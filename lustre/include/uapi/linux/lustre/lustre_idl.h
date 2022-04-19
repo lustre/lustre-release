@@ -1243,6 +1243,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_DUMMY	"trusted.dummy"
 #define XATTR_NAME_PROJID	"trusted.projid"
 #define XATTR_NAME_DATAVER	"trusted.dataver"
+#define XATTR_NAME_PIN		"trusted.pin"
 
 #define LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD XATTR_SECURITY_PREFIX"c"
 #define LL_XATTR_NAME_ENCRYPTION_CONTEXT XATTR_ENCRYPTION_PREFIX"c"

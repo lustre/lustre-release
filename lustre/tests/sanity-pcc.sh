@@ -4485,6 +4485,9 @@ test_203() {
 	local file=$DIR/$tfile
 	local bs="1024"
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev client $loopfile $mntpt 10
 	mkdir $hsm_root || error "mkdir $hsm_root failed"
 	setup_pcc_mapping client \
@@ -4513,6 +4516,78 @@ test_203() {
 	(( $hit_bytes == $((2 * bs)) )) || error "wrong hit bytes: $hit_bytes"
 }
 run_test 203 "Verify attach/hit bytes statistics data"
+
+test_204() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile.dat
+	local xattrname=trusted.pin
+	local xattrvalue
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need server version at least 2.15.61"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.dat}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+
+	do_facet $SINGLEAGT touch $file
+
+	# pin with id=2
+	do_facet $SINGLEAGT $LFS pcc pin -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to pcc pin $file"
+	do_facet $SINGLEAGT getfattr $file -d -m $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -d -m $xattrname \
+		     --only-values)
+	[[ "$xattrvalue" =~ "hsm: $HSM_ARCHIVE_NUMBER" ]] ||
+		error "incorrect xattr $xattrname=$xattrvalue"
+
+	# pin with id=100
+	do_facet $SINGLEAGT $LFS pcc pin -i 100 $file ||
+		error "failed to pcc pin $file"
+	do_facet $SINGLEAGT getfattr $file -d -m $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -d -m $xattrname \
+		     --only-values)
+	[[ "$xattrvalue" =~ "hsm: $HSM_ARCHIVE_NUMBER" &&
+	   "$xattrvalue" =~ "hsm: 100" ]] ||
+		error "incorrect xattr $xattrname=$xattrvalue"
+
+	# pin with id=2 again
+	do_facet $SINGLEAGT $LFS pcc pin -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to pcc pin $file"
+	do_facet $SINGLEAGT getfattr $file -d -m $xattrname
+
+	# unpin id=100
+	do_facet $SINGLEAGT $LFS pcc unpin -i 100 $file ||
+		error "failed to pcc unpin $file"
+	do_facet $SINGLEAGT getfattr $file -d -m $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -d -m $xattrname \
+		     --only-values)
+	[[ "$xattrvalue" =~ "hsm: $HSM_ARCHIVE_NUMBER" ]] ||
+		error "incorrect xattr $xattrname=$xattrvalue"
+
+	# unpin id=2
+	do_facet $SINGLEAGT $LFS pcc unpin -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to pcc unpin $file"
+	do_facet $SINGLEAGT getfattr $file -d -m $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -d -m $xattrname \
+		     --only-values)
+	[[ -z "$xattrvalue" ]] ||
+		error "incorrect xattr $xattrname=$xattrvalue"
+
+	# pin/unpin operation should NOT trigger autocache
+	check_lpcc_state $file "none"
+
+	# pin/unpin operation should NOT block autocache triggered by read
+	do_facet $SINGLEAGT cat $file
+	check_lpcc_state $file "readonly"
+}
+run_test 204 "pin/unpin pcc flag"
 
 complete_test $SECONDS
 check_and_cleanup_lustre

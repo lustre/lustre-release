@@ -31,6 +31,7 @@
  */
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <fcntl.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_user.h>
@@ -828,4 +829,211 @@ int llapi_pcc_clear(const char *mntpath, enum lu_pcc_cleanup_flags flags)
 	pch.pch_cb = llapi_handle_yaml_pcc_clear;
 
 	return llapi_pcc_yaml_cb_helper(&pch);
+}
+
+#define PIN_YAML_HSM_STR	"hsm"
+
+static int verify_pin_xattr_object(struct cYAML *yaml)
+{
+	struct cYAML *node = NULL;
+
+	if (yaml->cy_type != CYAML_TYPE_OBJECT)
+		return -EINVAL;
+
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (node->cy_type != CYAML_TYPE_NUMBER)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
+{
+	int rc = 0, remained;
+	struct cYAML *node;
+	char *p = buff;
+
+	if (yaml->cy_child == NULL) {
+		buff[0] = '\0';
+		goto out;
+	}
+
+	*p++ = '[';
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (node != yaml->cy_child)
+			*p++ = ',';
+
+		remained = buff + buflen - p - 1;
+		rc = snprintf(p, remained, "%s: %ld",
+			      node->cy_string, node->cy_valueint);
+		if (rc <= 0) {
+			rc = -errno;
+			goto out;
+		} else if (rc > remained) {
+			rc = -EOVERFLOW;
+			goto out;
+		}
+		p += rc;
+	}
+	*p++ = ']';
+	*p = '\0';
+
+	rc = 0;
+out:
+	return rc;
+}
+
+static struct cYAML *read_pin_xattr_object(const char *path)
+{
+	int rc, i;
+	struct cYAML *yaml = NULL;
+	char buff[XATTR_SIZE_MAX];
+
+	rc = getxattr(path, XATTR_NAME_PIN, buff, sizeof(buff));
+	if (rc < 0)
+		goto out;
+
+	if (buff[0] != '[' || buff[rc - 1] != ']') {
+		llapi_error(LLAPI_MSG_ERROR, EINVAL,
+			    "invalid pin string '%s'.", buff);
+		rc = -EINVAL;
+		goto out;
+	}
+
+	for (i = 0; i < rc; i++)
+		if (buff[i] == ',')
+			buff[i] = '\n';
+
+	yaml = cYAML_build_tree(NULL, buff + 1, rc - 2, NULL, false);
+	if (yaml == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, EINVAL,
+			    "invalid pin string '%s'.", buff);
+		errno = -EINVAL;
+		goto out;
+	}
+
+	rc = verify_pin_xattr_object(yaml);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, -rc, "Invalid pin object.");
+		cYAML_free_tree(yaml);
+		yaml = NULL;
+		errno = -rc;
+		goto out;
+	}
+
+out:
+	return yaml;
+}
+
+int llapi_pcc_pin_file(const char *path, __u32 id)
+{
+	int rc = 0;
+	struct cYAML *yaml, *node;
+	char buff[XATTR_SIZE_MAX];
+
+	yaml = read_pin_xattr_object(path);
+
+	if (yaml == NULL && errno == ENODATA) {
+		snprintf(buff, sizeof(buff), "[%s: %d]", PIN_YAML_HSM_STR, id);
+		goto set;
+
+	}
+	if (yaml == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "cannot read or parse pin xattr of file '%s'.",
+			    path);
+		rc = -errno;
+		goto out;
+	}
+
+	/* Now we have an valid pin object, search for existing entry */
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (strcmp(node->cy_string, PIN_YAML_HSM_STR) == 0 &&
+		    node->cy_valueint == id)
+			break;
+	}
+	if (node != NULL) {
+		rc = 0;
+		goto out;
+	}
+
+	node = cYAML_create_number(yaml, PIN_YAML_HSM_STR, id);
+	if (node == NULL) {
+		rc = -errno;
+		goto out;
+	}
+
+	rc = dump_pin_object(yaml, buff, sizeof(buff));
+	if (rc)
+		goto out;
+
+set:
+	rc = setxattr(path, XATTR_NAME_PIN, buff, strlen(buff), 0);
+	if (rc < 0)
+		rc = -errno;
+out:
+	return rc;
+}
+
+int llapi_pcc_unpin_file(const char *path, __u32 id)
+{
+	int rc = 0;
+	struct cYAML *yaml, *node;
+	char buff[XATTR_SIZE_MAX];
+
+	yaml = read_pin_xattr_object(path);
+
+	if (yaml == NULL && errno == ENODATA) {
+		rc = 0;
+		goto out;
+	}
+	if (yaml == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "cannot read or parse pin xattr of file '%s'.",
+			    path);
+		rc = -errno;
+		goto out;
+	}
+
+	/* We have an valid pin object, search for the entry to be deleted */
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (strcmp(node->cy_string, PIN_YAML_HSM_STR) == 0 &&
+		    node->cy_valueint == id)
+			break;
+	}
+	if (node == NULL) {
+		rc = 0;
+		goto out;
+	}
+
+	/* Remove the node */
+	if (node == yaml->cy_child) {
+		/* the first child */
+		if (node->cy_next)
+			node->cy_next->cy_prev = NULL;
+		yaml->cy_child = node->cy_next;
+	} else {
+		/* not the first child */
+		node->cy_prev->cy_next = node->cy_next;
+		if (node->cy_next)
+			node->cy_next->cy_prev = node->cy_prev;
+	}
+	node->cy_prev = node->cy_next = NULL;
+	cYAML_free_tree(node);
+
+	rc = dump_pin_object(yaml, buff, sizeof(buff));
+	if (rc)
+		goto out;
+
+	if (strlen(buff) == 0)
+		rc = removexattr(path, XATTR_NAME_PIN);
+	else
+		rc = setxattr(path, XATTR_NAME_PIN, buff, strlen(buff), 0);
+
+	if (rc < 0)
+		rc = -errno;
+
+out:
+	return rc;
 }

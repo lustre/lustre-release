@@ -745,6 +745,9 @@ int llapi_pccdev_get(const char *mntpath);
 int llapi_pcc_del(const char *mntpath, const char *pccpath,
 		  enum lu_pcc_cleanup_flags flags);
 int llapi_pcc_clear(const char *mntpath, enum lu_pcc_cleanup_flags flags);
+int llapi_pcc_pin_file(const char *path, __u32 id);
+int llapi_pcc_unpin_file(const char *path, __u32 id);
+
 /** @} llapi */
 
 /* llapi_layout user interface */

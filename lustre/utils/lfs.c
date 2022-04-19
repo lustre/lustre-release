@@ -147,6 +147,8 @@ static int lfs_pcc_attach(int argc, char **argv);
 static int lfs_pcc_attach_fid(int argc, char **argv);
 static int lfs_pcc_detach(int argc, char **argv);
 static int lfs_pcc_detach_fid(int argc, char **argv);
+static int lfs_pcc_pin(int argc, char **argv);
+static int lfs_pcc_unpin(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc_delete(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
@@ -334,6 +336,13 @@ command_t pcc_cmdlist[] = {
 	{ .pc_name = "delete", .pc_func = lfs_pcc_delete,
 	  .pc_help = "Delete the PCC layout component for given files.\n"
 		"usage: lfs pcc delete <FILE> ...\n" },
+	{ .pc_name = "pin", .pc_func = lfs_pcc_pin,
+	  .pc_help = "Pin files to prevent them from being removed from PCC.\n"
+		"usage: lfs pcc pin [--id|-i ID] FILE ...\n"
+		"\t-i: archive ID for PCC\n"},
+	{ .pc_name = "unpin", .pc_func = lfs_pcc_unpin,
+	  .pc_help = "Un-pin files so that they can be removed from PCC.\n"
+		"usage: lfs pcc unpin [--id|-i ID] FILE ...\n"},
 	{ .pc_help = NULL }
 };
 
@@ -585,7 +594,10 @@ command_t cmdlist[] = {
 	 "lfs pcc attach_fid - attach given files into PCC by FID(s)\n"
 	 "lfs pcc state  - display the PCC state for given files\n"
 	 "lfs pcc detach - detach given files from Persistent Client Cache\n"
-	 "lfs pcc detach_fid - detach given files from PCC by FID(s)\n"},
+	 "lfs pcc detach_fid - detach given files from PCC by FID(s)\n"
+	 "lfs pcc delete - delete the PCC layout componenet for given files\n"
+	 "lfs pcc pin - pin give files for PCC\n"
+	 "lfs pcc unpin - unpin given files for PCC\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -14415,6 +14427,148 @@ static int lfs_pcc_delete(int argc, char **argv)
 
 	return rc;
 }
+
+static int lfs_pcc_pin(int argc, char **argv)
+{
+	int rc = 0, c;
+	const char *path;
+	char *end;
+	char fullpath[PATH_MAX];
+	__u32 id = 0;
+	struct option long_opts[] = {
+	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "i:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'i':
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' ||
+			    id == 0 || id >= UINT32_MAX) {
+				fprintf(stderr,
+					"error: %s: bad attach ID '%s'\n",
+					argv[0], optarg);
+				return CMD_HELP;
+			}
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	/* check parameters */
+	if (id == 0) {
+		fprintf(stderr, "%s: must specify -i|--id option\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+	if (argc <= 1) {
+		fprintf(stderr, "%s: must specify one or more file names\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
+	while (optind < argc) {
+		int rc2;
+
+		path = argv[optind++];
+		if (!realpath(path, fullpath)) {
+			fprintf(stderr, "%s: could not find path '%s': %s\n",
+				argv[0], path, strerror(errno));
+			if (rc == 0)
+				rc = -EINVAL;
+			continue;
+		}
+
+		rc2 = llapi_pcc_pin_file(fullpath, id);
+		if (rc2 < 0) {
+			fprintf(stderr, "%s: cannot pin '%s' for PCC: %s\n",
+				argv[0], path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+		}
+	}
+
+	return rc;
+}
+
+static int lfs_pcc_unpin(int argc, char **argv)
+{
+	int rc = 0, c;
+	const char *path;
+	char *end;
+	char fullpath[PATH_MAX];
+	__u32 id = 0;
+	struct option long_opts[] = {
+	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "i:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'i':
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' ||
+			    id == 0 || id > UINT32_MAX) {
+				fprintf(stderr,
+					"error: %s: bad attach ID '%s'\n",
+					argv[0], optarg);
+				return CMD_HELP;
+			}
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+	/* check parameters */
+	if (id == 0) {
+		fprintf(stderr, "%s: must specify -i|--id option\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+	if (argc <= 1) {
+		fprintf(stderr, "%s: must specify one or more file names\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
+	while (optind < argc) {
+		int rc2;
+
+		path = argv[optind++];
+		if (!realpath(path, fullpath)) {
+			fprintf(stderr, "%s: could not find path '%s': %s\n",
+				argv[0], path, strerror(errno));
+			if (rc == 0)
+				rc = -EINVAL;
+			continue;
+		}
+
+		rc2 = llapi_pcc_unpin_file(fullpath, id);
+		if (rc2 < 0) {
+			fprintf(stderr, "%s: cannot unpin '%s' for PCC: %s\n",
+				argv[0], path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+		}
+	}
+
+	return rc;
+}
+
 
 /**
  * lfs_pcc() - Parse and execute lfs pcc commands.
