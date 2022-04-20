@@ -950,15 +950,33 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 		RETURN(err_serious(-ENOMEM));
 
 	/*
+	 * fallocate() start and end are passed in o_size and o_blocks
+	 * on the wire.  Clients 2.15.0 and newer should always set
+	 * the OBD_MD_FLSIZE and OBD_MD_FLBLOCKS valid flags, but some
+	 * older client versions did not.  We permit older clients to
+	 * not set these flags, checking their version by proxy using
+	 * the lack of OBD_CONNECT_TRUNCLOCK to imply 2.14.0 and older.
+	 *
+	 * Return -EOPNOTSUPP to also work with older clients not
+	 * supporting newer server modes.
+	 *
 	 * fallocate start and end are passed in o_size, o_blocks
 	 * on the wire.
 	 */
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
-	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
-		RETURN(err_serious(-EPROTO));
+	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 21, 53, 0)
+	    && (tgt_conn_flags(tsi) & OBD_CONNECT_OLD_FALLOC)
+#endif
+	    )
+		RETURN(-EOPNOTSUPP);
 
 	start = oa->o_size;
 	end = oa->o_blocks;
+	/* client should already limit len >= 0 */
+	if (start >= end)
+		RETURN(-EINVAL);
+
 	mode = oa->o_falloc_mode;
 
 	CDEBUG(D_INODE,
