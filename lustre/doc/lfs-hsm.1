@@ -1,38 +1,44 @@
-.TH lfs-hsm 1 "November 20, 2017" Lustre "Lustre/HSM binding utility"
+.TH LFS-HSM 1 "April 20, 2022" Lustre "Lustre/HSM binding utility"
 .SH NAME
-.Blfs hsm_command
-lfs commands used to interact with HSM features
+hsm_state, hsm_action, hsm_set, hsm_clear \- lfs commands used to interact with HSM features
 .SH SYNOPSIS
 .B lfs hsm_state
-.RB <FILE> ...
-.br
-.B  lfs hsm_action
-.RI file
-.br
-.B  lfs hsm_set|hsm_clear
-.RB [ --norelease ]
-.RB [ --noarchive ]
-.RB [ --dirty ]
-.RB [ --exists ]
-.RB [ --archived ]
-.RB [ --lost ]
-.RB [ --archive-id ]
-.RB <FILE> ...
-.br
+[\fI\,FILE\/\fR]...
+.PP
+.B lfs hsm_action
+[\fI\,FILE\/\fR]...
+.PP
+.B lfs hsm_set
+[\fB\-\-norelease\fR]
+[\fB\-\-noarchive\fR]
+[\fB\-\-exists\fR]
+[\fB\-\-archived\fR]
+[\fB\-\-lost\fR]
+[\fB\-\-archive-id\fR \fINUM\fR]
+[\fI\,FILE\/\fR]...
+.PP
+.B lfs hsm_clear
+[\fB\-\-norelease\fR]
+[\fB\-\-noarchive\fR]
+[\fB\-\-exists\fR]
+[\fB\-\-archived\fR]
+[\fB\-\-lost\fR]
+[\fI\,FILE\/\fR]...
+.PP
 .SH DESCRIPTION
 These are a set of lfs commands used to interact with Lustre/HSM binding feature.
 .TP
-.B lfs hsm_state <FILE> ...
+.B lfs hsm_state \fR[\fI\,FILE\/\fR]...
 Display the current HSM flags and archive ID for provided files.
 .TP
-.B lfs hsm_set <FILE>...
+.B lfs hsm_action \fR[\fI\,FILE\/\fR]...
+Display the in-progress HSM actions for provided files.
+.TP
+.B lfs hsm_set \fR[\fI\,OPTION\/\fR]... [\fI\,FILE\/\fR]...
 Set provided HSM flags on file list.
 .TP
-.B lfs hsm_clear <FILE>...
+.B lfs hsm_clear \fR[\fI\,OPTION\/\fR]... [\fI\,FILE\/\fR]...
 Clear the HSM related flags on file list.
-.TP
-.B lfs hsm_action <FILE>...
-Display the in-progress HSM actions for provided files.
 .PP
 Non-privileged user can only change the following flags:
 .B norelease
@@ -61,8 +67,8 @@ An up-to-date file copy exists in HSM backend. Useful mostly for debugging. (roo
 .B \\--lost
 File copy in HSM backend is not usable anymore and file could not be restored. It should be archived again. (root only)
 .TP
-.B \\--archive-id
-Set archive number identifier in hsm_set command. If archive-id is 0 or option is not provided, then default identifier 0 is used and means no identifier change.
+.B \\--archive-id \fINUM\fR
+Set archive number identifier to value \fINUM\fR. If archive-id is 0 or option is not provided, then default identifier 0 is used and means no identifier change.
 .SH EXAMPLES
 .TP
 .B Display current HSM flag for foo:

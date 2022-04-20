@@ -53,6 +53,10 @@ MANFILES =					\
 	lfs-getstripe.1				\
 	lfs-heat.1				\
 	lfs-hsm.1				\
+	lfs-hsm_action.1			\
+	lfs-hsm_clear.1				\
+	lfs-hsm_set.1				\
+	lfs-hsm_state.1				\
 	lfs-ladvise.1				\
 	lfs_migrate.1				\
 	lfs-migrate.1				\
