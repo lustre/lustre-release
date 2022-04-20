@@ -538,16 +538,17 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 			niov = DIV_ROUND_UP(nob + offset + kiov->bv_offset,
 					    PAGE_SIZE);
 
-		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
-			"bad niov %d msg %p kiov %p offset %d nob%d\n",
-			niov, msg, kiov, offset, nob);
-
 		while (offset >= kiov->bv_len) {
 			offset -= kiov->bv_len;
 			niov--;
 			kiov++;
 			LASSERT(niov > 0);
 		}
+
+		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
+			"bad niov %d msg %p kiov %p offset %d nob%d\n",
+			niov, msg, kiov, offset, nob);
+
 		for (i = 0; i < niov; i++) {
 			/* We can't have a bv_offset on anything but the first
 			 * entry, otherwise we'll have a hole at the end of the
@@ -2042,8 +2043,6 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	LASSERTF(nob == 0 || niov > 0,
 		"lntmsg %p nob %d niov %d\n", lntmsg, nob, niov);
-	LASSERTF(niov <= GNILND_MAX_IOV,
-		"lntmsg %p niov %d\n", lntmsg, niov);
 
 	if (msg_vmflush)
 		mpflag = memalloc_noreclaim_save();
