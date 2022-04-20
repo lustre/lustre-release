@@ -11531,8 +11531,8 @@ test_103e() {
 	local fileacl
 	local saved_debug=$($LCTL get_param -n debug)
 
-	(( $MDS1_VERSION >= $(version_code 2.14.0) )) ||
-		skip "MDS needs to be at least 2.14.0"
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) ||
+		skip "MDS needs to be at least 2.14.52"
 
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
