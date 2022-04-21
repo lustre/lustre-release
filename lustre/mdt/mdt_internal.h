@@ -327,6 +327,8 @@ struct mdt_device {
 				   /* user with this gid can change projid */
 	gid_t			   mdt_enable_chprojid_gid;
 	kernel_cap_t		   mdt_enable_cap_mask;
+				   /* user with this gid can pin/unpin file */
+	gid_t			   mdt_enable_pin_gid;
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;

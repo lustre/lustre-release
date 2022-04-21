@@ -927,7 +927,7 @@ static struct cYAML *read_pin_xattr_object(const char *path)
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
 
-	rc = getxattr(path, XATTR_NAME_PIN, buff, sizeof(buff));
+	rc = getxattr(path, XATTR_LUSTRE_PIN, buff, sizeof(buff));
 	if (rc < 0)
 		goto out;
 
@@ -1006,7 +1006,7 @@ int llapi_pcc_pin_file(const char *path, __u32 id)
 		goto out;
 
 set:
-	rc = setxattr(path, XATTR_NAME_PIN, buff, strlen(buff), 0);
+	rc = setxattr(path, XATTR_LUSTRE_PIN, buff, strlen(buff), 0);
 	if (rc < 0)
 		rc = -errno;
 out:
@@ -1064,9 +1064,9 @@ int llapi_pcc_unpin_file(const char *path, __u32 id)
 		goto out;
 
 	if (strlen(buff) == 0)
-		rc = removexattr(path, XATTR_NAME_PIN);
+		rc = removexattr(path, XATTR_LUSTRE_PIN);
 	else
-		rc = setxattr(path, XATTR_NAME_PIN, buff, strlen(buff), 0);
+		rc = setxattr(path, XATTR_LUSTRE_PIN, buff, strlen(buff), 0);
 
 	if (rc < 0)
 		rc = -errno;

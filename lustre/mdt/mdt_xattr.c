@@ -73,6 +73,9 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info *info)
 		    !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
 			RETURN(-EOPNOTSUPP);
 
+		if (strcmp(xattr_name, XATTR_LUSTRE_PIN) == 0)
+			xattr_name = XATTR_NAME_PIN;
+
 		size = mo_xattr_get(info->mti_env,
 				    mdt_object_child(info->mti_object),
 				    &LU_BUF_NULL, xattr_name);
@@ -286,6 +289,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	if (valid == OBD_MD_FLXATTR) {
 		const char *xattr_name = req_capsule_client_get(info->mti_pill,
 								&RMF_NAME);
+
+		if (strcmp(xattr_name, XATTR_LUSTRE_PIN) == 0)
+			xattr_name = XATTR_NAME_PIN;
+
 		rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
 		if (rc < 0)
 			GOTO(out, rc);
@@ -602,6 +609,16 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		}
 
 		lockpart |= MDS_INODELOCK_LAYOUT;
+	} else if ((strcmp(xattr_name, XATTR_LUSTRE_PIN) == 0)) {
+		struct mdt_device *mdt = info->mti_mdt;
+		struct lu_ucred *uc = mdt_ucred(info);
+
+		if (!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE) &&
+		    !lustre_in_group_p(uc, mdt->mdt_enable_pin_gid) &&
+		    !(mdt->mdt_enable_pin_gid == -1))
+			GOTO(out, rc = -EPERM);
+
+		xattr_name = XATTR_NAME_PIN;
 	}
 
 	if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))

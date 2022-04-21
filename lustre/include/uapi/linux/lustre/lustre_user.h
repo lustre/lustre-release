@@ -821,6 +821,7 @@ static inline bool lov_pool_is_reserved(const char *pool)
 #define LOV_V1_INSANE_STRIPE_COUNT LOV_V1_INSANE_STRIPE_INDEX /* deprecated */
 
 #define XATTR_LUSTRE_PREFIX	"lustre."
+#define XATTR_LUSTRE_PIN	XATTR_LUSTRE_PREFIX"pin"
 #define XATTR_LUSTRE_LOV	XATTR_LUSTRE_PREFIX"lov"
 
 /* Please update if XATTR_LUSTRE_LOV".set" groks more flags in the future */

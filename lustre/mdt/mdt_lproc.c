@@ -867,6 +867,37 @@ MDT_BOOL_RW_ATTR(enable_strict_som);
 MDT_BOOL_RW_ATTR(enable_dmv_implicit_inherit);
 MDT_BOOL_RW_ATTR(enable_dmv_xattr);
 
+static ssize_t enable_pin_gid_show(struct kobject *kobj,
+				   struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	if (mdt->mdt_enable_pin_gid == ~0U)
+		return scnprintf(buf, PAGE_SIZE, "-1\n");
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_pin_gid);
+}
+
+static ssize_t enable_pin_gid_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int val;
+	int rc;
+
+	rc = kstrtoint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_pin_gid = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_pin_gid);
+
 /**
  * Show if the MDT is in no create mode.
  *
@@ -1452,6 +1483,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_evict_tgt_nids.attr,
 	&lustre_attr_enable_cap_mask.attr,
 	&lustre_attr_enable_chprojid_gid.attr,
+	&lustre_attr_enable_pin_gid.attr,
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_dir_restripe.attr,
 	&lustre_attr_enable_dir_auto_split.attr,

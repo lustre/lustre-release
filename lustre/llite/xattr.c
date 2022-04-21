@@ -474,7 +474,8 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 
 	if (sbi->ll_xattr_cache_enabled && type != XATTR_ACL_ACCESS_T &&
 	    (type != XATTR_SECURITY_T || !ll_xattr_is_seclabel(name)) &&
-	    (type != XATTR_TRUSTED_T || strcmp(name, XATTR_NAME_SOM))) {
+	    (type != XATTR_TRUSTED_T || strcmp(name, XATTR_NAME_SOM)) &&
+	    (type != XATTR_LUSTRE_T || strcmp(name, XATTR_LUSTRE_PIN))) {
 		rc = ll_xattr_cache_get(inode, name, buffer, size, valid);
 		if (rc == -EAGAIN)
 			goto getxattr_nocache;

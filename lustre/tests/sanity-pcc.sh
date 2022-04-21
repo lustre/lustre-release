@@ -4692,6 +4692,54 @@ test_204a() {
 run_test 204a "pin/unpin pcc flag"
 
 test_204b() {
+	local id="100"
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local old
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need server version at least 2.15.61"
+
+	old=$(do_facet mds1 $LCTL get_param -n mdt.*.enable_pin_gid | head -1)
+	do_facet mds1 $LCTL set_param mdt.*.enable_pin_gid=0
+	stack_trap "do_facet mds1 $LCTL set_param mdt.*.enable_pin_gid=$old"
+
+	mkdir_on_mdt0 -p $dir || error "mkdir $dir failed"
+	chmod 777 $dir || error "chown $dir failed"
+	$RUNAS touch $file || error "touch $file failed"
+	$RUNAS $LFS pcc pin -i $id $file &&
+		error "normal user should not able to pin any file"
+	$LFS pcc pin -i $id $file || error "root should be able to pin any file"
+	getfattr -d -n trusted.pin $file
+	$RUNAS $LFS pcc unpin -i $id $file &&
+		error "nonroot user should fail to unpin file"
+	$LFS pcc unpin -i $id $file ||
+		error "root should be able to unpin any file"
+	$RUNAS $LFS pcc pin -i $id $file &&
+		error "nonroot user should fail to pin file"
+
+	do_facet mds1 $LCTL set_param mdt.*.enable_pin_gid=-1
+	$RUNAS $LFS pcc pin -i $id $file ||
+		error "failed to pin $file when enable_pin_gid=-1"
+	$RUNAS $LFS pcc unpin -i $id $file ||
+		error "failed to unpin $file when enable_pin_gid=-1"
+
+	do_facet mds1 $LCTL set_param mdt.*.enable_pin_gid=$RUNAS_GID
+	$RUNAS $LFS pcc pin -i $id $file ||
+		error "failed to pin $file when enable_pin_gid=$RUNAS_GID"
+	$RUNAS $LFS pcc unpin -i $id $file ||
+		error "failed to unpin $file when enable_pin_gid=$RUNAS_GID"
+	$LFS pcc pin -i $id $file ||
+		error "failed to pin $file when enable_pin_gid=$RUNAS_GID"
+	$LFS pcc unpin -i $id $file ||
+		error "failed to unpin $file when enable_pin_gid=$RUNAS_GID"
+}
+run_test 204b "Permission check for the pin/unpin operation"
+
+test_204c() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
@@ -4727,7 +4775,7 @@ test_204b() {
 	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -n $xattrname --only-values)
 	[[ -z "$xattrvalue" ]] || error "incorrect xattr $xattrname=$xattrvalue"
 }
-run_test 204b "PCC pin/unpin without attach ID specified"
+run_test 204c "PCC pin/unpin without attach ID specified"
 
 complete_test $SECONDS
 check_and_cleanup_lustre

@@ -6435,6 +6435,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_parallel_rename_crossdir = 1;
 	m->mdt_enable_remote_dir = 1;
 	m->mdt_enable_remote_dir_gid = 0;
+	m->mdt_enable_pin_gid = 0;
 	m->mdt_enable_remote_rename = 1;
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_enable_dmv_implicit_inherit = 1;
