@@ -14485,11 +14485,6 @@ static int lfs_pcc_pin(int argc, char **argv)
 	}
 
 	/* check parameters */
-	if (id == 0) {
-		fprintf(stderr, "%s: must specify -i|--id option\n",
-			argv[0]);
-		return CMD_HELP;
-	}
 	if (argc <= 1) {
 		fprintf(stderr, "%s: must specify one or more file names\n",
 			argv[0]);
@@ -14506,6 +14501,19 @@ static int lfs_pcc_pin(int argc, char **argv)
 			if (rc == 0)
 				rc = -EINVAL;
 			continue;
+		}
+
+		if (id == 0) {
+			rc2 = llapi_pcc_backend_id_get(fullpath,
+						       LU_PCC_READONLY, &id);
+			if (rc2 < 0) {
+				fprintf(stderr,
+					"%s: failed to get id for '%s': %s\n",
+					argv[0], path, strerror(-rc2));
+				if (rc == 0)
+					rc = rc2;
+				continue;
+			}
 		}
 
 		rc2 = llapi_pcc_pin_file(fullpath, id);
@@ -14555,11 +14563,6 @@ static int lfs_pcc_unpin(int argc, char **argv)
 		}
 	}
 	/* check parameters */
-	if (id == 0) {
-		fprintf(stderr, "%s: must specify -i|--id option\n",
-			argv[0]);
-		return CMD_HELP;
-	}
 	if (argc <= 1) {
 		fprintf(stderr, "%s: must specify one or more file names\n",
 			argv[0]);
@@ -14576,6 +14579,19 @@ static int lfs_pcc_unpin(int argc, char **argv)
 			if (rc == 0)
 				rc = -EINVAL;
 			continue;
+		}
+
+		if (id == 0) {
+			rc2 = llapi_pcc_backend_id_get(fullpath,
+						       LU_PCC_READONLY, &id);
+			if (rc2 < 0) {
+				fprintf(stderr,
+					"%s: failed to get id for '%s': %s\n",
+					argv[0], path, strerror(-rc2));
+				if (rc == 0)
+					rc = rc2;
+				continue;
+			}
 		}
 
 		rc2 = llapi_pcc_unpin_file(fullpath, id);

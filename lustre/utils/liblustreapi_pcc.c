@@ -684,6 +684,7 @@ typedef int (*pcc_handler_t)(struct cYAML *node, struct pcc_cmd_handler *pch);
 enum pcc_cmd_t {
 	PCC_CMD_DEL,
 	PCC_CMD_CLEAR,
+	PCC_CMD_BACKEND_SELECT,
 };
 
 struct pcc_cmd_handler {
@@ -748,11 +749,12 @@ static int llapi_pcc_yaml_cb_helper(struct pcc_cmd_handler *pch)
 			rc = ret;
 	}
 
+out_free:
 	/* Not found the given PCC backend on the client. */
-	if (pch->pch_iter_cont && pch->pch_cmd == PCC_CMD_DEL)
+	if (pch->pch_iter_cont && (pch->pch_cmd == PCC_CMD_DEL ||
+	    pch->pch_cmd == PCC_CMD_BACKEND_SELECT))
 		rc = -ENOENT;
 
-out_free:
 	if (tree)
 		cYAML_free_tree(tree);
 	cfs_free_param_data(&path);
@@ -829,6 +831,41 @@ int llapi_pcc_clear(const char *mntpath, enum lu_pcc_cleanup_flags flags)
 	pch.pch_cb = llapi_handle_yaml_pcc_clear;
 
 	return llapi_pcc_yaml_cb_helper(&pch);
+}
+
+static int llapi_pcc_yaml_backend_get(struct cYAML *node,
+				      struct pcc_cmd_handler *pch)
+{
+	struct cYAML *pccid;
+
+	/* TODO: check the flags of PCC backends. */
+	pccid = cYAML_get_object_item(node, pch->pch_type == LU_PCC_READWRITE ?
+				      PCC_YAML_RWID : PCC_YAML_ROID);
+	if (!pccid || pccid->cy_valueint == 0)
+		return 0;
+
+	pch->pch_iter_cont = false;
+	pch->pch_id = pccid->cy_valueint;
+	return 0;
+}
+
+int llapi_pcc_backend_id_get(const char *path, enum lu_pcc_type type, __u32 *id)
+{
+	struct pcc_cmd_handler pch;
+	int rc;
+
+	memset(&pch, 0, sizeof(pch));
+	pch.pch_cmd = PCC_CMD_BACKEND_SELECT;
+	pch.pch_iter_cont = true;
+	pch.pch_mntpath = path;
+	pch.pch_type = type;
+	pch.pch_cb = llapi_pcc_yaml_backend_get;
+
+	rc = llapi_pcc_yaml_cb_helper(&pch);
+	if (rc == 0)
+		*id = pch.pch_id;
+
+	return rc;
 }
 
 #define PIN_YAML_HSM_STR	"hsm"

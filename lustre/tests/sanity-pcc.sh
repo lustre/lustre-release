@@ -4619,7 +4619,7 @@ test_203() {
 }
 run_test 203 "Verify attach/hit bytes statistics data"
 
-test_204() {
+test_204a() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
@@ -4689,7 +4689,45 @@ test_204() {
 	do_facet $SINGLEAGT cat $file
 	check_lpcc_state $file "readonly"
 }
-run_test 204 "pin/unpin pcc flag"
+run_test 204a "pin/unpin pcc flag"
+
+test_204b() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local xattrname="trusted.pin"
+	local xattrvalue
+	local fid
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need server version at least 2.15.61"
+
+	do_facet $SINGLEAGT echo -n attach_id_not_specified > $file ||
+		error "dd write $file failed"
+	do_facet $SINGLEAGT $LFS pcc pin $file &&
+		error "Pin should fail for a client without any PCC backend"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+
+	do_facet $SINGLEAGT $LFS pcc pin $file || error "failed to pin $file"
+	do_facet $SINGLEAGT getfattr $file -n $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -n $xattrname --only-values)
+	[[ "$xattrvalue" =~ "hsm: $HSM_ARCHIVE_NUMBER" ]] ||
+		error "incorrect xattr $xattrname=$xattrvalue"
+
+	do_facet $SINGLEAGT $LFS pcc unpin $file || error "failed to PCC unpin $file"
+	do_facet $SINGLEAGT getfattr $file -n $xattrname
+	xattrvalue=$(do_facet $SINGLEAGT getfattr $file -n $xattrname --only-values)
+	[[ -z "$xattrvalue" ]] || error "incorrect xattr $xattrname=$xattrvalue"
+}
+run_test 204b "PCC pin/unpin without attach ID specified"
 
 complete_test $SECONDS
 check_and_cleanup_lustre
