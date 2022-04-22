@@ -125,7 +125,7 @@ if $unload_all; then
 	if [ -n "$(which lnetctl 2>/dev/null)" ]; then
 		lnetctl lnet unconfigure 2>/dev/null
 	elif [ -n "$(which lctl 2>/dev/null)" ]; then
-		lctl net down 2>/dev/null
+		lctl net down 2>/dev/null | grep -v "LNET ready to unload"
 	fi
 fi
 
