@@ -773,12 +773,12 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_ffree -= osfs->os_ffree;
 	}
 
-	/* OS_STATFS_READONLY can be set by OSD already */
+	/* OS_STATFS_READONLY can be set by OSD already, only add flags */
 	if (ofd->ofd_raid_degraded)
 		osfs->os_state |= OS_STATFS_DEGRADED;
 
-	if (ofd->ofd_no_precreate)
-		osfs->os_state |= OS_STATFS_NOPRECREATE;
+	if (ofd->ofd_lut.lut_no_create)
+		osfs->os_state |= OS_STATFS_NOCREATE;
 
 	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
 	    current_blockbits > COMPAT_BSIZE_SHIFT) {
@@ -1034,7 +1034,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
-	if (ofd->ofd_no_precreate)
+	if (ofd->ofd_lut.lut_no_create)
 		return -EPERM;
 
 	ofd_info_init(env, exp);

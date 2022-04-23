@@ -297,18 +297,18 @@ LUSTRE_RW_ATTR(degraded);
  *
  * \retval		number of bytes written
  */
-static ssize_t no_precreate_show(struct kobject *kobj, struct attribute *attr,
+static ssize_t no_create_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_no_precreate);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_lut.lut_no_create);
 }
 
 /**
- * Set OFD to no precreate mode.
+ * Set OFD to no create mode.
  *
  * This is used to interface to userspace administrative tools to
  * disable new object creation on the OST.
@@ -318,7 +318,7 @@ static ssize_t no_precreate_show(struct kobject *kobj, struct attribute *attr,
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t no_precreate_store(struct kobject *kobj, struct attribute *attr,
+static ssize_t no_create_store(struct kobject *kobj, struct attribute *attr,
 				  const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
@@ -332,12 +332,19 @@ static ssize_t no_precreate_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	spin_lock(&ofd->ofd_flags_lock);
-	ofd->ofd_no_precreate = val;
+	ofd->ofd_lut.lut_no_create = val;
 	spin_unlock(&ofd->ofd_flags_lock);
 
 	return count;
 }
+LUSTRE_RW_ATTR(no_create);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
+/* compatibility entry for a few releases */
+#define no_precreate_show no_create_show
+#define no_precreate_store no_create_store
 LUSTRE_RW_ATTR(no_precreate);
+#endif
 
 /**
  * Show OFD filesystem type.
@@ -993,34 +1000,37 @@ LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
 
 static struct attribute *ofd_attrs[] = {
+	&lustre_attr_access_log_mask.attr,
+	&lustre_attr_access_log_size.attr,
+	&lustre_attr_atime_diff.attr,
+	&lustre_attr_checksum_t10pi_enforce.attr,
+	&lustre_attr_degraded.attr,
+	&lustre_attr_eviction_count.attr,
+	&lustre_attr_fstype.attr,
+	&lustre_attr_grant_check_threshold.attr,
+	&lustre_attr_grant_compat_disable.attr,
+	&lustre_attr_grant_precreate.attr,
+	&lustre_attr_instance.attr,
+	&lustre_attr_ir_factor.attr,
+	&lustre_attr_job_cleanup_interval.attr,
+	&lustre_attr_lfsck_speed_limit.attr,
+	&lustre_attr_no_create.attr,
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
+	&lustre_attr_no_precreate.attr,
+#endif
+	&lustre_attr_num_exports.attr,
+	&lustre_attr_precreate_batch.attr,
+	&lustre_attr_recovery_time_hard.attr,
+	&lustre_attr_recovery_time_soft.attr,
+	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_tot_dirty.attr,
 	&lustre_attr_tot_granted.attr,
 	&lustre_attr_tot_pending.attr,
-	&lustre_attr_grant_compat_disable.attr,
-	&lustre_attr_instance.attr,
-	&lustre_attr_recovery_time_hard.attr,
-	&lustre_attr_recovery_time_soft.attr,
-	&lustre_attr_ir_factor.attr,
-	&lustre_attr_num_exports.attr,
-	&lustre_attr_grant_check_threshold.attr,
-	&lustre_attr_eviction_count.attr,
-	&lustre_attr_seqs_allocated.attr,
-	&lustre_attr_grant_precreate.attr,
-	&lustre_attr_precreate_batch.attr,
-	&lustre_attr_atime_diff.attr,
-	&lustre_attr_degraded.attr,
-	&lustre_attr_fstype.attr,
-	&lustre_attr_no_precreate.attr,
+	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_sync_journal.attr,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 	&lustre_attr_sync_on_lock_cancel.attr,
 #endif
-	&lustre_attr_soft_sync_limit.attr,
-	&lustre_attr_lfsck_speed_limit.attr,
-	&lustre_attr_access_log_mask.attr,
-	&lustre_attr_access_log_size.attr,
-	&lustre_attr_job_cleanup_interval.attr,
-	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_history.attr,

@@ -1141,7 +1141,7 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 
 	/* Object precreation skipped on OST if manually disabled */
 	if (d->opd_pre_max_create_count == 0)
-		msfs->os_state |= OS_STATFS_NOPRECREATE;
+		msfs->os_state |= OS_STATFS_NOCREATE;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
 update:

@@ -439,7 +439,7 @@ struct lmv_obd {
 	struct kobject		*lmv_tgts_kobj;
 	void			*lmv_cache;
 
-	__u32			lmv_qos_rr_index;
+	__u32			lmv_qos_rr_index; /* next round-robin MDT idx */
 };
 
 #define lmv_mdt_count	lmv_mdt_descs.ltd_lmv_desc.ld_tgt_count

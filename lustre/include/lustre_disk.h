@@ -83,7 +83,6 @@
 #define LMD_PARAMS_MAXLEN	4096
 
 enum lmd_flags {
-	LMD_FLG_SERVER		= 0,	/* Mounting a server */
 	LMD_FLG_CLIENT,			/* Mounting a client */
 	LMD_FLG_SKIP_LFSCK,		/* NOT auto resume LFSCK when mount */
 	LMD_FLG_ABORT_RECOV,		/* Abort recovery */
@@ -95,15 +94,14 @@ enum lmd_flags {
 					 */
 	LMD_FLG_WRITECONF,		/* Rewrite config log */
 	LMD_FLG_NOIR,			/* NO imperative recovery */
-	LMD_FLG_NOSCRUB,			/* Do not trigger scrub automatically */
+	LMD_FLG_NOSCRUB,		/* Do not trigger scrub automatically */
 	LMD_FLG_MGS,			/* Also start MGS along with server */
-	LMD_FLG_IAM,			/* IAM dir */
 	LMD_FLG_NO_PRIMNODE,		/* all nodes are service nodes */
 	LMD_FLG_VIRGIN,			/* the service registers first time */
 	LMD_FLG_UPDATE,			/* update parameters */
 	LMD_FLG_HSM,			/* Start coordinator */
 	LMD_FLG_DEV_RDONLY,		/* discard modification quitely */
-	LMD_FLG_NO_PRECREATE,		/* do not allow OST object creation */
+	LMD_FLG_NO_CREATE,		/* prevent MDT/OST object creation */
 	LMD_FLG_LOCAL_RECOV,		/* force recovery for local clients */
 	LMD_FLG_ABORT_RECOV_MDT,	/* Abort recovery between MDTs */
 	LMD_FLG_NO_LOCAL_LOGS,		/* Use config logs from MGS */

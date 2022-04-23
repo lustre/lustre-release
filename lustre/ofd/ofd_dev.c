@@ -184,8 +184,8 @@ static int ofd_stack_init(const struct lu_env *env,
 	if (lmd) {
 		if (test_bit(LMD_FLG_SKIP_LFSCK, lmd->lmd_flags))
 			m->ofd_skip_lfsck = 1;
-		if (test_bit(LMD_FLG_NO_PRECREATE, lmd->lmd_flags))
-			m->ofd_no_precreate = 1;
+		if (test_bit(LMD_FLG_NO_CREATE, lmd->lmd_flags))
+			m->ofd_lut.lut_no_create = 1;
 		bitmap_copy(lmd_flags, lmd->lmd_flags, LMD_FLG_NUM_FLAGS);
 	}
 
@@ -1468,7 +1468,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	if (CFS_FAIL_CHECK(OBD_FAIL_OST_EROFS))
 		RETURN(-EROFS);
 
-	if (ofd->ofd_no_precreate)
+	if (ofd->ofd_lut.lut_no_create)
 		return -EPERM;
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);

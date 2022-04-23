@@ -892,6 +892,55 @@ static ssize_t enable_dir_auto_split_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(enable_dir_auto_split);
 
 /**
+ * Show if the MDT is in no create mode.
+ *
+ * This means MDT has been adminstratively disabled to prevent it
+ * from creating any new directories on the MDT, though existing files
+ * and directories can still be read, written, and unlinked.
+ *
+ * \retval		number of bytes written
+ */
+static ssize_t no_create_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_lut.lut_no_create);
+}
+
+/**
+ * Set MDT to no create mode.
+ *
+ * This is used to interface to userspace administrative tools to
+ * disable new directory creation on the MDT.
+ *
+ * \param[in] count	\a buffer length
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t no_create_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_lut.lut_no_create = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(no_create);
+
+/**
  * Show MDT async commit count.
  *
  * @m		seq_file handle
@@ -1685,6 +1734,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_commit_on_sharing.attr,
 	&lustre_attr_local_recovery.attr,
+	&lustre_attr_no_create.attr,
 	&lustre_attr_async_commit_count.attr,
 	&lustre_attr_sync_count.attr,
 	&lustre_attr_dom_lock.attr,

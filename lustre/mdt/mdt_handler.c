@@ -573,6 +573,8 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 				   osfs->os_bsize - 1) >> current_blockbits));
 
 	tgt_grant_sanity_check(mdt->mdt_lu_dev.ld_obd, __func__);
+	if (mdt->mdt_lut.lut_no_create)
+		osfs->os_state |= OS_STATFS_NOCREATE;
 	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
 	       "%llu objects: %llu free; state %x\n",
 	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
@@ -6179,6 +6181,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		obd_obt_init(obd);
 		if (test_bit(LMD_FLG_SKIP_LFSCK, lsi->lsi_lmd->lmd_flags))
 			m->mdt_skip_lfsck = 1;
+		if (test_bit(LMD_FLG_NO_CREATE, lsi->lsi_lmd->lmd_flags))
+			m->mdt_lut.lut_no_create = 1;
 	}
 
 	/* Just try to get a DoM lock by default. Otherwise, having a group

@@ -563,6 +563,16 @@ static int lmv_disconnect(struct obd_export *exp)
 	RETURN(rc);
 }
 
+static void lmv_statfs_update(struct lmv_obd *lmv, struct lmv_tgt_desc *tgt,
+			      struct obd_statfs *osfs)
+{
+	spin_lock(&lmv->lmv_lock);
+	tgt->ltd_statfs = *osfs;
+	tgt->ltd_statfs_age = ktime_get_seconds();
+	spin_unlock(&lmv->lmv_lock);
+	set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
+}
+
 static int lmv_fid2path(struct obd_export *exp, int len, void *karg,
 			void __user *uarg)
 {
@@ -909,9 +919,9 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 				0);
 		if (rc)
 			RETURN(rc);
+		lmv_statfs_update(lmv, tgt, &stat_buf);
 		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
-				 min((int) data->ioc_plen1,
-				     (int) sizeof(stat_buf))))
+				 min_t(int, data->ioc_plen1, sizeof(stat_buf))))
 			RETURN(-EFAULT);
 		break;
 	}
@@ -1363,7 +1373,7 @@ out_free_temp:
 	RETURN(rc);
 }
 
-static int lmv_statfs_update(void *cookie, int rc)
+static int lmv_statfs_cb(void *cookie, int rc)
 {
 	struct obd_info *oinfo = cookie;
 	struct obd_device *obd = oinfo->oi_obd;
@@ -1375,13 +1385,8 @@ static int lmv_statfs_update(void *cookie, int rc)
 	 * NB: don't deactivate TGT upon error, because we may not trigger async
 	 * statfs any longer, then there is no chance to activate TGT.
 	 */
-	if (!rc) {
-		spin_lock(&lmv->lmv_lock);
-		tgt->ltd_statfs = *osfs;
-		tgt->ltd_statfs_age = ktime_get_seconds();
-		spin_unlock(&lmv->lmv_lock);
-		set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
-	}
+	if (!rc)
+		lmv_statfs_update(lmv, tgt, osfs);
 
 	return rc;
 }
@@ -1392,7 +1397,7 @@ int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	struct obd_info oinfo = {
 		.oi_obd	= obd,
 		.oi_tgt = tgt,
-		.oi_cb_up = lmv_statfs_update,
+		.oi_cb_up = lmv_statfs_cb,
 	};
 	int rc;
 
@@ -1555,7 +1560,8 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 		GOTO(unlock, tgt = ERR_PTR(rc));
 
 	lmv_foreach_tgt(lmv, tgt) {
-		if (!tgt->ltd_exp || !tgt->ltd_active) {
+		if (!tgt->ltd_exp || !tgt->ltd_active ||
+		    (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)) {
 			tgt->ltd_qos.ltq_usable = 0;
 			continue;
 		}
@@ -1572,7 +1578,7 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 		total_usable++;
 	}
 
-	/* If current MDT has above-average space and dir is not aleady using
+	/* If current MDT has above-average space and dir is not already using
 	 * round-robin to spread across more MDTs, stay on the parent MDT
 	 * to avoid creating needless remote MDT directories.  Remote dirs
 	 * close to the root balance space more effectively than bottom dirs,
@@ -1627,7 +1633,8 @@ static struct lu_tgt_desc *lmv_locate_tgt_rr(struct lmv_obd *lmv)
 		index = (i + lmv->lmv_qos_rr_index) %
 			lmv->lmv_mdt_descs.ltd_tgts_size;
 		tgt = lmv_tgt(lmv, index);
-		if (!tgt || !tgt->ltd_exp || !tgt->ltd_active)
+		if (!tgt || !tgt->ltd_exp || !tgt->ltd_active ||
+		    (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
 			continue;
 
 		lmv->lmv_qos_rr_index = (tgt->ltd_index + 1) %
@@ -1660,7 +1667,8 @@ static struct lu_tgt_desc *lmv_locate_tgt_lf(struct lmv_obd *lmv)
 		GOTO(unlock, tgt = ERR_PTR(-EAGAIN));
 
 	lmv_foreach_tgt(lmv, tgt) {
-		if (!tgt->ltd_exp || !tgt->ltd_active) {
+		if (!tgt->ltd_exp || !tgt->ltd_active ||
+		    (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)) {
 			tgt->ltd_qos.ltq_usable = 0;
 			continue;
 		}
@@ -1751,7 +1759,7 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_object *lso,
  * which is set outside, and if dir is migrating, 'op_data->op_new_layout'
  * indicates whether old or new layout is used to locate.
  *
- * For plain direcotry, it just locate the MDT of op_data->op_fid1.
+ * For plain directory, it just locate the MDT of op_data->op_fid1.
  *
  * \param[in] lmv		LMV device
  * \param[in/out] op_data	client MD stack parameters, name, namelen etc,
@@ -1967,7 +1975,8 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	if (tgt == ERR_PTR(-EAGAIN)) {
 		if (ltd_qos_is_balanced(&lmv->lmv_mdt_descs) &&
 		    !lmv_op_default_rr_mkdir(op_data) &&
-		    !lmv_op_user_qos_mkdir(op_data))
+		    !lmv_op_user_qos_mkdir(op_data) &&
+		    !(tmp->ltd_statfs.os_state & OS_STATFS_NOCREATE))
 			/* if not necessary, don't create remote directory. */
 			tgt = tmp;
 		else
@@ -1978,6 +1987,12 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 
 	if (!IS_ERR(tgt))
 		op_data->op_mds = tgt->ltd_index;
+
+	/* If space balance was called because the original target was marked
+	 * NOCREATE, periodically check whether the state has changed.
+	 */
+	if (tmp != tgt && tmp->ltd_statfs.os_state & OS_STATFS_NOCREATE)
+		lmv_statfs_check_update(lmv2obd_dev(lmv), tmp);
 
 	return tgt;
 }
@@ -2022,6 +2037,9 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	 * 2. is "lfs mkdir -i -1"? mkdir by space usage.
 	 * 3. is starting MDT specified in default LMV? mkdir on MDT N.
 	 * 4. is default LMV space balanced? mkdir by space usage.
+	 *
+	 * If the existing parent or specific MDT selected is deactivated
+	 * with OS_STATFS_NOCREATE then select a different MDT by QOS.
 	 */
 	if (lmv_op_user_specific_mkdir(op_data)) {
 		struct lmv_user_md *lum = op_data->op_data;
@@ -2030,6 +2048,8 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			RETURN(-ENODEV);
+		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+			GOTO(new_tgt, -EAGAIN);
 	} else if (lmv_op_user_qos_mkdir(op_data)) {
 		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
 		if (IS_ERR(tgt))
@@ -2041,7 +2061,11 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			RETURN(-ENODEV);
-	} else if (lmv_op_default_qos_mkdir(op_data)) {
+		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+			GOTO(new_tgt, -EAGAIN);
+	} else if (lmv_op_default_qos_mkdir(op_data) ||
+		   tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) {
+new_tgt:
 		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));

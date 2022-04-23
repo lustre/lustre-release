@@ -425,7 +425,7 @@ EXPORT_SYMBOL(ltd_del_tgt);
  * Calculate penalties per-tgt and per-server
  *
  * Re-calculate penalties when the configuration changes, active targets
- * change and after statfs refresh (all these are reflected by lq_dirty flag).
+ * change and after statfs refresh (all these are reflected by LQ_DIRTY flag).
  * On every tgt and server: decay the penalty by half for every 8x the update
  * interval that the device has been idle. That gives lots of time for the
  * statfs information to be updated (which the penalty is only a proxy for),

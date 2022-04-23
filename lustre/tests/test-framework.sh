@@ -11155,8 +11155,14 @@ rmultiop_stop() {
 }
 
 sleep_maxage() {
-	local delay=$(do_facet $SINGLEMDS lctl get_param -n lo[vd].*.qos_maxage |
-		      awk '{ print $1 * 2; exit; }')
+	local delay=$(do_facet mds1 lctl get_param -n lod.*.qos_maxage |
+		      awk '{ print $1 + 5; exit; }')
+	sleep $delay
+}
+
+sleep_maxage_lmv() {
+	local delay=$(lctl get_param -n lmv.*.qos_maxage |
+		      awk '{ print $1 + 5; exit; }')
 	sleep $delay
 }
 

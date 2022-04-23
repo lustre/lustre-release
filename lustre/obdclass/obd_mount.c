@@ -1394,8 +1394,10 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 				max_t(int, simple_strtoul(s1 + 19, NULL, 10),
 				      time_min);
 			clear++;
-		} else if (strncmp(s1, "no_precreate", 12) == 0) {
-			set_bit(LMD_FLG_NO_PRECREATE, lmd->lmd_flags);
+		} else if (strncmp(s1, "no_create", 9) == 0 ||
+			   /* no_precreate kept for 2.16 compatibility */
+			   strncmp(s1, "no_precreate", 12) == 0) {
+			set_bit(LMD_FLG_NO_CREATE, lmd->lmd_flags);
 			clear++;
 		} else if (strncmp(s1, "noir", 4) == 0) { /* test case only */
 			set_bit(LMD_FLG_NOIR, lmd->lmd_flags);

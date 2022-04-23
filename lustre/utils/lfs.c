@@ -6691,7 +6691,7 @@ static struct obd_statfs_state_names {
 } oss_names[] = {
 	{ .osn_state = OS_STATFS_DEGRADED,   .osn_name = 'D', .osn_err = true },
 	{ .osn_state = OS_STATFS_READONLY,   .osn_name = 'R', .osn_err = true },
-	{ .osn_state = OS_STATFS_NOPRECREATE,.osn_name = 'N', .osn_err = true },
+	{ .osn_state = OS_STATFS_NOCREATE,   .osn_name = 'N', .osn_err = true },
 	{ .osn_state = OS_STATFS_UNUSED1,    .osn_name = '?', .osn_err = true },
 	{ .osn_state = OS_STATFS_UNUSED2,    .osn_name = '?', .osn_err = true },
 	{ .osn_state = OS_STATFS_ENOSPC,     .osn_name = 'S', .osn_err = true },

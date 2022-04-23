@@ -62,8 +62,8 @@ static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
 	if (sfs->os_state & OS_STATFS_READONLY)
 		return -EROFS;
 
-	/* object precreation is skipped on targets with max_create_count=0 */
-	if (sfs->os_state & OS_STATFS_NOPRECREATE)
+	/* object creation is skipped on the OST with max_create_count=0 */
+	if (!ltd->ltd_is_mdt && sfs->os_state & OS_STATFS_NOCREATE)
 		return -ENOBUFS;
 
 	return 0;
@@ -999,6 +999,9 @@ repeat_find:
 		if (lod_statfs_check(ltd, mdt))
 			continue;
 
+		if (mdt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
+			continue;
+
 		/* try to use another OSP if this one is degraded */
 		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED &&
 		    !use_degraded) {
@@ -1858,7 +1861,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		if (mdt->ltd_discon || lod_statfs_check(ltd, mdt))
 			continue;
 
-		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED)
+		if (mdt->ltd_statfs.os_state &
+		    (OS_STATFS_DEGRADED | OS_STATFS_NOCREATE))
 			continue;
 
 		mdt->ltd_qos.ltq_usable = 1;

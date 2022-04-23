@@ -264,7 +264,7 @@ typedef struct statx lstatx_t;
 enum obd_statfs_state {
 	OS_STATFS_DEGRADED	= 0x00000001, /**< RAID degraded/rebuilding */
 	OS_STATFS_READONLY	= 0x00000002, /**< filesystem is read-only */
-	OS_STATFS_NOPRECREATE	= 0x00000004, /**< no object precreation */
+	OS_STATFS_NOCREATE	= 0x00000004, /**< no object creation */
 	OS_STATFS_UNUSED1	= 0x00000008, /**< obsolete 1.6, was EROFS=30 */
 	OS_STATFS_UNUSED2	= 0x00000010, /**< obsolete 1.6, was EROFS=30 */
 	OS_STATFS_ENOSPC	= 0x00000020, /**< not enough free space */
@@ -272,6 +272,9 @@ enum obd_statfs_state {
 	OS_STATFS_SUM		= 0x00000100, /**< aggregated for all tagrets */
 	OS_STATFS_NONROT	= 0x00000200, /**< non-rotational device */
 };
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
+#define OS_STATFS_NOPRECREATE OS_STATFS_NOCREATE
+#endif
 
 /** filesystem statistics/attributes for target device */
 struct obd_statfs {

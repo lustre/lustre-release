@@ -2091,6 +2091,9 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 				/* this OSP doesn't feel well */
 				continue;
 
+			if (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
+				continue;
+
 			rc = dt_fid_alloc(env, tgt_dt, &fid, NULL, NULL);
 			if (rc < 0)
 				continue;
@@ -7041,9 +7044,11 @@ static bool lod_sel_osts_allowed(const struct lu_env *env,
 
 		if (sfs->os_state & OS_STATFS_ENOSPC ||
 		    sfs->os_state & OS_STATFS_READONLY ||
+		    sfs->os_state & OS_STATFS_NOCREATE ||
 		    sfs->os_state & OS_STATFS_DEGRADED) {
-			CDEBUG(D_LAYOUT, "ost %d is not availble for SEL "
-			       "extension, state %u\n", index, sfs->os_state);
+			CDEBUG(D_LAYOUT,
+			       "OST%04x unusable for SEL extension, state %x\n",
+			       index, sfs->os_state);
 			ret = false;
 			break;
 		}

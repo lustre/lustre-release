@@ -133,12 +133,15 @@ stop_mdt() {
 }
 
 start_mds() {
+	local mdscount=$MDSCOUNT
 	local num
 
-	for num in $(seq $MDSCOUNT); do
+	[[ "$1" == "--mdscount" ]] && mdscount=$2 && shift 2
+
+	for ((num=1; num <= $mdscount; num++ )); do
 		start_mdt $num "$@" || return 94
 	done
-	for num in $(seq $MDSCOUNT); do
+	for ((num=1; num <= $mdscount; num++ )); do
 		wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds${num} FULL
 	done
 }
@@ -9241,15 +9244,22 @@ test_111() {
 }
 run_test 111 "Adding large_dir with over 2GB directory"
 
-test_112() {
+test_112a() {
+	local param="no_create"
+
+	(( $OST1_VERSION > $(version_code 2.14.0) )) ||
+		skip "need OSS at least 2.14.0"
+	(( $OST1_VERSION >= $(version_code 2.15.56.125) )) ||
+		param="no_precreate"
+
 	start_mds || error "MDS start failed"
 	start_ost || error "OSS start failed"
 	echo "start ost2 service on $(facet_active_host ost2)"
-	start ost2 $(ostdevname 2) $(csa_add "$OST_MOUNT_OPTS" -o no_precreate) ||
+	start ost2 $(ostdevname 2) $(csa_add "$OST_MOUNT_OPTS" -o $param) ||
 		error "start ost2 facet failed"
 	local val=$(do_facet ost2 \
-		   "$LCTL get_param -n obdfilter.$FSNAME-OST0001*.no_precreate")
-	(( $val == 1 )) || error "obdfilter.$FSNAME-OST0001*.no_precreate=$val"
+		   "$LCTL get_param -n obdfilter.$FSNAME-OST0001*.$param")
+	(( $val == 1 )) || error "obdfilter.$FSNAME-OST0001*.$param=$val"
 
 	mount_client $MOUNT || error "mount client failed"
 	wait_osc_import_state mds1 ost1 FULL
@@ -9261,7 +9271,11 @@ test_112() {
 	$LFS setstripe -i 1 $DIR/$tfile.1 && $LFS getstripe $DIR/$tfile.1 &&
 		(( $($LFS getstripe -i $DIR/$tfile.1) == 1 )) &&
 		error "allowed to create $tfile.1 on OST0001"
-	do_facet ost2 $LCTL set_param obdfilter.*.no_precreate=0
+	$LFS df -v $MOUNT
+	$LFS df -v $MOUNT | grep -q "OST:1.*N" ||
+		error "NOCREATE not in 'lfs df'"
+
+	do_facet ost2 $LCTL set_param obdfilter.$FSNAME-OST0001*.$param=0
 	sleep_maxage
 	$LFS setstripe -i 1 $DIR/$tfile.2 ||
 		error "failed to create $tfile.2 on ost1 facet"
@@ -9270,7 +9284,55 @@ test_112() {
 	stop_ost2 || error "stop ost2 facet failed"
 	cleanup
 }
-run_test 112 "mount OST with nocreate option"
+run_test 112a "mount OST with no_create option"
+
+test_112b() {
+	(( MDSCOUNT >= 2 )) || skip "need at least 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.56.125) )) ||
+		skip "need MDS >= 2.15.56.125"
+	local mdsnum=$MDSCOUNT
+	local facet=mds$mdsnum
+	local mdtidx=$((mdsnum - 1))
+	local mdtname=$FSNAME-MDT$(printf %04x $mdtidx)
+
+	start_mds --mdscount $((mdsnum - 1)) || error "MDS start failed"
+	start_mdt $mdsnum -o no_create || error "start $facet failed"
+	local val=$(do_facet $facet \
+		   "$LCTL get_param -n mdt.$mdtname*.no_create")
+	(( $val == 1 )) || error "mdt.$mdtname*.no_create=$val"
+	start_ost || error "ost1 start failed"
+	start_ost2 || error "ost1 start failed"
+
+	mount_client $MOUNT || error "mount client failed"
+	wait_osc_import_ready $facet ost2
+
+	$LFS df -v $MOUNT
+	$LFS df -v $MOUNT | grep -q "MDT:$mdtidx.*N" ||
+		error "NOCREATE not in 'lfs df'"
+
+	$LFS mkdir -i $mdtidx $DIR/$tdir ||
+		$LFS setdirstripe -D -c 1 -i -1 --max-inherit-rr 2 $DIR/$tdir ||
+		error "error creating $tdir on $mdtname"
+	stack_trap "rm -rf $DIR/$tdir"
+
+	mkdir $DIR/$tdir/d1.{1..100} || error "mkdir $tdir/d1.{1..100} failed"
+	$LFS getdirstripe -i $DIR/$tdir/d1.* | sort | uniq -c
+	do_facet $facet $LCTL set_param mdt.$mdtname*.no_create=0
+	# allow one initial create for delayed statfs on client
+	(( $($LFS getdirstripe -i $DIR/$tdir/d1.* | grep -c $mdtidx) < 2 )) ||
+		error "allowed create on $mdtname"
+	sleep_maxage_lmv
+
+	mkdir $DIR/$tdir/d2.{1..100} || error "mkdir $tdir/d2.{1..100} failed"
+	$LFS getdirstripe -i $DIR/$tdir/d2.{1..100} | sort | uniq -c
+	(( $($LFS getdirstripe -i $DIR/$tdir/d2.* | grep -c $mdtidx) > 10 )) ||
+		error "no create on $mdtname"
+	# files not cleaned with ONLY_REPEAT because of client unmount below
+	rm -r $DIR/$tdir
+	stop_ost2 || error "ost1 start failed"
+	cleanup
+}
+run_test 112b "mount MDT with no_create option"
 
 # Global for 113
 SAVE_MGS_MOUNT_OPTS=$MGS_MOUNT_OPTS
