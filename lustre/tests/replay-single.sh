@@ -2150,7 +2150,7 @@ test_70c () {
 	local elapsed
 	local start_ts=$(date +%s)
 
-	trap cleanup_70c EXIT
+	stack_trap cleanup_70c EXIT
 	(
 		while [ ! -e $DIR/replay-single.70c.lck ]; do
 			test_mkdir -p -c$MDSCOUNT $DIR/$tdir || break

@@ -902,7 +902,7 @@ int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 			continue;
 		}
 		qti_lqes_add(env, lqe);
-		CDEBUG(D_QUOTA, "adding lqe %p from pool %s\n",
+		CDEBUG(D_QUOTA, "adding lqe %px from pool %s\n",
 				 lqe, pos->qpi_name);
 	}
 	up_read(&qmt->qmt_pool_lock);

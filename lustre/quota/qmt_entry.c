@@ -115,6 +115,9 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 
 	LASSERT(lqe_is_master(lqe));
 
+	if (qmt_pool_global(pool))
+		lqe->lqe_is_global = 1;
+
 	/* read record from disk */
 	rc = lquota_disk_read(env, pool->qpi_glb_obj[lqe->lqe_site->lqs_qtype],
 			      &lqe->lqe_id, (struct dt_rec *)&qti->qti_glb_rec);
@@ -152,9 +155,6 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 		lqe->lqe_enforced = false;
 	else
 		lqe->lqe_enforced  = true;
-
-	if (qmt_pool_global(pool))
-		lqe->lqe_is_global = 1;
 
 	LQUOTA_DEBUG(lqe, "read");
 	RETURN(0);
@@ -971,7 +971,7 @@ int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 	 * extra reference that is put in qti_lqes_fini */
 	qpi_getref(lqe2qpi(lqe));
 
-	CDEBUG(D_QUOTA, "LQE %p %lu is added, lqe_cnt %d lqes_num %d\n",
+	CDEBUG(D_QUOTA, "LQE %px %lu is added, lqe_cnt %d lqes_num %d\n",
 			 lqe, (long unsigned)lqe->lqe_id.qid_uid,
 			 qti->qti_lqes_cnt, qti->qti_lqes_num);
 	LASSERT(qti->qti_lqes_num != 0);
