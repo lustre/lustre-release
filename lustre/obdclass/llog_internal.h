@@ -77,6 +77,8 @@ struct llog_handle *llog_handle_get(struct llog_handle *loghandle);
 int llog_handle_put(const struct lu_env *env, struct llog_handle *loghandle);
 int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       struct llog_handle **res, struct llog_logid *logid);
+void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
+			       unsigned int *cfg_flags);
 int class_config_dump_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
 			      struct llog_rec_hdr *rec, void *data);
