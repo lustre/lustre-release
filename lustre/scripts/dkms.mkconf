@@ -41,7 +41,7 @@ cat >>${filename} <<EOF
 NO_WEAK_MODULES="yes"
 AUTOINSTALL="yes"
 NO_WEAK_MODULES="yes"
-MAKE[0]="make"
+MAKE[0]="make -j \`nproc\`"
 
 OPTS=""
 strip_default=no

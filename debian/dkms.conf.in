@@ -72,7 +72,7 @@ CONFIGURE="${CONFIGURE} --with-linux-obj=$kernel_source_dir ${OPTS}"
 
 # Note OPTS, AUTOGEN, CONFIGURE are not exposed to dkms parser
 
-MAKE="${AUTOGEN} && ${CONFIGURE} && make"
+MAKE="${AUTOGEN} && ${CONFIGURE} && make -j `nproc`"
 CLEAN="make distclean || true"
 
 NO_WEAK_MODULES="yes"
