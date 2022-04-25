@@ -32,7 +32,11 @@
 #ifndef __LUSTRE_LU_OBJECT_H
 #define __LUSTRE_LU_OBJECT_H
 
+#ifdef HAVE_LINUX_STDARG_HEADER
+#include <linux/stdarg.h>
+#else
 #include <stdarg.h>
+#endif
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lu_ref.h>
