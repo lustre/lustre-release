@@ -3557,10 +3557,14 @@ static int llog_search_pool_cb(const char *record, void *data)
 
 		if (lpd->lpd_cmd_type == LCFG_POOL_NEW ||
 		    lpd->lpd_cmd_type == LCFG_POOL_DEL) {
+			/* In function mgs_pool_cmd(), a pool's pool_new/add
+			 * record will be marked as "SKIP" if its pool_destroy/
+			 * remove record is logged later. That means the "SKIP"
+			 * record won't be printed here and thus lpd_ost_num
+			 * doesn't need to be decreased as well.
+			 */
 			if (strstr(record, add_pool))
 				lpd->lpd_ost_num++;
-			if (strstr(record, rem_pool))
-				lpd->lpd_ost_num--;
 		} else if (lpd->lpd_ostname && lpd->lpd_ostname[0]) {
 			if (strstr(record, lpd->lpd_ostname)) {
 				lpd->lpd_pool_exists = true;

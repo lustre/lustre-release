@@ -2078,6 +2078,29 @@ parse_out:
 EXPORT_SYMBOL(class_config_parse_llog);
 
 /**
+ * Get marker cfg_flag
+ */
+void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
+			       unsigned int *cfg_flags)
+{
+	struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
+	struct cfg_marker *marker;
+
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		marker = lustre_cfg_buf(lcfg, 1);
+		if (marker->cm_flags & CM_START) {
+			*cfg_flags = CFG_F_MARKER;
+			if (marker->cm_flags & CM_SKIP)
+				*cfg_flags = CFG_F_SKIP;
+		} else if (marker->cm_flags & CM_END) {
+			*cfg_flags = 0;
+		}
+		CDEBUG(D_INFO, "index=%d, cm_flags=%#08x cfg_flags=%#08x\n",
+		       rec->lrh_index, marker->cm_flags, *cfg_flags);
+	}
+}
+
+/**
  * Parse config record and output dump in supplied buffer.
  *
  * This is separated from class_config_dump_handler() to use
@@ -2112,28 +2135,14 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 	if (!ldata)
 		return -ENOTTY;
 
-	if (lcfg->lcfg_command == LCFG_MARKER) {
-		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-
-		lustre_swab_cfg_marker(marker, swab,
-				       LUSTRE_CFG_BUFLEN(lcfg, 1));
-		if (marker->cm_flags & CM_START) {
-			*cfg_flags = CFG_F_MARKER;
-			if (marker->cm_flags & CM_SKIP)
-				*cfg_flags = CFG_F_SKIP;
-		} else if (marker->cm_flags & CM_END) {
-			*cfg_flags = 0;
-		}
-		if (likely(!raw))
-			return 0;
-	}
-
+	llog_get_marker_cfg_flags(rec, cfg_flags);
+	if ((lcfg->lcfg_command == LCFG_MARKER) && likely(!raw))
+		return 0;
 	/* entries outside marker are skipped */
 	if (!(*cfg_flags & CFG_F_MARKER) && !raw)
 		return 0;
-
 	/* inside skipped marker */
-	if (*cfg_flags & CFG_F_SKIP && !raw)
+	if ((*cfg_flags & CFG_F_SKIP) && !raw)
 		return 0;
 
 	/* form YAML entity */
@@ -2196,15 +2205,9 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 	}
 
 	if (lcfg->lcfg_command == LCFG_MARKER) {
-		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+		struct cfg_marker *marker;
 
-		if (marker->cm_flags & CM_START) {
-			*cfg_flags = CFG_F_MARKER;
-			if (marker->cm_flags & CM_SKIP)
-				*cfg_flags = CFG_F_SKIP;
-		} else if (marker->cm_flags & CM_END) {
-			*cfg_flags = 0;
-		}
+		marker = lustre_cfg_buf(lcfg, 1);
 		ptr += snprintf(ptr, end - ptr, ", flags: %#04x",
 				marker->cm_flags);
 		ptr += snprintf(ptr, end - ptr, ", version: %d.%d.%d.%d",

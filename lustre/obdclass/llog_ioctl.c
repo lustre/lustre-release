@@ -207,6 +207,7 @@ struct llog_print_data {
 	bool		       lprd_raw;
 };
 
+#define MARKER_DIFF	10
 static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 			 struct llog_rec_hdr *rec, void *data)
 {
@@ -239,6 +240,14 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 	}
 
 	cur_index = rec->lrh_index;
+	if (from > MARKER_DIFF && cur_index >= from - MARKER_DIFF &&
+	    cur_index < from) {
+		/* LU-15706: try to remember the marker cfg_flag that the "from"
+		 * is using, in case that the "from" record doesn't know its
+		 * "SKIP" or not flag.
+		 */
+		llog_get_marker_cfg_flags(rec, &lprd->lprd_cfg_flags);
+	}
 	if (cur_index < from)
 		RETURN(0);
 	if (to > 0 && cur_index > to)
