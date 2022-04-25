@@ -1516,7 +1516,10 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	/** VBR: set new versions */
 	if (th->th_result == 0 && obj != NULL) {
 		struct dt_object *dto = dt_object_locate(obj, th->th_dev);
+
 		dt_version_set(env, dto, tti->tti_transno, th);
+		if (unlikely(tsi->tsi_dv_update))
+			dt_data_version_set(env, dto, tti->tti_transno, th);
 	}
 
 	/* filling reply data */
@@ -2068,6 +2071,8 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	    !lu_object_remote(&tsi->tsi_vbr_obj->do_lu)) {
 		dto = dt_object_locate(tsi->tsi_vbr_obj, th->th_dev);
 		rc = dt_declare_version_set(env, dto, th);
+		if (!rc && tsi->tsi_dv_update)
+			rc = dt_declare_data_version_set(env, dto, th);
 	}
 
 	return rc;

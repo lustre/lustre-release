@@ -733,6 +733,31 @@ test_1e() {
 }
 run_test 1e "Archive, Release and Restore SEL file"
 
+test_1f() {
+	(( $MDS1_VERSION >= $(version_code 2.15.55.203) )) ||
+		skip "need MDS version at least 2.15.55.203"
+	local dom=$DIR/$tdir/$tfile
+
+	mkdir_on_mdt0 $DIR/$tdir
+	$LFS setstripe -E 512K -L mdt -E -1 -c 2 $DIR/$tdir ||
+		error "failed to set default stripe"
+
+	test_1bde_base $dom
+
+	[[ $($LFS getstripe --component-start=0 -L $dom) == 'mdt' ]] ||
+		error "MDT stripe isn't set"
+
+	# check that metadata change doesn't prevent second release
+	chmod 600 $dom  || error "chmod failed"
+
+	echo "release again $dom"
+	$LFS hsm_release $dom || error "second release failed"
+	$LFS hsm_state $dom
+	echo "verify released state: "
+	check_hsm_flags $dom "0x0000000d" && echo "pass"
+}
+run_test 1f "DoM file release after restore"
+
 test_2() {
 	local f=$DIR/$tdir/$tfile
 

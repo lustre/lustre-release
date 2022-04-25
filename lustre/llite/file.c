@@ -3196,7 +3196,6 @@ restart:
 
 	ioc->idv_version = io->u.ci_data_version.dv_data_version;
 	ioc->idv_layout_version = io->u.ci_data_version.dv_layout_version;
-
 	cl_io_fini(env, io);
 
 	if (unlikely(io->ci_need_restart))

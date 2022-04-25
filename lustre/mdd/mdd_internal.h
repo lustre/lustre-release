@@ -388,6 +388,8 @@ int mdd_changelog_data_store_xattr(const struct lu_env *env,
 				   struct mdd_object *mdd_obj,
 				   const char *xattr_name,
 				   struct thandle *handle);
+int mdd_dom_fixup(const struct lu_env *env, struct mdd_device *mdd,
+		  struct mdd_object *mo, struct mdd_object *vo);
 
 /* mdd_trans.c */
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,

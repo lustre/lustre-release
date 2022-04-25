@@ -2224,11 +2224,22 @@ static inline int dt_fid_alloc(const struct lu_env *env,
 }
 
 int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
-                           struct thandle *th);
+			   struct thandle *th);
 void dt_version_set(const struct lu_env *env, struct dt_object *o,
-                    dt_obj_version_t version, struct thandle *th);
+		    dt_obj_version_t version, struct thandle *th);
+int dt_declare_data_version_set(const struct lu_env *env, struct dt_object *o,
+				struct thandle *th);
+void dt_data_version_set(const struct lu_env *env, struct dt_object *o,
+			 dt_obj_version_t version, struct thandle *th);
+int dt_declare_data_version_del(const struct lu_env *env, struct dt_object *o,
+				struct thandle *th);
+void dt_data_version_del(const struct lu_env *env, struct dt_object *o,
+			 struct thandle *th);
 dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o);
-
+dt_obj_version_t dt_data_version_get(const struct lu_env *env,
+				     struct dt_object *o);
+dt_obj_version_t dt_data_version_init(const struct lu_env *env,
+				      struct dt_object *o);
 
 int dt_read(const struct lu_env *env, struct dt_object *dt,
             struct lu_buf *buf, loff_t *pos);

@@ -1836,9 +1836,6 @@ static int mdd_split_ea(struct lov_comp_md_v1 *comp_v1, __u16 mirror_id,
 	return 0;
 }
 
-static int mdd_dom_data_truncate(const struct lu_env *env,
-				 struct mdd_device *mdd, struct mdd_object *mo);
-
 static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 			   struct md_rejig_data *mrd)
 {
@@ -2003,7 +2000,7 @@ stop:
 
 	/* Truncate local DOM data if all went well */
 	if (!rc && dom_stripe)
-		mdd_dom_data_truncate(env, mdd, obj);
+		mdd_dom_fixup(env, mdd, obj, NULL);
 
 	lu_buf_free(buf_save);
 	lu_buf_free(buf);
@@ -2414,36 +2411,61 @@ static inline int mdd_set_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
 	return mdd_lmm_gen(lmm, gen, false);
 }
 
-static int mdd_dom_data_truncate(const struct lu_env *env,
-				 struct mdd_device *mdd, struct mdd_object *mo)
+int mdd_dom_fixup(const struct lu_env *env, struct mdd_device *mdd,
+		  struct mdd_object *mo, struct mdd_object *vo)
 {
+	struct dt_object *dom, *vlt;
+	dt_obj_version_t dv = 0;
 	struct thandle *th;
-	struct dt_object *dom;
 	int rc;
 
+	ENTRY;
+
+	if (vo) {
+		vlt = dt_object_locate(mdd_object_child(vo), mdd->mdd_bottom);
+		if (!vlt)
+			GOTO(out, rc = -ENOENT);
+		dv = dt_data_version_get(env, vlt);
+		if (!dv)
+			GOTO(out, rc = -ENODATA);
+	}
+
 	dom = dt_object_locate(mdd_object_child(mo), mdd->mdd_bottom);
-	if (!dom)
-		GOTO(out, rc = -ENODATA);
 
 	th = dt_trans_create(env, mdd->mdd_bottom);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	rc = dt_declare_punch(env, dom, 0, OBD_OBJECT_EOF, th);
-	if (rc)
-		GOTO(stop, rc);
+	if (vo) {
+		rc = dt_declare_data_version_set(env, dom, th);
+		if (rc)
+			GOTO(stop, rc);
+	} else {
+		rc = dt_declare_data_version_del(env, dom, th);
+		if (rc)
+			GOTO(stop, rc);
+		rc = dt_declare_punch(env, dom, 0, OBD_OBJECT_EOF, th);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
 	rc = dt_trans_start_local(env, mdd->mdd_bottom, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_punch(env, dom, 0, OBD_OBJECT_EOF, th);
+	if (vo) {
+		dt_data_version_set(env, dom, dv, th);
+	} else {
+		dt_data_version_del(env, dom, th);
+		rc = dt_punch(env, dom, 0, OBD_OBJECT_EOF, th);
+	}
+
 stop:
 	dt_trans_stop(env, mdd->mdd_bottom, th);
 out:
 	/* Ignore failure but report the error */
 	if (rc)
-		CERROR("%s: can't truncate DOM inode "DFID" data: rc = %d\n",
+		CERROR("%s: can't manage DOM file "DFID" data: rc = %d\n",
 		       mdd_obj_dev_name(mo), PFID(mdd_object_fid(mo)), rc);
 	return rc;
 }
@@ -2467,7 +2489,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct lu_buf *snd_hsm_buf = &info->mdi_buf[3];
 	struct ost_id *saved_oi = NULL;
 	struct thandle *handle;
-	struct mdd_object *dom_o = NULL;
+	struct mdd_object *dom_o = NULL, *vlt_o = NULL;
 	__u64 domsize_dom, domsize_vlt;
 	__u32 fst_gen, snd_gen, saved_gen;
 	int fst_fl;
@@ -2527,9 +2549,11 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	 * target file must be volatile and orphan.
 	 */
 	if (fst_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
+		vlt_o = domsize_vlt ? fst_o : NULL;
 		dom_o = domsize_dom ? snd_o : NULL;
 	} else if (snd_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
 		swap(domsize_dom, domsize_vlt);
+		vlt_o = domsize_vlt ? snd_o : NULL;
 		dom_o = domsize_dom ? fst_o : NULL;
 	} else if (domsize_dom > 0 || domsize_vlt > 0) {
 		/* 'lfs swap_layouts' case, neither file should have DoM */
@@ -2553,10 +2577,6 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		       mdd_obj_dev_name(fst_o),
 		       PFID(mdd_object_fid(fst_o)), rc);
 		GOTO(stop, rc);
-	} else if (domsize_vlt > 0) {
-		/* Migration with the same DOM component size, no need to
-		 * truncate local data, it is still being used */
-		dom_o = NULL;
 	}
 
 	/* swapping 2 non existant layouts is a success */
@@ -2783,9 +2803,12 @@ unlock:
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
-	/* Truncate local DOM data if all went well */
+	/* Truncate local DOM data if all went well, except migration case
+	 * with the same DOM component size. In that case a local data is
+	 * still in use and shouldn't be deleted.
+	 */
 	if (!rc && dom_o)
-		mdd_dom_data_truncate(env, mdd, dom_o);
+		mdd_dom_fixup(env, mdd, dom_o, vlt_o);
 
 	lu_buf_free(fst_buf);
 	lu_buf_free(snd_buf);

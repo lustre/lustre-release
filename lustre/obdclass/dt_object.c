@@ -548,7 +548,6 @@ int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
 	vbuf.lb_buf = NULL;
 	vbuf.lb_len = sizeof(dt_obj_version_t);
 	return dt_declare_xattr_set(env, o, &vbuf, xname, 0, th);
-
 }
 EXPORT_SYMBOL(dt_declare_version_set);
 
@@ -562,7 +561,6 @@ void dt_version_set(const struct lu_env *env, struct dt_object *o,
 	LASSERT(o);
 	vbuf.lb_buf = &version;
 	vbuf.lb_len = sizeof(version);
-
 	rc = dt_xattr_set(env, o, &vbuf, xname, 0, th);
 	if (rc < 0)
 		CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
@@ -584,9 +582,123 @@ dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o)
 		CDEBUG(D_INODE, "Can't get version, rc %d\n", rc);
 		version = 0;
 	}
+
 	return version;
 }
 EXPORT_SYMBOL(dt_version_get);
+
+int dt_declare_data_version_set(const struct lu_env *env, struct dt_object *o,
+				struct thandle *th)
+{
+	struct lu_buf vbuf;
+
+	vbuf.lb_buf = NULL;
+	vbuf.lb_len = sizeof(dt_obj_version_t);
+
+	return dt_declare_xattr_set(env, o, &vbuf, XATTR_NAME_DATAVER, 0, th);
+}
+EXPORT_SYMBOL(dt_declare_data_version_set);
+
+void dt_data_version_set(const struct lu_env *env, struct dt_object *o,
+			 dt_obj_version_t version, struct thandle *th)
+{
+	struct lu_buf vbuf;
+
+	CDEBUG(D_INODE, DFID": set new data version -> %llu\n",
+	       PFID(lu_object_fid(&o->do_lu)), version);
+
+	/* version should never be set to zero */
+	LASSERT(version);
+	vbuf.lb_buf = &version;
+	vbuf.lb_len = sizeof(version);
+	dt_xattr_set(env, o, &vbuf, XATTR_NAME_DATAVER, 0, th);
+}
+EXPORT_SYMBOL(dt_data_version_set);
+
+int dt_declare_data_version_del(const struct lu_env *env, struct dt_object *o,
+				struct thandle *th)
+{
+	return dt_declare_xattr_del(env, o, XATTR_NAME_DATAVER, th);
+}
+EXPORT_SYMBOL(dt_declare_data_version_del);
+
+void dt_data_version_del(const struct lu_env *env, struct dt_object *o,
+			 struct thandle *th)
+{
+	/* file doesn't need explicit data version anymore */
+	CDEBUG(D_INODE, DFID": remove explicit data version\n",
+	       PFID(lu_object_fid(&o->do_lu)));
+	dt_xattr_del(env, o, XATTR_NAME_DATAVER, th);
+}
+EXPORT_SYMBOL(dt_data_version_del);
+
+/* Initialize explicit data version, e.g. for DoM files.
+ * It uses inode version as initial value.
+ */
+dt_obj_version_t dt_data_version_init(const struct lu_env *env,
+				      struct dt_object *o)
+{
+	struct dt_device *dt = lu2dt_dev(o->do_lu.lo_dev);
+	dt_obj_version_t dv;
+	struct thandle *th;
+	int rc;
+
+	ENTRY;
+
+	dv = dt_version_get(env, o);
+	if (!dv)
+		RETURN(1);
+
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	rc = dt_declare_data_version_set(env, o, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	dt_data_version_set(env, o, dv, th);
+stop:
+	dt_trans_stop(env, dt, th);
+out:
+	/* Ignore failure but report the error */
+	if (rc)
+		CDEBUG(D_INODE, "can't init data version for "DFID": rc = %d\n",
+		       PFID(lu_object_fid(&o->do_lu)), rc);
+
+	RETURN(dv);
+}
+
+dt_obj_version_t dt_data_version_get(const struct lu_env *env,
+				     struct dt_object *o)
+{
+	struct lu_buf vbuf;
+	dt_obj_version_t version;
+	int rc;
+
+	vbuf.lb_buf = &version;
+	vbuf.lb_len = sizeof(version);
+	rc = dt_xattr_get(env, o, &vbuf, XATTR_NAME_DATAVER);
+
+	CDEBUG(D_INODE, DFID": get data version %llu: rc = %d\n",
+	       PFID(lu_object_fid(&o->do_lu)), version, rc);
+
+	if (rc == sizeof(version))
+		return version;
+
+	/* data version EA wasn't set yet on the object, initialize it now */
+	if (rc == -ENODATA)
+		return dt_data_version_init(env, o);
+
+	CDEBUG(D_INODE, "Can't get data version: rc = %d\n", rc);
+
+	return 0;
+}
+EXPORT_SYMBOL(dt_data_version_get);
 
 /* list of all supported index types */
 

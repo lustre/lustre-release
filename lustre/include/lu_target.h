@@ -282,6 +282,7 @@ struct tgt_session_info {
 	 * this value onto disk for recovery when tgt_txn_stop_cb() is called.
 	 */
 	__u64			 tsi_opdata;
+	bool			 tsi_dv_update;
 
 	/*
 	 * Additional fail id that can be set by handler.
@@ -317,15 +318,22 @@ static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
 	return tsi;
 }
 
-static inline void tgt_vbr_obj_set(const struct lu_env *env,
-				   struct dt_object *obj)
+static inline void tgt_vbr_obj_data_set(const struct lu_env *env,
+					struct dt_object *obj, bool dv_update)
 {
 	struct tgt_session_info	*tsi;
 
 	if (env->le_ses != NULL) {
 		tsi = tgt_ses_info(env);
 		tsi->tsi_vbr_obj = obj;
+		tsi->tsi_dv_update = dv_update;
 	}
+}
+
+static inline void tgt_vbr_obj_set(const struct lu_env *env,
+				   struct dt_object *obj)
+{
+	return tgt_vbr_obj_data_set(env, obj, false);
 }
 
 static inline void tgt_open_obj_set(const struct lu_env *env,

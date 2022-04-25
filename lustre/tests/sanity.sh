@@ -23835,6 +23835,63 @@ test_270i() {
 }
 run_test 270i "DoM: setting invalid DoM striping should fail"
 
+test_270j() {
+	(( $MDS1_VERSION >= $(version_code 2.15.55.203) )) ||
+		skip "Need MDS version at least 2.15.55.203"
+
+	local dom=$DIR/$tdir/$tfile
+	local odv
+	local ndv
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+
+	odv=$($LFS data_version $dom)
+	chmod 666 $dom
+	mv $dom ${dom}_moved
+	link ${dom}_moved $dom
+	setfattr -n user.attrx -v "some_attr" $dom
+	ndv=$($LFS data_version $dom)
+	(( $ndv == $odv )) ||
+		error "data version was changed by metadata operations"
+
+	dd if=/dev/urandom of=$dom bs=1M count=1 ||
+		error "failed to write data into $dom"
+	cancel_lru_locks mdc
+	ndv=$($LFS data_version $dom)
+	(( $ndv != $odv )) ||
+		error "data version wasn't changed on write"
+
+	odv=$ndv
+	$TRUNCATE $dom 1000 || error "failed to truncate $dom"
+	ndv=$($LFS data_version $dom)
+	(( $ndv != $odv )) ||
+		error "data version wasn't changed on truncate down"
+
+	odv=$ndv
+	$TRUNCATE $dom 25000
+	ndv=$($LFS data_version $dom)
+	(( $ndv != $odv )) ||
+		error "data version wasn't changed on truncate up"
+
+	# check also fallocate for ldiskfs
+	if [[ "$mds1_FSTYPE" == ldiskfs ]]; then
+		odv=$ndv
+		fallocate -l 1048576 $dom
+		ndv=$($LFS data_version $dom)
+		(( $ndv != $odv )) ||
+			error "data version wasn't changed on fallocate"
+
+		odv=$ndv
+		fallocate -p --offset 4096 -l 4096 $dom
+		ndv=$($LFS data_version $dom)
+		(( $ndv != $odv )) ||
+			error "data version wasn't changed on fallocate punch"
+	fi
+}
+run_test 270j "DoM migration: DOM file to the OST-striped file (plain)"
+
 test_271a() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
@@ -24140,8 +24197,10 @@ test_272b() {
 
 	$LFS migrate -c2 $dom ||
 		error "failed to migrate to the new composite layout"
-	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
+	[[ $($LFS getstripe --component-start=0 -L $dom) != 'mdt' ]] ||
 		error "MDT stripe was not removed"
+	! getfattr -n trusted.dataver $dom &> /dev/null ||
+		error "$dir1 shouldn't have DATAVER EA"
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
@@ -24181,7 +24240,7 @@ test_272c() {
 
 	$LFS migrate -E 2M -c1 -E -1 -c2 $dom ||
 		error "failed to migrate to the new composite layout"
-	[ $($LFS getstripe -L $dom) == 'mdt' ] &&
+	[[ $($LFS getstripe --component-start=0 -L $dom) != 'mdt' ]] ||
 		error "MDT stripe was not removed"
 
 	cancel_lru_locks mdc
