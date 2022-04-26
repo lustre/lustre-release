@@ -3604,8 +3604,10 @@ all_mds_up() {
 	(( MDSCOUNT == 1 )) && return
 
 	# wait so that statfs data on MDT expire
-	local delay=$(do_facet $SINGLEMDS lctl \
-		get_param -n osp.*MDT0000*MDT0001.maxage)
+	local delay=$(do_facet mds1 $LCTL \
+		get_param -n osp.*MDT*MDT0000.maxage | sort -n | tail -1)
+
+	[ -n "$delay" ] || error "fail to get maxage"
 	sleep $delay
 	local nodes=$(comma_list $(mdts_nodes))
 	# initiate statfs RPC, all to all MDTs
