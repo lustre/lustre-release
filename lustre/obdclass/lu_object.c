@@ -157,6 +157,7 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 	struct lu_object *orig = o;
 	const struct lu_fid *fid = lu_object_fid(o);
 
+	LASSERTF(atomic_read(&top->loh_ref) > 0, "o %p\n", o);
 	/*
 	 * till we have full fids-on-OST implemented anonymous objects
 	 * are possible in OSP. such an object isn't listed in the site

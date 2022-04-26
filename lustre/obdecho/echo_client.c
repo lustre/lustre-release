@@ -683,7 +683,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
 		}
 
 		tgt_type_name = lustre_cfg_string(cfg, 2);
-		if (!tgt_type_name) {
+		if (!tgt_type_name || strcmp(tgt_type_name, "mdd")) {
 			CERROR("%s no type name for echo %s setup\n",
 				lustre_cfg_string(cfg, 1),
 				tgt->obd_type->typ_name);
@@ -1795,8 +1795,14 @@ static struct lu_object *echo_resolve_path(const struct lu_env *env,
 		}
 		parent = child;
 	}
+
 	if (rc)
 		RETURN(ERR_PTR(rc));
+
+	if (!lu_object_exists(parent)) {
+		lu_object_put(env, parent);
+		parent = ERR_PTR(-ENOENT);
+	}
 
 	RETURN(parent);
 }

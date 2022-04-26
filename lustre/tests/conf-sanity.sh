@@ -10838,6 +10838,37 @@ test_135() {
 }
 run_test 135 "check the behavior when changelog is wrapped around"
 
+cleanup_136 () {
+	do_facet mds2 "$LCTL --device ec cleanup" || true
+	do_facet mds2 "$LCTL --device ec detach" || true
+
+	stopall
+	reformat_and_config
+}
+
+test_136() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+
+	reformat
+	setup_noconfig
+
+	do_facet mds2 "$LCTL attach echo_client ec ec_uuid" ||
+	    error "echo attach fail"
+
+	stack_trap cleanup_136 EXIT
+
+	do_facet mds2 "$LCTL --device ec setup lustre-MDT0001 mdt" &&
+	    error "attach to MDT should fail!"
+
+	do_facet mds2 "$LCTL --device ec setup lustre-MDT0001 mdd" ||
+	    error "attach to MDD should OK"
+	do_facet mds2 "$LCTL --device ec test_mkdir /tt" &&
+	    error "mkdir test should fail with remote object"
+
+	return 0
+}
+run_test 136 "don't panic with bad obdecho setup"
+
 test_140() {
 	(( MDS1_VERSION >= $(version_code 2.15.55) )) ||
 		skip "need MDS version at least 2.15.55"
