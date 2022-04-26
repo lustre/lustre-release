@@ -156,14 +156,15 @@ print_summary () {
 # output: No return values, environment variables are exported
 
 get_lustre_env() {
+	if ! $RPC_MODE; then
+		export mds1_FSTYPE=${mds1_FSTYPE:-$(facet_fstype mds1)}
+		export ost1_FSTYPE=${ost1_FSTYPE:-$(facet_fstype ost1)}
 
-	export mds1_FSTYPE=${mds1_FSTYPE:-$(facet_fstype mds1)}
-	export ost1_FSTYPE=${ost1_FSTYPE:-$(facet_fstype ost1)}
-
-	export MGS_VERSION=$(lustre_version_code mgs)
-	export MDS1_VERSION=$(lustre_version_code mds1)
-	export OST1_VERSION=$(lustre_version_code ost1)
-	export CLIENT_VERSION=$(lustre_version_code client)
+		export MGS_VERSION=$(lustre_version_code mgs)
+		export MDS1_VERSION=$(lustre_version_code mds1)
+		export OST1_VERSION=$(lustre_version_code ost1)
+		export CLIENT_VERSION=$(lustre_version_code client)
+	fi
 
 	# Prefer using "mds1" directly instead of SINGLEMDS.
 	# Keep this for compat until it is removed from scripts.
