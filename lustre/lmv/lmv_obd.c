@@ -1239,6 +1239,7 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 	__u32 i;
 	__u32 idx;
 	int rc = 0;
+	int err = 0;
 
 	ENTRY;
 
@@ -1260,6 +1261,10 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 		if (rc) {
 			CERROR("%s: can't stat MDS #%d: rc = %d\n",
 			       tgt->ltd_exp->exp_obd->obd_name, i, rc);
+			err = rc;
+			/* Try another MDT */
+			if (flags & OBD_STATFS_SUM)
+				continue;
 			GOTO(out_free_temp, rc);
 		}
 
@@ -1273,7 +1278,7 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 			 * clients can be mounted as long as MDT0 is in
 			 * service */
 			*osfs = *temp;
-			break;
+			GOTO(out_free_temp, rc);
 		}
 
 		if (i == 0) {
@@ -1286,11 +1291,12 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 			osfs->os_granted += temp->os_granted;
 		}
 	}
-
-	EXIT;
+	/* There is no stats from some MDTs, data incomplete */
+	if (err)
+		rc = err;
 out_free_temp:
 	OBD_FREE(temp, sizeof(*temp));
-	return rc;
+	RETURN(rc);
 }
 
 static int lmv_statfs_update(void *cookie, int rc)

@@ -3280,6 +3280,29 @@ test_149() {
 }
 run_test 149 "skip orphan removal at umount"
 
+test_150() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	local lazystatfs
+	local max
+
+	lazystatfs=$($LCTL get_param -n llite.$FSNAME-*.lazystatfs | head -1)
+	max=$($LCTL get_param -n llite.$FSNAME-*.statahead_max | head -1)
+
+	$LCTL set_param llite.$FSNAME-*.lazystatfs=1
+	$LCTL set_param llite.$FSNAME-*.statahead_max=0
+	stack_trap "$LCTL set_param llite.$FSNAME-*.lazystatfs=$lazystatfs" EXIT
+	stack_trap "$LCTL set_param llite.$FSNAME-*.statahead_max=$max" EXIT
+	# stop a slave MDT where one ons stripe is located
+	stop mds1 -f
+
+	stack_trap "start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS && \
+		wait_recovery_complete mds1 && clients_up && true" EXIT
+
+	df $MOUNT || error "statfs failed"
+	return 0
+}
+run_test 150 "statfs when MDT0 offline with lazystatfs option"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
