@@ -219,8 +219,7 @@ MODULE_ALIAS_FS("lustre");
 
 static int __init lustre_init(void)
 {
-	struct lnet_processid lnet_id;
-	int i, rc;
+	int rc;
 	unsigned long lustre_inode_cache_flags;
 
 	BUILD_BUG_ON(sizeof(LUSTRE_VOLATILE_HDR) !=
@@ -259,15 +258,6 @@ static int __init lustre_init(void)
 	rc = llite_tunables_register();
 	if (rc)
 		GOTO(out_cache, rc);
-
-	/* Nodes with small feet have little entropy. The NID for this
-	 * node gives the most entropy in the low bits. */
-	for (i = 0;; i++) {
-		if (LNetGetId(i, &lnet_id) == -ENOENT)
-			break;
-
-		add_device_randomness(&lnet_id.nid, sizeof(lnet_id.nid));
-	}
 
 	rc = vvp_global_init();
 	if (rc != 0)

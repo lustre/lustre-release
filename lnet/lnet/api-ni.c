@@ -2563,6 +2563,11 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 		   lnet_ni_tq_credits(ni) * ni->ni_ncpts);
 	atomic_set(&ni->ni_healthv, LNET_MAX_HEALTH_VALUE);
 
+	/* Nodes with small feet have little entropy. The NID for this
+	 * node gives the most entropy in the low bits.
+	 */
+	add_device_randomness(&ni->ni_nid, sizeof(ni->ni_nid));
+
 	CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d/%d]\n",
 		libcfs_nidstr(&ni->ni_nid),
 		ni->ni_net->net_tunables.lct_peer_tx_credits,
