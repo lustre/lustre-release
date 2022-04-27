@@ -718,6 +718,10 @@ static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 	if (IS_ERR(o))
 		RETURN(rc = PTR_ERR(o));
 
+	rc = mdt_check_enc(info, o);
+	if (rc)
+		GOTO(out, rc);
+
 	if (unlikely(mdt_object_remote(o))) {
 		/* the child object was created on remote server */
 		struct mdt_body *repbody;
@@ -1078,6 +1082,13 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 		GOTO(out, rc = -ENOENT);
 	}
 
+	/* do not check enc for directory: always allow open */
+	if (!S_ISDIR(lu_object_attr(&o->mot_obj))) {
+		rc = mdt_check_enc(info, o);
+		if (rc)
+			GOTO(out, rc);
+	}
+
 	mdt_set_disposition(info, rep, (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
 	mdt_prep_ma_buf_from_rep(info, o, ma);
@@ -1156,6 +1167,10 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 	o = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(o))
 		RETURN(rc = PTR_ERR(o));
+
+	rc = mdt_check_enc(info, o);
+	if (rc)
+		GOTO(out, rc);
 
 	if (mdt_object_remote(o)) {
 		/* Something is wrong here, the object is on another MDS! */
@@ -1390,6 +1405,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		mdt_object_put(info->mti_env, parent);
 		GOTO(out, result);
 	}
+
+	result = mdt_check_enc(info, parent);
+	if (result)
+		GOTO(out_parent, result);
 
 	fid_zero(child_fid);
 	result = -ENOENT;

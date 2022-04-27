@@ -4261,6 +4261,7 @@ run_test 53 "Mixed PAGE_SIZE clients"
 
 test_54() {
 	local testdir=$DIR/$tdir/$ID0
+	local testdir2=$DIR2/$tdir/$ID0
 	local testfile=$testdir/$tfile
 	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
 	local tmpfile=$TMP/${tfile}.tmp
@@ -4334,6 +4335,33 @@ test_54() {
 
 	$RUNAS hexdump -C ${scrambledfiles[1]} &&
 		error "reading ${scrambledfiles[1]} should fail without key"
+
+	# server local client incompatible with SSK keys installed
+	if [ "$SHARED_KEY" != true ]; then
+		mount_mds_client
+		do_facet $SINGLEMDS touch $DIR2/$tdir/newfile
+		mdsscrambledfile=$(do_facet $SINGLEMDS find $testdir2/ \
+					-maxdepth 1 -type f | head -n1)
+		[ -n "$mdsscrambledfile" ] || error "could not find file"
+		do_facet $SINGLEMDS cat "$mdsscrambledfile" &&
+			error "reading $mdsscrambledfile should fail on MDS"
+		do_facet $SINGLEMDS "echo aaa >> \"$mdsscrambledfile\"" &&
+			error "writing $mdsscrambledfile should fail on MDS"
+		do_facet $SINGLEMDS $MULTIOP $testdir2/fileA m &&
+			error "creating $testdir2/fileA should fail on MDS"
+		do_facet $SINGLEMDS mkdir $testdir2/dirA &&
+			error "mkdir $testdir2/dirA should fail on MDS"
+		do_facet $SINGLEMDS ln -s $DIR2/$tdir/newfile $testdir2/sl1 &&
+			error "ln -s $testdir2/sl1 should fail on MDS"
+		do_facet $SINGLEMDS ln $DIR2/$tdir/newfile $testdir2/hl1 &&
+			error "ln $testdir2/hl1 should fail on MDS"
+		do_facet $SINGLEMDS mv "$mdsscrambledfile" $testdir2/fB &&
+			error "mv $mdsscrambledfile should fail on MDS"
+		do_facet $SINGLEMDS mrename "$mdsscrambledfile" $testdir2/fB &&
+			error "mrename $mdsscrambledfile should fail on MDS"
+		do_facet $SINGLEMDS rm -f $DIR2/$tdir/newfile
+		umount_mds_client
+	fi
 
 	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
 		error "fscrypt unlock $testdir failed (2)"

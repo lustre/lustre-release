@@ -1428,6 +1428,42 @@ static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
 	return is_admin;
 }
 
+/* We forbid operations from encryption-unaware clients if they try to
+ * manipulate encrypted files/directories.
+ */
+static inline int mdt_check_enc(struct mdt_thread_info *info,
+				struct mdt_object *obj)
+{
+	struct obd_export *exp;
+	struct md_attr ma = { 0 };
+	int rc = 0;
+
+	if (!mdt_info_req(info))
+		/* no req, so cannot tell about client connection flags:
+		 * allow access
+		 */
+		return 0;
+	exp = mdt_info_req(info)->rq_export;
+	if (exp_connect_encrypt(exp))
+		/* client is encryption aware: fine */
+		return 0;
+
+	ma.ma_need = MA_INODE;
+	mdt_attr_get_complex(info, obj, &ma);
+	if (ma.ma_attr.la_valid & LA_FLAGS &&
+	    ma.ma_attr.la_flags & LUSTRE_ENCRYPT_FL)
+		rc = -ENOKEY;
+
+	if (rc)
+		CDEBUG(D_SEC, "%s: operation on encrypted "DFID
+		       " from encryption-unaware client %s: %d\n",
+		       mdt_obd_name(info->mti_mdt),
+		       PFID(lu_object_fid(&obj->mot_obj)),
+		       libcfs_nidstr(&exp->exp_connection->c_peer.nid), rc);
+
+	return rc;
+}
+
 int mdt_reint_migrate(struct mdt_thread_info *info,
 		      struct mdt_lock_handle *unused);
 int mdt_dir_layout_update(struct mdt_thread_info *info);
