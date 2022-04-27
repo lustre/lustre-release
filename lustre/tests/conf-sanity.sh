@@ -8975,7 +8975,7 @@ cleanup_115()
 {
 	trap 0
 	stopall
-	rm -f $TMP/$tdir/lustre-mdt
+	do_facet mds1 rm -f $1
 }
 
 test_115() {
@@ -8984,79 +8984,79 @@ test_115() {
 	fi
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
-	local dbfs_ver=$(do_facet $SINGLEMDS $DEBUGFS -V 2>&1)
+	local dbfs_ver=$(do_facet mds1 $DEBUGFS -V 2>&1)
 
 	echo "debugfs version: $dbfs_ver"
 	echo "$dbfs_ver" | egrep -w "1.44.3.wc1|1.44.5.wc1|1.45.2.wc1" &&
 		skip_env "This version of debugfs doesn't show inode number"
 
-	IMAGESIZE=$((3072 << 30)) # 3072 GiB
+	local IMAGESIZE=$((3072 << 30)) # 3072 GiB
 
 	stopall
 
-	local saved_flakey=${FLAKEY}
-
-	stack_trap "FLAKEY=$saved_flakey" EXIT
 	FLAKEY=false
 
 	echo "client1: "
-	lctl dl
+	$LCTL dl
 	mount | grep lustre
 	echo "mds1: "
-	do_facet mds1 "hostname; lctl dl; mount"
+	do_facet mds1 "hostname; $LCTL dl; mount"
 	echo "ost1: "
-	do_facet ost1 "hostname; lctl dl; mount"
+	do_facet ost1 "hostname; $LCTL dl; mount"
 	# We need MDT size 3072GB, because it is smallest
 	# partition that can store 2B inodes
-	do_facet $SINGLEMDS "mkdir -p $TMP/$tdir"
+	do_facet mds1 "mkdir -p $TMP/$tdir"
 	local mdsimgname=$TMP/$tdir/lustre-mdt
 
-	do_facet $SINGLEMDS "rm -f $mdsimgname"
-	do_facet $SINGLEMDS "touch $mdsimgname"
-	trap cleanup_115 RETURN EXIT
-	do_facet $SINGLEMDS "$TRUNCATE $mdsimgname $IMAGESIZE" ||
+	do_facet mds1 "rm -f $mdsimgname"
+	do_facet mds1 "touch $mdsimgname"
+	stack_trap "cleanup_115 $mdsimgname" EXIT
+	do_facet mds1 "$TRUNCATE $mdsimgname $IMAGESIZE" ||
 		skip "Backend FS doesn't support sparse files"
-	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
+	local mdsdev=$(do_facet mds1 "losetup -f")
 
-	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
+	do_facet mds1 "losetup $mdsdev $mdsimgname"
 
 	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1))	 \
 		--mkfsoptions='-O ea_inode,^resize_inode,meta_bg \
 		-N 2247484000 -E lazy_itable_init' --device-size=$IMAGESIZE"
 	add mds1 $mds_opts --mgs --reformat $mdsdev ||
 		skip_env "format large MDT failed"
-	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
-		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
+
+	local ostdev=$(ostdevname 1)
+
+	local opts="$(mkfs_opts ost1 $ostdev) \
+		--reformat $ostdev $ostdev"
 	add ost1 $opts || error "add ost1 failed with new params"
-	start $SINGLEMDS  $mdsdev $MDS_MOUNT_OPTS || error "start MDS failed"
+	start mds1  $mdsdev $MDS_MOUNT_OPTS || error "start MDS failed"
 	start_ost || error "start OSS failed"
 	mount_client $MOUNT || error "mount client failed"
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir fail"
-	goal="/sys/fs/ldiskfs/$(basename $mdsdev)/inode_goal"
+	local goal="/sys/fs/ldiskfs/$(basename $mdsdev)/inode_goal"
 	echo goal: $goal
 	# 2147483648 is 0x80000000
-	do_facet $SINGLEMDS "echo 2147483648 >> $goal; grep . $goal"
+	do_facet mds1 "echo 2147483648 >> $goal; grep . $goal"
 	touch $DIR/$tdir/$tfile
 
 	# attrs from 1 to 16 go to block, 17th - to inode
+	local i
+
 	for i in {1..17}; do
 		local nm="trusted.ea$i"
-
 		setfattr -n $nm -v $(printf "xattr%0250d" $i) $DIR/$tdir/$tfile
 	done
 
-	do_facet $SINGLEMDS $DEBUGFS -c -R "stat ROOT/$tdir/$tfile" $mdsdev
+	do_facet mds1 "$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsdev"
 
 	# inode <2147483649> trusted.ea16 (255)
-	local inode_num=$(do_facet $SINGLEMDS \
+	local inode_num=$(do_facet mds1 \
 			"$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsdev" |
 			 awk '/ea17/ { print $2 }' |
 			 sed -e 's/>//' -e 's/<//' -e 's/\"//')
 	echo "inode num: $inode_num"
 	[ $inode_num -ge 2147483648 ] || error "inode $inode_num too small"
-	do_facet $SINGLEMDS "losetup -d $mdsdev"
-	cleanup_115
+	do_facet mds1 "losetup -d $mdsdev"
 }
 run_test 115 "Access large xattr with inodes number over 2TB"
 
