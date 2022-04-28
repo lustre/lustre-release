@@ -72,7 +72,7 @@ Package: lustre-iokit
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-client-utils (= ${binary:Version}), python, perl, sg3-utils
+Depends: lustre-client-utils (= ${binary:Version}), python2, perl, sg3-utils
 Description: Collection of benchmark tools for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
