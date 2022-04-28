@@ -9149,6 +9149,7 @@ void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 		lo->ldo_dir_stripes_allocated = 0;
 		lo->ldo_dir_stripe_loaded = 0;
 		lo->ldo_dir_stripe_count = 0;
+		lo->ldo_obj.do_index_ops = NULL;
 	} else if (lo->ldo_comp_entries != NULL) {
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
 			/* free lod_layout_component::llc_stripe array */
