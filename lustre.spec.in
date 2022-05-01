@@ -479,7 +479,13 @@ fi
 # also remove (build|host|target) options because they will be specified
 # inside $CONFIGURE_ARGS
 # kmod tools/scripts require "name" directory with kernel modules
-%define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
+
+%if 0%{?rhel} >= 9
+%define _configure eval ./configure
+%define eval_configure %configure
+%else
+%define eval_configure %(echo -n '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
+%endif
 
 %if %{with mpi}
 %if %{mpi_name} == "mpich"
