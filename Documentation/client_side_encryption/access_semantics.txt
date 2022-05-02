@@ -105,6 +105,28 @@ It is not currently possible to backup and restore encrypted files
 without the encryption key.  This would require special APIs which
 have not yet been implemented.
 
+From encryption-unaware clients
+-------------------------------
+
+Encryption-unaware clients are Lustre clients explicitly compiled without
+encryption support (``--enable-crypto=no``), or compiled for a kernel that
+does not have necessary features to support Lustre client encryption (older
+than CentOS/RHEL 8.1, Ubuntu 18.04, SLES 15 SP2), or Lustre clients with a
+version older than 2.14.
+
+From those clients, we prevent manipulating encrypted files and directories,
+in order to avoid file system corruption.
+The forbidden operations are:
+- open;
+- create;
+- link;
+- rename;
+- migrate.
+Encryption-unaware clients get -ENOKEY if they try to perform these operations.
+Note that encryption-unaware clients can still list directory content, stat or
+remove files, but they have to use encrypted names for that, which may contain
+non-printable characters.
+
 Encryption policy enforcement
 =============================
 
