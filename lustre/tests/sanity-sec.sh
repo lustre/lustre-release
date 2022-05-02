@@ -4269,6 +4269,7 @@ test_54() {
 	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
 	local tmpfile=$TMP/${tfile}.tmp
 	local resfile=$TMP/${tfile}.res
+	local nameenc
 	local fid1
 	local fid2
 
@@ -4317,6 +4318,18 @@ test_54() {
 	$RUNAS ls -R $testdir || error "ls -R $testdir failed"
 	local filecount=$($RUNAS find $testdir -type f | wc -l)
 	[ $filecount -eq 3 ] || error "found $filecount files"
+
+	# check enable_filename_encryption default value
+	nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
+			head -n1)
+	[ $nameenc -eq 0 ] ||
+		error "enable_filename_encryption should be 0 by default"
+
+	# $testfile and $testfile2 should exist because names are not encrypted
+	[ -f $testfile ] ||
+		error "$testfile should exist because name is not encrypted"
+	[ -f $testfile2 ] ||
+		error "$testfile should exist because name is not encrypted"
 
 	scrambledfiles=( $(find $testdir/ -maxdepth 1 -type f) )
 	$RUNAS hexdump -C ${scrambledfiles[0]} &&
@@ -4391,6 +4404,16 @@ test_54() {
 	fid1=$(path2fid $MOUNT/.fscrypt)
 	echo "With FILESET $tdir, .fscrypt FID is $fid1"
 
+	# enable name encryption
+	do_facet mgs $LCTL set_param -P llite.*.enable_filename_encryption=1
+	[ $? -eq 0 ] ||
+		error "set_param -P llite.*.enable_filename_encryption failed"
+
+	wait_update_facet --verbose client \
+	    "$LCTL get_param -n llite.*.enable_filename_encryption | head -n1" \
+	    1 30 ||
+		error "enable_filename_encryption not set on client"
+
 	# encrypt 'vault' dir inside the subdir mount
 	echo -e 'mypass\nmypass' | su - $USER0 -c "fscrypt encrypt --verbose \
 		--source=custom_passphrase --name=protector $testdir" ||
@@ -4402,6 +4425,11 @@ test_54() {
 
 	$RUNAS fscrypt lock --verbose $testdir ||
 		error "fscrypt lock $testdir failed (4)"
+
+	# encfile should actually have its name encrypted
+	[ -f $testdir/encfile ] && error "encfile name should be encrypted"
+	filecount=$(find $testdir -type f | wc -l)
+	[ $filecount -eq 1 ] || error "found $filecount files instead of 1"
 
 	# remount client with encrypted dir as subdirectory mount
 	umount_client $MOUNT || error "umount $MOUNT failed (2)"
@@ -4440,6 +4468,16 @@ test_54() {
 	rm -rf $DIR/$tdir/vault/*
 	$RUNAS fscrypt lock --verbose $DIR/$tdir/vault ||
 		error "fscrypt lock $DIR/$tdir/vault failed (5)"
+
+	# disable name encryption
+	do_facet mgs $LCTL set_param -P llite.*.enable_filename_encryption=0
+	[ $? -eq 0 ] ||
+		error "set_param -P llite.*.enable_filename_encryption failed"
+
+	wait_update_facet --verbose client \
+	    "$LCTL get_param -n llite.*.enable_filename_encryption | head -n1" \
+	    0 30 ||
+		error "enable_filename_encryption not set back to default"
 
 	rm -rf $tmpfile $MOUNT/.fscrypt
 }

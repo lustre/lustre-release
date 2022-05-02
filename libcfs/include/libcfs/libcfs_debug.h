@@ -37,6 +37,7 @@
 #ifndef __LIBCFS_DEBUG_H__
 #define __LIBCFS_DEBUG_H__
 
+#include <linux/tty.h>
 #include <linux/limits.h>
 #include <uapi/linux/lnet/libcfs_debug.h>
 
@@ -306,5 +307,22 @@ do {									\
 } while (0)
 
 void cfs_debug_init(void);
+
+static inline void cfs_tty_write_msg(const char *msg)
+{
+	struct tty_struct *tty;
+
+	tty = get_current_tty();
+	if (!tty)
+		return;
+	mutex_lock(&tty->atomic_write_lock);
+	tty_lock(tty);
+	if (tty->ops->write && tty->count > 0)
+		tty->ops->write(tty, msg, strlen(msg));
+	tty_unlock(tty);
+	mutex_unlock(&tty->atomic_write_lock);
+	wake_up_interruptible_poll(&tty->write_wait, POLL_OUT);
+	tty_kref_put(tty);
+}
 
 #endif	/* __LIBCFS_DEBUG_H__ */

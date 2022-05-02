@@ -4846,7 +4846,6 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	__u64 data_version = 0;
 	size_t namelen = strlen(name);
 	int lumlen = lmv_user_md_size(lum->lum_stripe_count, lum->lum_magic);
-	bool oldformat = false;
 	int rc;
 	ENTRY;
 
@@ -4896,20 +4895,6 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	 */
 	if (is_root_inode(child_inode))
 		GOTO(out_iput, rc = -EINVAL);
-
-	if (IS_ENCRYPTED(parent)) {
-		if (unlikely(!llcrypt_policy_has_filename_enc(parent)))
-			oldformat = true;
-	} else if (IS_ENCRYPTED(child_inode) &&
-		   unlikely(!llcrypt_policy_has_filename_enc(child_inode))) {
-		oldformat = true;
-	}
-	if (unlikely(oldformat)) {
-		CDEBUG(D_SEC,
-		       "cannot migrate old format encrypted "DFID", please move to new enc dir first\n",
-		       PFID(ll_inode2fid(child_inode)));
-		GOTO(out_iput, rc = -EUCLEAN);
-	}
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
 				     child_inode->i_mode, LUSTRE_OPC_ANY, NULL);

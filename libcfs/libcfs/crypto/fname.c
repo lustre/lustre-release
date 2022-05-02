@@ -291,7 +291,7 @@ int llcrypt_fname_disk_to_usr(struct inode *inode,
 		return fname_decrypt(inode, iname, oname);
 	}
 
-	if (unlikely(!llcrypt_policy_has_filename_enc(inode))) {
+	if (!llcrypt_policy_has_filename_enc(inode)) {
 		memcpy(oname->name, iname->name, iname->len);
 		oname->name[iname->len] = '\0';
 		oname->len = iname->len;
@@ -387,7 +387,7 @@ int llcrypt_setup_filename(struct inode *dir, const struct qstr *iname,
 	if (!lookup)
 		return -ENOKEY;
 
-	if (unlikely(!llcrypt_policy_has_filename_enc(dir))) {
+	if (!llcrypt_policy_has_filename_enc(dir)) {
 		fname->disk_name.name = (unsigned char *)iname->name;
 		fname->disk_name.len = iname->len;
 		return 0;
