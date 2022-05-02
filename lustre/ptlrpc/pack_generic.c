@@ -2426,8 +2426,10 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 	__swab16s(&lum->lcm_flags);
 	__swab16s(&lum->lcm_entry_count);
 	__swab16s(&lum->lcm_mirror_count);
+	/* no need to swab lcm_ec_count */
 	BUILD_BUG_ON(offsetof(typeof(*lum), lcm_padding1) == 0);
 	BUILD_BUG_ON(offsetof(typeof(*lum), lcm_padding2) == 0);
+	BUILD_BUG_ON(offsetof(typeof(*lum), lcm_padding3) == 0);
 
 	for (i = 0; i < ent_count; i++) {
 		ent = &lum->lcm_entries[i];
@@ -2446,6 +2448,8 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		__swab32s(&ent->lcme_offset);
 		__swab32s(&ent->lcme_size);
 		__swab32s(&ent->lcme_layout_gen);
+		/* no need to swab lcme_dstripe_count */
+		/* no need to swab lcme_cstripe_count */
 		BUILD_BUG_ON(offsetof(typeof(*ent), lcme_padding_1) == 0);
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);

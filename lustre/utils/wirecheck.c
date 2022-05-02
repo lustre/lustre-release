@@ -844,6 +844,8 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_layout_gen);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_timestamp);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_dstripe_count);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_cstripe_count);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding_1);
 
 	CHECK_CVALUE_X(LCME_FL_STALE);
@@ -868,6 +870,8 @@ check_lov_comp_md_v1(void)
 	CHECK_MEMBER(lov_comp_md_v1, lcm_flags);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entry_count);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_mirror_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_ec_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_padding3);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);

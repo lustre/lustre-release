@@ -1843,9 +1843,17 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_timestamp));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1) == 44, "found %lld\n",
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_dstripe_count) == 44, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_dstripe_count));
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_dstripe_count) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_dstripe_count));
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_cstripe_count) == 45, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_cstripe_count));
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count));
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1) == 46, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1));
-	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1) == 4, "found %lld\n",
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1));
 	BUILD_BUG_ON(LCME_FL_STALE != 0x00000001);
 	BUILD_BUG_ON(LCME_FL_PREF_RD != 0x00000002);
@@ -1855,6 +1863,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LCME_FL_INIT != 0x00000010);
 	BUILD_BUG_ON(LCME_FL_NOSYNC != 0x00000020);
 	BUILD_BUG_ON(LCME_FL_EXTENSION != 0x00000040);
+	BUILD_BUG_ON(LCME_FL_PARITY != 0x00000080);
 	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
 
 	/* Checks for struct lov_comp_md_v1 */
@@ -1884,9 +1893,17 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_mirror_count));
 	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_mirror_count) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_mirror_count));
-	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding1) == 18, "found %lld\n",
+	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_ec_count) == 18, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_ec_count));
+	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_ec_count) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_ec_count));
+	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding3) == 19, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_padding3));
+	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding3) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding3));
+	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding1) == 20, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_padding1));
-	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1) == 6, "found %lld\n",
+	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1));
 	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding2) == 24, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_padding2));

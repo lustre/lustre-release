@@ -858,6 +858,7 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_INIT	  = 0x00000010,	/* instantiated */
 	LCME_FL_NOSYNC	  = 0x00000020,	/* FLR: no sync for the mirror */
 	LCME_FL_EXTENSION = 0x00000040,	/* extension comp, never init */
+	LCME_FL_PARITY    = 0x00000080,	/* EC: a parity code component */
 	LCME_FL_NEG	  = 0x80000000	/* used to indicate a negative flag,
 					 * won't be stored on disk
 					 */
@@ -906,13 +907,23 @@ enum lcme_id {
 struct lov_comp_md_entry_v1 {
 	__u32			lcme_id;        /* unique id of component */
 	__u32			lcme_flags;     /* LCME_FL_XXX */
-	struct lu_extent	lcme_extent;    /* file extent for component */
+	/* file extent for component. If it's an EC code component, its flags
+	 * contains LCME_FL_PARITY, and its extent covers the same extent of
+	 * its corresponding data component.
+	 */
+	struct lu_extent	lcme_extent;
 	__u32			lcme_offset;    /* offset of component blob,
 						   start from lov_comp_md_v1 */
 	__u32			lcme_size;      /* size of component blob */
 	__u32			lcme_layout_gen;
 	__u64			lcme_timestamp;	/* snapshot time if applicable*/
-	__u32			lcme_padding_1;
+	__u8			lcme_dstripe_count;	/* data stripe count,
+							 * k value in EC
+							 */
+	__u8			lcme_cstripe_count;	/* code stripe count,
+							 * p value in EC
+							 */
+	__u16			lcme_padding_1;
 } __attribute__((packed));
 
 #define SEQ_ID_MAX		0x0000FFFF
@@ -954,7 +965,10 @@ struct lov_comp_md_v1 {
 	/* lcm_mirror_count stores the number of actual mirrors minus 1,
 	 * so that non-flr files will have value 0 meaning 1 mirror. */
 	__u16	lcm_mirror_count;
-	__u16	lcm_padding1[3];
+	/* code components count, non-EC file contains 0 ec_count */
+	__u8	lcm_ec_count;
+	__u8	lcm_padding3[1];
+	__u16	lcm_padding1[2];
 	__u64	lcm_padding2;
 	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));

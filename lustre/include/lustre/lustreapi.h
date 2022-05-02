@@ -1106,6 +1106,7 @@ static const struct comp_flag_name {
 	{ LCME_FL_OFFLINE,	"offline" },
 	{ LCME_FL_NOSYNC,	"nosync" },
 	{ LCME_FL_EXTENSION,	"extension" },
+	{ LCME_FL_PARITY,	"parity" },
 };
 
 /**
