@@ -1591,6 +1591,39 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 
 LDEBUGFS_SEQ_FOPS(ll_nosquash_nids);
 
+static int ll_filename_enc_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+
+	seq_printf(m, "%u\n", lsi->lsi_flags & LSI_FILENAME_ENC ? 1 : 0);
+	return 0;
+}
+
+static ssize_t ll_filename_enc_seq_write(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val)
+		lsi->lsi_flags |= LSI_FILENAME_ENC;
+	else
+		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+
+	return count;
+}
+
+LDEBUGFS_SEQ_FOPS(ll_filename_enc);
+
 static int ll_pcc_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1645,6 +1678,8 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_nosquash_nids_fops			},
 	{ .name =	"pcc",
 	  .fops =	&ll_pcc_fops,				},
+	{ .name =	"enable_filename_encryption",
+	  .fops =	&ll_filename_enc_fops,			},
 	{ NULL }
 };
 

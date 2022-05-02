@@ -146,6 +146,10 @@ struct lustre_sb_info {
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000
+#ifndef HAVE_SUPER_SETUP_BDI_NAME
+#define LSI_BDI_INITIALIZED		 0x00400000
+#endif
+#define LSI_FILENAME_ENC		 0x00800000 /* enable name encryption */
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)

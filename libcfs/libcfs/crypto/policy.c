@@ -307,6 +307,7 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	union llcrypt_policy policy;
 	union llcrypt_policy existing_policy;
 	struct inode *inode = file_inode(filp);
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
 	u8 version;
 	int size;
 	int ret;
@@ -333,6 +334,26 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	if (copy_from_user(&policy, arg, size))
 		return -EFAULT;
 	policy.version = version;
+
+	/* Force file/directory name encryption policy to null if
+	 * LSI_FILENAME_ENC flag is not set on sb.
+	 * This allows enabling filename encryption separately from data
+	 * encryption, and can be useful for interoperability with
+	 * encryption-unaware clients.
+	 */
+	if (!(lsi->lsi_flags & LSI_FILENAME_ENC)) {
+		CWARN("inode %lu: forcing policy filenames_encryption_mode to null\n",
+		      inode->i_ino);
+		cfs_tty_write_msg("\n\nForcing policy filenames_encryption_mode to null.\n\n");
+		switch (policy.version) {
+		case LLCRYPT_POLICY_V1:
+			policy.v1.filenames_encryption_mode = LLCRYPT_MODE_NULL;
+			break;
+		case LLCRYPT_POLICY_V2:
+			policy.v2.filenames_encryption_mode = LLCRYPT_MODE_NULL;
+			break;
+		}
+	}
 
 	if (!inode_owner_or_capable(&init_user_ns, inode))
 		return -EACCES;

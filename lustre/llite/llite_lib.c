@@ -1194,9 +1194,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 #define MAX_STRING_SIZE 128
 
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
-
-#define LSI_BDI_INITIALIZED	0x00400000
-
 #ifndef HAVE_BDI_CAP_MAP_COPY
 # define BDI_CAP_MAP_COPY	0
 #endif

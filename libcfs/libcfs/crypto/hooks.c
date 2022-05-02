@@ -177,7 +177,7 @@ int __llcrypt_encrypt_symlink(struct inode *inode, const char *target,
 	struct llcrypt_symlink_data *sd;
 	unsigned int ciphertext_len;
 
-	if (unlikely(!llcrypt_policy_has_filename_enc(inode)))
+	if (!llcrypt_policy_has_filename_enc(inode))
 		return 0;
 
 	err = llcrypt_require_key(inode);
@@ -269,7 +269,7 @@ const char *llcrypt_get_symlink(struct inode *inode, const void *caddr,
 	 * the ciphertext length, even though this is redundant with i_size.
 	 */
 
-	if (unlikely(!llcrypt_policy_has_filename_enc(inode))) {
+	if (!llcrypt_policy_has_filename_enc(inode)) {
 		cstr.name = (unsigned char *)caddr;
 		cstr.len = strlen(cstr.name);
 

@@ -358,7 +358,7 @@ int ll_fname_disk_to_usr(struct inode *inode,
 		}
 		if (lltr.len > LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE &&
 		    !llcrypt_has_encryption_key(inode) &&
-		    likely(llcrypt_policy_has_filename_enc(inode))) {
+		    llcrypt_policy_has_filename_enc(inode)) {
 			digested = 1;
 			/* Without the key for long names, set the dentry name
 			 * to the representing struct ll_digest_filename. It

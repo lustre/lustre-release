@@ -753,7 +753,7 @@ static inline int llcrypt_prepare_symlink(struct inode *dir,
 					  struct llcrypt_str *disk_link)
 {
 	if ((IS_ENCRYPTED(dir) &&
-	     likely(llcrypt_policy_has_filename_enc(dir))) ||
+	     llcrypt_policy_has_filename_enc(dir)) ||
 	    llcrypt_dummy_context_enabled(dir))
 		return __llcrypt_prepare_symlink(dir, len, max_len, disk_link);
 
