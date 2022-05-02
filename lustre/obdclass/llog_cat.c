@@ -246,14 +246,16 @@ static int llog_cat_refresh(const struct lu_env *env,
 		if (!llog_exist(loghandle))
 			continue;
 
+		down_write(&loghandle->lgh_lock);
 		rc = llog_read_header(env, loghandle, NULL);
+		up_write(&loghandle->lgh_lock);
 		if (rc)
 			goto unlock;
 	}
 
 	rc = llog_read_header(env, cathandle, NULL);
 unlock:
-	up_write(&loghandle->lgh_lock);
+	up_write(&cathandle->lgh_lock);
 
 	return rc;
 }
