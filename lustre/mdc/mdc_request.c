@@ -1982,20 +1982,48 @@ out:
 	return rc;
 }
 
+/* For RESTORE and RELEASE the mdt will take EX lock on the file layout.
+ * So we can use early cancel on client side locks for that resource.
+ */
+static inline int mdc_hsm_request_lock_to_cancel(struct obd_export *exp,
+						 struct hsm_user_request *hur,
+						 struct list_head *cancels)
+{
+	struct hsm_user_item *hui = &hur->hur_user_item[0];
+	struct hsm_request *req_hr = &hur->hur_request;
+	int count = 0;
+	int i;
+
+	if (req_hr->hr_action != HUA_RESTORE &&
+	    req_hr->hr_action != HUA_RELEASE)
+		return 0;
+
+	for (i = 0; i < req_hr->hr_itemcount; i++, hui++) {
+		if (!fid_is_sane(&hui->hui_fid))
+			continue;
+		count += mdc_resource_get_unused(exp, &hui->hui_fid, cancels,
+						 LCK_EX, MDS_INODELOCK_LAYOUT);
+	}
+
+	return count;
+}
+
 static int mdc_ioc_hsm_request(struct obd_export *exp,
 			       struct hsm_user_request *hur)
 {
-	struct obd_import	*imp = class_exp2cliimp(exp);
-	struct ptlrpc_request	*req;
-	struct hsm_request	*req_hr;
-	struct hsm_user_item	*req_hui;
-	char			*req_opaque;
-	int			 rc;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	struct ptlrpc_request *req;
+	struct hsm_request *req_hr;
+	struct hsm_user_item *req_hui;
+	char *req_opaque;
+	LIST_HEAD(cancels);
+	int count;
+	int rc;
 	ENTRY;
 
 	req = ptlrpc_request_alloc(imp, &RQF_MDS_HSM_REQUEST);
 	if (req == NULL)
-		GOTO(out, rc = -ENOMEM);
+		RETURN(-ENOMEM);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDS_HSM_USER_ITEM, RCL_CLIENT,
 			     hur->hur_request.hr_itemcount
@@ -2009,6 +2037,9 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 		RETURN(rc);
 	}
 
+	/* Cancel existing locks */
+	count = mdc_hsm_request_lock_to_cancel(exp, hur, &cancels);
+	ldlm_cli_cancel_list(&cancels, count, NULL, 0);
 	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	/* Copy hsm_request struct */
