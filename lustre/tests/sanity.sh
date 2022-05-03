@@ -41,8 +41,8 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_EXCEPT "
 # bug number for skipped test: LU-9693 LU-6493 LU-9693
 ALWAYS_EXCEPT+="               42a     42b     42c "
-# bug number:    LU-8411 LU-9054
-ALWAYS_EXCEPT+=" 407     312"
+# bug number:    LU-8411 LU-9054 LU-15815 LU-15815
+ALWAYS_EXCEPT+=" 407     312     101j     271a"
 
 if $SHARED_KEY; then
 	# bug number:    LU-14181 LU-14181
