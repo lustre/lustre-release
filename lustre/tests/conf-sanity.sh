@@ -8983,6 +8983,98 @@ test_112() {
 }
 run_test 112 "mount OST with nocreate option"
 
+# Global for 113
+SAVE_MGS_MOUNT_OPTS=$MGS_MOUNT_OPTS
+SAVE_MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS
+SAVE_OST_MOUNT_OPTS=$OST_MOUNT_OPTS
+
+cleanup_113() {
+	trap 0
+
+	stopall
+	MGS_MOUNT_OPTS=$SAVE_MGS_MOUNT_OPTS
+	MDS_MOUNT_OPTS=$SAVE_MDS_MOUNT_OPTS
+	OST_MOUNT_OPTS=$SAVE_OST_MOUNT_OPTS
+	# Revert old mount options back
+	setupall
+	# Subsequent following test requires
+	# conf-sanity to be in stopall state.
+	# Force 'stopall' so others following
+	# test can pass
+	stopall
+}
+
+# Error out with mount info
+error_113() {
+	local server_nodes=$(comma_list $(mdts_nodes) $(osts_nodes))
+	local err=$1
+
+	echo "--Client Mount Info--"
+	mount | grep -i lustre
+	echo "--Server Mount Info--"
+	do_nodes $server_nodes mount | grep -i lustre
+
+	error $err
+}
+
+test_113() {
+	local ost_version="2.15.51" # Minimum version required
+
+	(( OST1_VERSION >= $(version_code $ost_version) )) ||
+		skip "Need server version at least $ost_version"
+	sync; sleep 3
+	stack_trap cleanup_113 EXIT
+
+	# Reset before starting
+	stopall
+	setupall
+
+	# Verify MDS's should start with "rw"
+	do_facet $SINGLEMDS mount | grep "lustre.*rw,.*MDT" ||
+		error_113 "$SINGLEMDS should be read-write"
+
+	# Verify OST's should start with "rw"
+	for (( i=1; i <= OSTCOUNT; i++ )); do
+		do_facet ost$i mount | grep "lustre.*rw,.*OST" ||
+			error_113 "ost$i should be read-write"
+	done
+
+	# rdonly_dev does not currently work for ldiskfs
+	# We skip the rdonly_dev check until then.
+	if [[ $ost1_FSTYPE == ldiskfs ]]; then
+		echo "Shadow Mountpoint correctly reports rw for ldiskfs"
+		return 0
+	fi
+
+	#
+	# Only ZFS specific tests below.
+	#
+
+	# Must stop all (server+client) and restart to verify new
+	# mount options
+	stopall
+
+	# add rdonly_dev to mount option
+	MGS_MOUNT_OPTS=$(csa_add "$MGS_MOUNT_OPTS" -o rdonly_dev)
+	MDS_MOUNT_OPTS=$(csa_add "$MDS_MOUNT_OPTS" -o rdonly_dev)
+	OST_MOUNT_OPTS=$(csa_add "$OST_MOUNT_OPTS" -o rdonly_dev)
+
+	# Only restart server(mds/ost). Sufficient for test
+	setupall server_only || error "Fail to start servers"
+
+	# Verify MDS's should be "ro"
+	do_facet $SINGLEMDS mount | grep "lustre.*ro,.*MDT.*rdonly_dev" ||
+		error_113 "$SINGLEMDS should be read-only"
+
+	# Verify OST's should be "ro"
+	for (( i=1; i <= OSTCOUNT; i++ )); do
+		do_facet ost$i mount | grep "lustre.*ro,.*OST.*rdonly_dev" ||
+			error_113 "ost$i should be read-only"
+	done
+}
+run_test 113 "Shadow mountpoint correctly report ro/rw for mounts"
+
+
 cleanup_115()
 {
 	trap 0

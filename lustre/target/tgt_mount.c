@@ -1765,10 +1765,35 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 {
 	struct lustre_sb_info *lsi;
 	struct lustre_mount_data *lmd;
+	struct obd_statfs osfs;
+	struct super_block *sb;
+	int rc;
 
 	LASSERT(seq && dentry);
 	lsi = s2lsi(dentry->d_sb);
 	lmd = lsi->lsi_lmd;
+	sb = dentry->d_sb;
+
+	if (lsi->lsi_dt_dev) {
+		rc = dt_statfs(NULL, lsi->lsi_dt_dev, &osfs);
+		if (!rc) {
+			/* Check FS State for OS_STATFS_READONLY
+			 * (Read only) flag. If it is not set then
+			 * toggle back the s_flag's SB_RDONLY bit.
+			 * The SB_RDONLY bit is always set for OST/MDT
+			 * during server prep (server_fill_super_common())
+			 * call.
+			 *
+			 * Also, if server is mounted with "rdonly_dev"
+			 * (LMD_FLG_DEV_RDONLY) then force flag to be 'ro'
+			 */
+
+			if (!(lmd->lmd_flags & LMD_FLG_DEV_RDONLY) &&
+			    !(osfs.os_state & OS_STATFS_READONLY))
+				sb->s_flags &= ~SB_RDONLY;
+		}
+	}
+
 	seq_printf(seq, ",svname=%s", lmd->lmd_profile);
 
 	if  (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
