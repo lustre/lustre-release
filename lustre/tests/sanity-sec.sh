@@ -3832,6 +3832,9 @@ test_49() {
 		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		# migrate a non-empty encrypted dir
 		trace_cmd $LFS migrate -m 1 $dirname/d2
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+		[ -f $dirname/d2/subf ] || error "migrate failed (1)"
+		[ $(cat $dirname/d2/subf) == "b" ] || error "migrate failed (2)"
 
 		$LFS setdirstripe -i 1 -c 1 $dirname/d3
 		dirname=$dirname/d3/subdir
@@ -4865,6 +4868,13 @@ test_59c() {
 	stripe=$($LFS getdirstripe -i $scrambleddir)
 	[ $stripe -eq 1 ] ||
 		error "migrate $scrambleddir between MDTs failed (2)"
+
+	# now, with the key
+	insert_enc_key
+	[ -f $dirname/subf ] ||
+	    error "migrate $scrambleddir between MDTs failed (3)"
+	[ $(cat $dirname/subf) == "b" ] ||
+	    error "migrate $scrambleddir between MDTs failed (4)"
 }
 run_test 59c "MDT migrate of encrypted files without key"
 

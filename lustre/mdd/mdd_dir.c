@@ -3437,7 +3437,10 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 				   bool skip_linkea,
 				   bool skip_dmv)
 {
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	struct mdd_xattr_entry *entry;
+	bool needencxattr = false;
+	bool encxattrfound = false;
 	char *xname;
 	int list_xsize;
 	int xlen;
@@ -3454,6 +3457,13 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 	if (list_xsize < 0)
 		RETURN(list_xsize);
 
+	if (attr->la_valid & LA_FLAGS &&
+	    attr->la_flags & LUSTRE_ENCRYPT_FL) {
+		needencxattr = true;
+		list_xsize +=
+			strlen(LL_XATTR_NAME_ENCRYPTION_CONTEXT) + 1;
+	}
+
 	lu_buf_alloc(&xattrs->mx_namebuf, list_xsize);
 	if (xattrs->mx_namebuf.lb_buf == NULL)
 		RETURN(-ENOMEM);
@@ -3465,7 +3475,11 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 	rem = rc;
 	rc = 0;
 	xname = xattrs->mx_namebuf.lb_buf;
+reloop:
 	for (; rem > 0; xname += xlen, rem -= xlen) {
+		if (needencxattr &&
+		    strcmp(xname, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0)
+			encxattrfound = true;
 		xlen = strnlen(xname, rem - 1) + 1;
 		if (strcmp(XATTR_NAME_LMA, xname) == 0 ||
 		    strcmp(XATTR_NAME_LMV, xname) == 0)
@@ -3506,6 +3520,13 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 
 		entry->mxe_name = xname;
 		list_add_tail(&entry->mxe_linkage, &xattrs->mx_list);
+	}
+
+	if (needencxattr && !encxattrfound) {
+		xlen = strlen(LL_XATTR_NAME_ENCRYPTION_CONTEXT) + 1;
+		strncpy(xname, LL_XATTR_NAME_ENCRYPTION_CONTEXT, xlen);
+		rem = xlen;
+		GOTO(reloop, 0);
 	}
 
 	RETURN(0);
