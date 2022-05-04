@@ -880,55 +880,6 @@ void cl_page_delete(const struct lu_env *env, struct cl_page *pg)
 }
 EXPORT_SYMBOL(cl_page_delete);
 
-/**
- * Marks page up-to-date.
- *
- * Call cl_page_operations::cpo_export() through all layers top-to-bottom. The
- * layer responsible for VM interaction has to mark/clear page as up-to-date
- * by the \a uptodate argument.
- *
- * \see cl_page_operations::cpo_export()
- */
-void cl_page_export(const struct lu_env *env, struct cl_page *cl_page,
-		    int uptodate)
-{
-	const struct cl_page_slice *slice;
-	int i;
-
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_export != NULL)
-			(*slice->cpl_ops->cpo_export)(env, slice, uptodate);
-	}
-}
-EXPORT_SYMBOL(cl_page_export);
-
-/**
- * Returns true, if \a page is VM locked in a suitable sense by the calling
- * thread.
- */
-int cl_page_is_vmlocked(const struct lu_env *env,
-			const struct cl_page *cl_page)
-{
-        const struct cl_page_slice *slice;
-	int result;
-
-	ENTRY;
-	slice = cl_page_slice_get(cl_page, 0);
-	PASSERT(env, cl_page, slice->cpl_ops->cpo_is_vmlocked != NULL);
-        /*
-	 * Call ->cpo_is_vmlocked() directly instead of going through
-         * CL_PAGE_INVOKE(), because cl_page_is_vmlocked() is used by
-         * cl_page_invariant().
-         */
-        result = slice->cpl_ops->cpo_is_vmlocked(env, slice);
-	PASSERT(env, cl_page, result == -EBUSY || result == -ENODATA);
-
-	RETURN(result == -EBUSY);
-}
-EXPORT_SYMBOL(cl_page_is_vmlocked);
-
 void cl_page_touch(const struct lu_env *env,
 		   const struct cl_page *cl_page, size_t to)
 {

@@ -594,7 +594,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 			put_page(vmpage);
 			break;
 		}
-		cl_page_export(env, page, 1);
+		SetPageUptodate(vmpage);
 		cl_page_put(env, page);
 		unlock_page(vmpage);
 		put_page(vmpage);

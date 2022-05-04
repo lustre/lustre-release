@@ -871,25 +871,6 @@ struct cl_page_operations {
         void (*cpo_unassume)(const struct lu_env *env,
                              const struct cl_page_slice *slice,
                              struct cl_io *io);
-        /**
-         * Announces whether the page contains valid data or not by \a uptodate.
-         *
-         * \see cl_page_export()
-         * \see vvp_page_export()
-         */
-        void  (*cpo_export)(const struct lu_env *env,
-                            const struct cl_page_slice *slice, int uptodate);
-        /**
-         * Checks whether underlying VM page is locked (in the suitable
-         * sense). Used for assertions.
-         *
-         * \retval    -EBUSY: page is protected by a lock of a given mode;
-         * \retval  -ENODATA: page is not protected by a lock;
-         * \retval         0: this layer cannot decide. (Should never happen.)
-         */
-        int (*cpo_is_vmlocked)(const struct lu_env *env,
-                               const struct cl_page_slice *slice);
-
 	/**
 	 * Update file attributes when all we have is this page.  Used for tiny
 	 * writes to update attributes when we don't have a full cl_io.
@@ -2326,12 +2307,8 @@ int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
 void    cl_page_discard(const struct lu_env *env, struct cl_io *io,
 			struct cl_page *pg);
 void    cl_page_delete(const struct lu_env *env, struct cl_page *pg);
-int     cl_page_is_vmlocked(const struct lu_env *env,
-			    const struct cl_page *pg);
 void	cl_page_touch(const struct lu_env *env, const struct cl_page *pg,
 		      size_t to);
-void    cl_page_export(const struct lu_env *env,
-		       struct cl_page *pg, int uptodate);
 loff_t  cl_offset(const struct cl_object *obj, pgoff_t idx);
 pgoff_t cl_index(const struct cl_object *obj, loff_t offset);
 size_t  cl_page_size(const struct cl_object *obj);

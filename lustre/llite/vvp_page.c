@@ -176,26 +176,6 @@ static void vvp_page_delete(const struct lu_env *env,
 	 */
 }
 
-static void vvp_page_export(const struct lu_env *env,
-			    const struct cl_page_slice *slice,
-			    int uptodate)
-{
-	struct page *vmpage = cl2vm_page(slice);
-
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-	if (uptodate)
-		SetPageUptodate(vmpage);
-	else
-		ClearPageUptodate(vmpage);
-}
-
-static int vvp_page_is_vmlocked(const struct lu_env *env,
-				const struct cl_page_slice *slice)
-{
-	return PageLocked(cl2vm_page(slice)) ? -EBUSY : -ENODATA;
-}
-
 static int vvp_page_prep_read(const struct lu_env *env,
 			      const struct cl_page_slice *slice,
 			      struct cl_io *unused)
@@ -271,7 +251,7 @@ static void vvp_page_completion_read(const struct lu_env *env,
 
 	if (ioret == 0)  {
 		if (!vpg->vpg_defer_uptodate)
-			cl_page_export(env, page, 1);
+			SetPageUptodate(vmpage);
 	} else if (vpg->vpg_defer_uptodate) {
 		vpg->vpg_defer_uptodate = 0;
 		if (ioret == -EAGAIN) {
@@ -401,8 +381,6 @@ static const struct cl_page_operations vvp_page_ops = {
 	.cpo_disown        = vvp_page_disown,
 	.cpo_discard       = vvp_page_discard,
 	.cpo_delete        = vvp_page_delete,
-	.cpo_export        = vvp_page_export,
-	.cpo_is_vmlocked   = vvp_page_is_vmlocked,
 	.cpo_fini          = vvp_page_fini,
 	.cpo_print         = vvp_page_print,
 	.io = {
@@ -431,15 +409,8 @@ static void vvp_transient_page_discard(const struct lu_env *env,
 	cl_page_delete(env, page);
 }
 
-static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
-					  const struct cl_page_slice *slice)
-{
-	return -EBUSY;
-}
-
 static const struct cl_page_operations vvp_transient_page_ops = {
 	.cpo_discard		= vvp_transient_page_discard,
-	.cpo_is_vmlocked	= vvp_transient_page_is_vmlocked,
 	.cpo_print		= vvp_page_print,
 };
 
