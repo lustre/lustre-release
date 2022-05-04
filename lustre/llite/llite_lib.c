@@ -2055,7 +2055,7 @@ int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 queuefini2:
 		cl_2queue_discard(env, io, queue);
 queuefini1:
-		cl_2queue_disown(env, io, queue);
+		cl_2queue_disown(env, queue);
 		cl_2queue_fini(env, queue);
 	}
 

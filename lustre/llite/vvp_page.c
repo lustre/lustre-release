@@ -73,34 +73,6 @@ static void vvp_page_fini(const struct lu_env *env,
 	}
 }
 
-static int vvp_page_own(const struct lu_env *env,
-			const struct cl_page_slice *slice, struct cl_io *io,
-			int nonblock)
-{
-	struct vvp_page *vpg    = cl2vvp_page(slice);
-	struct page     *vmpage = vpg->vpg_page;
-
-	ENTRY;
-
-	LASSERT(vmpage != NULL);
-	if (nonblock) {
-		if (!trylock_page(vmpage))
-			return -EAGAIN;
-
-		if (unlikely(PageWriteback(vmpage))) {
-			unlock_page(vmpage);
-			return -EAGAIN;
-		}
-
-		return 0;
-	}
-
-	lock_page(vmpage);
-	wait_on_page_writeback(vmpage);
-
-	RETURN(0);
-}
-
 static void vvp_page_assume(const struct lu_env *env,
 			    const struct cl_page_slice *slice,
 			    struct cl_io *unused)
@@ -122,35 +94,15 @@ static void vvp_page_unassume(const struct lu_env *env,
 	LASSERT(PageLocked(vmpage));
 }
 
-static void vvp_page_disown(const struct lu_env *env,
-			    const struct cl_page_slice *slice, struct cl_io *io)
-{
-	struct page *vmpage = cl2vm_page(slice);
-
-	ENTRY;
-
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-
-	unlock_page(cl2vm_page(slice));
-
-	EXIT;
-}
-
 static void vvp_page_discard(const struct lu_env *env,
 			     const struct cl_page_slice *slice,
 			     struct cl_io *unused)
 {
-	struct page     *vmpage = cl2vm_page(slice);
-	struct vvp_page *vpg    = cl2vvp_page(slice);
+	struct cl_page *cp = slice->cpl_page;
+	struct page *vmpage = cp->cp_vmpage;
 
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-
-	if (vpg->vpg_defer_uptodate && !vpg->vpg_ra_used && vmpage->mapping)
+	if (cp->cp_defer_uptodate && !cp->cp_ra_used && vmpage->mapping != NULL)
 		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
-
-	generic_error_remove_page(vmpage->mapping, vmpage);
 }
 
 static void vvp_page_delete(const struct lu_env *env,
@@ -237,23 +189,22 @@ static void vvp_page_completion_read(const struct lu_env *env,
 				     const struct cl_page_slice *slice,
 				     int ioret)
 {
-	struct vvp_page *vpg    = cl2vvp_page(slice);
-	struct page     *vmpage = vpg->vpg_page;
-	struct cl_page  *page   = slice->cpl_page;
-	struct inode    *inode  = vvp_object_inode(page->cp_obj);
+	struct cl_page *cp = slice->cpl_page;
+	struct page *vmpage = cp->cp_vmpage;
+	struct inode *inode = vvp_object_inode(cp->cp_obj);
 
 	ENTRY;
 	LASSERT(PageLocked(vmpage));
-	CL_PAGE_HEADER(D_PAGE, env, page, "completing READ with %d\n", ioret);
+	CL_PAGE_HEADER(D_PAGE, env, cp, "completing READ with %d\n", ioret);
 
-	if (vpg->vpg_defer_uptodate)
+	if (cp->cp_defer_uptodate)
 		ll_ra_count_put(ll_i2sbi(inode), 1);
 
 	if (ioret == 0)  {
-		if (!vpg->vpg_defer_uptodate)
+		if (!cp->cp_defer_uptodate)
 			SetPageUptodate(vmpage);
-	} else if (vpg->vpg_defer_uptodate) {
-		vpg->vpg_defer_uptodate = 0;
+	} else if (cp->cp_defer_uptodate) {
+		cp->cp_defer_uptodate = 0;
 		if (ioret == -EAGAIN) {
 			/* mirror read failed, it needs to destroy the page
 			 * because subpage would be from wrong osc when trying
@@ -263,7 +214,7 @@ static void vvp_page_completion_read(const struct lu_env *env,
 		}
 	}
 
-	if (page->cp_sync_io == NULL)
+	if (cp->cp_sync_io == NULL)
 		unlock_page(vmpage);
 
 	EXIT;
@@ -347,8 +298,7 @@ static int vvp_page_print(const struct lu_env *env,
 	struct page     *vmpage	= vpg->vpg_page;
 
 	(*printer)(env, cookie,
-		   LUSTRE_VVP_NAME"-page@%p(%d:%d) vm@%p ",
-		   vpg, vpg->vpg_defer_uptodate, vpg->vpg_ra_used, vmpage);
+		   LUSTRE_VVP_NAME"-page@%p vm@%p ", vpg, vmpage);
 
 	if (vmpage != NULL) {
 		(*printer)(env, cookie, "%lx %d:%d %lx %lu %slru",
@@ -375,10 +325,8 @@ static int vvp_page_fail(const struct lu_env *env,
 }
 
 static const struct cl_page_operations vvp_page_ops = {
-	.cpo_own           = vvp_page_own,
 	.cpo_assume        = vvp_page_assume,
 	.cpo_unassume      = vvp_page_unassume,
-	.cpo_disown        = vvp_page_disown,
 	.cpo_discard       = vvp_page_discard,
 	.cpo_delete        = vvp_page_delete,
 	.cpo_fini          = vvp_page_fini,
@@ -397,20 +345,7 @@ static const struct cl_page_operations vvp_page_ops = {
 	},
 };
 
-static void vvp_transient_page_discard(const struct lu_env *env,
-				       const struct cl_page_slice *slice,
-				       struct cl_io *unused)
-{
-	struct cl_page *page = slice->cpl_page;
-
-	/*
-	 * For transient pages, remove it from the radix tree.
-	 */
-	cl_page_delete(env, page);
-}
-
 static const struct cl_page_operations vvp_transient_page_ops = {
-	.cpo_discard		= vvp_transient_page_discard,
 	.cpo_print		= vvp_page_print,
 };
 

@@ -948,12 +948,10 @@ EXPORT_SYMBOL(cl_page_list_splice);
 /**
  * Disowns pages in a queue.
  */
-void cl_page_list_disown(const struct lu_env *env,
-			 struct cl_io *io, struct cl_page_list *plist)
+void cl_page_list_disown(const struct lu_env *env, struct cl_page_list *plist)
 {
 	struct cl_page *page;
 	struct cl_page *temp;
-
 
 	ENTRY;
 	cl_page_list_for_each_safe(page, temp, plist) {
@@ -969,7 +967,7 @@ void cl_page_list_disown(const struct lu_env *env,
 		/*
 		 * XXX cl_page_disown0() will fail if page is not locked.
 		 */
-		cl_page_disown0(env, io, page);
+		cl_page_disown0(env, page);
 		lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue",
 			      plist);
 		cl_page_put(env, page);
@@ -1047,12 +1045,11 @@ EXPORT_SYMBOL(cl_2queue_add);
 /**
  * Disown pages in both lists of a 2-queue.
  */
-void cl_2queue_disown(const struct lu_env *env,
-                      struct cl_io *io, struct cl_2queue *queue)
+void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue)
 {
         ENTRY;
-        cl_page_list_disown(env, io, &queue->c2_qin);
-        cl_page_list_disown(env, io, &queue->c2_qout);
+        cl_page_list_disown(env, &queue->c2_qin);
+        cl_page_list_disown(env, &queue->c2_qout);
         EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_disown);

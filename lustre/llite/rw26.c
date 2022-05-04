@@ -379,7 +379,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	}
 
 	cl_2queue_discard(env, io, queue);
-	cl_2queue_disown(env, io, queue);
+	cl_2queue_disown(env, queue);
 	cl_2queue_fini(env, queue);
 	RETURN(rc);
 }
@@ -599,8 +599,8 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 		GOTO(out, result = 0);
 	}
 
-	if (vpg->vpg_defer_uptodate) {
-		vpg->vpg_ra_used = 1;
+	if (pg->cp_defer_uptodate) {
+		pg->cp_ra_used = 1;
 		GOTO(out, result = 0);
 	}
 

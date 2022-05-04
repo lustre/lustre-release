@@ -763,6 +763,9 @@ struct cl_page {
          * creation.
          */
 	enum cl_page_type	cp_type:CP_TYPE_BITS;
+	unsigned		cp_defer_uptodate:1,
+				cp_ra_updated:1,
+				cp_ra_used:1;
 	/* which slab kmem index this memory allocated from */
 	short int		cp_kmem_index;
 
@@ -822,7 +825,7 @@ enum cl_req_type {
  *
  * Methods taking an \a io argument are for the activity happening in the
  * context of given \a io. Page is assumed to be owned by that io, except for
- * the obvious cases (like cl_page_operations::cpo_own()).
+ * the obvious cases.
  *
  * \see vvp_page_ops, lov_page_ops, osc_page_ops
  */
@@ -833,25 +836,6 @@ struct cl_page_operations {
          * provided by the topmost layer, see cl_page_disown0() as an example.
          */
 
-        /**
-         * Called when \a io acquires this page into the exclusive
-         * ownership. When this method returns, it is guaranteed that the is
-         * not owned by other io, and no transfer is going on against
-         * it. Optional.
-         *
-         * \see cl_page_own()
-         * \see vvp_page_own(), lov_page_own()
-         */
-        int  (*cpo_own)(const struct lu_env *env,
-                        const struct cl_page_slice *slice,
-                        struct cl_io *io, int nonblock);
-        /** Called when ownership it yielded. Optional.
-         *
-         * \see cl_page_disown()
-         * \see vvp_page_disown()
-         */
-        void (*cpo_disown)(const struct lu_env *env,
-                           const struct cl_page_slice *slice, struct cl_io *io);
         /**
          * Called for a page that is already "owned" by \a io from VM point of
          * view. Optional.
@@ -2525,7 +2509,7 @@ void cl_page_list_splice(struct cl_page_list *list,
 void cl_page_list_del(const struct lu_env *env,
 		      struct cl_page_list *plist, struct cl_page *page);
 void cl_page_list_disown(const struct lu_env *env,
-			 struct cl_io *io, struct cl_page_list *plist);
+			 struct cl_page_list *plist);
 void cl_page_list_assume(const struct lu_env *env,
 			 struct cl_io *io, struct cl_page_list *plist);
 void cl_page_list_discard(const struct lu_env *env,
@@ -2535,8 +2519,7 @@ void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist);
 void cl_2queue_init(struct cl_2queue *queue);
 void cl_2queue_add(struct cl_2queue *queue, struct cl_page *page,
 		   bool get_ref);
-void cl_2queue_disown(const struct lu_env *env, struct cl_io *io,
-		      struct cl_2queue *queue);
+void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue);
 void cl_2queue_assume(const struct lu_env *env, struct cl_io *io,
 		      struct cl_2queue *queue);
 void cl_2queue_discard(const struct lu_env *env, struct cl_io *io,
