@@ -5450,15 +5450,7 @@ static void osd_take_care_of_agent(const struct lu_env *env,
 static int obj_name2lu_name(struct osd_object *obj, const char *name,
 			    int len, struct lu_name *ln)
 {
-	struct lu_fid namefid;
-
-	fid_zero(&namefid);
-
-	if (name[0] == '[')
-		sscanf(name + 1, SFID, RFID(&namefid));
-
-	if (fid_is_sane(&namefid) || name_is_dot_or_dotdot(name, len) ||
-	    !(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
+	if (!(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
 		ln->ln_name = name;
 		ln->ln_namelen = len;
 	} else {
@@ -6907,33 +6899,30 @@ struct osd_filldir_cbs {
  * \retval 1 on buffer full
  */
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ldiskfs_filldir(struct dir_context *buf,
+static int osd_ldiskfs_filldir(struct dir_context *ctx,
 #else
-static int osd_ldiskfs_filldir(void *buf,
+static int osd_ldiskfs_filldir(void *ctx,
 #endif
 			       const char *name, int namelen,
 			       loff_t offset, __u64 ino, unsigned int d_type)
 {
-	struct osd_it_ea *it = ((struct osd_filldir_cbs *)buf)->it;
+	struct osd_it_ea *it = ((struct osd_filldir_cbs *)ctx)->it;
 	struct osd_object *obj = it->oie_obj;
 	struct osd_it_ea_dirent *ent = it->oie_dirent;
 	struct lu_fid *fid = &ent->oied_fid;
+	char *buf = it->oie_buf;
 	struct osd_fid_pack *rec;
-	struct lu_fid namefid;
-
 	ENTRY;
 
-/* this should never happen */
+	/* this should never happen */
 	if (unlikely(namelen == 0 || namelen > LDISKFS_NAME_LEN)) {
 		CERROR("ldiskfs return invalid namelen %d\n", namelen);
 		RETURN(-EIO);
 	}
 
-	if ((void *)ent - it->oie_buf + sizeof(*ent) + namelen >
-	    OSD_IT_EA_BUFSIZE)
+	/* Check for enough space. Note oied_name is not NUL terminated. */
+	if (&ent->oied_name[namelen] > buf + OSD_IT_EA_BUFSIZE)
 		RETURN(1);
-
-	fid_zero(&namefid);
 
 	/* "." is just the object itself. */
 	if (namelen == 1 && name[0] == '.') {
@@ -6955,30 +6944,30 @@ static int osd_ldiskfs_filldir(void *buf,
 		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
 	}
 
-	if (name[0] == '[')
-		sscanf(name + 1, SFID, RFID(&namefid));
-	if (fid_is_sane(&namefid) || name_is_dot_or_dotdot(name, namelen) ||
-	    !obj || !(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
+	if (obj == NULL || !(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
+		ent->oied_namelen = namelen;
 		memcpy(ent->oied_name, name, namelen);
 	} else {
-		int presented_len = critical_chars(name, namelen);
+		int encoded_namelen = critical_chars(name, namelen);
 
-		if (presented_len == namelen)
+		/* Check again for enough space. */
+		if (&ent->oied_name[encoded_namelen] > buf + OSD_IT_EA_BUFSIZE)
+			RETURN(1);
+
+		ent->oied_namelen = encoded_namelen;
+
+		if (encoded_namelen == namelen)
 			memcpy(ent->oied_name, name, namelen);
 		else
-			namelen = critical_encode(name, namelen,
-						  ent->oied_name);
-
-		ent->oied_name[namelen] = '\0';
+			critical_encode(name, namelen, ent->oied_name);
 	}
 
 	ent->oied_ino     = ino;
 	ent->oied_off     = offset;
-	ent->oied_namelen = namelen;
 	ent->oied_type    = d_type;
 
 	it->oie_rd_dirent++;
-	it->oie_dirent = (void *)ent + cfs_size_round(sizeof(*ent) + namelen);
+	it->oie_dirent = (void *)ent + cfs_size_round(sizeof(*ent) + ent->oied_namelen);
 	RETURN(0);
 }
 
