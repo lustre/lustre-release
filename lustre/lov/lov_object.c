@@ -115,8 +115,7 @@ static int lov_page_slice_fixup(struct lov_object *lov,
 	struct cl_object *o;
 
 	if (stripe == NULL)
-		return hdr->coh_page_bufsize - lov->lo_cl.co_slice_off -
-		       cfs_size_round(sizeof(struct lov_page));
+		return hdr->coh_page_bufsize - lov->lo_cl.co_slice_off;
 
 	cl_object_for_each(o, stripe)
 		o->co_slice_off += hdr->coh_page_bufsize;
@@ -1345,7 +1344,7 @@ static int lov_object_init(const struct lu_env *env, struct lu_object *obj,
 	init_rwsem(&lov->lo_type_guard);
 	atomic_set(&lov->lo_active_ios, 0);
 	init_waitqueue_head(&lov->lo_waitq);
-	cl_object_page_init(lu2cl(obj), sizeof(struct lov_page));
+	cl_object_page_init(lu2cl(obj), 0);
 
 	lov->lo_type = LLT_EMPTY;
 	if (cconf->u.coc_layout.lb_buf != NULL) {

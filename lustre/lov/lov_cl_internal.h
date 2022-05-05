@@ -48,23 +48,19 @@
 /** \defgroup lov lov
  * Logical object volume layer. This layer implements data striping (raid0).
  *
- * At the lov layer top-entity (object, page, lock, io) is connected to one or
+ * At the lov layer top-entity (object, lock, io) is connected to one or
  * more sub-entities: top-object, representing a file is connected to a set of
  * sub-objects, each representing a stripe, file-level top-lock is connected
- * to a set of per-stripe sub-locks, top-page is connected to a (single)
- * sub-page, and a top-level IO is connected to a set of (potentially
- * concurrent) sub-IO's.
+ * to a set of per-stripe sub-locks, and a top-level IO is connected to a set of
+ * (potentially concurrent) sub-IO's.
  *
- * Sub-object, sub-page, and sub-io have well-defined top-object and top-page
+ * Sub-object and sub-io have well-defined top-object and top-io
  * respectively, while a single sub-lock can be part of multiple top-locks.
  *
  * Reference counting models are different for different types of entities:
  *
  *     - top-object keeps a reference to its sub-objects, and destroys them
  *       when it is destroyed.
- *
- *     - top-page keeps a reference to its sub-page, and destroys it when it
- *       is destroyed.
  *
  *     - IO's are not reference counted.
  *
@@ -438,10 +434,6 @@ struct lov_lock {
 	struct lov_lock_sub	lls_sub[0];
 };
 
-struct lov_page {
-	struct cl_page_slice	lps_cl;
-};
-
 /*
  * Bottom half.
  */
@@ -622,6 +614,15 @@ int   lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
                                int stripe);
 
+enum {
+	CP_LOV_INDEX_EMPTY = -1U,
+};
+
+static inline bool lov_page_is_empty(const struct cl_page *cp)
+{
+	return cp->cp_lov_index == CP_LOV_INDEX_EMPTY;
+}
+
 int   lov_page_init_empty (const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
@@ -636,8 +637,6 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
                                       const struct lu_object_header *hdr,
                                       struct lu_device *dev);
 
-int lov_page_stripe(const struct cl_page *page);
-bool lov_page_is_empty(const struct cl_page *page);
 int lov_lsm_entry(const struct lov_stripe_md *lsm, __u64 offset);
 int lov_io_layout_at(struct lov_io *lio, __u64 offset);
 
@@ -771,12 +770,6 @@ static inline struct lov_lock *cl2lov_lock(const struct cl_lock_slice *slice)
 {
 	LINVRNT(lov_is_object(&slice->cls_obj->co_lu));
 	return container_of(slice, struct lov_lock, lls_cl);
-}
-
-static inline struct lov_page *cl2lov_page(const struct cl_page_slice *slice)
-{
-	LINVRNT(lov_is_object(&slice->cpl_obj->co_lu));
-	return container_of(slice, struct lov_page, lps_cl);
 }
 
 static inline struct lov_io *cl2lov_io(const struct lu_env *env,

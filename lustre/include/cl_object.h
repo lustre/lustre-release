@@ -719,7 +719,7 @@ enum cl_page_type {
 
 #define	CP_STATE_BITS	4
 #define	CP_TYPE_BITS	2
-#define	CP_MAX_LAYER	3
+#define	CP_MAX_LAYER	2
 
 /**
  * Fields are protected by the lock on struct page, except for atomics and
@@ -750,22 +750,21 @@ struct cl_page {
 	/** Linkage of pages within group. Pages must be owned */
 	struct list_head	cp_batch;
 	/** array of slices offset. Immutable after creation. */
-	unsigned char		cp_layer_offset[CP_MAX_LAYER]; /* 24 bits */
+	unsigned char		cp_layer_offset[CP_MAX_LAYER];
 	/** current slice index */
-	unsigned char		cp_layer_count:2; /* 26 bits */
+	unsigned char		cp_layer_count:2;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.
 	 */
-	enum cl_page_state	 cp_state:CP_STATE_BITS; /* 30 bits */
+	enum cl_page_state	 cp_state:CP_STATE_BITS;
         /**
          * Page type. Only CPT_TRANSIENT is used so far. Immutable after
          * creation.
          */
-	enum cl_page_type	cp_type:CP_TYPE_BITS; /* 32 bits */
+	enum cl_page_type	cp_type:CP_TYPE_BITS;
 	/* which slab kmem index this memory allocated from */
-	short int		cp_kmem_index; /* 48 bits */
-	unsigned int		cp_unused1:16;	/* 64 bits */
+	short int		cp_kmem_index;
 
 	/**
 	 * Owning IO in cl_page_state::CPS_OWNED state. Sub-page can be owned
