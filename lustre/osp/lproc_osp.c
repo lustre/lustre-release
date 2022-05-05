@@ -276,6 +276,44 @@ static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(max_rpcs_in_flight);
 
+static ssize_t max_mod_rpcs_in_flight_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	u16 max;
+
+	max = obd_get_max_mod_rpcs_in_flight(&obd->u.cli);
+	return scnprintf(buf, PAGE_SIZE, "%hu\n", max);
+}
+
+static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	u16 val;
+	int rc;
+
+	rc = kstrtou16(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	rc = obd_set_max_mod_rpcs_in_flight(&obd->u.cli, val);
+	if (rc)
+		count = rc;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
+
 /**
  * Show maximum number of RPCs in processing allowed
  *
@@ -905,6 +943,27 @@ osp_reserved_mb_high_seq_write(struct file *file, const char __user *buffer,
 }
 LDEBUGFS_SEQ_FOPS(osp_reserved_mb_high);
 
+static int osp_rpc_stats_seq_show(struct seq_file *seq, void *v)
+{
+	struct obd_device *dev = seq->private;
+
+	return obd_mod_rpc_stats_seq_show(&dev->u.cli, seq);
+}
+
+static ssize_t osp_rpc_stats_seq_write(struct file *file,
+				       const char __user *buf,
+				       size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct obd_device *dev = seq->private;
+	struct client_obd *cli = &dev->u.cli;
+
+	lprocfs_oh_clear(&cli->cl_mod_rpcs_hist);
+
+	return len;
+}
+LDEBUGFS_SEQ_FOPS(osp_rpc_stats);
+
 /**
  * Show low watermark (in megabytes). If available free space at OST is less
  * than low watermark, object allocation for OST is disabled.
@@ -1020,6 +1079,8 @@ static struct ldebugfs_vars ldebugfs_osp_md_vars[] = {
 	  .fops =	&osp_import_fops		},
 	{ .name =	"state",
 	  .fops =	&osp_state_fops			},
+	{ .name =	"rpc_stats",
+	  .fops =	&osp_rpc_stats_fops		},
 	{ NULL }
 };
 
@@ -1056,6 +1117,7 @@ static struct attribute *osp_md_attrs[] = {
 	&lustre_attr_destroys_in_flight.attr,
 	&lustre_attr_active.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
+	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	&lustre_attr_max_rpcs_in_progress.attr,
 	&lustre_attr_maxage.attr,
 	&lustre_attr_mdt_conn_uuid.attr,

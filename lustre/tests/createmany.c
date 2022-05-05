@@ -42,11 +42,15 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <linux/lustre/lustre_user.h>
+#include <lustre/lustreapi.h>
+
 static void usage(const char *prog)
 {
 	printf("usage: %s {-o [-k]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] "
-	       "[-t seconds] filenamefmt [[start] count]\n", prog);
-	printf("\t-l\tlink files to existing <tgt> file\n"
+	       "[-i mdt_index] [-t seconds] filenamefmt [[start] count]\n", prog);
+	printf("\t-i\tMDT to create the directories on\n"
+	       "\t-l\tlink files to existing <tgt> file\n"
 	       "\t-m\tmknod regular files (don't create OST objects)\n"
 	       "\t-o\topen+create files with path and printf format\n"
 	       "\t-k\t    keep files open until all files are opened\n"
@@ -83,6 +87,8 @@ int main(int argc, char ** argv)
 	bool do_open = false, do_keep = false, do_link = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
 	bool do_rmdir = false;
+	int stripe_pattern = LMV_HASH_TYPE_FNV_1A_64;
+	int stripe_offset = -1, stripe_count = 1;
 	char *filename, *progname;
 	char *fmt = NULL, *fmt_unlink = NULL, *tgt = NULL;
 	char *endp = NULL;
@@ -109,10 +115,18 @@ int main(int argc, char ** argv)
 	else
 		progname = argv[0];
 
-	while ((c = getopt(argc, argv, "dl:kmor::t:u::")) != -1) {
+	while ((c = getopt(argc, argv, "i:dl:kmor::t:u::")) != -1) {
 		switch (c) {
 		case 'd':
 			do_mkdir = true;
+			break;
+		case 'i':
+			stripe_offset = strtoul(optarg, &endp, 0);
+			if (*endp != '\0') {
+				fprintf(stderr, "invalid MDT index '%s'\n",
+					optarg);
+				return 1;
+			}
 			break;
 		case 'k':
 			do_keep = true;
@@ -198,12 +212,24 @@ int main(int argc, char ** argv)
 				break;
 			}
 		} else if (do_mkdir) {
-			rc = mkdir(filename, 0755);
-			if (rc) {
-				printf("mkdir(%s) error: %s\n",
-				       filename, strerror(errno));
-				rc = errno;
-				break;
+			if (stripe_offset != -1) {
+				rc = llapi_dir_create_pool(filename, 0755,
+							   stripe_offset, stripe_count,
+							   stripe_pattern, NULL);
+				if (rc) {
+					printf("llapi_dir_create_pool(%s) error: %s\n",
+					       filename, strerror(-rc));
+					rc = errno;
+					break;
+				}
+			} else {
+				rc = mkdir(filename, 0755);
+				if (rc) {
+					printf("mkdir(%s) error: %s\n",
+					       filename, strerror(errno));
+					rc = errno;
+					break;
+				}
 			}
 		} else if (do_mknod) {
 			rc = mknod(filename, S_IFREG | 0444, 0);

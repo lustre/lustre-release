@@ -175,7 +175,6 @@ enum obd_cl_sem_lock_class {
 	OBD_CLI_SEM_MDCOSC,
 };
 
-struct mdc_rpc_lock;
 struct obd_import;
 struct client_obd {
 	struct rw_semaphore	 cl_sem;

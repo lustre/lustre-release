@@ -207,6 +207,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		data->ocd_connect_flags |= OBD_CONNECT_ACL |
 					   OBD_CONNECT_IBITS |
 					   OBD_CONNECT_MDS_MDS |
+					   OBD_CONNECT_MULTIMODRPCS |
 					   OBD_CONNECT_FID |
 					   OBD_CONNECT_AT |
 					   OBD_CONNECT_FULL20 |

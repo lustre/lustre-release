@@ -1179,8 +1179,6 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	strcat(osdname, "-osd");
 	CDEBUG(D_HA, "%s: connect to %s (%s)\n", obd->obd_name, osdname, src);
 
-	osp_init_rpc_lock(osp);
-
 	osp->opd_dt_dev.dd_lu_dev.ld_ops = &osp_lu_ops;
 	osp->opd_dt_dev.dd_ops = &osp_dt_ops;
 

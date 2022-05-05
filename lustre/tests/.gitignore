@@ -49,7 +49,6 @@
 /mcreate
 /memhog
 /mirror_io
-/mkdirmany
 /mlink
 /mmap_cat
 /mmap_mknod_test

@@ -17844,7 +17844,7 @@ test_181() { # bug 22177
 }
 run_test 181 "Test open-unlinked dir ========================"
 
-test_182() {
+test_182a() {
 	local fcount=1000
 	local tcount=10
 
@@ -17870,7 +17870,75 @@ test_182() {
 
 	rm -rf $DIR/$tdir
 }
-run_test 182 "Test parallel modify metadata operations ================"
+run_test 182a "Test parallel modify metadata operations from mdc"
+
+test_182b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local dcount=1000
+	local tcount=10
+	local stime
+	local etime
+	local delta
+
+	do_facet mds1 $LCTL list_param \
+		osp.$FSNAME-MDT*-osp-MDT*.rpc_stats ||
+		skip "MDS lacks parallel RPC handling"
+
+	$LFS mkdir -i 0 $DIR/$tdir || error "creating dir $DIR/$tdir"
+
+	rpc_count=$(do_facet mds1 $LCTL get_param -n \
+		    osp.$FSNAME-MDT0001-osp-MDT0000.max_mod_rpcs_in_flight)
+
+	stime=$(date +%s)
+	createmany -i 0 -d $DIR/$tdir/t- $tcount
+
+	for (( i = 0; i < $tcount; i++ )) ; do
+		createmany -i 0 -d $DIR/$tdir/t-$i/d- 0 $dcount &
+	done
+	wait
+	etime=$(date +%s)
+	delta=$((etime - stime))
+	echo "Time for file creation $delta sec for $rpc_count parallel RPCs"
+
+	stime=$(date +%s)
+	for (( i = 0; i < $tcount; i++ )) ; do
+		unlinkmany -d $DIR/$tdir/$i/d- $dcount &
+	done
+	wait
+	etime=$(date +%s)
+	delta=$((etime - stime))
+	echo "Time for file removal $delta sec for $rpc_count parallel RPCs"
+
+	rm -rf $DIR/$tdir
+
+	$LFS mkdir -i 0 $DIR/$tdir || error "creating dir $DIR/$tdir"
+
+	do_facet mds1 $LCTL set_param osp.$FSNAME-MDT0001-osp-MDT0000.max_mod_rpcs_in_flight=1
+
+	stime=$(date +%s)
+	createmany -i 0 -d $DIR/$tdir/t- $tcount
+
+	for (( i = 0; i < $tcount; i++ )) ; do
+		createmany -i 0 -d $DIR/$tdir/t-$i/d- 0 $dcount &
+	done
+	wait
+	etime=$(date +%s)
+	delta=$((etime - stime))
+	echo "Time for file creation $delta sec for 1 RPC sent at a time"
+
+	stime=$(date +%s)
+	for (( i = 0; i < $tcount; i++ )) ; do
+		unlinkmany -d $DIR/$tdir/t-$i/d- $dcount &
+	done
+	wait
+	etime=$(date +%s)
+	delta=$((etime - stime))
+	echo "Time for file removal $delta sec for 1 RPC sent at a time"
+
+	do_facet mds1 $LCTL set_param osp.$FSNAME-MDT0001-osp-MDT0000.max_mod_rpcs_in_flight=$rpc_count
+}
+run_test 182b "Test parallel modify metadata operations from osp"
 
 test_183() { # LU-2275
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
@@ -20886,7 +20954,7 @@ test_244b()
 }
 run_test 244b "multi-threaded write with group lock"
 
-test_245() {
+test_245a() {
 	local flagname="multi_mod_rpcs"
 	local connect_data_name="max_mod_rpcs"
 	local out
@@ -20909,7 +20977,35 @@ test_245() {
 	echo "$out" | grep -qw $connect_data_name ||
 		error "import should have connect data $connect_data_name"
 }
-run_test 245 "check mdc connection flag/data: multiple modify RPCs"
+run_test 245a "check mdc connection flag/data: multiple modify RPCs"
+
+test_245b() {
+	local flagname="multi_mod_rpcs"
+	local connect_data_name="max_mod_rpcs"
+	local out
+
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $MDSCOUNT -ge 2 ]] || skip "needs >= 2 MDTs"
+
+	# check if multiple modify RPCs flag is set
+	out=$(do_facet mds1 \
+		$LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import |
+		grep "connect_flags:")
+	echo "$out"
+
+	if [[ "$out" =~ $flagname ]]; then
+		echo "connect flag $flagname is not set"
+		return 0
+	fi
+
+	# check if multiple modify RPCs data is set
+	out=$(do_facet mds1 \
+		$LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import)
+
+	[[ "$out" =~ $connect_data_name ]] ||
+		error "import should have connect data $connect_data_name"
+}
+run_test 245b "check osp connection flag/data: multiple modify RPCs"
 
 cleanup_247() {
 	local submount=$1

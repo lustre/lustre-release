@@ -1187,10 +1187,10 @@ static int osp_send_update_req(const struct lu_env *env,
 		 * env */
 		args->oaua_update_env = env;
 		if (osp->opd_connect_mdt)
-			osp_get_rpc_lock(osp);
+			ptlrpc_get_mod_rpc_slot(req);
 		rc = ptlrpc_queue_wait(req);
 		if (osp->opd_connect_mdt)
-			osp_put_rpc_lock(osp);
+			ptlrpc_put_mod_rpc_slot(req);
 
 		/* We use rq_queued_time to distinguish between local
 		 * and remote -ENOMEM. */

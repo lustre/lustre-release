@@ -64,31 +64,32 @@ typedef void (*out_reconstruct_t)(const struct lu_env *env,
 				  struct object_update_reply *reply,
 				  int index);
 
-static inline bool out_check_resent(struct ptlrpc_request *req)
+static inline bool out_check_resent(struct ptlrpc_request *req,
+				    struct tg_reply_data *trd)
 {
+	struct lsd_reply_data *lrd;
+	bool reconstruct = false;
+
 	if (likely(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)))
 		return false;
 
-	if (req_xid_is_last(req)) {
-		struct lsd_client_data *lcd;
+	if (req_can_reconstruct(req, trd)) {
+		lrd = &trd->trd_reply;
+		req->rq_transno = lrd->lrd_transno;
+		req->rq_status = lrd->lrd_result;
 
-		/* XXX this does not support mulitple transactions yet, i.e.
-		 * only 1 update RPC each time betwee MDTs */
-		lcd = req->rq_export->exp_target_data.ted_lcd;
-
-		req->rq_transno = lcd->lcd_last_transno;
-		req->rq_status = lcd->lcd_last_result;
 		if (req->rq_status != 0)
 			req->rq_transno = 0;
 		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
 		lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 
 		DEBUG_REQ(D_HA, req, "reconstruct resent RPC");
-		return true;
+		reconstruct = true;
+	} else {
+		DEBUG_REQ(D_HA, req, "no reply for RESENT req");
 	}
-	DEBUG_REQ(D_HA, req, "reprocess RESENT req, last_xid is %lld",
-		  req->rq_export->exp_target_data.ted_lcd->lcd_last_xid);
-	return false;
+
+	return reconstruct;
 }
 
 static int out_create(struct tgt_session_info *tsi)
@@ -956,6 +957,7 @@ int out_handle(struct tgt_session_info *tsi)
 	struct object_update		*update;
 	struct object_update_reply	*reply;
 	struct ptlrpc_bulk_desc		*desc = NULL;
+	struct tg_reply_data *trd = NULL;
 	void				**update_bufs;
 	int				current_batchid = -1;
 	__u32				update_buf_count;
@@ -1109,7 +1111,11 @@ int out_handle(struct tgt_session_info *tsi)
 	tti->tti_u.update.tti_update_reply = reply;
 	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
 
-	need_reconstruct = out_check_resent(pill->rc_req);
+	OBD_ALLOC_PTR(trd);
+	if (!trd)
+		GOTO(out_free, rc = -ENOMEM);
+
+	need_reconstruct = out_check_resent(pill->rc_req, trd);
 
 	/* Walk through updates in the request to execute them */
 	for (i = 0; i < update_buf_count; i++) {
@@ -1240,6 +1246,9 @@ out_free:
 
 		OBD_FREE_PTR_ARRAY(update_bufs, update_buf_count);
 	}
+
+	if (trd)
+		OBD_FREE_PTR(trd);
 
 	if (desc != NULL)
 		ptlrpc_free_bulk(desc);
