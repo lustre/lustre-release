@@ -255,7 +255,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 		 */
 		if (lock->l_resource->lr_lvb_inode)
 			LDLM_DEBUG(lock,
-				   "can't take inode for the lock (%sevicted)\n",
+				   "can't take inode for the lock (%sevicted)",
 				   lock->l_resource->lr_lvb_inode->i_state &
 				   I_FREEING ? "" : "not ");
 		RETURN_EXIT;

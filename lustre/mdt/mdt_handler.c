@@ -3608,7 +3608,7 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		struct mdt_device *mdt =
 				mdt_dev(obd->obd_lu_dev->ld_site->ls_top_dev);
 
-		LDLM_DEBUG(lock, "Revoke remote lock\n");
+		LDLM_DEBUG(lock, "Revoke remote lock");
 
 		/* discard slc lock here so that it can be cleaned anytime,
 		 * especially for cleanup_resource() */

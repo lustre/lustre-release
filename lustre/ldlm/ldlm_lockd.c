@@ -754,7 +754,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 			 * In all such cases errors are ignored.
 			 */
 			LDLM_DEBUG(lock,
-				   "%s AST can't be sent due to a server %s failure or umount process: rc = %d\n",
+				   "%s AST can't be sent due to a server %s failure or umount process: rc = %d",
 				    ast_type,
 				     req->rq_import->imp_obd->obd_name, rc);
 		} else {
