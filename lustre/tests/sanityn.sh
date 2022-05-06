@@ -20,6 +20,8 @@ init_logging
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
 # bug number for skipped test:  LU-7105
 ALWAYS_EXCEPT+="                28 "
+# bug number for skipped test:  LU-14541
+ALWAYS_EXCEPT+="                16f"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skip tests for PPC until they are fixed
@@ -534,6 +536,35 @@ test_16e() { # LU-13227
 	rm -f $file1
 }
 run_test 16e "Verify size consistency for O_DIRECT write"
+
+test_16f() { # LU-14541
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+	local duration=20
+	local status
+
+	timeout --preserve-status --signal=USR1 $duration \
+		rw_seq_cst_vs_drop_caches $file1 $file2
+	status=$?
+
+	case $((status & 0x7f)) in
+		0)
+			echo OK # Computers must be fast now.
+			;;
+		6) # SIGABRT
+			error "sequential consistency violation detected"
+			;;
+		10) # SIGUSR1
+			echo TIMEOUT # This is fine.
+			;;
+		*)
+			error "strange status '$status'"
+			;;
+	esac
+
+	rm -f $file1
+}
+run_test 16f "rw sequential consistency vs drop_caches"
 
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
