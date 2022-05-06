@@ -509,7 +509,7 @@ kdist_config: prep-deb-files patch-stamp
 		--disable-snmp \
 		--disable-tests \
 		--enable-quota \
-		--with-kmp-moddir=updates/kernel \
+		--with-kmp-moddir=updates \
 		$${EXTRAFLAGS} \
 		$(EXTRA_OPTIONS)
 
