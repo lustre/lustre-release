@@ -626,6 +626,8 @@ static int mdt_create(struct mdt_thread_info *info)
 	 * not exist.
 	 */
 	info->mti_spec.sp_cr_lookup = 0;
+	if (mdt_object_remote(parent))
+		info->mti_spec.sp_cr_lookup = 1;
 	info->mti_spec.sp_feat = &dt_directory_features;
 
 	rc = mdo_create(info->mti_env, mdt_object_child(parent), &rr->rr_name,
