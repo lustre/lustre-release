@@ -63,12 +63,20 @@ static inline bool cld_is_recover(struct config_llog_data *cld)
 
 static inline bool cld_is_nodemap(struct config_llog_data *cld)
 {
+#ifdef HAVE_SERVER_SUPPORT
 	return cld->cld_type == MGS_CFG_T_NODEMAP;
+#else
+	return false;
+#endif
 }
 
 static inline bool cld_is_barrier(struct config_llog_data *cld)
 {
+#ifdef HAVE_SERVER_SUPPORT
 	return cld->cld_type == MGS_CFG_T_BARRIER;
+#else
+	return false;
+#endif
 }
 
 #endif  /* _MGC_INTERNAL_H */

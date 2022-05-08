@@ -262,15 +262,14 @@ static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
 					struct super_block *sb)
 {
 	struct config_llog_instance lcfg = *cfg;
-	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct config_llog_data *cld;
 	char logname[32];
 
-	if (IS_OST(lsi))
+	if (IS_OST(s2lsi(sb)))
 		return NULL;
 
 	/* for osp-on-ost, see lustre_start_osp() */
-	if (IS_MDT(lsi) && lcfg.cfg_instance)
+	if (IS_MDT(s2lsi(sb)) && lcfg.cfg_instance)
 		return NULL;
 
 	/* We have to use different llog for clients and MDTs for DNE,
@@ -278,7 +277,7 @@ static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
 	 */
 	LASSERT(strlen(fsname) < sizeof(logname) / 2);
 	strncpy(logname, fsname, sizeof(logname));
-	if (IS_SERVER(lsi)) { /* mdt */
+	if (IS_SERVER(s2lsi(sb))) { /* mdt */
 		LASSERT(lcfg.cfg_instance == 0);
 		lcfg.cfg_instance = ll_get_cfg_instance(sb);
 		strncat(logname, "-mdtir", sizeof(logname));
@@ -738,6 +737,7 @@ static void mgc_requeue_add(struct config_llog_data *cld)
 }
 
 /********************** class fns **********************/
+#ifdef HAVE_SERVER_SUPPORT
 static int mgc_local_llog_init(const struct lu_env *env,
 			       struct obd_device *obd,
 			       struct obd_device *disk)
@@ -863,6 +863,7 @@ static int mgc_fs_cleanup(const struct lu_env *env, struct obd_device *obd)
 
 	RETURN(0);
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static int mgc_llog_init(const struct lu_env *env, struct obd_device *obd)
 {
@@ -1112,12 +1113,11 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, 0);
         ptlrpc_request_set_replen(req);
 
-        /* check if this is server or client */
-        if (cld->cld_cfg.cfg_sb) {
-                struct lustre_sb_info *lsi = s2lsi(cld->cld_cfg.cfg_sb);
-		if (lsi && IS_SERVER(lsi))
-                        short_limit = 1;
-        }
+	/* check if this is server or client */
+	if (cld->cld_cfg.cfg_sb &&
+	    IS_SERVER(s2lsi(cld->cld_cfg.cfg_sb)))
+		short_limit = 1;
+
         /* Limit how long we will wait for the enqueue to complete */
         req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT;
         rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
@@ -1149,26 +1149,27 @@ static void mgc_notify_active(struct obd_device *unused)
 	/* TODO: Help the MGS rebuild nidtbl. -jay */
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /* Send target_reg message to MGS */
 static int mgc_target_register(struct obd_export *exp,
-                               struct mgs_target_info *mti)
+			       struct mgs_target_info *mti)
 {
-        struct ptlrpc_request  *req;
-        struct mgs_target_info *req_mti, *rep_mti;
-        int                     rc;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct mgs_target_info *req_mti, *rep_mti;
+	int rc;
+	ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MGS_TARGET_REG, LUSTRE_MGS_VERSION,
-                                        MGS_TARGET_REG);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+					&RQF_MGS_TARGET_REG, LUSTRE_MGS_VERSION,
+					MGS_TARGET_REG);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
-        if (!req_mti) {
-                ptlrpc_req_finished(req);
-                RETURN(-ENOMEM);
-        }
+	req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+	if (!req_mti) {
+		ptlrpc_req_finished(req);
+		RETURN(-ENOMEM);
+	}
 
 	memcpy(req_mti, mti, sizeof(*req_mti));
 	ptlrpc_request_set_replen(req);
@@ -1198,6 +1199,7 @@ static int mgc_target_register(struct obd_export *exp,
 
         RETURN(rc);
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 			      u32 keylen, void *key,
@@ -1229,17 +1231,19 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		RETURN(0);
 	}
 
-        /* FIXME move this to mgc_process_config */
-        if (KEY_IS(KEY_REGISTER_TARGET)) {
-                struct mgs_target_info *mti;
-                if (vallen != sizeof(struct mgs_target_info))
-                        RETURN(-EINVAL);
-                mti = (struct mgs_target_info *)val;
-                CDEBUG(D_MGC, "register_target %s %#x\n",
-                       mti->mti_svname, mti->mti_flags);
-                rc =  mgc_target_register(exp, mti);
-                RETURN(rc);
-        }
+#ifdef HAVE_SERVER_SUPPORT
+	/* FIXME move this to mgc_process_config */
+	if (KEY_IS(KEY_REGISTER_TARGET)) {
+		struct mgs_target_info *mti;
+
+		if (vallen != sizeof(struct mgs_target_info))
+			RETURN(-EINVAL);
+		mti = (struct mgs_target_info *)val;
+		CDEBUG(D_MGC, "register_target %s %#x\n",
+		       mti->mti_svname, mti->mti_flags);
+		rc =  mgc_target_register(exp, mti);
+		RETURN(rc);
+	}
 	if (KEY_IS(KEY_SET_FS)) {
 		struct super_block *sb = (struct super_block *)val;
 
@@ -1255,6 +1259,7 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		rc = mgc_fs_cleanup(env, exp->exp_obd);
 		RETURN(rc);
 	}
+#endif
         if (KEY_IS(KEY_MGSSEC)) {
                 struct client_obd     *cli = &exp->exp_obd->u.cli;
                 struct sptlrpc_flavor  flvr;
@@ -1373,7 +1378,6 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 				  void *data, int datalen, bool mne_swab)
 {
 	struct config_llog_instance *cfg = &cld->cld_cfg;
-	struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
 	struct mgs_nidtbl_entry *entry;
 	struct lustre_cfg *lcfg;
 	struct lustre_cfg_bufs bufs;
@@ -1393,12 +1397,14 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	/* get dynamic nids setting */
 	dynamic_nids = mgc->obd_dynamic_nids;
 
-	if (!IS_SERVER(lsi)) {
+	if (!IS_SERVER(s2lsi(cfg->cfg_sb))) {
 		pos = snprintf(inst, sizeof(inst), "%016lx", cfg->cfg_instance);
 		if (pos >= PAGE_SIZE)
 			return -E2BIG;
 #ifdef HAVE_SERVER_SUPPORT
 	} else {
+		struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
+
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
 					sizeof(inst));
@@ -1822,6 +1828,7 @@ out:
 	return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 static int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data)
 {
 	struct config_llog_data *cld = lock->l_ast_data;
@@ -1880,36 +1887,14 @@ out:
 	return rc;
 }
 
-/* local_only means it cannot get remote llogs */
-static int mgc_process_cfg_log(struct obd_device *mgc,
-			       struct config_llog_data *cld, int local_only)
+static int
+mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
+			   struct lustre_sb_info *lsi, struct obd_device *mgc,
+			   struct config_llog_data *cld, int local_only)
 {
-	struct llog_ctxt	*ctxt, *lctxt = NULL;
-	struct client_obd	*cli = &mgc->u.cli;
-	struct lustre_sb_info	*lsi = NULL;
-	int			 rc = 0;
-	struct lu_env		*env;
-
-	ENTRY;
-
-	LASSERT(cld);
-	LASSERT(mutex_is_locked(&cld->cld_lock));
-
-	if (cld->cld_cfg.cfg_sb)
-		lsi = s2lsi(cld->cld_cfg.cfg_sb);
-
-	OBD_ALLOC_PTR(env);
-	if (env == NULL)
-		RETURN(-ENOMEM);
-
-	rc = lu_env_init(env, LCT_MG_THREAD);
-	if (rc)
-		GOTO(out_free, rc);
-
-	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
-	LASSERT(ctxt);
-
-	lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
+	struct llog_ctxt *lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
+	struct client_obd *cli = &mgc->u.cli;
+	int rc = 0;
 
 	/* Copy the setup log locally if we can. Don't mess around if we're
 	 * running an MGS though (logs are already local). */
@@ -1922,14 +1907,14 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			CDEBUG(D_INFO, "%s: copy local log %s\n",
 			       mgc->obd_name, cld->cld_logname);
 
-			rc = mgc_llog_local_copy(env, mgc, ctxt, lctxt,
+			rc = mgc_llog_local_copy(env, mgc, *ctxt, lctxt,
 						 cld->cld_logname);
 			if (!rc)
 				lsi->lsi_flags &= ~LDD_F_NO_LOCAL_LOGS;
 		}
 		if (local_only || rc) {
-			if (unlikely(lsi->lsi_flags & LDD_F_NO_LOCAL_LOGS)
-			    || rc) {
+			if (unlikely(lsi->lsi_flags & LDD_F_NO_LOCAL_LOGS) ||
+			    rc) {
 				CWARN("%s: local log %s are not valid and/or remote logs are not accessbile rc = %d\n",
 				      mgc->obd_name, cld->cld_logname, rc);
 				GOTO(out_pop, rc = -EIO);
@@ -1948,12 +1933,11 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 		/* Now, whether we copied or not, start using the local llog.
 		 * If we failed to copy, we'll start using whatever the old
 		 * log has. */
-		llog_ctxt_put(ctxt);
-		ctxt = lctxt;
+		llog_ctxt_put(*ctxt);
+		*ctxt = lctxt;
 		lctxt = NULL;
-	} else {
-		if (local_only) /* no local log at client side */
-			GOTO(out_pop, rc = -EIO);
+	} else if (local_only) { /* no local log at client side */
+		GOTO(out_pop, rc = -EIO);
 	}
 
 	rc = -EAGAIN;
@@ -1970,8 +1954,51 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 					     &cld->cld_cfg);
 		llog_ctxt_put(rctxt);
 	}
+out_pop:
+	if (lctxt)
+		__llog_ctxt_put(env, lctxt);
+	return rc;
+}
+#else /* !HAVE_SERVER_SUPPORT */
+#define mgc_barrier_glimpse_ast	NULL
+#endif /* HAVE_SERVER_SUPPORT */
 
+/* local_only means it cannot get remote llogs */
+static int mgc_process_cfg_log(struct obd_device *mgc,
+			       struct config_llog_data *cld, int local_only)
+{
+	struct llog_ctxt *ctxt;
+	struct lustre_sb_info *lsi = NULL;
+	int rc = 0;
+	struct lu_env *env;
+
+	ENTRY;
+	LASSERT(cld);
+	LASSERT(mutex_is_locked(&cld->cld_lock));
+
+	if (cld->cld_cfg.cfg_sb)
+		lsi = s2lsi(cld->cld_cfg.cfg_sb);
+
+	OBD_ALLOC_PTR(env);
+	if (!env)
+		RETURN(-ENOMEM);
+
+	rc = lu_env_init(env, LCT_MG_THREAD);
+	if (rc)
+		GOTO(out_free, rc);
+
+	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+	LASSERT(ctxt);
+#ifdef HAVE_SERVER_SUPPORT
+	rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc, cld,
+					local_only);
+	if (rc == -EIO && local_only)
+		GOTO(out_pop, rc);
 	if (rc && rc != -ENOENT)
+#else
+	if (local_only)
+		GOTO(out_pop, rc);
+#endif
 		rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
 
@@ -1987,9 +2014,6 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
 out_pop:
 	__llog_ctxt_put(env, ctxt);
-	if (lctxt)
-		__llog_ctxt_put(env, lctxt);
-
 	lu_env_fini(env);
 out_free:
 	OBD_FREE_PTR(env);
@@ -2170,25 +2194,27 @@ static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
         ENTRY;
 
         switch(lcfg->lcfg_command) {
-        case LCFG_LOV_ADD_OBD: {
-                /* Overloading this cfg command: register a new target */
-                struct mgs_target_info *mti;
+#ifdef HAVE_SERVER_SUPPORT
+	case LCFG_LOV_ADD_OBD: {
+		/* Overloading this cfg command: register a new target */
+		struct mgs_target_info *mti;
 
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) !=
-                    sizeof(struct mgs_target_info))
-                        GOTO(out, rc = -EINVAL);
+		if (LUSTRE_CFG_BUFLEN(lcfg, 1) !=
+		    sizeof(struct mgs_target_info))
+			GOTO(out, rc = -EINVAL);
 
-                mti = (struct mgs_target_info *)lustre_cfg_buf(lcfg, 1);
-                CDEBUG(D_MGC, "add_target %s %#x\n",
-                       mti->mti_svname, mti->mti_flags);
-                rc = mgc_target_register(obd->u.cli.cl_mgc_mgsexp, mti);
-                break;
-        }
-        case LCFG_LOV_DEL_OBD:
-                /* Unregister has no meaning at the moment. */
-                CERROR("lov_del_obd unimplemented\n");
-                rc = -ENOSYS;
-                break;
+		mti = lustre_cfg_buf(lcfg, 1);
+		CDEBUG(D_MGC, "add_target %s %#x\n",
+		       mti->mti_svname, mti->mti_flags);
+		rc = mgc_target_register(obd->u.cli.cl_mgc_mgsexp, mti);
+		break;
+	}
+	case LCFG_LOV_DEL_OBD:
+		/* Unregister has no meaning at the moment. */
+		CERROR("lov_del_obd unimplemented\n");
+		rc = -EINVAL;
+		break;
+#endif
         case LCFG_SPTLRPC_CONF: {
                 rc = sptlrpc_process_config(lcfg);
                 break;

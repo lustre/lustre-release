@@ -47,18 +47,31 @@
 #include <linux/backing-dev.h>
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
-#include <uapi/linux/lustre/lustre_disk.h>
-#include <uapi/linux/lustre/lustre_idl.h>
 #if !defined(CONFIG_LL_ENCRYPTION) && defined(HAVE_LUSTRE_CRYPTO)
 #include <lustre_crypto.h>
 #endif
-
+#include <uapi/linux/lustre/lustre_idl.h>
+#ifdef HAVE_SERVER_SUPPORT
+#include <uapi/linux/lustre/lustre_disk.h>
 #define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)
 #define IS_MGS(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MGS)
-#define IS_SERVER(data)		((data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
+#define IS_SERVER(data)		((data) &&				  \
+				 (data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
 						      LDD_F_SV_TYPE_MDT | \
 						      LDD_F_SV_TYPE_OST))
+#else
+#define LDD_F_SV_TYPE_MDT	0x0001
+#define LDD_F_SV_TYPE_OST	0x0002
+#define LDD_F_SV_TYPE_MGS	0x0004
+#define LDD_F_SV_ALL		0x0008
+
+#define IS_MDT(data)		(0)
+#define IS_OST(data)		(0)
+#define IS_MGS(data)		(0)
+#define IS_SERVER(data)		(0)
+#endif
+
 #define MT_STR(data)		mt_str((data)->ldd_mount_type)
 
 /****************** mount command *********************/

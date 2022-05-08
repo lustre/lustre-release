@@ -801,6 +801,7 @@ int server_name2fsname(const char *svname, char *fsname, const char **endptr)
 }
 EXPORT_SYMBOL(server_name2fsname);
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * Get service name (svname) from string
  * rc < 0 on error
@@ -826,6 +827,7 @@ int server_name2svname(const char *label, char *svname, const char **endptr,
 	return 0;
 }
 EXPORT_SYMBOL(server_name2svname);
+#endif /* HAVE_SERVER_SUPPORT */
 
 /**
  * check server name is OST.
