@@ -224,10 +224,10 @@ int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 
 	if (*path_or_device == '/')
 		rc = get_root_path(WANT_FD, NULL, &mnt_fd,
-				   (char *)path_or_device, -1);
+				   (char *)path_or_device, -1, NULL);
 	else
 		rc = get_root_path(WANT_FD, (char *)path_or_device,
-				   &mnt_fd, NULL, -1);
+				   &mnt_fd, NULL, -1, NULL);
 
 	if (rc < 0)
 		goto out;

@@ -472,6 +472,7 @@ int llapi_getname(const char *path, char *name, size_t namelen);
 int llapi_search_fileset(const char *pathname, char *fileset);
 
 int llapi_search_rootpath(char *pathname, const char *fsname);
+int llapi_search_rootpath_by_dev(char *pathname, dev_t dev);
 int llapi_nodemap_exists(const char *name);
 int llapi_migrate_mdt(char *path, struct find_param *param);
 int llapi_mv(char *path, struct find_param *param);
