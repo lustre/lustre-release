@@ -640,11 +640,12 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	struct obd_device *obd;
 	char *lwpname = NULL;
 	char *lwpuuid = NULL;
+	struct lnet_nid nid;
 	int rc;
 
 	ENTRY;
-	rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
-			    lcfg->lcfg_nid);
+	lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+	rc = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
 	if (rc != 0) {
 		CERROR("%s: Can't add uuid: rc =%d\n", lsi->lsi_svname, rc);
 		RETURN(rc);
@@ -869,8 +870,10 @@ static int client_lwp_config_process(const struct lu_env *env,
 			 */
 			cfg->cfg_flags |= CFG_F_SKIP;
 		} else if (cfg->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
-			rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
-					    lcfg->lcfg_nid);
+			struct lnet_nid nid;
+
+			lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+			rc = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
 			if (rc < 0)
 				CERROR("%s: Fail to add uuid, rc:%d\n",
 				       lsi->lsi_svname, rc);

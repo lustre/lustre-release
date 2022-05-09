@@ -1905,11 +1905,11 @@ int lustre_check_exclusion(struct super_block *sb, char *svname);
 /* lustre_peer.c    */
 int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid,
 			int index);
-int class_add_uuid(const char *uuid, __u64 nid);
+int class_add_uuid(const char *uuid, struct lnet_nid *nid);
 int class_del_uuid (const char *uuid);
 int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 			   int nid_count);
-int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
+int class_check_uuid(struct obd_uuid *uuid, struct lnet_nid *nid);
 
 /* class_obd.c */
 extern char obd_jobid_name[];

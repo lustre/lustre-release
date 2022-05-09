@@ -75,15 +75,13 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 /* Add a nid to a niduuid.  Multiple nids can be added to a single uuid;
    LNET will choose the best one. */
-int class_add_uuid(const char *uuid, lnet_nid_t nid4)
+int class_add_uuid(const char *uuid, struct lnet_nid *nid)
 {
 	struct uuid_nid_data *data, *entry;
-	struct lnet_nid nid;
 	int found = 0;
 	int rc;
 
-	LASSERT(nid4 != 0);  /* valid newconfig NID is never zero */
-	lnet_nid4_to_nid(nid4, &nid);
+	LASSERT(nid->nid_type != 0);  /* valid newconfig NID is never zero */
 
 	if (strlen(uuid) > UUID_MAX - 1)
 		return -EOVERFLOW;
@@ -93,7 +91,7 @@ int class_add_uuid(const char *uuid, lnet_nid_t nid4)
 		return -ENOMEM;
 
 	obd_str2uuid(&data->un_uuid, uuid);
-	data->un_nids[0] = nid;
+	data->un_nids[0] = *nid;
 	data->un_nid_count = 1;
 
 	spin_lock(&g_uuid_lock);
@@ -103,12 +101,12 @@ int class_add_uuid(const char *uuid, lnet_nid_t nid4)
 
 			found = 1;
 			for (i = 0; i < entry->un_nid_count; i++)
-				if (nid_same(&nid, &entry->un_nids[i]))
+				if (nid_same(nid, &entry->un_nids[i]))
 					break;
 
 			if (i == entry->un_nid_count) {
 				LASSERT(entry->un_nid_count < MTI_NIDS_MAX);
-				entry->un_nids[entry->un_nid_count++] = nid;
+				entry->un_nids[entry->un_nid_count++] = *nid;
 			}
 			break;
 		}
@@ -119,13 +117,13 @@ int class_add_uuid(const char *uuid, lnet_nid_t nid4)
 
 	if (found) {
 		CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
-		       libcfs_nidstr(&nid), entry->un_nid_count);
+		       libcfs_nidstr(nid), entry->un_nid_count);
 		rc = LNetAddPeer(entry->un_nids, entry->un_nid_count);
 		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
 		       libcfs_nidstr(&data->un_nids[0]), rc);
 		OBD_FREE(data, sizeof(*data));
 	} else {
-		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nidstr(&nid));
+		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nidstr(nid));
 		rc = LNetAddPeer(data->un_nids, data->un_nid_count);
 		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
 		       libcfs_nidstr(&data->un_nids[0]), rc);
@@ -217,17 +215,15 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 EXPORT_SYMBOL(class_add_nids_to_uuid);
 
 /* check if @nid exists in nid list of @uuid */
-int class_check_uuid(struct obd_uuid *uuid, lnet_nid_t nid4)
+int class_check_uuid(struct obd_uuid *uuid, struct lnet_nid *nid)
 {
 	struct uuid_nid_data *entry;
-	struct lnet_nid nid;
 	int found = 0;
 
 	ENTRY;
 
-	lnet_nid4_to_nid(nid4, &nid);
 	CDEBUG(D_INFO, "check if uuid %s has %s.\n",
-	       obd_uuid2str(uuid), libcfs_nidstr(&nid));
+	       obd_uuid2str(uuid), libcfs_nidstr(nid));
 
 	spin_lock(&g_uuid_lock);
 	list_for_each_entry(entry, &g_uuid_list, un_list) {
@@ -238,7 +234,7 @@ int class_check_uuid(struct obd_uuid *uuid, lnet_nid_t nid4)
 
 		/* found the uuid, check if it has @nid */
 		for (i = 0; i < entry->un_nid_count; i++) {
-			if (nid_same(&entry->un_nids[i], &nid)) {
+			if (nid_same(&entry->un_nids[i], nid)) {
 				found = 1;
 				break;
 			}
