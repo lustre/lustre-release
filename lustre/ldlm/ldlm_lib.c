@@ -249,32 +249,6 @@ out:
 }
 EXPORT_SYMBOL(client_import_del_conn);
 
-/**
- * Find conn UUID by peer NID. \a peer is a server NID. This function is used
- * to find a conn uuid of \a imp which can reach \a peer.
- */
-int client_import_find_conn(struct obd_import *imp, lnet_nid_t peer,
-			    struct obd_uuid *uuid)
-{
-	struct obd_import_conn *conn;
-	int rc = -ENOENT;
-
-	ENTRY;
-
-	spin_lock(&imp->imp_lock);
-	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
-		/* Check if conn UUID does have this peer NID. */
-		if (class_check_uuid(&conn->oic_uuid, peer)) {
-			*uuid = conn->oic_uuid;
-			rc = 0;
-			break;
-		}
-	}
-	spin_unlock(&imp->imp_lock);
-	RETURN(rc);
-}
-EXPORT_SYMBOL(client_import_find_conn);
-
 void client_destroy_import(struct obd_import *imp)
 {
 	/*
