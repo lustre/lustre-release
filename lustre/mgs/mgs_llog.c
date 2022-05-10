@@ -1135,7 +1135,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		/* LCFG_ADD_UUID command found. Let's skip original command
 		   and add passed nids */
 		ptr = mrd->target.mti_params;
-		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 			if (!mrd->nodeuuid) {
 				rc = name_create(&mrd->nodeuuid,
 						 libcfs_nid2str(nid), "");
@@ -1202,7 +1202,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 
 		if (mrd->failover) {
 			ptr = mrd->failover;
-			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+			while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 				if (mrd->nodeuuid == NULL) {
 					rc =  name_create(&mrd->nodeuuid,
 							  libcfs_nid2str(nid),
@@ -2500,12 +2500,12 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 
 	/*
 	 * Pull failnid info out of params string, which may contain something
-	 * like "<nid1>,<nid2>:<nid3>,<nid4>".  class_parse_nid() does not
+	 * like "<nid1>,<nid2>:<nid3>,<nid4>".  class_parse_nid4() does not
 	 * complain about abnormal inputs like ",:<nid1>", "<nid1>:,<nid2>",
 	 * etc.  However, convert_hostnames() should have caught those.
 	 */
-        while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
-                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
+		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 			char nidstr[LNET_NIDSTR_SIZE];
 
 			if (failnodeuuid == NULL) {

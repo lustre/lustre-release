@@ -313,7 +313,7 @@ static int mgs_check_failover_reg(struct mgs_target_info *mti)
 
 	ptr = mti->mti_params;
 	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
-		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid4_quiet(ptr, &nid, &ptr) == 0) {
 			for (i = 0; i < mti->mti_nid_count; i++) {
 				if (nid == mti->mti_nids[i]) {
 					LCONSOLE_WARN("Denying initial registration attempt from nid %s, specified as failover\n",

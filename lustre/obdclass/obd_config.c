@@ -408,12 +408,12 @@ int class_match_param(char *buf, const char *key, char **valp)
 }
 EXPORT_SYMBOL(class_match_param);
 
-static int parse_nid(char *buf, void *value, int quiet)
+static int parse_nid4(char *buf, void *value, int quiet)
 {
-	lnet_nid_t *nid = (lnet_nid_t *)value;
+	lnet_nid_t *nid4 = (lnet_nid_t *)value;
 
-	*nid = libcfs_str2nid(buf);
-	if (*nid != LNET_NID_ANY)
+	*nid4 = libcfs_str2nid(buf);
+	if (*nid4 != LNET_NID_ANY)
 		return 0;
 
 	if (!quiet)
@@ -431,7 +431,7 @@ static int parse_net(char *buf, void *value)
 }
 
 enum {
-	CLASS_PARSE_NID = 1,
+	CLASS_PARSE_NID4 = 1,
 	CLASS_PARSE_NET,
 };
 
@@ -465,8 +465,8 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 	switch (opc) {
 	default:
 		LBUG();
-	case CLASS_PARSE_NID:
-		rc = parse_nid(buf, value, quiet);
+	case CLASS_PARSE_NID4:
+		rc = parse_nid4(buf, value, quiet);
 		break;
 	case CLASS_PARSE_NET:
 		rc = parse_net(buf, value);
@@ -480,17 +480,17 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 	return 0;
 }
 
-int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
+int class_parse_nid4(char *buf, lnet_nid_t *nid4, char **endh)
 {
-	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 0);
+	return class_parse_value(buf, CLASS_PARSE_NID4, (void *)nid4, endh, 0);
 }
-EXPORT_SYMBOL(class_parse_nid);
+EXPORT_SYMBOL(class_parse_nid4);
 
-int class_parse_nid_quiet(char *buf, lnet_nid_t *nid, char **endh)
+int class_parse_nid4_quiet(char *buf, lnet_nid_t *nid4, char **endh)
 {
-	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 1);
+	return class_parse_value(buf, CLASS_PARSE_NID4, (void *)nid4, endh, 1);
 }
-EXPORT_SYMBOL(class_parse_nid_quiet);
+EXPORT_SYMBOL(class_parse_nid4_quiet);
 
 int class_parse_net(char *buf, __u32 *net, char **endh)
 {
@@ -512,7 +512,7 @@ int class_match_nid(char *buf, char *key, lnet_nid_t nid)
 		 * please restrict to the NIDs pertaining to
 		 * the specified NIDs
 		 */
-		while (class_parse_nid(buf, &tmp, &buf) == 0) {
+		while (class_parse_nid4(buf, &tmp, &buf) == 0) {
 			if (tmp == nid)
 				return 1;
 		}

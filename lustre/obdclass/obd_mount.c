@@ -237,7 +237,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* mount -o mgsnode=nid */
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		if (lsi->lsi_lmd->lmd_mgs &&
-		    (class_parse_nid(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
+		    (class_parse_nid4(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
 			i++;
 		} else if (IS_MGS(lsi)) {
 			struct lnet_processid id;
@@ -253,7 +253,7 @@ int lustre_start_mgc(struct super_block *sb)
 	} else { /* client */
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
-		if (class_parse_nid(ptr, &nid, &ptr) == 0)
+		if (class_parse_nid4(ptr, &nid, &ptr) == 0)
 			i++;
 	}
 	if (i == 0) {
@@ -370,7 +370,7 @@ int lustre_start_mgc(struct super_block *sb)
 			 * Multiple NIDs on one MGS node are separated
 			 * by commas.
 			 */
-			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+			while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 				rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
 					     niduuid, NULL, NULL, NULL);
 				if (rc == 0)
@@ -383,7 +383,7 @@ int lustre_start_mgc(struct super_block *sb)
 	} else { /* client */
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
-		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
 				     niduuid, NULL, NULL, NULL);
 			if (rc == 0)
@@ -421,7 +421,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* New failover node */
 		sprintf(niduuid, "%s_%x", mgcname, i);
 		j = 0;
-		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid4_quiet(ptr, &nid, &ptr) == 0) {
 			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
 				     niduuid, NULL, NULL, NULL);
 			if (rc == 0)
@@ -1155,7 +1155,7 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
 	int oldlen = 0;
 
 	/* Find end of NID-list */
-	while (class_parse_nid_quiet(tail, &nid, &tail) == 0)
+	while (class_parse_nid4_quiet(tail, &nid, &tail) == 0)
 		; /* do nothing */
 
 	length = tail - *ptr;
