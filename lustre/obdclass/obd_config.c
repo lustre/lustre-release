@@ -530,9 +530,9 @@ int class_parse_net(char *buf, __u32 *net, char **endh)
  * 0 param contains key and not match
  * -1 param does not contain key
  */
-int class_match_nid(char *buf, char *key, lnet_nid_t nid)
+int class_match_nid(char *buf, char *key, struct lnet_nid *nid)
 {
-	lnet_nid_t tmp;
+	struct lnet_nid tmp;
 	int rc = -1;
 
 	while (class_find_param(buf, key, &buf) == 0) {
@@ -540,8 +540,8 @@ int class_match_nid(char *buf, char *key, lnet_nid_t nid)
 		 * please restrict to the NIDs pertaining to
 		 * the specified NIDs
 		 */
-		while (class_parse_nid4(buf, &tmp, &buf) == 0) {
-			if (tmp == nid)
+		while (class_parse_nid(buf, &tmp, &buf) == 0) {
+			if (nid_same(&tmp, nid))
 				return 1;
 		}
 		rc = 0;

@@ -1178,8 +1178,7 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 		 */
 		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) != 0 &&
 		    class_match_nid(lsi->lsi_lmd->lmd_params,
-				    PARAM_FAILNODE,
-				    lnet_nid_to_nid4(&id.nid)) < 1)
+				    PARAM_FAILNODE, &id.nid) < 1)
 			continue;
 
 		if (!class_find_param(lsi->lsi_lmd->lmd_params,
