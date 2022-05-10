@@ -176,6 +176,8 @@ int class_get_next_param(char **params, char *copy);
 int class_match_param(char *buf, const char *key, char **valp);
 int class_parse_nid4(char *buf, lnet_nid_t *nid4, char **endh);
 int class_parse_nid4_quiet(char *buf, lnet_nid_t *nid4, char **endh);
+int class_parse_nid(char *buf, struct lnet_nid *nid, char **endh);
+int class_parse_nid_quiet(char *buf, struct lnet_nid *nid, char **endh);
 int class_parse_net(char *buf, u32 *net, char **endh);
 int class_match_nid(char *buf, char *key, lnet_nid_t nid);
 int class_match_net(char *buf, char *key, u32 net);

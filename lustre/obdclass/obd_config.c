@@ -421,6 +421,18 @@ static int parse_nid4(char *buf, void *value, int quiet)
 	return -EINVAL;
 }
 
+static int parse_nid(char *buf, void *value, int quiet)
+{
+	struct lnet_nid *nid = value;
+
+	if (libcfs_strnid(nid, buf) == 0)
+		return 0;
+
+	if (!quiet)
+		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
+	return -EINVAL;
+}
+
 static int parse_net(char *buf, void *value)
 {
 	__u32 *net = (__u32 *)value;
@@ -432,6 +444,7 @@ static int parse_net(char *buf, void *value)
 
 enum {
 	CLASS_PARSE_NID4 = 1,
+	CLASS_PARSE_NID,
 	CLASS_PARSE_NET,
 };
 
@@ -468,6 +481,9 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 	case CLASS_PARSE_NID4:
 		rc = parse_nid4(buf, value, quiet);
 		break;
+	case CLASS_PARSE_NID:
+		rc = parse_nid(buf, value, quiet);
+		break;
 	case CLASS_PARSE_NET:
 		rc = parse_net(buf, value);
 		break;
@@ -491,6 +507,18 @@ int class_parse_nid4_quiet(char *buf, lnet_nid_t *nid4, char **endh)
 	return class_parse_value(buf, CLASS_PARSE_NID4, (void *)nid4, endh, 1);
 }
 EXPORT_SYMBOL(class_parse_nid4_quiet);
+
+int class_parse_nid(char *buf, struct lnet_nid *nid, char **endh)
+{
+	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 0);
+}
+EXPORT_SYMBOL(class_parse_nid);
+
+int class_parse_nid_quiet(char *buf, struct lnet_nid *nid, char **endh)
+{
+	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 1);
+}
+EXPORT_SYMBOL(class_parse_nid_quiet);
 
 int class_parse_net(char *buf, __u32 *net, char **endh)
 {
