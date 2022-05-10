@@ -801,7 +801,7 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(stop, rc);
 
-	ofd_write_lock(env, fo);
+	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
 
@@ -824,7 +824,7 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 			filter_fid_le_to_cpu(&fo->ofo_ff, ff, sizeof(*ff));
 	}
 unlock:
-	ofd_write_unlock(env, fo);
+	ofd_read_unlock(env, fo);
 stop:
 	ofd_trans_stop(env, ofd, th, rc);
 	RETURN(rc);
