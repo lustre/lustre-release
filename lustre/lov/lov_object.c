@@ -1032,6 +1032,25 @@ static int lov_attr_get_empty(const struct lu_env *env, struct cl_object *obj,
 	return 0;
 }
 
+/**
+ * The MDT returns st_blocks=1 for the HSM released file (See LU-3864).
+ * The LOV layouer should also return st_blocks=1 for the HSM released file
+ * in the call ->coo_attr_get().
+ * Otherwise, the client may get 0 block count. This caused tools like tar
+ * then to consider the file as fully sparse and to archive it as is without
+ * attempting to access/restore its content.
+ */
+static int lov_attr_get_released(const struct lu_env *env,
+				 struct cl_object *obj, struct cl_attr *attr)
+{
+	if (attr->cat_size == 0)
+		attr->cat_blocks = 0;
+	else
+		attr->cat_blocks = 1;
+
+	return 0;
+}
+
 static int lov_attr_get_composite(const struct lu_env *env,
 				  struct cl_object *obj,
 				  struct cl_attr *attr)
@@ -1138,7 +1157,7 @@ const static struct lov_layout_operations lov_dispatch[] = {
 		.llo_page_init = lov_page_init_empty,
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_released,
-		.llo_getattr   = lov_attr_get_empty,
+		.llo_getattr   = lov_attr_get_released,
 		.llo_flush     = lov_flush_empty,
 	},
 	[LLT_COMP] = {

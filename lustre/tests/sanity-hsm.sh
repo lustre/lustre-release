@@ -5015,6 +5015,28 @@ test_261() {
 }
 run_test 261 "Report 0 bytes size after HSM release"
 
+test_262() {
+	local file=$DIR/$tdir/$tfile
+	local blocks
+	local fid
+
+	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	dd if=/dev/zero of=$file bs=4k count=2 || error "Write $file failed"
+	fid=$(path2fid $file)
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $file
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $file || error "HSM release $file failed"
+	$LFS hsm_restore $file || error "HSM restore $file failed"
+	$LFS hsm_release $file || error "HSM release $file failed"
+	$LFS hsm_release $file || error "HSM release $file failed"
+	blocks=$(stat -c "%b" $file)
+	[ $blocks -eq "1" ] || error "wrong block number is $blocks, not 1"
+}
+run_test 262 "The client should return 1 block for HSM released files"
+
 test_300() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
 
