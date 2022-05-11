@@ -180,9 +180,7 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 	if (size <= LNET_SMALL_MD_SIZE) {
 		lmd = kmem_cache_zalloc(lnet_small_mds_cachep, GFP_NOFS);
 		if (lmd) {
-			CDEBUG(D_MALLOC,
-			       "slab-alloced 'md' of size %u at %p.\n",
-			       size, lmd);
+			LIBCFS_MEM_MSG(lmd, size, "slab-alloced");
 		} else {
 			CDEBUG(D_MALLOC, "failed to allocate 'md' of size %u\n",
 			       size);

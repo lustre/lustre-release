@@ -103,7 +103,7 @@ void mdt_mfd_free(struct mdt_file_data *mfd)
 {
 	LASSERT(refcount_read(&mfd->mfd_open_handle.h_ref) == 1);
 	LASSERT(list_empty(&mfd->mfd_list));
-	OBD_FREE_PRE(mfd, sizeof(*mfd), "rcu");
+	OBD_FREE_PRE(mfd, sizeof(*mfd), "kfree_rcu");
 	kfree_rcu(mfd, mfd_open_handle.h_rcu);
 }
 

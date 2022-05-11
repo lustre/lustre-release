@@ -306,7 +306,7 @@ lnet_md_free(struct lnet_libmd *md)
 	size = offsetof(struct lnet_libmd, md_kiov[md->md_niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
-		CDEBUG(D_MALLOC, "slab-freed 'md' at %p.\n", md);
+		LIBCFS_MEM_MSG(md, size, "slab-freed");
 		kmem_cache_free(lnet_small_mds_cachep, md);
 	} else {
 		LIBCFS_FREE(md, size);
@@ -478,15 +478,14 @@ lnet_rspt_alloc(int cpt)
 		the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc++;
 		lnet_net_unlock(cpt);
 	}
-	CDEBUG(D_MALLOC, "rspt alloc %p\n", rspt);
+	LIBCFS_ALLOC_POST(rspt, sizeof(*rspt), "alloc");
 	return rspt;
 }
 
 static inline void
 lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
 {
-	CDEBUG(D_MALLOC, "rspt free %p\n", rspt);
-
+	LIBCFS_FREE_PRE(rspt, sizeof(*rspt), "free");
 	kmem_cache_free(lnet_rspt_cachep, rspt);
 	lnet_net_lock(cpt);
 	the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc--;

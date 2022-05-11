@@ -258,20 +258,22 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 	/* we only allocate this if we need to */
 	if (tx->tx_phys != NULL) {
 		kmem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
-		CDEBUG(D_MALLOC, "slab-freed 'tx_phys': %lu at %p.\n",
-		       GNILND_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
+		LIBCFS_MEM_MSG(tx->tx_phys,
+			       GNILND_MAX_IOV * sizeof(gni_mem_segment_t),
+			       "slab-freed");
 	}
 
 	/* Only free the buffer if we used it */
 	if (tx->tx_buffer_copy != NULL) {
+		LIBCFS_MEM_MSG(tx->tx_buffer_copy, tx->tx_rdma_desc.length,
+			       "vfreed");
 		kgnilnd_vfree(tx->tx_buffer_copy, tx->tx_rdma_desc.length);
 		tx->tx_buffer_copy = NULL;
-		CDEBUG(D_MALLOC, "vfreed buffer2\n");
 	}
 #if 0
 	KGNILND_POISON(tx, 0x5a, sizeof(kgn_tx_t));
 #endif
-	CDEBUG(D_MALLOC, "slab-freed 'tx': %lu at %p.\n", sizeof(*tx), tx);
+	LIBCFS_MEM_MSG(tx, sizeof(*tx), "slab-freed");
 	kmem_cache_free(kgnilnd_data.kgn_tx_cache, tx);
 }
 
@@ -288,8 +290,7 @@ kgnilnd_alloc_tx (void)
 		CERROR("failed to allocate tx\n");
 		return NULL;
 	}
-	CDEBUG(D_MALLOC, "slab-alloced 'tx': %lu at %p.\n",
-	       sizeof(*tx), tx);
+	LIBCFS_MEM_MSG(tx, sizeof(*tx), "slab-alloced");
 
 	/* setup everything here to minimize time under the lock */
 	tx->tx_buftype = GNILND_BUF_NONE;
@@ -639,8 +640,9 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, struct bio_vec *kiov,
 		GOTO(error, rc);
 	}
 
-	CDEBUG(D_MALLOC, "slab-alloced 'tx->tx_phys': %lu at %p.\n",
-	       GNILND_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
+	LIBCFS_MEM_MSG(tx->tx_phys,
+		       GNILND_MAX_IOV * sizeof(gni_mem_segment_t),
+		       "slab-alloced");
 
 	/* if loops changes, please change kgnilnd_cksum_kiov
 	 *   and kgnilnd_setup_immediate_buffer */
@@ -722,8 +724,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, struct bio_vec *kiov,
 error:
 	if (tx->tx_phys != NULL) {
 		kmem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
-		CDEBUG(D_MALLOC, "slab-freed 'tx_phys': %lu at %p.\n",
-		       sizeof(*tx->tx_phys), tx->tx_phys);
+		LIBCFS_MEM_MSG(tx->tx_phys, sizeof(*tx->tx_phys), "slab-freed");
 		tx->tx_phys = NULL;
 	}
 	return rc;
@@ -1959,8 +1960,7 @@ kgnilnd_alloc_rx(void)
 		CERROR("failed to allocate rx\n");
 		return NULL;
 	}
-	CDEBUG(D_MALLOC, "slab-alloced 'rx': %lu at %p.\n",
-	       sizeof(*rx), rx);
+	LIBCFS_MEM_MSG(rx, sizeof(*rx), "slab-alloced");
 
 	/* no memset to zero, we'll always fill all members */
 	return rx;
@@ -2010,9 +2010,8 @@ kgnilnd_consume_rx(kgn_rx_t *rx)
 		kgnilnd_release_msg(conn);
 	}
 
+	LIBCFS_MEM_MSG(rx, sizeof(*rx), "slab-freed");
 	kmem_cache_free(kgnilnd_data.kgn_rx_cache, rx);
-	CDEBUG(D_MALLOC, "slab-freed 'rx': %lu at %p.\n",
-	       sizeof(*rx), rx);
 }
 
 int

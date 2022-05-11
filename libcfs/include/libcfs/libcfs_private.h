@@ -156,19 +156,26 @@ do {									    \
 		 ((mask) & GFP_ATOMIC)) != 0);				    \
 } while (0)
 
-#define LIBCFS_ALLOC_POST(ptr, size)					      \
+/* message format here needs to match regexp in lustre/tests/leak_finder.pl */
+#define LIBCFS_MEM_MSG(ptr, size, name)					      \
+	CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n", (int)(size), ptr)
+
+#define LIBCFS_ALLOC_POST(ptr, size, name)				      \
 do {									      \
 	if (unlikely((ptr) == NULL)) {					      \
 		CERROR("LNET: out of memory at %s:%d (tried to alloc '"	      \
 		       #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));    \
 		CERROR("LNET: %lld total bytes allocated by lnet\n",	      \
-		       libcfs_kmem_read());			      \
+		       libcfs_kmem_read());				      \
 	} else {							      \
 		libcfs_kmem_inc((ptr), (size));				      \
-		CDEBUG(D_MALLOC, "alloc '" #ptr "': %d at %p (tot %lld).\n",  \
-		       (int)(size), (ptr), libcfs_kmem_read());		      \
+		LIBCFS_MEM_MSG(ptr, size, name);			      \
 	}                                                                     \
 } while (0)
+
+#define LIBCFS_FREE_PRE(ptr, size, name)				\
+	libcfs_kmem_dec((ptr), (size));					\
+	LIBCFS_MEM_MSG(ptr, size, name)
 
 /**
  * allocate memory with GFP flags @mask
@@ -179,7 +186,7 @@ do {									    \
 	LIBCFS_ALLOC_PRE((size), (mask));				    \
 	(ptr) = (size) <= LIBCFS_VMALLOC_SIZE ?				    \
 		kzalloc((size), (mask)) : vzalloc(size);		    \
-	LIBCFS_ALLOC_POST((ptr), (size));				    \
+	LIBCFS_ALLOC_POST((ptr), (size), "alloc");			    \
 } while (0)
 
 /**
@@ -206,7 +213,7 @@ do {									    \
 	(ptr) = (size) <= LIBCFS_VMALLOC_SIZE ?				    \
 		cfs_cpt_malloc((cptab), (cpt), (size), (mask) | __GFP_ZERO) : \
 		cfs_cpt_vzalloc((cptab), (cpt), (size));		    \
-	LIBCFS_ALLOC_POST((ptr), (size));				    \
+	LIBCFS_ALLOC_POST((ptr), (size), "alloc");			    \
 } while (0)
 
 /** default numa allocator */
@@ -224,9 +231,7 @@ do {									\
 		       "%s:%d\n", s, __FILE__, __LINE__);		\
 		break;							\
 	}								\
-	libcfs_kmem_dec((ptr), s);					\
-	CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %lld).\n",	\
-	       s, (ptr), libcfs_kmem_read());				\
+	LIBCFS_FREE_PRE(ptr, size, "kfreed");				\
 	if (unlikely(s > LIBCFS_VMALLOC_SIZE))				\
 		libcfs_vfree_atomic(ptr);				\
 	else								\

@@ -1091,7 +1091,7 @@ lnet_udsp_alloc(void)
 	INIT_LIST_HEAD(&udsp->udsp_rte.ud_addr_range);
 	INIT_LIST_HEAD(&udsp->udsp_rte.ud_net_id.udn_net_num_range);
 
-	CDEBUG(D_MALLOC, "udsp alloc %p\n", udsp);
+	LIBCFS_ALLOC_POST(udsp, sizeof(*udsp), "alloc");
 	return udsp;
 }
 
@@ -1124,7 +1124,7 @@ lnet_udsp_free(struct lnet_udsp *udsp)
 	lnet_udsp_nid_descr_free(&udsp->udsp_dst);
 	lnet_udsp_nid_descr_free(&udsp->udsp_rte);
 
-	CDEBUG(D_MALLOC, "udsp free %p\n", udsp);
+	LIBCFS_FREE_PRE(udsp, sizeof(*udsp), "kfreed");
 	kmem_cache_free(lnet_udsp_cachep, udsp);
 }
 

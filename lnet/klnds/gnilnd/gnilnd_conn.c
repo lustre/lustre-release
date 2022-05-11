@@ -344,10 +344,8 @@ kgnilnd_free_fmablk_locked(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 	 * purgatory holds. While we have purgatory holds, we might check the conn
 	 * RX mailbox during the CLOSING process. It is possible that kgni might
 	 * try to look into the RX side for credits when sending the CLOSE msg too */
-	CDEBUG(D_MALLOC, "fmablk %p free buffer %p mbox_size %d\n",
-		fma_blk, fma_blk->gnm_block, fma_blk->gnm_mbox_size);
-
 	if (fma_blk->gnm_state == GNILND_FMABLK_PHYS) {
+		LIBCFS_MEM_MSG(fma_blk->gnm_block, fma_blk->gnm_mbox_size, "free");
 		kmem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
 	} else {
 		kgnilnd_vfree(fma_blk->gnm_block, fma_blk->gnm_blk_size);

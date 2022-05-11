@@ -1004,13 +1004,13 @@ static inline void *kgnilnd_vzalloc(int size)
 	else
 		ret = __ll_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO);
 
-	LIBCFS_ALLOC_POST(ret, size);
+	LIBCFS_ALLOC_POST(ret, size, "alloc");
 	return ret;
 }
 
 static inline void kgnilnd_vfree(void *ptr, int size)
 {
-	libcfs_kmem_dec(ptr, size);
+	LIBCFS_FREE_PRE(ptr, size, "vfree");
 	vfree(ptr);
 }
 

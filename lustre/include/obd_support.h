@@ -805,16 +805,16 @@ static inline void obd_memory_sub(long size)
 #define OBD_DEBUG_MEMUSAGE (1)
 
 #if OBD_DEBUG_MEMUSAGE
-#define OBD_ALLOC_POST(ptr, size, name)                                 \
-                obd_memory_add(size);                                   \
-                CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",       \
-                       (int)(size), ptr)
+/* message format here needs to match regexp in lustre/tests/leak_finder.pl */
+#define OBD_ALLOC_POST(ptr, size, name)					\
+	obd_memory_add(size);						\
+	LIBCFS_MEM_MSG(ptr, size, name)
 
-#define OBD_FREE_PRE(ptr, size, name)                                   \
-        LASSERT(ptr);                                                   \
-        obd_memory_sub(size);                                           \
-        CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",               \
-	       (int)(size), ptr);
+/* message format here needs to match regexp in lustre/tests/leak_finder.pl */
+#define OBD_FREE_PRE(ptr, size, name)					\
+	LASSERT(ptr);							\
+	obd_memory_sub(size);						\
+	LIBCFS_MEM_MSG(ptr, size, name)
 
 #else /* !OBD_DEBUG_MEMUSAGE */
 

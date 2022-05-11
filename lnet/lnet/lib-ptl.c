@@ -770,9 +770,7 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 							      me_list)) != NULL) {
 				CERROR("Active ME %p on exit\n", me);
 				list_del(&me->me_list);
-				CDEBUG(D_MALLOC,
-				       "slab-freed 'me' at %p in cleanup.\n",
-				       me);
+				LIBCFS_FREE_PRE(me, sizeof(*me), "slab-freed");
 				kmem_cache_free(lnet_mes_cachep, me);
 			}
 		}

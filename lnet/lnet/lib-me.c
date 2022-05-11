@@ -89,7 +89,7 @@ LNetMEAttach(unsigned int portal,
 		CDEBUG(D_MALLOC, "failed to allocate 'me'\n");
 		return ERR_PTR(-ENOMEM);
 	}
-	CDEBUG(D_MALLOC, "slab-alloced 'me' at %p.\n", me);
+	LIBCFS_ALLOC_POST(me, sizeof(*me), "slab-alloced");
 
 	lnet_res_lock(mtable->mt_cpt);
 
@@ -132,7 +132,7 @@ lnet_me_unlink(struct lnet_me *me)
 		lnet_md_unlink(md);
 	}
 
-	CDEBUG(D_MALLOC, "slab-freed 'me' at %p.\n", me);
+	LIBCFS_FREE_PRE(me, sizeof(*me), "slab-freed");
 	kmem_cache_free(lnet_mes_cachep, me);
 }
 
