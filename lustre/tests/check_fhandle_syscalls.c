@@ -137,16 +137,22 @@ static int check_access(const char *filename,
 		goto out_fd2;
 	}
 
-	/* we can't check a ctime due unlink update */
-	if (st_orig->st_size != st.st_size ||
-	    st_orig->st_ino != st.st_ino ||
-	    st_orig->st_mode != st.st_mode ||
-	    st_orig->st_mtime != st.st_mtime) {
-		fprintf(stderr,
-			"stat data mismatch between fopen and fhandle case\n");
-		rc = EINVAL;
-		goto out_fd2;
+#define ST_CHECK(st1, st2, attr)					    \
+	if ((st1)->attr != (st2)->attr) {				    \
+		fprintf(stderr,						    \
+			"%s mismatch: open %llu, open_by_handle_at %llu\n", \
+			#attr,						    \
+			(unsigned long long)((st1)->attr),		    \
+			(unsigned long long)((st2)->attr));		    \
+		rc = EINVAL;						    \
+		goto out_fd2;						    \
 	}
+
+	ST_CHECK(st_orig, &st, st_dev);
+	ST_CHECK(st_orig, &st, st_ino);
+	ST_CHECK(st_orig, &st, st_mode);
+	ST_CHECK(st_orig, &st, st_mtime);
+	ST_CHECK(st_orig, &st, st_size);
 
 	if (st.st_size && S_ISREG(st.st_mode)) {
 		len = st.st_blksize;
