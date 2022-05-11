@@ -2528,8 +2528,8 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 	unsigned long *bitmap = lag->lag_ost_avoid_bitmap;
 	int i, j;
 
-	/* iterate mirrors */
-	for (i = 0; i < lo->ldo_mirror_count; i++) {
+	/* iterate components */
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		struct lod_layout_component *comp;
 
 		/**
@@ -2539,57 +2539,54 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 		 * not available, we still have other mirror with different
 		 * OSTs to read the data.
 		 */
-		comp = &lo->ldo_comp_entries[lo->ldo_mirrors[i].lme_start];
+		comp = &lo->ldo_comp_entries[i];
 		if (comp->llc_id != LCME_ID_INVAL &&
 		    mirror_id_of(comp->llc_id) ==
 						mirror_id_of(lod_comp->llc_id))
 			continue;
 
-		/* iterate components of a mirror */
-		lod_foreach_mirror_comp(comp, lo, i) {
-			/**
-			 * skip non-overlapped or un-instantiated components,
-			 * NOTE: don't use lod_comp_inited(comp) to judge
-			 * whether @comp has been inited, since during
-			 * declare phase, comp->llc_stripe has been allocated
-			 * while it's init flag not been set until the exec
-			 * phase.
-			 */
-			if (!lu_extent_is_overlapped(&comp->llc_extent,
-						     &lod_comp->llc_extent) ||
-			    !comp->llc_stripe)
+		/**
+		 * skip non-overlapped or un-instantiated components,
+		 * NOTE: don't use lod_comp_inited(comp) to judge
+		 * whether @comp has been inited, since during
+		 * declare phase, comp->llc_stripe has been allocated
+		 * while it's init flag not been set until the exec
+		 * phase.
+		 */
+		if (!lu_extent_is_overlapped(&comp->llc_extent,
+					     &lod_comp->llc_extent) ||
+		    !comp->llc_stripe)
+			continue;
+
+		/**
+		 * collect used OSTs index and OSS info from a
+		 * component
+		 */
+		for (j = 0; j < comp->llc_stripe_count; j++) {
+			struct lod_tgt_desc *ost;
+			struct lu_svr_qos *lsq;
+			int k;
+
+			ost = OST_TGT(lod, comp->llc_ost_indices[j]);
+			lsq = ost->ltd_qos.ltq_svr;
+
+			if (test_bit(ost->ltd_index, bitmap))
 				continue;
 
-			/**
-			 * collect used OSTs index and OSS info from a
-			 * component
-			 */
-			for (j = 0; j < comp->llc_stripe_count; j++) {
-				struct lod_tgt_desc *ost;
-				struct lu_svr_qos *lsq;
-				int k;
+			QOS_DEBUG("OST%d used in conflicting mirror "
+				  "component\n", ost->ltd_index);
+			set_bit(ost->ltd_index, bitmap);
+			lag->lag_ost_avail--;
 
-				ost = OST_TGT(lod, comp->llc_ost_indices[j]);
-				lsq = ost->ltd_qos.ltq_svr;
-
-				if (test_bit(ost->ltd_index, bitmap))
-					continue;
-
-				QOS_DEBUG("OST%d used in conflicting mirror "
-					  "component\n", ost->ltd_index);
-				set_bit(ost->ltd_index, bitmap);
-				lag->lag_ost_avail--;
-
-				for (k = 0; k < lag->lag_oaa_count; k++) {
-					if (lag->lag_oss_avoid_array[k] ==
-					    lsq->lsq_id)
-						break;
-				}
-				if (k == lag->lag_oaa_count) {
-					lag->lag_oss_avoid_array[k] =
-								lsq->lsq_id;
-					lag->lag_oaa_count++;
-				}
+			for (k = 0; k < lag->lag_oaa_count; k++) {
+				if (lag->lag_oss_avoid_array[k] ==
+				    lsq->lsq_id)
+					break;
+			}
+			if (k == lag->lag_oaa_count) {
+				lag->lag_oss_avoid_array[k] =
+							lsq->lsq_id;
+				lag->lag_oaa_count++;
 			}
 		}
 	}
