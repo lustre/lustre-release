@@ -1,3 +1,16 @@
+diff -wur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1154,6 +1154,9 @@ struct ext4_inode_info {
+ #define EXT4_MOUNT_DISCARD		0x40000000 /* Issue DISCARD requests */
+ #define EXT4_MOUNT_INIT_INODE_TABLE	0x80000000 /* Initialize uninitialized itables */
+ 
++/* we know this is a Lustre mount thanks to the DIRDATA flag */
++#define IS_LUSTRE_MOUNT(sb)	test_opt((sb), DIRDATA)
++
+ /*
+  * Mount flags set either automatically (could not be set by mount option)
+  * based on per file system feature or property or in special cases such as
 diff -wur a/fs/ext4/inode.c b/fs/ext4/inode.c
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
@@ -7,7 +20,7 @@ diff -wur a/fs/ext4/inode.c b/fs/ext4/inode.c
  
 -	if (flags & EXT4_ENCRYPT_FL)
 +	if (flags & EXT4_ENCRYPT_FL &&
-+	    unlikely(test_opt(inode->i_sb, DIRDATA) != EXT4_MOUNT_DIRDATA))
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
  		new_fl |= S_ENCRYPTED;
  	inode_set_flags(inode, new_fl,
  			S_SYNC|S_APPEND|S_IMMUTABLE|S_NOATIME|S_DIRSYNC|S_DAX|
@@ -18,7 +31,7 @@ diff -wur a/fs/ext4/inode.c b/fs/ext4/inode.c
  		stat->attributes |= STATX_ATTR_COMPRESSED;
 -	if (flags & EXT4_ENCRYPT_FL)
 +	if (flags & EXT4_ENCRYPT_FL &&
-+	    unlikely(test_opt(inode->i_sb, DIRDATA) != EXT4_MOUNT_DIRDATA))
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
  		stat->attributes |= STATX_ATTR_ENCRYPTED;
  	if (flags & EXT4_IMMUTABLE_FL)
  		stat->attributes |= STATX_ATTR_IMMUTABLE;
