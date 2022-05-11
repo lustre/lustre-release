@@ -39,6 +39,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/kthread.h>
+#include <linux/kernel.h>
 #include <obd_support.h>
 #include <lustre_export.h>
 #include <obd.h>
@@ -1478,16 +1479,12 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			break;
 		}
 
-		if (pgs->hpk_errval > CLF_HSM_MAXERROR) {
-			CERROR("%s: Request %#llx on "DFID
-			       " failed, error code %d too large\n",
-			       mdt_obd_name(mdt),
-			       pgs->hpk_cookie, PFID(&pgs->hpk_fid),
-			       pgs->hpk_errval);
-			hsm_set_cl_error(&clf_flags, CLF_HSM_ERROVERFLOW);
-			rc = -EINVAL;
-		} else {
-			hsm_set_cl_error(&clf_flags, pgs->hpk_errval);
+		rc = hsm_set_cl_error(&clf_flags, pgs->hpk_errval);
+		if (rc == -EOVERFLOW) {
+			CERROR("%s: Request %#llx on "DFID" failed, error code %d too large\n",
+			       mdt_obd_name(mdt), pgs->hpk_cookie,
+			       PFID(&pgs->hpk_fid), (int)abs(pgs->hpk_errval));
+			rc = 0;
 		}
 
 		switch (car->car_hai->hai_action) {
@@ -1592,6 +1589,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 				if (cdt->cdt_policy & CDT_NORETRY_ACTION)
 					*status = ARS_FAILED;
 				pgs->hpk_errval = -rc;
+				hsm_set_cl_error(&clf_flags, pgs->hpk_errval);
 			}
 		}
 		/* we have to retry, so keep layout lock */

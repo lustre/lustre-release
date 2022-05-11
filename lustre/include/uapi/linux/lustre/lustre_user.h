@@ -44,6 +44,8 @@
 # define __USE_ISOC99	1
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
+# include <stdlib.h> /* abs() */
+# include <errno.h>
 # include <sys/stat.h>
 
 # define __USE_GNU      1
@@ -1720,11 +1722,19 @@ static inline int hsm_get_cl_error(enum changelog_rec_flags clf_flags)
 	return CLF_GET_BITS(clf_flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
 }
 
-static inline void hsm_set_cl_error(enum changelog_rec_flags *clf_flags,
-				    unsigned int error)
+static inline int hsm_set_cl_error(enum changelog_rec_flags *clf_flags,
+				   int error)
 {
+	/* In case a negative error is given */
+	error = abs(error);
+
+	if (error > CLF_HSM_MAXERROR)
+		error = CLF_HSM_ERROVERFLOW;
+
 	*clf_flags = (enum changelog_rec_flags)
 		(*clf_flags | (error << CLF_HSM_ERR_L));
+
+	return error == CLF_HSM_ERROVERFLOW ? -EOVERFLOW : 0;
 }
 
 enum changelog_rec_extra_flags {
