@@ -60,6 +60,7 @@ endif
 	mkdir -p linux trace/events
 	@echo -n "Replacing 'ext4' with 'ldiskfs':"
 	for i in $(notdir $(backfs_headers) $(backfs_sources)) $(new_sources) ; do \
+		[ -f linux-stage/fs/ext4/$$i ] || continue; \
 		echo -n " $$i" ; \
 		sed $(strip $(ldiskfs_sed_flags)) \
 			linux-stage/fs/ext4/$$i > $$i ; \

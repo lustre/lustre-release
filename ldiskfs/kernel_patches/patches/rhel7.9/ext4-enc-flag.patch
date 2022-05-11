@@ -1,3 +1,16 @@
+diff -wur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1154,6 +1154,9 @@ struct ext4_inode_info {
+ #define EXT4_MOUNT_DISCARD		0x40000000 /* Issue DISCARD requests */
+ #define EXT4_MOUNT_INIT_INODE_TABLE	0x80000000 /* Initialize uninitialized itables */
+ 
++/* we know this is a Lustre mount thanks to the DIRDATA flag */
++#define IS_LUSTRE_MOUNT(sb)	test_opt((sb), DIRDATA)
++
+ /*
+  * Mount flags set either automatically (could not be set by mount option)
+  * based on per file system feature or property or in special cases such as
 diff -wur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
 --- a/fs/ext4/xattr.c
 +++ b/fs/ext4/xattr.c
@@ -9,7 +22,19 @@ diff -wur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
  
  static int
  ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
-@@ -1197,6 +1197,7 @@
+@@ -1197,14 +1197,19 @@
+ 			ext4_handle_sync(handle);
+ 	}
+ 
++	if (!error && name_index == EXT4_XATTR_INDEX_ENCRYPTION &&
++	    strcmp(name, "c") == 0)
++		EXT4_I(inode)->i_flags |= EXT4_ENCRYPT_FL;
++
+ cleanup:
+ 	brelse(is.iloc.bh);
+ 	brelse(bs.bh);
+ 	if (no_expand == 0)
+ 		ext4_clear_inode_state(inode, EXT4_STATE_NO_EXPAND);
  	up_write(&EXT4_I(inode)->xattr_sem);
  	return error;
  }
@@ -24,9 +49,40 @@ diff -wur a/fs/ext4/xattr.h b/fs/ext4/xattr.h
  extern const struct xattr_handler ext4_xattr_acl_default_handler;
  extern const struct xattr_handler ext4_xattr_security_handler;
  
-+#define LDISKFS_XATTR_INDEX_ENCRYPTION		9
-+#define LDISKFS_XATTR_NAME_ENCRYPTION_CONTEXT "c"
++#define EXT4_XATTR_INDEX_ENCRYPTION		9
++#define EXT4_XATTR_NAME_ENCRYPTION_CONTEXT "c"
 +
  extern ssize_t ext4_listxattr(struct dentry *, char *, size_t);
  
  extern int ext4_xattr_get(struct inode *, int, const char *, void *, size_t);
+diff -wur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -381,7 +378,8 @@ struct flex_groups {
+ #define EXT4_DIRTY_FL			0x00000100
+ #define EXT4_COMPRBLK_FL		0x00000200 /* One or more compressed clusters */
+ #define EXT4_NOCOMPR_FL			0x00000400 /* Don't compress */
+-#define EXT4_ECOMPR_FL			0x00000800 /* Compression error */
++/* nb: was previously EXT4_ECOMPR_FL */
++#define EXT4_ENCRYPT_FL                 0x00000800 /* encrypted file */
+ /* End compression flags --- maybe not all used */
+ #define EXT4_INDEX_FL			0x00001000 /* hash-indexed directory */
+ #define EXT4_IMAGIC_FL			0x00002000 /* AFS directory */
+@@ -447,7 +445,7 @@ enum {
+ 	EXT4_INODE_DIRTY	= 8,
+ 	EXT4_INODE_COMPRBLK	= 9,	/* One or more compressed clusters */
+ 	EXT4_INODE_NOCOMPR	= 10,	/* Don't compress */
+-	EXT4_INODE_ECOMPR	= 11,	/* Compression error */
++	EXT4_INODE_ENCRYPT	= 11,	/* Encrypted file */
+ /* End compression flags --- maybe not all used */
+ 	EXT4_INODE_INDEX	= 12,	/* hash-indexed directory */
+ 	EXT4_INODE_IMAGIC	= 13,	/* AFS directory */
+@@ -493,7 +491,7 @@ static inline void ext4_check_flag_va
+ 	CHECK_FLAG_VALUE(DIRTY);
+ 	CHECK_FLAG_VALUE(COMPRBLK);
+ 	CHECK_FLAG_VALUE(NOCOMPR);
+-	CHECK_FLAG_VALUE(ECOMPR);
++	CHECK_FLAG_VALUE(ENCRYPT);
+ 	CHECK_FLAG_VALUE(INDEX);
+ 	CHECK_FLAG_VALUE(IMAGIC);
+ 	CHECK_FLAG_VALUE(JOURNAL_DATA);
