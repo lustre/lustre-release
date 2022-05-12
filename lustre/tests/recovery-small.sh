@@ -3129,6 +3129,43 @@ test_144a() {
 }
 run_test 144a "MDT failover should stop precreation threads"
 
+test_144b() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+
+	local pids=""
+	local rc=0
+	local setcount=1000
+	local mds_timeout
+
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+
+	mds_timeout=$(do_facet mds1 $LCTL get_param -n timeout)
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=300
+	stack_trap "do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=$mds_timeout" EXIT
+
+	$LFS setstripe -i 0 -C $setcount $DIR/$tdir || error "setstripe failed"
+
+	for (( i = 0; i < 50; i++)); do
+		touch $DIR/$tdir/$tfile_$i &
+		pids="$pids $!"
+	done
+
+	fail ost1
+	sleep 60
+
+	for pid in $pids; do
+		ps -p $pid > /dev/null
+		(( $? == 0 )) && rc=1
+		kill -9 $pid >/dev/null 2>&1
+	done
+	echo "rc $rc"
+	(( $rc == 0 )) || { fail mds1; error "Create thread still running"; }
+}
+run_test 144b "orphan cleanup shouldn't be blocked for no objects+failover situation"
+
 test_145() {
 	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs"
 	[ $(facet_active_host mds2) = $(facet_active_host mds3) ] &&
