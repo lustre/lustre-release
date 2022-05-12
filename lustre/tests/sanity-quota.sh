@@ -496,7 +496,7 @@ reset_quota_settings() {
 # enable quota debug
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) \
-		"$LCTL set_param -n debug=+quota,trace"
+		"$LCTL set_param -n debug=+quota+trace"
 }
 quota_init
 reset_quota_settings
@@ -5560,7 +5560,7 @@ run_test 82 "verify more than 8 qids for single operation"
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
-		"lctl set_param -n debug=-quota,trace"
+		"lctl set_param -n debug=-quota-trace"
 	if $PQ_CLEANUP; then
 		disable_project_quota
 	fi
