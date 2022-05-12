@@ -114,7 +114,7 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
 	struct lu_env		*env;
 	struct cl_object	*obj;
-	struct cl_page		*page;
+	struct cl_page		*clpage;
 	struct address_space	*mapping;
 	int result = 0;
 
@@ -130,16 +130,23 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 	if (obj == NULL)
 		return 1;
 
-	page = cl_vmpage_page(vmpage, obj);
-	if (page == NULL)
+	clpage = cl_vmpage_page(vmpage, obj);
+	if (clpage == NULL)
 		return 1;
 
 	env = cl_env_percpu_get();
 	LASSERT(!IS_ERR(env));
 
-	if (!cl_page_in_use(page)) {
+	/* we must not delete the cl_page if the vmpage is in use, otherwise we
+	 * disconnect the vmpage from Lustre while it's still alive(!), which
+	 * means we won't find it to discard on lock cancellation.
+	 *
+	 * References here are: caller + cl_page + page cache.
+	 * Any other references are potentially transient and must be ignored.
+	 */
+	if (!cl_page_in_use(clpage) && !vmpage_in_use(vmpage, 1)) {
 		result = 1;
-		cl_page_delete(env, page);
+		cl_page_delete(env, clpage);
 	}
 
 	/* To use percpu env array, the call path can not be rescheduled;
@@ -156,7 +163,7 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 	 * that we won't get into object delete path.
 	 */
 	LASSERT(cl_object_refc(obj) > 1);
-	cl_page_put(env, page);
+	cl_page_put(env, clpage);
 
 	cl_env_percpu_put(env);
 	return result;

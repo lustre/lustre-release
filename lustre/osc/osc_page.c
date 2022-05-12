@@ -539,8 +539,13 @@ static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
 	if (cli->cl_cache->ccc_unstable_check) {
 		struct page *vmpage = cl_page_vmpage(page);
 
-		/* vmpage have two known users: cl_page and VM page cache */
-		if (page_count(vmpage) - page_mapcount(vmpage) > 2)
+		/* this check is racy because the vmpage is not locked, but
+		 * that's OK - the code which does the actual page release
+		 * checks this again before releasing
+		 *
+		 * vmpage have two known users: cl_page and VM page cache
+		 */
+		if (vmpage_in_use(vmpage, 0))
 			return true;
 	}
 	return false;
