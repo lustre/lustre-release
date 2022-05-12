@@ -29,6 +29,8 @@ if [[ $(uname -m) = ppc64 ]]; then
 fi
 
 if [ $mds1_FSTYPE = "zfs" ]; then
+	# bug number:    LU-15757 (test_102() causes crash in umount later)
+	ALWAYS_EXCEPT+=" 102"
 	# LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
