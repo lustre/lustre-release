@@ -174,7 +174,7 @@ static struct lcfg_type_data lcfg_data_table[] = {
 	{ LCFG_DETACH, "detach", { "1", "2", "3", "4" } },
 	{ LCFG_SETUP, "setup", { "UUID", "node", "options", "failout" } },
 	{ LCFG_CLEANUP, "cleanup", { "1", "2", "3", "4" } },
-	{ LCFG_ADD_UUID, "add_uuid", { "node", "2", "3", "4" }  },
+	{ LCFG_ADD_UUID, "add_uuid", { "node", "nid", "3", "4" }  },
 	{ LCFG_DEL_UUID, "del_uuid", { "1", "2", "3", "4" }  },
 	{ LCFG_MOUNTOPT, "new_profile", { "name", "lov", "lmv", "4" }  },
 	{ LCFG_DEL_MOUNTOPT, "del_mountopt", { "1", "2", "3", "4" }  },

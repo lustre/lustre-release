@@ -183,10 +183,14 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 static int do_lcfg_nid(char *cfgname, struct lnet_nid *nid, int cmd,
 		       char *s1)
 {
+	lnet_nid_t nid4 = 0;
+	char *nidstr = NULL;
+
 	if (nid_is_nid4(nid))
-		return do_lcfg(cfgname, lnet_nid_to_nid4(nid), cmd, s1,
-			       NULL, NULL, NULL);
-	return -EINVAL;
+		nid4 = lnet_nid_to_nid4(nid);
+	else
+		nidstr = libcfs_nidstr(nid);
+	return do_lcfg(cfgname, nid4, cmd, s1, nidstr, NULL, NULL);
 }
 
 /**

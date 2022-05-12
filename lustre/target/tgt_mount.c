@@ -644,7 +644,13 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	int rc;
 
 	ENTRY;
-	lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+	if (lcfg->lcfg_nid)
+		lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+	else {
+		rc = libcfs_strnid(&nid, lustre_cfg_string(lcfg, 2));
+		if (rc)
+			RETURN(rc);
+	}
 	rc = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
 	if (rc != 0) {
 		CERROR("%s: Can't add uuid: rc =%d\n", lsi->lsi_svname, rc);
@@ -872,8 +878,15 @@ static int client_lwp_config_process(const struct lu_env *env,
 		} else if (cfg->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
 			struct lnet_nid nid;
 
-			lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
-			rc = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
+			rc = 0;
+			if (lcfg->lcfg_nid)
+				lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+			else
+				rc = libcfs_strnid(&nid,
+						   lustre_cfg_string(lcfg, 2));
+			if (!rc)
+				rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
+						    &nid);
 			if (rc < 0)
 				CERROR("%s: Fail to add uuid, rc:%d\n",
 				       lsi->lsi_svname, rc);

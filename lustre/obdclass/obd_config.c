@@ -1398,8 +1398,19 @@ int class_process_config(struct lustre_cfg *lcfg)
 		       lustre_cfg_string(lcfg, 1), lcfg->lcfg_nid,
 		       libcfs_nid2str(lcfg->lcfg_nid));
 
-		lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
-		err = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
+		err = 0;
+		if (lcfg->lcfg_nid) {
+			lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
+		} else {
+			char *nidstr = lustre_cfg_string(lcfg, 2);
+
+			if (nidstr)
+				err = libcfs_strnid(&nid, nidstr);
+			else
+				err = -EINVAL;
+		}
+		if (!err)
+			err = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
 		GOTO(out, err);
 	}
 	case LCFG_DEL_UUID: {

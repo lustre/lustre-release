@@ -244,22 +244,30 @@ int jt_obd_cleanup(int argc, char **argv)
 }
 
 static
-int do_add_uuid(char *func, char *uuid, lnet_nid_t nid)
+int do_add_uuid(char *func, char *uuid, struct lnet_nid *nid)
 {
 	int rc;
+	char nidstr[LNET_NIDSTR_SIZE];
 	struct lustre_cfg_bufs bufs;
 	struct lustre_cfg *lcfg;
 
 	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 	if (uuid)
 		lustre_cfg_bufs_set_string(&bufs, 1, uuid);
+	if (!nid_is_nid4(nid)) {
+		libcfs_nidstr_r(nid, nidstr, sizeof(nidstr));
+		lustre_cfg_bufs_set_string(&bufs, 2, nidstr);
+	}
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, LCFG_ADD_UUID, &bufs);
-		lcfg->lcfg_nid = nid;
+		if (nid_is_nid4(nid))
+			lcfg->lcfg_nid = lnet_nid_to_nid4(nid);
+		else
+			lcfg->lcfg_nid = 0;
 
 		rc = lcfg_ioctl(func, OBD_DEV_ID, lcfg);
 		free(lcfg);
@@ -271,25 +279,24 @@ int do_add_uuid(char *func, char *uuid, lnet_nid_t nid)
 	}
 
 	if (uuid)
-		printf("Added uuid %s: %s\n", uuid, libcfs_nid2str(nid));
+		printf("Added uuid %s: %s\n", uuid, libcfs_nidstr(nid));
 
 	return 0;
 }
 
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 
 	if (argc != 3)
 		return CMD_HELP;
 
-	nid = libcfs_str2nid(argv[2]);
-	if (nid == LNET_NID_ANY) {
+	if (libcfs_strnid(&nid, argv[2]) < 0) {
 		fprintf(stderr, "Can't parse NID %s\n", argv[2]);
 		return (-1);
 	}
 
-	return do_add_uuid(argv[0], argv[1], nid);
+	return do_add_uuid(argv[0], argv[1], &nid);
 }
 
 int jt_lcfg_del_uuid(int argc, char **argv)

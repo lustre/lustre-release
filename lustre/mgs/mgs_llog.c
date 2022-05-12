@@ -1091,11 +1091,15 @@ static inline int record_add_uuid(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  struct lnet_nid *nid, char *uuid)
 {
+	lnet_nid_t nid4 = 0;
+	char *cfg2 = NULL;
+
 	if (nid_is_nid4(nid))
-		return record_base(env, llh, NULL, lnet_nid_to_nid4(nid),
-				   LCFG_ADD_UUID, uuid,
-				   NULL, NULL, NULL);
-	return -EINVAL;
+		nid4 = lnet_nid_to_nid4(nid);
+	else
+		cfg2 = libcfs_nidstr(nid);
+	return record_base(env, llh, NULL, nid4, LCFG_ADD_UUID, uuid,
+			   cfg2, NULL, NULL);
 }
 
 static inline int record_add_conn(const struct lu_env *env,
@@ -2214,6 +2218,17 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 
 	if (lcfg->lcfg_command == LCFG_ADD_UUID) {
 		__u64 nodenid = lcfg->lcfg_nid;
+		if (!nodenid) {
+			char *nidstr = lustre_cfg_buf(lcfg, 2);
+
+			if (nidstr) {
+				struct lnet_nid nid;
+
+				if (libcfs_strnid(&nid, nidstr) == 0 &&
+				    nid_is_nid4(&nid))
+					nodenid = lnet_nid_to_nid4(&nid);
+			}
+		}
 
 		if (strlen(tmti->mti_uuid) == 0) {
 			/* target uuid not set, this config record is before
