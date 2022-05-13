@@ -25859,7 +25859,7 @@ test_415() {
 
 	total=500
 	# this test may be slow on ZFS
-	[ "$mds1_FSTYPE" == "zfs" ] && total=100
+	[ "$mds1_FSTYPE" == "zfs" ] && total=50
 
 	# though this test is designed for striped directory, let's test normal
 	# directory too since lock is always saved as CoS lock.
