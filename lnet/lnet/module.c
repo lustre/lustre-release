@@ -265,6 +265,7 @@ static void __exit lnet_exit(void)
 						&lnet_ioctl_handler);
 	LASSERT(rc == 0);
 
+	lnet_router_exit();
 	lnet_lib_exit();
 }
 

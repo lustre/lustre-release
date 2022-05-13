@@ -891,12 +891,19 @@ static struct ctl_table lnet_table[] = {
 	{ .procname = NULL }
 };
 
+static void *debugfs_state;
+
 void lnet_router_debugfs_init(void)
 {
-	lnet_insert_debugfs(lnet_table);
+	lnet_insert_debugfs(lnet_table, THIS_MODULE,
+			    &debugfs_state);
 }
 
 void lnet_router_debugfs_fini(void)
 {
 	lnet_remove_debugfs(lnet_table);
+}
+void lnet_router_exit(void)
+{
+	lnet_debugfs_fini(&debugfs_state);
 }

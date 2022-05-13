@@ -84,8 +84,10 @@ int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
 extern struct workqueue_struct *cfs_rehash_wq;
 
-void lnet_insert_debugfs(struct ctl_table *table);
+void lnet_insert_debugfs(struct ctl_table *table, struct module *mod,
+			 void **statep);
 void lnet_remove_debugfs(struct ctl_table *table);
+void lnet_debugfs_fini(void **statep);
 
 /* helper for sysctl handlers */
 int debugfs_doint(struct ctl_table *table, int write,
