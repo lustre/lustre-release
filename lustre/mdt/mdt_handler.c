@@ -2393,6 +2393,15 @@ out_child:
 unlock_parent:
 	if (lhp)
 		mdt_object_unlock(info, parent, lhp, 1);
+	if (rc == -ENOENT) {
+		/* return -ENOKEY instead of -ENOENT to encryption-unaware
+		 * client if trying to access an encrypted file
+		 */
+		int rc2 = mdt_check_enc(info, parent);
+
+		if (rc2)
+			rc = rc2;
+	}
 	return rc;
 }
 
@@ -4567,13 +4576,14 @@ static int mdt_intent_getattr(enum ldlm_intent_flags it_opc,
 	rc = mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
 	ldlm_rep->lock_policy_res2 = clear_serious(rc);
 
-        if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
-                ldlm_rep->lock_policy_res2 = 0;
-        if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
-            ldlm_rep->lock_policy_res2) {
-                lhc->mlh_reg_lh.cookie = 0ull;
-                GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
-        }
+	if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG) &&
+	    ldlm_rep->lock_policy_res2 != -ENOKEY)
+		ldlm_rep->lock_policy_res2 = 0;
+	if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
+	    ldlm_rep->lock_policy_res2) {
+		lhc->mlh_reg_lh.cookie = 0ull;
+		GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
+	}
 
 	rc = mdt_intent_lock_replace(info, lockp, lhc, flags, rc);
         EXIT;
