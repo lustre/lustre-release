@@ -7186,6 +7186,9 @@ test_64f() {
 run_test 64f "check grant consumption (with grant allocation)"
 
 test_64h() {
+	(( $OST1_VERSION >= $(version_code 2.12.8) )) ||
+		skip "need OST at least 2.12.8 to avoid grant shrink on read"
+
 	local cli=$($LFS getname $DIR); cli=${cli%% *}; cli=${cli#*-}
 	local osc_tgt="$FSNAME-OST0000-osc-$cli"
 	local num_exps=$(do_facet ost1 \
@@ -7245,8 +7248,8 @@ test_64i() {
 	local cgb
 	local testid=${TESTNAME/_/ }
 
-	(( $OST1_VERSION >= $(version_code 2.12.7) )) ||
-		skip "need OST at least 2.12.7 to avoid grant shrink on replay"
+	(( $OST1_VERSION >= $(version_code 2.12.8) )) ||
+		skip "need OST at least 2.12.8 to avoid grant shrink on replay"
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OSTs with nodsh"
