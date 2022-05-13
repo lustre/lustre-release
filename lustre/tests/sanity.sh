@@ -5060,7 +5060,7 @@ test_39r() {
 	cancel_lru_locks osc
 
 	# exceed atime_diff and access file
-	sleep 6
+	sleep 10
 	dd if=$DIR/$tfile of=/dev/null bs=4k count=1 ||
 		error "can't udpate atime"
 
