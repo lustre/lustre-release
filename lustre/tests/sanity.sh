@@ -11652,7 +11652,7 @@ test_104c() {
 
 	echo "Before recordsize change"
 	lfs_df=($($LFS df -h | grep "filesystem_summary:"))
-	df=($(df -h | grep "/mnt/lustre"$))
+	df=($(df -h | grep "$MOUNT"$))
 
 	# For checking.
 	echo "lfs output : ${lfs_df[*]}"
@@ -11684,7 +11684,7 @@ test_104c() {
 
 	echo "After recordsize change"
 	lfs_df_after=($($LFS df -h | grep "filesystem_summary:"))
-	df_after=($(df -h | grep "/mnt/lustre"$))
+	df_after=($(df -h | grep "$MOUNT"$))
 
 	# For checking.
 	echo "lfs output : ${lfs_df_after[*]}"
