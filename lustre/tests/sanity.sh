@@ -8966,6 +8966,9 @@ test_64g() {
 run_test 64g "grant shrink on MDT"
 
 test_64h() {
+	(( $OST1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "need OST at least 2.14.56 to avoid grant shrink on read"
+
 	local instance=$($LFS getname -i $DIR)
 	local osc_tgt="$FSNAME-OST0000-osc-$instance"
 	local num_exps=$(do_facet ost1 \
@@ -9020,8 +9023,8 @@ test_64h() {
 run_test 64h "grant shrink on read"
 
 test_64i() {
-	(( $OST1_VERSION >= $(version_code 2.14.55) )) ||
-		skip "need OST at least 2.14.55 to avoid grant shrink on replay"
+	(( $OST1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "need OST at least 2.14.56 to avoid grant shrink on replay"
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OSTs with nodsh"
