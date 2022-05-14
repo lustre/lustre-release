@@ -2610,7 +2610,8 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	sfs->f_bavail = osfs.os_bavail;
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
-	if (ll_i2info(de->d_inode)->lli_projid)
+	if (ll_i2info(de->d_inode)->lli_projid &&
+	    test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(de->d_inode)->lli_flags))
 		return ll_statfs_project(de->d_inode, sfs);
 
 	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS,
