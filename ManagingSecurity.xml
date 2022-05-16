@@ -721,13 +721,45 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
        content encryption mode will be taken into account, and filename
        encryption mode will be ignored to leave filenames in clear text.</para>
       </warning>
-      <warning><para condition='l2F'>In Lustre 2.15, filename encryption mode
-       will be taken into account for new files and directories, if they are
-       under a parent encrypted directory created with Lustre 2.15. This means
-       new files and directories under a parent encrypted directory created with
-       Lustre 2.14 will not have their names encrypted.
+      <warning><para condition='l2F'>Ability to encrypt file and directory names
+       is governed by new llite parameter named
+       <literal>enable_filename_encryption</literal>, introduced in 2.15, and
+       set to 0 by default.
+       When this parameter is 0, new empty directories configured as encrypted
+       use content encryption only, and not name encryption. This mode is
+       inherited for all subdirectories and files.
+       When <literal>enable_filename_encryption</literal> parameter is set to 1,
+       new empty directories configured as encrypted use full encryption
+       capabilities by encrypting file content and also file and directory
+       names. This mode is inherited for all subdirectories and files.
+       To set the <literal>enable_filename_encryption</literal> parameter
+       globally for all clients, one can do on the MGS:
+<screen>mgs# lctl set_param -P llite.*.enable_filename_encryption=1</screen>
+       Note however that new files and directories under a parent encrypted
+       directory created with Lustre 2.14 will not have their names encrypted.
        Also, because files created with Lustre 2.14 did not have their names
-       encrypted, they will remain so after upgrade to 2.15.</para>
+       encrypted, they will remain so after upgrade to 2.15. To benefit from
+       name encryption for an old directory previously created with Lustre 2.14,
+       you need to do the following after upgrade to 2.15 is complete:
+       <orderedlist>
+         <listitem>
+           <para>create a new encrypted directory. This can use an already
+            existing protector.</para>
+         </listitem>
+         <listitem>
+           <para>unlock the old encrypted directory.</para>
+         </listitem>
+         <listitem>
+           <para>copy all files and directories recursively from the old
+            encrypted directory to the newly created encrypted directory. Note
+            that this operation will re-encrypt all files contents in addition
+            to names.</para>
+         </listitem>
+         <listitem>
+           <para>remove the old encrypted directory.</para>
+         </listitem>
+       </orderedlist>
+      </para>
       </warning>
     </section>
     <section xml:id="managingSecurity.clientencryption.threatmodel" remap="h3">
