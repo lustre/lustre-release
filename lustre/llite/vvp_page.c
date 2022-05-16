@@ -52,48 +52,6 @@
  * Page operations.
  *
  */
-static void vvp_page_fini(const struct lu_env *env,
-			  struct cl_page_slice *slice,
-			  struct pagevec *pvec)
-{
-	struct vvp_page *vpg     = cl2vvp_page(slice);
-	struct page     *vmpage  = vpg->vpg_page;
-
-	/*
-	 * vmpage->private was already cleared when page was moved into
-	 * VPG_FREEING state.
-	 */
-	LASSERT((struct cl_page *)vmpage->private != slice->cpl_page);
-	LASSERT(vmpage != NULL);
-	if (pvec) {
-		if (!pagevec_add(pvec, vmpage))
-			pagevec_release(pvec);
-	} else {
-		put_page(vmpage);
-	}
-}
-
-static void vvp_page_assume(const struct lu_env *env,
-			    const struct cl_page_slice *slice,
-			    struct cl_io *unused)
-{
-	struct page *vmpage = cl2vm_page(slice);
-
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-	wait_on_page_writeback(vmpage);
-}
-
-static void vvp_page_unassume(const struct lu_env *env,
-			      const struct cl_page_slice *slice,
-			      struct cl_io *unused)
-{
-	struct page *vmpage = cl2vm_page(slice);
-
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-}
-
 static void vvp_page_discard(const struct lu_env *env,
 			     const struct cl_page_slice *slice,
 			     struct cl_io *unused)
@@ -103,29 +61,6 @@ static void vvp_page_discard(const struct lu_env *env,
 
 	if (cp->cp_defer_uptodate && !cp->cp_ra_used && vmpage->mapping != NULL)
 		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
-}
-
-static void vvp_page_delete(const struct lu_env *env,
-			    const struct cl_page_slice *slice)
-{
-	struct page      *vmpage = cl2vm_page(slice);
-	struct cl_page   *page   = slice->cpl_page;
-	int refc;
-
-	LASSERT(PageLocked(vmpage));
-	LASSERT((struct cl_page *)vmpage->private == page);
-
-
-	/* Drop the reference count held in vvp_page_init */
-	refc = atomic_dec_return(&page->cp_ref);
-	LASSERTF(refc >= 1, "page = %p, refc = %d\n", page, refc);
-
-	ClearPagePrivate(vmpage);
-	vmpage->private = 0;
-	/*
-	 * Reference from vmpage to cl_page is removed, but the reference back
-	 * is still here. It is removed later in vvp_page_fini().
-	 */
 }
 
 static int vvp_page_prep_read(const struct lu_env *env,
@@ -325,11 +260,7 @@ static int vvp_page_fail(const struct lu_env *env,
 }
 
 static const struct cl_page_operations vvp_page_ops = {
-	.cpo_assume        = vvp_page_assume,
-	.cpo_unassume      = vvp_page_unassume,
 	.cpo_discard       = vvp_page_discard,
-	.cpo_delete        = vvp_page_delete,
-	.cpo_fini          = vvp_page_fini,
 	.cpo_print         = vvp_page_print,
 	.io = {
 		[CRT_READ] = {
@@ -367,7 +298,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 				  &vvp_transient_page_ops);
 	} else {
 		get_page(vmpage);
-		/* in cache, decref in vvp_page_delete */
+		/* in cache, decref in cl_page_delete() */
 		atomic_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
 		vmpage->private = (unsigned long)page;
