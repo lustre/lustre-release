@@ -532,6 +532,34 @@ static ssize_t changelog_deniednext_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(changelog_deniednext);
 
+static ssize_t enable_shard_pfid_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 mdd->mdd_cl.mc_enable_shard_pfid);
+}
+
+static ssize_t enable_shard_pfid_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+	unsigned char val;
+	int rc;
+
+	rc = kstrtou8(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	mdd->mdd_cl.mc_enable_shard_pfid = !!val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_shard_pfid);
+
 static ssize_t sync_permission_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
 {
@@ -763,6 +791,7 @@ static struct attribute *mdd_attrs[] = {
 	&lustre_attr_changelog_min_gc_interval.attr,
 	&lustre_attr_changelog_min_free_cat_entries.attr,
 	&lustre_attr_changelog_deniednext.attr,
+	&lustre_attr_enable_shard_pfid.attr,
 	&lustre_attr_lfsck_async_windows.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
 	&lustre_attr_sync_permission.attr,

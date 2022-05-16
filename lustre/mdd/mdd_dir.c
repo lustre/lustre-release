@@ -1088,13 +1088,71 @@ void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 	strlcpy(xattr->cr_xattr, xattr_name, sizeof(xattr->cr_xattr));
 }
 
+/**
+ * Set the parent FID at \a pfid for a namespace change changelog record, using
+ * XATTR_NAME_LMV and linkEA from the remote object to obtain the correct
+ * parent FID for striped directories
+ *
+ * \param[in] env - environment
+ * \param[in] mdd - mdd device
+ * \param[in] parent - parent object
+ * \param[in] pattr - parent attribute
+ * \param[out] pfid - parent fid
+ *
+ * \retval 0 success
+ * \retval -errno failure
+ */
+int mdd_changelog_ns_pfid_set(const struct lu_env *env, struct mdd_device *mdd,
+			      struct mdd_object *parent,
+			      const struct lu_attr *pattr, struct lu_fid *pfid)
+{
+	int rc = 0;
+
+	/* Certain userspace tools might rely on the previous behavior of
+	 * displaying the shard's parent FID, on some changelog records related
+	 * to striped directories, so use that for compatibility if needed
+	 */
+	if (mdd->mdd_cl.mc_enable_shard_pfid) {
+		*pfid = *mdd_object_fid(parent);
+		return 0;
+	}
+
+	if (!fid_is_zero(&parent->mod_striped_pfid)) {
+		*pfid = parent->mod_striped_pfid;
+		return 0;
+	}
+
+	/* is the parent dir striped? */
+	rc = mdo_xattr_get(env, parent, &LU_BUF_NULL, XATTR_NAME_LMV);
+	if (rc == -ENODATA) {
+		*pfid = *mdd_object_fid(parent);
+		parent->mod_striped_pfid = *pfid;
+		return 0;
+	}
+
+	if (rc < 0)
+		return rc;
+
+	LASSERT(!mdd_is_root(mdo2mdd(&parent->mod_obj),
+			     mdd_object_fid(parent)));
+
+	/* hide shard FID */
+	rc = mdd_parent_fid(env, parent, pattr, pfid);
+	if (!rc)
+		parent->mod_striped_pfid = *pfid;
+
+	return rc;
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
  * \param target - mdd_object of change
- * \param tpfid - target parent dir/object fid
+ * \param parent - target parent object
+ * \param pattr - target parent attribute
  * \param sfid - source object fid
- * \param spfid - source parent fid
+ * \param sparent - source parent object
+ * \param spattr - source parent attribute
  * \param tname - target name string
  * \param sname - source name string
  * \param handle - transaction handle
@@ -1104,9 +1162,11 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 			   enum changelog_rec_type type,
 			   enum changelog_rec_flags clf_flags,
 			   struct mdd_object *target,
-			   const struct lu_fid *tpfid,
+			   struct mdd_object *parent,
+			   const struct lu_attr *pattr,
 			   const struct lu_fid *sfid,
-			   const struct lu_fid *spfid,
+			   struct mdd_object *sparent,
+			   const struct lu_attr *spattr,
 			   const struct lu_name *tname,
 			   const struct lu_name *sname,
 			   struct thandle *handle)
@@ -1122,7 +1182,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	if (!mdd_changelog_enabled(env, mdd, type))
 		RETURN(0);
 
-	LASSERT(tpfid != NULL);
+	LASSERT(S_ISDIR(mdd_object_type(parent)));
 	LASSERT(tname != NULL);
 	LASSERT(handle != NULL);
 
@@ -1159,12 +1219,25 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	}
 
 	rec->cr.cr_type = (__u32)type;
-	rec->cr.cr_pfid = *tpfid;
+
+	rc = mdd_changelog_ns_pfid_set(env, mdd, parent, pattr,
+				       &rec->cr.cr_pfid);
+	if (rc < 0)
+		RETURN(rc);
+
 	rec->cr.cr_namelen = tname->ln_namelen;
 	memcpy(changelog_rec_name(&rec->cr), tname->ln_name, tname->ln_namelen);
 
-	if (clf_flags & CLF_RENAME)
-		mdd_changelog_rec_ext_rename(&rec->cr, sfid, spfid, sname);
+	if (clf_flags & CLF_RENAME) {
+		struct lu_fid spfid;
+
+		rc = mdd_changelog_ns_pfid_set(env, mdd, sparent, spattr,
+					       &spfid);
+		if (rc < 0)
+			RETURN(rc);
+
+		mdd_changelog_rec_ext_rename(&rec->cr, sfid, &spfid, sname);
+	}
 
 	if (clf_flags & CLF_JOBID)
 		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
@@ -1605,8 +1678,8 @@ out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
 	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
-					    mdd_object_fid(mdd_tobj), NULL,
-					    NULL, lname, NULL, handle);
+					    mdd_tobj, tattr, NULL,
+					    NULL, NULL, lname, NULL, handle);
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 	if (is_vmalloc_addr(ldata->ld_buf))
@@ -1980,8 +2053,8 @@ cleanup:
 
 		rc = mdd_changelog_ns_store(env, mdd,
 			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
-			mdd_cobj, mdd_object_fid(mdd_pobj), NULL, NULL,
-			lname, NULL, handle);
+			mdd_cobj, mdd_pobj, pattr, NULL,
+			NULL, NULL, lname, NULL, handle);
 	}
 
 stop:
@@ -2933,7 +3006,7 @@ out_volatile:
 				S_ISDIR(attr->la_mode) ? CL_MKDIR :
 				S_ISREG(attr->la_mode) ? CL_CREATE :
 				S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-				0, son, mdd_object_fid(mdd_pobj), NULL, NULL,
+				0, son, mdd_pobj, pattr, NULL, NULL, NULL,
 				lname, NULL, handle);
 out_stop:
 	rc2 = mdd_trans_stop(env, mdd, rc, handle);
@@ -3484,8 +3557,9 @@ cleanup:
 
 	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, cl_flags,
-					    mdd_tobj, tpobj_fid, lf, spobj_fid,
-					    ltname, lsname, handle);
+					    mdd_tobj, mdd_tpobj, tpattr, lf,
+					    mdd_spobj, pattr, ltname, lsname,
+					    handle);
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -4558,8 +4632,8 @@ static int mdd_migrate_object(const struct lu_env *env,
 
 	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0,
 				    spec->sp_migrate_nsonly ? sobj : tobj,
-				    mdd_object_fid(spobj), mdd_object_fid(sobj),
-				    mdd_object_fid(tpobj), tname, sname,
+				    spobj, spattr, mdd_object_fid(sobj),
+				    tpobj, tpattr, tname, sname,
 				    handle);
 	if (rc)
 		GOTO(stop, rc);
@@ -5073,8 +5147,8 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 
 	/* FID changes, record it as CL_MIGRATE */
 	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0, tobj,
-				    mdd_object_fid(pobj), mdd_object_fid(obj),
-				    mdd_object_fid(pobj), lname, lname, handle);
+				    pobj, pattr, mdd_object_fid(obj),
+				    pobj, pattr, lname, lname, handle);
 	RETURN(rc);
 }
 

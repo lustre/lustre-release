@@ -148,6 +148,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* current mask is calculated from mask above and users masks */
 	mdd->mdd_cl.mc_current_mask = CHANGELOG_MINMASK;
 	mdd->mdd_cl.mc_deniednext = 60; /* 60 secs by default */
+	mdd->mdd_cl.mc_enable_shard_pfid = false; /* master pFID by default */
 
 	dev = lustre_cfg_string(lcfg, 0);
 	if (dev == NULL)

@@ -109,6 +109,9 @@ struct mdd_changelog {
 	unsigned int		mc_deniednext; /* interval for recording denied
 						* accesses
 						*/
+	unsigned char		mc_enable_shard_pfid; /* master or shard pFID
+						       * for striped dirs
+						       */
 };
 
 static inline __u64 cl_time(void)
@@ -175,6 +178,9 @@ enum mod_flags {
 
 struct mdd_object {
 	struct md_object	mod_obj;
+	struct lu_fid		mod_striped_pfid; /* master dir parent FID, in
+						   * case this is a striped dir
+						   */
 	/* open count */
 	u32			mod_count;
 	u32			mod_valid;
@@ -368,9 +374,11 @@ int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
 			   enum changelog_rec_type type,
 			   enum changelog_rec_flags clf_flags,
 			   struct mdd_object *target,
-			   const struct lu_fid *tpfid,
+			   struct mdd_object *parent,
+			   const struct lu_attr *pattr,
 			   const struct lu_fid *sfid,
-			   const struct lu_fid *spfid,
+			   struct mdd_object *src_parent,
+			   const struct lu_attr *src_pattr,
 			   const struct lu_name *tname,
 			   const struct lu_name *sname,
 			   struct thandle *handle);

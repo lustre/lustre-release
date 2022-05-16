@@ -51,6 +51,12 @@ is only accessible to the root user.
 .TP
 .SM EIO
 Failed to read the changelog record on the MDT.
+.SH NOTES
+Certain userspace tools might rely on past Lustre behavior of displaying the
+shard's parent FID instead of the real parent FID, in changelog records related
+to striped directories or filesystem objects contained within them; if this
+behavior is needed for compatibility, please set mdd.*.enable_shard_pfid=1. This
+tunable might be deprecated in a future Lustre release.
 .SH EXAMPLE
 .TP
 Register 2 changelog consumers on the MDT0000
