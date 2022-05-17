@@ -2604,6 +2604,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 
 int tgt_brw_write(struct tgt_session_info *tsi)
 {
+	struct tgt_thread_info *tti = tgt_th_info(tsi->tsi_env);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct ptlrpc_bulk_desc	*desc = NULL;
 	struct obd_export	*exp = req->rq_export;
@@ -2845,6 +2846,9 @@ out_commitrw:
 
 		nob += len;
 	}
+
+	/* multiple transactions can be assigned during write commit */
+	tti->tti_mult_trans = 1;
 
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,
