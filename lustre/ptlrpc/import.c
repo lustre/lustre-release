@@ -1554,12 +1554,15 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         ENTRY;
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
 		struct task_struct *task;
+		u64 connect_flags;
 
                 deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
                           &target_start, &target_len);
+		connect_flags = imp->imp_connect_data.ocd_connect_flags;
                 /* Don't care about MGC eviction */
                 if (strcmp(imp->imp_obd->obd_type->typ_name,
-                           LUSTRE_MGC_NAME) != 0) {
+                           LUSTRE_MGC_NAME) != 0 &&
+		    (connect_flags & OBD_CONNECT_LIGHTWEIGHT) == 0) {
 			LCONSOLE_ERROR_MSG(0x167, "%s: This client was evicted "
 					   "by %.*s; in progress operations "
 					   "using this service will fail.\n",
