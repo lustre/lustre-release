@@ -1464,7 +1464,8 @@ static int lfsck_namespace_create_orphan_dir(const struct lu_env *env,
 		GOTO(log, rc = 1);
 
 	if (dt_object_remote(orphan)) {
-		LASSERT(lfsck->li_lpf_root_obj != NULL);
+		if (lfsck->li_lpf_root_obj == NULL)
+			GOTO(log, rc = -EBADF);
 
 		idx = lfsck_find_mdt_idx_by_fid(env, lfsck, cfid);
 		if (idx < 0)

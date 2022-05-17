@@ -370,14 +370,16 @@ __lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
 static inline int lmv_name_to_stripe_index(struct lmv_mds_md_v1 *lmv,
 					   const char *name, int namelen)
 {
-	if (lmv->lmv_magic == LMV_MAGIC_V1)
+	if (lmv->lmv_magic == LMV_MAGIC_V1 ||
+	    lmv->lmv_magic == LMV_MAGIC_STRIPE)
 		return __lmv_name_to_stripe_index(lmv->lmv_hash_type,
 						  lmv->lmv_stripe_count,
 						  lmv->lmv_migrate_hash,
 						  lmv->lmv_migrate_offset,
 						  name, namelen, true);
 
-	if (lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_V1))
+	if (lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_V1) ||
+	    lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_STRIPE))
 		return __lmv_name_to_stripe_index(
 					le32_to_cpu(lmv->lmv_hash_type),
 					le32_to_cpu(lmv->lmv_stripe_count),

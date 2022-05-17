@@ -1036,13 +1036,13 @@ int lfsck_master_engine(void *args)
 	    (!list_empty(&lfsck->li_list_scan) ||
 	     !list_empty(&lfsck->li_list_double_scan))) {
 		rc = lfsck_verify_lpf(env, lfsck);
-		/* Fail to verify the .lustre/lost+found/MDTxxxx/ may be not
-		 * fatal, because the .lustre/lost+found/ maybe not accessed
-		 * by the LFSCK if it does not add orphans or others to such
-		 * directory. So go ahead until hit failure when really uses
-		 * the directory. */
+		/* FIXME: once OI files are missing, this will fail, it should
+		 * return error, but to satisfy sanity-lfsck test 4 & 5, leave
+		 * it uninitialized here, and any code dereference it need to
+		 * check.
+		 */
 		if (rc != 0)
-			CDEBUG(D_LFSCK, "%s: master engine fail to verify the "
+			CERROR("%s: master engine fail to verify the "
 			       ".lustre/lost+found/, go ahead: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), rc);
 	}

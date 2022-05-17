@@ -1499,11 +1499,8 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 		goto find_child1;
 	}
 
-	if (unlikely(!dt_try_as_dir(env, child2))) {
-		lfsck_object_put(env, child2);
-		child2 = NULL;
-		rc = -ENOTDIR;
-	}
+	if (unlikely(!dt_try_as_dir(env, child2)))
+		GOTO(put, rc = -ENOTDIR);
 
 find_child1:
 	if (fid_is_zero(&bk->lb_lpf_fid))

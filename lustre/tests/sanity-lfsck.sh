@@ -1988,6 +1988,52 @@ test_15c() {
 }
 run_test 15c "LFSCK can repair unmatched MDT-object/OST-object pairs (3)"
 
+test_15d() {
+	(( $MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	check_mount_and_prep
+	rm -rf $DIR/$tdir
+	$LFS mkdir -c -1 $DIR/$tdir || error "create $tdir failed"
+	$LFS setdirstripe -D -i -1 -c 1 $DIR/$tdir ||
+		error "setdirstripe failed"
+
+	createmany -o $DIR/$tdir/f 100 || error "create sub files failed"
+	createmany -d $DIR/$tdir/s 100 || error "create sub dirs failed"
+
+	echo "Migrate $DIR/$tdir to MDT1"
+	$LFS migrate -m 1 $DIR/$tdir &
+	pid=$!
+
+	sleep 2
+	# fail sub transactions on random MDTs, which may cause some file
+	# inaccessible
+	#define OBD_FAIL_OUT_EIO		0x1709
+	for ((i = 0; i < $MDSCOUNT; i++)); do
+		do_facet mds$i $LCTL set_param fail_loc=0x1709
+		sleep 0.1
+		do_facet mds$i $LCTL set_param fail_loc=0
+	done
+
+	wait $pid
+
+	# LFSCK can't fully fix migrating directories, and may leave some
+	# files inaccessible, but it shouldn't cause crash
+	$START_NAMESPACE -A -r ||
+		error "Fail to start LFSCK for namespace"
+
+	wait_all_targets_blocked namespace completed 1
+
+	# resume migration may fail because some file may be inaccessible, but
+	# it shouldn't cause crash
+	$LFS migrate -m 1 $DIR/$tdir
+
+	# rm $tdir to avoid cleanup failure in the end
+	rm -rf $DIR/$tdir/*
+	$LFS rm_entry $DIR/$tdir/*
+	rm -rf $DIR/$tdir || error "rm $tdir failed"
+}
+run_test 15d "LFSCK don't crash upon dir migration failure"
+
 test_16() {
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-3594"

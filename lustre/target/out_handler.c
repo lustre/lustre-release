@@ -1219,7 +1219,10 @@ int out_handle(struct tgt_session_info *tsi)
 				}
 			}
 
-			rc = h->th_act(tsi);
+			if (OBD_FAIL_CHECK(OBD_FAIL_OUT_EIO))
+				rc = -EIO;
+			else
+				rc = h->th_act(tsi);
 next:
 			reply_index++;
 			dt_object_put(env, dt_obj);
