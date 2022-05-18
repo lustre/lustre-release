@@ -1664,9 +1664,6 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 		lfsck->li_obj_oit = NULL;
 	}
 
-	LASSERT(lfsck->li_obj_dir == NULL);
-	LASSERT(lfsck->li_lmv == NULL);
-
 	list_for_each_entry_safe(llu, llu_next, &lfsck->li_list_lmv, llu_link) {
 		llmv = &llu->llu_lmv;
 

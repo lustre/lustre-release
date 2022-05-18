@@ -3494,10 +3494,6 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(unlock, rc = 1);
 
-	/* If all known entries are in the linkEA, then the 'leh_reccount'
-	 * should NOT be zero. */
-	LASSERT(ldata->ld_leh->leh_reccount > 0);
-
 	lfsck_buf_init(&linkea_buf, ldata->ld_buf->lb_buf,
 		       ldata->ld_leh->leh_len);
 	rc = dt_xattr_set(env, obj, &linkea_buf, XATTR_NAME_LINK, 0, th);
@@ -6130,13 +6126,19 @@ static int lfsck_namespace_scan_local_lpf_one(const struct lu_env *env,
 	int				 rc	= 0;
 	__u8				 flags	= 0;
 	bool				 exist	= false;
+
 	ENTRY;
 
 	child = lfsck_object_find_by_dev(env, dev, &ent->lde_fid);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	LASSERT(dt_object_exists(child));
+	if (!dt_object_exists(child)) {
+		CDEBUG(D_LFSCK, "%s: lost+found/%s doesn't exist\n",
+		       lfsck_lfsck2name(lfsck), ent->lde_name);
+		GOTO(out, rc = -ENOENT);
+	}
+
 	LASSERT(!dt_object_remote(child));
 
 	idx = lfsck_sub_trace_file_fid2idx(&ent->lde_fid);
@@ -6893,9 +6895,14 @@ int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
 	int			 rc;
 	int			 fl	= LU_XATTR_CREATE;
 	bool			 dirty	= false;
+
 	ENTRY;
 
-	LASSERT(S_ISDIR(lfsck_object_type(obj)));
+	if (!dt_object_exists(obj))
+		RETURN(-ENOENT);
+
+	if (!S_ISDIR(lfsck_object_type(obj)))
+		RETURN(-ENOTDIR);
 
 	rc = lfsck_links_read_with_rec(env, obj, &ldata);
 	if (rc == -ENODATA) {
