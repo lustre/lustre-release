@@ -3866,7 +3866,7 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 		while (LNetGetId(i++, &id) != -ENOENT) {
 			if (nid_is_lo0(&id.nid))
 				continue;
-			if (cfs_match_nid(lnet_nid_to_nid4(&id.nid),
+			if (cfs_match_nid(&id.nid,
 					  &squash->rsi_nosquash_nids)) {
 				matched = true;
 				break;

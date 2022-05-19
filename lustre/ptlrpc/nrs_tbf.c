@@ -1217,7 +1217,10 @@ static int
 nrs_tbf_nid_rule_match(struct nrs_tbf_rule *rule,
 		       struct nrs_tbf_client *cli)
 {
-	return cfs_match_nid(cli->tc_nid, &rule->tr_nids);
+	struct lnet_nid nid;
+
+	lnet_nid4_to_nid(cli->tc_nid, &nid);
+	return cfs_match_nid(&nid, &rule->tr_nids);
 }
 
 static void nrs_tbf_nid_rule_fini(struct nrs_tbf_rule *rule)
@@ -1981,9 +1984,12 @@ nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 			 struct nrs_tbf_rule *rule,
 			 struct nrs_tbf_client *cli)
 {
+	struct lnet_nid nid;
+
 	switch (expr->te_field) {
 	case NRS_TBF_FIELD_NID:
-		return cfs_match_nid(cli->tc_nid, &expr->te_cond);
+		lnet_nid4_to_nid(cli->tc_nid, &nid);
+		return cfs_match_nid(&nid, &expr->te_cond);
 	case NRS_TBF_FIELD_JOBID:
 		return nrs_tbf_jobid_list_match(&expr->te_cond, cli->tc_jobid);
 	case NRS_TBF_FIELD_OPCODE:

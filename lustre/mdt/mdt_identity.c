@@ -230,25 +230,29 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
  * If there is LNET_NID_ANY in perm[i].mp_nid,
  * it must be perm[0].mp_nid, and act as default perm.
  */
-__u32 mdt_identity_get_perm(struct md_identity *identity, lnet_nid_t nid)
+__u32 mdt_identity_get_perm(struct md_identity *identity, struct lnet_nid *nid)
 {
 	struct md_perm *perm;
+	lnet_nid_t nid4;
 	int i;
 
 	if (!identity)
 		return CFS_SETGRP_PERM;
 
+	if (!nid_is_nid4(nid))
+		return CFS_SETGRP_PERM;
+	nid4 = lnet_nid_to_nid4(nid);
 	perm = identity->mi_perms;
 	/* check exactly matched nid first */
 	for (i = identity->mi_nperms - 1; i > 0; i--) {
-		if (perm[i].mp_nid != nid)
+		if (perm[i].mp_nid != nid4)
 			continue;
 		return perm[i].mp_perm;
 	}
 
 	/* check LNET_NID_ANY then */
 	if ((identity->mi_nperms > 0) &&
-	    ((perm[0].mp_nid == nid) || (perm[0].mp_nid == LNET_NID_ANY)))
+	    ((perm[0].mp_nid == nid4) || (perm[0].mp_nid == LNET_NID_ANY)))
 		return perm[0].mp_perm;
 
 	/* return default last */

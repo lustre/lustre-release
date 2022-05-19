@@ -84,7 +84,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 
 static int match_nosquash_list(struct spinlock *rsi_lock,
 			       struct list_head *nidlist,
-			       lnet_nid_t peernid)
+			       struct lnet_nid *peernid)
 {
 	int rc;
 	ENTRY;
@@ -95,7 +95,8 @@ static int match_nosquash_list(struct spinlock *rsi_lock,
 }
 
 /* root_squash for inter-MDS operations */
-static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
+static int mdt_root_squash(struct mdt_thread_info *info,
+			   struct lnet_nid *peernid)
 {
 	struct lu_ucred *ucred = mdt_ucred(info);
 	struct root_squash_info *squash = &info->mti_mdt->mdt_squash;
@@ -109,12 +110,12 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 				&squash->rsi_nosquash_nids,
 				peernid)) {
 		CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
-		       libcfs_nid2str(peernid));
+		       libcfs_nidstr(peernid));
 		RETURN(0);
 	}
 
 	CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
-	       libcfs_nid2str(peernid),
+	       libcfs_nidstr(peernid),
 	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap.cap[0],
 	       squash->rsi_uid, squash->rsi_gid, 0);
 
@@ -195,7 +196,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	struct ptlrpc_user_desc *pud = req->rq_user_desc;
 	struct lu_ucred *ucred = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
-	lnet_nid_t peernid = lnet_nid_to_nid4(&req->rq_peer.nid);
+	struct lnet_nid peernid = req->rq_peer.nid;
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
@@ -256,7 +257,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	    req->rq_auth_uid != pud->pud_uid) {
 		CDEBUG(D_SEC, "local client %s: auth uid %u "
 		       "while client claims %u:%u/%u:%u\n",
-		       libcfs_nid2str(peernid), req->rq_auth_uid,
+		       libcfs_nidstr(&peernid), req->rq_auth_uid,
 		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid);
 		RETURN(-EACCES);
@@ -284,7 +285,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		} else {
 			ucred->uc_identity = identity;
 			perm = mdt_identity_get_perm(ucred->uc_identity,
-						     peernid);
+						     &peernid);
 		}
 	}
 
@@ -297,7 +298,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	/* check permission of setuid */
 	if (setuid && !(perm & CFS_SETUID_PERM)) {
 		CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
-		       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
+		       pud->pud_uid, pud->pud_fsuid, libcfs_nidstr(&peernid));
 		GOTO(out, rc = -EACCES);
 	}
 
@@ -306,7 +307,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
 		       "from %s\n", pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid,
-		       ucred->uc_identity->mi_gid, libcfs_nid2str(peernid));
+		       ucred->uc_identity->mi_gid, libcfs_nidstr(&peernid));
 		GOTO(out, rc = -EACCES);
 	}
 
@@ -346,7 +347,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_fsgid = pud->pud_fsgid;
 
 	/* process root_squash here. */
-	mdt_root_squash(info, peernid);
+	mdt_root_squash(info, &peernid);
 
 	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
@@ -398,7 +399,7 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 	/* 3. Check the permission in the identities. */
 	perm = mdt_identity_get_perm(
 		uc->uc_identity,
-		lnet_nid_to_nid4(&mdt_info_req(info)->rq_peer.nid));
+		&mdt_info_req(info)->rq_peer.nid);
 	if (perm & CFS_SETGRP_PERM)
 		return true;
 
@@ -412,7 +413,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 	struct ptlrpc_user_desc	*pud = req->rq_user_desc;
 	struct lu_ucred		*ucred = mdt_ucred(info);
 	struct md_identity	*identity = NULL;
-	lnet_nid_t		 peernid = lnet_nid_to_nid4(&req->rq_peer.nid);
+	struct lnet_nid		 peernid = req->rq_peer.nid;
 	__u32			 perm = 0;
 	int			 setuid;
 	int			 setgid;
@@ -433,7 +434,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 	    req->rq_auth_uid != pud->pud_uid) {
 		CDEBUG(D_SEC, "local client %s: auth uid %u "
 		       "while client claims %u:%u/%u:%u\n",
-		       libcfs_nid2str(peernid), req->rq_auth_uid,
+		       libcfs_nidstr(&peernid), req->rq_auth_uid,
 		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid);
 		RETURN(-EACCES);
@@ -453,33 +454,34 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 		}
 	}
 
-	perm = mdt_identity_get_perm(identity, peernid);
-        /* find out the setuid/setgid attempt */
-        setuid = (pud->pud_uid != pud->pud_fsuid);
-        setgid = (pud->pud_gid != pud->pud_fsgid ||
-                  pud->pud_gid != identity->mi_gid);
+	perm = mdt_identity_get_perm(identity, &peernid);
+	/* find out the setuid/setgid attempt */
+	setuid = (pud->pud_uid != pud->pud_fsuid);
+	setgid = (pud->pud_gid != pud->pud_fsgid ||
+		  pud->pud_gid != identity->mi_gid);
 
-        /* check permission of setuid */
-        if (setuid && !(perm & CFS_SETUID_PERM)) {
-                CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
-                       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
-                GOTO(out, rc = -EACCES);
-        }
+	/* check permission of setuid */
+	if (setuid && !(perm & CFS_SETUID_PERM)) {
+		CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
+		       pud->pud_uid, pud->pud_fsuid, libcfs_nidstr(&peernid));
+		GOTO(out, rc = -EACCES);
+	}
 
-        /* check permission of setgid */
-        if (setgid && !(perm & CFS_SETGID_PERM)) {
-                CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-                       "from %s\n", pud->pud_uid, pud->pud_gid,
-                       pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
-                       libcfs_nid2str(peernid));
-                GOTO(out, rc = -EACCES);
-        }
+	/* check permission of setgid */
+	if (setgid && !(perm & CFS_SETGID_PERM)) {
+		CDEBUG(D_SEC,
+		       "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) from %s\n",
+		       pud->pud_uid, pud->pud_gid,
+		       pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
+		       libcfs_nidstr(&peernid));
+		GOTO(out, rc = -EACCES);
+	}
 
-        EXIT;
+	EXIT;
 
 out:
-        mdt_identity_put(mdt->mdt_identity_cache, identity);
-        return rc;
+	mdt_identity_put(mdt->mdt_identity_cache, identity);
+	return rc;
 }
 
 static int old_init_ucred_common(struct mdt_thread_info *info,
@@ -518,7 +520,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 
 	/* process root_squash here. */
 	mdt_root_squash(info,
-			lnet_nid_to_nid4(&mdt_info_req(info)->rq_peer.nid));
+			&mdt_info_req(info)->rq_peer.nid);
 
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);

@@ -1042,7 +1042,7 @@ void mdt_identity_put(struct upcall_cache *, struct md_identity *);
 
 void mdt_flush_identity(struct upcall_cache *, int);
 
-__u32 mdt_identity_get_perm(struct md_identity *, lnet_nid_t);
+__u32 mdt_identity_get_perm(struct md_identity *identity, struct lnet_nid *nid);
 
 /* mdt/mdt_recovery.c */
 __u64 mdt_req_from_lrd(struct ptlrpc_request *req, struct tg_reply_data *trd);
