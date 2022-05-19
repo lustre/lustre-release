@@ -878,7 +878,7 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 		memcpy(buf->lb_buf, tbuf.lb_buf, tbuf.lb_len);
 	}
 
-	if (unlikely(!dt_try_as_dir(env, obj)))
+	if (unlikely(!dt_try_as_dir(env, obj, true)))
 		RETURN(-ENOTDIR);
 
 	memset(&lmv1->lmv_stripe_fids[0], 0, stripes * sizeof(struct lu_fid));
@@ -1930,7 +1930,7 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 	slave_lmv_buf.lb_buf = slave_lmm;
 	slave_lmv_buf.lb_len = sizeof(*slave_lmm);
 
-	if (!dt_try_as_dir(env, dt_object_child(dt)))
+	if (!dt_try_as_dir(env, dt_object_child(dt), false))
 		GOTO(out, rc = -EINVAL);
 
 	rec->rec_type = S_IFDIR;
@@ -1952,7 +1952,7 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 			if (rc != 0)
 				GOTO(out, rc);
 
-			if (!dt_try_as_dir(env, dto))
+			if (!dt_try_as_dir(env, dto, false))
 				GOTO(out, rc = -EINVAL);
 
 			rc = lod_sub_declare_ref_add(env, dto, th);
@@ -8328,8 +8328,8 @@ static int lod_dir_declare_layout_attach(const struct lu_env *env,
 	if (!lmv_is_sane(lmv))
 		RETURN(-EINVAL);
 
-	if (!dt_try_as_dir(env, dt))
-		return -ENOTDIR;
+	if (!dt_try_as_dir(env, dt, false))
+		RETURN(-ENOTDIR);
 
 	dof->dof_type = DFT_DIR;
 
@@ -8369,7 +8369,7 @@ static int lod_dir_declare_layout_attach(const struct lu_env *env,
 
 		stripes[i + lo->ldo_dir_stripe_count] = dto;
 
-		if (!dt_try_as_dir(env, dto))
+		if (!dt_try_as_dir(env, dto, true))
 			GOTO(out, rc = -ENOTDIR);
 
 		rc = lod_sub_declare_ref_add(env, dto, th);
@@ -8462,7 +8462,7 @@ static int lod_dir_declare_layout_detach(const struct lu_env *env,
 	int i;
 	int rc = 0;
 
-	if (!dt_try_as_dir(env, dt))
+	if (!dt_try_as_dir(env, dt, true))
 		return -ENOTDIR;
 
 	if (!lo->ldo_dir_stripe_count)
@@ -8474,7 +8474,7 @@ static int lod_dir_declare_layout_detach(const struct lu_env *env,
 		if (!dto)
 			continue;
 
-		if (!dt_try_as_dir(env, dto))
+		if (!dt_try_as_dir(env, dto, true))
 			return -ENOTDIR;
 
 		rc = lod_sub_declare_delete(env, dto,
@@ -8507,7 +8507,7 @@ static int dt_dir_is_empty(const struct lu_env *env,
 
 	ENTRY;
 
-	if (!dt_try_as_dir(env, obj))
+	if (!dt_try_as_dir(env, obj, true))
 		RETURN(-ENOTDIR);
 
 	iops = &obj->do_index_ops->dio_it;
@@ -8554,7 +8554,7 @@ static int lod_dir_declare_layout_shrink(const struct lu_env *env,
 
 	LASSERT(lmu);
 
-	if (!dt_try_as_dir(env, dt))
+	if (!dt_try_as_dir(env, dt, true))
 		return -ENOTDIR;
 
 	/* shouldn't be called on plain directory */

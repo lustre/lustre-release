@@ -740,7 +740,7 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 	 */
 
 	rc = -ENOTDIR;
-	if (dt_try_as_dir(env, next)) {
+	if (dt_try_as_dir(env, next, false)) {
 		struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 
 		rec->rec_fid = fid;
@@ -754,15 +754,15 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 
 static inline
 int mdo_declare_index_delete(const struct lu_env *env, struct mdd_object *obj,
-                             const char *name, struct thandle *handle)
+			     const char *name, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        if (!dt_try_as_dir(env, next))
-                return -ENOTDIR;
+	if (!dt_try_as_dir(env, next, true))
+		return -ENOTDIR;
 
-        return dt_declare_delete(env, next, (const struct dt_key *)name,
-                                 handle);
+	return dt_declare_delete(env, next, (const struct dt_key *)name,
+				 handle);
 }
 
 static inline int mdo_declare_ref_add(const struct lu_env *env,

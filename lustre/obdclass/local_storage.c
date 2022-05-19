@@ -347,7 +347,7 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 		GOTO(trans_stop, rc);
 
 	if (dti->dti_dof.dof_type == DFT_DIR) {
-		if (!dt_try_as_dir(env, dto))
+		if (!dt_try_as_dir(env, dto, false))
 			GOTO(trans_stop, rc = -ENOTDIR);
 
 		rec->rec_type = S_IFDIR;

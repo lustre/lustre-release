@@ -350,7 +350,7 @@ int lfsck_open_dir(const struct lu_env *env,
 	LASSERT(obj != NULL);
 	LASSERT(di == NULL);
 
-	if (unlikely(!dt_try_as_dir(env, obj)))
+	if (unlikely(!dt_try_as_dir(env, obj, true)))
 		GOTO(out, rc = -ENOTDIR);
 
 	list_for_each_entry(com, &lfsck->li_list_dir, lc_link_dir) {

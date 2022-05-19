@@ -6978,7 +6978,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 	if (IS_ERR(root))
 		GOTO(out, rc = PTR_ERR(root));
 
-	if (unlikely(!dt_try_as_dir(env, root)))
+	if (unlikely(!dt_try_as_dir(env, root, true)))
 		GOTO(out, rc = -ENOTDIR);
 
 	obj = local_file_find_or_create(env, lfsck->li_los, root,

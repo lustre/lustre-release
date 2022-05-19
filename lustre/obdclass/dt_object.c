@@ -167,10 +167,38 @@ void dt_object_fini(struct dt_object *obj)
 }
 EXPORT_SYMBOL(dt_object_fini);
 
-int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj)
+/**
+ * Set directory .do_index_ops.
+ *
+ * Set directory index operations, if the caller knows directory exists,
+ * \a check should be set to ensure object is directory and exists, while for
+ * new directories, skip check and the index operations will be used to create
+ * ".." under directory.
+ *
+ * Normally this is called before dt_lookup() to ensure directory objects
+ * exists and .do_index_ops is correctly set.
+ *
+ * \param env	lu_env object.
+ * \param obj	dt object.
+ * \param check	check \a obj existence and type, return if index ops is set.
+ * \retval 1	on success.
+ * \retval 0	on error.
+ */
+int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check)
 {
-	if (obj->do_index_ops == NULL)
-		obj->do_ops->do_index_try(env, obj, &dt_directory_features);
+	if (check) {
+		if (unlikely(!dt_object_exists(obj)))
+			return 0;
+
+		if (unlikely(!S_ISDIR(lu_object_attr(&obj->do_lu))))
+			return 0;
+
+		if (obj->do_index_ops)
+			return 1;
+	}
+
+	obj->do_ops->do_index_try(env, obj, &dt_directory_features);
+
 	return obj->do_index_ops != NULL;
 }
 EXPORT_SYMBOL(dt_try_as_dir);
@@ -211,7 +239,7 @@ EXPORT_SYMBOL(dt_mode_to_dft);
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
                   const char *name, struct lu_fid *fid)
 {
-	if (dt_try_as_dir(env, dir))
+	if (dt_try_as_dir(env, dir, true))
 		return dt_lookup(env, dir, (struct dt_rec *)fid,
 				 (const struct dt_key *)name);
 	return -ENOTDIR;

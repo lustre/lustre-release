@@ -1171,7 +1171,7 @@ static int lfsck_allow_regenerate_master_lmv(const struct lu_env *env,
 	__u16				 type;
 	ENTRY;
 
-	if (unlikely(!dt_try_as_dir(env, obj)))
+	if (unlikely(!dt_try_as_dir(env, obj, true)))
 		RETURN(-ENOTDIR);
 
 	/* Check whether the shard and the master MDT-object matches or not. */
@@ -1637,7 +1637,7 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 	if (lmv->lmv_magic != LMV_MAGIC_STRIPE)
 		RETURN(1);
 
-	if (unlikely(!dt_try_as_dir(env, child)))
+	if (unlikely(!dt_try_as_dir(env, child, true)))
 		RETURN(-ENOTDIR);
 
 	OBD_ALLOC_PTR(llmv);
@@ -1782,7 +1782,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 	if (unlikely(!dt_object_exists(parent)))
 		GOTO(out, rc = 1);
 
-	if (unlikely(!dt_try_as_dir(env, parent)))
+	if (unlikely(!dt_try_as_dir(env, parent, true)))
 		GOTO(out, rc = -ENOTDIR);
 
 	rc = lfsck_read_stripe_lmv(env, lfsck, parent, plmv);

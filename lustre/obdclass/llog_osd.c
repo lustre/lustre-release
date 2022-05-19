@@ -1247,7 +1247,7 @@ static struct dt_object *llog_osd_dir_get(const struct lu_env *env,
 			return ERR_PTR(rc);
 		dir = dt_locate(env, dt, &dti->dti_fid);
 
-		if (!IS_ERR(dir) && !dt_try_as_dir(env, dir)) {
+		if (!IS_ERR(dir) && !dt_try_as_dir(env, dir, true)) {
 			dt_object_put(env, dir);
 			return ERR_PTR(-ENOTDIR);
 		}
@@ -1454,7 +1454,7 @@ struct dt_object *llog_osd_get_regular_fid_dir(const struct lu_env *env,
 	if (IS_ERR(dir))
 		RETURN(dir);
 
-	if (!dt_try_as_dir(env, dir)) {
+	if (!dt_try_as_dir(env, dir, true)) {
 		dt_object_put(env, dir);
 		RETURN(ERR_PTR(-ENOTDIR));
 	}

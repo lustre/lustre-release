@@ -101,8 +101,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		RETURN(rc);
 
-	if (likely(S_ISDIR(mdd_object_type(mdd_obj)) &&
-		   dt_try_as_dir(env, dir)))
+	if (likely(dt_try_as_dir(env, dir, true)))
 		rc = dt_lookup(env, dir, (struct dt_rec *)fid, key);
 	else
 		rc = -ENOTDIR;
@@ -369,7 +368,7 @@ int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir)
 	ENTRY;
 
 	obj = mdd_object_child(dir);
-	if (!dt_try_as_dir(env, obj))
+	if (!dt_try_as_dir(env, obj, true))
 		RETURN(-ENOTDIR);
 
 	iops = &obj->do_index_ops->dio_it;
@@ -660,7 +659,7 @@ static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *
 	int rc;
 	ENTRY;
 
-	if (dt_try_as_dir(env, next))
+	if (dt_try_as_dir(env, next, true))
 		rc = dt_delete(env, next, (struct dt_key *)name, handle);
 	else
 		rc = -ENOTDIR;
@@ -677,7 +676,7 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	if (dt_try_as_dir(env, next)) {
+	if (dt_try_as_dir(env, next, true)) {
 		struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 
 		rec->rec_fid = lf;

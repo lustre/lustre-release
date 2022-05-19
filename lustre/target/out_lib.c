@@ -1069,7 +1069,7 @@ static int out_obj_index_insert(const struct lu_env *env,
 	       (char *)key, PFID(((struct dt_insert_rec *)rec)->rec_fid),
 	       ((struct dt_insert_rec *)rec)->rec_type);
 
-	if (dt_try_as_dir(env, dt_obj) == 0)
+	if (!dt_try_as_dir(env, dt_obj, true))
 		return -ENOTDIR;
 
 	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
@@ -1090,7 +1090,7 @@ static int out_obj_index_delete(const struct lu_env *env,
 	       dt_obd_name(th->th_dev), PFID(lu_object_fid(&dt_obj->do_lu)),
 	       (char *)key);
 
-	if (dt_try_as_dir(env, dt_obj) == 0)
+	if (!dt_try_as_dir(env, dt_obj, true))
 		return -ENOTDIR;
 
 	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
@@ -1140,10 +1140,8 @@ int out_index_insert_add_exec(const struct lu_env *env,
 	struct tx_arg	*arg;
 	int		rc;
 
-	if (dt_try_as_dir(env, dt_obj) == 0) {
-		rc = -ENOTDIR;
-		return rc;
-	}
+	if (!dt_try_as_dir(env, dt_obj, false))
+		return -ENOTDIR;
 
 	rc = dt_declare_insert(env, dt_obj, rec, key, th);
 	if (rc != 0)
@@ -1202,10 +1200,8 @@ int out_index_delete_add_exec(const struct lu_env *env,
 	struct tx_arg	*arg;
 	int		rc;
 
-	if (dt_try_as_dir(env, dt_obj) == 0) {
-		rc = -ENOTDIR;
-		return rc;
-	}
+	if (!dt_try_as_dir(env, dt_obj, true))
+		return -ENOTDIR;
 
 	LASSERT(ta->ta_handle != NULL);
 	rc = dt_declare_delete(env, dt_obj, key, th);

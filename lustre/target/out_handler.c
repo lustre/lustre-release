@@ -370,7 +370,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 	}
 
 	dt_read_lock(env, obj, DT_TGT_CHILD);
-	if (!dt_try_as_dir(env, obj))
+	if (!dt_try_as_dir(env, obj, true))
 		GOTO(out_unlock, rc = -ENOTDIR);
 
 	rc = dt_lookup(env, obj, (struct dt_rec *)&tti->tti_fid1,

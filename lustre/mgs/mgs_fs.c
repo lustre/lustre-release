@@ -150,7 +150,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 	if (IS_ERR(o))
 		GOTO(out_root, rc = PTR_ERR(o));
 
-	if (!dt_try_as_dir(env, o)) {
+	if (!dt_try_as_dir(env, o, true)) {
 		dt_object_put(env, o);
 		GOTO(out_root, rc = -ENOTDIR);
 	}

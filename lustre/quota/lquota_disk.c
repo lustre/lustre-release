@@ -202,7 +202,7 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 	if (IS_ERR(qt_dir))
 		GOTO(out, rc = PTR_ERR(qt_dir));
 
-	if (!dt_try_as_dir(env, qt_dir))
+	if (!dt_try_as_dir(env, qt_dir, true))
 		GOTO(out, rc = -ENOTDIR);
 	EXIT;
 out:

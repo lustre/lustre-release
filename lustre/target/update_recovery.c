@@ -948,7 +948,7 @@ static int update_recovery_index_insert(const struct lu_env *env,
 		RETURN(-EIO);
 	type = le32_to_cpu(*ptype);
 
-	if (dt_try_as_dir(env, dt_obj) == 0)
+	if (!dt_try_as_dir(env, dt_obj, false))
 		RETURN(-ENOTDIR);
 
 	uti->uti_rec.rec_fid = fid;
@@ -982,7 +982,7 @@ static int update_recovery_index_delete(const struct lu_env *env,
 	if (name == NULL)
 		RETURN(-EIO);
 
-	if (dt_try_as_dir(env, dt_obj) == 0)
+	if (!dt_try_as_dir(env, dt_obj, true))
 		RETURN(-ENOTDIR);
 
 	rc = out_tx_index_delete(env, dt_obj,

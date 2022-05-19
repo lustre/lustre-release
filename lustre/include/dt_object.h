@@ -2055,7 +2055,7 @@ int dt_txn_hook_start(const struct lu_env *env,
                       struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 
-int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
+int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check);
 
 /**
  * Callback function used for parsing path.

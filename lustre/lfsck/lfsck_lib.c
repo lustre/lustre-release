@@ -697,7 +697,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (!dt_try_as_dir(env, child))
+	if (!dt_try_as_dir(env, child, false))
 		GOTO(stop, rc = -ENOTDIR);
 
 	/* 2a. increase child nlink */
@@ -875,7 +875,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (!dt_try_as_dir(env, child))
+	if (!dt_try_as_dir(env, child, false))
 		GOTO(stop, rc = -ENOTDIR);
 
 	/* 2a. increase child nlink */
@@ -1077,8 +1077,8 @@ static int lfsck_create_lpf(const struct lu_env *env,
 	if (IS_ERR(child))
 		GOTO(unlock, rc = PTR_ERR(child));
 
-	if (dt_object_exists(child) != 0) {
-		if (unlikely(!dt_try_as_dir(env, child)))
+	if (dt_object_exists(child)) {
+		if (unlikely(!dt_try_as_dir(env, child, true)))
 			rc = -ENOTDIR;
 		else
 			lfsck->li_lpf_obj = child;
@@ -1293,13 +1293,7 @@ static int lfsck_verify_lpf_pairs(const struct lu_env *env,
 	if (IS_ERR(parent2))
 		GOTO(linkea, parent2);
 
-	if (!dt_object_exists(parent2)) {
-		lfsck_object_put(env, parent2);
-
-		GOTO(linkea, parent2 = ERR_PTR(-ENOENT));
-	}
-
-	if (!dt_try_as_dir(env, parent2)) {
+	if (!dt_try_as_dir(env, parent2, true)) {
 		lfsck_object_put(env, parent2);
 
 		GOTO(linkea, parent2 = ERR_PTR(-ENOTDIR));
@@ -1450,7 +1444,7 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 	LASSERT(dt_object_exists(parent));
 
-	if (unlikely(!dt_try_as_dir(env, parent))) {
+	if (unlikely(!dt_try_as_dir(env, parent, true))) {
 		lfsck_object_put(env, parent);
 
 		GOTO(put, rc = -ENOTDIR);
@@ -1499,7 +1493,7 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 		goto find_child1;
 	}
 
-	if (unlikely(!dt_try_as_dir(env, child2)))
+	if (unlikely(!dt_try_as_dir(env, child2, true)))
 		GOTO(put, rc = -ENOTDIR);
 
 find_child1:
@@ -1562,7 +1556,7 @@ find_child1:
 		goto check_child2;
 	}
 
-	if (unlikely(!dt_try_as_dir(env, child1))) {
+	if (unlikely(!dt_try_as_dir(env, child1, true))) {
 		lfsck_object_put(env, child1);
 		child1 = NULL;
 		rc = -ENOTDIR;
@@ -1583,7 +1577,7 @@ check_child2:
 
 put:
 	if (lfsck->li_lpf_obj != NULL) {
-		if (unlikely(!dt_try_as_dir(env, lfsck->li_lpf_obj))) {
+		if (unlikely(!dt_try_as_dir(env, lfsck->li_lpf_obj, true))) {
 			lfsck_object_put(env, lfsck->li_lpf_obj);
 			lfsck->li_lpf_obj = NULL;
 			rc = -ENOTDIR;
@@ -2021,7 +2015,7 @@ lfsck_assistant_object_load(const struct lu_env *env,
 		return ERR_PTR(-ENOENT);
 	}
 
-	if (lso->lso_is_dir && unlikely(!dt_try_as_dir(env, obj))) {
+	if (lso->lso_is_dir && unlikely(!dt_try_as_dir(env, obj, true))) {
 		lfsck_object_put(env, obj);
 
 		return ERR_PTR(-ENOTDIR);
@@ -3737,9 +3731,6 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 						 &lfsck->li_global_root_fid);
 			if (rc != 0)
 				GOTO(out, rc);
-
-			if (unlikely(!dt_try_as_dir(env, obj)))
-				GOTO(out, rc = -ENOTDIR);
 
 			*pfid = *fid;
 			rc = dt_lookup_dir(env, obj, lostfound, fid);

@@ -3577,18 +3577,12 @@ stop:
  * no need check again.
  */
 static int mdd_readpage_sanity_check(const struct lu_env *env,
-                                     struct mdd_object *obj)
+				     struct mdd_object *obj)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        int rc;
-        ENTRY;
+	if (!dt_try_as_dir(env, mdd_object_child(obj), true))
+		return -ENOTDIR;
 
-        if (S_ISDIR(mdd_object_type(obj)) && dt_try_as_dir(env, next))
-                rc = 0;
-        else
-                rc = -ENOTDIR;
-
-        RETURN(rc);
+	return 0;
 }
 
 static int mdd_dir_page_build(const struct lu_env *env, struct dt_object *obj,

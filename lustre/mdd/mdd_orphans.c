@@ -173,6 +173,7 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 		GOTO(out, rc);
 
 	mdo_ref_add(env, obj, th);
+
 	if (!S_ISDIR(mdd_object_type(obj)))
 		GOTO(out, rc = 0);
 
@@ -180,7 +181,7 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 	dt_ref_add(env, mdd->mdd_orphans, th);
 
 	/* try best to fixup directory, do not return errors from here */
-	if (!dt_try_as_dir(env, next))
+	if (!dt_try_as_dir(env, next, true))
 		GOTO(out, rc = 0);
 
 	dt_delete(env, next, (const struct dt_key *)dotdot, th);
@@ -509,7 +510,7 @@ int mdd_orphan_index_init(const struct lu_env *env, struct mdd_device *mdd)
 	if (IS_ERR(d))
 		RETURN(PTR_ERR(d));
 	LASSERT(lu_object_exists(&d->do_lu));
-	if (!dt_try_as_dir(env, d)) {
+	if (!dt_try_as_dir(env, d, true)) {
 		CERROR("%s: orphan dir '%s' is not an index: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, mdd_orphan_index_name, rc);
 		dt_object_put(env, d);

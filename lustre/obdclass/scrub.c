@@ -1168,7 +1168,7 @@ int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
 
 	LASSERT(dt_object_exists(parent_obj));
 
-	if (unlikely(!dt_try_as_dir(env, parent_obj)))
+	if (unlikely(!dt_try_as_dir(env, parent_obj, true)))
 		GOTO(out, rc = -ENOTDIR);
 
 	rc = dt_attr_get(env, tgt_obj, la);

@@ -166,7 +166,7 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 	if (IS_ERR(root))
 		RETURN(PTR_ERR(root));
 
-	if (unlikely(!dt_try_as_dir(env, root))) {
+	if (unlikely(!dt_try_as_dir(env, root, true))) {
 		lfsck_object_put(env, root);
 
 		RETURN(-ENOTDIR);
