@@ -225,29 +225,6 @@ static int vvp_page_make_ready(const struct lu_env *env,
 	RETURN(result);
 }
 
-static int vvp_page_print(const struct lu_env *env,
-			  const struct cl_page_slice *slice,
-			  void *cookie, lu_printer_t printer)
-{
-	struct vvp_page *vpg	= cl2vvp_page(slice);
-	struct page     *vmpage	= vpg->vpg_page;
-
-	(*printer)(env, cookie,
-		   LUSTRE_VVP_NAME"-page@%p vm@%p ", vpg, vmpage);
-
-	if (vmpage != NULL) {
-		(*printer)(env, cookie, "%lx %d:%d %lx %lu %slru",
-			   (long)vmpage->flags, page_count(vmpage),
-			   page_mapcount(vmpage), vmpage->private,
-			   page_index(vmpage),
-			   list_empty(&vmpage->lru) ? "not-" : "");
-	}
-
-	(*printer)(env, cookie, "\n");
-
-	return 0;
-}
-
 static int vvp_page_fail(const struct lu_env *env,
 			 const struct cl_page_slice *slice)
 {
@@ -261,7 +238,6 @@ static int vvp_page_fail(const struct lu_env *env,
 
 static const struct cl_page_operations vvp_page_ops = {
 	.cpo_discard       = vvp_page_discard,
-	.cpo_print         = vvp_page_print,
 	.io = {
 		[CRT_READ] = {
 			.cpo_prep       = vvp_page_prep_read,
@@ -277,7 +253,6 @@ static const struct cl_page_operations vvp_page_ops = {
 };
 
 static const struct cl_page_operations vvp_transient_page_ops = {
-	.cpo_print		= vvp_page_print,
 };
 
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,

@@ -1149,21 +1149,36 @@ EXPORT_SYMBOL(cl_page_header_print);
  * Prints human readable representation of \a cl_page to the \a f.
  */
 void cl_page_print(const struct lu_env *env, void *cookie,
-		   lu_printer_t printer, const struct cl_page *cl_page)
+		   lu_printer_t printer, const struct cl_page *cp)
 {
+	struct page *vmpage = cp->cp_vmpage;
 	const struct cl_page_slice *slice;
 	int result = 0;
 	int i;
 
-	cl_page_header_print(env, cookie, printer, cl_page);
-	cl_page_slice_for_each(cl_page, slice, i) {
+	cl_page_header_print(env, cookie, printer, cp);
+
+	(*printer)(env, cookie, "vmpage @%p", vmpage);
+
+	if (vmpage != NULL) {
+		(*printer)(env, cookie, " %lx %d:%d %lx %lu %slru",
+			   (long)vmpage->flags, page_count(vmpage),
+			   page_mapcount(vmpage), vmpage->private,
+			   page_index(vmpage),
+			   list_empty(&vmpage->lru) ? "not-" : "");
+	}
+
+	(*printer)(env, cookie, "\n");
+
+	cl_page_slice_for_each(cp, slice, i) {
 		if (slice->cpl_ops->cpo_print != NULL)
 			result = (*slice->cpl_ops->cpo_print)(env, slice,
-							     cookie, printer);
+							      cookie, printer);
 		if (result != 0)
 			break;
 	}
-	(*printer)(env, cookie, "end page@%p\n", cl_page);
+
+	(*printer)(env, cookie, "end page@%p\n", cp);
 }
 EXPORT_SYMBOL(cl_page_print);
 
