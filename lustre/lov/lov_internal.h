@@ -261,7 +261,7 @@ extern struct lu_kmem_descr lov_caches[];
 
 /* lov_merge.c */
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
-                      struct ost_lvb *lvb, __u64 *kms_place);
+		      struct cl_attr *attr);
 
 /* lov_offset.c */
 loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index);

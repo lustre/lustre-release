@@ -6930,6 +6930,10 @@ run_one_logged() {
 		fi
 
 		pass "$testnum" "(${duration_sub}s)"
+		if [ -n "${DUMP_OK}" ]; then
+			gather_logs $(comma_list $(nodes_list))
+		fi
+
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
 		[[ $rc != 0 ]] && break
 	done

@@ -10612,7 +10612,7 @@ ra_check_101() {
 
 	if [[ $discard -gt $discard_limit ]]; then
 		$LCTL get_param llite.*.read_ahead_stats
-		error "($discard) discarded pages with size (${read_size})"
+		error "($discard limit ${discard_limit}) discarded pages with size (${read_size})"
 	else
 		echo "Read-ahead success for size ${read_size}"
 	fi
@@ -25022,6 +25022,11 @@ test_398n() { #  LU-13798
 
 }
 run_test 398n "test append with parallel DIO"
+
+test_398o() {
+	directio rdwr $DIR/$tfile 0 1 1 || error "bad KMS"
+}
+run_test 398o "right kms with DIO"
 
 test_fake_rw() {
 	local read_write=$1

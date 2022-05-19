@@ -140,6 +140,8 @@ struct cl_device {
 struct cl_attr {
         /** Object size, in bytes */
         loff_t cat_size;
+
+	unsigned int cat_kms_valid:1;
         /**
          * Known minimal size, in bytes.
          *

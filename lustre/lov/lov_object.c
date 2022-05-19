@@ -372,29 +372,13 @@ static int lov_attr_get_raid0(const struct lu_env *env, struct lov_object *lov,
 {
 	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
 	struct lov_stripe_md *lsm = lov->lo_lsm;
-	struct ost_lvb *lvb = &lov_env_info(env)->lti_lvb;
 	struct cl_attr *attr = &r0->lo_attr;
-	__u64 kms = 0;
 	int result = 0;
 
 	if (r0->lo_attr_valid) {
 		*lov_attr = attr;
 		return 0;
 	}
-
-	memset(lvb, 0, sizeof(*lvb));
-
-	/* XXX: timestamps can be negative by sanity:test_39m,
-	 * how can it be? */
-	lvb->lvb_atime = LLONG_MIN;
-	lvb->lvb_ctime = LLONG_MIN;
-	lvb->lvb_mtime = LLONG_MIN;
-
-	/*
-	 * XXX that should be replaced with a loop over sub-objects,
-	 * doing cl_object_attr_get() on them. But for now, let's
-	 * reuse old lov code.
-	 */
 
 	/*
 	 * XXX take lsm spin-lock to keep lov_merge_lvb_kms()
@@ -403,11 +387,9 @@ static int lov_attr_get_raid0(const struct lu_env *env, struct lov_object *lov,
 	 * sub-object attributes.
 	 */
 	lov_stripe_lock(lsm);
-	result = lov_merge_lvb_kms(lsm, index, lvb, &kms);
+	result = lov_merge_lvb_kms(lsm, index, attr);
 	lov_stripe_unlock(lsm);
 	if (result == 0) {
-		cl_lvb2attr(attr, lvb);
-		attr->cat_kms = kms;
 		r0->lo_attr_valid = 1;
 		*lov_attr = attr;
 	}
@@ -1052,6 +1034,8 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		       lov_attr->cat_ctime, lov_attr->cat_blocks);
 
 		/* merge results */
+		if (lov_attr->cat_kms_valid)
+			attr->cat_kms_valid = 1;
 		attr->cat_blocks += lov_attr->cat_blocks;
 		if (attr->cat_size < lov_attr->cat_size)
 			attr->cat_size = lov_attr->cat_size;

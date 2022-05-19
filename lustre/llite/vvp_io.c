@@ -150,7 +150,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 	result = cl_object_attr_get(env, obj, attr);
 	if (result == 0) {
 		kms = attr->cat_kms;
-		if (pos > kms) {
+		if (pos > kms || !attr->cat_kms_valid) {
 			/*
 			 * A glimpse is necessary to determine whether we
 			 * return a short read (B) or some zeroes at the end
