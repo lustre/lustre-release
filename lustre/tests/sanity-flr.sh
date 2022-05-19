@@ -15,7 +15,7 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT "
 # Bug number for skipped test:    LU-14818 LU-11381 LU-14765
-ALWAYS_EXCEPT+="                  6        201      44c"
+ALWAYS_EXCEPT+="                  6        201      44c "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skip all tests for PPC until we can get sanity-pfl to pass
@@ -25,7 +25,7 @@ fi
 
 if [[ "$ost1_FSTYPE" == "zfs" ]]; then
 	# bug #:	LU-1941
-	ALWAYS_EXCEPT+="49a"
+	ALWAYS_EXCEPT+=" 49a "
 fi
 
 build_test_filter
