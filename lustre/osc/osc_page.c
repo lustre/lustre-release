@@ -141,7 +141,7 @@ static int osc_page_print(const struct lu_env *env,
 			  /* 2 */
 			  oap->oap_obj_off, oap->oap_page_off, oap->oap_count,
 			  oap->oap_async_flags, oap->oap_brw_flags,
-			  oap->oap_request, oap->oap_cli, obj,
+			  oap->oap_request, cli, obj,
 			  /* 3 */
 			  opg->ops_transfer_pinned,
 			  osc_submit_duration(opg), opg->ops_srvlock,
