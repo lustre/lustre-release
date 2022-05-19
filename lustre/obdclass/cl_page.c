@@ -145,29 +145,6 @@ cl_page_slice_get(const struct cl_page *cl_page, int index)
 	     slice = cl_page_slice_get(cl_page, i); i >= 0;	\
 	     slice = cl_page_slice_get(cl_page, --i))
 
-/**
- * Returns a slice within a cl_page, corresponding to the given layer in the
- * device stack.
- *
- * \see cl_lock_at()
- */
-static const struct cl_page_slice *
-cl_page_at_trusted(const struct cl_page *cl_page,
-                   const struct lu_device_type *dtype)
-{
-	const struct cl_page_slice *slice;
-	int i;
-
-	ENTRY;
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_obj->co_lu.lo_dev->ld_type == dtype)
-			RETURN(slice);
-	}
-
-	RETURN(NULL);
-}
-
 static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
 {
 	int index = cl_page->cp_kmem_index;
@@ -551,13 +528,6 @@ struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj)
 	RETURN(page);
 }
 EXPORT_SYMBOL(cl_vmpage_page);
-
-const struct cl_page_slice *cl_page_at(const struct cl_page *page,
-                                       const struct lu_device_type *dtype)
-{
-        return cl_page_at_trusted(page, dtype);
-}
-EXPORT_SYMBOL(cl_page_at);
 
 static void cl_page_owner_clear(struct cl_page *page)
 {

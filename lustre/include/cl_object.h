@@ -2196,10 +2196,6 @@ void            cl_page_header_print(const struct lu_env *env, void *cookie,
                                      lu_printer_t printer,
                                      const struct cl_page *pg);
 struct cl_page *cl_vmpage_page      (struct page *vmpage, struct cl_object *obj);
-struct cl_page *cl_page_top         (struct cl_page *page);
-
-const struct cl_page_slice *cl_page_at(const struct cl_page *page,
-                                       const struct lu_device_type *dtype);
 
 /**
  * \name ownership
