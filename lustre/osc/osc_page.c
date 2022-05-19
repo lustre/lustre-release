@@ -81,7 +81,7 @@ static void osc_page_transfer_put(const struct lu_env *env,
 static void osc_page_transfer_add(const struct lu_env *env,
                                   struct osc_page *opg, enum cl_req_type crt)
 {
-	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 
 	osc_lru_use(osc_cli(obj), opg);
 }
@@ -124,7 +124,7 @@ static int osc_page_print(const struct lu_env *env,
 {
 	struct osc_page *opg = cl2osc_page(slice);
 	struct osc_async_page *oap = &opg->ops_oap;
-	struct osc_object *obj = cl2osc(slice->cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 	struct client_obd *cli = &osc_export(obj)->exp_obd->u.cli;
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
@@ -170,7 +170,7 @@ static void osc_page_delete(const struct lu_env *env,
 			    const struct cl_page_slice *slice)
 {
 	struct osc_page   *opg = cl2osc_page(slice);
-	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 	int rc;
 
 	ENTRY;
@@ -238,7 +238,7 @@ static void osc_page_touch(const struct lu_env *env,
 			  const struct cl_page_slice *slice, size_t to)
 {
 	struct osc_page *opg = cl2osc_page(slice);
-	struct cl_object *obj = opg->ops_cl.cpl_obj;
+	struct cl_object *obj = osc2cl(osc_page_object(opg));
 
 	osc_page_touch_at(env, obj, osc_index(opg), to);
 }

@@ -1202,7 +1202,6 @@ void cl_page_slice_add(struct cl_page *cl_page, struct cl_page_slice *slice,
 	LASSERT(cl_page->cp_layer_count < CP_MAX_LAYER);
 	LASSERT(offset < (1 << sizeof(cl_page->cp_layer_offset[0]) * 8));
 	cl_page->cp_layer_offset[cl_page->cp_layer_count++] = offset;
-	slice->cpl_obj  = obj;
 	slice->cpl_ops  = ops;
 	slice->cpl_page = cl_page;
 

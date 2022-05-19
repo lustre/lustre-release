@@ -846,6 +846,11 @@ static inline pgoff_t osc_index(struct osc_page *opg)
 	return opg->ops_oap.oap_obj_off >> PAGE_SHIFT;
 }
 
+static inline struct osc_object *osc_page_object(struct osc_page *ops)
+{
+	return ops->ops_oap.oap_obj;
+}
+
 static inline struct cl_page *oap2cl_page(struct osc_async_page *oap)
 {
 	return oap2osc(oap)->ops_cl.cpl_page;

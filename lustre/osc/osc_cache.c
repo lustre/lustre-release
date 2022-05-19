@@ -1271,7 +1271,7 @@ static int osc_refresh_count(const struct lu_env *env,
 {
 	struct osc_page  *opg = oap2osc_page(oap);
 	pgoff_t index = osc_index(oap2osc(oap));
-	struct cl_object *obj;
+	struct cl_object *obj = osc2cl(osc_page_object(opg));
 	struct cl_attr   *attr = &osc_env_info(env)->oti_attr;
 	int result;
 	loff_t kms;
@@ -1279,7 +1279,6 @@ static int osc_refresh_count(const struct lu_env *env,
 	/* readpage queues with _COUNT_STABLE, shouldn't get here. */
 	LASSERT(!(cmd & OBD_BRW_READ));
 	LASSERT(opg != NULL);
-	obj = opg->ops_cl.cpl_obj;
 
 	cl_object_attr_lock(obj);
 	result = cl_object_attr_get(env, obj, attr);
@@ -1323,7 +1322,7 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 
 	/* statistic */
 	if (rc == 0 && srvlock) {
-		struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
+		struct lu_device *ld = osc_page_object(opg)->oo_cl.co_lu.lo_dev;
 		struct osc_stats *stats = &lu2osc_dev(ld)->od_stats;
 		size_t bytes = oap->oap_count;
 
@@ -2512,7 +2511,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 			 struct osc_page *ops)
 {
 	struct osc_extent *ext   = NULL;
-	struct osc_object *obj   = cl2osc(ops->ops_cl.cpl_obj);
+	struct osc_object *obj   = osc_page_object(ops);
 	struct cl_page    *cp    = ops->ops_cl.cpl_page;
 	pgoff_t            index = osc_index(ops);
 	struct osc_async_page *oap = &ops->ops_oap;
