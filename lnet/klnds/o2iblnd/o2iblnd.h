@@ -767,28 +767,31 @@ kiblnd_dev_can_failover(struct kib_dev *dev)
         return dev->ibd_can_failover;
 }
 
-#define kiblnd_conn_addref(conn)                                \
-do {                                                            \
-        CDEBUG(D_NET, "conn[%p] (%d)++\n",                      \
-	       (conn), atomic_read(&(conn)->ibc_refcount)); \
-	atomic_inc(&(conn)->ibc_refcount);                  \
-} while (0)
+static inline void kiblnd_conn_addref(struct kib_conn *conn)
+{
+#ifdef O2IBLND_CONN_REFCOUNT_DEBUG
+	CDEBUG(D_NET, "conn[%p] (%d)++\n",
+	       (conn), atomic_read(&(conn)->ibc_refcount));
+#endif
+	atomic_inc(&(conn)->ibc_refcount);
+}
 
-#define kiblnd_conn_decref(conn)					\
-do {									\
-	unsigned long flags;						\
-									\
-	CDEBUG(D_NET, "conn[%p] (%d)--\n",				\
-	       (conn), atomic_read(&(conn)->ibc_refcount));		\
-	LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);			\
-	if (atomic_dec_and_test(&(conn)->ibc_refcount)) {		\
-		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);	\
-		list_add_tail(&(conn)->ibc_list,			\
-				  &kiblnd_data.kib_connd_zombies);	\
-		wake_up(&kiblnd_data.kib_connd_waitq);		\
-		spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);\
-	}								\
-} while (0)
+static inline void kiblnd_conn_decref(struct kib_conn *conn)
+{
+	unsigned long flags;
+#ifdef O2IBLND_CONN_REFCOUNT_DEBUG
+	CDEBUG(D_NET, "conn[%p] (%d)--\n",
+	       (conn), atomic_read(&(conn)->ibc_refcount));
+#endif
+	LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);
+	if (atomic_dec_and_test(&(conn)->ibc_refcount)) {
+		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
+		list_add_tail(&(conn)->ibc_list,
+			      &kiblnd_data.kib_connd_zombies);
+		wake_up(&kiblnd_data.kib_connd_waitq);
+		spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);
+	}
+}
 
 void kiblnd_destroy_peer(struct kref *kref);
 
@@ -1174,3 +1177,31 @@ unsigned int kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx);
 #undef netdev_notifier_info_to_dev
 #define netdev_notifier_info_to_dev(ndev) ndev
 #endif
+
+#define kiblnd_dump_conn_dbg(conn)			\
+({							\
+	if (conn && conn->ibc_cmid)			\
+		CDEBUG(D_NET, "conn %p state %d nposted %d/%d c/o/r %d/%d/%d ce %d : cm_id %p qp_num 0x%x device_name %s\n",	\
+			conn,				\
+			conn->ibc_state,		\
+			conn->ibc_noops_posted,		\
+			conn->ibc_nsends_posted,	\
+			conn->ibc_credits,		\
+			conn->ibc_outstanding_credits,	\
+			conn->ibc_reserved_credits,	\
+			conn->ibc_comms_error,		\
+			conn->ibc_cmid,			\
+			conn->ibc_cmid->qp ? conn->ibc_cmid->qp->qp_num : 0,	\
+			conn->ibc_cmid->qp ? (conn->ibc_cmid->qp->device ? dev_name(&conn->ibc_cmid->qp->device->dev) : "NULL") : "NULL");	\
+	else if (conn)					\
+		CDEBUG(D_NET, "conn %p state %d nposted %d/%d c/o/r %d/%d/%d ce %d : cm_id NULL\n",	\
+			conn,				\
+			conn->ibc_state,		\
+			conn->ibc_noops_posted,		\
+			conn->ibc_nsends_posted,	\
+			conn->ibc_credits,		\
+			conn->ibc_outstanding_credits,	\
+			conn->ibc_reserved_credits,	\
+			conn->ibc_comms_error		\
+			);				\
+})
