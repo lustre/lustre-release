@@ -25829,26 +25829,15 @@ test_413e() {
 }
 run_test 413e "check default max-inherit value"
 
-test_413f() {
-	(( MDSCOUNT >= 2 )) || skip "We need at least 2 MDTs for this test"
-
-	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
-		skip "Need server version at least 2.14.55"
-
-	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
-		error "dump $DIR default LMV failed"
-	stack_trap "setfattr --restore=$TMP/dmv.ea"
-
-	$LFS setdirstripe -D -i -1 -c 1 -X 3 --max-inherit-rr 3 $DIR ||
-		error "set $DIR default LMV failed"
-
+test_fs_dmv_inherit()
+{
 	local testdir=$DIR/$tdir
 
 	local count
 	local inherit
 	local inherit_rr
 
-	for i in $(seq 3); do
+	for i in 1 2 3; do
 		mkdir $testdir || error "mkdir $testdir failed"
 		count=$($LFS getdirstripe -D -c $testdir)
 		(( count == 1 )) ||
@@ -25867,7 +25856,56 @@ test_413f() {
 	(( count == 0 )) ||
 		error "$testdir default LMV count not zero: $count"
 }
+
+test_413f() {
+	(( MDSCOUNT >= 2 )) || skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need server version at least 2.14.55"
+
+	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
+		error "dump $DIR default LMV failed"
+	stack_trap "setfattr --restore=$TMP/dmv.ea"
+
+	$LFS setdirstripe -D -i -1 -c 1 -X 3 --max-inherit-rr 3 $DIR ||
+		error "set $DIR default LMV failed"
+
+	test_fs_dmv_inherit
+}
 run_test 413f "lfs getdirstripe -D list ROOT default LMV if it's not set on dir"
+
+test_413g() {
+	(( MDSCOUNT >= 2 )) || skip "We need at least 2 MDTs for this test"
+
+	mkdir -p $DIR/$tdir/l2/l3/l4 || error "mkdir $tdir/l1/l2/l3 failed"
+	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
+		error "dump $DIR default LMV failed"
+	stack_trap "setfattr --restore=$TMP/dmv.ea"
+
+	$LFS setdirstripe -D -i -1 -c 1 -X 3 --max-inherit-rr 3 $DIR ||
+		error "set $DIR default LMV failed"
+
+	FILESET="$FILESET/$tdir/l2/l3/l4" mount_client $MOUNT2 ||
+		error "mount $MOUNT2 failed"
+	stack_trap "umount_client $MOUNT2"
+
+	local saved_DIR=$DIR
+
+	export DIR=$MOUNT2
+
+	stack_trap "export DIR=$saved_DIR"
+
+	# first check filesystem-wide default LMV inheritance
+	test_fs_dmv_inherit || error "incorrect fs default LMV inheritance"
+
+	# then check subdirs are spread to all MDTs
+	createmany -d $DIR/s $((MDSCOUNT * 100)) || error "createmany failed"
+
+	local count=$($LFS getstripe -m $DIR/s* | sort -u | wc -l)
+
+	(( $count == $MDSCOUNT )) || error "dirs are spread to $count MDTs"
+}
+run_test 413g "enforce ROOT default LMV on subdir mount"
 
 test_413z() {
 	local pids=""

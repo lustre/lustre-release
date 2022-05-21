@@ -3089,6 +3089,41 @@ void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
 	EXIT;
 }
 
+/* set filesystem-wide default LMV for subdir mount if it's enabled on ROOT. */
+static int ll_fileset_default_lmv_fixup(struct inode *inode,
+					struct lustre_md *md)
+{
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ptlrpc_request *req = NULL;
+	union lmv_mds_md *lmm = NULL;
+	int size = 0;
+	int rc;
+
+	LASSERT(is_root_inode(inode));
+	LASSERT(!fid_is_root(&sbi->ll_root_fid));
+	LASSERT(!md->default_lmv);
+
+	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &size, &req,
+				       OBD_MD_DEFAULT_MEA,
+				       GET_DEFAULT_LAYOUT_ROOT);
+	if (rc && rc != -ENODATA)
+		GOTO(out, rc);
+
+	rc = 0;
+	if (lmm && size) {
+		rc = md_unpackmd(sbi->ll_md_exp, &md->default_lmv, lmm, size);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		rc = 0;
+	}
+	EXIT;
+out:
+	if (req)
+		ptlrpc_req_finished(req);
+	return rc;
+}
+
 int ll_prep_inode(struct inode **inode, struct req_capsule *pill,
 		  struct super_block *sb, struct lookup_intent *it)
 {
@@ -3112,8 +3147,17 @@ int ll_prep_inode(struct inode **inode, struct req_capsule *pill,
 	 * ll_update_lsm_md() may change md.
 	 */
 	if (it && (it->it_op & (IT_LOOKUP | IT_GETATTR)) &&
-	    S_ISDIR(md.body->mbo_mode) && !md.default_lmv)
-		default_lmv_deleted = true;
+	    S_ISDIR(md.body->mbo_mode) && !md.default_lmv) {
+		if (unlikely(*inode && is_root_inode(*inode) &&
+			     !fid_is_root(&sbi->ll_root_fid))) {
+			rc = ll_fileset_default_lmv_fixup(*inode, &md);
+			if (rc)
+				GOTO(out, rc);
+		}
+
+		if (!md.default_lmv)
+			default_lmv_deleted = true;
+	}
 
 	if (*inode) {
 		rc = ll_update_inode(*inode, &md);
