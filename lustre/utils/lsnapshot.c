@@ -66,6 +66,7 @@ struct snapshot_target {
 	struct list_head	 st_list;
 	/* Target node name. */
 	char			*st_host;
+	char			*st_fhost;
 	/* Where the pool is */
 	char			*st_dir;
 	/* The target pool name on the target node. */
@@ -139,7 +140,8 @@ do {									\
 #define DZFS "%s zfs"
 #define DIMPORT "%s zpool import -d %s %s > /dev/null 2>&1"
 
-#define PRSH(si, st) (si)->si_rsh, (st)->st_host
+#define PRSH(si, st, foreign) (si)->si_rsh, \
+		foreign ? (st)->st_fhost : (st)->st_host
 #define PFSNAME(st) (st)->st_pool, (st)->st_filesystem
 #define PSSNAME(si, st) PFSNAME(st), (si)->si_ssname
 #define PSS_NEW(si, st) PFSNAME(st), (si)->si_new_ssname
@@ -196,20 +198,19 @@ static int snapshot_load_conf_ldev(struct snapshot_instance *si, char *buf,
 {
 	char *label = NULL;
 	char *device = NULL;
-	char *ignore = NULL;
 	char *ptr;
 	char *ptr1;
 	int len;
 	int rc;
 
 	rc = sscanf(buf, "%ms %ms %ms %ms",
-		    &st->st_host, &ignore, &label, &device);
+		    &st->st_host, &st->st_fhost, &label, &device);
 	if (rc < 4) {
 		rc = -EINVAL;
 		goto out;
 	}
-
-	free(ignore);
+	if (strcmp(st->st_fhost, "-") == 0)
+		st->st_fhost = NULL;
 
 	/* Format of device:
 	 * [md|zfs:][pool_dir/]<pool>/<filesystem> */
@@ -397,11 +398,15 @@ static int snapshot_load_conf_one(struct snapshot_instance *si,
 	if (is_ldev) {
 		rc = snapshot_load_conf_ldev(si, buf, st, &role);
 	} else {
-		rc = sscanf(buf, "%ms %ms %ms %ms %ms %d",
-			    &st->st_host, &st->st_dir, &st->st_pool,
-			    &st->st_filesystem, &role, &st->st_index);
-		if (rc < 6)
+		rc = sscanf(buf, "%ms %ms %ms %ms %ms %ms %d",
+			    &st->st_host, &st->st_fhost, &st->st_dir,
+			    &st->st_pool, &st->st_filesystem, &role,
+			    &st->st_index);
+		if (rc < 7)
 			rc = -EINVAL;
+
+		if (strcmp(st->st_fhost, "-") == 0)
+			st->st_fhost = NULL;
 	}
 
 	if (rc < 0)
@@ -489,6 +494,8 @@ out:
 	if (rc) {
 		if (st->st_host)
 			free(st->st_host);
+		if (st->st_fhost)
+			free(st->st_fhost);
 		if (st->st_dir)
 			free(st->st_dir);
 		if (st->st_pool)
@@ -621,6 +628,7 @@ static void snapshot_unload_conf(struct snapshot_instance *si)
 				struct snapshot_target, st_list);
 		list_del(&st->st_list);
 		free(st->st_host);
+		free(st->st_fhost);
 		free(st->st_dir);
 		free(st->st_pool);
 		free(st->st_filesystem);
@@ -632,6 +640,7 @@ static void snapshot_unload_conf(struct snapshot_instance *si)
 				struct snapshot_target, st_list);
 		list_del(&st->st_list);
 		free(st->st_host);
+		free(st->st_fhost);
 		free(st->st_dir);
 		free(st->st_pool);
 		free(st->st_filesystem);
@@ -826,9 +835,11 @@ static int __snapshot_wait(struct snapshot_instance *si,
 		rc = waitpid(st->st_pid, &st->st_status, 0);
 		if (rc < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't wait child (%d) operation "
-					 "on the target <%s:%x:%d>: %s\n",
-					 st->st_pid, st->st_host, st->st_role,
-					 st->st_index, strerror(errno));
+					 "on the target <%s(%s):%x:%d>: %s\n",
+					 st->st_pid, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
+					 st->st_role, st->st_index,
+					 strerror(errno));
 			count++;
 			if (*err == 0)
 				*err = rc;
@@ -852,19 +863,22 @@ static int __snapshot_wait(struct snapshot_instance *si,
 			}
 		} else if (WIFSIGNALED(st->st_status)) {
 			SNAPSHOT_ADD_LOG(si, "The child (%d) operation on the "
-					 "target <%s:%x:%d> was killed by "
+					 "target <%s(%s):%x:%d> was killed by "
 					 "signal %d\n",
-					 st->st_pid, st->st_host, st->st_role,
-					 st->st_index, WTERMSIG(st->st_status));
+					 st->st_pid, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
+					 st->st_role, st->st_index,
+					 WTERMSIG(st->st_status));
 			count++;
 			if (*err == 0)
 				*err = -EINTR;
 		} else {
 			SNAPSHOT_ADD_LOG(si, "The child (%d) operation on the "
-					 "target <%s:%x:%d> failed for "
+					 "target <%s(%s):%x:%d> failed for "
 					 "unknown reason\n",
-					 st->st_pid, st->st_host, st->st_role,
-					 st->st_index);
+					 st->st_pid, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
+					 st->st_role, st->st_index);
 			count++;
 			if (*err == 0)
 				*err = -EFAULT;
@@ -912,12 +926,14 @@ static int mdt0_is_lustre_snapshot(struct snapshot_instance *si)
 	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int rc;
-
+	int foreign = 0;
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
 		 DRSH" '"DIMPORT"; "DZFS
-		 " get -H -o value lustre:magic "DSSNAME"'",
-		 PRSH(si, st), PIMPORT(st), PZFS(st), PSSNAME(si, st));
+		 " get -H -o value lustre:magic "DSSNAME"' 2>/dev/null",
+		 PRSH(si, st, foreign), PIMPORT(st), PZFS(st), PSSNAME(si, st));
+
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to check snapshot "
@@ -926,7 +942,13 @@ static int mdt0_is_lustre_snapshot(struct snapshot_instance *si)
 	}
 
 	if (snapshot_fgets(fp, buf, strlen(SNAPSHOT_MAGIC) + 1) == NULL) {
-		rc = -EINVAL;
+		if (foreign || !st->st_fhost) {
+			rc = -EINVAL;
+		} else {
+			foreign = 1;
+			pclose(fp);
+			goto again;
+		}
 	} else if (strcmp(buf, SNAPSHOT_MAGIC) == 0) {
 		rc = 0;
 	} else {
@@ -948,11 +970,13 @@ static int target_is_mounted(struct snapshot_instance *si,
 	FILE *fp;
 	char *ptr;
 	int rc = 0;
+	int foreign = 0;
 
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
-		 DRSH" 'mount'",
-		 PRSH(si, st));
+		 DRSH" 'mount' 2>/dev/null",
+		 PRSH(si, st, foreign));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to check target mount: %s\n",
@@ -987,6 +1011,10 @@ static int target_is_mounted(struct snapshot_instance *si,
 	}
 
 	pclose(fp);
+	if (!rc && !foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	return rc;
 }
 
@@ -996,13 +1024,16 @@ static int snapshot_get_fsname(struct snapshot_instance *si,
 	struct snapshot_target *st = si->si_mdt0;
 	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
-	int rc = 0;
-
+	int rc;
+	int foreign = 0;
+again:
+	rc = 0;
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
 		 DRSH" '"DIMPORT"; "DZFS
-		 " get -H -o value lustre:fsname "DSSNAME"'",
-		 PRSH(si, st), PIMPORT(st), PZFS(st), PSSNAME(si, st));
+		 " get -H -o value lustre:fsname "DSSNAME"' 2>/dev/null",
+		 PRSH(si, st, foreign), PIMPORT(st), PZFS(st),
+		 PSSNAME(si, st));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to get fsname: %s\n",
@@ -1014,6 +1045,11 @@ static int snapshot_get_fsname(struct snapshot_instance *si,
 		rc = -EINVAL;
 
 	pclose(fp);
+
+	if (rc && !foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	return rc;
 }
 
@@ -1023,14 +1059,18 @@ static int snapshot_get_mgsnode(struct snapshot_instance *si,
 	char buf[MAX_BUF_SIZE * 2];
 	struct snapshot_target *st;
 	FILE *fp;
-	int rc = 0;
+	int rc;
+	int foreign = 0;
 
 	st = list_entry(si->si_osts_list.next, struct snapshot_target,
 			st_list);
+again:
+	rc = 0;
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
-		 DRSH" '"DZFS" get -H -o value lustre:mgsnode "DFSNAME"'",
-		 PRSH(si, st), PZFS(st), PFSNAME(st));
+		 DRSH" '"DZFS" get -H -o value lustre:mgsnode "DFSNAME"'"
+		 " 2>/dev/null", PRSH(si, st, foreign), PZFS(st),
+		 PFSNAME(st));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to get mgsnode: %s\n",
@@ -1042,6 +1082,12 @@ static int snapshot_get_mgsnode(struct snapshot_instance *si,
 		rc = -EINVAL;
 
 	pclose(fp);
+
+	if (rc && !foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
+
 	return rc;
 }
 
@@ -1051,11 +1097,12 @@ static int snapshot_exists_check(struct snapshot_instance *si,
 	char buf[MAX_BUF_SIZE * 2];
 	FILE *fp;
 	int rc = 0;
-
+	int foreign = 0;
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
-		 DRSH" '"DZFS" list "DSSNAME" 2>/dev/null'",
-		 PRSH(si, st), PZFS(st), PSSNAME(si, st));
+		 DRSH" '"DZFS" list "DSSNAME"' 2>/dev/null",
+		 PRSH(si, st, foreign), PZFS(st), PSSNAME(si, st));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to create check: %s\n",
@@ -1067,6 +1114,11 @@ static int snapshot_exists_check(struct snapshot_instance *si,
 		rc = -EEXIST;
 
 	pclose(fp);
+
+	if (rc != -EEXIST && !foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	return rc;
 }
 
@@ -1119,14 +1171,15 @@ static int snapshot_inherit_prop(struct snapshot_instance *si,
 	FILE *fp;
 	int len = 0;
 	int rc = 0;
-
+	int foreign = 0;
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
 		 DRSH" \""DIMPORT"; "DZFS
 		 " get all "DFSNAME" | grep lustre: | grep local$ | "
 		 "awk '{ \\$1=\\\"\\\"; \\$NF=\\\"\\\"; print \\$0 }' | "
-		 "sed -e 's/^ //'\"",
-		 PRSH(si, st), PIMPORT(st), PZFS(st), PFSNAME(st));
+		 "sed -e 's/^ //'\" 2>/dev/null",
+		 PRSH(si, st, foreign), PIMPORT(st), PZFS(st), PFSNAME(st));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to list one: %s\n",
@@ -1137,7 +1190,7 @@ static int snapshot_inherit_prop(struct snapshot_instance *si,
 	while (snapshot_fgets(fp, buf, MAX_BUF_SIZE) != NULL) {
 		char *ptr;
 		char *end;
-
+		foreign = 1;
 		if (strncmp(buf, "lustre:fsname",
 			    strlen("lustre:fsname")) == 0)
 			continue;
@@ -1196,6 +1249,10 @@ static int snapshot_inherit_prop(struct snapshot_instance *si,
 	}
 
 	pclose(fp);
+	if (!foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	return len;
 }
 
@@ -1216,9 +1273,10 @@ static int __snapshot_create(struct snapshot_instance *si,
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for create snapshot "
 					 "(%s@%s <%s>) on the target "
-					 "(%s:%x:%d): %s\n",
+					 "(%s(%s):%x:%d): %s\n",
 					 fsname, si->si_ssname,
 					 si->si_comment, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -1228,7 +1286,8 @@ static int __snapshot_create(struct snapshot_instance *si,
 		if (pid == 0) {
 			char cmd[MAX_BUF_SIZE];
 			int len;
-
+			int foreign = 0;
+again:
 			memset(cmd, 0, sizeof(cmd));
 			len = scnprintf(cmd, sizeof(cmd) - 1,
 					DRSH" '"DZFS" snapshot "
@@ -1236,8 +1295,8 @@ static int __snapshot_create(struct snapshot_instance *si,
 					"-o lustre:magic=%s "
 					"-o lustre:ctime=%llu "
 					"-o lustre:mtime=%llu ",
-					PRSH(si, st), PZFS(st), fsname,
-					SNAPSHOT_MAGIC,
+					PRSH(si, st, foreign), PZFS(st),
+					fsname,	SNAPSHOT_MAGIC,
 					(unsigned long long)xtime,
 					(unsigned long long)xtime);
 			if (len <= 0)
@@ -1262,9 +1321,9 @@ static int __snapshot_create(struct snapshot_instance *si,
 			if (rc < 0) {
 				SNAPSHOT_ADD_LOG(si, "Can't filter property on "
 						 "target (%s:%x:%d): rc = %d\n",
+						 foreign ? st->st_fhost :
 						 st->st_host, st->st_role,
 						 st->st_index, rc);
-
 				exit(rc);
 			}
 
@@ -1272,7 +1331,8 @@ static int __snapshot_create(struct snapshot_instance *si,
 			if (st->st_role & SR_OST)
 				rc = snprintf(cmd + len, sizeof(cmd) - len - 1,
 					      "-o lustre:svname=%s-OST%04x "
-					      "-o lustre:mgsnode=%s "DSSNAME"'",
+					      "-o lustre:mgsnode=%s "DSSNAME"'"
+					      " 2>/dev/null",
 					      fsname, st->st_index, mgsnode,
 					      PSSNAME(si, st));
 			else if (!(st->st_role & SR_MGS) ||
@@ -1280,22 +1340,30 @@ static int __snapshot_create(struct snapshot_instance *si,
 				 si->si_mdt0 == si->si_mgs)
 				rc = snprintf(cmd + len, sizeof(cmd) - len - 1,
 					      "-o lustre:svname=%s-MDT%04x "
-					      "-o lustre:mgsnode=%s "DSSNAME"'",
+					      "-o lustre:mgsnode=%s "DSSNAME"'"
+					      " 2>/dev/null",
 					      fsname, st->st_index, mgsnode,
 					      PSSNAME(si, st));
 			else
 				/* separated MGS */
 				rc = snprintf(cmd + len, sizeof(cmd) - len - 1,
-					      DSSNAME"'", PSSNAME(si, st));
+					      DSSNAME"' 2>/dev/null",
+					      PSSNAME(si, st));
 			if (rc <= 0)
 				exit(-EOVERFLOW);
 
 			rc = snapshot_exec(cmd);
-			if (rc)
+			if (rc) {
 				SNAPSHOT_ADD_LOG(si, "Can't execute \"%s\" on "
 						 "target (%s:%x:%d): rc = %d\n",
-						 cmd, st->st_host, st->st_role,
+						 cmd, foreign ? st->st_fhost :
+						 st->st_host, st->st_role,
 						 st->st_index, rc);
+				if (!foreign && st->st_fhost) {
+					foreign = 1;
+					goto again;
+				}
+			}
 
 			exit(rc);
 		} /* end of child */
@@ -1502,8 +1570,10 @@ again1:
 		pid = fork();
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for check snapshot "
-					 "%s on the target (%s:%x:%d): %s\n",
+					 "%s on the target (%s(%s):%x:%d): "
+					 "%s\n",
 					 si->si_ssname, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -1577,8 +1647,10 @@ static int __snapshot_destroy(struct snapshot_instance *si,
 		pid = fork();
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for destroy snapshot "
-					 "%s on the target (%s:%x:%d): %s\n",
+					 "%s on the target (%s(%s):%x:%d): "
+					 "%s\n",
 					 si->si_ssname, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -1587,26 +1659,36 @@ static int __snapshot_destroy(struct snapshot_instance *si,
 		/* child */
 		if (pid == 0) {
 			char cmd[MAX_BUF_SIZE * 2];
-
+			int foreign = 0;
+again:
 			memset(cmd, 0, sizeof(cmd));
 			if (si->si_force)
 				snprintf(cmd, sizeof(cmd) - 1,
 					 DRSH" 'umount -f "DSSNAME
 					 " > /dev/null 2>&1; "DZFS
-					 " destroy -f "DSSNAME"'",
-					 PRSH(si, st), PSSNAME(si, st),
-					 PZFS(st), PSSNAME(si, st));
+					 " destroy -f "DSSNAME"'"
+					 " 2>/dev/null",
+					 PRSH(si, st, foreign),
+					 PSSNAME(si, st), PZFS(st),
+					 PSSNAME(si, st));
 			else
 				snprintf(cmd, sizeof(cmd) - 1,
-					 DRSH" '"DZFS" destroy "DSSNAME"'",
-					 PRSH(si, st), PZFS(st),
+					 DRSH" '"DZFS" destroy "DSSNAME"'"
+					 " 2>/dev/null",
+					 PRSH(si, st, foreign), PZFS(st),
 					 PSSNAME(si, st));
 			rc = snapshot_exec(cmd);
-			if (rc)
+			if (rc) {
 				SNAPSHOT_ADD_LOG(si, "Can't execute \"%s\" on "
 						 "target (%s:%x:%d): rc = %d\n",
-						 cmd, st->st_host, st->st_role,
+						 cmd, foreign ? st->st_fhost :
+						 st->st_host, st->st_role,
 						 st->st_index, rc);
+				if (!foreign && st->st_fhost) {
+					foreign = 1;
+					goto again;
+				}
+			}
 
 			exit(rc);
 		} /* end of child */
@@ -1780,9 +1862,10 @@ static int __snapshot_modify(struct snapshot_instance *si,
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for modify snapshot "
 					 "(%s|%s, <%s>) on the target "
-					 "(%s:%x:%d): %s\n",
+					 "(%s(%s):%x:%d): %s\n",
 					 si->si_ssname, si->si_new_ssname,
 					 si->si_comment, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -1791,7 +1874,8 @@ static int __snapshot_modify(struct snapshot_instance *si,
 		/* child */
 		if (pid == 0) {
 			char cmd[MAX_BUF_SIZE * 5];
-
+			int foreign = 0;
+again:
 			memset(cmd, 0, sizeof(cmd));
 			if (si->si_new_ssname && si->si_comment)
 				snprintf(cmd, sizeof(cmd) - 1,
@@ -1799,41 +1883,51 @@ static int __snapshot_modify(struct snapshot_instance *si,
 					 DSSNAME" "DSSNAME" && "DZFS
 					 " set lustre:comment=\"%s\" "DSSNAME
 					 " && "DZFS
-					 " set lustre:mtime=%llu "DSSNAME"'",
-					 PRSH(si, st), PIMPORT(st), PZFS(st),
-					 PSSNAME(si, st), PSS_NEW(si, st),
-					 PZFS(st), si->si_comment,
+					 " set lustre:mtime=%llu "DSSNAME"'"
+					 " 2>/dev/null",
+					 PRSH(si, st, foreign), PIMPORT(st),
+					 PZFS(st), PSSNAME(si, st),
 					 PSS_NEW(si, st), PZFS(st),
-					 (unsigned long long)xtime,
+					 si->si_comment, PSS_NEW(si, st),
+					 PZFS(st), (unsigned long long)xtime,
 					 PSS_NEW(si, st));
 			else if (si->si_new_ssname)
 				snprintf(cmd, sizeof(cmd) - 1,
 					 DRSH" '"DIMPORT"; "DZFS
 					 " rename "DSSNAME" "DSSNAME" && "DZFS
-					 " set lustre:mtime=%llu "DSSNAME"'",
-					 PRSH(si, st), PIMPORT(st), PZFS(st),
-					 PSSNAME(si, st), PSS_NEW(si, st),
-					 PZFS(st), (unsigned long long)xtime,
+					 " set lustre:mtime=%llu "DSSNAME"'"
+					 " 2>/dev/null",
+					 PRSH(si, st, foreign), PIMPORT(st),
+					 PZFS(st), PSSNAME(si, st),
+					 PSS_NEW(si, st), PZFS(st),
+					 (unsigned long long)xtime,
 					 PSS_NEW(si, st));
 			else if (si->si_comment)
 				snprintf(cmd, sizeof(cmd) - 1,
 					 DRSH" '"DIMPORT"; "DZFS
 					 " set lustre:comment=\"%s\" "DSSNAME
-					 " && "DZFS
-					 " set lustre:mtime=%llu "DSSNAME"'",
-					 PRSH(si, st), PIMPORT(st), PZFS(st),
-					 si->si_comment, PSSNAME(si, st),
-					 PZFS(st), (unsigned long long)xtime,
+					 " && "DZFS " set lustre:mtime=%llu "
+					 DSSNAME"' 2>/dev/null",
+					 PRSH(si, st, foreign), PIMPORT(st),
+					 PZFS(st), si->si_comment,
+					 PSSNAME(si, st), PZFS(st),
+					 (unsigned long long)xtime,
 					 PSSNAME(si, st));
 			else
 				exit(-EINVAL);
 
 			rc = snapshot_exec(cmd);
-			if (rc)
+			if (rc) {
 				SNAPSHOT_ADD_LOG(si, "Can't execute \"%s\" on "
 						 "target (%s:%x:%d): rc = %d\n",
-						 cmd, st->st_host, st->st_role,
+						 cmd, foreign ? st->st_fhost :
+						 st->st_host, st->st_role,
 						 st->st_index, rc);
+				if (!foreign && st->st_fhost) {
+					foreign = 1;
+					goto again;
+				}
+			}
 
 			exit(rc);
 		} /* end of child */
@@ -1937,14 +2031,17 @@ static int snapshot_list_one(struct snapshot_instance *si,
 	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int rc;
+	int foreign = 0;
 
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
 		 DRSH" \""DIMPORT"; "DZFS
 		 " get all "DSSNAME" | grep lustre: | grep local$ | "
 		 "awk '{ \\$1=\\\"\\\"; \\$NF=\\\"\\\"; print \\$0 }' | "
-		 "sed -e 's/^ //'\"",
-		 PRSH(si, st), PIMPORT(st), PZFS(st), PSSNAME(si, st));
+		 "sed -e 's/^ //'\" 2>/dev/null",
+		 PRSH(si, st, foreign), PIMPORT(st), PZFS(st),
+		 PSSNAME(si, st));
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to list one: %s\n",
@@ -1952,7 +2049,7 @@ static int snapshot_list_one(struct snapshot_instance *si,
 		return -errno;
 	}
 
-	if (si->si_detail) {
+	if (si->si_detail && !foreign) {
 		char name[8];
 
 		snapshot_role2name(name, st->st_role, st->st_index);
@@ -1962,6 +2059,7 @@ static int snapshot_list_one(struct snapshot_instance *si,
 	while (snapshot_fgets(fp, buf, MAX_BUF_SIZE) != NULL) {
 		__u64 xtime;
 		char *ptr;
+		foreign = 1;
 
 		if (strncmp(buf, "lustre:fsname",
 			    strlen("lustre:fsname")) == 0) {
@@ -2003,6 +2101,10 @@ static int snapshot_list_one(struct snapshot_instance *si,
 	}
 
 	pclose(fp);
+	if (!foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	rc = target_is_mounted(si, st, si->si_ssname);
 	if (rc < 0)
 		printf("status: unknown\n");
@@ -2069,13 +2171,17 @@ static int snapshot_list_all(struct snapshot_instance *si)
 	char buf[MAX_BUF_SIZE * 2];
 	FILE *fp;
 	int rc = 0;
+	int foreign = 0;
 
 	INIT_LIST_HEAD(&list_sub_items);
+again:
 	memset(buf, 0, sizeof(buf));
 	snprintf(buf, sizeof(buf) - 1,
 		 DRSH" \""DZFS" get -H -r lustre:magic "DFSNAME
-		 " | grep %s | awk '{ print \\$1 }' | cut -d@ -f2\"",
-		 PRSH(si, st), PZFS(st), PFSNAME(st), SNAPSHOT_MAGIC);
+		 " | grep %s | awk '{ print \\$1 }' | cut -d@ -f2\" "
+		 " 2>/dev/null",
+		 PRSH(si, st, foreign), PZFS(st), PFSNAME(st),
+		 SNAPSHOT_MAGIC);
 	fp = popen(buf, "r");
 	if (!fp) {
 		SNAPSHOT_ADD_LOG(si, "Popen fail to list ssnames: %s\n",
@@ -2085,6 +2191,7 @@ static int snapshot_list_all(struct snapshot_instance *si)
 
 	while (snapshot_fgets(fp, buf, MAX_BUF_SIZE) != NULL) {
 		int len = strlen(buf);
+		foreign = 1;
 
 		lsi = malloc(len + 1 + sizeof(struct list_sub_item));
 		if (!lsi) {
@@ -2098,6 +2205,10 @@ static int snapshot_list_all(struct snapshot_instance *si)
 	}
 
 	pclose(fp);
+	if (!foreign && st->st_fhost) {
+		foreign = 1;
+		goto again;
+	}
 	while (!list_empty(&list_sub_items)) {
 		lsi = list_entry(list_sub_items.next,
 				 struct list_sub_item, lsi_list);
@@ -2192,6 +2303,7 @@ static int snapshot_mount_target(struct snapshot_instance *si,
 	char cmd[MAX_BUF_SIZE * 2];
 	char name[8];
 	int rc;
+	int foreign = 0;
 
 	rc = target_is_mounted(si, st, si->si_ssname);
 	if (rc < 0)
@@ -2200,20 +2312,27 @@ static int snapshot_mount_target(struct snapshot_instance *si,
 	if (rc > 0)
 		return -ESRCH;
 
-	memset(cmd, 0, sizeof(cmd));
 	memset(name, 0, sizeof(name));
 	snapshot_role2name(name, st->st_role, st->st_index);
+again:
+	memset(cmd, 0, sizeof(cmd));
 	snprintf(cmd, sizeof(cmd) - 1,
 		 DRSH" '"DIMPORT"; mkdir -p /mnt/%s_%s && mount -t lustre "
-		 "-o rdonly_dev%s "DSSNAME" /mnt/%s_%s'",
-		 PRSH(si, st), PIMPORT(st), si->si_ssname, name,
+		 "-o rdonly_dev%s "DSSNAME" /mnt/%s_%s' 2>/dev/null",
+		 PRSH(si, st, foreign), PIMPORT(st), si->si_ssname, name,
 		 st != si->si_mdt0 ? "" : optstr, PSSNAME(si, st),
 		 si->si_ssname, name);
 	rc = snapshot_exec(cmd);
-	if (rc)
+	if (rc) {
 		SNAPSHOT_ADD_LOG(si, "Can't execute \"%s\" on the target "
-				 "(%s:%x:%d): rc = %d\n", cmd, st->st_host,
+				 "(%s:%x:%d): rc = %d\n",
+				 cmd, foreign ? st->st_fhost : st->st_host,
 				 st->st_role, st->st_index, rc);
+		if (!foreign && st->st_fhost) {
+			foreign = 1;
+			goto again;
+		}
+	}
 
 	return rc;
 }
@@ -2236,8 +2355,9 @@ static int __snapshot_mount(struct snapshot_instance *si,
 		pid = fork();
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for mount snapshot "
-					 "%s on target (%s:%x:%d): %s\n",
+					 "%s on target (%s(%s):%x:%d): %s\n",
 					 si->si_ssname, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -2435,8 +2555,9 @@ static int __snapshot_umount(struct snapshot_instance *si,
 		pid = fork();
 		if (pid < 0) {
 			SNAPSHOT_ADD_LOG(si, "Can't fork for umount snapshot "
-					 "%s on target (%s:%x:%d): %s\n",
+					 "%s on target (%s(%s):%x:%d): %s\n",
 					 si->si_ssname, st->st_host,
+					 st->st_fhost ? st->st_fhost : "none",
 					 st->st_role, st->st_index,
 					 strerror(errno));
 			return pid;
@@ -2445,6 +2566,7 @@ static int __snapshot_umount(struct snapshot_instance *si,
 		/* child */
 		if (pid == 0) {
 			char cmd[MAX_BUF_SIZE];
+			int foreign = 0;
 
 			rc = target_is_mounted(si, st, si->si_ssname);
 			if (rc < 0)
@@ -2452,12 +2574,16 @@ static int __snapshot_umount(struct snapshot_instance *si,
 
 			if (!rc)
 				exit(-ESRCH);
-
+again:
 			memset(cmd, 0, sizeof(cmd));
 			snprintf(cmd, sizeof(cmd) - 1,
-				 DRSH" 'umount "DSSNAME"'",
-				 PRSH(si, st), PSSNAME(si, st));
+				 DRSH" 'umount "DSSNAME"' 2>/dev/null",
+				 PRSH(si, st, foreign), PSSNAME(si, st));
 			rc = snapshot_exec(cmd);
+			if (rc && !foreign && st->st_fhost) {
+				foreign = 1;
+				goto again;
+			}
 
 			exit(rc);
 		}
