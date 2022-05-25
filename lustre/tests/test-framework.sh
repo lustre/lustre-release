@@ -6492,6 +6492,24 @@ skip_eopnotsupp() {
 	skip $retstr
 }
 
+# Add a list of tests to ALWAYS_EXCEPT due to an issue.
+# Usage: always_except LU-4815 23 42q ...
+#
+function always_except() {
+	local issue="${1:-}" # single jira style issue ("LU-4815")
+	local test_num
+
+	shift
+
+	if ! [[ "$issue" =~ ^[[:upper:]]+-[[:digit:]]+$ ]]; then
+		error "always_except: invalid issue '$issue' for tests '$*'"
+	fi
+
+	for test_num in "$@"; do
+		ALWAYS_EXCEPT+=" $test_num"
+	done
+}
+
 build_test_filter() {
 	EXCEPT="$EXCEPT $(testslist_filter)"
 
