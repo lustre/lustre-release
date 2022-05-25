@@ -676,12 +676,12 @@ LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS
 LC_CONFIG_CRYPTO
+LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 
 AS_IF([test "x$enable_utils" = xyes], [
-	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
 	LC_FID2PATH_ANON_UNION
