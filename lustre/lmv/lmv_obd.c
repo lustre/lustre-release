@@ -509,24 +509,33 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 					  mdc_obd->obd_name);
 	}
 
+	rc = lu_qos_del_tgt(&lmv->lmv_qos, tgt);
+	if (rc)
+		CERROR("%s: Can't del target from QoS table: rc = %d\n",
+		       tgt->ltd_exp->exp_obd->obd_name, rc);
+
+	rc = fld_client_del_target(&lmv->lmv_fld, tgt->ltd_index);
+	if (rc)
+		CERROR("%s: Can't del fld targets: rc = %d\n",
+		       tgt->ltd_exp->exp_obd->obd_name, rc);
+
 	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
 	if (rc)
-		CERROR("Can't finalize fids factory\n");
+		CERROR("%s: Can't finalize fids factory: rc = %d\n",
+		       tgt->ltd_exp->exp_obd->obd_name, rc);
 
 	CDEBUG(D_INFO, "Disconnected from %s(%s) successfully\n",
 	       tgt->ltd_exp->exp_obd->obd_name,
 	       tgt->ltd_exp->exp_obd->obd_uuid.uuid);
 
+	lmv_activate_target(lmv, tgt, 0);
 	obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
 	rc = obd_disconnect(tgt->ltd_exp);
 	if (rc) {
-		if (tgt->ltd_active) {
-			CERROR("Target %s disconnect error %d\n",
-			       tgt->ltd_uuid.uuid, rc);
-		}
+		CERROR("%s: Target %s disconnect error: rc = %d\n",
+		       tgt->ltd_exp->exp_obd->obd_name,
+		       tgt->ltd_uuid.uuid, rc);
 	}
-
-	lmv_activate_target(lmv, tgt, 0);
 	tgt->ltd_exp = NULL;
 	RETURN(0);
 }

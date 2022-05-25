@@ -654,6 +654,16 @@ int client_connect_import(const struct lu_env *env,
 
 	LASSERT(obd->obd_namespace);
 
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state == LUSTRE_IMP_CLOSED && imp->imp_deactive) {
+		/* need to reactivate import if trying to connect
+		 * to a previously disconnected
+		 */
+		imp->imp_deactive = 0;
+		imp->imp_invalid = 0;
+	}
+	spin_unlock(&imp->imp_lock);
+
 	imp->imp_dlm_handle = conn;
 	rc = ptlrpc_init_import(imp);
 	if (rc != 0)
@@ -694,8 +704,7 @@ out_ldlm:
 out_sem:
 	up_write(&cli->cl_sem);
 
-	if (!rc && localdata) {
-		LASSERT(cli->cl_cache == NULL); /* only once */
+	if (!rc && localdata && !cli->cl_cache) {
 		cli->cl_cache = (struct cl_client_cache *)localdata;
 		cl_cache_incref(cli->cl_cache);
 		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;

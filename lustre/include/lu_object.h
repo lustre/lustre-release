@@ -1738,6 +1738,7 @@ struct lu_tgt_descs {
 
 u64 lu_prandom_u64_max(u64 ep_ro);
 int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
+int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt);
 
 int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt);

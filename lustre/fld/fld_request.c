@@ -222,6 +222,7 @@ int fld_client_del_target(struct lu_client_fld *fld, u64 idx)
 	spin_unlock(&fld->lcf_lock);
 	RETURN(-ENOENT);
 }
+EXPORT_SYMBOL(fld_client_del_target);
 
 struct dentry *fld_debugfs_dir;
 

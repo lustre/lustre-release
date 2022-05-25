@@ -78,7 +78,7 @@ map UIDs, gid to map GIDs, both to map UIDs and GIDs, and projid to map PROJIDs.
 readonly_mount
 .RS 4
 Defaults to off, which lets clients mount in read-write mode. If set to 1,
-clients are only allowed to mount in read-only mount, and get -EROFS otherwise.
+clients are forced to a read-only mount if not specified explicitly.
 .RE
 
 .RE

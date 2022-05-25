@@ -5092,14 +5092,26 @@ test_61() {
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property readonly_mount --value 1
 	wait_nm_sync default readonly_mount
-	mount_client $MOUNT ${MOUNT_OPTS},rw &&
-		error "mount '-o rw' should have failed"
+	mount_client $MOUNT ${MOUNT_OPTS} ||
+		error "mount failed"
+	findmnt $MOUNT --output=options -n -f | grep -q "ro," ||
+		error "mount should have been turned into ro"
+	cat $testfile || error "read $testfile failed (1)"
+	echo b > $testfile && error "write $testfile should fail (1)"
+	umount_client $MOUNT || error "umount $MOUNT failed (3)"
+	mount_client $MOUNT ${MOUNT_OPTS},rw ||
+		error "mount '-o rw' failed"
+	findmnt $MOUNT --output=options -n -f | grep -q "ro," ||
+		error "mount rw should have been turned into ro"
+	cat $testfile || error "read $testfile failed (2)"
+	echo b > $testfile && error "write $testfile should fail (2)"
+	umount_client $MOUNT || error "umount $MOUNT failed (4)"
 	mount_client $MOUNT ${MOUNT_OPTS},ro ||
 		error "mount '-o ro' failed"
 	wait_ssk
-	cat $testfile || error "read $testfile failed"
-	echo b > $testfile && error "write $testfile should fail"
-	umount_client $MOUNT || error "umount $MOUNT failed (3)"
+	cat $testfile || error "read $testfile failed (3)"
+	echo b > $testfile && error "write $testfile should fail (3)"
+	umount_client $MOUNT || error "umount $MOUNT failed (5)"
 }
 run_test 61 "Nodemap enforces read-only mount"
 

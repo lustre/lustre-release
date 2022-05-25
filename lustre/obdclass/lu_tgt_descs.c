@@ -175,7 +175,7 @@ EXPORT_SYMBOL(lu_qos_add_tgt);
  * \retval 0			on success
  * \retval -ENOENT		if no server was found
  */
-static int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
+int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 {
 	struct lu_svr_qos *svr;
 	int rc = 0;
@@ -187,12 +187,12 @@ static int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 	if (!svr)
 		GOTO(out, rc = -ENOENT);
 
+	ltd->ltd_qos.ltq_svr = NULL;
 	svr->lsq_tgt_count--;
 	if (svr->lsq_tgt_count == 0) {
 		CDEBUG(D_OTHER, "removing server %s\n",
 		       obd_uuid2str(&svr->lsq_uuid));
 		list_del(&svr->lsq_svr_list);
-		ltd->ltd_qos.ltq_svr = NULL;
 		OBD_FREE_PTR(svr);
 	}
 
@@ -204,6 +204,7 @@ out:
 	up_write(&qos->lq_rw_sem);
 	RETURN(rc);
 }
+EXPORT_SYMBOL(lu_qos_del_tgt);
 
 static inline __u64 tgt_statfs_bavail(struct lu_tgt_desc *tgt)
 {
