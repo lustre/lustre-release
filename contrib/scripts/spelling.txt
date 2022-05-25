@@ -182,6 +182,7 @@ mti_spec||mdi_spec
 mti_tattr||mdi_tattr
 mti_tpattr||mdi_tpattr
 mti_xattr_buf||mdi_xattr_buf
+nla_strlcpy|nla_strscpy
 OS_STATE_DEGRADED||OS_STATFS_DEGRADED
 OS_STATE_READONLY||OS_STATFS_READONLY
 OS_STATE_NOPRECREATE||OS_STATFS_NOPRECREATE
