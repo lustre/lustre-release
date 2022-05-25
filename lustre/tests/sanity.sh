@@ -39,61 +39,47 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EXCEPT "
-# bug number for skipped test: LU-9693 LU-6493 LU-9693
-ALWAYS_EXCEPT+="               42a     42b     42c "
-# bug number:    LU-8411 LU-9054 LU-14541
-ALWAYS_EXCEPT+=" 407     312     277 "
+always_except LU-9693  42a 42c
+always_except LU-6493  42b
+always_except LU-14541 277
+always_except LU-9054  312
+always_except LU-8411  407
 
 if $SHARED_KEY; then
-	# bug number:    LU-14181 LU-14181
-	ALWAYS_EXCEPT+=" 64e      64f"
-fi
-
-selinux_status=$(getenforce)
-if [ "$selinux_status" != "Disabled" ]; then
-	# bug number:
-	ALWAYS_EXCEPT+=""
+	always_except LU-14181 64e 64f
 fi
 
 # skip the grant tests for ARM until they are fixed
 if [[ $(uname -m) = aarch64 ]]; then
-	# bug number:	 LU-11671
-	ALWAYS_EXCEPT+=" 45"
-	# bug number:	 LU-14067 LU-14067
-	ALWAYS_EXCEPT+=" 400a	  400b"
+	always_except LU-11671 45
+	always_except LU-14067 400a 400b
 fi
 
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
-	# bug number:	LU-12661
-	ALWAYS_EXCEPT+=" 817"
+	always_except LU-12661 817
 fi
 # skip cgroup tests on RHEL8.1 kernels until they are fixed
 if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
       $LINUX_VERSION_CODE <  $(version_code 5.4.0) )); then
-	# bug number:	LU-13063
-	ALWAYS_EXCEPT+=" 411"
+	always_except LU-13063 411
 fi
 
 #skip ACL tests on RHEL8 and SLES15 until tests changed to use other users
 if (( $(egrep -cw "^bin|^daemon" /etc/passwd) < 2 )); then
-	# bug number:   LU-15259 LU-15259
-	ALWAYS_EXCEPT+=" 103a  125   154a"
+	always_except LU-15259 103a 125 154a
 fi
 
 #                                  5              12     8   12  15   (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
-	# bug number for skipped test:
-	ALWAYS_EXCEPT+="              "
 	#                                               13    (min)"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi
 
 if [ "$ost1_FSTYPE" = "zfs" ]; then
-	# bug number for skipped test:	LU-1941  LU-1941  LU-1941  LU-1941
-	ALWAYS_EXCEPT+="                130a 130b 130c 130d 130e 130f 130g"
+	always_except LU-1941 130a 130b 130c 130d 130e 130f 130g
 fi
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
@@ -116,11 +102,10 @@ sles_version_code()
 if [ -r /etc/SuSE-release ]; then
 	sles_version=$(sles_version_code)
 	[ $sles_version -lt $(version_code 11.4.0) ] &&
-		# bug number for skipped test: LU-4341
-		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  170"
+		always_except LU-4341 170
+
 	[ $sles_version -lt $(version_code 12.0.0) ] &&
-		# bug number for skipped test: LU-3703
-		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  234"
+		always_except LU-3703 234
 elif [ -r /etc/os-release ]; then
 	if grep -qi ubuntu /etc/os-release; then
 		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
@@ -129,9 +114,8 @@ elif [ -r /etc/os-release ]; then
 						awk '{ print $1 }'))
 
 		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
-			# bug number for skipped test:
-			#                LU-10334 LU-10366
-			ALWAYS_EXCEPT+=" 103a	  410"
+			always_except LU-10334 103a
+			always_except LU-10366 410
 		fi
 	fi
 fi

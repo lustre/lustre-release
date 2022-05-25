@@ -1,7 +1,7 @@
 # The format of each line is:
 # mistake||correction
 #
-libcfs_debug_vmsg2|libcfs_debug_msg
+ALWAYS_EXCEPT||always_except
 alloca||malloc
 cfs_atomic_add||atomic_add
 cfs_atomic_add_return||atomic_add_return
@@ -122,6 +122,7 @@ ldlm_policy_res_t||enum ldlm_policy_res
 ldlm_side_t||enum ldlm_side
 ldlm_type_t||enum ldlm_type
 ldlm_wire_policy_data_t||union ldlm_wire_policy_data
+libcfs_debug_vmsg2||libcfs_debug_msg
 lnet_acceptor_connreq_t||struct lnet_acceptor_connreq
 lnet_counters_t||struct lnet_counters
 lnet_handle_wire_t||struct lnet_handle_wire
