@@ -951,7 +951,7 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		read_lock(&tgt->lut_sptlrpc_lock);
 		sptlrpc_target_choose_flavor(&tgt->lut_sptlrpc_rset,
 					     req->rq_sp_from,
-					     lnet_nid_to_nid4(&req->rq_peer.nid),
+					     &req->rq_peer.nid,
 					     &flvr);
 		read_unlock(&tgt->lut_sptlrpc_lock);
 

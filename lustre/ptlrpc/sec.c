@@ -2140,7 +2140,7 @@ void sptlrpc_target_update_exp_flavor(struct obd_device *obd,
 		 */
 		spin_lock(&exp->exp_lock);
 		sptlrpc_target_choose_flavor(rset, exp->exp_sp_peer,
-					     lnet_nid_to_nid4(&exp->exp_connection->c_peer.nid),
+					     &exp->exp_connection->c_peer.nid,
 					     &new_flvr);
 		if (exp->exp_flvr_changed ||
 		    !flavor_equal(&new_flvr, &exp->exp_flvr)) {

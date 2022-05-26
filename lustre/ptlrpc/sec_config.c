@@ -397,7 +397,7 @@ EXPORT_SYMBOL(sptlrpc_rule_set_merge);
 int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 			    enum lustre_sec_part from,
 			    enum lustre_sec_part to,
-			    lnet_nid_t nid,
+			    struct lnet_nid *nid,
 			    struct sptlrpc_flavor *sf)
 {
 	struct sptlrpc_rule *r;
@@ -406,9 +406,9 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 	for (n = 0; n < rset->srs_nrule; n++) {
 		r = &rset->srs_rules[n];
 
-		if (LNET_NIDNET(nid) != LNET_NET_ANY &&
+		if (!LNET_NID_IS_ANY(nid) &&
 		    r->sr_netid != LNET_NET_ANY &&
-		    LNET_NIDNET(nid) != r->sr_netid)
+		    __be16_to_cpu(nid->nid_num) != r->sr_netid)
 			continue;
 
 		if (from != LUSTRE_SP_ANY && r->sr_from != LUSTRE_SP_ANY &&
@@ -858,13 +858,13 @@ void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
 	conf_tgt = sptlrpc_conf_get_tgt(conf, name, 0);
 	if (conf_tgt) {
 		rc = sptlrpc_rule_set_choose(&conf_tgt->sct_rset,
-					     from, to, lnet_nid_to_nid4(nid), sf);
+					     from, to, nid, sf);
 		if (rc)
 			goto out;
 	}
 
 	rc = sptlrpc_rule_set_choose(&conf->sc_rset, from, to,
-				     lnet_nid_to_nid4(nid), sf);
+				     nid, sf);
 out:
 	mutex_unlock(&sptlrpc_conf_lock);
 
@@ -880,7 +880,7 @@ out:
  */
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
 				  enum lustre_sec_part from,
-				  lnet_nid_t nid,
+				  struct lnet_nid *nid,
 				  struct sptlrpc_flavor *sf)
 {
 	if (sptlrpc_rule_set_choose(rset, from, LUSTRE_SP_ANY, nid, sf) == 0)

@@ -376,7 +376,7 @@ int  sptlrpc_rule_set_merge(struct sptlrpc_rule_set *set,
 int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 			    enum lustre_sec_part from,
 			    enum lustre_sec_part to,
-			    lnet_nid_t nid,
+			    struct lnet_nid *nid,
 			    struct sptlrpc_flavor *sf);
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *set);
 
@@ -390,7 +390,7 @@ int  sptlrpc_conf_target_get_rules(struct obd_device *obd,
 				   struct sptlrpc_rule_set *rset);
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
 				  enum lustre_sec_part from,
-				  lnet_nid_t nid,
+				  struct lnet_nid *nid,
 				  struct sptlrpc_flavor *flavor);
 
 /* The maximum length of security payload. 1024 is enough for Kerberos 5,
