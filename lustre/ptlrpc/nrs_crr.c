@@ -111,13 +111,13 @@ static u32 nrs_crrn_hashfn(const void *data, u32 len, u32 seed)
 static int nrs_crrn_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 {
 	const struct nrs_crrn_client *cli = obj;
-	const lnet_nid_t *nid = arg->key;
+	const struct lnet_nid *nid = arg->key;
 
-	return *nid != cli->cc_nid;
+	return nid_same(nid, &cli->cc_nid) ? 0 : -ESRCH;
 }
 
 static const struct rhashtable_params nrs_crrn_hash_params = {
-	.key_len        = sizeof(lnet_nid_t),
+	.key_len	= sizeof(struct lnet_nid),
 	.key_offset	= offsetof(struct nrs_crrn_client, cc_nid),
 	.head_offset	= offsetof(struct nrs_crrn_client, cc_rhead),
 	.hashfn		= nrs_crrn_hashfn,
@@ -130,7 +130,7 @@ static void nrs_crrn_exit(void *vcli, void *data)
 
 	LASSERTF(atomic_read(&cli->cc_ref) == 0,
 		 "Busy CRR-N object from client with NID %s, with %d refs\n",
-		 libcfs_nid2str(cli->cc_nid), atomic_read(&cli->cc_ref));
+		 libcfs_nidstr(&cli->cc_nid), atomic_read(&cli->cc_ref));
 
 	OBD_FREE_PTR(cli);
 }
@@ -293,7 +293,6 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_crrn_client	*cli;
 	struct nrs_crrn_client	*tmp;
 	struct ptlrpc_request	*req;
-	lnet_nid_t nid4;
 
 	if (parent == NULL) {
 		*resp = &((struct nrs_crrn_net *)policy->pol_private)->cn_res;
@@ -302,8 +301,7 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 
 	net = container_of(parent, struct nrs_crrn_net, cn_res);
 	req = container_of(nrq, struct ptlrpc_request, rq_nrq);
-	nid4 = lnet_nid_to_nid4(&req->rq_peer.nid);
-	cli = rhashtable_lookup_fast(&net->cn_cli_hash, &nid4,
+	cli = rhashtable_lookup_fast(&net->cn_cli_hash, &req->rq_peer.nid,
 				     nrs_crrn_hash_params);
 	if (cli)
 		goto out;
@@ -313,7 +311,7 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 	if (cli == NULL)
 		return -ENOMEM;
 
-	cli->cc_nid = nid4;
+	cli->cc_nid = req->rq_peer.nid;
 
 	atomic_set(&cli->cc_ref, 0);
 

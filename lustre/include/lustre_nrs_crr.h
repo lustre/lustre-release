@@ -71,7 +71,7 @@ struct nrs_crrn_net {
 struct nrs_crrn_client {
 	struct ptlrpc_nrs_resource	cc_res;
 	struct rhash_head		cc_rhead;
-	lnet_nid_t			cc_nid;
+	struct lnet_nid			cc_nid;
 	/**
 	 * The round number against which this client is currently scheduling
 	 * requests.
