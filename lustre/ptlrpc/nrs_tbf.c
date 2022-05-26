@@ -1051,19 +1051,19 @@ static unsigned nrs_tbf_nid_hop_hash(struct cfs_hash *hs, const void *key,
 
 static int nrs_tbf_nid_hop_keycmp(const void *key, struct hlist_node *hnode)
 {
-	lnet_nid_t	      *nid = (lnet_nid_t *)key;
+	const struct lnet_nid *nid = key;
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
-	return *nid == cli->tc_nid;
+	return nid_same(nid, &cli->tc_nid);
 }
 
 static void *nrs_tbf_nid_hop_key(struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
 	return &cli->tc_nid;
 }
@@ -1071,8 +1071,8 @@ static void *nrs_tbf_nid_hop_key(struct hlist_node *hnode)
 static void nrs_tbf_nid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
 	atomic_inc(&cli->tc_ref);
 }
@@ -1080,8 +1080,8 @@ static void nrs_tbf_nid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 static void nrs_tbf_nid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
 	atomic_dec(&cli->tc_ref);
 }
@@ -1089,12 +1089,12 @@ static void nrs_tbf_nid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 static void nrs_tbf_nid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
 	LASSERTF(atomic_read(&cli->tc_ref) == 0,
 		 "Busy TBF object from client with NID %s, with %d refs\n",
-		 libcfs_nid2str(cli->tc_nid), atomic_read(&cli->tc_ref));
+		 libcfs_nidstr(&cli->tc_nid), atomic_read(&cli->tc_ref));
 
 	nrs_tbf_cli_fini(cli);
 }
@@ -1172,7 +1172,7 @@ static void
 nrs_tbf_nid_cli_init(struct nrs_tbf_client *cli,
 			     struct ptlrpc_request *req)
 {
-	cli->tc_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
+	cli->tc_nid = req->rq_peer.nid;
 }
 
 static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
@@ -1217,10 +1217,7 @@ static int
 nrs_tbf_nid_rule_match(struct nrs_tbf_rule *rule,
 		       struct nrs_tbf_client *cli)
 {
-	struct lnet_nid nid;
-
-	lnet_nid4_to_nid(cli->tc_nid, &nid);
-	return cfs_match_nid(&nid, &rule->tr_nids);
+	return cfs_match_nid(&cli->tc_nid, &rule->tr_nids);
 }
 
 static void nrs_tbf_nid_rule_fini(struct nrs_tbf_rule *rule)
@@ -1656,7 +1653,7 @@ static inline void nrs_tbf_cli_gen_key(struct nrs_tbf_client *cli,
 		INIT_LIST_HEAD(&cli->tc_lru);
 		strlcpy(cli->tc_key, keystr, sizeof(cli->tc_key));
 		strlcpy(cli->tc_jobid, jobid, sizeof(cli->tc_jobid));
-		cli->tc_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
+		cli->tc_nid = req->rq_peer.nid;
 		cli->tc_opcode = opc;
 		cli->tc_id = id;
 	}
@@ -1984,12 +1981,9 @@ nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 			 struct nrs_tbf_rule *rule,
 			 struct nrs_tbf_client *cli)
 {
-	struct lnet_nid nid;
-
 	switch (expr->te_field) {
 	case NRS_TBF_FIELD_NID:
-		lnet_nid4_to_nid(cli->tc_nid, &nid);
-		return cfs_match_nid(&nid, &expr->te_cond);
+		return cfs_match_nid(&cli->tc_nid, &expr->te_cond);
 	case NRS_TBF_FIELD_JOBID:
 		return nrs_tbf_jobid_list_match(&expr->te_cond, cli->tc_jobid);
 	case NRS_TBF_FIELD_OPCODE:

@@ -82,7 +82,7 @@ struct nrs_tbf_client {
 	/** Node in the hash table. */
 	struct hlist_node		 tc_hnode;
 	/** NID of the client. */
-	lnet_nid_t			 tc_nid;
+	struct lnet_nid			 tc_nid;
 	/** Jobid of the client. */
 	char				 tc_jobid[LUSTRE_JOBID_SIZE];
 	/** opcode of the client. */
