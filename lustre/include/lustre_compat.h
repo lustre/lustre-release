@@ -43,7 +43,6 @@
 #include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
-
 #include <libcfs/linux/linux-fs.h>
 #include <obd_support.h>
 
@@ -404,85 +403,6 @@ static inline struct timespec current_time(struct inode *inode)
 #ifndef smp_store_mb
 #define smp_store_mb(var, value)	set_mb(var, value)
 #endif
-
-#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
-static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
-{
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
-	return bi->interval_exp ? 1 << bi->interval_exp : 0;
-#elif defined(HAVE_INTERVAL_BLK_INTEGRITY)
-	return bi->interval;
-#else
-	return bi->sector_size;
-#endif /* !HAVE_INTERVAL_EXP_BLK_INTEGRITY */
-}
-
-static inline const char *blk_integrity_name(struct blk_integrity *bi)
-{
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
-	return bi->profile->name;
-#else
-	return bi->name;
-#endif
-}
-
-static inline unsigned int bip_size(struct bio_integrity_payload *bip)
-{
-#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
-	return bip->bip_iter.bi_size;
-#else
-	return bip->bip_size;
-#endif
-}
-#else /* !CONFIG_BLK_DEV_INTEGRITY */
-static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
-{
-	return 0;
-}
-static inline const char *blk_integrity_name(struct blk_integrity *bi)
-{
-	/* gcc8 dislikes when strcmp() is called against NULL */
-	return "";
-}
-#endif /* !CONFIG_BLK_DEV_INTEGRITY */
-
-#ifndef INTEGRITY_FLAG_READ
-#define INTEGRITY_FLAG_READ BLK_INTEGRITY_VERIFY
-#endif
-
-#ifndef INTEGRITY_FLAG_WRITE
-#define INTEGRITY_FLAG_WRITE BLK_INTEGRITY_GENERATE
-#endif
-
-static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
-{
-#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
-	struct blk_integrity *bi = bdev_get_integrity(bdev);
-
-	if (bi == NULL)
-		return false;
-
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
-	if (rw == 0 && bi->profile->verify_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_READ))
-		return true;
-
-	if (rw == 1 && bi->profile->generate_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_WRITE))
-		return true;
-#else
-	if (rw == 0 && bi->verify_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_READ))
-		return true;
-
-	if (rw == 1 && bi->generate_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_WRITE))
-		return true;
-#endif /* !HAVE_INTERVAL_EXP_BLK_INTEGRITY */
-#endif /* !CONFIG_BLK_DEV_INTEGRITY */
-
-	return false;
-}
 
 #ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
 #define ll_pagevec_init(pvec, n) pagevec_init(pvec)
