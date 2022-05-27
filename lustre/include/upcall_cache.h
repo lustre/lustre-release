@@ -65,7 +65,7 @@
 struct upcall_cache_entry;
 
 struct md_perm {
-	lnet_nid_t      mp_nid;
+	struct lnet_nid	mp_nid;
 	uint32_t	mp_perm;
 };
 

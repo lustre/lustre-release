@@ -167,7 +167,8 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 		}
 
 		for (i = 0; i < data->idd_nperms; i++) {
-			perms[i].mp_nid = data->idd_perms[i].pdd_nid;
+			lnet_nid4_to_nid(data->idd_perms[i].pdd_nid,
+					 &perms[i].mp_nid);
 			perms[i].mp_perm = data->idd_perms[i].pdd_perm;
 		}
 	}
@@ -233,26 +234,23 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
 __u32 mdt_identity_get_perm(struct md_identity *identity, struct lnet_nid *nid)
 {
 	struct md_perm *perm;
-	lnet_nid_t nid4;
 	int i;
 
 	if (!identity)
 		return CFS_SETGRP_PERM;
 
-	if (!nid_is_nid4(nid))
-		return CFS_SETGRP_PERM;
-	nid4 = lnet_nid_to_nid4(nid);
 	perm = identity->mi_perms;
 	/* check exactly matched nid first */
 	for (i = identity->mi_nperms - 1; i > 0; i--) {
-		if (perm[i].mp_nid != nid4)
+		if (!nid_same(&perm[i].mp_nid, nid))
 			continue;
 		return perm[i].mp_perm;
 	}
 
 	/* check LNET_NID_ANY then */
 	if ((identity->mi_nperms > 0) &&
-	    ((perm[0].mp_nid == nid4) || (perm[0].mp_nid == LNET_NID_ANY)))
+	    ((nid_same(&perm[0].mp_nid, nid)) ||
+	     (LNET_NID_IS_ANY(&perm[0].mp_nid))))
 		return perm[0].mp_perm;
 
 	/* return default last */
