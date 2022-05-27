@@ -64,7 +64,7 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 fi
 
 #                                  5              12     8   12  15   (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
 	#                                               13    (min)"
@@ -12248,119 +12248,6 @@ test_110() {
 	rm -rf $DIR/$tdir
 }
 run_test 110 "filename length checking"
-
-#
-# Purpose: To verify dynamic thread (OSS) creation.
-#
-test_115() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	remote_ost_nodsh && skip "remote OST with nodsh"
-
-	# Lustre does not stop service threads once they are started.
-	# Reset number of running threads to default.
-	stopall
-	setupall
-
-	local OSTIO_pre
-	local save_params="$TMP/sanity-$TESTNAME.parameters"
-
-	# Get ll_ost_io count before I/O
-	OSTIO_pre=$(do_facet ost1 \
-		"$LCTL get_param ost.OSS.ost_io.threads_started | cut -d= -f2")
-	# Exit if lustre is not running (ll_ost_io not running).
-	[ -z "$OSTIO_pre" ] && error "no OSS threads"
-
-	echo "Starting with $OSTIO_pre threads"
-	local thread_max=$((OSTIO_pre * 2))
-	local rpc_in_flight=$((thread_max * 2))
-	# this is limited to OSC_MAX_RIF_MAX (256)
-	[ $rpc_in_flight -gt 256 ] && rpc_in_flight=256
-	thread_max=$((rpc_in_flight / 2))
-	[ $thread_max -le $OSTIO_pre ] && skip "Too many ost_io threads" &&
-		return
-
-	# Number of I/O Process proposed to be started.
-	local nfiles
-	local facets=$(get_facets OST)
-
-	save_lustre_params client "osc.*OST*.max_rpcs_in_flight" > $save_params
-	save_lustre_params $facets "ost.OSS.ost_io.threads_max" >> $save_params
-
-	# Set in_flight to $rpc_in_flight
-	$LCTL set_param osc.*OST*.max_rpcs_in_flight=$rpc_in_flight ||
-		error "Failed to set max_rpcs_in_flight to $rpc_in_flight"
-	nfiles=${rpc_in_flight}
-	# Set ost thread_max to $thread_max
-	do_facet ost1 "$LCTL set_param ost.OSS.ost_io.threads_max=$thread_max"
-
-	# 5 Minutes should be sufficient for max number of OSS
-	# threads(thread_max) to be created.
-	local timeout=300
-
-	# Start I/O.
-	local WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
-	test_mkdir $DIR/$tdir
-	for i in $(seq $nfiles); do
-		local file=$DIR/$tdir/${tfile}-$i
-		$LFS setstripe -c -1 -i 0 $file
-		($WTL $file $timeout)&
-	done
-
-	# I/O Started - Wait for thread_started to reach thread_max or report
-	# error if thread_started is more than thread_max.
-	echo "Waiting for thread_started to reach thread_max"
-	local thread_started=0
-	local end_time=$((SECONDS + timeout))
-
-	while [ $SECONDS -le $end_time ] ; do
-		echo -n "."
-		# Get ost i/o thread_started count.
-		thread_started=$(do_facet ost1 \
-			"$LCTL get_param \
-			ost.OSS.ost_io.threads_started | cut -d= -f2")
-		# Break out if thread_started is equal/greater than thread_max
-		if [[ $thread_started -ge $thread_max ]]; then
-			echo ll_ost_io thread_started $thread_started, \
-				equal/greater than thread_max $thread_max
-			break
-		fi
-		sleep 1
-	done
-
-	# Cleanup - We have the numbers, Kill i/o jobs if running.
-	jobcount=($(jobs -p))
-	for i in $(seq 0 $((${#jobcount[@]}-1)))
-	do
-		kill -9 ${jobcount[$i]}
-		if [ $? -ne 0 ] ; then
-			echo Warning: \
-			Failed to Kill \'WTL\(I/O\)\' with pid ${jobcount[$i]}
-		fi
-	done
-
-	# Cleanup files left by WTL binary.
-	for i in $(seq $nfiles); do
-		local file=$DIR/$tdir/${tfile}-$i
-		rm -rf $file
-		if [ $? -ne 0 ] ; then
-			echo "Warning: Failed to delete file $file"
-		fi
-	done
-
-	restore_lustre_params <$save_params
-	rm -f $save_params || echo "Warning: delete file '$save_params' failed"
-
-	# Error out if no new thread has started or Thread started is greater
-	# than thread max.
-	if [[ $thread_started -le $OSTIO_pre ||
-			$thread_started -gt $thread_max ]]; then
-		error "ll_ost_io: thread_started $thread_started" \
-		      "OSTIO_pre $OSTIO_pre, thread_max $thread_max." \
-		      "No new thread started or thread started greater " \
-		      "than thread_max."
-	fi
-}
-run_test 115 "verify dynamic thread creation===================="
 
 test_116a() { # was previously test_116()
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
@@ -27827,72 +27714,9 @@ test_801c() {
 }
 run_test 801c "rescan barrier bitmap"
 
-saved_MGS_MOUNT_OPTS=$MGS_MOUNT_OPTS
-saved_MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS
-saved_OST_MOUNT_OPTS=$OST_MOUNT_OPTS
-saved_MOUNT_OPTS=$MOUNT_OPTS
-
-cleanup_802a() {
-	trap 0
-
-	stopall
-	MGS_MOUNT_OPTS=$saved_MGS_MOUNT_OPTS
-	MDS_MOUNT_OPTS=$saved_MDS_MOUNT_OPTS
-	OST_MOUNT_OPTS=$saved_OST_MOUNT_OPTS
-	MOUNT_OPTS=$saved_MOUNT_OPTS
-	setupall
-}
-
-test_802a() {
-	[[ $mds1_FSTYPE = zfs ]] || skip "ZFS specific test"
-	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
-	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
-		skip "Need server version at least 2.9.55"
-
-	[[ $ENABLE_QUOTA ]] && skip "Quota enabled for read-only test"
-
-	mkdir $DIR/$tdir || error "(1) fail to mkdir"
-
-	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir/ ||
-		error "(2) Fail to copy"
-
-	trap cleanup_802a EXIT
-
-	# sync by force before remount as readonly
-	sync; sync_all_data; sleep 3; sync_all_data
-
-	stopall
-
-	MGS_MOUNT_OPTS=$(csa_add "$MGS_MOUNT_OPTS" -o rdonly_dev)
-	MDS_MOUNT_OPTS=$(csa_add "$MDS_MOUNT_OPTS" -o rdonly_dev)
-	OST_MOUNT_OPTS=$(csa_add "$OST_MOUNT_OPTS" -o rdonly_dev)
-
-	echo "Mount the server as read only"
-	setupall server_only || error "(3) Fail to start servers"
-
-	echo "Mount client without ro should fail"
-	mount_client $MOUNT &&
-		error "(4) Mount client without 'ro' should fail"
-
-	echo "Mount client with ro should succeed"
-	MOUNT_OPTS=$(csa_add "$MOUNT_OPTS" -o ro)
-	mount_client $MOUNT ||
-		error "(5) Mount client with 'ro' should succeed"
-
-	echo "Modify should be refused"
-	touch $DIR/$tdir/guard && error "(6) Touch should fail under ro mode"
-
-	echo "Read should be allowed"
-	diff $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(7) Read should succeed under ro mode"
-
-	cleanup_802a
-}
-run_test 802a "simulate readonly device"
-
 test_802b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-        remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	do_facet $SINGLEMDS $LCTL get_param mdt.*.readonly ||
 		skip "readonly option not available"
