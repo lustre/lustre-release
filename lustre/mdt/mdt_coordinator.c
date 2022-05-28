@@ -2295,9 +2295,10 @@ ssize_t hsm_control_store(struct kobject *kobj, struct attribute *attr,
 			   strlen(CDT_DISABLE_CMD)) == 0) {
 		if ((cdt->cdt_state == CDT_STOPPING) ||
 		    (cdt->cdt_state == CDT_STOPPED)) {
-			CERROR("%s: Coordinator is stopped\n",
-			       mdt_obd_name(mdt));
-			rc = -EINVAL;
+			/* exit gracefully if coordinator is being stopped
+			 * or stopped already.
+			 */
+			rc = 0;
 		} else {
 			rc = set_cdt_state(cdt, CDT_DISABLE);
 		}
