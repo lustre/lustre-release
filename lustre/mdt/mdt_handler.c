@@ -3971,11 +3971,15 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *o,
 void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 		   enum ldlm_mode mode, int decref)
 {
+	struct tgt_session_info *tsi = info->mti_env->le_ses ?
+				       tgt_ses_info(info->mti_env) : NULL;
+
 	ENTRY;
 
 	if (lustre_handle_is_used(h)) {
-		if (decref || !info->mti_has_trans ||
-		    !(mode & (LCK_PW | LCK_EX))) {
+		bool has_trans = tsi && tsi->tsi_has_trans;
+
+		if (decref || !has_trans || !(mode & (LCK_PW | LCK_EX))) {
 			mdt_fid_unlock(h, mode);
 		} else {
 			struct mdt_device *mdt = info->mti_mdt;
@@ -4005,18 +4009,17 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			} else {
 				mdt_fid_unlock(h, mode);
 			}
-                        if (mdt_is_lock_sync(lock)) {
-                                CDEBUG(D_HA, "found sync-lock,"
-                                       " async commit started\n");
-                                mdt_device_commit_async(info->mti_env,
-                                                        mdt);
-                        }
-                        LDLM_LOCK_PUT(lock);
-                }
-                h->cookie = 0ull;
-        }
 
-        EXIT;
+			if (mdt_is_lock_sync(lock)) {
+				CDEBUG(D_HA, "sync_lock, do async commit\n");
+				mdt_device_commit_async(info->mti_env, mdt);
+			}
+			LDLM_LOCK_PUT(lock);
+		}
+		h->cookie = 0ull;
+	}
+
+	EXIT;
 }
 
 /**
@@ -4045,8 +4048,8 @@ static void mdt_save_remote_lock(struct mdt_thread_info *info,
 		     (MDS_INODELOCK_XATTR | MDS_INODELOCK_UPDATE)))
 			mo_invalidate(info->mti_env, mdt_object_child(o));
 
-		if (decref || !info->mti_has_trans || !req ||
-		    !(mode & (LCK_PW | LCK_EX))) {
+		if (decref || !req || !(mode & (LCK_PW | LCK_EX)) ||
+		    !tgt_ses_info(info->mti_env)->tsi_has_trans) {
 			ldlm_lock_decref_and_cancel(h, mode);
 			LDLM_LOCK_PUT(lock);
 		} else {
@@ -4255,7 +4258,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
 	info->mti_body = NULL;
         info->mti_object = NULL;
         info->mti_dlm_req = NULL;
-        info->mti_has_trans = 0;
         info->mti_cross_ref = 0;
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
@@ -5883,8 +5885,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
 
-	mdt_fs_cleanup(env, m);
-
 	tgt_fini(env, &m->mdt_lut);
 
 	mdt_hsm_cdt_fini(m);
@@ -6093,16 +6093,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	else
 		m->mdt_brw_size = ONE_MB_BRW_SIZE;
 
-	rc = mdt_fs_setup(env, m, obd, lsi);
-	if (rc)
-		GOTO(err_tgt, rc);
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
+		GOTO(err_tgt, rc = -ENOENT);
 
 	fid.f_seq = FID_SEQ_LOCAL_NAME;
 	fid.f_oid = 1;
 	fid.f_ver = 0;
 	rc = local_oid_storage_init(env, m->mdt_bottom, &fid, &m->mdt_los);
 	if (rc != 0)
-		GOTO(err_fs_cleanup, rc);
+		GOTO(err_tgt, rc);
 
 	rc = mdt_hsm_cdt_init(m);
 	if (rc != 0) {
@@ -6193,8 +6192,6 @@ err_free_hsm:
 err_los_fini:
 	local_oid_storage_fini(env, m->mdt_los);
 	m->mdt_los = NULL;
-err_fs_cleanup:
-	mdt_fs_cleanup(env, m);
 err_tgt:
 	/* keep recoverable clients */
 	obd->obd_fail = 1;

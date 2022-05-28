@@ -1981,8 +1981,8 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 
 	echo_client = (tgt_ses_req(tsi) == NULL && tsi->tsi_xid == 0);
 
-	if (tti->tti_has_trans && !echo_client) {
-		if (tti->tti_mult_trans == 0) {
+	if (tsi->tsi_has_trans && !echo_client) {
+		if (!tsi->tsi_mult_trans) {
 			CDEBUG(D_HA, "More than one transaction %llu\n",
 			       tti->tti_transno);
 			/**
@@ -1997,11 +1997,12 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 			 * data loss.
 			 */
 		}
-		/* we need another transno to be assigned */
+		/* we need new transno to be assigned */
 		tti->tti_transno = 0;
-	} else if (th->th_result == 0) {
-		tti->tti_has_trans = 1;
 	}
+
+	if (!th->th_result)
+		tsi->tsi_has_trans++;
 
 	if (tsi->tsi_vbr_obj != NULL &&
 	    !lu_object_remote(&tsi->tsi_vbr_obj->do_lu)) {

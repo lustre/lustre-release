@@ -66,56 +66,6 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
 	return buf;
 }
 
-/* This callback notifies MDT that transaction was done. This is needed by
- * mdt_save_lock() only. It is similar to new target code and will be removed
- * as mdt_save_lock() will be converted to use target structures
- */
-static int mdt_txn_stop_cb(const struct lu_env *env,
-			   struct thandle *txn, void *cookie)
-{
-	struct mdt_thread_info *mti;
-
-	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	LASSERT(mti);
-
-	if (mti->mti_has_trans)
-		CDEBUG(D_INFO, "More than one transaction\n");
-	else
-		mti->mti_has_trans = 1;
-	return 0;
-}
-
-int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
-		 struct obd_device *obd, struct lustre_sb_info *lsi)
-{
-	int rc = 0;
-
-	ENTRY;
-
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
-		RETURN(-ENOENT);
-
-	/* prepare transactions callbacks */
-	mdt->mdt_txn_cb.dtc_txn_start = NULL;
-	mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
-	mdt->mdt_txn_cb.dtc_cookie = NULL;
-	mdt->mdt_txn_cb.dtc_tag = LCT_MD_THREAD;
-	INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);
-
-	dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-
-	RETURN(rc);
-}
-
-void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
-{
-	ENTRY;
-
-	/* Remove transaction callback */
-	dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-	EXIT;
-}
-
 /* reconstruction code */
 static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 {

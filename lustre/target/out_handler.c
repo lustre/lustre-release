@@ -1109,7 +1109,7 @@ int out_handle(struct tgt_session_info *tsi)
 	reply->ourp_magic = UPDATE_REPLY_MAGIC;
 	reply->ourp_count = updates;
 	tti->tti_u.update.tti_update_reply = reply;
-	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
+	tsi->tsi_mult_trans = !req_is_replay(tgt_ses_req(tsi));
 
 	OBD_ALLOC_PTR(trd);
 	if (!trd)

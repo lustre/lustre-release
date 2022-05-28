@@ -757,21 +757,11 @@ static void tgt_key_fini(const struct lu_context *ctx,
 	OBD_SLAB_FREE_PTR(info, tgt_thread_kmem);
 }
 
-static void tgt_key_exit(const struct lu_context *ctx,
-			 struct lu_context_key *key, void *data)
-{
-	struct tgt_thread_info *tti = data;
-
-	tti->tti_has_trans = 0;
-	tti->tti_mult_trans = 0;
-}
-
 /* context key: tg_thread_key */
 struct lu_context_key tgt_thread_key = {
 	.lct_tags = LCT_MD_THREAD | LCT_DT_THREAD,
 	.lct_init = tgt_key_init,
 	.lct_fini = tgt_key_fini,
-	.lct_exit = tgt_key_exit,
 };
 
 LU_KEY_INIT_GENERIC(tgt);
@@ -796,11 +786,24 @@ static void tgt_ses_key_fini(const struct lu_context *ctx,
 	OBD_SLAB_FREE_PTR(session, tgt_session_kmem);
 }
 
+static void tgt_ses_key_exit(const struct lu_context *ctx,
+			     struct lu_context_key *key, void *data)
+{
+	struct tgt_session_info *tsi = data;
+
+	if (tsi->tsi_has_trans > 1)
+		CDEBUG(D_WARNING, "total %i transactions per RPC\n",
+		       tsi->tsi_has_trans);
+	tsi->tsi_has_trans = 0;
+	tsi->tsi_mult_trans = false;
+}
+
 /* context key: tgt_session_key */
 struct lu_context_key tgt_session_key = {
 	.lct_tags = LCT_SERVER_SESSION,
 	.lct_init = tgt_ses_key_init,
 	.lct_fini = tgt_ses_key_fini,
+	.lct_exit = tgt_ses_key_exit,
 };
 EXPORT_SYMBOL(tgt_session_key);
 

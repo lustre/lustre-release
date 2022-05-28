@@ -498,8 +498,7 @@ struct mdt_thread_info {
 	 */
 	const struct ldlm_request *mti_dlm_req;
 
-	__u32                      mti_has_trans:1, /* has txn already? */
-				   mti_cross_ref:1,
+	__u32                      mti_cross_ref:1,
 	/* big_lmm buffer was used and must be used in reply */
 				   mti_big_lmm_used:1,
 				   mti_big_acl_used:1,
@@ -890,9 +889,6 @@ void mdt_reconstruct_generic(struct mdt_thread_info *mti,
 extern void target_recovery_fini(struct obd_device *obd);
 extern void target_recovery_init(struct lu_target *lut,
                                  svc_handler_t handler);
-int mdt_fs_setup(const struct lu_env *, struct mdt_device *,
-                 struct obd_device *, struct lustre_sb_info *lsi);
-void mdt_fs_cleanup(const struct lu_env *, struct mdt_device *);
 
 int mdt_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
