@@ -5,7 +5,7 @@
 AC_DEFUN([LN_CONFIG_BACKOFF], [
 AC_MSG_CHECKING([whether to enable tunable backoff TCP support])
 AC_ARG_ENABLE([backoff],
-	AC_HELP_STRING([--disable-backoff],
+	AS_HELP_STRING([--disable-backoff],
 		[disable socknal tunable backoff]),
 	[], [enable_backoff="yes"])
 AC_MSG_RESULT([$enable_backoff])
@@ -53,7 +53,7 @@ AC_DEFUN([LN_CONFIG_DLC], [
 AC_DEFUN([LN_CONFIG_O2IB], [
 AC_MSG_CHECKING([whether to use Compat RDMA])
 AC_ARG_WITH([o2ib],
-	AC_HELP_STRING([--with-o2ib=[yes|no|<path>]],
+	AS_HELP_STRING([--with-o2ib=[yes|no|<path>]],
 		[build o2iblnd against path]),
 	[], [with_o2ib="yes"])
 
@@ -597,7 +597,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 AC_DEFUN([LN_CONFIG_GNILND], [
 AC_MSG_CHECKING([whether to enable GNI lnd])
 AC_ARG_ENABLE([gni],
-	AC_HELP_STRING([--enable-gni],
+	AS_HELP_STRING([--enable-gni],
 		[enable GNI lnd]),
 	[], [enable_gni="no"])
 AC_MSG_RESULT([$enable_gni])
@@ -928,14 +928,14 @@ AC_MSG_NOTICE([LNet core checks
 ==============================================================================])
 
 AC_ARG_WITH([cuda],
-	AC_HELP_STRING([--with-cuda=path],
+	AS_HELP_STRING([--with-cuda=path],
 			[Use a CUDA sources.]),
 	[LB_ARG_CANON_PATH([cuda], [CUDA_PATH])],
 	[CUDA_PATH=`ls -d1 /usr/src/nvidia-*/nvidia/ | tail -1`]
 )
 
 AC_ARG_WITH([gds],
-	AC_HELP_STRING([--with-gds=path],
+	AS_HELP_STRING([--with-gds=path],
 			[Use a gds sources.]),
 	[LB_ARG_CANON_PATH([gds], [GDS_PATH])],
 	[GDS_PATH=`ls -d1 /usr/src/nvidia-fs* | tail -1`]
@@ -1010,7 +1010,7 @@ AC_CHECK_FUNCS([strnlen])
 
 AC_MSG_CHECKING([whether to enable 'efence' debugging support])
 AC_ARG_ENABLE(efence,
-	AC_HELP_STRING([--enable-efence],
+	AS_HELP_STRING([--enable-efence],
 		[use efence library]),
 	[], [enable_efence="no"])
 AC_MSG_RESULT([$enable_efence])

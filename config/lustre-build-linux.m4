@@ -158,7 +158,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 
 	AC_MSG_CHECKING([for Linux kernel module package directory])
 	AC_ARG_WITH([kmp-moddir],
-		AC_HELP_STRING([--with-kmp-moddir=string],
+		AS_HELP_STRING([--with-kmp-moddir=string],
 			[set the kmod updates or extra directory]),
 		[KMP_MODDIR=$withval
 		 IN_KERNEL=''],[
@@ -256,7 +256,7 @@ done
 
 AC_MSG_CHECKING([for Linux sources])
 AC_ARG_WITH([linux],
-	AC_HELP_STRING([--with-linux=path],
+	AS_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/lib/modules/$(uname -r)/{source,build},/usr/src/linux)]),
 	[LB_ARG_CANON_PATH([linux], [LINUX])
 	DEFAULT_LINUX_OBJ=$LINUX],
@@ -271,7 +271,7 @@ LB_CHECK_FILE([$LINUX], [],
 # -------- linux objects (for 2.6) --
 AC_MSG_CHECKING([for Linux objects])
 AC_ARG_WITH([linux-obj],
-	AC_HELP_STRING([--with-linux-obj=path],
+	AS_HELP_STRING([--with-linux-obj=path],
 			[set path to Linux objects (default=/lib/modules/$(uname -r)/build,/usr/src/linux)]),
 	[LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])],
 	[LINUX_OBJ=$DEFAULT_LINUX_OBJ])
@@ -280,7 +280,7 @@ AC_SUBST(LINUX_OBJ)
 
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
-	[AC_HELP_STRING([--with-linux-config=path],
+	[AS_HELP_STRING([--with-linux-config=path],
 			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
 	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
 	[LINUX_CONFIG=$LINUX_OBJ/.config])
@@ -300,7 +300,7 @@ LB_CHECK_FILE([/boot/kernel.h],
 		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])])
 
 AC_ARG_WITH([kernel-source-header],
-	AC_HELP_STRING([--with-kernel-source-header=path],
+	AS_HELP_STRING([--with-kernel-source-header=path],
 			[Use a different kernel version header.]),
 	[LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])])
 

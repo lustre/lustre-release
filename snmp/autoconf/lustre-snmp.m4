@@ -6,7 +6,7 @@
 AC_DEFUN([LS_CONFIGURE], [
 AC_MSG_CHECKING([whether to try to build SNMP support])
 AC_ARG_ENABLE([snmp],
-	AC_HELP_STRING([--enable-snmp],
+	AS_HELP_STRING([--enable-snmp],
 		[require SNMP support (default=auto)]),
 	[], [enable_snmp="auto"])
 AC_MSG_RESULT([$enable_snmp])

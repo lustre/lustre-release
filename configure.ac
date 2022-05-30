@@ -1,5 +1,5 @@
 AC_PREREQ([2.57])
-AC_INIT([Lustre], m4_esyscmd([sh -c "./LUSTRE-VERSION-GEN | tr -d '\n'"]),
+AC_INIT([Lustre], m4_esyscmd_s([./LUSTRE-VERSION-GEN]),
         [https://jira.whamcloud.com/], [lustre])
 
 AC_CONFIG_AUX_DIR([config])
@@ -7,13 +7,13 @@ AC_CONFIG_MACRO_DIR([config])
 
 LC_CONFIG_SRCDIR
 
-AC_CANONICAL_SYSTEM
+AC_CANONICAL_TARGET
 
 AM_INIT_AUTOMAKE([1.10 tar-pax -Wno-portability subdir-objects])
 AM_MAINTAINER_MODE([enable])
 
 AC_PROG_CC
-AC_PROG_LIBTOOL
+LT_INIT
 AC_PROG_MKDIR_P
 AM_PROG_AS
 

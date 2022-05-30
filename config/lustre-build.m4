@@ -49,7 +49,7 @@ AC_DEFUN([LB_ARG_LIBS_INCLUDES], [
 lb_pathvar="m4_bpatsubst([$2], -, _)"
 AC_MSG_CHECKING([for $1])
 AC_ARG_WITH([$2],
-	AC_HELP_STRING([--with-$2=path],
+	AS_HELP_STRING([--with-$2=path],
 		[path to $1]),
 	[], [withval=$4])
 AS_IF([test "x$withval" = xyes],
@@ -60,7 +60,7 @@ AC_MSG_RESULT([${!lb_pathvar:-no}])
 AS_IF([test "x${!lb_pathvar}" != x -a "x${!lb_pathvar}" != xno], [
 	AC_MSG_CHECKING([for $1 includes])
 	AC_ARG_WITH([$2-includes],
-		AC_HELP_STRING([--with-$2-includes=path],
+		AS_HELP_STRING([--with-$2-includes=path],
 			[path to $1 includes]),
 		[], [withval="yes"])
 
@@ -72,7 +72,7 @@ AS_IF([test "x${!lb_pathvar}" != x -a "x${!lb_pathvar}" != xno], [
 
 	AC_MSG_CHECKING([for $1 libs])
 	AC_ARG_WITH([$2-libs],
-		AC_HELP_STRING([--with-$2-libs=path],
+		AS_HELP_STRING([--with-$2-libs=path],
 			[path to $1 libs]),
 		[], [withval="yes"])
 
@@ -92,7 +92,7 @@ AS_IF([test "x${!lb_pathvar}" != x -a "x${!lb_pathvar}" != xno], [
 AC_DEFUN([LB_PATH_LUSTREIOKIT], [
 AC_MSG_CHECKING([whether to build iokit])
 AC_ARG_ENABLE([iokit],
-	AC_HELP_STRING([--disable-iokit],
+	AS_HELP_STRING([--disable-iokit],
 		[disable iokit (default is enable)]),
 	[], [enable_iokit="yes"])
 AC_MSG_RESULT([$enable_iokit])
@@ -146,7 +146,7 @@ AC_SUBST(SNMP_SUBDIR)
 AC_DEFUN([LB_CONFIG_MODULES], [
 AC_MSG_CHECKING([whether to build Linux kernel modules])
 AC_ARG_ENABLE([modules],
-	AC_HELP_STRING([--disable-modules],
+	AS_HELP_STRING([--disable-modules],
 		[disable building of Lustre kernel modules]),
 	[ AC_DEFINE(HAVE_NATIVE_LINUX_CLIENT, 1, [support native Linux client])], [
 		LC_TARGET_SUPPORTED([enable_modules="yes"],
@@ -195,7 +195,7 @@ AS_IF([test "x$enable_modules" = xyes], [
 AC_DEFUN([LB_CONFIG_UTILS], [
 AC_MSG_CHECKING([whether to build Lustre utilities])
 AC_ARG_ENABLE([utils],
-	AC_HELP_STRING([--disable-utils],
+	AS_HELP_STRING([--disable-utils],
 		[disable building of Lustre utility programs]),
 	[], [enable_utils="yes"])
 AC_MSG_RESULT([$enable_utils])
@@ -209,7 +209,7 @@ AC_MSG_RESULT([$enable_utils])
 AC_DEFUN([LB_CONFIG_TESTS], [
 AC_MSG_CHECKING([whether to build Lustre tests])
 AC_ARG_ENABLE([tests],
-	AC_HELP_STRING([--disable-tests],
+	AS_HELP_STRING([--disable-tests],
 		[disable building of Lustre tests]),
 	[], [enable_tests="yes"])
 
@@ -238,7 +238,7 @@ AC_MSG_RESULT([$enable_tests])
 AC_DEFUN([LB_CONFIG_DIST], [
 AC_MSG_CHECKING([whether to configure just enough for make dist])
 AC_ARG_ENABLE([dist],
-	AC_HELP_STRING([--enable-dist],
+	AS_HELP_STRING([--enable-dist],
 			[only configure enough for make dist]),
 	[], [enable_dist="no"])
 AC_MSG_RESULT([$enable_dist])
@@ -258,7 +258,7 @@ AS_IF([test "x$enable_dist" != xno], [
 AC_DEFUN([LB_CONFIG_DOCS], [
 AC_MSG_CHECKING([whether to build Lustre docs])
 AC_ARG_ENABLE([doc],
-	AC_HELP_STRING([--disable-doc],
+	AS_HELP_STRING([--disable-doc],
 			[skip creation of pdf documentation]),
 	[], [enable_doc="no"])
 AC_MSG_RESULT([$enable_doc])
@@ -275,7 +275,7 @@ AC_SUBST(ENABLE_DOC)
 AC_DEFUN([LB_CONFIG_MANPAGES], [
 AC_MSG_CHECKING([whether to build Lustre manpages])
 AC_ARG_ENABLE([manpages],
-	AC_HELP_STRING([--disable-manpages],
+	AS_HELP_STRING([--disable-manpages],
 			[skip creation and inclusion of man pages (default is enable)]),
 	[], [enable_manpages="yes"])
 AC_MSG_RESULT([$enable_manpages])
@@ -480,7 +480,7 @@ AC_DEFUN([LB_CONFIG_FILES], [
 #
 AC_DEFUN([LB_CONFIG_SERVERS], [
 AC_ARG_ENABLE([server],
-	AC_HELP_STRING([--disable-server],
+	AS_HELP_STRING([--disable-server],
 			[disable Lustre server support]), [
 		AS_IF([test x$enable_server != xyes -a x$enable_server != xno],
 			[AC_MSG_ERROR([server valid options are "yes" or "no"])])
