@@ -826,7 +826,7 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 
 	rc = chlg_minor_alloc(&minor);
 	if (rc)
-		GOTO(out_unlock, rc);
+		GOTO(out_listrm, rc);
 
 	device_initialize(&entry->ced_device);
 	entry->ced_device.devt = MKDEV(MAJOR(mdc_changelog_dev), minor);
@@ -854,6 +854,7 @@ out_device_name:
 out_minor:
 	chlg_minor_free(minor);
 
+out_listrm:
 	list_del_init(&obd->u.cli.cl_chg_dev_linkage);
 	list_del(&entry->ced_link);
 
