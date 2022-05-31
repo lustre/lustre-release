@@ -51,7 +51,6 @@ fi
 # skip the grant tests for ARM until they are fixed
 if [[ $(uname -m) = aarch64 ]]; then
 	always_except LU-11671 45
-	always_except LU-14067 400a 400b
 fi
 
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
