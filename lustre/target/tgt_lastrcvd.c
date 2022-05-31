@@ -1985,7 +1985,17 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 		if (tti->tti_mult_trans == 0) {
 			CDEBUG(D_HA, "More than one transaction %llu\n",
 			       tti->tti_transno);
-			RETURN(0);
+			/**
+			 * if RPC handler sees unexpected multiple last_rcvd
+			 * updates with transno, then it is better to return
+			 * the latest transaction number to the client.
+			 * In that case replay may fail if part of operation
+			 * was committed and can't be re-applied easily. But
+			 * that is better than report the first transno, in
+			 * which case partially committed operation would be
+			 * considered as finished so never replayed causing
+			 * data loss.
+			 */
 		}
 		/* we need another transno to be assigned */
 		tti->tti_transno = 0;
