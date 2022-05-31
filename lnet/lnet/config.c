@@ -804,9 +804,9 @@ lnet_parse_networks(struct list_head *netlist, const char *networks)
 	lnet_syntax("networks", networks, (int)(str - tokens), strlen(str));
  failed:
 	/* free the net list and all the nis on each net */
-	while (!list_empty(netlist)) {
-		net = list_entry(netlist->next, struct lnet_net, net_list);
-
+	while ((net = list_first_entry_or_null(netlist,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 		lnet_net_free(net);
 	}
@@ -861,9 +861,8 @@ lnet_free_text_bufs(struct list_head *tbs)
 {
 	struct lnet_text_buf  *ltb;
 
-	while (!list_empty(tbs)) {
-		ltb = list_entry(tbs->next, struct lnet_text_buf, ltb_list);
-
+	while ((ltb = list_first_entry_or_null(tbs, struct lnet_text_buf,
+					       ltb_list)) != NULL) {
 		list_del(&ltb->ltb_list);
 		lnet_free_text_buf(ltb);
 	}
@@ -1083,7 +1082,8 @@ lnet_parse_route(char *str, int *im_a_router)
 	struct list_head *tmp2;
 	__u32 net;
 	struct lnet_nid nid;
-	struct lnet_text_buf  *ltb;
+	struct lnet_text_buf *ltb = NULL;
+	struct lnet_text_buf *ltb1, *ltb2;
 	int rc;
 	char *sep;
 	char *token = str;
@@ -1176,13 +1176,11 @@ lnet_parse_route(char *str, int *im_a_router)
 	LASSERT(!list_empty(&nets));
 	LASSERT(!list_empty(&gateways));
 
-	list_for_each(tmp1, &nets) {
-		ltb = list_entry(tmp1, struct lnet_text_buf, ltb_list);
-		net = libcfs_str2net(ltb->ltb_text);
+	list_for_each_entry(ltb1, &nets, ltb_list) {
+		net = libcfs_str2net(ltb1->ltb_text);
 		LASSERT(net != LNET_NET_ANY);
 
-		list_for_each(tmp2, &gateways) {
-			ltb = list_entry(tmp2, struct lnet_text_buf, ltb_list);
+		list_for_each_entry(ltb2, &gateways, ltb_list) {
 			LASSERT(libcfs_strnid(&nid, ltb->ltb_text) == 0);
 
 			if (lnet_islocalnid(&nid)) {
@@ -1215,11 +1213,10 @@ out:
 static int
 lnet_parse_route_tbs(struct list_head *tbs, int *im_a_router)
 {
-	struct lnet_text_buf   *ltb;
+	struct lnet_text_buf *ltb;
 
-	while (!list_empty(tbs)) {
-		ltb = list_entry(tbs->next, struct lnet_text_buf, ltb_list);
-
+	while ((ltb = list_first_entry_or_null(tbs, struct lnet_text_buf,
+					       ltb_list)) != NULL) {
 		if (lnet_parse_route(ltb->ltb_text, im_a_router) < 0) {
 			lnet_free_text_bufs(tbs);
 			return -EINVAL;
@@ -1352,7 +1349,6 @@ lnet_splitnets(char *source, struct list_head *nets)
 	int		  len;
 	struct lnet_text_buf  *tb;
 	struct lnet_text_buf  *tb2;
-	struct list_head *t;
 	char		 *sep;
 	char		 *bracket;
 	__u32		  net;
@@ -1360,7 +1356,7 @@ lnet_splitnets(char *source, struct list_head *nets)
 	LASSERT(!list_empty(nets));
 	LASSERT(nets->next == nets->prev);	/* single entry */
 
-	tb = list_entry(nets->next, struct lnet_text_buf, ltb_list);
+	tb = list_first_entry(nets, struct lnet_text_buf, ltb_list);
 
 	for (;;) {
 		sep = strchr(tb->ltb_text, ',');
@@ -1395,9 +1391,7 @@ lnet_splitnets(char *source, struct list_head *nets)
 			return -EINVAL;
 		}
 
-		list_for_each(t, nets) {
-			tb2 = list_entry(t, struct lnet_text_buf, ltb_list);
-
+		list_for_each_entry(tb2, nets, ltb_list) {
 			if (tb2 == tb)
 				continue;
 
@@ -1454,10 +1448,9 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	len = 0;
 	rc = 0;
 
-	while (!list_empty(&raw_entries)) {
-		tb = list_entry(raw_entries.next, struct lnet_text_buf,
-				ltb_list);
-
+	while ((tb = list_first_entry_or_null(&raw_entries,
+					      struct lnet_text_buf,
+					      ltb_list)) != NULL) {
 		strncpy(source, tb->ltb_text, sizeof(source));
 		source[sizeof(source) - 1] = '\0';
 

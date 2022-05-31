@@ -801,12 +801,12 @@ lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 			if (list_empty(&peer->lp_peer_nets))
 				return NULL;
 
-			net = list_entry(peer->lp_peer_nets.next,
-					 struct lnet_peer_net,
-					 lpn_peer_nets);
+			net = list_first_entry(&peer->lp_peer_nets,
+					       struct lnet_peer_net,
+					       lpn_peer_nets);
 		}
-		lpni = list_entry(net->lpn_peer_nis.next, struct lnet_peer_ni,
-				  lpni_peer_nis);
+		lpni = list_first_entry(&net->lpn_peer_nis, struct lnet_peer_ni,
+					lpni_peer_nis);
 
 		return lpni;
 	}
@@ -830,19 +830,19 @@ lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 			return NULL;
 
 		/* get the next net */
-		net = list_entry(prev->lpni_peer_net->lpn_peer_nets.next,
-				 struct lnet_peer_net,
-				 lpn_peer_nets);
+		net = list_first_entry(&prev->lpni_peer_net->lpn_peer_nets,
+				       struct lnet_peer_net,
+				       lpn_peer_nets);
 		/* get the ni on it */
-		lpni = list_entry(net->lpn_peer_nis.next, struct lnet_peer_ni,
-				  lpni_peer_nis);
+		lpni = list_first_entry(&net->lpn_peer_nis, struct lnet_peer_ni,
+					lpni_peer_nis);
 
 		return lpni;
 	}
 
 	/* there are more nis left */
-	lpni = list_entry(prev->lpni_peer_nis.next,
-			  struct lnet_peer_ni, lpni_peer_nis);
+	lpni = list_first_entry(&prev->lpni_peer_nis,
+				struct lnet_peer_ni, lpni_peer_nis);
 
 	return lpni;
 }

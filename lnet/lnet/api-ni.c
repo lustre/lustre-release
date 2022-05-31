@@ -1459,8 +1459,8 @@ lnet_net2ni_locked(__u32 net_id, int cpt)
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		if (net->net_id == net_id) {
-			ni = list_entry(net->net_ni_list.next, struct lnet_ni,
-					ni_netlist);
+			ni = list_first_entry(&net->net_ni_list, struct lnet_ni,
+					      ni_netlist);
 			return ni;
 		}
 	}
@@ -2332,12 +2332,12 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 	 * list and shut them down in guaranteed thread context
 	 */
 	i = 2;
-	while (!list_empty(zombie_list)) {
-		int	*ref;
-		int	j;
+	while ((ni = list_first_entry_or_null(zombie_list,
+					      struct lnet_ni,
+					      ni_netlist)) != NULL) {
+		int *ref;
+		int j;
 
-		ni = list_entry(zombie_list->next,
-				struct lnet_ni, ni_netlist);
 		list_del_init(&ni->ni_netlist);
 		/* the ni should be in deleting state. If it's not it's
 		 * a bug */
@@ -2430,9 +2430,9 @@ lnet_shutdown_lndnet(struct lnet_net *net)
 
 	list_del_init(&net->net_list);
 
-	while (!list_empty(&net->net_ni_list)) {
-		ni = list_entry(net->net_ni_list.next,
-				struct lnet_ni, ni_netlist);
+	while ((ni = list_first_entry_or_null(&net->net_ni_list,
+					      struct lnet_ni,
+					      ni_netlist)) != NULL) {
 		lnet_net_unlock(LNET_LOCK_EX);
 		lnet_shutdown_lndni(ni);
 		lnet_net_lock(LNET_LOCK_EX);
@@ -2478,11 +2478,10 @@ lnet_shutdown_lndnets(void)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* iterate through the net zombie list and delete each net */
-	while (!list_empty(&the_lnet.ln_net_zombie)) {
-		net = list_entry(the_lnet.ln_net_zombie.next,
-				 struct lnet_net, net_list);
+	while ((net = list_first_entry_or_null(&the_lnet.ln_net_zombie,
+					       struct lnet_net,
+					       net_list)) != NULL)
 		lnet_shutdown_lndnet(net);
-	}
 
 	spin_lock(&the_lnet.ln_msg_resend_lock);
 	list_splice(&the_lnet.ln_msg_resend, &resend);
@@ -2660,9 +2659,9 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 	 * After than we want to delete the network being added,
 	 * to avoid a memory leak.
 	 */
-	while (!list_empty(&net->net_ni_added)) {
-		ni = list_entry(net->net_ni_added.next, struct lnet_ni,
-				ni_netlist);
+	while ((ni = list_first_entry_or_null(&net->net_ni_added,
+					      struct lnet_ni,
+					      ni_netlist)) != NULL) {
 		list_del_init(&ni->ni_netlist);
 
 		/* make sure that the the NI we're about to start
@@ -2726,12 +2725,10 @@ failed1:
 	 * shutdown the new NIs that are being started up
 	 * free the NET being started
 	 */
-	while (!list_empty(&local_ni_list)) {
-		ni = list_entry(local_ni_list.next, struct lnet_ni,
-				ni_netlist);
-
+	while ((ni = list_first_entry_or_null(&local_ni_list,
+					      struct lnet_ni,
+					      ni_netlist)) != NULL)
 		lnet_shutdown_lndni(ni);
-	}
 
 failed0:
 	lnet_net_free(net);
@@ -2755,8 +2752,9 @@ lnet_startup_lndnets(struct list_head *netlist)
 	the_lnet.ln_state = LNET_STATE_RUNNING;
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	while (!list_empty(netlist)) {
-		net = list_entry(netlist->next, struct lnet_net, net_list);
+	while ((net = list_first_entry_or_null(netlist,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 
 		rc = lnet_startup_lndnet(net, NULL);
@@ -3081,10 +3079,9 @@ err_empty_list:
 	lnet_unprepare();
 	LASSERT(rc < 0);
 	mutex_unlock(&the_lnet.ln_api_mutex);
-	while (!list_empty(&net_head)) {
-		struct lnet_net *net;
-
-		net = list_entry(net_head.next, struct lnet_net, net_list);
+	while ((net = list_first_entry_or_null(&net_head,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 		lnet_net_free(net);
 	}
@@ -3328,14 +3325,15 @@ lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 	 * a message being sent. This function accessed the net without
 	 * checking if the list is empty
 	 */
-	if (prev == NULL) {
-		if (net == NULL)
-			net = list_entry(the_lnet.ln_nets.next, struct lnet_net,
-					net_list);
+	if (!prev) {
+		if (!net)
+			net = list_first_entry(&the_lnet.ln_nets,
+					       struct lnet_net,
+					       net_list);
 		if (list_empty(&net->net_ni_list))
 			return NULL;
-		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
-				ni_netlist);
+		ni = list_first_entry(&net->net_ni_list, struct lnet_ni,
+				      ni_netlist);
 
 		return ni;
 	}
@@ -3353,13 +3351,13 @@ lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 			return NULL;
 
 		/* get the next net */
-		net = list_entry(prev->ni_net->net_list.next, struct lnet_net,
-				 net_list);
+		net = list_first_entry(&prev->ni_net->net_list, struct lnet_net,
+				       net_list);
 		if (list_empty(&net->net_ni_list))
 			return NULL;
 		/* get the ni on it */
-		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
-				ni_netlist);
+		ni = list_first_entry(&net->net_ni_list, struct lnet_ni,
+				      ni_netlist);
 
 		return ni;
 	}
@@ -3368,7 +3366,7 @@ lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 		return NULL;
 
 	/* there are more nis left */
-	ni = list_entry(prev->ni_netlist.next, struct lnet_ni, ni_netlist);
+	ni = list_first_entry(&prev->ni_netlist, struct lnet_ni, ni_netlist);
 
 	return ni;
 }
@@ -3589,8 +3587,10 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 		rc = -ESHUTDOWN;
 		goto out;
 	}
-	while (!list_empty(&net_head)) {
-		net = list_entry(net_head.next, struct lnet_net, net_list);
+
+	while ((net = list_first_entry_or_null(&net_head,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 		rc = lnet_add_net_common(net, tun);
 		if (rc < 0)
@@ -3600,8 +3600,9 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 out:
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
-	while (!list_empty(&net_head)) {
-		net = list_entry(net_head.next, struct lnet_net, net_list);
+	while ((net = list_first_entry_or_null(&net_head,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 		lnet_net_free(net);
 	}
@@ -3785,7 +3786,7 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 		goto out_unlock_clean;
 	}
 
-	net = list_entry(net_head.next, struct lnet_net, net_list);
+	net = list_first_entry(&net_head, struct lnet_net, net_list);
 	list_del_init(&net->net_list);
 
 	LASSERT(lnet_net_unique(net->net_id, &the_lnet.ln_nets, NULL));
@@ -3808,9 +3809,10 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 
 out_unlock_clean:
 	mutex_unlock(&the_lnet.ln_api_mutex);
-	while (!list_empty(&net_head)) {
-		/* net_head list is empty in success case */
-		net = list_entry(net_head.next, struct lnet_net, net_list);
+	/* net_head list is empty in success case */
+	while ((net = list_first_entry_or_null(&net_head,
+					       struct lnet_net,
+					       net_list)) != NULL) {
 		list_del_init(&net->net_list);
 		lnet_net_free(net);
 	}

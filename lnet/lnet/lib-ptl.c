@@ -765,9 +765,9 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 		mhash = mtable->mt_mhash;
 		/* cleanup ME */
 		for (j = 0; j < LNET_MT_HASH_SIZE + 1; j++) {
-			while (!list_empty(&mhash[j])) {
-				me = list_entry(mhash[j].next,
-						struct lnet_me, me_list);
+			while ((me = list_first_entry_or_null(&mhash[j],
+							      struct lnet_me,
+							      me_list)) != NULL) {
 				CERROR("Active ME %p on exit\n", me);
 				list_del(&me->me_list);
 				CDEBUG(D_MALLOC,

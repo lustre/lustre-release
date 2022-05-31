@@ -229,9 +229,9 @@ lnet_fail_nid(lnet_nid_t nid4, unsigned int threshold)
 
 	lnet_net_unlock(0);
 
-	while (!list_empty(&cull)) {
-		tp = list_entry(cull.next, struct lnet_test_peer, tp_list);
-
+	while ((tp = list_first_entry_or_null(&cull,
+					      struct lnet_test_peer,
+					      tp_list)) != NULL) {
 		list_del(&tp->tp_list);
 		LIBCFS_FREE(tp, sizeof(*tp));
 	}
@@ -282,10 +282,10 @@ fail_peer(struct lnet_nid *nid, int outgoing)
 
 	lnet_net_unlock(0);
 
-	while (!list_empty(&cull)) {
-		tp = list_entry(cull.next, struct lnet_test_peer, tp_list);
+	while ((tp = list_first_entry_or_null(&cull,
+					      struct lnet_test_peer,
+					      tp_list)) != NULL) {
 		list_del(&tp->tp_list);
-
 		LIBCFS_FREE(tp, sizeof(*tp));
 	}
 
@@ -1034,7 +1034,7 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 	}
 
 	LASSERT(!list_empty(&rbp->rbp_bufs));
-	rb = list_entry(rbp->rbp_bufs.next, struct lnet_rtrbuf, rb_list);
+	rb = list_first_entry(&rbp->rbp_bufs, struct lnet_rtrbuf, rb_list);
 	list_del(&rb->rb_list);
 
 	msg->msg_niov = rbp->rbp_npages;
@@ -1074,8 +1074,8 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 		tq->tq_credits++;
 		atomic_inc(&ni->ni_tx_credits);
 		if (tq->tq_credits <= 0) {
-			msg2 = list_entry(tq->tq_delayed.next,
-					  struct lnet_msg, msg_list);
+			msg2 = list_first_entry(&tq->tq_delayed,
+						struct lnet_msg, msg_list);
 			list_del(&msg2->msg_list);
 
 			LASSERT(msg2->msg_txni == ni);
@@ -1102,8 +1102,8 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 		if (txpeer->lpni_txcredits <= 0) {
 			int msg2_cpt;
 
-			msg2 = list_entry(txpeer->lpni_txq.next,
-					      struct lnet_msg, msg_list);
+			msg2 = list_first_entry(&txpeer->lpni_txq,
+						struct lnet_msg, msg_list);
 			list_del(&msg2->msg_list);
 			spin_unlock(&txpeer->lpni_lock);
 
@@ -1155,8 +1155,8 @@ lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp)
 
 	if (list_empty(&rbp->rbp_msgs))
 		return;
-	msg = list_entry(rbp->rbp_msgs.next,
-			 struct lnet_msg, msg_list);
+	msg = list_first_entry(&rbp->rbp_msgs,
+			       struct lnet_msg, msg_list);
 	list_del(&msg->msg_list);
 
 	(void)lnet_post_routed_recv_locked(msg, 1);
@@ -1260,8 +1260,8 @@ routing_off:
 		} else if (!list_empty(&lp->lp_rtrq)) {
 			int msg2_cpt;
 
-			msg2 = list_entry(lp->lp_rtrq.next,
-					  struct lnet_msg, msg_list);
+			msg2 = list_first_entry(&lp->lp_rtrq,
+						struct lnet_msg, msg_list);
 			list_del(&msg2->msg_list);
 			msg2_cpt = msg2->msg_rx_cpt;
 			spin_unlock(&lp->lp_lock);
@@ -3637,9 +3637,9 @@ lnet_clean_local_ni_recoveryq(void)
 	/* This is only called when the monitor thread has stopped */
 	lnet_net_lock(0);
 
-	while (!list_empty(&the_lnet.ln_mt_localNIRecovq)) {
-		ni = list_entry(the_lnet.ln_mt_localNIRecovq.next,
-				struct lnet_ni, ni_recovery);
+	while ((ni = list_first_entry_or_null(&the_lnet.ln_mt_localNIRecovq,
+					      struct lnet_ni,
+					      ni_recovery)) != NULL) {
 		list_del_init(&ni->ni_recovery);
 		lnet_ni_lock(ni);
 		lnet_unlink_ni_recovery_mdh_locked(ni, 0, true);
@@ -4845,11 +4845,12 @@ EXPORT_SYMBOL(lnet_parse);
 void
 lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 {
-	while (!list_empty(head)) {
-		struct lnet_processid id = {};
-		struct lnet_msg	*msg;
+	struct lnet_msg	*msg;
 
-		msg = list_entry(head->next, struct lnet_msg, msg_list);
+	while ((msg = list_first_entry_or_null(head, struct lnet_msg,
+					       msg_list)) != NULL) {
+		struct lnet_processid id = {};
+
 		list_del(&msg->msg_list);
 
 		id.nid = msg->msg_hdr.src_nid;
@@ -4889,11 +4890,12 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 void
 lnet_recv_delayed_msg_list(struct list_head *head)
 {
-	while (!list_empty(head)) {
-		struct lnet_msg	*msg;
+	struct lnet_msg	*msg;
+
+	while ((msg = list_first_entry_or_null(head, struct lnet_msg,
+					       msg_list)) != NULL) {
 		struct lnet_processid id;
 
-		msg = list_entry(head->next, struct lnet_msg, msg_list);
 		list_del(&msg->msg_list);
 
 		/* md won't disappear under me, since each msg
@@ -5353,7 +5355,6 @@ EXPORT_SYMBOL(LNetGet);
 int
 LNetDist(struct lnet_nid *dstnid, struct lnet_nid *srcnid, __u32 *orderp)
 {
-	struct list_head *e;
 	struct lnet_ni *ni = NULL;
 	struct lnet_remotenet *rnet;
 	__u32 dstnet = LNET_NID_NET(dstnid);
@@ -5425,9 +5426,7 @@ LNetDist(struct lnet_nid *dstnid, struct lnet_nid *srcnid, __u32 *orderp)
 	}
 
 	rn_list = lnet_net2rnethash(dstnet);
-	list_for_each(e, rn_list) {
-		rnet = list_entry(e, struct lnet_remotenet, lrn_list);
-
+	list_for_each_entry(rnet, rn_list, lrn_list) {
 		if (rnet->lrn_net == dstnet) {
 			struct lnet_route *route;
 			struct lnet_route *shortest = NULL;

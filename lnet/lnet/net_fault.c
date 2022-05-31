@@ -661,8 +661,8 @@ delayed_msg_check(struct lnet_delay_rule *rule, bool all,
 	} else if (!list_empty(msg_list)) {
 		/* dequeued some timedout messages, update timer for the
 		 * next delayed message on rule */
-		msg = list_entry(rule->dl_msg_list.next,
-				 struct lnet_msg, msg_list);
+		msg = list_first_entry(&rule->dl_msg_list,
+				       struct lnet_msg, msg_list);
 		rule->dl_msg_send = msg->msg_delay_send;
 		mod_timer(&rule->dl_timer,
 			  jiffies +
@@ -676,12 +676,11 @@ delayed_msg_process(struct list_head *msg_list, bool drop)
 {
 	struct lnet_msg	*msg;
 
-	while (!list_empty(msg_list)) {
+	while ((msg = list_first_entry_or_null(msg_list, struct lnet_msg,
+					       msg_list)) != NULL) {
 		struct lnet_ni *ni;
 		int		cpt;
 		int		rc;
-
-		msg = list_entry(msg_list->next, struct lnet_msg, msg_list);
 
 		if (msg->msg_sending) {
 			/* Delayed send */
@@ -754,8 +753,8 @@ lnet_delay_rule_check(void)
 			break;
 		}
 
-		rule = list_entry(delay_dd.dd_sched_rules.next,
-				  struct lnet_delay_rule, dl_sched_link);
+		rule = list_first_entry(&delay_dd.dd_sched_rules,
+					struct lnet_delay_rule, dl_sched_link);
 		list_del_init(&rule->dl_sched_link);
 		spin_unlock_bh(&delay_dd.dd_lock);
 

@@ -739,9 +739,9 @@ lnet_attempt_msg_resend(struct lnet_msg *msg)
 		return 0;
 	}
 
-	while (!list_empty(&container->msc_resending)) {
-		msg = list_entry(container->msc_resending.next,
-					struct lnet_msg, msg_list);
+	while ((msg = list_first_entry_or_null(&container->msc_resending,
+					       struct lnet_msg,
+					       msg_list)) != NULL) {
 		list_del(&msg->msg_list);
 
 		/*
@@ -1199,10 +1199,9 @@ again:
 	}
 
 	rc = 0;
-	while (!list_empty(&container->msc_finalizing)) {
-		msg = list_entry(container->msc_finalizing.next,
-				 struct lnet_msg, msg_list);
-
+	while ((msg = list_first_entry_or_null(&container->msc_finalizing,
+					       struct lnet_msg,
+					       msg_list)) != NULL) {
 		list_del_init(&msg->msg_list);
 
 		/* NB drops and regains the lnet lock if it actually does
@@ -1229,16 +1228,15 @@ EXPORT_SYMBOL(lnet_finalize);
 void
 lnet_msg_container_cleanup(struct lnet_msg_container *container)
 {
-	int	count = 0;
+	struct lnet_msg *msg;
+	int count = 0;
 
 	if (container->msc_init == 0)
 		return;
 
-	while (!list_empty(&container->msc_active)) {
-		struct lnet_msg *msg;
-
-		msg  = list_entry(container->msc_active.next,
-				  struct lnet_msg, msg_activelist);
+	while ((msg = list_first_entry_or_null(&container->msc_active,
+					       struct lnet_msg,
+					       msg_activelist)) != NULL) {
 		LASSERT(msg->msg_onactivelist);
 		msg->msg_onactivelist = 0;
 		list_del_init(&msg->msg_activelist);
