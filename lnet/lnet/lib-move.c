@@ -1762,7 +1762,8 @@ lnet_reserved_msg(struct lnet_msg *msg)
 	return false;
 }
 
-/*
+/* Can the specified message trigger peer discovery?
+ *
  * Traffic to the LNET_RESERVED_PORTAL may not trigger peer discovery,
  * because such traffic is required to perform discovery. We therefore
  * exclude all GET and PUT on that portal. We also exclude all ACK and
@@ -1774,6 +1775,18 @@ static bool
 lnet_msg_discovery(struct lnet_msg *msg)
 {
 	return !(lnet_reserved_msg(msg) || lnet_msg_is_response(msg));
+}
+
+/* Is the specified message an LNet ping?
+ */
+static bool
+lnet_msg_is_ping(struct lnet_msg *msg)
+{
+	if (msg->msg_type == LNET_MSG_GET &&
+	    msg->msg_hdr.msg.get.ptl_index == LNET_RESERVED_PORTAL)
+		return true;
+
+	return false;
 }
 
 #define SRC_SPEC	0x0001
@@ -2432,10 +2445,14 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 	__u32 best_net_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 	__u32 net_sel_prio;
 
-	/* if this is a discovery message and lp_disc_net_id is
-	 * specified then use that net to send the discovery on.
+	/* If lp_disc_net_id is set, this peer is a router undergoing
+	 * discovery, and this message is an LNet ping, then this may be a
+	 * discovery message and we need to select an NI on the peer net
+	 * specified by lp_disc_net_id
 	 */
-	if (discovery && peer->lp_disc_net_id) {
+	if (peer->lp_disc_net_id &&
+	    (peer->lp_state & LNET_PEER_RTR_DISCOVERY) &&
+	    lnet_msg_is_ping(msg)) {
 		best_lpn = lnet_peer_get_net_locked(peer, peer->lp_disc_net_id);
 		if (best_lpn && lnet_get_net_locked(best_lpn->lpn_net_id))
 			goto select_best_ni;
