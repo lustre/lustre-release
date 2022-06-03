@@ -1461,6 +1461,9 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 	struct page **pa = NULL;
 	int i, j = 0;
 
+	if (!pga[0])
+		return;
+
 #ifdef CONFIG_LL_ENCRYPTION
 	if (PageChecked(pga[0]->pg)) {
 		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
