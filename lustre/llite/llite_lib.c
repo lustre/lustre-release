@@ -1305,12 +1305,15 @@ int ll_fill_super(struct super_block *sb)
 	if (err)
 		GOTO(out_free_cfg, err);
 
+	/* LSI_FILENAME_ENC is only used by embedded llcrypt */
+#ifdef CONFIG_LL_ENCRYPTION
 	if (ll_sb_has_test_dummy_encryption(sb))
 		/* enable filename encryption by default for dummy enc mode */
 		lsi->lsi_flags |= LSI_FILENAME_ENC;
 	else
 		/* filename encryption is disabled by default */
 		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+#endif
 
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;

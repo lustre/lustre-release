@@ -4318,10 +4318,12 @@ test_54() {
 
 	which fscrypt || skip "This test needs fscrypt userspace tool"
 
-	fscrypt setup --force --verbose || error "fscrypt global setup failed"
+	yes | fscrypt setup --force --verbose ||
+		error "fscrypt global setup failed"
 	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
 		/etc/fscrypt.conf
-	fscrypt setup --verbose $MOUNT || error "fscrypt setup $MOUNT failed"
+	yes | fscrypt setup --verbose $MOUNT ||
+		error "fscrypt setup $MOUNT failed"
 	mkdir -p $testdir
 	chown -R $ID0:$ID0 $testdir
 
@@ -4357,9 +4359,12 @@ test_54() {
 	[ $filecount -eq 3 ] || error "found $filecount files"
 
 	# check enable_filename_encryption default value
+	# tunable only available for client built against embedded llcrypt
 	$LCTL get_param mdc.*.connect_flags | grep -q name_encryption &&
 	  nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
 			head -n1)
+	# If client is built against in-kernel fscrypt, it is not possible
+	# to decide to encrypt file names or not: they are always encrypted.
 	if [ -n "$nameenc" ]; then
 		[ $nameenc -eq 0 ] ||
 		       error "enable_filename_encryption should be 0 by default"
@@ -4437,7 +4442,7 @@ test_54() {
 
 	# setup encryption from inside this subdir mount
 	# the .fscrypt directory is going to be created at the real fs root
-	fscrypt setup --verbose $MOUNT ||
+	yes | fscrypt setup --verbose $MOUNT ||
 		error "fscrypt setup $MOUNT failed (2)"
 	testdir=$MOUNT/vault
 	mkdir $testdir
@@ -4445,7 +4450,7 @@ test_54() {
 	fid1=$(path2fid $MOUNT/.fscrypt)
 	echo "With FILESET $tdir, .fscrypt FID is $fid1"
 
-	# enable name encryption
+	# enable name encryption, only valid if built against embedded llcrypt
 	if [ -n "$nameenc" ]; then
 		do_facet mgs $LCTL set_param -P \
 			llite.*.enable_filename_encryption=1
@@ -4517,7 +4522,7 @@ test_54() {
 	$RUNAS fscrypt lock --verbose $DIR/$tdir/vault ||
 		error "fscrypt lock $DIR/$tdir/vault failed (5)"
 
-	# disable name encryption
+	# disable name encryption, only valid if built against embedded llcrypt
 	if [ -n "$nameenc" ]; then
 		do_facet mgs $LCTL set_param -P \
 			llite.*.enable_filename_encryption=0
