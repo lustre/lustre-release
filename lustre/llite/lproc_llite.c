@@ -1591,6 +1591,7 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 
 LDEBUGFS_SEQ_FOPS(ll_nosquash_nids);
 
+#ifdef CONFIG_LL_ENCRYPTION
 static int ll_filename_enc_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1635,6 +1636,7 @@ static ssize_t ll_filename_enc_seq_write(struct file *file,
 }
 
 LDEBUGFS_SEQ_FOPS(ll_filename_enc);
+#endif /* CONFIG_LL_ENCRYPTION */
 
 static int ll_pcc_seq_show(struct seq_file *m, void *v)
 {
@@ -1690,8 +1692,10 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_nosquash_nids_fops			},
 	{ .name =	"pcc",
 	  .fops =	&ll_pcc_fops,				},
+#ifdef CONFIG_LL_ENCRYPTION
 	{ .name =	"enable_filename_encryption",
 	  .fops =	&ll_filename_enc_fops,			},
+#endif
 	{ NULL }
 };
 
