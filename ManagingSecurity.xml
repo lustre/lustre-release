@@ -721,8 +721,9 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
        content encryption mode will be taken into account, and filename
        encryption mode will be ignored to leave filenames in clear text.</para>
       </warning>
-      <warning><para condition='l2F'>Ability to encrypt file and directory names
-       is governed by new llite parameter named
+      <warning><para condition='l2F'>When Lustre client is built against the
+       embedded kernel library instead of the in-kernel fscrypt, the ability to
+       encrypt file and directory names is governed by new llite parameter named
        <literal>enable_filename_encryption</literal>, introduced in 2.15, and
        set to 0 by default.
        When this parameter is 0, new empty directories configured as encrypted
@@ -735,7 +736,11 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
        To set the <literal>enable_filename_encryption</literal> parameter
        globally for all clients, one can do on the MGS:
 <screen>mgs# lctl set_param -P llite.*.enable_filename_encryption=1</screen>
-       Note however that new files and directories under a parent encrypted
+       Be aware that the <literal>enable_filename_encryption</literal> tuning
+       parameter is not available when Lustre client is built against in-kernel
+       fscrypt. Indeed, the in-kernel fscrypt library always encrypts file name
+       along with file content.<literallayout></literallayout>
+       Also note that new files and directories under a parent encrypted
        directory created with Lustre 2.14 will not have their names encrypted.
        Also, because files created with Lustre 2.14 did not have their names
        encrypted, they will remain so after upgrade to 2.15. To benefit from
