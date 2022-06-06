@@ -146,6 +146,7 @@ struct obd_type *class_get_type(const char *name)
 	}
 	return type;
 }
+EXPORT_SYMBOL(class_get_type);
 
 void class_put_type(struct obd_type *type)
 {
@@ -153,6 +154,7 @@ void class_put_type(struct obd_type *type)
 	module_put(type->typ_dt_ops->o_owner);
 	atomic_dec(&type->typ_refcnt);
 }
+EXPORT_SYMBOL(class_put_type);
 
 static void class_sysfs_release(struct kobject *kobj)
 {

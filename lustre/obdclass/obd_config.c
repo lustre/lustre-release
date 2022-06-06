@@ -520,6 +520,7 @@ int class_match_nid(char *buf, char *key, lnet_nid_t nid)
 	}
 	return rc;
 }
+EXPORT_SYMBOL(class_match_nid);
 
 int class_match_net(char *buf, char *key, __u32 net)
 {
@@ -539,6 +540,7 @@ int class_match_net(char *buf, char *key, __u32 net)
 	}
 	return rc;
 }
+EXPORT_SYMBOL(class_match_net);
 
 char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index)
 {
@@ -988,6 +990,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(class_add_conn);
 
 /** Remove a failover NID location. */
 static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)

@@ -747,14 +747,6 @@ static int __init obdclass_init(void)
 	err = lu_ucred_global_init();
 	if (err != 0)
 		goto cleanup_dt_global;
-
-	err = lustre_tgt_register_fs();
-	if (err && err != -EBUSY) {
-		/* Don't fail if server code also registers "lustre_tgt" */
-		CERROR("obdclass: register fstype 'lustre_tgt' failed: rc = %d\n",
-		       err);
-		goto cleanup_lu_ucred_global;
-	}
 #endif /* HAVE_SERVER_SUPPORT */
 
 	/* simulate a late OOM situation now to require all
@@ -769,10 +761,6 @@ static int __init obdclass_init(void)
 
 cleanup_all:
 #ifdef HAVE_SERVER_SUPPORT
-	/* fake error but filesystem has been registered */
-	lustre_tgt_unregister_fs();
-
-cleanup_lu_ucred_global:
 	lu_ucred_global_fini();
 
 cleanup_dt_global:
@@ -849,7 +837,6 @@ static void __exit obdclass_exit(void)
 
 	misc_deregister(&obd_psdev);
 #ifdef HAVE_SERVER_SUPPORT
-	lustre_tgt_unregister_fs();
 	lu_ucred_global_fini();
 	dt_global_fini();
 #endif /* HAVE_SERVER_SUPPORT */

@@ -421,6 +421,7 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
 	print_lustre_cfg(lcfg);
 	EXIT;
 }
+EXPORT_SYMBOL(lustre_swab_lustre_cfg);
 
 /* used only for compatibility with old on-disk cfg_marker data */
 struct cfg_marker32 {
@@ -486,3 +487,4 @@ void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
 
 	EXIT;
 }
+EXPORT_SYMBOL(lustre_swab_cfg_marker);

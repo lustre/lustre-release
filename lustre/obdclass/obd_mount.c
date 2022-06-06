@@ -202,6 +202,7 @@ int lustre_start_simple(char *obdname, char *type, char *uuid,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lustre_start_simple);
 
 static DEFINE_MUTEX(mgc_start_lock);
 

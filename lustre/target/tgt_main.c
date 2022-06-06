@@ -824,6 +824,12 @@ int tgt_mod_init(void)
 	if (result != 0)
 		RETURN(result);
 
+	result = lustre_tgt_register_fs();
+	if (result != 0) {
+		lu_kmem_fini(tgt_caches);
+		RETURN(result);
+	}
+
 	tgt_page_to_corrupt = alloc_page(GFP_KERNEL);
 
 	tgt_key_init_generic(&tgt_thread_key, NULL);
@@ -847,6 +853,8 @@ void tgt_mod_exit(void)
 	lu_context_key_degister(&tgt_thread_key);
 	lu_context_key_degister(&tgt_session_key);
 	update_info_fini();
+
+	lustre_tgt_unregister_fs();
 
 	lu_kmem_fini(tgt_caches);
 }

@@ -21,7 +21,6 @@ obdclass-all-objs += range_lock.o interval_tree.o
 @SERVER_TRUE@obdclass-all-objs += lprocfs_status_server.o
 @SERVER_TRUE@obdclass-all-objs += lu_ucred.o
 @SERVER_TRUE@obdclass-all-objs += md_attrs.o
-@SERVER_TRUE@obdclass-all-objs += obd_mount_server.o
 @SERVER_TRUE@obdclass-all-objs += obdo_server.o
 @SERVER_TRUE@obdclass-all-objs += scrub.o
 
@@ -39,7 +38,6 @@ EXTRA_DIST += range_lock.c interval_tree.c
 @SERVER_FALSE@EXTRA_DIST += lprocfs_status_server.c
 @SERVER_FALSE@EXTRA_DIST += lu_ucred.c
 @SERVER_FALSE@EXTRA_DIST += md_attrs.c
-@SERVER_FALSE@EXTRA_DIST += obd_mount_server.c
 @SERVER_FALSE@EXTRA_DIST += obdo_server.c
 @SERVER_FALSE@EXTRA_DIST += scrub.c
 
