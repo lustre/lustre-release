@@ -1637,31 +1637,32 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
 	struct kib_dev *dev = ((struct kib_net *)ni->ni_data)->ibn_dev;
 	struct lnet_hdr *hdr = &lntmsg->msg_hdr;
-	int               type = lntmsg->msg_type;
+	int type = lntmsg->msg_type;
 	struct lnet_processid *target = &lntmsg->msg_target;
-	int               target_is_router = lntmsg->msg_target_is_router;
-	int               routing = lntmsg->msg_routing;
-	unsigned int      payload_niov = lntmsg->msg_niov;
-	struct bio_vec   *payload_kiov = lntmsg->msg_kiov;
-	unsigned int      payload_offset = lntmsg->msg_offset;
-	unsigned int      payload_nob = lntmsg->msg_len;
-	bool		 gpu;
+	int target_is_router = lntmsg->msg_target_is_router;
+	int routing = lntmsg->msg_routing;
+	unsigned int payload_niov = lntmsg->msg_niov;
+	struct bio_vec *payload_kiov = lntmsg->msg_kiov;
+	unsigned int payload_offset = lntmsg->msg_offset;
+	unsigned int payload_nob = lntmsg->msg_len;
+	struct lnet_libmd *msg_md = lntmsg->msg_md;
+	bool gpu;
 	struct kib_msg *ibmsg;
 	struct kib_rdma_desc *rd;
-	struct kib_tx	*tx;
-	int		 nob;
-	int		 rc;
+	struct kib_tx *tx;
+	int nob;
+	int rc;
 
 	/* NB 'private' is different depending on what we're sending.... */
 
 	CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
 	       payload_nob, payload_niov, libcfs_idstr(target));
 
-	LASSERT (payload_nob == 0 || payload_niov > 0);
-	LASSERT (payload_niov <= LNET_MAX_IOV);
+	LASSERT(payload_nob == 0 || payload_niov > 0);
+	LASSERT(payload_niov <= LNET_MAX_IOV);
 
 	/* Thread context */
-	LASSERT (!in_interrupt());
+	LASSERT(!in_interrupt());
 
 	tx = kiblnd_get_idle_tx(ni, lnet_nid_to_nid4(&target->nid));
 	if (tx == NULL) {
@@ -1671,7 +1672,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		return -ENOMEM;
 	}
 	ibmsg = tx->tx_msg;
-	gpu = (lntmsg->msg_md->md_flags & LNET_MD_FLAG_GPU);
+	gpu = msg_md ? (msg_md->md_flags & LNET_MD_FLAG_GPU) : false;
 
 	switch (type) {
 	default:
@@ -1687,16 +1688,17 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			break;                  /* send IMMEDIATE */
 
 		/* is the REPLY message too small for RDMA? */
-		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[lntmsg->msg_md->md_length]);
+		nob = offsetof(struct kib_msg,
+			       ibm_u.immediate.ibim_payload[msg_md->md_length]);
 		if (nob <= IBLND_MSG_SIZE && !gpu)
 			break;                  /* send IMMEDIATE */
 
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
-		tx->tx_gpu = !!gpu;
+		tx->tx_gpu = gpu;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-					  lntmsg->msg_md->md_niov,
-					  lntmsg->msg_md->md_kiov,
-					  0, lntmsg->msg_md->md_length);
+					  msg_md->md_niov,
+					  msg_md->md_kiov,
+					  0, msg_md->md_length);
 		if (rc != 0) {
 			CERROR("Can't setup GET sink for %s: %d\n",
 			       libcfs_nidstr(&target->nid), rc);
