@@ -128,6 +128,14 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	iobuf->dr_rw = rw;
 	iobuf->dr_init_at = line;
 
+	/* Init dr_start_pg_wblks to 0 for osd_read/write_prep().
+	 * For osd_write_commit() need to keep the value assigned in
+	 * osd_ldiskfs_map_inode_pages() during retries, and before it ,
+	 * init dr_start_pg_wblks to 0 in osd_write_prep() is sufficient.
+	 */
+	if (rw == 0)
+		iobuf->dr_start_pg_wblks = 0;
+
 	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	if (iobuf->dr_bl_buf.lb_len >= blocks * sizeof(iobuf->dr_blocks[0])) {
 		LASSERT(iobuf->dr_pg_buf.lb_len >=
@@ -321,22 +329,14 @@ static void osd_mark_page_io_done(struct osd_iobuf *iobuf,
 				  sector_t start_blocks,
 				  sector_t count)
 {
-	struct niobuf_local *lnb;
+	struct niobuf_local **lnbs = iobuf->dr_lnbs;
 	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	pgoff_t pg_start, pg_end;
+	int i, end;
 
-	pg_start = start_blocks / blocks_per_page;
-	if (start_blocks % blocks_per_page)
-		pg_start++;
-	if (count >= blocks_per_page)
-		pg_end = (start_blocks + count -
-			  blocks_per_page) / blocks_per_page;
-	else
-		return; /* nothing to mark */
-	for ( ; pg_start <= pg_end; pg_start++) {
-		lnb = iobuf->dr_lnbs[pg_start];
-		lnb->lnb_flags |= OBD_BRW_DONE;
-	}
+	i = start_blocks / blocks_per_page;
+	end = (start_blocks + count) / blocks_per_page;
+	for ( ; i < end; i++)
+		lnbs[i]->lnb_flags |= OBD_BRW_DONE;
 }
 
 /*
@@ -921,7 +921,6 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 				       struct thandle *thandle)
 {
 	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	int blocksize = 1 << inode->i_blkbits;
 	int rc = 0, i = 0, mapped_index = 0;
 	struct page *fp = NULL;
 	int clen = 0;
@@ -981,44 +980,19 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 		map.m_len = blen = clen * blocks_per_page;
 
 		/*
-		 * For PAGE_SIZE > blocksize block allocation mapping, the
-		 * ldiskfs_map_blocks() aims at looking up already mapped
-		 * blocks, recording them to iobuf->dr_blocks and fixing up
-		 * m_lblk, m_len for un-allocated blocks to be created/mapped
-		 * in the second ldiskfs_map_blocks().
-		 *
-		 * M_lblk should be the first un-allocated block if m_lblk
-		 * points at an already allocated block when create = 1,
-		 * ldiskfs_map_blocks() will just return with already
-		 * allocated blocks and without allocating any requested
-		 * new blocks for the extent. For PAGE_SIZE = blocksize
-		 * case, if m_lblk points at an already allocated block it
-		 * will point at an un-allocated block in next restart
-		 * transaction, because the already mapped block/page will
-		 * be filtered out in next restart transaction via flag
-		 * OBD_BRW_DONE in osd_declare_write_commit().
+		 * Skip already written blocks of the start page.
+		 * Note that this branch will not go into for 4K PAGE_SIZE.
+		 * Because dr_start_pg_wblks is always 0 for 4K PAGE_SIZE.
+		 * iobuf->dr_start_pg_wblks = (start_blocks + count) %
+		 * blocks_per_page.
 		 */
-		if (create && PAGE_SIZE > blocksize) {
-			/* With flags=0 just for already mapped blocks lookup */
-			rc = ldiskfs_map_blocks(handle, inode, &map, 0);
-			if (rc > 0 && map.m_flags & LDISKFS_MAP_MAPPED) {
-				for (; total < blen && total < map.m_len;
-						total++)
-					*(blocks + total) = map.m_pblk + total;
-
-				/* The extent is already full mapped */
-				if (total == blen) {
-					rc = 0;
-					goto ext_already_mapped;
-				}
-			}
-			/*
-			 * Fixup or reset m_lblk and m_len for un-mapped blocks.
-			 * The second ldiskfs_map_blocks() will create and map
-			 * them.
-			 */
-			map.m_lblk = fp->index * blocks_per_page + total;
+		if (iobuf->dr_start_pg_wblks > 0) {
+			total = previous_total = start_blocks =
+				iobuf->dr_start_pg_wblks;
+			map.m_lblk = fp->index * blocks_per_page +
+				total;
 			map.m_len = blen - total;
+			iobuf->dr_start_pg_wblks = 0;
 		}
 
 cont_map:
@@ -1046,6 +1020,8 @@ cont_map:
 				if (rc)
 					GOTO(cleanup, rc);
 				thandle->th_restart_tran = 1;
+				iobuf->dr_start_pg_wblks = (start_blocks +
+						count) % blocks_per_page;
 				GOTO(cleanup, rc = -EAGAIN);
 			}
 
@@ -1095,10 +1071,9 @@ cont_map:
 			rc = 0;
 		}
 
-ext_already_mapped:
 		if (rc == 0 && create) {
 			count += (total - previous_total);
-			mapped_index = (count + blocks_per_page -
+			mapped_index = (start_blocks + count + blocks_per_page -
 					1) / blocks_per_page - 1;
 			lnb1 = iobuf->dr_lnbs[i - clen];
 			lnb2 = iobuf->dr_lnbs[mapped_index];

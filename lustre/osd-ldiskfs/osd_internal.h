@@ -608,6 +608,8 @@ struct osd_iobuf {
 	ktime_t		   dr_elapsed;	/* how long io took */
 	struct osd_device *dr_dev;
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
+	/* Already written blocks of the start page */
+	unsigned int	   dr_start_pg_wblks;
 };
 
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
