@@ -563,6 +563,9 @@ test_16f() { # LU-14541
 	local duration=20
 	local status
 
+	(( $MDS1_VERSION > $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51"
+
 	timeout --preserve-status --signal=USR1 $duration \
 		rw_seq_cst_vs_drop_caches $file1 $file2
 	status=$?

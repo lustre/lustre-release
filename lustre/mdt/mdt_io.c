@@ -971,13 +971,26 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
 	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 21, 53, 0)
-	    && (tgt_conn_flags(tsi) & OBD_CONNECT_OLD_FALLOC)
+	    && !tsi->tsi_exp->exp_old_falloc
 #endif
 	    )
 		RETURN(-EOPNOTSUPP);
 
 	start = oa->o_size;
 	end = oa->o_blocks;
+	CDEBUG(D_INFO, "%s: start: %llu end: %llu\n",
+	       mdt->mdt_child_exp->exp_obd->obd_name, start, end);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 21, 53, 0)
+	/*
+	 * For inter-op case with older clients (where exp_old_falloc is true)
+	 * fallocate() start and end are passed in as 0 (For interior case
+	 * where end offset less than file size) This is fixed later.
+	 * For such cases we return -EOPNOTSUPP
+	 */
+	if (tsi->tsi_exp->exp_old_falloc && start >= end)
+		RETURN(-EOPNOTSUPP);
+#endif
 	/* client should already limit len >= 0 */
 	if (start >= end)
 		RETURN(-EINVAL);

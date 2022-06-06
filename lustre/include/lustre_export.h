@@ -279,6 +279,11 @@ struct obd_export {
 				exp_replay_done:1,
 				/* local client with recovery disabled */
 				exp_no_recovery:1,
+				/* old client will set this to 1 (true).
+				 * Newer clients 2.15 and beyond will have this
+				 * set as 0 (false)
+				 */
+				exp_old_falloc:1,
 				exp_hashed:1;
 	/* also protected by exp_lock */
 	enum lustre_sec_part	exp_sp_peer;

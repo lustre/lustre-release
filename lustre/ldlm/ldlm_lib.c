@@ -1107,6 +1107,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 	struct obd_connect_data *data, *tmpdata;
 	int size, tmpsize;
 	lnet_nid_t client_nid;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	int tmp_exp_old_falloc;
+#endif
 	struct ptlrpc_connection *pcon = NULL;
 
 	ENTRY;
@@ -1194,6 +1197,15 @@ int target_handle_connect(struct ptlrpc_request *req)
 	 */
 	if (!(data->ocd_connect_flags & OBD_CONNECT_FULL20))
 		GOTO(out, rc = -EPROTO);
+
+	/* Old clients will have 'tmp_exp_old_falloc' as 1.
+	 * Newer clients (2.15) and beyond will have it set as 0
+	 */
+	tmp_exp_old_falloc =
+		!!(data->ocd_connect_flags & OBD_CONNECT_OLD_FALLOC);
+
+	CDEBUG(D_INFO, "%s: ocd_connect_flags: %#llx tmp_exp_old_falloc: %d\n",
+	       target->obd_name, data->ocd_connect_flags, tmp_exp_old_falloc);
 
 	/*
 	 * Don't allow liblustre clients to connect.
@@ -1513,6 +1525,13 @@ dont_check_exports:
 	}
 	LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
 	export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	/* make 'tmp_exp_old_falloc' persistent by saving it into
+	 * server side export object(obd_export)
+	 */
+	export->exp_old_falloc = tmp_exp_old_falloc;
+#endif
 
 	/* Check to see if connection came from another NID. */
 	if (export->exp_connection != NULL &&

@@ -1991,9 +1991,10 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	 * fallocate() start and end are passed in o_size and o_blocks
 	 * on the wire.  Clients 2.15.0 and newer should always set
 	 * the OBD_MD_FLSIZE and OBD_MD_FLBLOCKS valid flags, but some
-	 * older client versions did not.  We permit older clients to
-	 * not set these flags, checking their version by proxy using
-	 * the lack of OBD_CONNECT_TRUNCLOCK to imply 2.14.0 and older.
+	 * older client (exp_old_falloc is true) versions did not.
+	 * We permit older clients to not set these flags, checking their
+	 * version by proxy using the lack of OBD_CONNECT_TRUNCLOCK to
+	 * imply 2.14.0 and older.
 	 *
 	 * Return -EOPNOTSUPP to also work with older clients not
 	 * supporting newer server modes.
@@ -2001,13 +2002,25 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
 	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 21, 53, 0)
-	    && (tgt_conn_flags(tsi) & OBD_CONNECT_OLD_FALLOC)
+	    && !tsi->tsi_exp->exp_old_falloc
 #endif
 	    )
 		RETURN(-EOPNOTSUPP);
 
 	start = oa->o_size;
 	end = oa->o_blocks;
+	CDEBUG(D_INFO, "%s: start: %llu end: %llu\n", tgt_name(tsi->tsi_tgt),
+	       start, end);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 21, 53, 0)
+	/* For inter-op case with older clients (where exp_old_falloc is true)
+	 * fallocate() start and end are passed in as 0 (For interior case
+	 * where end offset less than file size) This is fixed later.
+	 * For such cases we return -EOPNOTSUPP
+	 */
+	if (tsi->tsi_exp->exp_old_falloc && start >= end)
+		RETURN(-EOPNOTSUPP);
+#endif
 	/* client should already limit len >= 0 */
 	if (start >= end)
 		RETURN(-EINVAL);
