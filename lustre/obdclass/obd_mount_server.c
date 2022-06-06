@@ -66,8 +66,8 @@ static struct lustre_mount_info *server_find_mount(const char *name)
 {
 	struct list_head *tmp;
 	struct lustre_mount_info *lmi;
-	ENTRY;
 
+	ENTRY;
 	list_for_each(tmp, &server_mount_info_list) {
 		lmi = list_entry(tmp, struct lustre_mount_info,
 				 lmi_list_chain);
@@ -79,13 +79,14 @@ static struct lustre_mount_info *server_find_mount(const char *name)
 
 /* we must register an obd for a mount before we call the setup routine.
  *_setup will call lustre_get_mount to get the mnt struct
- by obd_name, since we can't pass the pointer to setup. */
+ * by obd_name, since we can't pass the pointer to setup.
+ */
 static int server_register_mount(const char *name, struct super_block *sb)
 {
 	struct lustre_mount_info *lmi;
 	char *name_cp;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(sb);
 
 	OBD_ALLOC(lmi, sizeof(*lmi));
@@ -122,8 +123,8 @@ static int server_register_mount(const char *name, struct super_block *sb)
 static int server_deregister_mount(const char *name)
 {
 	struct lustre_mount_info *lmi;
-	ENTRY;
 
+	ENTRY;
 	mutex_lock(&lustre_mount_info_lock);
 	lmi = server_find_mount(name);
 	if (!lmi) {
@@ -144,14 +145,15 @@ static int server_deregister_mount(const char *name)
 }
 
 /* obd's look up a registered mount using their obdname. This is just
-   for initial obd setup to find the mount struct.  It should not be
-   called every time you want to mntget. */
+ * for initial obd setup to find the mount struct.  It should not be
+ * called every time you want to mntget.
+ */
 struct lustre_mount_info *server_get_mount(const char *name)
 {
 	struct lustre_mount_info *lmi;
 	struct lustre_sb_info *lsi;
-	ENTRY;
 
+	ENTRY;
 	mutex_lock(&lustre_mount_info_lock);
 	lmi = server_find_mount(name);
 	mutex_unlock(&lustre_mount_info_lock);
@@ -186,8 +188,8 @@ int server_put_mount(const char *name, bool dereg_mnt)
 {
 	struct lustre_mount_info *lmi;
 	struct lustre_sb_info *lsi;
-	ENTRY;
 
+	ENTRY;
 	mutex_lock(&lustre_mount_info_lock);
 	lmi = server_find_mount(name);
 	mutex_unlock(&lustre_mount_info_lock);
@@ -215,43 +217,44 @@ EXPORT_SYMBOL(server_put_mount);
 /* Set up a MGS to serve startup logs */
 static int server_start_mgs(struct super_block *sb)
 {
-	struct lustre_sb_info    *lsi = s2lsi(sb);
+	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct lustre_mount_info *lmi;
-	int    rc = 0;
-	ENTRY;
+	int rc = 0;
 
+	ENTRY;
 	/* It is impossible to have more than 1 MGS per node, since
-	   MGC wouldn't know which to connect to */
+	 * MGC wouldn't know which to connect to
+	 */
 	lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
 	if (lmi) {
 		lsi = s2lsi(lmi->lmi_sb);
-		LCONSOLE_ERROR_MSG(0x15d, "The MGS service was already started"
-				   " from server\n");
+		LCONSOLE_ERROR_MSG(0x15d,
+				   "The MGS service was already started from server\n");
 		RETURN(-EALREADY);
 	}
 
 	CDEBUG(D_CONFIG, "Start MGS service %s\n", LUSTRE_MGS_OBDNAME);
 
 	rc = server_register_mount(LUSTRE_MGS_OBDNAME, sb);
+	if (rc < 0)
+		GOTO(report_err, rc);
 
-	if (!rc) {
-		rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
-					 LUSTRE_MGS_OBDNAME, NULL, NULL,
-					 lsi->lsi_osd_obdname, NULL);
-		/* server_deregister_mount() is not called previously, for lsi
-		 * and other stuff can't be freed cleanly when mgs calls
-		 * server_put_mount() in error handling case (see b=17758),
-		 * this problem is caused by a bug in mgs_init0, which forgot
-		 * calling server_put_mount in error case. */
-
-		if (rc)
-			server_deregister_mount(LUSTRE_MGS_OBDNAME);
-	}
-
-	if (rc)
-		LCONSOLE_ERROR_MSG(0x15e, "Failed to start MGS '%s' (%d). "
-				   "Is the 'mgs' module loaded?\n",
+	rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
+				 LUSTRE_MGS_OBDNAME, NULL, NULL,
+				 lsi->lsi_osd_obdname, NULL);
+	/* server_deregister_mount() is not called previously, for lsi
+	 * and other stuff can't be freed cleanly when mgs calls
+	 * server_put_mount() in error handling case (see b=17758),
+	 * this problem is caused by a bug in mgs_init0, which forgot
+	 * calling server_put_mount in error case.
+	 */
+	if (rc < 0) {
+		server_deregister_mount(LUSTRE_MGS_OBDNAME);
+report_err:
+		LCONSOLE_ERROR_MSG(0x15e,
+				   "Failed to start MGS '%s' (%d). Is the 'mgs' module loaded?\n",
 				   LUSTRE_MGS_OBDNAME, rc);
+	}
 	RETURN(rc);
 }
 
@@ -260,11 +263,11 @@ static int server_stop_mgs(struct super_block *sb)
 	struct obd_device *obd;
 	int rc;
 	struct lustre_mount_info *lmi;
-	ENTRY;
 
+	ENTRY;
 	/* Do not stop MGS if this device is not the running MGT */
 	lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
-	if (lmi != NULL && lmi->lmi_sb != sb)
+	if (lmi && lmi->lmi_sb != sb)
 		RETURN(0);
 
 	CDEBUG(D_MOUNT, "Stop MGS service %s\n", LUSTRE_MGS_OBDNAME);
@@ -283,14 +286,15 @@ static int server_stop_mgs(struct super_block *sb)
 }
 
 /* Since there's only one mgc per node, we have to change it's fs to get
-   access to the right disk. */
+ * access to the right disk.
+ */
 static int server_mgc_set_fs(const struct lu_env *env,
 			     struct obd_device *mgc, struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_MOUNT, "Set mgc disk for %s\n", lsi->lsi_lmd->lmd_dev);
 
 	/* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
@@ -307,10 +311,9 @@ static int server_mgc_clear_fs(const struct lu_env *env,
 			       struct obd_device *mgc)
 {
 	int rc;
+
 	ENTRY;
-
 	CDEBUG(D_MOUNT, "Unassign mgc disk\n");
-
 	rc = obd_set_info_async(env, mgc->obd_self_export,
 				sizeof(KEY_CLEAR_FS), KEY_CLEAR_FS,
 				0, NULL, NULL);
@@ -322,10 +325,10 @@ static inline bool is_mdc_device(const char *devname)
 	char *ptr;
 
 	ptr = strrchr(devname, '-');
-	return ptr != NULL && strcmp(ptr, "-mdc") == 0;
+	return ptr && strcmp(ptr, "-mdc") == 0;
 }
 
-static inline bool tgt_is_mdt(const char *tgtname, __u32 *idx)
+static inline bool tgt_is_mdt(const char *tgtname, u32 *idx)
 {
 	int type;
 
@@ -334,17 +337,17 @@ static inline bool tgt_is_mdt(const char *tgtname, __u32 *idx)
 	return type == LDD_F_SV_TYPE_MDT;
 }
 
-/**
+/*
  * Convert OST/MDT name(fsname-{MDT,OST}xxxx) to a lwp name with the @idx:yyyy
  * (fsname-MDTyyyy-lwp-{MDT,OST}xxxx)
- **/
-int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, __u32 idx)
+ */
+int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, u32 idx)
 {
-	char		*fsname;
-	const char	*tgt;
-	int		rc;
-	ENTRY;
+	char *fsname;
+	const char *tgt;
+	int rc;
 
+	ENTRY;
 	OBD_ALLOC(fsname, MTI_NAME_MAXLEN);
 	if (fsname == NULL)
 		RETURN(-ENOMEM);
@@ -387,7 +390,7 @@ static void lustre_put_lwp_item(struct lwp_register_item *lri)
 	if (atomic_dec_and_test(&lri->lri_ref)) {
 		LASSERT(list_empty(&lri->lri_list));
 
-		if (*lri->lri_exp != NULL)
+		if (*lri->lri_exp)
 			class_export_put(*lri->lri_exp);
 		OBD_FREE_PTR(lri);
 	}
@@ -396,21 +399,21 @@ static void lustre_put_lwp_item(struct lwp_register_item *lri)
 int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 			     register_lwp_cb cb_func, void *cb_data)
 {
-	struct obd_device	 *lwp;
+	struct obd_device *lwp;
 	struct lwp_register_item *lri;
 	bool cb = false;
-	ENTRY;
 
+	ENTRY;
 	LASSERTF(strlen(lwpname) < MTI_NAME_MAXLEN, "lwpname is too long %s\n",
 		 lwpname);
-	LASSERT(exp != NULL && *exp == NULL);
+	LASSERT(exp && !*exp);
 
 	OBD_ALLOC_PTR(lri);
 	if (lri == NULL)
 		RETURN(-ENOMEM);
 
 	lwp = class_name2obd(lwpname);
-	if (lwp != NULL && lwp->obd_set_up == 1) {
+	if (lwp && lwp->obd_set_up == 1) {
 		struct obd_uuid *uuid;
 
 		OBD_ALLOC_PTR(uuid);
@@ -437,11 +440,11 @@ int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 
 	spin_lock(&lwp_register_list_lock);
 	list_add(&lri->lri_list, &lwp_register_list);
-	if (*exp != NULL)
+	if (*exp)
 		cb = true;
 	spin_unlock(&lwp_register_list_lock);
 
-	if (cb && cb_func != NULL)
+	if (cb && cb_func)
 		cb_func(cb_data);
 	lustre_put_lwp_item(lri);
 
@@ -471,7 +474,8 @@ void lustre_deregister_lwp_item(struct obd_export **exp)
 	/* See lustre_notify_lwp_list(), in some extreme race conditions,
 	 * the notify callback could be still on the fly, we need to wait
 	 * for the callback done before moving on to free the data used
-	 * by callback. */
+	 * by callback.
+	 */
 	while (atomic_read(&lri->lri_ref) > 1) {
 		CDEBUG(D_MOUNT, "lri reference count %u, repeat: %d\n",
 		       atomic_read(&lri->lri_ref), repeat);
@@ -482,15 +486,15 @@ void lustre_deregister_lwp_item(struct obd_export **exp)
 }
 EXPORT_SYMBOL(lustre_deregister_lwp_item);
 
-struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
+struct obd_export *lustre_find_lwp_by_index(const char *dev, u32 idx)
 {
 	struct lustre_mount_info *lmi;
-	struct lustre_sb_info	 *lsi;
-	struct obd_device	 *lwp;
-	struct obd_export	 *exp = NULL;
-	char			  fsname[16];
-	char			  lwp_name[24];
-	int			  rc;
+	struct lustre_sb_info *lsi;
+	struct obd_device *lwp;
+	struct obd_export *exp = NULL;
+	char fsname[16];
+	char lwp_name[24];
+	int rc;
 
 	lmi = server_get_mount(dev);
 	if (lmi == NULL)
@@ -509,7 +513,7 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
 		char *ptr = strstr(lwp->obd_name, lwp_name);
 
-		if (ptr != NULL && lwp->obd_lwp_export != NULL) {
+		if (ptr && lwp->obd_lwp_export) {
 			exp = class_export_get(lwp->obd_lwp_export);
 			break;
 		}
@@ -526,17 +530,17 @@ EXPORT_SYMBOL(lustre_find_lwp_by_index);
 void lustre_notify_lwp_list(struct obd_export *exp)
 {
 	struct lwp_register_item *lri;
-	LASSERT(exp != NULL);
 
+	LASSERT(exp);
 again:
 	spin_lock(&lwp_register_list_lock);
 	list_for_each_entry(lri, &lwp_register_list, lri_list) {
 		if (strcmp(exp->exp_obd->obd_name, lri->lri_name))
 			continue;
-		if (*lri->lri_exp != NULL)
+		if (*lri->lri_exp)
 			continue;
 		*lri->lri_exp = class_export_get(exp);
-		if (lri->lri_cb_func == NULL)
+		if (!lri->lri_cb_func)
 			continue;
 		atomic_inc(&lri->lri_ref);
 		spin_unlock(&lwp_register_list_lock);
@@ -548,7 +552,8 @@ again:
 		 * to rescan the list from the beginning. Usually, the list
 		 * 'lwp_register_list' is very short, and there is 'guard'
 		 * lri::lri_exp that will prevent the callback to be done
-		 * repeatedly. So rescanning the list has no problem. */
+		 * repeatedly. So rescanning the list has no problem.
+		 */
 		goto again;
 	}
 	spin_unlock(&lwp_register_list_lock);
@@ -557,14 +562,14 @@ EXPORT_SYMBOL(lustre_notify_lwp_list);
 
 static int lustre_lwp_connect(struct obd_device *lwp, bool is_mdt)
 {
-	struct lu_env		 env;
-	struct lu_context	 session_ctx;
-	struct obd_export	*exp;
-	struct obd_uuid		*uuid = NULL;
+	struct lu_env env;
+	struct lu_context session_ctx;
+	struct obd_export *exp;
+	struct obd_uuid	*uuid = NULL;
 	struct obd_connect_data	*data = NULL;
-	int			 rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	/* log has been fully processed, let clients connect */
 	rc = lu_env_init(&env, lwp->obd_lu_dev->ld_type->ldt_ctx_tags);
 	if (rc != 0)
@@ -605,7 +610,7 @@ static int lustre_lwp_connect(struct obd_device *lwp, bool is_mdt)
 	if (rc != 0) {
 		CERROR("%s: connect failed: rc = %d\n", lwp->obd_name, rc);
 	} else {
-		if (unlikely(lwp->obd_lwp_export != NULL))
+		if (unlikely(lwp->obd_lwp_export))
 			class_export_put(lwp->obd_lwp_export);
 		lwp->obd_lwp_export = class_export_get(exp);
 	}
@@ -630,14 +635,14 @@ out:
  * or from the OSTx to MDTy.
  **/
 static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
-			    __u32 idx)
+			    u32 idx)
 {
-	struct obd_device	*obd;
-	char			*lwpname = NULL;
-	char			*lwpuuid = NULL;
-	int			 rc;
-	ENTRY;
+	struct obd_device *obd;
+	char *lwpname = NULL;
+	char *lwpuuid = NULL;
+	int rc;
 
+	ENTRY;
 	rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
 			    lcfg->lcfg_nid);
 	if (rc != 0) {
@@ -657,37 +662,35 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	}
 
 	OBD_ALLOC(lwpuuid, MTI_NAME_MAXLEN);
-	if (lwpuuid == NULL)
+	if (!lwpuuid)
 		GOTO(out, rc = -ENOMEM);
 
 	sprintf(lwpuuid, "%s_UUID", lwpname);
 	rc = lustre_start_simple(lwpname, LUSTRE_LWP_NAME,
 				 lwpuuid, lustre_cfg_string(lcfg, 1),
 				 NULL, NULL, NULL);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("%s: setup up failed: rc %d\n", lwpname, rc);
 		GOTO(out, rc);
 	}
 
 	obd = class_name2obd(lwpname);
-	LASSERT(obd != NULL);
+	LASSERT(obd);
 
 	rc = lustre_lwp_connect(obd, strstr(lsi->lsi_svname, "-MDT") != NULL);
-	if (rc == 0) {
-		obd->u.cli.cl_max_mds_easize = MAX_MD_SIZE;
-		mutex_lock(&lsi->lsi_lwp_mutex);
-		list_add_tail(&obd->obd_lwp_list, &lsi->lsi_lwp_list);
-		mutex_unlock(&lsi->lsi_lwp_mutex);
-	} else {
+	if (rc < 0) {
 		CERROR("%s: connect failed: rc = %d\n", lwpname, rc);
+		GOTO(out, rc);
 	}
 
-	GOTO(out, rc);
-
+	obd->u.cli.cl_max_mds_easize = MAX_MD_SIZE;
+	mutex_lock(&lsi->lsi_lwp_mutex);
+	list_add_tail(&obd->obd_lwp_list, &lsi->lsi_lwp_list);
+	mutex_unlock(&lsi->lsi_lwp_mutex);
 out:
-	if (lwpname != NULL)
+	if (lwpname)
 		OBD_FREE(lwpname, MTI_NAME_MAXLEN);
-	if (lwpuuid != NULL)
+	if (lwpuuid)
 		OBD_FREE(lwpuuid, MTI_NAME_MAXLEN);
 
 	return rc;
@@ -695,13 +698,13 @@ out:
 
 /* the caller is responsible for memory free */
 static struct obd_device *lustre_find_lwp(struct lustre_sb_info *lsi,
-					  char **lwpname, __u32 idx)
+					  char **lwpname, u32 idx)
 {
-	struct obd_device	*lwp;
-	int			 rc = 0;
-	ENTRY;
+	struct obd_device *lwp;
+	int rc = 0;
 
-	LASSERT(lwpname != NULL);
+	ENTRY;
+	LASSERT(lwpname);
 	LASSERT(IS_OST(lsi) || IS_MDT(lsi));
 
 	OBD_ALLOC(*lwpname, MTI_NAME_MAXLEN);
@@ -726,25 +729,25 @@ out:
 		lwp = ERR_PTR(rc);
 	}
 
-	RETURN(lwp != NULL ? lwp : ERR_PTR(-ENOENT));
+	RETURN(lwp ? lwp : ERR_PTR(-ENOENT));
 }
 
 static int lustre_lwp_add_conn(struct lustre_cfg *cfg,
-			       struct lustre_sb_info *lsi, __u32 idx)
+			       struct lustre_sb_info *lsi, u32 idx)
 {
 	struct lustre_cfg_bufs *bufs = NULL;
-	struct lustre_cfg      *lcfg = NULL;
-	char		       *lwpname = NULL;
-	struct obd_device      *lwp;
-	int			rc;
-	ENTRY;
+	struct lustre_cfg *lcfg = NULL;
+	char *lwpname = NULL;
+	struct obd_device *lwp;
+	int rc;
 
+	ENTRY;
 	lwp = lustre_find_lwp(lsi, &lwpname, idx);
 	if (IS_ERR(lwp)) {
 		CERROR("%s: can't find lwp device.\n", lsi->lsi_svname);
 		GOTO(out, rc = PTR_ERR(lwp));
 	}
-	LASSERT(lwpname != NULL);
+	LASSERT(lwpname);
 
 	OBD_ALLOC_PTR(bufs);
 	if (bufs == NULL)
@@ -760,17 +763,17 @@ static int lustre_lwp_add_conn(struct lustre_cfg *cfg,
 	lustre_cfg_init(lcfg, LCFG_ADD_CONN, bufs);
 
 	rc = class_add_conn(lwp, lcfg);
-	if (rc)
+	if (rc < 0)
 		CERROR("%s: can't add conn: rc = %d\n", lwpname, rc);
 
 	if (lcfg)
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 					      lcfg->lcfg_buflens));
 out_cfg:
-	if (bufs != NULL)
+	if (bufs)
 		OBD_FREE_PTR(bufs);
 out:
-	if (lwpname != NULL)
+	if (lwpname)
 		OBD_FREE(lwpname, MTI_NAME_MAXLEN);
 	RETURN(rc);
 }
@@ -798,20 +801,20 @@ static int client_lwp_config_process(const struct lu_env *env,
 				     struct llog_rec_hdr *rec, void *data)
 {
 	struct config_llog_instance *cfg = data;
-	int			     cfg_len = rec->lrh_len;
-	char			    *cfg_buf = (char *) (rec + 1);
-	struct lustre_cfg	    *lcfg = NULL;
-	struct lustre_sb_info	    *lsi;
-	int			     rc = 0, swab = 0;
-	ENTRY;
+	int cfg_len = rec->lrh_len;
+	char *cfg_buf = (char *) (rec + 1);
+	struct lustre_cfg *lcfg = NULL;
+	struct lustre_sb_info *lsi;
+	int rc = 0, swab = 0;
 
+	ENTRY;
 	if (rec->lrh_type != OBD_CFG_REC) {
 		CERROR("Unknown llog record type %#x encountered\n",
 		       rec->lrh_type);
 		RETURN(-EINVAL);
 	}
 
-	if (cfg->cfg_sb == NULL)
+	if (!cfg->cfg_sb)
 		GOTO(out, rc = -EINVAL);
 	lsi = s2lsi(cfg->cfg_sb);
 
@@ -822,7 +825,7 @@ static int client_lwp_config_process(const struct lu_env *env,
 	}
 
 	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc);
 
 	switch (lcfg->lcfg_command) {
@@ -847,7 +850,8 @@ static int client_lwp_config_process(const struct lu_env *env,
 				cfg->cfg_flags = CFG_F_MARKER;
 				/* This hack is to differentiate the
 				 * ADD_UUID is come from "add mdc" record
-				 * or from "add failnid" record. */
+				 * or from "add failnid" record.
+				 */
 				if (!strncmp(marker->cm_comment,
 					     "add failnid", 11))
 					cfg->cfg_flags |= CFG_F_SKIP;
@@ -861,12 +865,13 @@ static int client_lwp_config_process(const struct lu_env *env,
 		if (cfg->cfg_flags == CFG_F_MARKER) {
 			rc = lustre_lwp_setup(lcfg, lsi, cfg->cfg_lwp_idx);
 			/* XXX: process only the first nid as
-			 * we don't need another instance of lwp */
+			 * we don't need another instance of lwp
+			 */
 			cfg->cfg_flags |= CFG_F_SKIP;
 		} else if (cfg->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
 			rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
 					    lcfg->lcfg_nid);
-			if (rc)
+			if (rc < 0)
 				CERROR("%s: Fail to add uuid, rc:%d\n",
 				       lsi->lsi_svname, rc);
 		}
@@ -875,7 +880,7 @@ static int client_lwp_config_process(const struct lu_env *env,
 	case LCFG_ADD_CONN: {
 		char *devname = lustre_cfg_string(lcfg, 0);
 		char *ptr;
-		__u32 idx     = 0;
+		u32 idx = 0;
 
 		if (!is_mdc_device(devname))
 			break;
@@ -920,15 +925,15 @@ out:
 
 static int lustre_disconnect_lwp(struct super_block *sb)
 {
-	struct lustre_sb_info		*lsi	 = s2lsi(sb);
-	struct obd_device		*lwp;
-	char				*logname = NULL;
-	struct lustre_cfg_bufs		*bufs	 = NULL;
-	struct config_llog_instance	*cfg	 = NULL;
-	int				 rc	 = 0;
-	int				 rc1	 = 0;
-	ENTRY;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct obd_device *lwp;
+	char *logname = NULL;
+	struct lustre_cfg_bufs *bufs = NULL;
+	struct config_llog_instance *cfg = NULL;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	if (likely(lsi->lsi_lwp_started)) {
 		OBD_ALLOC(logname, MTI_NAME_MAXLEN);
 		if (logname == NULL)
@@ -936,8 +941,8 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 
 		rc = server_name2fsname(lsi->lsi_svname, logname, NULL);
 		if (rc != 0) {
-			CERROR("%s: failed to get fsname from svname: "
-			       "rc = %d\n", lsi->lsi_svname, rc);
+			CERROR("%s: failed to get fsname from svname: rc = %d\n",
+			       lsi->lsi_svname, rc);
 			GOTO(out, rc = -EINVAL);
 		}
 
@@ -963,7 +968,7 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
 		struct lustre_cfg *lcfg;
 
-		if (likely(lwp->obd_lwp_export != NULL)) {
+		if (likely(lwp->obd_lwp_export)) {
 			class_export_put(lwp->obd_lwp_export);
 			lwp->obd_lwp_export = NULL;
 		}
@@ -979,7 +984,8 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 		lustre_cfg_init(lcfg, LCFG_CLEANUP, bufs);
 
 		/* Disconnect import first. NULL is passed for the '@env',
-		 * since it will not be used. */
+		 * since it will not be used.
+		 */
 		rc = lwp->obd_lu_dev->ld_ops->ldo_process_config(NULL,
 							lwp->obd_lu_dev, lcfg);
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
@@ -995,11 +1001,11 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 	GOTO(out, rc);
 
 out:
-	if (bufs != NULL)
+	if (bufs)
 		OBD_FREE_PTR(bufs);
-	if (cfg != NULL)
+	if (cfg)
 		OBD_FREE_PTR(cfg);
-	if (logname != NULL)
+	if (logname)
 		OBD_FREE(logname, MTI_NAME_MAXLEN);
 
 	return rc1 != 0 ? rc1 : rc;
@@ -1010,12 +1016,12 @@ out:
  **/
 static int lustre_stop_lwp(struct super_block *sb)
 {
-	struct lustre_sb_info	*lsi = s2lsi(sb);
-	struct obd_device	*lwp;
-	int			 rc  = 0;
-	int			 rc1 = 0;
-	ENTRY;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct obd_device *lwp;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	mutex_lock(&lsi->lsi_lwp_mutex);
 	while (!list_empty(&lsi->lsi_lwp_list)) {
 		lwp = list_entry(lsi->lsi_lwp_list.next, struct obd_device,
@@ -1042,12 +1048,12 @@ static int lustre_stop_lwp(struct super_block *sb)
  **/
 static int lustre_start_lwp(struct super_block *sb)
 {
-	struct lustre_sb_info	    *lsi = s2lsi(sb);
+	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct config_llog_instance *cfg = NULL;
-	char			    *logname;
-	int			     rc;
-	ENTRY;
+	char *logname;
+	int rc;
 
+	ENTRY;
 	if (unlikely(lsi->lsi_lwp_started))
 		RETURN(0);
 
@@ -1077,7 +1083,7 @@ static int lustre_start_lwp(struct super_block *sb)
 
 out:
 	OBD_FREE(logname, MTI_NAME_MAXLEN);
-	if (cfg != NULL)
+	if (cfg)
 		OBD_FREE_PTR(cfg);
 
 	return rc;
@@ -1092,8 +1098,8 @@ static int server_stop_servers(int lsiflags)
 	struct obd_type *type = NULL;
 	int rc = 0;
 	bool type_last;
-	ENTRY;
 
+	ENTRY;
 	mutex_lock(&server_start_lock);
 
 	/* Either an MDT or an OST or neither  */
@@ -1110,14 +1116,15 @@ static int server_stop_servers(int lsiflags)
 	/* server_stop_servers is a pair of server_start_targets
 	 * Here we put type which was taken at server_start_targets.
 	 * If type is NULL then there is a wrong logic around type or
-	 * type reference. */
+	 * type reference.
+	 */
 	LASSERTF(type, "Server flags %d, obd %s\n", lsiflags,
 		 obd ? obd->obd_name : "NULL");
 
 	type_last = (atomic_read(&type->typ_refcnt) == 1);
 
 	class_put_type(type);
-	if (obd != NULL && type_last) {
+	if (obd && type_last) {
 		obd->obd_force = 1;
 		/* obd_fail doesn't mean much on a server obd */
 		rc = class_manual_cleanup(obd);
@@ -1149,8 +1156,8 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 	struct lnet_processid id;
 	int rc, i = 0;
 	int cplen = 0;
-	ENTRY;
 
+	ENTRY;
 	if (!IS_SERVER(lsi))
 		RETURN(-EINVAL);
 
@@ -1164,7 +1171,8 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 			continue;
 
 		/* server use --servicenode param, only allow specified
-		 * nids be registered */
+		 * nids be registered
+		 */
 		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) != 0 &&
 		    class_match_nid(lsi->lsi_lmd->lmd_params,
 				    PARAM_FAILNODE,
@@ -1186,9 +1194,8 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 	}
 
 	if (mti->mti_nid_count == 0) {
-		CERROR("Failed to get NID for server %s, please check whether "
-		       "the target is specifed with improper --servicenode or "
-		       "--network options.\n", mti->mti_svname);
+		CERROR("Failed to get NID for server %s, please check whether the target is specifed with improper --servicenode or --network options.\n",
+		       mti->mti_svname);
 		RETURN(-EINVAL);
 	}
 
@@ -1216,7 +1223,8 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 }
 
 /* Register an old or new target with the MGS. If needed MGS will construct
-   startup logs and assign index */
+ * startup logs and assign index
+ */
 static int server_register_target(struct lustre_sb_info *lsi)
 {
 	struct obd_device *mgc = lsi->lsi_mgc;
@@ -1224,8 +1232,8 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	bool must_succeed;
 	int rc;
 	int tried = 0;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(mgc);
 
 	if (!IS_SERVER(lsi))
@@ -1236,7 +1244,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 		RETURN(-ENOMEM);
 
 	rc = server_lsi2mti(lsi, mti);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc);
 
 	CDEBUG(D_MOUNT, "Registration %s, fs=%s, %s, index=%04x, flags=%#x\n",
@@ -1257,29 +1265,28 @@ again:
 				sizeof(KEY_REGISTER_TARGET),
 				KEY_REGISTER_TARGET,
 				sizeof(*mti), mti, NULL);
-	if (rc) {
+	if (rc < 0) {
 		if (mti->mti_flags & LDD_F_ERROR) {
 			LCONSOLE_ERROR_MSG(0x160,
-				"%s: the MGS refuses to allow this server "
-				"to start: rc = %d. Please see messages on "
-				"the MGS.\n", lsi->lsi_svname, rc);
+					   "%s: the MGS refuses to allow this server to start: rc = %d. Please see messages on the MGS.\n",
+					   lsi->lsi_svname, rc);
 		} else if (must_succeed) {
 			if ((rc == -ESHUTDOWN || rc == -EIO) && ++tried < 5) {
 				/* The connection with MGS is not established.
-				 * Try again after 2 seconds. Interruptable. */
-				schedule_timeout_interruptible(
-					cfs_time_seconds(2));
+				 * Try again after 2 seconds. Interruptable.
+				 */
+				schedule_timeout_interruptible(cfs_time_seconds(2));
 				if (!signal_pending(current))
 					goto again;
 			}
 
 			LCONSOLE_ERROR_MSG(0x15f,
-				"%s: cannot register this server with the MGS: "
-				"rc = %d. Is the MGS running?\n",
-				lsi->lsi_svname, rc);
+					   "%s: cannot register this server with the MGS: rc = %d. Is the MGS running?\n",
+					   lsi->lsi_svname, rc);
 		} else {
-			CDEBUG(D_HA, "%s: error registering with the MGS: "
-			       "rc = %d (not fatal)\n", lsi->lsi_svname, rc);
+			CDEBUG(D_HA,
+			       "%s: error registering with the MGS: rc = %d (not fatal)\n",
+			       lsi->lsi_svname, rc);
 			/* reset the error code for non-fatal error. */
 			rc = 0;
 		}
@@ -1302,8 +1309,8 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 	struct obd_device *mgc = lsi->lsi_mgc;
 	struct mgs_target_info *mti = NULL;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(mgc);
 
 	if (!(IS_SERVER(lsi)))
@@ -1313,7 +1320,7 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 	if (!mti)
 		RETURN(-ENOMEM);
 	rc = server_lsi2mti(lsi, mti);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc);
 
 	mti->mti_instance = obd->u.obt.obt_instance;
@@ -1337,8 +1344,7 @@ out:
 
 }
 
-/** Start server targets: MDTs and OSTs
- */
+/* Start server targets: MDTs and OSTs */
 static int server_start_targets(struct super_block *sb)
 {
 	struct obd_device *obd;
@@ -1349,8 +1355,8 @@ static int server_start_targets(struct super_block *sb)
 	char *name_service, *obd_name_service = NULL;
 	struct obd_type *type = NULL;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_svname);
 
 	LASSERTF(IS_MDT(lsi) || IS_OST(lsi), "designed for MDT or OST only\n");
@@ -1372,7 +1378,7 @@ static int server_start_targets(struct super_block *sb)
 					  LUSTRE_MDS_OBDNAME"_uuid" :
 					  LUSTRE_OSS_OBDNAME"_uuid"),
 					 NULL, NULL, NULL, NULL);
-		if (rc) {
+		if (rc < 0) {
 			mutex_unlock(&server_start_lock);
 			CERROR("failed to start %s: %d\n",
 			       obd_name_service, rc);
@@ -1399,20 +1405,22 @@ static int server_start_targets(struct super_block *sb)
 		GOTO(out_stop_service, rc);
 
 	/* Set the mgc fs to our server disk.  This allows the MGC to
-	 * read and write configs locally, in case it can't talk to the MGS. */
+	 * read and write configs locally, in case it can't talk to the MGS.
+	 */
 	rc = server_mgc_set_fs(&mgc_env, lsi->lsi_mgc, sb);
-	if (rc)
+	if (rc < 0)
 		GOTO(out_env, rc);
 
 	/* Register with MGS */
 	rc = server_register_target(lsi);
-	if (rc)
+	if (rc < 0)
 		GOTO(out_mgc, rc);
 
 	/* Let the target look up the mount using the target's name
-	   (we can't pass the sb or mnt through class_process_config.) */
+	 * (we can't pass the sb or mnt through class_process_config.)
+	 */
 	rc = server_register_mount(lsi->lsi_svname, sb);
-	if (rc)
+	if (rc < 0)
 		GOTO(out_mgc, rc);
 
 	/* Start targets using the llog named for the target */
@@ -1420,12 +1428,13 @@ static int server_start_targets(struct super_block *sb)
 	cfg.cfg_callback = class_config_llog_handler;
 	cfg.cfg_sub_clds = CONFIG_SUB_SERVER;
 	rc = lustre_process_log(sb, lsi->lsi_svname, &cfg);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("failed to start server %s: %d\n",
 		       lsi->lsi_svname, rc);
 		/* Do NOT call server_deregister_mount() here. This makes it
 		 * impossible to find mount later in cleanup time and leaves
-		 * @lsi and othder stuff leaked. -umka */
+		 * @lsi and othder stuff leaked. -umka
+		 */
 		GOTO(out_mgc, rc);
 	}
 
@@ -1437,7 +1446,7 @@ static int server_start_targets(struct super_block *sb)
 
 	if (IS_OST(lsi) || IS_MDT(lsi)) {
 		rc = lustre_start_lwp(sb);
-		if (rc) {
+		if (rc < 0) {
 			CERROR("%s: failed to start LWP: %d\n",
 			       lsi->lsi_svname, rc);
 			GOTO(out_mgc, rc);
@@ -1472,7 +1481,8 @@ static int server_start_targets(struct super_block *sb)
 	}
 
 	/* abort recovery only on the complete stack:
-	 * many devices can be involved */
+	 * many devices can be involved
+	 */
 	if ((lsi->lsi_lmd->lmd_flags &
 	     (LMD_FLG_ABORT_RECOV | LMD_FLG_ABORT_RECOV_MDT)) &&
 	    (OBP(obd, iocontrol))) {
@@ -1501,21 +1511,21 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 {
 	const char *osd_type;
 	const char *fstype;
-	__u32 index;
+	u32 index;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(lsi);
 	LASSERT(lsi->lsi_lmd);
 
 	/* The server name is given as a mount line option */
-	if (lsi->lsi_lmd->lmd_profile == NULL) {
+	if (!lsi->lsi_lmd->lmd_profile) {
 		LCONSOLE_ERROR("Can't determine server name\n");
 		RETURN(-EINVAL);
 	}
 
 	/* Determine osd type */
-	if (lsi->lsi_lmd->lmd_osd_type == NULL) {
+	if (!lsi->lsi_lmd->lmd_osd_type) {
 		osd_type = LUSTRE_OSD_LDISKFS_NAME;
 		fstype = "ldiskfs";
 	} else {
@@ -1532,7 +1542,8 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		sizeof(lsi->lsi_svname));
 	strlcpy(lsi->lsi_osd_type, osd_type, sizeof(lsi->lsi_osd_type));
 	/* XXX: a temp. solution for components using ldiskfs
-	 *      to be removed in one of the subsequent patches */
+	 *      to be removed in one of the subsequent patches
+	 */
 	strlcpy(lsi->lsi_fstype, fstype, sizeof(lsi->lsi_fstype));
 
 	/* Determine server type */
@@ -1576,13 +1587,13 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 static void server_put_super(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
-	struct obd_device     *obd;
+	struct obd_device *obd;
 	char *tmpname, *extraname = NULL;
 	int tmpname_sz;
 	int lsiflags = lsi->lsi_flags;
 	bool stop_servers = lsi->lsi_server_started;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(IS_SERVER(lsi));
 
 	tmpname_sz = strlen(lsi->lsi_svname) + 1;
@@ -1612,11 +1623,12 @@ static void server_put_super(struct super_block *sb)
 		lustre_end_log(sb, lsi->lsi_svname, NULL);
 
 		/* COMPAT_146 - profile may get deleted in mgc_cleanup.
-		   If there are any setup/cleanup errors, save the lov
-		   name for safety cleanup later. */
+		 * If there are any setup/cleanup errors, save the lov
+		 * name for safety cleanup later.
+		 */
 		lprof = class_get_profile(lsi->lsi_svname);
-		if (lprof != NULL) {
-			if (lprof->lp_dt != NULL) {
+		if (lprof) {
+			if (lprof->lp_dt) {
 				OBD_ALLOC(extraname, strlen(lprof->lp_dt) + 1);
 				strncpy(extraname, lprof->lp_dt,
 					strlen(lprof->lp_dt) + 1);
@@ -1630,11 +1642,13 @@ static void server_put_super(struct super_block *sb)
 			if (lsiflags & LSI_UMOUNT_FAILOVER)
 				obd->obd_fail = 1;
 			/* We can't seem to give an error return code
-			 * to .put_super, so we better make sure we clean up! */
+			 * to .put_super, so we better make sure we clean up!
+			 */
 			obd->obd_force = 1;
 			class_manual_cleanup(obd);
 			if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE)) {
 				int idx;
+
 				server_name2index(lsi->lsi_svname, &idx, NULL);
 				/* sleeping for MDT0001 */
 				if (idx == 1)
@@ -1647,7 +1661,8 @@ static void server_put_super(struct super_block *sb)
 	}
 
 	/* If they wanted the mgs to stop separately from the mdt, they
-	   should have put it on a different device. */
+	 * should have put it on a different device.
+	 */
 	if (IS_MGS(lsi)) {
 		/* if MDS start with --nomgs, don't stop MGS then */
 		if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
@@ -1664,12 +1679,14 @@ static void server_put_super(struct super_block *sb)
 
 	/* wait till all in-progress cleanups are done
 	 * specifically we're interested in ofd cleanup
-	 * as it pins OSS */
+	 * as it pins OSS
+	 */
 	obd_zombie_barrier();
 
 	/* Stop the servers (MDS, OSS) if no longer needed.  We must wait
-	   until the target is really gone so that our type refcount check
-	   is right. */
+	 * until the target is really gone so that our type refcount check
+	 * is right.
+	 */
 	if (stop_servers)
 		server_stop_servers(lsiflags);
 
@@ -1689,17 +1706,17 @@ static void server_put_super(struct super_block *sb)
 	EXIT;
 }
 
-/** Called only for 'umount -f'
- */
+/* Called only for 'umount -f' */
 static void server_umount_begin(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_MOUNT, "umount -f\n");
 	/* umount = failover
-	   umount -f = force
-	   no third way to do non-force, non-failover */
+	 * umount -f = force
+	 * no third way to do non-force, non-failover
+	 */
 	lsi->lsi_flags &= ~LSI_UMOUNT_FAILOVER;
 	EXIT;
 }
@@ -1710,8 +1727,8 @@ static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_statfs statfs;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (lsi->lsi_dt_dev) {
 		rc = dt_statfs(NULL, lsi->lsi_dt_dev, &statfs);
 		if (rc == 0) {
@@ -1738,7 +1755,7 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 	struct lustre_sb_info *lsi;
 	struct lustre_mount_data *lmd;
 
-	LASSERT(seq != NULL && dentry != NULL);
+	LASSERT(seq && dentry);
 	lsi = s2lsi(dentry->d_sb);
 	lmd = lsi->lsi_lmd;
 	seq_printf(seq, ",svname=%s", lmd->lmd_profile);
@@ -1766,13 +1783,13 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 	if (lmd->lmd_flags & LMD_FLG_MGS)
 		seq_puts(seq, ",mgs");
 
-	if (lmd->lmd_mgs != NULL)
+	if (lmd->lmd_mgs)
 		seq_printf(seq, ",mgsnode=%s", lmd->lmd_mgs);
 
-	if (lmd->lmd_osd_type != NULL)
+	if (lmd->lmd_osd_type)
 		seq_printf(seq, ",osd=%s", lmd->lmd_osd_type);
 
-	if (lmd->lmd_opts != NULL) {
+	if (lmd->lmd_opts) {
 		seq_putc(seq, ',');
 		seq_puts(seq, lmd->lmd_opts);
 	}
@@ -1870,8 +1887,8 @@ static const struct file_operations server_file_operations = {
 static int server_fill_super_common(struct super_block *sb)
 {
 	struct inode *root = NULL;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_MOUNT, "Server sb, dev=%d\n", (int)sb->s_dev);
 
 	sb->s_blocksize = 4096;
@@ -1909,8 +1926,8 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	struct dt_device_param p;
 	char flagstr[20 + 1 + 10 + 1];
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_MOUNT,
 	       "Attempting to start %s, type=%s, lsifl=%x, mountfl=%lx\n",
 	       lsi->lsi_svname, lsi->lsi_osd_type, lsi->lsi_flags, mflags);
@@ -1921,20 +1938,21 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	snprintf(flagstr, sizeof(flagstr), "%lu:%u", mflags, lmd->lmd_flags);
 
 	obd = class_name2obd(lsi->lsi_osd_obdname);
-	if (obd == NULL) {
+	if (!obd) {
 		rc = lustre_start_simple(lsi->lsi_osd_obdname,
 					 lsi->lsi_osd_type,
 					 lsi->lsi_osd_uuid, lmd->lmd_dev,
 					 flagstr, lsi->lsi_lmd->lmd_opts,
 					 lsi->lsi_svname);
-		if (rc)
+		if (rc < 0)
 			GOTO(out, rc);
 		obd = class_name2obd(lsi->lsi_osd_obdname);
 		LASSERT(obd);
 	} else {
 		CDEBUG(D_MOUNT, "%s already started\n", lsi->lsi_osd_obdname);
 		/* but continue setup to allow special case of MDT and internal
-		 * MGT being started separately. */
+		 * MGT being started separately.
+		 */
 		if (!((IS_MGS(lsi) && (lsi->lsi_lmd->lmd_flags &
 				      LMD_FLG_NOMGS)) ||
 		     (IS_MDT(lsi) && (lsi->lsi_lmd->lmd_flags &
@@ -1945,7 +1963,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	rc = obd_connect(NULL, &lsi->lsi_osd_exp,
 			 obd, &obd->obd_uuid, NULL, NULL);
 
-	if (rc) {
+	if (rc < 0) {
 		obd->obd_force = 1;
 		class_manual_cleanup(obd);
 		lsi->lsi_dt_dev = NULL;
@@ -1975,20 +1993,20 @@ int server_fill_super(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* to simulate target mount race */
 	OBD_RACE(OBD_FAIL_TGT_MOUNT_RACE);
 
 	rc = lsi_prepare(lsi);
-	if (rc) {
+	if (rc < 0) {
 		lustre_put_lsi(sb);
 		RETURN(rc);
 	}
 
 	/* Start low level OSD */
 	rc = osd_start(lsi, sb->s_flags);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("Unable to start osd on %s: %d\n",
 		       lsi->lsi_lmd->lmd_dev, rc);
 		lustre_put_lsi(sb);
@@ -1999,9 +2017,8 @@ int server_fill_super(struct super_block *sb)
 	       lsi->lsi_svname, lsi->lsi_lmd->lmd_dev);
 
 	if (class_name2obd(lsi->lsi_svname)) {
-		LCONSOLE_ERROR_MSG(0x161, "The target named %s is already "
-				   "running. Double-mount may have compromised"
-				   " the disk journal.\n",
+		LCONSOLE_ERROR_MSG(0x161,
+				   "The target named %s is already running. Double-mount may have compromised the disk journal.\n",
 				   lsi->lsi_svname);
 		lustre_put_lsi(sb);
 		RETURN(-EALREADY);
@@ -2010,13 +2027,13 @@ int server_fill_super(struct super_block *sb)
 	/* Start MGS before MGC */
 	if (IS_MGS(lsi) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
 		rc = server_start_mgs(sb);
-		if (rc)
+		if (rc < 0)
 			GOTO(out_mnt, rc);
 	}
 
 	/* Start MGC before servers */
 	rc = lustre_start_mgc(sb);
-	if (rc)
+	if (rc < 0)
 		GOTO(out_mnt, rc);
 
 	/* Set up all obd devices for service */
@@ -2037,18 +2054,20 @@ int server_fill_super(struct super_block *sb)
 		 * can return.  Client will not finish until all
 		 * servers are connected.  Note - MGS-only server does
 		 * NOT get a client, since there is no lustre fs
-		 * associated - the MGS is for all lustre fs's */
+		 * associated - the MGS is for all lustre fs's
+		 */
 	}
 
 	rc = server_fill_super_common(sb);
-	if (rc)
+	if (rc < 0)
 		GOTO(out_mnt, rc);
 
 	RETURN(0);
 out_mnt:
 	/* We jump here in case of failure while starting targets or MGS.
 	 * In this case we can't just put @mnt and have to do real cleanup
-	 * with stoping targets, etc. */
+	 * with stoping targets, etc.
+	 */
 	server_put_super(sb);
 	return rc;
 }
@@ -2094,14 +2113,13 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 		/* make sure the timeout is not too short */
 		new_soft = max(min, new_soft);
 
-		LCONSOLE_INFO("%s: Imperative Recovery enabled, recovery "
-			      "window shrunk from %d-%d down to %d-%d\n",
+		LCONSOLE_INFO("%s: Imperative Recovery enabled, recovery window shrunk from %d-%d down to %d-%d\n",
 			      obd->obd_name, soft, hard, new_soft, hard);
 
 		soft = new_soft;
 	} else {
-		LCONSOLE_INFO("%s: Imperative Recovery not enabled, recovery "
-			      "window %d-%d\n", obd->obd_name, soft, hard);
+		LCONSOLE_INFO("%s: Imperative Recovery not enabled, recovery window %d-%d\n",
+			      obd->obd_name, soft, hard);
 	}
 
 	/* we're done */
@@ -2109,4 +2127,111 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 					  soft);
 	obd->obd_recovery_time_hard = hard;
 	obd->obd_recovery_ir_factor = factor;
+}
+
+/**
+ * This is the entry point for the mount call into Lustre.
+ * This is called when a server target is mounted,
+ * and this is where we start setting things up.
+ * @param data Mount options (e.g. -o flock,abort_recov)
+ */
+static int lustre_tgt_fill_super(struct super_block *sb, void *lmd2_data,
+				 int silent)
+{
+	struct lustre_mount_data *lmd;
+	struct lustre_sb_info *lsi;
+	int rc;
+
+	ENTRY;
+	CDEBUG(D_MOUNT|D_VFSTRACE, "VFS Op: sb %p\n", sb);
+
+	lsi = lustre_init_lsi(sb);
+	if (!lsi)
+		RETURN(-ENOMEM);
+	lmd = lsi->lsi_lmd;
+
+	/*
+	 * Disable lockdep during mount, because mount locking patterns are
+	 * 'special'.
+	 */
+	lockdep_off();
+
+	/*
+	 * LU-639: the OBD cleanup of last mount may not finish yet, wait here.
+	 */
+	obd_zombie_barrier();
+
+	/* Figure out the lmd from the mount options */
+	if (lmd_parse(lmd2_data, lmd)) {
+		lustre_put_lsi(sb);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (lmd_is_client(lmd)) {
+		rc = -ENODEV;
+		CERROR("%s: attempting to mount a client with -t lustre_tgt' which is only for server-side mounts: rc = %d\n",
+		       lmd->lmd_dev, rc);
+		lustre_put_lsi(sb);
+		GOTO(out, rc);
+	}
+
+	CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
+	rc = server_fill_super(sb);
+	/*
+	 * server_fill_super calls lustre_start_mgc after the mount
+	 * because we need the MGS NIDs which are stored on disk.
+	 * Plus, we may need to start the MGS first.
+	 *
+	 * server_fill_super will call server_put_super on failure
+	 *
+	 * If error happens in fill_super() call, @lsi will be killed there.
+	 * This is why we do not put it here.
+	 */
+out:
+	if (rc) {
+		CERROR("Unable to mount %s (%d)\n",
+		       s2lsi(sb) ? lmd->lmd_dev : "", rc);
+	} else {
+		CDEBUG(D_SUPER, "Mount %s complete\n",
+		       lmd->lmd_dev);
+	}
+	lockdep_on();
+	return rc;
+}
+
+/***************** FS registration ******************/
+static struct dentry *lustre_tgt_mount(struct file_system_type *fs_type,
+				       int flags, const char *devname,
+				       void *data)
+{
+	return mount_nodev(fs_type, flags, data, lustre_tgt_fill_super);
+}
+
+/* Register the "lustre_tgt" fs type.
+ *
+ * Right now this isn't any different than the normal "lustre" filesystem
+ * type, but it is added so that there is some compatibility to allow
+ * changing documentation and scripts to start using the "lustre_tgt" type
+ * at mount time. That will simplify test interop, and in case of upgrades
+ * that change to the new type and then need to roll back for some reason.
+ *
+ * The long-term goal is to disentangle the client and server mount code.
+ */
+static struct file_system_type lustre_tgt_fstype = {
+	.owner		= THIS_MODULE,
+	.name		= "lustre_tgt",
+	.mount		= lustre_tgt_mount,
+	.kill_sb	= kill_anon_super,
+	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
+};
+MODULE_ALIAS_FS("lustre_tgt");
+
+int lustre_tgt_register_fs(void)
+{
+	return register_filesystem(&lustre_tgt_fstype);
+}
+
+void lustre_tgt_unregister_fs(void)
+{
+	unregister_filesystem(&lustre_tgt_fstype);
 }
