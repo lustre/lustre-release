@@ -39,7 +39,7 @@ endif
 #export CC
 
 # This is the debhelper compatibility version to use.
-export DH_COMPAT=9
+export DH_COMPAT=11
 
 # Module-assistant stuff
 ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
