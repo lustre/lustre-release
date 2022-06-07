@@ -808,6 +808,9 @@ enable_lockless_truncate() {
 }
 
 test_32a() { # bug 11270
+	$LCTL get_param osc.*.import | grep -q "connect_flags.*truncate_lock" ||
+		skip "missing truncate_lock support"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	local stripe_size=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
