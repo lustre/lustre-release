@@ -1873,11 +1873,11 @@ test_24c() {
 	# Save the default masks and check that cleanup_24c will
 	# restore the request masks correctly.
 	user_save=$(get_hsm_param user_request_mask)
-	stack_trap "set_hsm_param user_request_mask $user_save" EXIT
+	stack_trap "set_hsm_param user_request_mask '$user_save'" EXIT
 	group_save=$(get_hsm_param group_request_mask)
-	stack_trap "set_hsm_param user_request_mask $group_save" EXIT
+	stack_trap "set_hsm_param group_request_mask '$group_save'" EXIT
 	other_save=$(get_hsm_param other_request_mask)
-	stack_trap "set_hsm_param user_request_mask $other_save" EXIT
+	stack_trap "set_hsm_param other_request_mask '$other_save'" EXIT
 
 	[ "$user_save" == RESTORE ] ||
 		error "user_request_mask is '$user_save' expected 'RESTORE'"

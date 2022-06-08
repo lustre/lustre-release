@@ -10632,7 +10632,7 @@ mdts_set_param() {
 	local mdtno
 	local rc=0
 	if [[ "$value" != "" ]]; then
-		value="=$value"
+		value="='$value'"
 	fi
 	for mdtno in $(seq 1 $MDSCOUNT); do
 		local idx=$(($mdtno - 1))
