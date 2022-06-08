@@ -75,7 +75,7 @@
 #include <libcfs/util/string.h>
 #include <setjmp.h>
 
-#include <uapi/linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
 /*
