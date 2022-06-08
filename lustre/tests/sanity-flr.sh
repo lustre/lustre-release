@@ -3111,6 +3111,9 @@ run_test 70 "mirror create and split race"
 test_100() {
 	local tf=$DIR/$tdir/$tfile
 
+	(( $OST1_VERSION >= $(version_code 2.14.51) )) ||
+		skip "Need OST version at least 2.14.51"
+
 
 	test_mkdir $DIR/$tdir
 
