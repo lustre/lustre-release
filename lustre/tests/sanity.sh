@@ -43,7 +43,6 @@ always_except LU-6493  42b
 always_except LU-14541 277
 always_except LU-9054  312
 always_except LU-8411  407
-always_except LU-16046 244b
 
 if $SHARED_KEY; then
 	always_except LU-14181 64e 64f
@@ -21345,14 +21344,13 @@ test_244a()
 }
 run_test 244a "sendfile with group lock tests"
 
-test_244b()
+test_grouplock_244()
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local threads=50
 	local size=$((1024*1024))
 
-	test_mkdir $DIR/$tdir
 	for i in $(seq 1 $threads); do
 		local file=$DIR/$tdir/file_$((i / 10))
 		$MULTIOP $file OG1234w$size_$((i % 3))w$size_$((i % 4))g1234c &
@@ -21361,8 +21359,24 @@ test_244b()
 	for i in $(seq 1 $threads); do
 		wait ${pids[$i]}
 	done
+
+}
+
+test_244b()
+{
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -E 10M -E -1 -c 1 $DIR/$tdir
+	test_grouplock_244
 }
 run_test 244b "multi-threaded write with group lock"
+
+test_244c()
+{
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c 1 $DIR/$tdir
+	test_grouplock_244
+}
+run_test 244c "multi-threaded write with group lock on DOM file"
 
 test_245a() {
 	local flagname="multi_mod_rpcs"

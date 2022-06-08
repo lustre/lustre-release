@@ -202,7 +202,7 @@ void osc_lock_lvb_update(const struct lu_env *env,
 }
 
 static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
-			     struct lustre_handle *lockh)
+			     struct lustre_handle *lockh, int errcode)
 {
 	struct osc_object *osc = cl2osc(oscl->ols_cl.cls_obj);
 	struct ldlm_lock *dlmlock;
@@ -255,7 +255,129 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 
 	LASSERT(oscl->ols_state != OLS_GRANTED);
 	oscl->ols_state = OLS_GRANTED;
+
+	if (errcode != ELDLM_LOCK_MATCHED && dlmlock->l_req_mode == LCK_GROUP)
+		osc_grouplock_inc_locked(osc, dlmlock);
 }
+
+void osc_grouplock_inc_locked(struct osc_object *osc, struct ldlm_lock *lock)
+{
+	LASSERT(lock->l_req_mode == LCK_GROUP);
+
+	if (osc->oo_group_users == 0)
+		osc->oo_group_gid = lock->l_policy_data.l_extent.gid;
+	osc->oo_group_users++;
+
+	LDLM_DEBUG(lock, "users %llu gid %llu\n",
+		   osc->oo_group_users,
+		   lock->l_policy_data.l_extent.gid);
+}
+EXPORT_SYMBOL(osc_grouplock_inc_locked);
+
+void osc_grouplock_dec(struct osc_object *osc, struct ldlm_lock *lock)
+{
+	LASSERT(lock->l_req_mode == LCK_GROUP);
+
+	mutex_lock(&osc->oo_group_mutex);
+
+	LASSERT(osc->oo_group_users > 0);
+	osc->oo_group_users--;
+	if (osc->oo_group_users == 0) {
+		osc->oo_group_gid = 0;
+		wake_up_all(&osc->oo_group_waitq);
+	}
+	mutex_unlock(&osc->oo_group_mutex);
+
+	LDLM_DEBUG(lock, "users %llu gid %lu\n",
+		   osc->oo_group_users, osc->oo_group_gid);
+}
+EXPORT_SYMBOL(osc_grouplock_dec);
+
+int osc_grouplock_enqueue_init(const struct lu_env *env,
+			       struct osc_object *obj,
+			       struct osc_lock *oscl,
+			       struct lustre_handle *lh)
+{
+	struct cl_lock_descr *need = &oscl->ols_cl.cls_lock->cll_descr;
+	int rc = 0;
+	ENTRY;
+
+	LASSERT(need->cld_mode == CLM_GROUP);
+
+	while (true) {
+		bool check_gid = true;
+
+		if (oscl->ols_flags & LDLM_FL_BLOCK_NOWAIT) {
+			if (!mutex_trylock(&obj->oo_group_mutex))
+				RETURN(-EAGAIN);
+		} else {
+			mutex_lock(&obj->oo_group_mutex);
+		}
+
+		/**
+		 * If a grouplock of the same gid already exists, match it
+		 * here in advance. Otherwise, if that lock is being cancelled
+		 * there is a chance to get 2 grouplocks for the same file.
+		 */
+		if (obj->oo_group_users &&
+		    obj->oo_group_gid == need->cld_gid) {
+			struct osc_thread_info *info = osc_env_info(env);
+			struct ldlm_res_id *resname = &info->oti_resname;
+			union ldlm_policy_data *policy = &info->oti_policy;
+			struct cl_lock *lock = oscl->ols_cl.cls_lock;
+			__u64 flags = oscl->ols_flags | LDLM_FL_BLOCK_GRANTED;
+			struct ldlm_namespace *ns;
+			enum ldlm_mode mode;
+
+			ns = osc_export(obj)->exp_obd->obd_namespace;
+			ostid_build_res_name(&obj->oo_oinfo->loi_oi, resname);
+			osc_lock_build_policy(env, lock, policy);
+			mode = ldlm_lock_match(ns, flags, resname,
+					       oscl->ols_einfo.ei_type, policy,
+					       oscl->ols_einfo.ei_mode, lh);
+			if (mode)
+				oscl->ols_flags |= LDLM_FL_MATCH_LOCK;
+			else
+				check_gid = false;
+		}
+
+		/**
+		 * If a grouplock exists but cannot be matched, let it to flush
+		 * and wait just for zero users for now.
+		 */
+		if (obj->oo_group_users == 0 ||
+		    (check_gid && obj->oo_group_gid == need->cld_gid))
+			break;
+
+		mutex_unlock(&obj->oo_group_mutex);
+		if (oscl->ols_flags & LDLM_FL_BLOCK_NOWAIT)
+			RETURN(-EAGAIN);
+
+		rc = l_wait_event_abortable(obj->oo_group_waitq,
+					    !obj->oo_group_users);
+		if (rc)
+			RETURN(rc);
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(osc_grouplock_enqueue_init);
+
+void osc_grouplock_enqueue_fini(const struct lu_env *env,
+				struct osc_object *obj,
+				struct osc_lock *oscl,
+				struct lustre_handle *lh)
+{
+	ENTRY;
+
+	LASSERT(oscl->ols_cl.cls_lock->cll_descr.cld_mode == CLM_GROUP);
+
+	/* If a user was added on enqueue_init, decref it */
+	if (lustre_handle_is_used(lh))
+		ldlm_lock_decref(lh, oscl->ols_einfo.ei_mode);
+	mutex_unlock(&obj->oo_group_mutex);
+}
+EXPORT_SYMBOL(osc_grouplock_enqueue_fini);
 
 /**
  * Lock upcall function that is executed either when a reply to ENQUEUE rpc is
@@ -287,7 +409,7 @@ static int osc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 	}
 
 	if (rc == 0)
-		osc_lock_granted(env, oscl, lockh);
+		osc_lock_granted(env, oscl, lockh, errcode);
 
 	/* Error handling, some errors are tolerable. */
 	if (oscl->ols_glimpse && rc == -ENAVAIL) {
@@ -424,6 +546,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 		struct ldlm_extent *extent = &dlmlock->l_policy_data.l_extent;
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 		__u64 old_kms;
+		void *data;
 
 		/* Destroy pages covered by the extent of the DLM lock */
 		result = osc_lock_flush(cl2osc(obj),
@@ -435,6 +558,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 		lock_res_and_lock(dlmlock);
 		/* clearing l_ast_data after flushing data,
 		 * to let glimpse ast find the lock and the object */
+		data = dlmlock->l_ast_data;
 		dlmlock->l_ast_data = NULL;
 		cl_object_attr_lock(obj);
 		/* Must get the value under the lock to avoid race. */
@@ -447,6 +571,9 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 		cl_object_attr_unlock(obj);
 		unlock_res_and_lock(dlmlock);
 
+		/* Skip dec in case osc_object_ast_clear() did it */
+		if (data && dlmlock->l_req_mode == LCK_GROUP)
+			osc_grouplock_dec(cl2osc(obj), dlmlock);
 		cl_object_put(env, obj);
 	}
 	RETURN(result);
@@ -938,9 +1065,9 @@ EXPORT_SYMBOL(osc_lock_enqueue_wait);
  *
  * This function does not wait for the network communication to complete.
  */
-static int osc_lock_enqueue(const struct lu_env *env,
-			    const struct cl_lock_slice *slice,
-			    struct cl_io *unused, struct cl_sync_io *anchor)
+static int __osc_lock_enqueue(const struct lu_env *env,
+			      const struct cl_lock_slice *slice,
+			      struct cl_io *unused, struct cl_sync_io *anchor)
 {
 	struct osc_thread_info		*info  = osc_env_info(env);
 	struct osc_io			*oio   = osc_env_io(env);
@@ -1058,6 +1185,29 @@ out:
 			cl_sync_io_note(env, anchor, result);
 	}
 	RETURN(result);
+}
+
+static int osc_lock_enqueue(const struct lu_env *env,
+			    const struct cl_lock_slice *slice,
+			    struct cl_io *unused, struct cl_sync_io *anchor)
+{
+	struct osc_object *obj = cl2osc(slice->cls_obj);
+	struct osc_lock	*oscl = cl2osc_lock(slice);
+	struct lustre_handle lh = { 0 };
+	int rc;
+
+	if (oscl->ols_cl.cls_lock->cll_descr.cld_mode == CLM_GROUP) {
+		rc = osc_grouplock_enqueue_init(env, obj, oscl, &lh);
+		if (rc < 0)
+			return rc;
+	}
+
+	rc = __osc_lock_enqueue(env, slice, unused, anchor);
+
+	if (oscl->ols_cl.cls_lock->cll_descr.cld_mode == CLM_GROUP)
+		osc_grouplock_enqueue_fini(env, obj, oscl, &lh);
+
+	return rc;
 }
 
 /**
