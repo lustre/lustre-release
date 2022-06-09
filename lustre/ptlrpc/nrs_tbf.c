@@ -131,6 +131,7 @@ nrs_tbf_cli_reset_value(struct nrs_tbf_head *head,
 
 	cli->tc_rpc_rate = rule->tr_rpc_rate;
 	cli->tc_nsecs = rule->tr_nsecs_per_rpc;
+	cli->tc_nsecs_resid = 0;
 	cli->tc_depth = rule->tr_depth;
 	cli->tc_ntoken = rule->tr_depth;
 	cli->tc_check_time = ktime_to_ns(ktime_get());
