@@ -3461,6 +3461,7 @@ test_46() {
 	local lsfile=$TMP/lsfile
 	local scrambleddir
 	local scrambledfile
+	local inum
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -3480,6 +3481,7 @@ test_46() {
 	else
 		mkdir $testdir2
 	fi
+	inum=$(stat -c %i $testdir2)
 	if [ "$mds1_FSTYPE" = ldiskfs ]; then
 		# For now, restrict this part of the test to ldiskfs backend,
 		# as osd-zfs does not support 255 byte-long encrypted names.
@@ -3494,7 +3496,7 @@ test_46() {
 	remount_client_normally
 
 	# this is $testdir2
-	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d| grep _)
+	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -inum $inum)
 	stat $scrambleddir || error "stat $scrambleddir failed"
 	if [ "$mds1_FSTYPE" = ldiskfs ]; then
 		stat $scrambleddir/* || error "cannot stat in $scrambleddir"
@@ -3536,6 +3538,7 @@ test_47() {
 	local testfile=$DIR/$tdir/$tfile
 	local testfile2=$DIR/$tdir/${tfile}.2
 	local tmpfile=$DIR/junk
+	local name_enc=1
 	local scrambleddir
 	local scrambledfile
 
@@ -3544,6 +3547,9 @@ test_47() {
 
 	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
 		skip "need dummy encryption support"
+
+	$LCTL get_param mdc.*.connect_flags | grep -q name_encryption ||
+		name_enc=0
 
 	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
@@ -3583,13 +3589,15 @@ test_47() {
 		error "cannot read from hard link (2.2)"
 	rm -f $tmpfile
 
-	# check we are limited in the number of hard links
-	# we can create for encrypted files, to what can fit into LinkEA
-	for i in $(seq 1 160); do
-		ln $testfile2 ${testfile}_$i || break
-	done
-	[ $i -lt 160 ] || error "hard link $i should fail"
-	rm -f ${testfile}_*
+	if [ $name_enc -eq 1 ]; then
+		# check we are limited in the number of hard links
+		# we can create for encrypted files, to what can fit into LinkEA
+		for i in $(seq 1 160); do
+			ln $testfile2 ${testfile}_$i || break
+		done
+		[ $i -lt 160 ] || error "hard link $i should fail"
+		rm -f ${testfile}_*
+	fi
 
 	mrename $testfile2 $tmpfile &&
 		error "rename from encrypted to unencrypted dir should fail"
@@ -3644,8 +3652,10 @@ test_47() {
 	[ $(stat -c %s $scrambledlink) -eq \
 			$(expr length "$(readlink $scrambledlink)") ] ||
 		error "wrong symlink size without key"
-	readlink -e $scrambledlink &&
-		error "link should not point to anywhere useful"
+	if [ $name_enc -eq 1 ]; then
+		readlink -e $scrambledlink &&
+			error "link should not point to anywhere useful"
+	fi
 	ln -s $scrambledfile ${scrambledfile}.sym &&
 		error "symlink without key should fail (1)"
 	ln -s $tmpfile ${scrambledfile}.sl &&
@@ -3851,11 +3861,14 @@ test_49() {
 		trace_cmd $LFS migrate -m 0 $dirname/d2
 		echo b > $dirname/d2/subf
 		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
-		# migrate a non-empty encrypted dir
-		trace_cmd $LFS migrate -m 1 $dirname/d2
-		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
-		[ -f $dirname/d2/subf ] || error "migrate failed (1)"
-		[ $(cat $dirname/d2/subf) == "b" ] || error "migrate failed (2)"
+		if (( "$MDS1_VERSION" > $(version_code 2.14.54.54) )); then
+			# migrate a non-empty encrypted dir
+			trace_cmd $LFS migrate -m 1 $dirname/d2
+			sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+			[ -f $dirname/d2/subf ] || error "migrate failed (1)"
+			[ $(cat $dirname/d2/subf) == "b" ] ||
+				error "migrate failed (2)"
+		fi
 
 		$LFS setdirstripe -i 1 -c 1 $dirname/d3
 		dirname=$dirname/d3/subdir
@@ -4290,7 +4303,7 @@ test_54() {
 	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
 	local tmpfile=$TMP/${tfile}.tmp
 	local resfile=$TMP/${tfile}.res
-	local nameenc
+	local nameenc=""
 	local fid1
 	local fid2
 
@@ -4341,16 +4354,20 @@ test_54() {
 	[ $filecount -eq 3 ] || error "found $filecount files"
 
 	# check enable_filename_encryption default value
-	nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
+	$LCTL get_param mdc.*.connect_flags | grep -q name_encryption &&
+	  nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
 			head -n1)
-	[ $nameenc -eq 0 ] ||
-		error "enable_filename_encryption should be 0 by default"
+	if [ -n "$nameenc" ]; then
+		[ $nameenc -eq 0 ] ||
+		       error "enable_filename_encryption should be 0 by default"
 
-	# $testfile and $testfile2 should exist because names are not encrypted
-	[ -f $testfile ] ||
-		error "$testfile should exist because name is not encrypted"
-	[ -f $testfile2 ] ||
-		error "$testfile should exist because name is not encrypted"
+		# $testfile and $testfile2 should exist because
+		# names are not encrypted
+		[ -f $testfile ] ||
+		      error "$testfile should exist because name not encrypted"
+		[ -f $testfile2 ] ||
+		      error "$testfile2 should exist because name not encrypted"
+	fi
 
 	scrambledfiles=( $(find $testdir/ -maxdepth 1 -type f) )
 	$RUNAS hexdump -C ${scrambledfiles[0]} &&
@@ -4376,6 +4393,7 @@ test_54() {
 	# server local client incompatible with SSK keys installed
 	if [ "$SHARED_KEY" != true ]; then
 		mount_mds_client
+		stack_trap umount_mds_client EXIT
 		do_facet $SINGLEMDS touch $DIR2/$tdir/newfile
 		mdsscrambledfile=$(do_facet $SINGLEMDS find $testdir2/ \
 					-maxdepth 1 -type f | head -n1)
@@ -4397,7 +4415,6 @@ test_54() {
 		do_facet $SINGLEMDS mrename "$mdsscrambledfile" $testdir2/fB &&
 			error "mrename $mdsscrambledfile should fail on MDS"
 		do_facet $SINGLEMDS rm -f $DIR2/$tdir/newfile
-		umount_mds_client
 	fi
 
 	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
@@ -4426,14 +4443,18 @@ test_54() {
 	echo "With FILESET $tdir, .fscrypt FID is $fid1"
 
 	# enable name encryption
-	do_facet mgs $LCTL set_param -P llite.*.enable_filename_encryption=1
-	[ $? -eq 0 ] ||
-		error "set_param -P llite.*.enable_filename_encryption failed"
+	if [ -n "$nameenc" ]; then
+		do_facet mgs $LCTL set_param -P \
+			llite.*.enable_filename_encryption=1
+		[ $? -eq 0 ] ||
+			error "set_param -P \
+				llite.*.enable_filename_encryption failed"
 
-	wait_update_facet --verbose client \
-	    "$LCTL get_param -n llite.*.enable_filename_encryption | head -n1" \
-	    1 30 ||
-		error "enable_filename_encryption not set on client"
+		wait_update_facet --verbose client \
+			"$LCTL get_param -n llite.*.enable_filename_encryption \
+			| head -n1" 1 30 ||
+			error "enable_filename_encryption not set on client"
+	fi
 
 	# encrypt 'vault' dir inside the subdir mount
 	echo -e 'mypass\nmypass' | su - $USER0 -c "fscrypt encrypt --verbose \
@@ -4448,7 +4469,10 @@ test_54() {
 		error "fscrypt lock $testdir failed (4)"
 
 	# encfile should actually have its name encrypted
-	[ -f $testdir/encfile ] && error "encfile name should be encrypted"
+	if [ -n "$nameenc" ]; then
+		[ -f $testdir/encfile ] &&
+			error "encfile name should be encrypted"
+	fi
 	filecount=$(find $testdir -type f | wc -l)
 	[ $filecount -eq 1 ] || error "found $filecount files instead of 1"
 
@@ -4491,14 +4515,18 @@ test_54() {
 		error "fscrypt lock $DIR/$tdir/vault failed (5)"
 
 	# disable name encryption
-	do_facet mgs $LCTL set_param -P llite.*.enable_filename_encryption=0
-	[ $? -eq 0 ] ||
-		error "set_param -P llite.*.enable_filename_encryption failed"
+	if [ -n "$nameenc" ]; then
+		do_facet mgs $LCTL set_param -P \
+			llite.*.enable_filename_encryption=0
+		[ $? -eq 0 ] ||
+			error "set_param -P \
+				llite.*.enable_filename_encryption failed"
 
-	wait_update_facet --verbose client \
-	    "$LCTL get_param -n llite.*.enable_filename_encryption | head -n1" \
-	    0 30 ||
-		error "enable_filename_encryption not set back to default"
+		wait_update_facet --verbose client \
+			"$LCTL get_param -n llite.*.enable_filename_encryption \
+			| head -n1" 0 30 ||
+			error "enable_filename_encryption not set back to default"
+	fi
 
 	rm -rf $tmpfile $MOUNT/.fscrypt
 }
@@ -4914,7 +4942,10 @@ test_59c() {
 
 	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
 
-	stack_trap "cleanup_for_enc_tests" EXIT
+	(( "$MDS1_VERSION" > $(version_code 2.14.54.54) )) ||
+		skip "MDT migration not supported with older server"
+
+	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
 
 	$LFS setdirstripe -i 0 $dirname

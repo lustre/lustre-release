@@ -697,8 +697,8 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 			       "server returned encryption ctx for "DFID"\n",
 			       PFID(ll_inode2fid(child)));
 			rc = ll_xattr_cache_insert(child,
-					       LL_XATTR_NAME_ENCRYPTION_CONTEXT,
-					       encctx, encctxlen);
+						   xattr_for_enc(child),
+						   encctx, encctxlen);
 			if (rc)
 				CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
 				      ll_i2sbi(child)->ll_fsname,

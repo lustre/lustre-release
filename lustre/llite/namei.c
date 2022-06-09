@@ -689,7 +689,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 				       "server returned encryption ctx for "DFID"\n",
 				       PFID(ll_inode2fid(inode)));
 				rc = ll_xattr_cache_insert(inode,
-					       LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+							   xattr_for_enc(inode),
 							   encctx, encctxlen);
 				if (rc)
 					CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",

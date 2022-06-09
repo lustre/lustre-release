@@ -648,6 +648,7 @@ static const char *const obd_connect_names[] = {
 	"mne_nid_type",		/* 0x1000000 */
 	"lock_contend",		/* 0x2000000 */
 	"atomic_open_lock",	/* 0x4000000 */
+	"name_encryption",	/* 0x8000000 */
 	NULL
 };
 
