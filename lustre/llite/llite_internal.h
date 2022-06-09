@@ -241,10 +241,6 @@ struct ll_inode_info {
 			enum pcc_dataset_flags	 lli_pcc_dsflags;
 			struct pcc_inode	*lli_pcc_inode;
 
-			struct mutex		 lli_group_mutex;
-			__u64			 lli_group_users;
-			unsigned long		 lli_group_gid;
-
 			__u64			 lli_attr_valid;
 			__u64			 lli_lazysize;
 			__u64			 lli_lazyblocks;
