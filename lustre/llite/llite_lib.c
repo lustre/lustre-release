@@ -1679,6 +1679,7 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 				lmv_free_memmd(lli->lli_default_lsm_md);
 				lli->lli_default_lsm_md = NULL;
 			}
+			lli->lli_inherit_depth = 0;
 			up_write(&lli->lli_lsm_sem);
 		}
 		RETURN_EXIT;
@@ -2758,9 +2759,34 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	return 0;
 }
 
+/* child default LMV is inherited from parent */
+static inline bool ll_default_lmv_inherited(struct lmv_stripe_md *pdmv,
+					    struct lmv_stripe_md *cdmv)
+{
+	if (!pdmv || !cdmv)
+		return false;
+
+	if (pdmv->lsm_md_magic != cdmv->lsm_md_magic ||
+	    pdmv->lsm_md_stripe_count != cdmv->lsm_md_stripe_count ||
+	    pdmv->lsm_md_master_mdt_index != cdmv->lsm_md_master_mdt_index ||
+	    pdmv->lsm_md_hash_type != cdmv->lsm_md_hash_type)
+		return false;
+
+	if (cdmv->lsm_md_max_inherit !=
+	    lmv_inherit_next(pdmv->lsm_md_max_inherit))
+		return false;
+
+	if (cdmv->lsm_md_max_inherit_rr !=
+	    lmv_inherit_rr_next(pdmv->lsm_md_max_inherit_rr))
+		return false;
+
+	return true;
+}
+
 /* update directory depth to ROOT, called after LOOKUP lock is fetched. */
 void ll_update_dir_depth(struct inode *dir, struct inode *inode)
 {
+	struct ll_inode_info *plli;
 	struct ll_inode_info *lli;
 
 	if (!S_ISDIR(inode->i_mode))
@@ -2769,10 +2795,26 @@ void ll_update_dir_depth(struct inode *dir, struct inode *inode)
 	if (inode == dir)
 		return;
 
+	plli = ll_i2info(dir);
 	lli = ll_i2info(inode);
-	lli->lli_dir_depth = ll_i2info(dir)->lli_dir_depth + 1;
-	CDEBUG(D_INODE, DFID" depth %hu\n",
-	       PFID(&lli->lli_fid), lli->lli_dir_depth);
+	lli->lli_dir_depth = plli->lli_dir_depth + 1;
+	if (plli->lli_default_lsm_md && lli->lli_default_lsm_md) {
+		down_read(&plli->lli_lsm_sem);
+		down_read(&lli->lli_lsm_sem);
+		if (ll_default_lmv_inherited(plli->lli_default_lsm_md,
+					     lli->lli_default_lsm_md))
+			lli->lli_inherit_depth =
+				plli->lli_inherit_depth + 1;
+		else
+			lli->lli_inherit_depth = 0;
+		up_read(&lli->lli_lsm_sem);
+		up_read(&plli->lli_lsm_sem);
+	} else {
+		lli->lli_inherit_depth = 0;
+	}
+
+	CDEBUG(D_INODE, DFID" depth %hu default LMV depth %hu\n",
+	       PFID(&lli->lli_fid), lli->lli_dir_depth, lli->lli_inherit_depth);
 }
 
 void ll_truncate_inode_pages_final(struct inode *inode)

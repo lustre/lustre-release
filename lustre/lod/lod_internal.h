@@ -207,27 +207,6 @@ struct lod_default_striping {
 					lds_dir_def_striping_set:1;
 };
 
-static inline __u8 lmv_inherit_next(__u8 inherit)
-{
-	if (inherit == LMV_INHERIT_END || inherit == LMV_INHERIT_NONE)
-		return LMV_INHERIT_NONE;
-
-	if (inherit == LMV_INHERIT_UNLIMITED || inherit > LMV_INHERIT_MAX)
-		return inherit;
-
-	return inherit - 1;
-}
-
-static inline __u8 lmv_inherit_rr_next(__u8 inherit_rr)
-{
-	if (inherit_rr == LMV_INHERIT_RR_NONE ||
-	    inherit_rr == LMV_INHERIT_RR_UNLIMITED ||
-	    inherit_rr > LMV_INHERIT_RR_MAX)
-		return inherit_rr;
-
-	return inherit_rr - 1;
-}
-
 enum layout_verify_flags {
 	LVF_ALL_STALE		= BIT(0), /* check not all stale mirrors */
 };

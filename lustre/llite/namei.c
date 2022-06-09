@@ -1515,7 +1515,7 @@ static void ll_qos_mkdir_prep(struct md_op_data *op_data, struct inode *dir)
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct lmv_stripe_md *lsm;
 
-	op_data->op_dir_depth = lli->lli_dir_depth;
+	op_data->op_dir_depth = lli->lli_inherit_depth ?: lli->lli_dir_depth;
 
 	/* parent directory is striped */
 	if (unlikely(lli->lli_lsm_md))
