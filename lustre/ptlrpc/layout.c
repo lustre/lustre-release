@@ -470,6 +470,7 @@ static const struct req_msg_field *ldlm_intent_open_server[] = {
 	&RMF_NIOBUF_INLINE,
 	&RMF_FILE_SECCTX,
 	&RMF_FILE_ENCCTX,
+	&RMF_DEFAULT_MDT_MD,
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {

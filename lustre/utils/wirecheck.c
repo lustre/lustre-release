@@ -1203,6 +1203,7 @@ check_mdt_body(void)
 	CHECK_VALUE_64O(MDS_OPEN_LEASE);
 	CHECK_VALUE_64O(MDS_OPEN_RESYNC);
 	CHECK_VALUE_64O(MDS_OPEN_PCC);
+	CHECK_VALUE_64O(MDS_OPEN_DEFAULT_LMV);
 
 	/* these should be identical to their EXT3_*_FL counterparts, and
 	 * are redefined only to avoid dragging in ext3_fs.h */

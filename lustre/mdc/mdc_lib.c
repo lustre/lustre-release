@@ -337,6 +337,7 @@ void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 			rec->cr_archive_id = op_data->op_archive_id;
 		}
 	}
+	cr_flags |= MDS_OPEN_DEFAULT_LMV;
 	set_mrc_cr_flags(rec, cr_flags);
 }
 

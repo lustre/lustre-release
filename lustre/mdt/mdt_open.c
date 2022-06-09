@@ -311,8 +311,10 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags)
  */
 static void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 				     struct mdt_object *obj,
-				     struct md_attr *ma)
+				     struct md_attr *ma, __u64 open_flags)
 {
+	struct req_capsule *pill;
+
 	if (ma->ma_lmv || ma->ma_lmm) {
 		CDEBUG(D_INFO, DFID " %s already set.\n",
 		       PFID(mdt_object_fid(obj)),
@@ -322,19 +324,26 @@ static void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 		return;
 	}
 
+	pill = info->mti_pill;
 	if (S_ISDIR(obj->mot_header.loh_attr)) {
-		ma->ma_lmv = req_capsule_server_get(info->mti_pill,
-						    &RMF_MDT_MD);
-		ma->ma_lmv_size = req_capsule_get_size(info->mti_pill,
-						       &RMF_MDT_MD,
+		ma->ma_lmv = req_capsule_server_get(pill, &RMF_MDT_MD);
+		ma->ma_lmv_size = req_capsule_get_size(pill, &RMF_MDT_MD,
 						       RCL_SERVER);
 		if (ma->ma_lmv_size > 0)
 			ma->ma_need |= MA_LMV;
+
+		if (open_flags & MDS_OPEN_DEFAULT_LMV) {
+			ma->ma_default_lmv = req_capsule_server_get(pill,
+							&RMF_DEFAULT_MDT_MD);
+			ma->ma_default_lmv_size = req_capsule_get_size(pill,
+							&RMF_DEFAULT_MDT_MD,
+							RCL_SERVER);
+			if (ma->ma_default_lmv_size > 0)
+				ma->ma_need |= MA_LMV_DEF;
+		}
 	} else {
-		ma->ma_lmm = req_capsule_server_get(info->mti_pill,
-						    &RMF_MDT_MD);
-		ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
-						       &RMF_MDT_MD,
+		ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
+		ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
 						       RCL_SERVER);
 		if (ma->ma_lmm_size > 0)
 			ma->ma_need |= MA_LOV;
@@ -395,6 +404,12 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		repbody->mbo_eadatasize = ma->ma_lmv_size;
 		LASSERT(isdir);
 		repbody->mbo_valid |= OBD_MD_FLDIREA | OBD_MD_MEA;
+	}
+
+	if (ma->ma_valid & MA_LMV_DEF) {
+		LASSERT(ma->ma_default_lmv_size != 0);
+		LASSERT(isdir);
+		repbody->mbo_valid |= OBD_MD_FLDIREA | OBD_MD_DEFAULT_MEA;
 	}
 
 	if (open_flags & MDS_FMODE_WRITE)
@@ -748,7 +763,7 @@ static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 				mdt_set_disposition(info, rep,
 						    DISP_OPEN_CREATE);
 
-			mdt_prep_ma_buf_from_rep(info, o, ma);
+			mdt_prep_ma_buf_from_rep(info, o, ma, open_flags);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc)
 				GOTO(out, rc);
@@ -1094,7 +1109,7 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 
 	mdt_set_disposition(info, rep, (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
-	mdt_prep_ma_buf_from_rep(info, o, ma);
+	mdt_prep_ma_buf_from_rep(info, o, ma, open_flags);
 	if (open_flags & MDS_OPEN_RELEASE)
 		ma->ma_need |= MA_HSM;
 	rc = mdt_attr_get_complex(info, o, ma);
@@ -1197,7 +1212,7 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (rc)
 				goto out;
 
-			mdt_prep_ma_buf_from_rep(info, o, ma);
+			mdt_prep_ma_buf_from_rep(info, o, ma, open_flags);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc != 0)
 				GOTO(out, rc);
@@ -1510,7 +1525,7 @@ again_pw:
 			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
 			GOTO(out_child, result);
 		} else {
-			mdt_prep_ma_buf_from_rep(info, child, ma);
+			mdt_prep_ma_buf_from_rep(info, child, ma, open_flags);
 			/* XXX: we should call this once, see few lines below */
 			if (result == 0)
 				result = mdt_attr_get_complex(info, child, ma);
@@ -1561,7 +1576,7 @@ again_pw:
 
 			/* We have to get attr & LOV EA & HSM for this
 			 * object. */
-			mdt_prep_ma_buf_from_rep(info, child, ma);
+			mdt_prep_ma_buf_from_rep(info, child, ma, open_flags);
 			ma->ma_need |= MA_HSM;
 			result = mdt_attr_get_complex(info, child, ma);
 			if (result != 0)

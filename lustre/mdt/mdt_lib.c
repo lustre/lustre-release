@@ -787,6 +787,12 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 	    !(body->mbo_valid & OBD_MD_ENCCTX))
 		req_capsule_shrink(pill, &RMF_FILE_ENCCTX, 0, RCL_SERVER);
 
+	/* Shrink optional default LMV buffer if it is not used */
+	if (req_capsule_has_field(pill, &RMF_DEFAULT_MDT_MD, RCL_SERVER) &&
+	    req_capsule_get_size(pill, &RMF_DEFAULT_MDT_MD, RCL_SERVER) != 0 &&
+	    !(body->mbo_valid & OBD_MD_DEFAULT_MEA))
+		req_capsule_shrink(pill, &RMF_DEFAULT_MDT_MD, 0, RCL_SERVER);
+
 	/*
 	 * Some more field should be shrinked if needed.
 	 * This should be done by those who added fields to reply message.

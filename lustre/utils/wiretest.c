@@ -2642,6 +2642,8 @@ void lustre_assert_wire_constants(void)
 			(long long)MDS_OPEN_RESYNC);
 	LASSERTF(MDS_OPEN_PCC == 00000000010000000000000ULL, "found 0%.22lloULL\n",
 			(long long)MDS_OPEN_PCC);
+	LASSERTF(MDS_OPEN_DEFAULT_LMV == 00000000040000000000000ULL, "found 0%.22lloULL\n",
+			(long long)MDS_OPEN_DEFAULT_LMV);
 	LASSERTF(LUSTRE_SYNC_FL == 0x00000008UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_SYNC_FL);
 	LASSERTF(LUSTRE_IMMUTABLE_FL == 0x00000010UL, "found 0x%.8xUL\n",

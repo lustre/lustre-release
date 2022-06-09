@@ -819,7 +819,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	struct mdt_object *mo;
 	struct mdt_body *repbody;
 	ktime_t kstart = ktime_get();
-	int rc, rc2;
+	int rc;
 
 	ENTRY;
 	DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
@@ -1033,9 +1033,6 @@ out:
 				 ktime_us_delta(ktime_get(), kstart));
 
 	mdt_client_compatibility(info);
-	rc2 = mdt_fix_reply(info);
-	if (rc == 0)
-		rc = rc2;
 	return rc;
 }
 
@@ -3074,7 +3071,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	struct mdt_body *repbody;
 	struct md_layout_change layout = { .mlc_mirror_id = rr->rr_mirror_id };
 	bool lease_broken;
-	int rc, rc2;
+	int rc;
 
 	ENTRY;
 	DEBUG_REQ(D_INODE, req, DFID", FLR file resync", PFID(rr->rr_fid1));
@@ -3140,9 +3137,6 @@ out_obj:
 	mdt_object_put(info->mti_env, mo);
 out:
 	mdt_client_compatibility(info);
-	rc2 = mdt_fix_reply(info);
-	if (rc == 0)
-		rc = rc2;
 	return rc;
 }
 
