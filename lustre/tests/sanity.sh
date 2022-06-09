@@ -25598,6 +25598,7 @@ test_412() {
 }
 run_test 412 "mkdir on specific MDTs"
 
+TEST413_COUNT=${TEST413_COUNT:-200}
 generate_uneven_mdts() {
 	local threshold=$1
 	local lmv_qos_maxage
@@ -25655,23 +25656,24 @@ generate_uneven_mdts() {
 	local testdir=$DIR/$tdir-fillmdt
 	local start
 
-	mkdir -p $testdir
-
 	i=0
 	while (( diff < threshold )); do
+		mkdir -p $testdir
 		# generate uneven MDTs, create till $threshold% diff
 		echo -n "weight diff=$diff% must be > $threshold% ..."
-		echo "Fill MDT$min_index with 1000 files: loop $i"
+		echo "Fill MDT$min_index with $TEST413_COUNT files: loop $i"
 		testdir=$DIR/$tdir-fillmdt/$i
-		[ -d $testdir ] || $LFS mkdir -i $min_index $testdir ||
+		[ -d $testdir ] && continue
+		$LFS mkdir -i $min_index $testdir ||
 			error "mkdir $testdir failed"
 		$LFS setstripe -E 1M -L mdt $testdir ||
 			error "setstripe $testdir failed"
 		start=$SECONDS
-		for F in f.{0..999}; do
-			dd if=/dev/zero of=$testdir/$F bs=64K count=1 > \
+		for ((F=0; F < TEST413_COUNT; F++)); do
+			dd if=/dev/zero of=$testdir/f.$F bs=128K count=1 > \
 				/dev/null 2>&1 || error "dd $F failed"
 		done
+		sync; sleep 1; sync
 
 		# wait for QOS to update
 		(( SECONDS < start + 1 )) && sleep $((start + 1 - SECONDS))
@@ -26136,13 +26138,56 @@ test_413g() {
 }
 run_test 413g "enforce ROOT default LMV on subdir mount"
 
+test_413h() {
+	(( MDSCOUNT >= 2 )) ||
+		skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.15.50.6) )) ||
+		skip "Need server version at least 2.15.50.6"
+
+	local lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
+
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null"
+	$LCTL set_param lmv.*.qos_maxage=1
+
+	local depth=5
+	local rr_depth=4
+	local dir=$DIR/$tdir/l1/l2/l3/l4/l5
+	local count=$((MDSCOUNT * 20))
+
+	generate_uneven_mdts 50
+
+	mkdir -p $dir || error "mkdir $dir failed"
+	stack_trap "rm -rf $dir"
+	$LFS setdirstripe -D -c 1 -i -1 --max-inherit=$depth \
+		--max-inherit-rr=$rr_depth $dir
+
+	for ((d=0; d < depth + 2; d++)); do
+		log "dir=$dir:"
+		for ((sub=0; sub < count; sub++)); do
+			mkdir $dir/d$sub
+		done
+		$LFS getdirstripe -i $dir/d* | sort | uniq -c | sort -nr
+		local num=($($LFS getdirstripe -i $dir/d* | sort | uniq -c))
+		# subdirs within $rr_depth should be created round-robin
+		if (( d < rr_depth )); then
+			(( ${num[0]} != count )) ||
+				error "all objects created on MDT ${num[1]}"
+		fi
+
+		dir=$dir/d0
+	done
+}
+run_test 413h "don't stick to parent for round-robin dirs"
+
 test_413z() {
 	local pids=""
 	local subdir
 	local pid
 
 	for subdir in $(\ls -1 -d $DIR/d413*-fillmdt/*); do
-		unlinkmany $subdir/f. 1000 &
+		unlinkmany $subdir/f. $TEST413_COUNT &
 		pids="$pids $!"
 	done
 

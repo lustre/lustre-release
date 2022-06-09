@@ -6894,13 +6894,16 @@ run_one_logged() {
 	local isonly=ONLY_$testnum
 	local repeat=${!isonly:+$ONLY_REPEAT}
 
-	for testiter in $(seq ${repeat:-1}); do
+	for ((testiter=0; testiter < ${repeat:-1}; testiter++)); do
 		local before_sub=$SECONDS
 		log_sub_test_begin $TESTNAME
 
 		# remove temp files between repetitions to avoid test failures
-		[ -n "$append" -a -n "$DIR" -a -n "$tdir" -a -n "$tfile" ] &&
-			rm -rvf $DIR/$tdir* $DIR/$tfile*
+		if [[ -n "$append" ]]; then
+			[[ -n "$DIR/$tdir" ]] && rm -rvf $DIR/$tdir*
+			[[ -n "$DIR/$tfile" ]] && rm -vf $DIR/$tfile*
+			echo "subtest iteration $testiter/$repeat"
+		fi
 		# loop around subshell so stack_trap EXIT triggers each time
 		(run_one $testnum "$testmsg") 2>&1 | tee -i $append $test_log
 		rc=${PIPESTATUS[0]}
