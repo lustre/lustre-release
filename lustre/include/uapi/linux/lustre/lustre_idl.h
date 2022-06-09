@@ -852,6 +852,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_BATCH_RPC        0x400000ULL /* Multi-RPC batch request */
 #define OBD_CONNECT2_PCCRO	      0x800000ULL /* Read-only PCC */
 #define OBD_CONNECT2_ATOMIC_OPEN_LOCK 0x4000000ULL/* request lock on 1st open */
+#define OBD_CONNECT2_ENCRYPT_NAME     0x8000000ULL /* name encrypt */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
@@ -914,7 +915,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_GETATTR_PFID |\
 				OBD_CONNECT2_LSEEK | OBD_CONNECT2_DOM_LVB |\
 				OBD_CONNECT2_REP_MBITS | \
-				OBD_CONNECT2_ATOMIC_OPEN_LOCK)
+				OBD_CONNECT2_ATOMIC_OPEN_LOCK | \
+				OBD_CONNECT2_ENCRYPT_NAME)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \

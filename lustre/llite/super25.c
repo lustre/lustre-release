@@ -157,8 +157,6 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 	}
 
 	CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
-	/* filename encryption is disabled by default */
-	lsi->lsi_flags &= ~LSI_FILENAME_ENC;
 	rc = lustre_start_mgc(sb);
 	if (rc) {
 		lustre_common_put_super(sb);

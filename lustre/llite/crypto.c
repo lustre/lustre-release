@@ -38,7 +38,7 @@ static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 	/* Get enc context xattr directly instead of going through the VFS,
 	 * as there is no xattr handler for "encryption.".
 	 */
-	rc = ll_xattr_list(inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+	rc = ll_xattr_list(inode, xattr_for_enc(inode),
 			   XATTR_ENCRYPTION_T, ctx, len, OBD_MD_FLXATTR);
 
 	/* used as encryption unit size */
@@ -61,7 +61,7 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 
 	if (encctx && encctxlen)
 		rc = ll_xattr_cache_insert(inode,
-					   LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+					   xattr_for_enc(inode),
 					   encctx, encctxlen);
 	if (rc)
 		return rc;
@@ -110,7 +110,7 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	 * through the VFS, as there is no xattr handler for "encryption.".
 	 */
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-			 OBD_MD_FLXATTR, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+			 OBD_MD_FLXATTR, xattr_for_enc(inode),
 			 ctx, len, XATTR_CREATE, ll_i2suppgid(inode), &req);
 	if (rc)
 		return rc;
@@ -195,6 +195,19 @@ void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 		clear_bit(LL_SBI_ENCRYPT, sbi->ll_flags);
 		clear_bit(LL_SBI_TEST_DUMMY_ENCRYPTION, sbi->ll_flags);
 	}
+}
+
+bool ll_sbi_has_name_encrypt(struct ll_sb_info *sbi)
+{
+	return test_bit(LL_SBI_ENCRYPT_NAME, sbi->ll_flags);
+}
+
+void ll_sbi_set_name_encrypt(struct ll_sb_info *sbi, bool set)
+{
+	if (set)
+		set_bit(LL_SBI_ENCRYPT_NAME, sbi->ll_flags);
+	else
+		clear_bit(LL_SBI_ENCRYPT_NAME, sbi->ll_flags);
 }
 
 static bool ll_empty_dir(struct inode *inode)
@@ -491,6 +504,15 @@ bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
 }
 
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
+{
+}
+
+bool ll_sbi_has_name_encrypt(struct ll_sb_info *sbi)
+{
+	return false;
+}
+
+void ll_sbi_set_name_encrypt(struct ll_sb_info *sbi, bool set)
 {
 }
 

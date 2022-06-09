@@ -1607,6 +1607,7 @@ static ssize_t ll_filename_enc_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	bool val;
 	int rc;
 
@@ -1614,10 +1615,21 @@ static ssize_t ll_filename_enc_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	if (val)
+	if (val) {
+		if (!ll_sbi_has_name_encrypt(sbi)) {
+			/* server does not support name encryption,
+			 * so force it to NULL on client
+			 */
+			CDEBUG(D_SEC, "%s: server does not support name encryption\n",
+			       sbi->ll_fsname);
+			lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+			return -EOPNOTSUPP;
+		}
+
 		lsi->lsi_flags |= LSI_FILENAME_ENC;
-	else
+	} else {
 		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+	}
 
 	return count;
 }

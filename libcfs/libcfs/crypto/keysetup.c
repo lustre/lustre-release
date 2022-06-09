@@ -474,7 +474,14 @@ int llcrypt_get_encryption_info(struct inode *inode)
 		memset(&ctx, 0, sizeof(ctx));
 		ctx.version = LLCRYPT_CONTEXT_V1;
 		ctx.v1.contents_encryption_mode = LLCRYPT_MODE_AES_256_XTS;
-		ctx.v1.filenames_encryption_mode = LLCRYPT_MODE_AES_256_CTS;
+		if (lsi->lsi_flags & LSI_FILENAME_ENC) {
+			ctx.v1.filenames_encryption_mode =
+				LLCRYPT_MODE_AES_256_CTS;
+		} else {
+			llcrypt_warn(inode,
+			"dummy enc: forcing filenames_encryption_mode to null");
+			ctx.v1.filenames_encryption_mode = LLCRYPT_MODE_NULL;
+		}
 		memset(ctx.v1.master_key_descriptor, 0x42,
 		       LLCRYPT_KEY_DESCRIPTOR_SIZE);
 		res = sizeof(ctx.v1);

@@ -489,6 +489,23 @@ static inline void obd_connect_set_enc(struct obd_connect_data *data)
 #endif
 }
 
+static inline bool obd_connect_has_name_enc(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		data->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT_NAME;
+#else
+	return false;
+#endif
+}
+
+static inline void obd_connect_set_name_enc(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	data->ocd_connect_flags2 |= OBD_CONNECT2_ENCRYPT_NAME;
+#endif
+}
+
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.
@@ -654,6 +671,7 @@ enum ll_sbi_flags {
 	LL_SBI_TINY_WRITE,		/* tiny write support */
 	LL_SBI_FILE_HEAT,		/* file heat support */
 	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
+	LL_SBI_ENCRYPT_NAME,		/* name encryption */
 	LL_SBI_NUM_FLAGS
 };
 
@@ -1739,6 +1757,13 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			 struct lu_fid *fid);
 int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags);
 int ll_file_open_encrypt(struct inode *inode, struct file *filp);
+static inline char *xattr_for_enc(struct inode *inode)
+{
+	if (ll_sbi_has_name_encrypt(ll_i2sbi(inode)))
+		return LL_XATTR_NAME_ENCRYPTION_CONTEXT;
+
+	return LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD;
+}
 #ifdef HAVE_LUSTRE_CRYPTO
 extern const struct llcrypt_operations lustre_cryptops;
 #endif

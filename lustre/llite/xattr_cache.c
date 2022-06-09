@@ -139,7 +139,8 @@ static int ll_xattr_cache_add(struct list_head *cache,
 	ENTRY;
 
 	if (ll_xattr_cache_find(cache, xattr_name, &xattr) == 0) {
-		if (!strcmp(xattr_name, LL_XATTR_NAME_ENCRYPTION_CONTEXT))
+		if (!strcmp(xattr_name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) ||
+		    !strcmp(xattr_name, LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD))
 			/* it means enc ctx was already in cache,
 			 * ignore error as it cannot be modified
 			 */
@@ -333,8 +334,7 @@ int ll_xattr_cache_empty(struct inode *inode)
 		GOTO(out_empty, 0);
 
 	list_for_each_entry_safe(entry, n, &lli->lli_xattrs, xe_list) {
-		if (strcmp(entry->xe_name,
-			   LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0)
+		if (strcmp(entry->xe_name, xattr_for_enc(inode)) == 0)
 			continue;
 
 		CDEBUG(D_CACHE, "delete: %s\n", entry->xe_name);
@@ -579,7 +579,7 @@ int ll_xattr_cache_get(struct inode *inode,
 	 * cache if we are just interested in encryption context.
 	 */
 	if ((valid & OBD_MD_FLXATTRLS ||
-	     strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) != 0) &&
+	     strcmp(name, xattr_for_enc(inode)) != 0) &&
 	    !ll_xattr_cache_filled(lli)) {
 		up_read(&lli->lli_xattrs_list_rwsem);
 		rc = ll_xattr_cache_refill(inode);

@@ -162,6 +162,8 @@ void llcrypt_free_ctx(void *encctx, __u32 size);
 bool ll_sb_has_test_dummy_encryption(struct super_block *sb);
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi);
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
+bool ll_sbi_has_name_encrypt(struct ll_sb_info *sbi);
+void ll_sbi_set_name_encrypt(struct ll_sb_info *sbi, bool set);
 /* sizeof(struct fscrypt_context_v2) = 40 */
 #define LLCRYPT_ENC_CTX_SIZE 40
 
