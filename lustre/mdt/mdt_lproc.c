@@ -164,12 +164,14 @@ static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
-			      struct mdt_object *src,
-			      struct mdt_object *tgt, long count)
+			      struct mdt_object *src, struct mdt_object *tgt,
+			      enum mdt_stat_idx msi, s64 ktime_delta)
 {
 	struct md_attr *ma = &info->mti_attr;
 	struct rename_stats *rstats = &mdt->mdt_rename_stats;
 	int rc;
+
+	mdt_counter_incr(req, LPROC_MDT_RENAME, ktime_delta);
 
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;
@@ -181,13 +183,15 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 	}
 
 	if (src == tgt) {
-		mdt_counter_incr(req, LPROC_MDT_SAMEDIR_RENAME, count);
+		mdt_counter_incr(req, LPROC_MDT_RENAME_SAMEDIR, ktime_delta);
+		if (msi) /* parallel rename type */
+			mdt_counter_incr(req, msi, ktime_delta);
 		lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_SAMEDIR_SIZE],
 				      (unsigned int)ma->ma_attr.la_size);
 		return;
 	}
 
-	mdt_counter_incr(req, LPROC_MDT_CROSSDIR_RENAME, count);
+	mdt_counter_incr(req, LPROC_MDT_RENAME_CROSSDIR, ktime_delta);
 	lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_CROSSDIR_SRC_SIZE],
 			      (unsigned int)ma->ma_attr.la_size);
 
@@ -707,6 +711,72 @@ static ssize_t enable_chprojid_gid_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(enable_chprojid_gid);
+
+static ssize_t enable_parallel_rename_dir_show(struct kobject *kobj,
+					       struct attribute *attr,
+					       char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_enable_parallel_rename_dir);
+}
+
+static ssize_t enable_parallel_rename_dir_store(struct kobject *kobj,
+						struct attribute *attr,
+						const char *buffer,
+						size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_parallel_rename_dir = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_parallel_rename_dir);
+
+static ssize_t enable_parallel_rename_file_show(struct kobject *kobj,
+						struct attribute *attr,
+						char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_enable_parallel_rename_file);
+}
+
+static ssize_t enable_parallel_rename_file_store(struct kobject *kobj,
+						 struct attribute *attr,
+						 const char *buffer,
+						 size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_parallel_rename_file = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_parallel_rename_file);
 
 static ssize_t enable_striped_dir_show(struct kobject *kobj,
 				       struct attribute *attr, char *buf)
@@ -1451,14 +1521,16 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_identity_upcall.attr,
 	&lustre_attr_identity_flush.attr,
 	&lustre_attr_evict_tgt_nids.attr,
-	&lustre_attr_enable_remote_dir.attr,
-	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_chprojid_gid.attr,
-	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_dir_restripe.attr,
 	&lustre_attr_enable_dir_auto_split.attr,
+	&lustre_attr_enable_parallel_rename_dir.attr,
+	&lustre_attr_enable_parallel_rename_file.attr,
+	&lustre_attr_enable_remote_dir.attr,
+	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_remote_rename.attr,
+	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_commit_on_sharing.attr,
 	&lustre_attr_local_recovery.attr,
 	&lustre_attr_async_commit_count.attr,
@@ -1575,8 +1647,10 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_SETXATTR]		= "setxattr",
 	[LPROC_MDT_STATFS]		= "statfs",
 	[LPROC_MDT_SYNC]		= "sync",
-	[LPROC_MDT_SAMEDIR_RENAME]	= "samedir_rename",
-	[LPROC_MDT_CROSSDIR_RENAME]	= "crossdir_rename",
+	[LPROC_MDT_RENAME_SAMEDIR]	= "samedir_rename",
+	[LPROC_MDT_RENAME_PAR_FILE]	= "parallel_rename_file",
+	[LPROC_MDT_RENAME_PAR_DIR]	= "parallel_rename_dir",
+	[LPROC_MDT_RENAME_CROSSDIR]	= "crossdir_rename",
 	[LPROC_MDT_IO_READ_BYTES]	= "read_bytes",
 	[LPROC_MDT_IO_WRITE_BYTES]	= "write_bytes",
 	[LPROC_MDT_IO_READ]		= "read",

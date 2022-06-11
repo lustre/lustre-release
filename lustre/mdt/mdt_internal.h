@@ -205,6 +205,18 @@ struct mdt_statfs_cache {
 	__u64 msf_age;
 };
 
+enum mdt_rename_type {
+	RENAME_SAMEDIR_SIZE = 0,
+	RENAME_CROSSDIR_SRC_SIZE,
+	RENAME_CROSSDIR_TGT_SIZE,
+	RENAME_LAST
+};
+
+struct rename_stats {
+	ktime_t			rs_init;
+	struct obd_histogram	rs_hist[RENAME_LAST];
+};
+
 /* split directory automatically when sub file count exceeds 50k */
 #define DIR_SPLIT_COUNT_DEFAULT	50000
 
@@ -262,35 +274,37 @@ struct mdt_device {
 				   mo_dom_read_open:1,
 				   mo_migrate_hsm_allowed:1,
 				   mo_enable_strict_som:1;
-		unsigned int       mo_dom_lock;
+		unsigned int	   mo_dom_lock;
 	} mdt_opts;
-        /* mdt state flags */
-        unsigned long              mdt_state;
+	/* mdt state flags */
+	unsigned long		   mdt_state;
 
-        /* transaction callbacks */
-        struct dt_txn_callback     mdt_txn_cb;
+	/* transaction callbacks */
+	struct dt_txn_callback	   mdt_txn_cb;
 
-        /* these values should be updated from lov if necessary.
-         * or should be placed somewhere else. */
-        int                        mdt_max_mdsize;
+	/* these values should be updated from lov if necessary.
+	 * or should be placed somewhere else. */
+	int			   mdt_max_mdsize;
 
 	int			   mdt_max_ea_size;
 
 	/* preferred BRW size, decided by storage type and capability */
 	__u32			   mdt_brw_size;
 
-        struct upcall_cache        *mdt_identity_cache;
+	struct upcall_cache	  *mdt_identity_cache;
 
-	unsigned int               mdt_capa_conf:1,
+	unsigned int		   mdt_capa_conf:1,
 				   /* Enable remote dir on non-MDT0 */
-				   mdt_enable_remote_dir:1,
-				   mdt_enable_striped_dir:1,
 				   mdt_enable_dir_migration:1,
 				   mdt_enable_dir_restripe:1,
 				   mdt_enable_dir_auto_split:1,
+				   mdt_enable_parallel_rename_dir:1,
+				   mdt_enable_parallel_rename_file:1,
+				   mdt_enable_remote_dir:1,
 				   mdt_enable_remote_rename:1,
-				   mdt_skip_lfsck:1,
+				   mdt_enable_striped_dir:1,
 				   mdt_readonly:1,
+				   mdt_skip_lfsck:1,
 				   /* dir restripe migrate dirent only */
 				   mdt_dir_restripe_nsonly:1,
 				   /* subdirectory mount of remote dir */
@@ -310,9 +324,9 @@ struct mdt_device {
 	struct mdt_statfs_cache	   mdt_osfs;
 
         /* root squash */
-	struct root_squash_info    mdt_squash;
+	struct root_squash_info	   mdt_squash;
 
-        struct rename_stats        mdt_rename_stats;
+	struct rename_stats	   mdt_rename_stats;
 	struct lu_fid		   mdt_md_root_fid;
 
 	/* connection to quota master */
@@ -1298,8 +1312,10 @@ enum mdt_stat_idx {
         LPROC_MDT_SETXATTR,
         LPROC_MDT_STATFS,
         LPROC_MDT_SYNC,
-	LPROC_MDT_SAMEDIR_RENAME,
-	LPROC_MDT_CROSSDIR_RENAME,
+	LPROC_MDT_RENAME_SAMEDIR,
+	LPROC_MDT_RENAME_PAR_FILE,
+	LPROC_MDT_RENAME_PAR_DIR,
+	LPROC_MDT_RENAME_CROSSDIR,
 	LPROC_MDT_IO_READ,
 	LPROC_MDT_IO_WRITE,
 	LPROC_MDT_IO_READ_BYTES,
@@ -1322,7 +1338,7 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src, struct mdt_object *tgt,
-			      long count);
+			      enum mdt_stat_idx msi, s64 count);
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {

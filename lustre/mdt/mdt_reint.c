@@ -2694,6 +2694,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	bool reverse = false, discard = false;
 	bool cos_incompat;
 	ktime_t kstart = ktime_get();
+	enum mdt_stat_idx msi = 0;
 	int rc;
 
 	ENTRY;
@@ -2739,6 +2740,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	 * get rename lock, which will cause deadlock.
 	 */
 	if (!req_is_replay(req)) {
+		bool remote = mdt_object_remote(msrcdir);
+
 		/*
 		 * Normally rename RPC is handled on the MDT with the target
 		 * directory (if target exists, it's on the MDT with the
@@ -2747,16 +2750,21 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 		 * cause any issue), return -EXDEV early to avoid taking
 		 * rename_lock.
 		 */
-		if (!mdt->mdt_enable_remote_rename &&
-		    mdt_object_remote(msrcdir))
+		if (!mdt->mdt_enable_remote_rename && remote)
 			GOTO(out_put_tgtdir, rc = -EXDEV);
 
 		/* This might be further relaxed in the future for regular file
 		 * renames in different source and target parents. Start with
 		 * only same-directory renames for simplicity and because this
 		 * is by far the most the common use case.
+		 *
+		 * Striped directories should be considered "remote".
 		 */
-		if (msrcdir != mtgtdir) {
+		if (msrcdir != mtgtdir || remote ||
+		    (S_ISDIR(ma->ma_attr.la_mode) &&
+		     !mdt->mdt_enable_parallel_rename_dir) ||
+		    (!S_ISDIR(ma->ma_attr.la_mode) &&
+		     !mdt->mdt_enable_parallel_rename_file)) {
 			rc = mdt_rename_lock(info, &rename_lh);
 			if (rc != 0) {
 				CERROR("%s: cannot lock for rename: rc = %d\n",
@@ -2764,7 +2772,13 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 				GOTO(out_put_tgtdir, rc);
 			}
 		} else {
-			CDEBUG(D_INFO, "%s: samedir rename "DFID"/"DNAME"\n",
+			if (S_ISDIR(ma->ma_attr.la_mode))
+				msi = LPROC_MDT_RENAME_PAR_DIR;
+			else
+				msi = LPROC_MDT_RENAME_PAR_FILE;
+
+			CDEBUG(D_INFO,
+			       "%s: samedir parallel rename "DFID"/"DNAME"\n",
 			       mdt_obd_name(mdt), PFID(rr->rr_fid1),
 			       PNAME(&rr->rr_name));
 		}
@@ -3004,14 +3018,12 @@ relock:
 
 	/* handle last link of tgt object */
 	if (rc == 0) {
-		mdt_counter_incr(req, LPROC_MDT_RENAME,
-				 ktime_us_delta(ktime_get(), kstart));
 		if (mnew) {
 			mdt_handle_last_unlink(info, mnew, ma);
 			discard = mdt_dom_check_for_discard(info, mnew);
 		}
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
-					 msrcdir, mtgtdir,
+					 msrcdir, mtgtdir, msi,
 					 ktime_us_delta(ktime_get(), kstart));
 	}
 

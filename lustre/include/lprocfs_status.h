@@ -107,18 +107,6 @@ struct obd_hist_pcpu {
 	bool			oh_initialized;
 };
 
-enum {
-        RENAME_SAMEDIR_SIZE = 0,
-        RENAME_CROSSDIR_SRC_SIZE,
-        RENAME_CROSSDIR_TGT_SIZE,
-        RENAME_LAST,
-};
-
-struct rename_stats {
-	ktime_t			rs_init;
-	struct obd_histogram	rs_hist[RENAME_LAST];
-};
-
 /* An lprocfs counter can be configured using the enum bit masks below.
  *
  * LPROCFS_CNTR_EXTERNALLOCK indicates that an external lock already

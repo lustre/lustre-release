@@ -5995,16 +5995,19 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
 	spin_lock_init(&m->mdt_squash.rsi_lock);
 	spin_lock_init(&m->mdt_lock);
-	m->mdt_enable_remote_dir = 1;
-	m->mdt_enable_striped_dir = 1;
+	m->mdt_enable_chprojid_gid = 0;
 	m->mdt_enable_dir_migration = 1;
 	m->mdt_enable_dir_restripe = 0;
 	m->mdt_enable_dir_auto_split = 0;
+	m->mdt_enable_parallel_rename_dir = 1;
+	m->mdt_enable_parallel_rename_file = 1;
+	m->mdt_enable_remote_dir = 1;
 	m->mdt_enable_remote_dir_gid = 0;
-	m->mdt_enable_chprojid_gid = 0;
 	m->mdt_enable_remote_rename = 1;
-	m->mdt_dir_restripe_nsonly = 1;
 	m->mdt_enable_remote_subdir_mount = 1;
+	m->mdt_enable_striped_dir = 1;
+	m->mdt_dir_restripe_nsonly = 1;
+	m->mdt_rename_stats.rs_init = ktime_get();
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);
