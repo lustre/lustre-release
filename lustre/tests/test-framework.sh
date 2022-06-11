@@ -6754,6 +6754,7 @@ log() {
     local MSG="$*"
     # Get rid of '
     MSG=${MSG//\'/\\\'}
+    MSG=${MSG//\*/\\\*}
     MSG=${MSG//\(/\\\(}
     MSG=${MSG//\)/\\\)}
     MSG=${MSG//\;/\\\;}
