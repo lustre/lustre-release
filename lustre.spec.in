@@ -65,7 +65,7 @@
 %{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{_kver}/source" ]; then echo "/lib/modules/%{_kver}/build"; else echo "%{kdir}"; fi)}
 
 %if 0%{?suse_version} >= 1310 && %{defined _take_kobj}
-	%global _flavor %(basename "%{kobjdir}")
+	%global _flavor %(echo %{_kver} | sed -e 's/^.*-//')
 %else
 	%global _flavor default
 %endif
