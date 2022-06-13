@@ -34,11 +34,13 @@
 #include <keyutils.h>
 #endif
 #include <linux/lustre/lustre_idl.h>
-/* We need to use some deprecated APIs */
-#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#ifdef HAVE_OPENSSL_EVP_PKEY
+#include <openssl/core_names.h>
+#endif
+#include <openssl/err.h>
 #include <sys/types.h>
 
 #include <libcfs/libcfs_crypto.h>
@@ -122,6 +124,11 @@ static inline void DH_get0_key(const DH *dh, const BIGNUM **pub_key,
 		*pub_key = dh->pub_key;
 	if (priv_key != NULL)
 		*priv_key = dh->priv_key;
+}
+
+static inline const BIGNUM *DH_get0_p(const DH *dh)
+{
+	return dh->p;
 }
 #endif
 
@@ -212,6 +219,45 @@ struct sk_kernel_ctx {
 	gss_buffer_desc	skc_session_key;
 };
 
+
+#ifdef HAVE_OPENSSL_EVP_PKEY
+#define DECLARE_EVP_MD(name, hash)					\
+	OSSL_PARAM name[] = {						\
+		OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,	\
+					       (char *)EVP_MD_get0_name(hash), \
+					       0),			\
+		OSSL_PARAM_END						\
+	}
+#else /* !HAVE_OPENSSL_EVP_PKEY */
+#define EVP_PKEY DH
+#define EVP_PKEY_free(dh) DH_free(dh)
+struct dh_ssk_ctx { uint32_t bits; uint32_t gen; };
+#define EVP_PKEY_CTX struct dh_ssk_ctx
+#define EVP_PKEY_CTX_new_from_name(p1, name, p2) malloc(sizeof(EVP_PKEY_CTX))
+#define EVP_PKEY_paramgen_init(ctx) 1
+#undef EVP_PKEY_CTX_set_dh_paramgen_prime_len
+#define EVP_PKEY_CTX_set_dh_paramgen_prime_len(ctx, len) ((ctx)->bits = len)
+#undef EVP_PKEY_CTX_set_dh_paramgen_generator
+#define EVP_PKEY_CTX_set_dh_paramgen_generator(ctx, g) ((ctx)->gen = g)
+#define EVP_PKEY_paramgen(ctx, dhp)					\
+	((*dhp = DH_new()) &&						\
+	 DH_generate_parameters_ex(*(dhp), (ctx)->bits, (ctx)->gen, NULL))
+#define EVP_PKEY_get_bn_param(dh, param, bnp) (*bnp = (BIGNUM *)DH_get0_p(dh))
+#define EVP_PKEY_CTX_free(ctx) free(ctx)
+#define DECLARE_EVP_MD(name, hash)	\
+	const EVP_MD *name = hash
+#define EVP_MAC_CTX HMAC_CTX
+#define EVP_MAC_CTX_new(mac) HMAC_CTX_new()
+#define EVP_MAC_CTX_free HMAC_CTX_free
+#define EVP_MAC void
+#define EVP_MAC_fetch(a, b, c) (void *)1
+#define EVP_MAC_init(ctx, val, len, alg) HMAC_Init_ex(ctx, val, len, alg, NULL)
+#define EVP_MAC_update HMAC_Update
+#define EVP_MAC_final(ctx, val, lenp, hlen)		\
+	HMAC_Final(ctx, val, (unsigned int *)(lenp))
+#define EVP_MAC_free(mac) {}
+#endif
+
 /* Structure used in context initiation to hold all necessary data */
 struct sk_cred {
 	uint32_t		 sc_flags;
@@ -222,7 +268,7 @@ struct sk_cred {
 	gss_buffer_desc		 sc_hmac;
 	gss_buffer_desc		 sc_dh_shared_key;
 	struct sk_kernel_ctx	 sc_kctx;
-	DH			*sc_params;
+	EVP_PKEY *sc_params;
 };
 
 /* Names match up with openssl enc and dgst commands */
@@ -332,7 +378,9 @@ uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
 			       const uint32_t flags);
+#ifndef HAVE_OPENSSL_EVP_PKEY
 int sk_speedtest_dh_valid(unsigned int usec_check_max);
+#endif
 uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds);
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		 const EVP_MD *hash_alg, gss_buffer_desc *hmac);

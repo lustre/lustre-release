@@ -275,6 +275,56 @@ static int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 	return rc;
 }
 
+static inline int __gen_ssk_prime(struct sk_keyfile_config *config)
+{
+	int rc = -1;
+	EVP_PKEY_CTX *ctx = NULL;
+	EVP_PKEY *dh = NULL;
+	BIGNUM *p;
+
+	ctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+	if (!ctx || EVP_PKEY_paramgen_init(ctx) != 1) {
+		fprintf(stderr, "error: ctx cannot be init\n");
+		goto prime_end;
+	}
+
+	if (EVP_PKEY_CTX_set_dh_paramgen_prime_len(ctx,
+						 config->skc_prime_bits) <= 0 ||
+	    EVP_PKEY_CTX_set_dh_paramgen_generator(ctx, SK_GENERATOR) <= 0) {
+		fprintf(stderr, "error: cannot set prime or generator\n");
+		goto prime_end;
+	}
+
+	if (EVP_PKEY_paramgen(ctx, &dh) != 1) {
+		fprintf(stderr, "error: cannot generate DH parameters\n");
+		goto prime_end;
+	}
+
+	if (!EVP_PKEY_get_bn_param(dh, OSSL_PKEY_PARAM_FFC_P, &p)) {
+		fprintf(stderr, "error: cannot get p from dh\n");
+		goto prime_end;
+	}
+
+	if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
+		fprintf(stderr,
+			"error: cannot generate DH parameters: requested length %d exceeds maximum %d\n",
+			config->skc_prime_bits, SK_MAX_P_BYTES * 8);
+		goto prime_end;
+	}
+	if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
+		fprintf(stderr,
+			"error: convert BIGNUM p to binary failed\n");
+		goto prime_end;
+	}
+
+	rc = 0;
+
+prime_end:
+	EVP_PKEY_free(dh);
+	EVP_PKEY_CTX_free(ctx);
+	return rc;
+}
+
 int main(int argc, char **argv)
 {
 	struct sk_keyfile_config *config;
@@ -298,7 +348,6 @@ int main(int argc, char **argv)
 	int opt;
 	enum sk_key_type type = SK_TYPE_INVALID;
 	bool generate_prime = false;
-	DH *dh = NULL;
 
 	static struct option long_opts[] = {
 	{ .name = "crypt",	.has_arg = required_argument, .val = 'c'},
@@ -529,8 +578,17 @@ int main(int argc, char **argv)
 		config->skc_expire = expire;
 	if (shared_keylen != -1)
 		config->skc_shared_keylen = shared_keylen;
-	if (prime_bits != -1)
+	if (prime_bits != -1) {
+#ifdef HAVE_OPENSSL_EVP_PKEY
+		/* #define DH_MIN_MODULUS_BITS 512, not exported by OpenSSL */
+		if (prime_bits < 512) {
+			fprintf(stderr,
+				"error: prime length must be at least 512\n");
+			return EXIT_FAILURE;
+		}
+#endif
 		config->skc_prime_bits = prime_bits;
+	}
 	if (fsname)
 		/* fsname string length was checked when parsing
 		 * command-line options
@@ -556,39 +614,9 @@ int main(int argc, char **argv)
 	}
 
 	if (generate_prime) {
-		const BIGNUM *p;
-		int rc;
-
 		printf("Generating DH parameters, this can take a while...\n");
-		dh = DH_new();
-		if (!dh) {
-			fprintf(stderr, "error: dh cannot be allocated\n");
+		if (__gen_ssk_prime(config))
 			goto error;
-		}
-
-		rc = DH_generate_parameters_ex(dh, config->skc_prime_bits,
-					       SK_GENERATOR, NULL);
-		if (rc != 1) {
-			fprintf(stderr, "error generating DH parameters\n");
-			goto error;
-		}
-
-		DH_get0_pqg(dh, &p, NULL, NULL);
-
-		if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
-			fprintf(stderr, "error: cannot generate DH parameters: "
-				"requested length %d exceeds maximum %d\n",
-				config->skc_prime_bits, SK_MAX_P_BYTES * 8);
-			goto error;
-		}
-		if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
-			fprintf(stderr,
-				"error: convert BIGNUM p to binary failed\n");
-			goto error;
-		}
-
-		DH_free(dh);
-		dh = NULL;
 	}
 
 	if (write_config_file(modify ?: output, config, modify))
@@ -597,7 +625,6 @@ int main(int argc, char **argv)
 	return EXIT_SUCCESS;
 
 error:
-	DH_free(dh);
 	free(config);
 	return EXIT_FAILURE;
 }

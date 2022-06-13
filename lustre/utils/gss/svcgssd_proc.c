@@ -475,7 +475,7 @@ redo:
 		 */
 		attempts++;
 		if (skc->sc_params) {
-			DH_free(skc->sc_params);
+			EVP_PKEY_free(skc->sc_params);
 			skc->sc_params = NULL;
 		}
 		if (skc->sc_pub_key.value) {
@@ -484,6 +484,9 @@ redo:
 		}
 		skc->sc_pub_key.length = 0;
 		if (skc->sc_dh_shared_key.value) {
+			/* erase secret key before freeing memory */
+			memset(skc->sc_dh_shared_key.value, 0,
+			       skc->sc_dh_shared_key.length);
 			free(skc->sc_dh_shared_key.value);
 			skc->sc_dh_shared_key.value = NULL;
 		}
@@ -521,7 +524,7 @@ redo:
 	printerr(2, "Created netstring of %zd bytes\n", snd->out_tok.length);
 
 	if (sk_session_kdf(skc, snd->nid, &snd->in_tok, &snd->out_tok)) {
-		printerr(0, "Failed to calulate derviced session key\n");
+		printerr(0, "Failed to calculate derived session key\n");
 		goto out_err;
 	}
 	if (sk_compute_keys(skc)) {

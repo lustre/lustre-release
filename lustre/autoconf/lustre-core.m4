@@ -69,7 +69,9 @@ AC_CHECK_FUNCS([copy_file_range],
 # LC_FID2PATH_UNION
 #
 AC_DEFUN([LC_FID2PATH_ANON_UNION], [
-AC_MSG_CHECKING([if 'struct getinfo_fid2path' has anony•mous union])
+saved_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_MSG_CHECKING([if 'struct getinfo_fid2path' has anonymous union])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <linux/lustre/lustre_idl.h>
 
@@ -82,14 +84,19 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	}
 ])],[
 	AC_DEFINE(HAVE_FID2PATH_ANON_UNIONS, 1, [union is unnamed])
-	AC_MSG_RESULT("yes")
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
 ])
+CFLAGS="$saved_flags"
 ]) # LC_FID2PATH_ANON_UNION
 
 #
 # LC_IOC_REMOVE_ENTRY
 #
 AC_DEFUN([LC_IOC_REMOVE_ENTRY], [
+saved_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
 AC_MSG_CHECKING([if ioctl IOC_REMOVE_ENTRY' is supported])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <sys/ioctl.h>
@@ -101,7 +108,11 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 ])],[
 	AC_DEFINE(HAVE_IOC_REMOVE_ENTRY, 1,
 		[IOC_REMOVE_ENTRY ioctl exists])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
 ])
+CFLAGS="$saved_flags"
 ]) # LC_IOC_REMOVE_ENTRY
 
 #
@@ -393,11 +404,14 @@ AS_IF([test "x$enable_gss" != xno], [
 ])
 ]) # LC_CONFIG_GSS
 
-# LC_OPENSSL_SSK
+# LC_OPENSSL_HMAC
 #
 # OpenSSL 1.0+ return int for HMAC functions but older SLES11 versions do not
-AC_DEFUN([LC_OPENSSL_SSK], [
-AC_MSG_CHECKING([whether OpenSSL has functions needed for SSK])
+AC_DEFUN([LC_OPENSSL_HMAC], [
+has_hmac_functions="no"
+saved_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_MSG_CHECKING([whether OpenSSL has HMAC_Init_ex])
 AS_IF([test "x$enable_ssk" != xno], [
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <openssl/hmac.h>
@@ -407,9 +421,57 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 		int rc;
 		rc = HMAC_Init_ex(NULL, "test", 4, EVP_md_null(), NULL);
 	}
-])],[AC_DEFINE(HAVE_OPENSSL_SSK, 1,
-	       [OpenSSL HMAC functions needed for SSK])],
-	[enable_ssk="no"])
+])],[
+	has_hmac_functions="yes"
+])
+])
+AC_MSG_RESULT([$has_hmac_functions])
+CFLAGS="$saved_flags"
+]) # LC_OPENSSL_HMAC
+
+# LC_OPENSSL_EVP_PKEY
+#
+# OpenSSL 3.0 introduces EVP_PKEY_get_params
+AC_DEFUN([LC_OPENSSL_EVP_PKEY], [
+has_evp_pkey="no"
+saved_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_MSG_CHECKING([whether OpenSSL has EVP_PKEY_get_params])
+AS_IF([test "x$enable_ssk" != xno], [
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <openssl/evp.h>
+
+	int main(void) {
+		OSSL_PARAM *params;
+
+		int rc = EVP_PKEY_get_params(NULL, params);
+	}
+])],[
+	AC_DEFINE(HAVE_OPENSSL_EVP_PKEY, 1, [OpenSSL EVP_PKEY_get_params])
+	has_evp_pkey="yes"
+])
+])
+CFLAGS="$saved_flags"
+AC_MSG_RESULT([$has_evp_pkey])
+]) # LC_OPENSSL_EVP_PKEY
+
+#
+# LC_OPENSSL_SSK
+#
+# Check whether to enable Lustre client crypto
+#
+AC_DEFUN([LC_OPENSSL_SSK], [
+AC_MSG_CHECKING([whether OpenSSL has functions needed for SSK])
+AS_IF([test "x$enable_ssk" != xno], [
+	AC_MSG_RESULT(
+	)
+	LC_OPENSSL_HMAC
+	LC_OPENSSL_EVP_PKEY
+])
+AS_IF([test "x$has_hmac_functions" = xyes -o "x$has_evp_pkey" = xyes], [
+	AC_DEFINE(HAVE_OPENSSL_SSK, 1, [OpenSSL HMAC functions needed for SSK])
+], [
+	enable_ssk="no"
 ])
 AC_MSG_RESULT([$enable_ssk])
 ]) # LC_OPENSSL_SSK
@@ -418,6 +480,8 @@ AC_MSG_RESULT([$enable_ssk])
 #
 # OpenSSL is needed for l_getsepol
 AC_DEFUN([LC_OPENSSL_GETSEPOL], [
+saved_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
 AC_MSG_CHECKING([whether openssl-devel is present])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <openssl/evp.h>
@@ -437,6 +501,7 @@ No openssl-devel headers found, unable to build l_getsepol and SELinux status ch
 ])
 ])
 AC_MSG_RESULT([$enable_getsepol])
+CFLAGS="$saved_flags"
 ]) # LC_OPENSSL_GETSEPOL
 
 # LC_HAVE_LIBAIO
