@@ -27,8 +27,6 @@
 
 #include <limits.h>
 #include <string.h>
-/* We need to use some deprecated APIs */
-#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/dh.h>
 #include <openssl/engine.h>
 #include <openssl/err.h>
@@ -183,6 +181,14 @@ static int lgss_sk_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 		 * because there is a chance that the parameters generated
 		 * resulted in a key that is 1 byte short */
 		printerr(0, "Short key computed, must retry\n");
+		if (skc->sc_dh_shared_key.value) {
+			/* erase secret key before freeing memory */
+			memset(skc->sc_dh_shared_key.value, 0,
+			       skc->sc_dh_shared_key.length);
+			free(skc->sc_dh_shared_key.value);
+			skc->sc_dh_shared_key.value = NULL;
+		}
+		skc->sc_dh_shared_key.length = 0;
 		return -EAGAIN;
 	} else if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to compute session key: 0x%x\n", rc);
@@ -192,7 +198,7 @@ static int lgss_sk_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 	rc = sk_session_kdf(skc, cred->lc_self_nid, &cred->lc_mech_token,
 			    token);
 	if (rc) {
-		printerr(0, "Failed to calulate derived key\n");
+		printerr(0, "Failed to calculate derived key\n");
 		return -EINVAL;
 	}
 

@@ -74,14 +74,15 @@ svcgssd_run()
 	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
 
 	if (sk_enabled) {
-#if OPENSSL_VERSION_NUMBER >= 0x1010103fL
+#if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x1010103fL
 		sk_dh_checks =
 			sk_speedtest_dh_valid(MAX_ALLOWED_TIME_FOR_PRIME);
+		if (sk_dh_checks)
+			printerr(1, "will use %d rounds for prime testing\n",
+				 sk_dh_checks);
 #else
 		sk_dh_checks = 0;
 #endif
-		printerr(1, "will use %d rounds for prime testing\n",
-			 sk_dh_checks);
 	}
 
 	while (1) {

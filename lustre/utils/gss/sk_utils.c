@@ -33,12 +33,13 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
-/* We need to use some deprecated APIs */
-#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/dh.h>
 #include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/hmac.h>
+#ifdef HAVE_OPENSSL_EVP_PKEY
+#include <openssl/param_build.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <libcfs/util/string.h>
@@ -693,36 +694,39 @@ out_err:
  * of the prime provided as input parameter to DH_check(). This makes the check
  * roughly x10 longer, and causes request timeouts when an SSK flavor is being
  * used.
- *
  * Instead, use a dynamic number Miller-Rabin rounds based on the speed of the
  * check on the current system, evaluated when the lsvcgssd daemon starts, but
  * at least as many as OpenSSL 1.1.1b used for the same key size. If default
  * DH_check() duration is OK, use it directly instead of limiting the rounds.
- *
  * If \a num_rounds == 0, we just call original DH_check() directly.
+ *
+ * OpenSSL v3 internally forces a minimum of 64 rounds when checking prime, so
+ * it is no longer possible to test prime check speed with fewer rounds. In this
+ * case, do not bother and directly call EVP_PKEY_param_check.
  */
-static bool sk_is_dh_valid(const DH *dh, int num_rounds)
+#ifdef HAVE_OPENSSL_EVP_PKEY
+static bool sk_is_dh_valid(EVP_PKEY_CTX *ctx)
 {
-	const BIGNUM *p, *g;
+	if (EVP_PKEY_param_check(ctx) != 1) {
+		printerr(0, "EVP_PKEY_param_check failed\n");
+		ERR_print_errors_fp(stderr);
+		return false;
+	}
+	return true;
+}
+#else
+static inline bool sk_check_dh(const DH *dh, int num_rounds, bool fullcheck)
+{
+	const BIGNUM *p = NULL, *g = NULL;
 	BN_ULONG word;
 	BN_CTX *ctx;
 	BIGNUM *r;
 	bool valid = false;
 	int rc;
 
-	if (num_rounds == 0) {
-		int codes = 0;
-
-		rc = DH_check(dh, &codes);
-		if (rc != 1 || codes) {
-			printerr(0, "DH_check(0) failed: codes=%#x: rc=%d\n",
-				 codes, rc);
-			return false;
-		}
-		return true;
-	}
-
 	DH_get0_pqg(dh, &p, NULL, &g);
+	if (!p || !g)
+		return false;
 
 	if (!BN_is_word(g, SK_GENERATOR)) {
 		printerr(0, "%s: Diffie-Hellman generator is not %u\n",
@@ -731,11 +735,19 @@ static bool sk_is_dh_valid(const DH *dh, int num_rounds)
 	}
 
 	word = BN_mod_word(p, 24);
-	if (word != 11) {
+	/* OpenSSL v3 changed the way the prime is generated,
+	 * using p mod 24 == 23.
+	 * So we must accept word == 23 if the prime was generated
+	 * by a client with OpenSSL v3.
+	 */
+	if ((word != 11) && (word != 23)) {
 		printerr(0, "%s: Diffie-Hellman prime modulo=%lu unsuitable\n",
 			 program_invocation_short_name, word);
 		return false;
 	}
+
+	if (!fullcheck)
+		return true;
 
 	ctx = BN_CTX_new();
 	if (ctx == NULL) {
@@ -774,6 +786,30 @@ out_free:
 	return valid;
 }
 
+static bool sk_is_dh_valid(const DH *dh, int num_rounds)
+{
+	int rc;
+
+	if (num_rounds == 0) {
+		int codes = 0;
+
+		rc = DH_check(dh, &codes);
+		if (codes == DH_NOT_SUITABLE_GENERATOR &&
+		    sk_check_dh(dh, num_rounds, false))
+			return true;
+		if (rc != 1 || codes) {
+			printerr(0, "DH_check(0) failed: codes=%#x: rc=%d\n",
+				 codes, rc);
+			return false;
+		}
+		return true;
+	}
+
+	return sk_check_dh(dh, num_rounds, true);
+}
+#endif
+
+#ifndef HAVE_OPENSSL_EVP_PKEY
 #define VALUE_LENGTH 256
 static unsigned char test_prime[VALUE_LENGTH] =
 	"\xf7\xfa\x49\xd8\xec\xb1\x3b\xff\x26\x10\x3f\xc5\x3a\xc5\xcc\x40"
@@ -876,64 +912,94 @@ free_dh:
 
 	return prev_rounds;
 }
+#endif /* !HAVE_OPENSSL_EVP_PKEY */
 
-/**
- * Populates the DH parameters for the DHKE
- *
- * \param[in,out]	skc		Shared key credentials structure to
- *					populate with DH parameters
- *
- * \retval	GSS_S_COMPLETE	success
- * \retval	GSS_S_FAILURE	failure
- */
-uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds)
+#ifdef HAVE_OPENSSL_EVP_PKEY
+static uint32_t __sk_gen_params(struct sk_cred *skc, BIGNUM *p, BIGNUM *g,
+				int num_rounds)
 {
-	uint32_t random;
-	BIGNUM *p, *g;
+	EVP_PKEY_CTX *ctx = NULL, *ctx_from_key = NULL;
+	OSSL_PARAM_BLD *tmpl = NULL;
+	OSSL_PARAM *params = NULL;
+	EVP_PKEY *key = NULL;
+	uint32_t rc = GSS_S_FAILURE;
+
+	tmpl = OSSL_PARAM_BLD_new();
+	if (!tmpl ||
+	    !OSSL_PARAM_BLD_push_BN(tmpl, OSSL_PKEY_PARAM_FFC_P, p) ||
+	    !OSSL_PARAM_BLD_push_BN(tmpl, OSSL_PKEY_PARAM_FFC_G, g)) {
+		printerr(0, "error: params cannot be pushed\n");
+		goto err;
+	}
+	params = OSSL_PARAM_BLD_to_param(tmpl);
+	if (!params) {
+		printerr(0, "error: params cannot be allocated\n");
+		goto err;
+	}
+
+	ctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+	if (!ctx ||
+	    EVP_PKEY_fromdata_init(ctx) != 1 ||
+	    EVP_PKEY_fromdata(ctx, &key,
+			      EVP_PKEY_KEY_PARAMETERS, params) != 1) {
+		printerr(0, "error: params cannot be set\n");
+		goto err;
+	}
+
+	ctx_from_key = EVP_PKEY_CTX_new_from_pkey(NULL, key, NULL);
+	if (!ctx_from_key) {
+		printerr(0, "error: ctx_from_key cannot be allocated\n");
+		goto err;
+	}
+
+	/* Verify that we have a safe prime and valid generator */
+	if (!sk_is_dh_valid(ctx_from_key))
+		goto err;
+
+	skc->sc_params = NULL;
+	if (EVP_PKEY_keygen_init(ctx_from_key) != 1 ||
+	    EVP_PKEY_keygen(ctx_from_key, &skc->sc_params) != 1) {
+		printerr(0, "Failed to generate public DH key: %s\n",
+			 ERR_error_string(ERR_get_error(), NULL));
+		goto err;
+	}
+
+	/* skc->sc_pub_key.value is allocated by
+	 * EVP_PKEY_get1_encoded_public_key
+	 */
+	skc->sc_pub_key.length =
+	  EVP_PKEY_get1_encoded_public_key(skc->sc_params,
+				      (unsigned char **)&skc->sc_pub_key.value);
+	if (skc->sc_pub_key.length == 0) {
+		printerr(0, "error: cannot get pub key\n");
+		skc->sc_pub_key.value = NULL;
+		goto err;
+	}
+	rc = GSS_S_COMPLETE;
+
+err:
+	EVP_PKEY_CTX_free(ctx_from_key);
+	EVP_PKEY_free(key);
+	EVP_PKEY_CTX_free(ctx);
+	OSSL_PARAM_free(params);
+	OSSL_PARAM_BLD_free(tmpl);
+	BN_free(g);
+	BN_free(p);
+	return rc;
+}
+#else /* !HAVE_OPENSSL_EVP_PKEY */
+static uint32_t __sk_gen_params(struct sk_cred *skc, BIGNUM *p, BIGNUM *g,
+				int num_rounds)
+{
 	const BIGNUM *pub_key;
 
-	/* Random value used by both the request and response as part of the
-	 * key binding material.  This also should ensure we have unqiue
-	 * tokens that are sent to the remote server which is important because
-	 * the token is hashed for the sunrpc cache lookups and a failure there
-	 * would cause connection attempts to fail indefinitely due to the large
-	 * timeout value on the server side */
-	if (RAND_bytes((unsigned char *)&random, sizeof(random)) != 1) {
-		printerr(0, "Failed to get data for random parameter: %s\n",
-			 ERR_error_string(ERR_get_error(), NULL));
-		return GSS_S_FAILURE;
-	}
-
-	/* The random value will always be used in byte range operations
-	 * so we keep it as big endian from this point on */
-	skc->sc_kctx.skc_host_random = random;
-
 	/* Populate DH parameters */
+	/* "dh" takes over freeing of 'p' and 'g' if this succeeds */
 	skc->sc_params = DH_new();
-	if (!skc->sc_params) {
-		printerr(0, "Failed to allocate DH\n");
-		return GSS_S_FAILURE;
-	}
-
-	p = BN_bin2bn(skc->sc_p.value, skc->sc_p.length, NULL);
-	if (!p) {
-		printerr(0, "Failed to convert binary to BIGNUM\n");
-		return GSS_S_FAILURE;
-	}
-
-	/* We use a static generator for shared key */
-	g = BN_new();
-	if (!g) {
-		printerr(0, "Failed to allocate new BIGNUM\n");
-		return GSS_S_FAILURE;
-	}
-	if (BN_set_word(g, SK_GENERATOR) != 1) {
-		printerr(0, "Failed to set g value for DH params\n");
-		return GSS_S_FAILURE;
-	}
-
-	if (!DH_set0_pqg(skc->sc_params, p, NULL, g)) {
+	if (!skc->sc_params || !DH_set0_pqg(skc->sc_params, p, NULL, g)) {
 		printerr(0, "Failed to set pqg\n");
+		BN_free(g);
+		BN_free(p);
 		return GSS_S_FAILURE;
 	}
 
@@ -958,6 +1024,66 @@ uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds)
 	BN_bn2bin(pub_key, skc->sc_pub_key.value);
 
 	return GSS_S_COMPLETE;
+}
+#endif /* HAVE_OPENSSL_EVP_PKEY */
+
+/**
+ * Populates the DH parameters for the DHKE
+ *
+ * \param[in,out]	skc		Shared key credentials structure to
+ *					populate with DH parameters
+ *
+ * \retval	GSS_S_COMPLETE	success
+ * \retval	GSS_S_FAILURE	failure
+ */
+uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds)
+{
+	uint32_t random;
+	BIGNUM *p, *g;
+
+	/* Random value used by both the request and response as part of the
+	 * key binding material.  This also should ensure we have unqiue
+	 * tokens that are sent to the remote server which is important because
+	 * the token is hashed for the sunrpc cache lookups and a failure there
+	 * would cause connection attempts to fail indefinitely due to the large
+	 * timeout value on the server side.
+	 */
+	if (RAND_bytes((unsigned char *)&random, sizeof(random)) != 1) {
+		printerr(0, "Failed to get data for random parameter: %s\n",
+			 ERR_error_string(ERR_get_error(), NULL));
+		return GSS_S_FAILURE;
+	}
+
+	/* The random value will always be used in byte range operations
+	 * so we keep it as big endian from this point on.
+	 */
+	skc->sc_kctx.skc_host_random = random;
+
+	p = BN_bin2bn(skc->sc_p.value, skc->sc_p.length, NULL);
+	if (!p) {
+		printerr(0, "Failed to convert binary to BIGNUM\n");
+		return GSS_S_FAILURE;
+	}
+
+	/* We use a static generator for shared key */
+	g = BN_new();
+	if (!g) {
+		printerr(0, "Failed to allocate new BIGNUM\n");
+		goto free_p;
+	}
+	if (BN_set_word(g, SK_GENERATOR) != 1) {
+		printerr(0, "Failed to set g value for DH params\n");
+		goto free_g;
+	}
+
+	return __sk_gen_params(skc, p, g, num_rounds);
+
+free_g:
+	BN_free(g);
+free_p:
+	BN_free(p);
+
+	return GSS_S_FAILURE;
 }
 
 /**
@@ -997,17 +1123,17 @@ static inline const EVP_MD *sk_hash_to_evp_md(enum cfs_crypto_hash_alg alg)
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		 const EVP_MD *hash_alg, gss_buffer_desc *hmac)
 {
-	HMAC_CTX *hctx;
 	unsigned int hashlen = EVP_MD_size(hash_alg);
-	int i;
-	int rc = -1;
+	EVP_MAC_CTX *ctx = NULL;
+	EVP_MAC *mac = NULL;
+	size_t len = 0;
+	int i, rc = -1;
+	DECLARE_EVP_MD(subalg, hash_alg);
 
 	if (hash_alg == EVP_md_null()) {
 		printerr(0, "Invalid hash algorithm\n");
 		return -1;
 	}
-
-	hctx = HMAC_CTX_new();
 
 	hmac->length = hashlen;
 	hmac->value = malloc(hashlen);
@@ -1016,32 +1142,45 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		goto out;
 	}
 
-	if (HMAC_Init_ex(hctx, key->value, key->length, hash_alg, NULL) != 1) {
+	mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	if (!mac) {
+		printerr(0, "Failed to fetch HMAC\n");
+		goto out;
+	}
+
+	ctx = EVP_MAC_CTX_new(mac);
+	if (!ctx) {
+		printerr(0, "Failed to init HMAC ctx\n");
+		goto out;
+	}
+
+	if (EVP_MAC_init(ctx, key->value, key->length, subalg) != 1) {
 		printerr(0, "Failed to init HMAC\n");
 		goto out;
 	}
 
 	for (i = 0; i < numbufs; i++) {
-		if (HMAC_Update(hctx, bufs[i].value, bufs[i].length) != 1) {
+		if (EVP_MAC_update(ctx, bufs[i].value, bufs[i].length) != 1) {
 			printerr(0, "Failed to update HMAC\n");
 			goto out;
 		}
 	}
 
 	/* The result gets populated in hmac */
-	if (HMAC_Final(hctx, hmac->value, &hashlen) != 1) {
+	if (EVP_MAC_final(ctx, hmac->value, &len, hashlen) != 1) {
 		printerr(0, "Failed to finalize HMAC\n");
 		goto out;
 	}
-
-	if (hmac->length != hashlen) {
-		printerr(0, "HMAC size does not match expected\n");
+	if (hmac->length != len) {
+		printerr(0, "HMAC size %zu does not match expected %zu\n",
+			 len, hmac->length);
 		goto out;
 	}
 
 	rc = 0;
 out:
-	HMAC_CTX_free(hctx);
+	EVP_MAC_CTX_free(ctx);
+	EVP_MAC_free(mac);
 	return rc;
 }
 
@@ -1136,8 +1275,10 @@ void sk_free_cred(struct sk_cred *skc)
 		free(skc->sc_kctx.skc_session_key.value);
 	}
 
-	if (skc->sc_params)
-		DH_free(skc->sc_params);
+	if (skc->sc_params) {
+		EVP_PKEY_free(skc->sc_params);
+		skc->sc_params = NULL;
+	}
 
 	free(skc);
 	skc = NULL;
@@ -1317,6 +1458,98 @@ int sk_compute_keys(struct sk_cred *skc)
 	return 0;
 }
 
+uint32_t __sk_compute_dh_key(struct sk_cred *skc,
+			     const gss_buffer_desc *pub_key,
+			     size_t *expected_len)
+{
+	gss_buffer_desc *dh_shared = &skc->sc_dh_shared_key;
+	uint32_t rc = GSS_S_FAILURE;
+#ifdef HAVE_OPENSSL_EVP_PKEY
+	EVP_PKEY_CTX *ctx = NULL;
+	EVP_PKEY *peerkey = NULL;
+
+	peerkey = EVP_PKEY_new();
+	if (!peerkey ||
+	    EVP_PKEY_copy_parameters(peerkey, skc->sc_params) != 1) {
+		printerr(0, "error: peerkey cannot be init\n");
+		goto out_err;
+	}
+
+	if (EVP_PKEY_set1_encoded_public_key(peerkey,
+					     pub_key->value,
+					     pub_key->length) != 1) {
+		printerr(0, "error: peerkey cannot be set\n");
+		goto out_err;
+	}
+
+	ctx = EVP_PKEY_CTX_new_from_pkey(NULL, skc->sc_params, NULL);
+	if (!ctx) {
+		printerr(0, "error: ctx cannot be allocated\n");
+		goto out_err;
+	}
+
+	if (EVP_PKEY_derive_init(ctx) != 1 ||
+	    EVP_PKEY_derive_set_peer(ctx, peerkey) != 1) {
+		printerr(0, "error: ctx cannot be init\n");
+		goto out_err;
+	}
+
+	if (EVP_PKEY_derive(ctx, NULL, expected_len) != 1) {
+		printerr(0, "error: cannot get dh length\n");
+		goto out_err;
+	}
+
+	dh_shared->length = *expected_len;
+	dh_shared->value = malloc(*expected_len);
+	if (!dh_shared->value) {
+		printerr(0, "error: cannot allocate memory for shared key\n");
+		goto out_err;
+	}
+
+	if (EVP_PKEY_derive(ctx, dh_shared->value, &dh_shared->length) != 1) {
+		printerr(0, "error: cannot derive dh key\n");
+		ERR_print_errors_fp(stderr);
+		goto out_err;
+	}
+
+	rc = GSS_S_COMPLETE;
+out_err:
+	EVP_PKEY_CTX_free(ctx);
+	EVP_PKEY_free(peerkey);
+#else /* !HAVE_OPENSSL_EVP_PKEY */
+	BIGNUM *remote_pub_key;
+
+	remote_pub_key = BN_bin2bn(pub_key->value, pub_key->length, NULL);
+	if (!remote_pub_key) {
+		printerr(0, "Failed to convert binary to BIGNUM\n");
+		return rc;
+	}
+
+	*expected_len = DH_size(skc->sc_params);
+	dh_shared->length = *expected_len;
+	dh_shared->value = malloc(*expected_len);
+	if (!dh_shared->value) {
+		printerr(0,
+			 "Failed to allocate memory for computed shared secret key\n");
+		goto out_err;
+	}
+
+	/* This computes the shared key from the DHKE */
+	dh_shared->length = DH_compute_key(dh_shared->value, remote_pub_key,
+					   skc->sc_params);
+	if (dh_shared->length == -1) {
+		printerr(0, "DH key derivation failed: %s\n",
+			 ERR_error_string(ERR_get_error(), NULL));
+		goto out_err;
+	}
+
+	rc = GSS_S_COMPLETE;
+out_err:
+	BN_free(remote_pub_key);
+#endif /* HAVE_OPENSSL_EVP_PKEY */
+	return rc;
+}
+
 /**
  * Computes a session key based on the DH parameters from the host and its peer
  *
@@ -1330,59 +1563,37 @@ int sk_compute_keys(struct sk_cred *skc)
  */
 uint32_t sk_compute_dh_key(struct sk_cred *skc, const gss_buffer_desc *pub_key)
 {
-	gss_buffer_desc *dh_shared = &skc->sc_dh_shared_key;
-	BIGNUM *remote_pub_key;
-	int status;
-	uint32_t rc = GSS_S_FAILURE;
+	size_t expected_len;
+	uint32_t rc;
 
-	remote_pub_key = BN_bin2bn(pub_key->value, pub_key->length, NULL);
-	if (!remote_pub_key) {
-		printerr(0, "Failed to convert binary to BIGNUM\n");
+	rc = __sk_compute_dh_key(skc, pub_key, &expected_len);
+	if (rc != GSS_S_COMPLETE)
 		return rc;
-	}
 
-	dh_shared->length = DH_size(skc->sc_params);
-	dh_shared->value = malloc(dh_shared->length);
-	if (!dh_shared->value) {
-		printerr(0, "Failed to allocate memory for computed shared "
-			 "secret key\n");
-		goto out_err;
-	}
-
-	/* This compute the shared key from the DHKE */
-	status = DH_compute_key(dh_shared->value, remote_pub_key,
-				skc->sc_params);
-	if (status == -1) {
-		printerr(0, "DH_compute_key() failed: %s\n",
-			 ERR_error_string(ERR_get_error(), NULL));
-		goto out_err;
-	} else if (status < dh_shared->length) {
+	if (skc->sc_dh_shared_key.length < expected_len) {
 		/* there is around 1 chance out of 256 that the returned
 		 * shared key is shorter than expected
 		 */
-		if (status >= dh_shared->length - 2) {
-			int shift = dh_shared->length - status;
+		if (skc->sc_dh_shared_key.length >= expected_len - 2) {
+			int shift = expected_len - skc->sc_dh_shared_key.length;
+
 			/* if the key is short by only 1 or 2 bytes, just
 			 * prepend it with 0s
 			 */
-			memmove((void *)(dh_shared->value + shift),
-				dh_shared->value, status);
-			memset(dh_shared->value, 0, shift);
+			memmove((void *)(skc->sc_dh_shared_key.value + shift),
+				skc->sc_dh_shared_key.value,
+				skc->sc_dh_shared_key.length);
+			memset(skc->sc_dh_shared_key.value, 0, shift);
 		} else {
 			/* if the key is really too short, return GSS_S_BAD_QOP
 			 * so that the caller can retry to generate
 			 */
-			printerr(0, "DH_compute_key() returned a short key of %d bytes, expected: %zu\n",
-				 status, dh_shared->length);
+			printerr(0,
+				 "DH derivation returned a short key of %zu bytes, expected: %zu\n",
+				 skc->sc_dh_shared_key.length, expected_len);
 			rc = GSS_S_BAD_QOP;
-			goto out_err;
 		}
 	}
-
-	rc = GSS_S_COMPLETE;
-
-out_err:
-	BN_free(remote_pub_key);
 	return rc;
 }
 
