@@ -146,6 +146,9 @@ static int alr_print_fraction = 100;
 
 static void alr_dev_free(int epoll_fd, struct alr_dev *ad)
 {
+	if (ad == NULL)
+		return;
+
 	TRACE("alr_dev_free %s\n", ad->alr_name);
 
 	if (!(ad->alr_fd < 0))
@@ -891,8 +894,19 @@ int main(int argc, char *argv[])
 
 	/* Open control device. */
 	int ctl_fd = open(ctl_path, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
-	if (ctl_fd < 0)
+	if (ctl_fd < 0) {
+		/* If no OSTs are mounted then the ofd module may not
+		 * be loaded and hence the control device may not be
+		 * present. Handle this in the same way that we handle
+		 * no OSTs and exit_on_close below. */
+		if (errno == ENOENT && exit_on_close) {
+			DEBUG("no control device, exiting\n");
+			exit_status = EXIT_SUCCESS;
+			goto out;
+		}
+
 		FATAL("cannot open '%s': %s\n", ctl_path, strerror(errno));
+	}
 
 	/* Get and print interface version. */
 	oal_version = ioctl(ctl_fd, LUSTRE_ACCESS_LOG_IOCTL_VERSION);
