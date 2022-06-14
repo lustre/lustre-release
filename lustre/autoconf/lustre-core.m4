@@ -2497,6 +2497,29 @@ user_namespace_argument, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_USER_NAMESPACE_ARG
 
+#
+# LC_TASK_STRUCT_HAS_NEW_STATE
+#
+# kernel 5.13 commit 2f064a59a11ff9bc22e52e9678bc601404c7cb34
+# Change the type and name of task_struct::state. Drop the volatile and
+# shrink it to an 'unsigned int'. Rename it in order to find all uses
+# such that we can use READ_ONCE/WRITE_ONCE as appropriate.
+#
+AC_DEFUN([LC_TASK_STRUCT_HAS_NEW_STATE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'struct task_struct' has a '__state' member],
+task_struct_state, [
+	#include <linux/sched.h>
+],[
+	((struct task_struct *)NULL)->__state = 0;
+],[
+	AC_DEFINE(__state, state,
+		['struct task_struct' has a '__state' member])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_TASK_STRUCT_HAS_NEW_STATE
+
 AC_DEFUN([LC_PROG_LINUX_SRC], [])
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
 
@@ -2684,6 +2707,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 5.12
 	LC_HAVE_USER_NAMESPACE_ARG
+
+	# 5.13
+	LC_TASK_STRUCT_HAS_NEW_STATE
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
