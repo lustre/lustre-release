@@ -30,6 +30,7 @@ echo "layout: ${layout[*]}"
 
 while /bin/true; do
 	file=$((RANDOM % MAX))
+	(( RANDOM % 100 < 25 )) && file+="/$((RANDOM % MAX))"
 	# $RANDOM is between 0 and 32767, and we want $blockcount in 64kB units
 	blockcount=$((RANDOM * MAX_MB / 32 / 64))
 	$RACER_ENABLE_OVERSTRIPE &&

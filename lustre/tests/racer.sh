@@ -126,11 +126,11 @@ test_1() {
 			$LFS setstripe $d/racer $RACER_EXTRA_LAYOUT ||
 			error "setstripe $RACER_EXTRA_LAYOUT failed"
 		fi
-		if [ $MDSCOUNT -ge 2 ]; then
-			for i in $(seq $((MDSCOUNT - 1))); do
+		if (( MDSCOUNT >= 2 )); then
+			for ((i = 0; i < MDSCOUNT; i++)); do
 				RDIRS="$RDIRS $d/racer$i"
-				if [ ! -e $d/racer$i ]; then
-					$LFS mkdir -i $i $d/racer$i ||
+				if [[ ! -e $d/racer$i ]]; then
+					$LFS mkdir -i $i $RACER_MKDIR_OPTS $d/racer$i ||
 						error "lfs mkdir $i failed"
 				fi
 				if [[ -n "$RACER_EXTRA_LAYOUT" ]]; then
@@ -223,6 +223,74 @@ test_1() {
 }
 run_test 1 "racer on clients: ${CLIENTS:-$(hostname)} DURATION=$DURATION"
 
+# racer rename stress test
+test_2() {
+	local rrc=0
+	local rc=0
+	local clients=$CLIENTS
+	local RDIRS
+	local i
+	local racer_done=$TMP/racer_done
+
+	(( MDSCOUNT > 1 )) || skip "need at least 2 MDTs"
+
+	rm -f $racer_done
+
+	for d in ${RACERDIRS}; do
+		is_mounted $d || continue
+		mkdir -p $d
+
+		for ((i = 0; i < $MDSCOUNT; i++)); do
+			RDIRS+=" $d/racer$i"
+			[[  -d "$d/racer$i" ]] && continue
+			$LFS mkdir $RACER_MKDIR_OPTS $d/racer$i ||
+				error "mkdir $d/racer$i failed"
+			if [[ -n "$RACER_EXTRA_LAYOUT" ]]; then
+				$LFS setstripe $d/racer$i $RACER_EXTRA_LAYOUT ||
+					error "extra $RACER_EXTRA_LAYOUT failed"
+			fi
+		done
+	done
+
+	local rpids=""
+	local progs="dir_create+dir_remote+file_rename+file_rename+file_create+file_rm"
+	for rdir in $RDIRS; do
+		echo "starting on $clients:$rdir with: ${progs//+/ }"
+		do_nodes $clients "DURATION=$DURATION \
+			MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT\
+			RACER_MAX_MB=0 \
+			RACER_ENABLE_FLR=false \
+			RACER_ENABLE_DOM=false \
+			RACER_ENABLE_SEL=false \
+			RACER_ENABLE_MIGRATION=false \
+			RACER_MAX_CLEANUP_WAIT=$RACER_MAX_CLEANUP_WAIT \
+			RACER_EXTRA=\\\"$RACER_EXTRA\\\" \
+			RACER_EXTRA_LAYOUT=\\\"$RACER_EXTRA_LAYOUT\\\" \
+			RACER_PROGS="$progs" \
+			NUM_THREADS=$NUM_THREADS \
+			MAX_FILES=$MAX_FILES \
+			LFS=$LFS \
+			LCTL=$LCTL \
+			$racer $rdir $NUM_RACER_THREADS" &
+		pid=$!
+		rpids="$rpids $pid"
+	done
+
+	echo racers pids: $rpids
+	for pid in $rpids; do
+		wait $pid
+		rc=$?
+		echo "pid=$pid rc=$rc"
+		if [ $rc != 0 ]; then
+		    rrc=$((rrc + 1))
+		fi
+	done
+
+	return $rrc
+}
+run_test 2 "racer rename: ${CLIENTS:-$(hostname)} DURATION=$DURATION"
+
 complete_test $SECONDS
-check_and_cleanup_lustre
+FSCK_ALWAYS=${FSCK_ALWAYS:-"yes"} check_and_cleanup_lustre
+
 exit_status

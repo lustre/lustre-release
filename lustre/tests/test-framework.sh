@@ -1927,20 +1927,41 @@ set_default_debug_facet () {
 	set_default_debug_nodes $node "$debug" "$subsys" $debug_size
 }
 
-set_params_nodes () {
-	[[ $# -ge 2 ]] || return 0
-
+set_params_nodes() {
 	local nodes=$1
 	shift
-	do_nodes $nodes $LCTL set_param "$@"
+	local params="$@"
+
+	[[ -n "$params" ]] || return 0
+
+	do_nodes $nodes "$LCTL set_param $params"
 }
 
-set_params_clients () {
+set_params_clients() {
+	(( $# >= 2 )) || return 0
 	local clients=${1:-$CLIENTS}
-	local params=${2:-$CLIENT_LCTL_SETPARAM_PARAM}
+	shift
+	local params="${@:-$CLIENT_LCTL_SETPARAM_PARAM}"
 
-	[[ -n $params ]] || return 0
 	set_params_nodes $clients $params
+}
+
+set_params_mdts() {
+	(( $# >= 2 )) || return 0
+	local mdts=${1:-$(comma_list $(mdts_nodes))}
+	shift
+	local params="${@:-$MDS_LCTL_SETPARAM_PARAM}"
+
+	set_params_nodes $mdts $params
+}
+
+set_params_osts() {
+	(( $# >= 2 )) || return 0
+	local osts=${1:-$(comma_list $(osts_nodes))}
+	shift
+	local params="${@:-$OSS_LCTL_SETPARAM_PARAM}"
+
+	set_params_nodes $osts $params
 }
 
 set_hostid () {
@@ -5920,12 +5941,12 @@ check_config_clients () {
 }
 
 check_timeout () {
-    local mdstimeout=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
-    local cltimeout=$(lctl get_param -n timeout)
-    if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
-        error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
-        return 1
-    fi
+	local mdstimeout=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+	local cltimeout=$(lctl get_param -n timeout)
+	if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
+		error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
+		return 1
+	fi
 }
 
 is_mounted () {
@@ -6073,8 +6094,7 @@ do_check_and_setup_lustre() {
 			# i.e. if:
 			# 1) remote client has mounted other Lustre fs ?
 			# 2) it has insane env ?
-			# let's try umount MOUNT2 on all clients and mount it
-			# again:
+			# try to umount MOUNT2 on all clients and mount again:
 			if ! check_config_clients $MOUNT2; then
 				cleanup_mount $MOUNT2
 				restore_mount $MOUNT2
@@ -6138,6 +6158,10 @@ do_check_and_setup_lustre() {
 		set_pools_quota
 	fi
 
+	# set tunable parameters passed to test environment
+	set_params_clients
+	set_params_mdts
+	set_params_osts
 	echo "=== $TESTSUITE: finish setup $(date +'%H:%M:%S (%s)') ==="
 
 	if [[ "$ONLY" == "setup" ]]; then
