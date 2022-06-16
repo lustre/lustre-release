@@ -4457,7 +4457,8 @@ LNetCtl(unsigned int cmd, void *arg)
 			return rc;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lp = lnet_find_peer4(ping->ping_id.nid);
+		lnet_nid4_to_nid(ping->ping_id.nid, &nid);
+		lp = lnet_find_peer(&nid);
 		if (lp) {
 			ping->ping_id.nid =
 				lnet_nid_to_nid4(&lp->lp_primary_nid);
@@ -4481,7 +4482,8 @@ LNetCtl(unsigned int cmd, void *arg)
 			return rc;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lp = lnet_find_peer4(discover->ping_id.nid);
+		lnet_nid4_to_nid(discover->ping_id.nid, &nid);
+		lp = lnet_find_peer(&nid);
 		if (lp) {
 			discover->ping_id.nid =
 				lnet_nid_to_nid4(&lp->lp_primary_nid);
@@ -4794,7 +4796,7 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 
 	if (nob < 8) {
 		CERROR("%s: ping info too short %d\n",
-		       libcfs_id2str(id4), nob);
+		       libcfs_idstr(&id), nob);
 		goto fail_ping_buffer_decref;
 	}
 
@@ -4802,19 +4804,19 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		lnet_swap_pinginfo(pbuf);
 	} else if (pbuf->pb_info.pi_magic != LNET_PROTO_PING_MAGIC) {
 		CERROR("%s: Unexpected magic %08x\n",
-		       libcfs_id2str(id4), pbuf->pb_info.pi_magic);
+		       libcfs_idstr(&id), pbuf->pb_info.pi_magic);
 		goto fail_ping_buffer_decref;
 	}
 
 	if ((pbuf->pb_info.pi_features & LNET_PING_FEAT_NI_STATUS) == 0) {
 		CERROR("%s: ping w/o NI status: 0x%x\n",
-		       libcfs_id2str(id4), pbuf->pb_info.pi_features);
+		       libcfs_idstr(&id), pbuf->pb_info.pi_features);
 		goto fail_ping_buffer_decref;
 	}
 
 	if (nob < LNET_PING_INFO_SIZE(0)) {
 		CERROR("%s: Short reply %d(%d min)\n",
-		       libcfs_id2str(id4),
+		       libcfs_idstr(&id),
 		       nob, (int)LNET_PING_INFO_SIZE(0));
 		goto fail_ping_buffer_decref;
 	}
@@ -4824,7 +4826,7 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 
 	if (nob < LNET_PING_INFO_SIZE(n_ids)) {
 		CERROR("%s: Short reply %d(%d expected)\n",
-		       libcfs_id2str(id4),
+		       libcfs_idstr(&id),
 		       nob, (int)LNET_PING_INFO_SIZE(n_ids));
 		goto fail_ping_buffer_decref;
 	}
@@ -4846,21 +4848,23 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 }
 
 static int
-lnet_discover(struct lnet_process_id id, __u32 force,
+lnet_discover(struct lnet_process_id id4, __u32 force,
 	      struct lnet_process_id __user *ids, int n_ids)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer_ni *p;
 	struct lnet_peer *lp;
 	struct lnet_process_id *buf;
+	struct lnet_processid id;
 	int cpt;
 	int i;
 	int rc;
 
 	if (n_ids <= 0 ||
-	    id.nid == LNET_NID_ANY)
+	    id4.nid == LNET_NID_ANY)
 		return -EINVAL;
 
+	lnet_pid4_to_pid(id4, &id);
 	if (id.pid == LNET_PID_ANY)
 		id.pid = LNET_PID_LUSTRE;
 
@@ -4876,7 +4880,7 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 		return -ENOMEM;
 
 	cpt = lnet_net_lock_current();
-	lpni = lnet_nid2peerni_locked(id.nid, LNET_NID_ANY, cpt);
+	lpni = lnet_peerni_by_nid_locked(&id.nid, NULL, cpt);
 	if (IS_ERR(lpni)) {
 		rc = PTR_ERR(lpni);
 		goto out;
@@ -4902,7 +4906,7 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	 * and lookup the lpni again
 	 */
 	lnet_peer_ni_decref_locked(lpni);
-	lpni = lnet_find_peer_ni_locked(id.nid);
+	lpni = lnet_peer_ni_find_locked(&id.nid);
 	if (!lpni) {
 		rc = -ENOENT;
 		goto out;

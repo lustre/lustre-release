@@ -975,19 +975,13 @@ struct lnet_peer_net *lnet_get_next_peer_net_locked(struct lnet_peer *lp,
 struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 						  struct lnet_peer_net *peer_net,
 						  struct lnet_peer_ni *prev);
-struct lnet_peer_ni *lnet_nid2peerni_locked(lnet_nid_t nid, lnet_nid_t pref,
-					int cpt);
 struct lnet_peer_ni *lnet_peerni_by_nid_locked(struct lnet_nid *nid,
 					       struct lnet_nid *pref,
 					       int cpt);
 struct lnet_peer_ni *lnet_nid2peerni_ex(struct lnet_nid *nid);
-struct lnet_peer_ni *lnet_peer_get_ni_locked(struct lnet_peer *lp,
-					     lnet_nid_t nid);
 struct lnet_peer_ni *lnet_peer_ni_get_locked(struct lnet_peer *lp,
 					     struct lnet_nid *nid);
-struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid);
 struct lnet_peer_ni *lnet_peer_ni_find_locked(struct lnet_nid *nid);
-struct lnet_peer *lnet_find_peer4(lnet_nid_t nid);
 struct lnet_peer *lnet_find_peer(struct lnet_nid *nid);
 void lnet_peer_net_added(struct lnet_net *net);
 void lnet_peer_primary_nid_locked(struct lnet_nid *nid,

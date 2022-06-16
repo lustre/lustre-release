@@ -1052,17 +1052,19 @@ lnet_udsp_get_construct_info(struct lnet_ioctl_construct_udsp_info *info)
 {
 	struct lnet_ni *ni;
 	struct lnet_peer_ni *lpni;
+	struct lnet_nid nid;
 
 	lnet_net_lock(0);
+	lnet_nid4_to_nid(info->cud_nid, &nid);
 	if (!info->cud_peer) {
-		ni = lnet_nid2ni_locked(info->cud_nid, 0);
+		ni = lnet_nid_to_ni_locked(&nid, 0);
 		if (ni)
 			lnet_udsp_get_ni_info(info, ni);
 	} else {
-		lpni = lnet_find_peer_ni_locked(info->cud_nid);
+		lpni = lnet_peer_ni_find_locked(&nid);
 		if (!lpni) {
 			CDEBUG(D_NET, "nid %s is not found\n",
-			       libcfs_nid2str(info->cud_nid));
+			       libcfs_nidstr(&nid));
 		} else {
 			lnet_udsp_get_peer_info(info, lpni);
 			lnet_peer_ni_decref_locked(lpni);

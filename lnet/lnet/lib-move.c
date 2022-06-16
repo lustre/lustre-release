@@ -2106,7 +2106,7 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 		return rc;
 	}
 
-	new_lpni = lnet_find_peer_ni_locked(lnet_nid_to_nid4(&lpni->lpni_nid));
+	new_lpni = lnet_peer_ni_find_locked(&lpni->lpni_nid);
 	if (!new_lpni) {
 		lnet_peer_ni_decref_locked(lpni);
 		return -ENOENT;
@@ -3035,7 +3035,7 @@ again:
 		 * try to send it via non-multi-rail criteria
 		 */
 		if (!IS_ERR(src_lpni)) {
-			/* Drop ref taken by lnet_nid2peerni_locked() */
+			/* Drop ref taken by lnet_peerni_by_nid_locked() */
 			lnet_peer_ni_decref_locked(src_lpni);
 			src_lp = lpni->lpni_peer_net->lpn_peer;
 			if (lnet_peer_is_multi_rail(src_lp) &&
@@ -3780,7 +3780,7 @@ lnet_recover_peer_nis(void)
 					    true);
 			lnet_net_lock(0);
 			/*
-			 * lnet_find_peer_ni_locked() grabs a refcount for
+			 * lnet_peer_ni_find_locked() grabs a refcount for
 			 * us. No need to take it explicitly.
 			 */
 			lpni = lnet_peer_ni_find_locked(&nid);
@@ -3803,7 +3803,7 @@ lnet_recover_peer_nis(void)
 				spin_unlock(&lpni->lpni_lock);
 			}
 
-			/* Drop the ref taken by lnet_find_peer_ni_locked() */
+			/* Drop the ref taken by lnet_peer_ni_find_locked() */
 			lnet_peer_ni_decref_locked(lpni);
 			lnet_net_unlock(0);
 		} else
