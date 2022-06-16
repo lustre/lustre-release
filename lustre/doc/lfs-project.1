@@ -8,7 +8,7 @@ lfs project \- Change or list project attribute for specified file or directory.
 .br
 .BR "lfs project" " -c" " [" -d | -r " [" -p " "\fIID ] " [" -0 ] ] " <" file | directory...>
 .br
-.BR "lfs project" " -C" " [" -r | -k ] " <" file | directory...>
+.BR "lfs project" " -C" " [" -d | -r "] [" -k ] " <" file | directory...>
 .br
 .SH DESCRIPTION
 .TP
@@ -59,16 +59,26 @@ if checking a directory and or recursively, print only files that do not match.
 Print pathnames found by -c with a trailing NUL for use by
 .BR \' xargs "(1) " -0 \'.
 .TP
-.BR "lfs project" " -C [" -r | -k ]
+.BR "lfs project" " -C [" -d | -r "] [" -k ]
 .RI < file | directory...>
 .TP
 Clear the project inherit flag and ID on the file(s) or directories
 .TP
 .B -C
-Clear inherit attribute, project ID will be reset to be 0 in default
+Clear inherit attribute and reset project ID to 0 for file or directory.
+.TP
+.B -d
+Clear only the directory itself.
+.TP
+.B -r
+Clear the directory and all its descendants recursively.
+.TP
+.B ""
+If neither \fB-d\fR nor \fB-r\fR is specified, clear the directory and its
+immediate children.
 .TP
 .B -k
-keep the project ID unchanged.
+Keep the project ID unchanged.
 .TP
 .SH EXAMPLES
 .TP

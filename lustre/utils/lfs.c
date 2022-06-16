@@ -460,7 +460,7 @@ command_t cmdlist[] = {
 	 "         set project ID and/or inherit flag for specified file(s) or directories\n"
 	 "       project -c [-d|-r [-p id] [-0]] <file|directory...>\n"
 	 "         check project ID and flags on file(s) or directories, print outliers\n"
-	 "       project -C [-r] [-k] <file|directory...>\n"
+	 "       project -C [-d|-r] [-k] <file|directory...>\n"
 	 "         clear the project inherit flag and ID on the file or directory\n"
 	},
 #endif
