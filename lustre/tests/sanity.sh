@@ -20987,26 +20987,26 @@ test_245b() {
 	local connect_data_name="max_mod_rpcs"
 	local out
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $MDSCOUNT -ge 2 ]] || skip "needs >= 2 MDTs"
 
 	# check if multiple modify RPCs flag is set
 	out=$(do_facet mds1 \
-		$LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import |
-		grep "connect_flags:")
+	      $LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import |
+	      grep "connect_flags:")
 	echo "$out"
 
-	if [[ "$out" =~ $flagname ]]; then
-		echo "connect flag $flagname is not set"
-		return 0
-	fi
+	[[ "$out" =~ $flagname ]] || skip "connect flag $flagname is not set"
 
 	# check if multiple modify RPCs data is set
 	out=$(do_facet mds1 \
-		$LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import)
+	      $LCTL get_param osp.$FSNAME-MDT0001-osp-MDT0000.import)
 
 	[[ "$out" =~ $connect_data_name ]] ||
-		error "import should have connect data $connect_data_name"
+		{
+			echo "$out"
+			error "missing connect data $connect_data_name"
+		}
 }
 run_test 245b "check osp connection flag/data: multiple modify RPCs"
 
