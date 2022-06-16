@@ -2528,8 +2528,7 @@ ksocknal_startup(struct lnet_ni *ni)
 	struct ksock_net *net;
 	struct ksock_interface *ksi = NULL;
 	struct lnet_inetdev *ifaces = NULL;
-	int i = 0;
-	int rc;
+	int rc, if_idx;
 
 	LASSERT (ni->ni_net->net_lnd == &the_ksocklnd);
 	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_NOTHING) {
@@ -2539,7 +2538,8 @@ ksocknal_startup(struct lnet_ni *ni)
 	}
 	LIBCFS_ALLOC(net, sizeof(*net));
 	if (net == NULL)
-		goto fail_0;
+		goto out_base;
+
 	net->ksnn_incarnation = ktime_get_real_ns();
 	ni->ni_data = net;
 
@@ -2547,56 +2547,51 @@ ksocknal_startup(struct lnet_ni *ni)
 
 	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns, true);
 	if (rc < 0)
-		goto fail_1;
+		goto out_net;
 
 	ksi = &net->ksnn_interface;
 
-	/* Use the first discovered interface or look in the list */
-	if (ni->ni_interface) {
-		for (i = 0; i < rc; i++) {
-			if (strcmp(ifaces[i].li_name, ni->ni_interface) == 0)
-				break;
-		}
-		/* ni_interfaces doesn't contain the interface we want */
-		if (i == rc) {
-			CERROR("ksocklnd: failed to find interface %s\n",
-			       ni->ni_interface);
-			goto fail_1;
-		}
-	} else {
-		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
+	/* Interface and/or IP address is specified otherwise default to
+	 * the first Interface
+	 */
+	if_idx = lnet_inet_select(ni, ifaces, rc);
+	if (if_idx < 0)
+		goto out_net;
+
+	if (!ni->ni_interface) {
+		rc = lnet_ni_add_interface(ni, ifaces[if_idx].li_name);
 		if (rc < 0)
 			CWARN("ksocklnd failed to allocate ni_interface\n");
 	}
 
-	ni->ni_dev_cpt = ifaces[i].li_cpt;
-	ksi->ksni_index = ifaces[i].li_index;
-	if (ifaces[i].li_ipv6) {
+	ni->ni_dev_cpt = ifaces[if_idx].li_cpt;
+	ksi->ksni_index = ifaces[if_idx].li_index;
+	if (ifaces[if_idx].li_ipv6) {
 		struct sockaddr_in6 *sa;
 		sa = (void *)&ksi->ksni_addr;
 		memset(sa, 0, sizeof(*sa));
 		sa->sin6_family = AF_INET6;
-		memcpy(&sa->sin6_addr, ifaces[i].li_ipv6addr,
+		memcpy(&sa->sin6_addr, ifaces[if_idx].li_ipv6addr,
 		       sizeof(struct in6_addr));
 		ni->ni_nid.nid_size = sizeof(struct in6_addr) - 4;
-		memcpy(&ni->ni_nid.nid_addr, ifaces[i].li_ipv6addr,
+		memcpy(&ni->ni_nid.nid_addr, ifaces[if_idx].li_ipv6addr,
 		       sizeof(struct in6_addr));
 	} else {
 		struct sockaddr_in *sa;
 		sa = (void *)&ksi->ksni_addr;
 		memset(sa, 0, sizeof(*sa));
 		sa->sin_family = AF_INET;
-		sa->sin_addr.s_addr = htonl(ifaces[i].li_ipaddr);
-		ksi->ksni_netmask = ifaces[i].li_netmask;
+		sa->sin_addr.s_addr = htonl(ifaces[if_idx].li_ipaddr);
+		ksi->ksni_netmask = ifaces[if_idx].li_netmask;
 		ni->ni_nid.nid_size = 4 - 4;
 		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
 	}
-	strlcpy(ksi->ksni_name, ifaces[i].li_name, sizeof(ksi->ksni_name));
+	strlcpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
 
 	/* call it before add it to ksocknal_data.ksnd_nets */
 	rc = ksocknal_net_start_threads(net, ni->ni_cpts, ni->ni_ncpts);
 	if (rc != 0)
-		goto fail_1;
+		goto out_net;
 
 	list_add(&net->ksnn_list, &ksocknal_data.ksnd_nets);
 	net->ksnn_ni = ni;
@@ -2604,9 +2599,9 @@ ksocknal_startup(struct lnet_ni *ni)
 
 	return 0;
 
-fail_1:
+out_net:
 	LIBCFS_FREE(net, sizeof(*net));
-fail_0:
+out_base:
 	if (ksocknal_data.ksnd_nnets == 0)
 		ksocknal_base_shutdown();
 

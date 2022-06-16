@@ -914,6 +914,9 @@ struct lnet_inetdev {
 
 int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
 			bool v6);
+int lnet_inet_select(struct lnet_ni *ni, struct lnet_inetdev *ifaces,
+		     int num_ifaces);
+
 void lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
 void lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
 int lnet_sock_getaddr(struct socket *socket, bool remote,

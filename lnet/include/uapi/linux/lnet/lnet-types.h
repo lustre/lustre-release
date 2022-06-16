@@ -85,11 +85,6 @@ static inline __u32 LNET_NIDNET(lnet_nid_t nid)
 	return (nid >> 32) & 0xffffffff;
 }
 
-static inline lnet_nid_t LNET_MKNID(__u32 net, __u32 addr)
-{
-	return (((__u64)net) << 32) | addr;
-}
-
 static inline __u32 LNET_NETNUM(__u32 net)
 {
 	return net & 0xffff;
@@ -105,25 +100,41 @@ static inline __u32 LNET_MKNET(__u32 type, __u32 num)
 	return (type << 16) | num;
 }
 
+static inline lnet_nid_t LNET_MKNID(__u32 net, __u32 addr)
+{
+	return (((__u64)net) << 32) | addr;
+}
+
 /** The lolnd NID (i.e. myself) */
 #define LNET_NID_LO_0 LNET_MKNID(LNET_MKNET(LOLND, 0), 0)
 
 #define LNET_NET_ANY LNET_NIDNET(LNET_NID_ANY)
 
+static inline bool nid_is_nid4(const struct lnet_nid *nid)
+{
+	return NID_ADDR_BYTES(nid) == 4;
+}
+
+static inline bool nid_is_ipv4(const struct lnet_nid *nid)
+{
+	return NID_ADDR_BYTES(nid) == 4;
+}
+
+static inline bool nid_is_ipv6(const struct lnet_nid *nid)
+{
+	return NID_ADDR_BYTES(nid) == 16;
+}
+
 /* check for address set */
 static inline bool nid_addr_is_set(const struct lnet_nid *nid)
 {
-	int sum = 0, i;
+	int i;
 
 	for (i = 0; i < NID_ADDR_BYTES(nid); i++)
-		sum |= nid->nid_addr[i];
+		if (nid->nid_addr[i])
+			return true;
 
-	return sum ? true : false;
-}
-
-static inline int nid_is_nid4(const struct lnet_nid *nid)
-{
-	return NID_ADDR_BYTES(nid) == 4;
+	return false;
 }
 
 /* LOLND may not be defined yet, so we cannot use an inline */

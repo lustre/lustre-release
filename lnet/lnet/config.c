@@ -1634,6 +1634,56 @@ unlock_rtnl:
 }
 EXPORT_SYMBOL(lnet_inet_enumerate);
 
+int lnet_inet_select(struct lnet_ni *ni,
+		     struct lnet_inetdev *ifaces,
+                     int num_ifaces)
+{
+	bool addr_set = nid_addr_is_set(&ni->ni_nid);
+	int if_idx;
+
+	/* default to first interface if both interface and NID unspecified */
+	if (!ni->ni_interface && !addr_set)
+		return 0;
+
+	for (if_idx = 0; if_idx < num_ifaces; if_idx++) {
+		if (ni->ni_interface &&
+			strcmp(ni->ni_interface, ifaces[if_idx].li_name) != 0)
+			/* not the specified interface */
+			continue;
+
+		if (!addr_set)
+			/* IP unspecified, use IP of first matching interface */
+			break;
+
+		if (ifaces[if_idx].li_ipv6 &&
+		    nid_is_ipv6(&ni->ni_nid)) {
+			if (memcmp(ni->ni_nid.nid_addr,
+				   ifaces[if_idx].li_ipv6addr,
+				   sizeof(struct in6_addr)) == 0)
+				break;
+		} else if (!ifaces[if_idx].li_ipv6 &&
+			   nid_is_ipv4(&ni->ni_nid)) {
+			if (ni->ni_nid.nid_addr[0] ==
+			    htonl(ifaces[if_idx].li_ipaddr))
+				break;
+		}
+	}
+
+	if (if_idx < num_ifaces)
+		return if_idx;
+
+	if (ni->ni_interface)
+		CERROR("ksocklnd: failed to find interface %s%s%s\n",
+		       ni->ni_interface, addr_set ? "@" : "",
+		       addr_set ? libcfs_nidstr(&ni->ni_nid) : "");
+	else
+		CERROR("ksocklnd: failed to find IP address %s\n",
+		       libcfs_nidstr(&ni->ni_nid));
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(lnet_inet_select);
+
 int
 lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 {
