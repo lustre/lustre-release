@@ -133,18 +133,17 @@
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>10 TB/sec I/O</para>
+                <para>50 TB/sec I/O, 50M IOPS</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single client:</emphasis>
                 </para>
-                <para>4.5 GB/sec I/O (FDR IB, OPA1),
-		1000 metadata ops/sec</para>
+                <para>15 GB/sec I/O (HDR IB), 50000 IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>2.5 TB/sec I/O </para>
+                <para>10 TB/sec I/O, 10M IOPS</para>
               </entry>
             </row>
             <row>
@@ -161,26 +160,26 @@
                 <para>
                   <emphasis>Single OST:</emphasis>
                 </para>
-                <para>300M objects, 256TiB per OST (ldiskfs)</para>
-                <para>500M objects, 256TiB per OST (ZFS)</para>
+                <para>500M objects, 1024TiB per OST</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
-                <para>1000 OSSs, with up to 4000 OSTs</para>
+                <para>1000 OSSs, 4000 OSTs</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>32x 8TiB OSTs per OSS (ldiskfs),</para>
-                <para>8x 32TiB OSTs per OSS (ldiskfs)</para>
-                <para>1x 72TiB OST per OSS (ZFS)</para>
+                <para>4 OSTs per OSS</para>
+                <para>
+                  <emphasis>Single OST:</emphasis>
+                </para>
+                <para>1024TiB OSTs</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
-                <para>450 OSSs with 1000 4TiB OSTs</para>
-                <para>192 OSSs with 1344 8TiB OSTs</para>
-                <para>768 OSSs with 768 72TiB OSTs</para>
+                <para>450 OSSs with 900 750TiB HDD OSTs + 450 25TiB NVMe OSTs</para>
+                <para>1024 OSSs with 1024 72TiB OSTs</para>
               </entry>
             </row>
             <row>
@@ -193,21 +192,21 @@
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>15 GB/sec</para>
+                <para>15 GB/sec, 1.5M IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>10 TB/sec</para>
+                <para>50 TB/sec, 50M IOPS</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>10 GB/sec</para>
+                <para>10 GB/sec, 1.5M IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>2.5 TB/sec</para>
+                <para>20 TB/sec, 20M IOPS</para>
               </entry>
             </row>
             <row>
@@ -224,22 +223,22 @@
                 <para>
                   <emphasis>Single MDT:</emphasis>
                 </para>
-                <para>4 billion files, 8TiB per MDT (ldiskfs)</para>
+                <para>4 billion files, 16TiB per MDT (ldiskfs)</para>
 		<para>64 billion files, 64TiB per MDT (ZFS)</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>256 MDSs, with up to 256 MDTs</para>
+                <para>256 MDSs, up to 256 MDTs</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single MDS:</emphasis>
                 </para>
-                <para>3 billion files</para>
+                <para>4 billion files</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>7 MDS with 7 2TiB MDTs in production</para>
+                <para>40 MDS with 40 4TiB MDTs in production</para>
                 <para>256 MDS with 256 64GiB MDTs in testing</para>
               </entry>
             </row>
@@ -250,12 +249,12 @@
                 </para>
               </entry>
               <entry>
-                <para>50000/s create operations,</para>
-                <para>200000/s metadata stat operations</para>
+                <para>1M/s create operations</para>
+                <para>2M/s stat operations</para>
               </entry>
               <entry>
-                <para>15000/s create operations,</para>
-                <para>50000/s metadata stat operations</para>
+                <para>100k/s create operations,</para>
+                <para>200k/s metadata stat operations</para>
               </entry>
             </row>
             <row>
@@ -283,7 +282,7 @@
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>55 PiB space, 8 billion files</para>
+                <para>700 PiB space, 25 billion files</para>
               </entry>
             </row>
           </tbody>
