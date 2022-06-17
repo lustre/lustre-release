@@ -1027,7 +1027,8 @@ static int ll_statahead_thread(void *arg)
 	if (!op_data)
 		GOTO(out, rc = -ENOMEM);
 
-	while (pos != MDS_DIR_END_OFF && sai->sai_task) {
+	/* matches smp_store_release() in ll_deauthorize_statahead() */
+	while (pos != MDS_DIR_END_OFF && smp_load_acquire(&sai->sai_task)) {
 		struct lu_dirpage *dp;
 		struct lu_dirent  *ent;
 
@@ -1051,7 +1052,8 @@ static int ll_statahead_thread(void *arg)
 
 		dp = page_address(page);
 		for (ent = lu_dirent_start(dp);
-		     ent != NULL && sai->sai_task &&
+		     /* matches smp_store_release() in ll_deauthorize_statahead() */
+		     ent != NULL && smp_load_acquire(&sai->sai_task) &&
 		     !sa_low_hit(sai);
 		     ent = lu_dirent_next(ent)) {
 			__u64 hash;
@@ -1104,7 +1106,9 @@ static int ll_statahead_thread(void *arg)
 			fid_le_to_cpu(&fid, &ent->lde_fid);
 
 			while (({set_current_state(TASK_IDLE);
-				 sai->sai_task; })) {
+				 /* matches smp_store_release() in
+				  * ll_deauthorize_statahead() */
+				 smp_load_acquire(&sai->sai_task); })) {
 				spin_lock(&lli->lli_agl_lock);
 				while (sa_sent_full(sai) &&
 				       !agl_list_empty(sai)) {
@@ -1184,7 +1188,8 @@ static int ll_statahead_thread(void *arg)
 	 * for file release closedir() call to stop me.
 	 */
 	while (({set_current_state(TASK_IDLE);
-		 sai->sai_task; })) {
+		/* matches smp_store_release() in ll_deauthorize_statahead() */
+		smp_load_acquire(&sai->sai_task); })) {
 		schedule();
 	}
 	__set_current_state(TASK_RUNNING);
@@ -1266,7 +1271,8 @@ void ll_deauthorize_statahead(struct inode *dir, void *key)
 		 */
 		struct task_struct *task = sai->sai_task;
 
-		sai->sai_task = NULL;
+		/* matches smp_load_acquire() in ll_statahead_thread() */
+		smp_store_release(&sai->sai_task, NULL);
 		wake_up_process(task);
 	}
 	spin_unlock(&lli->lli_sa_lock);
@@ -1644,11 +1650,10 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 		GOTO(out, rc);
 	}
 
-	if (test_bit(LL_SBI_AGL_ENABLED, ll_i2sbi(parent->d_inode)->ll_flags) &&
-	    agl)
+	if (test_bit(LL_SBI_AGL_ENABLED, sbi->ll_flags) && agl)
 		ll_start_agl(parent, sai);
 
-	atomic_inc(&ll_i2sbi(parent->d_inode)->ll_sa_total);
+	atomic_inc(&sbi->ll_sa_total);
 	sai->sai_task = task;
 
 	wake_up_process(task);
