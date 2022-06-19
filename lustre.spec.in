@@ -276,8 +276,8 @@ echo $TMPFILE
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
-BuildRequires: e2fsprogs-devel >= 1.44.3
-Requires: ldiskfsprogs > 1.45.6
+BuildRequires: e2fsprogs-devel >= 1.44.3 libmount-devel
+Requires: ldiskfsprogs > 1.45.6 libmount
 Provides: lustre-osd-mount = %{version}
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: %{name}-osd-mount < %{version}
@@ -297,6 +297,8 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
+BuildRequires: libmount-devel
+Requires: libmount
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 # Tests also require zpool from zfs package:

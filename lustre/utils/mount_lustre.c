@@ -60,12 +60,6 @@
 #include "obdctl.h"
 #include "mount_utils.h"
 
-#ifdef HAVE_LIBMOUNT
-# define WITH_LIBMOUNT	"(libmount)"
-#else
-# define WITH_LIBMOUNT	""
-#endif
-
 #define MAX_RETRIES 99
 
 int	verbose;
@@ -746,8 +740,8 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 			break;
 		case 'V':
 			++version;
-			fprintf(stdout, "%s %s %s\n", progname,
-				LUSTRE_VERSION_STRING, WITH_LIBMOUNT);
+			fprintf(stdout, "%s %s (libmount)\n", progname,
+				LUSTRE_VERSION_STRING);
 			return 0;
 		default:
 			fprintf(stderr, "%s: unknown option '%c'\n",
