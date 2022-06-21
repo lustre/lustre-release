@@ -353,6 +353,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
 #define OBD_FAIL_OST_RESTART_IO		 0x251
 #define OBD_FAIL_OST_GET_LAST_FID	 0x252
+#define OBD_FAIL_OST_OPCODE		 0x253
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

@@ -28578,6 +28578,27 @@ test_904() {
 }
 run_test 904 "virtual project ID xattr"
 
+# LU-8582
+test_905() {
+	(( $OST1_VERSION >= $(version_code 2.8.54) )) ||
+		skip "lustre < 2.8.54 does not support ladvise"
+
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	$LFS setstripe -c -1 -i 0 $DIR/$tfile || error "setstripe failed"
+
+	$LFS ladvise -a willread $DIR/$tfile || error "ladvise does not work"
+
+	#define OBD_FAIL_OST_OPCODE 0x253
+	# OST_LADVISE = 21
+	do_facet ost1 "$LCTL set_param fail_val=21 fail_loc=0x0253"
+	$LFS ladvise -a willread $DIR/$tfile &&
+		error "unexpected success of ladvise with fault injection"
+	$LFS ladvise -a willread $DIR/$tfile |&
+		grep -q "Operation not supported"
+	(( $? == 0 )) || error "unexpected stderr of ladvise with fault injection"
+}
+run_test 905 "bad or new opcode should not stuck client"
+
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

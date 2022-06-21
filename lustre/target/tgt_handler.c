@@ -613,6 +613,8 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 	struct tgt_opc_slice	*s;
 	struct lu_target	*tgt;
 	__u32			 opc = lustre_msg_get_opc(req->rq_reqmsg);
+	/* don't spew error messages for unhandled RPCs */
+	static bool		 printed;
 
 	ENTRY;
 
@@ -629,25 +631,44 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 
 	/* opcode was not found in slice */
 	if (unlikely(s->tos_hs == NULL)) {
-		static bool printed;
-
-		/* don't spew error messages for unhandled RPCs */
 		if (!printed) {
 			CERROR("%s: no handler for opcode 0x%x from %s\n",
 			       tgt_name(tgt), opc, libcfs_id2str(req->rq_peer));
 			printed = true;
 		}
-		RETURN(ERR_PTR(-ENOTSUPP));
+		goto err_unsupported;
 	}
 
 	LASSERT(opc >= s->tos_opc_start && opc < s->tos_opc_end);
 	h = s->tos_hs + (opc - s->tos_opc_start);
 	if (unlikely(h->th_opc == 0)) {
-		CERROR("%s: unsupported opcode 0x%x\n", tgt_name(tgt), opc);
-		RETURN(ERR_PTR(-ENOTSUPP));
+		if (!printed) {
+			CERROR("%s: unsupported opcode 0x%x\n",
+			       tgt_name(tgt), opc);
+			printed = true;
+		}
+		goto err_unsupported;
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_OPCODE) && opc == cfs_fail_val)
+		goto err_unsupported;
+
 	RETURN(h);
+err_unsupported:
+	/*
+	 * Unknown opcode does not necessarily means insane client. A new
+	 * client might send RPCs with new opcodes to an old server. The
+	 * client might desperately stuck there waiting for a reply. So,
+	 * send an error back here.
+	 *
+	 * An old client might also send RPCs with deprecated opcodes (e.g.
+	 * OST_QUOTACHECK).
+	 *
+	 * Error in ptlrpc_send_error() is ignored.
+	 */
+	req->rq_status = -EOPNOTSUPP;
+	ptlrpc_send_error(req, PTLRPC_REPLY_MAYBE_DIFFICULT);
+	RETURN(ERR_PTR(-EOPNOTSUPP));
 }
 
 static int process_req_last_xid(struct ptlrpc_request *req)
