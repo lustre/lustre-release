@@ -275,6 +275,11 @@ struct lod_recovery_data {
 	struct completion	*lrd_started;
 };
 
+static bool lod_recovery_abort(struct obd_device *top)
+{
+	return (top->obd_stopping || top->obd_abort_recovery ||
+		top->obd_abort_recov_mdt);
+}
 
 /**
  * process update recovery record
@@ -331,8 +336,7 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 	       PFID(&llh->lgh_id.lgl_oi.oi_fid), rec->lrh_index);
 	lut = lod2lu_dev(lrd->lrd_lod)->ld_site->ls_tgt;
 
-	if (lut->lut_obd->obd_stopping ||
-	    lut->lut_obd->obd_abort_recovery)
+	if (lod_recovery_abort(lut->lut_obd))
 		return -ESHUTDOWN;
 
 	return insert_update_records_to_replay_list(lut->lut_tdtd,
@@ -360,6 +364,7 @@ static int lod_sub_recovery_thread(void *arg)
 	struct lu_env *env = &lrd->lrd_env;
 	struct lu_target *lut;
 	struct lu_tgt_desc *mdt = NULL;
+	struct lu_device *top_device;
 	time64_t start;
 	int retries = 0;
 	int rc;
@@ -385,6 +390,7 @@ again:
 	} else {
 		rc = lod_sub_prep_llog(env, lod, dt, lrd->lrd_idx);
 	}
+
 	if (!rc && !lod->lod_child->dd_rdonly) {
 		/* Process the recovery record */
 		ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
@@ -396,43 +402,46 @@ again:
 				      lod_process_recovery_updates, lrd, 0, 0);
 	}
 
-	if (rc < 0) {
-		struct lu_device *top_device;
-
-		top_device = lod->lod_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
-		/*
-		 * Because the remote target might failover at the same time,
-		 * let's retry here
-		 */
-		if ((rc == -ETIMEDOUT || rc == -EAGAIN || rc == -EIO) &&
-		     dt != lod->lod_child &&
-		    !top_device->ld_obd->obd_abort_recovery &&
-		    !top_device->ld_obd->obd_stopping) {
+	top_device = lod->lod_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
+	if (rc < 0 && dt != lod->lod_child &&
+	    !lod_recovery_abort(top_device->ld_obd)) {
+		if (rc == -EBADR) {
+			/* remote update llog is shorter than expected from
+			 * local header. Cached copy could be de-synced during
+			 * recovery, trust remote llog data
+			 */
+			CDEBUG(D_HA, "%s update log data de-sync\n",
+			       dt->dd_lu_dev.ld_obd->obd_name);
+			rc = 0;
+		} else if (rc == -ETIMEDOUT || rc == -EAGAIN || rc == -EIO) {
+			/*
+			 * the remote target might failover at the same time,
+			 * let's retry here
+			 */
 			if (ctxt) {
 				if (ctxt->loc_handle)
-					llog_cat_close(env,
-						       ctxt->loc_handle);
+					llog_cat_close(env, ctxt->loc_handle);
 				llog_ctxt_put(ctxt);
+				ctxt = NULL;
 			}
 			retries++;
 			CDEBUG(D_HA, "%s get update log failed %d, retry\n",
 			       dt->dd_lu_dev.ld_obd->obd_name, rc);
 			goto again;
 		}
+	}
 
+	llog_ctxt_put(ctxt);
+	if (rc < 0) {
 		CERROR("%s get update log failed: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name, rc);
-		llog_ctxt_put(ctxt);
-
 		spin_lock(&top_device->ld_obd->obd_dev_lock);
-		if (!top_device->ld_obd->obd_abort_recovery &&
-		    !top_device->ld_obd->obd_stopping)
-			top_device->ld_obd->obd_abort_recovery = 1;
+		if (!lod_recovery_abort(top_device->ld_obd))
+			/* abort just MDT-MDT recovery */
+			top_device->ld_obd->obd_abort_recov_mdt = 1;
 		spin_unlock(&top_device->ld_obd->obd_dev_lock);
-
 		GOTO(out, rc);
 	}
-	llog_ctxt_put(ctxt);
 
 	CDEBUG(D_HA, "%s retrieved update log, duration %lld, retries %d\n",
 	       dt->dd_lu_dev.ld_obd->obd_name, ktime_get_real_seconds() - start,

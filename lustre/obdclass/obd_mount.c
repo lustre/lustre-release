@@ -1334,11 +1334,12 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		 * Parse non-ldiskfs options here. Rather than modifying
 		 * ldiskfs, we just zero these out here
 		 */
-		if (strncmp(s1, "abort_recov", 11) == 0) {
-			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
-			clear++;
-		} else if (strncmp(s1, "abort_recov_mdt", 15) == 0) {
+		if (!strncmp(s1, "abort_recov_mdt", 15) ||
+		    !strncmp(s1, "abort_recovery_mdt", 18)) {
 			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV_MDT;
+			clear++;
+		} else if (strncmp(s1, "abort_recov", 11) == 0) {
+			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
 			clear++;
 		} else if (strncmp(s1, "recovery_time_soft=", 19) == 0) {
 			lmd->lmd_recovery_time_soft =

@@ -1085,7 +1085,12 @@ retry:
 		*cur_offset = last_offset;
 		*cur_idx = last_idx;
 	}
-	GOTO(out, rc = -EIO);
+	/* being here means we reach end of llog but didn't find needed idx
+	 * normally could happen while processing remote llog, return -EBADR
+	 * to indicate access beyond end of file like dt_read() does and to
+	 * distunguish this situation from real IO or network issues.
+	 */
+	GOTO(out, rc = -EBADR);
 out:
 	dt_read_unlock(env, o);
 	return rc;

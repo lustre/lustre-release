@@ -7433,12 +7433,15 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case OBD_IOC_ABORT_RECOVERY: {
 		struct obd_ioctl_data *data = karg;
 
-		CERROR("%s: Aborting recovery for device\n", mdt_obd_name(mdt));
 		if (data->ioc_type & OBD_FLG_ABORT_RECOV_MDT) {
+			CERROR("%s: Aborting MDT recovery\n",
+			       mdt_obd_name(mdt));
 			obd->obd_abort_recov_mdt = 1;
 			wake_up(&obd->obd_next_transno_waitq);
 		} else { /* if (data->ioc_type & OBD_FLG_ABORT_RECOV_OST) */
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */
+			CERROR("%s: Aborting client recovery\n",
+			       mdt_obd_name(mdt));
 			obd->obd_abort_recovery = 1;
 			target_stop_recovery_thread(obd);
 		}
