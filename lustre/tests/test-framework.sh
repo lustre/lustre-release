@@ -6072,8 +6072,8 @@ check_network() {
 }
 
 no_dsh() {
-    shift
-    eval $@
+	shift
+	eval "$@"
 }
 
 # Convert a space-delimited list to a comma-delimited list.  If the input is
@@ -6085,48 +6085,48 @@ comma_list() {
 }
 
 list_member () {
-    local list=$1
-    local item=$2
-    echo $list | grep -qw $item
+	local list=$1
+	local item=$2
+	echo $list | grep -qw $item
 }
 
 # list, excluded are the comma separated lists
 exclude_items_from_list () {
-    local list=$1
-    local excluded=$2
-    local item
+	local list=$1
+	local excluded=$2
+	local item
 
-    list=${list//,/ }
-    for item in ${excluded//,/ }; do
-        list=$(echo " $list " | sed -re "s/\s+$item\s+/ /g")
-    done
-    echo $(comma_list $list)
+	list=${list//,/ }
+	for item in ${excluded//,/ }; do
+		list=$(echo " $list " | sed -re "s/\s+$item\s+/ /g")
+	done
+	echo $(comma_list $list)
 }
 
 # list, expand  are the comma separated lists
 expand_list () {
-    local list=${1//,/ }
-    local expand=${2//,/ }
-    local expanded=
+	local list=${1//,/ }
+	local expand=${2//,/ }
+	local expanded=
 
-    expanded=$(for i in $list $expand; do echo $i; done | sort -u)
-    echo $(comma_list $expanded)
+	expanded=$(for i in $list $expand; do echo $i; done | sort -u)
+	echo $(comma_list $expanded)
 }
 
 testslist_filter () {
-    local script=$LUSTRE/tests/${TESTSUITE}.sh
+	local script=$LUSTRE/tests/${TESTSUITE}.sh
 
-    [ -f $script ] || return 0
+	[ -f $script ] || return 0
 
-    local start_at=$START_AT
-    local stop_at=$STOP_AT
+	local start_at=$START_AT
+	local stop_at=$STOP_AT
 
-    local var=${TESTSUITE//-/_}_START_AT
-    [ x"${!var}" != x ] && start_at=${!var}
-    var=${TESTSUITE//-/_}_STOP_AT
-    [ x"${!var}" != x ] && stop_at=${!var}
+	local var=${TESTSUITE//-/_}_START_AT
+	[ x"${!var}" != x ] && start_at=${!var}
+	var=${TESTSUITE//-/_}_STOP_AT
+	[ x"${!var}" != x ] && stop_at=${!var}
 
-    sed -n 's/^test_\([^ (]*\).*/\1/p' $script | \
+	sed -n 's/^test_\([^ (]*\).*/\1/p' $script |
         awk ' BEGIN { if ("'${start_at:-0}'" != 0) flag = 1 }
             /^'${start_at}'$/ {flag = 0}
             {if (flag == 1) print $0}
@@ -6134,74 +6134,76 @@ testslist_filter () {
 }
 
 absolute_path() {
-    (cd `dirname $1`; echo $PWD/`basename $1`)
+	(cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
 get_facets () {
-    local types=${1:-"OST MDS MGS"}
+	local types=${1:-"OST MDS MGS"}
 
-    local list=""
+	local list=""
 
-    for entry in $types; do
-        local name=$(echo $entry | tr "[:upper:]" "[:lower:]")
-        local type=$(echo $entry | tr "[:lower:]" "[:upper:]")
+	for entry in $types; do
+		local name=$(echo $entry | tr "[:upper:]" "[:lower:]")
+		local type=$(echo $entry | tr "[:lower:]" "[:upper:]")
 
-        case $type in
-                MGS ) list="$list $name";;
-            MDS|OST|AGT ) local count=${type}COUNT
-                       for ((i=1; i<=${!count}; i++)) do
-                          list="$list ${name}$i"
-                      done;;
-                  * ) error "Invalid facet type"
-                 exit 1;;
-        esac
-    done
-    echo $(comma_list $list)
+		case $type in
+			MGS ) list="$list $name";;
+			MDS|OST|AGT ) local count=${type}COUNT
+				for ((i=1; i<=${!count}; i++)) do
+					list="$list ${name}$i"
+				done;;
+			* ) error "Invalid facet type"
+				exit 1;;
+		esac
+	done
+	echo $(comma_list $list)
 }
 
 ##################################
 # Adaptive Timeouts funcs
 
 at_is_enabled() {
-    # only check mds, we assume at_max is the same on all nodes
-    local at_max=$(do_facet $SINGLEMDS "lctl get_param -n at_max")
-    if [ $at_max -eq 0 ]; then
-        return 1
-    else
-        return 0
-    fi
+	# only check mds, we assume at_max is the same on all nodes
+	local at_max=$(do_facet $SINGLEMDS "lctl get_param -n at_max")
+
+	if [ $at_max -eq 0 ]; then
+		return 1
+	else
+		return 0
+	fi
 }
 
 at_get() {
-    local facet=$1
-    local at=$2
+	local facet=$1
+	local at=$2
 
-    # suppose that all ost-s have the same $at value set
-    [ $facet != "ost" ] || facet=ost1
+	# suppose that all ost-s have the same $at value set
+	[ $facet != "ost" ] || facet=ost1
 
-    do_facet $facet "lctl get_param -n $at"
+	do_facet $facet "lctl get_param -n $at"
 }
 
 at_max_get() {
-    at_get $1 at_max
+	at_get $1 at_max
 }
 
 at_max_set() {
-    local at_max=$1
-    shift
+	local at_max=$1
+	shift
 
-    local facet
-    local hosts
-    for facet in $@; do
-        if [ $facet == "ost" ]; then
-            facet=$(get_facets OST)
-        elif [ $facet == "mds" ]; then
-            facet=$(get_facets MDS)
-        fi
-        hosts=$(expand_list $hosts $(facets_hosts $facet))
-    done
+	local facet
+	local hosts
 
-    do_nodes $hosts lctl set_param at_max=$at_max
+	for facet in "$@"; do
+		if [ $facet == "ost" ]; then
+			facet=$(get_facets OST)
+		elif [ $facet == "mds" ]; then
+			facet=$(get_facets MDS)
+		fi
+		hosts=$(expand_list $hosts $(facets_hosts $facet))
+	done
+
+	do_nodes $hosts lctl set_param at_max=$at_max
 }
 
 ##################################
@@ -6209,11 +6211,11 @@ at_max_set() {
 
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
-    RC=0
-    do_facet $SINGLEMDS lctl set_param fail_val=0 fail_loc=0x123
-    do_facet client "$1" || RC=$?
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
-    return $RC
+	RC=0
+	do_facet $SINGLEMDS lctl set_param fail_val=0 fail_loc=0x123
+	do_facet client "$1" || RC=$?
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	return $RC
 }
 
 drop_reply() {
@@ -6297,34 +6299,36 @@ drop_bl_callback() {
 
 drop_mdt_ldlm_reply() {
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
-    RC=0
-    local list=$(comma_list $(mdts_nodes))
-    do_nodes $list lctl set_param fail_loc=0x157
+	RC=0
+	local list=$(comma_list $(mdts_nodes))
 
-    do_facet client "$@" || RC=$?
+	do_nodes $list lctl set_param fail_loc=0x157
 
-    do_nodes $list lctl set_param fail_loc=0
-    return $RC
+	do_facet client "$@" || RC=$?
+
+	do_nodes $list lctl set_param fail_loc=0
+	return $RC
 }
 
 drop_mdt_ldlm_reply_once() {
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
-    RC=0
-    local list=$(comma_list $(mdts_nodes))
-    do_nodes $list lctl set_param fail_loc=0x80000157
+	RC=0
+	local list=$(comma_list $(mdts_nodes))
 
-    do_facet client "$@" || RC=$?
+	do_nodes $list lctl set_param fail_loc=0x80000157
 
-    do_nodes $list lctl set_param fail_loc=0
-    return $RC
+	do_facet client "$@" || RC=$?
+
+	do_nodes $list lctl set_param fail_loc=0
+	return $RC
 }
 
 clear_failloc() {
-    facet=$1
-    pause=$2
-    sleep $pause
-    echo "clearing fail_loc on $facet"
-    do_facet $facet "lctl set_param fail_loc=0 2>/dev/null || true"
+	facet=$1
+	pause=$2
+	sleep $pause
+	echo "clearing fail_loc on $facet"
+	do_facet $facet "lctl set_param fail_loc=0 2>/dev/null || true"
 }
 
 set_nodes_failloc () {
@@ -6348,7 +6352,7 @@ default_lru_size()
 
 lru_resize_enable()
 {
-    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+	lctl set_param ldlm.namespaces.*$1*.lru_size=0
 }
 
 lru_resize_disable()
@@ -6369,15 +6373,16 @@ flock_is_enabled()
 }
 
 pgcache_empty() {
-    local FILE
-    for FILE in `lctl get_param -N "llite.*.dump_page_cache"`; do
-        if [ `lctl get_param -n $FILE | wc -l` -gt 1 ]; then
-            echo there is still data in page cache $FILE ?
-            lctl get_param -n $FILE
-            return 1
-        fi
-    done
-    return 0
+	local FILE
+
+	for FILE in `lctl get_param -N "llite.*.dump_page_cache"`; do
+		if [ `lctl get_param -n $FILE | wc -l` -gt 1 ]; then
+			echo there is still data in page cache $FILE ?
+			lctl get_param -n $FILE
+			return 1
+		fi
+	done
+	return 0
 }
 
 debugsave() {
@@ -6399,13 +6404,13 @@ debugrestore() {
 }
 
 debug_size_save() {
-    DEBUG_SIZE_SAVED="$(lctl get_param -n debug_mb)"
+	DEBUG_SIZE_SAVED="$(lctl get_param -n debug_mb)"
 }
 
 debug_size_restore() {
-    [ -n "$DEBUG_SIZE_SAVED" ] && \
-        do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE_SAVED"
-    DEBUG_SIZE_SAVED=""
+	[ -n "$DEBUG_SIZE_SAVED" ] &&
+		do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE_SAVED"
+	DEBUG_SIZE_SAVED=""
 }
 
 start_full_debug_logging() {
@@ -6446,7 +6451,7 @@ report_error() {
 		dump=false
 	fi
 
-	log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
+	log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $* "
 	(print_stack_trace 2) >&2
 	mkdir -p $LOGDIR
 	# We need to dump the logs on all nodes
@@ -6456,7 +6461,7 @@ report_error() {
 
 	debugrestore
 	[ "$TESTSUITELOG" ] &&
-		echo "$TESTSUITE: $TYPE: $TESTNAME $@" >> $TESTSUITELOG
+		echo "$TESTSUITE: $TYPE: $TESTNAME $*" >> $TESTSUITELOG
 	if [ -z "$*" ]; then
 		echo "error() without useful message, please fix" > $LOGDIR/err
 	else
@@ -6567,12 +6572,12 @@ error_not_in_vm() {
 #           environment is not configured properly".
 #
 skip_env () {
-	$FAIL_ON_SKIP_ENV && error false $@ || skip $@
+	$FAIL_ON_SKIP_ENV && error false "$@" || skip "$@"
 }
 
 skip_noexit() {
 	echo
-	log " SKIP: $TESTSUITE $TESTNAME $@"
+	log " SKIP: $TESTSUITE $TESTNAME $*"
 
 	if [[ -n "$ALWAYS_SKIPPED" ]]; then
 		skip_logged $TESTNAME "$@"
@@ -6582,12 +6587,12 @@ skip_noexit() {
 	fi
 
 	[[ -n "$TESTSUITELOG" ]] &&
-		echo "$TESTSUITE: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+		echo "$TESTSUITE: SKIP: $TESTNAME $*" >> $TESTSUITELOG || true
 	unset TESTNAME
 }
 
 skip() {
-	skip_noexit $@
+	skip_noexit "$@"
 	exit 0
 }
 
@@ -6654,11 +6659,11 @@ build_test_filter() {
 }
 
 basetest() {
-    if [[ $1 = [a-z]* ]]; then
-        echo $1
-    else
-	echo ${1%%[a-zA-Z]*}
-    fi
+	if [[ $1 = [a-z]* ]]; then
+		echo $1
+	else
+		echo ${1%%[a-zA-Z]*}
+	fi
 }
 
 # print a newline if the last test was skipped
@@ -6723,7 +6728,8 @@ run_test() {
 		local isonly_base=ONLY_$base
 		if [[ ${!isonly}x != x || ${!isonly_base}x != x ]]; then
 
-			if [[ -n "$ALWAYS_SKIPPED" && -n "$HONOR_EXCEPT" ]]; then
+			if [[ -n "$ALWAYS_SKIPPED" &&
+					-n "$HONOR_EXCEPT" ]]; then
 				LAST_SKIPPED="y"
 				skip_noexit "$skip_message"
 				return 0
@@ -6755,34 +6761,34 @@ log() {
 	echo "$*" >&2
 	load_module ../libcfs/libcfs/libcfs
 
-    local MSG="$*"
-    # Get rid of '
-    MSG=${MSG//\'/\\\'}
-    MSG=${MSG//\*/\\\*}
-    MSG=${MSG//\(/\\\(}
-    MSG=${MSG//\)/\\\)}
-    MSG=${MSG//\;/\\\;}
-    MSG=${MSG//\|/\\\|}
-    MSG=${MSG//\>/\\\>}
-    MSG=${MSG//\</\\\<}
-    MSG=${MSG//\//\\\/}
-    do_nodes $(comma_list $(nodes_list)) $LCTL mark "$MSG" 2> /dev/null || true
+	local MSG="$*"
+	# Get rid of '
+	MSG=${MSG//\'/\\\'}
+	MSG=${MSG//\*/\\\*}
+	MSG=${MSG//\(/\\\(}
+	MSG=${MSG//\)/\\\)}
+	MSG=${MSG//\;/\\\;}
+	MSG=${MSG//\|/\\\|}
+	MSG=${MSG//\>/\\\>}
+	MSG=${MSG//\</\\\<}
+	MSG=${MSG//\//\\\/}
+	do_nodes $(comma_list $(nodes_list)) $LCTL mark "$MSG" 2> /dev/null || true
 }
 
 trace() {
-        log "STARTING: $*"
-        strace -o $TMP/$1.strace -ttt $*
-        RC=$?
-        log "FINISHED: $*: rc $RC"
-        return 1
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
 }
 
 complete () {
-    local duration=$1
+	local duration=$1
 
-    banner test complete, duration $duration sec
-    [ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
-    echo duration $duration >>$TESTSUITELOG
+	banner test complete, duration $duration sec
+	[ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
+	echo duration $duration >>$TESTSUITELOG
 }
 
 pass() {
@@ -6794,16 +6800,17 @@ pass() {
 	elif [[ -f $LOGDIR/skip ]]; then
 		TEST_STATUS="SKIP"
 	fi
-	echo "$TEST_STATUS $@" 2>&1 | tee -a $TESTSUITELOG
+	echo "$TEST_STATUS $*" 2>&1 | tee -a $TESTSUITELOG
 }
 
 check_mds() {
-    local FFREE=$(do_node $SINGLEMDS \
+	local FFREE=$(do_node $SINGLEMDS \
         lctl get_param -n osd*.*MDT*.filesfree | calc_sum)
-    local FTOTAL=$(do_node $SINGLEMDS \
+	local FTOTAL=$(do_node $SINGLEMDS \
         lctl get_param -n osd*.*MDT*.filestotal | calc_sum)
 
-    [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
+	[ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" ||
+		true
 }
 
 reset_fail_loc () {
@@ -6822,12 +6829,12 @@ reset_fail_loc () {
 # ======================================================== 15:06:12 (1624050372)
 EQUALS="========================================================"
 banner() {
-    msg="== ${TESTSUITE} $*"
-    last=${msg: -1:1}
-    [[ $last != "=" && $last != " " ]] && msg="$msg "
-    msg=$(printf '%s%.*s'  "$msg"  $((${#EQUALS} - ${#msg})) $EQUALS )
-    # always include at least == after the message
-    log "$msg== $(date +"%H:%M:%S (%s)")"
+	msg="== ${TESTSUITE} $*"
+	last=${msg: -1:1}
+	[[ $last != "=" && $last != " " ]] && msg="$msg "
+	msg=$(printf '%s%.*s'  "$msg"  $((${#EQUALS} - ${#msg})) $EQUALS )
+	# always include at least == after the message
+	log "$msg== $(date +"%H:%M:%S (%s)")"
 }
 
 check_dmesg_for_errors() {
@@ -7037,22 +7044,23 @@ check_grant() {
 
 osc_to_ost()
 {
-    osc=$1
-    ost=`echo $1 | awk -F_ '{print $3}'`
-    if [ -z $ost ]; then
-        ost=`echo $1 | sed 's/-osc.*//'`
-    fi
-    echo $ost
+	osc=$1
+	ost=`echo $1 | awk -F_ '{print $3}'`
+	if [ -z $ost ]; then
+		ost=`echo $1 | sed 's/-osc.*//'`
+	fi
+	echo $ost
 }
 
 ostuuid_from_index()
 {
-    $LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
+	$LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
 }
 
 ostname_from_index() {
-    local uuid=$(ostuuid_from_index $1 $2)
-    echo ${uuid/_UUID/}
+	local uuid=$(ostuuid_from_index $1 $2)
+
+	echo ${uuid/_UUID/}
 }
 
 mdtname_from_index() {
@@ -7067,12 +7075,12 @@ mdssize_from_index () {
 
 index_from_ostuuid()
 {
-    $LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"
+	$LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"
 }
 
 mdtuuid_from_index()
 {
-    $LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
+	$LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
 }
 
 # Description:
@@ -7151,11 +7159,11 @@ remote_node () {
 
 remote_mds ()
 {
-    local node
-    for node in $(mdts_nodes); do
-        remote_node $node && return 0
-    done
-    return 1
+	local node
+	for node in $(mdts_nodes); do
+		remote_node $node && return 0
+	done
+	return 1
 }
 
 remote_mds_nodsh()
@@ -7173,11 +7181,11 @@ require_dsh_mds()
 
 remote_ost ()
 {
-    local node
-    for node in $(osts_nodes) ; do
-        remote_node $node && return 0
-    done
-    return 1
+	local node
+	for node in $(osts_nodes) ; do
+		remote_node $node && return 0
+	done
+	return 1
 }
 
 remote_ost_nodsh()
@@ -7188,9 +7196,9 @@ remote_ost_nodsh()
 
 require_dsh_ost()
 {
-        remote_ost_nodsh && echo "SKIP: $TESTSUITE: remote OST with nodsh" && \
-            OSKIPPED=1 && return 1
-        return 0
+	remote_ost_nodsh && echo "SKIP: $TESTSUITE: remote OST with nodsh" &&
+		OSKIPPED=1 && return 1
+	return 0
 }
 
 remote_mgs_nodsh()
@@ -7203,12 +7211,12 @@ remote_mgs_nodsh()
 
 local_mode ()
 {
-    remote_mds_nodsh || remote_ost_nodsh || \
-        $(single_local_node $(comma_list $(nodes_list)))
+	remote_mds_nodsh || remote_ost_nodsh ||
+		$(single_local_node $(comma_list $(nodes_list)))
 }
 
 remote_servers () {
-    remote_ost && remote_mds
+	remote_ost && remote_mds
 }
 
 # Get the active nodes for facets.
@@ -7229,8 +7237,8 @@ facets_nodes () {
 
 # Get name of the active MGS node.
 mgs_node () {
-	echo -n $(facets_nodes $(get_facets MGS))
-}
+		echo -n $(facets_nodes $(get_facets MGS))
+	}
 
 # Get all of the active MDS nodes.
 mdts_nodes () {
@@ -7332,42 +7340,43 @@ all_nodes () {
 }
 
 init_clients_lists () {
-    # Sanity check: exclude the local client from RCLIENTS
-    local clients=$(hostlist_expand "$RCLIENTS")
-    local rclients=$(exclude_items_from_list "$clients" $HOSTNAME)
+	# Sanity check: exclude the local client from RCLIENTS
+	local clients=$(hostlist_expand "$RCLIENTS")
+	local rclients=$(exclude_items_from_list "$clients" $HOSTNAME)
 
-    # Sanity check: exclude the dup entries
-    RCLIENTS=$(for i in ${rclients//,/ }; do echo $i; done | sort -u)
+	# Sanity check: exclude the dup entries
+	RCLIENTS=$(for i in ${rclients//,/ }; do echo $i; done | sort -u)
 
 	export CLIENT1=${CLIENT1:-$HOSTNAME}
 	export SINGLECLIENT=$CLIENT1
 
 	clients="$SINGLECLIENT $HOSTNAME $RCLIENTS"
 
-    # Sanity check: exclude the dup entries from CLIENTS
-    # for those configs which has SINGLCLIENT set to local client
-    clients=$(for i in $clients; do echo $i; done | sort -u)
+	# Sanity check: exclude the dup entries from CLIENTS
+	# for those configs which has SINGLCLIENT set to local client
+	clients=$(for i in $clients; do echo $i; done | sort -u)
 
 	export CLIENTS=$(comma_list $clients)
-    local -a remoteclients=($RCLIENTS)
-    for ((i=0; $i<${#remoteclients[@]}; i++)); do
-            varname=CLIENT$((i + 2))
-			eval export $varname=${remoteclients[i]}
-    done
+	local -a remoteclients=($RCLIENTS)
+	for ((i=0; $i<${#remoteclients[@]}; i++)); do
+		varname=CLIENT$((i + 2))
+
+		eval export $varname=${remoteclients[i]}
+	done
 
 	export CLIENTCOUNT=$((${#remoteclients[@]} + 1))
 }
 
 get_random_entry () {
-    local rnodes=$1
+	local rnodes=$1
 
-    rnodes=${rnodes//,/ }
+	rnodes=${rnodes//,/ }
 
-    local -a nodes=($rnodes)
-    local num=${#nodes[@]}
-    local i=$((RANDOM * num * 2 / 65536))
+	local -a nodes=($rnodes)
+	local num=${#nodes[@]}
+	local i=$((RANDOM * num * 2 / 65536))
 
-    echo ${nodes[i]}
+	echo ${nodes[i]}
 }
 
 client_only () {
@@ -7380,24 +7389,28 @@ check_versions () {
 }
 
 get_node_count() {
-    local nodes="$@"
-    echo $nodes | wc -w || true
+	local nodes="$@"
+
+	echo $nodes | wc -w || true
 }
 
 mixed_mdt_devs () {
-    local nodes=$(mdts_nodes)
-    local mdtcount=$(get_node_count "$nodes")
-    [ ! "$MDSCOUNT" = "$mdtcount" ]
+	local nodes=$(mdts_nodes)
+	local mdtcount=$(get_node_count "$nodes")
+
+	[ ! "$MDSCOUNT" = "$mdtcount" ]
 }
 
 generate_machine_file() {
-    local nodes=${1//,/ }
-    local machinefile=$2
-    rm -f $machinefile
-    for node in $nodes; do
-        echo $node >>$machinefile || \
-            { echo "can not generate machinefile $machinefile" && return 1; }
-    done
+	local nodes=${1//,/ }
+	local machinefile=$2
+
+	rm -f $machinefile
+	for node in $nodes; do
+		echo $node >>$machinefile ||
+			{ echo "can not generate machinefile $machinefile" &&
+				return 1; }
+	done
 }
 
 get_stripe () {
@@ -7513,27 +7526,27 @@ check_runas_id() {
 
 # obtain the UID/GID for MPI_USER
 get_mpiuser_id() {
-    local mpi_user=$1
+	local mpi_user=$1
 
-    MPI_USER_UID=$(do_facet client "getent passwd $mpi_user | cut -d: -f3;
+	MPI_USER_UID=$(do_facet client "getent passwd $mpi_user | cut -d: -f3;
 exit \\\${PIPESTATUS[0]}") || error_exit "failed to get the UID for $mpi_user"
 
-    MPI_USER_GID=$(do_facet client "getent passwd $mpi_user | cut -d: -f4;
+	MPI_USER_GID=$(do_facet client "getent passwd $mpi_user | cut -d: -f4;
 exit \\\${PIPESTATUS[0]}") || error_exit "failed to get the GID for $mpi_user"
 }
 
 # obtain and cache Kerberos ticket-granting ticket
 refresh_krb5_tgt() {
-    local myRUNAS_UID=$1
-    local myRUNAS_GID=$2
-    shift 2
-    local myRUNAS=$@
-    if [ -z "$myRUNAS" ]; then
-        error_exit "myRUNAS command must be specified for refresh_krb5_tgt"
-    fi
+	local myRUNAS_UID=$1
+	local myRUNAS_GID=$2
+	shift 2
+	local myRUNAS=$@
+	if [ -z "$myRUNAS" ]; then
+		error_exit "myRUNAS command must be specified for refresh_krb5_tgt"
+	fi
 
-    CLIENTS=${CLIENTS:-$HOSTNAME}
-    do_nodes $CLIENTS "set -x
+	CLIENTS=${CLIENTS:-$HOSTNAME}
+	do_nodes $CLIENTS "set -x
 if ! $myRUNAS krb5_login.sh; then
     echo "Failed to refresh Krb5 TGT for UID/GID $myRUNAS_UID/$myRUNAS_GID."
     exit 1
@@ -7543,30 +7556,30 @@ fi"
 # Run multiop in the background, but wait for it to print
 # "PAUSING" to its stdout before returning from this function.
 multiop_bg_pause() {
-    MULTIOP_PROG=${MULTIOP_PROG:-$MULTIOP}
-    FILE=$1
-    ARGS=$2
+	MULTIOP_PROG=${MULTIOP_PROG:-$MULTIOP}
+	FILE=$1
+	ARGS=$2
 
-    TMPPIPE=/tmp/multiop_open_wait_pipe.$$
-    mkfifo $TMPPIPE
+	TMPPIPE=/tmp/multiop_open_wait_pipe.$$
+	mkfifo $TMPPIPE
 
-    echo "$MULTIOP_PROG $FILE v$ARGS"
-    $MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
+	echo "$MULTIOP_PROG $FILE v$ARGS"
+	$MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
 
-    echo "TMPPIPE=${TMPPIPE}"
-    read -t 60 multiop_output < $TMPPIPE
-    if [ $? -ne 0 ]; then
-        rm -f $TMPPIPE
-        return 1
-    fi
-    rm -f $TMPPIPE
-    if [ "$multiop_output" != "PAUSING" ]; then
-        echo "Incorrect multiop output: $multiop_output"
-        kill -9 $PID
-        return 1
-    fi
+	echo "TMPPIPE=${TMPPIPE}"
+	read -t 60 multiop_output < $TMPPIPE
+	if [ $? -ne 0 ]; then
+		rm -f $TMPPIPE
+		return 1
+	fi
+	rm -f $TMPPIPE
+	if [ "$multiop_output" != "PAUSING" ]; then
+		echo "Incorrect multiop output: $multiop_output"
+		kill -9 $PID
+		return 1
+	fi
 
-    return 0
+	return 0
 }
 
 do_and_time () {
@@ -7585,17 +7598,20 @@ do_and_time () {
 inodes_available () {
 	local IFree=$($LFS df -i $MOUNT | grep ^$FSNAME | awk '{ print $4 }' |
 		sort -un | head -n1) || return 1
+
 	echo $((IFree))
 }
 
 mdsrate_inodes_available () {
 	local min_inodes=$(inodes_available)
+
 	echo $((min_inodes * 99 / 100))
 }
 
 # reset stat counters
 clear_stats() {
 	local paramfile="$1"
+
 	lctl set_param -n $paramfile=0
 }
 
@@ -7603,6 +7619,7 @@ clear_stats() {
 calc_stats() {
 	local paramfile="$1"
 	local stat="$2"
+
 	lctl get_param -n $paramfile |
 		awk '/^'$stat'/ { sum += $2 } END { printf("%0.0f", sum) }'
 }
@@ -7706,7 +7723,7 @@ convert_facet2label() {
 
 	local varsvc=${facet}_svc
 
-	if [ -n ${!varsvc} ]; then
+	if [ -n "${!varsvc}" ]; then
 		echo ${!varsvc}
 	else
 		error "No label for $facet!"
@@ -7733,17 +7750,17 @@ get_mdtosc_proc_path() {
 }
 
 get_osc_import_name() {
-    local facet=$1
-    local ost=$2
-    local label=$(convert_facet2label $ost)
+	local facet=$1
+	local ost=$2
+	local label=$(convert_facet2label $ost)
 
-    if [ "${facet:0:3}" = "mds" ]; then
-        get_mdtosc_proc_path $facet $label
-        return 0
-    fi
+	if [ "${facet:0:3}" = "mds" ]; then
+		get_mdtosc_proc_path $facet $label
+		return 0
+	fi
 
-    get_clientosc_proc_path $label
-    return 0
+	get_clientosc_proc_path $label
+	return 0
 }
 
 _wait_import_state () {
@@ -7829,15 +7846,15 @@ wait_import_state_mount() {
 # #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 
 request_timeout () {
-    local facet=$1
+	local facet=$1
 
-    # request->rq_timeout = INITIAL_CONNECT_TIMEOUT
-    local init_connect_timeout=$TIMEOUT
-    [[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
+	# request->rq_timeout = INITIAL_CONNECT_TIMEOUT
+	local init_connect_timeout=$TIMEOUT
+	[[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
 
-    local at_min=$(at_get $facet at_min)
+	local at_min=$(at_get $facet at_min)
 
-    echo $(( init_connect_timeout + at_min ))
+	echo $(( init_connect_timeout + at_min ))
 }
 
 _wait_osc_import_state() {
@@ -7996,7 +8013,7 @@ do_rpc_nodes () {
 	local LIBPATH="/usr/lib/lustre/tests:/usr/lib64/lustre/tests:"
 	local TESTPATH="$RLUSTRE/tests:"
 	local RPATH="PATH=${TESTPATH}${LIBPATH}${PATH}:/sbin:/bin:/usr/sbin:"
-	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} bash rpc.sh $@ "
+	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} bash rpc.sh $* "
 }
 
 wait_clients_import_state () {
@@ -8055,7 +8072,7 @@ wait_osp_active() {
 		fi
 
 		echo "check $mproc"
-		while [ 1 ]; do
+		while true; do
 			sleep 5
 			local result=$(do_facet mds${num} "$LCTL get_param -n $mproc")
 			local max=30
@@ -8290,26 +8307,26 @@ gather_logs () {
 }
 
 do_ls () {
-    local mntpt_root=$1
-    local num_mntpts=$2
-    local dir=$3
-    local i
-    local cmd
-    local pids
-    local rc=0
+	local mntpt_root=$1
+	local num_mntpts=$2
+	local dir=$3
+	local i
+	local cmd
+	local pids
+	local rc=0
 
-    for i in $(seq 0 $num_mntpts); do
-        cmd="ls -laf ${mntpt_root}$i/$dir"
-        echo + $cmd;
-        $cmd > /dev/null &
-        pids="$pids $!"
-    done
-    echo pids=$pids
-    for pid in $pids; do
-        wait $pid || rc=$?
-    done
+	for i in $(seq 0 $num_mntpts); do
+		cmd="ls -laf ${mntpt_root}$i/$dir"
+		echo + $cmd;
+		$cmd > /dev/null &
+		pids="$pids $!"
+	done
+	echo pids=$pids
+	for pid in $pids; do
+		wait $pid || rc=$?
+	done
 
-    return $rc
+	return $rc
 }
 
 # check_and_start_recovery_timer()
@@ -8351,7 +8368,7 @@ recovery_time_min() {
 		initial_connect_timeout=$connection_switch_min ||
 		initial_connect_timeout=$timeout_20
 
-	reconnect_delay_max=$((connection_switch_max + connection_switch_inc + \
+	reconnect_delay_max=$((connection_switch_max + connection_switch_inc +
 			       initial_connect_timeout))
 	echo $((2 * reconnect_delay_max))
 }
