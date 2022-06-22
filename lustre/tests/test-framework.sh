@@ -2202,7 +2202,7 @@ start() {
 	local dev_alias=$(facet_device_alias $facet)
 
 	eval export ${dev_alias}_dev=${device}
-	eval export ${facet}_opt=\"$@\"
+	eval export ${facet}_opt=\"$*\"
 
 	combined_mgs_mds && [[ ${dev_alias} == mds1 ]] &&
 		eval export mgs_dev=${device}
@@ -2236,8 +2236,8 @@ stop() {
 	local mntpt=$(facet_mntpt $facet)
 	running=$(do_facet ${facet} "grep -c $mntpt' ' /proc/mounts || true")
 	if [ ${running} -ne 0 ]; then
-		echo "Stopping $mntpt (opts:$@) on $HOST"
-		do_facet ${facet} $UMOUNT $@ $mntpt
+		echo "Stopping $mntpt (opts:$*) on $HOST"
+		do_facet ${facet} $UMOUNT "$@" $mntpt
 	fi
 
 	# umount should block, but we should wait for unrelated obd's
@@ -2487,60 +2487,60 @@ umount_mds_client() {
 
 # nodes is comma list
 sanity_mount_check_nodes () {
-    local nodes=$1
-    shift
-    local mnts="$@"
-    local mnt
+	local nodes=$1
+	shift
+	local mnts="$@"
+	local mnt
 
-    # FIXME: assume that all cluster nodes run the same os
-    [ "$(uname)" = Linux ] || return 0
+	# FIXME: assume that all cluster nodes run the same os
+	[ "$(uname)" = Linux ] || return 0
 
-    local rc=0
-    for mnt in $mnts ; do
-        do_nodes $nodes "running=\\\$(grep -c $mnt' ' /proc/mounts);
+	local rc=0
+	for mnt in $mnts ; do
+		do_nodes $nodes "running=\\\$(grep -c $mnt' ' /proc/mounts);
 mpts=\\\$(mount | grep -c $mnt' ');
 if [ \\\$running -ne \\\$mpts ]; then
     echo \\\$(hostname) env are INSANE!;
     exit 1;
 fi"
-    [ $? -eq 0 ] || rc=1
-    done
-    return $rc
+		[ $? -eq 0 ] || rc=1
+	done
+	return $rc
 }
 
 sanity_mount_check_servers () {
-    [ -n "$CLIENTONLY" ] &&
-        { echo "CLIENTONLY mode, skip mount_check_servers"; return 0; } || true
-    echo Checking servers environments
+	[ -n "$CLIENTONLY" ] &&
+		{ echo "CLIENTONLY mode, skip mount_check_servers"; return 0; } || true
+	echo Checking servers environments
 
-    # FIXME: modify get_facets to display all facets wo params
-    local facets="$(get_facets OST),$(get_facets MDS),mgs"
-    local node
-    local mntpt
-    local facet
-    for facet in ${facets//,/ }; do
-        node=$(facet_host ${facet})
-        mntpt=$(facet_mntpt $facet)
-        sanity_mount_check_nodes $node $mntpt ||
-            { error "server $node environments are insane!"; return 1; }
-    done
+	# FIXME: modify get_facets to display all facets wo params
+	local facets="$(get_facets OST),$(get_facets MDS),mgs"
+	local node
+	local mntpt
+	local facet
+	for facet in ${facets//,/ }; do
+	node=$(facet_host ${facet})
+	mntpt=$(facet_mntpt $facet)
+	sanity_mount_check_nodes $node $mntpt ||
+		{ error "server $node environments are insane!"; return 1; }
+	done
 }
 
 sanity_mount_check_clients () {
-    local clients=${1:-$CLIENTS}
-    local mntpt=${2:-$MOUNT}
-    local mntpt2=${3:-$MOUNT2}
+	local clients=${1:-$CLIENTS}
+	local mntpt=${2:-$MOUNT}
+	local mntpt2=${3:-$MOUNT2}
 
-    [ -z $clients ] && clients=$(hostname)
-    echo Checking clients $clients environments
+	[ -z $clients ] && clients=$(hostname)
+	echo Checking clients $clients environments
 
-    sanity_mount_check_nodes $clients $mntpt $mntpt2 ||
-       error "clients environments are insane!"
+	sanity_mount_check_nodes $clients $mntpt $mntpt2 ||
+		error "clients environments are insane!"
 }
 
 sanity_mount_check () {
-    sanity_mount_check_servers || return 1
-    sanity_mount_check_clients || return 2
+	sanity_mount_check_servers || return 1
+	sanity_mount_check_clients || return 2
 }
 
 # mount clients if not mouted
@@ -2565,7 +2565,7 @@ zconf_mount_clients() {
 			local i=0
 			# Mount all server nodes first with per-NM keys
 			for nmclient in ${clients//,/ }; do
-#				do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server -l $SK_PATH/nodemap/c$i.key -n c$i"
+				# do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server -l $SK_PATH/nodemap/c$i.key -n c$i"
 				do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server -l $SK_PATH/nodemap/c$i.key"
 				i=$((i + 1))
 			done
@@ -2670,14 +2670,14 @@ exit \\\$rc" || return ${PIPESTATUS[0]}
 }
 
 zconf_umount_clients() {
-    local clients=$1
-    local mnt=$2
-    local force
+	local clients=$1
+	local mnt=$2
+	local force
 
-    [ "$3" ] && force=-f
+	[ "$3" ] && force=-f
 
-    echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients "running=\\\$(grep -c $mnt' ' /proc/mounts);
+	echo "Stopping clients: $clients $mnt (opts:$force)"
+	do_nodes $clients "running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
 echo Stopping client \\\$(hostname) $mnt opts:$force;
 lsof $mnt || need_kill=no;
@@ -2694,51 +2694,53 @@ fi"
 }
 
 shutdown_node () {
-    local node=$1
-    echo + $POWER_DOWN $node
-    $POWER_DOWN $node
+	local node=$1
+
+	echo + $POWER_DOWN $node
+	$POWER_DOWN $node
 }
 
 shutdown_node_hard () {
-    local host=$1
-    local attempts=$SHUTDOWN_ATTEMPTS
+	local host=$1
+	local attempts=$SHUTDOWN_ATTEMPTS
 
-    for i in $(seq $attempts) ; do
-        shutdown_node $host
-        sleep 1
-        wait_for_function --quiet "! ping -w 3 -c 1 $host" 5 1 && return 0
-        echo "waiting for $host to fail attempts=$attempts"
-        [ $i -lt $attempts ] || \
-            { echo "$host still pingable after power down! attempts=$attempts" && return 1; }
-    done
+	for i in $(seq $attempts) ; do
+		shutdown_node $host
+		sleep 1
+		wait_for_function --quiet "! ping -w 3 -c 1 $host" 5 1 &&
+			return 0
+		echo "waiting for $host to fail attempts=$attempts"
+		[ $i -lt $attempts ] ||
+			{ echo "$host still pingable after power down! attempts=$attempts" && return 1; }
+	done
 }
 
 shutdown_client() {
-    local client=$1
-    local mnt=${2:-$MOUNT}
-    local attempts=3
+	local client=$1
+	local mnt=${2:-$MOUNT}
+	local attempts=3
 
-    if [ "$FAILURE_MODE" = HARD ]; then
-        shutdown_node_hard $client
-    else
-       zconf_umount_clients $client $mnt -f
-    fi
+	if [ "$FAILURE_MODE" = HARD ]; then
+		shutdown_node_hard $client
+	else
+		zconf_umount_clients $client $mnt -f
+	fi
 }
 
 facets_on_host () {
-    local host=$1
-    local facets="$(get_facets OST),$(get_facets MDS)"
-    local affected
+	local affected
+	local host=$1
+	local facets="$(get_facets OST),$(get_facets MDS)"
 
-    combined_mgs_mds || facets="$facets,mgs"
+	combined_mgs_mds || facets="$facets,mgs"
 
-    for facet in ${facets//,/ }; do
-        if [ $(facet_active_host $facet) == $host ]; then
-           affected="$affected $facet"
-        fi
-    done
+	for facet in ${facets//,/ }; do
+		if [ $(facet_active_host $facet) == $host ]; then
+			affected="$affected $facet"
+		fi
+	done
 
-    echo $(comma_list $affected)
+	echo $(comma_list $affected)
 }
 
 facet_up() {
@@ -2750,17 +2752,17 @@ facet_up() {
 }
 
 facets_up_on_host () {
-    local host=$1
-    local facets=$(facets_on_host $host)
-    local affected_up
+	local affected_up
+	local host=$1
+	local facets=$(facets_on_host $host)
 
-    for facet in ${facets//,/ }; do
-        if $(facet_up $facet $host); then
-            affected_up="$affected_up $facet"
-        fi
-    done
+	for facet in ${facets//,/ }; do
+		if $(facet_up $facet $host); then
+			affected_up="$affected_up $facet"
+		fi
+	done
 
-    echo $(comma_list $affected_up)
+	echo $(comma_list $affected_up)
 }
 
 shutdown_facet() {
@@ -2784,16 +2786,17 @@ shutdown_facet() {
 }
 
 reboot_node() {
-    local node=$1
-    echo + $POWER_UP $node
-    $POWER_UP $node
+	local node=$1
+
+	echo + $POWER_UP $node
+	$POWER_UP $node
 }
 
 remount_facet() {
-    local facet=$1
+	local facet=$1
 
-    stop $facet
-    mount_facet $facet
+	stop $facet
+	mount_facet $facet
 }
 
 reboot_facet() {
@@ -2822,34 +2825,34 @@ boot_node() {
 }
 
 facets_hosts () {
-    local facets=$1
-    local hosts
+	local hosts
+	local facets=$1
 
-    for facet in ${facets//,/ }; do
-        hosts=$(expand_list $hosts $(facet_host $facet) )
-    done
+	for facet in ${facets//,/ }; do
+		hosts=$(expand_list $hosts $(facet_host $facet) )
+	done
 
-    echo $hosts
+	echo $hosts
 }
 
 _check_progs_installed () {
-    local progs=$@
-    local rc=0
+	local progs=$@
+	local rc=0
 
-    for prog in $progs; do
-        if ! [ "$(which $prog)"  -o  "${!prog}" ]; then
-           echo $prog missing on $(hostname)
-           rc=1
-        fi
-    done
-    return $rc
+	for prog in $progs; do
+		if ! [ "$(which $prog)"  -o  "${!prog}" ]; then
+			echo $prog missing on $(hostname)
+			rc=1
+		fi
+	done
+	return $rc
 }
 
 check_progs_installed () {
 	local nodes=$1
 	shift
 
-	do_rpc_nodes "$nodes" _check_progs_installed $@
+	do_rpc_nodes "$nodes" _check_progs_installed "$@"
 }
 
 # recovery-scale functions
@@ -2966,109 +2969,112 @@ check_client_load () {
 	return $RC
 }
 check_client_loads () {
-   local clients=${1//,/ }
-   local client=
-   local rc=0
+	local clients=${1//,/ }
+	local client=
+	local rc=0
 
-   for client in $clients; do
-      check_client_load $client
-      rc=${PIPESTATUS[0]}
-      if [ "$rc" != 0 ]; then
-        log "Client load failed on node $client, rc=$rc"
-        return $rc
-      fi
-   done
+	for client in $clients; do
+		check_client_load $client
+		rc=${PIPESTATUS[0]}
+		if [ "$rc" != 0 ]; then
+			log "Client load failed on node $client, rc=$rc"
+			return $rc
+		fi
+	done
 }
 
 restart_client_loads () {
-    local clients=${1//,/ }
-    local expectedfail=${2:-""}
-    local client=
-    local rc=0
+	local clients=${1//,/ }
+	local expectedfail=${2:-""}
+	local client=
+	local rc=0
 
-    for client in $clients; do
-        check_client_load $client
-        rc=${PIPESTATUS[0]}
-        if [ "$rc" != 0 -a "$expectedfail" ]; then
-            local var=$(node_var_name $client)_load
-            start_client_load $client ${!var}
-            echo "Restarted client load ${!var}: on $client. Checking ..."
-            check_client_load $client
-            rc=${PIPESTATUS[0]}
-            if [ "$rc" != 0 ]; then
-                log "Client load failed to restart on node $client, rc=$rc"
-                # failure one client load means test fail
-                # we do not need to check other
-                return $rc
-            fi
-        else
-            return $rc
-        fi
-    done
+	for client in $clients; do
+		check_client_load $client
+		rc=${PIPESTATUS[0]}
+		if [ "$rc" != 0 -a "$expectedfail" ]; then
+			local var=$(node_var_name $client)_load
+
+			start_client_load $client ${!var}
+			echo "Restarted client load ${!var}: on $client. Checking ..."
+			check_client_load $client
+			rc=${PIPESTATUS[0]}
+			if [ "$rc" != 0 ]; then
+				log "Client load failed to restart on node $client, rc=$rc"
+				# failure one client load means test fail
+				# we do not need to check other
+				return $rc
+			fi
+		else
+			return $rc
+		fi
+	done
 }
 
 # Start vmstat and save its process ID in a file.
 start_vmstat() {
-    local nodes=$1
-    local pid_file=$2
+	local nodes=$1
+	local pid_file=$2
 
-    [ -z "$nodes" -o -z "$pid_file" ] && return 0
+	[ -z "$nodes" -o -z "$pid_file" ] && return 0
 
-    do_nodes $nodes \
+	do_nodes $nodes \
         "vmstat 1 > $TESTLOG_PREFIX.$TESTNAME.vmstat.\\\$(hostname -s).log \
         2>/dev/null </dev/null & echo \\\$! > $pid_file"
 }
 
 # Display the nodes on which client loads failed.
 print_end_run_file() {
-    local file=$1
-    local node
+	local file=$1
+	local node
 
-    [ -s $file ] || return 0
+	[ -s $file ] || return 0
 
-    echo "Found the END_RUN_FILE file: $file"
-    cat $file
+	echo "Found the END_RUN_FILE file: $file"
+	cat $file
 
-    # A client load will stop if it finds the END_RUN_FILE file.
-    # That does not mean the client load actually failed though.
-    # The first node in END_RUN_FILE is the one we are interested in.
-    read node < $file
+	# A client load will stop if it finds the END_RUN_FILE file.
+	# That does not mean the client load actually failed though.
+	# The first node in END_RUN_FILE is the one we are interested in.
+	read node < $file
 
-    if [ -n "$node" ]; then
-        local var=$(node_var_name $node)_load
+	if [ -n "$node" ]; then
+		local var=$(node_var_name $node)_load
 
-        local prefix=$TESTLOG_PREFIX
-        [ -n "$TESTNAME" ] && prefix=$prefix.$TESTNAME
-        local stdout_log=$prefix.run_${!var}_stdout.$node.log
-        local debug_log=$(echo $stdout_log | sed 's/\(.*\)stdout/\1debug/')
+		local prefix=$TESTLOG_PREFIX
+		[ -n "$TESTNAME" ] && prefix=$prefix.$TESTNAME
+		local stdout_log=$prefix.run_${!var}_stdout.$node.log
+		local debug_log=$(echo $stdout_log |
+			sed 's/\(.*\)stdout/\1debug/')
 
-        echo "Client load ${!var} failed on node $node:"
-        echo "$stdout_log"
-        echo "$debug_log"
-    fi
+		echo "Client load ${!var} failed on node $node:"
+		echo "$stdout_log"
+		echo "$debug_log"
+	fi
 }
 
 # Stop the process which had its PID saved in a file.
 stop_process() {
-    local nodes=$1
-    local pid_file=$2
+	local nodes=$1
+	local pid_file=$2
 
-    [ -z "$nodes" -o -z "$pid_file" ] && return 0
+	[ -z "$nodes" -o -z "$pid_file" ] && return 0
 
-    do_nodes $nodes "test -f $pid_file &&
-        { kill -s TERM \\\$(cat $pid_file); rm -f $pid_file; }" || true
+	do_nodes $nodes "test -f $pid_file &&
+		{ kill -s TERM \\\$(cat $pid_file); rm -f $pid_file; }" || true
 }
 
 # Stop all client loads.
 stop_client_loads() {
-    local nodes=${1:-$CLIENTS}
-    local pid_file=$2
+	local nodes=${1:-$CLIENTS}
+	local pid_file=$2
 
-    # stop the client loads
-    stop_process $nodes $pid_file
+	# stop the client loads
+	stop_process $nodes $pid_file
 
-    # clean up the processes that started them
-    [ -n "$CLIENT_LOAD_PIDS" ] && kill -9 $CLIENT_LOAD_PIDS 2>/dev/null || true
+	# clean up the processes that started them
+	[ -n "$CLIENT_LOAD_PIDS" ] &&
+		kill -9 $CLIENT_LOAD_PIDS 2>/dev/null || true
 }
 # End recovery-scale functions
 
@@ -3405,47 +3411,48 @@ wait_for_host() {
 }
 
 wait_for_facet() {
-    local facetlist=$1
-    local hostlist
+	local facetlist=$1
+	local hostlist
 
-    for facet in ${facetlist//,/ }; do
-        hostlist=$(expand_list $hostlist $(facet_active_host $facet))
-    done
-    wait_for_host $hostlist
+	for facet in ${facetlist//,/ }; do
+		hostlist=$(expand_list $hostlist $(facet_active_host $facet))
+	done
+	wait_for_host $hostlist
 }
 
 _wait_recovery_complete () {
-    local param=$1
+	local param=$1
 
-    # Use default policy if $2 is not passed by caller.
-    local MAX=${2:-$(max_recovery_time)}
+	# Use default policy if $2 is not passed by caller.
+	local MAX=${2:-$(max_recovery_time)}
 
-    local WAIT=0
-    local STATUS=
+	local WAIT=0
+	local STATUS=
 
-    while [ $WAIT -lt $MAX ]; do
-        STATUS=$(lctl get_param -n $param | grep status)
-        echo $param $STATUS
-        [[ $STATUS = "status: COMPLETE" || $STATUS = "status: INACTIVE" ]] && return 0
-        sleep 5
-        WAIT=$((WAIT + 5))
-        echo "Waiting $((MAX - WAIT)) secs for $param recovery done. $STATUS"
-    done
-    echo "$param recovery not done in $MAX sec. $STATUS"
-    return 1
+	while [ $WAIT -lt $MAX ]; do
+		STATUS=$(lctl get_param -n $param | grep status)
+		echo $param $STATUS
+		[[ $STATUS == "status: COMPLETE" ||
+			$STATUS == "status: INACTIVE" ]] && return 0
+		sleep 5
+		WAIT=$((WAIT + 5))
+		echo "Waiting $((MAX - WAIT)) secs for $param recovery done. $STATUS"
+	done
+	echo "$param recovery not done in $MAX sec. $STATUS"
+	return 1
 }
 
 wait_recovery_complete () {
-    local facet=$1
+	local facet=$1
 
-    # with an assumption that at_max is the same on all nodes
-    local MAX=${2:-$(max_recovery_time)}
+	# with an assumption that at_max is the same on all nodes
+	local MAX=${2:-$(max_recovery_time)}
 
-    local facets=$facet
-    if [ "$FAILURE_MODE" = HARD ]; then
-        facets=$(facets_on_host $(facet_active_host $facet))
-    fi
-    echo affected facets: $facets
+	local facets=$facet
+	if [ "$FAILURE_MODE" = HARD ]; then
+		facets=$(facets_on_host $(facet_active_host $facet))
+	fi
+	echo affected facets: $facets
 
 	facets=${facets//,/ }
 	# We can use "for" here because we are waiting the slowest.
@@ -3555,57 +3562,59 @@ wait_delete_completed() {
 }
 
 wait_exit_ST () {
-    local facet=$1
+	local facet=$1
 
-    local WAIT=0
-    local INTERVAL=1
-    local running
-    # conf-sanity 31 takes a long time cleanup
-    while [ $WAIT -lt 300 ]; do
-	running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null &&
+	local WAIT=0
+	local INTERVAL=1
+	local running
+	# conf-sanity 31 takes a long time cleanup
+	while [ $WAIT -lt 300 ]; do
+		running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null &&
 lctl dl | grep ' ST ' || true")
-        [ -z "${running}" ] && return 0
-        echo "waited $WAIT for${running}"
-        [ $INTERVAL -lt 64 ] && INTERVAL=$((INTERVAL + INTERVAL))
-        sleep $INTERVAL
-        WAIT=$((WAIT + INTERVAL))
-    done
-    echo "service didn't stop after $WAIT seconds.  Still running:"
-    echo ${running}
-    return 1
+		[ -z "${running}" ] && return 0
+		echo "waited $WAIT for${running}"
+		[ $INTERVAL -lt 64 ] && INTERVAL=$((INTERVAL + INTERVAL))
+		sleep $INTERVAL
+		WAIT=$((WAIT + INTERVAL))
+	done
+	echo "service didn't stop after $WAIT seconds.  Still running:"
+	echo ${running}
+	return 1
 }
 
 wait_remote_prog () {
-   local prog=$1
-   local WAIT=0
-   local INTERVAL=5
-   local rc=0
+	local prog=$1
+	local WAIT=0
+	local INTERVAL=5
+	local rc=0
 
-   [ "$PDSH" = "no_dsh" ] && return 0
+	[ "$PDSH" = "no_dsh" ] && return 0
 
-   while [ $WAIT -lt $2 ]; do
-        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep) || true
-        [ -z "${running}" ] && return 0 || true
-        echo "waited $WAIT for: "
-        echo "$running"
-        [ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
-        sleep $INTERVAL
-        WAIT=$((WAIT + INTERVAL))
-    done
-    local pids=$(ps  uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep | awk '{print $2}')
-    [ -z "$pids" ] && return 0
-    echo "$PDSH processes still exists after $WAIT seconds.  Still running: $pids"
-    # FIXME: not portable
-    for pid in $pids; do
-        cat /proc/${pid}/status || true
-        cat /proc/${pid}/wchan || true
-        echo "Killing $pid"
-        kill -9 $pid || true
-        sleep 1
-        ps -P $pid && rc=1
-    done
+	while [ $WAIT -lt $2 ]; do
+		running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" |
+			grep -v grep) || true
+		[ -z "${running}" ] && return 0 || true
+		echo "waited $WAIT for: "
+		echo "$running"
+		[ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
+		sleep $INTERVAL
+		WAIT=$((WAIT + INTERVAL))
+	done
+	local pids=$(ps  uax | grep "$PDSH.*$prog.*$MOUNT" |
+			grep -v grep | awk '{print $2}')
+	[ -z "$pids" ] && return 0
+	echo "$PDSH processes still exists after $WAIT seconds.  Still running: $pids"
+	# FIXME: not portable
+	for pid in $pids; do
+		cat /proc/${pid}/status || true
+		cat /proc/${pid}/wchan || true
+		echo "Killing $pid"
+		kill -9 $pid || true
+		sleep 1
+		ps -P $pid && rc=1
+	done
 
-    return $rc
+	return $rc
 }
 
 lfs_df_check() {
@@ -3675,15 +3684,15 @@ client_reconnect() {
 }
 
 affected_facets () {
-    local facet=$1
+	local facet=$1
 
-    local host=$(facet_active_host $facet)
-    local affected=$facet
+	local host=$(facet_active_host $facet)
+	local affected=$facet
 
-    if [ "$FAILURE_MODE" = HARD ]; then
-        affected=$(facets_up_on_host $host)
-    fi
-    echo $affected
+	if [ "$FAILURE_MODE" = HARD ]; then
+		affected=$(facets_up_on_host $host)
+	fi
+	echo $affected
 }
 
 facet_failover() {
@@ -3991,98 +4000,101 @@ h2o2ib() {
 # to pdsh. What this function does is take a HOSTLIST type string and
 # expand it into a space deliminated list for us.
 hostlist_expand() {
-    local hostlist=$1
-    local offset=$2
-    local myList
-    local item
-    local list
+	local hostlist=$1
+	local offset=$2
+	local myList
+	local item
+	local list
 
-    [ -z "$hostlist" ] && return
+	[ -z "$hostlist" ] && return
 
-    # Translate the case of [..],..,[..] to [..] .. [..]
-    list="${hostlist/],/] }"
-    front=${list%%[*}
-    [[ "$front" == *,* ]] && {
-        new="${list%,*} "
-        old="${list%,*},"
-        list=${list/${old}/${new}}
-    }
+	# Translate the case of [..],..,[..] to [..] .. [..]
+	list="${hostlist/],/] }"
+	front=${list%%[*}
+	[[ "$front" == *,* ]] && {
+		new="${list%,*} "
+		old="${list%,*},"
+		list=${list/${old}/${new}}
+	}
 
-    for item in $list; do
-        # Test if we have any []'s at all
-        if [ "$item" != "${item/\[/}" ]; then {
-            # Expand the [*] into list
-            name=${item%%[*}
-            back=${item#*]}
+	for item in $list; do
+	# Test if we have any []'s at all
+		if [ "$item" != "${item/\[/}" ]; then {
+		# Expand the [*] into list
+		name=${item%%[*}
+		back=${item#*]}
 
-            if [ "$name" != "$item" ]; then
-                group=${item#$name[*}
-                group=${group%%]*}
+			if [ "$name" != "$item" ]; then
+				group=${item#$name[*}
+				group=${group%%]*}
 
-                for range in ${group//,/ }; do
-		    local order
+				for range in ${group//,/ }; do
+					local order
 
-                    begin=${range%-*}
-                    end=${range#*-}
+					begin=${range%-*}
+					end=${range#*-}
 
-                    # Number of leading zeros
-                    padlen=${#begin}
-                    padlen2=${#end}
-                    end=$(echo $end | sed 's/0*//')
-                    [[ -z "$end" ]] && end=0
-                    [[ $padlen2 -gt $padlen ]] && {
-                        [[ $padlen2 -eq ${#end} ]] && padlen2=0
-                        padlen=$padlen2
-                    }
-                    begin=$(echo $begin | sed 's/0*//')
-                    [ -z $begin ] && begin=0
+					# Number of leading zeros
+					padlen=${#begin}
+					padlen2=${#end}
+					end=$(echo $end | sed 's/0*//')
+					[[ -z "$end" ]] && end=0
+					[[ $padlen2 -gt $padlen ]] && {
+						[[ $padlen2 -eq ${#end} ]] &&
+							padlen2=0
+						padlen=$padlen2
+					}
+					begin=$(echo $begin | sed 's/0*//')
+					[ -z $begin ] && begin=0
 
-		    if [ ! -z "${begin##[!0-9]*}" ]; then
-			order=$(seq -f "%0${padlen}g" $begin $end)
-		    else
-			order=$(eval echo {$begin..$end});
-		    fi
+					if [ ! -z "${begin##[!0-9]*}" ]; then
+						order=$(seq -f "%0${padlen}g" $begin $end)
+					else
+						order=$(eval echo {$begin..$end});
+					fi
 
-		    for num in $order; do
-                        value="${name#*,}${num}${back}"
-                        [ "$value" != "${value/\[/}" ] && {
-                            value=$(hostlist_expand "$value")
-                        }
-                        myList="$myList $value"
-                    done
-                done
-            fi
-        } else {
-            myList="$myList $item"
-        } fi
-    done
-    myList=${myList//,/ }
-    myList=${myList:1} # Remove first character which is a space
+					for num in $order; do
+						value="${name#*,}${num}${back}"
 
-    # Filter any duplicates without sorting
-    list="$myList "
-    myList="${list%% *}"
+						[ "$value" != "${value/\[/}" ] && {
+						    value=$(hostlist_expand "$value")
+						}
+						myList="$myList $value"
+					done
+				done
+			fi
+		} else {
+			myList="$myList $item"
+		} fi
+	done
+	myList=${myList//,/ }
+	myList=${myList:1} # Remove first character which is a space
 
-    while [[ "$list" != ${myList##* } ]]; do
-	local tlist=" $list"
-	list=${tlist// ${list%% *} / }
-	list=${list:1}
-	myList="$myList ${list%% *}"
-    done
-    myList="${myList%* }";
+	# Filter any duplicates without sorting
+	list="$myList "
+	myList="${list%% *}"
 
-    # We can select an object at an offset in the list
-    [ $# -eq 2 ] && {
-        cnt=0
-        for item in $myList; do
-            let cnt=cnt+1
-            [ $cnt -eq $offset ] && {
-                myList=$item
-            }
-        done
-        [ $(get_node_count $myList) -ne 1 ] && myList=""
-    }
-    echo $myList
+	while [[ "$list" != ${myList##* } ]]; do
+		local tlist=" $list"
+
+		list=${tlist// ${list%% *} / }
+		list=${list:1}
+		myList="$myList ${list%% *}"
+	done
+	myList="${myList%* }";
+
+	# We can select an object at an offset in the list
+	[ $# -eq 2 ] && {
+	cnt=0
+	for item in $myList; do
+		let cnt=cnt+1
+		[ $cnt -eq $offset ] && {
+			myList=$item
+		}
+	done
+	[ $(get_node_count $myList) -ne 1 ] && myList=""
+	}
+	echo $myList
 }
 
 facet_host() {
