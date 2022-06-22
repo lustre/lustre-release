@@ -4123,19 +4123,19 @@ facet_failover_host() {
 }
 
 facet_active() {
-    local facet=$1
-    local activevar=${facet}active
+	local facet=$1
+	local activevar=${facet}active
 
-    if [ -f $TMP/${facet}active ] ; then
-        source $TMP/${facet}active
-    fi
+	if [ -f $TMP/${facet}active ] ; then
+		source $TMP/${facet}active
+	fi
 
-    active=${!activevar}
-    if [ -z "$active" ] ; then
-        echo -n ${facet}
-    else
-        echo -n ${active}
-    fi
+	active=${!activevar}
+	if [ -z "$active" ] ; then
+		echo -n ${facet}
+	else
+		echo -n ${active}
+	fi
 }
 
 facet_active_host() {
@@ -4161,28 +4161,31 @@ facet_passive_host() {
 }
 
 change_active() {
-    local facetlist=$1
-    local facet
+	local facetlist=$1
+	local facet
 
-    for facet in ${facetlist//,/ }; do
-    local failover=${facet}failover
-    local host=`facet_host $failover`
-    [ -z "$host" ] && return
+	for facet in ${facetlist//,/ }; do
+		local failover=${facet}failover
+		local host=`facet_host $failover`
 
-    local curactive=`facet_active $facet`
-    if [ -z "${curactive}" -o "$curactive" == "$failover" ] ; then
-        eval export ${facet}active=$facet
-    else
-        eval export ${facet}active=$failover
-    fi
-    # save the active host for this facet
-    local activevar=${facet}active
-    echo "$activevar=${!activevar}" > $TMP/$activevar
-    [[ $facet = mds1 ]] && combined_mgs_mds && \
-        echo "mgsactive=${!activevar}" > $TMP/mgsactive
-    local TO=`facet_active_host $facet`
-    echo "Failover $facet to $TO"
-    done
+		[ -z "$host" ] && return
+
+		local curactive=`facet_active $facet`
+
+		if [ -z "${curactive}" -o "$curactive" == "$failover" ] ; then
+			eval export ${facet}active=$facet
+		else
+			eval export ${facet}active=$failover
+		fi
+		# save the active host for this facet
+		local activevar=${facet}active
+
+		echo "$activevar=${!activevar}" > $TMP/$activevar
+		[[ $facet = mds1 ]] && combined_mgs_mds && \
+		echo "mgsactive=${!activevar}" > $TMP/mgsactive
+		local TO=`facet_active_host $facet`
+		echo "Failover $facet to $TO"
+	done
 }
 
 do_node() {
@@ -4204,8 +4207,8 @@ do_node() {
 		return 128
 	fi
 	if $VERBOSE && [[ -z "$quiet" ]]; then
-		echo "CMD: $HOST $@" >&2
-		$myPDSH $HOST "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
+		echo "CMD: $HOST $*" >&2
+		$myPDSH $HOST "$LCTL mark \"$*\"" > /dev/null 2>&1 || :
 	fi
 
 	if [[ "$myPDSH" == "rsh" ]] ||
@@ -4217,7 +4220,7 @@ do_node() {
 		eval $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests;
 				     PATH=\$PATH:/sbin:/usr/sbin;
 				     cd $RPWD;
-				     LUSTRE=\"$RLUSTRE\" bash -c \"$@\") ||
+				     LUSTRE=\"$RLUSTRE\" bash -c \"$*\") ||
 				     echo command failed >$command_status"
 		[[ -n "$($myPDSH $HOST cat $command_status)" ]] && return 1 ||
 			return 0
@@ -4228,17 +4231,17 @@ do_node() {
 		if [[ $myPDSH = no_dsh ]]; then
 			$myPDSH $HOST \
 			"(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;\
-			cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$@\")" |
+			cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$*\")" |
 			sed -e "s/^/${HOSTNAME}: /"
 		else
 			$myPDSH $HOST \
 			"(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;\
-			cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$@\")"
+			cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$*\")"
 		fi
 	else
 		$myPDSH $HOST \
 		"(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;\
-		cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$@\")" |
+		cd $RPWD; LUSTRE=\"$RLUSTRE\" bash -c \"$*\")" |
 		sed "s/^${HOST}: //"
 	fi
 	return ${PIPESTATUS[0]}
@@ -4345,16 +4348,16 @@ do_nodes() {
 
 	export FANOUT=$(get_node_count "${rnodes//,/ }")
 	if $VERBOSE && [[ -z "$quiet" ]]; then
-		echo "CMD: $rnodes $@" >&2
-		$myPDSH $rnodes "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
+		echo "CMD: $rnodes $*" >&2
+		$myPDSH $rnodes "$LCTL mark \"$*\"" > /dev/null 2>&1 || :
 	fi
 
 	# do not replace anything from pdsh output if -N is used
 	# -N     Disable hostname: prefix on lines of output.
 	if [[ -n "$verbose" || $myPDSH = *-N* ]]; then
-		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) bash -c \"$@\")"
+		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) bash -c \"$*\")"
 	else
-		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) bash -c \"$@\")" | sed -re "s/^[^:]*: //g"
+		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) bash -c \"$*\")" | sed -re "s/^[^:]*: //g"
 	fi
 	return ${PIPESTATUS[0]}
 }
@@ -4478,7 +4481,7 @@ ostdevname() {
 			error "unknown fstype!";;
 	esac
 
-    echo -n $DEVPTR
+	echo -n $DEVPTR
 }
 
 # Physical device location of data
@@ -4604,13 +4607,13 @@ mgsvdevname() {
 }
 
 facet_mntpt () {
-    local facet=$1
-    [[ $facet = mgs ]] && combined_mgs_mds && facet="mds1"
+	local facet=$1
+	[[ $facet = mgs ]] && combined_mgs_mds && facet="mds1"
 
-    local var=${facet}_MOUNT
-    eval mntpt=${!var:-${MOUNT}-$facet}
+	local var=${facet}_MOUNT
+	eval mntpt=${!var:-${MOUNT}-$facet}
 
-    echo -n $mntpt
+	echo -n $mntpt
 }
 
 mount_ldiskfs() {
@@ -5305,7 +5308,7 @@ init_facet_vars () {
 	shift
 
 	eval export ${facet}_dev=${device}
-	eval export ${facet}_opt=\"$@\"
+	eval export ${facet}_opt=\"$*\"
 
 	local dev=${facet}_dev
 
@@ -5421,22 +5424,23 @@ init_facets_vars_simple () {
 }
 
 osc_ensure_active () {
-    local facet=$1
-    local timeout=$2
-    local period=0
+	local facet=$1
+	local timeout=$2
+	local period=0
 
-    while [ $period -lt $timeout ]; do
-        count=$(do_facet $facet "lctl dl | grep ' IN osc ' 2>/dev/null | wc -l")
-        if [ $count -eq 0 ]; then
-            break
-        fi
+	while [ $period -lt $timeout ]; do
+		count=$(do_facet $facet "lctl dl | grep ' IN osc ' 2>/dev/null | wc -l")
+		if [ $count -eq 0 ]; then
+			break
+		fi
 
-        echo "There are $count OST are inactive, wait $period seconds, and try again"
-        sleep 3
-        period=$((period+3))
-    done
+		echo "$count OST inactive, wait $period seconds, and try again"
+		sleep 3
+		period=$((period+3))
+	done
 
-    [ $period -lt $timeout ] || log "$count OST are inactive after $timeout seconds, give up"
+	[ $period -lt $timeout ] ||
+		log "$count OST are inactive after $timeout seconds, give up"
 }
 
 set_conf_param_and_check() {
@@ -5554,21 +5558,23 @@ init_param_vars () {
 }
 
 nfs_client_mode () {
-    if [ "$NFSCLIENT" ]; then
-        echo "NFSCLIENT mode: setup, cleanup, check config skipped"
-        local clients=$CLIENTS
-        [ -z $clients ] && clients=$(hostname)
+	if [ "$NFSCLIENT" ]; then
+		echo "NFSCLIENT mode: setup, cleanup, check config skipped"
+		local clients=$CLIENTS
 
-        # FIXME: remove hostname when 19215 fixed
-        do_nodes $clients "echo \\\$(hostname); grep ' '$MOUNT' ' /proc/mounts"
-        declare -a nfsexport=(`grep ' '$MOUNT' ' /proc/mounts | awk '{print $1}' | awk -F: '{print $1 " "  $2}'`)
-        if [[ ${#nfsexport[@]} -eq 0 ]]; then
-                error_exit NFSCLIENT=$NFSCLIENT mode, but no NFS export found!
-        fi
-        do_nodes ${nfsexport[0]} "echo \\\$(hostname); df -T  ${nfsexport[1]}"
-        return
-    fi
-    return 1
+		[ -z $clients ] && clients=$(hostname)
+
+		# FIXME: remove hostname when 19215 fixed
+		do_nodes $clients "echo \\\$(hostname); grep ' '$MOUNT' ' /proc/mounts"
+		declare -a nfsexport=(`grep ' '$MOUNT' ' /proc/mounts |
+			awk '{print $1}' | awk -F: '{print $1 " "  $2}'`)
+		if [[ ${#nfsexport[@]} -eq 0 ]]; then
+			error_exit NFSCLIENT=$NFSCLIENT mode, but no NFS export found!
+		fi
+		do_nodes ${nfsexport[0]} "echo \\\$(hostname); df -T  ${nfsexport[1]}"
+		return
+	fi
+	return 1
 }
 
 cifs_client_mode () {
@@ -5577,34 +5583,37 @@ cifs_client_mode () {
 }
 
 check_config_client () {
-    local mntpt=$1
+	local mntpt=$1
+	local mounted=$(mount | grep " $mntpt ")
 
-    local mounted=$(mount | grep " $mntpt ")
-    if [ -n "$CLIENTONLY" ]; then
-        # bug 18021
-        # CLIENTONLY should not depend on *_HOST settings
-        local mgc=$($LCTL device_list | awk '/MGC/ {print $4}')
-        # in theory someone could create a new,
-        # client-only config file that assumed lustre was already
-        # configured and didn't set the MGSNID. If MGSNID is not set,
-        # then we should use the mgs nid currently being used
-        # as the default value. bug 18021
-        [[ x$MGSNID = x ]] &&
-            MGSNID=${mgc//MGC/}
+	if [ -n "$CLIENTONLY" ]; then
+		# bug 18021
+		# CLIENTONLY should not depend on *_HOST settings
+		local mgc=$($LCTL device_list | awk '/MGC/ {print $4}')
+		# in theory someone could create a new,
+		# client-only config file that assumed lustre was already
+		# configured and didn't set the MGSNID. If MGSNID is not set,
+		# then we should use the mgs nid currently being used
+		# as the default value. bug 18021
+		[[ x$MGSNID = x ]] &&
+		MGSNID=${mgc//MGC/}
 
-        if [[ x$mgc != xMGC$MGSNID ]]; then
-            if [ "$mgs_HOST" ]; then
-                local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST | grep PING | awk '{print $3}' | sed -e "s/(//g" -e "s/)//g")
-#                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
-#                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
-            fi
-        fi
-        return 0
-    fi
+		if [[ x$mgc != xMGC$MGSNID ]]; then
+			if [ "$mgs_HOST" ]; then
+				local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST |
+					grep PING | awk '{print $3}' |
+					sed -e "s/(//g" -e "s/)//g")
 
-    echo Checking config lustre mounted on $mntpt
-    local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
-    mgshost=$(echo $mgshost | awk -F: '{print $1}')
+				# [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
+				# error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
+			fi
+		fi
+		return 0
+	fi
+
+	echo Checking config lustre mounted on $mntpt
+	local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
+	mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
 }
 
@@ -5753,36 +5762,36 @@ check_and_setup_lustre() {
 		is_mounted $MOUNT || error "NAME=$NAME not mounted"
 		export I_MOUNTED=yes
 		do_check=false
-    # 2.
-    # MOUNT2 is mounted
-    elif is_mounted $MOUNT2; then
-            # 3.
-            # MOUNT2 is mounted, while MOUNT_2 is not set
-            if ! [ "$MOUNT_2" ]; then
-                cleanup_mount $MOUNT2
-                export I_UMOUNTED2=yes
+	# 2.
+	# MOUNT2 is mounted
+	elif is_mounted $MOUNT2; then
+		# 3.
+		# MOUNT2 is mounted, while MOUNT_2 is not set
+		if ! [ "$MOUNT_2" ]; then
+			cleanup_mount $MOUNT2
+			export I_UMOUNTED2=yes
 
-            # 4.
-            # MOUNT2 is mounted, MOUNT_2 is set
-            else
-                # FIXME: what to do if check_config failed?
-                # i.e. if:
-                # 1) remote client has mounted other Lustre fs ?
-                # 2) it has insane env ?
-                # let's try umount MOUNT2 on all clients and mount it again:
-                if ! check_config_clients $MOUNT2; then
-                    cleanup_mount $MOUNT2
-                    restore_mount $MOUNT2
-                    export I_MOUNTED2=yes
-                fi
-            fi
-
-    # 5.
-    # MOUNT is mounted MOUNT2 is not mounted
-    elif [ "$MOUNT_2" ]; then
-        restore_mount $MOUNT2
-        export I_MOUNTED2=yes
-    fi
+		# 4.
+		# MOUNT2 is mounted, MOUNT_2 is set
+		else
+			# FIXME: what to do if check_config failed?
+			# i.e. if:
+			# 1) remote client has mounted other Lustre fs ?
+			# 2) it has insane env ?
+			# let's try umount MOUNT2 on all clients and mount it
+			# again:
+			if ! check_config_clients $MOUNT2; then
+				cleanup_mount $MOUNT2
+				restore_mount $MOUNT2
+				export I_MOUNTED2=yes
+			fi
+		fi
+	# 5.
+	# MOUNT is mounted MOUNT2 is not mounted
+	elif [ "$MOUNT_2" ]; then
+		restore_mount $MOUNT2
+		export I_MOUNTED2=yes
+	fi
 
 	if $do_check; then
 		# FIXME: what to do if check_config failed?
@@ -5837,10 +5846,10 @@ check_and_setup_lustre() {
 }
 
 restore_mount () {
-   local clients=${CLIENTS:-$HOSTNAME}
-   local mntpt=$1
+	local clients=${CLIENTS:-$HOSTNAME}
+	local mntpt=$1
 
-   zconf_mount_clients $clients $mntpt
+	zconf_mount_clients $clients $mntpt
 }
 
 cleanup_mount () {
@@ -5851,14 +5860,14 @@ cleanup_mount () {
 }
 
 cleanup_and_setup_lustre() {
-    if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
-        lctl set_param debug=0 || true
-        cleanupall
-        if [ "$ONLY" == "cleanup" ]; then
-            exit 0
-        fi
-    fi
-    check_and_setup_lustre
+	if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
+		lctl set_param debug=0 || true
+		cleanupall
+		if [ "$ONLY" == "cleanup" ]; then
+			exit 0
+		fi
+	fi
+	check_and_setup_lustre
 }
 
 # Run e2fsck on MDT or OST device.
