@@ -53,9 +53,9 @@ LUSTRE_TESTS_CFG_DIR=${LUSTRE_TESTS_CFG_DIR:-${LUSTRE}/tests/cfg}
 EXCEPT_LIST_FILE=${EXCEPT_LIST_FILE:-${LUSTRE_TESTS_CFG_DIR}/tests-to-skip.sh}
 
 if [ -f "$EXCEPT_LIST_FILE" ]; then
-    echo "Reading test skip list from $EXCEPT_LIST_FILE"
-    cat $EXCEPT_LIST_FILE
-    . $EXCEPT_LIST_FILE
+	echo "Reading test skip list from $EXCEPT_LIST_FILE"
+	cat $EXCEPT_LIST_FILE
+	. $EXCEPT_LIST_FILE
 fi
 
 # check config files for options in decreasing order of preference
@@ -70,6 +70,7 @@ sanitize_parameters() {
 	for i in DIR DIR1 DIR2 MOUNT MOUNT1 MOUNT2
 	do
 		local path=${!i}
+
 		if [ -d "$path" ]; then
 			eval export $i=$(echo $path | sed -r 's/\/+$//g')
 		fi
@@ -88,10 +89,10 @@ assert_DIR () {
 }
 
 usage() {
-    echo "usage: $0 [-r] [-f cfgfile]"
-    echo "       -r: reformat"
+	echo "usage: $0 [-r] [-f cfgfile]"
+	echo "       -r: reformat"
 
-    exit
+	exit
 }
 
 print_summary () {
@@ -103,50 +104,53 @@ print_summary () {
 
 	printf "$form" "status" "script" "Total(sec)" "E(xcluded) S(low)"
 	echo "---------------------------------------------------------------"
-    for O in $DEFAULT_SUITES; do
-        O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
-        [ "${!O}" = "no" ] && continue || true
-        local o=$(echo $O  | tr "[:upper:]_" "[:lower:]-")
-        local log=${TMP}/${o}.log
-        if is_sanity_benchmark $o; then
-            log=${TMP}/sanity-benchmark.log
-        fi
-        local slow=
-        local skipped=
-        local total=
-        local status=Unfinished
-        if [ -f $log ]; then
-		skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' |
-			sed 's/test_//g')
-		slow=$(egrep "^PASS|^FAIL" $log | tr -d "("| sed s/s\)$//g |
-			sort -nr -k 3  | head -n5 |  awk '{ print $2":"$3"s" }')
-		total=$(grep duration $log | awk '{ print $2 }')
-		if [ "${!O}" = "done" ]; then
-			status=Done
-		fi
-		if $DDETAILS; then
-			local durations=$(egrep "^PASS|^FAIL" $log |
-				tr -d "("| sed s/s\)$//g |
-				awk '{ print $2":"$3"|" }')
-			details=$(printf "%s\n%s %s %s\n" "$details" \
-				"DDETAILS" "$O" "$(echo $durations)")
-		fi
-        fi
-        printf "$form" $status "$O" "${total}" "E=$skipped"
-        printf "$form" "-" "-" "-" "S=$(echo $slow)"
-    done
+	for O in $DEFAULT_SUITES; do
+		O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
+		[ "${!O}" = "no" ] && continue || true
+		local o=$(echo $O  | tr "[:upper:]_" "[:lower:]-")
+		local log=${TMP}/${o}.log
 
-    for O in $DEFAULT_SUITES; do
-        O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
-        if [ "${!O}" = "no" ]; then
-            printf "$form" "Skipped" "$O" ""
-        fi
-    done
+		if is_sanity_benchmark $o; then
+		    log=${TMP}/sanity-benchmark.log
+		fi
+		local slow=
+		local skipped=
+		local total=
+		local status=Unfinished
 
-    # print the detailed tests durations if DDETAILS=true
-    if $DDETAILS; then
-        echo "$details"
-    fi
+		if [ -f $log ]; then
+			skipped=$(grep excluded $log |
+				awk '{ printf " %s", $3 }' | sed 's/test_//g')
+			slow=$(egrep "^PASS|^FAIL" $log |
+				tr -d "("| sed s/s\)$//g | sort -nr -k 3 |
+				head -n5 |  awk '{ print $2":"$3"s" }')
+			total=$(grep duration $log | awk '{ print $2 }')
+			if [ "${!O}" = "done" ]; then
+				status=Done
+			fi
+			if $DDETAILS; then
+				local durations=$(egrep "^PASS|^FAIL" $log |
+					tr -d "("| sed s/s\)$//g |
+					awk '{ print $2":"$3"|" }')
+				details=$(printf "%s\n%s %s %s\n" "$details" \
+					"DDETAILS" "$O" "$(echo $durations)")
+			fi
+		fi
+		printf "$form" $status "$O" "${total}" "E=$skipped"
+		printf "$form" "-" "-" "-" "S=$(echo $slow)"
+	done
+
+	for O in $DEFAULT_SUITES; do
+		O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
+			if [ "${!O}" = "no" ]; then
+				printf "$form" "Skipped" "$O" ""
+			fi
+	done
+
+	# print the detailed tests durations if DDETAILS=true
+	if $DDETAILS; then
+		echo "$details"
+	fi
 }
 
 # Get information about the Lustre environment. The information collected
@@ -314,9 +318,11 @@ init_test_env() {
 		fi
 	fi
 	export LL_DECODE_FILTER_FID=${LL_DECODE_FILTER_FID:-"$LUSTRE/utils/ll_decode_filter_fid"}
-	[ ! -f "$LL_DECODE_FILTER_FID" ] && export LL_DECODE_FILTER_FID="ll_decode_filter_fid"
+	[ ! -f "$LL_DECODE_FILTER_FID" ] &&
+		export LL_DECODE_FILTER_FID="ll_decode_filter_fid"
 	export LL_DECODE_LINKEA=${LL_DECODE_LINKEA:-"$LUSTRE/utils/ll_decode_linkea"}
-	[ ! -f "$LL_DECODE_LINKEA" ] && export LL_DECODE_LINKEA="ll_decode_linkea"
+	[ ! -f "$LL_DECODE_LINKEA" ] &&
+		export LL_DECODE_LINKEA="ll_decode_linkea"
 	export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
 	[ ! -f "$MKFS" ] && export MKFS="mkfs.lustre"
 	export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
@@ -704,6 +710,7 @@ load_lnet() {
 	else
 		ncpus=$(getconf _NPROCESSORS_CONF 2>/dev/null)
 		local rc=$?
+
 		if [ $rc -eq 0 ]; then
 			echo "detected $ncpus online CPUs by getconf"
 		else
@@ -717,6 +724,7 @@ load_lnet() {
 	# partitions. So we just force libcfs to create 2 partitions for
 	# system with 2 or 4 cores
 	local saved_opts="$MODOPTS_LIBCFS"
+
 	if [ $ncpus -le 4 ] && [ $ncpus -gt 1 ]; then
 		# force to enable multiple CPU partitions
 		echo "Force libcfs to create 2 CPU partitions"
@@ -870,13 +878,15 @@ load_modules () {
 
 check_mem_leak () {
 	LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
-	LEAK_PORTALS=$(dmesg | tail -n 20 | egrep -i "libcfs.*memory leaked" || true)
+	LEAK_PORTALS=$(dmesg | tail -n 20 | egrep -i "libcfs.*memory leaked" ||
+		true)
 	if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 		echo "$LEAK_LUSTRE" 1>&2
 		echo "$LEAK_PORTALS" 1>&2
 		mv $TMP/debug $TMP/debug-leak.`date +%s` || true
 		echo "Memory leaks detected"
-		[ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
+		[ -n "$IGNORE_LEAK" ] &&
+			{ echo "ignoring leaks" && return 0; } || true
 		return 1
 	fi
 }
@@ -949,10 +959,10 @@ fs_inode_ksize() {
 }
 
 check_gss_daemon_nodes() {
-    local list=$1
-    dname=$2
+	local list=$1
+	local dname=$2
 
-    do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
+	do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
 if [ \\\"\\\$num\\\" -ne 1 ]; then
     echo \\\$num instance of $dname;
     exit 1;
@@ -960,22 +970,23 @@ fi; "
 }
 
 check_gss_daemon_facet() {
-    facet=$1
-    dname=$2
+	local facet=$1
+	local dname=$2
 
-    num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
-    if [ $num -ne 1 ]; then
-        echo "$num instance of $dname on $facet"
-        return 1
-    fi
-    return 0
+	num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
+	if [ $num -ne 1 ]; then
+		echo "$num instance of $dname on $facet"
+		return 1
+	fi
+	return 0
 }
 
 send_sigint() {
-    local list=$1
-    shift
-    echo Stopping $@ on $list
-    do_nodes $list "killall -2 $@ 2>/dev/null || true"
+	local list=$1
+
+	shift
+	echo "Stopping "$@" on $list"
+	do_nodes $list "killall -2 $* 2>/dev/null || true"
 }
 
 # start gss daemons on all nodes, or "daemon" on "nodes" if set
@@ -1012,6 +1023,7 @@ start_gss_daemons() {
 	# starting on clients
 
 	local clients=${CLIENTS:-$HOSTNAME}
+
 	if $GSS_PIPEFS; then
 		echo "Starting $LGSSD on clients $clients "
 		do_nodes $clients  "$LGSSD -v" || return 4
@@ -1049,6 +1061,7 @@ stop_gss_daemons() {
 add_sk_mntflag() {
 	# Add mount flags for shared key
 	local mt_opts=$@
+
 	if grep -q skpath <<< "$mt_opts" ; then
 		mt_opts=$(echo $mt_opts |
 			sed -e "s#skpath=[^ ,]*#skpath=$SK_PATH#")
@@ -1621,20 +1634,20 @@ set_osd_param() {
 }
 
 set_debug_size () {
-    local dz=${1:-$DEBUG_SIZE}
+	local dz=${1:-$DEBUG_SIZE}
 
-    if [ -f /sys/devices/system/cpu/possible ]; then
-        local cpus=$(($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1))
-    else
-        local cpus=$(getconf _NPROCESSORS_CONF 2>/dev/null)
-    fi
+	if [ -f /sys/devices/system/cpu/possible ]; then
+		local cpus=$(($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1))
+	else
+		local cpus=$(getconf _NPROCESSORS_CONF 2>/dev/null)
+	fi
 
-    # bug 19944, adjust size to be -gt num_possible_cpus()
-    # promise 2MB for every cpu at least
-    if [ -n "$cpus" ] && [ $((cpus * 2)) -gt $dz ]; then
-        dz=$((cpus * 2))
-    fi
-    lctl set_param debug_mb=$dz
+	# bug 19944, adjust size to be -gt num_possible_cpus()
+	# promise 2MB for every cpu at least
+	if [ -n "$cpus" ] && [ $((cpus * 2)) -gt $dz ]; then
+		dz=$((cpus * 2))
+	fi
+	lctl set_param debug_mb=$dz
 }
 
 set_default_debug () {
@@ -1643,7 +1656,8 @@ set_default_debug () {
 	local debug_size=${3:-$DEBUG_SIZE}
 
 	[ -n "$debug" ] && lctl set_param debug="$debug" >/dev/null
-	[ -n "$subsys" ] && lctl set_param subsystem_debug="${subsys# }" >/dev/null
+	[ -n "$subsys" ] &&
+		lctl set_param subsystem_debug="${subsys# }" >/dev/null
 
 	[ -n "$debug_size" ] && set_debug_size $debug_size > /dev/null
 }
@@ -1681,7 +1695,7 @@ set_params_nodes () {
 
 	local nodes=$1
 	shift
-	do_nodes $nodes $LCTL set_param $@
+	do_nodes $nodes $LCTL set_param "$@"
 }
 
 set_params_clients () {
@@ -1693,12 +1707,12 @@ set_params_clients () {
 }
 
 set_hostid () {
-    local hostid=${1:-$(hostid)}
+	local hostid=${1:-$(hostid)}
 
-    if [ ! -s /etc/hostid ]; then
-	printf $(echo -n $hostid |
+	if [ ! -s /etc/hostid ]; then
+		printf $(echo -n $hostid |
 	    sed 's/\(..\)\(..\)\(..\)\(..\)/\\x\4\\x\3\\x\2\\x\1/') >/etc/hostid
-    fi
+	fi
 }
 
 # Facet functions
