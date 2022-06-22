@@ -8434,22 +8434,22 @@ PROC_CON="srpc_contexts"
 
 combination()
 {
-    local M=$1
-    local N=$2
-    local R=1
+	local M=$1
+	local N=$2
+	local R=1
 
-    if [ $M -lt $N ]; then
-        R=0
-    else
-        N=$((N + 1))
-        while [ $N -lt $M ]; do
-            R=$((R * N))
-            N=$((N + 1))
-        done
-    fi
+	if [ $M -lt $N ]; then
+		R=0
+	else
+		N=$((N + 1))
+		while [ $N -lt $M ]; do
+			R=$((R * N))
+			N=$((N + 1))
+		done
+	fi
 
-    echo $R
-    return 0
+	echo $R
+	return 0
 }
 
 calc_connection_cnt() {
@@ -8490,24 +8490,24 @@ calc_connection_cnt() {
 
 set_rule()
 {
-    local tgt=$1
-    local net=$2
-    local dir=$3
-    local flavor=$4
-    local cmd="$tgt.srpc.flavor"
+	local tgt=$1
+	local net=$2
+	local dir=$3
+	local flavor=$4
+	local cmd="$tgt.srpc.flavor"
 
-    if [ $net == "any" ]; then
-        net="default"
-    fi
-    cmd="$cmd.$net"
+	if [ $net == "any" ]; then
+		net="default"
+	fi
+	cmd="$cmd.$net"
 
-    if [ $dir != "any" ]; then
-        cmd="$cmd.$dir"
-    fi
+	if [ $dir != "any" ]; then
+		cmd="$cmd.$dir"
+	fi
 
-    cmd="$cmd=$flavor"
-    log "Setting sptlrpc rule: $cmd"
-    do_facet mgs "$LCTL conf_param $cmd"
+	cmd="$cmd=$flavor"
+	log "Setting sptlrpc rule: $cmd"
+	do_facet mgs "$LCTL conf_param $cmd"
 }
 
 count_contexts()
@@ -8519,186 +8519,199 @@ count_contexts()
 
 count_flvr()
 {
-    local output=$1
-    local flavor=$2
-    local count=0
+	local output=$1
+	local flavor=$2
+	local count=0
 
-    rpc_flvr=`echo $flavor | awk -F - '{ print $1 }'`
-    bulkspec=`echo $flavor | awk -F - '{ print $2 }'`
+	rpc_flvr=`echo $flavor | awk -F - '{ print $1 }'`
+	bulkspec=`echo $flavor | awk -F - '{ print $2 }'`
 
-    count=`echo "$output" | grep "rpc flavor" | grep $rpc_flvr | wc -l`
+	count=`echo "$output" | grep "rpc flavor" | grep $rpc_flvr | wc -l`
 
-    if [ "x$bulkspec" != "x" ]; then
-        algs=`echo $bulkspec | awk -F : '{ print $2 }'`
+	if [ "x$bulkspec" != "x" ]; then
+		algs=`echo $bulkspec | awk -F : '{ print $2 }'`
 
-        if [ "x$algs" != "x" ]; then
-            bulk_count=`echo "$output" | grep "bulk flavor" | grep $algs | wc -l`
-        else
-            bulk=`echo $bulkspec | awk -F : '{ print $1 }'`
-            if [ $bulk == "bulkn" ]; then
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep "null/null" | wc -l`
-            elif [ $bulk == "bulki" ]; then
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep "/null" | grep -v "null/" | wc -l`
-            else
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep -v "/null" | grep -v "null/" | wc -l`
-            fi
-        fi
+		if [ "x$algs" != "x" ]; then
+			bulk_count=`echo "$output" | grep "bulk flavor" |
+				grep $algs | wc -l`
+		else
+			bulk=`echo $bulkspec | awk -F : '{ print $1 }'`
 
-        [ $bulk_count -lt $count ] && count=$bulk_count
-    fi
+			if [ $bulk == "bulkn" ]; then
+				bulk_count=`echo "$output" |
+					grep "bulk flavor" | grep "null/null" |
+					wc -l`
+			elif [ $bulk == "bulki" ]; then
+				bulk_count=`echo "$output" |
+					grep "bulk flavor" | grep "/null" |
+					grep -v "null/" | wc -l`
+			else
+				bulk_count=`echo "$output" |
+					grep "bulk flavor" | grep -v "/null" |
+					grep -v "null/" | wc -l`
+			fi
+		fi
+		[ $bulk_count -lt $count ] && count=$bulk_count
+	fi
 
-    echo $count
+	echo $count
 }
 
 flvr_cnt_cli2mdt()
 {
-    local flavor=$1
-    local cnt
+	local flavor=$1
+	local cnt
 
-    local clients=${CLIENTS:-$HOSTNAME}
+	local clients=${CLIENTS:-$HOSTNAME}
 
-    for c in ${clients//,/ }; do
-	local output=$(do_node $c lctl get_param -n \
-		 mdc.*-*-mdc-*.$PROC_CLI 2>/dev/null)
-	local tmpcnt=$(count_flvr "$output" $flavor)
-	if $GSS_SK && [ $flavor != "null" ]; then
-		# tmpcnt=min(contexts,flavors) to ensure SK context is on
-		output=$(do_node $c lctl get_param -n \
-			 mdc.*-MDT*-mdc-*.$PROC_CON 2>/dev/null)
-		local outcon=$(count_contexts "$output")
-		if [ "$outcon" -lt "$tmpcnt" ]; then
-			tmpcnt=$outcon
+	for c in ${clients//,/ }; do
+		local output=$(do_node $c lctl get_param -n \
+			 mdc.*-*-mdc-*.$PROC_CLI 2>/dev/null)
+		local tmpcnt=$(count_flvr "$output" $flavor)
+
+		if $GSS_SK && [ $flavor != "null" ]; then
+			# tmpcnt=min(contexts,flavors) to ensure SK context is
+			# on
+			output=$(do_node $c lctl get_param -n \
+				 mdc.*-MDT*-mdc-*.$PROC_CON 2>/dev/null)
+			local outcon=$(count_contexts "$output")
+
+			if [ "$outcon" -lt "$tmpcnt" ]; then
+				tmpcnt=$outcon
+			fi
 		fi
-	fi
-	cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt
+		cnt=$((cnt + tmpcnt))
+	done
+	echo $cnt
 }
 
 flvr_cnt_cli2ost()
 {
-    local flavor=$1
-    local cnt
+	local flavor=$1
+	local cnt
 
-    local clients=${CLIENTS:-$HOSTNAME}
+	local clients=${CLIENTS:-$HOSTNAME}
 
-    for c in ${clients//,/ }; do
-	# reconnect if idle
-	do_node $c lctl set_param osc.*.idle_connect=1 >/dev/null 2>&1
-	local output=$(do_node $c lctl get_param -n \
-		 osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null)
-	local tmpcnt=$(count_flvr "$output" $flavor)
-	if $GSS_SK && [ $flavor != "null" ]; then
-		# tmpcnt=min(contexts,flavors) to ensure SK context is on
-		output=$(do_node $c lctl get_param -n \
-			 osc.*OST*-osc-[^M][^D][^T]*.$PROC_CON 2>/dev/null)
-		local outcon=$(count_contexts "$output")
-		if [ "$outcon" -lt "$tmpcnt" ]; then
-			tmpcnt=$outcon
+	for c in ${clients//,/ }; do
+		# reconnect if idle
+		do_node $c lctl set_param osc.*.idle_connect=1 >/dev/null 2>&1
+		local output=$(do_node $c lctl get_param -n \
+			 osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null)
+		local tmpcnt=$(count_flvr "$output" $flavor)
+
+		if $GSS_SK && [ $flavor != "null" ]; then
+			# tmpcnt=min(contexts,flavors) to ensure SK context is on
+			output=$(do_node $c lctl get_param -n \
+				 osc.*OST*-osc-[^M][^D][^T]*.$PROC_CON 2>/dev/null)
+			local outcon=$(count_contexts "$output")
+
+			if [ "$outcon" -lt "$tmpcnt" ]; then
+				tmpcnt=$outcon
+			fi
 		fi
-	fi
-        cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt
+		cnt=$((cnt + tmpcnt))
+	done
+	echo $cnt
 }
 
 flvr_cnt_mdt2mdt()
 {
-    local flavor=$1
-    local cnt=0
+	local flavor=$1
+	local cnt=0
 
-    if [ $MDSCOUNT -le 1 ]; then
-        echo 0
-        return
-    fi
-
-    for num in `seq $MDSCOUNT`; do
-	local output=$(do_facet mds$num lctl get_param -n \
-		osp.*-MDT*osp-MDT*.$PROC_CLI 2>/dev/null)
-	local tmpcnt=$(count_flvr "$output" $flavor)
-	if $GSS_SK && [ $flavor != "null" ]; then
-		# tmpcnt=min(contexts,flavors) to ensure SK context is on
-		output=$(do_facet mds$num lctl get_param -n \
-			osp.*-MDT*osp-MDT*.$PROC_CON 2>/dev/null)
-		local outcon=$(count_contexts "$output")
-		if [ "$outcon" -lt "$tmpcnt" ]; then
-			tmpcnt=$outcon
-		fi
+	if [ $MDSCOUNT -le 1 ]; then
+		echo 0
+		return
 	fi
-        cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt;
+
+	for num in `seq $MDSCOUNT`; do
+		local output=$(do_facet mds$num lctl get_param -n \
+			osp.*-MDT*osp-MDT*.$PROC_CLI 2>/dev/null)
+		local tmpcnt=$(count_flvr "$output" $flavor)
+
+		if $GSS_SK && [ $flavor != "null" ]; then
+			# tmpcnt=min(contexts,flavors) to ensure SK context is on
+			output=$(do_facet mds$num lctl get_param -n \
+				osp.*-MDT*osp-MDT*.$PROC_CON 2>/dev/null)
+			local outcon=$(count_contexts "$output")
+
+			if [ "$outcon" -lt "$tmpcnt" ]; then
+				tmpcnt=$outcon
+			fi
+		fi
+		cnt=$((cnt + tmpcnt))
+	done
+	echo $cnt;
 }
 
 flvr_cnt_mdt2ost()
 {
-    local flavor=$1
-    local cnt=0
-    local mdtosc
+	local flavor=$1
+	local cnt=0
+	local mdtosc
 
-    for num in `seq $MDSCOUNT`; do
-        mdtosc=$(get_mdtosc_proc_path mds$num)
-        mdtosc=${mdtosc/-MDT*/-MDT\*}
-	local output=$(do_facet mds$num lctl get_param -n \
-		       os[cp].$mdtosc.$PROC_CLI 2>/dev/null)
-	local tmpcnt=$(count_flvr "$output" $flavor)
-	if $GSS_SK && [ $flavor != "null" ]; then
-		# tmpcnt=min(contexts,flavors) to ensure SK context is on
-		output=$(do_facet mds$num lctl get_param -n \
-			 os[cp].$mdtosc.$PROC_CON 2>/dev/null)
-		local outcon=$(count_contexts "$output")
-		if [ "$outcon" -lt "$tmpcnt" ]; then
-			tmpcnt=$outcon
+	for num in `seq $MDSCOUNT`; do
+		mdtosc=$(get_mdtosc_proc_path mds$num)
+		mdtosc=${mdtosc/-MDT*/-MDT\*}
+		local output=$(do_facet mds$num lctl get_param -n \
+				os[cp].$mdtosc.$PROC_CLI 2>/dev/null)
+		# Ensure SK context is on
+		local tmpcnt=$(count_flvr "$output" $flavor)
+
+		if $GSS_SK && [ $flavor != "null" ]; then
+			output=$(do_facet mds$num lctl get_param -n \
+				 os[cp].$mdtosc.$PROC_CON 2>/dev/null)
+			local outcon=$(count_contexts "$output")
+
+			if [ "$outcon" -lt "$tmpcnt" ]; then
+				tmpcnt=$outcon
+			fi
 		fi
-	fi
-        cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt;
+		cnt=$((cnt + tmpcnt))
+	done
+	echo $cnt;
 }
 
 flvr_cnt_mgc2mgs()
 {
-    local flavor=$1
+	local flavor=$1
 
-    local output=$(do_facet client lctl get_param -n mgc.*.$PROC_CLI \
+	local output=$(do_facet client lctl get_param -n mgc.*.$PROC_CLI \
 			2>/dev/null)
-    count_flvr "$output" $flavor
+	count_flvr "$output" $flavor
 }
 
 do_check_flavor()
 {
-    local dir=$1        # from to
-    local flavor=$2     # flavor expected
-    local res=0
+	local dir=$1        # from to
+	local flavor=$2     # flavor expected
+	local res=0
 
-    if [ $dir == "cli2mdt" ]; then
-        res=`flvr_cnt_cli2mdt $flavor`
-    elif [ $dir == "cli2ost" ]; then
-        res=`flvr_cnt_cli2ost $flavor`
-    elif [ $dir == "mdt2mdt" ]; then
-        res=`flvr_cnt_mdt2mdt $flavor`
-    elif [ $dir == "mdt2ost" ]; then
-        res=`flvr_cnt_mdt2ost $flavor`
-    elif [ $dir == "all2ost" ]; then
-        res1=`flvr_cnt_mdt2ost $flavor`
-        res2=`flvr_cnt_cli2ost $flavor`
-        res=$((res1 + res2))
-    elif [ $dir == "all2mdt" ]; then
-        res1=`flvr_cnt_mdt2mdt $flavor`
-        res2=`flvr_cnt_cli2mdt $flavor`
-        res=$((res1 + res2))
-    elif [ $dir == "all2all" ]; then
-        res1=`flvr_cnt_mdt2ost $flavor`
-        res2=`flvr_cnt_cli2ost $flavor`
-        res3=`flvr_cnt_mdt2mdt $flavor`
-        res4=`flvr_cnt_cli2mdt $flavor`
-        res=$((res1 + res2 + res3 + res4))
-    fi
+	if [ $dir == "cli2mdt" ]; then
+		res=`flvr_cnt_cli2mdt $flavor`
+	elif [ $dir == "cli2ost" ]; then
+		res=`flvr_cnt_cli2ost $flavor`
+	elif [ $dir == "mdt2mdt" ]; then
+		res=`flvr_cnt_mdt2mdt $flavor`
+	elif [ $dir == "mdt2ost" ]; then
+		res=`flvr_cnt_mdt2ost $flavor`
+	elif [ $dir == "all2ost" ]; then
+		res1=`flvr_cnt_mdt2ost $flavor`
+		res2=`flvr_cnt_cli2ost $flavor`
+		res=$((res1 + res2))
+	elif [ $dir == "all2mdt" ]; then
+		res1=`flvr_cnt_mdt2mdt $flavor`
+		res2=`flvr_cnt_cli2mdt $flavor`
+		res=$((res1 + res2))
+	elif [ $dir == "all2all" ]; then
+		res1=`flvr_cnt_mdt2ost $flavor`
+		res2=`flvr_cnt_cli2ost $flavor`
+		res3=`flvr_cnt_mdt2mdt $flavor`
+		res4=`flvr_cnt_cli2mdt $flavor`
+		res=$((res1 + res2 + res3 + res4))
+	fi
 
-    echo $res
+	echo $res
 }
 
 wait_flavor()
@@ -8810,15 +8823,15 @@ set_flavor_all()
 
 
 check_logdir() {
-    local dir=$1
-    # Checking for shared logdir
-    if [ ! -d $dir ]; then
-        # Not found. Create local logdir
-        mkdir -p $dir
-    else
-        touch $dir/check_file.$(hostname -s)
-    fi
-    return 0
+	local dir=$1
+	# Checking for shared logdir
+	if [ ! -d $dir ]; then
+		# Not found. Create local logdir
+		mkdir -p $dir
+	else
+		touch $dir/check_file.$(hostname -s)
+	fi
+	return 0
 }
 
 check_write_access() {
@@ -8869,19 +8882,19 @@ init_logging() {
 }
 
 log_test() {
-    yml_log_test $1 >> $YAML_LOG
+	yml_log_test $1 >> $YAML_LOG
 }
 
 log_test_status() {
-     yml_log_test_status $@ >> $YAML_LOG
+	yml_log_test_status "$@" >> $YAML_LOG
 }
 
 log_sub_test_begin() {
-    yml_log_sub_test_begin "$@" >> $YAML_LOG
+	yml_log_sub_test_begin "$@" >> $YAML_LOG
 }
 
 log_sub_test_end() {
-    yml_log_sub_test_end "$@" >> $YAML_LOG
+	yml_log_sub_test_end "$@" >> $YAML_LOG
 }
 
 run_llverdev()
@@ -8917,17 +8930,17 @@ run_llverfs()
 }
 
 run_sgpdd () {
-    local devs=${1//,/ }
-    shift
-    local params=$@
-    local rslt=$TMP/sgpdd_survey
+	local devs=${1//,/ }
+	shift
+	local params=$@
+	local rslt=$TMP/sgpdd_survey
 
-    # sgpdd-survey cleanups ${rslt}.* files
+	# sgpdd-survey cleanups ${rslt}.* files
 
-    local cmd="rslt=$rslt $params scsidevs=\"$devs\" $SGPDDSURVEY"
-    echo + $cmd
-    eval $cmd
-    cat ${rslt}.detail
+	local cmd="rslt=$rslt $params scsidevs=\"$devs\" $SGPDDSURVEY"
+	echo + $cmd
+	eval $cmd
+	cat ${rslt}.detail
 }
 
 # returns the canonical name for an ldiskfs device
@@ -8949,14 +8962,15 @@ ldiskfs_canon() {
 }
 
 is_sanity_benchmark() {
-    local benchmarks="dbench bonnie iozone fsx"
-    local suite=$1
-    for b in $benchmarks; do
-        if [ "$b" == "$suite" ]; then
-            return 0
-        fi
-    done
-    return 1
+	local benchmarks="dbench bonnie iozone fsx"
+	local suite=$1
+
+	for b in $benchmarks; do
+		if [ "$b" == "$suite" ]; then
+			return 0
+		fi
+	done
+	return 1
 }
 
 min_ost_size () {
@@ -8998,8 +9012,9 @@ get_block_count() {
 	local device=$2
 	local count
 
-	[ -z "$CLIENTONLY" ] && count=$(do_facet $facet "$DUMPE2FS -h $device 2>&1" |
-		awk '/^Block count:/ {print $3}')
+	[ -z "$CLIENTONLY" ] &&
+		count=$(do_facet $facet "$DUMPE2FS -h $device 2>&1" |
+			awk '/^Block count:/ {print $3}')
 	echo -n ${count:-0}
 }
 
@@ -9023,17 +9038,17 @@ max_xattr_size() {
 
 # Dump the value of the named xattr from a file.
 get_xattr_value() {
-    local xattr_name=$1
-    local file=$2
+	local xattr_name=$1
+	local file=$2
 
-    echo "$(getfattr -n $xattr_name --absolute-names --only-values $file)"
+	echo "$(getfattr -n $xattr_name --absolute-names --only-values $file)"
 }
 
 # Generate a string with size of $size bytes.
 generate_string() {
-    local size=${1:-1024} # in bytes
+	local size=${1:-1024} # in bytes
 
-    echo "$(head -c $size < /dev/zero | tr '\0' y)"
+	echo "$(head -c $size < /dev/zero | tr '\0' y)"
 }
 
 reformat_external_journal() {
@@ -9923,7 +9938,7 @@ changelog_register() {
 
 		local cl_user
 		cl_user=$(do_facet $facet $LCTL --device $mdt \
-			changelog_register -n $@) ||
+			changelog_register -n "$@") ||
 			error "$mdt: register changelog user failed: $?"
 		stack_trap "__changelog_deregister $facet $cl_user" EXIT
 
@@ -9932,7 +9947,7 @@ changelog_register() {
 		# cl_user is constrained enough to use whitespaces as separators
 		CL_USERS[$facet]+="$cl_user "
 	done
-	echo "Registered $MDSCOUNT changelog users: '${CL_USERS[@]% }'"
+	echo "Registered $MDSCOUNT changelog users: '${CL_USERS[*]% }'"
 }
 
 changelog_deregister() {
@@ -10447,7 +10462,8 @@ pkill_copytools() {
 	local hosts="$1"
 	local signal="$2"
 
-	do_nodes "$hosts" "pkill --pidfile=$HSMTOOL_PID_FILE --signal=$signal hsmtool"
+	do_nodes "$hosts" \
+		"pkill --pidfile=$HSMTOOL_PID_FILE --signal=$signal hsmtool"
 }
 
 copytool_continue() {
@@ -10497,23 +10513,26 @@ copytool_logfile()
 
 __lhsmtool_rebind()
 {
-	do_facet $facet $HSMTOOL "${hsmtool_options[@]}" --rebind "$@" "$mountpoint"
+	do_facet $facet $HSMTOOL \
+		"${hsmtool_options[@]}" --rebind "$@" "$mountpoint"
 }
 
 __lhsmtool_import()
 {
 	mkdir -p "$(dirname "$2")" ||
 		error "cannot create directory '$(dirname "$2")'"
-	do_facet $facet $HSMTOOL "${hsmtool_options[@]}" --import "$@" "$mountpoint"
+	do_facet $facet $HSMTOOL \
+		"${hsmtool_options[@]}" --import "$@" "$mountpoint"
 }
 
 __lhsmtool_setup()
 {
 	local host="$(facet_host "$facet")"
 	local cmd="$HSMTOOL ${hsmtool_options[@]} --daemon --pid-file=$HSMTOOL_PID_FILE"
+
 	[ -n "$bandwidth" ] && cmd+=" --bandwidth $bandwidth"
 	[ -n "$archive_id" ] && cmd+=" --archive $archive_id"
-#	[ ${#misc_options[@]} -gt 0 ] &&
+	#	[ ${#misc_options[@]} -gt 0 ] &&
 #		cmd+=" $(IFS=" " echo "$@")"
 	cmd+=" $@ \"$mountpoint\""
 
@@ -10967,7 +10986,8 @@ function check_set_fallocate_or_skip()
 
 function disable_opencache()
 {
-	local state=$($LCTL get_param -n "llite.*.opencache_threshold_count" | head -1)
+	local state=$($LCTL get_param -n "llite.*.opencache_threshold_count" |
+			head -1)
 
 	test -z "${saved_OPENCACHE_value}" &&
 					export saved_OPENCACHE_value="$state"
