@@ -339,6 +339,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	peer_ni->ibp_queue_depth = ni->ni_net->net_tunables.lct_peer_tx_credits;
 	peer_ni->ibp_queue_depth_mod = 0;	/* try to use the default */
 	kref_init(&peer_ni->ibp_kref);
+	atomic_set(&peer_ni->ibp_nconns, 0);
 
 	INIT_HLIST_NODE(&peer_ni->ibp_list);
 	INIT_LIST_HEAD(&peer_ni->ibp_conns);
@@ -650,8 +651,12 @@ kiblnd_get_completion_vector(struct kib_conn *conn, int cpt)
 
 	mask = cfs_cpt_cpumask(lnet_cpt_table(), cpt);
 
-	/* hash NID to CPU id in this partition... */
-	ibp_nid = conn->ibc_peer->ibp_nid;
+	/* hash NID to CPU id in this partition... when targeting a single peer
+	 * with multiple QPs, to engage more cores in CQ processing to a single
+	 * peer, use ibp_nconns to salt the value the comp_vector value
+	 */
+	ibp_nid = conn->ibc_peer->ibp_nid +
+		atomic_read(&conn->ibc_peer->ibp_nconns);
 	off = do_div(ibp_nid, cpumask_weight(*mask));
 	for_each_cpu(i, *mask) {
 		if (off-- == 0)
@@ -964,6 +969,7 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
         conn->ibc_state = state;
 
         /* 1 more conn */
+	atomic_inc(&peer_ni->ibp_nconns);
 	atomic_inc(&net->ibn_nconns);
         return conn;
 
@@ -1033,6 +1039,7 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 
 		kiblnd_peer_decref(peer_ni);
 		rdma_destroy_id(cmid);
+		atomic_dec(&peer_ni->ibp_nconns);
 		atomic_dec(&net->ibn_nconns);
 	}
 }
