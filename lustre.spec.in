@@ -366,8 +366,8 @@ BuildRequires: openmpi-devel
 %else
 BuildRequires: openmpi2-devel
 %endif
-%endif
-%endif
+%endif # openmpi
+%endif # mpi
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
@@ -477,8 +477,14 @@ fi
 # kmod tools/scripts require "name" directory with kernel modules
 %define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
 
-%{?_openmpi_load}
+%if %{with mpi}
+%if %{mpi_name} == "mpich"
 %{?_mpich_load}
+%endif
+%if %{mpi_name} == "openmpi"
+%{?_openmpi_load}
+%endif
+%endif # mpi
 
 %if %{with mofed}
 	o2ib_path=$(find /usr/src/ofa_kernel/ -type d -name ofed_scripts | xargs dirname)
@@ -522,9 +528,25 @@ fi
 
 make %{?_smp_mflags} -s %{?make_args}
 
+%if %{with mpi}
+%if %{mpi_name} == "mpich"
+%{?_mpich_unload}
+%endif
+%if %{mpi_name} == "openmpi"
+%{?_openmpi_unload}
+%endif
+%endif # mpi
+
 %install
-%{?_openmpi_load}
+
+%if %{with mpi}
+%if %{mpi_name} == "mpich"
 %{?_mpich_load}
+%endif
+%if %{mpi_name} == "openmpi"
+%{?_openmpi_load}
+%endif
+%endif # mpi
 
 make install DESTDIR=$RPM_BUILD_ROOT
 
@@ -552,6 +574,15 @@ mv $basemodpath/fs/llog_test.ko $basemodpath-tests/fs/llog_test.ko
 mkdir -p $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
 mv $basemodpath/fs/kinode.ko $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
 %endif
+%endif
+
+%if %{without mpi}
+if [ -d $RPM_BUILD_ROOT%{_libdir}/openmpi ] ; then
+	rm -fr $RPM_BUILD_ROOT%{_libdir}/openmpi
+fi
+if [ -d $RPM_BUILD_ROOT%{_libdir}/mpich ] ; then
+	rm -fr $RPM_BUILD_ROOT%{_libdir}/mpich
+fi
 %endif
 
 :> lustre.files
@@ -626,6 +657,14 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/liblustreapi.la
 
 %if %{with lustre_tests}
 :> lustre-tests.files
+%if %{with mpi}
+%if %{mpi_name} == "mpich"
+%{?_mpich_load}
+%endif
+%if %{mpi_name} == "openmpi"
+%{?_openmpi_load}
+%endif
+%endif # mpi
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
