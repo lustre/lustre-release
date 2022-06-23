@@ -1772,17 +1772,31 @@ list_cmp_func_t, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_LIST_CMP_FUNC_T
 
-AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
-	LIBCFS_SRC_HAVE_PROC_OPS
-
-	AC_MSG_CHECKING([for available kernel interfaces to libcfs])
-	LB2_LINUX_TEST_COMPILE_ALL([libcfs])
-	AC_MSG_RESULT([done])
+#
+# LIBCFS_NLA_STRSCPY
+#
+# Kernel version 5.10-rc3 commit 872f690341948b502c93318f806d821c56772c42
+# replaced nla_strlcpy() with nla_strscpy().
+#
+AC_DEFUN([LIBCFS_SRC_NLA_STRSCPY], [
+	LB2_LINUX_TEST_SRC([nla_strscpy], [
+		#include <net/netlink.h>
+	],[
+		if (nla_strscpy(NULL, NULL, 0) < 0)
+			return -EINVAL;
+	],[
+	],[])
 ])
-AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
-	# 5.6
-	LIBCFS_HAVE_PROC_OPS
-])
+AC_DEFUN([LIBCFS_NLA_STRSCPY], [
+	AC_MSG_CHECKING([if 'nla_strscpy()' exists])
+	LB2_LINUX_TEST_RESULT([nla_strscpy], [
+		AC_DEFINE(HAVE_NLA_STRSCPY, 1,
+			['nla_strscpy' is available])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+]) # LIBCFS_NLA_STRSCPY
 
 #
 # LIBCFS_HAVE_CIPHER_HEADER
@@ -1833,6 +1847,23 @@ param_set_uint_minmax, [
 		['param_set_uint_minmax' is available])
 ])
 ]) # LIBCFS_PARAM_SET_UINT_MINMAX
+
+AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
+	# 5.6
+	LIBCFS_SRC_HAVE_PROC_OPS
+	# 5.10
+	LIBCFS_SRC_NLA_STRSCPY
+
+	AC_MSG_CHECKING([for available kernel interfaces to libcfs])
+	LB2_LINUX_TEST_COMPILE_ALL([libcfs])
+	AC_MSG_RESULT([done])
+])
+AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
+	# 5.6
+	LIBCFS_HAVE_PROC_OPS
+	# 5.10
+	LIBCFS_NLA_STRSCPY
+])
 
 #
 # LIBCFS_PROG_LINUX
