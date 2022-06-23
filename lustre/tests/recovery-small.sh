@@ -3302,6 +3302,71 @@ test_150() {
 }
 run_test 150 "statfs when MDT0 offline with lazystatfs option"
 
+test_152() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+
+	local before
+	local after
+	local diff
+	local saved
+	local version
+	local pids_rr=""
+	local pids_qos=""
+	local setcount=500
+
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+	version=$(do_facet mds1 \
+		  uname -r | sed -e "s/\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/")
+	version=$(version_code ${version//\./ })
+	if (( $version < $(version_code 4.6.0) )); then
+		skip "MDS Linux kernel does not support killable semaphore"
+	fi
+
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir/rr
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir/qos
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+
+	$LFS setstripe -C $setcount $DIR/$tdir/rr/ || error "setstripe failed"
+
+
+	#define OBD_FAIL_MDS_LOD_CREATE_PAUSE	 0x173
+	#Simulate OST failover and sleep RR allocation under lq_rw_sem
+	do_facet mds1 $LCTL set_param fail_loc=0x80000173 fail_val=20
+	before=$(date +%s)
+	for (( i = 0; i < 2; i++)); do
+		touch $DIR/$tdir/rr/$tfile_$i &
+		pids_rr="$pids_rr $!"
+	done
+	sleep 3
+
+	saved=$(do_facet mds1 $LCTL get_param -n lov.*0000*.qos_threshold_rr)
+	do_facet mds1 $LCTL set_param lov.*.qos_threshold_rr=0
+	stack_trap "do_facet mds1 $LCTL set_param lov.*.qos_threshold_rr=$saved" EXIT
+
+	#create files with QoS algo, killable semaphore sleeps for 2seconds
+	for (( i = 0; i < 3; i++)); do
+		touch $DIR/$tdir/qos/$tfile_$i &
+		pids_qos="$pids_qos $!"
+	done
+
+	for pid in $pids_qos; do
+		wait $pid
+	done
+	after=$(date +%s)
+
+	diff=$((after - before))
+	echo "QoS allocation took $diff seconds"
+	for pid in $pids_rr; do
+	       wait $pid
+	done
+
+	(( $diff < 20 )) ||
+	error "QoS allocation slower than RR, killable semaphore doesn't work"
+}
+run_test 152 "QoS object allocation could be awakened in case of OST failover"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

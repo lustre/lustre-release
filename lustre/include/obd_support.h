@@ -254,6 +254,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170
 #define OBD_FAIL_MDS_NO_LL_OPEN		 0x171
 #define OBD_FAIL_MDS_LL_BLOCK		 0x172
+#define OBD_FAIL_MDS_LOD_CREATE_PAUSE	 0x173
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
