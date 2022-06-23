@@ -40,6 +40,16 @@
  *
  * @{
  */
+#ifndef __KERNEL__
+# define __USE_ISOC99	1
+# include <stdbool.h>
+# include <stdio.h> /* snprintf() */
+# include <sys/stat.h>
+
+# define __USE_GNU      1
+# define __USE_XOPEN2K8  1
+# define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
+#endif /* !__KERNEL__ */
 
 #include <linux/fs.h>
 #include <linux/limits.h>
@@ -50,14 +60,6 @@
 #include <linux/unistd.h>
 #include <linux/lustre/lustre_fiemap.h>
 #include <linux/lustre/lustre_ver.h>
-
-#ifndef __KERNEL__
-# define __USE_ISOC99	1
-# include <stdbool.h>
-# include <stdio.h> /* snprintf() */
-# include <sys/stat.h>
-# define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
-#endif /* !__KERNEL__ */
 
 #if defined(__cplusplus)
 extern "C" {
@@ -1971,16 +1973,14 @@ static inline char *changelog_rec_name(const struct changelog_rec *rec)
 		(enum changelog_rec_extra_flags)(cref & CLFE_SUPPORTED));
 }
 
-static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
-{
-	return rec->cr_namelen - strlen(changelog_rec_name(rec)) - 1;
-}
-
 static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 {
-	char *cr_name = changelog_rec_name(rec);
+	return strchrnul(changelog_rec_name(rec), '\0') + 1;
+}
 
-	return cr_name + strlen(cr_name) + 1;
+static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
+{
+	return strlen(changelog_rec_sname(rec));
 }
 
 /**

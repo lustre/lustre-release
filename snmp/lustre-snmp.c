@@ -712,7 +712,7 @@ void deinit_lustresnmp(void) {
 	/* deregister ourselves with the agent */
 	unregister_mib(clusterFileSystems_variables_oid,
 		       sizeof(clusterFileSystems_variables_oid)/
-		       sizeof(clusterFileSystems_variables_oid));
+		       sizeof(clusterFileSystems_variables_oid[0]));
 
 	terminate_trap_handler();
 
