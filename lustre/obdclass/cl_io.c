@@ -44,7 +44,6 @@
 #include <lustre_fid.h>
 #include <cl_object.h>
 #include "cl_internal.h"
-#include <libcfs/crypto/llcrypt.h>
 
 /*****************************************************************************
  *

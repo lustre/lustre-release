@@ -53,7 +53,7 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
-#include <libcfs/crypto/llcrypt.h>
+#include <lustre_crypto.h>
 #include "tracefile.h"
 
 struct lnet_debugfs_symlink_def {
@@ -872,11 +872,13 @@ static int __init libcfs_init(void)
 	rc = llcrypt_init();
 	if (rc) {
 		CERROR("llcrypt_init: error %d\n", rc);
-		goto cleanup_wi;
+		goto cleanup_crypto;
 	}
 
-	CDEBUG (D_OTHER, "portals setup OK\n");
+	CDEBUG(D_OTHER, "portals setup OK\n");
 	return 0;
+cleanup_crypto:
+	cfs_crypto_unregister();
 cleanup_wi:
 	cfs_wi_shutdown();
 cleanup_deregister:

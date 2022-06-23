@@ -1723,7 +1723,7 @@ static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
  */
 struct ll_digest_filename {
 	struct lu_fid ldf_fid;
-	char ldf_excerpt[LLCRYPT_FNAME_DIGEST_SIZE];
+	char ldf_excerpt[LL_CRYPTO_BLOCK_SIZE];
 };
 
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,

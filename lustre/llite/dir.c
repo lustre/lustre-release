@@ -49,7 +49,6 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
-#include <uapi/linux/llcrypt.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
@@ -522,7 +521,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	if (ll_sbi_has_encrypt(sbi) &&
 	    (IS_ENCRYPTED(parent) ||
-	    unlikely(llcrypt_dummy_context_enabled(parent)))) {
+	     unlikely(ll_sb_has_test_dummy_encryption(parent->i_sb)))) {
 		err = llcrypt_get_encryption_info(parent);
 		if (err)
 			GOTO(out_op_data, err);

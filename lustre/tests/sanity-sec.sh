@@ -2719,10 +2719,45 @@ insert_enc_key() {
 }
 
 remove_enc_key() {
-	cancel_lru_locks
+	local dummy_key
+
+	$LCTL set_param -n ldlm.namespaces.*.lru_size=clear
 	sync ; echo 3 > /proc/sys/vm/drop_caches
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
+	dummy_key=$(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	if [ -n "$dummy_key" ]; then
+		keyctl revoke $dummy_key
+		keyctl reap
+	fi
+}
+
+remount_client_normally() {
+	# remount client without dummy encryption key
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS} ||
+		error "remount failed"
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount failed"
+	fi
+
+	remove_enc_key
+}
+
+remount_client_dummykey() {
+	insert_enc_key
+
+	# remount client with dummy encryption key
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "remount failed"
 }
 
 setup_for_enc_tests() {
@@ -2738,31 +2773,9 @@ setup_for_enc_tests() {
 }
 
 cleanup_for_enc_tests() {
-	local dummy_key
-
 	rm -rf $DIR/$tdir $*
 
-	# remount client normally
-	if is_mounted $MOUNT; then
-		umount_client $MOUNT || error "umount $MOUNT failed"
-	fi
-	mount_client $MOUNT ${MOUNT_OPTS} ||
-		error "remount failed"
-
-	if is_mounted $MOUNT2; then
-		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
-	fi
-	if [ "$MOUNT_2" ]; then
-		mount_client $MOUNT2 ${MOUNT_OPTS} ||
-			error "remount failed"
-	fi
-
-	# remove fscrypt key from keyring
-	dummy_key=$(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	if [ -n "$dummy_key" ]; then
-		keyctl revoke $dummy_key
-		keyctl reap
-	fi
+	remount_client_normally
 }
 
 cleanup_nodemap_after_enc_tests() {
@@ -3078,11 +3091,8 @@ test_40() {
 	filesz=$(stat --format=%s $testfile)
 	filesz=$(((filesz+UNIT_SIZE-1)/UNIT_SIZE * UNIT_SIZE))
 
-	sync ; echo 3 > /proc/sys/vm/drop_caches
-
-	# remove fscrypt key from keyring
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
+	# remount without dummy encryption key
+	remount_client_normally
 
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
 	[ $(stat --format=%s $scrambledfile) -eq $filesz ] ||
@@ -3464,10 +3474,8 @@ test_46() {
 	fi
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
-	# remove fscrypt key from keyring
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
-	cancel_lru_locks
+	# remount without dummy encryption key
+	remount_client_normally
 
 	# this is $testdir2
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d| grep _)
@@ -3602,10 +3610,8 @@ test_47() {
 
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
-	# remove fscrypt key from keyring
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
-	cancel_lru_locks
+	# remount without dummy encryption key
+	remount_client_normally
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
@@ -3718,9 +3724,8 @@ test_48a() {
 
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
-	# remove fscrypt key from keyring
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
+	# remount without dummy encryption key
+	remount_client_normally
 
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
 	$TRUNCATE $scrambledfile 0 &&
@@ -4767,8 +4772,9 @@ test_59a() {
 		error "could not write to $testfile"
 	$LFS getstripe $testfile
 
-	# now, without the key
-	remove_enc_key
+	# remount without dummy encryption key
+	remount_client_normally
+
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
 	$LFS mirror resync $scrambledfile ||
 		error "could not resync mirror"
@@ -4784,7 +4790,7 @@ test_59a() {
 		error "read from mirror should fail"
 
 	# now, with the key
-	insert_enc_key
+	remount_client_dummykey
 	verify_mirror $testfile $tmpfile
 }
 run_test 59a "mirror resync of encrypted files without key"
@@ -4815,8 +4821,9 @@ test_59b() {
 		error "write to $testfile failed"
 	$LFS getstripe $testfile
 
-	# now, without the key
-	remove_enc_key
+	# remount without dummy encryption key
+	remount_client_normally
+
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
 	$LFS migrate -i1 $scrambledfile ||
 		error "migrate $scrambledfile failed"
@@ -4826,12 +4833,13 @@ test_59b() {
 	cancel_lru_locks
 
 	# now, with the key
-	insert_enc_key
+	remount_client_dummykey
 	cmp -bl $tmpfile $testfile ||
 		error "migrated file is corrupted"
 
-	# now, without the key
-	remove_enc_key
+	# remount without dummy encryption key
+	remount_client_normally
+
 	$LFS mirror extend -N -i0 $scrambledfile ||
 		error "mirror extend $scrambledfile failed (1)"
 	$LFS getstripe $scrambledfile
@@ -4853,11 +4861,12 @@ test_59b() {
 	fi
 
 	# now, with the key
-	insert_enc_key
+	remount_client_dummykey
 	verify_mirror $testfile $tmpfile
 
-	# now, without the key
-	remove_enc_key
+	# remount without dummy encryption key
+	remount_client_normally
+
 	$LFS mirror split --mirror-id 1 -d $scrambledfile ||
 		error "mirror split file $scrambledfile failed (1)"
 	$LFS getstripe $scrambledfile
@@ -4870,7 +4879,7 @@ test_59b() {
 	[ $stripe -eq 0 ] || error "mirror split file $scrambledfile failed (4)"
 
 	# now, with the key
-	insert_enc_key
+	remount_client_dummykey
 	cancel_lru_locks
 	cmp -bl $tmpfile $testfile ||
 		error "extended/split file is corrupted"
@@ -4895,8 +4904,9 @@ test_59c() {
 	$LFS setdirstripe -i 0 $dirname
 	echo b > $dirname/subf
 
-	# now, without the key
-	remove_enc_key
+	# remount without dummy encryption key
+	remount_client_normally
+
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 
 	# migrate a non-empty encrypted dir
@@ -4949,12 +4959,12 @@ test_60() {
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
 	fi
-	export FILESET=""
 
 	ls -Rl $DIR || error "ls -Rl $DIR failed (1)"
 
 	# now, with the key
-	insert_enc_key
+	remount_client_dummykey
+	export FILESET=""
 
 	ls -Rl $DIR || error "ls -Rl $DIR failed (2)"
 	cat $DIR/file1 || error "cat $DIR/$tdir/file1 failed"

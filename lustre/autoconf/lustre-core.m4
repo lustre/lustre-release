@@ -2475,6 +2475,79 @@ fscrypt_support, [
 ]) # LC_FSCRYPT_SUPPORT
 
 #
+# LC_FSCRYPT_DIGESTED_NAME
+#
+# Kernel 5.5-rc4 edc440e3d27fb31e6f9663cf413fad97d714c060
+# improved the format of no-key names. This results in the
+# removal of FSCRYPT_FNAME_DIGEST and FSCRYPT_FNAME_DIGEST_SIZE.
+#
+AC_DEFUN([LC_FSCRYPT_DIGESTED_NAME], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt has 'struct fscrypt_digested_name'],
+fscrypt_digested_name, [
+	#include <linux/fscrypt.h>
+],[
+	struct fscrypt_digested_name fname;
+
+	fname.hash = 0;
+],[
+	AC_DEFINE(HAVE_FSCRYPT_DIGESTED_NAME, 1,
+		['struct fscrypt_digested_name' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_DIGESTED_NAME
+
+#
+# LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
+#
+# Kernel 5.7-rc7 ed318a6cc0b620440e65f48eb527dc3df7269ce4
+# replaces fscrypt_dummy_context_enabled() with
+# fscrypt_get_dummy_context(). Later kernels rename
+# fscrypt_get_dummy_context() to fscrypt_get_dummy_policy()
+# which is why we test fscrypt_dummy_context_enabled().
+#
+AC_DEFUN([LC_FSCRYPT_DUMMY_CONTEXT_ENABLED], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_dummy_context_enabled() exists],
+fscrypt_dummy_context_enabled, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_dummy_context_enabled(NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1,
+		[fscrypt_dummy_context_enabled() exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
+
+#
+# LC_FSCRYPT_IS_NOKEY_NAME
+#
+# Kernel 5.10-rc4 159e1de201b6fca10bfec50405a3b53a561096a8
+# introduced fscrypt_is_nokey_name() inline macro. While
+# introduced for 5.10 kernels it was backported to earlier
+# Ubuntu kernels. Also it hides the change introduced due
+# to git commit 501e43fbe for kernel 5.9 which also was
+# backported to earlier Ubuntu kernels.
+#
+AC_DEFUN([LC_FSCRYPT_IS_NOKEY_NAME], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_is_nokey_name() exists],
+fscrypt_is_no_key_name, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_is_nokey_name(NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_IS_NOKEY_NAME, 1,
+		[fscrypt_is_nokey_name() exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_IS_NOKEY_NAME
+
+#
 # LC_HAVE_USER_NAMESPACE_ARG
 #
 # kernel 5.12 commit 549c7297717c32ee53f156cd949e055e601f67bb
@@ -2705,6 +2778,15 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BIO_BI_PHYS_SEGMENTS
 	LC_LM_COMPARE_OWNER_EXISTS
 
+	# 5.5
+	LC_FSCRYPT_DIGESTED_NAME
+
+	# 5.7
+	LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
+
+	# 5.10
+	LC_FSCRYPT_IS_NOKEY_NAME
+
 	# 5.12
 	LC_HAVE_USER_NAMESPACE_ARG
 
@@ -2881,6 +2963,7 @@ AS_IF([test "x$enable_crypto" = xin-kernel], [
 	[AS_IF([test "x$has_is_encrypted" = xyes], [
 	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via embedded llcrypt])
 	      AC_DEFINE(CONFIG_LL_ENCRYPTION, 1, [embedded llcrypt])
+	      AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1, [embedded llcrypt uses llcrypt_dummy_context_enabled()])
 	      enable_crypto="embedded llcrypt"
 	      enable_llcrypt=yes], [
 	      AS_IF([test "x$enable_crypto" = xyes],
