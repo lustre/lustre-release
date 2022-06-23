@@ -1048,6 +1048,94 @@ out:
 	return rc;
 }
 
+#ifdef ZFS_PROJINHERIT
+/*
+ * For the existed object that is upgraded from old system, its ondisk layout
+ * has no slot for the project ID attribute. But quota accounting logic needs
+ * to access related slots by offset directly. So we need to adjust these old
+ * objects' layout to make the project ID to some unified and fixed offset.
+ */
+static int osd_add_projid(const struct lu_env *env, struct osd_object *obj,
+			  struct osd_thandle *oh, uint64_t projid)
+{
+	sa_bulk_attr_t *bulk = osd_oti_get(env)->oti_attr_bulk;
+	struct osa_attr *osa = &osd_oti_get(env)->oti_osa;
+	struct osd_device *osd = osd_obj2dev(obj);
+	uint64_t gen;
+	size_t sa_size;
+	char *dxattr = NULL;
+	int rc, cnt;
+
+	rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_PROJID(osd), &osa->projid, 8);
+	if (unlikely(rc == 0))
+		rc = -EEXIST;
+	if (rc != -ENOENT)
+		GOTO(out, rc);
+
+	gen = dmu_tx_get_txg(oh->ot_tx);
+	osa->atime[0] = obj->oo_attr.la_atime;
+	osa->ctime[0] = obj->oo_attr.la_ctime;
+	osa->mtime[0] = obj->oo_attr.la_mtime;
+	osa->btime[0] = obj->oo_attr.la_btime;
+	osa->mode = obj->oo_attr.la_mode;
+	osa->uid = obj->oo_attr.la_uid;
+	osa->gid = obj->oo_attr.la_gid;
+	osa->rdev = obj->oo_attr.la_rdev;
+	osa->nlink = obj->oo_attr.la_nlink;
+	osa->flags = attrs_fs2zfs(obj->oo_attr.la_flags) | ZFS_PROJID;
+	osa->size  = obj->oo_attr.la_size;
+	osa->projid = projid;
+
+	cnt = 0;
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MODE(osd), NULL, &osa->mode, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_SIZE(osd), NULL, &osa->size, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GEN(osd), NULL, &gen, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_UID(osd), NULL, &osa->uid, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GID(osd), NULL, &osa->gid, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PARENT(osd), NULL,
+			 &obj->oo_parent, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(osd), NULL, &osa->flags, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_ATIME(osd), NULL, osa->atime, 16);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MTIME(osd), NULL, osa->mtime, 16);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CTIME(osd), NULL, osa->ctime, 16);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, osa->btime, 16);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(osd), NULL, &osa->nlink, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL, &osa->projid, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(osd), NULL, &osa->rdev, 8);
+	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
+
+	if (obj->oo_sa_xattr == NULL) {
+		rc = __osd_xattr_load(osd, obj->oo_sa_hdl, &obj->oo_sa_xattr);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	if (obj->oo_sa_xattr) {
+		rc = -nvlist_size(obj->oo_sa_xattr, &sa_size, NV_ENCODE_XDR);
+		if (rc)
+			GOTO(out, rc);
+
+		dxattr = osd_zio_buf_alloc(sa_size);
+		if (dxattr == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		rc = -nvlist_pack(obj->oo_sa_xattr, &dxattr, &sa_size,
+				NV_ENCODE_XDR, KM_SLEEP);
+		if (rc)
+			GOTO(out, rc);
+
+		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_DXATTR(osd),
+				NULL, dxattr, sa_size);
+	}
+
+	rc = -sa_replace_all_by_template(obj->oo_sa_hdl, bulk, cnt, oh->ot_tx);
+out:
+	if (dxattr)
+		osd_zio_buf_free(dxattr, sa_size);
+	return rc;
+}
+#endif
+
 static int osd_declare_attr_set(const struct lu_env *env,
 				struct dt_object *dt,
 				const struct lu_attr *attr,
@@ -1143,23 +1231,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		if (!osd->od_projectused_dn)
 			GOTO(out, rc = -EOPNOTSUPP);
 
-		/* Usually, if project quota is upgradable for the
-		 * device, then the upgrade will be done before or when
-		 * mount the device. So when we come here, this project
-		 * should have project ID attribute already (that is
-		 * zero by default).  Otherwise, there was something
-		 * wrong during the former upgrade, let's return failure
-		 * to report that.
-		 *
-		 * Please note that, different from other attributes,
-		 * you can NOT simply set the project ID attribute under
-		 * such case, because adding (NOT change) project ID
-		 * attribute needs to change the object's attribute
-		 * layout to match zfs backend quota accounting
-		 * requirement.
-		 */
-		if (unlikely(!obj->oo_with_projid))
-			GOTO(out, rc = -ENXIO);
+		if (!zpl_is_valid_projid(attr->la_projid))
+			GOTO(out, rc = -EINVAL);
 
 		rc = qsd_transfer(env, osd_def_qsd(osd),
 				  &oh->ot_quota_trans, PRJQUOTA,
@@ -1297,11 +1370,22 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (valid & LA_PROJID) {
 #ifdef ZFS_PROJINHERIT
 		if (osd->od_projectused_dn) {
-			LASSERT(obj->oo_with_projid);
-
-			osa->projid = obj->oo_attr.la_projid = la->la_projid;
-			SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
-					 &osa->projid, 8);
+			if (obj->oo_with_projid) {
+				osa->projid  = la->la_projid;
+				SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd),
+						 NULL, &osa->projid, 8);
+			} else {
+				rc = osd_add_projid(env, obj, oh,
+						    la->la_projid);
+				if (unlikely(rc == -EEXIST)) {
+					rc = 0;
+				} else if (rc != 0) {
+					write_unlock(&obj->oo_attr_lock);
+					GOTO(out, rc);
+				}
+				obj->oo_with_projid = 1;
+			}
+			obj->oo_attr.la_projid = la->la_projid;
 		} else
 #endif
 			valid &= ~LA_PROJID;
