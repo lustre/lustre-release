@@ -35,7 +35,11 @@
 #include "write_bytes.h"
 
 #ifndef fallthrough
-#define fallthrough do {} while (0)  /* fallthrough */
+# if defined(__GNUC__) && __GNUC__ >= 7
+#  define fallthrough  __attribute__((fallthrough)) /* fallthrough */
+# else
+#  define fallthrough do {} while (0)  /* fallthrough */
+# endif
 #endif
 
 extern char *this_realm;
