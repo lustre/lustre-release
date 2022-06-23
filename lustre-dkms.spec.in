@@ -28,10 +28,11 @@
     %define lustre_name @PACKAGE@-client
 %endif
 
-%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
 	%global kmod_name kmod-%{lustre_name}
 	%define mkconf_options %{nil}
-%else	#for Suse / Ubuntu
+#for Suse / Ubuntu
+%else
 	%global kmod_name %{lustre_name}-kmp
 	%define mkconf_options "-k updates"
 %endif
