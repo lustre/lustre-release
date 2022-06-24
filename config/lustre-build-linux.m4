@@ -262,7 +262,6 @@ AC_ARG_WITH([linux],
 	DEFAULT_LINUX_OBJ=$LINUX],
 	[LINUX=$DEFAULT_LINUX])
 AC_MSG_RESULT([$LINUX])
-AC_SUBST(LINUX)
 
 # -------- check for linux --------
 LB_CHECK_FILE([$LINUX], [],
@@ -276,8 +275,21 @@ AC_ARG_WITH([linux-obj],
 	[LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])],
 	[LINUX_OBJ=$DEFAULT_LINUX_OBJ])
 AC_MSG_RESULT([$LINUX_OBJ])
-AC_SUBST(LINUX_OBJ)
 
+## -------- with linux should point to <kernel>-common on Debian
+AS_IF([test ${LINUX} == ${LINUX_OBJ} -a ${LINUX} == $(realpath ${LINUX})],[
+	this_arch=$(realpath ${LINUX} | sed 's/-/\n/g' | tail -1)
+	linux_headers_common=$(realpath ${LINUX}|sed "s/-${this_arch}\$/-common/g")
+	AS_IF([test "${this_arch}" != common],[
+		_cah="${linux_headers_common}/include/linux/compiler_attributes.h"
+		_cgh="${linux_headers_common}/include/linux/compiler-gcc.h"
+		AS_IF([test -f "${_cah}" -o -f "${_cgh}"],[
+			AC_MSG_WARN([Setting LINUX to ${linux_headers_common} was ${LINUX}])
+			LINUX=${linux_headers_common}])
+		])
+	])
+AC_SUBST(LINUX)
+AC_SUBST(LINUX_OBJ)
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
 	[AS_HELP_STRING([--with-linux-config=path],
