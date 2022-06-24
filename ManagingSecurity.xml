@@ -87,31 +87,23 @@
       <para>Minimal ACLs have three entries. Extended ACLs have more than the
         three entries. Extended ACLs also contain a mask entry and may contain
         any number of named user and named group entries.</para>
-      <para>The MDS needs to be configured to enable ACLs. Use
-        <literal>--mountfsoptions</literal> to enable ACLs when creating your
-        configuration:</para>
-      <screen>$ mkfs.lustre --fsname spfs --mountfsoptions=acl --mdt -mgs /dev/sda</screen>
-      <para>Alternately, you can enable ACLs at run time by using the
-        <literal>--acl</literal> option with <literal>mkfs.lustre</literal>:
+      <para>To check ACLs on the MDS, check that the <literal>acl</literal>
+        connect flag is listed (default since Lustre 1.8):</para>
+      <screen>
+# lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl
+      </screen>
+      <para>ACLs are enabled by default on a Lustre file system, and are
+        controlled on a system-wide basis; either all clients enable ACLs or
+        none do.  Activating ACLs is controlled by MDS mount options
+        <literal>acl</literal>/<literal>noacl</literal> to enable or disable
+        ACLs, respectively.  You do not need to change the client
+        configuration, and the <literal>acl</literal> string will not appear
+        in the client mount options in <literal>/etc/mtab</literal>. 
       </para>
-      <screen>$ mount -t lustre -o acl /dev/sda /mnt/mdt</screen>
-      <para>To check ACLs on the MDS:</para>
-      <screen>$ lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl acl</screen>
-      <para>To mount the client with no ACLs:</para>
-      <screen>$ mount -t lustre -o noacl ibmds2@o2ib:/home /home</screen>
-      <para>ACLs are enabled in a Lustre file system on a system-wide basis;
-        either all clients enable ACLs or none do. Activating ACLs is controlled
-        by MDS mount options <literal>acl</literal> / <literal>noacl</literal>
-        (enable/disable ACLs). Client-side mount options acl/noacl are ignored.
-        You do not need to change the client configuration, and the
-        &apos;acl&apos; string will not appear in the client /etc/mtab. The
-        client acl mount option is no longer needed. If a client is mounted with
-        that option, then this message appears in the MDS syslog:</para>
-      <screen>...MDS requires ACL support but client does not</screen>
-      <para>The message is harmless but indicates a configuration issue, which
-        should be corrected.</para>
       <para>If ACLs are not enabled on the MDS, then any attempts to reference
-        an ACL on a client return an Operation not supported error.</para>
+        an ACL on a client return an <literal>Operation not supported</literal>
+        error.
+      </para>
     </section>
     <section xml:id="managingSecurity.acl.examples" remap="h3">
         <title><indexterm>
@@ -123,22 +115,22 @@
         file system. They are manipulated with the standard tools in the
         standard manner. Below, we create a directory and allow a specific user
         access.</para>
-      <screen>[root@client lustre]# umask 027
-[root@client lustre]# mkdir rain
-[root@client lustre]# ls -ld rain
-drwxr-x---  2 root root 4096 Feb 20 06:50 rain
-[root@client lustre]# getfacl rain
+      <screen>[phil@client lustre]$ umask 027
+[phil@client lustre]$ mkdir rain
+[phil@client lustre]$ ls -ld rain
+drwxr-x---  2 phil dev 4096 Feb 20 06:50 rain
+[phil@client lustre]$ getfacl rain
 # file: rain
-# owner: root
-# group: root
+# owner: phil
+# group: dev
 user::rwx
 group::r-x
 other::---
  
-[root@client lustre]# setfacl -m user:chirag:rwx rain
-[root@client lustre]# ls -ld rain
-drwxrwx---+ 2 root root 4096 Feb 20 06:50 rain
-[root@client lustre]# getfacl --omit-header rain
+[phil@client lustre]$ setfacl -m user:chirag:rwx rain
+[phil@client lustre]$ ls -ld rain
+drwxrwx---+ 2 phil dev 4096 Feb 20 06:50 rain
+[phil@client lustre]$ getfacl --omit-header rain
 user::rwx
 user:chirag:rwx
 group::r-x
