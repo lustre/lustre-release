@@ -155,6 +155,8 @@ AC_ARG_ENABLE([modules],
 AC_MSG_RESULT([$enable_modules ($target_os)])
 
 AS_IF([test "x$enable_modules" = xyes], [
+	AS_IF([test "x$FLEX" = "x"], [AC_MSG_ERROR([flex package is required to build kernel modules])])
+	AS_IF([test "x$BISON" = "x"], [AC_MSG_ERROR([bison package is required to build kernel modules])])
 	AS_CASE([$target_os],
 		[linux*], [
 			# Run serial tests
