@@ -53,6 +53,7 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#include <libmount/libmount.h>
 
 #ifdef HAVE_GSS
 #ifdef HAVE_LIBKEYUTILS
@@ -251,10 +252,6 @@ static int mtab_is_proc(const char *mtab)
 	return (s.f_type == PROC_SUPER_MAGIC);
 }
 
-#ifdef HAVE_LIBMOUNT
-
-# include <libmount/libmount.h>
-
 /*
  * The libmount is part of util-linux since 2.18.
  * We use it to update utab to avoid umount would
@@ -290,12 +287,6 @@ int update_utab_entry(struct mount_opts *mop)
 
 	return rc;
 }
-#else
-int update_utab_entry(struct mount_opts *mop)
-{
-	return 0;
-}
-#endif /* HAVE_LIBMOUNT */
 
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		      int flags, int freq, int pass)
