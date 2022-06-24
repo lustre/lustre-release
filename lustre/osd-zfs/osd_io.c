@@ -62,6 +62,9 @@
 
 char osd_0copy_tag[] = "zerocopy";
 
+static void osd_choose_next_blocksize(struct osd_object *obj,
+				      loff_t off, ssize_t len);
+
 static void dbuf_set_pending_evict(dmu_buf_t *db)
 {
 	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *)db;
@@ -600,6 +603,9 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 	uint32_t bs = dn->dn_datablksz;
 
 	ENTRY;
+
+	osd_choose_next_blocksize(obj, off, len);
+
 	/*
 	 * currently only full blocks are subject to zerocopy approach:
 	 * so that we're sure nobody is trying to update the same block
@@ -882,55 +888,69 @@ retry:
  * maximum blocksize the dataset can support. Otherwise, it will pick a
  * a block size by the writing region of this I/O.
  */
-static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh,
-			      uint64_t start, uint64_t end)
+static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_device *osd = osd_obj2dev(obj);
+	dnode_t *dn = obj->oo_dn;
+	int rc = 0;
+
+	ENTRY;
+
+	if (obj->oo_next_blocksize == 0)
+		return 0;
+	if (dn->dn_maxblkid > 0) /* can't change block size */
+		GOTO(out, rc);
+	if (dn->dn_datablksz >= osd->od_max_blksz)
+		GOTO(out, rc);
+	if (dn->dn_datablksz == obj->oo_next_blocksize)
+		GOTO(out, rc);
+
+	down_write(&obj->oo_guard);
+	if (dn->dn_datablksz < obj->oo_next_blocksize) {
+		CDEBUG(D_INODE, "set blksz to %u\n", obj->oo_next_blocksize);
+		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
+					       obj->oo_next_blocksize, 0,
+					       oh->ot_tx);
+		if (rc < 0)
+			CDEBUG(D_ERROR, "object "DFID": change block size"
+			       "%u -> %u error rc = %d\n",
+			       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
+			       dn->dn_datablksz, obj->oo_next_blocksize, rc);
+	}
+	EXIT;
+	up_write(&obj->oo_guard);
+out:
+	return rc;
+}
+
+static void osd_choose_next_blocksize(struct osd_object *obj,
+				      loff_t off, ssize_t len)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *dn = obj->oo_dn;
 	uint32_t blksz;
-	int rc = 0;
 
-	ENTRY;
-	if (dn->dn_maxblkid > 0) /* can't change block size */
-		GOTO(out, rc);
+	if (dn->dn_maxblkid > 0)
+		return;
 
 	if (dn->dn_datablksz >= osd->od_max_blksz)
-		GOTO(out, rc);
+		return;
 
-	down_write(&obj->oo_guard);
-
-	blksz = dn->dn_datablksz;
-	if (blksz >= osd->od_max_blksz) /* check again after grabbing lock */
-		GOTO(out_unlock, rc);
-
-	/* now ZFS can support up to 16MB block size, and if the write
-	 * is sequential, it just increases the block size gradually
+	/*
+	 * client sends data from own writeback cache after local
+	 * aggregation. there is a chance this is a "unit of write"
+	 * so blocksize.
 	 */
-	if (start <= blksz) { /* sequential */
-		blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, end);
-	} else { /* sparse, pick a block size by write region */
-		blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz,
-					end - start);
-	}
+	if (off != 0)
+		return;
 
+	blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, len);
 	if (!is_power_of_2(blksz))
 		blksz = size_roundup_power2(blksz);
 
-	if (blksz > dn->dn_datablksz) {
-		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
-					       blksz, 0, oh->ot_tx);
-		LASSERT(ergo(rc == 0, dn->dn_datablksz >= blksz));
-		if (rc < 0)
-			CDEBUG(D_INODE,
-			       "object "DFID": change block size %u -> %u error: rc = %d\n",
-			       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
-			       dn->dn_datablksz, blksz, rc);
-	}
-	EXIT;
-out_unlock:
-	up_write(&obj->oo_guard);
-out:
-	return rc;
+	/* XXX: locking? */
+	if (blksz > obj->oo_next_blocksize)
+		obj->oo_next_blocksize = blksz;
 }
 
 static void osd_evict_dbufs_after_write(struct osd_object *obj,
@@ -969,9 +989,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/* adjust block size. Assume the buffers are sorted. */
-	(void)osd_grow_blocksize(obj, oh, lnb[0].lnb_file_offset,
-				 lnb[npages - 1].lnb_file_offset +
-				 lnb[npages - 1].lnb_len);
+	(void)osd_grow_blocksize(obj, oh);
 
 	if (obj->oo_attr.la_size >= osd->od_readcache_max_filesize ||
 	    lnb[npages - 1].lnb_file_offset + lnb[npages - 1].lnb_len >=

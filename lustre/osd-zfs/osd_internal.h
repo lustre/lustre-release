@@ -463,6 +463,7 @@ struct osd_object {
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
+	__u32			 oo_next_blocksize;
 	union {
 		int		oo_ea_in_bonus; /* EA bytes we expect */
 		struct {
