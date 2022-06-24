@@ -33,6 +33,8 @@
 #include <keyutils.h>
 #endif
 #include <linux/lustre/lustre_idl.h>
+/* We need to use some deprecated APIs */
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>

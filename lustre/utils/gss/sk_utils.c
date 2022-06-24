@@ -33,6 +33,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+/* We need to use some deprecated APIs */
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/dh.h>
 #include <openssl/engine.h>
 #include <openssl/err.h>
