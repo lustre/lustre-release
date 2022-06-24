@@ -1815,6 +1815,43 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_CIPHER_HEADER
 
 #
+# LIBCFS_HAVE_TASK_RUNNING
+#
+# Kernel 5.13-rc6 commit b03fbd4ff24c5f075e58eb19261d5f8b3e40d
+# introduced task_is_running() macro.
+#
+AC_DEFUN([LIBCFS_HAVE_TASK_IS_RUNNING], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if task_is_running() is defined],
+task_is_running, [
+	#include <linux/sched.h>
+],[
+	if (task_is_running(current))
+		schedule();
+],[
+	AC_DEFINE(HAVE_TASK_IS_RUNNING, 1,
+		[task_is_running() is defined])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_TASK_IS_RUNNING
+
+#
+# LIBCFS_LINUX_STDARG_HEADER
+#
+# Kernel 5.14-rc5 commit c0891ac15f0428ffa81b2e818d416bdf3cb74ab6
+# isystem: ship and use stdarg.h
+#
+AC_DEFUN([LIBCFS_LINUX_STDARG_HEADER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_LINUX_HEADER([linux/stdarg.h], [
+	AC_DEFINE(HAVE_LINUX_STDARG_HEADER, 1, [linux/stdarg.h is present])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_LINUX_STDARG_HEADER
+
+#
 # LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
 #
 # Kernel 5.14 commit f39650de687e35766572ac89dbcd16a5911e2f0a
@@ -2017,7 +2054,10 @@ LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 LIBCFS_HAVE_LIST_CMP_FUNC_T
 # 5.12
 LIBCFS_HAVE_CIPHER_HEADER
+# 5.13
+LIBCFS_HAVE_TASK_IS_RUNNING
 # 5.14
+LIBCFS_LINUX_STDARG_HEADER
 LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
 # 5.15
 LIBCFS_PARAM_SET_UINT_MINMAX

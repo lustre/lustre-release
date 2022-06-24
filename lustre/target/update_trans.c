@@ -1608,7 +1608,7 @@ static int distribute_txn_commit_thread(void *_arg)
 			top_multiple_thandle_put(tmt);
 		}
 
-		if (current->state)
+		if (!task_is_running(current))
 			schedule();
 
 		if (OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {

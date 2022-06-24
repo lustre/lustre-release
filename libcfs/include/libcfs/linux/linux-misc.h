@@ -150,6 +150,10 @@ void cfs_arch_init(void);
 #define sizeof_field(type, member)	FIELD_SIZEOF(type, member)
 #endif
 
+#ifndef HAVE_TASK_IS_RUNNING
+#define task_is_running(task)		(task->state == TASK_RUNNING)
+#endif
+
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
 static inline void *cfs_kallsyms_lookup_name(const char *name)
 {
