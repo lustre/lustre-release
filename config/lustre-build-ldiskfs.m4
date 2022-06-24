@@ -333,7 +333,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 AC_DEFUN([LDISKFS_AC_PATCH_PROGRAM], [
 	AC_ARG_ENABLE([quilt],
-		[AC_HELP_STRING([--disable-quilt],
+		[AS_HELP_STRING([--disable-quilt],
 			[disable use of quilt for ldiskfs])],
 		[AS_IF([test "x$enableval" = xno],
 			[use_quilt=no],
@@ -648,7 +648,7 @@ LB_VALIDATE_EXT4_SRC_DIR
 AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES], [
 AC_MSG_CHECKING([whether to use alternate names for e2fsprogs])
 AC_ARG_WITH([ldiskfsprogs],
-	AC_HELP_STRING([--with-ldiskfsprogs],
+	AS_HELP_STRING([--with-ldiskfsprogs],
 		[use alternate names for ldiskfs-enabled e2fsprogs]),
 	[], [withval="no"])
 

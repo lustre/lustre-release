@@ -131,7 +131,7 @@ Lustre requires that Linux is configured with at least a 8KB stack.
 AC_DEFUN([LC_MDS_MAX_THREADS], [
 AC_MSG_CHECKING([for maximum number of MDS threads])
 AC_ARG_WITH([mds_max_threads],
-	AC_HELP_STRING([--with-mds-max-threads=count],
+	AS_HELP_STRING([--with-mds-max-threads=count],
 		[maximum threads available on the MDS: (default=512)]),
 	[AC_DEFINE_UNQUOTED(MDS_MAX_THREADS, $with_mds_max_threads,
 		[maximum number of MDS threads])])
@@ -146,7 +146,7 @@ AC_MSG_RESULT([$with_mds_max_threads])
 AC_DEFUN([LC_CONFIG_PINGER], [
 AC_MSG_CHECKING([whether to enable Lustre pinger support])
 AC_ARG_ENABLE([pinger],
-	AC_HELP_STRING([--disable-pinger],
+	AS_HELP_STRING([--disable-pinger],
 		[disable recovery pinger support]),
 	[], [enable_pinger="yes"])
 AC_MSG_RESULT([$enable_pinger])
@@ -162,7 +162,7 @@ AS_IF([test "x$enable_pinger" != xno],
 AC_DEFUN([LC_CONFIG_CHECKSUM], [
 AC_MSG_CHECKING([whether to enable data checksum support])
 AC_ARG_ENABLE([checksum],
-	AC_HELP_STRING([--disable-checksum],
+	AS_HELP_STRING([--disable-checksum],
 		[disable data checksum support]),
 	[], [enable_checksum="yes"])
 AC_MSG_RESULT([$enable_checksum])
@@ -178,7 +178,7 @@ AS_IF([test "x$enable_checksum" != xno],
 AC_DEFUN([LC_CONFIG_FLOCK], [
 AC_MSG_CHECKING([whether to enable flock by default])
 AC_ARG_ENABLE([flock],
-	AC_HELP_STRING([--disable-flock],
+	AS_HELP_STRING([--disable-flock],
 		[disable flock by default]),
 	[], [enable_flock="yes"])
 AC_MSG_RESULT([$enable_flock])
@@ -194,7 +194,7 @@ AS_IF([test "x$enable_flock" != xno],
 AC_DEFUN([LC_CONFIG_HEALTH_CHECK_WRITE], [
 AC_MSG_CHECKING([whether to enable a write with the health check])
 AC_ARG_ENABLE([health_write],
-	AC_HELP_STRING([--enable-health_write],
+	AS_HELP_STRING([--enable-health_write],
 		[enable disk writes when doing health check]),
 	[], [enable_health_write="no"])
 AC_MSG_RESULT([$enable_health_write])
@@ -208,7 +208,7 @@ AS_IF([test "x$enable_health_write" != xno],
 AC_DEFUN([LC_CONFIG_LRU_RESIZE], [
 AC_MSG_CHECKING([whether to enable lru self-adjusting])
 AC_ARG_ENABLE([lru_resize],
-	AC_HELP_STRING([--enable-lru-resize],
+	AS_HELP_STRING([--enable-lru-resize],
 		[enable lru resize support]),
 	[], [enable_lru_resize="yes"])
 AC_MSG_RESULT([$enable_lru_resize])
@@ -266,7 +266,7 @@ LB_CHECK_CONFIG_IM([CRYPTO_MD5], [],
 AC_DEFUN([LC_CONFIG_GSS_KEYRING], [
 AC_MSG_CHECKING([whether to enable gss keyring backend])
 AC_ARG_ENABLE([gss_keyring],
-	[AC_HELP_STRING([--disable-gss-keyring],
+	[AS_HELP_STRING([--disable-gss-keyring],
 		[disable gss keyring backend])],
 	[], [AS_IF([test "x$enable_gss" != xno], [
 			enable_gss_keyring="yes"], [
@@ -335,7 +335,7 @@ kernel SUNRPC support is required by using GSS.
 AC_DEFUN([LC_CONFIG_GSS], [
 AC_MSG_CHECKING([whether to enable gss support])
 AC_ARG_ENABLE([gss],
-	[AC_HELP_STRING([--enable-gss], [enable gss support])],
+	[AS_HELP_STRING([--enable-gss], [enable gss support])],
 	[], [enable_gss="auto"])
 AC_MSG_RESULT([$enable_gss])
 
@@ -2838,7 +2838,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 AC_DEFUN([LC_CONFIG_CLIENT], [
 AC_MSG_CHECKING([whether to build Lustre client support])
 AC_ARG_ENABLE([client],
-	AC_HELP_STRING([--disable-client],
+	AS_HELP_STRING([--disable-client],
 		[disable Lustre client support]),
 	[], [enable_client="yes"])
 AC_MSG_RESULT([$enable_client])
@@ -2849,7 +2849,7 @@ AC_MSG_RESULT([$enable_client])
 #
 AC_DEFUN([LB_CONFIG_MPITESTS], [
 AC_ARG_ENABLE([mpitests],
-	AC_HELP_STRING([--enable-mpitests=<yes|no|mpicc wrapper>],
+	AS_HELP_STRING([--enable-mpitests=<yes|no|mpicc wrapper>],
 		       [include mpi tests]), [
 		enable_mpitests="yes"
 		case $enableval in
@@ -2900,7 +2900,7 @@ AC_ARG_ENABLE([mpitests],
 AC_DEFUN([LC_CONFIG_QUOTA], [
 AC_MSG_CHECKING([whether to enable quota support global control])
 AC_ARG_ENABLE([quota],
-	AC_HELP_STRING([--enable-quota],
+	AS_HELP_STRING([--enable-quota],
 		[enable quota support]),
 	[], [enable_quota="yes"])
 AS_IF([test "x$enable_quota" = xyes],
@@ -2931,7 +2931,7 @@ AS_IF([test "x$enable_quota" != xno -a "x$enable_utils" != xno], [
 AC_DEFUN([LC_OSD_ADDON], [
 AC_MSG_CHECKING([whether to use OSD addon])
 AC_ARG_WITH([osd],
-	AC_HELP_STRING([--with-osd=path],
+	AS_HELP_STRING([--with-osd=path],
 		[set path to optional osd]),
 	[
 	case "$with_osd" in
@@ -2973,7 +2973,7 @@ AC_SUBST(OSDADDON)
 AC_DEFUN([LC_CONFIG_CRYPTO], [
 AC_MSG_CHECKING([whether to enable Lustre client crypto])
 AC_ARG_ENABLE([crypto],
-	AC_HELP_STRING([--enable-crypto=yes|no|in-kernel],
+	AS_HELP_STRING([--enable-crypto=yes|no|in-kernel],
 		[enable Lustre client crypto (default is yes), use 'in-kernel' to force use of in-kernel fscrypt instead of embedded llcrypt]),
 	[], [enable_crypto="auto"])
 AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno], [
@@ -3074,7 +3074,7 @@ AC_CHECK_LIB([keyutils], [add_key])
 # Super safe df
 AC_MSG_CHECKING([whether to report minimum OST free space])
 AC_ARG_ENABLE([mindf],
-	AC_HELP_STRING([--enable-mindf],
+	AS_HELP_STRING([--enable-mindf],
 		[Make statfs report the minimum available space on any single OST instead of the sum of free space on all OSTs]),
 	[], [enable_mindf="no"])
 AC_MSG_RESULT([$enable_mindf])
@@ -3083,7 +3083,7 @@ AS_IF([test "$enable_mindf" = "yes"],
 
 AC_MSG_CHECKING([whether to randomly failing memory alloc])
 AC_ARG_ENABLE([fail_alloc],
-	AC_HELP_STRING([--disable-fail-alloc],
+	AS_HELP_STRING([--disable-fail-alloc],
 		[disable randomly alloc failure]),
 	[], [enable_fail_alloc="yes"])
 AC_MSG_RESULT([$enable_fail_alloc])
@@ -3093,7 +3093,7 @@ AS_IF([test "x$enable_fail_alloc" != xno],
 
 AC_MSG_CHECKING([whether to check invariants (expensive cpu-wise)])
 AC_ARG_ENABLE([invariants],
-	AC_HELP_STRING([--enable-invariants],
+	AS_HELP_STRING([--enable-invariants],
 		[enable invariant checking (cpu intensive)]),
 	[], [enable_invariants="no"])
 AC_MSG_RESULT([$enable_invariants])
@@ -3103,7 +3103,7 @@ AS_IF([test "x$enable_invariants" = xyes],
 
 AC_MSG_CHECKING([whether to track references with lu_ref])
 AC_ARG_ENABLE([lu_ref],
-	AC_HELP_STRING([--enable-lu_ref],
+	AS_HELP_STRING([--enable-lu_ref],
 		[enable lu_ref reference tracking code]),
 	[], [enable_lu_ref="no"])
 AC_MSG_RESULT([$enable_lu_ref])
@@ -3113,7 +3113,7 @@ AS_IF([test "x$enable_lu_ref" = xyes],
 
 AC_MSG_CHECKING([whether to enable page state tracking])
 AC_ARG_ENABLE([pgstate-track],
-	AC_HELP_STRING([--enable-pgstate-track],
+	AS_HELP_STRING([--enable-pgstate-track],
 		[enable page state tracking]),
 	[], [enable_pgstat_track="no"])
 AC_MSG_RESULT([$enable_pgstat_track])
