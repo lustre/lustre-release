@@ -242,10 +242,13 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # kernel 3.15-rc4 commit 71d8e532b1549a478e6a6a8a44f309d050294d00
 # start adding the tag to iov_iter
+# kernel 5.13 commit 8cd54c1c848031a87820e58d772166ffdf8c08c0 change
+# ->type to ->iter_type
 #
 AC_DEFUN([LIBCFS_IOV_ITER_HAS_TYPE], [
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
+iter_type_member=no
 LB_CHECK_COMPILE([if iov_iter has member type],
 iov_iter_has_type_member, [
 	#include <linux/uio.h>
@@ -255,7 +258,21 @@ iov_iter_has_type_member, [
 ],[
 	AC_DEFINE(HAVE_IOV_ITER_HAS_TYPE_MEMBER, 1,
 		[if iov_iter has member type])
+	iter_type_member=yes
 ])
+if test $iter_type_member = no; then
+  LB_CHECK_COMPILE([if iov_iter has member iter_type],
+  iov_iter_has_iter_type_member, [
+	#include <linux/uio.h>
+  ],[
+	struct iov_iter iter = { .iter_type = ITER_KVEC };
+	(void)iter;
+  ],[
+	AC_DEFINE(HAVE_IOV_ITER_HAS_TYPE_MEMBER, 1,
+		[if iov_iter has member iter_type])
+	iter_type_member=yes
+  ])
+fi
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_IOV_ITER_HAS_TYPE
 
@@ -1461,7 +1478,7 @@ LB_CHECK_COMPILE([if iov_iter_type exists],
 macro_iov_iter_type_exists, [
 	#include <linux/uio.h>
 ],[
-	struct iov_iter iter = { .type = ITER_KVEC };
+	struct iov_iter iter = { };
 	enum iter_type type = iov_iter_type(&iter);
 	(void)type;
 ],[
