@@ -721,6 +721,11 @@ AC_SUBST(MOSTLYCLEANFILES)
 LB_CONFIG_RPMBUILD_OPTIONS
 LB_CONFIG_CACHE_OPTIONS
 
+AS_IF([test -d $TEST_DIR], [
+	AC_MSG_NOTICE([remove temporary parallel configure dir $TEST_DIR])
+	rm -rf $TEST_DIR
+])
+
 AC_OUTPUT
 
 cat <<_ACEOF
