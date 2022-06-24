@@ -113,7 +113,7 @@ static void qmt_set_id_notify(const struct lu_env *env, struct qmt_device *qmt,
 	lqe_gl = lqe->lqe_is_global ? lqe : NULL;
 	rc = qmt_pool_lqes_lookup_spec(env, qmt, lqe_rtype(lqe),
 				       lqe_qtype(lqe), &lqe->lqe_id);
-	if (!qti_lqes_cnt(env))
+	if (rc)
 		GOTO(lqes_fini, rc);
 
 	if (!lqe_gl && qti_lqes_glbl(env)->lqe_is_global)

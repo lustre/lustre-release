@@ -876,7 +876,6 @@ int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 {
 	struct qmt_pool_info	*pos;
 	struct lquota_entry	*lqe;
-	int rc = 0;
 
 	qti_lqes_init(env);
 	down_read(&qmt->qmt_pool_lock);
@@ -895,11 +894,8 @@ int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 		/* ENOENT is valid case for lqe from non global pool
 		 * that hasn't limits, i.e. not enforced. Continue even
 		 * in case of error - we can handle already found lqes */
-		if (IS_ERR_OR_NULL(lqe)) {
-			/* let know that something went wrong */
-			rc = lqe ? PTR_ERR(lqe) : -ENOENT;
+		if (IS_ERR(lqe))
 			continue;
-		}
 		if (!lqe->lqe_enforced) {
 			/* no settings for this qid_uid */
 			lqe_putref(lqe);
@@ -910,7 +906,7 @@ int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 				 lqe, pos->qpi_name);
 	}
 	up_read(&qmt->qmt_pool_lock);
-	RETURN(rc);
+	RETURN(qti_lqes_cnt(env) ? 0 : -ENOENT);
 }
 
 /**
