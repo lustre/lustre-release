@@ -1217,9 +1217,9 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
 	struct lu_ucred  *uc;
+	struct lquota_id_info qi;
 	bool quota_reserved = false;
 	bool chrgrp_by_unprivileged_user = false;
-	__s64 quota_size = 0;
 	int rc;
 	ENTRY;
 
@@ -1250,31 +1250,34 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	 * the setattr operation will be processed synchronously to
 	 * honor the quota limit of the corresponding group. see LU-5152 */
 	uc = lu_ucred_check(env);
+	memset(&qi, 0, sizeof(qi));
 	if (S_ISREG(attr->la_mode) && la->la_valid & LA_GID &&
 	    la->la_gid != attr->la_gid && uc != NULL && uc->uc_fsuid != 0) {
 		CDEBUG(D_QUOTA, "%s: reserve quota for changing group: gid=%u size=%llu\n",
 		       mdd2obd_dev(mdd)->obd_name, la->la_gid, la->la_size);
 
 		if (la->la_valid & LA_BLOCKS)
-			quota_size = la->la_blocks << 9;
+			qi.lqi_space = la->la_blocks << 9;
 		else if (la->la_valid & LA_SIZE)
-			quota_size = la->la_size;
+			qi.lqi_space = la->la_size;
 		/* use local attr gotten above */
 		else if (attr->la_valid & LA_BLOCKS)
-			quota_size = attr->la_blocks << 9;
+			qi.lqi_space = attr->la_blocks << 9;
 		else if (attr->la_valid & LA_SIZE)
-			quota_size = attr->la_size;
+			qi.lqi_space = attr->la_size;
 
-		if (quota_size > 0) {
+		if (qi.lqi_space > 0) {
+			qi.lqi_id.qid_gid = la->la_gid;
+			qi.lqi_type = GRPQUOTA;
+			qi.lqi_space = toqb(qi.lqi_space);
+			qi.lqi_is_blk = true;
 			rc = dt_reserve_or_free_quota(env, mdd->mdd_bottom,
-						      GRPQUOTA, attr->la_uid,
-						      la->la_gid, quota_size,
-						      false);
+						      &qi);
 
 			if (rc) {
 				CDEBUG(D_QUOTA, "%s: failed to reserve quota for gid %d size %llu\n",
 				       mdd2obd_dev(mdd)->obd_name,
-				       la->la_gid, quota_size);
+				       la->la_gid, qi.lqi_space);
 
 				GOTO(out, rc);
 			}
@@ -1363,14 +1366,14 @@ out:
 
 		sub_th = thandle_get_sub_by_dt(env, handle, mdd->mdd_bottom);
 		if (unlikely(IS_ERR(sub_th))) {
-			dt_reserve_or_free_quota(env, mdd->mdd_bottom, GRPQUOTA,
-						 attr->la_uid, la->la_gid,
-						 -quota_size, false);
+			qi.lqi_space *= -1;
+			dt_reserve_or_free_quota(env, mdd->mdd_bottom, &qi);
 		} else {
-			sub_th->th_reserved_quota.qrr_type = GRPQUOTA;
-			sub_th->th_reserved_quota.qrr_id.qid_gid = la->la_gid;
-			sub_th->th_reserved_quota.qrr_count = quota_size;
+			sub_th->th_reserved_quota = qi;
 		}
+	} else if (quota_reserved) {
+		qi.lqi_space *= -1;
+		dt_reserve_or_free_quota(env, mdd->mdd_bottom, &qi);
 	}
 
 	if (handle != NULL)
