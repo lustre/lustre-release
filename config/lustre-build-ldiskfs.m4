@@ -464,10 +464,27 @@ ext4_get_blocks_keep_size, [
 	(void)f;
 ],[
 	AC_DEFINE(HAVE_LDISKFS_GET_BLOCKS_KEEP_SIZE, 1,
-		[EXT4_GET_BLOCKS_KEEP_SIZE hasn't been removed])
+		[EXT4_GET_BLOCKS_KEEP_SIZE exists])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_EXT4_GET_BLOCKS_KEEP_SIZE
+
+#
+# LB_EXT4_INC_DEC_COUNT_2ARGS
+#
+# Linux v5.9-rc7-8-g15ed2851b0f4
+# ext4: remove unused argument from ext4_(inc|dec)_count
+#
+AC_DEFUN([LB_EXT4_INC_DEC_COUNT_2ARGS], [
+	AC_MSG_CHECKING([if ext4_(inc|dec)_count() have 2 arguments])
+	AS_IF([grep -q -E 'void ext4_inc_count.handle_t \*handle' $EXT4_SRC_DIR/namei.c],[
+		AC_DEFINE(HAVE_EXT4_INC_DEC_COUNT_2ARGS, 1,
+			[ext4_(inc|dec)_count() has 2 arguments])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+]) # LB_EXT4_INC_DEC_COUNT_2ARGS
 
 #
 # LB_CONFIG_LDISKFS
@@ -523,6 +540,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_LDISKFSFS_DIRHASH_WANTS_DIR
 	LB_JBD2_H_TOTAL_CREDITS
 	LB_EXT4_GET_BLOCKS_KEEP_SIZE
+	LB_EXT4_INC_DEC_COUNT_2ARGS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
