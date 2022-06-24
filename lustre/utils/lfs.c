@@ -6522,13 +6522,14 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		if (!(tp->st_op & ops))
 			continue;
 
-		for (index = 0; ; index++) {
+		for (index = 0; index < LOV_ALL_STRIPES &&
+		     (!lsb || lsb->sb_count < LL_STATFS_MAX); index++) {
 			memset(&stat_buf, 0, sizeof(struct obd_statfs));
 			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
 			type = flags & MNTDF_LAZY ?
 				tp->st_op | LL_STATFS_NODELAY : tp->st_op;
 			rc2 = llapi_obd_fstatfs(fd, type, index,
-					       &stat_buf, &uuid_buf);
+						&stat_buf, &uuid_buf);
 			if (rc2 == -ENODEV)
 				break;
 			if (rc2 == -EAGAIN)
