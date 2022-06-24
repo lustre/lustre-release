@@ -487,6 +487,28 @@ AC_DEFUN([LB_EXT4_INC_DEC_COUNT_2ARGS], [
 ]) # LB_EXT4_INC_DEC_COUNT_2ARGS
 
 #
+# LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
+# Linux commit v5.10-rc2-9-gede7dc7fa0af
+#  jbd2: rename j_maxlen to j_total_len and add jbd2_journal_max_txn_bufs
+#
+AC_DEFUN([LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if jbd2_journal_get_max_txn_bufs is available],
+jbd2_journal_get_max_txn_bufs, [
+	#include <linux/jbd2.h>
+],[
+	journal_t *journal = NULL;
+	int x = jbd2_journal_get_max_txn_bufs(journal);
+	(void)x;
+],[
+	AC_DEFINE(HAVE_JBD2_JOURNAL_GET_MAX_TXN_BUFS, 1,
+		[if jbd2_journal_get_max_txn_bufs is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
+
+#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -541,6 +563,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_JBD2_H_TOTAL_CREDITS
 	LB_EXT4_GET_BLOCKS_KEEP_SIZE
 	LB_EXT4_INC_DEC_COUNT_2ARGS
+	LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

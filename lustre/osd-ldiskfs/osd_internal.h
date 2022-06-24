@@ -958,6 +958,11 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 # define osd_attach_jinode(inode) 0
 #endif /* HAVE_LDISKFS_INFO_JINODE */
 
+#ifndef HAVE_JBD2_JOURNAL_GET_MAX_TXN_BUFS
+#define jbd2_journal_get_max_txn_bufs(jrnl) \
+	(jrnl->j_max_transaction_buffers)
+#endif
+
 #ifdef LDISKFS_HT_MISC
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, type, nblock)
@@ -986,7 +991,7 @@ static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 # define osd_journal_start(inode, type, nblocks) \
 		ldiskfs_journal_start(inode, type, nblocks)
 # define osd_transaction_size(dev) \
-		(osd_journal(dev)->j_max_transaction_buffers / 2)
+		(jbd2_journal_get_max_txn_bufs(osd_journal(dev)) / 2)
 #else /* ! defined LDISKFS_HT_MISC */
 # define LDISKFS_HT_MISC	0
 # define osd_journal_start_sb(sb, type, nblock) \
@@ -1018,7 +1023,7 @@ static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 # define osd_journal_start(inode, type, nblocks) \
 		ldiskfs_journal_start(inode, nblocks)
 # define osd_transaction_size(dev) \
-		(osd_journal(dev)->j_max_transaction_buffers)
+		jbd2_journal_get_max_txn_bufs(osd_journal(dev))
 #endif /* LDISKFS_HT_MISC */
 
 #ifndef HAVE___LDISKFS_FIND_ENTRY
