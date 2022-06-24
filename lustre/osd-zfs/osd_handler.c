@@ -701,21 +701,20 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 /* reserve or free quota for some operation */
 static int osd_reserve_or_free_quota(const struct lu_env *env,
 				     struct dt_device *dev,
-				     enum quota_type type, __u64 uid,
-				     __u64 gid, __s64 count, bool is_md)
+				     struct lquota_id_info *qi)
 {
-	int rc;
 	struct osd_device       *osd = osd_dt_dev(dev);
-	struct osd_thread_info  *info = osd_oti_get(env);
-	struct lquota_id_info   *qi = &info->oti_qi;
 	struct qsd_instance     *qsd = NULL;
+	int rc;
 
-	if (is_md)
-		qsd = osd->od_quota_slave_md;
-	else
+	ENTRY;
+
+	if (qi->lqi_is_blk)
 		qsd = osd->od_quota_slave_dt;
+	else
+		qsd = osd->od_quota_slave_md;
 
-	rc = quota_reserve_or_free(env, qsd, qi, type, uid, gid, count, is_md);
+	rc = qsd_reserve_or_free_quota(env, qsd, qi);
 	RETURN(rc);
 }
 

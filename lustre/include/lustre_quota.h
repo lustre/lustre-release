@@ -252,29 +252,5 @@ struct lquota_trans {
  * on slave */
 int lquotactl_slv(const struct lu_env *, struct dt_device *,
 		  struct obd_quotactl *);
-
-static inline int quota_reserve_or_free(const struct lu_env *env,
-					struct qsd_instance *qsd,
-					struct lquota_id_info *qi,
-					enum quota_type type, __u64 uid,
-					__u64 gid, __s64 count, bool is_md)
-{
-	qi->lqi_type = type;
-	if (count > 0)
-		qi->lqi_space = toqb(count);
-	else
-		qi->lqi_space = -toqb(-count);
-
-	if (is_md)
-		qi->lqi_is_blk = false;
-	else
-		qi->lqi_is_blk = true;
-
-	qi->lqi_id.qid_uid = uid;
-	qi->lqi_id.qid_gid = gid;
-
-	return qsd_reserve_or_free_quota(env, qsd, qi);
-}
-
 /** @} quota */
 #endif /* _LUSTRE_QUOTA_H */
