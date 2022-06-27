@@ -338,7 +338,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		/* We keep the refcount from cl_page_find, so we don't need
 		 * another one here
 		 */
-		cl_2queue_add(queue, page, false);
+		cl_page_list_add(&queue->c2_qin, page, false);
 		/*
 		 * Set page clip to tell transfer formation engine
 		 * that page has to be sent even if it is beyond KMS.

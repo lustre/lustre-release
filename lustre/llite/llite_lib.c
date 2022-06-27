@@ -2070,7 +2070,7 @@ int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 		anchor = &vvp_env_info(env)->vti_anchor;
 		cl_sync_io_init(anchor, 1);
 		clpage->cp_sync_io = anchor;
-		cl_2queue_add(queue, clpage, true);
+		cl_page_list_add(&queue->c2_qin, clpage, true);
 		rc = cl_io_submit_rw(env, io, CRT_WRITE, queue);
 		if (rc)
 			GOTO(queuefini1, rc);

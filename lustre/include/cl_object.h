@@ -2498,8 +2498,6 @@ void cl_page_list_discard(const struct lu_env *env,
 void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist);
 
 void cl_2queue_init(struct cl_2queue *queue);
-void cl_2queue_add(struct cl_2queue *queue, struct cl_page *page,
-		   bool get_ref);
 void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue);
 void cl_2queue_assume(const struct lu_env *env, struct cl_io *io,
 		      struct cl_2queue *queue);

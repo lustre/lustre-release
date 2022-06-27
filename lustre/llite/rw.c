@@ -1670,7 +1670,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		cl_sync_io_init(anchor, 1);
 		page->cp_sync_io = anchor;
 
-		cl_2queue_add(queue, page, true);
+		cl_page_list_add(&queue->c2_qin, page, true);
 	}
 
 	/* mmap does not set the ci_rw fields */

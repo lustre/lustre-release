@@ -1034,15 +1034,6 @@ void cl_2queue_init(struct cl_2queue *queue)
 EXPORT_SYMBOL(cl_2queue_init);
 
 /**
- * Add a page to the incoming page list of 2-queue.
- */
-void cl_2queue_add(struct cl_2queue *queue, struct cl_page *page, bool get_ref)
-{
-	cl_page_list_add(&queue->c2_qin, page, get_ref);
-}
-EXPORT_SYMBOL(cl_2queue_add);
-
-/**
  * Disown pages in both lists of a 2-queue.
  */
 void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue)
@@ -1096,7 +1087,10 @@ void cl_2queue_init_page(struct cl_2queue *queue, struct cl_page *page)
 {
 	ENTRY;
 	cl_2queue_init(queue);
-	cl_2queue_add(queue, page, true);
+	/*
+	 * Add a page to the incoming page list of 2-queue.
+	 */
+	cl_page_list_add(&queue->c2_qin, page, true);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_init_page);
