@@ -5233,6 +5233,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct hsm_user_import *)0)->hui_archive_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_user_import *)0)->hui_archive_id));
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 	/* Checks for struct netobj_s */
 	LASSERTF((int)sizeof(struct netobj_s) == 4, "found %lld\n",
 		 (long long)(int)sizeof(struct netobj_s));
@@ -5424,6 +5425,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct gss_wire_ctx, gw_handle));
 	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_handle) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_handle));
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 #ifdef HAVE_SERVER_SUPPORT
 
