@@ -2256,6 +2256,8 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		  void *arg);
 int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 		  struct idx_info *ii, const struct lu_rdpg *rdpg);
+void dt_index_page_adjust(struct page **pages, const u32 npages,
+			  const size_t nlupgs);
 
 static inline struct thandle *dt_trans_create(const struct lu_env *env,
                                               struct dt_device *d)

@@ -1978,21 +1978,22 @@ int osp_it_next_page(const struct lu_env *env, struct dt_it *di)
 	int			i;
 	ENTRY;
 
-again2:
+process_idxpage:
 	idxpage = it->ooi_cur_idxpage;
 	if (idxpage != NULL) {
 		if (idxpage->lip_nr == 0)
-			RETURN(1);
+			goto finish_cur_idxpage;
 
 		if (it->ooi_pos_ent < idxpage->lip_nr) {
 			CDEBUG(D_INFO, "ooi_pos %d nr %d\n",
 			       (int)it->ooi_pos_ent, (int)idxpage->lip_nr);
 			RETURN(0);
 		}
+finish_cur_idxpage:
 		it->ooi_cur_idxpage = NULL;
 		it->ooi_pos_lu_page++;
 
-again1:
+process_page:
 		if (it->ooi_pos_lu_page < LU_PAGE_COUNT) {
 			it->ooi_cur_idxpage = (void *)it->ooi_cur_page +
 					 LU_PAGE_SIZE * it->ooi_pos_lu_page;
@@ -2013,19 +2014,19 @@ again1:
 				RETURN(-EINVAL);
 			}
 			it->ooi_pos_ent = -1;
-			goto again2;
+			goto process_idxpage;
 		}
 
 		kunmap(it->ooi_cur_page);
 		it->ooi_cur_page = NULL;
 		it->ooi_pos_page++;
 
-again0:
+start:
 		pages = it->ooi_pages;
 		if (it->ooi_pos_page < it->ooi_valid_npages) {
 			it->ooi_cur_page = kmap(pages[it->ooi_pos_page]);
 			it->ooi_pos_lu_page = 0;
-			goto again1;
+			goto process_page;
 		}
 
 		for (i = 0; i < it->ooi_total_npages; i++) {
@@ -2049,7 +2050,7 @@ again0:
 
 	rc = osp_it_fetch(env, it);
 	if (rc == 0)
-		goto again0;
+		goto start;
 
 	RETURN(rc);
 }

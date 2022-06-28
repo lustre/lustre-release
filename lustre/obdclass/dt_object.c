@@ -1031,7 +1031,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 				/* end of index */
 				break;
 		}
-		kunmap(rdpg->rp_pages[i]);
+		kunmap(rdpg->rp_pages[pageidx]);
 	}
 
 out:
@@ -1129,12 +1129,61 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 		ii->ii_hash_end = II_END_OFF;
 	}
 
+	/*
+	 * For partial lu_idxpage filling of the end system page,
+	 * init the header of the remain lu_idxpages.
+	 */
+	if (rc > 0)
+		dt_index_page_adjust(rdpg->rp_pages, rdpg->rp_npages,
+				     ii->ii_count);
+
 	GOTO(out, rc);
 out:
 	dt_object_put(env, obj);
 	return rc;
 }
 EXPORT_SYMBOL(dt_index_read);
+
+#if PAGE_SIZE > LU_PAGE_SIZE
+/*
+ * For partial lu_idxpage filling of the end system page, init the header of the
+ * remain lu_idxpages. So that the clients handle partial filling correctly.
+ * Current lu_idxpage read clients are osp_it_next_page(),
+ * nodemap_process_idx_pages() and qsd_reint_entries().
+ */
+void dt_index_page_adjust(struct page **pages, const u32 npages,
+			  const size_t nlupgs)
+{
+	u32			nlupgs_mod = nlupgs % LU_PAGE_COUNT;
+	u32			remain_nlupgs;
+	u32			pgidx;
+	struct lu_idxpage      *lip;
+	union lu_page	       *lp;
+	int			i;
+
+	if (nlupgs_mod) {
+		pgidx = nlupgs / LU_PAGE_COUNT;
+		LASSERT(pgidx < npages);
+		lp = kmap(pages[pgidx]);
+		remain_nlupgs = LU_PAGE_COUNT - nlupgs_mod;
+
+		/* initialize the header for the remain lu_pages */
+		for (i = 0, lp += nlupgs_mod; i < remain_nlupgs; i++, lp++) {
+			lip = &lp->lp_idx;
+			memset(lip, 0, LIP_HDR_SIZE);
+			lip->lip_magic = LIP_MAGIC;
+		}
+
+		kunmap(pages[pgidx]);
+	}
+}
+#else
+void dt_index_page_adjust(struct page **pages, const u32 npages,
+			  const size_t nlupgs)
+{
+}
+#endif
+EXPORT_SYMBOL(dt_index_page_adjust);
 
 #ifdef CONFIG_PROC_FS
 int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v)
