@@ -13,10 +13,10 @@ if UTILS
 if GSS
 SUBDIRS = . gss
 GSSSRC = gss/err_util.c gss/err_util.h
-GSSLIB = -lcrypto -lssl -lm
+GSSLIB = -lm
 if GSS_SSK
 GSSSRC += gss/sk_utils.c gss/sk_utils.h
-GSSLIB += -lkeyutils
+GSSLIB += -lkeyutils -lcrypto -lssl
 endif
 if GSS_KEYRING
 GSSLIB += -lkeyutils

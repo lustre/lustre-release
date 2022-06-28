@@ -32,11 +32,10 @@ COMMON_SRCS = \
         err_util.h \
         gss_oids.h \
         gss_util.h \
-        sk_utils.h \
         lsupport.h
 
 if GSS_SSK
-COMMON_SRCS += sk_utils.c
+COMMON_SRCS += sk_utils.h sk_utils.c
 endif
 
 lgssd_SOURCES = \
@@ -65,8 +64,11 @@ lsvcgssd_SOURCES = \
         svcgssd.h
 
 lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
-lsvcgssd_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lkeyutils -lm
+lsvcgssd_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lkeyutils -lm
 lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
+if GSS_SSK
+lsvcgssd_LDADD += -lcrypto -lssl
+endif
 
 l_idmap_SOURCES = \
 	l_idmap.c \
@@ -94,11 +96,12 @@ lgss_keyring_SOURCES = \
 	lsupport.h
 
 lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
-lgss_keyring_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
+lgss_keyring_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lm -lkeyutils
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
 
 if GSS_SSK
 lgss_keyring_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c
+lgss_keyring_LDADD += -lcrypto -lssl
 
 lgss_sk_SOURCES = \
 	lgss_sk.c \
