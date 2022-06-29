@@ -276,7 +276,8 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 	/* For OPEN locks we differentiate between lock modes
 	 * LCK_CR, LCK_CW, LCK_PR - bug 22891 */
 	if (bits & MDS_INODELOCK_OPEN)
-		ll_have_md_lock(inode, &bits, lock->l_req_mode);
+		ll_have_md_lock(lock->l_conn_export, inode, &bits,
+				lock->l_req_mode);
 
 	if (bits & MDS_INODELOCK_OPEN) {
 		fmode_t fmode;
@@ -304,7 +305,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 	if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
 		    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM |
 		    MDS_INODELOCK_DOM))
-		ll_have_md_lock(inode, &bits, LCK_MINMODE);
+		ll_have_md_lock(lock->l_conn_export, inode, &bits, LCK_MINMODE);
 
 	if (bits & MDS_INODELOCK_DOM) {
 		rc =  ll_dom_lock_cancel(inode, lock);
@@ -449,7 +450,7 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	unlock_res_and_lock(lock);
 
 	inode = ll_inode_from_resource_lock(lock);
-	ll_have_md_lock(inode, &bits, mode);
+	ll_have_md_lock(lock->l_conn_export, inode, &bits, mode);
 	iput(inode);
 	return !!(bits);
 }

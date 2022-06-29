@@ -3618,41 +3618,47 @@ lmv_lock_match(struct obd_export *exp, __u64 flags,
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
-	enum ldlm_mode rc;
 	struct lu_tgt_desc *tgt;
-	int i;
+	__u64 bits = policy->l_inodebits.bits;
+	enum ldlm_mode rc = LCK_MINMODE;
 	int index;
+	int i;
 
-	ENTRY;
-
-	CDEBUG(D_INODE, "Lock match for "DFID"\n", PFID(fid));
-
-	/*
-	 * With DNE every object can have two locks in different namespaces:
+	/* only one bit is set */
+	LASSERT(bits && !(bits & (bits - 1)));
+	/* With DNE every object can have two locks in different namespaces:
 	 * lookup lock in space of MDT storing direntry and update/open lock in
 	 * space of MDT storing inode.  Try the MDT that the FID maps to first,
 	 * since this can be easily found, and only try others if that fails.
 	 */
-	for (i = 0, index = lmv_fid2tgt_index(lmv, fid);
-	     i < lmv->lmv_mdt_descs.ltd_tgts_size;
-	     i++, index = (index + 1) % lmv->lmv_mdt_descs.ltd_tgts_size) {
-		if (index < 0) {
-			CDEBUG(D_HA, "%s: "DFID" is inaccessible: rc = %d\n",
-			       obd->obd_name, PFID(fid), index);
-			index = 0;
+	if (bits == MDS_INODELOCK_LOOKUP) {
+		for (i = 0, index = lmv_fid2tgt_index(lmv, fid);
+		     i < lmv->lmv_mdt_descs.ltd_tgts_size; i++,
+		     index = (index + 1) % lmv->lmv_mdt_descs.ltd_tgts_size) {
+			if (index < 0) {
+				CDEBUG(D_HA,
+				       "%s: "DFID" is inaccessible: rc = %d\n",
+				       obd->obd_name, PFID(fid), index);
+				index = 0;
+			}
+			tgt = lmv_tgt(lmv, index);
+			if (!tgt || !tgt->ltd_exp || !tgt->ltd_active)
+				continue;
+			rc = md_lock_match(tgt->ltd_exp, flags, fid, type,
+					   policy, mode, lockh);
+			if (rc)
+				break;
 		}
-
-		tgt = lmv_tgt(lmv, index);
-		if (!tgt || !tgt->ltd_exp || !tgt->ltd_active)
-			continue;
-
-		rc = md_lock_match(tgt->ltd_exp, flags, fid, type, policy, mode,
-				   lockh);
-		if (rc)
-			RETURN(rc);
+	} else {
+		tgt = lmv_fid2tgt(lmv, fid);
+		if (!IS_ERR(tgt) && tgt->ltd_exp && tgt->ltd_active)
+			rc = md_lock_match(tgt->ltd_exp, flags, fid, type,
+					   policy, mode, lockh);
 	}
 
-	RETURN(0);
+	CDEBUG(D_INODE, "Lock match for "DFID": %d\n", PFID(fid), rc);
+
+	return rc;
 }
 
 static int

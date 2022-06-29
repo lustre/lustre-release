@@ -368,7 +368,8 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 			struct inode *parent =
 				file_dentry(filp)->d_parent->d_inode;
 
-			if (ll_have_md_lock(parent, &ibits, LCK_MINMODE))
+			if (ll_have_md_lock(ll_i2mdexp(parent), parent, &ibits,
+					    LCK_MINMODE))
 				pfid = *ll_inode2fid(parent);
 		}
 
