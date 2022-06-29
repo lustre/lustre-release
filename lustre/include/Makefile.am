@@ -38,6 +38,7 @@ DIST_SUBDIRS = lustre uapi/linux/lustre
 EXTRA_DIST = \
 	cl_object.h \
 	dt_object.h \
+	erasure_code.h \
 	interval_tree.h \
 	llog_swab.h \
 	lprocfs_status.h \

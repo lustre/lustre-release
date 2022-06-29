@@ -1,0 +1,6 @@
+MODULES := ec
+ec-objs := ec_base.o
+
+EXTRA_DIST = $(ec-objs:%.o=%.c)
+
+@INCLUDE_RULES@

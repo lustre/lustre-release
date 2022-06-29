@@ -3,6 +3,7 @@ obj-m += obdclass/
 obj-m += ptlrpc/
 obj-m += obdecho/
 obj-m += mgc/
+obj-m += ec/
 obj-m += tests/kernel/
 
 @SERVER_TRUE@obj-m += ost/ mgs/ mdt/ mdd/ ofd/ quota/ osp/ lod/ lfsck/
