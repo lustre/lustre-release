@@ -1446,6 +1446,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 		GOTO(out_free, rc = -ENOMEM);
 
 	*reqcopy = *req;
+	spin_lock_init(&reqcopy->rq_early_free_lock);
 	reqcopy->rq_reply_state = NULL;
 	reqcopy->rq_rep_swab_mask = 0;
 	reqcopy->rq_pack_bulk = 0;
