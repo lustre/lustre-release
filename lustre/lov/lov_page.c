@@ -84,6 +84,8 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 		suboff = lio->lis_cached_suboff + offset - lio->lis_cached_off;
 	} else {
 		entry = lov_io_layout_at(lio, offset);
+		if (entry < 0)
+			return(-ENODATA);
 
 		stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
 		rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe,
