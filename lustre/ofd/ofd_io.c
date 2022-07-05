@@ -1443,18 +1443,23 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid,
 				 ktime_us_delta(ktime_get(), kstart));
 
+		mapped_uid = oa->o_uid;
+		mapped_gid = oa->o_gid;
+		mapped_projid = oa->o_projid;
 		nodemap = nodemap_get_from_exp(exp);
-		if (IS_ERR(nodemap))
-			RETURN(PTR_ERR(nodemap));
-		mapped_uid = nodemap_map_id(nodemap, NODEMAP_UID,
-					    NODEMAP_FS_TO_CLIENT,
-					    oa->o_uid);
-		mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
-					    NODEMAP_FS_TO_CLIENT,
-					    oa->o_gid);
-		mapped_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
-					       NODEMAP_FS_TO_CLIENT,
-					       oa->o_projid);
+		if (!IS_ERR(nodemap)) {
+			mapped_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+						    NODEMAP_FS_TO_CLIENT,
+						    oa->o_uid);
+			mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+						    NODEMAP_FS_TO_CLIENT,
+						    oa->o_gid);
+			mapped_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+						       NODEMAP_FS_TO_CLIENT,
+						       oa->o_projid);
+		} else if (old_rc == 0) {
+			old_rc = PTR_ERR(nodemap);
+		}
 
 		if (!IS_ERR_OR_NULL(nodemap)) {
 			/* do not bypass quota enforcement if squashed uid */
