@@ -33,6 +33,7 @@
 /listxattr_size_check
 /iopentest1
 /iopentest2
+/io_uring_probe
 /it_test
 /lgetxattr_size_check
 /ll_dirstripe_verify

@@ -69,6 +69,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		esac
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.11.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.8.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.0.0],[
@@ -119,8 +120,10 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	],
 	[LDISKFS_SERIES="5.4.0-ml.series"])],
 	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
-	[LDISKFS_SERIES="5.8.0-63-ubuntu20.series"],
-	[LDISKFS_SERIES="5.8.0-ml.series"])
+	[LDISKFS_SERIES="5.8.0-63-ubuntu20.series"])],
+	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
+	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
+	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"])
 ])
 ])
 # Not RHEL/SLES or Ubuntu .. probably mainline

@@ -1,0 +1,196 @@
+diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h	2022-03-24 16:23:11.725060881 -0600
++++ b/fs/ext4/ext4.h	2022-03-24 16:24:35.400642866 -0600
+@@ -1882,6 +1882,8 @@
+ 
+ #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
+ 
++#define JOURNAL_START_HAS_3ARGS	1
++
+ /*
+  * Codes for operating systems
+  */
+@@ -2121,7 +2123,21 @@
+ 
+ EXTN_FEATURE_FUNCS(2)
+ EXTN_FEATURE_FUNCS(3)
+-EXTN_FEATURE_FUNCS(4)
++static inline bool ext4_has_unknown_ext4_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_compat &
++		cpu_to_le32(~EXT4_FEATURE_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_ro_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_ro_compat &
++		cpu_to_le32(~EXT4_FEATURE_RO_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_incompat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_incompat &
++		cpu_to_le32(~EXT4_FEATURE_INCOMPAT_SUPP)) != 0);
++}
+ 
+ static inline bool ext4_has_compat_features(struct super_block *sb)
+ {
+@@ -3594,6 +3610,13 @@
+ #define EXT_MAX_BLOCKS	0xffffffff
+ 
+ extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
++extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
++						  ext4_group_t block_group);
++extern void ext4_inc_count(struct inode *inode);
++extern void ext4_dec_count(struct inode *inode);
++extern struct buffer_head *ext4_append(handle_t *handle,
++				       struct inode *inode,
++				       ext4_lblk_t *block);
+ extern int ext4_ext_index_trans_blocks(struct inode *inode, int extents);
+ extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
+ 			       struct ext4_map_blocks *map, int flags);
+diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+--- a/fs/ext4/ialloc.c	2022-03-24 16:23:11.713060939 -0600
++++ b/fs/ext4/ialloc.c	2022-03-24 16:24:35.404642846 -0600
+@@ -120,7 +120,7 @@
+  *
+  * Return buffer_head of bitmap on success, or an ERR_PTR on error.
+  */
+-static struct buffer_head *
++struct buffer_head *
+ ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
+ {
+ 	struct ext4_group_desc *desc;
+@@ -215,6 +215,7 @@
+ 	put_bh(bh);
+ 	return ERR_PTR(err);
+ }
++EXPORT_SYMBOL(ext4_read_inode_bitmap);
+ 
+ /*
+  * NOTE! When we get the inode, we're the only people
+diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c	2022-03-24 16:23:11.721060900 -0600
++++ b/fs/ext4/inode.c	2022-03-24 16:24:35.412642805 -0600
+@@ -6222,3 +6222,19 @@
+ 
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_truncate);
++EXPORT_SYMBOL(ext4_iget);
++EXPORT_SYMBOL(ext4_bread);
++EXPORT_SYMBOL(ext4_itable_unused_count);
++EXPORT_SYMBOL(ext4_force_commit);
++EXPORT_SYMBOL(__ext4_mark_inode_dirty);
++EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_write_access);
++EXPORT_SYMBOL(__ext4_journal_start_sb);
++EXPORT_SYMBOL(__ext4_journal_stop);
++EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
++EXPORT_SYMBOL(__ext4_std_error);
++EXPORT_SYMBOL(ext4fs_dirhash);
++EXPORT_SYMBOL(ext4_get_inode_loc);
++EXPORT_SYMBOL(__ext4_journal_ensure_credits);
+diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
+--- a/fs/ext4/namei.c	2022-03-24 16:23:11.725060881 -0600
++++ b/fs/ext4/namei.c	2022-03-24 16:24:35.420642764 -0600
+@@ -50,7 +50,7 @@
+ #define NAMEI_RA_BLOCKS  4
+ #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ 
+-static struct buffer_head *ext4_append(handle_t *handle,
++struct buffer_head *ext4_append(handle_t *handle,
+ 					struct inode *inode,
+ 					ext4_lblk_t *block)
+ {
+@@ -79,6 +79,8 @@
+ 	return bh;
+ }
+ 
++#define assert(test) J_ASSERT(test)
++
+ static int ext4_dx_csum_verify(struct inode *inode,
+ 			       struct ext4_dir_entry *dirent);
+ 
+@@ -181,6 +183,7 @@
+ 	}
+ 	return bh;
+ }
++EXPORT_SYMBOL(ext4_append);
+ 
+ #ifdef DX_DEBUG
+ #define dxtrace(command) command
+@@ -2568,23 +2571,25 @@
+  * for checking S_ISDIR(inode) (since the INODE_INDEX feature will not be set
+  * on regular files) and to avoid creating huge/slow non-HTREE directories.
+  */
+-static void ext4_inc_count(struct inode *inode)
++void ext4_inc_count(struct inode *inode)
+ {
+ 	inc_nlink(inode);
+ 	if (is_dx(inode) &&
+ 	    (inode->i_nlink > EXT4_LINK_MAX || inode->i_nlink == 2))
+ 		set_nlink(inode, 1);
+ }
++EXPORT_SYMBOL(ext4_inc_count);
+ 
+ /*
+  * If a directory had nlink == 1, then we should let it be 1. This indicates
+  * directory has >EXT4_LINK_MAX subdirs.
+  */
+-static void ext4_dec_count(struct inode *inode)
++void ext4_dec_count(struct inode *inode)
+ {
+ 	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
+ 		drop_nlink(inode);
+ }
++EXPORT_SYMBOL(ext4_dec_count);
+ 
+ 
+ /*
+diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
+--- a/fs/ext4/super.c	2022-03-24 16:23:11.601061482 -0600
++++ b/fs/ext4/super.c	2022-03-24 16:24:35.424642743 -0600
+@@ -5557,7 +5557,7 @@
+ 			__ext4_update_tstamp(&es->s_first_error_time,
+ 					     &es->s_first_error_time_hi,
+ 					     sbi->s_first_error_time);
+-			strncpy(es->s_first_error_func, sbi->s_first_error_func,
++			strlcpy(es->s_first_error_func, sbi->s_first_error_func,
+ 				sizeof(es->s_first_error_func));
+ 			es->s_first_error_line =
+ 				cpu_to_le32(sbi->s_first_error_line);
+@@ -5571,7 +5571,7 @@
+ 		__ext4_update_tstamp(&es->s_last_error_time,
+ 				     &es->s_last_error_time_hi,
+ 				     sbi->s_last_error_time);
+-		strncpy(es->s_last_error_func, sbi->s_last_error_func,
++		strlcpy(es->s_last_error_func, sbi->s_last_error_func,
+ 			sizeof(es->s_last_error_func));
+ 		es->s_last_error_line = cpu_to_le32(sbi->s_last_error_line);
+ 		es->s_last_error_ino = cpu_to_le32(sbi->s_last_error_ino);
+@@ -6760,16 +6760,12 @@
+ 	if (err)
+ 		goto out05;
+ 
+-	register_as_ext3();
+-	register_as_ext2();
+ 	err = register_filesystem(&ext4_fs_type);
+ 	if (err)
+ 		goto out;
+ 
+ 	return 0;
+ out:
+-	unregister_as_ext2();
+-	unregister_as_ext3();
+ out05:
+ 	destroy_inodecache();
+ out1:
+@@ -6793,8 +6789,6 @@
+ static void __exit ext4_exit_fs(void)
+ {
+ 	ext4_destroy_lazyinit_thread();
+-	unregister_as_ext2();
+-	unregister_as_ext3();
+ 	unregister_filesystem(&ext4_fs_type);
+ 	destroy_inodecache();
+ 	ext4_exit_mballoc();

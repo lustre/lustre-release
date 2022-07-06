@@ -34,6 +34,7 @@
 *.lo
 *.mod.c
 *.o
+*.dwo
 *.o.ur-safe
 *.orig
 *.rej
