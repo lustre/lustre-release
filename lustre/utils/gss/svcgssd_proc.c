@@ -56,6 +56,8 @@
 #include "cacheio.h"
 #include "lsupport.h"
 #include "gss_oids.h"
+#include <time.h>
+#include <linux/lustre/lustre_idl.h>
 #include "sk_utils.h"
 #include <sys/time.h>
 

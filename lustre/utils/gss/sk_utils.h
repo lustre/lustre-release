@@ -28,6 +28,7 @@
 #ifndef SK_UTILS_H
 #define SK_UTILS_H
 
+#ifdef HAVE_OPENSSL_SSK
 #include <gssapi/gssapi.h>
 #ifdef HAVE_LIBKEYUTILS
 #include <keyutils.h>
@@ -349,4 +350,5 @@ int sk_decode_netstring(gss_buffer_desc *bufs, int numbufs,
 int sk_encode_netstring(gss_buffer_desc *bufs, int numbufs,
 			gss_buffer_desc *ns);
 
+#endif /* HAVE_OPENSSL_SSK */
 #endif /* SK_UTILS_H */
