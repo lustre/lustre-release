@@ -763,11 +763,13 @@ struct fsxattr {
  */
 #define O_CIPHERTEXT		(O_NOCTTY | O_NDELAY | O_DSYNC)
 
-#define LL_FILE_IGNORE_LOCK     0x00000001
-#define LL_FILE_GROUP_LOCKED    0x00000002
-#define LL_FILE_READAHEA        0x00000004
-#define LL_FILE_LOCKED_DIRECTIO 0x00000008 /* client-side locks with dio */
-#define LL_FILE_FLOCK_WARNING   0x00000020 /* warned about disabled flock */
+enum ll_file_flags {
+	LL_FILE_IGNORE_LOCK     = 0x00000001,
+	LL_FILE_GROUP_LOCKED    = 0x00000002,
+	LL_FILE_READAHEA        = 0x00000004,
+	LL_FILE_LOCKED_DIRECTIO = 0x00000008, /* client-side locks with dio */
+	LL_FILE_FLOCK_WARNING   = 0x00000020, /* warned about disabled flock */
+};
 
 #define LOV_USER_MAGIC_V1	0x0BD10BD0
 #define LOV_USER_MAGIC		LOV_USER_MAGIC_V1

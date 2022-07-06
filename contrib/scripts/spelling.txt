@@ -52,6 +52,7 @@ DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 ENOTSUPP||EOPNOTSUPP
 ERR_PTR.PTR_ERR||ERR_CAST
 EWOULDBLOCK||EAGAIN
+fd_flags||lfd_file_flags
 from_timer||cfs_from_timer
 ft_nob||ft_bytes
 f_dentry||f_path.dentry

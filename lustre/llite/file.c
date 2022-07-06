@@ -336,7 +336,7 @@ static int ll_md_close(struct inode *inode, struct file *file)
 
 	ENTRY;
 	/* clear group lock, if present */
-	if (unlikely(lfd->fd_flags & LL_FILE_GROUP_LOCKED))
+	if (unlikely(lfd->lfd_file_flags & LL_FILE_GROUP_LOCKED))
 		ll_put_grouplock(inode, file, lfd->fd_grouplock.lg_gid);
 
 	mutex_lock(&lli->lli_och_mutex);
@@ -2041,7 +2041,7 @@ restart:
 		 */
 		if (((iot == CIT_WRITE) ||
 		    (iot == CIT_READ && iocb_ki_flags_check(flags, DIRECT))) &&
-		    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		    !(vio->vui_fd->lfd_file_flags & LL_FILE_GROUP_LOCKED)) {
 			CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
 			       RL_PARA(&range));
 			rc = range_lock(&lli->lli_write_tree, &range);
@@ -3121,8 +3121,8 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 
 	if (arg == 0) {
 		rc = -EINVAL;
-		CWARN("%s: group id for group lock must not be 0: rc = %d\n",
-		      ll_i2sbi(inode)->ll_fsname, rc);
+		CWARN("%s: group id for group lock on "DFID" is 0: rc = %d\n",
+		      ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid), rc);
 		RETURN(rc);
 	}
 
@@ -3136,10 +3136,11 @@ retry:
 		mutex_lock(&lli->lli_group_mutex);
 	}
 
-	if (lfd->fd_flags & LL_FILE_GROUP_LOCKED) {
-		rc = -EINVAL;
-		CWARN("%s: group lock already existed with gid %lu: rc = %d\n",
-		      ll_i2sbi(inode)->ll_fsname, lfd->fd_grouplock.lg_gid, rc);
+	if (lfd->lfd_file_flags & LL_FILE_GROUP_LOCKED) {
+		rc =  -EINVAL;
+		CWARN("%s: group lock already exists with gid %lu on "DFID": rc = %d\n",
+		      ll_i2sbi(inode)->ll_fsname, lfd->fd_grouplock.lg_gid,
+		      PFID(&lli->lli_fid), rc);
 		GOTO(out, rc);
 	}
 	if (arg != lli->lli_group_gid && lli->lli_group_users != 0) {
@@ -3187,13 +3188,14 @@ retry:
 	if (rc)
 		GOTO(out, rc);
 
-	lfd->fd_flags |= LL_FILE_GROUP_LOCKED;
+	lfd->lfd_file_flags |= LL_FILE_GROUP_LOCKED;
 	lfd->fd_grouplock = grouplock;
 	if (lli->lli_group_users == 0)
 		lli->lli_group_gid = grouplock.lg_gid;
 	lli->lli_group_users++;
 
-	CDEBUG(D_INFO, "group lock %lu obtained\n", arg);
+	CDEBUG(D_INFO, "group lock %lu obtained on "DFID"\n",
+	       arg, PFID(&lli->lli_fid));
 out:
 	mutex_unlock(&lli->lli_group_mutex);
 
@@ -3210,10 +3212,10 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 
 	ENTRY;
 	mutex_lock(&lli->lli_group_mutex);
-	if (!(lfd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+	if (!(lfd->lfd_file_flags & LL_FILE_GROUP_LOCKED)) {
 		rc = -EINVAL;
-		CWARN("%s: no group lock held: rc = %d\n",
-		      ll_i2sbi(inode)->ll_fsname, rc);
+		CWARN("%s: no group lock held on "DFID": rc = %d\n",
+		      ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid), rc);
 		GOTO(out, rc);
 	}
 
@@ -3221,15 +3223,15 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 
 	if (lfd->fd_grouplock.lg_gid != arg) {
 		rc = -EINVAL;
-		CWARN("%s: group lock %lu not match current id %lu: rc = %d\n",
+		CWARN("%s: group lock %lu doesn't match current id %lu on "DFID": rc = %d\n",
 		      ll_i2sbi(inode)->ll_fsname, arg, lfd->fd_grouplock.lg_gid,
-		      rc);
+		      PFID(&lli->lli_fid), rc);
 		GOTO(out, rc);
 	}
 
 	grouplock = lfd->fd_grouplock;
 	memset(&lfd->fd_grouplock, 0, sizeof(lfd->fd_grouplock));
-	lfd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
+	lfd->lfd_file_flags &= ~LL_FILE_GROUP_LOCKED;
 
 	cl_put_grouplock(&grouplock);
 
@@ -3238,7 +3240,8 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 		lli->lli_group_gid = 0;
 		wake_up_var(&lli->lli_group_users);
 	}
-	CDEBUG(D_INFO, "group lock %lu released\n", arg);
+	CDEBUG(D_INFO, "group lock %lu on "DFID" released\n", arg,
+	       PFID(&lli->lli_fid));
 	GOTO(out, rc = 0);
 out:
 	mutex_unlock(&lli->lli_group_mutex);
@@ -4652,7 +4655,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct ll_file_data *lfd = file->private_data;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	void __user *uarg = (void __user *)arg;
-	int flags, rc;
+	int rc;
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOCTL, "VFS Op:inode="DFID"(%pK) cmd=%x arg=%lx\n",
@@ -4668,23 +4671,25 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	 */
 	switch (cmd) {
 	case LL_IOC_GETFLAGS:
-		/* Get the current value of the file flags */
-		return put_user(lfd->fd_flags, (int __user *)arg);
+		/* Get the current value of the Lustre file flags */
+		return put_user(lfd->lfd_file_flags, (int __user *)arg);
 	case LL_IOC_SETFLAGS:
-	case LL_IOC_CLRFLAGS:
-		/* Set or clear specific file flags */
+	case LL_IOC_CLRFLAGS: {
+		enum ll_file_flags lfd_file_flags;
+
+		/* Set or clear specific Lustre file flags */
 		/* XXX This probably needs checks to ensure the flags are
 		 *     not abused, and to handle any flag side effects.
 		 */
-		if (get_user(flags, (int __user *)arg))
+		if (get_user(lfd_file_flags, (int __user *)arg))
 			RETURN(-EFAULT);
 
 		/* LL_FILE_GROUP_LOCKED is managed via its own ioctls */
-		if (flags & LL_FILE_GROUP_LOCKED)
+		if (lfd_file_flags & LL_FILE_GROUP_LOCKED)
 			RETURN(-EINVAL);
 
 		if (cmd == LL_IOC_SETFLAGS) {
-			if ((flags & LL_FILE_IGNORE_LOCK) &&
+			if ((lfd_file_flags & LL_FILE_IGNORE_LOCK) &&
 			    !(file->f_flags & O_DIRECT)) {
 				rc = -EINVAL;
 				CERROR("%s: unable to disable locking on non-O_DIRECT file "DFID": rc = %d\n",
@@ -4693,11 +4698,12 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				RETURN(rc);
 			}
 
-			lfd->fd_flags |= flags;
+			lfd->lfd_file_flags |= lfd_file_flags;
 		} else {
-			lfd->fd_flags &= ~flags;
+			lfd->lfd_file_flags &= ~lfd_file_flags;
 		}
 		RETURN(0);
+	}
 	case LL_IOC_LOV_SETSTRIPE:
 	case LL_IOC_LOV_SETSTRIPE_NEW:
 		if (sbi->ll_enable_setstripe_gid != -1 &&
@@ -5055,12 +5061,12 @@ out_ladvise:
 		RETURN(rc ? -EFAULT : 0);
 	}
 	case LL_IOC_HEAT_SET: {
-		__u64 flags;
+		__u64 heat_flags;
 
-		if (copy_from_user(&flags, uarg, sizeof(flags)))
+		if (copy_from_user(&heat_flags, uarg, sizeof(heat_flags)))
 			RETURN(-EFAULT);
 
-		rc = ll_heat_set(inode, flags);
+		rc = ll_heat_set(inode, heat_flags);
 		RETURN(rc);
 	}
 	case LL_IOC_PCC_ATTACH: {
@@ -6032,8 +6038,8 @@ ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
 	 * for one file. And the entire message rate on the client is limited
 	 * by CDEBUG_LIMIT too.
 	 */
-	if (!(lfd->fd_flags & LL_FILE_FLOCK_WARNING)) {
-		lfd->fd_flags |= LL_FILE_FLOCK_WARNING;
+	if (!(lfd->lfd_file_flags & LL_FILE_FLOCK_WARNING)) {
+		lfd->lfd_file_flags |= LL_FILE_FLOCK_WARNING;
 		CDEBUG_LIMIT(D_CONSOLE,
 			     "flock disabled, mount with '-o [local]flock' to enable\r\n");
 	}

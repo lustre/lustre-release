@@ -200,7 +200,8 @@ static int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 
 	memset(&vio->vui_link, 0, sizeof(vio->vui_link));
 
-	if (vio->vui_fd && (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+	if (vio->vui_fd &&
+	    (vio->vui_fd->lfd_file_flags & LL_FILE_GROUP_LOCKED)) {
 		descr->cld_mode = CLM_GROUP;
 		descr->cld_gid  = vio->vui_fd->fd_grouplock.lg_gid;
 		enqflags |= CEF_LOCK_MATCH;
@@ -550,7 +551,7 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 		int flags;
 
 		/* Group lock held means no lockless any more */
-		if (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)
+		if (vio->vui_fd->lfd_file_flags & LL_FILE_GROUP_LOCKED)
 			io->ci_dio_lock = 1;
 
 		flags = iocb_ki_flags_get(vio->vui_iocb->ki_filp,
@@ -1721,7 +1722,8 @@ static int vvp_io_read_ahead(const struct lu_env *env,
 	    ios->cis_io->ci_type == CIT_FAULT) {
 		struct vvp_io *vio = cl2vvp_io(env, ios);
 
-		if (unlikely(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		if (unlikely(vio->vui_fd->lfd_file_flags &
+			     LL_FILE_GROUP_LOCKED)) {
 			ra->cra_end_idx = CL_PAGE_EOF;
 			result = 1; /* no need to call down */
 		}

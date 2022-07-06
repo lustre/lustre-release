@@ -141,6 +141,7 @@ struct ll_inode_info {
 
 	__u32				lli_projid;   /* project id */
 
+	/* BIT(enum ll_file_internal_flags) */
 	volatile unsigned long		lli_flags;
 	struct posix_acl		*lli_posix_acl;
 
@@ -512,7 +513,7 @@ static inline void ll_layout_version_set(struct ll_inode_info *lli, __u32 gen)
 	spin_unlock(&lli->lli_layout_lock);
 }
 
-enum ll_inode_flags {
+enum ll_file_internal_flags {
 	/* File data is modified. */
 	LLIF_DATA_MODIFIED      = 0,
 	/* File is being restored */
@@ -528,10 +529,9 @@ enum ll_inode_flags {
 	/* 6 is not used for now */
 	/* Xattr cache is filled */
 	LLIF_XATTR_CACHE_FILLED	= 7,
-
-/* New flags added to this enum potentially need to be handled in
- * ll_inode2ext_flags/ll_set_inode_flags
- */
+	/* New flags added to this enum potentially need to be handled in
+	 * ll_inode2ext_flags/ll_set_inode_flags
+	 */
 };
 
 int ll_xattr_cache_destroy(struct inode *inode);
@@ -1158,7 +1158,7 @@ struct ll_file_data {
 	 */
 	bool				fd_write_failed;
 	unsigned int			lfd_lock_no_expand:1;
-	__u32				fd_flags;
+	enum ll_file_flags		lfd_file_flags;
 	enum mds_open_flags		fd_open_mode;
 	/* striped directory may read partially if some stripe inaccessible,
 	 * -errno is saved here, and will return to user in close().
@@ -2007,7 +2007,7 @@ static inline int ll_file_nolock(const struct file *file)
 	struct inode *inode = file_inode((struct file *)file);
 
 	LASSERT(fd != NULL);
-	return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+	return ((fd->lfd_file_flags & LL_FILE_IGNORE_LOCK) ||
 		test_bit(LL_SBI_NOLCK, ll_i2sbi(inode)->ll_flags));
 }
 
