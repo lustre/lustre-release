@@ -593,6 +593,51 @@ test_16g() {
 }
 run_test 16g "mmap rw sequential consistency vs drop_caches"
 
+test_16i() {
+	local tf=$DIR/$tdir/$tfile
+	local tf2=$DIR2/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	# create file and populate data
+	cp /etc/passwd $tf || error "cp failed"
+
+	local size=$(stat -c %s $tf)
+
+	c1=$(dd if=$tf bs=1 2>/dev/null | od -x | tail -q -n4)
+	c2=$(dd if=$tf2 bs=1 2>/dev/null | od -x | tail -q -n4)
+
+	if [[ "$c1" != "$c2" ]]; then
+		echo "  ------- mount 1 read --------"
+		echo $c1
+		echo "  ------- mount 2 read --------"
+		echo $c2
+		error "content mismatch"
+	fi
+
+	echo "  ------- before truncate --------"
+	echo $c1
+
+	# truncate file
+	$TRUNCATE $tf $((size / 2)) || error "truncate file"
+
+	echo "  ------- after truncate --------"
+
+	# repeat the comparison
+	c1=$(dd if=$tf bs=1 2>/dev/null | od -x | tail -q -n4)
+	c2=$(dd if=$tf2 bs=1 2>/dev/null | od -x | tail -q -n4)
+
+	if [[ "$c1" != "$c2" ]]; then
+		echo "  ------- mount 1 read --------"
+		echo $c1
+		echo "  ------- mount 2 read --------"
+		echo $c2
+		error "content mismatch after truncate"
+	fi
+	echo $c2
+}
+run_test 16i "read after truncate file"
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

@@ -210,7 +210,12 @@ int cl_glimpse_size0(struct inode *inode, int agl)
 		} else if (result == 0) {
 			result = cl_glimpse_lock(env, io, inode, io->ci_obj,
 						 agl);
-			if (!agl && result == -EAGAIN)
+			/**
+			 * need to limit retries for FLR mirrors if fast read
+			 * is short because of concurrent truncate.
+			 */
+			if (!agl && result == -EAGAIN &&
+			    !io->ci_tried_all_mirrors)
 				io->ci_need_restart = 1;
 		}
 
