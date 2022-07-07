@@ -375,8 +375,10 @@ static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)
 }
 
 #define lov_for_layout_entry(lov, entry, start, end)			\
-	for (entry = lov_entry(lov, start);				\
-	     entry <= lov_entry(lov, end); entry++)
+	if (lov->u.composite.lo_entries &&				\
+	    lov->u.composite.lo_entry_count > 0)			\
+		for (entry = lov_entry(lov, start);			\
+		     entry <= lov_entry(lov, end); entry++)
 
 #define lov_foreach_layout_entry(lov, entry)				\
 	lov_for_layout_entry(lov, entry, 0,				\
