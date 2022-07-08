@@ -44,6 +44,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #ifdef HAVE_ENDIAN_H
 # include <endian.h>
 #endif
@@ -883,6 +884,12 @@ char *buf2str(void *buf, unsigned int size)
 	return string;
 }
 
+static inline size_t
+object_update_param_size(const struct object_update_param *param)
+{
+	return roundup(sizeof(*param) + param->oup_len, sizeof(__u64));
+}
+
 void print_update_rec(struct llog_update_record *lur)
 {
 	struct update_records *rec = &lur->lur_update_rec;
@@ -916,8 +923,8 @@ void print_update_rec(struct llog_update_record *lur)
 	for (i = 0; i < pm_count; i++) {
 		printf("\tp_%d - %d/%s\n", i, pm->oup_len,
 		       buf2str(pm->oup_buf, pm->oup_len));
-		pm = (struct object_update_param *)((char *)(pm + 1) +
-		     pm->oup_len);
+		pm = (struct object_update_param *)((char *)pm +
+		     object_update_param_size(pm));
 	}
 	printf("\n");
 
