@@ -10474,11 +10474,10 @@ copytool()
 	# Use default values
 	local facet=$SINGLEAGT
 	local mountpoint="${MOUNT2:-$MOUNT}"
-	local hsm_root="${hsm_root:-$(hsm_root "$facet")}"
 
 	# Parse arguments
 	local fail_on_error=true
-	local -a hsmtool_options=("--hsm-root=$hsm_root")
+	local -a hsmtool_options=()
 	local -a action_options=()
 
 	if [[ -n "$HSMTOOL_ARCHIVE_FORMAT" ]]; then
@@ -10505,7 +10504,7 @@ copytool()
 			;;
 		-h|--hsm-root)
 			shift
-			hsm_root="$1"
+			local hsm_root="$1"
 			;;
 		-b|--bwlimit)
 			shift
@@ -10521,6 +10520,9 @@ copytool()
 		esac
 		shift
 	done
+
+	local hsm_root="${hsm_root:-$(hsm_root "$facet")}"
+	hsmtool_options+=("--hsm-root=$hsm_root")
 
 	stack_trap "do_facet $facet rm -rf '$hsm_root'" EXIT
 	do_facet $facet mkdir -p "$hsm_root" ||
