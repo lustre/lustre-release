@@ -57,6 +57,8 @@ extern unsigned int obd_lbug_on_eviction;
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
+extern unsigned int ping_interval;	  /* seconds */
+extern unsigned int ping_evict_timeout_multiplier;
 extern unsigned int obd_timeout_set;
 extern unsigned int ldlm_timeout_set;
 extern unsigned int bulk_timeout;
@@ -96,7 +98,7 @@ extern char obd_jobid_var[];
 /* Should be very conservative; must catch the first reconnect after reboot */
 #define OBD_RECOVERY_TIME_SOFT          (obd_timeout * 3)
 /* Change recovery-small 26b time if you change this */
-#define PING_INTERVAL max(obd_timeout / 4, 1U)
+#define PING_INTERVAL ping_interval
 /* a bit more than maximal journal commit time in seconds */
 #define PING_INTERVAL_SHORT min(PING_INTERVAL, 7U)
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple
@@ -104,7 +106,7 @@ extern char obd_jobid_var[];
  * can be lost on a loaded network. Since eviction has serious consequences,
  * and there's no urgent need to evict a client just because it's idle, we
  * should be very conservative here. */
-#define PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
+#define PING_EVICT_TIMEOUT (PING_INTERVAL * ping_evict_timeout_multiplier)
 #define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
 #define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
  /* Max connect interval for nonresponsive servers; ~50s to avoid building up

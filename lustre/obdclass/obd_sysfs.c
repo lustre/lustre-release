@@ -112,7 +112,6 @@ static struct static_lustre_uintvalue_attr lustre_sattr_##name =	\
 	{ __ATTR(name, 0644, static_uintvalue_show,			\
 		 static_uintvalue_store), value }
 
-LUSTRE_STATIC_UINT_ATTR(timeout, &obd_timeout);
 LUSTRE_STATIC_UINT_ATTR(debug_peer_on_timeout, &obd_debug_peer_on_timeout);
 LUSTRE_STATIC_UINT_ATTR(dump_on_timeout, &obd_dump_on_timeout);
 LUSTRE_STATIC_UINT_ATTR(dump_on_eviction, &obd_dump_on_eviction);
@@ -122,6 +121,8 @@ LUSTRE_STATIC_UINT_ATTR(at_extra, &at_extra);
 LUSTRE_STATIC_UINT_ATTR(at_early_margin, &at_early_margin);
 LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
 LUSTRE_STATIC_UINT_ATTR(lbug_on_eviction, &obd_lbug_on_eviction);
+LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
+LUSTRE_STATIC_UINT_ATTR(evict_multiplier, &ping_evict_timeout_multiplier);
 
 #ifdef HAVE_SERVER_SUPPORT
 LUSTRE_STATIC_UINT_ATTR(ldlm_timeout, &ldlm_timeout);
@@ -380,6 +381,30 @@ static ssize_t jobid_this_session_store(struct kobject *kobj,
 	return ret ?: count;
 }
 
+static ssize_t timeout_show(struct kobject *kobj,
+			    struct attribute *attr,
+			    char *buf)
+{
+	return sprintf(buf, "%u\n", obd_timeout);
+}
+
+static ssize_t timeout_store(struct kobject *kobj,
+			     struct attribute *attr,
+			     const char *buffer,
+			     size_t count)
+{
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+	obd_timeout = val ?: 1U;
+	ping_interval = max(obd_timeout / 4, 1U);
+
+	return count;
+}
+
 /* Root for /sys/kernel/debug/lustre */
 struct dentry *debugfs_lustre_root;
 EXPORT_SYMBOL_GPL(debugfs_lustre_root);
@@ -398,6 +423,7 @@ LUSTRE_RO_ATTR(health_check);
 LUSTRE_RW_ATTR(jobid_var);
 LUSTRE_RW_ATTR(jobid_name);
 LUSTRE_RW_ATTR(jobid_this_session);
+LUSTRE_RW_ATTR(timeout);
 
 static struct attribute *lustre_attrs[] = {
 	&lustre_attr_version.attr,
@@ -406,7 +432,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_jobid_name.attr,
 	&lustre_attr_jobid_var.attr,
 	&lustre_attr_jobid_this_session.attr,
-	&lustre_sattr_timeout.u.attr,
+	&lustre_attr_timeout.attr,
 	&lustre_attr_max_dirty_mb.attr,
 	&lustre_sattr_debug_peer_on_timeout.u.attr,
 	&lustre_sattr_dump_on_timeout.u.attr,
@@ -424,6 +450,8 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_no_transno.attr,
 #endif
 	&lustre_sattr_lbug_on_eviction.u.attr,
+	&lustre_sattr_ping_interval.u.attr,
+	&lustre_sattr_evict_multiplier.u.attr,
 	NULL,
 };
 

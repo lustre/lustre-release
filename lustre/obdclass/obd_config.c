@@ -1427,6 +1427,7 @@ int class_process_config(struct lustre_cfg *lcfg)
 		CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n",
 		       obd_timeout, lcfg->lcfg_num);
 		obd_timeout = max(lcfg->lcfg_num, 1U);
+		ping_interval = max(obd_timeout / 4, 1U);
 		obd_timeout_set = 1;
 		GOTO(out, err = 0);
 	}

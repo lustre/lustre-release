@@ -76,6 +76,11 @@ unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 EXPORT_SYMBOL(obd_timeout);
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
 EXPORT_SYMBOL(ldlm_timeout);
+unsigned int ping_interval = (OBD_TIMEOUT_DEFAULT > 4) ?
+			     (OBD_TIMEOUT_DEFAULT / 4) : 1;
+EXPORT_SYMBOL(ping_interval);
+unsigned int ping_evict_timeout_multiplier = 6;
+EXPORT_SYMBOL(ping_evict_timeout_multiplier);
 unsigned int obd_timeout_set;
 EXPORT_SYMBOL(obd_timeout_set);
 unsigned int ldlm_timeout_set;
