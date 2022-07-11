@@ -1625,7 +1625,6 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	struct ll_readahead_state *ras    = NULL;
 	struct cl_2queue          *queue  = &io->ci_queue;
 	struct cl_sync_io	  *anchor = NULL;
-	struct vvp_page           *vpg;
 	int			   rc = 0, rc2 = 0;
 	bool			   uptodate;
 	struct vvp_io *vio = vvp_env_io(env);
@@ -1647,7 +1646,6 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	if (page->cp_vmpage && PagePrivate2(page->cp_vmpage))
 		unlockpage = false;
 
-	vpg = cl2vvp_page(cl_object_page_slice(page->cp_obj, page));
 	uptodate = page->cp_defer_uptodate;
 
 	if (ll_readahead_enabled(sbi) && !page->cp_ra_updated && ras) {
@@ -1657,7 +1655,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			flags |= LL_RAS_HIT;
 		if (mmap)
 			flags |= LL_RAS_MMAP;
-		ras_update(sbi, inode, ras, vvp_index(vpg), flags, io);
+		ras_update(sbi, inode, ras, cl_page_index(page), flags, io);
 	}
 
 	cl_2queue_init(queue);
@@ -1679,15 +1677,15 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
 					io->u.ci_rw.crw_count - 1);
 	} else {
-		io_start_index = vvp_index(vpg);
-		io_end_index = vvp_index(vpg);
+		io_start_index = cl_page_index(page);
+		io_end_index = cl_page_index(page);
 	}
 
 	if (ll_readahead_enabled(sbi) && ras && !io->ci_rand_read) {
 		pgoff_t skip_index = 0;
 
-		if (ras->ras_next_readahead_idx < vvp_index(vpg))
-			skip_index = vvp_index(vpg);
+		if (ras->ras_next_readahead_idx < cl_page_index(page))
+			skip_index = cl_page_index(page);
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file, skip_index,
 				   &ra_start_index);
@@ -1697,15 +1695,15 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		CDEBUG(D_READA | (rc2 ? D_IOTRACE : 0),
 		       DFID " %d pages read ahead at %lu, triggered by user read at %lu, stride offset %lld, stride length %lld, stride bytes %lld\n",
 		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
-		       vvp_index(vpg), ras->ras_stride_offset,
+		       cl_page_index(page), ras->ras_stride_offset,
 		       ras->ras_stride_length, ras->ras_stride_bytes);
 
-	} else if (vvp_index(vpg) == io_start_index &&
+	} else if (cl_page_index(page) == io_start_index &&
 		   io_end_index - io_start_index > 0) {
 		rc2 = ll_readpages(env, io, &queue->c2_qin, io_start_index + 1,
 				   io_end_index);
 		CDEBUG(D_READA, DFID " %d pages read at %lu\n",
-		       PFID(ll_inode2fid(inode)), rc2, vvp_index(vpg));
+		       PFID(ll_inode2fid(inode)), rc2, cl_page_index(page));
 	}
 
 	if (queue->c2_qin.pl_nr > 0) {
@@ -1865,7 +1863,6 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		struct ll_file_data *fd = file->private_data;
 		struct ll_readahead_state *ras = &fd->fd_ras;
 		struct lu_env  *local_env = NULL;
-		struct vvp_page *vpg;
 
 		result = -ENODATA;
 
@@ -1878,7 +1875,6 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			RETURN(result);
 		}
 
-		vpg = cl2vvp_page(cl_object_page_slice(page->cp_obj, page));
 		if (page->cp_defer_uptodate) {
 			enum ras_update_flags flags = LL_RAS_HIT;
 
@@ -1888,11 +1884,11 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			/* For fast read, it updates read ahead state only
 			 * if the page is hit in cache because non cache page
 			 * case will be handled by slow read later. */
-			ras_update(sbi, inode, ras, vvp_index(vpg), flags, io);
+			ras_update(sbi, inode, ras, cl_page_index(page), flags, io);
 			/* avoid duplicate ras_update() call */
 			page->cp_ra_updated = 1;
 
-			if (ll_use_fast_io(file, ras, vvp_index(vpg)))
+			if (ll_use_fast_io(file, ras, cl_page_index(page)))
 				result = 0;
 		}
 

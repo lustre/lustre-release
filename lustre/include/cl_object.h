@@ -966,6 +966,11 @@ static inline struct page *cl_page_vmpage(const struct cl_page *page)
 	return page->cp_vmpage;
 }
 
+static inline pgoff_t cl_page_index(const struct cl_page *cp)
+{
+	return cl_page_vmpage(cp)->index;
+}
+
 /**
  * Check if a cl_page is in use.
  *

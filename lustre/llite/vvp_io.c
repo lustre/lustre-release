@@ -1122,15 +1122,13 @@ static bool page_list_sanity_check(struct cl_object *obj,
 	pgoff_t index = CL_PAGE_EOF;
 
 	cl_page_list_for_each(page, plist) {
-		struct vvp_page *vpg = cl_object_page_slice(obj, page);
-
 		if (index == CL_PAGE_EOF) {
-			index = vvp_index(vpg);
+			index = cl_page_index(page);
 			continue;
 		}
 
 		++index;
-		if (index == vvp_index(vpg))
+		if (index == cl_page_index(page))
 			continue;
 
 		return false;
@@ -1526,7 +1524,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		wait_on_page_writeback(vmpage);
 		if (!PageDirty(vmpage)) {
 			struct cl_page_list *plist = &vio->u.fault.ft_queue;
-			struct vvp_page *vpg = cl_object_page_slice(obj, page);
 			int to = PAGE_SIZE;
 
 			/* vvp_page_assume() calls wait_on_page_writeback(). */
@@ -1536,7 +1533,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 			cl_page_list_add(plist, page, true);
 
 			/* size fixup */
-			if (last_index == vvp_index(vpg))
+			if (last_index == cl_page_index(page))
 				to = ((size - 1) & ~PAGE_MASK) + 1;
 
 			/* Do not set Dirty bit here so that in case IO is

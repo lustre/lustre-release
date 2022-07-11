@@ -131,14 +131,13 @@ static void vvp_page_completion_write(const struct lu_env *env,
 				      const struct cl_page_slice *slice,
 				      int ioret)
 {
-	struct vvp_page *vpg    = cl2vvp_page(slice);
-	struct cl_page  *pg     = slice->cpl_page;
-	struct page     *vmpage = vpg->vpg_page;
+	struct cl_page *cp = slice->cpl_page;
+	struct page *vmpage = cp->cp_vmpage;
 
 	ENTRY;
-	CL_PAGE_HEADER(D_PAGE, env, pg, "completing WRITE with %d\n", ioret);
+	CL_PAGE_HEADER(D_PAGE, env, cp, "completing WRITE with %d\n", ioret);
 
-	if (pg->cp_sync_io != NULL) {
+	if (cp->cp_sync_io != NULL) {
 		LASSERT(PageLocked(vmpage));
 		LASSERT(!PageWriteback(vmpage));
 	} else {
@@ -147,7 +146,7 @@ static void vvp_page_completion_write(const struct lu_env *env,
 		 * Only mark the page error only when it's an async write
 		 * because applications won't wait for IO to finish.
 		 */
-		vvp_vmpage_error(vvp_object_inode(pg->cp_obj), vmpage, ioret);
+		vvp_vmpage_error(vvp_object_inode(cp->cp_obj), vmpage, ioret);
 
 		end_page_writeback(vmpage);
 	}
@@ -172,18 +171,16 @@ static const struct cl_page_operations vvp_transient_page_ops = {
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 		struct cl_page *page, pgoff_t index)
 {
-	struct vvp_page *vpg = cl_object_page_slice(obj, page);
-	struct page     *vmpage = page->cp_vmpage;
+	struct cl_page_slice *cpl = cl_object_page_slice(obj, page);
+	struct page *vmpage = page->cp_vmpage;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
-
-	vpg->vpg_page = vmpage;
 
 	if (page->cp_type == CPT_TRANSIENT) {
 		/* DIO pages are referenced by userspace, we don't need to take
 		 * a reference on them. (contrast with get_page() call above)
 		 */
-		cl_page_slice_add(page, &vpg->vpg_cl, obj,
+		cl_page_slice_add(page, cpl, obj,
 				  &vvp_transient_page_ops);
 	} else {
 		get_page(vmpage);
@@ -191,8 +188,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 		atomic_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
 		vmpage->private = (unsigned long)page;
-		cl_page_slice_add(page, &vpg->vpg_cl, obj,
-				&vvp_page_ops);
+		cl_page_slice_add(page, cpl, obj, &vvp_page_ops);
 	}
 
 	return 0;
