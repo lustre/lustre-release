@@ -1268,20 +1268,20 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 					 struct lfsck_component *com,
 					 struct lfsck_request *lr)
 {
-	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
-	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	struct lfsck_assistant_data	  *lad   = com->lc_data;
-	struct lfsck_bookmark		  *bk    = &lfsck->li_bookmark_ram;
-	struct ptlrpc_request_set	  *set;
-	struct lfsck_tgt_descs		  *ltds;
-	struct lfsck_tgt_desc		  *ltd;
-	struct lfsck_tgt_desc		  *next;
-	__u32				   idx;
-	int				   rc    = 0;
-	int				   rc1	 = 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_async_interpret_args *laia = &info->lti_laia;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct ptlrpc_request_set *set;
+	struct lfsck_tgt_descs *ltds;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
+	int idx;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	set = ptlrpc_prep_set();
 	if (set == NULL)
 		RETURN(-ENOMEM);
@@ -1309,7 +1309,8 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 		ltds = &lfsck->li_ost_descs;
 		laia->laia_ltds = ltds;
 		down_read(&ltds->ltd_rw_sem);
-		cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		for_each_set_bit(idx, ltds->ltd_tgts_bitmap,
+				 ltds->ltd_tgts_mask_len) {
 			ltd = lfsck_tgt_get(ltds, idx);
 			LASSERT(ltd != NULL);
 
@@ -1343,7 +1344,8 @@ next:
 		ltds = &lfsck->li_mdt_descs;
 		spin_lock(&ltds->ltd_lock);
 		if (com->lc_type == LFSCK_TYPE_LAYOUT) {
-			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+			for_each_set_bit(idx, ltds->ltd_tgts_bitmap,
+					 ltds->ltd_tgts_mask_len) {
 				ltd = lfsck_ltd2tgt(ltds, idx);
 				LASSERT(ltd != NULL);
 
@@ -1356,7 +1358,8 @@ next:
 					      &lad->lad_mdt_phase1_list);
 			}
 		} else {
-			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+			for_each_set_bit(idx, ltds->ltd_tgts_bitmap,
+					 ltds->ltd_tgts_mask_len) {
 				ltd = lfsck_ltd2tgt(ltds, idx);
 				LASSERT(ltd != NULL);
 

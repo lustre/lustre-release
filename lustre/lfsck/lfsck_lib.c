@@ -113,8 +113,8 @@ static int lfsck_tgt_descs_init(struct lfsck_tgt_descs *ltds)
 	spin_lock_init(&ltds->ltd_lock);
 	init_rwsem(&ltds->ltd_rw_sem);
 	INIT_LIST_HEAD(&ltds->ltd_orphan);
-	ltds->ltd_tgts_bitmap = CFS_ALLOCATE_BITMAP(BITS_PER_LONG);
-	if (ltds->ltd_tgts_bitmap == NULL)
+	ltds->ltd_tgts_bitmap = bitmap_zalloc(BITS_PER_LONG, GFP_KERNEL);
+	if (!ltds->ltd_tgts_bitmap)
 		return -ENOMEM;
 
 	return 0;
@@ -122,9 +122,9 @@ static int lfsck_tgt_descs_init(struct lfsck_tgt_descs *ltds)
 
 static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 {
-	struct lfsck_tgt_desc	*ltd;
-	struct lfsck_tgt_desc	*next;
-	int			 idx;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
+	int idx;
 
 	down_write(&ltds->ltd_rw_sem);
 
@@ -134,13 +134,13 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 		lfsck_tgt_put(ltd);
 	}
 
-	if (unlikely(ltds->ltd_tgts_bitmap == NULL)) {
+	if (unlikely(!ltds->ltd_tgts_bitmap)) {
 		up_write(&ltds->ltd_rw_sem);
 
 		return;
 	}
 
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		if (likely(ltd != NULL)) {
 			LASSERT(list_empty(&ltd->ltd_layout_list));
@@ -149,7 +149,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 			LASSERT(list_empty(&ltd->ltd_namespace_phase_list));
 
 			ltds->ltd_tgtnr--;
-			cfs_bitmap_clear(ltds->ltd_tgts_bitmap, idx);
+			clear_bit(idx, ltds->ltd_tgts_bitmap);
 			lfsck_assign_tgt(ltds, NULL, idx);
 			lfsck_tgt_put(ltd);
 		}
@@ -165,7 +165,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 		}
 	}
 
-	CFS_FREE_BITMAP(ltds->ltd_tgts_bitmap);
+	bitmap_free(ltds->ltd_tgts_bitmap);
 	ltds->ltd_tgts_bitmap = NULL;
 	up_write(&ltds->ltd_rw_sem);
 }
@@ -188,28 +188,31 @@ static int __lfsck_add_target(const struct lu_env *env,
 	if (!locked)
 		down_write(&ltds->ltd_rw_sem);
 
-	LASSERT(ltds->ltd_tgts_bitmap != NULL);
+	LASSERT(ltds->ltd_tgts_bitmap);
 
-	if (index >= ltds->ltd_tgts_bitmap->size) {
-		__u32 newsize = max((__u32)ltds->ltd_tgts_bitmap->size,
-				    (__u32)BITS_PER_LONG);
-		struct cfs_bitmap *old_bitmap = ltds->ltd_tgts_bitmap;
-		struct cfs_bitmap *new_bitmap;
+	if (index >= ltds->ltd_tgts_mask_len) {
+		u32 newsize = max_t(u32, ltds->ltd_tgts_mask_len,
+				    BITS_PER_LONG);
+		unsigned long *old_bitmap = ltds->ltd_tgts_bitmap;
+		unsigned long *new_bitmap;
 
 		while (newsize < index + 1)
 			newsize <<= 1;
 
-		new_bitmap = CFS_ALLOCATE_BITMAP(newsize);
-		if (new_bitmap == NULL)
+		new_bitmap = bitmap_zalloc(newsize, GFP_KERNEL);
+		if (!new_bitmap)
 			GOTO(unlock, rc = -ENOMEM);
 
-		if (ltds->ltd_tgtnr > 0)
-			cfs_bitmap_copy(new_bitmap, old_bitmap);
+		if (ltds->ltd_tgtnr > 0) {
+			bitmap_copy(new_bitmap, old_bitmap,
+				    ltds->ltd_tgts_mask_len);
+		}
 		ltds->ltd_tgts_bitmap = new_bitmap;
-		CFS_FREE_BITMAP(old_bitmap);
+		ltds->ltd_tgts_mask_len = newsize;
+		bitmap_free(old_bitmap);
 	}
 
-	if (cfs_bitmap_check(ltds->ltd_tgts_bitmap, index)) {
+	if (test_bit(index, ltds->ltd_tgts_bitmap)) {
 		CERROR("%s: the device %s (%u) is registered already\n",
 		       lfsck_lfsck2name(lfsck),
 		       ltd->ltd_tgt->dd_lu_dev.ld_obd->obd_name, index);
@@ -223,7 +226,7 @@ static int __lfsck_add_target(const struct lu_env *env,
 	}
 
 	lfsck_assign_tgt(ltds, ltd, index);
-	cfs_bitmap_set(ltds->ltd_tgts_bitmap, index);
+	set_bit(index, ltds->ltd_tgts_bitmap);
 	ltds->ltd_tgtnr++;
 
 	GOTO(unlock, rc = 0);
@@ -1952,11 +1955,12 @@ lfsck_assistant_data_init(const struct lfsck_assistant_operations *lao,
 
 	OBD_ALLOC_PTR(lad);
 	if (lad != NULL) {
-		lad->lad_bitmap = CFS_ALLOCATE_BITMAP(BITS_PER_LONG);
+		lad->lad_bitmap = bitmap_zalloc(BITS_PER_LONG, GFP_KERNEL);
 		if (lad->lad_bitmap == NULL) {
 			OBD_FREE_PTR(lad);
 			return NULL;
 		}
+		lad->lad_bitmap_count = BITS_PER_LONG;
 
 		INIT_LIST_HEAD(&lad->lad_req_list);
 		spin_lock_init(&lad->lad_lock);
@@ -2444,17 +2448,17 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 
 int lfsck_query_all(const struct lu_env *env, struct lfsck_component *com)
 {
-	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
-	struct lfsck_request		  *lr	 = &info->lti_lr;
-	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		  *ltd;
-	struct ptlrpc_request_set	  *set;
-	int				   idx;
-	int				   rc;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_request *lr = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia = &info->lti_laia;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct ptlrpc_request_set *set;
+	int idx;
+	int rc;
 
+	ENTRY;
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_QUERY;
 	lr->lr_active = com->lc_type;
@@ -2471,7 +2475,7 @@ int lfsck_query_all(const struct lu_env *env, struct lfsck_component *com)
 again:
 	laia->laia_ltds = ltds;
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_tgt_get(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -2894,18 +2898,18 @@ static int lfsck_stop_all(const struct lu_env *env,
 			  struct lfsck_instance *lfsck,
 			  struct lfsck_stop *stop)
 {
-	struct lfsck_thread_info	  *info	  = lfsck_env_info(env);
-	struct lfsck_request		  *lr	  = &info->lti_lr;
-	struct lfsck_async_interpret_args *laia	  = &info->lti_laia;
-	struct ptlrpc_request_set	  *set;
-	struct lfsck_tgt_descs		  *ltds   = &lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		  *ltd;
-	struct lfsck_bookmark		  *bk	  = &lfsck->li_bookmark_ram;
-	__u32				   idx;
-	int				   rc	  = 0;
-	int				   rc1	  = 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_request *lr = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia = &info->lti_laia;
+	struct ptlrpc_request_set *set;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	int idx;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	LASSERT(stop->ls_flags & LPF_BROADCAST);
 
 	set = ptlrpc_prep_set();
@@ -2926,7 +2930,7 @@ static int lfsck_stop_all(const struct lu_env *env,
 	laia->laia_shared = 1;
 
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_tgt_get(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -2964,15 +2968,15 @@ static int lfsck_start_all(const struct lu_env *env,
 			   struct lfsck_instance *lfsck,
 			   struct lfsck_start *start)
 {
-	struct lfsck_thread_info	  *info	  = lfsck_env_info(env);
-	struct lfsck_request		  *lr	  = &info->lti_lr;
-	struct lfsck_async_interpret_args *laia	  = &info->lti_laia;
-	struct ptlrpc_request_set	  *set;
-	struct lfsck_tgt_descs		  *ltds   = &lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		  *ltd;
-	struct lfsck_bookmark		  *bk	  = &lfsck->li_bookmark_ram;
-	__u32				   idx;
-	int				   rc	  = 0;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_request *lr = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia = &info->lti_laia;
+	struct ptlrpc_request_set *set;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	int idx;
+	int rc = 0;
 	bool retry = false;
 	ENTRY;
 
@@ -3001,7 +3005,7 @@ again:
 		RETURN(-ENOMEM);
 
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_tgt_get(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -3071,22 +3075,22 @@ again:
 int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_start_param *lsp)
 {
-	struct lfsck_start		*start  = lsp->lsp_start;
-	struct lfsck_instance		*lfsck;
-	struct lfsck_bookmark		*bk;
-	struct ptlrpc_thread		*thread;
-	struct lfsck_component		*com;
-	struct lfsck_thread_args	*lta;
-	struct task_struct		*task;
-	struct lfsck_tgt_descs		*ltds;
-	struct lfsck_tgt_desc		*ltd;
-	__u32				 idx;
-	int				 rc     = 0;
-	__u16				 valid  = 0;
-	__u16				 flags  = 0;
-	__u16				 type   = 1;
-	ENTRY;
+	struct lfsck_start *start = lsp->lsp_start;
+	struct lfsck_instance *lfsck;
+	struct lfsck_bookmark *bk;
+	struct ptlrpc_thread *thread;
+	struct lfsck_component *com;
+	struct lfsck_thread_args *lta;
+	struct task_struct *task;
+	struct lfsck_tgt_descs *ltds;
+	struct lfsck_tgt_desc *ltd;
+	int idx;
+	int rc = 0;
+	__u16 valid  = 0;
+	__u16 flags  = 0;
+	__u16 type   = 1;
 
+	ENTRY;
 	if (key->dd_rdonly)
 		RETURN(-EROFS);
 
@@ -3241,7 +3245,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 
 	ltds = &lfsck->li_mdt_descs;
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -3259,7 +3263,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 
 	ltds = &lfsck->li_ost_descs;
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -3901,9 +3905,9 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		ltds = &lfsck->li_mdt_descs;
 
 	down_write(&ltds->ltd_rw_sem);
-	LASSERT(ltds->ltd_tgts_bitmap != NULL);
+	LASSERT(ltds->ltd_tgts_bitmap);
 
-	if (unlikely(index >= ltds->ltd_tgts_bitmap->size))
+	if (unlikely(index >= ltds->ltd_tgts_mask_len))
 		goto unlock;
 
 	ltd = lfsck_ltd2tgt(ltds, index);
@@ -3913,7 +3917,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 	LASSERT(ltds->ltd_tgtnr > 0);
 
 	ltds->ltd_tgtnr--;
-	cfs_bitmap_clear(ltds->ltd_tgts_bitmap, index);
+	set_bit(index, ltds->ltd_tgts_bitmap);
 	lfsck_assign_tgt(ltds, NULL, index);
 
 unlock:

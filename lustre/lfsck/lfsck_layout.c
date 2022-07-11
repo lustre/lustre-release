@@ -285,7 +285,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 		GOTO(out, rc = -ENOMEM);
 
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(lad->lad_bitmap, idx) {
+	for_each_set_bit(idx, lad->lad_bitmap, lad->lad_bitmap_count) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		if (unlikely(!ltd))
 			continue;
@@ -946,54 +946,53 @@ static void lfsck_layout_cpu_to_le(struct lfsck_layout *des,
 static int lfsck_layout_load_bitmap(const struct lu_env *env,
 				    struct lfsck_component *com)
 {
-	struct dt_object		*obj	= com->lc_obj;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_layout		*lo	= com->lc_file_ram;
-	struct cfs_bitmap			*bitmap = lad->lad_bitmap;
-	loff_t				 pos	= com->lc_file_size;
-	ssize_t				 size;
-	__u32				 nbits;
-	int				 rc;
-	ENTRY;
+	struct dt_object *obj = com->lc_obj;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_layout *lo	= com->lc_file_ram;
+	unsigned long *bitmap = lad->lad_bitmap;
+	loff_t pos = com->lc_file_size;
+	ssize_t	size;
+	__u32 nbits;
+	int rc;
 
-	if (com->lc_lfsck->li_ost_descs.ltd_tgts_bitmap->size >
-	    lo->ll_bitmap_size)
-		nbits = com->lc_lfsck->li_ost_descs.ltd_tgts_bitmap->size;
+	ENTRY;
+	if (com->lc_lfsck->li_ost_descs.ltd_tgts_mask_len > lo->ll_bitmap_size)
+		nbits = com->lc_lfsck->li_ost_descs.ltd_tgts_mask_len;
 	else
 		nbits = lo->ll_bitmap_size;
 
 	if (unlikely(nbits < BITS_PER_LONG))
 		nbits = BITS_PER_LONG;
 
-	if (nbits > bitmap->size) {
-		__u32 new_bits = bitmap->size;
-		struct cfs_bitmap *new_bitmap;
+	if (nbits > lad->lad_bitmap_count) {
+		u32 new_bits = lad->lad_bitmap_count;
+		unsigned long *new_bitmap;
 
 		while (new_bits < nbits)
 			new_bits <<= 1;
 
-		new_bitmap = CFS_ALLOCATE_BITMAP(new_bits);
+		new_bitmap = bitmap_zalloc(new_bits, GFP_KERNEL);
 		if (new_bitmap == NULL)
 			RETURN(-ENOMEM);
 
 		lad->lad_bitmap = new_bitmap;
-		CFS_FREE_BITMAP(bitmap);
+		lad->lad_bitmap_count = new_bits;
+		bitmap_free(bitmap);
 		bitmap = new_bitmap;
 	}
 
 	if (lo->ll_bitmap_size == 0) {
 		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
-		CFS_RESET_BITMAP(bitmap);
-
+		bitmap_zero(bitmap, lad->lad_bitmap_count);
 		RETURN(0);
 	}
 
 	size = (lo->ll_bitmap_size + 7) >> 3;
-	rc = dt_read(env, obj, lfsck_buf_get(env, bitmap->data, size), &pos);
+	rc = dt_read(env, obj, lfsck_buf_get(env, bitmap, size), &pos);
 	if (rc != size)
 		RETURN(rc >= 0 ? -EINVAL : rc);
 
-	if (cfs_bitmap_check_empty(bitmap))
+	if (bitmap_empty(bitmap, lad->lad_bitmap_count))
 		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	else
 		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
@@ -1069,24 +1068,24 @@ static int lfsck_layout_load(const struct lu_env *env,
 static int lfsck_layout_store(const struct lu_env *env,
 			      struct lfsck_component *com)
 {
-	struct dt_object	*obj	= com->lc_obj;
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct lfsck_layout	*lo_ram	= com->lc_file_ram;
-	struct lfsck_layout	*lo	= com->lc_file_disk;
-	struct thandle		*th;
-	struct dt_device	*dev	= lfsck_obj2dev(obj);
-	struct cfs_bitmap	*bitmap = NULL;
-	loff_t			 pos;
-	ssize_t			 size	= com->lc_file_size;
-	__u32			 nbits	= 0;
-	int			 rc;
-	ENTRY;
+	struct dt_object *obj = com->lc_obj;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_layout *lo_ram = com->lc_file_ram;
+	struct lfsck_layout *lo	= com->lc_file_disk;
+	struct thandle *th;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	unsigned long *bitmap = NULL;
+	loff_t pos;
+	ssize_t size = com->lc_file_size;
+	__u32 nbits = 0;
+	int rc;
 
+	ENTRY;
 	if (lfsck->li_master) {
 		struct lfsck_assistant_data *lad = com->lc_data;
 
 		bitmap = lad->lad_bitmap;
-		nbits = bitmap->size;
+		nbits = lad->lad_bitmap_count;
 
 		LASSERT(nbits > 0);
 		LASSERTF((nbits & 7) == 0, "Invalid nbits %u\n", nbits);
@@ -1105,7 +1104,7 @@ static int lfsck_layout_store(const struct lu_env *env,
 
 	if (bitmap != NULL) {
 		rc = dt_declare_record_write(env, obj,
-				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				lfsck_buf_get(env, bitmap, nbits >> 3),
 				(loff_t)size, th);
 		if (rc != 0)
 			GOTO(out, rc);
@@ -1123,7 +1122,7 @@ static int lfsck_layout_store(const struct lu_env *env,
 	if (bitmap != NULL) {
 		pos = size;
 		rc = dt_record_write(env, obj,
-				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				lfsck_buf_get(env, bitmap, nbits >> 3),
 				&pos, th);
 	}
 
@@ -3306,7 +3305,7 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 	       "scanning for OST%04x\n",
 	       lfsck_lfsck2name(lfsck), ltd->ltd_index);
 
-	if (cfs_bitmap_check(lad->lad_bitmap, ltd->ltd_index)) {
+	if (test_bit(ltd->ltd_index, lad->lad_bitmap)) {
 		CDEBUG(D_LFSCK, "%s: layout LFSCK assistant skip the orphan "
 		       "scanning for OST%04x\n",
 		       lfsck_lfsck2name(lfsck), ltd->ltd_index);
@@ -5223,7 +5222,7 @@ static int lfsck_layout_reset(const struct lu_env *env,
 		struct lfsck_assistant_data *lad = com->lc_data;
 
 		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
-		CFS_RESET_BITMAP(lad->lad_bitmap);
+		bitmap_zero(lad->lad_bitmap, lad->lad_bitmap_count);
 	}
 
 	rc = lfsck_layout_store(env, com);
@@ -6413,8 +6412,7 @@ static void lfsck_layout_master_data_release(const struct lu_env *env,
 	}
 	spin_unlock(&ltds->ltd_lock);
 
-	if (likely(lad->lad_bitmap != NULL))
-		CFS_FREE_BITMAP(lad->lad_bitmap);
+	bitmap_free(lad->lad_bitmap);
 
 	OBD_FREE_PTR(lad);
 }
@@ -6762,7 +6760,7 @@ static int lfsck_layout_query_all(const struct lu_env *env,
 
 	ltds = &com->lc_lfsck->li_mdt_descs;
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -6773,7 +6771,7 @@ static int lfsck_layout_query_all(const struct lu_env *env,
 
 	ltds = &com->lc_lfsck->li_ost_descs;
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 

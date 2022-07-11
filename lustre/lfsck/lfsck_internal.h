@@ -489,7 +489,8 @@ struct lfsck_tgt_descs {
 	struct lfsck_tgt_desc_idx	*ltd_tgts_idx[TGT_PTRS];
 
 	/* bitmap of TGTs available */
-	struct cfs_bitmap			*ltd_tgts_bitmap;
+	unsigned long			*ltd_tgts_bitmap;
+	u32				 ltd_tgts_mask_len;
 
 	/* for lfsck_tgt_desc::ltd_xxx_list */
 	spinlock_t			 ltd_lock;
@@ -851,7 +852,8 @@ struct lfsck_assistant_data {
 
 	const struct lfsck_assistant_operations	*lad_ops;
 
-	struct cfs_bitmap				*lad_bitmap;
+	unsigned long				*lad_bitmap;
+	unsigned int				 lad_bitmap_count;
 
 	__u32					 lad_touch_gen;
 	int					 lad_prefetched;
@@ -1436,14 +1438,14 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 					struct lfsck_component *com,
 					__u32 index)
 {
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct cfs_bitmap		*bitmap	= lad->lad_bitmap;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	unsigned long *bitmap = lad->lad_bitmap;
 
 	LASSERT(com->lc_lfsck->li_master);
-	LASSERT(bitmap != NULL);
+	LASSERT(bitmap);
 
-	if (likely(bitmap->size > index)) {
-		cfs_bitmap_set(bitmap, index);
+	if (likely(lad->lad_bitmap_count > index)) {
+		set_bit(index, bitmap);
 		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	} else if (com->lc_type == LFSCK_TYPE_NAMESPACE) {
 		struct lfsck_namespace *ns = com->lc_file_ram;
@@ -1453,7 +1455,7 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 
 	CDEBUG(D_LFSCK, "%s: %s LFSCK set bitmap (%p/%u) for idx %u\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, bitmap,
-	       bitmap->size, index);
+	       lad->lad_bitmap_count, index);
 }
 
 static inline int lfsck_links_read(const struct lu_env *env,

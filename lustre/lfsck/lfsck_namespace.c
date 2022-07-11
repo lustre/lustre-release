@@ -277,55 +277,55 @@ static void lfsck_namespace_record_failure(const struct lu_env *env,
 static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 				       struct lfsck_component *com)
 {
-	struct dt_object		*obj	= com->lc_obj;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct cfs_bitmap			*bitmap = lad->lad_bitmap;
-	ssize_t				 size;
-	__u32				 nbits;
-	int				 rc;
-	ENTRY;
+	struct dt_object *obj = com->lc_obj;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	unsigned long *bitmap = lad->lad_bitmap;
+	ssize_t	size;
+	__u32 nbits;
+	int rc;
 
-	if (com->lc_lfsck->li_mdt_descs.ltd_tgts_bitmap->size >
+	ENTRY;
+	if (com->lc_lfsck->li_mdt_descs.ltd_tgts_mask_len >
 	    ns->ln_bitmap_size)
-		nbits = com->lc_lfsck->li_mdt_descs.ltd_tgts_bitmap->size;
+		nbits = com->lc_lfsck->li_mdt_descs.ltd_tgts_mask_len;
 	else
 		nbits = ns->ln_bitmap_size;
 
 	if (unlikely(nbits < BITS_PER_LONG))
 		nbits = BITS_PER_LONG;
 
-	if (nbits > bitmap->size) {
-		__u32 new_bits = bitmap->size;
-		struct cfs_bitmap *new_bitmap;
+	if (nbits > lad->lad_bitmap_count) {
+		u32 new_bits = lad->lad_bitmap_count;
+		unsigned long *new_bitmap;
 
 		while (new_bits < nbits)
 			new_bits <<= 1;
 
-		new_bitmap = CFS_ALLOCATE_BITMAP(new_bits);
+		new_bitmap = bitmap_zalloc(new_bits, GFP_KERNEL);
 		if (new_bitmap == NULL)
 			RETURN(-ENOMEM);
 
 		lad->lad_bitmap = new_bitmap;
-		CFS_FREE_BITMAP(bitmap);
+		lad->lad_bitmap_count = new_bits;
+		bitmap_free(bitmap);
 		bitmap = new_bitmap;
 	}
 
 	if (ns->ln_bitmap_size == 0) {
 		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
-		CFS_RESET_BITMAP(bitmap);
-
+		bitmap_zero(bitmap, lad->lad_bitmap_count);
 		RETURN(0);
 	}
 
 	size = (ns->ln_bitmap_size + 7) >> 3;
 	rc = dt_xattr_get(env, obj,
-			  lfsck_buf_get(env, bitmap->data, size),
+			  lfsck_buf_get(env, bitmap, size),
 			  XATTR_NAME_LFSCK_BITMAP);
 	if (rc != size)
 		RETURN(rc >= 0 ? -EINVAL : rc);
 
-	if (cfs_bitmap_check_empty(bitmap))
+	if (bitmap_empty(bitmap, lad->lad_bitmap_count))
 		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	else
 		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
@@ -378,21 +378,21 @@ static int lfsck_namespace_load(const struct lu_env *env,
 static int lfsck_namespace_store(const struct lu_env *env,
 				 struct lfsck_component *com)
 {
-	struct dt_object		*obj	= com->lc_obj;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	struct cfs_bitmap		*bitmap	= NULL;
-	struct thandle			*handle;
-	__u32				 nbits	= 0;
-	int				 len    = com->lc_file_size;
-	int				 rc;
-	ENTRY;
+	struct dt_object *obj = com->lc_obj;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	unsigned long *bitmap = NULL;
+	struct thandle *handle;
+	__u32 nbits = 0;
+	int len = com->lc_file_size;
+	int rc;
 
+	ENTRY;
 	if (lad != NULL) {
 		bitmap = lad->lad_bitmap;
-		nbits = bitmap->size;
+		nbits = lad->lad_bitmap_count;
 
 		LASSERT(nbits > 0);
 		LASSERTF((nbits & 7) == 0, "Invalid nbits %u\n", nbits);
@@ -413,7 +413,7 @@ static int lfsck_namespace_store(const struct lu_env *env,
 
 	if (bitmap != NULL) {
 		rc = dt_declare_xattr_set(env, obj,
-				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				lfsck_buf_get(env, bitmap, nbits >> 3),
 				XATTR_NAME_LFSCK_BITMAP, 0, handle);
 		if (rc != 0)
 			GOTO(out, rc);
@@ -428,7 +428,7 @@ static int lfsck_namespace_store(const struct lu_env *env,
 			  XATTR_NAME_LFSCK_NAMESPACE, 0, handle);
 	if (rc == 0 && bitmap != NULL)
 		rc = dt_xattr_set(env, obj,
-				  lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				  lfsck_buf_get(env, bitmap, nbits >> 3),
 				  XATTR_NAME_LFSCK_BITMAP, 0, handle);
 
 	GOTO(out, rc);
@@ -4267,7 +4267,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 		GOTO(out, rc);
 
 	clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
-	CFS_RESET_BITMAP(lad->lad_bitmap);
+	bitmap_zero(lad->lad_bitmap, lad->lad_bitmap_count);
 
 	rc = lfsck_namespace_store(env, com);
 
@@ -5005,7 +5005,7 @@ static void lfsck_namespace_data_release(const struct lu_env *env,
 	spin_unlock(&ltds->ltd_lock);
 
 	if (likely(lad->lad_bitmap != NULL))
-		CFS_FREE_BITMAP(lad->lad_bitmap);
+		bitmap_free(lad->lad_bitmap);
 
 	OBD_FREE_PTR(lad);
 }
@@ -5190,7 +5190,7 @@ static int lfsck_namespace_query_all(const struct lu_env *env,
 		RETURN(rc);
 
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+	for_each_set_bit(idx, ltds->ltd_tgts_bitmap, ltds->ltd_tgts_mask_len) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
@@ -6809,16 +6809,16 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 {
 	struct lfsck_async_interpret_args *laia  =
 				&lfsck_env_info(env)->lti_laia2;
-	struct lfsck_assistant_data	  *lad   = com->lc_data;
-	struct lfsck_namespace		  *ns    = com->lc_file_ram;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		  *ltd;
-	struct ptlrpc_request_set	  *set;
-	__u32				   idx;
-	int				   rc    = 0;
-	ENTRY;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct ptlrpc_request_set *set;
+	int idx;
+	int rc = 0;
 
+	ENTRY;
 	if (!test_bit(LAD_INCOMPLETE, &lad->lad_flags))
 		RETURN_EXIT;
 
@@ -6831,7 +6831,7 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 	lad->lad_touch_gen++;
 
 	down_read(&ltds->ltd_rw_sem);
-	cfs_foreach_bit(lad->lad_bitmap, idx) {
+	for_each_set_bit(idx, lad->lad_bitmap, lad->lad_bitmap_count) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
 		if (unlikely(!ltd))
 			continue;
