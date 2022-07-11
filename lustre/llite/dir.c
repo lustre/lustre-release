@@ -698,18 +698,15 @@ int ll_dir_get_default_layout(struct inode *inode, void **plmm, int *plmm_size,
 	struct mdt_body   *body;
 	struct lov_mds_md *lmm = NULL;
 	struct ptlrpc_request *req = NULL;
-	int rc, lmm_size;
+	int lmm_size = OBD_MAX_DEFAULT_EA_SIZE;
 	struct md_op_data *op_data;
 	struct lu_fid fid;
+	int rc;
+
 	ENTRY;
 
-	rc = ll_get_default_mdsize(sbi, &lmm_size);
-	if (rc)
-		RETURN(rc);
-
-	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
-				     0, lmm_size, LUSTRE_OPC_ANY,
-				     NULL);
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, lmm_size,
+				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
