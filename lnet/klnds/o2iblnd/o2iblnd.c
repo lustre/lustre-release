@@ -2180,7 +2180,7 @@ again:
 	CDEBUG(D_NET, "%s pool exhausted, allocate new pool\n", ps->ps_name);
 	time_before = ktime_get();
 	rc = ps->ps_pool_create(ps, ps->ps_pool_size, &pool);
-	CDEBUG(D_NET, "ps_pool_create took %lld ms to complete",
+	CDEBUG(D_NET, "ps_pool_create took %lld ms to complete\n",
 	       ktime_ms_delta(ktime_get(), time_before));
 
 	spin_lock(&ps->ps_lock);
