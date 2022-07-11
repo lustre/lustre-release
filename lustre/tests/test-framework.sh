@@ -436,6 +436,7 @@ init_test_env() {
 	export KEEP_POOLS=${KEEP_POOLS:-false}
 	export PARALLEL=${PARALLEL:-"no"}
 
+	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 	get_lustre_env
@@ -4830,6 +4831,7 @@ mkfs_opts() {
 	local opts
 	local fs_mkfs_opts
 	local var
+	local varbs=${facet}_BLOCKSIZE
 
 	if [ $type == MGS ] || ( [ $type == MDS ] &&
                                  [ "$dev" == $(mgsdevname) ] &&
@@ -4894,6 +4896,7 @@ mkfs_opts() {
 
 	[[ "$QUOTA_TYPE" =~ "p" ]] && fs_mkfs_opts+=" -O project"
 
+	[ $fstype == ldiskfs ] && fs_mkfs_opts+=" -b ${!varbs:-$BLCKSIZE}"
 	[ $fstype == ldiskfs ] && fs_mkfs_opts=$(squash_opt $fs_mkfs_opts)
 
 	if [ -n "${fs_mkfs_opts## }" ]; then
@@ -8961,11 +8964,14 @@ reformat_external_journal() {
 	local var
 
 	var=${facet}_JRN
+	local varbs=${facet}_BLOCKSIZE
 	if [ -n "${!var}" ]; then
 		local rcmd="do_facet $facet"
+		local bs=${!varbs:-$BLCKSIZE}
 
+		bs="-b $bs"
 		echo "reformat external journal on $facet:${!var}"
-		${rcmd} mke2fs -O journal_dev ${!var} || return 1
+		${rcmd} mke2fs -O journal_dev $bs ${!var} || return 1
 	fi
 }
 
