@@ -603,11 +603,8 @@ static int mdt_coordinator(void *data)
 	obd_uuid2fsname(hsd.hsd_fsname, mdt_obd_name(mdt),
 			sizeof(hsd.hsd_fsname));
 
-	set_cdt_state(cdt, CDT_RUNNING);
-
-	/* Inform mdt_hsm_cdt_start(). */
-	wake_up(&cdt->cdt_waitq);
 	cdt_start_pending_restore(mdt, cdt);
+	set_cdt_state(cdt, CDT_RUNNING);
 
 	while (1) {
 		int i;
@@ -1214,10 +1211,6 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		       mdt_obd_name(mdt), rc);
 	} else {
 		cdt->cdt_task = task;
-		wait_event(cdt->cdt_waitq,
-			   cdt->cdt_state != CDT_INIT);
-		CDEBUG(D_HSM, "%s: coordinator thread started\n",
-		       mdt_obd_name(mdt));
 		rc = 0;
 	}
 

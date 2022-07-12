@@ -572,7 +572,8 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 
 	hal->hal_version = HAL_VERSION;
 	hal->hal_archive_id = hr->hr_archive_id;
-	hal->hal_flags = hr->hr_flags;
+	hal->hal_flags = hr->hr_flags & ~HAL_CDT_FORCE;
+
 	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
 			MTI_NAME_MAXLEN);
 

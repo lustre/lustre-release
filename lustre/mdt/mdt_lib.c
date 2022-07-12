@@ -984,8 +984,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 
 	hai.hai_fid = *mdt_object_fid(mo);
 
-	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt, archive_id, 0,
-				  &hai);
+	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt, archive_id,
+				  HAL_CDT_FORCE, &hai);
 	if (rc)
 		CERROR("%s: unable to add HSM remove request for "DFID
 		       ": rc=%d\n", mdt_obd_name(info->mti_mdt),

@@ -284,7 +284,19 @@ int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 	if (lctxt == NULL || lctxt->loc_handle == NULL)
 		GOTO(free, rc = -ENOENT);
 
+	/* Preserve lock order wrt hsm_cancel_all_actions() */
+	mutex_lock(&cdt->cdt_state_lock);
 	down_write(&cdt->cdt_llog_lock);
+
+	/* Need cdt_last_cookie to be set during CDT startup; allow RAoLU
+	 * requests, even though this can trigger the assertions in
+	 * cdt_agent_record_hash_add(). This could be improved e.g. by failing
+	 * the unlink during CDT_INIT, or adding RAoLU requests in an llog and
+	 * issuing them if the CDT is available later
+	 */
+	if ((cdt->cdt_state == CDT_STOPPED || cdt->cdt_state == CDT_STOPPING ||
+	    cdt->cdt_state == CDT_INIT) && !(flags & HAL_CDT_FORCE))
+		GOTO(unavail, rc = -EAGAIN);
 
 	/* in case of cancel request, the cookie is already set to the
 	 * value of the request cookie to be cancelled
@@ -297,8 +309,9 @@ int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 	rc = llog_cat_add(env, lctxt->loc_handle, &larr->arr_hdr, NULL);
 	if (rc > 0)
 		rc = 0;
-
+unavail:
 	up_write(&cdt->cdt_llog_lock);
+	mutex_unlock(&cdt->cdt_state_lock);
 	llog_ctxt_put(lctxt);
 
 	EXIT;
