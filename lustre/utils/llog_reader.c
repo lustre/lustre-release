@@ -219,7 +219,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	char *file_buf = NULL, *recs_buf = NULL;
 	struct llog_rec_hdr **recs_pr = NULL;
 	char *ptr = NULL;
-	int count;
+	int count, errors = 0;
 	int i, last_idx;
 
 	*recs = NULL;
@@ -229,7 +229,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	if (rc < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "Got file stat error.");
-		goto out;
+		return rc;
 	}
 
 	file_size = st.st_size;
@@ -239,14 +239,14 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 			    "need %zd, size %lld\n",
 			    sizeof(**llog), file_size);
 		rc = -EIO;
-		goto out;
+		return rc;
 	}
 
 	file_buf = malloc(file_size);
 	if (!file_buf) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc, "Memory Alloc for file_buf.");
-		goto out;
+		return rc;
 	}
 	*llog = (struct llog_log_hdr *)file_buf;
 
@@ -301,65 +301,89 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		int idx;
 		unsigned long offset;
 
-		if (ptr + sizeof(**recs_pr) > file_buf + file_size) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "The log is corrupt (too big at %d)", i);
-			goto clear_recs_buf;
+		offset = (unsigned long)ptr - (unsigned long)file_buf;
+		if (offset + sizeof(**recs_pr) > file_size) {
+			printf("error: rec header is trimmed by EOF, last idx #%d offset %lu\n",
+			       last_idx, offset);
+			errors++;
+			break;
 		}
-
 		cur_rec = (struct llog_rec_hdr *)ptr;
 		idx = __le32_to_cpu(cur_rec->lrh_index);
-		recs_pr[i] = cur_rec;
-		offset = (unsigned long)ptr - (unsigned long)file_buf;
 		if (cur_rec->lrh_len == 0 ||
 		    cur_rec->lrh_len > (*llog)->llh_hdr.lrh_len) {
 			cur_rec->lrh_len = (*llog)->llh_hdr.lrh_len -
 				offset % (*llog)->llh_hdr.lrh_len;
 			printf("off %lu skip %u to next chunk.\n", offset,
 			       cur_rec->lrh_len);
-			i--;
 		} else if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
 			printf("rec #%d type=%x len=%u offset %lu\n", idx,
 			       cur_rec->lrh_type, cur_rec->lrh_len, offset);
+			recs_pr[i] = cur_rec;
+			i++;
 		} else {
 			cur_rec->lrh_id = CANCELLED;
 			if (cur_rec->lrh_type == LLOG_PAD_MAGIC &&
-			   ((offset + cur_rec->lrh_len) & 0x7) != 0)
-				printf("rec #%d wrong padding len=%u offset %lu to 0x%lx\n",
+			   ((offset + cur_rec->lrh_len) & 0x7) != 0) {
+				printf("error: rec #%d wrong padding len=%u offset %lu to 0x%lx\n",
 				       idx, cur_rec->lrh_len, offset,
 				       offset + cur_rec->lrh_len);
+				errors++;
+			}
 			/* The header counts only set records */
-			i--;
 		}
-		if (last_idx + 1 != idx) {
-			printf("Previous index is %d, current %d, offset %lu\n",
-			       last_idx, idx, offset);
+
+		while (++last_idx < idx) {
+			printf("error: rec #%d is missing%s set in bitmap\n",
+			       last_idx,
+			       ext2_test_bit(last_idx, LLOG_HDR_BITMAP(*llog)) ?
+			       " but" : ", not");
+			errors++;
 		}
-		last_idx = idx;
+		/* index may decrease only when crosses index zero in catalog */
+		if (last_idx > idx && idx != 1) {
+			printf("error: rec #%d index is less than last #%d\n",
+			       idx, last_idx);
+			errors++;
+			last_idx = idx;
+		}
 
 		ptr += __le32_to_cpu(cur_rec->lrh_len);
 		if ((ptr - file_buf) > file_size) {
-			printf("The log is corrupt (too big at %d)\n", i);
-			rc = -EINVAL;
-			goto clear_recs_buf;
+			printf("error: rec #%d is trimmed by EOF, offset %lu\n",
+			       idx, offset);
+			errors++;
+			break;
 		}
-		i++;
 	}
 
-	*recs = recs_pr;
-	*recs_number = recs_num;
-out:
-	return rc;
+	while (++last_idx < LLOG_HDR_BITMAP_SIZE((*llog))) {
+		if (ext2_test_bit(last_idx, LLOG_HDR_BITMAP(*llog))) {
+			printf("error: rec #%d is set in bitmap only\n",
+			       last_idx);
+			errors++;
+		}
+	}
+	if (i != recs_num)
+		printf("error: header reports %d records but %d were found\n",
+		       recs_num, i);
 
-clear_recs_buf:
-	free(recs_buf);
+	/* don't set rc to output what was found */
+	if (errors)
+		llapi_error(LLAPI_MSG_NO_ERRNO, 0,
+			    "The llog is corrupted, %d errors found", errors);
+
+	*recs = recs_pr;
+	/* don't try to output more recs than was found or allocated */
+	*recs_number = i > recs_num ? recs_num : i;
+
+	return 0;
 
 clear_file_buf:
 	free(file_buf);
-
 	*llog = NULL;
-	goto out;
+
+	return rc;
 }
 
 void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
