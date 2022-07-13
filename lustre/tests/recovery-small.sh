@@ -3332,7 +3332,7 @@ test_150() {
 	stack_trap "$LCTL set_param llite.$FSNAME-*.lazystatfs=$lazystatfs" EXIT
 	stack_trap "$LCTL set_param llite.$FSNAME-*.statahead_max=$max" EXIT
 	# stop a slave MDT where one ons stripe is located
-	stop mds1 -f
+	stop mds1
 
 	stack_trap "start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS && \
 		wait_recovery_complete mds1 && clients_up && true" EXIT
