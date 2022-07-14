@@ -108,14 +108,12 @@ void srpc_get_counters(struct srpc_counters *cnt)
 }
 
 static int
-srpc_add_bulk_page(struct srpc_bulk *bk, struct page *pg, int i, int off,
-		   int nob)
+srpc_init_bulk_page(struct srpc_bulk *bk, int i, int off, int nob)
 {
 	LASSERT(off < PAGE_SIZE);
 	LASSERT(nob > 0 && nob <= PAGE_SIZE);
 
 	bk->bk_iovs[i].bv_offset = off;
-	bk->bk_iovs[i].bv_page   = pg;
 	bk->bk_iovs[i].bv_len    = nob;
 	return nob;
 }
@@ -140,8 +138,7 @@ srpc_free_bulk(struct srpc_bulk *bk)
 }
 
 struct srpc_bulk *
-srpc_alloc_bulk(int cpt, unsigned bulk_off, unsigned bulk_npg,
-		unsigned bulk_len, int sink)
+srpc_alloc_bulk(int cpt, unsigned int bulk_npg)
 {
 	struct srpc_bulk *bk;
 	int i;
@@ -156,13 +153,10 @@ srpc_alloc_bulk(int cpt, unsigned bulk_off, unsigned bulk_npg,
 	}
 
 	memset(bk, 0, offsetof(struct srpc_bulk, bk_iovs[bulk_npg]));
-	bk->bk_sink   = sink;
-	bk->bk_len    = bulk_len;
 	bk->bk_niov   = bulk_npg;
 
 	for (i = 0; i < bulk_npg; i++) {
 		struct page *pg;
-		int nob;
 
 		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, GFP_KERNEL);
 		if (pg == NULL) {
@@ -170,16 +164,37 @@ srpc_alloc_bulk(int cpt, unsigned bulk_off, unsigned bulk_npg,
 			srpc_free_bulk(bk);
 			return NULL;
 		}
+		bk->bk_iovs[i].bv_page   = pg;
+	}
+
+	return bk;
+}
+
+void
+srpc_init_bulk(struct srpc_bulk *bk, unsigned int bulk_off,
+		unsigned int bulk_npg, unsigned int bulk_len, int sink)
+{
+	int i;
+
+	LASSERT(bk != NULL);
+	LASSERT(bulk_npg > 0 && bulk_npg <= LNET_MAX_IOV);
+
+	bk->bk_sink   = sink;
+	bk->bk_len    = bulk_len;
+	bk->bk_niov   = bulk_npg;
+
+	for (i = 0; i < bulk_npg && bulk_len > 0; i++) {
+		int nob;
+
+		LASSERT(bk->bk_iovs[i].bv_page != NULL);
 
 		nob = min_t(unsigned, bulk_off + bulk_len, PAGE_SIZE) -
 		      bulk_off;
 
-		srpc_add_bulk_page(bk, pg, i, bulk_off, nob);
+		srpc_init_bulk_page(bk, i, bulk_off, nob);
 		bulk_len -= nob;
 		bulk_off = 0;
 	}
-
-	return bk;
 }
 
 static inline __u64
@@ -193,7 +208,6 @@ srpc_init_server_rpc(struct srpc_server_rpc *rpc,
 		     struct srpc_service_cd *scd,
 		     struct srpc_buffer *buffer)
 {
-	memset(rpc, 0, sizeof(*rpc));
 	swi_init_workitem(&rpc->srpc_wi, srpc_handle_rpc,
 			  srpc_serv_is_framework(scd->scd_svc) ?
 			  lst_sched_serial : lst_sched_test[scd->scd_cpt]);
@@ -205,6 +219,9 @@ srpc_init_server_rpc(struct srpc_server_rpc *rpc,
 	rpc->srpc_peer     = buffer->buf_peer;
 	rpc->srpc_self     = buffer->buf_self;
 	LNetInvalidateMDHandle(&rpc->srpc_replymdh);
+
+	rpc->srpc_aborted  = 0;
+	rpc->srpc_status   = 0;
 }
 
 static void
@@ -244,6 +261,8 @@ srpc_service_fini(struct srpc_service *svc)
 					 struct srpc_server_rpc,
 					 srpc_list);
 			list_del(&rpc->srpc_list);
+			if (svc->sv_srpc_fini)
+				svc->sv_srpc_fini(rpc);
 			LIBCFS_FREE(rpc, sizeof(*rpc));
 		}
 	}
@@ -311,7 +330,8 @@ srpc_service_init(struct srpc_service *svc)
 		for (j = 0; j < nrpcs; j++) {
 			LIBCFS_CPT_ALLOC(rpc, lnet_cpt_table(),
 					 i, sizeof(*rpc));
-			if (rpc == NULL) {
+			if (rpc == NULL ||
+			   (svc->sv_srpc_init && svc->sv_srpc_init(rpc, i))) {
 				srpc_service_fini(svc);
 				return -ENOMEM;
 			}
@@ -940,7 +960,6 @@ srpc_server_rpc_done(struct srpc_server_rpc *rpc, int status)
 
 	if (rpc->srpc_done != NULL)
 		(*rpc->srpc_done) (rpc);
-	LASSERT(rpc->srpc_bulk == NULL);
 
 	spin_lock(&scd->scd_lock);
 
