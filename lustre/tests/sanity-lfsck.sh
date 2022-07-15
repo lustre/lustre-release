@@ -2030,7 +2030,8 @@ test_15d() {
 	# rm $tdir to avoid cleanup failure in the end
 	rm -rf $DIR/$tdir/*
 	$LFS rm_entry $DIR/$tdir/*
-	rm -rf $DIR/$tdir || error "rm $tdir failed"
+	rm -rf $DIR/$tdir
+	REFORMAT="yes" cleanup_and_setup_lustre
 }
 run_test 15d "LFSCK don't crash upon dir migration failure"
 
