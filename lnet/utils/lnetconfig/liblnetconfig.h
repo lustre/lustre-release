@@ -820,6 +820,16 @@ int yaml_parser_set_input_netlink(yaml_parser_t *parser, struct nl_sock *nl,
 				  bool stream);
 
 /**
+ * yaml_parser_get_reader_proto_version
+ *
+ *   This function retrieves the Neltink version the kernel module
+ *   is set to.
+ *
+ *   parser	- YAML parser being used for Netlink communication.
+ */
+int yaml_parser_get_reader_proto_version(yaml_parser_t *parser);
+
+/**
  * yaml_parser_get_reader_error
  *
  *   By default libyaml reports a generic write error. We need a way
