@@ -2295,6 +2295,7 @@ test_8() {
 		quota_error a $TSTUSR "dbench failed!"
 
 	is_project_quota_supported && change_project -C $DIR/$tdir
+	return 0
 }
 run_test 8 "Run dbench with quota enabled"
 
