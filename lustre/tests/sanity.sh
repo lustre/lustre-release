@@ -5892,7 +5892,7 @@ test_51d_sub() {
 
 	local nlast
 	local min=4
-	local max=5 # allow variance of (1 - $min/$max) = 20% by default
+	local max=6 # allow variance of (1 - $min/$max) = 33% by default
 
 	# For some combinations of stripecount and OSTCOUNT current code
 	# is not ideal, and allocates 50% fewer *first* objects to some OSTs
