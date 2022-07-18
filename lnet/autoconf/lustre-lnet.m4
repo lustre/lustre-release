@@ -80,7 +80,7 @@ Instead, if you want to build Lustre for your kernel's built-in I/B stack rather
 				AC_MSG_ERROR([
 It appears that you have multiple OFED versions installed.
 If you still want to build Lustre for your OFED I/B stack, you need to install a single version with its devel headers RPM.
-Instead, if you want to build Lustre for your kernel's built-in I/B stack rather than your installed OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
+Instead, if you want to build Lustre for your in-kernel I/B stack rather than your installed external OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
 					     ])
 			])
 			if test -e $O2IBPATHS/${LINUXRELEASE}; then
@@ -210,6 +210,9 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			O2IB_SYMVER=$O2IBPATH/Module.symvers
 		elif test "x$SUSE_KERNEL" = "xyes"; then
 			O2IB_SYMVER=$(find ${O2IBPATH}* -name Module.symvers)
+		elif test -f $LINUX_OBJ/Module.symvers; then
+			# Debian symvers is in the arch tree
+			O2IB_SYMVER=$LINUX_OBJ/Module.symvers
 		fi
 		if test -n "$O2IB_SYMVER"; then
 			AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path])
@@ -619,7 +622,7 @@ AS_IF([test "x$enable_gni" = xyes], [
 	],[
 		GNILND="gnilnd"
 	],[
-		AC_MSG_ERROR([can't compile gnilnd with given GNICPPFLAGS: $GNICPPFLAGS])
+		AC_MSG_ERROR([cannot compile gnilnd with given GNICPPFLAGS: $GNICPPFLAGS])
 	])
 	# at this point, we have gnilnd basic support,
 	# now check for extra features
