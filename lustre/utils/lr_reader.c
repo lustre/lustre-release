@@ -67,132 +67,93 @@ static struct option const long_opts[] = {
 	{ .val = 'c',	.name = "client",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'r',	.name = "reply",	.has_arg = no_argument },
+	{ .val = 'R',	.name = "reply_data",	.has_arg = required_argument },
+	{ .val = 'C',	.name = "last_rcvd",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-/* Executes the command \a cmd and returns command status.
- */
-int run_command(char *cmd, size_t cmdsz)
+void dump_log(int fd)
+{
+	char buf[128];
+	int n;
+
+	do {
+		n = read(fd, buf, sizeof(buf));
+		n = write(2, buf, n);
+	} while (n == sizeof(buf));
+
+	fprintf(stderr, "\n");
+}
+
+FILE *open_debugfs_file(char *filename, char *tmpdir, char *dev)
 {
 	char log[] = "/tmp/run_command_logXXXXXX";
-	int fd, rc;
+	char filepnm[128];
+	char *cmd = NULL;
+	FILE *fp = NULL;
+	int flog = 0;
+	int cmdsize;
+	int n = 128;
+	int rc = 0;
 
-	if (strlen(cmd) + strlen(log) + 8 > cmdsz) {
-		fprintf(stderr, "Command buffer overflow: %.*s...\n",
-			(int)cmdsz, cmd);
-		return -ENOMEM;
-	}
+	flog = mkstemp(log);
+	if (flog < 0)
+		return NULL;
 
-	fd = mkstemp(log);
-	if (fd >= 0) {
-		close(fd);
-		strncat(cmd, " >", cmdsz);
-		strncat(cmd, log, cmdsz);
-	}
-	strncat(cmd, " 2>&1", cmdsz - strlen(cmd));
+	do {
+		cmdsize = n;
+		cmd = realloc(cmd, cmdsize);
+		if (!cmd) {
+			fprintf(stderr, "%s: Unable to allocate cmd buffer\n",
+				progname);
+			goto out;
+		}
 
-	/* Can't use popen because we need the rv of the command */
+		n = snprintf(cmd, cmdsize,
+			 "%s -c -R 'dump /%s %s/%s' %s > %s 2>&1",
+			 DEBUGFS, filename, tmpdir, filename, dev, log);
+		n++;
+
+	} while (n > cmdsize);
+
 	rc = system(cmd);
-	if (rc && fd >= 0) {
-		char buf[128];
-		FILE *fp;
-		fp = fopen(log, "r");
-		if (fp) {
-			while (fgets(buf, sizeof(buf), fp) != NULL) {
-				if (rc)
-					printf("   %s", buf);
-			}
-			fclose(fp);
-		}
-	}
-	if (fd >= 0)
-		remove(log);
-	return rc;
-}
-
-
-void display_usage(void)
-{
-	printf("Usage: %s [OPTIONS] devicename\n", progname);
-	printf("Read and print the last_rcvd file from a device\n");
-	printf("(safe for mounted devices)\n");
-	printf("\t-c, --client, display client information\n");
-	printf("\t-h, --help,   display this help and exit\n");
-	printf("\t-r, --reply,  display reply data information\n");
-}
-
-
-int main(int argc, char *const argv[])
-{
-	char tmpdir[] = "/tmp/dirXXXXXX";
-	char cmd[128];
-	char filepnm[128] = "";
-	char *dev;
-	struct lr_server_data lsd;
-	FILE *filep = NULL;
-	int ret;
-	int c;
-	int opt_client = 0;
-	int opt_reply = 0;
-
-	progname = argv[0];
-	while ((c = getopt_long(argc, argv, "chr", long_opts, NULL)) != -1) {
-		switch (c) {
-		case 'c':
-			opt_client = 1;
-			break;
-		case 'r':
-			opt_reply = 1;
-			break;
-		case 'h':
-		default:
-			display_usage();
-			return -1;
-		}
-	}
-	dev = argv[optind];
-	if (!dev) {
-		display_usage();
-		return -1;
-	}
-
-	/* Make a temporary directory to hold Lustre data files. */
-	if (!mkdtemp(tmpdir)) {
-		fprintf(stderr, "%s: Can't create temporary directory %s: %s\n",
-			progname, tmpdir, strerror(errno));
-		return errno;
-	}
-
-	memset(cmd, 0, sizeof(cmd));
-	snprintf(cmd, sizeof(cmd),
-		"%s -c -R 'dump /%s %s/%s' %s",
-		DEBUGFS, LAST_RCVD, tmpdir, LAST_RCVD, dev);
-
-	ret = run_command(cmd, sizeof(cmd));
-	if (ret) {
+	free(cmd);
+	if (rc) {
 		fprintf(stderr, "%s: Unable to dump %s file\n",
-			progname, LAST_RCVD);
-		goto out_rmdir;
+			progname, filename);
+		goto out;
 	}
 
-	snprintf(filepnm, 128, "%s/%s", tmpdir, LAST_RCVD);
-	filep = fopen(filepnm, "r");
-	if (!filep) {
-		fprintf(stderr, "%s: Unable to read old data\n",
-			progname);
-		ret = -errno;
-		goto out_rmdir;
-	}
+	snprintf(filepnm, sizeof(filepnm), "%s/%s", tmpdir, filename);
+	fp = fopen(filepnm, "r");
+	if (!fp)
+		rc = errno;
+
 	unlink(filepnm);
+
+out:
+	if (rc)
+		dump_log(flog);
+
+	close(flog);
+	unlink(log);
+
+	errno = rc;
+	return fp;
+}
+
+int print_last_rcvd(FILE *fp, int opt_client)
+{
+	struct lr_server_data lsd = {};
+	int rc = 0;
+	int n;
 
 	/* read lr_server_data structure */
 	printf("%s:\n", LAST_RCVD);
-	ret = fread(&lsd, 1, sizeof(lsd), filep);
-	if (ret < sizeof(lsd)) {
+	n = fread(&lsd, 1, sizeof(lsd), fp);
+	if (n < sizeof(lsd)) {
 		fprintf(stderr, "%s: Short read (%d of %d)\n",
-			progname, ret, (int)sizeof(lsd));
-		ret = -ferror(filep);
-		if (ret)
-			goto out_close;
+			progname, n, (int)sizeof(lsd));
+		rc = ferror(fp) ? EIO : EINVAL;
 	}
 
 	/* swab structure fields of interest */
@@ -214,184 +175,275 @@ int main(int argc, char *const argv[])
 	printf("  mount_count: %llu\n",
 	       (unsigned long long)lsd.lsd_mount_count);
 
+	if (!opt_client || rc)
+		return rc;
+
 	/* read client information */
-	if (opt_client) {
-		lsd.lsd_client_start = __le32_to_cpu(lsd.lsd_client_start);
-		lsd.lsd_client_size = __le16_to_cpu(lsd.lsd_client_size);
-		printf("  client_area_start: %u\n", lsd.lsd_client_start);
-		printf("  client_area_size: %hu\n", lsd.lsd_client_size);
+	lsd.lsd_client_start = __le32_to_cpu(lsd.lsd_client_start);
+	lsd.lsd_client_size = __le16_to_cpu(lsd.lsd_client_size);
+	printf("  client_area_start: %u\n", lsd.lsd_client_start);
+	printf("  client_area_size: %hu\n", lsd.lsd_client_size);
 
-		/* seek to per-client data area */
-		ret = fseek(filep, lsd.lsd_client_start, SEEK_SET);
-		if (ret) {
-			fprintf(stderr, "%s: seek failed. %s\n",
-				progname, strerror(errno));
-			ret = errno;
-			goto out_close;
-		}
-
-		/* walk throuh the per-client data area */
-		while (true) {
-			struct lsd_client_data lcd;
-
-			/* read a per-client data area */
-			ret = fread(&lcd, 1, sizeof(lcd), filep);
-			if (ret < sizeof(lcd)) {
-				if (feof(filep))
-					break;
-				fprintf(stderr, "%s: Short read (%d of %d)\n",
-					progname, ret, (int)sizeof(lcd));
-				ret = -ferror(filep);
-				goto out_close;
-			}
-
-			if (lcd.lcd_uuid[0] == '\0')
-				continue;
-
-			/* swab structure fields */
-			lcd.lcd_last_transno =
-					__le64_to_cpu(lcd.lcd_last_transno);
-			lcd.lcd_last_xid = __le64_to_cpu(lcd.lcd_last_xid);
-			lcd.lcd_last_result = __le32_to_cpu(lcd.lcd_last_result);
-			lcd.lcd_last_data = __le32_to_cpu(lcd.lcd_last_data);
-			lcd.lcd_generation = __le32_to_cpu(lcd.lcd_generation);
-
-			/* display per-client data area */
-			printf("\n  %.40s:\n", lcd.lcd_uuid);
-			printf("    generation: %u\n", lcd.lcd_generation);
-			printf("    last_transaction: %llu\n",
-			       (unsigned long long)lcd.lcd_last_transno);
-			printf("    last_xid: %llu\n",
-			       (unsigned long long)lcd.lcd_last_xid);
-			printf("    last_result: %u\n", lcd.lcd_last_result);
-			printf("    last_data: %u\n", lcd.lcd_last_data);
-
-			if (lcd.lcd_last_close_transno != 0 &&
-			    lcd.lcd_last_close_xid != 0) {
-				lcd.lcd_last_close_transno =
-					__le64_to_cpu(lcd.lcd_last_close_transno);
-				lcd.lcd_last_close_xid =
-					__le64_to_cpu(lcd.lcd_last_close_xid);
-				lcd.lcd_last_close_result =
-					__le32_to_cpu(lcd.lcd_last_close_result);
-				lcd.lcd_last_close_data =
-					__le32_to_cpu(lcd.lcd_last_close_data);
-				printf("    last_close_transation: %llu\n",
-				       (unsigned long long)lcd.lcd_last_close_transno);
-				printf("    last_close_xid: %llu\n",
-				       (unsigned long long)lcd.lcd_last_close_xid);
-				printf("    last_close_result: %u\n",
-				       lcd.lcd_last_close_result);
-				printf("    last_close_data: %u\n",
-				       lcd.lcd_last_close_data);
-			}
-		}
+	/* seek to per-client data area */
+	rc = fseek(fp, lsd.lsd_client_start, SEEK_SET);
+	if (rc) {
+		fprintf(stderr, "%s: seek failed. %s\n",
+			progname, strerror(errno));
+		return errno;
 	}
-	fclose(filep);
-	filep = NULL;
 
-	/* read reply data information */
-	if (opt_reply) {
-		struct lsd_reply_header lrh;
-		struct lsd_reply_data lrd;
-		unsigned long long slot;
+	/* walk throuh the per-client data area */
+	while (true) {
+		struct lsd_client_data lcd;
 
-		snprintf(cmd, sizeof(cmd),
-			 "%s -c -R 'dump /%s %s/%s' %s",
-			 DEBUGFS, REPLY_DATA, tmpdir, REPLY_DATA, dev);
-
-		ret = run_command(cmd, sizeof(cmd));
-		if (ret) {
-			fprintf(stderr, "%s: Unable to dump %s file\n",
-				progname, REPLY_DATA);
-			goto out_rmdir;
-		}
-
-		snprintf(filepnm, sizeof(filepnm),
-			 "%s/%s", tmpdir, REPLY_DATA);
-		filep = fopen(filepnm, "r");
-		if (!filep) {
-			fprintf(stderr, "%s: Unable to read reply data\n",
-				progname);
-			ret = -errno;
-			goto out_rmdir;
-		}
-		unlink(filepnm);
-
-		/* read reply_data header */
-		printf("\n%s:\n", REPLY_DATA);
-		ret = fread(&lrh, 1, sizeof(lrh), filep);
-		if (ret < sizeof(lrh)) {
+		/* read a per-client data area */
+		n = fread(&lcd, 1, sizeof(lcd), fp);
+		if (n < sizeof(lcd)) {
+			if (feof(fp))
+				break;
 			fprintf(stderr, "%s: Short read (%d of %d)\n",
-				progname, ret, (int)sizeof(lrh));
-			ret = -ferror(filep);
-			if (ret)
-				goto out_close;
+				progname, n, (int)sizeof(lcd));
+			return ferror(fp) ? EIO : EINVAL;
 		}
 
-		/* check header */
-		lrh.lrh_magic = __le32_to_cpu(lrh.lrh_magic);
-		lrh.lrh_header_size = __le32_to_cpu(lrh.lrh_header_size);
-		lrh.lrh_reply_size = __le32_to_cpu(lrh.lrh_reply_size);
-		if (lrh.lrh_magic != LRH_MAGIC) {
-			fprintf(stderr, "%s: invalid %s header: "
-				"lrh_magic=%08x expected %08x\n",
-				progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC);
-			goto out_close;
-		}
-		if (lrh.lrh_header_size != sizeof(struct lsd_reply_header)) {
-			fprintf(stderr, "%s: invalid %s header: "
-				"lrh_header_size=%08x expected %08x\n",
-				progname, REPLY_DATA, lrh.lrh_header_size,
-				(unsigned int)sizeof(struct lsd_reply_header));
-			goto out_close;
-		}
-		if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data)) {
-			fprintf(stderr, "%s: invalid %s header: "
-				"lrh_reply_size=%08x expected %08x\n",
-				progname, REPLY_DATA, lrh.lrh_reply_size,
-				(unsigned int)sizeof(struct lsd_reply_data));
-			goto out_close;
-		}
+		if (lcd.lcd_uuid[0] == '\0')
+			continue;
 
-		/* walk throuh the reply data */
-		for (slot = 0; ; slot++) {
-			/* read a reply data */
-			ret = fread(&lrd, 1, sizeof(lrd), filep);
-			if (ret < sizeof(lrd)) {
-				if (feof(filep))
-					break;
-				fprintf(stderr, "%s: Short read (%d of %d)\n",
-					progname, ret, (int)sizeof(lrd));
-				ret = -ferror(filep);
-				goto out_close;
-			}
+		/* swab structure fields */
+		lcd.lcd_last_transno =
+			__le64_to_cpu(lcd.lcd_last_transno);
+		lcd.lcd_last_xid = __le64_to_cpu(lcd.lcd_last_xid);
+		lcd.lcd_last_result = __le32_to_cpu(lcd.lcd_last_result);
+		lcd.lcd_last_data = __le32_to_cpu(lcd.lcd_last_data);
+		lcd.lcd_generation = __le32_to_cpu(lcd.lcd_generation);
 
-			/* display reply data */
-			lrd.lrd_transno = __le64_to_cpu(lrd.lrd_transno);
-			lrd.lrd_xid = __le64_to_cpu(lrd.lrd_xid);
-			lrd.lrd_data = __le64_to_cpu(lrd.lrd_data);
-			lrd.lrd_result = __le32_to_cpu(lrd.lrd_result);
-			lrd.lrd_client_gen = __le32_to_cpu(lrd.lrd_client_gen);
+		/* display per-client data area */
+		printf("\n  %.40s:\n", lcd.lcd_uuid);
+		printf("    generation: %u\n", lcd.lcd_generation);
+		printf("    last_transaction: %llu\n",
+		       (unsigned long long)lcd.lcd_last_transno);
+		printf("    last_xid: %llu\n",
+		       (unsigned long long)lcd.lcd_last_xid);
+		printf("    last_result: %u\n", lcd.lcd_last_result);
+		printf("    last_data: %u\n", lcd.lcd_last_data);
 
-			printf("  %lld:\n", slot);
-			printf("    client_generation: %u\n",
-			       lrd.lrd_client_gen);
-			printf("    last_transaction: %lluu\n",
-			       (unsigned long long)lrd.lrd_transno);
-			printf("    last_xid: %llu\n",
-			       (unsigned long long)lrd.lrd_xid);
-			printf("    last_result: %u\n", lrd.lrd_result);
-			printf("    last_data: %llu\n\n",
-			       (unsigned long long)lrd.lrd_data);
+		if (lcd.lcd_last_close_transno != 0 &&
+		    lcd.lcd_last_close_xid != 0) {
+			lcd.lcd_last_close_transno =
+				__le64_to_cpu(lcd.lcd_last_close_transno);
+			lcd.lcd_last_close_xid =
+				__le64_to_cpu(lcd.lcd_last_close_xid);
+			lcd.lcd_last_close_result =
+				__le32_to_cpu(lcd.lcd_last_close_result);
+			lcd.lcd_last_close_data =
+				__le32_to_cpu(lcd.lcd_last_close_data);
+			printf("    last_close_transation: %llu\n",
+			       (unsigned long long)lcd.lcd_last_close_transno);
+			printf("    last_close_xid: %llu\n",
+			       (unsigned long long)lcd.lcd_last_close_xid);
+			printf("    last_close_result: %u\n",
+			       lcd.lcd_last_close_result);
+			printf("    last_close_data: %u\n",
+			       lcd.lcd_last_close_data);
 		}
 	}
 
-out_close:
-	if (filep != NULL)
+	return 0;
+}
+
+int print_reply_data(FILE *fp)
+{
+	struct lsd_reply_header lrh = {};
+	unsigned long long slot;
+	int rc = 0;
+	int n;
+
+	/* read reply_data header */
+	printf("\n%s:\n", REPLY_DATA);
+	n = fread(&lrh, 1, sizeof(lrh), fp);
+	if (n < sizeof(lrh)) {
+		fprintf(stderr, "%s: Short read (%d of %d)\n",
+			progname, n, (int)sizeof(lrh));
+		rc = ferror(fp) ? EIO : EINVAL;
+	}
+
+	/* check header */
+	lrh.lrh_magic = __le32_to_cpu(lrh.lrh_magic);
+	lrh.lrh_header_size = __le32_to_cpu(lrh.lrh_header_size);
+	lrh.lrh_reply_size = __le32_to_cpu(lrh.lrh_reply_size);
+	if (lrh.lrh_magic != LRH_MAGIC) {
+		fprintf(stderr,
+			"%s: invalid %s header: lrh_magic=0x%08x expected 0x%08x\n",
+			progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC);
+		rc = EINVAL;
+	}
+	if (lrh.lrh_header_size != sizeof(struct lsd_reply_header)) {
+		fprintf(stderr,
+			"%s: invalid %s header: lrh_header_size=0x%08x expected 0x%08x\n",
+			progname, REPLY_DATA, lrh.lrh_header_size,
+			(unsigned int)sizeof(struct lsd_reply_header));
+		rc = EINVAL;
+	}
+	if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data)) {
+		fprintf(stderr,
+			"%s: invalid %s header: lrh_reply_size=0x%08x expected 0x%08x\n",
+			progname, REPLY_DATA, lrh.lrh_reply_size,
+			(unsigned int)sizeof(struct lsd_reply_data));
+		rc = EINVAL;
+	}
+
+	if (rc) {
+		/* dump header */
+		fprintf(stderr, "lsd_reply_header:\n");
+		fprintf(stderr, "\tlrh_magic: 0x%08x\n", lrh.lrh_magic);
+		fprintf(stderr, "\tlrh_header_size: %u\n", lrh.lrh_header_size);
+		fprintf(stderr, "\tlrh_reply_size: %u\n", lrh.lrh_reply_size);
+		return rc;
+	}
+
+	/* walk throuh the reply data */
+	for (slot = 0; ; slot++) {
+		struct lsd_reply_data lrd;
+
+		/* read a reply data */
+		n = fread(&lrd, 1, sizeof(lrd), fp);
+		if (n < sizeof(lrd)) {
+			if (feof(fp))
+				break;
+			fprintf(stderr, "%s: Short read (%d of %d)\n",
+				progname, n, (int)sizeof(lrd));
+			return ferror(fp) ? EIO : EINVAL;
+		}
+
+		/* display reply data */
+		lrd.lrd_transno = __le64_to_cpu(lrd.lrd_transno);
+		lrd.lrd_xid = __le64_to_cpu(lrd.lrd_xid);
+		lrd.lrd_data = __le64_to_cpu(lrd.lrd_data);
+		lrd.lrd_result = __le32_to_cpu(lrd.lrd_result);
+		lrd.lrd_client_gen = __le32_to_cpu(lrd.lrd_client_gen);
+
+		printf("  %lld:\n", slot);
+		printf("    client_generation: %u\n",
+		       lrd.lrd_client_gen);
+		printf("    last_transaction: %lluu\n",
+		       (unsigned long long)lrd.lrd_transno);
+		printf("    last_xid: %llu\n",
+		       (unsigned long long)lrd.lrd_xid);
+		printf("    last_result: %u\n", lrd.lrd_result);
+		printf("    last_data: %llu\n\n",
+		       (unsigned long long)lrd.lrd_data);
+	}
+
+	return 0;
+}
+
+void display_usage(void)
+{
+	printf("Usage: %s [OPTIONS] devicename\n", progname);
+	printf("Usage: %s [OPTIONS] -C <last_rcvd_file> -R <reply_data_file>\n",
+	       progname);
+	printf("Read and print the last_rcvd/reply_data file from a device\n");
+	printf("(safe for mounted devices) or from a file\n");
+	printf("\t-c, --client, display client information\n");
+	printf("\t-h, --help,   display this help and exit\n");
+	printf("\t-r, --reply,  display reply data information\n");
+	printf("\t-C FILE, --last_rcvd=FILE, specify FILE as input for client information\n");
+	printf("\t-R FILE, --reply_data=FILE, specify FILE as input for reply information\n");
+}
+
+
+int main(int argc, char *const argv[])
+{
+	char tmpdir[] = "/tmp/dirXXXXXX";
+	char *dev;
+	FILE *filep = NULL;
+	int ret = 0;
+	int c;
+	int opt_client = 0;
+	int opt_reply = 0;
+	char *file_client = NULL;
+	char *file_reply = NULL;
+	int need_dev = 1;
+
+	progname = basename(argv[0]);
+	while ((c = getopt_long(argc, argv, "hcrC:R:", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'c':
+			opt_client = 1;
+			break;
+		case 'r':
+			opt_reply = 1;
+			break;
+		case 'C':
+			file_client = optarg;
+			break;
+		case 'R':
+			file_reply = optarg;
+			break;
+		case 'h':
+		default:
+			display_usage();
+			return -1;
+		}
+	}
+
+	if ((file_reply && file_client) ||
+	    (!opt_reply && file_client) ||
+	    (!opt_client && opt_reply && file_reply))
+		need_dev = 0;
+
+	dev = argv[optind];
+	if (need_dev && !dev) {
+		display_usage();
+		return -1;
+	}
+
+	/* Make a temporary directory to hold Lustre data files. */
+	if (need_dev && !mkdtemp(tmpdir)) {
+		fprintf(stderr, "%s: Can't create temporary directory %s: %s\n",
+			progname, tmpdir, strerror(errno));
+		return errno;
+	}
+
+	if (file_client || dev) {
+		if (file_client)
+			filep = fopen(file_client, "r");
+		else
+			filep = open_debugfs_file(LAST_RCVD, tmpdir, dev);
+
+		if (!filep) {
+			ret = errno;
+			fprintf(stderr, "%s: Can't open %s: %s\n",
+				progname, LAST_RCVD, strerror(errno));
+			goto out_rmdir;
+		}
+
+		ret = print_last_rcvd(filep, opt_client);
 		fclose(filep);
+		filep = NULL;
+		if (ret)
+			goto out_rmdir;
+	}
+
+	if (opt_reply) {
+		if (file_reply)
+			filep = fopen(file_reply, "r");
+		else
+			filep = open_debugfs_file(REPLY_DATA, tmpdir, dev);
+
+		if (!filep) {
+			ret = errno;
+			fprintf(stderr, "%s: Can't open %s: %s\n",
+				progname, LAST_RCVD, strerror(errno));
+			goto out_rmdir;
+		}
+
+		ret = print_reply_data(filep);
+		fclose(filep);
+	}
 
 out_rmdir:
-	rmdir(tmpdir);
+	if (need_dev)
+		rmdir(tmpdir);
 	return ret;
 }
