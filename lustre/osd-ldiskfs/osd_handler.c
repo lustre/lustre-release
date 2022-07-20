@@ -7803,6 +7803,8 @@ static void osd_key_exit(const struct lu_context *ctx,
 	LASSERT(info->oti_r_locks == 0);
 	LASSERT(info->oti_w_locks == 0);
 	LASSERT(info->oti_txns    == 0);
+	LASSERTF(info->oti_dio_pages_used == 0, "%d\n",
+		 info->oti_dio_pages_used);
 }
 
 /* type constructor/destructor: osd_type_init, osd_type_fini */
