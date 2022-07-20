@@ -1943,6 +1943,27 @@ posix_acl_update_mode, [
 ]) # LC_POSIX_ACL_UPDATE_MODE
 
 #
+# LC_HAVE_BDI_IO_PAGES
+#
+# Kernel version 4.9 commit 9491ae4aade6814afcfa67f4eb3e3342c2b39750
+# mm: don't cap request size based on read-ahead setting
+# This patch introduces a bdi hint, io_pages.
+#
+AC_DEFUN([LC_HAVE_BDI_IO_PAGES], [
+LB_CHECK_COMPILE([if 'struct backing_dev_info' has 'io_pages' field],
+bdi_has_io_pages, [
+	#include <linux/backing-dev.h>
+],[
+	struct backing_dev_info info;
+
+	info.io_pages = 0;
+],[
+	AC_DEFINE(HAVE_BDI_IO_PAGES, 1,
+		[backing_dev_info has io_pages])
+])
+]) # LC_HAVE_BDI_IO_PAGES
+
+#
 # LC_IOP_GENERIC_READLINK
 #
 # Kernel version 4.10 commit dfeef68862edd7d4bafe68ef7aeb5f658ef24bb5
@@ -2822,6 +2843,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_GROUP_INFO_GID
 	LC_VFS_SETXATTR
 	LC_POSIX_ACL_UPDATE_MODE
+	LC_HAVE_BDI_IO_PAGES
 
 	# 4.10
 	LC_IOP_GENERIC_READLINK
