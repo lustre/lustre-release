@@ -2062,7 +2062,8 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
 	/* LU-2634: clear the extent format for fast symlink */
 	ldiskfs_clear_inode_flag(inode, LDISKFS_INODE_EXTENTS);
 
-	memcpy((char *)&LDISKFS_I(inode)->i_data, (char *)buffer, buflen);
+	/* Copying the NUL byte terminating the link target as well */
+	memcpy((char *)&LDISKFS_I(inode)->i_data, (char *)buffer, buflen + 1);
 	spin_lock(&inode->i_lock);
 	LDISKFS_I(inode)->i_disksize = buflen;
 	i_size_write(inode, buflen);
