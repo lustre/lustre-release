@@ -1346,6 +1346,8 @@ function lnet_health_post() {
 
 	restore_lnet_params
 
+	$LCTL net_drop_del -a
+
 	do_lnetctl peer set --health 1000 --all
 	do_lnetctl net set --health 1000 --all
 
@@ -1549,7 +1551,6 @@ test_204() {
 		add_health_test_drop_rules ${hstatus}
 		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
-		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1574,7 +1575,6 @@ test_205() {
 		add_health_test_drop_rules ${hstatus}
 		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
-		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1589,7 +1589,6 @@ test_205() {
 		add_health_test_drop_rules ${hstatus}
 		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
-		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1618,7 +1617,6 @@ test_206() {
 		add_health_test_drop_rules ${hstatus}
 		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
-		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1648,8 +1646,6 @@ test_207() {
 
 		lnet_health_post
 
-		$LCTL net_drop_del -a
-
 		check_resends || return $?
 		check_no_local_health || return $?
 		check_remote_health || return $?
@@ -1666,8 +1662,6 @@ test_207() {
 			error "Should have failed"
 
 		lnet_health_post
-
-		$LCTL net_drop_del -a
 
 		check_no_resends || return $?
 		check_no_local_health || return $?
@@ -1775,7 +1769,6 @@ test_209() {
 
 	do_lnetctl discover ${RNIDS[0]} &&
 		error "Should have failed"
-	$LCTL net_drop_del -a
 
 	lnet_health_post
 
@@ -1795,7 +1788,6 @@ test_209() {
 
 	do_lnetctl discover ${RNIDS[0]} &&
 		error "Should have failed"
-	$LCTL net_drop_del -a
 
 	lnet_health_post
 
