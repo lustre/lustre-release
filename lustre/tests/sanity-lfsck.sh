@@ -1052,8 +1052,13 @@ test_8()
 
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
-	$START_NAMESPACE ||
+	$START_NAMESPACE
+	sleep 1
+	[ -n "$($SHOW_NAMESPACE |
+		grep -E "status: init|status: completed")" ] && {
+		$START_NAMESPACE ||
 		namespace_error "(16) Fail to start LFSCK for namespace!"
+	} || echo "lfsck for namespace has been started"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
