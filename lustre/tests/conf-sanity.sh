@@ -8641,7 +8641,7 @@ test_110()
 	local old_mdscount=$MDSCOUNT
 	local old_ostcount=$OSTCOUNT
 	local replace=""
-	stack_trap "MDSCOUNT=$old_mdscount OSTCOUNT=$old_ostcount" EXIT
+	stack_trap "MDSCOUNT=$old_mdscount OSTCOUNT=$old_ostcount; reformat"
 	MDSCOUNT=1
 	OSTCOUNT=1
 
@@ -8748,7 +8748,8 @@ test_111() {
 	local old_ostcount=$OSTCOUNT
 	local old_mdssize=$MDSSIZE
 	local replace=""
-	stack_trap "MDSSIZE=$MDSSIZE MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT" EXIT
+	stack_trap "MDSSIZE=$old_mdssize MDSCOUNT=$old_mdscount \
+		    OSTCOUNT=$old_ostcount; reformat"
 	MDSCOUNT=1
 	OSTCOUNT=1
 	(( MDSSIZE < 2400000 )) && MDSSIZE=2400000 # need at least 2.4GB
@@ -8844,7 +8845,8 @@ test_111() {
 	umount_client $MOUNT2 -f
 	cleanup
 
-	(( $needskip )) && skip "ETA ${left}s after $num files / ${taken}s is too long"
+	! (( $needskip )) ||
+		echo "ETA ${left}s after $num files / ${taken}s is too long"
 
 	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
 	MDSCOUNT=$old_mdscount
