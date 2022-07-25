@@ -15631,6 +15631,12 @@ test_155_big_load() {
 	free_min_max
 	local cache_size=$(do_facet ost$((MAXI+1)) \
 		"awk '/cache/ {sum+=\\\$4} END {print sum}' /proc/cpuinfo")
+
+	# LU-16042: can not get the cache size on Arm64 VM here, fallback to a
+	# pre-set value
+	if [ -z "$cache_size" ]; then
+		cache_size=256
+	fi
 	local large_file_size=$((cache_size * 2))
 
 	echo "OSS cache size: $cache_size KB"
