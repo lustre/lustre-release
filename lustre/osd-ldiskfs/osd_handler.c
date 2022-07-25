@@ -2899,6 +2899,10 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			RETURN(rc);
 	}
 #endif
+	/* punch must be aware we are dealing with an encrypted file */
+	if (attr->la_valid & LA_FLAGS && attr->la_flags & LUSTRE_ENCRYPT_FL)
+		obj->oo_lma_flags |= LUSTRE_ENCRYPT_FL;
+
 	RETURN(rc);
 }
 

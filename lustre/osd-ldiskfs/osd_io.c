@@ -2506,6 +2506,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 			     __u64 start, __u64 end, struct thandle *th)
 {
 	struct osd_thandle *oh;
+	struct osd_object  *obj = osd_dt_obj(dt);
 	struct inode	   *inode;
 	int		    rc;
 	ENTRY;
@@ -2524,15 +2525,25 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_op(env, oh, OSD_OT_PUNCH,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE] + 3);
 
-	inode = osd_dt_obj(dt)->oo_inode;
+	inode = obj->oo_inode;
 	LASSERT(inode);
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
+				   i_projid_read(inode), 0, oh, obj,
 				   NULL, OSD_QID_BLK);
 
-	if (rc == 0)
-		rc = osd_trunc_lock(osd_dt_obj(dt), oh, false);
+	/* if object holds encrypted content, we need to make sure we truncate
+	 * on an encryption unit boundary, or subsequent reads will get
+	 * corrupted content
+	 */
+	if (rc == 0) {
+		if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+		    start & ~LUSTRE_ENCRYPTION_MASK)
+			start = (start & LUSTRE_ENCRYPTION_MASK) +
+				LUSTRE_ENCRYPTION_UNIT_SIZE;
+		ll_truncate_pagecache(inode, start);
+		rc = osd_trunc_lock(obj, oh, false);
+	}
 
 	RETURN(rc);
 }
@@ -2576,15 +2587,6 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		grow = true;
 	i_size_write(inode, start);
 	spin_unlock(&inode->i_lock);
-	/* if object holds encrypted content, we need to make sure we truncate
-	 * on an encryption unit boundary, or subsequent reads will get
-	 * corrupted content
-	 */
-	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
-	    start & ~LUSTRE_ENCRYPTION_MASK)
-		start = (start & LUSTRE_ENCRYPTION_MASK) +
-			LUSTRE_ENCRYPTION_UNIT_SIZE;
-	ll_truncate_pagecache(inode, start);
 
 	/* optimize grow case */
 	if (grow) {

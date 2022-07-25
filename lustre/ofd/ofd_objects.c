@@ -912,6 +912,11 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
+	if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & LUSTRE_ENCRYPT_FL) {
+		/* punch must be aware we are dealing with an encrypted file */
+		la->la_valid |= LA_FLAGS;
+		la->la_flags |= LUSTRE_ENCRYPT_FL;
+	}
 	rc = dt_declare_attr_set(env, dob, la, th);
 	if (rc)
 		GOTO(stop, rc);
@@ -947,17 +952,6 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 			GOTO(unlock, rc);
 	}
 
-	if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & LUSTRE_ENCRYPT_FL) {
-		/* punch must be aware we are dealing with an encrypted file */
-		struct lu_attr la = {
-			.la_valid = LA_FLAGS,
-			.la_flags = LUSTRE_ENCRYPT_FL,
-		};
-
-		rc = dt_attr_set(env, dob, &la, th);
-		if (rc)
-			GOTO(unlock, rc);
-	}
 	rc = dt_punch(env, dob, start, OBD_OBJECT_EOF, th);
 	if (rc)
 		GOTO(unlock, rc);

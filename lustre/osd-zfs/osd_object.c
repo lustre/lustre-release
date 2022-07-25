@@ -1185,8 +1185,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		GOTO(out_sem, rc = -oh->ot_tx->tx_err);
 
 	if (attr && attr->la_valid & LA_FLAGS) {
-		/* LMA is usually a part of bonus, no need to declare
-		 * anything else */
+		/* punch must be aware we are dealing with an encrypted file */
+		if (attr->la_flags & LUSTRE_ENCRYPT_FL)
+			obj->oo_lma_flags |= LUSTRE_ENCRYPT_FL;
 	}
 
 	if (attr && (attr->la_valid & (LA_UID | LA_GID | LA_PROJID))) {
