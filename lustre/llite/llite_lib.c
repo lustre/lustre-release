@@ -3618,6 +3618,7 @@ int ll_prep_inode(struct inode **inode, struct req_capsule *pill,
 			conf.coc_opc = OBJECT_CONF_SET;
 			conf.coc_inode = *inode;
 			conf.coc_lock = lock;
+			conf.coc_try = false;
 			conf.u.coc_layout = md.layout;
 			(void)ll_layout_conf(*inode, &conf);
 		}

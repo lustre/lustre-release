@@ -1435,6 +1435,11 @@ retry:
 		GOTO(out, result = -EBUSY);
 	}
 
+	if (conf->coc_try) {
+		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
+		GOTO(out, result = -ERESTARTSYS);
+	}
+
 	result = lov_layout_change(env, lov, lsm, conf);
 	if (result) {
 		if (result == -EAGAIN) {
