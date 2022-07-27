@@ -463,7 +463,8 @@ static inline void obd_connect_set_secctx(struct obd_connect_data *data)
 #endif
 }
 
-int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
+int ll_dentry_init_security(struct inode *parent, struct dentry *dentry,
+			    int mode, struct qstr *name,
 			    const char **secctx_name, void **secctx,
 			    __u32 *secctx_size);
 int ll_inode_init_security(struct dentry *dentry, struct inode *inode,
