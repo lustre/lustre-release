@@ -906,7 +906,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
 	if (it->it_op & IT_CREAT &&
 	    test_bit(LL_SBI_FILE_SECCTX, ll_i2sbi(parent)->ll_flags)) {
-		rc = ll_dentry_init_security(dentry, it->it_create_mode,
+		rc = ll_dentry_init_security(parent,
+					     dentry, it->it_create_mode,
 					     &dentry->d_name,
 					     &op_data->op_file_secctx_name,
 					     &op_data->op_file_secctx,
@@ -1587,7 +1588,8 @@ again:
 		ll_qos_mkdir_prep(op_data, dir);
 
 	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
-		err = ll_dentry_init_security(dchild, mode, &dchild->d_name,
+		err = ll_dentry_init_security(dir,
+					      dchild, mode, &dchild->d_name,
 					      &op_data->op_file_secctx_name,
 					      &op_data->op_file_secctx,
 					      &op_data->op_file_secctx_size);
