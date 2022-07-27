@@ -60,15 +60,33 @@ AC_ARG_WITH([o2ib],
 case $with_o2ib in
 	yes)    AS_IF([which ofed_info 2>/dev/null], [
 			AS_IF([test x$uses_dpkg = xyes], [
-				OFED_INFO="ofed_info | awk '{print \[$]2}'"
+				LIST_ALL_PKG="dpkg -l | awk '{print \[$]2}'"
 				LSPKG="dpkg --listfiles"
 			], [
-				OFED_INFO="ofed_info"
+				LIST_ALL_PKG="rpm -qa"
 				LSPKG="rpm -ql"
 			])
-			O2IBPATHS=$(eval $OFED_INFO |
-				    egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' |
-				    xargs $LSPKG | grep -v 'ofa_kernel-' | grep rdma_cm.h | sed 's/\/include\/rdma\/rdma_cm.h//')
+
+			O2IBPKG="mlnx-ofed-kernel-dkms"
+			O2IBPKG+="|mlnx-ofed-kernel-modules"
+			O2IBPKG+="|mlnx-ofa_kernel-devel"
+			O2IBPKG+="|compat-rdma-devel"
+			O2IBPKG+="|kernel-ib-devel"
+			O2IBPKG+="|ofa_kernel-devel"
+
+			O2IBDIR="/ofa_kernel"
+			O2IBDIR+="|/ofa_kernel/default"
+			O2IBDIR+="|/openib"
+
+			O2IBDIR_PATH=$(eval $LIST_ALL_PKG |
+				       egrep -w "$O2IBPKG" | xargs $LSPKG |
+				       egrep "${O2IBDIR}$" | head -n1)
+
+			if test -n "$O2IBDIR_PATH"; then
+				O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
+					sed -e 's/\/include\/rdma\/rdma_cm.h//')
+			fi
+
 			AS_IF([test -z "$O2IBPATHS"], [
 				AC_MSG_ERROR([
 You seem to have an OFED installed but have not installed it's devel package.
