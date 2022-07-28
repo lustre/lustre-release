@@ -394,7 +394,7 @@ wait_grace_time() {
 	echo "Sleep through grace ..."
 	[ "$orig_time" == "-" ] &&
 	    error "Grace timeout was not set or quota not exceeded"
-	if [ "$orig_time" == "none" ]; then
+	if [ "$orig_time" == "expired" -o "$orig_time" == "none" ]; then
 	    echo "...Grace timeout already expired"
 	else
 		let sleep_seconds+=$extrasleep

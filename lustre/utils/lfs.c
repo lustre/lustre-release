@@ -8043,7 +8043,7 @@ static void diff2str(time_t seconds, char *buf, time_t now)
 	if (!seconds)
 		return;
 	if (seconds <= now) {
-		strcpy(buf, "none");
+		strcpy(buf, "expired");
 		return;
 	}
 	__sec2str(seconds - now, buf);
