@@ -205,6 +205,10 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 		/* change quota limits */
 		lqe->lqe_hardlimit = hard;
 		lqe->lqe_softlimit = soft;
+		if (is_default) {
+			dirtied = true;
+			GOTO(quota_write, 0);
+		}
 
 quota_set:
 		/* recompute qunit in case it was never initialized */
@@ -248,6 +252,7 @@ quota_set:
 		dirtied = true;
 	}
 
+quota_write:
 	if (dirtied) {
 		if (!is_updated) {
 			/* write new quota settings to disk */

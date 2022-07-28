@@ -354,7 +354,8 @@ int qmt_glb_write(const struct lu_env *env, struct thandle *th,
 	if (lqe->lqe_is_default) {
 		rec->qbr_hardlimit = 0;
 		rec->qbr_softlimit = 0;
-		rec->qbr_time      = LQUOTA_GRACE_FLAG(0, LQUOTA_FLAG_DEFAULT);
+		rec->qbr_time      = LQUOTA_GRACE_FLAG(lqe->lqe_gracetime,
+						       LQUOTA_FLAG_DEFAULT);
 	} else {
 		rec->qbr_hardlimit = lqe->lqe_hardlimit;
 		rec->qbr_softlimit = lqe->lqe_softlimit;

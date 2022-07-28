@@ -8121,6 +8121,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		char timebuf[40];
 		char strbuf[STRBUF_LEN];
 
+		dqb->dqb_btime &= LQUOTA_GRACE_MASK;
+		dqb->dqb_itime &= LQUOTA_GRACE_MASK;
+
 		if (dqb->dqb_bhardlimit &&
 		    lustre_stoqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
 			bover = 1;
@@ -8146,11 +8149,11 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		else
 			printf("%15s", mnt);
 
-		if (bover)
-			diff2str(dqb->dqb_btime, timebuf, now);
-		else if (show_default)
+		if (show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
 				 (unsigned long long)dqb->dqb_btime);
+		else if (bover)
+			diff2str(dqb->dqb_btime, timebuf, now);
 
 		kbytes2str(lustre_stoqb(dqb->dqb_curspace),
 			   strbuf, sizeof(strbuf), h);
@@ -8178,11 +8181,11 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			       numbuf[0], bover ? '*' : ' ', numbuf[1],
 			       numbuf[2], bover > 1 ? timebuf : "-");
 
-		if (iover)
-			diff2str(dqb->dqb_itime, timebuf, now);
-		else if (show_default)
+		if (show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
 				 (unsigned long long)dqb->dqb_itime);
+		else if (iover)
+			diff2str(dqb->dqb_itime, timebuf, now);
 
 		snprintf(numbuf[0], sizeof(numbuf),
 			 (dqb->dqb_valid & QIF_INODES) ? "%ju" : "[%ju]",

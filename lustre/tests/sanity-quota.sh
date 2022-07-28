@@ -5557,6 +5557,50 @@ test_82()
 }
 run_test 82 "verify more than 8 qids for single operation"
 
+test_grace_with_default_quota()
+{
+	local qtype=$1
+	local qdtype=$2
+	local bgrace
+	local igrace
+	local bgrace2
+	local igrace2
+	echo "ttt1"
+	$LFS setquota $qdtype -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "clear default quota [$qdtype] failed"
+	echo "ttt2"
+	$LFS setquota -t $qtype --block-grace 1w --inode-grace 1w $DIR ||
+		error "reset quota [$qdtype] grace failed"
+	echo "ttt3"
+
+	eval $($LFS quota -t $qtype $DIR | awk -F "[; ]" \
+			'{printf("bgrace=%s;igrace=%s;", $4, $9)}')
+	echo "ttt4"
+
+	$LFS setquota $qdtype -B 10G -i 10k $DIR
+	echo "ttt5"
+
+	eval $($LFS quota -t $qtype $DIR | awk -F "[; ]" \
+			'{printf("bgrace2=%s;igrace2=%s;", $4, $9)}')
+
+	[ "$bgrace" == "$bgrace2" ] ||
+			error "set default quota shouldn't affect block grace"
+	[ "$igrace" == "$igrace2" ] ||
+			error "set default quota shouldn't affect inode grace"
+
+}
+
+test_83()
+{
+	setup_quota_test || error "setup quota failed with $?"
+	test_grace_with_default_quota "-u" "-U"
+	test_grace_with_default_quota "-g" "-G"
+
+	is_project_quota_supported || return 0
+	test_grace_with_default_quota "-p" "-P"
+}
+run_test 83 "Setting default quota shouldn't affect grace time"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
