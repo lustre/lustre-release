@@ -2622,8 +2622,10 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	scrub->os_auto_scrub_interval = interval;
 
 	push_ctxt(&saved, ctxt);
-	filp = filp_open(osd_scrub_name, O_RDWR |
-			 (dev->od_dt_dev.dd_rdonly ? 0 : O_CREAT), 0644);
+	filp = filp_open(osd_scrub_name,
+			 (dev->od_dt_dev.dd_rdonly ? O_RDONLY :
+						     O_RDWR | O_CREAT),
+			 0644);
 	if (IS_ERR(filp)) {
 		pop_ctxt(&saved, ctxt);
 		RETURN(PTR_ERR(filp));

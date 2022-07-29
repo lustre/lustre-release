@@ -8249,10 +8249,13 @@ static int osd_mount(const struct lu_env *env,
 #endif
 	inode = osd_sb(o)->s_root->d_inode;
 	lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
-	rc = osd_ea_fid_set(info, inode, fid, LMAC_NOT_IN_OI, 0);
-	if (rc != 0) {
-		CERROR("%s: failed to set lma on %s root inode\n", name, dev);
-		GOTO(out_mnt, rc);
+	if (!o->od_dt_dev.dd_rdonly) {
+		rc = osd_ea_fid_set(info, inode, fid, LMAC_NOT_IN_OI, 0);
+		if (rc != 0) {
+			CERROR("%s: failed to set lma on %s root inode\n",
+			       name, dev);
+			GOTO(out_mnt, rc);
+		}
 	}
 
 	if (lmd_flags & LMD_FLG_NOSCRUB)
