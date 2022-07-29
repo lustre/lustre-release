@@ -157,11 +157,8 @@ int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 
 		/* Note: this check might be forced in 2.5 or 2.6, i.e.
 		 * all of the requests are required to setup FLGROUP */
-		if (unlikely(!(oa->o_valid & OBD_MD_FLGROUP))) {
-			ostid_set_seq_mdt0(oi);
+		if (unlikely(!(oa->o_valid & OBD_MD_FLGROUP)))
 			oa->o_valid |= OBD_MD_FLGROUP;
-			seq = ostid_seq(oi);
-		}
 
 		if (unlikely(!(fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq) ||
 			       fid_seq_is_norm(seq) || fid_seq_is_echo(seq))))
