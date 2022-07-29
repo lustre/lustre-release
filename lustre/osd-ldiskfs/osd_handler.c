@@ -3989,6 +3989,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	 */
 	if (S_ISLNK(type)) {
 		BUILD_BUG_ON(LDISKFS_N_BLOCKS * 4 < FID_LEN + 1);
+		ldiskfs_clear_inode_flag(local, LDISKFS_INODE_EXTENTS);
 		rc = scnprintf((char *)LDISKFS_I(local)->i_data,
 			       LDISKFS_N_BLOCKS * 4, DFID, PFID(fid));
 
