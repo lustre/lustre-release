@@ -1049,7 +1049,7 @@ static int osc_io_ladvise_start(const struct lu_env *env,
 
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
-	oa->o_valid = OBD_MD_FLID;
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 	obdo_set_parent_fid(oa, lio->li_fid);
 
 	ladvise = ladvise_hdr->lah_advise;
