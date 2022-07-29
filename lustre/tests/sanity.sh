@@ -5847,7 +5847,7 @@ run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
 test_51d_sub() {
 	local stripecount=$1
-	local nfiles=$((200 * $OSTCOUNT))
+	local nfiles=$2
 
 	log "create files with stripecount=$stripecount"
 	$LFS setstripe -C $stripecount $DIR/$tdir
@@ -5878,20 +5878,24 @@ test_51d_sub() {
 	for ((nlast=0, n = 1; n < $OSTCOUNT; nlast=n,n++)); do
 		(( ${objs[$n]} > ${objs[$nlast]} * 4 / 5 )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer objects vs. OST $nlast " \
+			error "stripecount=$stripecount: " \
+			      "OST $n has fewer objects vs. OST $nlast " \
 			      "(${objs[$n]} < ${objs[$nlast]} x 4/5)"; }
 		(( ${objs[$n]} < ${objs[$nlast]} * 5 / 4 )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer objects vs. OST $nlast " \
+			error "stripecount=$stripecount: " \
+			      "OST $n has more objects vs. OST $nlast " \
 			      "(${objs[$n]} > ${objs[$nlast]} x 5/4)"; }
 
 		(( ${objs0[$n]} > ${objs0[$nlast]} * $min / $max )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer #0 objects vs. OST $nlast " \
+			error "stripecount=$stripecount: " \
+			      "OST $n has fewer #0 objects vs. OST $nlast " \
 			      "(${objs0[$n]} < ${objs0[$nlast]} x $min/$max)"; }
 		(( ${objs0[$n]} < ${objs0[$nlast]} * $max / $min )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer #0 objects vs. OST $nlast " \
+			error "stripecount=$stripecount: " \
+			      "OST $n has more #0 objects vs. OST $nlast " \
 			      "(${objs0[$n]} > ${objs0[$nlast]} x $max/$min)"; }
 	done
 }
@@ -5901,21 +5905,44 @@ test_51d() {
 	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
 
 	local stripecount
+	local per_ost=100
+	local nfiles=$((per_ost * OSTCOUNT))
+	local mdts=$(comma_list $(mdts_nodes))
+	local param="osp.*.create_count"
 	local qos_old=$(do_facet mds1 \
 		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
 
-	do_nodes $(comma_list $(mdts_nodes)) \
+	do_nodes $mdts \
 		"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=100"
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
+	stack_trap "do_nodes $mdts \
 		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
 
 	test_mkdir $DIR/$tdir
+	local dirstripes=$(lfs getdirstripe -c $DIR/$tdir)
+
+	# Ensure enough OST objects precreated for tests to pass without
+	# running out of objects.  This is an LOV r-r OST algorithm test,
+	# not an OST object precreation test.
+	local old=$(do_facet mds1 "$LCTL get_param -n $param" | head -n 1)
+	(( old >= nfiles )) ||
+	{
+		local create_count=$((nfiles * OSTCOUNT / dirstripes))
+
+		do_nodes $mdts "$LCTL set_param $param=$create_count"
+		stack_trap "do_nodes $mdts $LCTL set_param $param=$old"
+
+		# trigger precreation from all MDTs for all OSTs
+		for ((i = 0; i < $MDSCOUNT * 2; i++ )); do
+			$LFS setstripe -c -1 $DIR/$tdir/wide.$i
+		done
+	}
 
 	for ((stripecount = 3; stripecount <= $OSTCOUNT; stripecount++)); do
-		test_51d_sub $stripecount
+		sleep 8  # allow object precreation to catch up
+		test_51d_sub $stripecount $nfiles
 	done
 }
-run_test 51d "check object distribution"
+run_test 51d "check LOV round-robin OST object distribution"
 
 test_51e() {
 	if [ "$mds1_FSTYPE" != ldiskfs ]; then
