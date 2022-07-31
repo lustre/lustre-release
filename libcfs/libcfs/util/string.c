@@ -271,26 +271,6 @@ cfs_expr_list_print(char *buffer, int count, struct cfs_expr_list *expr_list)
 }
 
 /**
- * Matches value (\a value) against ranges expression list \a expr_list.
- *
- * \retval 1 if \a value matches
- * \retval 0 otherwise
- */
-int
-cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list)
-{
-	struct cfs_range_expr	*expr;
-
-	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
-		if (value >= expr->re_lo && value <= expr->re_hi &&
-		    ((value - expr->re_lo) % expr->re_stride) == 0)
-			return 1;
-	}
-
-	return 0;
-}
-
-/**
  * Convert express list (\a expr_list) to an array of all matched values
  *
  * \retval N N is total number of all matched values

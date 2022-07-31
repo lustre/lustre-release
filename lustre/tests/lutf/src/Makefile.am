@@ -103,7 +103,7 @@ dlc_glue:
 	echo "building liblnetconfig_wrap.c"
 	$(CC) $(SWIG_COMPFLAGS) $(PYTHON_CPPFLAGS) $(DLC_INCLUDES) $(LIBLNETCONFIG_WRAP_I) $(CYAML_SRC)
 	echo "linking _lnetconfig.so"
-	$(CC) $(LIBLNETCONFIG) -lyaml -llnetconfig -Wl,--whole-archive $(LIBCFS) $(CYAML_OBJ) -Wl,--no-whole-archive -shared -o _lnetconfig.so $(LIBLNETCONFIG_WRAP_OBJ) $(PYTHON_EXTRA_LIBS) $(PYTHON_LIBS)
+	$(CC) -shared -o _lnetconfig.so $(LIBCFS) -lyaml $(LIBLNETCONFIG) -llnetconfig $(CYAML_OBJ) $(LIBLNETCONFIG_WRAP_OBJ) $(PYTHON_EXTRA_LIBS) $(PYTHON_LIBS)
 
 install-exec-local:
 	$(mkinstalldirs) $(DESTDIR)$(libdir)

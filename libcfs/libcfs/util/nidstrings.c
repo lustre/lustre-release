@@ -481,6 +481,26 @@ cfs_ip_addr_range_gen(__u32 *ip_list, int count, struct list_head *ip_addr_expr)
 }
 
 /**
+ * Matches value (\a value) against ranges expression list \a expr_list.
+ *
+ * \retval 1 if \a value matches
+ * \retval 0 otherwise
+ */
+static int
+cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list)
+{
+	struct cfs_range_expr	*expr;
+
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		if (value >= expr->re_lo && value <= expr->re_hi &&
+		    ((value - expr->re_lo) % expr->re_stride) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
+/**
  * Matches address (\a addr) against address set encoded in \a list.
  *
  * \retval 1 if \a addr matches
