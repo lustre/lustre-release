@@ -159,6 +159,9 @@ AS_IF([test "x$enable_modules" = xyes], [
 	AS_IF([test "x$BISON" = "x"], [AC_MSG_ERROR([bison package is required to build kernel modules])])
 	AS_CASE([$target_os],
 		[linux*], [
+			# Ensure SUBARCH is defined
+			SUBARCH=$(echo $target_cpu | sed -e 's/powerpc.*/powerpc/' -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64.*/arm64/' -e 's/armv7.*/arm/')
+
 			# Run serial tests
 			LB_PROG_LINUX
 			LIBCFS_PROG_LINUX
@@ -723,7 +726,7 @@ AC_SUBST(MOSTLYCLEANFILES)
 LB_CONFIG_RPMBUILD_OPTIONS
 LB_CONFIG_CACHE_OPTIONS
 
-AS_IF([test -d $TEST_DIR], [
+AS_IF([test -d $TEST_DIR -a "x${PARALLEL_BUILD_OPT}" != "xdebug"], [
 	AC_MSG_NOTICE([remove temporary parallel configure dir $TEST_DIR])
 	rm -rf $TEST_DIR
 ])
