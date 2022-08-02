@@ -8786,6 +8786,70 @@ test_60i() {
 }
 run_test 60i "llog: new record vs reader race"
 
+test_60j() {
+	(( $MDS1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "need MDS version at least 2.15.50"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	changelog_users $SINGLEMDS | grep "^cl" &&
+		skip "active changelog user"
+
+	local llog_reader=$(do_facet $SINGLEMDS "which llog_reader 2> /dev/null")
+
+	[[ -z $(do_facet $SINGLEMDS ls -d $llog_reader 2> /dev/null) ]] &&
+		skip_env "missing llog_reader"
+
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local mdt_dev
+	local tmpfile
+	local plain
+
+	changelog_register || error "cannot register changelog user"
+
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+	changelog_clear
+
+	createmany -o ${f}- 100 || error "createmany failed as $RUNAS_ID"
+	unlinkmany ${f}- 100 || error "unlinkmany failed"
+
+	tmpfile="$(mktemp --tmpdir -u $tfile.XXXXXX)"
+	mdt_dev=$(facet_device $SINGLEMDS)
+
+	do_facet $SINGLEMDS sync
+	plain=$(do_facet $SINGLEMDS "$DEBUGFS -c -R 'dump changelog_catalog \
+		$tmpfile' $mdt_dev; $llog_reader $tmpfile" |
+		awk '{match($0,"path=([^ ]+)",a)}END{print a[1]}')
+
+	stack_trap "do_facet $SINGLEMDS rm -f $tmpfile"
+
+	# if $tmpfile is not on EXT3 filesystem for some reason
+	[[ ${plain:0:1} == 'O' ]] ||
+		skip "path $plain is not in 'O/1/d<n>/<n>' format"
+
+	size=$(do_facet $SINGLEMDS "$DEBUGFS -c -R 'dump $plain $tmpfile' \
+		$mdt_dev; stat -c %s $tmpfile")
+	echo "Truncate llog from $size to $((size - size % 8192))"
+	size=$((size - size % 8192))
+	do_facet $SINGLEMDS $TRUNCATE $tmpfile $size
+	errs=$(do_facet $SINGLEMDS "$llog_reader $tmpfile" |
+		grep -c 'in bitmap only')
+	(( $errs > 0 )) || error "llog_reader didn't find lost records"
+
+	size=$((size - 9000))
+	echo "Corrupt llog in the middle at $size"
+	do_facet $SINGLEMDS dd if=/dev/urandom of=$tmpfile bs=1 seek=$size \
+		count=333 conv=notrunc
+	errs=$(do_facet $SINGLEMDS "$llog_reader $tmpfile" |
+		grep -c 'next chunk')
+	(( $errs > 0 )) || error "llog_reader didn't skip bad chunk"
+}
+run_test 60j "llog_reader reports corruptions"
+
 test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

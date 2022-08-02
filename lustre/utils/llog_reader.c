@@ -307,7 +307,8 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	last_idx = 0;
 	while (ptr < (file_buf + file_size)) {
 		struct llog_rec_hdr *cur_rec;
-		int idx;
+		struct llog_rec_tail *cur_tail;
+		unsigned int idx, len, tail_idx, tail_len;
 		unsigned long offset;
 
 		offset = (unsigned long)ptr - (unsigned long)file_buf;
@@ -319,31 +320,53 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		}
 		cur_rec = (struct llog_rec_hdr *)ptr;
 		idx = __le32_to_cpu(cur_rec->lrh_index);
-		if (cur_rec->lrh_len == 0 ||
-		    cur_rec->lrh_len > (*llog)->llh_hdr.lrh_len) {
-			cur_rec->lrh_len = (*llog)->llh_hdr.lrh_len -
-				offset % (*llog)->llh_hdr.lrh_len;
-			printf("off %lu skip %u to next chunk.\n", offset,
-			       cur_rec->lrh_len);
-		} else if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
+		len = __le32_to_cpu(cur_rec->lrh_len);
+
+		if (len == 0 || len + offset % (*llog)->llh_hdr.lrh_len >
+				(*llog)->llh_hdr.lrh_len) {
+			printf("error: rec #%d type=%x has wrong len=%u @%lu\n",
+			       idx, cur_rec->lrh_type, len, offset);
+			errors++;
+			len = (*llog)->llh_hdr.lrh_len -
+			      offset % (*llog)->llh_hdr.lrh_len;
+			printf("skip %u bytes to the next chunk at off %lu.\n",
+			       len, offset + len);
+			ptr += len;
+			continue;
+		}
+
+		if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
 			printf("rec #%d type=%x len=%u offset %lu\n", idx,
-			       cur_rec->lrh_type, cur_rec->lrh_len, offset);
+			       cur_rec->lrh_type, len, offset);
 			recs_pr[i] = cur_rec;
 			i++;
 		} else {
 			cur_rec->lrh_id = CANCELLED;
 			if (cur_rec->lrh_type == LLOG_PAD_MAGIC &&
-			   ((offset + cur_rec->lrh_len) & 0x7) != 0) {
+			   ((offset + len) & 0x7) != 0) {
 				printf("error: rec #%d wrong padding len=%u offset %lu to 0x%lx\n",
-				       idx, cur_rec->lrh_len, offset,
-				       offset + cur_rec->lrh_len);
+				       idx, len, offset, offset + len);
 				errors++;
 			}
 			/* The header counts only set records */
 		}
 
+		cur_tail = (struct llog_rec_tail *)(ptr + len - sizeof(*cur_tail));
+		tail_idx = __le32_to_cpu(cur_tail->lrt_index);
+		tail_len = __le32_to_cpu(cur_tail->lrt_len);
+		if (idx != tail_idx || len != tail_len) {
+			printf("error: rec #%d len=%u has tail #%d len=%u%s\n",
+			       idx, len, tail_idx, tail_len,
+			       cur_rec->lrh_id == CANCELLED ? " (unset)" : "");
+			errors++;
+		}
+
+		if (idx > last_idx + 1)
+			printf("error: rec #%d len=%u has gap in %d recs\n",
+			       idx, len, idx - last_idx);
+
 		while (++last_idx < idx) {
-			printf("error: rec #%d is missing%s set in bitmap\n",
+			printf("error: -> rec #%d is lost%s set in bitmap\n",
 			       last_idx,
 			       ext2_test_bit(last_idx, LLOG_HDR_BITMAP(*llog)) ?
 			       " but" : ", not");
@@ -357,7 +380,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 			last_idx = idx;
 		}
 
-		ptr += __le32_to_cpu(cur_rec->lrh_len);
+		ptr += len;
 		if ((ptr - file_buf) > file_size) {
 			printf("error: rec #%d is trimmed by EOF, offset %lu\n",
 			       idx, offset);
