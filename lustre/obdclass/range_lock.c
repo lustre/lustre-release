@@ -166,7 +166,7 @@ int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 		spin_unlock(&tree->rlt_lock);
 		schedule();
 
-		if (signal_pending(current)) {
+		if (fatal_signal_pending(current)) {
 			range_unlock(tree, lock);
 			GOTO(out, rc = -ERESTARTSYS);
 		}
