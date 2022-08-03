@@ -487,8 +487,10 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 					   &pvec->ldp_count, count);
 		if (unlikely(result <= 0)) {
 			cl_sync_io_note(env, &ldp_aio->csd_sync, result);
-			if (sync_submit)
-				cl_sub_dio_free(ldp_aio, true);
+			if (sync_submit) {
+				LASSERT(ldp_aio->csd_creator_free);
+				cl_sub_dio_free(ldp_aio);
+			}
 			GOTO(out, result);
 		}
 
@@ -508,7 +510,8 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 					     0);
 			if (result == 0 && rc2)
 				result = rc2;
-			cl_sub_dio_free(ldp_aio, true);
+			LASSERT(ldp_aio->csd_creator_free);
+			cl_sub_dio_free(ldp_aio);
 		}
 		if (unlikely(result < 0))
 			GOTO(out, result);
