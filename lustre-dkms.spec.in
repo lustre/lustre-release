@@ -34,7 +34,7 @@
 #for Suse / Ubuntu
 %else
 	%global kmod_name %{lustre_name}-kmp
-	%define mkconf_options "-k updates"
+	%define mkconf_options -k updates
 %endif
 
 %define buildid 1
