@@ -648,7 +648,7 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 				LCONSOLE_WARN("%s: Unable to add client %s "
 					      "to file system %s: %d\n",
 					      tgt_name(tsi->tsi_tgt),
-					      libcfs_nid2str(req->rq_peer.nid),
+					      libcfs_nidstr(&req->rq_peer.nid),
 					      mgi->mgi_fsname, rc);
 			} else {
 				rc = 0;

@@ -2306,7 +2306,7 @@ static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
 {
 	DEBUG_REQ((req->rq_no_reply || rc) ? D_WARNING : D_DLMTRACE, req,
 		  "%s, NID=%s lock=%#llx: rc = %d",
-		  msg, libcfs_id2str(req->rq_peer),
+		  msg, libcfs_idstr(&req->rq_peer),
 		  handle ? handle->cookie : 0, rc);
 	if (req->rq_no_reply)
 		CWARN("No reply was sent, maybe cause b=21636.\n");
@@ -2516,7 +2516,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
 
 		CERROR("%s from %s arrived at %llu with bad export cookie %llu\n",
 		       ll_opcode2str(lustre_msg_get_opc(req->rq_reqmsg)),
-		       libcfs_nid2str(req->rq_peer.nid),
+		       libcfs_nidstr(&req->rq_peer.nid),
 		       (unsigned long long)req->rq_arrival_time.tv_sec,
 		       lustre_msg_get_handle(req->rq_reqmsg)->cookie);
 

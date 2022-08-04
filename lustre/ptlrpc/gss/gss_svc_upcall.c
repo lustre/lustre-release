@@ -922,7 +922,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	lnet_nid4_to_nid(req->rq_source.nid, &primary);
 	LNetPrimaryNID(&primary);
 	rsikey.nid4 = lnet_nid_to_nid4(&primary);
-	nodemap_test_nid(req->rq_peer.nid, rsikey.nm_name,
+	nodemap_test_nid(lnet_nid_to_nid4(&req->rq_peer.nid), rsikey.nm_name,
 			 sizeof(rsikey.nm_name));
 
         /* duplicate context handle. for INIT it always 0 */
@@ -1024,7 +1024,7 @@ cache_check:
 			   "krb5") &&
 		   !krb5_allow_old_client_csum) {
 		CWARN("%s: deny connection from '%s' due to missing 'krb_csum' feature, set 'sptlrpc.gss.krb5_allow_old_client_csum=1' to allow, but recommend client upgrade: rc = %d\n",
-		      target->obd_name, libcfs_nid2str(req->rq_peer.nid),
+		      target->obd_name, libcfs_nidstr(&req->rq_peer.nid),
 		      -EPROTO);
 		GOTO(out, rc = SECSVC_DROP);
 	} else {
@@ -1039,8 +1039,8 @@ cache_check:
 
         rsci->target = target;
 
-        CDEBUG(D_SEC, "server create rsc %p(%u->%s)\n",
-               rsci, rsci->ctx.gsc_uid, libcfs_nid2str(req->rq_peer.nid));
+	CDEBUG(D_SEC, "server create rsc %p(%u->%s)\n",
+	       rsci, rsci->ctx.gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
 
         if (rsip->out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
                 CERROR("handle size %u too large\n", rsip->out_handle.len);
@@ -1102,19 +1102,19 @@ out:
 }
 
 struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
-                                           struct gss_wire_ctx *gw)
+					   struct gss_wire_ctx *gw)
 {
-        struct rsc *rsc;
+	struct rsc *rsc;
 
-        rsc = gss_svc_searchbyctx(&gw->gw_handle);
-        if (!rsc) {
+	rsc = gss_svc_searchbyctx(&gw->gw_handle);
+	if (!rsc) {
 		CWARN("Invalid gss ctx idx %#llx from %s\n",
-                      gss_handle_to_u64(&gw->gw_handle),
-                      libcfs_nid2str(req->rq_peer.nid));
-                return NULL;
-        }
+		      gss_handle_to_u64(&gw->gw_handle),
+		      libcfs_nidstr(&req->rq_peer.nid));
+		return NULL;
+	}
 
-        return &rsc->ctx;
+	return &rsc->ctx;
 }
 
 void gss_svc_upcall_put_ctx(struct gss_svc_ctx *ctx)

@@ -989,7 +989,7 @@ static int rev_import_flags_update(struct obd_import *revimp,
 	if (rc) {
 		CERROR("%s: cannot get reverse import %s security: rc = %d\n",
 			revimp->imp_client->cli_name,
-			libcfs_id2str(req->rq_peer), rc);
+			libcfs_idstr(&req->rq_peer), rc);
 		return rc;
 	}
 
@@ -1098,7 +1098,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	bool new_mds_mds_conn = false;
 	struct obd_connect_data *data, *tmpdata;
 	int size, tmpsize;
-	lnet_nid_t *client_nid = NULL;
+	lnet_nid_t client_nid;
 	struct ptlrpc_connection *pcon = NULL;
 
 	ENTRY;
@@ -1116,7 +1116,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_ERROR_MSG(0x137,
 				   "%s: not available for connect from %s (no target). If you are running an HA pair check that the target is mounted on the other server.\n",
-				   str, libcfs_nid2str(req->rq_peer.nid));
+				   str, libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -ENODEV);
 	}
 
@@ -1130,7 +1130,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_INFO("%.*s: Not available for connect from %s (%s)\n",
 			      target_len, target_start,
-			      libcfs_nid2str(req->rq_peer.nid),
+			      libcfs_nidstr(&req->rq_peer.nid),
 			      (target->obd_stopping ?
 			       "stopping" : "not set up"));
 		GOTO(out, rc = -ENODEV);
@@ -1141,7 +1141,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 		CDEBUG(D_INFO,
 		       "%s: Temporarily refusing client connection from %s\n",
-		       target->obd_name, libcfs_nid2str(req->rq_peer.nid));
+		       target->obd_name, libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -EAGAIN);
 	}
 
@@ -1240,7 +1240,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 					      LUSTRE_MINOR, LUSTRE_PATCH,
 					      LUSTRE_FIX, major, minor, patch,
 					      OBD_OCD_VERSION_FIX(data->ocd_version),
-					      libcfs_nid2str(req->rq_peer.nid),
+					      libcfs_nidstr(&req->rq_peer.nid),
 					      str);
 				GOTO(out, rc = -EPROTO);
 			}
@@ -1263,33 +1263,33 @@ int target_handle_connect(struct ptlrpc_request *req)
 		spin_unlock(&export->exp_lock);
 		LCONSOLE_WARN("%s: Export %p already connecting from %s\n",
 			      export->exp_obd->obd_name, export,
-			      libcfs_nid2str(req->rq_peer.nid));
+			      libcfs_nidstr(&req->rq_peer.nid));
 		class_export_put(export);
 		export = NULL;
 		rc = -EALREADY;
 	} else if ((mds_conn || (lw_client && initial_conn) ||
 		   OCD_HAS_FLAG(data, MDS_MDS)) && export->exp_connection) {
 		spin_unlock(&export->exp_lock);
-		if (req->rq_peer.nid !=
-		    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid)) {
+		if (!nid_same(&req->rq_peer.nid,
+			      &export->exp_connection->c_peer.nid)) {
 			/* MDS or LWP reconnected after failover. */
 			LCONSOLE_WARN("%s: Received %s connection from %s, removing former export from %s\n",
 				      target->obd_name,
 				      lw_client ? "LWP" : "MDS",
-				      libcfs_nid2str(req->rq_peer.nid),
+				      libcfs_nidstr(&req->rq_peer.nid),
 				      libcfs_nidstr(&export->exp_connection->c_peer.nid));
 		} else {
 			/* New connection from the same NID. */
 			LCONSOLE_WARN("%s: Received new %s connection from %s, %s former export from same NID\n",
 				      target->obd_name,
 				      lw_client ? "LWP" : "MDS",
-				      libcfs_nid2str(req->rq_peer.nid),
+				      libcfs_nidstr(&req->rq_peer.nid),
 				      OCD_HAS_FLAG(data, MDS_MDS) ?
 				      "keep" : "remove");
 		}
 
-		if (req->rq_peer.nid ==
-		    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid) &&
+		if (nid_same(&req->rq_peer.nid,
+			     &export->exp_connection->c_peer.nid) &&
 		    OCD_HAS_FLAG(data, MDS_MDS)) {
 			/*
 			 * Because exports between MDTs will always be
@@ -1311,12 +1311,13 @@ int target_handle_connect(struct ptlrpc_request *req)
 			rc = 0;
 		}
 	} else if (export->exp_connection != NULL && initial_conn &&
-		   req->rq_peer.nid != lnet_nid_to_nid4(&export->exp_connection->c_peer.nid)) {
+		   !nid_same(&req->rq_peer.nid,
+			     &export->exp_connection->c_peer.nid)) {
 		spin_unlock(&export->exp_lock);
 		/* In MDS failover we have static UUID but NID can change. */
 		LCONSOLE_WARN("%s: Client %s seen on new nid %s when existing nid %s is already connected\n",
 			      target->obd_name, cluuid.uuid,
-			      libcfs_nid2str(req->rq_peer.nid),
+			      libcfs_nidstr(&req->rq_peer.nid),
 			      libcfs_nidstr(
 				      &export->exp_connection->c_peer.nid));
 		rc = -EALREADY;
@@ -1342,7 +1343,7 @@ no_export:
 		   atomic_read(&export->exp_rpc_count) > 0) {
 		LCONSOLE_WARN("%s: Client %s (at %s) refused connection, still busy with %d references\n",
 			      target->obd_name, cluuid.uuid,
-			      libcfs_nid2str(req->rq_peer.nid),
+			      libcfs_nidstr(&req->rq_peer.nid),
 			      refcount_read(&export->exp_handle.h_ref));
 			GOTO(out, rc = -EBUSY);
 	} else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
@@ -1350,7 +1351,7 @@ no_export:
 		if (!strstr(cluuid.uuid, "mdt"))
 			LCONSOLE_WARN("%s: Rejecting reconnect from the known client %s (at %s) because it is indicating it is a new client\n",
 				      target->obd_name, cluuid.uuid,
-				      libcfs_nid2str(req->rq_peer.nid));
+				      libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -EALREADY);
 	} else {
 		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
@@ -1360,7 +1361,7 @@ no_export:
 		GOTO(out, rc);
 
 	CDEBUG(D_HA, "%s: connection from %s@%s %st%llu exp %p cur %lld last %lld\n",
-	       target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+	       target->obd_name, cluuid.uuid, libcfs_nidstr(&req->rq_peer.nid),
 	       target->obd_recovering ? "recovering/" : "", data->ocd_transno,
 	       export, ktime_get_seconds(),
 	       export ? export->exp_last_request_time : 0);
@@ -1386,7 +1387,7 @@ no_export:
 	/* Tell the client if we support replayable requests. */
 	if (target->obd_replayable)
 		lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
-	client_nid = &req->rq_peer.nid;
+	client_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
 
 	if (export == NULL) {
 		/* allow lightweight connections during recovery */
@@ -1424,7 +1425,7 @@ no_export:
 
 			LCONSOLE_WARN("%s: Denying connection for new client %s (at %s), waiting for %d known clients (%d recovered, %d in progress, and %d evicted) %s %lld:%.02lld\n",
 				      target->obd_name, cluuid.uuid,
-				      libcfs_nid2str(req->rq_peer.nid), known,
+				      libcfs_nidstr(&req->rq_peer.nid), known,
 				      connected - in_progress, in_progress,
 				      stale, msg, timeout / 60, timeout % 60);
 			rc = -EBUSY;
@@ -1432,7 +1433,7 @@ no_export:
 dont_check_exports:
 			rc = obd_connect(req->rq_svc_thread->t_env,
 					 &export, target, &cluuid, data,
-					 client_nid);
+					 &client_nid);
 			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
 							MSG_CONNECT_RECOVERING);
@@ -1446,7 +1447,7 @@ dont_check_exports:
 		}
 	} else {
 		rc = obd_reconnect(req->rq_svc_thread->t_env,
-				   export, target, &cluuid, data, client_nid);
+				   export, target, &cluuid, data, &client_nid);
 	}
 	if (rc)
 		GOTO(out, rc);
@@ -1481,7 +1482,7 @@ dont_check_exports:
 	 */
 	ptlrpc_request_change_export(req, export);
 
-	pcon = ptlrpc_connection_get(req->rq_peer,
+	pcon = ptlrpc_connection_get(&req->rq_peer,
 				     &req->rq_self, &cluuid);
 	if (pcon == NULL)
 		GOTO(out, rc = -ENOTCONN);
@@ -1496,7 +1497,7 @@ dont_check_exports:
 		spin_unlock(&export->exp_lock);
 		CDEBUG(D_RPCTRACE,
 		       "%s: %s already connected at greater or equal conn_cnt: %d >= %d\n",
-		       cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+		       cluuid.uuid, libcfs_nidstr(&req->rq_peer.nid),
 		       export->exp_conn_cnt,
 		       lustre_msg_get_conn_cnt(req->rq_reqmsg));
 
@@ -1507,8 +1508,8 @@ dont_check_exports:
 
 	/* Check to see if connection came from another NID. */
 	if (export->exp_connection != NULL &&
-	    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid) !=
-	    req->rq_peer.nid) {
+	    !nid_same(&export->exp_connection->c_peer.nid,
+		      &req->rq_peer.nid)) {
 		obd_nid_del(export->exp_obd, export);
 		ptlrpc_connection_put(export->exp_connection);
 		export->exp_connection = NULL;
@@ -2538,7 +2539,7 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 	DEBUG_REQ(D_HA, req,
 		  "remove t%lld from %s because duplicate update records found",
 		  lustre_msg_get_transno(req->rq_reqmsg),
-		  libcfs_nid2str(req->rq_peer.nid));
+		  libcfs_nidstr(&req->rq_peer.nid));
 
 	/*
 	 * Right now, only for MDS reint operation update replay and
@@ -2553,7 +2554,7 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 		target_send_reply(req, req->rq_status, 0);
 	} else {
 		DEBUG_REQ(D_ERROR, req, "wrong opc from %s",
-		libcfs_nid2str(req->rq_peer.nid));
+		libcfs_nidstr(&req->rq_peer.nid));
 	}
 	target_exp_dequeue_req_replay(req);
 	target_request_copy_put(req);
@@ -2637,7 +2638,7 @@ static void replay_request_or_update(struct lu_env *env,
 			DEBUG_REQ(D_HA, req, "processing x%llu t%lld from %s",
 				  req->rq_xid,
 				  lustre_msg_get_transno(req->rq_reqmsg),
-				  libcfs_nid2str(req->rq_peer.nid));
+				  libcfs_nidstr(&req->rq_peer.nid));
 
 			ptlrpc_watchdog_init(&thread->t_watchdog,
 					     WATCHDOG_TIMEOUT);
@@ -2773,7 +2774,7 @@ static int target_recovery_thread(void *arg)
 	while ((req = target_next_replay_lock(lut))) {
 		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing lock from %s:",
-			  libcfs_nid2str(req->rq_peer.nid));
+			  libcfs_nidstr(&req->rq_peer.nid));
 		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_LOCK_REPLAY)) {
 			req->rq_status = -ENODEV;
 			target_request_copy_put(req);
@@ -2807,7 +2808,7 @@ static int target_recovery_thread(void *arg)
 	while ((req = target_next_final_ping(obd))) {
 		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing final ping from %s:",
-			  libcfs_nid2str(req->rq_peer.nid));
+			  libcfs_nidstr(&req->rq_peer.nid));
 		handle_recovery_req(thread, req,
 				    trd->trd_recovery_handler);
 		/*

@@ -629,7 +629,8 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
         ptlrpc_at_set_reply(req, flags);
 
 	if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
-		conn = ptlrpc_connection_get(req->rq_peer, &req->rq_self, NULL);
+		conn = ptlrpc_connection_get(&req->rq_peer, &req->rq_self,
+					     NULL);
 	else
 		conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 

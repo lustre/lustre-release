@@ -348,7 +348,7 @@ void request_in_callback(struct lnet_event *ev)
 		req->rq_reqdata_len = ev->mlength;
 	ktime_get_real_ts64(&req->rq_arrival_time);
 	/* Multi-Rail: keep track of both initiator and source NID. */
-	req->rq_peer = lnet_pid_to_pid4(&ev->initiator);
+	req->rq_peer = ev->initiator;
 	req->rq_source = lnet_pid_to_pid4(&ev->source);
 	req->rq_self = ev->target.nid;
 	req->rq_rqbd = rqbd;
@@ -358,7 +358,7 @@ void request_in_callback(struct lnet_event *ev)
 		       req, req->rq_xid, ev->mlength);
 
 	CDEBUG(D_RPCTRACE, "peer: %s (source: %s)\n",
-		libcfs_id2str(req->rq_peer), libcfs_id2str(req->rq_source));
+		libcfs_idstr(&req->rq_peer), libcfs_id2str(req->rq_source));
 
 	spin_lock(&svcpt->scp_lock);
 
@@ -527,7 +527,7 @@ static void ptlrpc_master_callback(struct lnet_event *ev)
 }
 
 int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
-			struct lnet_process_id *peer,
+			struct lnet_processid *peer,
 			struct lnet_nid *self,
 			u32 refnet)
 {
@@ -553,8 +553,8 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			continue;
 
 		if (dist == 0) {		/* local! use loopback LND */
-			peer->nid = LNET_NID_LO_0;
-			lnet_nid4_to_nid(peer->nid, self);
+			lnet_nid4_to_nid(LNET_NID_LO_0, self);
+			peer->nid = *self;
 			rc = 0;
 			break;
 		}
@@ -565,13 +565,13 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			best_dist = dist;
 			best_order = order;
 
-			peer->nid = lnet_nid_to_nid4(&dst_nid);
+			peer->nid = dst_nid;
 			*self = src_nid;
 			rc = 0;
 		}
 	}
 
-	CDEBUG(D_NET, "%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
+	CDEBUG(D_NET, "%s->%s\n", uuid->uuid, libcfs_idstr(peer));
 	return rc;
 }
 

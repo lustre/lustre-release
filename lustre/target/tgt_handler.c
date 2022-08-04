@@ -633,7 +633,7 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 	if (unlikely(s->tos_hs == NULL)) {
 		if (!printed) {
 			CERROR("%s: no handler for opcode 0x%x from %s\n",
-			       tgt_name(tgt), opc, libcfs_id2str(req->rq_peer));
+			       tgt_name(tgt), opc, libcfs_idstr(&req->rq_peer));
 			printed = true;
 		}
 		goto err_unsupported;
@@ -801,7 +801,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 			GOTO(handle_recov, rc = 0);
 		}
 		CDEBUG(D_HA, "operation %d on unconnected OST from %s\n",
-		       opc, libcfs_id2str(req->rq_peer));
+		       opc, libcfs_idstr(&req->rq_peer));
 		req->rq_status = -ENOTCONN;
 		rc = ptlrpc_error(req);
 		GOTO(out, rc);
@@ -953,7 +953,7 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		read_lock(&tgt->lut_sptlrpc_lock);
 		sptlrpc_target_choose_flavor(&tgt->lut_sptlrpc_rset,
 					     req->rq_sp_from,
-					     req->rq_peer.nid,
+					     lnet_nid_to_nid4(&req->rq_peer.nid),
 					     &flvr);
 		read_unlock(&tgt->lut_sptlrpc_lock);
 
@@ -975,7 +975,7 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 			CERROR("%s: unauthorized rpc flavor %x from %s, "
 			       "expect %x\n", tgt_name(tgt),
 			       req->rq_flvr.sf_rpc,
-			       libcfs_nid2str(req->rq_peer.nid),
+			       libcfs_nidstr(&req->rq_peer.nid),
 			       exp->exp_flvr.sf_rpc);
 			rc = -EACCES;
 		}
@@ -1980,7 +1980,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 
 static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 			       struct obd_export *exp, struct obdo *oa,
-			       const struct lnet_process_id *peer,
+			       const struct lnet_processid *peer,
 			       __u32 client_cksum, __u32 server_cksum,
 			       enum cksum_types server_cksum_type)
 {
@@ -2020,7 +2020,7 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 		DFID " object "DOSTID" extent [%llu-%llu], client returned csum"
 		" %x (type %x), server csum %x (type %x)\n",
 		exp->exp_obd->obd_name,
-		msg, libcfs_nid2str(peer->nid),
+		msg, libcfs_nidstr(&peer->nid),
 		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : 0ULL,
 		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
@@ -2379,7 +2379,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = 1;
 		CERROR("Dropping timed-out read from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
-		       libcfs_id2str(req->rq_peer), POSTID(&ioo->ioo_oid),
+		       libcfs_idstr(&req->rq_peer), POSTID(&ioo->ioo_oid),
 		       ktime_get_real_seconds() - req->rq_arrival_time.tv_sec,
 		       req->rq_deadline - req->rq_arrival_time.tv_sec);
 		GOTO(out_lock, rc = -ETIMEDOUT);
@@ -2606,7 +2606,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body != NULL);
 
-	if (desc && req->rq_peer.nid != desc->bd_sender) {
+	if (desc && lnet_nid_to_nid4(&req->rq_peer.nid) != desc->bd_sender) {
 		via = " via ";
 		router = libcfs_nid2str(desc->bd_sender);
 	}
@@ -2624,7 +2624,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 	LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: from %s%s%s inode "
 			   DFID" object "DOSTID" extent [%llu-%llu"
 			   "]: client csum %x, server csum %x\n",
-			   exp->exp_obd->obd_name, libcfs_id2str(req->rq_peer),
+			   exp->exp_obd->obd_name, libcfs_idstr(&req->rq_peer),
 			   via, router,
 			   body->oa.o_valid & OBD_MD_FLFID ?
 			   body->oa.o_parent_seq : (__u64)0,
@@ -2768,7 +2768,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = true;
 		CERROR("%s: Dropping timed-out write from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
-		       tgt_name(tsi->tsi_tgt), libcfs_id2str(req->rq_peer),
+		       tgt_name(tsi->tsi_tgt), libcfs_idstr(&req->rq_peer),
 		       POSTID(&ioo->ioo_oid),
 		       ktime_get_real_seconds() - req->rq_arrival_time.tv_sec,
 		       req->rq_deadline - req->rq_arrival_time.tv_sec);
@@ -2866,7 +2866,7 @@ skip_transfer:
 		} else if ((cksum_counter & (-cksum_counter)) ==
 			   cksum_counter) {
 			CDEBUG(D_INFO, "Checksum %u from %s OK: %x\n",
-			       cksum_counter, libcfs_id2str(req->rq_peer),
+			       cksum_counter, libcfs_idstr(&req->rq_peer),
 			       repbody->oa.o_cksum);
 		}
 	}

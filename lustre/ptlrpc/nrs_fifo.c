@@ -176,7 +176,7 @@ struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
 
 		CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: %llu"
 		       "\n", policy->pol_desc->pd_name,
-		       libcfs_id2str(req->rq_peer), nrq->nr_u.fifo.fr_sequence);
+		       libcfs_idstr(&req->rq_peer), nrq->nr_u.fifo.fr_sequence);
 	}
 
 	return nrq;
@@ -237,7 +237,7 @@ static void nrs_fifo_req_stop(struct ptlrpc_nrs_policy *policy,
 						  rq_nrq);
 
 	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: %llu\n",
-	       policy->pol_desc->pd_name, libcfs_id2str(req->rq_peer),
+	       policy->pol_desc->pd_name, libcfs_idstr(&req->rq_peer),
 	       nrq->nr_u.fifo.fr_sequence);
 }
 

@@ -76,14 +76,13 @@ static const struct rhashtable_params conn_hash_params = {
 };
 
 struct ptlrpc_connection *
-ptlrpc_connection_get(struct lnet_process_id peer4, struct lnet_nid *self,
+ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
 		      struct obd_uuid *uuid)
 {
 	struct ptlrpc_connection *conn, *conn2;
-	struct lnet_processid peer;
+	struct lnet_processid peer = *peer_orig;
 	ENTRY;
 
-	lnet_pid4_to_pid(peer4, &peer);
 	LNetPrimaryNID(&peer.nid);
 	conn = rhashtable_lookup_fast(&conn_hash, &peer, conn_hash_params);
 	if (conn) {

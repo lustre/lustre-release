@@ -1968,9 +1968,9 @@ int gss_pack_err_notify(struct ptlrpc_request *req, __u32 major, __u32 minor)
         rs->rs_repdata_len = lustre_msg_size_v2(rs->rs_repbuf->lm_bufcount,
                                                 rs->rs_repbuf->lm_buflens);
 
-        CDEBUG(D_SEC, "prepare gss error notify(0x%x/0x%x) to %s\n",
-               major, minor, libcfs_nid2str(req->rq_peer.nid));
-        RETURN(0);
+	CDEBUG(D_SEC, "prepare gss error notify(0x%x/0x%x) to %s\n",
+	       major, minor, libcfs_nidstr(&req->rq_peer.nid));
+	RETURN(0);
 }
 
 static
@@ -1987,8 +1987,8 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
         int                        swabbed, rc;
         ENTRY;
 
-        CDEBUG(D_SEC, "processing gss init(%d) request from %s\n", gw->gw_proc,
-               libcfs_nid2str(req->rq_peer.nid));
+	CDEBUG(D_SEC, "processing gss init(%d) request from %s\n", gw->gw_proc,
+	       libcfs_nidstr(&req->rq_peer.nid));
 
         req->rq_ctx_init = 1;
 
@@ -2060,14 +2060,14 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
 	if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_oss ||
 	    grctx->src_ctx->gsc_usr_root)
 		CWARN("create svc ctx %p: user from %s authenticated as %s\n",
-		      grctx->src_ctx, libcfs_nid2str(req->rq_peer.nid),
+		      grctx->src_ctx, libcfs_nidstr(&req->rq_peer.nid),
 		      grctx->src_ctx->gsc_usr_root ? "root" :
 		      (grctx->src_ctx->gsc_usr_mds ? "mds" :
 		       (grctx->src_ctx->gsc_usr_oss ? "oss" : "null")));
 	else
 		CWARN("create svc ctx %p: accept user %u from %s\n",
 		      grctx->src_ctx, grctx->src_ctx->gsc_uid,
-		      libcfs_nid2str(req->rq_peer.nid));
+		      libcfs_nidstr(&req->rq_peer.nid));
 
         if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (reqbuf->lm_bufcount < 4) {
@@ -2282,10 +2282,10 @@ int gss_svc_handle_data(struct ptlrpc_request *req,
         if (rc == 0)
                 RETURN(SECSVC_OK);
 
-	CERROR("svc %u failed: major 0x%08x: req xid %llu ctx %p idx "
-	       "%#llx(%u->%s)\n", gw->gw_svc, major, req->rq_xid,
-               grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
-               grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
+	CERROR("svc %u failed: major 0x%08x: req xid %llu ctx %p idx %#llx(%u->%s)\n",
+	       gw->gw_svc, major, req->rq_xid,
+	       grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
+	       grctx->src_ctx->gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
 error:
         /* we only notify client in case of NO_CONTEXT/BAD_SIG, which
          * might happen after server reboot, to allow recovery. */
@@ -2322,8 +2322,8 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
                 RETURN(SECSVC_DROP);
 
 	CWARN("destroy svc ctx %p idx %#llx (%u->%s)\n",
-              grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
-              grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
+	      grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
+	      grctx->src_ctx->gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
 
         gss_svc_upcall_destroy_ctx(grctx->src_ctx);
 

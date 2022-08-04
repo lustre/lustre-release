@@ -97,7 +97,7 @@ static struct binheap_ops nrs_crrn_heap_ops = {
 /**
  * rhashtable operations for nrs_crrn_net::cn_cli_hash
  *
- * This uses ptlrpc_request::rq_peer.nid as its key, in order to hash
+ * This uses ptlrpc_request::rq_peer.nid (as nid4) as its key, in order to hash
  * nrs_crrn_client objects.
  */
 static u32 nrs_crrn_hashfn(const void *data, u32 len, u32 seed)
@@ -293,6 +293,7 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_crrn_client	*cli;
 	struct nrs_crrn_client	*tmp;
 	struct ptlrpc_request	*req;
+	lnet_nid_t nid4;
 
 	if (parent == NULL) {
 		*resp = &((struct nrs_crrn_net *)policy->pol_private)->cn_res;
@@ -301,8 +302,8 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 
 	net = container_of(parent, struct nrs_crrn_net, cn_res);
 	req = container_of(nrq, struct ptlrpc_request, rq_nrq);
-
-	cli = rhashtable_lookup_fast(&net->cn_cli_hash, &req->rq_peer.nid,
+	nid4 = lnet_nid_to_nid4(&req->rq_peer.nid);
+	cli = rhashtable_lookup_fast(&net->cn_cli_hash, &nid4,
 				     nrs_crrn_hash_params);
 	if (cli)
 		goto out;
@@ -312,7 +313,7 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 	if (cli == NULL)
 		return -ENOMEM;
 
-	cli->cc_nid = req->rq_peer.nid;
+	cli->cc_nid = nid4;
 
 	atomic_set(&cli->cc_ref, 0);
 
@@ -399,7 +400,7 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 		CDEBUG(D_RPCTRACE,
 		       "NRS: starting to handle %s request from %s, with round "
 		       "%llu\n", NRS_POL_NAME_CRRN,
-		       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
+		       libcfs_idstr(&req->rq_peer), nrq->nr_u.crr.cr_round);
 
 		/** Peek at the next request to be served */
 		node = binheap_root(net->cn_binheap);
@@ -569,7 +570,7 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
 	CDEBUG(D_RPCTRACE,
 	       "NRS: finished handling %s request from %s, with round %llu"
 	       "\n", NRS_POL_NAME_CRRN,
-	       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
+	       libcfs_idstr(&req->rq_peer), nrq->nr_u.crr.cr_round);
 }
 
 /**

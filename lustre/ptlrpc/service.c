@@ -2089,7 +2089,7 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 		rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
 		if (rc != 0) {
 			CERROR("error unpacking request: ptl %d from %s x%llu\n",
-			       svc->srv_req_portal, libcfs_id2str(req->rq_peer),
+			       svc->srv_req_portal, libcfs_idstr(&req->rq_peer),
 			       req->rq_xid);
 			goto err_req;
 		}
@@ -2098,7 +2098,7 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
 	if (rc) {
 		CERROR("error unpacking ptlrpc body: ptl %d from %s x %llu\n",
-		       svc->srv_req_portal, libcfs_id2str(req->rq_peer),
+		       svc->srv_req_portal, libcfs_idstr(&req->rq_peer),
 		       req->rq_xid);
 		goto err_req;
 	}
@@ -2115,7 +2115,7 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	if (lustre_msg_get_type(req->rq_reqmsg) != PTL_RPC_MSG_REQUEST) {
 		CERROR("wrong packet type received (type=%u) from %s\n",
 		       lustre_msg_get_type(req->rq_reqmsg),
-		       libcfs_id2str(req->rq_peer));
+		       libcfs_idstr(&req->rq_peer));
 		goto err_req;
 	}
 
@@ -2284,7 +2284,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	if (ktime_get_real_seconds() > request->rq_deadline) {
 		DEBUG_REQ(D_ERROR, request,
 			  "Dropping timed-out request from %s: deadline %lld/%llds ago",
-			  libcfs_id2str(request->rq_peer),
+			  libcfs_idstr(&request->rq_peer),
 			  request->rq_deadline -
 			  request->rq_arrival_time.tv_sec,
 			  ktime_get_real_seconds() - request->rq_deadline);
@@ -2299,7 +2299,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       (request->rq_export ?
 		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
-	       libcfs_id2str(request->rq_peer),
+	       libcfs_idstr(&request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
 	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "");
 
@@ -2340,7 +2340,7 @@ put_conn:
 		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg),
 	       request->rq_xid,
-	       libcfs_id2str(request->rq_peer),
+	       libcfs_idstr(&request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
 	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "",
 	       timediff_usecs,

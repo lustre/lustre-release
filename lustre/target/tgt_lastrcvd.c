@@ -960,7 +960,6 @@ static int tgt_is_local_client(const struct lu_env *env,
 	struct lu_target	*tgt = class_exp2tgt(exp);
 	struct tgt_session_info *tsi = tgt_ses_info(env);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-	struct lnet_nid	nid;
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_MDS ||
 	    exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
@@ -969,8 +968,7 @@ static int tgt_is_local_client(const struct lu_env *env,
 		return 0;
 	if (!req)
 		return 0;
-	lnet_nid4_to_nid(req->rq_peer.nid, &nid);
-	if (!LNetIsPeerLocal(&nid))
+	if (!LNetIsPeerLocal(&req->rq_peer.nid))
 		return 0;
 
 	return 1;

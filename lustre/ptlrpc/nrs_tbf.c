@@ -1037,7 +1037,7 @@ static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
 /**
  * libcfs_hash operations for nrs_tbf_net::cn_cli_hash
  *
- * This uses ptlrpc_request::rq_peer.nid as its key, in order to hash
+ * This uses ptlrpc_request::rq_peer.nid (as nid4) as its key, in order to hash
  * nrs_tbf_client objects.
  */
 #define NRS_TBF_NID_BKT_BITS	8
@@ -1114,7 +1114,9 @@ static struct nrs_tbf_client *
 nrs_tbf_nid_cli_find(struct nrs_tbf_head *head,
 		     struct ptlrpc_request *req)
 {
-	return cfs_hash_lookup(head->th_cli_hash, &req->rq_peer.nid);
+	lnet_nid_t nid4 = lnet_nid_to_nid4(&req->rq_peer.nid);
+
+	return cfs_hash_lookup(head->th_cli_hash, &nid4);
 }
 
 static struct nrs_tbf_client *
@@ -1170,7 +1172,7 @@ static void
 nrs_tbf_nid_cli_init(struct nrs_tbf_client *cli,
 			     struct ptlrpc_request *req)
 {
-	cli->tc_nid = req->rq_peer.nid;
+	cli->tc_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
 }
 
 static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
@@ -1637,14 +1639,14 @@ static inline void nrs_tbf_cli_gen_key(struct nrs_tbf_client *cli,
 		jobid = NRS_TBF_JOBID_NULL;
 
 	snprintf(keystr, keystr_sz, "%s_%s_%d_%u_%u", jobid,
-		 libcfs_nid2str(req->rq_peer.nid), opc, id.ti_uid,
+		 libcfs_nidstr(&req->rq_peer.nid), opc, id.ti_uid,
 		 id.ti_gid);
 
 	if (cli) {
 		INIT_LIST_HEAD(&cli->tc_lru);
 		strlcpy(cli->tc_key, keystr, sizeof(cli->tc_key));
 		strlcpy(cli->tc_jobid, jobid, sizeof(cli->tc_jobid));
-		cli->tc_nid = req->rq_peer.nid;
+		cli->tc_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
 		cli->tc_opcode = opc;
 		cli->tc_id = id;
 	}
@@ -3252,7 +3254,7 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: %llu\n",
-	       policy->pol_desc->pd_name, libcfs_id2str(req->rq_peer),
+	       policy->pol_desc->pd_name, libcfs_idstr(&req->rq_peer),
 	       nrq->nr_u.tbf.tr_sequence);
 }
 

@@ -297,7 +297,7 @@ static void nrs_delay_req_stop(struct ptlrpc_nrs_policy *policy,
 
 	DEBUG_REQ(D_RPCTRACE, req,
 		  "NRS: finished delayed request from %s after %llds",
-		  libcfs_id2str(req->rq_peer),
+		  libcfs_idstr(&req->rq_peer),
 		  (s64)(nrq->nr_u.delay.req_start_time -
 			req->rq_srv.sr_arrival_time.tv_sec));
 }

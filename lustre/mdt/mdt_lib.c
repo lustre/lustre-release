@@ -173,7 +173,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	struct ptlrpc_user_desc *pud = req->rq_user_desc;
 	struct lu_ucred *ucred = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
-	lnet_nid_t peernid = req->rq_peer.nid;
+	lnet_nid_t peernid = lnet_nid_to_nid4(&req->rq_peer.nid);
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
@@ -373,8 +373,9 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 		return false;
 
 	/* 3. Check the permission in the identities. */
-	perm = mdt_identity_get_perm(uc->uc_identity,
-				     mdt_info_req(info)->rq_peer.nid);
+	perm = mdt_identity_get_perm(
+		uc->uc_identity,
+		lnet_nid_to_nid4(&mdt_info_req(info)->rq_peer.nid));
 	if (perm & CFS_SETGRP_PERM)
 		return true;
 
@@ -383,18 +384,18 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 
 int mdt_check_ucred(struct mdt_thread_info *info)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_device       *mdt = info->mti_mdt;
-        struct ptlrpc_user_desc *pud = req->rq_user_desc;
-	struct lu_ucred         *ucred = mdt_ucred(info);
-        struct md_identity      *identity = NULL;
-        lnet_nid_t               peernid = req->rq_peer.nid;
-        __u32                    perm = 0;
-        int                      setuid;
-        int                      setgid;
-        int                      rc = 0;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct ptlrpc_user_desc	*pud = req->rq_user_desc;
+	struct lu_ucred		*ucred = mdt_ucred(info);
+	struct md_identity	*identity = NULL;
+	lnet_nid_t		 peernid = lnet_nid_to_nid4(&req->rq_peer.nid);
+	__u32			 perm = 0;
+	int			 setuid;
+	int			 setgid;
+	int			 rc = 0;
 
-        ENTRY;
+	ENTRY;
 
 	LASSERT(ucred != NULL);
 	if ((ucred->uc_valid == UCRED_OLD) || (ucred->uc_valid == UCRED_NEW))
@@ -493,7 +494,8 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	uc->uc_identity = identity;
 
 	/* process root_squash here. */
-	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
+	mdt_root_squash(info,
+			lnet_nid_to_nid4(&mdt_info_req(info)->rq_peer.nid));
 
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);

@@ -2402,7 +2402,7 @@ static int replay_lock_interpret(const struct lu_env *env,
 		CERROR("received replay ack for unknown local cookie %#llx remote cookie %#llx from server %s id %s\n",
 		       aa->lock_handle.cookie, reply->lock_handle.cookie,
 		       req->rq_export->exp_client_uuid.uuid,
-		       libcfs_id2str(req->rq_peer));
+		       libcfs_idstr(&req->rq_peer));
 		GOTO(out, rc = -ESTALE);
 	}
 
