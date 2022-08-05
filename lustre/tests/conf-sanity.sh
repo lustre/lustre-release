@@ -9936,6 +9936,8 @@ run_test 130 "re-register an MDT after writeconf"
 
 test_131() {
 	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
+	(( $MDS1_VERSION >= $(version_code 2.14.56.35) )) ||
+		skip "Need MDS version at least 2.14.56.35"
 	do_facet mds1 $DEBUGFS -R features $(mdsdevname 1) |
 		grep -q project || skip "skip project quota not supported"
 
