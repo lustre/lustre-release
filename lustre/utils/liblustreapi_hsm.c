@@ -1592,7 +1592,7 @@ int llapi_hsm_request(const char *path, const struct hsm_user_request *request)
 	int rc;
 	int fd;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, (char *)path, -1, NULL);
+	rc = get_root_path(WANT_FD, NULL, &fd, (char *)path, -1, NULL, NULL);
 	if (rc)
 		return rc;
 

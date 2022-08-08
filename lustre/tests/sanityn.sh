@@ -510,7 +510,7 @@ test_16d() {
 
 	$LFS setstripe -c -1 $file1 # b=10919
 	$LCTL set_param ldlm.namespaces.*.lru_size=clear
-	
+
 	# direct write on one client and direct read from another
 	dd if=/dev/urandom of=$file1 bs=1M count=100 oflag=direct
 	dd if=$file2 of=$tmpfile iflag=direct bs=1M
@@ -5884,6 +5884,40 @@ test_112() {
 	(( count == 64 / MDSCOUNT )) || error "$count subdirs created on MDT0"
 }
 run_test 112 "update max-inherit in default LMV"
+
+test_113 () {
+	(( MDS1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need server version at least 2.15.50"
+
+	local instance
+	local nid
+
+	instance=$($LFS getname -i $DIR1) ||
+		error "cannot get instance of $DIR1"
+
+	$LFS check osts $DIR1 | grep $instance ||
+		error "cannot find OSTs of instance $instance"
+
+	$LFS check osts $DIR1 | grep -v $instance
+	if (( $? == 0 )); then
+		error "find OSTs other than instance $instance"
+	fi
+
+	$LFS check osts | grep $instance ||
+		error "cannot find other OSTs"
+
+	nid=$(df $DIR2 | tail -1 | sed 's%:/.*%%') ||
+		error "cannot parse nid for $DIR2"
+
+	$LFS check mgts $DIR2 | grep MGC$nid ||
+		error "cannot find mgc of $nid"
+
+	$LFS check mgts $DIR2 | grep -v MGC$nid
+	if (( $? == 0 )); then
+		error "find MGTs other than nid $nid"
+	fi
+}
+run_test 113 "check servers of specified fs"
 
 log "cleanup: ======================================================"
 
