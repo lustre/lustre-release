@@ -84,6 +84,8 @@
 #include "lstddef.h"
 
 #define FORMATTED_BUF_LEN	1024
+#define MAX_LINE_LEN		256
+#define MAX_INSTANCE_LEN	32
 
 static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
@@ -1254,12 +1256,13 @@ static struct {
 	dev_t dev;
 	char fsname[PATH_MAX];
 	char mnt_dir[PATH_MAX];
+	char nid[MAX_LINE_LEN];
 } root_cached = { 0 };
 
 static pthread_rwlock_t root_cached_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 static int get_root_path_fast(int want, char *fsname, int *outfd, char *path,
-			      dev_t *dev)
+			      dev_t *dev, char *nid)
 {
 	int rc = -ENODEV;
 	int fsnamelen;
@@ -1298,14 +1301,15 @@ static int get_root_path_fast(int want, char *fsname, int *outfd, char *path,
 		*dev = root_cached.dev;
 	if ((want & WANT_FD) && outfd)
 		rc = get_root_fd(root_cached.mnt_dir, outfd);
-
+	if ((want & WANT_NID) && nid)
+		strcpy(nid, root_cached.nid);
 out_unlock:
 	pthread_rwlock_unlock(&root_cached_lock);
 	return rc;
 }
 
 static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
-			      int index, dev_t *dev)
+			      int index, dev_t *dev, char *nid)
 {
 	struct mntent mnt;
 	char buf[PATH_MAX];
@@ -1392,6 +1396,10 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 		strncpy(root_cached.mnt_dir, mnt.mnt_dir, mntlen);
 		root_cached.mnt_dir[mntlen] = '\0';
 		root_cached.dev = devmnt;
+		ptr_end = strchr(mnt.mnt_fsname, ':');
+		strncpy(root_cached.nid, mnt.mnt_fsname,
+			ptr_end - mnt.mnt_fsname);
+		root_cached.nid[ptr_end - mnt.mnt_fsname] = '\0';
 
 		pthread_rwlock_unlock(&root_cached_lock);
 	}
@@ -1408,6 +1416,11 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 		*dev = devmnt;
 	if ((want & WANT_FD) && outfd)
 		rc = get_root_fd(mnt.mnt_dir, outfd);
+	if ((want & WANT_NID) && nid) {
+		ptr_end = strchr(mnt.mnt_fsname, ':');
+		strncpy(nid, mnt.mnt_fsname, ptr_end - mnt.mnt_fsname);
+		nid[ptr_end - mnt.mnt_fsname] = '\0';
+	}
 
 out:
 	endmntent(fp);
@@ -1419,14 +1432,15 @@ out:
  * Either the fsname or path must not be NULL
  */
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
-		       dev_t *dev)
+		  dev_t *dev, char *nid)
 {
 	int rc = -ENODEV;
 
 	if (!(want & WANT_INDEX))
-		rc = get_root_path_fast(want, fsname, outfd, path, dev);
+		rc = get_root_path_fast(want, fsname, outfd, path, dev, nid);
 	if (rc)
-		rc = get_root_path_slow(want, fsname, outfd, path, index, dev);
+		rc = get_root_path_slow(want, fsname, outfd, path, index, dev,
+					nid);
 
 	if (!rc || !(want & WANT_ERROR))
 		return rc;
@@ -1468,7 +1482,7 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 
 	if (fsname)
 		want |= WANT_FSNAME;
-	return get_root_path(want, fsname, NULL, mntdir, idx, NULL);
+	return get_root_path(want, fsname, NULL, mntdir, idx, NULL, NULL);
 }
 
 /* Given a path, find the corresponding Lustre fsname */
@@ -1501,7 +1515,7 @@ int llapi_search_fsname(const char *pathname, char *fsname)
 	}
 
 	rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, NULL, -1,
-			   &dev);
+			   &dev, NULL);
 
 	return rc;
 }
@@ -1517,7 +1531,7 @@ int llapi_search_rootpath(char *pathname, const char *fsname)
 	 */
 	pathname[0] = 0;
 	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1,
-			     NULL);
+			     NULL, NULL);
 }
 
 int llapi_search_rootpath_by_dev(char *pathname, dev_t dev)
@@ -1530,7 +1544,7 @@ int llapi_search_rootpath_by_dev(char *pathname, dev_t dev)
 	 * clear it for safety
 	 */
 	pathname[0] = 0;
-	return get_root_path(WANT_PATH, NULL, NULL, pathname, -1, &dev);
+	return get_root_path(WANT_PATH, NULL, NULL, pathname, -1, &dev, NULL);
 }
 
 /**
@@ -6706,10 +6720,27 @@ free_path:
 	return rc;
 }
 
+struct check_target_filter {
+	char *nid;
+	char *instance;
+};
+
 static void do_target_check(char *obd_type_name, char *obd_name,
 			    char *obd_uuid, void *args)
 {
 	int rc;
+	struct check_target_filter *filter = args;
+
+	if (filter != NULL) {
+		/* check nid if obd type is mgc */
+		if (strcmp(obd_type_name, "mgc") == 0) {
+			if (strcmp(obd_name + 3, filter->nid) != 0)
+				return;
+		}
+		/* check instance for other types of device (osc/mdc) */
+		else if (strstr(obd_name, filter->instance) == NULL)
+			return;
+	}
 
 	rc = llapi_ping(obd_type_name, obd_name);
 	if (rc == ENOTCONN)
@@ -6722,7 +6753,30 @@ static void do_target_check(char *obd_type_name, char *obd_name,
 
 int llapi_target_check(int type_num, char **obd_type, char *dir)
 {
-	return llapi_target_iterate(type_num, obd_type, NULL, do_target_check);
+	char nid[MAX_LINE_LEN], instance[MAX_INSTANCE_LEN];
+	struct check_target_filter filter = {NULL, NULL};
+	int rc;
+
+	if (dir == NULL || dir[0] == '\0')
+		return llapi_target_iterate(type_num, obd_type, NULL,
+					    do_target_check);
+
+	rc = get_root_path(WANT_NID | WANT_ERROR, NULL, NULL, dir, -1, NULL,
+			   nid);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot get nid of path '%s'", dir);
+		return rc;
+	}
+	filter.nid = nid;
+
+	rc = llapi_get_instance(dir, instance, ARRAY_SIZE(instance));
+	if (rc)
+		return rc;
+	filter.instance = instance;
+
+	return llapi_target_iterate(type_num, obd_type, &filter,
+				    do_target_check);
 }
 
 #undef MAX_STRING_SIZE
