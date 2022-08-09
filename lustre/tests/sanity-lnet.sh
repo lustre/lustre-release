@@ -3084,6 +3084,20 @@ test_300() {
 }
 run_test 300 "packaged LNet UAPI headers can be compiled"
 
+# LU-16081 lnet: Memory leak on adding existing interface
+
+test_301() {
+	reinit_dlc || return $?
+	do_lnetctl net add --net tcp --if ${INTERFACES[0]} ||
+		error "Failed to add net"
+	do_lnetctl net add --net tcp --if ${INTERFACES[0]} &&
+		error "add net should have failed"
+	do_lnetctl net del --net tcp --if ${INTERFACES[0]} ||
+		error "Failed to del net"
+	unload_modules
+}
+run_test 301 "Check for dynamic adds of same/wrong interface (memory leak)"
+
 complete $SECONDS
 
 cleanup_testsuite

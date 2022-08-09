@@ -3641,24 +3641,33 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 		return -ENOMEM;
 
 	for (i = 0; i < conf->lic_ncpts; i++) {
-		if (conf->lic_cpts[i] >= LNET_CPT_NUMBER)
+		if (conf->lic_cpts[i] >= LNET_CPT_NUMBER) {
+			lnet_net_free(net);
 			return -EINVAL;
+		}
 	}
 
 	ni = lnet_ni_alloc_w_cpt_array(net, conf->lic_cpts, conf->lic_ncpts,
 				       conf->lic_ni_intf);
-	if (!ni)
+	if (!ni) {
+		lnet_net_free(net);
 		return -ENOMEM;
+	}
 
 	lnet_set_tune_defaults(tun);
 
 	mutex_lock(&the_lnet.ln_api_mutex);
-	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		lnet_net_free(net);
 		rc = -ESHUTDOWN;
-	else
+	} else {
 		rc = lnet_add_net_common(net, tun);
+	}
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	if (rc)
+		lnet_ni_free(ni);
 
 	return rc;
 }
