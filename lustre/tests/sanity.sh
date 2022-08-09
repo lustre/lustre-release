@@ -28679,6 +28679,33 @@ test_905() {
 }
 run_test 905 "bad or new opcode should not stuck client"
 
+test_906() {
+	grep -q io_uring_setup /proc/kallsyms ||
+		skip "Client OS does not support io_uring I/O engine"
+	io_uring_probe || skip "kernel does not support io_uring fully"
+	which fio || skip_env "no fio installed"
+	fio --enghelp | grep -q io_uring ||
+		skip_env "fio does not support io_uring I/O engine"
+
+	local file=$DIR/$tfile
+	local ioengine="io_uring"
+	local numjobs=2
+	local size=50M
+
+	fio --name=seqwrite --ioengine=$ioengine	\
+		--bs=$PAGE_SIZE --direct=1 --numjobs=$numjobs	\
+		--iodepth=64 --size=$size --filename=$file --rw=write ||
+		error "fio seqwrite $file failed"
+
+	fio --name=seqread --ioengine=$ioengine	\
+		--bs=$PAGE_SIZE --direct=1 --numjobs=$numjobs	\
+		--iodepth=64 --size=$size --filename=$file --rw=read ||
+		error "fio seqread $file failed"
+
+	rm -f $file || error "rm -f $file failed"
+}
+run_test 906 "Simple test for io_uring I/O engine via fio"
+
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre
