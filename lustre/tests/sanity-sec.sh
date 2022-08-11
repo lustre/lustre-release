@@ -5068,6 +5068,46 @@ test_60() {
 }
 run_test 60 "Subdirmount of encrypted dir"
 
+test_62() {
+	local testdir=$DIR/$tdir/mytestdir
+	local testfile=$DIR/$tdir/$tfile
+
+	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
+
+	(( $MDS1_VERSION > $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	lfs setstripe -c -1 $DIR/$tdir
+	touch $DIR/$tdir/${tfile}_1 || error "touch ${tfile}_1 failed"
+	dd if=/dev/zero of=$DIR/$tdir/${tfile}_2 bs=1 count=1 conv=fsync ||
+		error "dd ${tfile}_2 failed"
+
+	# unmount the Lustre filesystem
+	stopall || error "stopping for e2fsck run"
+
+	# run e2fsck on the MDT and OST devices
+	local mds_host=$(facet_active_host $SINGLEMDS)
+	local ost_host=$(facet_active_host ost1)
+	local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+	local ost_dev=$(ostdevname 1)
+
+	run_e2fsck $mds_host $mds_dev "-n"
+	run_e2fsck $ost_host $ost_dev "-n"
+
+	# mount the Lustre filesystem
+	setupall || error "remounting the filesystem failed"
+}
+run_test 62 "e2fsck with encrypted files"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

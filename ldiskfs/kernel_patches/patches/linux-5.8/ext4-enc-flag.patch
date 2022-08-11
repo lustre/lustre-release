@@ -47,13 +47,15 @@ diff -wur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
  
  static int
  ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
-@@ -2425,12 +2425,17 @@
+@@ -2425,12 +2425,19 @@
  			ext4_handle_sync(handle);
  	}
  
 +	if (!error && name_index == EXT4_XATTR_INDEX_ENCRYPTION &&
-+	    strcmp(name, "c") == 0)
++	    strcmp(name, "c") == 0) {
 +		EXT4_I(inode)->i_flags |= EXT4_ENCRYPT_FL;
++		mark_inode_dirty(inode);
++	}
 +
  cleanup:
  	brelse(is.iloc.bh);

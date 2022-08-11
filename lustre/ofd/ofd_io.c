@@ -481,38 +481,62 @@ out:
 }
 
 /*
+ * Handle multiple attrs at once:
+ *
  * Lazy ATIME update to refresh atime every ofd_atime_diff
  * seconds so that external scanning tool can see it actual
  * within that period and be able to identify accessed files
+ *
+ * Update enc flag on OST object
+ * OSD layer will find out if this is really necessary.
  */
-static void ofd_handle_atime(const struct lu_env *env, struct ofd_device *ofd,
-			     struct ofd_object *fo, time64_t atime)
+static void ofd_handle_attrs(const struct lu_env *env, struct ofd_device *ofd,
+			     struct ofd_object *fo, struct obdo *oa)
 {
+	bool need_atime = (oa->o_valid & OBD_MD_FLATIME);
+	bool need_encfl = (oa->o_valid & OBD_MD_FLFLAGS &&
+			   oa->o_flags & LUSTRE_ENCRYPT_FL);
 	struct lu_attr *la;
 	struct dt_object *o;
 	struct thandle *th;
 	int rc;
 
-	if (ofd->ofd_atime_diff == 0)
+	if (need_atime && ofd->ofd_atime_diff == 0)
+		need_atime = false;
+
+	if (need_encfl && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG))
+		need_encfl = false;
+
+	if (!need_atime && !need_encfl)
 		return;
 
 	la = &ofd_info(env)->fti_attr2;
 	o = ofd_object_child(fo);
 
-	if (unlikely(fo->ofo_atime_ondisk == 0)) {
-		rc = dt_attr_get(env, o, la);
-		if (unlikely(rc))
-			return;
-		LASSERT(la->la_valid & LA_ATIME);
-		if (la->la_atime == 0)
-			la->la_atime = la->la_mtime;
-		fo->ofo_atime_ondisk = la->la_atime;
-	}
-	if (atime - fo->ofo_atime_ondisk < ofd->ofd_atime_diff)
-		return;
+	if (need_atime) {
+		if (unlikely(fo->ofo_atime_ondisk == 0)) {
+			rc = dt_attr_get(env, o, la);
+			if (unlikely(rc)) {
+				need_atime = false;
+				GOTO(trans, rc);
+			}
+			LASSERT(la->la_valid & LA_ATIME);
+			if (la->la_atime == 0)
+				la->la_atime = la->la_mtime;
+			fo->ofo_atime_ondisk = la->la_atime;
+		}
+		if (oa->o_atime - fo->ofo_atime_ondisk < ofd->ofd_atime_diff) {
+			need_atime = false;
+			GOTO(trans, rc = 0);
+		}
 
-	/* atime hasn't been updated too long, update it */
-	fo->ofo_atime_ondisk = atime;
+		/* atime hasn't been updated too long, update it */
+		fo->ofo_atime_ondisk = oa->o_atime;
+	}
+
+trans:
+	if (!need_atime && !need_encfl)
+		return;
 
 	th = ofd_trans_create(env, ofd);
 	if (IS_ERR(th)) {
@@ -521,7 +545,16 @@ static void ofd_handle_atime(const struct lu_env *env, struct ofd_device *ofd,
 		return;
 	}
 
-	la->la_valid = LA_ATIME;
+	la->la_valid = 0;
+	if (need_atime) {
+		la->la_valid |= LA_ATIME;
+		la->la_atime = fo->ofo_atime_ondisk;
+	}
+	if (need_encfl) {
+		la->la_valid |= LA_FLAGS;
+		la->la_flags = LUSTRE_ENCRYPT_FL;
+	}
+
 	rc = dt_declare_attr_set(env, o, la, th);
 	if (rc)
 		GOTO(out_tx, rc);
@@ -534,11 +567,8 @@ static void ofd_handle_atime(const struct lu_env *env, struct ofd_device *ofd,
 	}
 
 	ofd_read_lock(env, fo);
-	if (ofd_object_exists(fo)) {
-		la->la_atime = fo->ofo_atime_ondisk;
+	if (ofd_object_exists(fo))
 		rc = dt_attr_set(env, o, la, th);
-	}
-
 	ofd_read_unlock(env, fo);
 
 out_tx:
@@ -588,8 +618,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_info(env)->fti_obj = fo;
 
-	if (oa->o_valid & OBD_MD_FLATIME)
-		ofd_handle_atime(env, ofd, fo, oa->o_atime);
+	ofd_handle_attrs(env, ofd, fo, oa);
 
 	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo))
@@ -1019,13 +1048,14 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 		   struct ofd_object *ofd_obj, struct lu_attr *la,
 		   struct obdo *oa)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct filter_fid	*ff = &info->fti_mds_fid;
-	__u64			 valid = la->la_valid;
-	struct thandle		*th;
-	struct dt_object	*dt_obj;
-	int			 fl = 0;
-	int			 rc;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct filter_fid *ff = &info->fti_mds_fid;
+	__u64 valid = la->la_valid;
+	__u32 flags = la->la_flags;
+	struct thandle *th;
+	struct dt_object *dt_obj;
+	int fl = 0;
+	int rc;
 
 	ENTRY;
 
@@ -1035,6 +1065,11 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	LASSERT(dt_obj != NULL);
 
 	la->la_valid &= LA_UID | LA_GID | LA_PROJID;
+	if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & LUSTRE_ENCRYPT_FL &&
+	    !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
+		la->la_valid |= LA_FLAGS;
+		la->la_flags = LUSTRE_ENCRYPT_FL;
+	}
 
 	rc = ofd_attr_handle_id(env, ofd_obj, la, 0 /* !is_setattr */);
 	if (rc != 0)
@@ -1119,6 +1154,7 @@ out_tx:
 	dt_trans_stop(env, ofd->ofd_osd, th);
 out:
 	la->la_valid = valid;
+	la->la_flags = flags;
 	return rc;
 }
 

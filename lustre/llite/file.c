@@ -5417,6 +5417,11 @@ fill_attr:
 	stat->attributes_mask |= STATX_ATTR_ENCRYPTED;
 #endif
 	stat->attributes |= ll_inode_to_ext_flags(inode->i_flags);
+	/* if Lustre specific LUSTRE_ENCRYPT_FL flag is set, also set
+	 * ext4 equivalent to please statx
+	 */
+	if (stat->attributes & LUSTRE_ENCRYPT_FL)
+		stat->attributes |= STATX_ATTR_ENCRYPTED;
 	stat->result_mask &= request_mask;
 #endif
 

@@ -1342,6 +1342,15 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 			} else if (!rc) {
 				lma->lma_incompat =
 					le32_to_cpu(lma->lma_incompat);
+
+				if ((lma->lma_incompat &
+				     lustre_to_lma_flags(la->la_flags)) ==
+				    lustre_to_lma_flags(la->la_flags))
+					/* save a useless xattr set if lma
+					 * incompat already has the flags
+					 */
+					GOTO(lock, rc = 0);
+
 				lma->lma_incompat |=
 					lustre_to_lma_flags(la->la_flags);
 				lma->lma_incompat =
@@ -1364,6 +1373,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 
+lock:
 	write_lock(&obj->oo_attr_lock);
 	cnt = 0;
 

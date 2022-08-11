@@ -756,8 +756,12 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 	int			 rc = 0;
 	ENTRY;
 
-	/* we're interested in uid/gid/projid/layout version changes only */
-	if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
+	/* we're interested in uid/gid/projid/layout version changes,
+	 * and also specific setting of enc flag
+	 */
+	if (!(attr->la_valid & LA_REMOTE_ATTR_SET) &&
+	    !(attr->la_valid == LA_FLAGS &&
+	      attr->la_flags == LUSTRE_ENCRYPT_FL))
 		RETURN(0);
 
 	if (!is_only_remote_trans(th)) {
