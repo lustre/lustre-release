@@ -210,6 +210,18 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			O2IB_SYMVER=$O2IBPATH/Module.symvers
 		elif test "x$SUSE_KERNEL" = "xyes"; then
 			O2IB_SYMVER=$(find ${O2IBPATH}* -name Module.symvers)
+			# Select only the current 'flavor' if there is more than 1
+			NUM_AVAIL=$(find ${O2IBPATH}* -name Module.symvers | wc -l)
+			if test ${NUM_AVAIL} -gt 1; then
+				PREFER=$(basename ${LINUX_OBJ})
+				for F in $(find ${O2IBPATH}-obj -name Module.symvers)
+				do
+					maybe=$(echo $F | grep "/${PREFER}")
+					if test "x$maybe" != "x"; then
+						O2IB_SYMVER=$F
+					fi
+				done
+			fi
 		elif test -f $LINUX_OBJ/Module.symvers; then
 			# Debian symvers is in the arch tree
 			O2IB_SYMVER=$LINUX_OBJ/Module.symvers
