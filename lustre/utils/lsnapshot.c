@@ -2297,6 +2297,8 @@ static int snapshot_mount(struct snapshot_instance *si)
 
 		if (si->si_mgs == si->si_mdt0)
 			mdt0_mounted = true;
+	} else {
+		si->si_mgs->st_ignored = 1;
 	}
 
 	/* 2. Mount MDT0 if it is not combined with the MGS. */
@@ -2304,6 +2306,10 @@ static int snapshot_mount(struct snapshot_instance *si)
 		si->si_mdt0->st_ignored = 0;
 		si->si_mdt0->st_pid = 0;
 		rc = snapshot_mount_target(si, si->si_mdt0, ",nomgs");
+		if (rc == -ESRCH) {
+			si->si_mdt0->st_ignored = 1;
+			rc = 0;
+		}
 		if (rc)
 			goto cleanup;
 	}

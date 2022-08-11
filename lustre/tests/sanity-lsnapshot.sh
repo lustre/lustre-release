@@ -97,7 +97,7 @@ test_1a() {
 		lss_err "(5) Fail to mount lss_1a_0"
 
 	echo "Check whether mounted (2)"
-	local mcount=$(lsnapshot_list -n lss_1a_0 -d | grep "not mount" | wc -l)
+	local mcount=$(lsnapshot_list -n lss_1a_0 -d | grep -c "not mount")
 	[[ $mcount -ne 0 ]] && {
 		if combined_mgs_mds ; then
 			lsnapshot_list -n lss_1a_0 -d
@@ -179,17 +179,27 @@ test_1b() {
 		lss_err "(5) Expect 'mounted', got 'not mount' for lss_1b_0"
 	}
 
-	echo "umount lss_1b_0"
-	lsnapshot_umount -n lss_1b_0 ||
-		lss_err "(6) Fail to umount lss_1b_0"
+	echo "Remount lss_1b_0"
+	lsnapshot_mount -n lss_1b_0 &&
+		lss_err "(6) Mount already mounted snapshot should fail"
 
 	echo "Check whether mounted (3)"
-	lsnapshot_list -n lss_1b_0 -d | grep "mounted" && {
+	lsnapshot_list -n lss_1b_0 -d | grep "not mount" && {
 		lsnapshot_list -n lss_1b_0 -d
-		lss_err "(7) Expect 'not mount', got 'mounted' for lss_1b_0"
+		lss_err "(7) Expect 'mounted', got 'not mount' for lss_1b_0"
 	}
 
-	setupall || lss_err "(8) Fail to setupall"
+	echo "umount lss_1b_0"
+	lsnapshot_umount -n lss_1b_0 ||
+		lss_err "(8) Fail to umount lss_1b_0"
+
+	echo "Check whether mounted (4)"
+	lsnapshot_list -n lss_1b_0 -d | grep "mounted" && {
+		lsnapshot_list -n lss_1b_0 -d
+		lss_err "(9) Expect 'not mount', got 'mounted' for lss_1b_0"
+	}
+
+	setupall || lss_err "(10) Fail to setupall"
 }
 run_test 1b "mount snapshot without original filesystem mounted"
 
