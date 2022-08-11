@@ -32,9 +32,9 @@
 #include "kfilnd_dev.h"
 
 static const struct rhashtable_params peer_cache_params = {
-	.head_offset = offsetof(struct kfilnd_peer, node),
-	.key_offset = offsetof(struct kfilnd_peer, nid),
-	.key_len = sizeof_field(struct kfilnd_peer, nid),
+	.head_offset = offsetof(struct kfilnd_peer, kp_node),
+	.key_offset = offsetof(struct kfilnd_peer, kp_nid),
+	.key_len = sizeof_field(struct kfilnd_peer, kp_nid),
 	.automatic_shrinking = true,
 };
 
@@ -45,62 +45,62 @@ static const struct rhashtable_params peer_cache_params = {
  */
 static void kfilnd_peer_free(void *ptr, void *arg)
 {
-	struct kfilnd_peer *peer = ptr;
+	struct kfilnd_peer *kp = ptr;
 
 	CDEBUG(D_NET, "%s(0x%llx) peer entry freed\n",
-	       libcfs_nid2str(peer->nid), peer->addr);
+	       libcfs_nid2str(kp->kp_nid), kp->kp_addr);
 
-	kfi_av_remove(peer->dev->kfd_av, &peer->addr, 1, 0);
+	kfi_av_remove(kp->kp_dev->kfd_av, &kp->kp_addr, 1, 0);
 
-	kfree_rcu(peer, rcu_head);
+	kfree_rcu(kp, kp_rcu_head);
 }
 
 /**
  * kfilnd_peer_down() - Mark a peer as down.
- * @peer: Peer to be downed.
+ * @kp: Peer to be downed.
  */
-void kfilnd_peer_down(struct kfilnd_peer *peer)
+void kfilnd_peer_down(struct kfilnd_peer *kp)
 {
-	if (atomic_cmpxchg(&peer->remove_peer, 0, 1) == 0) {
+	if (atomic_cmpxchg(&kp->kp_remove_peer, 0, 1) == 0) {
 		struct lnet_nid peer_nid;
 
-		lnet_nid4_to_nid(peer->nid, &peer_nid);
+		lnet_nid4_to_nid(kp->kp_nid, &peer_nid);
 		CDEBUG(D_NET, "%s(0x%llx) marked for removal from peer cache\n",
-		       libcfs_nidstr(&peer_nid), peer->addr);
+		       libcfs_nidstr(&peer_nid), kp->kp_addr);
 
-		lnet_notify(peer->dev->kfd_ni, &peer_nid, false, false,
-			    peer->last_alive);
+		lnet_notify(kp->kp_dev->kfd_ni, &peer_nid, false, false,
+			    kp->kp_last_alive);
 	}
 }
 
 /**
  * kfilnd_peer_put() - Return a reference for a peer.
- * @peer: Peer where the reference should be returned.
+ * @kp: Peer where the reference should be returned.
  */
-void kfilnd_peer_put(struct kfilnd_peer *peer)
+void kfilnd_peer_put(struct kfilnd_peer *kp)
 {
 	rcu_read_lock();
 
 	/* Return allocation reference if the peer was marked for removal. */
-	if (atomic_cmpxchg(&peer->remove_peer, 1, 2) == 1) {
-		rhashtable_remove_fast(&peer->dev->peer_cache, &peer->node,
+	if (atomic_cmpxchg(&kp->kp_remove_peer, 1, 2) == 1) {
+		rhashtable_remove_fast(&kp->kp_dev->peer_cache, &kp->kp_node,
 				       peer_cache_params);
-		refcount_dec(&peer->cnt);
+		refcount_dec(&kp->kp_cnt);
 
 		CDEBUG(D_NET, "%s(0x%llx) removed from peer cache\n",
-		       libcfs_nid2str(peer->nid), peer->addr);
+		       libcfs_nid2str(kp->kp_nid), kp->kp_addr);
 	}
 
-	if (refcount_dec_and_test(&peer->cnt))
-		kfilnd_peer_free(peer, NULL);
+	if (refcount_dec_and_test(&kp->kp_cnt))
+		kfilnd_peer_free(kp, NULL);
 
 	rcu_read_unlock();
 }
 
-u16 kfilnd_peer_target_rx_base(struct kfilnd_peer *peer)
+u16 kfilnd_peer_target_rx_base(struct kfilnd_peer *kp)
 {
-	int cpt = lnet_cpt_of_nid(peer->nid, peer->dev->kfd_ni);
-	struct kfilnd_ep *ep = peer->dev->cpt_to_endpoint[cpt];
+	int cpt = lnet_cpt_of_nid(kp->kp_nid, kp->kp_dev->kfd_ni);
+	struct kfilnd_ep *ep = kp->kp_dev->cpt_to_endpoint[cpt];
 
 	return ep->end_context_id;
 }
@@ -119,24 +119,24 @@ struct kfilnd_peer *kfilnd_peer_get(struct kfilnd_dev *dev, lnet_nid_t nid)
 	int rc;
 	u32 nid_addr = LNET_NIDADDR(nid);
 	u32 net_num = LNET_NETNUM(LNET_NIDNET(nid));
-	struct kfilnd_peer *peer;
+	struct kfilnd_peer *kp;
 	struct kfilnd_peer *clash_peer;
 
 again:
 	/* Check the cache for a match. */
 	rcu_read_lock();
-	peer = rhashtable_lookup_fast(&dev->peer_cache, &nid,
+	kp = rhashtable_lookup_fast(&dev->peer_cache, &nid,
 				      peer_cache_params);
-	if (peer && !refcount_inc_not_zero(&peer->cnt))
-		peer = NULL;
+	if (kp && !refcount_inc_not_zero(&kp->kp_cnt))
+		kp = NULL;
 	rcu_read_unlock();
 
-	if (peer)
-		return peer;
+	if (kp)
+		return kp;
 
 	/* Allocate a new peer for the cache. */
-	peer = kzalloc(sizeof(*peer), GFP_KERNEL);
-	if (!peer) {
+	kp = kzalloc(sizeof(*kp), GFP_KERNEL);
+	if (!kp) {
 		rc = -ENOMEM;
 		goto err;
 	}
@@ -156,7 +156,7 @@ again:
 	/* Use the KFI address vector to translate node and service string into
 	 * a KFI address handle.
 	 */
-	rc = kfi_av_insertsvc(dev->kfd_av, node, service, &peer->addr, 0, dev);
+	rc = kfi_av_insertsvc(dev->kfd_av, node, service, &kp->kp_addr, 0, dev);
 
 	kfree(service);
 	kfree(node);
@@ -168,25 +168,25 @@ again:
 		goto err_free_peer;
 	}
 
-	peer->dev = dev;
-	peer->nid = nid;
-	atomic_set(&peer->rx_base, 0);
-	atomic_set(&peer->remove_peer, 0);
-	peer->local_session_key = kfilnd_dev_get_session_key(dev);
+	kp->kp_dev = dev;
+	kp->kp_nid = nid;
+	atomic_set(&kp->kp_rx_base, 0);
+	atomic_set(&kp->kp_remove_peer, 0);
+	kp->kp_local_session_key = kfilnd_dev_get_session_key(dev);
 
 	/* One reference for the allocation and another for get operation
 	 * performed for this peer. The allocation reference is returned when
 	 * the entry is marked for removal.
 	 */
-	refcount_set(&peer->cnt, 2);
+	refcount_set(&kp->kp_cnt, 2);
 
 	clash_peer = rhashtable_lookup_get_insert_fast(&dev->peer_cache,
-						       &peer->node,
+						       &kp->kp_node,
 						       peer_cache_params);
 
 	if (clash_peer) {
-		kfi_av_remove(dev->kfd_av, &peer->addr, 1, 0);
-		kfree(peer);
+		kfi_av_remove(dev->kfd_av, &kp->kp_addr, 1, 0);
+		kfree(kp);
 
 		if (IS_ERR(clash_peer)) {
 			rc = PTR_ERR(clash_peer);
@@ -196,17 +196,17 @@ again:
 		}
 	}
 
-	kfilnd_peer_alive(peer);
+	kfilnd_peer_alive(kp);
 
 	CDEBUG(D_NET, "%s(0x%llx) peer entry allocated\n",
-	       libcfs_nid2str(peer->nid), peer->addr);
+	       libcfs_nid2str(kp->kp_nid), kp->kp_addr);
 
-	return peer;
+	return kp;
 
 err_free_node_str:
 	kfree(node);
 err_free_peer:
-	kfree(peer);
+	kfree(kp);
 err:
 	return ERR_PTR(rc);
 }
@@ -214,7 +214,7 @@ err:
 /**
  * kfilnd_peer_get_kfi_addr() - Return kfi_addr_t used for eager untagged send
  * kfi operations.
- * @peer: Peer struct.
+ * @kp: Peer struct.
  *
  * The returned kfi_addr_t is updated to target a specific RX context. The
  * address return by this function should not be used if a specific RX context
@@ -223,36 +223,37 @@ err:
  *
  * Return: kfi_addr_t.
  */
-kfi_addr_t kfilnd_peer_get_kfi_addr(struct kfilnd_peer *peer)
+kfi_addr_t kfilnd_peer_get_kfi_addr(struct kfilnd_peer *kp)
 {
 	/* TODO: Support RX count by round-robining the generated kfi_addr_t's
 	 * across multiple RX contexts using RX base and RX count.
 	 */
-	return kfi_rx_addr(KFILND_BASE_ADDR(peer->addr),
-			   atomic_read(&peer->rx_base), KFILND_FAB_RX_CTX_BITS);
+	return kfi_rx_addr(KFILND_BASE_ADDR(kp->kp_addr),
+			   atomic_read(&kp->kp_rx_base),
+				       KFILND_FAB_RX_CTX_BITS);
 }
 
 /**
  * kfilnd_peer_update_rx_contexts() - Update the RX context for a peer.
- * @peer: Peer to be updated.
+ * @kp: Peer to be updated.
  * @rx_base: New RX base for peer.
  * @rx_count: New RX count for peer.
  */
-void kfilnd_peer_update_rx_contexts(struct kfilnd_peer *peer,
+void kfilnd_peer_update_rx_contexts(struct kfilnd_peer *kp,
 				    unsigned int rx_base, unsigned int rx_count)
 {
 	/* TODO: Support RX count. */
 	LASSERT(rx_count > 0);
-	atomic_set(&peer->rx_base, rx_base);
+	atomic_set(&kp->kp_rx_base, rx_base);
 }
 
 /**
  * kfilnd_peer_alive() - Update when the peer was last alive.
- * @peer: Peer to be updated.
+ * @kp: Peer to be updated.
  */
-void kfilnd_peer_alive(struct kfilnd_peer *peer)
+void kfilnd_peer_alive(struct kfilnd_peer *kp)
 {
-	peer->last_alive = ktime_get_seconds();
+	kp->kp_last_alive = ktime_get_seconds();
 
 	/* Ensure timestamp is committed to memory before used. */
 	smp_mb();

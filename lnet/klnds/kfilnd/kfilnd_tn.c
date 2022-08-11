@@ -69,8 +69,8 @@ static void kfilnd_tn_pack_hello_req(struct kfilnd_transaction *tn)
 
 	/* Pack the protocol header and payload. */
 	msg->proto.hello.version = KFILND_MSG_VERSION;
-	msg->proto.hello.rx_base = kfilnd_peer_target_rx_base(tn->peer);
-	msg->proto.hello.session_key = tn->peer->local_session_key;
+	msg->proto.hello.rx_base = kfilnd_peer_target_rx_base(tn->tn_kp);
+	msg->proto.hello.session_key = tn->tn_kp->kp_local_session_key;
 
 	/* TODO: Support multiple RX contexts per peer. */
 	msg->proto.hello.rx_count = 1;
@@ -85,7 +85,7 @@ static void kfilnd_tn_pack_hello_req(struct kfilnd_transaction *tn)
 		offsetof(struct kfilnd_msg, proto);
 	msg->cksum = NO_CHECKSUM;
 	msg->srcnid = lnet_nid_to_nid4(&tn->tn_ep->end_dev->kfd_ni->ni_nid);
-	msg->dstnid = tn->peer->nid;
+	msg->dstnid = tn->tn_kp->kp_nid;
 
 	/* Checksum entire message. */
 	msg->cksum = kfilnd_tn_cksum(msg, msg->nob);
@@ -98,9 +98,9 @@ static void kfilnd_tn_pack_hello_rsp(struct kfilnd_transaction *tn)
 	struct kfilnd_msg *msg = tn->tn_tx_msg.msg;
 
 	/* Pack the protocol header and payload. */
-	msg->proto.hello.version = tn->peer->version;
-	msg->proto.hello.rx_base = kfilnd_peer_target_rx_base(tn->peer);
-	msg->proto.hello.session_key = tn->peer->local_session_key;
+	msg->proto.hello.version = tn->tn_kp->kp_version;
+	msg->proto.hello.rx_base = kfilnd_peer_target_rx_base(tn->tn_kp);
+	msg->proto.hello.session_key = tn->tn_kp->kp_local_session_key;
 
 	/* TODO: Support multiple RX contexts per peer. */
 	msg->proto.hello.rx_count = 1;
@@ -115,7 +115,7 @@ static void kfilnd_tn_pack_hello_rsp(struct kfilnd_transaction *tn)
 		offsetof(struct kfilnd_msg, proto);
 	msg->cksum = NO_CHECKSUM;
 	msg->srcnid = lnet_nid_to_nid4(&tn->tn_ep->end_dev->kfd_ni->ni_nid);
-	msg->dstnid = tn->peer->nid;
+	msg->dstnid = tn->tn_kp->kp_nid;
 
 	/* Checksum entire message. */
 	msg->cksum = kfilnd_tn_cksum(msg, msg->nob);
@@ -140,7 +140,7 @@ static void kfilnd_tn_pack_bulk_req(struct kfilnd_transaction *tn)
 		offsetof(struct kfilnd_msg, proto);
 	msg->cksum = NO_CHECKSUM;
 	msg->srcnid = lnet_nid_to_nid4(&tn->tn_ep->end_dev->kfd_ni->ni_nid);
-	msg->dstnid = tn->peer->nid;
+	msg->dstnid = tn->tn_kp->kp_nid;
 
 	/* Checksum entire message. */
 	msg->cksum = kfilnd_tn_cksum(msg, msg->nob);
@@ -169,7 +169,7 @@ static void kfilnd_tn_pack_immed_msg(struct kfilnd_transaction *tn)
 	msg->nob = offsetof(struct kfilnd_msg, proto.immed.payload[tn->tn_nob]);
 	msg->cksum = NO_CHECKSUM;
 	msg->srcnid = lnet_nid_to_nid4(&tn->tn_ep->end_dev->kfd_ni->ni_nid);
-	msg->dstnid = tn->peer->nid;
+	msg->dstnid = tn->tn_kp->kp_nid;
 
 	/* Checksum entire message. */
 	msg->cksum = kfilnd_tn_cksum(msg, msg->nob);
@@ -433,7 +433,7 @@ static void kfilnd_tn_finalize(struct kfilnd_transaction *tn, bool *tn_released)
 	}
 
 	if (KFILND_TN_PEER_VALID(tn))
-		kfilnd_peer_put(tn->peer);
+		kfilnd_peer_put(tn->tn_kp);
 
 	kfilnd_tn_record_state_change(tn);
 	kfilnd_tn_record_duration(tn);
@@ -558,9 +558,9 @@ static int kfilnd_tn_state_tagged_recv_posted(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_INIT_BULK:
-		tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->peer);
+		tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->tn_kp);
 		KFILND_TN_DEBUG(tn, "Using peer %s(%#llx)",
-				libcfs_nid2str(tn->peer->nid),
+				libcfs_nid2str(tn->tn_kp->kp_nid),
 				tn->tn_target_addr);
 
 		kfilnd_tn_pack_bulk_req(tn);
@@ -578,7 +578,7 @@ static int kfilnd_tn_state_tagged_recv_posted(struct kfilnd_transaction *tn,
 		case -EAGAIN:
 			KFILND_TN_DEBUG(tn,
 					"Need to replay post send to %s(%#llx)",
-					libcfs_nid2str(tn->peer->nid),
+					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr);
 			return -EAGAIN;
 
@@ -588,7 +588,7 @@ static int kfilnd_tn_state_tagged_recv_posted(struct kfilnd_transaction *tn,
 		default:
 			KFILND_TN_ERROR(tn,
 					"Failed to post send to %s(%#llx): rc=%d",
-					libcfs_nid2str(tn->peer->nid),
+					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr, rc);
 			kfilnd_tn_status_update(tn, rc,
 						LNET_MSG_STATUS_LOCAL_ERROR);
@@ -624,7 +624,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 	/* For new peers, send a hello request message and queue the true LNet
 	 * message for replay.
 	 */
-	if (kfilnd_peer_is_new_peer(tn->peer) &&
+	if (kfilnd_peer_is_new_peer(tn->tn_kp) &&
 	    (event == TN_EVENT_INIT_IMMEDIATE || event == TN_EVENT_INIT_BULK)) {
 		remaining_time = max_t(ktime_t, 0,
 				       tn->deadline - ktime_get_seconds());
@@ -636,7 +636,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		 */
 		if (remaining_time > 0) {
 			KFILND_TN_DEBUG(tn, "%s hello response pending",
-					libcfs_nid2str(tn->peer->nid));
+					libcfs_nid2str(tn->tn_kp->kp_nid));
 			return -EAGAIN;
 		}
 
@@ -649,9 +649,9 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 	switch (event) {
 	case TN_EVENT_INIT_IMMEDIATE:
 	case TN_EVENT_TX_HELLO:
-		tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->peer);
+		tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->tn_kp);
 		KFILND_TN_DEBUG(tn, "Using peer %s(%#llx)",
-				libcfs_nid2str(tn->peer->nid),
+				libcfs_nid2str(tn->tn_kp->kp_nid),
 				tn->tn_target_addr);
 
 		if (event == TN_EVENT_INIT_IMMEDIATE)
@@ -672,14 +672,14 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		 */
 		case -EAGAIN:
 			KFILND_TN_DEBUG(tn, "Need to replay send to %s(%#llx)",
-					libcfs_nid2str(tn->peer->nid),
+					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr);
 			return -EAGAIN;
 
 		default:
 			KFILND_TN_ERROR(tn,
 					"Failed to post send to %s(%#llx): rc=%d",
-					libcfs_nid2str(tn->peer->nid),
+					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr, rc);
 			kfilnd_tn_status_update(tn, rc,
 						LNET_MSG_STATUS_LOCAL_ERROR);
@@ -723,10 +723,10 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		 * requires dropping the incoming message and initiating a hello
 		 * handshake.
 		 */
-		if (kfilnd_peer_is_new_peer(tn->peer)) {
+		if (kfilnd_peer_is_new_peer(tn->tn_kp)) {
 			rc = kfilnd_send_hello_request(tn->tn_ep->end_dev,
 						       tn->tn_ep->end_cpt,
-						       tn->peer->nid);
+						       tn->tn_kp->kp_nid);
 			if (rc)
 				KFILND_TN_ERROR(tn,
 						"Failed to send hello request: rc=%d",
@@ -737,18 +737,18 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			 */
 			KFILND_TN_ERROR(tn,
 					"Dropping message from %s due to stale peer",
-					libcfs_nid2str(tn->peer->nid));
+					libcfs_nid2str(tn->tn_kp->kp_nid));
 			kfilnd_tn_status_update(tn, -EPROTO,
 						LNET_MSG_STATUS_LOCAL_DROPPED);
 			rc = 0;
 			goto out;
 		}
 
-		LASSERT(kfilnd_peer_is_new_peer(tn->peer) == false);
+		LASSERT(kfilnd_peer_is_new_peer(tn->tn_kp) == false);
 		msg = tn->tn_rx_msg.msg;
 
 		/* Update the NID address with the new preferred RX context. */
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 
 		/* Pass message up to LNet
 		 * The TN will be reused in this call chain so we need to
@@ -787,26 +787,27 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 
 		switch (msg->type) {
 		case KFILND_MSG_HELLO_REQ:
-			kfilnd_peer_update_rx_contexts(tn->peer,
+			kfilnd_peer_update_rx_contexts(tn->tn_kp,
 						       msg->proto.hello.rx_base,
 						       msg->proto.hello.rx_count);
-			kfilnd_peer_set_remote_session_key(tn->peer,
+			kfilnd_peer_set_remote_session_key(tn->tn_kp,
 							   msg->proto.hello.session_key);
 
 			/* Negotiate kfilnd version used between peers. Fallback
 			 * to the minimum implemented kfilnd version.
 			 */
-			kfilnd_peer_set_version(tn->peer,
+			kfilnd_peer_set_version(tn->tn_kp,
 						min_t(__u16, KFILND_MSG_VERSION,
 						    msg->proto.hello.version));
 			KFILND_TN_DEBUG(tn,
 					"Peer kfilnd version: %u; Local kfilnd version: %u; Negotiated kfilnd verions: %u",
 					msg->proto.hello.version,
-					KFILND_MSG_VERSION, tn->peer->version);
+					KFILND_MSG_VERSION,
+					tn->tn_kp->kp_version);
 
-			tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->peer);
+			tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->tn_kp);
 			KFILND_TN_DEBUG(tn, "Using peer %s(%#llx)",
-					libcfs_nid2str(tn->peer->nid),
+					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr);
 
 			kfilnd_tn_pack_hello_rsp(tn);
@@ -820,14 +821,14 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 
 			case -EAGAIN:
 				KFILND_TN_DEBUG(tn, "Need to replay send to %s(%#llx)",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr);
 				return -EAGAIN;
 
 			default:
 				KFILND_TN_ERROR(tn,
 						"Failed to post send to %s(%#llx): rc=%d",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr, rc);
 				kfilnd_tn_status_update(tn, rc,
 							LNET_MSG_STATUS_LOCAL_ERROR);
@@ -836,12 +837,12 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 
 		case KFILND_MSG_HELLO_RSP:
 			rc = 0;
-			kfilnd_peer_update_rx_contexts(tn->peer,
+			kfilnd_peer_update_rx_contexts(tn->tn_kp,
 						       msg->proto.hello.rx_base,
 						       msg->proto.hello.rx_count);
-			kfilnd_peer_set_remote_session_key(tn->peer,
+			kfilnd_peer_set_remote_session_key(tn->tn_kp,
 							   msg->proto.hello.session_key);
-			kfilnd_peer_set_version(tn->peer,
+			kfilnd_peer_set_version(tn->tn_kp,
 						msg->proto.hello.version);
 			KFILND_TN_DEBUG(tn, "Negotiated kfilnd version: %u",
 					msg->proto.hello.version);
@@ -887,11 +888,11 @@ static int kfilnd_tn_state_imm_send(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TX_OK:
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		break;
 
 	default:
@@ -932,10 +933,10 @@ static int kfilnd_tn_state_imm_recv(struct kfilnd_transaction *tn,
 
 		/* Update the KFI address to use the response RX context. */
 		tn->tn_target_addr =
-			kfi_rx_addr(KFILND_BASE_ADDR(tn->peer->addr),
+			kfi_rx_addr(KFILND_BASE_ADDR(tn->tn_kp->kp_addr),
 				    tn->tn_response_rx, KFILND_FAB_RX_CTX_BITS);
 		KFILND_TN_DEBUG(tn, "Using peer %s(0x%llx)",
-				libcfs_nid2str(tn->peer->nid),
+				libcfs_nid2str(tn->tn_kp->kp_nid),
 				tn->tn_target_addr);
 
 		/* Initiate the RMA operation to push/pull the LNet payload or
@@ -962,7 +963,7 @@ static int kfilnd_tn_state_imm_recv(struct kfilnd_transaction *tn,
 				KFILND_TN_DEBUG(tn,
 						"Need to replay tagged %s to %s(%#llx)",
 						tn->sink_buffer ? "read" : "write",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr);
 				return -EAGAIN;
 
@@ -970,7 +971,7 @@ static int kfilnd_tn_state_imm_recv(struct kfilnd_transaction *tn,
 				KFILND_TN_ERROR(tn,
 						"Failed to post tagged %s to %s(%#llx): rc=%d",
 						tn->sink_buffer ? "read" : "write",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr, rc);
 				kfilnd_tn_status_update(tn, rc,
 							LNET_MSG_STATUS_LOCAL_ERROR);
@@ -1006,14 +1007,14 @@ static int kfilnd_tn_state_imm_recv(struct kfilnd_transaction *tn,
 			case -EAGAIN:
 				KFILND_TN_DEBUG(tn,
 						"Need to replay tagged send to %s(%#llx)",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr);
 				return -EAGAIN;
 
 			default:
 				KFILND_TN_ERROR(tn,
 						"Failed to post tagged send to %s(%#llx): rc=%d",
-						libcfs_nid2str(tn->peer->nid),
+						libcfs_nid2str(tn->tn_kp->kp_nid),
 						tn->tn_target_addr, rc);
 				kfilnd_tn_status_update(tn, rc,
 							LNET_MSG_STATUS_LOCAL_ERROR);
@@ -1051,7 +1052,7 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_TX_OK:
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		kfilnd_tn_timeout_enable(tn);
 		kfilnd_tn_state_change(tn, TN_STATE_WAIT_TAG_COMP);
 		break;
@@ -1067,7 +1068,7 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 
 		/* Need to cancel the tagged receive to prevent resources from
 		 * being leaked.
@@ -1120,7 +1121,7 @@ static int kfilnd_tn_state_wait_send_comp(struct kfilnd_transaction *tn,
 			status);
 
 	if (event == TN_EVENT_TX_OK) {
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		kfilnd_tn_finalize(tn, tn_released);
 	} else {
 		KFILND_TN_ERROR(tn, "Invalid %s event", tn_event_to_str(event));
@@ -1141,7 +1142,7 @@ static int kfilnd_tn_state_wait_tag_rma_comp(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_TAG_TX_OK:
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TAG_TX_FAIL:
@@ -1151,7 +1152,7 @@ static int kfilnd_tn_state_wait_tag_rma_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 		break;
 
 	default:
@@ -1232,11 +1233,11 @@ static int kfilnd_tn_state_wait_tag_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TAG_TX_OK:
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		break;
 
 	default:
@@ -1258,11 +1259,11 @@ static int kfilnd_tn_state_fail(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_TX_FAIL:
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TX_OK:
-		kfilnd_peer_alive(tn->peer);
+		kfilnd_peer_alive(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TAG_RX_FAIL:
@@ -1290,7 +1291,7 @@ static int kfilnd_tn_state_wait_timeout_tag_comp(struct kfilnd_transaction *tn,
 	case TN_EVENT_TAG_RX_CANCEL:
 		kfilnd_tn_status_update(tn, -ETIMEDOUT,
 					LNET_MSG_STATUS_REMOTE_TIMEOUT);
-		kfilnd_peer_down(tn->peer);
+		kfilnd_peer_down(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TAG_RX_FAIL:
@@ -1466,9 +1467,9 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 		tn->tn_mr_key = rc;
 	}
 
-	tn->peer = kfilnd_peer_get(dev, target_nid);
-	if (IS_ERR(tn->peer)) {
-		rc = PTR_ERR(tn->peer);
+	tn->tn_kp = kfilnd_peer_get(dev, target_nid);
+	if (IS_ERR(tn->tn_kp)) {
+		rc = PTR_ERR(tn->tn_kp);
 		goto err_put_mr_key;
 	}
 

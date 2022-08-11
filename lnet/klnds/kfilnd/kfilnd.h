@@ -221,35 +221,35 @@ struct kfilnd_ep {
 };
 
 struct kfilnd_peer {
-	struct rhash_head node;
-	struct rcu_head rcu_head;
-	struct kfilnd_dev *dev;
-	lnet_nid_t nid;
-	kfi_addr_t addr;
-	atomic_t rx_base;
-	atomic_t remove_peer;
-	refcount_t cnt;
-	time64_t last_alive;
-	u16 version;
-	u32 local_session_key;
-	u32 remote_session_key;
+	struct rhash_head kp_node;
+	struct rcu_head kp_rcu_head;
+	struct kfilnd_dev *kp_dev;
+	lnet_nid_t kp_nid;
+	kfi_addr_t kp_addr;
+	atomic_t kp_rx_base;
+	atomic_t kp_remove_peer;
+	refcount_t kp_cnt;
+	time64_t kp_last_alive;
+	u16 kp_version;
+	u32 kp_local_session_key;
+	u32 kp_remote_session_key;
 };
 
-static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *peer)
+static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 {
-	return peer->version == 0;
+	return kp->kp_version == 0;
 }
 
-static inline void kfilnd_peer_set_version(struct kfilnd_peer *peer,
+static inline void kfilnd_peer_set_version(struct kfilnd_peer *kp,
 					   u16 version)
 {
-	peer->version = version;
+	kp->kp_version = version;
 }
 
-static inline void kfilnd_peer_set_remote_session_key(struct kfilnd_peer *peer,
+static inline void kfilnd_peer_set_remote_session_key(struct kfilnd_peer *kp,
 						      u32 session_key)
 {
-	peer->remote_session_key = session_key;
+	kp->kp_remote_session_key = session_key;
 }
 
 struct kfilnd_fab {
@@ -478,16 +478,16 @@ struct kfilnd_msg {
 		(ep)->end_context_id, ##__VA_ARGS__)
 
 #define KFILND_TN_PEER_VALID(tn) \
-	!IS_ERR_OR_NULL((tn)->peer)
+	!IS_ERR_OR_NULL((tn)->tn_kp)
 
 #define KFILND_TN_DIR_DEBUG(tn, fmt, dir, ...) \
 	CDEBUG(D_NET, "Transaction ID %p: %s:%u %s %s:%llu " fmt "\n", \
 	       (tn), \
 	       libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
 	       (tn)->tn_ep->end_context_id, dir, \
-	       libcfs_nid2str((tn)->peer->nid), \
+	       libcfs_nid2str((tn)->tn_kp->kp_nid), \
 	       KFILND_TN_PEER_VALID(tn) ? \
-		KFILND_RX_CONTEXT((tn)->peer->addr) : 0, \
+		KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr) : 0, \
 	       ##__VA_ARGS__)
 
 #define KFILND_TN_DEBUG(tn, fmt, ...) \
@@ -503,9 +503,9 @@ struct kfilnd_msg {
 		(tn), \
 		libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
 		(tn)->tn_ep->end_context_id, dir, \
-		libcfs_nid2str((tn)->peer->nid), \
+		libcfs_nid2str((tn)->tn_kp->kp_nid), \
 		KFILND_TN_PEER_VALID(tn) ? \
-			KFILND_RX_CONTEXT((tn)->peer->addr) : 0, \
+			KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr) : 0, \
 		##__VA_ARGS__)
 
 #define KFILND_TN_ERROR(tn, fmt, ...) \
@@ -642,7 +642,7 @@ struct kfilnd_transaction {
 
 	/* Transaction send message and target address. */
 	kfi_addr_t		tn_target_addr;
-	struct kfilnd_peer	*peer;
+	struct kfilnd_peer	*tn_kp;
 	struct kfilnd_transaction_msg tn_tx_msg;
 
 	/* Transaction multi-receive buffer and associated receive message. */

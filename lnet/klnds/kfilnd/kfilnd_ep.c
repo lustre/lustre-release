@@ -199,7 +199,7 @@ static int kfilnd_ep_gen_fake_err(struct kfilnd_ep *ep,
 
 static uint64_t gen_init_tag_bits(struct kfilnd_transaction *tn)
 {
-	return (tn->peer->remote_session_key << KFILND_EP_KEY_BITS) |
+	return (tn->tn_kp->kp_remote_session_key << KFILND_EP_KEY_BITS) |
 		tn->tn_response_mr_key;
 }
 
@@ -296,7 +296,7 @@ int kfilnd_ep_cancel_tagged_recv(struct kfilnd_ep *ep,
 
 static uint64_t gen_target_tag_bits(struct kfilnd_transaction *tn)
 {
-	return (tn->peer->local_session_key << KFILND_EP_KEY_BITS) |
+	return (tn->tn_kp->kp_local_session_key << KFILND_EP_KEY_BITS) |
 		tn->tn_mr_key;
 }
 
@@ -316,7 +316,7 @@ int kfilnd_ep_post_tagged_recv(struct kfilnd_ep *ep,
 	struct kfi_msg_tagged msg = {
 		.tag = gen_target_tag_bits(tn),
 		.context = tn,
-		.addr = tn->peer->addr,
+		.addr = tn->tn_kp->kp_addr,
 	};
 	struct kfi_cq_err_entry fake_error = {
 		.op_context = tn,
