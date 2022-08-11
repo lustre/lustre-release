@@ -4344,6 +4344,65 @@ out:
 	return rc;
 }
 
+/*
+ * If the MDT-object has the LUSTRE_ENCRYPT_FL flag, it needs to be set
+ * on the OST-object as well.
+ */
+static int lfsck_layout_repair_encflag(const struct lu_env *env,
+				       struct lfsck_component *com,
+				       struct dt_object *parent,
+				       struct lfsck_layout_req *llr)
+{
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *tla = &info->lti_la2;
+	struct dt_object *child = llr->llr_child;
+	struct dt_device *dev = lfsck_obj2dev(child);
+	struct thandle *handle;
+	int rc;
+
+	ENTRY;
+
+	tla->la_valid = LA_FLAGS;
+	tla->la_flags = LUSTRE_ENCRYPT_FL;
+	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
+	if (IS_ERR(handle))
+		GOTO(log, rc = PTR_ERR(handle));
+
+	rc = dt_declare_attr_set(env, child, tla, handle);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, dev, handle);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* Use the dt_object lock to serialize with destroy and attr_set. */
+	dt_read_lock(env, parent, 0);
+	if (unlikely(lfsck_is_dead_obj(parent)))
+		GOTO(unlock, rc = 1);
+
+	rc = dt_attr_set(env, child, tla, handle);
+	GOTO(unlock, rc);
+
+unlock:
+	dt_read_unlock(env, parent);
+
+stop:
+	rc = lfsck_layout_trans_stop(env, dev, handle, rc);
+
+log:
+	if (rc != 0)
+		CDEBUG(D_LFSCK,
+		       "%s: layout LFSCK assistant repair of inconsistent file enc flag for: parent "
+		       DFID", child "
+		       DFID", OST-index %u, stripe-index %u: rc = %d\n",
+		       lfsck_lfsck2name(com->lc_lfsck),
+		       PFID(lfsck_dto2fid(parent)), PFID(lfsck_dto2fid(child)),
+		       llr->llr_ost_idx, llr->llr_lov_idx, rc);
+
+	return rc;
+}
+
 static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 					     struct lfsck_component *com,
 					     struct lfsck_assistant_req *lar)
@@ -4387,6 +4446,29 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
+	if (!(bk->lb_param & LPF_DRYRUN) &&
+	    pla->la_valid & LA_FLAGS && pla->la_flags & LUSTRE_ENCRYPT_FL) {
+		/* MDT-inode is encrypted */
+		struct lu_buf lb = { .lb_buf = NULL, .lb_len = 0 };
+
+		/* if OST-inode is missing encryption.c xattr, fix it */
+		if (dt_xattr_get(env, child, &lb,
+				 LL_XATTR_NAME_ENCRYPTION_CONTEXT) >= 0)
+			goto check_fid;
+
+		if (parent == NULL)
+			parent = lfsck_assistant_object_load(env, lfsck, lso);
+		if (!IS_ERR_OR_NULL(parent))
+			rc = lfsck_layout_repair_encflag(env, com, parent, llr);
+		down_write(&com->lc_sem);
+		if (rc < 0)
+			lfsck_layout_record_failure(env, lfsck, lo);
+		else if (rc > 0)
+			lo->ll_objs_repaired[LLIT_OTHERS - 1]++;
+		up_write(&com->lc_sem);
+	}
+
+check_fid:
 	lfsck_buf_init(&buf, ff, sizeof(*ff));
 	rc = dt_xattr_get(env, child, &buf, XATTR_NAME_FID);
 	if (unlikely(rc > 0 && rc < sizeof(struct lu_fid))) {

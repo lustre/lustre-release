@@ -2990,6 +2990,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 
 		flags = body->mbo_flags;
+		/* if Lustre specific LUSTRE_ENCRYPT_FL flag is set, also set
+		 * ext4 equivalent to please lsattr and other e2fsprogs tools
+		 */
+		if (flags & LUSTRE_ENCRYPT_FL)
+			flags |= STATX_ATTR_ENCRYPTED;
 
 		ptlrpc_req_finished(req);
 

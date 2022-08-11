@@ -123,6 +123,9 @@ static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 			  const struct lu_fid *fid);
 static int osd_process_scheduled_agent_removals(const struct lu_env *env,
 						struct osd_device *osd);
+static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			 const struct lu_buf *buf, const char *name, int fl,
+			 struct thandle *handle);
 
 int osd_trans_declare_op2rb[] = {
 	[OSD_OT_ATTR_SET]	= OSD_OT_ATTR_SET,
@@ -3156,7 +3159,9 @@ static int osd_attr_set(const struct lu_env *env,
 			const struct lu_attr *attr,
 			struct thandle *handle)
 {
+	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct inode *inode;
 	int rc;
 
@@ -3215,9 +3220,34 @@ static int osd_attr_set(const struct lu_env *env,
 	if (!(attr->la_valid & LA_FLAGS))
 		GOTO(out, rc);
 
+	/* If setting LUSTRE_ENCRYPT_FL on an OST object, also set a dummy
+	 * enc ctx xattr, with 2 benefits:
+	 * - setting the LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr internally sets
+	 *   the LDISKFS_ENCRYPT_FL flag on the on-disk inode;
+	 * - it makes e2fsprogs happy to see an enc ctx for an inode that has
+	 *   the LDISKFS_ENCRYPT_FL flag
+	 * We do not need the actual encryption context on OST objects, it is
+	 * only stored on MDT inodes, at file creation time.
+	 */
+	if (!(LDISKFS_I(obj->oo_inode)->i_flags & LDISKFS_ENCRYPT_FL) &&
+	    attr->la_flags & LUSTRE_ENCRYPT_FL && osd->od_is_ost &&
+	    !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
+		struct lu_buf buf;
+
+		/* use a dummy enc ctx, fine with e2fsprogs */
+		buf.lb_buf = "\xFF";
+		buf.lb_len = 1;
+		rc = osd_xattr_set(env, dt, &buf,
+				   LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+				   0, handle);
+		if (rc)
+			CWARN("%s: set "DFID" enc ctx failed: rc = %d\n",
+			      osd_name(osd), PFID(lu_object_fid(&dt->do_lu)),
+			      rc);
+	}
+
 	/* Let's check if there are extra flags need to be set into LMA */
 	if (attr->la_flags & LUSTRE_LMA_FL_MASKS) {
-		struct osd_thread_info *info = osd_oti_get(env);
 		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
 
 		LASSERT(!obj->oo_pfid_in_lma);
@@ -3227,6 +3257,13 @@ static int osd_attr_set(const struct lu_env *env,
 		if (rc)
 			GOTO(out, rc);
 
+		if ((lma->lma_incompat & lustre_to_lma_flags(attr->la_flags)) ==
+		    lustre_to_lma_flags(attr->la_flags))
+			/* if lma incompat already has the flags,
+			 * save a useless call to xattr_set
+			 */
+			GOTO(out, rc = 0);
+
 		lma->lma_incompat |=
 			lustre_to_lma_flags(attr->la_flags);
 		lustre_lma_swab(lma);
@@ -3235,20 +3272,17 @@ static int osd_attr_set(const struct lu_env *env,
 
 		rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA,
 				     lma, sizeof(*lma), XATTR_REPLACE);
-		if (rc != 0) {
-			struct osd_device *osd = osd_obj2dev(obj);
-
+		if (rc != 0)
 			CWARN("%s: set "DFID" lma flags %u failed: rc = %d\n",
 			      osd_name(osd), PFID(lu_object_fid(&dt->do_lu)),
 			      lma->lma_incompat, rc);
-		} else {
+		else
 			obj->oo_lma_flags =
 				attr->la_flags & LUSTRE_LMA_FL_MASKS;
-		}
 		osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
 	}
-out:
 
+out:
 	return rc;
 }
 

@@ -6037,6 +6037,140 @@ test_41()
 }
 run_test 41 "SEL support in LFSCK"
 
+setup_dummy_key() {
+	local mode='\x00\x00\x00\x00'
+	local raw="$(printf ""\\\\x%02x"" {0..63})"
+	local size
+	local key
+
+	[[ $(lscpu) =~ Byte\ Order.*Little ]] && size='\x40\x00\x00\x00' ||
+		size='\x00\x00\x00\x40'
+	key="${mode}${raw}${size}"
+	echo -n -e "${key}" | keyctl padd logon fscrypt:4242424242424242 @s
+}
+
+insert_enc_key() {
+	cancel_lru_locks
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	setup_dummy_key
+}
+
+remove_enc_key() {
+	local dummy_key
+
+	$LCTL set_param -n ldlm.namespaces.*.lru_size=clear
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	dummy_key=$(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	if [ -n "$dummy_key" ]; then
+		keyctl revoke $dummy_key
+		keyctl reap
+	fi
+}
+
+remount_client_normally() {
+	# remount client without dummy encryption key
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS} ||
+		error "remount failed"
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount failed"
+	fi
+
+	remove_enc_key
+}
+
+remount_client_dummykey() {
+	insert_enc_key
+
+	# remount client with dummy encryption key
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "remount failed"
+}
+
+setup_for_enc_tests() {
+	rm -rf $DIR/[df][0-9]* || error "Fail to cleanup env"
+
+	# remount client with test_dummy_encryption option
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount with '-o test_dummy_encryption' failed"
+
+	# this directory will be encrypted, because of dummy mode
+	$LFS setdirstripe -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+}
+
+cleanup_for_enc_tests() {
+	rm -rf $DIR/$tdir $*
+
+	remount_client_normally
+}
+
+test_42() {
+	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
+
+	(( $MDS1_VERSION > $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51"
+
+	echo "#####"
+	echo "If the MDT-object has the encryption flag but the OST-object"
+	echo "does not, add it to the OST-object."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+	touch $DIR/$tdir/${tfile}_1 || error "touch ${tfile}_1 failed"
+	dd if=/dev/zero of=$DIR/$tdir/${tfile}_2 bs=1 count=1 conv=fsync ||
+		error "dd ${tfile}_2 failed"
+
+	#define OBD_FAIL_LFSCK_NO_ENCFLAG	0x1632
+	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param fail_loc=0x1632"
+	touch $DIR/$tdir/${tfile}_3 || error "touch ${tfile}_3 failed"
+	dd if=/dev/zero of=$DIR/$tdir/${tfile}_4 bs=1 count=1 conv=fsync ||
+		error "dd ${tfile}_4 failed"
+	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param fail_loc=0x0"
+	cancel_lru_locks osc
+
+	echo "Trigger layout LFSCK to find out inconsistent OST-object enc flag"
+
+	$START_LAYOUT -r || error "Fail to start LFSCK for layout!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_LAYOUT
+		error "unexpected lfsck status"
+	}
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_others/ { print $2 }')
+	[ $repaired -eq 2 ] ||
+		error "Fail to repair inconsistent enc flag: $repaired"
+}
+run_test 42 "LFSCK can repair inconsistent MDT-object/OST-object encryption flags"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}
