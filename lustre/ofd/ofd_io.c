@@ -580,15 +580,8 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (oa->o_valid & OBD_MD_FLATIME)
 		ofd_handle_atime(env, ofd, fo, oa->o_atime);
 
-	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo))
-		GOTO(unlock, rc = -ENOENT);
-
-	if (ofd->ofd_lfsck_verify_pfid && oa->o_valid & OBD_MD_FLFID) {
-		rc = ofd_verify_ff(env, fo, oa);
-		if (rc != 0)
-			GOTO(unlock, rc);
-	}
+		GOTO(obj_put, rc = -ENOENT);
 
 	if (ptlrpc_connection_is_local(exp->exp_connection))
 		dbt |= DT_BUFS_TYPE_LOCAL;
@@ -616,10 +609,20 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		tot_bytes += rnb[i].rnb_len;
 	}
 
+	ofd_read_lock(env, fo);
+	if (!ofd_object_exists(fo))
+		GOTO(unlock, rc = -ENOENT);
+
+	if (ofd->ofd_lfsck_verify_pfid && oa->o_valid & OBD_MD_FLFID) {
+		rc = ofd_verify_ff(env, fo, oa);
+		if (rc != 0)
+			GOTO(unlock, rc);
+	}
+
 	LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
 	rc = dt_read_prep(env, ofd_object_child(fo), lnb, *nr_local);
 	if (unlikely(rc))
-		GOTO(buf_put, rc);
+		GOTO(unlock, rc);
 	ofd_read_unlock(env, fo);
 
 	ofd_access(env, ofd,
@@ -635,10 +638,11 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 
 	RETURN(0);
 
-buf_put:
-	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
 unlock:
 	ofd_read_unlock(env, fo);
+buf_put:
+	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
+obj_put:
 	ofd_object_put(env, fo);
 	return rc;
 }
