@@ -205,11 +205,13 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 {
 	struct inode *inode;
 	struct obdo  *oa;
+	struct ll_inode_info *lli;
 	u64 valid_flags = OBD_MD_FLTYPE | OBD_MD_FLUID | OBD_MD_FLGID |
 			  OBD_MD_FLPROJID;
 
 	oa = attr->cra_oa;
 	inode = vvp_object_inode(obj);
+	lli = ll_i2info(inode);
 
 	if (attr->cra_type == CRT_WRITE) {
 		valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
@@ -221,8 +223,11 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
-	memcpy(attr->cra_jobid, ll_i2info(inode)->lli_jobid,
-	       sizeof(attr->cra_jobid));
+
+	attr->cra_uid = lli->lli_uid;
+	attr->cra_gid = lli->lli_gid;
+
+	memcpy(attr->cra_jobid, &lli->lli_jobid, sizeof(attr->cra_jobid));
 }
 
 static const struct cl_object_operations vvp_ops = {

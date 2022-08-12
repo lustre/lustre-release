@@ -657,6 +657,7 @@ enum lustre_msg_version {
 /* #define MSG_CONNECT_ASYNC	0x00000040 obsolete since 1.5 */
 #define MSG_CONNECT_NEXT_VER	0x00000080 /* use next version of lustre_msg */
 #define MSG_CONNECT_TRANSNO	0x00000100 /* client sent transno in replay */
+#define MSG_PACK_UID_GID	0x00000200 /* thread UID/GID in ptlrpc_body */
 
 /* number of previous object versions in pb_pre_versions[] */
 #define PTLRPC_NUM_VERSIONS     4
@@ -686,7 +687,8 @@ struct ptlrpc_body_v3 {
 	/* padding for future needs - fix lustre_swab_ptlrpc_body() also */
 	__u64 pb_padding64_0;
 	__u64 pb_padding64_1;
-	__u64 pb_padding64_2;
+	__u32 pb_uid;		/* req: process uid, use by tbf rules */
+	__u32 pb_gid;		/* req: process gid, use by tbf rules */
 	char  pb_jobid[LUSTRE_JOBID_SIZE]; /* req: ASCII jobid from env + NUL */
 };
 #define ptlrpc_body     ptlrpc_body_v3

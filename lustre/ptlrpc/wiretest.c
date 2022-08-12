@@ -932,10 +932,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_padding64_1));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1));
-	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_padding64_2) == 144, "found %lld\n",
-		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_padding64_2));
-	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_2) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_2));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_uid) == 144, "found %lld\n",
+		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_uid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_gid) == 148, "found %lld\n",
+		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_gid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid));
 	BUILD_BUG_ON(LUSTRE_JOBID_SIZE != 32);
 	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_jobid) == 152, "found %lld\n",
 		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_jobid));
@@ -1029,10 +1033,12 @@ void lustre_assert_wire_constants(void)
 		 (int)offsetof(struct ptlrpc_body_v3, pb_padding64_1), (int)offsetof(struct ptlrpc_body_v2, pb_padding64_1));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_1), "%d != %d\n",
 		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_1));
-	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_padding64_2) == (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2), "%d != %d\n",
-		 (int)offsetof(struct ptlrpc_body_v3, pb_padding64_2), (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2));
-	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_2) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2), "%d != %d\n",
-		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_2), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_uid) == (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2), "%d != %d\n",
+		 (int)offsetof(struct ptlrpc_body_v3, pb_uid), (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) + (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid) ==
+		 (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2), "%d != %d\n",
+		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) + (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid),
+		 (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2));
 	LASSERTF(MSG_PTLRPC_BODY_OFF == 0, "found %lld\n",
 		 (long long)MSG_PTLRPC_BODY_OFF);
 	LASSERTF(REQ_REC_OFF == 1, "found %lld\n",

@@ -1602,6 +1602,13 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 	memset(id, 0, sizeof(struct tbf_id));
 	id->ti_type = ti_type;
 
+	rc = lustre_msg_get_uid_gid(req->rq_reqmsg, &id->ti_uid, &id->ti_gid);
+	if (!rc && id->ti_uid != (u32) -1 && id->ti_gid != (u32) -1)
+		return 0;
+
+	/* client req doesn't have uid/gid pack in ptlrpc_body
+	 * --> fallback to the old method
+	 */
 	if (fmt == NULL)
 		return -EINVAL;
 	req_capsule_init(&req->rq_pill, req, RCL_SERVER);

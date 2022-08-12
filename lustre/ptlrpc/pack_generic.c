@@ -1308,6 +1308,37 @@ timeout_t lustre_msg_get_service_timeout(struct lustre_msg *msg)
 	}
 }
 
+int lustre_msg_get_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb;
+
+		/* the old pltrpc_body_v2 is smaller; doesn't include uid/gid */
+		if (msg->lm_buflens[MSG_PTLRPC_BODY_OFF] <
+		    sizeof(struct ptlrpc_body))
+			return -EOPNOTSUPP;
+
+		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+					  sizeof(struct ptlrpc_body));
+
+		if (!pb || !(pb->pb_flags & MSG_PACK_UID_GID))
+			return -EOPNOTSUPP;
+
+		if (uid)
+			*uid = pb->pb_uid;
+		if (gid)
+			*gid = pb->pb_gid;
+
+		return 0;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return -EOPNOTSUPP;
+	}
+}
+EXPORT_SYMBOL(lustre_msg_get_uid_gid);
+
 char *lustre_msg_get_jobid(struct lustre_msg *msg)
 {
 	switch (msg->lm_magic) {
@@ -1576,6 +1607,40 @@ void lustre_msg_set_service_timeout(struct lustre_msg *msg,
 	}
 }
 
+void lustre_msg_set_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		__u32 opc = lustre_msg_get_opc(msg);
+		struct ptlrpc_body *pb;
+
+		/* Don't set uid/gid for ldlm ast RPCs */
+		if (!opc || opc == LDLM_BL_CALLBACK ||
+		    opc == LDLM_CP_CALLBACK || opc == LDLM_GL_CALLBACK)
+			return;
+
+		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+				       sizeof(struct ptlrpc_body));
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+
+		if (uid && gid) {
+			pb->pb_uid = *uid;
+			pb->pb_gid = *gid;
+			pb->pb_flags |= MSG_PACK_UID_GID;
+		} else if (!(pb->pb_flags & MSG_PACK_UID_GID)) {
+			pb->pb_uid = from_kuid(&init_user_ns, current_uid());
+			pb->pb_gid = from_kgid(&init_user_ns, current_gid());
+			pb->pb_flags |= MSG_PACK_UID_GID;
+		}
+
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
+}
+EXPORT_SYMBOL(lustre_msg_set_uid_gid);
+
 void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid)
 {
 	switch (msg->lm_magic) {
@@ -1733,7 +1798,8 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *body)
 	__swab64s(&body->pb_mbits);
 	BUILD_BUG_ON(offsetof(typeof(*body), pb_padding64_0) == 0);
 	BUILD_BUG_ON(offsetof(typeof(*body), pb_padding64_1) == 0);
-	BUILD_BUG_ON(offsetof(typeof(*body), pb_padding64_2) == 0);
+	__swab32s(&body->pb_uid);
+	__swab32s(&body->pb_gid);
 	/*
 	 * While we need to maintain compatibility between
 	 * clients and servers without ptlrpc_body_v2 (< 2.3)
@@ -2779,6 +2845,12 @@ void _debug_req(struct ptlrpc_request *req,
 	va_list args;
 	int rep_flags = -1;
 	int rep_status = -1;
+	__u64 req_transno = 0;
+	int req_opc = -1;
+	__u32 req_flags =  (__u32) -1;
+	__u32 req_uid = (__u32) -1;
+	__u32 req_gid = (__u32) -1;
+	char *req_jobid = NULL;
 
 	spin_lock(&req->rq_early_free_lock);
 	if (req->rq_repmsg)
@@ -2800,15 +2872,22 @@ void _debug_req(struct ptlrpc_request *req,
 	else if (req->rq_export && req->rq_export->exp_connection)
 		nid = &req->rq_export->exp_connection->c_peer.nid;
 
+	if (req_ok) {
+		req_transno = lustre_msg_get_transno(req->rq_reqmsg);
+		req_opc = lustre_msg_get_opc(req->rq_reqmsg);
+		req_jobid = lustre_msg_get_jobid(req->rq_reqmsg);
+		lustre_msg_get_uid_gid(req->rq_reqmsg, &req_uid, &req_gid);
+		req_flags = lustre_msg_get_flags(req->rq_reqmsg);
+	}
+
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	libcfs_debug_msg(msgdata,
-			 "%pV req@%p x%llu/t%lld(%lld) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d job:'%s'\n",
+			 "%pV req@%p x%llu/t%lld(%llu) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d uid:%u gid:%u job:'%s'\n",
 			 &vaf,
-			 req, req->rq_xid, req->rq_transno,
-			 req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
-			 req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
+			 req, req->rq_xid, req->rq_transno, req_transno,
+			 req_opc,
 			 req->rq_import ?
 			 req->rq_import->imp_obd->obd_name :
 			 req->rq_export ?
@@ -2820,11 +2899,9 @@ void _debug_req(struct ptlrpc_request *req,
 			 req->rq_early_count, (s64)req->rq_timedout,
 			 (s64)req->rq_deadline,
 			 atomic_read(&req->rq_refcount),
-			 DEBUG_REQ_FLAGS(req),
-			 req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
-			 rep_flags, req->rq_status, rep_status,
-			 req_ok ? lustre_msg_get_jobid(req->rq_reqmsg) ?: ""
-				: "");
+			 DEBUG_REQ_FLAGS(req), req_flags, rep_flags,
+			 req->rq_status, rep_status,
+			 req_uid, req_gid, req_jobid ?: "");
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);

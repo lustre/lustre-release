@@ -1170,8 +1170,10 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
 	atomic_inc(&set->set_remaining);
 	req->rq_queued_time = ktime_get_seconds();
 
-	if (req->rq_reqmsg)
+	if (req->rq_reqmsg) {
 		lustre_msg_set_jobid(req->rq_reqmsg, NULL);
+		lustre_msg_set_uid_gid(req->rq_reqmsg, NULL, NULL);
+	}
 
 	if (set->set_producer)
 		/*

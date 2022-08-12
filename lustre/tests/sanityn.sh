@@ -3848,10 +3848,20 @@ nrs_write_read() {
 	local n=16
 	local dir=$DIR/$tdir
 	local myRUNAS="$1"
+	local create_as="$2"
 
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
+
+	if [[ -n "$create_as" ]]; then
+		do_nodes $CLIENTS $create_as "touch $dir/nrs_r_\$HOSTNAME;" ||
+			error "touch failed for $dir/nrs_r_*"
+		do_nodes $CLIENTS $create_as touch "$dir/nrs_w_\$HOSTNAME" ||
+			error "touch failed for $dir/nrs_w_*"
+		do_nodes $CLIENTS $create_as "chmod 777 $dir/nrs_*_\$HOSTNAME;" ||
+			error "chmod failed for $dir/nrs_*"
+	fi
 
 	do_nodes $CLIENTS $myRUNAS \
 		dd if=/dev/zero of="$dir/nrs_r_\$HOSTNAME" bs=1M count=$n ||
@@ -4018,6 +4028,7 @@ tbf_verify() {
 	local dir=$DIR/$tdir
 	local client1=${CLIENT1:-$(hostname)}
 	local myRUNAS="$3"
+	local create_as="$4"
 
 	local np=$(check_cpt_number ost1)
 	[ $np -gt 0 ] || error "CPU partitions should not be $np."
@@ -4026,6 +4037,11 @@ tbf_verify() {
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -c 1 -i 0 $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
+
+	if [[ -n "$create_as" ]]; then
+		$create_as touch $dir/tbf
+		chmod 777 $dir/tbf
+	fi
 
 	trap cleanup_tbf_verify EXIT
 	echo "Limited write rate: $1, read rate: $2"
@@ -4343,6 +4359,8 @@ test_id() {
 	local idstr="${1}id"
 	local policy="${idstr}={$2}"
 	local rate="rate=$3"
+	local runas_args="$4"
+	local createas_args="${5:-$runas_args}"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param jobid_var=procname_uid \
@@ -4350,8 +4368,8 @@ test_id() {
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_${idstr}\ ${policy}\ ${rate}"
 	[ $? -ne 0 ] && error "failed to set tbf ${idstr} policy"
 
-	nrs_write_read "runas $4"
-	tbf_verify $3 $3 "runas $4"
+	nrs_write_read "runas $runas_args" "runas $createas_args"
+	tbf_verify $3 $3 "runas $runas_args" "runas $createas_args"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_${idstr}" \
@@ -4372,6 +4390,15 @@ test_77ja(){
 	test_id "g" "500" "5" "-u 500 -g 500"
 }
 run_test 77ja "check TBF-UID/GID NRS policy"
+
+test_77jb() { # LU-16077
+	(( "$OST1_VERSION" >= $(version_code 2.15.51) )) ||
+		skip "Need OST version at least 2.15.51"
+
+	test_id "u" "500" "5" "-u 500" "-u 0 -g 500"
+	test_id "g" "500" "5" "-u 500 -g 500" "-u 500 -g 0"
+}
+run_test 77jb "check TBF-UID/GID NRS policy on files that don't belong to us"
 
 cleanup_77k()
 {

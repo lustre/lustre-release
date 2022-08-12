@@ -1263,9 +1263,11 @@ void ll_lli_init(struct ll_inode_info *lli)
 		mutex_init(&lli->lli_group_mutex);
 		lli->lli_group_users = 0;
 		lli->lli_group_gid = 0;
+		memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
+		lli->lli_uid = (__u32) -1;
+		lli->lli_gid = (__u32) -1;
 	}
 	mutex_init(&lli->lli_layout_mutex);
-	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
 	/* ll_cl_context initialize */
 	INIT_LIST_HEAD(&lli->lli_lccs);
 	seqlock_init(&lli->lli_page_inv_lock);

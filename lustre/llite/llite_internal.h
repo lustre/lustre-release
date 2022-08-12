@@ -221,13 +221,16 @@ struct ll_inode_info {
 
 			/*
 			 * Whenever a process try to read/write the file, the
-			 * jobid of the process will be saved here, and it'll
-			 * be packed into the write PRC when flush later.
+			 * jobid, uid and gid of the process will be saved here,
+			 * and it'll be packed into write RPC when flush later.
 			 *
-			 * So the read/write statistics for jobid will not be
-			 * accurate if the file is shared by different jobs.
+			 * So the read/write statistics or TBF rules for jobid,
+			 * uid or gid will not be accurate if the file is shared
+			 * by different jobs.
 			 */
 			char                    lli_jobid[LUSTRE_JOBID_SIZE];
+			__u32			lli_uid;
+			__u32			lli_gid;
 
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
