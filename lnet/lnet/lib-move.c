@@ -3584,7 +3584,7 @@ lnet_recover_local_nis(void)
 
 			ev_info->mt_type = MT_TYPE_LOCAL_NI;
 			ev_info->mt_nid = nid;
-			rc = lnet_send_ping(&nid, &mdh, LNET_INTERFACES_MIN,
+			rc = lnet_send_ping(&nid, &mdh, LNET_PING_INFO_MIN_SIZE,
 					    ev_info, the_lnet.ln_mt_handler,
 					    true);
 			/* lookup the nid again */
@@ -3817,7 +3817,7 @@ lnet_recover_peer_nis(void)
 
 			ev_info->mt_type = MT_TYPE_PEER_NI;
 			ev_info->mt_nid = nid;
-			rc = lnet_send_ping(&nid, &mdh, LNET_INTERFACES_MIN,
+			rc = lnet_send_ping(&nid, &mdh, LNET_PING_INFO_MIN_SIZE,
 					    ev_info, the_lnet.ln_mt_handler,
 					    true);
 			lnet_net_lock(0);
@@ -3929,7 +3929,7 @@ lnet_monitor_thread(void *arg)
  */
 int
 lnet_send_ping(struct lnet_nid *dest_nid,
-	       struct lnet_handle_md *mdh, int nnis,
+	       struct lnet_handle_md *mdh, int bytes,
 	       void *user_data, lnet_handler_t handler, bool recovery)
 {
 	struct lnet_md md = { NULL };
@@ -3942,7 +3942,7 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 		goto fail_error;
 	}
 
-	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
+	pbuf = lnet_ping_buffer_alloc(bytes, GFP_NOFS);
 	if (!pbuf) {
 		rc = ENOMEM;
 		goto fail_error;
@@ -3950,7 +3950,7 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 
 	/* initialize md content */
 	md.start     = &pbuf->pb_info;
-	md.length    = LNET_PING_INFO_SIZE(nnis);
+	md.length    = bytes;
 	md.threshold = 2; /* GET/REPLY */
 	md.max_size  = 0;
 	md.options   = LNET_MD_TRUNCATE | LNET_MD_TRACK_RESPONSE;

@@ -291,9 +291,13 @@ struct lnet_ping_info {
 	struct lnet_ni_status	pi_ni[0];
 } __attribute__((packed));
 
-#define LNET_PING_INFO_SIZE(NNIDS) \
-	offsetof(struct lnet_ping_info, pi_ni[NNIDS])
+#define LNET_PING_INFO_HDR_SIZE \
+	offsetof(struct lnet_ping_info, pi_ni[0])
+#define LNET_PING_INFO_MIN_SIZE \
+	offsetof(struct lnet_ping_info, pi_ni[LNET_INTERFACES_MIN])
 #define LNET_PING_INFO_LONI(PINFO)      ((PINFO)->pi_ni[0].ns_nid)
 #define LNET_PING_INFO_SEQNO(PINFO)     ((PINFO)->pi_ni[0].ns_status)
+#define lnet_ping_info_size(pinfo)	\
+	offsetof(struct lnet_ping_info, pi_ni[(pinfo)->pi_nnis])
 
 #endif

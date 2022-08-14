@@ -2264,6 +2264,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 {
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_peer *lp;
+	int infobytes;
 
 	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md_start + ev->offset);
 
@@ -2307,12 +2308,12 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		goto out;
 	}
 
-	/*
-	 * Make sure we'll allocate the correct size ping buffer when
+	/* Make sure we'll allocate the correct size ping buffer when
 	 * pinging the peer.
 	 */
-	if (lp->lp_data_nnis < pbuf->pb_info.pi_nnis)
-		lp->lp_data_nnis = pbuf->pb_info.pi_nnis;
+	infobytes = lnet_ping_info_size(&pbuf->pb_info);
+	if (lp->lp_data_bytes < infobytes)
+		lp->lp_data_bytes = infobytes;
 
 	/*
 	 * A non-Multi-Rail peer is not supposed to be capable of
@@ -2375,19 +2376,17 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		lnet_peer_clr_non_mr_pref_nids(lp);
 	}
 
-	/*
-	 * Check for truncation of the Put message. Clear the
+	/* Check for truncation of the Put message. Clear the
 	 * NIDS_UPTODATE flag and set FORCE_PING to trigger a ping,
 	 * and tell discovery to allocate a bigger buffer.
 	 */
 	if (ev->mlength < ev->rlength) {
-		if (the_lnet.ln_push_target_nnis < pbuf->pb_info.pi_nnis)
-			the_lnet.ln_push_target_nnis = pbuf->pb_info.pi_nnis;
+		if (the_lnet.ln_push_target_nbytes < infobytes)
+			the_lnet.ln_push_target_nbytes = infobytes;
 		lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
 		lp->lp_state |= LNET_PEER_FORCE_PING;
-		CDEBUG(D_NET, "Truncated Push from %s (%d nids)\n",
-		       libcfs_nidstr(&lp->lp_primary_nid),
-		       pbuf->pb_info.pi_nnis);
+		CDEBUG(D_NET, "Truncated Push from %s (%d bytes)\n",
+		       libcfs_nidstr(&lp->lp_primary_nid), infobytes);
 		goto out;
 	}
 
@@ -2395,8 +2394,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
 	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
 
-	/*
-	 * If there is data present that hasn't been processed yet,
+	/* If there is data present that hasn't been processed yet,
 	 * we'll replace it if the Put contained newer data and it
 	 * fits. We're racing with a Ping or earlier Push in this
 	 * case.
@@ -2404,9 +2402,9 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	if (lp->lp_state & LNET_PEER_DATA_PRESENT) {
 		if (LNET_PING_BUFFER_SEQNO(pbuf) >
 			LNET_PING_BUFFER_SEQNO(lp->lp_data) &&
-		    pbuf->pb_info.pi_nnis <= lp->lp_data->pb_nnis) {
+		    infobytes <= lp->lp_data->pb_nbytes) {
 			memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
-			       LNET_PING_INFO_SIZE(pbuf->pb_info.pi_nnis));
+			       infobytes);
 			CDEBUG(D_NET, "Ping/Push race from %s: %u vs %u\n",
 			      libcfs_nidstr(&lp->lp_primary_nid),
 			      LNET_PING_BUFFER_SEQNO(pbuf),
@@ -2420,7 +2418,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	 * the Push and set FORCE_PING to force the discovery
 	 * thread to fix the problem by pinging the peer.
 	 */
-	lp->lp_data = lnet_ping_buffer_alloc(lp->lp_data_nnis, GFP_ATOMIC);
+	lp->lp_data = lnet_ping_buffer_alloc(lp->lp_data_bytes, GFP_ATOMIC);
 	if (!lp->lp_data) {
 		lp->lp_state |= LNET_PEER_FORCE_PING;
 		CDEBUG(D_NET, "Cannot allocate Push buffer for %s %u\n",
@@ -2430,8 +2428,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	}
 
 	/* Success */
-	memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
-	       LNET_PING_INFO_SIZE(pbuf->pb_info.pi_nnis));
+	memcpy(&lp->lp_data->pb_info, &pbuf->pb_info, infobytes);
 	lp->lp_state |= LNET_PEER_DATA_PRESENT;
 	CDEBUG(D_NET, "Received Push %s %u\n",
 	       libcfs_nidstr(&lp->lp_primary_nid),
@@ -2596,6 +2593,7 @@ static void
 lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 {
 	struct lnet_ping_buffer *pbuf;
+	int infobytes;
 	int rc;
 
 	spin_lock(&lp->lp_lock);
@@ -2708,25 +2706,24 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 		}
 	}
 
+	infobytes = lnet_ping_info_size(&pbuf->pb_info);
 	/*
 	 * Make sure we'll allocate the correct size ping buffer when
 	 * pinging the peer.
 	 */
-	if (lp->lp_data_nnis < pbuf->pb_info.pi_nnis)
-		lp->lp_data_nnis = pbuf->pb_info.pi_nnis;
+	if (lp->lp_data_bytes < infobytes)
+		lp->lp_data_bytes = infobytes;
 
-	/*
-	 * Check for truncation of the Reply. Clear PING_SENT and set
+	/* Check for truncation of the Reply. Clear PING_SENT and set
 	 * PING_FAILED to trigger a retry.
 	 */
-	if (pbuf->pb_nnis < pbuf->pb_info.pi_nnis) {
-		if (the_lnet.ln_push_target_nnis < pbuf->pb_info.pi_nnis)
-			the_lnet.ln_push_target_nnis = pbuf->pb_info.pi_nnis;
+	if (pbuf->pb_nbytes < infobytes) {
+		if (the_lnet.ln_push_target_nbytes < infobytes)
+			the_lnet.ln_push_target_nbytes = infobytes;
 		lp->lp_state |= LNET_PEER_PING_FAILED;
 		lp->lp_ping_error = 0;
-		CDEBUG(D_NET, "Truncated Reply from %s (%d nids)\n",
-		       libcfs_nidstr(&lp->lp_primary_nid),
-		       pbuf->pb_info.pi_nnis);
+		CDEBUG(D_NET, "Truncated Reply from %s (%d bytes)\n",
+		       libcfs_nidstr(&lp->lp_primary_nid), infobytes);
 		goto out;
 	}
 
@@ -3408,7 +3405,7 @@ __must_hold(&lp->lp_lock)
 static int lnet_peer_send_ping(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	int nnis;
+	int bytes;
 	int rc;
 	int cpt;
 
@@ -3421,13 +3418,11 @@ __must_hold(&lp->lp_lock)
 	lnet_peer_addref_locked(lp);
 	lnet_net_unlock(cpt);
 
-	nnis = max(lp->lp_data_nnis, LNET_INTERFACES_MIN);
+	bytes = max_t(int, lp->lp_data_bytes, LNET_PING_INFO_MIN_SIZE);
 
-	rc = lnet_send_ping(&lp->lp_primary_nid, &lp->lp_ping_mdh, nnis, lp,
+	rc = lnet_send_ping(&lp->lp_primary_nid, &lp->lp_ping_mdh, bytes, lp,
 			    the_lnet.ln_dc_handler, false);
-
-	/*
-	 * if LNetMDBind in lnet_send_ping fails we need to decrement the
+	/* if LNetMDBind in lnet_send_ping fails we need to decrement the
 	 * refcount on the peer, otherwise LNetMDUnlink will be called
 	 * which will eventually do that.
 	 */
@@ -3535,7 +3530,7 @@ __must_hold(&lp->lp_lock)
 
 	/* Push source MD */
 	md.start     = &pbuf->pb_info;
-	md.length    = LNET_PING_INFO_SIZE(pbuf->pb_nnis);
+	md.length    = pbuf->pb_nbytes;
 	md.threshold = 2; /* Put/Ack */
 	md.max_size  = 0;
 	md.options   = LNET_MD_TRACK_RESPONSE;

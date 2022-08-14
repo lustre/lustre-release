@@ -817,6 +817,8 @@ lnet_health_check(struct lnet_msg *msg)
 	 * messages with a health status != OK.
 	 */
 	if (hstatus != LNET_MSG_STATUS_OK) {
+		struct lnet_ping_info *pi;
+
 		/* Don't further decrement the health value if a recovery
 		 * message failed.
 		 */
@@ -826,11 +828,10 @@ lnet_health_check(struct lnet_msg *msg)
 			handle_local_health = handle_remote_health = true;
 
 		/* For local failures, health/recovery/resends are not needed if
-		 * I only have a single (non-lolnd) interface. NB: pb_nnis
-		 * includes the lolnd interface, so a single-rail node would
-		 * have pb_nnis == 2.
+		 * I only have a single (non-lolnd) interface.
 		 */
-		if (the_lnet.ln_ping_target->pb_nnis <= 2) {
+		pi = &the_lnet.ln_ping_target->pb_info;
+		if (pi->pi_nnis <= 2) {
 			handle_local_health = false;
 			attempt_local_resend = false;
 		}
@@ -840,9 +841,8 @@ lnet_health_check(struct lnet_msg *msg)
 		/* For remote failures, health/recovery/resends are not needed
 		 * if the peer only has a single interface. Special case for
 		 * routers where we rely on health feature to manage route
-		 * aliveness. NB: unlike pb_nnis above, lp_nnis does _not_
-		 * include the lolnd, so a single-rail node would have
-		 * lp_nnis == 1.
+		 * aliveness. NB: lp_nnis does _not_ include the lolnd, so a
+		 * single-rail node would have lp_nnis == 1.
 		 */
 		if (lpni && lpni->lpni_peer_net &&
 		    lpni->lpni_peer_net->lpn_peer &&

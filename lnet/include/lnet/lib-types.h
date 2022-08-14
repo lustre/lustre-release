@@ -558,14 +558,14 @@ struct lnet_ni {
  * area that may be overwritten by network data.
  */
 struct lnet_ping_buffer {
-	int			pb_nnis;
+	int			pb_nbytes;	/* sizeof pb_info */
 	atomic_t		pb_refcnt;
 	bool			pb_needs_post;
 	struct lnet_ping_info	pb_info;
 };
 
-#define LNET_PING_BUFFER_SIZE(NNIDS) \
-	offsetof(struct lnet_ping_buffer, pb_info.pi_ni[NNIDS])
+#define LNET_PING_BUFFER_SIZE(bytes) \
+	(offsetof(struct lnet_ping_buffer, pb_info) + bytes)
 #define LNET_PING_BUFFER_LONI(PBUF)	((PBUF)->pb_info.pi_ni[0].ns_nid)
 #define LNET_PING_BUFFER_SEQNO(PBUF)	((PBUF)->pb_info.pi_ni[0].ns_status)
 
@@ -724,8 +724,8 @@ struct lnet_peer {
 	/* MD handle for push in progress */
 	struct lnet_handle_md	lp_push_mdh;
 
-	/* number of NIDs for sizing push data */
-	int			lp_data_nnis;
+	/* number of bytes for sizing pb_info in push data */
+	int			lp_data_bytes;
 
 	/* NI config sequence number of peer */
 	__u32			lp_peer_seqno;
@@ -1210,7 +1210,8 @@ struct lnet {
 	lnet_handler_t			ln_push_target_handler;
 	struct lnet_handle_md		ln_push_target_md;
 	struct lnet_ping_buffer		*ln_push_target;
-	int				ln_push_target_nnis;
+	/* bytes needed for pb_info to receive push */
+	int				ln_push_target_nbytes;
 
 	/* discovery event queue handle */
 	lnet_handler_t			ln_dc_handler;

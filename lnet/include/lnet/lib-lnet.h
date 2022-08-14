@@ -696,7 +696,7 @@ void lnet_prep_send(struct lnet_msg *msg, int type,
 int lnet_send(struct lnet_nid *nid, struct lnet_msg *msg,
 	      struct lnet_nid *rtr_nid);
 int lnet_send_ping(struct lnet_nid *dest_nid, struct lnet_handle_md *mdh,
-		   int nnis, void *user_ptr, lnet_handler_t handler,
+		   int bytes, void *user_ptr, lnet_handler_t handler,
 		   bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
@@ -937,7 +937,7 @@ void lnet_wait_router_start(void);
 void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
 int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
-struct lnet_ping_buffer *lnet_ping_buffer_alloc(int nnis, gfp_t gfp);
+struct lnet_ping_buffer *lnet_ping_buffer_alloc(int bytes, gfp_t gfp);
 void lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf);
 
 static inline void lnet_ping_buffer_addref(struct lnet_ping_buffer *pbuf)
@@ -955,7 +955,7 @@ static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
 
 static inline int lnet_push_target_resize_needed(void)
 {
-	return the_lnet.ln_push_target->pb_nnis < the_lnet.ln_push_target_nnis;
+	return the_lnet.ln_push_target->pb_nbytes < the_lnet.ln_push_target_nbytes;
 }
 
 int lnet_push_target_resize(void);
