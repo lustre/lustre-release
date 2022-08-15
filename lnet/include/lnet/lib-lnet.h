@@ -963,6 +963,15 @@ static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
 	}
 }
 
+struct lnet_ping_iter {
+	struct lnet_ping_info	*pinfo;
+	void			*pos, *end;
+};
+
+u32 *ping_iter_first(struct lnet_ping_iter *pi, struct lnet_ping_buffer *pbuf,
+		     struct lnet_nid *nid);
+u32 *ping_iter_next(struct lnet_ping_iter *pi, struct lnet_nid *nid);
+
 static inline int lnet_push_target_resize_needed(void)
 {
 	return the_lnet.ln_push_target->pb_nbytes < the_lnet.ln_push_target_nbytes;

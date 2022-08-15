@@ -2889,6 +2889,56 @@ static void lnet_discovery_event_handler(struct lnet_event *event)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
+u32 *ping_iter_first(struct lnet_ping_iter *pi,
+		     struct lnet_ping_buffer *pbuf,
+		     struct lnet_nid *nid)
+{
+	pi->pinfo = &pbuf->pb_info;
+	pi->pos = &pbuf->pb_info.pi_ni;
+	pi->end = (void *)pi->pinfo +
+		  min_t(int, pbuf->pb_nbytes,
+			lnet_ping_info_size(pi->pinfo));
+	/* lnet_ping_info_validiate ensures there will be one
+	 * lnet_ni_status at the start
+	 */
+	if (nid)
+		lnet_nid4_to_nid(pbuf->pb_info.pi_ni[0].ns_nid, nid);
+	return &pbuf->pb_info.pi_ni[0].ns_status;
+}
+
+u32 *ping_iter_next(struct lnet_ping_iter *pi, struct lnet_nid *nid)
+{
+	int off = offsetof(struct lnet_ping_info, pi_ni[pi->pinfo->pi_nnis]);
+
+	if (pi->pos < ((void *)pi->pinfo + off)) {
+		struct lnet_ni_status *ns = pi->pos;
+
+		pi->pos = ns + 1;
+		if (pi->pos > pi->end)
+			return NULL;
+		if (nid)
+			lnet_nid4_to_nid(ns->ns_nid, nid);
+		return &ns->ns_status;
+	}
+
+	while (pi->pinfo->pi_features & LNET_PING_FEAT_LARGE_ADDR) {
+		struct lnet_ni_large_status *lns = pi->pos;
+
+		if (pi->pos + 8 > pi->end)
+			/* Not safe to examine next */
+			return NULL;
+		pi->pos = lnet_ping_sts_next(lns);
+		if (pi->pos > pi->end)
+			return NULL;
+		if (NID_BYTES(&lns->ns_nid) > sizeof(struct lnet_nid))
+			continue;
+		if (nid)
+			*nid = lns->ns_nid;
+		return &lns->ns_status;
+	}
+	return NULL;
+}
+
 /*
  * Build a peer from incoming data.
  *
@@ -3157,15 +3207,18 @@ lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
 	return 0;
 }
 
-static bool lnet_is_nid_in_ping_info(lnet_nid_t nid, struct lnet_ping_info *pinfo)
+static bool lnet_is_nid_in_ping_info(struct lnet_nid *nid,
+				     struct lnet_ping_buffer *pbuf)
 {
-	int i;
+	struct lnet_ping_iter pi;
+	struct lnet_nid pnid;
+	u32 *st;
 
-	for (i = 0; i < pinfo->pi_nnis; i++) {
-		if (pinfo->pi_ni[i].ns_nid == nid)
+	for (st = ping_iter_first(&pi, pbuf, &pnid);
+	     st;
+	     st = ping_iter_next(&pi, &pnid))
+		if (nid_same(nid, &pnid))
 			return true;
-	}
-
 	return false;
 }
 
@@ -3325,8 +3378,7 @@ __must_hold(&lp->lp_lock)
 	 * recorded in that peer.
 	 */
 	} else if (nid_same(&lp->lp_primary_nid, &nid) ||
-		   (lnet_is_nid_in_ping_info(lnet_nid_to_nid4(&lp->lp_primary_nid),
-					     &pbuf->pb_info) &&
+		   (lnet_is_nid_in_ping_info(&lp->lp_primary_nid, pbuf) &&
 		    lnet_is_discovery_disabled(lp))) {
 		rc = lnet_peer_merge_data(lp, pbuf);
 	} else {
