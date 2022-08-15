@@ -1,0 +1,93 @@
+source ${LBUILD_DIR}/lbuild-rhel
+
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN+=".0"
+
+SPEC_NAME="kernel.spec"
+DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=false
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el9.centos"
+# in kernel version and rpm names
+#
+RMAC=$HOME/.rpmmacros
+grep '^%dist' $RMAC &> /dev/null || echo '%dist .el9' >> $RMAC
+
+patch_spec_rhel9() {
+	sed -i -e '/Provides: kernel-uname-r =/a\
+Provides: kernel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+	       -e '/Provides: kernel-devel-uname-r =/a\
+Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+	       -e '/^    find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+	cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4\
+	rm -f $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4/ext4-inode-test*' \
+	SPECS/$SPEC_NAME 2>&1 ||
+		fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
+patch_spec() {
+	local buildid="$1"
+
+	# the el9 .spec file requires patch names to begin with "patch-3."
+	# so rename the lustre patch from lbuild to one the .spec will like
+	mv $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch \
+		$TOPDIR/SOURCES/patch-${lnxmaj}-lustre.patch
+
+	# edit the SPEC with our changes
+	patch_spec_rhel9 "$buildid"
+	sed -i -e '/^# empty final patch to facilitate testing of kernel patches/i\
+# adds Lustre patches\
+Patch99995: patch-%{version}-lustre.patch' \
+	       -e '/^ApplyOptionalPatch linux-kernel-test.patch/i\
+\
+# lustre patch\
+ApplyOptionalPatch patch-%{version}-lustre.patch\
+' \
+		-e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
+	SPECS/$SPEC_NAME 2>&1 ||
+		fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
+unpack_linux_devel_rpm-rhel9() {
+	local callers_rpm="$1"
+
+	unpack_linux_devel_rpm-rhel "$callers_rpm"
+}
+
+get_rpmbuildopts() {
+	if $KERNEL_LUSTRE_NAMING; then
+		echo -e "--define \"variant -lustre\" \c"
+	fi
+
+	echo "--with firmware --without debug"
+}
+
+find_linux_rpm-rhel9() {
+	local prefix="$1"
+	local wanted_kernel="$2"
+	local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+
+	find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+}
+
+kernel_srpm_location() {
+	local base_os="http://mirror.stream.centos.org/9-stream/BaseOS"
+
+	echo "$base_os/source/tree/Packages/"
+}
+
+kernel_debuginfo_location() {
+	local base_os="http://mirror.stream.centos.org/9-stream/BaseOS"
+
+	echo "$base_os/$TARGET_ARCH/debug/tree/Packages/"
+}
+
+apply_kmod_requires_conflicts() {
+	if $PATCHLESS; then
+		# don't allow the patched kernel to be considered as
+		# a valid kernel for the patchless client
+		echo "Conflicts:      kernel-lustre" >> rpm/kmp-lustre.preamble
+	fi
+}

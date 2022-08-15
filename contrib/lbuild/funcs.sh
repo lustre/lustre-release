@@ -169,10 +169,10 @@ autodetect_distro() {
 		    version="${version}.$PATCHLEVEL"
 	    fi
         elif [ -f /etc/redhat-release ]; then
-            #name=$(head -1 /etc/redhat-release)
-            name=rhel
-            version=$(echo "$distroname" |
-                      sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
+		#name=$(head -1 /etc/redhat-release)
+		name=rhel
+		version=$(cat /etc/redhat-release |
+			  sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
         fi
         if [ -z "$name" -o -z "$version" ]; then
             fatal 1 "I don't know how to determine distro type/version.\nEither update autodetect_distro() or use the --distro argument."
@@ -192,6 +192,7 @@ autodetect_target() {
     case ${distro} in
          rhel7*)  target="3.10-rhel7";;
          rhel8*)  target="4.18-rhel8";;
+	rhel-9.0) target="5.14-rhel9.0";;
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
