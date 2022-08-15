@@ -313,20 +313,23 @@ check_options() {
 #               usage 1 "Target '$TARGET' was not found."
     fi
 
-    case $TARGET in
-        3.12-sles12 | 4.4-sles12)
-            CANONICAL_TARGET="sles12"
-            ;;
-        4.18-rhel8*)
-            CANONICAL_TARGET="rhel8"
-            ;;
-        3.10-rhel7*)
-            CANONICAL_TARGET="rhel7"
-            ;;
-        3.0-sles11)
-            CANONICAL_TARGET="sles11"
-            ;;
-    esac
+	case $TARGET in
+		3.12-sles12 | 4.4-sles12)
+			CANONICAL_TARGET="sles12"
+			;;
+		5.14-rhel9*)
+			CANONICAL_TARGET="rhel9"
+			;;
+		4.18-rhel8*)
+			CANONICAL_TARGET="rhel8"
+			;;
+		3.10-rhel7*)
+			CANONICAL_TARGET="rhel7"
+			;;
+		3.0-sles11)
+			CANONICAL_TARGET="sles11"
+			;;
+	esac
 
     local timestampnodig=$(echo $TIMESTAMP | sed -e s/[0-9]*//g)
     [ "$timestampnodig" = "" ] || TIMESTAMP=$(date -d "$DATE" "+%Y%m%d%H%M%S")
@@ -354,7 +357,8 @@ check_options() {
     cat >${BINDIR}/rpmbuild <<EOF
 #!/bin/bash
 
-ARGS="\${FIND_REQUIRES:+--define \"__find_requires \$FIND_REQUIRES\"}"
+ARGS="\${FIND_REQUIRES:+--define \"__find_requires \$FIND_REQUIRES\"}
+\${FIND_KSYMS_REQUIRES:+--define \"__required_ksyms_requires \$FIND_KSYMS_REQUIRES\"}"
 for arg; do
     case \$arg in
     *\'* ) ARGS="\$ARGS \"\$arg\"" ;;
@@ -1318,6 +1322,7 @@ EOF
 		if ! $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' \
 			--define 'build_kernel_ib_devel 1' \
 			${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
+			${FIND_KSYMS_REQUIRES:+--define "__required_ksyms_requires $FIND_KSYMS_REQUIRES"} \
 			--define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
 			--define "KVERSION ${linuxrelease}" \
 			--define "$K_SRC ${linux}" \
@@ -1331,6 +1336,7 @@ EOF
 		mlnx)
 		if ! $RPMBUILD $BUILD_TYPE \
 			${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
+			${FIND_KSYMS_REQUIRES:+--define "__required_ksyms_requires $FIND_KSYMS_REQUIRES"} \
 			--define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
 			--define "KVERSION ${linuxrelease}" \
 			--define "KMP 1" \
@@ -1772,6 +1778,7 @@ build_with_srpm() {
 	# kernel-devel artifacts
 	cp $RPM_HELPERS_DIR/{symset-table,find-requires{,.ksyms}} .
 	export FIND_REQUIRES="$(pwd)/find-requires"
+	export FIND_KSYMS_REQUIRES="$(pwd)/find-requires.ksyms"
 	chmod 755 {symset-table,find-requires{,.ksyms}}
 	local tmp="$(pwd)"
 	tmp="${tmp//\//\\/}"
