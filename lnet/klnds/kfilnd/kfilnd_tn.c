@@ -614,7 +614,6 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 	struct kfilnd_msg *msg;
 	int rc;
 	bool finalize = false;
-	ktime_t remaining_time;
 	struct lnet_hdr hdr;
 	struct lnet_nid srcnid;
 
@@ -626,23 +625,32 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 	 */
 	if (kfilnd_peer_is_new_peer(tn->tn_kp) &&
 	    (event == TN_EVENT_INIT_IMMEDIATE || event == TN_EVENT_INIT_BULK)) {
-		remaining_time = max_t(ktime_t, 0,
-				       tn->deadline - ktime_get_seconds());
-
-		/* If transaction deadline has not be met, return -EAGAIN. This
-		 * will cause this transaction event to be replayed. During this
-		 * time, an async message from the peer should occur at which
-		 * point the kfilnd version should be negotiated.
-		 */
-		if (remaining_time > 0) {
+		if (kfilnd_peer_deleted(tn->tn_kp)) {
+			/* We'll assign a NETWORK_TIMEOUT message health status
+			 * below because we don't know why this peer was marked
+			 * for removal
+			 */
+			rc = -ESTALE;
+			KFILND_TN_DEBUG(tn,
+					"Dropping message to stale peer %s\n",
+					libcfs_nid2str(tn->tn_kp->kp_nid));
+		} else if (ktime_after(tn->deadline, ktime_get_seconds())) {
+			/* If transaction deadline has not been met, return
+			 * -EAGAIN. This will cause this transaction event to be
+			 * replayed. During this time, an async message from the
+			 * peer should occur at which point the kfilnd version
+			 * should be negotiated.
+			 */
 			KFILND_TN_DEBUG(tn, "%s hello response pending",
 					libcfs_nid2str(tn->tn_kp->kp_nid));
 			return -EAGAIN;
+		} else {
+			rc = -ETIMEDOUT;
 		}
 
-		rc = 0;
-		kfilnd_tn_status_update(tn, -ETIMEDOUT,
+		kfilnd_tn_status_update(tn, rc,
 					LNET_MSG_STATUS_NETWORK_TIMEOUT);
+		rc = 0;
 		goto out;
 	}
 

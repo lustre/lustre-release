@@ -238,6 +238,11 @@ struct kfilnd_peer {
 	time64_t kp_hello_ts;
 };
 
+static inline bool kfilnd_peer_deleted(struct kfilnd_peer *kp)
+{
+	return atomic_read(&kp->kp_remove_peer) > 0;
+}
+
 /* Sets kp_hello_sending
  * Returns true if it was already set
  * Returns false otherwise
