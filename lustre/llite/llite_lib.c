@@ -1366,6 +1366,9 @@ int ll_fill_super(struct super_block *sb)
 
 	/* disable kernel readahead */
 	sb->s_bdi->ra_pages = 0;
+#ifdef HAVE_BDI_IO_PAGES
+	sb->s_bdi->io_pages = 0;
+#endif
 
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.
