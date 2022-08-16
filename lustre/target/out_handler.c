@@ -64,34 +64,6 @@ typedef void (*out_reconstruct_t)(const struct lu_env *env,
 				  struct object_update_reply *reply,
 				  int index);
 
-static inline bool out_check_resent(struct ptlrpc_request *req,
-				    struct tg_reply_data *trd)
-{
-	struct lsd_reply_data *lrd;
-	bool reconstruct = false;
-
-	if (likely(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)))
-		return false;
-
-	if (req_can_reconstruct(req, trd)) {
-		lrd = &trd->trd_reply;
-		req->rq_transno = lrd->lrd_transno;
-		req->rq_status = lrd->lrd_result;
-
-		if (req->rq_status != 0)
-			req->rq_transno = 0;
-		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-		lustre_msg_set_status(req->rq_repmsg, req->rq_status);
-
-		DEBUG_REQ(D_HA, req, "reconstruct resent RPC");
-		reconstruct = true;
-	} else {
-		DEBUG_REQ(D_HA, req, "no reply for RESENT req");
-	}
-
-	return reconstruct;
-}
-
 static int out_create(struct tgt_session_info *tsi)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
@@ -1115,7 +1087,7 @@ int out_handle(struct tgt_session_info *tsi)
 	if (!trd)
 		GOTO(out_free, rc = -ENOMEM);
 
-	need_reconstruct = out_check_resent(pill->rc_req, trd);
+	need_reconstruct = tgt_check_resent(pill->rc_req, trd);
 
 	/* Walk through updates in the request to execute them */
 	for (i = 0; i < update_buf_count; i++) {

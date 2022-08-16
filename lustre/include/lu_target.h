@@ -299,6 +299,12 @@ struct tgt_session_info {
 	/* RPC transaction handling */
 	bool			tsi_mult_trans;
 	int			tsi_has_trans;
+
+	/* Batched RPC replay */
+	bool			 tsi_batch_env;
+	/* Sub request index in the batched RPC. */
+	__u32			 tsi_batch_idx;
+	struct tg_reply_data	*tsi_batch_trd;
 };
 
 static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
@@ -483,6 +489,7 @@ void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct lfsck_reply *,
 					   struct lfsck_query *));
 int req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
+bool tgt_check_resent(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];
 extern struct tgt_handler tgt_lfsck_handlers[];

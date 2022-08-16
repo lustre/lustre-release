@@ -289,8 +289,8 @@ void mdt_reconstruct(struct mdt_thread_info *mti, struct mdt_lock_handle *lhc)
 	mdt_reconstructor reconst;
 
 	ENTRY;
-	LASSERT(mti->mti_rr.rr_opcode < REINT_MAX &&
-		(reconst = reconstructors[mti->mti_rr.rr_opcode]) != NULL);
+	reconst = reconstructors[mti->mti_rr.rr_opcode];
+	LASSERT(reconst != NULL);
 	reconst(mti, lhc);
 	EXIT;
 }

@@ -215,6 +215,8 @@ struct lsd_reply_data {
 	__u64 lrd_data;		/* per-operation data */
 	__u32 lrd_result;	/* request result */
 	__u32 lrd_client_gen;	/* client generation */
+	__u32 lrd_batch_idx;	/* sub request index in the batched RPC */
+	__u32 lrd_padding[7];	/* unused fields, total size is 8X __u64 */
 };
 
 /* Header of the reply_data file */

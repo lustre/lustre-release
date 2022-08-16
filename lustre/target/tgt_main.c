@@ -802,6 +802,9 @@ static void tgt_ses_key_exit(const struct lu_context *ctx,
 		       tsi->tsi_has_trans);
 	tsi->tsi_has_trans = 0;
 	tsi->tsi_mult_trans = false;
+	tsi->tsi_batch_trd = NULL;
+	tsi->tsi_batch_env = false;
+	tsi->tsi_batch_idx = 0;
 }
 
 /* context key: tgt_session_key */

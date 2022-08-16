@@ -518,6 +518,7 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
 	case OBD_PING:
 	case MDS_REINT:
 	case OUT_UPDATE:
+	case MDS_BATCH:
 	case SEQ_QUERY:
 	case FLD_QUERY:
 	case FLD_READ:
@@ -3059,3 +3060,31 @@ int req_can_reconstruct(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(req_can_reconstruct);
 
+bool tgt_check_resent(struct ptlrpc_request *req, struct tg_reply_data *trd)
+{
+	struct lsd_reply_data *lrd;
+	bool need_reconstruct = false;
+
+	ENTRY;
+
+	if (likely(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)))
+		return false;
+
+	if (req_can_reconstruct(req, trd)) {
+		lrd = &trd->trd_reply;
+		req->rq_transno = lrd->lrd_transno;
+		req->rq_status = lrd->lrd_result;
+		if (req->rq_status != 0)
+			req->rq_transno = 0;
+		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+		lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+
+		DEBUG_REQ(D_HA, req, "reconstruct resent RPC");
+		need_reconstruct = true;
+	} else {
+		DEBUG_REQ(D_HA, req, "no reply for RESENT req");
+	}
+
+	return need_reconstruct;
+}
+EXPORT_SYMBOL(tgt_check_resent);
