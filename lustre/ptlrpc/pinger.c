@@ -35,6 +35,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/fs_struct.h>
 #include <linux/kthread.h>
 #include <linux/workqueue.h>
 #include <obd_support.h>
@@ -465,6 +466,7 @@ static int ping_evictor_main(void *arg)
 	time64_t expire_time;
 
 	ENTRY;
+	unshare_fs_struct();
 	CDEBUG(D_HA, "Starting Ping Evictor\n");
 	pet_state = PET_READY;
 	while (1) {
