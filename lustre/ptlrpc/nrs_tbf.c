@@ -1760,7 +1760,7 @@ nrs_tbf_expression_free(struct nrs_tbf_expression *expr)
 		nrs_tbf_jobid_list_free(&expr->te_cond);
 		break;
 	case NRS_TBF_FIELD_OPCODE:
-		CFS_FREE_BITMAP(expr->te_opcodes);
+		bitmap_free(expr->te_opcodes);
 		break;
 	case NRS_TBF_FIELD_UID:
 	case NRS_TBF_FIELD_GID:
@@ -1824,7 +1824,7 @@ nrs_tbf_check_field(struct cfs_lstr *field, char *str)
 }
 
 static int
-nrs_tbf_opcode_list_parse(char *str, int len, struct cfs_bitmap **bitmaptr);
+nrs_tbf_opcode_list_parse(char *str, int len, unsigned long **bitmaptr);
 static int
 nrs_tbf_id_list_parse(char *str, int len, struct list_head *id_list,
 		      enum nrs_tbf_flag tif);
@@ -1978,7 +1978,7 @@ nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 	case NRS_TBF_FIELD_JOBID:
 		return nrs_tbf_jobid_list_match(&expr->te_cond, cli->tc_jobid);
 	case NRS_TBF_FIELD_OPCODE:
-		return cfs_bitmap_check(expr->te_opcodes, cli->tc_opcode);
+		return test_bit(cli->tc_opcode, expr->te_opcodes);
 	case NRS_TBF_FIELD_UID:
 	case NRS_TBF_FIELD_GID:
 		return nrs_tbf_id_list_match(&expr->te_cond, cli->tc_id);
@@ -2087,8 +2087,8 @@ static struct nrs_tbf_ops nrs_tbf_generic_ops = {
 
 static void nrs_tbf_opcode_rule_fini(struct nrs_tbf_rule *rule)
 {
-	if (rule->tr_opcodes != NULL)
-		CFS_FREE_BITMAP(rule->tr_opcodes);
+	if (rule->tr_opcodes)
+		bitmap_free(rule->tr_opcodes);
 
 	LASSERT(rule->tr_opcodes_str != NULL);
 	OBD_FREE(rule->tr_opcodes_str, strlen(rule->tr_opcodes_str) + 1);
@@ -2219,7 +2219,7 @@ nrs_tbf_opcode_cli_init(struct nrs_tbf_client *cli,
 
 #define MAX_OPCODE_LEN	32
 static int
-nrs_tbf_opcode_set_bit(const struct cfs_lstr *id, struct cfs_bitmap *opcodes)
+nrs_tbf_opcode_set_bit(const struct cfs_lstr *id, unsigned long *opcodes)
 {
 	int	op = 0;
 	char	opcode_str[MAX_OPCODE_LEN];
@@ -2234,21 +2234,21 @@ nrs_tbf_opcode_set_bit(const struct cfs_lstr *id, struct cfs_bitmap *opcodes)
 	if (op < 0)
 		return -EINVAL;
 
-	cfs_bitmap_set(opcodes, op);
+	set_bit(op, opcodes);
 	return 0;
 }
 
 static int
-nrs_tbf_opcode_list_parse(char *str, int len, struct cfs_bitmap **bitmaptr)
+nrs_tbf_opcode_list_parse(char *str, int len, unsigned long **bitmaptr)
 {
-	struct cfs_bitmap *opcodes;
+	unsigned long *opcodes;
 	struct cfs_lstr src;
 	struct cfs_lstr res;
 	int rc = 0;
-	ENTRY;
 
-	opcodes = CFS_ALLOCATE_BITMAP(LUSTRE_MAX_OPCODES);
-	if (opcodes == NULL)
+	ENTRY;
+	opcodes = bitmap_zalloc(LUSTRE_MAX_OPCODES, GFP_KERNEL);
+	if (!opcodes)
 		return -ENOMEM;
 
 	src.ls_str = str;
@@ -2267,7 +2267,7 @@ nrs_tbf_opcode_list_parse(char *str, int len, struct cfs_bitmap **bitmaptr)
 	if (rc == 0 && bitmaptr)
 		*bitmaptr = opcodes;
 	else
-		CFS_FREE_BITMAP(opcodes);
+		bitmap_free(opcodes);
 
 	RETURN(rc);
 }
@@ -2314,7 +2314,7 @@ nrs_tbf_opcode_rule_match(struct nrs_tbf_rule *rule,
 	if (rule->tr_opcodes == NULL)
 		return 0;
 
-	return cfs_bitmap_check(rule->tr_opcodes, cli->tc_opcode);
+	return test_bit(cli->tc_opcode, rule->tr_opcodes);
 }
 
 static int nrs_tbf_opcode_rule_init(struct ptlrpc_nrs_policy *policy,

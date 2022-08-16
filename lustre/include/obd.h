@@ -41,7 +41,6 @@
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
-#include <libcfs/bitmap.h>
 #ifdef HAVE_SERVER_SUPPORT
 # include <lu_target.h>
 # include <obd_target.h>

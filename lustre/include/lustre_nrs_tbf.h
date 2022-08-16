@@ -161,7 +161,8 @@ struct nrs_tbf_rule {
 	/** uid/gid list string of the rule. */
 	char				*tr_ids_str;
 	/** Opcode bitmap of the rule. */
-	struct cfs_bitmap		*tr_opcodes;
+	unsigned long			*tr_opcodes;
+	u32				tr_opcodes_cnt;
 	/** Opcode list string of the rule.*/
 	char				*tr_opcodes_str;
 	/** Condition list of the rule.*/
@@ -332,7 +333,8 @@ enum nrs_tbf_field {
 struct nrs_tbf_expression {
 	enum nrs_tbf_field	 te_field;
 	struct list_head	 te_cond;
-	struct cfs_bitmap	*te_opcodes;
+	unsigned long		*te_opcodes;
+	u32			 te_opcodes_cnt;
 	struct list_head	 te_linkage;
 };
 
