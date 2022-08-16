@@ -1337,6 +1337,7 @@ EOF
 		if ! $RPMBUILD $BUILD_TYPE \
 			${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
 			${FIND_KSYMS_REQUIRES:+--define "__required_ksyms_requires $FIND_KSYMS_REQUIRES"} \
+			${MOFED_FLAVOR:+--define "flavors_to_build $MOFED_FLAVOR"} \
 			--define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
 			--define "KVERSION ${linuxrelease}" \
 			--define "KMP 1" \

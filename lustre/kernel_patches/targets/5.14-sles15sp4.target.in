@@ -1,6 +1,6 @@
-lnxmaj="5.3"
-lnxmin=".18"
-lnxrel="59.27"
+lnxmaj="5.14"
+lnxmin=".21"
+lnxrel="150400.24.18"
 # use this when there is an "RPM fix" which means that the name of the
 # (source) RPM has been updated but the version of the kernel inside the
 # RPM is not also updated
@@ -17,7 +17,6 @@ EXTRA_VERSION="${lnxmin#.}-${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
 
 OFED_VERSION=inkernel
-MOFED_FLAVOR=default
 
 BASE_ARCHS="i686 ppc x86_64 ia64 ppc64"
 BIGMEM_ARCHS=""

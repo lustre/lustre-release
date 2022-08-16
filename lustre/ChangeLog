@@ -29,7 +29,7 @@ TBD Whamcloud
          5.14.0-70.22.1.el9   (RHEL9.0)
          4.18.0-372.9.1.el8   (RHEL8.6)
          5.4.0-37             (Ubuntu 20.04)
-         5.3.18-59.27         (SLES15 SP3)
+         5.14.21-150400.24.18 (SLES15 SP4)
        * Other clients known to build on these kernels at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
          3.10.0-957.27.2.el7  (RHEL7.6)
@@ -50,6 +50,7 @@ TBD Whamcloud
          4.12.14-122.91       (SLES12 SP5)
          4.12.14-197.75       (SLES15 SP1)
          5.3.18-24.96         (SLES15 SP2)
+         5.3.18-59.27         (SLES15 SP3)
          4.4.0-131            (Ubuntu 16.04)
          4.15.0-48            (Ubuntu 18.04)
          5.8.0-53             (Ubuntu 20.04.2 HWE)

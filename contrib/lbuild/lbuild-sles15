@@ -8,6 +8,7 @@ BUILD_GEN+=".0"
 # This distro does not support zfs, so define WITH_ZFS
 # use words that make the bash log readable.
 WITH_ZFS="Zfs Not Supported"
+SUSE_MACROS=/usr/lib/rpm/macros.d/macros.kernel-source
 
 source ${LBUILD_DIR}/lbuild-sles
 
@@ -28,6 +29,9 @@ kernel_srpm_location() {
             kdir=updates-sles15.3-src
             ;;
         esac
+        ;;
+    5.14)
+        kdir=updates-sles15.4-src
         ;;
     esac
 
@@ -152,6 +156,9 @@ find_linux_rpm-sles15() {
             distro=sles15.3
             ;;
         esac
+        ;;
+    5.14)
+        distro=sles15.4
         ;;
     esac
 
