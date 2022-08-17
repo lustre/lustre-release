@@ -1539,7 +1539,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		/* see comment on LPROC_OFD_STATS_WRITE_BYTES usage above */
 		ofd_counter_incr(exp, LPROC_OFD_STATS_READ_BYTES, jobid, nob);
 		ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid,
-			 ktime_us_delta(ktime_get(), kstart));
+				 ktime_us_delta(ktime_get(), kstart));
 
 		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);

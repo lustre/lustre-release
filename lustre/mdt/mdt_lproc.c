@@ -1659,7 +1659,8 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_FALLOCATE]		= "fallocate",
 };
 
-void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
+void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
+			    enum lprocfs_counter_config cntr_umask)
 {
 	int array_size = ARRAY_SIZE(mdt_stats);
 	int oidx; /* obd_md_stats index */
@@ -1672,10 +1673,13 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
 		if (midx == LPROC_MDT_IO_READ_BYTES ||
 		    midx == LPROC_MDT_IO_WRITE_BYTES)
 			lprocfs_counter_init(stats, oidx,
-					     LPROCFS_TYPE_BYTES_FULL,
+					     LPROCFS_TYPE_BYTES_FULL_HISTOGRAM &
+					     (~cntr_umask),
 					     mdt_stats[midx]);
 		else
-			lprocfs_counter_init(stats, oidx, LPROCFS_TYPE_LATENCY,
+			lprocfs_counter_init(stats, oidx,
+					     LPROCFS_TYPE_LATENCY &
+					     (~cntr_umask),
 					     mdt_stats[midx]);
 	}
 }
@@ -1722,7 +1726,8 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 		return rc;
 
 	/* add additional MDT md_stats after the default ones */
-	mdt_stats_counter_init(obd->obd_md_stats, LPROC_MD_LAST_OPC);
+	mdt_stats_counter_init(obd->obd_md_stats, LPROC_MD_LAST_OPC,
+			       LPROCFS_CNTR_HISTOGRAM);
 	rc = lprocfs_job_stats_init(obd, ARRAY_SIZE(mdt_stats),
 				    mdt_stats_counter_init);
 

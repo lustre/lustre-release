@@ -365,10 +365,13 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 /* lproc_ofd.c */
 int ofd_tunables_init(struct ofd_device *ofd);
 #ifdef CONFIG_PROC_FS
-void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset);
+void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
+			    enum lprocfs_counter_config cntr_umask);
 #else
-static inline void ofd_stats_counter_init(struct lprocfs_stats *stats,
-					  unsigned int offset) {}
+static inline void
+ofd_stats_counter_init(struct lprocfs_stats *stats,
+		       unsigned int offset,
+		       enum lprocfs_counter_config cntr_umask) {}
 #endif
 
 /* ofd_objects.c */

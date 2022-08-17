@@ -260,7 +260,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 		return NULL;
 	}
 
-	jobs->ojs_cntr_init_fn(job->js_stats, 0);
+	jobs->ojs_cntr_init_fn(job->js_stats, 0, 0);
 
 	memcpy(job->js_jobid, jobid, sizeof(job->js_jobid));
 	job->js_time_init = ktime_get();
@@ -444,7 +444,7 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 	int i, joblen = 0;
 
 	if (v == SEQ_START_TOKEN) {
-		seq_printf(p, "job_stats:\n");
+		seq_puts(p, "job_stats:\n");
 		return 0;
 	}
 
@@ -473,6 +473,8 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 
 	s = job->js_stats;
 	for (i = 0; i < s->ls_num; i++) {
+		struct obd_histogram *hist;
+
 		cntr_header = &s->ls_cnt_header[i];
 		lprocfs_stats_collect(s, i, &ret);
 
@@ -494,8 +496,38 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 				   ret.lc_count ? ret.lc_sumsquare : 0);
 		}
 
-		seq_printf(p, " }\n");
+		/* show obd_histogram */
+		hist = s->ls_cnt_header[i].lc_hist;
+		if (hist != NULL) {
+			bool first = true;
+			int j;
 
+			seq_puts(p, ", hist: { ");
+			for (j = 0; j < ARRAY_SIZE(hist->oh_buckets); j++) {
+				unsigned long val = hist->oh_buckets[j];
+
+				if (val == 0)
+					continue;
+				if (first)
+					first = false;
+				else
+					seq_puts(p, ", ");
+
+				if (j < 10)
+					seq_printf(p, "%lu: %lu", BIT(j), val);
+				else if (j < 20)
+					seq_printf(p, "%luK: %lu", BIT(j - 10),
+						   val);
+				else if (j < 30)
+					seq_printf(p, "%luM: %lu", BIT(j - 20),
+						   val);
+				else
+					seq_printf(p, "%luG: %lu", BIT(j - 30),
+						   val);
+			}
+			seq_puts(p, " }");
+		}
+		seq_puts(p, " }\n");
 	}
 
 	return 0;

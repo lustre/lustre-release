@@ -1052,40 +1052,43 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
  *
  * param[in] stats	statistics counters
  */
-void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
+void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
+			    enum lprocfs_counter_config cntr_umask)
 {
 	LASSERT(stats && stats->ls_num >= LPROC_OFD_STATS_LAST);
 
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ_BYTES,
-			     LPROCFS_TYPE_BYTES_FULL, "read_bytes");
+			     LPROCFS_TYPE_BYTES_FULL_HISTOGRAM & (~cntr_umask),
+			     "read_bytes");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE_BYTES,
-			     LPROCFS_TYPE_BYTES_FULL, "write_bytes");
+			     LPROCFS_TYPE_BYTES_FULL_HISTOGRAM & (~cntr_umask),
+			     "write_bytes");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ,
-			     LPROCFS_TYPE_LATENCY, "read");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "read");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE,
-			     LPROCFS_TYPE_LATENCY, "write");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "write");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_GETATTR,
-			     LPROCFS_TYPE_LATENCY, "getattr");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "getattr");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SETATTR,
-			     LPROCFS_TYPE_LATENCY, "setattr");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "setattr");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_PUNCH,
-			     LPROCFS_TYPE_LATENCY, "punch");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "punch");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SYNC,
-			     LPROCFS_TYPE_LATENCY, "sync");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "sync");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_DESTROY,
-			     LPROCFS_TYPE_LATENCY, "destroy");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "destroy");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_CREATE,
-			     LPROCFS_TYPE_LATENCY, "create");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "create");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_STATFS,
-			     LPROCFS_TYPE_LATENCY, "statfs");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "statfs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_GET_INFO,
-			     LPROCFS_TYPE_LATENCY, "get_info");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "get_info");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SET_INFO,
-			     LPROCFS_TYPE_LATENCY, "set_info");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "set_info");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_QUOTACTL,
-			     LPROCFS_TYPE_LATENCY, "quotactl");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "quotactl");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_PREALLOC,
-			     LPROCFS_TYPE_LATENCY, "prealloc");
+			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "prealloc");
 }
 
 LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
@@ -1185,7 +1188,7 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		GOTO(obd_free_stats, rc);
 	}
 
-	ofd_stats_counter_init(obd->obd_stats, 0);
+	ofd_stats_counter_init(obd->obd_stats, 0, LPROCFS_CNTR_HISTOGRAM);
 
 	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
 				    ofd_stats_counter_init);

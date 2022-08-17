@@ -1323,7 +1323,8 @@ enum mdt_stat_idx {
 };
 
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount);
-void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset);
+void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
+			    enum lprocfs_counter_config cntr_umask);
 int mdt_tunables_init(struct mdt_device *mdt, const char *name);
 void mdt_tunables_fini(struct mdt_device *mdt);
 

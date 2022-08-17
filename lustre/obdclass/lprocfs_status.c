@@ -1269,8 +1269,14 @@ void lprocfs_free_stats(struct lprocfs_stats **statsh)
 	for (i = 0; i < num_entry; i++)
 		if (stats->ls_percpu[i])
 			LIBCFS_FREE(stats->ls_percpu[i], percpusize);
-	if (stats->ls_cnt_header)
+
+	if (stats->ls_cnt_header) {
+		for (i = 0; i < stats->ls_num; i++)
+			if (stats->ls_cnt_header[i].lc_hist != NULL)
+				CFS_FREE_PTR(stats->ls_cnt_header[i].lc_hist);
 		CFS_FREE_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
+	}
+
 	LIBCFS_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
 }
 EXPORT_SYMBOL(lprocfs_free_stats);
@@ -1304,12 +1310,19 @@ EXPORT_SYMBOL(lprocfs_stats_collector);
 void lprocfs_clear_stats(struct lprocfs_stats *stats)
 {
 	struct lprocfs_counter *percpu_cntr;
-	int i;
-	int j;
+	int i, j;
 	unsigned int num_entry;
 	unsigned long flags = 0;
 
 	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
+
+	/* clear histogram if exists */
+	for (j = 0; j < stats->ls_num; j++) {
+		struct obd_histogram *hist = stats->ls_cnt_header[j].lc_hist;
+
+		if (hist != NULL)
+			lprocfs_oh_clear(hist);
+	}
 
 	for (i = 0; i < num_entry; i++) {
 		if (!stats->ls_percpu[i])
@@ -1506,6 +1519,14 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 	header->lc_name = name;
 	header->lc_units = units;
 
+	if (config & LPROCFS_CNTR_HISTOGRAM) {
+		CFS_ALLOC_PTR(stats->ls_cnt_header[index].lc_hist);
+		if (stats->ls_cnt_header[index].lc_hist == NULL)
+			CERROR("LprocFS: Failed to allocate histogram:[%d]%s/%s\n",
+			       index, name, units);
+		else
+			spin_lock_init(&stats->ls_cnt_header[index].lc_hist->oh_lock);
+	}
 	num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 	for (i = 0; i < num_cpu; ++i) {
 		if (!stats->ls_percpu[i])

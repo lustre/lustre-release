@@ -42,10 +42,11 @@
 #ifdef CONFIG_PROC_FS
 void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 {
-	struct lprocfs_counter		*percpu_cntr;
-	struct lprocfs_counter_header	*header;
-	int				smp_id;
-	unsigned long			flags = 0;
+	struct lprocfs_counter *percpu_cntr;
+	struct lprocfs_counter_header *header;
+	int smp_id;
+	unsigned long flags = 0;
+	struct obd_histogram *hist;
 
 	if (stats == NULL)
 		return;
@@ -87,6 +88,18 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 		if (amount > percpu_cntr->lc_max)
 			percpu_cntr->lc_max = amount;
 	}
+	/* no counter in interrupt has historgram for now */
+	hist = stats->ls_cnt_header[idx].lc_hist;
+	if (hist != NULL) {
+		unsigned int val = 0;
+
+		if (likely(amount != 0))
+			val = min(fls(amount - 1), OBD_HIST_MAX - 1);
+		spin_lock(&hist->oh_lock);
+		hist->oh_buckets[val]++;
+		spin_unlock(&hist->oh_lock);
+	}
+
 	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_add);

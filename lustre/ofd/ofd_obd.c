@@ -93,7 +93,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
-	ofd_stats_counter_init(stats->nid_stats, 0);
+	ofd_stats_counter_init(stats->nid_stats, 0, LPROCFS_CNTR_HISTOGRAM);
 
 	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
 	if (rc != 0) {
