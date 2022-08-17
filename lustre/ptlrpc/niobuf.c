@@ -104,15 +104,12 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 	RETURN(0);
 }
 
-#define mdunlink_iterate_helper(mds, count) \
-		__mdunlink_iterate_helper(mds, count, false)
-static void __mdunlink_iterate_helper(struct lnet_handle_md *bd_mds,
-				      int count, bool discard)
+static void mdunlink_iterate_helper(struct lnet_handle_md *bd_mds, int count)
 {
 	int i;
 
 	for (i = 0; i < count; i++)
-		__LNetMDUnlink(bd_mds[i], discard);
+		LNetMDUnlink(bd_mds[i]);
 }
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -289,7 +286,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 	 * but we must still wait_event_idle_timeout() in this case, to give
 	 * us a chance to run server_bulk_callback()
 	 */
-	__mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw, true);
+	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 
 	for (;;) {
 		/* Network access will complete in finite time but the HUGE

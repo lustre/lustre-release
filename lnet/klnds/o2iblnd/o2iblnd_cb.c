@@ -2280,10 +2280,6 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 		if (tx->tx_sending == 0) {
 			tx->tx_queued = 0;
 			list_move(&tx->tx_list, &zombies);
-		} else {
-			/* keep tx until cq destroy */
-			list_move(&tx->tx_list, &conn->ibc_zombie_txs);
-			conn->ibc_waits++;
 		}
 	}
 
@@ -2296,31 +2292,6 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 	 * override the value already set in tx->tx_hstatus above.
 	 */
 	kiblnd_txlist_done(&zombies, -ECONNABORTED, LNET_MSG_STATUS_OK);
-}
-
-static bool
-kiblnd_tx_may_discard(struct kib_conn *conn)
-{
-	bool rc = false;
-	struct kib_tx *nxt;
-	struct kib_tx *tx;
-
-	spin_lock(&conn->ibc_lock);
-
-	list_for_each_entry_safe(tx, nxt, &conn->ibc_zombie_txs, tx_list) {
-		if (tx->tx_sending > 0 && tx->tx_lntmsg[0] &&
-		    lnet_md_discarded(tx->tx_lntmsg[0]->msg_md)) {
-			tx->tx_sending--;
-			if (tx->tx_sending == 0) {
-				kiblnd_conn_decref(tx->tx_conn);
-				tx->tx_conn = NULL;
-				rc = true;
-			}
-		}
-	}
-
-	spin_unlock(&conn->ibc_lock);
-	return rc;
 }
 
 static void
@@ -3593,9 +3564,8 @@ kiblnd_check_txs_locked(struct kib_conn *conn, struct list_head *txs)
 		}
 
 		if (ktime_compare(ktime_get(), tx->tx_deadline) >= 0) {
-			CERROR("Timed out tx: %s(WSQ:%d%d%d), %lld seconds\n",
+			CERROR("Timed out tx: %s, %lld seconds\n",
 			       kiblnd_queue2str(conn, txs),
-			       tx->tx_waiting, tx->tx_sending, tx->tx_queued,
 			       kiblnd_timeout() +
 			       ktime_ms_delta(ktime_get(),
 					      tx->tx_deadline) / MSEC_PER_SEC);
@@ -3827,23 +3797,15 @@ kiblnd_connd(void *arg)
 		conn = list_first_entry_or_null(&kiblnd_data.kib_connd_conns,
 						struct kib_conn, ibc_list);
 		if (conn) {
-			int wait;
-
 			list_del(&conn->ibc_list);
 
 			spin_unlock_irqrestore(lock, flags);
 			dropped_lock = true;
 
 			kiblnd_disconnect_conn(conn);
-			wait = conn->ibc_waits;
-			if (wait == 0) /* keep ref for connd_wait, see below */
-				kiblnd_conn_decref(conn);
+			kiblnd_conn_decref(conn);
 
 			spin_lock_irqsave(lock, flags);
-
-			if (wait)
-				list_add_tail(&conn->ibc_list,
-					      &kiblnd_data.kib_connd_waits);
 		}
 
 		while (reconn < KIB_RECONN_BREAK) {
@@ -3870,22 +3832,6 @@ kiblnd_connd(void *arg)
 			LIBCFS_FREE(conn, sizeof(*conn));
 
 			spin_lock_irqsave(lock, flags);
-		}
-
-		conn = list_first_entry_or_null(&kiblnd_data.kib_connd_waits,
-						struct kib_conn, ibc_list);
-		if (conn) {
-			list_del(&conn->ibc_list);
-			spin_unlock_irqrestore(lock, flags);
-
-			dropped_lock = kiblnd_tx_may_discard(conn);
-			if (dropped_lock)
-				kiblnd_conn_decref(conn);
-
-			spin_lock_irqsave(lock, flags);
-			if (!dropped_lock)
-				list_add_tail(&conn->ibc_list,
-					      &kiblnd_data.kib_connd_waits);
 		}
 
 		/* careful with the jiffy wrap... */

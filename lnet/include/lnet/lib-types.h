@@ -213,7 +213,6 @@ struct lnet_libmd {
  * call.
  */
 #define LNET_MD_FLAG_HANDLING	 BIT(3)
-#define LNET_MD_FLAG_DISCARD	 BIT(4)
 #define LNET_MD_FLAG_GPU	 BIT(5) /**< Special mapping needs */
 
 static inline bool lnet_md_is_gpu(struct lnet_libmd *md)
