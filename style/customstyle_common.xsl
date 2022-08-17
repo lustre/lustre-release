@@ -104,6 +104,18 @@
 				<xsl:with-param name='content' select="$content"/>
 			</xsl:call-template>
 		</xsl:when>
+		<xsl:when test="@condition = 'l2H'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.17'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l2I'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.18'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
 		<xsl:when test="@condition != ''">
 			<xsl:call-template name='textdecoration-1'>
 				<xsl:with-param name='version' select="'Introduced before Lustre 2.5'"/>
@@ -208,6 +220,15 @@
 		</xsl:when>
 		<xsl:when test="$condition = 'l2G'">
 			<span class='floatright'>L 2.16 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2G'">
+			<span class='floatright'>L 2.16 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2H'">
+			<span class='floatright'>L 2.17 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2I'">
+			<span class='floatright'>L 2.18 </span>
 		</xsl:when>
 		<xsl:when test="$condition != ''">
 			<span class='floatright'>L ?.? </span>

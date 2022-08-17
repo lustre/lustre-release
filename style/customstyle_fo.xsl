@@ -158,6 +158,8 @@
 			<xsl:when test="@condition = 'l2E'">Introduced in Lustre 2.14</xsl:when>
 			<xsl:when test="@condition = 'l2F'">Introduced in Lustre 2.15</xsl:when>
 			<xsl:when test="@condition = 'l2G'">Introduced in Lustre 2.16</xsl:when>
+			<xsl:when test="@condition = 'l2H'">Introduced in Lustre 2.17</xsl:when>
+			<xsl:when test="@condition = 'l2I'">Introduced in Lustre 2.18</xsl:when>
 			<xsl:otherwise>Introduced in before Lustre 2.5</xsl:otherwise>
 		</xsl:choose>
 	</xsl:variable>
@@ -200,6 +202,8 @@
 			<xsl:when test="@condition='l2E'">L 2.14</xsl:when>
 			<xsl:when test="@condition='l2F'">L 2.15</xsl:when>
 			<xsl:when test="@condition='l2G'">L 2.16</xsl:when>
+			<xsl:when test="@condition='l2H'">L 2.17</xsl:when>
+			<xsl:when test="@condition='l2I'">L 2.18</xsl:when>
 			<xsl:otherwise></xsl:otherwise>
 		</xsl:choose>
 	</xsl:variable>
