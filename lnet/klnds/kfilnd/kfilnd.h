@@ -481,11 +481,12 @@ struct kfilnd_msg {
 	!IS_ERR_OR_NULL((tn)->tn_kp)
 
 #define KFILND_TN_DIR_DEBUG(tn, fmt, dir, ...) \
-	CDEBUG(D_NET, "Transaction ID %p: %s:%u %s %s:%llu " fmt "\n", \
+	CDEBUG(D_NET, "%s Transaction ID %p: %s:%u %s %s(%p):0x%llx " fmt "\n", \
+	       msg_type_to_str(tn->msg_type), \
 	       (tn), \
 	       libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
 	       (tn)->tn_ep->end_context_id, dir, \
-	       libcfs_nid2str((tn)->tn_kp->kp_nid), \
+	       libcfs_nid2str((tn)->tn_kp->kp_nid), tn->tn_kp, \
 	       KFILND_TN_PEER_VALID(tn) ? \
 		KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr) : 0, \
 	       ##__VA_ARGS__)
@@ -499,11 +500,11 @@ struct kfilnd_msg {
 	} while (0)
 
 #define KFILND_TN_DIR_ERROR(tn, fmt, dir, ...) \
-	CNETERR("Transaction ID %p: %s:%u %s %s:%llu " fmt "\n", \
+	CNETERR("Transaction ID %p: %s:%u %s %s(%p):0x%llx " fmt "\n", \
 		(tn), \
 		libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
 		(tn)->tn_ep->end_context_id, dir, \
-		libcfs_nid2str((tn)->tn_kp->kp_nid), \
+		libcfs_nid2str((tn)->tn_kp->kp_nid), tn->tn_kp, \
 		KFILND_TN_PEER_VALID(tn) ? \
 			KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr) : 0, \
 		##__VA_ARGS__)
