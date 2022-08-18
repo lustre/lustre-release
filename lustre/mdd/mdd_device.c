@@ -72,6 +72,25 @@ static struct lu_kmem_descr mdd_caches[] = {
 	}
 };
 
+/**
+ * Mod params for the fs-wide (stored in ROOT) default dir layout,
+ * to be set and stored in EA, if EA is absent yet:
+ *
+ * stripe_offset, max_inherit, max_inherit_rr, see lfs setdirstripe for more
+ * details.
+ */
+static unsigned int root_stripe_offset = LMV_OFFSET_DEFAULT;
+module_param(root_stripe_offset, uint, 0444);
+MODULE_PARM_DESC(root_stripe_offset, "fs-wide default LMV stripe offset");
+
+static unsigned int root_max_inherit = LMV_INHERIT_UNLIMITED;
+module_param(root_max_inherit, uint, 0444);
+MODULE_PARM_DESC(root_max_inherit, "fs-wide default LMV max_inherit");
+
+static unsigned int root_max_inherit_rr = LMV_INHERIT_RR_ROOT;
+module_param(root_max_inherit_rr, uint, 0444);
+MODULE_PARM_DESC(root_max_inherit_rr, "fs-wide default LMV max_inherit_rr");
+
 static int mdd_connect_to_next(const struct lu_env *env, struct mdd_device *m,
 			       const char *nextdev)
 {
@@ -1328,9 +1347,9 @@ static int mdd_prepare(const struct lu_env *env,
 			struct lmv_user_md lmv_default = {
 				.lum_magic		= LMV_USER_MAGIC,
 				.lum_stripe_count	= 1,
-				.lum_stripe_offset	= LMV_OFFSET_DEFAULT,
-				.lum_max_inherit	= LMV_INHERIT_UNLIMITED,
-				.lum_max_inherit_rr	= LMV_INHERIT_RR_ROOT,
+				.lum_stripe_offset	= root_stripe_offset,
+				.lum_max_inherit	= root_max_inherit,
+				.lum_max_inherit_rr	= root_max_inherit_rr,
 			};
 
 			th = dt_trans_create(env, mdd->mdd_bottom);
