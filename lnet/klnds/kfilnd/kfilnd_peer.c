@@ -172,7 +172,9 @@ again:
 	kp->kp_nid = nid;
 	atomic_set(&kp->kp_rx_base, 0);
 	atomic_set(&kp->kp_remove_peer, 0);
+	atomic_set(&kp->kp_hello_pending, 0);
 	kp->kp_local_session_key = kfilnd_dev_get_session_key(dev);
+	kp->kp_hello_ts = ktime_get_seconds();
 
 	/* One reference for the allocation and another for get operation
 	 * performed for this peer. The allocation reference is returned when
@@ -234,20 +236,6 @@ kfi_addr_t kfilnd_peer_get_kfi_addr(struct kfilnd_peer *kp)
 }
 
 /**
- * kfilnd_peer_update_rx_contexts() - Update the RX context for a peer.
- * @kp: Peer to be updated.
- * @rx_base: New RX base for peer.
- * @rx_count: New RX count for peer.
- */
-void kfilnd_peer_update_rx_contexts(struct kfilnd_peer *kp,
-				    unsigned int rx_base, unsigned int rx_count)
-{
-	/* TODO: Support RX count. */
-	LASSERT(rx_count > 0);
-	atomic_set(&kp->kp_rx_base, rx_base);
-}
-
-/**
  * kfilnd_peer_alive() - Update when the peer was last alive.
  * @kp: Peer to be updated.
  */
@@ -275,4 +263,38 @@ void kfilnd_peer_destroy(struct kfilnd_dev *dev)
 void kfilnd_peer_init(struct kfilnd_dev *dev)
 {
 	rhashtable_init(&dev->peer_cache, &peer_cache_params);
+}
+
+void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
+{
+	/* TODO: Support RX count. */
+	LASSERT(msg->proto.hello.rx_count > 0);
+	atomic_set(&kp->kp_rx_base, msg->proto.hello.rx_base);
+
+	kp->kp_remote_session_key = msg->proto.hello.session_key;
+
+	/* If processing an incoming hello request, then negotiate kfilnd
+	 * version to the minimum implemented kfilnd version.
+	 */
+	if (msg->type == KFILND_MSG_HELLO_REQ) {
+		kp->kp_version = min_t(__u16, KFILND_MSG_VERSION,
+				       msg->proto.hello.version);
+		CDEBUG(D_NET,
+		       "Peer %s(%p):0x%llx version: %u; local version %u; negotiated version: %u\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
+		       msg->proto.hello.version, KFILND_MSG_VERSION,
+		       kp->kp_version);
+	} else {
+		kp->kp_version = msg->proto.hello.version;
+		CDEBUG(D_NET,"Peer %s(%p):0x%llx negotiated version: %u\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
+		       msg->proto.hello.version);
+	}
+
+	/* Clear kp_hello_pending if we've received the hello response,
+	 * otherwise this is an incoming hello request and we may have our
+	 * own hello request to this peer still outstanding
+	 */
+	if (msg->type == KFILND_MSG_HELLO_RSP)
+		kfilnd_peer_clear_hello_pending(kp);
 }

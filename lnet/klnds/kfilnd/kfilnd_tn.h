@@ -40,6 +40,12 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 					   lnet_nid_t target_nid,
 					   bool alloc_msg, bool is_initiator,
 					   bool key);
+struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
+						    int cpt,
+						    struct kfilnd_peer *kp,
+						    bool alloc_msg,
+						    bool is_initiator,
+						    bool key);
 void kfilnd_tn_event_handler(struct kfilnd_transaction *tn,
 			     enum tn_events event, int status);
 void kfilnd_tn_cleanup(void);

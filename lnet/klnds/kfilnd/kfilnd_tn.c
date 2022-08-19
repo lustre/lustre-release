@@ -681,6 +681,8 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 					"Failed to post send to %s(%#llx): rc=%d",
 					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr, rc);
+			if (event == TN_EVENT_TX_HELLO)
+				kfilnd_peer_clear_hello_pending(tn->tn_kp);
 			kfilnd_tn_status_update(tn, rc,
 						LNET_MSG_STATUS_LOCAL_ERROR);
 		}
@@ -718,23 +720,21 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		break;
 
 	case TN_EVENT_RX_OK:
-		/* If TN_EVENT_RX_OK occurs on a new peer, this is a sign of a
-		 * peer having a stale peer structure. Stale peer structures
-		 * requires dropping the incoming message and initiating a hello
-		 * handshake.
-		 */
-		if (kfilnd_peer_is_new_peer(tn->tn_kp)) {
+		if (kfilnd_peer_needs_hello(tn->tn_kp)) {
 			rc = kfilnd_send_hello_request(tn->tn_ep->end_dev,
 						       tn->tn_ep->end_cpt,
-						       tn->tn_kp->kp_nid);
+						       tn->tn_kp);
 			if (rc)
 				KFILND_TN_ERROR(tn,
 						"Failed to send hello request: rc=%d",
 						rc);
+			rc = 0;
+		}
 
-			/* Need to drop this message since it is uses stale
-			 * peer.
-			 */
+		/* If this is a new peer then we cannot progress the transaction
+		 * and must drop it
+		 */
+		if (kfilnd_peer_is_new_peer(tn->tn_kp)) {
 			KFILND_TN_ERROR(tn,
 					"Dropping message from %s due to stale peer",
 					libcfs_nid2str(tn->tn_kp->kp_nid));
@@ -787,24 +787,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 
 		switch (msg->type) {
 		case KFILND_MSG_HELLO_REQ:
-			kfilnd_peer_update_rx_contexts(tn->tn_kp,
-						       msg->proto.hello.rx_base,
-						       msg->proto.hello.rx_count);
-			kfilnd_peer_set_remote_session_key(tn->tn_kp,
-							   msg->proto.hello.session_key);
-
-			/* Negotiate kfilnd version used between peers. Fallback
-			 * to the minimum implemented kfilnd version.
-			 */
-			kfilnd_peer_set_version(tn->tn_kp,
-						min_t(__u16, KFILND_MSG_VERSION,
-						    msg->proto.hello.version));
-			KFILND_TN_DEBUG(tn,
-					"Peer kfilnd version: %u; Local kfilnd version: %u; Negotiated kfilnd verions: %u",
-					msg->proto.hello.version,
-					KFILND_MSG_VERSION,
-					tn->tn_kp->kp_version);
-
+			kfilnd_peer_process_hello(tn->tn_kp, msg);
 			tn->tn_target_addr = kfilnd_peer_get_kfi_addr(tn->tn_kp);
 			KFILND_TN_DEBUG(tn, "Using peer %s(%#llx)",
 					libcfs_nid2str(tn->tn_kp->kp_nid),
@@ -837,15 +820,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 
 		case KFILND_MSG_HELLO_RSP:
 			rc = 0;
-			kfilnd_peer_update_rx_contexts(tn->tn_kp,
-						       msg->proto.hello.rx_base,
-						       msg->proto.hello.rx_count);
-			kfilnd_peer_set_remote_session_key(tn->tn_kp,
-							   msg->proto.hello.session_key);
-			kfilnd_peer_set_version(tn->tn_kp,
-						msg->proto.hello.version);
-			KFILND_TN_DEBUG(tn, "Negotiated kfilnd version: %u",
-					msg->proto.hello.version);
+			kfilnd_peer_process_hello(tn->tn_kp, msg);
 			finalize = true;
 			break;
 
@@ -889,6 +864,8 @@ static int kfilnd_tn_state_imm_send(struct kfilnd_transaction *tn,
 
 		kfilnd_tn_status_update(tn, status, hstatus);
 		kfilnd_peer_down(tn->tn_kp);
+		if (tn->msg_type == KFILND_MSG_HELLO_REQ)
+			kfilnd_peer_clear_hello_pending(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TX_OK:
@@ -1425,6 +1402,45 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 					   bool key)
 {
 	struct kfilnd_transaction *tn;
+	struct kfilnd_peer *kp;
+	int rc;
+
+	if (!dev) {
+		rc = -EINVAL;
+		goto err;
+	}
+
+	kp = kfilnd_peer_get(dev, target_nid);
+	if (IS_ERR(kp)) {
+		rc = PTR_ERR(kp);
+		goto err;
+	}
+
+	tn = kfilnd_tn_alloc_for_peer(dev, cpt, kp, alloc_msg, is_initiator,
+				      key);
+	if (IS_ERR(tn)) {
+		rc = PTR_ERR(tn);
+		kfilnd_peer_put(kp);
+		goto err;
+	}
+
+	return tn;
+
+err:
+	return ERR_PTR(rc);
+}
+
+/* See kfilnd_tn_alloc()
+ * Note: Caller must have a reference on @kp
+ */
+struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
+						    int cpt,
+						    struct kfilnd_peer *kp,
+						    bool alloc_msg,
+						    bool is_initiator,
+						    bool key)
+{
+	struct kfilnd_transaction *tn;
 	struct kfilnd_ep *ep;
 	int rc;
 	ktime_t tn_alloc_ts;
@@ -1467,11 +1483,8 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 		tn->tn_mr_key = rc;
 	}
 
-	tn->tn_kp = kfilnd_peer_get(dev, target_nid);
-	if (IS_ERR(tn->tn_kp)) {
-		rc = PTR_ERR(tn->tn_kp);
-		goto err_put_mr_key;
-	}
+	tn->tn_kp = kp;
+	refcount_inc(&kp->kp_cnt);
 
 	mutex_init(&tn->tn_lock);
 	tn->tn_ep = ep;
@@ -1496,9 +1509,6 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 
 	return tn;
 
-err_put_mr_key:
-	if (key)
-		kfilnd_ep_put_key(ep, tn->tn_mr_key);
 err_free_tn:
 	if (tn->tn_tx_msg.msg)
 		kmem_cache_free(imm_buf_cache, tn->tn_tx_msg.msg);

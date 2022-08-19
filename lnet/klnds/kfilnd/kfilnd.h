@@ -234,23 +234,53 @@ struct kfilnd_peer {
 	u16 kp_version;
 	u32 kp_local_session_key;
 	u32 kp_remote_session_key;
+	atomic_t kp_hello_pending;
+	time64_t kp_hello_ts;
 };
+
+/* Sets kp_hello_sending
+ * Returns true if it was already set
+ * Returns false otherwise
+ */
+static inline bool kfilnd_peer_set_check_hello_pending(struct kfilnd_peer *kp)
+{
+	return (atomic_cmpxchg(&kp->kp_hello_pending, 0, 1) == 1);
+}
+
+static inline void kfilnd_peer_clear_hello_pending(struct kfilnd_peer *kp)
+{
+	atomic_set(&kp->kp_hello_pending, 0);
+}
 
 static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 {
 	return kp->kp_version == 0;
 }
 
-static inline void kfilnd_peer_set_version(struct kfilnd_peer *kp,
-					   u16 version)
+/* Peer needs hello if it is not up to date and there is not already a hello
+ * in flight.
+ *
+ * If hello was sent more than LND timeout seconds ago, and we never received a
+ * response, then send another one.
+ */
+static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp)
 {
-	kp->kp_version = version;
-}
+	if (atomic_read(&kp->kp_hello_pending) == 0) {
+		if (kfilnd_peer_is_new_peer(kp))
+			return true;
+	} else if (ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
+				ktime_get_seconds())) {
+		/* Sent hello but never received reply */
+		CDEBUG(D_NET,
+		       "No response from %s(%p):0x%llx after %lld\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
+		       ktime_sub(ktime_get_seconds(), kp->kp_hello_ts));
 
-static inline void kfilnd_peer_set_remote_session_key(struct kfilnd_peer *kp,
-						      u32 session_key)
-{
-	kp->kp_remote_session_key = session_key;
+		kfilnd_peer_clear_hello_pending(kp);
+		return true;
+	}
+
+	return false;
 }
 
 struct kfilnd_fab {
@@ -700,6 +730,7 @@ struct kfilnd_transaction {
 	enum kfilnd_msg_type msg_type;
 };
 
-int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt, lnet_nid_t nid);
+int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
+			      struct kfilnd_peer *kp);
 
 #endif /* _KFILND_ */

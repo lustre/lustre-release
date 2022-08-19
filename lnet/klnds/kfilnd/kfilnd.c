@@ -65,17 +65,29 @@ static int kfilnd_send_cpt(struct kfilnd_dev *dev, lnet_nid_t nid)
 	return  dev->kfd_endpoints[nid % dev->kfd_ni->ni_ncpts]->end_cpt;
 }
 
-int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt, lnet_nid_t nid)
+int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
+			      struct kfilnd_peer *kp)
 {
 	struct kfilnd_transaction *tn;
 	int rc;
 
-	tn = kfilnd_tn_alloc(dev, cpt, nid, true, true, false);
+	if (kfilnd_peer_set_check_hello_pending(kp)) {
+		CDEBUG(D_NET, "Hello already pending to peer %s(%px)\n",
+		       libcfs_nid2str(kp->kp_nid), kp);
+		return 0;
+	}
+
+	tn = kfilnd_tn_alloc_for_peer(dev, cpt, kp, true, true, false);
 	if (IS_ERR(tn)) {
 		rc = PTR_ERR(tn);
 		CERROR("Failed to allocate transaction struct: rc=%d\n", rc);
+		kfilnd_peer_clear_hello_pending(kp);
 		return rc;
 	}
+
+	tn->msg_type = KFILND_MSG_HELLO_REQ;
+
+	kp->kp_hello_ts = ktime_get_seconds();
 
 	kfilnd_tn_event_handler(tn, TN_EVENT_TX_HELLO, 0);
 
@@ -147,12 +159,11 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		return rc;
 	}
 
-	/* Need to fire off special transaction if this is a new peer. */
-	if (kfilnd_peer_is_new_peer(tn->tn_kp)) {
-		rc = kfilnd_send_hello_request(dev, cpt, tgt_nid4);
+	if (kfilnd_peer_needs_hello(tn->tn_kp)) {
+		rc = kfilnd_send_hello_request(dev, cpt, tn->tn_kp);
 		if (rc) {
 			kfilnd_tn_free(tn);
-			return 0;
+			return rc;
 		}
 	}
 
