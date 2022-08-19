@@ -209,7 +209,15 @@ struct lsd_client_data {
  * The lrd_client_gen field is assigned with lcd_generation value
  * to allow identify which client the reply data belongs to.
  */
-struct lsd_reply_data {
+struct lsd_reply_data_v1 {
+	__u64 lrd_transno;	/* transaction number */
+	__u64 lrd_xid;		/* transmission id */
+	__u64 lrd_data;		/* per-operation data */
+	__u32 lrd_result;	/* request result */
+	__u32 lrd_client_gen;	/* client generation */
+};
+
+struct lsd_reply_data_v2 {
 	__u64 lrd_transno;	/* transaction number */
 	__u64 lrd_xid;		/* transmission id */
 	__u64 lrd_data;		/* per-operation data */
@@ -219,13 +227,19 @@ struct lsd_reply_data {
 	__u32 lrd_padding[7];	/* unused fields, total size is 8X __u64 */
 };
 
+#define lsd_reply_data lsd_reply_data_v2
+
 /* Header of the reply_data file */
-#define LRH_MAGIC 0xbdabda01
+#define LRH_MAGIC_V1		0xbdabda01
+#define LRH_MAGIC_V2		0xbdabda02
+#define LRH_MAGIC		LRH_MAGIC_V2
+
+/* Don't change the header size for compatibility. */
 struct lsd_reply_header {
 	__u32	lrh_magic;
 	__u32	lrh_header_size;
 	__u32	lrh_reply_size;
-	__u8	lrh_pad[sizeof(struct lsd_reply_data) - 12];
+	__u8	lrh_pad[sizeof(struct lsd_reply_data_v1) - 12];
 };
 
 /** @} disk */

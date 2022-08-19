@@ -255,6 +255,7 @@ int print_reply_data(FILE *fp)
 {
 	struct lsd_reply_header lrh = {};
 	unsigned long long slot;
+	__u32 recsz;
 	int rc = 0;
 	int n;
 
@@ -271,12 +272,6 @@ int print_reply_data(FILE *fp)
 	lrh.lrh_magic = __le32_to_cpu(lrh.lrh_magic);
 	lrh.lrh_header_size = __le32_to_cpu(lrh.lrh_header_size);
 	lrh.lrh_reply_size = __le32_to_cpu(lrh.lrh_reply_size);
-	if (lrh.lrh_magic != LRH_MAGIC) {
-		fprintf(stderr,
-			"%s: invalid %s header: lrh_magic=0x%08x expected 0x%08x\n",
-			progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC);
-		rc = EINVAL;
-	}
 	if (lrh.lrh_header_size != sizeof(struct lsd_reply_header)) {
 		fprintf(stderr,
 			"%s: invalid %s header: lrh_header_size=0x%08x expected 0x%08x\n",
@@ -284,11 +279,31 @@ int print_reply_data(FILE *fp)
 			(unsigned int)sizeof(struct lsd_reply_header));
 		rc = EINVAL;
 	}
-	if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data)) {
+	if (lrh.lrh_magic == LRH_MAGIC) {
+		if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data)) {
+			fprintf(stderr,
+				"%s: invalid %s header: lrh_reply_size=0x%08x expected 0x%08x\n",
+				progname, REPLY_DATA, lrh.lrh_reply_size,
+				(unsigned int)sizeof(struct lsd_reply_data));
+			rc = EINVAL;
+		} else {
+			recsz = sizeof(struct lsd_reply_data);
+		}
+	} else if (lrh.lrh_magic == LRH_MAGIC_V1) {
+		if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data_v1)) {
+			fprintf(stderr,
+				"%s: invalid %s header: lrh_reply_size=0x%08x expected 0x%08x\n",
+				progname, REPLY_DATA, lrh.lrh_reply_size,
+				(unsigned int)sizeof(struct lsd_reply_data));
+			rc = EINVAL;
+		} else {
+			recsz = sizeof(struct lsd_reply_data_v1);
+		}
+	} else {
 		fprintf(stderr,
-			"%s: invalid %s header: lrh_reply_size=0x%08x expected 0x%08x\n",
-			progname, REPLY_DATA, lrh.lrh_reply_size,
-			(unsigned int)sizeof(struct lsd_reply_data));
+			"%s: invalid %s header: lrh_magic=0x%08x expected 0x%08x or 0x%08x\n",
+			progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC,
+			LRH_MAGIC_V1);
 		rc = EINVAL;
 	}
 
@@ -306,8 +321,8 @@ int print_reply_data(FILE *fp)
 		struct lsd_reply_data lrd;
 
 		/* read a reply data */
-		n = fread(&lrd, 1, sizeof(lrd), fp);
-		if (n < sizeof(lrd)) {
+		n = fread(&lrd, 1, recsz, fp);
+		if (n < recsz) {
 			if (feof(fp))
 				break;
 			fprintf(stderr, "%s: Short read (%d of %d)\n",
@@ -322,6 +337,9 @@ int print_reply_data(FILE *fp)
 		lrd.lrd_result = __le32_to_cpu(lrd.lrd_result);
 		lrd.lrd_client_gen = __le32_to_cpu(lrd.lrd_client_gen);
 
+		if (lrh.lrh_magic == LRH_MAGIC)
+			lrd.lrd_batch_idx = __le32_to_cpu(lrd.lrd_batch_idx);
+
 		printf("  %lld:\n", slot);
 		printf("    client_generation: %u\n",
 		       lrd.lrd_client_gen);
@@ -332,6 +350,8 @@ int print_reply_data(FILE *fp)
 		printf("    last_result: %u\n", lrd.lrd_result);
 		printf("    last_data: %llu\n\n",
 		       (unsigned long long)lrd.lrd_data);
+		if (lrh.lrh_magic == LRH_MAGIC)
+			printf("    batch_idx: %u\n", lrd.lrd_batch_idx);
 	}
 
 	return 0;

@@ -287,30 +287,41 @@ static int tgt_reply_data_write(const struct lu_env *env, struct lu_target *tgt,
  * into structure @lrd
  */
 static int tgt_reply_data_read(const struct lu_env *env, struct lu_target *tgt,
-			       struct lsd_reply_data *lrd, loff_t off)
+			       struct lsd_reply_data *lrd, loff_t off,
+			       __u32 magic)
 {
-	int			 rc;
-	struct tgt_thread_info	*tti = tgt_th_info(env);
-	struct lsd_reply_data	*buf = &tti->tti_lrd;
+	struct tgt_thread_info *tti = tgt_th_info(env);
+	struct lsd_reply_data *buf = &tti->tti_lrd;
+	int rc;
 
 	tti->tti_off = off;
 	tti->tti_buf.lb_buf = buf;
-	tti->tti_buf.lb_len = sizeof(*buf);
+
+	if (magic == LRH_MAGIC)
+		tti->tti_buf.lb_len = sizeof(*buf);
+	else if (magic == LRH_MAGIC_V1)
+		tti->tti_buf.lb_len = sizeof(struct lsd_reply_data_v1);
+	else
+		return -EINVAL;
 
 	rc = dt_record_read(env, tgt->lut_reply_data, &tti->tti_buf,
 			    &tti->tti_off);
 	if (rc != 0)
 		return rc;
 
-	lrd->lrd_transno	 = le64_to_cpu(buf->lrd_transno);
-	lrd->lrd_xid		 = le64_to_cpu(buf->lrd_xid);
-	lrd->lrd_data		 = le64_to_cpu(buf->lrd_data);
-	lrd->lrd_result		 = le32_to_cpu(buf->lrd_result);
-	lrd->lrd_client_gen	 = le32_to_cpu(buf->lrd_client_gen);
-	lrd->lrd_batch_idx	 = le32_to_cpu(buf->lrd_batch_idx);
+	lrd->lrd_transno = le64_to_cpu(buf->lrd_transno);
+	lrd->lrd_xid = le64_to_cpu(buf->lrd_xid);
+	lrd->lrd_data = le64_to_cpu(buf->lrd_data);
+	lrd->lrd_result = le32_to_cpu(buf->lrd_result);
+	lrd->lrd_client_gen = le32_to_cpu(buf->lrd_client_gen);
+
+	if (magic == LRH_MAGIC)
+		lrd->lrd_batch_idx = le32_to_cpu(buf->lrd_batch_idx);
+	else
+		lrd->lrd_batch_idx = 0;
+
 	return 0;
 }
-
 
 /* Free the in-memory reply data structure @trd and release
  * the corresponding slot in the reply_data file of target @lut
@@ -740,10 +751,9 @@ out:
 }
 EXPORT_SYMBOL(tgt_server_data_update);
 
-static int tgt_truncate_last_rcvd(const struct lu_env *env,
-				  struct lu_target *tgt, loff_t size)
+static int tgt_truncate_object(const struct lu_env *env, struct lu_target *tgt,
+			       struct dt_object *dt, loff_t size)
 {
-	struct dt_object *dt = tgt->lut_last_rcvd;
 	struct thandle	 *th;
 	struct lu_attr	  attr;
 	int		  rc;
@@ -791,6 +801,48 @@ static void tgt_client_epoch_update(const struct lu_env *env,
 		return;
 	lcd->lcd_last_epoch = tgt->lut_lsd.lsd_start_epoch;
 	tgt_client_data_update(env, exp);
+}
+
+static int tgt_reply_data_upgrade_check(const struct lu_env *env,
+					struct lu_target *tgt)
+{
+	struct lsd_reply_header lrh;
+	int rc;
+
+	/*
+	 * Reply data is supported by MDT targets only for now.
+	 * When reply data object @lut_reply_data is NULL, it indicates the
+	 * target type is OST and it should skip the upgrade check.
+	 */
+	if (tgt->lut_reply_data == NULL)
+		RETURN(0);
+
+	rc = tgt_reply_header_read(env, tgt, &lrh);
+	if (rc) {
+		CERROR("%s: failed to read %s: rc = %d\n",
+		       tgt_name(tgt), REPLY_DATA, rc);
+		RETURN(rc);
+	}
+
+	if (lrh.lrh_magic == LRH_MAGIC)
+		RETURN(0);
+
+	rc = tgt_truncate_object(env, tgt, tgt->lut_reply_data, 0);
+	if (rc) {
+		CERROR("%s: failed to truncate %s: rc = %d\n",
+		       tgt_name(tgt), REPLY_DATA, rc);
+		RETURN(rc);
+	}
+
+	lrh.lrh_magic = LRH_MAGIC;
+	lrh.lrh_header_size = sizeof(struct lsd_reply_header);
+	lrh.lrh_reply_size = sizeof(struct lsd_reply_data);
+	rc = tgt_reply_header_write(env, tgt, &lrh);
+	if (rc)
+		CERROR("%s: failed to write header for %s: rc = %d\n",
+		       tgt_name(tgt), REPLY_DATA, rc);
+
+	RETURN(rc);
 }
 
 /**
@@ -851,6 +903,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 
 	/** update server epoch */
 	tgt_server_data_update(&env, tgt, 1);
+	tgt_reply_data_upgrade_check(&env, tgt);
 	lu_env_fini(&env);
 }
 
@@ -1887,8 +1940,8 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 			LCONSOLE_WARN("%s: mounting at first time on 1.8 FS, "
 				      "remove all clients for interop needs\n",
 				      tgt_name(tgt));
-			rc = tgt_truncate_last_rcvd(env, tgt,
-						    lsd->lsd_client_start);
+			rc = tgt_truncate_object(env, tgt, tgt->lut_last_rcvd,
+						 lsd->lsd_client_start);
 			if (rc)
 				RETURN(rc);
 			last_rcvd_size = lsd->lsd_client_start;
@@ -2115,19 +2168,27 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			GOTO(out, rc);
 		}
 	} else {
+		__u32 recsz = sizeof(struct lsd_reply_data);
+
 		rc = tgt_reply_header_read(env, tgt, lrh);
 		if (rc) {
 			CERROR("%s: error reading %s: rc = %d\n",
 			       tgt_name(tgt), REPLY_DATA, rc);
 			GOTO(out, rc);
 		}
-		if (lrh->lrh_magic != LRH_MAGIC ||
-		    lrh->lrh_header_size != sizeof(struct lsd_reply_header) ||
-		    lrh->lrh_reply_size != sizeof(struct lsd_reply_data)) {
+		if (!(lrh->lrh_magic == LRH_MAGIC &&
+		      lrh->lrh_reply_size == sizeof(struct lsd_reply_data) &&
+		      lrh->lrh_header_size == sizeof(struct lsd_reply_header)) &&
+		    !(lrh->lrh_magic == LRH_MAGIC_V1 &&
+		      lrh->lrh_reply_size == sizeof(struct lsd_reply_data_v1) &&
+		      lrh->lrh_header_size == sizeof(struct lsd_reply_header))) {
 			CERROR("%s: invalid header in %s\n",
 			       tgt_name(tgt), REPLY_DATA);
 			GOTO(out, rc = -EINVAL);
 		}
+
+		if (lrh->lrh_magic == LRH_MAGIC_V1)
+			recsz = sizeof(struct lsd_reply_data_v1);
 
 		hash = cfs_hash_getref(tgt->lut_obd->obd_gen_hash);
 		if (hash == NULL)
@@ -2139,9 +2200,9 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 
 		/* Load reply_data from disk */
 		for (idx = 0, off = sizeof(struct lsd_reply_header);
-		     off < reply_data_size;
-		     idx++, off += sizeof(struct lsd_reply_data)) {
-			rc = tgt_reply_data_read(env, tgt, lrd, off);
+		     off < reply_data_size; idx++, off += recsz) {
+			rc = tgt_reply_data_read(env, tgt, lrd, off,
+						 lrh->lrh_magic);
 			if (rc) {
 				CERROR("%s: error reading %s: rc = %d\n",
 				       tgt_name(tgt), REPLY_DATA, rc);
