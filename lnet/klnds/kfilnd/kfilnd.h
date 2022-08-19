@@ -99,6 +99,7 @@
 #define CFS_KFI_FAIL_RECV_EAGAIN 0xF111
 #define CFS_KFI_FAIL_RECV 0xF112
 #define CFS_KFI_FAIL_MSG_UNPACK 0xF113
+#define CFS_KFI_FAIL_MSG_TYPE 0xF114
 
 /* Maximum number of transaction keys supported. */
 #define KFILND_EP_KEY_BITS 16U

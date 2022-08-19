@@ -398,7 +398,9 @@ int kfilnd_ep_post_send(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 		return -EINVAL;
 
 	/* Progress transaction to failure if send should fail. */
-	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_SEND_EVENT)) {
+	if (CFS_FAIL_CHECK_VALUE(CFS_KFI_FAIL_MSG_TYPE,
+				 tn->tn_tx_msg.msg->type) ||
+	    CFS_FAIL_CHECK(CFS_KFI_FAIL_SEND_EVENT)) {
 		rc = kfilnd_ep_gen_fake_err(ep, &fake_error);
 		if (!rc)
 			return 0;
