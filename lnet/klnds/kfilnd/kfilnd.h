@@ -221,6 +221,13 @@ struct kfilnd_ep {
 	struct kfilnd_immediate_buffer end_immed_bufs[];
 };
 
+/* Newly allocated peer */
+#define KP_STATE_NEW 0x1
+/* Peer after successful hello handshake */
+#define KP_STATE_UPTODATE 0x2
+/* Peer experienced some sort of network failure */
+#define KP_STATE_STALE 0x3
+
 struct kfilnd_peer {
 	struct rhash_head kp_node;
 	struct rcu_head kp_rcu_head;
@@ -236,6 +243,7 @@ struct kfilnd_peer {
 	u32 kp_remote_session_key;
 	atomic_t kp_hello_pending;
 	time64_t kp_hello_ts;
+	atomic_t kp_state;
 };
 
 static inline bool kfilnd_peer_deleted(struct kfilnd_peer *kp)
@@ -259,7 +267,7 @@ static inline void kfilnd_peer_clear_hello_pending(struct kfilnd_peer *kp)
 
 static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 {
-	return kp->kp_version == 0;
+	return atomic_read(&kp->kp_state) == KP_STATE_NEW;
 }
 
 /* Peer needs hello if it is not up to date and there is not already a hello
@@ -271,7 +279,7 @@ static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp)
 {
 	if (atomic_read(&kp->kp_hello_pending) == 0) {
-		if (kfilnd_peer_is_new_peer(kp))
+		if (atomic_read(&kp->kp_state) != KP_STATE_UPTODATE)
 			return true;
 	} else if (ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
 				ktime_get_seconds())) {

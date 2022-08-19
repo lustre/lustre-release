@@ -34,7 +34,8 @@
 
 #include "kfilnd.h"
 
-void kfilnd_peer_down(struct kfilnd_peer *kp);
+void kfilnd_peer_stale(struct kfilnd_peer *kp);
+void kfilnd_peer_del(struct kfilnd_peer *kp);
 void kfilnd_peer_put(struct kfilnd_peer *kp);
 struct kfilnd_peer *kfilnd_peer_get(struct kfilnd_dev *dev, lnet_nid_t nid);
 void kfilnd_peer_alive(struct kfilnd_peer *kp);

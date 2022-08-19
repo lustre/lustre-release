@@ -56,10 +56,33 @@ static void kfilnd_peer_free(void *ptr, void *arg)
 }
 
 /**
- * kfilnd_peer_down() - Mark a peer as down.
- * @kp: Peer to be downed.
+ * kfilnd_peer_stale() - Mark a peer as stale.
+ * @kp: Peer to be marked stale
+ * Note: only "up-to-date" peers can be marked stale. If we haven't completed
+ * a transaction with this peer within 5 LND timeouts then delete this peer.
  */
-void kfilnd_peer_down(struct kfilnd_peer *kp)
+void kfilnd_peer_stale(struct kfilnd_peer *kp)
+{
+	if (atomic_cmpxchg(&kp->kp_state,
+			   KP_STATE_UPTODATE,
+			   KP_STATE_STALE) == KP_STATE_UPTODATE) {
+		CDEBUG(D_NET, "%s(%p):0x%llx is stale\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
+	} else if (ktime_before(kp->kp_last_alive + lnet_get_lnd_timeout() * 5,
+			       ktime_get_seconds())) {
+		CDEBUG(D_NET,
+		       "Haven't heard from %s(%p):0x%llx in %lld seconds\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
+		       ktime_sub(ktime_get_seconds(), kp->kp_last_alive));
+		kfilnd_peer_del(kp);
+	}
+}
+
+/**
+ * kfilnd_peer_del() - Mark a peer for deletion
+ * @kp: Peer to be deleted
+ */
+void kfilnd_peer_del(struct kfilnd_peer *kp)
 {
 	if (atomic_cmpxchg(&kp->kp_remove_peer, 0, 1) == 0) {
 		struct lnet_nid peer_nid;
@@ -173,6 +196,7 @@ again:
 	atomic_set(&kp->kp_rx_base, 0);
 	atomic_set(&kp->kp_remove_peer, 0);
 	atomic_set(&kp->kp_hello_pending, 0);
+	atomic_set(&kp->kp_state, KP_STATE_NEW);
 	kp->kp_local_session_key = kfilnd_dev_get_session_key(dev);
 	kp->kp_hello_ts = ktime_get_seconds();
 
@@ -290,6 +314,10 @@ void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       msg->proto.hello.version);
 	}
+
+	atomic_set(&kp->kp_state, KP_STATE_UPTODATE);
+	CDEBUG(D_NET, "kp %s(%p):0x%llx is up-to-date\n",
+	       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
 
 	/* Clear kp_hello_pending if we've received the hello response,
 	 * otherwise this is an incoming hello request and we may have our
