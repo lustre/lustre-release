@@ -1517,12 +1517,21 @@ test_32newtarball() {
 		cp $dom_file $tmp/src/dom_dir
 	# FLR #
 		mkdir -p $flr_dir
-		LFS mirror create -N2 $flr_file
+		$LFS mirror create -N2 $flr_file
 		dd if=/dev/urandom of=$flr_file bs=1k count=1
 		mkdir -p $tmp/src/flr_dir
 		cp $flr_file $tmp/src/flr_dir
 	fi
 	############
+
+	local large_xattr_dir=/mnt/$FSNAME/large_xattr_test_dir
+	local xattr_file=$large_xattr_dir/large_xattr_file
+
+	mkdir $large_xattr_dir
+	touch $xattr_file
+	setfattr -n user.fooattr -v $(printf "%c" {1..4096} ) $xattr_file ||
+		rm -f $xattr_file
+
 	stopall
 
 	mkdir $tmp/img || return 1
@@ -1585,20 +1594,26 @@ test_32newtarball() {
 	uname -r >$tmp/img/kernel
 	uname -m >$tmp/img/arch
 
-	for num in $(seq 2 $MDSCOUNT); do
+	for ((num=1; num <= $MDSCOUNT; num++)); do
 		local devname=$(mdsdevname $num)
 		local facet=mds$num
+		local image_name
+
+		[[ num -eq 1 ]] && image_name=mdt || image_name=mdt$num
 		[[ $(facet_fstype $facet) != zfs ]] ||
 			devname=$(mdsvdevname $num)
-		mv $devname $tmp/img
+		dd conv=sparse bs=4k if=$devname of=$tmp/img/$image_name
 	done
 
-	for num in $(seq $OSTCOUNT); do
+	for ((num=1; num <= $OSTCOUNT; num++)); do
 		local devname=$(ostdevname $num)
 		local facet=oss$num
+		local image_name
+
+		[[ num -eq 1 ]] && image_name=ost || image_name=ost$num
 		[[ $(facet_fstype $facet) != zfs ]] ||
 			devname=$(ostdevname $num)
-		mv $devname $tmp/img
+		dd conv=sparse bs=4k if=$devname of=$tmp/img/$image_name
 	done
 
 	version=$(sed -e 's/\(^[0-9]\+\.[0-9]\+\)\(.*$\)/\1/' $tmp/img/commit |
@@ -1610,7 +1625,7 @@ test_32newtarball() {
 
 	rm -r $tmp
 }
-#run_test 32newtarball "Create a new test_32 disk image tarball for this version"
+# run_test 32newtarball "Create a new test_32 disk image tarball for this version"
 
 #
 # The list of applicable tarballs is returned via the caller's
@@ -2325,7 +2340,7 @@ t32_test() {
 
 	if [ "$writeconf" ]; then
 		echo "== writeconf and client mount =="
-		$MOUNT_CMD $nid:/$fsname $tmp/mnt/lustre || {
+		$MOUNT_CMD $nid:/$fsname -o user_xattr $tmp/mnt/lustre || {
 			error_noexit "Mounting the client"
 			return 1
 		}
@@ -2513,6 +2528,24 @@ t32_test() {
 			[ $comp_size -eq 2097152 ] || {
 				error_noexit "wrong component size $comp_size"
 				return 1
+			}
+		fi
+
+		local large_xattr_dir=$tmp/mnt/lustre/large_xattr_test_dir
+
+		if [[ -d $large_xattr_dir ]]; then
+			echo "== check Large EA =="
+			local xattr_file=$large_xattr_dir/large_xattr_file
+
+			xattr_val=$(getfattr --only-values\
+				-n user.fooattr $xattr_file) || {
+				error_noexit "Large EA cannot be read"
+				return 1
+			}
+
+			[[ $xattr_val == $(printf "%c" {1..4096}) ]] || {
+				error_noexit "Wrong large EA value"
+				return 1;
 			}
 		fi
 
