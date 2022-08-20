@@ -46,21 +46,19 @@
  */
 static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 			enum lnet_ack_req ack, struct ptlrpc_cb_id *cbid,
-			lnet_nid_t self4, struct lnet_process_id peer_id4,
+			lnet_nid_t self4, struct lnet_processid *peer_id,
 			int portal, __u64 xid, unsigned int offset,
 			struct lnet_handle_md *bulk_cookie)
 {
 	int rc;
 	struct lnet_md md;
 	struct lnet_nid self;
-	struct lnet_processid peer_id;
 	ENTRY;
 
 	lnet_nid4_to_nid(self4, &self);
-	lnet_pid4_to_pid(peer_id4, &peer_id);
 
 	LASSERT(portal != 0);
-	CDEBUG(D_INFO, "peer_id %s\n", libcfs_id2str(peer_id4));
+	CDEBUG(D_INFO, "peer_id %s\n", libcfs_idstr(peer_id));
 	md.start     = base;
 	md.length    = len;
 	md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
@@ -93,14 +91,14 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 	percpu_ref_get(&ptlrpc_pending);
 
 	rc = LNetPut(&self, *mdh, ack,
-		     &peer_id, portal, xid, offset, 0);
+		     peer_id, portal, xid, offset, 0);
 	if (unlikely(rc != 0)) {
 		int rc2;
 		/* We're going to get an UNLINK event when I unlink below,
 		 * which will complete just like any other failed send, so
 		 * I fall through and return success here! */
 		CERROR("LNetPut(%s, %d, %lld) failed: %d\n",
-		       libcfs_id2str(peer_id4), portal, xid, rc);
+		       libcfs_idstr(peer_id), portal, xid, rc);
 		rc2 = LNetMDUnlink(*mdh);
 		LASSERTF(rc2 == 0, "rc2 = %d\n", rc2);
 	}
@@ -189,7 +187,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	 * message.
 	 */
 	self_nid = desc->bd_req->rq_self;
-	lnet_pid4_to_pid(desc->bd_req->rq_source, &peer_id);
+	peer_id = desc->bd_req->rq_source;
 
 	/* NB total length may be 0 for a read past EOF, so we send 0
 	 * length bulks, since the client expects bulk events.
@@ -650,7 +648,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 			  (rs->rs_difficult && !rs->rs_no_ack) ?
 			  LNET_ACK_REQ : LNET_NOACK_REQ,
 			  &rs->rs_cb_id, lnet_nid_to_nid4(&req->rq_self),
-			  req->rq_source,
+			  &req->rq_source,
 			  ptlrpc_req2svc(req)->srv_rep_portal,
 			  req->rq_rep_mbits ? req->rq_rep_mbits : req->rq_xid,
 			  req->rq_reply_off, NULL);
@@ -945,7 +943,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			  request->rq_reqbuf, request->rq_reqdata_len,
 			  LNET_NOACK_REQ, &request->rq_req_cbid,
 			  LNET_NID_ANY,
-			  lnet_pid_to_pid4(&connection->c_peer),
+			  &connection->c_peer,
 			  request->rq_request_portal,
 			  request->rq_xid, 0, &bulk_cookie);
 	if (likely(rc == 0))

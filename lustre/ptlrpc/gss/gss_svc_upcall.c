@@ -910,18 +910,16 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	struct gss_rep_header     *rephdr;
 	int                        first_check = 1;
 	int                        rc = SECSVC_DROP;
-	struct lnet_nid primary;
-	ENTRY;
 
+	ENTRY;
 	memset(&rsikey, 0, sizeof(rsikey));
 	rsikey.lustre_svc = lustre_svc;
 	/* In case of MR, rq_peer is not the NID from which request is received,
 	 * but primary NID of peer.
 	 * So we need LNetPrimaryNID(rq_source) to match what the clients uses.
 	 */
-	lnet_nid4_to_nid(req->rq_source.nid, &primary);
-	LNetPrimaryNID(&primary);
-	rsikey.nid4 = lnet_nid_to_nid4(&primary);
+	LNetPrimaryNID(&req->rq_source.nid);
+	rsikey.nid4 = lnet_nid_to_nid4(&req->rq_source.nid);
 	nodemap_test_nid(lnet_nid_to_nid4(&req->rq_peer.nid), rsikey.nm_name,
 			 sizeof(rsikey.nm_name));
 

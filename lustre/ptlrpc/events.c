@@ -349,7 +349,7 @@ void request_in_callback(struct lnet_event *ev)
 	ktime_get_real_ts64(&req->rq_arrival_time);
 	/* Multi-Rail: keep track of both initiator and source NID. */
 	req->rq_peer = ev->initiator;
-	req->rq_source = lnet_pid_to_pid4(&ev->source);
+	req->rq_source = ev->source;
 	req->rq_self = ev->target.nid;
 	req->rq_rqbd = rqbd;
 	req->rq_phase = RQ_PHASE_NEW;
@@ -358,7 +358,7 @@ void request_in_callback(struct lnet_event *ev)
 		       req, req->rq_xid, ev->mlength);
 
 	CDEBUG(D_RPCTRACE, "peer: %s (source: %s)\n",
-		libcfs_idstr(&req->rq_peer), libcfs_id2str(req->rq_source));
+		libcfs_idstr(&req->rq_peer), libcfs_idstr(&req->rq_source));
 
 	spin_lock(&svcpt->scp_lock);
 
