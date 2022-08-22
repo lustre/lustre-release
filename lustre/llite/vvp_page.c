@@ -63,34 +63,6 @@ static void vvp_page_discard(const struct lu_env *env,
 		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
 }
 
-static int vvp_page_prep_read(const struct lu_env *env,
-			      const struct cl_page_slice *slice,
-			      struct cl_io *unused)
-{
-	ENTRY;
-	/* Skip the page already marked as PG_uptodate. */
-	RETURN(PageUptodate(cl2vm_page(slice)) ? -EALREADY : 0);
-}
-
-static int vvp_page_prep_write(const struct lu_env *env,
-			       const struct cl_page_slice *slice,
-			       struct cl_io *unused)
-{
-	struct page *vmpage = cl2vm_page(slice);
-	struct cl_page *pg = slice->cpl_page;
-
-	LASSERT(PageLocked(vmpage));
-	LASSERT(!PageDirty(vmpage));
-
-	/* ll_writepage path is not a sync write, so need to set page writeback
-	 * flag
-	 */
-	if (pg->cp_sync_io == NULL)
-		set_page_writeback(vmpage);
-
-	return 0;
-}
-
 /**
  * Handles page transfer errors at VM level.
  *
@@ -182,72 +154,14 @@ static void vvp_page_completion_write(const struct lu_env *env,
 	EXIT;
 }
 
-/**
- * Implements cl_page_operations::cpo_make_ready() method.
- *
- * This is called to yank a page from the transfer cache and to send it out as
- * a part of transfer. This function try-locks the page. If try-lock failed,
- * page is owned by some concurrent IO, and should be skipped (this is bad,
- * but hopefully rare situation, as it usually results in transfer being
- * shorter than possible).
- *
- * \retval 0      success, page can be placed into transfer
- *
- * \retval -EAGAIN page is either used by concurrent IO has been
- * truncated. Skip it.
- */
-static int vvp_page_make_ready(const struct lu_env *env,
-			       const struct cl_page_slice *slice)
-{
-	struct page *vmpage = cl2vm_page(slice);
-	struct cl_page *pg = slice->cpl_page;
-	int result = 0;
-
-	lock_page(vmpage);
-	if (clear_page_dirty_for_io(vmpage)) {
-		LASSERT(pg->cp_state == CPS_CACHED);
-		/* This actually clears the dirty bit in the radix
-		 * tree.
-		 */
-		set_page_writeback(vmpage);
-		CL_PAGE_HEADER(D_PAGE, env, pg, "readied\n");
-	} else if (pg->cp_state == CPS_PAGEOUT) {
-		/* is it possible for osc_flush_async_page() to already
-		 * make it ready?
-		 */
-		result = -EALREADY;
-	} else {
-		CL_PAGE_DEBUG(D_ERROR, env, pg, "Unexpecting page state %d.\n",
-			      pg->cp_state);
-		LBUG();
-	}
-	unlock_page(vmpage);
-	RETURN(result);
-}
-
-static int vvp_page_fail(const struct lu_env *env,
-			 const struct cl_page_slice *slice)
-{
-	/*
-	 * Cached read?
-	 */
-	LBUG();
-
-	return 0;
-}
-
 static const struct cl_page_operations vvp_page_ops = {
 	.cpo_discard       = vvp_page_discard,
 	.io = {
 		[CRT_READ] = {
-			.cpo_prep       = vvp_page_prep_read,
 			.cpo_completion = vvp_page_completion_read,
-			.cpo_make_ready = vvp_page_fail,
 		},
 		[CRT_WRITE] = {
-			.cpo_prep       = vvp_page_prep_write,
 			.cpo_completion = vvp_page_completion_write,
-			.cpo_make_ready = vvp_page_make_ready,
 		},
 	},
 };

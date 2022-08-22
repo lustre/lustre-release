@@ -894,22 +894,8 @@ struct cl_page_operations {
          */
         struct {
                 /**
-                 * Called when a page is submitted for a transfer as a part of
-                 * cl_page_list.
-                 *
-                 * \return    0         : page is eligible for submission;
-                 * \return    -EALREADY : skip this page;
-                 * \return    -ve       : error.
-                 *
-                 * \see cl_page_prep()
-                 */
-                int  (*cpo_prep)(const struct lu_env *env,
-                                 const struct cl_page_slice *slice,
-                                 struct cl_io *io);
-                /**
                  * Completion handler. This is guaranteed to be eventually
-                 * fired after cl_page_operations::cpo_prep() or
-                 * cl_page_operations::cpo_make_ready() call.
+		 * fired after cl_page_prep() or cl_page_make_ready() call.
                  *
                  * This method can be called in a non-blocking context. It is
                  * guaranteed however, that the page involved and its object
@@ -921,18 +907,6 @@ struct cl_page_operations {
                 void (*cpo_completion)(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
                                        int ioret);
-                /**
-                 * Called when cached page is about to be added to the
-                 * ptlrpc request as a part of req formation.
-                 *
-                 * \return    0       : proceed with this page;
-                 * \return    -EAGAIN : skip this page;
-                 * \return    -ve     : error.
-                 *
-                 * \see cl_page_make_ready()
-                 */
-                int  (*cpo_make_ready)(const struct lu_env *env,
-                                       const struct cl_page_slice *slice);
         } io[CRT_NR];
         /**
          * Tell transfer engine that only [to, from] part of a page should be
