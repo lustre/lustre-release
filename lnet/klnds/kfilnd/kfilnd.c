@@ -159,7 +159,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		return rc;
 	}
 
-	if (kfilnd_peer_needs_hello(tn->tn_kp)) {
+	if (kfilnd_peer_needs_hello(tn->tn_kp, true)) {
 		rc = kfilnd_send_hello_request(dev, cpt, tn->tn_kp);
 		if (rc && kfilnd_peer_is_new_peer(tn->tn_kp)) {
 			/* Only fail the send if this is a new peer. Otherwise

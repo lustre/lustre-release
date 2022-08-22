@@ -273,13 +273,23 @@ static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 /* Peer needs hello if it is not up to date and there is not already a hello
  * in flight.
  *
+ * Called from the send path and the receive path. When called from send path
+ * we additionally consider the peer's last alive value, and proactively
+ * handshake peers that we haven't talked to in a while.
+ *
  * If hello was sent more than LND timeout seconds ago, and we never received a
  * response, then send another one.
  */
-static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp)
+static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp,
+					   bool proactive_handshake)
 {
 	if (atomic_read(&kp->kp_hello_pending) == 0) {
 		if (atomic_read(&kp->kp_state) != KP_STATE_UPTODATE)
+			return true;
+		else if (proactive_handshake &&
+			 ktime_before(kp->kp_last_alive +
+				      lnet_get_lnd_timeout() * 2,
+				      ktime_get_seconds()))
 			return true;
 	} else if (ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
 				ktime_get_seconds())) {

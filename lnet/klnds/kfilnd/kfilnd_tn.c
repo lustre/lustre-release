@@ -728,7 +728,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		break;
 
 	case TN_EVENT_RX_OK:
-		if (kfilnd_peer_needs_hello(tn->tn_kp)) {
+		if (kfilnd_peer_needs_hello(tn->tn_kp, false)) {
 			rc = kfilnd_send_hello_request(tn->tn_ep->end_dev,
 						       tn->tn_ep->end_cpt,
 						       tn->tn_kp);
