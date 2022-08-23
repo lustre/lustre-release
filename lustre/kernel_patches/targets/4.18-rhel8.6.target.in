@@ -1,5 +1,5 @@
 lnxmaj="4.18.0"
-lnxrel="372.9.1.el8"
+lnxrel="372.19.1.el8_6"
 
 KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
 SERIES=4.18-rhel8.6.series

@@ -466,6 +466,8 @@ download_srpm() {
 	local srpm=$2
 	local force="${3:-false}"
 
+	[[ ! -s "$KERNELDIR/$srpm" ]] || return 0
+
 	# let the download_file handle the concurrency
 	if $DOWNLOAD; then
 		local location
@@ -489,6 +491,9 @@ SRPM $srpm from $location."
 download_debuginfo_common() {
 	local rpm=$1
 	local force="${2:-false}"
+
+	[[ ! -s "$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$rpm" ]] ||
+		return 0
 
 	# let the download_file handle the concurrency
 	if $DOWNLOAD; then
