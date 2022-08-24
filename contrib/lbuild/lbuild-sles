@@ -7,7 +7,6 @@ BUILD_GEN+=".2" #LU-3337 add missing build files for sles11sp2 server
 DEVEL_KERNEL_TYPE="default-devel"
 RPM_HELPERS_DIR="/usr/lib/rpm"
 RMAC=$HOME/.rpmmacros
-SUSE_MACROS=/etc/rpm/macros.kernel-source
 
 prepare_and_build_srpm() {
 
@@ -106,10 +105,14 @@ resolve_arch() {
 find_linux_devel_paths() {
 	local path="$1"
 	local linuxobjpath=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
+	local linuxmodpath=$path/lib/modules/${lnxmaj}${lnxmin}-${lnxrel}-$RPMSMPTYPE
 
 	LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
 	LINUXOBJ=$path/usr/src/linux-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
 
+	# symlink the build and source to the local path instead of system's
+	ln -sf $linuxobjpath $linuxmodpath/build
+	ln -sf $LINUX $linuxmodpath/source
 	# symlink the linux-obj to linux-version-obj
 	ln -s $linuxobjpath $LINUXOBJ
 	# We need to copy the headers from the source to the object tree for
@@ -119,10 +122,8 @@ find_linux_devel_paths() {
 	fi
 	# We modify %kernel_module_package macro to use the linux obj
 	# that lbuild install, not the OS installed /usr/src
-	sed -i -e "/^%kernel_module_package/,/^)}$/d" \
-	    -e "/^# A few cross-distro definitions/d" $RMAC
 	sed -e "s/\/usr\/src/${path//\//\\/}\/usr\/src/" \
-	    -e "s/\/boot/${path//\//\\/}\/boot/" ${SUSE_MACROS} >> $RMAC
+	    -e "s/\/boot/${path//\//\\/}\/boot/" ${SUSE_MACROS} > $RMAC
 
 	return 0
 }
