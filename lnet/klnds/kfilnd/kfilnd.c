@@ -422,7 +422,11 @@ static int kfilnd_startup(struct lnet_ni *ni)
 		return -EINVAL;
 	}
 
-	kfilnd_tunables_setup(ni);
+	rc = kfilnd_tunables_setup(ni);
+	if (rc) {
+		CERROR("Can't configure tunable values, rc = %d\n", rc);
+		goto err;
+	}
 
 	/* Only a single interface is supported. */
 	if (!ni->ni_interface) {

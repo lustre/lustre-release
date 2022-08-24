@@ -106,28 +106,39 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 	net_tunables = &ni->ni_net->net_tunables;
 	kfilnd_tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi;
 
-	if (!ni->ni_net->net_tunables_set) {
-		net_tunables->lct_max_tx_credits = credits;
-		net_tunables->lct_peer_tx_credits = peer_credits;
-		net_tunables->lct_peer_rtr_credits = peer_buffer_credits;
+	if (net_tunables->lct_peer_timeout == -1)
 		net_tunables->lct_peer_timeout = peer_timeout;
 
-		if (net_tunables->lct_peer_tx_credits >
-		    net_tunables->lct_max_tx_credits)
-			net_tunables->lct_peer_tx_credits =
-				net_tunables->lct_max_tx_credits;
-	}
+	if (net_tunables->lct_max_tx_credits == -1)
+		net_tunables->lct_max_tx_credits = credits;
+
+	if (net_tunables->lct_peer_tx_credits == -1)
+		net_tunables->lct_peer_tx_credits = peer_credits;
+
+	if (net_tunables->lct_peer_rtr_credits == -1)
+		net_tunables->lct_peer_rtr_credits = peer_buffer_credits;
+
+	if (net_tunables->lct_peer_tx_credits >
+		net_tunables->lct_max_tx_credits)
+		net_tunables->lct_peer_tx_credits =
+			net_tunables->lct_max_tx_credits;
 
 	kfilnd_tunables->lnd_version = KFILND_MSG_VERSION;
 	if (!ni->ni_lnd_tunables_set) {
 		kfilnd_tunables->lnd_prov_major_version = prov_major_version;
 		kfilnd_tunables->lnd_prov_minor_version = prov_minor_version;
-
-		/* Treat zero as uninitialized. */
-		if (ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_auth_key == 0)
-			ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_auth_key =
-				auth_key;
+		kfilnd_tunables->lnd_auth_key = auth_key;
 	}
+
+	/* Treat kfilnd_tunables set to zero as uninitialized. */
+	if (kfilnd_tunables->lnd_prov_major_version == 0 &&
+		kfilnd_tunables->lnd_prov_major_version == 0) {
+		kfilnd_tunables->lnd_prov_major_version = prov_major_version;
+		kfilnd_tunables->lnd_prov_minor_version = prov_minor_version;
+	}
+
+	if (kfilnd_tunables->lnd_auth_key == 0)
+		kfilnd_tunables->lnd_auth_key = auth_key;
 
 	if (net_tunables->lct_max_tx_credits > KFILND_EP_KEY_MAX) {
 		CERROR("Credits cannot exceed %lu\n", KFILND_EP_KEY_MAX);
@@ -136,6 +147,12 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 
 	if (net_tunables->lct_peer_tx_credits > KFILND_EP_KEY_MAX) {
 		CERROR("Peer credits cannot exceed %lu\n", KFILND_EP_KEY_MAX);
+		return -EINVAL;
+	}
+
+	if (kfilnd_tunables->lnd_prov_major_version > prov_major_version) {
+		CERROR("Provider major version greater than %d unsupported\n",
+			prov_major_version);
 		return -EINVAL;
 	}
 
