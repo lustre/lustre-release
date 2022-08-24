@@ -20,7 +20,9 @@ case $1 in
 	fi
 
 	# ZFS and SPL are version locked
-	ZFS_VERSION=$(dkms status -m zfs -k $3 -a $5 | awk -F', ' '{print $2; exit 0}' | grep -v ': added$')
+	ZFS_VERSION=$(dkms status -m zfs -k $3 -a $5 2>/dev/null |
+		      sed -e 's:zfs/::g' -e 's:,.*::g' | cut -d: -f1 |
+		      sort -V | head -n1)
 	if [ -z $ZFS_VERSION ] ; then
 		echo "zfs-dkms package must already be installed and built under DKMS control"
 		exit 1
@@ -28,10 +30,10 @@ case $1 in
 
 	SERVER="--enable-server $LDISKFS \
 		--with-linux=$4 --with-linux-obj=$4 \
-		--with-spl=$6/spl-${ZFS_VERSION} \
-		--with-spl-obj=$7/spl/${ZFS_VERSION}/$3/$5 \
-		--with-zfs=$6/zfs-${ZFS_VERSION} \
-		--with-zfs-obj=$7/zfs/${ZFS_VERSION}/$3/$5"
+		--with-spl=$(realpath $7/spl/${ZFS_VERSION}/source) \
+		--with-spl-obj=$(realpath $7/spl/kernel-$3-$5) \
+		--with-zfs=$(realpath $7/zfs/${ZFS_VERSION}/source) \
+		--with-zfs-obj=$(realpath $7/zfs/kernel-$3-$5)"
 
 	KERNEL_STUFF="--with-linux=$4 --with-linux-obj=$4"
 	;;

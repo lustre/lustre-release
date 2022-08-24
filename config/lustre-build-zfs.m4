@@ -71,7 +71,8 @@ AC_DEFUN([LB_SPL], [
 	dnl # The existence of spl.release[.in] is used to identify a valid
 	dnl # source directory.  In order of preference:
 	dnl #
-	splver=$(ls -1 /usr/src/ | grep -m1 spl | cut -f2 -d'-')
+	splver=$(ls -1 /usr/src/ | grep ^spl- | cut -f2 -d'-' |
+		 sort -V | head -n1)
 	spldkms="/var/lib/dkms/spl/${splver}"
 	splsrc1="/usr/src/spl-${splver}/${LINUXRELEASE}"
 	splsrc2="/usr/src/spl-${splver}"
@@ -192,7 +193,8 @@ AC_DEFUN([LB_ZFS], [
 	dnl # The existence of zfs.release[.in] is used to identify a valid
 	dnl # source directory.  In order of preference:
 	dnl #
-	zfsver=$(ls -1 /usr/src/ | grep -m1 zfs | cut -f2 -d'-')
+	zfsver=$(ls -1 /usr/src/ | grep ^zfs- | cut -f2 -d'-' |
+		 sort -V | head -n1)
 	zfsdkms="/var/lib/dkms/zfs/${zfsver}"
 	zfssrc1="/usr/src/zfs-${zfsver}/${LINUXRELEASE}"
 	zfssrc2="/usr/src/zfs-${zfsver}"
