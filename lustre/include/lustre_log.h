@@ -109,6 +109,7 @@ int llog_backup(const struct lu_env *env, struct obd_device *obd,
 int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		     const struct obd_uuid *uuid);
 __u64 llog_size(const struct lu_env *env, struct llog_handle *llh);
+int llog_retain(const struct lu_env *env, struct llog_handle *log);
 
 /* llog_process flags */
 #define LLOG_FLAG_NODEAMON 0x0001
@@ -180,6 +181,8 @@ __u32 llog_cat_free_space(struct llog_handle *cat_llh);
 int llog_cat_reverse_process(const struct lu_env *env,
 			     struct llog_handle *cat_llh, llog_cb_t cb,
 			     void *data);
+int llog_cat_retain_cb(const struct lu_env *env, struct llog_handle *cat,
+		       struct llog_rec_hdr *rec, void *data);
 /* llog_obd.c */
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,
@@ -190,11 +193,19 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
 
 /* llog_ioctl.c */
 struct obd_ioctl_data;
+int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
+		  struct llog_rec_hdr *rec, void *data);
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data);
 int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 		      int count, struct obd_ioctl_data *data,
 		      const struct lu_fid *fid);
+
+struct llog_print_data {
+	struct obd_ioctl_data *lprd_data;
+	unsigned int	       lprd_cfg_flags;
+	bool		       lprd_raw;
+};
 
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);

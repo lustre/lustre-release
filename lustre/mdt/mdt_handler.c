@@ -7405,17 +7405,17 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-        struct lu_env      env;
-        struct obd_device *obd = exp->exp_obd;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        struct dt_device  *dt = mdt->mdt_bottom;
-        int rc;
+	struct lu_env      env;
+	struct obd_device *obd = exp->exp_obd;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct dt_device  *dt = mdt->mdt_bottom;
+	int rc;
 
-        ENTRY;
-        CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
-        rc = lu_env_init(&env, LCT_MD_THREAD);
-        if (rc)
-                RETURN(rc);
+	ENTRY;
+	CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+	rc = lu_env_init(&env, LCT_MD_THREAD);
+	if (rc)
+		RETURN(rc);
 
 	switch (cmd) {
 	case OBD_IOC_SYNC:
@@ -7432,7 +7432,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (data->ioc_type & OBD_FLG_ABORT_RECOV_MDT) {
 			CERROR("%s: Aborting MDT recovery\n",
 			       mdt_obd_name(mdt));
-			obd->obd_abort_recov_mdt = 1;
+			obd->obd_abort_mdt_recovery = 1;
 			wake_up(&obd->obd_next_transno_waitq);
 		} else { /* if (data->ioc_type & OBD_FLG_ABORT_RECOV_OST) */
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */
@@ -7444,13 +7444,15 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = 0;
 		break;
 	}
-        case OBD_IOC_CHANGELOG_REG:
-        case OBD_IOC_CHANGELOG_DEREG:
-        case OBD_IOC_CHANGELOG_CLEAR:
+	case OBD_IOC_CHANGELOG_REG:
+	case OBD_IOC_CHANGELOG_DEREG:
+	case OBD_IOC_CHANGELOG_CLEAR:
+	case OBD_IOC_LLOG_PRINT:
+	case OBD_IOC_LLOG_CANCEL:
 		rc = mdt->mdt_child->md_ops->mdo_iocontrol(&env,
 							   mdt->mdt_child,
 							   cmd, len, karg);
-                break;
+		break;
 	case OBD_IOC_START_LFSCK: {
 		struct md_device *next = mdt->mdt_child;
 		struct obd_ioctl_data *data = karg;
@@ -7490,17 +7492,18 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 						 data->ioc_inlbuf1);
 		break;
 	}
-        case OBD_IOC_GET_OBJ_VERSION: {
-                struct mdt_thread_info *mti;
-                mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
-                memset(mti, 0, sizeof *mti);
-                mti->mti_env = &env;
-                mti->mti_mdt = mdt;
-                mti->mti_exp = exp;
+	case OBD_IOC_GET_OBJ_VERSION: {
+		struct mdt_thread_info *mti;
 
-                rc = mdt_ioc_version_get(mti, karg);
-                break;
-        }
+		mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+		memset(mti, 0, sizeof(*mti));
+		mti->mti_env = &env;
+		mti->mti_mdt = mdt;
+		mti->mti_exp = exp;
+
+		rc = mdt_ioc_version_get(mti, karg);
+		break;
+	}
 	case OBD_IOC_CATLOGLIST: {
 		struct mdt_thread_info *mti;
 
@@ -7516,8 +7519,8 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			mdt_obd_name(mdt), cmd, rc);
 	}
 
-        lu_env_fini(&env);
-        RETURN(rc);
+	lu_env_fini(&env);
+	RETURN(rc);
 }
 
 static int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)

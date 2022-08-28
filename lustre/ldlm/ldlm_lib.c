@@ -49,6 +49,7 @@
 #include <lustre_dlm.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include "ldlm_internal.h"
 
 /*
@@ -1875,8 +1876,9 @@ void target_cleanup_recovery(struct obd_device *obd)
 		EXIT;
 		return;
 	}
-	obd->obd_recovering = obd->obd_abort_recovery = 0;
-	obd->obd_abort_recov_mdt = 0;
+	obd->obd_recovering = 0;
+	obd->obd_abort_recovery = 0;
+	obd->obd_abort_mdt_recovery = 0;
 	spin_unlock(&obd->obd_dev_lock);
 
 	spin_lock(&obd->obd_recovery_task_lock);
@@ -2123,7 +2125,7 @@ static int check_for_next_transno(struct lu_target *lut)
 		req_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	}
 
-	if (!obd->obd_abort_recov_mdt && tdtd)
+	if (!obd_mdt_recovery_abort(obd) && tdtd)
 		update_transno = distribute_txn_get_next_transno(tdtd);
 
 	connected = atomic_read(&obd->obd_connected_clients);
@@ -2137,13 +2139,13 @@ static int check_for_next_transno(struct lu_target *lut)
 	       connected, completed,
 	       queue_len, req_transno, next_transno);
 
-	if (obd->obd_abort_recovery) {
+	if (obd_recovery_abort(obd)) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
 	} else if (obd->obd_recovery_expired) {
 		CDEBUG(D_HA, "waking for expired recovery\n");
 		wake_up = 1;
-	} else if (!obd->obd_abort_recov_mdt && tdtd && req &&
+	} else if (!obd_mdt_recovery_abort(obd) && tdtd && req &&
 		   is_req_replayed_by_update(req)) {
 		LASSERTF(req_transno < next_transno,
 			 "req_transno %llu next_transno%llu\n", req_transno,
@@ -2211,7 +2213,7 @@ static int check_update_llog(struct lu_target *lut)
 	struct obd_device *obd = lut->lut_obd;
 	struct target_distribute_txn_data *tdtd = lut->lut_tdtd;
 
-	if (obd->obd_abort_recovery) {
+	if (obd_mdt_recovery_abort(obd)) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		return 1;
 	}
@@ -2255,7 +2257,7 @@ repeat:
 		 * left in the queue
 		 */
 		spin_lock(&obd->obd_recovery_task_lock);
-		if (!obd->obd_abort_recov_mdt && lut->lut_tdtd) {
+		if (!obd_mdt_recovery_abort(obd) && lut->lut_tdtd) {
 			next_update_transno =
 				distribute_txn_get_next_transno(lut->lut_tdtd);
 
@@ -2279,7 +2281,7 @@ repeat:
 			}
 		}
 
-		if (next_update_transno != 0 && !obd->obd_abort_recovery) {
+		if (next_update_transno != 0 && !obd_recovery_abort(obd)) {
 			obd->obd_next_recovery_transno = next_update_transno;
 			spin_unlock(&obd->obd_recovery_task_lock);
 			/*
@@ -2309,7 +2311,7 @@ repeat:
 				  cfs_time_seconds(60)) == 0)
 		; /* wait indefinitely for event, but don't trigger watchdog */
 
-	if (obd->obd_abort_recovery) {
+	if (obd_recovery_abort(obd)) {
 		CWARN("recovery is aborted, evict exports in recovery\n");
 		if (lut->lut_tdtd != NULL) {
 			tdtd = lut->lut_tdtd;
@@ -2474,7 +2476,7 @@ static int check_for_recovery_ready(struct lu_target *lut)
 	       atomic_read(&obd->obd_max_recoverable_clients),
 	       obd->obd_abort_recovery, obd->obd_recovery_expired);
 
-	if (!obd->obd_abort_recovery && !obd->obd_recovery_expired) {
+	if (!obd_recovery_abort(obd) && !obd->obd_recovery_expired) {
 		LASSERT(clnts <=
 			atomic_read(&obd->obd_max_recoverable_clients));
 		if (clnts + obd->obd_stale_clients <
@@ -2482,20 +2484,16 @@ static int check_for_recovery_ready(struct lu_target *lut)
 			return 0;
 	}
 
-	if (!obd->obd_abort_recov_mdt && lut->lut_tdtd != NULL) {
-		if (!lut->lut_tdtd->tdtd_replay_ready &&
-		    !obd->obd_abort_recovery && !obd->obd_stopping) {
-			/*
-			 * Let's extend recovery timer, in case the recovery
-			 * timer expired, and some clients got evicted
-			 */
-			extend_recovery_timer(obd, obd->obd_recovery_timeout,
-					      true);
-			CDEBUG(D_HA,
-			       "%s update recovery is not ready, extend recovery %d\n",
-			       obd->obd_name, obd->obd_recovery_timeout);
-			return 0;
-		}
+	if (!obd_mdt_recovery_abort(obd) && lut->lut_tdtd &&
+	    !lut->lut_tdtd->tdtd_replay_ready) {
+		/* Let's extend recovery timer, in case the recovery timer
+		 * expired, and some clients got evicted
+		 */
+		extend_recovery_timer(obd, obd->obd_recovery_timeout, true);
+		CDEBUG(D_HA,
+		       "%s update recovery is not ready, extend recovery %d\n",
+		       obd->obd_name, obd->obd_recovery_timeout);
+		return 0;
 	}
 
 	return 1;
@@ -2534,7 +2532,7 @@ static __u64 get_next_transno(struct lu_target *lut, int *type)
 	if (type != NULL)
 		*type = REQUEST_RECOVERY;
 
-	if (!tdtd || obd->obd_abort_recov_mdt)
+	if (!tdtd || obd_mdt_recovery_abort(obd))
 		RETURN(transno);
 
 	update_transno = distribute_txn_get_next_transno(tdtd);
@@ -2821,13 +2819,20 @@ static int target_recovery_thread(void *arg)
 	CDEBUG(D_INFO, "3: final stage - process recovery completion pings\n");
 	/** Update server last boot epoch */
 	tgt_boot_epoch_update(lut);
+
+	/* cancel update llogs upon recovery abort */
+	if (obd->obd_abort_recovery || obd->obd_abort_mdt_recovery)
+		OBP(obd, iocontrol)(OBD_IOC_LLOG_CANCEL, obd->obd_self_export,
+				    0, NULL, NULL);
+
 	/*
 	 * We drop recoverying flag to forward all new requests
 	 * to regular mds_handle() since now
 	 */
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_recovering = obd->obd_abort_recovery = 0;
-	obd->obd_abort_recov_mdt = 0;
+	obd->obd_recovering = 0;
+	obd->obd_abort_recovery = 0;
+	obd->obd_abort_mdt_recovery = 0;
 	spin_unlock(&obd->obd_dev_lock);
 	spin_lock(&obd->obd_recovery_task_lock);
 	target_cancel_recovery_timer(obd);

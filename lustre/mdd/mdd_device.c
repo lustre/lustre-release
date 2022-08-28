@@ -2283,6 +2283,10 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 				 (struct lfsck_query *)karg);
 		RETURN(rc);
 	}
+	case OBD_IOC_LLOG_PRINT:
+	case OBD_IOC_LLOG_CANCEL:
+		rc = obd_iocontrol(cmd, mdd->mdd_child_exp, len, karg, NULL);
+		RETURN(rc);
 	}
 
 	/* Below ioctls use obd_ioctl_data */

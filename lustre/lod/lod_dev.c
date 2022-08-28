@@ -93,9 +93,11 @@
 #include <md_object.h>
 #include <lustre_fid.h>
 #include <uapi/linux/lustre/lustre_param.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_update.h>
 #include <lustre_log.h>
 #include <lustre_lmv.h>
+#include <llog_swab.h>
 
 #include "lod_internal.h"
 
@@ -275,12 +277,6 @@ struct lod_recovery_data {
 	struct completion	*lrd_started;
 };
 
-static bool lod_recovery_abort(struct obd_device *top)
-{
-	return (top->obd_stopping || top->obd_abort_recovery ||
-		top->obd_abort_recov_mdt);
-}
-
 /**
  * process update recovery record
  *
@@ -336,12 +332,106 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 	       PLOGID(&llh->lgh_id), rec->lrh_index);
 	lut = lod2lu_dev(lrd->lrd_lod)->ld_site->ls_tgt;
 
-	if (lod_recovery_abort(lut->lut_obd))
+	if (obd_mdt_recovery_abort(lut->lut_obd))
 		return -ESHUTDOWN;
 
 	return insert_update_records_to_replay_list(lut->lut_tdtd,
 					(struct llog_update_record *)rec,
 					cookie, index);
+}
+
+/* retain old catalog, create new catalog and update catlist */
+static int lod_sub_recreate_llog(const struct lu_env *env,
+				 struct lod_device *lod, struct dt_device *dt,
+				 int index)
+{
+	struct lod_thread_info *lti = lod_env_info(env);
+	struct llog_ctxt *ctxt;
+	struct llog_handle *lgh;
+	struct llog_catid *cid = &lti->lti_cid;
+	struct lu_fid *fid = &lti->lti_fid;
+	struct obd_device *obd;
+	int rc;
+
+	ENTRY;
+	lu_update_log_fid(fid, index);
+	rc = lodname2mdt_index(lod2obd(lod)->obd_name, (__u32 *)&index);
+	if (rc < 0)
+		RETURN(rc);
+
+	rc = llog_osd_get_cat_list(env, dt, index, 1, NULL, fid);
+	if (rc < 0) {
+		CERROR("%s: can't access update_log: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		RETURN(rc);
+	}
+
+	obd = dt->dd_lu_dev.ld_obd;
+	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
+	LASSERT(ctxt != NULL);
+	if (ctxt->loc_handle) {
+		/* retain old catalog */
+		llog_retain(env, ctxt->loc_handle);
+		llog_cat_close(env, ctxt->loc_handle);
+		LASSERT(!ctxt->loc_handle);
+	}
+
+	ctxt->loc_flags |= LLOG_CTXT_FLAG_NORMAL_FID;
+	ctxt->loc_chunk_size = LLOG_MIN_CHUNK_SIZE * 4;
+	rc = llog_open_create(env, ctxt, &lgh, NULL, NULL);
+	if (rc < 0)
+		GOTO(out_put, rc);
+
+	LASSERT(lgh != NULL);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
+	if (rc != 0)
+		GOTO(out_close, rc);
+
+	cid->lci_logid = lgh->lgh_id;
+	rc = llog_osd_put_cat_list(env, dt, index, 1, cid, fid);
+	if (rc != 0)
+		GOTO(out_close, rc);
+
+	ctxt->loc_handle = lgh;
+
+	CDEBUG(D_INFO, "%s: recreate catalog "DFID"\n",
+	       obd->obd_name, PLOGID(&cid->lci_logid));
+out_close:
+	if (rc)
+		llog_cat_close(env, lgh);
+out_put:
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
+/* retain update catalog and llogs, and create a new catalog */
+static int lod_sub_cancel_llog(const struct lu_env *env,
+			       struct lod_device *lod, struct dt_device *dt,
+			       int index)
+{
+	struct llog_ctxt *ctxt;
+	int rc = 0;
+
+	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
+				LLOG_UPDATELOG_ORIG_CTXT);
+	if (!ctxt)
+		return 0;
+
+	if (ctxt->loc_handle) {
+		LCONSOLE(D_INFO, "%s: cancel update llog "DFID"\n",
+			 dt->dd_lu_dev.ld_obd->obd_name,
+			 PLOGID(&ctxt->loc_handle->lgh_id));
+		/* set startcat to "lgh_last_idx + 1" to zap empty llogs */
+		llog_cat_process(env, ctxt->loc_handle, NULL, NULL,
+				 ctxt->loc_handle->lgh_last_idx + 1, 0);
+		/* set retention on logs to simplify reclamation */
+		llog_process_or_fork(env, ctxt->loc_handle, llog_cat_retain_cb,
+				     NULL, NULL, false);
+		/* retain old catalog and create a new one */
+		lod_sub_recreate_llog(env, lod, dt, index);
+	}
+	llog_ctxt_put(ctxt);
+	return rc;
 }
 
 /**
@@ -404,7 +494,7 @@ again:
 
 	top_device = lod->lod_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
 	if (rc < 0 && dt != lod->lod_child &&
-	    !lod_recovery_abort(top_device->ld_obd)) {
+	    !obd_mdt_recovery_abort(top_device->ld_obd)) {
 		if (rc == -EBADR) {
 			/* remote update llog is shorter than expected from
 			 * local header. Cached copy could be de-synced during
@@ -433,19 +523,20 @@ again:
 
 	llog_ctxt_put(ctxt);
 	if (rc < 0) {
-		CERROR("%s get update log failed: rc = %d\n",
-		       dt->dd_lu_dev.ld_obd->obd_name, rc);
-		spin_lock(&top_device->ld_obd->obd_dev_lock);
-		if (!lod_recovery_abort(top_device->ld_obd))
-			/* abort just MDT-MDT recovery */
-			top_device->ld_obd->obd_abort_recov_mdt = 1;
-		spin_unlock(&top_device->ld_obd->obd_dev_lock);
-		GOTO(out, rc);
+		CERROR("%s: get update log duration %lld, retries %d, failed: rc = %d\n",
+		       dt->dd_lu_dev.ld_obd->obd_name,
+		       ktime_get_real_seconds() - start, retries, rc);
+		/* abort MDT recovery of this target, but not all targets,
+		 * because recovery still has chance to succeed.
+		 */
+		if (!obd_mdt_recovery_abort(top_device->ld_obd))
+			lod_sub_cancel_llog(env, lod, dt, lrd->lrd_idx);
+	} else {
+		CDEBUG(D_HA,
+		       "%s retrieved update log, duration %lld, retries %d\n",
+		       dt->dd_lu_dev.ld_obd->obd_name,
+		       ktime_get_real_seconds() - start, retries);
 	}
-
-	CDEBUG(D_HA, "%s retrieved update log, duration %lld, retries %d\n",
-	       dt->dd_lu_dev.ld_obd->obd_name, ktime_get_real_seconds() - start,
-	       retries);
 
 	spin_lock(&lod->lod_lock);
 	if (!lrd->lrd_ltd)
@@ -455,13 +546,13 @@ again:
 
 	if (!lod->lod_child_got_update_log) {
 		spin_unlock(&lod->lod_lock);
-		GOTO(out, rc = 0);
+		GOTO(out, rc);
 	}
 
 	lod_foreach_mdt(lod, mdt) {
 		if (!mdt->ltd_got_update_log) {
 			spin_unlock(&lod->lod_lock);
-			GOTO(out, rc = 0);
+			GOTO(out, rc);
 		}
 	}
 	lut->lut_tdtd->tdtd_replay_ready = 1;
@@ -482,7 +573,7 @@ out:
 		wait_var_event(lrd, kthread_should_stop());
 	lu_env_fini(env);
 	OBD_FREE_PTR(lrd);
-	return 0;
+	return rc;
 }
 
 /**
@@ -1165,6 +1256,167 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 	RETURN(rc);
 }
 
+#define UPDATE_LOG_MAX_AGE	(30 * 24 * 60 * 60)	/* 30 days, in sec */
+
+static int lod_update_log_stale(const struct lu_env *env, struct dt_object *dto,
+				struct lu_buf *buf)
+{
+	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
+	struct llog_log_hdr *hdr;
+	loff_t off = 0;
+	int rc;
+
+	ENTRY;
+	rc = dt_attr_get(env, dto, attr);
+	if (rc)
+		RETURN(rc);
+
+	if (!(attr->la_valid & (LA_CTIME | LA_SIZE)))
+		RETURN(-EFAULT);
+
+	/* by default update log ctime is not set */
+	if (attr->la_ctime == 0)
+		RETURN(0);
+
+	/* update log not expired yet */
+	if (attr->la_ctime + UPDATE_LOG_MAX_AGE > ktime_get_real_seconds())
+		RETURN(0);
+
+	if (attr->la_size == 0)
+		RETURN(-EFAULT);
+
+	rc = dt_read(env, dto, buf, &off);
+	if (rc < 0)
+		RETURN(rc);
+
+	hdr = (struct llog_log_hdr *)buf->lb_buf;
+	if (LLOG_REC_HDR_NEEDS_SWABBING(&hdr->llh_hdr))
+		lustre_swab_llog_hdr(hdr);
+	/* log header is sane and flag LLOG_F_MAX_AGE|LLOG_F_RM_ON_ERR is set */
+	if (rc >= sizeof(*hdr) &&
+	    hdr->llh_hdr.lrh_type == LLOG_HDR_MAGIC &&
+	    (hdr->llh_flags & (LLOG_F_MAX_AGE | LLOG_F_RM_ON_ERR)) ==
+	    (LLOG_F_MAX_AGE | LLOG_F_RM_ON_ERR))
+		RETURN(1);
+
+	RETURN(0);
+}
+
+/**
+ * Reclaim stale update log.
+ *
+ * When update log is canceld (upon recovery abort), it's not destroy, but
+ * canceled from catlist, and set ctime and LLOG_F_MAX_AGE|LLOG_F_RM_ON_ERR,
+ * which is kept for debug. If it expired (more than UPDATE_LOG_MAX_AGE seconds
+ * passed), destroy it to save space.
+ */
+static int lod_update_log_gc(const struct lu_env *env, struct lod_device *lod,
+			     struct dt_object *dir, struct dt_object *dto,
+			     const char *name)
+{
+	struct dt_device *dt = lod->lod_child;
+	struct thandle *th;
+	int rc;
+
+	ENTRY;
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_delete(env, dir, (const struct dt_key *)name, th);
+	if (rc)
+		GOTO(out_trans, rc);
+
+	rc = dt_declare_destroy(env, dto, th);
+	if (rc)
+		GOTO(out_trans, rc);
+
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc)
+		GOTO(out_trans, rc);
+
+	rc = dt_delete(env, dir, (const struct dt_key *)name, th);
+	if (rc)
+		GOTO(out_trans, rc);
+
+	rc = dt_destroy(env, dto, th);
+	GOTO(out_trans, rc);
+out_trans:
+	dt_trans_stop(env, dt, th);
+
+	return rc;
+}
+
+/* reclaim stale update llogs under "update_log_dir" */
+static int lod_update_log_dir_gc(const struct lu_env *env,
+				 struct lod_device *lod,
+				 struct dt_object *dir)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_buf *buf = &info->lti_linkea_buf;
+	struct lu_dirent *ent = (struct lu_dirent *)info->lti_key;
+	struct lu_fid *fid = &info->lti_fid;
+	struct dt_it *it;
+	const struct dt_it_ops *iops;
+	struct dt_object *dto;
+	int rc;
+
+	ENTRY;
+
+	if (unlikely(!dt_try_as_dir(env, dir, true)))
+		RETURN(-ENOTDIR);
+
+	lu_buf_alloc(buf, sizeof(struct llog_log_hdr));
+	if (!buf->lb_buf)
+		RETURN(-ENOMEM);
+
+	iops = &dir->do_index_ops->dio_it;
+	it = iops->init(env, dir, LUDA_64BITHASH);
+	if (IS_ERR(it))
+		GOTO(out, rc = PTR_ERR(it));
+
+	rc = iops->load(env, it, 0);
+	if (rc == 0)
+		rc = iops->next(env, it);
+	else if (rc > 0)
+		rc = 0;
+
+	while (rc == 0) {
+		rc = iops->rec(env, it, (struct dt_rec *)ent, LUDA_64BITHASH);
+		if (rc != 0)
+			break;
+
+		ent->lde_namelen = le16_to_cpu(ent->lde_namelen);
+		if (ent->lde_name[0] == '.') {
+			if (ent->lde_namelen == 1)
+				goto next;
+
+			if (ent->lde_namelen == 2 && ent->lde_name[1] == '.')
+				goto next;
+		}
+
+		fid_le_to_cpu(fid, &ent->lde_fid);
+		dto = dt_locate(env, lod->lod_child, fid);
+		if (IS_ERR(dto))
+			goto next;
+
+		buf->lb_len = sizeof(struct llog_log_hdr);
+		if (lod_update_log_stale(env, dto, buf) == 1)
+			lod_update_log_gc(env, lod, dir, dto, ent->lde_name);
+		dt_object_put(env, dto);
+next:
+		rc = iops->next(env, it);
+	}
+
+	iops->put(env, it);
+	iops->fini(env, it);
+out:
+	buf->lb_len = sizeof(struct llog_log_hdr);
+	lu_buf_free(buf);
+
+	RETURN(rc > 0 ? 0 : rc);
+}
+
 /**
  * Implementation of lu_device_operations::ldo_prepare() for LOD
  *
@@ -1222,6 +1474,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	if (IS_ERR(dto))
 		GOTO(out_put, rc = PTR_ERR(dto));
 
+	lod_update_log_dir_gc(env, lod, dto);
 	dt_object_put(env, dto);
 
 	rc = lod_prepare_distribute_txn(env, lod);
@@ -2349,8 +2602,188 @@ static int lod_pool_del_q(struct obd_device *obd, char *poolname)
 	return err;
 }
 
+static inline int lod_sub_print_llog(const struct lu_env *env,
+				     struct dt_device *dt, void *data)
+{
+	struct llog_ctxt *ctxt;
+	int rc = 0;
+
+	ENTRY;
+	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
+				LLOG_UPDATELOG_ORIG_CTXT);
+	if (!ctxt)
+		RETURN(0);
+
+	if (ctxt->loc_handle) {
+		struct llog_print_data *lprd = data;
+		struct obd_ioctl_data *ioc_data = lprd->lprd_data;
+		int l, remains;
+		long from;
+		char *out;
+
+		LASSERT(ioc_data);
+		if (ioc_data->ioc_inllen1 > 0) {
+			remains = ioc_data->ioc_inllen4 +
+				  round_up(ioc_data->ioc_inllen1, 8) +
+				  round_up(ioc_data->ioc_inllen2, 8) +
+				  round_up(ioc_data->ioc_inllen3, 8);
+
+			rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
+			if (rc)
+				GOTO(ctxt_put, rc);
+
+			/* second iteration from jt_llog_print_iter() */
+			if (from > 1)
+				GOTO(ctxt_put, rc = 0);
+
+			out = ioc_data->ioc_bulk;
+			ioc_data->ioc_inllen1 = 0;
+		} else {
+			out = ioc_data->ioc_bulk + ioc_data->ioc_offset;
+			remains = ioc_data->ioc_count;
+		}
+
+		l = snprintf(out, remains, "%s [catalog]: "DFID"\n",
+			     ctxt->loc_obd->obd_name,
+			     PLOGID(&ctxt->loc_handle->lgh_id));
+		out += l;
+		remains -= l;
+		if (remains <= 0) {
+			CERROR("%s: not enough space for print log records: rc = %d\n",
+			       ctxt->loc_obd->obd_name, -LLOG_EEMPTY);
+			GOTO(ctxt_put, rc = -LLOG_EEMPTY);
+		}
+
+		ioc_data->ioc_offset += l;
+		ioc_data->ioc_count = remains;
+
+		rc = llog_process_or_fork(env, ctxt->loc_handle, llog_print_cb,
+					  data, NULL, false);
+	}
+	GOTO(ctxt_put, rc);
+ctxt_put:
+	llog_ctxt_put(ctxt);
+
+	return rc;
+}
+
+/* print update catalog and update logs FID of all sub devices */
+static int lod_llog_print(const struct lu_env *env, struct lod_device *lod,
+			  void *data)
+{
+	struct lod_tgt_desc *mdt;
+	bool empty = true;
+	int rc = 0;
+
+	ENTRY;
+	rc = lod_sub_print_llog(env, lod->lod_child, data);
+	if (!rc) {
+		empty = false;
+	} else if (rc == -LLOG_EEMPTY) {
+		rc = 0;
+	} else {
+		CERROR("%s: llog_print failed: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		RETURN(rc);
+	}
+
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, mdt) {
+		rc = lod_sub_print_llog(env, mdt->ltd_tgt, data);
+		if (!rc) {
+			empty = false;
+		} else if (rc == -LLOG_EEMPTY) {
+			rc = 0;
+		} else {
+			CERROR("%s: llog_print of MDT %u failed: rc = %d\n",
+			       lod2obd(lod)->obd_name, mdt->ltd_index, rc);
+			break;
+		}
+	}
+	lod_putref(lod, &lod->lod_mdt_descs);
+
+	RETURN(rc ? rc : empty ? -LLOG_EEMPTY : 0);
+}
+
+/* cancel update catalog from update catlist */
+static int lod_llog_cancel(const struct lu_env *env, struct lod_device *lod)
+{
+	struct lod_tgt_desc *tgt;
+	int index;
+	int rc;
+	int rc2;
+
+	rc = lodname2mdt_index(lod2obd(lod)->obd_name, (__u32 *)&index);
+	if (rc < 0)
+		return rc;
+
+	rc = lod_sub_cancel_llog(env, lod, lod->lod_child, index);
+
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, tgt) {
+		LASSERT(tgt && tgt->ltd_tgt);
+		rc2 = lod_sub_cancel_llog(env, lod, tgt->ltd_tgt,
+					  tgt->ltd_index);
+		if (rc2 && !rc)
+			rc = rc2;
+	}
+	lod_putref(lod, &lod->lod_mdt_descs);
+
+	return rc;
+}
+
+static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+			 void *karg, void __user *uarg)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
+	struct obd_ioctl_data *data = karg;
+	struct lu_env env;
+	int rc;
+
+	ENTRY;
+	rc = lu_env_init(&env, LCT_LOCAL | LCT_MD_THREAD);
+	if (rc) {
+		CERROR("%s: can't initialize env: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		RETURN(rc);
+	}
+
+	switch (cmd) {
+	case OBD_IOC_LLOG_PRINT: {
+		struct llog_print_data lprd = {
+			.lprd_data = data,
+			.lprd_raw = data->ioc_u32_1,
+		};
+		char *logname;
+
+		logname = data->ioc_inlbuf1;
+		if (strcmp(logname, lod_update_log_name) != 0) {
+			rc = -EINVAL;
+			CERROR("%s: llog iocontrol support %s only: rc = %d\n",
+			       lod2obd(lod)->obd_name, lod_update_log_name, rc);
+			RETURN(rc);
+		}
+
+		LASSERT(data->ioc_inllen1 > 0);
+		rc = lod_llog_print(&env, lod, &lprd);
+		break;
+	}
+	case OBD_IOC_LLOG_CANCEL:
+		rc = lod_llog_cancel(&env, lod);
+		break;
+	default:
+		CERROR("%s: unrecognized ioctl %#x by %s\n",
+		       obd->obd_name, cmd, current->comm);
+		rc = -ENOTTY;
+	}
+	lu_env_fini(&env);
+
+	RETURN(rc);
+}
+
 static const struct obd_ops lod_obd_device_ops = {
-	.o_owner        = THIS_MODULE,
+	.o_owner	= THIS_MODULE,
 	.o_connect      = lod_obd_connect,
 	.o_disconnect   = lod_obd_disconnect,
 	.o_get_info     = lod_obd_get_info,
@@ -2359,6 +2792,7 @@ static const struct obd_ops lod_obd_device_ops = {
 	.o_pool_rem     = lod_pool_remove_q,
 	.o_pool_add     = lod_pool_add_q,
 	.o_pool_del     = lod_pool_del_q,
+	.o_iocontrol	= lod_iocontrol,
 };
 
 static int __init lod_init(void)

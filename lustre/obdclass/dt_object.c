@@ -527,7 +527,8 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
 	LASSERT(th != NULL);
 	LASSERT(dt->do_body_ops);
-	LASSERT(dt->do_body_ops->dbo_write);
+	LASSERTF(dt->do_body_ops->dbo_write, DFID"\n",
+		 PFID(lu_object_fid(&dt->do_lu)));
 
 	size = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
 	if (size < 0)

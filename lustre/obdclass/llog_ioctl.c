@@ -211,15 +211,9 @@ static inline bool llog_idx_is_eof(struct llog_handle *llh, __u32 cur_idx)
 	return cur_idx >= last_idx;
 }
 
-struct llog_print_data {
-	struct obd_ioctl_data *lprd_data;
-	unsigned int	       lprd_cfg_flags;
-	bool		       lprd_raw;
-};
-
 #define MARKER_DIFF	10
-static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
-			 struct llog_rec_hdr *rec, void *data)
+int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
+		  struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_print_data *lprd = data;
 	struct obd_ioctl_data *ioc_data = lprd->lprd_data;
@@ -250,6 +244,11 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 
 		out = ioc_data->ioc_bulk;
 		ioc_data->ioc_inllen1 = 0;
+		ioc_data->ioc_offset = 0;
+		ioc_data->ioc_count = remains;
+	} else if (ioc_data) {
+		out = ioc_data->ioc_bulk + ioc_data->ioc_offset;
+		remains = ioc_data->ioc_count;
 	}
 
 	cur_index = rec->lrh_index;
@@ -298,8 +297,18 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 		RETURN(-LLOG_EEMPTY);
 	}
 
+	if (ioc_data) {
+		/* save offset and remains, then we don't always rely on those
+		 * static variables, which is more flexible.
+		 */
+		ioc_data->ioc_offset += l;
+		ioc_data->ioc_count = remains;
+	}
+
 	RETURN(0);
 }
+EXPORT_SYMBOL(llog_print_cb);
+
 static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 			   struct llog_logid *logid)
 {
@@ -339,7 +348,6 @@ static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
 
 	RETURN(rc);
 }
-
 
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data)

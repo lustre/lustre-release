@@ -231,7 +231,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	llh = loghandle->lgh_hdr;
 
-	CDEBUG(D_RPCTRACE, "Canceling %d records, first %d in log "DFID"\n",
+	CDEBUG(D_OTHER, "Canceling %d records, first %d in log "DFID"\n",
 	       num, index[0], PLOGID(&loghandle->lgh_id));
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
@@ -267,7 +267,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			GOTO(out_unlock, rc = -EINVAL);
 		}
 		if (!__test_and_clear_bit_le(index[i], LLOG_HDR_BITMAP(llh))) {
-			CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n",
+			CDEBUG(D_OTHER, "Catalog index %u already clear?\n",
 			       index[i]);
 			GOTO(out_unlock, rc = -ENOENT);
 		}
@@ -1549,3 +1549,49 @@ __u64 llog_size(const struct lu_env *env, struct llog_handle *llh)
 }
 EXPORT_SYMBOL(llog_size);
 
+/* set llog ctime to current, and set LLOG_F_RM_ON_ERR|LLOG_F_MAX_AGE flag in
+ * log header. It will be reclaimed when expired (UPDATE_LOG_MAX_AGE old).
+ */
+int llog_retain(const struct lu_env *env, struct llog_handle *log)
+{
+	struct dt_object *dto = log->lgh_obj;
+	struct dt_device *dt = lu2dt_dev(log->lgh_obj->do_lu.lo_dev);
+	struct lu_attr la = { 0 };
+	struct thandle *th;
+	int rc;
+
+	la.la_ctime = ktime_get_real_seconds();
+	la.la_valid = LA_CTIME;
+
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		return PTR_ERR(th);
+
+	th->th_wait_submit = 1;
+	log->lgh_hdr->llh_flags |= LLOG_F_MAX_AGE | LLOG_F_RM_ON_ERR;
+	rc = llog_declare_write_rec(env, log, &log->lgh_hdr->llh_hdr, -1, th);
+	if (rc)
+		goto out_trans;
+
+	rc = dt_declare_attr_set(env, dto, &la, th);
+	if (rc)
+		goto out_trans;
+
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc)
+		goto out_trans;
+
+	rc = llog_write_rec(env, log, &log->lgh_hdr->llh_hdr, NULL,
+			    LLOG_HEADER_IDX, th);
+	if (rc)
+		goto out_trans;
+
+	rc = dt_attr_set(env, dto, &la, th);
+out_trans:
+	dt_trans_stop(env, dt, th);
+
+	CDEBUG(D_OTHER, "retain log "DFID" rc = %d\n",
+	       PLOGID(&log->lgh_id), rc);
+	return rc;
+}
+EXPORT_SYMBOL(llog_retain);

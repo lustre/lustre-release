@@ -1180,3 +1180,30 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		       PLOGID(&cathandle->lgh_id));
 	return rc;
 }
+
+/* retain log in catalog, and zap it if log is empty */
+int llog_cat_retain_cb(const struct lu_env *env, struct llog_handle *cat,
+		       struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	struct llog_handle *log;
+	int rc;
+
+	if (rec->lrh_type != LLOG_LOGID_MAGIC)
+		return -EINVAL;
+
+	rc = llog_cat_id2handle(env, cat, &log, &lir->lid_id);
+	if (rc) {
+		CDEBUG(D_IOCTL, "cannot find log "DFID"\n",
+		       PLOGID(&lir->lid_id));
+		return -ENOENT;
+	}
+
+	llog_retain(env, log);
+	llog_handle_put(env, log);
+
+	return rc;
+}
+EXPORT_SYMBOL(llog_cat_retain_cb);
+
+
