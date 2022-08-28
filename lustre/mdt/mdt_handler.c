@@ -313,8 +313,7 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 	struct lu_name *lname = &info->mti_name;
 	const char *start = fileset;
 	char *filename = info->mti_filename;
-	struct mdt_object *parent;
-	u32 mode;
+	struct mdt_object *obj;
 	int rc = 0;
 
 	LASSERT(!info->mti_cross_ref);
@@ -348,8 +347,7 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 		}
 
 		/* reject .. as a path component */
-		if (lname->ln_namelen == 2 &&
-		    strncmp(s1, "..", 2) == 0) {
+		if (lname->ln_namelen == 2 && strncmp(s1, "..", 2) == 0) {
 			rc = -EINVAL;
 			break;
 		}
@@ -358,39 +356,18 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 		filename[lname->ln_namelen] = '\0';
 		lname->ln_name = filename;
 
-		parent = mdt_object_find(info->mti_env, mdt, fid);
-		if (IS_ERR(parent)) {
-			rc = PTR_ERR(parent);
+		obj = mdt_object_find(info->mti_env, mdt, fid);
+		if (IS_ERR(obj)) {
+			rc = PTR_ERR(obj);
 			break;
 		}
 		/* Only got the fid of this obj by name */
 		fid_zero(fid);
-		rc = mdo_lookup(info->mti_env, mdt_object_child(parent), lname,
+		rc = mdo_lookup(info->mti_env, mdt_object_child(obj), lname,
 				fid, &info->mti_spec);
-		mdt_object_put(info->mti_env, parent);
-	}
-	if (!rc) {
-		parent = mdt_object_find(info->mti_env, mdt, fid);
-		if (IS_ERR(parent))
-			rc = PTR_ERR(parent);
-		else {
-			mode = lu_object_attr(&parent->mot_obj);
-			if (!S_ISDIR(mode)) {
-				rc = -ENOTDIR;
-			} else if (mdt_is_remote_object(info, parent, parent)) {
-				if (!mdt->mdt_enable_remote_subdir_mount) {
-					rc = -EREMOTE;
-					LCONSOLE_WARN("%s: subdir mount '%s' refused because 'enable_remote_subdir_mount=0': rc = %d\n",
-						      mdt_obd_name(mdt),
-						      fileset, rc);
-				} else {
-					LCONSOLE_INFO("%s: subdir mount '%s' is remote and may be slow\n",
-						      mdt_obd_name(mdt),
-						      fileset);
-				}
-			}
-			mdt_object_put(info->mti_env, parent);
-		}
+		if (!rc && !S_ISDIR(lu_object_attr(&obj->mot_obj)))
+			rc = -ENOTDIR;
+		mdt_object_put(info->mti_env, obj);
 	}
 
 	return rc;
@@ -6004,7 +5981,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_dir = 1;
 	m->mdt_enable_remote_dir_gid = 0;
 	m->mdt_enable_remote_rename = 1;
-	m->mdt_enable_remote_subdir_mount = 1;
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_dir_restripe_nsonly = 1;
 

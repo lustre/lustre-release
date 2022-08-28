@@ -1353,12 +1353,7 @@ static ssize_t enable_remote_subdir_mount_show(struct kobject *kobj,
 					       struct attribute *attr,
 					       char *buf)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_remote_subdir_mount);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", 1);
 }
 
 static ssize_t enable_remote_subdir_mount_store(struct kobject *kobj,
@@ -1366,17 +1361,7 @@ static ssize_t enable_remote_subdir_mount_store(struct kobject *kobj,
 						const char *buffer,
 						size_t count)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_remote_subdir_mount = val;
+	LCONSOLE_WARN("enable_remote_subdir_mount is deprecated, it's always enabled.\n");
 	return count;
 }
 LUSTRE_RW_ATTR(enable_remote_subdir_mount);

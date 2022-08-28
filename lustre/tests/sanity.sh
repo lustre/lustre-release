@@ -20093,7 +20093,7 @@ test_228b() {
 	start $SINGLEMDS $(facet_device $SINGLEMDS) $MDS_MOUNT_OPTS ||
 		error "Fail to start MDT."
 
-	df $MOUNT || error "Fail to df."
+	client_up || error "Fail to df."
 	# Create new files, idle OI blocks should be reused.
 	createmany -o $myDIR/t- 2000
 	do_facet $SINGLEMDS sync
@@ -21737,13 +21737,10 @@ test_247e() {
 run_test 247e "mount .. as fileset"
 
 test_247f() {
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
-		skip "Need at least version 2.13.52"
-	[ $CLIENT_VERSION -lt $(version_code 2.14.50) ] &&
-		skip "Need at least version 2.14.50"
-	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
-		grep -q subtree ||
+	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.14.50.162) )) ||
+		skip "Need at least version 2.14.50.162"
+	lctl get_param -n mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
 		skip "Fileset feature is not supported"
 
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
@@ -21761,67 +21758,71 @@ test_247f() {
 	stack_trap "rmdir $submount"
 
 	local dir
-	local stat
 	local fileset=$FILESET
 	local mdts=$(comma_list $(mdts_nodes))
 
-	stat=$(do_facet mds1 $LCTL get_param -n \
-		mdt.*MDT0000.enable_remote_subdir_mount)
-	stack_trap "do_nodes $mdts $LCTL set_param \
-		mdt.*.enable_remote_subdir_mount=$stat"
-
-	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=0"
-	stack_trap "umount_client $submount"
-	FILESET="$fileset/$tdir/remote" mount_client $submount &&
-		error "mount remote dir $dir should fail"
-
-	for dir in $tdir/remote/subdir $tdir/striped $tdir/striped/subdir \
-		$tdir/striped/. ; do
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=1"
+	for dir in $tdir/remote $tdir/remote/subdir $tdir/striped \
+		$tdir/striped/subdir $tdir/striped/.; do
 		FILESET="$fileset/$dir" mount_client $submount ||
 			error "mount $dir failed"
 		umount_client $submount
 	done
-
-	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=1"
-	FILESET="$fileset/$tdir/remote" mount_client $submount ||
-		error "mount $tdir/remote failed"
 }
 run_test 247f "mount striped or remote directory as fileset"
 
-test_247g() {
-	[ $MDSCOUNT -lt 4 ] && skip_env "needs >= 4 MDTs"
-	[ $CLIENT_VERSION -lt $(version_code 2.14.50) ] &&
-		skip "Need at least version 2.14.50"
+test_subdir_mount_lock()
+{
+	local testdir=$1
+	local submount=${MOUNT}_$(basename $testdir)
 
-	$LFS mkdir -i 0 -c 4 -H fnv_1a_64 $DIR/$tdir ||
-		error "mkdir $tdir failed"
-	touch $DIR/$tdir/$tfile || error "touch $tfile failed"
-
-	local submount=${MOUNT}_$tdir
+	touch $DIR/$testdir/$tfile || error "touch $tfile failed"
 
 	mkdir -p $submount || error "mkdir $submount failed"
 	stack_trap "rmdir $submount"
 
-	FILESET="$fileset/$tdir" mount_client $submount ||
-		error "mount $dir failed"
+	FILESET="$fileset/$testdir" mount_client $submount ||
+		error "mount $FILESET failed"
 	stack_trap "umount $submount"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
 	local nrpcs
 
-	stat $submount > /dev/null
+	stat $submount > /dev/null || error "stat $submount failed"
 	cancel_lru_locks $MDC
-	stat $submount > /dev/null
-	stat $submount/$tfile > /dev/null
+	stat $submount > /dev/null || error "stat $submount failed"
+	stat $submount/$tfile > /dev/null || error "stat $tfile failed"
 	do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
-	stat $submount/$tfile > /dev/null
+	stat $submount/$tfile > /dev/null || error "stat $tfile failed"
 	nrpcs=$(do_nodes $mdts "lctl get_param -n mdt.*.md_stats" |
 		awk '/getattr/ {sum += $2} END {print sum}')
 
 	[ -z "$nrpcs" ] || error "$nrpcs extra getattr sent"
 }
-run_test 247g "mount striped directory as fileset caches ROOT lookup lock"
+
+test_247g() {
+	(( $MDSCOUNT > 1 )) || skip_env "needs > 1 MDTs"
+
+	$LFS mkdir -i 0 -c 4 -H fnv_1a_64 $DIR/$tdir ||
+		error "mkdir $tdir failed"
+	test_subdir_mount_lock $tdir
+}
+run_test 247g "striped directory submount revalidate ROOT from cache"
+
+test_247h() {
+	(( $MDSCOUNT > 1 )) || skip_env "needs > 1 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51"
+
+	$LFS mkdir -i 1 -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	test_subdir_mount_lock $tdir
+	mkdir_on_mdt -i 0 $DIR/$tdir/$tdir.0 || error "mkdir $tdir.0 failed"
+	mkdir_on_mdt -i 1 $DIR/$tdir/$tdir.0/$tdir.1 ||
+		error "mkdir $tdir.1 failed"
+	test_subdir_mount_lock $tdir/$tdir.0/$tdir.1
+}
+run_test 247h "remote directory submount revalidate ROOT from cache"
 
 test_248a() {
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
