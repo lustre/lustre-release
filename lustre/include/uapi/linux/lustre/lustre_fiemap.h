@@ -38,7 +38,11 @@
 #ifndef _LUSTRE_FIEMAP_H
 #define _LUSTRE_FIEMAP_H
 
-#include <stddef.h>
+#ifdef __KERNEL__
+# include <linux/stddef.h>
+#else
+# include <stddef.h>
+#endif
 #include <linux/fiemap.h>
 #include <linux/types.h>
 
