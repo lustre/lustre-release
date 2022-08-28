@@ -794,6 +794,10 @@ lnet_check_message_drop(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 	if (lnet_msg_is_response(msg))
 		return false;
 
+	/* always send non-routed messages */
+	if (!msg->msg_routing)
+		return false;
+
 	/* assume peer_ni is alive as long as we're within the configured
 	 * peer timeout
 	 */
