@@ -4556,6 +4556,8 @@ sub process {
 #	avoid cases like "foo + BAR < baz"
 #	only fix matches surrounded by parentheses to avoid incorrect
 #	conversions like "FOO < baz() + 5" being "misfixed" to "baz() > FOO + 5"
+# Exceptions:
+# 01.	LUSTRE_VERSION_CODE upper-case constant on left side.
 		if ($^V && $^V ge 5.10.0 &&
 		    $line =~ /^\+(.*)\b($Constant|[A-Z_][A-Z0-9_]*)\s*($Compare)\s*($LvalOrFunc)/) {
 			my $lead = $1;
@@ -4565,6 +4567,7 @@ sub process {
 			my $newcomp = $comp;
 			if ($lead !~ /(?:$Operators|\.)\s*$/ &&
 			    $to !~ /^(?:Constant|[A-Z_][A-Z0-9_]*)$/ &&
+			    $const !~ /LUSTRE_VERSION_CODE/ &&
 			    WARN("CONSTANT_COMPARISON",
 				 "Comparisons should place the constant on the right side of the test\n" . $herecurr) &&
 			    $fix) {
