@@ -5923,6 +5923,7 @@ test_51d() {
 
 	test_mkdir $DIR/$tdir
 	local dirstripes=$(lfs getdirstripe -c $DIR/$tdir)
+	(( dirstripes > 0 )) || dirstripes=1
 
 	# Ensure enough OST objects precreated for tests to pass without
 	# running out of objects.  This is an LOV r-r OST algorithm test,
