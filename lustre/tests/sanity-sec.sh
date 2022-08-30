@@ -2730,6 +2730,18 @@ remove_enc_key() {
 	fi
 }
 
+wait_ssk() {
+	# wait for SSK flavor to be applied if necessary
+	if $GSS_SK; then
+		if $SK_S2S; then
+			wait_flavor all2all $SK_FLAVOR
+		else
+			wait_flavor cli2mdt $SK_FLAVOR
+			wait_flavor cli2ost $SK_FLAVOR
+		fi
+	fi
+}
+
 remount_client_normally() {
 	# remount client without dummy encryption key
 	if is_mounted $MOUNT; then
@@ -2747,6 +2759,7 @@ remount_client_normally() {
 	fi
 
 	remove_enc_key
+	wait_ssk
 }
 
 remount_client_dummykey() {
@@ -2758,6 +2771,8 @@ remount_client_dummykey() {
 	fi
 	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
 		error "remount failed"
+
+	wait_ssk
 }
 
 setup_for_enc_tests() {
@@ -2767,6 +2782,8 @@ setup_for_enc_tests() {
 	fi
 	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
 		error "mount with '-o test_dummy_encryption' failed"
+
+	wait_ssk
 
 	# this directory will be encrypted, because of dummy mode
 	mkdir $DIR/$tdir
@@ -4428,6 +4445,7 @@ test_54() {
 	export FILESET=/$tdir
 	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (1)"
 	export FILESET=""
+	wait_ssk
 
 	# setup encryption from inside this subdir mount
 	# the .fscrypt directory is going to be created at the real fs root
@@ -4478,6 +4496,7 @@ test_54() {
 	export FILESET=/$tdir/vault
 	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (2)"
 	export FILESET=""
+	wait_ssk
 	ls -laR $MOUNT
 	fid2=$(path2fid $MOUNT/.fscrypt)
 	echo "With FILESET $tdir/vault, .fscrypt FID is $fid2"
@@ -4494,6 +4513,7 @@ test_54() {
 	# remount client without subdir mount
 	umount_client $MOUNT || error "umount $MOUNT failed (3)"
 	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (3)"
+	wait_ssk
 	ls -laR $MOUNT
 	fid2=$(path2fid $MOUNT/.fscrypt)
 	echo "Without FILESET, .fscrypt FID is $fid2"
@@ -4555,6 +4575,7 @@ cleanup_55() {
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
 	fi
+	wait_ssk
 }
 
 test_55() {
@@ -4618,6 +4639,7 @@ test_55() {
 	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
 		error "remount failed"
 	unset FILESET
+	wait_ssk
 
 	euid_access $USER0 $DIR/$tdir/$USER0/testdir_groups/file
 }
@@ -5003,6 +5025,7 @@ test_60() {
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
 	fi
+	wait_ssk
 
 	ls -Rl $DIR || error "ls -Rl $DIR failed (1)"
 
