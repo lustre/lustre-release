@@ -30,10 +30,8 @@ build_test_filter
 
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 ORIG_PWD=${PWD}
-TSTID=${TSTID:-60000}
-TSTID2=${TSTID2:-60001}
-TSTUSR=${TSTUSR:-"quota_usr"}
-TSTUSR2=${TSTUSR2:-"quota_2usr"}
+TSTID=${TSTID:-"$(id -u $TSTUSR)"}
+TSTID2=${TSTID2:-"$(id -u $TSTUSR2)"}
 TSTPRJID=${TSTPRJID:-1000}
 BLK_SZ=1024
 MAX_DQ_TIME=604800
@@ -4494,8 +4492,8 @@ test_67_write() {
 	echo "file "$file
 	echo "0 $0 1 $1 2 $2 3 $3 4 $4"
 	case "$4" in
-		quota_usr)  _runas=$RUNAS;;
-		quota_2usr) _runas=$RUNAS2;;
+		$TSTUSR)  _runas=$RUNAS;;
+		$TSTUSR2) _runas=$RUNAS2;;
 		*)          error "unknown quota parameter $4";;
 	esac
 
@@ -4567,12 +4565,12 @@ test_67() {
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	# write 10 MB to testfile
-	test_67_write "$testfile" "user" 10 "quota_usr"
+	test_67_write "$testfile" "user" 10 "$TSTUSR"
 
 	# create qpool and add OST1
 	pool_add $qpool || error "pool_add failed"
 	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
-	# as quota_usr hasn't limits, lqe may absent. But it should be
+	# as $TSTUSR hasn't limits, lqe may absent. But it should be
 	# created after the 1st direct qmt_get.
 	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
 
@@ -4597,14 +4595,14 @@ test_67() {
 		error "setstripe $testfile2 failed"
 	chown $TSTUSR2.$TSTUSR2 $testfile2 || error "chown $testfile2 failed"
 	# Write from another user and check that qpool1
-	# shows correct granted, despite quota_2usr hasn't limits in qpool1.
-	test_67_write "$testfile2" "user" 10 "quota_2usr"
+	# shows correct granted, despite $TSTUSR2 hasn't limits in qpool1.
+	test_67_write "$testfile2" "user" 10 "$TSTUSR2"
 	used=$(getquota -u $TSTUSR2 global curspace $qpool)
 	granted=$(getgranted $qpool "dt" $TSTID2 "usr")
 	[ $granted -ne 0 ] &&
 		error "Granted($granted) for $TSTUSR2 in $qpool isn't 0."
 
-	# Granted space for quota_2usr in qpool1 should appear only
+	# Granted space for $TSTUSR2 in qpool1 should appear only
 	# when global lqe for this user becomes enforced.
 	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR ||
 		error "set user quota failed"
@@ -4616,7 +4614,7 @@ test_67() {
 	$LFS setstripe $testfile3 -c 1 -i 0 ||
 		error "setstripe $testfile3 failed"
 	chown $TSTUSR2.$TSTUSR2 $testfile3 || error "chown $testfile3 failed"
-	test_67_write "$testfile3" "user" 10 "quota_2usr"
+	test_67_write "$testfile3" "user" 10 "$TSTUSR2"
 	granted_mb=$(($(getgranted $qpool "dt" $TSTID2 "usr")/1024))
 	echo "$testfile3 granted_mb $granted_mb"
 	[ $granted_mb -eq $limit ] ||
@@ -5009,7 +5007,7 @@ test_72()
 	[ $used -ge $limit ] || error "used($used) is less than limit($limit)"
 	# check that lfs quota -uv --pool prints only OST that
 	# was added in a pool
-	lfs quota -v -u quota_usr --pool $qpool $DIR | grep -v "OST0001" |
+	lfs quota -v -u $TSTUSR --pool $qpool $DIR | grep -v "OST0001" |
 		grep "OST\|MDT" && error "$qpool consists wrong targets"
 	return 0
 }
@@ -5316,7 +5314,7 @@ run_test 76 "project ID 4294967295 should be not allowed"
 test_77()
 {
 	mount_client $MOUNT2 "ro"
-	lfs setquota -u quota_usr -b 100M -B 100M -i 10K -I 10K $MOUNT2 &&
+	lfs setquota -u $TSTUSR -b 100M -B 100M -i 10K -I 10K $MOUNT2 &&
 		error "lfs setquota should fail in read-only Lustre mount"
 	umount $MOUNT2
 }

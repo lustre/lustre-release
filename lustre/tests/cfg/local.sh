@@ -109,9 +109,14 @@ fi
 
 DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
 
+TSTUSR=${TSTUSR:-"quota_usr"}
+TSTUSR2=${TSTUSR2:-"quota_2usr"}
+USER0=${USER0:-"sanityusr"}
+USER1=${USER1:-"sanityusr1"}
+
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}
 QUOTA_TYPE=${QUOTA_TYPE:-"ug3"}
-QUOTA_USERS=${QUOTA_USERS:-"quota_usr quota_2usr sanityusr sanityusr1"}
+QUOTA_USERS=${QUOTA_USERS:-"$TSTUSR $TSTUSR2 $USER0 $USER1"}
 # "error: conf_param: No such device" issue in every test suite logs
 # sanity-quota test_32 hash_lqs_cur_bits is not set properly
 LQUOTAOPTS=${LQUOTAOPTS:-"hash_lqs_cur_bits=3"}

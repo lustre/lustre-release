@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # reduce LEVELS from 3 => 2 by CFS
 LEVELS=2 ;		[ -z "$1" ] || LEVELS=$1

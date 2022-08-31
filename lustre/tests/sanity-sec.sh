@@ -47,10 +47,13 @@ clients=${CLIENTS//,/ }
 num_clients=$(get_node_count ${clients})
 clients_arr=($clients)
 
-ID0=${ID0:-500}
-ID1=${ID1:-501}
-USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
-USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
+echo "was USER0=$(getent passwd | grep :${ID0:-500}:)"
+echo "was USER1=$(getent passwd | grep :${ID1:-501}:)"
+
+ID0=$(id -u $USER0)
+ID1=$(id -u $USER1)
+
+echo "now USER0=$USER0=$ID0:$(id -g $USER0), USER1=$USER1=$ID1:$(id -g $USER1)"
 
 if [ "$SLOW" == "yes" ]; then
 	NODEMAP_COUNT=16
@@ -4568,10 +4571,10 @@ test_55() {
 	local client_nid
 
 	mkdir -p $DIR/$tdir/$USER0/testdir_groups
-	chown root:$ID0 $DIR/$tdir/$USER0
+	chown root:$USER0 $DIR/$tdir/$USER0
 	chmod 770 $DIR/$tdir/$USER0
 	chmod g+s $DIR/$tdir/$USER0
-	chown $ID0:$ID0 $DIR/$tdir/$USER0/testdir_groups
+	chown $USER0:$USER0 $DIR/$tdir/$USER0/testdir_groups
 	chmod 770 $DIR/$tdir/$USER0/testdir_groups
 	chmod g+s $DIR/$tdir/$USER0/testdir_groups
 
