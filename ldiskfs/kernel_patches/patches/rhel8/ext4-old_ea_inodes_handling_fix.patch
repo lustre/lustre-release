@@ -1,0 +1,19 @@
+Index: linux-stage/fs/ext4/xattr.c
+===================================================================
+--- linux-stage.orig/fs/ext4/xattr.c
++++ linux-stage/fs/ext4/xattr.c
+@@ -415,10 +415,11 @@ static int ext4_xattr_inode_iget(struct
+ 
+ 	/*
+ 	 * Check whether this is an old Lustre-style xattr inode. Lustre
+-	 * implementation does not have hash validation, rather it has a
+-	 * backpointer from ea_inode to the parent inode.
++	 * implementation sets ea_inode->i_atime.tv_sec to 0
++	 * (when md csum is off, means always)
++	 * and backpointer from ea_inode to the parent inode.
+ 	 */
+-	if (ea_inode_hash != ext4_xattr_inode_get_hash(inode) &&
++	if (ext4_xattr_inode_get_hash(inode) == 0 &&
+ 	    EXT4_XATTR_INODE_GET_PARENT(inode) == parent->i_ino &&
+ 	    inode->i_generation == parent->i_generation) {
+ 		ext4_set_inode_state(inode, EXT4_STATE_LUSTRE_EA_INODE);
