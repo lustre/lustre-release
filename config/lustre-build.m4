@@ -698,7 +698,7 @@ AS_IF([test "x$enable_tests" = xyes], [
 LIBCFS_CONFIG_CDEBUG
 LC_QUOTA
 
-LB_LIBMOUNT
+AS_IF([test "x$enable_dist" != xno], [],[LB_LIBMOUNT])
 LB_PATH_SNMP
 LB_PATH_LUSTREIOKIT
 
