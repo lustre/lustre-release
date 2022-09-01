@@ -35,6 +35,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/fs_struct.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <obd_support.h>
@@ -1507,6 +1508,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 	struct obd_import *imp = data;
 
 	ENTRY;
+	unshare_fs_struct();
 	CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
 	       imp->imp_connection->c_remote_uuid.uuid);
