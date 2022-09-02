@@ -3555,7 +3555,7 @@ static void
 lnet_set_tune_defaults(struct lnet_ioctl_config_lnd_tunables *tun)
 {
 	if (tun) {
-		if (!tun->lt_cmn.lct_peer_timeout)
+		if (tun->lt_cmn.lct_peer_timeout < 0)
 			tun->lt_cmn.lct_peer_timeout = DEFAULT_PEER_TIMEOUT;
 		if (!tun->lt_cmn.lct_peer_tx_credits)
 			tun->lt_cmn.lct_peer_tx_credits = DEFAULT_PEER_CREDITS;

@@ -3032,6 +3032,52 @@ test_230() {
 }
 run_test 230 "Test setting conns-per-peer"
 
+test_231() {
+	reinit_dlc || return $?
+
+	do_lnetctl net add --net tcp --if ${INTERFACES[0]} ||
+		error "Failed to add net"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+	sed -i 's/peer_timeout: .*$/peer_timeout: 0/' \
+		$TMP/sanity-lnet-$testnum-expected.yaml
+
+	reinit_dlc || return $?
+
+	do_lnetctl import $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Failed to import configuration"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files || error "Wrong config after import"
+
+	do_lnetctl net del --net tcp --if ${INTERFACES[0]} ||
+		error "Failed to delete net tcp"
+
+	do_lnetctl net add --net tcp --if ${INTERFACES[0]} --peer-timeout=0 ||
+		error "Failed to add net with peer-timeout=0"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files || error "Wrong config after lnetctl net add"
+
+	reinit_dlc || return $?
+
+	# lnet/include/lnet/lib-lnet.h defines DEFAULT_PEER_TIMEOUT 180
+	sed -i 's/peer_timeout: .*$/peer_timeout: 180/' \
+		$TMP/sanity-lnet-$testnum-expected.yaml
+
+	sed -i '/^.*peer_timeout:.*$/d' $TMP/sanity-lnet-$testnum-actual.yaml
+
+	do_lnetctl import $TMP/sanity-lnet-$testnum-actual.yaml ||
+		error "Failed to import config without peer_timeout"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files
+}
+run_test 231 "Check DLC handling of peer_timeout parameter"
+
 ### Test that linux route is added for each ni
 test_250() {
 	reinit_dlc || return $?

@@ -1178,7 +1178,7 @@ static int jt_add_ni(int argc, char **argv)
 		found = true;
 	}
 
-	if (pto > 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
+	if (pto >= 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
 		tunables.lt_cmn.lct_peer_timeout = pto;
 		tunables.lt_cmn.lct_peer_tx_credits = pc;
 		tunables.lt_cmn.lct_peer_rtr_credits = pbc;

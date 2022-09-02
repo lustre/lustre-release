@@ -4422,6 +4422,8 @@ yaml_extract_cmn_tunables(struct cYAML *tree,
 		item = cYAML_get_object_item(tun, "peer_timeout");
 		if (item != NULL)
 			tunables->lct_peer_timeout = item->cy_valueint;
+		else
+			tunables->lct_peer_timeout = -1;
 		item = cYAML_get_object_item(tun, "peer_credits");
 		if (item != NULL)
 			tunables->lct_peer_tx_credits = item->cy_valueint;
