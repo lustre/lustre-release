@@ -1647,6 +1647,10 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			return -1;
 		}
 	}
+	if (popt->po_perm && popt->po_file) {
+		fprintf(stderr, "warning: ignoring -P option\n");
+		popt->po_perm = 0;
+	}
 	return optind;
 }
 
@@ -1685,17 +1689,16 @@ static struct cfg_stage_data {
 	{ PS_NONE, "none" }
 };
 
-void conf_to_set_param(enum paramtype confset, const char *param,
-		       const char *device, char *buf,
-		       int bufsize)
+static enum paramtype construct_param(enum paramtype confset, const char *param,
+				      const char *device, char *buf,
+				      int bufsize, bool convert)
 {
 	char *tmp;
 
 	if (confset == PT_SETPARAM) {
 		strncpy(buf, param, bufsize);
-		return;
+		return confset;
 	}
-
 	/*
 	 * sys.* params are top level, we just need to trim the sys.
 	 */
@@ -1703,28 +1706,42 @@ void conf_to_set_param(enum paramtype confset, const char *param,
 	if (tmp) {
 		tmp += 4;
 		strncpy(buf, tmp, bufsize);
-		return;
+		return PT_SETPARAM;
 	}
 
-	/*
-	 * parameters look like type.parameter, we need to stick the device
-	 * in the middle.  Example combine mdt.identity_upcall with device
-	 * lustre-MDT0000 for mdt.lustre-MDT0000.identity_upcall
-	 */
+	if (convert) {
+		/*
+		 * parameters look like type.parameter, we need to stick the
+		 * device in the middle. Example combine mdt.identity_upcall
+		 * with device lustre-MDT0000 for
+		 * mdt.lustre-MDT0000.identity_upcall
+		 */
 
-	tmp = strchrnul(param, '.');
-	snprintf(buf, tmp - param + 1, "%s", param);
-	buf += tmp - param;
-	bufsize -= tmp - param;
-	snprintf(buf, bufsize, ".%s%s", device, tmp);
+		tmp = strchrnul(param, '.');
+		snprintf(buf, tmp - param + 1, "%s", param);
+		buf += tmp - param;
+		bufsize -= tmp - param;
+		snprintf(buf, bufsize, ".%s%s", device, tmp);
+		return PT_SETPARAM;
+	}
+	/* create for conf_param */
+	if (strlen(device)) {
+		int rc;
+
+		rc = snprintf(buf, bufsize, "%s.%s", device, param);
+		if (rc < 0)
+			return PT_NONE;
+		return confset;
+	}
+	return PT_NONE;
 }
 
-int lcfg_setparam_yaml(char *func, char *filename)
+int lcfg_apply_param_yaml(char *func, char *filename)
 {
 	FILE *file;
 	yaml_parser_t parser;
 	yaml_token_t token;
-	int rc = 0;
+	int rc = 0, rc1 = 0;
 
 	enum paramtype confset = PT_NONE;
 	int param = PS_NONE;
@@ -1732,7 +1749,9 @@ int lcfg_setparam_yaml(char *func, char *filename)
 	char parameter[PARAM_SZ + 1];
 	char value[PARAM_SZ + 1];
 	char device[PARAM_SZ + 1];
+	bool convert;
 
+	convert = !strncmp(func, "set_param", 9);
 	file = fopen(filename, "rb");
 	yaml_parser_initialize(&parser);
 	yaml_parser_set_input_file(&parser, file);
@@ -1744,7 +1763,7 @@ int lcfg_setparam_yaml(char *func, char *filename)
 	 * when we have all 3, create param=val and call the
 	 * appropriate function for set/conf param
 	 */
-	while (token.type != YAML_STREAM_END_TOKEN && rc == 0) {
+	while (token.type != YAML_STREAM_END_TOKEN) {
 		int i;
 
 		yaml_token_delete(&token);
@@ -1781,9 +1800,15 @@ int lcfg_setparam_yaml(char *func, char *filename)
 			continue;
 
 		if (param & PS_PARAM_FOUND) {
-			conf_to_set_param(confset,
-					  (char *)token.data.alias.value,
-					  device, parameter, PARAM_SZ);
+			enum paramtype rc;
+
+			rc = construct_param(confset,
+					(char *)token.data.alias.value,
+					device, parameter, PARAM_SZ, convert);
+
+			if (rc == PT_NONE)
+				printf("error: conf_param without device\n");
+			confset = rc;
 			param |= PS_PARAM_SET;
 			param &= ~PS_PARAM_FOUND;
 
@@ -1822,9 +1847,19 @@ int lcfg_setparam_yaml(char *func, char *filename)
 			}
 			snprintf(buf, size, "%s=%s", parameter, value);
 
-			printf("set_param: %s\n", buf);
-			rc = lcfg_setparam_perm(func, buf);
+			printf("%s: %s\n", confset == PT_SETPARAM ?
+			       "set_param" : "conf_param", buf);
 
+			if (confset == PT_SETPARAM)
+				rc = lcfg_setparam_perm(func, buf);
+			else
+				rc = lcfg_conf_param(func, buf);
+			if (rc) {
+				printf("error: failed to apply parameter rc = %d, tyring next one\n",
+				       rc);
+				rc1 = rc;
+				rc = 0;
+			}
 			confset = PT_NONE;
 			param = PS_NONE;
 			parameter[0] = '\0';
@@ -1837,7 +1872,19 @@ int lcfg_setparam_yaml(char *func, char *filename)
 	yaml_parser_delete(&parser);
 	fclose(file);
 
-	return rc;
+	return rc1;
+}
+
+int jt_lcfg_applyyaml(int argc, char **argv)
+{
+	int index;
+	struct param_opts popt = {0};
+
+	index = setparam_cmdline(argc, argv, &popt);
+	if (index < 0 || index >= argc)
+		return CMD_HELP;
+
+	return lcfg_apply_param_yaml(argv[0], argv[index]);
 }
 
 int jt_lcfg_setparam(int argc, char **argv)
@@ -1858,9 +1905,15 @@ int jt_lcfg_setparam(int argc, char **argv)
 		 */
 		return jt_lcfg_setparam_perm(argc, argv, &popt);
 
-	if (popt.po_file)
-		return lcfg_setparam_yaml(argv[0], argv[index]);
-
+	if (popt.po_file) {
+#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,17,0,0)
+		fprintf(stderr, "warning: 'lctl set_param -F' is deprecated, use 'lctl apply_yaml' instead\n");
+		return -EINVAL; 
+#else
+		printf("This option left for backward compatibility, please use 'lctl apply_yaml' instead\n");
+		return lcfg_apply_param_yaml(argv[0], argv[index]);
+#endif
+	}
 	for (i = index; i < argc; i++) {
 		int rc2;
 

@@ -201,6 +201,9 @@ command_t cmdlist[] = {
 	 "  -P  Set the parameter permanently, filesystem-wide.\n"
 	 "  -d  Remove the permanent setting (only with -P option).\n"
 	 "  -F  Read permanent configuration from a YAML file.\n"},
+	{"apply_yaml", jt_lcfg_applyyaml, 0, "set/config the Lustre or LNET "
+	 "parameters using configuration from a YAML file.\n"
+	 "usage: apply_yaml file\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
 	 "usage: list_param [-F|-R|-D] <param_path1 param_path2 ...>\n"

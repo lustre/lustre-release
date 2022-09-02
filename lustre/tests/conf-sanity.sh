@@ -9897,18 +9897,18 @@ test_123ai() { #LU-16167
 }
 run_test 123ai "llog_print display all non skipped records"
 
-test_123F() {
+test_123_prep() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 
 	[ -d $MOUNT/.lustre ] || setup
-	local yaml_file="$TMP/$tfile.yaml"
+	yaml_file="$TMP/$tfile.yaml"
 
 	do_facet mgs rm "$yaml_file"
-	local cfgfiles=$(do_facet mgs "lctl --device MGS llog_catlist" |
+	cfgfiles=$(do_facet mgs "lctl --device MGS llog_catlist" |
 			 sed 's/config_log://')
 
 	# set jobid_var to a different value for test
-	local orig_val=$(do_facet mgs $LCTL get_param jobid_var)
+	orig_val=$(do_facet mgs $LCTL get_param jobid_var)
 
 	do_facet mgs $LCTL set_param -P jobid_var="TESTNAME"
 
@@ -9922,12 +9922,10 @@ test_123F() {
 	writeconf_all
 	echo "Remounting"
 	setup_noconfig
+}
 
-	# Reapply the config from before
-	echo "Setting configuration parameters"
-	do_facet mgs "lctl set_param -F $yaml_file"
-
-	local set_val=$(do_facet mgs $LCTL get_param jobid_var)
+test_123_restore() {
+	set_val=$(do_facet mgs $LCTL get_param jobid_var)
 
 	do_facet mgs $LCTL set_param -P $orig_val
 
@@ -9937,7 +9935,39 @@ test_123F() {
 	do_facet mgs rm "$yaml_file"
 	cleanup
 }
+
+test_123F() {
+	local yaml_file
+	local cfgfiles
+	local orig_val
+	local set_val
+
+	test_123_prep
+
+	# Reapply the config from before
+	echo "Setting configuration parameters"
+	do_facet mgs "lctl set_param -F $yaml_file"
+
+	test_123_restore
+}
 run_test 123F "clear and reset all parameters using set_param -F"
+
+test_123G() {
+	local yaml_file
+	local cfgfiles
+	local orig_val
+	local set_val
+
+	test_123_prep
+
+	# Reapply the config from before
+	echo "Setting configuration parameters"
+	do_facet mgs "lctl apply_yaml $yaml_file"
+
+	test_123_restore
+}
+run_test 123G "clear and reset all parameters using apply_yaml"
+
 
 test_124()
 {

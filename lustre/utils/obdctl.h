@@ -154,6 +154,7 @@ int jt_lcfg_param(int argc, char **argv);
 int jt_lcfg_confparam(int argc, char **argv);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
+int jt_lcfg_applyyaml(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
 
 int jt_pool_cmd(int argc, char **argv);
