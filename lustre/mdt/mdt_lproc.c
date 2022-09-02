@@ -86,7 +86,7 @@ static void display_rename_stats(struct seq_file *seq, char *name,
 
 	tot = lprocfs_oh_sum(rs_hist);
 	if (tot > 0)
-		seq_printf(seq, "- %s\n", name);
+		seq_printf(seq, "- %s:\n", name);
 
 	for (i = 0; i < OBD_HIST_MAX; i++) {
 		t = rs_hist->oh_buckets[i];
@@ -113,9 +113,9 @@ static void rename_stats_show(struct seq_file *seq,
 			      struct rename_stats *rename_stats)
 {
 	/* this sampling races with updates */
-	seq_puts(seq, "rename_stats:\n- ");
+	seq_puts(seq, "rename_stats:\n-\n");
 	lprocfs_stats_header(seq, ktime_get(), rename_stats->rs_init, 15, ":",
-			     false);
+			     false, "  ");
 
 	display_rename_stats(seq, "same_dir",
 			     &rename_stats->rs_hist[RENAME_SAMEDIR_SIZE]);

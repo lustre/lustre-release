@@ -2058,7 +2058,8 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
 	}
 
 	spin_lock(&sbi->ll_pp_extent_lock);
-	lprocfs_stats_header(seq, ktime_get(), rw_extents->pp_init, 25, ":", 1);
+	lprocfs_stats_header(seq, ktime_get(), rw_extents->pp_init, 25, ":",
+			     true, "");
 	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
 	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
 		   "extents", "calls", "%", "cum%", "calls", "%", "cum%");
@@ -2199,7 +2200,8 @@ static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
 	}
 
 	spin_lock(&sbi->ll_lock);
-	lprocfs_stats_header(seq, ktime_get(), rw_extents->pp_init, 25, ":", 1);
+	lprocfs_stats_header(seq, ktime_get(), rw_extents->pp_init, 25, ":",
+			     true, "");
 
 	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
 	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
@@ -2382,7 +2384,7 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 
 	spin_lock(&sbi->ll_process_lock);
 	lprocfs_stats_header(seq, ktime_get(), sbi->ll_process_stats_init, 25,
-			     ":", true);
+			     ":", true, "");
 	seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
 		   "R/W", "PID", "RANGE START", "RANGE END",
 		   "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");

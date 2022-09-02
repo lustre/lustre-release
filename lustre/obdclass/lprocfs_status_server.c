@@ -779,7 +779,8 @@ static int brw_stats_seq_show(struct seq_file *seq, void *v)
 	int i;
 
 	/* this sampling races with updates */
-	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":", 1);
+	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":",
+			     true, "");
 
 	for (i = 0; i < ARRAY_SIZE(brw_stats->bs_props); i++) {
 		if (!brw_stats->bs_props[i].bsp_name)

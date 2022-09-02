@@ -713,7 +713,8 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
 	spin_lock(&cli->cl_loi_list_lock);
 
-	lprocfs_stats_header(seq, ktime_get(), cli->cl_stats_init, 25, ":", 1);
+	lprocfs_stats_header(seq, ktime_get(), cli->cl_stats_init, 25, ":",
+			     true, "");
 	seq_printf(seq, "read RPCs in flight:  %d\n",
 		   cli->cl_r_in_flight);
 	seq_printf(seq, "write RPCs in flight: %d\n",
@@ -822,7 +823,8 @@ static int osc_stats_seq_show(struct seq_file *seq, void *v)
 	struct obd_device *obd = seq->private;
 	struct osc_stats *stats = &obd2osc_dev(obd)->od_stats;
 
-	lprocfs_stats_header(seq, ktime_get(), stats->os_init, 25, ":", true);
+	lprocfs_stats_header(seq, ktime_get(), stats->os_init, 25, ":", true,
+			     "");
 	seq_printf(seq, "lockless_write_bytes\t\t%llu\n",
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",
