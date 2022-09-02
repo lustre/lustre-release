@@ -10838,3 +10838,11 @@ exhaust_all_precreations() {
 	done
 	sleep_maxage
 }
+
+verify_yaml_available() {
+	python3 -c "import yaml; yaml.safe_load_all('''a: b''')"
+}
+
+verify_yaml() {
+	python3 -c "import yaml; yaml.safe_load_all('''$1''')"
+}

@@ -595,7 +595,7 @@ extern int lprocfs_obd_seq_create(struct obd_device *obd, const char *name,
 				  void *data);
 extern void lprocfs_stats_header(struct seq_file *seq, ktime_t now,
 				 ktime_t ts_init, int width, const char *colon,
-				 bool show_units);
+				 bool show_units, const char *prefix);
 
 /* Generic callbacks */
 extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);

@@ -350,6 +350,9 @@ Provides: lustre-tests = %{version}
 Requires: lustre-iokit
 %endif
 Requires: lustre-devel = %{version}
+%if 0%{?rhel} >= 8 || 0%{?suse_version} >= 1500
+Requires: python3 >= 3.6.0, python3-PyYAML
+%endif
 %if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
