@@ -142,7 +142,18 @@ static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 
 	logid_to_fid(&lid->lid_id, &fid_from_logid);
 
-	if (is_ext)
+	/**
+	 * Llogs with regular llog SEQ such as FID_SEQ_LLOG and
+	 * FID_SEQ_LLOG_NAME are stored under O/ directory but
+	 * update llogs are using normal FIDs and stored under
+	 * 'update_log_dir' directory with FID format name
+	 * Distinguish them by FID sequence
+	 */
+	if (fid_from_logid.f_seq != FID_SEQ_LLOG &&
+	    fid_from_logid.f_seq != FID_SEQ_LLOG_NAME)
+		snprintf(object_path, sizeof(object_path),
+			 "update_log_dir/"DFID, PFID(&fid_from_logid));
+	else if (is_ext)
 		snprintf(object_path, sizeof(object_path),
 			 "O/%ju/d%u/%u", (uintmax_t)fid_from_logid.f_seq,
 			 fid_from_logid.f_oid % 32,
@@ -154,8 +165,7 @@ static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 				     (OSD_OI_FID_NR - 1)),
 			 PFID(&fid_from_logid));
 
-	printf("id="DFID":%x path=%s\n",
-	       PFID(&lid->lid_id.lgl_oi.oi_fid), lid->lid_id.lgl_ogen,
+	printf("fid="DFID" path=%s\n", PFID(&fid_from_logid),
 	       object_path);
 }
 
@@ -279,7 +289,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	/* the llog header not countable here.*/
 	recs_num = count - 1;
 	if (recs_num == 0)
-		goto clear_file_buf;
+		return 0;
 
 	recs_buf = calloc(recs_num, sizeof(**recs_pr));
 	if (!recs_buf) {
@@ -411,7 +421,7 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
 	       __le32_to_cpu(llog_buf->llh_count)-1,
 	       __le32_to_cpu(llog_buf->llh_cat_idx),
 	       __le32_to_cpu(tail->lrt_index));
-
+	printf("Flags: %#x\n", __le32_to_cpu(llog_buf->llh_flags));
 	printf("Target uuid : %s\n",
 	       (char *)(&llog_buf->llh_tgtuuid));
 

@@ -232,7 +232,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	llh = loghandle->lgh_hdr;
 
 	CDEBUG(D_RPCTRACE, "Canceling %d records, first %d in log "DFID"\n",
-	       num, index[0], PFID(&loghandle->lgh_id.lgl_oi.oi_fid));
+	       num, index[0], PLOGID(&loghandle->lgh_id));
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
 
@@ -306,7 +306,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			 * the orphan will be handled by LFSCK. */
 			CERROR("%s: can't destroy empty llog "DFID": rc = %d\n",
 			       loghandle2name(loghandle),
-			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), rc);
+			       PLOGID(&loghandle->lgh_id), rc);
 			GOTO(out_unlock, rc = 0);
 		}
 		rc = LLOG_DEL_PLAIN;
@@ -664,7 +664,7 @@ repeat:
 				CERROR("%s: invalid record in llog "DFID
 				       " record for index %d/%d: rc = %d\n",
 				       loghandle2name(loghandle),
-				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
+				       PLOGID(&loghandle->lgh_id),
 				       rec->lrh_index, index, rc);
 				/*
 				 * the block seem to be corrupted, let's try
@@ -688,7 +688,7 @@ repeat:
 				 * keep going */
 				CERROR("%s: "DFID" index %u, expected %u\n",
 				       loghandle2name(loghandle),
-				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
+				       PLOGID(&loghandle->lgh_id),
 				       rec->lrh_index, index);
 				index = rec->lrh_index;
 			}
@@ -767,10 +767,9 @@ repeat:
 	}
 
 out:
-	CDEBUG(D_HA, "stop processing %s "DOSTID":%x index %d count %d\n",
+	CDEBUG(D_HA, "stop processing %s "DFID" index %d count %d\n",
 	       ((llh->llh_flags & LLOG_F_IS_CAT) ? "catalog" : "plain"),
-	       POSTID(&loghandle->lgh_id.lgl_oi), loghandle->lgh_id.lgl_ogen,
-	       index, llh->llh_count);
+	       PLOGID(&loghandle->lgh_id), index, llh->llh_count);
 
 	if (cd != NULL)
 		cd->lpcd_last_idx = last_called_index;
@@ -790,13 +789,11 @@ out:
 			 * llog file, probably I/O error or the log got
 			 * corrupted to be able to finally release the log we
 			 * discard any remaining bits in the header */
-			CERROR("%s: Local llog found corrupted #"DOSTID":%x"
-			       " %s index %d count %d\n",
+			CERROR("%s: local llog is corrupted "DFID" %s index %d count %d\n",
 			       loghandle2name(loghandle),
-			       POSTID(&loghandle->lgh_id.lgl_oi),
-			       loghandle->lgh_id.lgl_ogen,
+			       PLOGID(&loghandle->lgh_id),
 			       ((llh->llh_flags & LLOG_F_IS_CAT) ? "catalog" :
-				"plain"), index, llh->llh_count);
+			       "plain"), index, llh->llh_count);
 
 			while (index <= last_index) {
 				if (test_bit_le(index,
@@ -875,7 +872,7 @@ int llog_process_or_fork(const struct lu_env *env,
 	lpi->lpi_catdata   = catdata;
 
 	CDEBUG(D_OTHER, "Processing "DFID" flags 0x%03x startcat %d startidx %d first_idx %d last_idx %d read_mode %d\n",
-	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), flags,
+	       PLOGID(&loghandle->lgh_id), flags,
 	       (flags & LLOG_F_IS_CAT) && d ? d->lpd_startcat : -1,
 	       (flags & LLOG_F_IS_CAT) && d ? d->lpd_startidx : -1,
 	       cd ? cd->lpcd_first_idx : -1, cd ? cd->lpcd_last_idx : -1,
@@ -1530,8 +1527,7 @@ __u64 llog_size(const struct lu_env *env, struct llog_handle *llh)
 	rc = llh->lgh_obj->do_ops->do_attr_get(env, llh->lgh_obj, &la);
 	if (rc) {
 		CERROR("%s: attr_get failed for "DFID": rc = %d\n",
-		       loghandle2name(llh), PFID(&llh->lgh_id.lgl_oi.oi_fid),
-		       rc);
+		       loghandle2name(llh), PLOGID(&llh->lgh_id), rc);
 		return 0;
 	}
 

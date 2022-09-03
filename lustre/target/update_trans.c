@@ -90,7 +90,7 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 
 		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
 			CDEBUG(mask, " cookie "DFID".%u\n",
-			       PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
+			       PLOGID(&stc->stc_cookie.lgc_lgl),
 			       stc->stc_cookie.lgc_index);
 		}
 	}
@@ -224,7 +224,7 @@ static int sub_updates_write(const struct lu_env *env,
 
 		CDEBUG(D_INFO, "%s: Add update log "DFID".%u: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name,
-		       PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
+		       PLOGID(&stc->stc_cookie.lgc_lgl),
 		       stc->stc_cookie.lgc_index, rc);
 
 		if (rc > 0) {
@@ -297,7 +297,7 @@ static int sub_updates_write(const struct lu_env *env,
 
 		CDEBUG(D_INFO, "%s: Add update log "DFID".%u: rc = %d\n",
 			dt->dd_lu_dev.ld_obd->obd_name,
-			PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
+			PLOGID(&stc->stc_cookie.lgc_lgl),
 			stc->stc_cookie.lgc_index, rc);
 
 		if (rc > 0) {
@@ -1308,8 +1308,7 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 						     cookie);
 			CDEBUG(D_HA, "%s: batchid %llu cancel update log "
 			       DFID".%u: rc = %d\n", obd->obd_name,
-			       tmt->tmt_batchid,
-			       PFID(&cookie->lgc_lgl.lgl_oi.oi_fid),
+			       tmt->tmt_batchid, PLOGID(&cookie->lgc_lgl),
 			       cookie->lgc_index, rc);
 		}
 

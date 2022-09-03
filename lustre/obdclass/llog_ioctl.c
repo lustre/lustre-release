@@ -46,16 +46,14 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 	ENTRY;
 	start = str;
 	if (start[0] == '[') {
-		struct lu_fid *fid = &logid->lgl_oi.oi_fid;
-		struct lu_fid sfid;
+		struct lu_fid fid;
 		int num;
 
-		fid_zero(fid);
-		logid->lgl_ogen = 0;
-		num = sscanf(start + 1, SFID, RFID(fid));
-		CDEBUG(D_INFO, DFID":%x\n", PFID(fid), logid->lgl_ogen);
-		logid_to_fid(logid, &sfid);
-		RETURN(num == 3 && fid_is_sane(&sfid) ? 0 : -EINVAL);
+		fid_zero(&fid);
+		num = sscanf(start + 1, SFID, RFID(&fid));
+		CDEBUG(D_INFO, "get FID "DFID"\n", PFID(&fid));
+		fid_to_logid(&fid, logid);
+		RETURN(num == 3 && fid_is_sane(&fid) ? 0 : -EINVAL);
 	}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)
@@ -162,9 +160,8 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 			RETURN(-EOPNOTSUPP);
 		rc = llog_cat_id2handle(env, handle, &loghandle, &lir->lid_id);
 		if (rc) {
-			CDEBUG(D_IOCTL, "cannot find log "DFID":%x\n",
-			       PFID(&lir->lid_id.lgl_oi.oi_fid),
-			       lir->lid_id.lgl_ogen);
+			CDEBUG(D_IOCTL, "cannot find log "DFID"\n",
+			       PLOGID(&lir->lid_id));
 			RETURN(rc);
 		}
 		rc = llog_process(env, loghandle, llog_check_cb, NULL, NULL);
@@ -261,10 +258,8 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 			RETURN(-EINVAL);
 		}
 
-		l = snprintf(out, remains,
-			     "[index]: %05d  [logid]: "DFID":%x\n",
-			     cur_index, PFID(&lir->lid_id.lgl_oi.oi_fid),
-			     lir->lid_id.lgl_ogen);
+		l = snprintf(out, remains, "[index]: %05d  [logid]: "DFID"\n",
+			     cur_index, PLOGID(&lir->lid_id));
 	} else if (rec->lrh_type == OBD_CFG_REC) {
 		int rc;
 
@@ -298,15 +293,13 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 
 	rc = llog_cat_id2handle(env, cat, &log, logid);
 	if (rc) {
-		CDEBUG(D_IOCTL, "cannot find log "DFID":%x\n",
-		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen);
+		CDEBUG(D_IOCTL, "cannot find log "DFID"\n", PLOGID(logid));
 		RETURN(-ENOENT);
 	}
 
 	rc = llog_destroy(env, log);
 	if (rc) {
-		CDEBUG(D_IOCTL, "cannot destroy log "DFID":%x\n",
-		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen);
+		CDEBUG(D_IOCTL, "cannot destroy log "DFID"\n", PLOGID(logid));
 		GOTO(out, rc);
 	}
 	llog_cat_cleanup(env, cat, log, log->u.phd.phd_cookie.lgc_index);
@@ -378,12 +371,11 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 		char *out = data->ioc_bulk;
 
 		l = snprintf(out, remains,
-			     "logid:            "DFID":%x\n"
+			     "logid:            "DFID"\n"
 			     "flags:            %x (%s)\n"
 			     "records_count:    %d\n"
 			     "last_index:       %d\n",
-			     PFID(&handle->lgh_id.lgl_oi.oi_fid),
-			     handle->lgh_id.lgl_ogen,
+			     PLOGID(&handle->lgh_id),
 			     handle->lgh_hdr->llh_flags,
 			     handle->lgh_hdr->llh_flags &
 				LLOG_F_IS_CAT ? "cat" : "plain",
@@ -527,8 +519,8 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 		data->ioc_count = cfs_fail_val - 1;
 	for (i = data->ioc_count; i < count; i++) {
 		id = &idarray[i].lci_logid;
-		l = snprintf(out, remains, "catalog_log: "DFID":%x\n",
-			      PFID(&id->lgl_oi.oi_fid), id->lgl_ogen);
+		l = snprintf(out, remains, "catalog_log: "DFID"\n",
+			     PLOGID(id));
 		out += l;
 		remains -= l;
 		if (remains <= 0) {

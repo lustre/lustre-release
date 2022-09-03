@@ -202,7 +202,7 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 	       "seeing record at index %d/%d/%llu t=%x %.*s in log"
 	       DFID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
 	       rec->cr.cr_index, rec->cr.cr_type, rec->cr.cr_namelen,
-	       changelog_rec_name(&rec->cr), PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	       changelog_rec_name(&rec->cr), PLOGID(&llh->lgh_id));
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_index = rec->cr.cr_index;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
@@ -242,7 +242,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
 		CWARN("%s: unknown user type %x at index %u in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
-		      rec->cur_hdr.lrh_type, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		      rec->cur_hdr.lrh_type, PLOGID(&llh->lgh_id));
 
 		return 0;
 	}
@@ -251,7 +251,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	       mdd2obd_dev(mdd)->obd_name, mdd_chlg_username(rec, user_name,
 							     sizeof(user_name)),
 	       hdr->lrh_index, rec->cur_hdr.lrh_index, rec->cur_endrec,
-	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	       PLOGID(&llh->lgh_id));
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
@@ -291,7 +291,7 @@ static int changelog_detect_orphan_cb(const struct lu_env *env,
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		CWARN("%s: invalid record at index %d in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
-		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		      PLOGID(&llh->lgh_id));
 		/* try to find some next valid record and thus allow to recover
 		 * from a corrupted LLOG, instead to assert and force a crash
 		 */
@@ -303,7 +303,7 @@ static int changelog_detect_orphan_cb(const struct lu_env *env,
 	       mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
 	       rec->cr_hdr.lrh_index, rec->cr.cr_index, rec->cr.cr_type,
 	       rec->cr.cr_namelen, changelog_rec_name(&rec->cr),
-	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	       PLOGID(&llh->lgh_id));
 
 	clod->clod_index = rec->cr.cr_index;
 
@@ -327,7 +327,7 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
 		CWARN("%s: unknown user type %u at index %u in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
-		      rec->cur_hdr.lrh_type, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		      rec->cur_hdr.lrh_type, PLOGID(&llh->lgh_id));
 		/* try to find some next valid record and thus allow to recover
 		 * from a corrupted LLOG, instead to assert and force a crash
 		 */
@@ -338,7 +338,7 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 	       mdd2obd_dev(mdd)->obd_name, mdd_chlg_username(rec, user_name,
 							     sizeof(user_name)),
 	       hdr->lrh_index, rec->cur_hdr.lrh_index,
-	       rec->cur_endrec, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	       rec->cur_endrec, PLOGID(&llh->lgh_id));
 
 	clod->clod_index = min_t(__u64, clod->clod_index, rec->cur_endrec);
 
@@ -410,7 +410,7 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 		rc = llog_destroy(env, llh);
 		if (!rc) {
 			CDEBUG(D_HA, "Changelog destroyed plain "DFID"\n",
-			       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+			       PLOGID(&llh->lgh_id));
 			RETURN(LLOG_DEL_PLAIN);
 		}
 	}
@@ -442,7 +442,7 @@ static int llog_changelog_cancel(const struct lu_env *env,
 	else
 		CERROR("%s: cancel idx %u of catalog "DFID": rc = %d\n",
 		       ctxt->loc_obd->obd_name, cathandle->lgh_last_idx,
-		       PFID(&cathandle->lgh_id.lgl_oi.oi_fid), rc);
+		       PLOGID(&cathandle->lgh_id), rc);
 
 	RETURN(rc);
 }

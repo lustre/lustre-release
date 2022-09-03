@@ -45,7 +45,7 @@ static void print_llogd_body(struct llogd_body *d)
 {
 	CDEBUG(D_OTHER, "llogd body: %p\n", d);
 	CDEBUG(D_OTHER, "\tlgd_logid.lgl_oi.oi_fid: "DFID"\n",
-	       PFID(&d->lgd_logid.lgl_oi.oi_fid));
+	       PLOGID(&d->lgd_logid));
 	CDEBUG(D_OTHER, "\tlgd_logid.lgl_ogen: %#x\n", d->lgd_logid.lgl_ogen);
 	CDEBUG(D_OTHER, "\tlgd_ctxt_idx: %#x\n", d->lgd_ctxt_idx);
 	CDEBUG(D_OTHER, "\tlgd_llh_flags: %#x\n", d->lgd_llh_flags);

@@ -443,10 +443,9 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 	llog_ctxt_put(ctxt);
 
 	if (likely(rc >= 0)) {
-		CDEBUG(D_OTHER, "%s: new record "DFID":%x.%u: rc = %d\n",
+		CDEBUG(D_OTHER, "%s: new record "DFID".%u: rc = %d\n",
 		       d->opd_obd->obd_name,
-		       PFID(&osi->osi_cookie.lgc_lgl.lgl_oi.oi_fid),
-		       osi->osi_cookie.lgc_lgl.lgl_ogen,
+		       PLOGID(&osi->osi_cookie.lgc_lgl),
 		       osi->osi_cookie.lgc_index, rc);
 		atomic_inc(&d->opd_sync_changes);
 	}
@@ -1096,8 +1095,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 				       obd->obd_name, i, rc);
 			else
 				CDEBUG(D_OTHER, "%s: massive records cancel id "DFID" num %d\n",
-				       obd->obd_name, PFID(&lgid.lgl_oi.oi_fid),
-				       i);
+				       obd->obd_name, PLOGID(&lgid), i);
 			i = 0;
 		}
 
@@ -1394,10 +1392,8 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 		rc = 0;
 	}
 
-	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DFID":%x\n",
-	       obd->obd_name, d->opd_index,
-	       PFID(&osi->osi_cid.lci_logid.lgl_oi.oi_fid),
-	       osi->osi_cid.lci_logid.lgl_ogen);
+	CDEBUG(D_INFO, "%s: init llog for %d - catid "DFID"\n",
+	       obd->obd_name, d->opd_index, PLOGID(&osi->osi_cid.lci_logid));
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT,
 			d->opd_storage->dd_lu_dev.ld_obd,
