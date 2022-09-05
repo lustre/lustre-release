@@ -2012,6 +2012,12 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 	case LOV_USER_MAGIC_V1:
 	case LOV_USER_MAGIC_V3:
 	case LOV_USER_MAGIC_SPECIFIC:
+		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
+		    LOV_PATTERN_MDT) {
+			/* DoM must use composite layout */
+			CDEBUG(D_LAYOUT, "DoM without composite layout\n");
+			RETURN(-EINVAL);
+		}
 		RETURN(lod_verify_v1v3(d, buf, is_from_disk));
 	case LOV_USER_MAGIC_COMP_V1:
 	case LOV_USER_MAGIC_SEL:

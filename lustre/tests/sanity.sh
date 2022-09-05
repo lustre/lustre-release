@@ -22845,8 +22845,16 @@ test_270i() {
 		skip "Need MDS version at least 2.14.54"
 
 	mkdir $DIR/$tdir
+	# DoM with plain layout
 	$LFS setstripe -L mdt -S 128k -c -1 $DIR/$tdir &&
-		error "setstripe should fail" || true
+		error "default plain layout with DoM must fail"
+	$LFS setstripe -L mdt -S 128k -c -1 $DIR/$tdir/$tfile &&
+		error "setstripe plain file layout with DoM must fail"
+	$LFS setstripe -E 1M -L mdt -S 128k -c -1 -E eof $DIR/$tdir &&
+		error "default DoM layout with bad striping must fail"
+	$LFS setstripe -E 1M -L mdt -S 128k -c -1 -E eof $DIR/$tdir/$tfile &&
+		error "setstripe to DoM layout with bad striping must fail"
+	return 0
 }
 run_test 270i "DoM: setting invalid DoM striping should fail"
 
