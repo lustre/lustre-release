@@ -5571,7 +5571,7 @@ test_106c() {
 	# Mask supported in stx_attributes by Lustre is
 	# STATX_ATTR_IMMUTABLE(0x10) | STATX_ATTR_APPEND(0x20) : (0x30).
 	mask=$($STATX -c %p $DIR/$tfile)
-	(( 0x$mask & 0x30 == 0x30 )) ||
+	(( (0x$mask & 0x30) == 0x30 )) ||
 		error "supported stx_attributes: got '0x$mask', expected '0x30' at least"
 	chattr +i $DIR/$tfile || error "chattr +i $DIR/$tfile failed"
 	mask=$($STATX -c %r $DIR/$tfile)
