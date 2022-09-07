@@ -2592,10 +2592,9 @@ int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
 struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 				    bool is_aio);
-struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool nofree);
-void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio,
-		     bool always_free);
-void cl_sub_dio_free(struct cl_sub_dio *sdio, bool nofree);
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool sync);
+void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
+void cl_sub_dio_free(struct cl_sub_dio *sdio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 {
 	cl_sync_io_init_notify(anchor, nr, NULL, NULL);
@@ -2640,7 +2639,7 @@ struct cl_dio_aio {
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
 	unsigned		cda_no_aio_complete:1,
-				cda_no_sub_free:1;
+				cda_creator_free:1;
 };
 
 /* Sub-dio used for splitting DIO (and AIO, because AIO is DIO) according to
@@ -2652,7 +2651,7 @@ struct cl_sub_dio {
 	ssize_t			csd_bytes;
 	struct cl_dio_aio	*csd_ll_aio;
 	struct ll_dio_pages	csd_dio_pages;
-	unsigned		csd_no_free:1;
+	unsigned		csd_creator_free:1;
 };
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
 	defined(HAVE_DIRECTIO_2ARGS)

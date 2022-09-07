@@ -1267,9 +1267,9 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 		 * no one is waiting (in the kernel) for this to complete
 		 *
 		 * in other cases, the last user is cl_sync_io_wait, and in
-		 * that case, the caller frees the struct after that call
+		 * that case, the creator frees the struct after that call
 		 */
-		aio->cda_no_sub_free = !is_aio;
+		aio->cda_creator_free = !is_aio;
 
 		cl_object_get(obj);
 		aio->cda_obj = obj;
@@ -1278,7 +1278,7 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_dio_aio_alloc);
 
-struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool nofree)
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool sync)
 {
 	struct cl_sub_dio *sdio;
 
@@ -1294,25 +1294,24 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool nofree)
 
 		sdio->csd_ll_aio = ll_aio;
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
-		sdio->csd_no_free = nofree;
+		sdio->csd_creator_free = sync;
 	}
 	return sdio;
 }
 EXPORT_SYMBOL(cl_sub_dio_alloc);
 
-void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio,
-		     bool always_free)
+void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio)
 {
-	if (aio && (!aio->cda_no_sub_free || always_free)) {
+	if (aio) {
 		cl_object_put(env, aio->cda_obj);
 		OBD_SLAB_FREE_PTR(aio, cl_dio_aio_kmem);
 	}
 }
 EXPORT_SYMBOL(cl_dio_aio_free);
 
-void cl_sub_dio_free(struct cl_sub_dio *sdio, bool always_free)
+void cl_sub_dio_free(struct cl_sub_dio *sdio)
 {
-	if (sdio && (!sdio->csd_no_free || always_free))
+	if (sdio)
 		OBD_SLAB_FREE_PTR(sdio, cl_sub_dio_kmem);
 }
 EXPORT_SYMBOL(cl_sub_dio_free);
@@ -1361,7 +1360,10 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 	LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
 	if (atomic_dec_and_lock(&anchor->csi_sync_nr,
 				&anchor->csi_waitq.lock)) {
-		void *dio_aio = NULL;
+		struct cl_sub_dio *sub_dio_aio = NULL;
+		struct cl_dio_aio *dio_aio = NULL;
+		void *csi_dio_aio = NULL;
+		bool creator_free = true;
 
 		cl_sync_io_end_t *end_io = anchor->csi_end_io;
 
@@ -1377,18 +1379,25 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		if (end_io)
 			end_io(env, anchor);
 
-		dio_aio = anchor->csi_dio_aio;
+		csi_dio_aio = anchor->csi_dio_aio;
+		sub_dio_aio = csi_dio_aio;
+		dio_aio = csi_dio_aio;
+
+		if (csi_dio_aio && end_io == cl_dio_aio_end)
+			creator_free = dio_aio->cda_creator_free;
+		else if (csi_dio_aio && end_io == cl_sub_dio_end)
+			creator_free = sub_dio_aio->csd_creator_free;
 
 		spin_unlock(&anchor->csi_waitq.lock);
 
-		if (dio_aio) {
-			if (end_io == cl_dio_aio_end)
-				cl_dio_aio_free(env,
-						(struct cl_dio_aio *) dio_aio,
-						false);
-			else if (end_io == cl_sub_dio_end)
-				cl_sub_dio_free((struct cl_sub_dio *) dio_aio,
-						false);
+		if (csi_dio_aio) {
+			if (end_io == cl_dio_aio_end) {
+				if (!creator_free)
+					cl_dio_aio_free(env, dio_aio);
+			} else if (end_io == cl_sub_dio_end) {
+				if (!creator_free)
+					cl_sub_dio_free(sub_dio_aio);
+			}
 		}
 	}
 	EXIT;
