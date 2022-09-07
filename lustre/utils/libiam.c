@@ -52,59 +52,6 @@
 
 typedef __u32 lvar_hash_t;
 
-enum {
-	IAM_LFIX_ROOT_MAGIC = 0xbedabb1edULL,
-	IAM_LVAR_ROOT_MAGIC = 0xb01dface
-};
-
-struct iam_lfix_root {
-	u_int64_t  ilr_magic;
-	u_int16_t  ilr_keysize;
-	u_int16_t  ilr_recsize;
-	u_int16_t  ilr_ptrsize;
-	u_int16_t  ilr_indirect_levels;
-};
-
-enum {
-	IAM_LEAF_HEADER_MAGIC = 0x1976,
-	IAM_LVAR_LEAF_MAGIC   = 0x1973
-};
-
-struct iam_leaf_head {
-	u_int16_t ill_magic;
-	u_int16_t ill_count;
-};
-
-struct dx_countlimit {
-	u_int16_t limit;
-	u_int16_t count;
-};
-
-struct lvar_leaf_header {
-	u_int16_t vlh_magic; /* magic number IAM_LVAR_LEAF_MAGIC */
-	u_int16_t vlh_used;  /* used bytes, including header */
-};
-
-struct lvar_root {
-	u_int32_t vr_magic;
-	u_int16_t vr_recsize;
-	u_int16_t vr_ptrsize;
-	u_int8_t  vr_indirect_levels;
-	u_int8_t  vr_padding0;
-	u_int16_t vr_padding1;
-};
-
-struct lvar_leaf_entry {
-	u_int32_t vle_hash;
-	u_int16_t vle_keysize;
-	u_int8_t  vle_key[0];
-};
-
-enum {
-	LVAR_PAD   = 4,
-	LVAR_ROUND = LVAR_PAD - 1
-};
-
 /**
  * Stores \a val at \a dst, where the latter is possibly unaligned. Uses
  * memcpy(). This macro is needed to avoid dependency of user level tools on
@@ -117,21 +64,10 @@ enum {
 	memcpy(dst, &__val, sizeof *(dst));     \
 })
 
-static int root_limit(int rootgap, int blocksize, int size)
-{
-	int limit;
-	int nlimit;
-
-	limit = (blocksize - rootgap) / size;
-	nlimit = blocksize / size;
-	if (limit == nlimit)
-		limit--;
-	return limit;
-}
 
 static int lfix_root_limit(int blocksize, int size)
 {
-	return root_limit(sizeof(struct iam_lfix_root), blocksize, size);
+	return root_limit(sizeof(struct iam_lfix_root), 0, blocksize, size);
 }
 
 static void lfix_root(void *buf,
@@ -199,7 +135,7 @@ static void lfix_leaf(void *buf,
 
 static int lvar_root_limit(int blocksize, int size)
 {
-	return root_limit(sizeof(struct lvar_root), blocksize, size);
+	return root_limit(sizeof(struct lvar_root), 0, blocksize, size);
 }
 
 static void lvar_root(void *buf,

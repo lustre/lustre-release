@@ -44,7 +44,7 @@ endif # TESTS
 if SERVER
 sbin_PROGRAMS += mkfs.lustre tunefs.lustre lr_reader lshowmount \
 		 ll_decode_filter_fid llog_reader l_tunedisk \
-		 ofd_access_log_reader
+		 ofd_access_log_reader check_iam
 endif
 if LIBPTHREAD
 sbin_PROGRAMS += lhsmtool_posix
@@ -147,6 +147,8 @@ endif # UTILS
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := liblustreapi.la
 llog_reader_DEPENDENCIES := liblustreapi.la
+
+check_iam_SOURCES = check_iam.c
 
 lr_reader_SOURCES = lr_reader.c
 

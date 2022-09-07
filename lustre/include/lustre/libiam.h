@@ -50,10 +50,104 @@
 
 #define DX_FMT_NAME_LEN 16
 
-enum iam_fmt_t {
-        FMT_LFIX,
-        FMT_LVAR
+#define IAM_LFIX_ROOT_MAGIC  0xbedabb1edULL
+#define IAM_LVAR_ROOT_MAGIC  0xb01dfaceULL
+
+enum {
+	IAM_LEAF_HEADER_MAGIC = 0x1976,
+	IAM_LVAR_LEAF_MAGIC   = 0x1973,
+	IAM_IDLE_HEADER_MAGIC = 0x7903
 };
+
+enum iam_fmt_t {
+        FMT_LFIX = 0,
+        FMT_LVAR = 1
+};
+
+struct dx_countlimit {
+	u_int16_t limit;
+	u_int16_t count;
+} __attribute__((packed));
+
+struct iam_lfix_root {
+	u_int64_t  ilr_magic;
+	u_int16_t  ilr_keysize;
+	u_int16_t  ilr_recsize;
+	u_int16_t  ilr_ptrsize;
+	u_int8_t   ilr_indirect_levels;
+	u_int8_t   ilr_padding;
+	struct dx_countlimit limit;
+	u_int32_t idle_blocks;
+	u_int8_t  ilr_paddingdd2[12];
+	unsigned char entries[0];
+} __attribute__((packed));
+
+struct iam_leaf_head {
+	u_int16_t ill_magic;
+	u_int16_t ill_count;
+} __attribute__((packed));
+
+struct lvar_leaf_header {
+	u_int16_t vlh_magic; /* magic number IAM_LVAR_LEAF_MAGIC */
+	u_int16_t vlh_used;  /* used bytes, including header */
+} __attribute__((packed));
+
+/*
+ * Header structure to record idle blocks.
+ */
+struct iam_idle_head {
+	__le16 iih_magic;
+	__le16 iih_count; /* how many idle blocks in this head */
+	__le32 iih_next; /* next head for idle blocks */
+	__le32 iih_blks[0];
+} __attribute__((packed));
+
+struct iam_index_head {
+	struct dx_countlimit limit;
+	u_int8_t  paddingdd[16];
+	unsigned char entries[0];
+} __attribute__((packed));
+
+struct lvar_root {
+	u_int32_t vr_magic;
+	u_int16_t vr_recsize;
+	u_int16_t vr_ptrsize;
+	u_int8_t  vr_indirect_levels;
+	u_int8_t  vr_padding0;
+	u_int16_t vr_padding1;
+} __attribute__((packed));
+
+
+struct lvar_leaf_entry {
+	u_int32_t vle_hash;
+	u_int16_t vle_keysize;
+	u_int8_t  vle_key[0];
+} __attribute__((packed));
+
+enum {
+	LVAR_PAD   = 4,
+	LVAR_ROUND = LVAR_PAD - 1
+};
+
+static inline unsigned int node_limit(unsigned int node_gap,
+				      unsigned int block_size,
+				      unsigned int size)
+{
+	return (block_size - node_gap) / size;
+}
+
+static inline unsigned int root_limit(unsigned int root_gap,
+				      unsigned int node_gap,
+				      unsigned int block_size,
+				      unsigned int size)
+{
+	unsigned int limit;
+
+	limit = (block_size - root_gap) / size;
+	if (limit == node_limit(node_gap, block_size, size))
+		limit--;
+	return limit;
+}
 
 struct iam_uapi_info {
         __u16 iui_keysize;

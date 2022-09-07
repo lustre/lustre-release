@@ -10359,6 +10359,45 @@ test_133() {
 }
 run_test 133 "stripe QOS: free space balance in a pool"
 
+test_134() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
+	local errors
+	local rc
+	local mdt_dev=$(facet_device mds1)
+	local tmp_dir=$TMP/$tdir
+	local out=$tmp_dir/check_iam.txt
+	local CHECK_IAM=${CHECK_IAM:-$(do_facet mds1 "which check_iam 2> /dev/null || true")}
+
+	[[ -n "$CHECK_IAM" ]] || skip "check_iam not found"
+
+	mkdir -p $tmp_dir
+	for ((i=0; i<64; i++)); do
+		local f=oi.16.$i
+		#cmd introduce a random corruption to IAM file
+		local cmd="dd if=/dev/urandom of=$tmp_dir/$f bs=2 conv=notrunc count=1 seek=$((RANDOM % 36))"
+		do_facet mds1 "mkdir -p $tmp_dir; \
+		   $DEBUGFS -c -R 'dump $f $tmp_dir/$f' $mdt_dev 2>&1; \
+		   $CHECK_IAM -v $tmp_dir/$f 2>&1; \
+		   echo $cmd; eval $cmd 2>/dev/null;
+		   $CHECK_IAM -v $tmp_dir/$f 2>&1; echo \\\$?" >> $out
+	done
+
+	tail -n50 $out
+
+	stack_trap "rm -rf $tmp_dir && do_facet mds1 rm -rf $tmp_dir" EXIT
+
+	rc=$(grep -c "fault\|except" $out)
+	(( rc == 0 )) || { cat $out &&
+		error "check_iam failed with fault or exception $rc"; }
+
+	rc=$(grep -c "^255" $out)
+	error=$(grep -c "FINISHED WITH ERRORS" $out)
+
+	(( rc == error )) || { cat $out &&
+		error "check_iam errcode does not fit with errors $rc $error"; }
+}
+run_test 134 "check_iam works without faults"
+
 #
 # (This was sanity/802a)
 #
