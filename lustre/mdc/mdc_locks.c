@@ -1407,7 +1407,8 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	EXIT;
 
 out:
-	item->mop_cb(&req->rq_pill, item, rc);
+	item->mop_pill = &req->rq_pill;
+	item->mop_cb(item, rc);
 	return 0;
 }
 

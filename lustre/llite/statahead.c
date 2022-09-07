@@ -342,8 +342,7 @@ static void sa_fini_data(struct md_op_item *item)
 	OBD_FREE_PTR(item);
 }
 
-static int ll_statahead_interpret(struct req_capsule *pill,
-				  struct md_op_item *item, int rc);
+static int ll_statahead_interpret(struct md_op_item *item, int rc);
 
 /*
  * prepare arguments for async stat RPC.
@@ -609,59 +608,6 @@ static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
 	EXIT;
 }
 
-static int ll_statahead_interpret_common(struct inode *dir,
-					 struct ll_statahead_info *sai,
-					 struct req_capsule *pill,
-					 struct lookup_intent *it,
-					 struct sa_entry *entry,
-					 struct mdt_body *body)
-{
-	struct inode *child;
-	int rc;
-
-	ENTRY;
-
-	child = entry->se_inode;
-	rc = ll_prep_inode(&child, pill, dir->i_sb, it);
-	if (rc)
-		GOTO(out, rc);
-
-	/* If encryption context was returned by MDT, put it in
-	 * inode now to save an extra getxattr.
-	 */
-	if (body->mbo_valid & OBD_MD_ENCCTX) {
-		void *encctx = req_capsule_server_get(pill, &RMF_FILE_ENCCTX);
-		__u32 encctxlen = req_capsule_get_size(pill, &RMF_FILE_ENCCTX,
-						       RCL_SERVER);
-
-		if (encctxlen) {
-			CDEBUG(D_SEC,
-			       "server returned encryption ctx for "DFID"\n",
-			       PFID(ll_inode2fid(child)));
-			rc = ll_xattr_cache_insert(child,
-						   xattr_for_enc(child),
-						   encctx, encctxlen);
-			if (rc)
-				CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
-				      ll_i2sbi(child)->ll_fsname,
-				      PFID(ll_inode2fid(child)), rc);
-		}
-	}
-
-	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
-	       ll_i2sbi(dir)->ll_fsname, entry->se_qstr.len,
-	       entry->se_qstr.name, PFID(ll_inode2fid(child)), child);
-	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
-
-	entry->se_inode = child;
-
-	if (agl_should_run(sai, child))
-		ll_agl_add(sai, child, entry->se_index);
-
-out:
-	RETURN(rc);
-}
-
 static void ll_statahead_interpret_fini(struct ll_inode_info *lli,
 					struct ll_statahead_info *sai,
 					struct md_op_item *item,
@@ -685,12 +631,11 @@ static void ll_statahead_interpret_fini(struct ll_inode_info *lli,
 	spin_unlock(&lli->lli_sa_lock);
 }
 
-static void ll_statahead_interpret_work(struct work_struct *data)
+static void ll_statahead_interpret_work(struct work_struct *work)
 {
-	struct ll_interpret_work *work = container_of(data,
-					struct ll_interpret_work, lpw_work);
-	struct md_op_item *item = work->lpw_item;
-	struct req_capsule *pill = work->lpw_pill;
+	struct md_op_item *item = container_of(work, struct md_op_item,
+					       mop_work);
+	struct req_capsule *pill = item->mop_pill;
 	struct inode *dir = item->mop_dir;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *sai = lli->lli_sai;
@@ -726,11 +671,43 @@ static void ll_statahead_interpret_work(struct work_struct *data)
 	if (rc != 1)
 		GOTO(out, rc = -EAGAIN);
 
-	LASSERT(it->it_extra_rpc_check == 0);
-	rc = ll_statahead_interpret_common(dir, sai, pill, it, entry, body);
+	rc = ll_prep_inode(&child, pill, dir->i_sb, it);
+	if (rc)
+		GOTO(out, rc);
+
+	/* If encryption context was returned by MDT, put it in
+	 * inode now to save an extra getxattr.
+	 */
+	if (body->mbo_valid & OBD_MD_ENCCTX) {
+		void *encctx = req_capsule_server_get(pill, &RMF_FILE_ENCCTX);
+		__u32 encctxlen = req_capsule_get_size(pill, &RMF_FILE_ENCCTX,
+						       RCL_SERVER);
+
+		if (encctxlen) {
+			CDEBUG(D_SEC,
+			       "server returned encryption ctx for "DFID"\n",
+			       PFID(ll_inode2fid(child)));
+			rc = ll_xattr_cache_insert(child,
+						   xattr_for_enc(child),
+						   encctx, encctxlen);
+			if (rc)
+				CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
+				      ll_i2sbi(child)->ll_fsname,
+				      PFID(ll_inode2fid(child)), rc);
+		}
+	}
+
+	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
+	       ll_i2sbi(dir)->ll_fsname, entry->se_qstr.len,
+	       entry->se_qstr.name, PFID(ll_inode2fid(child)), child);
+	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
+
+	entry->se_inode = child;
+
+	if (agl_should_run(sai, child))
+		ll_agl_add(sai, child, entry->se_index);
 out:
 	ll_statahead_interpret_fini(lli, sai, item, entry, pill->rc_req, rc);
-	OBD_FREE_PTR(work);
 }
 
 /*
@@ -738,14 +715,15 @@ out:
  * the inode and set lock data directly in the ptlrpcd context. It will wake up
  * the directory listing process if the dentry is the waiting one.
  */
-static int ll_statahead_interpret(struct req_capsule *pill,
-				  struct md_op_item *item, int rc)
+static int ll_statahead_interpret(struct md_op_item *item, int rc)
 {
+	struct req_capsule *pill = item->mop_pill;
 	struct lookup_intent *it = &item->mop_it;
 	struct inode *dir = item->mop_dir;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *sai = lli->lli_sai;
 	struct sa_entry *entry = (struct sa_entry *)item->mop_cbdata;
+	struct work_struct *work = &item->mop_work;
 	struct mdt_body *body;
 	struct inode *child;
 	__u64 handle = 0;
@@ -786,49 +764,33 @@ static int ll_statahead_interpret(struct req_capsule *pill,
 	entry->se_handle = it->it_lock_handle;
 	/*
 	 * In ptlrpcd context, it is not allowed to generate new RPCs
-	 * especially for striped directories.
+	 * especially for striped directories or regular files with layout
+	 * change.
 	 */
-	it->it_extra_rpc_check = 1;
-	rc = ll_statahead_interpret_common(dir, sai, pill, it, entry, body);
-	if (rc == -EAGAIN && it->it_extra_rpc_need) {
-		struct ll_interpret_work *work;
+	/*
+	 * release ibits lock ASAP to avoid deadlock when statahead
+	 * thread enqueues lock on parent in readdir and another
+	 * process enqueues lock on child with parent lock held, eg.
+	 * unlink.
+	 */
+	handle = it->it_lock_handle;
+	ll_intent_drop_lock(it);
+	ll_unlock_md_op_lsm(&item->mop_data);
 
-		/*
-		 * release ibits lock ASAP to avoid deadlock when statahead
-		 * thread enqueues lock on parent in readdir and another
-		 * process enqueues lock on child with parent lock held, eg.
-		 * unlink.
-		 */
-		handle = it->it_lock_handle;
-		ll_intent_drop_lock(it);
-		ll_unlock_md_op_lsm(&item->mop_data);
-		it->it_extra_rpc_check = 0;
-		it->it_extra_rpc_need = 0;
-
-		/*
-		 * If the stat-ahead entry is a striped directory, there are two
-		 * solutions:
-		 * 1. It can drop the result, let the scanning process do stat()
-		 * on the striped directory in synchronous way. By this way, it
-		 * can avoid to generate new RPCs to obtain the attributes for
-		 * slaves of the striped directory in the ptlrpcd context as it
-		 * is dangerous of blocking in ptlrpcd thread.
-		 * 2. Use work queue or the separate statahead thread to handle
-		 * the extra RPCs (@ll_prep_inode->@lmv_revalidate_slaves).
-		 * Here we adopt the second solution.
-		 */
-		OBD_ALLOC_GFP(work, sizeof(*work), GFP_ATOMIC);
-		if (work == NULL)
-			GOTO(out, rc = -ENOMEM);
-
-		INIT_WORK(&work->lpw_work, ll_statahead_interpret_work);
-		work->lpw_item = item;
-		work->lpw_pill = pill;
-		ptlrpc_request_addref(pill->rc_req);
-		schedule_work(&work->lpw_work);
-		RETURN(0);
-	}
-
+	/*
+	 * If the statahead entry is a striped directory or regular file with
+	 * layout change, it will generate a new RPC and long wait in the
+	 * ptlrpcd context.
+	 * However, it is dangerous of blocking in ptlrpcd thread.
+	 * Here we use work queue or the separate statahead thread to handle
+	 * the extra RPC and long wait:
+	 *	(@ll_prep_inode->@lmv_revalidate_slaves);
+	 *	(@ll_prep_inode->@lov_layout_change->osc_cache_wait_range);
+	 */
+	INIT_WORK(work, ll_statahead_interpret_work);
+	ptlrpc_request_addref(pill->rc_req);
+	schedule_work(work);
+	RETURN(0);
 out:
 	ll_statahead_interpret_fini(lli, sai, item, entry, NULL, rc);
 	RETURN(rc);

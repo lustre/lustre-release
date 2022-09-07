@@ -967,9 +967,7 @@ struct md_readdir_info {
 };
 
 struct md_op_item;
-typedef int (*md_op_item_cb_t)(struct req_capsule *pill,
-			       struct md_op_item *item,
-			       int rc);
+typedef int (*md_op_item_cb_t)(struct md_op_item *item, int rc);
 
 struct md_op_item {
 	struct md_op_data		 mop_data;
@@ -979,6 +977,8 @@ struct md_op_item {
 	md_op_item_cb_t			 mop_cb;
 	void				*mop_cbdata;
 	struct inode			*mop_dir;
+	struct req_capsule		*mop_pill;
+	struct work_struct		 mop_work;
 };
 
 struct obd_ops {

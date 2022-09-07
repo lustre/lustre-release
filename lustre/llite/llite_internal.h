@@ -1537,12 +1537,6 @@ struct ll_statahead_info {
 	atomic_t		sai_cache_count; /* entry count in cache */
 };
 
-struct ll_interpret_work {
-	struct work_struct	 lpw_work;
-	struct md_op_item	*lpw_item;
-	struct req_capsule	*lpw_pill;
-};
-
 int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,
 			    bool unplug);
 int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl);
