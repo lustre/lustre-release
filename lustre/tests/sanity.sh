@@ -5257,6 +5257,10 @@ run_test 42c "test partial truncate of file with cached dirty data"
 test_42d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	local olddebug="$($LCTL get_param -n debug 2> /dev/null)"
+	stack_trap "$LCTL set_param -n debug='$olddebug'" EXIT
+	$LCTL set_param debug=+cache
+
 	trunc_test 42d 0
 	[ $BEFOREWRITES -eq $AFTERWRITES ] ||
 		error "beforewrites $BEFOREWRITES != afterwrites $AFTERWRITES on truncate"
@@ -8834,6 +8838,10 @@ test_64e() {
 	[ $OST1_VERSION -ge $(version_code 2.11.56) ] ||
 		skip "Need OSS version at least 2.11.56"
 
+	local olddebug="$($LCTL get_param -n debug 2> /dev/null)"
+	stack_trap "$LCTL set_param -n debug='$olddebug'" EXIT
+	$LCTL set_param debug=+cache
+
 	# Remount client to reset grant
 	remount_client $MOUNT || error "failed to remount client"
 	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
@@ -8886,6 +8894,10 @@ run_test 64e "check grant consumption (no grant allocation)"
 
 test_64f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	local olddebug="$($LCTL get_param -n debug 2> /dev/null)"
+	stack_trap "$LCTL set_param -n debug='$olddebug'" EXIT
+	$LCTL set_param debug=+cache
 
 	# Remount client to reset grant
 	remount_client $MOUNT || error "failed to remount client"

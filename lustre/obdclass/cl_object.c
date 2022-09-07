@@ -57,6 +57,7 @@
 
 static struct kmem_cache *cl_env_kmem;
 struct kmem_cache *cl_dio_aio_kmem;
+struct kmem_cache *cl_sub_dio_kmem;
 struct kmem_cache *cl_page_kmem_array[16];
 unsigned short cl_page_kmem_size_array[16];
 
@@ -1047,6 +1048,11 @@ static struct lu_kmem_descr cl_object_caches[] = {
 		.ckd_cache = &cl_dio_aio_kmem,
 		.ckd_name  = "cl_dio_aio_kmem",
 		.ckd_size  = sizeof(struct cl_dio_aio)
+	},
+	{
+		.ckd_cache = &cl_sub_dio_kmem,
+		.ckd_name  = "cl_sub_dio_kmem",
+		.ckd_size  = sizeof(struct cl_sub_dio)
 	},
 	{
 		.ckd_cache = NULL

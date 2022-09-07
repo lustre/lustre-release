@@ -1839,8 +1839,8 @@ struct cl_io {
         enum cl_io_state               ci_state;
         /** main object this io is against. Immutable after creation. */
         struct cl_object              *ci_obj;
-	/** one AIO request might be split in cl_io_loop */
-	struct cl_dio_aio	      *ci_aio;
+	/** top level dio_aio */
+	struct cl_dio_aio	      *ci_dio_aio;
         /**
          * Upper layer io, of which this io is a part of. Immutable after
          * creation.
@@ -2577,11 +2577,12 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 struct cl_sync_io;
 struct cl_dio_aio;
+struct cl_sub_dio;
 
 typedef void (cl_sync_io_end_t)(const struct lu_env *, struct cl_sync_io *);
 
-void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr,
-			    struct cl_dio_aio *aio, cl_sync_io_end_t *end);
+void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr, void *dio_aio,
+			    cl_sync_io_end_t *end);
 
 int cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
 		    long timeout);
@@ -2589,9 +2590,12 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
-struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
-				struct cl_dio_aio *ll_aio);
-void cl_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
+struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
+				    bool is_aio);
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool nofree);
+void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio,
+		     bool always_free);
+void cl_sub_dio_free(struct cl_sub_dio *sdio, bool nofree);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 {
 	cl_sync_io_init_notify(anchor, nr, NULL, NULL);
@@ -2612,8 +2616,8 @@ struct cl_sync_io {
 	wait_queue_head_t	csi_waitq;
 	/** callback to invoke when this IO is finished */
 	cl_sync_io_end_t       *csi_end_io;
-	/** aio private data */
-	struct cl_dio_aio      *csi_aio;
+	/* private pointer for an associated DIO/AIO */
+	void		       *csi_dio_aio;
 };
 
 /** direct IO pages */
@@ -2629,19 +2633,27 @@ struct ll_dio_pages {
 	loff_t                  ldp_file_offset;
 };
 
-/** To support Direct AIO */
+/* Top level struct used for AIO and DIO */
 struct cl_dio_aio {
 	struct cl_sync_io	cda_sync;
-	struct cl_page_list	cda_pages;
 	struct cl_object	*cda_obj;
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
-	struct cl_dio_aio	*cda_ll_aio;
-	struct ll_dio_pages	cda_dio_pages;
 	unsigned		cda_no_aio_complete:1,
-				cda_no_aio_free:1;
+				cda_no_sub_free:1;
 };
 
+/* Sub-dio used for splitting DIO (and AIO, because AIO is DIO) according to
+ * the layout/striping, so we can do parallel submit of DIO RPCs
+ */
+struct cl_sub_dio {
+	struct cl_sync_io	csd_sync;
+	struct cl_page_list	csd_pages;
+	ssize_t			csd_bytes;
+	struct cl_dio_aio	*csd_ll_aio;
+	struct ll_dio_pages	csd_dio_pages;
+	unsigned		csd_no_free:1;
+};
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
 	defined(HAVE_DIRECTIO_2ARGS)
 #define HAVE_DIO_ITER 1

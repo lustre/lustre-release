@@ -1645,7 +1645,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	unsigned int retried = 0, dio_lock = 0;
 	bool is_aio = false;
 	bool is_parallel_dio = false;
-	struct cl_dio_aio *ci_aio = NULL;
+	struct cl_dio_aio *ci_dio_aio = NULL;
 	size_t per_bytes;
 	bool partial_io = false;
 	size_t max_io_pages, max_cached_pages;
@@ -1678,9 +1678,9 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		if (!ll_sbi_has_parallel_dio(sbi))
 			is_parallel_dio = false;
 
-		ci_aio = cl_aio_alloc(args->u.normal.via_iocb,
-				      ll_i2info(inode)->lli_clob, NULL);
-		if (!ci_aio)
+		ci_dio_aio = cl_dio_aio_alloc(args->u.normal.via_iocb,
+					  ll_i2info(inode)->lli_clob, is_aio);
+		if (!ci_dio_aio)
 			GOTO(out, rc = -ENOMEM);
 	}
 
@@ -1697,7 +1697,7 @@ restart:
 	partial_io = per_bytes < count;
 	io = vvp_env_thread_io(env);
 	ll_io_init(io, file, iot, args);
-	io->ci_aio = ci_aio;
+	io->ci_dio_aio = ci_dio_aio;
 	io->ci_dio_lock = dio_lock;
 	io->ci_ndelay_tried = retried;
 	io->ci_parallel_dio = is_parallel_dio;
@@ -1742,12 +1742,8 @@ restart:
 		rc = io->ci_result;
 	}
 
-	/* N/B: parallel DIO may be disabled during i/o submission;
-	 * if that occurs, async RPCs are resolved before we get here, and this
-	 * wait call completes immediately.
-	 */
 	if (is_parallel_dio) {
-		struct cl_sync_io *anchor = &io->ci_aio->cda_sync;
+		struct cl_sync_io *anchor = &io->ci_dio_aio->cda_sync;
 
 		/* for dio, EIOCBQUEUED is an implementation detail,
 		 * and we don't return it to userspace
@@ -1755,6 +1751,11 @@ restart:
 		if (rc == -EIOCBQUEUED)
 			rc = 0;
 
+		/* N/B: parallel DIO may be disabled during i/o submission;
+		 * if that occurs, I/O shifts to sync, so it's all resolved
+		 * before we get here, and this wait call completes
+		 * immediately.
+		 */
 		rc2 = cl_sync_io_wait_recycle(env, anchor, 0, 0);
 		if (rc2 < 0)
 			rc = rc2;
@@ -1818,24 +1819,29 @@ out:
 		goto restart;
 	}
 
-	if (io->ci_aio) {
+	if (io->ci_dio_aio) {
 		/*
 		 * VFS will call aio_complete() if no -EIOCBQUEUED
 		 * is returned for AIO, so we can not call aio_complete()
 		 * in our end_io().
+		 *
+		 * NB: This is safe because the atomic_dec_and_lock  in
+		 * cl_sync_io_init has implicit memory barriers, so this will
+		 * be seen by whichever thread completes the DIO/AIO, even if
+		 * it's not this one
 		 */
 		if (rc != -EIOCBQUEUED)
-			io->ci_aio->cda_no_aio_complete = 1;
+			io->ci_dio_aio->cda_no_aio_complete = 1;
 		/**
 		 * Drop one extra reference so that end_io() could be
 		 * called for this IO context, we could call it after
 		 * we make sure all AIO requests have been proceed.
 		 */
-		cl_sync_io_note(env, &io->ci_aio->cda_sync,
+		cl_sync_io_note(env, &io->ci_dio_aio->cda_sync,
 				rc == -EIOCBQUEUED ? 0 : rc);
 		if (!is_aio) {
-			cl_aio_free(env, io->ci_aio);
-			io->ci_aio = NULL;
+			cl_dio_aio_free(env, io->ci_dio_aio, true);
+			io->ci_dio_aio = NULL;
 		}
 	}
 
