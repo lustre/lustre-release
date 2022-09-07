@@ -316,12 +316,6 @@ struct srpc_service {
          */
 	int              (*sv_handler)(struct srpc_server_rpc *);
 	int              (*sv_bulk_ready)(struct srpc_server_rpc *, int);
-
-	/** Service side srpc constructor/destructor.
-	 *  used for the bulk preallocation as usual.
-	 */
-	int              (*sv_srpc_init)(struct srpc_server_rpc *, int);
-	void             (*sv_srpc_fini)(struct srpc_server_rpc *);
 };
 
 struct sfw_session {
@@ -423,6 +417,7 @@ void sfw_abort_rpc(struct srpc_client_rpc *rpc);
 void sfw_post_rpc(struct srpc_client_rpc *rpc);
 void sfw_client_rpc_done(struct srpc_client_rpc *rpc);
 void sfw_unpack_message(struct srpc_msg *msg);
+void sfw_free_pages(struct srpc_server_rpc *rpc);
 void sfw_add_bulk_page(struct srpc_bulk *bk, struct page *pg, int i);
 int sfw_alloc_pages(struct srpc_server_rpc *rpc, int cpt, int npages, int len,
 		    int sink);
@@ -437,10 +432,9 @@ srpc_create_client_rpc(struct lnet_process_id peer, int service,
 void srpc_post_rpc(struct srpc_client_rpc *rpc);
 void srpc_abort_rpc(struct srpc_client_rpc *rpc, int why);
 void srpc_free_bulk(struct srpc_bulk *bk);
-struct srpc_bulk *srpc_alloc_bulk(int cpt, unsigned int bulk_npg);
-void srpc_init_bulk(struct srpc_bulk *bk, unsigned int off,
-		    unsigned int bulk_npg, unsigned int bulk_len, int sink);
-
+struct srpc_bulk *srpc_alloc_bulk(int cpt, unsigned int off,
+				  unsigned int bulk_npg, unsigned int bulk_len,
+				  int sink);
 int srpc_send_rpc(struct swi_workitem *wi);
 int srpc_send_reply(struct srpc_server_rpc *rpc);
 int srpc_add_service(struct srpc_service *sv);
@@ -612,6 +606,7 @@ void ping_init_test_service(void);
 
 extern struct sfw_test_client_ops brw_test_client;
 extern struct srpc_service brw_test_service;
+void brw_init_test_client(void);
 void brw_init_test_service(void);
 
 #endif /* __SELFTEST_SELFTEST_H__ */
