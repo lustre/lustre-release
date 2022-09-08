@@ -3265,12 +3265,17 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	case RDMA_CM_EVENT_UNREACHABLE:
 		conn = cmid->context;
-                LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
-                        conn->ibc_state == IBLND_CONN_PASSIVE_WAIT);
-                CNETERR("%s: UNREACHABLE %d\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->status);
-                kiblnd_connreq_done(conn, -ENETDOWN);
-                kiblnd_conn_decref(conn);
+		CNETERR("%s: UNREACHABLE %d, ibc_state: %d\n",
+			libcfs_nid2str(conn->ibc_peer->ibp_nid),
+			event->status,
+			conn->ibc_state);
+		LASSERT(conn->ibc_state != IBLND_CONN_ESTABLISHED &&
+			conn->ibc_state != IBLND_CONN_INIT);
+		if (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
+		    conn->ibc_state == IBLND_CONN_PASSIVE_WAIT) {
+			kiblnd_connreq_done(conn, -ENETDOWN);
+			kiblnd_conn_decref(conn);
+		}
                 return 0;
 
 	case RDMA_CM_EVENT_CONNECT_ERROR:
