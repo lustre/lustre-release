@@ -3030,8 +3030,7 @@ static void nrs_tbf_res_put(struct ptlrpc_nrs_policy *policy,
  * \param[in] peek   When set, signifies that we just want to examine the
  *		     request, and not handle it, so the request is not removed
  *		     from the policy.
- * \param[in] force  Force the policy to return a request; unused in this
- *		     policy
+ * \param[in] force  Force the policy to return a request
  *
  * \retval The request to be handled; this is the next request in the TBF
  *	   rule
@@ -3050,7 +3049,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 
 	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
-	if (!peek && policy->pol_nrs->nrs_throttling)
+	if (likely(!peek && !force) && policy->pol_nrs->nrs_throttling)
 		return NULL;
 
 	node = binheap_root(head->th_binheap);
@@ -3059,7 +3058,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 
 	cli = container_of(node, struct nrs_tbf_client, tc_node);
 	LASSERT(cli->tc_in_heap);
-	if (peek) {
+	if (unlikely(peek)) {
 		nrq = list_entry(cli->tc_list.next,
 				     struct ptlrpc_nrs_request,
 				     nr_u.tbf.tr_list);
@@ -3089,6 +3088,10 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 			}
 		} else if (ntoken > cli->tc_depth)
 			ntoken = cli->tc_depth;
+
+		/* give an extra token with force mode */
+		if (unlikely(force) && ntoken == 0)
+			ntoken = 1;
 
 		if (ntoken > 0) {
 			struct ptlrpc_request *req;

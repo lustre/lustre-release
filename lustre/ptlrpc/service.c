@@ -3498,6 +3498,7 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 
 		while (ptlrpc_server_request_pending(svcpt, true)) {
 			req = ptlrpc_server_request_get(svcpt, true);
+			LASSERT(req);
 			ptlrpc_server_finish_active_request(svcpt, req);
 		}
 
