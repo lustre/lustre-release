@@ -4674,6 +4674,122 @@ test_77p() {
 }
 run_test 77p "Check validity of rule names for TBF policies"
 
+cleanup_77r() {
+	local pid=$1
+	local saved_jobid=$2
+	local current_jobid_var
+
+	echo "cleanup 77r $pid"
+
+	do_facet mds1 $LCTL set_param -n mds.MDS.mdt.nrs_policies=fifo
+	kill $pid || echo "fail to kill md thread"
+
+	current_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid != $current_jobid_var ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" $saved_jobid
+	fi
+
+	sleep 2
+	rm -rf $DIR1/$tdir
+}
+
+md_thread_run="true"
+md_thread_77r() {
+	local pid
+
+	while $md_thread_run; do
+		printf '%s\n' {$DIR1,$DIR2}/$tdir/${tfile}-{01..20} |
+			xargs -P20 -I{} $RUNAS bash -c 'touch {}; rm -f {}' \
+				&> /dev/null & pid=$!
+		trap "echo kill md_thread xargs; md_thread_run=false; kill $pid" INT TERM
+		wait $pid
+	done
+}
+
+wait_policy_state() {
+	local state="$1"
+	local policy="$2"
+	local change_pid="$3"
+	local time
+
+	for time in {1..60}; do
+		local nbr_started
+
+		nbr_started=$(do_facet mds1 $LCTL get_param mds.MDS.mdt.nrs_policies |
+			egrep -A2 "name: ${policy}$" | grep -c "state: $state")
+
+		[[ "$nbr_started" != 2 ]] || return 0
+		sleep 1
+	done
+
+	[[ -z "$change_pid" ]] || kill $change_pid || true
+	return 1
+}
+
+test_77r() { #LU-14976
+	local pid
+	local -A rules
+	local -a policies
+	local saved_jobid_var
+
+	rules["tbf uid"]="start md_rule uid={$RUNAS_ID} rate=1"
+	rules["tbf gid"]="start md_rule gid={$RUNAS_GID} rate=1"
+	rules["tbf jobid"]="start md_rule jobid={*.$RUNAS_ID} rate=1"
+	rules["tbf"]="start md_rule uid={$RUNAS_ID} rate=1"
+	policies=(
+	"tbf uid"
+	"tbf gid"
+	"tbf jobid"
+	"tbf"
+	"fifo"
+	)
+
+	test_mkdir -i 0 -c 1 $DIR1/$tdir
+	chmod 777 $DIR1/$tdir
+
+	# Configure jobid_var
+	saved_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	# start md thread
+	md_thread_77r & pid=$!
+	stack_trap "cleanup_77r $pid '$saved_jobid_var'"
+
+	local policy
+	for policy in "${policies[@]}"; do
+		local change_pid
+
+		# wait to queue requests
+		sleep 5
+
+		do_facet mds1 "$LCTL set_param mds.MDS.mdt.nrs_policies='$policy'" &
+		change_pid=$!
+
+		wait_policy_state "started" "$policy" "$change_pid" ||
+			error "timeout to start '$policy' policy"
+
+		[[ -n "${rules[$policy]}" ]] || continue
+
+		do_facet mds1 "$LCTL set_param mds.MDS.mdt.nrs_tbf_rule='${rules[$policy]}'" ||
+			error "fail to set rule '${rules[$policy]}' to '$policy'"
+	done
+
+	wait_policy_state "stopped" "tbf" ||
+		error "fail to stop tbf policy"
+
+	echo "check the number of requests in queue:"
+	local awkcmd='/name: / {last = $3} '
+	awkcmd+='/queued: / {printf "    %s: %d\n", last, $2;'
+	awkcmd+='	if (last == "tbf" && $2 > 0) exit 1;}'
+	do_facet mds1 $LCTL get_param mds.MDS.mdt.nrs_policies | awk "$awkcmd" ||
+		error "request leak in tbf policies"
+}
+run_test 77r "Change type of tbf policy at run time"
+
 test_78() { #LU-6673
 	local rc
 
