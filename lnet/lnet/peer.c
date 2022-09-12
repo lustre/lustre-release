@@ -2216,15 +2216,19 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp, int dc_error)
 	CDEBUG(D_NET, "Discovery complete. Dequeue peer %s\n",
 	       libcfs_nidstr(&lp->lp_primary_nid));
 
-	list_del_init(&lp->lp_dc_list);
 	spin_lock(&lp->lp_lock);
+	/* Our caller dropped lp_lock which may have allowed another thread to
+	 * set LNET_PEER_DISCOVERING, or it may be set if dc_error is non-zero.
+	 * Ensure it is cleared.
+	 */
+	lp->lp_state &= ~LNET_PEER_DISCOVERING;
 	if (dc_error) {
 		lp->lp_dc_error = dc_error;
-		lp->lp_state &= ~LNET_PEER_DISCOVERING;
 		lp->lp_state |= LNET_PEER_REDISCOVER;
 	}
 	list_splice_init(&lp->lp_dc_pendq, &pending_msgs);
 	spin_unlock(&lp->lp_lock);
+	list_del_init(&lp->lp_dc_list);
 	wake_up(&lp->lp_dc_waitq);
 
 	if (lp->lp_rtr_refcount > 0)
@@ -3167,18 +3171,16 @@ __must_hold(&lp->lp_lock)
 	struct list_head rlist;
 	struct lnet_route *route, *tmp;
 	int sensitivity = lp->lp_health_sensitivity;
-	int rc;
+	int rc = 0;
 
 	INIT_LIST_HEAD(&rlist);
 
-	lp->lp_state &= ~(LNET_PEER_DISCOVERING | LNET_PEER_FORCE_PING |
-			  LNET_PEER_FORCE_PUSH);
 	CDEBUG(D_NET, "peer %s(%p) state %#x\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), lp, lp->lp_state);
 
 	/* no-op if lnet_peer_del() has already been called on this peer */
 	if (lp->lp_state & LNET_PEER_MARK_DELETED)
-		return 0;
+		goto clear_discovering;
 
 	spin_unlock(&lp->lp_lock);
 
@@ -3187,27 +3189,24 @@ __must_hold(&lp->lp_lock)
 	    the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		spin_lock(&lp->lp_lock);
-		return -ESHUTDOWN;
+		rc = -ESHUTDOWN;
+		goto clear_discovering;
 	}
 
+	lnet_peer_cancel_discovery(lp);
 	lnet_net_lock(LNET_LOCK_EX);
-	/* remove the peer from the discovery work
-	 * queue if it's on there in preparation
-	 * of deleting it.
-	 */
-	if (!list_empty(&lp->lp_dc_list))
-		list_del_init(&lp->lp_dc_list);
 	list_for_each_entry_safe(route, tmp,
 				 &lp->lp_routes,
 				 lr_gwlist)
 		lnet_move_route(route, NULL, &rlist);
-	lnet_net_unlock(LNET_LOCK_EX);
 
-	/* lnet_peer_del() deletes all the peer NIs owned by this peer */
-	rc = lnet_peer_del(lp);
+	/* lnet_peer_del_locked() deletes all the peer NIs owned by this peer */
+	rc = lnet_peer_del_locked(lp);
 	if (rc)
 		CNETERR("Internal error: Unable to delete peer %s rc %d\n",
 			libcfs_nidstr(&lp->lp_primary_nid), rc);
+
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	list_for_each_entry_safe(route, tmp,
 				 &rlist, lr_list) {
@@ -3224,7 +3223,13 @@ __must_hold(&lp->lp_lock)
 
 	spin_lock(&lp->lp_lock);
 
-	return 0;
+	rc = 0;
+
+clear_discovering:
+	lp->lp_state &= ~(LNET_PEER_DISCOVERING | LNET_PEER_FORCE_PING |
+			  LNET_PEER_FORCE_PUSH);
+
+	return rc;
 }
 
 /*
