@@ -813,6 +813,10 @@ lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 	if (lnet_msg_is_response(msg))
 		return 1;
 
+	/* always send non-routed messages */
+	if (!msg->msg_routing)
+		return 1;
+
 	if (!lnet_is_peer_deadline_passed(lpni, now))
 		return true;
 
