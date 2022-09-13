@@ -18618,18 +18618,32 @@ test_205b() {
 	(( $MDS1_VERSION >= $(version_code 2.13.54.91) )) ||
 		skip "Need MDS version at least 2.13.54.91"
 
-	job_stats="mdt.*.job_stats"
-	$LCTL set_param $job_stats=clear
+	local job_stats="mdt.*.job_stats"
+	local old_jobid=$(do_facet mds1 $LCTL get_param jobid_var)
+
+	do_facet mds1 $LCTL set_param $job_stats=clear
+
 	# Setting jobid_var to USER might not be supported
+	[[ -n "$old_jobid" ]] && stack_trap "$LCTL set_param $old_jobid"
 	$LCTL set_param jobid_var=USER || true
-	$LCTL set_param jobid_name="%e.%u"
+	stack_trap "$LCTL set_param $($LCTL get_param jobid_name)"
+	$LCTL set_param jobid_name="%j.%e.%u"
+
 	env -i USERTESTJOBSTATS=foolish touch $DIR/$tfile.1
-	do_facet $SINGLEMDS $LCTL get_param $job_stats |
-		grep "job_id:.*foolish" &&
-			error "Unexpected jobid found"
-	do_facet $SINGLEMDS $LCTL get_param $job_stats |
-		grep "open:.*min.*max.*sum" ||
-			error "wrong job_stats format found"
+	do_facet mds1 $LCTL get_param $job_stats | grep "job_id:.*foolish" &&
+		{ do_facet mds1 $LCTL get_param $job_stats;
+		  error "Unexpected jobid found"; }
+	do_facet mds1 $LCTL get_param $job_stats | grep "open:.*min.*max.*sum"||
+		{ do_facet mds1 $LCTL get_param $job_stats;
+		  error "wrong job_stats format found"; }
+
+	(( $MDS1_VERSION <= $(version_code 2.15.0) )) &&
+		echo "MDS does not yet escape jobid" && return 0
+	$LCTL set_param jobid_var=TEST205b
+	env -i TEST205b="has sp" touch $DIR/$tfile.2
+	do_facet mds1 $LCTL get_param $job_stats | grep "has.*x20sp" ||
+		{ do_facet mds1 $LCTL get_param $job_stats;
+		  error "jobid not escaped"; }
 }
 run_test 205b "Verify job stats jobid and output format"
 

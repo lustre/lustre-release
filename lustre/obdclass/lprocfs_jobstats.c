@@ -439,24 +439,35 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 	struct lprocfs_stats *s;
 	struct lprocfs_counter ret;
 	struct lprocfs_counter_header *cntr_header;
-	int i;
+	char escaped[LUSTRE_JOBID_SIZE * 4] = "";
+	char *quote = "", *c, *end;
+	int i, joblen = 0;
 
 	if (v == SEQ_START_TOKEN) {
 		seq_printf(p, "job_stats:\n");
 		return 0;
 	}
 
-	/* Replace the non-printable character in jobid with '?', so
-	 * that the output of jobid will be confined in single line. */
-	seq_printf(p, "- %-16s ", "job_id:");
-	for (i = 0; i < strlen(job->js_jobid); i++) {
-		if (isprint(job->js_jobid[i]) != 0)
-			seq_putc(p, job->js_jobid[i]);
-		else
-			seq_putc(p, '?');
+	/* Quote and escape jobid characters to escape hex codes "\xHH" if
+	 * it contains any non-standard characters (space, newline, etc),
+	 * so it will be confined to single line and not break parsing.
+	 */
+	for (c = job->js_jobid, end = job->js_jobid + sizeof(job->js_jobid);
+	     c < end && *c != '\0';
+	     c++, joblen++) {
+		if (!isalnum(*c) &&
+		    *c != '.' && *c != '@' && *c != '-' && *c != '_') {
+			quote = "\"";
+			snprintf(escaped + joblen, sizeof(escaped), "\\x%02X",
+				 (unsigned char)*c);
+			joblen += 3;
+		} else {
+			escaped[joblen] = *c;
+		}
 	}
-	seq_putc(p, '\n');
 
+	seq_printf(p, "- %-16s %s%*s%s\n",
+		   "job_id:", quote, joblen, escaped, quote);
 	lprocfs_stats_header(p, job->js_time_latest, job->js_time_init, 16,
 			     ":", true);
 
@@ -486,6 +497,7 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 		seq_printf(p, " }\n");
 
 	}
+
 	return 0;
 }
 
