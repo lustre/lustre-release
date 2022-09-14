@@ -1839,18 +1839,18 @@ check_nid_in_recovq() {
 # If the recovery limit is 10 seconds, then when the 5th enqueue happens
 # we expect the peer NI to have aged out, so it will not actually be
 # queued.
-# If max_recovery_ping_interval is set to 2 then:
+# If max_recovery_ping_interval is set to 4 then:
 #  First enqueue happens at time 0.
-#  2nd at 0 + 2^0 = 1
-#  3rd at 1 + 2^1 = 3
-#  4th at 3 + 2^1 = 5
-#  5th at 5 + 2^1 = 7
-#  6th at 7 + 2^1 = 9
-#  7th at 9 + 2^1 = 11
-# e.g. after 4 seconds we would expect to have seen the 3th enqueue,
+#  2nd at 0 + min(2^0, 4) = 1
+#  3rd at 1 + min(2^1, 4) = 3
+#  4th at 3 + min(2^2, 4) = 7
+#  5th at 7 + min(2^3, 4) = 11
+#  6th at 11 + min(2^4, 4) = 15
+#  7th at 15 + min(2^5, 4) = 19
+# e.g. after 4 seconds we would expect to have seen the 3rd enqueue,
 # (2 pings sent, 3rd about to happen), and the 4th enqueue is yet to happen
-# e.g. after 10 seconds we would expect to have seen the 6th enqueue,
-# (5 pings sent, 6th about to happen), and the 8th enqueue is yet to happen
+# e.g. after 13 seconds we would expect to have seen the 5th enqueue,
+# (4 pings sent, 5th about to happen), and the 6th enqueue is yet to happen
 check_ping_count() {
 	local queue="$1"
 	local expect="$2"
@@ -1939,7 +1939,7 @@ test_210() {
 
 	default=$($LNETCTL global show |
 		  awk '/max_recovery_ping_interval/{print $NF}')
-	do_lnetctl set max_recovery_ping_interval 2 ||
+	do_lnetctl set max_recovery_ping_interval 4 ||
 		error "failed to set max_recovery_ping_interval"
 
 	$LCTL set_param debug=+net
@@ -1954,9 +1954,9 @@ test_210() {
 	check_nid_in_recovq "-l" "1"
 	check_ping_count "ni" "2"
 
-	sleep 6
+	sleep 9
 	check_nid_in_recovq "-l" "1"
-	check_ping_count "ni" "5"
+	check_ping_count "ni" "4"
 
 	$LCTL net_drop_del -a
 
@@ -2037,7 +2037,7 @@ test_211() {
 
 	default=$($LNETCTL global show |
 		  awk '/max_recovery_ping_interval/{print $NF}')
-	do_lnetctl set max_recovery_ping_interval 2 ||
+	do_lnetctl set max_recovery_ping_interval 4 ||
 		error "failed to set max_recovery_ping_interval"
 
 	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e remote_error
@@ -2052,9 +2052,9 @@ test_211() {
 	check_nid_in_recovq "-p" "1"
 	check_ping_count "peer_ni" "2"
 
-	sleep 6
+	sleep 9
 	check_nid_in_recovq "-p" "1"
-	check_ping_count "peer_ni" "5"
+	check_ping_count "peer_ni" "4"
 
 	$LCTL net_drop_del -a
 
