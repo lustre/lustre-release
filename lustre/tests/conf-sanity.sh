@@ -10009,6 +10009,8 @@ run_test 132 "hsm_actions processed after failover"
 # significant imbalance vs an OST outside the pool
 test_133() {
 	[[ $OSTCOUNT -lt 4 ]] && skip_env "needs >= 4 OSTs"
+	[[ "$OST1_VERSION" -ge $(version_code 2.15.51) ]] ||
+		skip "Need OST version at least 2.15.51"
 	# This is the easiest way to ensure OSTs start out balanced
 	reformat_and_config
 	setupall
