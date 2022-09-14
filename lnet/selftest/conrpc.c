@@ -780,10 +780,15 @@ lstcon_pingrpc_prep(struct lst_test_ping_param *param,
 {
 	struct test_ping_req *prq = &req->tsr_u.ping;
 
-        prq->png_size   = param->png_size;
-        prq->png_flags  = param->png_flags;
-        /* TODO dest */
-        return 0;
+	if (param) {
+		prq->png_size   = param->png_size;
+		prq->png_flags  = param->png_flags;
+	} else {
+		prq->png_size   = 0;
+		prq->png_flags  = 0;
+	}
+	/* TODO dest */
+	return 0;
 }
 
 static int
@@ -898,12 +903,17 @@ lstcon_testrpc_prep(struct lstcon_node *nd, int transop, unsigned int feats,
         trq->tsr_stop_onerr = !!test->tes_stop_onerr;
 
         switch (test->tes_type) {
-        case LST_TEST_PING:
-                trq->tsr_service = SRPC_SERVICE_PING;
-		rc = lstcon_pingrpc_prep((struct lst_test_ping_param *)
-					 &test->tes_param[0], trq);
-		break;
+	case LST_TEST_PING: {
+		struct lst_test_ping_param *data = NULL;
 
+		trq->tsr_service = SRPC_SERVICE_PING;
+		if (test->tes_paramlen)
+			data = ((struct lst_test_ping_param *)
+				&test->tes_param[0]);
+
+		rc = lstcon_pingrpc_prep(data, trq);
+		break;
+	}
 	case LST_TEST_BULK:
 		trq->tsr_service = SRPC_SERVICE_BRW;
 		if ((feats & LST_FEAT_BULK_LEN) == 0) {

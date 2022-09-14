@@ -3266,6 +3266,7 @@ int
 lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 {
 	struct lst_test_bulk_param *bulk = NULL;
+	struct lst_test_ping_param *ping = NULL;
         int                    type;
 
         type = lst_test_name2type(test);
@@ -3276,7 +3277,18 @@ lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 
         switch (type) {
         case LST_TEST_PING:
-                break;
+		/* unused but needs for kernel part */
+		ping = malloc(sizeof(*ping));
+		if (ping == NULL) {
+			fprintf(stderr, "Out of memory\n");
+			return -1;
+		}
+		memset(ping, 0, sizeof(*ping));
+
+		*param = ping;
+		*plen  = sizeof(*ping);
+
+		break;
 
         case LST_TEST_BULK:
                 bulk = malloc(sizeof(*bulk));
