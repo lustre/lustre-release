@@ -1769,6 +1769,10 @@ out:
 	memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
 	spin_unlock(&imp->imp_lock);
 
+	obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
+	if (!noclose)
+		obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
+
 	if (rc == -ETIMEDOUT || rc == -ENOTCONN || rc == -ESHUTDOWN)
 		rc = 0;
 	RETURN(rc);
