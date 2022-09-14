@@ -2499,6 +2499,9 @@ REMOTE_NET=${NETTYPE}2
 setup_router_test() {
 	local mod_opts="$@"
 
+	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
+		skip "need at least 2.15.0 for load_lnet"
+
 	if [[ ${#RPEER_INTERFACES[@]} -eq 0 ]]; then
 		init_router_test_vars ||
 			return $?
@@ -2511,6 +2514,9 @@ setup_router_test() {
 
 	mod_opts+=" alive_router_check_interval=5"
 	mod_opts+=" router_ping_timeout=5"
+	mod_opts+=" large_router_buffers=4"
+	mod_opts+=" small_router_buffers=8"
+	mod_opts+=" tiny_router_buffers=16"
 	do_rpc_nodes $all_nodes load_lnet "${mod_opts}" ||
 		error "Failed to load lnet"
 
