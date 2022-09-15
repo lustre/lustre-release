@@ -40,6 +40,7 @@
 #include <linux/inetdevice.h>
 #include "socklnd.h"
 #include <linux/sunrpc/addr.h>
+#include <net/addrconf.h>
 
 static const struct lnet_lnd the_ksocklnd;
 struct ksock_nal_data ksocknal_data;
@@ -78,8 +79,7 @@ static int ksocknal_ip2index(struct sockaddr *addr, struct lnet_ni *ni)
 	int ret = -1;
 	DECLARE_CONST_IN_IFADDR(ifa);
 
-	if (addr->sa_family != AF_INET)
-		/* No IPv6 support yet */
+	if (addr->sa_family != AF_INET && addr->sa_family != AF_INET6)
 		return ret;
 
 	rcu_read_lock();
@@ -93,16 +93,38 @@ static int ksocknal_ip2index(struct sockaddr *addr, struct lnet_ni *ni)
 		if (!(flags & IFF_UP))
 			continue;
 
-		in_dev = __in_dev_get_rcu(dev);
-		if (!in_dev)
-			continue;
+		switch (addr->sa_family) {
+		case AF_INET:
+			in_dev = __in_dev_get_rcu(dev);
+			if (!in_dev)
+				continue;
 
-		in_dev_for_each_ifa_rcu(ifa, in_dev) {
-			if (ifa->ifa_local ==
-			    ((struct sockaddr_in *)addr)->sin_addr.s_addr)
-				ret = dev->ifindex;
+			in_dev_for_each_ifa_rcu(ifa, in_dev) {
+				if (ifa->ifa_local ==
+				    ((struct sockaddr_in *)addr)->sin_addr.s_addr)
+					ret = dev->ifindex;
+			}
+			endfor_ifa(in_dev);
+			break;
+#if IS_ENABLED(CONFIG_IPV6)
+		case AF_INET6: {
+			struct inet6_dev *in6_dev;
+			const struct inet6_ifaddr *ifa6;
+			struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)addr;
+
+			in6_dev = __in6_dev_get(dev);
+			if (!in6_dev)
+				continue;
+
+			list_for_each_entry_rcu(ifa6, &in6_dev->addr_list, if_list) {
+				if (ipv6_addr_cmp(&ifa6->addr,
+						 &addr6->sin6_addr) == 0)
+					ret = dev->ifindex;
+			}
+			break;
+			}
+#endif /* IS_ENABLED(CONFIG_IPV6) */
 		}
-		endfor_ifa(in_dev);
 		if (ret >= 0)
 			break;
 	}
