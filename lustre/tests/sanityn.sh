@@ -586,6 +586,51 @@ test_16f() { # LU-14541
 }
 run_test 16f "rw sequential consistency vs drop_caches"
 
+test_16h() {
+	local tf=$DIR/$tdir/$tfile
+	local tf2=$DIR2/$tdir/$tfile
+	local cmd="$MMAP_CAT $tf | od -x | tail -q -n4"
+	local cmd2="$MMAP_CAT $tf2 | od -x | tail -q -n4"
+
+	test_mkdir $DIR/$tdir
+
+	# create file and populate data
+	cp /etc/passwd $tf || error "cp failed"
+
+	local size=$(stat -c %s $tf)
+	c1=$(eval $cmd)
+	c2=$(eval $cmd2)
+	if [[ "$c1" != "$c2" ]]; then
+		echo "  ------- mount 1 read --------"
+		echo $c1
+		echo "  ------- mount 2 read --------"
+		echo $c2
+		error "content mismatch"
+	fi
+
+	echo "  ------- before truncate --------"
+	echo $c1
+
+	# truncate file
+	$TRUNCATE $tf $((size / 2)) || error "truncate file"
+
+	#cancel_lru_locks
+	echo "  ------- after truncate --------"
+
+	# repeat the comparison
+	c1=$(eval $cmd)
+	c2=$(eval $cmd2)
+	if [[ "$c1" != "$c2" ]]; then
+		echo "  ------- mount 1 read --------"
+		echo $c1
+		echo "  ------- mount 2 read --------"
+		echo $c2
+		error "content mismatch after truncate"
+	fi
+	echo $c2
+}
+run_test 16h "mmap read after truncate file"
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

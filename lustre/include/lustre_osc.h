@@ -140,6 +140,7 @@ struct osc_io {
 	struct osc_extent *oi_trunc;
 	/** write osc_lock for this IO, used by osc_extent_find(). */
 	struct osc_lock   *oi_write_osclock;
+	struct osc_lock   *oi_read_osclock;
 	struct obdo        oi_oa;
 	struct osc_async_cbargs {
 		bool		  opc_rpc_sent;
@@ -714,6 +715,8 @@ void osc_lock_wake_waiters(const struct lu_env *env, struct osc_object *osc,
 int osc_lock_enqueue_wait(const struct lu_env *env, struct osc_object *obj,
 			  struct osc_lock *oscl);
 void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
+			 struct cl_object *obj, struct osc_lock *oscl);
+void osc_lock_set_reader(const struct lu_env *env, const struct cl_io *io,
 			 struct cl_object *obj, struct osc_lock *oscl);
 int osc_lock_print(const struct lu_env *env, void *cookie,
 		   lu_printer_t p, const struct cl_lock_slice *slice);

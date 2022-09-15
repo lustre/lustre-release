@@ -465,6 +465,7 @@ void osc_io_rw_iter_fini(const struct lu_env *env,
 		oio->oi_lru_reserved = 0;
 	}
 	oio->oi_write_osclock = NULL;
+	oio->oi_read_osclock = NULL;
 
 	osc_io_iter_fini(env, ios);
 }

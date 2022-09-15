@@ -2582,6 +2582,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 			 struct osc_object *obj, struct list_head *list,
 			 int brw_flags)
 {
+	struct osc_io *oio = osc_env_io(env);
 	struct client_obd     *cli = osc_cli(obj);
 	struct osc_extent     *ext;
 	struct osc_async_page *oap;
@@ -2590,6 +2591,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	bool	can_merge   = true;
 	pgoff_t start      = CL_PAGE_EOF;
 	pgoff_t end        = 0;
+	struct osc_lock *oscl;
 	ENTRY;
 
 	list_for_each_entry(oap, list, oap_pending_item) {
@@ -2629,6 +2631,11 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_dio = !!(brw_flags & OBD_BRW_NOCACHE);
+	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;
+	if (oscl && oscl->ols_dlmlock != NULL) {
+		ext->oe_dlmlock = LDLM_LOCK_GET(oscl->ols_dlmlock);
+		lu_ref_add(&ext->oe_dlmlock->l_reference, "osc_extent", ext);
+	}
 	if (ext->oe_dio && !ext->oe_rw) { /* direct io write */
 		int grants;
 		int ppc;

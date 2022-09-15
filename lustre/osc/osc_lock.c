@@ -1191,6 +1191,22 @@ void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_lock_set_writer);
 
+void osc_lock_set_reader(const struct lu_env *env, const struct cl_io *io,
+			 struct cl_object *obj, struct osc_lock *oscl)
+{
+	struct osc_io *oio = osc_env_io(env);
+
+	if (!cl_object_same(io->ci_obj, obj))
+		return;
+
+	if (oscl->ols_glimpse || osc_lock_is_lockless(oscl))
+		return;
+
+	if (oio->oi_read_osclock == NULL)
+		oio->oi_read_osclock = oscl;
+}
+EXPORT_SYMBOL(osc_lock_set_reader);
+
 int osc_lock_init(const struct lu_env *env,
 		  struct cl_object *obj, struct cl_lock *lock,
 		  const struct cl_io *io)
@@ -1236,6 +1252,9 @@ int osc_lock_init(const struct lu_env *env,
 
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, oscl);
+	else if (io->ci_type == CIT_READ ||
+		 (io->ci_type == CIT_FAULT && !io->u.ci_fault.ft_mkwrite))
+		osc_lock_set_reader(env, io, obj, oscl);
 
 	LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags %#llx",
 			  lock, oscl, oscl->ols_flags);

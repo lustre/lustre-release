@@ -989,6 +989,9 @@ int mdc_lock_init(const struct lu_env *env, struct cl_object *obj,
 
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, ols);
+	else if (io->ci_type == CIT_READ ||
+		 (io->ci_type == CIT_FAULT && !io->u.ci_fault.ft_mkwrite))
+		osc_lock_set_reader(env, io, obj, ols);
 
 	LDLM_DEBUG_NOLOCK("lock %p, mdc lock %p, flags %llx\n",
 			  lock, ols, ols->ols_flags);
