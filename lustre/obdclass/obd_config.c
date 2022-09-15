@@ -1971,16 +1971,15 @@ int class_config_llog_handler(const struct lu_env *env,
 			    libcfs_str2net(lsi->lsi_lmd->lmd_nidnet)) {
 				CDEBUG(D_CONFIG, "skipping add_conn for %s\n",
 				       uuid_str);
-				rc = 0;
 				/* No processing! */
-				break;
+				GOTO(out_inst, rc = 0);
 			}
 		}
 
 		OBD_ALLOC(lcfg_new, lustre_cfg_len(bufs.lcfg_bufcount,
 						   bufs.lcfg_buflen));
 		if (!lcfg_new)
-			GOTO(out, rc = -ENOMEM);
+			GOTO(out_inst, rc = -ENOMEM);
 
 		lustre_cfg_init(lcfg_new, lcfg->lcfg_command, &bufs);
 		lcfg_new->lcfg_num   = lcfg->lcfg_num;
@@ -2008,6 +2007,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		rc = class_process_config(lcfg_new);
 		OBD_FREE(lcfg_new, lustre_cfg_len(lcfg_new->lcfg_bufcount,
 						  lcfg_new->lcfg_buflens));
+out_inst:
 		if (inst_name)
 			OBD_FREE(inst_name, inst_len);
 		break;
