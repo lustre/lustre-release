@@ -46,20 +46,6 @@ static const struct lnet_lnd the_ksocklnd;
 struct ksock_nal_data ksocknal_data;
 
 static struct ksock_interface *
-ksocknal_ip2iface(struct lnet_ni *ni, struct sockaddr *addr)
-{
-	struct ksock_net *net = ni->ni_data;
-	struct ksock_interface *iface;
-
-	iface = &net->ksnn_interface;
-
-	if (rpc_cmp_addr((struct sockaddr *)&iface->ksni_addr, addr))
-		return iface;
-
-	return NULL;
-}
-
-static struct ksock_interface *
 ksocknal_index2iface(struct lnet_ni *ni, int index)
 {
 	struct ksock_net *net = ni->ni_data;
@@ -281,27 +267,6 @@ ksocknal_find_peer(struct lnet_ni *ni, struct lnet_processid *id)
 static void
 ksocknal_unlink_peer_locked(struct ksock_peer_ni *peer_ni)
 {
-	int i;
-	struct ksock_interface *iface;
-
-	for (i = 0; i < peer_ni->ksnp_n_passive_ips; i++) {
-		struct sockaddr_in sa = { .sin_family = AF_INET };
-		LASSERT(i < LNET_INTERFACES_NUM);
-		sa.sin_addr.s_addr = htonl(peer_ni->ksnp_passive_ips[i]);
-
-		iface = ksocknal_ip2iface(peer_ni->ksnp_ni,
-					  (struct sockaddr *)&sa);
-		/*
-		 * All IPs in peer_ni->ksnp_passive_ips[] come from the
-		 * interface list, therefore the call must succeed.
-		 */
-		LASSERT(iface != NULL);
-
-		CDEBUG(D_NET, "peer_ni=%p iface=%p ksni_nroutes=%d\n",
-		       peer_ni, iface, iface->ksni_nroutes);
-		iface->ksni_npeers--;
-	}
-
 	LASSERT(list_empty(&peer_ni->ksnp_conns));
 	LASSERT(peer_ni->ksnp_conn_cb == NULL);
 	LASSERT(!peer_ni->ksnp_closing);
@@ -319,7 +284,6 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_conn_cb *conn_cb;
 	int i;
-	int j;
 	int rc = -ENOENT;
 
 	read_lock(&ksocknal_data.ksnd_global_lock);
@@ -328,12 +292,11 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 
 		if (peer_ni->ksnp_ni != ni)
 			continue;
+		if (index-- > 0)
+			continue;
 
-		if (peer_ni->ksnp_n_passive_ips == 0 &&
-		    peer_ni->ksnp_conn_cb == NULL) {
-			if (index-- > 0)
-				continue;
-
+		conn_cb = peer_ni->ksnp_conn_cb;
+		if (conn_cb == NULL) {
 			*id = peer_ni->ksnp_id;
 			*myip = 0;
 			*peer_ip = 0;
@@ -341,29 +304,7 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 			*conn_count = 0;
 			*share_count = 0;
 			rc = 0;
-			goto out;
-		}
-
-		for (j = 0; j < peer_ni->ksnp_n_passive_ips; j++) {
-			if (index-- > 0)
-				continue;
-
-			*id = peer_ni->ksnp_id;
-			*myip = peer_ni->ksnp_passive_ips[j];
-			*peer_ip = 0;
-			*port = 0;
-			*conn_count = 0;
-			*share_count = 0;
-			rc = 0;
-			goto out;
-		}
-
-		if (peer_ni->ksnp_conn_cb) {
-			if (index-- > 0)
-				continue;
-
-			conn_cb = peer_ni->ksnp_conn_cb;
-
+		} else {
 			*id = peer_ni->ksnp_id;
 			if (conn_cb->ksnr_addr.ss_family == AF_INET) {
 				struct sockaddr_in *sa =
@@ -383,10 +324,9 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 			}
 			*conn_count = conn_cb->ksnr_conn_count;
 			*share_count = 1;
-			goto out;
 		}
+		break;
 	}
-out:
 	read_unlock(&ksocknal_data.ksnd_global_lock);
 	return rc;
 }
