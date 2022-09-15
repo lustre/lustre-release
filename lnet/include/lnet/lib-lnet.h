@@ -903,6 +903,7 @@ struct lnet_inetdev {
 	u32	li_flags;
 	u32	li_ipaddr;
 	u32	li_netmask;
+	u32	li_index;
 	char	li_name[IFNAMSIZ];
 };
 

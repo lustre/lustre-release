@@ -2506,11 +2506,11 @@ ksocknal_startup(struct lnet_ni *ni)
 	}
 
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
+	ksi->ksni_index = ifaces[i].li_index;
 	sa = (void *)&ksi->ksni_addr;
 	memset(sa, 0, sizeof(*sa));
 	sa->sin_family = AF_INET;
 	sa->sin_addr.s_addr = htonl(ifaces[i].li_ipaddr);
-	ksi->ksni_index = ksocknal_ip2index((struct sockaddr *)sa, ni);
 	ksi->ksni_netmask = ifaces[i].li_netmask;
 	strlcpy(ksi->ksni_name, ifaces[i].li_name, sizeof(ksi->ksni_name));
 

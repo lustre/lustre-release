@@ -1557,6 +1557,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 
 			ifaces[nip].li_cpt = cpt;
 			ifaces[nip].li_flags = flags;
+			ifaces[nip].li_index = dev->ifindex;
 			ifaces[nip].li_ipaddr = ntohl(ifa->ifa_local);
 			ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
 			strlcpy(ifaces[nip].li_name, ifa->ifa_label,
