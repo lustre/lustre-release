@@ -157,6 +157,15 @@ static inline int tcp_sock_set_keepcnt(struct sock *sk, int opt)
 				 (char *)&opt, sizeof(opt));
 }
 #endif /* HAVE_TCP_SOCK_SET_KEEPCNT */
+
+#if !defined(HAVE_IP6_SET_PREF)
+static inline void ip6_sock_set_addr_preferences(struct sock *sk,
+						 unsigned int pref)
+{
+	kernel_setsockopt(sk->sk_socket, SOL_IPV6, IPV6_ADDR_PREFERENCES,
+			  (char *)&pref, sizeof(pref));
+}
+#endif /* HAVE_IP6_SET_PREF */
 #endif /* HAVE_KERNEL_SETSOCKOPT */
 
 #endif /* __LIBCFS_LINUX_NET_H__ */

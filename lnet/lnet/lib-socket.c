@@ -416,6 +416,17 @@ lnet_sock_connect(int interface, int local_port,
 	if (IS_ERR(sock))
 		return sock;
 
+	/* Avoid temporary address, they are bad for long-lived
+	 * connections such as lustre mounts.
+	 * RFC4941, section 3.6 suggests that:
+	 *    Individual applications, which have specific
+	 *    knowledge about the normal duration of connections,
+	 *    MAY override this as appropriate.
+	 */
+	if (peeraddr->sa_family == PF_INET6)
+		ip6_sock_set_addr_preferences(sock->sk,
+					      IPV6_PREFER_SRC_PUBLIC);
+
 	rc = kernel_connect(sock, peeraddr, sizeof(struct sockaddr_in6), 0);
 	if (rc == 0)
 		return sock;
