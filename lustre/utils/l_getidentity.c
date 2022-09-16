@@ -408,6 +408,7 @@ int main(int argc, char **argv)
 	glob_t path;
 	unsigned long uid;
 	int fd, rc = -EINVAL, size, maxgroups;
+	bool alreadyfailed = false;
 
 	progname = basename(argv[0]);
 	if (argc != 3) {
@@ -429,10 +430,15 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
+retry:
 	size = offsetof(struct identity_downcall_data, idd_groups[maxgroups]);
 	data = malloc(size);
 	if (!data) {
 		errlog("malloc identity downcall data(%d) failed!\n", size);
+		if (!alreadyfailed) {
+			alreadyfailed = true;
+			goto retry;
+		}
 		rc = -ENOMEM;
 		goto out;
 	}
@@ -475,6 +481,13 @@ downcall:
 	close(fd);
 	if (rc != size) {
 		errlog("partial write ret %d: %s\n", rc, strerror(errno));
+		if (!alreadyfailed) {
+			alreadyfailed = true;
+			cfs_free_param_data(&path);
+			if (data)
+				free(data);
+			goto retry;
+		}
 		rc = -1;
 	} else {
 		rc = 0;
