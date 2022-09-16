@@ -900,14 +900,21 @@ void lnet_acceptor_stop(void);
 
 struct lnet_inetdev {
 	u32	li_cpt;
-	u32	li_flags;
-	u32	li_ipaddr;
-	u32	li_netmask;
+	union {
+		struct {
+			u32	li_ipaddr;
+			u32	li_netmask;
+		};
+		u32	li_ipv6addr[4];
+	};
 	u32	li_index;
+	bool	li_iff_master;
+	bool	li_ipv6;
 	char	li_name[IFNAMSIZ];
 };
 
-int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns);
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
+			bool v6);
 void lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
 void lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
 int lnet_sock_getaddr(struct socket *socket, bool remote,

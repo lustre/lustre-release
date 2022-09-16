@@ -36,6 +36,7 @@
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <lnet/lib-lnet.h>
+#include <net/addrconf.h>
 
 /* tmp struct for parsing routes */
 struct lnet_text_buf {
@@ -1505,7 +1506,7 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	return count;
 }
 
-int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 {
 	struct lnet_inetdev *ifaces = NULL;
 	struct net_device *dev;
@@ -1517,6 +1518,8 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 	for_each_netdev(ns, dev) {
 		int flags = dev_get_flags(dev);
 		struct in_device *in_dev;
+		struct inet6_dev *in6_dev;
+		const struct inet6_ifaddr *ifa6;
 		int node_id;
 		int cpt;
 
@@ -1529,15 +1532,16 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 			continue;
 		}
 
-		in_dev = __in_dev_get_rtnl(dev);
-		if (!in_dev) {
-			CWARN("lnet: Interface %s has no IPv4 status.\n",
-			      dev->name);
-			continue;
-		}
-
 		node_id = dev_to_node(&dev->dev);
 		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+
+		in_dev = __in_dev_get_rtnl(dev);
+		if (!in_dev) {
+			if (!v6)
+				CWARN("lnet: Interface %s has no IPv4 status.\n",
+				      dev->name);
+			goto try_v6;
+		}
 
 		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
 			if (nip >= nalloc) {
@@ -1556,7 +1560,8 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 			}
 
 			ifaces[nip].li_cpt = cpt;
-			ifaces[nip].li_flags = flags;
+			ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
+			ifaces[nip].li_ipv6 = false;
 			ifaces[nip].li_index = dev->ifindex;
 			ifaces[nip].li_ipaddr = ntohl(ifa->ifa_local);
 			ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
@@ -1565,6 +1570,54 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 			nip++;
 		}
 		endfor_ifa(in_dev);
+
+	try_v6:
+		if (!v6)
+			continue;
+#if IS_ENABLED(CONFIG_IPV6)
+		in6_dev = __in6_dev_get(dev);
+		if (!in6_dev) {
+			if (!in_dev)
+				CWARN("lnet: Interface %s has no IP status.\n",
+				      dev->name);
+			continue;
+		}
+
+		list_for_each_entry_rcu(ifa6, &in6_dev->addr_list, if_list) {
+			if (ifa6->flags & IFA_F_TEMPORARY)
+				continue;
+			if (nip >= nalloc) {
+				struct lnet_inetdev *tmp;
+
+				nalloc += LNET_INTERFACES_NUM;
+				tmp = krealloc(ifaces, nalloc * sizeof(*tmp),
+					       GFP_KERNEL);
+				if (!tmp) {
+					kfree(ifaces);
+					ifaces = NULL;
+					nip = -ENOMEM;
+					goto unlock_rtnl;
+				}
+				ifaces = tmp;
+			}
+
+			ifaces[nip].li_cpt = cpt;
+			ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
+			ifaces[nip].li_ipv6 = true;
+			ifaces[nip].li_index = dev->ifindex;
+			memcpy(ifaces[nip].li_ipv6addr,
+			       &ifa6->addr, sizeof(struct in6_addr));
+			strlcpy(ifaces[nip].li_name, dev->name,
+				sizeof(ifaces[nip].li_name));
+			nip++;
+			/* As different IPv6 addresses don't have unique
+			 * labels, it is safest just to use the first
+			 * and ignore the rest.
+			 */
+			break;
+		}
+#endif /* IS_ENABLED(CONFIG_IPV6) */
+
 	}
 unlock_rtnl:
 	rtnl_unlock();
@@ -1589,9 +1642,10 @@ lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 	int i;
 
 	if (current->nsproxy && current->nsproxy->net_ns)
-		nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns);
+		nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns,
+					  false);
 	else
-		nip = lnet_inet_enumerate(&ifaces, &init_net);
+		nip = lnet_inet_enumerate(&ifaces, &init_net, false);
 	if (nip < 0) {
 		if (nip != -ENOENT) {
 			LCONSOLE_ERROR_MSG(0x117,

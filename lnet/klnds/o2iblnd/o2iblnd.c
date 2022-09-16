@@ -3485,7 +3485,7 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
-	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns);
+	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns, false);
 	if (rc < 0)
 		goto failed;
 
@@ -3513,7 +3513,7 @@ kiblnd_startup(struct lnet_ni *ni)
 		ibdev->ibd_ifip = ifaces[i].li_ipaddr;
 		strlcpy(ibdev->ibd_ifname, ifaces[i].li_name,
 			sizeof(ibdev->ibd_ifname));
-		ibdev->ibd_can_failover = !!(ifaces[i].li_flags & IFF_MASTER);
+		ibdev->ibd_can_failover = ifaces[i].li_iff_master;
 
 		INIT_LIST_HEAD(&ibdev->ibd_nets);
 		INIT_LIST_HEAD(&ibdev->ibd_list); /* not yet in kib_devs */
