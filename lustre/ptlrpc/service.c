@@ -1112,9 +1112,9 @@ static void ptlrpc_server_finish_active_request(
  */
 void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 {
-	struct obd_export *oldest_exp;
-	time64_t oldest_time, new_time;
-
+	struct obd_export *oldest_exp, *newest_exp;
+	time64_t oldest_time, current_time;
+	bool	evict = false;
 	ENTRY;
 
 	LASSERT(exp);
@@ -1128,11 +1128,12 @@ void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 	 */
 
 	/* Do not pay attention on 1sec or smaller renewals. */
-	new_time = ktime_get_real_seconds() + extra_delay;
-	if (exp->exp_last_request_time + 1 /*second */ >= new_time)
+	current_time = ktime_get_real_seconds();
+	/* 1 seconds */
+	if (exp->exp_last_request_time + 1 >= current_time + extra_delay)
 		RETURN_EXIT;
 
-	exp->exp_last_request_time = new_time;
+	exp->exp_last_request_time = current_time + extra_delay;
 
 	/*
 	 * exports may get disconnected from the chain even though the
@@ -1147,25 +1148,32 @@ void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 		RETURN_EXIT;
 	}
 
+	newest_exp = list_entry(exp->exp_obd->obd_exports_timed.prev,
+				struct obd_export, exp_obd_chain_timed);
+
 	list_move_tail(&exp->exp_obd_chain_timed,
 		       &exp->exp_obd->obd_exports_timed);
 
-	oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
-				struct obd_export, exp_obd_chain_timed);
-	oldest_time = oldest_exp->exp_last_request_time;
-	spin_unlock(&exp->exp_obd->obd_dev_lock);
-
 	if (exp->exp_obd->obd_recovering) {
 		/* be nice to everyone during recovery */
-		EXIT;
-		return;
+		spin_unlock(&exp->exp_obd->obd_dev_lock);
+		RETURN_EXIT;
 	}
 
-	/* Note - racing to start/reset the obd_eviction timer is safe */
-	if (exp->exp_obd->obd_eviction_timer == 0) {
-		/* Check if the oldest entry is expired. */
-		if (ktime_get_real_seconds() >
-		    oldest_time + PING_EVICT_TIMEOUT + extra_delay) {
+	oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
+				struct obd_export, exp_obd_chain_timed);
+
+	oldest_time = oldest_exp->exp_last_request_time;
+
+	/* Check if the oldest entry is expired. */
+	if (exp->exp_obd->obd_eviction_timer == 0 &&
+	    current_time > oldest_time + PING_EVICT_TIMEOUT + extra_delay) {
+
+		if (current_time < newest_exp->exp_last_request_time +
+			     PING_EVICT_TIMEOUT / 2) {
+			/* If import is active - evict stale clients */
+			evict = true;
+		} else {
 			/*
 			 * We need a second timer, in case the net was down and
 			 * it just came back. Since the pinger may skip every
@@ -1177,7 +1185,15 @@ void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 			CDEBUG(D_HA, "%s: Think about evicting %s from %lld\n",
 			       exp->exp_obd->obd_name,
 			       obd_export_nid2str(oldest_exp), oldest_time);
+
 		}
+	}
+
+	spin_unlock(&exp->exp_obd->obd_dev_lock);
+
+	if (evict) {
+		/* Evict stale clients */
+		ping_evictor_wake(exp);
 	} else {
 		if (ktime_get_real_seconds() >
 		    (exp->exp_obd->obd_eviction_timer + extra_delay)) {

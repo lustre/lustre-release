@@ -63,13 +63,15 @@ test_0a() {
 	$LCTL set_param fail_loc=0x80000514
 	facet_failover $SINGLEMDS
 	[ -f "$LU482_FAILED" ] && skip "LU-482 failure" && return 0
-	client_up || return 1
+	client_up || (sleep 10; client_up) || (sleep 10; client_up) ||
+		error "reconnect failed"
 	umount -f $MOUNT2
-	client_up || return 1
-	zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
-	unlinkmany $MOUNT1/$tfile- 50 || return 2
-	rm $MOUNT2/$tfile || return 3
-	rm $MOUNT2/$tfile-A || return 4
+	client_up || (sleep 10; client_up) || (sleep 10; client_up) ||
+		error "reconnect failed"
+	zconf_mount `hostname` $MOUNT2 || error "mount2 failed"
+	unlinkmany $MOUNT1/$tfile- 50 || errot "unlinkmany failed"
+	rm $MOUNT2/$tfile || error "rm $MOUNT2/$tfile failed"
+	rm $MOUNT2/$tfile-A || error "rm $MOUNT2/$tfile-A failed"
 }
 run_test 0a "expired recovery with lost client"
 

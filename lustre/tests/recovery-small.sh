@@ -1077,10 +1077,10 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	local before=$(date +%s)
 	local rc=0
 
-	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
+	# evictor takes PING_EVICT_TIMEOUT to evict.
 	# But if there's a race to start the evictor from various obds,
 	# the loser might have to wait for the next ping.
-	sleep $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
+	sleep $((TIMEOUT * 2))
 	do_facet client lctl set_param fail_loc=0x0
 	do_facet client lfs df > /dev/null
 
@@ -1114,15 +1114,15 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# PING_INTERVAL max(obd_timeout / 4, 1U)
 	# PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
 
-	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
+	# evictor takes PING_EVICT_TIMEOUT to evict.
 	# But if there's a race to start the evictor from various obds,
 	# the loser might have to wait for the next ping.
-	# = 9 * PING_INTERVAL + PING_INTERVAL
-	# = 10 PING_INTERVAL = 10 obd_timeout / 4 = 2.5 obd_timeout
-	# let's wait $((TIMEOUT * 3)) # bug 19887
-	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 3)) ||
+	# = 6 * PING_INTERVAL + PING_INTERVAL
+	# = 7 PING_INTERVAL = 7 obd_timeout / 4 =  (1+3/4)obd_timeout
+	# let's wait $((TIMEOUT * 2)) # bug 19887
+	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2)) ||
 		error "Client was not evicted by ost"
-	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 3)) ||
+	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 2)) ||
 		error "Client was not evicted by mds"
 }
 run_test 26b "evict dead exports"
