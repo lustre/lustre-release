@@ -146,6 +146,7 @@ struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 						  __u64 key, void *args)
 {
 	struct upcall_cache_entry *entry = NULL, *new = NULL, *next;
+	bool failedacquiring = false;
 	struct list_head *head;
 	wait_queue_entry_t wait;
 	int rc, found;
@@ -231,6 +232,12 @@ find_again:
 			CERROR("acquire for key %llu: error %d\n",
 			       entry->ue_key, rc);
 			put_entry(cache, entry);
+			if (!failedacquiring) {
+				spin_unlock(&cache->uc_lock);
+				failedacquiring = true;
+				new = NULL;
+				goto find_again;
+			}
 			GOTO(out, entry = ERR_PTR(rc));
 		}
 	}
