@@ -1172,12 +1172,12 @@ static int jt_add_ni(int argc, char **argv)
 			return 0;
 		}
 	}
-
+#ifdef HAVE_KFILND
 	if (auth_key > 0 && LNET_NETTYP(nw_descr.nw_id) == KFILND) {
 		tunables.lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key = auth_key;
 		found = true;
 	}
-
+#endif
 	if (pto >= 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
 		tunables.lt_cmn.lct_peer_timeout = pto;
 		tunables.lt_cmn.lct_peer_tx_credits = pc;

@@ -85,6 +85,7 @@ lustre_socklnd_show_tun(struct cYAML *lndparams,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+#ifdef HAVE_KFILND
 static int
 lustre_kfilnd_show_tun(struct cYAML *lndparams,
 			struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg)
@@ -103,6 +104,7 @@ lustre_kfilnd_show_tun(struct cYAML *lndparams,
 
 	return LUSTRE_CFG_RC_NO_ERR;
 }
+#endif
 
 int
 lustre_net_show_tunables(struct cYAML *tunables,
@@ -148,10 +150,11 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 	else if (net_type == SOCKLND)
 		rc = lustre_socklnd_show_tun(lnd_tunables,
 					     &lnd->lnd_tun_u.lnd_sock);
+#ifdef HAVE_KFILND
 	else if (net_type == KFILND)
 		rc = lustre_kfilnd_show_tun(lnd_tunables,
 					    &lnd->lnd_tun_u.lnd_kfi);
-
+#endif
 	return rc;
 }
 
@@ -198,6 +201,7 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 
 }
 
+#ifdef HAVE_KFILND
 static void
 yaml_extract_kfi_tun(struct cYAML *tree,
 		      struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg)
@@ -225,6 +229,7 @@ yaml_extract_kfi_tun(struct cYAML *tree,
 	lnd_cfg->lnd_auth_key =
 		(auth_key) ? auth_key->cy_valueint : 0;
 }
+#endif
 
 static void
 yaml_extract_sock_tun(struct cYAML *tree,
@@ -252,8 +257,10 @@ lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
 	else if (net_type == SOCKLND)
 		yaml_extract_sock_tun(tree,
 				      &tun->lnd_tun_u.lnd_sock);
+#ifdef HAVE_KFILND
 	else if (net_type == KFILND)
 		yaml_extract_kfi_tun(tree,
 				     &tun->lnd_tun_u.lnd_kfi);
+#endif
 }
 

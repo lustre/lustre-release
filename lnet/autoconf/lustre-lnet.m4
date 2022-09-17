@@ -714,6 +714,7 @@ AC_ARG_WITH([kfi],
 			AC_MSG_ERROR(["$with_kfi/Module.symvers does not exist"])
 		])
 	],[])
+AC_DEFINE(HAVE_KFILND, 1, [support kfabric LND])
 AC_SUBST(KFICPPFLAGS)
 AC_SUBST(KFILND)
 AC_SUBST(EXTRA_SYMBOLS)
