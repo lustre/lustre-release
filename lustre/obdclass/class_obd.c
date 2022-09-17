@@ -683,8 +683,6 @@ static int __init obdclass_init(void)
 
 	register_oom_notifier(&obdclass_oom);
 
-	libcfs_kkuc_init();
-
 	err = obd_init_checks();
 	if (err)
 		return err;
@@ -702,9 +700,13 @@ static int __init obdclass_init(void)
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
 			     "memused");
 #endif
-	err = obd_zombie_impexp_init();
+	err = libcfs_kkuc_init();
 	if (err)
 		goto cleanup_obd_memory;
+
+	err = obd_zombie_impexp_init();
+	if (err)
+		goto cleanup_kkuc;
 
 	err = class_handle_init();
 	if (err)
@@ -796,6 +798,9 @@ cleanup_class_handle:
 cleanup_zombie_impexp:
 	obd_zombie_impexp_stop();
 
+cleanup_kkuc:
+	libcfs_kkuc_fini();
+
 cleanup_obd_memory:
 #ifdef CONFIG_PROC_FS
 	lprocfs_free_stats(&obd_memory);
@@ -856,6 +861,7 @@ static void __exit obdclass_exit(void)
 	class_handle_cleanup();
 	class_del_uuid(NULL); /* Delete all UUIDs. */
 	obd_zombie_impexp_stop();
+	libcfs_kkuc_fini();
 
 #ifdef CONFIG_PROC_FS
 	memory_leaked = obd_memory_sum();

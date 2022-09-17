@@ -100,10 +100,14 @@ Print the complete routing table.
 .BI device " <devname> "
 This will select the specified OBD device.  All other commands depend on the device being set.
 .TP
-.BI device_list
-Show all the local Lustre OBDs. AKA
+.BI device_list " [--target|-t] [--yaml|-y] "
+Show all the local Lustre OBDs.
 .B dl
-.PP
+is the same command. The
+.B -t
+option additonally will report the server's export NID linked to the local OBD. The
+.B -y
+option will display the OBD device information in YAML format.
 .SS Device Operations
 .TP
 .BI conf_param " [-d] <device|fsname>.<parameter>=<value>"

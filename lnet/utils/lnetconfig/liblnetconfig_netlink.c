@@ -1082,7 +1082,7 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 {
 	unsigned int indent = *offset, new_indent = 0;
 	enum lnet_nl_key_format fmt = 0;
-	char *tmp;
+	char *tmp, *flow;
 
 	new_indent = indent_level(line);
 	if (new_indent < indent) {
@@ -1102,10 +1102,16 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 	else
 		fmt |= LNKF_MAPPING;
 
-	if (strchr(tmp, '{') || strchr(tmp, '[')) {
+	flow = strchr(line + new_indent, '{');
+	if (!flow)
+		flow = strchr(line + new_indent, '[');
+	if (flow) {
+		if (flow < tmp)
+			fmt &= ~LNKF_MAPPING;
 		fmt |= LNKF_FLOW;
 	} else if (strchr(tmp, '}') || strchr(tmp, ']')) {
-		fmt &= ~LNKF_MAPPING;
+		if (strchr(tmp, ']'))
+			fmt &= ~LNKF_MAPPING;
 		fmt |= LNKF_FLOW;
 	}
 
@@ -1141,9 +1147,12 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 		goto nla_put_failure;
 	}
 
-	if (fmt & LNKF_MAPPING && sep && strlen(sep)) {
+	if (fmt & LNKF_MAPPING && sep) {
 		while (isspace(*sep))
 			++sep;
+
+		if (!strlen(sep))
+			goto nla_put_failure;
 
 		if (strspn(sep, "-0123456789") == strlen(sep)) {
 			num = strtoll(sep, NULL, 0);
@@ -1208,13 +1217,17 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 			goto nla_put_failure;
 		}
 
+		fmt &= ~LNKF_FLOW;
 		while ((line = strsep(hdr, ",")) != NULL) {
 			while (!isalnum(line[0]))
 				line++;
 
-			/* Flow can be splt across lines by libyaml library.
-			 * This is executed only once.
-			 */
+			/* Flow can be splt across lines by libyaml library. */
+			if (strchr(line, ',')) {
+				*hdr = line;
+				continue;
+			}
+
 			tmp = strchr(line, '}');
 			if (!tmp)
 				tmp = strchr(line, ']');
@@ -1228,9 +1241,10 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 				goto nla_put_failure;
 
 			/* Move to next YAML line */
-			tmp = strstr(*entry, line);
-			if (tmp && strcmp(tmp, line) == 0)
+			if (format) {
 				strsep(entry, "\n");
+				break;
+			}
 		}
 
 		if (!format) {
@@ -1258,7 +1272,6 @@ have_next_line:
 							     fmt);
 				if (rc < 0)
 					goto nla_put_failure;
-
 				if (line)
 					goto have_next_line;
 			} else {
@@ -1269,6 +1282,13 @@ have_next_line:
 			}
 		} while (strcmp(*entry, ""));
 
+		if (line && line[0] == '-'  && !*indent) {
+			line[0] = ' ';
+			*indent = 2;
+			goto have_next_line;
+		}
+		if (*entry && !strlen(*entry))
+			line = NULL;
 		/* strsep in the above loop moves entry to a value pass the
 		 * end of the nested list. So to avoid losing this value we
 		 * replace hdr with line.
@@ -1360,8 +1380,8 @@ already_have_line:
 			 * simple key
 			 */
 			if (extra) {
-				line = ++tmp;
-				indent = 1;
+				*tmp = ' ';
+				line = tmp;
 				goto already_have_line;
 			}
 		} else {
@@ -1384,6 +1404,9 @@ already_have_line:
 					nlmsg_free(msg);
 					goto nla_put_failure;
 				}
+
+				if (line[0] != '-')
+					indent = 2;
 			}
 
 			fmt = yaml_format_type(out->emitter, line, &indent);

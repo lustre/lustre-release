@@ -38,6 +38,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -59,6 +60,10 @@
 #include <linux/lustre/lustre_cfg.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ver.h>
+
+#include <linux/lustre/lustre_kernelcomm.h>
+#include <lnetconfig/liblnetconfig.h>
+#include "lustreapi_internal.h"
 
 #include <sys/un.h>
 #include <time.h>
@@ -442,6 +447,8 @@ struct param_opts {
 	unsigned int po_delete:1;
 	unsigned int po_only_dir:1;
 	unsigned int po_file:1;
+	unsigned int po_yaml:1;
+	unsigned int po_detail:1;
 };
 
 int lcfg_setparam_perm(char *func, char *buf)
@@ -519,7 +526,7 @@ static int jt_lcfg_setparam_perm(int argc, char **argv,
 			if (end_pos) {
 				*(++end_pos) = '\0';
 			} else if (buf[len - 1] != '=') {
-				buf = malloc(len + 1);
+				buf = malloc(len + 2);
 				if (buf == NULL)
 					return -ENOMEM;
 				sprintf(buf, "%s=", argv[i]);
@@ -882,6 +889,362 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 	return rc;
 }
 
+void print_obd_line(char *s)
+{
+	const char *param = "osc/%s/ost_conn_uuid";
+	char obd_name[MAX_OBD_NAME];
+	char buf[MAX_OBD_NAME];
+	FILE *fp = NULL;
+	glob_t path;
+	char *ptr;
+retry:
+	/* obd device type is the first 3 characters of param name */
+	snprintf(buf, sizeof(buf), " %%*d %%*s %.3s %%%zus %%*s %%*d ",
+		 param, sizeof(obd_name) - 1);
+	if (sscanf(s, buf, obd_name) == 0)
+		goto try_mdc;
+	if (cfs_get_param_paths(&path, param, obd_name) != 0)
+		goto try_mdc;
+	fp = fopen(path.gl_pathv[0], "r");
+	if (!fp) {
+		/* need to free path data before retry */
+		cfs_free_param_data(&path);
+try_mdc:
+		if (param[0] == 'o') { /* failed with osc, try mdc */
+			param = "mdc/%s/mds_conn_uuid";
+			goto retry;
+		}
+		buf[0] = '\0';
+		goto fail_print;
+	}
+
+	/* should not ignore fgets(3)'s return value */
+	if (!fgets(buf, sizeof(buf), fp)) {
+		fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
+		goto fail_close;
+	}
+
+fail_close:
+	fclose(fp);
+	cfs_free_param_data(&path);
+
+	/* trim trailing newlines */
+	ptr = strrchr(buf, '\n');
+	if (ptr)
+		*ptr = '\0';
+fail_print:
+	ptr = strrchr(s, '\n');
+	if (ptr)
+		*ptr = '\0';
+	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
+}
+
+static int print_out_devices(yaml_parser_t *reply, struct param_opts *popt)
+{
+	char buf[MAX_OBD_NAME], *tmp = NULL;
+	size_t buf_len = sizeof(buf);
+	yaml_event_t event;
+	bool done = false;
+	int rc;
+
+	bzero(buf, sizeof(buf));
+
+	while (!done) {
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_MAPPING_START_EVENT) {
+			size_t len = strlen(buf);
+
+			if (len > 0) {
+				/* eat last white space */
+				buf[len - 1] = '\0';
+				if (popt->po_detail)
+					print_obd_line(buf);
+				else
+					printf("%s\n",  buf);
+			}
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "index") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+
+				snprintf(tmp, buf_len, "%3s ", value);
+				buf_len -= 4;
+				tmp += 4;
+			}
+
+			if (strcmp(value, "status") == 0 ||
+			    strcmp(value, "type") == 0 ||
+			    strcmp(value, "name") == 0 ||
+			    strcmp(value, "uuid") == 0 ||
+			    strcmp(value, "refcount") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+
+				snprintf(tmp, buf_len, "%s ", value);
+				buf_len -= strlen(value) + 1;
+				tmp += strlen(value) + 1;
+			}
+		}
+
+		done = (event.type == YAML_DOCUMENT_END_EVENT);
+		if (done) {
+			size_t len = strlen(buf);
+
+			if (len > 0) {
+				/* eat last white space */
+				buf[len - 1] = '\0';
+				if (popt->po_detail)
+					print_obd_line(buf);
+				else
+					printf("%s\n", buf);
+			}
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+		}
+		yaml_event_delete(&event);
+	}
+
+	return rc;
+}
+
+int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk, char *pattern)
+{
+	char source[MAX_OBD_NAME], group[GENL_NAMSIZ + 1];
+	int version = LUSTRE_GENL_VERSION;
+	char *family = "lustre", *tmp;
+	yaml_emitter_t request;
+	yaml_event_t event;
+	int cmd = 0;
+	int rc;
+
+	bzero(source, sizeof(source));
+	tmp = strrchr(pattern, '/');
+	if (tmp) {
+		size_t len = tmp - pattern;
+
+		strncpy(group, tmp + 1, GENL_NAMSIZ);
+		strncpy(source, pattern, len);
+
+		/* replace '/' with '.' to match conf_param and sysctl */
+		for (tmp = strchr(pattern, '/'); tmp != NULL;
+		     tmp = strchr(tmp, '/'))
+			*tmp = '.';
+	} else {
+		strncpy(group, pattern, GENL_NAMSIZ);
+	}
+
+	if (strcmp(group, "devices") == 0)
+		cmd = LUSTRE_CMD_DEVICES;
+
+	if (!cmd)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(reply);
+	if (rc == 0)
+		return -EOPNOTSUPP;
+
+	rc = yaml_parser_set_input_netlink(reply, sk, false);
+	if (rc == 0)
+		return -EOPNOTSUPP;
+
+	/* Create Netlink emitter to send request to kernel */
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk,
+					     family, version,
+					     cmd, NLM_F_DUMP);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_open(&request);
+
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)group,
+				     strlen(group), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	if (source[0]) {
+		const char *key = "name";
+
+		/* Now fill in 'path' filter */
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1, YAML_ANY_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_ANY_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)key, strlen(key),
+					     1, 0, YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)source,
+					     strlen(source), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+	} else {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+	}
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_close(&request);
+error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	}
+	yaml_emitter_delete(&request);
+
+	return rc == 1 ? 0 : -EINVAL;
+}
+
+int lcfg_getparam_yaml(char *path, struct param_opts *popt)
+{
+	yaml_parser_t reply;
+	struct nl_sock *sk;
+	int rc;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -ENOMEM;
+
+	rc = lcfg_param_get_yaml(&reply, sk, path);
+	if (rc < 0)
+		return rc;
+
+	if (popt->po_yaml) {
+		yaml_document_t results;
+		yaml_emitter_t output;
+
+		/* load the reply results */
+		rc = yaml_parser_load(&reply, &results);
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			yaml_document_delete(&results);
+			rc = -EINVAL;
+			goto free_reply;
+		}
+
+		/* create emitter to output results */
+		rc = yaml_emitter_initialize(&output);
+		if (rc == 1) {
+			yaml_emitter_set_output_file(&output, stdout);
+
+			rc = yaml_emitter_dump(&output, &results);
+		}
+
+		yaml_document_delete(&results);
+		if (rc == 0) {
+			yaml_emitter_log_error(&output, stderr);
+			rc = -EINVAL;
+		}
+		yaml_emitter_delete(&output);
+	} else {
+		yaml_event_t event;
+		bool done = false;
+
+		while (!done) {
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0)
+				break;
+
+			if (event.type == YAML_SCALAR_EVENT) {
+				char *value = (char *)event.data.scalar.value;
+
+				if (strcmp(value, "devices") == 0)
+					rc = print_out_devices(&reply, popt);
+				if (rc == 0)
+					break;
+			}
+
+			done = (event.type == YAML_STREAM_END_EVENT);
+			yaml_event_delete(&event);
+		}
+
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			rc = -EINVAL;
+		}
+	}
+free_reply:
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+	return rc == 1 ? 0 : rc;
+}
+
 /**
  * Perform a read, write or just a listing of a parameter
  *
@@ -906,7 +1269,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 	rc = llapi_param_get_paths(pattern, &paths);
 	if (rc != 0) {
 		rc = -errno;
-		if (!popt->po_recursive) {
+		if (!popt->po_recursive && !(rc == -ENOENT && getuid() != 0)) {
 			fprintf(stderr, "error: %s: param_path '%s': %s\n",
 				opname, pattern, strerror(errno));
 		}
@@ -1165,6 +1528,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 int jt_lcfg_getparam(int argc, char **argv)
 {
+	enum parameter_operation mode;
 	int rc = 0, index, i;
 	struct param_opts popt;
 	char *path;
@@ -1174,6 +1538,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 	if (index < 0 || index >= argc)
 		return CMD_HELP;
 
+	mode = popt.po_only_path ? LIST_PARAM : GET_PARAM;
 	for (i = index; i < argc; i++) {
 		int rc2;
 
@@ -1188,9 +1553,12 @@ int jt_lcfg_getparam(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = param_display(&popt, path, NULL,
-				    popt.po_only_path ? LIST_PARAM : GET_PARAM);
+		rc2 = param_display(&popt, path, NULL, mode);
 		if (rc2 < 0) {
+			if (mode == GET_PARAM && rc2 == -ENOENT &&
+			    getuid() != 0)
+				rc2 = lcfg_getparam_yaml(path, &popt);
+
 			if (rc == 0)
 				rc = rc2;
 			continue;
@@ -1198,6 +1566,200 @@ int jt_lcfg_getparam(int argc, char **argv)
 	}
 
 	return rc;
+}
+
+/* get device list by netlink or debugfs */
+int jt_obd_list(int argc, char **argv)
+{
+	static const struct option long_opts[] = {
+		{ .name = "target",	.has_arg = no_argument,	.val = 't' },
+		{ .name = "yaml",	.has_arg = no_argument,	.val = 'y' },
+		{ .name = NULL }
+	};
+	struct param_opts opts;
+	char buf[MAX_OBD_NAME];
+	struct nl_sock *sk;
+	glob_t path;
+	int rc, c;
+	FILE *fp;
+
+	if (optind < argc)
+		return CMD_HELP;
+
+	memset(&opts, 0, sizeof(opts));
+
+	while ((c = getopt_long(argc, argv, "ty", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 't':
+			opts.po_detail = true;
+			break;
+		case 'y':
+			opts.po_yaml = true;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (optind < argc) {
+		optind = 1;
+		return CMD_HELP;
+	}
+	optind = 1;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		goto non_netlink;
+
+	/* Use YAML to list all devices */
+	rc = lcfg_getparam_yaml("devices", &opts);
+	if (rc == 0)
+		return 0;
+
+non_netlink:
+	if (sk) {
+		nl_close(sk);
+		nl_socket_free(sk);
+	}
+
+	rc = llapi_param_get_paths("devices", &path);
+	if (rc < 0)
+		return rc;
+
+	fp = fopen(path.gl_pathv[0], "r");
+	if (!fp) {
+		cfs_free_param_data(&path);
+		return errno;
+	}
+
+	while (fgets(buf, sizeof(buf), fp) != NULL)
+		if (opts.po_detail)
+			print_obd_line(buf);
+		else
+			printf("%s", buf);
+
+	cfs_free_param_data(&path);
+	fclose(fp);
+	return 0;
+}
+
+static int do_name2dev(char *func, char *name, int dev_id)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	yaml_parser_t output;
+	yaml_event_t event;
+	struct nl_sock *sk;
+	bool done = false;
+	int rc = 0;
+
+	memset(buf, 0, sizeof(rawbuf));
+	scnprintf(buf, sizeof(rawbuf), "%s/devices",
+		  name);
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		goto ioctl;
+
+	/* Use YAML to list all devices */
+	rc = lcfg_param_get_yaml(&output, sk, buf);
+	if (rc < 0) {
+		if (rc == -EOPNOTSUPP)
+			goto ioctl;
+		return rc;
+	}
+
+	while (!done) {
+		rc = yaml_parser_parse(&output, &event);
+		if (rc == 0) {
+			yaml_parser_log_error(&output, stdout, "lctl: ");
+			rc = -EINVAL;
+			break;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "index") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&output, &event);
+				if (rc == 1) {
+					value = (char *)event.data.scalar.value;
+					errno = 0;
+					rc = strtoul(value, NULL, 10);
+					if (errno) {
+						yaml_event_delete(&event);
+						rc = -errno;
+						goto ioctl;
+					}
+					return rc;
+				}
+			}
+		}
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+ioctl:
+	if (sk)
+		nl_socket_free(sk);
+
+	if (rc > 0 || rc != -EOPNOTSUPP)
+		return rc;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = dev_id;
+	data.ioc_inllen1 = strlen(name) + 1;
+	data.ioc_inlbuf1 = name;
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
+	if (rc < 0)
+		return -errno;
+	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: invalid reply\n", jt_cmdname(func));
+		return rc;
+	}
+
+	return data.ioc_dev;
+}
+
+/*
+ * resolve a device name to a device number.
+ * supports a number, $name or %uuid.
+ */
+int parse_devname(char *func, char *name, int dev_id)
+{
+	int rc = 0;
+	int ret = -1;
+
+	if (!name)
+		return ret;
+
+	/* Test if its a pure number string */
+	if (strspn(name, "0123456789") != strlen(name)) {
+		if (name[0] == '$' || name[0] == '%')
+			name++;
+
+		rc = do_name2dev(func, name, dev_id);
+		if (rc >= 0)
+			ret = rc;
+	} else {
+		errno = 0;
+		ret = strtoul(name, NULL, 10);
+		if (errno)
+			rc = errno;
+	}
+
+	if (rc < 0)
+		fprintf(stderr, "No device found for name %s: %s\n",
+			name, strerror(rc));
+	return ret;
 }
 
 #ifdef HAVE_SERVER_SUPPORT

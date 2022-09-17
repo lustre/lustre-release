@@ -11976,6 +11976,30 @@ test_104c() {
 }
 run_test 104c "Verify df vs lfs_df stays same after recordsize change"
 
+test_104d() {
+	(( $RUNAS_ID != $UID )) ||
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
+
+	(( $CLIENT_VERSION >= $(version_code 2.15.51) )) ||
+		skip "lustre version doesn't support lctl dl with non-root"
+
+	# debugfs only allows root users to access files, so the
+	# previous move of the "devices" file to debugfs broke
+	# "lctl dl" for non-root users. The LU-9680 Netlink
+	# interface again allows non-root users to list devices.
+	[ "$($RUNAS $LCTL dl | wc -l)" -ge 3 ] ||
+		error "lctl dl doesn't work for non root"
+
+	ost_count="$($RUNAS $LCTL dl | grep $FSNAME-OST* | wc -l)"
+	[ "$ost_count" -eq $OSTCOUNT ]  ||
+		error "lctl dl reports wrong number of OST devices"
+
+	mdt_count="$($RUNAS $LCTL dl | grep $FSNAME-MDT* | wc -l)"
+	[ "$mdt_count" -eq $MDSCOUNT ]  ||
+		error "lctl dl reports wrong number of MDT devices"
+}
+run_test 104d "$RUNAS lctl dl test"
+
 test_105a() {
 	# doesn't work on 2.4 kernels
 	touch $DIR/$tfile

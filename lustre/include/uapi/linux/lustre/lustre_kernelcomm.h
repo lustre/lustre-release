@@ -38,6 +38,24 @@
 
 #include <linux/types.h>
 
+#define LUSTRE_GENL_NAME		"lustre"
+#define LUSTRE_GENL_VERSION		0x1
+
+/*
+ * enum lustre_commands		      - Supported Lustre Netlink commands
+ *
+ * @LUSTRE_CMD_UNSPEC:			unspecified command to catch errors
+ * @LUSTRE_CMD_DEVICES:			command to manage the Lustre devices
+ */
+enum lustre_commands {
+	LUSTRE_CMD_UNSPEC	= 0,
+	LUSTRE_CMD_DEVICES	= 1,
+
+	__LUSTRE_CMD_MAX_PLUS_ONE
+};
+
+#define LUSTRE_CMD_MAX	(__LUSTRE_CMD_MAX_PLUS_ONE - 1)
+
 /* KUC message header.
  * All current and future KUC messages should use this header.
  * To avoid having to include Lustre headers from libcfs, define this here.

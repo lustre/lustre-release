@@ -134,7 +134,7 @@ int jt_llog_check(int argc, char **argv);
 struct lustre_cfg;
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg);
-int parse_devname(char *func, char *name);
+int parse_devname(char *func, char *name, int dev_id);
 char *jt_cmdname(char *func);
 
 

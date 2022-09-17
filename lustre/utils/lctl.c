@@ -183,9 +183,9 @@ command_t cmdlist[] = {
 	 "set current device to <name>, same as 'device'\n"
 	 "usage: cfg_device <name>"},
 	{"device_list", jt_obd_list, 0, "show all devices\n"
-	 "usage: device_list"},
+	 "usage: device_list [--target|-t] [--yaml|-y]"},
 	{"dl", jt_obd_list, 0, "show all devices, same as 'device_list'\n"
-	 "usage: dl [-t]"},
+	 "usage: dl [--target|-t] [--yaml|-y]"},
 
 	/* Device operations */
 	{"==== obd device operations ====", NULL, 0, "device operations"},

@@ -40,11 +40,46 @@
 /* For declarations shared with userspace */
 #include <uapi/linux/lustre/lustre_kernelcomm.h>
 
+/**
+ * enum lustre_device_attrs	      - Lustre general top-level netlink
+ *					attributes that describe lustre
+ *					'devices'. These values are used
+ *					to piece togther messages for
+ *					sending and receiving.
+ *
+ * @LUSTRE_DEVICE_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LUSTRE_DEVICE_ATTR_HDR:		Netlink group this data is for
+ *					(NLA_NUL_STRING)
+ * @LUSTRE_DEVICE_ATTR_INDEX:		device number used as an index (NLA_U16)
+ * @LUSTRE_DEVICE_ATTR_STATUS:		status of the device (NLA_STRING)
+ * @LUSTRE_DEVICE_ATTR_CLASS:		class the device belongs to (NLA_STRING)
+ * @LUSTRE_DEVICE_ATTR_NAME:		name of the device (NLA_STRING)
+ * @LUSTRE_DEVICE_ATTR_UUID:		UUID of the device (NLA_STRING)
+ * @LUSTRE_DEVICE_ATTR_REFCOUNT:	refcount of the device (NLA_U32)
+ */
+enum lustre_device_attrs {
+	LUSTRE_DEVICE_ATTR_UNSPEC = 0,
+
+	LUSTRE_DEVICE_ATTR_HDR,
+	LUSTRE_DEVICE_ATTR_INDEX,
+	LUSTRE_DEVICE_ATTR_STATUS,
+	LUSTRE_DEVICE_ATTR_CLASS,
+	LUSTRE_DEVICE_ATTR_NAME,
+	LUSTRE_DEVICE_ATTR_UUID,
+	LUSTRE_DEVICE_ATTR_REFCOUNT,
+
+	__LUSTRE_DEVICE_ATTR_MAX_PLUS_ONE
+};
+
+#define LUSTRE_DEVICE_ATTR_MAX (__LUSTRE_DEVICE_ATTR_MAX_PLUS_ONE - 1)
+
 /* prototype for callback function on kuc groups */
 typedef int (*libcfs_kkuc_cb_t)(void *data, void *cb_arg);
 
 /* Kernel methods */
-void libcfs_kkuc_init(void);
+int libcfs_kkuc_init(void);
+void libcfs_kkuc_fini(void);
 int libcfs_kkuc_msg_put(struct file *fp, void *payload);
 int libcfs_kkuc_group_put(const struct obd_uuid *uuid, int group, void *data);
 int libcfs_kkuc_group_add(struct file *fp, const struct obd_uuid *uuid, int uid,

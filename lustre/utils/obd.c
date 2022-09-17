@@ -214,67 +214,6 @@ char *obdo_print(struct obdo *obd)
 
 #define BAD_VERBOSE (-999999999)
 
-#define N2D_OFF 0x100      /* So we can tell between error codes and devices */
-
-static int do_name2dev(char *func, char *name)
-{
-	struct obd_ioctl_data data;
-	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	int rc;
-
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
-	data.ioc_inllen1 = strlen(name) + 1;
-	data.ioc_inlbuf1 = name;
-
-	memset(buf, 0, sizeof(rawbuf));
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc < 0) {
-		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
-		return -rc;
-	}
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
-	if (rc < 0)
-		return errno;
-	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	if (rc) {
-		fprintf(stderr, "error: %s: invalid reply\n", jt_cmdname(func));
-		return rc;
-	}
-
-	return data.ioc_dev + N2D_OFF;
-}
-
-/*
- * resolve a device name to a device number.
- * supports a number, $name or %uuid.
- */
-int parse_devname(char *func, char *name)
-{
-	int rc;
-	int ret = -1;
-	int try_digit;
-
-	if (!name)
-		return ret;
-
-	try_digit = isdigit(name[0]);
-
-	if (name[0] == '$' || name[0] == '%')
-		name++;
-
-	rc = do_name2dev(func, name);
-	if (rc >= N2D_OFF)
-		return rc - N2D_OFF;
-
-	if (try_digit)
-		ret = strtoul(name, NULL, 0);
-	else
-		fprintf(stderr, "No device found for name %s: %s\n",
-			name, strerror(rc));
-	return ret;
-}
-
 char *jt_cmdname(char *func)
 {
 	static char buf[512];
@@ -616,7 +555,7 @@ static int do_device(char *func, char *devname)
 {
 	int dev;
 
-	dev = parse_devname(func, devname);
+	dev = parse_devname(func, devname, cur_device);
 	if (dev < 0)
 		return -1;
 
@@ -1028,130 +967,6 @@ int jt_get_version(int argc, char **argv)
 	else
 		printf("Lustre version: %s\n", version);
 
-	return 0;
-}
-
-static void print_obd_line(char *s)
-{
-	const char *param = "osc/%s/ost_conn_uuid";
-	char buf[MAX_STRING_SIZE];
-	char obd_name[MAX_OBD_NAME];
-	FILE *fp = NULL;
-	glob_t path;
-	char *ptr;
-retry:
-	/* obd device type is the first 3 characters of param name */
-	snprintf(buf, sizeof(buf), " %%*d %%*s %.3s %%%zus %%*s %%*d ",
-		 param, sizeof(obd_name) - 1);
-	if (sscanf(s, buf, obd_name) == 0)
-		goto try_mdc;
-	if (cfs_get_param_paths(&path, param, obd_name) != 0)
-		goto try_mdc;
-	fp = fopen(path.gl_pathv[0], "r");
-	if (!fp) {
-		/* need to free path data before retry */
-		cfs_free_param_data(&path);
-try_mdc:
-		if (param[0] == 'o') { /* failed with osc, try mdc */
-			param = "mdc/%s/mds_conn_uuid";
-			goto retry;
-		}
-		buf[0] = '\0';
-		goto fail_print;
-	}
-
-	/* should not ignore fgets(3)'s return value */
-	if (!fgets(buf, sizeof(buf), fp)) {
-		fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
-		goto fail_close;
-	}
-
-fail_close:
-	fclose(fp);
-	cfs_free_param_data(&path);
-
-	/* trim trailing newlines */
-	ptr = strrchr(buf, '\n');
-	if (ptr)
-		*ptr = '\0';
-fail_print:
-	ptr = strrchr(s, '\n');
-	if (ptr)
-		*ptr = '\0';
-	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
-}
-
-/* get device list by ioctl */
-int jt_obd_list_ioctl(int argc, char **argv)
-{
-	int rc, index;
-	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
-
-	if (argc > 2)
-		return CMD_HELP;
-	/* Just ignore a -t option.  Only supported with /proc. */
-	else if (argc == 2 && strcmp(argv[1], "-t") != 0)
-		return CMD_HELP;
-
-	for (index = 0;; index++) {
-		memset(buf, 0, sizeof(rawbuf));
-		data->ioc_version = OBD_IOCTL_VERSION;
-		data->ioc_inllen1 =
-			sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(*data), 8);
-		data->ioc_inlbuf1 = buf + __ALIGN_KERNEL(sizeof(*data), 8);
-		data->ioc_len = obd_ioctl_packlen(data);
-		data->ioc_count = index;
-
-		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GETDEVICE, buf);
-		if (rc != 0)
-			break;
-		printf("%s\n", (char *)data->ioc_bulk);
-	}
-	if (rc != 0) {
-		if (errno == ENOENT)
-			/* no device or the last device */
-			rc = 0;
-		else
-			fprintf(stderr,
-				"Error getting device list: %s: check dmesg\n",
-				strerror(errno));
-	}
-	return rc;
-}
-
-int jt_obd_list(int argc, char **argv)
-{
-	char buf[MAX_STRING_SIZE];
-	int print_obd = 0;
-	glob_t path;
-	FILE *fp;
-
-	if (argc > 2)
-		return CMD_HELP;
-
-	if (argc == 2) {
-		if (strcmp(argv[1], "-t") == 0)
-			print_obd = 1;
-		else
-			return CMD_HELP;
-	}
-
-	if (cfs_get_param_paths(&path, "devices") ||
-	    !(fp = fopen(path.gl_pathv[0], "r"))) {
-		cfs_free_param_data(&path);
-
-		return jt_obd_list_ioctl(argc, argv);
-	}
-
-	while (fgets(buf, sizeof(buf), fp) != NULL)
-		if (print_obd)
-			print_obd_line(buf);
-		else
-			printf("%s", buf);
-
-	cfs_free_param_data(&path);
-	fclose(fp);
 	return 0;
 }
 
