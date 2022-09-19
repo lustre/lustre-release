@@ -1270,7 +1270,8 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 			DEBUG_REQ(D_NET, req, "IMP_INVALID");
 		*status = -ESHUTDOWN; /* b=12940 */
 	} else if (req->rq_import_generation != imp->imp_generation) {
-		DEBUG_REQ(D_ERROR, req, "req wrong generation:");
+		DEBUG_REQ(req->rq_no_resend ? D_INFO : D_ERROR,
+			  req, "req wrong generation:");
 		*status = -EIO;
 	} else if (req->rq_send_state != imp->imp_state) {
 		/* invalidate in progress - any requests should be drop */
