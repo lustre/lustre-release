@@ -201,6 +201,19 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 	RETURN(rc);
 }
 
+static inline bool llog_idx_is_eof(struct llog_handle *llh, __u32 cur_idx)
+{
+	__u32 last_idx = llh->lgh_last_idx;
+
+	/* catalog is wrapped ? */
+	if (unlikely(llh->lgh_hdr->llh_flags & LLOG_F_IS_CAT &&
+		     llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
+		     llh->lgh_hdr->llh_count > 1))
+		last_idx = LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1;
+
+	return cur_idx >= last_idx;
+}
+
 struct llog_print_data {
 	struct obd_ioctl_data *lprd_data;
 	unsigned int	       lprd_cfg_flags;
@@ -220,7 +233,10 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 	int rc;
 
 	ENTRY;
-	if (ioc_data && ioc_data->ioc_inllen1 > 0) {
+	if (unlikely(!ioc_data))
+		RETURN(-EINVAL);
+
+	if (ioc_data->ioc_inllen1 > 0) {
 		l = 0;
 		remains = ioc_data->ioc_inllen4 +
 			  round_up(ioc_data->ioc_inllen1, 8) +
@@ -240,6 +256,7 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 	}
 
 	cur_index = rec->lrh_index;
+	ioc_data->ioc_u32_2 = llog_idx_is_eof(handle, cur_index);
 	if (from > MARKER_DIFF && cur_index >= from - MARKER_DIFF &&
 	    cur_index < from) {
 		/* LU-15706: try to remember the marker cfg_flag that the "from"

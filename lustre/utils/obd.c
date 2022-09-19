@@ -2876,8 +2876,9 @@ int jt_llog_print_iter(char *logname, long start, long end,
 	long rec;
 	int rc = 0;
 
+	/* default end of indexes is max indexes in a llog bitmap */
 	if (end == -1)
-		end = 0x7fffffff;
+		end = LLOG_MIN_CHUNK_SIZE * 8 - 1;
 
 	data.ioc_dev = cur_device;
 	data.ioc_inlbuf1 = logname;
@@ -2894,6 +2895,7 @@ int jt_llog_print_iter(char *logname, long start, long end,
 	 */
 	for (rec = start; rec < end; rec += inc) {
 		char *record = ((struct obd_ioctl_data *)buf)->ioc_bulk;
+		__u32 *is_llog_eof = &((struct obd_ioctl_data *)buf)->ioc_u32_2;
 
 retry:
 		snprintf(startbuf, sizeof(startbuf), "%lu", rec);
@@ -2931,13 +2933,16 @@ retry:
 			goto out;
 		}
 
-		/* There is no "end of list" marker, record was not modified */
-		if (strcmp(record, logname) == 0)
-			break;
-
-		rc = llog_process_records(record_cb, record, private, reverse);
+		/* record was not modified -> all indexes are skipped */
+		if (strcmp(record, logname) != 0)
+			rc = llog_process_records(record_cb, record, private,
+						  reverse);
 		if (rc)
 			goto out;
+
+		/* end of llog file ? */
+		if (*is_llog_eof)
+			break;
 	}
 
 out:

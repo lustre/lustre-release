@@ -9446,6 +9446,55 @@ test_123ag() { # LU-15142
 }
 run_test 123ag "llog_print skips values deleted by set_param -P -d"
 
+cleanup_123ai() {
+	local timeout=$1
+
+	echo "cleanup test 123ai"
+
+	# cancel last timeout record
+	do_facet mgs "$LCTL set_param -P -d timeout"
+
+	# restore timeout value
+	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param timeout=$timeout"
+}
+
+test_123ai() { #LU-16167
+	local i
+	local count
+	local old_count
+	local old_timeout
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.15.3) )) ||
+		skip "Need MDS version at least 2.15.3"
+
+	[ -d $MOUNT/.lustre ] || setup
+
+	old_count=$(do_facet mgs "$LCTL --device MGS llog_print -r params" |
+		grep -c "parameter: timeout")
+
+	old_timeout=$($LCTL get_param -n timeout)
+	stack_trap "cleanup_123ai $old_timeout" EXIT
+
+	# add and cancel params (2 * MAX_IOC_BUFLEN / 128 + 1 = 129)
+	for i in {1..129}; do
+		do_facet mgs "$LCTL set_param -P timeout=$i" ||
+			error "fail to set timeout=$i on MGS"
+	done
+
+	count=$(do_facet mgs "$LCTL --device MGS llog_print -r params" |
+		grep -c "parameter: timeout")
+
+	((count - old_count == 129)) ||
+		error "number timeout record missmatch ($count - $old_count != 129)"
+
+	do_facet mgs "$LCTL --device MGS llog_print params" |
+		tail -1 | grep  "timeout, value: 129" ||
+		error "llog_print could not display the last record (timeout=129)"
+
+}
+run_test 123ai "llog_print display all non skipped records"
+
 test_123F() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 
