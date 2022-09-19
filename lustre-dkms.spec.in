@@ -73,7 +73,6 @@ Requires:	libnl3-devel
 Obsoletes:	@PACKAGE@-client < %{version}
 %if %{with zfs}
 Requires:       zfs-dkms >= 0.6.5
-Requires:	@PACKAGE@-osd-zfs-mount
 Conflicts:	@PACKAGE@-ldiskfs-dkms
 Conflicts:	@PACKAGE@-client-dkms
 # lustre-zfs-dkms replicates the functionality old lustre-dkms package
@@ -83,7 +82,6 @@ Obsoletes:	@PACKAGE@-dkms
 %if %{with ldiskfs}
 Requires:	patch
 Requires:	%{ext4_source_rpm}
-Requires:	@PACKAGE@-osd-ldiskfs-mount
 Conflicts:	@PACKAGE@-zfs-dkms
 Conflicts:	@PACKAGE@-client-dkms
 %if "%{module}" != "@PACKAGE@-all"
@@ -101,9 +99,13 @@ Provides:	@PACKAGE@-modules = %{version}
 %if %{with servers}
 %if %{with zfs}
 Provides:	@PACKAGE@-osd-zfs = %{version}
+Provides:	kmod-@PACKAGE@-osd-zfs = %{version}
+Provides:	@PACKAGE@-osd-zfs-mount = %{version}
 %endif
 %if %{with ldiskfs}
 Provides:	@PACKAGE@-osd-ldiskfs = %{version}
+Provides:	kmod-@PACKAGE@-osd-ldiskfs = %{version}
+Provides:	@PACKAGE@-osd-ldiskfs-mount = %{version}
 %endif
 Provides:	@PACKAGE@-osd
 %else
