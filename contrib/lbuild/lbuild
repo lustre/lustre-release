@@ -73,7 +73,7 @@ KERNELTREE=
 KERNEL_LUSTRE_NAMING=false
 ENABLE_KERNEL_DEBUG=false
 # default not use kabi check.
-USE_KABI=false
+USE_KABI=true
 
 # patchless build
 KERNELRPMSBASE=
