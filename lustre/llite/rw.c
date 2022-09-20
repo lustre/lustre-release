@@ -1943,7 +1943,15 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			unlock_page(vmpage);
 			result = 0;
 		}
-		cl_page_put(env, page);
+		if (cl_io_is_pagefault(io) && result == 0) {
+			/**
+			 * page fault, retain the cl_page reference until
+			 * vvp_io_kernel_fault() release it.
+			 */
+			page->cp_fault_ref = 1;
+		} else {
+			cl_page_put(env, page);
+		}
 	} else {
 		unlock_page(vmpage);
 		result = PTR_ERR(page);

@@ -828,18 +828,36 @@ static void __cl_page_delete(const struct lu_env *env, struct cl_page *cp)
 		LASSERT(PageLocked(vmpage));
 		LASSERT((struct cl_page *)vmpage->private == cp);
 
-		/* Drop the reference count held in vvp_page_init */
-		refc = atomic_dec_return(&cp->cp_ref);
-		LASSERTF(refc >= 1, "page = %p, refc = %d\n", cp, refc);
-
-		ClearPagePrivate(vmpage);
-		vmpage->private = 0;
-
-		/*
-		 * The reference from vmpage to cl_page is removed,
-		 * but the reference back is still here. It is removed
-		 * later in cl_page_free().
+		/**
+		 * clear vmpage uptodate bit, since ll_read_ahead_pages()->
+		 * ll_read_ahead_page() could pick up this stale vmpage and
+		 * take it as uptodated.
 		 */
+		ClearPageUptodate(vmpage);
+		/**
+		 * vvp_io_kernel_fault()->ll_readpage() set cp_fault_ref
+		 * and need it to check cl_page to retry the page fault read.
+		 */
+		if (cp->cp_fault_ref) {
+			cp->cp_defer_detach = 1;
+			/**
+			 * get a vmpage reference, so that filemap_fault()
+			 * won't free it from pagecache.
+			 */
+			get_page(vmpage);
+		} else {
+			/* Drop the reference count held in vvp_page_init */
+			refc = atomic_dec_return(&cp->cp_ref);
+			LASSERTF(refc >= 1, "page = %p, refc = %d\n", cp, refc);
+			ClearPagePrivate(vmpage);
+			vmpage->private = 0;
+
+			/*
+			 * The reference from vmpage to cl_page is removed,
+			 * but the reference back is still here. It is removed
+			 * later in cl_page_free().
+			 */
+		}
 	}
 
 	EXIT;
