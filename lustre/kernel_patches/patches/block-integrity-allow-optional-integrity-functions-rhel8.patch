@@ -164,22 +164,23 @@ Index: linux-4.18.0-80.el8/block/bio-integrity.c
  	if (IS_ERR(bip))
  		return PTR_ERR(bip);
  
-Index: linux-4.18.0-80.el8/include/linux/bio.h
+Index: linux-4.18.0-372.19.1.el8_6/include/linux/bio.h
 ===================================================================
---- linux-4.18.0-80.el8.orig/include/linux/bio.h
-+++ linux-4.18.0-80.el8/include/linux/bio.h
-@@ -313,6 +313,10 @@ struct bio_integrity_payload {
+--- linux-4.18.0-372.19.1.el8_6.orig/include/linux/bio.h
++++ linux-4.18.0-372.19.1.el8_6/include/linux/bio.h
+@@ -307,8 +307,9 @@ struct bio_integrity_payload {
  
  	struct bio_vec		*bip_vec;
  
+-	RH_KABI_RESERVE(1)
+-	RH_KABI_RESERVE(2)
 +	/* put after bip_vec as that is last externally-accessed bip_ field */
-+	integrity_processing_fn	*bip_generate_fn;
-+	integrity_processing_fn	*bip_verify_fn;
-+
- 	RH_KABI_RESERVE(1)
- 	RH_KABI_RESERVE(2)
++	RH_KABI_USE(1, integrity_processing_fn *bip_generate_fn)
++	RH_KABI_USE(2, integrity_processing_fn *bip_verify_fn)
  
-@@ -760,6 +764,11 @@ static inline bool bioset_initialized(st
+ 	struct bio_vec		bip_inline_vecs[0];/* embedded bvec array */
+ };
+@@ -728,6 +729,11 @@ static inline bool bioset_initialized(st
  		bip_for_each_vec(_bvl, _bio->bi_integrity, _iter)
  
  extern struct bio_integrity_payload *bio_integrity_alloc(struct bio *, gfp_t, unsigned int);
