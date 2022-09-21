@@ -541,7 +541,8 @@ LC_LBUG_WITH_LOC_IN_OBJTOOL
 AC_DEFUN([LB_USES_DPKG], [
 AC_CACHE_CHECK([if this distro uses dpkg], lb_cv_uses_dpkg, [
 lb_cv_uses_dpkg="no"
-AS_CASE([$(which dpkg 2>/dev/null)],[*/dpkg], [lb_cv_uses_dpkg="yes"])
+AS_CASE([$(egrep -q 'ubuntu|debian' /etc/os-release && which dpkg 2>/dev/null)],
+        [*/dpkg], [lb_cv_uses_dpkg="yes"])
 ])
 uses_dpkg=$lb_cv_uses_dpkg
 ])
