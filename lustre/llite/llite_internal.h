@@ -118,6 +118,13 @@ struct ll_trunc_sem {
 	atomic_t	ll_trunc_waiters;
 };
 
+enum ll_sa_pattern {
+	LSA_PATTERN_NONE	= 0x0000,
+	LSA_PATTERN_LIST	= 0x0001,
+	LSA_PATTERN_FNAME	= 0X0002,
+	LSA_PATTERN_MAX,
+};
+
 struct ll_inode_info {
 	__u32				lli_inode_magic;
 	rwlock_t			lli_lock;
@@ -171,6 +178,7 @@ struct ll_inode_info {
 			 * cleanup the dir readahead. */
 			void			       *lli_opendir_key;
 			struct ll_statahead_info       *lli_sai;
+			struct ll_statahead_context    *lli_sax;
 			/* protect statahead stuff. */
 			spinlock_t			lli_sa_lock;
 			/* "opendir_pid" is the token when lookup/revalid
@@ -195,6 +203,8 @@ struct ll_inode_info {
 							lli_def_lsm_obj_set:1;
 			/* generation for statahead */
 			unsigned int			lli_sa_generation;
+			/* access pattern for statahead */
+			enum ll_sa_pattern		lli_sa_pattern;
 			/* rw lock protects lli_lsm_md */
 			struct rw_semaphore		lli_lsm_sem;
 			/* directory stripe information */
@@ -1050,6 +1060,8 @@ struct ll_file_data {
 	 * -errno is saved here, and will return to user in close().
 	 */
 	int fd_partial_readdir_rc;
+	/* mdtest unique/shared dir stat mode: per process statahead struct. */
+	struct ll_statahead_info *fd_sai;
 };
 
 void llite_tunables_unregister(void);
@@ -1295,6 +1307,8 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			void __user *uarg);
 #endif
 int ll_ioctl_project(struct file *file, unsigned int cmd, void __user *uarg);
+int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise);
+
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 			     __u64 flags, struct lov_user_md *lum,
 			     int lum_size);
@@ -1617,11 +1631,11 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 #define LL_SA_BATCH_MAX		1024
 #define LL_SA_BATCH_DEF		64
 
-#define LL_SA_CACHE_BIT         5
+#define LL_SA_CACHE_BIT         6
 #define LL_SA_CACHE_SIZE        (1 << LL_SA_CACHE_BIT)
 #define LL_SA_CACHE_MASK        (LL_SA_CACHE_SIZE - 1)
 
-/* per inode struct, for dir only */
+/* statahead controller, per process struct, for dir only */
 struct ll_statahead_info {
 	struct dentry	       *sai_dentry;
 	atomic_t		sai_refcount;   /* when access this struct, hold
@@ -1654,12 +1668,23 @@ struct ll_statahead_info {
 	struct task_struct	*sai_agl_task;	/* AGL thread */
 	struct list_head	sai_entries;    /* completed entries */
 	struct list_head	sai_agls;	/* AGLs to be sent */
-	struct list_head	sai_cache[LL_SA_CACHE_SIZE];
-	spinlock_t		sai_cache_lock[LL_SA_CACHE_SIZE];
 	atomic_t		sai_cache_count; /* entry count in cache */
 	struct lu_batch		*sai_bh;
 	__u32			sai_max_batch_count;
 	__u64			sai_index_end;
+
+	__u64			sai_fstart;
+	__u64			sai_fend;
+	char			sai_fname[NAME_MAX];
+};
+
+/* Per inode statahead information */
+struct ll_statahead_context {
+	struct inode		*sax_inode;
+	atomic_t		 sax_refcount;
+	/* Local dcache */
+	struct list_head	 sax_cache[LL_SA_CACHE_SIZE];
+	spinlock_t		 sax_cache_lock[LL_SA_CACHE_SIZE];
 };
 
 int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,
@@ -1724,10 +1749,6 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 	if (!lli->lli_sa_enabled)
 		return false;
 
-	/* not the same process, don't statahead */
-	if (lli->lli_opendir_pid != current->pid)
-		return false;
-
 	/*
 	 * When stating a dentry, kernel may trigger 'revalidate' or 'lookup'
 	 * multiple times, eg. for 'getattr', 'getxattr' and etc.
@@ -1745,6 +1766,13 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 	ldd = ll_d2d(dentry);
 	if (ldd != NULL && lli->lli_sa_generation &&
 	    ldd->lld_sa_generation == lli->lli_sa_generation)
+		return false;
+
+	if (lli->lli_sa_pattern == LSA_PATTERN_FNAME)
+		return true;
+
+	/* not the same process, don't statahead */
+	if (lli->lli_opendir_pid != current->pid)
 		return false;
 
 	return true;

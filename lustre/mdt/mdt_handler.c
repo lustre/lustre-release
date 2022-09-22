@@ -2364,6 +2364,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 */
 			if (mdt_object_remote(child))
 				GOTO(out_child, rc = -EREMOTE);
+
 			try_bits |= child_bits;
 			child_bits = 0;
 		}

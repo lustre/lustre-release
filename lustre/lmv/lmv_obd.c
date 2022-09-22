@@ -3826,23 +3826,31 @@ static int lmv_intent_getattr_async(struct obd_export *exp,
 
 	ENTRY;
 
-	if (!fid_is_sane(&op_data->op_fid2))
+	if (!(fid_is_sane(&op_data->op_fid2) ||
+	      fid_is_zero(&op_data->op_fid2)))
 		RETURN(-EINVAL);
 
 	ptgt = lmv_locate_tgt(lmv, op_data);
 	if (IS_ERR(ptgt))
 		RETURN(PTR_ERR(ptgt));
 
-	ctgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
-	if (IS_ERR(ctgt))
-		RETURN(PTR_ERR(ctgt));
-
 	/*
-	 * remote object needs two RPCs to lookup and getattr, considering the
-	 * complexity don't support statahead for now.
+	 * Zeroed FID @op_fid2 means that the intent getattr() comes from
+	 * statahead by regularized file names. Currently only do statahead
+	 * for the children files located same as the parent directory.
 	 */
-	if (ctgt != ptgt)
-		RETURN(-EREMOTE);
+	if (!fid_is_zero(&op_data->op_fid2)) {
+		ctgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
+		if (IS_ERR(ctgt))
+			RETURN(PTR_ERR(ctgt));
+
+		/*
+		 * remote object needs two RPCs to lookup and getattr,
+		 * considering the complexity don't support statahead for now.
+		 */
+		if (ctgt != ptgt)
+			RETURN(-EREMOTE);
+	}
 
 	rc = md_intent_getattr_async(ptgt->ltd_exp, item);
 
@@ -4087,12 +4095,26 @@ lmv_batch_locate_tgt(struct lmv_obd *lmv, struct md_op_item *item)
 	case MD_OP_GETATTR: {
 		struct lmv_tgt_desc *ptgt;
 
-		if (!fid_is_sane(&op_data->op_fid2))
+		if (!(fid_is_sane(&op_data->op_fid2) ||
+		      fid_is_zero(&op_data->op_fid2)))
 			RETURN(ERR_PTR(-EINVAL));
 
 		ptgt = lmv_locate_tgt(lmv, op_data);
 		if (IS_ERR(ptgt))
 			RETURN(ptgt);
+
+		/*
+		 * Zeroed @op_fid2 means that it is a statahead populating call
+		 * in the file name pattern which is using file name format to
+		 * prefetch the attributes. Thus it has no idea about the FID of
+		 * the children file. The children file is considered to be
+		 * located on the same storage target with the parent directory
+		 * or the stripped directory.
+		 */
+		if (fid_is_zero(&op_data->op_fid2)) {
+			tgt = ptgt;
+			break;
+		}
 
 		tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
 		if (IS_ERR(tgt))

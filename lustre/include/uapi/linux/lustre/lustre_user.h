@@ -631,6 +631,7 @@ struct ll_ioc_lease_id {
 #define LL_IOC_FID2MDTIDX		_IOWR('f', 248, struct lu_fid)
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
+#define LL_IOC_LADVISE2			_IOW('f', 250, struct llapi_lu_ladvise2)
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
 #define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
 #define LL_IOC_PCC_ATTACH		_IOW('f', 252, struct lu_pcc_attach)
@@ -2610,6 +2611,8 @@ enum lu_ladvise_type {
 	LU_LADVISE_DONTNEED	= 2,
 	LU_LADVISE_LOCKNOEXPAND = 3,
 	LU_LADVISE_LOCKAHEAD	= 4,
+	/* Ahead operations for open|create|stat|read|write. */
+	LU_LADVISE_AHEAD	= 5,
 	LU_LADVISE_MAX
 };
 
@@ -2618,6 +2621,7 @@ enum lu_ladvise_type {
 	[LU_LADVISE_DONTNEED]		= "dontneed",			\
 	[LU_LADVISE_LOCKNOEXPAND]	= "locknoexpand",		\
 	[LU_LADVISE_LOCKAHEAD]		= "lockahead",			\
+	[LU_LADVISE_AHEAD]		= "ahead",			\
 }
 
 /* This is the userspace argument for ladvise.  It is currently the same as
@@ -2632,6 +2636,58 @@ struct llapi_lu_ladvise {
 	__u32 lla_value3;
 	__u32 lla_value4;
 };
+
+struct llapi_lu_ladvise2 {
+	__u16	lla_advice;	/* advice type */
+	__u16	lla_value1;	/* values for different advice types */
+	__u32	lla_value2;
+	__u64	lla_start;
+	__u64	lla_end;
+	__u32	lla_value3;
+	__u32	lla_value4;
+	union {
+		struct {
+			__u32	lla_value5;
+			__u32	lla_value6;
+		};
+		char lla_buf[NAME_MAX + 1];
+	};
+};
+
+/* I/O call sequences in a batch access. */
+enum lu_access_flags {
+	ACCESS_FL_NONE	= 0x0,
+	ACCESS_FL_STAT	= 0x01,
+	ACCESS_FL_OPEN	= 0x02,
+	ACCESS_FL_CREAT	= 0x04,
+	ACCESS_FL_READ	= 0x08,
+	ACCESS_FL_WRITE	= 0x10,
+	ACCESS_FL_OC	= ACCESS_FL_OPEN | ACCESS_FL_CREAT,
+	ACCESS_FL_SOR	= ACCESS_FL_STAT | ACCESS_FL_OPEN | ACCESS_FL_READ,
+	ACCESS_FL_OCW	= ACCESS_FL_OPEN | ACCESS_FL_CREAT | ACCESS_FL_WRITE,
+};
+
+enum lu_ahead_mode {
+	LU_AH_MODE_NONE		= 0,
+	/*
+	 * The batch access pattern obeys certain naming rules, such as mdtest
+	 * with the file naming format mdtest.$rank.$i.
+	 */
+	LU_AH_NAME_INDEX	= 1,
+	/*
+	 * Provide a file name list as input to do batch accesses with
+	 * irregular file name format.
+	 */
+	LU_AH_NAME_ARRAY	= 2,
+	/* Prefetching in readdir() order under a directory. */
+	LU_AH_NAME_READDIR	= 3,
+	LU_AH_MODE_MAX,
+};
+
+#define lla_ahead_mode		lla_value1
+#define lla_access_flags	lla_value2
+#define lla_batch_max		lla_value3
+#define lla_fname		lla_buf
 
 enum ladvise_flag {
 	LF_ASYNC	= 0x00000001,

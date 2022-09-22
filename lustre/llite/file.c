@@ -414,7 +414,8 @@ int ll_file_release(struct inode *inode, struct file *file)
 
 	/* The last ref on @file, maybe not the the owner pid of statahead,
 	 * because parent and child process can share the same file handle. */
-	if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd)
+	if (S_ISDIR(inode->i_mode) &&
+	    (lli->lli_opendir_key == fd || fd->fd_sai))
 		ll_deauthorize_statahead(inode, fd);
 
 	if (is_root_inode(inode)) {

@@ -1534,6 +1534,8 @@ static char *ll_getname(const char __user *filename)
 	return tmp;
 }
 
+static const char *const ladvise_names[] = LU_LADVISE_NAMES;
+
 #define ll_putname(filename) OBD_FREE(filename, NAME_MAX + 1);
 
 static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -2290,6 +2292,58 @@ out_hur:
 migrate_free:
 		OBD_FREE_LARGE(data, len);
 
+		RETURN(rc);
+	}
+	case LL_IOC_LADVISE2: {
+		struct llapi_lu_ladvise2 *ladvise;
+
+		OBD_ALLOC_PTR(ladvise);
+		if (ladvise == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(ladvise, uarg, sizeof(*ladvise)))
+			GOTO(out_ladvise, rc = -EFAULT);
+
+		switch (ladvise->lla_advice) {
+		case LU_LADVISE_AHEAD:
+			if (ladvise->lla_start >= ladvise->lla_end) {
+				CDEBUG(D_VFSTRACE,
+				       "%s: Invalid range (%llu %llu) for %s\n",
+				       sbi->ll_fsname, ladvise->lla_start,
+				       ladvise->lla_end,
+				       ladvise_names[ladvise->lla_advice]);
+				GOTO(out_ladvise, rc = -EINVAL);
+			}
+
+			/*
+			 * Currently we only support name indexing format
+			 * ahead operations.
+			 */
+			if (ladvise->lla_ahead_mode != LU_AH_NAME_INDEX) {
+				CDEBUG(D_VFSTRACE,
+				       "%s: Invalid access mode (%d) for %s\n",
+				       sbi->ll_fsname, ladvise->lla_ahead_mode,
+				       ladvise_names[ladvise->lla_advice]);
+				GOTO(out_ladvise, rc = -EINVAL);
+			}
+
+			/* Currently we only support stat-ahead operations. */
+			if (!(ladvise->lla_access_flags & ACCESS_FL_STAT)) {
+				CDEBUG(D_VFSTRACE,
+				       "%s: Invalid access flags (%x) for %s\n",
+				       sbi->ll_fsname,
+				       ladvise->lla_access_flags,
+				       ladvise_names[ladvise->lla_advice]);
+				GOTO(out_ladvise, rc = -EINVAL);
+			}
+
+			rc = ll_ioctl_ahead(file, ladvise);
+			break;
+		default:
+			rc = -EINVAL;
+		}
+out_ladvise:
+		OBD_FREE_PTR(ladvise);
 		RETURN(rc);
 	}
 	case LL_IOC_PCC_DETACH_BY_FID: {
