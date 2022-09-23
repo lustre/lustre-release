@@ -2963,6 +2963,186 @@ kiblnd_destroy_dev(struct kib_dev *dev)
         LIBCFS_FREE(dev, sizeof(*dev));
 }
 
+static struct kib_dev *
+kiblnd_dev_search(char *ifname)
+{
+	struct kib_dev *alias = NULL;
+	struct kib_dev *dev;
+	char *colon;
+	char *colon2;
+
+	colon = strchr(ifname, ':');
+	list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
+		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
+			return dev;
+
+		if (alias != NULL)
+			continue;
+
+		colon2 = strchr(dev->ibd_ifname, ':');
+		if (colon != NULL)
+			*colon = 0;
+		if (colon2 != NULL)
+			*colon2 = 0;
+
+		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
+			alias = dev;
+
+		if (colon != NULL)
+			*colon = ':';
+		if (colon2 != NULL)
+			*colon2 = ':';
+	}
+	return alias;
+}
+
+static int
+kiblnd_handle_link_state_change(struct net_device *dev,
+				unsigned char operstate)
+{
+	struct lnet_ni *ni = NULL;
+	struct kib_dev *event_kibdev;
+	struct kib_net *net;
+	struct kib_net *cnxt;
+	bool link_down = !(operstate == IF_OPER_UP);
+	struct in_device *in_dev;
+	bool found_ip = false;
+	DECLARE_CONST_IN_IFADDR(ifa);
+
+	event_kibdev = kiblnd_dev_search(dev->name);
+
+	if (!event_kibdev)
+		goto out;
+
+	list_for_each_entry_safe(net, cnxt, &event_kibdev->ibd_nets, ibn_list) {
+		found_ip = false;
+
+		ni = net->ibn_ni;
+
+		in_dev = __in_dev_get_rtnl(dev);
+		if (!in_dev) {
+			CDEBUG(D_NET, "Interface %s has no IPv4 status.\n",
+			       dev->name);
+			CDEBUG(D_NET, "%s: set link fatal state to 1\n",
+			       libcfs_nidstr(&net->ibn_ni->ni_nid));
+			atomic_set(&ni->ni_fatal_error_on, 1);
+			continue;
+		}
+		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+			if (htonl(event_kibdev->ibd_ifip) == ifa->ifa_local)
+				found_ip = true;
+		}
+		endfor_ifa(in_dev);
+
+		if (!found_ip) {
+			CDEBUG(D_NET, "Interface %s has no matching ip\n",
+			       dev->name);
+			CDEBUG(D_NET, "%s: set link fatal state to 1\n",
+			       libcfs_nidstr(&net->ibn_ni->ni_nid));
+			atomic_set(&ni->ni_fatal_error_on, 1);
+			continue;
+		}
+
+		if (link_down) {
+			CDEBUG(D_NET, "%s: set link fatal state to 1\n",
+			       libcfs_nidstr(&net->ibn_ni->ni_nid));
+			atomic_set(&ni->ni_fatal_error_on, link_down);
+		} else {
+			CDEBUG(D_NET, "%s: set link fatal state to %u\n",
+			       libcfs_nidstr(&net->ibn_ni->ni_nid),
+			       (kiblnd_get_link_status(dev) == 0));
+			atomic_set(&ni->ni_fatal_error_on,
+				   (kiblnd_get_link_status(dev) == 0));
+		}
+	}
+out:
+	return 0;
+}
+
+static int
+kiblnd_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
+{
+	struct kib_dev *event_kibdev;
+	struct kib_net *net;
+	struct kib_net *cnxt;
+	struct net_device *event_netdev = ifa->ifa_dev->dev;
+
+	event_kibdev = kiblnd_dev_search(event_netdev->name);
+
+	if (!event_kibdev)
+		goto out;
+
+	if (htonl(event_kibdev->ibd_ifip) != ifa->ifa_local)
+		goto out;
+
+	list_for_each_entry_safe(net, cnxt, &event_kibdev->ibd_nets,
+				 ibn_list) {
+		CDEBUG(D_NET, "%s: set link fatal state to %u\n",
+		       libcfs_nidstr(&net->ibn_ni->ni_nid),
+		       (event == NETDEV_DOWN));
+		atomic_set(&net->ibn_ni->ni_fatal_error_on,
+			   (event == NETDEV_DOWN));
+	}
+out:
+	return 0;
+}
+
+
+/************************************
+ * Net device notifier event handler
+ ************************************/
+static int kiblnd_device_event(struct notifier_block *unused,
+				 unsigned long event, void *ptr)
+{
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	unsigned char operstate;
+
+	operstate = dev->operstate;
+
+	CDEBUG(D_NET, "devevent: status=%ld, iface=%s ifindex %d state %u\n",
+	       event, dev->name, dev->ifindex, operstate);
+
+	switch (event) {
+	case NETDEV_UP:
+	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
+		kiblnd_handle_link_state_change(dev, operstate);
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
+/************************************
+ * Inetaddr notifier event handler
+ ************************************/
+static int kiblnd_inetaddr_event(struct notifier_block *unused,
+				 unsigned long event, void *ptr)
+{
+	struct in_ifaddr *ifa = ptr;
+
+	CDEBUG(D_NET, "addrevent: status %ld ip addr %pI4, netmask %pI4.\n",
+	       event, &ifa->ifa_address, &ifa->ifa_mask);
+
+	switch (event) {
+	case NETDEV_UP:
+	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
+		kiblnd_handle_inetaddr_change(ifa, event);
+		break;
+
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block kiblnd_dev_notifier_block = {
+	.notifier_call = kiblnd_device_event,
+};
+
+static struct notifier_block kiblnd_inetaddr_notifier_block = {
+	.notifier_call = kiblnd_inetaddr_event,
+};
+
 static void
 kiblnd_base_shutdown(void)
 {
@@ -2974,6 +3154,11 @@ kiblnd_base_shutdown(void)
 
 	CDEBUG(D_MALLOC, "before LND base cleanup: kmem %lld\n",
 	       libcfs_kmem_read());
+
+	if (kiblnd_data.kib_init == IBLND_INIT_ALL) {
+		unregister_netdevice_notifier(&kiblnd_dev_notifier_block);
+		unregister_inetaddr_notifier(&kiblnd_inetaddr_notifier_block);
+	}
 
 	switch (kiblnd_data.kib_init) {
 	default:
@@ -3171,6 +3356,9 @@ kiblnd_base_startup(struct net *ns)
 		goto failed;
 	}
 
+	register_netdevice_notifier(&kiblnd_dev_notifier_block);
+	register_inetaddr_notifier(&kiblnd_inetaddr_notifier_block);
+
 	/* flag everything initialised */
 	kiblnd_data.kib_init = IBLND_INIT_ALL;
 	/*****************************************************/
@@ -3246,39 +3434,6 @@ static int kiblnd_dev_start_threads(struct kib_dev *dev, bool newdev, u32 *cpts,
 		}
 	}
 	return 0;
-}
-
-static struct kib_dev *
-kiblnd_dev_search(char *ifname)
-{
-	struct kib_dev *alias = NULL;
-	struct kib_dev *dev;
-	char            *colon;
-	char            *colon2;
-
-	colon = strchr(ifname, ':');
-	list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
-		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
-			return dev;
-
-		if (alias != NULL)
-			continue;
-
-		colon2 = strchr(dev->ibd_ifname, ':');
-		if (colon != NULL)
-			*colon = 0;
-		if (colon2 != NULL)
-			*colon2 = 0;
-
-		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
-			alias = dev;
-
-		if (colon != NULL)
-			*colon = ':';
-		if (colon2 != NULL)
-			*colon2 = ':';
-	}
-	return alias;
 }
 
 static int

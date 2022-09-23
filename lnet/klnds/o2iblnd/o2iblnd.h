@@ -1170,4 +1170,7 @@ int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		unsigned int rlen);
 unsigned int kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx);
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0)
+#undef netdev_notifier_info_to_dev
+#define netdev_notifier_info_to_dev(ndev) ndev
+#endif
