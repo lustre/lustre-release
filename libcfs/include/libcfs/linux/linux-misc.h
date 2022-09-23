@@ -42,7 +42,18 @@
 #include <linux/uio.h>
 #include <linux/kallsyms.h>
 
+/*
+ * Since 4.20 commit 00e23707442a75b404392cef1405ab4fd498de6b
+ * iov_iter: Use accessor functions to access an iterator's type and direction.
+ * iter_is_iovec() and iov_iter_is_* are available, supply the missing
+ * functionality for older kernels.
+ */
 #ifndef HAVE_IOV_ITER_TYPE
+/*
+ * Since 3.15-rc4 commit 71d8e532b1549a478e6a6a8a44f309d050294d00
+ * The iov iterator has a type and can iterate over numerous vector types.
+ * Prior to this only iovec is supported, so all iov_iter_is_* are false.
+ */
 #ifdef HAVE_IOV_ITER_HAS_TYPE_MEMBER
 #define iter_is_iovec(iter)		((iter)->type & ITER_IOVEC)
 #define iov_iter_is_kvec(iter)		((iter)->type & ITER_KVEC)
