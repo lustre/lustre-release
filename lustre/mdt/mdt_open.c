@@ -801,8 +801,6 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 	ENTRY;
 	*ibits = 0;
-	mdt_lock_handle_init(lhc);
-
 	if (req_is_replay(mdt_info_req(info)))
 		RETURN(0);
 
@@ -893,8 +891,6 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			atomic_read(&obj->mot_lease_count), lm);
 	}
 
-	mdt_lock_reg_init(lhc, lm);
-
 	/* Return lookup lock to validate inode at the client side.
 	 * This is pretty important otherwise MDT will return layout
 	 * lock for each open.
@@ -908,7 +904,8 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	}
 
 	if (*ibits | trybits)
-		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, false);
+		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, lm,
+					 false);
 
 	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
 	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",
@@ -933,9 +930,8 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			mdt_object_unlock(info, obj, lhc, 1);
 
 		LASSERT(!try_layout);
-		mdt_lock_handle_init(ll);
-		mdt_lock_reg_init(ll, LCK_EX);
-		rc = mdt_object_lock(info, obj, ll, MDS_INODELOCK_LAYOUT);
+		rc = mdt_object_lock(info, obj, ll, MDS_INODELOCK_LAYOUT,
+				     LCK_EX, false);
 
 		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LL_BLOCK, 2);
 	}
@@ -1250,7 +1246,8 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 			       struct mdt_device *mdt)
 {
 	struct mdt_object *md_root = mdt->mdt_md_root;
-	struct lustre_handle lhroot;
+	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
+	__u64 ibits = MDS_INODELOCK_XATTR;
 	int rc;
 
 	if (md_root == NULL) {
@@ -1282,16 +1279,17 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 	if (md_root->mot_cache_attr || !mdt_object_remote(md_root))
 		return 0;
 
-	rc = mdt_remote_object_lock(info, md_root, mdt_object_fid(md_root),
-				    &lhroot, LCK_PR, MDS_INODELOCK_XATTR,
-				    true);
+	mdt_lock_reg_init(lh, LCK_PR);
+	rc = mdt_object_lock_internal(info, md_root, mdt_object_fid(md_root),
+				      lh, &ibits, 0, true, false);
 	if (rc < 0)
 		return rc;
 
 	md_root->mot_cache_attr = 1;
 
 	/* don't cancel this lock, so that we know the cached xattr is valid. */
-	ldlm_lock_decref(&lhroot, LCK_PR);
+	ldlm_lock_decref(&lh->mlh_rreg_lh, LCK_PR);
+	lh->mlh_rreg_lh.cookie = 0ull;
 
 	return 0;
 }
@@ -1449,8 +1447,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 again_pw:
 	if (lock_mode != LCK_NL) {
 		lh = &info->mti_lh[MDT_LH_PARENT];
-		mdt_lock_pdo_init(lh, lock_mode, &rr->rr_name);
-		result = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
+		result = mdt_parent_lock(info, parent, lh, &rr->rr_name,
+					 lock_mode, false);
 		if (result != 0)
 			GOTO(out_parent, result);
 
@@ -1481,7 +1479,6 @@ again_pw:
 			/* unlink vs create race: get write lock and restart */
 			mdt_object_unlock(info, parent, lh, 1);
 			mdt_clear_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
-			mdt_lock_handle_init(lh);
 			lock_mode = LCK_PW;
 			goto again_pw;
 		}
@@ -1562,15 +1559,11 @@ again_pw:
 			LASSERT(lhc != NULL);
 
 			rc = mdt_check_resent_lock(info, child, lhc);
-			if (rc < 0) {
+			if (rc < 0)
 				GOTO(out_child, result = rc);
-			} else if (rc > 0) {
-				mdt_lock_handle_init(lhc);
-				mdt_lock_reg_init(lhc, LCK_PR);
-
-				rc = mdt_object_lock(info, child, lhc,
-						     MDS_INODELOCK_LOOKUP);
-			}
+			else if (rc > 0)
+				rc = mdt_object_lookup_lock(info, NULL, child,
+							    lhc, LCK_PR, false);
 			repbody->mbo_fid1 = *mdt_object_fid(child);
 			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
 			if (rc != 0)
@@ -1999,9 +1992,8 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	lustre_hsm2buf(buf->lb_buf, &ma->ma_hsm);
 	ma->ma_hsm.mh_flags &= ~HS_RELEASED;
 
-	mdt_lock_reg_init(lh, LCK_EX);
 	rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR);
+			     MDS_INODELOCK_XATTR, LCK_EX, false);
 	if (rc != 0)
 		GOTO(out_close, rc);
 
@@ -2167,16 +2159,14 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 	if (lease_broken)
 		GOTO(out_unlock_sem, rc = -ESTALE);
 
-	mdt_lock_reg_init(lh1, LCK_EX);
 	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR);
+			     MDS_INODELOCK_XATTR, LCK_EX, false);
 	if (rc < 0)
 		GOTO(out_unlock_sem, rc);
 
 	if (o2) {
-		mdt_lock_reg_init(lh2, LCK_EX);
 		rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
-				     MDS_INODELOCK_XATTR);
+				     MDS_INODELOCK_XATTR, LCK_EX, false);
 		if (rc < 0)
 			GOTO(out_unlock1, rc);
 	}

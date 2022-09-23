@@ -411,6 +411,8 @@ enum {
 	MDT_LH_NEW,	/* new lockh for rename */
 	MDT_LH_RMT,	/* used for return lh to caller */
 	MDT_LH_LOCAL,	/* local lock never return to client */
+	MDT_LH_LOOKUP,	/* lookup lock for source object in rename/migrate if
+			 * it's remote object */
 	MDT_LH_NR
 };
 
@@ -817,21 +819,43 @@ int mdt_lock_setup(struct mdt_thread_info *info, struct mdt_object *mo,
 int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 			  struct mdt_lock_handle *lhc);
 
-int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *mo,
-		    struct mdt_lock_handle *lh, __u64 ibits);
-
-int mdt_reint_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
+int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
+		    struct mdt_lock_handle *lh, __u64 ibits,
+		    enum ldlm_mode mode, bool cos_incompat);
+int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *o,
+		    struct mdt_lock_handle *lh, const struct lu_name *lname,
+		    enum ldlm_mode mode, bool cos_incompat);
+int mdt_object_stripes_lock(struct mdt_thread_info *info,
+			    struct mdt_object *pobj, struct mdt_object *o,
+			    struct mdt_lock_handle *lh,
+			    struct ldlm_enqueue_info *einfo, __u64 ibits,
+			    enum ldlm_mode mode, bool cos_incompat);
+int mdt_object_check_lock(struct mdt_thread_info *info,
+			  struct mdt_object *parent, struct mdt_object *child,
 			  struct mdt_lock_handle *lh, __u64 ibits,
-			  bool cos_incompat);
-
+			  enum ldlm_mode mode, bool cos_incompat);
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct mdt_lock_handle *lh, __u64 *ibits,
-			__u64 trybits, bool cos_incompat);
+			__u64 trybits, enum ldlm_mode mode, bool cos_incompat);
+
+/* below three lock functions are used internally */
+int mdt_object_lock_internal(struct mdt_thread_info *info,
+			     struct mdt_object *obj, const struct lu_fid *fid,
+			     struct mdt_lock_handle *lh, __u64 *ibits,
+			     __u64 trybits, bool cache, bool cos_incompat);
+int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
+			struct mdt_lock_handle *lh, const struct lu_name *name,
+			enum ldlm_mode mode, bool pdo_lock, bool cos_incompat);
+int mdt_object_lookup_lock(struct mdt_thread_info *info,
+			   struct mdt_object *pobj, struct mdt_object *obj,
+			   struct mdt_lock_handle *lh, enum ldlm_mode mode,
+			   bool cos_incompat);
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);
-void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
-		   enum ldlm_mode mode, int decref);
+void mdt_object_stripes_unlock(struct mdt_thread_info *info,
+			       struct mdt_object *o, struct mdt_lock_handle *lh,
+			       struct ldlm_enqueue_info *einfo, int decref);
 
 struct mdt_object *mdt_object_new(const struct lu_env *env,
 				  struct mdt_device *,
@@ -839,34 +863,16 @@ struct mdt_object *mdt_object_new(const struct lu_env *env,
 struct mdt_object *mdt_object_find(const struct lu_env *,
                                    struct mdt_device *,
                                    const struct lu_fid *);
-struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
-                                        const struct lu_fid *,
-                                        struct mdt_lock_handle *,
-                                        __u64);
-void mdt_object_unlock_put(struct mdt_thread_info *,
-                           struct mdt_object *,
-                           struct mdt_lock_handle *,
-                           int decref);
-
-void mdt_client_compatibility(struct mdt_thread_info *info);
-
-int mdt_remote_object_lock(struct mdt_thread_info *mti,
-			   struct mdt_object *o, const struct lu_fid *fid,
-			   struct lustre_handle *lh,
-			   enum ldlm_mode mode, __u64 ibits, bool cache);
-int mdt_object_local_lock(struct mdt_thread_info *info, struct mdt_object *o,
-			  struct mdt_lock_handle *lh, __u64 *ibits,
-			  __u64 trybits, bool cos_incompat);
-int mdt_reint_striped_lock(struct mdt_thread_info *info,
+struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
+					const struct lu_fid *f,
+					struct mdt_lock_handle *lh,
+					__u64 ibits, enum ldlm_mode mode);
+void mdt_object_unlock_put(struct mdt_thread_info *info,
 			   struct mdt_object *o,
 			   struct mdt_lock_handle *lh,
-			   __u64 ibits,
-			   struct ldlm_enqueue_info *einfo,
-			   bool cos_incompat);
-void mdt_reint_striped_unlock(struct mdt_thread_info *info,
-			      struct mdt_object *o,
-			      struct mdt_lock_handle *lh,
-			      struct ldlm_enqueue_info *einfo, int decref);
+			   int decref);
+
+void mdt_client_compatibility(struct mdt_thread_info *info);
 
 enum mdt_name_flags {
 	MNF_FIX_ANON = 1,
@@ -891,9 +897,6 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *lh);
-
-void mdt_lock_handle_init(struct mdt_lock_handle *lh);
-void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,

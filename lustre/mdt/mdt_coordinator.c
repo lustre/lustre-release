@@ -850,9 +850,8 @@ int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 	mutex_unlock(&cdt->cdt_restore_lock);
 
 	/* get the layout lock */
-	mdt_lock_reg_init(&lh, LCK_EX);
 	obj = mdt_object_find_lock(mti, &crh->crh_fid, &lh,
-				   MDS_INODELOCK_LAYOUT);
+				   MDS_INODELOCK_LAYOUT, LCK_EX);
 	if (IS_ERR(obj)) {
 		mutex_lock(&cdt->cdt_restore_lock);
 		GOTO(out_ldel, rc = PTR_ERR(obj));
@@ -1377,8 +1376,8 @@ static int hsm_swap_layouts(struct mdt_thread_info *mti,
 	/* we already have layout lock on obj so take only
 	 * on dfid */
 	dlh = &mti->mti_lh[MDT_LH_OLD];
-	mdt_lock_reg_init(dlh, LCK_EX);
-	dobj = mdt_object_find_lock(mti, dfid, dlh, MDS_INODELOCK_LAYOUT);
+	dobj = mdt_object_find_lock(mti, dfid, dlh, MDS_INODELOCK_LAYOUT,
+				    LCK_EX);
 	if (IS_ERR(dobj))
 		GOTO(out, rc = PTR_ERR(dobj));
 
@@ -1614,8 +1613,8 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		if (!IS_ERR_OR_NULL(obj)) {
 			/* flush UPDATE lock so attributes are upadated */
 			lh = &mti->mti_lh[MDT_LH_OLD];
-			mdt_lock_reg_init(lh, LCK_EX);
-			mdt_object_lock(mti, obj, lh, MDS_INODELOCK_UPDATE);
+			mdt_object_lock(mti, obj, lh, MDS_INODELOCK_UPDATE,
+					LCK_EX, false);
 			mdt_object_unlock(mti, obj, lh, 1);
 		}
 	}

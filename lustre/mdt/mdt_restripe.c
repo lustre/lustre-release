@@ -389,36 +389,22 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 		GOTO(restriping_clear, rc);
 
 	lhp = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(lhp, LCK_PW, lname);
-	rc = mdt_reint_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,
-				   true);
+	rc = mdt_parent_lock(info, parent, lhp, lname, LCK_PW, true);
 	if (rc)
 		GOTO(restriping_clear, rc);
 
 	lhc = &info->mti_lh[MDT_LH_CHILD];
-	mdt_lock_reg_init(lhc, LCK_EX);
-	if (mdt_object_remote(parent)) {
-		/* enqueue object remote LOOKUP lock */
-		rc = mdt_remote_object_lock(info, parent, mdt_object_fid(child),
-					    &lhc->mlh_rreg_lh,
-					    lhc->mlh_rreg_mode,
-					    MDS_INODELOCK_LOOKUP, false);
-		if (rc != ELDLM_OK)
-			GOTO(unlock_parent, rc);
-	}
-
-	rc = mdt_reint_striped_lock(info, child, lhc, MDS_INODELOCK_FULL, einfo,
-				    true);
+	rc = mdt_object_stripes_lock(info, parent, child, lhc, einfo,
+				     MDS_INODELOCK_FULL, LCK_EX, true);
 	if (rc)
-		GOTO(unlock_child, rc);
+		GOTO(unlock_parent, rc);
 
 	mdt_auto_split_prep(info, spec, ma, lum_stripe_count);
 
 	rc = mdt_restripe_internal(info, parent, child, lname, fid, spec, ma);
 	EXIT;
 
-unlock_child:
-	mdt_reint_striped_unlock(info, child, lhc, einfo, rc);
+	mdt_object_stripes_unlock(info, child, lhc, einfo, rc);
 unlock_parent:
 	mdt_object_unlock(info, parent, lhp, rc);
 restriping_clear:
@@ -472,9 +458,8 @@ static int mdt_restripe_migrate_finish(struct mdt_thread_info *info,
 	buf.lb_len = sizeof(*lmv);
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_reg_init(lh, LCK_EX);
-	rc = mdt_reint_object_lock(info, stripe, lh, MDS_INODELOCK_XATTR,
-				   false);
+	rc = mdt_object_lock(info, stripe, lh, MDS_INODELOCK_XATTR, LCK_EX,
+			     false);
 	if (!rc)
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(stripe), &buf,
 				  XATTR_NAME_LMV, LU_XATTR_REPLACE);

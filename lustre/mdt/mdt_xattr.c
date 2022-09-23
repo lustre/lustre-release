@@ -368,33 +368,23 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	if (IS_ERR(pobj))
 		GOTO(put_obj, rc = PTR_ERR(pobj));
 
-	/* revoke object remote LOOKUP lock */
-	if (mdt_object_remote(pobj)) {
-		rc = mdt_revoke_remote_lookup_lock(info, pobj, obj);
-		if (rc)
-			GOTO(put_pobj, rc);
-	}
-
 	/*
 	 * lock parent if dir will be shrunk to 1 stripe, because dir will be
 	 * converted to normal directory, as will change dir FID and update
 	 * namespace of parent.
 	 */
 	lhp = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_reg_init(lhp, LCK_PW);
-
 	if (le32_to_cpu(lmu->lum_stripe_count) < 2) {
-		rc = mdt_reint_object_lock(info, pobj, lhp,
-					   MDS_INODELOCK_UPDATE, true);
+		rc = mdt_object_lock(info, pobj, lhp, MDS_INODELOCK_UPDATE,
+				     LCK_PW, true);
 		if (rc)
 			GOTO(put_pobj, rc);
 	}
 
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
-	mdt_lock_reg_init(lhc, LCK_EX);
-	rc = mdt_reint_striped_lock(info, obj, lhc, MDS_INODELOCK_FULL, einfo,
-				    true);
+	rc = mdt_object_stripes_lock(info, pobj, obj, lhc, einfo,
+				     MDS_INODELOCK_FULL, LCK_EX, true);
 	if (rc)
 		GOTO(unlock_pobj, rc);
 
@@ -513,7 +503,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	GOTO(unlock_obj, rc);
 
 unlock_obj:
-	mdt_reint_striped_unlock(info, obj, lhc, einfo, rc);
+	mdt_object_stripes_unlock(info, obj, lhc, einfo, rc);
 unlock_pobj:
 	mdt_object_unlock(info, pobj, lhp, rc);
 put_pobj:
@@ -615,16 +605,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		lockpart |= MDS_INODELOCK_LAYOUT;
 	}
 
-	/* Revoke all clients' lookup lock, since the access
-	 * permissions for this inode is changed when ACL_ACCESS is
-	 * set. This isn't needed for ACL_DEFAULT, since that does
-	 * not change the access permissions of this inode, nor any
-	 * other existing inodes. It is setting the ACLs inherited
-	 * by new directories/files at create time.
-	 */
-	/* We need revoke both LOOKUP|PERM lock here, see mdt_attr_set. */
 	if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
-		lockpart |= MDS_INODELOCK_PERM | MDS_INODELOCK_LOOKUP;
+		lockpart |= MDS_INODELOCK_PERM;
 	/* We need to take the lock on behalf of old clients so that newer
 	 * clients flush their xattr caches
 	 */
@@ -635,8 +617,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	/* ACLs were sent to clients under LCK_CR locks, so taking LCK_EX
 	 * to cancel them.
 	 */
-	mdt_lock_reg_init(lh, LCK_EX);
-	obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
+	obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart, LCK_EX);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 

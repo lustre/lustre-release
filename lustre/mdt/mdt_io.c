@@ -1519,7 +1519,8 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	mdt_intent_fixup_resent(mti, *lockp, lhc, flags);
 	/* resent case */
 	if (!lustre_handle_is_used(&lhc->mlh_reg_lh)) {
-		mdt_lock_handle_init(lhc);
+		__u64 ibits = MDS_INODELOCK_DOM;
+
 		mdt_lh_reg_init(lhc, *lockp);
 
 		/* This will block MDT thread but it should be fine until
@@ -1531,7 +1532,8 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 		 * return ELDLM_OK here and fall back into normal lock enqueue
 		 * process.
 		 */
-		rc = mdt_object_lock(mti, mo, lhc, MDS_INODELOCK_DOM);
+		rc = mdt_object_lock_internal(mti, mo, mdt_object_fid(mo), lhc,
+					      &ibits, 0, false, false);
 		if (rc)
 			GOTO(out, rc);
 	}
