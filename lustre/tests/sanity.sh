@@ -9667,6 +9667,34 @@ test_65o() {
 }
 run_test 65o "pool inheritance for mdt component"
 
+test_65p () { # LU-16152
+	local src_dir=$DIR/$tdir/src_dir
+	local dst_dir=$DIR/$tdir/dst_dir
+	local yaml_file=$DIR/$tdir/layout.yaml
+	local border
+
+	(( $CLIENT_VERSION >= $(version_code 2.15.51) )) ||
+		skip "Need at least version 2.15.51"
+
+	test_mkdir -p $src_dir
+	$LFS setstripe -E 2048M -c 4 -E EOF -c 8 $src_dir ||
+		error "failed to setstripe"
+	$LFS getstripe --yaml -d $src_dir > $yaml_file ||
+		error "failed to getstripe"
+
+	test_mkdir -p $dst_dir
+	$LFS setstripe --yaml $yaml_file $dst_dir ||
+		error "failed to setstripe with yaml file"
+	border=$($LFS getstripe -d $dst_dir |
+		awk '/lcme_extent.e_end:/ { print $2; exit; }') ||
+		error "failed to getstripe"
+
+	# 2048M is 0x80000000, or 2147483648
+	(( $border == 2147483648 )) ||
+		error "failed to handle huge number in yaml layout"
+}
+run_test 65p "setstripe with yaml file and huge number"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

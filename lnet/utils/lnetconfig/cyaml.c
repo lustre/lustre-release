@@ -391,7 +391,7 @@ static bool parse_number(struct cYAML *item, const char *input)
 	n = sign * n * pow(10.0, (scale + subscale * signsubscale));
 
 	item->cy_valuedouble = n;
-	item->cy_valueint = (int)n;
+	item->cy_valueint = (int64_t)n;
 	item->cy_type = CYAML_TYPE_NUMBER;
 
 	return true;
