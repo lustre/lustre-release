@@ -10027,7 +10027,8 @@ is_project_quota_supported() {
 
 	[[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" &&
 	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ]] &&
-		do_facet mds1 lfs --help |& grep -q project && return 0
+		do_facet mds1 lfs --list-commands |& grep -q project &&
+			return 0
 
 	[[ "$(facet_fstype $SINGLEMDS)" == "zfs" &&
 	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.10.53) ]] &&
