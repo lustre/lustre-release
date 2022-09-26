@@ -1346,8 +1346,6 @@ function lnet_health_post() {
 
 	restore_lnet_params
 
-	$LCTL net_drop_del -a
-
 	do_lnetctl peer set --health 1000 --all
 	do_lnetctl net set --health 1000 --all
 
@@ -1525,14 +1523,33 @@ cleanup_health_test() {
 }
 
 add_health_test_drop_rules() {
-	local hstatus=$1
-	local lnid rnid
+	local args="-m GET -r 1 -e ${1}"
+	local src dst
 
-	for lnid in "${LNIDS[@]}"; do
-		for rnid in "${RNIDS[@]}"; do
-			$LCTL net_drop_add -s $lnid -d $rnid -m GET -r 1 -e ${hstatus}
+	for src in "${LNIDS[@]}"; do
+		for dst in "${RNIDS[@]}" "${LNIDS[@]}"; do
+			$LCTL net_drop_add -s $src -d $dst ${args} ||
+				error "Failed to add drop rule $src $dst $args"
 		done
 	done
+}
+
+do_lnet_health_ping_test() {
+	local hstatus="$1"
+
+	echo "Simulate $hstatus"
+
+	lnet_health_pre || return $?
+
+	add_health_test_drop_rules ${hstatus}
+	do_lnetctl ping ${RNIDS[0]} &&
+		error "Should have failed"
+
+	lnet_health_post
+
+	$LCTL net_drop_del -a
+
+	return 0
 }
 
 # See lnet/lnet/lib-msg.c:lnet_health_check()
@@ -1545,15 +1562,7 @@ test_204() {
 	local hstatus
 	for hstatus in ${LNET_LOCAL_RESEND_STATUSES} \
 		       ${LNET_LOCAL_NO_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_no_resends || return $?
 		check_no_local_health || return $?
 	done
@@ -1569,29 +1578,13 @@ test_205() {
 
 	local hstatus
 	for hstatus in ${LNET_LOCAL_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_resends || return $?
 		check_local_health || return $?
 	done
 
 	for hstatus in ${LNET_LOCAL_NO_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_no_resends || return $?
 		check_local_health || return $?
 	done
@@ -1611,15 +1604,7 @@ test_206() {
 	local hstatus
 	for hstatus in ${LNET_REMOTE_RESEND_STATUSES} \
 		       ${LNET_REMOTE_NO_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_no_resends || return $?
 		check_no_local_health || return $?
 		check_no_remote_health || return $?
@@ -1636,16 +1621,7 @@ test_207() {
 
 	local hstatus
 	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_resends || return $?
 		check_no_local_health || return $?
 		check_remote_health || return $?
@@ -1653,16 +1629,7 @@ test_207() {
 			error "Unable to reset health rc=$?"
 	done
 	for hstatus in ${LNET_REMOTE_NO_RESEND_STATUSES}; do
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-
-		add_health_test_drop_rules ${hstatus}
-
-		do_lnetctl discover ${RNIDS[0]} &&
-			error "Should have failed"
-
-		lnet_health_post
-
+		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_no_resends || return $?
 		check_no_local_health || return $?
 		check_remote_health || return $?
