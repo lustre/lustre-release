@@ -534,7 +534,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	 * So no need the rebuild a full valid HAL now
 	 */
 	if (fail_request)
-		GOTO(out_buf, rc = 0);
+		GOTO(out_buf, rc = -EAGAIN);
 
 	/* Cancel memory registration is useless for purge
 	 * non registration avoid a deadlock :

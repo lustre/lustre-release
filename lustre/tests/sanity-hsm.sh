@@ -3909,6 +3909,33 @@ test_113() {
 }
 run_test 113 "wrong stat after restore"
 
+test_114() {
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local f1=$DIR/$tdir/${tfile}1
+	local f2=$DIR/$tdir/${tfile}2
+	local fid1=$(create_empty_file "$f1")
+	local fid2=$(create_empty_file "$f2")
+
+	copytool setup
+
+	# Prevent archive from completing
+	cdt_disable
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f1 $f2
+	# wait archive to register at CDT
+	wait_request_state "$fid1" ARCHIVE WAITING
+
+	# Set f2 in an incompatible state
+	$LFS hsm_set --noarchive $f2
+
+	cdt_enable
+
+	wait_request_state "$fid1" ARCHIVE SUCCEED
+	wait_request_state "$fid2" ARCHIVE FAILED
+}
+run_test 114 "Incompatible request does not set other requests as STARTED"
+
 test_200() {
 	mkdir_on_mdt0 $DIR/$tdir
 
