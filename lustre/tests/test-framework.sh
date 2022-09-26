@@ -7094,6 +7094,12 @@ lnet_if_list() {
 	[[ -z ${nids[@]} ]] &&
 		return 0
 
+	if [[ ${NETTYPE} =~ kfi* ]]; then
+		$LNETCTL net show 2>/dev/null | awk '/ cxi[0-9]+$/{print $NF}' |
+			sort -u | xargs echo
+		return 0
+	fi
+
 	declare -a INTERFACES
 
 	for ((i = 0; i < ${#nids[@]}; i++)); do

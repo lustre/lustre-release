@@ -3059,6 +3059,18 @@ test_250() {
 }
 run_test 250 "test that linux routes are added"
 
+test_251() {
+	[[ ${NETTYPE} =~ kfi* ]] ||
+		skip "Need kfi NETTYPE"
+
+	reinit_dlc || return $?
+	add_net "kfi" "${INTERFACES[0]}" || return $?
+	add_net "kfi1" "${INTERFACES[0]}" || return $?
+	add_net "kfi10" "${INTERFACES[0]}" || return $?
+	return 0
+}
+run_test 251 "Define multiple kfi networks on single interface"
+
 test_300() {
 	# LU-13274
 	local header
