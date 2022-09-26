@@ -144,6 +144,7 @@ ksocknal_create_conn_cb(struct sockaddr *addr)
 	conn_cb->ksnr_blki_conn_count = 0;
 	conn_cb->ksnr_blko_conn_count = 0;
 	conn_cb->ksnr_max_conns = 0;
+	conn_cb->ksnr_busy_retry_count = 0;
 
 	return conn_cb;
 }

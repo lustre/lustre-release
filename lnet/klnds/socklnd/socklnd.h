@@ -365,6 +365,7 @@ struct ksock_conn {
 };
 
 #define SOCKNAL_CONN_COUNT_MAX_BITS	8	/* max conn count bits */
+#define SOCKNAL_MAX_BUSY_RETRIES	3
 
 struct ksock_conn_cb {
 	struct list_head	ksnr_connd_list;/* chain on ksnr_connd_routes */
@@ -387,6 +388,9 @@ struct ksock_conn_cb {
 	unsigned int		ksnr_max_conns; /* conns_per_peer at peer
 						 * creation
 						 */
+	unsigned int		ksnr_busy_retry_count;/* counts retry attempts
+						       * due to EALREADY rc
+						       */
 };
 
 #define SOCKNAL_KEEPALIVE_PING          1       /* cookie for keepalive ping */

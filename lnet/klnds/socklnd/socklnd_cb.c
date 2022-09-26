@@ -1907,7 +1907,7 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 {
 	LIST_HEAD(zombies);
 	struct ksock_peer_ni *peer_ni = conn_cb->ksnr_peer;
-	int type;
+	int type = SOCKLND_CONN_NONE;
 	int wanted;
 	struct socket *sock;
 	time64_t deadline;
@@ -1987,19 +1987,34 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 			goto failed;
 		}
 
+		if (rc == EALREADY && conn_cb->ksnr_conn_count > 0)
+			conn_cb->ksnr_busy_retry_count += 1;
+		else
+			conn_cb->ksnr_busy_retry_count = 0;
+
 		/* A +ve RC means I have to retry because I lost the connection
 		 * race or I have to renegotiate protocol version
 		 */
 		retry_later = (rc != 0);
+
 		if (retry_later)
-			CDEBUG(D_NET, "peer_ni %s: conn race, retry later.\n",
-			       libcfs_nidstr(&peer_ni->ksnp_id.nid));
+			CDEBUG(D_NET, "peer_ni %s: conn race, retry later. rc %d\n",
+			       libcfs_nidstr(&peer_ni->ksnp_id.nid), rc);
 
 		write_lock_bh(&ksocknal_data.ksnd_global_lock);
 	}
 
 	conn_cb->ksnr_scheduled = 0;
 	conn_cb->ksnr_connecting = 0;
+
+	if (conn_cb->ksnr_busy_retry_count >= SOCKNAL_MAX_BUSY_RETRIES &&
+	    type > SOCKLND_CONN_NONE) {
+		/* After so many retries due to EALREADY assume that
+		 * the peer doesn't support as many connections as we want
+		 */
+		conn_cb->ksnr_connected |= BIT(type);
+		retry_later = false;
+	}
 
 	if (retry_later) {
 		/* re-queue for attention; this frees me up to handle
