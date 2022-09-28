@@ -437,7 +437,7 @@ lnet_sock_connect(int interface, int local_port,
 	 * port... */
 
 	CDEBUG_LIMIT(rc == -EADDRNOTAVAIL ? D_NET : D_NETERROR,
-		     "Error %d connecting %d -> %pISp\n", rc,
+		     "Error %d connecting %d -> %pIScp\n", rc,
 		     local_port, peeraddr);
 
 	sock_release(sock);

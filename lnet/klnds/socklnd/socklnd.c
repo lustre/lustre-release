@@ -526,13 +526,13 @@ ksocknal_associate_cb_conn_locked(struct ksock_conn_cb *conn_cb,
 	if (conn_cb->ksnr_myiface != conn_iface) {
 		if (conn_cb->ksnr_myiface < 0) {
 			/* route wasn't bound locally yet (the initial route) */
-			CDEBUG(D_NET, "Binding %s %pIS to interface %d\n",
+			CDEBUG(D_NET, "Binding %s %pISc to interface %d\n",
 			       libcfs_idstr(&peer_ni->ksnp_id),
 			       &conn_cb->ksnr_addr,
 			       conn_iface);
 		} else {
 			CDEBUG(D_NET,
-			       "Rebinding %s %pIS from interface %d to %d\n",
+			       "Rebinding %s %pISc from interface %d to %d\n",
 			       libcfs_idstr(&peer_ni->ksnp_id),
 			       &conn_cb->ksnr_addr,
 			       conn_cb->ksnr_myiface,
@@ -834,7 +834,7 @@ ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 	LIBCFS_ALLOC(cr, sizeof(*cr));
 	if (cr == NULL) {
 		LCONSOLE_ERROR_MSG(0x12f,
-				   "Dropping connection request from %pIS: memory exhausted\n",
+				   "Dropping connection request from %pISc: memory exhausted\n",
 				   &peer);
 		return -ENOMEM;
 	}
@@ -1103,7 +1103,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	if (active &&
 	    !rpc_cmp_addr((struct sockaddr *)&conn_cb->ksnr_addr,
 			  (struct sockaddr *)&conn->ksnc_peeraddr)) {
-		CERROR("Route %s %pIS connected to %pIS\n",
+		CERROR("Route %s %pISc connected to %pISc\n",
 		       libcfs_idstr(&peer_ni->ksnp_id),
 		       &conn_cb->ksnr_addr,
 		       &conn->ksnc_peeraddr);
@@ -1171,7 +1171,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	 *        socket callbacks.
 	 */
 
-	CDEBUG(D_NET, "New conn %s p %d.x %pIS -> %pISp"
+	CDEBUG(D_NET, "New conn %s p %d.x %pISc -> %pIScp"
 	       " incarnation:%lld sched[%d]\n",
 	       libcfs_idstr(&peerid), conn->ksnc_proto->pro_version,
 	       &conn->ksnc_myaddr, &conn->ksnc_peeraddr,
@@ -1534,7 +1534,7 @@ ksocknal_destroy_conn(struct ksock_conn *conn)
         case SOCKNAL_RX_LNET_PAYLOAD:
                 last_rcv = conn->ksnc_rx_deadline -
 			   ksocknal_timeout();
-		CERROR("Completing partial receive from %s[%d], ip %pISp, with error, wanted: %d, left: %d, last alive is %lld secs ago\n",
+		CERROR("Completing partial receive from %s[%d], ip %pIScp, with error, wanted: %d, left: %d, last alive is %lld secs ago\n",
 		       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
 		       conn->ksnc_type,
 		       &conn->ksnc_peeraddr,
@@ -1547,21 +1547,21 @@ ksocknal_destroy_conn(struct ksock_conn *conn)
 		break;
 	case SOCKNAL_RX_LNET_HEADER:
 		if (conn->ksnc_rx_started)
-			CERROR("Incomplete receive of lnet header from %s, ip %pISp, with error, protocol: %d.x.\n",
+			CERROR("Incomplete receive of lnet header from %s, ip %pIScp, with error, protocol: %d.x.\n",
 			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
 			       &conn->ksnc_peeraddr,
 			       conn->ksnc_proto->pro_version);
 		break;
 	case SOCKNAL_RX_KSM_HEADER:
 		if (conn->ksnc_rx_started)
-			CERROR("Incomplete receive of ksock message from %s, ip %pISp, with error, protocol: %d.x.\n",
+			CERROR("Incomplete receive of ksock message from %s, ip %pIScp, with error, protocol: %d.x.\n",
 			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
 			       &conn->ksnc_peeraddr,
 			       conn->ksnc_proto->pro_version);
 		break;
 	case SOCKNAL_RX_SLOP:
 		if (conn->ksnc_rx_started)
-			CERROR("Incomplete receive of slops from %s, ip %pISp, with error\n",
+			CERROR("Incomplete receive of slops from %s, ip %pIScp, with error\n",
 			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
 			       &conn->ksnc_peeraddr);
 		break;
