@@ -2175,8 +2175,12 @@ recheck:
 
 		if (le64_to_cpu(ext->e_start) > le64_to_cpu(ext->e_end) ||
 		    le64_to_cpu(ext->e_start) & (LOV_MIN_STRIPE_SIZE - 1) ||
+		    ((__s64)le64_to_cpu(ext->e_start) < 0 &&
+		    le64_to_cpu(ext->e_start) != LUSTRE_EOF) ||
 		    (le64_to_cpu(ext->e_end) != LUSTRE_EOF &&
-		    le64_to_cpu(ext->e_end) & (LOV_MIN_STRIPE_SIZE - 1))) {
+		    le64_to_cpu(ext->e_end) & (LOV_MIN_STRIPE_SIZE - 1)) ||
+		    ((__s64)le64_to_cpu(ext->e_end) < 0 &&
+		    le64_to_cpu(ext->e_end) != LUSTRE_EOF)) {
 			CDEBUG(D_LAYOUT, "invalid extent "DEXT"\n",
 			       le64_to_cpu(ext->e_start),
 			       le64_to_cpu(ext->e_end));

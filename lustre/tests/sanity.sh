@@ -10326,6 +10326,23 @@ test_65p () { # LU-16152
 }
 run_test 65p "setstripe with yaml file and huge number"
 
+test_65p () { # LU-16194
+	local src_dir=$DIR/$tdir/src_dir
+
+	(( $CLIENT_VERSION >= $(version_code 2.15.51) )) ||
+		skip "Need at least version 2.15.51"
+
+	test_mkdir -p $src_dir
+	# 8E is 0x8000 0000 0000 0000, which is negative as s64
+	$LFS setstripe -E 8E -c 4 -E EOF -c 8 $src_dir &&
+		error "should fail if extent start/end >=8E"
+
+	# EOF should work as before
+	$LFS setstripe -E 8M -c 4 -E EOF -c 8 $src_dir ||
+		error "failed to setstripe normally"
+}
+run_test 65p "setstripe with >=8E offset should fail"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
