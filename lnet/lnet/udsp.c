@@ -73,13 +73,17 @@
  *     from the policy list.
  *
  *   Generally, the syntax is as follows
- *     lnetctl policy <add | del | show>
- *      --src:      ip2nets syntax specifying the local NID to match
- *      --dst:      ip2nets syntax specifying the remote NID to match
- *      --rte:      ip2nets syntax specifying the router NID to match
- *      --priority: Priority to apply to rule matches
- *      --idx:      Index of where to insert or delete the rule
- *                  By default add appends to the end of the rule list
+ *     lnetctl udsp add: add a udsp
+ *      --src: ip2nets syntax specifying the local NID to match
+ *      --dst: ip2nets syntax specifying the remote NID to match
+ *      --rte: ip2nets syntax specifying the router NID to match
+ *      --priority: priority value (0 - highest priority)
+ *      --idx: index of where to insert the rule.
+ *             By default, appends to the end of the rule list.
+ *     lnetctl udsp del: delete a udsp
+ *      --idx: index of the Policy.
+ *     lnetctl udsp show: show udsps
+ *       --idx: index of the policy to show.
  *
  * Author: Amir Shehata
  */
@@ -538,7 +542,8 @@ lnet_udsp_apply_rule_on_lpni(struct udsp_info *udi)
 
 	/* check if looking for a net match */
 	if (!rc &&
-	    (lnet_get_list_len(&lp_match->ud_addr_range) ||
+	    (!udi->udi_lpn ||
+	     lnet_get_list_len(&lp_match->ud_addr_range) ||
 	     !cfs_match_net(udi->udi_lpn->lpn_net_id,
 			   lp_match->ud_net_id.udn_net_type,
 			   &lp_match->ud_net_id.udn_net_num_range))) {

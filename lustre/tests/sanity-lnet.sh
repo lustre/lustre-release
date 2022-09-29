@@ -3353,6 +3353,62 @@ test_302() {
 }
 run_test 302 "Check that peer debug info can be dumped"
 
+check_udsp_prio() {
+	local target_net="${1}"
+	local target_nid="${2}"
+	local expect_net="${3}"
+	local expect_nid="${4}"
+	local type="${5}"
+
+	declare -a nids
+	declare -a net_prios
+	declare -a nid_prios
+
+	nids=( $($LNETCTL ${type} show -v 5 | awk '/- nid:/{print $NF}' |
+		 xargs echo) )
+
+	net_prios=( $($LNETCTL ${type} show -v 5 |
+		      awk '/net priority:/{print $NF}' | xargs echo) )
+
+	nid_prios=( $($LNETCTL ${type} show -v 5 |
+		      awk '/nid priority:/{print $NF}' | xargs echo) )
+
+	(( ${#nids[@]} != ${#net_prios[@]} )) &&
+		error "Wrong # net prios ${#nids[@]} != ${#net_prios[@]}"
+
+	(( ${#nids[@]} != ${#nid_prios[@]} )) &&
+		error "Wrong # nid prios ${#nids[@]} != ${#nid_prios[@]}"
+
+	local i
+
+	for ((i = 0; i < ${#nids[@]}; i++)); do
+		[[ -n ${target_net} ]] &&
+			[[ ${nids[i]##*@} != "${target_net}" ]] &&
+			continue
+		[[ -n ${target_nid} ]] &&
+			[[ ${nids[i]} != "${target_nid}" ]] &&
+			continue
+
+		echo "${nids[i]}: net_prio ${net_prios[i]} expect ${expect_net}"
+		(( net_prios[i] != expect_net )) &&
+			error "Wrong net priority \"${net_prios[i]}\" expect ${expect_net}"
+
+		echo "${nids[i]}: nid_prio ${nid_prios[i]} expect ${expect_nid}"
+		(( nid_prios[i] != expect_nid )) &&
+			error "Wrong nid priority \"${nid_prios[i]}\" expect ${expect_nid}"
+	done
+
+	return 0
+}
+
+check_peer_udsp_prio() {
+	check_udsp_prio "${1}" "${2}" "${3}" "${4}" "peer"
+}
+
+check_net_udsp_prio() {
+	check_udsp_prio "${1}" "${2}" "${3}" "${4}" "net"
+}
+
 test_400() {
 	reinit_dlc || return $?
 
@@ -3363,6 +3419,24 @@ test_400() {
 	unload_modules
 }
 run_test 400 "Check for udsp add/delete net rule without net num"
+
+test_401() {
+	reinit_dlc || return $?
+
+	do_lnetctl net add --net ${NETTYPE} --if ${INTERFACES[0]} ||
+		error "Failed to add net"
+
+	do_lnetctl udsp add --dst ${NETTYPE} --prio 1 ||
+		error "Failed to add peer net priority rule"
+
+	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+		error "Failed to discover peer"
+
+	check_peer_udsp_prio "${NETTYPE}" "" "1" "-1"
+
+	return 0
+}
+run_test 401 "Discover peer after adding peer net UDSP rule"
 
 complete $SECONDS
 

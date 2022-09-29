@@ -3171,7 +3171,7 @@ static int jt_del_udsp(int argc, char **argv)
 				idx = 0;
 			break;
 		case '?':
-			print_help(udsp_cmds, "udsp", "add");
+			print_help(udsp_cmds, "udsp", "del");
 		default:
 			return 0;
 		}
