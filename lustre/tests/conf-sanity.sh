@@ -1534,13 +1534,13 @@ test_32newtarball() {
 		pushd_dir=$remote_dir
 		if [[ "$MDS1_VERSION" -ge $(version_code 2.7.0) ]]; then
 			pushd $striped_dir
-			ls -Rni --time-style=+%s >$tmp/img/list2
+			BLOCKSIZE=1024 ls -Rni --time-style=+%s >$tmp/img/list2
 			popd
 		fi
 	fi
 
 	pushd $pushd_dir
-	ls -Rni --time-style=+%s >$tmp/img/list
+	BLOCKSIZE=1024 ls -Rni --time-style=+%s >$tmp/img/list
 	find ! -name .lustre -type f -exec sha1sum {} \; |
 		sort -k 2 >$tmp/img/sha1sums
 	popd
@@ -2360,7 +2360,7 @@ t32_test() {
 				pushd $tmp/mnt/lustre
 			fi
 			$r cat $list_file | sort -k 6 >$tmp/list.orig
-			ls -Rni --time-style=+%s | sort -k 6 |
+			BLOCKSIZE=1024 ls -Rni --time-style=+%s | sort -k 6 |
 				sed 's/\. / /' >$tmp/list || {
 				error_noexit "ls"
 				return 1
