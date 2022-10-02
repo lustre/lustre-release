@@ -577,7 +577,7 @@ ksocknal_data_ready(struct sock *sk, int n)
 
         /* interleave correctly with closing sockets... */
         LASSERT(!in_irq());
-	read_lock(&ksocknal_data.ksnd_global_lock);
+	read_lock_bh(&ksocknal_data.ksnd_global_lock);
 
 	conn = sk->sk_user_data;
 	if (conn == NULL) {	/* raced with ksocknal_terminate_conn */
@@ -590,7 +590,7 @@ ksocknal_data_ready(struct sock *sk, int n)
 	} else
 		ksocknal_read_callback(conn);
 
-	read_unlock(&ksocknal_data.ksnd_global_lock);
+	read_unlock_bh(&ksocknal_data.ksnd_global_lock);
 }
 
 static void
