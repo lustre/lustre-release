@@ -429,12 +429,20 @@ parse_json_event() {
 	local raw_event=$1
 
 	# python2.6 in EL6 includes an internal json module
+	local PYTHON='python'
 	local json_parser='import json; import fileinput;'
-	json_parser+=' print "\n".join(["local %s=\"%s\"" % tuple for tuple in '
+	json_parser+=' print("\n".join(["local %s=\"%s\"" % tuple for tuple in '
 	json_parser+='json.loads([line for line in '
-	json_parser+='fileinput.input()][0]).items()])'
+	json_parser+='fileinput.input()][0]).items()]))'
 
-	echo $raw_event | python -c "$json_parser"
+	# check if python/python2/python3 is available
+	if ! which $PYTHON > /dev/null 2>&1 ; then
+		PYTHON='python2'
+		if ! which $PYTHON > /dev/null 2>&1 ; then
+			PYTHON='python3'
+		fi
+	fi
+	echo $raw_event | $PYTHON -c "$json_parser"
 }
 
 get_agent_by_uuid_mdt() {
