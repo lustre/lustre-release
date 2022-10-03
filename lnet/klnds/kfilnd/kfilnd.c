@@ -107,6 +107,11 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		break;
 
 	case LNET_MSG_GET:
+		if (msg->msg_routing || msg->msg_target_is_router) {
+			lnd_msg_type = KFILND_MSG_IMMEDIATE;
+			break;
+		}
+
 		nob = offsetof(struct kfilnd_msg,
 			       proto.immed.payload[msg->msg_md->md_length]);
 		if (nob <= KFILND_IMMEDIATE_MSG_SIZE) {
