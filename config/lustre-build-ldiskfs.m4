@@ -69,14 +69,15 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		esac
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.11.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.8.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.0.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.15.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0], [],
+        BASEVER=$(echo $LINUXRELEASE | cut -d'-' -f1)
+	AS_VERSION_COMPARE([$BASEVER],[5.11.0],[
+	AS_VERSION_COMPARE([$BASEVER],[5.8.0],[
+	AS_VERSION_COMPARE([$BASEVER],[5.4.0],[
+	AS_VERSION_COMPARE([$BASEVER],[5.0.0],[
+	AS_VERSION_COMPARE([$BASEVER],[4.15.0],[
+	AS_VERSION_COMPARE([$BASEVER],[4.4.0], [],
 	[
-		KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
+		KPLEV=$(echo $LINUXRELEASE | cut -d'-' -f2)
 		AS_IF(
 			[test -z "$KPLEV"], [
 				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
@@ -90,7 +91,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	],
 	[LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"])],
 	[
-		KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
+		KPLEV=$(echo $LINUXRELEASE | cut -d'-' -f2)
 		AS_IF(
 			[test -z "$KPLEV"], [
 				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
@@ -103,7 +104,6 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	[LDISKFS_SERIES="4.15.0-24-ubuntu18.series"])],
 	[LDISKFS_SERIES="5.0.0-13-ubuntu19.series"],
 	[LDISKFS_SERIES="5.0.0-13-ubuntu19.series"])],
-	[LDISKFS_SERIES="5.4.0-42-ubuntu20.series"],
 	[
 		KPLEV=$(echo $LINUXRELEASE | cut -d'-' -f2)
 		AS_IF(
@@ -119,9 +119,18 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		)
 	],
 	[LDISKFS_SERIES="5.4.0-ml.series"])],
-	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
-	[LDISKFS_SERIES="5.8.0-63-ubuntu20.series"])],
-	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
+	[
+		KPLEV=$(echo $LINUXRELEASE | cut -d'-' -f2)
+		AS_IF(
+			[test -z "$KPLEV"], [
+				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
+				LDISKFS_SERIES="5.8.0-63-ubuntu20.series"
+			],
+			[test $KPLEV -ge 63], [LDISKFS_SERIES="5.8.0-63-ubuntu20.series"],
+			[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"]
+		)
+	],
+	[LDISKFS_SERIES="5.8.0-ml.series"])],
 	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
 	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"])
 ])
