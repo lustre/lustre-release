@@ -1840,7 +1840,7 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 	struct bio_vec *kiov = lntmsg->msg_kiov;
 	unsigned int offset = lntmsg->msg_offset;
 	unsigned int nob = lntmsg->msg_len;
-	struct lnet_libmd *payload_md = lntmsg->msg_md;
+	struct lnet_libmd *msg_md = lntmsg->msg_md;
 	struct kib_tx *tx;
 	int rc;
 
@@ -1851,7 +1851,9 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 		goto failed_0;
 	}
 
-	tx->tx_gpu = !!(payload_md->md_flags & LNET_MD_FLAG_GPU);
+
+	tx->tx_gpu = msg_md ? (msg_md->md_flags & LNET_MD_FLAG_GPU) : 0;
+
 	if (nob == 0)
 		rc = 0;
 	else
@@ -1883,8 +1885,8 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 		tx->tx_lntmsg[0] = lntmsg;
 	}
 
-        kiblnd_queue_tx(tx, rx->rx_conn);
-        return;
+	kiblnd_queue_tx(tx, rx->rx_conn);
+	return;
 
 
 failed_1:
@@ -1949,7 +1951,7 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	case IBLND_MSG_PUT_REQ: {
 		struct kib_msg	*txmsg;
 		struct kib_rdma_desc *rd;
-		struct lnet_libmd *payload_md = lntmsg->msg_md;
+		struct lnet_libmd *msg_md = lntmsg->msg_md;
 
 		ibprm_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
 		if (mlen == 0) {
@@ -1968,7 +1970,8 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			break;
 		}
 
-		tx->tx_gpu = !!(payload_md->md_flags & LNET_MD_FLAG_GPU);
+		tx->tx_gpu = msg_md ? (msg_md->md_flags & LNET_MD_FLAG_GPU) : 0;
+
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
