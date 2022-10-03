@@ -742,6 +742,8 @@ load_lnet() {
 		case $NETTYPE in
 		o2ib*)	LNETLND="o2iblnd/ko2iblnd" ;;
 		tcp*)	LNETLND="socklnd/ksocklnd" ;;
+		kfi*)	LNETLND="kfilnd/kkfilnd" ;;
+		gni*)	LNETLND="gnilnd/kgnilnd" ;;
 		*)	local lnd="${NETTYPE%%[0-9]}lnd"
 			[ -f "$LNDPATH/$lnd/k$lnd.ko" ] &&
 				LNETLND="$lnd/k$lnd" ||
