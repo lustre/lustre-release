@@ -464,27 +464,26 @@ out:
 }
 EXPORT_SYMBOL(llog_init_handle);
 
+#define LLOG_ERROR_REC(lgh, rec, format, a...) \
+	CERROR("%s: "DFID" rec type=%x idx=%u len=%u, " format "\n" , \
+	       loghandle2name(lgh), PLOGID(&lgh->lgh_id), (rec)->lrh_type, \
+	       (rec)->lrh_index, (rec)->lrh_len, ##a)
+
 int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec)
 {
 	int chunk_size = llh->lgh_hdr->llh_hdr.lrh_len;
 
-	if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
-		CERROR("%s: record is too large: %d > %d\n",
-		       loghandle2name(llh), rec->lrh_len, chunk_size);
-		return -EINVAL;
-	}
-	if (rec->lrh_index >= LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr)) {
-		CERROR("%s: index is too high: %d\n",
-		       loghandle2name(llh), rec->lrh_index);
-		return -EINVAL;
-	}
-	if ((rec->lrh_type & LLOG_OP_MASK) != LLOG_OP_MAGIC) {
-		CERROR("%s: magic %x is bad\n",
-		       loghandle2name(llh), rec->lrh_type);
-		return -EINVAL;
-	}
+	if ((rec->lrh_type & LLOG_OP_MASK) != LLOG_OP_MAGIC)
+		LLOG_ERROR_REC(llh, rec, "magic is bad");
+	else if (rec->lrh_len == 0 || rec->lrh_len > chunk_size)
+		LLOG_ERROR_REC(llh, rec, "bad record len, chunk size is %d",
+			       chunk_size);
+	else if (rec->lrh_index >= LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr))
+		LLOG_ERROR_REC(llh, rec, "index is too high");
+	else
+		return 0;
 
-	return 0;
+	return -EINVAL;
 }
 EXPORT_SYMBOL(llog_verify_record);
 
@@ -499,19 +498,18 @@ static inline bool llog_is_index_skipable(int idx, struct llog_log_hdr *llh,
 
 static int llog_process_thread(void *arg)
 {
-	struct llog_process_info	*lpi = arg;
-	struct llog_handle		*loghandle = lpi->lpi_loghandle;
-	struct llog_log_hdr		*llh = loghandle->lgh_hdr;
-	struct llog_process_cat_data	*cd  = lpi->lpi_catdata;
-	struct llog_thread_info		*lti;
-	char				*buf;
-	size_t				 chunk_size;
-	__u64				 cur_offset;
-	int				 rc = 0, index = 1, last_index;
-	int				 saved_index = 0;
-	int				 last_called_index = 0;
-	bool				 repeated = false;
-	bool				refresh_idx = false;
+	struct llog_process_info *lpi = arg;
+	struct llog_handle *loghandle = lpi->lpi_loghandle;
+	struct llog_log_hdr *llh = loghandle->lgh_hdr;
+	struct llog_process_cat_data *cd  = lpi->lpi_catdata;
+	struct llog_thread_info *lti;
+	char *buf;
+	size_t chunk_size;
+	__u64 cur_offset;
+	int rc = 0, index = 1, last_index;
+	int saved_index = 0;
+	int last_called_index = 0;
+	bool repeated = false;
 
 	ENTRY;
 
@@ -545,8 +543,8 @@ static int llog_process_thread(void *arg)
 		struct llog_rec_hdr *rec;
 		off_t chunk_offset = 0;
 		unsigned int buf_offset = 0;
-		int	lh_last_idx;
-		int	synced_idx = 0;
+		int lh_last_idx;
+		int synced_idx = 0;
 
 		/* skip records not set in bitmap */
 		while (index <= last_index &&
@@ -579,6 +577,9 @@ repeat:
 		if (repeated && (chunk_offset + buf_offset) == cur_offset &&
 		    (rc == -EBADR || rc == -EIO))
 			GOTO(out, rc = 0);
+		/* EOF while trying to skip to the next chunk */
+		if (!index && rc == -EBADR)
+			GOTO(out, rc = 0);
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -608,6 +609,15 @@ repeat:
 			CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
 			       rec->lrh_type, rec->lrh_index);
 
+			/* start with first rec if block was skipped */
+			if (!index) {
+				CDEBUG(D_OTHER,
+				       "%s: skipping to the index %u\n",
+				       loghandle2name(loghandle),
+				       rec->lrh_index);
+				index = rec->lrh_index;
+			}
+
 			if (index == (synced_idx + 1) &&
 			    synced_idx == LLOG_HDR_TAIL(llh)->lrt_index)
 				GOTO(out, rc = 0);
@@ -635,13 +645,15 @@ repeat:
 			 * it turns to
 			 * lh_last_idx != LLOG_HDR_TAIL(llh)->lrt_index
 			 * This exception is working for catalog only.
+			 * The last check is for the partial chunk boundary,
+			 * if it is reached then try to re-read for possible
+			 * new records once.
 			 */
-
 			if ((index == lh_last_idx && synced_idx != index) ||
 			    (index == (lh_last_idx + 1) &&
 			     lh_last_idx != LLOG_HDR_TAIL(llh)->lrt_index) ||
-			    (rec->lrh_index == 0 && !repeated)) {
-
+			    (((char *)rec - buf >= cur_offset - chunk_offset) &&
+			    !repeated)) {
 				/* save offset inside buffer for the re-read */
 				buf_offset = (char *)rec - (char *)buf;
 				cur_offset = chunk_offset;
@@ -654,26 +666,28 @@ repeat:
 				up_read(&loghandle->lgh_last_sem);
 				CDEBUG(D_OTHER, "synced_idx: %d\n", synced_idx);
 				goto repeat;
-
 			}
-
 			repeated = false;
 
 			rc = llog_verify_record(loghandle, rec);
 			if (rc) {
-				CERROR("%s: invalid record in llog "DFID
-				       " record for index %d/%d: rc = %d\n",
-				       loghandle2name(loghandle),
-				       PLOGID(&loghandle->lgh_id),
-				       rec->lrh_index, index, rc);
+				CDEBUG(D_OTHER, "invalid record at index %d\n",
+				       index);
 				/*
-				 * the block seem to be corrupted, let's try
-				 * with the next one. reset rc to go to the
-				 * next chunk.
+				 * for fixed-sized llogs we can skip one record
+				 * by using llh_size from llog header.
+				 * Otherwise skip the next llog chunk.
 				 */
-				refresh_idx = true;
+				rc = 0;
+				if (llh->llh_flags & LLOG_F_IS_FIXSIZE) {
+					rec->lrh_len = llh->llh_size;
+					goto next_rec;
+				}
+				/* make sure that is always next block */
+				cur_offset = chunk_offset + chunk_size;
+				/* no goal to find, just next block to read */
 				index = 0;
-				GOTO(repeat, rc = 0);
+				break;
 			}
 
 			if (rec->lrh_index < index) {
@@ -686,10 +700,9 @@ repeat:
 				/* the record itself looks good, but we met a
 				 * gap which can be result of old bugs, just
 				 * keep going */
-				CERROR("%s: "DFID" index %u, expected %u\n",
-				       loghandle2name(loghandle),
-				       PLOGID(&loghandle->lgh_id),
-				       rec->lrh_index, index);
+				LLOG_ERROR_REC(loghandle, rec,
+					       "gap in index, expected %u",
+					       index);
 				index = rec->lrh_index;
 			}
 
@@ -759,6 +772,7 @@ repeat:
 				    loghandle->lgh_hdr->llh_count == 1)
 					GOTO(out, rc = 0);
 			}
+next_rec:
 			/* exit if the last index is reached */
 			if (index >= last_index)
 				GOTO(out, rc = 0);

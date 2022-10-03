@@ -917,7 +917,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 	__u32			chunk_size;
 	int last_idx = *cur_idx;
 	__u64 last_offset = *cur_offset;
-	bool force_mini_rec = false;
+	bool force_mini_rec = !next_idx;
 
 	ENTRY;
 
@@ -969,9 +969,13 @@ static int llog_osd_next_block(const struct lu_env *env,
 
 		rc = dt_read(env, o, &lgi->lgi_buf, cur_offset);
 		if (rc < 0) {
-			if (rc == -EBADR && !force_mini_rec)
-				goto retry;
-
+			if (rc == -EBADR) {
+				/* no goal is valid case */
+				if (!next_idx)
+					GOTO(out, rc);
+				if (!force_mini_rec)
+					goto retry;
+			}
 			CERROR("%s: can't read llog block from log "DFID
 			       " offset %llu: rc = %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
@@ -1008,21 +1012,9 @@ static int llog_osd_next_block(const struct lu_env *env,
 		tail = (struct llog_rec_tail *)((char *)buf + rc -
 						sizeof(struct llog_rec_tail));
 
-		if (llog_verify_record(loghandle, rec)) {
-			/*
-			 * the block seems corrupted. make a pad record so the
-			 * caller can skip the block and try with the next one
-			 */
-			rec->lrh_len = rc;
-			rec->lrh_index = next_idx;
-			rec->lrh_type = LLOG_PAD_MAGIC;
-
-			tail = rec_tail(rec);
-			tail->lrt_len = rc;
-			tail->lrt_index = next_idx;
-
+		/* caller handles bad records if any */
+		if (llog_verify_record(loghandle, rec))
 			GOTO(out, rc = 0);
-		}
 
 		/* get the last record in block */
 		last_rec = (struct llog_rec_hdr *)((char *)buf + rc -
