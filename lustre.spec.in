@@ -228,6 +228,9 @@ Requires: mlnx-ofa_kernel-kmp
 %if 0%{?rhel} >= 8
 BuildRequires: kernel-rpm-macros
 %endif
+%if 0%{?suse_version} >= 1530
+BuildRequires: rpm-build >= 4.14.3
+%endif
 BuildRequires: %kernel_module_package_buildreqs
 # need to provide a /usr/lib/${uname -r)/build dir
 BuildRequires: kernel
