@@ -688,7 +688,7 @@ AC_SUBST(GNILND)
 #
 AC_DEFUN([LN_CONFIG_KFILND], [
 AC_ARG_WITH([kfi],
-	AC_HELP_STRING([--with-kfi=<path>], [Kfabric build path for kfilnd]),
+	AS_HELP_STRING([--with-kfi=<path>], [Kfabric build path for kfilnd]),
 	[
 		AC_CHECK_FILE([$with_kfi/Module.symvers],
 		[
