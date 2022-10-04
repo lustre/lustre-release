@@ -280,6 +280,8 @@ init_test_env() {
 	fi
 	export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
 	[ ! -f "$LST" ] && export LST=$(which lst)
+	export LSTSH=${LSTSH:-"$LUSTRE/../lustre-iokit/lst-survey/lst.sh"}
+	[ ! -f "$LSTSH" ] && export LSTSH=$(which lst.sh)
 	export SGPDDSURVEY=${SGPDDSURVEY:-"$LUSTRE/../lustre-iokit/sgpdd-survey/sgpdd-survey")}
 	[ ! -f "$SGPDDSURVEY" ] && export SGPDDSURVEY=$(which sgpdd-survey)
 	export MCREATE=${MCREATE:-mcreate}

@@ -2799,6 +2799,15 @@ test_220() {
 
 	do_basic_rtr_test || return $?
 
+	do_rpc_nodes $HOSTNAME,$RPEER load_module ../lnet/selftest/lnet_selftest ||
+		error "Failed to load lnet-selftest module"
+
+	$LSTSH -H -t $HOSTNAME -f $RPEER -m rw -s 4k ||
+		error "lst failed"
+
+	$LSTSH -H -t $HOSTNAME -f $RPEER -m rw ||
+		error "lst failed"
+
 	cleanup_router_test || return $?
 }
 run_test 220 "Add routes w/default options - check aliveness"
