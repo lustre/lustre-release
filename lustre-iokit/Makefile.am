@@ -1,2 +1,2 @@
 SUBDIRS = obdfilter-survey sgpdd-survey ost-survey ior-survey
-SUBDIRS += mds-survey stats-collect
+SUBDIRS += mds-survey stats-collect lst-survey

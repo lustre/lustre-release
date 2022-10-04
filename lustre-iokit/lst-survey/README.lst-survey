@@ -1,0 +1,178 @@
+Overview
+--------
+
+This survey script performs a series of LNet selftest (LST) benchmarks between
+groups of LNet peers. It can be used to characterize the performance of the LNet
+interface(s) on Lustre servers, Lustre clients, or LNet routers.
+
+The LST client group is defined using the '-f' flag, and the LST server group
+is defined using the '-t' flag. Both of these flags take a space-separated or
+comma-separated list of LNet NIDs. The '-M' and '-N' options can be used to
+divide the client or server group into multiple smaller groups.
+For example, given 16 clients and 8 servers, '-M 8' and '-N 2' would create
+two client groups with eight peers in each group, and four servers groups with
+two peers in each group. Every server group is tested against every client
+group, so this would result in 4*2=8 test iterations.
+
+By default, each test iterations performs 4k read and write, 1m read and write,
+and ping LST benchmarks.
+
+A directory is created in the current working directory to store results.
+The csv output is written to a results.<timestamp>.csv file and the full
+lst.sh output is stored in an lst.<timestamp>.out file. An alternative output
+directory can be specified with the '-O' argument.
+
+Various options exist to customize the benchmarks that are run. See
+'lst-survey -h' for more information.
+
+A note on interpreting the results:
+By default, lst-survey displays bandwidth and rate statistics for peers in the
+server group as reported by the LST utility.
+These statistics reported by LST can be confusing because a "read" test will
+typically report read bandwidth that is lower than write bandwidth, and a
+"write" test will typically report write bandwidth that is lower than read
+bandwidth. This is because a "read" test involves peers in the client group
+setting up a sink that is then written to by peers in the server group, and a
+"write" test involves the clients setting up a source that is then read by the
+servers. Thus, the read test is really measuring the write performance of the
+servers and the write test is really measuing the read performance of the
+servers.
+
+The '-g clients' option can be used to instead report the client bandwidth and
+rate statistics. In this case, the reported stats will align with the benchmarks
+in the expected manner.
+
+Example 1: Default options
+# pdsh -w n0[0-3] lctl list_nids | dshbak -c
+----------------
+n00
+----------------
+172.18.2.5@tcp
+----------------
+n01
+----------------
+172.18.2.6@tcp
+----------------
+n02
+----------------
+172.18.2.7@tcp
+----------------
+n03
+----------------
+172.18.2.8@tcp
+# ./lst-survey -t 172.18.2.5@tcp,172.18.2.6@tcp -f 172.18.2.7@tcp,172.18.2.8@tcp
+CSV results: /tmp/lst_survey.1666207637/results.1666207637.csv
+LST output: /tmp/lst-survey/lst_survey.1666207637/lst.1666207637.out
+
+Commence lst-survey - Wed 19 Oct 2022 01:27:17 PM MDT
+Server Group: 172.18.2.5@tcp 172.18.2.6@tcp
+Client Group: 172.18.2.7@tcp 172.18.2.8@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              22           149981             608           299961
+       read 1m               2            14405           14405            28808
+      write 4k             489           241229              18           241229
+      write 1m           11463            22924               1            22924
+          ping              25           167928              25           167928
+
+Finished lst-survey - Wed 19 Oct 2022 01:28:08 PM MDT
+# cat /tmp/lst_survey.1666207637/results.1666207637.csv
+Servers,Clients,Mode,Read_BW,Read_Rate,Write_BW,Write_Rate,Server_Errors,Client_Errors
+172.18.2.5@tcp 172.18.2.6@tcp,172.18.2.7@tcp 172.18.2.8@tcp,read_4k,22,149981,608,299961,0,0
+172.18.2.5@tcp 172.18.2.6@tcp,172.18.2.7@tcp 172.18.2.8@tcp,read_1m,2,14405,14405,28808,0,0
+172.18.2.5@tcp 172.18.2.6@tcp,172.18.2.7@tcp 172.18.2.8@tcp,write_4k,489,241229,18,241229,0,0
+172.18.2.5@tcp 172.18.2.6@tcp,172.18.2.7@tcp 172.18.2.8@tcp,write_1m,11463,22924,1,22924,0,0
+172.18.2.5@tcp 172.18.2.6@tcp,172.18.2.7@tcp 172.18.2.8@tcp,ping,25,167928,25,167928,0,0
+#
+
+Example 2: Divide the servers into groups of size 1
+
+# ./lst-survey -t 172.18.2.5@tcp,172.18.2.6@tcp -f 172.18.2.7@tcp,172.18.2.8@tcp -N 1
+CSV results: /tmp/lst_survey.1666207844/results.1666207844.csv
+LST output: /tmp/lst_survey.1666207844/lst.1666207844.out
+
+Commence lst-survey - Wed 19 Oct 2022 01:30:44 PM MDT
+Server Group: 172.18.2.5@tcp
+Client Group: 172.18.2.7@tcp 172.18.2.8@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              25           167068             678           334135
+       read 1m               2            16186           16186            32366
+      write 4k             512           252613              19           252612
+      write 1m           11353            22706               1            22704
+          ping              29           192358              29           192358
+
+Finished lst-survey - Wed 19 Oct 2022 01:31:34 PM MDT
+
+Commence lst-survey - Wed 19 Oct 2022 01:31:34 PM MDT
+Server Group: 172.18.2.6@tcp
+Client Group: 172.18.2.7@tcp 172.18.2.8@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              22           144821             587           289642
+       read 1m               2            16841           16843            33681
+      write 4k             498           245552              18           245552
+      write 1m           11611            23219               1            23217
+          ping              22           145374              22           145374
+
+Finished lst-survey - Wed 19 Oct 2022 01:32:25 PM MDT
+#
+
+Example 3: Divide the servers and clients into groups of size 1
+
+# ./lst-survey -t 172.18.2.5@tcp,172.18.2.6@tcp -f 172.18.2.7@tcp,172.18.2.8@tcp -N 1 -M 1
+CSV results: /tmp/lst_survey.1666208473/results.1666208473.csv
+LST output: /tmp/lst_survey.1666208473/lst.1666208473.out
+
+Commence lst-survey - Wed 19 Oct 2022 01:41:13 PM MDT
+Server Group: 172.18.2.5@tcp
+Client Group: 172.18.2.7@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              11            75112             304           150224
+       read 1m               1             8808            8809            17616
+      write 4k             240           118402               9           118402
+      write 1m            6561            13119               1            13118
+          ping              13            90402              13            90402
+
+Finished lst-survey - Wed 19 Oct 2022 01:42:03 PM MDT
+
+Commence lst-survey - Wed 19 Oct 2022 01:42:03 PM MDT
+Server Group: 172.18.2.5@tcp
+Client Group: 172.18.2.8@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              13            90017             365           180034
+       read 1m               1             7333            7328            14655
+      write 4k             280           138173              10           138173
+      write 1m            8694            17388               1            17388
+          ping              15            98316              15            98316
+
+Finished lst-survey - Wed 19 Oct 2022 01:42:53 PM MDT
+
+Commence lst-survey - Wed 19 Oct 2022 01:42:53 PM MDT
+Server Group: 172.18.2.6@tcp
+Client Group: 172.18.2.7@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k               9            64613             262           129225
+       read 1m               1             9101            9101            18201
+      write 4k             212           104575               7           104573
+      write 1m            6769            13537               1            13539
+          ping              10            71612              10            71612
+
+Finished lst-survey - Wed 19 Oct 2022 01:43:44 PM MDT
+
+Commence lst-survey - Wed 19 Oct 2022 01:43:44 PM MDT
+Server Group: 172.18.2.6@tcp
+Client Group: 172.18.2.8@tcp
+
+          Mode       Read MB/s       Read RPC/s      Write MB/S      Write RPC/s
+       read 4k              12            83144             337           166287
+       read 1m               1             7582            7584            15166
+      write 4k             293           144601              11           144602
+      write 1m            8913            17824               1            17825
+          ping              11            78409              11            78409
+
+Finished lst-survey - Wed 19 Oct 2022 01:44:35 PM MDT
+#

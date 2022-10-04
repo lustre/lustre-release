@@ -1,0 +1,365 @@
+#!/bin/bash
+
+print_help() {
+	cat <<EOF
+Usage:
+${0##*/} -f "nid1[ nid2...]" -t "nidA[ nidB...]" [options]
+or
+${0##*/} -H -f "host1[ host2...]" -t "hostA[ hostB...]" [options]
+
+Options:
+	-c concurrency
+	   The number of requests that are active at one time. Default is 64.
+	-d
+	   Debug mode. Outputs the generated lst.sh commands, but does not
+	   execute them.
+	-e
+	   Lists the number of failed RPCs on test nodes in the current session.
+	-D delay
+	   The interval of the statistics (in seconds). Default is $STAT_DELAY.
+	-h
+	   Display this help.
+	-H
+	   Run in "host mode". Host mode indicates that the arguments to '-t'
+	   and '-f' flags are hostnames rather than LNet nids.
+	-f "nid1[ nid2...]"
+	   Space-separated list of LNet NIDs to place in the "clients" group.
+	   When '-H' flag is specified, the '-f' argument is a space-separated
+	   list of hostnames.
+	-g servers|clients
+	   Report stats from the specified group. Either 'clients' or
+	   'servers'. Default is 'servers'.
+	-m read|write|rw|ping<,read|write|rw|ping<,...>>
+	   Execute the specified list of tests. Default is ${MODE_LIST// /, }.
+	-M group_size
+	   Subdivide the client group (-f) into multiple groups of the
+	   specified size. Every client group is tested against every server
+	   group (see -t and -N).
+	-n count
+	   The number of stat RPCs to issue. Default is $STAT_COUNT.
+	-N group_size
+	   Subdivide the server group (-t) into multiple groups of the
+	   specified size. Every server group is tested against every client
+	   group (see -f and -M).
+	-O output_dir
+	   Create output files in specified directory.
+	   Default is PWD/lst_survey.<timestamp>
+	-t "nid1[ nid2...]"
+	   Space-separated list of LNet NIDs to place in the "servers" group.
+	   When '-H' flag is specified, the '-t' argument is a space-separated
+	   list of hostnames.
+	-s bulksize1<,bulksize2<,...>>
+	   For each read, write, or combined read-write test, execute the test
+	   with the specified bulk sizes. Default is 4k and 1m.
+	-S separator
+	   Use the specified character to separate fields in the .csv output
+	   file. Default is ','.
+	-v
+	   Prints additional output. e.g. LST parameters, group construction,
+	   etc.
+EOF
+	exit
+}
+
+verbose() {
+	${VERBOSE} && echo "$@"
+}
+
+SERVERS=""
+CLIENTS=""
+CONCURRENCY=64
+HOST_MODE=false
+LST_DEBUG=false
+MODE_LIST="read write ping"
+C_GRP_SIZE=""
+S_GRP_SIZE=""
+SEP=','
+SIZE_LIST="4k 1m"
+SHOW_ERRORS=false
+STAT_COUNT=3
+STAT_DELAY=3
+STAT_GROUP="servers"
+TS=$(date +%s)
+TEST_DIR=$PWD/lst_survey.${TS}
+VERBOSE=false
+while getopts "c:dD:e:Hhf:g:m:M:n:N:O:t:s:S:v" flag ; do
+	case $flag in
+		c) CONCURRENCY="$OPTARG";;
+		d) LST_DEBUG=true;;
+		D) STAT_DELAY="$OPTARG";;
+		e) SHOW_ERRORS=true;;
+		H) HOST_MODE=true;;
+		h) print_help;;
+		f) CLIENTS="$OPTARG";;
+		g) STAT_GROUP="$OPTARG";;
+		m) MODE_LIST="$OPTARG";;
+		M) C_GRP_SIZE="$OPTARG";;
+		n) STAT_COUNT="$OPTARG";;
+		N) S_GRP_SIZE="$OPTARG";;
+		O) TEST_DIR="$OPTARG";;
+		t) SERVERS="$OPTARG";;
+		s) SIZE_LIST="$OPTARG";;
+		S) SEP="${OPTARG}";;
+		v) VERBOSE=true;;
+		*) echo "Unrecognized option '-$flag'"
+		   exit 1;;
+	esac
+done
+
+LSTSH=${LSTSH:-$(dirname "$0")/lst.sh}
+if ! [[ -f $LSTSH ]]; then
+	LSTSH=$(which lst.sh 2>/dev/null)
+fi
+
+if ! [[ -f $LSTSH ]]; then
+	echo "Cannot find lst.sh script at $LSTSH"
+	exit 1
+fi
+
+if [[ -z $CLIENTS ]]; then
+	echo "Must specify \"clients\" group (-f)"
+	exit 1
+elif [[ -z $SERVERS ]]; then
+	echo "Must specify \"servers\" group (-t)"
+	exit 1
+fi
+
+IFS=" " read -r -a CLIENTS <<< "${CLIENTS//,/ }"
+[[ -z $C_GRP_SIZE ]] &&
+	C_GRP_SIZE=${#CLIENTS[@]}
+
+IFS=" " read -r -a SERVERS <<< "${SERVERS//,/ }"
+[[ -z $S_GRP_SIZE ]] &&
+	S_GRP_SIZE=${#SERVERS[@]}
+
+if [[ $STAT_COUNT -lt 1 ]]; then
+	echo "Stat count must be > 0 (-n count)"
+	exit 1
+elif [[ $C_GRP_SIZE -lt 1 ]]; then
+	echo "Client group size must be > 0 (-M group_size)"
+	exit 1
+elif [[ $C_GRP_SIZE -gt ${#CLIENTS[@]} ]]; then
+	echo "Specified client group size (-M $C_GRP_SIZE) cannot be larger than number of clients specified with -f (${#CLIENTS[@]})"
+	exit 1
+elif [[ $S_GRP_SIZE -lt 1 ]]; then
+	echo "Server group size must be > 0 (-N group_size)"
+	exit 1
+elif [[ $S_GRP_SIZE -gt ${#SERVERS[@]} ]]; then
+	echo "Specified server group size (-M $S_GRP_SIZE) cannot be larger than number of servers specified with -t (${#SERVERS[@]})"
+	exit 1
+elif ! [[ $STAT_GROUP =~ ^(servers|clients)$ ]]; then
+	echo "Invalid stat group $STAT_GROUP (-g servers|clients)"
+	exit 1
+elif [[ -z $MODE_LIST ]]; then
+	echo "Empty mode list (-m read|write|rw|ping)"
+	exit 1
+elif [[ -z $SIZE_LIST ]]; then
+	echo "Empty bulk size list (-s 1024|4k|1m)"
+	exit 1
+fi
+
+for m in $MODE_LIST; do
+	if ! [[ $m =~ (read|write|rw|ping) ]]; then
+		echo "Invalid mode \"$m\" specified (-m read|write|rw|ping)"
+		exit 1
+	fi
+done
+
+if ! mkdir -p "${TEST_DIR}" ; then
+	echo "Failed to create results directory at \"${TEST_DIR}\" rc=$?"
+	exit 1
+fi
+OUTFILE=${TEST_DIR}/results.${TS}.csv
+
+LST_OPTIONS="-c $CONCURRENCY -n $STAT_COUNT -D $STAT_DELAY -e -S \"bw rate\""
+LST_OPTIONS+=" -g ${STAT_GROUP} -e"
+if ${HOST_MODE}; then
+	LST_OPTIONS+=" -H"
+fi
+
+print_results() {
+	local mode="$1"
+	local size="$2"
+
+	if ${LST_DEBUG}; then
+		return
+	fi
+
+	[[ $mode != ping ]] &&
+		mode="${mode}_${size}"
+
+	{
+		echo -n "${SEP}${mode}"
+		echo -n "${SEP}${RD_BW_AVG}${SEP}${RD_RATE_AVG}"
+		echo -n "${SEP}${W_BW_AVG}${SEP}${W_RATE_AVG}"
+		echo "${SEP}${SERVER_ERRORS}${SEP}${CLIENT_ERRORS}"
+	}>>"${OUTFILE}"
+
+	printf "%14s  %14s  %15s  %14s  %15s\n" \
+		"${mode}" "${RD_BW_AVG}" "${RD_RATE_AVG}" "${W_BW_AVG}" \
+		"${W_RATE_AVG}"
+}
+
+SERVER_ERRORS=0
+CLIENT_ERRORS=0
+RD_RATE_AVG=0
+W_RATE_AVG=0
+RD_BW_AVG=0
+W_BW_AVG=0
+do_lst() {
+	local mode="$1"
+	shift
+	local lst_args="$*"
+
+	RD_RATE_AVG=0
+	W_RATE_AVG=0
+	RD_BW_AVG=0
+	W_BW_AVG=0
+
+	declare -a vals
+
+	if ${LST_DEBUG}; then
+		echo "$LSTSH ${lst_args}"
+		return
+	fi
+	IFS=" " read -r -a vals <<< "$(eval "$LSTSH" "${lst_args}" 2>&1 |
+				       tee -a "${TEST_DIR}"/lst."${TS}".out |
+				       awk '/^\[(R|W)\]/{print $3};
+				            /error nodes in/{print $2}' |
+				       xargs echo)"
+
+	# Each stat RPC generates 4 lines of output, and we have two lines for
+	# the error counts
+	local expect=$((2 + STAT_COUNT * 4))
+
+	if [[ ${#vals[@]} -ne $expect ]]; then
+		echo
+		echo "Error: Failed to get all samples. Expect $expect, found ${#vals[@]}"
+		exit
+	fi
+
+	local i rd_rate w_rate rd_bw w_bw
+	for ((i = 0; i < $((expect - 4)); i+=4)); do
+		rd_rate=${vals[i]}
+		w_rate=${vals[i+1]}
+		rd_bw=${vals[i+2]}
+		w_bw=${vals[i+3]}
+
+		RD_RATE_AVG="${RD_RATE_AVG:+$RD_RATE_AVG +} $rd_rate"
+		W_RATE_AVG="${W_RATE_AVG:+$W_RATE_AVG +} $w_rate"
+		RD_BW_AVG="${RD_BW_AVG:+$RD_BW_AVG +} $rd_bw"
+		W_BW_AVG="${W_BW_AVG:+$W_BW_AVG +} $w_bw"
+	done
+
+	RD_RATE_AVG=$(echo "($RD_RATE_AVG)/$STAT_COUNT" | bc)
+	W_RATE_AVG=$(echo "($W_RATE_AVG)/$STAT_COUNT" | bc)
+	RD_BW_AVG=$(echo "($RD_BW_AVG)/$STAT_COUNT" | bc)
+	W_BW_AVG=$(echo "($W_BW_AVG)/$STAT_COUNT" | bc)
+
+	SERVER_ERRORS=$((SERVER_ERRORS + ${vals[$expect - 2]}))
+	CLIENT_ERRORS=$((CLIENT_ERRORS + ${vals[$expect - 1]}))
+}
+
+run_test() {
+	local server_group="$1"
+	local client_group="$2"
+
+	if ! ${LST_DEBUG}; then
+		echo
+		echo "Commence lst-survey - $(date)"
+		echo "Server Group: ${server_group}"
+		echo "Client Group: ${client_group}"
+		echo
+		printf "%14s  %14s  %15s  %14s  %15s\n" \
+			"Mode" "Read MB/s" "Read RPC/s" "Write MB/S" "Write RPC/s"
+	fi
+
+	SERVER_ERRORS=0 # See do_lst()
+	CLIENT_ERRORS=0 # See do_lst()
+
+	local lst_args
+	lst_args="-t \"${server_group}\""
+	lst_args+=" -f \"${client_group}\""
+	lst_args+=" -d ${C_GRP_SIZE}:${S_GRP_SIZE} $LST_OPTIONS"
+
+	local bulksize mode
+	for mode in ${MODE_LIST//,/ }; do
+		for bulksize in ${SIZE_LIST//,/ } ping; do
+			[[ $bulksize == ping ]] && [[ $mode != ping ]] &&
+				continue
+			[[ $bulksize != ping ]] && [[ $mode == ping ]] &&
+				continue
+
+			{
+				echo -n "${server_group}"
+				echo -n "${SEP}${client_group}"
+			}>>"${OUTFILE}"
+			do_lst "$mode" "${lst_args} -m $mode -s $bulksize"
+			print_results "$mode" "$bulksize"
+		done
+	done
+
+	if ${SHOW_ERRORS} && ! ${LST_DEBUG}; then
+		echo "Server Errors: ${SERVER_ERRORS}"
+		echo "Client Errors: ${CLIENT_ERRORS}"
+	fi
+
+	if ! ${LST_DEBUG}; then
+		echo
+		echo "Finished lst-survey - $(date)"
+	fi
+}
+
+{
+	echo -n "Servers${SEP}Clients${SEP}"
+	echo -n "Mode${SEP}Read_BW${SEP}Read_Rate${SEP}"
+	echo -n "Write_BW${SEP}Write_Rate${SEP}"
+	echo "Server_Errors${SEP}Client_Errors"
+}>>"${OUTFILE}"
+
+declare -a s_groups
+n_s_groups=$((${#SERVERS[@]} / S_GRP_SIZE))
+verbose "Creating $n_s_groups server group(s) of size $S_GRP_SIZE"
+s_count=0
+s_grp_idx=0
+s_grp_str=""
+for s in "${SERVERS[@]}"; do
+	((s_count++))
+	s_grp_str="${s_grp_str:+$s_grp_str }${s}"
+	if [[ $s_count -eq $S_GRP_SIZE ]]; then
+		s_groups[s_grp_idx]="$s_grp_str"
+		((s_grp_idx++))
+		verbose "Server group $s_grp_idx: $s_grp_str"
+		s_count=0
+		s_grp_str=""
+	fi
+done
+
+declare -a c_groups
+n_c_groups=$((${#CLIENTS[@]} / C_GRP_SIZE))
+verbose "Creating $n_c_groups client group(s) of size $C_GRP_SIZE"
+c_count=0
+c_grp_idx=0
+c_grp_str=""
+for c in "${CLIENTS[@]}"; do
+	((c_count++))
+	c_grp_str="${c_grp_str:+$c_grp_str }${c}"
+	if [[ $c_count -eq $C_GRP_SIZE ]]; then
+		c_groups[c_grp_idx]="$c_grp_str"
+		((c_grp_idx++))
+		verbose "Client group $c_grp_idx: $c_grp_str"
+		c_count=0
+		c_grp_str=""
+	fi
+done
+
+verbose "Arguments to $LSTSH: $LST_OPTIONS"
+
+echo "CSV results: ${OUTFILE}"
+echo "LST output: ${TEST_DIR}/lst.${TS}.out"
+
+for ((s_grp_idx = 0; s_grp_idx < n_s_groups; s_grp_idx++)); do
+	for ((c_grp_idx = 0; c_grp_idx < n_c_groups; c_grp_idx++)); do
+		run_test "${s_groups[s_grp_idx]}" "${c_groups[c_grp_idx]}"
+	done
+done
