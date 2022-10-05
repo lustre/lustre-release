@@ -2404,7 +2404,7 @@ test_218() {
 
 	$LCTL net_drop_add -s $nid1 -d $nid1 -e local_error -r 1
 
-	do_lnetctl ping $nid1 &&
+	do_lnetctl ping --source $nid1 $nid1 &&
 		error "ping should have failed"
 
 	local health_recovered
