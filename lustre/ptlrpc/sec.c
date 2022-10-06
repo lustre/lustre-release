@@ -1829,7 +1829,7 @@ static inline int sptlrpc_sepol_needs_check(struct ptlrpc_sec *imp_sec)
 {
 	ktime_t checknext;
 
-	if (send_sepol == 0 || !selinux_is_enabled())
+	if (send_sepol == 0)
 		return 0;
 
 	if (send_sepol == -1)
@@ -1875,7 +1875,7 @@ int sptlrpc_get_sepol(struct ptlrpc_request *req)
 	RETURN(0);
 #endif
 
-	if (send_sepol == 0 || !selinux_is_enabled())
+	if (send_sepol == 0)
 		RETURN(0);
 
 	if (imp_sec == NULL)
@@ -1889,6 +1889,10 @@ int sptlrpc_get_sepol(struct ptlrpc_request *req)
 		memcpy(req->rq_sepol, imp_sec->ps_sepol,
 		       sizeof(req->rq_sepol));
 		spin_unlock(&imp_sec->ps_lock);
+	} else if (rc == -ENODEV) {
+		CDEBUG(D_SEC,
+		       "Client cannot report SELinux status, SELinux is disabled.\n");
+		rc = 0;
 	}
 
 	RETURN(rc);

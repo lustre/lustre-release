@@ -69,6 +69,8 @@ static void errlog(const char *fmt, ...)
 
 	va_start(args, fmt);
 	vsyslog(LOG_NOTICE, fmt, args);
+	if (isatty(STDIN_FILENO))
+		vfprintf(stderr, fmt, args);
 	va_end(args);
 
 	closelog();
@@ -205,7 +207,7 @@ int get_opts(int argc, char *const argv[])
 		ref_pol_mtime = (time_t)strtoul(sel_mtime, &res, 0);
 		if (*res != '\0') {
 			/* not a valid number */
-			errlog("invalid sel_mtime");
+			errlog("invalid sel_mtime\n");
 			return -EINVAL;
 		}
 	}
@@ -214,7 +216,7 @@ int get_opts(int argc, char *const argv[])
 		ref_selinux_mode = sel_mode[0] - '0';
 		if (ref_selinux_mode != 0 && ref_selinux_mode != 1) {
 			/* not a valid enforcing mode */
-			errlog("invalid sel_mode");
+			errlog("invalid sel_mode\n");
 			return -EINVAL;
 		}
 	}
@@ -331,6 +333,7 @@ int main(int argc, char **argv)
 	struct stat st;
 	time_t policymtime = 0;
 	int enforce;
+	int is_selinux;
 	char *policy_type = NULL;
 	unsigned char *mdval = NULL;
 	unsigned int mdsize = 0;
@@ -341,6 +344,19 @@ int main(int argc, char **argv)
 	rc = get_opts(argc, argv);
 	if (rc < 0)
 		goto out;
+
+	is_selinux = is_selinux_enabled();
+	if (is_selinux < 0) {
+		errlog("is_selinux_enabled() failed\n");
+		rc = -errno;
+		goto out;
+	}
+
+	if (!is_selinux) {
+		errlog("SELinux is disabled, ptlrpc 'send_sepol' value should be set to 0\n");
+		rc = -ENODEV;
+		goto out;
+	}
 
 	/* Max version of loaded policy */
 	policyver = security_policyvers();

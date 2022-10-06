@@ -505,9 +505,9 @@ static int ll_xattr_cache_refill(struct inode *inode)
 			CDEBUG(D_CACHE, "not caching %s\n",
 			       XATTR_NAME_ACL_ACCESS);
 			rc = 0;
-		} else if (!strcmp(xdata, "security.selinux")) {
-			/* Filter out security.selinux, it is cached in slab */
-			CDEBUG(D_CACHE, "not caching security.selinux\n");
+		} else if (ll_xattr_is_seclabel(xdata)) {
+			/* Filter out security label, it is cached in slab */
+			CDEBUG(D_CACHE, "not caching %s\n", xdata);
 			rc = 0;
 		} else if (!strcmp(xdata, XATTR_NAME_SOM)) {
 			/* Filter out trusted.som, it is not cached on client */
