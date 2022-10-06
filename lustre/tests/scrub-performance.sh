@@ -84,7 +84,6 @@ scrub_create() {
 	${ECHOCMD} "${LCTL} --device ${echodev} \
 		--threads ${threads} 0 ${echodev} \
 		test_create -d${tdir} -D${threads} -b${lbase} -c0 -n${usize}"
-	EOF"
 }
 
 scrub_cleanup() {
