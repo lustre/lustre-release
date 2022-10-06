@@ -2233,15 +2233,13 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 			struct cl_page *page, loff_t offset)
 {
 	struct osc_async_page *oap = &ops->ops_oap;
-	struct page	      *vmpage = page->cp_vmpage;
-	ENTRY;
 
+	ENTRY;
 	if (!page)
 		return cfs_size_round(sizeof(*oap));
 
 	oap->oap_obj = osc;
-
-	oap->oap_page = vmpage;
+	oap->oap_page = page->cp_vmpage;
 	oap->oap_obj_off = offset;
 	LASSERT(!(offset & ~PAGE_MASK));
 
@@ -2257,7 +2255,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	INIT_LIST_HEAD(&oap->oap_rpc_item);
 
 	CDEBUG(D_INFO, "oap %p vmpage %p obj off %llu\n",
-	       oap, vmpage, oap->oap_obj_off);
+	       oap, oap->oap_page, oap->oap_obj_off);
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_prep_async_page);
