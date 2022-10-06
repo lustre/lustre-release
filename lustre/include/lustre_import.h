@@ -286,6 +286,12 @@ struct obd_import {
         /** Protects flags, level, generation, conn_cnt, *_list */
 	spinlock_t		  imp_lock;
 
+	/**
+	 * A "sentinel" value used to check if there are other threads
+	 * waiting on the imp_lock.
+	 */
+	atomic_t                  imp_waiting;
+
 	/* flags */
 	unsigned long		  imp_invalid:1,    /* evicted */
 				  /* administratively disabled */
