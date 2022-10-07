@@ -830,7 +830,7 @@ struct cl_page_operations {
         /**
 	 * cl_page<->struct page methods. Only one layer in the stack has to
          * implement these. Current code assumes that this functionality is
-         * provided by the topmost layer, see cl_page_disown0() as an example.
+	 * provided by the topmost layer, see __cl_page_disown() as an example.
          */
 
 	/**
