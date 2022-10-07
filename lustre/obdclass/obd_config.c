@@ -1024,21 +1024,29 @@ static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 static LIST_HEAD(lustre_profile_list);
 static DEFINE_SPINLOCK(lustre_profile_list_lock);
 
+static struct lustre_profile *class_get_profile_nolock(const char *prof)
+{
+	struct lustre_profile *lprof;
+
+	ENTRY;
+	list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
+		if (strcmp(lprof->lp_profile, prof) == 0) {
+			lprof->lp_refs++;
+			RETURN(lprof);
+		}
+	}
+	RETURN(NULL);
+}
+
 struct lustre_profile *class_get_profile(const char *prof)
 {
 	struct lustre_profile *lprof;
 
 	ENTRY;
 	spin_lock(&lustre_profile_list_lock);
-	list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
-		if (!strcmp(lprof->lp_profile, prof)) {
-			lprof->lp_refs++;
-			spin_unlock(&lustre_profile_list_lock);
-			RETURN(lprof);
-		}
-	}
+	lprof = class_get_profile_nolock(prof);
 	spin_unlock(&lustre_profile_list_lock);
-	RETURN(NULL);
+	RETURN(lprof);
 }
 EXPORT_SYMBOL(class_get_profile);
 
@@ -1109,9 +1117,9 @@ void class_del_profile(const char *prof)
 
 	CDEBUG(D_CONFIG, "Del profile %s\n", prof);
 
-	lprof = class_get_profile(prof);
+	spin_lock(&lustre_profile_list_lock);
+	lprof = class_get_profile_nolock(prof);
 	if (lprof) {
-		spin_lock(&lustre_profile_list_lock);
 		/* because get profile increments the ref counter */
 		lprof->lp_refs--;
 		list_del(&lprof->lp_list);
@@ -1119,6 +1127,8 @@ void class_del_profile(const char *prof)
 		spin_unlock(&lustre_profile_list_lock);
 
 		class_put_profile(lprof);
+	} else {
+		spin_unlock(&lustre_profile_list_lock);
 	}
 	EXIT;
 }

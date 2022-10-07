@@ -2340,6 +2340,37 @@ out_ctxt:
 	RETURN(rc);
 }
 
+/* mount opt is the third thing in client logs */
+static int mgs_write_log_mount_opt(const struct lu_env *env,
+				   struct mgs_device *mgs, struct fs_db *fsdb,
+				   char *logname)
+{
+	struct llog_handle *llh = NULL;
+	int rc = 0;
+
+	ENTRY;
+
+	CDEBUG(D_MGS, "Writing mount options log for %s\n", logname);
+
+	rc = record_start_log(env, mgs, &llh, logname);
+	if (rc)
+		RETURN(rc);
+
+	rc = record_marker(env, llh, fsdb, CM_START, logname, "mount opts");
+	if (rc)
+		GOTO(out_end, rc);
+	rc = record_mount_opt(env, llh, logname, fsdb->fsdb_clilov,
+			      fsdb->fsdb_clilmv);
+	if (rc)
+		GOTO(out_end, rc);
+	rc = record_marker(env, llh, fsdb, CM_END, logname, "mount opts");
+	if (rc)
+		GOTO(out_end, rc);
+out_end:
+	record_end_log(env, &llh);
+	RETURN(rc);
+}
+
 /* lmv is the second thing for client logs */
 /* copied from mgs_write_log_lov. Please refer to that.  */
 static int mgs_write_log_lmv(const struct lu_env *env,
@@ -2865,6 +2896,9 @@ static int mgs_write_log_mdt(const struct lu_env *env,
                                        fsdb->fsdb_clilmv);
 		if (rc)
 			GOTO(out_free, rc);
+		rc = mgs_write_log_mount_opt(env, mgs, fsdb, cliname);
+		if (rc)
+			GOTO(out_free, rc);
         }
 
         /*
@@ -2873,7 +2907,6 @@ static int mgs_write_log_mdt(const struct lu_env *env,
         #11 L setup    0:MDC_uml1_mdsA_MNT_client  1:mdsA_UUID  2:uml1_UUID
         #12 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:uml2_UUID
         #13 L add_conn 0:MDC_uml1_mdsA_MNT_client  1:uml2_UUID
-        #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
         */
 
 	/* copy client info about lov/lmv */
@@ -2889,21 +2922,9 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 	if (rc)
 		GOTO(out_free, rc);
 
-	/* add mountopts */
 	rc = record_start_log(env, mgs, &llh, cliname);
 	if (rc)
 		GOTO(out_free, rc);
-
-	rc = record_marker(env, llh, fsdb, CM_START, cliname, "mount opts");
-	if (rc)
-		GOTO(out_end, rc);
-	rc = record_mount_opt(env, llh, cliname, fsdb->fsdb_clilov,
-			      fsdb->fsdb_clilmv);
-	if (rc)
-		GOTO(out_end, rc);
-	rc = record_marker(env, llh, fsdb, CM_END, cliname, "mount opts");
-	if (rc)
-		GOTO(out_end, rc);
 
 	/* for_all_existing_mdt except current one */
 	for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
@@ -3182,6 +3203,9 @@ out_end:
 			GOTO(out_free, rc);
 		rc = mgs_write_log_lmv(env, mgs, fsdb, mti, logname,
                                        fsdb->fsdb_clilmv);
+		if (rc)
+			GOTO(out_free, rc);
+		rc = mgs_write_log_mount_opt(env, mgs, fsdb, logname);
 		if (rc)
 			GOTO(out_free, rc);
         }
