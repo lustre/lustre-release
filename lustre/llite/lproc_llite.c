@@ -474,7 +474,7 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 		      "reclaim_count: %u\n"
 		      "max_read_ahead_mb: %lu\n"
 		      "used_read_ahead_mb: %d\n",
-		   atomic_read(&cache->ccc_users),
+		   refcount_read(&cache->ccc_users),
 		   max_cached_mb,
 		   max_cached_mb - unused_mb,
 		   unused_mb,

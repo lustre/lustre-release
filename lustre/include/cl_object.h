@@ -2276,7 +2276,7 @@ struct cl_client_cache {
 	 * # of client cache refcount
 	 * # of users (OSCs) + 2 (held by llite and lov)
 	 */
-	atomic_t		ccc_users;
+	refcount_t		ccc_users;
 	/**
 	 * # of threads are doing shrinking
 	 */
