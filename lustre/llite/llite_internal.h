@@ -119,9 +119,28 @@ struct ll_trunc_sem {
 };
 
 enum ll_sa_pattern {
-	LSA_PATTERN_NONE	= 0x0000,
-	LSA_PATTERN_LIST	= 0x0001,
-	LSA_PATTERN_FNAME	= 0X0002,
+	LSA_PATTERN_NONE		= 0x0000,
+	/* once detected, and found no statahead pattern matched */
+	LSA_PATTERN_INVALID		= 0x0001,
+	/* do the directory listing. i.e ls $dir */
+	LSA_PATTERN_LIST		= 0x0002,
+	/* regularized file name scanning, i.e. mdtest.$i */
+	LSA_PATTERN_FNAME		= 0x0004,
+	/* statahead advise via statahead hint from users */
+	LSA_PATTERN_ADVISE		= 0x0008,
+	/* not first dirent, or is "." for listing */
+	LSA_PATTERN_LS_NOT_FIRST_DE	= 0x0100,
+	/* the file names of stat() calls has regularized predictable format */
+	LSA_PATTERN_FN_PREDICT		= 0x1000,
+	/* fname statahead workload similar to mdtest shared dir stat() */
+	LSA_PATTERN_FN_SHARED		= 0x2000,
+	/* fname statahead workload similar to mdtest unique dir stat() */
+	LSA_PATTERN_FN_UNIQUE		= 0x4000,
+	/* fname statahead workload with stride regularized naming format */
+	LSA_PATTERN_FN_STRIDE		= 0x8000,
+	LSA_PATTERN_MASK		= (LSA_PATTERN_LIST |
+					   LSA_PATTERN_FNAME |
+					   LSA_PATTERN_ADVISE),
 	LSA_PATTERN_MAX,
 };
 
@@ -205,6 +224,18 @@ struct ll_inode_info {
 			unsigned int			lli_sa_generation;
 			/* access pattern for statahead */
 			enum ll_sa_pattern		lli_sa_pattern;
+			/*
+			 * suffix index number of the latest stat dentry. It
+			 * is used for the detection of the file name statahead
+			 * pattern.
+			 */
+			__u32				lli_sa_fname_index;
+			/*
+			 * indicate the count that the suffix index number
+			 * matched continuously. This field is using for the
+			 * detection of the file name statahead pattern.
+			 */
+			unsigned int			lli_sa_match_count;
 			/* rw lock protects lli_lsm_md */
 			struct rw_semaphore		lli_lsm_sem;
 			/* directory stripe information */
@@ -872,6 +903,7 @@ struct ll_sb_info {
 	unsigned int		  ll_sa_batch_max;/* max SUB request count in
 						   * a batch PTLRPC request */
 	unsigned int		  ll_sa_max;     /* max statahead RPCs */
+	unsigned int		  ll_sa_min;	 /* min statahead req count */
 	atomic_t		  ll_sa_total;   /* statahead thread started
 						  * count */
 	atomic_t		  ll_sa_wrong;   /* statahead thread stopped for
@@ -881,6 +913,16 @@ struct ll_sb_info {
 	atomic_t		  ll_agl_total;  /* AGL thread started count */
 	atomic_t		  ll_sa_hit_total;  /* total hit count */
 	atomic_t		  ll_sa_miss_total; /* total miss count */
+	/* statahead thread count started for directory traversing pattern. */
+	atomic_t		  ll_sa_list_total;
+	/* statahead thread count started for regularized file name pattern. */
+	atomic_t		  ll_sa_fname_total;
+	/*
+	 * stop the statahead thread if it is not doing a stat() in such time
+	 * period as it probably does not care too much about performance or
+	 * the user is no longer using this directory.
+	 */
+	unsigned long		  ll_sa_timeout;
 
 	dev_t			  ll_sdev_orig; /* save s_dev before assign for
 						 * clustred nfs */
@@ -1653,9 +1695,12 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 
 /* statahead.c */
 
-#define LL_SA_RPC_MIN           8
-#define LL_SA_RPC_DEF           128
-#define LL_SA_RPC_MAX           2048
+#define LL_SA_REQ_MIN           2
+#define LL_SA_REQ_MIN_DEF	8
+#define LL_SA_REQ_MAX		2048
+#define LL_SA_REQ_MAX_DEF	128
+
+#define LL_SA_TIMEOUT_DEF	30
 
 /* XXX: If want to support more concurrent statahead instances,
  *	please consider to decentralize the RPC lists attached
@@ -1670,6 +1715,9 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 #define LL_SA_CACHE_BIT         6
 #define LL_SA_CACHE_SIZE        (1 << LL_SA_CACHE_BIT)
 #define LL_SA_CACHE_MASK        (LL_SA_CACHE_SIZE - 1)
+
+#define LSA_FN_PREDICT_HIT	2
+#define LSA_FN_MATCH_HIT	4
 
 /* statahead controller, per process struct, for dir only */
 struct ll_statahead_info {
@@ -1709,8 +1757,23 @@ struct ll_statahead_info {
 	__u32			sai_max_batch_count;
 	__u64			sai_index_end;
 
-	__u64			sai_fstart;
-	__u64			sai_fend;
+	union {
+		/* for ADVISE statahead pattern */
+		struct {
+			__u64	sai_fstart;
+			__u64	sai_fend;
+		};
+
+		/* for FNAME statahead pattern */
+		struct {
+			__u64	sai_fname_index;
+			/*
+			 * The length of file name statahead pattern where the
+			 * front part is padding with 0.
+			 */
+			__u8	sai_fname_zeroed_len;
+		};
+	};
 	char			sai_fname[NAME_MAX];
 };
 
@@ -1728,6 +1791,7 @@ int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,
 int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl);
 void ll_authorize_statahead(struct inode *dir, void *key);
 void ll_deauthorize_statahead(struct inode *dir, void *key);
+void ll_statahead_enter(struct inode *dir, struct dentry *dentry);
 
 /* glimpse.c */
 blkcnt_t dirty_cnt(struct inode *inode);
@@ -1804,7 +1868,10 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 	    ldd->lld_sa_generation == lli->lli_sa_generation)
 		return false;
 
-	if (lli->lli_sa_pattern == LSA_PATTERN_FNAME)
+	if (lli->lli_sa_pattern & LSA_PATTERN_ADVISE)
+		return true;
+
+	if (lli->lli_sa_pattern & (LSA_PATTERN_FNAME | LSA_PATTERN_FN_PREDICT))
 		return true;
 
 	/* not the same process, don't statahead */

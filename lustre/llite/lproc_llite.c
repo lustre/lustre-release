@@ -864,16 +864,82 @@ static ssize_t statahead_max_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	if (val > LL_SA_RPC_MAX) {
+	if (val > LL_SA_REQ_MAX) {
 		CWARN("%s: statahead_max value %lu limited to maximum %d\n",
-		      sbi->ll_fsname, val, LL_SA_RPC_MAX);
-		val = LL_SA_RPC_MAX;
+		      sbi->ll_fsname, val, LL_SA_REQ_MAX);
+		val = LL_SA_REQ_MAX;
 	}
 
 	sbi->ll_sa_max = val;
 	return count;
 }
 LUSTRE_RW_ATTR(statahead_max);
+
+static ssize_t statahead_min_show(struct kobject *kobj,
+				  struct attribute *attr,
+				  char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_sa_min);
+}
+
+static ssize_t statahead_min_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer,
+				   size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < LL_SA_REQ_MIN)
+		CERROR("%s: bad statahead_min %lu < min %u\n",
+		       sbi->ll_fsname, val, LL_SA_REQ_MIN);
+	else if (val > sbi->ll_sa_max)
+		CERROR("%s: bad statahead_min %lu > max %u\n",
+		       sbi->ll_fsname, val, sbi->ll_sa_max);
+	else
+		sbi->ll_sa_min = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(statahead_min);
+
+static ssize_t statahead_timeout_show(struct kobject *kobj,
+				      struct attribute *attr,
+				      char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", sbi->ll_sa_timeout);
+}
+
+static ssize_t statahead_timeout_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer,
+				       size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_sa_timeout = val;
+	return count;
+}
+LUSTRE_RW_ATTR(statahead_timeout);
 
 static ssize_t statahead_agl_show(struct kobject *kobj,
 				  struct attribute *attr,
@@ -917,11 +983,15 @@ static int ll_statahead_stats_seq_show(struct seq_file *m, void *v)
 	seq_printf(m, "statahead total: %u\n"
 		      "statahead wrong: %u\n"
 		      "agl total: %u\n"
+		      "list_total: %u\n"
+		      "fname_total: %u\n"
 		      "hit_total: %u\n"
 		      "miss_total: %u\n",
 		   atomic_read(&sbi->ll_sa_total),
 		   atomic_read(&sbi->ll_sa_wrong),
 		   atomic_read(&sbi->ll_agl_total),
+		   atomic_read(&sbi->ll_sa_list_total),
+		   atomic_read(&sbi->ll_sa_fname_total),
 		   atomic_read(&sbi->ll_sa_hit_total),
 		   atomic_read(&sbi->ll_sa_miss_total));
 	return 0;
@@ -938,6 +1008,8 @@ static ssize_t ll_statahead_stats_seq_write(struct file *file,
 	atomic_set(&sbi->ll_sa_total, 0);
 	atomic_set(&sbi->ll_sa_wrong, 0);
 	atomic_set(&sbi->ll_agl_total, 0);
+	atomic_set(&sbi->ll_sa_list_total, 0);
+	atomic_set(&sbi->ll_sa_fname_total, 0);
 	atomic_set(&sbi->ll_sa_hit_total, 0);
 	atomic_set(&sbi->ll_sa_miss_total, 0);
 
@@ -1950,6 +2022,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statahead_running_max.attr,
 	&lustre_attr_statahead_batch_max.attr,
 	&lustre_attr_statahead_max.attr,
+	&lustre_attr_statahead_min.attr,
+	&lustre_attr_statahead_timeout.attr,
 	&lustre_attr_statahead_agl.attr,
 	&lustre_attr_lazystatfs.attr,
 	&lustre_attr_statfs_max_age.attr,

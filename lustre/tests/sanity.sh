@@ -1983,7 +1983,7 @@ test_27p() {
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
-	test_mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
 
 	$MCREATE $DIR/$tdir/$tfile || error "mcreate failed"
 	$TRUNCATE $DIR/$tdir/$tfile 80000000 || error "truncate failed"
@@ -14526,10 +14526,116 @@ test_123g() {
 		awk '/hit.total:/ {print $2}')
 	echo "Hit total: $count"
 	# Hit ratio should be >= 75%
-	(( $count > num * 75 / 100)) ||
+	(( $count > num * 75 / 100 )) ||
 		error "hit total $count is be > 75% of $num"
 }
 run_test 123g "Test for stat-ahead advise"
+
+test_123h_base() {
+	local dir=$DIR/$tdir
+	local cmd="touch $dir/$tfile.{$1}"
+	local fcnt=$2
+
+	stack_trap "rm -rf $dir"
+	mkdir -p $dir || error "failed to mkdir $dir"
+	eval $cmd
+
+	cancel_lru_locks mdc
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=0
+	$LCTL set_param llite.*.statahead_max=1024
+	$LCTL set_param llite.*.statahead_batch_max=1024
+	lctl get_param -n llite.*.statahead_stats
+	du -a $dir > /dev/null
+	echo "Wait statahead thread (ll_sa_xxx) to exit..."
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa statahead thread does not quit in 35s"
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+
+	local count=$($LCTL get_param -n llite.*.statahead_stats |
+			awk '/fname.total:/ {print $2}')
+
+	[ $count == 1 ] || error "File name pattern statahead not trigger"
+	count=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/hit.total:/ {print $2}')
+	# Hit ratio should be >= 75%
+	(( $count > fcnt * 75 / 100 )) ||
+		error "hit total is too low: $count"
+	rm -rf $dir || error "rm -rf $dir failed"
+}
+
+test_123h() {
+	local max
+	local batch_max
+	local enabled
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+
+	$LCTL set_param llite.*.enable_statahead_fname=1
+
+	echo "Scan a directory with number regularized fname"
+	test_123h_base "0..10000" 10000
+
+	echo "Scan a directory with zeroed padding number regularized fname"
+	test_123h_base "000000..010000" 10000
+}
+run_test 123h "Verify statahead work with the fname pattern via du"
+
+test_123i() {
+	local dir=$DIR/$tdir
+	local cmd="createmany -m $dir/$tfile.%06d 1000"
+
+	stack_trap "unlinkmany $dir/$tfile.%06d 1000"
+	mkdir -p $dir || error "failed to mkdir $dir"
+	eval $cmd
+
+	cancel_lru_locks mdc
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=0
+
+	local max
+	local batch_max
+	local enabled
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+
+	$LCTL set_param llite.*.statahead_max=1024
+	$LCTL set_param llite.*.statahead_batch_max=32
+	$LCTL set_param llite.*.enable_statahead_fname=1
+	echo "statahead_stats (Pre):"
+	lctl get_param -n llite.*.statahead_stats
+	ls $dir/* > /dev/null
+	echo "statahead_stats (Post):"
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+
+	echo "Wait the statahead thread (ll_sa_xxx) to exit ..."
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa statahead thread does not quit in 35s"
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+
+	local count=$($LCTL get_param -n llite.*.statahead_stats |
+			awk '/fname.total:/ {print $2}')
+
+	[ $count == 1 ] || error "File name pattern statahead not trigger"
+	count=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/hit.total:/ {print $2}')
+	# Hit ratio should be >= 75%
+	(( $count > 75 )) || error "hit total is too low: $count"
+}
+run_test 123i "Verify statahead work with the fname pattern via ls dir/*"
 
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

@@ -548,7 +548,8 @@ static inline void ll_sax_put(struct inode *dir,
 	if (atomic_dec_and_lock(&ctx->sax_refcount, &lli->lli_sa_lock)) {
 		lli->lli_sai = NULL;
 		lli->lli_sax = NULL;
-		if (lli->lli_sa_pattern == LSA_PATTERN_FNAME) {
+		if (lli->lli_sa_pattern & (LSA_PATTERN_ADVISE |
+					   LSA_PATTERN_FNAME)) {
 			lli->lli_opendir_key = NULL;
 			lli->lli_opendir_pid = 0;
 			lli->lli_sa_enabled = 0;
@@ -574,7 +575,7 @@ static struct ll_statahead_info *ll_sai_alloc(struct dentry *dentry)
 
 	sai->sai_dentry = dget(dentry);
 	atomic_set(&sai->sai_refcount, 1);
-	sai->sai_max = LL_SA_RPC_MIN;
+	sai->sai_max = ll_i2sbi(dentry->d_inode)->ll_sa_min;
 	sai->sai_index = 1;
 	init_waitqueue_head(&sai->sai_waitq);
 
@@ -1313,6 +1314,96 @@ static int ll_statahead_by_list(struct dentry *parent)
 	RETURN(rc);
 }
 
+static void ll_statahead_handle(struct ll_statahead_info *sai,
+				struct dentry *parent, const char *name,
+				int len, const struct lu_fid *fid)
+{
+	struct inode *dir = parent->d_inode;
+	struct ll_inode_info *lli = ll_i2info(dir);
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	long timeout;
+
+	while (({set_current_state(TASK_IDLE);
+		/* matches smp_store_release() in ll_deauthorize_statahead() */
+		 smp_load_acquire(&sai->sai_task); })) {
+		spin_lock(&lli->lli_agl_lock);
+		while (sa_sent_full(sai) && !agl_list_empty(sai)) {
+			struct ll_inode_info *clli;
+
+			__set_current_state(TASK_RUNNING);
+			clli = agl_first_entry(sai);
+			list_del_init(&clli->lli_agl_list);
+			spin_unlock(&lli->lli_agl_lock);
+
+			ll_agl_trigger(&clli->lli_vfs_inode, sai);
+			cond_resched();
+			spin_lock(&lli->lli_agl_lock);
+		}
+		spin_unlock(&lli->lli_agl_lock);
+
+		if (!sa_sent_full(sai))
+			break;
+
+		/*
+		 * If the thread is not doing a stat in 30s then it probably
+		 * does not care too much about performance, or is no longer
+		 * using this directory. Stop the statahead thread in this case.
+		 */
+		timeout = schedule_timeout(
+				cfs_time_seconds(sbi->ll_sa_timeout));
+		if (timeout == 0) {
+			lli->lli_sa_enabled = 0;
+			break;
+		}
+	}
+	__set_current_state(TASK_RUNNING);
+
+	sa_statahead(sai, parent, name, len, fid);
+}
+
+static int ll_statahead_by_advise(struct ll_statahead_info *sai,
+				  struct dentry *parent)
+{
+	struct inode *dir = parent->d_inode;
+	struct ll_inode_info *lli = ll_i2info(dir);
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	size_t max_len;
+	size_t len;
+	char *fname;
+	char *ptr;
+	int rc = 0;
+	__u64 i = 0;
+
+	ENTRY;
+
+	CDEBUG(D_READA, "%s: ADVISE statahead: parent %pd fname prefix %s\n",
+	       sbi->ll_fsname, parent, sai->sai_fname);
+
+	OBD_ALLOC(fname, NAME_MAX);
+	if (fname == NULL)
+		RETURN(-ENOMEM);
+
+	len = strlen(sai->sai_fname);
+	memcpy(fname, sai->sai_fname, len);
+	max_len = sizeof(sai->sai_fname) - len;
+	ptr = fname + len;
+
+	/* matches smp_store_release() in ll_deauthorize_statahead() */
+	while (smp_load_acquire(&sai->sai_task) && lli->lli_sa_enabled) {
+		size_t numlen;
+
+		numlen = snprintf(ptr, max_len, "%llu",
+				  sai->sai_fstart + i);
+
+		ll_statahead_handle(sai, parent, fname, len + numlen, NULL);
+		if (++i >= sai->sai_fend)
+			break;
+	}
+
+	OBD_FREE(fname, NAME_MAX);
+	RETURN(rc);
+}
+
 static int ll_statahead_by_fname(struct ll_statahead_info *sai,
 				 struct dentry *parent)
 {
@@ -1324,7 +1415,6 @@ static int ll_statahead_by_fname(struct ll_statahead_info *sai,
 	char *fname;
 	char *ptr;
 	int rc = 0;
-	__u64 i = 0;
 
 	ENTRY;
 
@@ -1341,42 +1431,28 @@ static int ll_statahead_by_fname(struct ll_statahead_info *sai,
 	ptr = fname + len;
 
 	/* matches smp_store_release() in ll_deauthorize_statahead() */
-	while (smp_load_acquire(&sai->sai_task)) {
+	while (smp_load_acquire(&sai->sai_task) && lli->lli_sa_enabled) {
 		size_t numlen;
 
-		numlen = snprintf(ptr, max_len, "%llu",
-				  sai->sai_fstart + i);
+		if (sai->sai_fname_zeroed_len)
+			numlen = snprintf(ptr, max_len, "%0*llu",
+					  sai->sai_fname_zeroed_len,
+					  ++sai->sai_fname_index);
+		else
+			numlen = snprintf(ptr, max_len, "%llu",
+					  ++sai->sai_fname_index);
 
-		while (({set_current_state(TASK_IDLE);
-			 /*
-			  * matches smp_store_release() in
-			  * ll_deauthorize_statahead()
-			  */
-			 smp_load_acquire(&sai->sai_task); })) {
-			spin_lock(&lli->lli_agl_lock);
-			while (sa_sent_full(sai) && !agl_list_empty(sai)) {
-				struct ll_inode_info *clli;
+		ll_statahead_handle(sai, parent, fname, len + numlen, NULL);
 
-				__set_current_state(TASK_RUNNING);
-				clli = agl_first_entry(sai);
-				list_del_init(&clli->lli_agl_list);
-				spin_unlock(&lli->lli_agl_lock);
-
-				ll_agl_trigger(&clli->lli_vfs_inode, sai);
-				cond_resched();
-				spin_lock(&lli->lli_agl_lock);
-			}
-			spin_unlock(&lli->lli_agl_lock);
-
-			if (!sa_sent_full(sai))
-				break;
-			schedule();
-		}
-		__set_current_state(TASK_RUNNING);
-
-		sa_statahead(sai, parent, fname, len + numlen, NULL);
-		if (++i >= sai->sai_fend)
+		if (sa_low_hit(sai)) {
+			rc = -EFAULT;
+			atomic_inc(&sbi->ll_sa_wrong);
+			CDEBUG(D_CACHE, "%s: low hit ratio for %pd "DFID": hit=%llu miss=%llu sent=%llu replied=%llu, stopping PID %d\n",
+			       sbi->ll_fsname, parent, PFID(ll_inode2fid(dir)),
+			       sai->sai_hit, sai->sai_miss, sai->sai_sent,
+			       sai->sai_replied, current->pid);
 			break;
+		}
 	}
 
 	OBD_FREE(fname, NAME_MAX);
@@ -1409,9 +1485,12 @@ static int ll_statahead_thread(void *arg)
 
 	sai->sai_bh = bh;
 
-	switch (lli->lli_sa_pattern) {
+	switch (lli->lli_sa_pattern & LSA_PATTERN_MASK) {
 	case LSA_PATTERN_LIST:
 		rc = ll_statahead_by_list(parent);
+		break;
+	case LSA_PATTERN_ADVISE:
+		rc = ll_statahead_by_advise(sai, parent);
 		break;
 	case LSA_PATTERN_FNAME:
 		rc = ll_statahead_by_fname(sai, parent);
@@ -1436,7 +1515,7 @@ static int ll_statahead_thread(void *arg)
 	 */
 	while (({set_current_state(TASK_IDLE);
 		/* matches smp_store_release() in ll_deauthorize_statahead() */
-		smp_load_acquire(&sai->sai_task); })) {
+		smp_load_acquire(&sai->sai_task) && lli->lli_sa_enabled; })) {
 		schedule();
 	}
 	__set_current_state(TASK_RUNNING);
@@ -1494,7 +1573,7 @@ void ll_authorize_statahead(struct inode *dir, void *key)
 	spin_unlock(&lli->lli_sa_lock);
 }
 
-static void ll_deauthorize_statahead_fname(struct inode *dir, void *key)
+static void ll_deauthorize_statahead_advise(struct inode *dir, void *key)
 {
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_file_data *fd = (struct ll_file_data *)key;
@@ -1507,7 +1586,8 @@ static void ll_deauthorize_statahead_fname(struct inode *dir, void *key)
 	if (sai->sai_task) {
 		struct task_struct *task = sai->sai_task;
 
-		sai->sai_task = NULL;
+		/* matches smp_load_acquire() in ll_statahead_thread() */
+		smp_store_release(&sai->sai_task, NULL);
 		wake_up_process(task);
 	}
 	fd->fd_sai = NULL;
@@ -1526,21 +1606,23 @@ void ll_deauthorize_statahead(struct inode *dir, void *key)
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *sai;
 
-	LASSERT(lli->lli_opendir_pid != 0);
-
 	CDEBUG(D_READA, "deauthorize statahead for "DFID"\n",
 	       PFID(&lli->lli_fid));
 
-	if (lli->lli_sa_pattern == LSA_PATTERN_FNAME) {
-		ll_deauthorize_statahead_fname(dir, key);
+	if (lli->lli_sa_pattern & LSA_PATTERN_ADVISE) {
+		ll_deauthorize_statahead_advise(dir, key);
 		return;
 	}
 
+	LASSERT(lli->lli_opendir_pid != 0);
 	LASSERT(lli->lli_opendir_key == key);
 	spin_lock(&lli->lli_sa_lock);
 	lli->lli_opendir_key = NULL;
 	lli->lli_opendir_pid = 0;
 	lli->lli_sa_enabled = 0;
+	lli->lli_sa_pattern = LSA_PATTERN_NONE;
+	lli->lli_sa_fname_index = 0;
+	lli->lli_sa_match_count = 0;
 	sai = lli->lli_sai;
 	if (sai && sai->sai_task) {
 		/*
@@ -1774,9 +1856,10 @@ static int revalidate_statahead_dentry(struct inode *dir,
 	if (!entry)
 		GOTO(out, rc = -EAGAIN);
 
-	if (lli->lli_sa_pattern == LSA_PATTERN_LIST)
+	if (lli->lli_sa_pattern & LSA_PATTERN_LIST ||
+	    lli->lli_sa_pattern & LSA_PATTERN_FNAME)
 		LASSERT(sai == entry->se_sai);
-	else if (lli->lli_sa_pattern == LSA_PATTERN_FNAME)
+	else if (lli->lli_sa_pattern == LSA_PATTERN_ADVISE)
 		sai = entry->se_sai;
 
 	LASSERT(sai != NULL);
@@ -1860,6 +1943,113 @@ out:
 	RETURN(rc);
 }
 
+static inline bool
+sa_pattern_list_detect(struct inode *dir, struct dentry *dchild, int *first)
+{
+	struct ll_inode_info *lli = ll_i2info(dir);
+
+	if (lli->lli_opendir_pid == 0)
+		return false;
+
+	if (lli->lli_sa_enabled == 0)
+		return false;
+
+	if (lli->lli_sa_pattern & LSA_PATTERN_LS_NOT_FIRST_DE)
+		return false;
+
+	*first = is_first_dirent(dir, dchild);
+	if (*first == LS_NOT_FIRST_DE) {
+		/*
+		 * It is not "ls -{a}l" operation, no need statahead for it.
+		 * Disable statahead so that subsequent stat() won't waste
+		 * time to try it.
+		 */
+		spin_lock(&lli->lli_sa_lock);
+		if (lli->lli_opendir_pid == current->pid) {
+			lli->lli_sa_enabled = 0;
+			lli->lli_sa_pattern |= LSA_PATTERN_LS_NOT_FIRST_DE;
+		}
+		spin_unlock(&lli->lli_sa_lock);
+		return false;
+	}
+
+	spin_lock(&lli->lli_sa_lock);
+	lli->lli_sa_pattern |= LSA_PATTERN_LIST;
+	spin_unlock(&lli->lli_sa_lock);
+	return true;
+}
+
+static inline bool
+sa_pattern_fname_detect(struct inode *dir, struct dentry *dchild)
+{
+	struct ll_inode_info *lli = ll_i2info(dir);
+	struct qstr *dname = &dchild->d_name;
+	const unsigned char *name = dname->name;
+	bool rc = false;
+	int i;
+
+	if (ll_i2sbi(dir)->ll_enable_statahead_fname == 0)
+		return false;
+
+	/*
+	 * Parse the format of the file name to determine whether it matches
+	 * the supported file name pattern for statahead (i.e. mdtest.$i).
+	 */
+	i = dname->len - 1;
+	if (isdigit(name[i])) {
+		long num;
+		int ret;
+
+		while (--i >= 0 && isdigit(name[i]))
+			/* do nothing */;
+		i++;
+		ret = kstrtol(&name[i], 0, &num);
+		if (ret)
+			GOTO(out, rc);
+
+		/*
+		 * The traversing program do multiple stat() calls on the same
+		 * children entry. i.e. ls $dir*.
+		 */
+		if (lli->lli_sa_fname_index == num)
+			return false;
+
+		if (lli->lli_sa_match_count == 0 ||
+		    num == lli->lli_sa_fname_index + 1) {
+			lli->lli_sa_match_count++;
+			lli->lli_sa_fname_index = num;
+
+			if (lli->lli_sa_match_count > LSA_FN_MATCH_HIT) {
+				lli->lli_sa_pattern |= LSA_PATTERN_FN_UNIQUE;
+				GOTO(out, rc = true);
+			}
+
+			return false;
+		}
+	}
+out:
+	spin_lock(&lli->lli_sa_lock);
+	if (rc) {
+		lli->lli_sa_pattern |= LSA_PATTERN_FNAME;
+	} else {
+		lli->lli_sa_pattern = LSA_PATTERN_NONE;
+		lli->lli_sa_match_count = 0;
+		lli->lli_sa_fname_index = 0;
+		lli->lli_sa_enabled = 0;
+	}
+	spin_unlock(&lli->lli_sa_lock);
+
+	return rc;
+}
+
+/* detect the statahead pattern. */
+static inline bool
+sa_pattern_detect(struct inode *dir, struct dentry *dchild, int *first)
+{
+	return sa_pattern_list_detect(dir, dchild, first) ||
+	       sa_pattern_fname_detect(dir, dchild);
+}
+
 /**
  * start statahead thread
  *
@@ -1888,11 +2078,8 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 
 	ENTRY;
 
-	/* I am the "lli_opendir_pid" owner, only me can set "lli_sai". */
-	first = is_first_dirent(dir, dentry);
-	if (first == LS_NOT_FIRST_DE)
-		/* It is not "ls -{a}l" operation, no need statahead for it. */
-		GOTO(out, rc = -EFAULT);
+	if (sa_pattern_detect(dir, dentry, &first) == false)
+		RETURN(0);
 
 	if (unlikely(atomic_inc_return(&sbi->ll_sa_running) >
 				       sbi->ll_sa_running_max)) {
@@ -1911,21 +2098,43 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 
 	sai->sai_ls_all = (first == LS_FIRST_DOT_DE);
 
+	if (lli->lli_sa_pattern & LSA_PATTERN_FNAME) {
+		struct qstr *dname = &dentry->d_name;
+		const unsigned char *name = dname->name;
+		int rc;
+		int i;
+
+		if (dname->len >= sizeof(sai->sai_fname))
+			GOTO(out, rc = -ERANGE);
+
+		i = dname->len;
+		while (--i >= 0 && isdigit(name[i]))
+			/* do nothing */;
+		i++;
+
+		memcpy(sai->sai_fname, dname->name, i);
+		sai->sai_fname[i] = '\0';
+		sai->sai_fname_index = lli->lli_sa_fname_index;
+		/* The front part of the file name is zeroed padding. */
+		if (name[i] == '0')
+			sai->sai_fname_zeroed_len = dname->len - i;
+	}
+
 	/*
 	 * if current lli_opendir_key was deauthorized, or dir re-opened by
 	 * another process, don't start statahead, otherwise the newly spawned
 	 * statahead thread won't be notified to quit.
 	 */
 	spin_lock(&lli->lli_sa_lock);
-	if (unlikely(lli->lli_sai || !lli->lli_opendir_key ||
-		     lli->lli_opendir_pid != current->pid ||
-		     lli->lli_sa_pattern != LSA_PATTERN_NONE)) {
+	if (unlikely(lli->lli_sai ||
+		     ((lli->lli_sa_pattern & LSA_PATTERN_LIST) &&
+		      !lli->lli_opendir_key &&
+		      lli->lli_opendir_pid != current->pid))) {
 		spin_unlock(&lli->lli_sa_lock);
 		GOTO(out, rc = -EPERM);
 	}
 	lli->lli_sai = sai;
 	lli->lli_sax = ctx;
-	lli->lli_sa_pattern = LSA_PATTERN_LIST;
 	spin_unlock(&lli->lli_sa_lock);
 
 	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %pd]\n",
@@ -1946,8 +2155,12 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 		ll_start_agl(parent, sai);
 
 	atomic_inc(&sbi->ll_sa_total);
-	sai->sai_task = task;
+	if (lli->lli_sa_pattern & LSA_PATTERN_LIST)
+		atomic_inc(&sbi->ll_sa_list_total);
+	else if (lli->lli_sa_pattern & LSA_PATTERN_FNAME)
+		atomic_inc(&sbi->ll_sa_fname_total);
 
+	sai->sai_task = task;
 	wake_up_process(task);
 	/*
 	 * We don't stat-ahead for the first dirent since we are already in
@@ -2123,15 +2336,14 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 			struct ll_statahead_context *tmp = ctx;
 
 			if (lli->lli_sa_pattern == LSA_PATTERN_NONE ||
-			    lli->lli_sa_pattern == LSA_PATTERN_FNAME) {
-				lli->lli_sa_pattern = LSA_PATTERN_FNAME;
+			    lli->lli_sa_pattern == LSA_PATTERN_ADVISE) {
+				lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 				ctx = lli->lli_sax;
 				__ll_sax_get(ctx);
 				fd->fd_sai = __ll_sai_get(sai);
 				rc = 0;
-			} else {
 				rc = -EINVAL;
-				CWARN("%s: pattern %X is not FNAME: rc = %d\n",
+				CWARN("%s: pattern %X is not ADVISE: rc = %d\n",
 				      sbi->ll_fsname, lli->lli_sa_pattern, rc);
 			}
 
@@ -2140,20 +2352,20 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 			if (rc)
 				GOTO(out, rc);
 		} else {
-			lli->lli_sa_pattern = LSA_PATTERN_FNAME;
+			lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 			lli->lli_sax = ctx;
 			fd->fd_sai = __ll_sai_get(sai);
 			spin_unlock(&lli->lli_sa_lock);
 		}
 	} else {
 		spin_lock(&lli->lli_sa_lock);
-		if (!(lli->lli_sa_pattern == LSA_PATTERN_FNAME ||
+		if (!(lli->lli_sa_pattern == LSA_PATTERN_ADVISE ||
 		      lli->lli_sa_pattern == LSA_PATTERN_NONE)) {
 			spin_unlock(&lli->lli_sa_lock);
 			GOTO(out, rc = -EINVAL);
 		}
 
-		lli->lli_sa_pattern = LSA_PATTERN_FNAME;
+		lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 		fd->fd_sai = __ll_sai_get(sai);
 		spin_unlock(&lli->lli_sa_lock);
 	}
@@ -2195,4 +2407,49 @@ out:
 
 	atomic_dec(&sbi->ll_sa_running);
 	RETURN(rc);
+}
+
+/*
+ * This function is called in each stat() system call to do statahead check.
+ * When the files' naming of stat() call sequence under a directory follows
+ * a certain name rule roughly, this directory is considered as an condicant
+ * to do statahead.
+ * For an example, the file naming rule is mdtest.$rank.$i, the suffix of
+ * the stat() dentry name is number and do stat() for dentries with name
+ * ending with number more than @LSA_FN_PREDICT_HIT, then the corresponding
+ * directory is met the requrirement for statahead.
+ */
+void ll_statahead_enter(struct inode *dir, struct dentry *dchild)
+{
+	struct ll_inode_info *lli;
+	struct qstr *dname = &dchild->d_name;
+
+	if (ll_i2sbi(dir)->ll_sa_max == 0)
+		return;
+
+	if (ll_i2sbi(dir)->ll_enable_statahead_fname == 0)
+		return;
+
+	lli = ll_i2info(dir);
+	if (lli->lli_sa_enabled)
+		return;
+
+	if (lli->lli_sa_pattern & (LSA_PATTERN_FN_PREDICT | LSA_PATTERN_LIST))
+		return;
+
+	/*
+	 * Now support number indexing regularized statahead pattern only.
+	 * Quick check whether the last character is digit.
+	 */
+	if (!isdigit(dname->name[dname->len - 1])) {
+		lli->lli_sa_match_count = 0;
+		return;
+	}
+
+	lli->lli_sa_match_count++;
+	if (lli->lli_sa_match_count > LSA_FN_PREDICT_HIT) {
+		lli->lli_sa_pattern |= LSA_PATTERN_FN_PREDICT;
+		lli->lli_sa_enabled = 1;
+		lli->lli_sa_match_count = 0;
+	}
 }

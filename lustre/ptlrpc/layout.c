@@ -2058,6 +2058,7 @@ int req_capsule_server_pack(struct req_capsule *pill)
 				len += max;
 			else
 				len += len;
+
 			rc = req_capsule_server_grow(&req->rq_pill,
 						     &RMF_BUT_REPLY, len);
 			if (rc)

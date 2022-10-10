@@ -5509,6 +5509,7 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	      request_mask & STATX_MTIME))
 		need_glimpse = false;
 
+	ll_statahead_enter(dir, de);
 	if (dentry_may_statahead(dir, de))
 		ll_start_statahead(dir, de, need_glimpse &&
 				   !(flags & AT_STATX_DONT_SYNC));

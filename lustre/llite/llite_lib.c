@@ -183,13 +183,17 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	/* metadata statahead is enabled by default */
 	sbi->ll_sa_running_max = LL_SA_RUNNING_DEF;
 	sbi->ll_sa_batch_max = LL_SA_BATCH_DEF;
-	sbi->ll_sa_max = LL_SA_RPC_DEF;
+	sbi->ll_sa_max = LL_SA_REQ_MAX_DEF;
+	sbi->ll_sa_min = LL_SA_REQ_MIN_DEF;
+	sbi->ll_sa_timeout = LL_SA_TIMEOUT_DEF;
 	atomic_set(&sbi->ll_sa_total, 0);
 	atomic_set(&sbi->ll_sa_wrong, 0);
 	atomic_set(&sbi->ll_sa_running, 0);
 	atomic_set(&sbi->ll_agl_total, 0);
 	atomic_set(&sbi->ll_sa_hit_total, 0);
 	atomic_set(&sbi->ll_sa_miss_total, 0);
+	atomic_set(&sbi->ll_sa_list_total, 0);
+	atomic_set(&sbi->ll_sa_fname_total, 0);
 	set_bit(LL_SBI_AGL_ENABLED, sbi->ll_flags);
 	set_bit(LL_SBI_FAST_READ, sbi->ll_flags);
 	set_bit(LL_SBI_TINY_WRITE, sbi->ll_flags);
