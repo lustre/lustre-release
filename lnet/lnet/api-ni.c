@@ -1738,33 +1738,6 @@ lnet_nid_to_ni_locked(struct lnet_nid *nid, int cpt)
 	return NULL;
 }
 
-struct lnet_ni  *
-lnet_nid2ni_locked(lnet_nid_t nid4, int cpt)
-{
-	struct lnet_nid nid;
-
-	lnet_nid4_to_nid(nid4, &nid);
-	return lnet_nid_to_ni_locked(&nid, cpt);
-}
-
-struct lnet_ni *
-lnet_nid2ni_addref(lnet_nid_t nid4)
-{
-	struct lnet_ni *ni;
-	struct lnet_nid nid;
-
-	lnet_nid4_to_nid(nid4, &nid);
-
-	lnet_net_lock(0);
-	ni = lnet_nid_to_ni_locked(&nid, 0);
-	if (ni)
-		lnet_ni_addref_locked(ni, 0);
-	lnet_net_unlock(0);
-
-	return ni;
-}
-EXPORT_SYMBOL(lnet_nid2ni_addref);
-
 struct lnet_ni *
 lnet_nid_to_ni_addref(struct lnet_nid *nid)
 {
@@ -4004,11 +3977,11 @@ lnet_get_local_ni_hstats(struct lnet_ioctl_local_ni_hstats *stats)
 {
 	int cpt, rc = 0;
 	struct lnet_ni *ni;
-	lnet_nid_t nid = stats->hlni_nid;
+	struct lnet_nid nid;
 
+	lnet_nid4_to_nid(stats->hlni_nid, &nid);
 	cpt = lnet_net_lock_current();
-	ni = lnet_nid2ni_locked(nid, cpt);
-
+	ni = lnet_nid_to_ni_locked(&nid, cpt);
 	if (!ni) {
 		rc = -ENOENT;
 		goto unlock;

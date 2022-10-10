@@ -2505,6 +2505,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	struct kib_conn *conn;
 	struct lnet_ni *ni = NULL;
 	struct kib_net *net = NULL;
+	struct lnet_nid destnid;
 	lnet_nid_t nid;
 	struct rdma_conn_param cp;
 	struct kib_rej rej;
@@ -2562,7 +2563,8 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	}
 
 	nid = reqmsg->ibm_srcnid;
-	ni  = lnet_nid2ni_addref(reqmsg->ibm_dstnid);
+	lnet_nid4_to_nid(reqmsg->ibm_dstnid, &destnid);
+	ni  = lnet_nid_to_ni_addref(&destnid);
 
 	if (ni != NULL) {
 		net = (struct kib_net *)ni->ni_data;
@@ -2570,10 +2572,10 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	}
 
 	if (ni == NULL ||			/* no matching net */
-	    lnet_nid_to_nid4(&ni->ni_nid) !=
-	    reqmsg->ibm_dstnid ||		/* right NET, wrong NID! */
+	    !nid_same(&ni->ni_nid, &destnid) ||	/* right NET, wrong NID! */
 	    net->ibn_dev != ibdev) {		/* wrong device */
-		CERROR("Can't accept conn from %s on %s (%s:%d:%pI4h): bad dst nid %s\n", libcfs_nid2str(nid),
+		CERROR("Can't accept conn from %s on %s (%s:%d:%pI4h): bad dst nid %s\n",
+		       libcfs_nid2str(nid),
 		       ni ? libcfs_nidstr(&ni->ni_nid) : "NA",
 		       ibdev->ibd_ifname, ibdev->ibd_nnets,
 		       &ibdev->ibd_ifip,
