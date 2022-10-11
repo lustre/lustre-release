@@ -190,41 +190,42 @@ EXPORT_SYMBOL(osc_device_fini);
 struct lu_device *osc_device_free(const struct lu_env *env,
 				  struct lu_device *d)
 {
-	struct osc_device *od = lu2osc_dev(d);
+	struct osc_device *oc = lu2osc_dev(d);
 
 	cl_device_fini(lu2cl_dev(d));
-	OBD_FREE_PTR(od);
+	OBD_FREE_PTR(oc);
 	return NULL;
 }
 EXPORT_SYMBOL(osc_device_free);
 
 static struct lu_device *osc_device_alloc(const struct lu_env *env,
-                                          struct lu_device_type *t,
-                                          struct lustre_cfg *cfg)
+					  struct lu_device_type *t,
+					  struct lustre_cfg *cfg)
 {
-        struct lu_device *d;
-        struct osc_device *od;
-        struct obd_device *obd;
-        int rc;
+	struct lu_device *d;
+	struct osc_device *osc;
+	struct obd_device *obd;
+	int rc;
 
-        OBD_ALLOC_PTR(od);
-        if (od == NULL)
-                RETURN(ERR_PTR(-ENOMEM));
+	OBD_ALLOC_PTR(osc);
+	if (osc == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
 
-        cl_device_init(&od->od_cl, t);
-        d = osc2lu_dev(od);
-        d->ld_ops = &osc_lu_ops;
+	cl_device_init(&osc->osc_cl, t);
+	d = osc2lu_dev(osc);
+	d->ld_ops = &osc_lu_ops;
 
-        /* Setup OSC OBD */
-        obd = class_name2obd(lustre_cfg_string(cfg, 0));
-        LASSERT(obd != NULL);
-        rc = osc_setup(obd, cfg);
-        if (rc) {
-                osc_device_free(env, d);
-                RETURN(ERR_PTR(rc));
-        }
-        od->od_exp = obd->obd_self_export;
-        RETURN(d);
+	/* Setup OSC OBD */
+	obd = class_name2obd(lustre_cfg_string(cfg, 0));
+	LASSERT(obd != NULL);
+	rc = osc_setup(obd, cfg);
+	if (rc) {
+		osc_device_free(env, d);
+		RETURN(ERR_PTR(rc));
+	}
+	osc->osc_exp = obd->obd_self_export;
+	osc->osc_stats.os_init = ktime_get_real();
+	RETURN(d);
 }
 
 static const struct lu_device_type_operations osc_device_type_ops = {

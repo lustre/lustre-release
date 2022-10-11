@@ -509,6 +509,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	cli->cl_mod_rpcs_in_flight = 0;
 	cli->cl_close_rpcs_in_flight = 0;
 	init_waitqueue_head(&cli->cl_mod_rpcs_waitq);
+	cli->cl_mod_rpcs_init = ktime_get_real();
 	cli->cl_mod_tag_bitmap = NULL;
 
 	INIT_LIST_HEAD(&cli->cl_chg_dev_linkage);

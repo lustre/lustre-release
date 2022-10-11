@@ -199,7 +199,7 @@ static int job_cleanup_iter_callback(struct cfs_hash *hs,
 static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 {
 	ktime_t cleanup_interval = stats->ojs_cleanup_interval;
-	ktime_t now = ktime_get();
+	ktime_t now = ktime_get_real();
 	ktime_t oldest;
 
 	if (likely(!clear)) {
@@ -242,7 +242,7 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 
 	write_lock(&stats->ojs_lock);
 	stats->ojs_cleaning = false;
-	stats->ojs_cleanup_last = ktime_get();
+	stats->ojs_cleanup_last = ktime_get_real();
 	write_unlock(&stats->ojs_lock);
 }
 
@@ -263,8 +263,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	jobs->ojs_cntr_init_fn(job->js_stats, 0);
 
 	memcpy(job->js_jobid, jobid, sizeof(job->js_jobid));
-	job->js_time_init = ktime_get();
-	job->js_time_latest = job->js_time_init;
+	job->js_time_latest = job->js_stats->ls_init;
 	job->js_jobstats = jobs;
 	INIT_HLIST_NODE(&job->js_hash);
 	INIT_LIST_HEAD(&job->js_list);
@@ -324,7 +323,7 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 
 found:
 	LASSERT(stats == job->js_jobstats);
-	job->js_time_latest = ktime_get();
+	job->js_time_latest = ktime_get_real();
 	lprocfs_counter_add(job->js_stats, event, amount);
 
 	job_putref(job);
@@ -468,8 +467,8 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 
 	seq_printf(p, "- %-16s %s%*s%s\n",
 		   "job_id:", quote, joblen, escaped, quote);
-	lprocfs_stats_header(p, job->js_time_latest, job->js_time_init, 16,
-			     ":", true, "  ");
+	lprocfs_stats_header(p, job->js_time_latest, job->js_stats->ls_init,
+			     16, ":", true, "  ");
 
 	s = job->js_stats;
 	for (i = 0; i < s->ls_num; i++) {
@@ -639,7 +638,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	 * it is easier to work with.
 	 */
 	stats->ojs_cleanup_interval = ktime_set(600 / 2, 0); /* default 10 min*/
-	stats->ojs_cleanup_last = ktime_get();
+	stats->ojs_cleanup_last = ktime_get_real();
 
 	entry = lprocfs_add_simple(obd->obd_proc_entry, "job_stats", stats,
 				   &lprocfs_jobstats_seq_fops);

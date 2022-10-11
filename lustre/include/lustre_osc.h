@@ -100,18 +100,18 @@ static inline struct osc_async_page *brw_page2oap(struct brw_page *pga)
 }
 
 struct osc_device {
-	struct cl_device	od_cl;
-	struct obd_export	*od_exp;
+	struct cl_device	osc_cl;
+	struct obd_export	*osc_exp;
 
 	/* Write stats is actually protected by client_obd's lock. */
 	struct osc_stats {
 		ktime_t		os_init;
 		uint64_t	os_lockless_writes;    /* by bytes */
 		uint64_t	os_lockless_reads;     /* by bytes */
-	} od_stats;
+	} osc_stats;
 
 	/* configuration item(s) */
-	time64_t		od_contention_time;
+	time64_t		osc_contention_time;
 };
 
 struct osc_extent;
@@ -758,12 +758,12 @@ static inline struct osc_io *osc_env_io(const struct lu_env *env)
 
 static inline struct osc_device *lu2osc_dev(const struct lu_device *d)
 {
-	return container_of_safe(d, struct osc_device, od_cl.cd_lu_dev);
+	return container_of_safe(d, struct osc_device, osc_cl.cd_lu_dev);
 }
 
 static inline struct obd_export *osc_export(const struct osc_object *obj)
 {
-	return lu2osc_dev(obj->oo_cl.co_lu.lo_dev)->od_exp;
+	return lu2osc_dev(obj->oo_cl.co_lu.lo_dev)->osc_exp;
 }
 
 static inline struct client_obd *osc_cli(const struct osc_object *obj)
@@ -784,12 +784,12 @@ static inline struct cl_object *osc2cl(const struct osc_object *obj)
 static inline struct osc_device *obd2osc_dev(const struct obd_device *obd)
 {
 	return container_of_safe(obd->obd_lu_dev, struct osc_device,
-				 od_cl.cd_lu_dev);
+				 osc_cl.cd_lu_dev);
 }
 
 static inline struct lu_device *osc2lu_dev(struct osc_device *osc)
 {
-	return &osc->od_cl.cd_lu_dev;
+	return &osc->osc_cl.cd_lu_dev;
 }
 
 static inline struct lu_object *osc2lu(struct osc_object *osc)

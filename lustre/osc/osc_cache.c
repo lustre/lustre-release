@@ -1324,7 +1324,7 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	/* statistic */
 	if (rc == 0 && srvlock) {
 		struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
-		struct osc_stats *stats = &lu2osc_dev(ld)->od_stats;
+		struct osc_stats *stats = &lu2osc_dev(ld)->osc_stats;
 		size_t bytes = oap->oap_count;
 
 		if (crt == CRT_READ)

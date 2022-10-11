@@ -1583,16 +1583,16 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 					  struct lustre_cfg *cfg)
 {
 	struct lu_device *d;
-	struct osc_device *od;
+	struct osc_device *oc;
 	struct obd_device *obd;
 	int rc;
 
-	OBD_ALLOC_PTR(od);
-	if (od == NULL)
+	OBD_ALLOC_PTR(oc);
+	if (oc == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	cl_device_init(&od->od_cl, t);
-	d = osc2lu_dev(od);
+	cl_device_init(&oc->osc_cl, t);
+	d = osc2lu_dev(oc);
 	d->ld_ops = &mdc_lu_ops;
 
 	/* Setup MDC OBD */
@@ -1605,7 +1605,8 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 		osc_device_free(env, d);
 		RETURN(ERR_PTR(rc));
 	}
-	od->od_exp = obd->obd_self_export;
+	oc->osc_exp = obd->obd_self_export;
+	oc->osc_stats.os_init = ktime_get_real();
 	RETURN(d);
 }
 
