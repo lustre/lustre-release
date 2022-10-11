@@ -1,2 +1,3 @@
 block-integrity-allow-optional-integrity-functions-rhel8.3.patch
 block-pass-bio-into-integrity_processing_fn-rhel8.patch
+jbd2-revoke-rhashtable-rhel8.4.patch
