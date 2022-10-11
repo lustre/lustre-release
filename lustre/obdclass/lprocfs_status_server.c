@@ -779,8 +779,8 @@ static int brw_stats_seq_show(struct seq_file *seq, void *v)
 	int i;
 
 	/* this sampling races with updates */
-	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":",
-			     true, "");
+	lprocfs_stats_header(seq, ktime_get_real(), brw_stats->bs_init, 25,
+			     ":", true, "");
 
 	for (i = 0; i < ARRAY_SIZE(brw_stats->bs_props); i++) {
 		if (!brw_stats->bs_props[i].bsp_name)
@@ -806,6 +806,7 @@ static ssize_t brw_stats_seq_write(struct file *file,
 
 	for (i = 0; i < BRW_RW_STATS_NUM; i++)
 		lprocfs_oh_clear_pcpu(&brw_stats->bs_hist[i]);
+	brw_stats->bs_init = ktime_get_real();
 
 	return len;
 }
@@ -842,7 +843,7 @@ void ldebugfs_register_osd_stats(struct dentry *parent,
 	int i;
 
 	LASSERT(brw_stats);
-	brw_stats->bs_init = ktime_get();
+	brw_stats->bs_init = ktime_get_real();
 	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
 		struct brw_stats_props *props = brw_stats->bs_props;
 

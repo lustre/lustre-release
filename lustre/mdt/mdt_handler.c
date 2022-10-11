@@ -6007,7 +6007,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_subdir_mount = 1;
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_dir_restripe_nsonly = 1;
-	m->mdt_rename_stats.rs_init = ktime_get();
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);

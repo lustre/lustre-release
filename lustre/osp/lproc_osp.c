@@ -890,6 +890,7 @@ static ssize_t osp_rpc_stats_seq_write(struct file *file,
 	struct client_obd *cli = &dev->u.cli;
 
 	lprocfs_oh_clear(&cli->cl_mod_rpcs_hist);
+	cli->cl_mod_rpcs_init = ktime_get_real();
 
 	return len;
 }

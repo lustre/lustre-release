@@ -1220,6 +1220,7 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 
 	stats->ls_num = num;
 	stats->ls_flags = flags;
+	stats->ls_init = ktime_get_real();
 	spin_lock_init(&stats->ls_lock);
 
 	/* alloc num of counter headers */
@@ -1338,6 +1339,7 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
 				percpu_cntr->lc_sum_irq	= 0;
 		}
 	}
+	stats->ls_init = ktime_get_real();
 
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
@@ -1419,8 +1421,8 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 	int idx = *(loff_t *)v;
 
 	if (idx == 0)
-		lprocfs_stats_header(p, ktime_get(), stats->ls_init, 25, "",
-				     true, "");
+		lprocfs_stats_header(p, ktime_get_real(), stats->ls_init, 25,
+				     "", true, "");
 
 	hdr = &stats->ls_cnt_header[idx];
 	lprocfs_stats_collect(stats, idx, &ctr);

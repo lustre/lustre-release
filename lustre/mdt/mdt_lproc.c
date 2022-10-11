@@ -109,13 +109,15 @@ static void display_rename_stats(struct seq_file *seq, char *name,
 	}
 }
 
-static void rename_stats_show(struct seq_file *seq,
-			      struct rename_stats *rename_stats)
+static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
 {
+	struct mdt_device *mdt = seq->private;
+	struct rename_stats *rename_stats = &mdt->mdt_rename_stats;
+
 	/* this sampling races with updates */
 	seq_puts(seq, "rename_stats:\n-\n");
-	lprocfs_stats_header(seq, ktime_get(), rename_stats->rs_init, 15, ":",
-			     false, "  ");
+	lprocfs_stats_header(seq, ktime_get_real(), rename_stats->rs_init, 15,
+			     ":", false, "  ");
 
 	display_rename_stats(seq, "same_dir",
 			     &rename_stats->rs_hist[RENAME_SAMEDIR_SIZE]);
@@ -123,13 +125,6 @@ static void rename_stats_show(struct seq_file *seq,
 			     &rename_stats->rs_hist[RENAME_CROSSDIR_SRC_SIZE]);
 	display_rename_stats(seq, "crossdir_tgt",
 			     &rename_stats->rs_hist[RENAME_CROSSDIR_TGT_SIZE]);
-}
-
-static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
-{
-	struct mdt_device *mdt = seq->private;
-
-	rename_stats_show(seq, &mdt->mdt_rename_stats);
 
 	return 0;
 }
@@ -144,7 +139,7 @@ mdt_rename_stats_seq_write(struct file *file, const char __user *buf,
 
 	for (i = 0; i < RENAME_LAST; i++)
 		lprocfs_oh_clear(&mdt->mdt_rename_stats.rs_hist[i]);
-	mdt->mdt_rename_stats.rs_init = ktime_get();
+	mdt->mdt_rename_stats.rs_init = ktime_get_real();
 
 	return len;
 }
@@ -156,6 +151,7 @@ static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 
 	for (i = 0; i < RENAME_LAST; i++)
 		spin_lock_init(&mdt->mdt_rename_stats.rs_hist[i].oh_lock);
+	mdt->mdt_rename_stats.rs_init = ktime_get_real();
 
 	return lprocfs_obd_seq_create(mdt2obd_dev(mdt), "rename_stats", 0644,
 				      &mdt_rename_stats_fops, mdt);

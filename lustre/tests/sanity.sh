@@ -13644,20 +13644,44 @@ run_test 126 "check that the fsgid provided by the client is taken into account"
 test_127a() { # bug 15521
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	local name count samp unit min max sum sumsq
+	local tmpfile=$TMP/$tfile.tmp
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 	echo "stats before reset"
-	$LCTL get_param osc.*.stats
+	stack_trap "rm -f $tmpfile"
+	local now=$(date +%s)
+
+	$LCTL get_param osc.*.stats | tee $tmpfile
+
+	local snapshot_time=$(awk '/snapshot_time/ { print $2; exit }' $tmpfile)
+	local start_time=$(awk '/start_time/ { print $2; exit }' $tmpfile)
+	local elapsed=$(awk '/elapsed_time/ { print $2; exit }' $tmpfile)
+	local uptime=$(awk '{ print $1 }' /proc/uptime)
+
+	# snapshot_time should match POSIX epoch time, allow some delta for VMs
+	(( ${snapshot_time%\.*} >= $now - 5 &&
+	   ${snapshot_time%\.*} <= $now + 5 )) ||
+		error "snapshot_time=$snapshot_time != now=$now"
+	# elapsed _should_ be from mount, but at least less than uptime
+	(( ${elapsed%\.*} < ${uptime%\.*} )) ||
+		error "elapsed=$elapsed > uptime=$uptime"
+	(( ${snapshot_time%\.*} - ${start_time%\.*} >= ${elapsed%\.*} - 2 &&
+	   ${snapshot_time%\.*} - ${start_time%\.*} <= ${elapsed%\.*} + 2 )) ||
+		error "elapsed=$elapsed != $snapshot_time - $start_time"
+
 	$LCTL set_param osc.*.stats=0
+	local reset=$(date +%s)
 	local fsize=$((2048 * 1024))
 
 	dd if=/dev/zero of=$DIR/$tfile bs=$fsize count=1
 	cancel_lru_locks osc
 	dd if=$DIR/$tfile of=/dev/null bs=$fsize
 
-	$LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/$tfile.tmp
-	stack_trap "rm -f $TMP/$tfile.tmp"
+	now=$(date +%s)
+	$LCTL get_param osc.*0000-osc-*.stats > $tmpfile
 	while read name count samp unit min max sum sumsq; do
+		[[ "$samp" == "samples" ]] || continue
+
 		echo "got name=$name count=$count unit=$unit min=$min max=$max"
 		[ ! $min ] && error "Missing min value for $name proc entry"
 		eval $name=$count || error "Wrong proc format"
@@ -13682,13 +13706,29 @@ test_127a() { # bug 15521
 			;;
 		*)	;;
 		esac
-	done < $DIR/$tfile.tmp
+	done < $tmpfile
 
 	#check that we actually got some stats
 	[ "$read_bytes" ] || error "Missing read_bytes stats"
 	[ "$write_bytes" ] || error "Missing write_bytes stats"
 	[ "$read_bytes" != 0 ] || error "no read done"
 	[ "$write_bytes" != 0 ] || error "no write done"
+
+	snapshot_time=$(awk '/snapshot_time/ { print $2; exit }' $tmpfile)
+	start_time=$(awk '/start_time/ { print $2; exit }' $tmpfile)
+	elapsed=$(awk '/elapsed_time/ { print $2; exit }' $tmpfile)
+
+	# snapshot_time should match POSIX epoch time, allow some delta for VMs
+	(( ${snapshot_time%\.*} >= $now - 5 &&
+	   ${snapshot_time%\.*} <= $now + 5 )) ||
+		error "reset snapshot_time=$snapshot_time != now=$now"
+	# elapsed should be from time of stats reset
+	(( ${elapsed%\.*} >= $now - $reset - 2 &&
+	   ${elapsed%\.*} <= $now - $reset + 2 )) ||
+		error "reset elapsed=$elapsed > $now - $reset"
+	(( ${snapshot_time%\.*} - ${start_time%\.*} >= ${elapsed%\.*} - 2 &&
+	   ${snapshot_time%\.*} - ${start_time%\.*} <= ${elapsed%\.*} + 2 )) ||
+		error "reset elapsed=$elapsed != $snapshot_time - $start_time"
 }
 run_test 127a "verify the client stats are sane"
 
