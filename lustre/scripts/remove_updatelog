@@ -1,0 +1,160 @@
+#!/bin/bash
+
+# remove_updatelogs: emergency remove MDT updatelog files from server.
+#
+# This is emergency tool to cleanup updatelogs in server if llog records
+# cannot be removed by regular means, e.g. due to llog corruptions
+#
+# Tool goes the following:
+# - goes through update_log catlist to find per-MDT update llog catalog
+# - process llog catalog to delete all plain llogs in it
+# - truncate or remove related llog catalog after all
+# - truncates update_llogs itself if all catalogs were removed
+#
+# Script required parameter is mount point of server FS mounted locally
+# it accepts also optional options as described below in usage()
+#
+# Steps to cleanup problematic llogs:
+#
+# 1. mount MDT filesystem locally on server as ldiskfs mount
+# 2. run script first in dry-run mode to make sure it parses llogs as needed:
+#    # bash remove_updatelog -n <ldiskfs_mount>
+# 3. save all llogs for analysis:
+#    # bash remove_updatelog -n -z /tmp/llogs_saved <ldiskfs_mount>
+# 4. check that /tmp/llogs_saved.tar.gz exists and has all llogs inside:
+#    # ls -ali /tmp/llogs_saved.tar.gz
+#    # tar -tf /tmp/llog_saved.tar.gz
+# 5. finally run script to delete all llogs:
+#    # bash remove_updatelog <ldiskfs_mount>
+#
+# For better llogs compression xz can be used as well, pass it to the script
+# via GZIP env variable:
+#    # GZIP=xz bash remove_updatelog -n -z /tmp/llogs_saved <ldiskfs_mount>
+# Archive name will ends with .xz in that case instead of .gz
+
+ECHO=echo
+PROG=$(basename $0)
+LLOG_READER=${LLOG_READER:-llog_reader}
+GZIP=${GZIP:-gzip}
+
+usage() {
+    cat -- <<USAGE 1>&2
+usage: remove_updatelog [--dry-run|-n] [--help|-h] [--quiet|-q] <localmount>
+	--help|-h	   show this usage message
+	--dry-run|-n	   only print the names of files to be removed
+	--quiet|-q	   run quietly (don't print filenames or status)
+	--zip|-z <name_prefix>
+			save all llogs into compressed tar archive with given
+			name prefix using gzip by default. Other compression
+			tools can be used via GZIP env variable.
+
+The 'localmount' argument should be an ldiskfs mounted MDT device mountpoint.
+
+Examples:
+      remove_updatelog /mnt/mdt0
+      remove_updatelog --dry-run /mnt/mdt0
+      remove_changelog -z /tmp/llogs /mnt/mdt0
+USAGE
+    exit 1
+}
+
+OPT_DRYRUN=false
+OPT_ARCH=""
+OPT_MOUNT=""
+OPT_MDTS=()
+
+# Examine any long options and arguments
+while [ -n "$*" ]; do
+	arg="$1"
+	case "$arg" in
+	-h|--help) usage;;
+	-n|--dry-run) OPT_DRYRUN=true;;
+	-q|--quiet) ECHO=:;;
+	-z|--zip) OPT_ARCH="$2.tar"; shift;;
+	*)
+	   [ -e "$arg" ] && OPT_MOUNT="$arg" && break
+	esac
+	shift
+done
+
+remove_updatelog() {
+	local mntpoint=$OPT_MOUNT
+	local catlist=${mntpoint}/update_log
+	local dir=${mntpoint}/update_log_dir
+	local arch=$OPT_ARCH
+	local length=0
+
+	if [[ -z $(df -t ldiskfs $mntpoint 2>/dev/null) ]] ; then
+		echo "$PROG: '$mntpoint' is not ldiskfs mount."
+		exit 1
+	fi
+
+	if $OPT_DRYRUN; then
+		$ECHO "Dry run was requested, no changes will be applied"
+	fi
+
+	$ECHO "Scan update_log at '$mntpoint':"
+	if [[ ! -f $catlist ]] ; then
+		echo "$PROG: $catlist doesn't exist already."
+	else
+		read -r -d '' -a OPT_MDTS < <(hexdump -v -e '2/8 " %16x" 2/8 "\n"' $catlist |
+					      awk '{print "[0x"$2":0x"$1":0x0]"}')
+
+		if [[ ! $(which $LLOG_READER 2>/dev/null) ]] ; then
+			echo "$PROG: $LLOG_READER is missing."
+			exit 1
+		fi
+		[[ -z $arch ]] || tar -cf $arch $catlist 2>/dev/null
+		length=${#OPT_MDTS[@]}
+		for (( i = 0; i < ${length}; i++ )); do
+			local catalog=$dir/${OPT_MDTS[$i]}
+
+			$ECHO "Processing MDT$i llogs ..."
+			if [[ ! -f $catalog ]] ; then
+				echo "$PROG: $catalog doesn't exist already."
+				continue
+			fi
+			[[ -z $arch ]] || tar -rf $arch $catalog 2>/dev/null
+			if (( $(stat -c %s $catalog) >= 8192 )) ; then
+				while read -r plain ; do
+					local path
+
+					# compatibility checks:
+					# old llog reader reports path in /O
+					# but correct path in update_log_dir
+					if [ ${plain:0:1} == 'O' ] ; then
+						local fid=${plain#"O/"*}
+
+						# old format: O/8589935617/d3/3
+						# get sequence and oid in hex:
+						fid=$(printf "[0x%x:0x%x:0x0]" ${fid%%/*} ${fid##*/})
+						path="$dir/$fid"
+					else
+						path=$mntpoint/$plain
+					fi
+					[[ -z $arch ]] ||
+						tar -rf $arch $path 2>/dev/null
+					$ECHO "rm -f $path"
+					$OPT_DRYRUN || rm -f $path
+				done < <(llog_reader $catalog |
+					 awk -F "path=" '/path=/ { print $2 }')
+			else
+				echo "$PROG: $catalog is too small."
+			fi
+			$ECHO "> $catalog"
+			$OPT_DRYRUN || > $catalog
+		done
+	fi
+	if [[ "$arch" ]] ; then
+		$GZIP -3 $arch
+		$ECHO "llog archive was created by $GZIP"
+	fi
+}
+
+if [ -z $OPT_MOUNT ] ; then
+	echo "Mount is not specified, exiting"
+	exit 1
+fi
+remove_updatelog
+
+

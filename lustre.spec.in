@@ -747,6 +747,8 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %{_libexecdir}/lustre/lc_common
 %{_libexecdir}/lustre/haconfig
 %{_bindir}/lustre_req_history
+%{_bindir}/remove_changelog
+%{_bindir}/remove_updatelog
 %endif
 
 %{_bindir}/llobdstat
