@@ -717,7 +717,7 @@ static void ldlm_namespace_debugfs_unregister(struct ldlm_namespace *ns)
 		debugfs_remove_recursive(ns->ns_debugfs_entry);
 
 	if (ns->ns_stats != NULL)
-		lprocfs_free_stats(&ns->ns_stats);
+		lprocfs_stats_free(&ns->ns_stats);
 }
 
 void ldlm_namespace_sysfs_unregister(struct ldlm_namespace *ns)
@@ -735,7 +735,7 @@ int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 	err = kobject_init_and_add(&ns->ns_kobj, &ldlm_ns_ktype, NULL,
 				   "%s", ldlm_ns_name(ns));
 
-	ns->ns_stats = lprocfs_alloc_stats(LDLM_NSS_LAST, 0);
+	ns->ns_stats = lprocfs_stats_alloc(LDLM_NSS_LAST, 0);
 	if (!ns->ns_stats) {
 		kobject_put(&ns->ns_kobj);
 		return -ENOMEM;

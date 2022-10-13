@@ -688,7 +688,7 @@ static int __init obdclass_init(void)
 		return err;
 
 #ifdef CONFIG_PROC_FS
-	obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
+	obd_memory = lprocfs_stats_alloc(OBD_STATS_NUM,
 					 LPROCFS_STATS_FLAG_NONE |
 					 LPROCFS_STATS_FLAG_IRQ_SAFE);
 	if (obd_memory == NULL) {
@@ -803,7 +803,7 @@ cleanup_kkuc:
 
 cleanup_obd_memory:
 #ifdef CONFIG_PROC_FS
-	lprocfs_free_stats(&obd_memory);
+	lprocfs_stats_free(&obd_memory);
 #endif
 
 	unregister_oom_notifier(&obdclass_oom);
@@ -867,7 +867,7 @@ static void __exit obdclass_exit(void)
 	memory_leaked = obd_memory_sum();
 	memory_max = obd_memory_max();
 
-	lprocfs_free_stats(&obd_memory);
+	lprocfs_stats_free(&obd_memory);
 	/* the below message is checked in test-framework.sh check_mem_leak() */
 	CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
 	       "obd_memory max: %llu, leaked: %llu\n",

@@ -114,7 +114,7 @@ static void job_free(struct job_stat *job)
 	list_del_init(&job->js_list);
 	write_unlock(&job->js_jobstats->ojs_lock);
 
-	lprocfs_free_stats(&job->js_stats);
+	lprocfs_stats_free(&job->js_stats);
 	OBD_FREE_PTR(job);
 }
 
@@ -254,7 +254,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	if (job == NULL)
 		return NULL;
 
-	job->js_stats = lprocfs_alloc_stats(jobs->ojs_cntr_num, 0);
+	job->js_stats = lprocfs_stats_alloc(jobs->ojs_cntr_num, 0);
 	if (job->js_stats == NULL) {
 		OBD_FREE_PTR(job);
 		return NULL;

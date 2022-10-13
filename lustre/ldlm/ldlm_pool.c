@@ -839,7 +839,7 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	ldlm_add_var(&pool_vars[0], pl->pl_debugfs_entry, "state", pl,
 		     &lprocfs_pool_state_fops);
 
-	pl->pl_stats = lprocfs_alloc_stats(LDLM_POOL_LAST_STAT -
+	pl->pl_stats = lprocfs_stats_alloc(LDLM_POOL_LAST_STAT -
 					   LDLM_POOL_FIRST_STAT, 0);
 	if (!pl->pl_stats)
 		GOTO(out, rc = -ENOMEM);
@@ -893,7 +893,7 @@ static void ldlm_pool_sysfs_fini(struct ldlm_pool *pl)
 static void ldlm_pool_debugfs_fini(struct ldlm_pool *pl)
 {
 	if (pl->pl_stats != NULL) {
-		lprocfs_free_stats(&pl->pl_stats);
+		lprocfs_stats_free(&pl->pl_stats);
 		pl->pl_stats = NULL;
 	}
 	debugfs_remove_recursive(pl->pl_debugfs_entry);

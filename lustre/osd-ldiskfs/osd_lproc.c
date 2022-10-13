@@ -82,7 +82,7 @@ static int osd_stats_init(struct osd_device *osd)
 	int result = -ENOMEM;
 
 	ENTRY;
-        osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
+	osd->od_stats = lprocfs_stats_alloc(LPROC_OSD_LAST, 0);
 	if (osd->od_stats) {
 		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
 				     LPROCFS_TYPE_LATENCY, "get_page");
@@ -872,7 +872,7 @@ int osd_procfs_fini(struct osd_device *osd)
 	lprocfs_fini_brw_stats(&osd->od_brw_stats);
 
 	if (osd->od_stats)
-		lprocfs_free_stats(&osd->od_stats);
+		lprocfs_stats_free(&osd->od_stats);
 
 	if (osd->od_proc_entry)
 		lprocfs_remove(&osd->od_proc_entry);

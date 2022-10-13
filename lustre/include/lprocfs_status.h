@@ -525,9 +525,9 @@ u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 			    enum lprocfs_fields_flags field);
 
 extern struct lprocfs_stats *
-lprocfs_alloc_stats(unsigned int num, enum lprocfs_stats_flags flags);
-extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
-extern void lprocfs_free_stats(struct lprocfs_stats **stats);
+lprocfs_stats_alloc(unsigned int num, enum lprocfs_stats_flags flags);
+extern void lprocfs_stats_clear(struct lprocfs_stats *stats);
+extern void lprocfs_stats_free(struct lprocfs_stats **stats);
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
 extern int lprocfs_alloc_obd_stats(struct obd_device *obd,
 				   unsigned int num_stats);
@@ -567,7 +567,7 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off);
 extern int lprocfs_nid_stats_clear_seq_show(struct seq_file *file, void *data);
 #endif
-extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
+extern int lprocfs_stats_register(struct proc_dir_entry *root, const char *name,
 				  struct lprocfs_stats *stats);
 extern const struct file_operations ldebugfs_stats_seq_fops;
 
@@ -946,15 +946,15 @@ static inline __u64 lc_read_helper(struct lprocfs_counter *lc,
 
 /* NB: we return !NULL to satisfy error checker */
 static inline struct lprocfs_stats *
-lprocfs_alloc_stats(unsigned int num, enum lprocfs_stats_flags flags)
+lprocfs_stats_alloc(unsigned int num, enum lprocfs_stats_flags flags)
 { return (struct lprocfs_stats *)1; }
-static inline void lprocfs_clear_stats(struct lprocfs_stats *stats)
+static inline void lprocfs_stats_clear(struct lprocfs_stats *stats)
 { return; }
-static inline void lprocfs_free_stats(struct lprocfs_stats **stats)
+static inline void lprocfs_stats_free(struct lprocfs_stats **stats)
 { return; }
-static inline int lprocfs_register_stats(struct proc_dir_entry *root,
-                                         const char *name,
-                                         struct lprocfs_stats *stats)
+static inline int lprocfs_stats_register(struct proc_dir_entry *root,
+					 const char *name,
+					 struct lprocfs_stats *stats)
 { return 0; }
 static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 { return; }

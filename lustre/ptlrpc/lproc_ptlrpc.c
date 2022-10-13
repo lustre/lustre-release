@@ -214,7 +214,7 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 	LASSERT(!*debugfs_root_ret);
 	LASSERT(!*stats_ret);
 
-	svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
+	svc_stats = lprocfs_stats_alloc(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
 					0);
 	if (!svc_stats)
 		return;
@@ -1309,7 +1309,7 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 	debugfs_remove_recursive(svc->srv_debugfs_entry);
 
 	if (svc->srv_stats)
-		lprocfs_free_stats(&svc->srv_stats);
+		lprocfs_stats_free(&svc->srv_stats);
 }
 
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
@@ -1322,7 +1322,7 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 	debugfs_remove_recursive(obd->obd_svc_debugfs_entry);
 
 	if (obd->obd_svc_stats)
-		lprocfs_free_stats(&obd->obd_svc_stats);
+		lprocfs_stats_free(&obd->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 

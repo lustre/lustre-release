@@ -671,7 +671,7 @@ static ssize_t ll_wr_track_id(struct kobject *kobj, const char *buffer,
 		sbi->ll_stats_track_type = STATS_TRACK_ALL;
 	else
 		sbi->ll_stats_track_type = type;
-	lprocfs_clear_stats(sbi->ll_stats);
+	lprocfs_stats_clear(sbi->ll_stats);
 	return count;
 }
 
@@ -1927,7 +1927,7 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 			    &ll_rw_offset_stats_fops);
 
 	/* File operations stats */
-	sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
+	sbi->ll_stats = lprocfs_stats_alloc(LPROC_LL_FILE_OPCODES,
 					    LPROCFS_STATS_FLAG_NONE);
 	if (sbi->ll_stats == NULL)
 		GOTO(out_debugfs, err = -ENOMEM);
@@ -1942,7 +1942,7 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	debugfs_create_file("stats", 0644, sbi->ll_debugfs_entry,
 			    sbi->ll_stats, &ldebugfs_stats_seq_fops);
 
-	sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
+	sbi->ll_ra_stats = lprocfs_stats_alloc(ARRAY_SIZE(ra_stat_string),
 					       LPROCFS_STATS_FLAG_NONE);
 	if (sbi->ll_ra_stats == NULL)
 		GOTO(out_stats, err = -ENOMEM);
@@ -1971,9 +1971,9 @@ out_ll_kset:
 
 	RETURN(0);
 out_ra_stats:
-	lprocfs_free_stats(&sbi->ll_ra_stats);
+	lprocfs_stats_free(&sbi->ll_ra_stats);
 out_stats:
-	lprocfs_free_stats(&sbi->ll_stats);
+	lprocfs_stats_free(&sbi->ll_stats);
 out_debugfs:
 	debugfs_remove_recursive(sbi->ll_debugfs_entry);
 
@@ -2000,8 +2000,8 @@ void ll_debugfs_unregister_super(struct super_block *sb)
 	kset_unregister(&sbi->ll_kset);
 	wait_for_completion(&sbi->ll_kobj_unregister);
 
-	lprocfs_free_stats(&sbi->ll_ra_stats);
-	lprocfs_free_stats(&sbi->ll_stats);
+	lprocfs_stats_free(&sbi->ll_ra_stats);
+	lprocfs_stats_free(&sbi->ll_stats);
 }
 #undef MAX_STRING_SIZE
 

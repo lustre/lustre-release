@@ -1152,7 +1152,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 		init_waitqueue_head(&bkt->lsb_waitq);
 	}
 
-	s->ls_stats = lprocfs_alloc_stats(LU_SS_LAST_STAT, 0);
+	s->ls_stats = lprocfs_stats_alloc(LU_SS_LAST_STAT, 0);
 	if (s->ls_stats == NULL) {
 		OBD_FREE_PTR_ARRAY_LARGE(s->ls_bkts, s->ls_bkt_cnt);
 		s->ls_bkts = NULL;
@@ -1200,15 +1200,15 @@ void lu_site_fini(struct lu_site *s)
 		s->ls_bkts = NULL;
 	}
 
-        if (s->ls_top_dev != NULL) {
-                s->ls_top_dev->ld_site = NULL;
-                lu_ref_del(&s->ls_top_dev->ld_reference, "site-top", s);
-                lu_device_put(s->ls_top_dev);
-                s->ls_top_dev = NULL;
-        }
+	if (s->ls_top_dev != NULL) {
+		s->ls_top_dev->ld_site = NULL;
+		lu_ref_del(&s->ls_top_dev->ld_reference, "site-top", s);
+		lu_device_put(s->ls_top_dev);
+		s->ls_top_dev = NULL;
+	}
 
-        if (s->ls_stats != NULL)
-                lprocfs_free_stats(&s->ls_stats);
+	if (s->ls_stats != NULL)
+		lprocfs_stats_free(&s->ls_stats);
 }
 EXPORT_SYMBOL(lu_site_fini);
 
@@ -1217,13 +1217,15 @@ EXPORT_SYMBOL(lu_site_fini);
  */
 int lu_site_init_finish(struct lu_site *s)
 {
-        int result;
+	int result;
+
 	down_write(&lu_sites_guard);
-        result = lu_context_refill(&lu_shrink_env.le_ctx);
-        if (result == 0)
+	result = lu_context_refill(&lu_shrink_env.le_ctx);
+	if (result == 0)
 		list_add(&s->ls_linkage, &lu_sites);
 	up_write(&lu_sites_guard);
-        return result;
+
+	return result;
 }
 EXPORT_SYMBOL(lu_site_init_finish);
 

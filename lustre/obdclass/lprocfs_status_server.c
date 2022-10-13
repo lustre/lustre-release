@@ -288,10 +288,10 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 		lprocfs_remove(&client_stat->nid_proc);
 
 	if (client_stat->nid_stats)
-		lprocfs_free_stats(&client_stat->nid_stats);
+		lprocfs_stats_free(&client_stat->nid_stats);
 
 	if (client_stat->nid_ldlm_stats)
-		lprocfs_free_stats(&client_stat->nid_ldlm_stats);
+		lprocfs_stats_free(&client_stat->nid_ldlm_stats);
 
 	OBD_FREE_PTR(client_stat);
 }
@@ -484,7 +484,7 @@ static int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 	}
 	/* we has reference to object - only clear data*/
 	if (stat->nid_stats)
-		lprocfs_clear_stats(stat->nid_stats);
+		lprocfs_stats_clear(stat->nid_stats);
 
 	RETURN(0);
 }
@@ -682,13 +682,13 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned int num_stats)
 	LASSERT(obd->obd_stats == NULL);
 	LASSERT(obd->obd_proc_entry != NULL);
 
-	stats = lprocfs_alloc_stats(num_stats, 0);
+	stats = lprocfs_stats_alloc(num_stats, 0);
 	if (stats == NULL)
 		return -ENOMEM;
 
-	rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
+	rc = lprocfs_stats_register(obd->obd_proc_entry, "stats", stats);
 	if (rc < 0)
-		lprocfs_free_stats(&stats);
+		lprocfs_stats_free(&stats);
 	else
 		obd->obd_stats = stats;
 
@@ -699,7 +699,7 @@ EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
 void lprocfs_free_obd_stats(struct obd_device *obd)
 {
 	if (obd->obd_stats)
-		lprocfs_free_stats(&obd->obd_stats);
+		lprocfs_stats_free(&obd->obd_stats);
 }
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
 
