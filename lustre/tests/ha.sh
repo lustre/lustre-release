@@ -527,9 +527,14 @@ ha_repeat_mpi_load()
 			$check_attrs " && rccheck=1
 		[[ -n "$ha_postcmd" ]] && ha_info "$ha_postcmd" &&
 			ha_on $client "$ha_postcmd" >>"$log" 2>&1
-		(( ((rc == 0)) && ((rccheck == 0)) && (( mustpass != 0 )) )) ||
-		(( ((rc != 0)) && ((rccheck == 0)) && (( mustpass == 0 )) )) &&
-		ha_on $client rm -rf "$dir";
+		if (( ((rc == 0)) && ((rccheck == 0)) && \
+			(( mustpass != 0 )) )) ||
+			(( ((rc != 0)) && ((rccheck == 0)) && \
+			(( mustpass == 0 )) )); then
+			local suf=$(date +%s)
+			$ha_cleanup && ha_on $client rm -rf "$dir" ||
+				ha_on $client mv "$dir" "${dir}.${suf}"
+		fi;
 		} >>"$log" 2>&1
 
 		ha_info $client: rc=$rc rccheck=$rccheck mustpass=$mustpass
