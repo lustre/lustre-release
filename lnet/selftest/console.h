@@ -148,8 +148,8 @@ struct lstcon_test {
 
 struct lstcon_session {
 	struct mutex		ses_mutex;      /* only 1 thread in session */
-	struct lst_sid          ses_id;         /* global session id */
-        int                     ses_key;        /* local session key */
+	struct lst_session_id	ses_id;		/* global session id */
+	u32			ses_key;	/* local session key */
         int                     ses_state;      /* state of session */
         int                     ses_timeout;    /* timeout in seconds */
 	time64_t		ses_laststamp;  /* last operation stamp (seconds) */
@@ -198,11 +198,7 @@ lstcon_id2hash(struct lnet_process_id id, struct list_head *hash)
 
 extern int lstcon_session_match(struct lst_sid sid);
 extern int lstcon_session_new(char *name, int key, unsigned version,
-			      int timeout, int flags, struct lst_sid __user *sid_up);
-extern int lstcon_session_info(struct lst_sid __user *sid_up, int __user *key,
-			       unsigned __user *verp,
-			       struct lstcon_ndlist_ent __user *entp,
-			       char __user *name_up, int len);
+			      int timeout, int flags);
 extern int lstcon_session_end(void);
 extern int lstcon_session_debug(int timeout,
 				struct list_head __user *result_up);
@@ -256,7 +252,11 @@ extern int lstcon_test_add(char *batch_name, int type, int loop,
 
 int lstcon_ioctl_entry(struct notifier_block *nb,
 		       unsigned long cmd, void *vdata);
+
 int lstcon_console_init(void);
 int lstcon_console_fini(void);
+
+int lstcon_init_netlink(void);
+void lstcon_fini_netlink(void);
 
 #endif

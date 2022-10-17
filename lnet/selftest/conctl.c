@@ -35,76 +35,10 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
+#include <libcfs/linux/linux-net.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include "console.h"
-
-static int
-lst_session_new_ioctl(struct lstio_session_new_args *args)
-{
-	char *name;
-	int rc;
-
-	if (args->lstio_ses_idp == NULL || /* address for output sid */
-	    args->lstio_ses_key == 0 || /* no key is specified */
-	    args->lstio_ses_namep == NULL || /* session name */
-	    args->lstio_ses_nmlen <= 0 ||
-	    args->lstio_ses_nmlen > LST_NAME_SIZE)
-		return -EINVAL;
-
-	LIBCFS_ALLOC(name, args->lstio_ses_nmlen + 1);
-	if (name == NULL)
-		return -ENOMEM;
-
-	if (copy_from_user(name, args->lstio_ses_namep,
-			   args->lstio_ses_nmlen)) {
-		LIBCFS_FREE(name, args->lstio_ses_nmlen + 1);
-		return -EFAULT;
-	}
-
-	name[args->lstio_ses_nmlen] = 0;
-
-	rc = lstcon_session_new(name,
-				args->lstio_ses_key,
-				args->lstio_ses_feats,
-				args->lstio_ses_timeout,
-				args->lstio_ses_force,
-				args->lstio_ses_idp);
-
-	LIBCFS_FREE(name, args->lstio_ses_nmlen + 1);
-	return rc;
-}
-
-static int
-lst_session_end_ioctl(struct lstio_session_end_args *args)
-{
-	if (args->lstio_ses_key != console_session.ses_key)
-		return -EACCES;
-
-	return lstcon_session_end();
-}
-
-static int
-lst_session_info_ioctl(struct lstio_session_info_args *args)
-{
-	/* no checking of key */
-
-	if (args->lstio_ses_idp == NULL || /* address for ouput sid */
-	    args->lstio_ses_keyp == NULL || /* address for ouput key */
-	    args->lstio_ses_featp == NULL || /* address for ouput features */
-	    args->lstio_ses_ndinfo == NULL || /* address for output ndinfo */
-	    args->lstio_ses_namep == NULL || /* address for ouput name */
-	    args->lstio_ses_nmlen <= 0 ||
-	    args->lstio_ses_nmlen > LST_NAME_SIZE)
-		return -EINVAL;
-
-	return lstcon_session_info(args->lstio_ses_idp,
-				   args->lstio_ses_keyp,
-				   args->lstio_ses_featp,
-				   args->lstio_ses_ndinfo,
-				   args->lstio_ses_namep,
-				   args->lstio_ses_nmlen);
-}
 
 static int
 lst_debug_ioctl(struct lstio_debug_args *args)
@@ -859,13 +793,11 @@ lstcon_ioctl_entry(struct notifier_block *nb,
 
 	switch (opc) {
 	case LSTIO_SESSION_NEW:
-		rc = lst_session_new_ioctl((struct lstio_session_new_args *)buf);
-		break;
+		fallthrough;
 	case LSTIO_SESSION_END:
-		rc = lst_session_end_ioctl((struct lstio_session_end_args *)buf);
-		break;
+		fallthrough;
 	case LSTIO_SESSION_INFO:
-		rc = lst_session_info_ioctl((struct lstio_session_info_args *)buf);
+		rc = -EOPNOTSUPP;
 		break;
 	case LSTIO_DEBUG:
 		rc = lst_debug_ioctl((struct lstio_debug_args *)buf);
@@ -926,4 +858,278 @@ out_free_buf:
 	LIBCFS_FREE(buf, data->ioc_plen1);
 err:
 	return notifier_from_ioctl_errno(rc);
+}
+
+static struct genl_family lst_family;
+
+static const struct ln_key_list lst_session_keys = {
+	.lkl_maxattr			= LNET_SELFTEST_SESSION_MAX,
+	.lkl_list			= {
+		[LNET_SELFTEST_SESSION_HDR]	= {
+			.lkp_value		= "session",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_SELFTEST_SESSION_NAME]	= {
+			.lkp_value		= "name",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_SELFTEST_SESSION_KEY]	= {
+			.lkp_value		= "key",
+			.lkp_data_type		= NLA_U32,
+		},
+		[LNET_SELFTEST_SESSION_TIMESTAMP] = {
+			.lkp_value		= "timestamp",
+			.lkp_data_type		= NLA_S64,
+		},
+		[LNET_SELFTEST_SESSION_NID]	= {
+			.lkp_value		= "nid",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_SELFTEST_SESSION_NODE_COUNT] = {
+			.lkp_value		= "nodes",
+			.lkp_data_type		= NLA_U16,
+		},
+	},
+};
+
+static int lst_sessions_show_dump(struct sk_buff *msg,
+				  struct netlink_callback *cb)
+{
+	const struct ln_key_list *all[] = {
+		&lst_session_keys, NULL
+	};
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	unsigned int node_count = 0;
+	struct lstcon_ndlink *ndl;
+	int flag = NLM_F_MULTI;
+	int rc = 0;
+	void *hdr;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (console_session.ses_state != LST_SESSION_ACTIVE) {
+		NL_SET_ERR_MSG(extack, "session is not active");
+		GOTO(out_unlock, rc = -ESRCH);
+	}
+
+	list_for_each_entry(ndl, &console_session.ses_ndl_list, ndl_link)
+		node_count++;
+
+	rc = lnet_genl_send_scalar_list(msg, portid, seq, &lst_family,
+					NLM_F_CREATE | NLM_F_MULTI,
+					LNET_SELFTEST_CMD_SESSIONS, all);
+	if (rc < 0) {
+		NL_SET_ERR_MSG(extack, "failed to send key table");
+		GOTO(out_unlock, rc);
+	}
+
+	if (console_session.ses_force)
+		flag |= NLM_F_REPLACE;
+
+	hdr = genlmsg_put(msg, portid, seq, &lst_family, flag,
+			  LNET_SELFTEST_CMD_SESSIONS);
+	if (!hdr) {
+		NL_SET_ERR_MSG(extack, "failed to send values");
+		genlmsg_cancel(msg, hdr);
+		GOTO(out_unlock, rc = -EMSGSIZE);
+	}
+
+	nla_put_string(msg, LNET_SELFTEST_SESSION_NAME,
+		       console_session.ses_name);
+	nla_put_u32(msg, LNET_SELFTEST_SESSION_KEY,
+		    console_session.ses_key);
+	nla_put_u64_64bit(msg, LNET_SELFTEST_SESSION_TIMESTAMP,
+			  console_session.ses_id.ses_stamp,
+			  LNET_SELFTEST_SESSION_PAD);
+	nla_put_string(msg, LNET_SELFTEST_SESSION_NID,
+		       libcfs_nidstr(&console_session.ses_id.ses_nid));
+	nla_put_u16(msg, LNET_SELFTEST_SESSION_NODE_COUNT,
+		    node_count);
+	genlmsg_end(msg, hdr);
+out_unlock:
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+static int lst_sessions_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct sk_buff *msg = NULL;
+	int rc = 0;
+
+	mutex_lock(&console_session.ses_mutex);
+
+	console_session.ses_laststamp = ktime_get_real_seconds();
+
+	if (console_session.ses_shutdown) {
+		GENL_SET_ERR_MSG(info, "session is shutdown");
+		GOTO(out_unlock, rc = -ESHUTDOWN);
+	}
+
+	if (console_session.ses_expired)
+		lstcon_session_end();
+
+	if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE) &&
+	    console_session.ses_state == LST_SESSION_NONE) {
+		GENL_SET_ERR_MSG(info, "session is not active");
+		GOTO(out_unlock, rc = -ESRCH);
+	}
+
+	memset(&console_session.ses_trans_stat, 0,
+	       sizeof(struct lstcon_trans_stat));
+
+	if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+		lstcon_session_end();
+		GOTO(out_unlock, rc);
+	}
+
+	if (info->attrs[LN_SCALAR_ATTR_LIST]) {
+		struct genlmsghdr *gnlh = nlmsg_data(info->nlhdr);
+		const struct ln_key_list *all[] = {
+			&lst_session_keys, NULL
+		};
+		char name[LST_NAME_SIZE];
+		struct nlmsghdr *nlh;
+		struct nlattr *item;
+		bool force = false;
+		s64 timeout = 300;
+		void *hdr;
+		int rem;
+
+		if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE)
+			force = true;
+
+		nla_for_each_nested(item, info->attrs[LN_SCALAR_ATTR_LIST],
+				    rem) {
+			if (nla_type(item) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			if (nla_strcmp(item, "name") == 0) {
+				ssize_t len;
+
+				item = nla_next(item, &rem);
+				if (nla_type(item) != LN_SCALAR_ATTR_VALUE)
+					GOTO(err_conf, rc = -EINVAL);
+
+				len = nla_strscpy(name, item, sizeof(name));
+				if (len < 0)
+					rc = len;
+			} else if (nla_strcmp(item, "timeout") == 0) {
+				item = nla_next(item, &rem);
+				if (nla_type(item) !=
+				    LN_SCALAR_ATTR_INT_VALUE)
+					GOTO(err_conf, rc = -EINVAL);
+
+				timeout = nla_get_s64(item);
+				if (timeout < 0)
+					rc = -ERANGE;
+			}
+			if (rc < 0) {
+err_conf:
+				GENL_SET_ERR_MSG(info,
+						 "failed to get config");
+				GOTO(out_unlock, rc);
+			}
+		}
+
+		rc = lstcon_session_new(name, info->nlhdr->nlmsg_pid,
+					gnlh->version, timeout,
+					force);
+		if (rc < 0) {
+			GENL_SET_ERR_MSG(info, "new session creation failed");
+			lstcon_session_end();
+			GOTO(out_unlock, rc);
+		}
+
+		msg = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+		if (!msg) {
+			GENL_SET_ERR_MSG(info, "msg allocation failed");
+			GOTO(out_unlock, rc = -ENOMEM);
+		}
+
+		rc = lnet_genl_send_scalar_list(msg, info->snd_portid,
+						info->snd_seq, &lst_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_SELFTEST_CMD_SESSIONS,
+						all);
+		if (rc < 0) {
+			GENL_SET_ERR_MSG(info, "failed to send key table");
+			GOTO(out_unlock, rc);
+		}
+
+		hdr = genlmsg_put(msg, info->snd_portid, info->snd_seq,
+				  &lst_family, NLM_F_MULTI,
+				  LNET_SELFTEST_CMD_SESSIONS);
+		if (!hdr) {
+			GENL_SET_ERR_MSG(info, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(out_unlock, rc = -EMSGSIZE);
+		}
+
+		nla_put_string(msg, LNET_SELFTEST_SESSION_NAME,
+			       console_session.ses_name);
+		nla_put_u32(msg, LNET_SELFTEST_SESSION_KEY,
+			    console_session.ses_key);
+		nla_put_u64_64bit(msg, LNET_SELFTEST_SESSION_TIMESTAMP,
+				  console_session.ses_id.ses_stamp,
+				  LNET_SELFTEST_SESSION_PAD);
+		nla_put_string(msg, LNET_SELFTEST_SESSION_NID,
+			       libcfs_nidstr(&console_session.ses_id.ses_nid));
+		nla_put_u16(msg, LNET_SELFTEST_SESSION_NODE_COUNT, 0);
+
+		genlmsg_end(msg, hdr);
+
+		nlh = nlmsg_put(msg, info->snd_portid, info->snd_seq,
+				NLMSG_DONE, 0, NLM_F_MULTI);
+		if (!nlh) {
+			GENL_SET_ERR_MSG(info, "failed to complete message");
+			genlmsg_cancel(msg, hdr);
+			GOTO(out_unlock, rc = -ENOMEM);
+		}
+		rc = genlmsg_reply(msg, info);
+		if (rc)
+			GENL_SET_ERR_MSG(info, "failed to send reply");
+	}
+out_unlock:
+	if (rc < 0 && msg)
+		nlmsg_free(msg);
+	mutex_unlock(&console_session.ses_mutex);
+	return rc;
+}
+
+static const struct genl_multicast_group lst_mcast_grps[] = {
+	{ .name = "sessions",		},
+};
+
+static const struct genl_ops lst_genl_ops[] = {
+	{
+		.cmd		= LNET_SELFTEST_CMD_SESSIONS,
+		.dumpit		= lst_sessions_show_dump,
+		.doit		= lst_sessions_cmd,
+	},
+};
+
+static struct genl_family lst_family = {
+	.name		= LNET_SELFTEST_GENL_NAME,
+	.version	= LNET_SELFTEST_GENL_VERSION,
+	.maxattr	= LN_SCALAR_MAX,
+	.module		= THIS_MODULE,
+	.ops		= lst_genl_ops,
+	.n_ops		= ARRAY_SIZE(lst_genl_ops),
+	.mcgrps		= lst_mcast_grps,
+	.n_mcgrps	= ARRAY_SIZE(lst_mcast_grps),
+};
+
+int lstcon_init_netlink(void)
+{
+	return genl_register_family(&lst_family);
+}
+
+void lstcon_fini_netlink(void)
+{
+	genl_unregister_family(&lst_family);
 }

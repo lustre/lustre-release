@@ -54,12 +54,11 @@
 #include "lnetconfig/liblnetconfig.h"
 
 struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
-static struct lst_sid session_id;
-static int                 session_key;
+static unsigned int session_key;
 static int lst_list_commands(int argc, char **argv);
 
 /* All nodes running 2.6.50 or later understand feature LST_FEAT_BULK_LEN */
-static unsigned		session_features = LST_FEATS_MASK;
+static unsigned int session_features = LST_FEATS_MASK;
 static struct lstcon_trans_stat	trans_stat;
 
 typedef struct list_string {
@@ -516,6 +515,265 @@ lst_ioctl(unsigned int opc, void *buf, int len)
         return 0;
 }
 
+int lst_yaml_session(const char *label, const char *timeout, int nlflags,
+		     const char *errmsg)
+{
+	struct lstcon_ndlist_ent ndinfo = { };
+	struct lst_sid sid = LST_INVALID_SID;
+	/* nlflags being zero means we are destroying the session.
+	 * No parsing of reply needed.
+	 */
+	bool done = nlflags ? false : true;
+	char nid[LNET_NIDSTR_SIZE];
+	char name[LST_NAME_SIZE];
+	unsigned int key = 0;
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	struct nl_sock *sk;
+	int rc;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -1;
+
+	/* Note: NL_AUTO_PID == zero which we use by default for the
+	 * session_key when creating a new session. This is considered
+	 * an invalid key so we need to get the real session key from
+	 * the yaml parser yet to be created. If the user did request
+	 * a specific session key then set the socket's port id to this
+	 * value.
+	 */
+	if (session_key)
+		nl_socket_set_local_port(sk, session_key);
+
+	/* Setup reply parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -1;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto parser_error;
+
+	/* Create Netlink emitter to send request to kernel */
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk,
+					     LNET_SELFTEST_GENL_NAME,
+					     LNET_SELFTEST_GENL_VERSION,
+					     LNET_SELFTEST_CMD_SESSIONS,
+					     nlflags);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&request);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_BLOCK_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"sessions",
+				     strlen("sessions"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (!label) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+		goto skip_params;
+	}
+
+	/* sessions: { name: 'name', timeout: 300 }
+	 * or
+	 * sessions:
+	 *   name: 'name'
+	 *   timeout: 300
+	 */
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_FLOW_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"name",
+				     strlen("name"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)label,
+				     strlen(label), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (timeout) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"timeout",
+					     strlen("timeout"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)timeout,
+					     strlen(timeout), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+skip_params:
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&request);
+	if (rc == 0) {
+emitter_error:
+		yaml_emitter_log_error(&request, stderr);
+		yaml_emitter_delete(&request);
+		errmsg = NULL;
+		goto parser_error;
+	}
+	yaml_emitter_delete(&request);
+
+	while (!done) {
+		rc = yaml_parser_parse(&reply, &event);
+		if (rc == 0)
+			goto parser_error;
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *tmp, *endp = NULL;
+
+			if (strcmp((char *)event.data.scalar.value,
+				   "name") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 0)
+					goto parser_error;
+
+				strncpy(name, (char *)event.data.scalar.value,
+					sizeof(name) - 1);
+			}
+
+			if (strcmp((char *)event.data.scalar.value,
+				   "key") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 0)
+					goto parser_error;
+
+				tmp = (char *)event.data.scalar.value;
+				key = strtoul(tmp, &endp, 10);
+				if (endp == tmp)
+					goto parser_error;
+			}
+
+			if (strcmp((char *)event.data.scalar.value,
+				   "timestamp") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 0)
+					goto parser_error;
+
+				tmp = (char *)event.data.scalar.value;
+				sid.ses_stamp = strtoll(tmp, &endp, 10);
+				if (endp == tmp)
+					goto parser_error;
+			}
+
+			if (strcmp((char *)event.data.scalar.value,
+				   "nid") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 0)
+					goto parser_error;
+
+				strncpy(nid, (char *)event.data.scalar.value,
+					sizeof(nid) - 1);
+			}
+
+			if (strcmp((char *)event.data.scalar.value,
+				   "nodes") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 0)
+					goto parser_error;
+
+				tmp = (char *)event.data.scalar.value;
+				ndinfo.nle_nnode = strtoul(tmp, &endp, 10);
+				if (endp == tmp)
+					goto parser_error;
+			}
+		}
+
+		done = (event.type == YAML_STREAM_END_EVENT);
+
+		yaml_event_delete(&event);
+	}
+
+	if (nlflags & NLM_F_CREATE) {
+		session_features = yaml_parser_get_reader_proto_version(&reply);
+		session_key = key;
+	}
+parser_error:
+	if (rc == 0 && errmsg)
+		yaml_parser_log_error(&reply, stderr, errmsg);
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	if (((nlflags & NLM_F_DUMP) == NLM_F_DUMP) && rc != 0) {
+		fprintf(stdout,
+			"%s ID: %ju@%s, KEY: %u FEATURES: %x NODES: %d\n",
+			name, (uintmax_t)sid.ses_stamp, nid,
+			key, session_features, ndinfo.nle_nnode);
+	}
+
+	return rc == 0 ? -1 : 0;
+}
+
 int
 lst_new_session_ioctl(char *name, int timeout, int force, struct lst_sid *sid)
 {
@@ -536,7 +794,9 @@ int
 jt_lst_new_session(int argc, char **argv)
 {
 	char  buf[LST_NAME_SIZE * 2 + 1];
-	char *name;
+	char *name, *timeout_s = NULL;
+	int nlflags = NLM_F_CREATE;
+	struct lst_sid session_id;
 	int   optidx = 0;
 	int   timeout = 300;
 	int   force = 0;
@@ -548,26 +808,19 @@ jt_lst_new_session(int argc, char **argv)
 		{ .name = "force",   .has_arg = no_argument,	   .val = 'f' },
 		{ .name = NULL } };
 
-        if (session_key == 0) {
-                fprintf(stderr,
-                        "Can't find env LST_SESSION or value is not valid\n");
-                return -1;
-        }
-
         while (1) {
-
                 c = getopt_long(argc, argv, "ft:",
                                 session_opts, &optidx);
-
                 if (c == -1)
                         break;
 
                 switch (c) {
                 case 'f':
+			nlflags |= NLM_F_REPLACE;
                         force = 1;
                         break;
                 case 't':
-                        timeout = atoi(optarg);
+			timeout_s = optarg;
                         break;
                 default:
                         lst_print_usage(argv[0]);
@@ -575,10 +828,13 @@ jt_lst_new_session(int argc, char **argv)
                 }
         }
 
-        if (timeout <= 0) {
-                fprintf(stderr, "Invalid timeout value\n");
-                return -1;
-        }
+	if (timeout_s) {
+		timeout = atoi(timeout_s);
+		if (timeout <= 0) {
+			fprintf(stderr, "Invalid timeout value\n");
+			return -1;
+		}
+	}
 
         if (optind == argc - 1) {
                 name = argv[optind ++];
@@ -587,7 +843,6 @@ jt_lst_new_session(int argc, char **argv)
                                 LST_NAME_SIZE - 1);
                         return -1;
                 }
-
         } else if (optind == argc) {
                 char           user[LST_NAME_SIZE];
                 char           host[LST_NAME_SIZE];
@@ -604,11 +859,20 @@ jt_lst_new_session(int argc, char **argv)
 
 		snprintf(buf, sizeof(buf), "%s@%s", user, host);
                 name = buf;
-
         } else {
                 lst_print_usage(argv[0]);
                 return -1;
         }
+
+	rc = lst_yaml_session(name, timeout_s, nlflags, "new session");
+	if (rc == 0)
+		goto success;
+
+	if (session_key == 0) {
+		fprintf(stderr,
+			"Can't find env LST_SESSION or value is not valid\n");
+		return -1;
+	}
 
         rc = lst_new_session_ioctl(name, timeout, force, &session_id);
         if (rc != 0) {
@@ -616,7 +880,7 @@ jt_lst_new_session(int argc, char **argv)
                                 strerror(errno));
                 return rc;
         }
-
+success:
 	fprintf(stdout, "SESSION: %s FEATURES: %x TIMEOUT: %d FORCE: %s\n",
 		name, session_features, timeout, force ? "Yes" : "No");
 	return 0;
@@ -643,10 +907,14 @@ jt_lst_show_session(int argc, char **argv)
 {
 	struct lstcon_ndlist_ent ndinfo;
 	struct lst_sid sid;
-        char                name[LST_NAME_SIZE];
-	unsigned	    feats;
-	int		    key;
-	int		    rc;
+	char name[LST_NAME_SIZE];
+	unsigned int feats;
+	int key;
+	int rc;
+
+	rc = lst_yaml_session(NULL, NULL, NLM_F_DUMP, "show session");
+	if (rc == 0)
+		return 0;
 
 	rc = lst_session_info_ioctl(name, sizeof(name), &key,
 				    &feats, &sid, &ndinfo);
@@ -684,6 +952,10 @@ jt_lst_end_session(int argc, char **argv)
                 return -1;
         }
 
+	rc = lst_yaml_session(NULL, NULL, 0, "end session");
+	if (rc == 0)
+		goto finish;
+
         rc = lst_end_session_ioctl();
 
         if (rc == 0) {
@@ -696,7 +968,7 @@ jt_lst_end_session(int argc, char **argv)
                                 strerror(errno));
                 return rc;
         }
-
+finish:
         if (trans_stat.trs_rpc_errno != 0) {
                 fprintf(stderr,
                         "[RPC] Failed to send %d session RPCs: %s\n",

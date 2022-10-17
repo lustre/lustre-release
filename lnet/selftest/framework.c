@@ -38,7 +38,7 @@
 
 #include "selftest.h"
 
-struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1};
+struct lst_session_id LST_INVALID_SID = { .ses_nid = LNET_ANY_NID, .ses_stamp = -1};
 
 static int session_timeout = 100;
 module_param(session_timeout, int, 0444);
@@ -252,7 +252,7 @@ sfw_session_expired (void *data)
         LASSERT (sn == sfw_data.fw_session);
 
 	CWARN ("Session expired! sid: %s-%llu, name: %s\n",
-               libcfs_nid2str(sn->sn_id.ses_nid),
+	       libcfs_nidstr(&sn->sn_id.ses_nid),
                sn->sn_id.ses_stamp, &sn->sn_name[0]);
 
         sn->sn_timer_active = 0;
@@ -276,7 +276,8 @@ sfw_init_session(struct sfw_session *sn, struct lst_sid sid,
 	strlcpy(&sn->sn_name[0], name, sizeof(sn->sn_name));
 
 	sn->sn_timer_active = 0;
-	sn->sn_id = sid;
+	sn->sn_id.ses_stamp = sid.ses_stamp;
+	lnet_nid4_to_nid(sid.ses_nid, &sn->sn_id.ses_nid);
 	sn->sn_features = features;
 	sn->sn_timeout = session_timeout;
 	sn->sn_started = ktime_get();
@@ -368,6 +369,18 @@ sfw_bid2batch(struct lst_bid bid)
 	return bat;
 }
 
+static struct lst_sid get_old_sid(struct sfw_session *sn)
+{
+	struct lst_sid sid = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
+
+	if (sn) {
+		sid.ses_stamp = sn->sn_id.ses_stamp;
+		sid.ses_nid = lnet_nid_to_nid4(&sn->sn_id.ses_nid);
+	}
+
+	return sid;
+}
+
 static int
 sfw_get_stats(struct srpc_stat_reqst *request, struct srpc_stat_reply *reply)
 {
@@ -375,7 +388,7 @@ sfw_get_stats(struct srpc_stat_reqst *request, struct srpc_stat_reply *reply)
 	struct sfw_counters *cnt = &reply->str_fw;
 	struct sfw_batch *bat;
 
-        reply->str_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
+	reply->str_sid = get_old_sid(sn);
 
         if (request->str_sid.ses_nid == LNET_NID_ANY) {
                 reply->str_status = EINVAL;
@@ -416,14 +429,14 @@ sfw_make_session(struct srpc_mksn_reqst *request, struct srpc_mksn_reply *reply)
 	int cplen = 0;
 
         if (request->mksn_sid.ses_nid == LNET_NID_ANY) {
-                reply->mksn_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
+		reply->mksn_sid = get_old_sid(sn);
                 reply->mksn_status = EINVAL;
                 return 0;
         }
 
         if (sn != NULL) {
                 reply->mksn_status  = 0;
-                reply->mksn_sid     = sn->sn_id;
+		reply->mksn_sid = get_old_sid(sn);
                 reply->mksn_timeout = sn->sn_timeout;
 
                 if (sfw_sid_equal(request->mksn_sid, sn->sn_id)) {
@@ -471,7 +484,7 @@ sfw_make_session(struct srpc_mksn_reqst *request, struct srpc_mksn_reply *reply)
 	spin_unlock(&sfw_data.fw_lock);
 
 	reply->mksn_status  = 0;
-	reply->mksn_sid     = sn->sn_id;
+	reply->mksn_sid = get_old_sid(sn);
 	reply->mksn_timeout = sn->sn_timeout;
 	return 0;
 }
@@ -482,7 +495,7 @@ sfw_remove_session(struct srpc_rmsn_reqst *request,
 {
 	struct sfw_session *sn = sfw_data.fw_session;
 
-        reply->rmsn_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
+	reply->rmsn_sid = get_old_sid(sn);
 
         if (request->rmsn_sid.ses_nid == LNET_NID_ANY) {
                 reply->rmsn_status = EINVAL;
@@ -504,7 +517,7 @@ sfw_remove_session(struct srpc_rmsn_reqst *request,
 	spin_unlock(&sfw_data.fw_lock);
 
 	reply->rmsn_status = 0;
-	reply->rmsn_sid    = LST_INVALID_SID;
+	reply->rmsn_sid = get_old_sid(NULL);
 	LASSERT(sfw_data.fw_session == NULL);
 	return 0;
 }
@@ -517,12 +530,12 @@ sfw_debug_session(struct srpc_debug_reqst *request,
 
         if (sn == NULL) {
                 reply->dbg_status = ESRCH;
-                reply->dbg_sid    = LST_INVALID_SID;
+		reply->dbg_sid = get_old_sid(NULL);
                 return 0;
 	}
 
 	reply->dbg_status  = 0;
-	reply->dbg_sid     = sn->sn_id;
+	reply->dbg_sid = get_old_sid(sn);
 	reply->dbg_timeout = sn->sn_timeout;
 	if (strlcpy(reply->dbg_name, &sn->sn_name[0], sizeof(reply->dbg_name))
 	    >= sizeof(reply->dbg_name))
@@ -1126,7 +1139,7 @@ sfw_add_test(struct srpc_server_rpc *rpc)
 	struct sfw_batch *bat;
 
         request = &rpc->srpc_reqstbuf->buf_msg.msg_body.tes_reqst;
-        reply->tsr_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
+	reply->tsr_sid = get_old_sid(sn);
 
         if (request->tsr_loop == 0 ||
             request->tsr_concur == 0 ||
@@ -1194,7 +1207,7 @@ sfw_control_batch(struct srpc_batch_reqst *request,
         int            rc = 0;
 	struct sfw_batch *bat;
 
-        reply->bar_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
+	reply->bar_sid = get_old_sid(sn);
 
         if (sn == NULL || !sfw_sid_equal(request->bar_sid, sn->sn_id)) {
                 reply->bar_status = ESRCH;
@@ -1274,7 +1287,9 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 				"features of current session: %x/%x\n",
 				request->msg_ses_feats, sn->sn_features);
 			reply->msg_body.reply.status = EPROTO;
-			reply->msg_body.reply.sid    = sn->sn_id;
+			reply->msg_body.reply.sid.ses_stamp = sn->sn_id.ses_stamp;
+			reply->msg_body.reply.sid.ses_nid =
+				lnet_nid_to_nid4(&sn->sn_id.ses_nid);
 			goto out;
 		}
 

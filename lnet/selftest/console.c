@@ -1684,27 +1684,32 @@ lstcon_nodes_debug(int timeout, int count,
 }
 
 int
-lstcon_session_match(struct lst_sid sid)
+lstcon_session_match(struct lst_sid id)
 {
-        return (console_session.ses_id.ses_nid   == sid.ses_nid &&
-                console_session.ses_id.ses_stamp == sid.ses_stamp) ?  1: 0;
+	struct lst_session_id sid;
+
+	sid.ses_stamp = id.ses_stamp;
+	lnet_nid4_to_nid(id.ses_nid, &sid.ses_nid);
+
+	return (nid_same(&console_session.ses_id.ses_nid, &sid.ses_nid) &&
+		console_session.ses_id.ses_stamp == sid.ses_stamp) ?  1 : 0;
 }
 
 static void
-lstcon_new_session_id(struct lst_sid *sid)
+lstcon_new_session_id(struct lst_session_id *sid)
 {
 	struct lnet_processid id;
 
 	LASSERT(console_session.ses_state == LST_SESSION_NONE);
 
 	LNetGetId(1, &id);
-	sid->ses_nid = lnet_nid_to_nid4(&id.nid);
+	sid->ses_nid = id.nid;
 	sid->ses_stamp = div_u64(ktime_get_ns(), NSEC_PER_MSEC);
 }
 
 int
 lstcon_session_new(char *name, int key, unsigned feats,
-		   int timeout, int force, struct lst_sid __user *sid_up)
+		   int timeout, int force)
 {
         int     rc = 0;
         int     i;
@@ -1736,7 +1741,6 @@ lstcon_session_new(char *name, int key, unsigned feats,
 	lstcon_new_session_id(&console_session.ses_id);
 
 	console_session.ses_key	    = key;
-	console_session.ses_state   = LST_SESSION_ACTIVE;
 	console_session.ses_force   = !!force;
 	console_session.ses_features = feats;
 	console_session.ses_feats_updated = 0;
@@ -1762,52 +1766,12 @@ lstcon_session_new(char *name, int key, unsigned feats,
                 return rc;
         }
 
-	if (copy_to_user(sid_up, &console_session.ses_id,
-			     sizeof(struct lst_sid)) == 0)
-                return rc;
+	console_session.ses_state = LST_SESSION_ACTIVE;
 
-        lstcon_session_end();
-
-        return -EFAULT;
+	return rc;
 }
 
-int
-lstcon_session_info(struct lst_sid __user *sid_up, int __user *key_up,
-		    unsigned __user *featp,
-		    struct lstcon_ndlist_ent __user *ndinfo_up,
-		    char __user *name_up, int len)
-{
-	struct lstcon_ndlist_ent *entp;
-	struct lstcon_ndlink *ndl;
-	int rc = 0;
-
-        if (console_session.ses_state != LST_SESSION_ACTIVE)
-                return -ESRCH;
-
-        LIBCFS_ALLOC(entp, sizeof(*entp));
-        if (entp == NULL)
-                return -ENOMEM;
-
-	list_for_each_entry(ndl, &console_session.ses_ndl_list, ndl_link)
-		LST_NODE_STATE_COUNTER(ndl->ndl_node, entp);
-
-	if (copy_to_user(sid_up, &console_session.ses_id,
-			 sizeof(struct lst_sid)) ||
-	    copy_to_user(key_up, &console_session.ses_key,
-			     sizeof(*key_up)) ||
-	    copy_to_user(featp, &console_session.ses_features,
-			     sizeof(*featp)) ||
-	    copy_to_user(ndinfo_up, entp, sizeof(*entp)) ||
-	    copy_to_user(name_up, console_session.ses_name, len))
-                rc = -EFAULT;
-
-        LIBCFS_FREE(entp, sizeof(*entp));
-
-        return rc;
-}
-
-int
-lstcon_session_end(void)
+int lstcon_session_end(void)
 {
 	struct lstcon_rpc_trans *trans;
 	struct lstcon_group *grp;
@@ -1915,9 +1879,10 @@ lstcon_acceptor_handle(struct srpc_server_rpc *rpc)
 
 	mutex_lock(&console_session.ses_mutex);
 
-        jrep->join_sid = console_session.ses_id;
+	jrep->join_sid.ses_stamp = console_session.ses_id.ses_stamp;
+	jrep->join_sid.ses_nid = lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
 
-        if (console_session.ses_id.ses_nid == LNET_NID_ANY) {
+	if (LNET_NID_IS_ANY(&console_session.ses_id.ses_nid)) {
                 jrep->join_status = ESRCH;
                 goto out;
         }
@@ -2049,12 +2014,19 @@ lstcon_console_init(void)
                 goto out;
         }
 
+	rc = lstcon_init_netlink();
+	if (rc < 0)
+		goto out;
+
 	rc = blocking_notifier_chain_register(&libcfs_ioctl_list,
 					      &lstcon_ioctl_handler);
-	if (rc == 0) {
-		lstcon_rpc_module_init();
-		return 0;
+	if (rc < 0) {
+		lstcon_fini_netlink();
+		goto out;
 	}
+
+	lstcon_rpc_module_init();
+	return 0;
 
 out:
 	srpc_shutdown_service(&lstcon_acceptor_service);
@@ -2074,6 +2046,7 @@ lstcon_console_fini(void)
 
 	blocking_notifier_chain_unregister(&libcfs_ioctl_list,
 					   &lstcon_ioctl_handler);
+	lstcon_fini_netlink();
 
 	mutex_lock(&console_session.ses_mutex);
 

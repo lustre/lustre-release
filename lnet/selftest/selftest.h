@@ -50,6 +50,38 @@
 #define MADE_WITHOUT_COMPROMISE
 #endif
 
+/* enum lnet_selftest_session_attrs   - LNet selftest session Netlink
+ *					attributes
+ *
+ *  @LNET_SELFTEST_SESSION_UNSPEC:	unspecified attribute to catch errors
+ *  @LNET_SELFTEST_SESSION_PAD:		padding for 64-bit attributes, ignore
+ *
+ *  @LENT_SELFTEST_SESSION_HDR:		Netlink group this data is for
+ *					(NLA_NUL_STRING)
+ *  @LNET_SELFTEST_SESSION_NAME:	name of this session (NLA_STRING)
+ *  @LNET_SELFTEST_SESSION_KEY:		key used to represent the session
+ *					(NLA_U32)
+ *  @LNET_SELFTEST_SESSION_TIMESTAMP:	timestamp when the session was created
+ *					(NLA_S64)
+ *  @LNET_SELFTEST_SESSION_NID:		NID of the node selftest ran on
+ *					(NLA_STRING)
+ *  @LNET_SELFTEST_SESSION_NODE_COUNT:	Number of nodes in use (NLA_U16)
+ */
+enum lnet_selftest_session_attrs {
+	LNET_SELFTEST_SESSION_UNSPEC = 0,
+	LNET_SELFTEST_SESSION_PAD = LNET_SELFTEST_SESSION_UNSPEC,
+
+	LNET_SELFTEST_SESSION_HDR,
+	LNET_SELFTEST_SESSION_NAME,
+	LNET_SELFTEST_SESSION_KEY,
+	LNET_SELFTEST_SESSION_TIMESTAMP,
+	LNET_SELFTEST_SESSION_NID,
+	LNET_SELFTEST_SESSION_NODE_COUNT,
+
+	__LNET_SELFTEST_SESSION_MAX_PLUS_ONE,
+};
+
+#define LNET_SELFTEST_SESSION_MAX	(__LNET_SELFTEST_SESSION_MAX_PLUS_ONE - 1)
 
 #define SWI_STATE_NEWBORN                  0
 #define SWI_STATE_REPLY_SUBMITTED          1
@@ -318,10 +350,17 @@ struct srpc_service {
 	int              (*sv_bulk_ready)(struct srpc_server_rpc *, int);
 };
 
+struct lst_session_id {
+	s64			ses_stamp;	/* time stamp in milliseconds */
+	struct lnet_nid		ses_nid;	/* nid of console node */
+};						/*** session id (large addr) */
+
+extern struct lst_session_id LST_INVALID_SID;
+
 struct sfw_session {
 	/* chain on fw_zombie_sessions */
 	struct list_head	sn_list;
-	struct lst_sid		sn_id;		/* unique identifier */
+	struct lst_session_id	sn_id;		/* unique identifier */
 	/* # seconds' inactivity to expire */
 	unsigned int		sn_timeout;
 	int			sn_timer_active;
@@ -335,8 +374,16 @@ struct sfw_session {
 	ktime_t			sn_started;
 };
 
-#define sfw_sid_equal(sid0, sid1)     ((sid0).ses_nid == (sid1).ses_nid && \
-                                       (sid0).ses_stamp == (sid1).ses_stamp)
+static inline int sfw_sid_equal(struct lst_sid sid0,
+				struct lst_session_id sid1)
+{
+	struct lnet_nid ses_nid;
+
+	lnet_nid4_to_nid(sid0.ses_nid, &ses_nid);
+
+	return ((sid0.ses_stamp == sid1.ses_stamp) &&
+		nid_same(&ses_nid, &sid1.ses_nid));
+}
 
 struct sfw_batch {
 	struct list_head	bat_list;	/* chain on sn_batches */
