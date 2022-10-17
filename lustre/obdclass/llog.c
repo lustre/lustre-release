@@ -576,8 +576,8 @@ repeat:
 			GOTO(out, rc = 0);
 		/* we`ve tried to reread the chunk, but there is no
 		 * new records */
-		if (rc == -EIO && repeated && (chunk_offset + buf_offset) ==
-		    cur_offset)
+		if (repeated && (chunk_offset + buf_offset) == cur_offset &&
+		    (rc == -EBADR || rc == -EIO))
 			GOTO(out, rc = 0);
 		if (rc != 0)
 			GOTO(out, rc);
