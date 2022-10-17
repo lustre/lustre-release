@@ -237,6 +237,7 @@ SERVER_MANFILES =				\
 	lctl-snapshot-umount.8			\
 	ll_decode_filter_fid.8			\
 	llobdstat.8				\
+	lljobstat.8				\
 	llog_reader.8				\
 	llverdev.8				\
 	lshowmount.8				\

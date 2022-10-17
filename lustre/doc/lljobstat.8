@@ -1,0 +1,80 @@
+.TH lljobstat 8 "Oct 14, 2022" Lustre "utilities"
+
+.SH NAME
+lljobstat \- display top jobs and statistics
+
+.SH SYNOPSIS
+.B "llobdstat"
+.RB [ -c|--count
+.IR COUNT ]
+.RB [ -i|--interval
+.IR INTERVAL ]
+.RB [ -n|--repeats
+.IR REPEATS ]
+.RB [ -m|--mdt ]
+.RB [ -o|--ost ]
+.RB [ --param
+.IR PARAM ]
+.RB [ --fullname ]
+.RB [ --no-fullname ]
+
+.SH DESCRIPTION
+.B lljobstat
+reads and parses the job_stats files on local node,
+sums up the operations of each job, and displays the top jobs.
+Repeat for some times or forever with given interval.
+.P
+Type Ctrl-C to stop printing.
+
+.SS Abbreviations
+\fBlljobstat\fR displays abbreviations of operation names as listed below:
+.P
+.nf
+ops: total number of operations
+cl: close,      cr: create,     dt: destroy,    fa: fallocate, ga: getattr
+gi: get_info,   gx: getxattr,   ln: link,       mi: migrate,   mk: mkdir
+mn: mknod,      mv: rename,     op: open,       pa: prealloc,  pu: punch
+qc: quotactl,   rd: read,       rm: rmdir,      sa: setattr,   si: set_info
+st: statfs,     sx: setxattr,   sy: sync,       ul: unlink,    wr: write
+.fi
+
+.SH "OPTIONS"
+.TP
+\fB-c|--count\fR \fICOUNT\fR
+how many top jobs are listed. Default 5.
+.TP
+\fB-i|--interval\fR \fIINTERVAL\fR
+interval in seconds before list top jobs again. Default 10.
+.TP
+\fB-n|--repeats\fR \fIREPEATS\fR
+how many times to repeat. Default unlimited.
+.TP
+\fB-m|--mdt\fR
+get data from only job_stats of MDTs.
+.TP
+\fB-o|--ost\fR
+get data from only job_stats of OSTs.
+.TP
+\fB--param\fR \fIPARAM\fR
+get data from only PARAM path. For example, "*.lustre-*.job_stat".
+.TP
+\fB--fullname\fR
+show full name of operations. Default no.
+.TP
+\fB--no-fullname\fR
+show abbreviated name of operations.
+.TP
+\fB-h|--help\fR
+print help message.
+
+.SH EXAMPLE
+.nf
+# lljobstat -n 1 -c 3
+---
+timestamp: 1665623345
+top_jobs:
+- rm.0:            {ops: 99, cl: 32, ul: 16, rm: 16, ga: 19, st: 16}
+- touch.500:       {ops: 48, op: 8, cl: 8, mn: 8, ga: 8, sa: 16}
+- dd.0:            {ops: 38, op: 4, cl: 4, mn: 1, ga: 1, sa: 3, gx: 3, wr: 19, pu: 3}
+\[char46]..
+.fi

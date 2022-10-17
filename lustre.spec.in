@@ -762,6 +762,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 
 %{_bindir}/llobdstat
+%{_bindir}/lljobstat
 %{_bindir}/llstat
 %{_bindir}/plot-llstat
 %{_datadir}/lustre

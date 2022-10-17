@@ -19209,10 +19209,10 @@ run_test 205c "Verify client stats format"
 test_205d() {
 	local file=$DIR/$tdir/$tfile
 
-	(( $MDS1_VERSION >= $(version_code 2.15.52) )) ||
-		skip "need lustre >= 2.15.51"
-	(( $OST1_VERSION >= $(version_code 2.15.52) )) ||
-		skip "need lustre >= 2.15.51"
+	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need lustre >= 2.15.53 for lljobstat"
+	(( $OST1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need lustre >= 2.15.53 for lljobstat"
 	verify_yaml_available || skip_env "YAML verification not installed"
 
 	test_mkdir -i 0 $DIR/$tdir
@@ -19222,6 +19222,7 @@ test_205d() {
 		error "failed to write data to $file"
 	mv $file $file.2
 
+	do_facet mds1 "$LCTL get_param -n mdt.$FSNAME-MDT0000.rename_stats"
 	echo -n 'verify rename_stats...'
 	do_facet mds1 "$LCTL get_param -n mdt.$FSNAME-MDT0000.rename_stats" |
 		verify_yaml || error "rename_stats is not valid YAML"
@@ -19238,6 +19239,41 @@ test_205d() {
 	echo " OK"
 }
 run_test 205d "verify the format of some stats files"
+
+test_205e() {
+	local ops_comma
+	local file=$DIR/$tdir/$tfile
+
+	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need lustre >= 2.15.53 for lljobstat"
+	(( $OST1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need lustre >= 2.15.53 for lljobstat"
+	verify_yaml_available || skip_env "YAML verification not installed"
+
+	mkdir_on_mdt0 $DIR/$tdir || error "failed to create dir"
+
+	$LFS setstripe -E EOF -i 0 -c 1 $file ||
+		error "failed to create $file on ost1"
+	dd if=/dev/zero of=$file bs=1M count=10 oflag=sync ||
+		error "failed to write data to $file"
+
+	do_facet mds1 "$LCTL get_param *.*.job_stats"
+	do_facet ost1 "$LCTL get_param *.*.job_stats"
+
+	do_facet ost1 "lljobstat -n 1 -i 0 -c 1000"
+	do_facet ost1 "lljobstat -n 1 -i 0 -c 1000" | verify_yaml ||
+		error "The output of lljobstat is not an valid YAML"
+
+	# verify that job dd.0 does exist and has some ops on ost1
+	# typically this line is like:
+	# - dd.0:            {ops: 20, ...}
+	ops_comma=$(do_facet ost1 "lljobstat -n 1 -i 0 -c 1000" |
+		    awk '$2=="dd.0:" {print $4}')
+
+	(( ${ops_comma%,} >= 10 )) ||
+		error "cannot find job dd.0 with ops >= 10"
+}
+run_test 205e "verify the output of lljobstat"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {
@@ -29105,6 +29141,7 @@ test_906() {
 	rm -f $file || error "rm -f $file failed"
 }
 run_test 906 "Simple test for io_uring I/O engine via fio"
+
 
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
