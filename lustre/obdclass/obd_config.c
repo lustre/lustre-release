@@ -2008,6 +2008,7 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 {
 	struct llog_process_cat_data cd = {
 		.lpcd_first_idx = 0,
+		.lpcd_read_mode = LLOG_READ_MODE_NORMAL,
 	};
 	struct llog_handle *llh;
 	llog_cb_t callback;

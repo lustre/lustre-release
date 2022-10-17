@@ -868,6 +868,7 @@ static int llog_cat_process_cb(const struct lu_env *env,
 	} else if (d->lpd_startidx > 0) {
                 struct llog_process_cat_data cd;
 
+                cd.lpcd_read_mode = LLOG_READ_MODE_NORMAL;
                 cd.lpcd_first_idx = d->lpd_startidx;
                 cd.lpcd_last_idx = 0;
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
@@ -920,7 +921,9 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 
 	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
 	    llh->llh_count > 1) {
-		struct llog_process_cat_data cd;
+		struct llog_process_cat_data cd = {
+			.lpcd_read_mode = LLOG_READ_MODE_NORMAL
+		};
 
 		CWARN("%s: catlog "DFID" crosses index zero\n",
 		      loghandle2name(cat_llh),
@@ -1083,6 +1086,7 @@ int llog_cat_reverse_process(const struct lu_env *env,
         ENTRY;
 
         LASSERT(llh->llh_flags & LLOG_F_IS_CAT);
+	cd.lpcd_read_mode = LLOG_READ_MODE_NORMAL;
         d.lpd_data = data;
         d.lpd_cb = cb;
 
