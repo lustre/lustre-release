@@ -840,7 +840,7 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 	skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 				   blocksize, local_iv);
 
-	rc = crypto_skcipher_encrypt_iv(req, sg_dst.sgl, sg_src.sgl, blocksize);
+	rc = crypto_skcipher_decrypt_iv(req, sg_dst.sgl, sg_src.sgl, blocksize);
 
 	gss_teardown_sgtable(&sg_dst);
 	gss_teardown_sgtable(&sg_src);
