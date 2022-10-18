@@ -29,7 +29,7 @@ noinst_SCRIPTS += sanity-sec.sh sanity-selinux.sh
 noinst_SCRIPTS += sanity-krb5.sh krb5_login.sh setup_kerberos.sh
 noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
-noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh metadata-updates.sh
+noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh
 noinst_SCRIPTS += lustre-rsync-test.sh ost-pools.sh rpc.sh yaml.sh
 if BUILD_LUTF
 noinst_SCRIPTS += lutf.sh

@@ -2,7 +2,6 @@ runtests
 sanity
 sanityn
 sanity-benchmark
-metadata-updates
 racer
 lnet-selftest
 replay-single
