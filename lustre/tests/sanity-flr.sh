@@ -1339,9 +1339,9 @@ test_33c() {
 run_test 33c "keep reading among unhealthy mirrors"
 
 test_34a() {
-	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+	(( $OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
 
-	rm -f $DIR/$tfile $DIR/$tfile-2 $DIR/$tfile-ref
+	stack_trap "rm -f $DIR/$tfile $DIR/$tfile-2 $DIR/$tfile-ref"
 
 	# reference file
 	$LFS setstripe -o 0 $DIR/$tfile-ref
@@ -1379,9 +1379,9 @@ test_34a() {
 run_test 34a "read mirrored file with multiple stripes"
 
 test_34b() {
-	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+	(( $OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
 
-	rm -f $DIR/$tfile $DIR/$tfile-2 $DIR/$tfile-ref
+	stack_trap "rm -f $DIR/$tfile $DIR/$tfile-2 $DIR/$tfile-ref"
 
 	# reference file
 	$LFS setstripe -o 0 $DIR/$tfile-ref
@@ -1546,6 +1546,7 @@ test_36c() {
 	# create 2 mirrors using different OSTs
 	$LFS setstripe -N -c1 -i0 --flags=prefer -N -c1 -i1 $tf ||
 		error "create mirrored file"
+	stack_trap "rm -f $tf"
 
 	# write it in the background
 	dd if=/dev/zero of=$tf bs=1M count=600 &
@@ -1651,7 +1652,6 @@ test_37()
 	stack_trap "rm -f $tf $tf2 $tf3 $tf4"
 
 	create_files_37 $((RANDOM + 15 * 1048576)) $tf $tf2 $tf3
-	rm -f $tf4
 	cp $tf $tf4
 
 	# assume the mirror id will be 1, 2, and 3
@@ -2072,7 +2072,8 @@ test_43a() {
 	local tf=$DIR/$tfile
 	local flags
 
-	rm -f $tf
+	stack_trap "rm -f $tf"
+
 	##   mirror 0  ost (0, 1)
 	##   mirror 1  ost (1, 2)
 	##   mirror 2  ost (2, 0)
@@ -2365,6 +2366,7 @@ test_44e() {
 	# Disable xattr caching so we can repeatedly check SOM with lfs getsom
 	$LCTL set_param llite.*.xattr_cache=0
 	stack_trap "$LCTL set_param llite.*.xattr_cache=1"
+	stack_trap "rm -rf $tf"
 
 	dd if=/dev/zero of=$tf bs=1M count=10 || error "dd write $tfile failed"
 	sync
@@ -2539,6 +2541,7 @@ test_47() {
 	local osts
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $file"
 
 	# test case 1:
 	rm -f $file
@@ -2607,7 +2610,8 @@ test_48() {
 
 	local tf=$DIR/$tfile
 
-	rm -f $tf
+	stack_trap "rm -f $tf"
+
 	echo " ** create 2 mirrors FLR file $tf"
 	$LFS mirror create -N -E2M -Eeof --flags prefer \
 			   -N -E1M -Eeof $tf ||
@@ -2680,6 +2684,7 @@ test_49a() {
 
 	$LFS setstripe -N -E eof -c1 -o1 -N -E eof -c1 -o0 $file ||
 		error "setstripe on $file"
+	stack_trap "rm -f $file"
 
 	dd if=/dev/zero of=$file bs=1M count=1 || error "dd failed for $file"
 	$LFS mirror resync $file
@@ -2846,8 +2851,6 @@ test_50a() {
 	# that file is still sparse
 	(( blocks < 1000 )) ||
 		error "Mirrored file consumes $blocks blocks"
-
-	rm $file
 }
 run_test 50a "mirror extend/copy preserves sparseness"
 
@@ -2864,6 +2867,7 @@ test_50b() {
 	local blocks
 
 	mkdir -p $DIR/$tdir
+	stack_trap "rm -f $file"
 
 	echo " ** create mirrored file $file"
 	$LFS mirror create -N -E1M -c1 -S1M -E eof \
@@ -2935,7 +2939,6 @@ test_50b() {
 	# not, so whole file should still use far fewer blocks in total
 	(( blocks < 3000 )) ||
 		error "Mirrored file consumes $blocks blocks"
-	rm $file
 }
 run_test 50b "mirror rsync handles sparseness"
 
@@ -3044,8 +3047,6 @@ test_60a() {
 	if ((new_size != old_size)); then
 		error "new_size ($new_size) is not equal to old_size ($old_size)"
 	fi
-
-	rm $file
 }
 run_test 60a "mirror extend sets correct size on sparse file"
 
@@ -3227,6 +3228,7 @@ test_70() {
 	local tf=$DIR/$tdir/$tfile
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
 
 	while true; do
 		rm -f $tf
@@ -3247,7 +3249,6 @@ test_70() {
 	kill -9 $c_pid &> /dev/null
 	kill -9 $s_pid &> /dev/null
 
-	rm -f $tf
 	true
 }
 run_test 70 "mirror create and split race"
@@ -3260,6 +3261,7 @@ test_100() {
 
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
 
 	$LFS setstripe -N -E1M -c-1 -Eeof -c-1 $tf ||
 		error "setstripe $tf failed"
@@ -3413,7 +3415,6 @@ test_200() {
 run_test 200 "stress test"
 
 cleanup_test_201() {
-	trap 0
 	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $CL_USER
 
 	umount_client $MOUNT2
@@ -3425,7 +3426,7 @@ test_201() {
 	MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
 	       awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 
-	trap cleanup_test_201 EXIT
+	stack_trap cleanup_test_201 EXIT
 
 	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
 			changelog_register -n)
@@ -3455,8 +3456,6 @@ test_201() {
 		$LFS mirror resync $file
 		echo "$file resync done"
 	done
-
-	cleanup_test_201
 }
 run_test 201 "FLR data mover"
 
@@ -3527,6 +3526,7 @@ test_204a() {
 	local found=""
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	# first mirror is 0-10M, then 10M-(-1), second mirror is 1M followed
 	# by extension space to -1
@@ -3559,8 +3559,6 @@ test_204a() {
 	[ $found -eq 1 ] || error "resync: Third comp start incorrect"
 
 	sel_layout_sanity $comp_file 5
-
-	rm -f $comp_file
 }
 run_test 204a "FLR write/stale/resync tests with self-extending mirror"
 
@@ -3574,6 +3572,7 @@ test_204b() {
 	local found=""
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	# first mirror is 1M followed by extension space to -1, second mirror
 	# is 0-10M, then 10M-(-1),
@@ -3628,8 +3627,6 @@ test_204b() {
 	[ $found -eq 1 ] || error "resync: Second mirror comp flags incorrect"
 
 	sel_layout_sanity $comp_file 5
-
-	rm -f $comp_file
 }
 run_test 204b "FLR write/stale/resync tests with self-extending primary"
 
@@ -3646,6 +3643,7 @@ test_204c() {
 	local ost_name=$(ostname_from_index $ost_idx1)
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	# first mirror is is 0-10M, then 10M-(-1), second mirror is 0-1M, then
 	# extension space from 1M to 1G, then normal space to -1
@@ -3692,8 +3690,6 @@ test_204c() {
 	[ $found -eq 1 ] || error "resync: Second mirror comp incorrect"
 
 	sel_layout_sanity $comp_file 4
-
-	rm -f $comp_file
 }
 run_test 204c "FLR write/stale/resync test with component removal"
 
@@ -3709,6 +3705,7 @@ test_204d() {
 	wait_delete_completed
 	wait_mds_ost_sync
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	# first mirror is 64M followed by extension space to -1, second mirror
 	# is 0-10M, then 10M-(-1)
@@ -3761,8 +3758,6 @@ test_204d() {
 	[ $found -eq 1 ] || error "resync: repeat comp incorrect"
 
 	sel_layout_sanity $comp_file 5
-
-	rm -f $comp_file
 }
 run_test 204d "FLR write/stale/resync sel test with repeated comp"
 
@@ -3779,6 +3774,7 @@ test_204e() {
 	wait_mds_ost_sync
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	# first mirror is is 0-100M, then 100M-(-1), second mirror is extension
 	# space to -1 (-z 64M, so first comp is 0-64M)
@@ -3842,8 +3838,6 @@ test_204e() {
 	[ $found -eq 1 ] || error "resync: repeated comp incorrect"
 
 	sel_layout_sanity $comp_file 5
-
-	rm -f $comp_file
 }
 run_test 204e "FLR write/stale/resync sel test with repeated comp"
 
@@ -3859,6 +3853,7 @@ test_204f() {
 	wait_delete_completed
 	wait_mds_ost_sync
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $comp_file"
 
 	pool_add $TESTNAME || error "Pool creation failed"
 	pool_add_targets $TESTNAME 0 1 || error "Pool add targets failed"
@@ -3911,8 +3906,6 @@ test_204f() {
 	[ $found -eq 1 ] || error "resync: First mirror comp incorrect"
 
 	sel_layout_sanity $comp_file 4
-
-	rm -f $comp_file
 }
 run_test 204f "FLR write/stale/resync sel w/forced extension"
 
