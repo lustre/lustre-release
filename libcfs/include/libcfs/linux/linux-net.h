@@ -26,6 +26,18 @@
 #include <net/netlink.h>
 #include <net/genetlink.h>
 
+/* NL_SET_ERR_MSG macros is already defined in kernels
+ * 3.10.0-1160 and above. For older kernels (3.10.0-957)
+ * where this is not defined we put the message to the
+ * system log as a workaround
+ */
+#ifndef NL_SET_ERR_MSG
+#define NL_SET_ERR_MSG(unused, msg) do {              \
+       static const char __msg[] = msg;               \
+       pr_debug("%s\n", __msg);                       \
+} while (0)
+#endif
+
 #ifndef HAVE_NLA_STRDUP
 char *nla_strdup(const struct nlattr *nla, gfp_t flags);
 #endif /* !HAVE_NLA_STRDUP */
