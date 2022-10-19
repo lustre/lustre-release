@@ -475,7 +475,9 @@ static int jobid_should_free_item(void *obj, void *data)
 static bool jobid_name_is_valid(char *jobid)
 {
 	const char *const lustre_reserved[] = { "ll_ping", "ptlrpc",
-						"ldlm", "ll_sa", NULL };
+						"ldlm", "ll_sa", "kworker",
+						"kswapd", "writeback", "irq",
+						"ksoftirq", NULL };
 	int i;
 
 	if (jobid[0] == '\0')
@@ -862,6 +864,8 @@ static struct cfs_hash_ops jobid_hash_ops = {
  */
 int lustre_get_jobid(char *jobid, size_t joblen)
 {
+	char id[LUSTRE_JOBID_SIZE] = "";
+	int len = min_t(int, joblen, LUSTRE_JOBID_SIZE);
 	int rc = 0;
 	ENTRY;
 
@@ -874,11 +878,14 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0) {
 		/* Jobstats isn't enabled */
 		memset(jobid, 0, joblen);
-	} else if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0) {
+		RETURN(0);
+	}
+
+	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0) {
 		/* Whole node dedicated to single job */
-		rc = jobid_interpret_string(obd_jobid_name, jobid, joblen);
+		rc = jobid_interpret_string(obd_jobid_name, id, len);
 	} else if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
-		rc = jobid_interpret_string("%e.%u", jobid, joblen);
+		rc = jobid_interpret_string("%e.%u", id, len);
 	} else if (strcmp(obd_jobid_var, JOBSTATS_SESSION) == 0 ||
 		   jobid_name_is_valid(current->comm)) {
 		/*
@@ -889,17 +896,18 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 		 */
 		rc = -EAGAIN;
 		if (!strnstr(obd_jobid_name, "%j", joblen))
-			rc = jobid_get_from_cache(jobid, joblen);
+			rc = jobid_get_from_cache(id, len);
 
 		/* fall back to jobid_name if jobid_var not available */
 		if (rc < 0) {
 			int rc2 = jobid_interpret_string(obd_jobid_name,
-							 jobid, joblen);
+							 id, len);
 			if (!rc2)
 				rc = 0;
 		}
 	}
 
+	memcpy(jobid, id, len);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_get_jobid);
