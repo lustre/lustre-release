@@ -9908,7 +9908,7 @@ run_test 128 "Force using remote logs with --nolocallogs"
 test_129()
 {
 	stopall
-	start_mds || error "MDS start failed"
+	start_mgsmds || error "MGS/MDS start failed"
 	format_ost 1
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &&
 		error "start ost1 should fail" || true
