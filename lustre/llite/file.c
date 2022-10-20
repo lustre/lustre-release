@@ -4798,11 +4798,20 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		}
 	}
 
-	err = md_fsync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), &req);
-	if (!rc)
-		rc = err;
-	if (!err)
-		ptlrpc_req_finished(req);
+	if (S_ISREG(inode->i_mode) && !lli->lli_synced_to_mds) {
+		/*
+		 * only the first sync on MDS makes sense,
+		 * everything else is stored on OSTs
+		 */
+		err = md_fsync(ll_i2sbi(inode)->ll_md_exp,
+			       ll_inode2fid(inode), &req);
+		if (!rc)
+			rc = err;
+		if (!err) {
+			lli->lli_synced_to_mds = true;
+			ptlrpc_req_finished(req);
+		}
+	}
 
 	if (S_ISREG(inode->i_mode)) {
 		struct ll_file_data *fd = file->private_data;

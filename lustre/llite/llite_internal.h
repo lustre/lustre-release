@@ -150,6 +150,7 @@ struct ll_inode_info {
 	s64				lli_ctime;
 	s64				lli_btime;
 	spinlock_t			lli_agl_lock;
+	bool				lli_synced_to_mds;
 
 	/* inode specific open lock caching threshold */
 	u32				lli_open_thrsh_count;

@@ -2300,6 +2300,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	rc = ll_md_setattr(dentry, op_data);
 	if (rc)
 		GOTO(out, rc);
+	lli->lli_synced_to_mds = false;
 
 	if (!S_ISREG(inode->i_mode) || hsm_import)
 		GOTO(out, rc = 0);
