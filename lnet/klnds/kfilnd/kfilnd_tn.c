@@ -634,6 +634,20 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			KFILND_TN_DEBUG(tn,
 					"Dropping message to stale peer %s\n",
 					libcfs_nid2str(tn->tn_kp->kp_nid));
+		} else if (kfilnd_peer_needs_hello(tn->tn_kp, false)) {
+			/* This transaction was setup against a new peer, which
+			 * implies a HELLO was sent. If a HELLO is no longer
+			 * in flight then that means it has failed, and we
+			 * should cancel this TN. Otherwise we are stuck
+			 * waiting for the TN deadline.
+			 *
+			 * We assign NETWORK_TIMEOUT health status below because
+			 * we do not know why the HELLO failed.
+			 */
+			rc = -ECANCELED;
+			KFILND_TN_DEBUG(tn,
+					"Peer is new but there is no outstanding hello %s\n",
+					libcfs_nid2str(tn->tn_kp->kp_nid));
 		} else if (ktime_after(tn->deadline, ktime_get_seconds())) {
 			/* If transaction deadline has not been met, return
 			 * -EAGAIN. This will cause this transaction event to be
