@@ -73,11 +73,14 @@ class LutfFile(BaseTest):
 		# search string
 		if not replace:
 			with open(fname) as old_file:
-				for line in old_file:
-					if search in line:
-						if not found_line:
-							found_line = line
-						count += 1
+				try:
+					for line in old_file:
+						if search in line:
+							if not found_line:
+								found_line = line
+							count += 1
+				except UnicodeDecodeError:
+					pass
 			if getline:
 				return count, found_line
 			return count
@@ -85,20 +88,26 @@ class LutfFile(BaseTest):
 		fh, abs_path = tempfile.mkstemp()
 		with os.fdopen(fh,'w') as new_file:
 			with open(fname) as old_file:
-				for line in old_file:
-					if search in line:
-						if not found_line:
-							found_line = line
-						new_file.write(replace)
-						count += 1
-					else:
-						new_file.write(line)
-		#Copy the file permissions from the old file to the new file
-		shutil.copymode(fname, abs_path)
-		#Remove original file
-		os.remove(fname)
-		#Move new file
-		shutil.move(abs_path, fname)
+				try:
+					for line in old_file:
+						if search in line:
+							if not found_line:
+								found_line = line
+							new_file.write(replace)
+							count += 1
+						else:
+							new_file.write(line)
+				except UnicodeDecodeError:
+					pass
+		if count:
+			#Copy the file permissions from the old file to the new file
+			shutil.copymode(fname, abs_path)
+			#Remove original file
+			os.remove(fname)
+			#Move new file
+			shutil.move(abs_path, fname)
+		else:
+			os.remove(abs_path)
 
 		if getline:
 			return count, found_line
