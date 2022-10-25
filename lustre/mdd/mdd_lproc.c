@@ -155,11 +155,11 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 
 	mdd->mdd_cl.mc_proc_mask = newmask;
 
-	/* if mask keeps all bits from oldmask then just extend the current
-	 * mask, otherwise the current mask should be recalculated through
-	 * all user masks.
+	/* if oldmask is not MINMASK and newmask keeps all bits from oldmask
+	 * then just extend the current mask, otherwise the current mask
+	 * should be recalculated through all user masks.
 	 */
-	if ((newmask & oldmask) == oldmask) {
+	if (oldmask != CHANGELOG_MINMASK && (newmask & oldmask) == oldmask) {
 		spin_lock(&mdd->mdd_cl.mc_user_lock);
 		mdd->mdd_cl.mc_current_mask |= newmask;
 		spin_unlock(&mdd->mdd_cl.mc_user_lock);

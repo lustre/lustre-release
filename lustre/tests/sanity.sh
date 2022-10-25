@@ -17160,6 +17160,15 @@ test_160o() {
 				mdd.$mdt.changelog_current_mask -n)
 	[[ $mask == *"HLINK"* ]] || error "mask is not DEFMASK as expected"
 
+	if (( $MDS1_VERSION >= $(version_code 2.15.52) )) ; then
+		# set server mask back to some value
+		changelog_chmask "CLOSE,UNLNK"
+		# check effective mask again, should not remain as DEFMASK
+		mask=$(do_facet $SINGLEMDS $LCTL get_param \
+				mdd.$mdt.changelog_current_mask -n)
+		[[ $mask != *"HLINK"* ]] || error "mask is still DEFMASK"
+	fi
+
 	do_facet $SINGLEMDS $LCTL --device $mdt \
 				changelog_deregister -u test_160o ||
 		error "cannot deregister by name"
