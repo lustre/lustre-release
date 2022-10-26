@@ -129,6 +129,8 @@ enum ll_sa_pattern {
 	LSA_PATTERN_FNAME		= 0x0004,
 	/* statahead advise via statahead hint from users */
 	LSA_PATTERN_ADVISE		= 0x0008,
+	/* have called opendir() on the parent dir */
+	LSA_PATTERN_OPENDIR		= 0x0010,
 	/* not first dirent, or is "." for listing */
 	LSA_PATTERN_LS_NOT_FIRST_DE	= 0x0100,
 	/* the file names of stat() calls has regularized predictable format */
@@ -202,10 +204,10 @@ struct ll_inode_info {
 			struct ll_statahead_context    *lli_sax;
 			/* protect statahead stuff. */
 			spinlock_t			lli_sa_lock;
-			/* "opendir_pid" is the token when lookup/revalid
+			/* "stat_pid" is the token when lookup/revalid
 			 * -- I am the owner of dir statahead.
 			 */
-			pid_t				lli_opendir_pid;
+			pid_t				lli_stat_pid;
 			/* directory depth to ROOT */
 			unsigned short			lli_dir_depth;
 			/* directory depth to ancestor whose default LMV is
@@ -1758,6 +1760,8 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 
 /* statahead controller, per process struct, for dir only */
 struct ll_statahead_info {
+	pid_t			sai_pid;
+	struct list_head	sai_item;
 	struct dentry		*sai_dentry;
 	atomic_t		sai_refcount;   /* On access, hold refcount */
 	unsigned int		sai_max;        /* max ahead of lookup */
@@ -1818,6 +1822,7 @@ struct ll_statahead_context {
 	/* Local dcache */
 	struct list_head	 sax_cache[LL_SA_CACHE_SIZE];
 	spinlock_t		 sax_cache_lock[LL_SA_CACHE_SIZE];
+	struct list_head	 sax_sai_list;
 };
 
 int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,
@@ -1910,7 +1915,7 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 		return true;
 
 	/* not the same process, don't statahead */
-	if (lli->lli_opendir_pid != current->pid)
+	if (lli->lli_stat_pid != current->pid)
 		return false;
 
 	return true;

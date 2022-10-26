@@ -1276,7 +1276,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_opendir_key = NULL;
 		lli->lli_sai = NULL;
 		spin_lock_init(&lli->lli_sa_lock);
-		lli->lli_opendir_pid = 0;
+		lli->lli_stat_pid = 0;
 		lli->lli_sa_enabled = 0;
 		init_rwsem(&lli->lli_lsm_sem);
 	} else {
@@ -1928,7 +1928,6 @@ void ll_clear_inode(struct inode *inode)
 		/* these should have been cleared in ll_file_release */
 		LASSERT(lli->lli_opendir_key == NULL);
 		LASSERT(lli->lli_sai == NULL);
-		LASSERT(lli->lli_opendir_pid == 0);
 	} else {
 		pcc_inode_free(inode);
 	}
