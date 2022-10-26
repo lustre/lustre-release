@@ -791,8 +791,12 @@ static void tgt_ses_key_exit(const struct lu_context *ctx,
 {
 	struct tgt_session_info *tsi = data;
 
-	if (tsi->tsi_has_trans > 1)
-		CDEBUG(D_WARNING, "total %i transactions per RPC\n",
+	/**
+	 * Check cases when that is true to add proper
+	 * handling and set mult_trans
+	 */
+	if (!tsi->tsi_mult_trans && tsi->tsi_has_trans > 1)
+		CDEBUG(D_HA, "total %i transactions per RPC\n",
 		       tsi->tsi_has_trans);
 	tsi->tsi_has_trans = 0;
 	tsi->tsi_mult_trans = false;
