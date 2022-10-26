@@ -1,0 +1,39 @@
+source ${LBUILD_DIR}/lbuild-rhel
+
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN+=".0"
+
+SPEC_NAME="kernel.spec"
+DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=false
+RPM_HELPERS_DIR="/usr/lib/rpm/openEuler"
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el9.centos"
+# in kernel version and rpm names
+#
+RMAC=$HOME/.rpmmacros
+grep '^%dist' $RMAC &> /dev/null || echo '%dist .oe2203' >> $RMAC
+
+unpack_linux_devel_rpm-oe2203() {
+	local callers_rpm="$1"
+
+	unpack_linux_devel_rpm-rhel "$callers_rpm"
+}
+
+find_linux_rpm-oe2203() {
+	local prefix="$1"
+	local wanted_kernel="$2"
+	local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+
+	find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+}
+
+apply_kmod_requires_conflicts() {
+	if $PATCHLESS; then
+		# don't allow the patched kernel to be considered as
+		# a valid kernel for the patchless client
+		echo "Conflicts:      kernel-lustre" >> rpm/kmp-lustre.preamble
+	fi
+}

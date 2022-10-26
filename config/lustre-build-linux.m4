@@ -92,6 +92,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 	RHEL_KERNEL="no"
 	SUSE_KERNEL="no"
 	UBUNTU_KERNEL="no"
+	OPENEULER_KERNEL="no"
 	# And if any of the above kernels has been detected yet
 	KERNEL_FOUND="no"
 
@@ -151,9 +152,23 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 		])
 	])
 
+	# Check for openEuler
+	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
+		AC_CACHE_CHECK([for openEuler kernel signature], lb_cv_openeuler_kernel_sig, [
+			lb_cv_openeuler_kernel_sig="no"
+			AS_IF([fgrep -q 'openEuler' $LINUX_OBJ/include/linux/kabi.h], [
+				lb_cv_openeuler_kernel_sig="yes"
+			])
+		])
+		AS_IF([test "x$lb_cv_openeuler_kernel_sig" = "xyes"], [
+			OPENEULER_KERNEL="yes"
+			KERNEL_FOUND="yes"
+		])
+	])
+
 	# If still no kernel was found, a warning is issued
 	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
-		AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE nor Ubuntu])
+		AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE, openEuler nor Ubuntu])
 	])
 
 	AC_MSG_CHECKING([for Linux kernel module package directory])
@@ -163,9 +178,10 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 		[KMP_MODDIR=$withval
 		 IN_KERNEL=''],[
 		AS_IF([test x$RHEL_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
+		      [test x$OPENEULER_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
 		      [test x$SUSE_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
 		      [test x$UBUNTU_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
-		      [AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE nor Ubuntu])]
+		      [AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE, openEuler nor Ubuntu])]
 		)
 		IN_KERNEL="${PACKAGE}"])
 	AC_MSG_RESULT($KMP_MODDIR)
