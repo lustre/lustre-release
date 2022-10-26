@@ -37,6 +37,9 @@
 #include <lustre_dlm.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
+#ifdef HAVE_SERVER_SUPPORT
+#include <lustre_nodemap.h>
+#endif
 
 int mgc_tunables_init(struct obd_device *obd);
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
@@ -78,5 +81,39 @@ static inline bool cld_is_barrier(struct config_llog_data *cld)
 	return false;
 #endif
 }
+
+#ifdef HAVE_SERVER_SUPPORT
+int mgc_set_info_async_server(const struct lu_env *env,
+			      struct obd_export *exp,
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set);
+int mgc_process_nodemap_log(struct obd_device *obd,
+			    struct config_llog_data *cld);
+int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
+			       struct lustre_sb_info *lsi,
+			       struct obd_device *mgc,
+			       struct config_llog_data *cld,
+			       int local_only);
+int mgc_process_config_server(struct obd_device *obd, size_t len, void *buf);
+int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data);
+#else /* HAVE_SERVER_SUPPORT */
+#define mgc_barrier_glimpse_ast NULL
+#endif /* HAVE_SERVER_SUPPORT */
+
+/* Not sure where this should go... */
+/* This is the timeout value for MGS_CONNECT request plus a ping interval, such
+ * that we can have a chance to try the secondary MGS if any.
+ */
+#define  MGC_ENQUEUE_LIMIT (INITIAL_CONNECT_TIMEOUT + (AT_OFF ? 0 : at_min) \
+				+ PING_INTERVAL)
+#define  MGC_TARGET_REG_LIMIT 10
+#define  MGC_TARGET_REG_LIMIT_MAX RECONNECT_DELAY_MAX
+#define  MGC_SEND_PARAM_LIMIT 10
+
+enum {
+	CONFIG_READ_NRPAGES_INIT = 1 << (20 - PAGE_SHIFT),
+	CONFIG_READ_NRPAGES      = 4
+};
 
 #endif  /* _MGC_INTERNAL_H */
