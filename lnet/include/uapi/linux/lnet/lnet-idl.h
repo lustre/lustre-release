@@ -247,7 +247,6 @@ struct lnet_counters_common {
 	__u64	lcc_drop_length;
 } __attribute__((packed));
 
-
 #define LNET_NI_STATUS_UP	0x15aac0de
 #define LNET_NI_STATUS_DOWN	0xdeadface
 #define LNET_NI_STATUS_INVALID	0x00000000
@@ -255,19 +254,32 @@ struct lnet_counters_common {
 struct lnet_ni_status {
 	lnet_nid_t ns_nid;
 	__u32      ns_status;
-	__u32      ns_unused;
+	__u32      ns_msg_size;	/* represents ping buffer size if message
+				 * contains large NID addresses.
+				 */
 } __attribute__((packed));
 
-/*
- * NB: value of these features equal to LNET_PROTO_PING_VERSION_x
+/* When this appears in lnet_ping_info, it will be large
+ * enough to hold whatever nid is present, rounded up
+ * to a multiple of 4 bytes.
+ * NOTE: all users MUST check ns_nid.nid_size is usable.
+ */
+struct lnet_ni_large_status {
+	__u32		ns_status;
+	struct lnet_nid	ns_nid;
+} __attribute__((packed));
+
+/* NB: value of these features equal to LNET_PROTO_PING_VERSION_x
  * of old LNet, so there shouldn't be any compatibility issue
  */
 #define LNET_PING_FEAT_INVAL		(0)		/* no feature */
 #define LNET_PING_FEAT_BASE		(1 << 0)	/* just a ping */
 #define LNET_PING_FEAT_NI_STATUS	(1 << 1)	/* return NI status */
-#define LNET_PING_FEAT_RTE_DISABLED	(1 << 2)        /* Routing enabled */
-#define LNET_PING_FEAT_MULTI_RAIL	(1 << 3)        /* Multi-Rail aware */
+#define LNET_PING_FEAT_RTE_DISABLED	(1 << 2)	/* Routing enabled */
+#define LNET_PING_FEAT_MULTI_RAIL	(1 << 3)	/* Multi-Rail aware */
 #define LNET_PING_FEAT_DISCOVERY	(1 << 4)	/* Supports Discovery */
+#define LNET_PING_FEAT_LARGE_ADDR	(1 << 5)	/* Large addr nids present */
+#define LNET_PING_FEAT_PRIMARY_LARGE	(1 << 6)	/* Primary is first Large addr */
 
 /*
  * All ping feature bits fit to hit the wire.
@@ -277,17 +289,26 @@ struct lnet_ni_status {
  * New feature bits can be added, just be aware that this does change the
  * over-the-wire protocol.
  */
-#define LNET_PING_FEAT_BITS		(LNET_PING_FEAT_BASE | \
-					 LNET_PING_FEAT_NI_STATUS | \
-					 LNET_PING_FEAT_RTE_DISABLED | \
-					 LNET_PING_FEAT_MULTI_RAIL | \
-					 LNET_PING_FEAT_DISCOVERY)
+#define LNET_PING_FEAT_BITS		(LNET_PING_FEAT_BASE |		\
+					 LNET_PING_FEAT_NI_STATUS |	\
+					 LNET_PING_FEAT_RTE_DISABLED |	\
+					 LNET_PING_FEAT_MULTI_RAIL |	\
+					 LNET_PING_FEAT_DISCOVERY |	\
+					 LNET_PING_FEAT_LARGE_ADDR |	\
+					 LNET_PING_FEAT_PRIMARY_LARGE)
 
+/* NOTE:
+ * The first address in pi_ni *must* be the loop-back nid: LNET_NID_LO_0
+ * The second address must be the primary nid for the host unless
+ * LNET_PING_FEAT_PRIMARY_LARGE is set, then the first large address
+ * is the preferred primary.  However nodes that do not recognise that
+ * flag will quietly ignore it.
+ */
 struct lnet_ping_info {
 	__u32			pi_magic;
 	__u32			pi_features;
 	lnet_pid_t		pi_pid;
-	__u32			pi_nnis;
+	__u32			pi_nnis;	/* number of nid4 entries */
 	struct lnet_ni_status	pi_ni[0];
 } __attribute__((packed));
 
@@ -297,7 +318,14 @@ struct lnet_ping_info {
 	offsetof(struct lnet_ping_info, pi_ni[LNET_INTERFACES_MIN])
 #define LNET_PING_INFO_LONI(PINFO)      ((PINFO)->pi_ni[0].ns_nid)
 #define LNET_PING_INFO_SEQNO(PINFO)     ((PINFO)->pi_ni[0].ns_status)
-#define lnet_ping_info_size(pinfo)	\
-	offsetof(struct lnet_ping_info, pi_ni[(pinfo)->pi_nnis])
+/* If LNET_PING_FEAT_LARGE_ADDR set, pi_nnis is the number of nid4 entries
+ * and pi_ni[0].ns_msg_size is the total number of bytes, including header and
+ * lnet_ni_large_status entries which follow the lnet_ni_status entries.
+ * This must be a multiple of 4.
+ */
+#define lnet_ping_info_size(pinfo)				\
+	(((pinfo)->pi_features & LNET_PING_FEAT_LARGE_ADDR)	\
+	? ((pinfo)->pi_ni[0].ns_msg_size & ~3)			\
+	: offsetof(struct lnet_ping_info, pi_ni[(pinfo)->pi_nnis]))
 
 #endif

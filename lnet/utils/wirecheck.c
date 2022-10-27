@@ -165,7 +165,11 @@ check_lnet_ni_status(void)
 	CHECK_STRUCT(struct lnet_ni_status);
 	CHECK_MEMBER(struct lnet_ni_status, ns_nid);
 	CHECK_MEMBER(struct lnet_ni_status, ns_status);
-	CHECK_MEMBER(struct lnet_ni_status, ns_unused);
+	CHECK_MEMBER(struct lnet_ni_status, ns_msg_size);
+
+	CHECK_STRUCT(struct lnet_ni_large_status);
+	CHECK_MEMBER(struct lnet_ni_large_status, ns_status);
+	CHECK_MEMBER(struct lnet_ni_large_status, ns_nid);
 }
 
 void
@@ -181,6 +185,8 @@ check_lnet_ping_info(void)
 	CHECK_VALUE(LNET_PING_FEAT_RTE_DISABLED);
 	CHECK_VALUE(LNET_PING_FEAT_MULTI_RAIL);
 	CHECK_VALUE(LNET_PING_FEAT_DISCOVERY);
+	CHECK_VALUE(LNET_PING_FEAT_LARGE_ADDR);
+	CHECK_VALUE(LNET_PING_FEAT_PRIMARY_LARGE);
 	CHECK_VALUE(LNET_PING_FEAT_BITS);
 
 	CHECK_STRUCT(struct lnet_ping_info);

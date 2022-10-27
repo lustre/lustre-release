@@ -675,6 +675,45 @@ struct lnet_ping_buffer {
 #define LNET_PING_INFO_TO_BUFFER(PINFO)	\
 	container_of((PINFO), struct lnet_ping_buffer, pb_info)
 
+static inline int
+lnet_ping_sts_size(const struct lnet_nid *nid)
+{
+	int size;
+
+	if (nid_is_nid4(nid))
+		return sizeof(struct lnet_ni_status);
+
+	size = offsetof(struct lnet_ni_large_status, ns_nid) +
+	       NID_BYTES(nid);
+
+	return round_up(size, 4);
+}
+
+static inline struct lnet_ni_large_status *
+lnet_ping_sts_next(const struct lnet_ni_large_status *nis)
+{
+	return (void *)nis + lnet_ping_sts_size(&nis->ns_nid);
+}
+
+static inline bool
+lnet_ping_at_least_two_entries(const struct lnet_ping_info *pi)
+{
+	/* Return true if we have at lease two entries.  There is always a
+	 * least one, a 4-byte lo0 interface.
+	 */
+	struct lnet_ni_large_status *lns;
+
+	if ((pi->pi_features & LNET_PING_FEAT_LARGE_ADDR) == 0)
+		return pi->pi_nnis <= 2;
+	/* There is at least 1 large-address entry */
+	if (pi->pi_nnis != 1)
+		return false;
+	lns = (void *)&pi->pi_ni[1];
+	lns = lnet_ping_sts_next(lns);
+
+	return ((void *)pi + lnet_ping_info_size(pi) <= (void *)lns);
+}
+
 struct lnet_nid_list {
 	struct list_head nl_list;
 	struct lnet_nid nl_nid;

@@ -831,7 +831,7 @@ lnet_health_check(struct lnet_msg *msg)
 		 * I only have a single (non-lolnd) interface.
 		 */
 		pi = &the_lnet.ln_ping_target->pb_info;
-		if (pi->pi_nnis <= 2) {
+		if (lnet_ping_at_least_two_entries(pi)) {
 			handle_local_health = false;
 			attempt_local_resend = false;
 		}

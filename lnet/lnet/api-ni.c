@@ -903,8 +903,15 @@ static void lnet_assert_wire_constants(void)
 	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_status *)0)->ns_nid) != 8);
 	BUILD_BUG_ON((int)offsetof(struct lnet_ni_status, ns_status) != 8);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_status *)0)->ns_status) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_ni_status, ns_unused) != 12);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_status *)0)->ns_unused) != 4);
+	BUILD_BUG_ON((int)offsetof(struct lnet_ni_status, ns_msg_size) != 12);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_status *)0)->ns_msg_size) != 4);
+
+	/* Checks for struct lnet_ni_large_status */
+	BUILD_BUG_ON((int)sizeof(struct lnet_ni_large_status) != 24);
+	BUILD_BUG_ON((int)offsetof(struct lnet_ni_large_status, ns_status) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_large_status *)0)->ns_status) != 4);
+	BUILD_BUG_ON((int)offsetof(struct lnet_ni_large_status, ns_nid) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_ni_large_status *)0)->ns_nid) != 20);
 
 	/* Checks for struct lnet_ping_info and related constants */
 	BUILD_BUG_ON(LNET_PROTO_PING_MAGIC != 0x70696E67);
@@ -914,7 +921,9 @@ static void lnet_assert_wire_constants(void)
 	BUILD_BUG_ON(LNET_PING_FEAT_RTE_DISABLED != 4);
 	BUILD_BUG_ON(LNET_PING_FEAT_MULTI_RAIL != 8);
 	BUILD_BUG_ON(LNET_PING_FEAT_DISCOVERY != 16);
-	BUILD_BUG_ON(LNET_PING_FEAT_BITS != 31);
+	BUILD_BUG_ON(LNET_PING_FEAT_LARGE_ADDR != 32);
+	BUILD_BUG_ON(LNET_PING_FEAT_PRIMARY_LARGE != 64);
+	BUILD_BUG_ON(LNET_PING_FEAT_BITS != 127);
 
 	/* Checks for struct lnet_ping_info */
 	BUILD_BUG_ON((int)sizeof(struct lnet_ping_info) != 16);
@@ -1854,21 +1863,7 @@ lnet_get_net_ni_bytes_locked(struct lnet_net *net)
 	int bytes = 0;
 
 	list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
-		if (nid_is_nid4(&ni->ni_nid))
-			bytes += sizeof(struct lnet_ni_status);
-
-	return bytes;
-}
-
-static inline int
-lnet_get_net_ni_bytes_pre(struct lnet_net *net)
-{
-	struct lnet_ni *ni;
-	int bytes = 0;
-
-	list_for_each_entry(ni, &net->net_ni_added, ni_netlist)
-		if (nid_is_nid4(&ni->ni_nid))
-			bytes += sizeof(struct lnet_ni_status);
+		bytes += lnet_ping_sts_size(&ni->ni_nid);
 
 	return bytes;
 }
@@ -1884,8 +1879,7 @@ lnet_get_ni_bytes(void)
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
-			if (nid_is_nid4(&ni->ni_nid))
-				bytes += sizeof(struct lnet_ni_status);
+			bytes += lnet_ping_sts_size(&ni->ni_nid);
 	}
 
 	lnet_net_unlock(0);
@@ -1896,6 +1890,7 @@ lnet_get_ni_bytes(void)
 void
 lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
 {
+	struct lnet_ni_large_status *lstat, *lend;
 	struct lnet_ni_status *stat, *end;
 	int nnis;
 	int i;
@@ -1910,6 +1905,19 @@ lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
 	for (i = 0; i < nnis && stat + 1 <= end; i++, stat++) {
 		__swab64s(&stat->ns_nid);
 		__swab32s(&stat->ns_status);
+		if (i == 0)
+			/* Might be total size */
+			__swab32s(&stat->ns_msg_size);
+	}
+	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_LARGE_ADDR))
+		return;
+
+	lstat = (struct lnet_ni_large_status *)stat;
+	lend = (void *)end;
+	while (lstat + 1 <= lend) {
+		__swab32s(&lstat->ns_status);
+		/* struct lnet_nid never needs to be swabed */
+		lstat = lnet_ping_sts_next(lstat);
 	}
 }
 
@@ -2040,6 +2048,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 	struct lnet_ni *ni;
 	struct lnet_net	*net;
 	struct lnet_ni_status *ns, *end;
+	struct lnet_ni_large_status *lns, *lend;
 	int rc;
 
 	pbuf->pb_info.pi_nnis = 0;
@@ -2047,8 +2056,14 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 	end = (void *)&pbuf->pb_info + pbuf->pb_nbytes;
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			if (!nid_is_nid4(&ni->ni_nid))
+			if (!nid_is_nid4(&ni->ni_nid)) {
+				if (ns == &pbuf->pb_info.pi_ni[1]) {
+					/* This is primary, and it is long */
+					pbuf->pb_info.pi_features |=
+						LNET_PING_FEAT_PRIMARY_LARGE;
+				}
 				continue;
+			}
 			LASSERT(ns + 1 <= end);
 			ns->ns_nid = lnet_nid_to_nid4(&ni->ni_nid);
 
@@ -2060,6 +2075,31 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 			pbuf->pb_info.pi_nnis++;
 			ns++;
 		}
+	}
+
+	lns = (void *)ns;
+	lend = (void *)end;
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (nid_is_nid4(&ni->ni_nid))
+				continue;
+			LASSERT(lns + 1 <= lend);
+
+			lns->ns_nid = ni->ni_nid;
+
+			lnet_ni_lock(ni);
+			ns->ns_status = lnet_ni_get_status_locked(ni);
+			ni->ni_status = &lns->ns_status;
+			lnet_ni_unlock(ni);
+
+			lns = lnet_ping_sts_next(lns);
+		}
+	}
+	if ((void *)lns > (void *)ns) {
+		/* Record total info size */
+		pbuf->pb_info.pi_ni[0].ns_msg_size =
+			(void *)lns - (void *)&pbuf->pb_info;
+		pbuf->pb_info.pi_features |= LNET_PING_FEAT_LARGE_ADDR;
 	}
 
 	/* We (ab)use the ns_status of the loopback interface to
@@ -3479,8 +3519,7 @@ static int lnet_add_net_common(struct lnet_net *net,
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_remotenet *rnet;
 	struct lnet_ni *ni;
-	int net_ni_bytes;
-	__u32 net_id;
+	u32 net_id;
 	int rc;
 
 	lnet_net_lock(LNET_LOCK_EX);
@@ -3497,26 +3536,6 @@ static int lnet_add_net_common(struct lnet_net *net,
 		return -EUSERS;
 	}
 
-	/*
-	 * make sure you calculate the correct number of slots in the ping
-	 * buffer. Since the ping info is a flattened list of all the NIs,
-	 * we should allocate enough slots to accomodate the number of NIs
-	 * which will be added.
-	 *
-	 * since ni hasn't been configured yet, use
-	 * lnet_get_net_ni_bytes_pre() which checks the net_ni_added list
-	 */
-	net_ni_bytes = lnet_get_net_ni_bytes_pre(net);
-
-	rc = lnet_ping_target_setup(&pbuf, &ping_mdh,
-				    LNET_PING_INFO_HDR_SIZE +
-				    net_ni_bytes + lnet_get_ni_bytes(),
-				    false);
-	if (rc < 0) {
-		lnet_net_free(net);
-		return rc;
-	}
-
 	if (tun)
 		memcpy(&net->net_tunables,
 		       &tun->lt_cmn, sizeof(net->net_tunables));
@@ -3528,7 +3547,21 @@ static int lnet_add_net_common(struct lnet_net *net,
 	rc = lnet_startup_lndnet(net,
 				 (tun) ? &tun->lt_tun : NULL);
 	if (rc < 0)
-		goto failed;
+		return rc;
+
+	/* make sure you calculate the correct number of slots in the ping
+	 * buffer. Since the ping info is a flattened list of all the NIs,
+	 * we should allocate enough slots to accomodate the number of NIs
+	 * which will be added.
+	 */
+	rc = lnet_ping_target_setup(&pbuf, &ping_mdh,
+				    LNET_PING_INFO_HDR_SIZE +
+				    lnet_get_ni_bytes(),
+				    false);
+	if (rc < 0) {
+		lnet_shutdown_lndnet(net);
+		return rc;
+	}
 
 	lnet_net_lock(LNET_LOCK_EX);
 	net = lnet_get_net_locked(net_id);
@@ -3762,7 +3795,7 @@ int lnet_dyn_del_ni(struct lnet_nid *nid)
 	rc = lnet_ping_target_setup(&pbuf, &ping_mdh,
 				    (LNET_PING_INFO_HDR_SIZE +
 				     lnet_get_ni_bytes() -
-				     sizeof(pbuf->pb_info.pi_ni[0])),
+				     lnet_ping_sts_size(&ni->ni_nid)),
 				    false);
 	if (rc != 0)
 		goto unlock_api_mutex;
@@ -5545,10 +5578,12 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		goto fail_ping_buffer_decref;
 	}
 
-	/* Test if smaller than lnet_pinginfo with no pi_ni status info */
-	if (nob < LNET_PING_INFO_HDR_SIZE) {
+	/* Test if smaller than lnet_pinginfo with just one pi_ni status info.
+	 * That one might contain size when large nids are used.
+	 */
+	if (nob < LNET_PING_INFO_SIZE(1)) {
 		CERROR("%s: Short reply %d(%lu min)\n",
-		       libcfs_idstr(&id), nob, LNET_PING_INFO_HDR_SIZE);
+		       libcfs_idstr(&id), nob, LNET_PING_INFO_SIZE(1));
 		goto fail_ping_buffer_decref;
 	}
 
