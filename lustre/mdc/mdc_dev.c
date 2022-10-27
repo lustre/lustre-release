@@ -714,7 +714,8 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 	struct ldlm_intent *lit;
 	enum ldlm_mode mode;
 	bool glimpse = *flags & LDLM_FL_HAS_INTENT;
-	__u64 match_flags = *flags;
+	__u64 search_flags = *flags;
+	__u64 match_flags = 0;
 	LIST_HEAD(cancels);
 	int rc, count;
 	int lvb_size;
@@ -726,11 +727,14 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 	if (einfo->ei_mode == LCK_PR)
 		mode |= LCK_PW;
 
-	match_flags |= LDLM_FL_LVB_READY;
+	search_flags |= LDLM_FL_LVB_READY;
 	if (glimpse)
-		match_flags |= LDLM_FL_BLOCK_GRANTED;
-	mode = ldlm_lock_match(obd->obd_namespace, match_flags, res_id,
-			       einfo->ei_type, policy, mode, &lockh);
+		search_flags |= LDLM_FL_BLOCK_GRANTED;
+	if (mode == LCK_GROUP)
+		match_flags = LDLM_MATCH_GROUP;
+	mode = ldlm_lock_match_with_skip(obd->obd_namespace, search_flags, 0,
+					 res_id, einfo->ei_type, policy, mode,
+					 &lockh, match_flags);
 	if (mode) {
 		struct ldlm_lock *matched;
 
@@ -973,8 +977,6 @@ int mdc_lock_init(const struct lu_env *env, struct cl_object *obj,
 
 	ols->ols_flags = flags;
 	ols->ols_speculative = !!(enqflags & CEF_SPECULATIVE);
-	if (lock->cll_descr.cld_mode == CLM_GROUP)
-		ols->ols_flags |= LDLM_FL_ATOMIC_CB;
 
 	if (ols->ols_flags & LDLM_FL_HAS_INTENT) {
 		ols->ols_flags |= LDLM_FL_BLOCK_GRANTED;
