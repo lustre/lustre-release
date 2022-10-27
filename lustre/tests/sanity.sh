@@ -16522,6 +16522,12 @@ test_160h() {
 		stop_pids[mds$i]=$!
 	done
 
+	do_facet mds1 "ls -l /sbin/umount*"
+	local umount="umount.lustre"
+	[[ -n "$(do_facet mds1 /bin/ls /sbin/$umount 2>/dev/null)" ]] ||
+		umount="umount"
+	echo "using /sbin/$umount on mds1"
+
 	for i in $(mdts_nodes); do
 		local facet
 		local nb=0
@@ -16541,8 +16547,9 @@ test_160h() {
 			"R" 20 ||
 			error "$i: GC-thread not found in R-state"
 		# check umounts of each MDT on MDS have reached kthread_stop()
-		[[ $(do_node $i pgrep umount | wc -l) -eq $nb ]] ||
-			error "$i: expected $nb umount"
+		do_node $i "ps auxww | grep umount"
+		[[ $(do_node $i pgrep $umount | wc -l) -eq $nb ]] ||
+			error "$i: expected $nb $umount"
 		wait_update $i \
 			"ps -C umount -o state --no-headers | uniq" "D" 20 ||
 			error "$i: umount not found in D-state"
