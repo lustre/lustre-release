@@ -3339,6 +3339,7 @@ lustre/kernel_patches/targets/5.3-sles15sp3.target
 lustre/kernel_patches/targets/5.14-sles15sp4.target
 lustre/kernel_patches/targets/3.x-fc18.target
 lustre/ldlm/Makefile
+lustre/ldlm/autoMakefile
 lustre/ec/autoMakefile
 lustre/ec/Makefile
 lustre/fid/Makefile
@@ -3378,6 +3379,7 @@ lustre/mgc/autoMakefile
 lustre/mgs/Makefile
 lustre/mgs/autoMakefile
 lustre/target/Makefile
+lustre/target/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
 lustre/ptlrpc/gss/Makefile

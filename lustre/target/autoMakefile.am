@@ -20,23 +20,4 @@
 # GPL HEADER END
 #
 
-#
-# Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
-# Use is subject to license terms.
-#
-# Copyright (c) 2015, Intel Corporation.
-#
-
-#
-# This file is part of Lustre, http://www.lustre.org/
-#
-
-#
-# ldlm is built into ptlrpc
-#
-
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-EXTRA_DIST = ldlm_extent.c ldlm_flock.c ldlm_internal.h ldlm_lib.c \
-	ldlm_lock.c ldlm_lockd.c ldlm_plain.c ldlm_request.c	     \
-	ldlm_resource.c l_lock.c ldlm_inodebits.c ldlm_pool.c 	     \
-	ldlm_reclaim.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

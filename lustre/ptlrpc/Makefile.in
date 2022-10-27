@@ -1,20 +1,7 @@
 MODULES := ptlrpc
+ptlrpc_dir := $(dir $(lastword $(MAKEFILE_LIST)))
 LDLM := @top_srcdir@/lustre/ldlm/
 TARGET := @top_srcdir@/lustre/target/
-
-ldlm_objs := $(LDLM)l_lock.o $(LDLM)ldlm_lock.o
-ldlm_objs += $(LDLM)ldlm_resource.o $(LDLM)ldlm_lib.o
-ldlm_objs += $(LDLM)ldlm_plain.o $(LDLM)ldlm_extent.o
-ldlm_objs += $(LDLM)ldlm_request.o $(LDLM)ldlm_lockd.o
-ldlm_objs += $(LDLM)ldlm_flock.o $(LDLM)ldlm_inodebits.o
-ldlm_objs += $(LDLM)ldlm_pool.o $(LDLM)ldlm_reclaim.o
-
-target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
-target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
-target_objs += $(TARGET)out_lib.o $(TARGET)update_trans.o
-target_objs += $(TARGET)update_records.o $(TARGET)update_recovery.o
-target_objs += $(TARGET)tgt_grant.o $(TARGET)tgt_fmd.o
-target_objs += $(TARGET)tgt_mount.o $(TARGET)barrier.o
 
 ptlrpc_objs := client.o recover.o connection.o niobuf.o pack_generic.o
 ptlrpc_objs += events.o ptlrpc_module.o service.o pinger.o
@@ -30,28 +17,18 @@ nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 nodemap_objs += nodemap_storage.o
 
-ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
-@SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs) $(nrs_server_objs)
+include $(ptlrpc_dir)/../ldlm/Makefile
+include $(ptlrpc_dir)/../target/Makefile
+
+ptlrpc-objs := $(ptlrpc_objs)
+ptlrpc-objs += $(patsubst %,$(LDLM)%,$(ldlm_objs))
+@SERVER_TRUE@ptlrpc-objs += $(nodemap_objs) $(nrs_server_objs)
 @SERVER_TRUE@ptlrpc-objs += pack_server.o llog_server.o
+@SERVER_TRUE@ptlrpc-objs += $(patsubst %,$(TARGET)%,$(target_objs))
 
 @GSS_TRUE@obj-m += gss/
 
 default: all
-
-ldlm_%.c: @LUSTRE@/ldlm/ldlm_%.c
-	ln -sf $< $@
-
-l_lock.c: @LUSTRE@/ldlm/l_lock.c
-	ln -sf $< $@
-
-tgt_%.c: @LUSTRE@/target/tgt_%.c
-	ln -sf $< $@
-
-out_%.c: @LUSTRE@/target/out_%.c
-	ln -sf $< $@
-
-barrier.c: @LUSTRE@/target/barrier.c
-	ln -sf $< $@
 
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
 EXTRA_DIST += $(nodemap_objs:.o=.c) nodemap_internal.h heap.h

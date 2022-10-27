@@ -14,26 +14,25 @@
 # in the LICENSE file that accompanied this code).
 #
 # You should have received a copy of the GNU General Public License
-# version 2 along with this program; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-# Boston, MA 021110-1307, USA
+# version 2 along with this program; If not, see
+# http://www.gnu.org/licenses/gpl-2.0.html
 #
 # GPL HEADER END
 #
 
 #
-# Copyright (c) 2012, 2017, Intel Corporation.
+# Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
 # Use is subject to license terms.
+#
+# Copyright (c) 2015, Intel Corporation.
 #
 
 #
-# target is built into ptlrpc
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+#
+# ldlm is built into ptlrpc
 #
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
-EXTRA_DIST = tgt_main.c tgt_lastrcvd.c tgt_handler.c tgt_internal.h \
-	     tgt_grant.c out_handler.c out_lib.c barrier.c tgt_fmd.c \
-	     tgt_mount.c
-EXTRA_DIST += update_trans.c
-EXTRA_DIST += update_records.c
-EXTRA_DIST += update_recovery.c
