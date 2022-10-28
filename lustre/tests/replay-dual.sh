@@ -933,7 +933,7 @@ test_25() {
 	# multiop does not finish because CP AST is skipped;
 	# it is ok to kill it in the test, because CP AST is already re-sent
 	# and it does not hung forever in real life
-	killall multiop
+	killall -r "(multiop)$"
 	wait
 }
 run_test 25 "replay|resend"
