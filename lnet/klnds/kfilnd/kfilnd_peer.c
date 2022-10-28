@@ -56,26 +56,77 @@ static void kfilnd_peer_free(void *ptr, void *arg)
 }
 
 /**
- * kfilnd_peer_stale() - Mark a peer as stale.
- * @kp: Peer to be marked stale
- * Note: only "up-to-date" peers can be marked stale. If we haven't completed
- * a transaction with this peer within 5 LND timeouts then delete this peer.
+ * kfilnd_peer_purge_old_peer() - Delete the specified peer from the cache
+ * if we haven't heard from it within 5x LND timeouts.
+ * @kp: The peer to be checked or purged
  */
-void kfilnd_peer_stale(struct kfilnd_peer *kp)
+static void kfilnd_peer_purge_old_peer(struct kfilnd_peer *kp)
 {
-	if (atomic_cmpxchg(&kp->kp_state,
-			   KP_STATE_UPTODATE,
-			   KP_STATE_STALE) == KP_STATE_UPTODATE) {
-		CDEBUG(D_NET, "%s(%p):0x%llx is stale\n",
-		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
-	} else if (ktime_before(kp->kp_last_alive + lnet_get_lnd_timeout() * 5,
-			       ktime_get_seconds())) {
+	if (ktime_after(ktime_get_seconds(),
+			kp->kp_last_alive + (lnet_get_lnd_timeout() * 5))) {
 		CDEBUG(D_NET,
 		       "Haven't heard from %s(%p):0x%llx in %lld seconds\n",
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       ktime_sub(ktime_get_seconds(), kp->kp_last_alive));
 		kfilnd_peer_del(kp);
 	}
+}
+
+/**
+ * kfilnd_peer_stale() - Mark a peer as stale. If the peer is already stale then
+ * check whether it should be deleted.
+ * @kp: Peer to be marked stale
+ * Note: only "up-to-date" peers can be marked stale.
+ */
+static void kfilnd_peer_stale(struct kfilnd_peer *kp)
+{
+	if (atomic_cmpxchg(&kp->kp_state,
+			   KP_STATE_UPTODATE,
+			   KP_STATE_STALE) == KP_STATE_UPTODATE) {
+		CDEBUG(D_NET, "%s(%p):0x%llx uptodate -> stale\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
+	} else {
+		kfilnd_peer_purge_old_peer(kp);
+	}
+}
+
+/**
+ * kfilnd_peer_down() - Mark a peer as down. If the peer is already down then
+ * check whether it should be deleted.
+ * @kp: Peer to be marked down
+ * Note: Only peers that are "up-to-date" or "stale" can be marked down.
+ */
+static void kfilnd_peer_down(struct kfilnd_peer *kp)
+{
+	if (atomic_read(&kp->kp_state) == KP_STATE_DOWN) {
+		kfilnd_peer_purge_old_peer(kp);
+	} else if (atomic_cmpxchg(&kp->kp_state,
+				  KP_STATE_UPTODATE,
+				  KP_STATE_DOWN) == KP_STATE_UPTODATE) {
+		CDEBUG(D_NET, "%s(%p):0x%llx uptodate -> down\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
+	} else if (atomic_cmpxchg(&kp->kp_state,
+				  KP_STATE_STALE,
+				  KP_STATE_DOWN) == KP_STATE_STALE) {
+		CDEBUG(D_NET, "%s(%p):0x%llx stale -> down\n",
+		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
+	}
+}
+
+/**
+ * kfilnd_peer_tn_failed() - A transaction with this peer has failed. Mark the
+ * peer as either stale or down depending on the provided error value.
+ * @kp: The peer to be marked down or stale
+ * @error: An errno indicating why the transaction failed.
+ * Note: We currently only consider EHOSTUNREACH which corresponds to
+ * C_RC_UNDELIVERABLE, and ENOTCONN which corresponds to C_RC_VNI_NOT_FOUND.
+ */
+void kfilnd_peer_tn_failed(struct kfilnd_peer *kp, int error)
+{
+	if (error == -EHOSTUNREACH || error == -ENOTCONN)
+		kfilnd_peer_down(kp);
+	else
+		kfilnd_peer_stale(kp);
 }
 
 /**

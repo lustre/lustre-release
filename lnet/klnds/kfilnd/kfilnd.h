@@ -227,6 +227,8 @@ struct kfilnd_ep {
 #define KP_STATE_UPTODATE 0x2
 /* Peer experienced some sort of network failure */
 #define KP_STATE_STALE 0x3
+/* We suspect this peer is actually down or otherwise unreachable */
+#define KP_STATE_DOWN 0x4
 
 struct kfilnd_peer {
 	struct rhash_head kp_node;
@@ -268,6 +270,13 @@ static inline void kfilnd_peer_clear_hello_pending(struct kfilnd_peer *kp)
 static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
 {
 	return atomic_read(&kp->kp_state) == KP_STATE_NEW;
+}
+
+static inline bool kfilnd_peer_needs_throttle(struct kfilnd_peer *kp)
+{
+	unsigned int kp_state = atomic_read(&kp->kp_state);
+
+	return (kp_state == KP_STATE_NEW || kp_state == KP_STATE_DOWN);
 }
 
 /* Peer needs hello if it is not up to date and there is not already a hello

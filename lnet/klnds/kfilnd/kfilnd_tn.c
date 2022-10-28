@@ -623,7 +623,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 	/* For new peers, send a hello request message and queue the true LNet
 	 * message for replay.
 	 */
-	if (kfilnd_peer_is_new_peer(tn->tn_kp) &&
+	if (kfilnd_peer_needs_throttle(tn->tn_kp) &&
 	    (event == TN_EVENT_INIT_IMMEDIATE || event == TN_EVENT_INIT_BULK)) {
 		if (kfilnd_peer_deleted(tn->tn_kp)) {
 			/* We'll assign a NETWORK_TIMEOUT message health status
@@ -631,23 +631,19 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			 * for removal
 			 */
 			rc = -ESTALE;
-			KFILND_TN_DEBUG(tn,
-					"Dropping message to stale peer %s\n",
-					libcfs_nid2str(tn->tn_kp->kp_nid));
+			KFILND_TN_DEBUG(tn, "Drop message to deleted peer");
 		} else if (kfilnd_peer_needs_hello(tn->tn_kp, false)) {
-			/* This transaction was setup against a new peer, which
-			 * implies a HELLO was sent. If a HELLO is no longer
-			 * in flight then that means it has failed, and we
-			 * should cancel this TN. Otherwise we are stuck
-			 * waiting for the TN deadline.
+			/* We're throttling transactions to this peer until
+			 * a handshake can be completed, but there is no HELLO
+			 * currently in flight. This implies the HELLO has
+			 * failed, and we should cancel this TN. Otherwise we
+			 * are stuck waiting for the TN deadline.
 			 *
 			 * We assign NETWORK_TIMEOUT health status below because
 			 * we do not know why the HELLO failed.
 			 */
 			rc = -ECANCELED;
-			KFILND_TN_DEBUG(tn,
-					"Peer is new but there is no outstanding hello %s\n",
-					libcfs_nid2str(tn->tn_kp->kp_nid));
+			KFILND_TN_DEBUG(tn, "Cancel throttled TN");
 		} else if (ktime_after(tn->deadline, ktime_get_seconds())) {
 			/* If transaction deadline has not been met, return
 			 * -EAGAIN. This will cause this transaction event to be
@@ -655,8 +651,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			 * peer should occur at which point the kfilnd version
 			 * should be negotiated.
 			 */
-			KFILND_TN_DEBUG(tn, "%s hello response pending",
-					libcfs_nid2str(tn->tn_kp->kp_nid));
+			KFILND_TN_DEBUG(tn, "hello response pending");
 			return -EAGAIN;
 		} else {
 			rc = -ETIMEDOUT;
@@ -887,7 +882,7 @@ static int kfilnd_tn_state_imm_send(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, status);
 		if (tn->msg_type == KFILND_MSG_HELLO_REQ)
 			kfilnd_peer_clear_hello_pending(tn->tn_kp);
 		break;
@@ -1069,7 +1064,7 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, status);
 
 		/* Need to cancel the tagged receive to prevent resources from
 		 * being leaked.
@@ -1153,7 +1148,7 @@ static int kfilnd_tn_state_wait_tag_rma_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, status);
 		break;
 
 	default:
@@ -1234,7 +1229,7 @@ static int kfilnd_tn_state_wait_tag_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, status);
 		break;
 
 	case TN_EVENT_TAG_TX_OK:
@@ -1260,7 +1255,7 @@ static int kfilnd_tn_state_fail(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_TX_FAIL:
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, status);
 		break;
 
 	case TN_EVENT_TX_OK:
@@ -1292,7 +1287,7 @@ static int kfilnd_tn_state_wait_timeout_tag_comp(struct kfilnd_transaction *tn,
 	case TN_EVENT_TAG_RX_CANCEL:
 		kfilnd_tn_status_update(tn, -ETIMEDOUT,
 					LNET_MSG_STATUS_REMOTE_TIMEOUT);
-		kfilnd_peer_stale(tn->tn_kp);
+		kfilnd_peer_tn_failed(tn->tn_kp, -ETIMEDOUT);
 		break;
 
 	case TN_EVENT_TAG_RX_FAIL:
