@@ -7946,7 +7946,7 @@ test_98()
 	setup
 	check_mount || error "mount failed"
 	mountopt="user_xattr"
-	for ((x = 1; x <= 400; x++)); do
+	for ((x = 1; x <= PAGE_SIZE/11; x++)); do
 		mountopt="$mountopt,user_xattr"
 	done
 	mount_client $MOUNT remount,$mountopt 2>&1 | grep "too long" ||
