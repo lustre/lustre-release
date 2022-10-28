@@ -83,6 +83,15 @@
 # define SOCKNAL_RISK_KMAP_DEADLOCK  1
 #endif
 
+enum ksocklnd_ni_lnd_tunables_attr {
+	LNET_NET_SOCKLND_TUNABLES_ATTR_UNSPEC = 0,
+
+	LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER,
+	__LNET_NET_SOCKLND_TUNABLES_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_SOCKLND_TUNABLES_ATTR_MAX (__LNET_NET_SOCKLND_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
+
 /* per scheduler state */
 struct ksock_sched {
 	/* serialise */

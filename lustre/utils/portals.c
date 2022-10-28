@@ -41,6 +41,7 @@
 #include <linux/lnet/lnetctl.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/socklnd.h>
+#include <lnetconfig/liblnetconfig.h>
 #include <lustre/lustreapi.h>
 
 unsigned int libcfs_debug;
@@ -345,13 +346,20 @@ int jt_ptl_network(int argc, char **argv)
 	return 0;
 }
 
+#define IOC_LIBCFS_GET_NI	_IOWR('e', 50, IOCTL_LIBCFS_TYPE)
+
 int
 jt_ptl_list_nids(int argc, char **argv)
 {
 	struct libcfs_ioctl_data data;
 	int all = 0, return_nid = 0;
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	struct nl_sock *sk;
+	bool done = false;
+	int rc = 0;
 	int count;
-	int rc;
 
 	all = (argc == 2) && (strcmp(argv[1], "all") == 0);
 	/* Hack to pass back value */
@@ -361,6 +369,174 @@ jt_ptl_list_nids(int argc, char **argv)
 		fprintf(stderr, "usage: %s [all]\n", argv[0]);
 		return 0;
 	}
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		goto old_api;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		yaml_parser_log_error(&reply, stderr, NULL);
+		goto old_api;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		yaml_parser_log_error(&reply, stderr, NULL);
+		yaml_parser_delete(&reply);
+		goto old_api;
+	}
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&request);
+	if (rc == 0) {
+		yaml_parser_log_error(&reply, stderr, NULL);
+		yaml_parser_delete(&reply);
+		goto old_api;
+	}
+
+	rc = yaml_emitter_set_output_netlink(&request, sk, LNET_GENL_NAME, 1,
+					     LNET_CMD_NETS, NLM_F_DUMP);
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		yaml_emitter_delete(&request);
+		yaml_parser_delete(&reply);
+		goto old_api;
+	}
+
+	yaml_emitter_open(&request);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"net",
+				     strlen("net"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	/* no net_id */
+	if (!g_net_set || g_net == LNET_NET_ANY) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	} else {
+		char *net_id = libcfs_net2str(g_net);
+
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1, YAML_ANY_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_ANY_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"net type",
+					     strlen("net type"),
+					     1, 0, YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)net_id,
+					     strlen(net_id), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&request);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	}
+	yaml_emitter_delete(&request);
+
+	while (!done) {
+		rc = yaml_parser_parse(&reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_SCALAR_EVENT &&
+		    strcmp((char *)event.data.scalar.value, "nid") == 0) {
+			char *tmp;
+
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				break;
+			}
+
+			tmp = (char *)event.data.scalar.value;
+			if (all || strcmp(tmp, "0@lo") != 0) {
+				printf("%s\n", tmp);
+				if (return_nid) {
+					*(__u64 *)(argv[1]) = libcfs_str2nid(tmp);
+					return_nid--;
+				}
+			}
+		}
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+
+	if (rc == 0)
+		yaml_parser_log_error(&reply, stderr, NULL);
+	yaml_parser_delete(&reply);
+old_api:
+	if (sk)
+		nl_socket_free(sk);
+	if (rc == 1)
+		return 0;
 
 	for (count = 0;; count++) {
 		LIBCFS_IOC_INIT(data);

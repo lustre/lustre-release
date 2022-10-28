@@ -39,6 +39,9 @@
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>
 #endif
+#include <net/genetlink.h>
+
+#include <libcfs/linux/linux-net.h>
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 
@@ -2580,6 +2583,36 @@ failed0:
 	return rc;
 }
 
+static const struct lnet_lnd *lnet_load_lnd(u32 lnd_type)
+{
+	const struct lnet_lnd *lnd;
+	int rc = 0;
+
+	mutex_lock(&the_lnet.ln_lnd_mutex);
+	lnd = lnet_find_lnd_by_type(lnd_type);
+	if (!lnd) {
+		mutex_unlock(&the_lnet.ln_lnd_mutex);
+		rc = request_module("%s", libcfs_lnd2modname(lnd_type));
+		mutex_lock(&the_lnet.ln_lnd_mutex);
+
+		lnd = lnet_find_lnd_by_type(lnd_type);
+		if (!lnd) {
+			mutex_unlock(&the_lnet.ln_lnd_mutex);
+			CERROR("Can't load LND %s, module %s, rc=%d\n",
+			libcfs_lnd2str(lnd_type),
+			libcfs_lnd2modname(lnd_type), rc);
+#ifndef HAVE_MODULE_LOADING_SUPPORT
+			LCONSOLE_ERROR_MSG(0x104,
+					   "Your kernel must be compiled with kernel module loading support.");
+#endif
+			return ERR_PTR(-EINVAL);
+		}
+	}
+	mutex_unlock(&the_lnet.ln_lnd_mutex);
+
+	return lnd;
+}
+
 static int
 lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 {
@@ -2607,32 +2640,14 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 	if (lnet_net_unique(net->net_id, &the_lnet.ln_nets, &net_l)) {
 		lnd_type = LNET_NETTYP(net->net_id);
 
-		mutex_lock(&the_lnet.ln_lnd_mutex);
-		lnd = lnet_find_lnd_by_type(lnd_type);
-
-		if (lnd == NULL) {
-			mutex_unlock(&the_lnet.ln_lnd_mutex);
-			rc = request_module("%s", libcfs_lnd2modname(lnd_type));
-			mutex_lock(&the_lnet.ln_lnd_mutex);
-
-			lnd = lnet_find_lnd_by_type(lnd_type);
-			if (lnd == NULL) {
-				mutex_unlock(&the_lnet.ln_lnd_mutex);
-				CERROR("Can't load LND %s, module %s, rc=%d\n",
-				libcfs_lnd2str(lnd_type),
-				libcfs_lnd2modname(lnd_type), rc);
-#ifndef HAVE_MODULE_LOADING_SUPPORT
-				LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
-						"compiled with kernel module "
-						"loading support.");
-#endif
-				rc = -EINVAL;
-				goto failed0;
-			}
+		lnd = lnet_load_lnd(lnd_type);
+		if (IS_ERR(lnd)) {
+			rc = PTR_ERR(lnd);
+			goto failed0;
 		}
 
+		mutex_lock(&the_lnet.ln_lnd_mutex);
 		net->net_lnd = lnd;
-
 		mutex_unlock(&the_lnet.ln_lnd_mutex);
 
 		net_l = net;
@@ -2852,6 +2867,8 @@ canceled:
 }
 EXPORT_SYMBOL(lnet_genl_send_scalar_list);
 
+static struct genl_family lnet_family;
+
 /**
  * Initialize LNet library.
  *
@@ -2887,6 +2904,13 @@ int lnet_lib_init(void)
 	rc = lnet_create_locks();
 	if (rc != 0) {
 		CERROR("Can't create LNet global locks: %d\n", rc);
+		return rc;
+	}
+
+	rc = genl_register_family(&lnet_family);
+	if (rc != 0) {
+		lnet_destroy_locks();
+		CERROR("Can't register LNet netlink family: %d\n", rc);
 		return rc;
 	}
 
@@ -2929,6 +2953,7 @@ void lnet_lib_exit(void)
 	for (i = 0; i < NUM_LNDS; i++)
 		LASSERT(!the_lnet.ln_lnds[i]);
 	lnet_destroy_locks();
+	genl_unregister_family(&lnet_family);
 }
 
 /**
@@ -3612,31 +3637,24 @@ out:
 	return rc;
 }
 
-int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
+int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
+		    struct lnet_ioctl_config_lnd_tunables *tun)
 {
 	struct lnet_net *net;
 	struct lnet_ni *ni;
-	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
 	int rc, i;
-	__u32 net_id, lnd_type;
-
-	/* get the tunables if they are available */
-	if (conf->lic_cfg_hdr.ioc_len >=
-	    sizeof(*conf) + sizeof(*tun))
-		tun = (struct lnet_ioctl_config_lnd_tunables *)
-			conf->lic_bulk;
+	u32 lnd_type;
 
 	/* handle legacy ip2nets from DLC */
 	if (conf->lic_legacy_ip2nets[0] != '\0')
 		return lnet_handle_legacy_ip2nets(conf->lic_legacy_ip2nets,
 						  tun);
 
-	net_id = LNET_NIDNET(conf->lic_nid);
 	lnd_type = LNET_NETTYP(net_id);
 
 	if (!libcfs_isknown_lnd(lnd_type)) {
 		CERROR("No valid net and lnd information provided\n");
-		return -EINVAL;
+		return -ENOENT;
 	}
 
 	net = lnet_net_alloc(net_id, NULL);
@@ -3646,7 +3664,7 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 	for (i = 0; i < conf->lic_ncpts; i++) {
 		if (conf->lic_cpts[i] >= LNET_CPT_NUMBER) {
 			lnet_net_free(net);
-			return -EINVAL;
+			return -ERANGE;
 		}
 	}
 
@@ -3675,16 +3693,15 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 	return rc;
 }
 
-int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf)
+int lnet_dyn_del_ni(struct lnet_nid *nid)
 {
 	struct lnet_net *net;
 	struct lnet_ni *ni;
-	__u32 net_id = LNET_NIDNET(conf->lic_nid);
+	u32 net_id = LNET_NID_NET(nid);
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_handle_md ping_mdh;
 	int net_bytes, rc;
 	bool net_empty;
-	u32 addr;
 
 	/* don't allow userspace to shutdown the LOLND */
 	if (LNET_NETTYP(net_id) == LOLND)
@@ -3706,8 +3723,7 @@ int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf)
 		goto unlock_net;
 	}
 
-	addr = LNET_NIDADDR(conf->lic_nid);
-	if (addr == 0) {
+	if (!nid_addr_is_set(nid)) {
 		/* remove the entire net */
 		net_bytes = lnet_get_net_ni_bytes_locked(net);
 
@@ -3730,10 +3746,9 @@ int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf)
 		goto unlock_api_mutex;
 	}
 
-	ni = lnet_nid2ni_locked(conf->lic_nid, 0);
+	ni = lnet_nid_to_ni_locked(nid, 0);
 	if (!ni) {
-		CERROR("nid %s not found\n",
-		       libcfs_nid2str(conf->lic_nid));
+		CERROR("nid %s not found\n", libcfs_nidstr(nid));
 		rc = -ENOENT;
 		goto unlock_net;
 	}
@@ -4032,8 +4047,6 @@ LNetCtl(unsigned int cmd, void *arg)
 {
 	struct libcfs_ioctl_data *data = arg;
 	struct lnet_ioctl_config_data *config;
-	struct lnet_process_id	  id4 = {};
-	struct lnet_processid	  id = {};
 	struct lnet_ni		 *ni;
 	struct lnet_nid		  nid;
 	int			  rc;
@@ -4042,11 +4055,6 @@ LNetCtl(unsigned int cmd, void *arg)
 		     sizeof(struct lnet_ioctl_config_data) > LIBCFS_IOC_DATA_MAX);
 
 	switch (cmd) {
-	case IOC_LIBCFS_GET_NI:
-		rc = LNetGetId(data->ioc_count, &id);
-		data->ioc_nid = lnet_nid_to_nid4(&id.nid);
-		return rc;
-
 	case IOC_LIBCFS_FAIL_NID:
 		return lnet_fail_nid(data->ioc_nid, data->ioc_count);
 
@@ -4428,6 +4436,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		return lnet_fault_ctl(data->ioc_flags, data);
 
 	case IOC_LIBCFS_PING: {
+		struct lnet_process_id id4;
 		signed long timeout;
 
 		id4.nid = data->ioc_nid;
@@ -4636,6 +4645,696 @@ LNetCtl(unsigned int cmd, void *arg)
 	/* not reached */
 }
 EXPORT_SYMBOL(LNetCtl);
+
+static const struct ln_key_list net_props_list = {
+	.lkl_maxattr			= LNET_NET_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_ATTR_HDR]		= {
+			.lkp_value		= "net",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_NET_ATTR_TYPE]		= {
+			.lkp_value		= "net type",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_NET_ATTR_LOCAL]           = {
+			.lkp_value		= "local NI(s)",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+	},
+};
+
+static struct ln_key_list local_ni_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_ATTR_NID]	= {
+			.lkp_value		= "nid",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_NET_LOCAL_NI_ATTR_STATUS] = {
+			.lkp_value		= "status",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_NET_LOCAL_NI_ATTR_INTERFACE] = {
+			.lkp_value		= "interfaces",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+	},
+};
+
+static const struct ln_key_list local_ni_interfaces_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_INTF_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_INTF_ATTR_TYPE] = {
+			.lkp_value	= "0",
+			.lkp_data_type	= NLA_STRING
+		},
+	},
+};
+
+/* Use an index since the traversal is across LNet nets and ni collections */
+struct lnet_genl_net_list {
+	unsigned int	lngl_net_id;
+	unsigned int	lngl_idx;
+};
+
+static inline struct lnet_genl_net_list *
+lnet_net_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_net_list *)cb->args[0];
+}
+
+static int lnet_net_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_net_list *nlist = lnet_net_dump_ctx(cb);
+
+	if (nlist) {
+		LIBCFS_FREE(nlist, sizeof(*nlist));
+		cb->args[0] = 0;
+	}
+
+	return 0;
+}
+
+/* LNet net ->start() handler for GET requests */
+static int lnet_net_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lnet_genl_net_list *nlist;
+	int msg_len = genlmsg_len(gnlh);
+	struct nlattr *params, *top;
+	int rem, rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (the_lnet.ln_refcount == 0) {
+		NL_SET_ERR_MSG(extack, "LNet stack down");
+		return -ENETDOWN;
+	}
+
+	LIBCFS_ALLOC(nlist, sizeof(*nlist));
+	if (!nlist)
+		return -ENOMEM;
+
+	nlist->lngl_net_id = LNET_NET_ANY;
+	nlist->lngl_idx = 0;
+	cb->args[0] = (long)nlist;
+
+	if (!msg_len)
+		return 0;
+
+	params = genlmsg_data(gnlh);
+	nla_for_each_attr(top, params, msg_len, rem) {
+		struct nlattr *net;
+		int rem2;
+
+		nla_for_each_nested(net, top, rem2) {
+			char filter[LNET_NIDSTR_SIZE];
+
+			if (nla_type(net) != LN_SCALAR_ATTR_VALUE ||
+			    nla_strcmp(net, "name") != 0)
+				continue;
+
+			net = nla_next(net, &rem2);
+			if (nla_type(net) != LN_SCALAR_ATTR_VALUE) {
+				NL_SET_ERR_MSG(extack, "invalid config param");
+				GOTO(report_err, rc = -EINVAL);
+			}
+
+			rc = nla_strscpy(filter, net, sizeof(filter));
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack, "failed to get param");
+				GOTO(report_err, rc);
+			}
+			rc = 0;
+
+			nlist->lngl_net_id = libcfs_str2net(filter);
+			if (nlist->lngl_net_id == LNET_NET_ANY) {
+				NL_SET_ERR_MSG(extack, "cannot parse net");
+				GOTO(report_err, rc = -ENOENT);
+			}
+		}
+	}
+report_err:
+	if (rc < 0)
+		lnet_net_show_done(cb);
+
+	return rc;
+}
+
+static int lnet_net_show_dump(struct sk_buff *msg,
+			      struct netlink_callback *cb)
+{
+	struct lnet_genl_net_list *nlist = lnet_net_dump_ctx(cb);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	struct lnet_net *net;
+	int idx = 0, rc = 0;
+	bool found = false;
+	void *hdr = NULL;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (!nlist->lngl_idx) {
+		const struct ln_key_list *all[] = {
+			&net_props_list, &local_ni_list,
+			&local_ni_interfaces_list,
+			NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_NETS, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+
+	lnet_net_lock(LNET_LOCK_EX);
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		struct lnet_ni *ni;
+
+		if (nlist->lngl_net_id != LNET_NET_ANY &&
+		    nlist->lngl_net_id != net->net_id)
+			continue;
+
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			struct nlattr *local_ni, *ni_attr;
+			char *status = "up";
+
+			if (idx++ < nlist->lngl_idx)
+				continue;
+
+			hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+					  NLM_F_MULTI, LNET_CMD_NETS);
+			if (!hdr) {
+				NL_SET_ERR_MSG(extack, "failed to send values");
+				GOTO(net_unlock, rc = -EMSGSIZE);
+			}
+
+			if (idx == 1)
+				nla_put_string(msg, LNET_NET_ATTR_HDR, "");
+
+			nla_put_string(msg, LNET_NET_ATTR_TYPE,
+				       libcfs_net2str(net->net_id));
+			found = true;
+
+			local_ni = nla_nest_start(msg, LNET_NET_ATTR_LOCAL);
+			ni_attr = nla_nest_start(msg, idx - 1);
+
+			lnet_ni_lock(ni);
+			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
+				       libcfs_nidstr(&ni->ni_nid));
+			if (nid_is_lo0(&ni->ni_nid) &&
+			    *ni->ni_status != LNET_NI_STATUS_UP)
+				status = "down";
+			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS, "up");
+
+			if (!nid_is_lo0(&ni->ni_nid) && ni->ni_interface) {
+				struct nlattr *intf_nest, *intf_attr;
+
+				intf_nest = nla_nest_start(msg,
+							   LNET_NET_LOCAL_NI_ATTR_INTERFACE);
+				intf_attr = nla_nest_start(msg, 0);
+				nla_put_string(msg,
+					       LNET_NET_LOCAL_NI_INTF_ATTR_TYPE,
+					       ni->ni_interface);
+				nla_nest_end(msg, intf_attr);
+				nla_nest_end(msg, intf_nest);
+			}
+
+			lnet_ni_unlock(ni);
+			nla_nest_end(msg, ni_attr);
+			nla_nest_end(msg, local_ni);
+
+			genlmsg_end(msg, hdr);
+		}
+	}
+
+	if (!found) {
+		struct nlmsghdr *nlh = nlmsg_hdr(msg);
+
+		nlmsg_cancel(msg, nlh);
+		NL_SET_ERR_MSG(extack, "Network is down");
+		rc = -ESRCH;
+	}
+net_unlock:
+	lnet_net_unlock(LNET_LOCK_EX);
+send_error:
+	nlist->lngl_idx = idx;
+
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_net_show_dump(struct sk_buff *msg,
+				   struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_net_show_start(cb);
+
+		if (rc < 0)
+			return rc;
+	}
+
+	return lnet_net_show_dump(msg, cb);
+}
+#endif
+
+static int lnet_genl_parse_tunables(struct nlattr *settings,
+				    struct lnet_ioctl_config_lnd_tunables *tun)
+{
+	struct nlattr *param;
+	int rem, rc = 0;
+
+	nla_for_each_nested(param, settings, rem) {
+		int type = LNET_NET_LOCAL_NI_TUNABLES_ATTR_UNSPEC;
+		s64 num;
+
+		if (nla_type(param) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(param, "peer_timeout") == 0)
+			type = LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT;
+		else if (nla_strcmp(param, "peer_credits") == 0)
+			type = LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS;
+		else if (nla_strcmp(param, "peer_buffer_credits") == 0)
+			type = LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS;
+		else if (nla_strcmp(param, "credits") == 0)
+			type = LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS;
+
+		param = nla_next(param, &rem);
+		if (nla_type(param) != LN_SCALAR_ATTR_INT_VALUE)
+			return -EINVAL;
+
+		num = nla_get_s64(param);
+		switch (type) {
+		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT:
+			tun->lt_cmn.lct_peer_timeout = num;
+			break;
+		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS:
+			tun->lt_cmn.lct_peer_tx_credits = num;
+			break;
+		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS:
+			tun->lt_cmn.lct_peer_rtr_credits = num;
+			break;
+		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS:
+			tun->lt_cmn.lct_max_tx_credits = num;
+			break;
+		default:
+			rc = -EINVAL;
+			break;
+		}
+	}
+	return rc;
+}
+
+static int
+lnet_genl_parse_lnd_tunables(struct nlattr *settings,
+			     struct lnet_ioctl_config_lnd_tunables *tun,
+			     const struct lnet_lnd *lnd)
+{
+	const struct ln_key_list *list = lnd->lnd_keys;
+	struct nlattr *param;
+	int rem, rc = 0;
+	int i = 1;
+
+	if (!list)
+		return 0;
+
+	if (!lnd->lnd_nl_set)
+		return -EOPNOTSUPP;
+
+	if (!list->lkl_maxattr)
+		return -ERANGE;
+
+	nla_for_each_nested(param, settings, rem) {
+		if (nla_type(param) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		for (i = 1; i <= list->lkl_maxattr; i++) {
+			if (!list->lkl_list[i].lkp_value ||
+			    nla_strcmp(param, list->lkl_list[i].lkp_value) != 0)
+				continue;
+
+			param = nla_next(param, &rem);
+			rc = lnd->lnd_nl_set(LNET_CMD_NETS, param, i, tun);
+			if (rc < 0)
+				return rc;
+		}
+	}
+
+	return rc;
+}
+
+static int
+lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
+			 int net_id, struct lnet_ioctl_config_ni *conf,
+			 struct lnet_ioctl_config_lnd_tunables *tun,
+			 bool *ni_list)
+{
+	struct nlattr *settings;
+	int rem3, rc = 0;
+
+	nla_for_each_nested(settings, entry, rem3) {
+		if (nla_type(settings) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(settings, "interfaces") == 0) {
+			struct nlattr *intf;
+			int rem4;
+
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) !=
+			    LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "invalid interfaces");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			nla_for_each_nested(intf, settings, rem4) {
+				intf = nla_next(intf, &rem4);
+				if (nla_type(intf) !=
+				    LN_SCALAR_ATTR_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "0 key is invalid");
+					GOTO(out, rc = -EINVAL);
+				}
+
+				rc = nla_strscpy(conf->lic_ni_intf, intf,
+						 sizeof(conf->lic_ni_intf));
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "failed to parse interfaces");
+					GOTO(out, rc);
+				}
+			}
+			*ni_list = true;
+		} else if (nla_strcmp(settings, "tunables") == 0) {
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) !=
+			    LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "invalid tunables");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			rc = lnet_genl_parse_tunables(settings, tun);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to parse tunables");
+				GOTO(out, rc);
+			}
+		} else if ((nla_strcmp(settings, "lnd tunables") == 0)) {
+			const struct lnet_lnd *lnd;
+
+			lnd = lnet_load_lnd(LNET_NETTYP(net_id));
+			if (IS_ERR(lnd)) {
+				GENL_SET_ERR_MSG(info,
+						 "LND type not supported");
+				GOTO(out, rc = PTR_ERR(lnd));
+			}
+
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) !=
+			    LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "lnd tunables should be list\n");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			rc = lnet_genl_parse_lnd_tunables(settings,
+							  tun, lnd);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to parse lnd tunables");
+				GOTO(out, rc);
+			}
+		} else if (nla_strcmp(settings, "CPT") == 0) {
+			struct nlattr *cpt;
+			int rem4;
+
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) != LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "CPT should be list");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			nla_for_each_nested(cpt, settings, rem4) {
+				s64 core;
+
+				if (nla_type(cpt) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid CPT config");
+					GOTO(out, rc = -EINVAL);
+				}
+
+				core = nla_get_s64(cpt);
+				if (core >= LNET_CPT_NUMBER) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid CPT value");
+					GOTO(out, rc = -ERANGE);
+				}
+
+				conf->lic_cpts[conf->lic_ncpts] = core;
+				conf->lic_ncpts++;
+			}
+		}
+	}
+out:
+	return rc;
+}
+
+static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	int msg_len, rem, rc = 0;
+	struct nlattr *attr;
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		return -ENOMSG;
+	}
+
+	nla_for_each_attr(attr, params, msg_len, rem) {
+		struct lnet_ioctl_config_ni conf;
+		u32 net_id = LNET_NET_ANY;
+		struct nlattr *entry;
+		bool ni_list = false;
+		int rem2;
+
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(entry, attr, rem2) {
+			switch (nla_type(entry)) {
+			case LN_SCALAR_ATTR_VALUE: {
+				size_t len;
+
+				memset(&conf, 0, sizeof(conf));
+				if (nla_strcmp(entry, "ip2net") == 0) {
+					entry = nla_next(entry, &rem2);
+					if (nla_type(entry) !=
+					    LN_SCALAR_ATTR_VALUE) {
+						GENL_SET_ERR_MSG(info,
+								 "ip2net has invalid key");
+						GOTO(out, rc = -EINVAL);
+					}
+
+					len = nla_strscpy(conf.lic_legacy_ip2nets,
+							  entry,
+							  sizeof(conf.lic_legacy_ip2nets));
+					if (len < 0) {
+						GENL_SET_ERR_MSG(info,
+								 "ip2net key string is invalid");
+						GOTO(out, rc = len);
+					}
+					ni_list = true;
+				} else if (nla_strcmp(entry, "net type") == 0) {
+					char tmp[LNET_NIDSTR_SIZE];
+
+					entry = nla_next(entry, &rem2);
+					if (nla_type(entry) !=
+					    LN_SCALAR_ATTR_VALUE) {
+						GENL_SET_ERR_MSG(info,
+								 "net type has invalid key");
+						GOTO(out, rc = -EINVAL);
+					}
+
+					len = nla_strscpy(tmp, entry,
+							  sizeof(tmp));
+					if (len < 0) {
+						GENL_SET_ERR_MSG(info,
+								 "net type key string is invalid");
+						GOTO(out, rc = len);
+					}
+
+					net_id = libcfs_str2net(tmp);
+					if (!net_id) {
+						GENL_SET_ERR_MSG(info,
+								 "cannot parse net");
+						GOTO(out, rc = -ENODEV);
+					}
+					if (LNET_NETTYP(net_id) == LOLND) {
+						GENL_SET_ERR_MSG(info,
+								 "setting @lo not allowed");
+						GOTO(out, rc = -ENODEV);
+					}
+					conf.lic_legacy_ip2nets[0] = '\0';
+					conf.lic_ni_intf[0] = '\0';
+					ni_list = false;
+				}
+				if (rc < 0)
+					GOTO(out, rc);
+				break;
+			}
+			case LN_SCALAR_ATTR_LIST: {
+				bool create = info->nlhdr->nlmsg_flags &
+					      NLM_F_CREATE;
+				struct lnet_ioctl_config_lnd_tunables tun;
+
+				memset(&tun, 0, sizeof(tun));
+				tun.lt_cmn.lct_peer_timeout = -1;
+				conf.lic_ncpts = 0;
+
+				rc = lnet_genl_parse_local_ni(entry, info,
+							      net_id, &conf,
+							      &tun, &ni_list);
+				if (rc < 0)
+					GOTO(out, rc);
+
+				if (!create) {
+					struct lnet_net *net;
+					struct lnet_ni *ni;
+
+					rc = -ENODEV;
+					if (!strlen(conf.lic_ni_intf)) {
+						GENL_SET_ERR_MSG(info,
+								 "interface is missing");
+						GOTO(out, rc);
+					}
+
+					lnet_net_lock(LNET_LOCK_EX);
+					net = lnet_get_net_locked(net_id);
+					if (!net) {
+						GENL_SET_ERR_MSG(info,
+								 "LNet net doesn't exist");
+						GOTO(out, rc);
+					}
+					list_for_each_entry(ni, &net->net_ni_list,
+							    ni_netlist) {
+						if (!ni->ni_interface ||
+						    strncmp(ni->ni_interface,
+							    conf.lic_ni_intf,
+							    strlen(conf.lic_ni_intf)) != 0) {
+							ni = NULL;
+							continue;
+						}
+
+						lnet_net_unlock(LNET_LOCK_EX);
+						rc = lnet_dyn_del_ni(&ni->ni_nid);
+						lnet_net_lock(LNET_LOCK_EX);
+						if (rc < 0) {
+							GENL_SET_ERR_MSG(info,
+									 "cannot del LNet NI");
+							GOTO(out, rc);
+						}
+						break;
+					}
+
+					lnet_net_unlock(LNET_LOCK_EX);
+				} else {
+					rc = lnet_dyn_add_ni(&conf, net_id, &tun);
+					switch (rc) {
+					case -ENOENT:
+						GENL_SET_ERR_MSG(info,
+								 "cannot parse net");
+						break;
+					case -ERANGE:
+						GENL_SET_ERR_MSG(info,
+								 "invalid CPT set");
+					fallthrough;
+					default:
+						GENL_SET_ERR_MSG(info,
+								 "cannot add LNet NI");
+					case 0:
+						break;
+					}
+					if (rc < 0)
+						GOTO(out, rc);
+				}
+				break;
+			}
+			/* it is possible a newer version of the user land send
+			 * values older kernels doesn't handle. So silently
+			 * ignore these values
+			 */
+			default:
+				break;
+			}
+		}
+
+		/* Handle case of just sent NET with no list of NIDs */
+		if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE) && !ni_list) {
+			rc = lnet_dyn_del_net(net_id);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "cannot del network");
+			}
+		}
+	}
+out:
+	return rc;
+}
+
+static const struct genl_multicast_group lnet_mcast_grps[] = {
+	{ .name	=	"ip2net",	},
+	{ .name =	"net",		},
+};
+
+static const struct genl_ops lnet_genl_ops[] = {
+	{
+		.cmd		= LNET_CMD_NETS,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_net_show_start,
+		.dumpit		= lnet_net_show_dump,
+#else
+		.dumpit		= lnet_old_net_show_dump,
+#endif
+		.done		= lnet_net_show_done,
+		.doit		= lnet_net_cmd,
+	},
+};
+
+static struct genl_family lnet_family = {
+	.name		= LNET_GENL_NAME,
+	.version	= LNET_GENL_VERSION,
+	.module		= THIS_MODULE,
+	.netnsok	= true,
+	.ops		= lnet_genl_ops,
+	.n_ops		= ARRAY_SIZE(lnet_genl_ops),
+	.mcgrps		= lnet_mcast_grps,
+	.n_mcgrps	= ARRAY_SIZE(lnet_mcast_grps),
+};
 
 void LNetDebugPeer(struct lnet_processid *id)
 {

@@ -32,8 +32,12 @@
 #ifndef __UAPI_LNET_TYPES_H__
 #define __UAPI_LNET_TYPES_H__
 
+#include <linux/types.h>
 #include <linux/string.h>
 #include <asm/byteorder.h>
+#ifndef __KERNEL__
+#include <stdbool.h>
+#endif
 
 /** \addtogroup lnet
  * @{ */
@@ -105,6 +109,17 @@ static inline __u32 LNET_MKNET(__u32 type, __u32 num)
 #define LNET_NID_LO_0 LNET_MKNID(LNET_MKNET(LOLND, 0), 0)
 
 #define LNET_NET_ANY LNET_NIDNET(LNET_NID_ANY)
+
+/* check for address set */
+static inline bool nid_addr_is_set(const struct lnet_nid *nid)
+{
+	int sum = 0, i;
+
+	for (i = 0; i < NID_ADDR_BYTES(nid); i++)
+		sum |= nid->nid_addr[i];
+
+	return sum ? true : false;
+}
 
 static inline int nid_is_nid4(const struct lnet_nid *nid)
 {

@@ -327,6 +327,51 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	return rc;
 }
 
+static const struct ln_key_list kfilnd_tunables_keys = {
+	.lkl_maxattr                    = LNET_NET_KFILND_TUNABLES_ATTR_MAX,
+	.lkl_list                       = {
+		[LNET_NET_KFILND_TUNABLES_ATTR_PROV_MAJOR]	= {
+			.lkp_value	= "prov_major_version",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR]  = {
+			.lkp_value	= "prov_minor_version",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY]  = {
+			.lkp_value	= "auth_key",
+			.lkp_data_type	= NLA_S32
+		},
+	},
+};
+
+static int
+kfilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
+{
+	struct lnet_lnd_tunables *tunables = data;
+	int rc = 0;
+
+	if (cmd != LNET_CMD_NETS)
+		return -EOPNOTSUPP;
+
+	switch (type) {
+	case LNET_NET_KFILND_TUNABLES_ATTR_PROV_MAJOR:
+		tunables->lnd_tun_u.lnd_kfi.lnd_prov_major_version = nla_get_s64(attr);
+		break;
+	case LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR:
+		tunables->lnd_tun_u.lnd_kfi.lnd_prov_minor_version = nla_get_s64(attr);
+		break;
+	case LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY:
+		tunables->lnd_tun_u.lnd_kfi.lnd_auth_key = nla_get_s64(attr);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+	return rc;
+}
+
 static int kfilnd_startup(struct lnet_ni *ni);
 
 static const struct lnet_lnd the_kfilnd = {
@@ -335,6 +380,8 @@ static const struct lnet_lnd the_kfilnd = {
 	.lnd_shutdown	= kfilnd_shutdown,
 	.lnd_send	= kfilnd_send,
 	.lnd_recv	= kfilnd_recv,
+	.lnd_nl_set	= kfilnd_nl_set,
+	.lnd_keys	= &kfilnd_tunables_keys,
 };
 
 static int kfilnd_startup(struct lnet_ni *ni)

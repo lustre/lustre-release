@@ -55,5 +55,5 @@ endif # TESTS
 
 lnetctl_SOURCES = lnetctl.c
 lnetctl_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
-		$(LIBEFENCE)
+		$(LIBNL3_LIBS) -lyaml $(LIBEFENCE)
 endif # UTILS

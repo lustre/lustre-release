@@ -1720,7 +1720,7 @@ test_208() {
 
 	echo "$LCTL net up should fail"
 	$LCTL net up &&
-		error "LNet bringup should have failed"
+		error "LNet bring up should have failed"
 
 	cleanup_lnet
 }

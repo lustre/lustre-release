@@ -841,6 +841,33 @@ ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 	return 0;
 }
 
+static const struct ln_key_list ksocknal_tunables_keys = {
+	.lkl_maxattr			= LNET_NET_SOCKLND_TUNABLES_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER]  = {
+			.lkp_value	= "conns_per_peer",
+			.lkp_data_type	= NLA_S32
+		},
+	},
+};
+
+static int
+ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
+{
+	struct lnet_lnd_tunables *tunables = data;
+
+	if (cmd != LNET_CMD_NETS)
+		return -EOPNOTSUPP;
+
+	if (type != LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER ||
+	    nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
+		return -EINVAL;
+
+	tunables->lnd_tun_u.lnd_sock.lnd_conns_per_peer = nla_get_s64(attr);
+
+	return 0;
+}
+
 static int
 ksocknal_connecting(struct ksock_conn_cb *conn_cb, struct sockaddr *sa)
 {
@@ -2506,16 +2533,20 @@ ksocknal_startup(struct lnet_ni *ni)
 
 	/* Use the first discovered interface or look in the list */
 	if (ni->ni_interface) {
-		for (i = 0; i < rc; i++)
+		for (i = 0; i < rc; i++) {
 			if (strcmp(ifaces[i].li_name, ni->ni_interface) == 0)
 				break;
-
+		}
 		/* ni_interfaces doesn't contain the interface we want */
 		if (i == rc) {
 			CERROR("ksocklnd: failed to find interface %s\n",
 			       ni->ni_interface);
 			goto fail_1;
 		}
+	} else {
+		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
+		if (rc < 0)
+			CWARN("ksocklnd failed to allocate ni_interface\n");
 	}
 
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
@@ -2576,6 +2607,8 @@ static const struct lnet_lnd the_ksocklnd = {
 	.lnd_recv		= ksocknal_recv,
 	.lnd_notify_peer_down	= ksocknal_notify_gw_down,
 	.lnd_accept		= ksocknal_accept,
+	.lnd_nl_set		= ksocknal_nl_set,
+	.lnd_keys		= &ksocknal_tunables_keys,
 };
 
 static int __init ksocklnd_init(void)

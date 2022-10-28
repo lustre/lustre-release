@@ -313,6 +313,7 @@ struct yaml_netlink_input {
 	yaml_parser_t		*parser;
 	void			*buffer;
 	const char		*errmsg;
+	int			error;
 	struct nl_sock		*nl;
 	bool			complete;
 	bool			async;
@@ -535,7 +536,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 
 		if (keys[i].lkp_data_type != NLA_NUL_STRING &&
 		    keys[i].lkp_data_type != NLA_NESTED) {
-			if (!attr)
+			if (!attr && keys[i].lkp_data_type != NLA_FLAG)
 				continue;
 
 			if (!(mapping & LNKF_FLOW)) {
@@ -683,6 +684,11 @@ not_first:
 		case NLA_STRING:
 			len = snprintf(data->buffer, *size, "%s",
 				       nla_get_string(attr));
+			break;
+
+		case NLA_FLAG:
+			len = snprintf(data->buffer, *size, "%s",
+				       attr ? "true" : "false");
 			break;
 
 		case NLA_U16:
@@ -837,6 +843,7 @@ static int yaml_netlink_msg_error(struct sockaddr_nl *who,
 		}
 #endif /* HAVE_USRSPC_NLMSGERR */
 		data->errmsg = errstr;
+		data->error = errmsg->error;
 		data->parser->error = YAML_READER_ERROR;
 		data->complete = true;
 	}
@@ -960,6 +967,7 @@ yaml_parser_get_reader_error(yaml_parser_t *parser)
 	if (!buf)
 		return NULL;
 
+	errno = buf->error;
 	return buf->errmsg;
 }
 
@@ -1127,10 +1135,16 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 				 enum lnet_nl_key_format fmt,
 				 char *line)
 {
-	char *sep = strchr(line, ':');
+	char *sep = strstr(line, ": "); /* handle mappings */
 	int rc = 0;
 	long num;
 
+	if (!sep) {
+		char *tmp = strchr(line, ':');
+
+		if (tmp && strlen(tmp) == 1) /* handle simple scalar */
+			sep = tmp;
+	}
 	if (sep)
 		*sep++ = '\0';
 
@@ -1193,7 +1207,7 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 	}
 
 	if (fmt & LNKF_FLOW) {
-		char *tmp = strchr(*hdr, '{');
+		char *tmp = strchr(*hdr, '{'), *split = NULL;
 		bool format = false;
 
 		if (!tmp) {
@@ -1224,6 +1238,7 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 
 			/* Flow can be splt across lines by libyaml library. */
 			if (strchr(line, ',')) {
+				split = line;
 				*hdr = line;
 				continue;
 			}
@@ -1242,7 +1257,10 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 
 			/* Move to next YAML line */
 			if (format) {
-				strsep(entry, "\n");
+				if (!split)
+					line = *entry;
+				else
+					*entry = NULL;
 				break;
 			}
 		}
@@ -1253,6 +1271,9 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 			rc = -EINVAL;
 			goto nla_put_failure;
 		}
+
+		if (line && line[0] == '-')
+			*indent = 0;
 
 		nla_nest_end(msg, list);
 	} else {
@@ -1282,9 +1303,9 @@ have_next_line:
 			}
 		} while (strcmp(*entry, ""));
 
-		if (line && line[0] == '-'  && !*indent) {
-			line[0] = ' ';
-			*indent = 2;
+		if (line && line[*indent] == '-') {
+			line[*indent] = ' ';
+			*indent += 2;
 			goto have_next_line;
 		}
 		if (*entry && !strlen(*entry))

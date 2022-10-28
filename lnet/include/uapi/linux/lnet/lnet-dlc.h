@@ -49,6 +49,29 @@
 #define __user
 #endif
 
+#define LNET_GENL_NAME		"lnet"
+#define LNET_GENL_VERSION	0x05
+
+/* enum lnet_commands	      - Supported core LNet Netlink commands
+ *
+ *  @LNET_CMD_UNSPEC:		unspecified command to catch errors
+ *
+ *  @LNET_CMD_NETS:		command to manage the LNet networks
+ */
+enum lnet_commands {
+	LNET_CMD_UNSPEC		= 0,
+
+	LNET_CMD_CONFIGURE	= 1,
+	LNET_CMD_NETS		= 2,
+	LNET_CMD_PEERS		= 3,
+	LNET_CMD_ROUTES		= 4,
+	LNET_CMD_CONNS		= 5,
+
+	__LNET_CMD_MAX_PLUS_ONE
+};
+
+#define LNET_CMD_MAX (__LNET_CMD_MAX_PLUS_ONE - 1)
+
 /*
  * To allow for future enhancements to extend the tunables
  * add a hdr to this structure, so that the version can be set

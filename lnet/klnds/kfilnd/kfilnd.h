@@ -125,6 +125,17 @@ enum kfilnd_object_states {
 	KFILND_STATE_SHUTTING_DOWN
 };
 
+enum kfilnd_ni_lnd_tunables_attr {
+	LNET_NET_KFILND_TUNABLES_ATTR_UNSPEC = 0,
+
+	LNET_NET_KFILND_TUNABLES_ATTR_PROV_MAJOR,
+	LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR,
+	LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY,
+	__LNET_NET_KFILND_TUNABLES_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_KFILND_TUNABLES_ATTR_MAX (__LNET_NET_KFILND_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
+
 extern struct dentry *kfilnd_debug_dir;
 extern const struct file_operations kfilnd_initiator_state_stats_file_ops;
 extern const struct file_operations kfilnd_target_state_stats_file_ops;

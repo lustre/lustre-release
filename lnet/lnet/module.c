@@ -40,8 +40,7 @@ MODULE_PARM_DESC(config_on_load, "configure network at module load");
 
 static DEFINE_MUTEX(lnet_config_mutex);
 
-static int
-lnet_configure(void *arg)
+int lnet_configure(void *arg)
 {
 	/* 'arg' only there so I can be passed to cfs_create_thread() */
 	int    rc = 0;
@@ -68,10 +67,9 @@ out:
 	return rc;
 }
 
-static int
-lnet_unconfigure (void)
+int lnet_unconfigure(void)
 {
-	int   refcount;
+	int refcount;
 
 	mutex_lock(&lnet_config_mutex);
 
@@ -135,16 +133,26 @@ lnet_dyn_configure_ni(struct libcfs_ioctl_hdr *hdr)
 {
 	struct lnet_ioctl_config_ni *conf =
 	  (struct lnet_ioctl_config_ni *)hdr;
-	int			      rc;
+	int rc = -EINVAL;
 
 	if (conf->lic_cfg_hdr.ioc_len < sizeof(*conf))
-		return -EINVAL;
+		return rc;
 
 	mutex_lock(&lnet_config_mutex);
-	if (the_lnet.ln_niinit_self)
-		rc = lnet_dyn_add_ni(conf);
-	else
-		rc = -EINVAL;
+	if (the_lnet.ln_niinit_self) {
+		struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+		struct lnet_nid nid;
+		u32 net_id;
+
+		/* get the tunables if they are available */
+		if (conf->lic_cfg_hdr.ioc_len >=
+		    sizeof(*conf) + sizeof(*tun))
+			tun = (struct lnet_ioctl_config_lnd_tunables *) conf->lic_bulk;
+
+		lnet_nid4_to_nid(conf->lic_nid, &nid);
+		net_id = LNET_NID_NET(&nid);
+		rc = lnet_dyn_add_ni(conf, net_id, tun);
+	}
 	mutex_unlock(&lnet_config_mutex);
 
 	return rc;
@@ -155,14 +163,17 @@ lnet_dyn_unconfigure_ni(struct libcfs_ioctl_hdr *hdr)
 {
 	struct lnet_ioctl_config_ni *conf =
 	  (struct lnet_ioctl_config_ni *) hdr;
-	int			      rc;
+	struct lnet_nid nid;
+	int rc = -EINVAL;
 
-	if (conf->lic_cfg_hdr.ioc_len < sizeof(*conf))
-		return -EINVAL;
+	if (conf->lic_cfg_hdr.ioc_len < sizeof(*conf) ||
+	    !the_lnet.ln_niinit_self)
+		return rc;
 
+	lnet_nid4_to_nid(conf->lic_nid, &nid);
 	mutex_lock(&lnet_config_mutex);
 	if (the_lnet.ln_niinit_self)
-		rc = lnet_dyn_del_ni(conf);
+		rc = lnet_dyn_del_ni(&nid);
 	else
 		rc = -EINVAL;
 	mutex_unlock(&lnet_config_mutex);

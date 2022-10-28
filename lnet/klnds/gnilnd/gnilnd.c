@@ -2615,6 +2615,12 @@ kgnilnd_startup(struct lnet_ni *ni)
 			*kgnilnd_tunables.kgn_peer_credits;
 	}
 
+	if (!ni->ni_interface) {
+		rc = lnet_ni_add_interface(ni, "ipogif0");
+		if (rc < 0)
+			CWARN("gnilnd failed to allocate ni_interface\n");
+	}
+
 	if (*kgnilnd_tunables.kgn_peer_health) {
 		int     fudge;
 		int     timeout;

@@ -1216,6 +1216,86 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
         return rc;
 }
 
+static const struct ln_key_list kiblnd_tunables_keys = {
+	.lkl_maxattr                    = LNET_NET_O2IBLND_TUNABLES_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS]  = {
+			.lkp_value	= "peercredits_hiw",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND]  = {
+			.lkp_value	= "map_on_demand",
+			.lkp_data_type	= NLA_FLAG
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS]  = {
+			.lkp_value	= "concurrent_sends",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_POOL_SIZE]  = {
+			.lkp_value	= "fmr_pool_size",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_FLUSH_TRIGGER]  = {
+			.lkp_value	= "fmr_flush_trigger",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_CACHE]  = {
+			.lkp_value	= "fmr_cache",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_NTX]  = {
+			.lkp_value	= "ntx",
+			.lkp_data_type	= NLA_U16
+		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER]  = {
+			.lkp_value	= "conns_per_peer",
+			.lkp_data_type	= NLA_U16
+		},
+	},
+};
+
+static int
+kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
+{
+	struct lnet_lnd_tunables *tunables = data;
+
+	if (cmd != LNET_CMD_NETS)
+		return -EOPNOTSUPP;
+
+	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
+		return -EINVAL;
+
+	switch (type) {
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_peercredits_hiw = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_map_on_demand = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_concurrent_sends = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_POOL_SIZE:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_fmr_pool_size = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_FLUSH_TRIGGER:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_fmr_flush_trigger = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_CACHE:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_fmr_cache = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_NTX:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_ntx = nla_get_s64(attr);
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = nla_get_s64(attr);
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 static void
 kiblnd_free_pages(struct kib_pages *p)
 {
@@ -3557,7 +3637,11 @@ kiblnd_startup(struct lnet_ni *ni)
 
 	net->ibn_dev = ibdev;
 	ni->ni_nid.nid_addr[0] = cpu_to_be32(ibdev->ibd_ifip);
-
+	if (!ni->ni_interface) {
+		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
+		if (rc < 0)
+			CWARN("ko2iblnd failed to allocate ni_interface\n");
+	}
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
 
 	rc = kiblnd_dev_start_threads(ibdev, newdev, ni->ni_cpts, ni->ni_ncpts);
@@ -3603,6 +3687,8 @@ static const struct lnet_lnd the_o2iblnd = {
 	.lnd_send	= kiblnd_send,
 	.lnd_recv	= kiblnd_recv,
 	.lnd_get_dev_prio = kiblnd_get_dev_prio,
+	.lnd_nl_set	= kiblnd_nl_set,
+	.lnd_keys	= &kiblnd_tunables_keys,
 };
 
 static void ko2inlnd_assert_wire_constants(void)

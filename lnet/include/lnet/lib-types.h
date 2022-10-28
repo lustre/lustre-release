@@ -334,6 +334,11 @@ struct lnet_lnd {
 	/* get dma_dev priority */
 	unsigned int (*lnd_get_dev_prio)(struct lnet_ni *ni,
 					 unsigned int dev_idx);
+
+	/* Handle LND specific Netlink handling */
+	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
+
+	const struct ln_key_list *lnd_keys;
 };
 
 struct lnet_tx_queue {
@@ -454,6 +459,104 @@ struct lnet_net {
 	/* list of router nids preferred for this network */
 	struct list_head	net_rtr_pref_nids;
 };
+
+/* Normally Netlink atttributes are defined in UAPI headers but Lustre is
+ * different in that the ABI is in a constant state of change unlike other
+ * Netlink interfaces. LNet sends a special header to help user land handle
+ * the differences.
+ */
+
+/** enum lnet_net_attrs		      - LNet NI netlink properties
+ *					attributes that describe LNet 'NI'
+ *					These values are used to piece together
+ *					messages for sending and receiving.
+ *
+ * @LNET_NET_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LNET_NET_ATTR_HDR:			grouping for LNet net data (NLA_NESTED)
+ * @LNET_NET_ATTR_TYPE:			LNet net this NI belongs to (NLA_STRING)
+ * @LNET_NET_ATTR_LOCAL:		Local NI information (NLA_NESTED)
+ */
+enum lnet_net_attrs {
+	LNET_NET_ATTR_UNSPEC = 0,
+
+	LNET_NET_ATTR_HDR,
+	LNET_NET_ATTR_TYPE,
+	LNET_NET_ATTR_LOCAL,
+
+	__LNET_NET_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_ATTR_MAX (__LNET_NET_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_attrs      - LNet local NI netlink properties
+ *					attributes that describe local NI
+ *
+ * @LNET_NET_LOCAL_NI_ATTR_UNSPEC:	unspecified attribute to catch errors
+ *
+ * @LNET_NET_LOCAL_NI_ATTR_NID:		NID that represents this NI (NLA_STRING)
+ * @LNET_NET_LOCAL_NI_ATTR_STATUS:	State of this NI (NLA_STRING)
+ * @LNET_NET_LOCAL_NI_ATTR_INTERFACE:	Defines physical devices (NLA_NESTED)
+ *					Used to be many devices but no longer.
+ */
+enum lnet_net_local_ni_attrs {
+	LNET_NET_LOCAL_NI_ATTR_UNSPEC = 0,
+
+	LNET_NET_LOCAL_NI_ATTR_NID,
+	LNET_NET_LOCAL_NI_ATTR_STATUS,
+	LNET_NET_LOCAL_NI_ATTR_INTERFACE,
+
+	__LNET_NET_LOCAL_NI_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_LOCAL_NI_ATTR_MAX (__LNET_NET_LOCAL_NI_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_intf_attrs - LNet NI device netlink properties
+ *					attribute that reports the device
+ *					in use
+ *
+ * @LNET_NET_LOCAL_NI_INTF_ATTR_UNSPEC:	unspecified attribute to catch errors
+ *
+ * @LNET_NET_LOCAL_NI_INTF_ATTR_TYPE:	Physcial device interface (NLA_STRING)
+ */
+enum lnet_net_local_ni_intf_attrs {
+	LNET_NET_LOCAL_NI_INTF_ATTR_UNSPEC = 0,
+
+	LNET_NET_LOCAL_NI_INTF_ATTR_TYPE,
+
+	__LNET_NET_LOCAL_NI_INTF_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_LOCAL_NI_INTF_ATTR_MAX (__LNET_NET_LOCAL_NI_INTF_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_tunables_attrs	      - LNet NI tunables
+ *							netlink properties.
+ *							Performance options
+ *							for your NI.
+ *
+ * @LNET_NET_LOCAL_NI_TUNABLES_ATTR_UNSPEC:		unspecified attribute
+ *							to catch errors
+ *
+ * @LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT:	Timeout for LNet peer.
+ *							(NLA_S32)
+ * @LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS:	Credits for LNet peer.
+ *							(NLA_S32)
+ * @LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS: Buffer credits for
+ *							 LNet peer. (NLA_S32)
+ * @LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS:		Credits for LNet peer
+ *							TX. (NLA_S32)
+ */
+enum lnet_net_local_ni_tunables_attr {
+	LNET_NET_LOCAL_NI_TUNABLES_ATTR_UNSPEC = 0,
+
+	LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT,
+	LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS,
+	LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS,
+	LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS,
+	__LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX (__LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
 
 struct lnet_ni {
 	/* chain on the lnet_net structure */
