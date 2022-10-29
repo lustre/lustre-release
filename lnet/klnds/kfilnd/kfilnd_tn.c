@@ -612,7 +612,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 				bool *tn_released)
 {
 	struct kfilnd_msg *msg;
-	int rc;
+	int rc = 0;
 	bool finalize = false;
 	struct lnet_hdr hdr;
 	struct lnet_nid srcnid;
@@ -644,12 +644,13 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			 */
 			rc = -ECANCELED;
 			KFILND_TN_DEBUG(tn, "Cancel throttled TN");
-		} else if (ktime_after(tn->deadline, ktime_get_seconds())) {
-			/* If transaction deadline has not been met, return
-			 * -EAGAIN. This will cause this transaction event to be
-			 * replayed. During this time, an async message from the
-			 * peer should occur at which point the kfilnd version
-			 * should be negotiated.
+		} else if (ktime_before(ktime_get_seconds(),
+					tn->tn_replay_deadline)) {
+			/* If the transaction replay deadline has not been met,
+			 * then return -EAGAIN. This will cause this transaction
+			 * event to be replayed. During this time, an async
+			 * hello message from the peer should occur at which
+			 * point we can resume sending new messages to this peer
 			 */
 			KFILND_TN_DEBUG(tn, "hello response pending");
 			return -EAGAIN;
@@ -658,6 +659,14 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		}
 
 		kfilnd_tn_status_update(tn, rc,
+					LNET_MSG_STATUS_NETWORK_TIMEOUT);
+		rc = 0;
+		goto out;
+	}
+
+	if ((event == TN_EVENT_INIT_IMMEDIATE || event == TN_EVENT_INIT_BULK) &&
+	    ktime_after(ktime_get_seconds(), tn->tn_replay_deadline)) {
+		kfilnd_tn_status_update(tn, -ETIMEDOUT,
 					LNET_MSG_STATUS_NETWORK_TIMEOUT);
 		rc = 0;
 		goto out;
@@ -1511,6 +1520,8 @@ struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
 	tn->tn_state = TN_STATE_IDLE;
 	tn->hstatus = LNET_MSG_STATUS_OK;
 	tn->deadline = ktime_get_seconds() + lnet_get_lnd_timeout();
+	tn->tn_replay_deadline = ktime_sub(tn->deadline,
+					   (lnet_get_lnd_timeout() / 2));
 	tn->is_initiator = is_initiator;
 	INIT_WORK(&tn->timeout_work, kfilnd_tn_timeout_work);
 

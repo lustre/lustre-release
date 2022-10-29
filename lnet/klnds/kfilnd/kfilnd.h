@@ -749,6 +749,8 @@ struct kfilnd_transaction {
 
 	/* Transaction deadline. */
 	ktime_t deadline;
+	/* Transaction replay deadline. */
+	ktime_t tn_replay_deadline;
 
 	ktime_t tn_alloc_ts;
 	ktime_t tn_state_ts;
