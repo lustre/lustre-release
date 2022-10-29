@@ -110,7 +110,7 @@
         even if their I/Os do not overlap.  This can be avoided if I/O can be
         stripe aligned so that each stripe is accessed by only one client.
         Since Lustre 2.13, the 'overstriping' feature is available, allowing more
-        than stripe per OST.  This is particularly helpful for the case where
+        than one stripe per OST.  This is particularly helpful for the case where
         thread count exceeds OST count, making it possible to match stripe count
         to thread count even in this case.</para>
       </listitem>
@@ -384,7 +384,7 @@ lmm_stripe_offset:  0
         command similar to:</para>
       <screen>[client]# lfs getstripe /mnt/lustre </screen>
       <para>This command produces output similar to:</para>
-      <screen>/mnt/lustre 
+      <screen>/mnt/lustre
 (Default) stripe_count: 1 stripe_size: 1M stripe_offset: -1</screen>
       <para>In this example, the default stripe count is <literal>1</literal> (data blocks are
         striped over a single OST), the default stripe size is 1 MB, and the objects are created
@@ -744,8 +744,8 @@ $ lfs setstripe --component-add -E -1 -c 4 -o 6-7,0,5 \
 <replaceable>filename</replaceable></screen>
         <para>The option <literal>--component-del</literal> is used to remove
           the component(s) specified by component ID or flags from an existing
-          file. This operation will result in any data stored in the deleted
-          component will be lost.</para>
+        file. Any data stored in the deleted component will be lost after
+        this operation.</para>
         <para>The ID specified by <literal>-I</literal> option is the numerical
           unique ID of the component, which can be obtained by command
           <literal>lfs getstripe -I</literal> command, and the flag specified by
@@ -754,8 +754,8 @@ $ lfs setstripe --component-add -E -1 -c 4 -o 6-7,0,5 \
           <literal>lfs getstripe --component-flags</literal>. For now, we only
           have two flags <literal>init</literal> and <literal>^init</literal>
           for instantiated and un-instantiated components respectively.</para>
-	<note><para>Deletion must start with the last component because hole is
-          not allowed.</para></note>
+        <note><para>Deletion must start with the last component because creation
+        of a hole in the middle of a file layout is not allowed.</para></note>
         <para><emphasis role="bold">Example</emphasis></para>
 	<screen>$ lfs getstripe -I /mnt/testfs/del_comp
 1
@@ -864,10 +864,10 @@ $ lfs getstripe /mnt/testfs/pfldir/pflfile
 </screen>
 	<note><para>
           <literal>lfs setstripe --component-add/del</literal> can't be run
-          on a directory, because default layout in directory is likea config,
+          on a directory, because the default layout in directory is like a config,
           which can be arbitrarily changed by <literal>lfs setstripe</literal>,
-          while layout in file may have data (OST objects) attached. If you want
-          to delete default layout in a directory, run
+          while the layout of a file may have data (OST objects) attached.
+          If you want to delete the default layout in a directory, run
 	  <literal>lfs setstripe -d <replaceable>dirname</replaceable></literal>
 	  to return the directory to the filesystem-wide defaults, like:
 	<screen>
@@ -1447,7 +1447,7 @@ STRIPE OPTIONS:
       lmm_pattern: raid0
       lmm_layout_gen: 0
       lmm_stripe_offset: -1
- 
+
     lcme_id: 3
     lcme_mirror_id: 0
     lcme_flags: 0
@@ -1458,7 +1458,7 @@ STRIPE OPTIONS:
       lmm_pattern: raid0
       lmm_layout_gen: 0
       lmm_stripe_offset: -1
- 
+
     lcme_id: 4
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -1589,7 +1589,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 0
       lmm_objects:
       - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
- 
+
     lcme_id: 2
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -1600,7 +1600,7 @@ STRIPE OPTIONS:
       lmm_pattern: raid0
       lmm_layout_gen: 0
       lmm_stripe_offset: -1
- 
+
     lcme_id: 3
     lcme_mirror_id: 0
     lcme_flags: 0
@@ -1611,7 +1611,7 @@ STRIPE OPTIONS:
       lmm_pattern: raid0
       lmm_layout_gen: 0
       lmm_stripe_offset: -1
- 
+
     lcme_id: 4
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -1661,7 +1661,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 0
       lmm_objects:
       - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
- 
+
     lcme_id: 3
     lcme_mirror_id: 0
     lcme_flags: init
@@ -1674,7 +1674,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 1
       lmm_objects:
       - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x8:0x0] }
- 
+
     lcme_id: 4
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -1734,7 +1734,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 1
       lmm_objects:
       - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x8:0x0] }
- 
+
     lcme_id: 8
     lcme_mirror_id: 0
     lcme_flags: init
@@ -1747,7 +1747,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 0
       lmm_objects:
       - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x6:0x0] }
- 
+
     lcme_id: 4
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -1819,7 +1819,7 @@ STRIPE OPTIONS:
       lmm_stripe_offset: 0
       lmm_objects:
       - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x6:0x0] }
- 
+
     lcme_id: 4
     lcme_mirror_id: 0
     lcme_flags: extension
@@ -2215,7 +2215,7 @@ testfs-OST0000_UUID   94181368   56330708  37850660  59%  /mnt/lustre[OST:0]
 testfs-OST0001_UUID   94181368   56385748  37795620  59%  /mnt/lustre[OST:1]
 testfs-OST0002_UUID   94181368   54352012  39829356  57%  /mnt/lustre[OST:2]
 filesystem summary:  282544104  167068468  39829356  57%  /mnt/lustre
- 
+
 [client1] $ lfs df -hv
 UUID                    bytes        Used Available Use%  Mounted on
 testfs-MDT0000_UUID      8.7G      996.1M      7.8G  11%  /mnt/lustre[MDT:0]
@@ -2223,7 +2223,7 @@ testfs-OST0000_UUID     89.8G       53.7G     36.1G  59%  /mnt/lustre[OST:0] f
 testfs-OST0001_UUID     89.8G       53.8G     36.0G  59%  /mnt/lustre[OST:1] f
 testfs-OST0002_UUID     89.8G       51.8G     38.0G  57%  /mnt/lustre[OST:2] f
 filesystem summary:    269.5G      159.3G    110.1G  59%  /mnt/lustre
- 
+
 [client1] $ lfs df -iH
 UUID                   Inodes       IUsed    IFree IUse%  Mounted on
 testfs-MDT0000_UUID     2.21M       41.9k     2.17M   1%  /mnt/lustre[MDT:0]
@@ -2373,7 +2373,7 @@ File 4: OST6, OST7, OST0</screen>
     <note condition='l2D'><para>Since Lustre 2.13 the
     <literal>ea_inode</literal> feature is enabled by default on all newly
     formatted ldiskfs MDT filesystems.</para></note>
-    <note><para>The maximum stripe count for a single file does not limit the 
+    <note><para>The maximum stripe count for a single file does not limit the
     maximum number of OSTs that are in the filesystem as a whole, only the
     maximum possible size and maximum aggregate bandwidth for the file.
     </para></note>

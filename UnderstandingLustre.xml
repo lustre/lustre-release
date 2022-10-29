@@ -714,7 +714,7 @@
       <listitem>
         <para>Verifies the linkEA entry for each inode and regenerates it if
         invalid or missing. The <emphasis role="italic">linkEA</emphasis>
-        stores of the file name and parent FID. It is stored as an extended
+        stores the file name and parent FID. It is stored as an extended
         attribute in each inode. Thus, the linkEA can be used to
         reconstruct the full path name of a file from only the FID.</para>
       </listitem>

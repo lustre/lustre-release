@@ -20,7 +20,7 @@
       tagging is removed), and within the text using a distinct box.
     </para>
 
-    <note xml:id="whichversion"><title>Which version amd I running?</title>
+    <note xml:id="whichversion"><title>Which version am I running?</title>
     <indexterm><primary>version</primary>
     <secondary>which version of Lustre am I running?</secondary></indexterm>
 
