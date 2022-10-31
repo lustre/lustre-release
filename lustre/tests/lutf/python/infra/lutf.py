@@ -325,7 +325,7 @@ class Script:
 						if type(e) == LUTFError and e.halt:
 							raise e
 						else:
-							rc = {'status': 'FAIL', 'error': str(e)}
+							rc = {'status': 'FAIL', 'error': traceback.format_exc()}
 							skip_test = True
 			if skip_test:
 				rc['reason'] = 'Test setup cleanup failed'
@@ -346,7 +346,7 @@ class Script:
 					if type(e) == LUTFError and e.halt:
 						raise e
 					else:
-						rc = {'status': 'FAIL', 'error': str(e)}
+						rc = {'status': 'FAIL', 'error': traceback.format_exc()}
 
 			logging.debug("Finished test script: %s" % str(self.name))
 			duration = datetime.datetime.now() - start_time
