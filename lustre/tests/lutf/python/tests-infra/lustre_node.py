@@ -14,7 +14,7 @@ from utility_paths import get_mkfs, MOUNT, UMOUNT, get_lctl, lustre_rmmod, load_
 class SimpleLustreNode(BaseTest):
 	def __init__(self, script=os.path.abspath(__file__),
 		     target=None, exceptions=True):
-		super().__init__(script, target=target)
+		super().__init__(script, target=target, exceptions=exceptions)
 		if target and me.name != target:
 			return
 		self.__exceptions = exceptions
