@@ -1,0 +1,369 @@
+diff -wur /dev/null b/fs/ext4/critical_encode.h
+--- /dev/null
++++ b/fs/ext4/critical_encode.h
+@@ -0,0 +1,158 @@
++/*
++ *  critical_encode.h
++ *
++ *  Copyright (c) 2022 Whamcloud
++ */
++
++#ifndef _CRITICAL_ENCODE_H
++#define _CRITICAL_ENCODE_H
++
++#include <linux/ctype.h>
++
++/* Encoding/decoding routines inspired from yEnc principles.
++ * We just take care of a few critical characters:
++ * NULL, LF, CR, /, DEL and =.
++ * If such a char is found, it is replaced with '=' followed by
++ * the char value + 64.
++ * All other chars are left untouched.
++ * Efficiency of this encoding depends on the occurences of the
++ * critical chars, but statistically on binary data it can be much higher
++ * than base64 for instance.
++ */
++static inline int critical_encode(const u8 *src, int len, char *dst)
++{
++	u8 *p = (u8 *)src, *q = dst;
++
++	while (p - src < len) {
++		/* escape NULL, LF, CR, /, DEL and = */
++		if (unlikely(*p == 0x0 || *p == 0xA || *p == 0xD ||
++			     *p == '/' || *p == 0x7F || *p == '=')) {
++			*(q++) = '=';
++			*(q++) = *(p++) + 64;
++		} else {
++			*(q++) = *(p++);
++		}
++	}
++
++	return (char *)q - dst;
++}
++
++/* returns the number of chars encoding would produce */
++static inline int critical_chars(const u8 *src, int len)
++{
++	u8 *p = (u8 *)src;
++	int newlen = len;
++
++	while (p - src < len) {
++		/* NULL, LF, CR, /, DEL and = cost an additional '=' */
++		if (unlikely(*p == 0x0 || *p == 0xA || *p == 0xD ||
++			     *p == '/' || *p == 0x7F || *p == '='))
++			newlen++;
++		p++;
++	}
++
++	return newlen;
++}
++
++/* decoding routine - returns the number of chars in output */
++static inline int critical_decode(const u8 *src, int len, char *dst)
++{
++	u8 *p = (u8 *)src, *q = dst;
++
++	while (p - src < len) {
++		if (unlikely(*p == '=')) {
++			*(q++) = *(++p) - 64;
++			p++;
++		} else {
++			*(q++) = *(p++);
++		}
++	}
++
++	return (char *)q - dst;
++}
++
++#define fscrypt_get_encryption_info(inode) \
++	(unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)) ? 0 : -EOPNOTSUPP)
++
++static inline int ext4_prepare_lookup(struct inode *dir,
++                                         struct dentry *dentry,
++                                         unsigned int flags)
++{
++	if (unlikely(!IS_LUSTRE_MOUNT(dir->i_sb)))
++		return 0;
++        return fscrypt_prepare_lookup(dir, dentry, flags);
++}
++
++static inline int ext4_fname_alloc_buffer(const struct inode *inode,
++					     u32 max_encrypted_len,
++					     struct fscrypt_str *crypto_str)
++{
++	crypto_str->name = kmalloc(max_encrypted_len + 1, GFP_NOFS);
++	if (!crypto_str->name)
++		return -ENOMEM;
++	crypto_str->len = max_encrypted_len;
++	return 0;
++}
++
++static inline void ext4_fname_free_buffer(struct fscrypt_str *crypto_str)
++{
++	if (!crypto_str)
++		return;
++	kfree(crypto_str->name);
++	crypto_str->name = NULL;
++}
++
++static inline int ext4_fname_disk_to_usr(struct inode *inode,
++					    u32 hash, u32 minor_hash,
++					    const struct fscrypt_str *iname,
++					    struct fscrypt_str *oname)
++{
++	int presented_len;
++
++	presented_len = critical_encode(iname->name, iname->len, oname->name);
++	if (presented_len > NAME_MAX) {
++		/* truncate at NAME_MAX,
++		 * or NAME_MAX-1 if name ends with '=' to avoid decoding issue
++		 */
++		presented_len = NAME_MAX;
++		if (oname->name[presented_len - 1] == '=')
++			presented_len--;
++		oname->len = presented_len;
++	}
++	oname->name[presented_len] = '\0';
++
++	return 0;
++}
++
++static inline int ext4_setup_filename(struct inode *dir,
++					 const struct qstr *iname,
++					 int lookup,
++					 struct ext4_filename *fname)
++{
++	fname->usr_fname = iname;
++
++	if (lookup && IS_ENCRYPTED(dir) &&
++	    unlikely(!IS_LUSTRE_MOUNT(dir->i_sb) &&
++		     strnchr(iname->name, iname->len, '='))) {
++		/* Only proceed to critical decode if
++		 * iname contains escape char '='.
++		 */
++		int len = iname->len;
++		char *buf;
++
++		buf = kmalloc(len, GFP_NOFS);
++		if (!buf)
++			return -ENOMEM;
++
++		len = critical_decode(iname->name, len, buf);
++		fname->disk_name.name = (unsigned char *)buf;
++		fname->disk_name.len = len;
++		return 0;
++	}
++
++	fname->disk_name.name = (unsigned char *) iname->name;
++	fname->disk_name.len = iname->len;
++	return 0;
++}
++
++#endif /* _CRITICAL_ENCODE_H */
+diff -wur a/fs/ext4/dir.c b/fs/ext4/dir.c
+--- a/fs/ext4/dir.c
++++ b/fs/ext4/dir.c
+@@ -28,6 +28,7 @@
+ #include <linux/iversion.h>
+ #include "ext4.h"
+ #include "xattr.h"
++#include "critical_encode.h"
+
+ static int ext4_dx_readdir(struct file *, struct dir_context *);
+
+@@ -144,7 +145,8 @@ static int ext4_readdir(struct file *
+ 			return err;
+ 	}
+
+-	if (IS_ENCRYPTED(inode)) {
++	/* disable decryption of filename, present only escaped name */
++	if (0 && IS_ENCRYPTED(inode)) {
+ 		err = fscrypt_fname_alloc_buffer(inode, EXT4_NAME_LEN, &fstr);
+ 		if (err < 0)
+ 			return err;
+@@ -258,22 +259,33 @@ static int ext4_readdir(struct file *
+ 					    get_dtype(sb, de->file_type)))
+ 						goto done;
+ 				} else {
+-					int save_len = fstr.len;
+ 					struct fscrypt_str de_name =
+ 							FSTR_INIT(de->name,
+ 								de->name_len);
++					int presented_len;
+
+ 					/* Directory is encrypted */
+-					err = fscrypt_fname_disk_to_usr(inode,
++					presented_len = critical_chars(de->name,
++								  de->name_len);
++					err = ext4_fname_alloc_buffer(inode,
++								  presented_len,
++								  &fstr);
++					if (err)
++						goto errout;
++
++					err = ext4_fname_disk_to_usr(inode,
+ 						0, 0, &de_name, &fstr);
+ 					de_name = fstr;
+-					fstr.len = save_len;
+-					if (err)
++					if (err) {
++						ext4_fname_free_buffer(&fstr);
+ 						goto errout;
+-					if (!dir_emit(ctx,
++					}
++					err = dir_emit(ctx,
+ 					    de_name.name, de_name.len,
+ 					    le32_to_cpu(de->inode),
+-					    get_dtype(sb, de->file_type)))
++						  get_dtype(sb, de->file_type));
++					ext4_fname_free_buffer(&fstr);
++					if (!err)
+ 						goto done;
+ 				}
+ 			}
+diff -wur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -30,6 +30,7 @@
+ #include "ext4_jbd2.h"
+ #include "xattr.h"
+ #include "acl.h"
++#include "critical_encode.h"
+
+ #include <trace/events/ext4.h>
+
+Index: kernel-4.18.0-423.el8/fs/ext4/namei.c
+===================================================================
+--- kernel-4.18.0-423.el8.orig/fs/ext4/namei.c
++++ kernel-4.18.0-423.el8/fs/ext4/namei.c
+@@ -40,6 +40,7 @@
+
+ #include "xattr.h"
+ #include "acl.h"
++#include "critical_encode.h"
+
+ #include <trace/events/ext4.h>
+ /*
+@@ -1423,22 +1424,31 @@ static int htree_dirblock_to_tree(struct
+ 				   hinfo->hash, hinfo->minor_hash, de,
+ 				   &tmp_str);
+ 		} else {
+-			int save_len = fname_crypto_str.len;
+ 			struct fscrypt_str de_name = FSTR_INIT(de->name,
+ 								de->name_len);
++			int presented_len;
+
+ 			/* Directory is encrypted */
+-			err = fscrypt_fname_disk_to_usr(dir, hinfo->hash,
++			presented_len = critical_chars(de->name, de->name_len);
++			err = ext4_fname_alloc_buffer(dir, presented_len,
++							 &fname_crypto_str);
++			if (err) {
++				count = err;
++				goto errout;
++			}
++
++			err = ext4_fname_disk_to_usr(dir, hinfo->hash,
+ 					hinfo->minor_hash, &de_name,
+ 					&fname_crypto_str);
+ 			if (err) {
++				ext4_fname_free_buffer(&fname_crypto_str);
+ 				count = err;
+ 				goto errout;
+ 			}
+ 			err = ext4_htree_store_dirent(dir_file,
+ 				   hinfo->hash, hinfo->minor_hash, de,
+ 					&fname_crypto_str);
+-			fname_crypto_str.len = save_len;
++			ext4_fname_free_buffer(&fname_crypto_str);
+ 		}
+ 		if (err != 0) {
+ 			count = err;
+@@ -1666,7 +1676,7 @@ static void dx_insert_block(struct dx_fr
+  * Return: %true if the directory entry matches, otherwise %false.
+  */
+ static inline bool ext4_match(const struct ext4_filename *fname,
+-			      const struct ext4_dir_entry_2 *de)
++			      const struct ext4_dir_entry_2 *de, int denamelen)
+ {
+ 	struct fscrypt_name f;
+
+@@ -1678,7 +1688,7 @@ static inline bool ext4_match(const stru
+ #ifdef CONFIG_EXT4_FS_ENCRYPTION
+ 	f.crypto_buf = fname->crypto_buf;
+ #endif
+-	return fscrypt_match_name(&f, de->name, de->name_len);
++	return fscrypt_match_name(&f, de->name, denamelen);
+ }
+
+ /*
+@@ -1689,16 +1699,30 @@ int ext4_search_dir(struct buffer_head *
+ 		    unsigned int offset, struct ext4_dir_entry_2 **res_dir)
+ {
+ 	struct ext4_dir_entry_2 * de;
++	bool probablytrunc;
+ 	char * dlimit;
+-	int de_len;
++	int de_len, denamelen;
+
+ 	de = (struct ext4_dir_entry_2 *)search_buf;
+ 	dlimit = search_buf + buf_size;
++	/* fname is probably truncated if it is the decoded representation of
++	 * an encrypted filename not aligned on a 32-byte boundary
++	 */
++	probablytrunc = !IS_LUSTRE_MOUNT(dir->i_sb) && IS_ENCRYPTED(dir) &&
++		fname->disk_name.len & 31;
+ 	while ((char *) de < dlimit - EXT4_BASE_DIR_LEN) {
+ 		/* this code is executed quadratically often */
+ 		/* do minimal checking `by hand' */
++		denamelen = de->name_len;
++		if (unlikely(probablytrunc) &&
++		    de->name_len > fname->disk_name.len)
++			/* Adjust name len to look for a partial match.
++			 * Since it is binary encrypted names, there
++			 * should not be any collision between names.
++			 */
++			denamelen = fname->disk_name.len;
+ 		if (de->name + de->name_len <= dlimit &&
+-		    ext4_match(fname, de)) {
++		    ext4_match(fname, de, denamelen)) {
+ 			/* found a match - just to be sure, do
+ 			 * a full check */
+ 			if (ext4_check_dir_entry(dir, NULL, de, bh, search_buf,
+@@ -1769,7 +1793,7 @@ struct buffer_head *__ext4_find_entry(st
+ 	if (namelen > EXT4_NAME_LEN)
+ 		return NULL;
+
+-	retval = ext4_fname_setup_filename(dir, d_name, 1, &fname);
++	retval = ext4_setup_filename(dir, d_name, 1, &fname);
+ 	if (retval == -ENOENT)
+ 		return NULL;
+ 	if (retval)
+@@ -1896,7 +1920,8 @@ cleanup_and_exit:
+ 	/* Clean up the read-ahead blocks */
+ 	for (; ra_ptr < ra_max; ra_ptr++)
+ 		brelse(bh_use[ra_ptr]);
+-	ext4_fname_free_filename(&fname);
++	if (fname.disk_name.name != d_name->name)
++		kfree(fname.disk_name.name);
+ 	return ret;
+ }
+ EXPORT_SYMBOL(__ext4_find_entry);
+@@ -1962,7 +1987,7 @@ static struct dentry *ext4_lookup(struct
+ 	struct buffer_head *bh;
+ 	int err;
+
+-	err = fscrypt_prepare_lookup(dir, dentry, flags);
++	err = ext4_prepare_lookup(dir, dentry, flags);
+ 	if (err)
+ 		return ERR_PTR(err);
+
+@@ -2271,7 +2296,7 @@ int ext4_find_dest_de(struct inode *dir,
+ 		if (ext4_check_dir_entry(dir, NULL, de, bh,
+ 					 buf, buf_size, offset))
+ 			return -EFSCORRUPTED;
+-		if (ext4_match(fname, de))
++		if (ext4_match(fname, de, de->name_len))
+ 			return -EEXIST;
+ 		nlen = EXT4_DIR_ENTRY_LEN(de);
+ 		rlen = ext4_rec_len_from_disk(de->rec_len, buf_size);

@@ -1,0 +1,39 @@
+Index: kernel-4.18.0-423.el8/fs/ext4/mballoc.c
+===================================================================
+--- kernel-4.18.0-423.el8.orig/fs/ext4/mballoc.c
++++ kernel-4.18.0-423.el8/fs/ext4/mballoc.c
+@@ -1958,6 +1958,21 @@ int ext4_mb_find_by_goal(struct ext4_all
+ 	return 0;
+ }
+
++static inline int ext4_mb_uninit_on_disk(struct super_block *sb,
++				    ext4_group_t group)
++{
++	struct ext4_group_desc *desc;
++
++	if (!ext4_has_group_desc_csum(sb))
++		return 0;
++
++	desc = ext4_get_group_desc(sb, group, NULL);
++	if (desc->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))
++		return 1;
++
++	return 0;
++}
++
+ /*
+  * The routine scans buddy structures (not bitmap!) from given order
+  * to max order and tries to find big enough chunk to satisfy the req
+@@ -2196,6 +2211,12 @@ static int ext4_mb_good_group_nolock(str
+
+ 	/* We only do this if the grp has never been initialized */
+ 	if (unlikely(EXT4_MB_GRP_NEED_INIT(grp))) {
++		/* cr=0/1 is a very optimistic search to find large
++		 * good chunks almost for free. if buddy data is
++		 * not ready, then this optimization makes no sense */
++
++		if (cr < 2 && !ext4_mb_uninit_on_disk(ac->ac_sb, group))
++			return 0;
+ 		ret = ext4_mb_init_group(ac->ac_sb, group, GFP_NOFS);
+ 		if (ret)
+ 			return ret;

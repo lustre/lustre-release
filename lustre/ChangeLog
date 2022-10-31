@@ -3,7 +3,7 @@ TBD Whamcloud
        * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
-         4.18.0-372.19.1.el8  (RHEL8.6)
+         4.18.0-423.el8       (RHEL8.7)
        * Other server kernels known to build and work at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
          3.10.0-957.27.2.el7  (RHEL7.6)
@@ -16,6 +16,7 @@ TBD Whamcloud
          4.18.0-240.22.1.el8  (RHEL8.3)
          4.18.0-305.25.1.el8  (RHEL8.4)
          4.18.0-348.23.1.el8  (RHEL8.5)
+         4.18.0-372.19.1.el8  (RHEL8.6)
          4.4.120-92.70        (SLES12 SP2)
          4.4.180-94.100       (SLES12 SP3)
          4.4.0-131            (Ubuntu 16.04)
@@ -27,7 +28,7 @@ TBD Whamcloud
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
          5.14.0-70.26.1.el9   (RHEL9.0)
-         4.18.0-372.19.1.el8  (RHEL8.6)
+         4.18.0-423.el8       (RHEL8.7)
          5.4.0-37             (Ubuntu 20.04)
          5.14.21-150400.24.21 (SLES15 SP4)
        * Other clients known to build on these kernels at some point (others may also work):
@@ -44,6 +45,7 @@ TBD Whamcloud
          4.18.0-240.22.1.el8  (RHEL8.3)
          4.18.0-305.25.1.el8  (RHEL8.4)
          4.18.0-348.23.1.el8  (RHEL8.5)
+         4.18.0-372.19.1.el8  (RHEL8.6)
          4.4.120-92.70        (SLES12 SP2)
          4.4.180-94.100       (SLES12 SP3)
          4.12.14-95.48        (SLES12 SP4)
@@ -56,7 +58,7 @@ TBD Whamcloud
          5.8.0-53             (Ubuntu 20.04.2 HWE)
          5.11.0-31            (Ubuntu 20.04.3 HWE)
          5.11.0               (vanilla kernel.org)
-       * Recommended e2fsprogs version: 1.46.2.wc5 or newer
+       * Recommended e2fsprogs version: 1.46.5.wc1 or newer
        * Recommended ZFS version: 2.1.5
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
