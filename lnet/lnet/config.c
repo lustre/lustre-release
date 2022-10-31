@@ -1518,8 +1518,10 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 	for_each_netdev(ns, dev) {
 		int flags = dev_get_flags(dev);
 		struct in_device *in_dev;
+#if IS_ENABLED(CONFIG_IPV6)
 		struct inet6_dev *in6_dev;
 		const struct inet6_ifaddr *ifa6;
+#endif
 		int node_id;
 		int cpt;
 
