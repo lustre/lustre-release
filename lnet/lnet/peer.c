@@ -2607,6 +2607,7 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	struct lnet_ping_buffer *pbuf;
 	int infobytes;
 	int rc;
+	bool ping_feat_disc;
 
 	spin_lock(&lp->lp_lock);
 
@@ -2648,10 +2649,12 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	 * The peer may have discovery disabled at its end. Set
 	 * NO_DISCOVERY as appropriate.
 	 */
-	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY) ||
-	    lnet_peer_discovery_disabled) {
-		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
-		       libcfs_nidstr(&lp->lp_primary_nid));
+	ping_feat_disc = pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY;
+	if (!ping_feat_disc || lnet_peer_discovery_disabled) {
+		CDEBUG(D_NET, "Peer %s has discovery %s, local discovery %s\n",
+		       libcfs_nidstr(&lp->lp_primary_nid),
+		       ping_feat_disc ? "enabled" : "disabled",
+		       lnet_peer_discovery_disabled ? "disabled" : "enabled");
 
 		/* Detect whether this peer has toggled discovery from on to
 		 * off and whether we can delete and re-create the peer. Peers
