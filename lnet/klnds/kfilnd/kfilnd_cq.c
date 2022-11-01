@@ -48,7 +48,7 @@ void kfilnd_cq_process_error(struct kfilnd_ep *ep,
 	switch (error->flags) {
 	case KFI_MSG | KFI_RECV:
 		if (error->err != ECANCELED) {
-			KFILND_EP_ERROR(ep, "Dropping error receive event %d\n",
+			KFILND_EP_ERROR(ep, "Dropping error receive event %d",
 					-error->err);
 			return;
 		}
@@ -76,6 +76,10 @@ void kfilnd_cq_process_error(struct kfilnd_ep *ep,
 		tn = error->op_context;
 		tn_event = TN_EVENT_TX_FAIL;
 		status = -error->err;
+		KFILND_EP_ERROR(ep,
+				"msg send error %d prov error %d flags %llx",
+				status, -error->prov_errno, error->flags);
+
 		break;
 
 	case KFI_TAGGED | KFI_SEND:
@@ -84,6 +88,9 @@ void kfilnd_cq_process_error(struct kfilnd_ep *ep,
 		tn = error->op_context;
 		tn_event = TN_EVENT_TAG_TX_FAIL;
 		status = -error->err;
+		KFILND_EP_ERROR(ep,
+				"tagged error %d prov error %d flags %llx",
+				status, -error->prov_errno, error->flags);
 		break;
 
 	default:
