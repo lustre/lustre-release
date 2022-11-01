@@ -2366,6 +2366,7 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 			if (rc == -ENOENT)
 				continue;
 		}
+
 		switch (dent->d_type) {
 		case DT_UNKNOWN:
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
@@ -6400,7 +6401,7 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 			struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
-	int d = dp == NULL ? -1 : *dp;
+	int d = dp == NULL ? -1 : *dp, fd = -1;
 	int ret = 0;
 
 	if (p == -1 && d == -1)
@@ -6413,10 +6414,12 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 			return ret;
 	}
 
+	if (!param->fp_no_follow && de && de->d_type == DT_LNK && d == -1)
+		d = fd = open(path, O_RDONLY | O_DIRECTORY);
+
 	if (d != -1 && (param->fp_get_lmv || param->fp_get_default_lmv))
 		ret = cb_get_dirstripe(path, &d, param);
-	else if (d != -1 ||
-		 (p != -1 && !param->fp_get_lmv && !param->fp_get_default_lmv))
+	else if (d != -1)
 		ret = get_lmd_info_fd(path, p, d, &param->fp_lmd->lmd_lmm,
 				      param->fp_lum_size, GET_LMD_STRIPE);
 	else if (d == -1 && (param->fp_get_lmv || param->fp_get_default_lmv)) {
@@ -6425,7 +6428,11 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 		 * to get LMV just in case, and by opening it as a file but
 		 * with O_NOFOLLOW ...
 		 */
-		int fd = open(path, O_RDONLY | O_NOFOLLOW);
+		int flag = O_RDONLY;
+
+		if (param->fp_no_follow)
+			flag = O_RDONLY | O_NOFOLLOW;
+		fd = open(path, flag);
 
 		if (fd == -1)
 			return 0;
@@ -6434,8 +6441,20 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 			llapi_lov_dump_user_lmm(param, path, LDF_IS_DIR);
 		close(fd);
 		return 0;
+	} else if (d == -1) {
+		if (!param->fp_no_follow && de && de->d_type == DT_LNK) {
+			/* open the target of symlink as a file */
+			fd = open(path, O_RDONLY);
+			if (fd == -1)
+				return 0;
+		}
+		ret = get_lmd_info_fd(path, p, fd, &param->fp_lmd->lmd_lmm,
+				      param->fp_lum_size, GET_LMD_STRIPE);
 	} else
 		return 0;
+
+	if (fd >= 0)
+		close(fd);
 
 	if (ret) {
 		if (errno == ENODATA && d != -1) {

@@ -8266,6 +8266,32 @@ test_56ea() { #LU-10378
 }
 run_test 56ea "test lfs find -printf option"
 
+test_56eb() {
+	local dir=$DIR/$tdir
+	local subdir_1=$dir/subdir_1
+
+	test_mkdir -p $subdir_1
+	ln -s subdir_1 $dir/link_1
+
+	$LFS getstripe $dir | grep "^$dir/link_1$" -A1 ||
+		error "symlink is not followed"
+
+	$LFS getstripe --no-follow $dir |
+		grep "^$dir/link_1 has no stripe info$" ||
+		error "symlink should not have stripe info"
+
+	touch $dir/testfile
+	ln -s testfile $dir/file_link_2
+
+	$LFS getstripe $dir | grep "^$dir/file_link_2$" -A1 ||
+		error "symlink is not followed"
+
+	$LFS getstripe --no-follow $dir |
+		grep "^$dir/file_link_2 has no stripe info$" ||
+		error "symlink should not have stripe info"
+}
+run_test 56eb "check lfs getstripe on symlink"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local
