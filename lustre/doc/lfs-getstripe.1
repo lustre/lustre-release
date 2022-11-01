@@ -25,8 +25,9 @@ lfs getstripe \- Lustre client command to print layout parameters of a file
       [\fB--stripe-size\fR|\fB-S\fR] [\fB--mirror-count\fR|\fB-N\fR]
       [[\fB!\fR] \fB--mirror-index\fR=[\fB+-\fR]\fI<index>\fR | [\fB!\fR] \fB--mirror-id\fR=[\fB+-\fR]\fI<id>\fR]
       [\fB--verbose\fR|\fB-v\fR]
-[\fB--yaml\fR|\fB-y\fR]
+[\fB--yaml\fR|\fB-y\fR][\fB--no-follow\fR]
 <\fIdirname\fR|\fIfilename\fR> ...
+
 .SH DESCRIPTION
 .B lfs getstripe
 is used to list the layout/striping information for a given filename or
@@ -255,6 +256,9 @@ addition to the normally-printed attributes.
 .BR --yaml | -y
 Always print the layout in YAML format, rather than only using this
 format for composite files.
+.TP
+.BR --no-follow
+Print the stripe information of symbolic link itself.
 .br
 .SH EXAMPLES
 .TP
