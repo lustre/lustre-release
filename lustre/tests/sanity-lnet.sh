@@ -3071,6 +3071,37 @@ test_251() {
 }
 run_test 251 "Define multiple kfi networks on single interface"
 
+test_252() {
+	setup_health_test false || return $?
+
+	local rc=0
+
+	do_rpc_nodes $RNODE unload_modules_local || rc=$?
+
+	if [[ $rc -ne 0 ]]; then
+		cleanup_health_test || return $?
+
+		error "Failed to unload modules on $RNODE rc=$rc"
+	else
+		RLOADED=false
+	fi
+
+	local ts1=$(date +%s)
+
+	do_lnetctl ping --timeout 15 ${RNIDS[0]} &&
+		error "Expected ping ${RNIDS[0]} to fail"
+
+	local ts2=$(date +%s)
+
+	local delta=$(echo "$ts2 - $ts1" | bc)
+
+	[[ $delta -lt 15 ]] ||
+		error "Ping took longer than expected to fail: $delta"
+
+	cleanup_health_test
+}
+run_test 252 "Ping to down peer should unlink quickly"
+
 test_300() {
 	# LU-13274
 	local header
