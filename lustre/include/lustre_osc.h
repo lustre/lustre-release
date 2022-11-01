@@ -311,11 +311,6 @@ struct osc_object {
 
 	const struct osc_object_operations *oo_obj_ops;
 	bool			oo_initialized;
-
-	wait_queue_head_t	oo_group_waitq;
-	struct mutex		oo_group_mutex;
-	__u64			oo_group_users;
-	unsigned long		oo_group_gid;
 };
 
 static inline void osc_build_res_name(struct osc_object *osc,
@@ -653,16 +648,6 @@ int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);
 int osc_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
 			   ldlm_iterator_t iter, void *data);
 int osc_object_prune(const struct lu_env *env, struct cl_object *obj);
-void osc_grouplock_inc_locked(struct osc_object *osc, struct ldlm_lock *lock);
-void osc_grouplock_dec(struct osc_object *osc, struct ldlm_lock *lock);
-int osc_grouplock_enqueue_init(const struct lu_env *env,
-			       struct osc_object *obj,
-			       struct osc_lock *oscl,
-			       struct lustre_handle *lh);
-void osc_grouplock_enqueue_fini(const struct lu_env *env,
-				struct osc_object *obj,
-				struct osc_lock *oscl,
-				struct lustre_handle *lh);
 
 /* osc_request.c */
 void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd);

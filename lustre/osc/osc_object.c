@@ -88,10 +88,6 @@ int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
 	atomic_set(&osc->oo_nr_ios, 0);
 	init_waitqueue_head(&osc->oo_io_waitq);
-	init_waitqueue_head(&osc->oo_group_waitq);
-	mutex_init(&osc->oo_group_mutex);
-	osc->oo_group_users = 0;
-	osc->oo_group_gid = 0;
 
 	LASSERT(osc->oo_obj_ops != NULL);
 
@@ -119,7 +115,6 @@ void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	LASSERT(atomic_read(&osc->oo_nr_writes) == 0);
 	LASSERT(list_empty(&osc->oo_ol_list));
 	LASSERT(atomic_read(&osc->oo_nr_ios) == 0);
-	LASSERT(osc->oo_group_users == 0);
 
 	lu_object_fini(obj);
 	/* osc doen't contain an lu_object_header, so we don't need call_rcu */
@@ -235,17 +230,6 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 		memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
 		cl_object_attr_unlock(&osc->oo_cl);
 		ldlm_clear_lvb_cached(lock);
-
-		/**
-		 * Object is being destroyed and gets unlinked from the lock,
-		 * IO is finished and no cached data is left under the lock. As
-		 * grouplock is immediately marked CBPENDING it is not reused.
-		 * It will also be not possible to flush data later due to a
-		 * NULL l_ast_data - enough conditions to let new grouplocks to
-		 * be enqueued even if the lock still exists on client.
-		 */
-		if (lock->l_req_mode == LCK_GROUP)
-			osc_grouplock_dec(osc, lock);
 	}
 	RETURN(LDLM_ITER_CONTINUE);
 }
