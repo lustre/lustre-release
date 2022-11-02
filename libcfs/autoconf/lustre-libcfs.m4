@@ -1489,6 +1489,20 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_IOV_ITER_TYPE
 
 #
+# LIBCFS_GENRADIX
+#
+# Kernel 5.0 commit ba20ba2e3743bac786dff777954c11930256075e
+# implemented generic radix trees to handle very large memory
+# allocation that can be used instead of vmalloc which has
+# a performance penalty.
+#
+AC_DEFUN([LIBCFS_GENRADIX], [
+LB_CHECK_EXPORT([__genradix_ptr], [lib/generic-radix-tree.c],
+	[AC_DEFINE(HAVE_GENRADIX_SUPPORT, 1,
+		[generic-radix-tree is present])])
+]) # LIBCFS_GENRADIX
+
+#
 # LIBCFS_GET_REQUEST_KEY_AUTH
 #
 # kernel 5.0 commit 822ad64d7e46a8e2c8b8a796738d7b657cbb146d
@@ -2056,6 +2070,7 @@ LIBCFS_NL_DUMP_EXT_ACK
 # 4.20
 LIBCFS_HAVE_IOV_ITER_TYPE
 # 5.0
+LIBCFS_GENRADIX
 LIBCFS_MM_TOTALRAM_PAGES_FUNC
 LIBCFS_GET_REQUEST_KEY_AUTH
 # 5.3
