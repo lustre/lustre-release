@@ -793,13 +793,21 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		LBUG();
 	}
 
-	/** For enabled AT all request should have AT_SUPPORT in the
-	 * FULL import state when OBD_CONNECT_AT is set */
-	LASSERT(AT_OFF || imp->imp_state != LUSTRE_IMP_FULL ||
-		(imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT) ||
-		!(imp->imp_connect_data.ocd_connect_flags &
-		  OBD_CONNECT_AT));
-
+	/**
+	 * For enabled AT all request should have AT_SUPPORT in the
+	 * FULL import state when OBD_CONNECT_AT is set.
+	 * This check has a race with ptlrpc_connect_import_locked()
+	 * with low chance, don't panic, only report.
+	 */
+	if (!(AT_OFF || imp->imp_state != LUSTRE_IMP_FULL ||
+	    (imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT) ||
+	    !(imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_AT))) {
+		DEBUG_REQ(D_HA, request, "Wrong state of import detected, AT=%d, imp=%d, msghdr=%d, conn=%d\n",
+			  AT_OFF, imp->imp_state != LUSTRE_IMP_FULL,
+			  (imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT),
+			  !(imp->imp_connect_data.ocd_connect_flags &
+			    OBD_CONNECT_AT));
+	}
 	if (request->rq_resend) {
 		lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
 		if (request->rq_resend_cb != NULL)
