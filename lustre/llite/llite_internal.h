@@ -538,6 +538,23 @@ static inline void obd_connect_set_name_enc(struct obd_connect_data *data)
 #endif
 }
 
+static inline bool obd_connect_has_enc_fid2path(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		data->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT_FID2PATH;
+#else
+	return false;
+#endif
+}
+
+static inline void obd_connect_set_enc_fid2path(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	data->ocd_connect_flags2 |= OBD_CONNECT2_ENCRYPT_FID2PATH;
+#endif
+}
+
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.

@@ -5181,6 +5181,147 @@ test_62() {
 }
 run_test 62 "e2fsck with encrypted files"
 
+create_files() {
+	local path
+
+	for path in "${paths[@]}"; do
+		touch $path
+	done
+}
+
+build_fids() {
+	local path
+
+	for path in "${paths[@]}"; do
+		fids+=("$(lfs path2fid $path)")
+	done
+}
+
+check_fids() {
+	for fid in "${fids[@]}"; do
+		echo $fid
+		respath=$(lfs fid2path $MOUNT $fid)
+		echo -e "\t" $respath
+		ls -li $respath >/dev/null
+		[ $? -eq 0 ] || error "fid2path $fid failed"
+	done
+}
+
+test_63() {
+	declare -a fids
+	declare -a paths
+	local vaultdir1=$DIR/$tdir/vault1==dir
+	local vaultdir2=$DIR/$tdir/vault2==dir
+	local longfname1="longfilenamewitha=inthemiddletotestbehaviorregardingthedigestedform"
+	local longdname="longdirectorynamewitha=inthemiddletotestbehaviorregardingthedigestedform"
+	local longfname2="$longdname/${longfname1}2"
+
+	(( $MDS1_VERSION > $(version_code 2.15.53) )) ||
+		skip "Need MDS version at least 2.15.53"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	which fscrypt || skip "This test needs fscrypt userspace tool"
+
+	yes | fscrypt setup --force --verbose ||
+		echo "fscrypt global setup already done"
+	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+		/etc/fscrypt.conf
+	yes | fscrypt setup --verbose $MOUNT ||
+		echo "fscrypt setup $MOUNT already done"
+
+	# enable_filename_encryption tunable only available for client
+	# built against embedded llcrypt. If client is built against in-kernel
+	# fscrypt, file names are always encrypted.
+	$LCTL get_param mdc.*.connect_flags | grep -q name_encryption &&
+	  nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
+			head -n1)
+	if [ -n "$nameenc" ]; then
+		do_facet mgs $LCTL set_param -P \
+			llite.*.enable_filename_encryption=1
+		[ $? -eq 0 ] ||
+			error "set_param -P \
+				llite.*.enable_filename_encryption=1 failed"
+
+		wait_update_facet --verbose client \
+			"$LCTL get_param -n llite.*.enable_filename_encryption \
+			| head -n1" 1 30 ||
+			error "enable_filename_encryption not set on client"
+	fi
+
+	mkdir -p $vaultdir1
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector_63_1 $vaultdir1 ||
+		error "fscrypt encrypt $vaultdir1 failed"
+
+	mkdir $vaultdir1/dirA
+	mkdir $vaultdir1/$longdname
+	paths=("$vaultdir1/fileA")
+	paths+=("$vaultdir1/dirA/fileB")
+	paths+=("$vaultdir1/$longfname1")
+	paths+=("$vaultdir1/$longfname2")
+	create_files
+
+	paths+=("$vaultdir1/dirA")
+	paths+=("$vaultdir1/$longdname")
+
+	build_fids
+	check_fids
+
+	fscrypt lock --verbose $vaultdir1 ||
+		error "fscrypt lock $vaultdir1 failed (1)"
+
+	check_fids
+
+	if [ -z "$nameenc" ]; then
+		echo "Rest of the test requires disabling name encryption"
+		exit 0
+	fi
+
+	# disable name encryption
+	do_facet mgs $LCTL set_param -P llite.*.enable_filename_encryption=0
+	[ $? -eq 0 ] ||
+		error "set_param -P llite.*.enable_filename_encryption=0 failed"
+
+	wait_update_facet --verbose client \
+		"$LCTL get_param -n llite.*.enable_filename_encryption \
+		| head -n1" 0 30 ||
+		error "enable_filename_encryption not set back to default"
+
+	mkdir -p $vaultdir2
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector_63_2 $vaultdir2 ||
+		error "fscrypt encrypt $vaultdir2 failed"
+
+	mkdir $vaultdir2/dirA
+	mkdir $vaultdir2/$longdname
+	paths=()
+	fids=()
+	paths=("$vaultdir2/fileA")
+	paths+=("$vaultdir2/dirA/fileB")
+	paths+=("$vaultdir2/$longfname1")
+	paths+=("$vaultdir2/$longfname2")
+	create_files
+
+	paths+=("$vaultdir2/dirA")
+	paths+=("$vaultdir2/$longdname")
+
+	build_fids
+	check_fids
+
+	fscrypt lock --verbose $vaultdir2 ||
+		error "fscrypt lock $vaultdir2 failed (2)"
+
+	check_fids
+
+	rm -rf $MOUNT/.fscrypt
+}
+run_test 63 "fid2path with encrypted files"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

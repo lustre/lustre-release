@@ -2865,14 +2865,150 @@ out:
 	RETURN(rc);
 }
 
+static int fid2path_for_enc_file(struct inode *parent, char *gfpath,
+				 __u32 gfpathlen)
+{
+	struct dentry *de = NULL, *de_parent = d_find_any_alias(parent);
+	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
+	struct llcrypt_str de_name;
+	char *p, *ptr = gfpath;
+	size_t len = 0, len_orig = 0;
+	int enckey = -1, nameenc = -1;
+	int rc = 0;
+
+	gfpath++;
+	while ((p = strsep(&gfpath, "/")) != NULL) {
+		struct lu_fid fid;
+
+		de = NULL;
+		if (!*p) {
+			dput(de_parent);
+			break;
+		}
+		len_orig = strlen(p);
+
+		rc = sscanf(p, "["SFID"]", RFID(&fid));
+		if (rc == 3)
+			p = strchr(p, ']') + 1;
+		else
+			fid_zero(&fid);
+		rc = 0;
+		len = strlen(p);
+
+		if (!IS_ENCRYPTED(parent)) {
+			if (gfpathlen < len + 1) {
+				dput(de_parent);
+				rc = -EOVERFLOW;
+				break;
+			}
+			memmove(ptr, p, len);
+			p = ptr;
+			ptr += len;
+			*(ptr++) = '/';
+			gfpathlen -= len + 1;
+			goto lookup;
+		}
+
+		/* From here, we know parent is encrypted */
+
+		if (enckey != 0) {
+			rc = llcrypt_get_encryption_info(parent);
+			if (rc && rc != -ENOKEY) {
+				dput(de_parent);
+				break;
+			}
+		}
+
+		if (enckey == -1) {
+			if (llcrypt_has_encryption_key(parent))
+				enckey = 1;
+			else
+				enckey = 0;
+			if (enckey == 1)
+				nameenc =
+					llcrypt_policy_has_filename_enc(parent);
+		}
+
+		/* Even if names are not encrypted, we still need to call
+		 * ll_fname_disk_to_usr in order to decode names as they are
+		 * coming from the wire.
+		 */
+		rc = llcrypt_fname_alloc_buffer(parent, NAME_MAX + 1, &lltr);
+		if (rc < 0) {
+			dput(de_parent);
+			break;
+		}
+
+		de_name.name = p;
+		de_name.len = len;
+		rc = ll_fname_disk_to_usr(parent, 0, 0, &de_name,
+					  &lltr, &fid);
+		if (rc) {
+			llcrypt_fname_free_buffer(&lltr);
+			dput(de_parent);
+			break;
+		}
+		lltr.name[lltr.len] = '\0';
+
+		if (lltr.len <= len_orig && gfpathlen >= lltr.len + 1) {
+			memcpy(ptr, lltr.name, lltr.len);
+			p = ptr;
+			len = lltr.len;
+			ptr += lltr.len;
+			*(ptr++) = '/';
+			gfpathlen -= lltr.len + 1;
+		} else {
+			rc = -EOVERFLOW;
+		}
+		llcrypt_fname_free_buffer(&lltr);
+
+		if (rc == -EOVERFLOW) {
+			dput(de_parent);
+			break;
+		}
+
+lookup:
+		if (!gfpath) {
+			/* We reached the end of the string, which means
+			 * we are dealing with the last component in the path.
+			 * So save a useless lookup and exit.
+			 */
+			dput(de_parent);
+			break;
+		}
+
+		if (enckey == 0 || nameenc == 0)
+			continue;
+
+		inode_lock(parent);
+		de = lookup_one_len(p, de_parent, len);
+		inode_unlock(parent);
+		if (IS_ERR_OR_NULL(de) || !de->d_inode) {
+			dput(de_parent);
+			rc = -ENODATA;
+			break;
+		}
+
+		parent = de->d_inode;
+		dput(de_parent);
+		de_parent = de;
+	}
+
+	if (len)
+		*(ptr - 1) = '\0';
+	if (!IS_ERR_OR_NULL(de))
+		dput(de);
+	return rc;
+}
+
 int ll_fid2path(struct inode *inode, void __user *arg)
 {
-	struct obd_export	*exp = ll_i2mdexp(inode);
+	struct obd_export *exp = ll_i2mdexp(inode);
 	const struct getinfo_fid2path __user *gfin = arg;
-	__u32			 pathlen;
-	struct getinfo_fid2path	*gfout;
-	size_t			 outsize;
-	int			 rc;
+	__u32 pathlen, pathlen_orig;
+	struct getinfo_fid2path *gfout;
+	size_t outsize;
+	int rc = 0;
 
 	ENTRY;
 
@@ -2886,7 +3022,9 @@ int ll_fid2path(struct inode *inode, void __user *arg)
 
 	if (pathlen > PATH_MAX)
 		RETURN(-EINVAL);
+	pathlen_orig = pathlen;
 
+gf_alloc:
 	outsize = sizeof(*gfout) + pathlen;
 	OBD_ALLOC(gfout, outsize);
 	if (gfout == NULL)
@@ -2898,17 +3036,35 @@ int ll_fid2path(struct inode *inode, void __user *arg)
 	 * can lookup the correct path, this is mainly for fileset.
 	 * old server without fileset mount support will ignore this. */
 	*gfout->gf_u.gf_root_fid = *ll_inode2fid(inode);
+	gfout->gf_pathlen = pathlen;
 
 	/* Call mdc_iocontrol */
 	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
 	if (rc != 0)
 		GOTO(gf_free, rc);
 
-	if (copy_to_user(arg, gfout, outsize))
+	if (gfout->gf_pathlen && gfout->gf_u.gf_path[0] == '/') {
+		/* by convention, server side (mdt_path_current()) puts
+		 * a leading '/' to tell client that we are dealing with
+		 * an encrypted file
+		 */
+		rc = fid2path_for_enc_file(inode, gfout->gf_u.gf_path,
+					   gfout->gf_pathlen);
+		if (rc)
+			GOTO(gf_free, rc);
+		if (strlen(gfout->gf_u.gf_path) > gfin->gf_pathlen)
+			GOTO(gf_free, rc = -EOVERFLOW);
+	}
+
+	if (copy_to_user(arg, gfout, sizeof(*gfout) + pathlen_orig))
 		rc = -EFAULT;
 
 gf_free:
 	OBD_FREE(gfout, outsize);
+	if (rc == -ENAMETOOLONG) {
+		pathlen += PATH_MAX;
+		GOTO(gf_alloc, rc);
+	}
 	RETURN(rc);
 }
 

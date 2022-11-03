@@ -7039,6 +7039,10 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	struct mdt_object *mdt_obj;
 	struct link_ea_header *leh;
 	struct link_ea_entry *lee;
+	bool worthchecking = true;
+	bool needsfid = false;
+	bool supported = false;
+	int isenc = -1;
 	char *ptr;
 	int reclen;
 	int rc = 0;
@@ -7081,6 +7085,39 @@ static int mdt_path_current(struct mdt_thread_info *info,
 			GOTO(remote_out, rc = -EREMOTE);
 		}
 
+		if (worthchecking) {
+			/* we need to know if the FID being
+			 * looked up is encrypted
+			 */
+			struct lu_attr la = { 0 };
+			struct dt_object *dt = mdt_obj2dt(mdt_obj);
+
+			if (dt && dt->do_ops && dt->do_ops->do_attr_get)
+				dt_attr_get(info->mti_env, dt, &la);
+			if (la.la_valid & LA_FLAGS &&
+			    la.la_flags & LUSTRE_ENCRYPT_FL) {
+				if (!supported && mdt_info_req(info) &&
+				    !exp_connect_encrypt_fid2path(
+					    mdt_info_req(info)->rq_export)) {
+					/* client does not support fid2path
+					 * for encrypted files
+					 */
+					mdt_object_put(info->mti_env, mdt_obj);
+					GOTO(out, rc = -ENODATA);
+				} else {
+					supported = true;
+				}
+				needsfid = true;
+				if (isenc == -1)
+					isenc = 1;
+			} else {
+				worthchecking = false;
+				needsfid = false;
+				if (isenc == -1)
+					isenc = 0;
+			}
+		}
+
 		rc = mdt_links_read(info, mdt_obj, &ldata);
 		if (rc != 0) {
 			mdt_object_put(info->mti_env, mdt_obj);
@@ -7118,8 +7155,21 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		/* Pack the name in the end of the buffer */
 		ptr -= tmpname->ln_namelen;
 		if (ptr - 1 <= fp->gf_u.gf_path)
-			GOTO(out, rc = -EOVERFLOW);
+			GOTO(out, rc = -ENAMETOOLONG);
 		strncpy(ptr, tmpname->ln_name, tmpname->ln_namelen);
+		if (needsfid) {
+			/* Pack FID before file name, so that client can build
+			 * encoded/digested form.
+			 */
+			char fidstr[FID_LEN + 1];
+
+			snprintf(fidstr, sizeof(fidstr), DFID,
+				 PFID(&fp->gf_fid));
+			ptr -= strlen(fidstr);
+			if (ptr - 1 <= fp->gf_u.gf_path)
+				GOTO(out, rc = -ENAMETOOLONG);
+			strncpy(ptr, fidstr, strlen(fidstr));
+		}
 		*(--ptr) = '/';
 
 		/* keep the last resolved fid to the client, so the
@@ -7134,7 +7184,8 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	rc = 0;
 
 remote_out:
-	ptr++; /* skip leading / */
+	if (isenc != 1)
+		ptr++; /* skip leading / unless this is an encrypted file */
 	memmove(fp->gf_u.gf_path, ptr,
 		fp->gf_u.gf_path + fp->gf_pathlen - ptr);
 
@@ -7229,24 +7280,12 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
-	if (mdt_object_remote(obj)) {
+	if (mdt_object_remote(obj))
 		rc = -EREMOTE;
-	} else if (!mdt_object_exists(obj)) {
+	else if (!mdt_object_exists(obj))
 		rc = -ENOENT;
-	} else {
-		struct lu_attr la = { 0 };
-		struct dt_object *dt = mdt_obj2dt(obj);
-
-		if (dt && dt->do_ops && dt->do_ops->do_attr_get)
-			dt_attr_get(info->mti_env, mdt_obj2dt(obj), &la);
-		if (la.la_valid & LA_FLAGS && la.la_flags & LUSTRE_ENCRYPT_FL)
-			/* path resolution cannot be carried out on server
-			 * side for encrypted files
-			 */
-			rc = -ENODATA;
-		else
-			rc = 0;
-	}
+	else
+		rc = 0;
 
 	if (rc < 0) {
 		mdt_object_put(info->mti_env, obj);

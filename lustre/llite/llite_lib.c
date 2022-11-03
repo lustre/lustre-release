@@ -381,6 +381,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
 	obd_connect_set_secctx(data);
 	if (ll_sbi_has_encrypt(sbi)) {
+		obd_connect_set_enc_fid2path(data);
 		obd_connect_set_name_enc(data);
 		obd_connect_set_enc(data);
 	}
