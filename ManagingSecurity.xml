@@ -146,173 +146,20 @@ other::---</screen>
       rights to a Lustre file system. Without the root squash feature enabled,
       Lustre file system users on untrusted clients could access or modify files
       owned by root on the file system, including deleting them. Using the root
-      squash feature restricts file access/modifications as the root user to
-      only the specified clients. Note, however, that this does
-      <emphasis>not</emphasis> prevent users on insecure clients from accessing
-      files owned by <emphasis>other</emphasis> users.</para>
+      squash feature restricts file access/modifications as the root user.
+      Note, however, that this does <emphasis>not</emphasis> prevent users
+      from accessing files owned by <emphasis>other</emphasis> users.</para>
     <para>The root squash feature works by re-mapping the user ID (UID) and
       group ID (GID) of the root user to a UID and GID specified by the system
-      administrator, via the Lustre configuration management server (MGS). The
-      root squash feature also enables the Lustre file system administrator to
-      specify a set of client for which UID/GID re-mapping does not apply.
+      administrator. The preferred way to configure root squash is via nodemaps
+      and the <literal>admin</literal> property. Nodemaps allow root squash on a
+      per-client basis. With UID maps, the clients can even have a local root
+      UID without actually having root access to the filesystem itself.
     </para>
-    <note><para>Nodemaps (<xref linkend="lustrenodemap.title" />) are an
-      alternative to root squash, since it also allows root squash on a per-client
-      basis.  With UID maps, the clients can even have a local root UID without
-      actually having root access to the filesystem itself.</para></note>
-    <section xml:id="managingSecurity.root_squash.config" remap="h3">
-      <title><indexterm>
-        <primary>root squash</primary>
-        <secondary>configuring</secondary>
-      </indexterm>Configuring Root Squash</title>
-      <para>Root squash functionality is managed by two configuration
-        parameters, <literal>root_squash</literal> and
-        <literal>nosquash_nids</literal>.</para>
-      <itemizedlist>
-        <listitem>
-          <para>The <literal>root_squash</literal> parameter specifies the UID
-            and GID with which the root user accesses the Lustre file system.
-          </para>
-        </listitem>
-        <listitem>
-          <para>The <literal>nosquash_nids</literal> parameter specifies the set
-            of clients to which root squash does not apply. LNet NID range
-            syntax is used for this parameter (see the NID range syntax rules
-            described in <xref linkend="managingSecurity.root_squash"/>). For
-            example:</para>
-        </listitem>
-      </itemizedlist>
-      <screen>nosquash_nids=172.16.245.[0-255/2]@tcp</screen>
-      <para>In this example, root squash does not apply to TCP clients on subnet
-        172.16.245.0 that have an even number as the last component of their IP
-        address.</para>
-    </section>
-    <section xml:id="managingSecurity.root_squash.tuning">
-      <title><indexterm>
-        <primary>root squash</primary><secondary>enabling</secondary>
-      </indexterm>Enabling and Tuning Root Squash</title>
-      <para>The default value for <literal>nosquash_nids</literal> is NULL,
-        which means that root squashing applies to all clients. Setting the root
-        squash UID and GID to 0 turns root squash off.</para>
-      <para>Root squash parameters can be set when the MDT is created
-        (<literal>mkfs.lustre --mdt</literal>). For example:</para>
-      <screen>mds# mkfs.lustre --reformat --fsname=testfs --mdt --mgs \
-       --param &quot;mdt.root_squash=500:501&quot; \
-       --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
-      <para>Root squash parameters can also be changed on an unmounted device
-        with <literal>tunefs.lustre</literal>. For example:</para>
-      <screen>tunefs.lustre --param &quot;mdt.root_squash=65534:65534&quot;  \
---param &quot;mdt.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
-</screen>
-      <para>Root squash parameters can also be changed with the
-      <literal>lctl conf_param</literal> command. For example:</para>
-      <screen>mgs# lctl conf_param testfs.mdt.root_squash=&quot;1000:101&quot;
-mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
-      <para>To retrieve the current root squash parameter settings, the
-      following <literal>lctl get_param</literal> commands can be used:</para>
-      <screen>mgs# lctl get_param mdt.*.root_squash
-mgs# lctl get_param mdt.*.nosquash_nids</screen>
-      <note>
-        <para>When using the lctl conf_param command, keep in mind:</para>
-        <itemizedlist>
-          <listitem>
-            <para><literal>lctl conf_param</literal> must be run on a live MGS
-            </para>
-          </listitem>
-          <listitem>
-            <para><literal>lctl conf_param</literal> causes the parameter to
-              change on all MDSs</para>
-          </listitem>
-          <listitem>
-            <para><literal>lctl conf_param</literal> is to be used once per a
-              parameter</para>
-          </listitem>
-        </itemizedlist>
-      </note>
-      <para>The root squash settings can also be changed temporarily with
-      <literal>lctl set_param</literal> or persistently with
-      <literal>lctl set_param -P</literal>.  For example:</para>
-      <screen>mgs# lctl set_param mdt.testfs-MDT0000.root_squash="1:0"
-mgs# lctl set_param -P mdt.testfs-MDT0000.root_squash="1:0"</screen>
-      <para>The <literal>nosquash_nids</literal> list can be cleared with:</para>
-      <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;NONE&quot;</screen>
-      <para>- OR -</para>
-      <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;clear&quot;</screen>
-      <para>If the <literal>nosquash_nids</literal> value consists of several
-        NID ranges (e.g. <literal>0@elan</literal>, <literal>1@elan1</literal>),
-        the list of NID ranges must be quoted with single (&apos;) or double
-        (&apos;&apos;) quotation marks. List elements must be separated with a
-        space. For example:</para>
-      <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
-lctl conf_param testfs.mdt.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
-      <para>These are examples of incorrect syntax:</para>
-      <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
-lctl conf_param testfs.mdt.nosquash_nids=24@elan 15@elan1</screen>
-      <para>To check root squash parameters, use the lctl get_param command:
-      </para>
-      <screen>mds# lctl get_param mdt.testfs-MDT0000.root_squash
-lctl get_param mdt.*.nosquash_nids</screen>
-      <note>
-        <para>An empty nosquash_nids list is reported as NONE.</para>
-      </note>
-    </section>
-    <section xml:id="managingSecurity.root_squash.tips" remap="h3">
-        <title><indexterm>
-          <primary>root squash</primary>
-          <secondary>tips</secondary>
-        </indexterm>Tips on Using Root Squash</title>
-      <para>Lustre configuration management limits root squash in several ways.
-      </para>
-      <itemizedlist>
-        <listitem>
-          <para>The <literal>lctl conf_param</literal> value overwrites the
-            parameter&apos;s previous value. If the new value uses an incorrect
-            syntax, then the system continues with the old parameters and the
-            previously-correct value is lost on remount. That is, be careful
-            doing root squash tuning.</para>
-        </listitem>
-        <listitem>
-          <para><literal>mkfs.lustre</literal> and
-            <literal>tunefs.lustre</literal> do not perform parameter syntax
-            checking. If the root squash parameters are incorrect, they are
-            ignored on mount and the default values are used instead.</para>
-        </listitem>
-        <listitem>
-          <para>Root squash parameters are parsed with rigorous syntax checking.
-            The root_squash parameter should be specified as
-            <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The
-            <literal>nosquash_nids</literal> parameter should follow LNet NID
-            range list syntax.</para>
-        </listitem>
-      </itemizedlist>
-      <para>LNet NID range syntax:</para>
-      <screen>&lt;nidlist&gt;     :== &lt;nidrange&gt; [ &apos; &apos; &lt;nidrange&gt; ]
-&lt;nidrange&gt;   :== &lt;addrrange&gt; &apos;@&apos; &lt;net&gt;
-&lt;addrrange&gt;  :== &apos;*&apos; |
-           &lt;ipaddr_range&gt; |
-           &lt;numaddr_range&gt;
-&lt;ipaddr_range&gt;       :==
-&lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;
-&lt;numaddr_range&gt;      :== &lt;number&gt; |
-                   &lt;expr_list&gt;
-&lt;expr_list&gt;  :== &apos;[&apos; &lt;range_expr&gt; [ &apos;,&apos; &lt;range_expr&gt;] &apos;]&apos;
-&lt;range_expr&gt; :== &lt;number&gt; |
-           &lt;number&gt; &apos;-&apos; &lt;number&gt; |
-           &lt;number&gt; &apos;-&apos; &lt;number&gt; &apos;/&apos; &lt;number&gt;
-&lt;net&gt;        :== &lt;netname&gt; | &lt;netname&gt;&lt;number&gt;
-&lt;netname&gt;    :== &quot;lo&quot; | &quot;tcp&quot; | &quot;o2ib&quot;
-           | &quot;ra&quot; | &quot;elan&quot;
-&lt;number&gt;     :== &lt;nonnegative decimal&gt; | &lt;hexadecimal&gt;</screen>
-      <note>
-        <para>For networks using numeric addresses (e.g. elan), the address
-          range must be specified in the
-          <literal>&lt;numaddr_range&gt;</literal> syntax. For networks using
-          IP addresses, the address range must be in the
-          <literal>&lt;ipaddr_range&gt;</literal>. For example, if elan is using
-          numeric addresses, <literal>1.2.3.4@elan</literal> is incorrect.
-        </para>
-      </note>
-    </section>
+    <para>Please refer to explanations about the <literal>admin</literal>
+      property in the chapter dedicated to Nodemaps, in
+      <xref linkend="lustrenodemap.alteringproperties.managing" />.
+    </para>
   </section>
   <section xml:id="managingSecurity.isolation">
     <title><indexterm><primary>Isolation</primary></indexterm>

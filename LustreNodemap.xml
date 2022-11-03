@@ -271,7 +271,7 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
     explicit label such as “TrustedSystems” or some identifier that makes the
     association clear.</para>
 
-    <section remap="h3">
+    <section xml:id="lustrenodemap.alteringproperties.managing" remap="h3">
       <title>Managing the Properties</title>
 
       <para>Several properties exist, off by default, which change
@@ -365,7 +365,7 @@ mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --prope
       change is distributed.</para>
     </section>
 
-    <section remap="h3">
+    <section xml:id="lustrenodemap.alteringproperties.mixing" remap="h3">
       <title>Mixing Properties</title>
 
       <para>With both <literal>admin</literal> and <literal>trusted</literal>
