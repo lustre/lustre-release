@@ -1591,7 +1591,7 @@ test_36c() {
 	stack_trap "rm -f $tf"
 
 	# write it in the background
-	dd if=/dev/zero of=$tf bs=1M count=600 &
+	$MULTIOP $tf Ow4096_w4096c &
 	local pid=$!
 
 	sleep 1
@@ -1601,6 +1601,7 @@ test_36c() {
 	$LFS setstripe --comp-set -I0x20002 --comp-flags=prefer $tf ||
 		error "set prefer mirror error"
 
+	kill -USR1 $pid
 	wait $pid
 }
 run_test 36c "change prefer mirror during write shouldn't hung"
