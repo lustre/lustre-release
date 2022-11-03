@@ -2403,7 +2403,7 @@ continue_without_msg_stats:
 
 			rc = lustre_ni_show_tunables(tunables,
 						     LNET_NETTYP(rc_net),
-						     &lnd->lt_tun);
+						     &lnd->lt_tun, backup);
 			if (rc != LUSTRE_CFG_RC_NO_ERR &&
 			    rc != LUSTRE_CFG_RC_NO_MATCH)
 				goto out;

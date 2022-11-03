@@ -366,6 +366,10 @@ static const struct ln_key_list kfilnd_tunables_keys = {
 			.lkp_value	= "auth_key",
 			.lkp_data_type	= NLA_S32
 		},
+		[LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS]  = {
+			.lkp_value      = "traffic_class",
+			.lkp_data_type  = NLA_STRING,
+		},
 	},
 };
 
@@ -373,20 +377,27 @@ static int
 kfilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
 	struct lnet_lnd_tunables *tunables = data;
+	struct lnet_ioctl_config_kfilnd_tunables *lnd_kfi;
 	int rc = 0;
 
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
+	lnd_kfi = &tunables->lnd_tun_u.lnd_kfi;
+
 	switch (type) {
 	case LNET_NET_KFILND_TUNABLES_ATTR_PROV_MAJOR:
-		tunables->lnd_tun_u.lnd_kfi.lnd_prov_major_version = nla_get_s64(attr);
+		lnd_kfi->lnd_prov_major_version = nla_get_s64(attr);
 		break;
 	case LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR:
-		tunables->lnd_tun_u.lnd_kfi.lnd_prov_minor_version = nla_get_s64(attr);
+		lnd_kfi->lnd_prov_minor_version = nla_get_s64(attr);
 		break;
 	case LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY:
-		tunables->lnd_tun_u.lnd_kfi.lnd_auth_key = nla_get_s64(attr);
+		lnd_kfi->lnd_auth_key = nla_get_s64(attr);
+		break;
+	case LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS:
+		rc = nla_strscpy(lnd_kfi->lnd_traffic_class_str, attr,
+				 sizeof(lnd_kfi->lnd_traffic_class_str));
 		break;
 	default:
 		rc = -EINVAL;

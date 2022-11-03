@@ -37,7 +37,7 @@ lustre_net_show_tunables(struct cYAML *tunables,
 int
 lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 			__u32 net_type,
-			struct lnet_lnd_tunables *lnd);
+			struct lnet_lnd_tunables *lnd, bool backup);
 
 void
 lustre_yaml_extract_lnd_tunables(struct cYAML *tree,

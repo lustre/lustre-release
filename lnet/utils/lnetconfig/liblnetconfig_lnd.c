@@ -88,7 +88,8 @@ lustre_socklnd_show_tun(struct cYAML *lndparams,
 #ifdef HAVE_KFILND
 static int
 lustre_kfilnd_show_tun(struct cYAML *lndparams,
-			struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg)
+		       struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg,
+		       bool backup)
 {
 	if (cYAML_create_number(lndparams, "prov_major_version",
 				lnd_cfg->lnd_prov_major_version) == NULL)
@@ -100,6 +101,15 @@ lustre_kfilnd_show_tun(struct cYAML *lndparams,
 
 	if (cYAML_create_number(lndparams, "auth_key",
 				lnd_cfg->lnd_auth_key) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (cYAML_create_string(lndparams, "traffic_class",
+				lnd_cfg->lnd_traffic_class_str) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (!backup &&
+	    cYAML_create_number(lndparams, "traffic_class_num",
+				lnd_cfg->lnd_traffic_class) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	return LUSTRE_CFG_RC_NO_ERR;
@@ -140,7 +150,8 @@ out:
 int
 lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 			__u32 net_type,
-			struct lnet_lnd_tunables *lnd)
+			struct lnet_lnd_tunables *lnd,
+			bool backup)
 {
 	int rc = LUSTRE_CFG_RC_NO_MATCH;
 
@@ -153,8 +164,10 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 #ifdef HAVE_KFILND
 	else if (net_type == KFILND)
 		rc = lustre_kfilnd_show_tun(lnd_tunables,
-					    &lnd->lnd_tun_u.lnd_kfi);
+					    &lnd->lnd_tun_u.lnd_kfi,
+					    backup);
 #endif
+
 	return rc;
 }
 
@@ -209,6 +222,7 @@ yaml_extract_kfi_tun(struct cYAML *tree,
 	struct cYAML *prov_major_version = NULL;
 	struct cYAML *prov_minor_version = NULL;
 	struct cYAML *auth_key = NULL;
+	struct cYAML *traffic_class = NULL;
 	struct cYAML *lndparams = NULL;
 
 	lndparams = cYAML_get_object_item(tree, "lnd tunables");
@@ -228,6 +242,12 @@ yaml_extract_kfi_tun(struct cYAML *tree,
 	auth_key = cYAML_get_object_item(lndparams, "auth_key");
 	lnd_cfg->lnd_auth_key =
 		(auth_key) ? auth_key->cy_valueint : 0;
+
+	traffic_class = cYAML_get_object_item(lndparams, "traffic_class");
+	if (traffic_class && traffic_class->cy_valuestring &&
+	    strlen(traffic_class->cy_valuestring) < LNET_MAX_STR_LEN)
+		strcpy(&lnd_cfg->lnd_traffic_class_str[0],
+		       traffic_class->cy_valuestring);
 }
 #endif
 

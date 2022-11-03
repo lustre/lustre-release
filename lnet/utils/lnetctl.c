@@ -167,7 +167,8 @@ command_t net_cmds[] = {
 	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"
 	 "\t--conns-per-peer: number of connections per peer\n"
 	 "\t--skip-mr-route-setup: do not add linux route for the ni\n"
-	 "\t--auth-key: Network authorization key (kfilnd only)\n"},
+	 "\t--auth-key: Network authorization key (kfilnd only)\n"
+	 "\t--traffic-class: Traffic class (kfilnd only)\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"},
@@ -1315,6 +1316,7 @@ skip_general_settings:
 	if (tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer > 0 ||
 #ifdef HAVE_KFILND
 	    tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key > 0 ||
+	    tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0] ||
 #endif
 	    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer > 0) {
 		yaml_scalar_event_initialize(&event, NULL,
@@ -1351,6 +1353,29 @@ skip_general_settings:
 						     (yaml_char_t *)num,
 						     strlen(num), 1, 0,
 						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+		}
+
+		if (tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0]) {
+			char *tc = &tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0];
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"traffic_class",
+						     strlen("traffic_class"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)tc,
+						     strlen(tc), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+
 			rc = yaml_emitter_emit(output, &event);
 			if (rc == 0)
 				goto error;
@@ -1692,6 +1717,7 @@ static int jt_add_ni(int argc, char **argv)
 {
 	char *ip2net = NULL;
 	long int pto = -1, pc = -1, pbc = -1, cre = -1, cpp = -1, auth_key = -1;
+	char *traffic_class = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc, opt, cpt_rc = -1;
 	struct lnet_dlc_network_descr nw_descr;
@@ -1699,7 +1725,7 @@ static int jt_add_ni(int argc, char **argv)
 	struct lnet_ioctl_config_lnd_tunables tunables;
 	bool found = false;
 	bool skip_mr_route_setup = false;
-	const char *const short_options = "a:b:c:i:k:m:n:p:r:s:t:";
+	const char *const short_options = "a:b:c:i:k:m:n:p:r:s:t:T:";
 	static const struct option long_options[] = {
 	{ .name = "auth-key",	  .has_arg = required_argument, .val = 'a' },
 	{ .name = "peer-buffer-credits",
@@ -1715,6 +1741,7 @@ static int jt_add_ni(int argc, char **argv)
 	{ .name = "credits",	  .has_arg = required_argument, .val = 'r' },
 	{ .name = "cpt",	  .has_arg = required_argument, .val = 's' },
 	{ .name = "peer-timeout", .has_arg = required_argument, .val = 't' },
+	{ .name = "traffic-class", .has_arg = required_argument, .val = 'T' },
 	{ .name = NULL } };
 	char *net_id = NULL;
 
@@ -1801,6 +1828,17 @@ static int jt_add_ni(int argc, char **argv)
 				continue;
 			}
 			break;
+		case 'T':
+			traffic_class = optarg;
+			if (strlen(traffic_class) == 0 ||
+			    strlen(traffic_class) >= LNET_MAX_STR_LEN) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						  "Invalid traffic-class argument",
+						  &err_rc);
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				goto failed;
+			}
+			break;
 		case '?':
 			print_help(net_cmds, "net", "add");
 		default:
@@ -1810,6 +1848,13 @@ static int jt_add_ni(int argc, char **argv)
 #ifdef HAVE_KFILND
 	if (auth_key > 0 && LNET_NETTYP(nw_descr.nw_id) == KFILND) {
 		tunables.lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key = auth_key;
+		found = true;
+	}
+
+	if (traffic_class && LNET_NETTYP(nw_descr.nw_id) == KFILND &&
+	    strlen(traffic_class) < LNET_MAX_STR_LEN) {
+		strcpy(&tunables.lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0],
+		       traffic_class);
 		found = true;
 	}
 #endif

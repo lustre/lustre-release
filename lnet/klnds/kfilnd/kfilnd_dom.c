@@ -337,6 +337,8 @@ struct kfilnd_dom *kfilnd_dom_get(struct lnet_ni *ni, const char *node,
 	hints->domain_attr->mr_iov_limit = 256; /* 1 MiB LNet message */
 	hints->domain_attr->mr_key_size = sizeof(int);
 	hints->domain_attr->resource_mgmt = KFI_RM_DISABLED;
+	hints->domain_attr->tclass =
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_traffic_class;
 	hints->ep_attr->max_msg_size = LNET_MAX_PAYLOAD;
 	hints->rx_attr->op_flags = KFI_COMPLETION | KFI_MULTI_RECV;
 	hints->rx_attr->iov_limit = 256; /* 1 MiB LNet message */

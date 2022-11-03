@@ -70,6 +70,7 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-net.h>
 #include <lnet/lib-lnet.h>
 #include "kfi_endpoint.h"
 #include "kfi_errno.h"
@@ -132,6 +133,7 @@ enum kfilnd_ni_lnd_tunables_attr {
 	LNET_NET_KFILND_TUNABLES_ATTR_PROV_MAJOR,
 	LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR,
 	LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY,
+	LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS,
 	__LNET_NET_KFILND_TUNABLES_ATTR_MAX_PLUS_ONE,
 };
 

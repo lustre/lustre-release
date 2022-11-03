@@ -98,6 +98,28 @@ static unsigned int auth_key = 255;
 module_param(auth_key, uint, 0444);
 MODULE_PARM_DESC(auth_key, "Default authorization key to be used for LNet NIs");
 
+static char *traffic_class = "best_effort";
+module_param(traffic_class, charp, 0444);
+MODULE_PARM_DESC(traffic_class, "Traffic class - default is \"best_effort\"");
+
+static int
+kfilnd_tcstr2num(char *tcstr)
+{
+	if (!strcmp(tcstr, "best_effort"))
+		return KFI_TC_BEST_EFFORT;
+	if (!strcmp(tcstr, "low_latency"))
+		return KFI_TC_LOW_LATENCY;
+	if (!strcmp(tcstr, "dedicated_access"))
+		return KFI_TC_DEDICATED_ACCESS;
+	if (!strcmp(tcstr, "bulk_data"))
+		return KFI_TC_BULK_DATA;
+	if (!strcmp(tcstr, "scavenger"))
+		return KFI_TC_SCAVENGER;
+	if (!strcmp(tcstr, "network_ctrl"))
+		return KFI_TC_NETWORK_CTRL;
+	return -1;
+}
+
 int kfilnd_tunables_setup(struct lnet_ni *ni)
 {
 	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
@@ -128,6 +150,9 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 		kfilnd_tunables->lnd_prov_major_version = prov_major_version;
 		kfilnd_tunables->lnd_prov_minor_version = prov_minor_version;
 		kfilnd_tunables->lnd_auth_key = auth_key;
+		if (strlen(traffic_class) < LNET_MAX_STR_LEN)
+			strcpy(&kfilnd_tunables->lnd_traffic_class_str[0],
+			       traffic_class);
 	}
 
 	/* Treat kfilnd_tunables set to zero as uninitialized. */
@@ -139,6 +164,14 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 
 	if (kfilnd_tunables->lnd_auth_key == 0)
 		kfilnd_tunables->lnd_auth_key = auth_key;
+
+	if (strlen(kfilnd_tunables->lnd_traffic_class_str) == 0 &&
+	    strlen(traffic_class) < LNET_MAX_STR_LEN)
+		strcpy(&kfilnd_tunables->lnd_traffic_class_str[0],
+		       traffic_class);
+
+	kfilnd_tunables->lnd_traffic_class =
+		kfilnd_tcstr2num(kfilnd_tunables->lnd_traffic_class_str);
 
 	if (net_tunables->lct_max_tx_credits > KFILND_EP_KEY_MAX) {
 		CERROR("Credits cannot exceed %lu\n", KFILND_EP_KEY_MAX);
@@ -153,6 +186,12 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 	if (kfilnd_tunables->lnd_prov_major_version > prov_major_version) {
 		CERROR("Provider major version greater than %d unsupported\n",
 			prov_major_version);
+		return -EINVAL;
+	}
+
+	if (kfilnd_tunables->lnd_traffic_class == -1) {
+		CERROR("Invalid traffic_class \"%s\" - Valid values are: best_effort, low_latency, dedicated_access, bulk_data, scavenger, and network_ctrl\n",
+		       kfilnd_tunables->lnd_traffic_class_str);
 		return -EINVAL;
 	}
 
@@ -193,6 +232,12 @@ int kfilnd_tunables_init(void)
 
 	if (peer_credits > KFILND_EP_KEY_MAX) {
 		CERROR("Peer credits cannot exceed %lu\n", KFILND_EP_KEY_MAX);
+		return -EINVAL;
+	}
+
+	if (kfilnd_tcstr2num(traffic_class) == -1) {
+		CERROR("Invalid traffic_class \"%s\" - Valid values are: best_effort, low_latency, dedicated_access, bulk_data, scavenger, and network_ctrl\n",
+		       traffic_class);
 		return -EINVAL;
 	}
 
