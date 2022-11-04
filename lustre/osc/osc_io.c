@@ -516,14 +516,13 @@ static bool trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 
 		oap = &ops->ops_oap;
 		if (oap->oap_cmd & OBD_BRW_WRITE &&
-				!list_empty(&oap->oap_pending_item))
+		    !list_empty(&oap->oap_pending_item))
 			CL_PAGE_DEBUG(D_ERROR, env, page, "exists %llu/%s.\n",
-					start, current->comm);
+				      start, current->comm);
 
 		if (PageLocked(page->cp_vmpage))
-			CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
-			       ops, osc_index(ops),
-			       oap->oap_cmd & OBD_BRW_RWMASK);
+			CDEBUG(D_CACHE, "page %p index %lu locked for cmd=%d\n",
+			       ops, osc_index(ops), oap->oap_cmd);
 	}
 	return true;
 }

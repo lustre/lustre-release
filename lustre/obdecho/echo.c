@@ -400,7 +400,7 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 	if (rc)
 		GOTO(commitrw_cleanup, rc);
 
-	if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
+	if (cmd == OBD_BRW_READ) {
 		CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
 		       objcount, niocount);
 	} else {

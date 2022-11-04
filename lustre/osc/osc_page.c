@@ -300,10 +300,8 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	oap->oap_count = opg->ops_to - opg->ops_from + 1;
 	oap->oap_brw_flags = OBD_BRW_SYNC | brw_flags;
 
-	if (oio->oi_cap_sys_resource) {
+	if (oio->oi_cap_sys_resource)
 		oap->oap_brw_flags |= OBD_BRW_SYS_RESOURCE;
-		oap->oap_cmd |= OBD_BRW_SYS_RESOURCE;
-	}
 
 	osc_page_transfer_get(opg, "transfer\0imm");
 	osc_page_transfer_add(env, opg, crt);
