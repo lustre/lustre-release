@@ -47,7 +47,8 @@ cleanup_exit () {
 }
 
 cleanup () {
-	cleanup_nfs "$NFS_CLIMNTPT" "$LUSTRE_CLIENT_NFSSRV" "$NFS_CLIENTS" ||
+	cleanup_nfs "$LUSTRE_CLIENT_NFSSRV" "$NFS_SRVMNTPT" \
+			"$NFS_CLIENTS" "$NFS_CLIMNTPT" || \
 		error_noexit false "failed to cleanup nfs"
 	zconf_umount $LUSTRE_CLIENT_NFSSRV $NFS_SRVMNTPT force ||
 		error_noexit false "failed to umount lustre on"\
@@ -63,8 +64,8 @@ zconf_mount $LUSTRE_CLIENT_NFSSRV $NFS_SRVMNTPT "$cl_mnt_opt" ||
 	error "mount lustre on $LUSTRE_CLIENT_NFSSRV failed"
 
 # setup the nfs
-setup_nfs "$NFSVERSION" "$NFS_SRVMNTPT" "$LUSTRE_CLIENT_NFSSRV" \
-		"$NFS_CLIENTS" "$NFS_CLIMNTPT" ||
+setup_nfs "$LUSTRE_CLIENT_NFSSRV" "$NFS_SRVMNTPT" "$NFS_CLIENTS" \
+		"$NFS_CLIMNTPT" "$NFSVERSION" || \
 	error false "setup nfs failed!"
 
 NFSCLIENT=true
@@ -101,6 +102,10 @@ MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 test_compilebench() {
+	if [[ "$TESTSUITE" =~ "parallel-scale-nfs" ]]; then
+		skip "LU-12957 and LU-13068: compilebench for $TESTSUITE"
+	fi
+
 	run_compilebench $TESTDIR
 }
 run_test compilebench "compilebench"
