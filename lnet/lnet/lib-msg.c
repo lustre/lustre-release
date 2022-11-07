@@ -782,7 +782,7 @@ lnet_health_check(struct lnet_msg *msg)
 		lo = true;
 
 	if (hstatus != LNET_MSG_STATUS_OK &&
-	    ktime_compare(ktime_get(), msg->msg_deadline) >= 0)
+	    ktime_after(ktime_get(), msg->msg_deadline))
 		return -1;
 
 	/*

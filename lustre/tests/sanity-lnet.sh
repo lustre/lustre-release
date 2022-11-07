@@ -3173,6 +3173,94 @@ test_252() {
 }
 run_test 252 "Ping to down peer should unlink quickly"
 
+do_expired_message_drop_test() {
+	local rnid lnid old_tto
+
+	old_tto=$($LNETCTL global show |
+		  awk '/transaction_timeout:/{print $NF}')
+
+	[[ -z $old_tto ]] &&
+		error "Cannot determine LNet transaction timeout"
+
+	local tto=10
+
+	do_lnetctl set transaction_timeout "${tto}" ||
+		error "Failed to set transaction_timeout"
+
+	# We want to consume all peer credits for at least transaction_timeout
+	# seconds
+	local delay
+
+	delay=$((tto + 1))
+
+	for lnid in "${LNIDS[@]}"; do
+		for rnid in "${RNIDS[@]}"; do
+			$LCTL net_delay_add -s "${lnid}" -d "${rnid}" -l "${delay}" -r 1
+		done
+	done
+
+	local pc
+
+	pc=$($LNETCTL peer show -v --nid "${RNIDS[0]}" |
+			awk '/max_ni_tx_credits:/{print $NF}' |
+			xargs echo |
+			sed 's/ /\+/g' | bc)
+
+	echo "Found $pc peer_credits for ${RNIDS[0]}"
+
+	local i
+
+	for i in $(seq 1 "${pc}"); do
+		$LNETCTL ping --timeout $((delay+2)) "${RNIDS[0]}" 1>/dev/null &
+	done
+
+	echo "Issued ${pc} pings to ${RNIDS[0]}"
+
+	# This ping should be queued on peer NI tx credit
+	$LNETCTL ping --timeout $((delay+2)) "${RNIDS[0]}" &
+
+	sleep ${delay}
+
+	$LCTL net_delay_del -a
+
+	wait
+
+	# Messages sent from the delay list do not go through
+	# lnet_post_send_locked(), thus we should only have a single drop
+	local dropped
+
+	dropped=$($LNETCTL peer show -v 2 --nid "${RNIDS[0]}" |
+			grep -A 2 dropped_stats |
+			awk '/get:/{print $2}' |
+			xargs echo |
+			sed 's/ /\+/g' | bc)
+
+	[[ $dropped -ne 1 ]] &&
+		error "Expect 1 dropped GET but found $dropped"
+
+	do_lnetctl set transaction_timeout "${old_tto}"
+
+	return 0
+}
+
+test_253() {
+	setup_health_test false || return $?
+
+	do_expired_message_drop_test || return $?
+
+	cleanup_health_test
+}
+run_test 253 "Message delayed beyond deadline should be dropped (single-rail)"
+
+test_254() {
+	setup_health_test true || return $?
+
+	do_expired_message_drop_test || return $?
+
+	cleanup_health_test
+}
+run_test 254 "Message delayed beyond deadline should be dropped (multi-rail)"
+
 test_300() {
 	# LU-13274
 	local header

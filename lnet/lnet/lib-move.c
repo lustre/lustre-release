@@ -769,41 +769,52 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 	return rc;
 }
 
-/* returns true if this message should be dropped */
-static bool
+/* Returns:
+ *  -ETIMEDOUT if the message deadline has been exceeded
+ *  -EHOSTUNREACH if the peer is down
+ *  0 if this message should not be dropped
+ */
+static int
 lnet_check_message_drop(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 			struct lnet_msg *msg)
 {
+	/* Drop message if we've exceeded the message deadline */
+	if (ktime_after(ktime_get(), msg->msg_deadline))
+		return -ETIMEDOUT;
+
 	if (msg->msg_target.pid & LNET_PID_USERFLAG)
-		return false;
+		return 0;
 
 	if (!lnet_peer_aliveness_enabled(lpni))
-		return false;
+		return 0;
 
 	/* If we're resending a message, let's attempt to send it even if
 	 * the peer is down to fulfill our resend quota on the message
 	 */
 	if (msg->msg_retry_count > 0)
-		return false;
+		return 0;
 
-	/* try and send recovery messages irregardless */
+	/* try and send recovery messages regardless */
 	if (msg->msg_recovery)
-		return false;
+		return 0;
 
 	/* always send any responses */
 	if (lnet_msg_is_response(msg))
-		return false;
+		return 0;
 
 	/* always send non-routed messages */
 	if (!msg->msg_routing)
-		return false;
+		return 0;
 
 	/* assume peer_ni is alive as long as we're within the configured
 	 * peer timeout
 	 */
-	return ktime_get_seconds() >=
-		(lpni->lpni_last_alive +
-		 lpni->lpni_net->net_tunables.lct_peer_timeout);
+	if (ktime_get_seconds() >=
+	    (lpni->lpni_last_alive +
+	     lpni->lpni_net->net_tunables.lct_peer_timeout))
+		return -EHOSTUNREACH;
+
+	return 0;
 }
 
 /**
@@ -824,6 +835,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 	struct lnet_ni		*ni = msg->msg_txni;
 	int			cpt = msg->msg_tx_cpt;
 	struct lnet_tx_queue	*tq = ni->ni_tx_queues[cpt];
+	int rc;
 
 	/* non-lnet_send() callers have checked before */
 	LASSERT(!do_send || msg->msg_tx_delayed);
@@ -835,7 +847,8 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 		LASSERT(!nid_same(&lp->lpni_nid, &the_lnet.ln_loni->ni_nid));
 
 	/* NB 'lp' is always the next hop */
-	if (lnet_check_message_drop(ni, lp, msg)) {
+	rc = lnet_check_message_drop(ni, lp, msg);
+	if (rc) {
 		the_lnet.ln_counters[cpt]->lct_common.lcc_drop_count++;
 		the_lnet.ln_counters[cpt]->lct_common.lcc_drop_length +=
 			msg->msg_len;
@@ -849,14 +862,22 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 					msg->msg_type,
 					LNET_STATS_TYPE_DROP);
 
-		CNETERR("Dropping message for %s: peer not alive\n",
-			libcfs_idstr(&msg->msg_target));
-		msg->msg_health_status = LNET_MSG_STATUS_REMOTE_DROPPED;
+		if (rc == -EHOSTUNREACH) {
+			CNETERR("Dropping message for %s: peer not alive\n",
+				libcfs_idstr(&msg->msg_target));
+			msg->msg_health_status = LNET_MSG_STATUS_REMOTE_DROPPED;
+		} else {
+			CNETERR("Dropping message for %s: exceeded message deadline\n",
+				libcfs_idstr(&msg->msg_target));
+			msg->msg_health_status =
+				LNET_MSG_STATUS_NETWORK_TIMEOUT;
+		}
+
 		if (do_send)
-			lnet_finalize(msg, -EHOSTUNREACH);
+			lnet_finalize(msg, rc);
 
 		lnet_net_lock(cpt);
-		return -EHOSTUNREACH;
+		return rc;
 	}
 
 	if (msg->msg_md != NULL &&
