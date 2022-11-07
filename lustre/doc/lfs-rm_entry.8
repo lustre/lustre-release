@@ -1,0 +1,36 @@
+.TH LFS-RMENTRY 8 2017-07-25 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs-rmentry \- remove only filename from directory
+.SH SYNOPSIS
+.B lfs rmentry <FILENAME|DIRECTORY>
+.SH DESCRIPTION
+In cases where an MDT is permanently offline, or if there is an inconsistency
+between MDT directory contents and files (e.g. broken striped directory), the
+.B lfs rmentry
+command removes
+.B only
+the filename entry from a directory, but does not try to delete the inode
+corresponding to the filename.  The MDT inode itself (or a local agent inode
+in the case of DNE remote entries) will still remain on the MDT filesystem,
+and will be reconnected to the internal MDT lost+found directory when
+e2fsck is next run.  Since the MDT inode itself is not deleted, any OST
+objects referenced by this inode will also not be destroyed, so no space
+will be released.
+.SH WARNING
+The main reason to use
+.B lfs rmentry
+is to remove filenames or directory names that are permanently inaccessible,
+in order to allow them to be restored from backup, or to avoid application
+errors when accessing these filenames.  It should not be used to delete files
+that are normally accessible, and can only be run by the root user.
+.SH EXAMPLES
+.TP
+.B lfs rmentry /mnt/testfs/mdt7/newdir
+Remove directory entry
+.B newdir
+on MDT0007 since the remote MDT it is referencing is no longer accessible.
+.SH AUTHOR
+The \fBlfs rmentry\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-rmfid (1)

@@ -388,6 +388,7 @@ command_t cmdlist[] = {
 	 "will become inaccessable after this command. This can only be done\n"
 	 "by the administrator\n"
 	 "usage: rm_entry <dir>\n"},
+	{"rmentry", lfs_rmentry, 0, "remove a dir entry, same as 'rm_entry'\n"},
 	{"unlink_foreign", lfs_unlink_foreign, 0,
 	 "To remove the foreign file/dir.\n"
 	 "Note: This is for files/dirs prevented to be removed using\n"

@@ -77,6 +77,8 @@ MANFILES =					\
 	lfs-pcc.1				\
 	lfs-project.1				\
 	lfs-quota.1				\
+	lfs-rm_entry.8				\
+	lfs-rmentry.8				\
 	lfs-rmfid.1				\
 	lfs-setdirstripe.1			\
 	lfs-setquota.1				\
