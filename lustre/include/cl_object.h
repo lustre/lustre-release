@@ -734,7 +734,7 @@ enum cl_page_type {
  */
 struct cl_page {
 	/** Reference counter. */
-	atomic_t		cp_ref;
+	refcount_t		cp_ref;
 	/** layout_entry + stripe index, composed using lov_comp_index() */
 	unsigned int		cp_lov_index;
 	/** page->index of the page within the whole file */
@@ -982,7 +982,7 @@ static inline pgoff_t cl_page_index(const struct cl_page *cp)
  */
 static inline bool __page_in_use(const struct cl_page *page, int refc)
 {
-	return (atomic_read(&page->cp_ref) > refc + 1);
+	return (refcount_read(&page->cp_ref) > refc + 1);
 }
 
 /**

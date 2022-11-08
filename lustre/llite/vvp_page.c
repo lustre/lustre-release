@@ -190,7 +190,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	} else {
 		get_page(vmpage);
 		/* in cache, decref in cl_page_delete() */
-		atomic_inc(&page->cp_ref);
+		refcount_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
 		vmpage->private = (unsigned long)page;
 		cl_page_slice_add(page, cpl, obj, &vvp_page_ops);

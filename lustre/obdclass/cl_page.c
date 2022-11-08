@@ -118,8 +118,8 @@ static void cs_pagestate_dec(const struct cl_object *obj,
  */
 static void cl_page_get_trust(struct cl_page *page)
 {
-	LASSERT(atomic_read(&page->cp_ref) > 0);
-	atomic_inc(&page->cp_ref);
+	LASSERT(refcount_read(&page->cp_ref) > 0);
+	refcount_inc(&page->cp_ref);
 }
 
 static struct cl_page_slice *
@@ -271,7 +271,7 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		 */
 		BUILD_BUG_ON((1 << CP_STATE_BITS) < CPS_NR); /* cp_state */
 		BUILD_BUG_ON((1 << CP_TYPE_BITS) < CPT_NR); /* cp_type */
-		atomic_set(&cl_page->cp_ref, 1);
+		refcount_set(&cl_page->cp_ref, 1);
 		cl_page->cp_obj = o;
 		if (type != CPT_TRANSIENT)
 			cl_object_get(o);
@@ -470,12 +470,12 @@ void cl_pagevec_put(const struct lu_env *env, struct cl_page *page,
 {
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
-		       atomic_read(&page->cp_ref));
+		       refcount_read(&page->cp_ref));
 
-	if (atomic_dec_and_test(&page->cp_ref)) {
+	if (refcount_dec_and_test(&page->cp_ref)) {
 		LASSERT(page->cp_state == CPS_FREEING);
 
-		LASSERT(atomic_read(&page->cp_ref) == 0);
+		LASSERT(refcount_read(&page->cp_ref) == 0);
 		PASSERT(env, page, page->cp_owner == NULL);
 		PASSERT(env, page, list_empty(&page->cp_batch));
 		/*
@@ -806,7 +806,6 @@ static void __cl_page_delete(const struct lu_env *env, struct cl_page *cp)
 {
 	struct page *vmpage;
 	const struct cl_page_slice *slice;
-	int refc;
 	int i;
 
 	ENTRY;
@@ -847,8 +846,7 @@ static void __cl_page_delete(const struct lu_env *env, struct cl_page *cp)
 			get_page(vmpage);
 		} else {
 			/* Drop the reference count held in vvp_page_init */
-			refc = atomic_dec_return(&cp->cp_ref);
-			LASSERTF(refc >= 1, "page = %p, refc = %d\n", cp, refc);
+			refcount_dec(&cp->cp_ref);
 			ClearPagePrivate(vmpage);
 			vmpage->private = 0;
 
@@ -1133,7 +1131,7 @@ void cl_page_header_print(const struct lu_env *env, void *cookie,
 {
 	(*printer)(env, cookie,
 		   "page@%p[%d %p %d %d %p]\n",
-		   pg, atomic_read(&pg->cp_ref), pg->cp_obj,
+		   pg, refcount_read(&pg->cp_ref), pg->cp_obj,
 		   pg->cp_state, pg->cp_type,
 		   pg->cp_owner);
 }

@@ -1400,7 +1400,7 @@ static void detach_and_deref_page(struct cl_page *clp, struct page *vmpage)
 	vmpage->private = 0;
 
 	put_page(vmpage);
-	atomic_dec(&clp->cp_ref);
+	refcount_dec(&clp->cp_ref);
 }
 
 static int vvp_io_kernel_fault(const struct lu_env *env,
