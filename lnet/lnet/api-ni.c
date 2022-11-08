@@ -5181,7 +5181,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 		nla_for_each_nested(entry, attr, rem2) {
 			switch (nla_type(entry)) {
 			case LN_SCALAR_ATTR_VALUE: {
-				size_t len;
+				ssize_t len;
 
 				memset(&conf, 0, sizeof(conf));
 				if (nla_strcmp(entry, "ip2net") == 0) {
