@@ -1777,6 +1777,7 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 {
 	kgn_conn_t        *conn = dgram->gndg_conn;
 	lnet_nid_t         her_nid = dgram->gndg_conn_in.gncr_srcnid;
+	struct lnet_nid    peer_nid;
 	kgn_peer_t        *new_peer, *peer = NULL;
 	kgn_tx_t          *tx;
 	kgn_tx_t          *txn;
@@ -1952,7 +1953,8 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	/* Notify LNET that we now have a working connection to this peer.
 	 * This is a Cray extension to the "standard" LND behavior.
 	 */
-	lnet_notify(peer->gnp_net->gnn_ni, peer->gnp_nid, true, true,
+	lnet_nid4_to_nid(peer->gnp_nid, &peer_nid);
+	lnet_notify(peer->gnp_net->gnn_ni, &peed_nid, true, true,
 		    ktime_get_seconds());
 
 	/* drop our 'hold' ref */

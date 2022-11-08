@@ -4447,7 +4447,8 @@ LNetCtl(unsigned int cmd, void *arg)
 		 * that deadline to the wall clock.
 		 */
 		deadline += ktime_get_seconds();
-		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, false,
+		lnet_nid4_to_nid(data->ioc_nid, &nid);
+		return lnet_notify(NULL, &nid, data->ioc_flags, false,
 				   deadline);
 	}
 

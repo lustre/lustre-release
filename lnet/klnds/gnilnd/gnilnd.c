@@ -592,19 +592,20 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 		up_read(&kgnilnd_data.kgn_net_rw_sem);
 
 		for (i = 0; i < nnets; i++) {
-			lnet_nid_t peer_nid;
+			struct lnet_nid peer_nid;
 
 			net = nets[i];
 
-			peer_nid = kgnilnd_lnd2lnetnid(
-				lnet_nid_to_nid4(&net->gnn_ni->ni_nid),
-				peer->gnp_nid);
+			lnet_nid4_to_nid(kgnilnd_lnd2lnetnid(
+						 lnet_nid_to_nid4(&net->gnn_ni->ni_nid),
+						 peer->gnp_nid),
+					 &peer_nid);
 
 			CDEBUG(D_NET, "peer 0x%p->%s last_alive %lld (%llds ago)\n",
 				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
 				ktime_get_seconds() - peer->gnp_last_alive);
 
-			lnet_notify(net->gnn_ni, peer_nid, alive, true,
+			lnet_notify(net->gnn_ni, &peer_nid, alive, true,
 				    peer->gnp_last_alive);
 
 			kgnilnd_net_decref(net);

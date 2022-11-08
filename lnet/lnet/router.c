@@ -1677,27 +1677,25 @@ lnet_notify_peer_down(struct lnet_ni *ni, struct lnet_nid *nid)
  * when: notificaiton time.
  */
 int
-lnet_notify(struct lnet_ni *ni, lnet_nid_t nid4, bool alive, bool reset,
+lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 	    time64_t when)
 {
 	struct lnet_peer_ni *lpni = NULL;
 	struct lnet_route *route;
 	struct lnet_peer *lp;
 	time64_t now = ktime_get_seconds();
-	struct lnet_nid nid;
 	int cpt;
 
-	lnet_nid4_to_nid(nid4, &nid);
 	LASSERT(!in_interrupt());
 
 	CDEBUG(D_NET, "%s notifying %s: %s\n",
 	       (ni == NULL) ? "userspace" : libcfs_nidstr(&ni->ni_nid),
-	       libcfs_nidstr(&nid), alive ? "up" : "down");
+	       libcfs_nidstr(nid), alive ? "up" : "down");
 
 	if (ni != NULL &&
-	    LNET_NID_NET(&ni->ni_nid) != LNET_NID_NET(&nid)) {
+	    LNET_NID_NET(&ni->ni_nid) != LNET_NID_NET(nid)) {
 		CWARN("Ignoring notification of %s %s by %s (different net)\n",
-		      libcfs_nidstr(&nid), alive ? "birth" : "death",
+		      libcfs_nidstr(nid), alive ? "birth" : "death",
 		      libcfs_nidstr(&ni->ni_nid));
 		return -EINVAL;
 	}
@@ -1706,7 +1704,7 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid4, bool alive, bool reset,
 	if (when > now) {
 		CWARN("Ignoring prediction from %s of %s %s %lld seconds in the future\n",
 			ni ? libcfs_nidstr(&ni->ni_nid) :  "userspace",
-			libcfs_nidstr(&nid), alive ? "up" : "down", when - now);
+			libcfs_nidstr(nid), alive ? "up" : "down", when - now);
 		return -EINVAL;
 	}
 
@@ -1724,11 +1722,11 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid4, bool alive, bool reset,
 		return -ESHUTDOWN;
 	}
 
-	lpni = lnet_peer_ni_find_locked(&nid);
+	lpni = lnet_peer_ni_find_locked(nid);
 	if (lpni == NULL) {
 		/* nid not found */
 		lnet_net_unlock(0);
-		CDEBUG(D_NET, "%s not found\n", libcfs_nidstr(&nid));
+		CDEBUG(D_NET, "%s not found\n", libcfs_nidstr(nid));
 		return 0;
 	}
 

@@ -1413,7 +1413,7 @@ ksocknal_peer_failed(struct ksock_peer_ni *peer_ni)
 
 	if (notify)
 		lnet_notify(peer_ni->ksnp_ni,
-			    lnet_nid_to_nid4(&peer_ni->ksnp_id.nid),
+			    &peer_ni->ksnp_id.nid,
 			    false, false, last_alive);
 }
 
