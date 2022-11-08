@@ -401,12 +401,13 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp,
 				 struct lnet_ping_buffer *pbuf)
 __must_hold(&the_lnet.ln_api_mutex)
 {
+	struct lnet_ping_iter piter;
 	struct lnet_peer_net *llpn;
 	struct lnet_route *route;
+	struct lnet_nid nid;
 	bool single_hop = false;
 	bool net_up = false;
-	__u32 net;
-	int i;
+	u32 *stp;
 
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED) {
 		CERROR("Peer %s is being used as a gateway but routing feature is not turned on\n",
@@ -419,8 +420,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	CDEBUG(D_NET, "Processing reply for gw: %s nnis %d\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), pbuf->pb_info.pi_nnis);
 
-	/*
-	 * examine the ping response to determine if the routes on that
+	/* examine the ping response to determine if the routes on that
 	 * gateway should be declared alive.
 	 * The route is alive if:
 	 *  1. local network to reach the route is alive and
@@ -440,13 +440,12 @@ __must_hold(&the_lnet.ln_api_mutex)
 		}
 
 		single_hop = net_up = false;
-		for (i = 1; i < pbuf->pb_info.pi_nnis; i++) {
-			net = LNET_NIDNET(pbuf->pb_info.pi_ni[i].ns_nid);
-
-			if (route->lr_net == net) {
+		for (stp = ping_iter_first(&piter, pbuf, &nid);
+		     stp;
+		     stp = ping_iter_next(&piter, &nid)) {
+			if (route->lr_net == LNET_NID_NET(&nid)) {
 				single_hop = true;
-				if (pbuf->pb_info.pi_ni[i].ns_status ==
-				    LNET_NI_STATUS_UP) {
+				if (*stp == LNET_NI_STATUS_UP) {
 					net_up = true;
 					break;
 				}
