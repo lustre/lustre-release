@@ -934,11 +934,24 @@ test_25() {
 }
 run_test 25 "replay|resend"
 
+pids_26=()
+dirs_26=()
+
 cleanup_26() {
 	trap 0
-	kill -9 $tar_26_pid
-	kill -9 $dbench_26_pid
-	killall -9 dbench
+
+	for pid_26 in "${pids_26[@]}"; do
+		if [[ -n "$pid_26" ]]; then
+			kill -0 "$pid_26" && kill "$pid_26" && \
+				wait "$pid_26" || true
+		fi
+	done
+
+	for dir_26 in "${dirs_26[@]}"; do
+		if [[ -n "$dir_26" && -d "$dir_26" ]]; then
+			rm -rf "$dir_26"
+		fi
+	done
 }
 
 test_26() {
@@ -947,51 +960,93 @@ test_26() {
 	zconf_mount_clients $clients $MOUNT
 
 	local duration=600
-	[ "$SLOW" = "no" ] && duration=200
+	[[ "$SLOW" == "no" ]] && duration=200
 	# set duration to 900 because it takes some time to boot node
-	[ "$FAILURE_MODE" = HARD ] && duration=900
+	[[ "$FAILURE_MODE" == HARD ]] && duration=900
 
 	local start_ts=$SECONDS
 	local rc=0
 
-	trap cleanup_26	EXIT
+	stack_trap cleanup_26
+
+	local tar_dir=$DIR/$tdir/run_tar
+
+	dirs_26+=($tar_dir)
 	(
-		local tar_dir=$DIR/$tdir/run_tar
+		stack_trap 'set +e; jobs -p | xargs -r kill; wait; exit' \
+			SIGTERM
+
 		while true; do
 			test_mkdir -p -c$MDSCOUNT $tar_dir || break
-			if [ $MDSCOUNT -ge 2 ]; then
+
+			if (( MDSCOUNT >= 2 )); then
 				$LFS setdirstripe -D -c$MDSCOUNT $tar_dir ||
 					error "set default dirstripe failed"
 			fi
+
 			cd $tar_dir || break
-			tar cf - /etc | tar xf - || error "tar failed"
+			tar -C / -cf - etc | tar -xf - &
+
+			local tar_pid=$!
+			local tar_rc=0
+
+			wait $tar_pid || tar_rc=$?
+
+			if (( tar_rc > 0 && tar_rc <= 128 )); then
+				error "tar failed with rc $tar_rc"
+			fi
+
 			cd $DIR/$tdir || break
 			rm -rf $tar_dir || break
 		done
-	)&
-	tar_26_pid=$!
-	echo "Started tar $tar_26_pid"
+	) &
 
+	local tar_26_pid=$!
+
+	echo "Started tar loop with pid $tar_26_pid"
+	pids_26+=($tar_26_pid)
+
+	local dbench_dir=$DIR2/$tdir/run_dbench
+
+	dirs_26+=($dbench_dir)
 	(
-		local dbench_dir=$DIR2/$tdir/run_dbench
+		stack_trap 'set +e; jobs -p | xargs -r kill; wait; exit' \
+			SIGTERM
+
 		while true; do
 			test_mkdir -p -c$MDSCOUNT $dbench_dir || break
-			if [ $MDSCOUNT -ge 2 ]; then
+
+			if (( MDSCOUNT >= 2 )); then
 				$LFS setdirstripe -D -c$MDSCOUNT $dbench_dir ||
 					error "set default dirstripe failed"
 			fi
+
 			cd $dbench_dir || break
-			rundbench 1 -D $dbench_dir -t 100 &>/dev/null || break
+			bash rundbench 1 -D $dbench_dir -t 100 &
+
+			local dbench_pid=$!
+			local dbench_rc=0
+
+			wait $dbench_pid || dbench_rc=$?
+
+			if (( dbench_rc > 0 && dbench_rc <= 128 )); then
+				error "dbench failed with rc $dbench_rc"
+			fi
+
 			cd $DIR/$tdir || break
 			rm -rf $dbench_dir || break
 		done
-	)&
-	dbench_26_pid=$!
-	echo "Started dbench $dbench_26_pid"
+	) &
+
+	local dbench_26_pid=$!
+
+	echo "Started dbench loop with $dbench_26_pid"
+	pids_26+=($dbench_26_pid)
 
 	local num_failovers=0
 	local fail_index=1
-	while [ $((SECONDS - start_ts)) -lt $duration ]; do
+
+	while (( (SECONDS - start_ts) < duration )); do
 		kill -0 $tar_26_pid || error "tar $tar_26_pid missing"
 		kill -0 $dbench_26_pid || error "dbench $dbench_26_pid missing"
 		sleep 2
@@ -1001,15 +1056,17 @@ test_26() {
 		num_failovers=$((num_failovers + 1))
 		log "$TESTNAME fail mds$fail_index $num_failovers times"
 		fail mds$fail_index
-		if [ $fail_index -ge $MDSCOUNT ]; then
-			fail_index=1
-		else
+		if (( fail_index < MDSCOUNT )); then
 			fail_index=$((fail_index + 1))
+		else
+			fail_index=1
 		fi
 	done
+
 	# stop the client loads
 	kill -0 $tar_26_pid || error "tar $tar_26_pid stopped"
 	kill -0 $dbench_26_pid || error "dbench $dbench_26_pid stopped"
+
 	cleanup_26 || true
 }
 run_test 26 "dbench and tar with mds failover"

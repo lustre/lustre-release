@@ -1,100 +1,157 @@
 #!/bin/bash
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+set -o errexit
+set -o pipefail
+
+MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT/$HOSTNAME}
+SCRIPT=$(realpath "$0")
+LUSTRE=${LUSTRE:-$(dirname "$SCRIPT")/..}
 . $LUSTRE/tests/test-framework.sh
 
+CHROOT="no"
+PREFIX="on"
+LIBS71=()
+DBENCHPID=""
+
 usage() {
-    echo "-C use chroot instead of cd"
-    echo "-D DIR - use 'DIR' as work directory"
-    echo
-    exit;
+	cat <<-EOF
+	Usage: $SCRIPT [-C] [-D DIR] [dbench options]
+	-C use chroot instead of change directory
+	-D DIR use DIR as work directory
+	EOF
+
+	exit 1
 }
 
-PATH=${DBENCH_LIB}:${PATH}
-MOUNT=${MOUNT:-/mnt/lustre}
-DIR=${DIR:-$MOUNT/`hostname`}
+clean_dbench() {
+	local rc=$?
 
-PREFIX="on"
-while getopts "CD:" opt $*; do
-	case $opt in
-		D) [ -d $OPTARG ] && DIR=$OPTARG ;;
+	trap '' ERR HUP INT TERM EXIT
+
+	if (( rc > 128 )); then
+		local signal=$((rc - 128))
+		echo "dbench killed by signal $signal"
+		rc=0
+	fi
+
+	echo "stopping dbench $PREFIX $DIR at $(date) with return code $rc"
+
+	if [[ -n "$DBENCHPID" ]]; then
+		if ps -h -p "$DBENCHPID" && kill "$DBENCHPID"; then
+			echo "killed dbench main pid $DBENCHPID"
+		fi
+	fi
+
+	if [[ -d "$DIR" ]]; then
+		echo "clean dbench files $PREFIX $DIR"
+		pushd "$DIR"
+		rm -frv clients client.txt dbench "${LIBS71[@]}"
+		popd
+	fi
+
+	if (( rc == 0 )); then
+		echo "dbench successfully finished"
+	else
+		echo "dbench exit with error $rc"
+	fi
+
+	exit $rc
+}
+
+trap clean_dbench ERR HUP INT TERM EXIT
+
+if [[ -n "$DBENCH_LIB" ]]; then
+	PATH=${DBENCH_LIB}:${PATH}
+fi
+
+while getopts "CD:" OPT; do
+	case "$OPT" in
+		D) test -d "$OPTARG" && DIR="$OPTARG" ;;
 		C) CHROOT="yes" ;;
 		\?) usage ;;
 	esac
 done
 
-mkdir -p $DIR
-TGT=$DIR/client.txt
-CLIENT_PREFIX="${DBENCH_LIB} /usr/share/dbench /usr/local/share /usr/lib/dbench"
-CLIENT_FILE="client.txt client_plain.txt dbench_client"
-if ! which dbench > /dev/null 2>&1 ; then
-    [ "$MISSING_DBENCH_OK" ] || { error "$0 : $(hostname) dbench is not installed !" && exit 3; }
-    skip_env "$0 : $(hostname) dbench is not installed"
-    exit 0
-fi
-CLIENT=""
+shift $((OPTIND - 1))
 
-for prefix in $CLIENT_PREFIX; do
-	for file in $CLIENT_FILE; do
-		if [ -s "${prefix}/${file}" ]; then
-			CLIENT="${prefix}/${file}";
-			break;
-		fi
+echo "looking for dbench program"
+if ! type -P dbench; then
+	if [[ -z "$MISSING_DBENCH_OK" ]]; then
+		error "dbench is not installed"
+	fi
+
+	skip_env "dbench is not installed"
+
+	exit 0
+fi
+
+if [[ ! -d "$DIR" ]]; then
+	echo "creating output directory $DIR"
+	mkdir -pv "$DIR"
+fi
+
+if ! cd "$DIR"; then
+	error "failed to change directory to $DIR"
+fi
+
+if [[ -n "$DBENCH_SRC" && -s "$DBENCH_SRC" ]]; then
+	echo "use dbench client file $DBENCH_SRC"
+	cp -v "$DBENCH_SRC" client.txt
+else
+	CLIENT_DIRS=(/usr/share/dbench /usr/local/share /usr/lib/dbench)
+	CLIENT_FILES=(client.txt client_plain.txt dbench_client)
+
+	if [[ -n "$DBENCH_LIB" ]]; then
+		CLIENT_DIRS=("$DBENCH_LIB" "${CLIENT_DIRS[@]}")
+	fi
+
+	for CLIENT_DIR in "${CLIENT_DIRS[@]}"; do
+		for CLIENT_FILE in "${CLIENT_FILES[@]}"; do
+			CLIENT_PATH="$CLIENT_DIR/$CLIENT_FILE"
+			if [[ -s "$CLIENT_PATH" ]]; then
+				echo "found dbench client file $CLIENT_PATH"
+				cp -v "$CLIENT_PATH" client.txt
+				break 2
+			fi
+		done
 	done
-	[ "x$CLIENT" != "x" ] && break;
-done
-
-if [ -n "$DBENCH_SRC" -a -s "$DBENCH_SRC" ]; then
-    CLIENT=$DBENCH_SRC
 fi
 
-[ ! -s "$CLIENT" ] &&
-    skip_env "$0: no client file found for dbench on $(hostname): "\
-             "DBENCH_LIB=$DBENCH_LIB DBENCH_SRC=$DBENCH_SRC" && exit 0
+if [[ ! -s client.txt ]]; then
+	skip_env "no dbench client file found" \
+		"DBENCH_LIB=$DBENCH_LIB DBENCH_SRC=$DBENCH_SRC"
+	exit 0
+fi
 
-[ ! -s "$TGT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT
-[ ! -s "$TGT" ] && \
-    echo "$0 : $(hostname) $TGT file doesn't exist after cp $CLIENT $TGT" && exit 1
-
-if [ "x$CHROOT" == "xyes" ]; then
-	echo "copying necessary libs to $DIR"
-	cp `which dbench` $DIR
-	LIBS71=$(ldd $DIR/dbench |
-		sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///' |
-		grep -v 'linux-vdso.so.1')
-	tar -C / -chf - $LIBS71 | tar -C $DIR -xvf -
-	if [ "${PIPESTATUS[*]}" != "0 0" ]; then
-		echo "can't copy libs $LIBS71 to $DIR"
-		rm -f $DIR/dbench
-		exit 1
+if [[ "$CHROOT" == "yes" ]]; then
+	echo "copying required dbench files to chroot directory $DIR"
+	cp -v "$(type -P dbench)" dbench
+	LIBS71=($(ldd dbench | awk '
+		{
+			if (NF == 2 && $1 ~ /^[/]/)
+				lib = $1
+			else if (NF == 4 && $3 ~ /^[/]/)
+				lib = $3
+			else
+				next
+			print(substr(lib, 2))
+		}
+	'))
+	if (( ${#LIBS71[@]} == 0 )); then
+		error "failed to get required dbench libraries"
+	fi
+	if ! tar -C / -chf - "${LIBS71[@]}" | tar -xvf -; then
+		error "failed to copy libs ${LIBS71[*]} to $DIR"
 	fi
 	RUN="chroot $DIR"
 	PREFIX="in"
 	PATH=.:/:$PATH
 fi
 
-shift $((OPTIND - 1))
-
-trap '
-echo kill dbench main pid=$DBENCHPID
-kill $DBENCHPID
-rm -rf dbench $LIBS71 client.txt
-exit 0
-' TERM
-
-# turn off errexit. rundbench will return error code on failure
-trap '' ERR
-set +e
-
-cd $DIR
-echo "running 'dbench $@' $PREFIX $PWD at `date`"
-
-$RUN dbench -c client.txt $@ &
+export PATH
+echo "running 'dbench $*' $PREFIX $DIR at $(date)"
+$RUN dbench -c client.txt "$@" &
 DBENCHPID=$!
-echo "dbench PID=$DBENCHPID"
+echo "waiting for dbench pid $DBENCHPID"
 wait $DBENCHPID
-RC=$?
-[ $RC -ne 0 ] && killall -9 dbench
-
-rm -rf dbench $LIBS71 client.txt
-exit $RC
