@@ -261,7 +261,7 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 
 		refresh = chlg_read_bulk(cp);
 		if (refresh == 0) {
-			/* EOF, CHANGELOG_FLAG_FOLLOW ignored for now LU-7659 */
+			/* EOF */
 			rc = 1;
 			goto out_free;
 		} else if (refresh < 0) {

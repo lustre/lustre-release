@@ -1,0 +1,134 @@
+.TH llapi_changelog_start 3 "2022-11-08" "" "Lustre User API"
+.SH NAME
+llapi_changelog_start, llapi_changelog_set_xflags, llapi_changelog_fini \- Initialize and clean a read instance for MDT changelogs
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_changelog_start(void **" priv ", enum changelog_send_flag " flags ,
+.BI "                          const char *" device ", long long " startrec ");"
+.PP
+.BI "int llapi_changelog_set_xflags(void *" priv,
+.BI "                               enum changelog_send_extra_flag " extra_flags ");"
+.PP
+.BI "int llapi_changelog_fini(void **" priv ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.B llapi_changelog_start()
+initializes a new instance
+.I priv
+to read MDT changelogs. It opens the changelog char device
+corresponding to the MDT's name given by
+.I device
+(e.g: "lustrefs-MDT0000").
+.br
+A changelog starting point can be specified with
+.I startrec
+record number.
+.B llapi_changelog_recv()
+will get changelog records with numbers greater or equal than
+.IR startrec .
+0 value means that all records will be read.
+.PP
+Some options can be passed to
+.B llapi_changelog_start()
+with
+.I flags
+mask.
+.PP
+.B enum changelog_send_flag
+values:
+.nf
+.LP
+	CHANGELOG_FLAG_FOLLOW
+	CHANGELOG_FLAG_BLOCK
+	CHANGELOG_FLAG_JOBID
+	CHANGELOG_FLAG_EXTRA_FLAGS
+.fi
+.TP
+CHANGELOG_FLAG_FOLLOW
+Use changelog follow mode:
+.B llapi_changelog_recv()
+will not return when all records have been read.  Instead it will block until a
+new record is available. It avoids restarting an instance and re-scan for newer
+changelogs.
+.TP
+CHANGELOG_FLAG_BLOCK
+Deprecated since Lustre 2.10.
+.TP
+CHANGELOG_FLAG_JOBID
+Pack jobid into the changelog records if available.
+.TP
+CHANGELOG_FLAG_EXTRA_FLAG
+Pack additional flag bits into the changelog record.
+.PP
+The function
+.B llapi_changelog_set_xflags()
+specifies additional changelog flags with
+.I extra_flags
+mask for the instance
+.IR priv .
+To use those extra flags, CHANGELOG_FLAG_EXTRA_FLAG must be set by
+.B llapi_changelog_start()
+on
+.I flags
+parameter.
+.PP
+.B enum changelog_send_extra_flag
+values:
+.nf
+.LP
+	CHANGELOG_EXTRA_FLAG_UIDGID
+	CHANGELOG_EXTRA_FLAG_NID
+	CHANGELOG_EXTRA_FLAG_OMODE
+	CHANGELOG_EXTRA_FLAG_XATTR
+.fi
+.TP
+CHANGELOG_EXTRA_FLAG_UIDGID
+Pack uid/gid into the changelog record
+.TP
+CHANGELOG_EXTRA_FLAG_NID
+Pack nid into the changelog record
+.TP
+CHANGELOG_EXTRA_FLAG_OMODE
+Pack open mode into the changelog record
+.TP
+CHANGELOG_EXTRA_FLAG_XATTR
+Pack xattr name into the changelog record
+.PP
+The function
+.B llapi_changelog_fini()
+closes the MDT's changelog char device and free internal pointers for the instance
+.IR priv .
+.SH RETURN VALUES
+.PP
+Return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -ENOENT
+MDT's changelog char device not found. Is the Lustre FS mounted?
+.TP
+.SM -EACCES
+Not enough permissions to open the changelog char device. By default, the device
+is only accessible to the root user.
+.SH EXAMPLE
+An example can be found for in lfs.c source file.
+.B lfs_changelog()
+implements the following command:
+.br
+.BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
+.SH "SEE ALSO"
+.BR lfs-changelog (1),
+.BR llapi_changelog_clear (3)
+.BR llapi_changelog_get_fd (3),
+.BR llapi_changelog_in_buf (3),
+.BR llapi_changelog_recv (3),
+.BR lustreapi (7)

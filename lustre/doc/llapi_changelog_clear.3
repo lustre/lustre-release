@@ -1,0 +1,58 @@
+.TH llapi_changelog_clear 3 "2022-11-08" "" "Lustre User API"
+.SH NAME
+llapi_changelog_clear \- Clear changelog records for a changelog consumer
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_changelog_clear(const char *" mdtname ", const char *" idstr ",
+.BI "                          long long " endrec ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.B llapi_changelog_clear()
+indicates that changelog records previous to
+.I endrec
+are no longer of interest to a particular consumer
+.I idstr
+, potentially allowing the MDT
+.I mdtname
+(e.g: "lustrefs-MDT0000") to free up disk space.
+.PP
+An
+.I endrec
+of 0 indicates the current last record.
+.PP
+Changelog consumers must be registered on the
+MDT node using:
+.br
+.BI "lctl --device " MDT_NAME " changelog_register"
+.SH RETURN VALUES
+.PP
+Return the file descriptor on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -ENOENT
+MDT's changelog char device or changelog user not found.
+.TP
+.SM -ENOPERM
+Not enough permissions to open the changelog char device. By default, the device
+is only accessible to the root user.
+.SH EXAMPLE
+An example can be found for in lfs.c source file.
+.B lfs_changelog_clear
+implements the following command:
+.br
+.BI "lfs changelog_clear " MDTNAME " " ID " " ENDREC ""
+.SH "SEE ALSO"
+.BR lfs-changelog_clear (1),
+.BR llapi_changelog_get_fd (3)
+.BR llapi_changelog_in_buf (3),
+.BR llapi_changelog_recv (3),
+.BR llapi_changelog_start (3),
+.BR lustreapi (7),
+.BR lctl-changelog_register (8)

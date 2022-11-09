@@ -1,0 +1,65 @@
+.TH llapi_changelog_recv 3 "2022-11-08" "" "Lustre User API"
+.SH NAME
+llapi_changelog_recv, llapi_changelog_free \- Read and free a changelog records
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_changelog_recv(void *" priv ", struct changelog_rec **" rech ");"
+.PP
+.BI "int llapi_changelog_free(struct changelog_rec **" rech ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.B llapi_changelog_recv()
+allocates and reads the next changelog record
+.I rech
+from the changelog reader instance
+.IR priv .
+.PP
+The function
+.B llapi_changelog_free()
+releases the allocated record
+.IR rech .
+.SH NOTES
+If
+.B llapi_changelog_start()
+initializes
+.I priv
+with CHANGELOG_FLAG_FOLLOW flag,
+.B llapi_changelog_recv()
+can block waiting for new records.
+.SH RETURN VALUES
+.TP 15
+.SM 0
+On success
+.TP
+.SM 1
+End of records
+.TP
+.SM -errno
+On failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EIO
+Failed to read the changelog record on the MDT.
+.SH EXAMPLE
+An example can be found for in lfs.c source file.
+.B lfs_changelog()
+implements the following command:
+.br
+.BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
+.SH "SEE ALSO"
+.BR lfs-changelog (1),
+.BR llapi_changelog_clear (3),
+.BR llapi_changelog_get_fd (3),
+.BR llapi_changelog_in_buf (3),
+.BR llapi_changelog_start (3),
+.BR lustreapi (7)

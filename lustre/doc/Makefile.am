@@ -98,6 +98,14 @@ MANFILES =					\
 
 LIBMAN = 					\
 	lustreapi.7				\
+	llapi_changelog_clear.3			\
+	llapi_changelog_fini.3			\
+	llapi_changelog_free.3			\
+	llapi_changelog_get_fd.3		\
+	llapi_changelog_in_buf.3		\
+	llapi_changelog_recv.3			\
+	llapi_changelog_set_xflags.3		\
+	llapi_changelog_start.3			\
 	llapi_create_volatile_param.3		\
 	llapi_fd2parent.3			\
 	llapi_fid_parse.3			\
@@ -188,6 +196,7 @@ LIBMAN = 					\
 	llapi_search_rootpath.3			\
 	llapi_search_rootpath_by_dev.3		\
 	llapi_unlink_foreign.3
+
 
 SERVER_MANFILES =				\
 	l_getidentity.8				\

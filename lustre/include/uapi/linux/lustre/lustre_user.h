@@ -1748,11 +1748,11 @@ enum changelog_rec_extra_flags {
 };
 
 enum changelog_send_flag {
-	/* Not yet implemented */
+	/* Use changelog follow mode: llapi_changelog_recv() will not stop at
+	 * the end of records and wait for new records to be generated.
+	 */
 	CHANGELOG_FLAG_FOLLOW      = 0x01,
-	/* Blocking IO makes sense in case of slow user parsing of the records,
-	 * but it also prevents us from cleaning up if the records are not
-	 * consumed. */
+	/* Deprecated since Lustre 2.10 */
 	CHANGELOG_FLAG_BLOCK       = 0x02,
 	/* Pack jobid into the changelog records if available. */
 	CHANGELOG_FLAG_JOBID       = 0x04,
