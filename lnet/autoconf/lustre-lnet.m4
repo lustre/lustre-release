@@ -245,9 +245,11 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			O2IB_SYMVER=$LINUX_OBJ/Module.symvers
 		fi
 		if test -n "$O2IB_SYMVER"; then
-			AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path])
-			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
-			AC_SUBST(EXTRA_SYMBOLS)
+			if test "$O2IB_SYMVER" != "$LINUX_OBJ/Module.symvers"; then
+				AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path O2IB])
+				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
+				AC_SUBST(EXTRA_SYMBOLS)
+			fi
 		else
 			AC_MSG_ERROR([an external source tree was, either specified or detected, for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 		fi
@@ -284,7 +286,9 @@ AC_SUBST(ENABLEO2IB)
 
 AS_IF([test $ENABLEO2IB != "no"], [
 	EXTRA_CHECK_INCLUDE="$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE"
-	KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $O2IBPATH/Module.symvers"
+	if test $O2IBPATH != $LINUX_OBJ; then
+		KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $O2IBPATH/Module.symvers"
+	fi
 
 	# In RHEL 6.2, rdma_create_id() takes the queue-pair type as a fourth argument
 	LB_CHECK_COMPILE([if 'rdma_create_id' wants four args],
