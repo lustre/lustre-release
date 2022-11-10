@@ -220,6 +220,11 @@ static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 
 		wq = lu_site_wq_from_fid(site, &header->loh_fid);
 
+		/* LU_OBJECT_HEARD_BANSHEE is set in cl_object_kill(), in case
+		 * someone is waiting on this, wake up and then wait for object
+		 * refcount becomes one.
+		 */
+		wake_up(wq);
 		wait_event(*wq, atomic_read(&header->loh_ref) == 1);
 	}
 
