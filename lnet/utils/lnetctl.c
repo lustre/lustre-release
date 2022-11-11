@@ -1376,11 +1376,15 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 	yaml_event_t event;
 	int rc;
 
-	if (!ip2net && (!nw_descr || nw_descr->nw_id == 0 ||
-	    (list_empty(&nw_descr->nw_intflist)))) {
+	if (!ip2net && (!nw_descr || nw_descr->nw_id == 0)) {
 		fprintf(stdout, "missing mandatory parameters in NI config: '%s'",
 			(!nw_descr) ? "network , interface" :
 			(nw_descr->nw_id == 0) ? "network" : "interface");
+		return -EINVAL;
+	}
+
+	if ((flags == NLM_F_CREATE) && list_empty(&nw_descr->nw_intflist)) {
+		fprintf(stdout, "creating a local NI needs at least one interface");
 		return -EINVAL;
 	}
 
@@ -1796,14 +1800,15 @@ static int jt_add_ni(int argc, char **argv)
 				 (cpt_rc == 0) ? global_cpts : NULL,
 				 NLM_F_CREATE);
 	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
 		if (global_cpts != NULL)
 			cfs_expr_list_free(global_cpts);
 		if (rc == 0 && !skip_mr_route_setup)
 			rc = lustre_lnet_setup_mrrouting(&err_rc);
-		if (rc != -EOPNOTSUPP)
-			return rc;
+		return rc;
 	}
-
+old_api:
 	rc = lustre_lnet_config_ni(&nw_descr,
 				   (cpt_rc == 0) ? global_cpts: NULL,
 				   ip2net, (found) ? &tunables : NULL,
