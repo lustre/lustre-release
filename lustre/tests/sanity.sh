@@ -15047,10 +15047,12 @@ run_test 150a "truncate/append tests"
 
 test_150b() {
 	check_set_fallocate_or_skip
+	local out
 
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
-	check_fallocate $DIR/$tfile || skip_eopnotsupp "fallocate failed"
+	out=$(check_fallocate $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|check_fallocate failed"
 }
 run_test 150b "Verify fallocate (prealloc) functionality"
 
