@@ -1498,7 +1498,10 @@ bool bio_integrity_enabled(struct bio *bio);
 # define bio_get_dev(bio)	((bio)->bi_bdev)
 # define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
 # define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
-# define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
+
+# ifndef HAVE_BIO_SET_DEV
+#  define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
+# endif
 #else
 # define bio_get_disk(bio)	((bio)->bi_disk)
 # define bio_get_queue(bio)	(bio_get_disk(bio)->queue)

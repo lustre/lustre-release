@@ -1993,8 +1993,9 @@ LB_CHECK_COMPILE([if 'struct vm_fault' replaced virtual_address with address fie
 vm_fault_address, [
 	#include <linux/mm.h>
 ],[
-	unsigned long vaddr = ((struct vm_fault *)0)->address;
-	(void)vaddr;
+		struct vm_fault vmf = { 0 };
+		unsigned long addr = (unsigned long)vmf.address;
+		(void)addr;
 ],[
 	AC_DEFINE(HAVE_VM_FAULT_ADDRESS, 1,
 		[virtual_address has been replaced by address field])
@@ -2686,6 +2687,35 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_FSCRYPT_IS_NOKEY_NAME
 
 #
+# LC_BIO_SET_DEV
+#
+# Linux: v5.11-rc5-9-g309dca309fc3
+#   block: store a block_device pointer in struct bio
+# created bio_set_dev macro
+# Linux: v5.15-rc6-127-gcf6d6238cdd3
+#   block: turn macro helpers into inline functions
+# created inline function(s).
+#
+# Only provide a bio_set_dev it is is not proveded by the kernel
+#
+AC_DEFUN([LC_BIO_SET_DEV], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+	LB_CHECK_COMPILE([if 'bio_set_dev' is available],
+	[bio_set_dev], [
+		#include <linux/bio.h>
+	],[
+		struct bio *bio = NULL;
+		struct block_device *bdev = NULL;
+
+		bio_set_dev(bio, bdev);
+	],[
+		AC_DEFINE(HAVE_BIO_SET_DEV, 1, ['bio_set_dev' is available])
+	])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_BIO_SET_DEV
+
+#
 # LC_HAVE_USER_NAMESPACE_ARG
 #
 # kernel 5.12 commit 549c7297717c32ee53f156cd949e055e601f67bb
@@ -2924,11 +2954,14 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 5.7
 	LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
+	# 5.9
+	LC_HAVE_ITER_FILE_SPLICE_WRITE
+
 	# 5.10
 	LC_FSCRYPT_IS_NOKEY_NAME
 
-	# 5.10
-	LC_HAVE_ITER_FILE_SPLICE_WRITE
+	# 5.11
+	LC_BIO_SET_DEV
 
 	# 5.12
 	LC_HAVE_USER_NAMESPACE_ARG
