@@ -115,7 +115,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
  */
 static int nodemap_idmap_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_idmap_show, PDE_DATA(inode));
+	return single_open(file, nodemap_idmap_show, pde_data(inode));
 }
 
 /**
@@ -173,7 +173,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
  */
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_ranges_show, PDE_DATA(inode));
+	return single_open(file, nodemap_ranges_show, pde_data(inode));
 }
 
 /**
@@ -372,7 +372,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_exports_show, PDE_DATA(inode));
+	return single_open(file, nodemap_exports_show, pde_data(inode));
 }
 
 /**

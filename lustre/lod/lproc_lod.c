@@ -997,7 +997,7 @@ static int lod_mdts_seq_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = PDE_DATA(inode);
+	seq->private = pde_data(inode);
 	return 0;
 }
 
@@ -1011,7 +1011,7 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = PDE_DATA(inode);
+	seq->private = pde_data(inode);
 	return 0;
 }
 

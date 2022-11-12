@@ -285,7 +285,7 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	/* store pointer to object we would like to iterate over */
-	lqp->lqp_obj = (struct dt_object *)PDE_DATA(inode);
+	lqp->lqp_obj = (struct dt_object *)pde_data(inode);
 
 	/* Initialize the common environment to be used in the seq operations */
 	rc = lu_env_init(&lqp->lqp_env, LCT_LOCAL);

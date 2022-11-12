@@ -83,7 +83,7 @@ EXPORT_SYMBOL(ldebugfs_add_symlink);
 
 int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 {
-	struct obd_device *obd = PDE_DATA(file_inode(f));
+	struct obd_device *obd = pde_data(file_inode(f));
 
 	atomic_inc(&obd->obd_evict_inprogress);
 	return 0;
@@ -91,7 +91,7 @@ int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 
 int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 {
-	struct obd_device *obd = PDE_DATA(file_inode(f));
+	struct obd_device *obd = pde_data(file_inode(f));
 
 	atomic_dec(&obd->obd_evict_inprogress);
 	wake_up(&obd->obd_evict_inprogress_waitq);
