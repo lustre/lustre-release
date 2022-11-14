@@ -71,6 +71,40 @@
 #define bio_start_sector(bio) (bio->bi_sector)
 #endif
 
+#ifdef HAVE_BI_BDEV
+# define bio_get_dev(bio)	((bio)->bi_bdev)
+# define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
+# define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
+
+# ifndef HAVE_BIO_SET_DEV
+#  define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
+# endif
+#else
+# define bio_get_disk(bio)	((bio)->bi_disk)
+# define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
+#endif
+
+#ifndef HAVE_BI_OPF
+#define bi_opf bi_rw
+#endif
+
+static inline struct bio *cfs_bio_alloc(struct block_device *bdev,
+					unsigned short nr_vecs,
+					__u32 op, gfp_t gfp_mask)
+{
+	struct bio *bio;
+#ifdef HAVE_BIO_ALLOC_WITH_BDEV
+	bio = bio_alloc(bdev, nr_vecs, op, gfp_mask);
+#else
+	bio = bio_alloc(gfp_mask, nr_vecs);
+	if (bio) {
+		bio_set_dev(bio, bdev);
+		bio->bi_opf = op;
+	}
+#endif /* HAVE_BIO_ALLOC_WITH_BDEV */
+	return bio;
+}
+
 #ifndef HAVE_DENTRY_D_CHILD
 #define d_child			d_u.d_child
 #endif

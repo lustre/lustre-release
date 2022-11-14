@@ -52,6 +52,7 @@
 #include <linux/file.h>
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
+#include <lustre_compat.h>
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>
@@ -1498,19 +1499,6 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 bool bio_integrity_enabled(struct bio *bio);
 #endif
 
-#ifdef HAVE_BI_BDEV
-# define bio_get_dev(bio)	((bio)->bi_bdev)
-# define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
-# define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
-
-# ifndef HAVE_BIO_SET_DEV
-#  define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
-# endif
-#else
-# define bio_get_disk(bio)	((bio)->bi_disk)
-# define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
-#endif
-
 #ifdef HAVE_EXT4_JOURNAL_GET_WRITE_ACCESS_4ARGS
 # define osd_ldiskfs_journal_get_write_access(handle, sb, bh, flags) \
 	 ldiskfs_journal_get_write_access((handle), (sb), (bh), (flags))
@@ -1613,10 +1601,6 @@ void osd_execute_truncate(struct osd_object *obj);
 
 #ifndef HAVE___BI_CNT
 #define __bi_cnt bi_cnt
-#endif
-
-#ifndef HAVE_BI_OPF
-#define bi_opf bi_rw
 #endif
 
 #ifndef HAVE_CLEAN_BDEV_ALIASES

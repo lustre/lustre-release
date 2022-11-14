@@ -28,6 +28,7 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 #include <linux/namei.h>
+#include <lustre_compat.h>
 #include "llcrypt_private.h"
 
 static void __llcrypt_decrypt_bio(struct bio *bio, bool done)
@@ -96,14 +97,13 @@ int llcrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
 		if (err)
 			goto errout;
 
-		bio = bio_alloc(GFP_NOWAIT, 1);
+		bio = cfs_bio_alloc(inode->i_sb->s_bdev, 1, REQ_OP_WRITE,
+				    GFP_NOWAIT);
 		if (!bio) {
 			err = -ENOMEM;
 			goto errout;
 		}
-		bio_set_dev(bio, inode->i_sb->s_bdev);
 		bio->bi_iter.bi_sector = pblk << (blockbits - 9);
-		bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 		ret = bio_add_page(bio, ciphertext_page, blocksize, 0);
 		if (WARN_ON(ret != blocksize)) {
 			/* should never happen! */

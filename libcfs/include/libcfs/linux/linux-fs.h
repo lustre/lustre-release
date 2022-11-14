@@ -84,4 +84,4 @@ static inline void mapping_clear_exiting(struct address_space *mapping)
 #endif
 }
 
-#endif
+#endif /* __LIBCFS_LINUX_CFS_FS_H__ */

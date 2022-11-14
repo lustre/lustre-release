@@ -612,21 +612,21 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 			bio_start_page_idx = page_idx;
 			/* allocate new bio */
-			bio = bio_alloc(GFP_NOIO, min_t(unsigned short,
-					BIO_MAX_VECS,
-					(block_idx_end - block_idx +
-					 blocks_left_page - 1)));
-			if (bio == NULL) {
+			bio = cfs_bio_alloc(bdev,
+					    min_t(unsigned short, BIO_MAX_VECS,
+						  (block_idx_end - block_idx +
+						   blocks_left_page - 1)),
+					    iobuf->dr_rw ? REQ_OP_WRITE
+							 : REQ_OP_READ,
+					    GFP_NOIO);
+			if (!bio) {
 				CERROR("Can't allocate bio %u pages\n",
 				       block_idx_end - block_idx +
 				       blocks_left_page - 1);
 				rc = -ENOMEM;
 				goto out;
 			}
-
-			bio_set_dev(bio, bdev);
 			bio_set_sector(bio, sector);
-			bio->bi_opf = iobuf->dr_rw ? WRITE : READ;
 			rc = osd_bio_init(bio, iobuf, integrity_enabled,
 					  bio_start_page_idx, &bio_private);
 			if (rc) {
