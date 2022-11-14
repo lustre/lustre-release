@@ -270,7 +270,16 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		fid->f_oid = 0;
 		fid->f_ver = 0;
 	}
-	rc = llcrypt_setup_filename(dir, &dname, lookup, fname);
+	if (unlikely(filename_is_volatile(iname->name,
+					  iname->len, NULL))) {
+		/* keep volatile name as-is, matters for server side */
+		memset(fname, 0, sizeof(struct llcrypt_name));
+		fname->disk_name.name = (unsigned char *)iname->name;
+		fname->disk_name.len = iname->len;
+		rc = 0;
+	} else {
+		rc = llcrypt_setup_filename(dir, &dname, lookup, fname);
+	}
 	if (rc == -ENOENT && lookup) {
 		if (((is_root_inode(dir) &&
 		     iname->len == strlen(dot_fscrypt_name) &&

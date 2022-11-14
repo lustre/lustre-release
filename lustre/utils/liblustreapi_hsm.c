@@ -1052,7 +1052,44 @@ static int create_restore_volatile(struct hsm_copyaction_private *hcp,
 		snprintf(parent, sizeof(parent), "%s", ct->mnt);
 	}
 
-	fd = llapi_create_volatile_idx(parent, mdt_index, open_flags);
+	if (hcp->source_fd < 0) {
+		fd = llapi_create_volatile_idx(parent, mdt_index, open_flags);
+	} else {
+		/* We need to insert source_fd in volatile file name, so open
+		 * it manually.
+		 */
+		char file_path[PATH_MAX];
+		unsigned int rnumber;
+
+		do {
+			rnumber = random();
+			if (mdt_index == -1)
+				rc = snprintf(file_path, sizeof(file_path),
+				       "%s/"LUSTRE_VOLATILE_HDR"::%.4X:fd=%.2d",
+				       parent, rnumber, hcp->source_fd);
+			else
+				rc = snprintf(file_path, sizeof(file_path),
+				   "%s/"LUSTRE_VOLATILE_HDR":%.4X:%.4X:fd=%.2d",
+				   parent, mdt_index, rnumber, hcp->source_fd);
+			if (rc < 0 || rc >= sizeof(file_path)) {
+				fd = -ENAMETOOLONG;
+				break;
+			}
+
+			/*
+			 * Either open O_WRONLY or O_RDWR, creating RDONLY
+			 * is non-sensical here.
+			 */
+			if ((open_flags & O_ACCMODE) == O_RDONLY)
+				open_flags = O_RDWR | (open_flags & ~O_ACCMODE);
+			open_flags |= O_CREAT | O_EXCL | O_NOFOLLOW;
+			fd = open(file_path, open_flags, S_IRUSR | S_IWUSR);
+			if (fd < 0)
+				rc = -errno;
+			else
+				(void)unlink(file_path);
+		} while (fd < 0 && rc == -EEXIST);
+	}
 	if (fd < 0)
 		return fd;
 
@@ -1130,8 +1167,26 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 		if (rc < 0)
 			goto err_out;
 
+		/* Use source_fd to store fd of Lustre file identified by fid.
+		 * This fd is appended to volatile file name, useful in case
+		 * of encrypted file in order to copy encryption context.
+		 */
+		hcp->source_fd = ct_open_by_fid(hcp->ct_priv, &hai->hai_dfid,
+				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
+		if (hcp->source_fd < 0) {
+			rc = hcp->source_fd;
+			goto err_out;
+		}
+
 		rc = create_restore_volatile(hcp, restore_mdt_index,
 					     restore_open_flags);
+		/* Now that volatile file has been created,
+		 * source_fd can be closed.
+		 */
+		if (hcp->source_fd >= 0) {
+			close(hcp->source_fd);
+			hcp->source_fd = -1;
+		}
 		if (rc < 0)
 			goto err_out;
 	} else if (hai->hai_action == HSMA_REMOVE) {
