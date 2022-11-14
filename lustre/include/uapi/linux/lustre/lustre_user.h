@@ -724,6 +724,7 @@ struct fsxattr {
 #define LOV_PATTERN_MDT			0x100
 #define LOV_PATTERN_OVERSTRIPING	0x200
 #define LOV_PATTERN_FOREIGN		0x400
+#define LOV_PATTERN_COMPRESS		0x800
 
 #define LOV_PATTERN_F_MASK	0xffff0000
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
@@ -893,6 +894,13 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_NOSYNC	  = 0x00000020,	/* FLR: no sync for the mirror */
 	LCME_FL_EXTENSION = 0x00000040,	/* extension comp, never init */
 	LCME_FL_PARITY    = 0x00000080,	/* EC: a parity code component */
+	LCME_FL_COMPRESS  = 0x00000100, /* the component should be compressed */
+	LCME_FL_PARTIAL   = 0x00000200, /* some chunks in the component are
+					 * uncompressed
+					 */
+	LCME_FL_NOCOMPR   = 0x00000400, /* the component should not be
+					 * compressed
+					 */
 	LCME_FL_NEG	  = 0x80000000	/* used to indicate a negative flag,
 					 * won't be stored on disk
 					 */
@@ -963,7 +971,11 @@ struct lov_comp_md_entry_v1 {
 	__u8			lcme_cstripe_count;	/* code stripe count,
 							 * p value in EC
 							 */
-	__u16			lcme_padding_1;
+	__u8			lcme_compr_type;	/* compress type */
+	__u8			lcme_compr_lvl:4;	/* compress level */
+	__u8			lcme_compr_chunk_log_bits:4;
+				     /* chunk_size = 2^(16+chunk_log_bits)
+				      * i.e. power-of-two multiple of 64KiB */
 } __attribute__((packed));
 
 #define SEQ_ID_MAX		0x0000FFFF

@@ -1907,10 +1907,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_cstripe_count));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1) == 46, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1));
-	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1) == 2, "found %lld\n",
-		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1));
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_compr_type) == 46, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_compr_type));
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type));
 	BUILD_BUG_ON(LCME_FL_STALE != 0x00000001);
 	BUILD_BUG_ON(LCME_FL_PREF_RD != 0x00000002);
 	BUILD_BUG_ON(LCME_FL_PREF_WR != 0x00000004);
@@ -1920,6 +1920,9 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LCME_FL_NOSYNC != 0x00000020);
 	BUILD_BUG_ON(LCME_FL_EXTENSION != 0x00000040);
 	BUILD_BUG_ON(LCME_FL_PARITY != 0x00000080);
+	BUILD_BUG_ON(LCME_FL_COMPRESS != 0x00000100);
+	BUILD_BUG_ON(LCME_FL_PARTIAL != 0x00000200);
+	BUILD_BUG_ON(LCME_FL_NOCOMPR != 0x00000400);
 	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
 
 	/* Checks for struct lov_comp_md_v1 */
@@ -1980,6 +1983,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)LCM_FL_SYNC_PENDING);
 	LASSERTF(LCM_FL_PCC_RDONLY == 8, "found %lld\n",
 		 (long long)LCM_FL_PCC_RDONLY);
+	LASSERTF(LCM_FL_FLR_MASK == 11, "found %lld\n",
+		 (long long)LCM_FL_FLR_MASK);
 
 	/* Checks for struct lmv_mds_md_v1 */
 	LASSERTF((int)sizeof(struct lmv_mds_md_v1) == 56, "found %lld\n",

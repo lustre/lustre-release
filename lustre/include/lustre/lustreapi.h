@@ -1124,6 +1124,9 @@ static const struct comp_flag_name {
 	{ LCME_FL_NOSYNC,	"nosync" },
 	{ LCME_FL_EXTENSION,	"extension" },
 	{ LCME_FL_PARITY,	"parity" },
+	{ LCME_FL_COMPRESS,	"compress" },
+	{ LCME_FL_PARTIAL,	"partial" },
+	{ LCME_FL_NOCOMPR,	"nocompr" },
 };
 
 /* HSM component flags table */

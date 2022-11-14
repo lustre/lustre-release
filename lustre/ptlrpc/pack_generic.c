@@ -2522,7 +2522,6 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		__swab32s(&ent->lcme_layout_gen);
 		/* no need to swab lcme_dstripe_count */
 		/* no need to swab lcme_cstripe_count */
-		BUILD_BUG_ON(offsetof(typeof(*ent), lcme_padding_1) == 0);
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
 		stripe_count = v1->lmm_stripe_count;
