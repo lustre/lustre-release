@@ -1681,6 +1681,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			/* From last created */
 			diff = OST_MAX_PRECREATE;
 			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
+			/* no sync_trans when recreating last batch */
+			sync_trans = 0;
 		}
 
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||

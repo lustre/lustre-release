@@ -5585,7 +5585,6 @@ test_69() {
 	start_ost || error "OST0 restart failure"
 	wait_osc_import_state mds ost FULL
 
-	sleep $((TIMEOUT/2)) #object recreation requires some time
 	mount_client $MOUNT || error "mount client failed"
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
 	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)

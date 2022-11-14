@@ -815,12 +815,17 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 	if (fid_oid(last_fid) > 0 && update)
 		d->opd_last_used_fid = *last_fid;
 
-	if (fid_oid(last_fid) == 0 &&
-	    fid_seq(last_fid) == fid_seq(&d->opd_last_used_fid)) {
-		/* reformatted OST, it requires creation request
-		 * to recreate objects
-		 */
-		d->opd_force_creation = true;
+	if (fid_seq(last_fid) == fid_seq(&d->opd_last_used_fid)) {
+		if (fid_oid(last_fid) == 0 ||
+		    (fid_seq_is_norm(fid_seq(last_fid)) &&
+		     fid_oid(last_fid) == LUSTRE_FID_INIT_OID)) {
+			/* reformatted OST, it requires creation request
+			 * to recreate objects
+			 */
+			spin_lock(&d->opd_pre_lock);
+			d->opd_force_creation = true;
+			spin_unlock(&d->opd_pre_lock);
+		}
 	}
 	CDEBUG(D_HA, "%s: Got last_fid "DFID"\n", d->opd_obd->obd_name,
 	       PFID(last_fid));
@@ -1418,7 +1423,7 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 		return 1;
 	}
 
-	if (d->opd_pre_recovering)
+	if (d->opd_pre_recovering || d->opd_force_creation)
 		return 0;
 
 	/* ready if got enough precreated objects */
@@ -1501,7 +1506,8 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 		spin_lock(&d->opd_pre_lock);
 		precreated = osp_objs_precreated(env, d);
 		if (precreated > d->opd_pre_reserved &&
-		    !d->opd_pre_recovering) {
+		    !d->opd_pre_recovering &&
+		    !d->opd_force_creation) {
 			d->opd_pre_reserved++;
 			spin_unlock(&d->opd_pre_lock);
 			rc = 0;
