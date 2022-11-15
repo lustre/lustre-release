@@ -105,7 +105,7 @@ int llapi_pcc_attach(const char *path, __u32 id, enum lu_pcc_type type)
 {
 	int rc;
 
-	switch (type) {
+	switch (type & LU_PCC_TYPE_MASK) {
 	case LU_PCC_READWRITE:
 		rc = llapi_readwrite_pcc_attach(path, id);
 		break;
@@ -143,7 +143,7 @@ int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
 {
 	int rc;
 
-	switch (type) {
+	switch (type & LU_PCC_TYPE_MASK) {
 	case LU_PCC_READWRITE:
 		rc = llapi_readwrite_pcc_attach_fid(mntpath, fid, id);
 		break;

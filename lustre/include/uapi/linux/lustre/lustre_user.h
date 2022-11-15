@@ -2670,18 +2670,22 @@ struct lu_heat {
 };
 
 enum lu_pcc_type {
-	LU_PCC_NONE = 0,
-	LU_PCC_READWRITE,
+	LU_PCC_NONE		= 0x0,
+	LU_PCC_READWRITE	= 0x01,
+	LU_PCC_READONLY		= 0x02,
+	LU_PCC_TYPE_MASK	= LU_PCC_READWRITE | LU_PCC_READONLY,
 	LU_PCC_MAX
 };
 
 static inline const char *pcc_type2string(enum lu_pcc_type type)
 {
-	switch (type) {
+	switch (type & LU_PCC_TYPE_MASK) {
 	case LU_PCC_NONE:
 		return "none";
 	case LU_PCC_READWRITE:
 		return "readwrite";
+	case LU_PCC_READONLY:
+		return "readonly";
 	default:
 		return "fault";
 	}
