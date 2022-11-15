@@ -1042,12 +1042,12 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 
 		ClearPageReclaim(page);
 
-		lock_page_memcg(page);
+		vvp_lock_page_memcg(page);
 		if (TestSetPageDirty(page)) {
 			/* page is already dirty .. no extra work needed
 			 * set a flag for the i'th page to be skipped
 			 */
-			unlock_page_memcg(page);
+			vvp_unlock_page_memcg(page);
 			skip_pages |= (1 << i);
 		}
 	}
@@ -1075,7 +1075,7 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
 		ll_account_page_dirtied(page, mapping);
 		dirtied++;
-		unlock_page_memcg(page);
+		vvp_unlock_page_memcg(page);
 	}
 	ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 
