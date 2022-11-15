@@ -1,0 +1,47 @@
+Subject: [PATCH] linux-5.14/export-ext4fs-dirhash-helper
+
+---
+ fs/ext4/ext4.h | 3 +++
+ fs/ext4/hash.c | 5 +++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 083c109..09d8720 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -2996,6 +2996,9 @@ extern int ext4_sync_file(struct file *, loff_t, loff_t, int);
+ extern int ext4fs_dirhash(const struct inode *dir, const char *name, int len,
+ 			  struct dx_hash_info *hinfo);
+ 
++extern int __ext4fs_dirhash(const struct inode *dir, const char *name, int len,
++			    struct dx_hash_info *hinfo);
++
+ /* ialloc.c */
+ extern int ext4_mark_inode_used(struct super_block *sb, int ino);
+ extern struct inode *__ext4_new_inode(struct user_namespace *, handle_t *,
+diff --git a/fs/ext4/hash.c b/fs/ext4/hash.c
+index f34f417..a41bd48 100644
+--- a/fs/ext4/hash.c
++++ b/fs/ext4/hash.c
+@@ -197,8 +197,8 @@ static void str2hashbuf_unsigned(const char *msg, int len, __u32 *buf, int num)
+  * represented, and whether or not the returned hash is 32 bits or 64
+  * bits.  32 bit hashes will return 0 for the minor hash.
+  */
+-static int __ext4fs_dirhash(const struct inode *dir, const char *name, int len,
+-			    struct dx_hash_info *hinfo)
++int __ext4fs_dirhash(const struct inode *dir, const char *name, int len,
++		     struct dx_hash_info *hinfo)
+ {
+ 	__u32	hash;
+ 	__u32	minor_hash = 0;
+@@ -286,6 +286,7 @@ static int __ext4fs_dirhash(const struct inode *dir, const char *name, int len,
+ 	hinfo->minor_hash = minor_hash;
+ 	return 0;
+ }
++EXPORT_SYMBOL(__ext4fs_dirhash);
+ 
+ int ext4fs_dirhash(const struct inode *dir, const char *name, int len,
+ 		   struct dx_hash_info *hinfo)
+-- 
+2.31.1
+

@@ -801,7 +801,8 @@ update:
 	 * making it as invisible temporary may be not worse. OI scrub
 	 * will process it later.
 	 */
-	rc = ldiskfs_journal_get_write_access(th, bh);
+	rc = osd_ldiskfs_journal_get_write_access(th, parent->i_sb, bh,
+						  LDISKFS_JTR_NONE);
 	if (rc != 0)
 		GOTO(out, rc);
 

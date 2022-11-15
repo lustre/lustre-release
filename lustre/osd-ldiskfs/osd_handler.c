@@ -2288,9 +2288,11 @@ out:
  * This is 28 bytes per object which is 28MB for 1M objects ... no so bad.
  */
 #ifdef __LDISKFS_DIR_REC_LEN
-#define PER_OBJ_USAGE __LDISKFS_DIR_REC_LEN(20)
+# define PER_OBJ_USAGE __LDISKFS_DIR_REC_LEN(20)
+#elif defined  LDISKFS_DIR_REC_LEN_WITH_DIR
+# define PER_OBJ_USAGE LDISKFS_DIR_REC_LEN(20, NULL)
 #else
-#define PER_OBJ_USAGE LDISKFS_DIR_REC_LEN(20)
+# define PER_OBJ_USAGE LDISKFS_DIR_REC_LEN(20)
 #endif
 
 /*
@@ -5739,8 +5741,9 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 		bh = osd_ldiskfs_find_entry(pobj->oo_inode, &child->d_name, &de,
 					    NULL, hlock);
 		if (!IS_ERR(bh)) {
-			rc1 = ldiskfs_journal_get_write_access(oth->ot_handle,
-							       bh);
+			rc1 = osd_ldiskfs_journal_get_write_access(
+				oth->ot_handle, pobj->oo_inode->i_sb, bh,
+				LDISKFS_JTR_NONE);
 			if (rc1 == 0) {
 				if (S_ISDIR(cinode->i_mode))
 					de->file_type = LDISKFS_DIRENT_LUFID |
@@ -7071,12 +7074,22 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
 
 #if defined LDISKFS_DIR_ENTRY_LEN && defined LDISKFS_DIR_ENTRY_LEN_
 #undef LDISKFS_DIR_REC_LEN
-#define LDISKFS_DIR_REC_LEN(de)		LDISKFS_DIR_ENTRY_LEN_((de))
+# if defined LDISKFS_DIR_REC_LEN_WITH_DIR
+#  define LDISKFS_DIR_REC_LEN(de, dir)	LDISKFS_DIR_ENTRY_LEN_((de), (dir))
+# else
+#  define LDISKFS_DIR_REC_LEN(de)	LDISKFS_DIR_ENTRY_LEN_((de))
+# endif
+#endif
+
+#if defined LDISKFS_DIR_REC_LEN_WITH_DIR
+# define LDISKFS_DIR_REC_LEN_DIR(de)	LDISKFS_DIR_REC_LEN((de), NULL)
+#else
+# define LDISKFS_DIR_REC_LEN_DIR(de)	LDISKFS_DIR_REC_LEN((de))
 #endif
 
 static inline bool osd_dotdot_has_space(struct ldiskfs_dir_entry_2 *de)
 {
-	if (LDISKFS_DIR_REC_LEN(de) >=
+	if (LDISKFS_DIR_REC_LEN_DIR(de) >=
 	    __LDISKFS_DIR_REC_LEN(2 + 1 + sizeof(struct osd_fid_pack)))
 		return true;
 
@@ -7119,7 +7132,8 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 
 	/* There is enough space to hold the FID-in-dirent. */
 	if (osd_dirent_has_space(de, namelen, dir->i_sb->s_blocksize, dotdot)) {
-		rc = ldiskfs_journal_get_write_access(jh, bh);
+		rc = osd_ldiskfs_journal_get_write_access(jh, dir->i_sb, bh,
+							  LDISKFS_JTR_NONE);
 		if (rc != 0)
 			RETURN(rc);
 

@@ -539,10 +539,12 @@ static int iam_txn_add(handle_t *handle,
                        struct iam_path *path, struct buffer_head *bh)
 {
 	int result;
+	struct super_block *sb = iam_path_obj(path)->i_sb;
 
-	result = ldiskfs_journal_get_write_access(handle, bh);
+	result = osd_ldiskfs_journal_get_write_access(handle, sb, bh,
+						      LDISKFS_JTR_NONE);
 	if (result != 0)
-		ldiskfs_std_error(iam_path_obj(path)->i_sb, result);
+		ldiskfs_std_error(sb, result);
 	return result;
 }
 
@@ -1573,7 +1575,9 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	head = (struct iam_idle_head *)(c->ic_idle_bh->b_data);
 	count = le16_to_cpu(head->iih_count);
 	if (count > 0) {
-		*e = ldiskfs_journal_get_write_access(h, c->ic_idle_bh);
+		*e = osd_ldiskfs_journal_get_write_access(h, inode->i_sb,
+							  c->ic_idle_bh,
+							  LDISKFS_JTR_NONE);
 		if (*e != 0)
 			goto fail;
 
@@ -1601,7 +1605,9 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	idle_blocks = (__u32 *)(c->ic_root_bh->b_data +
 				c->ic_descr->id_root_gap +
 				sizeof(struct dx_countlimit));
-	*e = ldiskfs_journal_get_write_access(h, c->ic_root_bh);
+	*e = osd_ldiskfs_journal_get_write_access(h, inode->i_sb,
+						  c->ic_root_bh,
+						  LDISKFS_JTR_NONE);
 	if (*e != 0)
 		goto fail;
 
@@ -1631,7 +1637,8 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 
 got:
 	/* get write access for the found buffer head */
-	*e = ldiskfs_journal_get_write_access(h, bh);
+	*e = osd_ldiskfs_journal_get_write_access(h, inode->i_sb, bh,
+						  LDISKFS_JTR_NONE);
 	if (*e != 0) {
 		brelse(bh);
 		bh = NULL;
@@ -1904,14 +1911,20 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 		}
 		do_corr(schedule());
 		BUFFER_TRACE(frame->bh, "get_write_access");
-		err = ldiskfs_journal_get_write_access(handle, frame->bh);
+		err = osd_ldiskfs_journal_get_write_access(handle,
+							   dir->i_sb,
+							   frame->bh,
+							   LDISKFS_JTR_NONE);
 		if (err)
 			goto journal_error;
 	}
 	/* Add "safe" node to transaction too */
 	if (safe + 1 != path->ip_frames) {
 		do_corr(schedule());
-		err = ldiskfs_journal_get_write_access(handle, safe->bh);
+		err = osd_ldiskfs_journal_get_write_access(handle,
+							   dir->i_sb,
+							   safe->bh,
+							   LDISKFS_JTR_NONE);
 		if (err)
 			goto journal_error;
 	}

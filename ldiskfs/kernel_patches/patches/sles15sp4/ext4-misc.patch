@@ -1,0 +1,226 @@
+Subject: [PATCH] ext4-misc
+
+---
+ fs/ext4/ext4.h   | 25 ++++++++++++++++++++++++-
+ fs/ext4/ialloc.c |  3 ++-
+ fs/ext4/inode.c  | 16 ++++++++++++++++
+ fs/ext4/namei.c  |  9 ++++++---
+ fs/ext4/super.c  | 10 ++--------
+ fs/ext4/xattr.c  |  2 ++
+ 6 files changed, 52 insertions(+), 13 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 8d2c493..c96d89f 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1913,6 +1913,8 @@ static inline bool ext4_verity_in_progress(struct inode *inode)
+ 
+ #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
+ 
++#define JOURNAL_START_HAS_3ARGS	1
++
+ /*
+  * Codes for operating systems
+  */
+@@ -2152,7 +2154,21 @@ static inline bool ext4_has_unknown_ext##ver##_incompat_features(struct super_bl
+ 
+ EXTN_FEATURE_FUNCS(2)
+ EXTN_FEATURE_FUNCS(3)
+-EXTN_FEATURE_FUNCS(4)
++static inline bool ext4_has_unknown_ext4_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_compat &
++		cpu_to_le32(~EXT4_FEATURE_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_ro_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_ro_compat &
++		cpu_to_le32(~EXT4_FEATURE_RO_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_incompat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_incompat &
++		cpu_to_le32(~EXT4_FEATURE_INCOMPAT_SUPP)) != 0);
++}
+ 
+ static inline bool ext4_has_compat_features(struct super_block *sb)
+ {
+@@ -3687,6 +3703,13 @@ struct ext4_extent;
+ #define EXT_MAX_BLOCKS	0xffffffff
+ 
+ extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
++extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
++						  ext4_group_t block_group);
++extern void ext4_inc_count(struct inode *inode);
++extern void ext4_dec_count(struct inode *inode);
++extern struct buffer_head *ext4_append(handle_t *handle,
++				       struct inode *inode,
++				       ext4_lblk_t *block);
+ extern int ext4_ext_index_trans_blocks(struct inode *inode, int extents);
+ extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
+ 			       struct ext4_map_blocks *map, int flags);
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index 5d0a11d..4840190 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -120,7 +120,7 @@ verified:
+  *
+  * Return buffer_head of bitmap on success, or an ERR_PTR on error.
+  */
+-static struct buffer_head *
++struct buffer_head *
+ ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
+ {
+ 	struct ext4_group_desc *desc;
+@@ -215,6 +215,7 @@ out:
+ 	put_bh(bh);
+ 	return ERR_PTR(err);
+ }
++EXPORT_SYMBOL(ext4_read_inode_bitmap);
+ 
+ /*
+  * NOTE! When we get the inode, we're the only people
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 06ee22e..bb109d9 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -6204,3 +6204,19 @@ out_error:
+ 	ext4_journal_stop(handle);
+ 	goto out;
+ }
++EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_truncate);
++EXPORT_SYMBOL(ext4_iget);
++EXPORT_SYMBOL(ext4_bread);
++EXPORT_SYMBOL(ext4_itable_unused_count);
++EXPORT_SYMBOL(ext4_force_commit);
++EXPORT_SYMBOL(__ext4_mark_inode_dirty);
++EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_write_access);
++EXPORT_SYMBOL(__ext4_journal_start_sb);
++EXPORT_SYMBOL(__ext4_journal_stop);
++EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
++EXPORT_SYMBOL(__ext4_std_error);
++EXPORT_SYMBOL(ext4fs_dirhash);
++EXPORT_SYMBOL(ext4_get_inode_loc);
++EXPORT_SYMBOL(__ext4_journal_ensure_credits);
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index 0d5b8ea..f207dd5 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -50,7 +50,7 @@
+ #define NAMEI_RA_BLOCKS  4
+ #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ 
+-static struct buffer_head *ext4_append(handle_t *handle,
++struct buffer_head *ext4_append(handle_t *handle,
+ 					struct inode *inode,
+ 					ext4_lblk_t *block)
+ {
+@@ -205,6 +205,7 @@ static struct buffer_head *__ext4_read_dirblock(struct inode *inode,
+ 	}
+ 	return bh;
+ }
++EXPORT_SYMBOL(ext4_append);
+ 
+ #ifdef DX_DEBUG
+ #define dxtrace(command) command
+@@ -2753,23 +2754,25 @@ EXPORT_SYMBOL(ext4_delete_entry);
+  * for checking S_ISDIR(inode) (since the INODE_INDEX feature will not be set
+  * on regular files) and to avoid creating huge/slow non-HTREE directories.
+  */
+-static void ext4_inc_count(struct inode *inode)
++void ext4_inc_count(struct inode *inode)
+ {
+ 	inc_nlink(inode);
+ 	if (is_dx(inode) &&
+ 	    (inode->i_nlink > EXT4_LINK_MAX || inode->i_nlink == 2))
+ 		set_nlink(inode, 1);
+ }
++EXPORT_SYMBOL(ext4_inc_count);
+ 
+ /*
+  * If a directory had nlink == 1, then we should let it be 1. This indicates
+  * directory has >EXT4_LINK_MAX subdirs.
+  */
+-static void ext4_dec_count(struct inode *inode)
++void ext4_dec_count(struct inode *inode)
+ {
+ 	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
+ 		drop_nlink(inode);
+ }
++EXPORT_SYMBOL(ext4_dec_count);
+ 
+ 
+ /*
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 7b5df25..4be1994 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -5605,7 +5605,7 @@ static void ext4_update_super(struct super_block *sb)
+ 			__ext4_update_tstamp(&es->s_first_error_time,
+ 					     &es->s_first_error_time_hi,
+ 					     sbi->s_first_error_time);
+-			strncpy(es->s_first_error_func, sbi->s_first_error_func,
++			strlcpy(es->s_first_error_func, sbi->s_first_error_func,
+ 				sizeof(es->s_first_error_func));
+ 			es->s_first_error_line =
+ 				cpu_to_le32(sbi->s_first_error_line);
+@@ -5619,7 +5619,7 @@ static void ext4_update_super(struct super_block *sb)
+ 		__ext4_update_tstamp(&es->s_last_error_time,
+ 				     &es->s_last_error_time_hi,
+ 				     sbi->s_last_error_time);
+-		strncpy(es->s_last_error_func, sbi->s_last_error_func,
++		strlcpy(es->s_last_error_func, sbi->s_last_error_func,
+ 			sizeof(es->s_last_error_func));
+ 		es->s_last_error_line = cpu_to_le32(sbi->s_last_error_line);
+ 		es->s_last_error_ino = cpu_to_le32(sbi->s_last_error_ino);
+@@ -6826,16 +6826,12 @@ static int __init ext4_init_fs(void)
+ 	if (err)
+ 		goto out05;
+ 
+-	register_as_ext3();
+-	register_as_ext2();
+ 	err = register_filesystem(&ext4_fs_type);
+ 	if (err)
+ 		goto out;
+ 
+ 	return 0;
+ out:
+-	unregister_as_ext2();
+-	unregister_as_ext3();
+ 	ext4_fc_destroy_dentry_cache();
+ out05:
+ 	destroy_inodecache();
+@@ -6860,8 +6856,6 @@ out7:
+ static void __exit ext4_exit_fs(void)
+ {
+ 	ext4_destroy_lazyinit_thread();
+-	unregister_as_ext2();
+-	unregister_as_ext3();
+ 	unregister_filesystem(&ext4_fs_type);
+ 	ext4_fc_destroy_dentry_cache();
+ 	destroy_inodecache();
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index f9b4602..f5af950 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -671,6 +671,7 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_get);
+ 
+ static int
+ ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
+@@ -2430,6 +2431,7 @@ cleanup:
+ 	ext4_write_unlock_xattr(inode, &no_expand);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_set_handle);
+ 
+ int ext4_xattr_set_credits(struct inode *inode, size_t value_len,
+ 			   bool is_create, int *credits)
+-- 
+2.34.1
+

@@ -165,26 +165,15 @@ static inline struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
 #define LVAR_HASH_R5        (0)
 #define LVAR_HASH_PREFIX    (0)
 
-#ifdef HAVE_LDISKFSFS_GETHASH_INODE_ARG
-/*
- * NOTE: doing this breaks on file systems configured with
- *       case-insensitive file name lookups
- *
- * kernel 5.2 commit b886ee3e778ec2ad43e276fd378ab492cf6819b7
- * ext4: Support case-insensitive file name lookups
- *
- * FUTURE:
- *  We need to pass the struct inode *dir down to hash_build0
- *  to enable case-insensitive file name support ext4/ldiskfs
- */
-#define e_ldiskfsfs_dirhash(name, len, info) \
-		__ldiskfsfs_dirhash(name, len, info)
+#ifdef HAVE_LDISKFSFS_DIRHASH_WITH_DIR
+#define e_ldiskfsfs_dirhash(dir, name, len, info) \
+		ldiskfsfs_dirhash((dir), (name), (len), (info))
 #else
-#define e_ldiskfsfs_dirhash(name, len, info) \
-		ldiskfsfs_dirhash(name, len, info)
+#define e_ldiskfsfs_dirhash(dir, name, len, info) \
+		ldiskfsfs_dirhash((name), (len), (info))
 #endif
 
-static u32 hash_build0(const char *name, int namelen)
+static u32 hash_build0(const struct inode *dir, const char *name, int namelen)
 {
 	u32 result;
 
@@ -204,14 +193,14 @@ static u32 hash_build0(const char *name, int namelen)
 
 		hinfo.hash_version = LDISKFS_DX_HASH_TEA;
 		hinfo.seed = NULL;
-		e_ldiskfsfs_dirhash(name, namelen, &hinfo);
+		e_ldiskfsfs_dirhash(dir, name, namelen, &hinfo);
 		result = hinfo.hash;
 		if (LVAR_HASH_SANDWICH) {
 			u32 result2;
 
 			hinfo.hash_version = LDISKFS_DX_HASH_TEA;
 			hinfo.seed = NULL;
-			e_ldiskfsfs_dirhash(name, namelen, &hinfo);
+			e_ldiskfsfs_dirhash(dir, name, namelen, &hinfo);
 			result2 = hinfo.hash;
 			result = (0xfc000000 & result2) | (0x03ffffff & result);
 		}
@@ -224,20 +213,28 @@ enum {
 	HASH_MAX_SIZE  = 0x7fffffffUL
 };
 
-static u32 hash_build(const char *name, int namelen)
+static u32 hash_build(const struct inode *dir, const char *name, int namelen)
 {
 	u32 hash;
 
-	hash = (hash_build0(name, namelen) << 1) & HASH_MAX_SIZE;
+	hash = (hash_build0(dir, name, namelen) << 1) & HASH_MAX_SIZE;
 	if (hash > HASH_MAX_SIZE - HASH_GRAY_AREA)
 		hash &= HASH_GRAY_AREA - 1;
 	return hash;
 }
 
-static inline lvar_hash_t get_hash(const struct iam_container *bag,
+static inline lvar_hash_t get_hash(const struct inode *dir,
 				   const char *name, int namelen)
 {
-	return hash_build(name, namelen);
+	return hash_build(dir, name, namelen);
+}
+
+static inline lvar_hash_t iam_get_hash(const struct iam_leaf *leaf,
+				       const char *name, int namelen)
+{
+	struct iam_path *iam_path = iam_leaf_path(leaf);
+
+	return get_hash(iam_path_obj(iam_path), name, namelen);
 }
 
 static inline int e_eq(const struct lvar_leaf_entry *ent,
@@ -310,6 +307,7 @@ static int n_at_rec(const struct iam_leaf *folio)
 static int n_invariant(const struct iam_leaf *leaf)
 {
 	struct iam_path *path;
+	struct inode *dir;
 	struct lvar_leaf_entry *scan;
 	struct lvar_leaf_entry *end;
 	lvar_hash_t hash;
@@ -323,6 +321,7 @@ static int n_invariant(const struct iam_leaf *leaf)
 	if (h_used(n_head(leaf)) > blocksize(leaf))
 		return 0;
 
+	dir = iam_path_obj(iam_path);
 	/*
 	 * Delimiting key in the parent index node. Clear least bit to account
 	 * for hash collision marker.
@@ -330,8 +329,7 @@ static int n_invariant(const struct iam_leaf *leaf)
 	starthash = *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at) & ~1;
 	for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 		nexthash = e_hash(scan);
-		if (nexthash != get_hash(iam_leaf_container(leaf),
-					e_char(scan), e_keysize(scan))) {
+		if (nexthash != get_hash(dir, e_char(scan), e_keysize(scan))) {
 			BREAKPOINT();
 			return 0;
 		}
@@ -455,7 +453,7 @@ static int lvar_lookup(struct iam_leaf *leaf, const struct iam_key *k)
 
 	name = kchar(k);
 	namelen = strlen(name);
-	hash = get_hash(iam_leaf_container(leaf), name, namelen);
+	hash = iam_get_hash(leaf, name, namelen);
 	found = NULL;
 	found_equal = 0;
 	last = 1;
@@ -551,7 +549,7 @@ static int lvar_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
 
 	name = kchar(k);
 
-	hash = get_hash(iam_leaf_container(l), name, strlen(name));
+	hash = iam_get_hash(l, name, strlen(name));
 	return e_cmp(l, n_cur(l), hash);
 }
 
@@ -647,8 +645,7 @@ static void lvar_rec_add(struct iam_leaf *leaf,
 	}
 	h_used_adj(leaf, n_head(leaf), shift);
 	n_cur(leaf)->vle_keysize = cpu_to_le16(ksize);
-	n_cur(leaf)->vle_hash = cpu_to_le32(get_hash(iam_leaf_container(leaf),
-					    key, ksize));
+	n_cur(leaf)->vle_hash = cpu_to_le32(iam_get_hash(leaf, key, ksize));
 	__lvar_key_set(leaf, k);
 	__lvar_rec_set(leaf, r);
 	assert_corr(n_at_rec(leaf));
@@ -894,7 +891,7 @@ static int lvar_node_load(struct iam_path *path, struct iam_frame *frame)
 		if (path->ip_ikey_target == NULL) {
 			path->ip_ikey_target = iam_path_ikey(path, 4);
 			*(lvar_hash_t *)path->ip_ikey_target =
-				get_hash(path->ip_container, name,
+				get_hash(iam_path_obj(path), name,
 					 strlen(name));
 		}
 	}

@@ -2179,7 +2179,9 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 			break;
 		}
 
-		err = ldiskfs_journal_get_write_access(handle, bh);
+		err = osd_ldiskfs_journal_get_write_access(handle, inode->i_sb,
+							   bh,
+							   LDISKFS_JTR_NONE);
 		if (err) {
 			CERROR("journal_get_write_access() returned error %d\n",
 			       err);

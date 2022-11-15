@@ -1,0 +1,274 @@
+Subject: [PATCH] ext4-corrupted-inode-block-bitmaps-handling-patches
+
+Since we could skip corrupt block groups, this patch
+use ext4_warning() intead of ext4_error() to make FS not
+remount RO in default
+
+---
+ fs/ext4/balloc.c  | 10 +++----
+ fs/ext4/ialloc.c  |  6 ++---
+ fs/ext4/mballoc.c | 68 +++++++++++++++++++----------------------------
+ 3 files changed, 35 insertions(+), 49 deletions(-)
+
+diff --git a/fs/ext4/balloc.c b/fs/ext4/balloc.c
+index 9dc6e74..ca05c72 100644
+--- a/fs/ext4/balloc.c
++++ b/fs/ext4/balloc.c
+@@ -387,7 +387,7 @@ static int ext4_validate_block_bitmap(struct super_block *sb,
+ 						    desc, bh) ||
+ 		     ext4_simulate_fail(sb, EXT4_SIM_BBITMAP_CRC))) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "bg %u: bad block bitmap checksum", block_group);
++		ext4_warning(sb, "bg %u: bad block bitmap checksum", block_group);
+ 		ext4_mark_group_bitmap_corrupted(sb, block_group,
+ 					EXT4_GROUP_INFO_BBITMAP_CORRUPT);
+ 		return -EFSBADCRC;
+@@ -395,8 +395,8 @@ static int ext4_validate_block_bitmap(struct super_block *sb,
+ 	blk = ext4_valid_block_bitmap(sb, desc, block_group, bh);
+ 	if (unlikely(blk != 0)) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "bg %u: block %llu: invalid block bitmap",
+-			   block_group, blk);
++		ext4_warning(sb, "bg %u: block %llu: invalid block bitmap",
++			     block_group, blk);
+ 		ext4_mark_group_bitmap_corrupted(sb, block_group,
+ 					EXT4_GROUP_INFO_BBITMAP_CORRUPT);
+ 		return -EFSCORRUPTED;
+@@ -479,8 +479,8 @@ ext4_read_block_bitmap_nowait(struct super_block *sb, ext4_group_t block_group,
+ 		ext4_unlock_group(sb, block_group);
+ 		unlock_buffer(bh);
+ 		if (err) {
+-			ext4_error(sb, "Failed to init block bitmap for group "
+-				   "%u: %d", block_group, err);
++			ext4_warning(sb, "Failed to init block bitmap for group "
++				     "%u: %d", block_group, err);
+ 			goto out;
+ 		}
+ 		goto verify;
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index 4840190..f73d3f8 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -102,8 +102,8 @@ static int ext4_validate_inode_bitmap(struct super_block *sb,
+ 					   EXT4_INODES_PER_GROUP(sb) / 8) ||
+ 	    ext4_simulate_fail(sb, EXT4_SIM_IBITMAP_CRC)) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "Corrupt inode bitmap - block_group = %u, "
+-			   "inode_bitmap = %llu", block_group, blk);
++		ext4_warning(sb, "Corrupt inode bitmap - block_group = %u, "
++			     "inode_bitmap = %llu", block_group, blk);
+ 		ext4_mark_group_bitmap_corrupted(sb, block_group,
+ 					EXT4_GROUP_INFO_IBITMAP_CORRUPT);
+ 		return -EFSBADCRC;
+@@ -353,7 +353,7 @@ out:
+ 		if (!fatal)
+ 			fatal = err;
+ 	} else {
+-		ext4_error(sb, "bit already cleared for inode %lu", ino);
++		ext4_warning(sb, "bit already cleared for inode %lu", ino);
+ 		ext4_mark_group_bitmap_corrupted(sb, block_group,
+ 					EXT4_GROUP_INFO_IBITMAP_CORRUPT);
+ 	}
+diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
+index de49616..90dfe9c 100644
+--- a/fs/ext4/mballoc.c
++++ b/fs/ext4/mballoc.c
+@@ -1134,10 +1134,14 @@ int ext4_mb_generate_buddy(struct super_block *sb,
+ 	grp->bb_fragments = fragments;
+ 
+ 	if (free != grp->bb_free) {
+-		ext4_grp_locked_error(sb, group, 0, 0,
+-				      "block bitmap and bg descriptor "
+-				      "inconsistent: %u vs %u free clusters",
+-				      free, grp->bb_free);
++		struct ext4_group_desc *gdp;
++		gdp = ext4_get_group_desc(sb, group, NULL);
++		ext4_warning(sb, "group %lu: block bitmap and bg descriptor "
++			     "inconsistent: %u vs %u free clusters "
++			     "%u in gd, %lu pa's",
++			     (long unsigned int)group, free, grp->bb_free,
++			     ext4_free_group_clusters(sb, gdp),
++			     grp->bb_prealloc_nr);
+ 		/*
+ 		 * If we intend to continue, we consider group descriptor
+ 		 * corrupt and update bb_free using bitmap value
+@@ -1481,7 +1485,7 @@ ext4_mb_load_buddy_gfp(struct super_block *sb, ext4_group_t group,
+ 	int block;
+ 	int pnum;
+ 	int poff;
+-	struct page *page;
++	struct page *page = NULL;
+ 	int ret;
+ 	struct ext4_group_info *grp;
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+@@ -1507,7 +1511,7 @@ ext4_mb_load_buddy_gfp(struct super_block *sb, ext4_group_t group,
+ 		 */
+ 		ret = ext4_mb_init_group(sb, group, gfp);
+ 		if (ret)
+-			return ret;
++			goto err;
+ 	}
+ 
+ 	/*
+@@ -1607,6 +1611,7 @@ err:
+ 		put_page(e4b->bd_buddy_page);
+ 	e4b->bd_buddy = NULL;
+ 	e4b->bd_bitmap = NULL;
++	ext4_warning(sb, "Error loading buddy information for %u", group);
+ 	return ret;
+ }
+ 
+@@ -4526,9 +4531,11 @@ int ext4_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
+ 	}
+ 
+ 	if (free != free_in_gdp) {
+-		ext4_error(sb, "on-disk bitmap for group %d"
++		ext4_warning(sb, "on-disk bitmap for group %d"
+ 			"corrupted: %u blocks free in bitmap, %u - in gd\n",
+ 			group, free, free_in_gdp);
++		ext4_mark_group_bitmap_corrupted(sb, group,
++					EXT4_GROUP_INFO_BBITMAP_CORRUPT);
+ 		return -EIO;
+ 	}
+ 	return 0;
+@@ -4894,16 +4901,8 @@ ext4_mb_release_inode_pa(struct ext4_buddy *e4b, struct buffer_head *bitmap_bh,
+ 	/* "free < pa->pa_free" means we maybe double alloc the same blocks,
+ 	 * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
+ 	if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {
+-		ext4_error(sb, "pa free mismatch: [pa %p] "
+-				"[phy %lu] [logic %lu] [len %u] [free %u] "
+-				"[error %u] [inode %d] [freed %u]", pa,
+-				(unsigned long)pa->pa_pstart,
+-				(unsigned long)pa->pa_lstart,
+-				pa->pa_len, (unsigned)pa->pa_free,
+-				(unsigned)pa->pa_error, pa->pa_inode->i_ino,
+-				free);
+ 		ext4_grp_locked_error(sb, group, 0, 0, "free %u, pa_free %u",
+-					free, pa->pa_free);
++				      free, pa->pa_free);
+ 		/*
+ 		 * pa is already deleted so we use the value obtained
+ 		 * from the bitmap and continue.
+@@ -4963,16 +4962,11 @@ ext4_mb_discard_group_preallocations(struct super_block *sb,
+ 	bitmap_bh = ext4_read_block_bitmap(sb, group);
+ 	if (IS_ERR(bitmap_bh)) {
+ 		err = PTR_ERR(bitmap_bh);
+-		ext4_error_err(sb, -err,
+-			       "Error %d reading block bitmap for %u",
+-			       err, group);
+ 		goto out_dbg;
+ 	}
+ 
+ 	err = ext4_mb_load_buddy(sb, group, &e4b);
+ 	if (err) {
+-		ext4_warning(sb, "Error %d loading buddy information for %u",
+-			     err, group);
+ 		put_bh(bitmap_bh);
+ 		goto out_dbg;
+ 	}
+@@ -5129,17 +5123,12 @@ repeat:
+ 
+ 		err = ext4_mb_load_buddy_gfp(sb, group, &e4b,
+ 					     GFP_NOFS|__GFP_NOFAIL);
+-		if (err) {
+-			ext4_error_err(sb, -err, "Error %d loading buddy information for %u",
+-				       err, group);
++		if (err)
+ 			return;
+-		}
+ 
+ 		bitmap_bh = ext4_read_block_bitmap(sb, group);
+ 		if (IS_ERR(bitmap_bh)) {
+ 			err = PTR_ERR(bitmap_bh);
+-			ext4_error_err(sb, -err, "Error %d reading block bitmap for %u",
+-				       err, group);
+ 			ext4_mb_unload_buddy(&e4b);
+ 			continue;
+ 		}
+@@ -5434,11 +5423,8 @@ ext4_mb_discard_lg_preallocations(struct super_block *sb,
+ 		group = ext4_get_group_number(sb, pa->pa_pstart);
+ 		err = ext4_mb_load_buddy_gfp(sb, group, &e4b,
+ 					     GFP_NOFS|__GFP_NOFAIL);
+-		if (err) {
+-			ext4_error_err(sb, -err, "Error %d loading buddy information for %u",
+-				       err, group);
++		if (err)
+ 			continue;
+-		}
+ 		ext4_lock_group(sb, group);
+ 		list_del(&pa->pa_group_list);
+ 		ext4_get_group_info(sb, group)->bb_prealloc_nr--;
+@@ -5773,7 +5759,7 @@ errout:
+ 			 * been updated or not when fail case. So can
+ 			 * not revert pa_free back, just mark pa_error*/
+ 			pa->pa_error++;
+-			ext4_error(sb,
++			ext4_warning(sb,
+ 				"Updating bitmap error: [err %d] "
+ 				"[pa %p] [phy %lu] [logic %lu] "
+ 				"[len %u] [free %u] [error %u] "
+@@ -5784,6 +5770,7 @@ errout:
+ 				(unsigned)pa->pa_free,
+ 				(unsigned)pa->pa_error,
+ 				pa->pa_inode ? pa->pa_inode->i_ino : 0);
++			ext4_mark_group_bitmap_corrupted(sb, 0, 0);
+ 		}
+ 	}
+ 	ext4_mb_release_context(ac);
+@@ -6182,7 +6169,7 @@ do_more:
+ 	err = ext4_mb_load_buddy_gfp(sb, block_group, &e4b,
+ 				     GFP_NOFS|__GFP_NOFAIL);
+ 	if (err)
+-		goto error_return;
++		goto error_brelse;
+ 
+ 	/*
+ 	 * We need to make sure we don't reuse the freed block until after the
+@@ -6273,8 +6260,9 @@ do_more:
+ 		goto do_more;
+ 	}
+ error_return:
+-	brelse(bitmap_bh);
+ 	ext4_std_error(sb, err);
++error_brelse:
++	brelse(bitmap_bh);
+ 	return;
+ }
+ 
+@@ -6375,7 +6363,7 @@ int ext4_group_add_blocks(handle_t *handle, struct super_block *sb,
+ 
+ 	err = ext4_mb_load_buddy(sb, block_group, &e4b);
+ 	if (err)
+-		goto error_return;
++		goto error_brelse;
+ 
+ 	/*
+ 	 * need to update group_info->bb_free and bitmap
+@@ -6414,8 +6402,9 @@ int ext4_group_add_blocks(handle_t *handle, struct super_block *sb,
+ 		err = ret;
+ 
+ error_return:
+-	brelse(bitmap_bh);
+ 	ext4_std_error(sb, err);
++error_brelse:
++	brelse(bitmap_bh);
+ 	return err;
+ }
+ 
+@@ -6538,11 +6527,8 @@ ext4_trim_all_free(struct super_block *sb, ext4_group_t group,
+ 	trace_ext4_trim_all_free(sb, group, start, max);
+ 
+ 	ret = ext4_mb_load_buddy(sb, group, &e4b);
+-	if (ret) {
+-		ext4_warning(sb, "Error %d loading buddy information for %u",
+-			     ret, group);
+-		return ret;
+-	}
++	if (ret)
++ 		return ret;
+ 	ext4_lock_group(sb, group);
+ 	if (!EXT4_MB_GRP_WAS_TRIMMED(e4b.bd_info) ||
+ 	    minblocks < atomic_read(&EXT4_SB(sb)->s_last_trim_minblks)) {
+-- 
+2.34.1
+

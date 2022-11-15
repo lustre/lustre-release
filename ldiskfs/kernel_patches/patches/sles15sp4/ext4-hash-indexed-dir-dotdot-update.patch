@@ -1,0 +1,98 @@
+Subject: [PATCH] linux-5.14/ext4-hash-indexed-dir-dotdot-update.patch
+
+---
+ fs/ext4/namei.c | 71 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index 95b21f5..e4514c9 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -2301,6 +2301,74 @@ out_frames:
+ 	return retval;
+ }
+ 
++/* update ".." for hash-indexed directory, split the item "." if necessary */
++static int ext4_update_dotdot(handle_t *handle, struct dentry *dentry,
++			      struct inode *inode)
++{
++	struct inode *dir = dentry->d_parent->d_inode;
++	struct buffer_head *dir_block;
++	struct ext4_dir_entry_2 *de;
++	int len, journal = 0, err = 0;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		handle->h_sync = 1;
++
++	dir_block = ext4_bread(handle, dir, 0, 0);
++	if (IS_ERR(dir_block)) {
++		err = PTR_ERR(dir_block);
++		goto out;
++	}
++
++	de = (struct ext4_dir_entry_2 *)dir_block->b_data;
++	/* the first item must be "." */
++	assert(de->name_len == 1 && de->name[0] == '.');
++	len = le16_to_cpu(de->rec_len);
++	assert(len >= EXT4_DIR_REC_LEN(1));
++	if (len > EXT4_DIR_REC_LEN(1)) {
++		BUFFER_TRACE(dir_block, "get_write_access");
++		err = ext4_journal_get_write_access(handle, dir->i_sb, dir_block, EXT4_JTR_NONE);
++		if (err)
++			goto out_journal;
++
++		journal = 1;
++		de->rec_len = cpu_to_le16(EXT4_DIR_REC_LEN(1));
++	}
++
++	len -= EXT4_DIR_REC_LEN(1);
++	assert(len == 0 || len >= EXT4_DIR_REC_LEN(2));
++	de = (struct ext4_dir_entry_2 *)
++			((char *) de + le16_to_cpu(de->rec_len));
++	if (!journal) {
++		BUFFER_TRACE(dir_block, "get_write_access");
++		err = ext4_journal_get_write_access(handle, dir->i_sb, dir_block, EXT4_JTR_NONE);
++		if (err)
++			goto out_journal;
++	}
++
++	de->inode = cpu_to_le32(inode->i_ino);
++	if (len > 0)
++		de->rec_len = cpu_to_le16(len);
++	else
++		assert(le16_to_cpu(de->rec_len) >= EXT4_DIR_REC_LEN(2));
++	de->name_len = 2;
++	strcpy(de->name, "..");
++	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
++
++out_journal:
++	if (journal) {
++		BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
++		err = ext4_handle_dirty_dirblock(handle, dir, dir_block);
++		ext4_mark_inode_dirty(handle, dir);
++	}
++	brelse(dir_block);
++
++out:
++	return err;
++}
++
+ /*
+  *	ext4_add_entry()
+  *
+@@ -2357,6 +2425,9 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+ 	}
+ 
+ 	if (is_dx(dir)) {
++		if (dentry->d_name.len == 2 &&
++                   memcmp(dentry->d_name.name, "..", 2) == 0)
++                       return ext4_update_dotdot(handle, dentry, inode);
+ 		retval = ext4_dx_add_entry(handle, &fname, dir, inode);
+ 		if (!retval || (retval != ERR_BAD_DX_DIR))
+ 			goto out;
+-- 
+2.31.1
+

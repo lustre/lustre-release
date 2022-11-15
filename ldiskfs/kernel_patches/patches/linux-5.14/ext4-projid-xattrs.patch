@@ -1,0 +1,167 @@
+Subject: [PATCH] P: linux-5.14/ext4-projid-xattrs.patch
+
+---
+ fs/ext4/ext4.h  |  1 +
+ fs/ext4/ioctl.c |  4 +--
+ fs/ext4/xattr.c | 84 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 87 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index afca42d..9ba2e8b 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -3164,6 +3164,7 @@ extern int ext4_ind_remove_space(handle_t *handle, struct inode *inode,
+ 				 ext4_lblk_t start, ext4_lblk_t end);
+ 
+ /* ioctl.c */
++extern int ext4_ioctl_setproject(struct inode *, __u32);
+ extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
+ extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
+ int ext4_fileattr_set(struct user_namespace *mnt_userns,
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index 6eed617..88cb1fb 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
+@@ -461,7 +461,7 @@ flags_out:
+ }
+ 
+ #ifdef CONFIG_QUOTA
+-static int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
++int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
+ {
+ 	struct super_block *sb = inode->i_sb;
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+@@ -546,7 +546,7 @@ out_stop:
+ 	return err;
+ }
+ #else
+-static int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
++int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
+ {
+ 	if (projid != EXT4_DEF_PROJID)
+ 		return -EOPNOTSUPP;
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index aabc92e..442bfbd 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -62,6 +62,8 @@
+ #include "xattr.h"
+ #include "acl.h"
+ 
++#define EXT4_XATTR_PROJID "projid"
++
+ #ifdef EXT4_XATTR_DEBUG
+ # define ea_idebug(inode, fmt, ...)					\
+ 	printk(KERN_DEBUG "inode %s:%lu: " fmt "\n",			\
+@@ -648,11 +650,30 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
+ 		return -ERANGE;
+ 
+ 	down_read(&EXT4_I(inode)->xattr_sem);
++	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
++	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
++	    ext4_has_feature_project(inode->i_sb)) {
++		/* 10 chars to hold u32 in decimal, plus ending \0 */
++		char value[11];
++		__u32 projid = (__u32)from_kprojid(&init_user_ns,
++						   EXT4_I(inode)->i_projid);
++		error = snprintf(value, sizeof(value), "%u", projid);
++		if (buffer) {
++			if (error > buffer_size) {
++				error = -ERANGE;
++				goto out;
++			}
++			memcpy(buffer, value, error);
++		}
++		goto out;
++	}
++
+ 	error = ext4_xattr_ibody_get(inode, name_index, name, buffer,
+ 				     buffer_size);
+ 	if (error == -ENODATA)
+ 		error = ext4_xattr_block_get(inode, name_index, name, buffer,
+ 					     buffer_size);
++out:
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
+@@ -775,7 +796,33 @@ ext4_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
+ 	ret = ext4_xattr_block_list(dentry, buffer, buffer_size);
+ 	if (ret < 0)
+ 		goto errout;
++	if (buffer) {
++		buffer += ret;
++		buffer_size -= ret;
++	}
+ 	ret += ret2;
++	if (ext4_has_feature_project(dentry->d_sb)) {
++		size_t prefix_len = strlen(XATTR_TRUSTED_PREFIX);
++		size_t name_len = strlen(EXT4_XATTR_PROJID);
++		size_t size = prefix_len + name_len + 1;
++
++		if (__kprojid_val(EXT4_I(dentry->d_inode)->i_projid) ==
++							EXT4_DEF_PROJID)
++			goto errout;
++		if (buffer) {
++			if (size > buffer_size) {
++				ret = -ERANGE;
++				goto errout;
++			}
++			strncpy(buffer, XATTR_TRUSTED_PREFIX, prefix_len);
++			buffer += prefix_len;
++			strncpy(buffer, EXT4_XATTR_PROJID, name_len);
++			buffer += name_len;
++			*buffer++ = 0;
++			buffer_size -= size;
++		}
++		ret += size;
++	}
+ errout:
+ 	up_read(&EXT4_I(d_inode(dentry))->xattr_sem);
+ 	return ret;
+@@ -2456,6 +2503,43 @@ ext4_xattr_set(struct inode *inode, int name_index, const char *name,
+ 	int error, retries = 0;
+ 	int credits;
+ 
++	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
++	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
++	    ext4_has_feature_project(inode->i_sb)) {
++		/* 10 chars to hold u32 in decimal, plus ending \0 */
++		char buffer[11];
++		__u32 projid;
++
++		/*
++		 * Project Quota ID state is only allowed to change from within
++		 * the init namespace.
++		 */
++		if (current_user_ns() != &init_user_ns)
++			return -EINVAL;
++
++		if (value && value_len) {
++			if (value_len >= sizeof(buffer))
++				return -EINVAL;
++			memcpy(buffer, value, value_len);
++			buffer[value_len] = '\0';
++			error = kstrtouint(buffer, 0, &projid);
++			if (error)
++				return error;
++		} else {
++			projid = EXT4_DEF_PROJID;
++		}
++
++		/*
++		 * Caller is allowed to change the project ID. If it is being
++		 * changed, make sure that the new value is valid.
++		 */
++		if (!projid_valid(make_kprojid(&init_user_ns, projid)))
++			return -EINVAL;
++
++		error = ext4_ioctl_setproject(inode, projid);
++		return error;
++	}
++
+ 	error = dquot_initialize(inode);
+ 	if (error)
+ 		return error;
+-- 
+2.27.0
+

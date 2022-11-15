@@ -67,6 +67,8 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			;; # (
 		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp3.series"
 			;;
+		15sp4 ) LDISKFS_SERIES="5.14.21-sles15sp4.series"
+			;;
 		esac
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
@@ -431,7 +433,7 @@ ext4fs_dirhash, [
 	int f = ext4fs_dirhash(NULL, NULL, 0, NULL);
 	(void)f;
 ],[
-	AC_DEFINE(HAVE_LDISKFSFS_GETHASH_INODE_ARG, 1,
+	AC_DEFINE(HAVE_LDISKFSFS_DIRHASH_WITH_DIR, 1,
 		[ldiskfsfs_dirhash takes an inode argument])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
@@ -499,6 +501,44 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 
 #
+# LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
+#
+# Linux v5.14-rc2-19-g188c299e2a26
+#    ext4: Support for checksumming from journal triggers
+#
+AC_DEFUN([LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if jbd2_journal_get_max_txn_bufs is available],
+ext4_journal_get_write_access, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+
+	int __ext4_journal_get_write_access(const char *where, unsigned int line,
+				    handle_t *handle,
+				    struct super_block *sb,
+				    struct buffer_head *bh,
+				    enum ext4_journal_trigger_type trigger_type)
+	{
+		return 0;
+	}
+],[
+	handle_t *handle = NULL;
+	struct super_block *sb = NULL;
+	struct buffer_head *bh = NULL;
+	enum ext4_journal_trigger_type trigger_type = EXT4_JTR_NONE;
+	int err = ext4_journal_get_write_access(handle, sb, bh, trigger_type);
+
+	(void)err;
+],[
+	AC_DEFINE(HAVE_EXT4_JOURNAL_GET_WRITE_ACCESS_4ARGS, 1,
+		[ext4_journal_get_write_access() has 4 arguments])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
+
+#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -553,6 +593,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_JBD2_H_TOTAL_CREDITS
 	LB_EXT4_INC_DEC_COUNT_2ARGS
 	LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
+	LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

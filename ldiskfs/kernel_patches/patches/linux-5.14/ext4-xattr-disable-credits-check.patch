@@ -1,0 +1,24 @@
+Subject: [PATCH] ext4-xattr-disable-credits-check
+
+---
+ fs/ext4/xattr.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index 850b9cf..f29de20 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -2387,10 +2387,6 @@ ext4_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
+ 						   flags & XATTR_CREATE);
+ 		brelse(bh);
+ 
+-		if (jbd2_handle_buffer_credits(handle) < credits) {
+-			error = -ENOSPC;
+-			goto cleanup;
+-		}
+ 		WARN_ON_ONCE(!(current->flags & PF_MEMALLOC_NOFS));
+ 	}
+ 
+-- 
+2.27.0
+
