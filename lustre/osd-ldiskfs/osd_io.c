@@ -2372,7 +2372,7 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		 !ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)) ?
 		LDISKFS_GET_BLOCKS_CREATE_ZERO :
 		LDISKFS_GET_BLOCKS_CREATE_UNWRIT_EXT;
-#ifndef HAVE_LDISKFS_GET_BLOCKS_KEEP_SIZE
+#ifdef LDISKFS_GET_BLOCKS_KEEP_SIZE
 	if (mode & FALLOC_FL_KEEP_SIZE)
 		flags |= LDISKFS_GET_BLOCKS_KEEP_SIZE;
 #endif
@@ -2437,7 +2437,7 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 				epos = end;
 			if (ldiskfs_update_inode_size(inode, epos) & 0x1)
 				inode->i_mtime = inode->i_ctime;
-#ifndef HAVE_LDISKFS_GET_BLOCKS_KEEP_SIZE
+#ifdef LDISKFS_EOFBLOCKS_FL
 		} else {
 			if (epos > inode->i_size)
 				ldiskfs_set_inode_flag(inode,
