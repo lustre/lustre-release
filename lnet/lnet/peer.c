@@ -2931,6 +2931,8 @@ u32 *ping_iter_first(struct lnet_ping_iter *pi,
 	 */
 	if (nid)
 		lnet_nid4_to_nid(pbuf->pb_info.pi_ni[0].ns_nid, nid);
+
+	pi->pos += sizeof(struct lnet_ni_status);
 	return &pbuf->pb_info.pi_ni[0].ns_status;
 }
 
@@ -2967,6 +2969,19 @@ u32 *ping_iter_next(struct lnet_ping_iter *pi, struct lnet_nid *nid)
 	return NULL;
 }
 
+static int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
+{
+	struct lnet_ping_iter pi;
+	u32 *st;
+	int nnis = 0;
+
+	for (st = ping_iter_first(&pi, pbuf, NULL); st;
+	     st = ping_iter_next(&pi, NULL))
+		nnis += 1;
+
+	return nnis;
+}
+
 /*
  * Build a peer from incoming data.
  *
@@ -2990,10 +3005,14 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 {
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
-	lnet_nid_t *curnis = NULL;
-	struct lnet_ni_status *addnis = NULL;
-	lnet_nid_t *delnis = NULL;
+	struct lnet_nid *curnis = NULL;
+	struct lnet_ni_large_status *addnis = NULL;
+	struct lnet_nid *delnis = NULL;
+	struct lnet_ping_iter pi;
 	struct lnet_nid nid;
+	u32 *stp;
+	struct lnet_nid primary = {};
+	bool want_large_primary;
 	unsigned int flags;
 	int ncurnis;
 	int naddnis;
@@ -3018,7 +3037,8 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		lp->lp_state &= ~LNET_PEER_ROUTER_ENABLED;
 	spin_unlock(&lp->lp_lock);
 
-	nnis = max_t(int, lp->lp_nnis, pbuf->pb_info.pi_nnis);
+	nnis = ping_info_count_entries(pbuf);
+	nnis = max_t(int, lp->lp_nnis, nnis);
 	CFS_ALLOC_PTR_ARRAY(curnis, nnis);
 	CFS_ALLOC_PTR_ARRAY(addnis, nnis);
 	CFS_ALLOC_PTR_ARRAY(delnis, nnis);
@@ -3033,18 +3053,31 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	/* Construct the list of NIDs present in peer. */
 	lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL)
-		curnis[ncurnis++] = lnet_nid_to_nid4(&lpni->lpni_nid);
+		curnis[ncurnis++] = lpni->lpni_nid;
 
-	/*
-	 * Check for NIDs in pbuf not present in curnis[].
-	 * The loop starts at 1 to skip the loopback NID.
+	/* Check for NIDs in pbuf not present in curnis[].
+	 * Skip the first, which is loop-back.  Take second as
+	 * primary, unless a large primary is found.
 	 */
-	for (i = 1; i < pbuf->pb_info.pi_nnis; i++) {
+	ping_iter_first(&pi, pbuf, NULL);
+	stp = ping_iter_next(&pi, &nid);
+	if (stp)
+		primary = nid;
+	want_large_primary = (pbuf->pb_info.pi_features &
+			      LNET_PING_FEAT_PRIMARY_LARGE);
+	for (; stp; stp = ping_iter_next(&pi, &nid)) {
 		for (j = 0; j < ncurnis; j++)
-			if (pbuf->pb_info.pi_ni[i].ns_nid == curnis[j])
+			if (nid_same(&nid, &curnis[j]))
 				break;
-		if (j == ncurnis)
-			addnis[naddnis++] = pbuf->pb_info.pi_ni[i];
+		if (j == ncurnis) {
+			addnis[naddnis].ns_nid = nid;
+			addnis[naddnis].ns_status = *stp;
+			naddnis += 1;
+		}
+		if (want_large_primary && nid.nid_size) {
+			primary = nid;
+			want_large_primary = false;
+		}
 	}
 	/*
 	 * Check for NIDs in curnis[] not present in pbuf.
@@ -3054,25 +3087,25 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 * present in curnis[] then this peer is for this node.
 	 */
 	for (i = 0; i < ncurnis; i++) {
-		if (curnis[i] == LNET_NID_LO_0)
+		if (nid_is_lo0(&curnis[i]))
 			continue;
-		for (j = 1; j < pbuf->pb_info.pi_nnis; j++) {
-			if (curnis[i] == pbuf->pb_info.pi_ni[j].ns_nid) {
+		ping_iter_first(&pi, pbuf, NULL);
+		while ((stp = ping_iter_next(&pi, &nid)) != NULL) {
+			if (nid_same(&curnis[i], &nid)) {
 				/*
 				 * update the information we cache for the
 				 * peer with the latest information we
 				 * received
 				 */
-				lnet_nid4_to_nid(curnis[i], &nid);
-				lpni = lnet_peer_ni_find_locked(&nid);
+				lpni = lnet_peer_ni_find_locked(&curnis[i]);
 				if (lpni) {
-					lpni->lpni_ns_status = pbuf->pb_info.pi_ni[j].ns_status;
+					lpni->lpni_ns_status = *stp;
 					lnet_peer_ni_decref_locked(lpni);
 				}
 				break;
 			}
 		}
-		if (j == pbuf->pb_info.pi_nnis)
+		if (!stp)
 			delnis[ndelnis++] = curnis[i];
 	}
 
@@ -3086,16 +3119,15 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		goto out;
 
 	for (i = 0; i < naddnis; i++) {
-		lnet_nid4_to_nid(addnis[i].ns_nid, &nid);
-		rc = lnet_peer_add_nid(lp, &nid, flags);
+		rc = lnet_peer_add_nid(lp, &addnis[i].ns_nid, flags);
 		if (rc) {
 			CERROR("Error adding NID %s to peer %s: %d\n",
-			       libcfs_nid2str(addnis[i].ns_nid),
+			       libcfs_nidstr(&addnis[i].ns_nid),
 			       libcfs_nidstr(&lp->lp_primary_nid), rc);
 			if (rc == -ENOMEM)
 				goto out;
 		}
-		lpni = lnet_peer_ni_find_locked(&nid);
+		lpni = lnet_peer_ni_find_locked(&addnis[i].ns_nid);
 		if (lpni) {
 			lpni->lpni_ns_status = addnis[i].ns_status;
 			lnet_peer_ni_decref_locked(lpni);
@@ -3109,13 +3141,12 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		 * being told that the router changed its primary_nid
 		 * then it's okay to delete it.
 		 */
-		lnet_nid4_to_nid(delnis[i], &nid);
 		if (lp->lp_rtr_refcount > 0)
 			flags |= LNET_PEER_RTR_NI_FORCE_DEL;
-		rc = lnet_peer_del_nid(lp, &nid, flags);
+		rc = lnet_peer_del_nid(lp, &delnis[i], flags);
 		if (rc) {
 			CERROR("Error deleting NID %s from peer %s: %d\n",
-			       libcfs_nid2str(delnis[i]),
+			       libcfs_nidstr(&delnis[i]),
 			       libcfs_nidstr(&lp->lp_primary_nid), rc);
 			if (rc == -ENOMEM)
 				goto out;
