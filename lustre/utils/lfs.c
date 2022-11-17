@@ -1092,12 +1092,13 @@ static int check_lease(int fd)
 
 static int migrate_nonblock(int fd_src, int fd_dst,
 			    unsigned long long bandwidth_bytes_sec,
-			    long stats_interval_sec)
+			    long stats_interval_sec,
+			    __u64 *dv_src)
 {
 	struct stat st;
-	__u64	dv1;
-	__u64	dv2;
-	int	rc;
+	__u64 dv1;
+	__u64 dv2;
+	int rc;
 
 	rc = fstat(fd_src, &st);
 	if (rc < 0) {
@@ -1124,6 +1125,9 @@ static int migrate_nonblock(int fd_src, int fd_dst,
 		error_loc = "cannot get data version";
 		return rc;
 	}
+
+	if (dv_src)
+		*dv_src = dv2;
 
 	if (dv1 != dv2) {
 		rc = -EAGAIN;
@@ -1324,6 +1328,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 {
 	struct llapi_layout *existing;
 	uint64_t dom_new, dom_cur;
+	__u64 dv_src = 0;
+	__u64 dv_dst = 0;
 	int fd_src = -1;
 	int fd_dst = -1;
 	int rc;
@@ -1388,18 +1394,24 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	}
 
 	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
-			      stats_interval_sec);
+			      stats_interval_sec, &dv_src);
 	if (rc < 0) {
 		llapi_lease_release(fd_src);
 		goto out;
 	}
 
+	rc = llapi_get_data_version(fd_dst, &dv_dst, LL_DV_RD_FLUSH);
+	if (rc != 0) {
+		error_loc = "cannot get data version";
+		return rc;
+	}
 	/*
 	 * Atomically put lease, swap layouts and close.
 	 * for a migration we need to check data version on file did
 	 * not change.
 	 */
-	rc = llapi_fswap_layouts(fd_src, fd_dst, 0, 0, SWAP_LAYOUTS_CLOSE);
+	rc = llapi_fswap_layouts(fd_src, fd_dst, dv_src, dv_dst,
+				 SWAP_LAYOUTS_CLOSE);
 	if (rc < 0) {
 		error_loc = "cannot swap layout";
 		goto out;
@@ -1930,9 +1942,9 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 {
 	struct llapi_layout *f_layout = NULL;
 	struct ll_ioc_lease *data = NULL;
-	struct stat st;
 	int fd_src = -1;
 	int fd_dst = -1;
+	struct stat st;
 	int rc = 0;
 
 	if (inherit) {
@@ -1980,7 +1992,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		printf("%s:\n", name);
 
 	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
-			      stats_interval_sec);
+			      stats_interval_sec, NULL);
 	if (rc < 0) {
 		llapi_lease_release(fd_src);
 		goto out;
@@ -2505,7 +2517,7 @@ static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 		printf("%s:\n", name);
 
 	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
-			      stats_interval_sec);
+			      stats_interval_sec, NULL);
 	if (rc < 0)
 		goto out_release;
 

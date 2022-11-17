@@ -67,6 +67,12 @@ struct pcc_param {
 	__u32	pa_layout_gen;
 };
 
+struct swap_layouts_param {
+	struct inode *slp_inode;
+	__u64         slp_dv1;
+	__u64         slp_dv2;
+};
+
 static int
 ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 
@@ -143,8 +149,9 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
  * The meaning of "data" depends on the value of "bias".
  *
  * If \a bias is MDS_HSM_RELEASE then \a data is a pointer to the data version.
- * If \a bias is MDS_CLOSE_LAYOUT_SWAP then \a data is a pointer to the inode to
- * swap layouts with.
+ * If \a bias is MDS_CLOSE_LAYOUT_SWAP then \a data is a pointer to a
+ * struct swap_layouts_param containing the inode to swap with and the old and
+ * new dataversion
  */
 static int ll_close_inode_openhandle(struct inode *inode,
 				     struct obd_client_handle *och,
@@ -177,8 +184,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		op_data->op_attr.ia_valid |= ATTR_SIZE;
 		op_data->op_xvalid |= OP_XVALID_BLOCKS;
 		fallthrough;
-	case MDS_CLOSE_LAYOUT_SPLIT:
-	case MDS_CLOSE_LAYOUT_SWAP: {
+	case MDS_CLOSE_LAYOUT_SPLIT: {
 		struct split_param *sp = data;
 
 		LASSERT(data != NULL);
@@ -188,9 +194,20 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		if (bias == MDS_CLOSE_LAYOUT_SPLIT) {
 			op_data->op_fid2 = *ll_inode2fid(sp->sp_inode);
 			op_data->op_mirror_id = sp->sp_mirror_id;
-		} else {
+		} else { /* MDS_CLOSE_LAYOUT_MERGE */
 			op_data->op_fid2 = *ll_inode2fid(data);
 		}
+		break;
+	}
+	case MDS_CLOSE_LAYOUT_SWAP: {
+		struct swap_layouts_param *slp = data;
+
+		LASSERT(data != NULL);
+		op_data->op_bias |= (bias | MDS_CLOSE_LAYOUT_SWAP_HSM);
+		op_data->op_lease_handle = och->och_lease_handle;
+		op_data->op_fid2 = *ll_inode2fid(slp->slp_inode);
+		op_data->op_data_version = slp->slp_dv1;
+		op_data->op_data_version2 = slp->slp_dv2;
 		break;
 	}
 
@@ -1325,11 +1342,13 @@ static int ll_check_swap_layouts_validity(struct inode *inode1,
 }
 
 static int ll_swap_layouts_close(struct obd_client_handle *och,
-				 struct inode *inode, struct inode *inode2)
+				 struct inode *inode, struct inode *inode2,
+				 struct lustre_swap_layouts *lsl)
 {
-	const struct lu_fid	*fid1 = ll_inode2fid(inode);
-	const struct lu_fid	*fid2;
-	int			 rc;
+	const struct lu_fid *fid1 = ll_inode2fid(inode);
+	struct swap_layouts_param slp;
+	const struct lu_fid *fid2;
+	int  rc;
 	ENTRY;
 
 	CDEBUG(D_INODE, "%s: biased close of file "DFID"\n",
@@ -1349,8 +1368,10 @@ static int ll_swap_layouts_close(struct obd_client_handle *och,
 	/* Close the file and {swap,merge} layouts between inode & inode2.
 	 * NB: local lease handle is released in mdc_close_intent_pack()
 	 * because we still need it to pack l_remote_handle to MDT. */
-	rc = ll_close_inode_openhandle(inode, och, MDS_CLOSE_LAYOUT_SWAP,
-				       inode2);
+	slp.slp_inode = inode2;
+	slp.slp_dv1 = lsl->sl_dv1;
+	slp.slp_dv2 = lsl->sl_dv2;
+	rc = ll_close_inode_openhandle(inode, och, MDS_CLOSE_LAYOUT_SWAP, &slp);
 
 	och = NULL; /* freed in ll_close_inode_openhandle() */
 
@@ -4423,7 +4444,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (och == NULL)
 				GOTO(out, rc = -ENOLCK);
 			inode2 = file_inode(file2);
-			rc = ll_swap_layouts_close(och, inode, inode2);
+			rc = ll_swap_layouts_close(och, inode, inode2, &lsl);
 		} else {
 			rc = ll_swap_layouts(file, file2, &lsl);
 		}

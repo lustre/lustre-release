@@ -5896,6 +5896,133 @@ test_606() {
 }
 run_test 606 "llog_reader groks changelog fields"
 
+get_hsm_xattr_sha()
+{
+	getfattr -e text -n trusted.hsm "$1" 2>/dev/null |
+		sha1sum | awk '{ print $1 }'
+}
+
+test_hsm_migrate_init()
+{
+	local d=$1
+	local f=$2
+	local fid
+
+	mkdir_on_mdt0 "$d"
+	fid=$(create_small_file "$f")
+
+	echo "$fid"
+}
+
+test_607a()
+{
+	local d="$DIR/$tdir"
+	local f="$d/$tfile"
+	local fid
+
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "need MDS version at least 2.15.60"
+
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	fid=$(test_hsm_migrate_init "$d" "$f" | tail -1)
+
+	copytool setup
+
+	$LFS hsm_archive "$f" || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS migrate -n -i 1 "$f" ||
+		error "could not migrate file to OST 1"
+
+	$LFS hsm_release "$f" ||
+		error "could not release file after non blocking migrate"
+	$LFS hsm_restore "$f" ||
+		error "could not restore file after non blocking migrate"
+	wait_request_state $fid RESTORE SUCCEED
+}
+run_test 607a "release a file that was migrated after being archived"
+
+test_607b()
+{
+	local d="$DIR/$tdir"
+	local f="$DIR/$tdir/$tfile"
+	local saved_params
+	local old_hsm
+	local new_hsm
+	local fid
+
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "need MDS version at least 2.15.60"
+
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	fid=$(test_hsm_migrate_init "$d" "$f" | tail -1)
+
+	copytool setup
+
+	$LFS hsm_archive "$f" || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	saved_params=$($LCTL get_param llite.*.xattr_cache | tr '\n' ' ')
+	$LCTL set_param llite.*.xattr_cache=0
+	stack_trap "$LCTL set_param $saved_params" EXIT
+
+	# make sure that migrate won't change archive version
+	echo 10 >> "$f"
+
+	old_hsm=$(get_hsm_xattr_sha "$f")
+	$LFS migrate -n -i 1 "$f" ||
+		error "could not migrate file to OST 1"
+
+	$LFS hsm_state "$f" | grep dirty || error "dirty flag not found"
+
+	new_hsm=$(get_hsm_xattr_sha "$f")
+	[ "$old_hsm" != "$new_hsm" ] &&
+		 error "migrate should not modify data version of dirty files"
+
+	return 0
+}
+run_test 607b "Migrate should not change the HSM attribute of dirty files"
+
+test_607c()
+{
+	local d="$DIR/$tdir"
+	local f="$DIR/$tdir/$tfile"
+	local fid1 fid2 fid3
+	local nbr_dirty
+
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "need MDS version at least 2.15.60"
+
+	mkdir_on_mdt0 $d
+	fid1=$(create_small_file "$f-1")
+	fid2=$(create_small_file "$f-2")
+	fid3=$(create_small_file "$f-3")
+
+	copytool setup
+
+	$LFS hsm_archive "$f-1" || error "could not archive file"
+	wait_request_state $fid1 ARCHIVE SUCCEED
+
+	$LFS hsm_archive "$f-3" || error "could not archive file"
+	wait_request_state $fid3 ARCHIVE SUCCEED
+
+	$LFS swap_layouts "$f-1" "$f-3" |& grep "Operation not permitted" ||
+		error "swap_layouts should fail with EPERM on 2 archived file"
+
+	$LFS swap_layouts "$f-1" "$f-2" ||
+		error "swap_layout failed on $f-1 and $f-2"
+
+	$LFS swap_layouts "$f-2" "$f-3" ||
+		error "swap_layout failed on $f-2 and $f-3"
+
+	nbr_dirty=$($LFS hsm_state "$f-1" "$f-3" | grep -c 'dirty')
+	((nbr_dirty == 2)) || error "dirty flag should be set on $f-1 and $f-3"
+
+}
+run_test 607c "'lfs swap_layouts' should set dirty flag on HSM file"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

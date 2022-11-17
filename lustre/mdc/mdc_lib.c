@@ -566,6 +566,8 @@ static void mdc_close_intent_pack(struct req_capsule *pill,
 		}
 	} else if (bias & MDS_PCC_ATTACH) {
 		data->cd_archive_id = op_data->op_archive_id;
+	} else if (bias & MDS_CLOSE_LAYOUT_SWAP) {
+		data->cd_data_version2 = op_data->op_data_version2;
 	}
 }
 

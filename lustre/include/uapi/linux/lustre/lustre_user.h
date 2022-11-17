@@ -1598,8 +1598,9 @@ struct if_quotactl {
 #define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 #define SWAP_LAYOUTS_CLOSE		(1 << 4)
 
-/* Swap XATTR_NAME_HSM as well, only on the MDT so far */
-#define SWAP_LAYOUTS_MDS_HSM		(1 << 31)
+/* Skip the UID/GID check before a swap layout for a release (server only) */
+#define SWAP_LAYOUTS_MDS_RELEASE	(1 << 31)
+
 struct lustre_swap_layouts {
 	__u64	sl_flags;
 	__u32	sl_fd;

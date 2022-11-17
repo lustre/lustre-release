@@ -948,8 +948,9 @@ struct md_op_data {
 	 * see enum op_cli_flags */
 	enum md_cli_flags	op_cli_flags;
 
-	/* File object data version for HSM release, on client */
+	/* File object data version for HSM release or migrate, on client */
 	__u64			op_data_version;
+	__u64			op_data_version2;
 	struct lustre_handle	op_lease_handle;
 
 	/* File security context, for creates/metadata ops */

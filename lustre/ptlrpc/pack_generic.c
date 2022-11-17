@@ -3059,6 +3059,8 @@ void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl)
 
 void lustre_swab_close_data(struct close_data *cd)
 {
+
+	__swab64s(&cd->cd_handle.cookie);
 	lustre_swab_lu_fid(&cd->cd_fid);
 	__swab64s(&cd->cd_data_version);
 }
@@ -3074,7 +3076,19 @@ void lustre_swab_close_data_resync_done(struct close_data_resync_done *resync)
 			__swab32s(&resync->resync_ids_inline[i]);
 	}
 }
-EXPORT_SYMBOL(lustre_swab_close_data_resync_done);
+
+void lustre_swab_close_data_special(struct close_data *cd, enum mds_op_bias b)
+{
+	if (b & MDS_CLOSE_RESYNC_DONE)
+		lustre_swab_close_data_resync_done(&cd->cd_resync);
+	else if (b & MDS_CLOSE_LAYOUT_SPLIT)
+		__swab16s(&cd->cd_mirror_id);
+	else if (b & MDS_PCC_ATTACH)
+		swab32s(&cd->cd_archive_id);
+	else if (b & MDS_CLOSE_LAYOUT_SWAP)
+		swab64s(&cd->cd_data_version2);
+}
+EXPORT_SYMBOL(lustre_swab_close_data_special);
 
 void lustre_swab_lfsck_request(struct lfsck_request *lr)
 {

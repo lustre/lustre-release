@@ -256,7 +256,7 @@ struct md_object_operations {
 	/** This method is used to swap the layouts between 2 objects */
 	int (*moo_swap_layouts)(const struct lu_env *env,
 			       struct md_object *obj1, struct md_object *obj2,
-			       __u64 flags);
+			       __u64 dv1, __u64 dv2, __u64 flags);
 
 	/** \retval number of bytes actually read upon success */
 	int (*moo_readpage)(const struct lu_env *env, struct md_object *obj,
@@ -532,14 +532,14 @@ static inline int mo_layout_change(const struct lu_env *env,
 }
 
 static inline int mo_swap_layouts(const struct lu_env *env,
-				  struct md_object *o1,
-				  struct md_object *o2, __u64 flags)
+				  struct md_object *o1, struct md_object *o2,
+				  __u64 dv1, __u64 dv2, __u64 flags)
 {
 	LASSERT(o1->mo_ops->moo_swap_layouts);
 	LASSERT(o2->mo_ops->moo_swap_layouts);
 	if (o1->mo_ops->moo_swap_layouts != o2->mo_ops->moo_swap_layouts)
 		return -EPERM;
-	return o1->mo_ops->moo_swap_layouts(env, o1, o2, flags);
+	return o1->mo_ops->moo_swap_layouts(env, o1, o2, dv1, dv2, flags);
 }
 
 static inline int mo_open(const struct lu_env *env, struct md_object *m,
