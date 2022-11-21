@@ -11,6 +11,8 @@ BUILD_GEN+=".2"	# LU-9850
 
 DEVEL_KERNEL_TYPE="devel"
 RPM_HELPERS_DIR="/usr/lib/rpm/redhat"
+# Pkg which contains ext4 source code
+KERNEL_DEBUGINFO="kernel-debuginfo-common-${TARGET_ARCH}-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
 
 # a method which can be overriden by the release specific code
 get_rpmbuildopts() {

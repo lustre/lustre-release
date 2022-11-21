@@ -672,6 +672,12 @@ load_target() {
 
     . "$TARGET_FILE"
 
+
+    # patched kernel build needs a series patches
+    if ! $PATCHLESS && ! $PATCHLESS_SERVER && [ ! "$SERIES" ]; then
+        fatal 1 "Distro $DISTRO doesn't support patched kernel server build!! Please use option --patchless-server"
+    fi
+
     if [ -n "$env_OFED_VERSION" ]; then
         OFED_VERSION="$env_OFED_VERSION"
     fi
@@ -729,7 +735,7 @@ load_target() {
     #       a new variable.
     PRISTINE_EXTRA_VERSION=$EXTRA_VERSION
 
-    if ! $PATCHLESS && [ ! -f "$CONFIG_FILE" ]; then
+    if ! $PATCHLESS && ! $PATCHLESS_SERVER && [ ! -f "$CONFIG_FILE" ]; then
         fatal 1 "Config file for target $TARGET missing from $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
     fi
 
@@ -1746,8 +1752,7 @@ build_with_srpm() {
 				fatal 1 "Could not find the Linux tree in $kernelrpm"
 			fi
 			# download and unpack kernel-debuginfo-common (only in EL)
-			if [[ $DISTROMAJ =~ rhel ]]; then
-				local KERNEL_DEBUGINFO="kernel-debuginfo-common-${TARGET_ARCH}-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
+            if [[ -n "$KERNEL_DEBUGINFO" ]]; then
 				download_debuginfo_common "$KERNEL_DEBUGINFO"
 				if ! lnxrel="$lnxrel" unpack_linux_devel_rpm \
 					"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$KERNEL_DEBUGINFO"; then

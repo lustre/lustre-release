@@ -135,9 +135,13 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	[LDISKFS_SERIES="5.8.0-ml.series"])],
 	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
 	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"])
+], [test x$OPENEULER_KERNEL = xyes], [
+	case $OPENEULER_VERSION_NO in
+	2203.0) LDISKFS_SERIES="5.10.0-oe2203.series" ;;
+	esac
 ])
 ])
-# Not RHEL/SLES or Ubuntu .. probably mainline
+# Not RHEL/SLES/openEuler or Ubuntu .. probably mainline
 AS_IF([test -z "$LDISKFS_SERIES"],
 	[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[],
