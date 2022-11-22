@@ -5252,10 +5252,12 @@ static int lfs_find(int argc, char **argv)
 					char *ptr;
 
 					/* Init for times relative to today */
-					if (strncmp(fmts[i], "%H", 2) == 0)
+					if (strncmp(fmts[i], "%H", 2) == 0) {
 						localtime_r(&ref, &tm);
-					else
+					} else {
 						memset(&tm, 0, sizeof(tm));
+						tm.tm_isdst = -1;
+					}
 					ptr = strptime(optarg, fmts[i], &tm);
 					/* Skip spaces */
 					while (ptr && isspace(*ptr))

@@ -6689,9 +6689,6 @@ test_56oc() {
 	test_newerXY_base "c" "m"
 	test_newerXY_base "c" "c"
 
-	[[ -n "$sles_version" ]] &&
-		echo "skip timestamp tests on SLES, LU-13665" && return 0
-
 	test_newerXY_base "a" "t"
 	test_newerXY_base "m" "t"
 	test_newerXY_base "c" "t"
