@@ -2217,11 +2217,11 @@ enum tgt_type {
  * there are more OSTs than allocated to uuidp, then an error is returned with
  * the ost_count set to number of available obd uuids.
  */
-static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,
+static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp, int *indices,
 				  int *ost_count, enum tgt_type type)
 {
 	char buf[PATH_MAX], format[32];
-	int rc = 0, index = 0;
+	int i, rc = 0;
 	struct obd_uuid name;
 	glob_t param;
 	FILE *fp;
@@ -2250,20 +2250,25 @@ static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,
 
 	snprintf(format, sizeof(format),
 		 "%%d: %%%zus", sizeof(uuidp[0].uuid) - 1);
-	while (fgets(buf, sizeof(buf), fp) != NULL) {
-		if (uuidp && (index < *ost_count)) {
-			if (sscanf(buf, format, &index, uuidp[index].uuid) < 2)
-				break;
-		}
-		index++;
-	}
+	for (i = 0; fgets(buf, sizeof(buf), fp); i++) {
+		int index;
 
+		if (sscanf(buf, format, &index, name.uuid) < 2)
+			break;
+
+		if (i < *ost_count) {
+			if (uuidp != NULL)
+				uuidp[i] = name;
+			if (indices != NULL)
+				indices[i] = index;
+		}
+	}
 	fclose(fp);
 
-	if (uuidp && (index > *ost_count))
+	if (uuidp && (i > *ost_count))
 		rc = -EOVERFLOW;
 
-	*ost_count = index;
+	*ost_count = i;
 free_param:
 	cfs_free_param_data(&param);
 	return rc;
@@ -2271,7 +2276,7 @@ free_param:
 
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 {
-	return llapi_get_target_uuids(fd, uuidp, ost_count, LOV_TYPE);
+	return llapi_get_target_uuids(fd, uuidp, NULL, ost_count, LOV_TYPE);
 }
 
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
@@ -2418,9 +2423,10 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 			 int num_obds, int **obdindexes, int *obdindex,
 			 enum tgt_type type)
 {
-	int ret, obdcount, obd_valid = 0, obdnum;
+	int ret, obdcount, maxidx, obd_valid = 0, obdnum;
 	long i;
 	struct obd_uuid *uuids = NULL;
+	int *indices = NULL;
 	char buf[16];
 	int *indexes;
 
@@ -2435,17 +2441,26 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 	uuids = malloc(obdcount * sizeof(struct obd_uuid));
 	if (uuids == NULL)
 		return -ENOMEM;
+	indices = malloc(obdcount * sizeof(int));
+	if (indices == NULL) {
+		free(uuids);
+		return -ENOMEM;
+	}
+	maxidx = obdcount;
 
 retry_get_uuids:
-	ret = llapi_get_target_uuids(d, uuids, &obdcount, type);
+	ret = llapi_get_target_uuids(d, uuids, indices, &obdcount, type);
 	if (ret) {
 		if (ret == -EOVERFLOW) {
 			struct obd_uuid *uuids_temp;
+			int *indices_temp;
 
 			uuids_temp = realloc(uuids, obdcount *
 					     sizeof(struct obd_uuid));
-			if (uuids_temp != NULL) {
+			indices_temp = realloc(indices, obdcount * sizeof(int));
+			if (uuids_temp != NULL && indices_temp != NULL) {
 				uuids = uuids_temp;
+				indices = indices_temp;
 				goto retry_get_uuids;
 			}
 			ret = -ENOMEM;
@@ -2466,20 +2481,21 @@ retry_get_uuids:
 
 		/* The user may have specified a simple index */
 		i = strtol(obduuids[obdnum].uuid, &end, 0);
-		if (end && *end == '\0' && i < obdcount) {
+		if (end && *end == '\0' && i < maxidx) {
 			indexes[obdnum] = i;
 			obd_valid++;
 		} else {
 			for (i = 0; i < obdcount; i++) {
 				if (llapi_uuid_match(uuids[i].uuid,
 						     obduuids[obdnum].uuid)) {
-					indexes[obdnum] = i;
+					indexes[obdnum] = indices[i];
 					obd_valid++;
 					break;
 				}
 			}
 		}
-		if (i >= obdcount) {
+
+		if (i >= maxidx) {
 			indexes[obdnum] = OBD_NOT_FOUND;
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
 					  "invalid obduuid '%s'",
@@ -2497,6 +2513,8 @@ retry_get_uuids:
 out_free:
 	if (uuids)
 		free(uuids);
+	if (indices)
+		free(indices);
 
 	return ret;
 }

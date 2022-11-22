@@ -6442,7 +6442,7 @@ save_ostindex() {
 
 	local i
 	local index
-	for i in $(seq $OSTCOUNT); do
+	for ((i = 1; i <= $OSTCOUNT; i++ )); do
 		index=OSTINDEX$i
 		eval saved_ostindex$i=${!index}
 		eval OSTINDEX$i=""
@@ -6451,11 +6451,12 @@ save_ostindex() {
 
 # Restore the original values of $OSTCOUNT and $OSTINDEX$i.
 restore_ostindex() {
-	trap 0
-
 	local i
 	local index
-	for i in $(seq $OSTCOUNT); do
+
+	echo "restoring OSTCOUNT=$saved_ostcount and OSTINDEXn"
+
+	for ((i = 1; i <= $OSTCOUNT; i++ )); do
 		index=saved_ostindex$i
 		eval OSTINDEX$i=${!index}
 	done
@@ -6471,9 +6472,9 @@ restore_ostindex() {
 # expected. This test uses OST_INDEX_LIST to format OSTs with a randomly
 # assigned index and ensures we can mount such a formatted file system
 test_81() { # LU-4665
-	[[ "$MDS1_VERSION" -ge $(version_code 2.6.54) ]] ||
+	(( MDS1_VERSION >= $(version_code 2.6.54) )) ||
 		skip "Need MDS version at least 2.6.54"
-	[[ $OSTCOUNT -ge 3 ]] || skip_env "needs >= 3 OSTs"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
 
 	stopall
 
@@ -6493,36 +6494,66 @@ test_81() { # LU-4665
 	OSTINDEX1=$saved_ostindex1
 
 	save_ostindex 3
+	stack_trap restore_ostindex
 
 	# Format OSTs with random sparse indices.
-	trap "restore_ostindex" EXIT
-	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices"
-	OST_INDEX_LIST=[0,$((RANDOM * 2 % 65533 + 1)),65534] formatall
+	local rand_ost=$(((RANDOM * 2 % 65533) + 1))
+	echo  "Format $OSTCOUNT OSTs with OST_INDEX_LIST=[0,$rand_ost,65534]"
+	OST_INDEX_LIST=[0,$rand_ost,65534] formatall ||
+		error "formatall failed with $?"
 
 	# Setup and check Lustre filesystem.
 	start_mgsmds || error "start_mgsmds failed"
-	for i in $(seq $OSTCOUNT); do
+	for ((i = 1; i <= $OSTCOUNT; i++ )); do
 		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS ||
 			error "start ost$i failed"
 	done
 
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 	check_mount || error "check client $MOUNT failed"
+	$LFS df
 
 	# Check max_easize.
 	local max_easize=$($LCTL get_param -n llite.*.max_easize)
-	# 65452 is XATTR_SIZE_MAX less ldiskfs ea overhead
-	if large_xattr_enabled; then
-		[[ $max_easize -ge 65452 ]] ||
-			error "max_easize is $max_easize, should be at least 65452 bytes"
-	else
-		# LU-11868
-		# 4012 is 4096 less ldiskfs ea overhead
-		[[ $max_easize -ge 4012 ]] ||
-			error "max_easize is $max_easize, should be at least 4012 bytes"
-	fi
+	local xattr_size_max=$((4096 - 84)) # 4096 less ldiskfs ea overhead
 
-	restore_ostindex
+	# XATTR_SIZE_MAX less ldiskfs ea overhead
+	large_xattr_enabled && xattr_size_max=$((65536 - 84))
+	(( max_easize >= xattr_size_max )) ||
+		error "max_easize $max_easize < $xattr_size_max bytes"
+
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -i $rand_ost $DIR/$tdir/$tfile ||
+		error "error creating $tfile on ost$rand_ost"
+	$LFS getstripe $DIR/$tdir/$tfile
+
+	local cmd
+	local idx
+	local found
+	local uuid
+
+	cmd="getstripe -i $DIR/$tdir/$tfile"
+	echo lfs $cmd
+	found=$($LFS $cmd)
+	(( $found == $rand_ost )) || error "index $found is not $rand_ost"
+
+	cmd="find $DIR/$tdir -i $rand_ost"
+	echo lfs $cmd
+	$LFS $cmd
+	found=$($LFS $cmd)
+	[[ "$found" == "$DIR/$tdir/$tfile" ]] ||
+		error "'lfs find' returned '$found', not '$tfile' by index"
+
+	$LFS osts
+	uuid=$(ostuuid_from_index $rand_ost)
+
+	cmd="find $DIR/$tdir -O $uuid"
+	echo lfs $cmd
+	$LFS $cmd
+	found=$($LFS $cmd)
+
+	[[ "$found" == "$DIR/$tdir/$tfile" ]] ||
+		error "'lfs find' returned '$found', not '$tfile' by UUID"
 }
 run_test 81 "sparse OST indexing"
 
@@ -6583,7 +6614,7 @@ test_82a() { # LU-4665
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
-		   $LCTL get_param osp.*.prealloc_*_id" EXIT
+		   $LCTL get_param osp.*.prealloc_*_id || true" EXIT
 
 	# 1. If the file does not exist, new file will be created
 	#    with specified OSTs.
@@ -6642,19 +6673,8 @@ test_82a() { # LU-4665
 	else
 		echo "need MDS+client version at least 2.11.53"
 	fi
-
-	restore_ostindex
 }
 run_test 82a "specify OSTs for file (succeed) or directory (succeed)"
-
-cleanup_82b() {
-	trap 0
-
-	# Remove OSTs from a pool and destroy the pool.
-	destroy_pool $ost_pool || true
-
-	restore_ostindex
-}
 
 # Test 82b is run to ensure that if the user supplies a pool with a specific
 # stripe layout that it behaves proprerly. It should fail in the case that
@@ -6680,7 +6700,7 @@ test_82b() { # LU-4665
 	done
 	ost_indices=$(comma_list $ost_indices)
 
-	trap "restore_ostindex" EXIT
+	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
 	OST_INDEX_LIST=[$ost_indices] formatall
 
@@ -6701,9 +6721,6 @@ test_82b() { # LU-4665
 	# Create a new pool and add OSTs into it.
 	local ost_pool=$FSNAME.$TESTNAME
 	create_pool $ost_pool || error "create OST pool $ost_pool failed"
-
-	trap - EXIT
-	trap "cleanup_82b" EXIT
 
 	local ost_idx_in_list=${ost_indices##*,}
 	local ost_idx_in_pool=$(exclude_items_from_list $ost_indices \
@@ -6747,8 +6764,6 @@ test_82b() { # LU-4665
 	check_obdidx $file $ost_idx_in_list
 	dd if=/dev/urandom of=$file count=1 bs=1M > /dev/null 2>&1 ||
 		error "write $file failed"
-
-	cleanup_82b
 }
 run_test 82b "specify OSTs for file with --pool and --ost-list options"
 
