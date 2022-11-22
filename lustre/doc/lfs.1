@@ -149,15 +149,6 @@ as listed in the
 .B SEE ALSO
 section at the end.
 .TP
-.B changelog
-Show the metadata changes on an MDT.  Start and end points are optional.  The --follow option will block on new changes; this option is only valid when run direclty on the MDT node.
-.TP
-.B changelog_clear
-Indicate that changelog records previous to <endrec> are no longer of
-interest to a particular consumer <id>, potentially allowing the MDT to
-free up disk space. An <endrec> of 0 indicates the current last record.
-Changelog consumers must be registered on the MDT node using \fBlctl\fR.
-.TP
 .B check <mgts|mdts|osts|all> [path]
 Display the status of the MGTs, MDTs or OSTs (as specified in the command) or
 all the servers (MGTs, MDTs and OSTs). If \fBpath\fR is provided, display
@@ -254,12 +245,15 @@ Turn quotas of user and group off
 .SH NOTES
 The usage of \fBlfs find\fR, \fBlfs getstripe\fR, \fBlfs hsm_*\fR,
 \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs getdirstripe\fR,
-\fBlfs setdirstripe\fR, \fBlfs mkdir\fR, \fBlfs flushctx\fR
+\fBlfs setdirstripe\fR, \fBlfs mkdir\fR, \fBlfs flushctx\fR,
+\fBlfs changelog\fR, \fBlfs changelog_clear\fR
 and \fBlfs project\fR are explained in separate man pages.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lctl (8),
+.BR lfs-changelog (1),
+.BR lfs-changelog_clear (1),
 .BR lfs-df (1),
 .BR lfs-fid2path (1),
 .BR lfs-find (1),
@@ -268,14 +262,14 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs-getname (1),
 .BR lfs-getstripe (1),
 .BR lfs-hsm (1),
-.BR lfs-mkdir (1),
-.BR lfs-migrate (1),
 .BR lfs_migrate (1),
-.BR lfs-project (1),
+.BR lfs-migrate (1),
+.BR lfs-mkdir (1),
 .BR lfs-path2fid (1),
+.BR lfs-pcc (1),
+.BR lfs-project (1),
 .BR lfs-quota (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-setquota (1),
 .BR lfs-setstripe (1),
-.BR lfs-pcc (1),
 .BR lustre (7)

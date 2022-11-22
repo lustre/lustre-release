@@ -43,6 +43,8 @@ MANFILES =					\
 	ldev.8					\
 	ldev.conf.5				\
 	lfs.1					\
+	lfs-changelog.1				\
+	lfs-changelog_clear.1			\
 	lfs-df.1				\
 	lfs-fid2path.1				\
 	lfs-find.1				\
