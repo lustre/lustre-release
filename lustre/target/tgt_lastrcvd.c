@@ -449,7 +449,8 @@ void tgt_client_free(struct obd_export *exp)
 
 	/* Target may have been freed (see LU-7430)
 	 * Slot may be not yet assigned */
-	if (exp->exp_obd->u.obt.obt_magic != OBT_MAGIC ||
+	if (((struct obd_device_target *)(&exp->exp_obd->u))->obt_magic !=
+	    OBT_MAGIC ||
 	    ted->ted_lr_idx < 0)
 		return;
 
@@ -701,7 +702,7 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 
 	CDEBUG(D_SUPER,
 	       "%s: mount_count is %llu, last_transno is %llu\n",
-	       tgt->lut_lsd.lsd_uuid, tgt->lut_obd->u.obt.obt_mount_count,
+	       tgt->lut_lsd.lsd_uuid, obd2obt(tgt->lut_obd)->obt_mount_count,
 	       tgt->lut_last_transno);
 
 	/* Always save latest transno to keep it fresh */
@@ -1900,8 +1901,8 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	tgt->lut_obd->obd_last_committed = tgt->lut_last_transno;
 	spin_unlock(&tgt->lut_translock);
 
-	tgt->lut_obd->u.obt.obt_mount_count = lsd->lsd_mount_count;
-	tgt->lut_obd->u.obt.obt_instance = (__u32)lsd->lsd_mount_count;
+	obd2obt(tgt->lut_obd)->obt_mount_count = lsd->lsd_mount_count;
+	obd2obt(tgt->lut_obd)->obt_instance = (__u32)lsd->lsd_mount_count;
 
 	/* save it, so mount count and last_transno is current */
 	rc = tgt_server_data_update(env, tgt, 0);

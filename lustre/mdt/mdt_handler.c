@@ -5979,7 +5979,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		if (rc)
 			RETURN(rc);
 
-		obd->u.obt.obt_magic = OBT_MAGIC;
+		obd_obt_init(obd);
 		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
 			m->mdt_skip_lfsck = 1;
 	}
@@ -6981,7 +6981,7 @@ static int mdt_destroy_export(struct obd_export *exp)
 	 */
 	tgt_grant_discard(exp);
 	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
-		exp->exp_obd->u.obt.obt_lut->lut_tgd.tgd_tot_granted_clients--;
+		obd2obt(exp->exp_obd)->obt_lut->lut_tgd.tgd_tot_granted_clients--;
 
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		tgt_grant_sanity_check(exp->exp_obd, __func__);

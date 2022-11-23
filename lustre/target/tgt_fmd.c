@@ -110,7 +110,7 @@ static void tgt_fmd_expire_nolock(struct obd_export *exp,
 				  struct tgt_fmd_data *keep)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
-	struct lu_target *lut = exp->exp_obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(exp->exp_obd)->obt_lut;
 	time64_t now = ktime_get_seconds();
 	struct tgt_fmd_data *fmd, *tmp;
 
@@ -161,7 +161,7 @@ static struct tgt_fmd_data *tgt_fmd_find_nolock(struct obd_export *exp,
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 	struct tgt_fmd_data *found = NULL, *fmd;
-	struct lu_target *lut = exp->exp_obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(exp->exp_obd)->obt_lut;
 	time64_t now = ktime_get_seconds();
 
 	assert_spin_locked(&ted->ted_fmd_lock);

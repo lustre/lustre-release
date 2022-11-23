@@ -3012,8 +3012,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc != 0)
 		RETURN(rc);
 
-	obt = &obd->u.obt;
-	obt->obt_magic = OBT_MAGIC;
+	obt = obd_obt_init(obd);
 
 	spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
@@ -3192,8 +3191,9 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	ofd_stop_inconsistency_verification_thread(m);
 	lfsck_degister(env, m->ofd_osd);
 	ofd_fs_cleanup(env, m);
-	nm_config_file_deregister_tgt(env, obd->u.obt.obt_nodemap_config_file);
-	obd->u.obt.obt_nodemap_config_file = NULL;
+	nm_config_file_deregister_tgt(env,
+				      obd2obt(obd)->obt_nodemap_config_file);
+	obd2obt(obd)->obt_nodemap_config_file = NULL;
 
 	if (m->ofd_namespace != NULL) {
 		ldlm_namespace_free_post(m->ofd_namespace);

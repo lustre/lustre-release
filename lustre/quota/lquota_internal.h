@@ -26,6 +26,7 @@
  */
 
 #include <obd.h>
+#include <dt_object.h>
 #include <lustre_quota.h>
 
 #ifndef _LQUOTA_INTERNAL_H

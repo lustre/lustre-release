@@ -925,7 +925,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 		goto out;
 	}
 
-	tdtd = obd->u.obt.obt_lut->lut_tdtd;
+	tdtd = obd2obt(obd)->obt_lut->lut_tdtd;
 	if (tdtd && tdtd->tdtd_show_update_logs_retrievers) {
 		char *buf;
 		int size = 0;
@@ -1112,10 +1112,10 @@ ssize_t instance_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct obd_device_target *target = &obd->u.obt;
+	struct obd_device_target *target = obd2obt(obd);
 
 	LASSERT(target->obt_magic == OBT_MAGIC);
-	return scnprintf(buf, PAGE_SIZE, "%u\n", obd->u.obt.obt_instance);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", obd2obt(obd)->obt_instance);
 }
 EXPORT_SYMBOL(instance_show);
 

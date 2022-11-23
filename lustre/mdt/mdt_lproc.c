@@ -543,7 +543,7 @@ static ssize_t local_recovery_show(struct kobject *kobj,
 					      obd_kset.kobj);
 
 	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 obd->u.obt.obt_lut->lut_local_recovery);
+			 obd2obt(obd)->obt_lut->lut_local_recovery);
 }
 
 static ssize_t local_recovery_store(struct kobject *kobj,
@@ -559,7 +559,7 @@ static ssize_t local_recovery_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	obd->u.obt.obt_lut->lut_local_recovery = !!val;
+	obd2obt(obd)->obt_lut->lut_local_recovery = !!val;
 	return count;
 }
 LUSTRE_RW_ATTR(local_recovery);
@@ -949,7 +949,7 @@ static ssize_t sync_count_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
+	struct lu_target *tgt = obd2obt(obd)->obt_lut;
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
 			 atomic_read(&tgt->lut_sync_count));
@@ -960,7 +960,7 @@ static ssize_t sync_count_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
+	struct lu_target *tgt = obd2obt(obd)->obt_lut;
 	int val;
 	int rc;
 
@@ -1400,7 +1400,7 @@ static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 
 	return scnprintf(buf, PAGE_SIZE, "%u\n", lut->lut_cksum_t10pi_enforce);
 }
@@ -1432,7 +1432,7 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	bool enforce;
 	int rc;
 
@@ -1462,8 +1462,7 @@ static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
 	if (!obd)
 		return 0;
 
-	lut = obd->u.obt.obt_lut;
-
+	lut = obd2obt(obd)->obt_lut;
 	/* select fastest checksum type on the server */
 	pref = obd_cksum_type_select(obd->obd_name,
 				     lut->lut_cksum_types_supported, 0);
@@ -1625,7 +1624,7 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount)
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
 				    amount);
-	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
+	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_hash &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd,
 				      lustre_msg_get_jobid(req->rq_reqmsg),

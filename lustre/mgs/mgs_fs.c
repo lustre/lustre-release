@@ -190,7 +190,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 		       mgs->mgs_obd->obd_name, PTR_ERR(nm_config_file));
 		GOTO(out_configs, rc = PTR_ERR(nm_config_file));
 	}
-	mgs->mgs_obd->u.obt.obt_nodemap_config_file = nm_config_file;
+	obd2obt(mgs->mgs_obd)->obt_nodemap_config_file = nm_config_file;
 
 	/* create directory to store nid table versions */
 	o = local_file_find_or_create(env, mgs->mgs_los, root, MGS_NIDTBL_DIR,
@@ -203,7 +203,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 out_nm:
 	if (rc < 0) {
 		nm_config_file_deregister_mgs(env, nm_config_file);
-		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
+		obd2obt(mgs->mgs_obd)->obt_nodemap_config_file = NULL;
 	}
 out_configs:
 	if (rc < 0) {
@@ -255,12 +255,12 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 		dt_object_put(env, mgs->mgs_nidtbl_dir);
 		mgs->mgs_nidtbl_dir = NULL;
 	}
-	if (mgs->mgs_obd->u.obt.obt_nodemap_config_file != NULL) {
+	if (obd2obt(mgs->mgs_obd)->obt_nodemap_config_file != NULL) {
 		struct nm_config_file *ncf;
 
-		ncf = mgs->mgs_obd->u.obt.obt_nodemap_config_file;
+		ncf = obd2obt(mgs->mgs_obd)->obt_nodemap_config_file;
 		nm_config_file_deregister_mgs(env, ncf);
-		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
+		obd2obt(mgs->mgs_obd)->obt_nodemap_config_file = NULL;
 	}
 
 	if (mgs->mgs_los) {

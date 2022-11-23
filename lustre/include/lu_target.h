@@ -32,7 +32,7 @@
 #ifndef _LUSTRE_LU_TARGET_H
 #define _LUSTRE_LU_TARGET_H
 
-#include <dt_object.h>
+#include <lustre_quota.h>
 #include <lustre_export.h>
 #include <lustre_update.h>
 #include <lustre_disk.h>

@@ -1334,7 +1334,7 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 	if (rc < 0)
 		GOTO(out, rc);
 
-	mti->mti_instance = obd->u.obt.obt_instance;
+	mti->mti_instance = obd2obt(obd)->obt_instance;
 	mti->mti_flags |= LDD_F_OPC_READY;
 
 	/* FIXME use mgc_process_config instead */

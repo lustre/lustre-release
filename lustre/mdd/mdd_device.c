@@ -1153,10 +1153,12 @@ static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 	mdd_changelog_fini(env, m);
 	mdd_orphan_index_fini(env, m);
 	mdd_dot_lustre_cleanup(env, m);
-	if (mdd2obd_dev(m)->u.obt.obt_nodemap_config_file) {
+	if (obd2obt(mdd2obd_dev(m))->obt_nodemap_config_file) {
+		struct obd_device_target *obt = obd2obt(mdd2obd_dev(m));
+
 		nm_config_file_deregister_tgt(env,
-				mdd2obd_dev(m)->u.obt.obt_nodemap_config_file);
-		mdd2obd_dev(m)->u.obt.obt_nodemap_config_file = NULL;
+					      obt->obt_nodemap_config_file);
+		obt->obt_nodemap_config_file = NULL;
 	}
 	if (m->mdd_los != NULL) {
 		local_oid_storage_fini(env, m->mdd_los);
@@ -1276,7 +1278,7 @@ static int mdd_prepare(const struct lu_env *env,
 	struct mdd_device *mdd = lu2mdd_dev(cdev);
 	struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
 	struct nm_config_file *nodemap_config;
-	struct obd_device_target *obt = &mdd2obd_dev(mdd)->u.obt;
+	struct obd_device_target *obt = obd2obt(mdd2obd_dev(mdd));
 	struct dt_object *root = NULL;
 	struct thandle *th = NULL;
 	struct lu_fid fid;

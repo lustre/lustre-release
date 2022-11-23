@@ -122,10 +122,11 @@ static int echo_destroy_export(struct obd_export *exp)
 static u64 echo_next_id(struct obd_device *obd)
 {
 	u64 id;
+	struct echo_obd *echo = obd2echo(obd);
 
-	spin_lock(&obd->u.echo.eo_lock);
-	id = ++obd->u.echo.eo_lastino;
-	spin_unlock(&obd->u.echo.eo_lock);
+	spin_lock(&echo->eo_lock);
+	id = ++echo->eo_lastino;
+	spin_unlock(&echo->eo_lock);
 
 	return id;
 }
@@ -344,7 +345,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 		}
 	}
 
-	atomic_add(*pages, &obd->u.echo.eo_prep);
+	atomic_add(*pages, &obd2echo(obd)->eo_prep);
 
 	if (cmd & OBD_BRW_READ)
 		lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -354,7 +355,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 				    tot_bytes);
 
 	CDEBUG(D_PAGE, "%d pages allocated after prep\n",
-	       atomic_read(&obd->u.echo.eo_prep));
+	       atomic_read(&obd2echo(obd)->eo_prep));
 
 	RETURN(0);
 
@@ -374,7 +375,7 @@ preprw_cleanup:
 		 */
 		__free_page(res[i].lnb_page);
 		res[i].lnb_page = NULL;
-		atomic_dec(&obd->u.echo.eo_prep);
+		atomic_dec(&obd2echo(obd)->eo_prep);
 	}
 
 	return rc;
@@ -434,14 +435,14 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 		}
 	}
 
-	atomic_sub(pgs, &obd->u.echo.eo_prep);
+	atomic_sub(pgs, &obd2echo(obd)->eo_prep);
 
 	CDEBUG(D_PAGE, "%d pages remain after commit\n",
-	       atomic_read(&obd->u.echo.eo_prep));
+	       atomic_read(&obd2echo(obd)->eo_prep));
 	RETURN(rc);
 
 commitrw_cleanup:
-	atomic_sub(pgs, &obd->u.echo.eo_prep);
+	atomic_sub(pgs, &obd2echo(obd)->eo_prep);
 
 	CERROR("cleaning up %d pages (%d obdos)\n",
 	       niocount - pgs - 1, objcount);
@@ -454,7 +455,7 @@ commitrw_cleanup:
 
 		/* NB see comment above regarding persistent pages */
 		__free_page(page);
-		atomic_dec(&obd->u.echo.eo_prep);
+		atomic_dec(&obd2echo(obd)->eo_prep);
 	}
 	return rc;
 }
@@ -562,7 +563,7 @@ static int esd_destroy_hdl(struct tgt_session_info *tsi)
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
 
-	if (ostid_id(&oa->o_oi) > obd->u.echo.eo_lastino ||
+	if (ostid_id(&oa->o_oi) > obd2echo(obd)->eo_lastino ||
 	    ostid_id(&oa->o_oi) < ECHO_INIT_OID) {
 		CERROR("%s: bad objid to destroy: "DOSTID"\n",
 		       tsi->tsi_exp->exp_obd->obd_name, POSTID(&oa->o_oi));
@@ -609,7 +610,7 @@ static int esd_getattr_hdl(struct tgt_session_info *tsi)
 	repbody->oa.o_oi = oa->o_oi;
 	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-	obdo_cpy_md(&repbody->oa, &obd->u.echo.eo_oa, oa->o_valid);
+	obdo_cpy_md(&repbody->oa, &obd2echo(obd)->eo_oa, oa->o_valid);
 
 	repbody->oa.o_valid |= OBD_MD_FLFLAGS;
 	repbody->oa.o_flags = OBD_FL_FLUSH;
@@ -650,7 +651,7 @@ static int esd_setattr_hdl(struct tgt_session_info *tsi)
 	repbody->oa.o_oi = body->oa.o_oi;
 	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-	obd->u.echo.eo_oa = body->oa;
+	obd2echo(obd)->eo_oa = body->oa;
 
 	RETURN(0);
 }
@@ -746,8 +747,8 @@ static int echo_srv_init0(const struct lu_env *env,
 		RETURN(-ENODEV);
 	}
 
-	spin_lock_init(&obd->u.echo.eo_lock);
-	obd->u.echo.eo_lastino = ECHO_INIT_OID;
+	spin_lock_init(&obd2echo(obd)->eo_lock);
+	obd2echo(obd)->eo_lastino = ECHO_INIT_OID;
 
 	esd->esd_dev.ld_ops = &echo_srv_lu_ops;
 	esd->esd_dev.ld_obd = obd;
@@ -846,7 +847,7 @@ static void echo_srv_fini(const struct lu_env *env,
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_obd_stats(obd);
 
-	leaked = atomic_read(&obd->u.echo.eo_prep);
+	leaked = atomic_read(&obd2echo(obd)->eo_prep);
 	if (leaked != 0)
 		CERROR("%d prep/commitrw pages leaked\n", leaked);
 

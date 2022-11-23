@@ -486,8 +486,7 @@ static int ofd_checksum_type_seq_show(struct seq_file *m, void *data)
 	if (!obd)
 		return 0;
 
-	lut = obd->u.obt.obt_lut;
-
+	lut = obd2obt(obd)->obt_lut;
 	/* select fastest checksum type on the server */
 	pref = obd_cksum_type_select(obd->obd_name,
 				     lut->lut_cksum_types_supported, 0);
@@ -846,7 +845,7 @@ static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 
 	return scnprintf(buf, PAGE_SIZE, "%u\n", lut->lut_cksum_t10pi_enforce);
 }
@@ -878,7 +877,7 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	bool enforce;
 	int rc;
 

@@ -81,7 +81,7 @@ static struct cfs_cpt_table *ost_io_cptable;
 static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	static struct ptlrpc_service_conf svc_conf;
-	struct ost_obd *ost = &obd->u.ost;
+	struct ost_obd *ost = obd2ost(obd);
 	nodemask_t *mask;
 	int rc;
 
@@ -360,7 +360,7 @@ out_lprocfs:
 
 static int ost_cleanup(struct obd_device *obd)
 {
-	struct ost_obd *ost = &obd->u.ost;
+	struct ost_obd *ost = obd2ost(obd);
 	int err = 0;
 
 	ENTRY;
@@ -398,7 +398,7 @@ static int ost_cleanup(struct obd_device *obd)
 
 static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 {
-	struct ost_obd *ost = &obd->u.ost;
+	struct ost_obd *ost = obd2ost(obd);
 	int rc = 0;
 
 	mutex_lock(&ost->ost_health_mutex);

@@ -1283,8 +1283,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	mgs->mgs_obd = obd;
 	mgs->mgs_obd->obd_lu_dev = &mgs->mgs_dt_dev.dd_lu_dev;
 
-	obd->u.obt.obt_magic = OBT_MAGIC;
-	obd->u.obt.obt_instance = 0;
+	obd_obt_init(obd);
 
 	/* namespace for mgs llog */
 	obd->obd_namespace = ldlm_namespace_new(obd ,"MGS",

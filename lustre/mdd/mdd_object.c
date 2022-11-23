@@ -271,6 +271,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *d)
 {
+	struct mdd_device *mdd = lu2mdd_dev(d);
 	struct mdd_object *mdd_obj;
 	struct lu_object *o;
 
@@ -283,6 +284,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 	mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
 	mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
 	mdd_obj->mod_count = 0;
+	obd_obt_init(mdd2obd_dev(mdd));
 	o->lo_ops = &mdd_lu_obj_ops;
 	INIT_LIST_HEAD(&mdd_obj->mod_users);
 

@@ -1472,8 +1472,7 @@ dont_check_exports:
 	if (rc)
 		GOTO(out, rc);
 
-	LASSERT(target->u.obt.obt_magic == OBT_MAGIC);
-	data->ocd_instance = target->u.obt.obt_instance;
+	data->ocd_instance = obd2obt(target)->obt_instance;
 
 	/*
 	 * Return only the parts of obd_connect_data that we understand, so the
@@ -2026,7 +2025,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
 			       int new_client)
 {
 	timeout_t service_timeout = lustre_msg_get_service_timeout(req->rq_reqmsg);
-	struct obd_device_target *obt = &obd->u.obt;
+	struct obd_device_target *obt = obd2obt(obd);
 
 	if (!new_client && service_timeout)
 		/*

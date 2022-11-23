@@ -31,6 +31,7 @@
 #ifndef __OBD_TARGET_H
 #define __OBD_TARGET_H
 #include <lprocfs_status.h>
+#include <obd.h>
 
 /* server-side individual type definitions */
 
@@ -46,11 +47,6 @@ struct obd_device_target {
 };
 
 #define OBJ_SUBDIR_COUNT 32 /* set to zero for no subdirs */
-
-struct filter_obd {
-	/* NB this field MUST be first */
-	struct obd_device_target	 fo_obt;
-};
 
 struct echo_obd {
 	struct obd_device_target	eo_obt;
@@ -69,5 +65,55 @@ struct ost_obd {
 	struct ptlrpc_service	*ost_out_service;
 	struct mutex		 ost_health_mutex;
 };
+
+static inline struct obd_device_target *obd2obt(struct obd_device *obd)
+{
+	struct obd_device_target *obt;
+
+	BUILD_BUG_ON(sizeof(obd->u) < sizeof(*obt));
+
+	if (!obd)
+		return NULL;
+	obt = (void *)&obd->u;
+	LASSERT(obt->obt_magic == OBT_MAGIC);
+	return obt;
+}
+
+static inline struct obd_device_target *obd_obt_init(struct obd_device *obd)
+{
+	struct obd_device_target *obt;
+
+	obt = (void *)&obd->u;
+	obt->obt_magic = OBT_MAGIC;
+	obt->obt_instance = 0;
+
+	return obt;
+}
+
+static inline struct echo_obd *obd2echo(struct obd_device *obd)
+{
+	struct echo_obd *echo;
+
+	BUILD_BUG_ON(sizeof(obd->u) < sizeof(*echo));
+
+	if (!obd)
+		return NULL;
+	echo = (void *)&obd->u;
+
+	return echo;
+}
+
+static inline struct ost_obd *obd2ost(struct obd_device *obd)
+{
+	struct ost_obd *ost;
+
+	BUILD_BUG_ON(sizeof(obd->u) < sizeof(*ost));
+
+	if (!obd)
+		return NULL;
+	ost = (void *)&obd->u;
+
+	return ost;
+}
 
 #endif /* __OBD_TARGET_H */

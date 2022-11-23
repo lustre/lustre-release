@@ -41,6 +41,7 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_lfsck.h>
+#include <lu_target.h>
 
 #include "lfsck_internal.h"
 

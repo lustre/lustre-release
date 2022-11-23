@@ -36,7 +36,6 @@
 #include <linux/quota.h>
 #include <linux/quotaops.h>
 #include <linux/sort.h>
-#include <dt_object.h>
 #include <lustre_fid.h>
 #include <lustre_dlm.h>
 

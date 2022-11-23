@@ -39,7 +39,11 @@
 #include <lustre_lib.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lprocfs_status.h>
+#ifdef HAVE_SERVER_SUPPORT
+#include <lu_target.h>
+#include <obd_target.h>
 #include <dt_object.h>
+#endif
 
 #define OBD_STATFS_NODELAY	0x0001	/* requests should be send without delay
 					 * and resends for avoid deadlocks */
@@ -388,16 +392,21 @@ static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 #ifdef HAVE_SERVER_SUPPORT
 static inline struct lu_target *class_exp2tgt(struct obd_export *exp)
 {
-        LASSERT(exp->exp_obd);
-	if (exp->exp_obd->u.obt.obt_magic != OBT_MAGIC)
+	struct obd_device_target *obt;
+
+	LASSERT(exp->exp_obd);
+	obt = (void *)&exp->exp_obd->u;
+	if (obt->obt_magic != OBT_MAGIC)
 		return NULL;
-        return exp->exp_obd->u.obt.obt_lut;
+	return obt->obt_lut;
 }
 
 static inline struct lr_server_data *class_server_data(struct obd_device *obd)
 {
-        LASSERT(obd->u.obt.obt_lut);
-        return &obd->u.obt.obt_lut->lut_lsd;
+	struct obd_device_target *obt = obd2obt(obd);
+
+	LASSERT(obt);
+	return &obt->obt_lut->lut_lsd;
 }
 #endif
 
@@ -559,9 +568,11 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 			if (!IS_ERR(dev)) {
 				obd->obd_lu_dev = dev;
 				dev->ld_obd = obd;
+#ifdef HAVE_SERVER_SUPPORT
 				if (lu_device_is_dt(dev) &&
 				    lu2dt_dev(dev)->dd_rdonly)
 					obd->obd_read_only = 1;
+#endif
 				rc = 0;
 			} else
 				rc = PTR_ERR(dev);

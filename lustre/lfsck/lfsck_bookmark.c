@@ -33,6 +33,7 @@
 #include <lu_object.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
+#include <lu_target.h>
 
 #include "lfsck_internal.h"
 

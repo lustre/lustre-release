@@ -41,11 +41,6 @@
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
-#ifdef HAVE_SERVER_SUPPORT
-# include <lu_target.h>
-# include <obd_target.h>
-# include <lustre_quota.h>
-#endif
 #include <lu_ref.h>
 #include <lustre_export.h>
 #include <lustre_fid.h>
@@ -714,12 +709,6 @@ struct obd_device {
 	struct list_head		obd_final_req_queue;
 
 	union {
-#ifdef HAVE_SERVER_SUPPORT
-		struct obd_device_target obt;
-		struct filter_obd filter;
-		struct ost_obd ost;
-		struct echo_obd echo;
-#endif
 		struct client_obd cli;
 		struct echo_client_obd echo_client;
 		struct lov_obd lov;

@@ -1547,7 +1547,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	nodemap_ii.ii_attrs = body->mcb_nm_cur_pass;
 
 	bytes = nodemap_index_read(req->rq_svc_thread->t_env,
-				   mgs_obd->u.obt.obt_nodemap_config_file,
+				   obd2obt(mgs_obd)->obt_nodemap_config_file,
 				   &nodemap_ii, &rdpg);
 	if (bytes < 0)
 		GOTO(out, rc = bytes);

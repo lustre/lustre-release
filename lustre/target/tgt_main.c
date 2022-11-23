@@ -34,6 +34,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
+#include <obd_target.h>
 #include <obd_cksum.h>
 #include "tgt_internal.h"
 #include "../ptlrpc/ptlrpc_internal.h"
@@ -61,7 +62,7 @@ ssize_t sync_lock_cancel_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
+	struct lu_target *tgt = obd2obt(obd)->obt_lut;
 
 	return sprintf(buf, "%s\n",
 		       sync_lock_cancel_states[tgt->lut_sync_lock_cancel]);
@@ -94,7 +95,7 @@ ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
+	struct lu_target *tgt = obd2obt(obd)->obt_lut;
 	int val = -1;
 	enum tgt_sync_lock_cancel slc;
 
@@ -141,7 +142,7 @@ ssize_t tgt_fmd_count_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 
 	return sprintf(buf, "%u\n", lut->lut_fmd_max_num);
 }
@@ -164,7 +165,7 @@ ssize_t tgt_fmd_count_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	int val, rc;
 
 	rc = kstrtoint(buffer, 0, &val);
@@ -195,7 +196,7 @@ ssize_t tgt_fmd_seconds_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 
 	return sprintf(buf, "%lld\n", lut->lut_fmd_max_age);
 }
@@ -218,7 +219,7 @@ ssize_t tgt_fmd_seconds_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	time64_t val;
 	int rc;
 
@@ -478,6 +479,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	struct dt_object	*o;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	struct obd_statfs	*osfs;
+	struct obd_device_target *obt;
 	int i, rc = 0;
 
 	ENTRY;
@@ -492,8 +494,8 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	atomic_set(&lut->lut_client_generation, 0);
 	lut->lut_reply_data = NULL;
 	lut->lut_reply_bitmap = NULL;
-	obd->u.obt.obt_lut = lut;
-	obd->u.obt.obt_magic = OBT_MAGIC;
+	obt = obd_obt_init(obd);
+	obt->obt_lut = lut;
 
 	/* set request handler slice and parameters */
 	lut->lut_slice = slice;
@@ -625,8 +627,8 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 out:
 	dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
 out_put:
-	obd->u.obt.obt_magic = 0;
-	obd->u.obt.obt_lut = NULL;
+	obd2obt(obd)->obt_lut = NULL;
+	obd2obt(obd)->obt_magic = 0;
 	if (lut->lut_last_rcvd != NULL) {
 		dt_object_put(env, lut->lut_last_rcvd);
 		lut->lut_last_rcvd = NULL;

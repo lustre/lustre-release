@@ -184,7 +184,7 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
  */
 void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 {
-	struct lu_target *lut = obd->u.obt.obt_lut;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	struct tg_grants_data *tgd = &lut->lut_tgd;
 	struct obd_export *exp;
 	struct tg_export_data *ted;
@@ -395,7 +395,7 @@ static void tgt_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 			     int force, int *from_cache)
 {
 	struct obd_device	*obd = exp->exp_obd;
-	struct lu_target	*lut = obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	struct tgt_thread_info	*tti;
 	struct obd_statfs	*osfs;
@@ -438,7 +438,7 @@ static void tgt_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 static u64 tgt_grant_space_left(struct obd_export *exp)
 {
 	struct obd_device	*obd = exp->exp_obd;
-	struct lu_target	*lut = obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	u64			 tot_granted;
 	u64			 left;
@@ -507,7 +507,7 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 {
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct obd_device	*obd = exp->exp_obd;
-	struct tg_grants_data	*tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data	*tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	long long		 dirty, dropped;
 	ENTRY;
 
@@ -603,7 +603,7 @@ static void tgt_grant_shrink(struct obd_export *exp, struct obdo *oa,
 {
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct obd_device	*obd = exp->exp_obd;
-	struct tg_grants_data	*tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data	*tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	long			 grant_shrink;
 
 	assert_spin_locked(&tgd->tgd_grant_lock);
@@ -720,7 +720,7 @@ static void tgt_grant_check(const struct lu_env *env, struct obd_export *exp,
 {
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct obd_device	*obd = exp->exp_obd;
-	struct lu_target	*lut = obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	unsigned long		 ungranted = 0;
 	unsigned long		 granted = 0;
@@ -906,7 +906,7 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 			    bool conservative)
 {
 	struct obd_device	*obd = exp->exp_obd;
-	struct tg_grants_data	*tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data	*tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	u64			 grant;
 
@@ -1015,7 +1015,7 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 void tgt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       struct obd_connect_data *data, bool new_conn)
 {
-	struct lu_target	*lut = exp->exp_obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(exp->exp_obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	u64			 left = 0;
@@ -1160,7 +1160,7 @@ EXPORT_SYMBOL(tgt_grant_discard);
 void tgt_grant_prepare_read(const struct lu_env *env,
 			    struct obd_export *exp, struct obdo *oa)
 {
-	struct lu_target	*lut = exp->exp_obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(exp->exp_obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	int			 do_shrink;
 	u64			 left = 0;
@@ -1245,7 +1245,7 @@ void tgt_grant_prepare_write(const struct lu_env *env,
 			     struct niobuf_remote *rnb, int niocount)
 {
 	struct obd_device	*obd = exp->exp_obd;
-	struct lu_target	*lut = obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	u64			 left;
 	int			 from_cache;
@@ -1347,7 +1347,7 @@ EXPORT_SYMBOL(tgt_grant_prepare_write);
  */
 long tgt_grant_create(const struct lu_env *env, struct obd_export *exp, s64 *nr)
 {
-	struct lu_target	*lut = exp->exp_obd->u.obt.obt_lut;
+	struct lu_target	*lut = obd2obt(exp->exp_obd)->obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	u64			 left = 0;
@@ -1442,7 +1442,7 @@ EXPORT_SYMBOL(tgt_grant_create);
 void tgt_grant_commit(struct obd_export *exp, unsigned long pending,
 		      int rc)
 {
-	struct tg_grants_data *tgd = &exp->exp_obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data *tgd = &obd2obt(exp->exp_obd)->obt_lut->lut_tgd;
 
 	ENTRY;
 
@@ -1592,7 +1592,7 @@ ssize_t tot_dirty_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_dirty);
 }
 EXPORT_SYMBOL(tot_dirty_show);
@@ -1614,7 +1614,7 @@ ssize_t tot_granted_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_granted);
 }
 EXPORT_SYMBOL(tot_granted_show);
@@ -1636,7 +1636,7 @@ ssize_t tot_pending_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_pending);
 }
 EXPORT_SYMBOL(tot_pending_show);
@@ -1661,7 +1661,7 @@ ssize_t grant_compat_disable_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data *tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 
 	return scnprintf(buf, PAGE_SIZE, "%u\n", tgd->tgd_grant_compat_disable);
 }
@@ -1689,7 +1689,7 @@ ssize_t grant_compat_disable_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct tg_grants_data *tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	bool val;
 	int rc;
 

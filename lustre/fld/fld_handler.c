@@ -44,6 +44,7 @@
 
 #include <obd.h>
 #include <obd_support.h>
+#include <lu_target.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include <lustre_req_layout.h>

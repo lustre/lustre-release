@@ -276,7 +276,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 			  int event, long amount)
 {
-	struct obd_job_stats *stats = &obd->u.obt.obt_jobstats;
+	struct obd_job_stats *stats = &obd2obt(obd)->obt_jobstats;
 	struct job_stat *job, *job2;
 	ENTRY;
 
@@ -335,7 +335,7 @@ EXPORT_SYMBOL(lprocfs_job_stats_log);
 
 void lprocfs_job_stats_fini(struct obd_device *obd)
 {
-	struct obd_job_stats *stats = &obd->u.obt.obt_jobstats;
+	struct obd_job_stats *stats = &obd2obt(obd)->obt_jobstats;
 
 	if (stats->ojs_hash == NULL)
 		return;
@@ -617,7 +617,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 		       obd->obd_name, obd->obd_type->typ_name, -EINVAL);
 		RETURN(-EINVAL);
 	}
-	stats = &obd->u.obt.obt_jobstats;
+	stats = &obd2obt(obd)->obt_jobstats;
 
 	LASSERT(stats->ojs_hash == NULL);
 	stats->ojs_hash = cfs_hash_create("JOB_STATS",
@@ -660,7 +660,7 @@ ssize_t job_cleanup_interval_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_job_stats *stats;
 	struct timespec64 ts;
 
-	stats = &obd->u.obt.obt_jobstats;
+	stats = &obd2obt(obd)->obt_jobstats;
 	ts = ktime_to_timespec64(stats->ojs_cleanup_interval);
 
 	return scnprintf(buf, PAGE_SIZE, "%lld\n", (long long)ts.tv_sec * 2);
@@ -677,7 +677,7 @@ ssize_t job_cleanup_interval_store(struct kobject *kobj,
 	unsigned int val;
 	int rc;
 
-	stats = &obd->u.obt.obt_jobstats;
+	stats = &obd2obt(obd)->obt_jobstats;
 
 	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
