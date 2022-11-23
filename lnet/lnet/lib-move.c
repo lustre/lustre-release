@@ -3481,8 +3481,11 @@ lnet_unlink_ni_recovery_mdh_locked(struct lnet_ni *ni, int cpt, bool force)
 	lnet_ni_lock(ni);
 }
 
-static void
-lnet_recover_local_nis(void)
+/* Returns the total number of local NIs in recovery.
+ * Records up to @arrsz of the associated NIDs in the @nidarr array
+ */
+static int
+lnet_recover_local_nis(struct lnet_nid *nidarr, unsigned int arrsz)
 {
 	struct lnet_mt_event_info *ev_info;
 	LIST_HEAD(processed_list);
@@ -3494,6 +3497,7 @@ lnet_recover_local_nis(void)
 	int healthv;
 	int rc;
 	time64_t now;
+	unsigned int nnis = 0;
 
 	/*
 	 * splice the recovery queue on a local queue. We will iterate
@@ -3531,6 +3535,10 @@ lnet_recover_local_nis(void)
 			lnet_net_unlock(0);
 			continue;
 		}
+
+		if (nnis < arrsz)
+			nidarr[nnis] = ni->ni_nid;
+		nnis++;
 
 		/*
 		 * if the local NI failed recovery we must unlink the md.
@@ -3642,6 +3650,8 @@ lnet_recover_local_nis(void)
 	lnet_net_lock(0);
 	list_splice(&local_queue, &the_lnet.ln_mt_localNIRecovq);
 	lnet_net_unlock(0);
+
+	return nnis;
 }
 
 static int
@@ -3741,8 +3751,11 @@ lnet_clean_resendqs(void)
 	cfs_percpt_free(the_lnet.ln_mt_resendqs);
 }
 
-static void
-lnet_recover_peer_nis(void)
+/* Returns the total number of peer NIs in recovery.
+ * Records up to @arrsz of the associated NIDs in the @nidarr array
+ */
+static unsigned int
+lnet_recover_peer_nis(struct lnet_nid *nidarr, unsigned int arrsz)
 {
 	struct lnet_mt_event_info *ev_info;
 	LIST_HEAD(processed_list);
@@ -3754,6 +3767,7 @@ lnet_recover_peer_nis(void)
 	int healthv;
 	int rc;
 	time64_t now;
+	unsigned int nlpnis = 0;
 
 	/*
 	 * Always use cpt 0 for locking across all interactions with
@@ -3784,6 +3798,10 @@ lnet_recover_peer_nis(void)
 			lnet_net_unlock(0);
 			continue;
 		}
+
+		if (nlpnis < arrsz)
+			nidarr[nlpnis] = lpni->lpni_nid;
+		nlpnis++;
 
 		/*
 		 * If the peer NI has failed recovery we must unlink the
@@ -3867,14 +3885,141 @@ lnet_recover_peer_nis(void)
 			/* Drop the ref taken by lnet_peer_ni_find_locked() */
 			lnet_peer_ni_decref_locked(lpni);
 			lnet_net_unlock(0);
-		} else
+		} else {
 			spin_unlock(&lpni->lpni_lock);
+		}
 	}
 
 	list_splice_init(&processed_list, &local_queue);
 	lnet_net_lock(0);
 	list_splice(&local_queue, &the_lnet.ln_mt_peerNIRecovq);
 	lnet_net_unlock(0);
+
+	return nlpnis;
+}
+
+#define LNET_MAX_NNIDS 20
+/* @nids is array of nids that are in recovery. It has max size of
+ * LNET_MAX_NNIDS.
+ * @nnids is the total number of nids that are in recovery. It can be
+ * larger than LNET_MAX_NNIDS.
+ * @local tells us whether these are local or peer NIs in recovery.
+ */
+static void
+lnet_print_recovery_list(struct lnet_nid *nids, unsigned int nnids,
+			 bool local)
+{
+	static bool printed;
+	char *buf = NULL;
+	char *tmp;
+	int i;
+	unsigned int arrsz;
+	unsigned int bufsz;
+
+	if (!nnids)
+		return;
+
+	arrsz = nnids < LNET_MAX_NNIDS ? nnids : LNET_MAX_NNIDS;
+
+	/* Printing arrsz NIDs, each has max size LNET_NIDSTR_SIZE, a comma
+	 * and space for each nid after the first (2 * (arrsz - 1)),
+	 * + 1 for terminating null byte
+	 */
+	bufsz = (arrsz * LNET_NIDSTR_SIZE) + (2 * (arrsz - 1)) + 1;
+	LIBCFS_ALLOC(buf, bufsz);
+	if (!buf) {
+		LCONSOLE(D_INFO, "%u %s NIs in recovery\n",
+			 nnids, local ? "local" : "peer");
+		return;
+	}
+
+	tmp = buf;
+	tmp += sprintf(tmp, "%s", libcfs_nidstr(&nids[0]));
+	for (i = 1; i < arrsz; i++)
+		tmp += sprintf(tmp, ", %s", libcfs_nidstr(&nids[i]));
+
+	/* LCONSOLE() used to avoid rate limiting when we have both local
+	 * and peer NIs in recovery
+	 */
+	LCONSOLE(D_INFO, "%u %s NIs in recovery (showing %u): %s\n",
+		 nnids, local ? "local" : "peer", arrsz, buf);
+
+	LIBCFS_FREE(buf, bufsz);
+
+	if (!printed && nnids > LNET_MAX_NNIDS) {
+		LCONSOLE(D_INFO, "See full list with 'lnetctl debug recovery -(p|l)'\n");
+		printed = true;
+	}
+}
+
+static void
+lnet_health_update_console(struct lnet_nid *lnids, unsigned int nnis,
+			   struct lnet_nid *rnids, unsigned int nlpnis,
+			   time64_t now)
+{
+	static time64_t next_ni_update;
+	static time64_t next_lpni_update;
+	static time64_t next_msg_update;
+	static unsigned int num_ni_updates;
+	static unsigned int num_lpni_updates;
+	static unsigned int num_msg_updates = 1;
+	int late_count;
+
+	if (now >= next_ni_update) {
+		if (nnis) {
+			lnet_print_recovery_list(lnids, nnis, true);
+			if (num_ni_updates < 5)
+				num_ni_updates++;
+			next_ni_update = now + (60 * num_ni_updates);
+		} else {
+			next_ni_update = 0;
+			num_ni_updates = 0;
+		}
+	}
+
+
+	if (now >= next_lpni_update) {
+		if (nlpnis) {
+			lnet_print_recovery_list(rnids, nlpnis, false);
+			if (num_lpni_updates < 5)
+				num_lpni_updates++;
+			next_lpni_update = now + (60 * num_lpni_updates);
+		} else {
+			next_lpni_update = 0;
+			num_lpni_updates = 0;
+		}
+	}
+
+	/* Let late_count accumulate for 60 seconds */
+	if (unlikely(!next_msg_update))
+		next_msg_update = now + 60;
+
+	if (now >= next_msg_update) {
+		late_count = atomic_read(&the_lnet.ln_late_msg_count);
+
+		if (late_count) {
+			s64 avg = atomic64_xchg(&the_lnet.ln_late_msg_nsecs, 0) /
+				  atomic_xchg(&the_lnet.ln_late_msg_count, 0);
+
+			if (avg > NSEC_PER_SEC) {
+				unsigned int avg_msec;
+
+				avg_msec = do_div(avg, NSEC_PER_SEC) /
+						NSEC_PER_MSEC;
+				LCONSOLE_INFO("%u messages in past %us over their deadline by avg %lld.%03us\n",
+					      late_count,
+					      (60 * num_msg_updates), avg,
+					      avg_msec);
+
+				if (num_msg_updates < 5)
+					num_msg_updates++;
+				next_msg_update = now + (60 * num_msg_updates);
+			}
+		} else {
+			next_msg_update = now + 60;
+			num_msg_updates = 1;
+		}
+	}
 }
 
 static int
@@ -3882,8 +4027,13 @@ lnet_monitor_thread(void *arg)
 {
 	time64_t rsp_timeout = 0;
 	time64_t now;
+	unsigned int nnis;
+	unsigned int nlpnis;
+	struct lnet_nid local_nids[LNET_MAX_NNIDS];
+	struct lnet_nid peer_nids[LNET_MAX_NNIDS];
 
 	wait_for_completion(&the_lnet.ln_started);
+
 	/*
 	 * The monitor thread takes care of the following:
 	 *  1. Checks the aliveness of routers
@@ -3907,8 +4057,10 @@ lnet_monitor_thread(void *arg)
 			rsp_timeout = now + (lnet_transaction_timeout / 2);
 		}
 
-		lnet_recover_local_nis();
-		lnet_recover_peer_nis();
+		nnis = lnet_recover_local_nis(local_nids, LNET_MAX_NNIDS);
+		nlpnis = lnet_recover_peer_nis(peer_nids, LNET_MAX_NNIDS);
+		lnet_health_update_console(local_nids, nnis, peer_nids, nlpnis,
+					   now);
 
 		/*
 		 * TODO do we need to check if we should sleep without
@@ -4026,7 +4178,7 @@ lnet_handle_recovery_reply(struct lnet_mt_event_info *ev_info,
 		lnet_net_unlock(0);
 
 		if (status != 0) {
-			CERROR("local NI (%s) recovery failed with %d\n",
+			CDEBUG(D_NET, "local NI (%s) recovery failed with %d\n",
 			       libcfs_nidstr(nid), status);
 			return;
 		}
@@ -4060,7 +4212,7 @@ lnet_handle_recovery_reply(struct lnet_mt_event_info *ev_info,
 		lnet_net_unlock(cpt);
 
 		if (status != 0)
-			CERROR("peer NI (%s) recovery failed with %d\n",
+			CDEBUG(D_NET, "peer NI (%s) recovery failed with %d\n",
 			       libcfs_nidstr(nid), status);
 	}
 }

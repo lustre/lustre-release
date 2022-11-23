@@ -1373,6 +1373,8 @@ lnet_prepare(lnet_pid_t requested_pid)
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
 	the_lnet.ln_mt_handler = NULL;
 	init_completion(&the_lnet.ln_started);
+	atomic_set(&the_lnet.ln_late_msg_count, 0);
+	atomic64_set(&the_lnet.ln_late_msg_nsecs, 0);
 
 	rc = lnet_slab_setup();
 	if (rc != 0)

@@ -1482,6 +1482,11 @@ struct lnet {
 	struct completion		ln_started;
 	/* UDSP list */
 	struct list_head		ln_udsp_list;
+
+	/* Number of messages that have exceeded their message deadline */
+	atomic_t			ln_late_msg_count;
+	/* Total amount of time past their deadline for all late ^ messages */
+	atomic64_t			ln_late_msg_nsecs;
 };
 
 struct genl_filter_list {
