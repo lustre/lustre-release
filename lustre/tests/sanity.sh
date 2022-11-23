@@ -15275,6 +15275,24 @@ test_150g() {
 }
 run_test 150g "Verify fallocate punch on large range"
 
+test_150h() {
+	local file=$DIR/$tfile
+	local size
+
+	check_set_fallocate_or_skip
+	statx_supported || skip_env "Test must be statx() syscall supported"
+
+	# fallocate() does not update the size information on the MDT
+	fallocate -l 16K $file || error "failed to fallocate $file"
+	cancel_lru_locks $OSC
+	# STATX with cached-always mode will not send glimpse RPCs to OST,
+	# it uses the caching attrs on the client side as much as possible.
+	size=$($STATX --cached=always -c %s $file)
+	[ $size == 16384 ] ||
+		error "size after fallocate() is $size, expected 16384"
+}
+run_test 150h "Verify extend fallocate updates the file size"
+
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
 	local list=$(comma_list $(osts_nodes))

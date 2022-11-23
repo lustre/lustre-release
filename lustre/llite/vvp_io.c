@@ -767,17 +767,27 @@ static int vvp_io_setattr_start(const struct lu_env *env,
 static void vvp_io_setattr_end(const struct lu_env *env,
                                const struct cl_io_slice *ios)
 {
-	struct cl_io		*io    = ios->cis_io;
-	struct inode		*inode = vvp_object_inode(io->ci_obj);
-	struct ll_inode_info	*lli   = ll_i2info(inode);
+	struct cl_io *io = ios->cis_io;
+	struct inode *inode = vvp_object_inode(io->ci_obj);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	loff_t size = io->u.ci_setattr.sa_attr.lvb_size;
 
 	if (cl_io_is_trunc(io)) {
 		/* Truncate in memory pages - they must be clean pages
 		 * because osc has already notified to destroy osc_extents. */
-		vvp_do_vmtruncate(inode, io->u.ci_setattr.sa_attr.lvb_size);
+		vvp_do_vmtruncate(inode, size);
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else if (cl_io_is_fallocate(io)) {
+		int mode = io->u.ci_setattr.sa_falloc_mode;
+
+		if (!(mode & FALLOC_FL_KEEP_SIZE) &&
+		    size > i_size_read(inode)) {
+			ll_inode_size_lock(inode);
+			i_size_write(inode, size);
+			ll_inode_size_unlock(inode);
+		}
+		inode->i_ctime = current_time(inode);
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else {
