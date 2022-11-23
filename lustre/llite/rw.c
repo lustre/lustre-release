@@ -148,7 +148,16 @@ static inline bool ll_readahead_enabled(struct ll_sb_info *sbi)
 void ll_ra_stats_inc(struct inode *inode, enum ra_stat which)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
+
 	ll_ra_stats_inc_sbi(sbi, which);
+}
+
+void ll_ra_stats_add(struct inode *inode, enum ra_stat which, long count)
+{
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+
+	LASSERTF(which < _NR_RA_STAT, "which: %u\n", which);
+	lprocfs_counter_add(sbi->ll_ra_stats, which, count);
 }
 
 #define RAS_CDEBUG(ras) \
@@ -523,6 +532,10 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 	}
 
 	cl_read_ahead_release(env, &ra);
+
+	if (count)
+		ll_ra_stats_add(vvp_object_inode(io->ci_obj),
+				RA_STAT_READAHEAD_PAGES, count);
 
 	return count;
 }

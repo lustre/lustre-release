@@ -11152,6 +11152,20 @@ test_101j() {
 }
 run_test 101j "A complete read block should be submitted when no RA"
 
+test_101k()
+{
+	local file=$DIR/$tfile
+
+	check_set_fallocate_or_skip
+
+	$LCTL set_param -n llite.*.read_ahead_stats=0
+	fallocate -l 16K $file || error "failed to fallocate $file"
+	cancel_lru_locks osc
+	$MULTIOP $file or1048576c
+	$LCTL get_param llite.*.read_ahead_stats
+}
+run_test 101k "read ahead for small file"
+
 setup_test102() {
 	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
