@@ -1850,11 +1850,53 @@ static const struct super_operations server_ops = {
 	.show_options	= server_show_options,
 };
 
+#if defined(HAVE_USER_NAMESPACE_ARG)
+# define USERNS_ARG mnt_userns,
+#else
+# define USERNS_ARG
+# ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+#  define server_getattr(ns, path, st, rq, fl) server_getattr(path, st, rq, fl)
+# endif
+#endif
+
 /*
- * Xattr support for Lustre servers
+ * inode operations for Lustre server mountpoints
  */
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
+static int server_getattr(struct user_namespace *mnt_userns,
+			  const struct path *path, struct kstat *stat,
+			  u32 request_mask, unsigned int flags)
+{
+	struct inode *inode = d_inode(path->dentry);
+#else
+static int server_getattr(struct vfsmount *mnt, struct dentry *de,
+			  struct kstat *stat)
+{
+	struct inode *inode = de->d_inode;
+#endif
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+	struct vfsmount *root_mnt;
+	struct inode *root_inode;
+
+	root_mnt = dt_mnt_get(lsi->lsi_dt_dev);
+	if (IS_ERR(root_mnt))
+		root_inode = igrab(inode);
+	else
+		root_inode = igrab(root_mnt->mnt_sb->s_root->d_inode);
+	if (!root_inode)
+		return -EACCES;
+
+	CDEBUG(D_SUPER, "%s: root_inode from %s ino=%lu, dev=%x\n",
+	       lsi->lsi_svname, root_inode == inode ? "lsi" : "vfsmnt",
+	       root_inode->i_ino, root_inode->i_rdev);
+	generic_fillattr(USERNS_ARG root_inode, stat);
+	iput(root_inode);
+
+	return 0;
+}
+
 #ifdef HAVE_IOP_XATTR
-static ssize_t lustre_getxattr(struct dentry *dentry, const char *name,
+static ssize_t server_getxattr(struct dentry *dentry, const char *name,
 				void *buffer, size_t size)
 {
 	if (!selinux_is_enabled())
@@ -1862,23 +1904,27 @@ static ssize_t lustre_getxattr(struct dentry *dentry, const char *name,
 	return -ENODATA;
 }
 
-static int lustre_setxattr(struct dentry *dentry, const char *name,
+static int server_setxattr(struct dentry *dentry, const char *name,
 			    const void *value, size_t size, int flags)
 {
 	return -EOPNOTSUPP;
 }
 #endif
 
-static ssize_t lustre_listxattr(struct dentry *d_entry, char *name,
+static ssize_t server_listxattr(struct dentry *d_entry, char *name,
 				size_t size)
 {
 	return -EOPNOTSUPP;
 }
 
-static bool is_cmd_supported(unsigned int command)
+static bool is_cmd_supported(unsigned int cmd)
 {
-	switch (command) {
+	CDEBUG(D_SUPER, "ioctl cmd=%x\n", cmd);
+
+	switch (cmd) {
 	case FITRIM:
+		return true;
+	case LL_IOC_RESIZE_FS:
 		return true;
 	default:
 		return false;
@@ -1887,37 +1933,41 @@ static bool is_cmd_supported(unsigned int command)
 	return false;
 }
 
-static long server_ioctl(struct file *filp, unsigned int command,
-			 unsigned long arg)
+static long server_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	struct file active_filp;
-	struct inode *inode = file_inode(filp);
-	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
-	struct super_block *dd_sb = dt_mnt_sb_get(lsi->lsi_dt_dev);
-	struct inode *active_inode;
+	struct lustre_sb_info *lsi = s2lsi(file_inode(filp)->i_sb);
+	struct vfsmount *root_mnt;
+	struct file *root_filp;
+	struct inode *root_inode;
 	int err = -EOPNOTSUPP;
 
-	if (IS_ERR(dd_sb) || !is_cmd_supported(command))
+	if (!is_cmd_supported(cmd))
 		return err;
 
-	active_inode = igrab(dd_sb->s_root->d_inode);
-	if (!active_inode)
+	root_mnt = dt_mnt_get(lsi->lsi_dt_dev);
+	if (IS_ERR(root_mnt))
+		return err;
+
+	root_inode = igrab(root_mnt->mnt_root->d_inode);
+	if (!root_inode)
 		return -EACCES;
 
-	active_filp.f_inode = active_inode;
-	if (active_inode->i_fop && active_inode->i_fop->unlocked_ioctl)
-		err = active_inode->i_fop->unlocked_ioctl(&active_filp,
-							  command, arg);
-	iput(active_inode);
+	root_filp = alloc_file_pseudo(root_inode, root_mnt, "/",
+				      O_RDWR | O_NOATIME, root_inode->i_fop);
+	if (root_inode->i_fop && root_inode->i_fop->unlocked_ioctl)
+		err = root_inode->i_fop->unlocked_ioctl(root_filp, cmd, arg);
+	fput(root_filp);
+
 	return err;
 }
 
 static const struct inode_operations server_inode_operations = {
+	.getattr	= server_getattr,
 #ifdef HAVE_IOP_XATTR
-	.setxattr       = lustre_setxattr,
-	.getxattr       = lustre_getxattr,
+	.setxattr       = server_setxattr,
+	.getxattr       = server_getxattr,
 #endif
-	.listxattr      = lustre_listxattr,
+	.listxattr      = server_listxattr,
 };
 
 static const struct file_operations server_file_operations = {

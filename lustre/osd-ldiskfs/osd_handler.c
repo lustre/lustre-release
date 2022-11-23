@@ -2554,9 +2554,9 @@ out:
 	param->ddp_has_lseek_data_hole = true;
 }
 
-static struct super_block *osd_mnt_sb_get(const struct dt_device *d)
+static struct vfsmount *osd_mnt_get(const struct dt_device *d)
 {
-	return osd_sb(osd_dt_dev(d));
+	return osd_dt_dev(d)->od_mnt;
 }
 
 /*
@@ -2709,7 +2709,7 @@ static const struct dt_device_operations osd_dt_ops = {
 	.dt_trans_stop		  = osd_trans_stop,
 	.dt_trans_cb_add	  = osd_trans_cb_add,
 	.dt_conf_get		  = osd_conf_get,
-	.dt_mnt_sb_get		  = osd_mnt_sb_get,
+	.dt_mnt_get		  = osd_mnt_get,
 	.dt_sync		  = osd_sync,
 	.dt_ro			  = osd_ro,
 	.dt_commit_async	  = osd_commit_async,

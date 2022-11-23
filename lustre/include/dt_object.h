@@ -117,8 +117,8 @@ struct dt_txn_commit_cb {
  * Operations on dt device.
  */
 struct dt_device_operations {
-        /**
-         * Return device-wide statistics.
+	/**
+	 * Return device-wide statistics.
 	 *
 	 * Return device-wide stats including block size, total and
 	 * free blocks, total and free objects, etc. See struct obd_statfs
@@ -130,13 +130,13 @@ struct dt_device_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
-        int   (*dt_statfs)(const struct lu_env *env,
+	 */
+	int   (*dt_statfs)(const struct lu_env *env,
 			   struct dt_device *dev,
 			   struct obd_statfs *osfs,
 			   struct obd_statfs_info *info);
 
-        /**
+	/**
 	 * Create transaction.
 	 *
 	 * Create in-memory structure representing the transaction for the
@@ -151,11 +151,11 @@ struct dt_device_operations {
 	 *
 	 * \retval pointer to handle	if creation succeeds
 	 * \retval ERR_PTR(errno)	if creation fails
-         */
-        struct thandle *(*dt_trans_create)(const struct lu_env *env,
-                                           struct dt_device *dev);
+	 */
+	struct thandle *(*dt_trans_create)(const struct lu_env *env,
+					   struct dt_device *dev);
 
-        /**
+	/**
 	 * Start transaction.
 	 *
 	 * Start the transaction. The transaction described by \a th can be
@@ -172,8 +172,8 @@ struct dt_device_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
-        int   (*dt_trans_start)(const struct lu_env *env,
+	 */
+	int   (*dt_trans_start)(const struct lu_env *env,
 				struct dt_device *dev,
 				struct thandle *th);
 
@@ -197,8 +197,8 @@ struct dt_device_operations {
 			       struct dt_device *dev,
 			       struct thandle *th);
 
-        /**
-         * Add commit callback to the transaction.
+	/**
+	 * Add commit callback to the transaction.
 	 *
 	 * Add a commit callback to the given transaction handle. The callback
 	 * will be called when the associated transaction is stored. I.e. the
@@ -216,11 +216,11 @@ struct dt_device_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
-        int   (*dt_trans_cb_add)(struct thandle *th,
-                                 struct dt_txn_commit_cb *dcb);
+	 */
+	int   (*dt_trans_cb_add)(struct thandle *th,
+				 struct dt_txn_commit_cb *dcb);
 
-        /**
+	/**
 	 * Return FID of root index object.
 	 *
 	 * Return the FID of the root object in the filesystem. This object
@@ -234,13 +234,13 @@ struct dt_device_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
-        int   (*dt_root_get)(const struct lu_env *env,
+	 */
+	int   (*dt_root_get)(const struct lu_env *env,
 			     struct dt_device *dev,
 			     struct lu_fid *f);
 
-        /**
-         * Return device configuration data.
+	/**
+	 * Return device configuration data.
 	 *
 	 * Return device (disk fs, actually) specific configuration.
 	 * The configuration isn't subject to change at runtime.
@@ -249,17 +249,17 @@ struct dt_device_operations {
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dev	dt device
 	 * \param[out] param	configuration parameters
-         */
-        void  (*dt_conf_get)(const struct lu_env *env,
-                             const struct dt_device *dev,
-                             struct dt_device_param *param);
+	 */
+	void  (*dt_conf_get)(const struct lu_env *env,
+			     const struct dt_device *dev,
+			     struct dt_device_param *param);
 
 	/**
-	 * Return device's super block.
+	 * Return device's vfsmount.
 	 *
 	 * \param[in] dev	dt device
 	 */
-	struct super_block *(*dt_mnt_sb_get)(const struct dt_device *dev);
+	struct vfsmount *(*dt_mnt_get)(const struct dt_device *dev);
 
 	/**
 	 * Sync the device.
@@ -2706,21 +2706,21 @@ static inline int dt_root_get(const struct lu_env *env, struct dt_device *dev,
 }
 
 static inline void dt_conf_get(const struct lu_env *env,
-                               const struct dt_device *dev,
-                               struct dt_device_param *param)
-{
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_conf_get);
-        return dev->dd_ops->dt_conf_get(env, dev, param);
-}
-
-static inline struct super_block *dt_mnt_sb_get(const struct dt_device *dev)
+			       const struct dt_device *dev,
+			       struct dt_device_param *param)
 {
 	LASSERT(dev);
 	LASSERT(dev->dd_ops);
-	if (dev->dd_ops->dt_mnt_sb_get)
-		return dev->dd_ops->dt_mnt_sb_get(dev);
+	LASSERT(dev->dd_ops->dt_conf_get);
+	return dev->dd_ops->dt_conf_get(env, dev, param);
+}
+
+static inline struct vfsmount *dt_mnt_get(const struct dt_device *dev)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	if (dev->dd_ops->dt_mnt_get)
+		return dev->dd_ops->dt_mnt_get(dev);
 
 	return ERR_PTR(-EOPNOTSUPP);
 }

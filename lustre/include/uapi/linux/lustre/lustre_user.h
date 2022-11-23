@@ -253,7 +253,9 @@ typedef struct statx lstatx_t;
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
-#define FSFILT_IOC_GETVERSION		_IOR('f', 3, long)
+#define LL_IOC_GETVERSION		_IOR('f', 3, long)
+#define FSFILT_IOC_GETVERSION		LL_IOC_GETVERSION /* backward compat */
+#define LL_IOC_RESIZE_FS		_IOW('f', 16, __u64)
 
 /* FIEMAP flags supported by Lustre */
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)

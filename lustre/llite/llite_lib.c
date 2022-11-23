@@ -3002,7 +3002,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 	switch (cmd) {
 	case BLKSSZGET:
 		RETURN(put_user(PAGE_SIZE, (int __user *)uarg));
-	case FSFILT_IOC_GETVERSION:
+	case LL_IOC_GETVERSION:
 	case FS_IOC_GETVERSION:
 		RETURN(put_user(inode->i_generation, (int __user *)uarg));
 	case FS_IOC_GETFLAGS: {

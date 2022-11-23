@@ -1029,7 +1029,7 @@ static inline int lustre_to_lma_flags(__u32 la_flags)
  * for the client inode i_flags.  The LUSTRE_*_FL are the Lustre wire
  * protocol equivalents of LDISKFS_*_FL values stored on disk, while
  * the S_* flags are kernel-internal values that change between kernel
- * versions. These flags are set/cleared via FSFILT_IOC_{GET,SET}_FLAGS.
+ * versions. These are set/cleared via FS_IOC_GETFLAGS/FS_IOC_SETFLAGS.
  * See b=16526 for a full history.
  */
 static inline int ll_ext_to_inode_flags(int ext_flags)
