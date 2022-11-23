@@ -614,7 +614,7 @@ int main(int argc, char **argv)
 					fprintf(stderr, "short read: %lld/%u\n",
 						rc, len);
 					if (rc == 0)
-						exit(ENODATA);
+						break;
 				}
 				len -= rc;
 				if (verbose >= 2)

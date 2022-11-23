@@ -11393,19 +11393,65 @@ test_101j() {
 }
 run_test 101j "A complete read block should be submitted when no RA"
 
-test_101k()
-{
+test_readahead_base() {
 	local file=$DIR/$tfile
-
-	check_set_fallocate_or_skip
+	local size=$1
+	local iosz
+	local ramax
+	local ranum
 
 	$LCTL set_param -n llite.*.read_ahead_stats=0
-	fallocate -l 16K $file || error "failed to fallocate $file"
+	# The first page is not accounted into readahead
+	ramax=$(((size + PAGE_SIZE - 1) / PAGE_SIZE - 1))
+	iosz=$(((size + 1048575) / 1048576 * 1048576))
+	echo "Test readahead: size=$size ramax=$ramx iosz=$iosz"
+
+	$LCTL mark  "Test readahead: size=$size ramax=$ramx iosz=$iosz"
+	fallocate -l $size $file || error "failed to fallocate $file"
 	cancel_lru_locks osc
-	$MULTIOP $file or1048576c
-	$LCTL get_param llite.*.read_ahead_stats
+	$MULTIOP $file or${iosz}c || error "failed to read $file"
+	$LCTL get_param -n llite.*.read_ahead_stats
+	ranum=$($LCTL get_param -n llite.*.read_ahead_stats |
+		awk '/readahead.pages/ { print $7 }' | calc_total)
+	(( $ranum <= $ramax )) ||
+		error "read-ahead pages is $ranum more than $ramax"
+	rm -rf $file || error "failed to remove $file"
 }
-run_test 101k "read ahead for small file"
+
+test_101m()
+{
+	local file=$DIR/$tfile
+	local ramax
+	local ranum
+	local size
+	local iosz
+
+	check_set_fallocate_or_skip
+	stack_trap "rm -f $file" EXIT
+
+	test_readahead_base 4096
+
+	# file size: 16K = 16384
+	test_readahead_base 16384
+	test_readahead_base 16385
+	test_readahead_base 16383
+
+	# file size: 1M + 1 = 1048576 + 1
+	test_readahead_base 1048577
+	# file size: 1M + 16K
+	test_readahead_base $((1048576 + 16384))
+
+	# file size: stripe_size * (stripe_count - 1) + 16K
+	$LFS setstripe -c -1 $file || error "failed to setstripe $file"
+	test_readahead_base $((1048576 * (OSTCOUNT - 1) + 16384))
+	# file size: stripe_size * stripe_count + 16K
+	$LFS setstripe -c -1 $file || error "failed to setstripe $file"
+	test_readahead_base $((1048576 * OSTCOUNT + 16384))
+	# file size: 2 * stripe_size * stripe_count + 16K
+	$LFS setstripe -c -1 $file || error "failed to setstripe $file"
+	test_readahead_base $((2 * 1048576 * OSTCOUNT + 16384))
+}
+run_test 101m "read ahead for small file and last stripe of the file"
 
 setup_test102() {
 	test_mkdir $DIR/$tdir

@@ -85,6 +85,8 @@ static int osc_io_read_ahead(const struct lu_env *env,
 	oio->oi_is_readahead = true;
 	dlmlock = osc_dlmlock_at_pgoff(env, osc, start, 0);
 	if (dlmlock != NULL) {
+		struct lov_oinfo *oinfo = osc->oo_oinfo;
+
 		LASSERT(dlmlock->l_ast_data == osc);
 		if (dlmlock->l_req_mode != LCK_PR) {
 			struct lustre_handle lockh;
@@ -101,6 +103,9 @@ static int osc_io_read_ahead(const struct lu_env *env,
 		ra->cra_oio = oio;
 		if (ra->cra_end_idx != CL_PAGE_EOF)
 			ra->cra_contention = true;
+		ra->cra_end_idx = min_t(pgoff_t, ra->cra_end_idx,
+					cl_index(osc2cl(osc),
+						 oinfo->loi_kms - 1));
 		result = 0;
 	}
 
