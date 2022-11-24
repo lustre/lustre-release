@@ -1673,7 +1673,9 @@ found:
 #ifdef HAVE_SERVER_SUPPORT
 static void ptlrpc_server_mark_obsolete(struct ptlrpc_request *req)
 {
+	spin_lock(&req->rq_lock);
 	req->rq_obsolete = 1;
+	spin_unlock(&req->rq_lock);
 }
 
 static void
@@ -1860,7 +1862,9 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 			ptlrpc_nrs_req_finalize(req);
 
 			/* don't mark slot unused for resend in progress */
+			spin_lock(&req->rq_lock);
 			req->rq_obsolete = 1;
+			spin_unlock(&req->rq_lock);
 
 			RETURN(-EBUSY);
 		}

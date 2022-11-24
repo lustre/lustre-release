@@ -1005,7 +1005,7 @@ struct ptlrpc_request {
 		rq_allow_intr:1;
 	/** @} */
 
-	/** server-side flags @{ */
+	/** server-side flags are serialized by rq_lock @{ */
 	unsigned int
 		rq_hp:1,		/**< high priority RPC */
 		rq_at_linked:1,		/**< link into service's srv_at_array */
