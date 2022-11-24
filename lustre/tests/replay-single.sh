@@ -4154,14 +4154,13 @@ run_test 111f "DNE: unlink striped dir, uncommit on MDT1, fail MDT1/MDT2"
 
 test_111g() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION -ge $(version_code 2.7.56) )) ||
+	(( $MDS1_VERSION >= $(version_code 2.7.56) )) ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE != "HARD" ] ||
 		[ "$(facet_host mds1)" != "$(facet_host mds2)" ]) ||
 		skip "MDTs needs to be on diff hosts for HARD fail mode"
 
-	start_full_debug_logging
 	mkdir -p $DIR/$tdir
 	$LFS mkdir -i1 -c2 $DIR/$tdir/striped_dir
 	$LFS df -i
@@ -4171,7 +4170,6 @@ test_111g() {
 	fail mds1,mds2
 	$CHECKSTAT -t dir $DIR/$tdir/striped_dir &&
 		error "striped dir still exists"
-	stop_full_debug_logging
 	return 0
 }
 run_test 111g "DNE: unlink striped dir, fail MDT1/MDT2"

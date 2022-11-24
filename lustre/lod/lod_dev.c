@@ -1698,6 +1698,7 @@ static struct thandle *lod_trans_create(const struct lu_env *env,
  * directories, check space before transaction start.
  */
 static int lod_trans_space_check(const struct lu_env *env,
+				 struct lod_device *lod,
 				 struct thandle *th)
 {
 	struct lod_thread_info *info = lod_env_info(env);
@@ -1725,6 +1726,9 @@ static int lod_trans_space_check(const struct lu_env *env,
 		if (rc) {
 			CDEBUG(D_INFO, "%s: fail - statfs error: rc = %d\n",
 			       sub_dt->dd_lu_dev.ld_obd->obd_name, rc);
+			/* statfs may fail during recovery, skip check */
+			if (!lod->lod_recovery_completed)
+				rc = 0;
 			return rc;
 		}
 
@@ -1756,7 +1760,7 @@ static int lod_trans_start(const struct lu_env *env, struct dt_device *dt,
 	if (lod->lod_dist_txn_check_space) {
 		int rc;
 
-		rc = lod_trans_space_check(env, th);
+		rc = lod_trans_space_check(env, lod, th);
 		if (rc)
 			return rc;
 	}
