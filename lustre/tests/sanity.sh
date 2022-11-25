@@ -25315,6 +25315,7 @@ test_398m() { #  LU-13798
 	# Set up failure on OST0, the first stripe:
 	#define OBD_FAIL_OST_BRW_WRITE_BULK     0x20e
 	#NB: Fail val is ost # + 1, because we cannot use cfs_fail_val = 0
+	# OST0 is on ost1, OST1 is on ost2.
 	# So this fail_val specifies OST0
 	do_facet ost1 $LCTL set_param fail_loc=0x20e fail_val=1
 	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0"
@@ -25340,13 +25341,13 @@ test_398m() { #  LU-13798
 	# Clear file contents, maintain striping
 	echo > $DIR/$tfile
 	# Set up failure on OST1, second stripe:
-	do_facet ost1 $LCTL set_param fail_loc=0x20e fail_val=2
-	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0"
+	do_facet ost2 $LCTL set_param fail_loc=0x20e fail_val=2
+	stack_trap "do_facet ost2 $LCTL set_param fail_loc=0"
 
 	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct &&
-		error "parallel dio write with failure on first stripe succeeded"
+		error "parallel dio write with failure on second stripe succeeded"
 	stack_trap "rm -f $DIR/$tfile"
-	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0
+	do_facet ost2 $LCTL set_param fail_loc=0 fail_val=0
 
 	# Place data in file for read
 	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct ||
@@ -25356,7 +25357,7 @@ test_398m() { #  LU-13798
 	#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 	do_facet ost2 $LCTL set_param fail_loc=0x20f fail_val=2
 	dd if=$DIR/$tfile of=$DIR/$tfile.2 bs=8M count=8 iflag=direct &&
-		error "parallel dio read with error on first stripe succeeded"
+		error "parallel dio read with error on second stripe succeeded"
 	rm -f $DIR/$tfile.2
 	do_facet ost2 $LCTL set_param fail_loc=0 fail_val=0
 }
