@@ -761,7 +761,7 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 		struct genlmsghdr *ghdr = genlmsg_hdr(nlh);
 		struct nlattr *attrs[LN_SCALAR_MAX + 1];
 
-		if (genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX + 1,
+		if (genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX,
 				  scalar_attr_policy))
 			return NL_SKIP;
 
