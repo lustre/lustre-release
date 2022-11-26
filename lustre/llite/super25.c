@@ -149,7 +149,6 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 
 	if (!lmd_is_client(lmd)) {
 #ifdef HAVE_SERVER_SUPPORT
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 15, 51, 0)
 		static bool printed;
 
 		if (!printed) {
@@ -157,7 +156,6 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 				      lmd->lmd_profile);
 			printed = true;
 		}
-#endif
 		rc = server_fill_super(sb);
 #else
 		rc = -ENODEV;

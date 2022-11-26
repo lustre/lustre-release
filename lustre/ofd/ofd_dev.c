@@ -710,55 +710,6 @@ static const struct lu_device_operations ofd_lu_ops = {
 	.ldo_prepare		= ofd_prepare,
 };
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
-/**
- * Expose OSD statistics to OFD layer.
- *
- * The osd interfaces to the backend file system exposes useful data
- * such as brw_stats and read or write cache states. This same data
- * needs to be exposed into the obdfilter (ofd) layer to maintain
- * backwards compatibility. This function creates the symlinks in the
- * proc layer to enable this.
- *
- * \param[in] ofd	OFD device
- */
-static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
-{
-	struct obd_device *obd = ofd_obd(ofd);
-	struct obd_device *osd_obd = ofd->ofd_osd_exp->exp_obd;
-	const struct kobj_type *osd_type;
-	int i;
-
-	osd_type = get_ktype(&ofd->ofd_osd->dd_kobj);
-	for (i = 0; osd_type->default_attrs[i]; i++) {
-		if (strcmp(osd_type->default_attrs[i]->name,
-			   "read_cache_enable") == 0) {
-			ofd->ofd_read_cache_enable =
-				osd_type->default_attrs[i];
-		}
-
-		if (strcmp(osd_type->default_attrs[i]->name,
-			   "readcache_max_filesize") == 0) {
-			ofd->ofd_read_cache_max_filesize =
-				osd_type->default_attrs[i];
-		}
-
-		if (strcmp(osd_type->default_attrs[i]->name,
-			   "writethrough_cache_enable") == 0) {
-			ofd->ofd_write_cache_enable =
-				osd_type->default_attrs[i];
-		}
-	}
-
-	if (obd->obd_proc_entry == NULL)
-		return;
-
-	lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
-			    "../../%s/%s/brw_stats",
-			    osd_obd->obd_type->typ_name, obd->obd_name);
-}
-#endif
-
 /**
  * Cleanup all procfs entries in OFD.
  *
@@ -3060,10 +3011,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
-	ofd_procfs_add_brw_stats_symlink(m);
-#endif
 
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "%s-%s",
 		 "filter"/*LUSTRE_OST_NAME*/, obd->obd_uuid.uuid);

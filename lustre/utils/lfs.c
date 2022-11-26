@@ -5545,11 +5545,6 @@ err_free:
 			param.fp_exclude_pool = !!neg_opt;
 			param.fp_check_pool = 1;
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
-		case 'p': /* want this for --pool, to match getstripe/find */
-			fprintf(stderr,
-				"warning: -p deprecated, use --print0 or -0\n");
-#endif
 		case '0':
 			param.fp_zero_end = 1;
 			break;
@@ -6799,11 +6794,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = mdts[0];
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 53, 0)
-		case 'm':
-			fprintf(stderr,
-				"warning: '-m' is deprecated, use '--mode' or '-o' instead\n");
-#endif
 		case 'o':
 			mode_opt = optarg;
 			break;
@@ -7808,10 +7798,10 @@ quota_type_def:
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'd':
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 15, 53, 0)
-			fprintf(stderr, "'-d' deprecatd, use '-D' or '--default'\n");
-#endif
-			/* falltrrough */
+			fprintf(stderr,
+				"%s setquota: '-d' deprecated, use '-D' or '--default'\n",
+				progname);
+			fallthrough;
 #endif
 		case 'D':
 			use_default = true;

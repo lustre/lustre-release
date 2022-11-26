@@ -161,16 +161,15 @@ int llapi_get_version_string(char *version, unsigned int version_size)
  */
 int llapi_get_version(char *buffer, int buffer_size, char **version)
 {
-	int rc;
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 8, 53, 0)
 	static bool printed;
+	int rc;
+
 	if (!printed) {
 		fprintf(stderr,
 			"%s deprecated, use llapi_get_version_string()\n",
 			__func__);
 		printed = true;
 	}
-#endif
 
 	rc = llapi_get_version_string(buffer, buffer_size);
 	/* keep old return style for this legacy function */
