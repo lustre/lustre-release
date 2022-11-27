@@ -14167,8 +14167,8 @@ test_133a() {
 	check_stats $SINGLEMDS "rmdir" 1
 
 	local testdir1=$DIR/${tdir}/stats_testdir1
-	mkdir -p ${testdir}
-	mkdir -p ${testdir1}
+	mkdir_on_mdt0 -p ${testdir}
+	mkdir_on_mdt0 -p ${testdir1}
 	touch ${testdir1}/test1
 	mv ${testdir1}/test1 ${testdir} || error "file crossdir rename"
 	check_stats $SINGLEMDS "crossdir_rename" 1
