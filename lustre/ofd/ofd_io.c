@@ -991,7 +991,11 @@ ofd_commitrw_read(const struct lu_env *env, struct ofd_device *ofd,
 
 	fo = ofd_info(env)->fti_obj;
 	LASSERT(fo != NULL);
-	LASSERT(ofd_object_exists(fo));
+	/*
+	 * there is no guarantee the object still exists as the client
+	 * behind this RPC could have been evicted allowing concurrent
+	 * OST_DESTROY to remove the object.
+	 */
 	dt_bufs_put(env, ofd_object_child(fo), lnb, niocount);
 
 	ofd_object_put(env, fo);
