@@ -194,7 +194,7 @@ Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: python3 >= 3.6.0
 BuildRequires: python3-devel >= 3.6.0, swig
 %endif
-BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel
+BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel flex bison
 %if "%{_vendor}" == "redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig

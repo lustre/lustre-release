@@ -61,6 +61,7 @@ BuildArch:      noarch
 # (ie, "BUILD_DEPENDS[#]=<pkg>"), and have latest DKMS fixes integrated
 # for bugs that prevented our module to build/install.
 Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
+Requires:       flex bison libmount-devel libmount
 # for lnetctl
 Requires:	libyaml-devel
 Requires:	zlib-devel
