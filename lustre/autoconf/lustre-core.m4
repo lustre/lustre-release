@@ -3203,7 +3203,7 @@ AS_IF([test "x$enable_crypto" = xin-kernel], [
 	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via embedded llcrypt])
 	      AC_DEFINE(CONFIG_LL_ENCRYPTION, 1, [embedded llcrypt])
 	      AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1, [embedded llcrypt uses llcrypt_dummy_context_enabled()])
-	      enable_crypto="embedded llcrypt"
+	      enable_crypto="embedded-llcrypt"
 	      enable_llcrypt=yes], [
 	      AS_IF([test "x$enable_crypto" = xyes],
 	            [AC_MSG_ERROR([Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.])])
