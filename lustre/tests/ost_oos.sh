@@ -6,7 +6,7 @@ export OSTSIZE=10000
 MOUNT=${MOUNT:-/mnt/lustre}
 
 echo "mnt.."
-sh llmount.sh
+./llmount.sh
 echo "done"
 echo ""
 
@@ -38,4 +38,4 @@ rm -f /tmp/oosfile
 
 echo ""
 echo "cln.."
-sh llmountcleanup.sh
+./llmountcleanup.sh
