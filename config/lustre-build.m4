@@ -693,7 +693,6 @@ AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 AS_IF([test "x$enable_utils" = xyes], [
 	LC_OPENSSL_GETSEPOL
 	LC_FID2PATH_ANON_UNION
-	LC_IOC_REMOVE_ENTRY
 ])
 AS_IF([test "x$enable_tests" = xyes], [
 	LC_HAVE_LIBAIO
