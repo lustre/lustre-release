@@ -46,7 +46,7 @@ my $ONE_MB = 1048576;
 
 # Command line parameter parsing
 use Getopt::Std;
-getopts('cdghi:w:') or usage();
+getopts('cdghi:n:w:') or usage();
 usage() if $opt_h;
 $clear = 1 if $opt_c;
 $debug = $opt_d if $opt_d;
