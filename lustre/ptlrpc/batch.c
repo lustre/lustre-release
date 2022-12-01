@@ -483,10 +483,7 @@ static int batch_send_update_req(const struct lu_env *env,
 	if (flags & BATCH_FL_SYNC) {
 		rc = ptlrpc_queue_wait(req);
 	} else {
-		if ((flags & (BATCH_FL_RDONLY | BATCH_FL_RQSET)) ==
-		    BATCH_FL_RDONLY) {
-			ptlrpcd_add_req(req);
-		} else if (flags & BATCH_FL_RQSET) {
+		if (bh && (flags & BATCH_FL_RQSET)) {
 			ptlrpc_set_add_req(bh->lbt_rqset, req);
 			ptlrpc_check_set(env, bh->lbt_rqset);
 		} else {

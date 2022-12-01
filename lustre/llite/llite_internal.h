@@ -1764,6 +1764,7 @@ struct ll_statahead_info {
 	struct list_head	sai_item;
 	struct dentry		*sai_dentry;
 	atomic_t		sai_refcount;   /* On access, hold refcount */
+	atomic_t		sai_inuse_count;/* inuse entry count */
 	unsigned int		sai_max;        /* max ahead of lookup */
 	__u64			sai_sent;       /* stat requests sent count */
 	__u64			sai_replied;    /* stat req which recv reply */

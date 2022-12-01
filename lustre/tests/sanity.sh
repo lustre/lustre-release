@@ -14906,6 +14906,89 @@ test_123j() {
 }
 run_test 123j "-ENOENT error from batched statahead be handled correctly"
 
+test_123k() {
+	MDTEST=${MDTEST:=$(which mdtest 2> /dev/null || true)}
+	[[ -n "$MDTEST" ]] || skip_env "mdtest not found"
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
+	local enabled
+
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+	$LCTL set_param llite.*.enable_statahead_fname=1
+
+	local np=2
+
+	mpi_run -np $np $MDTEST -C -F -n 1000 -d $DIR/$tdir
+	cancel_lru_locks mdc
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=0
+	mpi_run -np $np $MDTEST -T -F -n 1000 -d $DIR/$tdir
+	#umount_client $MOUNT || error "failed to umount client"
+	echo "Sleep to wait statahead thread (ll_sa_xxx) to exit ..."
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
+
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+	ps -el | grep ll_sa
+
+	local count=$($LCTL get_param -n llite.*.statahead_stats |
+			awk '/fname.total:/ {print $2}')
+
+	[ $count == $np ] || error "File name pattern statahead not trigger"
+	count=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/hit.total:/ {print $2}')
+	# Hit ratio should be >= 75%
+	[ $count -gt $((np * 1000 * 75 / 100)) ] ||
+		error "hit total is too low: $count"
+}
+run_test 123k "Verify statahead work with mdtest shared stat() mode"
+
+test_123l() {
+	local dir=$DIR/$tdir
+	local cmd="touch $dir/$tfile.{000000..000100}"
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
+	stack_trap "rm -rf $dir"
+	mkdir -p $dir || error "failed to mkdir $dir"
+	eval $cmd
+
+	cancel_lru_locks mdc
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=0
+
+	local max
+	local batch_max
+	local enabled
+
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+	$LCTL set_param llite.*.enable_statahead_fname=1
+	$LCTL set_param llite.*.statahead_max=1024
+	$LCTL set_param llite.*.statahead_batch_max=32
+	$LCTL get_param -n llite.*.statahead_stats
+	#define OBD_FAIL_LLITE_STATAHEAD_PAUSE	0x1433
+	$LCTL set_param fail_loc=0x80001433 fail_val=35
+	ls $dir/* > /dev/null
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+
+	echo "Sleep to wait the statahead thread (ll_sa_xxx) to exit ..."
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
+	$LCTL get_param -n llite.*.statahead_stats
+}
+run_test 123l "Avoid panic when revalidate a local cached entry"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
