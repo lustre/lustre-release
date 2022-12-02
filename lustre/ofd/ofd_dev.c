@@ -726,7 +726,7 @@ static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 	struct obd_device *osd_obd = ofd->ofd_osd_exp->exp_obd;
-	struct kobj_type *osd_type;
+	const struct kobj_type *osd_type;
 	int i;
 
 	osd_type = get_ktype(&ofd->ofd_osd->dd_kobj);

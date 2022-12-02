@@ -1627,7 +1627,7 @@ EXPORT_SYMBOL(class_process_config);
 ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 			    struct kobject *kobj)
 {
-	struct kobj_type *typ;
+	const struct kobj_type *typ;
 	ssize_t count = 0;
 	int i;
 
