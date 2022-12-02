@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# This script reads filenames from STDIN and outputs any relevant provides
+# information that needs to be included in the package.
+
+if [ "$1" ]
+then
+   package_name="$1"
+fi
+
+filelist=`sed "s/['\"]/\\\&/g"`
+
+[ -x /usr/lib/rpm/rpmdeps -a -n "$filelist" ] &&
+    echo $filelist | tr '[:blank:]' \\n | /usr/lib/rpm/rpmdeps --provides
+
+#
+# --- any other extra find-provides scripts
+for i in /usr/lib/rpm/redhat/find-provides.d/*.prov
+do
+    [ -x $i ] &&
+        (echo $filelist | tr '[:blank:]' \\n | $i | sort -u)
+done
+
+#
+# --- Kernel module imported symbols
+#
+# Since we don't (yet) get passed the name of the package being built, we
+# cheat a little here by looking first for a kernel, then for a kmod.
+#
+
+is_kmod=1
+for f in $filelist; do
+    if [ $(echo "$f" | sed -r -ne 's:^.*/lib/modules/(.*)/(.*)\.ko(\.gz|\.bz2|\.xz)?$:\2:p') ]
+    then
+        is_kernel=1;
+    fi
+    if [ $(echo "$f" | sed -r -ne 's:^.*/boot/(.*):\1:p') ]
+    then
+	unset is_kmod;
+    fi
+done
+if [ ! "$is_kernel" ] || [ "$package_name" == "kernel" ]
+then
+    unset is_kmod
+fi
+
+FIND_PROVIDES_KSYMS=/usr/lib/rpm/redhat/find-provides.ksyms
+MODULE_SYMVERS=$RPM_BUILD_ROOT/Module.symvers
+if [[ -f $MODULE_SYMVERS ]] ; then
+    _sourcedir=$(realpath $(dirname "$0"))
+    FIND_PROVIDES_KSYMS=$_sourcedir/find-provides.ksyms
+else
+    >&2 echo "*****************************************************************"
+    >&2 echo "$MODULE_SYMVERS not found."
+    >&2 echo "Falling back to redhad find-provides.ksyms"
+    >&2 echo "*****************************************************************"
+fi
+
+[ -x $FIND_PROVIDES_KSYMS ] && [ "$is_kmod" ] &&
+    printf "%s\n" "${filelist[@]}" | $FIND_PROVIDES_KSYMS
+
+exit 0

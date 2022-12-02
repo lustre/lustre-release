@@ -1,0 +1,44 @@
+#! /bin/bash
+
+IFS=$'\n'
+
+MODULE_SYMVERS=$RPM_BUILD_ROOT/Module.symvers
+
+for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz)?$'); do
+    tmpfile=""
+    if [ "x${module%.ko}" = "x${module}" ]; then
+        tmpfile=$(mktemp -t ${0##*/}.XXXXXX.ko)
+        proc_bin=
+        case "${module##*.}" in
+        xz)
+                proc_bin=xz
+                ;;
+        bz2)
+                proc_bin=bzip2
+                ;;
+        gz)
+                proc_bin=gzip
+                ;;
+        esac
+
+        [ -n "$proc_bin" ] || continue
+
+        "$proc_bin" -d -c - < "$module" > "$tmpfile" || continue
+        module="$tmpfile"
+    fi
+
+    if [[ -f $MODULE_SYMVERS ]] ; then
+        # all symbols prefixed with __rcr_ where the symbol is:
+        #  A   - symbol is an absolute value
+        #  D,d - symbol is in the initialized data section
+        #  R,r - symbol is in the read-only data section
+        #  T,t - symbol is in the text (code) section
+        for sym in $(nm $module | sed -r -ne 's:^0*([0-9a-f]+) [ADdRr] __crc_(.+):\2:p'); do
+            grep -w $sym $MODULE_SYMVERS | awk '{printf("ksym(%s) = %08s\n", $2, $1)}'
+        done \
+        | LC_ALL=C sort -u
+    else
+        >&2 echo "Module.symvers required for provides."
+    fi
+    [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
+done

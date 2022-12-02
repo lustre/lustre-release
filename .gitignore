@@ -63,6 +63,8 @@ TAGS
 #
 # Top level generated files specific to this top level dir
 #
+/find-provides
+/find-provides.ksyms
 /.mergeinfo-*
 /.pc
 /.Xrefs-2.5
