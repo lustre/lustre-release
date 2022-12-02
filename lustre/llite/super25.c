@@ -50,10 +50,17 @@ static struct kmem_cache *ll_inode_cachep;
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
 	struct ll_inode_info *lli;
-	OBD_SLAB_ALLOC_PTR_GFP(lli, ll_inode_cachep, GFP_NOFS);
-	if (lli == NULL)
+#ifdef HAVE_ALLOC_INODE_SB
+	lli = alloc_inode_sb(sb, ll_inode_cachep, GFP_NOFS);
+	if (!lli)
 		return NULL;
-
+	OBD_ALLOC_POST(lli, sizeof(*lli), "slab-alloced");
+	memset(lli, 0, sizeof(*lli));
+#else
+	OBD_SLAB_ALLOC_PTR_GFP(lli, ll_inode_cachep, GFP_NOFS);
+	if (!lli)
+		return NULL;
+#endif
 	inode_init_once(&lli->lli_vfs_inode);
 	return &lli->lli_vfs_inode;
 }
