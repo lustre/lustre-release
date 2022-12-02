@@ -65,6 +65,10 @@
 #define LOOKUP_CONTINUE LOOKUP_PARENT
 #endif
 
+#ifdef HAVE_DENTRY_D_U_D_ALIAS
+#define d_alias			d_u.d_alias
+#endif
+
 /** Only used on client-side for indicating the tail of dir hash/offset. */
 #define LL_DIR_END_OFF          0x7fffffffffffffffULL
 #define LL_DIR_END_OFF_32BIT    0x7fffffffUL

@@ -75,10 +75,6 @@
 #define d_child			d_u.d_child
 #endif
 
-#ifdef HAVE_DENTRY_D_U_D_ALIAS
-#define d_alias			d_u.d_alias
-#endif
-
 #ifndef HAVE_D_IN_LOOKUP
 static inline int d_in_lookup(struct dentry *dentry)
 {
