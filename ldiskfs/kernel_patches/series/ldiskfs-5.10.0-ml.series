@@ -30,3 +30,4 @@ rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 base/ext4-projid-xattrs.patch
 linux-5.8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
+linux-5.10/ext4-fiemap-kernel-data.patch

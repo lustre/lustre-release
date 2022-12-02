@@ -1398,6 +1398,22 @@ struct osd_fextent {
 	unsigned int	mapped:1;
 };
 
+#ifdef KERNEL_DS
+#define DECLARE_MM_SEGMENT_T(name)		mm_segment_t name
+#define access_set_kernel(saved_fs, fei)				\
+do {									\
+	saved_fs = get_fs();						\
+	set_fs(KERNEL_DS);						\
+} while (0)
+#define access_unset_kernel(saved_fs, fei)		set_fs((saved_fs))
+#else
+#define DECLARE_MM_SEGMENT_T(name)
+#define access_set_kernel(saved_fs, fei)				\
+	(fei)->fi_flags |= LDISKFS_FIEMAP_FLAG_MEMCPY
+#define access_unset_kernel(saved_fs, fei) \
+	(fei)->fi_flags &= ~(LDISKFS_FIEMAP_FLAG_MEMCPY)
+#endif /* KERNEL_DS */
+
 static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 			 struct osd_fextent *cached_extent)
 {
@@ -1407,6 +1423,7 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 	struct fiemap_extent_info fei = { 0 };
 	struct fiemap_extent fe = { 0 };
 	int rc;
+	DECLARE_MM_SEGMENT_T(saved_fs);
 
 	if (block >= cached_extent->start && block < cached_extent->end)
 		return cached_extent->mapped;
@@ -1420,8 +1437,9 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 
 	fei.fi_extents_max = 1;
 	fei.fi_extents_start = &fe;
-
+	access_set_kernel(saved_fs, &fei);
 	rc = inode->i_op->fiemap(inode, &fei, offset, FIEMAP_MAX_OFFSET-offset);
+	access_unset_kernel(saved_fs, &fei);
 	if (rc != 0)
 		return 0;
 
@@ -2678,6 +2696,7 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	u64 len;
 	int rc;
+	DECLARE_MM_SEGMENT_T(saved_fs);
 
 	LASSERT(inode);
 	if (inode->i_op->fiemap == NULL)
@@ -2697,7 +2716,9 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
 		filemap_write_and_wait(inode->i_mapping);
 
+	access_set_kernel(saved_fs, &fieinfo);
 	rc = inode->i_op->fiemap(inode, &fieinfo, fm->fm_start, len);
+	access_unset_kernel(saved_fs, &fieinfo);
 	fm->fm_flags = fieinfo.fi_flags;
 	fm->fm_mapped_extents = fieinfo.fi_extents_mapped;
 

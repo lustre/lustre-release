@@ -1,0 +1,312 @@
+Subject: [PATCH] ext4-fiemap-kernel-data
+
+Pull in enough upstream fiemap handling to conditionally use
+memcpy instead of copy_to_user in fiemap_fill_next_extent.
+Common kernel functions prefixed with ext4_ or _ext4_
+
+---
+ fs/ext4/ext4.h    |   3 +
+ fs/ext4/extents.c | 265 +++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 264 insertions(+), 4 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index c931e3a..0bb54fe 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -766,6 +766,9 @@ enum {
+  */
+ #define EXT4_FIEMAP_EXTENT_HOLE		0x08000000
+ 
++/* Otherwise unused fi_flags ext4 use memcpy instead of copy_[to|from]_uiser */
++#define EXT4_FIEMAP_FLAG_MEMCPY		0x80000000
++
+ /* Max physical block we can address w/o extents */
+ #define EXT4_MAX_BLOCK_FILE_PHYS	0xFFFFFFFF
+ 
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 2e62f83..176d2b8 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -2138,6 +2138,264 @@ cleanup:
+ 	return err;
+ }
+ 
++#ifdef KERNEL_DS
++#define ext4_iomap_fiemap(i, f, s, l, ops) \
++	iomap_fiemap((i), (f), (s), (l), (ops))
++#else
++/*
++ * linux:
++ *   ext4_fiemap_fill_next_extent <--- fiemap_fill_next_extent
++ *   ext4_iomap_to_fiemap <----------- iomap_to_fiemap
++ *   ext4_iomap_fiemap_actor <-------- iomap_fiemap_actor
++ *   ext4_iomap_apply <----------------iomap_apply
++ *   _ext4_iomap_fiemap <------------- iomap_fiemap
++ */
++/**
++ * ext4_fiemap_fill_next_extent - Fiemap helper function
++ * @fieinfo:	Fiemap context passed into ->fiemap
++ * @logical:	Extent logical start offset, in bytes
++ * @phys:	Extent physical start offset, in bytes
++ * @len:	Extent length, in bytes
++ * @flags:	FIEMAP_EXTENT flags that describe this extent
++ *
++ * Called from file system ->fiemap callback. Will populate extent
++ * info as passed in via arguments and copy to user memory. On
++ * success, extent count on fieinfo is incremented.
++ *
++ * Returns 0 on success, -errno on error, 1 if this was the last
++ * extent that will fit in user array.
++ */
++#define SET_UNKNOWN_FLAGS	(FIEMAP_EXTENT_DELALLOC)
++#define SET_NO_UNMOUNTED_IO_FLAGS	(FIEMAP_EXTENT_DATA_ENCRYPTED)
++#define SET_NOT_ALIGNED_FLAGS	(FIEMAP_EXTENT_DATA_TAIL|FIEMAP_EXTENT_DATA_INLINE)
++static int ext4_fiemap_fill_next_extent(struct fiemap_extent_info *fieinfo,
++					u64 logical, u64 phys, u64 len,
++					u32 flags)
++{
++	struct fiemap_extent extent;
++	struct fiemap_extent __user *dest = fieinfo->fi_extents_start;
++
++	/* only count the extents */
++	if (fieinfo->fi_extents_max == 0) {
++		fieinfo->fi_extents_mapped++;
++		return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
++	}
++
++	if (fieinfo->fi_extents_mapped >= fieinfo->fi_extents_max)
++		return 1;
++
++	if (flags & SET_UNKNOWN_FLAGS)
++		flags |= FIEMAP_EXTENT_UNKNOWN;
++	if (flags & SET_NO_UNMOUNTED_IO_FLAGS)
++		flags |= FIEMAP_EXTENT_ENCODED;
++	if (flags & SET_NOT_ALIGNED_FLAGS)
++		flags |= FIEMAP_EXTENT_NOT_ALIGNED;
++
++	memset(&extent, 0, sizeof(extent));
++	extent.fe_logical = logical;
++	extent.fe_physical = phys;
++	extent.fe_length = len;
++	extent.fe_flags = flags;
++
++	dest += fieinfo->fi_extents_mapped;
++	if (fieinfo->fi_flags & EXT4_FIEMAP_FLAG_MEMCPY)
++		memcpy((__force void *)dest, &extent, sizeof(extent));
++	else if (copy_to_user(dest, &extent, sizeof(extent)))
++		return -EFAULT;
++
++	fieinfo->fi_extents_mapped++;
++	if (fieinfo->fi_extents_mapped == fieinfo->fi_extents_max)
++		return 1;
++	return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
++}
++
++static int ext4_iomap_to_fiemap(struct fiemap_extent_info *fi,
++				struct iomap *iomap, u32 flags)
++{
++	switch (iomap->type) {
++	case IOMAP_HOLE:
++		/* skip holes */
++		return 0;
++	case IOMAP_DELALLOC:
++		flags |= FIEMAP_EXTENT_DELALLOC | FIEMAP_EXTENT_UNKNOWN;
++		break;
++	case IOMAP_MAPPED:
++		break;
++	case IOMAP_UNWRITTEN:
++		flags |= FIEMAP_EXTENT_UNWRITTEN;
++		break;
++	case IOMAP_INLINE:
++		flags |= FIEMAP_EXTENT_DATA_INLINE;
++		break;
++	}
++
++	if (iomap->flags & IOMAP_F_MERGED)
++		flags |= FIEMAP_EXTENT_MERGED;
++	if (iomap->flags & IOMAP_F_SHARED)
++		flags |= FIEMAP_EXTENT_SHARED;
++
++	return ext4_fiemap_fill_next_extent(fi, iomap->offset,
++			iomap->addr != IOMAP_NULL_ADDR ? iomap->addr : 0,
++			iomap->length, flags);
++}
++
++struct fiemap_ctx {
++	struct fiemap_extent_info *fi;
++	struct iomap prev;
++};
++
++static loff_t
++ext4_iomap_fiemap_actor(struct inode *inode, loff_t pos, loff_t length,
++			void *data, struct iomap *iomap, struct iomap *srcmap)
++{
++	struct fiemap_ctx *ctx = data;
++	loff_t ret = length;
++
++	if (iomap->type == IOMAP_HOLE)
++		return length;
++
++	ret = ext4_iomap_to_fiemap(ctx->fi, &ctx->prev, 0);
++	ctx->prev = *iomap;
++	switch (ret) {
++	case 0:		/* success */
++		return length;
++	case 1:		/* extent array full */
++		return 0;
++	default:
++		return ret;
++	}
++}
++
++/*
++ * Execute a iomap write on a segment of the mapping that spans a
++ * contiguous range of pages that have identical block mapping state.
++ *
++ * This avoids the need to map pages individually, do individual allocations
++ * for each page and most importantly avoid the need for filesystem specific
++ * locking per page. Instead, all the operations are amortised over the entire
++ * range of pages. It is assumed that the filesystems will lock whatever
++ * resources they require in the iomap_begin call, and release them in the
++ * iomap_end call.
++ */
++static loff_t
++ext4_iomap_apply(struct inode *inode, loff_t pos, loff_t length, unsigned flags,
++		const struct iomap_ops *ops, void *data, iomap_actor_t actor)
++{
++	struct iomap iomap = { .type = IOMAP_HOLE };
++	struct iomap srcmap = { .type = IOMAP_HOLE };
++	loff_t written = 0, ret;
++	u64 end;
++
++	/*
++	 * Need to map a range from start position for length bytes. This can
++	 * span multiple pages - it is only guaranteed to return a range of a
++	 * single type of pages (e.g. all into a hole, all mapped or all
++	 * unwritten). Failure at this point has nothing to undo.
++	 *
++	 * If allocation is required for this range, reserve the space now so
++	 * that the allocation is guaranteed to succeed later on. Once we copy
++	 * the data into the page cache pages, then we cannot fail otherwise we
++	 * expose transient stale data. If the reserve fails, we can safely
++	 * back out at this point as there is nothing to undo.
++	 */
++	ret = ops->iomap_begin(inode, pos, length, flags, &iomap, &srcmap);
++	if (ret)
++		return ret;
++	if (WARN_ON(iomap.offset > pos)) {
++		written = -EIO;
++		goto out;
++	}
++	if (WARN_ON(iomap.length == 0)) {
++		written = -EIO;
++		goto out;
++	}
++
++	/*
++	 * Cut down the length to the one actually provided by the filesystem,
++	 * as it might not be able to give us the whole size that we requested.
++	 */
++	end = iomap.offset + iomap.length;
++	if (srcmap.type != IOMAP_HOLE)
++		end = min(end, srcmap.offset + srcmap.length);
++	if (pos + length > end)
++		length = end - pos;
++
++	/*
++	 * Now that we have guaranteed that the space allocation will succeed,
++	 * we can do the copy-in page by page without having to worry about
++	 * failures exposing transient data.
++	 *
++	 * To support COW operations, we read in data for partially blocks from
++	 * the srcmap if the file system filled it in.  In that case we the
++	 * length needs to be limited to the earlier of the ends of the iomaps.
++	 * If the file system did not provide a srcmap we pass in the normal
++	 * iomap into the actors so that they don't need to have special
++	 * handling for the two cases.
++	 */
++	written = actor(inode, pos, length, data, &iomap,
++			srcmap.type != IOMAP_HOLE ? &srcmap : &iomap);
++
++out:
++	/*
++	 * Now the data has been copied, commit the range we've copied.  This
++	 * should not fail unless the filesystem has had a fatal error.
++	 */
++	if (ops->iomap_end) {
++		ret = ops->iomap_end(inode, pos, length,
++				     written > 0 ? written : 0,
++				     flags, &iomap);
++	}
++
++	return written ? written : ret;
++}
++
++static
++int _ext4_iomap_fiemap(struct inode *inode, struct fiemap_extent_info *fi,
++		u64 start, u64 len, const struct iomap_ops *ops)
++{
++	struct fiemap_ctx ctx;
++	loff_t ret;
++	bool in_kernel = fi->fi_flags & EXT4_FIEMAP_FLAG_MEMCPY;
++
++	memset(&ctx, 0, sizeof(ctx));
++	ctx.fi = fi;
++	ctx.prev.type = IOMAP_HOLE;
++
++	fi->fi_flags &= ~EXT4_FIEMAP_FLAG_MEMCPY;
++	ret = fiemap_prep(inode, fi, start, &len, 0);
++	if (in_kernel)
++		fi->fi_flags |= EXT4_FIEMAP_FLAG_MEMCPY;
++	if (ret)
++		return ret;
++
++	while (len > 0) {
++		ret = ext4_iomap_apply(inode, start, len, IOMAP_REPORT, ops,
++				       &ctx, ext4_iomap_fiemap_actor);
++		/* inode with no (attribute) mapping will give ENOENT */
++		if (ret == -ENOENT)
++			break;
++		if (ret < 0)
++			return ret;
++		if (ret == 0)
++			break;
++
++		start += ret;
++		len -= ret;
++	}
++
++	if (ctx.prev.type != IOMAP_HOLE) {
++		ret = ext4_iomap_to_fiemap(fi, &ctx.prev, FIEMAP_EXTENT_LAST);
++		if (ret < 0)
++			return ret;
++	}
++
++	return 0;
++}
++
++#define ext4_iomap_fiemap(i, f, s, l, ops) \
++	_ext4_iomap_fiemap((i), (f), (s), (l), (ops))
++#endif /* KERNEL_DS */
++
+ static int ext4_fill_es_cache_info(struct inode *inode,
+ 				   ext4_lblk_t block, ext4_lblk_t num,
+ 				   struct fiemap_extent_info *fieinfo)
+@@ -4918,11 +5176,10 @@ int ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
+ 
+ 	if (fieinfo->fi_flags & FIEMAP_FLAG_XATTR) {
+ 		fieinfo->fi_flags &= ~FIEMAP_FLAG_XATTR;
+-		return iomap_fiemap(inode, fieinfo, start, len,
+-				    &ext4_iomap_xattr_ops);
++		return ext4_iomap_fiemap(inode, fieinfo, start, len,
++					 &ext4_iomap_xattr_ops);
+ 	}
+-
+-	return iomap_fiemap(inode, fieinfo, start, len, &ext4_iomap_report_ops);
++	return ext4_iomap_fiemap(inode, fieinfo, start, len, &ext4_iomap_report_ops);
+ }
+ 
+ int ext4_get_es_cache(struct inode *inode, struct fiemap_extent_info *fieinfo,
+-- 
+2.34.1
+
