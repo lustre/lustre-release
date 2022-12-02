@@ -1146,7 +1146,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		__u32 ost_idx = lod_comp->llc_ostlist.op_array[array_idx];
 
 		if (!test_bit(ost_idx, m->lod_ost_bitmap)) {
-			rc = -ENODEV;
+			rc = -EINVAL;
 			break;
 		}
 

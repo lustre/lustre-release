@@ -2597,6 +2597,12 @@ test_27Cf() {
 }
 run_test 27Cf "test default inheritance with overstriping"
 
+test_27Cg() {
+	$LFS setstripe -o 0,$OSTCOUNT $DIR/$tfile
+	[ $? -ne 0 ] || error "must be an error for not existent OST#"
+}
+run_test 27Cg "test setstripe with wrong OST idx"
+
 test_27D() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
