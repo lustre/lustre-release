@@ -1841,6 +1841,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LCME_FL_INIT != 0x00000010);
 	BUILD_BUG_ON(LCME_FL_NOSYNC != 0x00000020);
 	BUILD_BUG_ON(LCME_FL_EXTENSION != 0x00000040);
+	BUILD_BUG_ON(LCME_FL_PARITY != 0x00000080);
 	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
 
 	/* Checks for struct lov_comp_md_v1 */

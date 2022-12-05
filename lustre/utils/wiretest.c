@@ -2110,7 +2110,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(QIF_DQBLKSIZE_BITS == 10, "found %lld\n",
 		 (long long)QIF_DQBLKSIZE_BITS);
 	LASSERTF(QIF_DQBLKSIZE == 1024, "found %lld\n",
-		 (long long)QIF_DQBLKSIZE_BITS);
+		 (long long)QIF_DQBLKSIZE);
 
 	/* Checks for struct obd_quotactl */
 	LASSERTF((int)sizeof(struct obd_quotactl) == 112, "found %lld\n",
