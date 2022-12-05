@@ -472,21 +472,16 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	if (blocks > 0xffffffffULL && is_e2fsprogs_feature_supp("-O 64bit"))
 		enable_64bit = true;
 
+	append_unique(anchor, user_spec ? "," : " -O ",
+		      "uninit_bg", NULL, maxbuflen);
 	if (IS_OST(&mop->mo_ldd)) {
-		append_unique(anchor, user_spec ? "," : " -O ",
-			      "extents", NULL, maxbuflen);
-		append_unique(anchor, ",", "uninit_bg", NULL, maxbuflen);
+		append_unique(anchor, ",", "extents", NULL, maxbuflen);
 	} else if (IS_MDT(&mop->mo_ldd)) {
-		append_unique(anchor, user_spec ? "," : " -O ",
-			      "dirdata", NULL, maxbuflen);
-		append_unique(anchor, ",", "uninit_bg", NULL, maxbuflen);
 		if (enable_64bit)
 			append_unique(anchor, ",", "extents", NULL, maxbuflen);
 		else
 			append_unique(anchor, ",", "^extents", NULL, maxbuflen);
-	} else {
-		append_unique(anchor, user_spec ? "," : " -O ",
-			      "uninit_bg", NULL, maxbuflen);
+		append_unique(anchor, ",", "dirdata", NULL, maxbuflen);
 	}
 
 	/* Multiple mount protection enabled only if failover node specified */
@@ -501,11 +496,6 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	if (is_e2fsprogs_feature_supp("-O dir_nlink"))
 		append_unique(anchor, ",", "dir_nlink", NULL, maxbuflen);
 
-	/* The following options are only valid for ext4-based ldiskfs.
-	 * If --backfstype=ext3 is specified, do not enable them. */
-	if (mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3)
-		return 0;
-
 	/* Enable quota by default */
 	if (is_e2fsprogs_feature_supp("-O quota")) {
 		append_unique(anchor, ",", "quota", NULL, maxbuflen);
@@ -519,25 +509,23 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		return EINVAL;
 	}
 
-	/* Allow files larger than 2TB.  Also needs LU-16, but not harmful. */
+	/* Allow files larger than 2TB */
 	if (is_e2fsprogs_feature_supp("-O huge_file"))
 		append_unique(anchor, ",", "huge_file", NULL, maxbuflen);
 
-	if (enable_64bit)
+	if (enable_64bit) {
 		append_unique(anchor, ",", "64bit", NULL, maxbuflen);
-
-	if (blocks >= 0x1000000000 && is_e2fsprogs_feature_supp("-O meta_bg"))
-		append_unique(anchor, ",", "meta_bg", NULL, maxbuflen);
-
-	if (enable_64bit || strstr(mop->mo_mkfsopts, "meta_bg"))
+		if (is_e2fsprogs_feature_supp("-O meta_bg"))
+			append_unique(anchor, ",", "meta_bg", NULL, maxbuflen);
 		append_unique(anchor, ",", "^resize_inode", NULL, maxbuflen);
+	}
 
 	/* Allow xattrs larger than one block, stored in a separate inode */
 	if (IS_MDT(&mop->mo_ldd) && is_e2fsprogs_feature_supp("-O ea_inode"))
 		append_unique(anchor, ",", "ea_inode", NULL, maxbuflen);
 
-	/* Allow more than 10M directory entries */
-	if (IS_MDT(&mop->mo_ldd) && is_e2fsprogs_feature_supp("-O large_dir"))
+	/* Allow more than 10M entries in a single directory */
+	if (is_e2fsprogs_feature_supp("-O large_dir"))
 		append_unique(anchor, ",", "large_dir", NULL, maxbuflen);
 
 	/* Disable fast_commit since it breaks ldiskfs transactions ordering */
