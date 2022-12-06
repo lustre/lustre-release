@@ -1,7 +1,7 @@
 diff -wur /dev/null b/fs/ext4/critical_encode.h
 --- /dev/null
 +++ b/fs/ext4/critical_encode.h
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,166 @@
 +/*
 + *  critical_encode.h
 + *
@@ -77,6 +77,14 @@ diff -wur /dev/null b/fs/ext4/critical_encode.h
 +
 +#define fscrypt_get_encryption_info(inode) \
 +	(unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)) ? 0 : -EOPNOTSUPP)
++
++static inline int ext4_has_permitted_context(struct inode *parent,
++					struct inode *child)
++{
++	if (unlikely(!IS_LUSTRE_MOUNT(parent->i_sb)))
++		return 1;
++	return fscrypt_has_permitted_context(parent, child);
++}
 +
 +static inline int ext4_prepare_lookup(struct inode *dir,
 +                                         struct dentry *dentry,
@@ -357,6 +365,15 @@ diff -wur a/fs/ext4/namei.c b/fs/ext4/namei.c
  	if (err)
  		return ERR_PTR(err);
  
+@@ -1957,7 +1957,7 @@ static struct dentry *ext4_lookup(struct
+ 		}
+ 		if (!IS_ERR(inode) && IS_ENCRYPTED(dir) &&
+ 		    (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode)) &&
+-		    !fscrypt_has_permitted_context(dir, inode)) {
++		    !ext4_has_permitted_context(dir, inode)) {
+ 			ext4_warning(inode->i_sb,
+ 				     "Inconsistent encryption contexts: %lu/%lu",
+ 				     dir->i_ino, inode->i_ino);
 @@ -2206,7 +2221,7 @@ int ext4_find_dest_de(struct inode *d
  		if (ext4_check_dir_entry(dir, NULL, de, bh,
  					 buf, buf_size, offset))
