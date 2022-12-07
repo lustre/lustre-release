@@ -3782,6 +3782,7 @@ static int ll_lock_noexpand(struct file *file, int flags)
 	return 0;
 }
 
+#ifndef HAVE_FILEATTR_GET
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			void __user *uarg)
 {
@@ -3799,6 +3800,7 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 
 	RETURN(0);
 }
+#endif
 
 int ll_ioctl_check_project(struct inode *inode, __u32 xflags,
 			   __u32 projid)
@@ -3834,7 +3836,7 @@ int ll_ioctl_check_project(struct inode *inode, __u32 xflags,
 	return 0;
 }
 
-static int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
+int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 {
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
@@ -3884,6 +3886,7 @@ out_fsxattr:
 	RETURN(rc);
 }
 
+#ifndef HAVE_FILEATTR_GET
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			void __user *uarg)
 {
@@ -3897,6 +3900,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	RETURN(ll_set_project(inode, fsxattr.fsx_xflags,
 			      fsxattr.fsx_projid));
 }
+#endif
 
 int ll_ioctl_project(struct file *file, unsigned int cmd, void __user *uarg)
 {
@@ -5964,6 +5968,10 @@ const struct inode_operations ll_file_inode_operations = {
 	.get_acl	= ll_get_acl,
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
+#endif
+#ifdef HAVE_FILEATTR_GET
+	.fileattr_get	= ll_fileattr_get,
+	.fileattr_set	= ll_fileattr_set,
 #endif
 };
 
