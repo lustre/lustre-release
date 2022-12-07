@@ -172,17 +172,20 @@ AC_SUBST(LDISKFS_SERIES)
 # 2.6.32-rc7 ext4_free_blocks requires struct buffer_head
 # Note that RHEL6 is pre 2.6.32-rc7 so this check is still needed.
 #
+AC_DEFUN([LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
+	LB2_LINUX_TEST_SRC([ext4_free_blocks_with_buffer_head], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+	],[
+		ext4_free_blocks(NULL, NULL, NULL, 0, 0, 0);
+	],[],[],[ext4_free_blocks])
+])
 AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
-LB_CHECK_COMPILE([if 'ext4_free_blocks' needs 'struct buffer_head'],
-ext4_free_blocks_with_buffer_head, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-],[
-	ext4_free_blocks(NULL, NULL, NULL, 0, 0, 0);
-],[
+AC_MSG_CHECKING([if 'ext4_free_blocks' needs 'struct buffer_head'])
+LB2_LINUX_TEST_RESULT([ext4_free_blocks_with_buffer_head], [
 	AC_DEFINE(HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD, 1,
 		[ext4_free_blocks do not require struct buffer_head])
-])
+	])
 ]) # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 
 #
@@ -190,16 +193,20 @@ ext4_free_blocks_with_buffer_head, [
 #
 # 3.9 added a type argument to ext4_journal_start and friends
 #
-AC_DEFUN([LB_EXT4_JOURNAL_START_3ARGS], [
-LB_CHECK_COMPILE([if ext4_journal_start takes 3 arguments],
-ext4_journal_start, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
-],[
-	ext4_journal_start(NULL, 0, 0);
-],[
-	AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1, [ext4_journal_start takes 3 arguments])
+AC_DEFUN([LB_SRC_EXT4_JOURNAL_START_3ARGS], [
+	LB2_LINUX_TEST_SRC([ext4_journal_start], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+	],[
+		ext4_journal_start(NULL, 0, 0);
+	],[],[],[__ext4_journal_start_sb])
 ])
+AC_DEFUN([LB_EXT4_JOURNAL_START_3ARGS], [
+	AC_MSG_CHECKING([if ext4_journal_start takes 3 arguments])
+	LB2_LINUX_TEST_RESULT([ext4_journal_start], [
+		AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1,
+			[ext4_journal_start takes 3 arguments])
+	])
 ]) # LB_EXT4_JOURNAL_START_3ARGS
 
 #
@@ -208,27 +215,32 @@ ext4_journal_start, [
 # 3.18 ext4_bread has 4 arguments
 # NOTE: It may not be exported for modules, use a positive compiler test here.
 #
-AC_DEFUN([LB_EXT4_BREAD_4ARGS], [
-LB_CHECK_COMPILE([if ext4_bread takes 4 arguments],
-ext4_bread, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
+AC_DEFUN([LB_SRC_EXT4_BREAD_4ARGS], [
+	LB2_LINUX_TEST_SRC([ext4_bread], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
 
-	struct buffer_head *ext4_bread(handle_t *handle, struct inode *inode,
-				       ext4_lblk_t block, int map_flags)
-	{
-		struct buffer_head *bh = NULL;
-		(void)handle;
-		(void)inode;
-		(void)block;
-		(void)map_flags;
-		return bh;
-	}
-],[
-	ext4_bread(NULL, NULL, 0, 0);
-],[
-	AC_DEFINE(HAVE_EXT4_BREAD_4ARGS, 1, [ext4_bread takes 4 arguments])
+		struct buffer_head *ext4_bread(handle_t *handle,
+					       struct inode *inode,
+					       ext4_lblk_t block, int map_flags)
+		{
+			struct buffer_head *bh = NULL;
+			(void)handle;
+			(void)inode;
+			(void)block;
+			(void)map_flags;
+			return bh;
+		}
+	],[
+		ext4_bread(NULL, NULL, 0, 0);
+	],[],[],[ext4_bread])
 ])
+AC_DEFUN([LB_EXT4_BREAD_4ARGS], [
+	AC_MSG_CHECKING([if ext4_bread takes 4 arguments])
+	LB2_LINUX_TEST_RESULT([ext4_bread], [
+		AC_DEFINE(HAVE_EXT4_BREAD_4ARGS, 1,
+			[ext4_bread takes 4 arguments])
+	])
 ]) # LB_EXT4_BREAD_4ARGS
 
 #
@@ -236,20 +248,24 @@ ext4_bread, [
 #
 # in linux 4.4 i_dqout is in ext4_inode_info, not in struct inode
 #
-AC_DEFUN([LB_EXT4_HAVE_INFO_DQUOT], [
-LB_CHECK_COMPILE([if i_dquot is in ext4_inode_info],
-ext4_info_dquot, [
-	#include <linux/fs.h>
-	#include <linux/quota.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-],[
-	struct ext4_inode_info in;
-	struct dquot *dq;
+AC_DEFUN([LB_SRC_EXT4_HAVE_INFO_DQUOT], [
+	LB2_LINUX_TEST_SRC([ext4_info_dquot], [
+		#include <linux/fs.h>
+		#include <linux/quota.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+	],[
+		struct ext4_inode_info in;
+		struct dquot *dq;
 
-	dq = in.i_dquot[0];
-],[
-	AC_DEFINE(HAVE_EXT4_INFO_DQUOT, 1, [i_dquot is in ext4_inode_info])
+		dq = in.i_dquot[0];
+	])
 ])
+AC_DEFUN([LB_EXT4_HAVE_INFO_DQUOT], [
+	AC_MSG_CHECKING([if i_dquot is in ext4_inode_info])
+	LB2_LINUX_TEST_RESULT([ext4_info_dquot], [
+		AC_DEFINE(HAVE_EXT4_INFO_DQUOT, 1,
+			[i_dquot is in ext4_inode_info])
+	])
 ]) # LB_EXT4_HAVE_INFO_DQUOT
 
 #
@@ -263,29 +279,33 @@ ext4_info_dquot, [
 # Otherwise i_crypy_info is in struct inode, we need to check kernel
 # config option to determine that.
 #
-AC_DEFUN([LB_EXT4_HAVE_I_CRYPT_INFO], [
-LB_CHECK_COMPILE([if i_crypt_info is in ext4_inode_info],
-ext4_i_crypt_info, [
-	#define CONFIG_EXT4_FS_ENCRYPTION 1
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-],[
-	struct ext4_inode_info in;
+AC_DEFUN([LB_SRC_EXT4_HAVE_I_CRYPT_INFO], [
+	LB2_SRC_CHECK_CONFIG([EXT4_FS_ENCRYPTION])
+	LB2_LINUX_TEST_SRC([ext4_i_crypt_info], [
+		#define CONFIG_EXT4_FS_ENCRYPTION 1
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+	],[
+		struct ext4_inode_info in;
 
-	in.i_crypt_info = NULL;
-],[
-	AC_DEFINE(
-		CONFIG_LDISKFS_FS_ENCRYPTION, 1,
-		[enable encryption for ldiskfs]
-	)
-],[
-	LB_CHECK_CONFIG([EXT4_FS_ENCRYPTION],[
-		AC_DEFINE(
-			CONFIG_LDISKFS_FS_ENCRYPTION, 1,
-			[enable encryption for ldiskfs]
-		)
+		in.i_crypt_info = NULL;
 	])
 ])
+AC_DEFUN([LB_EXT4_HAVE_I_CRYPT_INFO], [
+	AC_MSG_CHECKING([if i_crypt_info is in ext4_inode_info])
+	LB2_LINUX_TEST_RESULT([ext4_i_crypt_info], [
+		AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1,
+			[enable encryption for ldiskfs])
+		test_have_i_crypt_info=yes
+	],[
+		test_have_i_crypt_info=no
+	])
+	AS_IF([test x$test_have_i_crypt_info = xno], [
+		LB2_TEST_CHECK_CONFIG([EXT4_FS_ENCRYPTION],[
+			AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1,
+				[enable encryption for ldiskfs])
+		])
+	])
 ]) # LB_EXT4_HAVE_I_CRYPT_INFO
 
 #
@@ -298,21 +318,21 @@ ext4_i_crypt_info, [
 # has at least requested amount of credits available, and possibly
 # restarting transaction if needed.
 #
-AC_DEFUN([LB_LDISKFS_JOURNAL_ENSURE_CREDITS], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if 'ext4_journal_ensure_credits' exists],
-ext4_journal_ensure_credits, [
-	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
-	int __ext4_journal_ensure_credits(handle_t *handle, int check_cred,
-		int extend_cred, int revoke_cred) { return 0; }
-],[
-	ext4_journal_ensure_credits(NULL, 0, 0);
-],[
-	AC_DEFINE(HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS, 1,
-		['ext4_journal_ensure_credits' exists])
+AC_DEFUN([LB_SRC_LDISKFS_JOURNAL_ENSURE_CREDITS], [
+	LB2_LINUX_TEST_SRC([ext4_journal_ensure_credits], [
+		#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+		int __ext4_journal_ensure_credits(handle_t *handle, int check_cred,
+			int extend_cred, int revoke_cred) { return 0; }
+	],[
+		ext4_journal_ensure_credits(NULL, 0, 0);
+	],[-Werror],[],[__ext4_journal_ensure_credits])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_LDISKFS_JOURNAL_ENSURE_CREDITS], [
+	AC_MSG_CHECKING([if 'ext4_journal_ensure_credits' exists])
+	LB2_LINUX_TEST_RESULT([ext4_journal_ensure_credits], [
+		AC_DEFINE(HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS, 1,
+			['ext4_journal_ensure_credits' exists])
+	])
 ]) # LB_LDISKFS_JOURNAL_ENSURE_CREDITS
 
 #
@@ -321,21 +341,21 @@ EXTRA_KCFLAGS="$tmp_flags"
 # kernel 4.19 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
 # ext4_iget changed to a macro with 3 args was function with 2 args
 #
-AC_DEFUN([LB_LDISKFS_IGET_HAS_FLAGS_ARG], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if ldiskfs_iget takes a flags argument],
-ext4_iget_3args, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-],[
-	int f = EXT4_IGET_SPECIAL;
-	(void)f;
-],[
-	AC_DEFINE(HAVE_LDISKFS_IGET_WITH_FLAGS, 1,
-		[if ldiskfs_iget takes a flags argument])
+AC_DEFUN([LB_SRC_LDISKFS_IGET_HAS_FLAGS_ARG], [
+	LB2_LINUX_TEST_SRC([ext4_iget_3args], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+	],[
+		int f = EXT4_IGET_SPECIAL;
+		(void)f;
+	],[-Werror])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_LDISKFS_IGET_HAS_FLAGS_ARG], [
+	AC_MSG_CHECKING([if ldiskfs_iget takes a flags argument])
+	LB2_LINUX_TEST_RESULT([ext4_iget_3args], [
+		AC_DEFINE(HAVE_LDISKFS_IGET_WITH_FLAGS, 1,
+			[if ldiskfs_iget takes a flags argument])
+	])
 ]) # LB_LDISKFS_IGET_HAS_FLAGS_ARG
 
 #
@@ -384,24 +404,24 @@ AC_DEFUN([LDISKFS_AC_PATCH_PROGRAM], [
 # When the following check succeeds __ext4_find_entry helper is not
 # used.
 #
-AC_DEFUN([LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if __ldiskfs_find_entry is available],
-ldiskfs_find_entry_locked, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-	#include "$EXT4_SRC_DIR/namei.c"
+AC_DEFUN([LB_SRC_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
+	LB2_LINUX_TEST_SRC([ldiskfs_find_entry_locked], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+		#include "$EXT4_SRC_DIR/namei.c"
 
-	static int __ext4_find_entry(void) { return 0; }
-],[
-	int x = __ext4_find_entry();
-	(void)x;
-],[
-	AC_DEFINE(HAVE___LDISKFS_FIND_ENTRY, 1,
-		[if __ldiskfs_find_entry is available])
+		static int __ext4_find_entry(void) { return 0; }
+	],[
+		int x = __ext4_find_entry();
+		(void)x;
+	],[-Werror])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
+	AC_MSG_CHECKING([if __ldiskfs_find_entry is available])
+	LB2_LINUX_TEST_RESULT([ldiskfs_find_entry_locked], [
+		AC_DEFINE(HAVE___LDISKFS_FIND_ENTRY, 1,
+			[if __ldiskfs_find_entry is available])
+	])
 ]) # LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
 
 #
@@ -410,31 +430,21 @@ EXTRA_KCFLAGS="$tmp_flags"
 # kernel 5.2 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
 # ext4fs_dirhash UNICODE support
 #
-AC_DEFUN([LB_LDISKFSFS_DIRHASH_WANTS_DIR], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if ldiskfsfs_dirhash takes an inode argument],
-ext4fs_dirhash, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-
-	int ext4fs_dirhash(const struct inode *dir, const char *name, int len,
-			  struct dx_hash_info *hinfo)
-	{
-		(void)dir;
-		(void)name;
-		(void)len;
-		(void)hinfo;
-		return 0;
-	}
-],[
-	int f = ext4fs_dirhash(NULL, NULL, 0, NULL);
-	(void)f;
-],[
-	AC_DEFINE(HAVE_LDISKFSFS_DIRHASH_WITH_DIR, 1,
-		[ldiskfsfs_dirhash takes an inode argument])
+AC_DEFUN([LB_SRC_LDISKFSFS_DIRHASH_WANTS_DIR], [
+	LB2_LINUX_TEST_SRC([ext4fs_dirhash], [
+		#include <linux/fs.h>
+		#include "$EXT4_SRC_DIR/ext4.h"
+	],[
+		int f = ext4fs_dirhash(NULL, NULL, 0, NULL);
+		(void)f;
+	],[-Werror],[],[ext4fs_dirhash])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_LDISKFSFS_DIRHASH_WANTS_DIR], [
+	AC_MSG_CHECKING([if ldiskfsfs_dirhash takes an inode argument])
+	LB2_LINUX_TEST_RESULT([ext4fs_dirhash], [
+		AC_DEFINE(HAVE_LDISKFSFS_DIRHASH_WITH_DIR, 1,
+			[if ldiskfsfs_dirhash takes an inode argument])
+	])
 ]) # LB_LDISKFSFS_DIRHASH_WANTS_DIR
 
 #
@@ -443,20 +453,20 @@ EXTRA_KCFLAGS="$tmp_flags"
 # kernel 5.5 commit 933f1c1e0b75bbc29730eef07c9e196c6dfd37e5
 # jbd2: Reserve space for revoke descriptor blocks
 #
-AC_DEFUN([LB_JBD2_H_TOTAL_CREDITS], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if struct jbd2_journal_handle has h_total_credits member],
-handle_t_h_revoke_credits, [
-	#include <linux/jbd2.h>
-],[
-	int x = offsetof(struct jbd2_journal_handle, h_total_credits);
-	(void)x;
-],[
-	AC_DEFINE(HAVE_JOURNAL_TOTAL_CREDITS, 1,
-		[struct jbd2_journal_handle has h_total_credits member])
+AC_DEFUN([LB_SRC_JBD2_H_TOTAL_CREDITS], [
+	LB2_LINUX_TEST_SRC([handle_t_h_revoke_credits], [
+		#include <linux/jbd2.h>
+	],[
+		int x = offsetof(struct jbd2_journal_handle, h_total_credits);
+		(void)x;
+	],[-Werror])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_JBD2_H_TOTAL_CREDITS], [
+	AC_MSG_CHECKING([if struct jbd2_journal_handle has h_total_credits member])
+	LB2_LINUX_TEST_RESULT([handle_t_h_revoke_credits], [
+		AC_DEFINE(HAVE_JOURNAL_TOTAL_CREDITS, 1,
+			[struct jbd2_journal_handle has h_total_credits member])
+	])
 ]) # LB_JBD2_H_TOTAL_CREDITS
 
 #
@@ -481,21 +491,21 @@ AC_DEFUN([LB_EXT4_INC_DEC_COUNT_2ARGS], [
 # Linux commit v5.10-rc2-9-gede7dc7fa0af
 #  jbd2: rename j_maxlen to j_total_len and add jbd2_journal_max_txn_bufs
 #
-AC_DEFUN([LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if jbd2_journal_get_max_txn_bufs is available],
-jbd2_journal_get_max_txn_bufs, [
-	#include <linux/jbd2.h>
-],[
-	journal_t *journal = NULL;
-	int x = jbd2_journal_get_max_txn_bufs(journal);
-	(void)x;
-],[
-	AC_DEFINE(HAVE_JBD2_JOURNAL_GET_MAX_TXN_BUFS, 1,
-		[if jbd2_journal_get_max_txn_bufs is available])
+AC_DEFUN([LB_SRC_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
+	LB2_LINUX_TEST_SRC([jbd2_journal_get_max_txn_bufs], [
+		#include <linux/jbd2.h>
+	],[
+		journal_t *journal = NULL;
+		int x = jbd2_journal_get_max_txn_bufs(journal);
+		(void)x;
+	],[-Werror],[],[])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
+	AC_MSG_CHECKING([if jbd2_journal_get_max_txn_bufs is available])
+	LB2_LINUX_TEST_RESULT([jbd2_journal_get_max_txn_bufs], [
+		AC_DEFINE(HAVE_JBD2_JOURNAL_GET_MAX_TXN_BUFS, 1,
+			[if jbd2_journal_get_max_txn_bufs is available])
+	])
 ]) # LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 
 #
@@ -608,9 +618,37 @@ AC_MSG_RESULT([$enable_ldiskfs])
 AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 ]) # LB_CONFIG_LDISKFS
 
+AS_IF([test x$enable_ldiskfs != xno],[
+	AC_DEFUN([LB_EXT4_SRC_DIR_SRC],[
+		LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
+		LB_SRC_EXT4_JOURNAL_START_3ARGS
+		LB_SRC_EXT4_BREAD_4ARGS
+		LB_SRC_EXT4_HAVE_INFO_DQUOT
+		LB_SRC_EXT4_HAVE_I_CRYPT_INFO
+		LB_SRC_LDISKFS_JOURNAL_ENSURE_CREDITS
+		LB_SRC_LDISKFS_IGET_HAS_FLAGS_ARG
+		LB_SRC_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
+		LB_SRC_LDISKFSFS_DIRHASH_WANTS_DIR
+		LB_SRC_JBD2_H_TOTAL_CREDITS
+		LB_SRC_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 
-AC_DEFUN([LB_EXT4_SRC_DIR_SRC], [])
-AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [])
+		LB2_LINUX_TEST_COMPILE_ALL([ldiskfs],
+			[for available ldiskfs ext4 interfaces])
+	])
+	AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [
+		LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
+		LB_EXT4_JOURNAL_START_3ARGS
+		LB_EXT4_BREAD_4ARGS
+		LB_EXT4_HAVE_INFO_DQUOT
+		LB_EXT4_HAVE_I_CRYPT_INFO
+		LB_LDISKFS_JOURNAL_ENSURE_CREDITS
+		LB_LDISKFS_IGET_HAS_FLAGS_ARG
+		LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
+		LB_LDISKFSFS_DIRHASH_WANTS_DIR
+		LB_JBD2_H_TOTAL_CREDITS
+		LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
+	])
+])
 
 #
 # LB_VALIDATE_EXT4_SRC_DIR
