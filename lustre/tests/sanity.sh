@@ -28878,6 +28878,24 @@ test_831() {
 }
 run_test 831 "throttling unlink/setattr queuing on OSP"
 
+test_832() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.52) )) ||
+		skip "Need MDS version 2.15.52+"
+	is_rmentry_supported || skip "rm_entry not supported"
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir $DIR/$tdir/local_dir || error "mkdir local_dir failed"
+	mkdir_on_mdt -i 1 $DIR/$tdir/remote_dir ||
+		error "mkdir remote_dir failed"
+	$LFS mkdir -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "mkdir striped_dir failed"
+	touch $DIR/$tdir/file || error "touch file failed"
+	$LFS rm_entry $DIR/$tdir/* || error "lfs rm_entry $tdir/* failed"
+	[ -z "$(ls -A $DIR/$tdir)" ] || error "$tdir not empty"
+}
+run_test 832 "lfs rm_entry"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

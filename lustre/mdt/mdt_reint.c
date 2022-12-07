@@ -1141,6 +1141,23 @@ relock:
 	if (rc != 0)
 		GOTO(put_parent, rc);
 
+	if (info->mti_spec.sp_rm_entry) {
+		struct lu_ucred *uc  = mdt_ucred(info);
+
+		if (!mdt_is_dne_client(req->rq_export))
+			/* Return -ENOTSUPP for old client */
+			GOTO(unlock_parent, rc = -ENOTSUPP);
+
+		if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN))
+			GOTO(unlock_parent, rc = -EPERM);
+
+		ma->ma_need = MA_INODE;
+		ma->ma_valid = 0;
+		rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
+				NULL, &rr->rr_name, ma, no_name);
+		GOTO(unlock_parent, rc);
+	}
+
 	if (info->mti_spec.sp_cr_flags & MDS_OP_WITH_FID) {
 		*child_fid = *rr->rr_fid2;
 	} else {
@@ -1207,23 +1224,6 @@ relock:
 
 	child_lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(child_lh, LCK_EX);
-	if (info->mti_spec.sp_rm_entry) {
-		struct lu_ucred *uc  = mdt_ucred(info);
-
-		if (!mdt_is_dne_client(req->rq_export))
-			/* Return -ENOTSUPP for old client */
-			GOTO(put_child, rc = -ENOTSUPP);
-
-		if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN))
-			GOTO(put_child, rc = -EPERM);
-
-		ma->ma_need = MA_INODE;
-		ma->ma_valid = 0;
-		rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
-				NULL, &rr->rr_name, ma, no_name);
-		GOTO(put_child, rc);
-	}
-
 	if (mdt_object_remote(mc)) {
 		struct mdt_body	 *repbody;
 

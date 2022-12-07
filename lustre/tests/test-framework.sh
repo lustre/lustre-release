@@ -10817,6 +10817,13 @@ statx_supported() {
 	return $?
 }
 
+# lfs rm_entry is disabled on native client
+is_rmentry_supported() {
+	$LFS rm_entry $DIR/dir/not/exists > /dev/null
+	# is return code ENOENT?
+	(( $? == 2 ))
+}
+
 #
 # wrappers for createmany and unlinkmany
 # to set debug=0 if number of creates is high enough
