@@ -1056,6 +1056,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 		 * can match this lock. */
 		ldlm_set_cbpending(lock);
 		ldlm_set_failed(lock);
+		ldlm_clear_converting(lock);
 		lock->l_flags |= flags;
 
 		/* ... without sending a CANCEL message for local_only. */
