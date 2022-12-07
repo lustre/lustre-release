@@ -3921,6 +3921,15 @@ fail_abort() {
 	all_mds_up
 }
 
+# LU-16159: abort recovery will cancel update logs, which may leave broken
+# directories in the system, remove name entry if necessary
+fail_abort_cleanup() {
+	rm -rf $DIR/$tdir/*
+	find $DIR/$tdir -depth | while read D; do
+		rmdir "$D" || $LFS rm_entry "$D" || error "rm $D failed"
+	done
+}
+
 host_nids_address() {
 	local nodes=$1
 	local net=${2:-"."}
