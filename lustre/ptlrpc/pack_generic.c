@@ -1324,6 +1324,12 @@ char *lustre_msg_get_jobid(struct lustre_msg *msg)
 		if (!pb)
 			return NULL;
 
+		/* If clients send unterminated jobids, terminate them here
+		 * so that there is no chance of string overflow later.
+		 */
+		if (unlikely(pb->pb_jobid[LUSTRE_JOBID_SIZE - 1] != '\0'))
+			pb->pb_jobid[LUSTRE_JOBID_SIZE - 1] = '\0';
+
 		return pb->pb_jobid;
 	}
 	default:
