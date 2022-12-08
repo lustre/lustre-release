@@ -286,10 +286,11 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 		RETURN(-EINVAL);
 
 	if (jobid == NULL || strlen(jobid) == 0)
-		RETURN(-EINVAL);
+		RETURN(0);
 
+	/* unterminated jobid should be handled in lustre_msg_get_jobid() */
 	if (strlen(jobid) >= LUSTRE_JOBID_SIZE) {
-		CERROR("Invalid jobid size (%lu), expect(%d)\n",
+		CERROR("%s: invalid jobid size %lu, expect %d\n", obd->obd_name,
 		       (unsigned long)strlen(jobid) + 1, LUSTRE_JOBID_SIZE);
 		RETURN(-EINVAL);
 	}
