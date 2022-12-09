@@ -101,7 +101,7 @@ extern struct kmem_cache *dynlock_cachep;
 #define OSD_DEFAULT_EXTENT_BYTES	(1U << 20)
 
 /* check if ldiskfs support project quota */
-#ifndef LDISKFS_IOC_FSSETXATTR
+#if LDISKFS_MAXQUOTAS < 3
 #undef HAVE_PROJECT_QUOTA
 #endif
 
