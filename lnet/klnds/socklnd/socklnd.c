@@ -1993,9 +1993,27 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 		sa = (void *)&ksi->ksni_addr;
 		found_ip = false;
 
-		if (ksi->ksni_index != ifindex ||
-		    strcmp(ksi->ksni_name, dev->name))
+		if (strcmp(ksi->ksni_name, dev->name))
 			continue;
+
+		if (ksi->ksni_index == -1) {
+			if (dev->reg_state != NETREG_REGISTERED)
+				continue;
+			/* A registration just happened: save the new index for
+			 * the device */
+			ksi->ksni_index = ifindex;
+			goto out;
+		}
+
+		if (ksi->ksni_index != ifindex)
+			continue;
+
+		if (dev->reg_state == NETREG_UNREGISTERING) {
+			/* Device is being unregitering, we need to clear the
+			 * index, it can change when device will be back */
+			ksi->ksni_index = -1;
+			goto out;
+		}
 
 		ni = net->ksnn_ni;
 
@@ -2092,6 +2110,8 @@ static int ksocknal_device_event(struct notifier_block *unused,
 	case NETDEV_UP:
 	case NETDEV_DOWN:
 	case NETDEV_CHANGE:
+	case NETDEV_REGISTER:
+	case NETDEV_UNREGISTER:
 		ksocknal_handle_link_state_change(dev, operstate);
 		break;
 	}
