@@ -62,17 +62,6 @@
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			    void *data, int flag);
 
-/**
- * list_for_remaining_safe - iterate over the remaining entries in a list
- *              and safeguard against removal of a list entry.
- * \param pos   the &struct list_head to use as a loop counter. pos MUST
- *              have been initialized prior to using it in this macro.
- * \param n     another &struct list_head to use as temporary storage
- * \param head  the head for your list.
- */
-#define list_for_remaining_safe(pos, n, head) \
-	for (n = pos->next; pos != (head); pos = n, n = pos->next)
-
 static inline int
 ldlm_same_flock_owner(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
@@ -287,8 +276,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 {
 	struct ldlm_resource *res = req->l_resource;
 	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
-	struct list_head *tmp;
-	struct list_head *ownlocks = NULL;
+	struct ldlm_lock *tmp;
+	struct ldlm_lock *ownlocks = NULL;
 	struct ldlm_lock *lock = NULL;
 	struct ldlm_lock *new = req;
 	struct ldlm_lock *new2 = NULL;
@@ -301,8 +290,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	struct list_head *grant_work = (intention == LDLM_PROCESS_ENQUEUE ?
 					NULL : work_list);
 #endif
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_DLMTRACE, "flags %#llx owner %llu pid %u mode %u start "
 	       "%llu end %llu\n", *flags,
 	       new->l_policy_data.l_flock.owner,
@@ -327,11 +316,9 @@ reprocess:
 		/* This loop determines where this processes locks start
 		 * in the resource lr_granted list.
 		 */
-		list_for_each(tmp, &res->lr_granted) {
-			lock = list_entry(tmp, struct ldlm_lock,
-					  l_res_link);
+		list_for_each_entry(lock, &res->lr_granted, l_res_link) {
 			if (ldlm_same_flock_owner(lock, req)) {
-				ownlocks = tmp;
+				ownlocks = lock;
 				break;
 			}
 		}
@@ -344,13 +331,10 @@ reprocess:
 		/* This loop determines if there are existing locks
 		 * that conflict with the new lock request.
 		 */
-		list_for_each(tmp, &res->lr_granted) {
-			lock = list_entry(tmp, struct ldlm_lock,
-					  l_res_link);
-
+		list_for_each_entry(lock, &res->lr_granted, l_res_link) {
 			if (ldlm_same_flock_owner(lock, req)) {
 				if (!ownlocks)
-					ownlocks = tmp;
+					ownlocks = lock;
 				continue;
 			}
 
@@ -432,15 +416,16 @@ reprocess:
 	ldlm_flock_blocking_unlink(req);
 #endif /* HAVE_SERVER_SUPPORT */
 
-	/* Scan the locks owned by this process that overlap this request.
+	/* Scan the locks owned by this process to find the insertion point
+	 * (as locks are ordered), and to handle overlaps.
 	 * We may have to merge or split existing locks.
 	 */
-	if (!ownlocks)
-		ownlocks = &res->lr_granted;
-
-	list_for_remaining_safe(ownlocks, tmp, &res->lr_granted) {
-		lock = list_entry(ownlocks, struct ldlm_lock, l_res_link);
-
+	if (ownlocks)
+		lock = ownlocks;
+	else
+		lock = list_entry(&res->lr_granted,
+				  struct ldlm_lock, l_res_link);
+	list_for_each_entry_safe_from(lock, tmp, &res->lr_granted, l_res_link) {
 		if (!ldlm_same_flock_owner(lock, new))
 			break;
 
@@ -573,7 +558,7 @@ reprocess:
 							 lock->l_granted_mode);
 
 		/* insert new2 at lock */
-		ldlm_resource_add_lock(res, ownlocks, new2);
+		ldlm_resource_add_lock(res, &lock->l_res_link, new2);
 		LDLM_LOCK_RELEASE(new2);
 		break;
 	}
@@ -588,8 +573,12 @@ reprocess:
 	/* Add req to the granted queue before calling ldlm_reprocess_all(). */
 	if (!added) {
 		list_del_init(&req->l_res_link);
-		/* insert new lock before ownlocks in list. */
-		ldlm_resource_add_lock(res, ownlocks, req);
+		/* insert new lock before "lock", which might be the
+		 * next lock for this owner, or might be the first
+		 * lock for the next owner, or might not be a lock at
+		 * all, but instead points at the head of the list
+		 */
+		ldlm_resource_add_lock(res, &lock->l_res_link, req);
 	}
 
 	if (*flags != LDLM_FL_WAIT_NOREPROC) {
