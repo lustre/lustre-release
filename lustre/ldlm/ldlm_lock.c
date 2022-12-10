@@ -2149,7 +2149,7 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	if (list_empty(arg->list))
 		RETURN(-ENOENT);
 
-	lock = list_entry(arg->list->next, struct ldlm_lock, l_bl_ast);
+	lock = list_first_entry(arg->list, struct ldlm_lock, l_bl_ast);
 
 	/* nobody should touch l_bl_ast but some locks in the list may become
 	 * granted after lock convert or COS downgrade, these locks should be
@@ -2214,7 +2214,7 @@ ldlm_work_revoke_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	if (list_empty(arg->list))
 		RETURN(-ENOENT);
 
-	lock = list_entry(arg->list->next, struct ldlm_lock, l_rk_ast);
+	lock = list_first_entry(arg->list, struct ldlm_lock, l_rk_ast);
 	list_del_init(&lock->l_rk_ast);
 
 	/* the desc just pretend to exclusive */
@@ -2242,8 +2242,8 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	if (list_empty(arg->list))
 		RETURN(-ENOENT);
 
-	gl_work = list_entry(arg->list->next, struct ldlm_glimpse_work,
-				 gl_list);
+	gl_work = list_first_entry(arg->list, struct ldlm_glimpse_work,
+				   gl_list);
 	list_del_init(&gl_work->gl_list);
 
 	lock = gl_work->gl_lock;
@@ -2286,7 +2286,7 @@ ldlm_work_cp_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	if (list_empty(arg->list))
 		RETURN(-ENOENT);
 
-	lock = list_entry(arg->list->next, struct ldlm_lock, l_cp_ast);
+	lock = list_first_entry(arg->list, struct ldlm_lock, l_cp_ast);
 
 	/* It's possible to receive a completion AST before we've set
 	 * the l_completion_ast pointer: either because the AST arrived
