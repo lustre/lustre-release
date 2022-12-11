@@ -584,7 +584,7 @@ static ssize_t soft_sync_limit_store(struct kobject *kobj,
 		return rc;
 
 	ofd->ofd_soft_sync_limit = val;
-	return 0;
+	return count;
 }
 LUSTRE_RW_ATTR(soft_sync_limit);
 
