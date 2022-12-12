@@ -825,6 +825,41 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	return 0;
 }
 
+/*
+ * This function checks args for sanity.
+ *
+ * Returns 0 if all is found good.
+ * Returns 1 if invalid args is detected
+ */
+int chk_args(int argc, char *const argv[])
+{
+	/* If no argument is given to mkfs.lustre, bail out */
+	if (argc < 2)
+		return 1;
+
+	/* If argc is exactly 2, make sure the user wants "--version"
+	 * or "-V" and handle correctly if that is what the user wants
+	 * without bailing out with error.
+	 */
+	if (argc == 2) {
+		if (strncmp(argv[1], "--version", strlen(argv[1])) == 0 &&
+		    (strlen(argv[1]) == 9))
+			return 0;
+
+		if (strncmp(argv[1], "-V", strlen(argv[1])) == 0 &&
+		    (strlen(argv[1]) == 2))
+			return 0;
+	}
+
+	/* This check validates if the last argument is really a device name
+	 * and does not start with char '-'.
+	 */
+	if ((argv[argc - 1][0] == '-'))
+		return 1;
+	else
+		return 0;
+}
+
 int main(int argc, char *const argv[])
 {
 	struct mkfs_opts mop;
@@ -842,7 +877,7 @@ int main(int argc, char *const argv[])
 	else
 		progname = argv[0];
 
-	if ((argc < 2) || (argv[argc - 1][0] == '-')) {
+	if (chk_args(argc, argv)) {
 		usage(stderr);
 		return EINVAL;
 	}
