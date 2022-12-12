@@ -373,6 +373,7 @@ int target_name2index(const char *svname, u32 *idx, const char **endptr);
 int lustre_put_lsi(struct super_block *sb);
 int lustre_start_simple(char *obdname, char *type, char *uuid,
 			char *s1, char *s2, char *s3, char *s4);
+int lustre_stop_mgc(struct super_block *sb);
 #endif /* HAVE_SERVER_SUPPORT */
 int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 void obdname2fsname(const char *tgt, char *fsname, size_t fslen);
