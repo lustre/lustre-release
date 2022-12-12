@@ -1,2 +1,4 @@
 %defattr(-,root,root)
+%dir %{modules_fs_path}/%{lustre_name}-osd-zfs
+%dir %{modules_fs_path}/%{lustre_name}-osd-zfs/fs
 %{modules_fs_path}/%{lustre_name}-osd-zfs/fs/osd_zfs.ko

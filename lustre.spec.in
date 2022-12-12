@@ -648,6 +648,8 @@ fi
 # legacy syntax. Install a compatibility symlink to avoid conflicts when
 # newer-style agents are added.
 ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
+echo '%dir %{_sysconfdir}/ha.d' >>lustre.files
+echo '%dir %{_sysconfdir}/ha.d/resource.d' >>lustre.files
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 %endif
@@ -723,6 +725,8 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/liblustreapi.la
 %endif
 # mpi
 %endif
+echo '%dir %{_libdir}/lustre' >>lustre-tests.files
+echo '%dir %{_libdir}/lustre/tests' >>lustre-tests.files
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
@@ -771,6 +775,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 %if %{with lustre_utils}
 %if %{with servers}
+%dir %{_libexecdir}/lustre
 %{_libexecdir}/lustre/lc_common
 %{_libexecdir}/lustre/haconfig
 %{_bindir}/lustre_req_history
@@ -819,6 +824,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with lustre_utils}
 %files osd-ldiskfs-mount
 %defattr(-,root,root)
+%dir %{_libdir}/@PACKAGE@
 %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
 %endif
 %endif
@@ -829,6 +835,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with lustre_utils}
 %files osd-zfs-mount
 %defattr(-,root,root)
+%dir %{_libdir}/@PACKAGE@
 %{_libdir}/@PACKAGE@/mount_osd_zfs.so
 %{_sysconfdir}/zfs/zed.d/*
 %endif
@@ -841,6 +848,8 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with servers}
 %files resource-agents
 %defattr(0755,root,root)
+%dir %{_prefix}/lib/ocf
+%dir %{_prefix}/lib/ocf/resource.d
 %{_prefix}/lib/ocf/resource.d/lustre/
 %endif
 

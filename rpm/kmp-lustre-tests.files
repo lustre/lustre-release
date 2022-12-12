@@ -1,1 +1,3 @@
+%dir %{modules_fs_path}/%{lustre_name}-tests
+%dir %{modules_fs_path}/%{lustre_name}-tests/fs
 %{modules_fs_path}/%{lustre_name}-tests/fs/llog_test.ko
