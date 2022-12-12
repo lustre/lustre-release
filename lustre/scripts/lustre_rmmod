@@ -8,6 +8,7 @@
 SCRIPT_NAME="$(basename "$0")"
 LCTL=${LCTL:-lctl}
 DEBUG='false'
+[[ -n $DEBUG_RMMOD ]] && DEBUG='true'
 
 # Print help message
 print_usage() {
@@ -23,8 +24,14 @@ print_usage() {
 
 # Print kernel debug message for lustre modules
 print_debug() {
+	local debug_file
 	$LCTL mark "$SCRIPT_NAME : Stop debug"
-	$LCTL debug_kernel
+	if [[ $DEBUG_RMMOD == "-" ]]; then
+		debug_file="" # dump to stdout
+	else
+		debug_file=$DEBUG_RMMOD
+	fi
+	$LCTL debug_kernel $debug_file
 	DEBUG='false'
 }
 
