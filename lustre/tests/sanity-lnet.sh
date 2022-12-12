@@ -3623,6 +3623,26 @@ test_310() {
 }
 run_test 310 "Set timeout and verify"
 
+test_311() {
+	[[ $NETTYPE == kfi* ]] ||
+		skip "Need kfi network type"
+
+	setupall || error "setupall failed"
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 oflag=direct ||
+		error "dd write failed"
+
+	local list=$(comma_list $(osts_nodes))
+
+#define CFS_KFI_FAIL_WAIT_SEND_COMP 0xF115
+	do_nodes $list $LCTL set_param fail_loc=0x8000F115
+	dd if=$DIR/$tdir/$tfile of=/dev/null bs=1M count=1 ||
+		error "dd read failed"
+
+	cleanupall || error "Failed cleanup"
+}
+run_test 311 "Fail bulk put in send wait completion"
 
 check_udsp_prio() {
 	local target_net="${1}"

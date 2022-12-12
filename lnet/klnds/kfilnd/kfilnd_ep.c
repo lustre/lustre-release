@@ -180,8 +180,8 @@ static void kfilnd_ep_err_fail_loc_work(struct work_struct *work)
 	kfree(err);
 }
 
-static int kfilnd_ep_gen_fake_err(struct kfilnd_ep *ep,
-				  const struct kfi_cq_err_entry *err)
+int kfilnd_ep_gen_fake_err(struct kfilnd_ep *ep,
+			   const struct kfi_cq_err_entry *err)
 {
 	struct kfilnd_ep_err_fail_loc_work *fake_err;
 

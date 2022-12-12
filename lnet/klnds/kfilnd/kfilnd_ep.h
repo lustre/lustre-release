@@ -65,6 +65,8 @@ void kfilnd_ep_queue_tn_replay(struct kfilnd_ep *ep,
 
 int kfilnd_ep_get_key(struct kfilnd_ep *ep);
 void kfilnd_ep_put_key(struct kfilnd_ep *ep, unsigned int key);
+int kfilnd_ep_gen_fake_err(struct kfilnd_ep *ep,
+			   const struct kfi_cq_err_entry *err);
 
 
 #endif /* _KFILND_EP_ */
