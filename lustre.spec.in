@@ -206,9 +206,10 @@ Source3: kmp-lustre-osd-ldiskfs.preamble
 Source4: kmp-lustre-osd-ldiskfs.files
 Source5: kmp-lustre-osd-zfs.preamble
 Source6: kmp-lustre-osd-zfs.files
-Source7: kmp-lustre-tests.files
-Source8: find-provides
-Source9: find-provides.ksyms
+Source7: kmp-lustre-tests.preamble
+Source8: kmp-lustre-tests.files
+Source9: find-provides
+Source10: find-provides.ksyms
 URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 %if %{with lustre_modules}
@@ -418,7 +419,7 @@ This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
 
 %if %{with lustre_modules}
-%kernel_module_package -n %{name}-tests -f %SOURCE7 %{_flavor}
+%kernel_module_package -n %{name}-tests -p %SOURCE7 -f %SOURCE8 %{_flavor}
 %endif
 %endif
 

@@ -1,2 +1,5 @@
+%if 0%{?suse_version} > 1
+Requires:       kernel-%1
+%endif
 Obsoletes:      %{name}-modules < %{version}
 License:        GPL-2.0-only
