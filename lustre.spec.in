@@ -210,7 +210,7 @@ Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: python3 >= 3.6.0
 BuildRequires: python3-devel >= 3.6.0, swig
 %endif
-BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel flex bison
+BuildRequires: libtool pkgconfig(yaml-0.1) pkgconfig(zlib) pkgconfig(libnl-3.0) flex bison
 %if "%{_vendor}" == "redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig
@@ -233,7 +233,7 @@ Obsoletes: lustre-client < %{version}
 Provides: lustre-client = %{version}-%{release}
 %if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || "%{_vendor}" == "openEuler"
 #suse don't support selinux
-BuildRequires: libselinux-devel
+BuildRequires: pkgconfig(libselinux)
 %endif
 %if %{with lustre_modules}
 %if %{with mofed}
@@ -264,7 +264,7 @@ BuildRequires: kernel-abi-whitelists
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
-BuildRequires: systemd
+BuildRequires: pkgconfig(systemd)
 %endif
 
 %description
@@ -298,8 +298,8 @@ echo $TMPFILE
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
-BuildRequires: e2fsprogs-devel >= 1.44.3 libmount-devel
-Requires: ldiskfsprogs > 1.45.6 libmount
+BuildRequires: e2fsprogs-devel >= 1.44.3 pkgconfig(mount)
+Requires: ldiskfsprogs > 1.45.6
 Provides: lustre-osd-mount = %{version}
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: %{name}-osd-mount < %{version}
@@ -318,8 +318,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
-BuildRequires: libmount-devel
-Requires: libmount
+BuildRequires: pkgconfig(mount)
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 # Tests also require zpool from zfs package:
