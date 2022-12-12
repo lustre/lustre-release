@@ -186,7 +186,7 @@ Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
 Release: 1%{?dist}
-License: GPL
+License: GPL-2.0-only AND LGPL-2.1-or-later
 Group: System Environment/Kernel
 Source: lustre-%{version}.tar.gz
 Source1: kmp-lustre.preamble

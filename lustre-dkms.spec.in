@@ -51,7 +51,7 @@ Release:        %{buildid}%{?dist}
 Summary:        Kernel module(s) (dkms)
 
 Group:          System Environment/Kernel
-License:        GPLv2+
+License:        GPL-2.0-only
 URL:            http://lustre.opensfs.org/
 Source0:        @PACKAGE@-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)

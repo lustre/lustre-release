@@ -1,4 +1,5 @@
 Summary:        Lustre osd-zfs feature support
+License:        GPL-2.0-only
 Requires:       %{name}-osd-zfs-mount = %{version}
 Provides:       %{name}-osd = %{version}
 Obsoletes:      %{name}-osd-zfs < %{version}

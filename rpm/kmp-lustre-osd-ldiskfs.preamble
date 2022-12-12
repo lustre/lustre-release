@@ -1,3 +1,4 @@
+License:        GPL-2.0-only
 Requires:       %{requires_kmod_name} = %{requires_kmod_version}
 Requires:       ldiskfsprogs >= 1.44.3.wc1
 Requires:       %{name}-osd-ldiskfs-mount = %{version}
