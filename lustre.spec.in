@@ -187,7 +187,10 @@ Name: %{lustre_name}
 Version: %{version}
 Release: 1%{?dist}
 License: GPL-2.0-only AND LGPL-2.1-or-later
-Group: System Environment/Kernel
+%if 0%{?suse_version} >= 1310
+# SUSE needs Group for the kernel_module_package macro
+Group: System/Kernel
+%endif
 Source: lustre-%{version}.tar.gz
 Source1: kmp-lustre.preamble
 Source2: kmp-lustre.files
@@ -301,7 +304,6 @@ Provides: lustre-osd-mount = %{version}
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: %{name}-osd-mount < %{version}
 Obsoletes: lustre-osd-mount < %{version}
-Group: System Environment/Kernel
 
 %description osd-ldiskfs-mount
 LDISKFS hooks for mount/mkfs into a dynamic library.
@@ -323,7 +325,6 @@ Obsoletes: lustre-osd-mount < %{version}
 # Tests also require zpool from zfs package:
 Requires: zfs
 Requires: %{requires_kmod_osd_zfs_name}
-Group: System Environment/Kernel
 
 %description osd-zfs-mount
 ZFS hooks for mount/mkfs into a dynamic library.
@@ -338,7 +339,6 @@ ZFS hooks for mount/mkfs into a dynamic library.
 %if %{with servers}
 %package resource-agents
 Summary: HA Resuable Cluster Resource Scripts for Lustre
-Group: System Environment/Base
 Requires: %{name}
 Requires: resource-agents
 
@@ -349,7 +349,6 @@ environment for both Pacemaker and rgmanager.
 
 %package devel
 Summary: Lustre include headers
-Group: Development/Kernel
 Provides: lustre-devel = %{version}
 Requires: %{lustre_name} = %{version}
 %if %{with lustre_modules}
@@ -365,7 +364,6 @@ applications against the Lustre / LNet utilities libraries.
 %if %{with lustre_tests}
 %package tests
 Summary: Lustre testing framework
-Group: System Environment/Kernel
 Provides: %{name}-tests = %{version}
 %if %{with lustre_iokit}
 Requires: %{name} = %{version}, lustre-iokit
@@ -411,7 +409,6 @@ to be used by the Lustre testing framework.
 %if %{with lustre_iokit}
 %package -n lustre-iokit
 Summary: The Lustre IO-Kit is a collection of benchmark tools for a cluster with the Lustre file system.
-Group: Applications/System
 Requires: python3, sg3_utils
 
 %description -n lustre-iokit
