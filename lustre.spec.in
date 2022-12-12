@@ -232,6 +232,18 @@ BuildRequires: pkg-config
 %if %{with gss}
 BuildRequires: krb5-devel openssl-devel
 %endif
+%if %{with lustre_modules}
+# abuild (auto-build) used by SUSE Open Build Service
+# need kernel-source as a build requirement, but the code
+# which extracts these requirements don't understand %()
+# and treats all such as failures.  So the following dance
+# Allows the requirements to be seen by abuild, but ignored
+# by lbuild.
+%if "%(echo $USER)" != "abuild"
+%else
+BuildRequires: kernel-source
+%endif
+%endif
 %if %{with servers}
 Requires: %{name}-osd
 Requires: %{name}-osd-mount
