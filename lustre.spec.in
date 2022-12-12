@@ -391,6 +391,13 @@ Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 Requires: python3 >= 3.6.0
 %endif
 Requires: attr, rsync, perl, lsof, /usr/bin/getconf
+Requires: /usr/sbin/getenforce, /usr/bin/netstat, acl, /usr/bin/killall, /usr/bin/ping, bc
+# Of the supported targets, only rhel7 doesn't support Recommends.
+%if 0%{?rhel} > 7 || 0%{?rhel} < 1
+Recommends: dbench, iozone
+# Either of these is sufficient
+Suggests: pdsh, clush
+%endif
 %if %{with mpi}
 %if "%{mpi_name}" == "mpich"
 BuildRequires: mpich-devel
