@@ -297,7 +297,7 @@ echo $TMPFILE
 %kernel_module_package -n %{name}-osd-ldiskfs -p %SOURCE3 -f %SOURCE4 %{_flavor}
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
-Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
+Summary: Lustre mount's ldiskfs-specific helper library
 BuildRequires: e2fsprogs-devel >= 1.44.3 pkgconfig(mount)
 Requires: ldiskfsprogs > 1.45.6
 Provides: lustre-osd-mount = %{version}
@@ -306,7 +306,8 @@ Obsoletes: %{name}-osd-mount < %{version}
 Obsoletes: lustre-osd-mount < %{version}
 
 %description osd-ldiskfs-mount
-LDISKFS hooks for mount/mkfs into a dynamic library.
+Provide a shared library (dso) that can be loaded into various
+lustre tools (mount/mkfs) to provide support for ldisfs
 
 # with lustre_utils
 %endif
@@ -317,7 +318,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %kernel_module_package -n %{name}-osd-zfs -p %SOURCE5 -f %SOURCE6 %{_flavor}
 %if %{with lustre_utils}
 %package osd-zfs-mount
-Summary: osd-zfs-mount contains mount's zfs specific dso.
+Summary: Lustre mount's zfs-specific helper library
 BuildRequires: pkgconfig(mount)
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
@@ -326,7 +327,8 @@ Requires: zfs
 Requires: %{requires_kmod_osd_zfs_name}
 
 %description osd-zfs-mount
-ZFS hooks for mount/mkfs into a dynamic library.
+Provide a shared library (dso) that can be loaded into various
+lustre tools (mount/mkfs) to provide support for ZFS.
 
 # with lustre_utils
 %endif
@@ -407,7 +409,7 @@ to be used by the Lustre testing framework.
 
 %if %{with lustre_iokit}
 %package -n lustre-iokit
-Summary: The Lustre IO-Kit is a collection of benchmark tools for a cluster with the Lustre file system.
+Summary: Collection of benchmark tools for a cluster with the Lustre file system
 Requires: python3, sg3_utils
 
 %description -n lustre-iokit
