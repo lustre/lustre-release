@@ -33,7 +33,6 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		suse_conf=$LINUX_OBJ/include/generated/uapi/linux/suse_version.h
 		suse_vers=$(awk '[$]2 == "SUSE_VERSION" {print [$]3 }' $suse_conf)
 		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
-		echo "$suse_conf $suse_vers $suse_patchlevel  ${suse_vers}sp$suse_patchlevel" >> /tmp/log-nb
 		case ${suse_vers}sp$suse_patchlevel in # (
 		15sp0 ) LDISKFS_SERIES="4.12-sles15.series"
 			if test ! -f $LINUX/arch/x86/kernel/cpu/hygon.c ; then
@@ -56,8 +55,6 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		suse_conf=$LINUX_OBJ/include/generated/uapi/linux/suse_version.h
 		suse_vers=$(awk '[$]2 == "SUSE_VERSION" {print [$]3 }' $suse_conf)
 		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
-		echo "$suse_conf $suse_vers $suse_patchlevel  ${suse_vers}sp$suse_patchlevel" >> /tmp/log-nb
-
 		case ${suse_vers}sp${suse_patchlevel} in # (
 		15sp2 ) LDISKFS_SERIES="5.4.21-ml.series"
 		        grep -A3 ext4_update_dx_flag $LINUX/fs/ext4/ext4.h \
