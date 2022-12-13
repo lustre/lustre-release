@@ -178,7 +178,7 @@ is created.
 .BI \--verbose
 Print more information.
 .TP
-.BI \--version
+.B \-V,  \-\-version
 Output build version of the mkfs.lustre utiltiy.
 
 .SH NID
@@ -216,6 +216,9 @@ MDT for filesystem 'myfs1' on any node, using the above MGS
 .B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs zfspool/mdt1 mirror /dev/sdb /dev/sdc mirror /dev/sdd /dev/sde
 Create zfs pool 'zfspool' on two root vdevs each a mirror of two disks and
 create mdt/mgs on filesystem 'zfspool/mdt1'.
+.TP
+.B mkfs.lustre --version
+Output build version of the mkfs.lustre utiltiy e.g. 2.15.52_175_ge7aa83d
 
 .SH AVAILABILITY
 .B mkfs.lustre
