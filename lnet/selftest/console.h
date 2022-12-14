@@ -212,6 +212,9 @@ extern int lstcon_nodes_debug(int timeout, int nnd,
 			      struct list_head __user *result_up);
 extern int lstcon_group_add(char *name);
 extern int lstcon_group_del(char *name);
+void lstcon_group_addref(struct lstcon_group *grp);
+void lstcon_group_decref(struct lstcon_group *grp);
+int lstcon_group_find(const char *name, struct lstcon_group **grpp);
 extern int lstcon_group_clean(char *name, int args);
 extern int lstcon_group_refresh(char *name, struct list_head __user *result_up);
 extern int lstcon_nodes_add(char *name, int nnd,
@@ -224,7 +227,6 @@ extern int lstcon_nodes_remove(char *name, int nnd,
 extern int lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gent_up,
 			     int *index_p, int *ndent_p,
 			     struct lstcon_node_ent __user *ndents_up);
-extern int lstcon_group_list(int idx, int len, char __user *name_up);
 extern int lstcon_batch_add(char *name);
 extern int lstcon_batch_run(char *name, int timeout,
 			    struct list_head __user *result_up);

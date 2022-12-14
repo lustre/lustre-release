@@ -540,11 +540,13 @@ struct sfw_counters {
  *
  * @LNET_SELFTEST_CMD_UNSPEC:		unspecified command to catch errors
  * @LNET_SELFTEST_CMD_SESSIONS:		command to manage sessions
+ * @LNET_SELFTEST_CMD_GROUPS:		command to manage selftest groups
  */
 enum lnet_selftest_commands {
 	LNET_SELFTEST_CMD_UNSPEC	= 0,
 
 	LNET_SELFTEST_CMD_SESSIONS	= 1,
+	LNET_SELFTEST_CMD_GROUPS	= 2,
 
 	__LNET_SELFTEST_CMD_MAX_PLUS_ONE,
 };

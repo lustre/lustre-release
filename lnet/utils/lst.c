@@ -986,6 +986,393 @@ finish:
         return rc;
 }
 
+#define LST_NODES_TITLE "\tACTIVE\tBUSY\tDOWN\tUNKNOWN\tTOTAL\n"
+
+static int lst_yaml_display_groups(yaml_parser_t *reply, char *group,
+				   int states, bool print)
+{
+	yaml_event_t event;
+	int rc;
+
+	if (states) {
+		char name[LST_NAME_SIZE] = {};
+		bool done = false;
+		int count = 0;
+
+		if (print)
+			fprintf(stdout, LST_NODES_TITLE);
+
+		while (!done) {
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto parser_error;
+
+			if (event.type == YAML_MAPPING_START_EVENT) {
+				char *value = NULL;
+				yaml_event_t next;
+
+				rc = yaml_parser_parse(reply, &next);
+				if (rc == 0)
+					goto parser_error;
+
+				if (next.type != YAML_SCALAR_EVENT) {
+					yaml_event_delete(&next);
+					continue;
+				}
+
+				value = (char *)next.data.scalar.value;
+				if (strcmp(value, "groups") == 0) {
+					yaml_event_delete(&next);
+				} else if (strcmp(value, "nid") == 0) {
+					yaml_event_t next;
+					char *tmp;
+
+					rc = yaml_parser_parse(reply, &next);
+					if (rc == 0)
+						goto parser_error;
+
+					fprintf(stdout, "\t%s: ",
+						(char *)next.data.scalar.value);
+
+					rc = yaml_parser_parse(reply, &next);
+					if (rc == 0)
+						goto parser_error;
+
+					tmp = (char *)next.data.scalar.value;
+					if (strcmp(tmp, "status") == 0) {
+						yaml_event_t state;
+
+						rc = yaml_parser_parse(reply, &state);
+						if (rc == 0)
+							goto parser_error;
+
+						fprintf(stdout, "%s\n",
+							(char *)state.data.scalar.value);
+						count++;
+					}
+				} else {
+					yaml_event_t next;
+
+					rc = yaml_parser_parse(reply, &next);
+					if (rc == 0)
+						goto parser_error;
+
+					strncpy(name, value, sizeof(name) - 1);
+					fprintf(stdout, "Group [ %s ]\n", name);
+					count = 0;
+
+					if (next.type != YAML_SEQUENCE_START_EVENT) {
+						fprintf(stdout,
+							"No nodes found [ %s ]\n",
+							name);
+					}
+				}
+			} else if (event.type == YAML_SEQUENCE_END_EVENT &&
+				   count) {
+				fprintf(stdout, "Total %d nodes [ %s ]\n",
+					count, name);
+				count = 0;
+			}
+
+			done = (event.type == YAML_STREAM_END_EVENT);
+			yaml_event_delete(&event);
+		}
+	} else if (group) {
+		int active = 0, busy = 0, down = 0, unknown = 0;
+		char group[LST_NAME_SIZE];
+		bool done = false;
+
+		while (!done) {
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto parser_error;
+
+			if (event.type == YAML_SCALAR_EVENT) {
+				char *value = (char *)event.data.scalar.value;
+				yaml_event_t next;
+
+				value = (char *)event.data.scalar.value;
+				if (strcmp(value, "groups") == 0) {
+					yaml_event_delete(&event);
+					continue;
+				}
+
+				rc = yaml_parser_parse(reply, &next);
+				if (rc == 0)
+					goto parser_error;
+
+				if (next.type == YAML_SCALAR_EVENT) {
+					int status;
+
+					status = lst_node_str2state((char *)next.data.scalar.value);
+					switch (status) {
+					case LST_NODE_ACTIVE:
+						active++;
+						break;
+					case LST_NODE_BUSY:
+						busy++;
+						break;
+					case LST_NODE_DOWN:
+						down++;
+						break;
+					case LST_NODE_UNKNOWN:
+						unknown++;
+					default:
+						break;
+					}
+				} else if (next.type == YAML_SEQUENCE_START_EVENT) {
+					strncpy(group, value, sizeof(group) - 1);
+					active = 0;
+					busy = 0;
+					down = 0;
+					unknown = 0;
+				}
+				yaml_event_delete(&next);
+			} else if (event.type == YAML_SEQUENCE_END_EVENT) {
+				if (strlen(group)) {
+					fprintf(stdout, "\t%d\t%d\t%d\t%d\t%d\t%s\n",
+						active, busy, down, unknown,
+						active + busy + down + unknown, group);
+				}
+				memset(group, 0, sizeof(group));
+			}
+			done = (event.type == YAML_STREAM_END_EVENT);
+			yaml_event_delete(&event);
+		}
+	} else {
+		bool done = false;
+		unsigned int i = 1;
+
+		while (!done) {
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto parser_error;
+
+			if (event.type == YAML_SCALAR_EVENT) {
+				char *value;
+
+				value = (char *)event.data.scalar.value;
+				if (strlen(value) &&
+				    strcmp(value, "groups") != 0) {
+					if (print)
+						fprintf(stdout, "%d) %s\n",
+							i, value);
+					i++;
+				}
+			}
+			done = (event.type == YAML_STREAM_END_EVENT);
+
+			yaml_event_delete(&event);
+		}
+		if (print)
+			fprintf(stdout, "Total %d groups\n", i - 1);
+		else
+			rc = i - 1;
+	}
+parser_error:
+	return rc;
+}
+
+#define LST_NODES_TITLE "\tACTIVE\tBUSY\tDOWN\tUNKNOWN\tTOTAL\n"
+
+static int lst_yaml_groups(int nlflags, char *name, int states, bool print)
+{
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	struct nl_sock *sk;
+	int rc;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup reply parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto parser_error;
+
+	/* Create Netlink emitter to send request to kernel */
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk,
+					     LNET_SELFTEST_GENL_NAME,
+					     LNET_SELFTEST_GENL_VERSION,
+					     LNET_SELFTEST_CMD_GROUPS,
+					     nlflags);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&request);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_BLOCK_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"groups",
+				     strlen("groups"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (name) {
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1, YAML_BLOCK_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_BLOCK_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)name,
+					     strlen(name), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		if (states) {
+			int max = ffs(LST_NODE_UNKNOWN) + 1, i;
+			char *state;
+
+			yaml_sequence_start_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_SEQ_TAG,
+							     1, YAML_BLOCK_SEQUENCE_STYLE);
+			rc = yaml_emitter_emit(&request, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+
+			for (i = 0; i < max; i++) {
+				int mask = states & (1 << i);
+
+				state = lst_node_state2str(mask);
+				if (mask != LST_NODE_UNKNOWN && strcmp(state, "Unknown") == 0)
+					continue;
+
+				yaml_mapping_start_event_initialize(&event, NULL,
+								    (yaml_char_t *)YAML_MAP_TAG,
+								    1, YAML_BLOCK_MAPPING_STYLE);
+				rc = yaml_emitter_emit(&request, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)"status",
+							     strlen("status"), 1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&request, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)state,
+							     strlen(state), 1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&request, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_mapping_end_event_initialize(&event);
+				rc = yaml_emitter_emit(&request, &event);
+				if (rc == 0)
+					goto emitter_error;
+			}
+
+			yaml_sequence_end_event_initialize(&event);
+			rc = yaml_emitter_emit(&request, &event);
+			if (rc == 0)
+				goto emitter_error;
+		} else {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"",
+						     strlen(""), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&request, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	} else {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&request);
+	if (rc == 0) {
+emitter_error:
+		yaml_emitter_log_error(&request, stderr);
+		yaml_emitter_delete(&request);
+		rc = -EINVAL;
+		goto parser_error;
+	}
+	yaml_emitter_delete(&request);
+
+	/* display output */
+	if (nlflags == NLM_F_DUMP)
+		rc = lst_yaml_display_groups(&reply, name, states, print);
+parser_error:
+	if (rc == 0)
+		yaml_parser_log_error(&reply, stderr, NULL);
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	if (print)
+		rc = rc == 1 ? 0 : -EINVAL;
+
+	return rc;
+}
+
 int
 lst_ping_ioctl(char *str, int type, int timeout,
 	       int count, struct lnet_process_id *ids, struct list_head *head)
@@ -1030,7 +1417,13 @@ lst_get_node_count(int type, char *str, int *countp,
                 break;
 
         case LST_OPC_GROUP:
-                rc = lst_info_group_ioctl(str, entp, NULL, NULL, NULL);
+		rc = lst_yaml_groups(NLM_F_DUMP, NULL, 0, false);
+		if (rc == -EOPNOTSUPP) {
+			rc = lst_info_group_ioctl(str, entp, NULL, NULL, NULL);
+		} else if (rc > 0) {
+			entp->nle_nnode = rc;
+			rc = 0;
+		}
                 break;
 
         case LST_OPC_NODES:
@@ -1609,13 +2002,12 @@ lst_list_group_all(void)
         return 0;
 }
 
-#define LST_NODES_TITLE "\tACTIVE\tBUSY\tDOWN\tUNKNOWN\tTOTAL\n"
-
 int
 jt_lst_list_group(int argc, char **argv)
 {
 	struct lstcon_ndlist_ent gent;
 	struct lstcon_node_ent   *dents;
+	int states = 0;
 	int optidx  = 0;
 	int verbose = 0;
 	int active  = 0;
@@ -1629,7 +2021,6 @@ jt_lst_list_group(int argc, char **argv)
 	int j;
 	int c;
 	int rc      = 0;
-
 	static const struct option list_group_opts[] = {
 		{ .name = "active",  .has_arg = no_argument, .val = 'a' },
 		{ .name = "busy",    .has_arg = no_argument, .val = 'b' },
@@ -1654,21 +2045,27 @@ jt_lst_list_group(int argc, char **argv)
                 switch (c) {
                 case 'a':
                         verbose = active = 1;
+			states |= LST_NODE_ACTIVE;
                         all = 0;
                         break;
                 case 'b':
                         verbose = busy = 1;
+			states |= LST_NODE_BUSY;
                         all = 0;
                         break;
                 case 'd':
                         verbose = down = 1;
+			states |= LST_NODE_DOWN;
                         all = 0;
                         break;
                 case 'u':
                         verbose = unknown = 1;
+			states |= LST_NODE_UNKNOWN;
                         all = 0;
                         break;
                 case 'l':
+			states |= LST_NODE_ACTIVE | LST_NODE_BUSY |
+				  LST_NODE_DOWN | LST_NODE_UNKNOWN;
                         verbose = all = 1;
                         break;
                 default:
@@ -1677,6 +2074,26 @@ jt_lst_list_group(int argc, char **argv)
                 }
         }
 
+	if (optind == argc) {
+		rc = lst_yaml_groups(NLM_F_DUMP, NULL, 0, true);
+		if (rc <= 0) {
+			if (rc == -EOPNOTSUPP)
+				goto old_api;
+			return rc;
+		}
+	} else {
+		for (i = optind; i < argc; i++) {
+			rc = lst_yaml_groups(NLM_F_DUMP, argv[i], states,
+					     i == optind ? true : false);
+			if (rc < 0) {
+				if (rc == -EOPNOTSUPP)
+					goto old_api;
+				return rc;
+			}
+		}
+		return 0;
+	}
+old_api:
         if (optind == argc) {
                 /* no group is specified, list name of all groups */
                 rc = lst_list_group_all();
