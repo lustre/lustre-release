@@ -384,6 +384,13 @@ static inline struct lu_buf *tti_buf_lcd(struct tgt_thread_info *tti)
 	return &tti->tti_buf;
 }
 
+static inline bool tgt_is_multimodrpcs_record(struct lu_target *tgt,
+					      struct lsd_client_data *lcd)
+{
+	return tgt->lut_lsd.lsd_feature_incompat & OBD_INCOMPAT_MULTI_RPCS &&
+		lcd->lcd_generation != 0;
+}
+
 /**
  * Allocate in-memory data for client slot related to export.
  */
@@ -453,9 +460,6 @@ void tgt_client_free(struct obd_export *exp)
 		       exp->exp_obd->obd_name, ted->ted_lr_idx);
 		LBUG();
 	}
-
-	if (tgt_is_multimodrpcs_client(exp) && !exp->exp_obd->obd_stopping)
-		atomic_dec(&lut->lut_num_clients);
 }
 EXPORT_SYMBOL(tgt_client_free);
 
@@ -837,13 +841,11 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	list_splice_init(&client_list, &tgt->lut_obd->obd_final_req_queue);
 	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
 
-	/** Clear MULTI RPCS incompatibility flag if
-	 * - target is MDT and
-	 * - there is no client to recover or the recovery was aborted
+	/**
+	 * Clear MULTI RPCS incompatibility flag if there is no multi-rpcs
+	 * client in last_rcvd file
 	 */
-	if (!strncmp(tgt->lut_obd->obd_type->typ_name, LUSTRE_MDT_NAME, 3) &&
-	    (atomic_read(&tgt->lut_obd->obd_max_recoverable_clients) == 0 ||
-	    tgt->lut_obd->obd_abort_recovery))
+	if (atomic_read(&tgt->lut_num_clients) == 0)
 		tgt->lut_lsd.lsd_feature_incompat &= ~OBD_INCOMPAT_MULTI_RPCS;
 
 	/** update server epoch */
@@ -1041,7 +1043,6 @@ repeat:
 	if (tgt_is_multimodrpcs_client(exp)) {
 		/* Set MULTI RPCS incompatibility flag to prevent previous
 		 * Lustre versions to mount a target with reply_data file */
-		atomic_inc(&tgt->lut_num_clients);
 		if (!(tgt->lut_lsd.lsd_feature_incompat &
 		      OBD_INCOMPAT_MULTI_RPCS)) {
 			tgt->lut_lsd.lsd_feature_incompat |=
@@ -1071,11 +1072,16 @@ repeat:
 		RETURN(-ENOSPC);
 
 	rc = tgt_client_data_update(env, exp);
-	if (rc)
+	if (rc) {
 		CERROR("%s: Failed to write client lcd at idx %d, rc %d\n",
 		       tgt->lut_obd->obd_name, idx, rc);
+		RETURN(rc);
+	}
 
-	RETURN(rc);
+	if (tgt_is_multimodrpcs_client(exp))
+		atomic_inc(&tgt->lut_num_clients);
+
+	RETURN(0);
 }
 EXPORT_SYMBOL(tgt_client_new);
 
@@ -1105,7 +1111,6 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 		       tgt->lut_obd->obd_name,  idx);
 		LBUG();
 	}
-	atomic_inc(&tgt->lut_num_clients);
 
 	CDEBUG(D_INFO, "%s: client at idx %d with UUID '%s' added, "
 	       "generation %d\n",
@@ -1184,8 +1189,20 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 		RETURN(rc);
 	}
 
+	/* Race between an eviction and a disconnection ?*/
+	mutex_lock(&ted->ted_lcd_lock);
+	if (ted->ted_lcd->lcd_uuid[0] == '\0') {
+		mutex_unlock(&ted->ted_lcd_lock);
+		RETURN(rc);
+	}
+
 	memset(ted->ted_lcd->lcd_uuid, 0, sizeof ted->ted_lcd->lcd_uuid);
+	mutex_unlock(&ted->ted_lcd_lock);
+
 	rc = tgt_client_data_update(env, exp);
+
+	if (!rc && tgt_is_multimodrpcs_record(tgt, ted->ted_lcd))
+		atomic_dec(&tgt->lut_num_clients);
 
 	CDEBUG(rc == 0 ? D_INFO : D_ERROR,
 	       "%s: zeroing out client %s at idx %u (%llu), rc %d\n",
@@ -1658,9 +1675,9 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		spin_unlock(&exp->exp_lock);
 		atomic_inc(&obd->obd_max_recoverable_clients);
 
-		if (tgt->lut_lsd.lsd_feature_incompat &
-		    OBD_INCOMPAT_MULTI_RPCS &&
-		    lcd->lcd_generation != 0) {
+		if (tgt_is_multimodrpcs_record(tgt, lcd)) {
+			atomic_inc(&tgt->lut_num_clients);
+
 			/* compute the highest valid client generation */
 			generation = max(generation, lcd->lcd_generation);
 			/* fill client_generation <-> export hash table */

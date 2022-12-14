@@ -192,7 +192,8 @@ struct lu_target {
 	/** Bitmap of known clients */
 	unsigned long		*lut_client_bitmap;
 	/* Number of clients supporting multiple modify RPCs
-	 * recorded in the bitmap */
+	 * recorded in the last_rcvd file
+	 */
 	atomic_t		 lut_num_clients;
 	/* Client generation to identify client slot reuse */
 	atomic_t		 lut_client_generation;
