@@ -1193,6 +1193,11 @@ last_rcvd_check_incompat_flag() {
 
 
 test_33() { # LU-15935
+	(( $MDS1_VERSION >= $(version_code 2.15.52.86) )) ||
+	(( $MDS1_VERSION >= $(version_code 2.15.2) &&
+	   $MDS1_VERSION < $(version_code 2.15.50) )) ||
+		skip "Need MDS version at least 2.15.52.86 or 2.15.2"
+
 	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
 
 	clients_up
