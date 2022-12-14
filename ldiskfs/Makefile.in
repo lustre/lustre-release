@@ -16,7 +16,7 @@ else
 backfs_sources := $(filter-out %.mod.c %/inode-test.c,$(wildcard @EXT4_SRC_DIR@/*.c))
 endif
 
-new_sources := mmp.c htree_lock.c critical_encode.h
+new_sources := mmp.c htree_lock.c critical_encode.h encdata.h
 new_headers :=
 
 ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)

@@ -31,3 +31,4 @@ base/ext4-projid-xattrs.patch
 rhel8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-filename-encode.patch
+rhel8/ext4-encdata.patch

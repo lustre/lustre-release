@@ -53,3 +53,4 @@ rhel7.7/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 rhel7.6/ext4-projid-xattrs.patch
 rhel7.9/ext4-enc-flag.patch
 rhel7.9/ext4-filename-encode.patch
+rhel7.9/ext4-encdata.patch

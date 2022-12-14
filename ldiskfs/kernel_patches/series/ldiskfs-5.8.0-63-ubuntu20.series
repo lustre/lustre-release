@@ -32,3 +32,4 @@ base/ext4-projid-xattrs.patch
 linux-5.8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
+rhel8/ext4-encdata.patch

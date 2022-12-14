@@ -1,0 +1,43 @@
+diff -wur /dev/null b/fs/ext4/encdata.h
+--- /dev/null
++++ b/fs/ext4/encdata.h
+@@ -0,0 +1,16 @@
++/*
++ *  encdata.h
++ *
++ *  Copyright (c) 2022 Whamcloud
++ */
++
++#ifndef _ENCDATA_H
++#define _ENCDATA_H
++
++/* Define a fixed 4096-byte encryption unit size */
++/* Must be identical to LUSTRE_ENCRYPTION_UNIT_SIZE */
++#define EXT4_ENCRYPTION_BLOCKBITS 12
++#define EXT4_ENCRYPTION_UNIT_SIZE ((size_t)1 << EXT4_ENCRYPTION_BLOCKBITS)
++#define EXT4_ENCRYPTION_MASK      (~(EXT4_ENCRYPTION_UNIT_SIZE - 1))
++
++#endif /* _ENCDATA_H */
+diff -wur a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -45,6 +45,7 @@
+ #include "xattr.h"
+ #include "acl.h"
+ #include "truncate.h"
++#include "encdata.h"
+ 
+ #include <trace/events/ext4.h>
+ 
+@@ -5069,6 +5070,11 @@ int ext4_getattr(struct vfsmount *mnt
+ 
+ 	inode = dentry->d_inode;
+ 	generic_fillattr(inode, stat);
++
++	if (EXT4_I(inode)->i_flags & EXT4_ENCRYPT_FL &&
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
++		stat->size = round_up(stat->size,
++				      EXT4_ENCRYPTION_UNIT_SIZE);
+
+ 	/*
+ 	 * If there is inline data in the inode, the inode will normally not
