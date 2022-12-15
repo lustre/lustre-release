@@ -42,6 +42,19 @@ across all MDTs if their free space is within
 percent of each other, otherwise the client will prefer to select
 .B COUNT
 MDT(s) proportional to the free space and inodes on each.
+
+Providing mutiple
+.I MDT_INDEX
+values while trying to set the default striping pattern of subdirectories using
+.B -D
+will not load balance subdirectory creation amongst the MDTs. Instead, this
+will cause all new subdirectories to be striped across all of the specified
+MDTs. This is discouraged and can lead to filesystem problems if too many
+striped directories are created. To do this anyway,
+.B -c N
+must also be specified, where
+.B N
+matches the number of MDT indices given.
 .TP
 .BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
 Use

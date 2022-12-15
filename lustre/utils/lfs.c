@@ -6641,6 +6641,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	bool default_stripe = false;
 	bool delete = false;
 	bool foreign_mode = false;
+	bool mdt_count_set = false;
 	mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t previous_mode = 0;
 	char *xattr = NULL;
@@ -6703,6 +6704,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 					progname, optarg);
 				return CMD_HELP;
 			}
+			mdt_count_set = true;
 			break;
 		case 'd':
 			delete = true;
@@ -6927,6 +6929,15 @@ static int lfs_setdirstripe(int argc, char **argv)
 				"%s %s: unrecommended max-inherit=%d when default stripe-count=%lld\n",
 				progname, argv[0], max_inherit,
 				lsa.lsa_stripe_count);
+	}
+
+	if (default_stripe && lsa.lsa_nr_tgts > 1 && !mdt_count_set) {
+		fprintf(stderr,
+			"%s %s: trying to create unrecommended default striped directory layout,\n"
+			"	'-D -i x,y,z' will stripe every new directory across all MDTs,\n"
+			"	add -c with the number of MDTs to do this anyway\n",
+			progname, argv[0]);
+		return CMD_HELP;
 	}
 
 	if (max_inherit_rr != LAYOUT_INHERIT_UNSET &&

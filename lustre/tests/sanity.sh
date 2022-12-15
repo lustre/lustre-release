@@ -4420,6 +4420,25 @@ test_33i()
 }
 run_test 33i "striped directory can be accessed when one MDT is down"
 
+test_33j() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+
+	mkdir -p $DIR/$tdir/
+
+	$LFS setdirstripe -D -i0,1 $DIR/$tdir/striped_dir_a &&
+		error "setdirstripe -D -i0,1 incorrectly succeeded"
+
+	$LFS setdirstripe -D -i0,1 -c1 $DIR/$tdir/striped_dir_b &&
+		error "setdirstripe -D -i0,1 -c1 incorrectly succeeded"
+
+	$LFS setdirstripe -D -i0,1 -c3 $DIR/$tdir/striped_dir_c &&
+		error "setdirstripe -D -i0,1 -c3 incorrectly succeeded"
+
+	$LFS setdirstripe -i0,1 $DIR/$tdir/striped_dir_e ||
+		error "-D was not specified, but still failed"
+}
+run_test 33j "lfs setdirstripe -D -i x,y,x should fail"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
