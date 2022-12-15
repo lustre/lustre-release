@@ -3129,6 +3129,9 @@ test_144a() {
 	# the worst.
 	diff=$((after - before))
 	(( $diff < 240 )) || error "MDT failover took $diff seconds"
+
+	# failover mds1 back to the primary server
+	fail mds1
 }
 run_test 144a "MDT failover should stop precreation threads"
 
