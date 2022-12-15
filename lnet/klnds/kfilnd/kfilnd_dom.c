@@ -345,6 +345,8 @@ struct kfilnd_dom *kfilnd_dom_get(struct lnet_ni *ni, const char *node,
 	hints->tx_attr->op_flags = KFI_COMPLETION;
 	hints->tx_attr->iov_limit = 256; /* 1 MiB LNet message */
 	hints->tx_attr->rma_iov_limit = 256; /* 1 MiB LNet message */
+	hints->tx_attr->tclass =
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_traffic_class;
 	hints->ep_attr->auth_key =
 		(void *)&ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_auth_key;
 	hints->ep_attr->auth_key_size =

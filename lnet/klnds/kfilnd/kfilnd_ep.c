@@ -849,6 +849,8 @@ struct kfilnd_ep *kfilnd_ep_alloc(struct kfilnd_dev *dev,
 		tx_scale_factor;
 	tx_attr.iov_limit = LNET_MAX_IOV;
 	tx_attr.rma_iov_limit = LNET_MAX_IOV;
+	tx_attr.tclass =
+		dev->kfd_ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_traffic_class;
 	rc = kfi_tx_context(dev->kfd_sep, context_id, &tx_attr, &ep->end_tx,
 			    ep);
 	if (rc) {
