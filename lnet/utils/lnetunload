@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 lnds=$(echo k{sock,qsw,{open,i,v,o2,c}ib,ra,ptl,mx}lnd)
 

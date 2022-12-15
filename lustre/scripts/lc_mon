@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Given one or more Lustre objects, create a mon configuration file
 # naming the mon watches based on the Lustre object names 

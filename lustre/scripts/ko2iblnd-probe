@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # flags of IB devices which present
 HFI=0

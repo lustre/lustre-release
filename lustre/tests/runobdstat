@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 PATH=`dirname $0`/../utils:$PATH
 
 llobdstat $1 1 | while read LINE; do

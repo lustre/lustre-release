@@ -54,6 +54,13 @@ if [[ -x "$SHELLCHECK" && "$SHELLCHECK_RUN" == "yes" ]]; then
 	# Example End   --
 	mod_files=($(awk '/modified:.*\.sh|new:.*\.sh/ { print $3 }' $1))
 	for cur_file in ${mod_files[@]}; do
+		# Shebangs should prefer bash over regular sh. This allows
+		# scripts to freely use bash-isms and lowers the risks of
+		# failures on Debian based platforms. Output a small warning
+		# if #!/bin/sh is found.
+		echo "#" $(grep -Hn "#\!/bin/sh" "$cur_file" && \
+			echo " : Please don't use sh in shebangs.") >> "$1"
+
 		# Get start/end range of lines that needs to be reported
 		# range presently not used will come in handy when dealing with
 		# warnings reported by shellcheck

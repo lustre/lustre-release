@@ -1,7 +1,4 @@
-#!/bin/sh
-
-# NOTE: Please avoid bashisms (bash specific syntax) in this script
-
+#!/bin/bash
 set -e
 pw="$PWD"
 for dir in libcfs lnet lustre snmp ; do

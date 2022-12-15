@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # License:      GNU General Public License (GPL)v2
 # Description:  Manages Lustre server on a shared storage

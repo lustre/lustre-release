@@ -827,7 +827,7 @@ load_modules_local() {
 			[ ! -f "$sbin_mount" ] && touch "$sbin_mount"
 			if [ ! -s "$sbin_mount" -a -w "$sbin_mount" ]; then
 				cat <<- EOF > "$sbin_mount"
-				#!/bin/sh
+				#!/bin/bash
 				#STUB MARK
 				echo "This $sbin_mount just a mountpoint." 1>&2
 				echo "It is never supposed to be run." 1>&2

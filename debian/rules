@@ -130,7 +130,7 @@ autogen-stamp: patch-stamp
 		cp /usr/share/misc/config.sub ldiskfs/config.sub; \
 		cp /usr/share/misc/config.guess config.guess; \
 		cp /usr/share/misc/config.guess ldiskfs/config.guess; \
-		sh build/autogen.sh; \
+		bash build/autogen.sh; \
 	fi; \
 	touch $@
 

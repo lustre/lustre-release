@@ -1072,7 +1072,7 @@ build_spl_zfs() {
 	    speclist="$pkg.spec $pkg-kmod.spec $pkg-dkms.spec"
 	fi
 
-	sh autogen.sh || return 255
+	bash autogen.sh || return 255
 
 	if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUXOBJ:-$LINUX} \
 	    ${spldir:+--with-spl="${spldir}"} 2>&1 ||

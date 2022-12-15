@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 DEPMOD_DIR="/etc/depmod.d"
 LUSTRE_DEPMOD_FILE="${DEPMOD_DIR}/lustre.conf"
