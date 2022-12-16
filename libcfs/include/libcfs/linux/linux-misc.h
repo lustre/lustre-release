@@ -166,4 +166,13 @@ static inline void *cfs_kallsyms_lookup_name(const char *name)
 }
 #endif
 
+#ifndef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+#define default_groups			default_attrs
+#define KOBJ_ATTR_GROUPS(_name)		_name##_attrs
+#define KOBJ_ATTRIBUTE_GROUPS(_name)
+#else
+#define KOBJ_ATTR_GROUPS(_name)		_name##_groups
+#define KOBJ_ATTRIBUTE_GROUPS(_name)	ATTRIBUTE_GROUPS(_name)
+#endif
+
 #endif /* __LIBCFS_LINUX_MISC_H__ */

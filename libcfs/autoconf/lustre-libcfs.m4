@@ -1533,6 +1533,28 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_GET_REQUEST_KEY_AUTH
 
 #
+# LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS
+#
+# Linux commit v5.1-rc3-29-gaa30f47cf666
+#    kobject: Add support for default attribute groups to kobj_type
+# Linux commit v5.18-rc1-2-gcdb4f26a63c3
+#    kobject: kobj_type: remove default_attrs
+#
+AC_DEFUN([LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS],[
+LB_CHECK_COMPILE([does struct kobj_type have 'default_groups' member],
+kobj_type_default_groups, [
+		#include <linux/kobject.h>
+	],[
+		struct kobj_type *kobj_type = NULL;
+		void *has = kobj_type->default_groups;
+		(void) has;
+	],[
+		AC_DEFINE(HAVE_KOBJ_TYPE_DEFAULT_GROUPS, 1,
+			[struct kobj_type has 'default_groups' member])
+	])
+]) # LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS
+
+#
 # LIBCFS_LOOKUP_USER_KEY
 #
 # kernel 5.3 commit 3cf5d076fb4d48979f382bc9452765bf8b79e740
@@ -2073,6 +2095,8 @@ LIBCFS_HAVE_IOV_ITER_TYPE
 LIBCFS_GENRADIX
 LIBCFS_MM_TOTALRAM_PAGES_FUNC
 LIBCFS_GET_REQUEST_KEY_AUTH
+# 5.2
+LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS
 # 5.3
 LIBCFS_LOOKUP_USER_KEY
 LIBCFS_FORCE_SIG_WITH_TASK

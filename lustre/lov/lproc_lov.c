@@ -276,12 +276,14 @@ static struct attribute *lov_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(lov); /* creates lov_groups */
+
 int lov_tunables_init(struct obd_device *obd)
 {
 	struct lov_obd *lov = &obd->u.lov;
 	int rc;
 
-	obd->obd_ktype.default_attrs = lov_attrs;
+	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(lov);
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
 		GOTO(out, rc);

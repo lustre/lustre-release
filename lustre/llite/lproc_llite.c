@@ -1799,6 +1799,8 @@ static struct attribute *llite_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(llite); /* creates llite_groups */
+
 static void sbi_kobj_release(struct kobject *kobj)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
@@ -1807,7 +1809,7 @@ static void sbi_kobj_release(struct kobject *kobj)
 }
 
 static struct kobj_type sbi_ktype = {
-	.default_attrs  = llite_attrs,
+	.default_groups = KOBJ_ATTR_GROUPS(llite),
 	.sysfs_ops      = &lustre_sysfs_ops,
 	.release        = sbi_kobj_release,
 };

@@ -1354,6 +1354,8 @@ static struct attribute *lod_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(lod); /* creates lod_groups from lod_attrs */
+
 /**
  * Initialize procfs entries for LOD.
  *
@@ -1369,7 +1371,7 @@ int lod_procfs_init(struct lod_device *lod)
 	struct kobject *lov;
 	int rc;
 
-	lod->lod_dt_dev.dd_ktype.default_attrs = lod_attrs;
+	lod->lod_dt_dev.dd_ktype.default_groups = KOBJ_ATTR_GROUPS(lod);
 	rc = dt_tunables_init(&lod->lod_dt_dev, obd->obd_type, obd->obd_name,
 			      NULL);
 	if (rc) {
