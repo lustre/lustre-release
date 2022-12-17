@@ -842,6 +842,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 					oa->o_flags = OBD_FL_NO_PRJQUOTA;
 			}
 
+			if (lnb[0].lnb_flags & OBD_BRW_ROOT_PRJQUOTA)
+				oa->o_flags |= OBD_FL_ROOT_PRJQUOTA;
+
 			if (root_squash)
 				oa->o_flags |= OBD_FL_ROOT_SQUASH;
 

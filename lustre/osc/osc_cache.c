@@ -2302,7 +2302,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	 * we should bypass quota
 	 */
 	if ((!oio->oi_cap_sys_resource ||
-	     cli->cl_root_squash) &&
+	     cli->cl_root_squash || cli->cl_root_prjquota) &&
 	    !io->ci_noquota) {
 		struct cl_object *obj;
 		struct cl_attr   *attr;

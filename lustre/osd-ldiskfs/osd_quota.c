@@ -696,6 +696,8 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	qi->lqi_type = PRJQUOTA;
 	rcp = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 
+	if (local_flags && *local_flags & QUOTA_FL_ROOT_PRJQUOTA)
+		force = th->th_ignore_quota;
 	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS)) {
 		CDEBUG(D_QUOTA, "forced to ignore quota flags = %#x\n",
 		       local_flags ? *local_flags : -1);

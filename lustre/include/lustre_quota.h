@@ -181,6 +181,7 @@ enum osd_quota_local_flags {
 	QUOTA_FL_OVER_GRPQUOTA	= BIT(1),
 	QUOTA_FL_SYNC		= BIT(2),
 	QUOTA_FL_OVER_PRJQUOTA	= BIT(3),
+	QUOTA_FL_ROOT_PRJQUOTA	= BIT(4),
 };
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,

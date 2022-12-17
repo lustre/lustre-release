@@ -559,7 +559,7 @@ test_1_check_write() {
 		quota_error $short_qtype $TSTUSR \
 			"$qtype write failure, but expect success"
 	log "Write out of block quota ..."
-	# this time maybe cache write,  ignore it's failure
+	# this time maybe cache write, ignore it's failure
 	$RUNAS $DD of=$testfile count=$((limit/2)) seek=$((limit/2)) || true
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks osc
@@ -1127,7 +1127,6 @@ test_1i() {
 
 	mds_supports_qp
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test EXIT
 
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -1185,6 +1184,54 @@ test_1i() {
 	return 0
 }
 run_test 1i "Quota pools: different limit and usage relations"
+
+test_1j() {
+	local limit=20 # MB
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	(( $OST1_VERSION >= $(version_code 2.15.52.206) )) ||
+		skip "need OST at least 2.15.52.206"
+
+	is_project_quota_supported ||
+		skip "skip project quota unsupported"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for Project
+	log "--------------------------------------"
+	log "Project quota (block hardlimit:$limit mb)"
+	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
+
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	change_project -p $TSTPRJID $testfile
+
+	local procf=osd-$ost1_FSTYPE.$FSNAME-OST0000.quota_slave.root_prj_enable
+	do_facet ost1 $LCTL set_param $procf=1 ||
+		error "enable root quotas for project failed"
+	stack_trap "do_facet ost1 $LCTL set_param $procf=0"
+
+	runas -u 0 -g 0 $DD of=$testfile count=$limit oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testfile count=$((limit/2)) seek=$limit oflag=direct &&
+		quota_error "project" $TSTPRJID "root write to project success"
+
+	do_facet ost1 $LCTL set_param $procf=0 ||
+		error "disable root quotas for project failed"
+
+	runas -u 0 -g 0 $DD of=$testfile count=$limit seek=$limit oflag=direct ||
+		quota_error "project" $TSTPRJID "root write to project failed"
+
+	# cleanup
+	cleanup_quota_test
+
+	used=$(getquota -p $TSTPRJID global curspace)
+	(( $used == 0 )) || quota_error p $TSTPRJID \
+		"project quota isn't released after deletion"
+}
+run_test 1j "Enable project quota enforcement for root"
 
 # test inode hardlimit
 test_2() {
@@ -2642,7 +2689,6 @@ test_16b()
 	mount_client $MOUNT || error "Unable to mount client"
 
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test EXIT
 
 	$LFS setquota -u $TSTUSR -B 100M -I 10K $MOUNT ||
 		error "failed to set quota for user $TSTUSR"
@@ -5532,7 +5578,6 @@ test_82()
 		skip "skip project quota unsupported"
 
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test
 	quota_init
 
 	local parent_dir="$DIR/$tdir.parent"

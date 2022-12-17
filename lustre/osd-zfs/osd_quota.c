@@ -579,6 +579,8 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		qi->lqi_type = PRJQUOTA;
 		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi,
 				   local_flags);
+		if (local_flags && *local_flags & QUOTA_FL_ROOT_PRJQUOTA)
+			force = th->th_ignore_quota;
 		if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
 			rcp = 0;
 	}

@@ -742,6 +742,8 @@ retry:
 #ifdef ZFS_PROJINHERIT
 	if (local_flags & QUOTA_FL_OVER_PRJQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
+	if (local_flags & QUOTA_FL_ROOT_PRJQUOTA)
+		lnb[0].lnb_flags |= OBD_BRW_ROOT_PRJQUOTA;
 #endif
 
 	RETURN(rc);

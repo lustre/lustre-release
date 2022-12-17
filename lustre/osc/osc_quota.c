@@ -109,6 +109,7 @@ int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
 
 	mutex_lock(&cli->cl_quota_mutex);
 	cli->cl_root_squash = !!(flags & OBD_FL_ROOT_SQUASH);
+	cli->cl_root_prjquota = !!(flags & OBD_FL_ROOT_PRJQUOTA);
 	/* still mark the quots is running out for the old request, because it
 	 * could be processed after the new request at OST, the side effect is
 	 * the following request will be processed synchronously, but it will

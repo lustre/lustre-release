@@ -1102,6 +1102,7 @@ enum obdo_flags {
 	OBD_FL_FLUSH	    = 0x00200000, /* flush pages on the OST */
 	OBD_FL_SHORT_IO	    = 0x00400000, /* short io request */
 	OBD_FL_ROOT_SQUASH  = 0x00800000, /* root squash */
+	OBD_FL_ROOT_PRJQUOTA  = 0x01000000, /* check prj quota for root */
 	/* OBD_FL_LOCAL_MASK = 0xF0000000, was local-only flags until 2.10 */
 
 	/*
@@ -1397,6 +1398,7 @@ struct hsm_state_set {
 				      * space for unstable pages; asking
 				      * it to sync quickly */
 #define OBD_BRW_OVER_PRJQUOTA 0x8000 /* Running out of project quota */
+#define OBD_BRW_ROOT_PRJQUOTA 0x10000 /* check project quota for root */
 #define OBD_BRW_RDMA_ONLY    0x20000 /* RPC contains RDMA-only pages*/
 #define OBD_BRW_SYS_RESOURCE 0x40000 /* page has CAP_SYS_RESOURCE */
 

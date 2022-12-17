@@ -113,7 +113,8 @@ struct qsd_instance {
 				qsd_exp_valid:1,/* qsd_exp is now valid */
 				qsd_stopping:1, /* qsd_instance is stopping */
 				qsd_updating:1, /* qsd is updating record */
-				qsd_exclusive:1; /* upd exclusive with reint */
+				qsd_exclusive:1, /* upd exclusive with reint */
+				qsd_root_prj_enable:1;
 
 };
 
