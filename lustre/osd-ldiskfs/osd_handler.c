@@ -1155,7 +1155,8 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	/* Search order: 2. OI scrub pending list. */
 	id = &info->oti_id;
 	memset(id, 0, sizeof(struct osd_inode_id));
-	if (fid_in_scrub_list(scrub, &scrub->os_inconsistent_items, fid))
+	if (fid_in_scrub_list(scrub, &scrub->os_inconsistent_items, fid) &&
+	    scrub->os_running)
 		RETURN(-EINPROGRESS);
 
 	stale = fid_in_scrub_list(scrub, &scrub->os_stale_items, fid);
