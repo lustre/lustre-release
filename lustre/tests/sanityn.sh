@@ -5215,6 +5215,38 @@ test_94() {
 }
 run_test 94 "signal vs CP callback race"
 
+test_95() {
+	local file=$DIR/$tfile
+	local file2=$DIR2/$tfile
+	local fast_read_save
+	local pid
+
+	fast_read_save=$($LCTL get_param -n llite.*.fast_read | head -n 1)
+	[ -z "$fast_read_save" ] && skip "no fast read support"
+
+	stack_trap "$LCTL set_param llite.*.fast_read=$fast_read_save" EXIT
+	$LCTL set_param llite.*.fast_read=0
+
+	$LFS setstripe -c $OSTCOUNT $file || error "failed to setstripe $file"
+	dd if=/dev/zero of=$file bs=1M count=2 || error "failed to write $file"
+	cancel_lru_locks $OSC
+	$MULTIOP $file Oz1048576w4096c || error "failed to write $file"
+	$MULTIOP $file oz1044480r4096c || error "failed to read $file"
+
+	# OBD_FAIL_LLITE_PAGE_INVALIDATE_PAUSE	0x1421
+	$LCTL set_param fail_loc=0x80001421 fail_val=7
+	$MULTIOP $file2 Oz1048576w4096_c &
+	pid=$!
+
+	sleep 2
+	# OBD_FAIL_LLITE_READPAGE_PAUSE		0x1422
+	$LCTL set_param fail_loc=0x80001422 fail_val=10
+	$MULTIOP $file oz1044480r4096c || error "failed to read $file"
+
+	kill -USR1 $pid && wait $pid || error "wait for PID $pid failed"
+}
+run_test 95 "Check readpage() on a page that was removed from page cache"
+
 # Data-on-MDT tests
 test_100a() {
 	skip "Reserved for glimpse-ahead" && return

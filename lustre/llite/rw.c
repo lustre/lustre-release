@@ -1865,6 +1865,41 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	int result;
 	ENTRY;
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
+		unlock_page(vmpage);
+		OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
+		lock_page(vmpage);
+	}
+
+	/*
+	 * The @vmpage got truncated.
+	 * This is a kernel bug introduced since kernel 5.12:
+	 * comment: cbd59c48ae2bcadc4a7599c29cf32fd3f9b78251
+	 * ("mm/filemap: use head pages in generic_file_buffered_read")
+	 *
+	 * The page end offset calculation in filemap_get_read_batch() was off
+	 * by one.  When a read is submitted with end offset 1048575, then it
+	 * calculates the end page for read of 256 where it should be 255. This
+	 * results in the readpage() for the page with index 256 is over stripe
+	 * boundary and may not covered by a DLM extent lock.
+	 *
+	 * This happens in a corner race case: filemap_get_read_batch() adds
+	 * the page with index 256 for read which is not in the current read
+	 * I/O context, and this page is being invalidated and will be removed
+	 * from page cache due to the lock protected it being revoken. This
+	 * results in this page in the read path not covered by any DLM lock.
+	 *
+	 * The solution is simple. Check whether the page was truncated in
+	 * ->readpage(). If so, just return AOP_TRUNCATED_PAGE to the upper
+	 * caller. Then the kernel will retry to batch pages, and it will not
+	 * add the truncated page into batches as it was removed from page
+	 * cache of the file.
+	 */
+	if (vmpage->mapping != inode->i_mapping) {
+		unlock_page(vmpage);
+		RETURN(AOP_TRUNCATED_PAGE);
+	}
+
 	lcc = ll_cl_find(inode);
 	if (lcc != NULL) {
 		env = lcc->lcc_env;

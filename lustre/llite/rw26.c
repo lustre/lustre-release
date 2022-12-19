@@ -156,6 +156,13 @@ static void ll_invalidatepage(struct page *vmpage,
 
 		cl_env_percpu_put(env);
 	}
+
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLITE_PAGE_INVALIDATE_PAUSE)) {
+		unlock_page(vmpage);
+		OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_PAGE_INVALIDATE_PAUSE,
+				 cfs_fail_val);
+		lock_page(vmpage);
+	}
 }
 #endif
 
