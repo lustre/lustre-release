@@ -490,7 +490,8 @@ static int ofd_checksum_type_seq_show(struct seq_file *m, void *data)
 
 	/* select fastest checksum type on the server */
 	pref = obd_cksum_type_select(obd->obd_name,
-				     lut->lut_cksum_types_supported, 0);
+				     lut->lut_cksum_types_supported,
+				     lut->lut_dt_conf.ddp_t10_cksum_type);
 
 	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
 		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)

@@ -464,7 +464,7 @@ struct niobuf_local {
 	int		lnb_rc;
 	struct page	*lnb_page;
 	void		*lnb_data;
-	__u16		lnb_guards[MAX_GUARD_NUMBER];
+	__be16		lnb_guards[MAX_GUARD_NUMBER];
 	__u16		lnb_guard_rpc:1;
 	__u16		lnb_guard_disk:1;
 	/* separate unlock for read path to allow shared access */

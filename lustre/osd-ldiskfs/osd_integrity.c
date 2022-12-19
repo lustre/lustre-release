@@ -27,7 +27,11 @@
  * Codes copied from kernel 3.10.0-862.el7
  * drivers/scsi/sd_dif.c and block/t10-pi.c
  */
-#include <linux/blkdev.h>
+#ifdef HAVE_LINUX_BLK_INTEGRITY_HEADER
+ #include <linux/blk-integrity.h>
+#else
+ #include <linux/blkdev.h>
+#endif
 #include <linux/blk_types.h>
 
 #include <obd_cksum.h>
@@ -36,22 +40,38 @@
 #include "osd_internal.h"
 
 #if IS_ENABLED(CONFIG_CRC_T10DIF)
+#ifdef HAVE_BLK_INTEGRITY_ITER
+# define blk_status_gen blk_status_t
+# define RETURN_GEN(_gen_fn) return _gen_fn
+#else
+# define blk_status_gen void
+# define RETURN_GEN(_gen_fn) _gen_fn
+# define blk_integrity_iter blk_integrity_exchg
+# define interval sector_size
+# define seed sector
+# define blk_status_t int
+# define BLK_STS_PROTECTION -EIO
+# define BLK_STS_OK 0
+#endif
 /*
  * Data Integrity Field tuple.
  */
-struct sd_dif_tuple {
+struct t10_pi_tuple {
        __be16 guard_tag;        /* Checksum */
        __be16 app_tag;          /* Opaque storage */
        __be32 ref_tag;          /* Target LBA or indirect LBA */
 };
 
-static struct niobuf_local *find_lnb(struct blk_integrity_exchg *bix)
+#define T10_PI_APP_ESCAPE cpu_to_be16(0xffff)
+#define T10_PI_REF_ESCAPE cpu_to_be32(0xffffffff)
+
+static struct niobuf_local *find_lnb(struct blk_integrity_iter *iter)
 {
-	struct bio *bio = bix->bio;
-	struct bio_vec *bv = bio_iovec_idx(bio, bix->bi_idx);
+	struct bio *bio = iter->bio;
+	struct bio_vec *bv = &bio->bi_io_vec[iter->bi_idx];
 	struct osd_bio_private *bio_private = bio->bi_private;
 	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
-	int index = bio_private->obp_start_page_idx + bix->bi_idx;
+	int index = bio_private->obp_start_page_idx + iter->bi_idx;
 	int i;
 
 	/*
@@ -74,75 +94,86 @@ static struct niobuf_local *find_lnb(struct blk_integrity_exchg *bix)
  * Type 3 protection has a 16-bit guard tag and 16 + 32 bits of opaque
  * tag space.
  */
-static void osd_dif_generate(struct blk_integrity_exchg *bix,
-			     obd_dif_csum_fn *fn, enum osd_t10_type type)
+static blk_status_gen osd_dif_generate(struct blk_integrity_iter *iter,
+				obd_dif_csum_fn *fn, enum osd_t10_type type)
 {
-	void *buf = bix->data_buf;
-	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct niobuf_local *lnb = find_lnb(bix);
-	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
-	sector_t sector = bix->sector;
+	struct niobuf_local *lnb = find_lnb(iter);
+	__be16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	unsigned int i;
 
 	ENTRY;
-	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
+	for (i = 0 ; i < iter->data_size ; i += iter->interval) {
+		struct t10_pi_tuple *pi = iter->prot_buf;
+
 		if (lnb && lnb->lnb_guard_rpc) {
-			sdt->guard_tag = *guard_buf;
+			pi->guard_tag = *guard_buf;
 			guard_buf++;
 		} else {
-			sdt->guard_tag = fn(buf, bix->sector_size);
+			pi->guard_tag = fn(iter->data_buf, iter->interval);
 		}
-		sdt->app_tag = 0;
-		if (type == OSD_T10_TYPE1)
-			sdt->ref_tag = cpu_to_be32(sector & 0xffffffff);
-		else /* if (type == OSD_T10_TYPE3) */
-			sdt->ref_tag = 0;
+		pi->app_tag = 0;
 
-		buf += bix->sector_size;
-		sector++;
+		if (type == OSD_T10_TYPE1)
+			pi->ref_tag = cpu_to_be32(lower_32_bits(iter->seed));
+		else /* if (type == OSD_T10_TYPE3) */
+			pi->ref_tag = 0;
+
+		iter->data_buf += iter->interval;
+		iter->prot_buf += sizeof(struct t10_pi_tuple);
+		iter->seed++;
 	}
+
+#ifdef HAVE_BLK_INTEGRITY_ITER
+	RETURN(BLK_STS_OK);
+#else
 	RETURN_EXIT;
+#endif
 }
 
-static int osd_dif_verify(struct blk_integrity_exchg *bix,
-			  obd_dif_csum_fn *fn, enum osd_t10_type type)
+static blk_status_t osd_dif_verify(struct blk_integrity_iter *iter,
+				   obd_dif_csum_fn *fn, enum osd_t10_type type)
 {
-	void *buf = bix->data_buf;
-	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct niobuf_local *lnb = find_lnb(bix);
-	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
-	sector_t sector = bix->sector;
+	struct niobuf_local *lnb = find_lnb(iter);
+	__be16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	unsigned int i;
-	__u16 csum;
 
 	ENTRY;
-	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		if (type == OSD_T10_TYPE1) {
-			/* Unwritten sectors */
-			if (sdt->app_tag == 0xffff)
-				RETURN(0);
+	for (i = 0 ; i < iter->data_size ; i += iter->interval) {
+		struct t10_pi_tuple *pi = iter->prot_buf;
+		__be16 csum;
 
-			if (be32_to_cpu(sdt->ref_tag) != (sector & 0xffffffff)) {
-				CERROR("%s: ref tag error on sector %lu (rcvd %u): rc = %d\n",
-				       bix->disk_name, (unsigned long)sector,
-				       be32_to_cpu(sdt->ref_tag), -EIO);
-				return -EIO;
+		if (type == OSD_T10_TYPE1 ||
+		    type == OSD_T10_TYPE2) {
+			if (pi->app_tag == T10_PI_APP_ESCAPE) {
+				lnb = NULL;
+				goto next;
 			}
-		} else /* if (type == OSD_T10_TYPE3) */ {
-			/* Unwritten sectors */
-			if (sdt->app_tag == 0xffff &&
-			    sdt->ref_tag == 0xffffffff)
-				RETURN(0);
+
+			if (be32_to_cpu(pi->ref_tag) !=
+			    lower_32_bits(iter->seed)) {
+				CERROR("%s: ref tag error at location %llu (rcvd %u): rc = %d\n",
+				       iter->disk_name,
+				       (unsigned long long)iter->seed,
+				       be32_to_cpu(pi->ref_tag),
+				       BLK_STS_PROTECTION);
+				RETURN(BLK_STS_PROTECTION);
+			}
+		} else  if (type == OSD_T10_TYPE3) {
+			if (pi->app_tag == T10_PI_APP_ESCAPE &&
+			    pi->ref_tag == T10_PI_REF_ESCAPE) {
+				lnb = NULL;
+				goto next;
+			}
 		}
 
-		csum = fn(buf, bix->sector_size);
+		csum = fn(iter->data_buf, iter->interval);
 
-		if (sdt->guard_tag != csum) {
-			CERROR("%s: guard tag error on sector %lu (rcvd %04x, data %04x): rc = %d\n",
-			       bix->disk_name, (unsigned long)sector,
-			       be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum),
-			       -EIO);
-			return -EIO;
+		if (pi->guard_tag != csum) {
+			CERROR("%s: guard tag error on sector %llu (rcvd %04x, want %04x): rc = %d\n",
+			       iter->disk_name, (unsigned long long)iter->seed,
+			       be16_to_cpu(pi->guard_tag), be16_to_cpu(csum),
+			       BLK_STS_PROTECTION);
+			RETURN(BLK_STS_PROTECTION);
 		}
 
 		if (guard_buf) {
@@ -150,54 +181,55 @@ static int osd_dif_verify(struct blk_integrity_exchg *bix,
 			guard_buf++;
 		}
 
-		buf += bix->sector_size;
-		sector++;
+next:
+		iter->data_buf += iter->interval;
+		iter->prot_buf += sizeof(struct t10_pi_tuple);
+		iter->seed++;
 	}
 
 	if (lnb)
 		lnb->lnb_guard_disk = 1;
 
-	RETURN(0);
+	RETURN(BLK_STS_OK);
 }
 
-static void osd_dif_type1_generate_crc(struct blk_integrity_exchg *bix)
+static blk_status_gen osd_dif_type1_generate_crc(struct blk_integrity_iter *iter)
 {
-	osd_dif_generate(bix, obd_dif_crc_fn, OSD_T10_TYPE1);
+	RETURN_GEN(osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE1));
 }
 
-static void osd_dif_type1_generate_ip(struct blk_integrity_exchg *bix)
+static blk_status_gen osd_dif_type1_generate_ip(struct blk_integrity_iter *iter)
 {
-	osd_dif_generate(bix, obd_dif_ip_fn, OSD_T10_TYPE1);
+	RETURN_GEN(osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE1));
 }
 
-static void osd_dif_type3_generate_crc(struct blk_integrity_exchg *bix)
+static blk_status_gen osd_dif_type3_generate_crc(struct blk_integrity_iter *iter)
 {
-	osd_dif_generate(bix, obd_dif_crc_fn, OSD_T10_TYPE3);
+	RETURN_GEN(osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE3));
 }
 
-static void osd_dif_type3_generate_ip(struct blk_integrity_exchg *bix)
+static blk_status_gen osd_dif_type3_generate_ip(struct blk_integrity_iter *iter)
 {
-	osd_dif_generate(bix, obd_dif_ip_fn, OSD_T10_TYPE3);
+	RETURN_GEN(osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE3));
+}
+static blk_status_t osd_dif_type1_verify_crc(struct blk_integrity_iter *iter)
+{
+	return osd_dif_verify(iter, obd_dif_crc_fn, OSD_T10_TYPE1);
 }
 
-static int osd_dif_type1_verify_crc(struct blk_integrity_exchg *bix)
+static blk_status_t osd_dif_type1_verify_ip(struct blk_integrity_iter *iter)
 {
-	return osd_dif_verify(bix, obd_dif_crc_fn, OSD_T10_TYPE1);
+	return osd_dif_verify(iter, obd_dif_ip_fn, OSD_T10_TYPE1);
 }
 
-static int osd_dif_type1_verify_ip(struct blk_integrity_exchg *bix)
+static blk_status_t osd_dif_type3_verify_crc(struct blk_integrity_iter *iter)
 {
-	return osd_dif_verify(bix, obd_dif_ip_fn, OSD_T10_TYPE1);
+	return osd_dif_verify(iter, obd_dif_crc_fn, OSD_T10_TYPE3);
 }
 
-static int osd_dif_type3_verify_crc(struct blk_integrity_exchg *bix)
+static blk_status_t osd_dif_type3_verify_ip(struct blk_integrity_iter *iter)
 {
-	return osd_dif_verify(bix, obd_dif_crc_fn, OSD_T10_TYPE3);
-}
-
-static int osd_dif_type3_verify_ip(struct blk_integrity_exchg *bix)
-{
-	return osd_dif_verify(bix, obd_dif_ip_fn, OSD_T10_TYPE3);
+	return osd_dif_verify(iter, obd_dif_ip_fn, OSD_T10_TYPE3);
 }
 
 int osd_get_integrity_profile(struct osd_device *osd,

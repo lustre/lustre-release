@@ -1,0 +1,44 @@
+From b13e0c71856817fca67159b11abac350e41289f5 Mon Sep 17 00:00:00 2001
+From: "Martin K. Petersen" <martin.petersen@oracle.com>
+Date: Thu, 3 Feb 2022 22:42:09 -0500
+Subject: [PATCH] block: bio-integrity: Advance seed correctly for larger
+ interval sizes
+
+Commit 309a62fa3a9e ("bio-integrity: bio_integrity_advance must update
+integrity seed") added code to update the integrity seed value when
+advancing a bio. However, it failed to take into account that the
+integrity interval might be larger than the 512-byte block layer
+sector size. This broke bio splitting on PI devices with 4KB logical
+blocks.
+
+The seed value should be advanced by bio_integrity_intervals() and not
+the number of sectors.
+
+Cc: Dmitry Monakhov <dmonakhov@openvz.org>
+Cc: stable@vger.kernel.org
+Fixes: 309a62fa3a9e ("bio-integrity: bio_integrity_advance must update integrity seed")
+Tested-by: Dmitry Ivanov <dmitry.ivanov2@hpe.com>
+Reported-by: Alexey Lyashkov <alexey.lyashkov@hpe.com>
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+Link: https://lore.kernel.org/r/20220204034209.4193-1-martin.petersen@oracle.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/bio-integrity.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/bio-integrity.c b/block/bio-integrity.c
+index d25114715459..0827b19820c5 100644
+--- a/block/bio-integrity.c
++++ b/block/bio-integrity.c
+@@ -373,7 +373,7 @@ void bio_integrity_advance(struct bio *bio, unsigned int bytes_done)
+ 	struct blk_integrity *bi = blk_get_integrity(bio->bi_bdev->bd_disk);
+ 	unsigned bytes = bio_integrity_bytes(bi, bytes_done >> 9);
+ 
+-	bip->bip_iter.bi_sector += bytes_done >> 9;
++	bip->bip_iter.bi_sector += bio_integrity_intervals(bi, bytes_done >> 9);
+ 	bvec_iter_advance(bip->bip_vec, &bip->bip_iter, bytes);
+ }
+ 
+-- 
+2.39.0
+

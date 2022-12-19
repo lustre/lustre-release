@@ -2020,6 +2020,7 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 }
 
 static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
+				     enum cksum_types cksum_type,
 				     struct niobuf_local *local_nb, int npages,
 				     int opc, obd_dif_csum_fn *fn,
 				     int sector_size, u32 *check_sum,
@@ -2032,7 +2033,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	unsigned int bufsize;
 	unsigned char *buffer;
 	struct page *__page;
-	__u16 *guard_start;
+	__be16 *guard_start;
 	int guard_number;
 	int used_number = 0;
 	__u32 cksum;
@@ -2052,7 +2053,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	}
 
 	buffer = kmap(__page);
-	guard_start = (__u16 *)buffer;
+	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	if (unlikely(resend))
 		CDEBUG(D_PAGE | D_HA, "GRD tags per page = %u\n", guard_number);
@@ -2092,7 +2093,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		use_t10_grd = t10_cksum_type && opc == OST_READ &&
+		use_t10_grd = t10_cksum_type && t10_cksum_type == cksum_type &&
+			      opc == OST_READ &&
 			      local_nb[i].lnb_len == PAGE_SIZE &&
 			      local_nb[i].lnb_guard_disk;
 		if (use_t10_grd) {
@@ -2114,8 +2116,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				       guard_start + used_number);
 		}
 		if (!use_t10_grd || unlikely(resend)) {
-			__u16 guard_tmp[MAX_GUARD_NUMBER];
-			__u16 *guards = guard_start + used_number;
+			__be16 guard_tmp[MAX_GUARD_NUMBER];
+			__be16 *guards = guard_start + used_number;
 			int used_tmp = -1, *usedp = &used;
 
 			if (unlikely(use_t10_grd)) {
@@ -2164,7 +2166,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * partial page write, but it will only add minimal extra time
 		 * of checksum calculation.
 		 */
-		if (t10_cksum_type && opc == OST_WRITE &&
+		if (t10_cksum_type && t10_cksum_type == cksum_type &&
+		    opc == OST_WRITE &&
 		    local_nb[i].lnb_len == PAGE_SIZE) {
 			local_nb[i].lnb_guard_rpc = 1;
 			memcpy(local_nb[i].lnb_guards,
@@ -2240,7 +2243,8 @@ static int tgt_checksum_niobuf_rw(struct lu_target *tgt,
 	obd_t10_cksum2dif(cksum_type, &fn, &sector_size);
 
 	if (fn)
-		rc = tgt_checksum_niobuf_t10pi(tgt, local_nb, npages,
+		rc = tgt_checksum_niobuf_t10pi(tgt, cksum_type,
+					       local_nb, npages,
 					       opc, fn, sector_size,
 					       check_sum, resend);
 	else

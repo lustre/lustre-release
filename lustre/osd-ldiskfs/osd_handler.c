@@ -2409,37 +2409,52 @@ static void osd_conf_get(const struct lu_env *env,
 		/*
 		 * Expected values:
 		 * T10-DIF-TYPE1-CRC
+		 * T10-DIF-TYPE2-CRC
 		 * T10-DIF-TYPE3-CRC
 		 * T10-DIF-TYPE1-IP
+		 * T10-DIF-TYPE2-IP
 		 * T10-DIF-TYPE3-IP
 		 */
 		if (strncmp(name, "T10-DIF-TYPE",
 			    sizeof("T10-DIF-TYPE") - 1) == 0) {
-			/* also skip "1/3-" at end */
+			/* also skip "1/2/3-" at end */
 			const int type_off = sizeof("T10-DIF-TYPE.");
 			char type_number = name[type_off - 2];
 
 			if (interval != 512 && interval != 4096) {
 				CERROR("%s: unsupported T10PI sector size %u\n",
 				       d->od_svname, interval);
-			} else if (type_number != '1' && type_number != '3') {
+				goto out;
+			}
+			switch (type_number) {
+			case '1':
+				d->od_t10_type = OSD_T10_TYPE1;
+				break;
+			case '2':
+				d->od_t10_type = OSD_T10_TYPE2;
+				break;
+			case '3':
+				d->od_t10_type = OSD_T10_TYPE3;
+				break;
+			default:
 				CERROR("%s: unsupported T10PI type %s\n",
 				       d->od_svname, name);
-			} else if (strcmp(name + type_off, "CRC") == 0) {
-				d->od_t10_type = type_number == '1' ?
-					OSD_T10_TYPE1_CRC : OSD_T10_TYPE3_CRC;
+				goto out;
+			}
+			if (strcmp(name + type_off, "CRC") == 0) {
+				d->od_t10_type |= OSD_T10_TYPE_CRC;
 				param->ddp_t10_cksum_type = interval == 512 ?
 					OBD_CKSUM_T10CRC512 :
 					OBD_CKSUM_T10CRC4K;
 			} else if (strcmp(name + type_off, "IP") == 0) {
-				d->od_t10_type = type_number == '1' ?
-					OSD_T10_TYPE1_IP : OSD_T10_TYPE3_IP;
+				d->od_t10_type |= OSD_T10_TYPE_IP;
 				param->ddp_t10_cksum_type = interval == 512 ?
 					OBD_CKSUM_T10IP512 :
 					OBD_CKSUM_T10IP4K;
 			} else {
 				CERROR("%s: unsupported checksum type of T10PI type '%s'\n",
 				       d->od_svname, name);
+				d->od_t10_type = 0;
 			}
 
 		} else {
@@ -2448,6 +2463,7 @@ static void osd_conf_get(const struct lu_env *env,
 		}
 	}
 
+out:
 	param->ddp_has_lseek_data_hole = true;
 }
 
