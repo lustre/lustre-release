@@ -274,6 +274,21 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 }
 
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+# ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+static void dio_integrity_complete_routine(struct bio *bio)
+# else
+static void dio_integrity_complete_routine(struct bio *bio, int error)
+# endif
+{
+	struct osd_bio_private *bio_private = bio->bi_private;
+
+	bio->bi_private = bio_private->obp_iobuf;
+	osd_dio_complete_routine(bio, error);
+
+	OBD_FREE_PTR(bio_private);
+}
+
 /*
  * This function will change the data written, thus it should only be
  * used when checking data integrity feature
@@ -299,8 +314,8 @@ static void bio_integrity_fault_inject(struct bio *bio)
 static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
 			   unsigned int sectors, int tuple_size)
 {
-	__u16 *expected_guard;
-	__u16 *bio_guard;
+	__be16 *expected_guard;
+	__be16 *bio_guard;
 	int i;
 
 	expected_guard = expected_guard_buf;
@@ -332,7 +347,7 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 	sector_t sector = bio_start_sector(bio);
 	unsigned int i, sectors, total;
 	DECLARE_BVEC_ITER_ALL(iter_all);
-	__u16 *expected_guard;
+	__be16 *expected_guard;
 	int rc;
 
 	total = 0;
@@ -363,12 +378,14 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 	}
 	return 0;
 }
+#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
 
 static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 				    struct osd_iobuf *iobuf,
 				    int start_page_idx, bool fault_inject,
 				    bool integrity_enabled)
 {
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
 	struct super_block *sb = osd_sb(osd);
 	integrity_gen_fn *generate_fn = NULL;
 	integrity_vrfy_fn *verify_fn = NULL;
@@ -383,9 +400,14 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 	if (rc)
 		RETURN(rc);
 
+# ifdef HAVE_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
+	if (!bio_integrity_prep_fn(bio, generate_fn, verify_fn))
+		RETURN(blk_status_to_errno(bio->bi_status));
+# else
 	rc = bio_integrity_prep_fn(bio, generate_fn, verify_fn);
 	if (rc)
 		RETURN(rc);
+# endif
 
 	/* Verify and inject fault only when writing */
 	if (iobuf->dr_rw == 1) {
@@ -399,25 +421,10 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 		if (unlikely(fault_inject))
 			bio_integrity_fault_inject(bio);
 	}
+#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
 
 	RETURN(0);
 }
-
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN
-#  ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
-static void dio_integrity_complete_routine(struct bio *bio)
-#  else
-static void dio_integrity_complete_routine(struct bio *bio, int error)
-#  endif
-{
-	struct osd_bio_private *bio_private = bio->bi_private;
-
-	bio->bi_private = bio_private->obp_iobuf;
-	osd_dio_complete_routine(bio, error);
-
-	OBD_FREE_PTR(bio_private);
-}
-#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
 #else  /* !CONFIG_BLK_DEV_INTEGRITY */
 #define osd_bio_integrity_handle(osd, bio, iobuf, start_page_idx, \
 				 fault_inject, integrity_enabled) 0

@@ -1,2 +1,3 @@
-block-integrity-allow-optional-integrity-functions-rhel8.patch
+block-bio-integrity-Advance-seed-correctly-for-large.patch
+block-integrity-allow-optional-integrity-functions-rhel8.3.patch
 block-pass-bio-into-integrity_processing_fn-rhel8.patch

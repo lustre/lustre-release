@@ -138,13 +138,13 @@ enum cksum_types obd_cksum_type_select(const char *obd_name,
 #define DECLARE_CKSUM_NAME const char *const cksum_name[] = {"crc32", "adler", \
 	"crc32c", "reserved", "t10ip512", "t10ip4K", "t10crc512", "t10crc4K"}
 
-typedef __u16 (obd_dif_csum_fn) (void *, unsigned int);
+typedef __be16 (obd_dif_csum_fn) (void *, unsigned int);
 
-__u16 obd_dif_crc_fn(void *data, unsigned int len);
-__u16 obd_dif_ip_fn(void *data, unsigned int len);
+__be16 obd_dif_crc_fn(void *data, unsigned int len);
+__be16 obd_dif_ip_fn(void *data, unsigned int len);
 int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
 				 __u32 offset, __u32 length,
-				 __u16 *guard_start, int guard_number,
+				 __be16 *guard_start, int guard_number,
 				 int *used_number, int sector_size,
 				 obd_dif_csum_fn *fn);
 /*

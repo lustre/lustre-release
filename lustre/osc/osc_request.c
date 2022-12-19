@@ -1188,7 +1188,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	struct page *__page;
 	unsigned char *buffer;
-	__u16 *guard_start;
+	__be16 *guard_start;
 	unsigned int bufsize;
 	int guard_number;
 	int used_number = 0;
@@ -1212,7 +1212,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	}
 
 	buffer = kmap(__page);
-	guard_start = (__u16 *)buffer;
+	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	CDEBUG(D_PAGE | (resend ? D_HA : 0),
 	       "GRD tags per page=%u, resend=%u, bytes=%u, pages=%zu\n",

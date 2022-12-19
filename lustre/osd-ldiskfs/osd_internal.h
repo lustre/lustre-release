@@ -249,14 +249,18 @@ struct osd_obj_orphan {
 };
 
 enum osd_t10_type {
-	OSD_T10_TYPE_UNKNOWN	= 0,
-	OSD_T10_TYPE1		= 0x1,
-	OSD_T10_TYPE3		= 0x2,
-	OSD_T10_TYPE_CRC	= 0x4,
+	OSD_T10_TYPE_UNKNOWN	= 0x00,
+	OSD_T10_TYPE1		= 0x01,
+	OSD_T10_TYPE2		= 0x02,
+	OSD_T10_TYPE3		= 0x04,
+	OSD_T10_TYPE_CRC	= 0x08,
+	OSD_T10_TYPE_IP		= 0x10,
 	OSD_T10_TYPE1_CRC	= OSD_T10_TYPE1 | OSD_T10_TYPE_CRC,
+	OSD_T10_TYPE2_CRC	= OSD_T10_TYPE2 | OSD_T10_TYPE_CRC,
 	OSD_T10_TYPE3_CRC	= OSD_T10_TYPE3 | OSD_T10_TYPE_CRC,
-	OSD_T10_TYPE1_IP	= OSD_T10_TYPE1,
-	OSD_T10_TYPE3_IP	= OSD_T10_TYPE3,
+	OSD_T10_TYPE1_IP	= OSD_T10_TYPE1 | OSD_T10_TYPE_IP,
+	OSD_T10_TYPE2_IP	= OSD_T10_TYPE2 | OSD_T10_TYPE_IP,
+	OSD_T10_TYPE3_IP	= OSD_T10_TYPE3 | OSD_T10_TYPE_IP,
 };
 
 /*
@@ -1637,33 +1641,14 @@ struct osd_bio_private {
 };
 
 #ifdef HAVE_BIO_INTEGRITY_PREP_FN
+# ifdef HAVE_BLK_INTEGRITY_ITER
+#  define integrity_gen_fn integrity_processing_fn
+#  define integrity_vrfy_fn integrity_processing_fn
+# endif
 int osd_get_integrity_profile(struct osd_device *osd,
 			      integrity_gen_fn **generate_fn,
 			      integrity_vrfy_fn **verify_fn);
-#else
-#define integrity_gen_fn void
-#define integrity_vrfy_fn int
-static inline int osd_get_integrity_profile(struct osd_device *osd,
-					    integrity_gen_fn **generate_fn,
-					    integrity_vrfy_fn **verify_fn)
-{
-	return 0;
-}
-
-static inline int bio_integrity_prep_fn(struct bio *bio,
-					 integrity_gen_fn *generate_fn,
-					 integrity_vrfy_fn *verify_fn)
-{
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
-	if (bio_integrity_prep(bio))
-		return 0;
-	else
-		return -EIO;
-#else
-	return bio_integrity_prep(bio);
-#endif
-}
-#endif /* HAVE_EXT4_INC_DEC_COUNT_2ARGS */
+#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
 
 #ifdef HAVE_BIO_BI_PHYS_SEGMENTS
 #define osd_bio_nr_segs(bio)		((bio)->bi_phys_segments)

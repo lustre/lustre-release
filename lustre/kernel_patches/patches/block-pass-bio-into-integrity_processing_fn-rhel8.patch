@@ -2,45 +2,24 @@ Having struct bio allows us to do more in the genrate/verify_fn,
 like copying a known good guard tag already available rather than
 calculating it.
 
-Index: linux-4.18.0/block/bio-integrity.c
+Index: linux-4.18.0-80.11.2.el8_0/block/bio-integrity.c
 ===================================================================
---- linux-4.18.0.orig/block/bio-integrity.c
-+++ linux-4.18.0/block/bio-integrity.c
-@@ -209,17 +209,21 @@ static blk_status_t bio_integrity_proces
- 	blk_status_t ret = BLK_STS_OK;
- 	void *prot_buf = page_address(bip->bip_vec->bv_page) +
- 		bip->bip_vec->bv_offset;
-+	unsigned int i;
- 
- 	iter.disk_name = bio->bi_disk->disk_name;
- 	iter.interval = 1 << bi->interval_exp;
- 	iter.seed = proc_iter->bi_sector;
- 	iter.prot_buf = prot_buf;
- 
-+	i = 0;
- 	__bio_for_each_segment(bv, bio, bviter, *proc_iter) {
- 		void *kaddr = kmap_atomic(bv.bv_page);
+--- linux-4.18.0-80.11.2.el8_0.orig/block/bio-integrity.c
++++ linux-4.18.0-80.11.2.el8_0/block/bio-integrity.c
+@@ -197,6 +197,8 @@ static blk_status_t bio_integrity_proces
  
  		iter.data_buf = kaddr + bv.bv_offset;
  		iter.data_size = bv.bv_len;
-+		iter.bi_idx = i;
++		iter.bi_idx = bviter.bi_idx;
 +		iter.bio = bio;
  
  		ret = proc_fn(&iter);
  		if (ret) {
-@@ -228,6 +232,7 @@ static blk_status_t bio_integrity_proces
- 		}
- 
- 		kunmap_atomic(kaddr);
-+		i++;
- 	}
- 	return ret;
- }
-Index: linux-4.18.0-372.19.1.el8_6/include/linux/blkdev.h
+Index: linux-4.18.0-80.11.2.el8_0/include/linux/blkdev.h
 ===================================================================
---- linux-4.18.0-372.19.1.el8_6.orig/include/linux/blkdev.h
-+++ linux-4.18.0-372.19.1.el8_6/include/linux/blkdev.h
-@@ -1615,7 +1615,9 @@ struct blk_integrity_iter {
+--- linux-4.18.0-80.11.2.el8_0.orig/include/linux/blkdev.h
++++ linux-4.18.0-80.11.2.el8_0/include/linux/blkdev.h
+@@ -1502,7 +1502,9 @@ struct blk_integrity_iter {
  	sector_t		seed;
  	unsigned int		data_size;
  	unsigned short		interval;
@@ -49,4 +28,4 @@ Index: linux-4.18.0-372.19.1.el8_6/include/linux/blkdev.h
 +	RH_KABI_EXTEND(struct bio *bio)
  };
  
- typedef blk_status_t (integrity_processing_fn) (struct blk_integrity_iter *);
+ struct blk_integrity_profile {
