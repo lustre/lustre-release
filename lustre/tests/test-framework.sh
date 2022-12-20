@@ -8013,7 +8013,9 @@ do_rpc_nodes () {
 	local LIBPATH="/usr/lib/lustre/tests:/usr/lib64/lustre/tests:"
 	local TESTPATH="$RLUSTRE/tests:"
 	local RPATH="PATH=${TESTPATH}${LIBPATH}${PATH}:/sbin:/bin:/usr/sbin:"
-	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} bash rpc.sh $* "
+	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} \
+		TESTLOG_PREFIX=$TESTLOG_PREFIX TESTNAME=$TESTNAME \
+		bash rpc.sh $* "
 }
 
 wait_clients_import_state () {
