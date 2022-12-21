@@ -76,7 +76,7 @@ command_t pccdev_cmdlist[] = {
 	{ .pc_name = "list", .pc_func = jt_pcc_list,
 	  .pc_help = "List all PCC backends on a client.\n"
 		"usage: lctl pcc list <mntpath>\n" },
-	{ .pc_name = "list-commands", .pc_func = jt_pcc_list_commands,
+	{ .pc_name = "--list-commands", .pc_func = jt_pcc_list_commands,
 	  .pc_help = "list commands supported by lctl pcc"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
 	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
@@ -108,6 +108,9 @@ command_t cmdlist[] = {
 	{"--version", Parser_version, 0,
 	 "print build version of this utility and exit"},
 	{"--list-commands", lctl_list_commands, 0,
+	 "list commands supported by this utility and exit"},
+	/* help is a synonym of --list-commands */
+	{"--help", lctl_list_commands, 0,
 	 "list commands supported by this utility and exit"},
 
 	/* Network configuration commands */
@@ -602,10 +605,7 @@ command_t cmdlist[] = {
  */
 static int jt_pcc_list_commands(int argc, char **argv)
 {
-	char buffer[81] = "";
-
-	Parser_list_commands(pccdev_cmdlist, buffer, sizeof(buffer),
-			     NULL, 0, 4);
+	Parser_list_commands(pccdev_cmdlist, 80, 4);
 
 	return 0;
 }
@@ -669,7 +669,6 @@ int lctl_main(int argc, char **argv)
 
 static int lctl_list_commands(int argc, char **argv)
 {
-	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
 	command_t *cmd;
 	int rc;
 
@@ -677,8 +676,7 @@ static int lctl_list_commands(int argc, char **argv)
 	while (cmd->pc_name != NULL) {
 		printf("\n%s\n", cmd->pc_name); /* Command category */
 		cmd++;
-		rc = Parser_list_commands(cmd, buffer, sizeof(buffer), NULL,
-					 0, 4);
+		rc = Parser_list_commands(cmd, 80, 4);
 		cmd += rc;
 	}
 

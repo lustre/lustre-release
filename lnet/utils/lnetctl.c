@@ -3188,9 +3188,7 @@ static int jt_del_udsp(int argc, char **argv)
 
 static int lnetctl_list_commands(int argc, char **argv)
 {
-	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
-
-	Parser_list_commands(cmd_list, buffer, sizeof(buffer), NULL, 0, 4);
+	Parser_list_commands(cmd_list, 80, 4);
 
 	return 0;
 }

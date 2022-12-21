@@ -3989,9 +3989,7 @@ lst_initialize(void)
 
 static int lst_list_commands(int argc, char **argv)
 {
-	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
-
-	Parser_list_commands(lst_cmdlist, buffer, sizeof(buffer), NULL, 0, 4);
+	Parser_list_commands(lst_cmdlist, 80, 4);
 
 	return 0;
 }

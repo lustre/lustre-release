@@ -27853,6 +27853,30 @@ test_434() {
 }
 run_test 434 "Client should not send RPCs for security.selinux with SElinux disabled"
 
+test_440() {
+	if [[ -f $LUSTRE/scripts/bash-completion/lustre ]]; then
+		source $LUSTRE/scripts/bash-completion/lustre
+	elif [[ -f /usr/share/bash-completion/completions/lustre ]]; then
+		source /usr/share/bash-completion/completions/lustre
+	else
+		skip "bash completion scripts not found"
+	fi
+
+	local lctl_completions
+	local lfs_completions
+
+	lctl_completions=$(_lustre_cmds lctl)
+	if [[ ! $lctl_completions =~ "get_param" ]]; then
+		error "lctl bash completion failed"
+	fi
+
+	lfs_completions=$(_lustre_cmds lfs)
+	if [[ ! $lfs_completions =~ "setstripe" ]]; then
+		error "lfs bash completion failed"
+	fi
+}
+run_test 440 "bash completion for lfs, lctl"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

@@ -288,7 +288,7 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Verify mirrored file(s).\n"
 		"usage: lfs mirror verify [--only MIRROR_ID[,...]]\n"
 		"\t\t[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n" },
-	{ .pc_name = "list-commands", .pc_func = lfs_mirror_list_commands,
+	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
 	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
@@ -318,7 +318,7 @@ command_t pcc_cmdlist[] = {
 	{ .pc_name = "detach_fid", .pc_func = lfs_pcc_detach_fid,
 	  .pc_help = "Detach given files from PCC by FID(s).\n"
 		"usage: lfs pcc detach_fid <mntpath> <fid>...\n" },
-	{ .pc_name = "list-commands", .pc_func = lfs_pcc_list_commands,
+	{ .pc_name = "--list-commands", .pc_func = lfs_pcc_list_commands,
 	  .pc_help = "list commands supported by lfs pcc"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
 	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
@@ -12730,10 +12730,7 @@ static int lfs_getsom(int argc, char **argv)
  */
 static int lfs_mirror_list_commands(int argc, char **argv)
 {
-	char buffer[81] = "";
-
-	Parser_list_commands(mirror_cmdlist, buffer, sizeof(buffer),
-			     NULL, 0, 4);
+	Parser_list_commands(mirror_cmdlist, 80, 4);
 
 	return 0;
 }
@@ -13052,10 +13049,7 @@ static int lfs_pcc_state(int argc, char **argv)
  */
 static int lfs_pcc_list_commands(int argc, char **argv)
 {
-	char buffer[81] = "";
-
-	Parser_list_commands(pcc_cmdlist, buffer, sizeof(buffer),
-			     NULL, 0, 4);
+	Parser_list_commands(pcc_cmdlist, 80, 4);
 
 	return 0;
 }
@@ -13092,9 +13086,7 @@ static int lfs_pcc(int argc, char **argv)
 
 static int lfs_list_commands(int argc, char **argv)
 {
-	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
-
-	Parser_list_commands(cmdlist, buffer, sizeof(buffer), NULL, 0, 4);
+	Parser_list_commands(cmdlist, 80, 4);
 
 	return 0;
 }

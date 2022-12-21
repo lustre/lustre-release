@@ -3,9 +3,8 @@ _lustre_cmds()
 	local cmd="$1"
 	local sub="$2"
 
-	# "--list-command" prints commands in columns and truncates long ones
-	"$cmd" "$sub" --non-existent-option |
-		sed -e 1d -e '$d' -e 's/"//g' -e /=/d -e /exit/d -e /quit/d
+	$cmd $sub --list-commands |
+		sed -e '/=/d' -e s/exit// -e s/quit//
 }
 
 _lustre_long_opts()

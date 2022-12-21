@@ -123,6 +123,17 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 		}
 		return rc;
 	}
+	/*
+	 * handle --help here as a synonym of --list-commands so that it can be
+	 * applied to all commands without needing to individually add a --help
+	 * option to each command.
+	 * This does not apply to lctl which has its own --help option because
+	 * `lctl --list-commands` uses a unique format.
+	 */
+	if (strcmp(argv[0], "--help") == 0) {
+		Parser_list_commands(cmds, 80, 4);
+		return 0;
+	}
 	fprintf(stderr,
 		"%s: '%s' is not a valid command. See '%s --list-commands'.\n",
 		program_invocation_short_name, argv[0],
@@ -543,72 +554,49 @@ void Parser_printhelp(char *cmd)
 /**
  * Parser_list_commands() - Output a list of the supported commands.
  * @cmdlist:	  Array of structures describing the commands.
- * @buffer:	  String buffer used to temporarily store the output text.
- * @buf_size:	  Length of the string buffer.
- * @parent_cmd:	  When called recursively, contains the name of the parent cmd.
- * @col_start:	  Column where printing should begin.
+ * @line_len:	  Length of output line.
  * @col_num:	  The number of commands printed in a single row.
  *
  * The commands and subcommands supported by the utility are printed, arranged
- * into several columns for readability.  If a command supports subcommands, the
- * function is called recursively, and the name of the parent command is
- * supplied so that it can be prepended to the names of the subcommands.
+ * into several columns for readability.
  *
  * Return: The number of items that were printed.
  */
-int Parser_list_commands(const command_t *cmdlist, char *buffer,
-			 size_t buf_size, const char *parent_cmd,
-			 int col_start, int col_num)
+int Parser_list_commands(const command_t *cmdlist, int line_len,
+			 int col_num)
 {
-	int col = col_start;
 	int char_max;
-	int len;
 	int count = 0;
-	int rc;
+	int col = 0;
 
-	if (col_start >= col_num)
-		return 0;
+	int nprinted = 0;
+	int offset = 0;
 
-	char_max = (buf_size - 1) / col_num; /* Reserve 1 char for NUL */
+	char_max = line_len / col_num;
 
 	for (; cmdlist->pc_name; cmdlist++) {
 		if (!cmdlist->pc_func && !cmdlist->pc_sub_cmd)
 			break;
 		count++;
-		if (parent_cmd)
-			len = snprintf(&buffer[col * char_max],
-				       char_max + 1, "%s %s", parent_cmd,
-				       cmdlist->pc_name);
-		else
-			len = snprintf(&buffer[col * char_max],
-				       char_max + 1, "%s", cmdlist->pc_name);
 
-		/* Add trailing spaces to pad the entry to the column size */
-		if (len < char_max) {
-			snprintf(&buffer[col * char_max] + len,
-				 char_max - len + 1, "%*s", char_max - len,
-				 " ");
-		} else {
-			buffer[(col + 1) * char_max - 1] = ' ';
-		}
+		nprinted = fprintf(stdout, "%-*s ", char_max - offset - 1,
+				   cmdlist->pc_name);
+		/*
+		 * when a column is too wide, save offset so subsequent columns
+		 * can be aligned properly
+		 */
+		offset = offset + nprinted - char_max;
+		offset = offset > 0 ? offset : 0;
 
 		col++;
 		if (col >= col_num) {
-			fprintf(stdout, "%s\n", buffer);
+			fprintf(stdout, "\n");
 			col = 0;
-			buffer[0] = '\0';
-		}
-
-		if (cmdlist->pc_sub_cmd) {
-			rc = Parser_list_commands(cmdlist->pc_sub_cmd, buffer,
-						  buf_size, cmdlist->pc_name,
-						  col, col_num);
-			col = (col + rc) % col_num;
-			count += rc;
+			offset = 0;
 		}
 	}
-	if (!parent_cmd && col != 0)
-		fprintf(stdout, "%s\n", buffer);
+	if (col != 0)
+		fprintf(stdout, "\n");
 	return count;
 }
 
