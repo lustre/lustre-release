@@ -142,11 +142,6 @@ extern struct kib_tunables  kiblnd_tunables;
 #define IBLND_CREDITS_DEFAULT        8          /* default # of peer_ni credits */
 #define IBLND_CREDITS_MAX          ((typeof(((struct kib_msg *) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
 
-/* when eagerly to return credits */
-#define IBLND_CREDITS_HIGHWATER(t, conn) ((conn->ibc_version) == IBLND_MSG_VERSION_1 ? \
-					IBLND_CREDIT_HIGHWATER_V1 : \
-			min(t->lnd_peercredits_hiw, (__u32)conn->ibc_queue_depth - 1))
-
 #ifdef HAVE_RDMA_CREATE_ID_5ARG
 # define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
 	 rdma_create_id((ns) ? (ns) : &init_net, cb, dev, ps, qpt)
@@ -875,17 +870,37 @@ kiblnd_send_keepalive(struct kib_conn *conn)
 			    ktime_add_ns(conn->ibc_last_send, keepalive_ns));
 }
 
+/* when to return credits eagerly */
+static inline int
+kiblnd_credits_highwater(struct lnet_ioctl_config_o2iblnd_tunables *t,
+			 struct lnet_ioctl_config_lnd_cmn_tunables *nt,
+			 struct kib_conn *conn)
+{
+	int credits_hiw = IBLND_CREDIT_HIGHWATER_V1;
+
+	if ((conn->ibc_version) == IBLND_MSG_VERSION_1)
+		return credits_hiw;
+
+	/* if queue depth is negotiated down, calculate hiw proportionally */
+	credits_hiw = (conn->ibc_queue_depth * t->lnd_peercredits_hiw) /
+		       nt->lct_peer_tx_credits;
+
+	return credits_hiw;
+}
+
 static inline int
 kiblnd_need_noop(struct kib_conn *conn)
 {
 	struct lnet_ni *ni = conn->ibc_peer->ibp_ni;
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	net_tunables = &ni->ni_net->net_tunables;
 
         if (conn->ibc_outstanding_credits <
-	    IBLND_CREDITS_HIGHWATER(tunables, conn) &&
+	    kiblnd_credits_highwater(tunables, net_tunables, conn) &&
             !kiblnd_send_keepalive(conn))
                 return 0; /* No need to send NOOP */
 
