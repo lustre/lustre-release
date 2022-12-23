@@ -10248,17 +10248,24 @@ verify_yaml_layout() {
 
 is_project_quota_supported() {
 	$ENABLE_PROJECT_QUOTAS || return 1
+	[[ -z "$SAVE_PROJECT_SUPPORTED" ]] || return $SAVE_PROJECT_SUPPORTED
+	local save_project_supported=1
 
 	[[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" &&
 	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ]] &&
 		do_facet mds1 lfs --list-commands |& grep -q project &&
-			return 0
+			save_project_supported=0
 
 	[[ "$(facet_fstype $SINGLEMDS)" == "zfs" &&
 	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.10.53) ]] &&
-		do_facet mds1 $ZPOOL get all | grep -q project_quota && return 0
+		do_facet mds1 $ZPOOL get all | grep -q project_quota &&
+			save_project_supported=0
 
-	return 1
+	# cache state of project quotas once instead of re-checking each time
+	export SAVE_PROJECT_SUPPORTED=$save_project_supported
+	echo "using SAVE_PROJECT_SUPPORTED=$SAVE_PROJECT_SUPPORTED"
+
+	return $save_project_supported
 }
 
 # ZFS project quota enable/disable:

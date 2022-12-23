@@ -66,6 +66,7 @@ export QUOTA_AUTO=0
 check_and_setup_lustre
 
 ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
+is_project_quota_supported || echo "project quota not supported/enabled"
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USERID="$LFS quota -v -u $TSTID $DIR"
@@ -108,17 +109,18 @@ FAIL_ON_ERROR=false
 #        resetquota -g groupname
 #	 resetquota -p projid
 
-resetquota() {
-	[ "$#" != 2 ] && error "resetquota: wrong number of arguments: $#"
-	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
-		error "resetquota: wrong specifier $1 passed"
-
-	if [ $1 == "-p" ]; then
-		is_project_quota_supported || return 0
-	fi
-
+resetquota_one() {
 	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT ||
 		error "clear quota for [type:$1 name:$2] failed"
+}
+
+resetquota() {
+	(( "$#" == 2 )) || error "resetquota: wrong number of arguments: '$*'"
+	[[ "$1" == "-u" || "$1" == "-g" || "$1" == "-p" ]] ||
+		error "resetquota: wrong quota type '$1' passed"
+
+	resetquota_one "$1" "$2"
+
 	# give a chance to slave to release space
 	sleep 1
 }
@@ -480,15 +482,17 @@ project_quota_enabled () {
 project_quota_enabled || enable_project_quota
 
 reset_quota_settings() {
-	resetquota -u $TSTUSR
-	resetquota -u $TSTID
-	resetquota -g $TSTUSR
-	resetquota -g $TSTID
-	resetquota -u $TSTUSR2
-	resetquota -u $TSTID2
-	resetquota -g $TSTUSR2
-	resetquota -g $TSTID2
-	resetquota -p $TSTPRJID
+	resetquota_one -u $TSTUSR
+	[[ $(id -u $TSTUSR) == $TSTID ]] || resetquota_one -u $TSTID
+	resetquota_one -g $TSTUSR
+	[[ $(id -g $TSTUSR) == $TSTID ]] || resetquota_one -g $TSTID
+	resetquota_one -u $TSTUSR2
+	[[ $(id -u $TSTUSR2) == $TSTID2 ]] || resetquota_one -u $TSTID2
+	resetquota_one -g $TSTUSR2
+	[[ $(id -g $TSTUSR2) == $TSTID2 ]] || resetquota_one -g $TSTID2
+	is_project_quota_supported && resetquota_one -p $TSTPRJID
+
+	sleep 1
 }
 
 # enable quota debug
@@ -3155,10 +3159,10 @@ test_27b() { # b20200
 	if is_project_quota_supported; then
 		$SHOW_QUOTA_PROJID ||
 			error "lfs quota failed with projid argument"
+		resetquota_one -p $TSTPRJID
 	fi
 	resetquota -u $TSTID
 	resetquota -g $TSTID
-	resetquota -p $TSTPRJID
 	return 0
 }
 run_test 27b "lfs quota/setquota should handle user/group/project ID (b20200)"
