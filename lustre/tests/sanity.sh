@@ -20648,7 +20648,7 @@ test_230j() {
 	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
-	$LFS mkdir -m 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
 	$LFS setstripe -E 1M -L mdt $DIR/$tdir/$tfile ||
 		error "create $tfile failed"
 	cat /etc/passwd > $DIR/$tdir/$tfile
