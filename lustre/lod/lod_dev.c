@@ -2437,25 +2437,18 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		lod_getref(&d->lod_mdt_descs);
 		lod_foreach_mdt(d, tgt) {
 			struct llog_ctxt *ctxt;
+			struct obd_device *ld = tgt->ltd_tgt->dd_lu_dev.ld_obd;
 
 			if (!tgt->ltd_active)
 				continue;
 
-			ctxt = llog_get_context(tgt->ltd_tgt->dd_lu_dev.ld_obd,
-						LLOG_UPDATELOG_ORIG_CTXT);
-			if (!ctxt) {
-				CDEBUG(D_INFO, "%s: %s is not ready.\n",
-				       obd->obd_name,
-				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
-				rc = -EAGAIN;
-				break;
-			}
+			ctxt = llog_get_context(ld, LLOG_UPDATELOG_ORIG_CTXT);
+			LASSERT(ctxt != NULL);
 			if (!ctxt->loc_handle) {
-				CDEBUG(D_INFO, "%s: %s is not ready.\n",
-				       obd->obd_name,
-				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
-				rc = -EAGAIN;
+				CDEBUG(D_INFO, "%s: %s is not ready(%p).\n",
+				       obd->obd_name, ld->obd_name, ctxt);
 				llog_ctxt_put(ctxt);
+				rc = -EAGAIN;
 				break;
 			}
 			llog_ctxt_put(ctxt);
