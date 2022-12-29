@@ -1022,25 +1022,21 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		 "mapping must be set. page %p, page->private (cl_page) %p\n",
 		 page, (void *) page->private);
 
-/* kernels without HAVE_KALLSYMS_LOOKUP_NAME also don't have account_dirty_page
- * exported, and if we can't access that symbol, we can't do page dirtying in
- * batch (taking the xarray lock only once) so we just fall back to a looped
- * call to __set_page_dirty_nobuffers
- */
-#ifndef HAVE_KALLSYMS_LOOKUP_NAME
-	for (i = 0; i < count; i++)
-		__set_page_dirty_nobuffers(pvec->pages[i]);
-#else
 	/*
-	 * In kernel 5.14.21, kallsyms_lookup_name is defined but
-	 * account_page_dirtied is not exported.
+	 * kernels without HAVE_KALLSYMS_LOOKUP_NAME also don't have
+	 * account_dirty_page exported, and if we can't access that symbol,
+	 * we can't do page dirtying in batch (taking the xarray lock only once)
+	 * so we just fall back to a looped call to __set_page_dirty_nobuffers
 	 */
+#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
 	if (!vvp_account_page_dirtied) {
 		for (i = 0; i < count; i++)
 			__set_page_dirty_nobuffers(pvec->pages[i]);
-		goto end;
+		EXIT;
 	}
+#endif
 
+#ifdef HAVE_KALLSYMS_LOOKUP_NAME
 	for (i = 0; i < count; i++) {
 		page = pvec->pages[i];
 
@@ -1090,7 +1086,6 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		/* !PageAnon && !swapper_space */
 		__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
 	}
-end:
 #endif
 	EXIT;
 }
