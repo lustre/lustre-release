@@ -534,10 +534,7 @@ __u32 ll_i2suppgid(struct inode *i)
 		return (__u32) __kgid_val(INVALID_GID);
 }
 
-/* Pack the required supplementary groups into the supplied groups array.
- * If we don't need to use the groups from the target inode(s) then we
- * instead pack one or more groups from the user's supplementary group
- * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
+/* Pack the required supplementary groups into the supplied groups array. */
 void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 {
 	LASSERT(i1 != NULL);
