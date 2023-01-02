@@ -605,11 +605,15 @@ simulate_error:
 	if (!conn->ksnc_closing) {
 		switch (rc) {
 		case -ECONNRESET:
-			LCONSOLE_WARN("Host %pISc reset our connection while we were sending data; it may have rebooted.\n",
-				      &conn->ksnc_peeraddr);
+			LCONSOLE_WARN("Host %pISc reset our connection while we were sending data; it may have rebooted: rc = %d\n",
+				      &conn->ksnc_peeraddr, rc);
+			break;
+		case -ETIMEDOUT:
+			LCONSOLE_WARN("Timeout error while writing to %pISp. Closing socket: rc = %d\n",
+				      &conn->ksnc_peeraddr, rc);
 			break;
 		default:
-			LCONSOLE_WARN("There was an unexpected network error while writing to %pISc: %d.\n",
+			LCONSOLE_WARN("There was an unexpected network error while writing to %pISc: rc = %d\n",
 				      &conn->ksnc_peeraddr, rc);
 			break;
 		}
