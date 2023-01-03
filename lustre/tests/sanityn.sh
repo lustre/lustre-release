@@ -18,8 +18,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
-# bug number for skipped test:  LU-7105
-ALWAYS_EXCEPT+="                28 "
+# bug number for skipped test:  LU-7105 LU-14541 LU-16160
+ALWAYS_EXCEPT+="                28      16f      16g "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if [ $mds1_FSTYPE = "zfs" ]; then
