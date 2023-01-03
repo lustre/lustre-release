@@ -60,7 +60,7 @@ unsigned int eq_size = 1024;
 module_param(eq_size, uint, 0444);
 MODULE_PARM_DESC(eq_size, "Default event queue size used by all kfi LNet NIs");
 
-unsigned int immediate_rx_buf_count = 2;
+unsigned int immediate_rx_buf_count = 8;
 module_param(immediate_rx_buf_count, uint, 0444);
 MODULE_PARM_DESC(immediate_rx_buf_count,
 		 "Number of immediate multi-receive buffers posted per CPT");
@@ -70,7 +70,7 @@ static int credits = 256;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "Number of concurrent sends on network");
 
-static int peer_credits = 128;
+static int peer_credits = 16;
 module_param(peer_credits, int, 0444);
 MODULE_PARM_DESC(peer_credits, "Number of concurrent sends to 1 peer");
 
