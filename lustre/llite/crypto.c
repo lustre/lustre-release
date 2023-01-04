@@ -251,8 +251,8 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 	struct qstr dname;
 	int rc;
 
-	if (fid && IS_ENCRYPTED(dir) && !llcrypt_has_encryption_key(dir) &&
-	    iname->name[0] == '_')
+	if (fid && IS_ENCRYPTED(dir) && llcrypt_policy_has_filename_enc(dir) &&
+	    !llcrypt_has_encryption_key(dir) && iname->name[0] == '_')
 		digested = 1;
 
 	dname.name = iname->name + digested;

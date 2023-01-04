@@ -4310,6 +4310,7 @@ test_54() {
 	local testdir2=$DIR2/$tdir/$ID0
 	local testfile=$testdir/$tfile
 	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
+	local testfile3=$testdir/_${tfile}
 	local tmpfile=$TMP/${tfile}.tmp
 	local resfile=$TMP/${tfile}.res
 	local nameenc=""
@@ -4354,6 +4355,8 @@ test_54() {
 	cp $testfile $tmpfile
 	$RUNAS dd if=/dev/urandom of=$testfile2 bs=127 count=1 conv=fsync ||
 		error "write to encrypted file $testfile2 failed"
+	$RUNAS dd if=/dev/urandom of=$testfile3 bs=127 count=1 conv=fsync ||
+		error "write to encrypted file $testfile3 failed"
 	$RUNAS mkdir $testdir/subdir || error "mkdir subdir failed"
 	$RUNAS touch $testdir/subdir/subfile || error "mkdir subdir failed"
 
@@ -4362,7 +4365,7 @@ test_54() {
 
 	$RUNAS ls -R $testdir || error "ls -R $testdir failed"
 	local filecount=$($RUNAS find $testdir -type f | wc -l)
-	[ $filecount -eq 3 ] || error "found $filecount files"
+	[ $filecount -eq 4 ] || error "found $filecount files"
 
 	# check enable_filename_encryption default value
 	# tunable only available for client built against embedded llcrypt
@@ -4375,12 +4378,16 @@ test_54() {
 		[ $nameenc -eq 0 ] ||
 		       error "enable_filename_encryption should be 0 by default"
 
-		# $testfile and $testfile2 should exist because
+		# $testfile, $testfile2 and $testfile3 should exist because
 		# names are not encrypted
 		[ -f $testfile ] ||
 		      error "$testfile should exist because name not encrypted"
 		[ -f $testfile2 ] ||
 		      error "$testfile2 should exist because name not encrypted"
+		[ -f $testfile3 ] ||
+		      error "$testfile3 should exist because name not encrypted"
+		stat $testfile3
+		[ $? -eq 0 ] || error "cannot stat $testfile3 without key"
 	fi
 
 	scrambledfiles=( $(find $testdir/ -maxdepth 1 -type f) )
@@ -4397,6 +4404,8 @@ test_54() {
 		error "reading $testfile failed"
 
 	cmp -bl $tmpfile $resfile || error "file read differs from file written"
+	stat $testfile3
+	[ $? -eq 0 ] || error "cannot stat $testfile3 with key"
 
 	$RUNAS fscrypt lock --verbose $testdir ||
 		error "fscrypt lock $testdir failed (2)"
