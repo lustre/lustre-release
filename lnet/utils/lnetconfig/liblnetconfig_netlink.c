@@ -571,6 +571,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 			struct nla_policy nest_policy[num];
 			struct yaml_nl_node *old;
 			struct nlattr *cnt_attr;
+			uint16_t indent = 0;
 			int rem, j;
 
 			if (!attr)
@@ -580,69 +581,67 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 			for (j = 1; j < num; j++)
 				nest_policy[j].type = next->keys.lkl_list[j].lkp_data_type;
 
+			if (keys[i].lkp_key_format & LNKF_FLOW) {
+				char brace = '{';
+
+				if (keys[i].lkp_key_format &
+				    LNKF_SEQUENCE)
+					brace = '[';
+				len = snprintf(data->buffer, *size,
+					       "%*s%s: %c ",
+					       data->indent, "",
+					       keys[i].lkp_value,
+					       brace);
+			} else {
+				if (keys[i].lkp_key_format &
+				    LNKF_MAPPING)
+					indent += 2;
+				if (keys[i].lkp_key_format &
+				    LNKF_SEQUENCE)
+					indent += 2;
+
+				if (keys[i].lkp_value) {
+					len = snprintf(data->buffer,
+						       *size,
+						       "%*s%s:\n",
+						       data->indent, "",
+						       keys[i].lkp_value);
+				} else {
+					len = 0;
+				}
+			}
+			if (len < 0)
+				goto unwind;
+			data->buffer += len;
+			*size -= len;
+			len = 0;
+
 			old = data->cur;
 			data->cur = next;
 			nla_for_each_nested(cnt_attr, attr, rem) {
 				struct nlattr *nest_info[num];
-				uint16_t indent = 0;
 
 				if (nla_parse_nested(nest_info, num, cnt_attr,
 						     nest_policy))
 					break;
 
-				if (keys[i].lkp_key_format & LNKF_FLOW) {
-					char brace = '{';
-
-					if (keys[i].lkp_key_format &
-					    LNKF_SEQUENCE)
-						brace = '[';
-
-					len = snprintf(data->buffer, *size,
-						       "%*s%s: %c ",
-						       data->indent, "",
-						       keys[i].lkp_value,
-						       brace);
-				} else {
-					if (keys[i].lkp_key_format &
-					    LNKF_MAPPING)
-						indent += 2;
-					if (keys[i].lkp_key_format &
-					    LNKF_SEQUENCE)
-						indent += 2;
-
-					if (keys[i].lkp_value) {
-						len = snprintf(data->buffer,
-							       *size,
-							       "%*s%s:\n",
-							       data->indent, "",
-							       keys[i].lkp_value);
-					} else {
-						len = 0;
-					}
-				}
-				if (len < 0)
-					goto unwind;
-				data->buffer += len;
-				*size -= len;
-				len = 0;
-
 				data->indent += indent;
 				yaml_parse_value_list(data, size, nest_info,
 						      &keys[i]);
 				data->indent -= indent;
+			}
 
-				if (keys[i].lkp_key_format & LNKF_FLOW) {
-					char *tmp = (char *)data->buffer - 2;
-					char *brace = " }\n";
+			if (keys[i].lkp_key_format & LNKF_FLOW) {
+				char *tmp = (char *)data->buffer - 2;
+				char *brace = " }\n";
 
-					if (keys[i].lkp_key_format &
-					    LNKF_SEQUENCE)
-						brace = " ]\n";
+				if (keys[i].lkp_key_format &
+				    LNKF_SEQUENCE)
+					brace = " ]\n";
 
-					memcpy(tmp, brace, strlen(brace));
-					data->buffer++;
-					*size -= 1;
-				}
+				memcpy(tmp, brace, strlen(brace));
+				data->buffer++;
+				*size -= 1;
 			}
 			data->cur = old;
 			break;

@@ -971,6 +971,7 @@ struct lnet_ping_iter {
 u32 *ping_iter_first(struct lnet_ping_iter *pi, struct lnet_ping_buffer *pbuf,
 		     struct lnet_nid *nid);
 u32 *ping_iter_next(struct lnet_ping_iter *pi, struct lnet_nid *nid);
+int ping_info_count_entries(struct lnet_ping_buffer *pbuf);
 
 static inline int lnet_push_target_resize_needed(void)
 {

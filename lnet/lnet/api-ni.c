@@ -32,6 +32,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/ctype.h>
+#include <linux/generic-radix-tree.h>
 #include <linux/log2.h>
 #include <linux/ktime.h>
 #include <linux/moduleparam.h>
@@ -285,8 +286,23 @@ static void lnet_set_lnd_timeout(void)
  */
 static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 
-static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
-		     signed long timeout, struct lnet_process_id __user *ids,
+struct lnet_fail_ping {
+	struct lnet_processid		lfp_id;
+	int				lfp_errno;
+};
+
+struct lnet_genl_ping_list {
+	unsigned int			lgpl_index;
+	unsigned int			lgpl_list_count;
+	unsigned int			lgpl_failed_count;
+	signed long			lgpl_timeout;
+	struct lnet_nid			lgpl_src_nid;
+	GENRADIX(struct lnet_fail_ping)	lgpl_failed;
+	GENRADIX(struct lnet_processid)	lgpl_list;
+};
+
+static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
+		     signed long timeout, struct lnet_genl_ping_list *plist,
 		     int n_ids);
 
 static int lnet_discover(struct lnet_process_id id, __u32 force,
@@ -4442,35 +4458,15 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_LNET_FAULT:
 		return lnet_fault_ctl(data->ioc_flags, data);
 
-	case IOC_LIBCFS_PING: {
-		struct lnet_process_id id4;
-		signed long timeout;
-
-		id4.nid = data->ioc_nid;
-		id4.pid = data->ioc_u32[0];
-
-		/* If timeout is negative then set default of 3 minutes */
-		if (((s32)data->ioc_u32[1] <= 0) ||
-		    data->ioc_u32[1] > (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
-			timeout = cfs_time_seconds(DEFAULT_PEER_TIMEOUT);
-		else
-			timeout = nsecs_to_jiffies(data->ioc_u32[1] * NSEC_PER_MSEC);
-
-		rc = lnet_ping(id4, &LNET_ANY_NID, timeout, data->ioc_pbuf1,
-			       data->ioc_plen1 / sizeof(struct lnet_process_id));
-
-		if (rc < 0)
-			return rc;
-
-		data->ioc_count = rc;
-		return 0;
-	}
-
 	case IOC_LIBCFS_PING_PEER: {
 		struct lnet_ioctl_ping_data *ping = arg;
+		struct lnet_process_id __user *ids = ping->ping_buf;
 		struct lnet_nid src_nid = LNET_ANY_NID;
+		struct lnet_genl_ping_list plist;
+		struct lnet_processid id;
 		struct lnet_peer *lp;
 		signed long timeout;
+		int count, i;
 
 		/* Check if the supplied ping data supports source nid
 		 * NB: This check is sufficient if lnet_ioctl_ping_data has
@@ -4490,15 +4486,30 @@ LNetCtl(unsigned int cmd, void *arg)
 		else
 			timeout = nsecs_to_jiffies(ping->op_param * NSEC_PER_MSEC);
 
-		rc = lnet_ping(ping->ping_id, &src_nid, timeout,
-			       ping->ping_buf,
+		id.pid = ping->ping_id.pid;
+		lnet_nid4_to_nid(ping->ping_id.nid, &id.nid);
+		rc = lnet_ping(&id, &src_nid, timeout, &plist,
 			       ping->ping_count);
 		if (rc < 0)
-			return rc;
+			goto report_ping_err;
+		count = rc;
+
+		for (i = 0; i < count; i++) {
+			struct lnet_processid *result;
+			struct lnet_process_id tmpid;
+
+			result = genradix_ptr(&plist.lgpl_list, i);
+			memset(&tmpid, 0, sizeof(tmpid));
+			tmpid.pid = result->pid;
+			tmpid.nid = lnet_nid_to_nid4(&result->nid);
+			if (copy_to_user(&ids[i], &tmpid, sizeof(tmpid))) {
+				rc = -EFAULT;
+				goto report_ping_err;
+			}
+		}
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_nid4_to_nid(ping->ping_id.nid, &nid);
-		lp = lnet_find_peer(&nid);
+		lp = lnet_find_peer(&id.nid);
 		if (lp) {
 			ping->ping_id.nid =
 				lnet_nid_to_nid4(&lp->lp_primary_nid);
@@ -4507,8 +4518,10 @@ LNetCtl(unsigned int cmd, void *arg)
 		}
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
-		ping->ping_count = rc;
-		return 0;
+		ping->ping_count = count;
+report_ping_err:
+		genradix_free(&plist.lgpl_list);
+		return rc;
 	}
 
 	case IOC_LIBCFS_DISCOVER: {
@@ -5313,9 +5326,359 @@ out:
 	return rc;
 }
 
+static inline struct lnet_genl_ping_list *
+lnet_ping_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_ping_list *)cb->args[0];
+}
+
+static int lnet_ping_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_ping_list *plist = lnet_ping_dump_ctx(cb);
+
+	if (plist) {
+		genradix_free(&plist->lgpl_failed);
+		genradix_free(&plist->lgpl_list);
+		LIBCFS_FREE(plist, sizeof(*plist));
+		cb->args[0] = 0;
+	}
+
+	return 0;
+}
+
+/* LNet ping ->start() handler for GET requests */
+static int lnet_ping_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lnet_genl_ping_list *plist;
+	int msg_len = genlmsg_len(gnlh);
+	struct nlattr *params, *top;
+	int rem, rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (the_lnet.ln_refcount == 0) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		return -ENETDOWN;
+	}
+
+	if (!msg_len) {
+		NL_SET_ERR_MSG(extack, "Ping needs NID targets");
+		return -ENOENT;
+	}
+
+	LIBCFS_ALLOC(plist, sizeof(*plist));
+	if (!plist) {
+		NL_SET_ERR_MSG(extack, "failed to setup ping list");
+		return -ENOMEM;
+	}
+	genradix_init(&plist->lgpl_list);
+	plist->lgpl_timeout = cfs_time_seconds(DEFAULT_PEER_TIMEOUT);
+	plist->lgpl_src_nid = LNET_ANY_NID;
+	plist->lgpl_index = 0;
+	plist->lgpl_list_count = 0;
+	cb->args[0] = (long)plist;
+
+	params = genlmsg_data(gnlh);
+	nla_for_each_attr(top, params, msg_len, rem) {
+		struct nlattr *nids;
+		int rem2;
+
+		switch (nla_type(top)) {
+		case LN_SCALAR_ATTR_VALUE:
+			if (nla_strcmp(top, "timeout") == 0) {
+				s64 timeout;
+
+				top = nla_next(top, &rem);
+				if (nla_type(top) != LN_SCALAR_ATTR_INT_VALUE) {
+					NL_SET_ERR_MSG(extack,
+						       "invalid timeout param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				/* If timeout is negative then set default of
+				 * 3 minutes
+				 */
+				timeout = nla_get_s64(top);
+				if (timeout > 0 &&
+				    timeout < (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
+					plist->lgpl_timeout =
+						nsecs_to_jiffies(timeout * NSEC_PER_MSEC);
+			} else if (nla_strcmp(top, "source") == 0) {
+				char nidstr[LNET_NIDSTR_SIZE + 1];
+
+				top = nla_next(top, &rem);
+				if (nla_type(top) != LN_SCALAR_ATTR_VALUE) {
+					NL_SET_ERR_MSG(extack,
+						       "invalid source param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				rc = nla_strscpy(nidstr, top, sizeof(nidstr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to parse source nid");
+					GOTO(report_err, rc);
+				}
+
+				rc = libcfs_strnid(&plist->lgpl_src_nid,
+						   strim(nidstr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "invalid source nid");
+					GOTO(report_err, rc);
+				}
+				rc = 0;
+			}
+			break;
+		case LN_SCALAR_ATTR_LIST:
+			nla_for_each_nested(nids, top, rem2) {
+				char nid[LNET_NIDSTR_SIZE + 1];
+				struct lnet_processid *id;
+
+				if (nla_type(nids) != LN_SCALAR_ATTR_VALUE)
+					continue;
+
+				memset(nid, 0, sizeof(nid));
+				rc = nla_strscpy(nid, nids, sizeof(nid));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to get NID");
+					GOTO(report_err, rc);
+				}
+
+				id = genradix_ptr_alloc(&plist->lgpl_list,
+							plist->lgpl_list_count++,
+							GFP_ATOMIC);
+				if (!id) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to allocate NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+
+				rc = libcfs_strid(id, strim(nid));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack, "invalid NID");
+					GOTO(report_err, rc);
+				}
+				rc = 0;
+			}
+			fallthrough;
+		default:
+			break;
+		}
+	}
+report_err:
+	if (rc < 0)
+		lnet_ping_show_done(cb);
+
+	return rc;
+}
+
+static const struct ln_key_list ping_props_list = {
+	.lkl_maxattr			= LNET_PING_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PING_ATTR_HDR]            = {
+			.lkp_value              = "ping",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_PING_ATTR_PRIMARY_NID]	= {
+			.lkp_value		= "primary nid",
+			.lkp_data_type          = NLA_STRING
+		},
+		[LNET_PING_ATTR_ERRNO]		= {
+			.lkp_value		= "errno",
+			.lkp_data_type		= NLA_S16
+		},
+		[LNET_PING_ATTR_MULTIRAIL]	= {
+			.lkp_value              = "Multi-Rail",
+			.lkp_data_type          = NLA_FLAG
+		},
+		[LNET_PING_ATTR_PEER_NI_LIST]	= {
+			.lkp_value		= "peer_ni",
+			.lkp_key_format         = LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type          = NLA_NESTED
+		},
+	},
+};
+
+static struct ln_key_list ping_peer_ni_list = {
+	.lkl_maxattr			= LNET_PING_PEER_NI_ATTR_MAX,
+	.lkl_list                       = {
+		[LNET_PING_PEER_NI_ATTR_NID]	= {
+			.lkp_value		= "nid",
+			.lkp_data_type		= NLA_STRING
+		},
+	},
+};
+
+static int lnet_ping_show_dump(struct sk_buff *msg,
+			       struct netlink_callback *cb)
+{
+	struct lnet_genl_ping_list *plist = lnet_ping_dump_ctx(cb);
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx = plist->lgpl_index;
+	int rc = 0, i = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (!plist->lgpl_index) {
+		const struct ln_key_list *all[] = {
+			&ping_props_list, &ping_peer_ni_list, NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_PING, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+
+		genradix_init(&plist->lgpl_failed);
+	}
+
+	while (idx < plist->lgpl_list_count) {
+		struct lnet_nid primary_nid = LNET_ANY_NID;
+		struct lnet_genl_ping_list peers;
+		struct lnet_processid *id;
+		struct nlattr *nid_list;
+		struct lnet_peer *lp;
+		bool mr_flag = false;
+		unsigned int count;
+		void *hdr = NULL;
+
+		id = genradix_ptr(&plist->lgpl_list, idx++);
+		if (nid_is_lo0(&id->nid))
+			continue;
+
+		rc = lnet_ping(id, &plist->lgpl_src_nid, plist->lgpl_timeout,
+			       &peers, lnet_interfaces_max);
+		if (rc < 0) {
+			struct lnet_fail_ping *fail;
+
+			fail = genradix_ptr_alloc(&plist->lgpl_failed,
+						  plist->lgpl_failed_count++,
+						  GFP_ATOMIC);
+			if (!fail) {
+				NL_SET_ERR_MSG(extack,
+					       "failed to allocate failed NID");
+				GOTO(send_error, rc);
+			}
+			fail->lfp_id = *id;
+			fail->lfp_errno = rc;
+			goto cant_reach;
+		}
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lp = lnet_find_peer(&id->nid);
+		if (lp) {
+			primary_nid = lp->lp_primary_nid;
+			mr_flag = lnet_peer_is_multi_rail(lp);
+			lnet_peer_decref_locked(lp);
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_PING);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(send_error, rc = -EMSGSIZE);
+		}
+
+		if (i++ == 0)
+			nla_put_string(msg, LNET_PING_ATTR_HDR, "");
+
+		nla_put_string(msg, LNET_PING_ATTR_PRIMARY_NID,
+			       libcfs_nidstr(&primary_nid));
+		if (mr_flag)
+			nla_put_flag(msg, LNET_PING_ATTR_MULTIRAIL);
+
+		nid_list = nla_nest_start(msg, LNET_PING_ATTR_PEER_NI_LIST);
+		for (count = 0; count < rc; count++) {
+			struct lnet_processid *result;
+			struct nlattr *nid_attr;
+			char *idstr;
+
+			result = genradix_ptr(&peers.lgpl_list, count);
+			if (nid_is_lo0(&result->nid))
+				continue;
+
+			nid_attr = nla_nest_start(msg, count + 1);
+			if (gnlh->version == 1)
+				idstr = libcfs_nidstr(&result->nid);
+			else
+				idstr = libcfs_idstr(result);
+			nla_put_string(msg, LNET_PING_PEER_NI_ATTR_NID, idstr);
+			nla_nest_end(msg, nid_attr);
+		}
+		nla_nest_end(msg, nid_list);
+		genlmsg_end(msg, hdr);
+cant_reach:
+		genradix_free(&peers.lgpl_list);
+	}
+
+	for (i = 0; i < plist->lgpl_failed_count; i++) {
+		struct lnet_fail_ping *fail;
+		void *hdr;
+
+		fail = genradix_ptr(&plist->lgpl_failed, i);
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_PING);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send failed values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(send_error, rc = -EMSGSIZE);
+		}
+
+		if (i == 0)
+			nla_put_string(msg, LNET_PING_ATTR_HDR, "");
+
+		nla_put_string(msg, LNET_PING_ATTR_PRIMARY_NID,
+			       libcfs_nidstr(&fail->lfp_id.nid));
+		nla_put_s16(msg, LNET_PING_ATTR_ERRNO, fail->lfp_errno);
+		genlmsg_end(msg, hdr);
+	}
+	rc = 0; /* don't treat it as an error */
+
+	plist->lgpl_index = idx;
+send_error:
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_ping_show_dump(struct sk_buff *msg,
+				   struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_ping_show_start(cb);
+
+		if (rc < 0)
+			return rc;
+	}
+
+	return lnet_ping_show_dump(msg, cb);
+}
+#endif
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
+	{ .name	=	"ping",		},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -5329,6 +5692,16 @@ static const struct genl_ops lnet_genl_ops[] = {
 #endif
 		.done		= lnet_net_show_done,
 		.doit		= lnet_net_cmd,
+	},
+	{
+		.cmd		= LNET_CMD_PING,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_ping_show_start,
+		.dumpit		= lnet_ping_show_dump,
+#else
+		.dumpit		= lnet_old_ping_show_dump,
+#endif
+		.done		= lnet_ping_show_done,
 	},
 };
 
@@ -5454,42 +5827,38 @@ lnet_ping_event_handler(struct lnet_event *event)
 		complete(&pd->completion);
 }
 
-/* lnet_ping() only works with nid4 nids, so we can calculate
- * size from number of nids
- */
-#define LNET_PING_INFO_SIZE(NNIDS) \
-	offsetof(struct lnet_ping_info, pi_ni[NNIDS])
-
-static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
-		     signed long timeout, struct lnet_process_id __user *ids,
+static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
+		     signed long timeout, struct lnet_genl_ping_list *plist,
 		     int n_ids)
 {
+	int id_bytes = sizeof(struct lnet_ni_status); /* For 0@lo */
 	struct lnet_md md = { NULL };
 	struct ping_data pd = { 0 };
 	struct lnet_ping_buffer *pbuf;
-	struct lnet_process_id tmpid;
-	struct lnet_processid id;
-	int id_bytes;
-	int i;
+	struct lnet_processid pid;
+	struct lnet_ping_iter pi;
+	int i = 0;
+	u32 *st;
 	int nob;
 	int rc;
 	int rc2;
 
+	genradix_init(&plist->lgpl_list);
+
 	/* n_ids limit is arbitrary */
-	if (n_ids <= 0 || id4.nid == LNET_NID_ANY)
+	if (n_ids <= 0 || LNET_NID_IS_ANY(&id->nid))
 		return -EINVAL;
 
-	/*
-	 * if the user buffer has more space than the lnet_interfaces_max
+	/* if the user buffer has more space than the lnet_interfaces_max
 	 * then only fill it up to lnet_interfaces_max
 	 */
 	if (n_ids > lnet_interfaces_max)
 		n_ids = lnet_interfaces_max;
 
-	if (id4.pid == LNET_PID_ANY)
-		id4.pid = LNET_PID_LUSTRE;
+	if (id->pid == LNET_PID_ANY)
+		id->pid = LNET_PID_LUSTRE;
 
-	id_bytes = LNET_PING_INFO_SIZE(n_ids);
+	id_bytes += lnet_ping_sts_size(&id->nid) * n_ids;
 	pbuf = lnet_ping_buffer_alloc(id_bytes, GFP_NOFS);
 	if (!pbuf)
 		return -ENOMEM;
@@ -5511,10 +5880,8 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		goto fail_ping_buffer_decref;
 	}
 
-	lnet_pid4_to_pid(id4, &id);
-	rc = LNetGet(src_nid, pd.mdh, &id, LNET_RESERVED_PORTAL,
+	rc = LNetGet(src_nid, pd.mdh, id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, false);
-
 	if (rc != 0) {
 		/* Don't CERROR; this could be deliberate! */
 		rc2 = LNetMDUnlink(pd.mdh);
@@ -5529,6 +5896,7 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		LNetMDUnlink(pd.mdh);
 		wait_for_completion(&pd.completion);
 	}
+
 	if (!pd.replied) {
 		rc = pd.rc ?: -EIO;
 		goto fail_ping_buffer_decref;
@@ -5539,9 +5907,9 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 
 	rc = -EPROTO;		/* if I can't parse... */
 
-	if (nob < 8) {
+	if (nob < LNET_PING_INFO_HDR_SIZE) {
 		CERROR("%s: ping info too short %d\n",
-		       libcfs_idstr(&id), nob);
+		       libcfs_idstr(id), nob);
 		goto fail_ping_buffer_decref;
 	}
 
@@ -5549,52 +5917,54 @@ static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		lnet_swap_pinginfo(pbuf);
 	} else if (pbuf->pb_info.pi_magic != LNET_PROTO_PING_MAGIC) {
 		CERROR("%s: Unexpected magic %08x\n",
-		       libcfs_idstr(&id), pbuf->pb_info.pi_magic);
+		       libcfs_idstr(id), pbuf->pb_info.pi_magic);
 		goto fail_ping_buffer_decref;
 	}
 
 	if ((pbuf->pb_info.pi_features & LNET_PING_FEAT_NI_STATUS) == 0) {
 		CERROR("%s: ping w/o NI status: 0x%x\n",
-		       libcfs_idstr(&id), pbuf->pb_info.pi_features);
+		       libcfs_idstr(id), pbuf->pb_info.pi_features);
 		goto fail_ping_buffer_decref;
 	}
 
 	/* Test if smaller than lnet_pinginfo with just one pi_ni status info.
 	 * That one might contain size when large nids are used.
 	 */
-	if (nob < LNET_PING_INFO_SIZE(1)) {
+	if (nob < offsetof(struct lnet_ping_info, pi_ni[1])) {
 		CERROR("%s: Short reply %d(%lu min)\n",
-		       libcfs_idstr(&id), nob, LNET_PING_INFO_SIZE(1));
+		       libcfs_idstr(id), nob,
+		       offsetof(struct lnet_ping_info, pi_ni[1]));
 		goto fail_ping_buffer_decref;
 	}
 
-	if (pbuf->pb_info.pi_nnis < n_ids) {
-		n_ids = pbuf->pb_info.pi_nnis;
+	if (ping_info_count_entries(pbuf) < n_ids) {
+		n_ids = ping_info_count_entries(pbuf);
 		id_bytes = lnet_ping_info_size(&pbuf->pb_info);
 	}
 
 	if (nob < id_bytes) {
 		CERROR("%s: Short reply %d(%d expected)\n",
-		       libcfs_idstr(&id), nob, id_bytes);
+		       libcfs_idstr(id), nob, id_bytes);
 		goto fail_ping_buffer_decref;
 	}
 
-	rc = -EFAULT;		/* if I segv in copy_to_user()... */
-
-	memset(&tmpid, 0, sizeof(tmpid));
-	for (i = 0; i < n_ids; i++) {
-		tmpid.pid = pbuf->pb_info.pi_pid;
-		tmpid.nid = pbuf->pb_info.pi_ni[i].ns_nid;
-		if (copy_to_user(&ids[i], &tmpid, sizeof(tmpid)))
+	for (st = ping_iter_first(&pi, pbuf, &pid.nid);
+	     st;
+	     st = ping_iter_next(&pi, &pid.nid)) {
+		id = genradix_ptr_alloc(&plist->lgpl_list, i++, GFP_ATOMIC);
+		if (!id) {
+			rc = -ENOMEM;
 			goto fail_ping_buffer_decref;
-	}
-	rc = pbuf->pb_info.pi_nnis;
+		}
 
- fail_ping_buffer_decref:
+		id->pid = pbuf->pb_info.pi_pid;
+		id->nid = pid.nid;
+	}
+	rc = i;
+fail_ping_buffer_decref:
 	lnet_ping_buffer_decref(pbuf);
 	return rc;
 }
-#undef LNET_PING_INFO_SIZE
 
 static int
 lnet_discover(struct lnet_process_id id4, __u32 force,

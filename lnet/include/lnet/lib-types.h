@@ -64,6 +64,7 @@ static inline char *libcfs_nidstr(const struct lnet_nid *nid)
 
 int libcfs_strnid(struct lnet_nid *nid, const char *str);
 char *libcfs_idstr(struct lnet_processid *id);
+int libcfs_strid(struct lnet_processid *id, const char *str);
 
 int cfs_match_nid_net(struct lnet_nid *nid, u32 net,
 		      struct list_head *net_num_list,
@@ -557,6 +558,51 @@ enum lnet_net_local_ni_tunables_attr {
 };
 
 #define LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX (__LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
+
+/** LNet netlink ping API */
+
+/** enum lnet_ping_atts				      - LNet ping netlink properties
+ *							attributes to describe ping format
+ *							These values are used to piece together
+ *							messages for sending and receiving.
+ *
+ * @LNET_PING_ATTR_UNSPEC:				unspecified attribute to catch errors
+ *
+ * @LNET_PING_ATTR_HDR:					grouping for LNet ping  data (NLA_NUL_STRING)
+ * @LNET_PING_ATTR_PRIMARY_NID:				Source NID for ping request (NLA_STRING)
+ * @LNET_PING_ATTR_ERRNO:				error code if we fail to ping (NLA_S16)
+ * @LNET_PING_ATTR_MULTIRAIL:				Report if MR is supported (NLA_FLAG)
+ * @LNET_PING_ATTR_PEER_NI_LIST:			List of peer NI's (NLA_NESTED)
+ */
+enum lnet_ping_attr {
+	LNET_PING_ATTR_UNSPEC = 0,
+
+	LNET_PING_ATTR_HDR,
+	LNET_PING_ATTR_PRIMARY_NID,
+	LNET_PING_ATTR_ERRNO,
+	LNET_PING_ATTR_MULTIRAIL,
+	LNET_PING_ATTR_PEER_NI_LIST,
+	__LNET_PING_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PING_ATTR_MAX (__LNET_PING_ATTR_MAX_PLUS_ONE - 1)
+
+/** enium lnet_ping_peer_ni_attr		      - LNet peer ni information reported by
+ *							ping command. A list of these are
+ *							returned with a ping request.
+ *
+ * @LNET_PING_PEER_NI_ATTR_UNSPEC:			unspecified attribute to catch errrors
+ *
+ * @LNET_PING_PEER_NI_ATTR_NID:				NID address of peer NI. (NLA_STRING)
+ */
+enum lnet_ping_peer_ni_attr {
+	LNET_PING_PEER_NI_ATTR_UNSPEC = 0,
+
+	LNET_PING_PEER_NI_ATTR_NID,
+	__LNET_PING_PEER_NI_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PING_PEER_NI_ATTR_MAX (__LNET_PING_PEER_NI_ATTR_MAX_PLUS_ONE - 1)
 
 struct lnet_ni {
 	/* chain on the lnet_net structure */

@@ -1177,6 +1177,30 @@ libcfs_idstr(struct lnet_processid *id)
 EXPORT_SYMBOL(libcfs_idstr);
 
 int
+libcfs_strid(struct lnet_processid *id, const char *str)
+{
+	char *tmp = strchr(str, '-');
+
+	id->pid = LNET_PID_LUSTRE;
+	if (tmp &&
+	    strncmp("LNET_PID_ANY-", str, tmp - str) != 0) {
+		char pid[LNET_NIDSTR_SIZE];
+		int rc;
+
+		strscpy(pid, str, tmp - str);
+		rc = kstrtou32(pid, 10, &id->pid);
+		if (rc < 0)
+			return rc;
+		tmp++;
+	} else {
+		tmp = (char *)str;
+	}
+
+	return libcfs_strnid(&id->nid, tmp);
+}
+EXPORT_SYMBOL(libcfs_strid);
+
+int
 libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 {
 	if (!strcmp(str, "*")) {

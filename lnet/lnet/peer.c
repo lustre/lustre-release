@@ -2969,7 +2969,7 @@ u32 *ping_iter_next(struct lnet_ping_iter *pi, struct lnet_nid *nid)
 	return NULL;
 }
 
-static int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
+int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
 {
 	struct lnet_ping_iter pi;
 	u32 *st;

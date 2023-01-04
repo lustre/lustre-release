@@ -57,6 +57,7 @@
  *  @LNET_CMD_UNSPEC:		unspecified command to catch errors
  *
  *  @LNET_CMD_NETS:		command to manage the LNet networks
+ *  @LNET_CMD_PING:		command to send pings to LNet connections
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,
@@ -66,6 +67,7 @@ enum lnet_commands {
 	LNET_CMD_PEERS		= 3,
 	LNET_CMD_ROUTES		= 4,
 	LNET_CMD_CONNS		= 5,
+	LNET_CMD_PING		= 6,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };
