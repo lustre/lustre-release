@@ -669,6 +669,12 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (unlikely(nodemap == NULL))
 		goto out;
 
+	if (id == 0) {
+		if (nodemap->nmf_allow_root_access)
+			goto out;
+		goto squash;
+	}
+
 	if (id_type == NODEMAP_UID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_UID))
 		goto out;
@@ -680,13 +686,6 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (id_type == NODEMAP_PROJID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_PROJID))
 		goto out;
-
-	if (id == 0) {
-		if (nodemap->nmf_allow_root_access)
-			goto out;
-		else
-			goto squash;
-	}
 
 	if (nodemap->nmf_trust_client_ids)
 		goto out;

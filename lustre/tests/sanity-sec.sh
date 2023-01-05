@@ -1576,12 +1576,21 @@ test_17() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
+	local check_proj=true
+
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || check_proj=false
 
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
 	trap nodemap_test_cleanup EXIT
 	nodemap_clients_admin_trusted 0 1
+	test_fops trusted_noadmin 1
+	if $check_proj; then
+		do_facet mgs $LCTL nodemap_modify --name c0 \
+			--property map_mode --value projid
+		wait_nm_sync c0 map_mode
+	fi
 	test_fops trusted_noadmin 1
 	nodemap_test_cleanup
 }
