@@ -52,7 +52,6 @@ ldlm_flags_tbl = {
     0x0001000000000000:  "NO_LRU",                  # bit 48
     0x0002000000000000:  "FAIL_NOTIFIED",           # bit 49
     0x0004000000000000:  "DESTROYED",               # bit 50
-    0x0008000000000000:  "SERVER_LOCK",             # bit 51
     0x0010000000000000:  "RES_LOCKED",              # bit 52
     0x0020000000000000:  "WAITED",                  # bit 53
     0x0040000000000000:  "NS_SRV",                  # bit 54

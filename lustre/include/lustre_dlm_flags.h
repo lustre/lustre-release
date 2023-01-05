@@ -331,12 +331,6 @@
 #define ldlm_set_destroyed(_l)          LDLM_SET_FLAG((  _l), 1ULL << 50)
 #define ldlm_clear_destroyed(_l)        LDLM_CLEAR_FLAG((_l), 1ULL << 50)
 
-/** flag whether this is a server namespace lock */
-#define LDLM_FL_SERVER_LOCK             0x0008000000000000ULL // bit  51
-#define ldlm_is_server_lock(_l)         LDLM_TEST_FLAG(( _l), 1ULL << 51)
-#define ldlm_set_server_lock(_l)        LDLM_SET_FLAG((  _l), 1ULL << 51)
-#define ldlm_clear_server_lock(_l)      LDLM_CLEAR_FLAG((_l), 1ULL << 51)
-
 /**
  * It's set in lock_res_and_lock() and unset in unlock_res_and_lock().
  *
