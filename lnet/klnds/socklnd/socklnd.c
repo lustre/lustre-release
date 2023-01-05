@@ -2570,7 +2570,7 @@ ksocknal_startup(struct lnet_ni *ni)
 
 	ni->ni_dev_cpt = ifaces[if_idx].li_cpt;
 	ksi->ksni_index = ifaces[if_idx].li_index;
-	if (ifaces[if_idx].li_ipv6) {
+	if (ifaces[if_idx].li_size == sizeof(struct in6_addr)) {
 		struct sockaddr_in6 *sa;
 		sa = (void *)&ksi->ksni_addr;
 		memset(sa, 0, sizeof(*sa));
@@ -2585,9 +2585,9 @@ ksocknal_startup(struct lnet_ni *ni)
 		sa = (void *)&ksi->ksni_addr;
 		memset(sa, 0, sizeof(*sa));
 		sa->sin_family = AF_INET;
-		sa->sin_addr.s_addr = htonl(ifaces[if_idx].li_ipaddr);
+		sa->sin_addr.s_addr = ifaces[if_idx].li_ipaddr;
 		ksi->ksni_netmask = ifaces[if_idx].li_netmask;
-		ni->ni_nid.nid_size = 4 - 4;
+		ni->ni_nid.nid_size = 0;
 		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
 	}
 	strlcpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));

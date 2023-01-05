@@ -115,16 +115,6 @@ static inline bool nid_is_nid4(const struct lnet_nid *nid)
 	return NID_ADDR_BYTES(nid) == 4;
 }
 
-static inline bool nid_is_ipv4(const struct lnet_nid *nid)
-{
-	return NID_ADDR_BYTES(nid) == 4;
-}
-
-static inline bool nid_is_ipv6(const struct lnet_nid *nid)
-{
-	return NID_ADDR_BYTES(nid) == 16;
-}
-
 /* check for address set */
 static inline bool nid_addr_is_set(const struct lnet_nid *nid)
 {

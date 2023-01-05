@@ -1563,9 +1563,9 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 
 			ifaces[nip].li_cpt = cpt;
 			ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
-			ifaces[nip].li_ipv6 = false;
+			ifaces[nip].li_size = sizeof(ifa->ifa_local);
 			ifaces[nip].li_index = dev->ifindex;
-			ifaces[nip].li_ipaddr = ntohl(ifa->ifa_local);
+			ifaces[nip].li_ipaddr = ifa->ifa_local;
 			ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
 			strlcpy(ifaces[nip].li_name, ifa->ifa_label,
 				sizeof(ifaces[nip].li_name));
@@ -1605,7 +1605,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 
 			ifaces[nip].li_cpt = cpt;
 			ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
-			ifaces[nip].li_ipv6 = true;
+			ifaces[nip].li_size = sizeof(struct in6_addr);
 			ifaces[nip].li_index = dev->ifindex;
 			memcpy(ifaces[nip].li_ipv6addr,
 			       &ifa6->addr, sizeof(struct in6_addr));
@@ -1655,16 +1655,14 @@ int lnet_inet_select(struct lnet_ni *ni,
 			/* IP unspecified, use IP of first matching interface */
 			break;
 
-		if (ifaces[if_idx].li_ipv6 &&
-		    nid_is_ipv6(&ni->ni_nid)) {
-			if (memcmp(ni->ni_nid.nid_addr,
-				   ifaces[if_idx].li_ipv6addr,
-				   sizeof(struct in6_addr)) == 0)
-				break;
-		} else if (!ifaces[if_idx].li_ipv6 &&
-			   nid_is_ipv4(&ni->ni_nid)) {
-			if (ni->ni_nid.nid_addr[0] ==
-			    htonl(ifaces[if_idx].li_ipaddr))
+		if (ifaces[if_idx].li_size == NID_ADDR_BYTES(&ni->ni_nid)) {
+			char *addr = (char *)&ifaces[if_idx].li_ipaddr;
+
+			if (ifaces[if_idx].li_size != 4)
+				addr = (char *)ifaces[if_idx].li_ipv6addr;
+
+			if (memcmp(ni->ni_nid.nid_addr, addr,
+				   ifaces[if_idx].li_size) == 0)
 				break;
 		}
 	}
@@ -1673,11 +1671,13 @@ int lnet_inet_select(struct lnet_ni *ni,
 		return if_idx;
 
 	if (ni->ni_interface)
-		CERROR("ksocklnd: failed to find interface %s%s%s\n",
+		CERROR("%s: failed to find interface %s%s%s\n",
+		       libcfs_lnd2modname(ni->ni_nid.nid_type),
 		       ni->ni_interface, addr_set ? "@" : "",
 		       addr_set ? libcfs_nidstr(&ni->ni_nid) : "");
 	else
-		CERROR("ksocklnd: failed to find IP address %s\n",
+		CERROR("%s: failed to find IP address %s\n",
+		       libcfs_lnd2modname(ni->ni_nid.nid_type),
 		       libcfs_nidstr(&ni->ni_nid));
 
 	return -EINVAL;
@@ -1719,7 +1719,7 @@ lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 	}
 
 	for (i = 0; i < nip; i++)
-		ipaddrs[i] = ifaces[i].li_ipaddr;
+		ipaddrs[i] = ntohl(ifaces[i].li_ipaddr);
 
 	rc = lnet_match_networks(networksp, ip2nets, ipaddrs, nip);
 	if (rc < 0) {

@@ -908,7 +908,7 @@ struct lnet_inetdev {
 	};
 	u32	li_index;
 	bool	li_iff_master;
-	bool	li_ipv6;
+	u32	li_size;
 	char	li_name[IFNAMSIZ];
 };
 
