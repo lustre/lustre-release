@@ -340,13 +340,21 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 	return oxe;
 }
 
-/* whether \a oxe is large enough to hold XATTR value */
+/**
+ * Check whether \a oxe is large enough to hold the xattr value
+ *
+ * \param[in] oxe	pointer to the OSP object attributes cache xattr entry
+ * \param[in] len	xattr value size in bytes
+ *
+ * \retval		true if xattr can fit in \a oxe
+ * \retval		false if xattr can not fit in \a oxe
+ */
 static inline bool oxe_can_hold(struct osp_xattr_entry *oxe, size_t len)
 {
 	if (unlikely(oxe->oxe_largebuf))
-		return oxe->oxe_buflen > len;
+		return oxe->oxe_buflen >= len;
 
-	return oxe->oxe_buflen - oxe->oxe_namelen - 1 - sizeof(*oxe) > len;
+	return oxe->oxe_buflen - oxe->oxe_namelen - 1 - sizeof(*oxe) >= len;
 }
 
 /**
