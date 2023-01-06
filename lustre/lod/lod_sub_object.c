@@ -956,6 +956,7 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	if (unlikely(logid_id(&cid->lci_logid) == 0)) {
+renew:
 		rc = llog_open_create(env, ctxt, &lgh, NULL, NULL);
 		if (rc < 0)
 			GOTO(out_put, rc);
@@ -966,8 +967,14 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 	LASSERT(lgh != NULL);
 
 	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
-	if (rc != 0)
+	if (rc) {
+		/* Update llog is corruption, renew it */
+		if (rc == -EIO && need_put == false) {
+			llog_cat_close(env, lgh);
+			GOTO(renew, 0);
+		}
 		GOTO(out_close, rc);
+	}
 
 	if (need_put) {
 		rc = llog_osd_put_cat_list(env, dt, index, 1, cid, fid);

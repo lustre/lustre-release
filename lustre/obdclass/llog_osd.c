@@ -245,10 +245,10 @@ static int llog_osd_read_header(const struct lu_env *env,
 		CERROR("%s: error reading "DFID" log header size %d: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,
 		       PFID(lu_object_fid(&o->do_lu)), rc < 0 ? 0 : rc,
-		       -EFAULT);
+		       -EIO);
 
 		if (rc >= 0)
-			rc = -EFAULT;
+			rc = -EIO;
 
 		GOTO(unlock, rc);
 	}
