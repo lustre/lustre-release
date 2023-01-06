@@ -66,9 +66,8 @@ scrub_attach() {
 
 scrub_detach() {
 	${ECHOCMD} "${LCTL} <<-EOF
-		device scrub-MDT0000
-		cleanup
-		detach
+		--device scrub-MDT0000 cleanup
+		--device scrub-MDT0000 detach
 	EOF"
 }
 
@@ -76,22 +75,15 @@ scrub_create() {
 	local echodev=$(${RLCTL} dl | grep echo_client|awk '{print $1}')
 	local j
 
-	${ECHOCMD} "${LCTL} <<-EOF
-		cfg_device ${echodev}
-		test_mkdir ${tdir}
-	EOF"
+	${ECHOCMD} "${LCTL} --device ${echodev} test_mkdir ${tdir}"
 
-	for ((j=1; j<${threads}; j++)); do
-		${ECHOCMD} "${LCTL} <<-EOF
-			cfg_device ${echodev}
-			test_mkdir ${tdir}${j}
-		EOF"
+	for ((j = 1; j < ${threads}; j++)); do
+		${ECHOCMD} "${LCTL} --device ${echodev} test_mkdir ${tdir}${j}"
 	done
 
-	${ECHOCMD} "${LCTL} <<-EOF
-		cfg_device ${echodev}
-		--threads ${threads} 0 ${echodev} test_create \
-		-d ${tdir} -D ${threads} -b ${lbase} -c 0 -n ${usize}
+	${ECHOCMD} "${LCTL} --device ${echodev} \
+		--threads ${threads} 0 ${echodev} \
+		test_create -d${tdir} -D${threads} -b${lbase} -c0 -n${usize}"
 	EOF"
 }
 

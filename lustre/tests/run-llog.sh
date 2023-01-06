@@ -20,9 +20,8 @@ eval "$LCTL <<-EOF || RC=2
 	attach llog_test llt_name llt_uuid
 	ignore_errors
 	setup $MGS
-	device llt_name
-	cleanup
-	detach
+	--device llt_name cleanup
+	--device llt_name detach
 EOF"
 rmmod -v llog_test || RC2=3
 [ $RC -eq 0 -a "$RC2" ] && RC=$RC2
