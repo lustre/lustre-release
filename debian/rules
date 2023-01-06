@@ -6,6 +6,7 @@
 #
 # Copying and modification is unlimited, provided that the modified
 # version is marked as being modified.
+# (This version has been modified from the original)
 
 # Uncomment this to turn on verbose mode.
 # export DH_VERBOSE=1
@@ -534,6 +535,9 @@ binary-modules: prep-deb-files
 	dh_installmodules -p $(PKGNAME)
 	dh_compress -p $(PKGNAME)
 	dh_fixperms -p $(PKGNAME)
+	sed "s/depmod -a/depmod -a $(KVERS)/" $(CURDIR)/debian/postinst > $(CURDIR)/debian/$(PKGNAME).postinst
+	sed "s/depmod -a/depmod -a $(KVERS)/" $(CURDIR)/debian/postrm > $(CURDIR)/debian/$(PKGNAME).postrm
+	chmod +x $(CURDIR)/debian/$(PKGNAME).postinst $(CURDIR)/debian/$(PKGNAME).postrm
 	dh_installdeb -p $(PKGNAME)
 	dh_gencontrol -- -v$(VERSION)
 	dh_md5sums -p $(PKGNAME)
