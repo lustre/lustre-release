@@ -9132,8 +9132,8 @@ test_122a() {
 run_test 122a "Check OST sequence update"
 
 test_122b() {
-	[[ "$OST1_VERSION" -ge $(version_code 2.11.53) ]] ||
-		skip "Need OST version at least 2.11.53"
+	(( OST1_VERSION >= $(version_code 2.14.52) )) ||
+		skip "Need OST version at least 2.14.52"
 	local err
 
 	reformat
