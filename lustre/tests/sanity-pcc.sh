@@ -1584,7 +1584,7 @@ test_101a() {
 	# File is owned by root, make it accessible to RUNAS user
 	chmod a+rw $DIR/$tdir/$tfile.shell
 	stack_trap 'rm -f $DIR/$tdir/$tfile.shell' EXIT
-	do_facet $SINGLEAGT nsenter -t $PID -U -m "sh $DIR/$tdir/$tfile.shell"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m "bash $DIR/$tdir/$tfile.shell"
 	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
 		$file || error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"

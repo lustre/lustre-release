@@ -3075,7 +3075,7 @@ run_test 33b "Drop cancel during umount"
 
 test_34a() {
 	setup
-	do_facet client "sh runmultiop_bg_pause $DIR/file O_c"
+	do_facet client "bash runmultiop_bg_pause $DIR/file O_c"
 	manual_umount_client
 	rc=$?
 	do_facet client killall -USR1 multiop

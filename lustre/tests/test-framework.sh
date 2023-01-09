@@ -4289,7 +4289,7 @@ do_node_vp() {
 	shift
 
 	if [[ "$host" == "$HOSTNAME" ]]; then
-		sh -c "$(printf -- ' %q' "$@")"
+		bash -c "$(printf -- ' %q' "$@")"
 		return $?
 	fi
 
@@ -5771,7 +5771,9 @@ set_pools_quota () {
 	done
 }
 
-check_and_setup_lustre() {
+do_check_and_setup_lustre() {
+	echo "=== $TESTSUITE: start setup $(date +'%H:%M:%S (%s)') ==="
+
 	sanitize_parameters
 	nfs_client_mode && return
 	cifs_client_mode && return
@@ -5850,6 +5852,7 @@ check_and_setup_lustre() {
 	if [ -n "$fs_STRIPEPARAMS" ]; then
 		setstripe_getstripe $MOUNT $fs_STRIPEPARAMS
 	fi
+
 	if $GSS_SK; then
 		set_flavor_all null
 	elif $GSS; then
@@ -5859,6 +5862,7 @@ check_and_setup_lustre() {
 	if $DELETE_OLD_POOLS; then
 		destroy_all_pools
 	fi
+
 	if [[ -n "$FS_POOL" ]]; then
 		create_pools $FS_POOL $FS_POOL_NOSTS
 	fi
@@ -5866,9 +5870,42 @@ check_and_setup_lustre() {
 	if [[ -n "$POOLS_QUOTA_USERS_SET" ]]; then
 		set_pools_quota
 	fi
-	if [ "$ONLY" == "setup" ]; then
+
+	echo "=== $TESTSUITE: finish setup $(date +'%H:%M:%S (%s)') ==="
+
+	if [[ "$ONLY" == "setup" ]]; then
 		exit 0
 	fi
+}
+
+check_and_setup_lustre() {
+	local start_stamp=$(date +%s)
+	local saved_umask=$(umask)
+	local log=$TESTLOG_PREFIX.test_setup.test_log.$(hostname -s).log
+	local status='PASS'
+	local stop_stamp=0
+	local duration=0
+	local error=''
+	local rc=0
+
+	umask 0022
+
+	log_sub_test_begin test_setup
+
+	if ! do_check_and_setup_lustre 2>&1 > >(tee -i $log); then
+		error=$(tail -1 $log)
+		status='FAIL'
+		rc=1
+	fi
+
+	stop_stamp=$(date +%s)
+	duration=$((stop_stamp - start_stamp))
+
+	log_sub_test_end "$status" "$duration" "$rc" "$error"
+
+	umask $saved_umask
+
+	return $rc
 }
 
 restore_mount () {
@@ -5886,14 +5923,16 @@ cleanup_mount () {
 }
 
 cleanup_and_setup_lustre() {
-	if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
+	if [[ "$ONLY" == "cleanup" ]] || grep -q "$MOUNT" /proc/mounts; then
 		lctl set_param debug=0 || true
 		cleanupall
-		if [ "$ONLY" == "cleanup" ]; then
+
+		if [[ "$ONLY" == "cleanup" ]]; then
 			exit 0
 		fi
 	fi
-	check_and_setup_lustre
+
+	do_check_and_setup_lustre
 }
 
 # Run e2fsck on MDT or OST device.
@@ -6033,34 +6072,68 @@ log_zfs_info() {
 	fi
 }
 
-check_and_cleanup_lustre() {
-	if [ "$LFSCK_ALWAYS" = "yes" -a "$TESTSUITE" != "sanity-lfsck" -a \
-	     "$TESTSUITE" != "sanity-scrub" ]; then
+do_check_and_cleanup_lustre() {
+	echo "=== $TESTSUITE: start cleanup $(date +'%H:%M:%S (%s)') ==="
+
+	if [[ "$LFSCK_ALWAYS" == "yes" && "$TESTSUITE" != "sanity-lfsck" && \
+	      "$TESTSUITE" != "sanity-scrub" ]]; then
 		run_lfsck
 	fi
 
 	if is_mounted $MOUNT; then
 		if $DO_CLEANUP; then
-			[ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]* ||
+			[[ -n "$DIR" ]] && rm -rf $DIR/[Rdfs][0-9]* ||
 				error "remove sub-test dirs failed"
 		else
 			echo "skip cleanup"
 		fi
-		[ "$ENABLE_QUOTA" ] && restore_quota || true
+		[[ -n "$ENABLE_QUOTA" ]] && restore_quota || true
 	fi
 
-	if [ "$I_UMOUNTED2" = "yes" ]; then
+	if [[ "$I_UMOUNTED2" == "yes" ]]; then
 		restore_mount $MOUNT2 || error "restore $MOUNT2 failed"
 	fi
 
-	if [ "$I_MOUNTED2" = "yes" ]; then
+	if [[ "$I_MOUNTED2" == "yes" ]]; then
 		cleanup_mount $MOUNT2
 	fi
 
-	if [[ "$I_MOUNTED" = "yes" ]] && ! $AUSTER_CLEANUP; then
+	if [[ "$I_MOUNTED" == "yes" ]] && ! $AUSTER_CLEANUP; then
 		cleanupall -f || error "cleanup failed"
 		unset I_MOUNTED
 	fi
+
+	echo "=== $TESTSUITE: finish cleanup $(date +'%H:%M:%S (%s)') ==="
+}
+
+check_and_cleanup_lustre() {
+	local start_stamp=$(date +%s)
+	local saved_umask=$(umask)
+	local log=$TESTLOG_PREFIX.test_cleanup.test_log.$(hostname -s).log
+	local status='PASS'
+	local stop_stamp=0
+	local duration=0
+	local error=''
+	local rc=0
+
+	umask 0022
+
+	log_sub_test_begin test_cleanup
+
+	if ! do_check_and_cleanup_lustre 2>&1 > >(tee -i $log); then
+		error=$(tail -1 $log)
+		status='FAIL'
+		rc=1
+	fi
+
+	stop_stamp=$(date +%s)
+	duration=$((stop_stamp - start_stamp))
+
+	log_sub_test_end "$status" "$duration" "$rc" "$error"
+
+	umask $saved_umask
+
+	return $rc
 }
 
 #######
