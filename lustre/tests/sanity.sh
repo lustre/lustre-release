@@ -8022,6 +8022,82 @@ test_56xg() {
 }
 run_test 56xg "lfs migrate pool support"
 
+test_56xh() {
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local size_mb=25
+	local file1=$DIR/$tfile
+	local tmp1=$TMP/$tfile.tmp
+
+	$LFS setstripe -c 2 $file1
+
+	stack_trap "rm -f $file1 $tmp1"
+	dd if=/dev/urandom of=$tmp1 bs=1M count=$size_mb ||
+			error "error creating $tmp1"
+	ls -lsh $tmp1
+	cp $tmp1 $file1
+
+	local start=$SECONDS
+
+	$LFS migrate --stats --stats-interval=1 -W 1M -c 1 $file1 ||
+		error "migrate failed rc = $?"
+
+	local elapsed=$((SECONDS - start))
+
+	# with 1MB/s, elapsed should equal size_mb
+	(( elapsed >= size_mb * 95 / 100 )) ||
+		error "'lfs migrate -W' too fast ($elapsed < 0.95 * $size_mb)?"
+
+	(( elapsed <= size_mb * 120 / 100 )) ||
+		error_not_in_vm "'lfs migrate -W' slow ($elapsed > 1.2 * $size_mb)"
+
+	(( elapsed <= size_mb * 150 / 100 )) ||
+		error "'lfs migrate -W' too slow in VM ($elapsed > 2 * $size_mb 2)"
+
+	stripe=$($LFS getstripe -c $file1)
+	(( $stripe == 1 )) || error "stripe of $file1 is $stripe != 1"
+	cmp $file1 $tmp1 || error "content mismatch $file1 differs from $tmp1"
+
+	# Clean up file (since it is multiple MB)
+	rm -f $file1 $tmp1
+}
+run_test 56xh "lfs migrate bandwidth limitation support"
+
+test_56xi() {
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	verify_yaml_available || skip_env "YAML verification not installed"
+
+	local size_mb=5
+	local file1=$DIR/$tfile.1
+	local file2=$DIR/$tfile.2
+	local file3=$DIR/$tfile.3
+	local output_file=$DIR/$tfile.out
+	local tmp1=$TMP/$tfile.tmp
+
+	$LFS setstripe -c 2 $file1
+	$LFS setstripe -c 2 $file2
+	$LFS setstripe -c 2 $file3
+
+	stack_trap "rm -f $file1 $file2 $file3 $tmp1 $output_file"
+	dd if=/dev/urandom of=$tmp1 bs=1M count=$size_mb ||
+			error "error creating $tmp1"
+	ls -lsh $tmp1
+	cp $tmp1 $file1
+	cp $tmp1 $file2
+	cp $tmp1 $file3
+
+	$LFS migrate --stats --stats-interval=1 \
+		-c 1 $file1 $file2 $file3 1> $output_file ||
+		error "migrate failed rc = $?"
+
+	cat $output_file
+	cat $output_file | verify_yaml || error "rename_stats is not valid YAML"
+
+	# Clean up file (since it is multiple MB)
+	rm -f $file1 $file2 $file3 $tmp1 $output_file
+}
+run_test 56xi "lfs migrate stats support"
+
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"

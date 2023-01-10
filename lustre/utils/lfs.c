@@ -78,6 +78,11 @@
 #include <lnetconfig/cyaml.h>
 #include "lstddef.h"
 
+#ifndef NSEC_PER_SEC
+# define NSEC_PER_SEC 1000000000UL
+#endif
+#define ONE_MB 0x100000
+
 /* all functions */
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
@@ -133,13 +138,23 @@ static int lfs_pcc_detach_fid(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 static int lfs_pcc_list_commands(int argc, char **argv);
+
+enum stats_flag {
+	STATS_ON,
+	STATS_OFF,
+};
+
 static int lfs_migrate_to_dom(int fd, int fdv, char *name,
-			      __u64 migration_flags);
+			      __u64 migration_flags,
+			      unsigned long long bandwidth_bytes_sec,
+			      enum stats_flag stats_flag,
+			      long stats_interval_sec);
 
 struct pool_to_id_cbdata {
 	const char *pool;
 	__u32 id;
 };
+
 static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata);
 static int find_mirror_id_by_pool(struct llapi_layout *layout, void *cbdata);
 
@@ -776,7 +791,45 @@ out:
 	return rc;
 }
 
-static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
+struct timespec timespec_sub(struct timespec *before, struct timespec *after)
+{
+	struct timespec ret;
+
+	ret.tv_sec = after->tv_sec - before->tv_sec;
+	if (after->tv_nsec < before->tv_nsec) {
+		ret.tv_sec--;
+		ret.tv_nsec = NSEC_PER_SEC + after->tv_nsec - before->tv_nsec;
+	} else {
+		ret.tv_nsec = after->tv_nsec - before->tv_nsec;
+	}
+
+	return ret;
+}
+
+static void stats_log(struct timespec *now, struct timespec *start_time,
+		      enum stats_flag stats_flag,
+		      ssize_t read_bytes, size_t write_bytes,
+		      off_t file_size_bytes)
+{
+	struct timespec diff = timespec_sub(start_time, now);
+
+	if (stats_flag == STATS_ON && ((diff.tv_sec != 0) ||
+		(diff.tv_nsec != 0)) &&	file_size_bytes != 0)
+		printf("- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
+			diff.tv_sec,
+			(double) read_bytes/((ONE_MB * diff.tv_sec) +
+				((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+			(double) write_bytes/((ONE_MB * diff.tv_sec) +
+				((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+			write_bytes/ONE_MB,
+			file_size_bytes/ONE_MB,
+			((write_bytes*100)/file_size_bytes));
+}
+
+static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
+			     unsigned long long bandwidth_bytes_sec,
+			     enum stats_flag stats_flag,
+			     long stats_interval_sec, off_t file_size_bytes)
 {
 	struct llapi_layout *layout;
 	size_t buf_size = 4 * 1024 * 1024;
@@ -786,6 +839,11 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	bool sparse;
 	int rc;
+	size_t write_bytes = 0;
+	ssize_t read_bytes = 0;
+	struct timespec start_time;
+	struct timespec now;
+	struct timespec last_bw_print;
 
 	layout = llapi_layout_get_by_fd(fd_src, 0);
 	if (layout) {
@@ -811,6 +869,9 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 			return rc;
 		}
 	}
+
+	clock_gettime(CLOCK_REALTIME, &start_time);
+	now = last_bw_print = start_time;
 
 	while (1) {
 		off_t data_off;
@@ -847,6 +908,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 		}
 
 		rsize = pread(fd_src, buf, to_read, pos);
+		read_bytes += rsize;
 		if (rsize < 0) {
 			rc = -errno;
 			goto out;
@@ -857,7 +919,9 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 
 		to_write = rsize;
 		while (to_write > 0) {
+			unsigned long long write_target;
 			ssize_t written;
+			struct timespec diff;
 
 			written = pwrite(fd_dst, buf, to_write, pos);
 			if (written < 0) {
@@ -866,10 +930,65 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 			}
 			pos += written;
 			to_write -= written;
+			write_bytes += written;
+
+			if (bandwidth_bytes_sec == 0)
+				continue;
+
+			clock_gettime(CLOCK_REALTIME, &now);
+			diff = timespec_sub(&start_time, &now);
+			write_target = ((bandwidth_bytes_sec * diff.tv_sec) +
+				((bandwidth_bytes_sec *
+				diff.tv_nsec)/NSEC_PER_SEC));
+
+			if (write_target < write_bytes) {
+				unsigned long long excess;
+				struct timespec delay = { 0, 0 };
+
+				excess = write_bytes - write_target;
+
+				if (excess == 0)
+					continue;
+
+				delay.tv_sec = excess / bandwidth_bytes_sec;
+				delay.tv_nsec = (excess % bandwidth_bytes_sec) *
+					NSEC_PER_SEC / bandwidth_bytes_sec;
+
+				do {
+					rc = clock_nanosleep(CLOCK_REALTIME, 0,
+							     &delay, &delay);
+				} while (rc < 0 && errno == EINTR);
+
+				if (rc < 0) {
+					if (stats_flag == STATS_OFF)
+						fprintf(stderr,
+							"error %s: delay for bandwidth control failed: %s\n",
+							progname,
+							strerror(-rc));
+					rc = 0;
+				}
+			}
 		}
+
+		clock_gettime(CLOCK_REALTIME, &now);
+		if ((write_bytes != file_size_bytes) &&
+			(now.tv_sec >= last_bw_print.tv_sec +
+			stats_interval_sec)) {
+			stats_log(&now, &start_time, stats_flag,
+				  read_bytes, write_bytes,
+				  file_size_bytes);
+			last_bw_print = now;
+		}
+
 		if (rc || rsize < to_read)
 			break;
 	}
+
+	/* Output at least one log, regardless of stats_interval */
+	clock_gettime(CLOCK_REALTIME, &now);
+	stats_log(&now, &start_time, stats_flag,
+		  read_bytes, write_bytes,
+		  file_size_bytes);
 
 	rc = fsync(fd_dst);
 	if (rc < 0)
@@ -893,7 +1012,10 @@ static int migrate_set_timestamps(int fd, const struct stat *st)
 	return futimes(fd, tv);
 }
 
-static int migrate_block(int fd, int fdv)
+static int migrate_block(int fd, int fdv,
+			 unsigned long long bandwidth_bytes_sec,
+			 enum stats_flag stats_flag,
+			 long stats_interval_sec)
 {
 	struct stat st;
 	__u64	dv1;
@@ -928,7 +1050,9 @@ static int migrate_block(int fd, int fdv)
 		return rc;
 	}
 
-	rc = migrate_copy_data(fd, fdv, NULL);
+	rc = migrate_copy_data(fd, fdv, NULL, bandwidth_bytes_sec,
+			       stats_flag, stats_interval_sec,
+			       st.st_size);
 	if (rc < 0) {
 		error_loc = "data copy failed";
 		goto out_unlock;
@@ -988,7 +1112,10 @@ static int check_lease(int fd)
 	return -EBUSY;
 }
 
-static int migrate_nonblock(int fd, int fdv)
+static int migrate_nonblock(int fd, int fdv,
+			    unsigned long long bandwidth_bytes_sec,
+			    enum stats_flag stats_flag,
+			    long stats_interval_sec)
 {
 	struct stat st;
 	__u64	dv1;
@@ -1007,7 +1134,9 @@ static int migrate_nonblock(int fd, int fdv)
 		return rc;
 	}
 
-	rc = migrate_copy_data(fd, fdv, check_lease);
+	rc = migrate_copy_data(fd, fdv, check_lease, bandwidth_bytes_sec,
+			       stats_flag, stats_interval_sec,
+			       st.st_size);
 	if (rc < 0) {
 		error_loc = "data copy failed";
 		return rc;
@@ -1211,8 +1340,10 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 }
 
 static int lfs_migrate(char *name, __u64 migration_flags,
-		       struct llapi_stripe_param *param,
-		       struct llapi_layout *layout)
+			struct llapi_stripe_param *param,
+			struct llapi_layout *layout,
+			unsigned long long bandwidth_bytes_sec,
+			enum stats_flag stats_flag, long stats_interval_sec)
 {
 	struct llapi_layout *existing;
 	uint64_t dom_new, dom_cur;
@@ -1249,11 +1380,16 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	 * if new layout used bigger DOM size, then mirroring is used
 	 */
 	if (dom_new > dom_cur) {
-		rc = lfs_migrate_to_dom(fd, fdv, name, migration_flags);
+		rc = lfs_migrate_to_dom(fd, fdv, name, migration_flags,
+					bandwidth_bytes_sec, stats_flag,
+					stats_interval_sec);
 		if (rc)
 			error_loc = "cannot migrate to DOM layout";
 		goto out_closed;
 	}
+
+	if (stats_flag == STATS_ON)
+		printf("%s:\n", name);
 
 	if (!(migration_flags & LLAPI_MIGRATION_NONBLOCK)) {
 		/*
@@ -1262,7 +1398,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		 * between a broken lease and a server that does not support
 		 * atomic swap/close (LU-6785)
 		 */
-		rc = migrate_block(fd, fdv);
+		rc = migrate_block(fd, fdv, bandwidth_bytes_sec, stats_flag,
+				   stats_interval_sec);
 		goto out;
 	}
 
@@ -1272,7 +1409,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	rc = migrate_nonblock(fd, fdv);
+	rc = migrate_nonblock(fd, fdv, bandwidth_bytes_sec, stats_flag,
+			      stats_interval_sec);
 	if (rc < 0) {
 		llapi_lease_release(fd);
 		goto out;
@@ -1819,7 +1957,10 @@ out:
 }
 
 static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
-				bool inherit, uint32_t flags)
+				bool inherit, uint32_t flags,
+				unsigned long long bandwidth_bytes_sec,
+				enum stats_flag stats_flag,
+				long stats_interval_sec)
 {
 	struct llapi_layout *f_layout = NULL;
 	struct ll_ioc_lease *data = NULL;
@@ -1869,7 +2010,11 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		goto out;
 	}
 
-	rc = migrate_nonblock(fd, fdv);
+	if (stats_flag)
+		printf("%s:\n", name);
+
+	rc = migrate_nonblock(fd, fdv, bandwidth_bytes_sec, stats_flag,
+			      stats_interval_sec);
 	if (rc < 0) {
 		llapi_lease_release(fd);
 		goto out;
@@ -1916,7 +2061,9 @@ out:
 }
 
 static int mirror_extend(char *fname, struct mirror_args *mirror_list,
-			 enum mirror_flags mirror_flags)
+			 enum mirror_flags mirror_flags,
+			 unsigned long long bandwidth_bytes_sec,
+			 enum stats_flag stats_flag, long stats_interval_sec)
 {
 	int rc = 0;
 
@@ -1931,7 +2078,10 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 				rc = mirror_extend_layout(fname,
 							mirror_list->m_layout,
 							mirror_list->m_inherit,
-							mirror_list->m_flags);
+							mirror_list->m_flags,
+							bandwidth_bytes_sec,
+							stats_flag,
+							stats_interval_sec);
 				if (rc)
 					break;
 
@@ -2363,7 +2513,10 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr);
 
 static int lfs_migrate_to_dom(int fd, int fdv, char *name,
-			      __u64 migration_flags)
+			      __u64 migration_flags,
+			      unsigned long long bandwidth_bytes_sec,
+			      enum stats_flag stats_flag,
+			      long stats_interval_sec)
 {
 	struct ll_ioc_lease *data = NULL;
 	int rc;
@@ -2374,7 +2527,11 @@ static int lfs_migrate_to_dom(int fd, int fdv, char *name,
 		goto out_close;
 	}
 
-	rc = migrate_nonblock(fd, fdv);
+	if (stats_flag)
+		printf("%s:\n", name);
+
+	rc = migrate_nonblock(fd, fdv, bandwidth_bytes_sec, stats_flag,
+			      stats_interval_sec);
 	if (rc < 0)
 		goto out_release;
 
@@ -3356,6 +3513,8 @@ enum {
 	LFS_FIND_PERM,
 	LFS_PRINTF_OPT,
 	LFS_NO_FOLLOW_OPT,
+	LFS_STATS_OPT,
+	LFS_STATS_INTERVAL_OPT
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -3409,6 +3568,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	char *mode_opt = NULL;
 	mode_t previous_umask = 0;
 	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+	unsigned long long bandwidth_bytes_sec = 0;
+	unsigned long long bandwidth_unit = ONE_MB;
+	enum stats_flag stats_flag = STATS_OFF;
+	long stats_interval_sec = 5;
 
 	struct option long_opts[] = {
 /* find { .val = '0',	.name = "null",		.has_arg = no_argument }, */
@@ -3446,6 +3609,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			.name = "mode",		.has_arg = required_argument},
 	{ .val = LFS_LAYOUT_COPY,
 			.name = "copy",		.has_arg = required_argument},
+	{ .val = LFS_STATS_OPT,
+			.name = "stats",	.has_arg = no_argument},
+	{ .val = LFS_STATS_INTERVAL_OPT,
+			.name = "stats-interval",
+						.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument},
@@ -3495,6 +3663,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
+	{ .val = 'W',	.name = "bandwidth",	.has_arg = required_argument },
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 /* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
@@ -3515,7 +3684,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	while ((c = getopt_long(argc, argv,
-				"bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:y:z:",
+				"bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
 				long_opts, NULL)) >= 0) {
 		size_units = 1;
 		switch (c) {
@@ -3652,6 +3821,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case LFS_LAYOUT_COPY:
 			from_copy = true;
 			template = optarg;
+			break;
+		case LFS_STATS_OPT:
+			stats_flag = STATS_ON;
+			break;
+		case LFS_STATS_INTERVAL_OPT:
+			stats_interval_sec = strtol(optarg, &end, 0);
+			if (stats_interval_sec == 0)
+				stats_interval_sec = 5;
 			break;
 		case 'b':
 			if (!migrate_mode) {
@@ -3976,6 +4153,20 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case 'x':
 			xattr = optarg;
+			break;
+		case 'W':
+			if (!migrate_mode) {
+				fprintf(stderr,
+					"--bandwidth is valid only for migrate and mirror mode\n");
+				goto error;
+			}
+			if (llapi_parse_size(optarg, &bandwidth_bytes_sec,
+					     &bandwidth_unit, 0) < 0) {
+				fprintf(stderr,
+					"error: %s: bad value for bandwidth '%s'\n",
+					argv[0], optarg);
+				goto error;
+			}
 			break;
 		case 'y':
 			from_yaml = true;
@@ -4321,7 +4512,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
 		} else if (migrate_mode) {
 			result = lfs_migrate(fname, migration_flags, param,
-					     layout);
+					     layout, bandwidth_bytes_sec,
+					     stats_flag, stats_interval_sec);
 		} else if (comp_set != 0) {
 			result = lfs_component_set(fname, comp_id,
 						   lsa.lsa_pool_name,
@@ -4337,7 +4529,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			result = mirror_create(fname, mirror_list);
 		} else if (opc == SO_MIRROR_EXTEND) {
 			result = mirror_extend(fname, mirror_list,
-					       mirror_flags);
+					       mirror_flags,
+					       bandwidth_bytes_sec,
+					       stats_flag, stats_interval_sec);
 		} else if (opc == SO_MIRROR_SPLIT || opc == SO_MIRROR_DELETE) {
 			if (!mirror_id && !comp_id && !lsa.lsa_pool_name) {
 				fprintf(stderr,
@@ -4942,6 +5136,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
+/* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }, */
 	{ .val = 'z',	.name = "extension-size",
 						.has_arg = required_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = required_argument },
@@ -5807,6 +6002,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 /* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
+/* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .val = 'z',	.name = "extension-size", .has_arg = no_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = no_argument },
@@ -6683,6 +6879,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = LFS_INHERIT_RR_OPT,
 			.name = "max-inherit-rr", .has_arg = required_argument},
 /* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
+/* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }, */
 	{ .name = NULL } };
 	int result = 0;
 

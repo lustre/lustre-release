@@ -78,6 +78,15 @@ available. It will result in
 .B
 -ENOKEY.
 .TP
+.BR -W , --bandwidth
+Limit how much file system bandwidth a migrate job can consume.
+.TP
+.BR --stats
+Output verbose stats about migrate job progress in YAML format.
+.TP
+.BR --stats-interval
+Controls how often the stats are output; this defaults to 5 seconds.
+.TP
 .BR -v , --verbose
 Print each filename as it is migrated.
 .P
