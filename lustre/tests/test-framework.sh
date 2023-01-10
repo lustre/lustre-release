@@ -11067,9 +11067,9 @@ exhaust_all_precreations() {
 }
 
 verify_yaml_available() {
-	python3 -c "import yaml; yaml.safe_load_all('''a: b''')"
+	python3 -c "import yaml; yaml.safe_load('''a: b''')"
 }
 
 verify_yaml() {
-	python3 -c "import yaml; yaml.safe_load_all('''$1''')"
+	python3 -c "import sys, yaml; obj = yaml.safe_load(sys.stdin)"
 }

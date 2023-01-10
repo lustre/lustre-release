@@ -19215,29 +19215,26 @@ test_205d() {
 		skip "need lustre >= 2.15.51"
 	verify_yaml_available || skip_env "YAML verification not installed"
 
-	test_mkdir $DIR/$tdir
-	$LFS setstripe -E 1M -L mdt -E -1 $file || error "setstripe failed"
+	test_mkdir -i 0 $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 $file || error "create file failed"
 
 	dd if=/dev/zero of=$file bs=1M count=10 conv=sync ||
 		error "failed to write data to $file"
 	mv $file $file.2
 
 	echo -n 'verify rename_stats...'
-	output=$(do_facet mds1 \
-		 "$LCTL get_param -n mdt.$FSNAME-MDT0000.rename_stats")
-	verify_yaml "$output" || error "rename_stats is not valid YAML"
+	do_facet mds1 "$LCTL get_param -n mdt.$FSNAME-MDT0000.rename_stats" |
+		verify_yaml || error "rename_stats is not valid YAML"
 	echo " OK"
 
 	echo -n 'verify mdt job_stats...'
-	output=$(do_facet mds1 \
-		 "$LCTL get_param -n mdt.$FSNAME-MDT0000.job_stats")
-	verify_yaml "$output" || error "job_stats on mds1 is not valid YAML"
+	do_facet mds1 "$LCTL get_param -n mdt.$FSNAME-MDT0000.job_stats" |
+		verify_yaml || error "job_stats on mds1 is not valid YAML"
 	echo " OK"
 
 	echo -n 'verify ost job_stats...'
-	output=$(do_facet ost1 \
-		 "$LCTL get_param -n obdfilter.$FSNAME-OST0000.job_stats")
-	verify_yaml "$output" || error "job_stats on ost1 is not valid YAML"
+	do_facet ost1 "$LCTL get_param -n obdfilter.$FSNAME-OST0000.job_stats" |
+		verify_yaml || error "job_stats on ost1 is not valid YAML"
 	echo " OK"
 }
 run_test 205d "verify the format of some stats files"
