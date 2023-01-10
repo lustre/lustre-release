@@ -592,7 +592,7 @@ top_trans_create(const struct lu_env *env, struct dt_device *master_dev)
 	struct top_thandle	*top_th;
 	struct thandle		*child_th;
 
-	OBD_ALLOC_GFP(top_th, sizeof(*top_th), __GFP_IO);
+	OBD_ALLOC_GFP(top_th, sizeof(*top_th), GFP_NOFS);
 	if (top_th == NULL)
 		return ERR_PTR(-ENOMEM);
 
