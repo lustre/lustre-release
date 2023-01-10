@@ -1510,13 +1510,18 @@ test_101a() {
 	echo "creating user namespace for $RUNAS_ID"
 	# Create a mount and user namespace with this command, and leave the
 	# process running so we can do the rest of our steps
-	do_facet $SINGLEAGT $RUNAS unshare -Um sleep 600 &
-	# Let the child start...
-	sleep 2
-	# Get the sleep PID so we can find its namespace and kill it later
-	PID=$(do_facet $SINGLEAGT pgrep sleep)
+	local start=$SECONDS
+	local PID=$(do_facet $SINGLEAGT \
+		    "$RUNAS unshare -Um sleep 600 &>/dev/null & echo \\\$!")
+	local elapsed=$((SECONDS - start))
+	local count=0
+
+	do_facet $SINGLEAGT ps auxww | grep sleep
+	echo "Created NS: child (sleep) pid=$PID in $elapsed seconds"
+	[[ -n "$PID" ]] || error "remote sleep start failed"
 	stack_trap "do_facet $SINGLEAGT kill -9 $PID" EXIT
-	echo "Created NS: child (sleep) pid $PID"
+	(( elapsed < 300 )) || error "remote sleep took $elapsed sec to start"
+
 	# Map 'RUNAS' to root in the namespace, so it has rights to do whatever
 	# This is handled by '-r' in unshare in newer versions
 	do_facet $SINGLEAGT $RUNAS newuidmap $PID 0 $RUNAS_ID 1 ||
