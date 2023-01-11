@@ -10198,6 +10198,8 @@ run_test 128 "Force using remote logs with --nolocallogs"
 
 test_129()
 {
+	(( MDS1_VERSION >= $(version_code 2.14.57) )) ||
+		skip "Need MDS version at least 2.14.57"
 	stopall
 	start_mgsmds || error "MGS/MDS start failed"
 	format_ost 1
@@ -10278,6 +10280,8 @@ test_132() {
 	local err_cnt
 	local err_cnt2
 
+	(( MDS1_VERSION >= $(version_code 2.14.57) )) ||
+		skip "Need MDS version at least 2.14.57"
 	reformat
 	combined_mgs_mds || start_mgs || error "unable to start MGS"
 	start_mdt 1 || error "unable to start mdt1"
