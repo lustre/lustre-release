@@ -38,9 +38,10 @@
 
 #include <linux/ethtool.h>
 #include <linux/inetdevice.h>
-#include "socklnd.h"
+#include <linux/kernel.h>
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>
+#include "socklnd.h"
 
 static const struct lnet_lnd the_ksocklnd;
 struct ksock_nal_data ksocknal_data;
@@ -855,6 +856,7 @@ static int
 ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
 	struct lnet_lnd_tunables *tunables = data;
+	s64 num;
 
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
@@ -863,7 +865,9 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	    nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
 		return -EINVAL;
 
-	tunables->lnd_tun_u.lnd_sock.lnd_conns_per_peer = nla_get_s64(attr);
+	num = nla_get_s64(attr);
+	clamp_t(s64, num, 1, 127);
+	tunables->lnd_tun_u.lnd_sock.lnd_conns_per_peer = num;
 
 	return 0;
 }

@@ -1624,7 +1624,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 			  struct cfs_expr_list *global_cpts,
 			  char *ip2net,
 			  struct lnet_ioctl_config_lnd_tunables *tunables,
-			  long int cpp, int seq_no, struct cYAML **err_rc)
+			  int seq_no, struct cYAML **err_rc)
 {
 	char *data = NULL;
 	struct lnet_ioctl_config_ni *conf;
@@ -1738,11 +1738,6 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
-
-	if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND && (cpp > -1))
-		tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;
-	else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND && (cpp > -1))
-		tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = cpp;
 
 	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids,
 				   err_str, sizeof(err_str));
@@ -4594,7 +4589,7 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 
 	rc = lustre_lnet_config_ni(&nw_descr, global_cpts,
 				   (ip2net) ? ip2net->cy_valuestring : NULL,
-				   (found) ? &tunables : NULL, -1,
+				   (found) ? &tunables : NULL,
 				   (seq_no) ? seq_no->cy_valueint : -1,
 				   err_rc);
 

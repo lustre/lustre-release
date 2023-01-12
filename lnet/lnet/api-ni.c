@@ -3709,7 +3709,8 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
-	if (rc)
+	/* If NI already exist delete this new unused copy */
+	if (rc == -EEXIST)
 		lnet_ni_free(ni);
 
 	return rc;
@@ -4964,16 +4965,20 @@ static int lnet_genl_parse_tunables(struct nlattr *settings,
 		num = nla_get_s64(param);
 		switch (type) {
 		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT:
-			tun->lt_cmn.lct_peer_timeout = num;
+			if (num >= 0)
+				tun->lt_cmn.lct_peer_timeout = num;
 			break;
 		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS:
-			tun->lt_cmn.lct_peer_tx_credits = num;
+			if (num > 0)
+				tun->lt_cmn.lct_peer_tx_credits = num;
 			break;
 		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS:
-			tun->lt_cmn.lct_peer_rtr_credits = num;
+			if (num > 0)
+				tun->lt_cmn.lct_peer_rtr_credits = num;
 			break;
 		case LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS:
-			tun->lt_cmn.lct_max_tx_credits = num;
+			if (num > 0)
+				tun->lt_cmn.lct_max_tx_credits = num;
 			break;
 		default:
 			rc = -EINVAL;
@@ -4983,24 +4988,20 @@ static int lnet_genl_parse_tunables(struct nlattr *settings,
 	return rc;
 }
 
-static int
-lnet_genl_parse_lnd_tunables(struct nlattr *settings,
-			     struct lnet_ioctl_config_lnd_tunables *tun,
-			     const struct lnet_lnd *lnd)
+static int lnet_genl_parse_lnd_tunables(struct nlattr *settings,
+					struct lnet_lnd_tunables *tun,
+					const struct lnet_lnd *lnd)
 {
 	const struct ln_key_list *list = lnd->lnd_keys;
 	struct nlattr *param;
 	int rem, rc = 0;
 	int i = 1;
 
-	if (!list)
+	/* silently ignore these setting if the LND driver doesn't
+	 * support any LND tunables
+	 */
+	if (!list || !lnd->lnd_nl_set || !list->lkl_maxattr)
 		return 0;
-
-	if (!lnd->lnd_nl_set)
-		return -EOPNOTSUPP;
-
-	if (!list->lkl_maxattr)
-		return -ERANGE;
 
 	nla_for_each_nested(param, settings, rem) {
 		if (nla_type(param) != LN_SCALAR_ATTR_VALUE)
@@ -5098,7 +5099,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			}
 
 			rc = lnet_genl_parse_lnd_tunables(settings,
-							  tun, lnd);
+							  &tun->lt_tun, lnd);
 			if (rc < 0) {
 				GENL_SET_ERR_MSG(info,
 						 "failed to parse lnd tunables");
@@ -5233,7 +5234,11 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 				struct lnet_ioctl_config_lnd_tunables tun;
 
 				memset(&tun, 0, sizeof(tun));
+				/* Use LND defaults */
 				tun.lt_cmn.lct_peer_timeout = -1;
+				tun.lt_cmn.lct_peer_tx_credits = -1;
+				tun.lt_cmn.lct_peer_rtr_credits = -1;
+				tun.lt_cmn.lct_max_tx_credits = -1;
 				conf.lic_ncpts = 0;
 
 				rc = lnet_genl_parse_local_ni(entry, info,
@@ -5258,6 +5263,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 					if (!net) {
 						GENL_SET_ERR_MSG(info,
 								 "LNet net doesn't exist");
+						lnet_net_unlock(LNET_LOCK_EX);
 						GOTO(out, rc);
 					}
 					list_for_each_entry(ni, &net->net_ni_list,
@@ -5272,7 +5278,6 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 
 						lnet_net_unlock(LNET_LOCK_EX);
 						rc = lnet_dyn_del_ni(&ni->ni_nid);
-						lnet_net_lock(LNET_LOCK_EX);
 						if (rc < 0) {
 							GENL_SET_ERR_MSG(info,
 									 "cannot del LNet NI");
@@ -5281,7 +5286,11 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 						break;
 					}
 
-					lnet_net_unlock(LNET_LOCK_EX);
+					if (rc < 0) { /* will be -ENODEV */
+						GENL_SET_ERR_MSG(info,
+								 "interface invalid for deleting LNet NI");
+						lnet_net_unlock(LNET_LOCK_EX);
+					}
 				} else {
 					rc = lnet_dyn_add_ni(&conf, net_id, &tun);
 					switch (rc) {

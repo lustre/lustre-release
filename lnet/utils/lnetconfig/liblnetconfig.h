@@ -245,7 +245,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 			  struct cfs_expr_list *global_cpts,
 			  char *ip2net,
 			  struct lnet_ioctl_config_lnd_tunables *tunables,
-			  long int cpp, int seq_no, struct cYAML **err_rc);
+			  int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_ni

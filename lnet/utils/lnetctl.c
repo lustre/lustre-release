@@ -1188,11 +1188,17 @@ static int jt_add_route(int argc, char **argv)
 
 static int yaml_add_ni_tunables(yaml_emitter_t *output,
 				struct lnet_ioctl_config_lnd_tunables *tunables,
-				int cpp)
+				struct lnet_dlc_network_descr *nw_descr)
 {
 	yaml_event_t event;
 	char num[23];
 	int rc;
+
+	if (tunables->lt_cmn.lct_peer_timeout < 0 &&
+	    tunables->lt_cmn.lct_peer_tx_credits <= 0 &&
+	    tunables->lt_cmn.lct_peer_rtr_credits <= 0 &&
+	    tunables->lt_cmn.lct_max_tx_credits <= 0)
+		goto skip_general_settings;
 
 	yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
@@ -1303,7 +1309,12 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 	if (rc == 0)
 		goto error;
 
-	if (cpp > 0 || tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key > 0) {
+skip_general_settings:
+	if (tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer > 0 ||
+#ifdef HAVE_KFILND
+	    tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key > 0 ||
+#endif
+	    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer > 0) {
 		yaml_scalar_event_initialize(&event, NULL,
 					     (yaml_char_t *)YAML_STR_TAG,
 					     (yaml_char_t *)"lnd tunables",
@@ -1319,7 +1330,7 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 		rc = yaml_emitter_emit(output, &event);
 		if (rc == 0)
 			goto error;
-
+#ifdef HAVE_KFILND
 		if (tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key > 0) {
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_STR_TAG,
@@ -1332,7 +1343,21 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 
 			snprintf(num, sizeof(num), "%u",
 				 tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key);
-		} else {
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)num,
+						     strlen(num), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+		}
+#endif
+		if (tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer > 0 ||
+		    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer > 0) {
+			int cpp = 0;
+
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_STR_TAG,
 						     (yaml_char_t *)"conns_per_peer",
@@ -1342,22 +1367,24 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 			if (rc == 0)
 				goto error;
 
+			if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND)
+				cpp = tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer;
+			else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND)
+				cpp = tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer;
 			snprintf(num, sizeof(num), "%u", cpp);
-		}
 
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_INT_TAG,
-					     (yaml_char_t *)num,
-					     strlen(num), 1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(output, &event);
-		if (rc == 0)
-			goto error;
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)num,
+						     strlen(num), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+		}
 
 		yaml_mapping_end_event_initialize(&event);
 		rc = yaml_emitter_emit(output, &event);
-		if (rc == 0)
-			goto error;
 	}
 error:
 	return rc;
@@ -1366,7 +1393,7 @@ error:
 static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			       struct lnet_dlc_network_descr *nw_descr,
 			       struct lnet_ioctl_config_lnd_tunables *tunables,
-			       int cpp, struct cfs_expr_list *global_cpts,
+			       struct cfs_expr_list *global_cpts,
 			       int flags)
 {
 	struct lnet_dlc_intf_descr *intf;
@@ -1553,7 +1580,7 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			goto emitter_error;
 
 		if (tunables) {
-			rc = yaml_add_ni_tunables(&output, tunables, cpp);
+			rc = yaml_add_ni_tunables(&output, tunables, nw_descr);
 			if (rc == 0)
 				goto emitter_error;
 		}
@@ -1784,6 +1811,15 @@ static int jt_add_ni(int argc, char **argv)
 		found = true;
 	}
 #endif
+
+	if (LNET_NETTYP(nw_descr.nw_id) == SOCKLND && (cpp > -1)) {
+		tunables.lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;
+		found = true;
+	} else if (LNET_NETTYP(nw_descr.nw_id) == O2IBLND && (cpp > -1)) {
+		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = cpp;
+		found = true;
+	}
+
 	if (pto >= 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
 		tunables.lt_cmn.lct_peer_timeout = pto;
 		tunables.lt_cmn.lct_peer_tx_credits = pc;
@@ -1796,7 +1832,7 @@ static int jt_add_ni(int argc, char **argv)
 		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_map_on_demand = UINT_MAX;
 
 	rc = yaml_lnet_config_ni(net_id, ip2net, &nw_descr,
-				 found ? &tunables : NULL, cpp,
+				 found ? &tunables : NULL,
 				 (cpt_rc == 0) ? global_cpts : NULL,
 				 NLM_F_CREATE);
 	if (rc <= 0) {
@@ -1812,7 +1848,7 @@ old_api:
 	rc = lustre_lnet_config_ni(&nw_descr,
 				   (cpt_rc == 0) ? global_cpts: NULL,
 				   ip2net, (found) ? &tunables : NULL,
-				   cpp, -1, &err_rc);
+				   cpp, &err_rc);
 
 	if (global_cpts != NULL)
 		cfs_expr_list_free(global_cpts);
@@ -1919,7 +1955,7 @@ static int jt_del_ni(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, -1, NULL, 0);
+	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, NULL, 0);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
 			return rc;
