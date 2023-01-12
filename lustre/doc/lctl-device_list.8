@@ -1,0 +1,38 @@
+.TH lctl-device_list 8 "2023-01-09" Lustre "configuration utilities"
+.SH NAME
+lctl device_list \- show all local Lustre Object Based Devices
+.SH SYNOPSIS
+.B lctl device_list
+.RB "[ --target|-t ]"
+.RB "[ --yaml|-y ]"
+
+.B lctl dl
+is the same command.
+.SH DESCRIPTION
+.B lctl device_list
+reports details about the local Lustre OBDs. The information reported for the
+OBD are the type, name, and UUID. Also reported are the device number, status
+and reference count of the OBD device. The device number is needed for lctl
+--device argument.
+.TP
+.SH OPTIONS
+.TP
+\fB\-t\fR, \fB\-\-target\fR
+Retrieve the servers' export NID that communicates with the local OBD.
+.TP
+\fB\-y\fR, \fB\-\-yaml\fR
+An option provided so that the OBD information can be provided in YAML format
+.TP
+.SH EXAMPLES
+.TP
+.B $ lctl --device_list -t -y
+.SH AVAILABILITY
+.B lctl device_list
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lustre (7)

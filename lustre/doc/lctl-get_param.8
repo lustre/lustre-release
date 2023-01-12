@@ -47,6 +47,12 @@ useful when using patterns.
 .TP
 .B -R
 Recursively show all of the parameter names below the specified name.
+.TP
+.B -y
+Some paramters can be presented in a YAML format but are not by default. This
+will format the parameter data in YAML. If the YAML provides a source: field
+it can be suppressed with the -n option.
+
 .SH EXAMPLES
 .B $ lctl get_param osc.*.max_pages_per_rpc
 .br
@@ -73,6 +79,26 @@ osc.testfs-OST0000-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
 .br
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
+.br
+.B $ lctl get_param -n devices
+.br
+ 0 UP osd-ldiskfs MGS-osd MGS-osd_UUID 4
+.br
+.B $ lctl get_param -y devices
+.br
+devices:
+.br
+- index: 0
+.br
+  status: UP
+.br
+  type: osd-ldiskfs
+.br
+  name: MGS-osd
+.br
+  uuid: MGS-osd_UUID
+.br
+  refcount: 4
 .SH SEE ALSO
 .BR lustre (7),
 .BR lctl (8),

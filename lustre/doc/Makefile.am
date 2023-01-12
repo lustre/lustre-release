@@ -33,6 +33,8 @@
 
 MANFILES =					\
 	lctl.8					\
+	lctl-dl.8				\
+	lctl-device_list.8			\
 	lctl-get_param.8			\
 	lctl-list_param.8			\
 	lctl-network.8				\

@@ -32,9 +32,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <yaml.h>
 
 #include <libcfs/util/param.h>
+#include <linux/lustre/lustre_kernelcomm.h>
 #include <linux/lustre/lustre_user.h>
+#include <lnetconfig/liblnetconfig.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
@@ -362,6 +365,371 @@ out:
 	close(fd);
 
 	return rc;
+}
+
+static void print_obd_line(char *s)
+{
+	const char *param = "osc/%s/ost_conn_uuid";
+	char obd_name[MAX_OBD_NAME];
+	char buf[MAX_OBD_NAME];
+	FILE *fp = NULL;
+	glob_t path;
+	char *ptr;
+retry:
+	/* obd device type is the first 3 characters of param name */
+	snprintf(buf, sizeof(buf), " %%*d %%*s %.3s %%%zus %%*s %%*d ",
+		 param, sizeof(obd_name) - 1);
+	if (sscanf(s, buf, obd_name) == 0)
+		goto try_mdc;
+	if (cfs_get_param_paths(&path, param, obd_name) != 0)
+		goto try_mdc;
+	fp = fopen(path.gl_pathv[0], "r");
+	if (!fp) {
+		/* need to free path data before retry */
+		cfs_free_param_data(&path);
+try_mdc:
+		if (param[0] == 'o') { /* failed with osc, try mdc */
+			param = "mdc/%s/mds_conn_uuid";
+			goto retry;
+		}
+		buf[0] = '\0';
+		goto fail_print;
+	}
+
+	/* should not ignore fgets(3)'s return value */
+	if (!fgets(buf, sizeof(buf), fp)) {
+		fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
+		goto fail_close;
+	}
+
+fail_close:
+	fclose(fp);
+	cfs_free_param_data(&path);
+
+	/* trim trailing newlines */
+	ptr = strrchr(buf, '\n');
+	if (ptr)
+		*ptr = '\0';
+fail_print:
+	ptr = strrchr(s, '\n');
+	if (ptr)
+		*ptr = '\0';
+	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
+}
+
+static int print_out_devices(yaml_parser_t *reply, enum lctl_param_flags flags)
+{
+	char buf[PATH_MAX / 2], *tmp = NULL;
+	size_t buf_len = sizeof(buf);
+	yaml_event_t event;
+	bool done = false;
+	int rc;
+
+	if (flags & PARAM_FLAGS_SHOW_SOURCE) {
+		snprintf(buf, buf_len, "devices=");
+		printf("%s\n",  buf);
+	}
+	bzero(buf, sizeof(buf));
+
+	while (!done) {
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_MAPPING_START_EVENT) {
+			size_t len = strlen(buf);
+
+			if (len > 0 && strcmp(buf, "devices=\n") != 0) {
+				/* eat last white space */
+				buf[len - 1] = '\0';
+				if (flags & PARAM_FLAGS_EXTRA_DETAILS)
+					print_obd_line(buf);
+				else
+					printf("%s\n",  buf);
+			}
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "index") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				snprintf(tmp, buf_len, "%3s ", value);
+				buf_len -= 4;
+				tmp += 4;
+			}
+
+			if (strcmp(value, "status") == 0 ||
+			    strcmp(value, "type") == 0 ||
+			    strcmp(value, "name") == 0 ||
+			    strcmp(value, "uuid") == 0 ||
+			    strcmp(value, "refcount") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				snprintf(tmp, buf_len, "%s ", value);
+				buf_len -= strlen(value) + 1;
+				tmp += strlen(value) + 1;
+			}
+		}
+
+		done = (event.type == YAML_DOCUMENT_END_EVENT);
+		if (done) {
+			size_t len = strlen(buf);
+
+			if (len > 0) {
+				/* eat last white space */
+				buf[len - 1] = '\0';
+				if (flags & PARAM_FLAGS_EXTRA_DETAILS)
+					print_obd_line(buf);
+				else
+					printf("%s\n", buf);
+			}
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+		}
+		yaml_event_delete(&event);
+	}
+
+	return rc;
+}
+
+int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
+			int version, char *pattern)
+{
+	char source[PATH_MAX / 2], group[GENL_NAMSIZ + 1];
+	char *family = "lustre", *tmp;
+	yaml_emitter_t request;
+	yaml_event_t event;
+	int cmd = 0;
+	int rc;
+
+	bzero(source, sizeof(source));
+	/* replace '/' with '.' to match conf_param and sysctl */
+	for (tmp = strchr(pattern, '/'); tmp != NULL;
+	     tmp = strchr(tmp, '/'))
+		*tmp = '.';
+
+	tmp = strrchr(pattern, '.');
+	if (tmp) {
+		size_t len = tmp - pattern;
+
+		strncpy(group, tmp + 1, GENL_NAMSIZ);
+		strncpy(source, pattern, len);
+	} else {
+		strncpy(group, pattern, GENL_NAMSIZ);
+	}
+
+	if (strcmp(group, "devices") == 0)
+		cmd = LUSTRE_CMD_DEVICES;
+
+	if (!cmd)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(reply);
+	if (rc == 0)
+		return -EOPNOTSUPP;
+
+	rc = yaml_parser_set_input_netlink(reply, sk, false);
+	if (rc == 0)
+		return -EOPNOTSUPP;
+
+	/* Create Netlink emitter to send request to kernel */
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk,
+					     family, version,
+					     cmd, NLM_F_DUMP);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_open(&request);
+
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)group,
+				     strlen(group), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	if (source[0]) {
+		const char *key = cmd == LUSTRE_CMD_DEVICES ? "name" : "source";
+
+		/* Now fill in 'path' filter */
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1, YAML_ANY_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_ANY_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)key, strlen(key),
+					     1, 0, YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)source,
+					     strlen(source), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+	} else {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto error;
+	}
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_close(&request);
+error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	}
+	yaml_emitter_delete(&request);
+
+	return rc == 1 ? 0 : -EINVAL;
+}
+
+int llapi_param_display_value(char *path, int version,
+			      enum lctl_param_flags flags, FILE *fp)
+{
+	yaml_parser_t reply;
+	struct nl_sock *sk;
+	int rc;
+
+	/* version zero means just list sources. "devices is special case */
+	if (!version && strcmp(path, "devices") == 0) {
+		fprintf(fp, "devices\n");
+		return 0;
+	}
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -ENOMEM;
+
+	rc = lcfg_param_get_yaml(&reply, sk, version, path);
+	if (rc < 0)
+		return rc;
+
+	if (flags & PARAM_FLAGS_YAML_FORMAT) {
+		yaml_document_t results;
+		yaml_emitter_t output;
+
+		/* load the reply results */
+		rc = yaml_parser_load(&reply, &results);
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			yaml_document_delete(&results);
+			rc = -EINVAL;
+			goto free_reply;
+		}
+
+		/* create emitter to output results */
+		rc = yaml_emitter_initialize(&output);
+		if (rc == 1) {
+			yaml_emitter_set_output_file(&output, fp);
+
+			rc = yaml_emitter_dump(&output, &results);
+		}
+
+		yaml_document_delete(&results);
+		if (rc == 0) {
+			yaml_emitter_log_error(&output, stderr);
+			rc = -EINVAL;
+		}
+		yaml_emitter_delete(&output);
+	} else {
+		yaml_event_t event;
+		bool done = false;
+
+		while (!done) {
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0)
+				break;
+
+			if (event.type == YAML_SCALAR_EVENT) {
+				char *value = (char *)event.data.scalar.value;
+
+				if (strcmp(value, "devices") == 0)
+					rc = print_out_devices(&reply, flags);
+				if (rc == 0)
+					break;
+			}
+
+			done = (event.type == YAML_STREAM_END_EVENT);
+			yaml_event_delete(&event);
+		}
+
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			rc = -EINVAL;
+		}
+	}
+free_reply:
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+	return rc == 1 ? 0 : rc;
 }
 
 /**

@@ -184,6 +184,15 @@ int libcfs_ukuc_get_rfd(struct lustre_kernelcomm *link);
 int libcfs_ukuc_msg_get(struct lustre_kernelcomm *l, char *buf, int maxsize,
 			int transport);
 
+enum lctl_param_flags {
+	PARAM_FLAGS_YAML_FORMAT		= 0x0001,
+	PARAM_FLAGS_SHOW_SOURCE		= 0x0002,
+	PARAM_FLAGS_EXTRA_DETAILS	= 0x0004,
+};
+
+int llapi_param_display_value(char *path, int version,
+			      enum lctl_param_flags flags, FILE *fp);
+
 enum get_lmd_info_type {
 	GET_LMD_INFO = 1,
 	GET_LMD_STRIPE = 2,

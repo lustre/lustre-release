@@ -111,11 +111,15 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  liblustreapi_heat.c liblustreapi_pcc.c \
 			  liblustreapi_root.c \
 			  liblustreapi_lseek.c liblustreapi_swap.c
+liblustreapi_la_CFLAGS = -fPIC -D_GNU_SOURCE $(LIBNL3_CFLAGS) \
+			 -I $(top_builddir)/lnet/utils \
+			 -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \
+			 -DLUSTRE_UTILS=1
 liblustreapi_la_LDFLAGS = $(LIBREADLINE) -version-info 1:0:0 \
 			  -Wl,--version-script=liblustreapi.map
 liblustreapi_la_LIBADD = $(top_builddir)/libcfs/libcfs/libcfs.la \
 			 $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
-			 -lpthread
+			 $(LIBNL3_LIBS) -lpthread
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lustre.pc
