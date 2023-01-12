@@ -720,9 +720,17 @@ static void request_key_unlink(struct key *key)
 		LBUG();
 	}
 
-	LASSERT(ring);
-	key_unlink(ring, key);
-	key_put(ring);
+	if (ring) {
+		int res = key_unlink(ring, key);
+		CDEBUG(D_SEC,
+		       "Unlink key %08x (%p) from keyring %08x: %d\n",
+		       key->serial, key, ring->serial, res);
+		key_put(ring);
+	} else {
+		CDEBUG(D_SEC,
+		       "Missing keyring, key %08x (%p) could not be unlinked, ignored\n",
+		       key->serial, key);
+	}
 }
 
 static
@@ -921,6 +929,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 			/* we'd prefer to call key_revoke(), but we more like
 			 * to revoke it within this key->sem locked period.
 			 */
+			CDEBUG(D_SEC, "revoking key %08x (%p)\n",
+			       key->serial, key);
 			key_revoke_locked(key);
 		}
 
@@ -1339,35 +1349,37 @@ static
 #ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
 int gss_kt_instantiate(struct key *key, struct key_preparsed_payload *prep)
 {
-	const void     *data = prep->data;
-	size_t          datalen = prep->datalen;
+	const void *data = prep->data;
+	size_t datalen = prep->datalen;
 #else
 int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 {
 #endif
-        int             rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        if (data != NULL || datalen != 0) {
-                CERROR("invalid: data %p, len %lu\n", data, (long)datalen);
-                RETURN(-EINVAL);
-        }
+	CDEBUG(D_SEC, "instantiating key %08x (%p)\n", key->serial, key);
+
+	if (data != NULL || datalen != 0) {
+		CERROR("invalid: data %p, len %lu\n", data, (long)datalen);
+		RETURN(-EINVAL);
+	}
 
 	if (key_get_payload(key, 0)) {
-                CERROR("key already have payload\n");
-                RETURN(-EINVAL);
-        }
+		CERROR("key already have payload\n");
+		RETURN(-EINVAL);
+	}
 
-        /* link the key to session keyring, so following context negotiation
-         * rpc fired from user space could find this key. This will be unlinked
-         * automatically when upcall processes die.
-         *
-         * we can't do this through keyctl from userspace, because the upcall
-         * might be neither possessor nor owner of the key (setuid).
-         *
-         * the session keyring is created upon upcall, and don't change all
-         * the way until upcall finished, so rcu lock is not needed here.
-         */
+	/* link the key to session keyring, so following context negotiation
+	 * rpc fired from user space could find this key. This will be unlinked
+	 * automatically when upcall processes die.
+	 *
+	 * we can't do this through keyctl from userspace, because the upcall
+	 * might be neither possessor nor owner of the key (setuid).
+	 *
+	 * the session keyring is created upon upcall, and don't change all
+	 * the way until upcall finished, so rcu lock is not needed here.
+	 */
 	LASSERT(current_cred()->session_keyring);
 
 	lockdep_off();
@@ -1380,7 +1392,9 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 		RETURN(rc);
 	}
 
-	CDEBUG(D_SEC, "key %p instantiated, ctx %p\n", key,
+	CDEBUG(D_SEC,
+	      "key %08x (%p) linked to keyring %08x and instantiated, ctx %p\n",
+	       key->serial, key, current_cred()->session_keyring->serial,
 	       key_get_payload(key, 0));
 	RETURN(0);
 }
@@ -1393,60 +1407,62 @@ static
 #ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
 int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
 {
-	const void              *data = prep->data;
-	__u32                    datalen32 = (__u32) prep->datalen;
+	const void *data = prep->data;
+	__u32 datalen32 = (__u32) prep->datalen;
 #else
 int gss_kt_update(struct key *key, const void *data, size_t datalen)
 {
-	__u32                    datalen32 = (__u32) datalen;
+	__u32 datalen32 = (__u32) datalen;
 #endif
 	struct ptlrpc_cli_ctx *ctx = key_get_payload(key, 0);
-        struct gss_cli_ctx      *gctx;
-        rawobj_t                 tmpobj = RAWOBJ_EMPTY;
-        int                      rc;
-        ENTRY;
+	struct gss_cli_ctx *gctx;
+	rawobj_t tmpobj = RAWOBJ_EMPTY;
+	int rc;
+	ENTRY;
+
+	CDEBUG(D_SEC, "updating key %08x (%p)\n", key->serial, key);
 
 	if (data == NULL || datalen32 == 0) {
 		CWARN("invalid: data %p, len %lu\n", data, (long)datalen32);
 		RETURN(-EINVAL);
 	}
 
-        /* if upcall finished negotiation too fast (mostly likely because
-         * of local error happened) and call kt_update(), the ctx
-         * might be still NULL. but the key will finally be associate
-         * with a context, or be revoked. if key status is fine, return
-         * -EAGAIN to allow userspace sleep a while and call again. */
-        if (ctx == NULL) {
-                CDEBUG(D_SEC, "update too soon: key %p(%x) flags %lx\n",
-                      key, key->serial, key->flags);
+	/* if upcall finished negotiation too fast (mostly likely because
+	 * of local error happened) and call kt_update(), the ctx
+	 * might be still NULL. but the key will finally be associate
+	 * with a context, or be revoked. if key status is fine, return
+	 * -EAGAIN to allow userspace sleep a while and call again. */
+	if (ctx == NULL) {
+		CDEBUG(D_SEC, "update too soon: key %08x (%p) flags %lx\n",
+		       key->serial, key, key->flags);
 
-                rc = key_validate(key);
-                if (rc == 0)
-                        RETURN(-EAGAIN);
-                else
-                        RETURN(rc);
-        }
+		rc = key_validate(key);
+		if (rc == 0)
+			RETURN(-EAGAIN);
+		else
+			RETURN(rc);
+	}
 
 	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 	LASSERT(ctx->cc_sec);
 
 	ctx_clear_timer_kr(ctx);
 
-        /* don't proceed if already refreshed */
-        if (cli_ctx_is_refreshed(ctx)) {
-                CWARN("ctx already done refresh\n");
-                RETURN(0);
-        }
+	/* don't proceed if already refreshed */
+	if (cli_ctx_is_refreshed(ctx)) {
+		CWARN("ctx already done refresh\n");
+		RETURN(0);
+	}
 
-        sptlrpc_cli_ctx_get(ctx);
-        gctx = ctx2gctx(ctx);
+	sptlrpc_cli_ctx_get(ctx);
+	gctx = ctx2gctx(ctx);
 
-        rc = buffer_extract_bytes(&data, &datalen32, &gctx->gc_win,
-                                  sizeof(gctx->gc_win));
-        if (rc) {
-                CERROR("failed extract seq_win\n");
-                goto out;
-        }
+	rc = buffer_extract_bytes(&data, &datalen32, &gctx->gc_win,
+				  sizeof(gctx->gc_win));
+	if (rc) {
+		CERROR("failed extract seq_win\n");
+		goto out;
+	}
 
 	if (gctx->gc_win == 0) {
 		__u32   nego_rpc_err, nego_gss_err;
@@ -1493,25 +1509,26 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
 			rc = 0;
 	}
 out:
-        /* we don't care what current status of this ctx, even someone else
-         * is operating on the ctx at the same time. we just add up our own
-         * opinions here. */
-        if (rc == 0) {
-                gss_cli_ctx_uptodate(gctx);
-        } else {
-                /* this will also revoke the key. has to be done before
-                 * wakeup waiters otherwise they can find the stale key */
-                kill_key_locked(key);
+	CDEBUG(D_SEC, "update of key %08x (%p): %d\n", key->serial, key, rc);
+	/* we don't care what current status of this ctx, even someone else
+	 * is operating on the ctx at the same time. we just add up our own
+	 * opinions here. */
+	if (rc == 0) {
+		gss_cli_ctx_uptodate(gctx);
+	} else {
+		/* this will also revoke the key. has to be done before
+		 * wakeup waiters otherwise they can find the stale key */
+		kill_key_locked(key);
 
-                cli_ctx_expire(ctx);
+		cli_ctx_expire(ctx);
 
-                if (rc != -ERESTART)
+		if (rc != -ERESTART)
 			set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
-        }
+	}
 
-        /* let user space think it's a success */
-        sptlrpc_cli_ctx_put(ctx, 1);
-        RETURN(0);
+	/* let user space think it's a success */
+	sptlrpc_cli_ctx_put(ctx, 1);
+	RETURN(0);
 }
 
 #ifndef HAVE_KEY_MATCH_DATA

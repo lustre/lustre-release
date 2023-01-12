@@ -936,12 +936,13 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 		inst_keyring = KEY_SPEC_SESSION_KEYRING;
 
 	if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
-		logmsg(LL_ERR, "instantiate key %08x: %s\n",
-		       keyid, strerror(errno));
+		logmsg(LL_ERR, "instantiate key %08x in keyring id %d: %s\n",
+		       keyid, inst_keyring, strerror(errno));
 		return 1;
 	}
 
-	logmsg(LL_TRACE, "instantiated kernel key %08x\n", keyid);
+	logmsg(LL_TRACE, "instantiated kernel key %08x in keyring id %d\n",
+	       keyid, inst_keyring);
 
 	return 0;
 }
@@ -988,20 +989,26 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	logmsg(LL_INFO, "key %s, desc %s, ugid %s:%s, sring %s, coinfo %s\n",
-	       argv[2], argv[4], argv[6], argv[7], argv[10], argv[5]);
-
 	memset(&uparam, 0, sizeof(uparam));
 
 	if (strcmp(argv[1], "create") != 0) {
-		logmsg(LL_ERR, "invalid OP %s\n", argv[1]);
+		logmsg(LL_ERR,
+		       "invalid OP %s (key %s, desc %s, ugid %s:%s, sring %s, coinfo %s)\n",
+		       argv[1], argv[2], argv[4], argv[6], argv[7], argv[10],
+		       argv[5]);
 		return 1;
 	}
 
 	if (sscanf(argv[2], "%d", &keyid) != 1) {
-		logmsg(LL_ERR, "can't extract KeyID: %s\n", argv[2]);
+		logmsg(LL_ERR,
+		       "can't extract KeyID: %s (key %s, desc %s, ugid %s:%s, sring %s, coinfo %s)\n",
+		       argv[2], argv[2], argv[4], argv[6], argv[7], argv[10],
+		       argv[5]);
 		return 1;
 	}
+
+	logmsg(LL_INFO, "key %08x, desc %s, ugid %s:%s, sring %s, coinfo %s\n",
+	       keyid, argv[4], argv[6], argv[7], argv[10], argv[5]);
 
 	if (sscanf(argv[6], "%d", &uparam.kup_fsuid) != 1) {
 		logmsg(LL_ERR, "can't extract UID: %s\n", argv[6]);
