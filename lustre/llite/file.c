@@ -2038,20 +2038,36 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 static int file_read_confine_iter(struct lu_env *env, struct kiocb *iocb,
 				  struct iov_iter *to)
 {
+	struct cl_io *io;
 	struct cl_attr *attr = vvp_env_thread_attr(env);
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_object *obj = lli->lli_clob;
 	loff_t read_end = iocb->ki_pos + iov_iter_count(to);
 	loff_t kms;
 	loff_t size;
-	int rc;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!obj)
+		RETURN(rc);
+
+	io = vvp_env_thread_io(env);
+	io->ci_obj = obj;
+	rc = cl_io_init(env, io, CIT_MISC, obj);
+	if (rc < 0)
+		GOTO(fini_io, rc);
 
 	cl_object_attr_lock(lli->lli_clob);
 	rc = cl_object_attr_get(env, lli->lli_clob, attr);
 	cl_object_attr_unlock(lli->lli_clob);
-	if (rc != 0)
-		return rc;
+
+fini_io:
+	cl_io_fini(env, io);
+	if (rc < 0)
+		RETURN(rc);
 
 	kms = attr->cat_kms;
 	/* if read beyond end-of-file, adjust read count */
@@ -2068,14 +2084,14 @@ static int file_read_confine_iter(struct lu_env *env, struct kiocb *iocb,
 			       iocb->ki_pos, read_end, kms, size);
 
 			if (iocb->ki_pos >= size)
-				return 1;
+				RETURN(1);
 
 			if (read_end > size)
 				iov_iter_truncate(to, size - iocb->ki_pos);
 		}
 	}
 
-	return rc;
+	RETURN(rc);
 }
 
 /*
