@@ -29,3 +29,4 @@ linux-5.14/ext4-projid-xattrs.patch
 base/ext4-delayed-iput.patch
 linux-5.14/ext4-xattr-disable-credits-check.patch
 linux-5.10/ext4-fiemap-kernel-data.patch
+rhel8/ext4-old_ea_inodes_handling_fix.patch

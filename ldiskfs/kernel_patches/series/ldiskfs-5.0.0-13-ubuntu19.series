@@ -27,3 +27,4 @@ rhel8/ext4-xattr-disable-credits-check.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 base/ext4-projid-xattrs.patch
+rhel8/ext4-old_ea_inodes_handling_fix.patch
