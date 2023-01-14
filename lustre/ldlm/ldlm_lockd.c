@@ -2424,8 +2424,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 		 * we can tell the server we have no lock. Otherwise, we
 		 * should send cancel after dropping the cache.
 		 */
-		if ((ldlm_is_canceling(lock) && ldlm_is_bl_done(lock)) ||
-		     ldlm_is_failed(lock)) {
+		if (ldlm_is_ast_sent(lock) || ldlm_is_failed(lock)) {
 			LDLM_DEBUG(lock,
 				   "callback on lock %llx - lock disappeared",
 				   dlm_req->lock_handle[0].cookie);
@@ -2460,7 +2459,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
 	case LDLM_BL_CALLBACK:
-		CDEBUG(D_INODE, "blocking ast\n");
+		LDLM_DEBUG(lock, "blocking ast\n");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_BL_CALLBACK);
 		if (!ldlm_is_cancel_on_block(lock)) {
 			rc = ldlm_callback_reply(req, 0);
@@ -2472,14 +2471,14 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 			ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
 		break;
 	case LDLM_CP_CALLBACK:
-		CDEBUG(D_INODE, "completion ast\n");
+		LDLM_DEBUG(lock, "completion ast\n");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_CP_CALLBACK);
 		rc = ldlm_handle_cp_callback(req, ns, dlm_req, lock);
 		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE))
 			ldlm_callback_reply(req, rc);
 		break;
 	case LDLM_GL_CALLBACK:
-		CDEBUG(D_INODE, "glimpse ast\n");
+		LDLM_DEBUG(lock, "glimpse ast\n");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK);
 		ldlm_handle_gl_callback(req, ns, dlm_req, lock);
 		break;

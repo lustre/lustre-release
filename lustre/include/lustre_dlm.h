@@ -722,6 +722,7 @@ enum ldlm_cancel_flags {
 	LCF_ASYNC	= 0x1, /* Cancel locks asynchronously. */
 	LCF_LOCAL	= 0x2, /* Cancel locks locally, not notifing server */
 	LCF_BL_AST	= 0x4, /* Cancel LDLM_FL_BL_AST locks in the same RPC */
+	LCF_ONE_LOCK	= 0x8, /* Cancel locks pack only one lock. */
 };
 
 struct ldlm_flock {
@@ -1757,7 +1758,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 				    union ldlm_policy_data *policy,
 				    enum ldlm_mode mode,
 				    enum ldlm_cancel_flags flags, void *opaque);
-int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *head,
+int ldlm_cli_cancel_req(struct obd_export *exp, void *ptr,
 			int count, enum ldlm_cancel_flags flags);
 int ldlm_cancel_resource_local(struct ldlm_resource *res,
 			       struct list_head *cancels,
