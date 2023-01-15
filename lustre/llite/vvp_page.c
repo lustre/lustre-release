@@ -63,6 +63,41 @@ static void vvp_page_discard(const struct lu_env *env,
 		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
 }
 
+static void vvp_page_delete(const struct lu_env *env,
+			    const struct cl_page_slice *slice)
+{
+	struct cl_page *cp = slice->cpl_page;
+
+	if (cp->cp_type == CPT_CACHEABLE) {
+		struct page *vmpage = cp->cp_vmpage;
+		struct inode *inode = vmpage->mapping->host;
+
+		LASSERT(PageLocked(vmpage));
+		LASSERT((struct cl_page *)vmpage->private == cp);
+
+		/* Drop the reference count held in vvp_page_init */
+		refcount_dec(&cp->cp_ref);
+
+		ClearPagePrivate(vmpage);
+		vmpage->private = 0;
+
+		/* clearpageuptodate prevents the page being read by the
+		 * kernel after it has been deleted from Lustre, which avoids
+		 * potential stale data reads.  The seqlock allows us to see
+		 * that a page was potentially deleted and catch the resulting
+		 * SIGBUS - see ll_filemap_fault() (LU-16160) */
+		write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
+		ClearPageUptodate(vmpage);
+		write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
+
+		/*
+		 * The reference from vmpage to cl_page is removed,
+		 * but the reference back is still here. It is removed
+		 * later in cl_page_free().
+		 */
+	}
+}
+
 /**
  * Handles page transfer errors at VM level.
  *
@@ -159,6 +194,7 @@ static void vvp_page_completion_write(const struct lu_env *env,
 }
 
 static const struct cl_page_operations vvp_page_ops = {
+	.cpo_delete	   = vvp_page_delete,
 	.cpo_discard       = vvp_page_discard,
 	.io = {
 		[CRT_READ] = {

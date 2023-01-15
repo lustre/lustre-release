@@ -397,9 +397,9 @@ static inline void __user *get_vmf_address(struct vm_fault *vmf)
 }
 
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-# define ll_filemap_fault(vma, vmf) filemap_fault(vmf)
+# define __ll_filemap_fault(vma, vmf) filemap_fault(vmf)
 #else
-# define ll_filemap_fault(vma, vmf) filemap_fault(vma, vmf)
+# define __ll_filemap_fault(vma, vmf) filemap_fault(vma, vmf)
 #endif
 
 #ifndef HAVE_CURRENT_TIME
