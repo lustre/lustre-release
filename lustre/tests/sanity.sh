@@ -26096,11 +26096,10 @@ generate_uneven_mdts() {
 		fi
 	done
 
-	(( min > 0 )) || skip "low space on MDT$min_index"
 	(( ${ffree[min_index]} > 0 )) ||
-		skip "no free files on MDT$min_index"
+		skip "no free files in MDT$min_index"
 	(( ${ffree[min_index]} < 10000000 )) ||
-		skip "too many free files on MDT$min_index"
+		skip "too many free files in MDT$min_index"
 
 	# Check if we need to generate uneven MDTs
 	local diff=$(((max - min) * 100 / min))
@@ -26135,8 +26134,6 @@ generate_uneven_mdts() {
 			(${bavail[max_index]} * bsize >> 16)))
 		min=$(((${ffree[min_index]} >> 8) *
 			(${bavail[min_index]} * bsize >> 16)))
-		(( min > 0 )) ||
-			skip "low space on MDT$min_index"
 		diff=$(((max - min) * 100 / min))
 		i=$((i + 1))
 	done
@@ -26158,16 +26155,8 @@ test_qos_mkdir() {
 	local lod_qos_prio_free
 	local lod_qos_threshold_rr
 	local lod_qos_maxage
-	local total
 	local count
 	local i
-
-	# @total is total directories created if it's testing plain
-	# directories, otherwise it's total stripe object count for
-	# striped directories test.
-	# remote/striped directory unlinking is slow on zfs and may
-	# timeout, test with fewer directories
-	[ "$mds1_FSTYPE" = "zfs" ] && total=120 || total=240
 
 	lmv_qos_prio_free=$($LCTL get_param -n lmv.*.qos_prio_free | head -n1)
 	lmv_qos_prio_free=${lmv_qos_prio_free%%%}
@@ -26217,8 +26206,8 @@ test_qos_mkdir() {
 		echo "Mkdir (stripe_count $stripe_count) roundrobin:" ||
 		echo "Mkdir (stripe_count $stripe_count) on stripe $stripe_index"
 
-	stack_trap "unlinkmany -d $testdir/subdir $((total / stripe_count))"
-	for (( i = 0; i < total / stripe_count; i++ )); do
+	stack_trap "unlinkmany -d $testdir/subdir $((100 * MDSCOUNT))"
+	for (( i = 0; i < 100 * MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
@@ -26227,13 +26216,13 @@ test_qos_mkdir() {
 		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
 		echo "$count directories created on MDT$i"
 		if $test_mkdir_rr; then
-			(( count == total / stripe_count / MDSCOUNT )) ||
+			(( $count == 100 )) ||
 				error "subdirs are not evenly distributed"
-		elif (( i == stripe_index )); then
-			(( count == total / stripe_count )) ||
+		elif (( $i == $stripe_index )); then
+			(( $count == 100 * MDSCOUNT )) ||
 				error "$count subdirs created on MDT$i"
 		else
-			(( count == 0 )) ||
+			(( $count == 0 )) ||
 				error "$count subdirs created on MDT$i"
 		fi
 
@@ -26242,9 +26231,8 @@ test_qos_mkdir() {
 				grep -c -P "^\s+$i\t")
 			echo "$count stripes created on MDT$i"
 			# deviation should < 5% of average
-			delta=$((count - total / MDSCOUNT))
-			delta=${delta#-}
-			(( delta <= total / MDSCOUNT / 20 )) ||
+			(( $count >= 95 * stripe_count &&
+			   $count <= 105 * stripe_count)) ||
 				error "stripes are not evenly distributed"
 		fi
 	done
@@ -26280,12 +26268,10 @@ test_qos_mkdir() {
 		fi
 	done
 
-	(( min > 0 )) ||
-		skip "low space on MDT$min_index"
+	(( ${ffree[min_index]} > 0 )) ||
+		skip "no free files in MDT$min_index"
 	(( ${ffree[min_index]} < 10000000 )) ||
-		skip "too many free files on MDT$min_index"
-
-	generate_uneven_mdts 120
+		skip "too many free files in MDT$min_index"
 
 	echo "MDT filesfree available: ${ffree[*]}"
 	echo "MDT blocks available: ${bavail[*]}"
@@ -26304,9 +26290,10 @@ test_qos_mkdir() {
 	sleep 1
 
 	testdir=$DIR/$tdir-s$stripe_count/qos
+	local num=200
 
-	stack_trap "unlinkmany -d $testdir/subdir $((total / stripe_count))"
-	for (( i = 0; i < total / stripe_count; i++ )); do
+	stack_trap "unlinkmany -d $testdir/subdir $((num * MDSCOUNT))"
+	for (( i = 0; i < num * MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
@@ -26321,8 +26308,8 @@ test_qos_mkdir() {
 	min=$($LFS getdirstripe -i $testdir/* | grep -c "^$min_index$")
 
 	# D-value should > 10% of averge
-	(( max - min > total / stripe_count / MDSCOUNT / 10 )) ||
-		error "subdirs shouldn't be evenly distributed: $max - $min <= $((total / stripe_count / MDSCOUNT / 10))"
+	(( max - min > num / 10 )) ||
+		error "subdirs shouldn't be evenly distributed: $max - $min < $((num / 10))"
 
 	# ditto for stripes
 	if (( stripe_count > 1 )); then
@@ -26336,8 +26323,8 @@ test_qos_mkdir() {
 
 		min=$($LFS getdirstripe $testdir/* |
 			grep -c -P "^\s+$min_index\t")
-		(( max - min > total / MDSCOUNT / 10 )) ||
-			error "stripes shouldn't be evenly distributed: $max - $min <= $((total / MDSCOUNT / 10))"
+		(( max - min > num * stripe_count / 10 )) ||
+			error "stripes shouldn't be evenly distributed: $max - $min < $((num / 10)) * $stripe_count"
 	fi
 }
 
@@ -26370,17 +26357,10 @@ test_413a() {
 	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
 		skip "Need server version at least 2.12.52"
 
-	local stripe_max=$((MDSCOUNT - 1))
 	local stripe_count
 
-	generate_uneven_mdts 120
-
-	# test 4-stripe directory at most, otherwise it's too slow
-	(( stripe_max > 4 )) && stripe_max=4
-	# unlinking striped directory is slow on zfs, and may timeout, only test
-	# plain directory
-	[ "$mds1_FSTYPE" == "zfs" ] && stripe_max=1
-	for stripe_count in $(seq 1 $stripe_max); do
+	generate_uneven_mdts 100
+	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
 		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
 		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
 		$LFS mkdir -i $(most_full_mdt) $DIR/$tdir-s$stripe_count/qos ||
@@ -26397,15 +26377,11 @@ test_413b() {
 	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
 		skip "Need server version at least 2.12.52"
 
-	local stripe_max=$((MDSCOUNT - 1))
 	local testdir
 	local stripe_count
 
-	generate_uneven_mdts 120
-
-	(( stripe_max > 4 )) && stripe_max=4
-	[ "$mds1_FSTYPE" == "zfs" ] && stripe_max=1
-	for stripe_count in $(seq 1 $stripe_max); do
+	generate_uneven_mdts 100
+	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
 		testdir=$DIR/$tdir-s$stripe_count
 		mkdir $testdir || error "mkdir $testdir failed"
 		mkdir $testdir/rr || error "mkdir rr failed"
@@ -26430,8 +26406,6 @@ test_413c() {
 	local testdir
 	local inherit
 	local inherit_rr
-
-	generate_uneven_mdts 120
 
 	testdir=$DIR/${tdir}-s1
 	mkdir $testdir || error "mkdir $testdir failed"
@@ -26670,8 +26644,6 @@ test_413z() {
 	for pid in $pids; do
 		wait $pid
 	done
-
-	true
 }
 run_test 413z "413 test cleanup"
 
