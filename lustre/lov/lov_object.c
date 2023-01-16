@@ -1918,7 +1918,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	struct fiemap_state fs = { 0 };
 	struct lu_extent range;
 	int cur_ext;
-	int stripe_last;
+	int stripe_last = 0;
 	int start_stripe = 0;
 	bool resume = false;
 	ENTRY;
@@ -2006,9 +2006,10 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	 * the high 16bits of fe_device remember which stripe the last
 	 * call has been arrived, we'd continue from there in this call.
 	 */
-	if (fiemap->fm_extent_count && fiemap->fm_extents[0].fe_logical)
+	if (fiemap->fm_extent_count && fiemap->fm_extents[0].fe_logical) {
 		resume = true;
-	stripe_last = get_fe_stripenr(&fiemap->fm_extents[0]);
+		stripe_last = get_fe_stripenr(&fiemap->fm_extents[0]);
+	}
 	/**
 	 * stripe_last records stripe number we've been processed in the last
 	 * call
