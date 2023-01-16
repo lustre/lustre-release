@@ -5644,6 +5644,109 @@ test_83()
 }
 run_test 83 "Setting default quota shouldn't affect grace time"
 
+test_84()
+{
+	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need MDS 2.15.53 or later"
+
+	local dir1="$DIR/$tdir/dir1"
+	local TESTFILE1="$dir1/$tfile-1"
+	local waited=0
+	local grant=0
+	local grant2=0
+	local qp="qpool1"
+
+	mds_supports_qp
+
+	setup_quota_test || error "setup quota failed with $?"
+	quota_init
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	pool_add $qp || error "pool_add failed"
+	pool_add_targets $qp 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -g $TSTUSR -B 10G $DIR ||
+		error "failed to set group quota for $TSTUSR"
+	$LFS setquota -g $TSTUSR -B 5G --pool $qp $DIR ||
+                error "set user quota failed"
+	$LFS quota -gv $TSTUSR $DIR
+
+	mkdir -p $dir1 || error "failed to mkdir"
+	chown $TSTUSR.$TSTUSR $dir1 || error "chown $dir1 failed"
+
+	$LFS setstripe -c 1 -i 0 $TESTFILE1
+	$LFS getstripe $TESTFILE1
+	chown $TSTUSR.$TSTUSR $TESTFILE1
+
+	$RUNAS $DD of=$TESTFILE1 count=60 conv=nocreat oflag=direct ||
+		quota_error g $TSTUSR "write failed"
+
+	sync
+	sleep 3
+	$LFS quota -gv $TSTUSR $DIR
+
+#define OBD_FAIL_QUOTA_GRANT 0xA08
+	lustre_fail mds 0xa08
+	lustre_fail ost 0xa08
+	sleep 1
+
+	# clear quota limits to trigger updating grant quota
+	$LFS setquota -g $TSTUSR -b 0 -B 0 $DIR ||
+		error "failed to clear the group quota for $TSTUSR"
+	$LFS quota -gv $TSTUSR $DIR
+
+	# the grant quota should be set as insane value
+	waited=0
+	while (( $waited < 60 )); do
+		grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+		(( ${#grant} == 20 && ${#grant2} == 20 )) && break
+
+		sleep 1
+		waited=$((waited + 1))
+	done
+
+	(( ${#grant} == 20 )) || error "pool grant is not set as insane value"
+	(( ${#grant2} == 20 )) || error "grant is not set as insane value"
+
+	lustre_fail mds_ost 0
+	sleep 1
+
+	# reset the quota
+	$LFS setquota -g $TSTUSR -r $DIR ||
+		error "failed to reset group quota for $TSTUSR"
+
+	sleep 3
+	$LFS quota -gv $TSTUSR $DIR
+
+	# the grant quota should be reset
+	grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+	(( ${#grant} == 20 )) && error "grant is not cleared"
+	grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
+	(( ${#grant} == 20 )) && error "pool grant is not cleared"
+
+	$LFS quota -gv $TSTUSR --pool $qp $DIR
+	local hlimit=$(getquota -g $TSTUSR global bhardlimit $qp)
+	 [ $hlimit -eq 5242880 ] || error "pool limit is changed"
+
+	# test whether the quota still works
+	$LFS setquota -g $TSTUSR -B 100M $DIR ||
+		error "failed to set group quota for $TSTUSR"
+	$LFS quota -gv $TSTUSR $DIR
+
+	$RUNAS $DD of=$TESTFILE1 count=200 conv=nocreat oflag=direct &&
+		quota_error g $TSTUSR "dd succeed, expect EDQUOT"
+
+	$LFS setquota -g $TSTUSR -B 300M $DIR ||
+		error "failed to set group quota for $TSTUSR"
+	$LFS quota -gv $TSTUSR $DIR
+
+	$RUNAS $DD of=$TESTFILE1 count=200 conv=nocreat oflag=direct ||
+		quota_error g $TSTUSR "dd failed, expect succeed"
+}
+run_test 84 "Reset quota should fix the insane granted quota"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

@@ -352,7 +352,9 @@ static void qsd_req_completion(const struct lu_env *env,
 	if (repbody != NULL && repbody->qb_count != 0) {
 		LQUOTA_DEBUG(lqe, "DQACQ qb_count:%llu", repbody->qb_count);
 
-		if (req_is_rel(reqbody->qb_flags)) {
+		if (lqe->lqe_is_reset) {
+			lqe->lqe_granted = 0;
+		} else if (req_is_rel(reqbody->qb_flags)) {
 			if (lqe->lqe_granted < repbody->qb_count) {
 				LQUOTA_ERROR(lqe, "can't release more space "
 					     "than owned %llu<%llu",
@@ -379,6 +381,9 @@ static void qsd_req_completion(const struct lu_env *env,
 		 * We don't update the version of slave index copy on DQACQ.
 		 * No locking is necessary since nobody can change
 		 * lqe->lqe_granted while lqe->lqe_pending_req > 0 */
+		if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_GRANT))
+			qti->qti_rec.lqr_slv_rec.qsr_granted =
+							0xFFFFFFFFFFDEC80CULL;
 		qsd_upd_schedule(qqi, lqe, &lqe->lqe_id, &qti->qti_rec, 0,
 				 false);
 		lqe_write_lock(lqe);

@@ -332,6 +332,7 @@ out_del:
 			GOTO(out, rc = PTR_ERR(lqe));
 	}
 
+	lqe->lqe_is_reset = false;
 	lqe->lqe_is_deleted = 0;
 
 	/* The in-memory lqe update for slave index copy isn't deferred,
@@ -369,6 +370,20 @@ out:
 			lqe->lqe_enforced = true;
 
 		LQUOTA_DEBUG(lqe, "update to use default quota");
+	}
+	if (upd->qur_global && rc == 0 &&
+	    (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
+							LQUOTA_FLAG_RESET)) {
+		struct lquota_slv_rec srec;
+
+		lqe->lqe_granted = 0;
+		lqe->lqe_softlimit = 0;
+		lqe->lqe_hardlimit = 0;
+		lqe->lqe_is_default = false;
+		lqe->lqe_is_reset = true;
+
+		memset(&srec, 0, sizeof(srec));
+		rc = qsd_update_index(env, qqi, &upd->qur_qid, false, 0, &srec);
 	}
 
 	if (lqe && !IS_ERR(lqe)) {

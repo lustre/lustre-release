@@ -93,6 +93,11 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 		}
 
 		if (lqe->lqe_id.qid_uid != 0 &&
+		    (LQUOTA_FLAG(qti->qti_glb_rec.qbr_time) &
+						LQUOTA_FLAG_RESET))
+			lqe->lqe_is_reset = true;
+
+		if (lqe->lqe_id.qid_uid != 0 &&
 		    (qti->qti_glb_rec.qbr_hardlimit != 0 ||
 		     qti->qti_glb_rec.qbr_softlimit != 0))
 			lqe->lqe_enforced = true;

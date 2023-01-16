@@ -549,6 +549,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_QUOTA_INIT              0xA05
 #define OBD_FAIL_QUOTA_PREACQ            0xA06
 #define OBD_FAIL_QUOTA_RECALC            0xA07
+#define OBD_FAIL_QUOTA_GRANT             0xA08
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

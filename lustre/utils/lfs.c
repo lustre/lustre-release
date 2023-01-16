@@ -7682,6 +7682,153 @@ quota_type:
 	return 0;
 }
 
+static int lfs_reset_quota(char *mnt, struct if_quotactl *qctl)
+{
+	struct if_quotactl tmp_qctl;
+	int index, md_count, dt_count;
+	int wait_phase = 0, wait_index = 0, wait_count = 0;
+	int rc, rc2;
+
+	/* reset the quota ID, the existing quota setting will be returned */
+	rc = llapi_quotactl(mnt, qctl);
+	if (rc)
+		return rc;
+
+	/* sanity check */
+	if ((qctl->qc_dqblk.dqb_valid & QIF_LIMITS) != QIF_LIMITS) {
+		fprintf(stderr,
+			"the existing quota settings are not returned!\n");
+		return -EINVAL;
+	}
+
+	rc = llapi_get_obd_count(mnt, &md_count, 1);
+	if (rc) {
+		fprintf(stderr, "can not get mdt count: %s\n", strerror(-rc));
+		return rc;
+	}
+
+	rc = llapi_get_obd_count(mnt, &dt_count, 0);
+	if (rc) {
+		fprintf(stderr, "can not get ost count: %s\n", strerror(-rc));
+		return rc;
+	}
+
+	memset(&tmp_qctl, 0, sizeof(tmp_qctl));
+	tmp_qctl.qc_type = qctl->qc_type;
+	tmp_qctl.qc_id = qctl->qc_id;
+	tmp_qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
+
+retry:
+	if (wait_phase == 0) {
+		for (index = wait_index; index < md_count; index++) {
+			tmp_qctl.qc_idx = index;
+			tmp_qctl.qc_valid = QC_MDTIDX;
+			rc = llapi_quotactl(mnt, &tmp_qctl);
+			if (rc == -ENODEV || rc == -ENODATA)
+				continue;
+			if (rc) {
+				fprintf(stderr, "quotactl mdt%d failed: %s\n",
+					index, strerror(-rc));
+				break;
+			}
+			/* check whether the md quota grant is reset */
+			if (tmp_qctl.qc_dqblk.dqb_valid & QIF_LIMITS &&
+			    tmp_qctl.qc_dqblk.dqb_ihardlimit != 0)
+				break;
+		}
+
+		if (index < md_count) {
+			wait_phase = 0;
+			wait_index = index;
+			goto wait;
+		}
+	} else {
+		for (index = wait_index; index < dt_count; index++) {
+			tmp_qctl.qc_idx = index;
+			tmp_qctl.qc_valid = QC_OSTIDX;
+			rc = llapi_quotactl(mnt, &tmp_qctl);
+			if (rc == -ENODEV || rc == -ENODATA)
+				continue;
+			if (rc) {
+				fprintf(stderr, "quotactl mdt%d failed: %s\n",
+					index, strerror(-rc));
+				break;
+			}
+			/* check whether the dt quota grant is reset */
+			if (tmp_qctl.qc_dqblk.dqb_valid & QIF_LIMITS &&
+			    tmp_qctl.qc_dqblk.dqb_bhardlimit != 0)
+				break;
+		}
+
+		if (index < dt_count) {
+			wait_phase = 1;
+			wait_index = index;
+			goto wait;
+		}
+	}
+
+	if (wait_phase == 0) {
+		wait_phase = 1;
+		goto retry;
+	}
+
+	goto out;
+
+wait:
+	if (rc || wait_count > 30) {
+		fprintf(stderr, "fail to reset the quota ID %d on OBDs\n",
+			qctl->qc_id);
+		goto out;
+	}
+
+	wait_count++;
+	sleep(1);
+	fprintf(stdout, "wait %d seconds for OBDs to reset the quota ID %u\n",
+		wait_count, qctl->qc_id);
+	goto retry;
+
+
+out:
+	/* restore the quota setting */
+	if (qctl->qc_dqblk.dqb_isoftlimit == 0 &&
+	    qctl->qc_dqblk.dqb_ihardlimit == 0 &&
+	    qctl->qc_dqblk.dqb_bsoftlimit == 0 &&
+	    qctl->qc_dqblk.dqb_bhardlimit == 0)
+		return rc;
+
+	memcpy(&tmp_qctl, qctl, sizeof(tmp_qctl));
+	tmp_qctl.qc_cmd = LUSTRE_Q_SETQUOTA;
+	rc2 = llapi_quotactl(mnt, &tmp_qctl);
+	if (!rc2)
+		return rc;
+
+	fprintf(stderr,
+		"fail to restore the quota setting: %s, please restore it manually by\n  lfs setquota %s %d",
+		strerror(-rc2),
+		qctl->qc_type == USRQUOTA ? "-u" :
+				(qctl->qc_type == GRPQUOTA ? "-g" : "-p"),
+		qctl->qc_id);
+
+	if (qctl->qc_dqblk.dqb_isoftlimit != 0)
+		fprintf(stderr, " -i %llu",
+			(unsigned long long)qctl->qc_dqblk.dqb_isoftlimit);
+	if (qctl->qc_dqblk.dqb_ihardlimit != 0)
+		fprintf(stderr, " -I %llu",
+			(unsigned long long)qctl->qc_dqblk.dqb_ihardlimit);
+	if (qctl->qc_dqblk.dqb_bsoftlimit != 0)
+		fprintf(stderr, " -b %llu",
+			(unsigned long long)qctl->qc_dqblk.dqb_bsoftlimit);
+	if (qctl->qc_dqblk.dqb_bhardlimit != 0)
+		fprintf(stderr, " -B %llu",
+			(unsigned long long)qctl->qc_dqblk.dqb_bhardlimit);
+
+	fprintf(stderr, " %s\n", mnt);
+	if (!rc)
+		rc = rc2;
+
+	return rc;
+}
+
 #define BSLIMIT (1 << 0)
 #define BHLIMIT (1 << 1)
 #define ISLIMIT (1 << 2)
@@ -7710,6 +7857,7 @@ int lfs_setquota(int argc, char **argv)
 						.has_arg = required_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
 	{ .val = 'P',	.name = "default-prj",	.has_arg = no_argument },
+	{ .val = 'r',	.name = "reset",	.has_arg = no_argument },
 	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "default-usr",	.has_arg = no_argument },
 	{ .val = LFS_POOL_OPT,
@@ -7738,7 +7886,7 @@ int lfs_setquota(int argc, char **argv)
 				   * so it can be used as a marker that qc_type
 				   * isn't reinitialized from command line
 				   */
-	while ((c = getopt_long(argc, argv, "b:B:dDg:Ghi:I:p:Pu:U",
+	while ((c = getopt_long(argc, argv, "b:B:dDg:Ghi:I:p:Pru:U",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'U':
@@ -7867,6 +8015,9 @@ quota_type_def:
 						LUSTRE_Q_SETDEFAULT_POOL :
 						LUSTRE_Q_SETQUOTAPOOL;
 			break;
+		case 'r':
+			qctl->qc_cmd = LUSTRE_Q_RESETQID;
+			break;
 		default:
 			fprintf(stderr,
 				"%s setquota: unrecognized option '%s'\n",
@@ -7887,7 +8038,7 @@ quota_type_def:
 	}
 
 	if (!use_default && qctl->qc_cmd != LUSTRE_Q_DELETEQID &&
-	    limit_mask == 0) {
+	    qctl->qc_cmd != LUSTRE_Q_RESETQID && limit_mask == 0) {
 		fprintf(stderr,
 			"%s setquota: at least one limit must be specified\n",
 			progname);
@@ -7895,10 +8046,10 @@ quota_type_def:
 		goto out;
 	}
 
-	if ((use_default || qctl->qc_cmd == LUSTRE_Q_DELETEQID)  &&
-	    limit_mask != 0) {
+	if ((use_default || qctl->qc_cmd == LUSTRE_Q_DELETEQID ||
+	     qctl->qc_cmd == LUSTRE_Q_RESETQID) && limit_mask != 0) {
 		fprintf(stderr,
-			"%s setquota: limits should not be specified when using default quota or deleting quota ID\n",
+			"%s setquota: limits should not be specified when using default quota, deleting or resetting quota ID\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;
@@ -7912,9 +8063,10 @@ quota_type_def:
 		goto out;
 	}
 
-	if (qctl->qc_cmd == LUSTRE_Q_DELETEQID  && qctl->qc_id == 0) {
+	if ((qctl->qc_cmd == LUSTRE_Q_DELETEQID ||
+	     qctl->qc_cmd == LUSTRE_Q_RESETQID)  && qctl->qc_id == 0) {
 		fprintf(stderr,
-			"%s setquota: can not delete root user/group/project\n",
+			"%s setquota: can not delete or reset root user/group/project\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;
@@ -7991,7 +8143,11 @@ quota_type_def:
 	dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
 	dqb->dqb_valid |= (limit_mask & (IHLIMIT | ISLIMIT)) ? QIF_ILIMITS : 0;
 
-	rc = llapi_quotactl(mnt, qctl);
+	if (qctl->qc_cmd == LUSTRE_Q_RESETQID)
+		rc = lfs_reset_quota(mnt, qctl);
+	else
+		rc = llapi_quotactl(mnt, qctl);
+
 	if (rc) {
 		if (*obd_type)
 			fprintf(stderr,

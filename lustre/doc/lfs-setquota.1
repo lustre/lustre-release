@@ -25,6 +25,8 @@ lfs setquota \- set quota limits or grace time for users, groups or projects.
 .TP
 .BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
        [\fB--delete\fR] <\fIfilesystem\fR>
+.BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
+       [\fB-r\fR] <\fIfilesystem\fR>
 .TP
 .SH DESCRIPTION
 .TP
@@ -68,6 +70,10 @@ Set project quota for \fIPROJID\fR.
 .TP
 .B --pool \fIPOOL_NAME\fR
 Set quota per OST pool \fIPOOL_NAME\fR.
+.TP
+.BR -r
+Reset the internal quota data of the user|group|project quota. It can be used
+to fix the quota containing corrupted internal data (such as, the quota grant).
 .TP
 .BR -u | --user \fIUSERNAME\fR|\fBUID
 Set user quota for \fIUNAME\fR or \fIUID\fR.
@@ -157,6 +163,9 @@ Command deletes the unused UID|GID|PROJID from Quota settings.
 .TP
 .B $ lfs setquota -u bob --delete /mnt/lustre
 Delete unused user 'bob'.
+.TP
+.B $ lfs setquota -u bob -r /mnt/lustre
+Reset the user 'bob'.
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-quota(1)

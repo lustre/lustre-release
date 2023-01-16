@@ -136,6 +136,9 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 		    (LQUOTA_FLAG(qti->qti_glb_rec.qbr_time) &
 		     LQUOTA_FLAG_DEFAULT))
 			qmt_lqe_set_default(env, pool, lqe, false);
+		else if (LQUOTA_FLAG(qti->qti_glb_rec.qbr_time) &
+							LQUOTA_FLAG_RESET)
+			lqe->lqe_is_reset = true;
 		break;
 	default:
 		LQUOTA_ERROR(lqe, "failed to read quota entry from disk, rc:%d",
@@ -356,6 +359,12 @@ int qmt_glb_write(const struct lu_env *env, struct thandle *th,
 		rec->qbr_softlimit = 0;
 		rec->qbr_time      = LQUOTA_GRACE_FLAG(lqe->lqe_gracetime,
 						       LQUOTA_FLAG_DEFAULT);
+	} else if (lqe->lqe_is_reset) {
+		rec->qbr_hardlimit = 0;
+		rec->qbr_softlimit = 0;
+		rec->qbr_granted = 0;
+		rec->qbr_time      = LQUOTA_GRACE_FLAG(lqe->lqe_gracetime,
+						       LQUOTA_FLAG_RESET);
 	} else {
 		rec->qbr_hardlimit = lqe->lqe_hardlimit;
 		rec->qbr_softlimit = lqe->lqe_softlimit;
