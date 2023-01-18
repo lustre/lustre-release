@@ -566,6 +566,7 @@ static inline void obd_connect_set_enc_fid2path(struct obd_connect_data *data)
 
 void ll_inode_size_lock(struct inode *inode);
 void ll_inode_size_unlock(struct inode *inode);
+int ll_inode_size_trylock(struct inode *inode);
 
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
@@ -1257,6 +1258,7 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 		     struct ptlrpc_request **request, u64 valid);
 int ll_fsync(struct file *file, loff_t start, loff_t end, int data);
 int ll_merge_attr(const struct lu_env *env, struct inode *inode);
+int ll_merge_attr_try(const struct lu_env *env, struct inode *inode);
 int ll_fid2path(struct inode *inode, void __user *arg);
 int __ll_fid2path(struct inode *inode, struct getinfo_fid2path *gfout,
 		  size_t outsize, __u32 pathlen_orig);

@@ -2664,6 +2664,16 @@ void ll_inode_size_unlock(struct inode *inode)
 	mutex_unlock(&lli->lli_size_mutex);
 }
 
+int ll_inode_size_trylock(struct inode *inode)
+{
+	struct ll_inode_info *lli;
+
+	LASSERT(!S_ISDIR(inode->i_mode));
+
+	lli = ll_i2info(inode);
+	return mutex_trylock(&lli->lli_size_mutex);
+}
+
 void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags)
 {
 	/* do not clear encryption flag */

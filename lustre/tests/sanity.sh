@@ -28801,11 +28801,12 @@ test_806() {
 
 	local bs=1048576
 
-	touch $DIR/$tfile || error "touch $tfile failed"
+	$LFS setstripe -c-1 $DIR/$tfile || error "setstripe $tfile failed"
 
+	# Disable opencache
 	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	save_lustre_params client "llite.*.xattr_cache" > $save
-	lctl set_param llite.*.xattr_cache=0
+	save_lustre_params client "llite.*.opencache_threshold_count" > $save
+	lctl set_param llite.*.opencache_threshold_count=0
 	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
 
 	# single-threaded write
@@ -28874,18 +28875,34 @@ test_806() {
 	done
 	check_lsom_size $DIR/$tfile $size
 
-	# verify truncate
-	echo "Test SOM for truncate"
-	$TRUNCATE $DIR/$tfile 1048576
-	check_lsom_size $DIR/$tfile 1048576
-	$TRUNCATE $DIR/$tfile 1234
-	check_lsom_size $DIR/$tfile 1234
-
 	# verify SOM blocks count
 	echo "Verify SOM block count"
 	$TRUNCATE $DIR/$tfile 0
-	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w1048576YSc ||
-		error "failed to write file $tfile"
+	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w$((bs))YSc ||
+		error "failed to write file $tfile with fdatasync and fstat"
+	check_lsom_data $DIR/$tfile
+
+	$TRUNCATE $DIR/$tfile 0
+	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w$((bs * 2))Yc ||
+		error "failed to write file $tfile with fdatasync"
+	check_lsom_data $DIR/$tfile
+
+	$TRUNCATE $DIR/$tfile 0
+	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:O_SYNC:w$((bs * 3))c ||
+		error "failed to write file $tfile with sync IO"
+	check_lsom_data $DIR/$tfile
+
+	# verify truncate
+	echo "Test SOM for truncate"
+	# use ftruncate to sync blocks on close request
+	$MULTIOP $DIR/$tfile oO_WRONLY:T16384c
+	check_lsom_size $DIR/$tfile 16384
+	check_lsom_data $DIR/$tfile
+
+	$TRUNCATE $DIR/$tfile 1234
+	check_lsom_size $DIR/$tfile 1234
+	# sync blocks on the MDT
+	$MULTIOP $DIR/$tfile oc
 	check_lsom_data $DIR/$tfile
 }
 run_test 806 "Verify Lazy Size on MDS"
@@ -28909,8 +28926,10 @@ test_807() {
 		error "truncate $tdir/trunc failed"
 
 	local bs=1048576
-	dd if=/dev/zero of=$DIR/$tdir/single_dd bs=$bs count=1 conv=fsync ||
+	echo "Test SOM for single-threaded write with fsync"
+	dd if=/dev/zero of=$DIR/$tdir/single_dd bs=$bs count=1 ||
 		error "write $tfile failed"
+	sync;sync;sync
 
 	# multi-client wirtes
 	local num=$(get_node_count ${CLIENTS//,/ })

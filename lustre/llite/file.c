@@ -1421,7 +1421,7 @@ out:
 	return rc;
 }
 
-int ll_merge_attr(const struct lu_env *env, struct inode *inode)
+static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
@@ -1432,8 +1432,6 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	int rc = 0;
 
 	ENTRY;
-
-	ll_inode_size_lock(inode);
 
 	/* Merge timestamps the most recently obtained from MDS with
 	 * timestamps obtained from OSTs.
@@ -1466,7 +1464,7 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	cl_object_attr_unlock(obj);
 
 	if (rc != 0)
-		GOTO(out_size_unlock, rc = (rc == -ENODATA ? 0 : rc));
+		GOTO(out, rc = (rc == -ENODATA ? 0 : rc));
 
 	if (atime < attr->cat_atime)
 		atime = attr->cat_atime;
@@ -1477,8 +1475,8 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	if (mtime < attr->cat_mtime)
 		mtime = attr->cat_mtime;
 
-	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu\n",
-	       PFID(&lli->lli_fid), attr->cat_size);
+	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu i_blocks %llu\n",
+	       PFID(&lli->lli_fid), attr->cat_size, attr->cat_blocks);
 
 	if (llcrypt_require_key(inode) == -ENOKEY) {
 		/* Without the key, round up encrypted file size to next
@@ -1497,10 +1495,33 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	inode->i_atime.tv_sec = atime;
 	inode->i_ctime.tv_sec = ctime;
 
-out_size_unlock:
+	EXIT;
+out:
+	return rc;
+}
+
+int ll_merge_attr(const struct lu_env *env, struct inode *inode)
+{
+	int rc;
+
+	ll_inode_size_lock(inode);
+	rc = ll_merge_attr_nolock(env, inode);
 	ll_inode_size_unlock(inode);
 
-	RETURN(rc);
+	return rc;
+}
+
+/* Use to update size and blocks on inode for LSOM if there is no contention */
+int ll_merge_attr_try(const struct lu_env *env, struct inode *inode)
+{
+	int rc = 0;
+
+	if (ll_inode_size_trylock(inode)) {
+		rc = ll_merge_attr_nolock(env, inode);
+		ll_inode_size_unlock(inode);
+	}
+
+	return rc;
 }
 
 /**

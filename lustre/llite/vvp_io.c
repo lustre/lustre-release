@@ -778,6 +778,10 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 		vvp_do_vmtruncate(inode, size);
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
+
+		/* Update size and blocks for LSOM */
+		if (!io->ci_ignore_layout)
+			ll_merge_attr(env, inode);
 	} else if (cl_io_is_fallocate(io)) {
 		int mode = io->u.ci_setattr.sa_falloc_mode;
 
@@ -1398,6 +1402,20 @@ static void vvp_io_rw_end(const struct lu_env *env,
 	trunc_sem_up_read(&lli->lli_trunc_sem);
 }
 
+static void vvp_io_write_end(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct inode *inode = vvp_object_inode(ios->cis_obj);
+	struct cl_io *io = ios->cis_io;
+
+	vvp_io_rw_end(env, ios);
+
+	/* Update size and blocks for LSOM (best effort) */
+	if (!io->ci_ignore_layout && cl_io_is_sync_write(io))
+		ll_merge_attr_try(env, inode);
+}
+
+
 static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 {
 	struct vm_fault *vmf = cfio->ft_vmf;
@@ -1644,6 +1662,17 @@ static int vvp_io_fsync_start(const struct lu_env *env,
 	return 0;
 }
 
+static void vvp_io_fsync_end(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct inode *inode = vvp_object_inode(ios->cis_obj);
+	struct cl_io *io = ios->cis_io;
+
+	/* Update size and blocks for LSOM (best effort) */
+	if (!io->ci_ignore_layout)
+		ll_merge_attr_try(env, inode);
+}
+
 static int vvp_io_read_ahead(const struct lu_env *env,
 			     const struct cl_io_slice *ios,
 			     pgoff_t start, struct cl_read_ahead *ra)
@@ -1725,7 +1754,7 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_iter_fini = vvp_io_write_iter_fini,
 			.cio_lock      = vvp_io_write_lock,
 			.cio_start     = vvp_io_write_start,
-			.cio_end       = vvp_io_rw_end,
+			.cio_end       = vvp_io_write_end,
 			.cio_advance   = vvp_io_advance,
                 },
                 [CIT_SETATTR] = {
@@ -1744,7 +1773,8 @@ static const struct cl_io_operations vvp_io_ops = {
                 },
 		[CIT_FSYNC] = {
 			.cio_start	= vvp_io_fsync_start,
-			.cio_fini	= vvp_io_fini
+			.cio_fini	= vvp_io_fini,
+			.cio_end	= vvp_io_fsync_end,
 		},
 		[CIT_GLIMPSE] = {
 			.cio_fini	= vvp_io_fini
