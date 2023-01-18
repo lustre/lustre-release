@@ -3068,8 +3068,8 @@ test_142() {
 run_test 142 "orphan name stub can be cleaned up in startup"
 
 test_143() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.13.00) ] &&
-		skip "Need MDS version at least 2.13.00"
+	(( $MDS1_VERSION >= $(version_code 2.13.0) )) ||
+		skip "Need MDS version at least 2.13.0"
 	[ "$PARALLEL" == "yes" ] && skip "skip parallel run"
 
 	local mntpt=$(facet_mntpt $SINGLEMDS)
@@ -3088,6 +3088,8 @@ run_test 143 "orphan cleanup thread shouldn't be blocked even delete failed"
 test_144a() {
 	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
 		skip "server does not support overstriping"
+	(( MDS1_VERSION >= $(version_code 2.15.1) )) ||
+		skip "Need MDS version at least 2.15.1"
 
 	local pids=""
 	local setcount=1000
