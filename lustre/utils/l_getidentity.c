@@ -43,6 +43,7 @@
 #include <stddef.h>
 #include <libgen.h>
 #include <syslog.h>
+#include <sys/time.h>
 
 #include <libcfs/util/param.h>
 #include <linux/lnet/nidstr.h>
@@ -401,12 +402,17 @@ static void show_result(struct identity_downcall_data *data)
 	printf("\n");
 }
 
+#define difftime(a, b)					\
+	((a).tv_sec - (b).tv_sec +			\
+	 ((a).tv_usec - (b).tv_usec) / 1000000.0)
+
 int main(int argc, char **argv)
 {
 	char *end;
 	struct identity_downcall_data *data = NULL;
 	glob_t path;
 	unsigned long uid;
+	struct timeval start, idgot, fini;
 	int fd, rc = -EINVAL, size, maxgroups;
 	bool alreadyfailed = false;
 
@@ -421,6 +427,7 @@ int main(int argc, char **argv)
 		errlog("%s: invalid uid '%s'\n", progname, argv[2]);
 		goto out;
 	}
+	gettimeofday(&start, NULL);
 
 	maxgroups = sysconf(_SC_NGROUPS_MAX);
 	if (maxgroups > NGROUPS_MAX)
@@ -456,6 +463,7 @@ retry:
 	/* read permission database */
 	rc = get_perms(data);
 
+	gettimeofday(&idgot, NULL);
 downcall:
 	if (strcmp(argv[1], "-d") == 0 || getenv("L_GETIDENTITY_TEST")) {
 		show_result(data);
@@ -478,6 +486,7 @@ downcall:
 	}
 
 	rc = write(fd, data, size);
+	gettimeofday(&fini, NULL);
 	close(fd);
 	if (rc != size) {
 		errlog("partial write ret %d: %s\n", rc, strerror(errno));
@@ -492,6 +501,11 @@ downcall:
 	} else {
 		rc = 0;
 	}
+	/* log if it takes more than 20 second to avoid rate limite */
+	if (rc || difftime(fini, start) > 20)
+		errlog("get identity for uid %lu start time %ld.%06ld got time %ld.%06ld end time %ld.%06ld: rc = %d\n",
+		       uid, start.tv_sec, start.tv_usec, idgot.tv_sec,
+		       idgot.tv_usec, fini.tv_sec, fini.tv_usec, rc);
 
 out_params:
 	cfs_free_param_data(&path);
