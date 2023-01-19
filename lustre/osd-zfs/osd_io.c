@@ -170,6 +170,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
+	loff_t _pos = pos, max = 0;
 	struct osd_thandle *oh;
 	uint64_t            oid;
 	ENTRY;
@@ -190,9 +191,44 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	/* XXX: we still miss for append declaration support in ZFS
 	 *	-1 means append which is used by llog mostly, llog
 	 *	can grow upto LLOG_MIN_CHUNK_SIZE*8 records */
+	max = max_t(loff_t, 256 * 8 * LLOG_MIN_CHUNK_SIZE,
+		    obj->oo_attr.la_size + (2 << 20));
 	if (pos == -1)
-		pos = max_t(loff_t, 256 * 8 * LLOG_MIN_CHUNK_SIZE,
-			    obj->oo_attr.la_size + (2 << 20));
+		pos = max;
+	if (obj->oo_dn) {
+		loff_t tstart, tend, end = pos + buf->lb_len;
+		dmu_tx_hold_t *txh;
+
+		/* try to find a close declared window to fit/extend */
+		for (txh = list_head(&oh->ot_tx->tx_holds); txh != NULL;
+		    txh = list_next(&oh->ot_tx->tx_holds, txh)) {
+			if (obj->oo_dn != txh->txh_dnode)
+				continue;
+			if (txh->txh_type != THT_WRITE)
+				continue;
+
+			/* bytes already declared in this handle */
+			tstart = txh->txh_arg1;
+			tend = txh->txh_arg1 + txh->txh_arg2;
+
+			if (pos < tstart)
+				tstart = pos;
+			if (tend < end)
+				tend = end;
+			/* if this is an append, then extend it */
+			if (_pos == -1 && txh->txh_arg1 == max)
+				tend += buf->lb_len;
+			/* don't let too big appends */
+			if (tend - tstart > 4*1024*1024)
+				continue;
+			if (pos >= tend || end <= tstart)
+				continue;
+
+			txh->txh_arg1 = tstart;
+			txh->txh_arg2 = tend - tstart;
+			return 0;
+		}
+	}
 	osd_tx_hold_write(oh->ot_tx, oid, obj->oo_dn, pos, buf->lb_len);
 
 	/* dt_declare_write() is usually called for system objects, such
