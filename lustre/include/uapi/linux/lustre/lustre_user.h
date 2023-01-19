@@ -1080,6 +1080,8 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 	       (type & LMV_HASH_TYPE_MASK) < LMV_HASH_TYPE_MAX;
 }
 
+/* This flag indicates that overstriping (>1 stripe per MDT) is desired */
+#define LMV_HASH_FLAG_OVERSTRIPED	0x01000000
 /* fixed layout, such directories won't split automatically */
 /* NB, update LMV_HASH_FLAG_KNOWN when adding new flag */
 #define LMV_HASH_FLAG_FIXED		0x02000000

@@ -3070,6 +3070,8 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%#x", type);
 
+		if (flags & LMV_HASH_FLAG_OVERSTRIPED)
+			llapi_printf(LLAPI_MSG_NORMAL, ",overstriped");
 		if (flags & LMV_HASH_FLAG_MIGRATION)
 			llapi_printf(LLAPI_MSG_NORMAL, ",migrating");
 		if (flags & LMV_HASH_FLAG_BAD_TYPE)
@@ -3078,7 +3080,10 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, ",lost_lmv");
 		if (flags & LMV_HASH_FLAG_FIXED)
 			llapi_printf(LLAPI_MSG_NORMAL, ",fixed");
-		if (flags & ~LMV_HASH_FLAG_KNOWN)
+		/* NB: OVERSTRIPED is not in KNOWN until implementation patch
+		 * is landed, but we do recognize it
+		 */
+		if (flags & ~(LMV_HASH_FLAG_KNOWN|LMV_HASH_FLAG_OVERSTRIPED))
 			llapi_printf(LLAPI_MSG_NORMAL, ",unknown_%04x",
 				     flags & ~LMV_HASH_FLAG_KNOWN);
 
