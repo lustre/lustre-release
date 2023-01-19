@@ -932,12 +932,8 @@ __must_hold(&conn->ibc_lock)
 		struct ib_send_wr *wr  = &tx->tx_wrq[0].wr;
 
 		if (frd != NULL && !frd->frd_posted) {
-			if (!frd->frd_valid) {
-				wr = &frd->frd_inv_wr.wr;
-				wr->next = &frd->frd_fastreg_wr.wr;
-			} else {
-				wr = &frd->frd_fastreg_wr.wr;
-			}
+			wr = &frd->frd_inv_wr.wr;
+			wr->next = &frd->frd_fastreg_wr.wr;
 			frd->frd_fastreg_wr.wr.next = &tx->tx_wrq[0].wr;
 		}
 
@@ -956,6 +952,13 @@ __must_hold(&conn->ibc_lock)
 #else
 			rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
 #endif
+		if (frd && !frd->frd_posted) {
+			/* The local invalidate becomes invalid (has been
+			 * successfully used) if the post succeeds or the
+			 * failing wr was not the invalidate. */
+			frd->frd_valid =
+				!(rc == 0 || (bad != &frd->frd_inv_wr.wr));
+		}
 	}
 
 	conn->ibc_last_send = ktime_get();

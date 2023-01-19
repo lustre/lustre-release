@@ -1673,9 +1673,7 @@ static int kiblnd_alloc_freg_pool(struct kib_fmr_poolset *fps,
 			goto out_middle;
 		}
 
-		/* There appears to be a bug in MLX5 code where you must
-		 * invalidate the rkey of a new FastReg pool before first
-		 * using it. Thus, I am marking the FRD invalid here. */
+		/* indicate that the local invalidate needs to be generated */
 		frd->frd_valid = false;
 
 		list_add_tail(&frd->frd_list, &fpo->fast_reg.fpo_pool_list);
@@ -1866,9 +1864,7 @@ kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 #endif /* HAVE_FMR_POOL_API */
 	{
 		struct kib_fast_reg_descriptor *frd = fmr->fmr_frd;
-
 		if (frd) {
-			frd->frd_valid = false;
 			frd->frd_posted = false;
 			fmr->fmr_frd = NULL;
 			spin_lock(&fps->fps_lock);
@@ -1971,6 +1967,7 @@ again:
 					struct ib_rdma_wr *inv_wr;
 					__u32 key = is_rx ? mr->rkey : mr->lkey;
 
+					frd->frd_valid = true;
 					inv_wr = &frd->frd_inv_wr;
 					memset(inv_wr, 0, sizeof(*inv_wr));
 
