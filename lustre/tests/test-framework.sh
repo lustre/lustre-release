@@ -649,6 +649,7 @@ init_test_env() {
 
 	# Constants used in more than one test script
 	export LOV_MAX_STRIPE_COUNT=2000
+	export LMV_MAX_STRIPES_PER_MDT=5
 	export DELETE_OLD_POOLS=${DELETE_OLD_POOLS:-false}
 	export KEEP_POOLS=${KEEP_POOLS:-false}
 	export PARALLEL=${PARALLEL:-"no"}
@@ -9735,13 +9736,16 @@ test_mkdir() {
 	local dirstripe_count=${DIRSTRIPE_COUNT:-"2"}
 	local dirstripe_index=${DIRSTRIPE_INDEX:-$((base % $MDSCOUNT))}
 	local OPTIND=1
+	local overstripe_count
+	local stripe_command="-c"
 
 	(( $MDS1_VERSION > $(version_code 2.15.0) )) &&
 		hash_name+=("crush2")
 
-	while getopts "c:H:i:p" opt; do
+	while getopts "c:C:H:i:p" opt; do
 		case $opt in
 			c) dirstripe_count=$OPTARG;;
+			C) overstripe_count=$OPTARG;;
 			H) hash_type=$OPTARG;;
 			i) dirstripe_index=$OPTARG;;
 			p) p_option="-p";;
@@ -9760,6 +9764,11 @@ test_mkdir() {
 			mkdir -p ${parent} ||
 				error "mkdir parent '$parent' failed"
 		fi
+	fi
+
+	if [[ -n "$overstripe_count" ]]; then
+		stripe_command="-C"
+		dirstripe_count=$overstripe_count
 	fi
 
 	if [ $MDSCOUNT -le 1 ] || ! is_lustre ${parent}; then
@@ -9785,9 +9794,9 @@ test_mkdir() {
 			dirstripe_count=1
 		fi
 
-		echo "striped dir -i$mdt_index -c$dirstripe_count -H $hash_type $path"
-		$LFS mkdir -i$mdt_index -c$dirstripe_count -H $hash_type $path ||
-			error "mkdir -i $mdt_index -c$dirstripe_count -H $hash_type $path failed"
+		echo "striped dir -i$mdt_index $stripe_command$dirstripe_count -H $hash_type $path"
+		$LFS mkdir -i$mdt_index $stripe_command$dirstripe_count -H $hash_type $path ||
+			error "mkdir -i $mdt_index $stripe_command$dirstripe_count -H $hash_type $path failed"
 	fi
 }
 

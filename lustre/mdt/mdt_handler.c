@@ -4226,7 +4226,7 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 				if (req->rq_export->exp_disconnected)
 					mdt_fid_unlock(h, mode);
 				else
-					ptlrpc_save_lock(req, h, mode, no_ack);
+					ptlrpc_save_lock(req, h, no_ack);
 			} else {
 				mdt_fid_unlock(h, mode);
 			}

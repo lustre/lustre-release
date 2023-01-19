@@ -1145,7 +1145,7 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 #define LMV_HASH_FLAG_LAYOUT_CHANGE	\
 	(LMV_HASH_FLAG_MIGRATION | LMV_HASH_FLAG_SPLIT | LMV_HASH_FLAG_MERGE)
 
-#define LMV_HASH_FLAG_KNOWN		0xbe000000
+#define LMV_HASH_FLAG_KNOWN		0xbf000000
 
 /* migration failure may leave hash type as
  * LMV_HASH_TYPE_UNKNOWN|LMV_HASH_FLAG_BAD_TYPE, which should be treated as
@@ -1218,6 +1218,7 @@ extern struct lustre_foreign_type lu_foreign_types[];
  * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data)
  */
 #define LMV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
+#define LMV_MAX_STRIPES_PER_MDT 5 /* (RS_MAX_LOCKS - 4) / 2 */
 #define lmv_user_md lmv_user_md_v1
 struct lmv_user_md_v1 {
 	__u32	lum_magic;	   /* must be the first field */
@@ -1267,7 +1268,9 @@ enum {
 	LMV_INHERIT_DEFAULT_PLAIN	= LMV_INHERIT_UNLIMITED,
 	/* not inherit any more */
 	LMV_INHERIT_END			= 1,
-	/* for multiple stripes, the default lum_max_inherit is 3 */
+	/* for overstriped dirs, the default limit is 1 level of inheritance */
+	LMV_INHERIT_DEFAULT_OVERSTRIPED	= 2,
+	/* for multiple stripes, the default limit is 2 levels of inheritance*/
 	LMV_INHERIT_DEFAULT_STRIPED	= 3,
 	/* max inherit depth */
 	LMV_INHERIT_MAX			= 250,

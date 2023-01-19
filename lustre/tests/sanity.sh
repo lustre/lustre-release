@@ -25610,32 +25610,41 @@ cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
 }
+
 test_striped_dir() {
 	local mdt_index=$1
-	local stripe_count
+	local stripe_count=$2
+	local overstriping=$3
 	local stripe_index
+	local getstripe_count
 
 	mkdir -p $DIR/$tdir
 
 	SAVE_UMASK=$(umask)
 	trap cleanup_test_300 RETURN EXIT
 
-	$LFS setdirstripe -i $mdt_index -c 2 -H all_char -o 755 \
-						$DIR/$tdir/striped_dir ||
-		error "set striped dir error"
+	if [ -z $overstriping ]; then
+		$LFS setdirstripe -i $mdt_index -c $stripe_count -H all_char \
+					-o 755 $DIR/$tdir/striped_dir ||
+			error "set striped dir error"
+	else
+		$LFS setdirstripe -i $mdt_index -C $stripe_count -H all_char \
+					-o 755 $DIR/$tdir/striped_dir ||
+			error "set striped dir error"
+	fi
 
 	local mode=$(stat -c%a $DIR/$tdir/striped_dir)
 	[ "$mode" = "755" ] || error "expect 755 got $mode"
 
 	$LFS getdirstripe $DIR/$tdir/striped_dir > /dev/null 2>&1 ||
 		error "getdirstripe failed"
-	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
-	if [ "$stripe_count" != "2" ]; then
-		error "1:stripe_count is $stripe_count, expect 2"
+	getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
+	if [ "$getstripe_count" != "$stripe_count" ]; then
+		error "1:stripe_count is $getstripe_count, expect $stripe_count"
 	fi
-	stripe_count=$($LFS getdirstripe -T $DIR/$tdir/striped_dir)
-	if [ "$stripe_count" != "2" ]; then
-		error "2:stripe_count is $stripe_count, expect 2"
+	getstripe_count=$($LFS getdirstripe -T $DIR/$tdir/striped_dir)
+	if [ "$getstripe_count" != "$stripe_count" ]; then
+		error "2:stripe_count is $getstripe_count, expect $stripe_count"
 	fi
 
 	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir)
@@ -25684,8 +25693,8 @@ test_300a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
-	test_striped_dir 0 || error "failed on striped dir on MDT0"
-	test_striped_dir 1 || error "failed on striped dir on MDT0"
+	test_striped_dir 0 2 || error "failed on striped dir on MDT0"
+	test_striped_dir 1 2 || error "failed on striped dir on MDT0"
 }
 run_test 300a "basic striped dir sanity test"
 
@@ -26432,6 +26441,322 @@ test_300t() {
 	(( $stripe_count == $max_count )) || error "wrong stripe count"
 }
 run_test 300t "test max_mdt_stripecount"
+
+MDT_OVSTRP_VER="2.15.60"
+# 300u family tests MDT overstriping
+test_300ua() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	local setcount=$((MDSCOUNT * 2))
+
+	local expected_count
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -C $setcount $DIR/$tdir/${tdir}.0 ||
+		error "(0) failed basic overstriped dir creation test"
+	local getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.0)
+
+	# This does a basic interop test - if the MDS does not support mdt
+	# overstriping, we should get stripes == number of MDTs
+	if (( $MDS1_VERSION < $(version_code $MDT_OVSTRP_VER) )); then
+		expected_count=$MDSCOUNT
+	else
+		expected_count=$setcount
+	fi
+	(( getstripe_count == expected_count )) ||
+		error "(1) incorrect stripe count for simple overstriped dir"
+
+	rm -rf $DIR/$tdir/${tdir}.0 ||
+		error "(2) unable to rm overstriped dir"
+
+	# Tests after this require overstriping support
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		{ echo "skipped for MDS < $MDT_OVSTRP_VER"; return 0; }
+
+	test_striped_dir 0 $setcount true ||
+		error "(3)failed on overstriped dir"
+	test_striped_dir 1 $setcount true ||
+		error "(4)failed on overstriped dir"
+
+	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
+
+	test_striped_dir 0 $setcount true ||
+		error "(5)failed on overstriped dir"
+}
+run_test 300ua "basic overstriped dir sanity test"
+
+test_300ub() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	mkdir $DIR/$tdir
+
+	echo "Testing invalid stripe count, failure expected"
+	local setcount=$((MDSCOUNT * 2))
+
+	$LFS setdirstripe -c $setcount $DIR/$tdir/${tdir}.0
+	local getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.0)
+
+	(( getstripe_count <= MDSCOUNT )) ||
+		error "(0)stripe count ($setcount) > MDT count ($MDSCOUNT) succeeded with -c"
+
+	# When a user requests > LMV_MAX_STRIPES_PER_MDT, we reduce to that
+	setcount=$((MDSCOUNT * 2 * LMV_MAX_STRIPES_PER_MDT))
+	$LFS setdirstripe -C $setcount $DIR/$tdir/${tdir}.1
+
+	local maxcount=$((MDSCOUNT * LMV_MAX_STRIPES_PER_MDT))
+
+	getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.1)
+	(( getstripe_count == maxcount )) ||
+		error "(1)stripe_count is $getstripe_count, expect $maxcount"
+
+	# Test specific striping with -i
+	$LFS setdirstripe -i 0,0,0,0 $DIR/$tdir/${tdir}.2
+
+	getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.2)
+	(( getstripe_count == 4 )) ||
+		error "(2)stripe_count is $getstripe_count, expect 4"
+
+	local nonzeroindices=$($LFS getdirstripe $DIR/$tdir/${tdir}.2 | grep "\[" | \
+			       grep -v mdtidx | awk '{print $1}' | grep -c -v 0)
+
+	[[ -n "$nonzeroindices" ]] ||
+		error "(3) stripes indices not all 0: $nonzeroindices"
+
+	# Test specific striping with too many stripes on one MDT
+	echo "Testing invalid striping, failure expected"
+	$LFS setdirstripe -i 0,1,0,1,0,1,0,1,0,1,0 $DIR/$tdir/${tdir}.3
+	$LFS getdirstripe $DIR/$tdir/${tdir}.3
+	getstripe_count=$($LFS getdirstripe $DIR/$tdir/${tdir}.3 | grep "\[" | \
+			  grep -v mdtidx | awk '{print $1}' | grep -c '0')
+	echo "stripes on MDT0: $getstripe_count"
+	(( getstripe_count <= LMV_MAX_STRIPES_PER_MDT )) ||
+		error "(4) setstripe with too many stripes on MDT0 succeeded"
+
+	setcount=$((MDSCOUNT * 2))
+	$LFS setdirstripe -C $setcount -H all_char $DIR/${tdir}.4 ||
+		error "(5) can't setdirstripe with manually set hash function"
+
+	getstripe_count=$($LFS getdirstripe -c $DIR/${tdir}.4)
+	(( getstripe_count == setcount )) ||
+		error "(6)stripe_count is $getstripe_count, expect $setcount"
+
+	setcount=$((MDSCOUNT * 2))
+	mkdir $DIR/${tdir}.5
+	$LFS setdirstripe -C $setcount -D -H crush $DIR/${tdir}.5 ||
+		error "(7) can't setdirstripe with manually set hash function"
+	mkdir $DIR/${tdir}.5/${tdir}.6
+
+	getstripe_count=$($LFS getdirstripe -c $DIR/${tdir}.5/${tdir}.6)
+	(( getstripe_count == setcount )) ||
+		error "(8)stripe_count is $getstripe_count, expect $setcount"
+}
+run_test 300ub "test MDT overstriping interface & limits"
+
+test_300uc() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	mkdir $DIR/$tdir
+
+	local setcount=$((MDSCOUNT * 2))
+
+	$LFS setdirstripe -D -C $setcount $DIR/$tdir
+
+	mkdir $DIR/$tdir/${tdir}.1
+
+	local getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.1)
+
+	(( getstripe_count == setcount )) ||
+		error "(0)stripe_count is $getstripe_count, expect $setcount"
+
+	mkdir $DIR/$tdir/${tdir}.1/${tdir}.2
+
+	local getstripe_count=$($LFS getdirstripe -c \
+				$DIR/$tdir/${tdir}.1/${tdir}.2)
+
+	(( getstripe_count == setcount )) ||
+		error "(1)stripe_count is $getstripe_count, expect $setcount"
+}
+run_test 300uc "test MDT overstriping as default & inheritance"
+
+test_300ud() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local timeout=100
+
+	local restripe_status
+	local delta
+	local i
+
+	[[ $mds1_FSTYPE == zfs ]] && timeout=300
+
+	# in case "crush" hash type is not set
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+
+	restripe_status=$(do_facet mds1 $LCTL get_param -n \
+			   mdt.*MDT0000.enable_dir_restripe)
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=1"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.enable_dir_restripe=$restripe_status"
+
+	mkdir $DIR/$tdir
+	createmany -m $DIR/$tdir/f $((50 * MDSCOUNT)) ||
+		error "create files under remote dir failed $i"
+	createmany -d $DIR/$tdir/d $((50 * MDSCOUNT)) ||
+		error "create dirs under remote dir failed $i"
+
+	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
+
+	(( setcount < 13 )) || setcount=12
+	for i in $(seq 2 $setcount); do
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
+		$LFS setdirstripe -C $i $DIR/$tdir ||
+			error "split -C $i $tdir failed"
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
+			error "dir split not finished"
+		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
+			awk '/migrate/ {sum += $2} END { print sum }')
+		echo "$delta migrated when dir split $((i - 1)) to $i stripes"
+		# delta is around total_files/stripe_count, deviation 3%
+		(( delta < 100 * MDSCOUNT / i + 3 * MDSCOUNT )) ||
+			error "$delta files migrated >= $((100 * MDSCOUNT / i + 3 * MDSCOUNT))"
+	done
+}
+run_test 300ud "dir split"
+
+test_300ue() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local timeout=100
+
+	local restripe_status
+	local delta
+	local c
+
+	[[ $mds1_FSTYPE == zfs ]] && timeout=300
+
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+
+	restripe_status=$(do_facet mds1 $LCTL get_param -n \
+			   mdt.*MDT0000.enable_dir_restripe)
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=1"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.enable_dir_restripe=$restripe_status"
+
+	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
+
+	(( setcount < 13 )) || setcount=12
+	test_mkdir -C $setcount -H crush $DIR/$tdir
+	createmany -m $DIR/$tdir/f $((50 * MDSCOUNT)) ||
+		error "create files under remote dir failed"
+	createmany -d $DIR/$tdir/d $((50 * MDSCOUNT)) ||
+		error "create dirs under remote dir failed"
+
+	for c in $(seq $((setcount - 1)) -1 1); do
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
+		$LFS setdirstripe -C $c $DIR/$tdir ||
+			error "split -C $c $tdir failed"
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -H $DIR/$tdir" "crush,fixed" $timeout ||
+			error "dir merge not finished"
+		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
+			awk '/migrate/ {sum += $2} END { print sum }')
+		echo "$delta migrated when dir merge $((c + 1)) to $c stripes"
+		# delta is around total_files/stripe_count, deviation 3%
+		(( delta < 100 * MDSCOUNT / c + 3 * MDSCOUNT )) ||
+			error "$delta files migrated >= $((100 * MDSCOUNT / c + 3 * MDSCOUNT))"
+	done
+}
+run_test 300ue "dir merge"
+
+test_300uf() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	# maximum amount of local locks:
+	# parent striped dir - 2 locks
+	# new stripe in parent to migrate to - 1 lock
+	# source and target - 2 locks
+	# Total 5 locks for regular file
+	#
+	# NB: Overstriping should add several extra local locks
+	# FIXME: Remove this once understood
+	#lctl set_param *debug=-1 debug_mb=10000
+	lctl clear
+	lctl mark "touch/create"
+	mkdir -p $DIR/$tdir
+	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
+	local setcount=$((MDSCOUNT * 5))
+
+	$LFS mkdir -i1 -C $setcount $DIR/$tdir/dir1
+	touch $DIR/$tdir/dir1/eee
+
+	lctl mark "hardlinks"
+	# create 4 hardlink for 4 more locks
+	# Total: 9 locks > RS_MAX_LOCKS (8)
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir2
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir3
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir4
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir5
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir2/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir3/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir4/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir5/eee
+
+	lctl mark "cancel lru"
+	cancel_lru_locks mdc
+
+	lctl mark "migrate"
+	$LFS migrate -m1 -c1 $DIR/$tdir/dir1 ||
+		error "migrate dir fails"
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 300uf "migrate with too many local locks"
+
+test_300ug() {
+	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
+		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	mkdir -p $DIR/$tdir
+	local migrate_dir=$DIR/$tdir/migrate_dir
+	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
+	local setcount2=$((setcount - 2))
+
+	$LFS setdirstripe -c 2 $migrate_dir ||
+		error "(0) failed to create striped directory"
+
+	$LFS migrate -m 0 -C $setcount $migrate_dir ||
+		error "(1)failed to migrate to overstriped directory"
+	local getstripe_count=$($LFS getdirstripe -c $migrate_dir)
+
+	(( getstripe_count == setcount )) ||
+		error "(2)stripe_count is $getstripe_count, expect $setcount"
+	touch $DIR/$tdir/migrate_dir/$tfile ||
+		error "(3)failed to create file in overstriped directory"
+	$LFS migrate -m 0 -C $setcount2 $migrate_dir ||
+		error "(4)failed to migrate overstriped directory"
+	# Check stripe count after migration
+	$LFS getdirstripe $migrate_dir
+	getstripe_count=$($LFS getdirstripe -c $migrate_dir)
+	(( getstripe_count == setcount2 )) ||
+		error "(5)stripe_count is $getstripe_count, expect $setcount2"
+
+	rm -rf $migrate_dir || error "(6) unable to rm overstriped dir"
+}
+run_test 300ug "migrate overstriped dirs"
 
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||

@@ -421,10 +421,11 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 		 * directory.
 		 */
 
-		if (lum_stripe_count > 1 && lmu->lum_hash_type &&
-		    lmu->lum_hash_type !=
+		if (lum_stripe_count > 1 &&
+		    (lmu->lum_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) &&
+		    (lmu->lum_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) !=
 		    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
-			CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
+			CERROR("%s: "DFID" migrate mdt hash mismatch %x != %x\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 				lmv->lmv_hash_type, lmu->lum_hash_type);
 			GOTO(unlock_obj, rc = -EINVAL);

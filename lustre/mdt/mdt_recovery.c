@@ -102,8 +102,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 
 		spin_lock(&rs->rs_lock);
 		for (i = 0; i < rs->rs_nlocks; i++)
-			ptlrpc_save_lock(req, &rs->rs_locks[i],
-					 rs->rs_modes[i], rs->rs_no_ack);
+			ptlrpc_save_lock(req, &rs->rs_locks[i], rs->rs_no_ack);
 		rs->rs_nlocks = 0;
 
 		DEBUG_REQ(D_HA, req, "stole locks for");
@@ -120,7 +119,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 		rs = req->rq_reply_state;
 
 		for (i = 0; i < rs->rs_nlocks; i++)
-			ldlm_lock_decref(&rs->rs_locks[i], rs->rs_modes[i]);
+			ldlm_lock_decref(&rs->rs_locks[i], LCK_TXN);
 
 		rs->rs_nlocks = 0;
 	}

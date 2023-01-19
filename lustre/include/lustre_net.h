@@ -635,8 +635,12 @@ struct ptlrpc_cb_id {
 	void *cbid_arg;				/* additional arg */
 };
 
-/** Maximum number of locks to fit into reply state */
-#define RS_MAX_LOCKS 8
+/** Maximum number of locks to fit into reply state, migrating directory max
+ * stripe count is 2 * LMV_MAX_STRIPES_PER_MDT, plus source parent, target
+ * parent, source and target master object:
+ *	2 * LMV_MAX_STRIPES_PER_MDT + 4
+ */
+#define RS_MAX_LOCKS 14
 #define RS_DEBUG     0
 
 /**
@@ -705,8 +709,6 @@ struct ptlrpc_reply_state {
 
 	/** Handles of locks awaiting client reply ACK */
 	struct lustre_handle	rs_locks[RS_MAX_LOCKS];
-	/** Lock modes of locks in \a rs_locks */
-	enum ldlm_mode		rs_modes[RS_MAX_LOCKS];
 };
 
 struct ptlrpc_thread;
@@ -2229,7 +2231,7 @@ struct ptlrpc_service_conf {
  * @{
  */
 void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
-		      int mode, bool no_ack);
+		      bool no_ack);
 void ptlrpc_commit_replies(struct obd_export *exp);
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs);
 void ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs);

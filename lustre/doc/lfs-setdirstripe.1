@@ -2,7 +2,7 @@
 .SH NAME
 lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .SH SYNOPSIS
-.B lfs setdirstripe [\fR-cdDhHioTxX\fR] \fIDIR\fR...
+.B lfs setdirstripe [\fR-cCdDhHioTxX\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
 Create a striped directory with specified striping pattern. This
@@ -24,6 +24,12 @@ is an alias for this command.
 Stripe the new directory over
 .I COUNT
 MDTs.
+.TP
+.B -C\fR, \fB--overstripe-count \fISTRIPE_COUNT\fR
+The number of stripes to create, creating > 1 stripe MDT if \fISTRIPE_COUNT\fR
+exceeds the number of MDTs in the file system. \fB0 \fRmeans to use the
+filesystem-wide default stripe count (default 1), and \fB-1 \fRmeans to stripe
+over all available MDTs.  Max of 5 stripes/MDT.
 .TP
 .BR \-h ", " \-\-help
 Print usage message.

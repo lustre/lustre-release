@@ -179,17 +179,17 @@ static int ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
  * Puts a lock and its mode into reply state assotiated to request reply.
  */
 void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
-		      int mode, bool no_ack)
+		      bool no_ack)
 {
 	struct ptlrpc_reply_state *rs = req->rq_reply_state;
 	int idx;
 
 	LASSERT(rs != NULL);
+	CDEBUG(D_RPCTRACE, "nlocks %d\n", rs->rs_nlocks);
 	LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
 	idx = rs->rs_nlocks++;
 	rs->rs_locks[idx] = *lock;
-	rs->rs_modes[idx] = mode;
 	rs->rs_difficult = 1;
 	rs->rs_no_ack = no_ack;
 }
@@ -2488,8 +2488,7 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 		}
 
 		while (nlocks-- > 0)
-			ldlm_lock_decref(&rs->rs_locks[nlocks],
-					 rs->rs_modes[nlocks]);
+			ldlm_lock_decref(&rs->rs_locks[nlocks], LCK_TXN);
 
 		spin_lock(&rs->rs_lock);
 	}

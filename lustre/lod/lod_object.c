@@ -2047,11 +2047,17 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 			bool already_allocated = false;
 			__u32 k;
 
-			CDEBUG(D_INFO, "try idx %d, mdt cnt %u, allocated %u\n",
-			       idx, lod->lod_remote_mdt_count + 1, stripe_idx);
+			CDEBUG(D_INFO,
+			       "try idx %d, mdt cnt %u, allocated %u, specific %d count %hu offset %d hash %#X\n",
+			       idx, lod->lod_remote_mdt_count + 1, stripe_idx,
+			       is_specific, lo->ldo_dir_stripe_count,
+			       (int)lo->ldo_dir_stripe_offset,
+			       lo->ldo_dir_hash_type);
 
 			if (likely(!is_specific &&
-				   !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
+				   !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE) &&
+				   !(lo->ldo_dir_hash_type &
+				     LMV_HASH_FLAG_OVERSTRIPED))) {
 				/* check whether the idx already exists
 				 * in current allocated array */
 				for (k = 0; k < stripe_idx; k++) {
@@ -2167,6 +2173,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	struct dt_object **stripes;
 	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
 	struct lu_fid fid = { 0 };
+	int mdt_count = lod->lod_remote_mdt_count + 1;
 	__u32 stripe_count;
 	int i;
 	int rc = 0;
@@ -2178,6 +2185,17 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
 
 	stripe_count = lo->ldo_dir_stripe_count;
+	if (!(lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
+	    stripe_count > mdt_count)
+		RETURN(-E2BIG);
+
+	if ((lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
+	    (stripe_count > mdt_count * LMV_MAX_STRIPES_PER_MDT ||
+	/* a single MDT doesn't initialize the infrastructure for striped
+	 * directories, so we just don't support overstriping in that case
+	 */
+		   mdt_count == 1))
+		RETURN(-E2BIG);
 
 	OBD_ALLOC_PTR_ARRAY(stripes, stripe_count);
 	if (!stripes)
@@ -2208,7 +2226,23 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			GOTO(out, rc = -ENOMEM);
 
 		if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) {
+			int stripes_per_mdt;
+			int mdt;
+
 			is_specific = true;
+
+			/* Verify we do not exceed the stripes per MDT limit */
+			for (mdt = 0; mdt < mdt_count + 1; mdt++) {
+				stripes_per_mdt = 0;
+				for (i = 0; i < stripe_count; i++) {
+					if (mdt == le32_to_cpu(
+					    lum->lum_objects[i].lum_mds))
+						stripes_per_mdt++;
+				}
+				if (stripes_per_mdt > LMV_MAX_STRIPES_PER_MDT)
+					GOTO(out_free, rc = -EINVAL);
+			}
+
 			for (i = 0; i < stripe_count; i++)
 				idx_array[i] =
 				       le32_to_cpu(lum->lum_objects[i].lum_mds);
@@ -2219,6 +2253,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
 		rc = lod_mdt_alloc_specific(env, lo, stripes, idx_array,
 					    is_specific);
+out_free:
 		OBD_FREE_PTR_ARRAY(idx_array, stripe_count);
 	}
 
@@ -5787,6 +5822,7 @@ static void lod_ah_init(const struct lu_env *env,
 
 	if (S_ISDIR(child_mode)) {
 		const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
+		int max_stripe_count;
 
 		/* other default values are 0 */
 		lc->ldo_dir_stripe_offset = LMV_OFFSET_DEFAULT;
@@ -5895,10 +5931,15 @@ static void lod_ah_init(const struct lu_env *env,
 		    d->lod_max_mdt_stripecount)
 			lc->ldo_dir_stripe_count = d->lod_max_mdt_stripecount;
 
-		/* shrink the stripe_count to the avaible MDT count */
-		if (lc->ldo_dir_stripe_count > d->lod_remote_mdt_count + 1 &&
+		max_stripe_count = d->lod_remote_mdt_count + 1;
+		if (lc->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED)
+			max_stripe_count =
+				max_stripe_count * LMV_MAX_STRIPES_PER_MDT;
+
+		/* shrink the stripe_count to max stripe count */
+		if (lc->ldo_dir_stripe_count > max_stripe_count &&
 		    !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)) {
-			lc->ldo_dir_stripe_count = d->lod_remote_mdt_count + 1;
+			lc->ldo_dir_stripe_count = max_stripe_count;
 			if (lc->ldo_dir_stripe_count == 1)
 				lc->ldo_dir_stripe_count = 0;
 		}
@@ -5917,7 +5958,7 @@ static void lod_ah_init(const struct lu_env *env,
 			lc->ldo_def_striping = lds;
 		}
 
-		CDEBUG(D_INFO, "final dir stripe_count=%hu offset=%d hash=%u\n",
+		CDEBUG(D_INFO, "final dir stripe_count=%hu offset=%d hash=%x\n",
 		       lc->ldo_dir_stripe_count,
 		       (int)lc->ldo_dir_stripe_offset, lc->ldo_dir_hash_type);
 
@@ -8970,6 +9011,7 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	struct dt_object_format *dof = &info->lti_format;
 	struct lmv_user_md_v1 *lum = mlc->mlc_spec->u.sp_ea.eadata;
 	struct dt_object **stripes;
+	int mdt_count = lod->lod_remote_mdt_count + 1;
 	u32 stripe_count;
 	u32 saved_count;
 	int i;
@@ -8985,6 +9027,29 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	if (stripe_count <= saved_count)
 		RETURN(-EINVAL);
 
+	/* if the split target is overstriped, we need to put that flag in the
+	 * current layout so it can allocate the larger number of stripes
+	 *
+	 * Note we need to pick up any hash *flags* which affect allocation
+	 * *before* allocation, so they're used in allocating the directory,
+	 * rather than after when we finalize directory setup (at the end of
+	 * this function).
+	 */
+	if (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_FLAG_OVERSTRIPED)
+		lo->ldo_dir_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
+
+	if (!(lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
+	    stripe_count > mdt_count) {
+		RETURN(-E2BIG);
+	} else if ((lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
+		   (stripe_count > mdt_count * LMV_MAX_STRIPES_PER_MDT ||
+	/* a single MDT doesn't initialize the infrastructure for striped
+	 * directories, so we just don't support overstriping in that case
+	 */
+		   mdt_count == 1)) {
+		RETURN(-E2BIG);
+	}
+
 	dof->dof_type = DFT_DIR;
 
 	OBD_ALLOC(stripes, sizeof(*stripes) * stripe_count);
@@ -8995,6 +9060,7 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 		stripes[i] = lo->ldo_stripe[i];
 
 	lod_qos_statfs_update(env, lod, &lod->lod_mdt_descs);
+
 	rc = lod_mdt_alloc_qos(env, lo, stripes, saved_count, stripe_count);
 	if (rc == -EAGAIN)
 		rc = lod_mdt_alloc_rr(env, lo, stripes, saved_count,

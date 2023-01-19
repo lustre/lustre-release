@@ -229,6 +229,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"		[--mdt-count|-c stripe_count>\n"		\
 	"		[--help|-h] [--mdt-hash|-H mdt_hash]\n"		\
 	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
+	"		[--mdt-overcount|-C stripe_count>\n"		\
 	"		[--default|-D] [--mode|-o mode]\n"		\
 	"		[--max-inherit|-X max_inherit]\n"		\
 	"		[--max-inherit-rr max_inherit_rr] <dir>\n"	\
@@ -502,8 +503,9 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate directories and their inodes between MDTs.\n"
-	 "usage: migrate [--mdt-count|-c STRIPE_COUNT] [--directory|-d]\n"
-	 "               [--mdt-hash|-H HASH_TYPE]\n"
+	 "usage: migrate [--mdt-count|-c STRIPE_COUNT]\n"
+	 "               [--mdt-overcount|-C OVERSTRIPE_COUNT\n"
+	 "               [--directory|-d] [--mdt-hash|-H HASH_TYPE]\n"
 	 "               [--mdt-index|-m START_MDT_INDEX] [--verbose|-v]\n"
 	 "		 DIRECTORY\n"
 	 "\n"
@@ -2570,19 +2572,18 @@ out:
  * \param[in] size		size of \a tgts array
  * \param[in] offset		starting index in \a tgts
  * \param[in] arg		string containing OST index list
- * \param[in/out] overstriping	index list may contain duplicates
+ * \param[out] duplicates	tell caller list contains duplicates
  *
  * \retval positive    number of indices in \a tgts
  * \retval -EINVAL     unable to parse \a arg
  */
 static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
-			 unsigned long long *pattern)
+			 bool *duplicates)
 {
 	int rc;
 	int nr = offset;
 	int slots = size - offset;
 	char *ptr = NULL;
-	bool overstriped = false;
 	bool end_of_loop;
 
 	if (!arg)
@@ -2623,13 +2624,10 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 		for (i = start_index; i <= end_index && slots > 0; i++) {
 			int j;
 
-			/* remove duplicate */
+			/* note presence of duplicates */
 			for (j = 0; j < offset; j++) {
-				if (tgts[j] == i && pattern &&
-				    *pattern == LLAPI_LAYOUT_OVERSTRIPING)
-					overstriped = true;
-				else if (tgts[j] == i)
-					return -EINVAL;
+				if (tgts[j] == i)
+					*duplicates = true;
 			}
 
 			j = offset;
@@ -2650,9 +2648,6 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 	}
 	if (!end_of_loop && ptr)
 		*ptr = ',';
-
-	if (!overstriped && pattern)
-		*pattern = LLAPI_LAYOUT_DEFAULT;
 
 	return rc < 0 ? rc : nr;
 }
@@ -3541,6 +3536,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	char *template = NULL;
 	bool foreign_mode = false;
 	char *xattr = NULL;
+	bool overstriped = false;
 	uint32_t type = LU_FOREIGN_TYPE_NONE, flags = 0;
 	char *mode_opt = NULL;
 	mode_t previous_umask = 0;
@@ -3594,6 +3590,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument},
 	{ .val = 'C',	.name = "overstripe-count",
+						.has_arg = required_argument},
+	{ .val = 'C',	.name = "mdt-overcount",
 						.has_arg = required_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
@@ -3826,7 +3824,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname, argv[0]);
 				goto usage_error;
 			}
-			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
+			if (migrate_mode)
+				overstriped = true;
+			else
+				lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			fallthrough;
 		case 'c':
 			errno = 0;
@@ -3996,8 +3997,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			migrate_mdt_mode = true;
 			lsa.lsa_nr_tgts = parse_targets(tgts,
-						sizeof(tgts) / sizeof(__u32),
-						lsa.lsa_nr_tgts, optarg, NULL);
+							sizeof(tgts) / sizeof(__u32),
+							lsa.lsa_nr_tgts, optarg,
+							&overstriped);
 			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
 					"%s: invalid MDT target(s) '%s'\n",
@@ -4082,17 +4084,19 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			 * parse_targets is shared with MDT striping, which
 			 * does not allow duplicates
 			 */
-			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			lsa.lsa_nr_tgts = parse_targets(tgts,
 						sizeof(tgts) / sizeof(__u32),
 						lsa.lsa_nr_tgts, optarg,
-						&lsa.lsa_pattern);
+						&overstriped);
 			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
 					"%s %s: invalid OST target(s) '%s'\n",
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
+
+			if (overstriped)
+				lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 
 			lsa.lsa_tgts = tgts;
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
@@ -4369,10 +4373,15 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			goto usage_error;
 		}
 		lmu->lum_stripe_offset = lsa.lsa_stripe_off;
+
 		if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 			lmu->lum_hash_type = lsa.lsa_pattern;
 		else
 			lmu->lum_hash_type = LMV_HASH_TYPE_UNKNOWN;
+
+		if (overstriped)
+			lmu->lum_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
+
 		if (lsa.lsa_pool_name) {
 			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
 				sizeof(lmu->lum_pool_name) - 1);
@@ -6956,6 +6965,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	bool delete = false;
 	bool foreign_mode = false;
 	bool mdt_count_set = false;
+	bool overstriped = false;
 	mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t previous_mode = 0;
 	char *xattr = NULL;
@@ -6965,6 +6975,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
+	{ .val = 'C',	.name = "mdt-overcount", .has_arg = required_argument },
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default_stripe", .has_arg = no_argument },
@@ -7001,13 +7012,17 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	setstripe_args_init(&lsa);
 
-	while ((c = getopt_long(argc, argv, "c:dDi:hH:m:o:t:T:x:X:",
+	while ((c = getopt_long(argc, argv, "c:C:dDi:hH:m:o:t:T:x:X:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
 			break;
+		case 'C':
+			overstriped = true;
+			fallthrough;
 		case 'c':
+			fallthrough;
 		case 'T':
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
@@ -7095,7 +7110,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 #endif
 			lsa.lsa_nr_tgts = parse_targets(mdts,
 						sizeof(mdts) / sizeof(__u32),
-						lsa.lsa_nr_tgts, optarg, NULL);
+						lsa.lsa_nr_tgts, optarg,
+						&overstriped);
 			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
 					"%s %s: invalid MDT target(s) '%s'\n",
@@ -7303,10 +7319,17 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_offset = LMV_OFFSET_DEFAULT;
 	else
 		param->lsp_stripe_offset = lsa.lsa_stripe_off;
+
 	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 		param->lsp_stripe_pattern = lsa.lsa_pattern;
 	else
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
+
+	if (overstriped) {
+		param->lsp_stripe_pattern |= LMV_HASH_FLAG_OVERSTRIPED;
+		max_inherit = LMV_INHERIT_DEFAULT_OVERSTRIPED;
+	}
+
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
 

@@ -920,15 +920,16 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
 	struct lu_tgt_pool *pool;
 	struct lu_qos_rr *lqr;
-	struct lu_tgt_desc *mdt;
 	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
 	struct lu_fid fid = { 0 };
 	struct dt_object *dto;
 	unsigned int pool_idx;
 	unsigned int i;
 	u32 saved_idx = stripe_idx;
+	int stripes_per_mdt = 1;
 	u32 mdt_idx;
 	bool use_degraded = false;
+	bool overstriped = false;
 	int tgt_connecting = 0;
 	int rc;
 
@@ -939,6 +940,14 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	rc = lod_qos_calc_rr(lod, ltd, pool, lqr);
 	if (rc)
 		RETURN(rc);
+
+	overstriped = lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED;
+
+	if (stripe_count > lod->lod_remote_mdt_count + 1 && !overstriped)
+		RETURN(-E2BIG);
+
+	if (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED)
+		stripes_per_mdt = stripe_count / (pool->op_count + 1);
 
 	rc = lod_qos_mdt_in_use_init(env, ltd, stripe_idx, stripe_count, pool,
 				     stripes);
@@ -956,7 +965,8 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	} else if (atomic_read(&lqr->lqr_start_idx) >= pool->op_count) {
 		/* If we have allocated from all of the tgts, slowly
 		 * precess the next start if the tgt/stripe count isn't
-		 * already doing this for us. */
+		 * already doing this for us.
+		 */
 		atomic_sub(pool->op_count, &lqr->lqr_start_idx);
 		if (stripe_count - 1 > 1 &&
 		    (pool->op_count % (stripe_count - 1)) != 1)
@@ -965,65 +975,111 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	spin_unlock(&lqr->lqr_alloc);
 
 repeat_find:
-	CDEBUG(D_OTHER, "want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
+	CDEBUG(D_OTHER,
+	       "want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
 	       stripe_count - 1, atomic_read(&lqr->lqr_start_idx),
-	       lqr->lqr_start_count, lqr->lqr_offset_idx, pool->op_count,
-	       pool->op_count);
+	       lqr->lqr_start_count, lqr->lqr_offset_idx,
+	       /* if we're overstriped, the local MDT is available and is
+		* included in the count
+		*/
+	       pool->op_count + overstriped,
+	       lqr->lqr_pool.op_count + overstriped);
 
-	for (i = 0; i < pool->op_count && stripe_idx < stripe_count; i++) {
+	for (i = 0; i < (pool->op_count + overstriped) * stripes_per_mdt &&
+	     stripe_idx < stripe_count; i++) {
+		struct lu_tgt_desc *mdt = NULL;
+		struct dt_device *mdt_tgt;
+		bool local_alloc = false;
 		int idx;
 
 		idx = atomic_inc_return(&lqr->lqr_start_idx);
 		pool_idx = (idx + lqr->lqr_offset_idx) %
-			    pool->op_count;
-		mdt_idx = lqr->lqr_pool.op_array[pool_idx];
-		mdt = LTD_TGT(ltd, mdt_idx);
+			    (pool->op_count + overstriped);
+		/* in the overstriped case, we must be able to allocate a stripe
+		 * to the local MDT, ie, the one doing the allocation
+		 */
+		if (pool_idx == pool->op_count) {
+			LASSERT(overstriped);
+			/* because there is already a stripe on the local MDT,
+			 * do not allocate from the local MDT until we've
+			 * allocated at least as many stripes as we have MDTs
+			 */
+			if (stripe_idx < (pool->op_count + 1)) {
+				CDEBUG(D_OTHER,
+				       "Skipping local alloc, not enough stripes yet\n");
+				continue;
+			}
+			CDEBUG(D_OTHER, "Attempting to allocate locally\n");
+			local_alloc = true;
+			mdt_tgt = lod->lod_child;
+			rc = lodname2mdt_index(lod2obd(lod)->obd_name,
+					       &mdt_idx);
+			/* this parsing can't fail here because we're working
+			 * with a known-good MDT
+			 */
+			LASSERT(!rc);
+		} else {
+			mdt_idx = lqr->lqr_pool.op_array[pool_idx];
+			mdt = LTD_TGT(ltd, mdt_idx);
+			mdt_tgt = mdt->ltd_tgt;
+		}
 
 		CDEBUG(D_OTHER, "#%d strt %d act %d strp %d ary %d idx %d\n",
 		       i, idx, /* XXX: active*/ 0,
 		       stripe_idx, pool_idx, mdt_idx);
 
-		if (mdt_idx == LOV_QOS_EMPTY ||
-		    !test_bit(mdt_idx, ltd->ltd_tgt_bitmap))
-			continue;
-
-		/* do not put >1 objects on one MDT */
-		if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
-			continue;
-
-		if (mdt->ltd_discon) {
-			tgt_connecting = 1;
+		if (!local_alloc &&  (mdt_idx == LOV_QOS_EMPTY ||
+		    !test_bit(mdt_idx, ltd->ltd_tgt_bitmap))) {
+			CDEBUG(D_OTHER, "mdt_idx not found %d\n", mdt_idx);
 			continue;
 		}
 
-		if (lod_statfs_check(ltd, mdt))
-			continue;
+		/* do not put >1 objects on one MDT, except for overstriping */
+		if (!local_alloc) {
+			if (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) {
+				CDEBUG(D_OTHER, "overstriped\n");
+			} else if (lod_qos_is_tgt_used(env, mdt_idx,
+						       stripe_idx)) {
+				CDEBUG(D_OTHER, "#%d: already used\n", mdt_idx);
+				continue;
+			}
+		}
 
-		if (mdt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
-			continue;
+		/* we know the local MDT is usable */
+		if (!local_alloc) {
+			if (mdt->ltd_discon) {
+				tgt_connecting = 1;
+				CDEBUG(D_OTHER, "#%d: unusable\n", mdt_idx);
+				continue;
+			}
+			if (lod_statfs_check(ltd, mdt))
+				continue;
+			if (mdt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
+				continue;
+		}
 
 		/* try to use another OSP if this one is degraded */
-		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED &&
-		    !use_degraded) {
+		if (!local_alloc && !use_degraded &&
+		    mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED) {
 			CDEBUG(D_OTHER, "#%d: degraded\n", mdt_idx);
 			continue;
 		}
 
-		rc = dt_fid_alloc(env, mdt->ltd_tgt, &fid, NULL, NULL);
+		rc = dt_fid_alloc(env, mdt_tgt, &fid, NULL, NULL);
 		if (rc < 0) {
 			CDEBUG(D_OTHER, "#%d: alloc FID failed: %dl\n", mdt_idx, rc);
 			continue;
 		}
 
-		dto = dt_locate_at(env, mdt->ltd_tgt, &fid,
+		dto = dt_locate_at(env, mdt_tgt, &fid,
 				lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
 				&conf);
 
 		if (IS_ERR(dto)) {
 			CDEBUG(D_OTHER, "can't alloc stripe on #%u: %d\n",
-			       mdt->ltd_index, (int) PTR_ERR(dto));
+			       mdt_idx, (int) PTR_ERR(dto));
 
-			if (mdt->ltd_discon)
+			if (!local_alloc && mdt->ltd_discon)
 				tgt_connecting = 1;
 			continue;
 		}
@@ -1041,9 +1097,15 @@ repeat_find:
 	}
 	up_read(&ltd->ltd_qos.lq_rw_sem);
 
-	if (stripe_idx > saved_idx)
+	if (stripe_idx > saved_idx) {
+		/* If there are enough MDTs, we will not actually do
+		 * overstriping, and the hash flags should reflect this.
+		 */
+		if (!overstriped)
+			lo->ldo_dir_hash_type &= ~LMV_HASH_FLAG_OVERSTRIPED;
 		/* at least one stripe is allocated */
 		RETURN(stripe_idx);
+	}
 
 	/* nobody provided us with a single object */
 	if (tgt_connecting)
@@ -1820,6 +1882,16 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(stripe_idx <= stripe_count);
 	if (stripe_idx == stripe_count)
 		RETURN(stripe_count);
+
+	/* we do not use qos for overstriping, since it will always use all the
+	 * MDTs.  So we check if it's truly needed, falling back to rr if it is,
+	 * and otherwise we remove the flag and continue
+	 */
+	if (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) {
+		if (stripe_count > lod->lod_remote_mdt_count + 1)
+			RETURN(-EAGAIN);
+		lo->ldo_dir_hash_type &= ~LMV_HASH_FLAG_OVERSTRIPED;
+	}
 
 	/* use MDT pool in @ltd, once MDT pool is supported in the future, it
 	 * can be passed in as argument like OST object allocation.
