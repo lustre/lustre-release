@@ -3118,9 +3118,9 @@ test_144a() {
 		kill -9 $pid >/dev/null 2>&1
 	done
 
-	before=$(date +%s)
+	before=$SECONDS
 	fail mds1
-	after=$(date +%s)
+	after=$SECONDS
 	# here we measure MDT stop + MDT start time. For error case MDT stop takes
 	# about obd_timeout-60 (240) seconds. Without error - less than 30s.
 	# MDT start takes different time depends on a configuration, let's check
@@ -3160,7 +3160,12 @@ test_144b() {
 	done
 
 	fail ost1
-	sleep 60
+
+	# 60s is not enought with ZFS which is still significatnly
+	# slower on some operations like record writing
+	local stime=60
+	[[ "$mds1_FSTYPE" != "zfs" ]] || stime=120
+	sleep $stime
 
 	for pid in $pids; do
 		ps -p $pid > /dev/null
