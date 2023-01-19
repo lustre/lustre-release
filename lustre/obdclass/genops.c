@@ -1067,6 +1067,9 @@ struct obd_export *__class_new_export(struct obd_device *obd,
 	obd_init_export(export);
 
 	at_init(&export->exp_bl_lock_at, obd_timeout, 0);
+	export->exp_root_fid.f_seq = 0;
+	export->exp_root_fid.f_oid = 0;
+	export->exp_root_fid.f_ver = 0;
 
 	spin_lock(&obd->obd_dev_lock);
 	if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {

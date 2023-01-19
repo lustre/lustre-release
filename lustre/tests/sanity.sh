@@ -27369,6 +27369,71 @@ test_421g() {
 }
 run_test 421g "rmfid to return errors properly"
 
+test_421h() {
+	local mount_other
+	local mount_ret
+	local rmfid_ret
+	local old_fid
+	local fidA
+	local fidB
+	local fidC
+	local fidD
+
+	(( MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "Need MDS version at least 2.15.53"
+
+	test_mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir/subdir
+	touch $DIR/$tdir/subdir/file0
+	old_fid=$(lfs path2fid $DIR/$tdir/subdir/file0 | sed "s/[/][^:]*://g")
+	echo File $DIR/$tdir/subdir/file0 FID $old_fid
+	rm -f $DIR/$tdir/subdir/file0
+	touch $DIR/$tdir/subdir/fileA
+	fidA=$(lfs path2fid $DIR/$tdir/subdir/fileA | sed "s/[/][^:]*://g")
+	echo File $DIR/$tdir/subdir/fileA FID $fidA
+	touch $DIR/$tdir/subdir/fileB
+	fidB=$(lfs path2fid $DIR/$tdir/subdir/fileB | sed "s/[/][^:]*://g")
+	echo File $DIR/$tdir/subdir/fileB FID $fidB
+	ln $DIR/$tdir/subdir/fileB $DIR/$tdir/subdir/fileB_hl
+	touch $DIR/$tdir/subdir/fileC
+	fidC=$(lfs path2fid $DIR/$tdir/subdir/fileC | sed "s/[/][^:]*://g")
+	echo File $DIR/$tdir/subdir/fileC FID $fidC
+	ln $DIR/$tdir/subdir/fileC $DIR/$tdir/fileC
+	touch $DIR/$tdir/fileD
+	fidD=$(lfs path2fid $DIR/$tdir/fileD | sed "s/[/][^:]*://g")
+	echo File $DIR/$tdir/fileD FID $fidD
+
+	# mount another client mount point with subdirectory mount
+	export FILESET=/$tdir/subdir
+	mount_other=${MOUNT}_other
+	mount_client $mount_other ${MOUNT_OPTS}
+	mount_ret=$?
+	export FILESET=""
+	(( mount_ret == 0 )) || error "mount $mount_other failed"
+
+	echo Removing FIDs:
+	echo $LFS rmfid $mount_other $old_fid $fidA $fidD $fidB $fidC
+	$LFS rmfid $mount_other $old_fid $fidA $fidD $fidB $fidC
+	rmfid_ret=$?
+
+	umount_client $mount_other || error "umount $mount_other failed"
+
+	(( rmfid_ret != 0 )) || error "rmfid should have failed"
+
+	# fileA should have been deleted
+	stat $DIR/$tdir/subdir/fileA && error "fileA not deleted"
+
+	# fileB should have been deleted
+	stat $DIR/$tdir/subdir/fileB && error "fileB not deleted"
+
+	# fileC should not have been deleted, fid also exists outside of fileset
+	stat $DIR/$tdir/subdir/fileC || error "fileC deleted"
+
+	# fileD should not have been deleted, it exists outside of fileset
+	stat $DIR/$tdir/fileD || error "fileD deleted"
+}
+run_test 421h "rmfid with fileset mount"
+
 test_422() {
 	test_mkdir -i 0 -c 1 -p $DIR/$tdir/d1
 	test_mkdir -i 0 -c 1 -p $DIR/$tdir/d2

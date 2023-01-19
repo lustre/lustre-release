@@ -316,6 +316,7 @@ struct obd_export {
 	 */
 	__u64			exp_last_xid;
 	long			*exp_used_slots;
+	struct lu_fid		exp_root_fid; /* subdir mount fid */
 };
 
 #define exp_target_data u.eu_target_data

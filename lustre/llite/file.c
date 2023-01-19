@@ -3041,9 +3041,37 @@ lookup:
 	return rc;
 }
 
-int ll_fid2path(struct inode *inode, void __user *arg)
+int __ll_fid2path(struct inode *inode, struct getinfo_fid2path *gfout,
+		  size_t outsize, __u32 pathlen_orig)
 {
 	struct obd_export *exp = ll_i2mdexp(inode);
+	int rc;
+
+	/* Append root FID after gfout to let MDT know the root FID so that
+	 * it can lookup the correct path, this is mainly for fileset.
+	 * old server without fileset mount support will ignore this.
+	 */
+	*gfout->gf_u.gf_root_fid = *ll_inode2fid(inode);
+
+	/* Call mdc_iocontrol */
+	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
+
+	if (!rc && gfout->gf_pathlen && gfout->gf_u.gf_path[0] == '/') {
+		/* by convention, server side (mdt_path_current()) puts
+		 * a leading '/' to tell client that we are dealing with
+		 * an encrypted file
+		 */
+		rc = fid2path_for_enc_file(inode, gfout->gf_u.gf_path,
+					   gfout->gf_pathlen);
+		if (!rc && strlen(gfout->gf_u.gf_path) > pathlen_orig)
+			rc = -EOVERFLOW;
+	}
+
+	return rc;
+}
+
+int ll_fid2path(struct inode *inode, void __user *arg)
+{
 	const struct getinfo_fid2path __user *gfin = arg;
 	__u32 pathlen, pathlen_orig;
 	struct getinfo_fid2path *gfout;
@@ -3072,29 +3100,11 @@ gf_alloc:
 
 	if (copy_from_user(gfout, arg, sizeof(*gfout)))
 		GOTO(gf_free, rc = -EFAULT);
-	/* append root FID after gfout to let MDT know the root FID so that it
-	 * can lookup the correct path, this is mainly for fileset.
-	 * old server without fileset mount support will ignore this. */
-	*gfout->gf_u.gf_root_fid = *ll_inode2fid(inode);
+
 	gfout->gf_pathlen = pathlen;
-
-	/* Call mdc_iocontrol */
-	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
-	if (rc != 0)
+	rc = __ll_fid2path(inode, gfout, outsize, pathlen_orig);
+	if (rc)
 		GOTO(gf_free, rc);
-
-	if (gfout->gf_pathlen && gfout->gf_u.gf_path[0] == '/') {
-		/* by convention, server side (mdt_path_current()) puts
-		 * a leading '/' to tell client that we are dealing with
-		 * an encrypted file
-		 */
-		rc = fid2path_for_enc_file(inode, gfout->gf_u.gf_path,
-					   gfout->gf_pathlen);
-		if (rc)
-			GOTO(gf_free, rc);
-		if (strlen(gfout->gf_u.gf_path) > gfin->gf_pathlen)
-			GOTO(gf_free, rc = -EOVERFLOW);
-	}
 
 	if (copy_to_user(arg, gfout, sizeof(*gfout) + pathlen_orig))
 		rc = -EFAULT;

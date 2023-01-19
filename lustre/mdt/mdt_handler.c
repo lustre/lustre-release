@@ -458,6 +458,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	} else {
 		repbody->mbo_fid1 = mdt->mdt_md_root_fid;
 	}
+	exp->exp_root_fid = repbody->mbo_fid1;
 	repbody->mbo_valid |= OBD_MD_FLID;
 
 	EXIT;
@@ -7311,6 +7312,18 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		       ", or f_oid != 0, or f_ver == 0\n", mdt_obd_name(mdt),
 		       PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
 		RETURN(-EINVAL);
+	}
+
+	/* return error if client-provided root fid
+	 * is not the one stored in the export
+	 */
+	if (root_fid && !fid_is_zero(&info->mti_exp->exp_root_fid) &&
+	    !lu_fid_eq(root_fid, &info->mti_exp->exp_root_fid)) {
+		CDEBUG(D_INFO,
+		       "%s: root fid from client "DFID" but "DFID" stored in export\n",
+		       mdt_obd_name(mdt), PFID(root_fid),
+		       PFID(&info->mti_exp->exp_root_fid));
+		RETURN(-EXDEV);
 	}
 
 	obj = mdt_object_find(info->mti_env, mdt, &fp->gf_fid);
