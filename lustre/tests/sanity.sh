@@ -25076,26 +25076,29 @@ test_398a() { # LU-4198
 run_test 398a "direct IO should cancel lock otherwise lockless"
 
 test_398b() { # LU-4198
+	local before=$(date +%s)
+	local njobs=4
+	local size=48
+
 	which fio || skip_env "no fio installed"
 	$LFS setstripe -c -1 -S 1M $DIR/$tfile
-
-	local size=48
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$size
 
-	local njobs=4
 	# Single page, multiple pages, stripe size, 4*stripe size
 	for bsize in $(( $PAGE_SIZE )) $(( 4*$PAGE_SIZE )) 1048576 4194304; do
 		echo "mix direct rw ${bsize} by fio with $njobs jobs..."
 		fio --name=rand-rw --rw=randrw --bs=$bsize --direct=1 \
 			--numjobs=$njobs --fallocate=none \
-			--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+			--iodepth=16 --allow_file_create=0 \
+			--size=$((size/njobs))M \
 			--filename=$DIR/$tfile &
 		bg_pid=$!
 
 		echo "mix buffer rw ${bsize} by fio with $njobs jobs..."
 		fio --name=rand-rw --rw=randrw --bs=$bsize \
 			--numjobs=$njobs --fallocate=none \
-			--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+			--iodepth=16 --allow_file_create=0 \
+			--size=$((size/njobs))M \
 			--filename=$DIR/$tfile || true
 		wait $bg_pid
 	done
