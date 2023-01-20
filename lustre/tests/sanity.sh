@@ -26712,45 +26712,55 @@ test_414() {
 run_test 414 "simulate ENOMEM in ptlrpc_register_bulk()"
 
 test_415() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	(( $MDS1_VERSION >= $(version_code 2.11.52) )) ||
 		skip "Need server version at least 2.11.52"
 
 	# LU-11102
-	local total
-	local setattr_pid
-	local start_time
-	local end_time
-	local duration
+	local total=500
+	local max=120
 
-	total=500
 	# this test may be slow on ZFS
-	[ "$mds1_FSTYPE" == "zfs" ] && total=50
+	[[ "$mds1_FSTYPE" == "zfs" ]] && total=50
 
 	# though this test is designed for striped directory, let's test normal
 	# directory too since lock is always saved as CoS lock.
 	test_mkdir $DIR/$tdir || error "mkdir $tdir"
 	createmany -o $DIR/$tdir/$tfile. $total || error "createmany"
+	stack_trap "unlinkmany $DIR/$tdir/$tfile. $total || true"
+	# if looping with ONLY_REPEAT, wait for previous deletions to finish
+	wait_delete_completed_mds
+
+	# run a loop without concurrent touch to measure rename duration.
+	# only for test debug/robustness, NOT part of COS functional test.
+	local start_time=$SECONDS
+	for ((i = 0; i < total; i++)); do
+		mrename $DIR/$tdir/$tfile.$i $DIR/$tdir/$tfile-new.$i \
+			> /dev/null
+	done
+	local baseline=$((SECONDS - start_time))
+	echo "rename $total files without 'touch' took $baseline sec"
 
 	(
 		while true; do
 			touch $DIR/$tdir
 		done
 	) &
-	setattr_pid=$!
+	local setattr_pid=$!
 
-	start_time=$(date +%s)
-	for i in $(seq $total); do
-		mrename $DIR/$tdir/$tfile.$i $DIR/$tdir/$tfile-new.$i \
+	# rename files back to original name so unlinkmany works
+	start_time=$SECONDS
+	for ((i = 0; i < total; i++)); do
+		mrename $DIR/$tdir/$tfile-new.$i $DIR/$tdir/$tfile.$i\
 			> /dev/null
 	done
-	end_time=$(date +%s)
-	duration=$((end_time - start_time))
+	local duration=$((SECONDS - start_time))
 
 	kill -9 $setattr_pid
 
-	echo "rename $total files took $duration sec"
-	[ $duration -lt 100 ] || error "rename took $duration sec"
+	echo "rename $total files with 'touch' took $duration sec"
+	(( max > 2 * baseline )) || max=$((2 * baseline + 5))
+	(( duration <= max )) || error "rename took $duration > $max sec"
 }
 run_test 415 "lock revoke is not missing"
 

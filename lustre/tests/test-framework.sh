@@ -10839,7 +10839,9 @@ function createmany() {
 	fi
 	$LUSTRE/tests/createmany $*
 	rc=$?
-	debugrestore
+	if (( count > 100 )); then
+		debugrestore
+	fi
 
 	return $rc
 }
