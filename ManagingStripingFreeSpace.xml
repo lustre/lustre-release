@@ -140,6 +140,21 @@
           in their entirety. Many users would prefer to lose some of their files entirely than all
           of their files partially.</para>
       </listitem>
+      <listitem>
+        <para><emphasis role="bold">Small files.</emphasis> Small files do not benefit from striping
+          because they can be efficiently stored and accessed as a single OST object or even with
+          Data on MDT.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis role="bold">O_APPEND mode.</emphasis> When files are opened for append, they
+          instantiate all uninitialized components expressed in the layout.  Typically, log files are
+          opened for append, and complex layouts can be inefficient.</para>
+        <note>
+          <para>The <literal>mdd.*.append_stripe_count</literal> and <literal>mdd.*.append_pool
+            </literal> options can be used to specify special default striping for files created
+            with <literal> O_APPEND</literal>.</para>
+        </note>
+      </listitem>
     </itemizedlist>
     <section remap="h3">
         <title><indexterm><primary>striping</primary><secondary>size</secondary></indexterm>
@@ -297,6 +312,13 @@ obdidx     objid        objid           group
       <para>To change the striping pattern for a sub-directory, create a directory with desired file
         layout as described above. Sub-directories inherit the file layout of the root/parent
         directory.</para>
+      <note>
+        <para>Special default striping can be used for files created with <literal>O_APPEND</literal>.
+          Files with uninitialized layouts opened with <literal>O_APPEND</literal> will
+          override a directory's default striping configuration and abide by the <literal>
+          mdd.*.append_pool</literal> and <literal>mdd.*.append_stripe_count</literal> options (if
+          they are specified).</para>
+      </note>
     </section>
     <section remap="h3">
       <title><indexterm>
@@ -311,6 +333,13 @@ obdidx     objid        objid           group
         <para>The striping settings for a <literal>root</literal> directory are, by default, applied
           to any new child directories created in the root directory, unless striping settings have
           been specified for the child directory.</para>
+      </note>
+      <note>
+        <para>Special default striping can be used for files created with <literal>O_APPEND</literal>.
+          Files with uninitialized layouts opened with <literal>O_APPEND</literal> will
+          override a file system's default striping configuration and abide by the <literal>
+          mdd.*.append_pool</literal> and <literal>mdd.*.append_stripe_count</literal> options (if
+          they are specified).</para>
       </note>
     </section>
     <section remap="h3">
