@@ -63,15 +63,16 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 fi
 
 #                                  5              12     8   12  15   (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o"
+[[ "$SLOW" = "no" ]] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o"
 
-if [ "$mds1_FSTYPE" = "zfs" ]; then
+if [[ "$mds1_FSTYPE" == "zfs" ]]; then
 	#                                               13    (min)"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
+	[[ "$SLOW" == "no" ]] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi
 
-if [ "$ost1_FSTYPE" = "zfs" ]; then
+if [[ "$ost1_FSTYPE" = "zfs" ]]; then
 	always_except LU-1941 130b 130c 130d 130e 130f 130g
+	always_except LU-9054 312
 fi
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
@@ -24771,8 +24772,7 @@ zfs_object_blksz() {
 
 test_312() { # LU-4856
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ "$ost1_FSTYPE" = "zfs" ] ||
-		skip_env "the test only applies to zfs"
+	[[ "$ost1_FSTYPE" == "zfs" ]] || skip "the test only applies to zfs"
 
 	local max_blksz=$(do_facet ost1 \
 			  $ZFS get -p recordsize $(facet_device ost1) |
