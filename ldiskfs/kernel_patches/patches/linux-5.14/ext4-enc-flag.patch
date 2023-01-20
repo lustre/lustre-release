@@ -1,0 +1,69 @@
+Subject: [PATCH] ext4-enc-flag
+
+---
+ fs/ext4/ext4.h  | 3 +++
+ fs/ext4/inode.c | 6 ++++--
+ fs/ext4/xattr.c | 8 +++++++-
+ 3 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 0144c3a..848b7bb 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1242,6 +1242,9 @@ struct ext4_inode_info {
+ #define EXT4_MOUNT_DISCARD		0x40000000 /* Issue DISCARD requests */
+ #define EXT4_MOUNT_INIT_INODE_TABLE	0x80000000 /* Initialize uninitialized itables */
+ 
++/* we know this is a Lustre mount thanks to the DIRDATA flag */
++#define IS_LUSTRE_MOUNT(sb)	test_opt((sb), DIRDATA)
++
+ /*
+  * Mount flags set either automatically (could not be set by mount option)
+  * based on per file system feature or property or in special cases such as
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 2de9443..97649e9 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -4536,7 +4536,8 @@ void ext4_set_inode_flags(struct inode *inode, bool init)
+ 	if (init && ext4_should_enable_dax(inode))
+ 		new_fl |= S_DAX;
+ 
+-	if (flags & EXT4_ENCRYPT_FL)
++	if (flags & EXT4_ENCRYPT_FL &&
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
+ 		new_fl |= S_ENCRYPTED;
+ 	if (flags & EXT4_CASEFOLD_FL)
+ 		new_fl |= S_CASEFOLD;
+@@ -5576,7 +5577,8 @@ int ext4_getattr(struct user_namespace *mnt_userns, const struct path *path,
+ 		stat->attributes |= STATX_ATTR_APPEND;
+ 	if (flags & EXT4_COMPR_FL)
+ 		stat->attributes |= STATX_ATTR_COMPRESSED;
+-	if (flags & EXT4_ENCRYPT_FL)
++	if (flags & EXT4_ENCRYPT_FL &&
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
+ 		stat->attributes |= STATX_ATTR_ENCRYPTED;
+ 	if (flags & EXT4_IMMUTABLE_FL)
+ 		stat->attributes |= STATX_ATTR_IMMUTABLE;
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index 9800ef9..99eaf86 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -2496,8 +2496,14 @@ retry_inode:
+ 		if (IS_SYNC(inode))
+ 			ext4_handle_sync(handle);
+ 	}
+-	ext4_fc_mark_ineligible(inode->i_sb, EXT4_FC_REASON_XATTR);
+ 
++	if (!error && name_index == EXT4_XATTR_INDEX_ENCRYPTION &&
++	    strcmp(name, "c") == 0) {
++		EXT4_I(inode)->i_flags |= EXT4_ENCRYPT_FL;
++		mark_inode_dirty(inode);
++	}
++
++	ext4_fc_mark_ineligible(inode->i_sb, EXT4_FC_REASON_XATTR);
+ cleanup:
+ 	brelse(is.iloc.bh);
+ 	brelse(bs.bh);
+-- 
+2.34.1
+
