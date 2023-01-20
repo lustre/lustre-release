@@ -1391,6 +1391,8 @@ struct ll_cl_context {
 	struct cl_io		*lcc_io;
 	struct cl_page		*lcc_page;
 	enum lcc_type		 lcc_type;
+	struct kiocb		*lcc_iocb;
+	struct iov_iter		*lcc_iter;
 };
 
 struct ll_thread_info {
