@@ -811,6 +811,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	loff_t pos = io->u.ci_rd.rd.crw_pos;
 	size_t cnt = io->u.ci_rd.rd.crw_count;
 	size_t tot = vio->vui_tot_count;
+	struct ll_cl_context *lcc;
 	int exceed = 0;
 	int result;
 	struct iov_iter iter;
@@ -876,7 +877,15 @@ static int vvp_io_read_start(const struct lu_env *env,
 	file_accessed(file);
 	LASSERT(vio->vui_iocb->ki_pos == pos);
 	iter = *vio->vui_iter;
+
+	lcc = ll_cl_find(inode);
+	lcc->lcc_iter = &iter;
+	lcc->lcc_iocb = vio->vui_iocb;
+	CDEBUG(D_VFSTRACE, "cnt:%ld,iocb pos:%lld\n", lcc->lcc_iter->count,
+	       lcc->lcc_iocb->ki_pos);
+
 	result = generic_file_read_iter(vio->vui_iocb, &iter);
+
 out:
 	if (result >= 0) {
 		if (result < cnt)
