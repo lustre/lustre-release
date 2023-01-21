@@ -1,0 +1,110 @@
+---
+ fs/ext4/mballoc.c | 43 +++++++++++++++++++++++++++++++++++++------
+ fs/ext4/mballoc.h |  1 +
+ 2 files changed, 38 insertions(+), 6 deletions(-)
+
+diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
+index 5dbd7e7..961732c 100644
+--- a/fs/ext4/mballoc.c
++++ b/fs/ext4/mballoc.c
+@@ -4859,6 +4859,7 @@ ext4_mb_new_inode_pa(struct ext4_allocation_context *ac)
+ 	INIT_LIST_HEAD(&pa->pa_group_list);
+ 	pa->pa_deleted = 0;
+ 	pa->pa_type = MB_INODE_PA;
++	pa->pa_error = 0;
+ 
+ 	mb_debug(sb, "new inode pa %p: %llu/%d for %u\n", pa, pa->pa_pstart,
+ 		 pa->pa_len, pa->pa_lstart);
+@@ -4914,6 +4915,7 @@ ext4_mb_new_group_pa(struct ext4_allocation_context *ac)
+ 	INIT_LIST_HEAD(&pa->pa_group_list);
+ 	pa->pa_deleted = 0;
+ 	pa->pa_type = MB_GROUP_PA;
++	pa->pa_error = 0;
+ 
+ 	mb_debug(sb, "new group pa %p: %llu/%d for %u\n", pa, pa->pa_pstart,
+ 		 pa->pa_len, pa->pa_lstart);
+@@ -4967,7 +4969,9 @@ ext4_mb_release_inode_pa(struct ext4_buddy *e4b, struct buffer_head *bitmap_bh,
+ 	unsigned long long grp_blk_start;
+ 	int free = 0;
+ 
++	assert_spin_locked(ext4_group_lock_ptr(sb, e4b->bd_group));
+ 	BUG_ON(pa->pa_deleted == 0);
++	BUG_ON(pa->pa_inode == NULL);
+ 	ext4_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
+ 	grp_blk_start = pa->pa_pstart - EXT4_C2B(sbi, bit);
+ 	BUG_ON(group != e4b->bd_group && pa->pa_len != 0);
+@@ -4990,12 +4994,18 @@ ext4_mb_release_inode_pa(struct ext4_buddy *e4b, struct buffer_head *bitmap_bh,
+ 		mb_free_blocks(pa->pa_inode, e4b, bit, next - bit);
+ 		bit = next + 1;
+ 	}
+-	if (free != pa->pa_free) {
+-		ext4_msg(e4b->bd_sb, KERN_CRIT,
+-			 "pa %p: logic %lu, phys. %lu, len %d",
+-			 pa, (unsigned long) pa->pa_lstart,
+-			 (unsigned long) pa->pa_pstart,
+-			 pa->pa_len);
++
++	/* "free < pa->pa_free" means we maybe double alloc the same blocks,
++	 * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
++	if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {
++		ext4_error(sb, "pa free mismatch: [pa %p] "
++				"[phy %lu] [logic %lu] [len %u] [free %u] "
++				"[error %u] [inode %d] [freed %u]", pa,
++				(unsigned long)pa->pa_pstart,
++				(unsigned long)pa->pa_lstart,
++				pa->pa_len, (unsigned)pa->pa_free,
++				(unsigned)pa->pa_error, pa->pa_inode->i_ino,
++				free);
+ 		ext4_grp_locked_error(sb, group, 0, 0, "free %u, pa_free %u",
+ 					free, pa->pa_free);
+ 		/*
+@@ -5003,6 +5013,8 @@ ext4_mb_release_inode_pa(struct ext4_buddy *e4b, struct buffer_head *bitmap_bh,
+ 		 * from the bitmap and continue.
+ 		 */
+ 	}
++	/* do not verify if the file system is being umounted */
++	BUG_ON(atomic_read(&sb->s_active) > 0 && pa->pa_free != free);
+ 	atomic_add(free, &sbi->s_mb_discarded);
+ 
+ 	return 0;
+@@ -5858,6 +5870,25 @@ errout:
+ 		ac->ac_b_ex.fe_len = 0;
+ 		ar->len = 0;
+ 		ext4_mb_show_ac(ac);
++		if (ac->ac_pa) {
++			struct ext4_prealloc_space *pa = ac->ac_pa;
++
++			/* We can not make sure whether the bitmap has
++			 * been updated or not when fail case. So can
++			 * not revert pa_free back, just mark pa_error*/
++			pa->pa_error++;
++			ext4_error(sb,
++				"Updating bitmap error: [err %d] "
++				"[pa %p] [phy %lu] [logic %lu] "
++				"[len %u] [free %u] [error %u] "
++				"[inode %lu]", *errp, pa,
++				(unsigned long)pa->pa_pstart,
++				(unsigned long)pa->pa_lstart,
++				(unsigned)pa->pa_len,
++				(unsigned)pa->pa_free,
++				(unsigned)pa->pa_error,
++				pa->pa_inode ? pa->pa_inode->i_ino : 0);
++		}
+ 	}
+ 	ext4_mb_release_context(ac);
+ out:
+diff --git a/fs/ext4/mballoc.h b/fs/ext4/mballoc.h
+index b6c4a30..f1a9152 100644
+--- a/fs/ext4/mballoc.h
++++ b/fs/ext4/mballoc.h
+@@ -128,6 +128,7 @@ struct ext4_prealloc_space {
+ 	ext4_grpblk_t		pa_len;		/* len of preallocated chunk */
+ 	ext4_grpblk_t		pa_free;	/* how many blocks are free */
+ 	unsigned short		pa_type;	/* pa type. inode or group */
++	unsigned short		pa_error;
+ 	spinlock_t		*pa_obj_lock;
+ 	struct inode		*pa_inode;	/* hack, for history only */
+ };
+-- 
+2.34.1
+
