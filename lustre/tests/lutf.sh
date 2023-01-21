@@ -1,6 +1,13 @@
+#!/bin/bash
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
 #
+
+# Sourcing this script will log you out from your shell
+if [[ -n "${PS1}" ]]; then
+	echo "Do not source this script. Run using ./lutf.sh instead."
+	return 1
+fi
 
 export ONLY=${ONLY:-"$*"}
 export SUITE=${SUITE:-"$*"}
@@ -9,11 +16,11 @@ export PATTERN=${PATTERN:-"$*"}
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(dirname $0)/..}
+LUSTRE=${LUSTRE:-$(dirname "$0")/..}
 
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+. "$LUSTRE/tests/test-framework.sh"
+init_test_env "$@"
+. "${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}"
 init_logging
 
 # bug number for skipped test:
@@ -25,7 +32,7 @@ export LNETCTL=${LNETCTL:-"$LUSTRE/../lnet/utils/lnetctl"}
 [[ -z $LNETCTL ]] && skip "Need lnetctl"
 
 restore_mounts=false
-if is_mounted $MOUNT || is_mounted $MOUNT2; then
+if is_mounted "$MOUNT" || is_mounted "$MOUNT2"; then
 	cleanupall || error "Failed cleanup prior to test execution"
 	restore_mounts=true
 fi
@@ -62,19 +69,19 @@ set_env_vars_on_remote() {
 
 set_env_vars_on_remote
 
-rm /tmp/tf.skip
+rm -f /tmp/tf.skip
 
 # do not exit if LUTF fails
 set +e
 
 echo "+++++++++++STARTING LUTF"
-. $LUSTRE/tests/lutf/python/config/lutf_start.sh $CONFIG
+. "$LUSTRE/tests/lutf/python/config/lutf_start.sh" "$CONFIG"
 rc=$?
 echo "-----------STOPPING LUTF: $rc"
 
 if [ -d /tmp/lutf/ ]; then
 	tar -czf /tmp/lutf.tar.gz /tmp/lutf
-	mv /tmp/lutf.tar.gz $LOGDIR
+	mv /tmp/lutf.tar.gz "$LOGDIR"
 fi
 
 

@@ -1,3 +1,4 @@
+#!/bin/bash
 # note the cfg/<lutf config>.sh should export all environment variables
 # required. EX: export ost4_HOST=lustre01
 
@@ -26,4 +27,4 @@ if [[ -z "${PYTHONBIN}" ]]; then
 fi
 
 export LUTF_ENV_VARS=$1
-$PYTHONBIN $LUSTRE/tests/lutf/python/config/lutf_start.py
+$PYTHONBIN "$LUSTRE/tests/lutf/python/config/lutf_start.py"
