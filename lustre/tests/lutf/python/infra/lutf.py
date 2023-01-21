@@ -652,7 +652,7 @@ class TestSuites:
 			raise LUTFError('No LUTF path provided')
 		self.__lutf_tests = self.__lutf_path + '/python/tests/'
 		if not os.path.isdir(self.__lutf_tests):
-			raise LUTFError('No tests suites director: ' + sef.lutf_tests)
+			raise LUTFError('No tests suites directory: ' + self.__lutf_tests)
 		self.__generate_test_db(self.__test_db)
 
 	def __getitem__(self, key):
