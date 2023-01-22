@@ -154,6 +154,17 @@ void cfs_arch_init(void);
 #define task_is_running(task)		(task->state == TASK_RUNNING)
 #endif
 
+#ifndef memset_startat
+/** from linux 5.19 include/linux/string.h: */
+#define memset_startat(obj, v, member)					\
+({									\
+	u8 *__ptr = (u8 *)(obj);					\
+	typeof(v) __val = (v);						\
+	memset(__ptr + offsetof(typeof(*(obj)), member), __val,		\
+	       sizeof(*(obj)) - offsetof(typeof(*(obj)), member));	\
+})
+#endif /* memset_startat() */
+
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
 static inline void *cfs_kallsyms_lookup_name(const char *name)
 {

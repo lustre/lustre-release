@@ -1504,23 +1504,29 @@ struct obd_quotactl {
 	__u32			qc_stat;
 	struct obd_dqinfo	qc_dqinfo;
 	struct obd_dqblk	qc_dqblk;
-	char			qc_poolname[0];
+	char			qc_poolname[];
 };
 
 #define Q_COPY(out, in, member) (out)->member = (in)->member
 
-#define __QCTL_COPY(out, in, need_pname)		\
-do {							\
-	Q_COPY(out, in, qc_cmd);			\
-	Q_COPY(out, in, qc_type);			\
-	Q_COPY(out, in, qc_id);				\
-	Q_COPY(out, in, qc_stat);			\
-	Q_COPY(out, in, qc_dqinfo);			\
-	Q_COPY(out, in, qc_dqblk);			\
-	if (need_pname && LUSTRE_Q_CMD_IS_POOL(in->qc_cmd))		\
-		memcpy(out->qc_poolname,		\
-		       in->qc_poolname,			\
-		       LOV_MAXPOOLNAME + 1);		\
+/* NOTE:
+ * - in and out maybe a type of struct if_quotactl or struct obd_quotactl
+ * - in and out need not be of the same type.
+ */
+#define __QCTL_COPY(out, in, need_pname)				\
+do {									\
+	Q_COPY(out, in, qc_cmd);					\
+	Q_COPY(out, in, qc_type);					\
+	Q_COPY(out, in, qc_id);						\
+	Q_COPY(out, in, qc_stat);					\
+	Q_COPY(out, in, qc_dqinfo);					\
+	Q_COPY(out, in, qc_dqblk);					\
+	if (need_pname && LUSTRE_Q_CMD_IS_POOL(in->qc_cmd)) {		\
+		size_t len = strnlen(in->qc_poolname, LOV_MAXPOOLNAME);	\
+									\
+		memcpy(out->qc_poolname, in->qc_poolname, len);		\
+		out->qc_poolname[len] = '\0';				\
+	}								\
 } while (0)
 
 #define QCTL_COPY(out, in) __QCTL_COPY(out, in, true)
