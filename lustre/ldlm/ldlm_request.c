@@ -2178,8 +2178,7 @@ int ldlm_cli_cancel_list(struct list_head *cancels, int count,
 	 */
 	while (count > 0) {
 		LASSERT(!list_empty(cancels));
-		lock = list_entry(cancels->next, struct ldlm_lock,
-				  l_bl_ast);
+		lock = list_first_entry(cancels, struct ldlm_lock, l_bl_ast);
 		LASSERT(lock->l_conn_export);
 
 		if (exp_connect_cancelset(lock->l_conn_export)) {
@@ -2305,26 +2304,21 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
 			  void *closure)
 {
-	struct list_head *tmp, *next;
+	struct ldlm_lock *tmp;
 	struct ldlm_lock *lock;
 	int rc = LDLM_ITER_CONTINUE;
 
 	ENTRY;
-
 	if (!res)
 		RETURN(LDLM_ITER_CONTINUE);
 
 	lock_res(res);
-	list_for_each_safe(tmp, next, &res->lr_granted) {
-		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-
+	list_for_each_entry_safe(lock, tmp, &res->lr_granted, l_res_link) {
 		if (iter(lock, closure) == LDLM_ITER_STOP)
 			GOTO(out, rc = LDLM_ITER_STOP);
 	}
 
-	list_for_each_safe(tmp, next, &res->lr_waiting) {
-		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-
+	list_for_each_entry_safe(lock, tmp, &res->lr_waiting, l_res_link) {
 		if (iter(lock, closure) == LDLM_ITER_STOP)
 			GOTO(out, rc = LDLM_ITER_STOP);
 	}
