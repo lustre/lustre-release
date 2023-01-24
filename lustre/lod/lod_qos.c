@@ -830,6 +830,12 @@ repeat_find:
 		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
 			continue;
 
+		if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LOD_CREATE_PAUSE)) {
+			clear_bit(LQ_SAME_SPACE,
+				  &m->lod_ost_descs.ltd_qos.lq_flags);
+			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOD_CREATE_PAUSE,
+					 cfs_fail_val);
+		}
 		rc = lod_check_and_reserve_ost(env, lo, lod_comp, ost_idx,
 					       speed, &stripe_idx, stripe,
 					       ost_indices, th, &overstriped,
