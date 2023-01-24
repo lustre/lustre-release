@@ -1442,6 +1442,10 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	int rc = 0;
 	ENTRY;
 
+	/* Totally skip qos part when qos_threshold_rr=100% */
+	if (lod->lod_ost_descs.ltd_qos.lq_threshold_rr == QOS_THRESHOLD_MAX)
+		return -EAGAIN;
+
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	stripe_count = lod_comp->llc_stripe_count;
@@ -1725,6 +1729,10 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	int rc = 0;
 
 	ENTRY;
+
+	/* Totally skip qos part when qos_threshold_rr=100% */
+	if (ltd->ltd_qos.lq_threshold_rr == QOS_THRESHOLD_MAX)
+		return -EAGAIN;
 
 	LASSERT(stripe_idx <= stripe_count);
 	if (stripe_idx == stripe_count)

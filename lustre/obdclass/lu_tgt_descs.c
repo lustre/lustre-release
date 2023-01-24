@@ -283,11 +283,13 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 		ltd->ltd_lmv_desc.ld_pattern = LMV_HASH_TYPE_DEFAULT;
 		ltd->ltd_qos.lq_prio_free = LMV_QOS_DEF_PRIO_FREE * 256 / 100;
 		ltd->ltd_qos.lq_threshold_rr =
-			LMV_QOS_DEF_THRESHOLD_RR_PCT * 256 / 100;
+			LMV_QOS_DEF_THRESHOLD_RR_PCT *
+			QOS_THRESHOLD_MAX / 100;
 	} else {
 		ltd->ltd_qos.lq_prio_free = LOV_QOS_DEF_PRIO_FREE * 256 / 100;
 		ltd->ltd_qos.lq_threshold_rr =
-			LOV_QOS_DEF_THRESHOLD_RR_PCT * 256 / 100;
+			LOV_QOS_DEF_THRESHOLD_RR_PCT *
+			QOS_THRESHOLD_MAX / 100;
 	}
 
 	return 0;
@@ -577,8 +579,10 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 	 * creation performance
 	 */
 	clear_bit(LQ_SAME_SPACE, &qos->lq_flags);
-	if ((ba_max * (256 - qos->lq_threshold_rr)) >> 8 < ba_min &&
-	    (ia_max * (256 - qos->lq_threshold_rr)) >> 8 < ia_min) {
+	if (((ba_max * (QOS_THRESHOLD_MAX - qos->lq_threshold_rr)) /
+	    QOS_THRESHOLD_MAX) < ba_min &&
+	    ((ia_max * (QOS_THRESHOLD_MAX - qos->lq_threshold_rr)) /
+	    QOS_THRESHOLD_MAX) < ia_min) {
 		set_bit(LQ_SAME_SPACE, &qos->lq_flags);
 		/* Reset weights for the next time we enter qos mode */
 		set_bit(LQ_RESET, &qos->lq_flags);

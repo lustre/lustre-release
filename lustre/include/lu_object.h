@@ -1638,7 +1638,9 @@ struct lu_tgt_desc_idx {
 	struct lu_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
 };
 
+
 /* QoS data for LOD/LMV */
+#define QOS_THRESHOLD_MAX 256 /* should be power of two */
 struct lu_qos {
 	struct list_head	 lq_svr_list;	/* lu_svr_qos list */
 	struct rw_semaphore	 lq_rw_sem;
