@@ -511,36 +511,6 @@ AC_DEFUN([LC_HAVE_LIBAIO], [
 		AC_MSG_WARN([libaio is not installed in the system]))
 ]) # LC_HAVE_LIBAIO
 
-AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
-LB_CHECK_COMPILE([if get_projid exists],
-get_projid, [
-	struct inode;
-	#include <linux/quota.h>
-],[
-	struct dquot_operations ops = { };
-
-	ops.get_projid(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_PROJECT_QUOTA, 1,
-		[get_projid function exists])
-])
-]) # LC_HAVE_PROJECT_QUOTA
-
-AC_DEFUN([LC_HAVE_GET_INODE_USAGE], [
-LB_CHECK_COMPILE([if get_inode_usage exists],
-get_inode_usage, [
-	struct inode;
-	#include <linux/quota.h>
-],[
-	struct dquot_operations ops = { };
-
-	ops.get_inode_usage(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_GET_INODE_USAGE, 1,
-		[get_inode_usage function exists])
-])
-]) # LC_HAVE_GET_INODE_USAGE
-
 #
 # LC_INVALIDATE_RANGE
 #
@@ -1196,6 +1166,26 @@ bdi_cap_map_copy, [
 ]) # LC_HAVE_BDI_CAP_MAP_COPY
 
 #
+# LC_HAVE_PROJECT_QUOTA
+#
+# Kernel version v4.0-rc1-197-g847aac644e92
+#
+AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
+LB_CHECK_COMPILE([if get_projid exists],
+get_projid, [
+	struct inode;
+	#include <linux/quota.h>
+],[
+	struct dquot_operations ops = { };
+
+	ops.get_projid(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_PROJECT_QUOTA, 1,
+		[get_projid function exists])
+])
+]) # LC_HAVE_PROJECT_QUOTA
+
+#
 # LC_IOV_ITER_RW
 #
 # 4.1 kernel has iov_iter_rw
@@ -1685,6 +1675,26 @@ lock_page_memcg, [
 ]) # LC_LOCK_PAGE_MEMCG
 
 #
+# LC_HAVE_DOWN_WRITE_KILLABLE
+#
+# Kernel version v4.6-rc3-28-g916633a40370
+#
+AC_DEFUN([LC_HAVE_DOWN_WRITE_KILLABLE], [
+LB_CHECK_COMPILE([if down_write_killable exists],
+down_write_killable, [
+	struct rw_semaphore sem;
+	#include <linux/rwsem.h>
+],[
+	int rc;
+
+	rc = down_write_killable(&sem);
+],[
+	AC_DEFINE(HAVE_DOWN_WRITE_KILLABLE, 1,
+		[down_write_killable function exists])
+])
+]) # LC_HAVE_DOWN_WRITE_KILLABLE
+
+#
 # LC_D_INIT
 #
 # Kernel version 4.7-rc5 commit 285b102d3b745f3c2c110c9c327741d87e64aacc
@@ -2070,6 +2080,27 @@ current_time, [
 		[current_time() has replaced CURRENT_TIME])
 ])
 ]) # LIBCFS_CURRENT_TIME
+
+#
+# LC_HAVE_GET_INODE_USAGE
+#
+# Kernel version v4.12-rc2-43-g7a9ca53aea10
+#
+AC_DEFUN([LC_HAVE_GET_INODE_USAGE], [
+LB_CHECK_COMPILE([if get_inode_usage exists],
+get_inode_usage, [
+	struct inode;
+	#include <linux/quota.h>
+],[
+	struct dquot_operations ops = { };
+
+	ops.get_inode_usage(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_GET_INODE_USAGE, 1,
+		[get_inode_usage function exists])
+])
+]) # LC_HAVE_GET_INODE_USAGE
+
 
 #
 # Kernel version 4.12-rc3 85787090a21eb749d8b347eaf9ff1a455637473c
@@ -2791,6 +2822,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_IN_COMPAT_SYSCALL
 	LC_HAVE_XATTR_HANDLER_INODE_PARAM
 	LC_LOCK_PAGE_MEMCG
+	LC_HAVE_DOWN_WRITE_KILLABLE
 
 	# 4.7
 	LC_D_IN_LOOKUP
