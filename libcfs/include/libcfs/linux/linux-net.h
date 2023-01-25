@@ -30,9 +30,9 @@
 char *nla_strdup(const struct nlattr *nla, gfp_t flags);
 #endif /* !HAVE_NLA_STRDUP */
 
-#ifndef HAVE_NLA_STRSCPY
+#ifdef HAVE_NLA_STRLCPY
 #define nla_strscpy	nla_strlcpy
-#endif /* !HAVE_NLA_STRSCPY */
+#endif /* HAVE_NLA_STRLCPY */
 
 #ifndef HAVE_NL_PARSE_WITH_EXT_ACK
 
