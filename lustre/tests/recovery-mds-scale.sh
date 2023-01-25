@@ -64,9 +64,9 @@ run_info() {
 	$oput "END_RUN_FILE:$7"
 	$oput "LOAD_PID_FILE:$8"
 	$oput "VMSTAT_PID_FILE:$9"
-	$oput "CLIENTCOUNT:$10"
-	$oput "MDTS:$11"
-	$oput "OSTS:$12"
+	$oput "CLIENTCOUNT:${10}"
+	$oput "MDTS:${11}"
+	$oput "OSTS:${12}"
 	$oput "*******************************"
 }
 
