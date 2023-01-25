@@ -31,6 +31,7 @@
 #define _NODEMAP_INTERNAL_H
 
 #include <lustre_nodemap.h>
+#include <lustre_disk.h>
 #include <linux/rbtree.h>
 
 #define DEFAULT_NODEMAP "default"
@@ -74,29 +75,6 @@ struct lu_idmap {
 	/* tree mappung filesystem to client */
 	struct rb_node	id_fs_to_client;
 };
-
-/* first 4 bits of the nodemap_id is the index type */
-struct nodemap_key {
-	__u32 nk_nodemap_id;
-	union {
-		__u32 nk_range_id;
-		__u32 nk_id_client;
-		__u32 nk_unused;
-	};
-};
-
-enum nodemap_idx_type {
-	NODEMAP_EMPTY_IDX = 0,		/* index created with blank record */
-	NODEMAP_CLUSTER_IDX = 1,	/* a nodemap cluster of nodes */
-	NODEMAP_RANGE_IDX = 2,		/* nid range assigned to a nm cluster */
-	NODEMAP_UIDMAP_IDX = 3,		/* uid map assigned to a nm cluster */
-	NODEMAP_GIDMAP_IDX = 4,		/* gid map assigned to a nm cluster */
-	NODEMAP_PROJIDMAP_IDX = 5,	/* projid map assigned to nm cluster */
-	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
-};
-
-#define NM_TYPE_MASK 0x0FFFFFFF
-#define NM_TYPE_SHIFT 28
 
 static inline enum nodemap_idx_type nm_idx_get_type(unsigned int id)
 {
@@ -191,6 +169,9 @@ int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 int nodemap_idx_nodemap_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap);
+int nodemap_idx_cluster_roles_add(const struct lu_nodemap *nodemap);
+int nodemap_idx_cluster_roles_update(const struct lu_nodemap *nodemap);
+int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);

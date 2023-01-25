@@ -46,6 +46,7 @@
 #include <lustre_nodemap.h>
 #include <lustre_quota.h>
 #include <lustre_lfsck.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
 /* context key constructor/destructor: dt_global_key_init, dt_global_key_fini */
 LU_KEY_INIT(dt_global, struct dt_thread_info);

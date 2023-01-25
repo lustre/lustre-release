@@ -630,6 +630,52 @@ static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 }
 
 /**
+ * Reads and prints the rbac for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	char *sep = "";
+	int i, rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	if (nodemap->nmf_rbac == NODEMAP_RBAC_ALL) {
+		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++)
+			seq_printf(m, "%s%s", i == 0 ? "" : ",",
+				   nodemap_rbac_names[i].nrn_name);
+		seq_puts(m, "\n");
+	} else if (nodemap->nmf_rbac == NODEMAP_RBAC_NONE) {
+		seq_puts(m, "none\n");
+	} else {
+		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+			if (nodemap->nmf_rbac &
+			    nodemap_rbac_names[i].nrn_mode) {
+				seq_printf(m, "%s%s", sep,
+					   nodemap_rbac_names[i].nrn_name);
+				sep = ",";
+			}
+		}
+		seq_puts(m, "\n");
+	}
+
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
  * Reads and prints the deny_unknown flag for the given nodemap.
  *
  * \param	m		seq file in proc fs
@@ -755,6 +801,7 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_projid);
 
 LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
 LPROC_SEQ_FOPS_RO(nodemap_map_mode);
+LPROC_SEQ_FOPS_RO(nodemap_rbac);
 LPROC_SEQ_FOPS_RO(nodemap_audit_mode);
 LPROC_SEQ_FOPS_RO(nodemap_forbid_encryption);
 LPROC_SEQ_FOPS_RO(nodemap_readonly_mount);
@@ -781,41 +828,58 @@ static const struct proc_ops nodemap_exports_fops = {
 };
 
 static struct lprocfs_vars lprocfs_nodemap_vars[] = {
-	{
-		.name		= "id",
-		.fops		= &nodemap_id_fops,
-	},
-	{
-		.name		= "trusted_nodemap",
-		.fops		= &nodemap_trusted_fops,
-	},
+	/* in alphabetical order */
 	{
 		.name		= "admin_nodemap",
 		.fops		= &nodemap_admin_fops,
-	},
-	{
-		.name		= "deny_unknown",
-		.fops		= &nodemap_deny_unknown_fops,
-	},
-	{
-		.name		= "map_mode",
-		.fops		= &nodemap_map_mode_fops,
 	},
 	{
 		.name		= "audit_mode",
 		.fops		= &nodemap_audit_mode_fops,
 	},
 	{
+		.name		= "deny_unknown",
+		.fops		= &nodemap_deny_unknown_fops,
+	},
+	{
+		.name		= "exports",
+		.fops		= &nodemap_exports_fops,
+	},
+	{
+		.name		= "fileset",
+		.fops		= &nodemap_fileset_fops,
+	},
+	{
 		.name		= "forbid_encryption",
 		.fops		= &nodemap_forbid_encryption_fops,
+	},
+	{
+		.name		= "id",
+		.fops		= &nodemap_id_fops,
+	},
+	{
+		.name		= "idmap",
+		.fops		= &nodemap_idmap_fops,
+	},
+	{
+		.name		= "map_mode",
+		.fops		= &nodemap_map_mode_fops,
+	},
+	{
+		.name		= "ranges",
+		.fops		= &nodemap_ranges_fops,
+	},
+	{
+		.name		= "rbac",
+		.fops		= &nodemap_rbac_fops,
 	},
 	{
 		.name		= "readonly_mount",
 		.fops		= &nodemap_readonly_mount_fops,
 	},
 	{
-		.name		= "squash_uid",
-		.fops		= &nodemap_squash_uid_fops,
+		.name		= "sepol",
+		.fops		= &nodemap_sepol_fops,
 	},
 	{
 		.name		= "squash_gid",
@@ -826,24 +890,12 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 		.fops		= &nodemap_squash_projid_fops,
 	},
 	{
-		.name		= "ranges",
-		.fops		= &nodemap_ranges_fops,
+		.name		= "squash_uid",
+		.fops		= &nodemap_squash_uid_fops,
 	},
 	{
-		.name		= "fileset",
-		.fops		= &nodemap_fileset_fops,
-	},
-	{
-		.name		= "sepol",
-		.fops		= &nodemap_sepol_fops,
-	},
-	{
-		.name		= "exports",
-		.fops		= &nodemap_exports_fops,
-	},
-	{
-		.name		= "idmap",
-		.fops		= &nodemap_idmap_fops,
+		.name		= "trusted_nodemap",
+		.fops		= &nodemap_trusted_fops,
 	},
 	{
 		NULL

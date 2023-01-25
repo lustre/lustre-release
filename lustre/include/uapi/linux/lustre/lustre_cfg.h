@@ -141,6 +141,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_FORBID_ENCRYPT	= 0x00ce05c, /**< forbid encryption */
 	LCFG_NODEMAP_SQUASH_PROJID	= 0x00ce05d, /**< default map projid */
 	LCFG_NODEMAP_READONLY_MOUNT	= 0x00ce05e, /**< read-only mount */
+	LCFG_NODEMAP_RBAC	  = 0x00ce05f, /**< rbac */
 };
 
 struct lustre_cfg_bufs {

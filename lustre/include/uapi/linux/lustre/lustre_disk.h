@@ -242,6 +242,97 @@ struct lsd_reply_header {
 	__u8	lrh_pad[sizeof(struct lsd_reply_data_v1) - 12];
 };
 
+/****************** nodemap *********************/
+
+enum nodemap_idx_type {
+	NODEMAP_EMPTY_IDX = 0,		/* index created with blank record */
+	NODEMAP_CLUSTER_IDX = 1,	/* a nodemap cluster of nodes */
+	NODEMAP_RANGE_IDX = 2,		/* nid range assigned to a nm cluster */
+	NODEMAP_UIDMAP_IDX = 3,		/* uid map assigned to a nm cluster */
+	NODEMAP_GIDMAP_IDX = 4,		/* gid map assigned to a nm cluster */
+	NODEMAP_PROJIDMAP_IDX = 5,	/* projid map assigned to nm cluster */
+	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
+};
+
+/* Nodemap records, uses 32 byte record length.
+ * New nodemap config records can be added into NODEMAP_CLUSTER_IDX
+ * with a new nk_cluster_subid value, as long as the records are
+ * kept at 32 bytes in size.  New global config records can be added
+ * into NODEMAP_GLOBAL_IDX with a new nk_global_subid.  This avoids
+ * breaking compatibility.  Do not change the record size.  If a
+ * new ID type or range is needed, a new IDX type should be used.
+ */
+struct nodemap_cluster_rec {
+	char			ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	enum nm_flag_bits	ncr_flags:8;
+	enum nm_flag2_bits	ncr_flags2:8;
+	__u8			ncr_padding1;
+	__u32			ncr_squash_projid;
+	__u32			ncr_squash_uid;
+	__u32			ncr_squash_gid;
+};
+
+/* lnet_nid_t is 8 bytes */
+struct nodemap_range_rec {
+	lnet_nid_t	nrr_start_nid;
+	lnet_nid_t	nrr_end_nid;
+	__u64		nrr_padding1;
+	__u64		nrr_padding2;
+};
+
+struct nodemap_id_rec {
+	__u32	nir_id_fs;
+	__u32	nir_padding1;
+	__u64	nir_padding2;
+	__u64	nir_padding3;
+	__u64	nir_padding4;
+};
+
+struct nodemap_global_rec {
+	__u8	ngr_is_active;
+	__u8	ngr_padding1;
+	__u16	ngr_padding2;
+	__u32	ngr_padding3;
+	__u64	ngr_padding4;
+	__u64	ngr_padding5;
+	__u64	ngr_padding6;
+};
+
+struct nodemap_cluster_roles_rec {
+	__u64 ncrr_roles;	/* enum nodemap_rbac_roles */
+	__u64 ncrr_unused1;
+	__u64 ncrr_unused2;
+	__u64 ncrr_unused3;
+};
+
+union nodemap_rec {
+	struct nodemap_cluster_rec ncr;
+	struct nodemap_range_rec nrr;
+	struct nodemap_id_rec nir;
+	struct nodemap_global_rec ngr;
+	struct nodemap_cluster_roles_rec ncrr;
+};
+
+/* sub-keys for records of type NODEMAP_CLUSTER_IDX */
+enum nodemap_cluster_rec_subid {
+	NODEMAP_CLUSTER_REC = 0,   /* nodemap_cluster_rec */
+	NODEMAP_CLUSTER_ROLES = 1, /* nodemap_cluster_roles_rec */
+};
+
+/* first 4 bits of the nodemap_id is the index type */
+struct nodemap_key {
+	__u32 nk_nodemap_id;
+	union {
+		__u32 nk_cluster_subid;
+		__u32 nk_range_id;
+		__u32 nk_id_client;
+		__u32 nk_unused;
+	};
+};
+
+#define NM_TYPE_MASK 0x0FFFFFFF
+#define NM_TYPE_SHIFT 28
+
 /** @} disk */
 
 #endif /* _UAPI_LUSTRE_DISK_H */

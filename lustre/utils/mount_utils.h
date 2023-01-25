@@ -56,6 +56,7 @@
 #include <libcfs/util/list.h>
 #include <linux/lustre/lustre_param.h>
 #ifdef HAVE_SERVER_SUPPORT
+#include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_disk.h>
 #endif
 

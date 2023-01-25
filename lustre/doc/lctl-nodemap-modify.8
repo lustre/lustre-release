@@ -80,6 +80,19 @@ readonly_mount
 Defaults to off, which lets clients mount in read-write mode. If set to 1,
 clients are forced to a read-only mount if not specified explicitly.
 .RE
+.PP
+rbac
+.RS 4
+Defaults to all, which means all roles are allowed. Other possible values
+(multiple can be specified, comma separated) are:
+- byfid_ops, to allow operations by FID (e.g. 'lfs rmfid').
+- chlg_ops, to allow access to Lustre Changelogs.
+- dne_ops, to allow operations related to DNE (e.g. 'lfs mkdir').
+- file_perms, to allow modifications of file permissions and owners.
+- quota_ops, to allow quota modifications.
+Apart from all, any role not explicitly specified is forbidden. And to forbid
+all roles, use 'none' value.
+.RE
 
 .RE
 .I value

@@ -59,6 +59,7 @@
 #include <getopt.h>
 
 #include <asm/byteorder.h>
+#include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_ver.h>
 

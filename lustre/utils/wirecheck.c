@@ -2687,10 +2687,73 @@ static void check_nodemap_global_rec(void)
 	CHECK_MEMBER(nodemap_global_rec, ngr_padding6);
 }
 
+static void check_nodemap_cluster_roles_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_cluster_roles_rec);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_roles);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused1);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused2);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused3);
+}
+
 static void check_nodemap_rec(void)
 {
 	BLANK_LINE();
 	CHECK_UNION(nodemap_rec);
+}
+
+static void check_nodemap_key(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_key);
+	CHECK_MEMBER(nodemap_key, nk_nodemap_id);
+
+	CHECK_VALUE(NODEMAP_EMPTY_IDX);
+	CHECK_VALUE(NODEMAP_CLUSTER_IDX);
+	CHECK_VALUE(NODEMAP_RANGE_IDX);
+	CHECK_VALUE(NODEMAP_UIDMAP_IDX);
+	CHECK_VALUE(NODEMAP_GIDMAP_IDX);
+	CHECK_VALUE(NODEMAP_PROJIDMAP_IDX);
+	CHECK_VALUE(NODEMAP_GLOBAL_IDX);
+
+	CHECK_VALUE(NODEMAP_CLUSTER_REC);
+	CHECK_VALUE(NODEMAP_CLUSTER_ROLES);
+
+	CHECK_VALUE_X(NM_TYPE_MASK);
+	CHECK_VALUE(NM_TYPE_SHIFT);
+
+	CHECK_VALUE_X(NM_FL_ALLOW_ROOT_ACCESS);
+	CHECK_VALUE_X(NM_FL_TRUST_CLIENT_IDS);
+	CHECK_VALUE_X(NM_FL_DENY_UNKNOWN);
+	CHECK_VALUE_X(NM_FL_MAP_UID);
+	CHECK_VALUE_X(NM_FL_MAP_GID);
+	CHECK_VALUE_X(NM_FL_ENABLE_AUDIT);
+	CHECK_VALUE_X(NM_FL_FORBID_ENCRYPT);
+	CHECK_VALUE_X(NM_FL_MAP_PROJID);
+	CHECK_VALUE_X(NM_FL2_READONLY_MOUNT);
+
+	CHECK_VALUE(NODEMAP_UID);
+	CHECK_VALUE(NODEMAP_GID);
+	CHECK_VALUE(NODEMAP_PROJID);
+
+	CHECK_VALUE(NODEMAP_FS_TO_CLIENT);
+	CHECK_VALUE(NODEMAP_CLIENT_TO_FS);
+
+	CHECK_VALUE_X(NODEMAP_MAP_BOTH_LEGACY);
+	CHECK_VALUE_X(NODEMAP_MAP_UID);
+	CHECK_VALUE_X(NODEMAP_MAP_GID);
+	CHECK_VALUE_X(NODEMAP_MAP_BOTH);
+	CHECK_VALUE_X(NODEMAP_MAP_PROJID);
+	CHECK_VALUE_X(NODEMAP_MAP_ALL);
+
+	CHECK_VALUE_X(NODEMAP_RBAC_FILE_PERMS);
+	CHECK_VALUE_X(NODEMAP_RBAC_DNE_OPS);
+	CHECK_VALUE_X(NODEMAP_RBAC_QUOTA_OPS);
+	CHECK_VALUE_X(NODEMAP_RBAC_BYFID_OPS);
+	CHECK_VALUE_X(NODEMAP_RBAC_CHLG_OPS);
+	CHECK_VALUE_X(NODEMAP_RBAC_NONE);
+	CHECK_VALUE_X(NODEMAP_RBAC_ALL);
 }
 
 static void check_ofd_access_entry_v1(void)
@@ -2897,6 +2960,7 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_FORBID_ENCRYPT);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_PROJID);
 	CHECK_VALUE_X(LCFG_NODEMAP_READONLY_MOUNT);
+	CHECK_VALUE_X(LCFG_NODEMAP_RBAC);
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);
@@ -3300,7 +3364,9 @@ printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 	check_nodemap_range_rec();
 	check_nodemap_id_rec();
 	check_nodemap_global_rec();
+	check_nodemap_cluster_roles_rec();
 	check_nodemap_rec();
+	check_nodemap_key();
 
 	check_ofd_access_entry_v1();
 	check_lustre_access_log_info_v1();

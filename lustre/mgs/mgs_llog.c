@@ -5596,6 +5596,45 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		rc = nodemap_set_mapping_mode(nodemap_name, map_mode);
 		break;
 	}
+	case LCFG_NODEMAP_RBAC:
+	{
+		enum nodemap_rbac_roles rbac;
+		char *p;
+
+		if (strcmp(param, "all") == 0) {
+			rbac = NODEMAP_RBAC_ALL;
+		} else if (strcmp(param, "none") == 0) {
+			rbac = NODEMAP_RBAC_NONE;
+		} else {
+			rbac = NODEMAP_RBAC_NONE;
+			while ((p = strsep(&param, ",")) != NULL) {
+				int i;
+
+				if (!*p)
+					break;
+
+				for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names);
+				     i++) {
+					if (strcmp(p,
+						 nodemap_rbac_names[i].nrn_name)
+					    == 0) {
+						rbac |=
+						 nodemap_rbac_names[i].nrn_mode;
+						break;
+					}
+				}
+				if (i == ARRAY_SIZE(nodemap_rbac_names))
+					break;
+			}
+			if (p) {
+				rc = -EINVAL;
+				break;
+			}
+		}
+
+		rc = nodemap_set_rbac(nodemap_name, rbac);
+		break;
+	}
 	case LCFG_NODEMAP_TRUSTED:
 		rc = kstrtobool(param, &bool_switch);
 		if (rc)

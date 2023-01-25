@@ -67,11 +67,12 @@ static DEFINE_MUTEX(ncf_list_lock);
 /* MGS index is different than others, others are listeners to MGS idx */
 static struct nm_config_file *nodemap_mgs_ncf;
 
-static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
+static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id,
+				     enum nodemap_cluster_rec_subid subid)
 {
 	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id,
 							NODEMAP_CLUSTER_IDX));
-	nk->nk_unused = 0;
+	nk->nk_cluster_subid = subid;
 }
 
 static void nodemap_cluster_rec_init(union nodemap_rec *nr,
@@ -103,6 +104,15 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	nr->ncr.ncr_flags2 =
 		(nodemap->nmf_readonly_mount ?
 			NM_FL2_READONLY_MOUNT : 0);
+}
+
+static void nodemap_cluster_roles_rec_init(union nodemap_rec *nr,
+					   const struct lu_nodemap *nodemap)
+{
+	struct nodemap_cluster_roles_rec *ncrr = &nr->ncrr;
+
+	memset(ncrr, 0, sizeof(struct nodemap_cluster_roles_rec));
+	ncrr->ncrr_roles = cpu_to_le64(nodemap->nmf_rbac);
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -380,9 +390,10 @@ enum nm_add_update {
 	NM_UPDATE = 1,
 };
 
-static int nodemap_idx_nodemap_add_update(const struct lu_nodemap *nodemap,
+static int nodemap_idx_cluster_add_update(const struct lu_nodemap *nodemap,
 					  struct dt_object *idx,
-					  enum nm_add_update update)
+					  enum nm_add_update update,
+					  enum nodemap_cluster_rec_subid subid)
 {
 	struct nodemap_key nk;
 	union nodemap_rec nr;
@@ -391,43 +402,51 @@ static int nodemap_idx_nodemap_add_update(const struct lu_nodemap *nodemap,
 
 	ENTRY;
 
+	if (idx == NULL) {
+		if (nodemap_mgs_ncf == NULL) {
+			CERROR("cannot add nodemap config to non-existing MGS.\n");
+			return -EINVAL;
+		}
+		idx = nodemap_mgs_ncf->ncf_obj;
+	}
+
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc)
 		RETURN(rc);
 
-	nodemap_cluster_key_init(&nk, nodemap->nm_id);
-	nodemap_cluster_rec_init(&nr, nodemap);
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, subid);
+	switch (subid) {
+	case NODEMAP_CLUSTER_REC:
+		nodemap_cluster_rec_init(&nr, nodemap);
+		break;
+	case NODEMAP_CLUSTER_ROLES:
+		nodemap_cluster_roles_rec_init(&nr, nodemap);
+		break;
+	default:
+		CWARN("%s: unknown subtype %u\n", nodemap->nm_name, subid);
+		GOTO(fini, rc = -EINVAL);
+	}
 
 	if (update == NM_UPDATE)
 		rc = nodemap_idx_update(&env, idx, &nk, &nr);
 	else
 		rc = nodemap_idx_insert(&env, idx, &nk, &nr);
 
+fini:
 	lu_env_fini(&env);
-
 	RETURN(rc);
 }
 
 int nodemap_idx_nodemap_add(const struct lu_nodemap *nodemap)
 {
-	if (nodemap_mgs_ncf == NULL) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
-		return -EINVAL;
-	}
-
-	return nodemap_idx_nodemap_add_update(nodemap, nodemap_mgs_ncf->ncf_obj,
-					      NM_ADD);
+	return nodemap_idx_cluster_add_update(nodemap, NULL,
+					      NM_ADD, NODEMAP_CLUSTER_REC);
 }
 
 int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap)
 {
-	if (nodemap_mgs_ncf == NULL) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
-		return -EINVAL;
-	}
-
-	return nodemap_idx_nodemap_add_update(nodemap, nodemap_mgs_ncf->ncf_obj,
-					      NM_UPDATE);
+	return nodemap_idx_cluster_add_update(nodemap, NULL,
+					      NM_UPDATE, NODEMAP_CLUSTER_REC);
 }
 
 int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
@@ -452,6 +471,11 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc != 0)
 		RETURN(rc);
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_ROLES);
+	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+	if (rc2 < 0 && rc2 != -ENOENT)
+		rc = rc2;
 
 	root = nodemap->nm_fs_to_client_uidmap;
 	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
@@ -495,13 +519,49 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 			rc = rc2;
 	}
 
-	nodemap_cluster_key_init(&nk, nodemap->nm_id);
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_REC);
 	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	if (rc2 < 0)
 		rc = rc2;
 
 	lu_env_fini(&env);
 
+	RETURN(rc);
+}
+
+int nodemap_idx_cluster_roles_add(const struct lu_nodemap *nodemap)
+{
+	return nodemap_idx_cluster_add_update(nodemap, NULL, NM_ADD,
+					      NODEMAP_CLUSTER_ROLES);
+}
+
+int nodemap_idx_cluster_roles_update(const struct lu_nodemap *nodemap)
+{
+	return nodemap_idx_cluster_add_update(nodemap, NULL, NM_UPDATE,
+					      NODEMAP_CLUSTER_ROLES);
+}
+
+int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap)
+{
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+
+	ENTRY;
+
+	if (nodemap_mgs_ncf == NULL) {
+		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		return -EINVAL;
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_ROLES);
+	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+
+	lu_env_fini(&env);
 	RETURN(rc);
 }
 
@@ -655,6 +715,93 @@ static enum nodemap_idx_type nodemap_get_key_type(const struct nodemap_key *key)
 	return nm_idx_get_type(nodemap_id);
 }
 
+static int nodemap_get_key_subtype(const struct nodemap_key *key)
+{
+	enum nodemap_idx_type type = nodemap_get_key_type(key);
+
+	return type == NODEMAP_CLUSTER_IDX ? key->nk_cluster_subid : -1;
+}
+
+static int nodemap_cluster_rec_helper(struct nodemap_config *config,
+				      u32 nodemap_id,
+				      const union nodemap_rec *rec,
+				      struct lu_nodemap **recent_nodemap)
+{
+	struct lu_nodemap *nodemap, *old_nm;
+	enum nm_flag_bits flags;
+	enum nm_flag2_bits flags2;
+
+	nodemap = cfs_hash_lookup(config->nmc_nodemap_hash, rec->ncr.ncr_name);
+	if (nodemap == NULL) {
+		if (nodemap_id == LUSTRE_NODEMAP_DEFAULT_ID)
+			nodemap = nodemap_create(rec->ncr.ncr_name, config, 1);
+		else
+			nodemap = nodemap_create(rec->ncr.ncr_name, config, 0);
+		if (IS_ERR(nodemap))
+			return PTR_ERR(nodemap);
+
+		/* we need to override the local ID with the saved ID */
+		nodemap->nm_id = nodemap_id;
+		if (nodemap_id > config->nmc_nodemap_highest_id)
+			config->nmc_nodemap_highest_id = nodemap_id;
+
+	} else if (nodemap->nm_id != nodemap_id) {
+		nodemap_putref(nodemap);
+		return -EINVAL;
+	}
+
+	nodemap->nm_squash_uid = le32_to_cpu(rec->ncr.ncr_squash_uid);
+	nodemap->nm_squash_gid = le32_to_cpu(rec->ncr.ncr_squash_gid);
+	nodemap->nm_squash_projid = le32_to_cpu(rec->ncr.ncr_squash_projid);
+
+	flags = rec->ncr.ncr_flags;
+	nodemap->nmf_allow_root_access = flags & NM_FL_ALLOW_ROOT_ACCESS;
+	nodemap->nmf_trust_client_ids = flags & NM_FL_TRUST_CLIENT_IDS;
+	nodemap->nmf_deny_unknown = flags & NM_FL_DENY_UNKNOWN;
+	nodemap->nmf_map_mode =
+		(flags & NM_FL_MAP_UID ? NODEMAP_MAP_UID : 0) |
+		(flags & NM_FL_MAP_GID ? NODEMAP_MAP_GID : 0) |
+		(flags & NM_FL_MAP_PROJID ? NODEMAP_MAP_PROJID : 0);
+	if (nodemap->nmf_map_mode == NODEMAP_MAP_BOTH_LEGACY)
+		nodemap->nmf_map_mode = NODEMAP_MAP_BOTH;
+	nodemap->nmf_enable_audit = flags & NM_FL_ENABLE_AUDIT;
+	nodemap->nmf_forbid_encryption = flags & NM_FL_FORBID_ENCRYPT;
+	flags2 = rec->ncr.ncr_flags2;
+	nodemap->nmf_readonly_mount = flags2 & NM_FL2_READONLY_MOUNT;
+	/* by default, and in the absence of cluster_roles, grant all roles */
+	nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
+
+	/* The fileset should be saved otherwise it will be empty
+	 * every time in case of "NODEMAP_CLUSTER_IDX".
+	 */
+	mutex_lock(&active_config_lock);
+	old_nm = nodemap_lookup(rec->ncr.ncr_name);
+	if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
+		strlcpy(nodemap->nm_fileset, old_nm->nm_fileset,
+			sizeof(nodemap->nm_fileset));
+	mutex_unlock(&active_config_lock);
+	if (!IS_ERR(old_nm))
+		nodemap_putref(old_nm);
+
+	if (*recent_nodemap == NULL) {
+		*recent_nodemap = nodemap;
+		INIT_LIST_HEAD(&nodemap->nm_list);
+	} else {
+		list_add(&nodemap->nm_list, &(*recent_nodemap)->nm_list);
+	}
+	nodemap_putref(nodemap);
+
+	return 0;
+}
+
+static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
+					const union nodemap_rec *rec)
+{
+	nodemap->nmf_rbac = le64_to_cpu(rec->ncrr.ncrr_roles);
+
+	return 0;
+}
+
 /**
  * Process a key/rec pair and modify the new configuration.
  *
@@ -676,8 +823,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	struct lu_nodemap *nodemap = NULL;
 	enum nodemap_idx_type type;
 	enum nodemap_id_type id_type;
-	enum nm_flag_bits flags;
-	enum nm_flag2_bits flags2;
+	int subtype;
 	u32 nodemap_id;
 	lnet_nid_t nid[2];
 	u32 map[2];
@@ -689,14 +835,16 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 
 	nodemap_id = le32_to_cpu(key->nk_nodemap_id);
 	type = nodemap_get_key_type(key);
+	subtype = nodemap_get_key_subtype(key);
 	nodemap_id = nm_idx_set_type(nodemap_id, 0);
 
-	CDEBUG(D_INFO, "found config entry, nm_id %d type %d\n",
-	       nodemap_id, type);
+	CDEBUG(D_INFO, "found config entry, nm_id %d type %d subtype %d\n",
+	       nodemap_id, type, subtype);
 
 	/* find the correct nodemap in the load list */
 	if (type == NODEMAP_RANGE_IDX || type == NODEMAP_UIDMAP_IDX ||
-	    type == NODEMAP_GIDMAP_IDX || type == NODEMAP_PROJIDMAP_IDX) {
+	    type == NODEMAP_GIDMAP_IDX || type == NODEMAP_PROJIDMAP_IDX ||
+	    (type == NODEMAP_CLUSTER_IDX && subtype != NODEMAP_CLUSTER_REC)) {
 		struct lu_nodemap *tmp = NULL;
 
 		nodemap = *recent_nodemap;
@@ -727,83 +875,26 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			      " nodemap_id=%d. nodemap config file corrupt?\n",
 			      nodemap_id);
 		break;
-	case NODEMAP_CLUSTER_IDX: {
-		struct lu_nodemap *old_nm = NULL;
-
-		nodemap = cfs_hash_lookup(config->nmc_nodemap_hash,
-					  rec->ncr.ncr_name);
-		if (nodemap == NULL) {
-			if (nodemap_id == LUSTRE_NODEMAP_DEFAULT_ID) {
-				nodemap = nodemap_create(rec->ncr.ncr_name,
-							 config, 1);
-			} else {
-				nodemap = nodemap_create(rec->ncr.ncr_name,
-							 config, 0);
-			}
-			if (IS_ERR(nodemap))
-				GOTO(out, rc = PTR_ERR(nodemap));
-
-			/* we need to override the local ID with the saved ID */
-			nodemap->nm_id = nodemap_id;
-			if (nodemap_id > config->nmc_nodemap_highest_id)
-				config->nmc_nodemap_highest_id = nodemap_id;
-
-		} else if (nodemap->nm_id != nodemap_id) {
-			nodemap_putref(nodemap);
-			GOTO(out, rc = -EINVAL);
+	case NODEMAP_CLUSTER_IDX:
+		switch (nodemap_get_key_subtype(key)) {
+		case NODEMAP_CLUSTER_REC:
+			rc = nodemap_cluster_rec_helper(config, nodemap_id, rec,
+							recent_nodemap);
+			if (rc != 0)
+				GOTO(out, rc);
+			break;
+		case NODEMAP_CLUSTER_ROLES:
+			rc = nodemap_cluster_roles_helper(nodemap, rec);
+			if (rc != 0)
+				GOTO(out, rc);
+			break;
+		default:
+			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
+			      nodemap->nm_name, NODEMAP_CLUSTER_IDX,
+			      nodemap_get_key_subtype(key));
+			break;
 		}
-
-		nodemap->nm_squash_uid =
-				le32_to_cpu(rec->ncr.ncr_squash_uid);
-		nodemap->nm_squash_gid =
-				le32_to_cpu(rec->ncr.ncr_squash_gid);
-		nodemap->nm_squash_projid =
-			le32_to_cpu(rec->ncr.ncr_squash_projid);
-
-		flags = rec->ncr.ncr_flags;
-		nodemap->nmf_allow_root_access =
-					flags & NM_FL_ALLOW_ROOT_ACCESS;
-		nodemap->nmf_trust_client_ids =
-					flags & NM_FL_TRUST_CLIENT_IDS;
-		nodemap->nmf_deny_unknown =
-					flags & NM_FL_DENY_UNKNOWN;
-		nodemap->nmf_map_mode = (flags & NM_FL_MAP_UID ?
-					 NODEMAP_MAP_UID : 0) |
-					(flags & NM_FL_MAP_GID ?
-					 NODEMAP_MAP_GID : 0) |
-					(flags & NM_FL_MAP_PROJID ?
-					 NODEMAP_MAP_PROJID : 0);
-		if (nodemap->nmf_map_mode == NODEMAP_MAP_BOTH_LEGACY)
-			nodemap->nmf_map_mode = NODEMAP_MAP_BOTH;
-		nodemap->nmf_enable_audit =
-					flags & NM_FL_ENABLE_AUDIT;
-		nodemap->nmf_forbid_encryption =
-					flags & NM_FL_FORBID_ENCRYPT;
-		flags2 = rec->ncr.ncr_flags2;
-		nodemap->nmf_readonly_mount =
-					flags2 & NM_FL2_READONLY_MOUNT;
-
-		/* The fileset should be saved otherwise it will be empty
-		 * every time in case of "NODEMAP_CLUSTER_IDX". */
-		mutex_lock(&active_config_lock);
-		old_nm = nodemap_lookup(rec->ncr.ncr_name);
-		if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
-			strlcpy(nodemap->nm_fileset, old_nm->nm_fileset,
-				sizeof(nodemap->nm_fileset));
-		mutex_unlock(&active_config_lock);
-		if (!IS_ERR(old_nm))
-			nodemap_putref(old_nm);
-
-		if (*recent_nodemap == NULL) {
-			*recent_nodemap = nodemap;
-			INIT_LIST_HEAD(&nodemap->nm_list);
-		} else {
-			list_add(&nodemap->nm_list,
-				 &(*recent_nodemap)->nm_list);
-		}
-		nodemap_putref(nodemap);
 		break;
-	}
 	case NODEMAP_RANGE_IDX:
 		nid[0] = le64_to_cpu(rec->nrr.nrr_start_nid);
 		nid[1] = le64_to_cpu(rec->nrr.nrr_end_nid);
@@ -833,10 +924,22 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			GOTO(out, rc);
 		break;
 	case NODEMAP_GLOBAL_IDX:
-		config->nmc_nodemap_is_active = rec->ngr.ngr_is_active;
+		switch (key->nk_unused) {
+		case 0:
+			config->nmc_nodemap_is_active = rec->ngr.ngr_is_active;
+			break;
+		default:
+			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
+			      recent_nodemap ?
+			       (*recent_nodemap)->nm_name : "nodemap",
+			      NODEMAP_GLOBAL_IDX, key->nk_unused);
+			break;
+		}
 		break;
 	default:
-		CERROR("got keyrec pair for unknown type %d\n", type);
+		CWARN("%s: ignoring key %u:%u for unknown type %u\n",
+		      recent_nodemap ? (*recent_nodemap)->nm_name : "nodemap",
+		      key->nk_nodemap_id & 0x0FFFFFFF, key->nk_unused, type);
 		break;
 	}
 
@@ -903,14 +1006,18 @@ static int nodemap_load_entries(const struct lu_env *env,
 		struct nodemap_key *key;
 		union nodemap_rec rec;
 		enum nodemap_idx_type key_type;
+		int sub_type;
 
 		key = (struct nodemap_key *)iops->key(env, it);
 		key_type = nodemap_get_key_type((struct nodemap_key *)key);
+		sub_type = nodemap_get_key_subtype((struct nodemap_key *)key);
 		if ((cur_pass == NM_READ_CLUSTERS &&
-				key_type == NODEMAP_CLUSTER_IDX) ||
+		     key_type == NODEMAP_CLUSTER_IDX &&
+		     sub_type == NODEMAP_CLUSTER_REC) ||
 		    (cur_pass == NM_READ_ATTRIBUTES &&
-				key_type != NODEMAP_CLUSTER_IDX &&
-				key_type != NODEMAP_EMPTY_IDX)) {
+		     (key_type != NODEMAP_CLUSTER_IDX ||
+		      sub_type != NODEMAP_CLUSTER_REC) &&
+		     key_type != NODEMAP_EMPTY_IDX)) {
 			rc = iops->rec(env, it, (struct dt_rec *)&rec, 0);
 			if (rc != -ESTALE) {
 				if (rc != 0)
@@ -971,10 +1078,10 @@ out:
 		if (IS_ERR(nodemap)) {
 			rc = PTR_ERR(nodemap);
 		} else {
-			rc = nodemap_idx_nodemap_add_update(
+			rc = nodemap_idx_cluster_add_update(
 					new_config->nmc_default_nodemap,
 					nodemap_idx,
-					NM_ADD);
+					NM_ADD, NODEMAP_CLUSTER_REC);
 			nodemap_putref(new_config->nmc_default_nodemap);
 		}
 	}
@@ -1031,13 +1138,26 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 			       nm_hash_list_cb, &nodemap_list_head);
 
 	list_for_each_entry_safe(nodemap, nm_tmp, &nodemap_list_head, nm_list) {
-		nodemap_cluster_key_init(&nk, nodemap->nm_id);
+		nodemap_cluster_key_init(&nk, nodemap->nm_id,
+					 NODEMAP_CLUSTER_REC);
 		nodemap_cluster_rec_init(&nr, nodemap);
 
 		rc2 = nodemap_idx_insert(env, o, &nk, &nr);
 		if (rc2 < 0) {
 			rc = rc2;
 			continue;
+		}
+
+		/* only insert NODEMAP_CLUSTER_ROLES idx in saved config cache
+		 * if nmf_rbac is not default value NODEMAP_RBAC_ALL
+		 */
+		if (nodemap->nmf_rbac != NODEMAP_RBAC_ALL) {
+			nodemap_cluster_key_init(&nk, nodemap->nm_id,
+						 NODEMAP_CLUSTER_ROLES);
+			nodemap_cluster_roles_rec_init(&nr, nodemap);
+			rc2 = nodemap_idx_insert(env, o, &nk, &nr);
+			if (rc2 < 0)
+				rc = rc2;
 		}
 
 		down_read(&active_config->nmc_range_tree_lock);
@@ -1377,6 +1497,7 @@ static int nodemap_page_build(const struct lu_env *env, struct dt_object *obj,
 		struct dt_key *key;
 		__u64 hash;
 		enum nodemap_idx_type key_type;
+		int sub_type;
 
 		/* fetch 64-bit hash value */
 		hash = iops->store(env, it);
@@ -1395,14 +1516,17 @@ static int nodemap_page_build(const struct lu_env *env, struct dt_object *obj,
 
 		key = iops->key(env, it);
 		key_type = nodemap_get_key_type((struct nodemap_key *)key);
+		sub_type = nodemap_get_key_subtype((struct nodemap_key *)key);
 
 		/* on the first pass, get only the cluster types. On second
 		 * pass, get all the rest */
 		if ((ii->ii_attrs == NM_READ_CLUSTERS &&
-				key_type == NODEMAP_CLUSTER_IDX) ||
+		     key_type == NODEMAP_CLUSTER_IDX &&
+		     sub_type == NODEMAP_CLUSTER_REC) ||
 		    (ii->ii_attrs == NM_READ_ATTRIBUTES &&
-				key_type != NODEMAP_CLUSTER_IDX &&
-				key_type != NODEMAP_EMPTY_IDX)) {
+		     (key_type != NODEMAP_CLUSTER_IDX ||
+		      sub_type != NODEMAP_CLUSTER_REC) &&
+		     key_type != NODEMAP_EMPTY_IDX)) {
 			memcpy(tmp_entry, key, ii->ii_keysize);
 			tmp_entry += ii->ii_keysize;
 

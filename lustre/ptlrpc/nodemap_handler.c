@@ -1184,6 +1184,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_enable_audit = 1;
 		nodemap->nmf_forbid_encryption = 0;
 		nodemap->nmf_readonly_mount = 0;
+		nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1205,6 +1206,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 			default_nodemap->nmf_forbid_encryption;
 		nodemap->nmf_readonly_mount =
 			default_nodemap->nmf_readonly_mount;
+		nodemap->nmf_rbac = default_nodemap->nmf_rbac;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1326,6 +1328,49 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_mapping_mode);
+
+int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
+{
+	struct lu_nodemap *nodemap = NULL;
+	enum nodemap_rbac_roles old_rbac;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	if (is_default_nodemap(nodemap))
+		GOTO(put, rc = -EINVAL);
+
+	old_rbac = nodemap->nmf_rbac;
+	/* if value does not change, do nothing */
+	if (rbac == old_rbac)
+		GOTO(put, rc = 0);
+
+	nodemap->nmf_rbac = rbac;
+	if (rbac == NODEMAP_RBAC_ALL)
+		/* if new value is ALL (default), just delete
+		 * NODEMAP_CLUSTER_ROLES idx
+		 */
+		rc = nodemap_idx_cluster_roles_del(nodemap);
+	else if (old_rbac == NODEMAP_RBAC_ALL)
+		/* if old value is ALL (default), need to insert
+		 * NODEMAP_CLUSTER_ROLES idx
+		 */
+		rc = nodemap_idx_cluster_roles_add(nodemap);
+	else
+		/* otherwise just update existing NODEMAP_CLUSTER_ROLES idx */
+		rc = nodemap_idx_cluster_roles_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+put:
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_rbac);
 
 /**
  * Update the squash_uid for a nodemap.

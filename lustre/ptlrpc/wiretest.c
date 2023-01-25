@@ -5671,9 +5671,129 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding6) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding6));
 
+	/* Checks for struct nodemap_cluster_roles_rec */
+	LASSERTF((int)sizeof(struct nodemap_cluster_roles_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_cluster_roles_rec));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_roles) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_roles));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_roles) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_roles));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused1) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused1));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused1));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused2) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused2));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused2));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused3) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused3));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused3) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused3));
+
 	/* Checks for union nodemap_rec */
 	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(union nodemap_rec));
+
+	/* Checks for struct nodemap_key */
+	LASSERTF((int)sizeof(struct nodemap_key) == 8, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_key));
+	LASSERTF((int)offsetof(struct nodemap_key, nk_nodemap_id) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_key, nk_nodemap_id));
+	LASSERTF((int)sizeof(((struct nodemap_key *)0)->nk_nodemap_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_key *)0)->nk_nodemap_id));
+	LASSERTF((int)offsetof(struct nodemap_key, nk_cluster_subid) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_key, nk_cluster_subid));
+	LASSERTF((int)sizeof(((struct nodemap_key *)0)->nk_cluster_subid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_key *)0)->nk_cluster_subid));
+	LASSERTF((int)offsetof(struct nodemap_key, nk_range_id) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_key, nk_range_id));
+	LASSERTF((int)sizeof(((struct nodemap_key *)0)->nk_range_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_key *)0)->nk_range_id));
+	LASSERTF((int)offsetof(struct nodemap_key, nk_id_client) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_key, nk_id_client));
+	LASSERTF((int)sizeof(((struct nodemap_key *)0)->nk_id_client) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_key *)0)->nk_id_client));
+	LASSERTF((int)offsetof(struct nodemap_key, nk_unused) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_key, nk_unused));
+	LASSERTF((int)sizeof(((struct nodemap_key *)0)->nk_unused) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_key *)0)->nk_unused));
+	LASSERTF(NODEMAP_EMPTY_IDX == 0, "found %lld\n",
+		 (long long)NODEMAP_EMPTY_IDX);
+	LASSERTF(NODEMAP_CLUSTER_IDX == 1, "found %lld\n",
+		 (long long)NODEMAP_CLUSTER_IDX);
+	LASSERTF(NODEMAP_RANGE_IDX == 2, "found %lld\n",
+		 (long long)NODEMAP_RANGE_IDX);
+	LASSERTF(NODEMAP_UIDMAP_IDX == 3, "found %lld\n",
+		 (long long)NODEMAP_UIDMAP_IDX);
+	LASSERTF(NODEMAP_GIDMAP_IDX == 4, "found %lld\n",
+		 (long long)NODEMAP_GIDMAP_IDX);
+	LASSERTF(NODEMAP_PROJIDMAP_IDX == 5, "found %lld\n",
+		 (long long)NODEMAP_PROJIDMAP_IDX);
+	LASSERTF(NODEMAP_GLOBAL_IDX == 15, "found %lld\n",
+		 (long long)NODEMAP_GLOBAL_IDX);
+	LASSERTF(NODEMAP_CLUSTER_REC == 0, "found %lld\n",
+		 (long long)NODEMAP_CLUSTER_REC);
+	LASSERTF(NODEMAP_CLUSTER_ROLES == 1, "found %lld\n",
+		 (long long)NODEMAP_CLUSTER_ROLES);
+	LASSERTF(NM_TYPE_MASK == 0x0FFFFFFFUL, "found 0x%.8llxUL\n",
+		 (long long)NM_TYPE_MASK);
+	LASSERTF(NM_TYPE_SHIFT == 28, "found %lld\n",
+		 (long long)NM_TYPE_SHIFT);
+	LASSERTF(NM_FL_ALLOW_ROOT_ACCESS == 0x00000001UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_ALLOW_ROOT_ACCESS);
+	LASSERTF(NM_FL_TRUST_CLIENT_IDS == 0x00000002UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_TRUST_CLIENT_IDS);
+	LASSERTF(NM_FL_DENY_UNKNOWN == 0x00000004UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_DENY_UNKNOWN);
+	LASSERTF(NM_FL_MAP_UID == 0x00000008UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_MAP_UID);
+	LASSERTF(NM_FL_MAP_GID == 0x00000010UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_MAP_GID);
+	LASSERTF(NM_FL_ENABLE_AUDIT == 0x00000020UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_ENABLE_AUDIT);
+	LASSERTF(NM_FL_FORBID_ENCRYPT == 0x00000040UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_FORBID_ENCRYPT);
+	LASSERTF(NM_FL_MAP_PROJID == 0x00000080UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL_MAP_PROJID);
+	LASSERTF(NM_FL2_READONLY_MOUNT == 0x00000001UL, "found 0x%.8llxUL\n",
+		 (long long)NM_FL2_READONLY_MOUNT);
+	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
+		 (long long)NODEMAP_UID);
+	LASSERTF(NODEMAP_GID == 1, "found %lld\n",
+		 (long long)NODEMAP_GID);
+	LASSERTF(NODEMAP_PROJID == 2, "found %lld\n",
+		 (long long)NODEMAP_PROJID);
+	LASSERTF(NODEMAP_FS_TO_CLIENT == 0, "found %lld\n",
+		 (long long)NODEMAP_FS_TO_CLIENT);
+	LASSERTF(NODEMAP_CLIENT_TO_FS == 1, "found %lld\n",
+		 (long long)NODEMAP_CLIENT_TO_FS);
+	LASSERTF(NODEMAP_MAP_BOTH_LEGACY == 0x00000000UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_BOTH_LEGACY);
+	LASSERTF(NODEMAP_MAP_UID == 0x00000001UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_UID);
+	LASSERTF(NODEMAP_MAP_GID == 0x00000002UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_GID);
+	LASSERTF(NODEMAP_MAP_BOTH == 0x00000003UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_BOTH);
+	LASSERTF(NODEMAP_MAP_PROJID == 0x00000004UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_PROJID);
+	LASSERTF(NODEMAP_MAP_ALL == 0x00000007UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_MAP_ALL);
+	LASSERTF(NODEMAP_RBAC_FILE_PERMS == 0x00000001UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_FILE_PERMS);
+	LASSERTF(NODEMAP_RBAC_DNE_OPS == 0x00000002UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_DNE_OPS);
+	LASSERTF(NODEMAP_RBAC_QUOTA_OPS == 0x00000004UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_QUOTA_OPS);
+	LASSERTF(NODEMAP_RBAC_BYFID_OPS == 0x00000008UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_BYFID_OPS);
+	LASSERTF(NODEMAP_RBAC_CHLG_OPS == 0x00000010UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_CHLG_OPS);
+	LASSERTF(NODEMAP_RBAC_NONE == 0xFFFFFFE0UL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_NONE);
+	LASSERTF(NODEMAP_RBAC_ALL == 0xFFFFFFFFUL, "found 0x%.8llxUL\n",
+		 (long long)NODEMAP_RBAC_ALL);
 
 	LASSERTF(OFD_ACCESS_READ == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OFD_ACCESS_READ);
@@ -6106,6 +6226,8 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)LCFG_NODEMAP_SQUASH_PROJID);
 	LASSERTF(LCFG_NODEMAP_READONLY_MOUNT == 0x000ce05eUL, "found 0x%.8xUL\n",
 		 (unsigned)LCFG_NODEMAP_READONLY_MOUNT);
+	LASSERTF(LCFG_NODEMAP_RBAC == 0x000ce05fUL, "found 0x%.8xUL\n",
+		 (unsigned)LCFG_NODEMAP_RBAC);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);

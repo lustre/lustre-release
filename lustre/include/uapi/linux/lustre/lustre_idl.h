@@ -3670,6 +3670,8 @@ struct llog_update_record {
 				     SELINUX_POLICY_VER_LEN + \
 				     SELINUX_POLICY_HASH_LEN + 3)
 
+#define LUSTRE_NODEMAP_NAME_LENGTH 16
+
 /* lu_nodemap flags */
 enum nm_flag_bits {
 	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
@@ -3685,49 +3687,45 @@ enum nm_flag2_bits {
 	NM_FL2_READONLY_MOUNT = 0x1,
 };
 
-/* nodemap records, uses 32 byte record length */
-#define LUSTRE_NODEMAP_NAME_LENGTH 16
-struct nodemap_cluster_rec {
-	char			ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
-	enum nm_flag_bits	ncr_flags:8;
-	enum nm_flag2_bits	ncr_flags2:8;
-	__u8			ncr_padding1;
-	__u32			ncr_squash_projid;
-	__u32			ncr_squash_uid;
-	__u32			ncr_squash_gid;
+/** enums containing the types of ids contained in a nodemap
+ * kept so other modules (mgs, mdt, etc) can define the type
+ * of search easily
+ */
+
+enum nodemap_id_type {
+	NODEMAP_UID,
+	NODEMAP_GID,
+	NODEMAP_PROJID,
 };
 
-/* lnet_nid_t is 8 bytes */
-struct nodemap_range_rec {
-	lnet_nid_t	nrr_start_nid;
-	lnet_nid_t	nrr_end_nid;
-	__u64		nrr_padding1;
-	__u64		nrr_padding2;
+enum nodemap_tree_type {
+	NODEMAP_FS_TO_CLIENT,
+	NODEMAP_CLIENT_TO_FS,
 };
 
-struct nodemap_id_rec {
-	__u32	nir_id_fs;
-	__u32	nir_padding1;
-	__u64	nir_padding2;
-	__u64	nir_padding3;
-	__u64	nir_padding4;
+enum nodemap_mapping_modes {
+	NODEMAP_MAP_BOTH_LEGACY	= 0x0,  /* for compatibility */
+	NODEMAP_MAP_UID		= 0x01,
+	NODEMAP_MAP_GID		= 0x02,
+	NODEMAP_MAP_BOTH	= 0x03, /* for compatibility */
+	NODEMAP_MAP_PROJID	= 0x04,
+	NODEMAP_MAP_ALL		= NODEMAP_MAP_UID |
+				  NODEMAP_MAP_GID |
+				  NODEMAP_MAP_PROJID,
 };
 
-struct nodemap_global_rec {
-	__u8	ngr_is_active;
-	__u8	ngr_padding1;
-	__u16	ngr_padding2;
-	__u32	ngr_padding3;
-	__u64	ngr_padding4;
-	__u64	ngr_padding5;
-	__u64	ngr_padding6;
-};
-
-union nodemap_rec {
-	struct nodemap_cluster_rec ncr;
-	struct nodemap_range_rec nrr;
-	struct nodemap_id_rec nir;
-	struct nodemap_global_rec ngr;
+enum nodemap_rbac_roles {
+	NODEMAP_RBAC_FILE_PERMS	= 0x00000001,
+	NODEMAP_RBAC_DNE_OPS	= 0x00000002,
+	NODEMAP_RBAC_QUOTA_OPS	= 0x00000004,
+	NODEMAP_RBAC_BYFID_OPS	= 0x00000008,
+	NODEMAP_RBAC_CHLG_OPS	= 0x00000010,
+	NODEMAP_RBAC_NONE	= (__u32)~(NODEMAP_RBAC_FILE_PERMS |
+					   NODEMAP_RBAC_DNE_OPS    |
+					   NODEMAP_RBAC_QUOTA_OPS  |
+					   NODEMAP_RBAC_BYFID_OPS  |
+					   NODEMAP_RBAC_CHLG_OPS),
+	NODEMAP_RBAC_ALL	= 0xFFFFFFFF, /* future caps ON by default */
 };
 
 /*

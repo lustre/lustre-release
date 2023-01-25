@@ -36,31 +36,15 @@
 
 #define LUSTRE_NODEMAP_DEFAULT_ID 0
 
-/** enums containing the types of ids contained in a nodemap
- * kept so other modules (mgs, mdt, etc) can define the type
- * of search easily
- */
-
-enum nodemap_id_type {
-	NODEMAP_UID,
-	NODEMAP_GID,
-	NODEMAP_PROJID,
-};
-
-enum nodemap_tree_type {
-	NODEMAP_FS_TO_CLIENT,
-	NODEMAP_CLIENT_TO_FS,
-};
-
-enum nodemap_mapping_modes {
-	NODEMAP_MAP_BOTH_LEGACY	= 0x0,  /* for compatibility */
-	NODEMAP_MAP_UID		= 0x01,
-	NODEMAP_MAP_GID		= 0x02,
-	NODEMAP_MAP_BOTH	= 0x03, /* for compatibility */
-	NODEMAP_MAP_PROJID	= 0x04,
-	NODEMAP_MAP_ALL		= NODEMAP_MAP_UID |
-				  NODEMAP_MAP_GID |
-				  NODEMAP_MAP_PROJID,
+static const struct nodemap_rbac_name {
+	enum nodemap_rbac_roles nrn_mode;
+	const char	       *nrn_name;
+} nodemap_rbac_names[] = {
+	{ NODEMAP_RBAC_FILE_PERMS, "file_perms" },
+	{ NODEMAP_RBAC_DNE_OPS,    "dne_ops"    },
+	{ NODEMAP_RBAC_QUOTA_OPS,  "quota_ops"  },
+	{ NODEMAP_RBAC_BYFID_OPS,  "byfid_ops"  },
+	{ NODEMAP_RBAC_CHLG_OPS,   "chlg_ops"   },
 };
 
 struct nodemap_pde {
@@ -85,8 +69,9 @@ struct lu_nodemap {
 				 nmf_forbid_encryption:1,
 				 nmf_readonly_mount:1;
 	/* bitmap for mapping type */
-	enum nodemap_mapping_modes
-				nmf_map_mode;
+	enum nodemap_mapping_modes nmf_map_mode;
+	/* bitmap for rbac, enum nodemap_rbac_roles */
+	enum nodemap_rbac_roles	 nmf_rbac;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
@@ -152,6 +137,7 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
 int nodemap_set_mapping_mode(const char *name,
 			     enum nodemap_mapping_modes map_mode);
+int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
 int nodemap_set_squash_projid(const char *name, projid_t projid);
