@@ -1421,6 +1421,8 @@ static struct attribute *mdt_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(mdt); /* creates mdt_groups from mdt_attrs */
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	{ .name =	"recovery_status",
 	  .fops =	&mdt_recovery_status_fops		},
@@ -1559,7 +1561,7 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 	ENTRY;
 	LASSERT(name != NULL);
 
-	obd->obd_ktype.default_attrs = mdt_attrs;
+	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(mdt);
 	obd->obd_vars = lprocfs_mdt_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc) {

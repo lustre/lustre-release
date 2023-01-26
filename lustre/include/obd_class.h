@@ -1894,4 +1894,61 @@ extern __u64 obd_heat_get(struct obd_heat_instance *instance,
 			  unsigned int time_second, unsigned int weight,
 			  unsigned int period_second);
 extern void obd_heat_clear(struct obd_heat_instance *instance, int count);
+
+/* struct kobj_type */
+static inline
+struct attribute *_get_attr_matches(const struct kobj_type *typ,
+				    const char *key, size_t keylen,
+				    int (*is_match)(const char *, const char *,
+						    size_t))
+{
+	int i;
+
+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+	for (i = 0; typ->default_groups[i]; i++) {
+		int k;
+		struct attribute **attrs;
+
+		attrs = (struct attribute **)typ->default_groups[i]->attrs;
+		for (k = 0; attrs[k]; k++) {
+			if (is_match(attrs[k]->name, key, keylen))
+				return (struct attribute *)attrs[k];
+		}
+	}
+#else
+	for (i = 0; typ->default_attrs[i]; i++) {
+		if (is_match(typ->default_attrs[i]->name, key, keylen))
+			return typ->default_attrs[i];
+	}
+#endif
+	return NULL;
+}
+
+static inline
+int _attr_name_exact(const char *attr_name, const char *key, size_t len)
+{
+	return !strcmp(attr_name, key);
+}
+
+static inline
+struct attribute *get_attr_by_name(const struct kobj_type *typ,
+				   const char *name)
+{
+	return _get_attr_matches(typ, name, 0, _attr_name_exact);
+}
+
+static inline
+int _attr_name_starts_with(const char *attr_name, const char *name, size_t len)
+{
+	return !strncmp(attr_name, name, len);
+}
+
+static inline
+struct attribute *get_attr_starts_with(const struct kobj_type *typ,
+				       const char *name,
+				       size_t len)
+{
+	return _get_attr_matches(typ, name, len, _attr_name_starts_with);
+}
+
 #endif /* __LINUX_OBD_CLASS_H */

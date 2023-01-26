@@ -1633,7 +1633,7 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 	}
 
 	typ = get_ktype(kobj);
-	if (!typ || !typ->default_attrs)
+	if (!typ || !typ->default_groups)
 		return -ENODEV;
 
 	print_lustre_cfg(lcfg);
@@ -1644,11 +1644,10 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 	 * or   lctl conf_param lustre-OST0000.osc.max_dirty_mb=36
 	 */
 	for (i = 1; i < lcfg->lcfg_bufcount; i++) {
-		struct attribute *attr;
+		struct attribute *attr = NULL;
 		size_t keylen;
 		char *value;
 		char *key;
-		int j;
 
 		key = lustre_cfg_buf(lcfg, i);
 		/* Strip off prefix */
@@ -1670,15 +1669,7 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 		keylen = value - key;
 		value++;
 
-		attr = NULL;
-		for (j = 0; typ->default_attrs[j]; j++) {
-			if (!strncmp(typ->default_attrs[j]->name, key,
-				     keylen)) {
-				attr = typ->default_attrs[j];
-				break;
-			}
-		}
-
+		attr = get_attr_starts_with(typ, key, keylen);
 		if (!attr) {
 			char *envp[4], *param, *path;
 

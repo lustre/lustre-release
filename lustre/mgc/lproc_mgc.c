@@ -116,11 +116,13 @@ static struct attribute *mgc_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(mgc);
+
 int mgc_tunables_init(struct obd_device *obd)
 {
 	int rc;
 
-	obd->obd_ktype.default_attrs = mgc_attrs;
+	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(mgc);
 	obd->obd_debugfs_vars = ldebugfs_mgc_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc)

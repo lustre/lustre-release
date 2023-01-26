@@ -2582,6 +2582,8 @@ static struct attribute *hsm_attrs[] = {
 	NULL,
 };
 
+KOBJ_ATTRIBUTE_GROUPS(hsm); /* creates hsm_groups from hsm_attrs */
+
 static void hsm_kobj_release(struct kobject *kobj)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
@@ -2594,7 +2596,7 @@ static void hsm_kobj_release(struct kobject *kobj)
 }
 
 static struct kobj_type hsm_ktype = {
-	.default_attrs	= hsm_attrs,
+	.default_groups = KOBJ_ATTR_GROUPS(hsm),
 	.sysfs_ops	= &lustre_sysfs_ops,
 	.release	= hsm_kobj_release,
 };
