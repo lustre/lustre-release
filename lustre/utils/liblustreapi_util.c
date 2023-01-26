@@ -315,7 +315,7 @@ retry_open:
 
 int llapi_direntry_remove(char *dname)
 {
-#ifdef HAVE_IOC_REMOVE_ENTRY
+#ifdef LL_IOC_REMOVE_ENTRY
 	char *dirpath = NULL;
 	char *namepath = NULL;
 	char *dir;
@@ -351,7 +351,7 @@ out:
 		close(fd);
 	return rc;
 #else
-	return -ENOTSUP;
+	return -EOPNOTSUPP;
 #endif
 }
 

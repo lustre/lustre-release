@@ -92,30 +92,6 @@ CFLAGS="$saved_flags"
 ]) # LC_FID2PATH_ANON_UNION
 
 #
-# LC_IOC_REMOVE_ENTRY
-#
-AC_DEFUN([LC_IOC_REMOVE_ENTRY], [
-saved_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_MSG_CHECKING([if ioctl IOC_REMOVE_ENTRY' is supported])
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-	#include <sys/ioctl.h>
-	#include <linux/lustre/lustre_ioctl.h>
-
-	int main(void) {
-		return ioctl(0, LL_IOC_REMOVE_ENTRY, NULL);
-	}
-])],[
-	AC_DEFINE(HAVE_IOC_REMOVE_ENTRY, 1,
-		[IOC_REMOVE_ENTRY ioctl exists])
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$saved_flags"
-]) # LC_IOC_REMOVE_ENTRY
-
-#
 # LC_STACK_SIZE
 #
 # Ensure the stack size is at least 8k in Lustre server (all kernels)

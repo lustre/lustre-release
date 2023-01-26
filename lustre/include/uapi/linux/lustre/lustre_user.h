@@ -1975,7 +1975,11 @@ static inline char *changelog_rec_name(const struct changelog_rec *rec)
 
 static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 {
-	return strchrnul(changelog_rec_name(rec), '\0') + 1;
+	char *str = changelog_rec_name(rec);
+
+	while (*str != '\0')
+		str++;
+	return str + 1;
 }
 
 static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
