@@ -192,6 +192,7 @@ int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
+	th->th_wait_submit = 1;
 
 	rc = llog_declare_destroy(env, handle, th);
 	if (rc != 0)

@@ -1070,6 +1070,7 @@ int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object *o = dt2osp_obj(dt);
 	struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_update_request *update;
+	struct osp_thandle *oth = thandle_to_osp_thandle(th);
 	int rc = 0;
 	ENTRY;
 
@@ -1084,6 +1085,12 @@ int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 				 lu_object_fid(&dt->do_lu));
 	if (rc != 0)
 		RETURN(rc);
+
+	/*
+	 * the object can be stale (due to lost LDLM lock), but
+	 * we still want to destroy it
+	 */
+	osp_check_and_set_rpc_version(oth, o);
 
 	/* retain the object and it's status until it's destroyed on remote */
 	rc = osp_insert_update_callback(env, update, o, NULL,
