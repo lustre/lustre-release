@@ -2687,6 +2687,36 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_GET_ACL_RCU_ARG
 
 #
+# LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
+#
+# Linux v5.15-rc1-20-g15bf32398ad4
+# security: Return xattr name from security_dentry_init_security()
+#
+AC_DEFUN([LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if security_dentry_init_security() returns xattr name],
+security_dentry_init_security_xattr_name_arg, [
+	#include <linux/security.h>
+],[
+	struct dentry *dentry = NULL;
+	int mode = 0;
+	const struct qstr *name = NULL;
+	const char *xattr_name = NULL;
+	void **ctx = NULL;
+	u32 *ctxlen = 0;
+	int rc = security_dentry_init_security(dentry, mode, name, &xattr_name,
+					       ctx, ctxlen);
+	(void)rc;
+
+],[
+	AC_DEFINE(HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG, 1,
+		[security_dentry_init_security() returns xattr name])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
+
+#
 # LC_HAVE_KIOCB_COMPLETE_2ARGS
 #
 # kernel v5.15-rc6-145-g6b19b766e8f0
@@ -2920,6 +2950,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_GET_ACL_RCU_ARG
 
 	# 5.16
+	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
 
 	# kernel patch to extend integrity interface
