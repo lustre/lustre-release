@@ -104,6 +104,12 @@
 # response from them
 #%%global _use_internal_dependency_generator 0
 
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33
+## SUSE uses another tool for provides:
+## https://github.com/openSUSE/kernel-source/blob/master/patches.rpmify/Add-ksym-provides-tool.patch
+%global __find_provides   %{_sourcedir}/find-provides
+%endif
+
 # Set the package name prefix
 %if %{undefined lustre_name}
     %if %{with servers}
@@ -185,6 +191,8 @@ Source4: kmp-lustre-osd-ldiskfs.files
 Source5: kmp-lustre-osd-zfs.preamble
 Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
+Source8: find-provides
+Source9: find-provides.ksyms
 URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 %if %{with lustre_modules}
@@ -575,6 +583,7 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # Lustre's build system.  This is not expected to bother SLES's
 # kernel_module_path macro.
 basemodpath=$RPM_BUILD_ROOT%{modules_fs_path}/%{name}
+%{__install} -D -m 0644 ${PWD}/Module.symvers %{buildroot}/Module.symvers
 %if %{with ldiskfs}
 mkdir -p $basemodpath-osd-ldiskfs/fs
 mv $basemodpath/fs/osd_ldiskfs.ko $basemodpath-osd-ldiskfs/fs/osd_ldiskfs.ko
@@ -769,7 +778,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %config(noreplace) %{_sysconfdir}/lnet_routes.conf
 %endif
 %if %{with lustre_modules}
-
+%exclude /Module.symvers
 %if %{with shared}
 %if %{with ldiskfs}
 %if %{with lustre_utils}
