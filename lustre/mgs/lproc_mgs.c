@@ -260,7 +260,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 {
 	int osd_len = strlen(osd_name) - strlen("-osd");
 	struct obd_device *obd = mgs->mgs_obd;
-	struct kobj_type *bottom_type;
+	const struct kobj_type *bottom_type;
 	struct obd_device *osd_obd;
 	int rc;
 	int i;
