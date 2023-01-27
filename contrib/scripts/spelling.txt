@@ -84,7 +84,7 @@ CFS_PAGE_MASK||PAGE_MASK
 CFS_PAGE_SIZE||PAGE_SIZE
 cfs_proc_dir_entry_t||struct proc_dir_entry
 cfs_rcu_head_t||struct rcu_head
-cfs_rand||prandom_u32
+cfs_rand||get_random_u32
 cfs_srand||add_device_randomness
 cfs_trimwhite||strim
 cfs_time_add_64||ktime_add
@@ -212,6 +212,7 @@ PAGE_CACHE_MASK||PAGE_MASK
 page_cache_release||put_page
 PAGE_CACHE_SHIFT||PAGE_SHIFT
 PAGE_CACHE_SIZE||PAGE_SIZE
+prandom_u32||get_random_u32
 return seq_printf||seq_printf
 setup_timer||cfs_timer_setup
 = seq_printf||seq_printf

@@ -1135,7 +1135,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 		return -ENOMEM;
 	}
 
-	s->ls_bkt_seed = prandom_u32();
+	s->ls_bkt_seed = get_random_u32();
 	s->ls_bkt_cnt = max_t(long, 1 << LU_SITE_BKT_BITS,
 			      2 * num_possible_cpus());
 	s->ls_bkt_cnt = roundup_pow_of_two(s->ls_bkt_cnt);

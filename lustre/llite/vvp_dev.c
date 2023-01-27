@@ -386,6 +386,28 @@ struct vvp_seq_private {
 	loff_t			vvp_prev_pos;
 };
 
+unsigned int ll_filemap_get_one_page_contig(struct address_space *mapping,
+					     pgoff_t start, struct page **pg)
+{
+#ifdef HAVE_FILEMAP_GET_FOLIOS_CONTIG
+	struct folio_batch fbatch;
+	int nr;
+
+	folio_batch_init(&fbatch);
+	*pg = NULL;
+
+	nr = filemap_get_folios_contig(mapping, &start, start, &fbatch);
+	if (nr == PAGEVEC_SIZE) {
+		--nr;
+		*pg = folio_page(fbatch.folios[nr], 0);
+		return 1;
+	}
+	return 0;
+#else /* !HAVE_FILEMAP_GET_FOLIOS_CONTIG */
+	return find_get_pages_contig(mapping, start, 1, pg);
+#endif
+}
+
 static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 {
 	struct lu_device *dev = &priv->vsp_sbi->ll_cl->cd_lu_dev;
@@ -416,8 +438,9 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 		}
 
 		inode = vvp_object_inode(priv->vsp_clob);
-		nr = find_get_pages_contig(inode->i_mapping,
-					   priv->vsp_page_index, 1, &vmpage);
+		nr = ll_filemap_get_one_page_contig(inode->i_mapping,
+						    priv->vsp_page_index,
+						    &vmpage);
 		if (nr > 0) {
 			priv->vsp_page_index = vmpage->index;
 			break;
