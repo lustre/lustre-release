@@ -784,7 +784,7 @@ LB_CHECK_COMPILE([does 'struct rhltable' exist],
 rhtable, [
 	#include <linux/rhashtable.h>
 ],[
-	struct rhltable *hlt;
+	struct rhltable *hlt = NULL;
 
 	rhltable_destroy(hlt);
 ],[
@@ -1091,6 +1091,7 @@ nla_strdup, [
 	#include <net/netlink.h>
 ],[
 	char *tmp = nla_strdup(NULL, GFP_KERNEL);
+	(void)tmp;
 ],[
 	AC_DEFINE(HAVE_NLA_STRDUP, 1,
 		['nla_strdup' is available])
