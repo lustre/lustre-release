@@ -377,25 +377,36 @@ kefalnd_get_idle_tx(struct kefa_ni *efa_ni)
 	return tx;
 }
 
+/* Must be called after setting the Tx resp_id */
 static inline u64
-kefalnd_tx_to_idx(struct kefa_tx *tx)
+kefalnd_calc_tx_cookie(struct kefa_tx *tx)
 {
-	return tx - (struct kefa_tx *)tx->tx_pool->obj_arr;
+	u32 idx = tx - (struct kefa_tx *)tx->tx_pool->obj_arr;
+
+	return EFALND_TX_COOKIE(atomic_read(&tx->resp_id), idx);
 }
 
 static inline struct kefa_tx *
-kefalnd_get_tx_by_idx(struct kefa_ni *efa_ni, u64 tx_idx)
+kefalnd_finalize_response_get_tx(struct kefa_ni *efa_ni, u64 cookie)
 {
 	struct kefa_obj_pool *tx_pool = &efa_ni->tx_pool;
+	u32 tx_idx = EFALND_TX_COOKIE_INDEX(cookie);
+	u32 exp_id = EFALND_TX_COOKIE_ID(cookie);
+	struct kefa_tx *tx;
 
 	if (tx_idx >= tx_pool->pool_size) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
-			    "received out of range TX[%llu] max[%u]\n",
+			    "received out of range TX[%u] max[%u]\n",
 			    tx_idx, tx_pool->pool_size);
 		return NULL;
 	}
 
-	return (struct kefa_tx *)tx_pool->obj_arr + tx_idx;
+	tx = (struct kefa_tx *)tx_pool->obj_arr + tx_idx;
+
+	if (atomic_cmpxchg_relaxed(&tx->resp_id, exp_id, 0) != exp_id)
+		return NULL;
+
+	return tx;
 }
 
 static inline void
@@ -910,7 +921,7 @@ kefalnd_abort_tx(struct kefa_tx *tx, enum lnet_msg_hstatus hstatus, int status)
 	tx->status = status;
 
 	/* Make sure response message refcount decreased only once */
-	if (!atomic_xchg_relaxed(&tx->waiting_resp, false))
+	if (!atomic_xchg_relaxed(&tx->resp_id, 0))
 		return;
 
 	if (atomic_dec_and_test(&tx->ref_cnt))
@@ -930,7 +941,7 @@ kefalnd_force_cancel_tx(struct kefa_tx *tx, enum lnet_msg_hstatus hstatus,
 	tx->hstatus = hstatus;
 	tx->status = status;
 
-	atomic_set(&tx->waiting_resp, false);
+	atomic_set(&tx->resp_id, 0);
 	atomic_set(&tx->ref_cnt, 0);
 
 	kefalnd_tx_done(tx);
@@ -968,7 +979,7 @@ kefalnd_fill_getr_msg(struct kefa_conn *conn, struct kefa_tx *tx,
 				     conn->proto_ver);
 
 	lnet_hdr_to_nid16(hdr, &msg->msg_v2.u.getr_req.hdr);
-	msg->msg_v2.u.getr_req.sink_cookie = kefalnd_tx_to_idx(tx);
+	msg->msg_v2.u.getr_req.sink_cookie = kefalnd_calc_tx_cookie(tx);
 }
 
 static inline void
@@ -982,7 +993,7 @@ kefalnd_fill_putr_msg(struct kefa_conn *conn, struct kefa_tx *tx,
 				     conn->proto_ver);
 
 	lnet_hdr_to_nid16(hdr, &msg->msg_v2.u.putr_req.hdr);
-	msg->msg_v2.u.putr_req.cookie = kefalnd_tx_to_idx(tx);
+	msg->msg_v2.u.putr_req.cookie = kefalnd_calc_tx_cookie(tx);
 	msg->msg_v2.u.putr_req.rdma_desc = tx->rdma_desc;
 }
 
@@ -1081,7 +1092,6 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		}
 
 		/* setup the message */
-		kefalnd_fill_getr_msg(conn, tx, hdr);
 		tx->lntmsg[1] = lnet_create_reply_msg(ni, lntmsg);
 		if (tx->lntmsg[1] == NULL) {
 			EFA_DEV_ERR(efa_ni->efa_dev,
@@ -1093,10 +1103,11 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			return -EIO;
 		}
 
+		atomic_set(&tx->resp_id, EFALND_RESP_ID(++tx->resp_counter, 1));
+		kefalnd_fill_getr_msg(conn, tx, hdr);
 		/* finalise lntmsg[0,1] on completion */
 		tx->lntmsg[0] = lntmsg;
 		atomic_inc(&tx->ref_cnt); /* wait for GETR_{ACK,NACK} */
-		atomic_set(&tx->waiting_resp, true);
 		kefalnd_launch_tx(conn, tx);
 		return 0;
 
@@ -1121,11 +1132,11 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		}
 
 		/* setup the message */
+		atomic_set(&tx->resp_id, EFALND_RESP_ID(++tx->resp_counter, 1));
 		kefalnd_fill_putr_msg(conn, tx, hdr);
 		/* finalise lntmsg[0,1] on completion */
 		tx->lntmsg[0] = lntmsg;
 		atomic_inc(&tx->ref_cnt); /* wait for PUT_DONE */
-		atomic_set(&tx->waiting_resp, true);
 		kefalnd_launch_tx(conn, tx);
 		return 0;
 	}
@@ -1307,12 +1318,12 @@ kefalnd_handle_getr_req(struct kefa_ni *efa_ni, struct kefa_conn *conn,
 
 	getr_ack = kefalnd_get_getr_ack_from_msg(tx->msg);
 	getr_ack->sink_cookie = sink_cookie;
-	getr_ack->src_cookie = kefalnd_tx_to_idx(tx);
+
+	atomic_set(&tx->resp_id, EFALND_RESP_ID(++tx->resp_counter, 1));
+	getr_ack->src_cookie = kefalnd_calc_tx_cookie(tx);
 	getr_ack->rdma_desc = tx->rdma_desc;
 
 	atomic_inc(&tx->ref_cnt); /* Wait for GETR_DONE */
-	atomic_set(&tx->waiting_resp, true);
-
 	kefalnd_launch_tx(conn, tx);
 	return 0;
 }
@@ -1557,15 +1568,10 @@ kefalnd_handle_completion(struct kefa_ni *efa_ni,
 			  struct kefa_completion_msg *completion)
 {
 	int status = kefalnd_efa_status_to_errno(completion->status);
-	u64 tx_idx = completion->cookie;
 	struct kefa_tx *tx;
 
-	tx = kefalnd_get_tx_by_idx(efa_ni, tx_idx);
+	tx = kefalnd_finalize_response_get_tx(efa_ni, completion->cookie);
 	if (!tx)
-		return;
-
-	/* Response handling might race with TX abort, first 'wins' */
-	if (!atomic_xchg_relaxed(&tx->waiting_resp, false))
 		return;
 
 	if (tx->status == 0) { /* success so far */
@@ -1586,12 +1592,8 @@ kefalnd_handle_getr_ack(struct kefa_ni *efa_ni,
 	struct kefa_conn *conn;
 	struct kefa_tx *tx;
 
-	tx = kefalnd_get_tx_by_idx(efa_ni, getr_ack->sink_cookie);
+	tx = kefalnd_finalize_response_get_tx(efa_ni, getr_ack->sink_cookie);
 	if (!tx)
-		return -EINVAL;
-
-	/* Response handling might race with TX abort, first 'wins' */
-	if (!atomic_xchg_relaxed(&tx->waiting_resp, false))
 		return -EINVAL;
 
 	conn = tx->conn;

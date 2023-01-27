@@ -54,6 +54,14 @@
 #define EFALND_RX_WRID_EPOCH(wrid)	((u32)((wrid) >> 32))
 #define EFALND_RX_WRID_INDEX(wrid)	((u32)(wrid))
 
+/* TX resp_id encoding: [resp_counter(31) | valid(1)] */
+#define EFALND_RESP_ID(resp_counter, valid) (((resp_counter) << 1) | !!(valid))
+
+/* TX wire cookie encoding: [resp_id(32) | tx_index(32)] */
+#define EFALND_TX_COOKIE(resp_id, idx)	(((u64)(resp_id) << 32) | (u32)(idx))
+#define EFALND_TX_COOKIE_ID(cookie)	((u32)((cookie) >> 32))
+#define EFALND_TX_COOKIE_INDEX(cookie)	((u32)(cookie))
+
 /* max # of fragments supported. + 1 for unaligned case */
 #define EFALND_MAX_TX_FRAGS		(LNET_MAX_IOV + 1)
 
@@ -256,7 +264,8 @@ struct kefa_tx {
 	struct kefa_rdma_desc rdma_desc;/* rdma descriptor to read/write */
 	enum dma_data_direction dmadir;
 	atomic_t ref_cnt;		/* track sends and completions */
-	atomic_t waiting_resp;
+	atomic_t resp_id;
+	u32 resp_counter;		/* response counter, incremented per request */
 	struct kefa_fmr *fmr;
 	atomic64_t send_time;		/* send time of send in seconds */
 
