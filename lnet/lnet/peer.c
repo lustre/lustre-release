@@ -2515,8 +2515,8 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	}
 
 	/* Success */
-	memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
-	       LNET_PING_INFO_SIZE(pbuf->pb_info.pi_nnis));
+	unsafe_memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
+	       LNET_PING_INFO_SIZE(pbuf->pb_info.pi_nnis), FLEXIBLE_OBJECT);
 	lp->lp_state |= LNET_PEER_DATA_PRESENT;
 	CDEBUG(D_NET, "Received Push %s %u\n",
 	       libcfs_nidstr(&lp->lp_primary_nid),

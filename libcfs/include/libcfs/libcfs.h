@@ -132,4 +132,12 @@ void libcfs_vfree_atomic(const void *addr);
 #define INTERVAL_TREE_ROOT RB_ROOT
 #endif /* HAVE_INTERVAL_TREE_CACHED */
 
+#ifndef unsafe_memcpy
+#define unsafe_memcpy(to, from, size, reason)	memcpy((to), (from), (size))
+#endif
+
+#define FLEXIBLE_OBJECT \
+	"Struct contains a flexible member, the size of object is checked" \
+	"and can be safely copied in a single memcpy()"
+
 #endif /* _LIBCFS_LIBCFS_H_ */
