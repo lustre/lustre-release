@@ -27,7 +27,7 @@ TBD Whamcloud
          vanilla linux 5.4.136  (ZFS + ldiskfs)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
-         5.14.0-70.30.1.el9   (RHEL9.0)
+         5.14.0-162.12.1.el9  (RHEL9.1)
          4.18.0-425.3.1.el8   (RHEL8.7)
          5.4.0-37             (Ubuntu 20.04)
          5.14.21-150400.24.28 (SLES15 SP4)
@@ -46,6 +46,7 @@ TBD Whamcloud
          4.18.0-305.25.1.el8  (RHEL8.4)
          4.18.0-348.23.1.el8  (RHEL8.5)
          4.18.0-372.32.1.el8  (RHEL8.6)
+         5.14.0-70.30.1.el9   (RHEL9.0)
          4.4.120-92.70        (SLES12 SP2)
          4.4.180-94.100       (SLES12 SP3)
          4.12.14-95.48        (SLES12 SP4)
@@ -59,7 +60,7 @@ TBD Whamcloud
          5.11.0-31            (Ubuntu 20.04.3 HWE)
          5.11.0               (vanilla kernel.org)
          5.10.0-60.56.0.84.oe2203 (openEuler 22.03 LTS)
-       * Recommended e2fsprogs version: 1.46.5.wc1 or newer
+       * Recommended e2fsprogs version: 1.46.6-wc1 or newer
        * Recommended ZFS version: 2.1.5
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
