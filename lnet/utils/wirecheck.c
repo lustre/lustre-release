@@ -58,6 +58,9 @@ do {                                            \
 
 #define STRINGIFY(a) #a
 
+#define CHECK_BUILD_TEST(a)					\
+	printf("	BUILD_BUG_ON("#a");\n")
+
 #define CHECK_DEFINE(a)                                                 \
 do {                                                                    \
         printf ("        BUILD_BUG_ON("#a" != "STRINGIFY(a)");\n");     \
@@ -76,6 +79,12 @@ do {                                            \
 #define CHECK_MEMBER_SIZEOF(s,m)                \
 do {                                            \
         CHECK_VALUE((int)sizeof(((s *)0)->m));  \
+} while (0)
+
+#define CHECK_MEMBER_IS_FLEXIBLE(s, m)			\
+do {									\
+	CHECK_MEMBER_OFFSET(s, m);					\
+	CHECK_BUILD_TEST(offsetof(struct s, m) != sizeof(struct s));	\
 } while (0)
 
 #define CHECK_MEMBER(s,m)                       \
@@ -194,7 +203,7 @@ check_lnet_ping_info(void)
 	CHECK_MEMBER(struct lnet_ping_info, pi_features);
 	CHECK_MEMBER(struct lnet_ping_info, pi_pid);
 	CHECK_MEMBER(struct lnet_ping_info, pi_nnis);
-	CHECK_MEMBER(struct lnet_ping_info, pi_ni);
+	CHECK_MEMBER_IS_FLEXIBLE(struct lnet_ping_info, pi_ni);
 }
 
 void

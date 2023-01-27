@@ -309,7 +309,7 @@ struct lnet_ping_info {
 	__u32			pi_features;
 	lnet_pid_t		pi_pid;
 	__u32			pi_nnis;	/* number of nid4 entries */
-	struct lnet_ni_status	pi_ni[0];
+	struct lnet_ni_status	pi_ni[];
 } __attribute__((packed));
 
 #define LNET_PING_INFO_HDR_SIZE \

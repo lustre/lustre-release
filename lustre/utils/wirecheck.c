@@ -145,7 +145,7 @@ do {								\
 	CHECK_VALUE((int)sizeof(((s *)0)->m));			\
 } while(0)
 
-#define CHECK_MEMBER_IS_FLEXIBLE_OR_ZERO_LENGTH(s, m)			\
+#define CHECK_MEMBER_IS_FLEXIBLE(s, m)			\
 do {									\
 	CHECK_MEMBER_OFFSET(s, m);					\
 	CHECK_BUILD_TEST(offsetof(struct s, m) != sizeof(struct s));	\
@@ -2238,7 +2238,7 @@ check_ll_user_fiemap(void)
 	CHECK_MEMBER(fiemap, fm_mapped_extents);
 	CHECK_MEMBER(fiemap, fm_extent_count);
 	CHECK_MEMBER(fiemap, fm_reserved);
-	CHECK_MEMBER_IS_FLEXIBLE_OR_ZERO_LENGTH(fiemap, fm_extents);
+	CHECK_MEMBER_IS_FLEXIBLE(fiemap, fm_extents);
 
 	CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
 	CHECK_CDEFINE(FIEMAP_FLAG_XATTR);

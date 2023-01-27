@@ -2440,7 +2440,8 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	}
 
 	/* Success */
-	memcpy(&lp->lp_data->pb_info, &pbuf->pb_info, infobytes);
+	unsafe_memcpy(&lp->lp_data->pb_info, &pbuf->pb_info, infobytes,
+		      FLEXIBLE_OBJECT);
 	lp->lp_state |= LNET_PEER_DATA_PRESENT;
 	CDEBUG(D_NET, "Received Push %s %u\n",
 	       libcfs_nidstr(&lp->lp_primary_nid),

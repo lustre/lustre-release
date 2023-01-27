@@ -952,7 +952,7 @@ static void lnet_assert_wire_constants(void)
 	BUILD_BUG_ON((int)offsetof(struct lnet_ping_info, pi_nnis) != 12);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_ping_info *)0)->pi_nnis) != 4);
 	BUILD_BUG_ON((int)offsetof(struct lnet_ping_info, pi_ni) != 16);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_ping_info *)0)->pi_ni) != 0);
+	BUILD_BUG_ON(offsetof(struct lnet_ping_info, pi_ni) != sizeof(struct lnet_ping_info));
 
 	/* Acceptor connection request */
 	BUILD_BUG_ON(LNET_PROTO_ACCEPTOR_VERSION != 1);
