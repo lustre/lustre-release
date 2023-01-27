@@ -2749,6 +2749,55 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [])
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
 
 #
+# LC_HAVE_INVALIDATE_FOLIO
+#
+# linux commit v5.17-rc4-10-g128d1f8241d6
+# fs: Add invalidate_folio() aops method
+#
+AC_DEFUN([LC_HAVE_INVALIDATE_FOLIO], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if have address_spaace_operaions->invalidate_folio() member],
+address_spaace_operaions_invalidate_folio, [
+		#include <linux/fs.h>
+	],[
+		struct address_space_operations *aops = NULL;
+		struct folio *folio = NULL;
+		aops->invalidate_folio(folio, 0, PAGE_SIZE);
+	],[
+		AC_DEFINE(HAVE_INVALIDATE_FOLIO, 1,
+			[address_spaace_operaions->invalidate_folio() member exists])
+	])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_INVALIDATE_FOLIO
+
+#
+# LC_HAVE_DIRTY_FOLIO
+#
+# linux commit v5.17-rc4-38-g6f31a5a261db
+# fs: Add aops->dirty_folio
+# ... replaces ->set_page_dirty() with ->dirty_folio()
+#
+AC_DEFUN([LC_HAVE_DIRTY_FOLIO], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if have address_spaace_operaions->dirty_folio() member],
+address_spaace_operaions_dirty_folio, [
+		#include <linux/fs.h>
+	],[
+		struct address_space_operations *aops = NULL;
+		struct address_space *mapping = NULL;
+		struct folio *folio = NULL;
+		bool dirty = aops->dirty_folio(mapping, folio);
+		(void) dirty;
+	],[
+		AC_DEFINE(HAVE_DIRTY_FOLIO, 1,
+			[address_spaace_operaions->dirty_folio() member exists])
+	])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_DIRTY_FOLIO
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2952,6 +3001,10 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 5.16
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
+
+	# 5.18
+	LC_HAVE_INVALIDATE_FOLIO
+	LC_HAVE_DIRTY_FOLIO
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

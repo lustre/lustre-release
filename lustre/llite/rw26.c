@@ -50,6 +50,59 @@
 #include "llite_internal.h"
 #include <lustre_compat.h>
 
+#ifdef HAVE_INVALIDATE_FOLIO
+/**
+ * Implements Linux VM address_space::invalidate_folio() method. This method is
+ * called when the folio is truncated from a file, either as a result of
+ * explicit truncate, or when inode is removed from memory (as a result of
+ * final iput(), umount, or memory pressure induced icache shrinking).
+ *
+ * [0, off] bytes of the folio remain valid (this is for a case of non-page
+ * aligned truncate). Lustre leaves partially truncated folios in the cache,
+ * relying on struct inode::i_size to limit further accesses.
+ */
+static void ll_invalidate_folio(struct folio *folio, size_t offset, size_t len)
+{
+	struct inode *inode;
+	struct lu_env *env;
+	struct cl_page *page;
+	struct cl_object *obj;
+
+	LASSERT(!folio_test_writeback(folio));
+	LASSERT(folio_test_locked(folio));
+
+	if (!(offset == 0 && len == folio_size(folio)) &&
+	    !folio_test_large(folio))
+		return;
+
+	/* Drop the pages from the folio */
+	env = cl_env_percpu_get();
+	LASSERT(!IS_ERR(env));
+
+	inode = folio_inode(folio);
+	obj = ll_i2info(inode)->lli_clob;
+	if (obj != NULL) {
+		int n, npgs = folio_nr_pages(folio);
+
+		for (n = 0; n < npgs; n++) {
+			struct page *vmpage = folio_page(folio, n);
+
+			LASSERT(PageLocked(vmpage));
+			LASSERT(!PageWriteback(vmpage));
+
+			page = cl_vmpage_page(vmpage, obj);
+			if (page != NULL) {
+				cl_page_delete(env, page);
+				cl_page_put(env, page);
+			}
+		}
+	} else {
+		LASSERT(!folio_get_private(folio));
+	}
+	cl_env_percpu_put(env);
+}
+#else
+
 /**
  * Implements Linux VM address_space::invalidatepage() method. This method is
  * called when the page is truncate from a file, either as a result of
@@ -68,13 +121,13 @@ static void ll_invalidatepage(struct page *vmpage,
 #endif
 			     )
 {
-        struct inode     *inode;
-        struct lu_env    *env;
-        struct cl_page   *page;
-        struct cl_object *obj;
+	struct inode     *inode;
+	struct lu_env    *env;
+	struct cl_page   *page;
+	struct cl_object *obj;
 
-        LASSERT(PageLocked(vmpage));
-        LASSERT(!PageWriteback(vmpage));
+	LASSERT(PageLocked(vmpage));
+	LASSERT(!PageWriteback(vmpage));
 
 	/*
 	 * It is safe to not check anything in invalidatepage/releasepage
@@ -102,8 +155,9 @@ static void ll_invalidatepage(struct page *vmpage,
 			LASSERT(vmpage->private == 0);
 
 		cl_env_percpu_put(env);
-        }
+	}
 }
+#endif
 
 #ifdef HAVE_RELEASEPAGE_WITH_INT
 #define RELEASEPAGE_ARG_TYPE int
@@ -917,16 +971,24 @@ static int ll_migratepage(struct address_space *mapping,
 #endif
 
 const struct address_space_operations ll_aops = {
-	.readpage	= ll_readpage,
-	.direct_IO	= ll_direct_IO,
-	.writepage	= ll_writepage,
-	.writepages	= ll_writepages,
-	.set_page_dirty	= __set_page_dirty_nobuffers,
-	.write_begin	= ll_write_begin,
-	.write_end	= ll_write_end,
-	.invalidatepage	= ll_invalidatepage,
-	.releasepage	= (void *)ll_releasepage,
+#ifdef HAVE_DIRTY_FOLIO
+	.dirty_folio		= filemap_dirty_folio,
+#else
+	.set_page_dirty		= __set_page_dirty_nobuffers,
+#endif
+#ifdef HAVE_INVALIDATE_FOLIO
+	.invalidate_folio	= ll_invalidate_folio,
+#else
+	.invalidatepage		= ll_invalidatepage,
+#endif
+	.readpage		= ll_readpage,
+	.releasepage		= (void *)ll_releasepage,
+	.direct_IO		= ll_direct_IO,
+	.writepage		= ll_writepage,
+	.writepages		= ll_writepages,
+	.write_begin		= ll_write_begin,
+	.write_end		= ll_write_end,
 #ifdef CONFIG_MIGRATION
-	.migratepage	= ll_migratepage,
+	.migratepage		= ll_migratepage,
 #endif
 };
