@@ -312,7 +312,7 @@ static int pool_proc_open(struct inode *inode, struct file *file)
 	rc = seq_open(file, &pool_proc_ops);
 	if (!rc) {
 		struct seq_file *seq = file->private_data;
-		seq->private = PDE_DATA(inode);
+		seq->private = pde_data(inode);
 	}
 	return rc;
 }

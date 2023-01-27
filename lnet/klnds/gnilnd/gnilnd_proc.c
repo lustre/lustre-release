@@ -192,7 +192,7 @@ kgnilnd_proc_cksum_test_write(struct file *file, const char __user *ubuffer,
 static int
 kgnilnd_cksum_test_seq_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, NULL, PDE_DATA(inode));
+	return single_open(file, NULL, pde_data(inode));
 }
 
 static const struct file_operations kgn_cksum_test_fops = {
@@ -337,7 +337,7 @@ kgnilnd_proc_stats_write(struct file *file, const char __user *ubuffer,
 static int
 kgnilnd_stats_seq_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, kgnilnd_stats_seq_show, PDE_DATA(inode));
+	return single_open(file, kgnilnd_stats_seq_show, pde_data(inode));
 }
 
 static const struct file_operations kgn_stats_fops = {
@@ -729,7 +729,7 @@ kgnilnd_smsg_seq_open(struct inode *inode, struct file *file)
 	rc = seq_open(file, &kgn_smsg_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = PDE_DATA(inode);
+		sf->private = pde_data(inode);
 	}
 
 	return rc;
@@ -1060,7 +1060,7 @@ static int
 kgnilnd_peer_conns_seq_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, kgnilnd_proc_peer_conns_seq_show,
-			   PDE_DATA(inode));
+			   pde_data(inode));
 }
 
 static const struct file_operations kgn_peer_conns_fops = {
@@ -1081,7 +1081,7 @@ kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
 	rc = seq_open(file, &kgn_conn_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = PDE_DATA(inode);
+		sf->private = pde_data(inode);
 	}
 
 	return rc;
@@ -1302,7 +1302,7 @@ kgnilnd_peer_seq_open(struct inode *inode, struct file *file)
 	rc = seq_open(file, &kgn_peer_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = PDE_DATA(inode);
+		sf->private = pde_data(inode);
 	}
 
 	return rc;

@@ -1447,7 +1447,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	if (rc)
 		return rc;
 	seq = file->private_data;
-	seq->private = inode->i_private ? inode->i_private : PDE_DATA(inode);
+	seq->private = inode->i_private ? inode->i_private : pde_data(inode);
 	return 0;
 }
 

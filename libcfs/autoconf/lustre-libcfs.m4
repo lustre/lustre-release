@@ -1947,6 +1947,30 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_LINUX_BLK_INTEGRITY_HEADER
 
 #
+# LIBCFS_PDE_DATA_EXISTS
+#
+# Linux commit v5.16-11573-g6dfbbae14a7b
+#    introduce pde_data()
+# Linux commit v5.16-11574-g359745d78351
+#    remove PDE_DATA()
+#
+AC_DEFUN([LIBCFS_PDE_DATA_EXISTS],[
+LB_CHECK_COMPILE([does function 'pde_data' exist],
+pde_data, [
+		#include <linux/proc_fs.h>
+	],[
+		struct inode *inode = NULL;
+		void *data =pde_data(inode);
+		(void)data;
+	],[
+		AC_DEFINE(HAVE_pde_data, 1, [function pde_data() available])
+	],[
+		AC_DEFINE(pde_data(inode), PDE_DATA(inode),
+			  [function pde_data() unavailable])
+	])
+]) # LIBCFS_PDE_DATA_EXISTS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -2093,6 +2117,8 @@ LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
 # 5.15
 LIBCFS_PARAM_SET_UINT_MINMAX
 LIBCFS_LINUX_BLK_INTEGRITY_HEADER
+# 5.17
+LIBCFS_PDE_DATA_EXISTS
 ]) # LIBCFS_PROG_LINUX
 
 #
