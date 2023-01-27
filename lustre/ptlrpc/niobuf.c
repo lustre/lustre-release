@@ -942,6 +942,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	request->rq_deadline = request->rq_sent + request->rq_timeout +
 		ptlrpc_at_get_net_latency(request);
 
+	if (unlikely(opc == OBD_PING &&
+	    OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND_FAIL, cfs_fail_val)))
+		GOTO(skip_send, rc);
+
 	DEBUG_REQ(D_INFO, request, "send flags=%x",
 		  lustre_msg_get_flags(request->rq_reqmsg));
 	rc = ptl_send_buf(&request->rq_req_md_h,
@@ -954,6 +958,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	if (likely(rc == 0))
 		GOTO(out, rc);
 
+skip_send:
 	request->rq_req_unlinked = 1;
 	ptlrpc_req_finished(request);
 	if (noreply)

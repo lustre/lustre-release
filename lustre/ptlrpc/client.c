@@ -2289,13 +2289,15 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	struct obd_import *imp = req->rq_import;
 	unsigned int debug_mask = D_RPCTRACE;
 	int rc = 0;
+	__u32 opc;
 
 	ENTRY;
 	spin_lock(&req->rq_lock);
 	req->rq_timedout = 1;
 	spin_unlock(&req->rq_lock);
 
-	if (ptlrpc_console_allow(req, lustre_msg_get_opc(req->rq_reqmsg),
+	opc = lustre_msg_get_opc(req->rq_reqmsg);
+	if (ptlrpc_console_allow(req, opc,
 				 lustre_msg_get_status(req->rq_reqmsg)))
 		debug_mask = D_WARNING;
 	DEBUG_REQ(debug_mask, req, "Request sent has %s: [sent %lld/real %lld]",
@@ -2352,7 +2354,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 		rc = 1;
 	}
 
-	ptlrpc_fail_import(imp, lustre_msg_get_conn_cnt(req->rq_reqmsg));
+	if (opc != OBD_PING || req->rq_xid > imp->imp_highest_replied_xid)
+		ptlrpc_fail_import(imp,
+				   lustre_msg_get_conn_cnt(req->rq_reqmsg));
 
 	RETURN(rc);
 }
