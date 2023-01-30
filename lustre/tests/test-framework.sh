@@ -2280,6 +2280,18 @@ ost_quota_type() {
 
 # restore old quota type settings
 restore_quota() {
+	for usr in $QUOTA_USERS; do
+		echo "Setting up quota on $HOSTNAME:$MOUNT for $usr..."
+		for type in u g; do
+			cmd="$LFS setquota -$type $usr -b 0"
+			cmd="$cmd -B 0 -i 0 -I 0 $MOUNT"
+			echo "+ $cmd"
+			eval $cmd || error "$cmd FAILED!"
+		done
+		# display the quota status
+		echo "Quota settings for $usr : "
+		$LFS quota -v -u $usr $MOUNT || true
+	done
 	if [ "$old_MDT_QUOTA_TYPE" ]; then
 		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			do_facet mgs $PERM_CMD \
