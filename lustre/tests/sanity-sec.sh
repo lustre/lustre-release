@@ -2675,7 +2675,7 @@ test_34() {
 run_test 34 "deny_unknown on default nodemap"
 
 test_35() {
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.13.50) ] ||
+	(( $MDS1_VERSION >= $(version_code 2.13.50) )) ||
 		skip "Need MDS >= 2.13.50"
 
 	# activate changelogs
@@ -2810,20 +2810,26 @@ cleanup_for_enc_tests() {
 cleanup_nodemap_after_enc_tests() {
 	umount_client $MOUNT || true
 
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property forbid_encryption --value 0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property readonly_mount --value 0 || true
+	if (( MGS_VERSION >= $(version_code 2.13.55) )); then
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property forbid_encryption --value 0
+		if (( MGS_VERSION >= $(version_code 2.15.51) )); then
+			do_facet mgs $LCTL nodemap_modify --name default \
+				--property readonly_mount --value 0
+		fi
+	fi
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property trusted --value 0
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property admin --value 0
 	do_facet mgs $LCTL nodemap_activate 0
 
-	wait_nm_sync default forbid_encryption '' inactive
-	[ -z "$(do_facet mgs \
-			lctl get_param -n nodemap.default.readonly_mount)" ] ||
-		wait_nm_sync default readonly_mount '' inactive
+	if (( MGS_VERSION >= $(version_code 2.13.55) )); then
+		wait_nm_sync default forbid_encryption '' inactive
+		if (( MGS_VERSION >= $(version_code 2.15.51) )); then
+			wait_nm_sync default readonly_mount '' inactive
+		fi
+	fi
 	wait_nm_sync default trusted_nodemap '' inactive
 	wait_nm_sync default admin_nodemap '' inactive
 	wait_nm_sync active
