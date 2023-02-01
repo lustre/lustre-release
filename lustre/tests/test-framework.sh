@@ -9737,7 +9737,7 @@ parse_plain_param()
 		echo "-c $val"
 	elif [[ $line =~ ^"lmm_stripe_size:" ]]; then
 		echo "-S $val"
-	elif [[ $line =~ ^"lmm_stripe_offset:" ]]; then
+	elif [[ $line =~ ^"lmm_stripe_offset:" && $SKIP_INDEX != yes ]]; then
 		echo "-i $val"
 	elif [[ $line =~ ^"lmm_pattern:" ]]; then
 		echo "-L $val"

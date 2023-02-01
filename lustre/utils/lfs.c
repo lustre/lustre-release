@@ -4511,6 +4511,22 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		if (migrate_mdt_mode) {
 			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
 		} else if (migrate_mode) {
+			if (from_copy) {
+				/*
+				 * Strip the source layout of specific
+				 * OST object/index values.
+				 */
+				result = llapi_layout_ost_index_set(layout, 0,
+						LLAPI_LAYOUT_DEFAULT);
+				if (result) {
+					fprintf(stderr,
+						"%s: set default ost index failed: %s\n",
+						progname, strerror(errno));
+					result = -errno;
+					goto error;
+				}
+			}
+
 			result = lfs_migrate(fname, migration_flags, param,
 					     layout, bandwidth_bytes_sec,
 					     stats_flag, stats_interval_sec);

@@ -7948,8 +7948,8 @@ test_56xd() {
 	# 2. test option --copy
 	$LFS_MIGRATE -y --copy $f_copy $f_mgrt ||
 		error "cannot migrate $f_mgrt with --copy $f_copy"
-	layout_before=$(get_layout_param $f_copy)
-	layout_after=$(get_layout_param $f_mgrt)
+	layout_before=$(SKIP_INDEX=yes get_layout_param $f_copy)
+	layout_after=$(SKIP_INDEX=yes get_layout_param $f_mgrt)
 	[ "$layout_after" == "$layout_before" ] ||
 		error "lfs_migrate --copy: $layout_after != $layout_before"
 }
@@ -7967,18 +7967,18 @@ test_56xe() {
 	test_mkdir "$dir" || error "cannot create dir $dir"
 	$LFS setstripe $layout $f_comp ||
 		error "cannot setstripe $f_comp with layout $layout"
-	layout_before=$(get_layout_param $f_comp)
+	layout_before=$(SKIP_INDEX=yes get_layout_param $f_comp)
 	dd if=/dev/zero of=$f_comp bs=1M count=4
 
 	# 1. migrate a comp layout file by lfs_migrate
 	$LFS_MIGRATE -y $f_comp || error "cannot migrate $f_comp by lfs_migrate"
-	layout_after=$(get_layout_param $f_comp)
+	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
 	[ "$layout_before" == "$layout_after" ] ||
 		error "lfs_migrate: $layout_before != $layout_after"
 
 	# 2. migrate a comp layout file by lfs migrate
 	$LFS migrate $f_comp || error "cannot migrate $f_comp by lfs migrate"
-	layout_after=$(get_layout_param $f_comp)
+	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
 	[ "$layout_before" == "$layout_after" ] ||
 		error "lfs migrate: $layout_before != $layout_after"
 }
