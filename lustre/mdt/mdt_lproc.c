@@ -115,9 +115,9 @@ static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
 	struct rename_stats *rename_stats = &mdt->mdt_rename_stats;
 
 	/* this sampling races with updates */
-	seq_puts(seq, "rename_stats:\n-\n");
+	seq_puts(seq, "rename_stats:\n");
 	lprocfs_stats_header(seq, ktime_get_real(), rename_stats->rs_init, 15,
-			     ":", false, "  ");
+			     ":", false, "- ");
 
 	display_rename_stats(seq, "same_dir",
 			     &rename_stats->rs_hist[RENAME_SAMEDIR_SIZE]);
