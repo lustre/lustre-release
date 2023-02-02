@@ -7225,8 +7225,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
+
 	if (max_inherit == LAYOUT_INHERIT_UNSET) {
-		if (lsa.lsa_stripe_count == 0 || lsa.lsa_stripe_count == 1)
+		if (lsa.lsa_stripe_count == 0 || lsa.lsa_stripe_count == 1 ||
+		    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT)
 			max_inherit = LMV_INHERIT_DEFAULT_PLAIN;
 		else
 			max_inherit = LMV_INHERIT_DEFAULT_STRIPED;

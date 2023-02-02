@@ -3092,8 +3092,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	}
 
 	if ((verbose & VERBOSE_INHERIT_RR) &&
-	    lum->lum_magic == LMV_USER_MAGIC &&
-	    lum->lum_stripe_offset == LMV_OFFSET_DEFAULT) {
+	    lum->lum_magic == LMV_USER_MAGIC) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_INHERIT_RR)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_max_inherit_rr: ");

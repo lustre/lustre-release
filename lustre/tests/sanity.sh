@@ -26867,7 +26867,7 @@ test_fs_dmv_inherit()
 	local inherit
 	local inherit_rr
 
-	for i in 1 2 3; do
+	for i in 1 2; do
 		mkdir $testdir || error "mkdir $testdir failed"
 		count=$($LFS getdirstripe -D -c $testdir)
 		(( count == 1 )) ||
@@ -26979,6 +26979,68 @@ test_413h() {
 	done
 }
 run_test 413h "don't stick to parent for round-robin dirs"
+
+test_413i() {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
+	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need server version at least 2.14.55"
+
+	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
+		error "dump $DIR default LMV failed"
+	stack_trap "setfattr --restore=$TMP/dmv.ea"
+
+	local testdir=$DIR/$tdir
+	local def_max_rr=1
+	local def_max=3
+	local count
+
+	$LFS setdirstripe -D -i-1 -c1 --max-inherit=$def_max \
+		--max-inherit-rr=$def_max_rr $DIR ||
+		error "set $DIR default LMV failed"
+
+	for i in $(seq 2 3); do
+		def_max=$((def_max - 1))
+		(( def_max_rr == 0 )) || def_max_rr=$((def_max_rr - 1))
+
+		mkdir $testdir
+		# RR is decremented and keeps zeroed once exhausted
+		count=$($LFS getdirstripe -D --max-inherit-rr $testdir)
+		(( count == def_max_rr )) ||
+			error_noexit "$testdir: max-inherit-rr $count != $def_max_rr"
+
+		# max-inherit is decremented
+		count=$($LFS getdirstripe -D --max-inherit $testdir)
+		(( count == def_max )) ||
+			error_noexit "$testdir: max-inherit $count != $def_max"
+
+		testdir=$testdir/d$i
+	done
+
+	# d3 is the last inherited from ROOT, no inheritance anymore
+	# i.e. no the default layout anymore
+	mkdir -p $testdir/d4/d5
+	count=$($LFS getdirstripe -D --max-inherit $testdir)
+	(( count == -1 )) ||
+		error_noexit "$testdir: max-inherit $count != -1"
+
+	local p_count=$($LFS getdirstripe -i $testdir)
+
+	for i in $(seq 4 5); do
+		testdir=$testdir/d$i
+
+		# the root default layout is not applied once exhausted
+		count=$($LFS getdirstripe -i $testdir)
+		(( count == p_count )) ||
+			error_noexit "$testdir: stripe-offset $count != parent offset $p_count"
+	done
+
+	$LFS setdirstripe -i 0 $DIR/d2
+	count=$($LFS getdirstripe -D --max-inherit $DIR/d2)
+	(( count == -1 )) ||
+		error_noexit "$DIR/d2: max-inherit non-striped default $count != -1"
+}
+run_test 413i "check default layout inheritance"
 
 test_413z() {
 	local pids=""

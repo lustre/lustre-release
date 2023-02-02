@@ -1718,35 +1718,27 @@ out:
 
 		/* Get default LMV EA */
 		if (lum.lum_magic == LMV_USER_MAGIC) {
+			struct lmv_user_md *lum;
+			struct ll_inode_info *lli;
+
 			if (lmmsize > sizeof(*ulmv))
 				GOTO(finish_req, rc = -EINVAL);
 
-			if (root_request != NULL) {
-				struct lmv_user_md *lum;
-				struct ll_inode_info *lli;
+			lum = (struct lmv_user_md *)lmm;
+			if (lum->lum_max_inherit == LMV_INHERIT_NONE)
+				GOTO(finish_req, rc = -ENODATA);
 
-				lum = (struct lmv_user_md *)lmm;
+			if (root_request != NULL) {
 				lli = ll_i2info(inode);
 				if (lum->lum_max_inherit !=
 				    LMV_INHERIT_UNLIMITED) {
-					if (lum->lum_max_inherit ==
-						LMV_INHERIT_NONE ||
-					    lum->lum_max_inherit <
+					if (lum->lum_max_inherit <
 						LMV_INHERIT_END ||
 					    lum->lum_max_inherit >
 						LMV_INHERIT_MAX ||
-					    lum->lum_max_inherit <
+					    lum->lum_max_inherit <=
 						lli->lli_dir_depth)
 						GOTO(finish_req, rc = -ENODATA);
-
-					if (lum->lum_max_inherit ==
-					    lli->lli_dir_depth) {
-						lum->lum_max_inherit =
-							LMV_INHERIT_NONE;
-						lum->lum_max_inherit_rr =
-							LMV_INHERIT_RR_NONE;
-						goto out_copy;
-					}
 
 					lum->lum_max_inherit -=
 						lli->lli_dir_depth;
@@ -1767,10 +1759,8 @@ out:
 						goto out_copy;
 					}
 
-					if (lum->lum_max_inherit_rr >
-						lli->lli_dir_depth)
-						lum->lum_max_inherit_rr -=
-							lli->lli_dir_depth;
+					lum->lum_max_inherit_rr -=
+						lli->lli_dir_depth;
 				}
 			}
 out_copy:
