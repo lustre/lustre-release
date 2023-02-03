@@ -598,6 +598,29 @@ AC_DEFUN([LIBCFS_KERNEL_PARAM_LOCK],[
 ]) # LIBCFS_KERNEL_PARAM_LOCK
 
 #
+# LIBCFS_STRSCPY_EXISTS
+#
+# Linux commit v4.2-rc1-2-g30035e45753b
+#  string: provide strscpy()
+#
+# If strscpy exists, prefer it over strlcpy
+#
+AC_DEFUN([LIBCFS_SRC_STRSCPY_EXISTS], [
+	LB2_LINUX_TEST_SRC([strscpy_exists], [
+		#include <linux/string.h>
+	],[
+		strscpy((char *)NULL, (const char *)NULL, 0);
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_STRSCPY_EXISTS], [
+	AC_MSG_CHECKING([if kernel strscpy is available])
+	LB2_LINUX_TEST_RESULT([strscpy_exists], [
+		AC_DEFINE(HAVE_STRSCPY, 1,
+			[kernel strscpy is available])
+	])
+]) # LIBCFS_STRSCPY_EXISTS
+
+#
 # Kernel version 4.2 changed topology_thread_cpumask
 # to topology_sibling_cpumask
 #
@@ -2281,9 +2304,10 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_WAIT_WOKEN
 	# 4.0
 	LIBCFS_SRC_KTIME_MS_DELTA
-	# 4.2
+	# 4.1
 	LIBCFS_SRC_KERNEL_PARAM_LOCK
 	# 4.2
+	LIBCFS_SRC_STRSCPY_EXISTS
 	LIBCFS_SRC_HAVE_TOPOLOGY_SIBLING_CPUMASK
 	# 4.4
 	LIBCFS_SRC_KSTRTOBOOL_FROM_USER
@@ -2425,6 +2449,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	# 4.1
 	LIBCFS_KERNEL_PARAM_LOCK
 	# 4.2
+	LIBCFS_STRSCPY_EXISTS
 	LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 	# 4.4
 	LIBCFS_KSTRTOBOOL_FROM_USER
