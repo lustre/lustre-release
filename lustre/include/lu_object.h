@@ -1675,6 +1675,18 @@ struct lu_tgt_desc {
 			   ltd_connecting:1; /* target is connecting */
 };
 
+static inline __u64 tgt_statfs_bavail(struct lu_tgt_desc *tgt)
+{
+	struct obd_statfs *statfs = &tgt->ltd_statfs;
+
+	return statfs->os_bavail * statfs->os_bsize;
+}
+
+static inline __u64 tgt_statfs_iavail(struct lu_tgt_desc *tgt)
+{
+	return tgt->ltd_statfs.os_ffree;
+}
+
 /* number of pointers at 2nd level */
 #define TGT_PTRS_PER_BLOCK	(PAGE_SIZE / sizeof(void *))
 /* number of pointers at 1st level - only need as many as max OST/MDT count */
@@ -1739,7 +1751,7 @@ struct lu_tgt_descs {
 u64 lu_prandom_u64_max(u64 ep_ro);
 int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
-void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt);
+void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt, bool is_mdt);
 
 int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt);
 void lu_tgt_descs_fini(struct lu_tgt_descs *ltd);

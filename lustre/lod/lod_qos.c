@@ -1444,8 +1444,7 @@ static int lod_pool_qos_penalties_calc(struct lod_device *lod,
 		if (!ost->ltd_active)
 			continue;
 
-		ba = ost->ltd_statfs.os_bavail * ost->ltd_statfs.os_bsize;
-		ba >>= 8;
+		ba = tgt_statfs_bavail(ost) >> 8;
 		if (!ba)
 			continue;
 
@@ -1455,9 +1454,9 @@ static int lod_pool_qos_penalties_calc(struct lod_device *lod,
 
 		/*
 		 * per-ost penalty is
-		 * prio * bavail * iavail / (num_tgt - 1) / 2
+		 * prio * bavail / (num_tgt - 1) / prio_max / 2
 		 */
-		ost->ltd_qos.ltq_penalty_per_obj = prio_wide * ba >> 8;
+		ost->ltd_qos.ltq_penalty_per_obj = prio_wide * ba >> 9;
 		do_div(ost->ltd_qos.ltq_penalty_per_obj, num_active);
 
 		age = (now - ost->ltd_qos.ltq_used) >> 3;
@@ -1641,7 +1640,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			continue;
 
 		ost->ltd_qos.ltq_usable = 1;
-		lu_tgt_qos_weight_calc(ost);
+		lu_tgt_qos_weight_calc(ost, false);
 		total_weight += ost->ltd_qos.ltq_weight;
 
 		good_osts++;
@@ -1887,7 +1886,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			continue;
 
 		mdt->ltd_qos.ltq_usable = 1;
-		lu_tgt_qos_weight_calc(mdt);
+		lu_tgt_qos_weight_calc(mdt, true);
 		total_weight += mdt->ltd_qos.ltq_weight;
 
 		good_mdts++;

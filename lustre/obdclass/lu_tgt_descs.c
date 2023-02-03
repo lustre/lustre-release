@@ -206,33 +206,26 @@ out:
 }
 EXPORT_SYMBOL(lu_qos_del_tgt);
 
-static inline __u64 tgt_statfs_bavail(struct lu_tgt_desc *tgt)
-{
-	struct obd_statfs *statfs = &tgt->ltd_statfs;
-
-	return statfs->os_bavail * statfs->os_bsize;
-}
-
-static inline __u64 tgt_statfs_iavail(struct lu_tgt_desc *tgt)
-{
-	return tgt->ltd_statfs.os_ffree;
-}
-
 /**
  * Calculate weight for a given tgt.
  *
- * The final tgt weight is bavail >> 16 * iavail >> 8 minus the tgt and server
- * penalties.  See ltd_qos_penalties_calc() for how penalties are calculated.
+ * The final tgt weight uses only free space for OSTs, but combines
+ * both free space and inodes for MDTs, minus tgt and server penalties.
+ * See ltd_qos_penalties_calc() for how penalties are calculated.
  *
  * \param[in] tgt	target descriptor
+ * \param[in] is_mdt	target table is for MDT selection (use inodes)
  */
-void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt)
+void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt, bool is_mdt)
 {
 	struct lu_tgt_qos *ltq = &tgt->ltd_qos;
 	__u64 penalty;
 
-	ltq->ltq_avail = (tgt_statfs_bavail(tgt) >> 16) *
-			 (tgt_statfs_iavail(tgt) >> 8);
+	if (is_mdt)
+		ltq->ltq_avail = (tgt_statfs_bavail(tgt) >> 16) *
+				 (tgt_statfs_iavail(tgt) >> 8);
+	else
+		ltq->ltq_avail = tgt_statfs_bavail(tgt) >> 8;
 	penalty = ltq->ltq_penalty + ltq->ltq_svr->lsq_penalty;
 	if (ltq->ltq_avail < penalty)
 		ltq->ltq_weight = 0;
@@ -521,14 +514,13 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 
 		/*
 		 * per-tgt penalty is
-		 * prio * bavail * iavail / (num_tgt - 1) / 2
+		 * prio * bavail * iavail / (num_tgt - 1) / prio_max / 2
 		 */
-		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia >> 8;
+		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia >> 9;
 		do_div(tgt->ltd_qos.ltq_penalty_per_obj, num_active);
-		tgt->ltd_qos.ltq_penalty_per_obj >>= 1;
 
 		age = (now - tgt->ltd_qos.ltq_used) >> 3;
-		if (test_bit(LQ_RESET, &qos->lq_flags) || 
+		if (test_bit(LQ_RESET, &qos->lq_flags) ||
 		    age > 32 * desc->ld_qos_maxage)
 			tgt->ltd_qos.ltq_penalty = 0;
 		else if (age > desc->ld_qos_maxage)
@@ -564,7 +556,7 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 		svr->lsq_penalty_per_obj >>= 1;
 
 		age = (now - svr->lsq_used) >> 3;
-		if (test_bit(LQ_RESET, &qos->lq_flags) || 
+		if (test_bit(LQ_RESET, &qos->lq_flags) ||
 		    age > 32 * desc->ld_qos_maxage)
 			svr->lsq_penalty = 0;
 		else if (age > desc->ld_qos_maxage)
@@ -572,14 +564,11 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 			svr->lsq_penalty >>= age / desc->ld_qos_maxage;
 	}
 
-	clear_bit(LQ_DIRTY, &qos->lq_flags);
-	clear_bit(LQ_RESET, &qos->lq_flags);
 
 	/*
 	 * If each tgt has almost same free space, do rr allocation for better
 	 * creation performance
 	 */
-	clear_bit(LQ_SAME_SPACE, &qos->lq_flags);
 	if (((ba_max * (QOS_THRESHOLD_MAX - qos->lq_threshold_rr)) /
 	    QOS_THRESHOLD_MAX) < ba_min &&
 	    ((ia_max * (QOS_THRESHOLD_MAX - qos->lq_threshold_rr)) /
@@ -587,7 +576,11 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 		set_bit(LQ_SAME_SPACE, &qos->lq_flags);
 		/* Reset weights for the next time we enter qos mode */
 		set_bit(LQ_RESET, &qos->lq_flags);
+	} else {
+		clear_bit(LQ_SAME_SPACE, &qos->lq_flags);
+		clear_bit(LQ_RESET, &qos->lq_flags);
 	}
+	clear_bit(LQ_DIRTY, &qos->lq_flags);
 	rc = 0;
 
 out:
@@ -664,7 +657,7 @@ int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		else
 			ltq->ltq_penalty -= ltq->ltq_penalty_per_obj;
 
-		lu_tgt_qos_weight_calc(tgt);
+		lu_tgt_qos_weight_calc(tgt, ltd->ltd_is_mdt);
 
 		/* Recalc the total weight of usable osts */
 		if (ltq->ltq_usable)

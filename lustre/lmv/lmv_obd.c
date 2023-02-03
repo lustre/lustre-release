@@ -1545,7 +1545,7 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 		}
 
 		tgt->ltd_qos.ltq_usable = 1;
-		lu_tgt_qos_weight_calc(tgt);
+		lu_tgt_qos_weight_calc(tgt, true);
 		if (tgt->ltd_index == op_data->op_mds)
 			cur = tgt;
 		total_avail += tgt->ltd_qos.ltq_avail;
@@ -1647,7 +1647,7 @@ static struct lu_tgt_desc *lmv_locate_tgt_lf(struct lmv_obd *lmv)
 		}
 
 		tgt->ltd_qos.ltq_usable = 1;
-		lu_tgt_qos_weight_calc(tgt);
+		lu_tgt_qos_weight_calc(tgt, true);
 		avail += tgt->ltd_qos.ltq_avail;
 		if (!min || min->ltd_qos.ltq_avail > tgt->ltd_qos.ltq_avail)
 			min = tgt;
