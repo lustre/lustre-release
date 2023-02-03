@@ -494,6 +494,7 @@ int llapi_fid2path_at(int mnt_fd, const struct lu_fid *fid, char *path,
 int llapi_fid2path(const char *device, const char *fidstr, char *path,
 		   int pathlen, long long *recno, int *linkno);
 int llapi_path2fid(const char *path, struct lu_fid *fid);
+unsigned long llapi_fid_hash(const struct lu_fid *f, unsigned int shift);
 int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 			       int *mdt_index);
 int llapi_get_lum_file(const char *path, __u64 *valid, lstatx_t *statx,

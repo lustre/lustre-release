@@ -46,6 +46,7 @@
 #include <sched.h>
 
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/hash.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_fid.h>
 #include "lustreapi_internal.h"
@@ -487,4 +488,9 @@ int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 	rc = llapi_open_by_fid_at(mnt_fd, fid, flags);
 out:
 	return rc;
+}
+
+unsigned long llapi_fid_hash(const struct lu_fid *f, unsigned int shift)
+{
+	return hash_long(fid_flatten_long(f), shift);
 }

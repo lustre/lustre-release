@@ -87,14 +87,6 @@ static const int fid_hash_shift = 6;
 #define FID_HASH_ENTRIES	(1 << fid_hash_shift)
 #define FID_ON_HASH(f)		(!hlist_unhashed(&(f)->fr_node))
 
-#if __BITS_PER_LONG == 32
-#define FID_HASH_FN(f)	(hash_long(fid_flatten32(f), fid_hash_shift))
-#elif __BITS_PER_LONG == 64
-#define FID_HASH_FN(f)	(hash_long(fid_flatten(f), fid_hash_shift))
-#else
-#error Wordsize not 32 or 64
-#endif
-
 struct lsom_head {
 	struct hlist_head	*lh_hash;
 	struct list_head	 lh_list; /* ordered list by record index */
@@ -115,51 +107,6 @@ static void usage(char *prog)
 	exit(0);
 }
 
-static inline __u64 fid_flatten(const struct lu_fid *fid)
-{
-	__u64 ino;
-	__u64 seq;
-
-	if (fid_is_igif(fid)) {
-		ino = lu_igif_ino(fid);
-		return ino;
-	}
-
-	seq = fid_seq(fid);
-
-	ino = (seq << 24) + ((seq >> 24) & 0xffffff0000ULL) + fid_oid(fid);
-
-	return ino ?: fid_oid(fid);
-}
-
-/**
- * map fid to 32 bit value for ino on 32bit systems.
- */
-static inline __u32 fid_flatten32(const struct lu_fid *fid)
-{
-	__u32 ino;
-	__u64 seq;
-
-	if (fid_is_igif(fid)) {
-		ino = lu_igif_ino(fid);
-		return ino;
-	}
-
-	seq = fid_seq(fid) - FID_SEQ_START;
-
-	/* Map the high bits of the OID into higher bits of the inode number so
-	 * that inodes generated at about the same time have a reduced chance
-	 * of collisions. This will give a period of 2^12 = 1024 unique clients
-	 * (from SEQ) and up to min(LUSTRE_SEQ_MAX_WIDTH, 2^20) = 128k objects
-	 * (from OID), or up to 128M inodes without collisions for new files.
-	 */
-	ino = ((seq & 0x000fffffULL) << 12) + ((seq >> 8) & 0xfffff000) +
-	      (seq >> (64 - (40-8)) & 0xffffff00) +
-	      (fid_oid(fid) & 0xff000fff) + ((fid_oid(fid) & 0x00fff000) << 8);
-
-	return ino ?: fid_oid(fid);
-}
-
 static inline bool fid_eq(const lustre_fid *f1, const lustre_fid *f2)
 {
 	return f1->f_seq == f2->f_seq && f1->f_oid == f2->f_oid &&
@@ -175,7 +122,9 @@ static void fid_hash_del(struct fid_rec *f)
 static void fid_hash_add(struct fid_rec *f)
 {
 	assert(!FID_ON_HASH(f));
-	hlist_add_head(&f->fr_node, &head.lh_hash[FID_HASH_FN(&f->fr_fid)]);
+	hlist_add_head(&f->fr_node,
+		       &head.lh_hash[llapi_fid_hash(&f->fr_fid,
+					      fid_hash_shift)]);
 }
 
 static struct fid_rec *fid_hash_find(const lustre_fid *fid)
@@ -184,7 +133,7 @@ static struct fid_rec *fid_hash_find(const lustre_fid *fid)
 	struct hlist_node *entry, *next;
 	struct fid_rec *f;
 
-	hash_list = &head.lh_hash[FID_HASH_FN(fid)];
+	hash_list = &head.lh_hash[llapi_fid_hash(fid, fid_hash_shift)];
 	hlist_for_each_entry_safe(f, entry, next, hash_list, fr_node) {
 		assert(FID_ON_HASH(f));
 		if (fid_eq(fid, &f->fr_fid))

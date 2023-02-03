@@ -276,7 +276,7 @@ __u64 cl_fid_build_ino(const struct lu_fid *fid, int api32)
 	if (BITS_PER_LONG == 32 || api32)
 		RETURN(fid_flatten32(fid));
 
-	RETURN(fid_flatten(fid));
+	RETURN(fid_flatten64(fid));
 }
 
 /**
@@ -288,5 +288,5 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid)
 	if (fid_is_igif(fid))
 		RETURN(lu_igif_gen(fid));
 
-	RETURN(fid_flatten(fid) >> 32);
+	RETURN(fid_flatten64(fid) >> 32);
 }

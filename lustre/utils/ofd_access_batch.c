@@ -41,16 +41,9 @@
 #include <linux/lustre/lustre_idl.h>
 #include <libcfs/util/hash.h>
 #include <libcfs/util/list.h>
+#include <lustre/lustreapi.h>
 #include "lstddef.h"
 #include "ofd_access_batch.h"
-
-/* XXX Weird param order to be consistent with list_replace_init(). */
-static inline void list_replace_init(struct list_head *old_node,
-				struct list_head *new_node)
-{
-	list_add(new_node, old_node);
-	list_del_init(old_node);
-}
 
 struct fid_hash_node {
 	struct list_head fhn_node;
@@ -61,62 +54,6 @@ static inline bool fid_eq(const struct lu_fid *f1, const struct lu_fid *f2)
 {
 	return f1->f_seq == f2->f_seq && f1->f_oid == f2->f_oid &&
 	       f1->f_ver == f2->f_ver;
-}
-
-static inline __u64 fid_flatten(const struct lu_fid *fid)
-{
-	__u64 ino;
-	__u64 seq;
-
-	if (fid_is_igif(fid)) {
-		ino = lu_igif_ino(fid);
-		return ino;
-	}
-
-	seq = fid_seq(fid);
-
-	ino = (seq << 24) + ((seq >> 24) & 0xffffff0000ULL) + fid_oid(fid);
-
-	return ino != 0 ? ino : fid_oid(fid);
-}
-
-/**
- * map fid to 32 bit value for ino on 32bit systems.
- */
-static inline __u32 fid_flatten32(const struct lu_fid *fid)
-{
-	__u32 ino;
-	__u64 seq;
-
-	if (fid_is_igif(fid)) {
-		ino = lu_igif_ino(fid);
-		return ino;
-	}
-
-	seq = fid_seq(fid) - FID_SEQ_START;
-
-	/* Map the high bits of the OID into higher bits of the inode number so
-	 * that inodes generated at about the same time have a reduced chance
-	 * of collisions. This will give a period of 2^12 = 1024 unique clients
-	 * (from SEQ) and up to min(LUSTRE_SEQ_MAX_WIDTH, 2^20) = 128k objects
-	 * (from OID), or up to 128M inodes without collisions for new files.
-	 */
-	ino = ((seq & 0x000fffffULL) << 12) + ((seq >> 8) & 0xfffff000) +
-	      (seq >> (64 - (40-8)) & 0xffffff00) +
-	      (fid_oid(fid) & 0xff000fff) + ((fid_oid(fid) & 0x00fff000) << 8);
-
-	return ino != 0 ? ino : fid_oid(fid);
-}
-
-static unsigned long fid_hash(const struct lu_fid *f, unsigned int shift)
-{
-#if __BITS_PER_LONG == 32
-	return hash_long(fid_flatten32(f), shift);
-#elif __BITS_PER_LONG == 64
-	return hash_long(fid_flatten(f), shift);
-#else
-# error "Wordsize not 32 or 64"
-#endif
 }
 
 static void fhn_init(struct fid_hash_node *fhn, const struct lu_fid *fid)
@@ -148,7 +85,7 @@ void fid_hash_add(struct list_head *head, unsigned int shift,
 {
 	assert(!fhn_is_hashed(fhn));
 
-	list_add(&fhn->fhn_node, &head[fid_hash(&fhn->fhn_fid, shift)]);
+	list_add(&fhn->fhn_node, &head[llapi_fid_hash(&fhn->fhn_fid, shift)]);
 }
 
 struct fid_hash_node *
@@ -157,7 +94,7 @@ fid_hash_find(struct list_head *head, unsigned int shift, const struct lu_fid *f
 	struct list_head *hash_list;
 	struct fid_hash_node *fhn, *next;
 
-	hash_list = &head[fid_hash(fid, shift)];
+	hash_list = &head[llapi_fid_hash(fid, shift)];
 	list_for_each_entry_safe(fhn, next, hash_list, fhn_node) {
 		assert(fhn_is_hashed(fhn));
 
@@ -174,7 +111,7 @@ fid_hash_insert(struct list_head *head, unsigned int shift, struct fid_hash_node
 	struct list_head *list;
 	struct fid_hash_node *old_fhn, *next;
 
-	list = &head[fid_hash(&new_fhn->fhn_fid, shift)];
+	list = &head[llapi_fid_hash(&new_fhn->fhn_fid, shift)];
 	list_for_each_entry_safe(old_fhn, next, list, fhn_node) {
 		assert(fhn_is_hashed(old_fhn));
 
