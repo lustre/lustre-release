@@ -1328,6 +1328,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	struct ldlm_reply *ldlm_rep;
 	struct mdt_body *repbody;
 	struct lu_fid *child_fid = &info->mti_tmp_fid1;
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct md_attr *ma = &info->mti_attr;
 	u64 open_flags = info->mti_spec.sp_cr_flags;
 	u64 ibits = 0;
@@ -1369,6 +1370,13 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	       "cr_flag=%#llo mode=0%06o msg_flag=0x%x\n",
 	       PFID(rr->rr_fid1), PNAME(&rr->rr_name), PFID(rr->rr_fid2),
 	       open_flags, ma->ma_attr.la_mode, msg_flags);
+
+	/* Prevent by-fid operation if parent fid is .lustre/fid.
+	 * Also, we want rbac roles to have precedence over any other
+	 * permission or capability checks
+	 */
+	if (lu_fid_eq(rr->rr_fid1, &LU_OBF_FID) && !uc->uc_rbac_byfid_ops)
+		GOTO(out, result = -EPERM);
 
 	if (info->mti_cross_ref) {
 		/* This is cross-ref open */

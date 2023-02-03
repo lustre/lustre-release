@@ -1489,7 +1489,8 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 	if (!nodemap_active)
 		return true;
 
-	if (!nodemap || !nodemap->nmf_allow_root_access)
+	if (!nodemap || !nodemap->nmf_allow_root_access ||
+	    !(nodemap->nmf_rbac & NODEMAP_RBAC_QUOTA_OPS))
 		return false;
 
 	if (qc_type == PRJQUOTA) {

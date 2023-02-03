@@ -165,6 +165,27 @@ static void ucred_set_audit_enabled(struct mdt_thread_info *info,
 	uc->uc_enable_audit = audit;
 }
 
+static void ucred_set_rbac_roles(struct mdt_thread_info *info,
+				 struct lu_ucred *uc)
+{
+	struct lu_nodemap *nodemap = NULL;
+	enum nodemap_rbac_roles rbac = NODEMAP_RBAC_ALL;
+
+	if (info && info->mti_exp) {
+		nodemap = nodemap_get_from_exp(info->mti_exp);
+		if (!IS_ERR_OR_NULL(nodemap)) {
+			rbac = nodemap->nmf_rbac;
+			nodemap_putref(nodemap);
+		}
+	}
+
+	uc->uc_rbac_file_perms = !!(rbac & NODEMAP_RBAC_FILE_PERMS);
+	uc->uc_rbac_dne_ops = !!(rbac & NODEMAP_RBAC_DNE_OPS);
+	uc->uc_rbac_quota_ops = !!(rbac & NODEMAP_RBAC_QUOTA_OPS);
+	uc->uc_rbac_byfid_ops = !!(rbac & NODEMAP_RBAC_BYFID_OPS);
+	uc->uc_rbac_chlg_ops = !!(rbac & NODEMAP_RBAC_CHLG_OPS);
+}
+
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 			  void *buf)
 {
@@ -330,6 +351,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
 	ucred_set_audit_enabled(info, ucred);
+	ucred_set_rbac_roles(info, ucred);
 
 	EXIT;
 
@@ -501,6 +523,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
 	ucred_set_audit_enabled(info, uc);
+	ucred_set_rbac_roles(info, uc);
 
 	EXIT;
 

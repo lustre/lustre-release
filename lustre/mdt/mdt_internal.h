@@ -1432,7 +1432,7 @@ long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
-static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
+static inline bool mdt_changelog_allow(struct mdt_thread_info *info)
 {
 	struct lu_ucred *uc = NULL;
 	bool is_admin;
@@ -1452,7 +1452,8 @@ static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
 
 	uc = mdt_ucred(info);
 	is_admin = (uc->uc_uid == 0 && uc->uc_gid == 0 &&
-		    cap_raised(uc->uc_cap, CAP_SYS_ADMIN));
+		    cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
+		    uc->uc_rbac_chlg_ops);
 
 	mdt_exit_ucred(info);
 

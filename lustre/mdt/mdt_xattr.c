@@ -346,9 +346,13 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	if (!mdt->mdt_enable_dir_migration)
 		RETURN(-EPERM);
 
-	if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-	    mdt->mdt_enable_remote_dir_gid != -1)
+	/* we want rbac roles to have precedence over any other
+	 * permission or capability checks
+	 */
+	if (!uc->uc_rbac_dne_ops ||
+	    (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
+	     uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+	     mdt->mdt_enable_remote_dir_gid != -1))
 		RETURN(-EPERM);
 
 	obj = mdt_object_find(env, mdt, rr->rr_fid1);

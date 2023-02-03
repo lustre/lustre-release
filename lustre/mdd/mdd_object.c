@@ -691,10 +691,14 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(0);
 
 	if (is_project_state_change(oattr, la)) {
-		if (!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE) &&
-		    !lustre_in_group_p(uc, ma->ma_enable_chprojid_gid) &&
-		    !(ma->ma_enable_chprojid_gid == -1 &&
-		      mdd_permission_internal(env, obj, oattr, MAY_WRITE)))
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (!uc->uc_rbac_file_perms ||
+		    (!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE) &&
+		     !lustre_in_group_p(uc, ma->ma_enable_chprojid_gid) &&
+		     !(ma->ma_enable_chprojid_gid == -1 &&
+		       mdd_permission_internal(env, obj, oattr, MAY_WRITE))))
 			RETURN(-EPERM);
 	}
 
@@ -795,9 +799,13 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
 	/* Make sure a caller can chmod. */
 	if (la->la_valid & LA_MODE) {
-		if (!(flags & MDS_PERM_BYPASS) &&
-		    (uc->uc_fsuid != oattr->la_uid) &&
-		    !cap_raised(uc->uc_cap, CAP_FOWNER))
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (!uc->uc_rbac_file_perms ||
+		    (!(flags & MDS_PERM_BYPASS) &&
+		     (uc->uc_fsuid != oattr->la_uid) &&
+		     !cap_raised(uc->uc_cap, CAP_FOWNER)))
 			RETURN(-EPERM);
 
 		if (la->la_mode == (umode_t) -1)
@@ -819,9 +827,13 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if (la->la_valid & LA_UID) {
 		if (la->la_uid == (uid_t) -1)
 			la->la_uid = oattr->la_uid;
-		if (((uc->uc_fsuid != oattr->la_uid) ||
-		     (la->la_uid != oattr->la_uid)) &&
-		    !cap_raised(uc->uc_cap, CAP_CHOWN))
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (!uc->uc_rbac_file_perms ||
+		    ((uc->uc_fsuid != oattr->la_uid ||
+		      la->la_uid != oattr->la_uid) &&
+		     !cap_raised(uc->uc_cap, CAP_CHOWN)))
 			RETURN(-EPERM);
 
 		/* If the user or group of a non-directory has been
@@ -844,10 +856,14 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if (la->la_valid & LA_GID) {
 		if (la->la_gid == (gid_t) -1)
 			la->la_gid = oattr->la_gid;
-		if (((uc->uc_fsuid != oattr->la_uid) ||
-		     ((la->la_gid != oattr->la_gid) &&
-		      !lustre_in_group_p(uc, la->la_gid))) &&
-		    !cap_raised(uc->uc_cap, CAP_CHOWN))
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (!uc->uc_rbac_file_perms ||
+		    ((uc->uc_fsuid != oattr->la_uid ||
+		      (la->la_gid != oattr->la_gid &&
+		       !lustre_in_group_p(uc, la->la_gid))) &&
+		     !cap_raised(uc->uc_cap, CAP_CHOWN)))
 			RETURN(-EPERM);
 
 		/* Likewise, if the user or group of a non-directory

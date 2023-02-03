@@ -2548,6 +2548,11 @@ static int mdt_rmfid_check_permission(struct mdt_thread_info *info,
 	if (la->la_flags & LUSTRE_IMMUTABLE_FL)
 			rc = -EACCES;
 
+	/* we want rbac roles to have precedence over any other
+	 * permission or capability checks
+	 */
+	if (!uc->uc_rbac_byfid_ops)
+		RETURN(-EPERM);
 	if (cap_raised(uc->uc_cap, CAP_DAC_OVERRIDE))
 		RETURN(0);
 	if (uc->uc_fsuid == la->la_uid) {
@@ -2779,7 +2784,7 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			__swab32s(&cs->cs_id);
 		}
 
-		if (!mdt_is_rootadmin(tsi2mdt_info(tsi)))
+		if (!mdt_changelog_allow(tsi2mdt_info(tsi)))
 			RETURN(-EACCES);
 		rc = mdt_iocontrol(OBD_IOC_CHANGELOG_CLEAR, req->rq_export,
 				   vallen, val, NULL);
@@ -5719,7 +5724,7 @@ static int mdt_llog_open(struct tgt_session_info *tsi)
 {
 	ENTRY;
 
-	if (!mdt_is_rootadmin(tsi2mdt_info(tsi)))
+	if (!mdt_changelog_allow(tsi2mdt_info(tsi)))
 		RETURN(err_serious(-EACCES));
 
 	RETURN(tgt_llog_open(tsi));
@@ -6714,6 +6719,12 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	lu_context_enter(&ses);
 
 	mdt_ucred(info)->uc_valid = UCRED_OLD;
+	/* do not let rbac interfere with dirty flag internal system event */
+	mdt_ucred(info)->uc_rbac_file_perms = 1;
+	mdt_ucred(info)->uc_rbac_dne_ops = 1;
+	mdt_ucred(info)->uc_rbac_quota_ops = 1;
+	mdt_ucred(info)->uc_rbac_byfid_ops = 1;
+	mdt_ucred(info)->uc_rbac_chlg_ops = 1;
 	rc = mdt_add_dirty_flag(info, mfd->mfd_object, &info->mti_attr);
 
 	lu_context_exit(&ses);

@@ -1030,6 +1030,12 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_identity = NULL;
 	/* always record internal HSM activity if also enabled globally */
 	uc->uc_enable_audit = 1;
+	/* do not let rbac interfere with HSM internal processing */
+	uc->uc_rbac_file_perms = 1;
+	uc->uc_rbac_dne_ops = 1;
+	uc->uc_rbac_quota_ops = 1;
+	uc->uc_rbac_byfid_ops = 1;
+	uc->uc_rbac_chlg_ops = 1;
 
 	RETURN(0);
 }

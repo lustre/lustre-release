@@ -355,6 +355,7 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	struct lu_fid *fid = &info->mti_tmp_fid2;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
 	struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct lmv_mds_md_v1 *lmv;
 	struct mdt_object *child;
 	struct mdt_lock_handle *lhp;
@@ -363,7 +364,11 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-	if (!mdt->mdt_enable_dir_restripe)
+
+	/* we want rbac roles to have precedence over any other
+	 * permission or capability checks
+	 */
+	if (!mdt->mdt_enable_dir_restripe && !uc->uc_rbac_dne_ops)
 		RETURN(-EPERM);
 
 	LASSERT(lum);
@@ -543,9 +548,13 @@ static int mdt_create(struct mdt_thread_info *info)
 		    LMV_HASH_TYPE_CRUSH)
 			RETURN(-EPROTO);
 
-		if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-		    mdt->mdt_enable_remote_dir_gid != -1)
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (!uc->uc_rbac_dne_ops ||
+		    (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
+		     uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+		     mdt->mdt_enable_remote_dir_gid != -1))
 			RETURN(-EPERM);
 
 		/* restripe if later found dir exists, MDS_OPEN_CREAT means
@@ -935,9 +944,13 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			    !mdt->mdt_enable_striped_dir)
 				GOTO(out_put, rc = -EPERM);
 
-			if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-			    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-			    mdt->mdt_enable_remote_dir_gid != -1)
+			/* we want rbac roles to have precedence over any other
+			 * permission or capability checks
+			 */
+			if (!uc->uc_rbac_dne_ops ||
+			    (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
+			     uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+			     mdt->mdt_enable_remote_dir_gid != -1))
 				GOTO(out_put, rc = -EPERM);
 		}
 
@@ -2262,9 +2275,13 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	if (!mdt->mdt_enable_remote_dir || !mdt->mdt_enable_dir_migration)
 		RETURN(-EPERM);
 
-	if (uc && !cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-	    mdt->mdt_enable_remote_dir_gid != -1)
+	/* we want rbac roles to have precedence over any other
+	 * permission or capability checks
+	 */
+	if (uc && (!uc->uc_rbac_dne_ops ||
+		   (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
+		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+		    mdt->mdt_enable_remote_dir_gid != -1)))
 		RETURN(-EPERM);
 
 	/*

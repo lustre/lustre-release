@@ -5347,6 +5347,329 @@ test_63() {
 }
 run_test 63 "fid2path with encrypted files"
 
+setup_64() {
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+
+	do_facet mgs $LCTL nodemap_del c0 || true
+	wait_nm_sync c0 id ''
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+	do_facet mgs $LCTL nodemap_add c0
+	do_facet mgs $LCTL nodemap_add_range \
+		 --name c0 --range $client_nid
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property trusted --value 1
+	wait_nm_sync c0 admin_nodemap
+	wait_nm_sync c0 trusted_nodemap
+}
+
+cleanup_64() {
+	do_facet mgs $LCTL nodemap_del c0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property trusted --value 0
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active 0
+}
+
+test_64a() {
+	local testfile=$DIR/$tdir/$tfile
+	local rbac
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+	# check default value for rbac is all
+	rbac=$(do_facet mds $LCTL get_param -n nodemap.c0.rbac)
+	for role in file_perms \
+		    dne_ops \
+		    quota_ops \
+		    byfid_ops \
+		    chlg_ops \
+		    ;
+	do
+		[[ "$rbac" =~ "$role" ]] ||
+			error "role '$role' not in default '$rbac'"
+	done
+
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value file_perms
+	wait_nm_sync c0 rbac
+	touch $testfile
+	stack_trap "set +vx"
+	set -vx
+	chmod 777 $testfile || error "chmod failed"
+	chown $TSTUSR:$TSTUSR $testfile || error "chown failed"
+	chgrp $TSTUSR $testfile || error "chgrp failed"
+	$LFS project -p 1000 $testfile || error "setting project failed"
+	set +vx
+	rm -f $testfile
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	wait_nm_sync c0 rbac
+	touch $testfile
+	set -vx
+	chmod 777 $testfile && error "chmod should fail"
+	chown $TSTUSR:$TSTUSR $testfile && error "chown should fail"
+	chgrp $TSTUSR $testfile && error "chgrp should fail"
+	$LFS project -p 1000 $testfile && error "setting project should fail"
+	set +vx
+}
+run_test 64a "Nodemap enforces file_perms RBAC roles"
+
+test_64b() {
+	local testdir=$DIR/$tdir/${tfile}.d
+	local dir_restripe
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDSCOUNT >= 2 )) || skip "mdt count $MDSCOUNT, skipping dne_ops role"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+        dir_restripe=$(do_node $mds1_HOST \
+		"$LCTL get_param -n mdt.*MDT0000.enable_dir_restripe")
+	[ -n "$dir_restripe" ] || dir_restripe=0
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.enable_dir_restripe=1 ||
+			error "enabling dir_restripe failed"
+	stack_trap "do_nodes $(comma_list $(all_mdts_nodes)) \
+	      $LCTL set_param mdt.*.enable_dir_restripe=$dir_restripe" EXIT
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		 --value dne_ops
+	wait_nm_sync c0 rbac
+	$LFS mkdir -i 0 ${testdir}_for_migr ||
+		error "$LFS mkdir ${testdir}_for_migr failed (1)"
+	touch ${testdir}_for_migr/file001 ||
+		error "touch ${testdir}_for_migr/file001 failed (1)"
+	$LFS mkdir -i 0 ${testdir}_mdt0 ||
+		error "$LFS mkdir ${testdir}_mdt0 failed (1)"
+	$LFS mkdir -i 1 ${testdir}_mdt1 ||
+		error "$LFS mkdir ${testdir}_mdt1 failed (1)"
+	set -vx
+	$LFS mkdir -i 1 $testdir || error "$LFS mkdir failed (1)"
+	rmdir $testdir
+	$LFS mkdir -c 2 $testdir || error "$LFS mkdir failed (2)"
+	rmdir $testdir
+	mkdir $testdir
+	$LFS setdirstripe -c 2 $testdir || error "$LFS setdirstripe failed"
+	rmdir $testdir
+	$LFS migrate -m 1 ${testdir}_for_migr || error "$LFS migrate failed"
+	touch ${testdir}_mdt0/fileA || error "touch fileA failed (1)"
+	mv ${testdir}_mdt0/fileA ${testdir}_mdt1/ || error "mv failed (1)"
+	set +vx
+	rm -rf ${testdir}*
+	$LFS mkdir -i 0 ${testdir}_for_migr ||
+		error "$LFS mkdir ${testdir}_for_migr failed (2)"
+	touch ${testdir}_for_migr/file001 ||
+		error "touch ${testdir}_for_migr/file001 failed (2)"
+	$LFS mkdir -i 0 ${testdir}_mdt0 ||
+		error "$LFS mkdir ${testdir}_mdt0 failed (2)"
+	$LFS mkdir -i 1 ${testdir}_mdt1 ||
+		error "$LFS mkdir ${testdir}_mdt1 failed (2)"
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	wait_nm_sync c0 rbac
+	set -vx
+	$LFS mkdir -i 1 $testdir && error "$LFS mkdir should fail (1)"
+	$LFS mkdir -c 2 $testdir && error "$LFS mkdir should fail (2)"
+	mkdir $testdir
+	$LFS setdirstripe -c 2 $testdir && error "$LFS setdirstripe should fail"
+	rmdir $testdir
+	$LFS migrate -m 1 ${testdir}_for_migr &&
+		error "$LFS migrate should fail"
+	touch ${testdir}_mdt0/fileA || error "touch fileA failed (2)"
+	mv ${testdir}_mdt0/fileA ${testdir}_mdt1/ || error "mv failed (2)"
+	set +vx
+}
+run_test 64b "Nodemap enforces dne_ops RBAC roles"
+
+test_64c() {
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value quota_ops
+	wait_nm_sync c0 rbac
+	set -vx
+	$LFS setquota -u $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -u failed"
+	$LFS setquota -u $USER0 --delete $MOUNT
+	$LFS setquota -g $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -g failed"
+	$LFS setquota -g $USER0 --delete $MOUNT
+	$LFS setquota -p 1000 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -p failed"
+	$LFS setquota -p 1000 --delete $MOUNT
+
+	$LFS setquota -U -b 10G -B 11G -i 100K -I 105K $MOUNT ||
+		error "lfs setquota -U failed"
+	$LFS setquota -U -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota -G -b 10G -B 11G -i 100K -I 105K $MOUNT ||
+		error "lfs setquota -G failed"
+	$LFS setquota -G -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota -P -b 10G -B 11G -i 100K -I 105K $MOUNT ||
+		error "lfs setquota -P failed"
+	$LFS setquota -P -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota -u $USER0 -D $MOUNT ||
+		error "lfs setquota -u -D failed"
+	$LFS setquota -u $USER0 --delete $MOUNT
+	$LFS setquota -g $USER0 -D $MOUNT ||
+		error "lfs setquota -g -D failed"
+	$LFS setquota -g $USER0 --delete $MOUNT
+	$LFS setquota -p 1000 -D $MOUNT ||
+		error "lfs setquota -p -D failed"
+	$LFS setquota -p 1000 --delete $MOUNT
+	set +vx
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	wait_nm_sync c0 rbac
+
+	set -vx
+	$LFS setquota -u $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -u should fail"
+	$LFS setquota -u $USER0 --delete $MOUNT
+	$LFS setquota -g $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -g should fail"
+	$LFS setquota -g $USER0 --delete $MOUNT
+	$LFS setquota -p 1000 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -p should fail"
+	$LFS setquota -p 1000 --delete $MOUNT
+
+	$LFS setquota -U -b 10G -B 11G -i 100K -I 105K $MOUNT &&
+		error "lfs setquota -U should fail"
+	$LFS setquota -G -b 10G -B 11G -i 100K -I 105K $MOUNT &&
+		error "lfs setquota -G should fail"
+	$LFS setquota -P -b 10G -B 11G -i 100K -I 105K $MOUNT &&
+		error "lfs setquota -P should fail"
+	$LFS setquota -u $USER0 -D $MOUNT &&
+		error "lfs setquota -u -D should fail"
+	$LFS setquota -u $USER0 --delete $MOUNT
+	$LFS setquota -g $USER0 -D $MOUNT &&
+		error "lfs setquota -g -D should fail"
+	$LFS setquota -g $USER0 --delete $MOUNT
+	$LFS setquota -p 1000 -D $MOUNT &&
+		error "lfs setquota -p -D should fail"
+	$LFS setquota -p 1000 --delete $MOUNT
+	set +vx
+}
+run_test 64c "Nodemap enforces quota_ops RBAC roles"
+
+test_64d() {
+	local testfile=$DIR/$tdir/$tfile
+	local fid
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value byfid_ops
+	wait_nm_sync c0 rbac
+
+	touch $testfile
+	fid=$(lfs path2fid $testfile)
+	set -vx
+	$LFS fid2path $MOUNT $fid || error "fid2path $fid failed (1)"
+	cat $MOUNT/.lustre/fid/$fid || error "cat by fid failed"
+	lfs rmfid $MOUNT $fid || error "lfs rmfid failed"
+	set +vx
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	wait_nm_sync c0 rbac
+
+	touch $testfile
+	fid=$(lfs path2fid $testfile)
+	set -vx
+	$LFS fid2path $MOUNT $fid || error "fid2path $fid failed (2)"
+	cat $MOUNT/.lustre/fid/$fid && error "cat by fid should fail"
+	lfs rmfid $MOUNT $fid && error "lfs rmfid should fail"
+	set +vx
+	rm -f $testfile
+}
+run_test 64d "Nodemap enforces byfid_ops RBAC roles"
+
+test_64e() {
+	local testfile=$DIR/$tdir/$tfile
+	local testdir=$DIR/$tdir/${tfile}.d
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+	# activate changelogs
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+	changelog_chmask ALL
+
+	# do some IOs
+	mkdir $testdir || error "failed to mkdir $testdir"
+	touch $testfile || error "failed to touch $testfile"
+
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value chlg_ops
+	wait_nm_sync c0 rbac
+
+	# access changelogs
+	echo "changelogs dump"
+	changelog_dump || error "failed to dump changelogs"
+	echo "changelogs clear"
+	changelog_clear 0 || error "failed to clear changelogs"
+
+	rm -rf $testdir $testfile || error "rm -rf $testdir $testfile failed"
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	wait_nm_sync c0 rbac
+
+	# do some IOs
+	mkdir $testdir || error "failed to mkdir $testdir"
+	touch $testfile || error "failed to touch $testfile"
+
+	# access changelogs
+	echo "changelogs dump"
+	changelog_dump && error "dump changelogs should fail"
+	echo "changelogs clear"
+	changelog_clear 0 && error "clear changelogs should fail"
+	rm -rf $testdir $testfile
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value all
+	wait_nm_sync c0 rbac
+}
+run_test 64e "Nodemap enforces chlg_ops RBAC roles"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

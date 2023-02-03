@@ -937,6 +937,12 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	uc->uc_umask = 0644;
 	uc->uc_ginfo = NULL;
 	uc->uc_identity = NULL;
+	/* do not let rbac interfere with restriper internal processing */
+	uc->uc_rbac_file_perms = 1;
+	uc->uc_rbac_dne_ops = 1;
+	uc->uc_rbac_quota_ops = 1;
+	uc->uc_rbac_byfid_ops = 1;
+	uc->uc_rbac_chlg_ops = 1;
 
 	task = kthread_create(mdt_restriper_main, info, "mdt_restriper_%03d",
 			      mdt_seq_site(mdt)->ss_node_id);
