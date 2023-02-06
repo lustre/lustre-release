@@ -2532,6 +2532,8 @@ static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 struct cl_sync_io {
 	/** number of pages yet to be transferred. */
 	atomic_t		csi_sync_nr;
+	/** has this i/o completed? */
+	atomic_t		csi_complete;
 	/** error code. */
 	int			csi_sync_rc;
 	/** completion to be signaled when transfer is complete. */
