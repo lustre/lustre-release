@@ -513,8 +513,8 @@ lnet_nid2peerhash(struct lnet_nid *nid)
 	int i;
 
 	for (i = 0; i < 4; i++)
-		h = hash_32(nid->nid_addr[i]^h, 32);
-	return hash_32(LNET_NID_NET(nid) ^ h, LNET_PEER_HASH_BITS);
+		h = cfs_hash_32(nid->nid_addr[i]^h, 32);
+	return cfs_hash_32(LNET_NID_NET(nid) ^ h, LNET_PEER_HASH_BITS);
 }
 
 static inline struct list_head *

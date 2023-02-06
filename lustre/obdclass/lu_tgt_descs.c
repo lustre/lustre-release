@@ -36,7 +36,6 @@
 #include <linux/list.h>
 #include <linux/random.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_hash.h> /* hash_long() */
 #include <libcfs/linux/linux-mem.h>
 #include <obd_class.h>
 #include <obd_support.h>

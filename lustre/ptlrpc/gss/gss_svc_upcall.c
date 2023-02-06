@@ -53,7 +53,6 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/slab.h>
-#include <linux/hash.h>
 #include <linux/mutex.h>
 #include <linux/sunrpc/cache.h>
 #include <net/sock.h>
@@ -65,6 +64,7 @@
 #include <lustre_net.h>
 #include <lustre_nodemap.h>
 #include <lustre_sec.h>
+#include <libcfs/linux/linux-hash.h>
 
 #include "gss_err.h"
 #include "gss_internal.h"
@@ -107,7 +107,7 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 		len++;
 
 		if ((len & (BITS_PER_LONG/8-1)) == 0)
-			hash = hash_long(hash^l, BITS_PER_LONG);
+			hash = cfs_hash_long(hash^l, BITS_PER_LONG);
 	} while (len);
 
 	return hash >> (BITS_PER_LONG - bits);

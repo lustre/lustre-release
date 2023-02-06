@@ -37,24 +37,9 @@
 #ifndef __LIBCFS_HASH_H__
 #define __LIBCFS_HASH_H__
 
-#include <linux/hash.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
-
-/*
- * Knuth recommends primes in approximately golden ratio to the maximum
- * integer representable by a machine word for multiplicative hashing.
- * Chuck Lever verified the effectiveness of this technique:
- * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
- *
- * These primes are chosen to be bit-sparse, that is operations on
- * them can use shifts and additions instead of multiplications for
- * machines where multiplications are slow.
- */
-/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define CFS_GOLDEN_RATIO_PRIME_32 0x9e370001UL
-/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define CFS_GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001ULL
+#include <libcfs/linux/linux-hash.h>
 
 /** disable debug */
 #define CFS_HASH_DEBUG_NONE	0
@@ -828,24 +813,6 @@ cfs_hash_djb2_hash(const void *key, size_t size, unsigned mask)
                 hash = hash * 33 + ((char *)key)[i];
 
         return (hash & mask);
-}
-
-/*
- * Generic u32 hash algorithm.
- */
-static inline unsigned
-cfs_hash_u32_hash(const __u32 key, unsigned mask)
-{
-        return ((key * CFS_GOLDEN_RATIO_PRIME_32) & mask);
-}
-
-/*
- * Generic u64 hash algorithm.
- */
-static inline unsigned
-cfs_hash_u64_hash(const __u64 key, unsigned mask)
-{
-        return ((unsigned)(key * CFS_GOLDEN_RATIO_PRIME_64) & mask);
 }
 
 /** iterate over all buckets in @bds (array of struct cfs_hash_bd) */

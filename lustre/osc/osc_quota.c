@@ -177,7 +177,7 @@ out_unlock:
 static unsigned
 oqi_hashfn(struct cfs_hash *hs, const void *key, unsigned mask)
 {
-	return cfs_hash_u32_hash(*((__u32*)key), mask);
+	return cfs_hash_32(*((__u32 *)key), 0) & mask;
 }
 
 static int

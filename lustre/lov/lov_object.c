@@ -758,7 +758,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	 * so that different clients would use different mirrors for read. */
 	mirror_count = 0;
 	preference = -1;
-	seq = hash_long((unsigned long)lov, 8);
+	seq = cfs_hash_long((unsigned long)lov, 8);
 	for (i = 0; i < comp->lo_mirror_count; i++) {
 		unsigned int idx = (i + seq) % comp->lo_mirror_count;
 

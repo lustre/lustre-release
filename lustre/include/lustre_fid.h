@@ -818,7 +818,7 @@ static inline __u32 fid_hash(const struct lu_fid *f, int bits)
 {
 	/* all objects with same id and different versions will belong to same
 	 * collisions list. */
-	return hash_long(fid_flatten(f), bits);
+	return cfs_hash_long(fid_flatten(f), bits);
 }
 
 /**

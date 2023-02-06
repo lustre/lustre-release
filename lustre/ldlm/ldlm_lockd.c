@@ -3101,7 +3101,7 @@ void ldlm_put_ref(void)
 static unsigned
 ldlm_export_lock_hash(struct cfs_hash *hs, const void *key, unsigned int mask)
 {
-	return cfs_hash_u64_hash(((struct lustre_handle *)key)->cookie, mask);
+	return cfs_hash_64(((struct lustre_handle *)key)->cookie, 0) & mask;
 }
 
 static void *

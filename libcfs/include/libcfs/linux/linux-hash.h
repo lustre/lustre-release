@@ -59,10 +59,20 @@ static __always_inline u32 cfs_hash_64(u64 val, unsigned int bits)
 	return cfs_hash_32(((u32)val ^ ((val >> 32) * GOLDEN_RATIO_32)), bits);
 #endif
 }
+
+#if BITS_PER_LONG == 32
+#define cfs_hash_long(val, bits) cfs_hash_32(val, bits)
+#elif BITS_PER_LONG == 64
+#define cfs_hash_long(val, bits) cfs_hash_64(val, bits)
+#else
+#error Wordsize not 32 or 64
+#endif
+
 #else
 
-#define cfs_hash_32	hash_32
-#define cfs_hash_64	hash_64
+#define cfs_hash_32 hash_32
+#define cfs_hash_64 hash_64
+#define cfs_hash_long hash_long
 
 #endif /* HAVE_BROKEN_HASH_64 */
 
