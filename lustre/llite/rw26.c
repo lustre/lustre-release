@@ -363,7 +363,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	struct cl_sync_io *anchor = &sdio->csd_sync;
 	loff_t offset   = pv->ldp_file_offset;
 	int io_pages    = 0;
-	size_t page_size = cl_page_size(obj);
 	int i;
 	ssize_t rc = 0;
 
@@ -404,12 +403,12 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		 * Set page clip to tell transfer formation engine
 		 * that page has to be sent even if it is beyond KMS.
 		 */
-		if (size < page_size)
+		if (size < PAGE_SIZE)
 			cl_page_clip(env, page, 0, size);
 		++io_pages;
 
-		offset += page_size;
-		size -= page_size;
+		offset += PAGE_SIZE;
+		size -= PAGE_SIZE;
 	}
 	if (rc == 0 && io_pages > 0) {
 		int iot = rw == READ ? CRT_READ : CRT_WRITE;
@@ -665,7 +664,7 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	if (attr->cat_kms <= offset) {
 		char *kaddr = kmap_atomic(pg->cp_vmpage);
 
-		memset(kaddr, 0, cl_page_size(obj));
+		memset(kaddr, 0, PAGE_SIZE);
 		kunmap_atomic(kaddr);
 		GOTO(out, result = 0);
 	}

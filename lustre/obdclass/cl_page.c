@@ -1155,12 +1155,6 @@ pgoff_t cl_index(const struct cl_object *obj, loff_t offset)
 }
 EXPORT_SYMBOL(cl_index);
 
-size_t cl_page_size(const struct cl_object *obj)
-{
-	return 1UL << PAGE_SHIFT;
-}
-EXPORT_SYMBOL(cl_page_size);
-
 /**
  * Adds page slice to the compound page.
  *

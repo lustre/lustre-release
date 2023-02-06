@@ -1610,7 +1610,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
                  */
                 fio->ft_nob = size - cl_offset(obj, fio->ft_index);
         else
-                fio->ft_nob = cl_page_size(obj);
+		fio->ft_nob = PAGE_SIZE;
 
         lu_ref_add(&page->cp_reference, "fault", io);
         fio->ft_page = page;
