@@ -2986,7 +2986,7 @@ kgnilnd_reaper(void *arg)
 				CDEBUG(D_INFO, "awake after schedule\n");
 			}
 
-			del_singleshot_timer_sync(&timer);
+			timer_delete_sync(&timer);
 			spin_lock(&kgnilnd_data.kgn_reaper_lock);
 			finish_wait(&kgnilnd_data.kgn_reaper_waitq, &wait);
 			continue;
@@ -3803,7 +3803,7 @@ kgnilnd_process_rdmaq(kgn_device_t *dev)
 		/* if we think we need to adjust, take lock to serialize and recheck */
 		spin_lock(&dev->gnd_rdmaq_lock);
 		if (time_after_eq(jiffies, dev->gnd_rdmaq_deadline)) {
-			del_singleshot_timer_sync(&dev->gnd_rdmaq_timer);
+			timer_delete_sync(&dev->gnd_rdmaq_timer);
 
 			dead_bump = cfs_time_seconds(1) / *kgnilnd_tunables.kgn_rdmaq_intervals;
 
@@ -4634,7 +4634,7 @@ kgnilnd_process_mapped_tx(kgn_device_t *dev)
 	spin_lock(&dev->gnd_lock);
 	if (list_empty(&dev->gnd_map_tx)) {
 		/* if the list is empty make sure we dont have a timer running */
-		del_singleshot_timer_sync(&dev->gnd_map_timer);
+		timer_delete_sync(&dev->gnd_map_timer);
 		spin_unlock(&dev->gnd_lock);
 		RETURN(0);
 	}
@@ -4661,7 +4661,7 @@ kgnilnd_process_mapped_tx(kgn_device_t *dev)
 	}
 
 	/* delete the previous timer if it exists */
-	del_singleshot_timer_sync(&dev->gnd_map_timer);
+	timer_delete_sync(&dev->gnd_map_timer);
 	/* stash the last map version to let us know when a good one was seen */
 	last_map_version = dev->gnd_map_version;
 

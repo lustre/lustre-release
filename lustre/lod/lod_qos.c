@@ -1582,7 +1582,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		/* Do actual allocation, use write lock here. */
 		rc = down_write_killable(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
-		del_singleshot_timer_sync(&timer.timer);
+		timer_delete_sync(&timer.timer);
 		kernel_sigaction(SIGKILL, SIG_IGN);
 		if (rc) {
 			flush_signals(current);

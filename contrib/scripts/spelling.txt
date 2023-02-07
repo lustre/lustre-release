@@ -102,6 +102,9 @@ msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
 define OBD_CONNECT||see "XXX README XXX" below and contact adilger@whamcloud.com
 __u[136][624] ocd_||see "XXX README XXX" below and contact adilger@whamcloud.com
+del_timer||timer_delete
+del_timer_sync||timer_delete_sync
+del_singleshot_timer_sync||timer_delete_sync
 EWOULDBLOCK||EAGAIN
 container_of0||container_of_safe
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)

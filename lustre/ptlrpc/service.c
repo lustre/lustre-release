@@ -1264,7 +1264,7 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service_part *svcpt)
 	time64_t next;
 
 	if (array->paa_count == 0) {
-		del_timer(&svcpt->scp_at_timer);
+		timer_delete(&svcpt->scp_at_timer);
 		return;
 	}
 
@@ -3405,7 +3405,7 @@ ptlrpc_service_del_atimer(struct ptlrpc_service *svc)
 	/* early disarm AT timer... */
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
 		if (svcpt->scp_service != NULL)
-			del_timer(&svcpt->scp_at_timer);
+			timer_delete(&svcpt->scp_at_timer);
 	}
 }
 
@@ -3574,7 +3574,7 @@ ptlrpc_service_free(struct ptlrpc_service *svc)
 			break;
 
 		/* In case somebody rearmed this in the meantime */
-		del_timer(&svcpt->scp_at_timer);
+		timer_delete(&svcpt->scp_at_timer);
 		array = &svcpt->scp_at_array;
 
 		if (array->paa_reqs_array != NULL) {

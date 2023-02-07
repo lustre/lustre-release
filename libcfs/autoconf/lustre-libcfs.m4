@@ -2264,6 +2264,58 @@ AC_DEFUN([LIBCFS_BIO_ALLOC_WITH_BDEV],[
 	])
 ]) # LIBCFS_BIO_ALLOC_WITH_BDEV
 
+#
+# LIBCFS_TIMER_DELETE_SYNC
+#
+# Linux commit v6.1-rc1-7-g9a5a30568697
+#   timers: Get rid of del_singleshot_timer_sync()
+# Linux commit v6.1-rc1-11-g9b13df3fb64e
+#   timers: Rename del_timer_sync() to timer_delete_sync()
+#
+AC_DEFUN([LIBCFS_SRC_TIMER_DELETE_SYNC],[
+	LB2_LINUX_TEST_SRC([timer_delete_sync], [
+		#include <linux/timer.h>
+	],[
+		struct timer_list *timer = NULL;
+		(void)timer_delete_sync(timer);
+	],[])
+])
+AC_DEFUN([LIBCFS_TIMER_DELETE_SYNC],[
+	AC_MSG_CHECKING([is timer_delete_sync() available])
+	LB2_LINUX_TEST_RESULT([timer_delete_sync], [
+		AC_DEFINE(HAVE_TIMER_DELETE_SYNC, 1,
+			[timer_delete_sync() is available])
+	],[
+		AC_DEFINE(timer_delete_sync(t), del_timer_sync(t),
+			[timer_delete_sync() not is available])
+	])
+]) # LIBCFS_TIMER_DELETE_SYNC
+
+#
+# LIBCFS_TIMER_DELETE_SYNC
+#
+# Linux commit v6.1-rc1-12-gbb663f0f3c39
+#   timers: Rename del_timer() to timer_delete()
+#
+AC_DEFUN([LIBCFS_SRC_TIMER_DELETE],[
+	LB2_LINUX_TEST_SRC([timer_delete], [
+		#include <linux/timer.h>
+	],[
+		struct timer_list *timer = NULL;
+		(void)timer_delete(timer);
+	],[])
+])
+AC_DEFUN([LIBCFS_TIMER_DELETE],[
+	AC_MSG_CHECKING([is timer_delete() available])
+	LB2_LINUX_TEST_RESULT([timer_delete], [
+		AC_DEFINE(HAVE_TIMER_DELETE, 1,
+			[timer_delete() is available])
+	],[
+		AC_DEFINE(timer_delete(t), del_timer(t),
+			[timer_delete() not is available])
+	])
+]) # LIBCFS_TIMER_DELETE
+
 dnl #
 dnl # Generate and compile all of the kernel API test cases to determine
 dnl # which interfaces are available.  By invoking the kernel build system
@@ -2404,6 +2456,9 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 5.17
 	LIBCFS_SRC_PDE_DATA_EXISTS
 	LIBCFS_SRC_BIO_ALLOC_WITH_BDEV
+	# 6.2
+	LIBCFS_SRC_TIMER_DELETE_SYNC
+	LIBCFS_SRC_TIMER_DELETE
 
 	LB2_LINUX_TEST_COMPILE_ALL([libcfs],
 		[for available kernel interfaces to libcfs])
@@ -2546,6 +2601,9 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	# 5.17
 	LIBCFS_PDE_DATA_EXISTS
 	LIBCFS_BIO_ALLOC_WITH_BDEV
+	# 6.2
+	LIBCFS_TIMER_DELETE_SYNC
+	LIBCFS_TIMER_DELETE
 ])
 
 #

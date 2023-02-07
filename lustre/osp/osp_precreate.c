@@ -242,7 +242,7 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 	/*
 	 * no updates till reply
 	 */
-	del_timer(&d->opd_statfs_timer);
+	timer_delete(&d->opd_statfs_timer);
 	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), expire);
 	d->opd_statfs_update_in_progress = 1;
 
@@ -296,7 +296,7 @@ void osp_statfs_need_now(struct osp_device *d)
 		 * is replied
 		 */
 		d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(), NSEC_PER_SEC);
-		del_timer(&d->opd_statfs_timer);
+		timer_delete(&d->opd_statfs_timer);
 		wake_up(&d->opd_pre_waitq);
 	}
 }
@@ -1885,7 +1885,7 @@ void osp_statfs_fini(struct osp_device *d)
 	struct task_struct *task = d->opd_pre_task;
 	ENTRY;
 
-	del_timer(&d->opd_statfs_timer);
+	timer_delete(&d->opd_statfs_timer);
 
 	d->opd_pre_task = NULL;
 	if (task)

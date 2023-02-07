@@ -2545,7 +2545,7 @@ kgnilnd_dgram_mover(void *arg)
 			deadline = jiffies + cfs_time_seconds(*kgnilnd_tunables.kgn_dgram_timeout);
 		}
 
-		del_singleshot_timer_sync(&timer.timer);
+		timer_delete_sync(&timer.timer);
 		finish_wait(&dev->gnd_dgram_waitq, &wait);
 	}
 

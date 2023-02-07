@@ -485,7 +485,7 @@ static void kfilnd_tn_timeout(cfs_timer_cb_arg_t data)
 
 static bool kfilnd_tn_timeout_cancel(struct kfilnd_transaction *tn)
 {
-	return del_timer(&tn->timeout_timer);
+	return timer_delete(&tn->timeout_timer);
 }
 
 static void kfilnd_tn_timeout_enable(struct kfilnd_transaction *tn)
