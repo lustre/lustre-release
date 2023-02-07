@@ -3439,9 +3439,8 @@ test_27U() {
 	local stripe_count2
 	local mdts=$(comma_list $(mdts_nodes))
 
-	# FIMXE
-	# (( $MDS1_VERSION >= $(version_code 2.15.42) )) ||
-	# 	skip "Need MDS version at least 2.15.42"
+	(( $MDS1_VERSION >= $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51 for append pool feature"
 
 	# Validate existing append_* params and ensure restore
 	pool=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_pool)
