@@ -917,7 +917,7 @@ restart:
 		if (!it->it_disposition) {
 			struct dentry *dentry = file_dentry(file);
 			struct ll_sb_info *sbi = ll_i2sbi(inode);
-			struct ll_dentry_data *ldd;
+			int open_threshold = sbi->ll_oc_thrsh_count;
 
 			/* We cannot just request lock handle now, new ELC code
 			 * means that one of other OPEN locks for this file
@@ -928,23 +928,23 @@ restart:
 			mutex_unlock(&lli->lli_och_mutex);
 			/*
 			 * Normally called under two situations:
-			 * 1. NFS export.
+			 * 1. fhandle / NFS export.
 			 * 2. A race/condition on MDS resulting in no open
 			 *    handle to be returned from LOOKUP|OPEN request,
 			 *    for example if the target entry was a symlink.
 			 *
-			 * In NFS path we know there's pathologic behavior
-			 * so we always enable open lock caching when coming
-			 * from there. It's detected by setting a flag in
-			 * ll_iget_for_nfs.
+			 * For NFSv3 we need to always cache the open lock
+			 * for pre 5.5 Linux kernels.
 			 *
 			 * After reaching number of opens of this inode
 			 * we always ask for an open lock on it to handle
 			 * bad userspace actors that open and close files
 			 * in a loop for absolutely no good reason
 			 */
+			/* fhandle / NFS path. */
+			if (lli->lli_open_thrsh_count != UINT_MAX)
+				open_threshold = lli->lli_open_thrsh_count;
 
-			ldd = ll_d2d(dentry);
 			if (filename_is_volatile(dentry->d_name.name,
 						 dentry->d_name.len,
 						 NULL)) {
@@ -953,17 +953,9 @@ restart:
 				 * We do not want openlock for volatile
 				 * files under any circumstances
 				 */
-			} else if (ldd && ldd->lld_nfs_dentry) {
-				/* NFS path. This also happens to catch
-				 * open by fh files I guess
-				 */
-				it->it_flags |= MDS_OPEN_LOCK;
-				/* clear the flag for future lookups */
-				ldd->lld_nfs_dentry = 0;
-			} else if (sbi->ll_oc_thrsh_count > 0) {
+			} else if (open_threshold > 0) {
 				/* Take MDS_OPEN_LOCK with many opens */
-				if (lli->lli_open_fd_count >=
-				    sbi->ll_oc_thrsh_count)
+				if (lli->lli_open_fd_count >= open_threshold)
 					it->it_flags |= MDS_OPEN_LOCK;
 
 				/* If this is open after we just closed */

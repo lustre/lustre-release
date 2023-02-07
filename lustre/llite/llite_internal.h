@@ -84,7 +84,6 @@
 struct ll_dentry_data {
 	unsigned int			lld_sa_generation;
 	unsigned int			lld_invalid:1;
-	unsigned int			lld_nfs_dentry:1;
 	struct rcu_head			lld_rcu_head;
 };
 
@@ -140,11 +139,6 @@ struct ll_inode_info {
 	__u64				lli_open_fd_write_count;
 	__u64				lli_open_fd_exec_count;
 
-	/* Number of times this inode was opened */
-	u64				lli_open_fd_count;
-	/* When last close was performed on this inode */
-	ktime_t				lli_close_fd_time;
-
 	/* Protects access to och pointers and their usage counters */
 	struct mutex			lli_och_mutex;
 
@@ -156,6 +150,13 @@ struct ll_inode_info {
 	s64				lli_ctime;
 	s64				lli_btime;
 	spinlock_t			lli_agl_lock;
+
+	/* inode specific open lock caching threshold */
+	u32				lli_open_thrsh_count;
+	/* Number of times this inode was opened */
+	u64				lli_open_fd_count;
+	/* When last close was performed on this inode */
+	ktime_t				lli_close_fd_time;
 
 	/* Try to make the d::member and f::member are aligned. Before using
 	 * these members, make clear whether it is directory or not. */

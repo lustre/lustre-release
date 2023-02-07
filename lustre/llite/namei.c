@@ -1155,9 +1155,10 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	struct ll_sb_info *sbi = NULL;
 	struct pcc_create_attach pca = { NULL, NULL };
 	bool encrypt = false;
+	int open_threshold;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_VFSTRACE,
 	       "VFS Op:name=%pd, dir="DFID"(%p), file %p, open_flags %x, mode %x opened %d\n",
 	       dentry, PFID(ll_inode2fid(dir)), dir, file, open_flags, mode,
@@ -1236,7 +1237,12 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	 * we only need to request open lock if it was requested
 	 * for every open
 	 */
-	if (ll_i2sbi(dir)->ll_oc_thrsh_count == 1 &&
+	if (ll_i2info(dir)->lli_open_thrsh_count != UINT_MAX)
+		open_threshold = ll_i2info(dir)->lli_open_thrsh_count;
+	else
+		open_threshold = ll_i2sbi(dir)->ll_oc_thrsh_count;
+
+	if (open_threshold == 1 &&
 	    exp_connect_flags2(ll_i2mdexp(dir)) &
 	    OBD_CONNECT2_ATOMIC_OPEN_LOCK)
 		it->it_flags |= MDS_OPEN_LOCK;

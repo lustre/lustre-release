@@ -136,22 +136,24 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 
 	/* N.B. d_obtain_alias() drops inode ref on error */
 	result = d_obtain_alias(inode);
-	if (!IS_ERR(result)) {
-		struct ll_dentry_data *ldd;
+	if (IS_ERR(result))
+		RETURN(result);
 
-		if (!ll_d_setup(result, true))
-			RETURN(ERR_PTR(-ENOMEM));
-		ldd = ll_d2d(result);
-		/*
-		 * Need to signal to the ll_file_open that
-		 * we came from NFS and so opencache needs to be
-		 * enabled for this one
-		 */
-		spin_lock(&result->d_lock);
-		ldd->lld_nfs_dentry = 1;
-		spin_unlock(&result->d_lock);
+	if (!ll_d_setup(result, true))
+		RETURN(ERR_PTR(-ENOMEM));
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
+	/* If we are called by nfsd kthread set lli_open_thrsh_count
+	 * to one. This will force caching the open lock. To be
+	 * removed once oldest supported Linux kernel is 5.5
+	 */
+	if ((current->flags & PF_KTHREAD) &&
+	    strcmp(current->comm, "nfsd") == 0) {
+		struct ll_inode_info *lli = ll_i2info(inode);
+
+		lli->lli_open_thrsh_count = 1;
 	}
-
+#endif
 	RETURN(result);
 }
 
