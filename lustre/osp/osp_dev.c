@@ -662,10 +662,15 @@ static int osp_process_config(const struct lu_env *env,
 	case LCFG_PRE_CLEANUP:
 		rc = osp_disconnect(d);
 		osp_update_fini(env, d);
-		if (obd->obd_namespace != NULL)
-			ldlm_namespace_free_prior(obd->obd_namespace, NULL, 1);
 		break;
 	case LCFG_CLEANUP:
+		/*
+		 * cleanup ldlm so that PRE_CLEANUP phase doesn't block
+		 * awaiting for locks held by MDT threads awaiting for
+		 * all OSPs to interrupt their in-flight RPCs
+		 */
+		if (obd->obd_namespace != NULL)
+			ldlm_namespace_free_prior(obd->obd_namespace, NULL, 1);
 		lu_dev_del_linkage(dev->ld_site, dev);
 		rc = osp_shutdown(env, d);
 		break;

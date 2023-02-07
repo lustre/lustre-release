@@ -4997,6 +4997,29 @@ test_135() {
 }
 run_test 135 "Server failure in lock replay phase"
 
+test_136() {
+	(( $MDSCOUNT >= 3 )) || skip "needs > 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "need MDS version >= 2.15.53 for LU-16536 fix"
+
+	$LFS mkdir -i0 -c3 $DIR/$tdir || error "can't mkdir"
+	$LFS getdirstripe $DIR/$tdir
+	sync;sync;sync
+
+#define OBD_FAIL_OUT_DROP_DESTROY      0x170b
+	local mdts=$(comma_list $(mdts_nodes))
+	do_nodes $mdts $LCTL set_param fail_loc=0x170b
+	rmdir $DIR/$tdir &
+	sleep 0.5
+	stop mds2
+	stop mds3
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "MDT1 start failed"
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS || error "MDT2 start failed"
+	start mds3 $(mdsdevname 3) $MDS_MOUNT_OPTS || error "MDT3 star"
+}
+run_test 136 "MDS to disconnect all OSPs first, then cleanup ldlm"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
