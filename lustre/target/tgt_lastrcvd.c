@@ -2159,8 +2159,8 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		CDEBUG(D_INFO, "%s: new reply_data file, initializing\n",
 		       tgt_name(tgt));
 		lrh->lrh_magic = LRH_MAGIC;
-		lrh->lrh_header_size = sizeof(struct lsd_reply_header);
-		lrh->lrh_reply_size = sizeof(struct lsd_reply_data);
+		lrh->lrh_header_size = sizeof(*lrh);
+		lrh->lrh_reply_size = sizeof(*lrd);
 		rc = tgt_reply_header_write(env, tgt, lrh);
 		if (rc) {
 			CERROR("%s: error writing %s: rc = %d\n",
@@ -2168,7 +2168,8 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			GOTO(out, rc);
 		}
 	} else {
-		__u32 recsz = sizeof(struct lsd_reply_data);
+		__u32 recsz = sizeof(*lrd);
+		const char *lrd_ver = "v2";
 
 		rc = tgt_reply_header_read(env, tgt, lrh);
 		if (rc) {
@@ -2176,19 +2177,40 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			       tgt_name(tgt), REPLY_DATA, rc);
 			GOTO(out, rc);
 		}
-		if (!(lrh->lrh_magic == LRH_MAGIC &&
-		      lrh->lrh_reply_size == sizeof(struct lsd_reply_data) &&
-		      lrh->lrh_header_size == sizeof(struct lsd_reply_header)) &&
-		    !(lrh->lrh_magic == LRH_MAGIC_V1 &&
-		      lrh->lrh_reply_size == sizeof(struct lsd_reply_data_v1) &&
-		      lrh->lrh_header_size == sizeof(struct lsd_reply_header))) {
-			CERROR("%s: invalid header in %s\n",
-			       tgt_name(tgt), REPLY_DATA);
+
+		switch (lrh->lrh_magic) {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 5, 53, 0)
+		/* The old reply_data is replaced on the first mount after
+		 * an upgrade, so no need to keep this interop code forever.
+		 */
+		case LRH_MAGIC_V1:
+			recsz = sizeof(struct lsd_reply_data_v1);
+			lrd_ver = "v1";
+
+			CWARN("%s: %s v1 will be upgraded to new record size\n",
+			      tgt_name(tgt), REPLY_DATA);
+			fallthrough;
+#endif
+		case LRH_MAGIC_V2:
+			if (lrh->lrh_header_size != sizeof(*lrh)) {
+				CERROR("%s: bad %s %s header size: %u != %lu\n",
+				       tgt_name(tgt), REPLY_DATA, lrd_ver,
+				       lrh->lrh_header_size, sizeof(*lrh));
+				GOTO(out, rc = -EINVAL);
+			}
+			if (lrh->lrh_reply_size != recsz) {
+				CERROR("%s: bad %s %s reply size: %u != %u\n",
+				tgt_name(tgt), REPLY_DATA, lrd_ver,
+				lrh->lrh_reply_size, recsz);
+				GOTO(out, rc = -EINVAL);
+			}
+			break;
+		default:
+			CERROR("%s: invalid %s magic: %x != %x/%x\n",
+			       tgt_name(tgt), REPLY_DATA,
+			       lrh->lrh_magic, LRH_MAGIC_V1, LRH_MAGIC_V2);
 			GOTO(out, rc = -EINVAL);
 		}
-
-		if (lrh->lrh_magic == LRH_MAGIC_V1)
-			recsz = sizeof(struct lsd_reply_data_v1);
 
 		hash = cfs_hash_getref(tgt->lut_obd->obd_gen_hash);
 		if (hash == NULL)
@@ -2199,7 +2221,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			GOTO(out, rc = -ENOMEM);
 
 		/* Load reply_data from disk */
-		for (idx = 0, off = sizeof(struct lsd_reply_header);
+		for (idx = 0, off = lrh->lrh_header_size;
 		     off < reply_data_size; idx++, off += recsz) {
 			rc = tgt_reply_data_read(env, tgt, lrd, off,
 						 lrh->lrh_magic);
