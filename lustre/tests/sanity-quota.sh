@@ -1234,8 +1234,8 @@ test_1j() {
 	local client_nid=$(h2nettype $client_ip)
 	local nm=test_1j
 
-	(( $OST1_VERSION >= $(version_code 2.14.0.74) )) ||
-		skip "need OST at least 2.14.0.74"
+	(( $OST1_VERSION >= $(version_code 2.15.63.108) )) ||
+		skip "need OST >= v2_15_63-108-gbdf2744ad5 for root project quota"
 
 	is_project_quota_supported ||
 		skip "skip project quota unsupported"
