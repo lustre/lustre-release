@@ -68,6 +68,8 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			;;
 		15sp4 ) LDISKFS_SERIES="5.14.21-sles15sp4.series"
 			;;
+		15sp5 ) LDISKFS_SERIES="5.14.21-sles15sp5.series"
+			;;
 		esac
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
