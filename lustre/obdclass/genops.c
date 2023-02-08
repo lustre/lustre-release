@@ -2173,7 +2173,7 @@ int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max)
 		maxmodrpcs = 1;
 	}
 	if (max > maxmodrpcs) {
-		CERROR("%s: can't set max_mod_rpcs_in_flight=%hu higher than ocd_maxmodrpcs=%hu returned by the server at connection\n",
+		CERROR("%s: can't set max_mod_rpcs_in_flight=%hu higher than mdt.*.max_mod_rpcs_in_flight=%hu returned by the MDT server at connection.\n",
 		       cli->cl_import->imp_obd->obd_name,
 		       max, maxmodrpcs);
 		return -ERANGE;

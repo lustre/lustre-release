@@ -7195,6 +7195,40 @@ check_max_mod_rpcs_in_flight() {
 	wait
 }
 
+get_mdt_max_mod_rpcs_in_flight_val() {
+	local tmp_value
+	local host_d="$1"
+
+	tmp_value=$($LCTL get_param -n \
+		mdt.*.max_mod_rpcs_in_flight)
+	if [[ $tmp_value ]]; then
+		echo $tmp_value
+	else
+		tmp_value=$(do_facet $host_d \
+		cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
+		echo $tmp_value
+	fi
+}
+
+set_mdt_max_mod_rpcs_in_flight() {
+	local lctl_op
+	local value_d="$1"
+	local host_d="$2"
+
+	lctl_op=$($LCTL get_param \
+		mdt.*.max_mod_rpcs_in_flight)
+	if [[ $lctl_op ]]; then
+		$LCTL set_param \
+			mdt.$FSNAME-MDT0000.max_mod_rpcs_in_flight=$value_d
+	else
+		do_facet $host_d \
+			"echo $value_d > \
+			/sys/module/mdt/parameters/max_mod_rpcs_per_client"
+		echo "the deprecated max_mod_rpcs_per_client \
+				parameter was involved"
+	fi
+}
+
 test_90a() {
 	setup
 
@@ -7245,21 +7279,17 @@ test_90b() {
 	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/${tdir}3))
 	facet="mds$((0x$idx + 1))"
 
-	# save MDT max_mod_rpcs_per_client
-	mmrpc=$(do_facet $facet \
-		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
-
+	mmrpc=$(get_mdt_max_mod_rpcs_in_flight_val $facet)
+	echo "mdt_max_mod_rpcs_in_flight is $mmrpc"
 	# update max_mod_rpcs_in_flight
 	umount_client $MOUNT
-	do_facet $facet \
-		"echo 16 > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	set_mdt_max_mod_rpcs_in_flight 16 $facet
 	mount_client $MOUNT
 	$LCTL set_param mdc.$FSNAME-MDT$idx-mdc-*.max_rpcs_in_flight=17
 	check_max_mod_rpcs_in_flight $DIR/${tdir}3 16
 
-	# restore MDT max_mod_rpcs_per_client initial value
-	do_facet $facet \
-		"echo $mmrpc > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	# restore MDT max_mod_rpcs_in_flight initial value
+	set_mdt_max_mod_rpcs_in_flight $mmrpc $facet
 
 	rm -rf $DIR/${tdir}?
 	cleanup
@@ -7272,15 +7302,14 @@ save_params_90c() {
 		   mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight)
 	echo "max_rpcs_in_flight is $mrif_90c"
 
-	# get max_mod_rpcs_in_flight value
+	# get MDC max_mod_rpcs_in_flight value
 	mmrif_90c=$($LCTL get_param -n \
 		    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight)
-	echo "max_mod_rpcs_in_flight is $mmrif_90c"
+	echo "MDC max_mod_rpcs_in_flight is $mmrif_90c"
 
-	# get MDT max_mod_rpcs_per_client value
-	mmrpc_90c=$(do_facet mds1 \
-		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
-	echo "max_mod_rpcs_per_client is $mmrpc_90c"
+	# get MDT max_mod_rpcs_in_flight value
+	mmrpc_90c=$(get_mdt_max_mod_rpcs_in_flight_val "mds1")
+	echo "mdt_max_mod_rpcs_in_flight is $mmrpc_90c"
 }
 
 restore_params_90c() {
@@ -7294,9 +7323,8 @@ restore_params_90c() {
 	do_facet mgs $LCTL set_param -P \
 		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mmrif_90c
 
-	# restore MDT max_mod_rpcs_per_client value
-	do_facet mds1 "echo $mmrpc_90c > \
-		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	# restore MDT max_mod_rpcs_in_flight value
+	set_mdt_max_mod_rpcs_in_flight $mmrpc_90c "mds1"
 }
 
 test_90c() {
@@ -7321,9 +7349,9 @@ test_90c() {
 
 	# testcase 1
 	# attempt to set max_mod_rpcs_in_flight to max_rpcs_in_flight value
-	# prerequisite: set max_mod_rpcs_per_client to max_rpcs_in_flight value
-	do_facet mds1 "echo $mrif_90c > \
-		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	# prerequisite: set MDT max_mod_rpcs_in_flight to
+	# max_rpcs_in_flight value
+	set_mdt_max_mod_rpcs_in_flight $mrif_90c "mds1"
 
 	# if max_mod_rpcs_in_flight is set to be equal to or larger than
 	# max_rpcs_in_flight, then max_rpcs_in_flight will be increased
@@ -7339,13 +7367,12 @@ test_90c() {
 	fi
 
 	umount_client $MOUNT
-	do_facet mds1 "echo $mmrpc_90c > \
-		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	set_mdt_max_mod_rpcs_in_flight $mmrpc_90c "mds1"
 	mount_client $MOUNT
 
 	# testcase 2
-	# attempt to set max_mod_rpcs_in_flight to max_mod_rpcs_per_client+1
-	# prerequisite: set max_rpcs_in_flight to max_mod_rpcs_per_client+2
+	# attempt to set max_mod_rpcs_in_flight to MDT max_mod_rpcs_in_flight+1
+	# prerequisite: set max_rpcs_in_flight to MDT max_mod_rpcs_in_flight+2
 	$LCTL set_param \
 		mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$((mmrpc_90c + 2))
 

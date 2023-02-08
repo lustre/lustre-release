@@ -288,6 +288,9 @@ struct mdt_device {
 
 	int			   mdt_max_ea_size;
 
+	/* Max modify RPCs, replaces max_mod_rpcs_per_client module param */
+	unsigned int			   mdt_max_mod_rpcs_in_flight;
+
 	/* preferred BRW size, decided by storage type and capability */
 	__u32			   mdt_brw_size;
 
@@ -1514,5 +1517,16 @@ void mdt_restripe_update_add(struct mdt_thread_info *info,
 int mdt_is_remote_object(struct mdt_thread_info *info,
 			 struct mdt_object *parent,
 			 struct mdt_object *child);
+
+static unsigned int max_mod_rpcs_per_client = OBD_MAX_RIF_DEFAULT;
+#if OBD_OCD_VERSION(3, 0, 53, 0) > LUSTRE_VERSION_CODE
+static inline bool mdt_max_mod_rpcs_changed(struct mdt_device *mdt)
+{
+	return max_mod_rpcs_per_client != OBD_MAX_RIF_DEFAULT &&
+		mdt->mdt_max_mod_rpcs_in_flight == OBD_MAX_RIF_DEFAULT;
+}
+#else
+#define mdt_max_mod_rpcs_changed(mdt) false
+#endif
 
 #endif /* _MDT_INTERNAL_H */

@@ -1428,6 +1428,53 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(checksum_t10pi_enforce);
 
+/**
+ * Show MDT Maximum modify RPCs in flight.
+ *
+ * @m		seq_file handle
+ * @data	unused for single entry
+ *
+ * Return:	value on success or negative number on error
+ */
+static ssize_t max_mod_rpcs_in_flight_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_max_mod_rpcs_in_flight);
+}
+
+static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1 || val > OBD_MAX_RIF_DEFAULT)
+		return -ERANGE;
+
+	if (mdt_max_mod_rpcs_changed(mdt)) {
+		CWARN("%s: deprecated 'max_mod_rpcs_in_flight' module parameter has also been modified\n",
+				obd->obd_name);
+		max_mod_rpcs_per_client = val;
+	}
+	mdt->mdt_max_mod_rpcs_in_flight = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
+
 /*
  * mdt_checksum_type(server) proc handling
  */
@@ -1528,6 +1575,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_dir_restripe_nsonly.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_enable_remote_subdir_mount.attr,
+	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	NULL,
 };
 

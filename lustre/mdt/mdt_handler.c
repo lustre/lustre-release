@@ -67,9 +67,41 @@
 
 #include "mdt_internal.h"
 
-static unsigned int max_mod_rpcs_per_client = 8;
-module_param(max_mod_rpcs_per_client, uint, 0644);
-MODULE_PARM_DESC(max_mod_rpcs_per_client, "maximum number of modify RPCs in flight allowed per client");
+#if OBD_OCD_VERSION(3, 0, 53, 0) > LUSTRE_VERSION_CODE
+static int mdt_max_mod_rpcs_per_client_set(const char *val,
+				cfs_kernel_param_arg_t *kp)
+{
+	unsigned int num;
+	int rc;
+
+	rc = kstrtouint(val, 0, &num);
+	if (rc < 0)
+		return rc;
+
+	if (num < 1 || num > OBD_MAX_RIF_MAX)
+		return -EINVAL;
+
+	CWARN("max_mod_rpcs_per_client is deprecated, set mdt.*.max_mod_rpcs_in_flight parameter instead\n");
+
+	max_mod_rpcs_per_client = num;
+	return 0;
+}
+static const struct kernel_param_ops
+				param_ops_max_mod_rpcs_per_client = {
+	.set = mdt_max_mod_rpcs_per_client_set,
+	.get = param_get_uint,
+};
+
+#define param_check_max_mod_rpcs_per_client(name, p) \
+		__param_check(name, p, unsigned int)
+
+module_param_cb(max_mod_rpcs_per_client,
+				&param_ops_max_mod_rpcs_per_client,
+				&max_mod_rpcs_per_client, 0644);
+
+MODULE_PARM_DESC(max_mod_rpcs_per_client,
+	"maximum number of modify RPCs in flight allowed per client (Deprecated)");
+#endif
 
 mdl_mode_t mdt_mdl_lock_modes[] = {
         [LCK_MINMODE] = MDL_MINMODE,
@@ -6000,6 +6032,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_rename = 1;
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_dir_restripe_nsonly = 1;
+	m->mdt_max_mod_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);
@@ -6615,7 +6648,15 @@ static int mdt_connect_internal(const struct lu_env *env,
 	 * multiple modify RPCs, and it is safe to expose this flag before
 	 * connection processing completes. */
 	if (data->ocd_connect_flags & OBD_CONNECT_MULTIMODRPCS) {
-		data->ocd_maxmodrpcs = max_mod_rpcs_per_client;
+		if (mdt_max_mod_rpcs_changed(mdt))
+			/* The new mdt.*.max_mod_rpcs_in_flight parameter
+			 * has not changed since initialization, but the
+			 * deprecated module parameter was changed,
+			 * so use that instead.
+			 */
+			data->ocd_maxmodrpcs = max_mod_rpcs_per_client;
+		else
+			data->ocd_maxmodrpcs = mdt->mdt_max_mod_rpcs_in_flight;
 		spin_lock(&exp->exp_lock);
 		*exp_connect_flags_ptr(exp) |= OBD_CONNECT_MULTIMODRPCS;
 		spin_unlock(&exp->exp_lock);
