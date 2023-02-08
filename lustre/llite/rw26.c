@@ -545,7 +545,8 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		 * otherwise it is freed on the final call to cl_sync_io_note
 		 * (either in this function or from a ptlrpcd daemon)
 		 */
-		sdio = cl_sub_dio_alloc(ll_dio_aio, rw == WRITE, sync_submit);
+		sdio = cl_sub_dio_alloc(ll_dio_aio, iter, rw == WRITE,
+					sync_submit);
 		if (!sdio)
 			GOTO(out, result = -ENOMEM);
 

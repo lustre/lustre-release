@@ -1241,7 +1241,8 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_dio_aio_alloc);
 
-struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool write,
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
+				    struct iov_iter *iter, bool write,
 				    bool sync)
 {
 	struct cl_sub_dio *sdio;
@@ -1260,7 +1261,26 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool write,
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 		sdio->csd_creator_free = sync;
 		sdio->csd_write = write;
+
+		/* we need to make a copy of the user iovec at this point in
+		 * time so we:
+		 * A) have the correct state of the iovec for this chunk of I/O
+		 * B) have a chunk-local copy; some of the things we want to
+		 * do to the iovec modify it, so to process each chunk from a
+		 * separate thread requires a local copy of the iovec
+		 */
+		memcpy(&sdio->csd_iter, iter,
+		       sizeof(struct iov_iter));
+		OBD_ALLOC_PTR(sdio->csd_iter.iov);
+		if (sdio->csd_iter.iov == NULL) {
+			cl_sub_dio_free(sdio);
+			sdio = NULL;
+			goto out;
+		}
+		memcpy((void *) sdio->csd_iter.iov, iter->iov,
+		       sizeof(struct iovec));
 	}
+out:
 	return sdio;
 }
 EXPORT_SYMBOL(cl_sub_dio_alloc);
@@ -1276,8 +1296,13 @@ EXPORT_SYMBOL(cl_dio_aio_free);
 
 void cl_sub_dio_free(struct cl_sub_dio *sdio)
 {
-	if (sdio)
+	if (sdio) {
+		void *tmp = (void *) sdio->csd_iter.iov;
+
+		if (tmp)
+			OBD_FREE(tmp, sizeof(struct iovec));
 		OBD_SLAB_FREE_PTR(sdio, cl_sub_dio_kmem);
+	}
 }
 EXPORT_SYMBOL(cl_sub_dio_free);
 
