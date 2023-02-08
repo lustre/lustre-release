@@ -3491,8 +3491,8 @@ static void lfs_mirror_list_free(struct mirror_args *mirror_list)
 }
 
 enum {
-	LFS_SETQUOTA_DELETE = 1,
-	LFS_POOL_OPT = 3,
+	LFS_SETQUOTA_DELETE = (CHAR_MAX + 1),
+	LFS_POOL_OPT,
 	LFS_COMP_COUNT_OPT,
 	LFS_COMP_START_OPT,
 	LFS_COMP_FLAGS_OPT,
@@ -3826,6 +3826,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			stats_flag = STATS_ON;
 			break;
 		case LFS_STATS_INTERVAL_OPT:
+			stats_flag = STATS_ON;
 			stats_interval_sec = strtol(optarg, &end, 0);
 			if (stats_interval_sec == 0)
 				stats_interval_sec = 5;
