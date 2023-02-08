@@ -2563,6 +2563,7 @@ struct cl_dio_aio {
 	struct cl_object	*cda_obj;
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
+	struct mm_struct	*cda_mm;
 	unsigned		cda_no_aio_complete:1,
 				cda_creator_free:1;
 };
@@ -2586,6 +2587,11 @@ struct cl_sub_dio {
 #endif
 
 void ll_release_user_pages(struct page **pages, int npages);
+
+#ifndef HAVE_KTHREAD_USE_MM
+#define kthread_use_mm(mm) use_mm(mm)
+#define kthread_unuse_mm(mm) unuse_mm(mm)
+#endif
 
 /** @} cl_sync_io */
 

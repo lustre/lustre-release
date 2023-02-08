@@ -1238,6 +1238,7 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 
 		cl_object_get(obj);
 		aio->cda_obj = obj;
+		aio->cda_mm = get_task_mm(current);
 	}
 	return aio;
 }
@@ -1290,6 +1291,8 @@ EXPORT_SYMBOL(cl_sub_dio_alloc);
 void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio)
 {
 	if (aio) {
+		if (aio->cda_mm)
+			mmput(aio->cda_mm);
 		cl_object_put(env, aio->cda_obj);
 		OBD_SLAB_FREE_PTR(aio, cl_dio_aio_kmem);
 	}
