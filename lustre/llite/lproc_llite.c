@@ -1642,7 +1642,7 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 
 LDEBUGFS_SEQ_FOPS(ll_nosquash_nids);
 
-#ifdef CONFIG_LL_ENCRYPTION
+#if defined(CONFIG_LL_ENCRYPTION)
 static int ll_filename_enc_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1687,7 +1687,9 @@ static ssize_t ll_filename_enc_seq_write(struct file *file,
 }
 
 LDEBUGFS_SEQ_FOPS(ll_filename_enc);
+#endif /* CONFIG_LL_ENCRYPTION */
 
+#if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
 static int ll_old_b64_enc_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1734,7 +1736,7 @@ static ssize_t ll_old_b64_enc_seq_write(struct file *file,
 }
 
 LDEBUGFS_SEQ_FOPS(ll_old_b64_enc);
-#endif /* CONFIG_LL_ENCRYPTION */
+#endif /* CONFIG_LL_ENCRYPTION || HAVE_LUSTRE_CRYPTO */
 
 static int ll_pcc_seq_show(struct seq_file *m, void *v)
 {
@@ -1793,6 +1795,8 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 #ifdef CONFIG_LL_ENCRYPTION
 	{ .name =	"enable_filename_encryption",
 	  .fops =	&ll_filename_enc_fops,			},
+#endif
+#if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
 	{ .name =	"filename_enc_use_old_base64",
 	  .fops =	&ll_old_b64_enc_fops,			},
 #endif

@@ -33,6 +33,11 @@
 #define __FS_HAS_ENCRYPTION 1
 #include <linux/fscrypt.h>
 
+/* LLCRYPT_DIGESTED_* is provided by llcrypt.h but that is not present
+ * for native fscrypt builds
+ */
+#define LLCRYPT_DIGESTED_CHAR		'+'
+#define LLCRYPT_DIGESTED_CHAR_OLD	'_'
 #define LL_CRYPTO_BLOCK_SIZE		FS_CRYPTO_BLOCK_SIZE
 #define llcrypt_name			fscrypt_name
 #define llcrypt_str			fscrypt_str
@@ -42,10 +47,21 @@
 #define llcrypt_init()			0
 #define llcrypt_exit()			{}
 #ifndef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
-#define llcrypt_context			fscrypt_context
-#define llcrypt_dummy_context		fscrypt_dummy_context
+#ifdef HAVE_FSCRYPT_DUMMY_POLICY
+#define llcrypt_policy			fscrypt_policy
+#define llcrypt_dummy_policy		fscrypt_dummy_policy
+#else
+#define llcrypt_policy			fscrypt_context
+#define llcrypt_dummy_policy		fscrypt_dummy_context
 #endif
-#define llcrypt_require_key(inode)     \
+#endif
+#ifdef HAVE_FSCRYPT_D_REVALIDATE
+#define llcrypt_d_revalidate(dentry, flags)				\
+	fscrypt_d_revalidate(dentry, flags)
+#else
+	int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags);
+#endif
+#define llcrypt_require_key(inode)	\
 	fscrypt_require_key(inode)
 #define llcrypt_has_encryption_key(inode) fscrypt_has_encryption_key(inode)
 #define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
@@ -56,7 +72,11 @@
 	fscrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)
 #define llcrypt_inherit_context(parent, child, fs_data, preload)	\
 	fscrypt_inherit_context(parent, child, fs_data, preload)
-#define llcrypt_get_encryption_info(inode) fscrypt_get_encryption_info(inode)
+#ifdef HAVE_FSCRYPT_PREPARE_READDIR
+#define llcrypt_prepare_readdir(inode) fscrypt_prepare_readdir(inode)
+#else
+#define llcrypt_prepare_readdir(inode) fscrypt_get_encryption_info(inode)
+#endif
 #define llcrypt_put_encryption_info(inode) fscrypt_put_encryption_info(inode)
 #define llcrypt_free_inode(inode)	   fscrypt_free_inode(inode)
 #define llcrypt_finalize_bounce_page(pagep)  fscrypt_finalize_bounce_page(pagep)
@@ -82,8 +102,13 @@
 	__fscrypt_prepare_lookup(inode, dentry, fname)
 #define llcrypt_set_ops(sb, cop)	fscrypt_set_ops(sb, cop)
 #define llcrypt_sb_free(sb)		{}
+#ifdef HAVE_FSCRYPT_FNAME_ALLOC_BUFFER_NO_INODE
+#define llcrypt_fname_alloc_buffer(inode, max_encrypted_len, crypto_str) \
+	fscrypt_fname_alloc_buffer(max_encrypted_len, crypto_str)
+#else
 #define llcrypt_fname_alloc_buffer(inode, max_encrypted_len, crypto_str) \
 	fscrypt_fname_alloc_buffer(inode, max_encrypted_len, crypto_str)
+#endif
 #define llcrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname) \
 	fscrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname)
 #define llcrypt_fname_free_buffer(crypto_str) \
@@ -115,13 +140,18 @@
 
 #else /* HAVE_LUSTRE_CRYPTO && !CONFIG_LL_ENCRYPTION */
 #include <libcfs/crypto/llcrypt.h>
+
+#define llcrypt_prepare_readdir(inode) llcrypt_get_encryption_info(inode)
+
+int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags);
+
 #endif /* !HAVE_LUSTRE_CRYPTO || CONFIG_LL_ENCRYPTION */
+
+#if !defined(HAVE_FSCRYPT_IS_NOKEY_NAME) || defined(CONFIG_LL_ENCRYPTION)
 
 #ifndef DCACHE_NOKEY_NAME
 #define DCACHE_NOKEY_NAME               0x02000000 /* Enc name without key */
 #endif
-
-#if !defined(HAVE_FSCRYPT_IS_NOKEY_NAME) || defined(CONFIG_LL_ENCRYPTION)
 
 static inline bool llcrypt_is_nokey_name(const struct dentry *dentry)
 {
@@ -137,11 +167,16 @@ static inline bool llcrypt_is_nokey_name(const struct dentry *dentry)
 	fscrypt_show_test_dummy_encryption(seq, sep, sb)
 #define llcrypt_set_test_dummy_encryption(sb, arg, ctx)		\
 	fscrypt_set_test_dummy_encryption(sb, arg, ctx)
-#define llcrypt_free_dummy_context(ctx)				\
-	fscrypt_free_dummy_context(ctx)
+#ifdef HAVE_FSCRYPT_DUMMY_POLICY
+#define llcrypt_free_dummy_policy(policy)			\
+	fscrypt_free_dummy_policy(policy)
+#else
+#define llcrypt_free_dummy_policy(policy)			\
+	fscrypt_free_dummy_context(policy)
+#endif
 #else
 #define llcrypt_show_test_dummy_encryption(seq, sep, sb)	{}
-#define llcrypt_free_dummy_context(ctx)				{}
+#define llcrypt_free_dummy_policy(policy)			{}
 #endif
 
 /* Macro to extract digest from Lustre specific structures */

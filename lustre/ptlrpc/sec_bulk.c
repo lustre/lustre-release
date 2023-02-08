@@ -798,12 +798,6 @@ int sptlrpc_enc_pool_add_user(void)
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_add_user);
 
-int sptlrpc_enc_pool_del_user(void)
-{
-	return 0;
-}
-EXPORT_SYMBOL(sptlrpc_enc_pool_del_user);
-
 static inline void enc_pools_alloc(void)
 {
 	LASSERT(page_pools.epp_max_pools);

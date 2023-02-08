@@ -2877,6 +2877,128 @@ AC_DEFUN([LC_FSCRYPT_DUMMY_CONTEXT_ENABLED], [
 ]) # LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
 #
+# LC_FSCRYPT_FNAME_ALLOC_BUFFER
+#
+# Kernel 5.9-rc4 8b10fe68985278de4926daa56ad6af701839e40a
+# removed the inode parameter for the fscrypt function
+# fscrypt_fname_alloc_buffer()
+#
+AC_DEFUN([LC_FSCRYPT_FNAME_ALLOC_BUFFER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_fname_alloc_buffer() removed inode parameter],
+fscrypt_fname_alloc_buffer, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_fname_alloc_buffer(0, NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_FNAME_ALLOC_BUFFER_NO_INODE, 1,
+		[fscrypt_fname_alloc_buffer() doesn't use inode parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_FNAME_ALLOC_BUFFER
+
+#
+# LC_FSCRYPT_SET_CONTEXT
+#
+# Kernel 5.9-rc4 a992b20cd4ee360dbbe6f69339cb07146e4304d6
+# fscrypt_get_encryption_info() is not GFP_NOFS safe which
+# is used by fscrypt_inherit_context. Replace fscrypt_inherit_context,
+# with two new functions, fscrypt_prepare_new_inode() and
+# fscrypt_set_context()
+#
+AC_DEFUN([LC_FSCRYPT_SET_CONTEXT], [
+LB_CHECK_COMPILE([if 'fscrypt_set_context()' exist],
+fscrypt_set_context, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_set_context(NULL, NULL);
+	fscrypt_prepare_new_inode(NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_SET_CONTEXT, 1,
+		[fscrypt_set_context() does exist])
+])
+]) # LC_FSCRYPT_SET_CONTEXT
+
+#
+# LC_FSCRYPT_D_REVALIDATE
+#
+# kernel 5.9-rc4 5b2a828b98ec1872799b1b4d82113c76a12d594f
+# exported fscrypt_d_revalidate()
+#
+AC_DEFUN([LC_FSCRYPT_D_REVALIDATE], [
+LB_CHECK_EXPORT([fscrypt_d_revalidate], [fs/crypto/fname.c],
+	[AC_DEFINE(HAVE_FSCRYPT_D_REVALIDATE, 1,
+		   [fscrypt_d_revalidate() is exported by the kernel])])
+]) # LC_FSCRYPT_D_REVALIDATE
+
+#
+# LC_FSCRYPT_NOKEY_NAME
+#
+# kernel 5.9-rc4 70fb2612aab62d47e03f82eaa7384a8d30ca175d
+# renamed is_ciphertext_name to is_nokey_name
+#
+AC_DEFUN([LC_FSCRYPT_NOKEY_NAME], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if struct fscrypt_name has is_nokey_name field],
+fname_is_nokey_name, [
+	#include <linux/fscrypt.h>
+],[
+	struct fscrypt_name fname;
+
+	fname.is_nokey_name = true;
+],[
+	AC_DEFINE(HAVE_FSCRYPT_NOKEY_NAME, 1,
+		[struct fscrypt_name has is_nokey_name field])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_NOKEY_NAME
+
+#
+# LC_FSCRYPT_SET_TEST_DUMMY_ENC_CHAR_ARG
+# Kernel 5.9-rc4 c8c868abc91ff23f6f5c4444c419de7c277d77e1
+# changed fscrypt_set_test_dummy_encryption() take a 'const char *
+#
+AC_DEFUN([LC_FSCRYPT_SET_TEST_DUMMY_ENC_CHAR_ARG], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_set_test_dummy_encryption() take 'const char' parameter],
+fscrypt_set_test_dummy_encryption, [
+	#include <linux/fscrypt.h>
+],[
+	char *arg = "arg";
+	fscrypt_set_test_dummy_encryption(NULL, arg, NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_SET_TEST_DUMMY_ENC_CHAR_ARG, 1,
+		[fscrypt_set_test_dummy_encryption() take 'const char' parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_SET_TEST_DUMMY_ENC_CHAR_ARG
+
+#
+# LC_FSCRYPT_DUMMY_POLICY
+#
+# Kernel 5.9-rc4 ac4acb1f4b2b6b7e8d913537cccec8789903e164
+# move the test dummy context for fscrypt_policy which is
+# also used by the user land interface.
+#
+AC_DEFUN([LC_FSCRYPT_DUMMY_POLICY], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_free_dummy_policy() exists],
+fscrypt_free_dummy_policy, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_free_dummy_policy(NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_DUMMY_POLICY, 1,
+		[fscrypt_free_dummy_policy() exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_DUMMY_POLICY
+
+#
 # LC_HAVE_ITER_FILE_SPLICE_WRITE
 #
 # Linux commit v5.9-rc1-6-g36e2c7421f02
@@ -2921,6 +3043,28 @@ AC_DEFUN([LC_FSCRYPT_IS_NOKEY_NAME], [
 			[fscrypt_is_nokey_name() exists])
 	])
 ]) # LC_FSCRYPT_IS_NOKEY_NAME
+
+#
+# LC_FSCRYPT_PREPARE_READDIR
+#
+# Kernel 5.10-rc4 ec0caa974cd092549ab282deb8ec7ea73b36eba0
+# replaced fscrypt_get_encryption_info() with
+# fscrypt_prepare_readdir()
+#
+AC_DEFUN([LC_FSCRYPT_PREPARE_READDIR], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if fscrypt_prepare_readdir() exists],
+fscrypt_prepare_readdir, [
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_prepare_readdir(NULL);
+],[
+	AC_DEFINE(HAVE_FSCRYPT_PREPARE_READDIR, 1,
+		[fscrypt_prepare_readdir() exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_FSCRYPT_PREPARE_READDIR
 
 #
 # LC_BIO_SET_DEV
@@ -3558,8 +3702,17 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 5.9
 	LC_HAVE_ITER_FILE_SPLICE_WRITE
 
+	# 5.9
+	LC_FSCRYPT_FNAME_ALLOC_BUFFER
+	LC_FSCRYPT_SET_CONTEXT
+	LC_FSCRYPT_D_REVALIDATE
+	LC_FSCRYPT_NOKEY_NAME
+	LC_FSCRYPT_SET_TEST_DUMMY_ENC_CHAR_ARG
+	LC_FSCRYPT_DUMMY_POLICY
+
 	# 5.10
 	LC_FSCRYPT_IS_NOKEY_NAME
+	LC_FSCRYPT_PREPARE_READDIR
 
 	# 5.11
 	LC_BIO_SET_DEV

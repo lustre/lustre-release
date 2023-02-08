@@ -311,7 +311,7 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
 	       dentry->d_name.name, lookup_flags);
 
-	rc = ll_revalidate_d_crypto(dentry, lookup_flags);
+	rc = llcrypt_d_revalidate(dentry, lookup_flags);
 	if (rc != 1)
 		return rc;
 

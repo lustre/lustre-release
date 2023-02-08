@@ -2952,7 +2952,7 @@ static int fid2path_for_enc_file(struct inode *parent, char *gfpath,
 		/* From here, we know parent is encrypted */
 
 		if (enckey != 0) {
-			rc = llcrypt_get_encryption_info(parent);
+			rc = llcrypt_prepare_readdir(parent);
 			if (rc && rc != -ENOKEY) {
 				dput(de_parent);
 				break;

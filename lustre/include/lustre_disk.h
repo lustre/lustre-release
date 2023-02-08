@@ -159,8 +159,8 @@ struct lustre_sb_info {
 	const struct llcrypt_operations	*lsi_cop;
 	struct key		 *lsi_master_keys; /* master crypto keys used */
 #elif defined(HAVE_LUSTRE_CRYPTO) && !defined(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED)
-	/* Encryption context for '-o test_dummy_encryption' */
-	struct llcrypt_dummy_context lsi_dummy_enc_ctx;
+	/* Dummy Encryption policy for '-o test_dummy_encryption' */
+	struct llcrypt_dummy_policy	lsi_dummy_enc_policy;
 #endif
 };
 
@@ -168,7 +168,9 @@ struct lustre_sb_info {
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
 #define LSI_BDI_INITIALIZED		 0x00400000
 #endif
+#ifdef CONFIG_LL_ENCRYPTION
 #define LSI_FILENAME_ENC		 0x00800000 /* enable name encryption */
+#endif
 #define LSI_FILENAME_ENC_B64_OLD_CLI	 0x01000000 /* use old style base64 */
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))

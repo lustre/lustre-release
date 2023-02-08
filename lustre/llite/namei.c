@@ -693,7 +693,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 					      ll_i2sbi(inode)->ll_fsname,
 					      PFID(ll_inode2fid(inode)), rc);
 				else if (encrypt) {
-					rc = llcrypt_get_encryption_info(inode);
+					rc = llcrypt_prepare_readdir(inode);
 					if (rc)
 						CDEBUG(D_SEC,
 						 "cannot get enc info for "DFID": rc = %d\n",
@@ -755,7 +755,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		}
 
 		if (encrypt) {
-			rc = llcrypt_get_encryption_info(inode);
+			rc = llcrypt_prepare_readdir(inode);
 			if (rc)
 				GOTO(out, rc);
 			if (!llcrypt_has_encryption_key(inode))
@@ -855,23 +855,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	else
 		opc = LUSTRE_OPC_LOOKUP;
 
-	/* Here we should be calling llcrypt_prepare_lookup(). But it installs a
-	 * custom ->d_revalidate() method, so we lose ll_d_ops.
-	 * To workaround this, call ll_setup_filename() and do the rest
-	 * manually. Also make a copy of llcrypt_d_revalidate() (unfortunately
-	 * not exported function) and call it from ll_revalidate_dentry(), to
-	 * ensure we do not cache stale dentries after a key has been added.
-	 */
-	rc = ll_setup_filename(parent, &dentry->d_name, 1, &fname, &fid);
-	if ((!rc || rc == -ENOENT) && fname.is_ciphertext_name) {
-		spin_lock(&dentry->d_lock);
-		dentry->d_flags |= DCACHE_NOKEY_NAME;
-		spin_unlock(&dentry->d_lock);
-	}
-	if (rc == -ENOENT)
-		RETURN(NULL);
+	rc = ll_prepare_lookup(parent, dentry, &fname, &fid);
 	if (rc)
-		RETURN(ERR_PTR(rc));
+		RETURN(rc != -ENOENT ? ERR_PTR(rc) : NULL);
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, fname.disk_name.name,
 				     fname.disk_name.len, 0, opc, NULL);
@@ -1227,7 +1213,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		/* in case of create, this is going to be a regular file because
 		 * we set S_IFREG bit on it->it_create_mode above
 		 */
-		rc = llcrypt_get_encryption_info(dir);
+		rc = llcrypt_prepare_readdir(dir);
 		if (rc)
 			GOTO(out_release, rc);
 		if (open_flags & O_CREAT) {
@@ -1572,7 +1558,7 @@ again:
 	    (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode))) ||
 	     (unlikely(ll_sb_has_test_dummy_encryption(dir->i_sb)) &&
 	      S_ISDIR(mode)))) {
-		err = llcrypt_get_encryption_info(dir);
+		err = llcrypt_prepare_readdir(dir);
 		if (err)
 			GOTO(err_exit, err);
 		if (!llcrypt_has_encryption_key(dir))

@@ -1138,10 +1138,6 @@ void gss_sec_destroy_common(struct gss_sec *gsec)
 	}
 
 	class_import_put(sec->ps_import);
-
-	if (SPTLRPC_FLVR_BULK_SVC(sec->ps_flvr.sf_rpc) == SPTLRPC_BULK_SVC_PRIV)
-		sptlrpc_enc_pool_del_user();
-
 	EXIT;
 }
 

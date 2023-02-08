@@ -1821,6 +1821,8 @@ struct ll_digest_filename {
 	char ldf_excerpt[LL_CRYPTO_BLOCK_SIZE];
 };
 
+int ll_prepare_lookup(struct inode *dir, struct dentry *de,
+		      struct llcrypt_name *fname, struct lu_fid *fid);
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		      int lookup, struct llcrypt_name *fname,
 		      struct lu_fid *fid);
@@ -1828,8 +1830,8 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,
 			 struct llcrypt_str *iname, struct llcrypt_str *oname,
 			 struct lu_fid *fid);
-int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags);
 int ll_file_open_encrypt(struct inode *inode, struct file *filp);
+
 static inline char *xattr_for_enc(struct inode *inode)
 {
 	if (ll_sbi_has_name_encrypt(ll_i2sbi(inode)))
@@ -1837,6 +1839,7 @@ static inline char *xattr_for_enc(struct inode *inode)
 
 	return LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD;
 }
+
 #ifdef HAVE_LUSTRE_CRYPTO
 extern const struct llcrypt_operations lustre_cryptops;
 #endif

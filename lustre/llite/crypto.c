@@ -66,7 +66,7 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 	if (rc)
 		return rc;
 
-	return preload ? llcrypt_get_encryption_info(inode) : 0;
+	return preload ? llcrypt_prepare_readdir(inode) : 0;
 }
 
 /* ll_set_context has 2 distinct behaviors, depending on the value of inode
@@ -168,17 +168,21 @@ static bool ll_dummy_context(struct inode *inode)
 	return ll_sb_has_test_dummy_encryption(inode->i_sb);
 }
 #else
-static const union llcrypt_context *
-ll_get_dummy_context(struct super_block *sb)
+static const union llcrypt_policy *
+ll_get_dummy_policy(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 
-	return lsi ? lsi->lsi_dummy_enc_ctx.ctx : NULL;
+#ifdef HAVE_FSCRYPT_DUMMY_POLICY
+	return lsi ? lsi->lsi_dummy_enc_policy.policy : NULL;
+#else
+	return lsi ? lsi->lsi_dummy_enc_policy.ctx : NULL;
+#endif
 }
 
 bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
 {
-	return ll_get_dummy_context(sb) != NULL;
+	return ll_get_dummy_policy(sb) != NULL;
 }
 #endif
 
@@ -220,6 +224,157 @@ static bool ll_empty_dir(struct inode *inode)
 	 * mdd_dir_is_empty() when setting encryption flag on directory.
 	 */
 	return true;
+}
+
+static int ll_digest_long_name(struct inode *dir, struct llcrypt_name *fname,
+			       struct lu_fid *fid, int digested)
+{
+	int rc = 0;
+
+	if (digested) {
+		/* Without the key, for long names user should have struct
+		 * ll_digest_filename representation of the dentry instead of
+		 * the name. So make sure it is valid, return fid and put
+		 * excerpt of cipher text name in disk_name.
+		 */
+		struct ll_digest_filename *digest;
+
+		if (fname->crypto_buf.len < sizeof(struct ll_digest_filename)) {
+			rc = -EINVAL;
+			goto out_free;
+		}
+		digest = (struct ll_digest_filename *)fname->disk_name.name;
+		*fid = digest->ldf_fid;
+		if (!fid_is_sane(fid)) {
+			rc = -EINVAL;
+			goto out_free;
+		}
+		fname->disk_name.name = digest->ldf_excerpt;
+		fname->disk_name.len = sizeof(digest->ldf_excerpt);
+	}
+	if (IS_ENCRYPTED(dir) &&
+	    !name_is_dot_or_dotdot(fname->disk_name.name,
+				   fname->disk_name.len)) {
+		int presented_len = critical_chars(fname->disk_name.name,
+						   fname->disk_name.len);
+		char *buf;
+
+		buf = kmalloc(presented_len + 1, GFP_NOFS);
+		if (!buf) {
+			rc = -ENOMEM;
+			goto out_free;
+		}
+
+		if (presented_len == fname->disk_name.len)
+			memcpy(buf, fname->disk_name.name, presented_len);
+		else
+			critical_encode(fname->disk_name.name,
+					fname->disk_name.len, buf);
+		buf[presented_len] = '\0';
+		kfree(fname->crypto_buf.name);
+		fname->crypto_buf.name = buf;
+		fname->crypto_buf.len = presented_len;
+		fname->disk_name.name = fname->crypto_buf.name;
+		fname->disk_name.len = fname->crypto_buf.len;
+	}
+out_free:
+	if (rc < 0)
+		llcrypt_free_filename(fname);
+
+	return rc;
+}
+
+/**
+ * ll_prepare_lookup() - overlay to llcrypt_prepare_lookup
+ * @dir: the directory that will be searched
+ * @de: the dentry contain the user-provided filename being searched for
+ * @fname: the filename information to be filled in
+ * @fid: fid retrieved from user-provided filename
+ *
+ * This overlay function is necessary to properly encode @fname after
+ * encryption, as it will be sent over the wire.
+ * This overlay function is also necessary to handle the case of operations
+ * carried out without the key. Normally llcrypt makes use of digested names in
+ * that case. Having a digested name works for local file systems that can call
+ * llcrypt_match_name(), but Lustre server side is not aware of encryption.
+ * FID and name hash can then easily be extracted and put into the
+ * requests sent to servers.
+ */
+int ll_prepare_lookup(struct inode *dir, struct dentry *de,
+		      struct llcrypt_name *fname, struct lu_fid *fid)
+{
+	struct qstr iname = QSTR_INIT(de->d_name.name, de->d_name.len);
+	int digested = 0;
+	int rc;
+
+	if (fid && IS_ENCRYPTED(dir) && llcrypt_policy_has_filename_enc(dir) &&
+	    !llcrypt_has_encryption_key(dir)) {
+		struct lustre_sb_info *lsi = s2lsi(dir->i_sb);
+
+		if ((!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+		     iname.name[0] == LLCRYPT_DIGESTED_CHAR) ||
+		    ((lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+		     iname.name[0] == LLCRYPT_DIGESTED_CHAR_OLD))
+			digested = 1;
+	}
+
+	iname.name += digested;
+	iname.len -= digested;
+
+	if (fid) {
+		fid->f_seq = 0;
+		fid->f_oid = 0;
+		fid->f_ver = 0;
+	}
+	if (unlikely(filename_is_volatile(iname.name,
+					  iname.len, NULL))) {
+		/* keep volatile name as-is, matters for server side */
+		memset(fname, 0, sizeof(struct llcrypt_name));
+		fname->disk_name.name = (unsigned char *)iname.name;
+		fname->disk_name.len = iname.len;
+		rc = 0;
+	} else {
+		 /* We should use ll_prepare_lookup() but Lustre handles the
+		  * digested form its own way, incompatible with llcrypt's
+		  * digested form.
+		  */
+		rc = llcrypt_setup_filename(dir, &iname, 1, fname);
+		if ((rc == 0 || rc == -ENOENT) &&
+#if defined(HAVE_FSCRYPT_NOKEY_NAME) && !defined(CONFIG_LL_ENCRYPTION)
+		    fname->is_nokey_name) {
+#else
+		    fname->is_ciphertext_name) {
+#endif
+			spin_lock(&de->d_lock);
+			de->d_flags |= DCACHE_NOKEY_NAME;
+			spin_unlock(&de->d_lock);
+		}
+	}
+	if (rc == -ENOENT) {
+		if (((is_root_inode(dir) &&
+		     iname.len == strlen(dot_fscrypt_name) &&
+		     strncmp(iname.name, dot_fscrypt_name, iname.len) == 0) ||
+		     (!llcrypt_has_encryption_key(dir) &&
+		      unlikely(filename_is_volatile(iname.name,
+						    iname.len, NULL))))) {
+			/* In case of subdir mount of an encrypted directory,
+			 * we allow lookup of /.fscrypt directory.
+			 */
+			/* For purpose of migration or mirroring without enc key
+			 * we allow lookup of volatile file without enc context.
+			 */
+			memset(fname, 0, sizeof(struct llcrypt_name));
+			fname->disk_name.name = (unsigned char *)iname.name;
+			fname->disk_name.len = iname.len;
+			rc = 0;
+		} else if (!llcrypt_has_encryption_key(dir)) {
+			rc = -ENOKEY;
+		}
+	}
+	if (rc)
+		return rc;
+
+	return ll_digest_long_name(dir, fname, fid, digested);
 }
 
 /**
@@ -304,58 +459,7 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 	if (rc)
 		return rc;
 
-	if (digested) {
-		/* Without the key, for long names user should have struct
-		 * ll_digest_filename representation of the dentry instead of
-		 * the name. So make sure it is valid, return fid and put
-		 * excerpt of cipher text name in disk_name.
-		 */
-		struct ll_digest_filename *digest;
-
-		if (fname->crypto_buf.len < sizeof(struct ll_digest_filename)) {
-			rc = -EINVAL;
-			goto out_free;
-		}
-		digest = (struct ll_digest_filename *)fname->disk_name.name;
-		*fid = digest->ldf_fid;
-		if (!fid_is_sane(fid)) {
-			rc = -EINVAL;
-			goto out_free;
-		}
-		fname->disk_name.name = digest->ldf_excerpt;
-		fname->disk_name.len = sizeof(digest->ldf_excerpt);
-	}
-	if (IS_ENCRYPTED(dir) &&
-	    !name_is_dot_or_dotdot(fname->disk_name.name,
-				   fname->disk_name.len)) {
-		int presented_len = critical_chars(fname->disk_name.name,
-						   fname->disk_name.len);
-		char *buf;
-
-		buf = kmalloc(presented_len + 1, GFP_NOFS);
-		if (!buf) {
-			rc = -ENOMEM;
-			goto out_free;
-		}
-
-		if (presented_len == fname->disk_name.len)
-			memcpy(buf, fname->disk_name.name, presented_len);
-		else
-			critical_encode(fname->disk_name.name,
-					fname->disk_name.len, buf);
-		buf[presented_len] = '\0';
-		kfree(fname->crypto_buf.name);
-		fname->crypto_buf.name = buf;
-		fname->crypto_buf.len = presented_len;
-		fname->disk_name.name = fname->crypto_buf.name;
-		fname->disk_name.len = fname->crypto_buf.len;
-	}
-
-	return rc;
-
-out_free:
-	llcrypt_free_filename(fname);
-	return rc;
+	return ll_digest_long_name(dir, fname, fid, digested);
 }
 
 /**
@@ -446,12 +550,13 @@ int ll_fname_disk_to_usr(struct inode *inode,
 	return rc;
 }
 
+#if !defined(HAVE_FSCRYPT_D_REVALIDATE) || defined(CONFIG_LL_ENCRYPTION)
 /* Copied from llcrypt_d_revalidate, as it is not exported */
 /*
  * Validate dentries in encrypted directories to make sure we aren't potentially
  * caching stale dentries after a key has been added.
  */
-int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
+int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *dir;
 	int err;
@@ -481,7 +586,7 @@ int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
 		return -ECHILD;
 
 	dir = dget_parent(dentry);
-	err = llcrypt_get_encryption_info(d_inode(dir));
+	err = llcrypt_prepare_readdir(d_inode(dir));
 	valid = !llcrypt_has_encryption_key(d_inode(dir));
 	dput(dir);
 
@@ -490,6 +595,7 @@ int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
 
 	return valid;
 }
+#endif /* !HAVE_FSCRYPT_D_REVALIDATE || CONFIG_LL_ENCRYPTION */
 
 const struct llcrypt_operations lustre_cryptops = {
 	.key_prefix		= "lustre:",
@@ -498,8 +604,12 @@ const struct llcrypt_operations lustre_cryptops = {
 #ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
 	.dummy_context		= ll_dummy_context,
 #else
-	.get_dummy_context	= ll_get_dummy_context,
+#ifdef HAVE_FSCRYPT_DUMMY_POLICY
+	.get_dummy_policy	= ll_get_dummy_policy,
+#else
+	.get_dummy_context	= ll_get_dummy_policy,
 #endif
+#endif /* !HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED */
 	.empty_dir		= ll_empty_dir,
 	.max_namelen		= NAME_MAX,
 };
@@ -542,6 +652,20 @@ void ll_sbi_set_name_encrypt(struct ll_sb_info *sbi, bool set)
 {
 }
 
+int ll_prepare_lookup(struct inode *dir, struct dentry *de,
+		      struct llcrypt_name *fname, struct lu_fid *fid)
+{
+	const struct qstr *iname = &de->d_name;
+
+	if (fid) {
+		fid->f_seq = 0;
+		fid->f_oid = 0;
+		fid->f_ver = 0;
+	}
+
+	return llcrypt_setup_filename(dir, iname, 1, fname);
+}
+
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		      int lookup, struct llcrypt_name *fname,
 		      struct lu_fid *fid)
@@ -563,7 +687,7 @@ int ll_fname_disk_to_usr(struct inode *inode,
 	return llcrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname);
 }
 
-int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
+int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	return 1;
 }

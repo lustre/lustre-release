@@ -346,7 +346,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	       inode, (unsigned long)pos, i_size_read(inode), api32);
 
 	if (IS_ENCRYPTED(inode)) {
-		rc = llcrypt_get_encryption_info(inode);
+		rc = llcrypt_prepare_readdir(inode);
 		if (rc && rc != -ENOKEY)
 			GOTO(out, rc);
 	}
@@ -529,7 +529,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	if (ll_sbi_has_encrypt(sbi) &&
 	    (IS_ENCRYPTED(parent) ||
 	     unlikely(ll_sb_has_test_dummy_encryption(parent->i_sb)))) {
-		err = llcrypt_get_encryption_info(parent);
+		err = llcrypt_prepare_readdir(parent);
 		if (err)
 			GOTO(out_op_data, err);
 		if (!llcrypt_has_encryption_key(parent))
@@ -2402,22 +2402,12 @@ out_detach:
 	case LL_IOC_REMOVE_ENCRYPTION_KEY:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
-		rc = llcrypt_ioctl_remove_key(file, (void __user *)arg);
-#ifdef CONFIG_LL_ENCRYPTION
-		if (!rc)
-			sptlrpc_enc_pool_del_user();
-#endif
-		return rc;
+		return llcrypt_ioctl_remove_key(file, (void __user *)arg);
 	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
-		rc = llcrypt_ioctl_remove_key_all_users(file,
-							(void __user *)arg);
-#ifdef CONFIG_LL_ENCRYPTION
-		if (!rc)
-			sptlrpc_enc_pool_del_user();
-#endif
-		return rc;
+		return llcrypt_ioctl_remove_key_all_users(file,
+							  (void __user *)arg);
 	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
