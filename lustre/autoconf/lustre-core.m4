@@ -2692,6 +2692,30 @@ AC_DEFUN([LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK], [
 ]) # LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
 #
+# LC_GENL_FAMILY_HAS_RESV_START_OP
+#
+# Linux v5.0-11693-g3b0f31f2b8c9
+#   genetlink: make policy common to family
+#
+AC_DEFUN([LC_SRC_GENL_FAMILY_HAS_RESV_START_OP], [
+	LB2_LINUX_TEST_SRC([genl_family_has_resv_start_op], [
+		#include <net/genetlink.h>
+	],[
+		static const struct genl_family family = {
+			.resv_start_op = 42,
+		};
+		(void)family;
+	],[-Werror])
+])
+AC_DEFUN([LC_GENL_FAMILY_HAS_RESV_START_OP], [
+	AC_MSG_CHECKING([if struct genl_family has resv_start_op member])
+	LB2_LINUX_TEST_RESULT([genl_family_has_resv_start_op], [
+		AC_DEFINE(GENL_FAMILY_HAS_RESV_START_OP, 1,
+			[struct genl_family has resv_start_op member])
+	])
+]) # LC_GENL_FAMILY_HAS_RESV_START_OP
+
+#
 # LC_HAVE_BVEC_ITER_ALL
 #
 # kernel 5.1 commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa
@@ -3786,6 +3810,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_UAPI_LINUX_MOUNT_H
 	LC_SRC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
+	# 5.0
+	LC_SRC_GENL_FAMILY_HAS_RESV_START_OP
+
 	# 5.1
 	LC_SRC_HAVE_BVEC_ITER_ALL
 
@@ -4032,6 +4059,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_RADIX_TREE_TAG_SET
 	LC_UAPI_LINUX_MOUNT_H
 	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
+
+	# 5.0
+	LC_GENL_FAMILY_HAS_RESV_START_OP
 
 	# 5.1
 	LC_HAVE_BVEC_ITER_ALL

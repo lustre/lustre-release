@@ -1394,6 +1394,9 @@ static struct genl_family lst_family = {
 	.n_ops		= ARRAY_SIZE(lst_genl_ops),
 	.mcgrps		= lst_mcast_grps,
 	.n_mcgrps	= ARRAY_SIZE(lst_mcast_grps),
+#ifdef GENL_FAMILY_HAS_RESV_START_OP
+	.resv_start_op	= __LNET_SELFTEST_CMD_MAX_PLUS_ONE,
+#endif
 };
 
 int lstcon_init_netlink(void)

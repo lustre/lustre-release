@@ -314,6 +314,9 @@ static struct genl_family lustre_family = {
 	.n_ops		= ARRAY_SIZE(lustre_genl_ops),
 	.mcgrps		= lustre_mcast_grps,
 	.n_mcgrps	= ARRAY_SIZE(lustre_mcast_grps),
+#ifdef GENL_FAMILY_HAS_RESV_START_OP
+	.resv_start_op	= __LUSTRE_CMD_MAX_PLUS_ONE,
+#endif
 };
 
 /**
