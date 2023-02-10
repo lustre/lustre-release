@@ -112,7 +112,8 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 liblustreapi_la_LDFLAGS = $(LIBREADLINE) -version-info 1:0:0 \
 			  -Wl,--version-script=liblustreapi.map
 liblustreapi_la_LIBADD = $(top_builddir)/libcfs/libcfs/libcfs.la \
-			 $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
+			 $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
+			 -lpthread
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lustre.pc

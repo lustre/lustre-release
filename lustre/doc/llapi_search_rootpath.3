@@ -1,0 +1,49 @@
+.TH llapi_search_rootpath 3 "2022 May 23" "Lustre User API"
+.SH NAME
+llapi_search_rootpath, llapi_search_rootpath_by_dev \-
+retrieve the path of a lustre mount point
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_search_rootpath( char *" pathname " ,const char *" fsname ")
+.PP
+.BI "int llapi_search_rootpath_by_dev( char *" pathname ", dev_t " dev ")
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_search_rootpath()
+and
+.BR llapi_search_rootpath_by_dev()
+find the first Lustre mount point by matching the filesystem name \fIfsname\fP or the filesystem device \fIdev\fP.
+.PP
+The path of the mount point found is stored into \fIpathname\fP. This buffer should be sufficient to store the path.
+.PP
+.BR e.g:
+char pathname[PATH_MAX];
+.PP
+The filesystem device can be retrieved from a file with
+.BR stat()
+(field \fIst_dev\fP) or
+.BR statx()
+(fields \fIstx_dev_major\fP and \fIstx_dev_minor\fP).
+.SH RETURN VALUES
+.TP
+.B 0
+on success, or
+.TP
+-ve
+error code on failure and sets errno appropriately.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+\fIpathname\fP pointer is NULL.
+.TP
+.SM ENODEV
+The Lustre mount point was not found.
+.SH SEE ALSO
+.ad l
+.nh
+.BR lustreapi (7),
+.BR stat (2),
+.BR statx (2)

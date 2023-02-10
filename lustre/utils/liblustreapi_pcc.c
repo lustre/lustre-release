@@ -212,7 +212,7 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 	int fd;
 	struct lu_pcc_detach_fid detach;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, (char *)mntpath, -1);
+	rc = get_root_path(WANT_FD, NULL, &fd, (char *)mntpath, -1, NULL);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get root path: %s",
 			    mntpath);

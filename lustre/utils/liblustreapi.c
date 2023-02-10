@@ -71,6 +71,7 @@
 #include <poll.h>
 #include <time.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -1209,19 +1210,111 @@ int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 	return llapi_dir_create(name, mode, &param);
 }
 
-/*
- * Find the fsname, the full path, and/or an open fd.
- * Either the fsname or path must not be NULL
- */
-int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
+static int get_file_dev(const char *path, dev_t *dev)
+{
+#ifdef HAVE_STATX
+	struct statx stx;
+
+	if (!dev)
+		return -EINVAL;
+	if (statx(AT_FDCWD, path, 0, 0, &stx))
+		return -errno;
+	*dev = makedev(stx.stx_dev_major, stx.stx_dev_minor);
+#else
+	struct stat st;
+
+	if (!dev)
+		return -EINVAL;
+	if (stat(path, &st) != 0)
+		return -errno;
+
+	*dev = st.st_dev;
+#endif
+	return 0;
+}
+
+static int get_root_fd(const char *rootpath, int *outfd)
+{
+	int rc = 0;
+	int fd;
+
+	fd = open(rootpath, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot open '%s'", rootpath);
+	} else {
+		*outfd = fd;
+	}
+
+	return rc;
+}
+
+static struct {
+	dev_t dev;
+	char fsname[PATH_MAX];
+	char mnt_dir[PATH_MAX];
+} root_cached = { 0 };
+
+static pthread_rwlock_t root_cached_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+static int get_root_path_fast(int want, char *fsname, int *outfd, char *path,
+			      dev_t *dev)
+{
+	int rc = -ENODEV;
+	int fsnamelen;
+	int mntlen;
+
+	pthread_rwlock_rdlock(&root_cached_lock);
+	if (root_cached.dev == 0)
+		goto out_unlock;
+
+	fsnamelen = strlen(root_cached.fsname);
+	mntlen = strlen(root_cached.mnt_dir);
+
+	/* Check the fsname for a match, if given */
+	if (!(want & WANT_FSNAME) && fsname &&
+	    strlen(fsname) == fsnamelen &&
+	    (strncmp(root_cached.fsname, fsname, fsnamelen) == 0)) {
+		rc = 0;
+		/* Check the dev for a match, if given */
+	} else if (!(want & WANT_DEV) && dev && *dev == root_cached.dev) {
+		rc = 0;
+		/* Otherwise find the longest matching path */
+	} else if (path && strlen(path) >= mntlen &&
+		   (strncmp(root_cached.mnt_dir, path, mntlen) == 0) &&
+		   (strlen(path) == mntlen || path[mntlen] == '/')) {
+		rc = 0;
+	}
+
+	if (rc)
+		goto out_unlock;
+
+	if ((want & WANT_FSNAME) && fsname)
+		strcpy(fsname, root_cached.fsname);
+	if ((want & WANT_PATH) && path)
+		strcpy(path, root_cached.mnt_dir);
+	if ((want & WANT_DEV) && dev)
+		*dev = root_cached.dev;
+	if ((want & WANT_FD) && outfd)
+		rc = get_root_fd(root_cached.mnt_dir, outfd);
+
+out_unlock:
+	pthread_rwlock_unlock(&root_cached_lock);
+	return rc;
+}
+
+static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
+			      int index, dev_t *dev)
 {
 	struct mntent mnt;
-	char buf[PATH_MAX], mntdir[PATH_MAX];
+	char buf[PATH_MAX];
 	char *ptr, *ptr_end;
 	FILE *fp;
-	int idx = 0, mntlen = 0, fd;
+	int idx = -1, mntlen = 0;
 	int rc = -ENODEV;
-	int fsnamelen, mountlen;
+	int fsnamelen = 0;
+	dev_t devmnt = 0;
 
 	/* get the mount point */
 	fp = setmntent(PROC_MOUNTS, "r");
@@ -1231,16 +1324,12 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			    "cannot retrieve filesystem mount point");
 		return rc;
 	}
-	while (1) {
-		if (getmntent_r(fp, &mnt, buf, sizeof(buf)) == NULL)
-			break;
+	while (getmntent_r(fp, &mnt, buf, sizeof(buf))) {
 
 		if (!llapi_is_lustre_mnt(&mnt))
 			continue;
 
-		if ((want & WANT_INDEX) && (idx++ != index))
-			continue;
-
+		idx++;
 		mntlen = strlen(mnt.mnt_dir);
 		ptr = strchr(mnt.mnt_fsname, '/');
 		while (ptr && *ptr == '/')
@@ -1256,60 +1345,97 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 		while (*ptr_end != '/' && *ptr_end != '\0')
 			ptr_end++;
 
-		/* Check the fsname for a match, if given */
-		mountlen = ptr_end - ptr;
-		if (!(want & WANT_FSNAME) && fsname != NULL &&
-		    (fsnamelen = strlen(fsname)) > 0 &&
-		    (fsnamelen != mountlen ||
-		    (strncmp(ptr, fsname, mountlen) != 0)))
+		fsnamelen = ptr_end - ptr;
+
+		/* ignore unaccessible filesystem */
+		if (get_file_dev(mnt.mnt_dir, &devmnt))
 			continue;
 
-		/* If the path isn't set return the first one we find */
-		if (path == NULL || strlen(path) == 0) {
-			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
-			mntdir[sizeof(mntdir) - 1] = '\0';
-			if ((want & WANT_FSNAME) && fsname != NULL) {
-				strncpy(fsname, ptr, mountlen);
-				fsname[mountlen] = '\0';
-			}
+		if ((want & WANT_INDEX) && idx == index) {
 			rc = 0;
 			break;
+		}
+
+		/* Check the fsname for a match, if given */
+		if (!(want & WANT_FSNAME) && fsname &&
+		    strlen(fsname) == fsnamelen &&
+		    (strncmp(ptr, fsname, fsnamelen) == 0)) {
+			rc = 0;
+			break;
+		}
+
+		/* Check the dev for a match, if given */
+		if (!(want & WANT_DEV) && dev && *dev == devmnt) {
+			rc = 0;
+			break;
+		}
+
 		/* Otherwise find the longest matching path */
-		} else if ((strlen(path) >= mntlen) &&
-			   (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
-			/* check the path format */
-			if (strlen(path) > mntlen && path[mntlen] != '/')
-				continue;
-			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
-			mntdir[sizeof(mntdir) - 1] = '\0';
-			if ((want & WANT_FSNAME) && fsname != NULL) {
-				strncpy(fsname, ptr, mountlen);
-				fsname[mountlen] = '\0';
-			}
+		if (path && strlen(path) >= mntlen &&
+		    (strncmp(mnt.mnt_dir, path, mntlen) == 0) &&
+		    (strlen(path) == mntlen || path[mntlen] == '/')) {
 			rc = 0;
 			break;
 		}
 	}
-	endmntent(fp);
+
+	if (rc)
+		goto out;
 
 	/* Found it */
-	if (rc == 0) {
-		if ((want & WANT_PATH) && path != NULL) {
-			strncpy(path, mntdir, mntlen);
-			path[mntlen] = '\0';
-		}
-		if (want & WANT_FD) {
-			fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
-			if (fd < 0) {
-				rc = -errno;
-				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "cannot open '%s'", mntdir);
+	if (!(want & WANT_INDEX)) {
+		/* Cache the mount point information */
+		pthread_rwlock_wrlock(&root_cached_lock);
 
-			} else {
-				*outfd = fd;
-			}
-		}
-	} else if (want & WANT_ERROR)
+		strncpy(root_cached.fsname, ptr, fsnamelen);
+		root_cached.fsname[fsnamelen] = '\0';
+		strncpy(root_cached.mnt_dir, mnt.mnt_dir, mntlen);
+		root_cached.mnt_dir[mntlen] = '\0';
+		root_cached.dev = devmnt;
+
+		pthread_rwlock_unlock(&root_cached_lock);
+	}
+
+	if ((want & WANT_FSNAME) && fsname) {
+		strncpy(fsname, ptr, fsnamelen);
+		fsname[fsnamelen] = '\0';
+	}
+	if ((want & WANT_PATH) && path) {
+		strncpy(path, mnt.mnt_dir, mntlen);
+		path[mntlen] = '\0';
+	}
+	if ((want & WANT_DEV) && dev)
+		*dev = devmnt;
+	if ((want & WANT_FD) && outfd)
+		rc = get_root_fd(mnt.mnt_dir, outfd);
+
+out:
+	endmntent(fp);
+	return rc;
+}
+
+/*
+ * Find the fsname, the full path, and/or an open fd.
+ * Either the fsname or path must not be NULL
+ */
+int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
+		       dev_t *dev)
+{
+	int rc = -ENODEV;
+
+	if (!(want & WANT_INDEX))
+		rc = get_root_path_fast(want, fsname, outfd, path, dev);
+	if (rc)
+		rc = get_root_path_slow(want, fsname, outfd, path, index, dev);
+
+	if (!rc || !(want & WANT_ERROR))
+		return rc;
+
+	if (dev || !(want & WANT_DEV))
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "'%u/%u' dev not on a mounted Lustre filesystem",
+				  major(*dev), minor(*dev));
+	else
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "'%s' not on a mounted Lustre filesystem",
 				  (want & WANT_PATH) ? fsname : path);
@@ -1342,90 +1468,69 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 
 	if (fsname)
 		want |= WANT_FSNAME;
-	return get_root_path(want, fsname, NULL, mntdir, idx);
+	return get_root_path(want, fsname, NULL, mntdir, idx, NULL);
 }
 
 /* Given a path, find the corresponding Lustre fsname */
 int llapi_search_fsname(const char *pathname, char *fsname)
 {
-	char *path;
+	dev_t dev;
 	int rc;
 
-	path = realpath(pathname, NULL);
-	if (path == NULL) {
-		char tmp[PATH_MAX - 1];
-		char buf[PATH_MAX];
-		char *ptr;
+	rc = get_file_dev(pathname, &dev);
+	if (rc) {
+		char tmp[PATH_MAX];
+		char *parent;
+		int len;
 
-		tmp[0] = '\0';
-		buf[0] = '\0';
-		if (pathname[0] != '/') {
-			/*
-			 * Need an absolute path, but realpath() only works for
-			 * pathnames that actually exist.  We go through the
-			 * extra hurdle of dirname(getcwd() + pathname) in
-			 * case the relative pathname contains ".." in it.
-			 */
-			char realpath[PATH_MAX - 1];
+		/* file does not exist try the parent */
+		len = readlink(pathname, tmp, PATH_MAX);
+		if (len != -1)
+			tmp[len] = '\0';
+		else
+			strncpy(tmp, pathname, PATH_MAX - 1);
 
-			if (getcwd(realpath, sizeof(realpath) - 2) == NULL) {
-				rc = -errno;
-				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "cannot get current working directory");
-				return rc;
-			}
-
-			rc = snprintf(tmp, sizeof(tmp), "%s/", realpath);
-			if (rc >= sizeof(tmp)) {
-				rc = -E2BIG;
-				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "invalid parent path '%s'",
-					    tmp);
-				return rc;
-			}
-		}
-
-		rc = snprintf(buf, sizeof(buf), "%s%s", tmp, pathname);
-		if (rc >= sizeof(buf)) {
-			rc = -E2BIG;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "invalid path '%s'", pathname);
-			return rc;
-		}
-		path = realpath(buf, NULL);
-		if (path == NULL) {
-			ptr = strrchr(buf, '/');
-			if (ptr == NULL) {
-				llapi_error(LLAPI_MSG_ERROR |
-					    LLAPI_MSG_NO_ERRNO, 0,
-					    "cannot resolve path '%s'",
-					    buf);
-				return -ENOENT;
-			}
-			*ptr = '\0';
-			path = realpath(buf, NULL);
-			if (path == NULL) {
-				rc = -errno;
-				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "cannot resolve path '%s'",
-					     pathname);
-				return rc;
-			}
-		}
+		parent = dirname(tmp);
+		rc = get_file_dev(parent, &dev);
 	}
-	rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, path, -1);
-	free(path);
+
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot resolve path '%s'", pathname);
+		return rc;
+	}
+
+	rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, NULL, -1,
+			   &dev);
+
 	return rc;
 }
 
 int llapi_search_rootpath(char *pathname, const char *fsname)
 {
+	if (!pathname)
+		return -EINVAL;
+
 	/*
 	 * pathname can be used as an argument by get_root_path(),
 	 * clear it for safety
 	 */
 	pathname[0] = 0;
-	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1);
+	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1,
+			     NULL);
+}
+
+int llapi_search_rootpath_by_dev(char *pathname, dev_t dev)
+{
+	if (!pathname)
+		return -EINVAL;
+
+	/*
+	 * pathname can be used as an argument by get_root_path(),
+	 * clear it for safety
+	 */
+	pathname[0] = 0;
+	return get_root_path(WANT_PATH, NULL, NULL, pathname, -1, &dev);
 }
 
 /**
