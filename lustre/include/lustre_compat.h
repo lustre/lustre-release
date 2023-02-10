@@ -450,9 +450,14 @@ static inline struct timespec current_time(struct inode *inode)
 	kmem_cache_create(name, size, align, flags, ctor)
 #endif
 
-#ifndef HAVE_LINUX_SELINUX_IS_ENABLED
-#define selinux_is_enabled() 1
+static inline bool ll_security_xattr_wanted(struct inode *in)
+{
+#ifdef CONFIG_SECURITY
+	return in->i_security && in->i_sb->s_security;
+#else
+	return false;
 #endif
+}
 
 static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,

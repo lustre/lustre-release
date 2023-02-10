@@ -463,15 +463,36 @@ static inline void obd_connect_set_secctx(struct obd_connect_data *data)
 #endif
 }
 
-int ll_dentry_init_security(struct inode *parent, struct dentry *dentry,
-			    int mode, struct qstr *name,
-			    const char **secctx_name, void **secctx,
-			    __u32 *secctx_size);
+/* Only smack and selinux is known to use security contexts */
+static inline bool ll_xattr_is_seclabel(const char *name)
+{
+	return !strcmp(name, XATTR_NAME_SELINUX) ||
+		!strcmp(name, XATTR_NAME_SMACK);
+}
+
+static inline bool ll_xattr_suffix_is_seclabel(const char *suffix)
+{
+	return !strcmp(suffix, XATTR_SELINUX_SUFFIX) ||
+		!strcmp(suffix, XATTR_SMACK_SUFFIX);
+}
+
+int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
+			    const char **secctx_name, __u32 *secctx_name_size,
+			    void **secctx, __u32 *secctx_size);
 int ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 			   struct inode *dir);
 
-int ll_listsecurity(struct inode *inode, char *secctx_name,
-		    size_t secctx_name_size);
+int ll_inode_notifysecctx(struct inode *inode,
+			  void *secctx, __u32 secctxlen);
+
+void ll_secctx_name_free(struct ll_sb_info *sbi);
+
+int ll_secctx_name_store(struct inode *in);
+
+__u32 ll_secctx_name_get(struct ll_sb_info *sbi, const char **secctx_name);
+
+int ll_security_secctx_name_filter(struct ll_sb_info *sbi, int xattr_type,
+				   const char *suffix);
 
 static inline bool obd_connect_has_enc(struct obd_connect_data *data)
 {
@@ -803,6 +824,10 @@ struct ll_sb_info {
 	struct ll_foreign_symlink_upcall_item *ll_foreign_symlink_upcall_items;
 	/* foreign symlink path upcall nb infos */
 	unsigned int		  ll_foreign_symlink_upcall_nb_items;
+
+	/* cached file security context xattr name. e.g: security.selinux */
+	char *ll_secctx_name;
+	__u32 ll_secctx_name_size;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)

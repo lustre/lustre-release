@@ -138,10 +138,9 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	     (handler->flags == XATTR_LUSTRE_T && !strcmp(name, "lov"))))
 		RETURN(0);
 
-	/* LU-549:  Disable security.selinux when selinux is disabled */
-	if (handler->flags == XATTR_SECURITY_T && !selinux_is_enabled() &&
-	    strcmp(name, "selinux") == 0)
-		RETURN(-EOPNOTSUPP);
+	rc = ll_security_secctx_name_filter(sbi, handler->flags, name);
+	if (rc)
+		RETURN(rc);
 
 	/*
 	 * In user.* namespace, only regular files and directories can have
@@ -398,7 +397,7 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 		GOTO(out_xattr, rc = -EPERM);
 
 	if (sbi->ll_xattr_cache_enabled && type != XATTR_ACL_ACCESS_T &&
-	    (type != XATTR_SECURITY_T || strcmp(name, "security.selinux")) &&
+	    (type != XATTR_SECURITY_T || !ll_xattr_is_seclabel(name)) &&
 	    (type != XATTR_TRUSTED_T || strcmp(name, XATTR_NAME_SOM))) {
 		rc = ll_xattr_cache_get(inode, name, buffer, size, valid);
 		if (rc == -EAGAIN)
@@ -471,10 +470,9 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 	if (rc)
 		RETURN(rc);
 
-	/* LU-549:  Disable security.selinux when selinux is disabled */
-	if (handler->flags == XATTR_SECURITY_T && !selinux_is_enabled() &&
-	    !strcmp(name, "selinux"))
-		RETURN(-EOPNOTSUPP);
+	rc = ll_security_secctx_name_filter(sbi, handler->flags, name);
+	if (rc)
+		RETURN(rc);
 
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	/* posix acl is under protection of LOOKUP lock. when calling to this,

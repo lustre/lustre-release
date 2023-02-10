@@ -147,6 +147,9 @@ static struct ll_sb_info *ll_init_sbi(void)
 	 * not enabled by default
 	 */
 
+	sbi->ll_secctx_name = NULL;
+	sbi->ll_secctx_name_size = 0;
+
 	sbi->ll_ra_info.ra_max_pages =
 		min(pages / 32, SBI_DEFAULT_READ_AHEAD_MAX);
 	sbi->ll_ra_info.ra_max_pages_per_file =
@@ -255,6 +258,9 @@ static void ll_free_sbi(struct super_block *sb)
 				sizeof(struct ll_foreign_symlink_upcall_item));
 			sbi->ll_foreign_symlink_upcall_items = NULL;
 		}
+		if (sbi->ll_secctx_name)
+			ll_secctx_name_free(sbi);
+
 		ll_free_rw_stats_info(sbi);
 		pcc_super_fini(&sbi->ll_pcc_super);
 		OBD_FREE(sbi, sizeof(*sbi));
@@ -710,6 +716,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 		GOTO(out_root, err);
 	}
 
+	err = ll_secctx_name_store(root);
+	if (err < 0 && ll_security_xattr_wanted(root))
+		CWARN("%s: file security contextes not supported: rc = %d\n",
+		      sbi->ll_fsname, err);
+
+	err = 0;
 	if (encctxlen) {
 		CDEBUG(D_SEC,
 		       "server returned encryption ctx for root inode "DFID"\n",

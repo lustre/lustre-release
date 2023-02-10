@@ -458,6 +458,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 			.hash = ll_full_name_hash(dparent, dirname,
 						  strlen(dirname)),
 		},
+		.d_sb = dparent->d_sb,
 	};
 	bool encrypt = false;
 	int hash_flags;
@@ -535,9 +536,9 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		/* selinux_dentry_init_security() uses dentry->d_parent and name
 		 * to determine the security context for the file. So our fake
 		 * dentry should be real enough for this purpose. */
-		err = ll_dentry_init_security(parent,
-					      &dentry, mode, &dentry.d_name,
+		err = ll_dentry_init_security(&dentry, mode, &dentry.d_name,
 					      &op_data->op_file_secctx_name,
+					      &op_data->op_file_secctx_name_size,
 					      &op_data->op_file_secctx,
 					      &op_data->op_file_secctx_size);
 		if (err < 0)
@@ -569,17 +570,12 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	dentry.d_inode = inode;
 
-	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
-		/* no need to protect selinux_inode_setsecurity() by
-		 * inode_lock. Taking it would lead to a client deadlock
-		 * LU-13617
-		 */
-		err = security_inode_notifysecctx(inode,
-						  op_data->op_file_secctx,
-						  op_data->op_file_secctx_size);
-	} else {
+	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags))
+		err = ll_inode_notifysecctx(inode, op_data->op_file_secctx,
+					    op_data->op_file_secctx_size);
+	else
 		err = ll_inode_init_security(&dentry, inode, parent);
-	}
+
 	if (err)
 		GOTO(out_inode, err);
 
