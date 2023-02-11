@@ -1386,14 +1386,11 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 
 		spin_unlock(&anchor->csi_waitq.lock);
 
-		if (csi_dio_aio) {
-			if (end_io == cl_dio_aio_end) {
-				if (!creator_free)
-					cl_dio_aio_free(env, dio_aio);
-			} else if (end_io == cl_sub_dio_end) {
-				if (!creator_free)
-					cl_sub_dio_free(sub_dio_aio);
-			}
+		if (csi_dio_aio && !creator_free) {
+			if (end_io == cl_dio_aio_end)
+				cl_dio_aio_free(env, dio_aio);
+			else if (end_io == cl_sub_dio_end)
+				cl_sub_dio_free(sub_dio_aio);
 		}
 	}
 	EXIT;

@@ -2206,6 +2206,7 @@ __must_hold(&cli->cl_loi_list_lock)
 
 		spin_lock(&cli->cl_loi_list_lock);
 	}
+	EXIT;
 }
 
 int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
