@@ -62,6 +62,12 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	always_except LU-13063 411
 fi
 
+# skip basic ops on file with foreign LOV tests on 5.16.0+ kernels
+# until the filemap_read() issue is fixed
+if (( $LINUX_VERSION_CODE >= $(version_code 5.16.0) )); then
+	always_except LU-16101 27J
+fi
+
 #                                  5              12     8   12  15   (min)"
 [[ "$SLOW" = "no" ]] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o"
 
@@ -92,13 +98,16 @@ sles_version_code()
 
 # Check if we are running on Ubuntu or SLES so we can make decisions on
 # what tests to run
-if [ -r /etc/SuSE-release ]; then
+if [ -r /etc/SuSE-release ] || [ -r /etc/SUSE-brand ]; then
 	sles_version=$(sles_version_code)
 	[ $sles_version -lt $(version_code 11.4.0) ] &&
 		always_except LU-4341 170
 
 	[ $sles_version -lt $(version_code 12.0.0) ] &&
 		always_except LU-3703 234
+
+	[ $sles_version -ge $(version_code 15.4.0) ] &&
+		always_except LU-16101 27J
 elif [ -r /etc/os-release ]; then
 	if grep -qi ubuntu /etc/os-release; then
 		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
