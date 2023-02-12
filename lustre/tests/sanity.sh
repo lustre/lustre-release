@@ -75,6 +75,13 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
+# skip basic ops on file with foreign LOV tests on 5.16.0+ kernels
+# until the filemap_read() issue is fixed
+if (( $LINUX_VERSION_CODE >= $(version_code 5.16.0) )); then
+	# bug number for skipped test: LU-16101
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  27J"
+fi
+
 #skip ACL tests on RHEL8 and SLES15 until tests changed to use other users
 if (( $(egrep -cw "^bin|^daemon" /etc/passwd) < 2 )); then
 	# bug number:   LU-15259 LU-15259
@@ -113,7 +120,7 @@ sles_version_code()
 
 # Check if we are running on Ubuntu or SLES so we can make decisions on
 # what tests to run
-if [ -r /etc/SuSE-release ]; then
+if [ -r /etc/SuSE-release ] || [ -r /etc/SUSE-brand ]; then
 	sles_version=$(sles_version_code)
 	[ $sles_version -lt $(version_code 11.4.0) ] &&
 		# bug number for skipped test: LU-4341
@@ -121,6 +128,10 @@ if [ -r /etc/SuSE-release ]; then
 	[ $sles_version -lt $(version_code 12.0.0) ] &&
 		# bug number for skipped test: LU-3703
 		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  234"
+
+	[ $sles_version -ge $(version_code 15.4.0) ] &&
+		# bug number for skipped test: LU-16101
+		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  27J"
 elif [ -r /etc/os-release ]; then
 	if grep -qi ubuntu /etc/os-release; then
 		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
