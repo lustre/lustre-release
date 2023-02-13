@@ -1475,6 +1475,20 @@ setup_health_test() {
 	[[ ${#RNIDS[@]} -lt 1 ]] &&
 		error "No NIDs configured for remote host $RNODE"
 
+	# Ensure all peer NIs are local (i.e. non-routed config)
+	local rnid rnet lnid lnet
+
+	for rnid in ${RNIDS[@]}; do
+		rnet=${rnid##*@}
+		for lnid in ${LNIDS[@]}; do
+			lnet=${lnid##*@}
+			[[ ${lnet} == ${rnet} ]] &&
+				break
+		done
+		[[ ${lnet} != ${rnet} ]] &&
+			skip "Need non-routed configuration"
+	done
+
 	do_lnetctl discover ${RNIDS[0]} ||
 		error "Unable to discover ${RNIDS[0]}"
 
@@ -3199,22 +3213,35 @@ do_expired_message_drop_test() {
 		done
 	done
 
-	local pc
+	declare -a pcs
 
-	pc=$($LNETCTL peer show -v --nid "${RNIDS[0]}" |
-			awk '/max_ni_tx_credits:/{print $NF}' |
-			xargs echo |
-			sed 's/ /\+/g' | bc)
+	pcs=( $($LNETCTL peer show -v --nid "${RNIDS[0]}" |
+		awk '/max_ni_tx_credits:/{print $NF}' |
+		xargs echo) )
 
-	echo "Found $pc peer_credits for ${RNIDS[0]}"
+	[[ ${#RNIDS[@]} -ne ${#pcs[@]} ]] &&
+		error "Expect ${#RNIDS[@]} peer credit values found ${#pcs[@]}"
 
-	local i
+	local rnet lnid lnet i j
 
-	for i in $(seq 1 "${pc}"); do
-		$LNETCTL ping --timeout $((delay+2)) "${RNIDS[0]}" 1>/dev/null &
+	# Need to use --source for multi-rail configs to ensure we consume
+	# all available peer credits
+	for ((i = 0; i < ${#RNIDS[@]}; i++)); do
+		local ping_args="--timeout $((delay+2))"
+
+		rnet=${RNIDS[i]##*@}
+		for lnid in ${LNIDS[@]}; do
+			lnet=${lnid##*@}
+			[[ $rnet == $lnet ]] && break
+		done
+
+		ping_args+=" --source ${lnid} ${RNIDS[i]}"
+		for j in $(seq 1 "${pcs[i]}"); do
+			$LNETCTL ping ${ping_args} 1>/dev/null &
+		done
+
+		echo "Issued ${pcs[i]} pings to ${RNIDS[i]} from $lnid"
 	done
-
-	echo "Issued ${pc} pings to ${RNIDS[0]}"
 
 	# This ping should be queued on peer NI tx credit
 	$LNETCTL ping --timeout $((delay+2)) "${RNIDS[0]}" &
