@@ -2322,6 +2322,10 @@ test_31() {
 	local nid=$(lctl list_nids | grep ${NETTYPE} | head -n1)
 	local addr=${nid%@*}
 	local net=${nid#*@}
+	local net2=${NETTYPE}999
+	local mdsnid=$(do_facet mds1 $LCTL list_nids | head -1)
+	local addr1=${mdsnid%@*}
+	local addr2=${addr1%.*}.$(((${addr1##*.} + 11) % 256))
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
@@ -2346,39 +2350,44 @@ test_31() {
 		  2>/dev/null | grep -q -" &&
 		error "export on servers should be empty"
 
-	# add network ${NETTYPE}999 on all nodes
+	# add network $net2 on all nodes
 	do_nodes $(comma_list $(all_nodes)) \
 		 "$LNETCTL lnet configure && $LNETCTL net add --if \
 		  \$($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
 		  {if (inf==1) print \$2; fi; inf=0} /interfaces/{inf=1}') \
-		  --net ${NETTYPE}999" ||
-		error "unable to configure NID ${NETTYPE}999"
+		  --net $net2" ||
+		error "unable to configure NID $net2"
 
 	# necessary to do writeconf in order to register
-	# new @${NETTYPE}999 nid for targets
+	# new @$net2 nid for targets
 	KZPOOL=$KEEP_ZPOOL
 	export KEEP_ZPOOL="true"
 	stopall
 	export SK_MOUNTED=false
 	writeconf_all
+
+	nids="${addr1}@$net,${addr1}@$net2:${addr2}@$net,${addr2}@$net2"
+	do_facet mds1 "$TUNEFS --servicenode="$nids" $(mdsdevname 1)" ||
+		error "tunefs failed"
+
 	setupall server_only || echo 1
 	export KEEP_ZPOOL="$KZPOOL"
 
 	# backup MGSNID
 	local mgsnid_orig=$MGSNID
 	# compute new MGSNID
-	MGSNID=$(do_facet mgs "$LCTL list_nids | grep ${NETTYPE}999")
+	MGSNID=$(do_facet mgs "$LCTL list_nids | grep $net2")
 
 	# on client, turn LNet Dynamic Discovery on
 	lnetctl set discovery 1
 
-	# mount client with -o network=${NETTYPE}999 option:
+	# mount client with -o network=$net2 option:
 	# should fail because of LNet Dynamic Discovery
-	mount_client $MOUNT ${MOUNT_OPTS},network=${NETTYPE}999 &&
+	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 &&
 		error "client mount with '-o network' option should be refused"
 
 	# on client, reconfigure LNet and turn LNet Dynamic Discovery off
-	$LNETCTL net del --net ${NETTYPE}999 && lnetctl lnet unconfigure
+	$LNETCTL net del --net $net2 && lnetctl lnet unconfigure
 	lustre_rmmod
 	modprobe lnet
 	lnetctl set discovery 0
@@ -2386,11 +2395,11 @@ test_31() {
 	$LNETCTL lnet configure && $LNETCTL net add --if \
 	  $($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
 	  {if (inf==1) print $2; fi; inf=0} /interfaces/{inf=1}') \
-	  --net ${NETTYPE}999 ||
-	error "unable to configure NID ${NETTYPE}999 on client"
+	  --net $net2 ||
+		error "unable to configure NID $net2 on client"
 
-	# mount client with -o network=${NETTYPE}999 option
-	mount_client $MOUNT ${MOUNT_OPTS},network=${NETTYPE}999 ||
+	# mount client with -o network=$net2 option
+	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 ||
 		error "unable to remount client"
 
 	# restore MGSNID
@@ -2398,24 +2407,34 @@ test_31() {
 
 	# check export on MGS
 	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
-		      grep -q -"
+		      grep -"
 	[ $? -ne 0 ] ||	error "export for $nid on MGS should not exist"
 
 	do_facet mgs \
-		"lctl get_param -n *.MGS*.exports.'${addr}@${NETTYPE}999'.uuid \
-		 2>/dev/null | grep -q -"
+		"lctl get_param -n *.MGS*.exports.'${addr}@$net2'.uuid \
+		 2>/dev/null | grep -"
 	[ $? -eq 0 ] ||
-		error "export for ${addr}@${NETTYPE}999 on MGS should exist"
+		error "export for ${addr}@$net2 on MGS should exist"
 
 	# check {mdc,osc} imports
 	lctl get_param mdc.${FSNAME}-*.import | grep current_connection |
-	    grep -q ${NETTYPE}999
+	    grep $net2
 	[ $? -eq 0 ] ||
-		error "import for mdc should use ${addr}@${NETTYPE}999"
+		error "import for mdc should use ${addr1}@$net2"
 	lctl get_param osc.${FSNAME}-*.import | grep current_connection |
-	    grep -q ${NETTYPE}999
+	    grep $net2
 	[ $? -eq 0 ] ||
-		error "import for osc should use ${addr}@${NETTYPE}999"
+		error "import for osc should use ${addr1}@$net2"
+
+	# no NIDs on other networks should be listed
+	lctl get_param mdc.${FSNAME}-*.import | grep failover_nids |
+	    grep -w ".*@$net" &&
+		error "MDC import shouldn't have failnids at @$net"
+
+	# failover NIDs on net999 should be listed
+	lctl get_param mdc.${FSNAME}-*.import | grep failover_nids |
+	    grep ${addr2}@$net2 ||
+		error "MDC import should have failnid ${addr2}@$net2"
 }
 run_test 31 "client mount option '-o network'"
 

@@ -61,7 +61,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 {
 	struct ptlrpc_connection *ptlrpc_conn;
 	struct obd_import_conn *imp_conn = NULL, *item;
-	u32 refnet = LNET_NET_ANY;
+	u32 refnet = imp->imp_conn_restricted_net;
 	int rc = 0;
 
 	ENTRY;
@@ -71,10 +71,12 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 		RETURN(-EINVAL);
 	}
 
-	if (imp->imp_connection &&
-	    imp->imp_connection->c_remote_uuid.uuid[0] == 0)
-		/* refnet is used to restrict network connections */
-		refnet = LNET_NID_NET(&imp->imp_connection->c_self);
+	/* refnet is used to restrict network connections */
+	if (refnet != LNET_NET_ANY)
+		CDEBUG(D_HA, "imp %s: restrict %s to %s net\n",
+		       imp->imp_obd->obd_name, uuid->uuid,
+		       libcfs_net2str(refnet));
+
 	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, refnet);
 	if (!ptlrpc_conn) {
 		CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
@@ -327,8 +329,6 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	const char *name = obd->obd_type->typ_name;
 	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
-	struct ptlrpc_connection fake_conn = { .c_self = {},
-					       .c_remote_uuid.uuid[0] = 0 };
 	int rc;
 
 	ENTRY;
@@ -550,8 +550,9 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			       rc);
 			GOTO(err_import, rc);
 		}
-		lnet_nid4_to_nid(LNET_MKNID(refnet, 0), &fake_conn.c_self);
-		imp->imp_connection = &fake_conn;
+		imp->imp_conn_restricted_net = refnet;
+	} else {
+		imp->imp_conn_restricted_net = LNET_NET_ANY;
 	}
 
 	rc = client_import_add_conn(imp, &server_uuid, 1);
