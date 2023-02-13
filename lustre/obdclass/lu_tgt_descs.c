@@ -30,7 +30,7 @@
  *
  */
 
-#define DEBUG_SUBSYSTEM S_CLASS
+#define DEBUG_SUBSYSTEM S_LOV
 
 #include <linux/module.h>
 #include <linux/list.h>
@@ -226,6 +226,8 @@ void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt, bool is_mdt)
 	else
 		ltq->ltq_avail = tgt_statfs_bavail(tgt) >> 8;
 	penalty = ltq->ltq_penalty + ltq->ltq_svr->lsq_penalty;
+	CDEBUG(D_OTHER, "ltq_penalty: %llu lsq_penalty: %llu tgt_bavail: %llu\n",
+		  ltq->ltq_penalty, ltq->ltq_svr->lsq_penalty, ltq->ltq_avail);
 	if (ltq->ltq_avail < penalty)
 		ltq->ltq_weight = 0;
 	else
@@ -633,8 +635,15 @@ int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 	/* Set max penalties for this tgt and server */
 	ltq->ltq_penalty += ltq->ltq_penalty_per_obj *
 			    ltd->ltd_lov_desc.ld_active_tgt_count;
+	CDEBUG(D_OTHER, "ltq_penalty: %llu per_obj: %llu tgt_count: %d\n",
+	       ltq->ltq_penalty, ltq->ltq_penalty_per_obj,
+	       ltd->ltd_lov_desc.ld_active_tgt_count);
 	svr->lsq_penalty += svr->lsq_penalty_per_obj *
 			    qos->lq_active_svr_count;
+	CDEBUG(D_OTHER, "lsq_penalty: %llu per_obj: %llu srv_count: %d\n",
+	       svr->lsq_penalty, svr->lsq_penalty_per_obj,
+	       qos->lq_active_svr_count);
+
 
 	/* Decrease all MDS penalties */
 	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
