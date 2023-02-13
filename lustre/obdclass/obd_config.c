@@ -1953,27 +1953,6 @@ int class_config_llog_handler(const struct lu_env *env,
 			}
 		}
 
-		/*
-		 * Skip add_conn command if uuid is
-		 * not on restricted net
-		 */
-		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb) &&
-		    !IS_SERVER(s2lsi(cfg->cfg_sb))) {
-			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
-			char *uuid_str = lustre_cfg_string(lcfg, 1);
-
-			if (lcfg->lcfg_command == LCFG_ADD_CONN &&
-			    lsi->lsi_lmd->lmd_nidnet &&
-			    LNET_NIDNET(libcfs_str2nid(uuid_str)) !=
-			    libcfs_str2net(lsi->lsi_lmd->lmd_nidnet)) {
-				CDEBUG(D_CONFIG, "skipping add_conn for %s\n",
-				       uuid_str);
-				rc = 0;
-				/* No processing! */
-				break;
-			}
-		}
-
 		OBD_ALLOC(lcfg_new, lustre_cfg_len(bufs.lcfg_bufcount,
 						   bufs.lcfg_buflen));
 		if (!lcfg_new)
