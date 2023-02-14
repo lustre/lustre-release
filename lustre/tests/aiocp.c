@@ -163,8 +163,9 @@ static void wr_done(io_context_t ctx, struct iocb *iocb, long res, long res2)
 		io_error("aio write", res2);
 
 	if (res != iocb->u.c.nbytes) {
-		fprintf(stderr, "write missed bytes expected %lu got %ld\n",
-			iocb->u.c.nbytes, res2);
+		fprintf(stderr,
+			"write missed bytes at %llu expected %lu got %ld\n",
+			iocb->u.c.offset, iocb->u.c.nbytes, res);
 		exit(1);
 	}
 	--tocopy;
@@ -188,11 +189,11 @@ static void rd_done(io_context_t ctx, struct iocb *iocb, long res, long res2)
 	if (res2 != 0)
 		io_error("aio read", res2);
 	if (res != iosize) {
-		fprintf(stderr, "read missed bytes expected %lu got %ld\n",
-			iocb->u.c.nbytes, res);
+		fprintf(stderr,
+			"read missed bytes at %llu expected %lu got %ld\n",
+			iocb->u.c.offset, iocb->u.c.nbytes, res);
 		exit(1);
 	}
-
 
 	/* turn read into write */
 	if (no_write) {
