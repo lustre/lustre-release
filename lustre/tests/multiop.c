@@ -52,6 +52,7 @@
 #include <time.h>
 #include <err.h>
 #include <dirent.h>
+#include <ctype.h>
 
 #include <lustre/lustreapi.h>
 
@@ -257,6 +258,9 @@ int main(int argc, char **argv)
 	size_t xattr_buf_size = 0;
 	long long rc = 0;
 	long long last_rc;
+	bool unaligned;
+	int msg_len = strlen(msg);
+	size_t total_bytes;
 
 	if (argc < 3) {
 		fprintf(stderr, usage, argv[0]);
@@ -278,6 +282,8 @@ int main(int argc, char **argv)
 		 */
 		last_rc = rc;
 		rc = 0;
+		total_bytes = 0;
+		unaligned = false;
 
 		switch (*commands) {
 		case '_':
@@ -585,24 +591,52 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'r':
+			if (*(commands + 1) == 'u') {
+				unaligned = true;
+				commands++;
+			}
 			len = atoi(commands + 1);
 			if (len <= 0)
 				len = 1;
-			if (bufsize < len) {
+			/* for unaligned, we realloc every time, so the
+			 * buffer alignment is variable
+			 *
+			 * the last condition is "if buf is unaligned", so when
+			 * unaligned is not set, we realloc if the buf is
+			 * unaligned to create an aligned buffer
+			 */
+			if (bufsize < len || unaligned ||
+			    buf !=
+			    (char *)((long)(buf + ALIGN_LEN) & ~ALIGN_LEN)) {
 				void *tmp;
 
-				tmp = realloc(buf, len + ALIGN_LEN);
+				/* We add a margin of + ALIGN_LEN to let us
+				 * unalign and stay in the buffer
+				 */
+				tmp = realloc(buf, len + ALIGN_LEN*2);
 				if (!tmp) {
 					free(buf);
 					save_errno = errno;
-					perror("allocating buf for read\n");
+					perror("allocating buf for write\n");
 					exit(save_errno);
 				}
 				buf = tmp;
 				bufsize = len;
 				buf_align = (char *)((long)(buf + ALIGN_LEN) &
 						     ~ALIGN_LEN);
+				/* if the original buffer was aligned, we
+				 * manually unalign it.  Otherwise, we use
+				 * the unalignment from the allocator.
+				 *
+				 * Add + 1 to avoid ever hitting 0, and use
+				 * mod 255 to avoid 255 + 1 = 256
+				 */
+				if (unaligned && buf_align == buf)
+					buf_align += rand() % 255 + 1;
+				else if (unaligned)
+					buf_align = buf;
 			}
+
 			while (len > 0) {
 				rc = read(fd, buf_align, len);
 				if (rc == -1) {
@@ -617,8 +651,13 @@ int main(int argc, char **argv)
 						break;
 				}
 				len -= rc;
-				if (verbose >= 2)
+				if (verbose >= 2) {
+					printf("Buffer address %s: %p\n",
+						unaligned ? "(unaligned)" : "",
+						buf_align);
+					printf("Read this (%lld bytes):\n", rc);
 					printf("%.*s\n", (int)rc, buf_align);
+				}
 			}
 			break;
 		case 'R':
@@ -687,13 +726,29 @@ int main(int argc, char **argv)
 			break;
 		case 'w':
 		case 'P':
+			if (*(commands + 1) == 'u') {
+				unaligned = true;
+				commands++;
+			}
 			len = atoi(commands + 1);
 			if (len <= 0)
 				len = 1;
-			if (bufsize < len) {
+			/* for unaligned, we realloc every time, so the
+			 * buffer alignment is variable
+			 *
+			 * the last condition is "if buf is unaligned", so when
+			 * unaligned is not set, we realloc if the buf is
+			 * unaligned to create an aligned buffer
+			 */
+			if (bufsize < len || unaligned ||
+			    buf !=
+			    (char *)((long)(buf + ALIGN_LEN) & ~ALIGN_LEN)) {
 				void *tmp;
 
-				tmp = realloc(buf, len + ALIGN_LEN);
+				/* We add a margin of + ALIGN_LEN to let us
+				 * unalign and stay in the buffer
+				 */
+				tmp = realloc(buf, len + ALIGN_LEN*2);
 				if (!tmp) {
 					free(buf);
 					save_errno = errno;
@@ -704,7 +759,28 @@ int main(int argc, char **argv)
 				bufsize = len;
 				buf_align = (char *)((long)(buf + ALIGN_LEN) &
 						     ~ALIGN_LEN);
-				strncpy(buf_align, msg, bufsize);
+				/* if the original buffer was aligned, we
+				 * manually unalign it.  Otherwise, we use
+				 * the unalignment from the allocator.
+				 *
+				 * Add + 1 to avoid ever hitting 0, and use
+				 * mod 255 to avoid 255 + 1 = 256
+				 */
+				if (unaligned && buf_align == buf)
+					buf_align += rand() % 255 + 1;
+				else if (unaligned)
+					buf_align = buf;
+
+				/* fill the buffer with our string */
+				while (total_bytes < bufsize) {
+					/* msg_len does not include the
+					 * terminating nul, deliberately,
+					 * so all the additions are one string
+					 */
+					strncpy(buf_align + total_bytes, msg,
+						bufsize - total_bytes);
+					total_bytes += msg_len;
+				}
 			}
 			while (len > 0) {
 				rc = write(fd, buf_align, len);
@@ -720,6 +796,14 @@ int main(int argc, char **argv)
 				if (commands[0] == 'P')
 					break;
 				len -= rc;
+				if (verbose >= 2) {
+					printf("Buffer address %s: %p\n",
+						unaligned ? "(unaligned)" : "",
+						buf_align);
+					printf("Wrote this (%lld bytes):\n",
+					       rc);
+					printf("%.*s\n", (int)rc, buf_align);
+				}
 			}
 			break;
 		case 'W':
