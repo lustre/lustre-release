@@ -1241,7 +1241,8 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_dio_aio_alloc);
 
-struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool sync)
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool write,
+				    bool sync)
 {
 	struct cl_sub_dio *sdio;
 
@@ -1258,6 +1259,7 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool sync)
 		sdio->csd_ll_aio = ll_aio;
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 		sdio->csd_creator_free = sync;
+		sdio->csd_write = write;
 	}
 	return sdio;
 }

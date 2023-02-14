@@ -2513,7 +2513,8 @@ int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
 struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 				    bool is_aio);
-struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool sync);
+struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio, bool write,
+				    bool sync);
 void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
 void cl_sub_dio_free(struct cl_sub_dio *sdio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
@@ -2572,7 +2573,8 @@ struct cl_sub_dio {
 	ssize_t			csd_bytes;
 	struct cl_dio_aio	*csd_ll_aio;
 	struct ll_dio_pages	csd_dio_pages;
-	unsigned		csd_creator_free:1;
+	unsigned		csd_creator_free:1,
+				csd_write:1;
 };
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
 	defined(HAVE_DIRECTIO_2ARGS)
