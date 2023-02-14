@@ -2719,16 +2719,20 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 			list_add_tail(&oap->oap_rpc_item, &rpc_list);
 			if (starting_offset == OBD_OBJECT_EOF ||
-			    starting_offset > oap->oap_obj_off)
+			    starting_offset > oap->oap_obj_off) {
 				starting_offset = oap->oap_obj_off;
-			else
+			} else {
+				CDEBUG(D_CACHE, "page i:%d, oap->oap_obj_off %llu, oap->oap_page_off %u\n",
+				       i, oap->oap_obj_off, oap->oap_page_off);
 				LASSERT(oap->oap_page_off == 0);
-			if (ending_offset < oap->oap_obj_off + oap->oap_count)
+			}
+			if (ending_offset < oap->oap_obj_off + oap->oap_count) {
 				ending_offset = oap->oap_obj_off +
 						oap->oap_count;
-			else
+			} else {
 				LASSERT(oap->oap_page_off + oap->oap_count ==
 					PAGE_SIZE);
+			}
 		}
 		if (ext->oe_ndelay)
 			ndelay = true;

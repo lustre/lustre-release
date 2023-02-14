@@ -204,6 +204,8 @@ static void osc_page_clip(const struct lu_env *env,
 	struct osc_page       *opg = cl2osc_page(slice);
 	struct osc_async_page *oap = &opg->ops_oap;
 
+	CDEBUG(D_CACHE, "from %d, to %d\n", from, to);
+
 	opg->ops_from = from;
 	/* argument @to is exclusive, but @ops_to is inclusive */
 	opg->ops_to   = to - 1;
