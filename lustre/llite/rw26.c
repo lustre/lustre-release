@@ -372,20 +372,23 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	struct cl_sync_io *anchor = &sdio->csd_sync;
 	loff_t offset   = pv->ldp_file_offset;
 	int io_pages    = 0;
-	int i;
 	ssize_t rc = 0;
+	int i = 0;
 
 	ENTRY;
 
 	cl_2queue_init(queue);
-	for (i = 0; i < pv->ldp_count; i++) {
-		LASSERT(!(offset & (PAGE_SIZE - 1)));
+	while (size > 0) {
+		size_t from = offset & ~PAGE_MASK;
+		size_t to = min(from + size, PAGE_SIZE);
+
 		page = cl_page_find(env, obj, offset >> PAGE_SHIFT,
 				    pv->ldp_pages[i], CPT_TRANSIENT);
 		if (IS_ERR(page)) {
 			rc = PTR_ERR(page);
 			break;
 		}
+
 		LASSERT(page->cp_type == CPT_TRANSIENT);
 		rc = cl_page_own(env, io, page);
 		if (rc) {
@@ -409,16 +412,24 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		 */
 		cl_page_list_add(&queue->c2_qin, page, false);
 		/*
-		 * Set page clip to tell transfer formation engine
-		 * that page has to be sent even if it is beyond KMS.
+		 * Call page clip for incomplete pages, to set range of bytes
+		 * in the page and to tell transfer formation engine to send
+		 * the page even if it is beyond KMS (ie, don't trim IO to KMS)
 		 */
-		if (size < PAGE_SIZE)
-			cl_page_clip(env, page, 0, size);
+		if (from != 0 || to != PAGE_SIZE)
+			cl_page_clip(env, page, from, to);
 		++io_pages;
+		i++;
 
-		offset += PAGE_SIZE;
-		size -= PAGE_SIZE;
+		offset += to - from;
+		size -= to - from;
 	}
+	/* on success, we should hit every page in the pvec and have no bytes
+	 * left in 'size'
+	 */
+	LASSERT(ergo(rc == 0, i == pv->ldp_count));
+	LASSERT(ergo(rc == 0, size == 0));
+
 	if (rc == 0 && io_pages > 0) {
 		int iot = rw == READ ? CRT_READ : CRT_WRITE;
 
