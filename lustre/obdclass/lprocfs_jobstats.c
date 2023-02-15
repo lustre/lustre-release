@@ -455,8 +455,7 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 	for (c = job->js_jobid, end = job->js_jobid + sizeof(job->js_jobid);
 	     c < end && *c != '\0';
 	     c++, joblen++) {
-		if (!isalnum(*c) &&
-		    *c != '.' && *c != '@' && *c != '-' && *c != '_') {
+		if (!isalnum(*c) && strchr(".@-_:/", *c) == NULL) {
 			quote = "\"";
 			snprintf(escaped + joblen, sizeof(escaped), "\\x%02X",
 				 (unsigned char)*c);
