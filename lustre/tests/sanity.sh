@@ -5303,15 +5303,6 @@ test_39s() {
 	# Remount the client to clear 'relatime' option
 	remount_client $MOUNT
 
-	if (( MDS1_VERSION >= $(version_code 2.15.50) )); then
-		# The full test lasted less than default atime_diff
-		# Client was remounted to clear 'relatime' option for next tests
-		# and to confirm atime was written to disk
-		local atime5=$(stat -c %X $DIR/$tfile)
-		(( atime3 == atime5 )) ||
-			error "atime3 $atime3 != atime5 $atime5"
-	fi
-
 	(( atime0 < atime1 )) ||
 		error "atime $atime0 should be smaller than $atime1"
 	(( atime1 == atime2 )) ||

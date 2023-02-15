@@ -651,12 +651,17 @@ static bool is_project_state_change(const struct lu_attr *oattr,
 	return false;
 }
 
-/*
+/**
  * This gives the same functionality as the code between
  * sys_chmod and inode_setattr
  * chown_common and inode_setattr
  * utimes and inode_setattr
  * This API is ported from mds_fix_attr but remove some unnecesssary stuff.
+ *
+ * @param[in]     oattr  Original, current object attributes.
+ * @param[in,out] la     New attributes to be evaluated and potentially
+ *                       modified depending on oattr content and other rules.
+ * @param[in]     ma     md_attr to be evaluated for that object.
  */
 static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 			const struct lu_attr *oattr, struct lu_attr *la,
@@ -710,7 +715,6 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		 * close RPCs.
 		 */
 		if (la->la_valid & LA_ATIME &&
-		    oattr->la_atime > max(oattr->la_ctime, oattr->la_mtime) &&
 		    la->la_atime <= (oattr->la_atime +
 				mdd_obj2mdd_dev(obj)->mdd_atime_diff))
 			la->la_valid &= ~LA_ATIME;
