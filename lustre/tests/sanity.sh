@@ -23885,6 +23885,17 @@ test_273b() {
 }
 run_test 273b "DoM: race writeback and object destroy"
 
+test_273c() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -E-1 -c-1 $DIR/$tdir
+
+	#define OBD_FAIL_OFD_COMMITRW_DELAY      0x1e1
+	do_facet ost1 $LCTL set_param fail_loc=0x800001e1 fail_val=2
+
+	$MULTIOP $DIR/$tdir/$tfile Ouw2097152c
+}
+run_test 273c "race writeback and object destroy"
+
 test_275() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $OST1_VERSION -lt $(version_code 2.10.57) ] &&

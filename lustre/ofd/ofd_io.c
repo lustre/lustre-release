@@ -1296,6 +1296,8 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	}
 
 retry:
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OFD_COMMITRW_DELAY, cfs_fail_val);
+
 	th = ofd_trans_create(env, ofd);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));

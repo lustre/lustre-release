@@ -1025,8 +1025,16 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
 	ENTRY;
 	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
 		rc = iofunc(sub->sub_env, &sub->sub_io);
-		if (rc)
+		if (rc) {
+			/**
+			 * fsync race with truncate, we'd continue to other
+			 * OST object's fsync to potentially discard
+			 * caching pages (osc_cache_writeback_range).
+			 */
+			if (rc == -ENOENT && parent->ci_type == CIT_FSYNC)
+				continue;
 			break;
+		}
 
 		if (parent->ci_result == 0)
 			parent->ci_result = sub->sub_io.ci_result;

@@ -293,6 +293,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSD_SCRUB_STALE			0x19f
 
 #define OBD_FAIL_OFD_SET_OID				0x1e0
+#define OBD_FAIL_OFD_COMMITRW_DELAY			0x1e1
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
