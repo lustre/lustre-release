@@ -251,7 +251,7 @@ __must_hold(&ni->ni_lock)
 		return LNET_NI_STATUS_UP;
 	else if (atomic_read(&ni->ni_fatal_error_on))
 		return LNET_NI_STATUS_DOWN;
-	else if (ni->ni_status)
+	else if (the_lnet.ln_routing && ni->ni_status)
 		return *ni->ni_status;
 	else
 		return LNET_NI_STATUS_UP;
@@ -1295,4 +1295,5 @@ lnet_set_route_aliveness(struct lnet_route *route, bool alive)
 		       old ? "up" : "down",
 		       alive ? "up" : "down");
 }
+void lnet_update_ping_buffer(void);
 #endif

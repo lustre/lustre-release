@@ -3925,6 +3925,26 @@ out:
 	return rc;
 }
 
+void lnet_update_ping_buffer(void)
+{
+	struct lnet_ping_buffer *pbuf;
+	struct lnet_handle_md ping_mdh;
+
+	if (the_lnet.ln_routing)
+		return;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	if (!lnet_ping_target_setup(&pbuf, &ping_mdh,
+				    LNET_PING_INFO_HDR_SIZE +
+				    lnet_get_ni_bytes(),
+				    false))
+		lnet_ping_target_update(pbuf, ping_mdh);
+
+	mutex_unlock(&the_lnet.ln_api_mutex);
+}
+EXPORT_SYMBOL(lnet_update_ping_buffer);
+
 void lnet_incr_dlc_seq(void)
 {
 	atomic_inc(&lnet_dlc_seq_no);

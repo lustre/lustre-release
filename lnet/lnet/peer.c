@@ -3095,6 +3095,15 @@ int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
 	return nnis;
 }
 
+static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni)
+{
+	if (lpni->lpni_ns_status == LNET_NI_STATUS_DOWN)
+		lnet_handle_remote_failure_locked(lpni);
+	else if (lpni->lpni_ns_status == LNET_NI_STATUS_UP &&
+		 !lpni->lpni_last_alive)
+		atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
+}
+
 /*
  * Build a peer from incoming data.
  *
@@ -3134,6 +3143,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	int i;
 	int j;
 	int rc;
+	__u32 old_st;
 
 	flags = LNET_PEER_DISCOVERED;
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL)
@@ -3212,7 +3222,10 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 				 */
 				lpni = lnet_peer_ni_find_locked(&curnis[i]);
 				if (lpni) {
+					old_st = lpni->lpni_ns_status;
 					lpni->lpni_ns_status = *stp;
+					if (old_st != lpni->lpni_ns_status)
+						handle_disc_lpni_health(lpni);
 					lnet_peer_ni_decref_locked(lpni);
 				}
 				break;
@@ -3243,6 +3256,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		lpni = lnet_peer_ni_find_locked(&addnis[i].ns_nid);
 		if (lpni) {
 			lpni->lpni_ns_status = addnis[i].ns_status;
+			handle_disc_lpni_health(lpni);
 			lnet_peer_ni_decref_locked(lpni);
 		}
 	}
