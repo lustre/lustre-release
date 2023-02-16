@@ -1,17 +1,54 @@
-Linux 5.1 (commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa) introduces
-bvec_iter_all.
-
---- a/libcfs/libcfs/crypto/bio.c
-+++ b/libcfs/libcfs/crypto/bio.c
-@@ -29,7 +29,11 @@
- static void __llcrypt_decrypt_bio(struct bio *bio, bool done)
- {
- 	struct bio_vec *bv;
-+#ifdef HAVE_BVEC_ITER_ALL
- 	struct bvec_iter_all iter_all;
-+#else
-+	int iter_all;
+LU-12275 sec: disable bio functions on client
+    
+diff --git a/libcfs/include/libcfs/crypto/llcrypt.h b/libcfs/include/libcfs/crypto/llcrypt.h
+index b152915fb1..93e1766edc 100644
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -267,12 +267,14 @@ static inline bool llcrypt_match_name(const struct llcrypt_name *fname,
+ 	return !memcmp(de_name, fname->disk_name.name, fname->disk_name.len);
+ }
+ 
++#ifdef HAVE_SERVER_SUPPORT
+ /* bio.c */
+ extern void llcrypt_decrypt_bio(struct bio *);
+ extern void llcrypt_enqueue_decrypt_bio(struct llcrypt_ctx *ctx,
+ 					struct bio *bio);
+ extern int llcrypt_zeroout_range(const struct inode *, pgoff_t, sector_t,
+ 				 unsigned int);
 +#endif
  
- 	bio_for_each_segment_all(bv, bio, iter_all) {
- 		struct page *page = bv->bv_page;
+ /* hooks.c */
+ extern int llcrypt_file_open(struct inode *inode, struct file *filp);
+@@ -525,6 +527,7 @@ static inline bool llcrypt_match_name(const struct llcrypt_name *fname,
+ 	return !memcmp(de_name, fname->disk_name.name, fname->disk_name.len);
+ }
+ 
++#ifdef HAVE_SERVER_SUPPORT
+ /* bio.c */
+ static inline void llcrypt_decrypt_bio(struct bio *bio)
+ {
+@@ -540,6 +543,7 @@ static inline int llcrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
+ {
+ 	return -EOPNOTSUPP;
+ }
++#endif
+ 
+ /* hooks.c */
+ 
+diff --git a/libcfs/libcfs/crypto/bio.c b/libcfs/libcfs/crypto/bio.c
+index 78b56cbd36..02ecacff5e 100644
+--- a/libcfs/libcfs/crypto/bio.c
++++ b/libcfs/libcfs/crypto/bio.c
+@@ -24,6 +24,7 @@
+  * tags/v5.4
+  */
+ 
++#ifdef HAVE_SERVER_SUPPORT
+ #include <linux/pagemap.h>
+ #include <linux/module.h>
+ #include <linux/bio.h>
+@@ -126,3 +127,4 @@ errout:
+ 	return err;
+ }
+ EXPORT_SYMBOL(llcrypt_zeroout_range);
++#endif
