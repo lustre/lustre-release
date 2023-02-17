@@ -664,6 +664,7 @@ int lctl_main(int argc, char **argv)
 	}
 
 	obd_finalize(argc, argv);
+	Parser_exit(argc, argv);
 	return rc < 0 ? -rc : rc;
 }
 

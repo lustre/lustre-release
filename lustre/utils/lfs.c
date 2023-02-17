@@ -13130,6 +13130,8 @@ int main(int argc, char **argv)
 		rc = Parser_commands();
 	}
 
+	Parser_exit(argc, argv);
+
 	return rc < 0 ? -rc : rc;
 }
 
