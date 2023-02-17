@@ -1139,6 +1139,12 @@ int tgt_obd_ping(struct tgt_session_info *tsi)
 	if (rc)
 		RETURN(err_serious(rc));
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_VS_EVICT)) {
+		if (strstr(tsi->tsi_exp->exp_obd->obd_name, "MDT0000") &&
+		    (exp_connect_flags(tsi->tsi_exp) & OBD_CONNECT_MDS_MDS))
+			tsi->tsi_pill->rc_req->rq_no_reply = 1;
+	}
+
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_obd_ping);

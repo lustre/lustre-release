@@ -1088,6 +1088,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	int tmp_exp_old_falloc;
 #endif
 	struct ptlrpc_connection *pcon = NULL;
+	bool reconnected = false;
 
 	ENTRY;
 
@@ -1443,8 +1444,15 @@ dont_check_exports:
 				new_mds_mds_conn = true;
 		}
 	} else {
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_VS_EVICT)) {
+			class_export_get(export);
+			class_fail_export(export);
+			class_export_put(export);
+		}
 		rc = obd_reconnect(req->rq_svc_thread->t_env,
 				   export, target, &cluuid, data, &client_nid);
+		if (rc == 0)
+			reconnected = true;
 	}
 	if (rc)
 		GOTO(out, rc);
@@ -1487,6 +1495,15 @@ dont_check_exports:
 
 	if (export->exp_disconnected) {
 		spin_unlock(&export->exp_lock);
+		if (reconnected) {
+			/*
+			 * for each connect called disconnect
+			 * should be called to cleanup stuff
+			 */
+			class_export_get(export);
+			obd_disconnect(export);
+		}
+
 		GOTO(out, rc = -ENODEV);
 	}
 	if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {

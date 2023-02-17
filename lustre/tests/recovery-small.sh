@@ -3431,6 +3431,20 @@ test_152() {
 }
 run_test 152 "QoS object allocation could be awakened in case of OST failover"
 
+test_153() {
+#define OBD_FAIL_MDS_CONNECT_VS_EVICT   0x174
+	do_facet mds1 "$LCTL set_param fail_loc=0x174"
+	# first drop ping reply from MDS and then
+	# evict on the subsequent reconnect
+	# (see target_handle_connect)
+	sleep $((TIMEOUT + 3))
+	stop mds1
+	do_facet mds1 "$LCTL set_param fail_loc=0"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "Fail to start $SINGLEMDS"
+}
+run_test 153 "evict vs reconnect race"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
