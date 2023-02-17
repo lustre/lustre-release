@@ -112,7 +112,11 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0
     Linux Enterprise Server, Debian operating system (and perhaps others), use
     the 
     <literal>_netdev</literal> flag to ensure that these disks are mounted after
-    the network is up.</para>
+    the network is up, unless you are using systemd 232 or greater, which
+    recognize <literal>lustre</literal> as a network filesystem.
+    If you are using <literal>lnet.service</literal>, use
+    <literal>x-systemd.requires=lnet.service</literal> regardless of systemd
+    version.</para>
     <para>We are mounting by disk label here. The label of a device can be read
     with 
     <literal>e2label</literal>. The label of a newly-formatted Lustre server
