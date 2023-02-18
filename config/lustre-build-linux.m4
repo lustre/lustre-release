@@ -422,7 +422,7 @@ LB_LINUX_VERSION
 
 # --- Parallel config for kernel v5.17+
 AS_IF([test "x$lb_cv_dequote_CC_VERSION_TEXT" = "xyes"], [
-	CC_VERSION_TEXT=$(gcc --version | head -n1 | tr ' ()' '.')
+	CC_VERSION_TEXT=$($CC --version | head -n1 | tr ' ()' '.')
 	MAKE_KMOD_ENV="CONFIG_CC_VERSION_TEXT='$CC_VERSION_TEXT'"])
 
 # --- check that we can build modules at all
@@ -842,10 +842,10 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE], [
 	J=${TEST_JOBS:-$(nproc)}
 
 	AC_MSG_NOTICE([Making $1 in $D])
-	AC_MSG_NOTICE([KBUILD_MODPOST_NOFINAL="yes" make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV])
+	AC_MSG_NOTICE([KBUILD_MODPOST_NOFINAL="yes" make modules CC="$CC" -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV])
 
 	AC_TRY_COMMAND([KBUILD_MODPOST_NOFINAL="yes"
-		make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV >${L} 2>&1])
+		make modules CC="$CC" -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV >${L} 2>&1])
 	AS_IF([test -f ${L}],
 	      [AS_IF([test -f $2/Makefile],
 		     [mv $2/Makefile $2/Makefile.compile.$1])],
@@ -928,7 +928,7 @@ AC_DEFUN([LB2_LINUX_TEST_RESULT],[
 			for mf in $(ls -1 ${TEST_DIR}/Makefile.compile.*); do
 				ln -sf $mf ${D}/Makefile
 				KBUILD_MODPOST_NOFINAL="yes"
-				make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} >> rebuild.log 2>&1
+				make modules CC="$CC" -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} >> rebuild.log 2>&1
 
 				for dir in $(awk '/^obj-m/ { print [$]3 }' ${D}/$mf); do
 					name=${dir%/}

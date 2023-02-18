@@ -337,107 +337,6 @@ LC_PATH_DEFAULTS
 ]) # LB_PATH_DEFAULTS
 
 #
-# LB_PROG_CC
-#
-# checks on the C compiler
-#
-AC_DEFUN([LB_PROG_CC], [
-AC_PROG_RANLIB
-AC_CHECK_TOOL(LD, [ld], [no])
-AC_CHECK_TOOL(OBJDUMP, [objdump], [no])
-AC_CHECK_TOOL(STRIP, [strip], [no])
-
-# ---------  unsigned long long sane? -------
-AC_CHECK_SIZEOF(unsigned long long, 0)
-AS_IF([test $ac_cv_sizeof_unsigned_long_long != 8],
-	[AC_MSG_ERROR([we assume that sizeof(unsigned long long) == 8.])])
-
-AS_IF([test $target_cpu = powerpc64], [
-	AC_MSG_WARN([set compiler with -m64])
-	CFLAGS="$CFLAGS -m64"
-	CC="$CC -m64"
-])
-
-# libcfs/include for util headers, lustre/include for liblustreapi and friends
-# UAPI headers from OpenSFS are included if modules support is enabled, otherwise
-# it will use the native kernel implementation.
-CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lustre/include $CPPFLAGS"
-
-CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
-AC_SUBST(CCASFLAGS)
-
-# everyone builds against lnet and lustre kernel headers
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/libcfs/include/libcfs -I$PWD/lnet/include/uapi -I$PWD/lnet/include -I$PWD/lustre/include/uapi -I$PWD/lustre/include"
-AC_SUBST(EXTRA_KCFLAGS)
-]) # LB_PROG_CC
-
-#
-# Check if gcc supports -Wno-format-truncation
-#
-# To supress many warnings with gcc7
-#
-AC_DEFUN([LB_CC_NO_FORMAT_TRUNCATION], [
-	AC_MSG_CHECKING([for -Wno-format-truncation support])
-
-	saved_flags="$CFLAGS"
-	CFLAGS="$CFLAGS -Wno-format-truncation"
-
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-format-truncation"
-		AC_SUBST(EXTRA_KCFLAGS)
-		AC_MSG_RESULT([yes])
-	], [
-		AC_MSG_RESULT([no])
-	])
-
-	CFLAGS="$saved_flags"
-])
-
-#
-# Check if gcc supports -Wno-stringop-truncation
-#
-# To supress many warnings with gcc8
-#
-AC_DEFUN([LB_CC_NO_STRINGOP_TRUNCATION], [
-	AC_MSG_CHECKING([for -Wno-stringop-truncation support])
-
-	saved_flags="$CFLAGS"
-	CFLAGS="$CFLAGS -Werror -Wno-stringop-truncation"
-
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-stringop-truncation"
-		AC_SUBST(EXTRA_KCFLAGS)
-		AC_MSG_RESULT([yes])
-	], [
-		AC_MSG_RESULT([no])
-	])
-
-	CFLAGS="$saved_flags"
-])
-
-#
-# Check if gcc supports -Wno-stringop-overflow
-#
-# To supress many warnings with gcc8
-#
-AC_DEFUN([LB_CC_NO_STRINGOP_OVERFLOW], [
-	AC_MSG_CHECKING([for -Wno-stringop-overflow support])
-
-	saved_flags="$CFLAGS"
-	CFLAGS="$CFLAGS -Wno-stringop-overflow"
-
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-stringop-overflow"
-		AC_SUBST(EXTRA_KCFLAGS)
-		AC_MSG_RESULT([yes])
-	], [
-		AC_MSG_RESULT([no])
-	])
-
-	CFLAGS="$saved_flags"
-])
-
-#
 # LB_CONDITIONALS
 #
 # AM_CONDITIONAL instances for everything
@@ -675,11 +574,6 @@ LB_INCLUDE_RULES
 
 LB_PATH_DEFAULTS
 
-LB_PROG_CC
-LB_CC_NO_FORMAT_TRUNCATION
-LB_CC_NO_STRINGOP_TRUNCATION
-LB_CC_NO_STRINGOP_OVERFLOW
-
 LC_OSD_ADDON
 
 LB_CONFIG_DOCS
@@ -742,15 +636,4 @@ AS_IF([test -d $TEST_DIR -a "x${PARALLEL_BUILD_OPT}" != "xdebug"], [
 ])
 
 AC_OUTPUT
-
-cat <<_ACEOF
-
-CC:            $CC
-LD:            $LD
-CPPFLAGS:      $CPPFLAGS
-CFLAGS:        $CFLAGS
-EXTRA_KCFLAGS: $EXTRA_KCFLAGS
-
-Type 'make' to build Lustre.
-_ACEOF
 ]) # LB_CONFIGURE

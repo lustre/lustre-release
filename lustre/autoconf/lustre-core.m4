@@ -70,7 +70,7 @@ AC_CHECK_FUNCS([copy_file_range],
 #
 AC_DEFUN([LC_FID2PATH_ANON_UNION], [
 saved_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
+CFLAGS="-Werror"
 AC_MSG_CHECKING([if 'struct getinfo_fid2path' has anonymous union])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <linux/lustre/lustre_idl.h>
@@ -405,7 +405,7 @@ AS_IF([test "x$enable_gss" != xno], [
 AC_DEFUN([LC_OPENSSL_HMAC], [
 has_hmac_functions="no"
 saved_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
+CFLAGS="-Werror"
 AC_MSG_CHECKING([whether OpenSSL has HMAC_Init_ex])
 AS_IF([test "x$enable_ssk" != xno], [
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
@@ -415,6 +415,7 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	int main(void) {
 		int rc;
 		rc = HMAC_Init_ex(NULL, "test", 4, EVP_md_null(), NULL);
+		return rc;
 	}
 ])],[
 	has_hmac_functions="yes"
@@ -430,7 +431,7 @@ CFLAGS="$saved_flags"
 AC_DEFUN([LC_OPENSSL_EVP_PKEY], [
 has_evp_pkey="no"
 saved_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
+CFLAGS="-Werror"
 AC_MSG_CHECKING([whether OpenSSL has EVP_PKEY_get_params])
 AS_IF([test "x$enable_ssk" != xno], [
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
@@ -440,6 +441,7 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 		OSSL_PARAM *params;
 
 		int rc = EVP_PKEY_get_params(NULL, params);
+		return rc;
 	}
 ])],[
 	AC_DEFINE(HAVE_OPENSSL_EVP_PKEY, 1, [OpenSSL EVP_PKEY_get_params])
@@ -476,13 +478,14 @@ AC_MSG_RESULT([$enable_ssk])
 # OpenSSL is needed for l_getsepol
 AC_DEFUN([LC_OPENSSL_GETSEPOL], [
 saved_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
+CFLAGS="-Werror"
 AC_MSG_CHECKING([whether openssl-devel is present])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <openssl/evp.h>
 
 	int main(void) {
 		EVP_MD_CTX *mdctx = EVP_MD_CTX_create();
+		(void) mdctx;
 	}
 ])],[
 	AC_DEFINE(HAVE_OPENSSL_GETSEPOL, 1, [openssl-devel is present])
@@ -4450,9 +4453,6 @@ AC_MSG_RESULT([$enable_crypto])
 AC_DEFUN([LC_CONFIGURE], [
 AC_MSG_NOTICE([Lustre core checks
 ==============================================================================])
-
-AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
-	[CFLAGS="$CFLAGS -Wall -Werror"])
 
 # maximum MDS thread count
 LC_MDS_MAX_THREADS
