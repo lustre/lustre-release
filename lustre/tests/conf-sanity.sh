@@ -7196,33 +7196,36 @@ check_max_mod_rpcs_in_flight() {
 }
 
 get_mdt_max_mod_rpcs_in_flight_val() {
-	local tmp_value
-	local host_d="$1"
+	local max_mrif
+	local facet="$1"
 
-	tmp_value=$($LCTL get_param -n \
-		mdt.*.max_mod_rpcs_in_flight)
-	if [[ $tmp_value ]]; then
-		echo $tmp_value
+	# It will be enough to get one value from one MDT
+	max_mrif=$(do_facet $facet \
+		"$LCTL get_param -n \
+		mdt.$FSNAME-MDT*.max_mod_rpcs_in_flight | head -n 1")
+	if [[ $max_mrif ]]; then
+		echo $max_mrif
 	else
-		tmp_value=$(do_facet $host_d \
+		max_mrif=$(do_facet $facet \
 		cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
-		echo $tmp_value
+		echo $max_mrif
 	fi
 }
 
 set_mdt_max_mod_rpcs_in_flight() {
 	local lctl_op
-	local value_d="$1"
-	local host_d="$2"
+	local max_mrif="$1"
+	local facet="$2"
 
 	lctl_op=$($LCTL get_param \
 		mdt.*.max_mod_rpcs_in_flight)
 	if [[ $lctl_op ]]; then
-		$LCTL set_param \
-			mdt.$FSNAME-MDT0000.max_mod_rpcs_in_flight=$value_d
+		do_facet $facet \
+			"$LCTL set_param \
+			mdt.$FSNAME-MDT*.max_mod_rpcs_in_flight=$max_mrif"
 	else
-		do_facet $host_d \
-			"echo $value_d > \
+		do_facet $facet \
+			"echo $max_mrif > \
 			/sys/module/mdt/parameters/max_mod_rpcs_per_client"
 		echo "the deprecated max_mod_rpcs_per_client \
 				parameter was involved"

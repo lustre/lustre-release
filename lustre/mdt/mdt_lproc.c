@@ -1461,7 +1461,7 @@ static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	if (val < 1 || val > OBD_MAX_RIF_DEFAULT)
+	if (val < 1 || val > OBD_MAX_RIF_MAX)
 		return -ERANGE;
 
 	if (mdt_max_mod_rpcs_changed(mdt)) {
