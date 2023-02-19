@@ -352,7 +352,7 @@ EXPORT_SYMBOL(sptlrpc_lprocfs_dir);
 
 int sptlrpc_lproc_init(void)
 {
-	int rc;
+	int rc = 0;
 
 	LASSERT(sptlrpc_debugfs_dir == NULL);
 
@@ -368,7 +368,7 @@ int sptlrpc_lproc_init(void)
 			: -ENOMEM;
 		sptlrpc_lprocfs_dir = NULL;
 	}
-	return 0;
+	return rc;
 }
 
 void sptlrpc_lproc_fini(void)

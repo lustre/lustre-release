@@ -233,7 +233,7 @@ static int nrs_crrn_ctl(struct ptlrpc_nrs_policy *policy,
 {
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
-	switch((enum nrs_ctl_crr)opc) {
+	switch (opc) {
 	default:
 		RETURN(-EINVAL);
 

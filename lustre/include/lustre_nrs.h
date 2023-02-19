@@ -63,7 +63,16 @@ enum ptlrpc_nrs_ctl {
 	 * Policies can start using opcodes from this value and onwards for
 	 * their own purposes; the assigned value itself is arbitrary.
 	 */
-	PTLRPC_NRS_CTL_1ST_POL_SPEC = 0x20,
+	PTLRPC_NRS_CTL_POL_SPEC_01 = 0x20,
+	PTLRPC_NRS_CTL_POL_SPEC_02,
+	PTLRPC_NRS_CTL_POL_SPEC_03,
+	PTLRPC_NRS_CTL_POL_SPEC_04,
+	PTLRPC_NRS_CTL_POL_SPEC_05,
+	PTLRPC_NRS_CTL_POL_SPEC_06,
+	PTLRPC_NRS_CTL_POL_SPEC_07,
+	PTLRPC_NRS_CTL_POL_SPEC_08,
+	PTLRPC_NRS_CTL_POL_SPEC_09,
+	PTLRPC_NRS_CTL_POL_SPEC_10
 };
 
 /**

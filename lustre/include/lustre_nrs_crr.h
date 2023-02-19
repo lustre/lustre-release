@@ -112,17 +112,14 @@ struct nrs_crrn_req {
 
 /**
  * CRR-N policy operations.
+ *
+ * Read the RR quantum size of a CRR-N policy.
  */
-enum nrs_ctl_crr {
-	/**
-	 * Read the RR quantum size of a CRR-N policy.
-	 */
-	NRS_CTL_CRRN_RD_QUANTUM = PTLRPC_NRS_CTL_1ST_POL_SPEC,
-	/**
-	 * Write the RR quantum size of a CRR-N policy.
-	 */
-	NRS_CTL_CRRN_WR_QUANTUM,
-};
+#define NRS_CTL_CRRN_RD_QUANTUM PTLRPC_NRS_CTL_POL_SPEC_01
+/**
+ * Write the RR quantum size of a CRR-N policy.
+ */
+#define NRS_CTL_CRRN_WR_QUANTUM PTLRPC_NRS_CTL_POL_SPEC_02
 
 /** @} CRR-N */
 #endif

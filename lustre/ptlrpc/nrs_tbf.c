@@ -2870,7 +2870,7 @@ static int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy,
 
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
-	switch ((enum nrs_ctl_tbf)opc) {
+	switch (opc) {
 	default:
 		RETURN(-EINVAL);
 
@@ -3094,13 +3094,9 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 			ntoken = 1;
 
 		if (ntoken > 0) {
-			struct ptlrpc_request *req;
 			nrq = list_entry(cli->tc_list.next,
-					     struct ptlrpc_nrs_request,
-					     nr_u.tbf.tr_list);
-			req = container_of(nrq,
-					   struct ptlrpc_request,
-					   rq_nrq);
+					 struct ptlrpc_nrs_request,
+					 nr_u.tbf.tr_list);
 			ntoken--;
 			cli->tc_ntoken = ntoken;
 			cli->tc_check_time = now;

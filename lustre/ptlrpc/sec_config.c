@@ -688,7 +688,7 @@ int sptlrpc_process_config(struct lustre_cfg *lcfg)
 	 *	is a actual filesystem.
 	 */
 	if (server_name2fsname(target, fsname, NULL))
-		strlcpy(fsname, target, sizeof(target));
+		strlcpy(fsname, target, sizeof(fsname));
 
 	rc = sptlrpc_parse_rule(param, &rule);
 	if (rc)

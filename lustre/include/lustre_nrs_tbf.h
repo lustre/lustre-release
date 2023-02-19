@@ -362,21 +362,18 @@ struct nrs_tbf_req {
 
 /**
  * TBF policy operations.
+ *
+ * Read the the data of a TBF policy.
  */
-enum nrs_ctl_tbf {
-	/**
-	 * Read the the data of a TBF policy.
-	 */
-	NRS_CTL_TBF_RD_RULE = PTLRPC_NRS_CTL_1ST_POL_SPEC,
-	/**
-	 * Write the the data of a TBF policy.
-	 */
-	NRS_CTL_TBF_WR_RULE,
-	/**
-	 * Read the TBF policy type preset by proc entry "nrs_policies".
-	 */
-	NRS_CTL_TBF_RD_TYPE_FLAG,
-};
+#define NRS_CTL_TBF_RD_RULE PTLRPC_NRS_CTL_POL_SPEC_01
+/**
+ * Write the the data of a TBF policy.
+ */
+#define NRS_CTL_TBF_WR_RULE PTLRPC_NRS_CTL_POL_SPEC_02
+/**
+ * Read the TBF policy type preset by proc entry "nrs_policies".
+ */
+#define NRS_CTL_TBF_RD_TYPE_FLAG PTLRPC_NRS_CTL_POL_SPEC_03
 
 /** @} tbf */
 #endif
