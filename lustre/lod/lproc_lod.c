@@ -1356,6 +1356,114 @@ static struct attribute *lod_attrs[] = {
 
 KOBJ_ATTRIBUTE_GROUPS(lod); /* creates lod_groups from lod_attrs */
 
+int lod_tgt_weights_seq_show(struct seq_file *m, struct lod_device *lod,
+			     struct lu_tgt_pool *tgts, bool is_mdt)
+{
+	int i;
+
+	if (!tgts->op_count)
+		return 0;
+
+	down_read(&tgts->op_rw_sem);
+	for (i = 0; i < tgts->op_count; i++) {
+		u32 *op_array = tgts->op_array;
+		struct lod_tgt_desc *tgt = is_mdt ? MDT_TGT(lod, op_array[i]) :
+						 OST_TGT(lod, op_array[i]);
+		struct lu_svr_qos *svr = tgt->ltd_qos.ltq_svr;
+
+		seq_printf(m, "- { %s: %d, tgt_weight: %llu, tgt_penalty: %llu, tgt_penalty_per_obj: %llu, tgt_avail: %llu, tgt_last_used: %llu, svr_nid: %s, svr_bavail: %llu, svr_iavail: %llu, svr_penalty: %llu, svr_penalty_per_obj: %llu, svr_last_used: %llu }\n",
+			   is_mdt ? "mdt_idx" : "ost_idx", tgt->ltd_index,
+			   tgt->ltd_qos.ltq_weight,
+			   tgt->ltd_qos.ltq_penalty,
+			   tgt->ltd_qos.ltq_penalty_per_obj,
+			   tgt->ltd_qos.ltq_avail, tgt->ltd_qos.ltq_used,
+			   svr->lsq_uuid.uuid, svr->lsq_bavail, svr->lsq_iavail,
+			   svr->lsq_penalty, svr->lsq_penalty_per_obj,
+			   svr->lsq_used);
+	}
+	up_read(&tgts->op_rw_sem);
+
+	return 0;
+}
+
+int lod_tgt_weights_seq_write(struct seq_file *m, const char __user *buf,
+			      size_t count, struct lod_device *lod,
+			      struct lu_tgt_pool *tgts, bool is_mdt)
+{
+	int i;
+
+	if (!tgts->op_count)
+		return count;
+
+	down_read(&tgts->op_rw_sem);
+	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	for (i = 0; i < tgts->op_count; i++) {
+		u32 *op_array = tgts->op_array;
+		struct lod_tgt_desc *tgt = is_mdt ? MDT_TGT(lod, op_array[i]) :
+						 OST_TGT(lod, op_array[i]);
+
+		tgt->ltd_qos.ltq_weight = 0;
+		tgt->ltd_qos.ltq_penalty = 0;
+		tgt->ltd_qos.ltq_svr->lsq_penalty = 0;
+	}
+	set_bit(LQ_DIRTY, &lod->lod_ost_descs.ltd_qos.lq_flags);
+	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	up_read(&tgts->op_rw_sem);
+
+	return count;
+}
+
+static int lod_mdt_weights_seq_show(struct seq_file *m, void *data)
+{
+	struct lod_device *lod = m->private;
+	struct lu_tgt_pool *tgts = &lod->lod_mdt_descs.ltd_tgt_pool;
+
+	return lod_tgt_weights_seq_show(m, lod, tgts, true);
+}
+
+static ssize_t
+lod_mdt_weights_seq_write(struct file *file, const char __user *buf,
+		      size_t count, loff_t *off)
+{
+
+	struct seq_file *m = file->private_data;
+	struct lod_device *lod = m->private;
+	struct lu_tgt_pool *tgts = &lod->lod_mdt_descs.ltd_tgt_pool;
+
+	return lod_tgt_weights_seq_write(m, buf, count, lod, tgts, true);
+}
+LDEBUGFS_SEQ_FOPS(lod_mdt_weights);
+
+static int lod_ost_weights_seq_show(struct seq_file *m, void *data)
+{
+	struct lod_device *lod = m->private;
+	struct lu_tgt_pool *tgts = &lod->lod_ost_descs.ltd_tgt_pool;
+
+	return lod_tgt_weights_seq_show(m, lod, tgts, false);
+}
+
+static ssize_t
+lod_ost_weights_seq_write(struct file *file, const char __user *buf,
+		      size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct lod_device *lod = m->private;
+	struct lu_tgt_pool *tgts = &lod->lod_ost_descs.ltd_tgt_pool;
+
+	return lod_tgt_weights_seq_write(m, buf, count, lod, tgts, false);
+}
+LDEBUGFS_SEQ_FOPS(lod_ost_weights);
+
+static struct ldebugfs_vars ldebugfs_lod_vars[] = {
+	{ .name	=	"qos_mdt_weights",
+	  .fops	=	&lod_mdt_weights_fops,
+	  .proc_mode =	0444 },
+	{ .name	=	"qos_ost_weights",
+	  .fops	=	&lod_ost_weights_fops,
+	  .proc_mode =	0444 },
+	{ 0 }
+};
+
 /**
  * Initialize procfs entries for LOD.
  *
@@ -1444,11 +1552,17 @@ int lod_procfs_init(struct lod_device *lod)
 	obd->obd_debugfs_entry = debugfs_create_dir(obd->obd_name,
 						    obd->obd_type->typ_debugfs_entry);
 
+
+	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_lod_vars, lod);
+
 	lod->lod_debugfs = ldebugfs_add_symlink(obd->obd_name, "lov",
 						"../lod/%s", obd->obd_name);
 	if (!lod->lod_debugfs)
 		CERROR("%s: failed to create LOV debugfs symlink\n",
 		       obd->obd_name);
+
+	lod->lod_pool_debugfs = debugfs_create_dir("pool",
+						   obd->obd_debugfs_entry);
 
 	type = container_of(lov, struct obd_type, typ_kobj);
 	if (!type->typ_procroot)
@@ -1490,7 +1604,9 @@ void lod_procfs_fini(struct lod_device *lod)
 		kobject_put(lov);
 	}
 
+	debugfs_remove_recursive(lod->lod_pool_debugfs);
 	debugfs_remove_recursive(lod->lod_debugfs);
+	debugfs_remove_recursive(obd->obd_debugfs_entry);
 
 	if (obd->obd_proc_entry) {
 		lprocfs_remove(&obd->obd_proc_entry);

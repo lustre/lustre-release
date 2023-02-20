@@ -401,6 +401,35 @@ struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
 	rcu_read_unlock();
 	return pool;
 }
+
+static int lod_ost_pool_weights_seq_show(struct seq_file *m, void *data)
+{
+	struct pool_desc *pool = m->private;
+	struct lod_device *lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
+
+	return lod_tgt_weights_seq_show(m, lod,	&pool->pool_obds, false);
+}
+
+static ssize_t
+lod_ost_pool_weights_seq_write(struct file *file, const char __user *buf,
+			       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct pool_desc *pool = m->private;
+	struct lod_device *lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
+
+	return lod_tgt_weights_seq_write(m, buf, count, lod, &pool->pool_obds,
+					 false);
+}
+LDEBUGFS_SEQ_FOPS(lod_ost_pool_weights);
+
+static struct ldebugfs_vars ldebugfs_lod_pool_vars[] = {
+	{ .name	=	"qos_ost_weights",
+	  .fops	=	&lod_ost_pool_weights_fops,
+	  .proc_mode =	0444 },
+	{ 0 }
+};
+
 /**
  * Allocate a new pool for the specified device.
  *
@@ -490,6 +519,11 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 		GOTO(out_err, rc);
 	}
 
+	new_pool->pool_debugfs = debugfs_create_dir(poolname,
+						    lod->lod_pool_debugfs);
+	ldebugfs_add_vars(new_pool->pool_debugfs, ldebugfs_lod_pool_vars,
+			  new_pool);
+
 	CDEBUG(D_CONFIG, LOV_POOLNAMEF" is pool #%d\n",
 			poolname, lod->lod_pool_count);
 
@@ -538,6 +572,8 @@ int lod_pool_del(struct obd_device *obd, char *poolname)
 	rcu_read_unlock();
 	if (!pool)
 		RETURN(-ENOENT);
+
+	debugfs_remove_recursive(pool->pool_debugfs);
 
 	if (pool->pool_proc_entry != NULL) {
 		CDEBUG(D_INFO, "proc entry %p\n", pool->pool_proc_entry);

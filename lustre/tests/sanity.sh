@@ -19517,6 +19517,16 @@ test_205e() {
 }
 run_test 205e "verify the output of lljobstat"
 
+test_205f() {
+	verify_yaml_available || skip_env "YAML verification not installed"
+
+	# check both qos_ost_weights and qos_mdt_weights
+	do_facet mds1 $LCTL get_param -n lod.*.qos*weights
+	do_facet mds1 $LCTL get_param -n lod.*.qos*weights | verify_yaml ||
+		error "qos_ost_weights is not valid YAML"
+}
+run_test 205f "verify qos_ost_weights YAML format "
+
 # LU-1480, LU-1773 and LU-1657
 test_206() {
 	mkdir -p $DIR/$tdir
@@ -29622,7 +29632,6 @@ test_906() {
 	rm -f $file || error "rm -f $file failed"
 }
 run_test 906 "Simple test for io_uring I/O engine via fio"
-
 
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true

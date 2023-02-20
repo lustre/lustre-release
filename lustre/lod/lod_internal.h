@@ -71,6 +71,7 @@ struct pool_desc {
 	char			 pool_spill_target[LOV_MAXPOOLNAME + 1];
 	bool			 pool_same_space; /* targets in pool balanced*/
 	time64_t		 pool_same_space_expire; /*uses ld_qos_maxage*/
+	struct dentry		*pool_debugfs;
 };
 
 struct lod_device;
@@ -155,6 +156,7 @@ struct lod_device {
 
 	struct proc_dir_entry *lod_symlink;
 	struct dentry	       *lod_debugfs;
+	struct dentry	       *lod_pool_debugfs;
 
 	/* ROOT object, used to fetch FS default striping */
 	struct lod_object      *lod_md_root;
@@ -817,5 +819,10 @@ void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
 			      struct pool_desc *pool);
 struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname);
+int lod_tgt_weights_seq_show(struct seq_file *m, struct lod_device *lod,
+			     struct lu_tgt_pool *tgts, bool mdt);
+int lod_tgt_weights_seq_write(struct seq_file *m, const char __user *buf,
+			      size_t count, struct lod_device *lod,
+			      struct lu_tgt_pool *tgts, bool is_mdt);
 extern struct lprocfs_vars lprocfs_lod_spill_vars[];
 #endif
