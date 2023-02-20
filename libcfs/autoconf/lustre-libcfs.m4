@@ -2616,6 +2616,7 @@ AC_MSG_NOTICE([LibCFS core checks
 # libcfs/libcfs/util/nidstrings.c
 AC_CHECK_HEADERS([netdb.h asm/types.h endian.h])
 AC_CHECK_FUNCS([gethostbyname])
+AC_CHECK_FUNCS([getaddrinfo])
 
 # --------  Check for required packages  --------------
 

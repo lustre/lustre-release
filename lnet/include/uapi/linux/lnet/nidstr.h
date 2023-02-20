@@ -86,6 +86,17 @@ static inline char *libcfs_nid2str(lnet_nid_t nid)
 				LNET_NIDSTR_SIZE);
 }
 
+char *libcfs_nidstr_r(const struct lnet_nid *nid,
+		      char *buf, __kernel_size_t buf_size);
+
+static inline char *libcfs_nidstr(const struct lnet_nid *nid)
+{
+	return libcfs_nidstr_r(nid, libcfs_next_nidstring(),
+			       LNET_NIDSTR_SIZE);
+}
+
+int libcfs_strnid(struct lnet_nid *nid, const char *str);
+char *libcfs_idstr(struct lnet_processid *id);
 __u32 libcfs_str2net(const char *str);
 lnet_nid_t libcfs_str2nid(const char *str);
 int libcfs_str2anynid(lnet_nid_t *nid, const char *str);

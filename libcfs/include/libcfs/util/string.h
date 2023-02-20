@@ -80,7 +80,11 @@ struct netstrfns {
 	char	*nf_name;
 	char	*nf_modname;
 	void	(*nf_addr2str)(__u32 addr, char *str, size_t size);
+	void	(*nf_addr2str_size)(const __be32 *addr, size_t asize, char *str,
+				    size_t size);
 	int	(*nf_str2addr)(const char *str, int nob, __u32 *addr);
+	int	(*nf_str2addr_size)(const char *str, int nob,
+				    __be32 *addr, size_t *asize);
 	int	(*nf_parse_addrlist)(char *str, int len,
 				     struct list_head *list);
 	int	(*nf_print_addrlist)(char *buffer, int count,

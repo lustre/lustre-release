@@ -41,6 +41,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #include <libcfs/util/string.h>
 #include <linux/lnet/lnet-types.h>
@@ -97,6 +98,22 @@ libcfs_ip_addr2str(__u32 addr, char *str, size_t size)
 		 (addr >> 8) & 0xff, addr & 0xff);
 }
 
+static void
+libcfs_ip_addr2str_size(const __be32 *addr, size_t asize,
+			char *str, size_t size)
+{
+	switch (asize) {
+	case 4:
+		inet_ntop(AF_INET, addr, str, size);
+		break;
+	case 16:
+		inet_ntop(AF_INET6, addr, str, size);
+		break;
+	default:
+		return;
+	}
+}
+
 /* CAVEAT EMPTOR XscanfX
  * I use "%n" at the end of a sscanf format to detect trailing junk.  However
  * sscanf may return immediately if it sees the terminating '0' in a string, so
@@ -148,6 +165,68 @@ libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 	}
 #endif
 	return 0;
+}
+
+static int
+libcfs_ip_str2addr_size(const char *str, int nob,
+			__be32 *addr, size_t *alen)
+{
+	char *tmp = malloc(nob+1);
+	int ret = 1;
+
+	if (!tmp)
+		return 0;
+	memcpy(tmp, str, nob);
+	tmp[nob] = 0;
+
+	if (inet_pton(AF_INET, tmp, (struct in_addr *)addr) == 0) {
+		*alen = 4;
+		goto out;
+	}
+	if (inet_pton(AF_INET6, tmp, (struct in6_addr *)addr) == 0) {
+		*alen = 16;
+		goto out;
+	}
+#ifdef HAVE_GETADDRINFO
+	/* known hostname? */
+	if (('a' <= str[0] && str[0] <= 'z') ||
+	    ('A' <= str[0] && str[0] <= 'Z')) {
+		struct addrinfo *ai = NULL;
+
+		if (getaddrinfo(tmp, NULL, NULL, &ai) == 0) {
+			struct addrinfo *a;
+			/* First look for an AF_INET address */
+			for (a = ai; a; a = a->ai_next) {
+				if (a->ai_family == AF_INET && a->ai_addr) {
+					struct sockaddr_in *sin =
+						(void *)ai->ai_addr;
+
+					memcpy(addr, &sin->sin_addr, 4);
+					*alen = 4;
+					freeaddrinfo(ai);
+					goto out;
+				}
+			}
+			/* Now consider AF_INET6 */
+			for (a = ai; a; a = a->ai_next) {
+				if (a->ai_family == AF_INET6 && a->ai_addr) {
+					struct sockaddr_in6 *sin6 =
+						(void *)ai->ai_addr;
+
+					memcpy(addr, &sin6->sin6_addr, 16);
+					*alen = 16;
+					freeaddrinfo(ai);
+					goto out;
+				}
+			}
+		}
+		freeaddrinfo(ai);
+	}
+#endif
+	ret = 0;
+out:
+	free(tmp);
+	return ret;
 }
 
 int
@@ -508,7 +587,9 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_name		= "tcp",
 		.nf_modname		= "ksocklnd",
 		.nf_addr2str		= libcfs_ip_addr2str,
+		.nf_addr2str_size	= libcfs_ip_addr2str_size,
 		.nf_str2addr		= libcfs_ip_str2addr,
+		.nf_str2addr_size	= libcfs_ip_str2addr_size,
 		.nf_parse_addrlist	= cfs_ip_addr_parse,
 		.nf_print_addrlist	= libcfs_ip_addr_range_print,
 		.nf_match_addr		= cfs_ip_addr_match,
@@ -709,6 +790,54 @@ libcfs_nid2str_r(lnet_nid_t nid, char *buf, size_t buf_size)
 	return buf;
 }
 
+char *
+libcfs_nidstr_r(const struct lnet_nid *nid, char *buf, size_t buf_size)
+{
+	__u32 nnum;
+	__u32 lnd;
+	struct netstrfns *nf;
+
+	if (LNET_NID_IS_ANY(nid)) {
+		strncpy(buf, "<?>", buf_size);
+		buf[buf_size - 1] = '\0';
+		return buf;
+	}
+
+	nnum = __be16_to_cpu(nid->nid_num);
+	lnd = nid->nid_type;
+	nf = libcfs_lnd2netstrfns(lnd);
+	if (nf) {
+		size_t addr_len;
+		/* Avoid take address in packed array */
+		__u32 addr[4] = { nid->nid_addr[0], nid->nid_addr[1],
+				 nid->nid_addr[2], nid->nid_addr[3]};
+
+		if (nf->nf_addr2str_size)
+			nf->nf_addr2str_size(addr, NID_ADDR_BYTES(nid),
+					     buf, buf_size);
+		else
+			nf->nf_addr2str(ntohl(nid->nid_addr[0]), buf, buf_size);
+		addr_len = strlen(buf);
+		if (nnum == 0)
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s",
+				 nf->nf_name);
+		else
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s%u",
+				 nf->nf_name, nnum);
+	} else {
+		int l = 0;
+		int words = (NID_ADDR_BYTES(nid) + 3) / 4;
+		int i;
+
+		for (i = 0; i < words && i < 4; i++)
+			l = snprintf(buf+l, buf_size-l, "%s%x",
+				     i ? ":" : "", ntohl(nid->nid_addr[i]));
+		snprintf(buf+l, buf_size-l, "@<%u:%u>", lnd, nnum);
+	}
+
+	return buf;
+}
+
 static struct netstrfns *
 libcfs_str2net_internal(const char *str, __u32 *net)
 {
@@ -779,6 +908,52 @@ libcfs_str2nid(const char *str)
 		return LNET_NID_ANY;
 
 	return LNET_MKNID(net, addr);
+}
+
+int
+libcfs_strnid(struct lnet_nid *nid, const char *str)
+{
+	const char *sep = strchr(str, '@');
+	struct netstrfns *nf;
+	__u32 net;
+
+	if (sep != NULL) {
+		nf = libcfs_str2net_internal(sep + 1, &net);
+		if (nf == NULL)
+			return -EINVAL;
+	} else {
+		sep = str + strlen(str);
+		net = LNET_MKNET(SOCKLND, 0);
+		nf = libcfs_lnd2netstrfns(SOCKLND);
+		assert(nf != NULL);
+	}
+
+	memset(nid, 0, sizeof(*nid));
+	nid->nid_type = LNET_NETTYP(net);
+	nid->nid_num = htons(LNET_NETNUM(net));
+	if (nf->nf_str2addr_size) {
+		size_t asize = 0;
+		__u32 addr[4];
+
+		if (!nf->nf_str2addr_size(str, (int)(sep - str),
+					  addr, &asize))
+			return -EINVAL;
+
+		/* Avoid take address in packed array */
+		nid->nid_addr[0] = addr[0];
+		nid->nid_addr[1] = addr[1];
+		nid->nid_addr[2] = addr[2];
+		nid->nid_addr[3] = addr[3];
+		nid->nid_size = asize - 4;
+	} else {
+		__u32 addr;
+
+		if (!nf->nf_str2addr(str, (int)(sep - str), &addr))
+			return -EINVAL;
+		nid->nid_addr[0] = htonl(addr);
+		nid->nid_size = 0;
+	}
+	return 0;
 }
 
 char *
