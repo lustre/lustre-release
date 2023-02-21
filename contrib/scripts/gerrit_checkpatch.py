@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # GPL HEADER START
 #
@@ -33,6 +33,7 @@ Gerrit Checkpatch Reviewer Daemon
 * POST reviews back to gerrit based on checkpatch output.
 """
 
+from __future__ import print_function
 import base64
 import fnmatch
 import logging
@@ -41,7 +42,7 @@ import os
 import requests
 import subprocess
 import time
-import urllib
+from six.moves.urllib.parse import quote
 
 def _getenv_list(key, default=None, sep=':'):
     """
@@ -144,7 +145,7 @@ def parse_checkpatch_output(out, path_line_comments, warning_count):
             except ValueError:
                 level, kind, message = None, None, None
 
-            if level != 'ERROR' and level != 'WARNING':
+            if level not in ('ERROR', 'WARNING'):
                 level, kind, message = None, None, None
 
 
@@ -155,9 +156,9 @@ def review_input_and_score(path_line_comments, warning_count):
     """
     review_comments = {}
 
-    for path, line_comments in path_line_comments.iteritems():
+    for path, line_comments in list(path_line_comments.items()):
         path_comments = []
-        for line, comment_list in line_comments.iteritems():
+        for line, comment_list in list(line_comments.items()):
             message = '\n'.join(comment_list)
             path_comments.append({'line': line, 'message': message})
         review_comments[path] = path_comments
@@ -194,7 +195,7 @@ def review_input_and_score(path_line_comments, warning_count):
 
 def _now():
     """_"""
-    return long(time.time())
+    return int(time.time())
 
 
 class Reviewer(object):
@@ -214,7 +215,7 @@ class Reviewer(object):
         self.history_path = history_path
         self.history_mode = 'rw'
         self.history = {}
-        self.timestamp = 0L
+        self.timestamp = 0
         self.post_enabled = True
         self.post_interval = 10
         self.update_interval = 300
@@ -292,7 +293,7 @@ class Reviewer(object):
                 for line in history_file:
                     epoch, change_id, revision, score = line.split()
                     if change_id == '-':
-                        self.timestamp = long(float(epoch))
+                        self.timestamp = int(float(epoch))
                     else:
                         self.history[change_id + ' ' + revision] = score
 
@@ -311,7 +312,7 @@ class Reviewer(object):
 
         if 'w' in self.history_mode:
             with open(self.history_path, 'a') as history_file:
-                print >> history_file, epoch, change_id, revision, score
+                print(epoch, change_id, revision, score, file=history_file)
 
     def in_history(self, change_id, revision):
         """
@@ -323,8 +324,8 @@ class Reviewer(object):
         """
         GET one change by id.
         """
-        path = ('/changes/' + urllib.quote(self.project, safe='') + '~' +
-                urllib.quote(self.branch, safe='') + '~' + change_id +
+        path = ('/changes/' + quote(self.project, safe='') + '~' +
+                quote(self.branch, safe='') + '~' + change_id +
                 '?o=CURRENT_REVISION')
         res = self._get(path)
         if not res:
@@ -343,11 +344,11 @@ class Reviewer(object):
         """
         query = dict(query)
         project = query.get('project', self.project)
-        query['project'] = urllib.quote(project, safe='')
+        query['project'] = quote(project, safe='')
         branch = query.get('branch', self.branch)
-        query['branch'] = urllib.quote(branch, safe='')
+        query['branch'] = quote(branch, safe='')
         path = ('/changes/?q=' +
-                '+'.join(k + ':' + v for k, v in query.iteritems()) +
+                '+'.join(k + ':' + v for k, v in list(query.items())) +
                 '&o=CURRENT_REVISION')
         res = self._get(path)
         if not res:
