@@ -1486,8 +1486,19 @@ copy_ioc_udsp_descr(struct lnet_ud_nid_descr *nid_descr, char *type,
 	CDEBUG(D_NET, "%u\n", nid_descr->ud_net_id.udn_net_type);
 
 	/* allocate the total memory required to copy this NID descriptor */
-	alloc_size = (sizeof(struct cfs_expr_list) * (expr_count + 1)) +
-		     (sizeof(struct cfs_range_expr) * (range_count));
+	if (ioc_nid->iud_net.ud_net_num_expr.le_count) {
+		if (ioc_nid->iud_net.ud_net_num_expr.le_count != 1) {
+			CERROR("Unexpected number of net numeric ranges \"%u\". Cannot add UDSP rule.\n",
+			       ioc_nid->iud_net.ud_net_num_expr.le_count);
+			return -EINVAL;
+		}
+		alloc_size = (sizeof(struct cfs_expr_list) * (expr_count + 1)) +
+			     (sizeof(struct cfs_range_expr) * (range_count));
+	} else {
+		alloc_size = (sizeof(struct cfs_expr_list) * (expr_count)) +
+			     (sizeof(struct cfs_range_expr) * (range_count));
+	}
+
 	LIBCFS_ALLOC(buf, alloc_size);
 	if (!buf)
 		return -ENOMEM;
