@@ -79,12 +79,51 @@
         <screen>[md|zfs:][pool_dir/]&lt;pool&gt;/&lt;filesystem&gt;</screen>
         <para>Snapshot only uses the fields &lt;host&gt;, &lt;label&gt; and
         &lt;device&gt;.</para>
-        <para>Example:</para>
+        <para>Example 1:</para>
         <screen>mgs# cat /etc/ldev.conf
 host-mdt1 - myfs-MDT0000 zfs:/tmp/myfs-mdt1/mdt1
 host-mdt2 - myfs-MDT0001 zfs:myfs-mdt2/mdt2
 host-ost1 - OST0000 zfs:/tmp/myfs-ost1/ost1
 host-ost2 - OST0001 zfs:myfs-ost2/ost2</screen>
+        <para>Example 2:</para>
+        <screen>
+<emphasis role="bold">For the given mounted MGS/OST on single node:</emphasis>
+singlenode# mount | grep "lustre-[m|o]"
+lustre-mdt1/mdt1 on /mnt/lustre-mds1 type lustre (rw,svname=lustre-MDT0000,mgs,osd=osd-zfs)
+lustre-ost1/ost1 on /mnt/lustre-ost1 type lustre (rw,svname=lustre-OST0000, mgsnode=x.x.x.x@tcp, osd=osd-zfs)
+
+<emphasis role="bold">The corresponding /etc/ldev.conf would be</emphasis>
+singlenode# cat /etc/ldev.conf
+centos79z1 - lustre-MDT0000 zfs:/tmp/lustre-mdt1/mdt1 - -
+centos79z1 - lustre-OST0000 zfs:/tmp/lustre-ost1/ost1 - -
+
+<emphasis role="Bold">Where:</emphasis>
+        </screen>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colwidth="50*"/>
+            <colspec colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry>
+                   <para><emphasis role="bold">Fields</emphasis></para>
+                     </entry>
+                     <entry>
+                       <para><emphasis role="bold">Description</emphasis></para>
+                     </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row><entry>centos79z1</entry><entry>Hostname</entry></row>
+                <row><entry>-</entry><entry>Not Used</entry></row>
+                <row><entry>lustre-OST0000</entry><entry>Device label</entry></row>
+                <row><entry>zfs:/tmp/lustre-ost1/ost1</entry><entry>Device Name</entry></row>
+                <row><entry>-</entry><entry>Not Used</entry></row>
+                <row><entry>-</entry><entry>Not Used</entry></row>
+              </tbody>
+          </tgroup>
+        </informaltable>
+
         <para>The configuration file is edited manually.</para>
         <para> Once the configuration file is updated to reflect the current
         file system setup, you are ready to create a file system snapshot.
