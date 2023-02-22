@@ -456,9 +456,6 @@ static int kfilnd_startup(struct lnet_ni *ni)
 		goto err;
 	}
 
-	ni->ni_data = kfdev;
-	ni->ni_nid.nid_addr[0] = cpu_to_be32(LNET_NIDADDR(kfdev->nic_addr));
-
 	/* Post a series of immediate receive buffers */
 	rc = kfilnd_dev_post_imm_buffers(kfdev);
 	if (rc) {

@@ -251,6 +251,9 @@ struct kfilnd_dev *kfilnd_dev_alloc(struct lnet_ni *ni,
 	/* Mark that the dev/NI has now been initialized */
 	dev->kfd_state = KFILND_STATE_INITIALIZED;
 
+	ni->ni_data = dev;
+	ni->ni_nid.nid_addr[0] = cpu_to_be32(LNET_NIDADDR(dev->nic_addr));
+
 	/* Initialize debugfs stats. */
 	dev->dev_dir = debugfs_create_dir(libcfs_nidstr(&ni->ni_nid),
 					  kfilnd_debug_dir);
