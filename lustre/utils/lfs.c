@@ -1023,31 +1023,34 @@ static int migrate_block(int fd, int fdv,
 	int	rc;
 	int	rc2;
 
-	rc = fstat(fd, &st);
-	if (rc < 0) {
-		error_loc = "cannot stat source file";
-		return -errno;
-	}
-
-	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
-	if (rc < 0) {
-		error_loc = "cannot get dataversion";
-		return rc;
-	}
-
 	do
 		gid = random();
 	while (gid == 0);
 
-	/*
-	 * The grouplock blocks all concurrent accesses to the file.
-	 * It has to be taken after llapi_get_data_version as it would
-	 * block it too.
-	 */
+
+	/* The grouplock blocks all concurrent accesses to the file. */
 	rc = llapi_group_lock(fd, gid);
 	if (rc < 0) {
 		error_loc = "cannot get group lock";
 		return rc;
+	}
+
+	rc = fstat(fd, &st);
+	if (rc < 0) {
+		error_loc = "cannot stat source file";
+		rc = -errno;
+		goto out_unlock;
+	}
+
+	/*
+	 * LL_DV_RD_FLUSH should not be set, otherwise the servers will try to
+	 * get extent locks on the OST objects. This will conflict with our
+	 * extent group locks.
+	 */
+	rc = llapi_get_data_version(fd, &dv1, 0);
+	if (rc < 0) {
+		error_loc = "cannot get dataversion";
+		goto out_unlock;
 	}
 
 	rc = migrate_copy_data(fd, fdv, NULL, bandwidth_bytes_sec,

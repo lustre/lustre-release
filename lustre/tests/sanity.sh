@@ -8212,6 +8212,44 @@ test_56xi() {
 }
 run_test 56xi "lfs migrate stats support"
 
+test_56xj() { # LU-16571 "lfs migrate -b" can cause thread starvation on OSS
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local file=$DIR/$tfile
+	local linkdir=$DIR/$tdir
+
+	test_mkdir $linkdir || error "fail to create $linkdir"
+	$LFS setstripe -i 0 -c 1 -S1M $file
+	dd if=/dev/urandom of=$file bs=1M count=10 ||
+		error "fail to create $file"
+
+	# Create file links
+	local cpts
+	local threads_max
+	local nlinks
+
+	thread_max=$(do_facet ost1 "$LCTL get_param -n ost.OSS.ost.threads_max")
+	cpts=$(do_facet ost1 "$LCTL get_param -n cpu_partition_table | wc -l")
+	(( nlinks = thread_max * 3 / 2 / cpts))
+
+	echo "create $nlinks hard links of $file"
+	createmany -l $file $linkdir/link $nlinks
+
+	# Parallel migrates (should not block)
+	local i
+	for ((i = 0; i < nlinks; i++)); do
+		echo $linkdir/link$i
+	done | xargs -n1 -P $nlinks $LFS migrate -c2
+
+	local stripe_count
+	stripe_count=$($LFS getstripe -c $file) ||
+		error "fail to get stripe count on $file"
+
+	((stripe_count == 2)) ||
+		error "fail to migrate $file (stripe_count = $stripe_count)"
+}
+run_test 56xj "lfs migrate -b should not cause starvation of threads on OSS"
+
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
