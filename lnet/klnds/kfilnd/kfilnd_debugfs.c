@@ -32,7 +32,7 @@
 #include "kfilnd_dev.h"
 
 #define TIME_MAX 0xFFFFFFFFFFFF
-static s64 print_duration(struct kfilnd_tn_duration_stat *stat)
+static s64 get_ave_duration(struct kfilnd_tn_duration_stat *stat)
 {
 	s64 duration;
 
@@ -43,6 +43,16 @@ static s64 print_duration(struct kfilnd_tn_duration_stat *stat)
 		atomic_read(&stat->accumulated_count);
 
 	return min_t(s64, duration, TIME_MAX);
+}
+
+static s64 get_min_duration(struct kfilnd_tn_duration_stat *stat)
+{
+	s64 min;
+
+	min = atomic64_read(&stat->min_duration);
+	if (min == MIN_DURATION_RESET)
+		return 0;
+	return min;
 }
 
 static void seq_print_tn_state_stats(struct seq_file *s, struct kfilnd_dev *dev,
@@ -65,18 +75,18 @@ static void seq_print_tn_state_stats(struct seq_file *s, struct kfilnd_dev *dev,
 	for (data_size = 0; data_size < KFILND_DATA_SIZE_BUCKETS; data_size++) {
 		seq_printf(s, "%-20lu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu %-20llu\n",
 			   data_size == 0 ? 0 : BIT(data_size - 1),
-			   print_duration(&state_stats->state[TN_STATE_IDLE].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_TAG_COMP].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_IMM_SEND].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_TAGGED_RECV_POSTED].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_SEND_FAILED].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_COMP].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_TIMEOUT_COMP].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_SEND_COMP].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_TIMEOUT_TAG_COMP].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_FAIL].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_IMM_RECV].data_size[data_size]),
-			   print_duration(&state_stats->state[TN_STATE_WAIT_TAG_RMA_COMP].data_size[data_size]));
+			   get_ave_duration(&state_stats->state[TN_STATE_IDLE].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_TAG_COMP].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_IMM_SEND].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_TAGGED_RECV_POSTED].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_SEND_FAILED].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_COMP].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_TIMEOUT_COMP].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_SEND_COMP].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_TIMEOUT_TAG_COMP].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_FAIL].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_IMM_RECV].data_size[data_size]),
+			   get_ave_duration(&state_stats->state[TN_STATE_WAIT_TAG_RMA_COMP].data_size[data_size]));
 	}
 }
 
@@ -137,12 +147,15 @@ static void seq_print_tn_stats(struct seq_file *s, struct kfilnd_dev *dev,
 	else
 		stats = &dev->target_stats;
 
-	seq_printf(s, "%-16s %-16s\n", "MSG_SIZE", "DURATION");
+	seq_printf(s, "%16s %16s %16s %16s\n", "MSG_SIZE", "MIN", "MAX",
+		   "AVE");
 
 	for (data_size = 0; data_size < KFILND_DATA_SIZE_BUCKETS; data_size++) {
-		seq_printf(s, "%-16lu %-16llu\n",
+		seq_printf(s, "%16lu %16llu %16llu %16llu\n",
 			   data_size == 0 ? 0 : BIT(data_size - 1),
-			   print_duration(&stats->data_size[data_size]));
+			   get_min_duration(&stats->data_size[data_size]),
+			   atomic64_read(&stats->data_size[data_size].max_duration),
+			   get_ave_duration(&stats->data_size[data_size]));
 	}
 }
 

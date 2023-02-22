@@ -122,6 +122,8 @@
 #define KFILND_BASE_ADDR(addr) \
 	((addr) & ((1UL << (64 - KFILND_FAB_RX_CTX_BITS)) - 1))
 
+#define MIN_DURATION_RESET 0x7fffffffffffffffLL
+
 /* States used by all kfilnd structures */
 enum kfilnd_object_states {
 	KFILND_STATE_UNINITIALIZED,
@@ -368,6 +370,8 @@ enum tn_states {
 struct kfilnd_tn_duration_stat {
 	atomic64_t accumulated_duration;
 	atomic_t accumulated_count;
+	atomic64_t max_duration;
+	atomic64_t min_duration;
 };
 
 /* Transaction state stats group into 22 buckets. Bucket zero corresponds to

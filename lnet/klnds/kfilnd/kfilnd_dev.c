@@ -304,7 +304,6 @@ err:
 	return ERR_PTR(rc);
 }
 
-
 void kfilnd_dev_reset_stats(struct kfilnd_dev *dev)
 {
 	unsigned int data_size;
@@ -315,19 +314,27 @@ void kfilnd_dev_reset_stats(struct kfilnd_dev *dev)
 		stat = &dev->initiator_stats.data_size[data_size];
 		atomic64_set(&stat->accumulated_duration, 0);
 		atomic_set(&stat->accumulated_count, 0);
+		atomic64_set(&stat->max_duration, 0);
+		atomic64_set(&stat->min_duration, MIN_DURATION_RESET);
 
 		stat = &dev->target_stats.data_size[data_size];
 		atomic64_set(&stat->accumulated_duration, 0);
 		atomic_set(&stat->accumulated_count, 0);
+		atomic64_set(&stat->max_duration, 0);
+		atomic64_set(&stat->min_duration, MIN_DURATION_RESET);
 
 		for (state = 0; state < TN_STATE_MAX; state++) {
 			stat = &dev->initiator_state_stats.state[state].data_size[data_size];
 			atomic64_set(&stat->accumulated_duration, 0);
 			atomic_set(&stat->accumulated_count, 0);
+			atomic64_set(&stat->max_duration, 0);
+			atomic64_set(&stat->min_duration, MIN_DURATION_RESET);
 
 			stat = &dev->target_state_stats.state[state].data_size[data_size];
 			atomic64_set(&stat->accumulated_duration, 0);
 			atomic_set(&stat->accumulated_count, 0);
+			atomic64_set(&stat->max_duration, 0);
+			atomic64_set(&stat->min_duration, MIN_DURATION_RESET);
 		}
 	}
 }

@@ -266,15 +266,29 @@ static void kfilnd_tn_record_state_change(struct kfilnd_transaction *tn)
 	unsigned int data_size_bucket =
 		kfilnd_msg_len_to_data_size_bucket(tn->lnet_msg_len);
 	struct kfilnd_tn_duration_stat *stat;
+	s64 time;
+	s64 cur;
 
 	if (tn->is_initiator)
 		stat = &tn->tn_ep->end_dev->initiator_state_stats.state[tn->tn_state].data_size[data_size_bucket];
 	else
 		stat = &tn->tn_ep->end_dev->target_state_stats.state[tn->tn_state].data_size[data_size_bucket];
 
-	atomic64_add(ktime_to_ns(ktime_sub(ktime_get(), tn->tn_state_ts)),
-		     &stat->accumulated_duration);
+	time = ktime_to_ns(ktime_sub(ktime_get(), tn->tn_state_ts));
+	atomic64_add(time, &stat->accumulated_duration);
 	atomic_inc(&stat->accumulated_count);
+
+	do {
+		cur = atomic64_read(&stat->max_duration);
+		if (time <= cur)
+			break;
+	} while (atomic64_cmpxchg(&stat->max_duration, cur, time) != cur);
+
+	do {
+		cur = atomic64_read(&stat->min_duration);
+		if (time >= cur)
+			break;
+	} while (atomic64_cmpxchg(&stat->min_duration, cur, time) != cur);
 }
 
 static void kfilnd_tn_state_change(struct kfilnd_transaction *tn,
@@ -388,15 +402,29 @@ static void kfilnd_tn_record_duration(struct kfilnd_transaction *tn)
 	unsigned int data_size_bucket =
 		kfilnd_msg_len_to_data_size_bucket(tn->lnet_msg_len);
 	struct kfilnd_tn_duration_stat *stat;
+	s64 time;
+	s64 cur;
 
 	if (tn->is_initiator)
 		stat = &tn->tn_ep->end_dev->initiator_stats.data_size[data_size_bucket];
 	else
 		stat = &tn->tn_ep->end_dev->target_stats.data_size[data_size_bucket];
 
-	atomic64_add(ktime_to_ns(ktime_sub(ktime_get(), tn->tn_alloc_ts)),
-		     &stat->accumulated_duration);
+	time = ktime_to_ns(ktime_sub(ktime_get(), tn->tn_alloc_ts));
+	atomic64_add(time, &stat->accumulated_duration);
 	atomic_inc(&stat->accumulated_count);
+
+	do {
+		cur = atomic64_read(&stat->max_duration);
+		if (time <= cur)
+			break;
+	} while (atomic64_cmpxchg(&stat->max_duration, cur, time) != cur);
+
+	do {
+		cur = atomic64_read(&stat->min_duration);
+		if (time >= cur)
+			break;
+	} while (atomic64_cmpxchg(&stat->min_duration, cur, time) != cur);
 }
 
 /**
