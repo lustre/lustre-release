@@ -228,6 +228,11 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 		RETURN(rc);
 	}
 
+	/* Check if we can skip the entire llog plain */
+	if (llog_is_plain_skipable(llh->lgh_hdr, hdr, rec->cr.cr_index,
+				   crs->crs_start_offset))
+		RETURN(LLOG_SKIP_PLAIN);
+
 	/* Skip undesired records */
 	if (rec->cr.cr_index < crs->crs_start_offset)
 		RETURN(0);

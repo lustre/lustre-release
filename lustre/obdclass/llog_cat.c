@@ -895,6 +895,9 @@ out:
 	if (rc == LLOG_DEL_PLAIN || rc == LLOG_DEL_RECORD)
 		/* clear wrong catalog entry */
 		rc = llog_cat_cleanup(env, cat_llh, llh, rec->lrh_index);
+	else if (rc == LLOG_SKIP_PLAIN)
+		/* processing callback ask to skip the llog -> continue */
+		rc = 0;
 
 	if (llh)
 		llog_handle_put(env, llh);
@@ -1060,6 +1063,9 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 	} else if (rc == LLOG_DEL_RECORD) {
 		/* clear wrong catalog entry */
 		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
+	} else if (rc == LLOG_SKIP_PLAIN) {
+		/* processing callback ask to skip the llog -> continue */
+		rc = 0;
 	}
 	if (rc)
 		RETURN(rc);
