@@ -3565,8 +3565,8 @@ wait_destroy_complete () {
 			con=0
 			break;
 		done
-		sleep 1
 		[ ${con} -eq 1 ] && return 0 # done waiting
+		sleep 1
 		echo "Waiting ${WAIT}s for local destroys to complete"
 		WAIT=$((WAIT + 1))
 	done
