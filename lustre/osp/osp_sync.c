@@ -45,42 +45,36 @@
 #include "osp_internal.h"
 
 /*
- * this is a components of OSP implementing synchronization between MDS and OST
- * it llogs all interesting changes (currently it's uig/gid change and object
- * destroy) atomically, then makes sure changes hit OST storage
+ * This is a components of OSP implementing synchronization between MDS and OST
+ * it LLOGs all interesting changes (e.g. UID/GID/projid, late striping, layout
+ * version, and object destroy) atomically, then makes sure changes hit OST
+ * storage
  *
- * we have 4 queues of work:
+ * The OSP syncing thread keeps on reading change records from LLOG. If there
+ * are still idle slots for both in-flight RPCs (opd_sync_rpcs_in_flight) and
+ * in-progress jobs (opd_sync_rpcs_in_progress), the thread will create one
+ * sycning RPC for each LLOG record and send it to corresponding OST for remote
+ * committing. Once RPC is reported committed by OST (using regular
+ * last_committed mechanism), the job is enqueued (into opd_sync_committed_there)
+ * for later cancelling of the corresponded LLOG record.
  *
- * the first queue is llog itself, once read a change is stored in 2nd queue
- * in form of RPC (but RPC isn't fired yet).
+ * opd_sync_changes is the number of unread LLOG records (to be processed).
+ * Please note that this number only includes the LLOG records newly
+ * accumulated since the newest start of the MDS service, but not includes the
+ * LLOG records saved in disk before that. Thus, the actual number of LLOG
+ * records might be larger than this.
  *
- * the second queue (opd_sync_waiting_for_commit) holds changes awaiting local
- * commit. once change is committed locally it migrates onto 3rd queue.
+ * opd_sync_rpcs_in_flight is the in-flight RPC number. An syncing RPC is
+ * in-flight until the MDS received the reply from the corresponding OST (no
+ * matter the remote commit succeeded or failed). The total number of
+ * in-flight RPCs is limited by OSP_MAX_RPCS_IN_FLIGHT.
  *
- * the third queue (opd_sync_committed_here) holds changes committed locally,
- * but not sent to OST (as the pipe can be full). once pipe becomes non-full
- * we take a change from the queue and fire corresponded RPC.
- *
- * once RPC is reported committed by OST (using regular last_committed mech.)
- * the change jumps into 4th queue (opd_sync_committed_there), now we can
- * cancel corresponded llog record and release RPC
- *
- * opd_sync_changes is a number of unread llog records (to be processed).
- * notice this number doesn't include llog records from previous boots.
- * with OSP_SYNC_THRESHOLD we try to batch processing a bit (TO BE IMPLEMENTED)
- *
- * opd_sync_rpcs_in_progress is total number of requests in above 2-4 queues.
- * we control this with OSP_MAX_RPCS_IN_PROGRESS so that OSP don't consume
- * too much memory -- how to deal with 1000th OSTs ? batching could help?
- *
- * opd_sync_rpcs_in_flight is a number of RPC in flight.
- * we control this with OSP_MAX_RPCS_IN_FLIGHT
+ * opd_sync_rpcs_in_progress is the number of RPCs that is still in progress. A
+ * syncing RPC is consider to be in progress until its LLOG record got
+ * canceled. As we can see, an in-flight RPC is obviously still in progress.
+ * The total number of in-progress RPCs is limited by OSP_MAX_RPCS_IN_PROGRESS.
  */
 
-/* XXX: do math to learn reasonable threshold
- * should it be ~ number of changes fitting bulk? */
-
-#define OSP_SYNC_THRESHOLD		10
 #define OSP_MAX_RPCS_IN_FLIGHT		8
 #define OSP_MAX_RPCS_IN_PROGRESS	4096
 #define OSP_MAX_SYNC_CHANGES		2000000000
