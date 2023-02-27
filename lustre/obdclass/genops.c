@@ -1014,6 +1014,9 @@ static void obd_zombie_exp_cull(struct work_struct *ws)
 
 	export = container_of(ws, struct obd_export, exp_zombie_work);
 	class_export_destroy(export);
+	LASSERT(atomic_read(&obd_stale_export_num) > 0);
+	if (atomic_dec_and_test(&obd_stale_export_num))
+		wake_up_var(&obd_stale_export_num);
 }
 
 /* Creates a new export, adds it to the hash table, and returns a
@@ -1153,7 +1156,6 @@ void class_unlink_export(struct obd_export *exp)
 	list_del_init(&exp->exp_obd_chain_timed);
 	exp->exp_obd->obd_num_exports--;
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
-	atomic_inc(&obd_stale_export_num);
 
 	/* A reference is kept by obd_stale_exports list */
 	obd_stale_export_put(exp);
@@ -1807,12 +1809,11 @@ EXPORT_SYMBOL(obd_exports_barrier);
  * Add export to the obd_zombe thread and notify it.
  */
 static void obd_zombie_export_add(struct obd_export *exp) {
-	atomic_dec(&obd_stale_export_num);
+	atomic_inc(&obd_stale_export_num);
 	spin_lock(&exp->exp_obd->obd_dev_lock);
 	LASSERT(!list_empty(&exp->exp_obd_chain));
 	list_del_init(&exp->exp_obd_chain);
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
-
 	queue_work(zombie_wq, &exp->exp_zombie_work);
 }
 
@@ -1830,6 +1831,8 @@ static void obd_zombie_import_add(struct obd_import *imp) {
  */
 void obd_zombie_barrier(void)
 {
+	wait_var_event(&obd_stale_export_num,
+			atomic_read(&obd_stale_export_num) == 0);
 	flush_workqueue(zombie_wq);
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
