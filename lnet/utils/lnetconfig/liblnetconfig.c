@@ -631,7 +631,7 @@ int lustre_lnet_discover_nid(char *ping_nids, int force, int seq_no,
 }
 
 static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
-					   bool is_mr, __u32 cmd,
+					   bool is_mr, int option, __u32 cmd,
 					   char *cmd_type, char *err_str)
 {
 	struct lnet_ioctl_peer_cfg data;
@@ -646,6 +646,7 @@ static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
 		data.prcfg_mr = is_mr;
 		data.prcfg_prim_nid = nidlist[0];
 		data.prcfg_cfg_nid = LNET_NID_ANY;
+		data.prcfg_count = option;
 
 		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
 
@@ -661,6 +662,7 @@ static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
 		data.prcfg_mr = is_mr;
 		data.prcfg_prim_nid = nidlist[0];
 		data.prcfg_cfg_nid = nidlist[nid_idx];
+		data.prcfg_count = option;
 
 		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
 
@@ -676,6 +678,7 @@ static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
 		LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
 		data.prcfg_prim_nid = nidlist[0];
 		data.prcfg_cfg_nid = LNET_NID_ANY;
+		data.prcfg_count = option;
 
 		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
 	}
@@ -685,8 +688,8 @@ static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
 
 static int
 lustre_lnet_mod_peer_nidlist(lnet_nid_t pnid, lnet_nid_t *lnet_nidlist,
-			     int cmd, int num_nids, bool is_mr, int seq_no,
-			     struct cYAML **err_rc)
+			     int cmd, int num_nids, bool is_mr, int option,
+			     int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 	char err_str[LNET_MAX_STR_LEN];
@@ -707,8 +710,8 @@ lustre_lnet_mod_peer_nidlist(lnet_nid_t pnid, lnet_nid_t *lnet_nidlist,
 						(num_nids - 1));
 
 	rc = lustre_lnet_handle_peer_nidlist(lnet_nidlist2,
-					     num_nids, is_mr, ioc_cmd,
-					     cmd_str, err_str);
+					     num_nids, is_mr, option,
+					     ioc_cmd, cmd_str, err_str);
 out:
 	if (lnet_nidlist2)
 		free(lnet_nidlist2);
@@ -735,8 +738,8 @@ replace_sep(char *str, char sep, char newsep)
 	}
 }
 
-int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr,
-			    int cmd, int seq_no, struct cYAML **err_rc)
+int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr, int cmd,
+			    int option, int seq_no, struct cYAML **err_rc)
 {
 	int num_nids, rc;
 	char err_str[LNET_MAX_STR_LEN] = "Error";
@@ -775,7 +778,7 @@ int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr,
 
 	rc = lustre_lnet_mod_peer_nidlist(pnid, lnet_nidlist,
 					  cmd, num_nids, is_mr,
-					  -1, err_rc);
+					  option, -1, err_rc);
 
 out:
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
@@ -4851,6 +4854,7 @@ static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
 	struct cYAML *seq_no, *prim_nid, *mr, *peer_nis;
 	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
 	lnet_nid_t pnid = LNET_NID_ANY;
+	int force = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	seqn = seq_no ? seq_no->cy_valueint : -1;
@@ -4917,8 +4921,8 @@ static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
 	}
 
 	rc = lustre_lnet_mod_peer_nidlist(pnid, lnet_nidlist, cmd,
-					  num_nids, mr_value, seqn,
-					  err_rc);
+					  num_nids, mr_value, force,
+					  seqn, err_rc);
 
 failed:
 	if (nidstr)

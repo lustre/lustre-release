@@ -678,11 +678,12 @@ int lustre_lnet_reset_stats(int seq_no, struct cYAML **err_rc);
  *	nids - a comma separated string of nids
  *	is_mr - Specifies whether this peer is MR capable.
  *	cmd - CONFIG or DELETE
+ *	force - whether force-deleting a peer with locked primary nid
  *	seq_no - sequence number of the command
  *	err_rc - YAML structure of the resultant return code
  */
-int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr,
-			    int cmd, int seq_no, struct cYAML **err_rc);
+int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr, int cmd,
+			    int force, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_show_peer

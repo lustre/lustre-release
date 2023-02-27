@@ -1029,8 +1029,10 @@ void lnet_peer_clr_pref_rtrs(struct lnet_peer_ni *lpni);
 int lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni, struct lnet_nid *nid);
 int lnet_peer_ni_set_non_mr_pref_nid(struct lnet_peer_ni *lpni,
 				     struct lnet_nid *nid);
-int lnet_user_add_peer_ni(struct lnet_nid *key_nid, struct lnet_nid *nid, bool mr);
-int lnet_del_peer_ni(struct lnet_nid *key_nid, struct lnet_nid *nid);
+int lnet_user_add_peer_ni(struct lnet_nid *key_nid, struct lnet_nid *nid,
+			  bool mr, bool lock_prim);
+int lnet_del_peer_ni(struct lnet_nid *key_nid, struct lnet_nid *nid,
+		     int force);
 int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk);
 int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  char alivness[LNET_MAX_STR_LEN],

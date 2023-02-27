@@ -125,6 +125,9 @@ Configure an LNET peer with at least one supplied NID\.  The primary NID must be
 \-\-non_mr: create this peer as not Multi-Rail capable\.
 .
 .br
+\-\-lock_prim: lock primary NID of the peer for the purpose of identification with Lustre\.
+.
+.br
 
 .TP
 \fBlnetctl peer\fR del
@@ -137,6 +140,9 @@ Delete a peer NID.  The primary NID must be specified.  If the removed NID is th
 .br
 .
 \-\-prim_nid: Primary NID of the peer\.
+.
+.br
+\-\-force: optional, use to delete a peer with primary NID locked\.
 .
 .br
 

@@ -266,12 +266,14 @@ command_t peer_cmds[] = {
 	 "\t--prim_nid: Primary NID of the peer.\n"
 	 "\t--nid: one or more peer NIDs\n"
 	 "\t--non_mr: create this peer as not Multi-Rail capable\n"
-	 "\t--ip2nets: specify a range of nids per peer"},
+	 "\t--ip2nets: specify a range of nids per peer\n"
+	 "\t--lock_prim: lock primary nid\n"},
 	{"del", jt_del_peer_nid, 0, "delete a peer NID\n"
 	 "\t--prim_nid: Primary NID of the peer.\n"
 	 "\t--nid: list of NIDs to remove. If none provided,\n"
 	 "\t       peer is deleted\n"
-	 "\t--ip2nets: specify a range of nids per peer"},
+	 "\t--ip2nets: specify a range of nids per peer\n"
+	 "\t--force: force-delete locked primary NID\n"},
 	{"show", jt_show_peer, 0, "show peer information\n"
 	 "\t--nid: NID of peer to filter on.\n"
 	 "\t--verbose: display detailed output per peer."
@@ -2844,12 +2846,15 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 	char *prim_nid = NULL, *nidstr = NULL;
 	char err_str[LNET_MAX_STR_LEN] = "Error";
 	struct cYAML *err_rc = NULL;
+	int force_lock = 0;
 
-	const char *const short_opts = "k:mn:";
+	const char *const short_opts = "k:m:n:f:l";
 	const struct option long_opts[] = {
 	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
 	{ .name = "non_mr",	.has_arg = no_argument,		.val = 'm' },
 	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
+	{ .name = "force",      .has_arg = no_argument,		.val = 'f' },
+	{ .name = "lock_prim",	.has_arg = no_argument,		.val = 'l' },
 	{ .name = NULL } };
 
 	rc = check_cmd(peer_cmds, "peer", "add", 2, argc, argv);
@@ -2874,6 +2879,22 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 			}
 			is_mr = false;
 			break;
+		case 'f':
+			if (cmd == LNETCTL_ADD_CMD) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, LNET_MAX_STR_LEN,
+					 "Unrecognized option '-%c'", opt);
+			}
+			force_lock = 1;
+			break;
+		case 'l':
+			if (cmd == LNETCTL_DEL_CMD) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, LNET_MAX_STR_LEN,
+					 "Unrecognized option '-%c'", opt);
+			}
+			force_lock = 1;
+			break;
 		case '?':
 			print_help(peer_cmds, "peer",
 				   cmd == LNETCTL_ADD_CMD ? "add" : "del");
@@ -2883,7 +2904,7 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 	}
 
 	rc = lustre_lnet_modify_peer(prim_nid, nidstr, is_mr, cmd,
-				     -1, &err_rc);
+				     force_lock, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		goto out;
 
