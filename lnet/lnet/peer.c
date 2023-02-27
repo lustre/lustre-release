@@ -2038,10 +2038,12 @@ __must_hold(&the_lnet.ln_api_mutex)
 	return lnet_peer_add_nid(lp, nid, flags);
 }
 
-int lnet_user_add_peer_ni(lnet_nid_t prim_nid, struct lnet_nid *nid, bool mr)
+int lnet_user_add_peer_ni(lnet_nid_t prim_nid, struct lnet_nid *nid, bool mr,
+			  bool lock_prim)
 {
-	return lnet_add_peer_ni(prim_nid, lnet_nid_to_nid4(nid), mr,
-				LNET_PEER_CONFIGURED);
+	int fl = LNET_PEER_CONFIGURED | (LNET_PEER_LOCK_PRIMARY * lock_prim);
+
+	return lnet_add_peer_ni(prim_nid, lnet_nid_to_nid4(nid), mr, fl);
 }
 
 static int
@@ -2093,7 +2095,7 @@ lnet_reset_peer(struct lnet_peer *lp)
  * being modified/deleted by a different thread.
  */
 int
-lnet_del_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid)
+lnet_del_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, int force)
 {
 	struct lnet_peer *lp;
 	struct lnet_peer_ni *lpni;
@@ -2126,7 +2128,7 @@ lnet_del_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid)
 
 	if (nid == LNET_NID_ANY ||
 	    nid == lnet_nid_to_nid4(&lp->lp_primary_nid)) {
-		if (lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
+		if (!force && lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
 			CERROR("peer %s created by Lustre. Must preserve primary NID, but will remove other NIDs\n",
 			       libcfs_nidstr(&lp->lp_primary_nid));
 			return lnet_reset_peer(lp);

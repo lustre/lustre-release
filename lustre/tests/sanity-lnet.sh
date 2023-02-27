@@ -932,6 +932,24 @@ EOF
 }
 run_test 25 "Delete all secondary nids from peer (tcp, gni and o2ib)"
 
+test_26() {
+	reinit_dlc || return $?
+
+	do_lnetctl peer add --prim_nid 1.1.1.1@tcp --lock_prim ||
+		error "Peer add with --lock_prim option failed $?"
+	do_lnetctl peer del --prim_nid 1.1.1.1@tcp ||
+		error "Peer del failed $?"
+	$LNETCTL peer show --nid 1.1.1.1@tcp | grep -q 1.1.1.1@tcp ||
+		error "1.1.1.1@tcp is not listed"
+	do_lnetctl peer del --prim_nid 1.1.1.1@tcp --force ||
+		error "Peer del --force failed $?"
+	do_lnetctl peer show --nid 1.1.1.1@tcp &&
+		error "failed to delete 1.1.1.1@tcp"
+
+	return 0
+}
+run_test 26 "Delete peer with primary nid locked"
+
 test_99a() {
 	reinit_dlc || return $?
 

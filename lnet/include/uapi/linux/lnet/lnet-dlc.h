@@ -273,7 +273,9 @@ struct lnet_ioctl_peer_cfg {
 	struct libcfs_ioctl_hdr prcfg_hdr;
 	lnet_nid_t prcfg_prim_nid;
 	lnet_nid_t prcfg_cfg_nid;
-	__u32 prcfg_count;
+	__u32 prcfg_count;	/* ADD_PEER_NI: used for 'lock_prim' option
+				 * DEL_PEER_NI: used for 'force' option
+				 */
 	__u32 prcfg_mr;
 	__u32 prcfg_state;
 	__u32 prcfg_size;
