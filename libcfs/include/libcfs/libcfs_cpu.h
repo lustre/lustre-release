@@ -305,7 +305,7 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 	struct workqueue_attrs attrs = { };
 	struct workqueue_struct *wq;
 
-	wq = alloc_workqueue(wq_name, WQ_UNBOUND | flags, nthrs);
+	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
 	if (!wq)
 		return ERR_PTR(-ENOMEM);
 

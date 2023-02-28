@@ -504,14 +504,14 @@ int Parser_help(int argc, char **argv)
 	 */
 	line[0] = '\0';
 	for (i = 1;  i < argc; i++) {
-		if (strlen(argv[i]) >= sizeof(line) - strlen(line))
+		if (strlen(argv[i]) >= sizeof(line) - strlen(line) - 1)
 			return -E2BIG;
 		/*
 		 * The function strlcat() cannot be used here because of
 		 * this function is used in LNet utils that is not linked
 		 * with libcfs.a.
 		 */
-		strncat(line, argv[i], sizeof(line) - strlen(line));
+		strncat(line, argv[i], sizeof(line) - strlen(line) - 1);
 	}
 
 	switch (process(line, &next, top_level, &result, &prev)) {
@@ -828,8 +828,8 @@ int Parser_bool(int *b, char *str)
 
 int Parser_quit(int argc, char **argv)
 {
-	argc = argc;
-	argv = argv;
+	(void) argc;
+	(void) argv;
 	done = 1;
 	return 0;
 }
