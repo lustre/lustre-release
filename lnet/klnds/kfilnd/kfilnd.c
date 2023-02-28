@@ -85,6 +85,11 @@ int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
 		return rc;
 	}
 
+	/* +1 for tn->tn_kp. This ref is dropped when this transaction is
+	 * finalized
+	 */
+	refcount_inc(&kp->kp_cnt);
+
 	tn->msg_type = KFILND_MSG_HELLO_REQ;
 
 	kp->kp_hello_ts = ktime_get_seconds();

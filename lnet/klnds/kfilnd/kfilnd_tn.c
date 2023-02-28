@@ -1512,7 +1512,6 @@ struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
 	}
 
 	tn->tn_kp = kp;
-	refcount_inc(&kp->kp_cnt);
 
 	mutex_init(&tn->tn_lock);
 	tn->tn_ep = ep;
