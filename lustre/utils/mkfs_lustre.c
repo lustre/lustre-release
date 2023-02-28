@@ -861,7 +861,7 @@ int chk_args(int argc, char *const argv[])
 	/* This check validates if the last argument is really a device name
 	 * and does not start with char '-'.
 	 */
-	if ((argv[argc - 1][0] == '-'))
+	if (argv[argc - 1][0] == '-')
 		return 1;
 	else
 		return 0;

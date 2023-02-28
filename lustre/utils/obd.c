@@ -3497,7 +3497,7 @@ static int llog_search_pool_cb(const char *record, void *data)
 			 */
 			if (strstr(record, add_pool))
 				lpd->lpd_ost_num++;
-		} else if (lpd->lpd_ostname && lpd->lpd_ostname[0]) {
+		} else if (lpd->lpd_ostname[0] != '\0') {
 			if (strstr(record, lpd->lpd_ostname)) {
 				lpd->lpd_pool_exists = true;
 				if (strstr(record, add_pool)) {

@@ -2785,7 +2785,7 @@ int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
  *				belonging to these mirror will be collected.
  * \param[in] ids_nr		number of mirror ids array.
  *
- * \retval		number of component info collected on sucess or
+ * \retval		number of component info collected on success or
  *			an error code on failure.
  */
 int llapi_mirror_find_stale(struct llapi_layout *layout,
@@ -2942,7 +2942,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 		return -rc;
 
 	while (pos < end) {
-		uint64_t mirror_end;
+		uint64_t mirror_end = LUSTRE_EOF;
 		ssize_t bytes_read;
 		size_t to_read;
 		size_t to_write;

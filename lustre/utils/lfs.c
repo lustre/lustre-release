@@ -4637,8 +4637,8 @@ static int lfs_poollist(int argc, char **argv)
 }
 
 #define FP_DEFAULT_TIME_MARGIN (24 * 60 * 60)
-static time_t set_time(struct find_param *param, time_t *time, time_t *set,
-		       char *str)
+static int set_time(struct find_param *param, time_t *time, time_t *set,
+		    char *str)
 {
 	long long t = 0;
 	int sign = 0;
@@ -4685,7 +4685,7 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 			fprintf(stderr,
 				"%s find: bad time string '%s': %s\n",
 				progname, timebuf, strerror(EINVAL));
-			return LONG_MAX;
+			return INT_MAX;
 		}
 
 		if (param->fp_time_margin == 0 ||
@@ -4699,7 +4699,7 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 			str--;
 		fprintf(stderr, "%s find: bad time '%s': too large\n",
 			progname, str);
-		return LONG_MAX;
+		return INT_MAX;
 	}
 
 	*set = *time - t;
@@ -5248,7 +5248,7 @@ static int lfs_find(int argc, char **argv)
 				param.fp_exclude_mtime = !!neg_opt;
 			}
 			rc = set_time(&param, &t, xtime, optarg);
-			if (rc == LONG_MAX) {
+			if (rc == INT_MAX) {
 				ret = -1;
 				goto err;
 			}
@@ -8623,7 +8623,8 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		else
 			printf(" %7s %7s %7s %7s", "-", "-", "-", "-");
 		printf("\n");
-	} else if (qctl->qc_cmd == LUSTRE_Q_GETINFO || LUSTRE_Q_GETINFOPOOL ||
+	} else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
+		   qctl->qc_cmd == LUSTRE_Q_GETINFOPOOL ||
 		   qctl->qc_cmd == Q_GETOINFO) {
 		char bgtimebuf[40];
 		char igtimebuf[40];

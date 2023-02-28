@@ -248,7 +248,7 @@ int sk_load_keyfile(char *path)
 	}
 	if (config->skc_type & SK_TYPE_SERVER) {
 		/* Server keys need to have the file system name in the key */
-		if (!config->skc_fsname) {
+		if (config->skc_fsname[0] == '\0') {
 			printerr(0, "Key configuration has no file system "
 				 "attribute.  Can't load as server type\n");
 			goto out;
@@ -262,7 +262,7 @@ int sk_load_keyfile(char *path)
 	}
 	if (config->skc_type & SK_TYPE_CLIENT) {
 		/* Load client file system key */
-		if (config->skc_fsname) {
+		if (config->skc_fsname[0] != '\0') {
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
 				      "lustre:%s", config->skc_fsname);
 			if (rc >= SK_DESCRIPTION_SIZE)

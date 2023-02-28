@@ -2628,16 +2628,16 @@ struct llapi_ladvise_hdr {
 
 /* Shared key */
 enum sk_crypt_alg {
-	SK_CRYPT_INVALID	= -1,
 	SK_CRYPT_EMPTY		= 0,
 	SK_CRYPT_AES256_CTR	= 1,
+	SK_CRYPT_INVALID	= __UINT16_MAX__
 };
 
 enum sk_hmac_alg {
-	SK_HMAC_INVALID	= -1,
 	SK_HMAC_EMPTY	= 0,
 	SK_HMAC_SHA256	= 1,
 	SK_HMAC_SHA512	= 2,
+	SK_HMAC_INVALID	= __UINT16_MAX__
 };
 
 struct sk_crypt_type {
