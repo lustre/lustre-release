@@ -462,6 +462,9 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 			joblen += 3;
 		} else {
 			escaped[joblen] = *c;
+			/* if jobid has ':', it should be quoted too */
+			if (*c == ':')
+				quote = "\"";
 		}
 	}
 
