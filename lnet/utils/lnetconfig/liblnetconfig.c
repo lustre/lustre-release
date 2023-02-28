@@ -4644,7 +4644,7 @@ static int handle_yaml_config_ip2nets(struct cYAML *tree,
 
 	/* assign the network id */
 	ip2nets.ip2nets_net.nw_id = libcfs_str2net(net->cy_valuestring);
-	if (ip2nets.ip2nets_net.nw_id == LNET_NID_ANY)
+	if (ip2nets.ip2nets_net.nw_id == LNET_NET_ANY)
 		return LUSTRE_CFG_RC_BAD_PARAM;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");

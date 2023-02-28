@@ -55,9 +55,9 @@
 #define LNET_RESERVED_PORTAL	  0
 
 /** wildcard NID that matches any end-point address */
-#define LNET_NID_ANY	  ((lnet_nid_t) -1)
+#define LNET_NID_ANY	  (~(lnet_nid_t) 0)
 /** wildcard PID that matches any lnet_pid_t */
-#define LNET_PID_ANY	  ((lnet_pid_t) -1)
+#define LNET_PID_ANY	  (~(lnet_pid_t) 0)
 
 static inline int LNET_NID_IS_ANY(const struct lnet_nid *nid)
 {

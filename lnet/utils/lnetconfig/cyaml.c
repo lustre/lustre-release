@@ -1257,7 +1257,7 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 		       char *entity, char *err_str,
 		       struct cYAML **root)
 {
-	struct cYAML *r = NULL, *err, *s, *itm, *cmd_obj;
+	struct cYAML *r = NULL, *err, *s, *itm = NULL, *cmd_obj;
 	if (root == NULL)
 		return;
 
@@ -1277,8 +1277,9 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 	else if (cmd_obj == NULL) {
 		s = cYAML_create_seq(r, cmd);
 		itm = cYAML_create_seq_item(s);
-	} else if (cmd_obj != NULL && cmd_obj->cy_type != CYAML_TYPE_ARRAY)
+	} else if (cmd_obj != NULL && cmd_obj->cy_type != CYAML_TYPE_ARRAY) {
 		goto failed;
+	}
 
 	err = cYAML_create_object(itm, entity);
 	if (err == NULL)
