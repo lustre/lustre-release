@@ -1401,6 +1401,7 @@ struct hsm_state_set {
 #define OBD_BRW_ROOT_PRJQUOTA 0x10000 /* check project quota for root */
 #define OBD_BRW_RDMA_ONLY    0x20000 /* RPC contains RDMA-only pages*/
 #define OBD_BRW_SYS_RESOURCE 0x40000 /* page has CAP_SYS_RESOURCE */
+#define OBD_BRW_COMPRESSED   0x80000 /* data compressed on client */
 
 #define OBD_BRW_OVER_ALLQUOTA (OBD_BRW_OVER_USRQUOTA | \
 			       OBD_BRW_OVER_GRPQUOTA | \
