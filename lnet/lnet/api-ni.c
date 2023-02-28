@@ -243,6 +243,11 @@ module_param_call(lnet_response_tracking, response_tracking_set, param_get_int,
 MODULE_PARM_DESC(lnet_response_tracking,
 		 "(0|1|2|3) LNet Internal Only|GET Reply only|PUT ACK only|Full Tracking (default)");
 
+int lock_prim_nid = 1;
+module_param(lock_prim_nid, int, 0444);
+MODULE_PARM_DESC(lock_prim_nid,
+		 "Whether nid passed down by Lustre is locked as primary");
+
 #define LNET_LND_TIMEOUT_DEFAULT ((LNET_TRANSACTION_TIMEOUT_DEFAULT - 1) / \
 				  (LNET_RETRY_COUNT_DEFAULT + 1))
 unsigned int lnet_lnd_timeout = LNET_LND_TIMEOUT_DEFAULT;

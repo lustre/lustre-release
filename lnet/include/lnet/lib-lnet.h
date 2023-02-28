@@ -615,6 +615,7 @@ extern int alive_router_check_interval;
 extern int live_router_check_interval;
 extern int dead_router_check_interval;
 extern int portal_rotor;
+extern int lock_prim_nid;
 
 void lnet_mt_event_handler(struct lnet_event *event);
 
