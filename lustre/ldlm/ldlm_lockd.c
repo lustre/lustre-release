@@ -2472,7 +2472,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 		 * we can tell the server we have no lock. Otherwise, we
 		 * should send cancel after dropping the cache.
 		 */
-		if (ldlm_is_ast_sent(lock) || ldlm_is_failed(lock)) {
+		if ((ldlm_is_canceling(lock) && ldlm_is_bl_done(lock)) ||
+		     ldlm_is_failed(lock)) {
 			LDLM_DEBUG(lock,
 				   "callback on lock %llx - lock disappeared",
 				   dlm_req->lock_handle[0].cookie);
