@@ -5194,14 +5194,14 @@ test_dom_75() {
 
 	for ((i = 0; i < $((LIMIT/2048-1)); i++)); do
 		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
-			oflag=sync || dd_failed=true
+			conv=fsync || dd_failed=true
 	done
 
 	$dd_failed && quota_error u $qid "write failed, expect succeed (1)"
 
 	for ((i = $((LIMIT/2048-1)); i < $((LIMIT/1024 + 10)); i++)); do
 		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
-			oflag=sync || dd_failed=true
+			conv=fsync || dd_failed=true
 	done
 
 	$dd_failed || quota_error u $qid "write succeed, expect EDQUOT (1)"
@@ -5214,12 +5214,12 @@ test_dom_75() {
 
 	dd_failed=false
 
-	$DD of=$DIR/$tdir/file count=$((LIMIT/2048-1)) oflag=sync ||
+	$DD of=$DIR/$tdir/file count=$((LIMIT/2048-1)) conv=fsync ||
 		quota_error u $qid "write failed, expect succeed (2)"
 
 	for ((i = 0; i < $((LIMIT/2048 + 10)); i++)); do
 		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
-			oflag=sync || dd_failed=true
+			conv=fsync || dd_failed=true
 	done
 
 	$dd_failed || quota_error u $TSTID "write succeed, expect EDQUOT (2)"
@@ -5235,12 +5235,12 @@ test_dom_75() {
 
 	for ((i = 0; i < $((LIMIT/2048-1)); i++)); do
 		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
-			oflag=sync || dd_failed=true
+			conv=fsync || dd_failed=true
 	done
 
 	$dd_failed && quota_error u $qid "write failed, expect succeed (3)"
 
-	$DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) oflag=sync &&
+	$DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) conv=fsync &&
 		quota_error u $qid "write succeed, expect EDQUOT (3)"
 	true
 }
