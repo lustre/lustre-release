@@ -208,6 +208,16 @@ validate_gateway_nids() {
 		compare_yaml_files
 		error "Expected $expect_gw gateways but found $actual_gw gateways"
 	fi
+
+	local expect_gwnids=$(awk '/gateway:/{print $NF}' $TMP/sanity-lnet-$testnum-expected.yaml |
+			      xargs echo)
+	local nid
+	for nid in ${expect_gwnids}; do
+		if ! grep -q "gateway: ${nid}" $TMP/sanity-lnet-$testnum-actual.yaml; then
+			error "${nid} not configured as gateway"
+		fi
+	done
+
 	validate_nids
 }
 
@@ -1065,14 +1075,24 @@ append_net_tunables() {
 		awk '/^\s+tunables:$/,/^\s+CPT:/' >> $TMP/sanity-lnet-$testnum-expected.yaml
 }
 
+IF0_IP=$(ip -o -4 a s ${INTERFACES[0]} |
+	 awk '{print $4}' | sed 's/\/.*//')
+IF0_NET=$(awk -F. '{print $1"."$2"."$3}'<<<"${IF0_IP}")
+IF0_HOSTNUM=$(awk -F. '{print $4}'<<<"${IF0_IP}")
+if (((IF0_HOSTNUM + 5) > 254)); then
+	GW_HOSTNUM=1
+else
+	GW_HOSTNUM=$((IF0_HOSTNUM + 1))
+fi
+GW_NID="${IF0_NET}.${GW_HOSTNUM}@${NETTYPE}"
 test_100() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
 	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}"
+	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
-    - net type: tcp
+    - net type: ${NETTYPE}
       local NI(s):
         - interfaces:
               0: ${INTERFACES[0]}
@@ -1081,19 +1101,18 @@ EOF
 	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
 route:
     - net: tcp7
-      gateway: 7.7.7.7@tcp
+      gateway: ${GW_NID}
       hop: -1
       priority: 0
       health_sensitivity: 1
 peer:
-    - primary nid: 7.7.7.7@tcp
+    - primary nid: ${GW_NID}
       Multi-Rail: False
       peer ni:
-        - nid: 7.7.7.7@tcp
+        - nid: ${GW_NID}
 EOF
 	append_global_yaml
-	compare_route_add "tcp7" "7.7.7.7@tcp" || return $?
-	compare_yaml_files
+	compare_route_add "tcp7" "${GW_NID}"
 }
 run_test 100 "Add route with single gw (tcp)"
 
@@ -1101,52 +1120,41 @@ test_101() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
 	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}"
+	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
-    - net type: tcp
+    - net type: ${NETTYPE}
       local NI(s):
         - interfaces:
               0: ${INTERFACES[0]}
-          tunables:
-              peer_timeout: 180
-              peer_credits: 8
-              peer_buffer_credits: 0
-              credits: 256
-          lnd tunables:
-              conns_per_peer: 1
-route:
-    - net: tcp8
-      gateway: 8.8.8.10@tcp
-      hop: -1
-      priority: 0
-      health_sensitivity: 1
-    - net: tcp8
-      gateway: 8.8.8.9@tcp
-      hop: -1
-      priority: 0
-      health_sensitivity: 1
-    - net: tcp8
-      gateway: 8.8.8.8@tcp
-      hop: -1
-      priority: 0
-      health_sensitivity: 1
-peer:
-    - primary nid: 8.8.8.9@tcp
-      Multi-Rail: False
-      peer ni:
-        - nid: 8.8.8.9@tcp
-    - primary nid: 8.8.8.10@tcp
-      Multi-Rail: False
-      peer ni:
-        - nid: 8.8.8.10@tcp
-    - primary nid: 8.8.8.8@tcp
-      Multi-Rail: False
-      peer ni:
-        - nid: 8.8.8.8@tcp
 EOF
+	append_net_tunables tcp
+
+	echo "route:" >> $TMP/sanity-lnet-$testnum-expected.yaml
+	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
+		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+    - net: tcp8
+      gateway: ${IF0_NET}.${i}@tcp
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+EOF
+	done
+
+	echo "peer:" >> $TMP/sanity-lnet-$testnum-expected.yaml
+	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
+		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+    - primary nid: ${IF0_NET}.${i}@tcp
+      Multi-Rail: False
+      peer ni:
+        - nid: ${IF0_NET}.${i}@tcp
+EOF
+	done
 	append_global_yaml
-	compare_route_add "tcp8" "8.8.8.[8-10]@tcp"
+
+	local gw="${IF0_NET}.[$GW_HOSTNUM-$((GW_HOSTNUM + 4))]@tcp"
+
+	compare_route_add "tcp8" "${gw}"
 }
 run_test 101 "Add route with multiple gw (tcp)"
 
@@ -1163,14 +1171,13 @@ compare_route_del() {
 	validate_gateway_nids
 }
 
-generate_nid() {
+generate_gw_nid() {
 	local net=${1}
-	local nid=$((${testnum} % 255))
 
 	if [[ ${net} =~ (tcp|o2ib)[0-9]* ]]; then
-		echo "${nid}.${nid}.${nid}.${nid}@${net}"
+		echo "${GW_NID}"
 	else
-		echo "${nid}@${net}"
+		echo "$((${testnum} % 255))@${net}"
 	fi
 }
 
@@ -1179,7 +1186,7 @@ test_102() {
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 
-	local gwnid=$(generate_nid ${NETTYPE})
+	local gwnid=$(generate_gw_nid ${NETTYPE})
 
 	do_lnetctl route add --net ${NETTYPE}2 --gateway ${gwnid} ||
 		error "route add failed $?"
@@ -1197,7 +1204,7 @@ test_103() {
 	local nid_expr
 
 	if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
-		nid_expr="${IP_NID_EXPR}"
+		nid_expr="${IF0_NET}.[$GW_HOSTNUM-$((GW_HOSTNUM+5))/2]"
 	else
 		nid_expr="${NUM_NID_EXPR}"
 	fi
@@ -1270,7 +1277,7 @@ test_105() {
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 
-	local gwnid=$(generate_nid ${NETTYPE})
+	local gwnid=$(generate_gw_nid ${NETTYPE})
 
 	do_lnetctl route add --net ${NETTYPE}105 --gateway ${gwnid} ||
 		error "route add failed $?"
@@ -1285,7 +1292,7 @@ test_106() {
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 
-	local gwnid=$(generate_nid ${NETTYPE})
+	local gwnid=$(generate_gw_nid ${NETTYPE})
 
 	do_lnetctl route add --net ${NETTYPE}106 --gateway ${gwnid} ||
 		error "route add failed $?"
@@ -3102,7 +3109,9 @@ run_test 230 "Test setting conns-per-peer"
 test_231() {
 	reinit_dlc || return $?
 
-	do_lnetctl net add --net ${NETTYPE} --if ${INTERFACES[0]} ||
+	local net=${NETTYPE}231
+
+	do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
 		error "Failed to add net"
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
@@ -3118,10 +3127,10 @@ test_231() {
 
 	compare_yaml_files || error "Wrong config after import"
 
-	do_lnetctl net del --net ${NETTYPE} --if ${INTERFACES[0]} ||
-		error "Failed to delete net ${NETTYPE}"
+	do_lnetctl net del --net $net --if ${INTERFACES[0]} ||
+		error "Failed to delete net $net"
 
-	do_lnetctl net add --net ${NETTYPE} --if ${INTERFACES[0]} --peer-timeout=0 ||
+	do_lnetctl net add --net $net --if ${INTERFACES[0]} --peer-timeout=0 ||
 		error "Failed to add net with peer-timeout=0"
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
@@ -3313,18 +3322,7 @@ test_255() {
 
 	cleanup_lnet || return $?
 
-	local ip=$(ip -o -4 a s ${INTERFACES[0]} |
-		   awk '{print $4}' | sed 's/\/.*//')
-	local net=$(awk -F. '{print $1"."$2"."$3}'<<<"${ip}")
-	local host=$(awk -F. '{print $4}'<<<"${ip}")
-
-	if (((host + 5) > 254)); then
-		host=1
-	fi
-
-	local range="[$((host + 1))-$((host + 5))]"
-
-	local routes_str="o2ib ${net}.${range}@${NETTYPE}"
+	local routes_str="o2ib ${IF0_NET}.[$GW_HOSTNUM-$((GW_HOSTNUM+4))]"
 	local network_str="${NETTYPE}(${INTERFACES[0]})"
 
 	load_lnet "networks=\"${network_str}\" routes=\"${routes_str}\"" ||
@@ -3343,10 +3341,10 @@ EOF
 	append_net_tunables tcp
 
 	echo "route:" >> $TMP/sanity-lnet-$testnum-expected.yaml
-	for i in $(seq $((host + 1)) $((host +5))); do
+	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
 		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
     - net: o2ib
-      gateway: ${net}.${i}@${NETTYPE}
+      gateway: ${IF0_NET}.${i}@${NETTYPE}
       hop: -1
       priority: 0
       health_sensitivity: 1
@@ -3354,12 +3352,12 @@ EOF
 	done
 
 	echo "peer:" >> $TMP/sanity-lnet-$testnum-expected.yaml
-	for i in $(seq $((host + 1)) $((host +5))); do
+	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
 		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-    - primary nid: ${net}.${i}@${NETTYPE}
+    - primary nid: ${IF0_NET}.${i}@${NETTYPE}
       Multi-Rail: False
       peer ni:
-        - nid: ${net}.${i}@${NETTYPE}
+        - nid: ${IF0_NET}.${i}@${NETTYPE}
 EOF
 	done
 
