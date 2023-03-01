@@ -495,6 +495,55 @@ reset_quota_settings() {
 	sleep 1
 }
 
+get_quota_on_qsd() {
+	local facet
+	local spec
+	local qid
+	local qtype
+	local output
+
+	facet=$1
+	case "$2" in
+		usr) qtype="limit_user";;
+		grp) qtype="limit_group";;
+		*)	   error "unknown quota parameter $2";;
+	esac
+
+	qid=$3
+	case "$4" in
+		hardlimit) spec=4;;
+		softlimit) spec=6;;
+		*)	   error "unknown quota parameter $4";;
+	esac
+
+	do_facet $facet $LCTL get_param osd-*.*-OST0000.quota_slave.$qtype |
+		awk '($3 == '$qid') {getline; print $'$spec'; exit;}' | tr -d ,
+}
+
+wait_quota_setting_synced() {
+	local value
+	local qtype=$1
+	local qid=$2
+	local limit_type=$3
+	local limit_val=$4
+	local interval=0
+
+	value=$(get_quota_on_qsd ost1 $qtype $qid $limit_type)
+	while [[ $value != $limit_val ]]; do
+		(( interval != 0 )) ||
+			do_facet ost1 $LCTL set_param \
+				osd-*.*-OST0000.quota_slave.force_reint=1
+
+		(( interval <= 20 )) ||
+			error "quota ($value) don't update on QSD, $limit_val"
+
+		interval=$((interval + 1))
+		sleep 1
+
+		value=$(get_quota_on_qsd ost1 $qtype $qid $limit_type)
+	done
+}
+
 # enable quota debug
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) \
@@ -5708,6 +5757,8 @@ test_84()
 	$LFS setquota -g $TSTUSR -B 5G --pool $qp $DIR ||
                 error "set user quota failed"
 	$LFS quota -gv $TSTUSR $DIR
+
+	wait_quota_setting_synced "grp" $TSTID "hardlimit" $((10*1024*1024))
 
 	mkdir -p $dir1 || error "failed to mkdir"
 	chown $TSTUSR.$TSTUSR $dir1 || error "chown $dir1 failed"
