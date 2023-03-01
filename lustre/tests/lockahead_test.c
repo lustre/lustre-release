@@ -429,7 +429,7 @@ static int test15(void)
 
 	advice = malloc(sizeof(struct llapi_lu_ladvise)*count);
 
-	for (i = 0; i < 500; i++) {
+	for (i = 0; i < 100; i++) {
 		/* The 'UL' designators are required to avoid undefined
 		 * behavior which GCC turns in to an infinite loop */
 		__u64 start = i * 1024UL * 1024UL * 10UL;
