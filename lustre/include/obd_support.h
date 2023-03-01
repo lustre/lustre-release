@@ -443,6 +443,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_OSC_NO_SIZE_DATA        0x415
 #define OBD_FAIL_OSC_DELAY_CANCEL        0x416
 #define OBD_FAIL_OSC_SLOW_PAGE_EVICT	 0x417
+#define OBD_FAIL_OSC_MARK_COMPRESSED	 0x419
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
@@ -766,6 +767,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_BARRIER_FAILURE		0x2203
 
 #define OBD_FAIL_OSD_FAIL_AT_TRUNCATE		0x2301
+#define OBD_FAIL_OSD_MARK_COMPRESSED	 	0x2302
 
 /* continuation of MDS related constants */
 #define OBD_FAIL_MDS_PAUSE_CREATE_AFTER_LOOKUP	0x2401

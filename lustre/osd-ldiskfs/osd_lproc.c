@@ -805,6 +805,35 @@ ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(index_backup);
 
+#ifdef LDISKFS_GET_BLOCKS_VERY_DENSE
+static ssize_t extents_dense_show(struct kobject *kobj, struct attribute *attr,
+			char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", osd->od_extents_dense);
+}
+
+static ssize_t extents_dense_store(struct kobject *kobj, struct attribute *attr,
+			 const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	bool extents_dense;
+	int rc;
+
+	rc = kstrtobool(buffer, &extents_dense);
+	if (rc != 0)
+		return rc;
+
+	osd->od_extents_dense = extents_dense;
+
+	return count;
+}
+LUSTRE_RW_ATTR(extents_dense);
+#endif
+
 struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name =	"oi_scrub",
 	  .fops =	&ldiskfs_osd_oi_scrub_fops      },
@@ -832,6 +861,9 @@ static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_full_scrub_ratio.attr,
 	&lustre_attr_full_scrub_threshold_rate.attr,
 	&lustre_attr_extent_bytes_allocation.attr,
+#ifdef LDISKFS_GET_BLOCKS_VERY_DENSE
+	&lustre_attr_extents_dense.attr,
+#endif
 	NULL,
 };
 

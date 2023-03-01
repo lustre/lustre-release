@@ -915,7 +915,8 @@ static void osd_decay_extent_bytes(struct osd_device *osd,
 static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 				       struct osd_iobuf *iobuf,
 				       struct osd_device *osd,
-				       int create, __u64 user_size,
+				       const int create,
+				       __u64 user_size,
 				       int check_credits,
 				       struct thandle *thandle)
 {
@@ -932,14 +933,19 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 	sector_t *blocks = iobuf->dr_blocks;
 	struct niobuf_local *lnb1, *lnb2;
 	loff_t size1, size2;
+	bool compressed = false;
+	int flags = 0;
 
 	max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
 	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
 		inode->i_ino, pages, (*lnbs)->lnb_page->index);
 
+	if (osd->od_extents_dense)
+		compressed = iobuf->dr_lnbs[0]->lnb_flags & OBD_BRW_COMPRESSED;
+
 	if (create) {
-		create = LDISKFS_GET_BLOCKS_CREATE;
+		flags = LDISKFS_GET_BLOCKS_CREATE;
 		handle = ldiskfs_journal_current_handle();
 		LASSERT(handle != NULL);
 		rc = osd_attach_jinode(inode);
@@ -1031,9 +1037,17 @@ cont_map:
 			else
 				oh->oh_declared_ext--;
 		}
+#ifdef LDISKFS_GET_BLOCKS_VERY_DENSE
+		if (osd->od_extents_dense) {
+			if (CFS_FAIL_CHECK(OBD_FAIL_OSD_MARK_COMPRESSED))
+				flags |= LDISKFS_GET_BLOCKS_VERY_DENSE;
+			if (compressed)
+				flags |= LDISKFS_GET_BLOCKS_VERY_DENSE;
+		}
+#endif
 
 		time = ktime_get();
-		rc = ldiskfs_map_blocks(handle, inode, &map, create);
+		rc = ldiskfs_map_blocks(handle, inode, &map, flags);
 		time = ktime_sub(ktime_get(), time);
 
 		if (rc >= 0) {

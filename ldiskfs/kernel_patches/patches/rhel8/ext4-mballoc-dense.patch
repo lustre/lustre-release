@@ -1,0 +1,127 @@
+--- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/mballoc.h
++++ linux-4.18.0-80.1.2.el8_0/fs/ext4/mballoc.h
+@@ -131,6 +131,8 @@ enum SHIFT_DIRECTION {
+ 	ext4_lblk_t		pa_lstart;	/* log. block */
+ 	ext4_grpblk_t		pa_len;		/* len of preallocated chunk */
+ 	ext4_grpblk_t		pa_free;	/* how many blocks are free */
++	ext4_grpblk_t		pa_group;
++	unsigned short		pa_regular;
+ 	unsigned short		pa_type;	/* pa type. inode or group */
+ 	unsigned short		pa_error;
+ 	spinlock_t		*pa_obj_lock;
+@@ -167,7 +167,7 @@ struct ext4_allocation_request {
+ 	__u16 ac_found;
+ 	__u16 ac_tail;
+ 	__u16 ac_buddy;
+-	__u16 ac_flags;		/* allocation hints */
++	__u32 ac_flags;		/* allocation hints */
+ 	__u8 ac_status;
+ 	__u8 ac_criteria;
+ 	__u8 ac_2order;		/* if request is to allocate 2^N blocks and
+--- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/ext4.h
++++ linux-4.18.0-80.1.2.el8_0/fs/ext4/ext4.h
+@@ -151,6 +151,7 @@ enum SHIFT_DIRECTION {
+ #define EXT4_MB_USE_RESERVED		0x2000
+ /* Do strict check for free blocks while retrying block allocation */
+ #define EXT4_MB_STRICT_CHECK		0x4000
++#define EXT4_MB_VERY_DENSE		0x80000
+
+ struct ext4_allocation_request {
+ 	/* target inode for block we're allocating */
+@@ -627,6 +628,7 @@ enum {
+ 	/* Caller will submit data before dropping transaction handle. This
+ 	 * allows jbd2 to avoid submitting data before commit. */
+ #define EXT4_GET_BLOCKS_IO_SUBMIT		0x0400
++#define EXT4_GET_BLOCKS_VERY_DENSE		0x08000
+ 
+ /*
+  * The bit position of these flags must not overlap with any of the
+--- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/extents.c
++++ linux-4.18.0-80.1.2.el8_0/fs/ext4/extents.c
+@@ -4484,6 +4467,8 @@ int ext4_ext_map_blocks(handle_t *han
+ 		ar.flags = 0;
+ 	if (flags & EXT4_GET_BLOCKS_NO_NORMALIZE)
+ 		ar.flags |= EXT4_MB_HINT_NOPREALLOC;
++	if (flags & EXT4_GET_BLOCKS_VERY_DENSE)
++		ar.flags |= EXT4_MB_VERY_DENSE;
+ 	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE)
+ 		ar.flags |= EXT4_MB_DELALLOC_RESERVED;
+ 	if (flags & EXT4_GET_BLOCKS_METADATA_NOFAIL)
+--- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/mballoc.c
++++ linux-4.18.0-80.1.2.el8_0/fs/ext4/mballoc.c
+@@ -4267,6 +4291,25 @@ ext4_mb_use_inode_pa(struct ext4
+ 	ext4_fsblk_t end;
+ 	int len;
+
++	if (ac->ac_flags & EXT4_MB_VERY_DENSE && !pa->pa_regular) {
++		unsigned int len = ac->ac_o_ex.fe_len;
++		if (len > pa->pa_free)
++			len = pa->pa_free;
++		ext4_get_group_no_and_offset(ac->ac_sb,
++					pa->pa_pstart,
++					&ac->ac_b_ex.fe_group,
++					&ac->ac_b_ex.fe_start);
++		ac->ac_b_ex.fe_len = len;
++		pa->pa_lstart += len;
++		pa->pa_pstart += len;
++		pa->pa_free -= len;
++		pa->pa_len -= len;
++		ac->ac_status = AC_STATUS_FOUND;
++		ac->ac_pa = pa;
++		return;
++	}
++
++	pa->pa_regular = 1;
+ 	/* found preallocated blocks, use them */
+ 	start = pa->pa_pstart + (ac->ac_o_ex.fe_logical - pa->pa_lstart);
+ 	end = min(pa->pa_pstart + EXT4_C2B(sbi, pa->pa_len),
+@@ -4367,6 +4380,23 @@ ext4_mb_use_preallocated(struct ext4
+ 	if (!(ac->ac_flags & EXT4_MB_HINT_DATA))
+ 		return false;
+ 
++	if (ac->ac_flags & EXT4_MB_VERY_DENSE) {
++		rcu_read_lock();
++		list_for_each_entry_rcu(pa, &ei->i_prealloc_list, pa_inode_list) {
++			spin_lock(&pa->pa_lock);
++			if (!pa->pa_deleted && pa->pa_free && !pa->pa_regular) {
++				atomic_inc(&pa->pa_count);
++				ext4_mb_use_inode_pa(ac, pa);
++				spin_unlock(&pa->pa_lock);
++				break;
++			}
++			spin_unlock(&pa->pa_lock);
++		}
++		rcu_read_unlock();
++		if (ac->ac_status == AC_STATUS_FOUND)
++			return true;
++	}
++
+ 	/* first, try per-file preallocation */
+ 	rcu_read_lock();
+ 	list_for_each_entry_rcu(pa, &ei->i_prealloc_list, pa_inode_list) {
+@@ -4833,7 +4833,7 @@ ext4_mb_put_pa(struct ext4
+ 	if (pa->pa_type == MB_GROUP_PA)
+ 		grp_blk--;
+
+-	grp = ext4_get_group_number(sb, grp_blk);
++	grp = pa->pa_group;
+
+ 	/*
+ 	 * possible race:
+@@ -4894,6 +4894,8 @@ ext4_mb_new_inode_pa(struct ext4
+ 	pa->pa_pstart = ext4_grp_offs_to_block(sb, &ac->ac_b_ex);
+ 	pa->pa_len = ac->ac_b_ex.fe_len;
+ 	pa->pa_free = pa->pa_len;
++	pa->pa_group = ac->ac_b_ex.fe_group;
++	pa->pa_regular = 0;
+ 	spin_lock_init(&pa->pa_lock);
+ 	INIT_LIST_HEAD(&pa->pa_inode_list);
+ 	INIT_LIST_HEAD(&pa->pa_group_list);
+@@ -5004,6 +5005,7 @@ ext4_mb_new_group_pa(struct ext4
+ 	pa->pa_lstart = pa->pa_pstart;
+ 	pa->pa_len = ac->ac_b_ex.fe_len;
+ 	pa->pa_free = pa->pa_len;
++	pa->pa_group = ac->ac_b_ex.fe_group;
+ 	spin_lock_init(&pa->pa_lock);
+ 	INIT_LIST_HEAD(&pa->pa_inode_list);
+ 	INIT_LIST_HEAD(&pa->pa_group_list);

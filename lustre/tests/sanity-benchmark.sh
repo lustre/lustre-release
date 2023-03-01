@@ -178,6 +178,7 @@ test_iozone() {
 run_test iozone "iozone"
 
 test_fsx() {
+        local fsx_layout="${fsx_STRIPEPARAMS:--c -1}"
 	local testfile=$DIR/f0.fsxfile
 	FSX_SIZE=$SIZE
 	FSX_COUNT=1000
@@ -189,7 +190,8 @@ test_fsx() {
 	$DEBUG_OFF
 	FSX_SEED=${FSX_SEED:-$RANDOM}
 	rm -f $testfile
-	$LFS setstripe -c -1 $testfile
+	$LFS setstripe $fsx_layout $testfile ||
+		error "'setstripe $fsx_layout $testfile' failed"
 	CMD="$FSX -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
 	     -N $((FSX_COUNT * 100)) $FSXOPT $testfile"
 	echo "Using: $CMD"
