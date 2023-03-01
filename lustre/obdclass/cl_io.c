@@ -1365,6 +1365,10 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 }
 EXPORT_SYMBOL(cl_sync_io_note);
 
+/* this function waits for completion of outstanding io and then re-initializes
+ * the anchor used to track it.  This is used to wait to complete DIO before
+ * returning to userspace, and is never called for true AIO
+ */
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret)
 {
@@ -1377,10 +1381,8 @@ int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 	 * count to be zero.
 	 */
 	cl_sync_io_note(env, anchor, ioret);
-	/* Wait for completion of normal dio.
-	 * This replaces the EIOCBQEUED return from the DIO/AIO
-	 * path, and this is where AIO and DIO implementations
-	 * split.
+	/* Wait for completion of outstanding dio before re-initializing for
+	 * possible restart
 	 */
 	rc = cl_sync_io_wait(env, anchor, timeout);
 	/**
