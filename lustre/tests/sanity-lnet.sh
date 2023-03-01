@@ -3306,6 +3306,72 @@ test_254() {
 }
 run_test 254 "Message delayed beyond deadline should be dropped (multi-rail)"
 
+test_255() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	reinit_dlc || return $?
+
+	cleanup_lnet || return $?
+
+	local ip=$(ip -o -4 a s ${INTERFACES[0]} |
+		   awk '{print $4}' | sed 's/\/.*//')
+	local net=$(awk -F. '{print $1"."$2"."$3}'<<<"${ip}")
+	local host=$(awk -F. '{print $4}'<<<"${ip}")
+
+	if (((host + 5) > 254)); then
+		host=1
+	fi
+
+	local range="[$((host + 1))-$((host + 5))]"
+
+	local routes_str="o2ib ${net}.${range}@${NETTYPE}"
+	local network_str="${NETTYPE}(${INTERFACES[0]})"
+
+	load_lnet "networks=\"${network_str}\" routes=\"${routes_str}\"" ||
+		error "Failed to load LNet"
+
+	$LCTL net up ||
+		error "Failed to load LNet with networks=\"${network_str}\" routes=\"${routes_str}\""
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: ${NETTYPE}
+      local NI(s):
+        - interfaces:
+              0: ${INTERFACES[0]}
+EOF
+	append_net_tunables tcp
+
+	echo "route:" >> $TMP/sanity-lnet-$testnum-expected.yaml
+	for i in $(seq $((host + 1)) $((host +5))); do
+		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+    - net: o2ib
+      gateway: ${net}.${i}@${NETTYPE}
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+EOF
+	done
+
+	echo "peer:" >> $TMP/sanity-lnet-$testnum-expected.yaml
+	for i in $(seq $((host + 1)) $((host +5))); do
+		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+    - primary nid: ${net}.${i}@${NETTYPE}
+      Multi-Rail: False
+      peer ni:
+        - nid: ${net}.${i}@${NETTYPE}
+EOF
+	done
+
+	append_global_yaml
+
+	$LNETCTL export --backup >  $TMP/sanity-lnet-$testnum-actual.yaml ||
+		error "export failed $?"
+
+	validate_gateway_nids
+}
+run_test 255 "Use lnet routes param with pdsh syntax"
+
 test_300() {
 	# LU-13274
 	local header

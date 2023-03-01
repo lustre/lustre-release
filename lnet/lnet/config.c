@@ -1178,7 +1178,7 @@ lnet_parse_route(char *str, int *im_a_router)
 		LASSERT(net != LNET_NET_ANY);
 
 		list_for_each_entry(ltb2, &gateways, ltb_list) {
-			LASSERT(libcfs_strnid(&nid, ltb->ltb_text) == 0);
+			LASSERT(libcfs_strnid(&nid, ltb2->ltb_text) == 0);
 
 			if (lnet_islocalnid(&nid)) {
 				*im_a_router = 1;
