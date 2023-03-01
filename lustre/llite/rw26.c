@@ -476,7 +476,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
 	struct cl_dio_aio *ll_dio_aio;
-	struct cl_sub_dio *ldp_aio;
+	struct cl_sub_dio *sdio;
 	size_t count = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
@@ -545,39 +545,39 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		 * otherwise it is freed on the final call to cl_sync_io_note
 		 * (either in this function or from a ptlrpcd daemon)
 		 */
-		ldp_aio = cl_sub_dio_alloc(ll_dio_aio, sync_submit);
-		if (!ldp_aio)
+		sdio = cl_sub_dio_alloc(ll_dio_aio, sync_submit);
+		if (!sdio)
 			GOTO(out, result = -ENOMEM);
 
-		pvec = &ldp_aio->csd_dio_pages;
+		pvec = &sdio->csd_dio_pages;
 		pvec->ldp_file_offset = file_offset;
 
 		result = ll_get_user_pages(rw, iter, pvec, count);
 
 		if (unlikely(result <= 0)) {
-			cl_sync_io_note(env, &ldp_aio->csd_sync, result);
+			cl_sync_io_note(env, &sdio->csd_sync, result);
 			if (sync_submit) {
-				LASSERT(ldp_aio->csd_creator_free);
-				cl_sub_dio_free(ldp_aio);
+				LASSERT(sdio->csd_creator_free);
+				cl_sub_dio_free(sdio);
 			}
 			GOTO(out, result);
 		}
 		count = result;
 
 		result = ll_direct_rw_pages(env, io, count,
-					    rw, inode, ldp_aio);
+					    rw, inode, sdio);
 		/* We've submitted pages and can now remove the extra
 		 * reference for that
 		 */
-		cl_sync_io_note(env, &ldp_aio->csd_sync, result);
+		cl_sync_io_note(env, &sdio->csd_sync, result);
 
 		if (sync_submit) {
-			rc2 = cl_sync_io_wait(env, &ldp_aio->csd_sync,
+			rc2 = cl_sync_io_wait(env, &sdio->csd_sync,
 					     0);
 			if (result == 0 && rc2)
 				result = rc2;
-			LASSERT(ldp_aio->csd_creator_free);
-			cl_sub_dio_free(ldp_aio);
+			LASSERT(sdio->csd_creator_free);
+			cl_sub_dio_free(sdio);
 		}
 		if (unlikely(result < 0))
 			GOTO(out, result);
