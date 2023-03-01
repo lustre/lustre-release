@@ -243,16 +243,17 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 #endif /* HAVE_AOPS_RELEASE_FOLIO */
 
 static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
-				struct page ***pages, ssize_t *npages,
+				struct ll_dio_pages *pvec,
 				size_t maxsize)
 {
 #if defined(HAVE_DIO_ITER)
 	size_t start;
 	size_t result;
 
-	result = iov_iter_get_pages_alloc2(iter, pages, maxsize, &start);
+	result = iov_iter_get_pages_alloc2(iter, &pvec->ldp_pages, maxsize,
+					  &start);
 	if (result > 0)
-		*npages = DIV_ROUND_UP(result + start, PAGE_SIZE);
+		pvec->ldp_count = DIV_ROUND_UP(result + start, PAGE_SIZE);
 
 	return result;
 #else
@@ -273,25 +274,25 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 
 	size = min_t(size_t, maxsize, iter->iov->iov_len);
 	page_count = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	OBD_ALLOC_PTR_ARRAY_LARGE(*pages, page_count);
-	if (*pages == NULL)
+	OBD_ALLOC_PTR_ARRAY_LARGE(pvec->ldp_pages, page_count);
+	if (pvec->ldp_pages == NULL)
 		return -ENOMEM;
 
 	mmap_read_lock(current->mm);
 	result = get_user_pages(current, current->mm, addr, page_count,
-				rw == READ, 0, *pages, NULL);
+				rw == READ, 0, pvec->ldp_pages, NULL);
 	mmap_read_unlock(current->mm);
 
 	if (unlikely(result != page_count)) {
-		ll_release_user_pages(*pages, page_count);
-		*pages = NULL;
+		ll_release_user_pages(pvec->ldp_pages, page_count);
+		pvec->ldp_pages = NULL;
 
 		if (result >= 0)
 			return -EFAULT;
 
 		return result;
 	}
-	*npages = page_count;
+	pvec->ldp_count = page_count;
 
 	return size;
 #endif
@@ -530,7 +531,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	while (iov_iter_count(iter)) {
 		struct ll_dio_pages *pvec;
-		struct page **pages;
 
 		count = min_t(size_t, iov_iter_count(iter), MAX_DIO_SIZE);
 		if (rw == READ) {
@@ -550,9 +550,10 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			GOTO(out, result = -ENOMEM);
 
 		pvec = &ldp_aio->csd_dio_pages;
+		pvec->ldp_file_offset = file_offset;
 
-		result = ll_get_user_pages(rw, iter, &pages,
-					   &pvec->ldp_count, count);
+		result = ll_get_user_pages(rw, iter, pvec, count);
+
 		if (unlikely(result <= 0)) {
 			cl_sync_io_note(env, &ldp_aio->csd_sync, result);
 			if (sync_submit) {
@@ -561,10 +562,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			}
 			GOTO(out, result);
 		}
-
 		count = result;
-		pvec->ldp_file_offset = file_offset;
-		pvec->ldp_pages = pages;
 
 		result = ll_direct_rw_pages(env, io, count,
 					    rw, inode, ldp_aio);
