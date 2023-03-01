@@ -508,6 +508,7 @@ enum lu_object_header_attr {
 	LOHA_EXISTS		= BIT(0),
 	LOHA_REMOTE		= BIT(1),
 	LOHA_HAS_AGENT_ENTRY	= BIT(2),
+	LOHA_FSCRYPT_MD		= BIT(3),
 	/**
 	 * UNIX file type is stored in S_IFMT bits.
 	 */

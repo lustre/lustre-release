@@ -1432,6 +1432,11 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result);
 	}
 
+	if (!uc->uc_rbac_fscrypt_admin &&
+	    parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD &&
+	    open_flags & MDS_OPEN_CREAT)
+		GOTO(out_parent, result = -EPERM);
+
 	result = mdt_check_enc(info, parent);
 	if (result)
 		GOTO(out_parent, result);

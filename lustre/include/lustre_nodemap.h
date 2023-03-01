@@ -40,11 +40,12 @@ static const struct nodemap_rbac_name {
 	enum nodemap_rbac_roles nrn_mode;
 	const char	       *nrn_name;
 } nodemap_rbac_names[] = {
-	{ NODEMAP_RBAC_FILE_PERMS, "file_perms" },
-	{ NODEMAP_RBAC_DNE_OPS,    "dne_ops"    },
-	{ NODEMAP_RBAC_QUOTA_OPS,  "quota_ops"  },
-	{ NODEMAP_RBAC_BYFID_OPS,  "byfid_ops"  },
-	{ NODEMAP_RBAC_CHLG_OPS,   "chlg_ops"   },
+	{ NODEMAP_RBAC_FILE_PERMS,	"file_perms"	},
+	{ NODEMAP_RBAC_DNE_OPS,		"dne_ops"	},
+	{ NODEMAP_RBAC_QUOTA_OPS,	"quota_ops"	},
+	{ NODEMAP_RBAC_BYFID_OPS,	"byfid_ops"	},
+	{ NODEMAP_RBAC_CHLG_OPS,	"chlg_ops"	},
+	{ NODEMAP_RBAC_FSCRYPT_ADMIN,   "fscrypt_admin"	},
 };
 
 struct nodemap_pde {

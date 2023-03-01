@@ -5405,6 +5405,7 @@ test_64a() {
 		    quota_ops \
 		    byfid_ops \
 		    chlg_ops \
+		    fscrypt_admin \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
@@ -5669,6 +5670,86 @@ test_64e() {
 	wait_nm_sync c0 rbac
 }
 run_test 64e "Nodemap enforces chlg_ops RBAC roles"
+
+test_64f() {
+	local vaultdir=$DIR/$tdir/vault
+	local cli_enc
+	local policy
+	local protector
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	cli_enc=$($LCTL get_param mdc.*.import | grep client_encryption)
+	[ -n "$cli_enc" ] || skip "Need enc support, skip fscrypt_admin role"
+        which fscrypt || skip "Need fscrypt, skip fscrypt_admin role"
+
+	stack_trap cleanup_64 EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_64
+
+	yes | fscrypt setup --force --verbose ||
+		echo "fscrypt global setup already done"
+	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+		/etc/fscrypt.conf
+	yes | fscrypt setup --verbose $MOUNT ||
+		echo "fscrypt setup $MOUNT already done"
+	stack_trap "rm -rf $MOUNT/.fscrypt"
+
+	# file_perms is required because fscrypt uses chmod/chown
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value fscrypt_admin,file_perms
+	wait_nm_sync c0 rbac
+
+	mkdir -p $vaultdir
+	set -vx
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+	     --source=custom_passphrase --name=protector_64 $vaultdir ||
+		error "fscrypt encrypt $vaultdir failed"
+	fscrypt lock $vaultdir || error "fscrypt lock $vaultdir failed (1)"
+	policy=$(fscrypt status $vaultdir | awk '$1 == "Policy:"{print $2}')
+	[ -n "$policy" ] || error "could not get enc policy"
+	protector=$(fscrypt status $vaultdir |
+		  awk 'BEGIN {found=0} { if (found == 1) { print $1 }} \
+			$1 == "PROTECTOR" {found=1}')
+	[ -n "$protector" ] || error "could not get enc protector"
+	set +vx
+
+	cancel_lru_locks
+	# file_perms is required because fscrypt uses chmod/chown
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value file_perms
+	wait_nm_sync c0 rbac
+
+	set -vx
+	echo mypass | fscrypt unlock $vaultdir ||
+		error "fscrypt unlock $vaultdir failed"
+	fscrypt lock $vaultdir || error "fscrypt lock $vaultdir failed (2)"
+	fscrypt metadata destroy --protector=$MOUNT:$protector --force &&
+		error "destroy protector should fail"
+	fscrypt metadata destroy --policy=$MOUNT:$policy --force &&
+		error "destroy policy should fail"
+	mkdir -p ${vaultdir}2
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+		--source=custom_passphrase \
+		--name=protector_64bis ${vaultdir}2 &&
+			error "fscrypt encrypt ${vaultdir}2 should fail"
+	set +vx
+
+	cancel_lru_locks
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac  --value all
+	wait_nm_sync c0 rbac
+
+	set -vx
+	fscrypt metadata destroy --protector=$MOUNT:$protector --force ||
+		error "destroy protector failed"
+	fscrypt metadata destroy --policy=$MOUNT:$policy --force ||
+		error "destroy policy failed"
+	set +vx
+
+	rm -rf ${vaultdir}*
+}
+run_test 64f "Nodemap enforces fscrypt_admin RBAC roles"
 
 log "cleanup: ======================================================"
 

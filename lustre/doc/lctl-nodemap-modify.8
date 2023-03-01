@@ -89,6 +89,10 @@ Defaults to all, which means all roles are allowed. Other possible values
 - chlg_ops, to allow access to Lustre Changelogs.
 - dne_ops, to allow operations related to DNE (e.g. 'lfs mkdir').
 - file_perms, to allow modifications of file permissions and owners.
+- fscrypt_admin, to allow fscrypt related admin tasks (create or modify
+protectors/policies). Note that even without this role, it is still possible
+to lock or unlock encrypted directories, as these operations only need read
+access to fscrypt metadata.
 - quota_ops, to allow quota modifications.
 Apart from all, any role not explicitly specified is forbidden. And to forbid
 all roles, use 'none' value.

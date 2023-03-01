@@ -5783,6 +5783,15 @@ static void lod_ah_init(const struct lu_env *env,
 				(lc->ldo_dir_hash_type & LMV_HASH_FLAG_KNOWN) |
 				d->lod_mdt_descs.ltd_lmv_desc.ld_pattern;
 
+		/* make sure all fscrypt metadata stays on same mdt */
+		if (child->do_lu.lo_header->loh_attr & LOHA_FSCRYPT_MD) {
+			lc->ldo_dir_stripe_count = 0;
+			lds->lds_dir_def_stripe_offset =
+				lod2lu_dev(d)->ld_site->ld_seq_site->ss_node_id;
+			lds->lds_dir_def_striping_set = 1;
+			lc->ldo_def_striping = lds;
+		}
+
 		CDEBUG(D_INFO, "final dir stripe_count=%hu offset=%d hash=%u\n",
 		       lc->ldo_dir_stripe_count,
 		       (int)lc->ldo_dir_stripe_offset, lc->ldo_dir_hash_type);

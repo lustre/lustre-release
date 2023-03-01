@@ -1468,6 +1468,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
+	/* return immutable attr on fscrypt metadata files
+	 * if fscrypt admin is not permitted
+	 */
+	if (o->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD &&
+	    !mdt_ucred(info)->uc_rbac_fscrypt_admin)
+		la->la_flags |= LUSTRE_IMMUTABLE_FL;
+
 	/* if file is released, check if a restore is running */
 	if (ma->ma_valid & MA_HSM) {
 		repbody->mbo_valid |= OBD_MD_TSTATE;
@@ -1685,12 +1692,18 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 
 	info->mti_cross_ref = !!(reqbody->mbo_valid & OBD_MD_FLCROSSREF);
 
+	rc = mdt_init_ucred(info, reqbody);
+	if (rc)
+		GOTO(out_shrink, rc);
+
 	rc = mdt_getattr_internal(info, obj, 0);
 	if (unlikely(rc))
-		GOTO(out_shrink, rc);
+		GOTO(out_ucred, rc);
 
 	rc = mdt_pack_encctx_in_reply(info, obj);
 	EXIT;
+out_ucred:
+	mdt_exit_ucred(info);
 out_shrink:
 	mdt_client_compatibility(info);
 	rc2 = mdt_fix_reply(info);
@@ -2038,6 +2051,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	struct mdt_lock_handle *lhp = NULL;
 	struct ldlm_lock *lock;
 	struct req_capsule *pill = info->mti_pill;
+	bool fscrypt_md = false;
 	__u64 try_bits = 0;
 	bool is_resent;
 	int ma_need = 0;
@@ -2148,6 +2162,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		CDEBUG(D_INODE, "getattr with lock for "DFID"/"DNAME", "
 		       "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)),
 		       PNAME(lname), ldlm_rep);
+
+		if (parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD ||
+		    (fid_is_root(mdt_object_fid(parent)) &&
+		     lname->ln_namelen == strlen(dot_fscrypt_name) &&
+		     strncmp(lname->ln_name, dot_fscrypt_name,
+			     lname->ln_namelen) == 0))
+			fscrypt_md = true;
 	} else {
 		reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
 		if (unlikely(reqbody == NULL))
@@ -2337,6 +2358,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		if (unlikely(rc != 0))
 			GOTO(out_child, rc);
 	}
+
+	if (fscrypt_md)
+		child->mot_obj.lo_header->loh_attr |= LOHA_FSCRYPT_MD;
 
 	/* finally, we can get attr for child. */
 	rc = mdt_getattr_internal(info, child, ma_need);
@@ -6725,6 +6749,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	mdt_ucred(info)->uc_rbac_quota_ops = 1;
 	mdt_ucred(info)->uc_rbac_byfid_ops = 1;
 	mdt_ucred(info)->uc_rbac_chlg_ops = 1;
+	mdt_ucred(info)->uc_rbac_fscrypt_admin = 1;
 	rc = mdt_add_dirty_flag(info, mfd->mfd_object, &info->mti_attr);
 
 	lu_context_exit(&ses);

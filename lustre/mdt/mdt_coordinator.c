@@ -1036,6 +1036,7 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_rbac_quota_ops = 1;
 	uc->uc_rbac_byfid_ops = 1;
 	uc->uc_rbac_chlg_ops = 1;
+	uc->uc_rbac_fscrypt_admin = 1;
 
 	RETURN(0);
 }

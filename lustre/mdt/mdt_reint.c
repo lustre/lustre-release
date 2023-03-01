@@ -510,6 +510,7 @@ static int mdt_create(struct mdt_thread_info *info)
 	struct md_attr *ma = &info->mti_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct md_op_spec *spec = &info->mti_spec;
+	struct lu_ucred *uc = mdt_ucred(info);
 	bool restripe = false;
 	int rc;
 
@@ -524,7 +525,6 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (S_ISDIR(ma->ma_attr.la_mode) &&
 	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen != 0) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
-		struct lu_ucred	*uc = mdt_ucred(info);
 		struct obd_export *exp = mdt_info_req(info)->rq_export;
 
 		/* Only new clients can create remote dir( >= 2.4) and
@@ -579,6 +579,10 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (rc)
 		GOTO(put_parent, rc);
 
+	if (!uc->uc_rbac_fscrypt_admin &&
+	    parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD)
+		GOTO(put_parent, rc = -EPERM);
+
 	/*
 	 * LU-10235: check if name exists locklessly first to avoid massive
 	 * lock recalls on existing directories.
@@ -629,6 +633,12 @@ static int mdt_create(struct mdt_thread_info *info)
 	rc = mdt_version_get_check_save(info, child, 2);
 	if (rc)
 		GOTO(put_child, rc);
+
+	if (parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD ||
+	    (rr->rr_name.ln_namelen == strlen(dot_fscrypt_name) &&
+	     strncmp(rr->rr_name.ln_name, dot_fscrypt_name,
+		     rr->rr_name.ln_namelen) == 0))
+		child->mot_obj.lo_header->loh_attr |= LOHA_FSCRYPT_MD;
 
 	/*
 	 * Do not perform lookup sanity check. We know that name does
@@ -1113,6 +1123,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	struct mdt_lock_handle *parent_lh;
 	struct mdt_lock_handle *child_lh;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct lu_ucred *uc  = mdt_ucred(info);
 	__u64 lock_ibits;
 	bool cos_incompat = false;
 	int no_name = 0;
@@ -1144,6 +1155,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			GOTO(put_parent, rc);
 	}
 
+	if (!uc->uc_rbac_fscrypt_admin &&
+	    mp->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD)
+		GOTO(put_parent, rc = -EPERM);
+
 	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
 	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 relock:
@@ -1155,8 +1170,6 @@ relock:
 		GOTO(put_parent, rc);
 
 	if (info->mti_spec.sp_rm_entry) {
-		struct lu_ucred *uc  = mdt_ucred(info);
-
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
 			GOTO(unlock_parent, rc = -ENOTSUPP);
@@ -2704,6 +2717,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	struct mdt_lock_handle *lh_newp = NULL;
 	struct lu_fid *old_fid = &info->mti_tmp_fid1;
 	struct lu_fid *new_fid = &info->mti_tmp_fid2;
+	struct lu_ucred *uc = mdt_ucred(info);
 	__u64 lock_ibits;
 	bool reverse = false, discard = false;
 	bool cos_incompat;
@@ -2746,6 +2760,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	rc = mdt_check_enc(info, mtgtdir);
 	if (rc)
 		GOTO(out_put_tgtdir, rc);
+
+	if (!uc->uc_rbac_fscrypt_admin &&
+	    mtgtdir->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD)
+		GOTO(out_put_tgtdir, rc = -EPERM);
 
 	/*
 	 * Note: do not enqueue rename lock for replay request, because

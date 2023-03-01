@@ -184,6 +184,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_quota_ops = !!(rbac & NODEMAP_RBAC_QUOTA_OPS);
 	uc->uc_rbac_byfid_ops = !!(rbac & NODEMAP_RBAC_BYFID_OPS);
 	uc->uc_rbac_chlg_ops = !!(rbac & NODEMAP_RBAC_CHLG_OPS);
+	uc->uc_rbac_fscrypt_admin = !!(rbac & NODEMAP_RBAC_FSCRYPT_ADMIN);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
