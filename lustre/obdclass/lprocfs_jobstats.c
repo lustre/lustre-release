@@ -561,10 +561,12 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 {
 	struct seq_file *seq = file->private_data;
 	struct obd_job_stats *stats = seq->private;
-	char jobid[LUSTRE_JOBID_SIZE];
+	char jobid[4 * LUSTRE_JOBID_SIZE]; /* all escaped chars, plus ""\n\0 */
+	char *p1, *p2, *last;
+	unsigned int c;
 	struct job_stat *job;
 
-	if (len == 0 || len >= LUSTRE_JOBID_SIZE)
+	if (len == 0 || len >= 4 * LUSTRE_JOBID_SIZE)
 		return -EINVAL;
 
 	if (stats->ojs_hash == NULL)
@@ -573,10 +575,31 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 	if (copy_from_user(jobid, buf, len))
 		return -EFAULT;
 	jobid[len] = 0;
+	last = jobid + len - 1;
 
 	/* Trim '\n' if any */
-	if (jobid[len - 1] == '\n')
-		jobid[len - 1] = 0;
+	if (*last == '\n')
+		*(last--) = 0;
+
+	/* decode escaped chars if jobid is a quoted string */
+	if (jobid[0] == '"' && *last == '"') {
+		last--;
+
+		for (p1 = jobid, p2 = jobid + 1; p2 <= last; p1++, p2++) {
+			if (*p2 != '\\') {
+				*p1 = *p2;
+			} else if (p2 + 3 <= last && *(p2 + 1) == 'x' &&
+				 sscanf(p2 + 2, "%02X", &c) == 1) {
+				*p1 = c;
+				p2 += 3;
+			} else {
+				return -EINVAL;
+			}
+		}
+		*p1 = 0;
+
+	}
+	jobid[LUSTRE_JOBID_SIZE - 1] = 0;
 
 	if (strcmp(jobid, "clear") == 0) {
 		lprocfs_job_cleanup(stats, true);

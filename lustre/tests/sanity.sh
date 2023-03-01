@@ -19468,7 +19468,7 @@ test_205a() { # Job stats
 }
 run_test 205a "Verify job stats"
 
-# LU-13117, LU-13597
+# LU-13117, LU-13597, LU-16599
 test_205b() {
 	(( $MDS1_VERSION >= $(version_code 2.13.54.91) )) ||
 		skip "Need MDS version at least 2.13.54.91"
@@ -19494,11 +19494,26 @@ test_205b() {
 
 	(( $MDS1_VERSION <= $(version_code 2.15.0) )) &&
 		echo "MDS does not yet escape jobid" && return 0
+
+	mkdir_on_mdt0 $DIR/$tdir
 	$LCTL set_param jobid_var=TEST205b
-	env -i TEST205b="has sp" touch $DIR/$tfile.2
-	do_facet mds1 $LCTL get_param $job_stats | grep "has.*x20sp" ||
-		{ do_facet mds1 $LCTL get_param $job_stats;
+	env -i TEST205b="has sp" touch $DIR/$tdir/$tfile.2
+	local jobid=$(do_facet mds1 $LCTL get_param $job_stats |
+		      awk '/has\\x20sp/ {print $3}')
+	[[ -n "$jobid" ]] || { do_facet mds1 $LCTL get_param $job_stats;
 		  error "jobid not escaped"; }
+
+	if (( $MDS1_VERSION >= $(version_code 2.15.53.139) )); then
+		# need to run such a command on mds1:
+		# lctl set_param mdt.$FSNAME-MDT0000.job_stats='"has\x20sp.touch.0"'
+		#
+		# there might be multiple MDTs on single mds server, so need to
+		# specifiy MDT0000. Or the command will fail due to other MDTs
+		do_facet_vp mds1 $LCTL set_param mdt.$FSNAME-MDT0000.job_stats=$jobid ||
+			error "cannot clear escaped jobid in job_stats";
+	else
+		echo "MDS does not support clearing escaped jobid"
+	fi
 }
 run_test 205b "Verify job stats jobid and output format"
 
