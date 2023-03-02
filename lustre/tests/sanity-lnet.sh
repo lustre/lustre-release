@@ -3444,6 +3444,48 @@ test_302() {
 }
 run_test 302 "Check that peer debug info can be dumped"
 
+test_303() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	setup_health_test true || return $?
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	add_net "${NETTYPE}99" "$FAKE_IF" || return $?
+
+	local nid=$($LCTL list_nids | tail --lines 1)
+
+	# Our updated config should be pushed to RNODE
+	local found=$(do_node $RNODE "$LNETCTL peer show --nid $nid")
+
+	[[ -z $found ]] && error "Peer not updated on $RNODE"
+
+	local prim=$($LCTL list_nids | head -n 1)
+
+	if ! grep -q -- "- primary nid: $prim"<<<"${found}"; then
+		echo "$found"
+		error "Wrong primary nid"
+	fi
+
+	echo "Set $FAKE_IF down"
+	echo "ip link set dev $FAKE_IF down"
+	ip link set dev $FAKE_IF down
+	check_ni_status "$nid" down
+
+	local hval=$(do_node $RNODE "$LNETCTL peer show --nid $nid -v 2 | \
+				     grep -e '- nid:' -e 'health value:'")
+
+	hval=$(grep -A 1 $nid<<<"$hval" | tail -n 1 | awk '{print $NF}')
+	(( hval < 1000 )) ||
+		error "Expect $hval < 1000"
+
+	return 0
+}
+run_test 303 "Check peer NI health after link down"
+
 check_udsp_prio() {
 	local target_net="${1}"
 	local target_nid="${2}"
