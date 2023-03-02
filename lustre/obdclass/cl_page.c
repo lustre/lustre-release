@@ -989,6 +989,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 		       enum cl_req_type crt)
 {
 	struct page *vmpage = cp->cp_vmpage;
+	bool unlock = false;
 	int rc;
 
 	ENTRY;
@@ -998,6 +999,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 		GOTO(out, rc = 0);
 
 	lock_page(vmpage);
+	unlock = true;
 
 	if (clear_page_dirty_for_io(vmpage)) {
 		LASSERT(cp->cp_state == CPS_CACHED);
@@ -1019,12 +1021,14 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 		LBUG();
 	}
 
-	unlock_page(vmpage);
 out:
 	if (rc == 0) {
 		PASSERT(env, cp, cp->cp_state == CPS_CACHED);
 		cl_page_io_start(env, cp, crt);
 	}
+
+	if (unlock)
+		unlock_page(vmpage);
 
 	CL_PAGE_HEADER(D_TRACE, env, cp, "%d %d\n", crt, rc);
 
