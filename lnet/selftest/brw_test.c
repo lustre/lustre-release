@@ -311,7 +311,9 @@ brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
 	if (rc != 0)
 		return rc;
 
-	memcpy(&rpc->crpc_bulk, bulk, offsetof(struct srpc_bulk, bk_iovs[npg]));
+	unsafe_memcpy(&rpc->crpc_bulk, bulk,
+		      offsetof(struct srpc_bulk, bk_iovs[npg]),
+		      FLEXIBLE_OBJECT);
 	if (opc == LST_BRW_WRITE)
 		brw_fill_bulk(&rpc->crpc_bulk, flags, BRW_MAGIC);
 	else
