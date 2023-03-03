@@ -43,6 +43,7 @@
 #include <linux/compat.h>
 #include <linux/aio.h>
 #include <linux/parser.h>
+#include <linux/seqlock.h>
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
 #include <range_lock.h>
@@ -271,6 +272,7 @@ struct ll_inode_info {
 	struct mutex			lli_xattrs_enq_lock;
 	struct list_head		lli_xattrs; /* ll_xattr_entry->xe_list */
 	struct list_head		lli_lccs; /* list of ll_cl_context */
+	seqlock_t			lli_page_inv_lock;
 };
 
 #ifndef HAVE_USER_NAMESPACE_ARG
@@ -1798,5 +1800,7 @@ extern const struct llcrypt_operations lustre_cryptops;
 int ll_manage_foreign(struct inode *inode, struct lustre_md *lmd);
 bool ll_foreign_is_openable(struct dentry *dentry, unsigned int flags);
 bool ll_foreign_is_removable(struct dentry *dentry, bool unset);
+
+int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
 
 #endif /* LLITE_INTERNAL_H */

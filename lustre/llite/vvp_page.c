@@ -153,29 +153,6 @@ static void vvp_page_discard(const struct lu_env *env,
 	generic_error_remove_page(vmpage->mapping, vmpage);
 }
 
-static void vvp_page_delete(const struct lu_env *env,
-			    const struct cl_page_slice *slice)
-{
-	struct page      *vmpage = cl2vm_page(slice);
-	struct cl_page   *page   = slice->cpl_page;
-	int refc;
-
-	LASSERT(PageLocked(vmpage));
-	LASSERT((struct cl_page *)vmpage->private == page);
-
-
-	/* Drop the reference count held in vvp_page_init */
-	refc = atomic_dec_return(&page->cp_ref);
-	LASSERTF(refc >= 1, "page = %p, refc = %d\n", page, refc);
-
-	ClearPagePrivate(vmpage);
-	vmpage->private = 0;
-	/*
-	 * Reference from vmpage to cl_page is removed, but the reference back
-	 * is still here. It is removed later in vvp_page_fini().
-	 */
-}
-
 static void vvp_page_export(const struct lu_env *env,
 			    const struct cl_page_slice *slice,
 			    int uptodate)
@@ -222,6 +199,41 @@ static int vvp_page_prep_write(const struct lu_env *env,
 		set_page_writeback(vmpage);
 
 	return 0;
+}
+
+static void vvp_page_delete(const struct lu_env *env,
+			    const struct cl_page_slice *slice)
+{
+	struct cl_page *cp = slice->cpl_page;
+
+	if (cp->cp_type == CPT_CACHEABLE) {
+		struct page *vmpage = cp->cp_vmpage;
+		struct inode *inode = vmpage->mapping->host;
+
+		LASSERT(PageLocked(vmpage));
+		LASSERT((struct cl_page *)vmpage->private == cp);
+
+		/* Drop the reference count held in vvp_page_init */
+		atomic_dec(&cp->cp_ref);
+
+		ClearPagePrivate(vmpage);
+		vmpage->private = 0;
+
+		/* clearpageuptodate prevents the page being read by the
+		 * kernel after it has been deleted from Lustre, which avoids
+		 * potential stale data reads.  The seqlock allows us to see
+		 * that a page was potentially deleted and catch the resulting
+		 * SIGBUS - see ll_filemap_fault() (LU-16160) */
+		write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
+		ClearPageUptodate(vmpage);
+		write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
+
+		/*
+		 * The reference from vmpage to cl_page is removed,
+		 * but the reference back is still here. It is removed
+		 * later in cl_page_free().
+		 */
+	}
 }
 
 /**

@@ -11,13 +11,22 @@
 #include <pthread.h>
 
 /*
- * Usage: rw_seq_cst_vs_drop_caches /mnt/lustre/file0 /mnt/lustre2/file0
+ * Usage: rw_seq_cst_vs_drop_caches [-m] /mnt/lustre/file0 /mnt/lustre2/file0
 
  * Race reads of the same file on two client mounts vs writes and drop
  * caches to detect sequential consistency violations. Run
  * indefinately.  all abort() if a consistency violation is found in
  * which case the wait status ($?) will be 134.
 */
+
+int mmap_mode;		/* -m flag */
+
+void usage(void)
+{
+	fprintf(stdout,
+		"%s: rw_seq_cst_vs_drop_caches [-m] /mnt/lustre/file0 /mnt/lustre2/file0\n"
+"	-m : use mmap to read/write file\n", __func__);
+}
 
 #define handle_error(msg)	\
 	do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -28,23 +37,39 @@ static int fd[2] = { -1, -1 };
  */
 static uint64_t u, u_max = UINT64_MAX / 2;
 static uint64_t v[2];
+char *ptr;
 
 static void *access_thread_start(void *unused)
 {
+	char *ptr2 = NULL;
 	ssize_t rc;
 	int i;
 
+	if (mmap_mode) {
+		ptr2 = mmap(NULL, sizeof(v[1]), PROT_READ,
+			    MAP_PRIVATE | MAP_POPULATE, fd[1], 0);
+		if (ptr2 == MAP_FAILED)
+			handle_error("mmap");
+	}
+
 	do {
 		for (i = 0; i < 2; i++) {
-			rc = pread(fd[i], &v[i], sizeof(v[i]), 0);
-			if (rc < 0 || rc != sizeof(v[i]))
-				handle_error("pread");
+			if (mmap_mode) {
+				memcpy(&v[i], i == 0 ? ptr : ptr2,
+				       sizeof(v[i]));
+			} else {
+				rc = pread(fd[i], &v[i], sizeof(v[i]), 0);
+				if (rc < 0 || rc != sizeof(v[i]))
+					handle_error("pread");
+			}
 		}
 	} while (v[0] <= v[1]);
 
 	fprintf(stderr, "error: u = %"PRIu64", v = %"PRIu64", %"PRIu64"\n",
 		u, v[0], v[1]);
 
+	if (mmap_mode)
+		munmap(ptr2, sizeof(v[i]));
 	abort();
 }
 
@@ -56,12 +81,26 @@ int main(int argc, char *argv[])
 	pthread_t access_thread;
 	struct stat st[2];
 	ssize_t rc;
-	int i;
+	int i, ch;
 
 	setvbuf(stderr, stderr_buf, _IOLBF, sizeof(stderr_buf));
 
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s /mnt/lustre/file0 /mnt/lustre2/file0\n", argv[0]);
+	while ((ch = getopt(argc, argv, "m")) >= 0) {
+		switch (ch) {
+		case 'm':
+			mmap_mode = 1;
+			break;
+		default:
+			usage();
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc != 2) {
+		usage();
 		exit(EXIT_FAILURE);
 	}
 
@@ -69,7 +108,7 @@ int main(int argc, char *argv[])
 	assert(!(drop_caches_fd < 0));
 
 	for (i = 0; i < 2; i++) {
-		fd[i] = open(argv[i + 1], O_RDWR|O_CREAT|O_TRUNC, 0666);
+		fd[i] = open(argv[i], O_RDWR|O_CREAT|O_TRUNC, 0666);
 		if (fd[i] < 0)
 			handle_error("open");
 
@@ -86,18 +125,33 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	rc = pwrite(fd[0], &u, sizeof(u), 0);
-	if (rc < 0 || rc != sizeof(u))
-		handle_error("pwrite");
+	if (mmap_mode) {
+		if (ftruncate(fd[0], sizeof(u)) < 0)
+			handle_error("ftruncate");
+
+		ptr = mmap(NULL, sizeof(u), PROT_READ|PROT_WRITE, MAP_SHARED,
+			   fd[0], 0);
+		if (ptr == MAP_FAILED)
+			handle_error("mmap");
+		memcpy(ptr, &u, sizeof(u));
+	} else {
+		rc = pwrite(fd[0], &u, sizeof(u), 0);
+		if (rc < 0 || rc != sizeof(u))
+			handle_error("pwrite");
+	}
 
 	rc = pthread_create(&access_thread, NULL, &access_thread_start, NULL);
 	if (rc != 0)
 		handle_error("pthread_create");
 
 	for (u = 1; u <= u_max; u++) {
-		rc = pwrite(fd[0], &u, sizeof(u), 0);
-		if (rc < 0 || rc != sizeof(u))
-			handle_error("pwrite");
+		if (mmap_mode) {
+			memcpy(ptr, &u, sizeof(u));
+		} else {
+			rc = pwrite(fd[0], &u, sizeof(u), 0);
+			if (rc < 0 || rc != sizeof(u))
+				handle_error("pwrite");
+		}
 
 		rc = write(drop_caches_fd, "3\n", 2);
 		if (rc < 0 || rc != 2)
@@ -111,6 +165,9 @@ int main(int argc, char *argv[])
 	rc = pthread_join(access_thread, NULL);
 	if (rc != 0)
 		handle_error("pthread_join");
+
+	if (mmap_mode)
+		munmap(ptr, sizeof(u));
 
 	return 0;
 }
