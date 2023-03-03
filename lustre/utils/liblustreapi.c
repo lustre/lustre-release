@@ -243,7 +243,18 @@ llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb)
 }
 
 /**
- * size_units is to be initialized (or zeroed) by caller.
+ * Convert a size string (with optional suffix) into binary value.
+ *
+ * \param optarg [in]		string containing numeric value with optional
+ *				KMGTPE suffix to specify the unit size.
+ *				The \a string may be a decimal value.
+ * \param size [out]		pointer to integer numeric value to be returned
+ * \param size_units [in]	units of \a string if dimensionless.  Must be
+ *				initialized by caller. If zero, units = bytes.
+ * \param bytes_spec [in]	if suffix 'b' means bytes or 512-byte sectors.
+ *
+ * \retval 0			success
+ * \retval -EINVAL		negative or too large size, or unknown suffix
  */
 int llapi_parse_size(const char *optarg, unsigned long long *size,
 		     unsigned long long *size_units, int bytes_spec)
@@ -253,7 +264,7 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 	unsigned long long frac = 0, frac_d = 1;
 
 	if (strncmp(optarg, "-", 1) == 0)
-		return -1;
+		return -EINVAL;
 
 	if (*size_units == 0)
 		*size_units = 1;
@@ -303,7 +314,7 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 			   (*size & (~0ULL << (64 - 60))) == 0) {
 			*size_units = 1ULL << 60;
 		} else {
-			return -1;
+			return -EINVAL;
 		}
 	}
 	*size = *size * *size_units + frac * *size_units / frac_d;
@@ -6528,4 +6539,3 @@ int llapi_file_flush(int fd)
 
 	return llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
 }
-

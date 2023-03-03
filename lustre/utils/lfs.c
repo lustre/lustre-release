@@ -6027,7 +6027,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'z',	.name = "extension-size", .has_arg = no_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = no_argument },
 	{ .name = NULL } };
-	int c, rc;
+	int c, rc = 0;
 	int neg_opt = 0;
 	int pathstart = -1, pathend = -1;
 	int isoption;
@@ -6351,12 +6351,18 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		param->fp_verbose = VERBOSE_OBJID;
 
 	do {
-		rc = llapi_getstripe(argv[pathstart], param);
-	} while (++pathstart < pathend && !rc);
+		int rc2;
 
-	if (rc)
-		fprintf(stderr, "error: %s failed for %s.\n",
-			argv[0], argv[optind - 1]);
+		rc2 = llapi_getstripe(argv[pathstart], param);
+		if (rc2) {
+			fprintf(stderr, "%s: %s for '%s' failed: %s\n",
+				progname, argv[0], argv[optind - 1],
+				strerror(-rc2));
+			if (!rc)
+				rc = rc2;
+		}
+	} while (++pathstart < pathend);
+
 	return rc;
 }
 
@@ -6426,7 +6432,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .val = LFS_INHERIT_RR_OPT,
 			.name = "max-inherit-rr", .has_arg = no_argument },
 	{ .name = NULL } };
-	int c, rc;
+	int c, rc = 0;
 
 	param.fp_get_lmv = 1;
 
@@ -6497,12 +6503,18 @@ static int lfs_getdirstripe(int argc, char **argv)
 		param.fp_verbose = VERBOSE_DEFAULT;
 
 	do {
-		rc = llapi_getstripe(argv[optind], &param);
-	} while (++optind < argc && !rc);
+		int rc2;
 
-	if (rc)
-		fprintf(stderr, "error: %s failed for %s.\n",
-			argv[0], argv[optind - 1]);
+		rc2 = llapi_getstripe(argv[optind], &param);
+		if (rc2) {
+			fprintf(stderr, "%s: %s for '%s' failed: %s\n",
+				progname, argv[0], argv[optind],
+				strerror(-rc2));
+			if (!rc)
+				rc = rc2;
+		}
+	} while (++optind < argc);
+
 	return rc;
 }
 
@@ -7270,12 +7282,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 	return result;
 }
 
-/* functions */
 static int lfs_rmentry(int argc, char **argv)
 {
 	char *dname;
-	int   index;
-	int   result = 0;
+	int index;
+	int result = 0;
 
 	if (argc <= 1) {
 		fprintf(stderr, "error: %s: missing dirname\n",
@@ -7286,12 +7297,15 @@ static int lfs_rmentry(int argc, char **argv)
 	index = 1;
 	dname = argv[index];
 	while (dname) {
-		result = llapi_direntry_remove(dname);
-		if (result) {
+		int rc2;
+
+		rc2 = llapi_direntry_remove(dname);
+		if (rc2) {
 			fprintf(stderr,
-				"error: %s: remove dir entry '%s' failed\n",
-				argv[0], dname);
-			break;
+				"%s %s: remove dir entry '%s' failed: %s\n",
+				progname, argv[0], dname, strerror(-rc2));
+			if (!result)
+				result = rc2;
 		}
 		dname = argv[++index];
 	}
@@ -7654,15 +7668,16 @@ static int lfs_check(int argc, char **argv)
 	rc = llapi_search_mounts(path, 0, mntdir, NULL);
 	if (rc < 0 || mntdir[0] == '\0') {
 		fprintf(stderr,
-			"%s check: cannot find mounted Lustre filesystem: %s\n",
-			progname, (rc < 0) ? strerror(-rc) : strerror(ENODEV));
+			"%s %s: cannot find mounted Lustre filesystem: %s\n",
+			progname, argv[0],
+			(rc < 0) ? strerror(-rc) : strerror(ENODEV));
 		return rc;
 	}
 
 	rc = llapi_target_check(num_types, obd_types, path);
 	if (rc)
-		fprintf(stderr, "%s check: cannot check target '%s': %s\n",
-			progname, argv[1], strerror(-rc));
+		fprintf(stderr, "%s %s: cannot check target '%s': %s\n",
+			progname, argv[0], argv[1], strerror(-rc));
 
 	return rc;
 }
@@ -9967,7 +9982,7 @@ static int lfs_data_version(int argc, char **argv)
 
 static int lfs_hsm_state(int argc, char **argv)
 {
-	int rc;
+	int rc = 0;
 	int i = 1;
 	char *path;
 	struct hsm_user_state hus;
@@ -9976,13 +9991,17 @@ static int lfs_hsm_state(int argc, char **argv)
 		return CMD_HELP;
 
 	do {
+		int rc2;
 		path = argv[i];
 
-		rc = llapi_hsm_state_get(path, &hus);
-		if (rc) {
-			fprintf(stderr, "can't get hsm state for %s: %s\n",
-				path, strerror(errno = -rc));
-			return rc;
+		rc2 = llapi_hsm_state_get(path, &hus);
+		if (rc2) {
+			fprintf(stderr,
+				"%s %s: get HSM state for '%s' failed: %s\n",
+				progname, argv[0], path, strerror(-rc2));
+			if (!rc)
+				rc = rc2;
+			continue;
 		}
 
 		/* Display path name and status flags */
@@ -10010,7 +10029,7 @@ static int lfs_hsm_state(int argc, char **argv)
 
 	} while (++i < argc);
 
-	return 0;
+	return rc;
 }
 
 #define LFS_HSM_SET   0
@@ -10035,7 +10054,7 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 	{ .val = 'r',	.name = "norelease",	.has_arg = no_argument },
 	{ .name = NULL } };
 	__u64 mask = 0;
-	int c, rc;
+	int c, rc = 0;
 	char *path;
 	__u32 archive_id = 0;
 	char *end = NULL;
@@ -10088,46 +10107,54 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 		return CMD_HELP;
 
 	while (optind < argc) {
+		int rc2;
 		path = argv[optind];
 
 		/* If mode == 0, this means we apply the mask. */
 		if (mode == LFS_HSM_SET)
-			rc = llapi_hsm_state_set(path, mask, 0, archive_id);
+			rc2 = llapi_hsm_state_set(path, mask, 0, archive_id);
 		else
-			rc = llapi_hsm_state_set(path, 0, mask, 0);
+			rc2 = llapi_hsm_state_set(path, 0, mask, 0);
 
-		if (rc != 0) {
-			fprintf(stderr, "Can't change hsm flags for %s: %s\n",
-				path, strerror(errno = -rc));
-			return rc;
+		if (rc2) {
+			fprintf(stderr,
+				"%s %s: change hsm flags for '%s' failed: %s\n",
+				progname, argv[0], path, strerror(-rc2));
+			if (!rc)
+				rc = rc2;
 		}
 		optind++;
 	}
 
-	return 0;
+	return rc;
 }
 
 static int lfs_hsm_action(int argc, char **argv)
 {
-	int				 rc;
-	int				 i = 1;
-	char				*path;
-	struct hsm_current_action	 hca;
-	struct hsm_extent		 he;
-	enum hsm_user_action		 hua;
-	enum hsm_progress_states	 hps;
+	struct hsm_current_action hca;
+	struct hsm_extent he;
+	enum hsm_user_action hua;
+	enum hsm_progress_states hps;
+	int rc = 0;
+	int i = 1;
+	char *path;
 
 	if (argc < 2)
 		return CMD_HELP;
 
 	do {
+		int rc2;
 		path = argv[i];
 
-		rc = llapi_hsm_current_action(path, &hca);
-		if (rc) {
-			fprintf(stderr, "can't get hsm action for %s: %s\n",
-				path, strerror(errno = -rc));
-			return rc;
+		rc2 = llapi_hsm_current_action(path, &hca);
+		if (rc2) {
+			fprintf(stderr,
+				"%s %s: get hsm action for '%s' failed: %s\n",
+				progname, argv[0], path, strerror(-rc2));
+
+			if (!rc)
+				rc = rc2;
+			continue;
 		}
 		he = hca.hca_location;
 		hua = hca.hca_action;
@@ -10157,7 +10184,7 @@ static int lfs_hsm_action(int argc, char **argv)
 
 	} while (++i < argc);
 
-	return 0;
+	return rc;
 }
 
 static int lfs_hsm_set(int argc, char **argv)
@@ -10677,10 +10704,12 @@ static int lfs_ladvise(int argc, char **argv)
 
 		fd = open(path, O_RDONLY);
 		if (fd < 0) {
-			fprintf(stderr, "%s: cannot open file '%s': %s\n",
-				argv[0], path, strerror(errno));
 			rc2 = -errno;
-			goto next;
+			fprintf(stderr, "%s: cannot open file '%s': %s\n",
+				argv[0], path, strerror(-rc2));
+			if (!rc)
+				rc = rc2;
+			continue;
 		}
 
 		advice.lla_start = start;
@@ -10703,13 +10732,12 @@ static int lfs_ladvise(int argc, char **argv)
 				argv[0], ladvise_names[advice_type],
 				path, strerror(errno));
 
-			goto next;
+			if (!rc)
+				rc = rc2;
+			continue;
 		}
-
-next:
-		if (rc == 0 && rc2 < 0)
-			rc = rc2;
 	}
+
 	return rc;
 }
 
@@ -11608,8 +11636,8 @@ static inline int lfs_mirror_write(int argc, char **argv)
 		rc = check_same_file(fd, inputfile);
 		if (rc == 0) {
 			fprintf(stderr,
-			"%s %s: input file cannot be the mirrored file\n",
-				progname, argv[0]);
+			"%s %s: input file cannot be the mirrored file '%s'\n",
+				progname, argv[0], fname);
 			goto close_fd;
 		}
 		if (rc < 0)
@@ -11706,7 +11734,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 			rc = -EBUSY;
 		fprintf(stderr,
 			"%s %s: release lease lock of '%s' failed: %s\n",
-			progname, argv[0], fname, strerror(errno));
+			progname, argv[0], fname, strerror(-rc));
 		goto free_buf;
 	}
 
