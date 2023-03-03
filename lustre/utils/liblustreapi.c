@@ -6393,6 +6393,7 @@ int llapi_target_iterate(int type_num, char **obd_type,
 			fclose(fp);
 			fp = NULL;
 		}
+		cfs_free_param_data(&param);
 	}
 free_path:
 	if (fp)
