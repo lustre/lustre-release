@@ -6418,6 +6418,17 @@ test_56b() {
 }
 run_test 56b "check $LFS getdirstripe"
 
+test_56bb() {
+	verify_yaml_available || skip_env "YAML verification not installed"
+	local output_file=$DIR/$tfile.out
+
+	$LFS getdirstripe -v -D -y $DIR 1> $output_file
+
+	cat $output_file
+	cat $output_file | verify_yaml || error "layout is not valid YAML"
+}
+run_test 56bb "check $LFS getdirstripe layout is YAML"
+
 test_56c() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
