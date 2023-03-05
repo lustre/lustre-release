@@ -2777,12 +2777,15 @@ use_bigger_buffer:
 	if (rc < 0)
 		GOTO(out_stop, rc);
 
-	if (S_ISDIR(attr->la_mode)) {
+	/* adjust stripe count to 0 for 'lfs mkdir -c 1 ...' to avoid creating
+	 * 1-stripe directory, MDS_OPEN_DEFAULT_LMV means ea is default LMV.
+	 */
+	if (unlikely(S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata &&
+		     !(spec->sp_cr_flags & MDS_OPEN_DEFAULT_LMV))) {
 		struct lmv_user_md *lmu = spec->u.sp_ea.eadata;
 
-		/*
-		 * migrate may create 1-stripe directory, so lod_ah_init()
-		 * doesn't adjust stripe count from lmu.
+		/* migrate may create 1-stripe directory, adjust stripe count
+		 * before lod_ah_init().
 		 */
 		if (lmu && lmu->lum_stripe_count == cpu_to_le32(1))
 			lmu->lum_stripe_count = 0;

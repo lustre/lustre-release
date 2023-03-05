@@ -539,8 +539,12 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (!fid_is_md_operative(rr->rr_fid1))
 		RETURN(-EPERM);
 
+	/* MDS_OPEN_DEFAULT_LMV means eadata is parent default LMV, which is set
+	 * if client maintains inherited default LMV
+	 */
 	if (S_ISDIR(ma->ma_attr.la_mode) &&
-	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen != 0) {
+	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen != 0 &&
+	    !(spec->sp_cr_flags & MDS_OPEN_DEFAULT_LMV)) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 		struct obd_export *exp = mdt_info_req(info)->rq_export;
 

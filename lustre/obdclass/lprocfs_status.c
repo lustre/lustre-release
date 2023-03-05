@@ -649,7 +649,7 @@ static const char *const obd_connect_names[] = {
 	"atomic_open_lock",		/* 0x4000000 */
 	"name_encryption",		/* 0x8000000 */
 	"mkdir_replay",			/* 0x10000000 */
-	"dmv_inherit",			/* 0x20000000 */
+	"dmv_imp_inherit",		/* 0x20000000 */
 	"encryption_fid2path",		/* 0x40000000 */
 	NULL
 };

@@ -3232,10 +3232,14 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 
 	/* For striped directory, give striping EA to lod_ah_init, which will
 	 * decide the stripe_offset and stripe count by it. */
-	if (S_ISDIR(attr->la_mode) &&
-	    unlikely(spec != NULL && spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
-		hint->dah_eadata = spec->u.sp_ea.eadata;
-		hint->dah_eadata_len = spec->u.sp_ea.eadatalen;
+	if (S_ISDIR(attr->la_mode) && spec) {
+		if (unlikely(spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
+			hint->dah_eadata = spec->u.sp_ea.eadata;
+			hint->dah_eadata_len = spec->u.sp_ea.eadatalen;
+			if (spec->sp_cr_flags & MDS_OPEN_DEFAULT_LMV)
+				hint->dah_eadata_is_dmv = 1;
+		}
+		hint->dah_dmv_imp_inherit = spec->sp_dmv_imp_inherit;
 	} else if (S_ISREG(attr->la_mode) &&
 		   spec->sp_cr_flags & MDS_OPEN_APPEND) {
 		hint->dah_append_stripe_count = mdd->mdd_append_stripe_count;

@@ -5412,6 +5412,17 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static inline void lod_lum2lds(struct lod_default_striping *lds,
+			       const struct lmv_user_md *lum)
+{
+	lds->lds_dir_def_stripe_count = le32_to_cpu(lum->lum_stripe_count);
+	lds->lds_dir_def_stripe_offset = le32_to_cpu(lum->lum_stripe_offset);
+	lds->lds_dir_def_hash_type = le32_to_cpu(lum->lum_hash_type);
+	lds->lds_dir_def_max_inherit = lum->lum_max_inherit;
+	lds->lds_dir_def_max_inherit_rr = lum->lum_max_inherit_rr;
+	lds->lds_dir_def_striping_set = 1;
+}
+
 /**
  * Get default directory striping.
  *
@@ -5439,16 +5450,7 @@ static int lod_get_default_lmv_striping(const struct lu_env *env,
 		struct lod_thread_info *info = lod_env_info(env);
 
 		lmu = info->lti_ea_store;
-
-		lds->lds_dir_def_stripe_count =
-				le32_to_cpu(lmu->lum_stripe_count);
-		lds->lds_dir_def_stripe_offset =
-				le32_to_cpu(lmu->lum_stripe_offset);
-		lds->lds_dir_def_hash_type =
-				le32_to_cpu(lmu->lum_hash_type);
-		lds->lds_dir_def_max_inherit = lmu->lum_max_inherit;
-		lds->lds_dir_def_max_inherit_rr = lmu->lum_max_inherit_rr;
-		lds->lds_dir_def_striping_set = 1;
+		lod_lum2lds(lds, lmu);
 	}
 
 	return 0;
@@ -5468,6 +5470,7 @@ static int lod_get_default_lmv_striping(const struct lu_env *env,
  */
 static int lod_get_default_striping(const struct lu_env *env,
 				    struct lod_object *lo,
+				    struct dt_allocation_hint *ah,
 				    struct lod_default_striping *lds)
 {
 	int rc, rc1;
@@ -5482,9 +5485,15 @@ static int lod_get_default_striping(const struct lu_env *env,
 			lds->lds_def_striping_set = 0;
 	}
 
-	rc1 = lod_get_default_lmv_striping(env, lo, lds);
-	if (rc == 0 && rc1 < 0)
-		rc = rc1;
+	if (ah->dah_eadata_is_dmv) {
+		lod_lum2lds(lds, ah->dah_eadata);
+	} else if (ah->dah_dmv_imp_inherit) {
+		lds->lds_dir_def_striping_set = 0;
+	} else {
+		rc1 = lod_get_default_lmv_striping(env, lo, lds);
+		if (rc == 0 && rc1 < 0)
+			rc = rc1;
+	}
 
 	return rc;
 }
@@ -5683,14 +5692,15 @@ static void lod_ah_init(const struct lu_env *env,
 		}
 
 		if (likely(lp != NULL))
-			lod_get_default_striping(env, lp, lds);
+			lod_get_default_striping(env, lp, ah, lds);
 
 		/* It should always honour the specified stripes */
 		/* Note: old client (< 2.7)might also do lfs mkdir, whose EA
 		 * will have old magic. In this case, we should ignore the
 		 * stripe count and try to create dir by default stripe.
 		 */
-		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0 &&
+		if (ah->dah_eadata && ah->dah_eadata_len &&
+		    !ah->dah_eadata_is_dmv &&
 		    (le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC ||
 		     le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC_SPECIFIC)) {
 			lc->ldo_dir_stripe_count =
@@ -5761,6 +5771,13 @@ static void lod_ah_init(const struct lu_env *env,
 			/* set count 0 to create normal directory */
 			if (lc->ldo_dir_stripe_count == 1)
 				lc->ldo_dir_stripe_count = 0;
+
+			/* do not save default LMV on server */
+			if (ah->dah_dmv_imp_inherit) {
+				lds->lds_dir_def_striping_set = 0;
+				if (!lds->lds_def_striping_set)
+					lc->ldo_def_striping = NULL;
+			}
 		}
 
 		/* shrink the stripe count to max_mdt_stripecount if it is -1

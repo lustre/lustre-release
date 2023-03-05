@@ -224,6 +224,13 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		 * create only, and don't restripe if object exists.
 		 */
 		flags |= MDS_OPEN_CREAT;
+	if (op_data->op_bias & MDS_CREATE_DEFAULT_LMV) {
+		/* borrow MDS_OPEN_DEFAULT_LMV flag to indicate parent default
+		 * LMV is packed in create request.
+		 */
+		flags |= MDS_OPEN_DEFAULT_LMV;
+		LASSERT(data);
+	}
 	set_mrc_cr_flags(rec, flags);
 	rec->cr_bias     = op_data->op_bias;
 	rec->cr_umask    = current_umask();

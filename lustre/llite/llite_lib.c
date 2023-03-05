@@ -351,7 +351,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_DOM_LVB |
 				   OBD_CONNECT2_REP_MBITS |
 				   OBD_CONNECT2_ATOMIC_OPEN_LOCK |
-				   OBD_CONNECT2_BATCH_RPC;
+				   OBD_CONNECT2_BATCH_RPC |
+				   OBD_CONNECT2_DMV_IMP_INHERIT;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))
@@ -1724,13 +1725,15 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 
 	if (!md->default_lmv) {
 		/* clear default lsm */
-		if (lli->lli_default_lsm_md) {
+		if (lli->lli_default_lsm_md && lli->lli_default_lmv_set) {
 			down_write(&lli->lli_lsm_sem);
-			if (lli->lli_default_lsm_md) {
+			if (lli->lli_default_lsm_md &&
+			    lli->lli_default_lmv_set) {
 				lmv_free_memmd(lli->lli_default_lsm_md);
 				lli->lli_default_lsm_md = NULL;
+				lli->lli_inherit_depth = 0;
+				lli->lli_default_lmv_set = 0;
 			}
-			lli->lli_inherit_depth = 0;
 			up_write(&lli->lli_lsm_sem);
 		}
 		RETURN_EXIT;
@@ -1751,6 +1754,7 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 	if (lli->lli_default_lsm_md)
 		lmv_free_memmd(lli->lli_default_lsm_md);
 	lli->lli_default_lsm_md = md->default_lmv;
+	lli->lli_default_lmv_set = 1;
 	lsm_md_dump(D_INODE, md->default_lmv);
 	md->default_lmv = NULL;
 	up_write(&lli->lli_lsm_sem);
@@ -2846,38 +2850,146 @@ static inline bool ll_default_lmv_inherited(struct lmv_stripe_md *pdmv,
 	return true;
 }
 
-/* update directory depth to ROOT, called after LOOKUP lock is fetched. */
-void ll_update_dir_depth(struct inode *dir, struct inode *inode)
+/* if default LMV is implicitly inherited, subdir default LMV is maintained on
+ * client side.
+ */
+int ll_dir_default_lmv_inherit(struct inode *dir, struct inode *inode)
 {
+	struct ll_inode_info *plli = ll_i2info(dir);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct lmv_stripe_md *plsm;
+	struct lmv_stripe_md *lsm;
+	int rc = 0;
+
+	ENTRY;
+
+	/* ROOT default LMV is not inherited */
+	if (is_root_inode(dir) ||
+	    !(exp_connect_flags2(ll_i2mdexp(dir)) &
+				 OBD_CONNECT2_DMV_IMP_INHERIT))
+		RETURN(0);
+
+	/* nothing to do if no default LMV on both */
+	if (!plli->lli_default_lsm_md && !lli->lli_default_lsm_md)
+		RETURN(0);
+
+	/* subdir default LMV comes from disk */
+	if (lli->lli_default_lsm_md && lli->lli_default_lmv_set)
+		RETURN(0);
+
+	/* delete subdir default LMV if parent's is deleted or becomes
+	 * uninheritable.
+	 */
+	down_read(&plli->lli_lsm_sem);
+	plsm = plli->lli_default_lsm_md;
+	if (!plsm || !lmv_is_inheritable(plsm->lsm_md_max_inherit)) {
+		if (lli->lli_default_lsm_md && !lli->lli_default_lmv_set) {
+			down_write(&lli->lli_lsm_sem);
+			if (lli->lli_default_lsm_md &&
+			    !lli->lli_default_lmv_set) {
+				lmv_free_memmd(lli->lli_default_lsm_md);
+				lli->lli_default_lsm_md = NULL;
+				lli->lli_inherit_depth = 0;
+			}
+			up_write(&lli->lli_lsm_sem);
+		}
+		GOTO(unlock_parent, rc = 0);
+	}
+
+	/* do nothing if inherited LMV is unchanged */
+	if (lli->lli_default_lsm_md) {
+		rc = 1;
+		down_read(&lli->lli_lsm_sem);
+		if (!lli->lli_default_lmv_set)
+			rc = lsm_md_inherited(plsm, lli->lli_default_lsm_md);
+		up_read(&lli->lli_lsm_sem);
+		if (rc == 1)
+			GOTO(unlock_parent, rc = 0);
+	}
+
+	/* inherit default LMV */
+	down_write(&lli->lli_lsm_sem);
+	if (lli->lli_default_lsm_md) {
+		/* checked above, but in case of race, check again with lock */
+		if (lli->lli_default_lmv_set)
+			GOTO(unlock_child, rc = 0);
+		/* always update subdir default LMV in case parent's changed */
+		lsm = lli->lli_default_lsm_md;
+	} else {
+		OBD_ALLOC_PTR(lsm);
+		if (!lsm)
+			GOTO(unlock_child, rc = -ENOMEM);
+		lli->lli_default_lsm_md = lsm;
+	}
+
+	*lsm = *plsm;
+	lsm->lsm_md_max_inherit = lmv_inherit_next(plsm->lsm_md_max_inherit);
+	lsm->lsm_md_max_inherit_rr =
+			lmv_inherit_rr_next(plsm->lsm_md_max_inherit_rr);
+	lli->lli_inherit_depth = plli->lli_inherit_depth + 1;
+
+	lsm_md_dump(D_INODE, lsm);
+
+	EXIT;
+unlock_child:
+	up_write(&lli->lli_lsm_sem);
+unlock_parent:
+	up_read(&plli->lli_lsm_sem);
+
+	return rc;
+}
+
+/**
+ * Update directory depth and default LMV
+ *
+ * Update directory depth to ROOT and inherit default LMV from parent if
+ * parent's default LMV is inheritable. The default LMV set with command
+ * "lfs setdirstripe -D ..." is stored on MDT, while the inherited default LMV
+ * is generated at runtime on client side.
+ *
+ * \param[in]	dir	parent directory inode
+ * \param[in]	de	dentry
+ */
+void ll_update_dir_depth_dmv(struct inode *dir, struct dentry *de)
+{
+	struct inode *inode = de->d_inode;
 	struct ll_inode_info *plli;
 	struct ll_inode_info *lli;
 
-	if (!S_ISDIR(inode->i_mode))
-		return;
-
+	LASSERT(S_ISDIR(inode->i_mode));
 	if (inode == dir)
 		return;
 
 	plli = ll_i2info(dir);
 	lli = ll_i2info(inode);
 	lli->lli_dir_depth = plli->lli_dir_depth + 1;
-	if (plli->lli_default_lsm_md && lli->lli_default_lsm_md) {
-		down_read(&plli->lli_lsm_sem);
-		down_read(&lli->lli_lsm_sem);
-		if (ll_default_lmv_inherited(plli->lli_default_lsm_md,
+	if (lli->lli_default_lsm_md && lli->lli_default_lmv_set) {
+		if (plli->lli_default_lsm_md) {
+			down_read(&plli->lli_lsm_sem);
+			down_read(&lli->lli_lsm_sem);
+			if (lsm_md_inherited(plli->lli_default_lsm_md,
 					     lli->lli_default_lsm_md))
-			lli->lli_inherit_depth =
-				plli->lli_inherit_depth + 1;
-		else
+				lli->lli_inherit_depth =
+					plli->lli_inherit_depth + 1;
+			else
+				/* in case parent default LMV changed */
+				lli->lli_inherit_depth = 0;
+			up_read(&lli->lli_lsm_sem);
+			up_read(&plli->lli_lsm_sem);
+		} else {
+			/* in case parent default LMV deleted */
 			lli->lli_inherit_depth = 0;
-		up_read(&lli->lli_lsm_sem);
-		up_read(&plli->lli_lsm_sem);
+		}
 	} else {
-		lli->lli_inherit_depth = 0;
+		ll_dir_default_lmv_inherit(dir, inode);
 	}
 
-	CDEBUG(D_INODE, DFID" depth %hu default LMV depth %hu\n",
-	       PFID(&lli->lli_fid), lli->lli_dir_depth, lli->lli_inherit_depth);
+	if (lli->lli_default_lsm_md)
+		CDEBUG(D_INODE,
+		       "%s "DFID" depth %hu %s default LMV inherit depth %hu\n",
+		       de->d_name.name, PFID(&lli->lli_fid), lli->lli_dir_depth,
+		       lli->lli_default_lmv_set ? "server" : "client",
+		       lli->lli_inherit_depth);
 }
 
 void ll_truncate_inode_pages_final(struct inode *inode, struct cl_io *io)

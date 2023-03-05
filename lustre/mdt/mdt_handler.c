@@ -6219,11 +6219,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_dir_gid = 0;
 	m->mdt_enable_remote_rename = 1;
 	m->mdt_enable_striped_dir = 1;
+	m->mdt_enable_dmv_implicit_inherit = 1;
 	m->mdt_dir_restripe_nsonly = 1;
 	m->mdt_max_mod_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);
+	atomic_set(&m->mdt_dmv_old_client_count, 0);
 
 	m->mdt_lu_dev.ld_ops = &mdt_lu_ops;
 	m->mdt_lu_dev.ld_obd = obd;
@@ -6882,6 +6884,12 @@ static int mdt_connect_internal(const struct lu_env *env,
 	if (!mdt->mdt_lut.lut_dt_conf.ddp_has_lseek_data_hole)
 		data->ocd_connect_flags2 &= ~OBD_CONNECT2_LSEEK;
 
+	if (!OCD_HAS_FLAG(data, MDS_MDS) && !OCD_HAS_FLAG(data, LIGHTWEIGHT) &&
+	    !OCD_HAS_FLAG2(data, DMV_IMP_INHERIT)) {
+		atomic_inc(&mdt->mdt_dmv_old_client_count);
+		mdt->mdt_enable_dmv_implicit_inherit = 0;
+	}
+
 	return 0;
 }
 
@@ -7002,6 +7010,8 @@ static int mdt_export_cleanup(struct obd_export *exp)
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
+	struct obd_connect_data *data = &exp->exp_connect_data;
+	struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
 	int rc;
 
 	ENTRY;
@@ -7012,13 +7022,14 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
-	if ((exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
-	    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)) {
-		struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
+	if (OCD_HAS_FLAG(data, MDS_MDS) && !OCD_HAS_FLAG(data, LIGHTWEIGHT) &&
+	    atomic_dec_and_test(&mdt->mdt_mds_mds_conns))
+		mdt_disable_slc(mdt);
 
-		if (atomic_dec_and_test(&mdt->mdt_mds_mds_conns))
-			mdt_disable_slc(mdt);
-	}
+	if (!OCD_HAS_FLAG(data, MDS_MDS) && !OCD_HAS_FLAG(data, LIGHTWEIGHT) &&
+	    !OCD_HAS_FLAG2(data, DMV_IMP_INHERIT) &&
+	    atomic_dec_and_test(&mdt->mdt_dmv_old_client_count))
+		mdt->mdt_enable_dmv_implicit_inherit = 1;
 
 	rc = server_disconnect_export(exp);
 	if (rc != 0)

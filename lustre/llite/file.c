@@ -708,10 +708,8 @@ retry:
 		 * of kernel will deal with that later.
 		 */
 		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, &bits);
-		if (bits & MDS_INODELOCK_LOOKUP) {
+		if (bits & MDS_INODELOCK_LOOKUP)
 			d_lustre_revalidate(de);
-			ll_update_dir_depth(parent->d_inode, de->d_inode);
-		}
 
 		/* if DoM bit returned along with LAYOUT bit then there
 		 * can be read-on-open data returned.
@@ -719,6 +717,11 @@ retry:
 		if (bits & MDS_INODELOCK_DOM && bits & MDS_INODELOCK_LAYOUT)
 			ll_dom_finish_open(de->d_inode, req);
 	}
+	/* open may not fetch LOOKUP lock, update dir depth and default LMV
+	 * anyway.
+	 */
+	if (!rc && S_ISDIR(de->d_inode->i_mode))
+		ll_update_dir_depth_dmv(parent->d_inode, de);
 
 out:
 	ptlrpc_req_finished(req);

@@ -309,7 +309,12 @@ struct mdt_device {
 				   mdt_readonly:1,
 				   mdt_skip_lfsck:1,
 				   /* dir restripe migrate dirent only */
-				   mdt_dir_restripe_nsonly:1;
+				   mdt_dir_restripe_nsonly:1,
+				   /* this is enabled by default, but once an
+				    * old client joins, disable this to handle
+				    * inherited default LMV on server.
+				    */
+				   mdt_enable_dmv_implicit_inherit:1;
 
 				   /* user with gid can create remote/striped
 				    * dir, and set default dir stripe */
@@ -346,6 +351,9 @@ struct mdt_device {
 	struct mdt_object	  *mdt_md_root;
 
 	struct mdt_dir_restriper   mdt_restriper;
+
+	/* count of old clients that doesn't support DMV implicite inherit */
+	atomic_t		   mdt_dmv_old_client_count;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)

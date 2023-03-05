@@ -6162,6 +6162,116 @@ test_113 () {
 }
 run_test 113 "check servers of specified fs"
 
+check_default_lmv() {
+	local dir=$1
+
+	local enabled
+	local dmv
+	local index
+	local count
+	local inherit
+	local inherit_rr
+	local raw
+
+	enabled=$(do_facet mds1 \
+		$LCTL get_param -n mdt.*-MDT0000*.enable_dmv_implicit_inherit)
+
+	dmv=$($LFS getdirstripe -D $dir)
+	echo $dir $dmv
+	index=$(echo $dmv | awk '{ print $4 }')
+	(( index == $2 )) || error "$dir default stripe index $index != $2"
+
+	count=$(echo $dmv | awk '{ print $2 }')
+	(( count == $3 )) || error "$dir default stripe count $count != $3"
+
+	inherit=$(echo $dmv | awk '{ print $8 }')
+	(( inherit == $4 )) || error "$dir default max-inherit $inherit != $4"
+
+	if [ $index -eq -1 ]; then
+		inherit_rr=$(echo $dmv | awk '{ print $10 }')
+		(( inherit_rr == $5 )) ||
+			error "$dir default max-inherit-rr $inherit_rr != $5"
+	fi
+
+	# with --raw, print default LMV stored in inode, otherwise print nothing
+	raw=$($LFS getdirstripe -D --raw $dir)
+	if (( enabled == 1 )); then
+		[ -z $raw ] ||
+			error "implicit inherited DMV is printed with --raw"
+	else
+		# if disabled, dmv is stored in inode, which will always
+		# print max-inherit-rr
+		echo $dir $raw
+		[[ $raw =~ $dmv.* ]] || error "$dir raw $raw != dmv $dmv"
+	fi
+}
+
+test_dmv_imp_inherit() {
+	local dmv
+	local raw
+	local index
+	local count
+	local inherit
+	local inherit_rr
+
+	rm -rf $DIR/$tdir || error "rm $tdir failed"
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+
+	# set dir default LMV
+	$LFS setdirstripe -D -c1 -X4 --max-inherit-rr 2 $DIR/$tdir ||
+		error "setdirstripe -D $tdir failed"
+	dmv=$($LFS getdirstripe -D $DIR/$tdir)
+	raw=$($LFS getdirstripe -D --raw $DIR/$tdir)
+	[ "$dmv" == "$raw" ] || error "$dmv != $raw"
+
+	mkdir -p $DIR/$tdir/l1/l2/l3 || error "mkdir $DIR/$tdir/l1/l2/l3 failed"
+	check_default_lmv $DIR/$tdir/l1/l2/l3 -1 1 1 0
+	check_default_lmv $DIR2/$tdir/l1/l2/l3 -1 1 1 0
+
+	# below tests are valid only when this feature is enabled
+	local enabled=$(do_facet mds1 \
+		$LCTL get_param -n mdt.*-MDT0000*.enable_dmv_implicit_inherit)
+
+	(( enabled == 1 )) || return 0
+
+	# set l2 default LMV, dmv of l3 should change immediately
+	$LFS setdirstripe -D -i1 -c2 -X4 $DIR/$tdir/l1/l2 ||
+		error "setdirstripe -D $tdir/l1/l2 failed"
+
+	check_default_lmv $DIR/$tdir/l1/l2/l3 1 2 3
+	check_default_lmv $DIR2/$tdir/l1/l2/l3 1 2 3
+
+	# change tdir default LMV, dmv of l3 should be unchanged because dmv
+	# of l2 is explicitly set
+	$LFS setdirstripe -D -i2 -c2 -X3 $DIR/$tdir ||
+		error "setdirstripe -D $tdir failed"
+
+	check_default_lmv $DIR/$tdir/l1 2 2 2
+	check_default_lmv $DIR2/$tdir/l1 2 2 2
+	check_default_lmv $DIR/$tdir/l1/l2/l3 1 2 3
+	check_default_lmv $DIR2/$tdir/l1/l2/l3 1 2 3
+}
+
+test_114() {
+	(( MDSCOUNT >= 2 )) ||
+		skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.15.55.45) )) ||
+		skip "Need server version at least 2.15.54.45"
+
+	test_dmv_imp_inherit
+
+	# disable dmv_imp_inherit to simulate old client
+	local mdts=$(comma_list $(mdts_nodes))
+
+	do_nodes $mdts $LCTL set_param -n \
+		mdt.*MDT*.enable_dmv_implicit_inherit=0
+	test_dmv_imp_inherit
+	do_nodes $mdts $LCTL set_param -n \
+		mdt.*MDT*.enable_dmv_implicit_inherit=1
+}
+run_test 114 "implicit default LMV inherit"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

@@ -1361,14 +1361,29 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 			RETURN(-EFAULT);
 	} else {
 		req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_ACL);
-		if (S_ISDIR(attr->la_mode) &&
-		    req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT) > 0) {
-			sp->u.sp_ea.eadata =
-				req_capsule_client_get(pill, &RMF_EADATA);
-			sp->u.sp_ea.eadatalen =
-				req_capsule_get_size(pill, &RMF_EADATA,
-						     RCL_CLIENT);
-			sp->sp_cr_flags |= MDS_OPEN_HAS_EA;
+		if (S_ISDIR(attr->la_mode)) {
+			struct obd_export *exp = mdt_info_req(info)->rq_export;
+
+			sp->sp_dmv_imp_inherit =
+				info->mti_mdt->mdt_enable_dmv_implicit_inherit;
+			if (req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT)
+			    > 0) {
+				sp->u.sp_ea.eadata =
+					req_capsule_client_get(pill,
+							       &RMF_EADATA);
+				sp->u.sp_ea.eadatalen =
+					req_capsule_get_size(pill, &RMF_EADATA,
+							     RCL_CLIENT);
+				sp->sp_cr_flags |= MDS_OPEN_HAS_EA;
+			}
+			if (OCD_HAS_FLAG2(&exp->exp_connect_data,
+					  DMV_IMP_INHERIT)) {
+				if ((sp->sp_cr_flags & MDS_OPEN_DEFAULT_LMV) &&
+				    !(sp->sp_cr_flags & MDS_OPEN_HAS_EA))
+					RETURN(-EPROTO);
+			} else if (sp->sp_cr_flags & MDS_OPEN_DEFAULT_LMV) {
+				RETURN(-EPROTO);
+			}
 		}
 	}
 

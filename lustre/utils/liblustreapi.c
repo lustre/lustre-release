@@ -1561,6 +1561,8 @@ again:
 	} else {
 		param->fp_lmv_md->lum_magic = LMV_MAGIC_V1;
 	}
+	if (param->fp_raw)
+		param->fp_lmv_md->lum_type = LMV_TYPE_RAW;
 
 	ret = ioctl(*d, LL_IOC_LMV_GETSTRIPE, param->fp_lmv_md);
 
@@ -6146,6 +6148,8 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 			if (param->fp_get_default_lmv) {
 				struct lmv_user_md *lum = param->fp_lmv_md;
 
+				if (param->fp_raw)
+					goto out;
 				lum->lum_magic = LMV_USER_MAGIC;
 				lum->lum_stripe_count = 0;
 				lum->lum_stripe_offset = LMV_OFFSET_DEFAULT;

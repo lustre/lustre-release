@@ -378,8 +378,8 @@ command_t cmdlist[] = {
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
 	 "		      [--help|-h] [--hex-idx] [--mdt-hash|-H]\n"
-	 "		      [--obd|-O UUID] [--recursive|-r] [--yaml|-y]\n"
-	 "		      [--verbose|-v] [--default|-D]\n"
+	 "		      [--obd|-O UUID] [--recursive|-r] [--raw|-R]\n"
+	 "		      [--yaml|-y] [--verbose|-v] [--default|-D]\n"
 	 "		      [--max-inherit|-X]\n"
 	 "		      [--max-inherit-rr] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
@@ -6447,6 +6447,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .val = 'm',	.name = "mdt-index",	 .has_arg = no_argument },
 	{ .val = 'O',	.name = "obd",		 .has_arg = required_argument },
 	{ .val = 'r',	.name = "recursive",	 .has_arg = no_argument },
+	{ .val = 'R',	.name = "raw",		.has_arg = no_argument },
 	{ .val = 'T',	.name = "mdt-count",	 .has_arg = no_argument },
 	{ .val = 'v',	.name = "verbose",	 .has_arg = no_argument },
 	{ .val = 'X',	.name = "max-inherit",	 .has_arg = no_argument },
@@ -6459,7 +6460,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDhHimO:rtTvXy", long_opts, NULL)) != -1) {
+				"cDhHimO:rRtTvXy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
@@ -6496,6 +6497,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 		case 'r':
 			param.fp_recursive = 1;
+			break;
+		case 'R':
+			param.fp_raw = 1;
 			break;
 		case 'v':
 			param.fp_verbose |= VERBOSE_DEFAULT;

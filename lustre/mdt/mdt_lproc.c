@@ -1366,6 +1366,38 @@ static ssize_t enable_remote_subdir_mount_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_remote_subdir_mount);
 
+static ssize_t enable_dmv_implicit_inherit_show(struct kobject *kobj,
+						struct attribute *attr,
+						char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_enable_dmv_implicit_inherit);
+}
+
+static ssize_t enable_dmv_implicit_inherit_store(struct kobject *kobj,
+						 struct attribute *attr,
+						 const char *buffer,
+						 size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_dmv_implicit_inherit = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_dmv_implicit_inherit);
+
 /**
  * Show if the OFD enforces T10PI checksum.
  *
@@ -1578,6 +1610,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_enable_remote_subdir_mount.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
+	&lustre_attr_enable_dmv_implicit_inherit.attr,
 	NULL,
 };
 

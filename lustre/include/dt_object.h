@@ -409,7 +409,11 @@ struct dt_allocation_hint {
 	int			dah_eadata_len;
 	int			dah_append_stripe_count;
 	int			dah_acl_len;
-	bool			dah_can_block;
+	unsigned int		dah_can_block:1,
+				/* implicit default LMV inherit is enabled? */
+				dah_dmv_imp_inherit:1,
+				/* eadata is default LMV sent from client  */
+				dah_eadata_is_dmv:1;
 };
 
 /**

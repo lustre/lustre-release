@@ -81,6 +81,33 @@ static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
 	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
 }
 
+static inline __u8 lmv_inherit_next(__u8 inherit)
+{
+	if (inherit == LMV_INHERIT_END || inherit == LMV_INHERIT_NONE)
+		return LMV_INHERIT_NONE;
+
+	if (inherit == LMV_INHERIT_UNLIMITED || inherit > LMV_INHERIT_MAX)
+		return inherit;
+
+	return inherit - 1;
+}
+
+static inline __u8 lmv_inherit_rr_next(__u8 inherit_rr)
+{
+	if (inherit_rr == LMV_INHERIT_RR_NONE ||
+	    inherit_rr == LMV_INHERIT_RR_UNLIMITED ||
+	    inherit_rr > LMV_INHERIT_RR_MAX)
+		return inherit_rr;
+
+	return inherit_rr - 1;
+}
+
+static inline bool lmv_is_inheritable(__u8 inherit)
+{
+	return inherit == LMV_INHERIT_UNLIMITED ||
+	       (inherit > LMV_INHERIT_END && inherit <= LMV_INHERIT_MAX);
+}
+
 static inline bool
 lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 {
@@ -144,6 +171,22 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
 		CDEBUG(mask, "stripe[%d] "DFID"\n",
 		       i, PFID(&lsm->lsm_md_oinfo[i].lmo_fid));
+}
+
+static inline bool
+lsm_md_inherited(const struct lmv_stripe_md *plsm,
+		 const struct lmv_stripe_md *clsm)
+{
+	return plsm && clsm &&
+	       plsm->lsm_md_magic == clsm->lsm_md_magic &&
+	       plsm->lsm_md_stripe_count == clsm->lsm_md_stripe_count &&
+	       plsm->lsm_md_master_mdt_index ==
+			clsm->lsm_md_master_mdt_index &&
+	       plsm->lsm_md_hash_type == clsm->lsm_md_hash_type &&
+	       lmv_inherit_next(plsm->lsm_md_max_inherit) ==
+			clsm->lsm_md_max_inherit &&
+	       lmv_inherit_rr_next(plsm->lsm_md_max_inherit_rr) ==
+			clsm->lsm_md_max_inherit_rr;
 }
 
 union lmv_mds_md;
@@ -521,27 +564,6 @@ static inline bool lmv_is_layout_changing(const struct lmv_mds_md_v1 *lmv)
 static inline bool lmv_is_fixed(const struct lmv_mds_md_v1 *lmv)
 {
 	return cpu_to_le32(lmv->lmv_hash_type) & LMV_HASH_FLAG_FIXED;
-}
-
-static inline __u8 lmv_inherit_next(__u8 inherit)
-{
-	if (inherit == LMV_INHERIT_END || inherit == LMV_INHERIT_NONE)
-		return LMV_INHERIT_NONE;
-
-	if (inherit == LMV_INHERIT_UNLIMITED || inherit > LMV_INHERIT_MAX)
-		return inherit;
-
-	return inherit - 1;
-}
-
-static inline __u8 lmv_inherit_rr_next(__u8 inherit_rr)
-{
-	if (inherit_rr == LMV_INHERIT_RR_NONE ||
-	    inherit_rr == LMV_INHERIT_RR_UNLIMITED ||
-	    inherit_rr > LMV_INHERIT_RR_MAX)
-		return inherit_rr;
-
-	return inherit_rr - 1;
 }
 
 #endif

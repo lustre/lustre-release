@@ -1209,6 +1209,8 @@ static inline __u32 lmv_foreign_to_md_stripes(__u32 size)
  */
 enum lmv_type {
 	LMV_TYPE_DEFAULT = 0x0000,
+	/* fetch raw default LMV set on directory inode */
+	LMV_TYPE_RAW	 = 0x0001,
 };
 
 /* lum_max_inherit will be decreased by 1 after each inheritance if it's not
@@ -1630,7 +1632,9 @@ enum la_valid {
 #define MDS_OPEN_PCC      010000000000000ULL /* PCC: auto RW-PCC cache attach
 					      * for newly created file */
 #define MDS_OP_WITH_FID   020000000000000ULL /* operation carried out by FID */
-#define MDS_OPEN_DEFAULT_LMV  040000000000000ULL /* open fetches default LMV */
+#define MDS_OPEN_DEFAULT_LMV  040000000000000ULL /* open fetches default LMV,
+						  * or mkdir with default LMV
+						  */
 
 /* lustre internal open flags, which should not be set from user space */
 #define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
