@@ -1938,6 +1938,9 @@ int ldlm_dom_discard_cp_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	env = lu_env_find();
 	LASSERT(env);
+
+	lu_env_refill(env);
+
 	mdt_object_put(env, mo);
 
 	RETURN(0);
