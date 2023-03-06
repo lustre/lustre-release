@@ -86,7 +86,7 @@ static inline unsigned int ll_get_ra_async_max_active(void)
 	return cfs_cpt_weight(cfs_cpt_tab, CFS_CPT_ANY) >> 1;
 }
 
-static struct ll_sb_info *ll_init_sbi(void)
+static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 {
 	struct ll_sb_info *sbi = NULL;
 	unsigned long pages;
@@ -108,7 +108,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 	mutex_init(&sbi->ll_lco.lco_lock);
 	spin_lock_init(&sbi->ll_pp_extent_lock);
 	spin_lock_init(&sbi->ll_process_lock);
-        sbi->ll_rw_stats_on = 0;
+	sbi->lsi = lsi;
+	sbi->ll_rw_stats_on = 0;
 	sbi->ll_statfs_max_age = OBD_STATFS_CACHE_SECONDS;
 
         si_meminfo(&si);
@@ -1332,7 +1333,7 @@ int ll_fill_super(struct super_block *sb)
 		GOTO(out_free_cfg, err = -ENOMEM);
 
 	/* client additional sb info */
-	lsi->lsi_llsbi = sbi = ll_init_sbi();
+	lsi->lsi_llsbi = sbi = ll_init_sbi(lsi);
 	if (IS_ERR(sbi))
 		GOTO(out_free_cfg, err = PTR_ERR(sbi));
 

@@ -747,6 +747,7 @@ struct ll_sb_info {
 	spinlock_t		 ll_lock;
 	spinlock_t		 ll_pp_extent_lock; /* pp_extent entry*/
 	spinlock_t		 ll_process_lock; /* ll_rw_process_info */
+	struct lustre_sb_info    *lsi;
 	struct obd_uuid		 ll_sb_uuid;
 	struct obd_export	*ll_md_exp;
 	struct obd_export	*ll_dt_exp;

@@ -1643,27 +1643,30 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 LDEBUGFS_SEQ_FOPS(ll_nosquash_nids);
 
 #if defined(CONFIG_LL_ENCRYPTION)
-static int ll_filename_enc_seq_show(struct seq_file *m, void *v)
+static ssize_t enable_filename_encryption_show(struct kobject *kobj,
+					       struct attribute *attr,
+					       char *buffer)
 {
-	struct super_block *sb = m->private;
-	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct lustre_sb_info *lsi = sbi->lsi;
 
-	seq_printf(m, "%u\n", lsi->lsi_flags & LSI_FILENAME_ENC ? 1 : 0);
-	return 0;
+	return snprintf(buffer, PAGE_SIZE,  "%u\n",
+			lsi->lsi_flags & LSI_FILENAME_ENC ? 1 : 0);
 }
 
-static ssize_t ll_filename_enc_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t enable_filename_encryption_store(struct kobject *kobj,
+						struct attribute *attr,
+						const char *buffer,
+						size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct lustre_sb_info *lsi = s2lsi(sb);
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct lustre_sb_info *lsi = sbi->lsi;
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -1686,32 +1689,34 @@ static ssize_t ll_filename_enc_seq_write(struct file *file,
 	return count;
 }
 
-LDEBUGFS_SEQ_FOPS(ll_filename_enc);
+LUSTRE_RW_ATTR(enable_filename_encryption);
 #endif /* CONFIG_LL_ENCRYPTION */
 
 #if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
-static int ll_old_b64_enc_seq_show(struct seq_file *m, void *v)
+static ssize_t filename_enc_use_old_base64_show(struct kobject *kobj,
+						struct attribute *attr,
+						char *buffer)
 {
-	struct super_block *sb = m->private;
-	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct lustre_sb_info *lsi = sbi->lsi;
 
-	seq_printf(m, "%u\n",
-		   lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI ? 1 : 0);
-	return 0;
+	return snprintf(buffer, PAGE_SIZE, "%u\n",
+			lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI ? 1 : 0);
 }
 
-static ssize_t ll_old_b64_enc_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t filename_enc_use_old_base64_store(struct kobject *kobj,
+						 struct attribute *attr,
+						 const char *buffer,
+						 size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct lustre_sb_info *lsi = s2lsi(sb);
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct lustre_sb_info *lsi = sbi->lsi;
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -1735,7 +1740,7 @@ static ssize_t ll_old_b64_enc_seq_write(struct file *file,
 	return count;
 }
 
-LDEBUGFS_SEQ_FOPS(ll_old_b64_enc);
+LUSTRE_RW_ATTR(filename_enc_use_old_base64);
 #endif /* CONFIG_LL_ENCRYPTION || HAVE_LUSTRE_CRYPTO */
 
 static int ll_pcc_seq_show(struct seq_file *m, void *v)
@@ -1792,14 +1797,6 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_nosquash_nids_fops			},
 	{ .name =	"pcc",
 	  .fops =	&ll_pcc_fops,				},
-#ifdef CONFIG_LL_ENCRYPTION
-	{ .name =	"enable_filename_encryption",
-	  .fops =	&ll_filename_enc_fops,			},
-#endif
-#if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
-	{ .name =	"filename_enc_use_old_base64",
-	  .fops =	&ll_old_b64_enc_fops,			},
-#endif
 	{ NULL }
 };
 
@@ -1849,6 +1846,12 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_opencache_threshold_ms.attr,
 	&lustre_attr_opencache_max_ms.attr,
 	&lustre_attr_inode_cache.attr,
+#ifdef CONFIG_LL_ENCRYPTION
+	&lustre_attr_enable_filename_encryption.attr,
+#endif
+#if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
+	&lustre_attr_filename_enc_use_old_base64.attr,
+#endif
 	NULL,
 };
 
