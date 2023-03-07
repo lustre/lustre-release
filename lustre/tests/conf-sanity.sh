@@ -5101,14 +5101,13 @@ run_test 60b "check mkfs.lustre MDT default features"
 test_61a() { # LU-80
 	local lxattr=$(large_xattr_enabled)
 
-	[ "$MDS1_VERSION" -ge $(version_code 2.1.53) ] ||
-		skip "Need MDS version at least 2.1.53"
+	(( "$MDS1_VERSION" >= $(version_code 2.1.53) )) ||
+		skip "Need MDS version at least 2.1.53 for large_xattr"
 
-	if [ "$mds1_FSTYPE" == ldiskfs ] &&
-	     ! large_xattr_enabled; then
+	if [[ "$mds1_FSTYPE" == ldiskfs ]] && ! large_xattr_enabled; then
 		lxattr=true
 
-		for num in $(seq $MDSCOUNT); do
+		for ((num=1; num <= $MDSCOUNT; num++)); do
 			do_facet mds${num} $TUNE2FS -O ea_inode \
 				$(mdsdevname $num) ||
 				error "tune2fs on mds $num failed"
@@ -5177,17 +5176,15 @@ run_test 61a "large xattr"
 test_61b() { # LU-80
 	local lxattr=$(large_xattr_enabled)
 
-	[ "$MDS1_VERSION" -ge $(version_code 2.1.53) ] ||
-		skip "Need MDS version at least 2.1.53"
+	(( $MDS1_VERSION >= $(version_code 2.15.51) )) ||
+		skip "Need MDS version at least 2.15.51 for large_xattr fix"
 
-	if [ "$mds1_FSTYPE" != ldiskfs ]; then
-		skip "ldiskfs specific bug"
-	fi
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs specific bug"
 
 	if ! large_xattr_enabled; then
 		lxattr=true
 
-		for num in $(seq $MDSCOUNT); do
+		for (( num=1; num <= $MDSCOUNT; num++ )); do
 			do_facet mds${num} $TUNE2FS -O ea_inode \
 				$(mdsdevname $num) ||
 				error "tune2fs on mds $num failed"
