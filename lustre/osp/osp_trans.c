@@ -401,7 +401,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_HEADER, RCL_CLIENT,
-			     sizeof(struct osp_update_request));
+			     sizeof(struct out_update_header));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_BUF, RCL_CLIENT,
 			     buf_count * sizeof(*oub));
