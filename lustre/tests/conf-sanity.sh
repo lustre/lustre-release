@@ -3041,13 +3041,18 @@ test_33a() { # bug 12333, was test_33
 
 	umount $MOUNT2
 
-	# test lctl del_ost on large index
-	do_facet mgs "$LCTL del_ost -t ${FSNAME2}-OST1fff" ||
-		error "del_ost failed with $?"
-	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || error "$MOUNT_CMD failed"
-	echo "ok."
-	$LFS df | grep -q OST1fff && error "del_ost did not remove OST1fff!"
-	umount $MOUNT2
+	if (( "$MGS_VERSION" >= $(version_code 2.15.51) &&
+	      "$MDS1_VERSION" >= $(version_code 2.15.51) )); then
+		# test lctl del_ost on large index
+		do_facet mgs "$LCTL del_ost -t ${FSNAME2}-OST1fff" ||
+			error "del_ost failed with $?"
+		$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 ||
+			error "$MOUNT_CMD failed"
+		echo "ok."
+		$LFS df | grep -q OST1fff &&
+			error "del_ost did not remove OST1fff!"
+		umount $MOUNT2
+	fi
 
 	stop fs2ost -f
 	stop fs2mds -f
@@ -9750,9 +9755,9 @@ test_123ag() { # LU-15142
 run_test 123ag "llog_print skips values deleted by set_param -P -d"
 
 test_123ah() { #LU-7668 del_ost
-	[ "$MGS_VERSION" -ge $(version_code 2.15.50) -a \
-	   "$MDS1_VERSION" -ge $(version_code 2.15.50) ] ||
-		skip "Need both MGS and MDS version at least 2.15.50"
+	(( "$MGS_VERSION" >= $(version_code 2.15.51) &&
+	   "$MDS1_VERSION" >= $(version_code 2.15.51) )) ||
+		skip "Need MGS/MDS version >= 2.15.51 for del_ost"
 
 	[ -d $MOUNT/.lustre ] || setupall
 	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0" EXIT
