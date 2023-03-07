@@ -4774,7 +4774,12 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 		return 0;
 
 	params = genlmsg_data(gnlh);
-	nla_for_each_attr(top, params, msg_len, rem) {
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		NL_SET_ERR_MSG(extack, "invalid configuration");
+		return -EINVAL;
+	}
+
+	nla_for_each_nested(top, params, rem) {
 		struct nlattr *net;
 		int rem2;
 
@@ -4782,7 +4787,7 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 			char filter[LNET_NIDSTR_SIZE];
 
 			if (nla_type(net) != LN_SCALAR_ATTR_VALUE ||
-			    nla_strcmp(net, "name") != 0)
+			    nla_strcmp(net, "net type") != 0)
 				continue;
 
 			net = nla_next(net, &rem2);
@@ -5027,11 +5032,20 @@ static int lnet_genl_parse_lnd_tunables(struct nlattr *settings,
 static int
 lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			 int net_id, struct lnet_ioctl_config_ni *conf,
-			 struct lnet_ioctl_config_lnd_tunables *tun,
 			 bool *ni_list)
 {
+	bool create = info->nlhdr->nlmsg_flags & NLM_F_CREATE;
+	struct lnet_ioctl_config_lnd_tunables tun;
 	struct nlattr *settings;
 	int rem3, rc = 0;
+
+	memset(&tun, 0, sizeof(tun));
+	/* Use LND defaults */
+	tun.lt_cmn.lct_peer_timeout = -1;
+	tun.lt_cmn.lct_peer_tx_credits = -1;
+	tun.lt_cmn.lct_peer_rtr_credits = -1;
+	tun.lt_cmn.lct_max_tx_credits = -1;
+	conf->lic_ncpts = 0;
 
 	nla_for_each_nested(settings, entry, rem3) {
 		if (nla_type(settings) != LN_SCALAR_ATTR_VALUE)
@@ -5076,7 +5090,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				GOTO(out, rc = -EINVAL);
 			}
 
-			rc = lnet_genl_parse_tunables(settings, tun);
+			rc = lnet_genl_parse_tunables(settings, &tun);
 			if (rc < 0) {
 				GENL_SET_ERR_MSG(info,
 						 "failed to parse tunables");
@@ -5101,7 +5115,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			}
 
 			rc = lnet_genl_parse_lnd_tunables(settings,
-							  &tun->lt_tun, lnd);
+							  &tun.lt_tun, lnd);
 			if (rc < 0) {
 				GENL_SET_ERR_MSG(info,
 						 "failed to parse lnd tunables");
@@ -5140,6 +5154,73 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			}
 		}
 	}
+
+	if (!create) {
+		struct lnet_net *net;
+		struct lnet_ni *ni;
+
+		rc = -ENODEV;
+		if (!strlen(conf->lic_ni_intf)) {
+			GENL_SET_ERR_MSG(info,
+					 "interface is missing");
+			GOTO(out, rc);
+		}
+
+		lnet_net_lock(LNET_LOCK_EX);
+		net = lnet_get_net_locked(net_id);
+		if (!net) {
+			GENL_SET_ERR_MSG(info,
+					 "LNet net doesn't exist");
+			lnet_net_unlock(LNET_LOCK_EX);
+			GOTO(out, rc);
+		}
+
+		list_for_each_entry(ni, &net->net_ni_list,
+				    ni_netlist) {
+			if (!ni->ni_interface ||
+			    strcmp(ni->ni_interface,
+				  conf->lic_ni_intf) != 0)
+				continue;
+
+			lnet_net_unlock(LNET_LOCK_EX);
+			rc = lnet_dyn_del_ni(&ni->ni_nid);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "cannot del LNet NI");
+				GOTO(out, rc);
+			}
+			break;
+		}
+
+		if (rc < 0) { /* will be -ENODEV */
+			GENL_SET_ERR_MSG(info,
+					 "interface invalid for deleting LNet NI");
+			lnet_net_unlock(LNET_LOCK_EX);
+		}
+	} else {
+		if (!strlen(conf->lic_ni_intf)) {
+			GENL_SET_ERR_MSG(info,
+					 "interface is missing");
+			GOTO(out, rc);
+		}
+
+		rc = lnet_dyn_add_ni(conf, net_id, &tun);
+		switch (rc) {
+		case -ENOENT:
+			GENL_SET_ERR_MSG(info,
+					 "cannot parse net");
+			break;
+		case -ERANGE:
+			GENL_SET_ERR_MSG(info,
+					 "invalid CPT set");
+			break;
+		default:
+			GENL_SET_ERR_MSG(info,
+					 "cannot add LNet NI");
+		case 0:
+			break;
+		}
+	}
 out:
 	return rc;
 }
@@ -5158,7 +5239,12 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 		return -ENOMSG;
 	}
 
-	nla_for_each_attr(attr, params, msg_len, rem) {
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		return -EINVAL;
+	}
+
+	nla_for_each_nested(attr, params, rem) {
 		struct lnet_ioctl_config_ni conf;
 		u32 net_id = LNET_NET_ANY;
 		struct nlattr *entry;
@@ -5231,85 +5317,13 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 				break;
 			}
 			case LN_SCALAR_ATTR_LIST: {
-				bool create = info->nlhdr->nlmsg_flags &
-					      NLM_F_CREATE;
-				struct lnet_ioctl_config_lnd_tunables tun;
+				struct nlattr *interface;
+				int rem3;
 
-				memset(&tun, 0, sizeof(tun));
-				/* Use LND defaults */
-				tun.lt_cmn.lct_peer_timeout = -1;
-				tun.lt_cmn.lct_peer_tx_credits = -1;
-				tun.lt_cmn.lct_peer_rtr_credits = -1;
-				tun.lt_cmn.lct_max_tx_credits = -1;
-				conf.lic_ncpts = 0;
-
-				rc = lnet_genl_parse_local_ni(entry, info,
-							      net_id, &conf,
-							      &tun, &ni_list);
-				if (rc < 0)
-					GOTO(out, rc);
-
-				if (!create) {
-					struct lnet_net *net;
-					struct lnet_ni *ni;
-
-					rc = -ENODEV;
-					if (!strlen(conf.lic_ni_intf)) {
-						GENL_SET_ERR_MSG(info,
-								 "interface is missing");
-						GOTO(out, rc);
-					}
-
-					lnet_net_lock(LNET_LOCK_EX);
-					net = lnet_get_net_locked(net_id);
-					if (!net) {
-						GENL_SET_ERR_MSG(info,
-								 "LNet net doesn't exist");
-						lnet_net_unlock(LNET_LOCK_EX);
-						GOTO(out, rc);
-					}
-					list_for_each_entry(ni, &net->net_ni_list,
-							    ni_netlist) {
-						if (!ni->ni_interface ||
-						    strncmp(ni->ni_interface,
-							    conf.lic_ni_intf,
-							    strlen(conf.lic_ni_intf)) != 0) {
-							ni = NULL;
-							continue;
-						}
-
-						lnet_net_unlock(LNET_LOCK_EX);
-						rc = lnet_dyn_del_ni(&ni->ni_nid);
-						if (rc < 0) {
-							GENL_SET_ERR_MSG(info,
-									 "cannot del LNet NI");
-							GOTO(out, rc);
-						}
-						break;
-					}
-
-					if (rc < 0) { /* will be -ENODEV */
-						GENL_SET_ERR_MSG(info,
-								 "interface invalid for deleting LNet NI");
-						lnet_net_unlock(LNET_LOCK_EX);
-					}
-				} else {
-					rc = lnet_dyn_add_ni(&conf, net_id, &tun);
-					switch (rc) {
-					case -ENOENT:
-						GENL_SET_ERR_MSG(info,
-								 "cannot parse net");
-						break;
-					case -ERANGE:
-						GENL_SET_ERR_MSG(info,
-								 "invalid CPT set");
-					fallthrough;
-					default:
-						GENL_SET_ERR_MSG(info,
-								 "cannot add LNet NI");
-					case 0:
-						break;
-					}
+				nla_for_each_nested(interface, entry, rem3) {
+					rc = lnet_genl_parse_local_ni(interface, info,
+								      net_id, &conf,
+								      &ni_list);
 					if (rc < 0)
 						GOTO(out, rc);
 				}
@@ -5695,6 +5709,7 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 static const struct genl_ops lnet_genl_ops[] = {
 	{
 		.cmd		= LNET_CMD_NETS,
+		.flags		= GENL_ADMIN_PERM,
 #ifdef HAVE_NETLINK_CALLBACK_START
 		.start		= lnet_net_show_start,
 		.dumpit		= lnet_net_show_dump,

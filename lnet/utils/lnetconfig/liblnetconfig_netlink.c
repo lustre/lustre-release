@@ -567,14 +567,14 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 		case NLA_NESTED: {
 			struct yaml_nl_node *next = get_next_child(node,
 								   child_idx++);
-			int num = next->keys.lkl_maxattr;
+			int num = next ? next->keys.lkl_maxattr : 0;
 			struct nla_policy nest_policy[num];
 			struct yaml_nl_node *old;
 			struct nlattr *cnt_attr;
 			uint16_t indent = 0;
 			int rem, j;
 
-			if (!attr)
+			if (!attr || !next)
 				continue;
 
 			memset(nest_policy, 0, sizeof(struct nla_policy) * num);
@@ -1081,7 +1081,7 @@ static unsigned int indent_level(const char *str)
 	return tmp - str;
 }
 
-#define LNKF_END 8
+#define LNKF_BLOCK 8
 
 static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 						char *line,
@@ -1094,12 +1094,13 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 	new_indent = indent_level(line);
 	if (new_indent < indent) {
 		*offset = indent - emitter->best_indent;
-		return LNKF_END;
+		return LNKF_BLOCK;
 	}
 
 	if (strncmp(line + new_indent, "- ", 2) == 0) {
 		memset(line + new_indent, ' ', 2);
 		new_indent += 2;
+		fmt |= LNKF_SEQUENCE;
 	}
 
 	/* hdr: [ a : 1, b : 2, c : 3 ] */
@@ -1124,7 +1125,7 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 
 	if (indent != new_indent) {
 		*offset = new_indent;
-		fmt |= LNKF_SEQUENCE;
+		fmt |= LNKF_BLOCK;
 	}
 
 	return fmt;
@@ -1183,15 +1184,14 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 				   char **entry, unsigned int *indent,
 				   enum lnet_nl_key_format fmt)
 {
-	bool nested = fmt & LNKF_SEQUENCE;
-	struct nlattr *list = NULL;
-	char *line;
+	struct nlattr *mapping = NULL, *seq = NULL;
+	char *line, *tmp;
 	int rc = 0;
 
 	/* Not needed for FLOW only case */
-	if (nested) {
-		list = nla_nest_start(msg, LN_SCALAR_ATTR_LIST);
-		if (!list) {
+	if (fmt & LNKF_SEQUENCE) {
+		seq = nla_nest_start(msg, LN_SCALAR_ATTR_LIST);
+		if (!seq) {
 			yaml_emitter_set_writer_error(out->emitter,
 						      "Emmitter netlink list creation failed");
 			rc = -EINVAL;
@@ -1199,16 +1199,18 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 		}
 	}
 
-	if (fmt != LNKF_FLOW) {
-		rc = yaml_fill_scalar_data(msg, fmt, *hdr + *indent);
-		if (rc < 0)
-			goto nla_put_failure;
-	}
-
 	if (fmt & LNKF_FLOW) {
-		char *tmp = strchr(*hdr, '{'), *split = NULL;
+		struct nlattr *list = NULL;
 		bool format = false;
+		char *split = NULL;
 
+		if (fmt != LNKF_FLOW) {
+			rc = yaml_fill_scalar_data(msg, fmt, *hdr + *indent);
+			if (rc < 0)
+				goto nla_put_failure;
+		}
+
+		tmp = strchr(*hdr, '{');
 		if (!tmp) {
 			tmp = strchr(*hdr, '[');
 			if (!tmp) {
@@ -1276,6 +1278,21 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 
 		nla_nest_end(msg, list);
 	} else {
+next_mapping:
+		if (fmt & LNKF_BLOCK && strchr(*hdr, ':')) {
+			mapping = nla_nest_start(msg, LN_SCALAR_ATTR_LIST);
+			if (!mapping) {
+				yaml_emitter_set_writer_error(out->emitter,
+							      "Emmitter netlink list creation failed");
+				rc = -EINVAL;
+				goto nla_put_failure;
+			}
+		}
+
+		rc = yaml_fill_scalar_data(msg, fmt, *hdr + *indent);
+		if (rc < 0)
+			goto nla_put_failure;
+
 		do {
 			line = strsep(entry, "\n");
 have_next_line:
@@ -1283,41 +1300,88 @@ have_next_line:
 				break;
 
 			fmt = yaml_format_type(out->emitter, line, indent);
-			if (fmt == LNKF_END)
+			if (fmt == LNKF_BLOCK)
 				break;
 
-			if (fmt & ~LNKF_MAPPING) { /* Filter out mappings */
+			/* sequences of simple scalars, general mappings, and
+			 * plain scalars are not nested structures in a
+			 * netlink packet.
+			 */
+			if (fmt == LNKF_SEQUENCE || fmt == LNKF_MAPPING || fmt == 0) {
+				rc = yaml_fill_scalar_data(msg, fmt,
+							   line + *indent);
+				if (rc < 0)
+					goto nla_put_failure;
+			} else {
 				rc = yaml_create_nested_list(out, msg, &line,
 							     entry, indent,
 							     fmt);
 				if (rc < 0)
 					goto nla_put_failure;
+
+				/* if the original line that called
+				 * yaml_create_nested_list above was an
+				 * sequence and the next line is also
+				 * then break to treat it as a mapping / scalar
+				 * instead to avoid over nesting.
+				 */
+				if (line && seq) {
+					fmt = yaml_format_type(out->emitter, line, indent);
+					if ((fmt & LNKF_SEQUENCE) || (fmt & LNKF_BLOCK))
+						break;
+				}
+
 				if (line)
 					goto have_next_line;
-			} else {
-				rc = yaml_fill_scalar_data(msg, fmt,
-							   line + *indent);
-				if (rc < 0)
-					goto nla_put_failure;
 			}
 		} while (strcmp(*entry, ""));
 
-		if (line && line[*indent] == '-') {
-			line[*indent] = ' ';
-			*indent += 2;
-			goto have_next_line;
+		if (mapping) {
+			nla_nest_end(msg, mapping);
+			mapping = NULL;
 		}
-		if (*entry && !strlen(*entry))
-			line = NULL;
-		/* strsep in the above loop moves entry to a value pass the
-		 * end of the nested list. So to avoid losing this value we
-		 * replace hdr with line.
-		 */
-		*hdr = line;
 	}
 
-	if (nested)
-		nla_nest_end(msg, list);
+	/* test if next line is sequence at the same level. */
+	if (line && (line[0] != '\0') && (fmt & LNKF_BLOCK)) {
+		int old_indent = indent_level(*hdr);
+
+		fmt = yaml_format_type(out->emitter, line, indent);
+		if (fmt != LNKF_BLOCK && old_indent == *indent) {
+			/* If we have a normal mapping set then treate
+			 * it as a collection of scalars i.e don't create
+			 * another nested level. For scalar:\n and plain
+			 * scalar case we send it to next_mapping to
+			 * create another nested level.
+			 */
+			tmp = strchr(line, ':');
+			if (tmp) {
+				fmt = LNKF_BLOCK;
+				if (strstr(line, ": "))
+					fmt |= LNKF_MAPPING;
+				if (strstr(line, "- "))
+					fmt |= LNKF_SEQUENCE;
+				*hdr = line;
+				goto next_mapping;
+			}
+
+			goto have_next_line;
+		}
+	}
+
+	if (seq) {
+		if (*indent >= 2)
+			*indent -= 2;
+		nla_nest_end(msg, seq);
+		seq = NULL;
+		if (*entry && !strlen(*entry) && fmt != LNKF_BLOCK)
+			line = NULL;
+	}
+
+	/* strsep in the above loop moves entry to a value pass the end of the
+	 * nested list. So to avoid losing this value we replace hdr with line.
+	 */
+	*hdr = line;
 nla_put_failure:
 	return rc;
 }
@@ -1430,7 +1494,7 @@ already_have_line:
 			}
 
 			fmt = yaml_format_type(out->emitter, line, &indent);
-			if (fmt & ~LNKF_MAPPING) {
+			if (fmt) {
 				rc = yaml_create_nested_list(out, msg, &line,
 							     &entry, &indent,
 							     fmt);

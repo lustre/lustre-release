@@ -1139,7 +1139,13 @@ static int lst_groups_show_start(struct netlink_callback *cb)
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
 	extack = cb->extack;
 #endif
-	nla_for_each_attr(groups, params, msg_len, rem) {
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		NL_SET_ERR_MSG(extack, "no configuration");
+		GOTO(report_err, rc);
+	}
+
+	nla_for_each_nested(groups, params, rem) {
 		struct lst_genl_group_prop *prop = NULL;
 		struct nlattr *group;
 		int rem2;
