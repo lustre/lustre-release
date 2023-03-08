@@ -7,7 +7,7 @@ libcfs-linux-objs += glob.o
 libcfs-linux-objs += xarray.o
 
 libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
-libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o bio.o
+libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o
 
 default: all
 
