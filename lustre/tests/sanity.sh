@@ -1383,7 +1383,7 @@ test_24B() { # LU-4805
 	local count
 
 	test_mkdir $DIR/$tdir
-	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir/ ||
 		error "create striped dir failed"
 
 	count=$(ls -ai $DIR/$tdir/striped_dir | wc -l)
