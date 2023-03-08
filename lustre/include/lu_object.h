@@ -1669,11 +1669,11 @@ struct lu_tgt_desc {
 	struct lu_tgt_qos  ltd_qos; /* qos info per target */
 	struct obd_statfs  ltd_statfs;
 	time64_t	   ltd_statfs_age;
-	unsigned long      ltd_active:1,/* is this target up for requests */
-			   ltd_activate:1,/* should target be activated */
+	unsigned long      ltd_active:1,/* is target available for requests */
+			   ltd_activate:1,/* should LOV target be connected */
 			   ltd_reap:1,  /* should this target be deleted */
 			   ltd_got_update_log:1, /* Already got update log */
-			   ltd_connecting:1; /* target is connecting */
+			   ltd_discon:1; /* LOD target disconnected from OST */
 };
 
 static inline __u64 tgt_statfs_bavail(struct lu_tgt_desc *tgt)

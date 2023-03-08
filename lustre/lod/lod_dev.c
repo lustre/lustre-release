@@ -1104,8 +1104,7 @@ static int lod_process_config(const struct lu_env *env,
 				rc = lod_sub_prep_llog(env, lod,
 						       sub_tgt->ltd_tgt,
 						       sub_tgt->ltd_index);
-				if (rc == 0)
-					sub_tgt->ltd_active = 1;
+				sub_tgt->ltd_active = !rc;
 			} else {
 				lod_sub_fini_llog(env, sub_tgt->ltd_tgt,
 						  NULL);
@@ -1865,7 +1864,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 
 	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, tgt) {
-		if (!tgt->ltd_active)
+		if (tgt->ltd_discon)
 			continue;
 		rc = dt_sync(env, tgt->ltd_tgt);
 		if (rc) {
@@ -1885,7 +1884,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 
 	lod_getref(&lod->lod_mdt_descs);
 	lod_foreach_mdt(lod, tgt) {
-		if (!tgt->ltd_active)
+		if (tgt->ltd_discon)
 			continue;
 		rc = dt_sync(env, tgt->ltd_tgt);
 		if (rc) {
@@ -2493,7 +2492,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	d = lu2lod_dev(obd->obd_lu_dev);
 	lod_getref(&d->lod_ost_descs);
 	lod_foreach_ost(d, tgt) {
-		if (!tgt->ltd_active)
+		if (tgt->ltd_discon)
 			continue;
 
 		rc2 = obd_set_info_async(env, tgt->ltd_exp, keylen, key,
@@ -2505,8 +2504,9 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 
 	lod_getref(&d->lod_mdt_descs);
 	lod_foreach_mdt(d, tgt) {
-		if (!tgt->ltd_active)
+		if (tgt->ltd_discon)
 			continue;
+
 		rc2 = obd_set_info_async(env, tgt->ltd_exp, keylen, key,
 					 vallen, val, set);
 		if (rc2 != 0 && rc == 0)

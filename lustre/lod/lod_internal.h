@@ -42,8 +42,10 @@
 #include <obd.h>
 #include <dt_object.h>
 
-#define LOV_USES_ASSIGNED_STRIPE        0
-#define LOV_USES_DEFAULT_STRIPE         1
+enum lod_uses_hint {
+	LOD_USES_ASSIGNED_STRIPE = 0,
+	LOD_USES_DEFAULT_STRIPE,
+};
 
 /* Special values to remove LOV EA from disk */
 #define LOVEA_DELETE_VALUES(size, count, offset, pool)			\
@@ -719,8 +721,12 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			int comp_idx, __u64 reserve);
 __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  int comp_idx, bool is_dir);
+__u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,
+				 __u16 stripe_count, bool overstriping,
+				 enum lod_uses_hint *flags);
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
-			   int comp_idx, __u16 stripe_count, bool overstriping);
+			   int comp_idx, __u16 stripe_count, bool overstriping,
+			   enum lod_uses_hint *flags);
 void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 			   struct lu_tgt_descs *ltd);
 

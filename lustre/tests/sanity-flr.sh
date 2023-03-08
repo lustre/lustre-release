@@ -3599,10 +3599,10 @@ test_202() {
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	verify_comp_attr stripe-count $tf ${ids[0]} 1
 
-	$LFS setstripe --component-add -E 2M -c -1 $tf
+	$LFS setstripe --component-add -E 2M -c $OSTCOUNT $tf
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	verify_comp_attr stripe-count $tf ${ids[0]} 1
-	verify_comp_attr stripe-count $tf ${ids[1]} -1
+	verify_comp_attr stripe-count $tf ${ids[1]} $OSTCOUNT
 
 	dd if=/dev/zero of=$tf bs=1M count=2
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))

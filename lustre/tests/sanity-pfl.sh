@@ -824,8 +824,8 @@ test_15() {
 	$LFS setstripe -E 1M -S 1M -E 10M -E eof $parent/f1 || error "create f1"
 	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
 	test_mkdir $parent/subdir
-	$LFS setstripe -E 6M -S 1M -c1 -E 30M -c4 -E eof -c -1 $parent/subdir ||
-		error "setstripe to subdir"
+	$LFS setstripe -E 6M -S 1M -c1 -E 30M -c4 -E eof -c $OSTCOUNT \
+		$parent/subdir || error "setstripe to subdir"
 	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"
 	$LFS setstripe -c 1 $parent/subdir/f4 || error "create f4"
 

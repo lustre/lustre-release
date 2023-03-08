@@ -794,7 +794,7 @@ void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
 		if (!test_bit(idx, lod->lod_ost_bitmap))
 			continue;
 		tgt = OST_TGT(lod, idx);
-		if (tgt->ltd_active == 0)
+		if (!tgt->ltd_active)
 			continue;
 		sfs = &tgt->ltd_statfs;
 

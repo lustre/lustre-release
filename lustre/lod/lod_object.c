@@ -2641,11 +2641,12 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 	RETURN(rc);
 }
 
-__u16 lod_comp_entry_stripe_count(struct lod_object *lo,
-				  int comp_idx, bool is_dir)
+__u16 lod_comp_entry_stripe_count(struct lod_object *lo, int comp_idx,
+				  bool is_dir)
 {
 	struct lod_device *lod = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_layout_component *entry;
+	enum lod_uses_hint flags = LOD_USES_ASSIGNED_STRIPE;
 
 	if (is_dir)
 		return  0;
@@ -2653,13 +2654,16 @@ __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 	entry = &lo->ldo_comp_entries[comp_idx];
 	if (lod_comp_inited(entry))
 		return entry->llc_stripe_count;
-	else if ((__u16)-1 == entry->llc_stripe_count)
-		return lod->lod_ost_count;
-	else
-		return lod_get_stripe_count(lod, lo, comp_idx,
-					    entry->llc_stripe_count,
-					    entry->llc_pattern &
-					    LOV_PATTERN_OVERSTRIPING);
+	if (entry->llc_stripe_count == (__u16)-1)
+		return lod_get_stripe_count_plain(lod, lo,
+						  entry->llc_stripe_count,
+						  entry->llc_pattern &
+						      LOV_PATTERN_OVERSTRIPING,
+						  &flags);
+
+	return lod_get_stripe_count(lod, lo, comp_idx, entry->llc_stripe_count,
+				 entry->llc_pattern & LOV_PATTERN_OVERSTRIPING,
+				 &flags);
 }
 
 static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
@@ -7668,12 +7672,9 @@ static inline int lod_check_ost_avail(const struct lu_env *env,
 	}
 
 	ost = OST_TGT(lod, idx);
-	if (ost->ltd_statfs.os_state &
-		(OS_STATFS_READONLY | OS_STATFS_ENOSPC | OS_STATFS_ENOINO |
-		 OS_STATFS_NOPRECREATE) ||
-	    ost->ltd_active == 0) {
-		CDEBUG(D_LAYOUT, DFID ": mirror %d OST%d unavail, rc = %d\n",
-		       PFID(lod_object_fid(lo)), index, idx, rc);
+	if (ost->ltd_active == 0) {
+		CDEBUG(D_LAYOUT, DFID ": mirror %d OST%d unavail\n",
+		       PFID(lod_object_fid(lo)), index, idx);
 		return 0;
 	}
 

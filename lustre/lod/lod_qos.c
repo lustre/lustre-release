@@ -59,22 +59,24 @@
 #define TGT_BAVAIL(i) (OST_TGT(lod,i)->ltd_statfs.os_bavail * \
 		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
 
+/* check whether a target is available for new object allocation */
 static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
 				   struct lu_tgt_desc *tgt)
 {
 	struct obd_statfs *sfs = &tgt->ltd_statfs;
 
-	if (((sfs->os_state & OS_STATFS_ENOSPC) ||
-	    (!ltd->ltd_is_mdt && sfs->os_state & OS_STATFS_ENOINO &&
-	     sfs->os_fprecreated == 0)))
+	if (sfs->os_state & OS_STATFS_ENOSPC ||
+	    (sfs->os_state & OS_STATFS_ENOINO &&
+	     /* OST allocation allowed while precreated objects available */
+	     (ltd->ltd_is_mdt || sfs->os_fprecreated == 0)))
 		return -ENOSPC;
 
 	/* If the OST is readonly then we can't allocate objects there */
 	if (sfs->os_state & OS_STATFS_READONLY)
 		return -EROFS;
 
-	/* object precreation is skipped on the OST with max_create_count=0 */
-	if (!ltd->ltd_is_mdt && sfs->os_state & OS_STATFS_NOPRECREATE)
+	/* object precreation is skipped on targets with max_create_count=0 */
+	if (sfs->os_state & OS_STATFS_NOPRECREATE)
 		return -ENOBUFS;
 
 	return 0;
@@ -112,27 +114,25 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	info.os_enable_pre = 1;
 	rc = dt_statfs_info(env, tgt->ltd_tgt, &tgt->ltd_statfs, &info);
 	if (rc && rc != -ENOTCONN)
-		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
+		CERROR("%s: statfs error: rc = %d\n", lod2obd(d)->obd_name, rc);
 
-	if (!rc) {
+	if (!rc)
 		rc = lod_statfs_check(ltd, tgt);
-		if (rc == -ENOSPC)
-			return rc;
-	}
 
+	/* reserving space shouldn't be enough to mark an OST inactive */
 	if (reserve &&
 	    (reserve + (info.os_reserved_mb_low << 20) >
 	     tgt->ltd_statfs.os_bavail * tgt->ltd_statfs.os_bsize))
 		return -ENOSPC;
 
 	/* check whether device has changed state (active, inactive) */
-	if (rc != 0 && tgt->ltd_active) {
+	if (rc && tgt->ltd_active) {
 		/* turned inactive? */
 		spin_lock(&d->lod_lock);
 		if (tgt->ltd_active) {
 			tgt->ltd_active = 0;
 			if (rc == -ENOTCONN)
-				tgt->ltd_connecting = 1;
+				tgt->ltd_discon = 1;
 
 			LASSERT(desc->ld_active_tgt_count > 0);
 			desc->ld_active_tgt_count--;
@@ -141,15 +141,15 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
 		spin_unlock(&d->lod_lock);
-	} else if (rc == 0 && tgt->ltd_active == 0) {
+	} else if (rc == 0 && !tgt->ltd_active) {
 		/* turned active? */
+		spin_lock(&d->lod_lock);
 		LASSERTF(desc->ld_active_tgt_count < desc->ld_tgt_count,
 			 "active tgt count %d, tgt nr %d\n",
 			 desc->ld_active_tgt_count, desc->ld_tgt_count);
-		spin_lock(&d->lod_lock);
-		if (tgt->ltd_active == 0) {
+		if (!tgt->ltd_active) {
 			tgt->ltd_active = 1;
-			tgt->ltd_connecting = 0;
+			tgt->ltd_discon = 0;
 			desc->ld_active_tgt_count++;
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 			CDEBUG(D_CONFIG, "%s: turns active\n",
@@ -166,20 +166,6 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	}
 
 	RETURN(rc);
-}
-
-static int lod_is_tgt_usable(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
-{
-	int rc;
-
-	rc = lod_statfs_check(ltd, tgt);
-	if (rc)
-		return rc;
-
-	if (!tgt->ltd_active)
-		return -ENOTCONN;
-
-	return 0;
 }
 
 /**
@@ -424,17 +410,18 @@ out:
 /**
  * Calculate a minimum acceptable stripe count.
  *
- * Return an acceptable stripe count depending on flag LOV_USES_DEFAULT_STRIPE:
- * all stripes or 3/4 of stripes.
+ * Return an acceptable stripe count depending on flag LOD_USES_DEFAULT_STRIPE:
+ * all stripes or 3/4 of stripes.  The code is written this way to avoid
+ * returning 0 for stripe_count < 4, like "stripe_count * 3 / 4" would do.
  *
  * \param[in] stripe_count	number of stripes requested
- * \param[in] flags		0 or LOV_USES_DEFAULT_STRIPE
+ * \param[in] flags		0 or LOD_USES_DEFAULT_STRIPE
  *
  * \retval			acceptable stripecount
  */
-static int min_stripe_count(__u32 stripe_count, int flags)
+static int lod_stripe_count_min(__u32 stripe_count, enum lod_uses_hint flags)
 {
-	return (flags & LOV_USES_DEFAULT_STRIPE ?
+	return (flags & LOD_USES_DEFAULT_STRIPE ?
 		stripe_count - (stripe_count / 4) : stripe_count);
 }
 
@@ -716,7 +703,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  * all the internal structures (statfs cache, array of available OSTs sorted
  * with regard to OSS, etc). The number of stripes required is taken from the
  * object (must be prepared by the caller), but can change if the flag
- * LOV_USES_DEFAULT_STRIPE is supplied. The caller should ensure nobody else
+ * LOD_USES_DEFAULT_STRIPE is supplied. The caller should ensure nobody else
  * is trying to create a striping on the object in parallel. All the internal
  * structures (like pools, etc) are protected and no additional locking is
  * required. The function succeeds even if a single stripe is allocated. To save
@@ -727,7 +714,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  * \param[in] lo		LOD object
  * \param[out] stripe		striping created
  * \param[out] ost_indices	ost indices of striping created
- * \param[in] flags		allocation flags (0 or LOV_USES_DEFAULT_STRIPE)
+ * \param[in] flags		allocation flags (0 or LOD_USES_DEFAULT_STRIPE)
  * \param[in] th		transaction handle
  * \param[in] comp_idx		index of ldo_comp_entries
  *
@@ -737,8 +724,8 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  */
 static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			    struct dt_object **stripe, __u32 *ost_indices,
-			    int flags, struct thandle *th, int comp_idx,
-			    __u64 reserve)
+			    enum lod_uses_hint flags, struct thandle *th,
+			    int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -756,7 +743,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	stripe_count = lod_comp->llc_stripe_count;
-	stripe_count_min = min_stripe_count(stripe_count, flags);
+	stripe_count_min = lod_stripe_count_min(stripe_count, flags);
 
 	if (lod_comp->llc_pool != NULL)
 		pool = lod_find_pool(m, lod_comp->llc_pool);
@@ -843,7 +830,7 @@ repeat_find:
 					       ost_indices, th, &overstriped,
 					       reserve);
 
-		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
+		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_discon)
 			ost_connecting = 1;
 	}
 	if ((speed < 2) && (stripe_idx < stripe_count_min)) {
@@ -1020,12 +1007,13 @@ repeat_find:
 		if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
 			continue;
 
-		rc = lod_is_tgt_usable(ltd, mdt);
-		if (rc) {
-			if (mdt->ltd_connecting)
-				tgt_connecting = 1;
+		if (mdt->ltd_discon) {
+			tgt_connecting = 1;
 			continue;
 		}
+
+		if (lod_statfs_check(ltd, mdt))
+			continue;
 
 		/* try to use another OSP if this one is degraded */
 		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED &&
@@ -1048,7 +1036,7 @@ repeat_find:
 			QOS_DEBUG("can't alloc stripe on #%u: %d\n",
 				  mdt->ltd_index, (int) PTR_ERR(dto));
 
-			if (mdt->ltd_connecting)
+			if (mdt->ltd_discon)
 				tgt_connecting = 1;
 			continue;
 		}
@@ -1217,8 +1205,8 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 static int lod_ost_alloc_specific(const struct lu_env *env,
 				  struct lod_object *lo,
 				  struct dt_object **stripe, __u32 *ost_indices,
-				  int flags, struct thandle *th, int comp_idx,
-				  __u64 reserve)
+				  enum lod_uses_hint flags, struct thandle *th,
+				  int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1497,7 +1485,7 @@ out:
  * configuration (# of stripes, offset, pool) is taken from the object and
  * is prepared by the caller.
  *
- * If LOV_USES_DEFAULT_STRIPE is not passed and prepared configuration can't
+ * If LOD_USES_DEFAULT_STRIPE is not passed and prepared configuration can't
  * be met due to too few OSTs, then allocation fails. If the flag is passed
  * fewer than 3/4 of the requested number of stripes can be allocated, then
  * allocation fails.
@@ -1514,7 +1502,7 @@ out:
  * \param[in] lo		LOD object
  * \param[out] stripe		striping created
  * \param[out] ost_indices	ost indices of striping created
- * \param[in] flags		0 or LOV_USES_DEFAULT_STRIPE
+ * \param[in] flags		0 or LOD_USES_DEFAULT_STRIPE
  * \param[in] th		transaction handle
  * \param[in] comp_idx		index of ldo_comp_entries
  *
@@ -1525,8 +1513,8 @@ out:
  */
 static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			     struct dt_object **stripe, __u32 *ost_indices,
-			     int flags, struct thandle *th, int comp_idx,
-			     __u64 reserve)
+			     enum lod_uses_hint flags, struct thandle *th,
+			     int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1551,7 +1539,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	stripe_count = lod_comp->llc_stripe_count;
-	stripe_count_min = min_stripe_count(stripe_count, flags);
+	stripe_count_min = lod_stripe_count_min(stripe_count, flags);
 	if (stripe_count_min < 1)
 		RETURN(-EINVAL);
 
@@ -1695,11 +1683,13 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
 			/*
-			 * do not put >1 objects on a single OST, except for
-			 * overstriping
+			 * In case of QOS it makes sense to check components
+			 * only for FLR and if current component doesn't support
+			 * overstriping.
 			 */
-			if ((lod_comp_is_ost_used(env, lo, idx)) &&
-			    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
+			if (lo->ldo_mirror_count > 1 &&
+			    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+			    && lod_comp_is_ost_used(env, lo, idx))
 				continue;
 
 			if (lod_qos_is_tgt_used(env, idx, nfound)) {
@@ -1740,7 +1730,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 	}
 
-	if (unlikely(nfound != stripe_count)) {
+	if (unlikely(nfound < stripe_count_min)) {
 		/*
 		 * when the decision to use weighted algorithm was made
 		 * we had enough appropriate OSPs, but this state can
@@ -1880,8 +1870,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		mdt = LTD_TGT(ltd, pool->op_array[i]);
 		mdt->ltd_qos.ltq_usable = 0;
 
-		rc = lod_is_tgt_usable(ltd, mdt);
-		if (rc)
+		if (mdt->ltd_discon || lod_statfs_check(ltd, mdt))
 			continue;
 
 		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED)
@@ -2014,28 +2003,45 @@ unlock:
  *
  * \retval		the maximum usable stripe count
  */
+__u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,
+				 __u16 stripe_count, bool overstriping,
+				 enum lod_uses_hint *flags)
+{
+	struct lov_desc *lov_desc = &lod->lod_ost_descs.ltd_lov_desc;
+
+	if (!stripe_count)
+		stripe_count = lov_desc->ld_default_stripe_count;
+
+	/* Overstriping allows more stripes than targets */
+	if (stripe_count > lov_desc->ld_active_tgt_count && !overstriping) {
+		*flags |= LOD_USES_DEFAULT_STRIPE;
+		if (stripe_count == LOV_ALL_STRIPES && lod->lod_max_stripecount)
+			stripe_count = lod->lod_max_stripecount;
+		else
+			stripe_count = lov_desc->ld_active_tgt_count;
+	}
+	if (!stripe_count)
+		stripe_count = 1;
+
+	if (overstriping && stripe_count > LOV_MAX_STRIPE_COUNT)
+		stripe_count = LOV_MAX_STRIPE_COUNT;
+
+	return stripe_count;
+}
+
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
-			   int comp_idx, __u16 stripe_count, bool overstriping)
+			   int comp_idx, __u16 stripe_count, bool overstriping,
+			   enum lod_uses_hint *flags)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
 	/* max stripe count is based on OSD ea size */
 	unsigned int easize = lod->lod_osd_max_easize;
 	int i;
+
 	ENTRY;
 
-	if (stripe_count == (__u16)(-1) && lod->lod_max_stripecount)
-		stripe_count = lod->lod_max_stripecount;
-	if (!stripe_count)
-		stripe_count =
-			lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_count;
-	if (!stripe_count)
-		stripe_count = 1;
-	/* Overstriping allows more stripes than targets */
-	if (stripe_count >
-		lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count &&
-	    !overstriping)
-		stripe_count =
-			lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count;
+	stripe_count = lod_get_stripe_count_plain(lod, lo, stripe_count,
+						  overstriping, flags);
 
 	if (lo->ldo_is_composite) {
 		struct lod_layout_component *lod_comp;
@@ -2666,13 +2672,13 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
-	struct lod_device      *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	int			stripe_len;
-	int			flag = LOV_USES_ASSIGNED_STRIPE;
-	int			i, rc = 0;
+	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct dt_object **stripe = NULL;
 	__u32 *ost_indices = NULL;
+	enum lod_uses_hint flags = LOD_USES_ASSIGNED_STRIPE;
+	int stripe_len;
+	int i, rc = 0;
 	ENTRY;
 
 	LASSERT(lo);
@@ -2704,7 +2710,8 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		stripe_len = lod_get_stripe_count(d, lo, comp_idx,
 						  lod_comp->llc_stripe_count,
 						  lod_comp->llc_pattern &
-						  LOV_PATTERN_OVERSTRIPING);
+						  LOV_PATTERN_OVERSTRIPING,
+						  &flags);
 
 		if (stripe_len == 0)
 			GOTO(out, rc = -ERANGE);
@@ -2740,14 +2747,14 @@ repeat:
 			lod_collect_avoidance(lo, lag, comp_idx);
 
 			rc = lod_ost_alloc_qos(env, lo, stripe, ost_indices,
-					       flag, th, comp_idx, reserve);
+					       flags, th, comp_idx, reserve);
 			if (rc == -EAGAIN)
 				rc = lod_ost_alloc_rr(env, lo, stripe,
-						      ost_indices, flag, th,
+						      ost_indices, flags, th,
 						      comp_idx, reserve);
 		} else {
 			rc = lod_ost_alloc_specific(env, lo, stripe,
-						    ost_indices, flag, th,
+						    ost_indices, flags, th,
 						    comp_idx, reserve);
 		}
 put_ldts:
