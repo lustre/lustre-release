@@ -1636,7 +1636,9 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # LC_LOCK_PAGE_MEMCG
 #
-# Kernel version 4.6 adds lock_page_memcg
+# Kernel version 4.6 adds lock_page_memcg(page)
+# Linux commit v5.15-12273-gab2f9d2d3626
+#   mm: unexport {,un}lock_page_memcg
 #
 AC_DEFUN([LC_LOCK_PAGE_MEMCG], [
 LB_CHECK_COMPILE([if 'lock_page_memcg' is defined],

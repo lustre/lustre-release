@@ -430,9 +430,18 @@ static inline struct timespec current_time(struct inode *inode)
 #define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
 #endif
 
-#ifndef HAVE_LOCK_PAGE_MEMCG
-#define lock_page_memcg(page) do {} while (0)
-#define unlock_page_memcg(page) do {} while (0)
+/* Linux commit v5.15-12273-gab2f9d2d3626
+ *   mm: unexport {,un}lock_page_memcg
+ *
+ * Note that the functions are still defined or declared breaking
+ * the simple approach of just defining the missing functions here
+ */
+#ifdef HAVE_LOCK_PAGE_MEMCG
+#define vvp_lock_page_memcg(page)	lock_page_memcg((page))
+#define vvp_unlock_page_memcg(page)	unlock_page_memcg((page))
+#else
+#define vvp_lock_page_memcg(page)
+#define vvp_unlock_page_memcg(page)
 #endif
 
 #ifndef KMEM_CACHE_USERCOPY
