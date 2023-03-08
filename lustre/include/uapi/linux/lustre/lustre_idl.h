@@ -1509,7 +1509,7 @@ struct obd_quotactl {
 
 #define Q_COPY(out, in, member) (out)->member = (in)->member
 
-#define QCTL_COPY(out, in)				\
+#define __QCTL_COPY(out, in, need_pname)		\
 do {							\
 	Q_COPY(out, in, qc_cmd);			\
 	Q_COPY(out, in, qc_type);			\
@@ -1517,11 +1517,14 @@ do {							\
 	Q_COPY(out, in, qc_stat);			\
 	Q_COPY(out, in, qc_dqinfo);			\
 	Q_COPY(out, in, qc_dqblk);			\
-	if (LUSTRE_Q_CMD_IS_POOL(in->qc_cmd))		\
+	if (need_pname && LUSTRE_Q_CMD_IS_POOL(in->qc_cmd))		\
 		memcpy(out->qc_poolname,		\
 		       in->qc_poolname,			\
 		       LOV_MAXPOOLNAME + 1);		\
 } while (0)
+
+#define QCTL_COPY(out, in) __QCTL_COPY(out, in, true)
+#define QCTL_COPY_NO_PNAME(out, in) __QCTL_COPY(out, in, false)
 
 /* Body of quota request used for quota acquire/release RPCs between quota
  * master (aka QMT) and slaves (ak QSD). */

@@ -3318,7 +3318,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	if (oqctl->qc_id != id)
 		swap(oqctl->qc_id, id);
 
-	QCTL_COPY(repoqc, oqctl);
+	QCTL_COPY_NO_PNAME(repoqc, oqctl);
 	EXIT;
 
 out_nodemap:
