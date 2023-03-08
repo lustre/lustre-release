@@ -2745,9 +2745,6 @@ kiocb_ki_complete_2args, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_KIOCB_COMPLETE_2ARGS
 
-AC_DEFUN([LC_PROG_LINUX_SRC], [])
-AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
-
 #
 # LC_HAVE_INVALIDATE_FOLIO
 #
@@ -2796,6 +2793,33 @@ address_spaace_operaions_dirty_folio, [
 	])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_DIRTY_FOLIO
+
+#
+# LC_HAVE_ALLOC_INODE_SB
+#
+# linux commit v5.17-49-g8b9f3ac5b01d
+#   fs: introduce alloc_inode_sb() to allocate filesystems specific inode
+#
+AC_DEFUN([LC_HAVE_ALLOC_INODE_SB], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if alloc_inode_sb() exists],
+alloc_inode_sb, [
+		#include <linux/fs.h>
+	],[
+		struct super_block *sb = NULL;
+		struct kmem_cache *cache = NULL;
+
+		(void)alloc_inode_sb(sb, cache, GFP_NOFS);
+	],[
+		AC_DEFINE(HAVE_ALLOC_INODE_SB, 1,
+			[alloc_inode_sb() exists])
+	])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_ALLOC_INODE_SB
+
+AC_DEFUN([LC_PROG_LINUX_SRC], [])
+AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
 
 #
 # LC_PROG_LINUX
@@ -3002,9 +3026,12 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
 
-	# 5.18
+	# 5.17
 	LC_HAVE_INVALIDATE_FOLIO
 	LC_HAVE_DIRTY_FOLIO
+
+	# 5.18
+	LC_HAVE_ALLOC_INODE_SB
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
