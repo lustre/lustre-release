@@ -27520,11 +27520,6 @@ test_807() {
 	changelog_users $SINGLEMDS | grep -q $cl_user ||
 		error "User $cl_user not found in changelog_users"
 
-	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	save_lustre_params client "llite.*.xattr_cache" > $save
-	lctl set_param llite.*.xattr_cache=0
-	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
-
 	rm -rf $DIR/$tdir || error "rm $tdir failed"
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
 	touch $DIR/$tdir/trunc || error "touch $tdir/trunc failed"

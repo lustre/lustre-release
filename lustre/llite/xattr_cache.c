@@ -509,6 +509,10 @@ static int ll_xattr_cache_refill(struct inode *inode)
 			/* Filter out security.selinux, it is cached in slab */
 			CDEBUG(D_CACHE, "not caching security.selinux\n");
 			rc = 0;
+		} else if (!strcmp(xdata, XATTR_NAME_SOM)) {
+			/* Filter out trusted.som, it is not cached on client */
+			CDEBUG(D_CACHE, "not caching trusted.som\n");
+			rc = 0;
 		} else {
 			rc = ll_xattr_cache_add(&lli->lli_xattrs, xdata, xval,
 						*xsizes);
