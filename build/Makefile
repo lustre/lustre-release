@@ -25,10 +25,16 @@ else
 # so "include Makefile" below includes $LINUX/Makefile, not this file
 include $(LUSTRE_LINUX_CONFIG)
 include Makefile
+ifeq ($(DEQUOTE_CC_VERSION_TEXT),yes)
+CONFIG_CC_VERSION_TEXT=$(shell echo ${CONFIG_CC_VERSION_TEXT:1:-1})
+endif
 
 endif # LUSTRE_LINUX_CONFIG
 
 else # PATCHLEVEL
+ifeq ($(DEQUOTE_CC_VERSION_TEXT),yes)
+CONFIG_CC_VERSION_TEXT=$(shell echo ${CONFIG_CC_VERSION_TEXT:1:-1})
+endif
 
 # case #3
 ifneq ($(LUSTRE_KERNEL_TEST),)

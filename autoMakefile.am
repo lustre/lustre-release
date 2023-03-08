@@ -16,6 +16,10 @@ DIST_SUBDIRS := ldiskfs \
 
 AUTOMAKE_OPTIONS = foreign
 
+if DEQUOTE_CC_VERSION_TEXT
+DEQUOTE = yes
+endif
+
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
 		     -path $(top_srcdir)/ldiskfs/linux-stage \
 		     -prune -false -o -type f -name '*.[hc]'
@@ -72,7 +76,8 @@ if LINUX
 all-am: modules
 
 modules: undef.h ldiskfs-sources
-	$(MAKE) LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
+	$(MAKE) DEQUOTE_CC_VERSION_TEXT=$(DEQUOTE) \
+	LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \

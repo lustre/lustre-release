@@ -30,8 +30,25 @@ AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
 		[test -s build/conftest.i],
 		[lb_cv_module_target="M58"], [
+	makerule=""
+	lb_cv_dequote_CC_VERSION_TEXT=yes
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M517"], [
 			AC_MSG_ERROR([kernel module make failed; check config.log for details])
-	])])])
+	])])])])
+])
+# Linux commit v5.16-rc3-26-g129ab0d2d9f3
+#  added quotes around "$(CONFIG_CC_VERSION_TEXT)", however .config stores
+#  CONFIG_CC_VERSION_TEXT with quotes thus breaking the GNU make Makefile
+#  for external modules.
+#  Workaround by providing a non-quoted value to override the value in .config
+unset lb_cv_dequote_CC_VERSION_TEXT
+AC_CACHE_CHECK([for compiler version text], lb_cv_dequote_CC_VERSION_TEXT, [
+	AS_IF([test "x$lb_cv_module_target" = "xM517"],
+		[lb_cv_dequote_CC_VERSION_TEXT=yes],
+		[lb_cv_dequote_CC_VERSION_TEXT=yes])
 ])
 AS_IF([test -z "$lb_cv_module_target"],
 	[AC_MSG_ERROR([unknown external module build target])],
@@ -39,6 +56,9 @@ AS_IF([test -z "$lb_cv_module_target"],
 	[makerule="$PWD/build"
 	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM58"],
+	[makerule=""
+	lb_cv_module_target="M"],
+[test "x$lb_cv_module_target" = "xM517"],
 	[makerule=""
 	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM"],
@@ -373,8 +393,17 @@ Consult build/README.kernel-source for details.
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 ])
 
+AS_IF([test -n SUBARCH],
+[SUBARCH=$(echo $target_cpu | sed -e 's/powerpc.*/powerpc/' -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64.*/arm64/' -e 's/armv7.*/arm/')
+])
+
 # this is needed before we can build modules
 LB_LINUX_VERSION
+
+# --- Parallel config for kernel v5.17+
+AS_IF([test "x$lb_cv_dequote_CC_VERSION_TEXT" = "xyes"], [
+	CC_VERSION_TEXT=$(gcc --version | head -n1 | tr ' ()' '.')
+	MAKE_KMOD_ENV="CONFIG_CC_VERSION_TEXT='$CC_VERSION_TEXT'"])
 
 # --- check that we can build modules at all
 LB_CHECK_COMPILE([that modules can be built at all], build_modules,
@@ -574,7 +603,7 @@ MODULE_LICENSE("GPL");])
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([AC_LANG_SOURCE([$1])])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] LDFLAGS= ${LD:+LD="$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $CONFIG_INCLUDE" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] DEQUOTE_CC_VERSION_TEXT=$lb_cv_dequote_CC_VERSION_TEXT LDFLAGS= ${LD:+LD="$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $CONFIG_INCLUDE" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -725,7 +754,7 @@ AC_DEFUN([LB2_LINUX_CONFTEST_MAKEFILE], [
 
 	cat - <<_EOF >$file
 # Example command line to manually build source
-# make modules -C $LINUX_OBJ $ARCH_UM M=${TEST_DIR}/$1
+# make modules -C $LINUX_OBJ $ARCH_UM M=${TEST_DIR}/$1 $MAKE_KMOD_ENV
 
 ${LD:+LD="$LD"}
 CC=$CC
@@ -793,10 +822,10 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE], [
 	J=${TEST_JOBS:-$(nproc)}
 
 	AC_MSG_NOTICE([Making $1 in $D])
-	AC_MSG_NOTICE([KBUILD_MODPOST_NOFINAL="yes" make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D}])
+	AC_MSG_NOTICE([KBUILD_MODPOST_NOFINAL="yes" make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV])
 
 	AC_TRY_COMMAND([KBUILD_MODPOST_NOFINAL="yes"
-		make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} >${L} 2>&1])
+		make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} $MAKE_KMOD_ENV >${L} 2>&1])
 	AS_IF([test -f ${L}],
 	      [AS_IF([test -f $2/Makefile],
 		     [mv $2/Makefile $2/Makefile.compile.$1])],

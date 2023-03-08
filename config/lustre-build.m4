@@ -452,6 +452,7 @@ AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
 AM_CONDITIONAL([BUILD_LUTF], [test x$enable_lutf = xyes])
+AM_CONDITIONAL([DEQUOTE_CC_VERSION_TEXT], [test x$lb_cv_dequote_CC_VERSION_TEXT = xyes])
 
 LN_CONDITIONALS
 LC_CONDITIONALS
