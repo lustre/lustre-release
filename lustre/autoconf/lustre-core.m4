@@ -335,7 +335,7 @@ AC_SUBST(TEST_JOBS)
 
 AC_ARG_VAR([TEST_DIR],
     [location of temporary parallel configure tests (defaults to $PWD/lb2)])
-	TEST_DIR=${TEST_DIR:-$PWD/_lpb}
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 AC_SUBST(TEST_DIR)
 
 AS_IF([test "x$enable_gss" != xno], [

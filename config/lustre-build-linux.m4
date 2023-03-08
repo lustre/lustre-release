@@ -423,6 +423,18 @@ Kernel module loading support is highly recommended.
 	])
 ])
 
+AC_DEFUN([LB_PROG_LINUX_SRC], [
+	LB2_SRC_CHECK_CONFIG([MODULES])
+	LB2_SRC_CHECK_CONFIG([MODVERSIONS])
+])
+
+AC_DEFUN([LB_PROG_LINUX_RESULTS], [
+	LB2_TEST_CHECK_CONFIG([MODULES], [], [AC_MSG_ERROR(
+		[module support is required to build Lustre kernel modules.])
+	])
+	LB2_TEST_CHECK_CONFIG([MODVERSIONS],[],[])
+])
+
 #
 # LB_PROG_LINUX
 #
@@ -431,16 +443,6 @@ Kernel module loading support is highly recommended.
 AC_DEFUN([LB_PROG_LINUX], [
 LB_LINUX_PATH
 LB_LINUX_SYMVERFILE
-
-LB_CHECK_CONFIG([MODULES], [], [
-	AC_MSG_ERROR([
-
-module support is required to build Lustre kernel modules.
-])
-	])
-
-LB_CHECK_CONFIG([MODVERSIONS])
-
 # 2.6.28
 LC_MODULE_LOADING
 ])
@@ -627,23 +629,66 @@ AS_VAR_POPDEF([lb_compile])dnl
 #
 # Like AC_CHECK_HEADER but checks for a kernel-space header
 #
-m4_define([LB_CHECK_LINUX_HEADER], [
-AS_VAR_PUSHDEF([lb_header], [lb_cv_header_$1])dnl
-AC_CACHE_CHECK([for $1], lb_header, [
-	LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
-		[modules], [test -s build/conftest.o],
-		[AS_VAR_SET([lb_header], [yes])],
-		[AS_VAR_SET([lb_header], [no])])
-])
-AS_VAR_IF([lb_header], [yes], [$2], [$3])[]dnl
-AS_VAR_POPDEF([lb_header])dnl
+AC_DEFUN([LB_CHECK_LINUX_HEADER], [
+	AS_VAR_PUSHDEF([lb_header], [lb_cv_header_$1])
+	AC_CACHE_CHECK([for $1], lb_header, [
+		LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
+			[modules], [test -s build/conftest.o],
+			[AS_VAR_SET([lb_header], [yes])],
+			[AS_VAR_SET([lb_header], [no])])
+	])
+	AS_VAR_IF([lb_header], [yes], [$2], [$3])
+	AS_VAR_POPDEF([lb_header])
 ]) # LB_CHECK_LINUX_HEADER
 
 # ------------------------------------------------------------------------------
 # Support 2 stage: parallel compile then checked test results
 # Heavily inspired by OpenZFS
 
+# When converting tests from an LB_CHECK_COMPILE to use an
+# LB2_LINUX_TEST_SRC and LB2_LINUX_TEST_RESULT pairing the primary
+# consideration if dependencies on the results of LB2_LINUX_TEST_RESULT
+# or LB2_TEST_CHECK_CONFIG[_IM] are used by annother compile test.
+# Such dependencies should be avoided without a clear understanding
+# of when the test result is actually available.
+# The serial LB_CHECK_* test produces immediate results
+# where as the LB2_ variant is not available until an intermediate
+# LB2_LINUX_TEST_COMPILE_ALL has been executed.
+#
+# Currently all of the non-conditional LB_CHECK_COMPILE and
+# LB_CHECK_CONFIG[_IM] cases are executed before any of the
+# LB2_LINUX_TEST_SRC, or LB2_SRC_CHECK_CONFIG[_IM] code snippets
+# are written. [Reference LB_CONFIG_MODULES for more details]
+#
+# This allows such LB2_*_SRC_* test cases to rely on
+# prior LB_CHECK_* results, provided such results are preserved
+# in the global configure name space. Likewise an LB2_LINUX_TEST_RESULT
+# or LB2_TEST_CHECK_CONFIG[_IM] may conditionally execute a further
+# LB_CHECK_* if required. Although it would be typcially be faster
+# to run a few compile tests and conditionally ignore the results
+# the reduced configure time may not always out weight the added
+# complexity.
+#
+# It is worth noting that the LB_CHECK_COMPILE macros second argument
+# is used as the configure test cache name. While is has been important
+# that this name be globally unique it is even more important in the
+# parallel case. The is somewhat alleviated by the sanity check in the
+# LB2_LINUX_TEST_RESULT macro as it will abort with an error if
+# the cache name does not exist. However care should be taken
+# that the cache name is a globally unique identifier.
+#
+# Non-unique cases that are otherwise correct can be identified in the
+# configure output when a results include ".. (cached)". This indicates
+# either a duplicate LB_CHECK_* execution which is not critical or a
+# duplicate identifier which needs to be corrected.
+#
+# At this point the number of LB_ and LB2_ examples should be
+# sufficient for the casual developer to perform cut-paste-modify
+# without serious confusion or complication.
+# ------------------------------------------------------------------------------
+
 AC_DEFUN([LB2_LINUX_CONFTEST_C], [
+TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 test -d ${TEST_DIR}/$2 || mkdir -p ${TEST_DIR}/$2
 cat confdefs.h - <<_EOF >${TEST_DIR}/$2/$2.c
 $1
@@ -656,13 +701,27 @@ _EOF
 # $1 - *unique* test case name
 # $2 - additional build flags (ccflags)
 # $3 - external kernel includes for lnet o2ib|gni
+# $4 - extra symbol in Psuedo.symvers (optional)
 #
 AC_DEFUN([LB2_LINUX_CONFTEST_MAKEFILE], [
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 	test -d ${TEST_DIR} || mkdir -p ${TEST_DIR}
 	test -d ${TEST_DIR}/$1 || mkdir -p ${TEST_DIR}/$1
 
 	file=${TEST_DIR}/$1/Makefile
 	EXT_INCLUDE="$3"
+	EXT_SYMBOL="$4"
+	PSYM_FILE=""
+	if test "${EXT_SYMBOL}x" != "x" ; then
+		PSYM_FILE=${TEST_DIR}/$1/Psuedo.symvers
+		echo -e "0x12345678\t${EXT_SYMBOL}\tvmlinux\tEXPORT_SYMBOL\t" > ${PSYM_FILE}
+	fi
+	XTRA_SYM=
+	if test "x$O2IBPATH" != "x"; then
+		if test "x$O2IBPATH" != "x$LINUX_OBJ"; then
+			XTRA_SYM="$O2IBPATH/Module.symvers"
+		fi
+	fi
 
 	cat - <<_EOF >$file
 # Example command line to manually build source
@@ -674,6 +733,7 @@ ZINC=${ZFS}
 SINC=${SPL}
 ZOBJ=${ZFS_OBJ}
 SOBJ=${SPL_OBJ}
+PSYM=${PSYM_FILE}
 
 LINUXINCLUDE  = $EXT_INCLUDE
 LINUXINCLUDE += -I$LINUX/arch/$SUBARCH/include
@@ -703,7 +763,11 @@ LINUXINCLUDE += -I\$(ZINC)/include/spl
 endif
 endif
 LINUXINCLUDE += -include $CONFIG_INCLUDE
-KBUILD_EXTRA_SYMBOLS=${ZFS_OBJ:+$ZFS_OBJ/Module.symvers}
+KBUILD_EXTRA_SYMBOLS += ${ZFS_OBJ:+$ZFS_OBJ/Module.symvers}
+KBUILD_EXTRA_SYMBOLS += ${XTRA_SYM}
+ifneq (\$(PSYM),)
+KBUILD_EXTRA_SYMBOLS += \$(PSYM)
+endif
 
 ccflags-y := -Werror-implicit-function-declaration
 _EOF
@@ -716,25 +780,6 @@ _EOF
 	echo "obj-m += $1/" >>${TEST_DIR}/Makefile
 ])
 
-
-#
-# LB2_LINUX_COMPILE
-#
-# $1 - build dir
-# $2 - test command
-# $3 - pass command
-# $4 - fail command
-#
-# Used internally by LB2_LINUX_TEST_COMPILE
-#
-AC_DEFUN([LB2_LINUX_COMPILE], [
-	AC_TRY_COMMAND([
-	    KBUILD_MODPOST_NOFINAL="yes"
-	    make modules -k -j$TEST_JOBS -C $LINUX_OBJ $ARCH_UM
-	    M=$1 >$1/build.log 2>&1])
-	AS_IF([AC_TRY_COMMAND([$2])], [$3], [$4])
-])
-
 #
 # LB2_LINUX_TEST_COMPILE
 #
@@ -743,12 +788,19 @@ AC_DEFUN([LB2_LINUX_COMPILE], [
 # $2 - dirname
 #
 AC_DEFUN([LB2_LINUX_TEST_COMPILE], [
-	LB2_LINUX_COMPILE([$2], [test -f $2/build.log], [
-		mv $2/Makefile $2/Makefile.compile.$1
-		mv $2/build.log $2/build.log.$1
-	],[
-	        AC_MSG_ERROR([
-        *** Unable to compile test source to determine kernel interfaces.])
+	D="$(realpath [$2])"
+	L="$D/build.log.$1"
+	J=${TEST_JOBS:-$(nproc)}
+
+	AC_MSG_NOTICE([Making $1 in $D])
+	AC_MSG_NOTICE([KBUILD_MODPOST_NOFINAL="yes" make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D}])
+
+	AC_TRY_COMMAND([KBUILD_MODPOST_NOFINAL="yes"
+		make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} >${L} 2>&1])
+	AS_IF([test -f ${L}],
+	      [AS_IF([test -f $2/Makefile],
+		     [mv $2/Makefile $2/Makefile.compile.$1])],
+	      [AC_MSG_ERROR([*** Unable to compile test source ... $3])
 	])
 ])
 
@@ -768,15 +820,13 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE], [
 # TEST_JOBS environment variable which defaults to $(nproc).
 #
 AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 	# Phase 1 - Compilation only, final linking is skipped.
-	LB2_LINUX_TEST_COMPILE([$1], [${TEST_DIR}])
-
+	LB2_LINUX_TEST_COMPILE([$1], [${TEST_DIR}], [$2])
 	for dir in $(awk '/^obj-m/ { print [$]3 }' \
 	    ${TEST_DIR}/Makefile.compile.$1); do
 		name=${dir%/}
-		AS_IF([test -f ${TEST_DIR}/$name/$name.o], [
-			touch ${TEST_DIR}/$name/$name.ko
-		])
+		touch ${TEST_DIR}/$name/$name.tested
 	done
 ])
 
@@ -788,6 +838,7 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
 # $3 - source
 # $4 - extra cflags
 # $5 - external include paths
+# $6 - fake symvers entry
 #
 # NOTICE as all of the test cases are compiled in parallel tests may not
 # depend on the results other tests.
@@ -795,8 +846,12 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
 # source is generated.
 #
 AC_DEFUN([LB2_LINUX_TEST_SRC], [
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
+	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_$1])
+	# Skip test write and build steps if the result is already known.
 	LB2_LINUX_CONFTEST_C([LB_LANG_PROGRAM([[$2]], [[$3]])], [$1_pc])
-	LB2_LINUX_CONFTEST_MAKEFILE([$1_pc], [$4], [$5])
+	LB2_LINUX_CONFTEST_MAKEFILE([$1_pc], [$4], [$5], [$6])
+	AS_VAR_POPDEF([lb_test])
 ])
 
 #
@@ -806,14 +861,125 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 # $2 - run on success (valid .ko generated)
 # $3 - run on failure (unable to compile)
 #
-AC_DEFUN([LB2_LINUX_TEST_RESULT], [
-	AS_IF([test -d ${TEST_DIR}/$1_pc], [
-		AS_IF([test -f ${TEST_DIR}/$1_pc/$1_pc.ko], [$2], [$3])
-	], [
+AC_DEFUN([LB2_LINUX_TEST_RESULT],[
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
+	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_$1])
+	D="$(realpath ${TEST_DIR})"
+	T=${D}/$1_pc
+	O=${T}/$1_pc
+	AS_IF([test -d ${T}], [
+		# test source exists, was the compile test run?
+		AS_IF([test -f ${O}.tested],[
+			# compile test was run.
+		],[
+			# compile test was NOT run. Re-compile everything.
+			AC_MSG_NOTICE([** Rebuilding all tests **])
+
+			J=${TEST_JOBS:-$(nproc)}
+			for mf in $(ls -1 ${TEST_DIR}/Makefile.compile.*); do
+				ln -sf $mf ${D}/Makefile
+				KBUILD_MODPOST_NOFINAL="yes"
+				make modules -k -j${J} -C $LINUX_OBJ $ARCH_UM M=${D} >> rebuild.log 2>&1
+
+				for dir in $(awk '/^obj-m/ { print [$]3 }' ${D}/$mf); do
+					name=${dir%/}
+					AC_MSG_NOTICE([touch ${D}/$name/$name.tested])
+					touch ${D}/$name/$name.tested
+				done
+				rm ${D}/Makefile
+			done
+			# compile test was NOT run. Re-compile everything.
+		])
+	],[
+		# test source does not exist:
 		AC_MSG_ERROR([
-	*** No matching source for the "$1" test, check that
-	*** both the test source and result macros refer to the same name.
+*** No matching source for the "$1" test, check that
+*** both the test source and result macros refer to the same name.
 		])
 	])
-])
+	# Abort if key does not exist
+	AS_IF([test -f ${O}.tested], [],
+		[AC_MSG_ERROR([*** Compile test for $1 was not run.])])
+	# If test was compiled and if we got an object ...
+	AS_IF([test -f ${O}.o], [touch ${O}.ko])
+	# key is valid. Cache should be valid, set the variable
+	AC_CACHE_CHECK([for $1], lb_test,
+		AS_IF([test -f ${O}.ko],
+			AS_VAR_SET([lb_test], [yes]),
+			AS_VAR_SET([lb_test], [no])))
+	# Read the variable and run the caller's actions for yes (arg2) or no (arg3)
+	AS_VAR_IF([lb_test], [yes], $2, $3)
+	AS_VAR_POPDEF([lb_test])
+]) # LB2_LINUX_TEST_RESULT
 
+#
+# LB2_SRC_CHECK_CONFIG
+#
+# generate source to check if a given config option is defined
+#
+#   $1 - CONFIG_<name>
+#
+AC_DEFUN([LB2_SRC_CHECK_CONFIG], [
+	LB2_LINUX_TEST_SRC([config_$1], [
+		#include <$AUTOCONF_HDIR/autoconf.h>
+	], [
+		#ifndef CONFIG_$1
+		#error CONFIG_$1 not #defined
+		#endif
+	])
+]) # LB2_SRC_CHECK_CONFIG
+
+#
+# LB2_TEST_CHECK_CONFIG
+#
+# test result compile test from LB2_SRC_CHECK_CONFIG
+#
+#   $1 - CONFIG_<name>
+#   $2 - do 'yes'
+#   $3 - do 'no'
+#
+AC_DEFUN([LB2_TEST_CHECK_CONFIG], [
+	AC_MSG_CHECKING([if Linux kernel was built with CONFIG_$1])
+	LB2_LINUX_TEST_RESULT([config_$1], [
+		$2
+	],[
+		$3
+	])
+]) # LB2_TEST_CHECK_CONFIG
+
+#
+# LB2_SRC_CHECK_CONFIG_IM
+#
+# generate source to check if a given config option is defined as built-in
+# or as a module.
+#
+#    $1 - CONFIG_<name> or CONFIG_<name>_MODULE
+#
+AC_DEFUN([LB2_SRC_CHECK_CONFIG_IM], [
+	LB2_LINUX_TEST_SRC([config_im_$1], [
+		#include <$AUTOCONF_HDIR/autoconf.h>
+	], [
+		#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
+		#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
+		#endif
+	])
+]) # LB2_SRC_CHECK_CONFIG_IM
+
+
+#
+# LB2_TEST_CHECK_CONFIG_IM
+#
+# test result compile test from LB2_SRC_CHECK_CONFIG_IM
+#
+#   $1 - CONFIG_<name>
+#   $2 - do 'yes'
+#   $3 - do 'no'
+#
+AC_DEFUN([LB2_TEST_CHECK_CONFIG_IM], [
+	AC_MSG_CHECKING([if Linux kernel enabled CONFIG_$1 as built-in or module])
+	LB2_LINUX_TEST_RESULT([config_im_$1], [
+		$2
+	],[
+		$3
+	])
+]) # LB2_TEST_CHECK_CONFIG_IM

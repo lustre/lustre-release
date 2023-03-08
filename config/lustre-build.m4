@@ -170,12 +170,17 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LC_PROG_LINUX
 
 			# Run any parallel compile tests
+			LB_PROG_LINUX_SRC
 			LIBCFS_PROG_LINUX_SRC
 			LN_PROG_LINUX_SRC
 			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_SRC])
 			LC_PROG_LINUX_SRC
 
+			LB2_LINUX_TEST_COMPILE_ALL([lustre],
+				[for available lustre kapi interfaces])
+
 			# Collect parallel compile tests results
+			LB_PROG_LINUX_RESULTS
 			LIBCFS_PROG_LINUX_RESULTS
 			LN_PROG_LINUX_RESULTS
 			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_RESULTS])
