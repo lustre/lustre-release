@@ -1128,7 +1128,7 @@ static void mdc_release_page(struct page *page, int remove)
 	if (remove) {
 		lock_page(page);
 		if (likely(page->mapping != NULL))
-			delete_from_page_cache(page);
+			cfs_delete_from_page_cache(page);
 		unlock_page(page);
 	}
 	put_page(page);
@@ -1370,7 +1370,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	rc = mdc_getpage(rp->rp_exp, fid, rp->rp_off, page_pool, npages, &req);
 	if (rc < 0) {
 		/* page0 is special, which was added into page cache early */
-		delete_from_page_cache(page0);
+		cfs_delete_from_page_cache(page0);
 	} else {
 		int lu_pgs;
 

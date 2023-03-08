@@ -558,4 +558,31 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen)
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
 
+/**
+ * delete_from_page_cache is not exported anymore
+ */
+#ifdef HAVE_DELETE_FROM_PAGE_CACHE
+#define cfs_delete_from_page_cache(page)	delete_from_page_cache((page))
+#else
+static inline void cfs_delete_from_page_cache(struct page *page)
+{
+	if (!page->mapping)
+		return;
+	LASSERT(PageLocked(page));
+	get_page(page);
+	unlock_page(page);
+	/* on entry page is locked */
+	if (S_ISREG(page->mapping->host->i_mode)) {
+		generic_error_remove_page(page->mapping, page);
+	} else {
+		loff_t lstart = page->index << PAGE_SHIFT;
+		loff_t lend = lstart + PAGE_SIZE - 1;
+
+		truncate_inode_pages_range(page->mapping, lstart, lend);
+	}
+	lock_page(page);
+	put_page(page);
+}
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

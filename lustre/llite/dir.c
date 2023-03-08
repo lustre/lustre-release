@@ -51,6 +51,7 @@
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
+#include <lustre_compat.h>
 #include <lustre_fid.h>
 #include <lustre_kernelcomm.h>
 #include <lustre_swab.h>
@@ -174,7 +175,7 @@ void ll_release_page(struct inode *inode, struct page *page,
 	if (remove) {
 		lock_page(page);
 		if (likely(page->mapping != NULL))
-			delete_from_page_cache(page);
+			cfs_delete_from_page_cache(page);
 		unlock_page(page);
 	}
 	put_page(page);
