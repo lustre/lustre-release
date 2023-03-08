@@ -738,6 +738,14 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	case NODEMAP_CLUSTER_IDX: {
 		struct lu_nodemap *old_nm = NULL;
 
+		if (key->nk_unused != 0) {
+			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
+			      recent_nodemap ?
+			       (*recent_nodemap)->nm_name : "nodemap",
+			      NODEMAP_CLUSTER_IDX, key->nk_unused);
+			break;
+		}
+
 		nodemap = cfs_hash_lookup(config->nmc_nodemap_hash,
 					  rec->ncr.ncr_name);
 		if (nodemap == NULL) {
@@ -838,6 +846,14 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			GOTO(out, rc);
 		break;
 	case NODEMAP_GLOBAL_IDX:
+		if (key->nk_unused != 0) {
+			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
+			      recent_nodemap ?
+			      (*recent_nodemap)->nm_name : "nodemap",
+			      NODEMAP_GLOBAL_IDX, key->nk_unused);
+			break;
+		}
+
 		config->nmc_nodemap_is_active = rec->ngr.ngr_is_active;
 		break;
 	default:
