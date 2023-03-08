@@ -1450,7 +1450,7 @@ struct if_quotactl {
 	struct obd_dqblk        qc_dqblk;
 	char                    obd_type[16];
 	struct obd_uuid         obd_uuid;
-	char			qc_poolname[0];
+	char			qc_poolname[];
 };
 
 /* swap layout flags */

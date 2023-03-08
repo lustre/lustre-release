@@ -129,8 +129,7 @@ static inline __u32 LNET_NID_NET(const struct lnet_nid *nid)
 static inline void lnet_nid4_to_nid(lnet_nid_t nid4, struct lnet_nid *nid)
 {
 	if (nid4 == LNET_NID_ANY) {
-		/* equal to setting to LNET_ANY_NID */
-		memset(nid, 0xff, sizeof(*nid));
+		*nid = LNET_ANY_NID;
 		return;
 	}
 
