@@ -1318,7 +1318,7 @@ static int kfilnd_tn_state_wait_timeout_tag_comp(struct kfilnd_transaction *tn,
 	switch (event) {
 	case TN_EVENT_TAG_RX_CANCEL:
 		kfilnd_tn_status_update(tn, -ETIMEDOUT,
-					LNET_MSG_STATUS_REMOTE_TIMEOUT);
+					LNET_MSG_STATUS_NETWORK_TIMEOUT);
 		kfilnd_peer_tn_failed(tn->tn_kp, -ETIMEDOUT);
 		break;
 
