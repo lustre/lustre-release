@@ -1,12 +1,20 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
 #
+# This file is part of Lustre, http://www.lustre.org/
 #
-# auster - drive lustre tests
+# lustre/tests/auster
+#
+# Drive lustre tests
+#
+
+#
 # TODO
 #  1. --time-limt <seconds>  add per test time limit, kill test if it runs to long
 #  2. Read list of tests to run from a file. same syntax as cli, but one test per line
 #  3. Run test on remote node
-#  4. Use long opts for auster options
+#
 
 set -e
 
@@ -17,25 +25,25 @@ usage() {
 	less -F <<EOF
 Usage ${0##*/} [options]  suite [suite options] [suite [suite options]]
 Run Lustre regression tests suites.
-      -c CONFIG Test environment config file
-      -d LOGDIR Top level directory for logs
-      -D FULLLOGDIR Full directory for logs
-      -f STR    Config name (cfg/<name>.sh)
-      -g GROUP  Test group file (Overrides tests listed on command line)
-      -S TESTSUITE First test suite to run allows for restarts
-      -H        Honor the EXCEPT and ALWAYS_EXCEPT list when --only is used
-      -i N      Repeat tests N times (default 1). A new directory
-                will be created under LOGDIR for each iteration.
-      -k        Don't stop when subtests fail
-      -R        Remount lustre between tests
-      -r        Reformat (during initial configuration if needed)
-      -s        SLOW=yes
-      -v        Verbose mode
-      -l        Send logs to the Maloo database after run
-                  (can be done later by running maloo_upload.sh)
-      -L        Script language of test suite. Default: bash
-      -N        No setup. Do not setup Lustre prior to executing test suite.
-      -h        This help.
+      -c, --config CONFIG   Test environment config file
+      -d, --log-dir LOGDIR            Top level directory for logs
+      -D, --full-log-dir FULLLOGDIR   Full directory for logs
+      -f, --cfg-name STR    Config name (cfg/<name>.sh)
+      -g, --group GROUP     Test group file (Overrides tests listed on command line)
+      -S, --suite TESTSUITE           First test suite to run allows for restarts
+      -H, --honor           Honor the EXCEPT and ALWAYS_EXCEPT list when --only is used
+      -i, --repeat N        Repeat tests N times (default 1). A new directory
+                            will be created under LOGDIR for each iteration.
+      -k  --no-stop         Don't stop when subtests fail
+      -R, --remount         Remount lustre between tests
+      -r, --reformat        Reformat (during initial configuration if needed)
+      -s  --slow            SLOW=yes
+      -v, --verbose         Verbose mode
+      -l, --send-logs       Send logs to the Maloo database after run
+                              (can be done later by running maloo_upload.sh)
+      -L, --lang            Script language of test suite. Default: bash
+      -N, --no-setup        No setup. Do not setup Lustre prior to executing test suite.
+      -h, --help            This help.
 
 Suite options
 These are suite specific options that can be specified after each suite on
@@ -72,8 +80,34 @@ script_lang=bash
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export HONOR_EXCEPT=
 do_setup=true
-export ${SLOW:=no}
-export ${NAME:=local}
+export "${SLOW:=no}"
+export "${NAME:=local}"
+
+# Replace long option with corresponding short option
+for arg in "$@"; do
+	shift
+	case "$arg" in
+		--config) set -- "$@" '-c';;
+		--log-dir) set -- "$@" '-d';;
+		--full-log-dir) set -- "$@" '-D';;
+		--group) set -- "$@" '-g';;
+		--suite) set -- "$@" '-S';;
+		--no-stop) set -- "$@" '-k';;
+		--verbose) set -- "$@" '-v';;
+		--honor) set -- "$@" '-H';;
+		--repeat) set -- "$@" '-i';;
+		--cfg-name) set -- "$@" '-f';;
+		--remount) set -- "$@" '-R';;
+		--reformat) set -- "$@" '-r';;
+		--slow) set -- "$@" '-s';;
+		--send-logs) set -- "$@" '-l';;
+		--lang) set -- "$@" '-L';;
+		--no-setup) set -- "$@" '-N';;
+		--help) set -- "$@" '-h';;
+		*) set -- "$@" "$arg";;
+	esac
+done
+
 while getopts "c:d:D:nkf:S:g:Hi:rRslL:Nhv" opt
 do
 	case "$opt" in
