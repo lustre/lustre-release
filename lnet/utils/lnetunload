@@ -1,19 +1,28 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lnet/utils/lnetunload
+#
+# Unload lnet related kernel modules
+#
 
 lnds=$(echo k{sock,qsw,{open,i,v,o2,c}ib,ra,ptl,mx}lnd)
 
 do_rmmod() {
-    mod=$1
-    if grep "^$mod" /proc/modules >/dev/null 2>&1; then
-	rmmod $mod
-    fi
+	mod=$1
+	if grep "^$mod" /proc/modules >/dev/null 2>&1; then
+		rmmod "$mod"
+	fi
 }
 
 do_rmmod lnet_selftest
 
 if lctl network down > /dev/null 2>&1; then
-    for mod in $lnds; do do_rmmod $mod; done
+	for mod in $lnds; do do_rmmod "$mod"; done
 
-    rmmod lnet 
-    rmmod libcfs
+	rmmod lnet
+	rmmod libcfs
 fi

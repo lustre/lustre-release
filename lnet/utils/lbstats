@@ -1,4 +1,14 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lnet/utils/lbstats
+#
+# Cleanly print out info about lnet router buffers,
+# network interfaces, and peers
+#
 
 echo "=== Router Buffers ======="
 lctl get_param -n buffers 2> /dev/null
