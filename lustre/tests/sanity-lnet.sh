@@ -940,6 +940,13 @@ test_26() {
 
 	do_lnetctl peer add --prim_nid 1.1.1.1@tcp --lock_prim ||
 		error "Peer add with --lock_prim option failed $?"
+	local peer_state=$($LNETCTL peer show -v 4 --nid 1.1.1.1@tcp |
+		awk '/peer state/ {print $NF}')
+	# This relies on the following peer state definition:
+	# #define LNET_PEER_LOCK_PRIMARY          BIT(20)
+	if ((!("$peer_state" & (1 << 20)))); then
+		error "Peer state does not have 'locked' bit set: $peer_state"
+	fi
 	do_lnetctl peer del --prim_nid 1.1.1.1@tcp ||
 		error "Peer del failed $?"
 	$LNETCTL peer show --nid 1.1.1.1@tcp | grep -q 1.1.1.1@tcp ||
