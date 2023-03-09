@@ -278,8 +278,8 @@ MODULE_PARM_DESC(lock_prim_nid,
 unsigned int lnet_lnd_timeout = LNET_LND_TIMEOUT_DEFAULT;
 static void lnet_set_lnd_timeout(void)
 {
-	lnet_lnd_timeout = (lnet_transaction_timeout - 1) /
-			   (lnet_retry_count + 1);
+	lnet_lnd_timeout = max((lnet_transaction_timeout - 1) /
+			       (lnet_retry_count + 1), 1U);
 }
 
 /*
