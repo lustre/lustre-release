@@ -1,3 +1,74 @@
+TBD Whamcloud
+       * version 2.15.3
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
+         for currently supported client and server kernel versions.
+       * Server primary kernels built and tested during release cycle:
+         4.18.0-425.3.1.el8   (RHEL8.7)
+       * Other server kernels known to build and work at some point (others may also work):
+         3.10.0-862.14.4.el7  (RHEL7.5)
+         3.10.0-957.27.2.el7  (RHEL7.6)
+         3.10.0-1062.18.1.el7 (RHEL7.7)
+         3.10.0-1127.19.1.el7 (RHEL7.8)
+         3.10.0-1160.80.1.el7 (RHEL7.9)
+         4.18.0-80.11.2.el8   (RHEL8.0)
+         4.18.0-147.8.1.el8   (RHEL8.1)
+         4.18.0-193.28.1.el8  (RHEL8.2)
+         4.18.0-240.22.1.el8  (RHEL8.3)
+         4.18.0-305.25.1.el8  (RHEL8.4)
+         4.18.0-348.23.1.el8  (RHEL8.5)
+         4.18.0-372.32.1.el8  (RHEL8.6)
+         4.4.120-92.70        (SLES12 SP2)
+         4.4.180-94.100       (SLES12 SP3)
+         4.4.0-131            (Ubuntu 16.04)
+         4.15.0-32            (Ubuntu 18.04)
+         5.4.0-48             (Ubuntu 20.04)
+         vanilla linux 5.4.0  (ZFS + ldiskfs)
+         vanilla linux 5.4.21  (ZFS + ldiskfs)
+         vanilla linux 5.4.136  (ZFS + ldiskfs)
+       * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
+       * Client primary kernels built and tested during release cycle:
+         5.14.0-162.18.1.el9  (RHEL9.1)
+         4.18.0-425.3.1.el8   (RHEL8.7)
+         5.4.0-37             (Ubuntu 20.04)
+         5.14.21-150400.24.28 (SLES15 SP4)
+       * Other clients known to build on these kernels at some point (others may also work):
+         3.10.0-862.14.4.el7  (RHEL7.5)
+         3.10.0-957.27.2.el7  (RHEL7.6)
+         4.14.0-49.13.1.el7a  (RHEL7.5)
+         4.14.0-115.2.2.el7a  (RHEL7.6)
+         3.10.0-1062.18.1.el7 (RHEL7.7)
+         3.10.0-1127.19.1.el7 (RHEL7.8)
+         3.10.0-1160.80.1.el7 (RHEL7.9)
+         4.18.0-80.11.2.el8   (RHEL8.0)
+         4.18.0-147.8.1.el8   (RHEL8.1)
+         4.18.0-193.28.1.el8  (RHEL8.2)
+         4.18.0-240.22.1.el8  (RHEL8.3)
+         4.18.0-305.25.1.el8  (RHEL8.4)
+         4.18.0-348.23.1.el8  (RHEL8.5)
+         4.18.0-372.32.1.el8  (RHEL8.6)
+         5.14.0-70.30.1.el9   (RHEL9.0)
+         4.4.120-92.70        (SLES12 SP2)
+         4.4.180-94.100       (SLES12 SP3)
+         4.12.14-95.48        (SLES12 SP4)
+         4.12.14-122.91       (SLES12 SP5)
+         4.12.14-197.75       (SLES15 SP1)
+         5.3.18-24.96         (SLES15 SP2)
+         5.3.18-150300.59.93  (SLES15 SP3)
+         4.4.0-131            (Ubuntu 16.04)
+         4.15.0-48            (Ubuntu 18.04)
+         5.8.0-53             (Ubuntu 20.04.2 HWE)
+         5.11.0-31            (Ubuntu 20.04.3 HWE)
+         5.11.0               (vanilla kernel.org)
+       * Recommended e2fsprogs version: 1.46.6-wc1 or newer
+       * Recommended ZFS version: 2.1.5
+       * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
+         since the NFSv4 export of Lustre filesystem with 4K stack may cause a
+         stack overflow. For more information, please refer to bugzilla 17630.
+       * NFSv4 reexport to 32-bit NFS client nodes requires Lustre client on
+         the re-exporting nodes to be mounted with "32bitapi" mount option
+
+--------------------------------------------------------------------------------
+
 01-11-2023 Whamcloud
        * version 2.15.2
        * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
