@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 # Copyright (c) 2014, Lawrence Livermore National Security, LLC.
 # Produced at the Lawrence Livermore National Laboratory.
@@ -27,21 +27,31 @@
 import sys
 import subprocess
 
-def from_bytes(b):
-    return sum(b[i] << i*8 for i in range(len(b)))
+def from_bytes(data):
+    return hex(sum(data[i] << i * 8 for i in range(len(data))))
 
 def main():
     if len(sys.argv) != 3:
-        print "Usage:", sys.argv[0], "<dataset> <object>"
+        print('Usage:', sys.argv[0], '<dataset>', '<object>')
         return 1
 
-    p = subprocess.Popen(["zdb", "-e", "-vvv", sys.argv[1], sys.argv[2]],
-                          stdout=subprocess.PIPE)
-    pout, perr = p.communicate()
+    cmd = ['zdb', '-e', '-vvv', sys.argv[1], sys.argv[2]]
+    process = subprocess.Popen(cmd,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE,
+                               universal_newlines=True)
+    stdout, stderr = process.communicate()
+    result = process.returncode
 
-    b = bytearray()
+    if result != 0:
+        msg = 'Error %d on %s: %s %s' % (result, cmd, stdout, stderr)
+        raise RuntimeError(msg)
+
+    lines = stdout.splitlines()
+    data = bytearray()
     found_fid = False
-    for line in pout.split('\n'):
+
+    for line in lines:
         part = line.split()
         if not part or part[0] != 'trusted.fid':
             continue
@@ -53,24 +63,19 @@ def main():
             if val == '\\':
                 val = fid[0:3]
                 fid = fid[3:]
-                b.append(int(val, 8))
+                data.append(int(val, 8))
             else:
-                b.append(ord(val))
+                data.append(ord(val))
         break
 
     if not found_fid:
-        print "FID not found on", sys.argv[1], sys.argv[2]
+        print('FID not found on', sys.argv[1], sys.argv[2])
         return 1
 
-    print '[' \
-        + hex(from_bytes(b[0:8])) \
-        + ':' \
-        + hex(from_bytes(b[8:12])) \
-        + ':' \
-        + hex(from_bytes(b[12:16])) \
-        + ']'
-
+    print('[%s:%s:%s]' % (from_bytes(data[0:8]),
+                          from_bytes(data[8:12]),
+                          from_bytes(data[12:16])))
     return 0
 
 if __name__ == '__main__':
-      sys.exit(main())
+    sys.exit(main())
