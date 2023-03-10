@@ -36,8 +36,24 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/module.h>
-#include <lustre_update.h>
 #include <obd.h>
+#ifdef HAVE_SERVER_SUPPORT
+#include <lustre_update.h>
+#else
+
+#define OUT_UPDATE_REPLY_SIZE		4096
+
+static inline struct lustre_msg *
+batch_update_repmsg_next(struct batch_update_reply *bur,
+			 struct lustre_msg *repmsg)
+{
+	if (repmsg)
+		return (struct lustre_msg *)((char *)repmsg +
+					     lustre_packed_msg_size(repmsg));
+	else
+		return &bur->burp_repmsg[0];
+}
+#endif
 
 struct batch_update_buffer {
 	struct batch_update_request	*bub_req;

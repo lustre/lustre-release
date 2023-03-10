@@ -36,7 +36,6 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/module.h>
-#include <lustre_update.h>
 #include <lustre_acl.h>
 
 #include "mdc_internal.h"
