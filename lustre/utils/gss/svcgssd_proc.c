@@ -60,6 +60,7 @@
 #include <linux/lustre/lustre_idl.h>
 #include "sk_utils.h"
 #include <sys/time.h>
+#include <gssapi/gssapi_krb5.h>
 
 #define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
 #define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
@@ -103,13 +104,13 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	const char *mechname;
 	int err;
 
-	printerr(2, "doing downcall\n");
+	printerr(LL_INFO, "doing downcall\n");
 	mechname = gss_OID_mech_name(mechoid);
 	if (mechname == NULL)
 		goto out_err;
 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
 	if (f == NULL) {
-		printerr(0, "WARNING: unable to open downcall channel "
+		printerr(LL_ERR, "ERROR: unable to open downcall channel "
 			     "%s: %s\n",
 			     SVCGSSD_CONTEXT_CHANNEL, strerror(errno));
 		goto out_err;
@@ -130,7 +131,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	fclose(f);
 	return err;
 out_err:
-	printerr(0, "WARNING: downcall failed\n");
+	printerr(LL_ERR, "ERROR: downcall failed\n");
 	return -1;
 }
 
@@ -152,7 +153,7 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	/* XXXARG: */
 	int g;
 
-	printerr(2, "sending reply\n");
+	printerr(LL_INFO, "sending reply\n");
 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
 	qword_addint(&bp, &blen, time(NULL) + 3600);   /* 1 hour should be ok */
@@ -162,19 +163,20 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	qword_addhex(&bp, &blen, out_token->value, out_token->length);
 	qword_addeol(&bp, &blen);
 	if (blen <= 0) {
-		printerr(0, "WARNING: send_response: message too long\n");
+		printerr(LL_ERR, "ERROR: %s: message too long\n", __func__);
 		return -1;
 	}
 	g = open(SVCGSSD_INIT_CHANNEL, O_WRONLY);
 	if (g == -1) {
-		printerr(0, "WARNING: open %s failed: %s\n",
-				SVCGSSD_INIT_CHANNEL, strerror(errno));
+		printerr(LL_ERR, "ERROR: %s: open %s failed: %s\n",
+			 __func__, SVCGSSD_INIT_CHANNEL, strerror(errno));
 		return -1;
 	}
 	*bp = '\0';
-	printerr(3, "writing message: %s", buf);
+	printerr(LL_DEBUG, "writing message: %s", buf);
 	if (write(g, buf, bp - buf) == -1) {
-		printerr(0, "WARNING: failed to write message\n");
+		printerr(LL_ERR, "ERROR: %s: failed to write message\n",
+			 __func__);
 		close(g);
 		return -1;
 	}
@@ -190,6 +192,50 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 #define rpc_autherr_tooweak		5
 #define rpcsec_gsserr_credproblem	13
 #define rpcsec_gsserr_ctxproblem	14
+
+static int lookup_localname(gss_name_t client_name, char *princ, lnet_nid_t nid,
+			    uid_t *uid)
+{
+	u_int32_t maj_stat, min_stat;
+	gss_buffer_desc	localname;
+	char *sname;
+	int rc = -1;
+
+	*uid = -1;
+	maj_stat = gss_localname(&min_stat, client_name, GSS_C_NO_OID,
+				 &localname);
+	if (maj_stat != GSS_S_COMPLETE) {
+		printerr(LL_INFO, "no local name for %s/%#Lx\n", princ, nid);
+		return rc;
+	}
+
+	sname = calloc(localname.length + 1, 1);
+	if (!sname) {
+		printerr(LL_ERR, "%s: error allocating %zu bytes\n",
+			 __func__, localname.length + 1);
+		goto free;
+	}
+	memcpy(sname, localname.value, localname.length);
+	sname[localname.length] = '\0';
+
+	*uid = parse_uid(sname);
+	free(sname);
+	printerr(LL_WARN, "found local uid: %s ==> %d\n", princ, *uid);
+	rc = 0;
+
+free:
+	gss_release_buffer(&min_stat, &localname);
+	return rc;
+}
+
+static int lookup_id(gss_name_t client_name, char *princ, lnet_nid_t nid,
+		     uid_t *uid)
+{
+	if (!mapping_empty())
+		return lookup_mapping(princ, nid, uid);
+
+	return lookup_localname(client_name, princ, nid, uid);
+}
 
 static int
 get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
@@ -214,10 +260,12 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			maj_stat, min_stat, mech);
 		return -1;
 	}
-	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
+	/* be certain name.length+1 doesn't overflow */
+	if (name.length >= 0xffff ||
 	    !(sname = calloc(name.length + 1, 1))) {
-		printerr(0, "WARNING: get_ids: error allocating %zu bytes "
-			"for sname\n", name.length + 1);
+		printerr(LL_ERR,
+			 "ERROR: %s: error allocating %zu bytes for sname\n",
+			 __func__, name.length + 1);
 		gss_release_buffer(&min_stat, &name);
 		return -1;
 	}
@@ -225,16 +273,15 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	sname[name.length] = '\0';
 	gss_release_buffer(&min_stat, &name);
 
-	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
-		lookup_mapping(sname, nid, &cred->cr_mapped_uid);
-	else
-		cred->cr_mapped_uid = -1;
+	if (lustre_svc == LUSTRE_GSS_SVC_MDS &&
+	    lookup_id(client_name, sname, nid, &cred->cr_mapped_uid))
+		printerr(LL_DEBUG, "no id found for %s\n", sname);
 
 	realm = strchr(sname, '@');
 	if (realm) {
 		*realm++ = '\0';
 	} else {
-		printerr(0, "ERROR: %s has no realm name\n", sname);
+		printerr(LL_ERR, "ERROR: %s has no realm name\n", sname);
 		goto out_free;
 	}
 
@@ -243,30 +290,32 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		*host++ = '\0';
 
 	if (strcmp(sname, GSSD_SERVICE_MGS) == 0) {
-		printerr(0, "forbid %s as a user name\n", sname);
+		printerr(LL_ERR, "forbid %s as a user name\n", sname);
 		goto out_free;
 	}
 
 	/* 1. check host part */
 	if (host) {
 		if (lnet_nid2hostname(nid, namebuf, namebuf_size)) {
-			printerr(0, "ERROR: failed to resolve hostname for "
-				 "%s/%s@%s from %016llx\n",
+			printerr(LL_ERR,
+				 "ERROR: failed to resolve hostname for %s/%s@%s from %016llx\n",
 				 sname, host, realm, nid);
 			goto out_free;
 		}
 
 		if (strcasecmp(host, namebuf)) {
-			printerr(0, "ERROR: %s/%s@%s claimed hostname doesn't "
-				 "match %s, nid %016llx\n", sname, host, realm,
+			printerr(LL_ERR,
+				 "ERROR: %s/%s@%s claimed hostname doesn't match %s, nid %016llx\n",
+				 sname, host, realm,
 				 namebuf, nid);
 			goto out_free;
 		}
 	} else {
 		if (!strcmp(sname, GSSD_SERVICE_MDS) ||
 		    !strcmp(sname, GSSD_SERVICE_OSS)) {
-			printerr(0, "ERROR: %s@%s from %016llx doesn't "
-				 "bind with hostname\n", sname, realm, nid);
+			printerr(LL_ERR,
+				 "ERROR: %s@%s from %016llx doesn't bind with hostname\n",
+				 sname, realm, nid);
 			goto out_free;
 		}
 	}
@@ -274,46 +323,57 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	/* 2. check realm and user */
 	switch (lustre_svc) {
 	case LUSTRE_GSS_SVC_MDS:
-		if (strcasecmp(mds_local_realm, realm)) {
+		if (strcasecmp(mds_local_realm, realm) != 0) {
+			/* Remote realm case */
 			cred->cr_remote = 1;
 
-			/* only allow mapped user from remote realm */
+			/* Prevent access to unmapped user from remote realm */
 			if (cred->cr_mapped_uid == -1) {
-				printerr(0, "ERROR: %s%s%s@%s from %016llx "
-					 "is remote but without mapping\n",
+				printerr(LL_ERR,
+					 "ERROR: %s%s%s@%s from %016llx is remote but without mapping\n",
 					 sname, host ? "/" : "",
 					 host ? host : "", realm, nid);
 				break;
 			}
-		} else {
-			if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
-				cred->cr_uid = 0;
-				cred->cr_usr_root = 1;
-			} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-				cred->cr_uid = 0;
-				cred->cr_usr_mds = 1;
-			} else if (!strcmp(sname, GSSD_SERVICE_OSS)) {
-				cred->cr_uid = 0;
-				cred->cr_usr_oss = 1;
-			} else {
-				pw = getpwnam(sname);
-				if (pw != NULL) {
-					cred->cr_uid = pw->pw_uid;
-					printerr(2, "%s resolve to uid %u\n",
-						 sname, cred->cr_uid);
-				} else if (cred->cr_mapped_uid != -1) {
-					printerr(2, "user %s from %016llx is "
-						 "mapped to %u\n", sname, nid,
-						 cred->cr_mapped_uid);
-				} else {
-					printerr(0, "ERROR: invalid user, "
-						 "%s/%s@%s from %016llx\n",
-						 sname, host, realm, nid);
-					break;
-				}
-			}
+			goto valid;
 		}
 
+		/* Now we know we are dealing with a local realm */
+
+		if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_root = 1;
+			goto valid;
+		}
+		if (!strcmp(sname, GSSD_SERVICE_MDS)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_mds = 1;
+			goto valid;
+		}
+		if (!strcmp(sname, GSSD_SERVICE_OSS)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_oss = 1;
+			goto valid;
+		}
+		if (cred->cr_mapped_uid != -1) {
+			printerr(LL_INFO,
+				 "user %s from %016llx is mapped to %u\n",
+				 sname, nid,
+				 cred->cr_mapped_uid);
+			goto valid;
+		}
+		pw = getpwnam(sname);
+		if (pw != NULL) {
+			cred->cr_uid = pw->pw_uid;
+			printerr(LL_INFO, "%s resolve to uid %u\n",
+				 sname, cred->cr_uid);
+			goto valid;
+		}
+		printerr(LL_ERR, "ERROR: invalid user, %s/%s@%s from %016llx\n",
+			 sname, host, realm, nid);
+		break;
+
+valid:
 		res = 0;
 		break;
 	case LUSTRE_GSS_SVC_MGS:
@@ -331,8 +391,9 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			cred->cr_usr_mds = 1;
 		}
 		if (cred->cr_uid == -1) {
-			printerr(0, "ERROR: svc %d doesn't accept user %s "
-				 "from %016llx\n", lustre_svc, sname, nid);
+			printerr(LL_ERR,
+				 "ERROR: svc %d doesn't accept user %s from %016llx\n",
+				 lustre_svc, sname, nid);
 			break;
 		}
 		res = 0;
@@ -343,7 +404,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 
 out_free:
 	if (!res)
-		printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",
+		printerr(LL_WARN, "%s: authenticated %s%s%s@%s from %016llx\n",
 			 lustre_svc_name[lustre_svc], sname,
 			 host ? "/" : "", host ? host : "", realm, nid);
 	free(sname);
@@ -369,26 +430,27 @@ int handle_sk(struct svc_nego_data *snd)
 	int i;
 	int attempts = 0;
 
-	printerr(3, "Handling sk request\n");
+	printerr(LL_DEBUG, "Handling sk request\n");
 	memset(bufs, 0, sizeof(gss_buffer_desc) * SK_INIT_BUFFERS);
 
 	/* See lgss_sk_using_cred() for client side token formation.
 	 * Decoding initiator buffers */
 	i = sk_decode_netstring(bufs, SK_INIT_BUFFERS, &snd->in_tok);
 	if (i < SK_INIT_BUFFERS) {
-		printerr(0, "Invalid netstring token received from peer\n");
+		printerr(LL_ERR,
+			 "Invalid netstring token received from peer\n");
 		goto cleanup_buffers;
 	}
 
 	/* Allowing for a larger length first buffer in the future */
 	if (bufs[SK_INIT_VERSION].length < sizeof(version)) {
-		printerr(0, "Invalid version received (wrong size)\n");
+		printerr(LL_ERR, "Invalid version received (wrong size)\n");
 		goto cleanup_buffers;
 	}
 	memcpy(&version, bufs[SK_INIT_VERSION].value, sizeof(version));
 	version = be32toh(version);
 	if (version != SK_MSG_VERSION) {
-		printerr(0, "Invalid version received: %d\n", version);
+		printerr(LL_ERR, "Invalid version received: %d\n", version);
 		goto cleanup_buffers;
 	}
 
@@ -398,19 +460,19 @@ int handle_sk(struct svc_nego_data *snd)
 	i = bufs[SK_INIT_TARGET].length - 1;
 	target = bufs[SK_INIT_TARGET].value;
 	if (i >= 0 && target[i] != '\0') {
-		printerr(0, "Invalid target from netstring\n");
+		printerr(LL_ERR, "Invalid target from netstring\n");
 		goto cleanup_buffers;
 	}
 
 	if (bufs[SK_INIT_FLAGS].length != sizeof(flags)) {
-		printerr(0, "Invalid flags from netstring\n");
+		printerr(LL_ERR, "Invalid flags from netstring\n");
 		goto cleanup_buffers;
 	}
 	memcpy(&flags, bufs[SK_INIT_FLAGS].value, sizeof(flags));
 
 	skc = sk_create_cred(target, snd->nm_name, be32toh(flags));
 	if (!skc) {
-		printerr(0, "Failed to create sk credentials\n");
+		printerr(LL_ERR, "Failed to create sk credentials\n");
 		goto cleanup_buffers;
 	}
 
@@ -420,8 +482,9 @@ int handle_sk(struct svc_nego_data *snd)
 	 * servers */
 	if (skc->sc_flags & LGSS_SVC_PRIV &&
 	    bufs[SK_INIT_P].length < skc->sc_p.length) {
-		printerr(0, "Peer DHKE prime does not meet the size required "
-			 "by keyfile: %zd bits\n", skc->sc_p.length * 8);
+		printerr(LL_ERR,
+			 "Peer DHKE prime does not meet the size required by keyfile: %zd bits\n",
+			 skc->sc_p.length * 8);
 		goto cleanup_buffers;
 	}
 
@@ -433,7 +496,7 @@ int handle_sk(struct svc_nego_data *snd)
 	/* Take control of all the allocated buffers from decoding */
 	if (bufs[SK_INIT_RANDOM].length !=
 	    sizeof(skc->sc_kctx.skc_peer_random)) {
-		printerr(0, "Invalid size for client random\n");
+		printerr(LL_ERR, "Invalid size for client random\n");
 		goto cleanup_buffers;
 	}
 
@@ -450,7 +513,7 @@ int handle_sk(struct svc_nego_data *snd)
 	rc = sk_verify_hmac(skc, bufs, SK_INIT_BUFFERS - 1, EVP_sha256(),
 			    &skc->sc_hmac);
 	if (rc != GSS_S_COMPLETE) {
-		printerr(0, "HMAC verification error: 0x%x from peer %s\n",
+		printerr(LL_ERR, "HMAC verification error: 0x%x from peer %s\n",
 			 rc, libcfs_nid2str((lnet_nid_t)snd->nid));
 		goto cleanup_partial;
 	}
@@ -458,14 +521,15 @@ int handle_sk(struct svc_nego_data *snd)
 	/* Check that the cluster hash matches the hash of nodemap name */
 	rc = sk_verify_hash(snd->nm_name, EVP_sha256(), &skc->sc_nodemap_hash);
 	if (rc != GSS_S_COMPLETE) {
-		printerr(0, "Cluster hash failed validation: 0x%x\n", rc);
+		printerr(LL_ERR, "Cluster hash failed validation: 0x%x\n", rc);
 		goto cleanup_partial;
 	}
 
 redo:
 	rc = sk_gen_params(skc, sk_dh_checks);
 	if (rc != GSS_S_COMPLETE) {
-		printerr(0, "Failed to generate DH params for responder\n");
+		printerr(LL_ERR,
+			 "Failed to generate DH params for responder\n");
 		goto cleanup_partial;
 	}
 	rc = sk_compute_dh_key(skc, &remote_pub_key);
@@ -493,7 +557,8 @@ redo:
 		skc->sc_dh_shared_key.length = 0;
 		goto redo;
 	} else if (rc != GSS_S_COMPLETE) {
-		printerr(0, "Failed to compute session key from DH params\n");
+		printerr(LL_ERR,
+			 "Failed to compute session key from DH params\n");
 		goto cleanup_partial;
 	}
 
@@ -513,26 +578,28 @@ redo:
 	if (sk_sign_bufs(&skc->sc_kctx.skc_shared_key, bufs,
 			 SK_RESP_BUFFERS - 1, EVP_sha256(),
 			 &skc->sc_hmac)) {
-		printerr(0, "Failed to sign parameters\n");
+		printerr(LL_ERR, "Failed to sign parameters\n");
 		goto out_err;
 	}
 	bufs[SK_RESP_HMAC] = skc->sc_hmac;
 	if (sk_encode_netstring(bufs, SK_RESP_BUFFERS, &snd->out_tok)) {
-		printerr(0, "Failed to encode netstring for token\n");
+		printerr(LL_ERR, "Failed to encode netstring for token\n");
 		goto out_err;
 	}
-	printerr(2, "Created netstring of %zd bytes\n", snd->out_tok.length);
+	printerr(LL_INFO, "Created netstring of %zd bytes\n",
+		 snd->out_tok.length);
 
 	if (sk_session_kdf(skc, snd->nid, &snd->in_tok, &snd->out_tok)) {
-		printerr(0, "Failed to calculate derived session key\n");
+		printerr(LL_ERR, "Failed to calculate derived session key\n");
 		goto out_err;
 	}
 	if (sk_compute_keys(skc)) {
-		printerr(0, "Failed to compute HMAC and encryption keys\n");
+		printerr(LL_ERR,
+			 "Failed to compute HMAC and encryption keys\n");
 		goto out_err;
 	}
 	if (sk_serialize_kctx(skc, &snd->ctx_token)) {
-		printerr(0, "Failed to serialize context for kernel\n");
+		printerr(LL_ERR, "Failed to serialize context for kernel\n");
 		goto out_err;
 	}
 
@@ -559,7 +626,7 @@ redo:
 	free(snd->ctx_token.value);
 	snd->ctx_token.length = 0;
 
-	printerr(3, "sk returning success\n");
+	printerr(LL_DEBUG, "sk returning success\n");
 	return 0;
 
 cleanup_buffers:
@@ -588,9 +655,9 @@ out_err:
 	}
 	free(remote_pub_key.value);
 	sk_free_cred(skc);
-	printerr(3, "sk returning failure\n");
+	printerr(LL_DEBUG, "sk returning failure\n");
 #else /* !HAVE_OPENSSL_SSK */
-	printerr(0, "ERROR: shared key subflavour is not enabled\n");
+	printerr(LL_ERR, "ERROR: shared key subflavour is not enabled\n");
 #endif /* HAVE_OPENSSL_SSK */
 	return -1;
 }
@@ -605,7 +672,7 @@ int handle_null(struct svc_nego_data *snd)
 	 * for sending to the kernel.  It is a single uint64_t. */
 	if (snd->in_tok.length != sizeof(uint64_t)) {
 		snd->maj_stat = GSS_S_DEFECTIVE_TOKEN;
-		printerr(0, "Invalid token size (%zd) received\n",
+		printerr(LL_ERR, "Invalid token size (%zd) received\n",
 			 snd->in_tok.length);
 		return -1;
 	}
@@ -613,7 +680,7 @@ int handle_null(struct svc_nego_data *snd)
 	snd->out_tok.value = malloc(snd->out_tok.length);
 	if (!snd->out_tok.value) {
 		snd->maj_stat = GSS_S_FAILURE;
-		printerr(0, "Failed to allocate out_tok\n");
+		printerr(LL_ERR, "Failed to allocate out_tok\n");
 		return -1;
 	}
 
@@ -621,7 +688,7 @@ int handle_null(struct svc_nego_data *snd)
 	snd->ctx_token.value = malloc(snd->ctx_token.length);
 	if (!snd->ctx_token.value) {
 		snd->maj_stat = GSS_S_FAILURE;
-		printerr(0, "Failed to allocate ctx_token\n");
+		printerr(LL_ERR, "Failed to allocate ctx_token\n");
 		return -1;
 	}
 
@@ -664,7 +731,7 @@ static int handle_krb(struct svc_nego_data *snd)
 
 	svc_cred = gssd_select_svc_cred(snd->lustre_svc);
 	if (!svc_cred) {
-		printerr(0, "no service credential for svc %u\n",
+		printerr(LL_ERR, "no service credential for svc %u\n",
 			 snd->lustre_svc);
 		goto out_err;
 	}
@@ -677,14 +744,15 @@ static int handle_krb(struct svc_nego_data *snd)
 					       NULL);
 
 	if (snd->maj_stat == GSS_S_CONTINUE_NEEDED) {
-		printerr(1, "gss_accept_sec_context GSS_S_CONTINUE_NEEDED\n");
+		printerr(LL_WARN,
+			 "gss_accept_sec_context GSS_S_CONTINUE_NEEDED\n");
 
 		/* Save the context handle for future calls */
 		snd->out_handle.length = sizeof(snd->ctx);
 		memcpy(snd->out_handle.value, &snd->ctx, sizeof(snd->ctx));
 		return 0;
 	} else if (snd->maj_stat != GSS_S_COMPLETE) {
-		printerr(0, "WARNING: gss_accept_sec_context failed\n");
+		printerr(LL_ERR, "ERROR: gss_accept_sec_context failed\n");
 		pgsserr("handle_krb: gss_accept_sec_context",
 			snd->maj_stat, snd->min_stat, mech);
 		goto out_err;
@@ -707,8 +775,9 @@ static int handle_krb(struct svc_nego_data *snd)
 	/* kernel needs ctx to calculate verifier on null response, so
 	 * must give it context before doing null call: */
 	if (serialize_context_for_kernel(snd->ctx, &snd->ctx_token, mech)) {
-		printerr(0, "WARNING: handle_krb: "
-			 "serialize_context_for_kernel failed\n");
+		printerr(LL_ERR,
+			 "ERROR: %s: serialize_context_for_kernel failed\n",
+			__func__);
 		snd->maj_stat = GSS_S_FAILURE;
 		goto out_err;
 	}
@@ -752,9 +821,9 @@ int handle_channel_request(FILE *f)
 		.ctx			= GSS_C_NO_CONTEXT,
 	};
 
-	printerr(2, "handling request\n");
+	printerr(LL_INFO, "handling request\n");
 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
-		printerr(0, "WARNING: failed reading request\n");
+		printerr(LL_ERR, "ERROR: failed reading request\n");
 		return -1;
 	}
 
@@ -773,8 +842,8 @@ int handle_channel_request(FILE *f)
 			static time_t next_krb;
 
 			if (time(NULL) > next_krb) {
-				printerr(1, "warning: Request for kerberos but "
-					 "service support not enabled\n");
+				printerr(LL_WARN,
+					 "warning: Request for kerberos but service support not enabled\n");
 				next_krb = time(NULL) + 3600;
 			}
 			goto ignore;
@@ -786,8 +855,8 @@ int handle_channel_request(FILE *f)
 			static time_t next_null;
 
 			if (time(NULL) > next_null) {
-				printerr(1, "warning: Request for gssnull but "
-					 "service support not enabled\n");
+				printerr(LL_WARN,
+					 "warning: Request for gssnull but service support not enabled\n");
 				next_null = time(NULL) + 3600;
 			}
 			goto ignore;
@@ -799,8 +868,8 @@ int handle_channel_request(FILE *f)
 			static time_t next_ssk;
 
 			if (time(NULL) > next_ssk) {
-				printerr(1, "warning: Request for SSK but "
-					 "service support not %s\n",
+				printerr(LL_WARN,
+					 "warning: Request for SSK but service support not %s\n",
 #ifdef HAVE_OPENSSL_SSK
 					 "enabled"
 #else
@@ -815,7 +884,7 @@ int handle_channel_request(FILE *f)
 		snd.mech = &skoid;
 		break;
 	default:
-		printerr(0, "WARNING: invalid mechanism recevied: %d\n",
+		printerr(LL_ERR, "WARNING: invalid mechanism recevied: %d\n",
 			 lustre_mech);
 		goto out_err;
 		break;
@@ -824,33 +893,35 @@ int handle_channel_request(FILE *f)
 	qword_get(&cp, (char *)&snd.nid, sizeof(snd.nid));
 	qword_get(&cp, (char *)&snd.handle_seq, sizeof(snd.handle_seq));
 	qword_get(&cp, snd.nm_name, sizeof(snd.nm_name));
-	printerr(2, "handling req: svc %u, nid %016llx, idx %"PRIx64" nodemap "
-		 "%s\n", snd.lustre_svc, snd.nid, snd.handle_seq, snd.nm_name);
+	printerr(LL_INFO,
+		 "handling req: svc %u, nid %016llx, idx %"PRIx64" nodemap %s\n",
+		 snd.lustre_svc, snd.nid, snd.handle_seq, snd.nm_name);
 
 	get_len = qword_get(&cp, snd.in_handle.value, sizeof(in_handle_buf));
 	if (get_len < 0) {
-		printerr(0, "WARNING: failed parsing request\n");
+		printerr(LL_ERR, "ERROR: failed parsing request\n");
 		goto out_err;
 	}
 	snd.in_handle.length = (size_t)get_len;
 
-	printerr(3, "in_handle:\n");
+	printerr(LL_DEBUG, "in_handle:\n");
 	print_hexl(3, snd.in_handle.value, snd.in_handle.length);
 
 	get_len = qword_get(&cp, snd.in_tok.value, sizeof(in_tok_buf));
 	if (get_len < 0) {
-		printerr(0, "WARNING: failed parsing request\n");
+		printerr(LL_ERR, "ERROR: failed parsing request\n");
 		goto out_err;
 	}
 	snd.in_tok.length = (size_t)get_len;
 
-	printerr(3, "in_tok:\n");
+	printerr(LL_DEBUG, "in_tok:\n");
 	print_hexl(3, snd.in_tok.value, snd.in_tok.length);
 
 	if (snd.in_handle.length != 0) { /* CONTINUE_INIT case */
 		if (snd.in_handle.length != sizeof(snd.ctx)) {
-			printerr(0, "WARNING: input handle has unexpected "
-				 "length %zu\n", snd.in_handle.length);
+			printerr(LL_ERR,
+				 "ERROR: input handle has unexpected length %zu\n",
+				 snd.in_handle.length);
 			goto out_err;
 		}
 		/* in_handle is the context id stored in the out_handle
@@ -865,8 +936,8 @@ int handle_channel_request(FILE *f)
 	else if (lustre_mech == LGSS_MECH_NULL)
 		rc = handle_null(&snd);
 	else
-		printerr(0,
-			 "WARNING: Received or request for subflavor that is not enabled: %d\n",
+		printerr(LL_ERR,
+			 "ERROR: Received or request for subflavor that is not enabled: %d\n",
 			 lustre_mech);
 
 out_err:

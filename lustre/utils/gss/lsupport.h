@@ -102,6 +102,9 @@ struct lgssd_upcall_data {
 
 int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
 void cleanup_mapping(void);
+uid_t parse_uid(char *uidstr);
+void load_mapping(void);
+int mapping_empty(void);
 int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid);
 
 #endif /* __LSUPPORT_H__ */

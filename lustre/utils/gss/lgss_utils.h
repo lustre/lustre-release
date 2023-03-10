@@ -45,6 +45,7 @@
 #include <gssapi/gssapi.h>
 
 #include "lsupport.h"
+#include "err_util.h"
 
 #define LGSS_SVC_MGS_STR        "lustre_mgs"
 #define LGSS_SVC_MDS_STR        "lustre_mds"
@@ -75,23 +76,6 @@ int lgss_mutex_unlock(lgss_mutex_id_t mid);
 /****************************************
  * log facilities                       *
  ****************************************/
-
-/*
- * log level:
- * LL_ERR:      critical error messages
- * LL_WARN:     warning (default)
- * LL_INFO:     important infomation
- * LL_DEBUG:    debugging
- * LL_TRACE:    excessive tracing messages
- */
-typedef enum {
-        LL_ERR          = 0,
-        LL_WARN         = 1,
-        LL_INFO         = 2,
-        LL_DEBUG        = 3,
-        LL_TRACE        = 4,
-        LL_MAX
-} loglevel_t;
 
 extern loglevel_t g_log_level;
 

@@ -31,6 +31,23 @@
 #ifndef _ERR_UTIL_H_
 #define _ERR_UTIL_H_
 
+/*
+ * log level:
+ * LL_ERR:      critical error messages
+ * LL_WARN:     warning (default)
+ * LL_INFO:     important infomation
+ * LL_DEBUG:    debugging
+ * LL_TRACE:    excessive tracing messages
+ */
+typedef enum {
+	LL_ERR		= 0,
+	LL_WARN		= 1,
+	LL_INFO		= 2,
+	LL_DEBUG	= 3,
+	LL_TRACE	= 4,
+	LL_MAX
+} loglevel_t;
+
 void initerr(char *progname, int verbosity, int fg);
 void printerr(int priority, char *format, ...)
 	      __attribute__((__format__(__printf__, 2, 3)));

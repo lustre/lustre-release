@@ -34,6 +34,7 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 #include <gssapi/gssapi.h>
+#include "lsupport.h"
 
 int handle_channel_request(FILE *f);
 void svcgssd_run(void);

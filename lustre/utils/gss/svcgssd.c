@@ -101,13 +101,13 @@ mydaemon(int nochdir, int noclose)
 	int pid, status, tempfd;
 
 	if (pipe(pipefds) < 0) {
-		printerr(1, "mydaemon: pipe() failed: errno %d (%s)\n",
-			errno, strerror(errno));
+		printerr(LL_ERR, "%s: pipe() failed: errno %d (%s)\n",
+			 __func__, errno, strerror(errno));
 		exit(1);
 	}
 	if ((pid = fork ()) < 0) {
-		printerr(1, "mydaemon: fork() failed: errno %d (%s)\n",
-			errno, strerror(errno));
+		printerr(LL_ERR, "%s: fork() failed: errno %d (%s)\n",
+			 __func__, errno, strerror(errno));
 		exit(1);
 	}
 
@@ -125,8 +125,9 @@ mydaemon(int nochdir, int noclose)
 	setsid ();
 	if (nochdir == 0) {
 		if (chdir ("/") == -1) {
-			printerr(1, "mydaemon: chdir() failed: errno %d (%s)\n",
-				errno, strerror(errno));
+			printerr(LL_ERR,
+				 "%s: chdir() failed: errno %d (%s)\n",
+				 __func__, errno, strerror(errno));
 			exit(1);
 		}
 	}
@@ -134,8 +135,8 @@ mydaemon(int nochdir, int noclose)
 	while (pipefds[1] <= 2) {
 		pipefds[1] = dup(pipefds[1]);
 		if (pipefds[1] < 0) {
-			printerr(1, "mydaemon: dup() failed: errno %d (%s)\n",
-				errno, strerror(errno));
+			printerr(LL_ERR, "%s: dup() failed: errno %d (%s)\n",
+				 __func__, errno, strerror(errno));
 			exit(1);
 		}
 	}
@@ -167,7 +168,7 @@ sig_die(int signal)
 {
 	/* destroy krb5 machine creds */
 	cleanup_mapping();
-	printerr(1, "exiting on signal %d\n", signal);
+	printerr(LL_WARN, "exiting on signal %d\n", signal);
 	exit(1);
 }
 
@@ -175,7 +176,7 @@ void
 sig_hup(int signal)
 {
 	/* don't exit on SIGHUP */
-	printerr(1, "Received SIGHUP... Ignoring.\n");
+	printerr(LL_WARN, "Received SIGHUP... Ignoring.\n");
 }
 
 static void
@@ -276,22 +277,23 @@ main(int argc, char *argv[])
 	/* For kerberos use gss mechanisms but ignore for sk and null */
 	if (krb_enabled) {
 		if (gssd_check_mechs()) {
-			printerr(0, "ERROR: problem with gssapi library\n");
+			printerr(LL_ERR,
+				 "ERROR: problem with gssapi library\n");
 			exit(1);
 		}
 		if (gssd_get_local_realm()) {
-			printerr(0, "ERROR: Can't get Local Kerberos realm\n");
+			printerr(LL_ERR,
+				 "ERROR: Can't get Local Kerberos realm\n");
 			exit(1);
 		}
 
 		if (get_creds &&
 		    gssd_prepare_creds(must_srv_mgs, must_srv_mds,
 				       must_srv_oss)) {
-			printerr(0, "unable to obtain root (machine) "
-				 "credentials\n");
-			printerr(0, "do you have a keytab entry for "
-				 "<lustre_xxs>/<your.host>@<YOUR.REALM> in "
-				 "/etc/krb5.keytab?\n");
+			printerr(LL_ERR,
+				 "unable to obtain root (machine) credentials\n");
+			printerr(LL_ERR,
+				 "do you have a keytab entry for <lustre_xxs>/<your.host>@<YOUR.REALM> in /etc/krb5.keytab?\n");
 			exit(1);
 		}
 	}
@@ -314,6 +316,6 @@ main(int argc, char *argv[])
 
 	svcgssd_run();
 	cleanup_mapping();
-	printerr(0, "gssd_run returned!\n");
+	printerr(LL_ERR, "svcgssd_run returned!\n");
 	abort();
 }

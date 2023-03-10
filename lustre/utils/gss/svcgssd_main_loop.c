@@ -78,11 +78,15 @@ svcgssd_run()
 		sk_dh_checks =
 			sk_speedtest_dh_valid(MAX_ALLOWED_TIME_FOR_PRIME);
 		if (sk_dh_checks)
-			printerr(1, "will use %d rounds for prime testing\n",
+			printerr(LL_WARN,
+				 "will use %d rounds for prime testing\n",
 				 sk_dh_checks);
 #else
 		sk_dh_checks = 0;
 #endif
+	} else {
+		/* For krb, preload mapping table if any */
+		load_mapping();
 	}
 
 	while (1) {
@@ -91,11 +95,11 @@ svcgssd_run()
 		while (f == NULL) {
 			f = fopen(gss_rpc_channel_path, "r+");
 			if (f == NULL) {
-				printerr(4, "failed to open %s: %s\n",
+				printerr(LL_TRACE, "failed to open %s: %s\n",
 					 gss_rpc_channel_path, strerror(errno));
 				nanosleep(&halfsec, NULL);
 			} else {
-				printerr(1, "successfully open %s\n",
+				printerr(LL_WARN, "successfully open %s\n",
 					 gss_rpc_channel_path);
 				break;
 			}
@@ -108,16 +112,17 @@ svcgssd_run()
 		save_err = errno;
 
 		if (ret < 0) {
-			printerr(0, "error return from poll: %s\n",
+			printerr(LL_ERR, "error return from poll: %s\n",
 				 strerror(save_err));
 			fclose(f);
 			f = NULL;
 		} else if (ret == 0) {
-			printerr(4, "poll timeout\n");
+			printerr(LL_TRACE, "poll timeout\n");
 		} else {
 			if (ret != 1) {
-				printerr(0, "bug: unexpected poll return %d\n",
-						ret);
+				printerr(LL_ERR,
+					 "bug: unexpected poll return %d\n",
+					 ret);
 				exit(1);
 			}
 			if (pollfd.revents & POLLIN) {
