@@ -2247,6 +2247,7 @@ EXPORT_SYMBOL(obd_mod_rpc_stats_seq_show);
 struct mod_waiter {
 	struct client_obd *cli;
 	bool close_req;
+	bool woken;
 	wait_queue_entry_t wqe;
 };
 static int claim_mod_rpc_function(wait_queue_entry_t *wq_entry,
@@ -2259,10 +2260,9 @@ static int claim_mod_rpc_function(wait_queue_entry_t *wq_entry,
 	int ret;
 
 	/* As woken_wake_function() doesn't remove us from the wait_queue,
-	 * we could get called twice for the same thread - take care.
+	 * we use own flag to ensure we're called just once.
 	 */
-	if (wq_entry->flags & WQ_FLAG_WOKEN)
-		/* Already woke this thread, don't try again */
+	if (w->woken)
 		return 0;
 
 	/* A slot is available if
@@ -2276,6 +2276,7 @@ static int claim_mod_rpc_function(wait_queue_entry_t *wq_entry,
 		if (w->close_req)
 			cli->cl_close_rpcs_in_flight++;
 		ret = woken_wake_function(wq_entry, mode, flags, key);
+		w->woken = true;
 	} else if (cli->cl_close_rpcs_in_flight)
 		/* No other waiter could be woken */
 		ret = -1;
@@ -2303,6 +2304,7 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 	struct mod_waiter wait = {
 		.cli = cli,
 		.close_req = (opc == MDS_CLOSE),
+		.woken = false,
 	};
 	__u16			i, max;
 
@@ -2316,7 +2318,8 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 	 * and there will be no need to wait.
 	 */
 	wake_up_locked(&cli->cl_mod_rpcs_waitq);
-	if (!(wait.wqe.flags & WQ_FLAG_WOKEN)) {
+	/* XXX: handle spurious wakeups (from unknown yet source */
+	while (wait.woken == false) {
 		spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
 		wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
 			   MAX_SCHEDULE_TIMEOUT);

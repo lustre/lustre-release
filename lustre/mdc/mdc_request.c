@@ -2959,6 +2959,8 @@ static int mdc_precleanup(struct obd_device *obd)
 
 static int mdc_cleanup(struct obd_device *obd)
 {
+	struct client_obd *cli = &obd->u.cli;
+	LASSERT(cli->cl_mod_rpcs_in_flight == 0);
 	return osc_cleanup_common(obd);
 }
 
