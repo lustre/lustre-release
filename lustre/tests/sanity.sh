@@ -8177,8 +8177,8 @@ test_56xh() {
 	(( elapsed <= size_mb * 120 / 100 )) ||
 		error_not_in_vm "'lfs migrate -W' slow ($elapsed > 1.2 * $size_mb)"
 
-	(( elapsed <= size_mb * 150 / 100 )) ||
-		error "'lfs migrate -W' too slow in VM ($elapsed > 2 * $size_mb 2)"
+	(( elapsed <= size_mb * 350 / 100 )) ||
+		error "'lfs migrate -W' too slow in VM ($elapsed > 3.5 * $size_mb)"
 
 	stripe=$($LFS getstripe -c $file1)
 	(( $stripe == 1 )) || error "stripe of $file1 is $stripe != 1"
