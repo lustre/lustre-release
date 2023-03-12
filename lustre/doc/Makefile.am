@@ -55,7 +55,8 @@ MANFILES =					\
 	lfs-getname.1				\
 	lfs-getsom.1				\
 	lfs-getstripe.1				\
-	lfs-heat.1				\
+	lfs-heat_get.1				\
+	lfs-heat_set.1				\
 	lfs-hsm.1				\
 	lfs-hsm_action.1			\
 	lfs-hsm_clear.1				\
@@ -76,6 +77,7 @@ MANFILES =					\
 	lfs-mkdir.1				\
 	lfs-path2fid.1				\
 	lfs-pcc-detach.1			\
+	lfs-pcc-state.1				\
 	lfs-pcc.1				\
 	lfs-project.1				\
 	lfs-quota.1				\
