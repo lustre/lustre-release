@@ -785,9 +785,9 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with shared}
 %{_libdir}/liblustreapi.so.*
 %endif
-%{_sysconfdir}/udev/rules.d/99-lustre.rules
+%{_udevrulesdir}/99-lustre.rules
 %if %{with servers}
-%{_sysconfdir}/udev/rules.d/99-lustre-server.rules
+%{_udevrulesdir}/99-lustre-server.rules
 %endif
 %if %{with zfs}
 %config(noreplace) %{_sysconfdir}/ldev.conf

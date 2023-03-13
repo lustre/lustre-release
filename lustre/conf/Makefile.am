@@ -47,7 +47,7 @@ endif
 
 firewallddir = ${prefix}/lib/firewalld/services
 firewalld_DATA = lustre.xml
-udevrulesdir = $(sysconfdir)/udev/rules.d
+udevrulesdir = $(prefix)/lib/udev/rules.d
 udevrules_DATA = 99-lustre.rules
 
 if SERVER
