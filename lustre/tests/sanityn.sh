@@ -3491,9 +3491,9 @@ test_55d()
 	mkdir -p $DIR2/$tdir/$tdir || error "(1) mkdir failed"
 
 	# link in reverse locking order
-	ln $DIR2/$tdir/f1 $DIR2/$tdir/$tdir/
+	ln $DIR2/$tdir/f1 $DIR2/$tdir/$tdir/f1 || error "(2) ln failed"
 
-	wait $PID1 && error "(2) mv succeeded"
+	! wait $PID1 || error "(3) mv succeeded"
 	rm -rf $DIR/$tdir
 }
 run_test 55d "rename file vs link"
