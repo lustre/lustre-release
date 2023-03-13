@@ -3731,6 +3731,19 @@ test_31k() {
 }
 run_test 31k "link to file: the same, non-existing, dir==============="
 
+test_31l() {
+	local ln_ver=$(ln --version | awk '/coreutils/ { print $4 }')
+
+	(( $(version_code $ln_ver) < $(version_code 8.31) )) ||
+	(( $(version_code $(uname -r)) >= $(version_code 5.18) )) ||
+		skip "need coreutils < 8.31 or kernel >= 5.18 for ln"
+
+	touch $DIR/$tfile || error "create failed"
+	mkdir $DIR/$tdir || error "mkdir failed"
+	ln $DIR/$tfile $DIR/$tdir/ || error "ln to '$tdir/' failed"
+}
+run_test 31l "link to file: target dir has trailing slash"
+
 test_31m() {
         mkdir $DIR/d31m
         touch $DIR/d31m/s
