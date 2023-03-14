@@ -1306,7 +1306,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags);
 void ll_update_dir_depth(struct inode *dir, struct inode *inode);
 int ll_read_inode2(struct inode *inode, void *opaque);
-void ll_truncate_inode_pages_final(struct inode *inode);
+void ll_truncate_inode_pages_final(struct inode *inode, struct cl_io *io);
 void ll_delete_inode(struct inode *inode);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);

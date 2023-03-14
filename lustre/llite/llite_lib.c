@@ -2863,11 +2863,14 @@ void ll_update_dir_depth(struct inode *dir, struct inode *inode)
 	       PFID(&lli->lli_fid), lli->lli_dir_depth, lli->lli_inherit_depth);
 }
 
-void ll_truncate_inode_pages_final(struct inode *inode)
+void ll_truncate_inode_pages_final(struct inode *inode, struct cl_io *io)
 {
 	struct address_space *mapping = &inode->i_data;
 	unsigned long nrpages;
 	unsigned long flags;
+
+	LASSERTF(io == NULL || inode_is_locked(inode), "io %p (type %d)\n",
+		 io, io ? io->ci_type : 0);
 
 	truncate_inode_pages_final(mapping);
 
@@ -2885,10 +2888,12 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 	} /* Workaround end */
 
-	LASSERTF(nrpages == 0, "%s: inode="DFID"(%p) nrpages=%lu, "
+	LASSERTF(nrpages == 0, "%s: inode="DFID"(%p) nrpages=%lu "
+		 "io %p (io_type %d), "
 		 "see https://jira.whamcloud.com/browse/LU-118\n",
 		 ll_i2sbi(inode)->ll_fsname,
-		 PFID(ll_inode2fid(inode)), inode, nrpages);
+		 PFID(ll_inode2fid(inode)), inode, nrpages,
+		 io, io ? io->ci_type : 0);
 }
 
 int ll_read_inode2(struct inode *inode, void *opaque)
@@ -2962,7 +2967,7 @@ void ll_delete_inode(struct inode *inode)
 				   CL_FSYNC_LOCAL : CL_FSYNC_DISCARD, 1);
 	}
 
-	ll_truncate_inode_pages_final(inode);
+	ll_truncate_inode_pages_final(inode, NULL);
 	ll_clear_inode(inode);
 	clear_inode(inode);
 

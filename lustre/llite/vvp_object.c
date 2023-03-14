@@ -155,6 +155,7 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 
 static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 {
+	struct cl_io *io = vvp_env_io(env)->vui_cl.cis_io;
 	struct inode *inode = vvp_object_inode(obj);
 	int rc;
 	ENTRY;
@@ -166,8 +167,14 @@ static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 		RETURN(rc);
 	}
 
-	ll_truncate_inode_pages_final(inode);
+	if (io != NULL)
+		inode_lock(inode);
+
+	ll_truncate_inode_pages_final(inode, io);
 	mapping_clear_exiting(inode->i_mapping);
+
+	if (io != NULL)
+		inode_unlock(inode);
 
 	RETURN(0);
 }
