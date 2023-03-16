@@ -5103,6 +5103,49 @@ test_60() {
 }
 run_test 60 "Subdirmount of encrypted dir"
 
+setup_61() {
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+
+	do_facet mgs $LCTL nodemap_del c0 || true
+	wait_nm_sync c0 id ''
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+	do_facet mgs $LCTL nodemap_add c0
+	do_facet mgs $LCTL nodemap_add_range \
+		 --name c0 --range $client_nid
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property trusted --value 1
+	wait_nm_sync c0 admin_nodemap
+	wait_nm_sync c0 trusted_nodemap
+}
+
+cleanup_61() {
+	do_facet mgs $LCTL nodemap_del c0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property trusted --value 0
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active 0
+
+	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
+	wait_ssk
+}
+
 test_61() {
 	local testfile=$DIR/$tdir/$tfile
 	local readonly
@@ -5112,23 +5155,20 @@ test_61() {
 	[ -n "$readonly" ] ||
 		skip "Server does not have readonly_mount nodemap flag"
 
-	stack_trap cleanup_nodemap_after_enc_tests EXIT
+	stack_trap cleanup_61 EXIT
 	umount_client $MOUNT || error "umount $MOUNT failed (1)"
 
 	# Activate nodemap, and mount rw.
-	# Should succeed as rw mount is not forbidden on default nodemap
-	# by default.
-	do_facet mgs $LCTL nodemap_activate 1
-	wait_nm_sync active
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
+	# Should succeed as rw mount is not forbidden by default.
+	setup_61
 	readonly=$(do_facet mgs \
 			lctl get_param -n nodemap.default.readonly_mount)
-	[ $readonly -eq 0 ] || error "wrong default value for readonly_mount"
+	[ $readonly -eq 0 ] ||
+		error "wrong default value for readonly_mount on default nodemap"
+	readonly=$(do_facet mgs \
+			lctl get_param -n nodemap.c0.readonly_mount)
+	[ $readonly -eq 0 ] ||
+		error "wrong default value for readonly_mount on nodemap c0"
 
 	mount_client $MOUNT ${MOUNT_OPTS},rw ||
 		error "mount '-o rw' failed with default"
@@ -5140,9 +5180,9 @@ test_61() {
 	umount_client $MOUNT || error "umount $MOUNT failed (2)"
 
 	# Now enforce read-only, and retry.
-	do_facet mgs $LCTL nodemap_modify --name default \
+	do_facet mgs $LCTL nodemap_modify --name c0 \
 		--property readonly_mount --value 1
-	wait_nm_sync default readonly_mount
+	wait_nm_sync c0 readonly_mount
 	mount_client $MOUNT ${MOUNT_OPTS} ||
 		error "mount failed"
 	findmnt $MOUNT --output=options -n -f | grep -q "ro," ||
