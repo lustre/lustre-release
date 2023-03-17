@@ -2662,6 +2662,7 @@ enum lov_dump_flags {
 	LDF_SKIP_OBJS	= 0x0008,
 	LDF_YAML	= 0x0010,
 	LDF_EXTENSION	= 0x0020,
+	LDF_HEX_IDX	= 0x0040,
 };
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
@@ -2679,6 +2680,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
 	char *space = indent ? "      " : "";
+	char *fmt_idx = flags & LDF_HEX_IDX ? "%#x" : "%d";
 	int rc;
 
 	if (is_dir && lmm_oi_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
@@ -2858,14 +2860,16 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_offset: ",
 				     space, prefix);
 		if (is_dir || skip_objs)
-			llapi_printf(LLAPI_MSG_NORMAL, "%d",
-				     lum->lmm_stripe_offset ==
-				     (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
-				     lum->lmm_stripe_offset);
+			if (lum->lmm_stripe_offset ==
+			    (typeof(lum->lmm_stripe_offset))(-1))
+				llapi_printf(LLAPI_MSG_NORMAL, "-1");
+			else
+				llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
+					     lum->lmm_stripe_offset);
 		else if (lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)
 			llapi_printf(LLAPI_MSG_NORMAL, "0");
 		else
-			llapi_printf(LLAPI_MSG_NORMAL, "%u",
+			llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
 				     objects[0].l_ost_idx);
 		if (!yaml && is_dir)
 			separator = " ";
@@ -2900,6 +2904,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	bool indent = flags & LDF_INDENT;
 	bool skip_objs = flags & LDF_SKIP_OBJS;
 	bool yaml = flags & LDF_YAML;
+	bool hex = flags & LDF_HEX_IDX;
 	bool obdstripe = obdindex == OBD_NOT_FOUND;
 	int i;
 
@@ -2942,10 +2947,11 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 
 			if (yaml) {
 				struct lu_fid fid = { 0 };
-
 				ostid_to_fid(&fid, &objects[i].l_ost_oi, idx);
 				llapi_printf(LLAPI_MSG_NORMAL,
-				    "%sl_ost_idx: %d\n", space, idx);
+					     hex ? "%sl_ost_idx: %#x\n"
+						 : "%sl_ost_idx: %d\n",
+					     space, idx);
 				llapi_printf(LLAPI_MSG_NORMAL,
 				    "%8sl_fid:     "DFID_NOBRACE"\n",
 				    " ", PFID(&fid));
@@ -2953,14 +2959,16 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 				struct lu_fid fid = { 0 };
 
 				ostid_to_fid(&fid, &objects[i].l_ost_oi, idx);
-				llapi_printf(LLAPI_MSG_NORMAL,
-				    "%s%d: { l_ost_idx: %d, l_fid: "DFID" }\n",
+				llapi_printf(LLAPI_MSG_NORMAL, hex ?
+				    "%s%3d: { l_ost_idx: %#5x, l_fid: "DFID" }\n" :
+				    "%s%3d: { l_ost_idx: %3d, l_fid: "DFID" }\n",
 				    space, i, idx, PFID(&fid));
 			} else {
-				char fmt[48];
+				char fmt[48] = { 0 };
 
 				sprintf(fmt, "%s%s%s\n",
-					"\t%6u\t%14llu\t%#13llx\t",
+					hex ? "\t%#6x\t%14llu\t%#13llx\t"
+					    : "\t%6u\t%14llu\t%#13llx\t",
 					(fid_seq_is_rsvd(gr) ||
 					 fid_seq_is_mdt0(gr)) ?
 					 "%14llu" : "%#14llx", "%s");
@@ -2982,6 +2990,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	char *prefix = lum->lum_magic == LMV_USER_MAGIC ? "(Default)" : "";
 	char *separator = "";
 	bool yaml = flags & LDF_YAML;
+	bool hex = flags & LDF_HEX_IDX;
 	bool obdstripe = false;
 	int i;
 
@@ -3035,7 +3044,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_STRIPE_OFFSET)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_offset: ");
-		llapi_printf(LLAPI_MSG_NORMAL, "%d",
+		llapi_printf(LLAPI_MSG_NORMAL, hex ? "%#x" : "%d",
 			     (int)lum->lum_stripe_offset);
 		if (verbose & VERBOSE_HASH_TYPE && !yaml)
 			separator = " ";
@@ -3116,13 +3125,16 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		if (lum->lum_stripe_count > 0)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "mdtidx\t\t FID[seq:oid:ver]\n");
+
+		char fmt[48] = { 0 };
+		sprintf(fmt, "%s%s", hex ? "%#6x" : "%6u",
+			"\t\t "DFID"\t\t%s\n");
 		for (i = 0; i < lum->lum_stripe_count; i++) {
 			int idx = objects[i].lum_mds;
 			struct lu_fid *fid = &objects[i].lum_fid;
 
 			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
-				llapi_printf(LLAPI_MSG_NORMAL,
-					     "%6u\t\t "DFID"\t\t%s\n",
+				llapi_printf(LLAPI_MSG_NORMAL, fmt,
 					    idx, PFID(fid),
 					    obdindex == idx ? " *" : "");
 		}
@@ -3862,6 +3874,8 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 		flags |= LDF_IS_RAW;
 	if (param->fp_yaml)
 		flags |= LDF_YAML;
+	if (param->fp_hex_idx)
+		flags |= LDF_HEX_IDX;
 
 	switch (magic) {
 	case LOV_USER_MAGIC_V1:
@@ -6035,6 +6049,7 @@ static int cb_get_mdt_index(char *path, int p, int *dp, void *data,
 	int d = dp == NULL ? -1 : *dp;
 	int ret;
 	int mdtidx;
+	bool hex = param->fp_hex_idx;
 
 	if (p == -1 && d == -1)
 		return -EINVAL;
@@ -6077,9 +6092,10 @@ static int cb_get_mdt_index(char *path, int p, int *dp, void *data,
 	}
 
 	if (param->fp_quiet || !(param->fp_verbose & VERBOSE_DETAIL))
-		llapi_printf(LLAPI_MSG_NORMAL, "%d\n", mdtidx);
+		llapi_printf(LLAPI_MSG_NORMAL, hex ? "%#x\n" : "%d\n", mdtidx);
 	else
-		llapi_printf(LLAPI_MSG_NORMAL, "%s\nmdt_index:\t%d\n",
+		llapi_printf(LLAPI_MSG_NORMAL, hex ? "%s\nmdt_index:\t%#x\n"
+						   : "%s\nmdt_index:\t%d\n",
 			     path, mdtidx);
 
 out:

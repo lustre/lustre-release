@@ -370,7 +370,8 @@ command_t cmdlist[] = {
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
 	 "		   [--mdt-index|-m] [--recursive|-r] [--raw|-R]\n"
 	 "		   [--layout|-L] [--generation|-g] [--yaml|-y]\n"
-	 "		   [--help|-h] [--component-id|-I[=COMP_ID]]\n"
+	 "		   [--help|-h] [--hex-idx]\n"
+	 "		   [--component-id|-I[=COMP_ID]]\n"
 	 "		   [--component-flags[=COMP_FLAGS]]\n"
 	 "		   [--component-count]\n"
 	 "		   [--extension-size|--ext-size|-z]\n"
@@ -389,8 +390,8 @@ command_t cmdlist[] = {
 	 "To list the layout pattern info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
-	 "		      [--help|-h] [--mdt-hash|-H] [--obd|-O UUID]\n"
-	 "		      [--recursive|-r] [--yaml|-y]\n"
+	 "		      [--help|-h] [--hex-idx] [--mdt-hash|-H]\n"
+	 "		      [--obd|-O UUID] [--recursive|-r] [--yaml|-y]\n"
 	 "		      [--verbose|-v] [--default|-D]\n"
 	 "		      [--max-inherit|-X]\n"
 	 "		      [--max-inherit-rr] <dir> ..."},
@@ -3522,6 +3523,7 @@ enum {
 	LFS_FIND_PERM,
 	LFS_PRINTF_OPT,
 	LFS_NO_FOLLOW_OPT,
+	LFS_HEX_IDX_OPT,
 	LFS_STATS_OPT,
 	LFS_STATS_INTERVAL_OPT
 };
@@ -5983,12 +5985,6 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			.name = "comp-start",	.has_arg = optional_argument },
 	{ .val = LFS_COMP_START_OPT,
 		.name = "component-start",	.has_arg = optional_argument },
-	{ .val = LFS_MIRROR_INDEX_OPT,
-		.name = "mirror-index",		.has_arg = required_argument },
-	{ .val = LFS_MIRROR_ID_OPT,
-		.name = "mirror-id",		.has_arg = required_argument },
-	{ .val = LFS_NO_FOLLOW_OPT,
-		.name = "no-follow",		.has_arg = no_argument },
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = no_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = no_argument },
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
@@ -6000,6 +5996,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'g',	.name = "generation",	.has_arg = no_argument },
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = LFS_HEX_IDX_OPT,
+			.name = "hex-idx",	.has_arg = no_argument },
 /* dirstripe { .val = 'H', .name = "mdt-hash",	.has_arg = required_argument }*/
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = no_argument },
@@ -6013,6 +6011,12 @@ static int lfs_getstripe_internal(int argc, char **argv,
 /* find	{ .val = 'M',	.name = "mtime",	.has_arg = required_argument }*/
 /* find	{ .val = 'n',	.name = "name",		.has_arg = required_argument }*/
 	{ .val = 'N',	.name = "mirror-count",	.has_arg = no_argument },
+	{ .val = LFS_MIRROR_INDEX_OPT,
+			.name = "mirror-index",	.has_arg = required_argument },
+	{ .val = LFS_MIRROR_ID_OPT,
+			.name = "mirror-id",	.has_arg = required_argument },
+	{ .val = LFS_NO_FOLLOW_OPT,
+			.name = "no-follow",	.has_arg = no_argument },
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = no_argument },
@@ -6186,6 +6190,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		}
 		case LFS_NO_FOLLOW_OPT:
 			param->fp_no_follow = true;
+			break;
+		case LFS_HEX_IDX_OPT:
+			param->fp_hex_idx = true;
 			break;
 		case 'd':
 			param->fp_max_depth = 0;
@@ -6427,6 +6434,8 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .val = 'D',	.name = "default",	 .has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	 .has_arg = no_argument },
+	{ .val = LFS_HEX_IDX_OPT,
+			.name = "hex-idx",	 .has_arg = no_argument },
 	{ .val = 'i',	.name = "mdt-index",	 .has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt-index",	 .has_arg = no_argument },
 	{ .val = 'O',	.name = "obd",		 .has_arg = required_argument },
@@ -6434,9 +6443,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .val = 'T',	.name = "mdt-count",	 .has_arg = no_argument },
 	{ .val = 'v',	.name = "verbose",	 .has_arg = no_argument },
 	{ .val = 'X',	.name = "max-inherit",	 .has_arg = no_argument },
-	{ .val = 'y',	.name = "yaml",		 .has_arg = no_argument },
 	{ .val = LFS_INHERIT_RR_OPT,
 			.name = "max-inherit-rr", .has_arg = no_argument },
+	{ .val = 'y',	.name = "yaml",		 .has_arg = no_argument },
 	{ .name = NULL } };
 	int c, rc = 0;
 
@@ -6460,6 +6469,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 #endif
 		case 'H':
 			param.fp_verbose |= VERBOSE_HASH_TYPE;
+			break;
+		case LFS_HEX_IDX_OPT:
+			param.fp_hex_idx = 1;
 			break;
 		case 'i':
 			fallthrough;

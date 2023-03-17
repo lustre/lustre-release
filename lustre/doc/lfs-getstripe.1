@@ -13,6 +13,7 @@ lfs-getstripe \- Lustre client command to print layout parameters of a file
 [\fB--fid\fR|\fB-F\fR]
 [\fB--generation\fR|\fB-g\fR]
 [\fB--help\fR|\fB-h\fR]
+[\fB--hex-idx\fR]
       [\fB--layout\fR|\fB-L\fR]
 [\fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR]
 [\fB--ost\fR|\fB-O\fR <\fIuuid\fR>]
@@ -159,6 +160,9 @@ Print only the layout generation number.
 .TP
 .BR --help | -h
 Print usage message.
+.TP
+.BR --hex-idx
+Print OST and MDT indexes in hexademical rather than decimal.
 .TP
 .BR --layout
 Show only the file layout, which is one of:

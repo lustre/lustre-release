@@ -8699,6 +8699,32 @@ test_56eb() {
 }
 run_test 56eb "check lfs getstripe on symlink"
 
+test_56ec() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	local dir=$DIR/$tdir
+	local srcfile=$dir/srcfile
+	local srcyaml=$dir/srcyaml
+	local destfile=$dir/destfile
+
+	test_mkdir -p $dir
+
+	$LFS setstripe -i 1 $srcfile
+	$LFS getstripe --hex-idx --yaml $srcfile > $srcyaml
+	# if the setstripe yaml parsing fails for any reason, the command can
+	# randomly assign the correct OST index, leading to an erroneous
+	# success. but the chance of false success is low enough that a
+	# regression should still be quickly caught.
+	$LFS setstripe --yaml=$srcyaml $destfile
+
+	local srcindex=$($LFS getstripe -i $srcfile)
+	local destindex=$($LFS getstripe -i $destfile)
+
+	if [[ ! $srcindex -eq $destindex ]]; then
+		error "setstripe did not set OST index correctly"
+	fi
+}
+run_test 56ec "check lfs getstripe,setstripe --hex --yaml"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

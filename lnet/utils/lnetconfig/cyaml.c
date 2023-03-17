@@ -348,6 +348,23 @@ static bool parse_number(struct cYAML *item, const char *input)
 	int subscale = 0, signsubscale = 1;
 	const char *num = input;
 
+	if (!strncmp(input, "0x", 2)) {
+		int64_t hex; /* hex input is always an integer */
+		char *invalid = NULL;
+
+		errno = 0;
+		hex = strtoll(input, &invalid, 16);
+		if (errno)
+			return false;
+		if (*invalid)
+			return false;
+
+		item->cy_valuedouble = (double) hex;
+		item->cy_valueint = hex;
+		item->cy_type = CYAML_TYPE_NUMBER;
+		return true;
+	}
+
 	if (*num == '-') {
 		sign = -1;
 		num++;

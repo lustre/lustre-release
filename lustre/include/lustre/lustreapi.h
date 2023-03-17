@@ -398,7 +398,8 @@ struct find_param {
 
 	unsigned long		 fp_got_uuids:1,
 				 fp_obds_printed:1,
-				 fp_no_follow:1;
+				 fp_no_follow:1,
+				 fp_hex_idx:1;
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
 	unsigned int		 fp_time_margin; /* time margin in seconds */
