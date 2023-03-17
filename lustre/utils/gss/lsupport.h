@@ -80,8 +80,6 @@ enum {
 	LGSS_SVC_AUTH		= 0x20,
 	LGSS_SVC_INTG		= 0x40,
 	LGSS_SVC_PRIV		= 0x80,
-	/* Number of sec part flags */
-	LGSS_ROOT_CRED_NR       = 3,
 };
 
 struct lgssd_upcall_data {

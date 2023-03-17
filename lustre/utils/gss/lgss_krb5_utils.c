@@ -123,9 +123,7 @@
 #include <errno.h>
 #include <time.h>
 #include <gssapi/gssapi.h>
-#ifdef USE_PRIVATE_KRB5_FUNCTIONS
 #include <gssapi/gssapi_krb5.h>
-#endif
 #include <krb5.h>
 
 #include "lsupport.h"
@@ -150,7 +148,6 @@ static void lgss_krb5_mutex_unlock(void)
 
 #define krb5_err_msg(code)      error_message(code)
 
-const char *krb5_cc_type_file   = "FILE:";
 const char *krb5_cred_root_suffix  = "lustre_root";
 const char *krb5_cred_mds_suffix   = "lustre_mds";
 const char *krb5_cred_oss_suffix   = "lustre_oss";
@@ -166,31 +163,18 @@ struct lgss_krb5_cred {
         int             kc_remove;        /* remove cache upon release */
 };
 
-static
-int lgss_krb5_set_ccache_name(const char *ccname)
+static int lgss_krb5_set_ccache_name(const char *ccname)
 {
-#ifdef USE_GSS_KRB5_CCACHE_NAME
-        unsigned int    maj_stat, min_stat;
+	unsigned int	maj_stat, min_stat;
 
-        maj_stat = gss_krb5_ccache_name(&min_stat, ccname, NULL);
-        if (maj_stat != GSS_S_COMPLETE) {
-                logmsg(LL_ERR, "failed to set ccache name\n");
-                return -1;
-        }
-#else
-        /*
-         * Set the KRB5CCNAME environment variable to tell the krb5 code
-         * which credentials cache to use.  (Instead of using the private
-         * function above for which there is no generic gssapi equivalent)
-         */
-        if (setenv("KRB5CCNAME", ccname, 1)) {
-                logmsg(LL_ERR, "set env of krb5 ccname: %s\n",
-                       strerror(errno));
-                return -1;
-        }
-#endif
-        logmsg(LL_DEBUG, "set cc: %s\n", ccname);
-        return 0;
+	maj_stat = gss_krb5_ccache_name(&min_stat, ccname, NULL);
+	if (maj_stat != GSS_S_COMPLETE) {
+		logmsg(LL_ERR, "failed to set ccache name\n");
+		return -1;
+	}
+
+	logmsg(LL_DEBUG, "set cc: %s\n", ccname);
+	return 0;
 }
 
 static
@@ -281,73 +265,67 @@ int svc_princ_verify_host(krb5_context ctx,
 	return 0;
 }
 
-static
-int lkrb5_cc_check_tgt_princ(krb5_context ctx,
+static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 			     krb5_ccache ccache,
 			     krb5_principal princ,
 			     unsigned int flag,
 			     uint64_t self_nid)
 {
-        const char     *princ_name;
+	const char     *princ_name;
 
-        logmsg(LL_DEBUG, "principal: realm %.*s, type %d, size %d, name %.*s\n",
-               krb5_princ_realm(ctx, princ)->length,
-               krb5_princ_realm(ctx, princ)->data,
-               krb5_princ_type(ctx, princ),
-               krb5_princ_size(ctx, princ),
-               krb5_princ_name(ctx, princ)->length,
-               krb5_princ_name(ctx, princ)->data);
+	logmsg(LL_DEBUG, "principal: realm %.*s, type %d, size %d, name %.*s\n",
+	       krb5_princ_realm(ctx, princ)->length,
+	       krb5_princ_realm(ctx, princ)->data,
+	       krb5_princ_type(ctx, princ),
+	       krb5_princ_size(ctx, princ),
+	       krb5_princ_name(ctx, princ)->length,
+	       krb5_princ_name(ctx, princ)->data);
 
-        /* check type */
-        if (krb5_princ_type(ctx, princ) != KRB5_NT_PRINCIPAL) {
-                logmsg(LL_WARN, "principal type %d is not I want\n",
-                       krb5_princ_type(ctx, princ));
-                return -1;
-        }
+	/* check type */
+	if (krb5_princ_type(ctx, princ) != KRB5_NT_PRINCIPAL) {
+		logmsg(LL_WARN, "principal type %d is not I want\n",
+		       krb5_princ_type(ctx, princ));
+		return -1;
+	}
 
-        /* check local realm */
-        if (!princ_is_local_realm(ctx, princ)) {
-                logmsg(LL_WARN, "principal realm %.*s not local: %s\n",
-                       krb5_princ_realm(ctx, princ)->length,
-                       krb5_princ_realm(ctx, princ)->data,
-                       krb5_this_realm);
-                return -1;
-        }
+	/* check local realm */
+	if (!princ_is_local_realm(ctx, princ)) {
+		logmsg(LL_WARN, "principal realm %.*s not local: %s\n",
+		       krb5_princ_realm(ctx, princ)->length,
+		       krb5_princ_realm(ctx, princ)->data,
+		       krb5_this_realm);
+		return -1;
+	}
 
-        /* check principal name */
-        switch (flag) {
-        case LGSS_ROOT_CRED_ROOT:
-                princ_name = LGSS_USR_ROOT_STR;
-                break;
-        case LGSS_ROOT_CRED_MDT:
-                princ_name = LGSS_SVC_MDS_STR;
-                break;
-        case LGSS_ROOT_CRED_OST:
-                princ_name = LGSS_SVC_OSS_STR;
-                break;
-        default:
-                lassert(0);
-        }
+	/* check principal name, give priority to MDT/OST cred over ROOT */
+	if (flag & LGSS_ROOT_CRED_MDT)
+		princ_name = LGSS_SVC_MDS_STR;
+	else if (flag & LGSS_ROOT_CRED_OST)
+		princ_name = LGSS_SVC_OSS_STR;
+	else if (flag & LGSS_ROOT_CRED_ROOT)
+		princ_name = LGSS_USR_ROOT_STR;
+	else
+		return -1;
 
-        if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name)) {
-                logmsg(LL_WARN, "%.*s: we expect %s instead\n",
-                       krb5_princ_name(ctx, princ)->length,
-                       krb5_princ_name(ctx, princ)->data,
-                       princ_name);
-                return -1;
-        }
+	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name)) {
+		logmsg(LL_WARN, "%.*s: we expect %s instead\n",
+		       krb5_princ_name(ctx, princ)->length,
+		       krb5_princ_name(ctx, princ)->data,
+		       princ_name);
+		return -1;
+	}
 
-        /*
-         * verify the hostname part of the principal, except we do allow
-         * lustre_root without binding to a host.
-         */
-        if (krb5_princ_component(ctx, princ, 1) == NULL) {
-                if (flag != LGSS_ROOT_CRED_ROOT) {
-                        logmsg(LL_WARN, "%.*s: missing hostname\n",
-                               krb5_princ_name(ctx, princ)->length,
-                               krb5_princ_name(ctx, princ)->data);
-                        return -1;
-                }
+	/*
+	 * verify the hostname part of the principal, except we do allow
+	 * lustre_root without binding to a host.
+	 */
+	if (krb5_princ_component(ctx, princ, 1) == NULL) {
+		if (flag != LGSS_ROOT_CRED_ROOT) {
+			logmsg(LL_WARN, "%.*s: missing hostname\n",
+			       krb5_princ_name(ctx, princ)->length,
+			       krb5_princ_name(ctx, princ)->data);
+			return -1;
+		}
 	} else {
 		if (svc_princ_verify_host(ctx, princ, self_nid, LL_WARN)) {
 			logmsg(LL_DEBUG, "%.*s: doesn't belong to this node\n",
@@ -357,54 +335,42 @@ int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 		}
 	}
 
-        logmsg(LL_TRACE, "principal is OK\n");
-        return 0;
+	logmsg(LL_TRACE, "principal is OK\n");
+	return 0;
 }
 
 /**
- * compose the TGT cc name, according to the root flags.
+ * compose the TGT cc name, abiding to system configuration.
  */
-static
-void get_root_tgt_ccname(char *ccname, int size, unsigned int flag)
+static void get_root_tgt_ccname(krb5_context ctx, char *ccname, int size)
 {
-        const char *suffix;
-
-        switch (flag) {
-        case LGSS_ROOT_CRED_ROOT:
-                suffix = krb5_cred_root_suffix;
-                break;
-        case LGSS_ROOT_CRED_MDT:
-                suffix = krb5_cred_mds_suffix;
-                break;
-        case LGSS_ROOT_CRED_OST:
-                suffix = krb5_cred_oss_suffix;
-                break;
-        default:
-                lassert(0);
-        }
-
-        snprintf(ccname, size, "%s%s/%s%s_%s",
-                 krb5_cc_type, krb5_cc_dir, krb5_cred_prefix,
-                 suffix, krb5_this_realm);
+	snprintf(ccname, size, "%s", krb5_cc_default_name(ctx));
 }
 
-static int lkrb5_check_root_tgt_cc_base(krb5_context ctx, char *ccname,
-					unsigned int flag, uint64_t self_nid)
+/**
+ * find out whether current TGT cache is valid or not
+ */
+static int lkrb5_check_root_tgt_cc(krb5_context ctx, unsigned int flag,
+				   uint64_t self_nid)
 {
 	krb5_ccache tgt_ccache;
-	krb5_creds cred;
 	krb5_principal princ;
 	krb5_cc_cursor cursor;
 	krb5_error_code code;
+	char ccname[PATH_MAX];
+	krb5_creds cred;
 	time_t now;
-	int rc = -1, found = 0;
+	int found = 0;
+
+	get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
+	logmsg(LL_DEBUG, "root krb5 TGT ccname: %s\n", ccname);
 
 	/* prepare parsing the cache file */
 	code = krb5_cc_resolve(ctx, ccname, &tgt_ccache);
 	if (code) {
 		logmsg(LL_ERR, "resolve krb5 cc %s: %s\n",
 		       ccname, krb5_err_msg(code));
-		return -1;
+		goto out_fail;
 	}
 
 	/* checks the principal */
@@ -472,60 +438,19 @@ static int lkrb5_check_root_tgt_cc_base(krb5_context ctx, char *ccname,
 		}
 	} while (1);
 
-	if (!found) {
-		logmsg(LL_DEBUG, "doesn't find good TGT cache\n");
-		goto out_seq;
-	}
-	logmsg(LL_DEBUG, "found good TGT cache\n");
-	rc = 0;
-
-out_seq:
 	krb5_cc_end_seq_get(ctx, tgt_ccache, &cursor);
 out_princ:
 	krb5_free_principal(ctx, princ);
 out_cc:
 	krb5_cc_close(ctx, tgt_ccache);
 
-	return rc;
-}
-
-/**
- * find out whether current TGT cache is valid or not
- */
-static int lkrb5_check_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
-				   uint64_t self_nid)
-{
-	char ccname[PATH_MAX];
-	struct stat statbuf;
-	unsigned int flag;
-	char *ccfile;
-	int i, rc;
-
-	for (i = 0; i < LGSS_ROOT_CRED_NR; i++) {
-		flag = 1 << i;
-
-		if ((root_flags & flag) == 0)
-			continue;
-
-		get_root_tgt_ccname(ccname, sizeof(ccname), flag);
-		logmsg(LL_DEBUG, "root krb5 TGT ccname: %s\n", ccname);
-
-		/* currently we only support type "FILE", firstly make sure
-		 * the cache file is there
-		 */
-		ccfile = ccname + strlen(krb5_cc_type);
-		if (stat(ccfile, &statbuf)) {
-			logmsg(LL_DEBUG, "krb5 cc %s: %s\n",
-			       ccname, strerror(errno));
-			continue;
-		}
-
-		rc = lkrb5_check_root_tgt_cc_base(ctx, ccname, flag, self_nid);
-		if (rc == 0)
-			return lgss_krb5_set_ccache_name(ccname);
+	if (found) {
+		logmsg(LL_TRACE, "found good TGT cache\n");
+		return lgss_krb5_set_ccache_name(ccname);
 	}
 
-	logmsg(LL_TRACE, "doesn't find a valid tgt cc\n");
+out_fail:
+	logmsg(LL_TRACE, "did not find good TGT cache\n");
 	return -1;
 }
 
@@ -609,7 +534,7 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 	krb5_kt_cursor cursor;
 	krb5_principal princ = NULL;
 	krb5_error_code code;
-	char ccname[1024];
+	char ccname[PATH_MAX];
 	unsigned int flag = 0;
 	int rc = -1;
 
@@ -695,7 +620,7 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 	}
 
 	/* obtain root TGT */
-	get_root_tgt_ccname(ccname, sizeof(ccname), flag);
+	get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
 	rc = lkrb5_get_root_tgt_keytab(ctx, kt, princ, ccname);
 
 	krb5_free_principal(ctx, princ);
