@@ -210,4 +210,5 @@ struct timeval||struct timespec64
 tempnam||mkstemp
 time_t||timeout_t
 timer_setup||cfs_timer_setup
+version_code.*2.1[7-9]||version 2.16.x should be used
 wait_queue_t||wait_queue_entry_t

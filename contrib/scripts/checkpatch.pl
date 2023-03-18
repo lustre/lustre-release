@@ -2894,6 +2894,10 @@ sub process {
 			if ($line =~ /^\+\s*$logFunctions\s*\(\s*(?:(?:KERN_\S+\s*|[^"]*))?($String\s*(?:|,|\)\s*;)\s*)$/ &&
 			    length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
 				$msg_type = "";
+			# a Lustre message that contains embedded formatting
+			} elsif ($line =~ /^\+\s*(?:$logFunctions\s*\()?($String(?:DFID|DOSTID)$String\s*(?:|,|\)\s*;)?\s*)$/ &&
+				 length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
+				$msg_type = ""
 
 			# lines with only strings (w/ possible termination)
 			# #defines with only strings
@@ -5168,31 +5172,42 @@ sub process {
 			}
 		}
 
-# try to replace assertions with error handling
+# Lustre try to replace assertions with error handling
 		if ($line =~ /\bLASSERTF?\s*\(/) {
 		    WARN("LASSERT",
-			 "try to replace assertions with error handling\n" .
+			 "Try to replace assertions with error handling\n" .
 			 $herecurr);
 		}
 
-# avoid new console messages
-		if ($line =~ /\bLCONSOLE[A-Z_]*\s*\(/) {
-		    WARN("LCONSOLE",
-			 "avoid adding new console messages\n" .
-			 $herecurr);
+# Lustre minimize new CERROR messages
+		if ($line =~ /\b(CEMERG|CERROR|CNETERR|CWARN|LCONSOLE)\s*\(/) {
+			if ($rawline !~ /\(\"\%s: /) {
+				WARN("CERROR_DEV",
+				     "Console messages should start with '%s:' to print device name\n" . $herecurr)
+			}
+
+			# Check for "rc = %d" or "rc = %ld" at the end of errors
+			if ($line !~ /LCONSOLE/ && $rawline !~ /: rc = \%l?d\\n\",/) {
+				WARN("CERROR_RET",
+				     "Console messages should end with ': rc = %d' or 'rc = %ld'\n" . $herecurr);
+			}
+
+			# This is fine as we are only matching the first part.
+			if ($line =~ /(CEMERG|CERROR|CNETERR)/) {
+				WARN("CERROR",
+				     "Errors should be useful to fix failure conditions, not status/debug\n" . $herecurr);
+			}
+		}
+# Lustre avoid unlimited message printing to the console
+		if ($line =~ /CDEBUG\((D_ERROR|D_WARNING|D_CONSOLE|[a-z])/) {
+			WARN("CDEBUG_LIMIT",
+			     "CDEBUG does not rate-limit console messages, use CDEBUG_LIMIT\n". $herecurr);
 		}
 
-# minimize new CERROR messages
-		if ($line =~ /\bC(EMERG|ERROR|NETERR|WARN)\s*\(/) {
-		    WARN("CERROR",
-			 "think hard when adding new CERROR messages\n" .
-			 $herecurr);
-		}
-
-# don't allow GPLv3 license files
+# Lustre don't allow GPLv3 license files
 		if ($rawline =~ /version 3/) {
 			WARN("GPLV3",
-			     "using GPLv3 is usually wrong\n" . $herecurr);
+			     "Using GPLv3 is usually wrong\n" . $herecurr);
 		}
 
 # check for single line unbalanced braces
@@ -6116,7 +6131,7 @@ sub process {
 				next if ($fline =~ /^.[\s$;]*$/);
 				$has_statement = 1;
 				$count++;
-				$has_break = 1 if ($fline =~ /\bswitch\b|\b(?:break\s*;[\s$;]*$|return\b|goto\b|continue\b)/);
+				$has_break = 1 if ($fline =~ /\bswitch\b|\b(?:break\s*;[\s$;]*$|return\b|goto\b|continue\b)/i);
 			}
 			if (!$has_break && $has_statement) {
 				WARN("MISSING_BREAK",
