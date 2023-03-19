@@ -2743,6 +2743,9 @@ static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	int rc;
 
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
+
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_MD_THREAD);
 	if (rc) {
 		CERROR("%s: can't initialize env: rc = %d\n",
@@ -2774,9 +2777,8 @@ static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = lod_llog_cancel(&env, lod);
 		break;
 	default:
-		CERROR("%s: unrecognized ioctl %#x by %s\n",
-		       obd->obd_name, cmd, current->comm);
-		rc = -ENOTTY;
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 	lu_env_fini(&env);
 

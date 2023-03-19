@@ -2260,20 +2260,23 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #ifdef HAVE_SERVER_SUPPORT
 	struct tgt_session_info *tsi;
 #endif
-	struct obd_device      *obd = exp->exp_obd;
-	struct echo_device     *ed = obd2echo_dev(obd);
+	struct obd_device *obd = exp->exp_obd;
+	struct echo_device *ed = obd2echo_dev(obd);
 	struct echo_client_obd *ec = ed->ed_ec;
-	struct echo_object     *eco;
-	struct obd_ioctl_data  *data = karg;
-	struct lu_env          *env;
-	unsigned long		env_tags = 0;
-	__u16			refcheck;
-	struct obdo            *oa;
-	struct lu_fid           fid;
-	int                     rw = OBD_BRW_READ;
-	int                     rc = 0;
+	struct echo_object *eco;
+	struct obd_ioctl_data *data = karg;
+	struct lu_env *env;
+	unsigned long env_tags = 0;
+	__u16 refcheck;
+	struct obdo *oa;
+	struct lu_fid fid;
+	int rw = OBD_BRW_READ;
+	int rc = -EINVAL;
 
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
+
 	oa = &data->ioc_obdo1;
 	if (!(oa->o_valid & OBD_MD_FLGROUP)) {
 		oa->o_valid |= OBD_MD_FLGROUP;
@@ -2411,10 +2414,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case OBD_IOC_BRW_READ:
 		rc = echo_client_brw_ioctl(env, rw, exp, data);
 		GOTO(out, rc);
-
 	default:
-		CERROR("echo_ioctl(): unrecognised ioctl %#x\n", cmd);
-		GOTO(out, rc = -ENOTTY);
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 
 	EXIT;

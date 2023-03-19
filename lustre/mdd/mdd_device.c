@@ -2267,12 +2267,16 @@ static int mdd_changelog_user_deregister(const struct lu_env *env,
  * \param karg - ioctl data, in kernel space
  */
 static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
-                         unsigned int cmd, int len, void *karg)
+			 unsigned int cmd, int len, void *karg)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+	struct obd_device *obd = mdd2obd_dev(mdd);
 	struct obd_ioctl_data *data = karg;
-	int rc;
+	int rc = -EINVAL;
+
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK\n",
+	       obd->obd_name, cmd, len, karg);
 
 	/* Doesn't use obd_ioctl_data */
 	switch (cmd) {
@@ -2282,24 +2286,20 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 			RETURN(-EINPROGRESS);
 
-		rc = mdd_changelog_clear(env, mdd, cs->cs_id,
-					 cs->cs_recno);
+		rc = mdd_changelog_clear(env, mdd, cs->cs_id, cs->cs_recno);
 		barrier_exit(mdd->mdd_bottom);
 		RETURN(rc);
 	}
 	case OBD_IOC_START_LFSCK: {
-		rc = lfsck_start(env, mdd->mdd_bottom,
-				 (struct lfsck_start_param *)karg);
+		rc = lfsck_start(env, mdd->mdd_bottom, karg);
 		RETURN(rc);
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		rc = lfsck_stop(env, mdd->mdd_bottom,
-				(struct lfsck_stop *)karg);
+		rc = lfsck_stop(env, mdd->mdd_bottom, karg);
 		RETURN(rc);
 	}
 	case OBD_IOC_QUERY_LFSCK: {
-		rc = lfsck_query(env, mdd->mdd_bottom, NULL, NULL,
-				 (struct lfsck_query *)karg);
+		rc = lfsck_query(env, mdd->mdd_bottom, NULL, NULL, karg);
 		RETURN(rc);
 	}
 	case OBD_IOC_LLOG_PRINT:
@@ -2310,9 +2310,10 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 
 	/* Below ioctls use obd_ioctl_data */
 	if (data->ioc_version != OBD_IOCTL_VERSION) {
-		CERROR("Bad magic %x != %x\n", data->ioc_version,
-		       OBD_IOCTL_VERSION);
-		RETURN(-EINVAL);
+		CERROR("%s: iocontrol from '%s' bad magic %x != %x: rc = %d\n",
+		       obd->obd_name, current->comm,
+		       data->ioc_version, OBD_IOCTL_VERSION, rc);
+		RETURN(rc);
 	}
 
 	switch (cmd) {
@@ -2335,7 +2336,8 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		barrier_exit(mdd->mdd_bottom);
 		break;
 	default:
-		rc = -ENOTTY;
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 
 	RETURN(rc);

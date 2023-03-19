@@ -954,6 +954,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	int i = 0, rc = 0, count = lov->desc.ld_tgt_count;
 
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
+
 	switch (cmd) {
 	case IOC_OBD_STATFS: {
 		struct obd_ioctl_data *data = karg;
@@ -1081,11 +1084,11 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 					    len, karg, uarg);
 			if (err) {
 				if (lov->lov_tgts[i]->ltd_active) {
-					CDEBUG_LIMIT(err == -ENOTTY ?
-						     D_IOCTL : D_WARNING,
-						     "iocontrol OSC %s on OST idx %d cmd %x: err = %d\n",
-						     lov_uuid2str(lov, i),
-						     i, cmd, err);
+					OBD_IOC_DEBUG(err == -ENOTTY ?
+						      D_IOCTL : D_WARNING,
+						      obd->obd_name, cmd,
+						      lov_uuid2str(lov, i),
+						      err);
 					if (!rc)
 						rc = err;
 				}

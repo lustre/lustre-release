@@ -2017,4 +2017,11 @@ struct attribute *get_attr_starts_with(const struct kobj_type *typ,
 	return _get_attr_matches(typ, name, len, _attr_name_starts_with);
 }
 
+int obd_ioctl_msg(const char *file, const char *func, int line, int level,
+		  const char *name, unsigned int cmd, const char *msg, int rc);
+#define OBD_IOC_DEBUG(level, dev, cmd, msg, rc)	\
+	obd_ioctl_msg(__FILE__, __func__, __LINE__, level, dev, cmd, msg, rc)
+#define OBD_IOC_ERROR(dev, cmd, msg, rc)	\
+	obd_ioctl_msg(__FILE__, __func__, __LINE__, D_ERROR, dev, cmd, msg, rc)
+
 #endif /* __LINUX_OBD_CLASS_H */

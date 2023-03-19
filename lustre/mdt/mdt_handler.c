@@ -7527,14 +7527,16 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-	struct lu_env      env;
 	struct obd_device *obd = exp->exp_obd;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	struct dt_device  *dt = mdt->mdt_bottom;
+	struct dt_device *dt = mdt->mdt_bottom;
+	struct lu_env env;
 	int rc;
 
 	ENTRY;
-	CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
+
 	rc = lu_env_init(&env, LCT_MD_THREAD);
 	if (rc)
 		RETURN(rc);
@@ -7552,14 +7554,12 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		struct obd_ioctl_data *data = karg;
 
 		if (data->ioc_type & OBD_FLG_ABORT_RECOV_MDT) {
-			CERROR("%s: Aborting MDT recovery\n",
-			       mdt_obd_name(mdt));
+			CWARN("%s: Aborting MDT recovery\n", obd->obd_name);
 			obd->obd_abort_mdt_recovery = 1;
 			wake_up(&obd->obd_next_transno_waitq);
 		} else { /* if (data->ioc_type & OBD_FLG_ABORT_RECOV_OST) */
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */
-			CERROR("%s: Aborting client recovery\n",
-			       mdt_obd_name(mdt));
+			CWARN("%s: Aborting client recovery\n", obd->obd_name);
 			obd->obd_abort_recovery = 1;
 			target_stop_recovery_thread(obd);
 		}
@@ -7634,11 +7634,10 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = llog_catalog_list(&env, mdt->mdt_bottom, 0, karg,
 				       &mti->mti_tmp_fid1);
 		break;
-	 }
+	}
 	default:
-		rc = -EOPNOTSUPP;
-		CERROR("%s: Not supported cmd = %d, rc = %d\n",
-			mdt_obd_name(mdt), cmd, rc);
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 
 	lu_env_fini(&env);

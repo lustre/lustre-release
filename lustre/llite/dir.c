@@ -1500,8 +1500,8 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	int rc = 0;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), cmd=%#x\n",
-	       PFID(ll_inode2fid(inode)), inode, cmd);
+	CDEBUG(D_VFSTRACE|D_IOCTL, "VFS Op:inode="DFID"(%pK) cmd=%x arg=%lx\n",
+	       PFID(ll_inode2fid(inode)), inode, cmd, arg);
 
 	/* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
 	if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
@@ -2119,7 +2119,8 @@ out_quotactl:
 		rc = obd_get_info(NULL, exp, sizeof(KEY_TGT_COUNT),
 				  KEY_TGT_COUNT, &vallen, &count);
 		if (rc) {
-			CERROR("get target count failed: %d\n", rc);
+			CERROR("%s: get target count failed: rc = %d\n",
+			       sbi->ll_fsname, rc);
 			RETURN(rc);
 		}
 

@@ -4174,8 +4174,8 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	int flags, rc;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), cmd=%x\n",
-	       PFID(ll_inode2fid(inode)), inode, cmd);
+	CDEBUG(D_VFSTRACE|D_IOCTL, "VFS Op:inode="DFID"(%pK) cmd=%x arg=%lx\n",
+	       PFID(ll_inode2fid(inode)), inode, cmd, arg);
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
 
 	/* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
@@ -4198,9 +4198,11 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (cmd == LL_IOC_SETFLAGS) {
 			if ((flags & LL_FILE_IGNORE_LOCK) &&
 			    !(file->f_flags & O_DIRECT)) {
-				CERROR("%s: unable to disable locking on "
-				       "non-O_DIRECT file\n", current->comm);
-				RETURN(-EINVAL);
+				rc = -EINVAL;
+				CERROR("%s: unable to disable locking on non-O_DIRECT file "DFID": rc = %d\n",
+				       current->comm, PFID(ll_inode2fid(inode)),
+				       rc);
+				RETURN(rc);
 			}
 
 			fd->fd_flags |= flags;
@@ -4970,60 +4972,64 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 #endif
 
 	switch (fl_type) {
-        case F_RDLCK:
-                einfo.ei_mode = LCK_PR;
-                break;
-        case F_UNLCK:
-                /* An unlock request may or may not have any relation to
-                 * existing locks so we may not be able to pass a lock handle
-                 * via a normal ldlm_lock_cancel() request. The request may even
-                 * unlock a byte range in the middle of an existing lock. In
-                 * order to process an unlock request we need all of the same
-                 * information that is given with a normal read or write record
-                 * lock request. To avoid creating another ldlm unlock (cancel)
-                 * message we'll treat a LCK_NL flock request as an unlock. */
-                einfo.ei_mode = LCK_NL;
-                break;
-        case F_WRLCK:
-                einfo.ei_mode = LCK_PW;
-                break;
-        default:
-		CDEBUG(D_INFO, "Unknown fcntl lock type: %d\n", fl_type);
-                RETURN (-ENOTSUPP);
-        }
+	case F_RDLCK:
+		einfo.ei_mode = LCK_PR;
+		break;
+	case F_UNLCK:
+		/* An unlock request may or may not have any relation to
+		 * existing locks so we may not be able to pass a lock handle
+		 * via a normal ldlm_lock_cancel() request. The request may even
+		 * unlock a byte range in the middle of an existing lock. In
+		 * order to process an unlock request we need all of the same
+		 * information that is given with a normal read or write record
+		 * lock request. To avoid creating another ldlm unlock (cancel)
+		 * message we'll treat a LCK_NL flock request as an unlock. */
+		einfo.ei_mode = LCK_NL;
+		break;
+	case F_WRLCK:
+		einfo.ei_mode = LCK_PW;
+		break;
+	default:
+		rc = -EINVAL;
+		CERROR("%s: fcntl from '%s' unknown lock type=%d: rc = %d\n",
+		       sbi->ll_fsname, current->comm, fl_type, rc);
+		RETURN(rc);
+	}
 
-        switch (cmd) {
-        case F_SETLKW:
+	switch (cmd) {
+	case F_SETLKW:
 #ifdef F_SETLKW64
-        case F_SETLKW64:
+	case F_SETLKW64:
 #endif
-                flags = 0;
-                break;
-        case F_SETLK:
+		flags = 0;
+		break;
+	case F_SETLK:
 #ifdef F_SETLK64
-        case F_SETLK64:
+	case F_SETLK64:
 #endif
-                flags = LDLM_FL_BLOCK_NOWAIT;
-                break;
-        case F_GETLK:
+		flags = LDLM_FL_BLOCK_NOWAIT;
+		break;
+	case F_GETLK:
 #ifdef F_GETLK64
-        case F_GETLK64:
+	case F_GETLK64:
 #endif
-                flags = LDLM_FL_TEST_LOCK;
-                break;
-        default:
-                CERROR("unknown fcntl lock command: %d\n", cmd);
-                RETURN (-EINVAL);
-        }
+		flags = LDLM_FL_TEST_LOCK;
+		break;
+	default:
+		rc = -EINVAL;
+		CERROR("%s: fcntl from '%s' unknown lock command=%d: rc = %d\n",
+		       sbi->ll_fsname, current->comm, cmd, rc);
+		RETURN(rc);
+	}
 
 	/* Save the old mode so that if the mode in the lock changes we
 	 * can decrement the appropriate reader or writer refcount. */
 	file_lock->fl_type = einfo.ei_mode;
 
-        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY, NULL);
-        if (IS_ERR(op_data))
-                RETURN(PTR_ERR(op_data));
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
 
 	CDEBUG(D_DLMTRACE, "inode="DFID", pid=%u, flags=%#llx, mode=%u, "
 	       "start=%llu, end=%llu\n", PFID(ll_inode2fid(inode)),
@@ -5042,12 +5048,12 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	    !(flags & LDLM_FL_TEST_LOCK))
 		rc2  = locks_lock_file_wait(file, file_lock);
 #else
-        if ((file_lock->fl_flags & FL_FLOCK) &&
-            (rc == 0 || file_lock->fl_type == F_UNLCK))
+	if ((file_lock->fl_flags & FL_FLOCK) &&
+	    (rc == 0 || file_lock->fl_type == F_UNLCK))
 		rc2  = flock_lock_file_wait(file, file_lock);
-        if ((file_lock->fl_flags & FL_POSIX) &&
-            (rc == 0 || file_lock->fl_type == F_UNLCK) &&
-            !(flags & LDLM_FL_TEST_LOCK))
+	if ((file_lock->fl_flags & FL_POSIX) &&
+	    (rc == 0 || file_lock->fl_type == F_UNLCK) &&
+	    !(flags & LDLM_FL_TEST_LOCK))
 		rc2  = posix_lock_file_wait(file, file_lock);
 #endif /* HAVE_LOCKS_LOCK_FILE_WAIT */
 

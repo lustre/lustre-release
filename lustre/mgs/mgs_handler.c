@@ -986,80 +986,77 @@ out_pool:
 static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
+	struct obd_device *obd = exp->exp_obd;
 	struct mgs_device *mgs = exp2mgs_dev(exp);
-        struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data = karg;
 	struct lu_env env;
-        int rc = 0;
+	int rc = -EINVAL;
 
-        ENTRY;
-        CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
 
 	rc = lu_env_init(&env, LCT_MG_THREAD);
 	if (rc)
 		RETURN(rc);
 
-        switch (cmd) {
-
+	rc = -EINVAL;
+	switch (cmd) {
 	case OBD_IOC_PARAM: {
 		struct lustre_cfg *lcfg;
 
 		if (data->ioc_type != LUSTRE_CFG_TYPE) {
-			CERROR("%s: unknown cfg record type: %d\n",
-			       mgs->mgs_obd->obd_name, data->ioc_type);
-			GOTO(out, rc = -EINVAL);
-                }
+			CERROR("%s: unknown cfg record type '%x': rc = %d\n",
+			       obd->obd_name, data->ioc_type, rc);
+			GOTO(out, rc);
+		}
 
-                OBD_ALLOC(lcfg, data->ioc_plen1);
-                if (lcfg == NULL)
+		OBD_ALLOC(lcfg, data->ioc_plen1);
+		if (lcfg == NULL)
 			GOTO(out, rc = -ENOMEM);
 		if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
-                        GOTO(out_free, rc = -EFAULT);
+			GOTO(out_free, rc = -EFAULT);
 
-                if (lcfg->lcfg_bufcount < 1)
-                        GOTO(out_free, rc = -EINVAL);
+		if (lcfg->lcfg_bufcount < 1)
+			GOTO(out_free, rc);
 
 		rc = mgs_set_param(&env, mgs, lcfg);
 		if (rc)
 			CERROR("%s: setparam err: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 out_free:
-                OBD_FREE(lcfg, data->ioc_plen1);
+		OBD_FREE(lcfg, data->ioc_plen1);
 		break;
-        }
-
-	case OBD_IOC_REPLACE_NIDS: {
+	}
+	case OBD_IOC_REPLACE_NIDS:
 		if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
-			rc = -EINVAL;
 			CERROR("%s: no device or fsname specified: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inllen1 > MTI_NAME_MAXLEN) {
 			rc = -EOVERFLOW;
 			CERROR("%s: device or fsname is too long: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
-			rc = -EINVAL;
-			CERROR("%s: device or fsname is not NUL terminated: "
-			       "rc = %d\n", exp->exp_obd->obd_name, rc);
+			CERROR("%s: unterminated device or fsname: rc = %d\n",
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (!data->ioc_inllen2 || !data->ioc_inlbuf2) {
-			rc = -EINVAL;
 			CERROR("%s: no NIDs specified: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inlbuf2[data->ioc_inllen2 - 1] != 0) {
-			rc = -EINVAL;
-			CERROR("%s: NID list is not NUL terminated: "
-			       "rc = %d\n", exp->exp_obd->obd_name, rc);
+			CERROR("%s: NID list is not NUL terminated: rc = %d\n",
+			       obd->obd_name, rc);
 			break;
 		}
 
@@ -1068,30 +1065,26 @@ out_free:
 				      data->ioc_inlbuf2);
 		if (rc)
 			CERROR("%s: error replacing nids: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 
 		break;
-	}
-
-	case OBD_IOC_CLEAR_CONFIGS: {
+	case OBD_IOC_CLEAR_CONFIGS:
 		if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
-			rc = -EINVAL;
 			CERROR("%s: no device or fsname specified: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inllen1 > MTI_NAME_MAXLEN) {
 			rc = -EOVERFLOW;
 			CERROR("%s: device or fsname is too long: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
-			rc = -EINVAL;
-			CERROR("%s: device or fsname is not NUL terminated: "
-			       "rc = %d\n", exp->exp_obd->obd_name, rc);
+			CERROR("%s: unterminated device or fsname: rc = %d\n",
+			       obd->obd_name, rc);
 			break;
 		}
 
@@ -1099,32 +1092,25 @@ out_free:
 		rc = mgs_clear_configs(&env, mgs, data->ioc_inlbuf1);
 		if (rc)
 			CERROR("%s: error clearing config log: rc = %d\n",
-			       exp->exp_obd->obd_name, rc);
+			       obd->obd_name, rc);
 
 		break;
-	}
-
 	case OBD_IOC_POOL:
 		rc = mgs_iocontrol_pool(&env, mgs, data);
 		break;
-
 	case OBD_IOC_BARRIER:
 		rc = mgs_iocontrol_barrier(&env, mgs, data);
 		break;
-
 	case OBD_IOC_NODEMAP:
 		rc = mgs_iocontrol_nodemap(&env, mgs, data);
 		break;
-
 	case OBD_IOC_LCFG_FORK:
 		rc = mgs_lcfg_fork(&env, mgs, data->ioc_inlbuf1,
 				   data->ioc_inlbuf2);
 		break;
-
 	case OBD_IOC_LCFG_ERASE:
 		rc = mgs_lcfg_erase(&env, mgs, data->ioc_inlbuf1);
 		break;
-
 	case OBD_IOC_CATLOGLIST:
 		rc = mgs_list_logs(&env, mgs, data);
 		break;
@@ -1140,11 +1126,8 @@ out_free:
 		llog_ctxt_put(ctxt);
 		break;
         }
-
         default:
-		CERROR("%s: unknown command %#x\n",
-		       mgs->mgs_obd->obd_name,  cmd);
-		rc = -ENOTTY;
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
 		break;
         }
 out:

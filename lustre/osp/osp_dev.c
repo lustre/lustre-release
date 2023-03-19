@@ -1667,12 +1667,14 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-	struct obd_device	*obd = exp->exp_obd;
-	struct osp_device	*d;
-	struct obd_ioctl_data	*data = karg;
-	int			 rc = 0;
+	struct obd_device *obd = exp->exp_obd;
+	struct osp_device *d;
+	struct obd_ioctl_data *data = karg;
+	int rc = -EINVAL;
 
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
 
 	LASSERT(obd->obd_lu_dev);
 	d = lu2osp_dev(obd->obd_lu_dev);
@@ -1696,14 +1698,12 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 					      data->ioc_offset);
 		break;
 	default:
-		CERROR("%s: unrecognized ioctl %#x by %s\n", obd->obd_name,
-		       cmd, current->comm);
-		rc = -ENOTTY;
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 	module_put(THIS_MODULE);
 	return rc;
 }
-
 
 /**
  * Implementation of obd_ops::o_get_info

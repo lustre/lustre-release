@@ -851,6 +851,8 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 	int rc = 0;
 
 	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
 
 	if (count == 0)
 		RETURN(-ENOTTY);
@@ -1064,6 +1066,7 @@ hsm_req_err:
 	}
 	case LL_IOC_HSM_CT_START: {
 		struct lustre_kernelcomm *lk = karg;
+
 		if (lk->lk_flags & LK_FLG_STOP)
 			rc = lmv_hsm_ct_unregister(obd, cmd, len, lk, uarg);
 		else
@@ -1082,10 +1085,8 @@ hsm_req_err:
 			err = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
 			if (err) {
 				if (tgt->ltd_active) {
-					CERROR("error: iocontrol MDC %s on MDT"
-					       " idx %d cmd %x: err = %d\n",
-					       tgt->ltd_uuid.uuid,
-					       tgt->ltd_index, cmd, err);
+					OBD_IOC_ERROR(obd->obd_name, cmd,
+						      tgt->ltd_uuid.uuid, err);
 					if (!rc)
 						rc = err;
 				}

@@ -1257,15 +1257,15 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	int rc;
 
 	ENTRY;
-
-	CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
 	rc = lu_env_init(&env, LCT_DT_THREAD);
 	if (rc)
 		RETURN(rc);
 
 	switch (cmd) {
 	case OBD_IOC_ABORT_RECOVERY:
-		CERROR("%s: aborting recovery\n", obd->obd_name);
+		CWARN("%s: Aborting recovery\n", obd->obd_name);
 		obd->obd_abort_recovery = 1;
 		target_stop_recovery_thread(obd);
 		break;
@@ -1302,7 +1302,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			stop.ls_flags = 0;
 		else
 			stop.ls_flags =
-			((struct lfsck_stop *)(data->ioc_inlbuf1))->ls_flags;
+			   ((struct lfsck_stop *)(data->ioc_inlbuf1))->ls_flags;
 
 		rc = lfsck_stop(&env, ofd->ofd_osd, &stop);
 		break;
@@ -1311,8 +1311,8 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = ofd_ioc_get_obj_version(&env, ofd, karg);
 		break;
 	default:
-		CERROR("%s: not supported cmd = %#x\n", obd->obd_name, cmd);
-		rc = -ENOTTY;
+		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
+		break;
 	}
 
 	lu_env_fini(&env);
