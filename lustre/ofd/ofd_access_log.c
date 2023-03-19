@@ -341,10 +341,9 @@ unsigned int oal_file_poll(struct file *filp, struct poll_table_struct *wait)
 	return mask;
 }
 
-static long oal_ioctl_info(struct oal_circ_buf *ocb, unsigned long arg)
+static long oal_ioctl_info(struct oal_circ_buf *ocb, void __user *uarg)
 {
 	struct ofd_access_log *oal = ocb->ocb_access_log;
-
 	struct lustre_access_log_info_v1 __user *lali;
 	u32 entry_count = CIRC_CNT(ocb->ocb_circ.head,
 				ocb->ocb_circ.tail,
@@ -353,7 +352,7 @@ static long oal_ioctl_info(struct oal_circ_buf *ocb, unsigned long arg)
 				ocb->ocb_circ.tail,
 				oal->oal_log_size) / oal->oal_entry_size;
 
-	lali = (struct lustre_access_log_info_v1 __user *)arg;
+	lali = uarg;
 	BUILD_BUG_ON(sizeof(lali->lali_name) != sizeof(oal->oal_name));
 
 	if (put_user(LUSTRE_ACCESS_LOG_VERSION_1, &lali->lali_version))
@@ -393,7 +392,7 @@ static long oal_ioctl_info(struct oal_circ_buf *ocb, unsigned long arg)
 }
 
 static long oal_file_ioctl(struct file *filp, unsigned int cmd,
-			unsigned long arg)
+			   unsigned long arg)
 {
 	struct oal_circ_buf *ocb = filp->private_data;
 
@@ -401,7 +400,7 @@ static long oal_file_ioctl(struct file *filp, unsigned int cmd,
 	case LUSTRE_ACCESS_LOG_IOCTL_VERSION:
 		return LUSTRE_ACCESS_LOG_VERSION_1;
 	case LUSTRE_ACCESS_LOG_IOCTL_INFO:
-		return oal_ioctl_info(ocb, arg);
+		return oal_ioctl_info(ocb, (void __user *)arg);
 	case LUSTRE_ACCESS_LOG_IOCTL_FILTER:
 		ocb->ocb_filter = arg;
 		return 0;
@@ -629,7 +628,7 @@ static unsigned int oal_control_file_poll(struct file *filp, poll_table *wait)
 }
 
 static long oal_control_file_ioctl(struct file *filp, unsigned int cmd,
-				unsigned long arg)
+				   unsigned long arg)
 {
 	struct oal_control_file *ccf = filp->private_data;
 

@@ -305,7 +305,7 @@ int obd_ioctl_getdata(struct obd_ioctl_data **datap, int *len, void __user *arg)
 }
 EXPORT_SYMBOL(obd_ioctl_getdata);
 
-int class_handle_ioctl(unsigned int cmd, unsigned long arg)
+int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 {
 	struct obd_ioctl_data *data;
 	struct obd_device *obd = NULL;
@@ -313,7 +313,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
-	if (obd_ioctl_getdata(&data, &len, (void __user *)arg)) {
+	if (obd_ioctl_getdata(&data, &len, uarg)) {
 		CERROR("OBD ioctl: data error\n");
 		RETURN(-EINVAL);
 	}
@@ -363,27 +363,25 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 		memcpy(data->ioc_bulk, LUSTRE_VERSION_STRING,
 		       strlen(LUSTRE_VERSION_STRING) + 1);
 
-		if (copy_to_user((void __user *)arg, data, len))
+		if (copy_to_user(uarg, data, len))
 			err = -EFAULT;
 		GOTO(out, err);
 	}
 #endif
-        case OBD_IOC_NAME2DEV: {
-                /* Resolve a device name.  This does not change the
-                 * currently selected device.
-                 */
-                int dev;
+	case OBD_IOC_NAME2DEV: {
+		/* Resolve device name, does not change current selected dev */
+		int dev;
 
-                dev = class_resolve_dev_name(data->ioc_inllen1,
-                                             data->ioc_inlbuf1);
-                data->ioc_dev = dev;
-                if (dev < 0)
-                        GOTO(out, err = -EINVAL);
+		dev = class_resolve_dev_name(data->ioc_inllen1,
+					     data->ioc_inlbuf1);
+		data->ioc_dev = dev;
+		if (dev < 0)
+			GOTO(out, err = -EINVAL);
 
-		if (copy_to_user((void __user *)arg, data, sizeof(*data)))
-                        err = -EFAULT;
-                GOTO(out, err);
-        }
+		if (copy_to_user(uarg, data, sizeof(*data)))
+			err = -EFAULT;
+		GOTO(out, err);
+	}
 
         case OBD_IOC_UUID2DEV: {
                 /* Resolve a device uuid.  This does not change the
@@ -411,12 +409,12 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         GOTO(out, err = -EINVAL);
                 }
 
-                CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
-                       dev);
-		if (copy_to_user((void __user *)arg, data, sizeof(*data)))
-                        err = -EFAULT;
-                GOTO(out, err);
-        }
+		CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
+		       dev);
+		if (copy_to_user(uarg, data, sizeof(*data)))
+			err = -EFAULT;
+		GOTO(out, err);
+	}
 
         case OBD_IOC_GETDEVICE: {
                 int     index = data->ioc_count;
@@ -446,19 +444,18 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 		else
 			status = "--";
 
-                str = (char *)data->ioc_bulk;
-                snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
-                         (int)index, status, obd->obd_type->typ_name,
-                         obd->obd_name, obd->obd_uuid.uuid,
+		str = data->ioc_bulk;
+		snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
+			 index, status, obd->obd_type->typ_name,
+			 obd->obd_name, obd->obd_uuid.uuid,
 			 atomic_read(&obd->obd_refcount));
 
-		if (copy_to_user((void __user *)arg, data, len))
+		if (copy_to_user(uarg, data, len))
 			err = -EFAULT;
 
 		GOTO(out, err);
-        }
-
-        }
+	}
+	}
 
         if (data->ioc_dev == OBD_DEV_BY_DEVNAME) {
                 if (data->ioc_inllen4 <= 0 || data->ioc_inlbuf4 == NULL)
@@ -488,7 +485,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 	if (err)
 		GOTO(out, err);
 
-	if (copy_to_user((void __user *)arg, data, len))
+	if (copy_to_user(uarg, data, len))
 		err = -EFAULT;
 out:
 	OBD_FREE_LARGE(data, len);
@@ -509,7 +506,7 @@ static long obd_class_ioctl(struct file *filp, unsigned int cmd,
 	if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
 		RETURN(err = -ENOTTY);
 
-	err = class_handle_ioctl(cmd, (unsigned long)arg);
+	err = class_handle_ioctl(cmd, (void __user *)arg);
 
 	RETURN(err);
 }

@@ -2975,7 +2975,7 @@ void ll_delete_inode(struct inode *inode)
 }
 
 int ll_iocontrol(struct inode *inode, struct file *file,
-                 unsigned int cmd, unsigned long arg)
+		 unsigned int cmd, void __user *uarg)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
@@ -3014,7 +3014,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 		ptlrpc_req_finished(req);
 
-		RETURN(put_user(flags, (int __user *)arg));
+		RETURN(put_user(flags, (int __user *)uarg));
 	}
 	case FS_IOC_SETFLAGS: {
 		struct iattr *attr;
@@ -3022,7 +3022,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		struct cl_object *obj;
 		struct fsxattr fa = { 0 };
 
-		if (get_user(flags, (int __user *)arg))
+		if (get_user(flags, (int __user *)uarg))
 			RETURN(-EFAULT);
 
 		fa.fsx_projid = ll_i2info(inode)->lli_projid;
@@ -3366,7 +3366,7 @@ out:
 	return rc;
 }
 
-int ll_obd_statfs(struct inode *inode, void __user *arg)
+int ll_obd_statfs(struct inode *inode, void __user *uarg)
 {
 	struct ll_sb_info *sbi = NULL;
 	struct obd_export *exp;
@@ -3379,7 +3379,7 @@ int ll_obd_statfs(struct inode *inode, void __user *arg)
 	if (!sbi)
 		GOTO(out_statfs, rc = -EINVAL);
 
-	rc = obd_ioctl_getdata(&data, &len, arg);
+	rc = obd_ioctl_getdata(&data, &len, uarg);
 	if (rc)
 		GOTO(out_statfs, rc);
 
@@ -3629,24 +3629,23 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 /**
  * Get obd name by cmd, and copy out to user space
  */
-int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg)
+int ll_get_obd_name(struct inode *inode, unsigned int cmd, void __user *uarg)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct obd_device *obd;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct obd_device *obd;
+	ENTRY;
 
 	if (cmd == OBD_IOC_GETNAME_OLD || cmd == OBD_IOC_GETDTNAME)
-                obd = class_exp2obd(sbi->ll_dt_exp);
-        else if (cmd == OBD_IOC_GETMDNAME)
-                obd = class_exp2obd(sbi->ll_md_exp);
-        else
-                RETURN(-EINVAL);
+		obd = class_exp2obd(sbi->ll_dt_exp);
+	else if (cmd == OBD_IOC_GETMDNAME)
+		obd = class_exp2obd(sbi->ll_md_exp);
+	else
+		RETURN(-EINVAL);
 
-        if (!obd)
-                RETURN(-ENOENT);
+	if (!obd)
+		RETURN(-ENOENT);
 
-	if (copy_to_user((void __user *)arg, obd->obd_name,
-			 strlen(obd->obd_name) + 1))
+	if (copy_to_user(uarg, obd->obd_name, strlen(obd->obd_name) + 1))
 		RETURN(-EFAULT);
 
 	RETURN(0);
