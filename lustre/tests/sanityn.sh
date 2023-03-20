@@ -5358,7 +5358,7 @@ test_94() {
 }
 run_test 94 "signal vs CP callback race"
 
-test_95() {
+test_95a() {
 	local file=$DIR/$tfile
 	local file2=$DIR2/$tfile
 	local fast_read_save
@@ -5388,7 +5388,38 @@ test_95() {
 
 	kill -USR1 $pid && wait $pid || error "wait for PID $pid failed"
 }
-run_test 95 "Check readpage() on a page that was removed from page cache"
+run_test 95a "Check readpage() on a page that was removed from page cache"
+
+test_95b() {
+	local file=$DIR/$tfile
+	local file2=$DIR2/$tfile
+	local fast_read_save
+	local pid
+
+	fast_read_save=$($LCTL get_param -n llite.*.fast_read | head -n 1)
+	[ -z "$fast_read_save" ] && skip "no fast read support"
+
+	stack_trap "$LCTL set_param llite.*.fast_read=$fast_read_save" EXIT
+	$LCTL set_param llite.*.fast_read=0
+
+	$LFS setstripe -c $OSTCOUNT $file || error "failed to setstripe $file"
+	dd if=/dev/zero of=$file bs=$((PAGE_SIZE * 3)) count=1 ||
+		error "failed to write $file"
+
+	# This does the read from the second mount, so this flushes the pages
+	# the first mount and creates new ones on the second mount
+	# OBD_FAIL_LLITE_READPAGE_PAUSE2	0x1424
+	$LCTL set_param fail_loc=0x80001424 fail_val=5
+	$MULTIOP $file2 or${PAGE_SIZE}c &
+	pid=$!
+
+	sleep 2
+	fadvise_dontneed_helper $file2
+	$LCTL set_param fail_loc=0
+	sleep 4
+	wait $pid || error "failed to read file"
+}
+run_test 95b "Check readpage() on a page that is no longer uptodate"
 
 # Data-on-MDT tests
 test_100a() {

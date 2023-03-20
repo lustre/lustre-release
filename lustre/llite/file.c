@@ -1990,9 +1990,14 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 	result = generic_file_read_iter(iocb, iter);
 
 	/* If the first page is not in cache, generic_file_aio_read() will be
-	 * returned with -ENODATA.
-	 * See corresponding code in ll_readpage(). */
-	if (result == -ENODATA)
+	 * returned with -ENODATA.  Fall back to full read path.
+	 * See corresponding code in ll_readpage().
+	 *
+	 * if we raced with page deletion, we might get EIO.  Rather than add
+	 * locking to the fast path for this rare case, fall back to the full
+	 * read path.  (See vvp_io_read_start() for rest of handling.
+	 */
+	if (result == -ENODATA || result == -EIO)
 		result = 0;
 
 	if (result > 0) {

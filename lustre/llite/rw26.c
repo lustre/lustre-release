@@ -174,21 +174,23 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 	struct lu_env *env;
 	int result = 0;
 
+	ENTRY;
+
 	LASSERT(PageLocked(vmpage));
 	if (PageWriteback(vmpage) || PageDirty(vmpage))
-		return 0;
+		RETURN(0);
 
 	mapping = vmpage->mapping;
 	if (mapping == NULL)
-		return 1;
+		RETURN(1);
 
 	obj = ll_i2info(mapping->host)->lli_clob;
 	if (obj == NULL)
-		return 1;
+		RETURN(1);
 
 	page = cl_vmpage_page(vmpage, obj);
 	if (page == NULL)
-		return 1;
+		RETURN(1);
 
 	env = cl_env_percpu_get();
 	LASSERT(!IS_ERR(env));
@@ -215,7 +217,7 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 	cl_page_put(env, page);
 
 	cl_env_percpu_put(env);
-	return result;
+	RETURN(result);
 }
 
 #ifdef HAVE_AOPS_RELEASE_FOLIO
