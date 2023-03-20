@@ -1441,7 +1441,7 @@ static inline bool mdt_changelog_allow(struct mdt_thread_info *info)
 		/* return true in case old client did not send mdt body */
 		return true;
 #else
-		return false
+		return false;
 #endif
 
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);

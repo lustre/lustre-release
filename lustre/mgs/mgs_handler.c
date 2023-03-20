@@ -991,13 +991,16 @@ static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct mgs_device *mgs = exp2mgs_dev(exp);
-	struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data;
 	struct lu_env env;
 	int rc = -EINVAL;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       obd->obd_name, cmd, len, karg, uarg);
+	if (unlikely(karg == NULL))
+		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", rc));
+	data = karg;
 
 	rc = lu_env_init(&env, LCT_MG_THREAD);
 	if (rc)
@@ -1067,8 +1070,8 @@ out_free:
 		rc = mgs_replace_nids(&env, mgs, data->ioc_inlbuf1,
 				      data->ioc_inlbuf2);
 		if (rc)
-			CERROR("%s: error replacing nids: rc = %d\n",
-			       obd->obd_name, rc);
+			CERROR("%s: error replacing NIDs for '%s': rc = %d\n",
+			       obd->obd_name, data->ioc_inlbuf1, rc);
 
 		break;
 	case OBD_IOC_CLEAR_CONFIGS:
@@ -1119,20 +1122,20 @@ out_free:
 		break;
 	case OBD_IOC_LLOG_CANCEL:
 	case OBD_IOC_LLOG_REMOVE:
-        case OBD_IOC_LLOG_CHECK:
-        case OBD_IOC_LLOG_INFO:
-        case OBD_IOC_LLOG_PRINT: {
-                struct llog_ctxt *ctxt;
+	case OBD_IOC_LLOG_CHECK:
+	case OBD_IOC_LLOG_INFO:
+	case OBD_IOC_LLOG_PRINT: {
+		struct llog_ctxt *ctxt;
 
 		ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
 		rc = llog_ioctl(&env, ctxt, cmd, data);
 		llog_ctxt_put(ctxt);
 		break;
-        }
-        default:
+	}
+	default:
 		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
 		break;
-        }
+	}
 out:
 	lu_env_fini(&env);
 	RETURN(rc);

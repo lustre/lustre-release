@@ -1669,12 +1669,18 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct osp_device *d;
-	struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data;
 	int rc = -EINVAL;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
+	if (unlikely(karg == NULL)) {
+		CERROR("%s: iocontrol from '%s' cmd=%x karg=NULL: rc = %d\n",
+		       obd->obd_name, current->comm, cmd, rc);
+		RETURN(rc);
+	}
+	data = karg;
 
 	LASSERT(obd->obd_lu_dev);
 	d = lu2osp_dev(obd->obd_lu_dev);

@@ -2835,7 +2835,7 @@ static int target_recovery_thread(void *arg)
 	/* cancel update llogs upon recovery abort */
 	if (obd->obd_abort_recovery || obd->obd_abort_mdt_recovery)
 		OBP(obd, iocontrol)(OBD_IOC_LLOG_CANCEL, obd->obd_self_export,
-				    0, NULL, NULL);
+				    0, trd, NULL);
 
 	list_for_each_entry(req, &obd->obd_final_req_queue, rq_list) {
 		/*

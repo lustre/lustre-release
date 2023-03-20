@@ -438,13 +438,13 @@ int llcrypt_ioctl_get_policy_ex(struct file *filp, void __user *uarg)
 		     offsetof(typeof(arg), policy));
 	BUILD_BUG_ON(sizeof(arg.policy) != sizeof(*policy));
 
+	if (copy_from_user(&arg, uarg, sizeof(arg.policy_size)))
+		return -EFAULT;
+
 	err = llcrypt_get_policy(file_inode(filp), policy);
 	if (err)
 		return err;
 	policy_size = llcrypt_policy_size(policy);
-
-	if (copy_from_user(&arg, uarg, sizeof(arg.policy_size)))
-		return -EFAULT;
 
 	if (policy_size > arg.policy_size)
 		return -EOVERFLOW;

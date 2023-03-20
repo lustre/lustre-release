@@ -288,23 +288,23 @@ static void helper_test20(int fd)
 
 	gid = 1234;
 	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
-	ASSERTF(rc == -1 && errno == ENOTTY, "unexpected retval: %d %s",
-		rc, strerror(errno));
+	ASSERTF(rc == -1 && (errno == ENOTTY || errno == EINVAL),
+		"unexpected retval: %d %s", rc, strerror(errno));
 
 	gid = 0;
 	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
-	ASSERTF(rc == -1 && errno == ENOTTY, "unexpected retval: %d %s",
-		rc, strerror(errno));
+	ASSERTF(rc == -1 && (errno == ENOTTY || errno == EINVAL),
+		"unexpected retval: %d %s", rc, strerror(errno));
 
 	gid = 1;
 	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
-	ASSERTF(rc == -1 && errno == ENOTTY, "unexpected retval: %d %s",
-		rc, strerror(errno));
+	ASSERTF(rc == -1 && (errno == ENOTTY || errno == EINVAL),
+		"unexpected retval: %d %s", rc, strerror(errno));
 
 	gid = -1;
 	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
-	ASSERTF(rc == -1 && errno == ENOTTY, "unexpected retval: %d %s",
-		rc, strerror(errno));
+	ASSERTF(rc == -1 && (errno == ENOTTY || errno == EINVAL),
+		"unexpected retval: %d %s", rc, strerror(errno));
 }
 
 /* Test lock / unlock on a directory */

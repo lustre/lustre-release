@@ -2197,13 +2197,26 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
 	struct obd_device *obd = exp->exp_obd;
-	struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data;
 	struct obd_import *imp = obd->u.cli.cl_import;
 	int rc;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       obd->obd_name, cmd, len, karg, uarg);
+
+	/* handle commands that do not need @karg first */
+	switch (cmd) {
+	case LL_IOC_GET_CONNECT_FLAGS:
+		if (copy_to_user(uarg, exp_connect_flags_ptr(exp),
+				 sizeof(*exp_connect_flags_ptr(exp))))
+			RETURN(-EFAULT);
+		RETURN(0);
+	}
+
+	if (unlikely(karg == NULL))
+		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", -EINVAL));
+	data = karg;
 
 	if (!try_module_get(THIS_MODULE)) {
 		CERROR("%s: cannot get module '%s'\n", obd->obd_name,
@@ -2294,12 +2307,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		OBD_FREE_PTR(oqctl);
 		GOTO(out, rc);
 	}
-	case LL_IOC_GET_CONNECT_FLAGS:
-		if (copy_to_user(uarg, exp_connect_flags_ptr(exp),
-				 sizeof(*exp_connect_flags_ptr(exp))))
-			GOTO(out, rc = -EFAULT);
-
-		GOTO(out, rc = 0);
 	case LL_IOC_LOV_SWAP_LAYOUTS:
 		rc = mdc_ioc_swap_layouts(exp, karg);
 		GOTO(out, rc);

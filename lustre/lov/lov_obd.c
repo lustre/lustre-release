@@ -957,14 +957,27 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       exp->exp_obd->obd_name, cmd, len, karg, uarg);
 
+	/* exit early for unknown ioctl types */
+	if (unlikely(_IOC_TYPE(cmd) != 'f' && cmd != IOC_OSC_SET_ACTIVE))
+		RETURN(OBD_IOC_DEBUG(D_IOCTL, obd->obd_name, cmd, "unknown",
+				     -ENOTTY));
+
+	/* can't do a generic karg == NULL check here, since it is too noisy and
+	 * we need to return -ENOTTY for unsupported ioctls instead of -EINVAL.
+	 */
 	switch (cmd) {
 	case IOC_OBD_STATFS: {
-		struct obd_ioctl_data *data = karg;
+		struct obd_ioctl_data *data;
 		struct obd_device *osc_obd;
 		struct obd_statfs stat_buf = {0};
 		struct obd_import *imp;
 		__u32 index;
 		__u32 flags;
+
+		if (unlikely(karg == NULL))
+			RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=null",
+					     -EINVAL));
+		data = karg;
 
 		memcpy(&index, data->ioc_inlbuf2, sizeof(index));
 		if (index >= count)
@@ -1005,10 +1018,15 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	}
 	case OBD_IOC_QUOTACTL: {
-		struct if_quotactl *qctl = karg;
+		struct if_quotactl *qctl;
 		struct lov_tgt_desc *tgt = NULL;
 		struct obd_quotactl *oqctl;
 		struct obd_import *imp;
+
+		if (unlikely(karg == NULL))
+			RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=null",
+					     -EINVAL));
+		qctl = karg;
 
 		if (qctl->qc_valid == QC_OSTIDX) {
 			if (count <= qctl->qc_idx)
@@ -1091,6 +1109,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 						      err);
 					if (!rc)
 						rc = err;
+
+					if (err == -ENOTTY)
+						break;
 				}
 			} else {
 				set = 1;
@@ -1098,6 +1119,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		}
 		if (!set && !rc)
 			rc = -EIO;
+		break;
 	}
 	}
 

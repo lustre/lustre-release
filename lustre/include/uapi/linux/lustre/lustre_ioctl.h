@@ -224,7 +224,8 @@ enum obd_abort_recovery_flags {
 /*	lustre/lustre_user.h	240-249 */
 /* was	LIBCFS_IOC_DEBUG_MASK	_IOWR('f', 250, long) until 2.11 */
 
-#define OBD_IOC_BARRIER		_IOWR('f', 261, OBD_IOC_DATA_TYPE)
+/* OBD_IOC_BARRIER wrongly defined as _IOWR('f', 261, OBD_IOC_DATA_TYPE) */
+#define OBD_IOC_BARRIER		_IOWR('g', 5, OBD_IOC_DATA_TYPE)
 
 #define IOC_OSC_SET_ACTIVE	_IOWR('h', 21, void *)
 

@@ -1181,8 +1181,7 @@ static int ofd_ioc_get_obj_version(const struct lu_env *env,
 	int rc = 0;
 
 	ENTRY;
-
-	if (!data->ioc_inlbuf2 || data->ioc_inllen2 != sizeof(version))
+	if (!data || !data->ioc_inlbuf2 || data->ioc_inllen2 != sizeof(version))
 		GOTO(out, rc = -EINVAL);
 
 	if (data->ioc_inlbuf1 && data->ioc_inllen1 == sizeof(fid)) {
@@ -1252,6 +1251,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	struct lu_env env;
 	struct ofd_device *ofd = ofd_exp(exp);
 	struct obd_device *obd = ofd_obd(ofd);
+	struct obd_ioctl_data *data;
 	int rc;
 
 	ENTRY;
@@ -1261,29 +1261,34 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc)
 		RETURN(rc);
 
+	/* handle commands that don't use @karg first */
+	rc = -EINVAL;
 	switch (cmd) {
 	case OBD_IOC_ABORT_RECOVERY:
-		CWARN("%s: Aborting recovery\n", obd->obd_name);
+		LCONSOLE_WARN("%s: Aborting recovery\n", obd->obd_name);
 		obd->obd_abort_recovery = 1;
 		target_stop_recovery_thread(obd);
-		break;
+		GOTO(out, rc);
 	case OBD_IOC_SYNC:
 		CDEBUG(D_RPCTRACE, "syncing ost %s\n", obd->obd_name);
 		rc = dt_sync(&env, ofd->ofd_osd);
-		break;
+		GOTO(out, rc);
 	case OBD_IOC_SET_READONLY:
 		rc = dt_sync(&env, ofd->ofd_osd);
 		if (rc == 0)
 			rc = dt_ro(&env, ofd->ofd_osd);
-		break;
-	case OBD_IOC_START_LFSCK: {
-		struct obd_ioctl_data *data = karg;
-		struct lfsck_start_param lsp;
+		GOTO(out, rc);
+	}
 
-		if (unlikely(!data)) {
-			rc = -EINVAL;
-			break;
-		}
+	if (unlikely(karg == NULL)) {
+		OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", rc = -EINVAL);
+		GOTO(out, rc);
+	}
+	data = karg;
+
+	switch (cmd) {
+	case OBD_IOC_START_LFSCK: {
+		struct lfsck_start_param lsp;
 
 		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
 		lsp.lsp_index_valid = 0;
@@ -1291,8 +1296,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		struct obd_ioctl_data *data = karg;
-		struct lfsck_stop      stop;
+		struct lfsck_stop stop;
 
 		stop.ls_status = LS_STOPPED;
 		/* Old lfsck utils may pass NULL @stop. */
@@ -1312,7 +1316,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
 		break;
 	}
-
+out:
 	lu_env_fini(&env);
 	RETURN(rc);
 }

@@ -2271,12 +2271,15 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
 	struct obd_device *obd = mdd2obd_dev(mdd);
-	struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data;
 	int rc = -EINVAL;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK\n",
 	       obd->obd_name, cmd, len, karg);
+	if (unlikely(karg == NULL))
+		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", rc));
+	data = karg;
 
 	/* Doesn't use obd_ioctl_data */
 	switch (cmd) {

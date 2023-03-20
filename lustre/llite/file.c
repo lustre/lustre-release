@@ -2639,10 +2639,14 @@ out_lump:
 
 static int ll_file_getstripe(struct inode *inode, void __user *lum, size_t size)
 {
-	struct lu_env	*env;
-	__u16		refcheck;
-	int		rc;
+	struct lu_env *env;
+	__u16 refcheck;
+	int rc;
 	ENTRY;
+
+	/* exit before doing any work if pointer is bad */
+	if (unlikely(!ll_access_ok(lum, sizeof(struct lov_user_md))))
+		RETURN(-EFAULT);
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
@@ -3948,7 +3952,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 	bool lease_broken = false;
 	fmode_t fmode = 0;
 	enum mds_op_bias bias = 0;
-	int fdv;
+	__u32 fdv;
 	struct file *layout_file = NULL;
 	void *data = NULL;
 	size_t data_size = 0;
@@ -3984,12 +3988,12 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 
 		bias = MDS_CLOSE_RESYNC_DONE;
 		break;
-	case LL_LEASE_LAYOUT_MERGE: {
+	case LL_LEASE_LAYOUT_MERGE:
 		if (ioc->lil_count != 1)
 			GOTO(out_lease_close, rc = -EINVAL);
 
 		uarg += sizeof(*ioc);
-		if (copy_from_user(&fdv, uarg, sizeof(__u32)))
+		if (copy_from_user(&fdv, uarg, sizeof(fdv)))
 			GOTO(out_lease_close, rc = -EFAULT);
 
 		layout_file = fget(fdv);
@@ -4003,20 +4007,21 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 		data = file_inode(layout_file);
 		bias = MDS_CLOSE_LAYOUT_MERGE;
 		break;
-	}
 	case LL_LEASE_LAYOUT_SPLIT: {
-		int mirror_id;
+		__u32 mirror_id;
 
 		if (ioc->lil_count != 2)
 			GOTO(out_lease_close, rc = -EINVAL);
 
 		uarg += sizeof(*ioc);
-		if (copy_from_user(&fdv, uarg, sizeof(__u32)))
+		if (copy_from_user(&fdv, uarg, sizeof(fdv)))
 			GOTO(out_lease_close, rc = -EFAULT);
 
-		uarg += sizeof(__u32);
-		if (copy_from_user(&mirror_id, uarg, sizeof(__u32)))
+		uarg += sizeof(fdv);
+		if (copy_from_user(&mirror_id, uarg, sizeof(mirror_id)))
 			GOTO(out_lease_close, rc = -EFAULT);
+		if (mirror_id >= MIRROR_ID_NEG)
+			GOTO(out_lease_close, rc = -EINVAL);
 
 		layout_file = fget(fdv);
 		if (!layout_file)
@@ -4214,6 +4219,9 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
 		RETURN(-ENOTTY);
 
+	/* can't do a generic karg == NULL check here, since it is too noisy and
+	 * we need to return -ENOTTY for unsupported ioctls instead of -EINVAL.
+	 */
 	switch (cmd) {
 	case LL_IOC_GETFLAGS:
 		/* Get the current value of the file flags */
@@ -4315,6 +4323,9 @@ out:
 		struct hsm_user_state *hus;
 		int rc;
 
+		if (!ll_access_ok(uarg, sizeof(*hus)))
+			RETURN(-EFAULT);
+
 		OBD_ALLOC_PTR(hus);
 		if (hus == NULL)
 			RETURN(-ENOMEM);
@@ -4322,17 +4333,16 @@ out:
 		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
 					     LUSTRE_OPC_ANY, hus);
 		if (IS_ERR(op_data)) {
-			OBD_FREE_PTR(hus);
-			RETURN(PTR_ERR(op_data));
+			rc = PTR_ERR(op_data);
+		} else {
+			rc = obd_iocontrol(cmd, ll_i2mdexp(inode),
+					   sizeof(*op_data), op_data, NULL);
+
+			if (copy_to_user(uarg, hus, sizeof(*hus)))
+				rc = -EFAULT;
+
+			ll_finish_md_op_data(op_data);
 		}
-
-		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
-				   op_data, NULL);
-
-		if (copy_to_user(uarg, hus, sizeof(*hus)))
-			rc = -EFAULT;
-
-		ll_finish_md_op_data(op_data);
 		OBD_FREE_PTR(hus);
 		RETURN(rc);
 	}
@@ -4344,12 +4354,10 @@ out:
 		if (hss == NULL)
 			RETURN(-ENOMEM);
 
-		if (copy_from_user(hss, uarg, sizeof(*hss))) {
-			OBD_FREE_PTR(hss);
-			RETURN(-EFAULT);
-		}
-
-		rc = ll_hsm_state_set(inode, hss);
+		if (copy_from_user(hss, uarg, sizeof(*hss)))
+			rc = -EFAULT;
+		else
+			rc = ll_hsm_state_set(inode, hss);
 
 		OBD_FREE_PTR(hss);
 		RETURN(rc);
@@ -4359,6 +4367,9 @@ out:
 		struct hsm_current_action *hca;
 		const char *action;
 		int rc;
+
+		if (!ll_access_ok(uarg, sizeof(*hca)))
+			RETURN(-EFAULT);
 
 		OBD_ALLOC_PTR(hca);
 		if (hca == NULL)
@@ -4440,12 +4451,10 @@ skip_copy:
 		if (hui == NULL)
 			RETURN(-ENOMEM);
 
-		if (copy_from_user(hui, uarg, sizeof(*hui))) {
-			OBD_FREE_PTR(hui);
-			RETURN(-EFAULT);
-		}
-
-		rc = ll_hsm_import(inode, file, hui);
+		if (copy_from_user(hui, uarg, sizeof(*hui)))
+			rc = -EFAULT;
+		else
+			rc = ll_hsm_import(inode, file, hui);
 
 		OBD_FREE_PTR(hui);
 		RETURN(rc);

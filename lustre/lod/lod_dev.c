@@ -2738,13 +2738,16 @@ static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
-	struct obd_ioctl_data *data = karg;
+	struct obd_ioctl_data *data;
 	struct lu_env env;
 	int rc;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       obd->obd_name, cmd, len, karg, uarg);
+	if (unlikely(karg == NULL))
+		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", -EINVAL));
+	data = karg;
 
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_MD_THREAD);
 	if (rc) {

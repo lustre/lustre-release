@@ -7655,6 +7655,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	struct obd_device *obd = exp->exp_obd;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	struct dt_device *dt = mdt->mdt_bottom;
+	struct obd_ioctl_data *data;
 	struct lu_env env;
 	int rc;
 
@@ -7666,25 +7667,35 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc)
 		RETURN(rc);
 
+	/* handle commands that don't use @karg first */
 	switch (cmd) {
 	case OBD_IOC_SYNC:
 		rc = mdt_device_sync(&env, mdt);
-		break;
+		GOTO(out, rc);
 	case OBD_IOC_SET_READONLY:
 		rc = dt_sync(&env, dt);
 		if (rc == 0)
 			rc = dt_ro(&env, dt);
-		break;
-	case OBD_IOC_ABORT_RECOVERY: {
-		struct obd_ioctl_data *data = karg;
+		GOTO(out, rc);
+	}
 
+	if (unlikely(karg == NULL)) {
+		OBD_IOC_ERROR(obd->obd_name, cmd, "karg=NULL", rc = -EINVAL);
+		GOTO(out, rc);
+	}
+	data = karg;
+
+	switch (cmd) {
+	case OBD_IOC_ABORT_RECOVERY: {
 		if (data->ioc_type & OBD_FLG_ABORT_RECOV_MDT) {
-			CWARN("%s: Aborting MDT recovery\n", obd->obd_name);
+			LCONSOLE_WARN("%s: Aborting MDT recovery\n",
+				      obd->obd_name);
 			obd->obd_abort_mdt_recovery = 1;
 			wake_up(&obd->obd_next_transno_waitq);
 		} else { /* if (data->ioc_type & OBD_FLG_ABORT_RECOV_OST) */
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */
-			CWARN("%s: Aborting client recovery\n", obd->obd_name);
+			LCONSOLE_WARN("%s: Aborting client recovery\n",
+				      obd->obd_name);
 			obd->obd_abort_recovery = 1;
 			target_stop_recovery_thread(obd);
 		}
@@ -7696,19 +7707,12 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case OBD_IOC_CHANGELOG_CLEAR:
 	case OBD_IOC_LLOG_PRINT:
 	case OBD_IOC_LLOG_CANCEL:
-		rc = mdt->mdt_child->md_ops->mdo_iocontrol(&env,
-							   mdt->mdt_child,
+		rc = mdt->mdt_child->md_ops->mdo_iocontrol(&env, mdt->mdt_child,
 							   cmd, len, karg);
 		break;
 	case OBD_IOC_START_LFSCK: {
 		struct md_device *next = mdt->mdt_child;
-		struct obd_ioctl_data *data = karg;
 		struct lfsck_start_param lsp;
-
-		if (unlikely(data == NULL)) {
-			rc = -EINVAL;
-			break;
-		}
 
 		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
 		lsp.lsp_index_valid = 0;
@@ -7716,9 +7720,8 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		struct md_device	*next = mdt->mdt_child;
-		struct obd_ioctl_data	*data = karg;
-		struct lfsck_stop	 stop;
+		struct md_device *next = mdt->mdt_child;
+		struct lfsck_stop stop;
 
 		stop.ls_status = LS_STOPPED;
 		/* Old lfsck utils may pass NULL @stop. */
@@ -7732,8 +7735,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	}
 	case OBD_IOC_QUERY_LFSCK: {
-		struct md_device	*next = mdt->mdt_child;
-		struct obd_ioctl_data	*data = karg;
+		struct md_device *next = mdt->mdt_child;
 
 		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0,
 						 data->ioc_inlbuf1);
@@ -7764,7 +7766,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
 		break;
 	}
-
+out:
 	lu_env_fini(&env);
 	RETURN(rc);
 }

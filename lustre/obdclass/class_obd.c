@@ -296,16 +296,11 @@ int obd_ioctl_getdata(struct obd_ioctl_data **datap, int *len, void __user *arg)
 	}
 	*len = hdr.ioc_len;
 
-	if (copy_from_user(data, arg, hdr.ioc_len)) {
-		OBD_FREE_LARGE(data, hdr.ioc_len);
-		RETURN(-EFAULT);
-	}
+	if (copy_from_user(data, arg, hdr.ioc_len))
+		GOTO(out_free, rc = -EFAULT);
 
-	if (obd_ioctl_is_invalid(data)) {
-		CERROR("ioctl not correctly formatted\n");
-		OBD_FREE_LARGE(data, hdr.ioc_len);
-		RETURN(-EINVAL);
-	}
+	if (obd_ioctl_is_invalid(data))
+		GOTO(out_free, rc = -EINVAL);
 
 	if (data->ioc_inllen1) {
 		data->ioc_inlbuf1 = &data->ioc_bulk[0];
@@ -328,6 +323,10 @@ int obd_ioctl_getdata(struct obd_ioctl_data **datap, int *len, void __user *arg)
 	*datap = data;
 
 	RETURN(0);
+
+out_free:
+	OBD_FREE_LARGE(data, *len);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(obd_ioctl_getdata);
 
@@ -339,6 +338,10 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "obdclass: cmd=%x len=%u uarg=%pK\n", cmd, len, uarg);
+	if (unlikely(_IOC_TYPE(cmd) != 'f' && cmd != IOC_OSC_SET_ACTIVE &&
+		     cmd != OBD_IOC_BARRIER))
+		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "unknown", -ENOTTY));
+
 	rc = obd_ioctl_getdata(&data, &len, uarg);
 	if (rc) {
 		CERROR("%s: ioctl data error: rc = %d\n", current->comm, rc);
