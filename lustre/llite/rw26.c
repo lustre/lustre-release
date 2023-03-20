@@ -168,10 +168,10 @@ static void ll_invalidatepage(struct page *vmpage,
 
 static bool do_release_page(struct page *vmpage, gfp_t wait)
 {
-	struct lu_env *env;
-	struct cl_object *obj;
-	struct cl_page *clpage;
 	struct address_space *mapping;
+	struct cl_object *obj;
+	struct cl_page *page;
+	struct lu_env *env;
 	int result = 0;
 
 	LASSERT(PageLocked(vmpage));
@@ -186,23 +186,16 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 	if (obj == NULL)
 		return 1;
 
-	clpage = cl_vmpage_page(vmpage, obj);
-	if (clpage == NULL)
+	page = cl_vmpage_page(vmpage, obj);
+	if (page == NULL)
 		return 1;
 
 	env = cl_env_percpu_get();
 	LASSERT(!IS_ERR(env));
 
-	/* we must not delete the cl_page if the vmpage is in use, otherwise we
-	 * disconnect the vmpage from Lustre while it's still alive(!), which
-	 * means we won't find it to discard on lock cancellation.
-	 *
-	 * References here are: caller + cl_page + page cache.
-	 * Any other references are potentially transient and must be ignored.
-	 */
-	if (!cl_page_in_use(clpage) && !vmpage_in_use(vmpage, 1)) {
+	if (!cl_page_in_use(page)) {
 		result = 1;
-		cl_page_delete(env, clpage);
+		cl_page_delete(env, page);
 	}
 
 	/* To use percpu env array, the call path can not be rescheduled;
@@ -219,7 +212,7 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 	 * that we won't get into object delete path.
 	 */
 	LASSERT(cl_object_refc(obj) > 1);
-	cl_page_put(env, clpage);
+	cl_page_put(env, page);
 
 	cl_env_percpu_put(env);
 	return result;

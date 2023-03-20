@@ -41,7 +41,6 @@ ALWAYS_EXCEPT="$SANITY_EXCEPT "
 always_except LU-9693  42a 42c
 always_except LU-6493  42b
 always_except LU-16515 118c 118d
-always_except LU-14541 277
 always_except LU-8411  407
 
 if $SHARED_KEY; then
@@ -25602,21 +25601,18 @@ test_398a() { # LU-4198
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	$LCTL set_param ldlm.namespaces.*.lru_size=clear
 
-	# Disabled: DIO does not push out buffered I/O pages, see LU-12587
 	# request a new lock on client
-	#dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
 
-	#dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
-	#local lock_count=$($LCTL get_param -n \
-	#		   ldlm.namespaces.$imp_name.lru_size)
-	#[[ $lock_count -eq 0 ]] || error "lock should be cancelled by direct IO"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
+	local lock_count=$($LCTL get_param -n \
+			   ldlm.namespaces.$imp_name.lru_size)
+	[[ $lock_count -eq 0 ]] || error "lock should be cancelled by direct IO"
 
 	$LCTL set_param ldlm.namespaces.*-OST0000-osc-ffff*.lru_size=clear
 
 	# no lock cached, should use lockless DIO and not enqueue new lock
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct \
-		conv=notrunc ||
-		error "dio write failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
 	lock_count=$($LCTL get_param -n \
 		     ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -eq 0 ]] || error "no lock should be held by direct IO"
