@@ -2974,6 +2974,7 @@ void ll_delete_inode(struct inode *inode)
         EXIT;
 }
 
+/* ioctl commands shared between files and directories */
 int ll_iocontrol(struct inode *inode, struct file *file,
 		 unsigned int cmd, void __user *uarg)
 {
@@ -2983,27 +2984,31 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 	ENTRY;
 
 	switch (cmd) {
+	case BLKSSZGET:
+		RETURN(put_user(PAGE_SIZE, (int __user *)uarg));
+	case FSFILT_IOC_GETVERSION:
+	case FS_IOC_GETVERSION:
+		RETURN(put_user(inode->i_generation, (int __user *)uarg));
 	case FS_IOC_GETFLAGS: {
-                struct mdt_body *body;
-                struct md_op_data *op_data;
+		struct mdt_body *body;
+		struct md_op_data *op_data;
 
-                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
-                                             0, 0, LUSTRE_OPC_ANY,
-                                             NULL);
-                if (IS_ERR(op_data))
-                        RETURN(PTR_ERR(op_data));
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, NULL);
+		if (IS_ERR(op_data))
+			RETURN(PTR_ERR(op_data));
 
-                op_data->op_valid = OBD_MD_FLFLAGS;
-                rc = md_getattr(sbi->ll_md_exp, op_data, &req);
-                ll_finish_md_op_data(op_data);
-                if (rc) {
+		op_data->op_valid = OBD_MD_FLFLAGS;
+		rc = md_getattr(sbi->ll_md_exp, op_data, &req);
+		ll_finish_md_op_data(op_data);
+		if (rc) {
 			CERROR("%s: failure inode "DFID": rc = %d\n",
 			       sbi->ll_md_exp->exp_obd->obd_name,
 			       PFID(ll_inode2fid(inode)), rc);
-                        RETURN(-abs(rc));
-                }
+			RETURN(-abs(rc));
+		}
 
-                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 
 		flags = body->mbo_flags;
 		/* if Lustre specific LUSTRE_ENCRYPT_FL flag is set, also set
@@ -3042,8 +3047,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		op_data->op_attr_flags = flags;
 		op_data->op_xvalid |= OP_XVALID_FLAGS;
 		rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &req);
-                ll_finish_md_op_data(op_data);
-                ptlrpc_req_finished(req);
+		ll_finish_md_op_data(op_data);
+		ptlrpc_req_finished(req);
 		if (rc)
 			RETURN(rc);
 
@@ -3061,12 +3066,88 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 		OBD_FREE_PTR(attr);
 		RETURN(rc);
-        }
-        default:
-                RETURN(-ENOSYS);
-        }
+	}
+	case FS_IOC_FSGETXATTR:
+		RETURN(ll_ioctl_fsgetxattr(inode, cmd, uarg));
+	case FS_IOC_FSSETXATTR:
+		RETURN(ll_ioctl_fssetxattr(inode, cmd, uarg));
+	case LL_IOC_PROJECT:
+		RETURN(ll_ioctl_project(file, cmd, uarg));
+	case IOC_OBD_STATFS:
+		RETURN(ll_obd_statfs(inode, uarg));
+	case LL_IOC_GET_MDTIDX: {
+		rc = ll_get_mdt_idx(inode);
+		if (rc < 0)
+			RETURN(rc);
 
-        RETURN(0);
+		if (put_user(rc, (int __user *)uarg))
+			RETURN(-EFAULT);
+
+		RETURN(0);
+	}
+	case LL_IOC_FLUSHCTX:
+		RETURN(ll_flush_ctx(inode));
+#ifdef HAVE_LUSTRE_CRYPTO
+	case LL_IOC_ADD_ENCRYPTION_KEY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		rc = llcrypt_ioctl_add_key(file, uarg);
+#ifdef CONFIG_LL_ENCRYPTION
+		if (!rc && S_ISDIR(inode->i_mode))
+			sptlrpc_enc_pool_add_user();
+#endif
+		RETURN(rc);
+	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		RETURN(llcrypt_ioctl_get_key_status(file, uarg));
+	case LL_IOC_GET_ENCRYPTION_POLICY_EX:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		RETURN(llcrypt_ioctl_get_policy_ex(file, uarg));
+	case LL_IOC_SET_ENCRYPTION_POLICY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		RETURN(llcrypt_ioctl_set_policy(file, uarg));
+	case LL_IOC_REMOVE_ENCRYPTION_KEY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		RETURN(llcrypt_ioctl_remove_key(file, uarg));
+	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		RETURN(llcrypt_ioctl_remove_key_all_users(file, uarg));
+#endif
+	case LL_IOC_GETPARENT:
+		RETURN(ll_getparent(file, uarg));
+	case LL_IOC_PATH2FID:
+		if (copy_to_user(uarg, ll_inode2fid(inode),
+				 sizeof(struct lu_fid)))
+			RETURN(-EFAULT);
+		RETURN(0);
+	case LL_IOC_UNLOCK_FOREIGN: {
+		struct dentry *dentry = file_dentry(file);
+
+		/* if not a foreign symlink do nothing */
+		if (ll_foreign_is_removable(dentry, true)) {
+			CDEBUG(D_INFO,
+			       "prevent unlink of non-foreign file ("DFID")\n",
+			       PFID(ll_inode2fid(inode)));
+			RETURN(-EOPNOTSUPP);
+		}
+		RETURN(0);
+	}
+	case OBD_IOC_FID2PATH:
+		RETURN(ll_fid2path(inode, uarg));
+	case OBD_IOC_GETNAME_OLD:
+	case OBD_IOC_GETDTNAME:
+	case OBD_IOC_GETMDNAME:
+		RETURN(ll_get_obd_name(inode, cmd, uarg));
+	default:
+		RETURN(-ENOTTY);
+	}
+
+	RETURN(0);
 }
 
 int ll_flush_ctx(struct inode *inode)

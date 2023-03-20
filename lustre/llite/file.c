@@ -2579,11 +2579,10 @@ out:
 static int ll_lov_setea(struct inode *inode, struct file *file,
 			void __user *arg)
 {
-	__u64			 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
-	struct lov_user_md	*lump;
-	int			 lum_size = sizeof(struct lov_user_md) +
-					    sizeof(struct lov_user_ost_data);
-	int			 rc;
+	__u64 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
+	struct lov_user_md *lump;
+	int lum_size = sizeof(*lump) + sizeof(struct lov_user_ost_data);
+	int rc;
 	ENTRY;
 
 	if (!capable(CAP_SYS_ADMIN))
@@ -2591,7 +2590,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 
 	OBD_ALLOC_LARGE(lump, lum_size);
 	if (lump == NULL)
-                RETURN(-ENOMEM);
+		RETURN(-ENOMEM);
 
 	if (copy_from_user(lump, arg, lum_size))
 		GOTO(out_lump, rc = -EFAULT);
@@ -4259,39 +4258,10 @@ out:
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:
 		RETURN(ll_file_getstripe(inode, uarg, 0));
-	case FS_IOC_GETFLAGS:
-	case FS_IOC_SETFLAGS:
-		RETURN(ll_iocontrol(inode, file, cmd, uarg));
-	case FSFILT_IOC_GETVERSION:
-	case FS_IOC_GETVERSION:
-		RETURN(put_user(inode->i_generation, (int __user *)arg));
-	/* We need to special case any other ioctls we want to handle,
-	 * to send them to the MDS/OST as appropriate and to properly
-	 * network encode the arg field. */
-	case FS_IOC_SETVERSION:
-		RETURN(-ENOTSUPP);
-
 	case LL_IOC_GROUP_LOCK:
 		RETURN(ll_get_grouplock(inode, file, arg));
 	case LL_IOC_GROUP_UNLOCK:
 		RETURN(ll_put_grouplock(inode, file, arg));
-	case IOC_OBD_STATFS:
-		RETURN(ll_obd_statfs(inode, uarg));
-
-	case LL_IOC_FLUSHCTX:
-		RETURN(ll_flush_ctx(inode));
-	case LL_IOC_PATH2FID: {
-		if (copy_to_user(uarg, ll_inode2fid(inode),
-				 sizeof(struct lu_fid)))
-			RETURN(-EFAULT);
-
-		RETURN(0);
-	}
-	case LL_IOC_GETPARENT:
-		RETURN(ll_getparent(file, uarg));
-
-	case OBD_IOC_FID2PATH:
-		RETURN(ll_fid2path(inode, uarg));
 	case LL_IOC_DATA_VERSION: {
 		struct ioc_data_version idv;
 		int rc;
@@ -4307,23 +4277,6 @@ out:
 
 		RETURN(rc);
 	}
-
-	case LL_IOC_GET_MDTIDX: {
-		int mdtidx;
-
-		mdtidx = ll_get_mdt_idx(inode);
-		if (mdtidx < 0)
-			RETURN(mdtidx);
-
-		if (put_user(mdtidx, (int __user *)arg))
-			RETURN(-EFAULT);
-
-		RETURN(0);
-	}
-	case OBD_IOC_GETNAME_OLD:
-	case OBD_IOC_GETDTNAME:
-	case OBD_IOC_GETMDNAME:
-		RETURN(ll_get_obd_name(inode, cmd, uarg));
 	case LL_IOC_HSM_STATE_GET: {
 		struct md_op_data *op_data;
 		struct hsm_user_state *hus;
@@ -4559,14 +4512,6 @@ out_ladvise:
 		fd->fd_designated_mirror = arg;
 		RETURN(0);
 	}
-	case FS_IOC_FSGETXATTR:
-		RETURN(ll_ioctl_fsgetxattr(inode, cmd, uarg));
-	case FS_IOC_FSSETXATTR:
-		RETURN(ll_ioctl_fssetxattr(inode, cmd, uarg));
-	case LL_IOC_PROJECT:
-		RETURN(ll_ioctl_project(file, cmd, uarg));
-	case BLKSSZGET:
-		RETURN(put_user(PAGE_SIZE, (int __user *)arg));
 	case LL_IOC_HEAT_GET: {
 		struct lu_heat uheat;
 		struct lu_heat *heat;
@@ -4641,47 +4586,10 @@ out_state:
 		OBD_FREE_PTR(state);
 		RETURN(rc);
 	}
-#ifdef HAVE_LUSTRE_CRYPTO
-	case LL_IOC_SET_ENCRYPTION_POLICY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_set_policy(file, uarg);
-	case LL_IOC_GET_ENCRYPTION_POLICY_EX:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_get_policy_ex(file, uarg);
-	case LL_IOC_ADD_ENCRYPTION_KEY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_add_key(file, uarg);
-	case LL_IOC_REMOVE_ENCRYPTION_KEY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key(file, uarg);
-	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key_all_users(file, uarg);
-	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_get_key_status(file, uarg);
-#endif
-
-	case LL_IOC_UNLOCK_FOREIGN: {
-		struct dentry *dentry = file_dentry(file);
-
-		/* if not a foreign symlink do nothing */
-		if (ll_foreign_is_removable(dentry, true)) {
-			CDEBUG(D_INFO,
-			       "prevent unlink of non-foreign file ("DFID")\n",
-			       PFID(ll_inode2fid(inode)));
-			RETURN(-EOPNOTSUPP);
-		}
-		RETURN(0);
-	}
-
 	default:
+		rc = ll_iocontrol(inode, file, cmd, uarg);
+		if (rc != -ENOTTY)
+			RETURN(rc);
 		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL, uarg));
 	}
 }

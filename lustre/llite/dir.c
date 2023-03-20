@@ -1509,30 +1509,6 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
 	switch (cmd) {
-	case FS_IOC_GETFLAGS:
-	case FS_IOC_SETFLAGS:
-		RETURN(ll_iocontrol(inode, file, cmd, uarg));
-	case FSFILT_IOC_GETVERSION:
-	case FS_IOC_GETVERSION:
-		RETURN(put_user(inode->i_generation, (int __user *)arg));
-	/* We need to special case any other ioctls we want to handle,
-	 * to send them to the MDS/OST as appropriate and to properly
-	 * network encode the arg field. */
-	case FS_IOC_SETVERSION:
-		RETURN(-ENOTSUPP);
-
-	case LL_IOC_GET_MDTIDX: {
-		int mdtidx;
-
-		mdtidx = ll_get_mdt_idx(inode);
-		if (mdtidx < 0)
-			RETURN(mdtidx);
-
-		if (put_user((int)mdtidx, (int __user *)arg))
-			RETURN(-EFAULT);
-
-		return 0;
-	}
 	case IOC_MDC_LOOKUP: {
 		int namelen, len = 0;
 		char *filename;
@@ -1844,17 +1820,6 @@ finish_req:
 		ptlrpc_req_finished(root_request);
 		return rc;
 	}
-
-	case LL_IOC_UNLOCK_FOREIGN:
-		/* if not a foreign symlink do nothing */
-		if (ll_foreign_is_removable(dentry, true)) {
-			CDEBUG(D_INFO,
-			       "prevent rmdir of non-foreign dir ("DFID")\n",
-			       PFID(ll_inode2fid(inode)));
-			RETURN(-EOPNOTSUPP);
-		}
-		RETURN(0);
-
 	case LL_IOC_REMOVE_ENTRY: {
 		char		*filename = NULL;
 		int		 namelen = 0;
@@ -1886,8 +1851,6 @@ out_rmdir:
 		RETURN(ll_rmfid(file, uarg));
 	case LL_IOC_LOV_SWAP_LAYOUTS:
 		RETURN(-EPERM);
-	case IOC_OBD_STATFS:
-		RETURN(ll_obd_statfs(inode, uarg));
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:
 	case LL_IOC_MDC_GETINFO_V1:
@@ -2100,12 +2063,6 @@ out_quotactl:
 		OBD_FREE(qctl, qctl_len);
 		RETURN(rc);
 	}
-	case OBD_IOC_GETNAME_OLD:
-	case OBD_IOC_GETDTNAME:
-	case OBD_IOC_GETMDNAME:
-		RETURN(ll_get_obd_name(inode, cmd, uarg));
-	case LL_IOC_FLUSHCTX:
-		RETURN(ll_flush_ctx(inode));
 	case LL_IOC_GETOBDCOUNT: {
 		u32 count, vallen;
 		struct obd_export *exp;
@@ -2129,17 +2086,8 @@ out_quotactl:
 
 		RETURN(0);
 	}
-	case LL_IOC_PATH2FID:
-		if (copy_to_user(uarg, ll_inode2fid(inode),
-				 sizeof(struct lu_fid)))
-			RETURN(-EFAULT);
-		RETURN(0);
 	case LL_IOC_GET_CONNECT_FLAGS:
 		RETURN(obd_iocontrol(cmd, sbi->ll_md_exp, 0, NULL, uarg));
-	case OBD_IOC_FID2PATH:
-		RETURN(ll_fid2path(inode, uarg));
-	case LL_IOC_GETPARENT:
-		RETURN(ll_getparent(file, uarg));
 	case LL_IOC_FID2MDTIDX: {
 		struct obd_export *exp = ll_i2mdexp(inode);
 		struct lu_fid fid;
@@ -2320,12 +2268,6 @@ migrate_free:
 
 		RETURN(rc);
 	}
-	case FS_IOC_FSGETXATTR:
-		RETURN(ll_ioctl_fsgetxattr(inode, cmd, uarg));
-	case FS_IOC_FSSETXATTR:
-		RETURN(ll_ioctl_fssetxattr(inode, cmd, uarg));
-	case LL_IOC_PROJECT:
-		RETURN(ll_ioctl_project(file, cmd, uarg));
 	case LL_IOC_PCC_DETACH_BY_FID: {
 		struct lu_pcc_detach_fid *detach;
 		struct lu_fid *fid;
@@ -2361,38 +2303,10 @@ out_detach:
 		OBD_FREE_PTR(detach);
 		RETURN(rc);
 	}
-#ifdef HAVE_LUSTRE_CRYPTO
-	case LL_IOC_SET_ENCRYPTION_POLICY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_set_policy(file, uarg);
-	case LL_IOC_GET_ENCRYPTION_POLICY_EX:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_get_policy_ex(file, uarg);
-	case LL_IOC_ADD_ENCRYPTION_KEY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		rc = llcrypt_ioctl_add_key(file, uarg);
-#ifdef CONFIG_LL_ENCRYPTION
-		if (!rc)
-			sptlrpc_enc_pool_add_user();
-#endif
-		return rc;
-	case LL_IOC_REMOVE_ENCRYPTION_KEY:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key(file, uarg);
-	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key_all_users(file, uarg);
-	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
-		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
-			return -EOPNOTSUPP;
-		return llcrypt_ioctl_get_key_status(file, uarg);
-#endif
 	default:
+		rc = ll_iocontrol(inode, file, cmd, uarg);
+		if (rc != -ENOTTY)
+			RETURN(rc);
 		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL, uarg));
 	}
 }
