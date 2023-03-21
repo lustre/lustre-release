@@ -1,4 +1,15 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre-dkms_post-build.sh
+#
+# Script run after dkms build
+#
+
+#
 # $1 : $module
 # $2 : $module_version
 # $3 : $kernelver
@@ -15,11 +26,15 @@
 # beginning of the DKMS build step when its content has to be on-target
 # customized during pre_build script. This can lead to incomplete list
 # of built Lustre kernel modules then to be saved for next DKMS install step.
+#
 
+#
 # Use this place to also save config.log that has been generated during
 # pre_build.
 # $7/$1/$2/$3/$5/log repository should have already been created to save
 # make.log and $kernel_config
+#
+
 mkdir -p "$7/$1/$2/$3/$5/log"
 cp -f "$7/$1/$2/build/config.log" "$7/$1/$2/$3/$5/log/config.log" 2>/dev/null
 cp -f "$7/$1/$2/build/config.h" \

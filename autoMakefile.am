@@ -1,3 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# autoMakefile.am
+#
+# Used by automake to create the top-level autoMakefile.in,
+# which is used by config.status to create the top-level
+# autoMakefile
+#
+
 SUBDIRS := @LDISKFS_SUBDIR@ \
 	. \
 	@LUSTREIOKIT_SUBDIR@ \

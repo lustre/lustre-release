@@ -1,4 +1,12 @@
-# lustre.spec
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre.spec.in
+#
+# spec file template for RHEL package builds
+#
 
 # Declare rpmbuild --with/--without parameters
 %bcond_without servers
@@ -113,22 +121,22 @@
 # Set the package name prefix
 %if %{undefined lustre_name}
     %if %{with servers}
-        %global lustre_name lustre
+	%global lustre_name lustre
     %else
-        %global lustre_name lustre-client
+	%global lustre_name lustre-client
     %endif
 %endif
 
 %if %{with lustre_modules}
 %if %{undefined kmoddir}
     %if %{defined kernel_module_package_moddir}
-        %global kmoddir %{kernel_module_package_moddir}
+	%global kmoddir %{kernel_module_package_moddir}
     %else
-        %if %{defined suse_kernel_module_package}
-            %global kmoddir updates
-        %else
-            %global kmoddir extra
-        %endif
+	%if %{defined suse_kernel_module_package}
+	    %global kmoddir updates
+	%else
+	    %global kmoddir extra
+	%endif
     %endif
 %endif
 

@@ -1,6 +1,16 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# configure.ac
+#
+# Used by autoconf to create the configure script
+#
+
 AC_PREREQ([2.57])
 AC_INIT([Lustre], m4_esyscmd_s([./LUSTRE-VERSION-GEN]),
-        [https://jira.whamcloud.com/], [lustre])
+	[https://jira.whamcloud.com/], [lustre])
 
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])

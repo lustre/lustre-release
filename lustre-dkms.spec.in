@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre-dkms.spec.in
+#
+# spec file template for RHEL dkms package builds
+#
+
 %bcond_without servers
 %bcond_without zfs
 %bcond_with ldiskfs
@@ -146,8 +156,8 @@ fi
 %post
 for POSTINST in /usr/lib/dkms/common.postinst; do
     if [ -f $POSTINST ]; then
-        $POSTINST %{module} %{version}
-        exit $?
+	$POSTINST %{module} %{version}
+	exit $?
     fi
     echo "WARNING: $POSTINST does not exist."
 done

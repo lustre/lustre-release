@@ -1,4 +1,15 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre-dkms_pre-build.sh
+#
+# Script run before dkms build
+#
+
+#
 # $1 : $module
 # $2 : $module_version
 # $3 : $kernelver
@@ -6,6 +17,7 @@
 # $5 : $arch
 # $6 : $source_tree
 # $7 : $dkms_tree
+#
 
 case $1 in
     lustre-client)
