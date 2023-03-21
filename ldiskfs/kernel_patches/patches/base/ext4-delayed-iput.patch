@@ -1,21 +1,88 @@
-diff --git a/fs/ext4/super.c b/fs/ext4/super.c
-index 1ac2f2cdc..197dd546d 100644
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
-@@ -972,6 +972,8 @@ static void ext4_put_super(struct super_block *sb)
- 	int aborted = 0;
+Index: b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/ext4.h
+===================================================================
+--- b2_15_linux-4.18.0-425.3.1.el8.orig/fs/ext4/ext4.h
++++ b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/ext4.h
+@@ -1534,8 +1534,11 @@ struct ext4_sb_info {
+ 	struct flex_groups * __rcu *s_flex_groups;
+ 	ext4_group_t s_flex_groups_allocated;
+ 
+-	/* workqueue for reserved extent conversions (buffered io) */
+-	struct workqueue_struct *rsv_conversion_wq;
++	/*
++	 * workqueue for reserved extent conversions (buffered io)
++	 * and large ea inodes reclaim
++	 */
++	struct workqueue_struct *s_misc_wq;
+ 
+ 	/* timer for periodic error stats printing */
+ 	struct timer_list s_err_report;
+Index: b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/page-io.c
+===================================================================
+--- b2_15_linux-4.18.0-425.3.1.el8.orig/fs/ext4/page-io.c
++++ b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/page-io.c
+@@ -207,7 +207,7 @@ static void ext4_add_complete_io(ext4_io
+ 	WARN_ON(!(io_end->flag & EXT4_IO_END_UNWRITTEN));
+ 	WARN_ON(!io_end->handle && sbi->s_journal);
+ 	spin_lock_irqsave(&ei->i_completed_io_lock, flags);
+-	wq = sbi->rsv_conversion_wq;
++	wq = sbi->s_misc_wq;
+ 	if (list_empty(&ei->i_rsv_conversion_list))
+ 		queue_work(wq, &ei->i_rsv_conversion_work);
+ 	list_add_tail(&io_end->list, &ei->i_rsv_conversion_list);
+Index: b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/super.c
+===================================================================
+--- b2_15_linux-4.18.0-425.3.1.el8.orig/fs/ext4/super.c
++++ b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/super.c
+@@ -1022,9 +1022,10 @@ static void ext4_put_super(struct super_
  	int i, err;
  
-+	flush_scheduled_work();
-+
  	ext4_unregister_li_request(sb);
++	flush_workqueue(sbi->s_misc_wq);
  	ext4_quota_off_umount(sb);
  
-diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
-index 491f9ee40..6a77f12d1 100644
---- a/fs/ext4/xattr.c
-+++ b/fs/ext4/xattr.c
-@@ -1551,6 +1551,31 @@ static int ext4_xattr_inode_lookup_create(handle_t *handle, struct inode *inode,
+-	destroy_workqueue(sbi->rsv_conversion_wq);
++	destroy_workqueue(sbi->s_misc_wq);
+ 
+ 	/*
+ 	 * Unregister sysfs before destroying jbd2 journal.
+@@ -4588,9 +4589,9 @@ no_journal:
+ 	 * The maximum number of concurrent works can be high and
+ 	 * concurrency isn't really necessary.  Limit it to 1.
+ 	 */
+-	EXT4_SB(sb)->rsv_conversion_wq =
+-		alloc_workqueue("ext4-rsv-conversion", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
+-	if (!EXT4_SB(sb)->rsv_conversion_wq) {
++	EXT4_SB(sb)->s_misc_wq =
++		alloc_workqueue("ext4-misc", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
++	if (!EXT4_SB(sb)->s_misc_wq) {
+ 		printk(KERN_ERR "EXT4-fs: failed to create workqueue\n");
+ 		ret = -ENOMEM;
+ 		goto failed_mount4;
+@@ -4785,8 +4786,8 @@ failed_mount4a:
+ 	sb->s_root = NULL;
+ failed_mount4:
+ 	ext4_msg(sb, KERN_ERR, "mount failed");
+-	if (EXT4_SB(sb)->rsv_conversion_wq)
+-		destroy_workqueue(EXT4_SB(sb)->rsv_conversion_wq);
++	if (EXT4_SB(sb)->s_misc_wq)
++		destroy_workqueue(EXT4_SB(sb)->s_misc_wq);
+ failed_mount_wq:
+ 	ext4_xattr_destroy_cache(sbi->s_ea_inode_cache);
+ 	sbi->s_ea_inode_cache = NULL;
+@@ -5285,7 +5286,7 @@ static int ext4_sync_fs(struct super_blo
+ 		return 0;
+ 
+ 	trace_ext4_sync_fs(sb, wait);
+-	flush_workqueue(sbi->rsv_conversion_wq);
++	flush_workqueue(sbi->s_misc_wq);
+ 	/*
+ 	 * Writeback quota in non-journalled quota case - journalled quota has
+ 	 * no dirty dquots
+Index: b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/xattr.c
+===================================================================
+--- b2_15_linux-4.18.0-425.3.1.el8.orig/fs/ext4/xattr.c
++++ b2_15_linux-4.18.0-425.3.1.el8/fs/ext4/xattr.c
+@@ -1579,6 +1579,36 @@ static int ext4_xattr_inode_lookup_creat
  	return 0;
  }
  
@@ -35,19 +102,24 @@ index 491f9ee40..6a77f12d1 100644
 +
 +static void delayed_iput(struct inode *inode, struct delayed_iput_work *work)
 +{
++	if (!inode) {
++		kfree(work);
++		return;
++	}
++
 +	if (!work) {
 +		iput(inode);
 +	} else {
 +		INIT_WORK(&work->work, delayed_iput_fn);
 +		work->inode = inode;
-+		schedule_work(&work->work);
++		queue_work(EXT4_SB(inode->i_sb)->s_misc_wq, &work->work);
 +	}
 +}
 +
  /*
   * Reserve min(block_size/8, 1024) bytes for xattr entries/names if ea_inode
   * feature is enabled.
-@@ -1568,6 +1593,7 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+@@ -1596,6 +1626,7 @@ static int ext4_xattr_set_entry(struct e
  	int in_inode = i->in_inode;
  	struct inode *old_ea_inode = NULL;
  	struct inode *new_ea_inode = NULL;
@@ -55,7 +127,7 @@ index 491f9ee40..6a77f12d1 100644
  	size_t old_size, new_size;
  	int ret;
  
-@@ -1644,7 +1670,11 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+@@ -1672,7 +1703,11 @@ static int ext4_xattr_set_entry(struct e
  	 * Finish that work before doing any modifications to the xattr data.
  	 */
  	if (!s->not_found && here->e_value_inum) {
@@ -68,7 +140,7 @@ index 491f9ee40..6a77f12d1 100644
  					    le32_to_cpu(here->e_value_inum),
  					    le32_to_cpu(here->e_hash),
  					    &old_ea_inode);
-@@ -1797,7 +1827,7 @@ update_hash:
+@@ -1825,7 +1860,7 @@ update_hash:
  
  	ret = 0;
  out:
