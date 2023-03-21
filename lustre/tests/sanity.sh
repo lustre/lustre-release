@@ -30011,6 +30011,54 @@ test_832() {
 }
 run_test 832 "lfs rm_entry"
 
+test_833() {
+	local file=$DIR/$tfile
+
+	stack_trap "rm -f $file" EXIT
+	dd if=/dev/zero of=$file bs=1M count=50 || error "Write $file failed"
+
+	local wpid
+	local rpid
+	local rpid2
+
+	# Buffered I/O write
+	(
+		while [ ! -e $DIR/sanity.833.lck ]; do
+			dd if=/dev/zero of=$file bs=1M count=50 conv=notrunc ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	wpid=$!
+
+	# Buffered I/O read
+	(
+		while [ ! -e $DIR/sanity.833.lck ]; do
+			dd if=$file of=/dev/null bs=1M count=50 ||
+				error "failed to read $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid=$!
+
+	# Direct I/O read
+	(
+		while [ ! -e $DIR/sanity.833.lck ]; do
+			dd if=$file of=/dev/null bs=1M count=50 iflag=direct ||
+				error "failed to read $file in direct I/O mode"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid2=$!
+
+	sleep 30
+	touch $DIR/sanity.833.lck
+	wait $wpid || error "$?: buffered write failed"
+	wait $rpid || error "$?: buffered read failed"
+	wait $rpid2 || error "$?: direct read failed"
+}
+run_test 833 "Mixed buffered/direct read and write should not return -EIO"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

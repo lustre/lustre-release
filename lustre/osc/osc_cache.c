@@ -3265,6 +3265,7 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 	io->ci_obj = cl_object_top(osc2cl(osc));
 	io->ci_ignore_layout = 1;
+	io->ci_invalidate_page_cache = 1;
 	io->u.ci_misc.lm_next_rpc_time = ktime_get_seconds() +
 					 5 * obd_timeout / 16;
 	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);

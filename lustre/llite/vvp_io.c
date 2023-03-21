@@ -303,11 +303,18 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-			   "need write layout %d, restore needed %d\n",
+	       "need write layout %d, restore needed %d, invalidate_lock %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
 	       vio->vui_layout_gen, io->ci_need_write_intent,
-	       io->ci_restore_needed);
+	       io->ci_restore_needed, io->ci_invalidate_page_cache);
+
+#ifdef HAVE_INVALIDATE_LOCK
+	if (io->ci_invalidate_page_cache) {
+		filemap_invalidate_unlock(inode->i_mapping);
+		io->ci_invalidate_page_cache = 0;
+	}
+#endif /* HAVE_INVALIDATE_LOCK */
 
 	if (io->ci_restore_needed) {
 		/* file was detected release, we need to restore it
@@ -1871,6 +1878,11 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 			       ll_i2sbi(inode)->ll_fsname,
 			       PFID(lu_object_fid(&obj->co_lu)), result);
 	}
+
+#ifdef HAVE_INVALIDATE_LOCK
+	if (io->ci_invalidate_page_cache)
+		filemap_invalidate_lock(inode->i_mapping);
+#endif /* HAVE_INVALIDATE_LOCK */
 
 	io->ci_result = result < 0 ? result : 0;
 	RETURN(result);

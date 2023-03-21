@@ -1925,7 +1925,16 @@ struct cl_io {
 	/**
 	 * io_uring direct IO with flags IOCB_NOWAIT.
 	 */
-			     ci_iocb_nowait:1;
+			     ci_iocb_nowait:1,
+	/**
+	 * The filesystem must exclusively acquire invalidate_lock before
+	 * invalidating page cache in truncate / hole punch / DLM extent
+	 * lock blocking AST path (and thus calling into ->invalidatepage)
+	 * to block races between page cache invalidation and page cache
+	 * filling functions (fault, read, ...)
+	 */
+			     ci_invalidate_page_cache:1;
+
 	/**
 	 * How many times the read has retried before this one.
 	 * Set by the top level and consumed by the LOV.

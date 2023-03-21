@@ -3193,6 +3193,29 @@ AC_DEFUN([LC_HAVE_GET_ACL_RCU_ARG], [
 ]) # LC_HAVE_GET_ACL_RCU_ARG
 
 #
+# LC_HAVE_INVALIDATE_LOCK
+#
+# Kernel version v5.15-rc1 commit 730633f0b7f951726e87f912a6323641f674ae34
+# mm: Protect operations adding pages to page cache with invalidate_lock
+#
+AC_DEFUN([LC_HAVE_INVALIDATE_LOCK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if have address_space have invalidate_lock member],
+address_space_invalidate_lock, [
+		#include <linux/fs.h>
+	],[
+		struct address_space *mapping = NULL;
+
+		filemap_invalidate_lock(mapping);
+	],[
+		AC_DEFINE(HAVE_INVALIDATE_LOCK, 1,
+			[address_space invalidate_lock member exists])
+	])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_INVALIDATE_LOCK
+
+#
 # LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 #
 # Linux v5.15-rc1-20-g15bf32398ad4
@@ -4258,6 +4281,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.15
 	LC_HAVE_GET_ACL_RCU_ARG
+	LC_HAVE_INVALIDATE_LOCK
 
 	# 5.16
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
