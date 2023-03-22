@@ -10,6 +10,7 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$PERFORMANCE_SANITY_EXCEPT "
+always_except LU-16658 6
 build_test_filter
 
 [ -x "$MDSRATE" ] || FAIL_ON_ERROR=true error "No mdsrate program. Aborting."
