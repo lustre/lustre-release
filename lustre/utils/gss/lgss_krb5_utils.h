@@ -21,6 +21,10 @@ extern struct lgss_mech_type lgss_mech_null;
 extern struct lgss_mech_type lgss_mech_krb5;
 extern struct lgss_mech_type lgss_mech_sk;
 
+#define LGSS_DEFAULT_CRED_DIR			"/tmp"
+#define LGSS_USER_CRED_DIR			"/run/user/%U"
+#define LGSS_DEFAULT_CRED_PREFIX		"krb5cc"
+
 /*
  * convenient macros, these perhaps need further cleanup
  */

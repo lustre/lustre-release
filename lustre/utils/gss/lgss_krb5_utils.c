@@ -104,9 +104,12 @@
 #endif
 #include "config.h"
 #include <sys/param.h>
-//#include <rpc/rpc.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <grp.h>
+#include <pwd.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
 #include <sys/utsname.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -154,14 +157,6 @@ const char *krb5_cred_oss_suffix   = "lustre_oss";
 
 char    *krb5_this_realm        = NULL;
 char    *krb5_keytab_file       = "/etc/krb5.keytab";
-char    *krb5_cc_type           = "FILE:";
-char    *krb5_cc_dir            = "/tmp";
-char    *krb5_cred_prefix       = "krb5cc_";
-
-struct lgss_krb5_cred {
-        char            kc_ccname[128];
-        int             kc_remove;        /* remove cache upon release */
-};
 
 static int lgss_krb5_set_ccache_name(const char *ccname)
 {
@@ -339,12 +334,280 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 	return 0;
 }
 
+static inline int lgss_krb5_get_default_ccache_name(krb5_context ctx,
+						    char *ccname, int size)
+{
+	if (snprintf(ccname, size, "%s", krb5_cc_default_name(ctx)) >= size)
+		return -ENAMETOOLONG;
+
+	return 0;
+}
+
 /**
  * compose the TGT cc name, abiding to system configuration.
  */
-static void get_root_tgt_ccname(krb5_context ctx, char *ccname, int size)
+static int get_root_tgt_ccname(krb5_context ctx, char *ccname, int size)
 {
-	snprintf(ccname, size, "%s", krb5_cc_default_name(ctx));
+	return lgss_krb5_get_default_ccache_name(ctx, ccname, size);
+}
+
+static int switch_identity(uid_t uid)
+{
+	struct passwd *pw;
+	int rc;
+
+	/* drop list of supp groups */
+	rc = setgroups(0, NULL);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot drop list of supp groups: %s\n",
+		       strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	pw = getpwuid(uid);
+	if (!pw) {
+		logmsg(LL_ERR, "cannot get pw entry for %u: %s\n",
+		       uid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	rc = setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot set real gid to %u: %s\n",
+		       pw->pw_gid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	rc = setresuid(uid, uid, uid);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot set real uid to %u: %s\n",
+		       uid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+end_switch:
+	return rc;
+}
+
+static int acquire_user_cred_and_check(char *ccname)
+{
+	gss_OID mech = (gss_OID)&krb5oid;
+	gss_OID_set_desc desired_mechs = { 1, mech };
+	gss_cred_id_t gss_cred;
+	OM_uint32 maj_stat, min_stat, lifetime;
+	int rc = 0;
+
+	if (lgss_krb5_set_ccache_name(ccname)) {
+		logmsg(LL_ERR, "cannot set ccache name: %s\n", ccname);
+		return -1;
+	}
+
+	maj_stat = gss_acquire_cred(&min_stat, GSS_C_NO_NAME, GSS_C_INDEFINITE,
+				    &desired_mechs, GSS_C_INITIATE,
+				    &gss_cred, NULL, NULL);
+	if (maj_stat != GSS_S_COMPLETE) {
+		logmsg_gss(LL_INFO, mech, maj_stat, min_stat,
+			   "failed gss_acquire_cred");
+		return -1;
+	}
+
+	/* force validation of cred to check for expiry */
+	maj_stat = gss_inquire_cred(&min_stat, gss_cred,
+				    NULL, &lifetime, NULL, NULL);
+	if (maj_stat != GSS_S_COMPLETE) {
+		logmsg_gss(LL_INFO, mech, maj_stat, min_stat,
+			   "failed gss_inquire_cred");
+		rc = -1;
+	}
+
+	if (gss_cred != GSS_C_NO_CREDENTIAL)
+		gss_release_cred(&min_stat, &gss_cred);
+
+	return rc;
+}
+
+static int filter_krb5_ccache(const struct dirent *d)
+{
+	if (strstr(d->d_name, LGSS_DEFAULT_CRED_PREFIX))
+		return 1;
+	else
+		return 0;
+}
+
+/*
+ * Look in dirname for a possibly valid ccache for uid.
+ *
+ * Returns 0 if a potential entry is found.
+ * Otherwise, a negative errno is returned.
+ */
+static int find_existing_krb5_ccache(uid_t uid, char *dir,
+				     char *ccname, int size)
+{
+	struct dirent **namelist;
+	int found = 0;
+	struct stat tmp_stat;
+	char dirname[PATH_MAX], buf[PATH_MAX];
+	int num_ents, i, j = 0, rc = -1;
+
+	/* provided dir can be a pattern */
+	for (i = 0; dir[i] != '\0'; i++) {
+		switch (dir[i]) {
+		case '%':
+			switch (dir[i + 1]) {
+			case 'U':
+				j += sprintf(dirname + j, "%lu",
+					     (unsigned long)uid);
+				i++;
+				break;
+			}
+			break;
+		default:
+			dirname[j++] = dir[i];
+			break;
+		}
+	}
+	dirname[j] = '\0';
+
+	num_ents = scandir(dirname, &namelist, filter_krb5_ccache, 0);
+	if (num_ents < 0) {
+		logmsg(LL_INFO, "scandir %s failed: %s\n",
+		       dirname, strerror(errno));
+		goto end_find;
+	}
+
+	for (i = 0; i < num_ents; i++) {
+		if (found)
+			goto next_find;
+
+		if (snprintf(buf, sizeof(buf), "%s/%s",
+			     dirname, namelist[i]->d_name) >= sizeof(buf)) {
+			logmsg(LL_INFO, "%s/%s name too long\n",
+			       dirname, namelist[i]->d_name);
+			goto next_find;
+		}
+
+		if (lstat(buf, &tmp_stat)) {
+			logmsg(LL_INFO, "lstat %s failed: %s\n",
+			       buf, strerror(errno));
+			goto next_find;
+		}
+
+		/* we only look for files as credentials caches */
+		if (!S_ISREG(tmp_stat.st_mode))
+			goto next_find;
+
+		/* make sure it is owned by uid */
+		if (tmp_stat.st_uid != uid) {
+			logmsg(LL_INFO, "%s not owned by %u\n",
+			       buf, uid);
+			goto next_find;
+		}
+
+		/* check user has rw perms */
+		if (!(tmp_stat.st_mode & S_IRUSR &&
+		      tmp_stat.st_mode & S_IWUSR)) {
+			logmsg(LL_INFO, "%s does not have rw perms for %u\n",
+			       buf, uid);
+			goto next_find;
+		}
+
+		if (snprintf(ccname, size, "FILE:%s", buf) >= size) {
+			logmsg(LL_INFO, "FILE:%s name too long\n", buf);
+			goto next_find;
+		}
+
+		rc = acquire_user_cred_and_check(ccname);
+		if (!rc)
+			found = 1;
+
+next_find:
+		free(namelist[i]);
+	}
+	free(namelist);
+
+end_find:
+	return rc;
+}
+
+/**
+ * Compose the TGT cc name for user, needs to fork process and switch identity.
+ * For that reason, ccname buffer passed in must be mmapped with MAP_SHARED.
+ */
+static int get_user_tgt_ccname(struct lgss_cred *cred, krb5_context ctx,
+			       char *ccname, int size)
+{
+	pid_t child;
+	int status, rc = 0;
+
+	/* fork to not change identity in main process, it needs to stay root
+	 * in order to proceed to ioctls
+	 */
+	child = fork();
+	if (child == -1) {
+		logmsg(LL_ERR, "cannot fork child for user %u: %s\n",
+		       cred->lc_uid, strerror(errno));
+		rc = -errno;
+	} else if (child == 0) {
+		/* switch identity */
+		rc = switch_identity(cred->lc_uid);
+		if (rc)
+			exit(1);
+
+		/* getting default ccname requires impersonating user */
+		rc = lgss_krb5_get_default_ccache_name(ctx, ccname, size);
+		if (rc) {
+			logmsg(LL_ERR,
+			       "cannot get default ccname for user %u\n",
+			       cred->lc_uid);
+			exit(1);
+		}
+
+		/* job done for child */
+		exit(0);
+	} else {
+		logmsg(LL_TRACE, "forked child %d\n", child);
+		if (wait(&status) < 0) {
+			logmsg(LL_ERR, "wait child %d failed: %s\n",
+			       child, strerror(errno));
+			return -errno;
+		}
+		if (!WIFEXITED(status)) {
+			logmsg(LL_ERR, "child %d terminated with %d\n",
+			       child, status);
+			return status;
+		}
+	}
+
+	/* try ccname as fetched by child */
+	rc = acquire_user_cred_and_check(ccname);
+	if (!rc)
+		/* user's creds found in default ccache */
+		goto end_ccache;
+
+	/* fallback: look at every file matching
+	 * - /tmp/ *krb5cc*
+	 * - /run/user/<uid>/ *krb5cc*
+	 */
+	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_DEFAULT_CRED_DIR,
+				       ccname, size);
+	if (!rc)
+		/* user's creds found in LGSS_DEFAULT_CRED_DIR */
+		goto end_ccache;
+
+	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_USER_CRED_DIR,
+				       ccname, size);
+	if (!rc)
+		/* user's creds found in LGSS_USER_CRED_DIR */
+		goto end_ccache;
+
+	rc = -ENODATA;
+
+end_ccache:
+	return rc;
 }
 
 /**
@@ -360,9 +623,11 @@ static int lkrb5_check_root_tgt_cc(krb5_context ctx, unsigned int flag,
 	char ccname[PATH_MAX];
 	krb5_creds cred;
 	time_t now;
-	int found = 0;
+	int found;
 
-	get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
+	found = get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
+	if (found)
+		return found;
 	logmsg(LL_DEBUG, "root krb5 TGT ccname: %s\n", ccname);
 
 	/* prepare parsing the cache file */
@@ -620,8 +885,9 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 	}
 
 	/* obtain root TGT */
-	get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
-	rc = lkrb5_get_root_tgt_keytab(ctx, kt, princ, ccname);
+	rc = get_root_tgt_ccname(ctx, ccname, sizeof(ccname));
+	if (!rc)
+		rc = lkrb5_get_root_tgt_keytab(ctx, kt, princ, ccname);
 
 	krb5_free_principal(ctx, princ);
 out_kt:
@@ -651,7 +917,7 @@ static int lkrb5_prepare_root_cred(struct lgss_cred *cred)
 	lgss_krb5_mutex_lock();
 	rc = lkrb5_check_root_tgt_cc(ctx, cred->lc_root_flags,
 				     cred->lc_self_nid);
-	if (rc != 0)
+	if (rc)
 		rc = lkrb5_refresh_root_tgt_cc(ctx, cred->lc_root_flags,
 					       cred->lc_self_nid);
 
@@ -662,69 +928,74 @@ static int lkrb5_prepare_root_cred(struct lgss_cred *cred)
 	return rc;
 }
 
-static
-int lkrb5_prepare_user_cred(struct lgss_cred *cred)
+static int lkrb5_prepare_user_cred(struct lgss_cred *cred)
 {
-        struct lgss_krb5_cred   *kcred;
-        int                      rc;
+	krb5_context ctx;
+	krb5_error_code code;
+	int size = PATH_MAX;
+	void *ccname;
+	int rc;
 
-        lassert(krb5_this_realm == NULL);
+	lassert(krb5_this_realm == NULL);
 
-        kcred = (struct lgss_krb5_cred *) cred->lc_mech_cred;
+	code = krb5_init_context(&ctx);
+	if (code) {
+		logmsg(LL_ERR, "initialize krb5 context: %s\n",
+		       krb5_err_msg(code));
+		return -1;
+	}
 
-        /*
-         * here we just specified a fix ccname, instead of searching
-         * entire cc dir. is this OK??
-         */
-        snprintf(kcred->kc_ccname, sizeof(kcred->kc_ccname),
-                 "%s%s/%s%u",
-                 krb5_cc_type, krb5_cc_dir, krb5_cred_prefix, cred->lc_uid);
-        logmsg(LL_DEBUG, "using krb5 cache name: %s\n", kcred->kc_ccname);
+	/* buffer passed to get_user_tgt_ccname() must be mmapped with
+	 * MAP_SHARED because it is accessed read/write from a child process
+	 */
+	ccname = mmap(NULL, size, PROT_READ | PROT_WRITE,
+		      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (ccname == MAP_FAILED) {
+		logmsg(LL_ERR, "cannot mmap memory for user %u: %s\n",
+		       cred->lc_uid, strerror(errno));
+		rc = -errno;
+		goto free;
+	}
 
-        rc = lgss_krb5_set_ccache_name(kcred->kc_ccname);
-        if (rc)
-                logmsg(LL_ERR, "can't set krb5 ccache name: %s\n",
-                       kcred->kc_ccname);
+	rc = get_user_tgt_ccname(cred, ctx, ccname, size);
+	if (rc)
+		logmsg(LL_ERR, "cannot get user %u ccname: %s\n",
+		       cred->lc_uid, strerror(-rc));
+	else
+		logmsg(LL_INFO, "using krb5 cache name: %s\n", (char *)ccname);
 
-        return rc;
+	if (munmap(ccname, size) == -1) {
+		logmsg(LL_ERR, "cannot munmap memory for user %u: %s\n",
+		       cred->lc_uid, strerror(errno));
+		rc = rc ? rc : -errno;
+	}
+
+free:
+	krb5_free_context(ctx);
+	return rc;
 }
 
-static
-int lgss_krb5_prepare_cred(struct lgss_cred *cred)
+static int lgss_krb5_prepare_cred(struct lgss_cred *cred)
 {
-        struct lgss_krb5_cred  *kcred;
-        int                     rc;
+	int rc;
 
-        kcred = malloc(sizeof(*kcred));
-        if (kcred == NULL) {
-                logmsg(LL_ERR, "can't allocate krb5 cred\n");
-                return -1;
-        }
+	cred->lc_mech_cred = NULL;
 
-        kcred->kc_ccname[0] = '\0';
-        kcred->kc_remove = 0;
-        cred->lc_mech_cred = kcred;
+	if (cred->lc_root_flags != 0) {
+		if (lgss_krb5_get_local_realm())
+			return -1;
 
-        if (cred->lc_root_flags != 0) {
-                if (lgss_krb5_get_local_realm())
-                        return -1;
+		rc = lkrb5_prepare_root_cred(cred);
+	} else {
+		rc = lkrb5_prepare_user_cred(cred);
+	}
 
-                rc = lkrb5_prepare_root_cred(cred);
-        } else {
-                rc = lkrb5_prepare_user_cred(cred);
-        }
-
-        return rc;
+	return rc;
 }
 
 static
 void lgss_krb5_release_cred(struct lgss_cred *cred)
 {
-        struct lgss_krb5_cred   *kcred;
-
-        kcred = (struct lgss_krb5_cred *) cred->lc_mech_cred;
-
-        free(kcred);
         cred->lc_mech_cred = NULL;
 }
 
