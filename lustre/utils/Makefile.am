@@ -109,7 +109,7 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  liblustreapi_mirror.c liblustreapi_fid.c \
 			  liblustreapi_ladvise.c liblustreapi_chlg.c \
 			  liblustreapi_heat.c liblustreapi_pcc.c \
-			  liblustreapi_root.c \
+			  liblustreapi_ioctl.c liblustreapi_root.c \
 			  liblustreapi_lseek.c liblustreapi_swap.c
 liblustreapi_la_CFLAGS = -fPIC -D_GNU_SOURCE $(LIBNL3_CFLAGS) \
 			 -I $(top_builddir)/lnet/utils \

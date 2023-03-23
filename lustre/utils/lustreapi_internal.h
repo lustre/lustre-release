@@ -68,6 +68,7 @@
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
 		  dev_t *dev, char *nid);
 int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
+int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf);
 int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
 int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,

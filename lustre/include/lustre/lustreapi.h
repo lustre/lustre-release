@@ -1259,6 +1259,8 @@ int llapi_mirror_punch(int fd, unsigned int id, off_t start, size_t length);
 int llapi_heat_get(int fd, struct lu_heat *heat);
 int llapi_heat_set(int fd, __u64 flags);
 
+int llapi_ioctl(int fd, unsigned int cmd, void *buf);
+
 int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr);
 void llapi_layout_sanity_perror(int error);
 int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size);

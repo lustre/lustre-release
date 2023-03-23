@@ -41,6 +41,7 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_ioctl_old.h>
 #include <uapi/linux/lustre/lustre_param.h>
 #include <uapi/linux/lustre/lustre_barrier_user.h>
 
@@ -1104,7 +1105,10 @@ out_free:
 	case OBD_IOC_POOL:
 		rc = mgs_iocontrol_pool(&env, mgs, data);
 		break;
-	case OBD_IOC_BARRIER:
+#ifdef OBD_IOC_BARRIER
+	case_OBD_IOC_DEPRECATED_FT(OBD_IOC_BARRIER, obd->obd_name, 2, 17);
+#endif
+	case OBD_IOC_BARRIER_V2:
 		rc = mgs_iocontrol_barrier(&env, mgs, data);
 		break;
 	case OBD_IOC_NODEMAP:

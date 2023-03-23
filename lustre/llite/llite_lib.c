@@ -56,6 +56,7 @@
 #endif
 #include <libcfs/linux/linux-misc.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_ioctl_old.h>
 #ifdef HAVE_UAPI_LINUX_MOUNT_H
 #include <uapi/linux/mount.h>
 #endif
@@ -3161,7 +3162,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 	}
 	case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, uarg));
-	case OBD_IOC_GETNAME_OLD:
+#ifdef OBD_IOC_GETNAME_OLD
+	case_OBD_IOC_DEPRECATED_FT(OBD_IOC_GETNAME_OLD,
+				   sbi->ll_md_exp->exp_obd->obd_name, 2, 16);
+#endif
 	case OBD_IOC_GETDTNAME:
 	case OBD_IOC_GETMDNAME:
 		RETURN(ll_get_obd_name(inode, cmd, uarg));
@@ -3220,10 +3224,10 @@ void ll_umount_begin(struct super_block *sb)
 
 	OBD_ALLOC_PTR(ioc_data);
 	if (ioc_data) {
-		obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_md_exp,
+		obd_iocontrol(OBD_IOC_SET_ACTIVE, sbi->ll_md_exp,
 			      sizeof *ioc_data, ioc_data, NULL);
 
-		obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_dt_exp,
+		obd_iocontrol(OBD_IOC_SET_ACTIVE, sbi->ll_dt_exp,
 			      sizeof *ioc_data, ioc_data, NULL);
 
 		OBD_FREE_PTR(ioc_data);

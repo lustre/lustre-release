@@ -72,6 +72,7 @@
 #include <linux/kthread.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_ioctl_old.h>
 #include <lustre_log.h>
 #include <lustre_obdo.h>
 #include <uapi/linux/lustre/lustre_param.h>
@@ -1699,7 +1700,10 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (rc > 0)
 			rc = 0;
 		break;
-	case IOC_OSC_SET_ACTIVE:
+#ifdef IOC_OSC_SET_ACTIVE
+	case_OBD_IOC_DEPRECATED_FT(IOC_OSC_SET_ACTIVE, obd->obd_name, 2, 17);
+#endif
+	case OBD_IOC_SET_ACTIVE:
 		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
 					      data->ioc_offset);
 		break;

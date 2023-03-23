@@ -52,6 +52,7 @@
 #include <cl_object.h>
 #include <lustre_fid.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_ioctl_old.h>
 #include <lustre_kernelcomm.h>
 #include "lmv_internal.h"
 
@@ -857,7 +858,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		RETURN(-ENOTTY);
 
 	/* exit early for unknown ioctl types */
-	if (unlikely(_IOC_TYPE(cmd) != 'f' && cmd != IOC_OSC_SET_ACTIVE))
+	if (unlikely(_IOC_TYPE(cmd) != 'f' && !IOC_OSC_SET_ACTIVE_ALLOW(cmd)))
 		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "unknown", -ENOTTY));
 
 	/* handle commands that don't use @karg first */

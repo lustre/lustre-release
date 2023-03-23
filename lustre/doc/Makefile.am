@@ -143,6 +143,7 @@ LIBMAN = 					\
 	llapi_hsm_copytool_unregister.3		\
 	llapi_hsm_state_get.3			\
 	llapi_hsm_state_set.3			\
+	llapi_ioctl.3				\
 	llapi_ladvise.3				\
 	llapi_layout.7				\
 	llapi_layout_alloc.3			\

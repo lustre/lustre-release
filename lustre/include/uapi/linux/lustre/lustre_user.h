@@ -588,17 +588,10 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
 #define LL_IOC_LOV_GETSTRIPE_NEW	_IOR('f', 155, struct lov_user_md)
 #define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
-/*	LL_IOC_RECREATE_OBJ             157 obsolete */
-/*	LL_IOC_RECREATE_FID             157 obsolete */
 #define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
 #define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
-/*	LL_IOC_QUOTACHECK               160 OBD_IOC_QUOTACHECK */
-/*	LL_IOC_POLL_QUOTACHECK		161 OBD_IOC_POLL_QUOTACHECK */
-/*	LL_IOC_QUOTACTL			162 OBD_IOC_QUOTACTL */
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
-/*	IOC_LOV_GETINFO                 165 obsolete */
 #define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-/*	LL_IOC_RMTACL                   167 obsolete */
 #define LL_IOC_GETOBDCOUNT              _IOR ('f', 168, long)
 #define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
@@ -622,7 +615,7 @@ struct ll_ioc_lease_id {
 						struct lustre_swap_layouts)
 #define LL_IOC_HSM_ACTION		_IOR('f', 220, \
 						struct hsm_current_action)
-/*	lustre_ioctl.h			221-232 */
+/*	lustre_ioctl.h			221-233 */
 #define LL_IOC_LMV_SETSTRIPE		_IOWR('f', 240, struct lmv_user_md)
 #define LL_IOC_LMV_GETSTRIPE		_IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY		_IOWR('f', 242, __u64)

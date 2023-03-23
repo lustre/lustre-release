@@ -2176,7 +2176,7 @@ static int do_activate(int argc, char **argv, int flag)
 			jt_cmdname(argv[0]));
 		return rc;
 	}
-	rc = l_ioctl(OBD_DEV_ID, IOC_OSC_SET_ACTIVE, buf);
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_SET_ACTIVE, buf);
 	if (rc)
 		fprintf(stderr, "error: %s: failed: %s\n",
 			jt_cmdname(argv[0]), strerror(rc = errno));
@@ -5373,7 +5373,7 @@ int jt_barrier_freeze(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_BARRIER_V2, buf);
 	if (rc < 0)
 		fprintf(stderr, "Fail to freeze barrier for %s: %s\n",
 			argv[1], strerror(errno));
@@ -5417,7 +5417,7 @@ int jt_barrier_thaw(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_BARRIER_V2, buf);
 	if (rc < 0)
 		fprintf(stderr, "Fail to thaw barrier for %s: %s\n",
 			argv[1], strerror(errno));
@@ -5449,7 +5449,7 @@ int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc)
 		return rc;
 	}
 
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_BARRIER_V2, buf);
 	if (rc < 0)
 		fprintf(stderr, "Fail to query barrier for %s: %s\n",
 			fsname, strerror(errno));
@@ -5570,7 +5570,7 @@ int jt_barrier_rescan(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_BARRIER_V2, buf);
 	if (rc < 0) {
 		fprintf(stderr, "Fail to rescan barrier bitmap for %s: %s\n",
 			argv[1], strerror(errno));

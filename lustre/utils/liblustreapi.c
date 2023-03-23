@@ -322,96 +322,6 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 	return 0;
 }
 
-int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
-{
-	struct obd_ioctl_data *overlay;
-	char *ptr;
-
-	data->ioc_len = obd_ioctl_packlen(data);
-	data->ioc_version = OBD_IOCTL_VERSION;
-
-	if (*pbuf != NULL && data->ioc_len > max_len) {
-		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
-			    "pbuf = %p, ioc_len = %u, max_len = %d",
-			    *pbuf, data->ioc_len, max_len);
-		return -EINVAL;
-	}
-
-	if (*pbuf == NULL)
-		*pbuf = malloc(data->ioc_len);
-
-	if (*pbuf == NULL)
-		return -ENOMEM;
-
-	overlay = (struct obd_ioctl_data *)*pbuf;
-	memcpy(*pbuf, data, sizeof(*data));
-
-	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1) {
-		memcpy(ptr, data->ioc_inlbuf1, data->ioc_inllen1);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen1, 8);
-	}
-
-	if (data->ioc_inlbuf2) {
-		memcpy(ptr, data->ioc_inlbuf2, data->ioc_inllen2);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen2, 8);
-	}
-
-	if (data->ioc_inlbuf3) {
-		memcpy(ptr, data->ioc_inlbuf3, data->ioc_inllen3);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen3, 8);
-	}
-
-	if (data->ioc_inlbuf4) {
-		memcpy(ptr, data->ioc_inlbuf4, data->ioc_inllen4);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen4, 8);
-	}
-
-	return 0;
-}
-
-int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
-{
-	struct obd_ioctl_data *overlay;
-	char *ptr;
-
-	if (pbuf == NULL)
-		return -EINVAL;
-
-	overlay = (struct obd_ioctl_data *)pbuf;
-
-	/* Preserve the caller's buffer pointers */
-	overlay->ioc_inlbuf1 = data->ioc_inlbuf1;
-	overlay->ioc_inlbuf2 = data->ioc_inlbuf2;
-	overlay->ioc_inlbuf3 = data->ioc_inlbuf3;
-	overlay->ioc_inlbuf4 = data->ioc_inlbuf4;
-
-	memcpy(data, pbuf, sizeof(*data));
-
-	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1) {
-		memcpy(data->ioc_inlbuf1, ptr, data->ioc_inllen1);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen1, 8);
-	}
-
-	if (data->ioc_inlbuf2) {
-		memcpy(data->ioc_inlbuf2, ptr, data->ioc_inllen2);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen2, 8);
-	}
-
-	if (data->ioc_inlbuf3) {
-		memcpy(data->ioc_inlbuf3, ptr, data->ioc_inllen3);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen3, 8);
-	}
-
-	if (data->ioc_inlbuf4) {
-		memcpy(data->ioc_inlbuf4, ptr, data->ioc_inllen4);
-		ptr += __ALIGN_KERNEL(data->ioc_inllen4, 8);
-	}
-
-	return 0;
-}
-
 /**
  * Verify the setstripe parameters before using.
  * This is a pair method for comp_args_to_layout()/llapi_layout_sanity_cb()
@@ -2141,8 +2051,6 @@ int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_name)
 	int rc;
 
 	rc = ioctl(fd, OBD_IOC_GETDTNAME, lov_name);
-	if (rc && errno == ENOTTY)
-		rc = ioctl(fd, OBD_IOC_GETNAME_OLD, lov_name);
 	if (rc) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get lov name");
@@ -2155,7 +2063,7 @@ int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_name)
 {
 	int rc;
 
-	rc = ioctl(fd, OBD_IOC_GETMDNAME, lov_name);
+	rc = llapi_ioctl(fd, OBD_IOC_GETMDNAME, lov_name);
 	if (rc) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get lmv name.");

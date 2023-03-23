@@ -43,6 +43,7 @@
 #include <linux/lnet/socklnd.h>
 #include <lnetconfig/liblnetconfig.h>
 #include <lustre/lustreapi.h>
+#include <lustre_ioctl_old.h>
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;
@@ -353,7 +354,6 @@ int jt_ptl_network(int argc, char **argv)
 int
 jt_ptl_list_nids(int argc, char **argv)
 {
-	struct libcfs_ioctl_data data;
 	int all = 0, return_nid = 0;
 	yaml_emitter_t request;
 	yaml_parser_t reply;
@@ -361,7 +361,6 @@ jt_ptl_list_nids(int argc, char **argv)
 	struct nl_sock *sk;
 	bool done = false;
 	int rc = 0;
-	int count;
 
 	all = (argc == 2) && (strcmp(argv[1], "all") == 0);
 	/* Hack to pass back value */
@@ -534,13 +533,18 @@ emitter_error:
 	if (rc == 0)
 		yaml_parser_log_error(&reply, stderr, NULL);
 	yaml_parser_delete(&reply);
-old_api:
+old_api: {
+#ifdef IOC_LIBCFS_GET_NI
+	int count;
+
 	if (sk)
 		nl_socket_free(sk);
 	if (rc == 1)
 		return 0;
 
 	for (count = 0;; count++) {
+		struct libcfs_ioctl_data data;
+
 		LIBCFS_IOC_INIT(data);
 		data.ioc_count = count;
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
@@ -563,7 +567,11 @@ old_api:
 		}
 	}
 
-	return 0;
+#else
+	rc = -1;
+#endif
+	}
+	return rc;
 }
 
 int
@@ -1084,16 +1092,11 @@ int jt_ptl_ping(int argc, char **argv)
 	int rc;
 	int timeout;
 	struct lnet_process_id id;
-	struct lnet_process_id ids[LNET_INTERFACES_MAX_DEFAULT];
-	lnet_nid_t src = LNET_NID_ANY;
-	int maxids = sizeof(ids) / sizeof(ids[0]);
-	struct lnet_ioctl_ping_data ping = { { 0 } };
 	yaml_emitter_t request;
 	yaml_parser_t reply;
 	yaml_event_t event;
 	struct nl_sock *sk;
 	char *sep;
-	int i;
 
 	if (argc < 2) {
 		fprintf(stderr, "usage: %s id [timeout (secs)]\n", argv[0]);
@@ -1330,13 +1333,20 @@ free_reply:
 	nl_socket_free(sk);
 	return rc;
 old_api:
+#ifdef IOC_LIBCFS_PING_PEER
+	{
+	struct lnet_process_id ids[LNET_INTERFACES_MAX_DEFAULT];
+	int maxids = sizeof(ids) / sizeof(ids[0]);
+	struct lnet_ioctl_ping_data ping = { { 0 } };
+	int i;
+
 	if (sk)
 		nl_socket_free(sk);
 
 	LIBCFS_IOC_INIT_V2(ping, ping_hdr);
 	ping.ping_hdr.ioc_len = sizeof(ping);
 	ping.ping_id = id;
-	ping.ping_src = src;
+	ping.ping_src = LNET_NID_ANY;
 	ping.op_param = timeout;
 	ping.ping_count = maxids;
 	ping.ping_buf = ids;
@@ -1353,8 +1363,11 @@ old_api:
 
 	if (ping.ping_count > maxids)
 		printf("%d out of %d ids listed\n", maxids, ping.ping_count);
-
-	return 0;
+	}
+#else
+	rc = -ENOTTY;
+#endif
+	return rc;
 }
 
 int jt_ptl_mynid(int argc, char **argv)

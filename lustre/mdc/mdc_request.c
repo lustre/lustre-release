@@ -51,12 +51,13 @@
 #include <lustre_compat.h>
 #include <lustre_fid.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_ioctl_old.h>
 #include <lustre_kernelcomm.h>
 #include <lustre_lmv.h>
 #include <lustre_log.h>
+#include <lustre_osc.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
-#include <lustre_osc.h>
 
 #include "mdc_internal.h"
 
@@ -2253,7 +2254,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (rc < 0)
 			GOTO(out, rc);
 		GOTO(out, rc = 0);
-	case IOC_OSC_SET_ACTIVE:
+#ifdef IOC_OSC_SET_ACTIVE
+	case_OBD_IOC_DEPRECATED_FT(IOC_OSC_SET_ACTIVE, obd->obd_name, 2, 17);
+#endif
+	case OBD_IOC_SET_ACTIVE:
 		rc = ptlrpc_set_import_active(imp, data->ioc_offset);
 		GOTO(out, rc);
 	/*

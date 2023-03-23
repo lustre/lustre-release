@@ -32,6 +32,7 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_ver.h>
 
 /*
  * sparse kernel source annotations
@@ -134,7 +135,14 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 
 #define OBD_IOC_CREATE		_IOWR('f', 101, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_DESTROY		_IOW('f', 104, OBD_IOC_DATA_TYPE)
-/*	OBD_IOC_PREALLOCATE	_IOWR('f', 105, OBD_IOC_DATA_TYPE) */
+#define OBD_IOC_BARRIER_V2	_IOW('f', 105, struct obd_ioctl_data)
+#define OBD_IOC_SET_ACTIVE	_IOW('f', 106, struct obd_ioctl_data)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 19, 53, 0)
+/* for API compatibility until 2.19.x, but prefer to use new IOC values above */
+/* OBD_IOC_BARRIER wrongly defined as _IOWR('f', 261, OBD_IOC_DATA_TYPE) */
+#define OBD_IOC_BARRIER		_IOWR('g', 5, OBD_IOC_DATA_TYPE) /* < 2.16 */
+#define IOC_OSC_SET_ACTIVE	_IOWR('h', 21, void *) /* deprecated 2.16 */
+#endif
 
 #define OBD_IOC_SETATTR		_IOW('f', 107, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETATTR		_IOWR('f', 108, OBD_IOC_DATA_TYPE)
@@ -150,14 +158,9 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_GETDTNAME	_IOR('f', 127, char[MAX_OBD_NAME])
 /* ioctl codes 128-143 are reserved for fsverity */
 #define OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETNAME_OLD	_IOWR('f', 131, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETMDNAME	_IOR('f', 131, char[MAX_OBD_NAME])
-/*      OBD_IOC_LOV_GET_CONFIG	_IOWR('f', 132, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_CLIENT_RECOVER	_IOW('f', 133, OBD_IOC_DATA_TYPE)
 /* ioctl codes 128-143 are reserved for fsverity */
-/* FS_IOC_ENABLE_VERITY		_IOW('f', 133, struct fsverity_enable_arg) */
-/* FS_IOC_MEASURE_VERITY	_IOW('f', 134, struct fsverity_digest) */
-/* was	OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_SET_READONLY	_IOW('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY	_IOR('f', 142, OBD_IOC_DATA_TYPE)
 enum obd_abort_recovery_flags {
@@ -165,31 +168,15 @@ enum obd_abort_recovery_flags {
 	OBD_FLG_ABORT_RECOV_MDT	= 0x40000, /* LMD_FLG_ABORT_RECOV_MDT */
 };
 /* ioctl codes 128-143 are reserved for fsverity */
-#define OBD_GET_VERSION		_IOWR('f', 144, OBD_IOC_DATA_TYPE)
-/*	OBD_IOC_GSS_SUPPORT	_IOWR('f', 145, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_CLOSE_UUID	_IOWR('f', 147, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_CHANGELOG_SEND	_IOW('f', 148, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_GETDEVICE	_IOWR('f', 149, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_FID2PATH	_IOWR('f', 150, OBD_IOC_DATA_TYPE)
-/*	lustre/lustre_user.h	151-153 */
-/*	OBD_IOC_LOV_SETSTRIPE	154 LL_IOC_LOV_SETSTRIPE */
-/*	OBD_IOC_LOV_GETSTRIPE	155 LL_IOC_LOV_GETSTRIPE */
-/*	OBD_IOC_LOV_SETEA	156 LL_IOC_LOV_SETEA */
-/*	lustre/lustre_user.h	157-159 */
-/*	OBD_IOC_QUOTACHECK	_IOW('f', 160, int) */
-/*	OBD_IOC_POLL_QUOTACHECK	_IOR('f', 161, struct if_quotacheck *) */
+/*	lustre/lustre_user.h	151-159 */
 #define OBD_IOC_QUOTACTL	_IOWR('f', 162, struct if_quotactl)
 /*	lustre/lustre_user.h	163-176 */
 #define OBD_IOC_CHANGELOG_REG	_IOW('f', 177, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_DEREG	_IOW('f', 178, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_CLEAR	_IOW('f', 179, struct obd_ioctl_data)
-/*	OBD_IOC_RECORD		_IOWR('f', 180, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_ENDRECORD	_IOWR('f', 181, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_PARSE		_IOWR('f', 182, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_DORECORD	_IOWR('f', 183, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_PROCESS_CFG	_IOWR('f', 184, OBD_IOC_DATA_TYPE)
-/*	OBD_IOC_DUMP_LOG	_IOWR('f', 185, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_CLEAR_LOG	_IOWR('f', 186, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_PARAM		_IOW('f', 187, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_POOL		_IOWR('f', 188, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_REPLACE_NIDS	_IOWR('f', 189, OBD_IOC_DATA_TYPE)
@@ -200,33 +187,18 @@ enum obd_abort_recovery_flags {
 #define OBD_IOC_LLOG_CANCEL	_IOWR('f', 193, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_REMOVE	_IOWR('f', 194, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_CHECK	_IOWR('f', 195, OBD_IOC_DATA_TYPE)
-/*	OBD_IOC_LLOG_CATINFO	_IOWR('f', 196, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_NODEMAP		_IOWR('f', 197, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLEAR_CONFIGS   _IOWR('f', 198, OBD_IOC_DATA_TYPE)
-
-/*	ECHO_IOC_GET_STRIPE	_IOWR('f', 200, OBD_IOC_DATA_TYPE) */
-/*	ECHO_IOC_SET_STRIPE	_IOWR('f', 201, OBD_IOC_DATA_TYPE) */
-/*	ECHO_IOC_ENQUEUE	_IOWR('f', 202, OBD_IOC_DATA_TYPE) */
-/*	ECHO_IOC_CANCEL		_IOWR('f', 203, OBD_IOC_DATA_TYPE) */
-
 #define OBD_IOC_LCFG_FORK	_IOWR('f', 208, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LCFG_ERASE	_IOWR('f', 209, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GET_OBJ_VERSION	_IOR('f', 210, OBD_IOC_DATA_TYPE)
-
 /*	lustre/lustre_user.h	211-220 */
-/* was #define OBD_IOC_GET_MNTOPT	_IOW('f', 220, mntopt_t) until 2.11 */
 #define OBD_IOC_ECHO_MD		_IOR('f', 221, struct obd_ioctl_data)
 #define OBD_IOC_ECHO_ALLOC_SEQ	_IOWR('f', 222, struct obd_ioctl_data)
 #define OBD_IOC_START_LFSCK	_IOWR('f', 230, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_STOP_LFSCK	_IOW('f', 231, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_QUERY_LFSCK	_IOR('f', 232, struct obd_ioctl_data)
 #define OBD_IOC_CHLG_POLL	_IOR('f', 233, long)
-/*	lustre/lustre_user.h	240-249 */
-/* was	LIBCFS_IOC_DEBUG_MASK	_IOWR('f', 250, long) until 2.11 */
-
-/* OBD_IOC_BARRIER wrongly defined as _IOWR('f', 261, OBD_IOC_DATA_TYPE) */
-#define OBD_IOC_BARRIER		_IOWR('g', 5, OBD_IOC_DATA_TYPE)
-
-#define IOC_OSC_SET_ACTIVE	_IOWR('h', 21, void *)
+/*	lustre/lustre_user.h	240-253 */
 
 #endif /* _UAPI_LUSTRE_IOCTL_H */

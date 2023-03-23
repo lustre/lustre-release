@@ -50,6 +50,7 @@
 #endif /* HAVE_SERVER_SUPPORT */
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include "llog_internal.h"
+#include <lustre_ioctl_old.h>
 
 #ifdef CONFIG_PROC_FS
 static __u64 obd_max_alloc;
@@ -338,8 +339,8 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "obdclass: cmd=%x len=%u uarg=%pK\n", cmd, len, uarg);
-	if (unlikely(_IOC_TYPE(cmd) != 'f' && cmd != IOC_OSC_SET_ACTIVE &&
-		     cmd != OBD_IOC_BARRIER))
+	if (unlikely(_IOC_TYPE(cmd) != 'f' && !OBD_IOC_BARRIER_ALLOW(cmd) &&
+		     !IOC_OSC_SET_ACTIVE_ALLOW(cmd)))
 		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "unknown", -ENOTTY));
 
 	rc = obd_ioctl_getdata(&data, &len, uarg);
@@ -370,10 +371,8 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 		GOTO(out, rc);
 	}
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	case OBD_GET_VERSION: {
-		static bool warned;
-
+#ifdef OBD_GET_VERSION
+	case_OBD_IOC_DEPRECATED(OBD_GET_VERSION, "obdclass", 2, 15)
 		if (!data->ioc_inlbuf1) {
 			rc = OBD_IOC_ERROR("obdclass", cmd, "no buffer passed",
 					   -EINVAL);
@@ -386,19 +385,12 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 			GOTO(out, rc);
 		}
 
-		if (!warned) {
-			warned = true;
-			CWARN("%s: ioctl(OBD_GET_VERSION) is deprecated, "
-			      "use llapi_get_version_string() and/or relink\n",
-			      current->comm);
-		}
 		memcpy(data->ioc_bulk, LUSTRE_VERSION_STRING,
 		       strlen(LUSTRE_VERSION_STRING) + 1);
 
 		if (copy_to_user(uarg, data, len))
 			rc = -EFAULT;
 		GOTO(out, rc);
-	}
 #endif
 	case OBD_IOC_NAME2DEV: {
 		/* Resolve device name, does not change current selected dev */
