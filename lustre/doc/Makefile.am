@@ -92,8 +92,6 @@ MANFILES =					\
 	ll_decode_linkea.8			\
 	llsom_sync.8				\
 	llstat.8				\
-	lnetctl.8				\
-	lst.8					\
 	lustre.7				\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
