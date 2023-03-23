@@ -6692,9 +6692,11 @@ function always_except() {
 build_test_filter() {
 	EXCEPT="$EXCEPT $(testslist_filter)"
 
-	for O in $ONLY; do
-		if [[ $O = [0-9]*-[0-9]* ]]; then
-			for num in $(seq $(echo $O | tr '-' ' ')); do
+	# allow test numbers separated by '+', or ',', in addition to ' '
+	# to avoid issues with multiple arguments handling by shell/autotest
+	for O in ${ONLY//[+,]/ }; do
+		if [[ $O =~ [0-9]*-[0-9]* ]]; then
+			for ((num=${O%-[0-9]*}; num <= ${O#[0-9]*-}; num++)); do
 				eval ONLY_$num=true
 			done
 		else
@@ -6702,20 +6704,20 @@ build_test_filter() {
 		fi
 	done
 
-	[ "$EXCEPT$ALWAYS_EXCEPT" ] &&
-		log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
-	[ "$EXCEPT_SLOW" ] &&
-		log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
-	for E in $EXCEPT; do
+	[[ -z "$EXCEPT$ALWAYS_EXCEPT" ]] ||
+		log "excepting tests: $(echo $EXCEPT $ALWAYS_EXCEPT)"
+	[[ -z "$EXCEPT_SLOW" ]] ||
+		log "skipping tests SLOW=no: $(echo $EXCEPT_SLOW)"
+	for E in ${EXCEPT//[+,]/ }; do
 		eval EXCEPT_${E}=true
 	done
-	for E in $ALWAYS_EXCEPT; do
+	for E in ${ALWAYS_EXCEPT//[+,]/ }; do
 		eval EXCEPT_ALWAYS_${E}=true
 	done
-	for E in $EXCEPT_SLOW; do
+	for E in ${EXCEPT_SLOW//[+,]/ }; do
 		eval EXCEPT_SLOW_${E}=true
 	done
-	for G in $GRANT_CHECK_LIST; do
+	for G in ${GRANT_CHECK_LIST//[+,]/ }; do
 		eval GCHECK_ONLY_${G}=true
 	done
 }
@@ -6963,18 +6965,17 @@ run_one_logged() {
 
 	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
 	echo
-	# if ${ONLY_$testnum} set, repeat $ONLY_REPEAT times, otherwise once
-	local isonly=ONLY_$testnum
-	local repeat=${!isonly:+$ONLY_REPEAT}
+	# if $ONLY is set, repeat subtest $ONLY_REPEAT times, otherwise once
+	local repeat=${ONLY:+$ONLY_REPEAT}
 
 	for ((testiter=0; testiter < ${repeat:-1}; testiter++)); do
 		local before_sub=$SECONDS
-		log_sub_test_begin $TESTNAME
 
+		log_sub_test_begin $TESTNAME
 		# remove temp files between repetitions to avoid test failures
 		if [[ -n "$append" ]]; then
-			[[ -n "$DIR/$tdir" ]] && rm -rvf $DIR/$tdir*
-			[[ -n "$DIR/$tfile" ]] && rm -vf $DIR/$tfile*
+			[[ -n "$tdir" ]] && rm -rvf $DIR/$tdir*
+			[[ -n "$tfile" ]] && rm -vf $DIR/$tfile*
 			echo "subtest iteration $testiter/$repeat"
 		fi
 		# loop around subshell so stack_trap EXIT triggers each time
@@ -7005,7 +7006,7 @@ run_one_logged() {
 		fi
 
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
-		[[ $rc != 0 ]] && break
+		[[ $rc != 0 || "$TEST_STATUS" != "PASS" ]] && break
 	done
 
 	if [[ "$TEST_STATUS" != "SKIP" && -f $TF_SKIP ]]; then
