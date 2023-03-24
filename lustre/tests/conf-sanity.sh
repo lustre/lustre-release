@@ -3452,8 +3452,8 @@ test_38() { # bug 14222
 	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid"
 	unmount_fstype $SINGLEMDS || error "umount failed (4)"
 
-	[ "$ERROR" = "y" ] &&
-		error "old and new files are different after sync" || true
+	[[ "$ERROR" != "y" ]] ||
+		error "old and new files are different after sync"
 
 	log "files compared the same"
 	cleanup || error "cleanup failed with $?"
@@ -3461,6 +3461,8 @@ test_38() { # bug 14222
 run_test 38 "MDS recreates missing lov_objid file from OST data"
 
 test_39() {
+	[[ -n "$(type -p perl)" ]] || skip_env "need perl for leak_finder.pl"
+
 	PTLDEBUG=+malloc
 	setup
 	cleanup || error "cleanup failed with $?"
@@ -9513,7 +9515,7 @@ test_123aa() {
 	[ -d $MOUNT/.lustre ] || setup
 
 	# test old logid format until removal from llog_ioctl.c::str2logid()
-	if [ $MGS_VERSION -lt $(version_code 3.1.53) ]; then
+	if (( $MGS_VERSION < $(version_code 2.99.53) )); then
 		do_facet mgs $LCTL dl | grep MGS
 		do_facet mgs "$LCTL --device %MGS llog_print \
 			      \\\\\\\$$FSNAME-client 1 10" ||

@@ -102,8 +102,14 @@ Conflicts:	@PACKAGE@-dkms
 Conflicts:	@PACKAGE@-all-dkms
 %endif
 %endif
-Requires:       gcc, make, perl
-Requires:       kernel-devel
+Requires:	gcc, make
+Requires:	kernel-devel >= 3.10
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
+Recommends:	perl
+Suggests:	bash-completion
+%else
+Requires:	perl
+%endif
 Provides:	%{kmod_name} = %{version}
 Provides:	@PACKAGE@-modules = %{version}
 %if %{with servers}

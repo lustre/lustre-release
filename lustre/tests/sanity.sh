@@ -6245,11 +6245,11 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-	perl -MSocket -e ';' || skip "no Socket perl module installed"
+	LANG=C perl -MSocket -e ';' || skip "no Socket perl module installed"
 
-	$SOCKETSERVER $DIR/socket ||
+	LANG=C $SOCKETSERVER $DIR/socket ||
 		error "$SOCKETSERVER $DIR/socket failed: $?"
-	$SOCKETCLIENT $DIR/socket ||
+	LANG=C $SOCKETCLIENT $DIR/socket ||
 		error "$SOCKETCLIENT $DIR/socket failed: $?"
 	$MUNLINK $DIR/socket || error "$MUNLINK $DIR/socket failed: $?"
 }
@@ -10964,27 +10964,24 @@ test_100() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ "$NETTYPE" =~ tcp ]] ||
 		skip_env "TCP secure port test, not useful for NETTYPE=$NETTYPE"
+	[[ -n "$(type -p ss)" ]] || skip_env "ss not available"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	remote_servers ||
-		skip "useless for local single node setup"
+	remote_servers || skip "useless for local single node setup"
 
-	netstat -tna | ( rc=1; while read PROT SND RCV LOCAL REMOTE STAT; do
-		[ "$PROT" != "tcp" ] && continue
-		RPORT=$(echo $REMOTE | cut -d: -f2)
-		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
+	ss -tna | ( rc=1; while read STATE SND RCV LOCAL REMOTE STAT; do
+		[[ "${REMOTE/*:/}" == "$ACCEPTOR_PORT" ]] || continue
 
 		rc=0
-		LPORT=`echo $LOCAL | cut -d: -f2`
-		if [ $LPORT -ge 1024 ]; then
+		if (( ${LOCAL/*:/} >= 1024 )); then
 			echo "bad: $PROT $SND $RCV $LOCAL $REMOTE $STAT"
-			netstat -tna
-			error_exit "local: $LPORT > 1024, remote: $RPORT"
+			ss -tna
+			error "local: ${LOCAL/*:/} > 1024 remote: ${REMOTE/*:/}"
 		fi
 	done
-	[ "$rc" = 0 ] || error_exit "privileged port not found" )
+	(( $rc == 0 )) || error "privileged port not found" )
 }
-run_test 100 "check local port using privileged port ==========="
+run_test 100 "check local port using privileged port"
 
 function get_named_value()
 {
@@ -28354,22 +28351,38 @@ test_430c() {
 	local start
 
 	mkdir -p $DIR/$tdir
-	dd if=/dev/urandom of=$file bs=1k count=1 seek=5M
+	stack_trap "rm -f $file $file.tmp"
+	dd if=/dev/urandom of=$file bs=1k count=1 seek=5M || error "dd failed"
 
 	# cp version 8.33+ prefers lseek over fiemap
-	if [[ $(cp --version | head -n1 | sed "s/[^0-9]//g") -ge 833 ]]; then
+	local ver=$(cp --version | awk '{ print $4; exit; }')
+	echo "cp $ver installed"
+	if (( $(version_code $ver) >= $(version_code 8.33) )); then
 		start=$SECONDS
-		time cp $file /dev/null
-		(( SECONDS - start < 5 )) ||
+		time cp -v $file $file.tmp
+		(( SECONDS - start < 5 )) || {
+			strace cp $file $file.tmp |&
+				grep -E "open|read|seek|FIEMAP" |
+				grep -A 100 $file
 			error "cp: too long runtime $((SECONDS - start))"
-
+		}
+	else
+		echo "cp test skipped due to $ver < 8.33"
 	fi
 	# tar version 1.29+ supports SEEK_HOLE/DATA
-	if [[ $(tar --version | head -n1 | sed "s/[^0-9]//g") -ge 129 ]]; then
+	ver=$(tar --version | awk '{ print $4; exit; }')
+	echo "tar $ver installed"
+	if (( $(version_code $ver) >= $(version_code 1.29) )); then
 		start=$SECONDS
-		time tar cS $file - | cat > /dev/null
-		(( SECONDS - start < 5 )) ||
+		time tar cvf $file.tmp --sparse $file || error "tar $file failed"
+		(( SECONDS - start < 5 )) || {
+			strace tar cf $file.tmp --sparse $file |&
+				grep -E "open|read|seek|FIEMAP" |
+				grep -A 100 $file
 			error "tar: too long runtime $((SECONDS - start))"
+		}
+	else
+		echo "tar test skipped due to $ver < 1.29"
 	fi
 }
 run_test 430c "lseek: external tools check"

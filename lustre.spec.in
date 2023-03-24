@@ -223,6 +223,9 @@ BuildRequires: libtool pkgconfig(yaml-0.1) pkgconfig(zlib) pkgconfig(libnl-3.0) 
 %if "%{_vendor}" == "redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
+Suggests: bash-completion
+%endif
 %else
 %if "%{_vendor}" == "openEuler"
 BuildRequires: openEuler-rpm-config
@@ -273,7 +276,7 @@ BuildRequires: rpm-build >= 4.14.3
 %endif
 BuildRequires: %kernel_module_package_buildreqs
 # need to provide a /usr/lib/${uname -r)/build dir
-BuildRequires: kernel
+BuildRequires: kernel >= 3.10
 %if "%{_vendor}" == "redhat"
 %if %{with kabi}
 BuildRequires: kernel-abi-whitelists
@@ -403,11 +406,11 @@ Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 %if %{with lustre_tests_lutf}
 Requires: python3 >= 3.6.0
 %endif
-Requires: attr, rsync, perl, lsof, /usr/bin/getconf
-Requires: /usr/sbin/getenforce, /usr/bin/netstat, acl, /usr/bin/killall, /usr/bin/ping, bc
+Requires: attr, rsync, lsof, /usr/bin/getconf
+Requires: /usr/sbin/getenforce, acl, /usr/bin/killall, /usr/bin/ping, bc
 # Of the supported targets, only rhel7 doesn't support Recommends.
-%if 0%{?rhel} > 7 || 0%{?rhel} < 1
-Recommends: dbench, iozone
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
+Recommends: perl, dbench, iozone
 # Either of these is sufficient
 Suggests: pdsh, clush
 %endif
@@ -438,7 +441,7 @@ to be used by the Lustre testing framework.
 %if %{with lustre_iokit}
 %package -n lustre-iokit
 Summary: Collection of benchmark tools for a cluster with the Lustre file system
-Requires: python3, sg3_utils
+Requires: perl, sg3_utils
 
 %description -n lustre-iokit
 This package includes five tools:
@@ -461,7 +464,7 @@ This script will collect IO stats on a defined set of nodes.
 
 ior-survey:
 A script to run the IOR benchmark. The latest version can be downloaded from
-http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
+https://github.com/hpc/ior/
 
 mds-survey:
 This survey tests the local metadata performance using the echo_client to drive
