@@ -1,8 +1,8 @@
 Source: lustre
 Section: admin
 Priority: optional
-Maintainer: Brian J. Murrell <brian.murrell@intel.com>
-Uploaders: Brian J. Murrell <brian.murrell@intel.com>
+Maintainer: Lustre Developers <lustre-devel@lists.lustre.org>
+Uploaders: Lustre Developers <lustre-devel@lists.lustre.org>
 Standards-Version: 3.8.3
 Build-Depends: module-assistant, libreadline-dev, debhelper (>= 11), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, pkg-config, libtool, libyaml-dev, libnl-genl-3-dev, libselinux-dev, libsnmp-dev, mpi-default-dev, bzip2, quilt, linux-headers-generic | linux-headers-amd64 | linux-headers-arm64, rsync, libssl-dev, libpython3-dev, swig, libmount-dev, ed
 Homepage: https://wiki.whamcloud.com/
@@ -19,28 +19,32 @@ Description: source for Lustre filesystem client kernel modules
  https://wiki.whamcloud.com/
  .
  This package contains the module source. The client kernel modules
- can be built for kernels 2.6.32+ with the use of module-assistant
+ can be built for kernels 3.10+ with the use of module-assistant
  or make-kpkg.
 
 Package: lustre-client-utils
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp-dev, zlib1g, libnl-genl-3-200, perl, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp-dev, zlib1g, libnl-genl-3-200, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Recommends: perl
+Suggests: bash-completion
 Description: Userspace utilities for the Lustre filesystem (client)
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
  https://wiki.whamcloud.com/
  .
- This package provides a number of userspace utilities for
- accessing Lustre filesystems from a client. If you need server utils,
- use lustre-server-utils instead.
+ This package provides a number of userspace utilities for accessing a
+ remote Lustre filesystems from a client. If you need to serve local
+ storage from this node to other clients, use lustre-server-utils instead.
 
 Package: lustre-server-utils
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp-dev, zlib1g, libnl-genl-3-200, perl, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp-dev, zlib1g, libnl-genl-3-200, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Recommends: perl, python3
+Suggests: bash-completion
 Provides: lustre-server-utils, lustre-client-utils (= ${binary:Version})
 Conflicts: lustre-client-utils
 Replaces: lustre-client-utils
@@ -51,8 +55,8 @@ Description: Userspace utilities for the Lustre filesystem (server)
  .
  This package provides a number of userspace utilities for
  accessing and maintaining Lustre filesystems from a server.
- If you only need to access the LFS cluster, install lustre-client-utils
- instead.
+ If you only need to access the filesystem hosted on remote
+ servers, the lustre-client-utils package may be used instead.
 
 Package: lustre-resource-agents
 Section: ha
@@ -66,19 +70,19 @@ Description: HA Resuable Cluster Resource Scripts for Lustre
  .
  This package provides a set of scripts to operate Lustre
  resources in a High Availablity environment for both Pacemaker
- and rgmanager.
+ and rgmanager on a server.
 
 Package: lustre-iokit
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-client-utils (= ${binary:Version}), python3, perl, sg3-utils
+Depends: lustre-client-utils (= ${binary:Version}), perl, sg3-utils
 Description: Collection of benchmark tools for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
  https://wiki.whamcloud.com/
  .
- This package provides a collection of benchmark tools
+ This package provides a collection of benchmark tools for Lustre clients.
 
 Package: lustre-tests
 Section: utils
@@ -90,7 +94,7 @@ Description: Test suite for the Lustre filesystem
  This release is maintained by Whamcloud and available from
  https://wiki.whamcloud.com/
  .
- This package provides a number of test utilities for the Lustre filesystem.
+ This package provides regression test scripts for the Lustre filesystem.
 
 Package: lustre-dev
 Section: libdevel
@@ -108,7 +112,7 @@ Package: lustre-client-modules-dkms
 Section: admin
 Architecture: i386 armhf powerpc ppc64el amd64 ia64
 Priority: optional
-Depends: autoconf, automake, bison, build-essential, dkms, flex, libaio-dev, libkeyutils-dev, libkrb5-dev, libtool, libselinux-dev, libssl-dev, libyaml-dev, linux-base, linux-image | linux-image-amd64 | linux-image-arm64, linux-headers-generic | linux-headers-amd64, module-assistant, pkg-config, python3-distutils | python3-distutils-extra, python3-dev, libnl-genl-3-dev, zlib1g-dev, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Depends: autoconf, automake, bison, build-essential, dkms, flex, libaio-dev, libkeyutils-dev, libkrb5-dev, libtool, libselinux-dev, libssl-dev, libyaml-dev, linux-base, linux-image >= 3.10 | linux-image-amd64 >= 3.10 | linux-image-arm64 >= 3.10, linux-headers-generic | linux-headers-amd64, module-assistant, pkg-config, python3-distutils | python3-distutils-extra, python3-dev, libnl-genl-3-dev, zlib1g-dev, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
 Provides: lustre-client-modules
 Description: Lustre Linux kernel module (DKMS)
  This package contains the loadable kernel modules for the patchless client

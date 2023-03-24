@@ -1,8 +1,8 @@
 Source: lustre
 Section: admin
 Priority: optional
-Maintainer: Brian J. Murrell <brian.murrell@intel.com>
-Uploaders: Brian J. Murrell <brian.murrell@intel.com>
+Maintainer: Lustre Developers <lustre-devel@lists.lustre.org>
+Uploaders: Lustre Developers <lustre-devel@lists.lustre.org>
 Standards-Version: 3.7.2
 Build-Depends: debhelper (>= 11), bzip2
 
@@ -26,7 +26,7 @@ Description: Lustre Server Linux kernel module (kernel _KVERS_)
  This package contains the loadable kernel modules for the
  ldiskfs filesystem as used by the Lustre cluster filesystem servers.
  .
- Do note, that you will only need this, when you're running the
+ Note that you will only need this when you're running the
  node as a Lustre server. The package might also contain the ldiskfs
  module for use as a backing file system, in case it was enabled.
  In that case, you should also run a lustre-patched Kernel
