@@ -169,10 +169,6 @@ test_5() {
 }
 run_test 5 "Fail OST during iozone"
 
-kbytesfree() {
-   calc_osc_kbytes kbytesfree
-}
-
 test_6() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return 0
 
@@ -185,7 +181,7 @@ test_6() {
 	wait_destroy_complete || error "first wait_destroy_complete failed"
 	sync_all_data
 
-	local before=$(kbytesfree)
+	local before=$(calc_osc_kbytes kbytesfree)
 	dd if=/dev/urandom bs=4096 count=1280 of=$f || error "dd failed"
 	$LFS getstripe $f || error "$LFS getstripe $f failed"
 	local stripe_index=$(lfs getstripe -i $f)
@@ -200,13 +196,13 @@ test_6() {
 	wait_mds_ost_sync || error "second wait_mds_ost_sync failed"
 
 	# retry till statfs returns useful results
-	local after_dd=$(kbytesfree)
+	local after_dd=$(calc_osc_kbytes kbytesfree)
 	local i=0
 	while (( $before <= $after_dd && $i < 20 )); do
 		sync
 		sleep 1
 		let ++i
-		after_dd=$(kbytesfree)
+		after_dd=$(calc_osc_kbytes kbytesfree)
 	done
 
 	log "before_free: $before after_dd_free: $after_dd took $i seconds"
@@ -222,7 +218,7 @@ test_6() {
 	# let the delete happen
 	wait_mds_ost_sync || error "third wait_mds_ost_sync failed"
 	wait_delete_completed || error "second wait_delete_completed failed"
-	local after=$(kbytesfree)
+	local after=$(calc_osc_kbytes kbytesfree)
 	log "free_before: $before free_after: $after"
 	(( $before <= $after + $(fs_log_size) )) ||
 		error "$before > $after + logsize $(fs_log_size)"
@@ -238,18 +234,18 @@ test_7() {
 	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 	wait_destroy_complete || error "wait_destroy_complete failed"
 
-	local before=$(kbytesfree)
+	local before=$(calc_osc_kbytes kbytesfree)
 	dd if=/dev/urandom bs=4096 count=1280 of=$f ||
 		error "dd to file failed: $?"
 
 	sync
-	local after_dd=$(kbytesfree)
+	local after_dd=$(calc_osc_kbytes kbytesfree)
 	local i=0
 	while (( $before <= $after_dd && $i < 10 )); do
 		sync
 		sleep 1
 		let ++i
-		after_dd=$(kbytesfree)
+		after_dd=$(calc_osc_kbytes kbytesfree)
 	done
 
 	log "before: $before after_dd: $after_dd took $i seconds"
@@ -264,7 +260,7 @@ test_7() {
 	# let the delete happen
 	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 	wait_delete_completed || error "wait_delete_completed failed"
-	local after=$(kbytesfree)
+	local after=$(calc_osc_kbytes kbytesfree)
 	log "before: $before after: $after"
 	(( $before <= $after + $(fs_log_size) )) ||
 		 error "$before > $after + logsize $(fs_log_size)"

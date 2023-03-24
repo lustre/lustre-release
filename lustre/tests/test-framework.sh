@@ -934,18 +934,20 @@ unload_modules() {
 }
 
 fs_log_size() {
-	local facet=${1:-$SINGLEMDS}
+	local facet=${1:-ost1}
 	local size=0
+	local mult=$OSTCOUNT
 
 	case $(facet_fstype $facet) in
-		ldiskfs) size=72;; # largest seen is 64, leave some headroom
+		ldiskfs) size=32;; # largest seen is 64 with multiple OSTs
 		# grant_block_size is in bytes, allow at least 2x max blocksize
 		zfs)     size=$(lctl get_param osc.$FSNAME*.import |
 				awk '/grant_block_size:/ {print $2/512; exit;}')
 			  ;;
 	esac
 
-	echo -n $((size * MDSCOUNT))
+	[[ $facet =~ mds ]] && mult=$MDTCOUNT
+	echo -n $((size * mult))
 }
 
 fs_inode_ksize() {

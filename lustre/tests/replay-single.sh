@@ -3253,23 +3253,17 @@ test_88() { #bug 17485
 }
 run_test 88 "MDS should not assign same objid to different files "
 
-function calc_osc_kbytes_used() {
-	local kbtotal=$(calc_osc_kbytes kbytestotal)
-	local kbfree=$(calc_osc_kbytes kbytesfree)
-	echo $((kbtotal-kbfree))
-}
-
 test_89() {
 	cancel_lru_locks osc
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	rm -f $DIR/$tdir/$tfile
 	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
 	wait_delete_completed || error "initial wait delete timed out"
-	local blocks1=$(calc_osc_kbytes_used)
+	local before=$(calc_osc_kbytes kbytesfree)
 	local write_size=$(fs_log_size)
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile
-	[ $write_size -lt 1024 ] && write_size=1024
+	(( $write_size >= 1024 )) || write_size=1024
 	dd if=/dev/zero bs=${write_size}k count=10 of=$DIR/$tdir/$tfile
 	sync
 	stop ost1
@@ -3287,10 +3281,11 @@ test_89() {
 
 	wait_mds_ost_sync || error "MDS-OST sync timed out"
 	wait_delete_completed || error "wait delete timed out"
-	local blocks2=$(calc_osc_kbytes_used)
+	local after=$(calc_osc_kbytes kbytesfree)
 
-	[ $((blocks2 - blocks1)) -le $(fs_log_size)  ] ||
-		error $((blocks2 - blocks1)) blocks leaked
+	log "free_before: $before free_after: $after"
+	(( $before <= $after + $(fs_log_size) )) ||
+		error "kbytesfree $before > $after + margin $(fs_log_size)"
 }
 run_test 89 "no disk space leak on late ost connection"
 
