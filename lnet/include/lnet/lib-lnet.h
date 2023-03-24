@@ -73,6 +73,10 @@ extern struct lnet the_lnet;			/* THE network */
 /** exclusive lock */
 #define LNET_LOCK_EX		CFS_PERCPT_LOCK_EX
 
+/* need both kernel and user-land acceptor */
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT	512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT	1023
+
 /* default timeout and credits */
 #define DEFAULT_PEER_TIMEOUT    180
 #define DEFAULT_PEER_CREDITS    8
