@@ -71,11 +71,6 @@ mkid:
 	$(FIND_TAG_FILES_CMD) | xargs mkid
 
 
-doxygen:  doxygen-api doxygen-ref
-
-doxygen-%: build/doxyfile.%
-	doxygen $<
-
 if MODULES
 .PHONY: ldiskfs-sources
 
