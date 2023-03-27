@@ -78,13 +78,15 @@ release() {
 	rhel_pat=".*release \([[:digit:]]\+\.[[:digit:]]\+\).*"
 
 	if [ -r /etc/centos-release ]; then
+		name=$(sed -n -e "s/^\([A-Za-z]\+\).*/\1/p" /etc/centos-release)
 		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/centos-release)
-		dist="CentOS ${version}"
+		dist="${name} ${version}"
 	elif [ -r /etc/redhat-release ]; then
 		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/redhat-release)
 		dist="RHEL ${version}"
 	elif [ -r /etc/os-release ]; then
-		name=$(sed -n -e 's/"//g' -e 's/^NAME=//p' /etc/os-release)
+		name=$(sed -n -e 's/"//g' -e 's/ [A-Za-z]*$//' \
+			-e 's/^NAME=//p' /etc/os-release)
 		version=$(sed -n -e 's/"//g' -e 's/^VERSION_ID=//p' \
 		/etc/os-release)
 		dist="${name} ${version}"
