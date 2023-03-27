@@ -3946,7 +3946,7 @@ test_50() {
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted in memory"
 
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 
 	# check that file read from server is correct
 	cmp -bl $tmpfile $testfile ||
@@ -3955,7 +3955,7 @@ test_50() {
 	# decrease size: truncate to PAGE_SIZE
 	$TRUNCATE $tmpfile $pagesz
 	$TRUNCATE $testfile $pagesz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (1)"
 
@@ -3963,7 +3963,7 @@ test_50() {
 	sz=$((pagesz*2))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (2)"
 
@@ -3971,7 +3971,7 @@ test_50() {
 	sz=$((pagesz/2))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (3)"
 
@@ -3979,7 +3979,7 @@ test_50() {
 	sz=$((sz-7))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (4)"
 
@@ -3987,7 +3987,7 @@ test_50() {
 	sz=$((sz+18))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (5)"
 
@@ -3995,12 +3995,12 @@ test_50() {
 	sz=$((sz+pagesz+30))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (6)"
 
 	rm -f $testfile
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 
 	# write hole in file, data spread on MDT and OST
 	tr '\0' '2' < /dev/zero |
@@ -4012,7 +4012,7 @@ test_50() {
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted in memory"
 
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 
 	# check that file read from server is correct
 	cmp -bl $tmpfile $testfile ||
@@ -4023,7 +4023,7 @@ test_50() {
 	sz=$((1024*1024+13))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (7)"
 
@@ -4032,7 +4032,7 @@ test_50() {
 	sz=7
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (8)"
 
@@ -4041,7 +4041,7 @@ test_50() {
 	sz=$((1024*1024-13))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (9)"
 
@@ -4050,7 +4050,7 @@ test_50() {
 	sz=$((1024*1024+7))
 	$TRUNCATE $tmpfile $sz
 	$TRUNCATE $testfile $sz
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	remove_enc_key ; insert_enc_key
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (10)"
 
