@@ -5379,8 +5379,8 @@ test_75()
 
 	# mmap write when over soft limit
 	limit=$soft_limit
-	$DD of=$testfile count=${limit} ||
-		quota_error a  "root write failure, but expect success (1)"
+	$DD of=$testfile count=${limit} || quota_error a $TSTUSR \
+			"root write failure, but expect success (1)"
 	OFFSET=$((limit * 1024))
 	cancel_lru_locks osc
 
