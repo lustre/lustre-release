@@ -458,15 +458,14 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	if (lnb->lnb_len < PAGE_SIZE)
 		memset(kaddr + lnb->lnb_len, 0,
 		       PAGE_SIZE - lnb->lnb_len);
-	flush_dcache_page(page);
-	SetPageUptodate(page);
 	kunmap_atomic(kaddr);
 
 	if (inode && IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode)) {
-		if (!llcrypt_has_encryption_key(inode))
+		if (!llcrypt_has_encryption_key(inode)) {
 			CDEBUG(D_SEC, "no enc key for "DFID"\n",
 			       PFID(ll_inode2fid(inode)));
-		else {
+			rc = -ENOKEY;
+		} else {
 			unsigned int offs = 0;
 
 			while (offs < PAGE_SIZE) {
@@ -485,6 +484,10 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 				offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
 			}
 		}
+	}
+	if (!rc) {
+		flush_dcache_page(page);
+		SetPageUptodate(page);
 	}
 	unlock_page(page);
 
