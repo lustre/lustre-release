@@ -6352,6 +6352,29 @@ at_max_set() {
 	do_nodes $hosts lctl set_param at_max=$at_max
 }
 
+at_min_get() {
+	at_get $1 at_min
+}
+
+at_min_set() {
+	local at_min=$1
+	shift
+
+	local facet
+	local hosts
+
+	for facet in "$@"; do
+		if [ $facet == "ost" ]; then
+			facet=$(get_facets OST)
+		elif [ $facet == "mds" ]; then
+			facet=$(get_facets MDS)
+		fi
+		hosts=$(expand_list $hosts $(facets_hosts $facet))
+	done
+
+	do_nodes $hosts lctl set_param at_min=$at_min
+}
+
 ##################################
 # OBD_FAIL funcs
 
