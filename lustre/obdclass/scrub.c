@@ -119,7 +119,7 @@ void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid)
 
 	memset(sf, 0, sizeof(*sf));
 	uuid_copy(&sf->sf_uuid, &uuid);
-	sf->sf_magic = SCRUB_MAGIC_V1;
+	sf->sf_magic = SCRUB_MAGIC_V2;
 	sf->sf_status = SS_INIT;
 }
 EXPORT_SYMBOL(scrub_file_init);
@@ -133,6 +133,7 @@ void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
 	       scrub->os_name, sf->sf_flags, flags);
 
 	uuid_copy(&sf->sf_uuid, &uuid);
+	sf->sf_magic = SCRUB_MAGIC_V2;
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
 	sf->sf_flags &= ~SF_AUTO;
@@ -183,9 +184,13 @@ int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub)
 	}
 
 	scrub_file_to_cpu(sf, &scrub->os_file_disk);
-	if (sf->sf_magic != SCRUB_MAGIC_V1) {
-		CDEBUG(D_LFSCK, "%s: invalid scrub magic 0x%x != 0x%x\n",
-		       scrub->os_name, sf->sf_magic, SCRUB_MAGIC_V1);
+	if (sf->sf_magic == SCRUB_MAGIC_V1) {
+		CWARN("%s: reset scrub OI count for format change (LU-16655)\n",
+		      scrub->os_name);
+		sf->sf_oi_count = 0;
+	} else if (sf->sf_magic != SCRUB_MAGIC_V2) {
+		CDEBUG(D_LFSCK, "%s: invalid scrub magic %#x, should be %#x\n",
+		       scrub->os_name, sf->sf_magic, SCRUB_MAGIC_V2);
 		return -EFAULT;
 	}
 

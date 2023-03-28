@@ -1380,8 +1380,9 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 			dirty = true;
 		}
 
-		if ((sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0) {
-			LCONSOLE_WARN("%s: invalid oi count %d, set it to %d\n",
+		if (unlikely((sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0 ||
+			     sf->sf_oi_count > OSD_OI_FID_NR_MAX)) {
+			LCONSOLE_WARN("%s: invalid OI count %u, reset to %u\n",
 				      osd_name(dev), sf->sf_oi_count,
 				      osd_oi_count);
 			sf->sf_oi_count = osd_oi_count;
