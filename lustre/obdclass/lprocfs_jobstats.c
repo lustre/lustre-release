@@ -70,6 +70,7 @@ struct job_stat {
 	ktime_t			js_time_latest;	/* time of most recent stat*/
 	struct lprocfs_stats	*js_stats;	/* per-job statistics */
 	struct obd_job_stats	*js_jobstats;	/* for accessing ojs_lock */
+	struct rcu_head		js_rcu;		/* RCU head for job_reclaim_rcu*/
 };
 
 static unsigned
@@ -98,6 +99,11 @@ static void *job_stat_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct job_stat, js_hash);
 }
 
+static bool job_getref_try(struct job_stat *job)
+{
+	return atomic_inc_not_zero(&job->js_refcount);
+}
+
 static void job_stat_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
@@ -105,17 +111,24 @@ static void job_stat_get(struct cfs_hash *hs, struct hlist_node *hnode)
 	atomic_inc(&job->js_refcount);
 }
 
+static void job_reclaim_rcu(struct rcu_head *head)
+{
+	struct job_stat *job = container_of(head, typeof(*job), js_rcu);
+
+	lprocfs_stats_free(&job->js_stats);
+	OBD_FREE_PTR(job);
+}
+
 static void job_free(struct job_stat *job)
 {
 	LASSERT(atomic_read(&job->js_refcount) == 0);
 	LASSERT(job->js_jobstats != NULL);
 
-	write_lock(&job->js_jobstats->ojs_lock);
-	list_del_init(&job->js_list);
-	write_unlock(&job->js_jobstats->ojs_lock);
+	spin_lock(&job->js_jobstats->ojs_lock);
+	list_del_rcu(&job->js_list);
+	spin_unlock(&job->js_jobstats->ojs_lock);
 
-	lprocfs_stats_free(&job->js_stats);
-	OBD_FREE_PTR(job);
+	call_rcu(&job->js_rcu, job_reclaim_rcu);
 }
 
 static void job_putref(struct job_stat *job)
@@ -216,14 +229,14 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 			return;
 	}
 
-	write_lock(&stats->ojs_lock);
+	spin_lock(&stats->ojs_lock);
 	if (!clear && stats->ojs_cleaning) {
-		write_unlock(&stats->ojs_lock);
+		spin_unlock(&stats->ojs_lock);
 		return;
 	}
 
 	stats->ojs_cleaning = true;
-	write_unlock(&stats->ojs_lock);
+	spin_unlock(&stats->ojs_lock);
 
 	/* Can't hold ojs_lock over hash iteration, since it is grabbed by
 	 * job_cleanup_iter_callback()
@@ -246,10 +259,10 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 	cfs_hash_for_each_safe(stats->ojs_hash, job_cleanup_iter_callback,
 			       &oldest);
 
-	write_lock(&stats->ojs_lock);
+	spin_lock(&stats->ojs_lock);
 	stats->ojs_cleaning = false;
 	stats->ojs_cleanup_last = ktime_get_real();
-	write_unlock(&stats->ojs_lock);
+	spin_unlock(&stats->ojs_lock);
 }
 
 static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
@@ -323,9 +336,9 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 		 * "job2" was initialized in job_alloc() already. LU-2163 */
 	} else {
 		LASSERT(list_empty(&job->js_list));
-		write_lock(&stats->ojs_lock);
-		list_add_tail(&job->js_list, &stats->ojs_list);
-		write_unlock(&stats->ojs_lock);
+		spin_lock(&stats->ojs_lock);
+		list_add_tail_rcu(&job->js_list, &stats->ojs_list);
+		spin_unlock(&stats->ojs_lock);
 	}
 
 found:
@@ -353,17 +366,30 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 }
 EXPORT_SYMBOL(lprocfs_job_stats_fini);
 
+
+struct lprocfs_jobstats_data {
+	struct obd_job_stats *pjd_stats;
+	loff_t pjd_last_pos;
+	struct job_stat *pjd_last_job;
+};
+
 static void *lprocfs_jobstats_seq_start(struct seq_file *p, loff_t *pos)
 {
-	struct obd_job_stats *stats = p->private;
+	struct lprocfs_jobstats_data *data = p->private;
+	struct obd_job_stats *stats = data->pjd_stats;
 	loff_t off = *pos;
 	struct job_stat *job;
 
-	read_lock(&stats->ojs_lock);
+	rcu_read_lock();
 	if (off == 0)
 		return SEQ_START_TOKEN;
+
+	/* if pos matches the offset of last saved job, start from saved job */
+	if (data->pjd_last_job && data->pjd_last_pos == off)
+		return data->pjd_last_job;
+
 	off--;
-	list_for_each_entry(job, &stats->ojs_list, js_list) {
+	list_for_each_entry_rcu(job, &stats->ojs_list, js_list) {
 		if (!off--)
 			return job;
 	}
@@ -372,27 +398,47 @@ static void *lprocfs_jobstats_seq_start(struct seq_file *p, loff_t *pos)
 
 static void lprocfs_jobstats_seq_stop(struct seq_file *p, void *v)
 {
-	struct obd_job_stats *stats = p->private;
+	struct lprocfs_jobstats_data *data = p->private;
+	struct job_stat *job = NULL;
 
-	read_unlock(&stats->ojs_lock);
+	/* try to get a ref on current job (not deleted) */
+	if (v && v != SEQ_START_TOKEN && job_getref_try(v))
+		job = v;
+
+	rcu_read_unlock();
+
+	/* drop the ref on the old saved job */
+	if (data->pjd_last_job) {
+		job_putref(data->pjd_last_job);
+		data->pjd_last_job = NULL;
+	}
+
+	/* save the current job for the next read */
+	if (job)
+		data->pjd_last_job = job;
 }
 
 static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-	struct obd_job_stats *stats = p->private;
+	struct lprocfs_jobstats_data *data = p->private;
+	struct obd_job_stats *stats = data->pjd_stats;
 	struct job_stat *job;
-	struct list_head *next;
+	struct list_head *cur;
 
 	++*pos;
+	data->pjd_last_pos = *pos;
 	if (v == SEQ_START_TOKEN) {
-		next = stats->ojs_list.next;
+		cur = &stats->ojs_list;
 	} else {
 		job = (struct job_stat *)v;
-		next = job->js_list.next;
+		cur = &job->js_list;
 	}
 
-	return next == &stats->ojs_list ? NULL :
-		list_entry(next, struct job_stat, js_list);
+	job = list_entry_rcu(cur->next, struct job_stat, js_list);
+	if (&job->js_list == &stats->ojs_list)
+		return NULL;
+
+	return job;
 }
 
 /*
@@ -550,14 +596,23 @@ static const struct seq_operations lprocfs_jobstats_seq_sops = {
 
 static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
 {
+	struct lprocfs_jobstats_data *data = NULL;
 	struct seq_file *seq;
 	int rc;
 
 	rc = seq_open(file, &lprocfs_jobstats_seq_sops);
 	if (rc)
 		return rc;
+
+	OBD_ALLOC_PTR(data);
+	if (!data)
+		return -ENOMEM;
+
+	data->pjd_stats = pde_data(inode);
+	data->pjd_last_job = NULL;
+	data->pjd_last_pos = 0;
 	seq = file->private_data;
-	seq->private = pde_data(inode);
+	seq->private = data;
 	return 0;
 }
 
@@ -566,7 +621,8 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 					  size_t len, loff_t *off)
 {
 	struct seq_file *seq = file->private_data;
-	struct obd_job_stats *stats = seq->private;
+	struct lprocfs_jobstats_data *data = seq->private;
+	struct obd_job_stats *stats = data->pjd_stats;
 	char jobid[4 * LUSTRE_JOBID_SIZE]; /* all escaped chars, plus ""\n\0 */
 	char *p1, *p2, *last;
 	unsigned int c;
@@ -641,9 +697,17 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 static int lprocfs_jobstats_seq_release(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq = file->private_data;
-	struct obd_job_stats *stats = seq->private;
+	struct lprocfs_jobstats_data *data = seq->private;
 
-	lprocfs_job_cleanup(stats, false);
+	/* drop the ref of last saved job */
+	if (data->pjd_last_job) {
+		job_putref(data->pjd_last_job);
+		data->pjd_last_pos = 0;
+		data->pjd_last_job = NULL;
+	}
+
+	lprocfs_job_cleanup(data->pjd_stats, false);
+	OBD_FREE_PTR(data);
 
 	return lprocfs_seq_release(inode, file);
 }
@@ -695,7 +759,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 		RETURN(-ENOMEM);
 
 	INIT_LIST_HEAD(&stats->ojs_list);
-	rwlock_init(&stats->ojs_lock);
+	spin_lock_init(&stats->ojs_lock);
 	stats->ojs_cntr_num = cntr_num;
 	stats->ojs_cntr_init_fn = init_fn;
 	/* Store 1/2 the actual interval, since we use that the most, and

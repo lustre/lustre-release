@@ -450,7 +450,7 @@ typedef void (*cntr_init_callback)(struct lprocfs_stats *stats,
 struct obd_job_stats {
 	struct cfs_hash	       *ojs_hash;	/* hash of jobids */
 	struct list_head	ojs_list;	/* list of job_stat structs */
-	rwlock_t		ojs_lock;	/* protect ojs_list/js_list */
+	spinlock_t		ojs_lock;	/* protect ojs_list/js_list */
 	ktime_t			ojs_cleanup_interval;/* 1/2 expiry seconds */
 	ktime_t			ojs_cleanup_last;/* previous cleanup time */
 	cntr_init_callback	ojs_cntr_init_fn;/* lprocfs_stats initializer */

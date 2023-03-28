@@ -19400,14 +19400,12 @@ test_205a() { # Job stats
 
 	local old_jobenv=$($LCTL get_param -n jobid_var)
 	[ $old_jobenv != $JOBENV ] && jobstats_set $JOBENV
+	stack_trap "jobstats_set $old_jobenv" EXIT
 
-	if [[ $PERM_CMD == *"set_param -P"* ]]; then
-		stack_trap "do_facet mgs $PERM_CMD jobid_var=$old_jobenv" EXIT
-	else
-		stack_trap "do_facet mgs $PERM_CMD \
-			$FSNAME.sys.jobid_var=$old_jobenv" EXIT
-	fi
 	changelog_register
+
+	local old_jobid_name=$($LCTL get_param jobid_name)
+	stack_trap "$LCTL set_param $old_jobid_name" EXIT
 
 	local old_interval=$(do_facet $SINGLEMDS lctl get_param -n \
 				mdt.*.job_cleanup_interval | head -n 1)
@@ -19609,12 +19607,17 @@ run_test 205d "verify the format of some stats files"
 test_205e() {
 	local ops_comma
 	local file=$DIR/$tdir/$tfile
+	local -a cli_params
 
 	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
 		skip "need lustre >= 2.15.53 for lljobstat"
 	(( $OST1_VERSION >= $(version_code 2.15.53) )) ||
 		skip "need lustre >= 2.15.53 for lljobstat"
 	verify_yaml_available || skip_env "YAML verification not installed"
+
+	cli_params=( $($LCTL get_param jobid_name jobid_var) )
+	$LCTL set_param jobid_var=nodelocal jobid_name=205e.%e.%u
+	stack_trap "$LCTL set_param ${cli_params[*]}" EXIT
 
 	mkdir_on_mdt0 $DIR/$tdir || error "failed to create dir"
 
@@ -19632,12 +19635,12 @@ test_205e() {
 
 	# verify that job dd.0 does exist and has some ops on ost1
 	# typically this line is like:
-	# - dd.0:            {ops: 20, ...}
+	# - 205e.dd.0:            {ops: 20, ...}
 	ops_comma=$(do_facet ost1 "lljobstat -n 1 -i 0 -c 1000" |
-		    awk '$2=="dd.0:" {print $4}')
+		    awk '$2=="205e.dd.0:" {print $4}')
 
 	(( ${ops_comma%,} >= 10 )) ||
-		error "cannot find job dd.0 with ops >= 10"
+		error "cannot find job 205e.dd.0 with ops >= 10"
 }
 run_test 205e "verify the output of lljobstat"
 
@@ -19650,6 +19653,55 @@ test_205f() {
 		error "qos_ost_weights is not valid YAML"
 }
 run_test 205f "verify qos_ost_weights YAML format "
+
+__test_205_jobstats_dump() {
+	local -a pids
+	local nbr_instance=$1
+
+	while true; do
+		if (( ${#pids[@]} >= nbr_instance )); then
+			wait ${pids[@]}
+			pids=()
+		fi
+
+		do_facet mds1 "$LCTL get_param mdt.*.job_stats > /dev/null" &
+		pids+=( $! )
+	done
+}
+
+__test_205_cleanup() {
+	kill $@
+	# Clear all job entries
+	do_facet mds1 "$LCTL set_param mdt.*.job_stats=clear"
+}
+
+test_205g() {
+	local -a mds1_params
+	local -a cli_params
+	local pids
+	local interval=5
+
+	mds1_params=( $(do_facet mds1 $LCTL get_param mdt.*.job_cleanup_interval) )
+	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=$interval
+	stack_trap "do_facet mds1 $LCTL set_param ${mds1_params[*]}" EXIT
+
+	cli_params=( $($LCTL get_param jobid_name jobid_var) )
+	$LCTL set_param jobid_var=TEST205G_ID jobid_name=%j.%p
+	stack_trap "$LCTL set_param ${cli_params[*]}" EXIT
+
+	# start jobs loop
+	export TEST205G_ID=205g
+	stack_trap "unset TEST205G_ID" EXIT
+	while true; do
+		printf $DIR/$tfile.{0001..1000} | xargs -P10 -n1 touch
+	done & pids="$! "
+
+	__test_205_jobstats_dump 4 & pids+="$! "
+	stack_trap "__test_205_cleanup $pids" EXIT INT
+
+	[[ $SLOW == "no" ]] && sleep 90 || sleep 240
+}
+run_test 205g "stress test for job_stats procfile"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {
