@@ -397,8 +397,9 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 	int rc;
 	ENTRY;
 
-	if (unlikely(sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0) {
-		LCONSOLE_WARN("%s: Invalid OI count in scrub file %d\n",
+	if (unlikely((sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0 ||
+		     sf->sf_oi_count > OSD_OI_FID_NR_MAX)) {
+		LCONSOLE_WARN("%s: invalid OI count %u in scrub file, reset it\n",
 			      osd_dev2name(osd), sf->sf_oi_count);
 		sf->sf_oi_count = 0;
 	}
