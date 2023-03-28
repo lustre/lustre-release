@@ -416,7 +416,7 @@ check_lustre_msg_v2(void)
 	CHECK_MEMBER(lustre_msg_v2, lm_repsize);
 	CHECK_MEMBER(lustre_msg_v2, lm_cksum);
 	CHECK_MEMBER(lustre_msg_v2, lm_flags);
-	CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
+	CHECK_MEMBER(lustre_msg_v2, lm_opc);
 	CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
 	CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
 
@@ -1106,7 +1106,7 @@ check_niobuf_remote(void)
 	CHECK_DEFINE_X(OBD_BRW_OVER_PRJQUOTA);
 	CHECK_DEFINE_X(OBD_BRW_RDMA_ONLY);
 	CHECK_DEFINE_X(OBD_BRW_SYS_RESOURCE);
-	CHECK_DEFINE_X(OBD_BRW_SYS_COMPRESSED);
+	CHECK_DEFINE_X(OBD_BRW_COMPRESSED);
 }
 
 static void
@@ -2645,8 +2645,10 @@ static void check_nodemap_cluster_rec(void)
 	CHECK_STRUCT(nodemap_cluster_rec);
 	CHECK_CDEFINE(LUSTRE_NODEMAP_NAME_LENGTH);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1]);
+#if 0 /* cannot check offset of 8-bit bitfield */
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags2);
+#endif
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding1);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_projid);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_uid);
@@ -2708,6 +2710,10 @@ static void check_nodemap_key(void)
 	BLANK_LINE();
 	CHECK_STRUCT(nodemap_key);
 	CHECK_MEMBER(nodemap_key, nk_nodemap_id);
+	CHECK_MEMBER(nodemap_key, nk_cluster_subid);
+	CHECK_MEMBER(nodemap_key, nk_range_id);
+	CHECK_MEMBER(nodemap_key, nk_id_client);
+	CHECK_MEMBER(nodemap_key, nk_unused);
 
 	CHECK_VALUE(NODEMAP_EMPTY_IDX);
 	CHECK_VALUE(NODEMAP_CLUSTER_IDX);

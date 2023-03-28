@@ -5240,7 +5240,6 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct hsm_user_import *)0)->hui_archive_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_user_import *)0)->hui_archive_id));
 
-#ifndef HAVE_NATIVE_LINUX_CLIENT
 	/* Checks for struct netobj_s */
 	LASSERTF((int)sizeof(struct netobj_s) == 4, "found %lld\n",
 		 (long long)(int)sizeof(struct netobj_s));
@@ -5432,8 +5431,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct gss_wire_ctx, gw_handle));
 	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_handle) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_handle));
-#endif /* !HAVE_NATIVE_LINUX_CLIENT */
-
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct object_update_param */
@@ -5604,8 +5601,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name[16 + 1]));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]));
-	/* ncr_flags' address and size cannot be taken because it is a bit-field (8 bits) */
-	/* ncr_flags2' address and size cannot be taken because it is a bit-field (8 bits) */
 	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding1) == 19, "found %lld\n",
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_padding1));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1) == 1, "found %lld\n",
@@ -5764,28 +5759,28 @@ void lustre_assert_wire_constants(void)
 		 (long long)NODEMAP_CLUSTER_REC);
 	LASSERTF(NODEMAP_CLUSTER_ROLES == 1, "found %lld\n",
 		 (long long)NODEMAP_CLUSTER_ROLES);
-	LASSERTF(NM_TYPE_MASK == 0x0FFFFFFFUL, "found 0x%.8llxUL\n",
-		 (long long)NM_TYPE_MASK);
+	LASSERTF(NM_TYPE_MASK == 0x0fffffffUL, "found 0x%.8xUL\n",
+		(unsigned)NM_TYPE_MASK);
 	LASSERTF(NM_TYPE_SHIFT == 28, "found %lld\n",
 		 (long long)NM_TYPE_SHIFT);
-	LASSERTF(NM_FL_ALLOW_ROOT_ACCESS == 0x00000001UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_ALLOW_ROOT_ACCESS);
-	LASSERTF(NM_FL_TRUST_CLIENT_IDS == 0x00000002UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_TRUST_CLIENT_IDS);
-	LASSERTF(NM_FL_DENY_UNKNOWN == 0x00000004UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_DENY_UNKNOWN);
-	LASSERTF(NM_FL_MAP_UID == 0x00000008UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_MAP_UID);
-	LASSERTF(NM_FL_MAP_GID == 0x00000010UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_MAP_GID);
-	LASSERTF(NM_FL_ENABLE_AUDIT == 0x00000020UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_ENABLE_AUDIT);
-	LASSERTF(NM_FL_FORBID_ENCRYPT == 0x00000040UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_FORBID_ENCRYPT);
-	LASSERTF(NM_FL_MAP_PROJID == 0x00000080UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL_MAP_PROJID);
-	LASSERTF(NM_FL2_READONLY_MOUNT == 0x00000001UL, "found 0x%.8llxUL\n",
-		 (long long)NM_FL2_READONLY_MOUNT);
+	LASSERTF(NM_FL_ALLOW_ROOT_ACCESS == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_ALLOW_ROOT_ACCESS);
+	LASSERTF(NM_FL_TRUST_CLIENT_IDS == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_TRUST_CLIENT_IDS);
+	LASSERTF(NM_FL_DENY_UNKNOWN == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_DENY_UNKNOWN);
+	LASSERTF(NM_FL_MAP_UID == 0x00000008UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_MAP_UID);
+	LASSERTF(NM_FL_MAP_GID == 0x00000010UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_MAP_GID);
+	LASSERTF(NM_FL_ENABLE_AUDIT == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_ENABLE_AUDIT);
+	LASSERTF(NM_FL_FORBID_ENCRYPT == 0x00000040UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_FORBID_ENCRYPT);
+	LASSERTF(NM_FL_MAP_PROJID == 0x00000080UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL_MAP_PROJID);
+	LASSERTF(NM_FL2_READONLY_MOUNT == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL2_READONLY_MOUNT);
 	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
 		 (long long)NODEMAP_UID);
 	LASSERTF(NODEMAP_GID == 1, "found %lld\n",
@@ -5796,34 +5791,34 @@ void lustre_assert_wire_constants(void)
 		 (long long)NODEMAP_FS_TO_CLIENT);
 	LASSERTF(NODEMAP_CLIENT_TO_FS == 1, "found %lld\n",
 		 (long long)NODEMAP_CLIENT_TO_FS);
-	LASSERTF(NODEMAP_MAP_BOTH_LEGACY == 0x00000000UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_BOTH_LEGACY);
-	LASSERTF(NODEMAP_MAP_UID == 0x00000001UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_UID);
-	LASSERTF(NODEMAP_MAP_GID == 0x00000002UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_GID);
-	LASSERTF(NODEMAP_MAP_BOTH == 0x00000003UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_BOTH);
-	LASSERTF(NODEMAP_MAP_PROJID == 0x00000004UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_PROJID);
-	LASSERTF(NODEMAP_MAP_ALL == 0x00000007UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_MAP_ALL);
-	LASSERTF(NODEMAP_RBAC_FILE_PERMS == 0x00000001UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_FILE_PERMS);
-	LASSERTF(NODEMAP_RBAC_DNE_OPS == 0x00000002UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_DNE_OPS);
-	LASSERTF(NODEMAP_RBAC_QUOTA_OPS == 0x00000004UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_QUOTA_OPS);
-	LASSERTF(NODEMAP_RBAC_BYFID_OPS == 0x00000008UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_BYFID_OPS);
-	LASSERTF(NODEMAP_RBAC_CHLG_OPS == 0x00000010UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_CHLG_OPS);
-	LASSERTF(NODEMAP_RBAC_FSCRYPT_ADMIN == 0x00000020UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_FSCRYPT_ADMIN);
-	LASSERTF(NODEMAP_RBAC_NONE == 0xFFFFFFC0UL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_NONE);
-	LASSERTF(NODEMAP_RBAC_ALL == 0xFFFFFFFFUL, "found 0x%.8llxUL\n",
-		 (long long)NODEMAP_RBAC_ALL);
+	LASSERTF(NODEMAP_MAP_BOTH_LEGACY == 0x00000000UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_BOTH_LEGACY);
+	LASSERTF(NODEMAP_MAP_UID == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_UID);
+	LASSERTF(NODEMAP_MAP_GID == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_GID);
+	LASSERTF(NODEMAP_MAP_BOTH == 0x00000003UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_BOTH);
+	LASSERTF(NODEMAP_MAP_PROJID == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_PROJID);
+	LASSERTF(NODEMAP_MAP_ALL == 0x00000007UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_MAP_ALL);
+	LASSERTF(NODEMAP_RBAC_FILE_PERMS == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_FILE_PERMS);
+	LASSERTF(NODEMAP_RBAC_DNE_OPS == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_DNE_OPS);
+	LASSERTF(NODEMAP_RBAC_QUOTA_OPS == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_QUOTA_OPS);
+	LASSERTF(NODEMAP_RBAC_BYFID_OPS == 0x00000008UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_BYFID_OPS);
+	LASSERTF(NODEMAP_RBAC_CHLG_OPS == 0x00000010UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_CHLG_OPS);
+	LASSERTF(NODEMAP_RBAC_FSCRYPT_ADMIN == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_FSCRYPT_ADMIN);
+	LASSERTF(NODEMAP_RBAC_NONE == 0xffffffc0UL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_NONE);
+	LASSERTF(NODEMAP_RBAC_ALL == 0xffffffffUL, "found 0x%.8xUL\n",
+		(unsigned)NODEMAP_RBAC_ALL);
 
 	LASSERTF(OFD_ACCESS_READ == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OFD_ACCESS_READ);
@@ -6223,9 +6218,9 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LCFG_NODEMAP_ADMIN == 0x000ce049UL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_NODEMAP_ADMIN);
 	LASSERTF(LCFG_NODEMAP_ADD_PROJIDMAP == 0x000ce04aUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_ADD_PROJIDMAP);
+		(unsigned)LCFG_NODEMAP_ADD_PROJIDMAP);
 	LASSERTF(LCFG_NODEMAP_DEL_PROJIDMAP == 0x000ce04bUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_DEL_PROJIDMAP);
+		(unsigned)LCFG_NODEMAP_DEL_PROJIDMAP);
 	LASSERTF(LCFG_NODEMAP_TRUSTED == 0x000ce050UL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_NODEMAP_TRUSTED);
 	LASSERTF(LCFG_NODEMAP_SQUASH_UID == 0x000ce051UL, "found 0x%.8xUL\n",
@@ -6251,13 +6246,13 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LCFG_NODEMAP_SET_SEPOL == 0x000ce05bUL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_NODEMAP_SET_SEPOL);
 	LASSERTF(LCFG_NODEMAP_FORBID_ENCRYPT == 0x000ce05cUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_FORBID_ENCRYPT);
+		(unsigned)LCFG_NODEMAP_FORBID_ENCRYPT);
 	LASSERTF(LCFG_NODEMAP_SQUASH_PROJID == 0x000ce05dUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_SQUASH_PROJID);
+		(unsigned)LCFG_NODEMAP_SQUASH_PROJID);
 	LASSERTF(LCFG_NODEMAP_READONLY_MOUNT == 0x000ce05eUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_READONLY_MOUNT);
+		(unsigned)LCFG_NODEMAP_READONLY_MOUNT);
 	LASSERTF(LCFG_NODEMAP_RBAC == 0x000ce05fUL, "found 0x%.8xUL\n",
-		 (unsigned)LCFG_NODEMAP_RBAC);
+		(unsigned)LCFG_NODEMAP_RBAC);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);
