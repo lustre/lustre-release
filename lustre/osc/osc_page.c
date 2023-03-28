@@ -892,7 +892,6 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
 #endif
 
 static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
-					    struct osc_brw_async_args *aa,
 					    int factor)
 {
 	int page_count;
@@ -900,18 +899,15 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 	int count = 0;
 	int i;
 
-	if (desc != NULL) {
-		page_count = desc->bd_iov_count;
-	} else {
-		page_count = aa->aa_page_count;
-	}
+	ENTRY;
+
+	page_count = desc->bd_iov_count;
+
+	CDEBUG(D_PAGE, "%s %d unstable pages\n",
+	       factor == 1 ? "adding" : "removing", page_count);
 
 	for (i = 0; i < page_count; i++) {
-		void *pz;
-		if (desc)
-			pz = page_zone(desc->bd_vec[i].bv_page);
-		else
-			pz = page_zone(aa->aa_ppga[i]->bp_page);
+		void *pz = page_zone(desc->bd_vec[i].bv_page);
 
 		if (likely(pz == zone)) {
 			++count;
@@ -930,18 +926,18 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 	if (count > 0)
 		mod_zone_page_state(zone, (enum zone_stat_item)NR_WRITEBACK,
 				    factor * count);
+
+	EXIT;
 }
 
-static inline void add_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
-						struct osc_brw_async_args *aa)
+static inline void add_unstable_pages(struct ptlrpc_bulk_desc *desc)
 {
-	unstable_page_accounting(desc, aa, 1);
+	unstable_page_accounting(desc, 1);
 }
 
-static inline void dec_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
-						struct osc_brw_async_args *aa)
+static inline void dec_unstable_pages(struct ptlrpc_bulk_desc *desc)
 {
-	unstable_page_accounting(desc, aa, -1);
+	unstable_page_accounting(desc, -1);
 }
 
 /**
@@ -958,19 +954,21 @@ static inline void dec_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 void osc_dec_unstable_pages(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc       = req->rq_bulk;
-	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
 	struct client_obd       *cli        = &req->rq_import->imp_obd->u.cli;
 	int			 page_count;
 	long			 unstable_count;
 
-	if (desc)
-		page_count = desc->bd_iov_count;
-	else
-		page_count = aa->aa_page_count;
+	/* no desc means short io, which doesn't have separate unstable pages,
+	 * it's just using space inside the RPC itself
+	 */
+	if (!desc)
+		return;
+
+	page_count = desc->bd_iov_count;
 
 	LASSERT(page_count >= 0);
 
-	dec_unstable_page_accounting(desc, aa);
+	dec_unstable_pages(desc);
 
 	unstable_count = atomic_long_sub_return(page_count,
 						&cli->cl_unstable_count);
@@ -992,7 +990,6 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 void osc_inc_unstable_pages(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
 	struct client_obd       *cli  = &req->rq_import->imp_obd->u.cli;
 	long			 page_count;
 
@@ -1000,12 +997,15 @@ void osc_inc_unstable_pages(struct ptlrpc_request *req)
 	if (cli->cl_cache == NULL || !cli->cl_cache->ccc_unstable_check)
 		return;
 
-	if (desc)
-		page_count = desc->bd_iov_count;
-	else
-		page_count = aa->aa_page_count;
+	/* no desc means short io, which doesn't have separate unstable pages,
+	 * it's just using space inside the RPC itself
+	 */
+	if (!desc)
+		return;
 
-	add_unstable_page_accounting(desc, aa);
+	page_count = desc->bd_iov_count;
+
+	add_unstable_pages(desc);
 	atomic_long_add(page_count, &cli->cl_unstable_count);
 	atomic_long_add(page_count, &cli->cl_cache->ccc_unstable_nr);
 
