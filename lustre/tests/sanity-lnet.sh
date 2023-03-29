@@ -3252,7 +3252,8 @@ do_expired_message_drop_test() {
 
 	for lnid in "${LNIDS[@]}"; do
 		for rnid in "${RNIDS[@]}"; do
-			$LCTL net_delay_add -s "${lnid}" -d "${rnid}" -l "${delay}" -r 1
+			$LCTL net_delay_add -s "${lnid}" -d "${rnid}" \
+				-l "${delay}" -r 1 -m GET
 		done
 	done
 
