@@ -1350,7 +1350,7 @@ lnet_is_discovery_disabled(struct lnet_peer *lp)
 }
 
 int
-LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
+LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 {
 	struct lnet_nid pnid = LNET_ANY_NID;
 	bool mr;
@@ -1370,14 +1370,11 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 
 	rc = 0;
 	for (i = 0; i < num_nids; i++) {
-		struct lnet_nid nid;
-
-		if (nids[i] == LNET_NID_LO_0)
+		if (nid_is_lo0(&nids[i]))
 			continue;
 
-		lnet_nid4_to_nid(nids[i], &nid);
 		if (LNET_NID_IS_ANY(&pnid)) {
-			lnet_nid4_to_nid(nids[i], &pnid);
+			pnid = nids[i];
 			rc = lnet_add_peer_ni(&pnid, &LNET_ANY_NID, mr, flags);
 			if (rc == -EALREADY) {
 				struct lnet_peer *lp;
@@ -1393,11 +1390,11 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 				lnet_peer_decref_locked(lp);
 			}
 		} else if (lnet_peer_discovery_disabled) {
-			lnet_nid4_to_nid(nids[i], &nid);
-			rc = lnet_add_peer_ni(&nid, &LNET_ANY_NID, mr, flags);
+			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, mr,
+					      flags);
 		} else {
-			lnet_nid4_to_nid(nids[i], &nid);
-			rc = lnet_add_peer_ni(&pnid, &nid, mr, flags);
+			rc = lnet_add_peer_ni(&pnid, &nids[i], mr,
+					      flags);
 		}
 
 		if (rc && rc != -EEXIST)

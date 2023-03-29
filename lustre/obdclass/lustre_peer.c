@@ -43,7 +43,7 @@ struct uuid_nid_data {
 	struct list_head	un_list;
 	struct obd_uuid		un_uuid;
 	int			un_nid_count;
-	lnet_nid_t		un_nids[MTI_NIDS_MAX];
+	struct lnet_nid		un_nids[MTI_NIDS_MAX];
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -64,7 +64,7 @@ int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid, int index)
 				break;
 
 			rc = 0;
-			lnet_nid4_to_nid(data->un_nids[index], peer_nid);
+			*peer_nid = data->un_nids[index];
 			break;
 		}
 	}
@@ -75,13 +75,15 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 /* Add a nid to a niduuid.  Multiple nids can be added to a single uuid;
    LNET will choose the best one. */
-int class_add_uuid(const char *uuid, __u64 nid)
+int class_add_uuid(const char *uuid, lnet_nid_t nid4)
 {
 	struct uuid_nid_data *data, *entry;
+	struct lnet_nid nid;
 	int found = 0;
 	int rc;
 
-	LASSERT(nid != 0);  /* valid newconfig NID is never zero */
+	LASSERT(nid4 != 0);  /* valid newconfig NID is never zero */
+	lnet_nid4_to_nid(nid4, &nid);
 
 	if (strlen(uuid) > UUID_MAX - 1)
 		return -EOVERFLOW;
@@ -101,7 +103,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 
 			found = 1;
 			for (i = 0; i < entry->un_nid_count; i++)
-				if (nid == entry->un_nids[i])
+				if (nid_same(&nid, &entry->un_nids[i]))
 					break;
 
 			if (i == entry->un_nid_count) {
@@ -117,16 +119,16 @@ int class_add_uuid(const char *uuid, __u64 nid)
 
 	if (found) {
 		CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
-		       libcfs_nid2str(nid), entry->un_nid_count);
+		       libcfs_nidstr(&nid), entry->un_nid_count);
 		rc = LNetAddPeer(entry->un_nids, entry->un_nid_count);
 		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
-		       libcfs_nid2str(data->un_nids[0]), rc);
+		       libcfs_nidstr(&data->un_nids[0]), rc);
 		OBD_FREE(data, sizeof(*data));
 	} else {
-		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nidstr(&nid));
 		rc = LNetAddPeer(data->un_nids, data->un_nid_count);
 		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
-		       libcfs_nid2str(data->un_nids[0]), rc);
+		       libcfs_nidstr(&data->un_nids[0]), rc);
 	}
 
 	return 0;
@@ -165,7 +167,7 @@ int class_del_uuid(const char *uuid)
 
 		CDEBUG(D_INFO, "del uuid %s %s/%d\n",
 		       obd_uuid2str(&data->un_uuid),
-		       libcfs_nid2str(data->un_nids[0]),
+		       libcfs_nidstr(&data->un_nids[0]),
 		       data->un_nid_count);
 
 		OBD_FREE(data, sizeof(*data));
@@ -199,7 +201,7 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 		matched = true;
 		CDEBUG(D_NET, "Updating UUID '%s'\n", obd_uuid2str(uuid));
 		for (i = 0; i < nid_count; i++)
-			entry->un_nids[i] = nids[i];
+			lnet_nid4_to_nid(nids[i], &entry->un_nids[i]);
 		entry->un_nid_count = nid_count;
 		break;
 	}
@@ -207,7 +209,7 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 	if (matched) {
 		rc = LNetAddPeer(entry->un_nids, entry->un_nid_count);
 		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
-		       libcfs_nid2str(entry->un_nids[0]), rc);
+		       libcfs_nidstr(&entry->un_nids[0]), rc);
 	}
 
 	RETURN(0);
@@ -215,26 +217,28 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 EXPORT_SYMBOL(class_add_nids_to_uuid);
 
 /* check if @nid exists in nid list of @uuid */
-int class_check_uuid(struct obd_uuid *uuid, __u64 nid)
+int class_check_uuid(struct obd_uuid *uuid, lnet_nid_t nid4)
 {
 	struct uuid_nid_data *entry;
+	struct lnet_nid nid;
 	int found = 0;
 
 	ENTRY;
 
+	lnet_nid4_to_nid(nid4, &nid);
 	CDEBUG(D_INFO, "check if uuid %s has %s.\n",
-	       obd_uuid2str(uuid), libcfs_nid2str(nid));
+	       obd_uuid2str(uuid), libcfs_nidstr(&nid));
 
 	spin_lock(&g_uuid_lock);
 	list_for_each_entry(entry, &g_uuid_list, un_list) {
 		int i;
 
 		if (!obd_uuid_equals(&entry->un_uuid, uuid))
-                        continue;
+			continue;
 
 		/* found the uuid, check if it has @nid */
 		for (i = 0; i < entry->un_nid_count; i++) {
-			if (entry->un_nids[i] == nid) {
+			if (nid_same(&entry->un_nids[i], &nid)) {
 				found = 1;
 				break;
 			}
