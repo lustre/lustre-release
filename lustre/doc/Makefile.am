@@ -212,7 +212,12 @@ SERVER_MANFILES =				\
 	lctl-barrier.8				\
 	lctl-changelog_deregister.8		\
 	lctl-changelog_register.8		\
-	lctl-lcfg.8				\
+	lctl-clear_conf.8			\
+	lctl-erase_lcfg.8			\
+	lctl-fork_lcfg.8			\
+	lctl-lcfg_clear.8			\
+	lctl-lcfg_erase.8			\
+	lctl-lcfg_fork.8			\
 	lctl-lfsck-query.8			\
 	lctl-lfsck-start.8			\
 	lctl-lfsck-stop.8			\
