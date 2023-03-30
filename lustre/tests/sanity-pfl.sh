@@ -74,7 +74,7 @@ test_0b() {
 		skip "server does not support overstriping"
 	large_xattr_enabled || skip_env "no large xattr support"
 
-	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+	force_new_seq_all
 
 	local comp_file=$DIR/$tdir/$tfile
 
@@ -119,7 +119,7 @@ test_0c() {
 
 	large_xattr_enabled || skip_env "no large xattr support"
 
-	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+	force_new_seq_all
 
 	local comp_file=$DIR/$tdir/$tfile
 
@@ -259,7 +259,7 @@ test_1c() {
 		skip "server does not support overstriping"
 	large_xattr_enabled || skip_env "no large xattr support"
 
-	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+	force_new_seq_all
 
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
@@ -944,6 +944,8 @@ test_16b() {
 	[[ $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
 		skip_env "too many osts, skipping"
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
+
+	force_new_seq_all
 
 	local file=$DIR/$tdir/$tfile
 	local dir=$DIR/$tdir/dir

@@ -33,6 +33,8 @@ mkdir_on_mdt0 $TDIR
 $LFS setstripe $TDIR -i 0 -c 1
 $LFS getstripe $TDIR
 
+force_new_seq_all
+
 test_0a() {
 	zconf_umount $(hostname) $MOUNT -f
 	# needs to run during initial client->OST connection

@@ -2145,12 +2145,14 @@ mount_facet() {
 	if [ -f $TMP/test-lu482-trigger ]; then
 		RC=2
 	else
+		local seq_width=$(($OSTSEQWIDTH / $OSTCOUNT))
+		(( $seq_width >= 16384 )) || seq_width=16384
 		do_facet ${facet} \
 			"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
 		RC=${PIPESTATUS[0]}
 		if [[ ${facet} =~ ost ]]; then
 			do_facet ${facet} "$LCTL set_param \
-				seq.cli-$(devicelabel $facet $dm_dev)-super.width=$OSTSEQWIDTH"
+				seq.cli-$(devicelabel $facet $dm_dev)-super.width=$seq_width"
 		fi
 	fi
 

@@ -43,7 +43,7 @@ if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
     do_facet $SINGLEMDS sync
 fi
 
-force_new_seq mds1
+force_new_seq_all
 
 test_0a() {	# was test_0
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"

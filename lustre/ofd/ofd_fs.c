@@ -426,7 +426,8 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 				min(OBIF_MAX_OID, client_seq->lcs_width) :
 				min(IDIF_MAX_OID, client_seq->lcs_width);
 
-			ofd_seq_last_oid_set(oseq, seq_width & ~0xffULL);
+			ofd_seq_last_oid_set(oseq, seq_width > 255 ?
+						seq_width - 255 : seq_width);
 		} else {
 			ofd_seq_last_oid_set(oseq, OFD_INIT_OBJID);
 		}

@@ -2517,7 +2517,7 @@ test_27Cd() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
-	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+	force_new_seq_all
 
 	test_mkdir -p $DIR/$tdir
 	local setcount=$LOV_MAX_STRIPE_COUNT
