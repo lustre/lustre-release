@@ -20,6 +20,11 @@ AS_IF([test "x$enable_backoff" = xyes], [
 	], [
 		AC_MSG_RESULT([no])
 	])
+
+	AC_SUBST(ENABLE_BACKOFF, yes)
+], [
+	AC_SUBST(ENABLE_BACKOFF, no)
+
 ])
 ]) # LN_CONFIG_BACKOFF
 
@@ -883,6 +888,10 @@ AS_IF([test "x$enable_gni" = xyes], [
 		GNICPPFLAGS="$GNICPPFLAGS -DGNILND_USE_RCA=1"
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+
+	AC_SUBST(ENABLE_GNI, yes)
+], [
+	AC_SUBST(ENABLE_GNI, no)
 ])
 AC_SUBST(GNICPPFLAGS)
 AC_SUBST(GNILND)
@@ -1255,6 +1264,9 @@ AS_IF([test "$enable_efence" = yes], [
 	LIBEFENCE="-lefence"
 	AC_DEFINE(HAVE_LIBEFENCE, 1,
 		[libefence support is requested])
+	AC_SUBST(ENABLE_EFENCE, yes)
+], [
+	AC_SUBST(ENABLE_EFENCE, no)
 ])
 AC_SUBST(LIBEFENCE)
 

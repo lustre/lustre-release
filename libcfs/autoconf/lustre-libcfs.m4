@@ -10,8 +10,12 @@ AC_ARG_ENABLE([libcfs_cdebug],
 		[disable libcfs CDEBUG, CWARN]),
 	[], [enable_libcfs_cdebug="yes"])
 AC_MSG_RESULT([$enable_libcfs_cdebug])
-AS_IF([test "x$enable_libcfs_cdebug" = xyes],
-	[AC_DEFINE(CDEBUG_ENABLED, 1, [enable libcfs CDEBUG, CWARN])])
+AS_IF([test "x$enable_libcfs_cdebug" = xyes], [
+	AC_DEFINE(CDEBUG_ENABLED, 1, [enable libcfs CDEBUG, CWARN])
+	AC_SUBST(ENABLE_LIBCFS_CDEBUG, yes)
+], [
+	AC_SUBST(ENABLE_LIBCFS_CDEBUG, no)
+])
 
 AC_MSG_CHECKING([whether to enable ENTRY/EXIT])
 AC_ARG_ENABLE([libcfs_trace],
@@ -19,8 +23,12 @@ AC_ARG_ENABLE([libcfs_trace],
 		[disable libcfs ENTRY/EXIT]),
 	[], [enable_libcfs_trace="yes"])
 AC_MSG_RESULT([$enable_libcfs_trace])
-AS_IF([test "x$enable_libcfs_trace" = xyes],
-	[AC_DEFINE(CDEBUG_ENTRY_EXIT, 1, [enable libcfs ENTRY/EXIT])])
+AS_IF([test "x$enable_libcfs_trace" = xyes], [
+	AC_DEFINE(CDEBUG_ENTRY_EXIT, 1, [enable libcfs ENTRY/EXIT])
+	AC_SUBST(ENABLE_LIBCFS_TRACE, yes)
+], [
+	AC_SUBST(ENABLE_LIBCFS_TRACE, no)
+])
 
 AC_MSG_CHECKING([whether to enable LASSERT, LASSERTF])
 AC_ARG_ENABLE([libcfs_assert],
@@ -28,8 +36,12 @@ AC_ARG_ENABLE([libcfs_assert],
 		[disable libcfs LASSERT, LASSERTF]),
 	[], [enable_libcfs_assert="yes"])
 AC_MSG_RESULT([$enable_libcfs_assert])
-AS_IF([test x$enable_libcfs_assert = xyes],
-	[AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])])
+AS_IF([test x$enable_libcfs_assert = xyes], [
+	AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])
+	AC_SUBST(ENABLE_LIBCFS_ASSERT, yes)
+], [
+	AC_SUBST(ENABLE_LIBCFS_ASSERT, no)
+])
 ]) # LIBCFS_CONFIG_CDEBUG
 
 #
@@ -44,8 +56,12 @@ AC_ARG_ENABLE([panic_dumplog],
 		[enable panic_dumplog]),
 	[], [enable_panic_dumplog="no"])
 AC_MSG_RESULT([$enable_panic_dumplog])
-AS_IF([test "x$enable_panic_dumplog" = xyes],
-	[AC_DEFINE(LNET_DUMP_ON_PANIC, 1, [use dumplog on panic])])
+AS_IF([test "x$enable_panic_dumplog" = xyes], [
+	AC_DEFINE(LNET_DUMP_ON_PANIC, 1, [use dumplog on panic])
+	AC_SUBST(ENABLE_PANIC_DUMPLOG, yes)
+], [
+	AC_SUBST(ENABLE_PANIC_DUMPLOG, no)
+])
 ]) # LIBCFS_CONFIG_PANIC_DUMPLOG
 
 #
@@ -2685,6 +2701,10 @@ AS_IF([test "x$enable_readline" = xyes], [
 		AC_DEFINE(HAVE_LIBREADLINE, 1,
 			[readline library is available])
 	])
+
+	AC_SUBST(ENABLE_READLINE, yes)
+], [
+	AC_SUBST(ENABLE_READLINE, no)
 ])
 AC_SUBST(LIBREADLINE)
 
@@ -2702,7 +2722,10 @@ AS_IF([test "x$enable_libpthread" = xyes], [
 		AC_DEFINE([HAVE_LIBPTHREAD], 1,
 			[use libpthread for libcfs library])
 	])
+
+	AC_SUBST(ENABLE_LIBPTHREAD, yes)
 ], [
+	AC_SUBST(ENABLE_LIBPTHREAD, no)
 	AC_MSG_WARN([Using libpthread for libcfs library is disabled explicitly])
 ])
 AC_SUBST(PTHREAD_LIBS)
