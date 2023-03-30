@@ -449,6 +449,7 @@ static int print_out_devices(yaml_parser_t *reply, enum lctl_param_flags flags)
 			}
 			bzero(buf, sizeof(buf));
 			tmp = buf;
+			buf_len = sizeof(buf);
 		}
 
 		if (event.type == YAML_SCALAR_EVENT) {
