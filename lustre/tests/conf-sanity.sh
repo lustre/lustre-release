@@ -6820,7 +6820,9 @@ test_84() {
 		error "start MDS failed"
 
 	start_ost || error "start OST0000 failed"
+	wait_osc_import_state mds ost1 FULL
 	start_ost2 || error "start OST0001 failed"
+	wait_osc_import_state mds ost2 FULL
 
 	echo "recovery_time=$time_min, timeout=$TIMEOUT, wrap_up=$wrap_up"
 
