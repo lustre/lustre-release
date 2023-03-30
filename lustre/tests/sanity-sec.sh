@@ -5104,6 +5104,11 @@ test_60() {
 run_test 60 "Subdirmount of encrypted dir"
 
 setup_61() {
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+		export FILESET="/"
+	fi
+
 	do_facet mgs $LCTL nodemap_activate 1
 	wait_nm_sync active
 
@@ -5142,6 +5147,11 @@ cleanup_61() {
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active 0
 
+	if $SHARED_KEY; then
+		unset FILESET
+		export SK_UNIQUE_NM=false
+	fi
+
 	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
 	wait_ssk
 }
@@ -5156,6 +5166,9 @@ test_61() {
 		skip "Server does not have readonly_mount nodemap flag"
 
 	stack_trap cleanup_61 EXIT
+	for idx in $(seq 1 $MDSCOUNT); do
+		wait_recovery_complete mds$idx
+	done
 	umount_client $MOUNT || error "umount $MOUNT failed (1)"
 
 	# Activate nodemap, and mount rw.
@@ -5170,7 +5183,7 @@ test_61() {
 	[ $readonly -eq 0 ] ||
 		error "wrong default value for readonly_mount on nodemap c0"
 
-	mount_client $MOUNT ${MOUNT_OPTS},rw ||
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS},rw ||
 		error "mount '-o rw' failed with default"
 	wait_ssk
 	findmnt $MOUNT --output=options -n -f | grep -q "rw," ||
@@ -5183,21 +5196,21 @@ test_61() {
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		--property readonly_mount --value 1
 	wait_nm_sync c0 readonly_mount
-	mount_client $MOUNT ${MOUNT_OPTS} ||
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS} ||
 		error "mount failed"
 	findmnt $MOUNT --output=options -n -f | grep -q "ro," ||
 		error "mount should have been turned into ro"
 	cat $testfile || error "read $testfile failed (1)"
 	echo b > $testfile && error "write $testfile should fail (1)"
 	umount_client $MOUNT || error "umount $MOUNT failed (3)"
-	mount_client $MOUNT ${MOUNT_OPTS},rw ||
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS},rw ||
 		error "mount '-o rw' failed"
 	findmnt $MOUNT --output=options -n -f | grep -q "ro," ||
 		error "mount rw should have been turned into ro"
 	cat $testfile || error "read $testfile failed (2)"
 	echo b > $testfile && error "write $testfile should fail (2)"
 	umount_client $MOUNT || error "umount $MOUNT failed (4)"
-	mount_client $MOUNT ${MOUNT_OPTS},ro ||
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS},ro ||
 		error "mount '-o ro' failed"
 	wait_ssk
 	cat $testfile || error "read $testfile failed (3)"
