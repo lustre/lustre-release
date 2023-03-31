@@ -2362,13 +2362,15 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 				/* Call to ll_io_zero_page is not necessary if
 				 * truncating on PAGE_SIZE boundary, because
 				 * whole pages will be wiped.
-				 * In case of Direct IO, all we need is to set
-				 * new size.
+				 *
+				 * an exception is when working with the
+				 * raw ciphertext - in that case, we need to
+				 * encrypt those zeroes
 				 */
 				if (attr->ia_valid & ATTR_SIZE &&
 				    attr->ia_size & ~PAGE_MASK &&
 				    !(attr->ia_valid & ATTR_FILE &&
-				      attr->ia_file->f_flags & O_DIRECT)) {
+				      attr->ia_file->f_flags & O_CIPHERTEXT)) {
 					pgoff_t offset =
 						attr->ia_size & (PAGE_SIZE - 1);
 

@@ -1633,26 +1633,21 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 {
 	struct inode *inode = file_inode(file);
 	struct ll_file_data *fd  = file->private_data;
+	int flags = vvp_io_args_flags(file, args);
 
 	io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
 	io->ci_lock_no_expand = fd->ll_lock_no_expand;
 
 	if (iot == CIT_WRITE) {
-		io->u.ci_wr.wr_append = !!(file->f_flags & O_APPEND);
-		io->u.ci_wr.wr_sync   = !!(file->f_flags & O_SYNC ||
-					   file->f_flags & O_DIRECT ||
+		io->u.ci_wr.wr_append = iocb_ki_flags_check(flags, APPEND);
+		io->u.ci_wr.wr_sync   = !!(iocb_ki_flags_check(flags, SYNC) ||
+					   iocb_ki_flags_check(flags, APPEND) ||
+					   iocb_ki_flags_check(flags, DSYNC) ||
 					   IS_SYNC(inode));
-#ifdef HAVE_GENERIC_WRITE_SYNC_2ARGS
-		io->u.ci_wr.wr_sync  |= !!(args &&
-					   (args->u.normal.via_iocb->ki_flags &
-					    IOCB_DSYNC));
-#endif
 	}
 
 #ifdef IOCB_NOWAIT
-	io->ci_iocb_nowait = !!(args &&
-				(args->u.normal.via_iocb->ki_flags &
-				 IOCB_NOWAIT));
+	io->ci_iocb_nowait = iocb_ki_flags_check(flags, NOWAIT);
 #endif
 
 	io->ci_obj = ll_i2info(inode)->lli_clob;
@@ -1660,7 +1655,7 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	if (ll_file_nolock(file)) {
 		io->ci_lockreq = CILR_NEVER;
 		io->ci_no_srvlock = 1;
-	} else if (file->f_flags & O_APPEND) {
+	} else if (iocb_ki_flags_check(flags, APPEND)) {
 		io->ci_lockreq = CILR_MANDATORY;
 	}
 	io->ci_noatime = file_is_noatime(file);
@@ -1720,9 +1715,10 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ll_file_data *fd  = file->private_data;
 	struct range_lock range;
-	bool range_locked = false;
 	struct cl_io *io;
+	bool range_locked = false;
 	ssize_t result = 0;
+	int flags = vvp_io_args_flags(file, args);
 	int rc = 0;
 	int rc2 = 0;
 	int retries = 1000;
@@ -1743,8 +1739,8 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 			     sbi->ll_cache->ccc_lru_max >> 2) << PAGE_SHIFT;
 
 	io = vvp_env_thread_io(env);
-	if (file->f_flags & O_DIRECT) {
-		if (file->f_flags & O_APPEND)
+	if (iocb_ki_flags_check(flags, DIRECT)) {
+		if (iocb_ki_flags_check(flags, APPEND))
 			dio_lock = 1;
 		if (!is_sync_kiocb(args->u.normal.via_iocb))
 			is_aio = true;
@@ -1771,7 +1767,7 @@ restart:
 	 * if we have small max_cached_mb but large block IO issued, io
 	 * could not be finished and blocked whole client.
 	 */
-	if (file->f_flags & O_DIRECT || bytes < max_io_bytes) {
+	if (iocb_ki_flags_check(flags, DIRECT) || bytes < max_io_bytes) {
 		per_bytes = bytes;
 		partial_io = false;
 	} else {
@@ -1786,7 +1782,7 @@ restart:
 	io->ci_parallel_dio = is_parallel_dio;
 
 	if (cl_io_rw_init(env, io, iot, *ppos, per_bytes) == 0) {
-		if (file->f_flags & O_APPEND)
+		if (iocb_ki_flags_check(flags, APPEND))
 			range_lock_init(&range, 0, LUSTRE_EOF);
 		else
 			range_lock_init(&range, *ppos, *ppos + per_bytes - 1);
@@ -1799,7 +1795,7 @@ restart:
 		 * See LU-6227 for details.
 		 */
 		if (((iot == CIT_WRITE) ||
-		    (iot == CIT_READ && (file->f_flags & O_DIRECT))) &&
+		    (iot == CIT_READ && iocb_ki_flags_check(flags, DIRECT))) &&
 		    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 			CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
 			       RL_PARA(&range));
@@ -1995,6 +1991,7 @@ static ssize_t
 ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct ll_inode_info *lli = ll_i2info(file_inode(iocb->ki_filp));
+	int flags = iocb_ki_flags_get(iocb->ki_filp, iocb);
 	ssize_t result;
 
 	if (!ll_sbi_has_fast_read(ll_i2sbi(file_inode(iocb->ki_filp))))
@@ -2002,7 +1999,7 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 
 	/* NB: we can't do direct IO for fast read because it will need a lock
 	 * to make IO engine happy. */
-	if (iocb->ki_filp->f_flags & O_DIRECT)
+	if (iocb_ki_flags_check(flags, DIRECT))
 		return 0;
 
 	if (ll_layout_version_get(lli) == CL_LAYOUT_GEN_NONE)
@@ -2262,6 +2259,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct lu_env *env;
 	ssize_t rc_tiny = 0, rc_normal;
 	struct file *file = iocb->ki_filp;
+	int flags = iocb_ki_flags_get(file, iocb);
 	__u16 refcheck;
 	bool cached;
 	ktime_t kstart = ktime_get();
@@ -2298,7 +2296,8 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	 * required DLM locks are held to protect file size.
 	 */
 	if (ll_sbi_has_tiny_write(ll_i2sbi(file_inode(file))) &&
-	    !(file->f_flags & (O_DIRECT | O_SYNC | O_APPEND)))
+	    !(flags &
+	      (ki_flag(DIRECT) | ki_flag(DSYNC) | ki_flag(SYNC) | ki_flag(APPEND))))
 		rc_tiny = ll_do_tiny_write(iocb, from);
 
 	/* In case of error, go on and try normal write - Only stop if tiny

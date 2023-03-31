@@ -1908,7 +1908,10 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	struct ll_cl_context *lcc;
 	struct cl_io *io = NULL;
 	struct cl_page *page;
+	struct vvp_io *vio;
 	int result;
+	int flags;
+
 	ENTRY;
 
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
@@ -2051,12 +2054,14 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		}
 	}
 
+	vio = vvp_env_io(env);
 	/**
 	 * Direct read can fall back to buffered read, but DIO is done
 	 * with lockless i/o, and buffered requires LDLM locking, so in
 	 * this case we must restart without lockless.
 	 */
-	if (file->f_flags & O_DIRECT &&
+	flags = iocb_ki_flags_get(file, vio->vui_iocb);
+	if (iocb_ki_flags_check(flags, DIRECT) &&
 	    lcc && lcc->lcc_type == LCC_RW &&
 	    !io->ci_dio_lock) {
 		unlock_page(vmpage);

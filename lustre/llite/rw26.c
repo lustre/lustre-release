@@ -803,6 +803,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 {
 	struct ll_cl_context *lcc = NULL;
 	const struct lu_env  *env = NULL;
+	struct vvp_io *vio;
 	struct cl_io   *io = NULL;
 	struct cl_page *page = NULL;
 	struct inode *inode = file_inode(file);
@@ -812,6 +813,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	unsigned from = pos & (PAGE_SIZE - 1);
 	unsigned to = from + len;
 	int result = 0;
+	int iocb_flags;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "Writing %lu of %d to %d bytes\n", index, from, len);
@@ -825,8 +827,10 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 
 	env = lcc->lcc_env;
 	io  = lcc->lcc_io;
+	vio = vvp_env_io(env);
 
-	if (file->f_flags & O_DIRECT) {
+	iocb_flags = iocb_ki_flags_get(file, vio->vui_iocb);
+	if (iocb_ki_flags_check(iocb_flags, DIRECT)) {
 		/* direct IO failed because it couldn't clean up cached pages,
 		 * this causes a problem for mirror write because the cached
 		 * page may belong to another mirror, which will result in

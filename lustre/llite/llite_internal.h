@@ -318,6 +318,14 @@ struct ll_inode_info {
 #define ll_setattr(ns, de, attr)		ll_setattr(de, attr)
 #endif
 
+#ifdef IOCB_APPEND
+#define iocb_ki_flags_check(flag, name) (!!((flag) & IOCB_ ## name))
+#define ki_flag(name) IOCB_ ## name
+#else
+#define iocb_ki_flags_check(flag, name) (!!((flag) & O_ ## name))
+#define ki_flag(name) O_ ## name
+#endif
+
 static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
 {
 	atomic_set(&sem->ll_trunc_readers, 0);
@@ -1468,6 +1476,22 @@ struct vvp_io_args {
                 } normal;
         } u;
 };
+
+static inline unsigned int iocb_ki_flags_get(const struct file *file,
+					     const struct kiocb *iocb)
+{
+#ifdef IOCB_APPEND
+	return iocb ? iocb->ki_flags : 0;
+#else
+	return file->f_flags;
+#endif
+}
+
+static inline unsigned int vvp_io_args_flags(const struct file *file,
+					     const struct vvp_io_args *args)
+{
+	return iocb_ki_flags_get(file, args ? args->u.normal.via_iocb : NULL);
+}
 
 enum lcc_type {
 	LCC_RW = 1,
