@@ -7192,7 +7192,8 @@ local_node() {
 	local is_local="IS_LOCAL_$(host_id $host_name)"
 	if [ -z "${!is_local-}" ] ; then
 		eval $is_local=0
-		local host_ip=$($LUSTRE/tests/resolveip $host_name)
+		local host_ip=$(getent ahostsv4 $host_name |
+					awk 'NR == 1 { print $1 }')
 		is_local_addr "$host_ip" && eval $is_local=1
 	fi
 	[[ "${!is_local}" == "1" ]]
