@@ -772,17 +772,14 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		struct lookup_intent parent_it = {
 					.it_op = IT_GETATTR,
 					.it_lock_handle = 0 };
-		struct ll_inode_info *lli = ll_i2info(parent);
-		struct lu_fid fid = lli->lli_fid;
+		struct lu_fid	fid = ll_i2info(parent)->lli_fid;
 
 		/* If it is striped directory, get the real stripe parent */
 		if (unlikely(ll_dir_striped(parent))) {
-			down_read(&lli->lli_lsm_sem);
 			rc = md_get_fid_from_lsm(ll_i2mdexp(parent),
-						 lli->lli_lsm_md,
+						 ll_i2info(parent)->lli_lsm_md,
 						 (*de)->d_name.name,
 						 (*de)->d_name.len, &fid);
-			up_read(&lli->lli_lsm_sem);
 			if (rc != 0)
 				GOTO(out, rc);
 		}

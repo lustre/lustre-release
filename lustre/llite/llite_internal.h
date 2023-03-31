@@ -1546,22 +1546,9 @@ static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 
 static inline bool ll_dir_striped(struct inode *inode)
 {
-	struct ll_inode_info *lli;
-	bool rc;
-
 	LASSERT(inode);
-	if (!S_ISDIR(inode->i_mode))
-		return false;
-
-	lli = ll_i2info(inode);
-	if (!lli->lli_lsm_md)
-		return false;
-
-	down_read(&lli->lli_lsm_sem);
-	rc = lmv_dir_striped(lli->lli_lsm_md);
-	up_read(&lli->lli_lsm_sem);
-
-	return rc;
+	return S_ISDIR(inode->i_mode) &&
+	       lmv_dir_striped(ll_i2info(inode)->lli_lsm_md);
 }
 
 static inline loff_t ll_file_maxbytes(struct inode *inode)

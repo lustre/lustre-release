@@ -166,8 +166,7 @@ void ll_release_page(struct inode *inode, struct page *page,
 
 	/* Always remove the page for striped dir, because the page is
 	 * built from temporarily in LMV layer */
-	if (inode && S_ISDIR(inode->i_mode) &&
-	    lmv_dir_striped(ll_i2info(inode)->lli_lsm_md)) {
+	if (inode && ll_dir_striped(inode)) {
 		__free_page(page);
 		return;
 	}
