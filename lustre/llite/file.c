@@ -1832,21 +1832,12 @@ restart:
 			range_locked = false;
 	}
 
-	/*
-	 * In order to move forward AIO, ci_nob was increased,
-	 * but that doesn't mean io have been finished, it just
-	 * means io have been submited, we will always return
-	 * EIOCBQUEUED to the caller, So we could only return
-	 * number of bytes in non-AIO case.
-	 */
 	if (io->ci_nob > 0) {
-		if (!is_aio) {
-			if (rc2 == 0) {
-				result += io->ci_nob;
-				*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
-			} else if (rc2) {
-				result = 0;
-			}
+		if (rc2 == 0) {
+			result += io->ci_nob;
+			*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
+		} else if (rc2) {
+			result = 0;
 		}
 		count -= io->ci_nob;
 
@@ -1886,22 +1877,36 @@ out:
 	}
 
 	if (io->ci_dio_aio) {
+		/* set the number of bytes successfully moved in the aio */
+		if (result > 0)
+			io->ci_dio_aio->cda_bytes = result;
 		/*
 		 * VFS will call aio_complete() if no -EIOCBQUEUED
 		 * is returned for AIO, so we can not call aio_complete()
-		 * in our end_io().
+		 * in our end_io().  (cda_no_aio_complete is always set for
+		 * normal DIO.)
 		 *
-		 * NB: This is safe because the atomic_dec_and_lock  in
-		 * cl_sync_io_init has implicit memory barriers, so this will
-		 * be seen by whichever thread completes the DIO/AIO, even if
-		 * it's not this one
+		 * NB: Setting cda_no_aio_complete like this is safe because
+		 * the atomic_dec_and_lock in cl_sync_io_note has implicit
+		 * memory barriers, so this will be seen by whichever thread
+		 * completes the DIO/AIO, even if it's not this one.
 		 */
-		if (rc != -EIOCBQUEUED)
+		if (is_aio && rc != -EIOCBQUEUED)
 			io->ci_dio_aio->cda_no_aio_complete = 1;
+		/* if an aio enqueued successfully (-EIOCBQUEUED), then Lustre
+		 * will call aio_complete rather than the vfs, so we return 0
+		 * to tell the VFS we're handling it
+		 */
+		else if (is_aio) /* rc == -EIOCBQUEUED */
+			result = 0;
 		/**
-		 * Drop one extra reference so that end_io() could be
-		 * called for this IO context, we could call it after
-		 * we make sure all AIO requests have been proceed.
+		 * Drop the reference held by the llite layer on this top level
+		 * IO context.
+		 *
+		 * For DIO, this frees it here, since IO is complete, and for
+		 * AIO, we will call aio_complete() (and then free this top
+		 * level context) once all the outstanding chunks of this AIO
+		 * have completed.
 		 */
 		cl_sync_io_note(env, &io->ci_dio_aio->cda_sync,
 				rc == -EIOCBQUEUED ? 0 : rc);
