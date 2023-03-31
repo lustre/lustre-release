@@ -1,0 +1,33 @@
+Having struct bio allows us to do more in the genrate/verify_fn,
+like copying a known good guard tag already available rather than
+calculating it.
+
+Index: linux-5.14.0-162.12.1.el9_1/block/bio-integrity.c
+===================================================================
+--- linux-5.14.0-162.12.1.el9_1.orig/block/bio-integrity.c
++++ linux-5.14.0-162.12.1.el9_1/block/bio-integrity.c
+@@ -184,6 +184,9 @@ static blk_status_t bio_integrity_proces
+
+ 		iter.data_buf = kaddr;
+ 		iter.data_size = bv.bv_len;
++		iter.bi_idx = bviter.bi_idx;
++		iter.bio = bio;
++
+ 		ret = proc_fn(&iter);
+ 		kunmap_local(kaddr);
+
+Index: linux-5.14.0-162.12.1.el9_1/include/linux/blk-integrity.h
+===================================================================
+--- linux-5.14.0-162.12.1.el9_1.orig/include/linux/blk-integrity.h
++++ linux-5.14.0-162.12.1.el9_1/include/linux/blk-integrity.h
+@@ -19,8 +19,10 @@ struct blk_integrity_iter {
+ 	sector_t		seed;
+ 	unsigned int		data_size;
+ 	unsigned short		interval;
++	RH_KABI_FILL_HOLE(unsigned short bi_idx)
+ 	unsigned char		tuple_size;
+ 	const char		*disk_name;
++	RH_KABI_EXTEND(struct bio *bio)
+ };
+
+ typedef blk_status_t (integrity_processing_fn) (struct blk_integrity_iter *);

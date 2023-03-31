@@ -3,6 +3,7 @@ TBD Whamcloud
        * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
+         5.14.0-162.18.1.el9  (RHEL9.1)
          4.18.0-425.10.1.el8  (RHEL8.7)
        * Other server kernels known to build and work at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
