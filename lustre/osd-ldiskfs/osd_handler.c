@@ -64,6 +64,7 @@
 #include <lustre_fid.h>
 /* process_config */
 #include <uapi/linux/lustre/lustre_param.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
 #include "osd_internal.h"
 #include "osd_dynlocks.h"

@@ -36,15 +36,8 @@
 #include <linux/uuid.h>
 #include <dt_object.h>
 #include <lustre_net.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
-#define OSD_OI_FID_OID_BITS_MAX	10
-#define OSD_OI_FID_NR_MAX	(1UL << OSD_OI_FID_OID_BITS_MAX)
-#define SCRUB_OI_BITMAP_SIZE	(OSD_OI_FID_NR_MAX >> 3)
-#define PFID_STRIPE_IDX_BITS	16
-#define PFID_STRIPE_COUNT_MASK	((1 << PFID_STRIPE_IDX_BITS) - 1)
-
-#define SCRUB_MAGIC_V1			0x4C5FD252
-#define SCRUB_MAGIC_V2			0x4C5FE253
 #define SCRUB_CHECKPOINT_INTERVAL	60
 #define SCRUB_WINDOW_SIZE		1024
 
@@ -86,52 +79,6 @@ enum scrub_local_file_flags {
 	SLFF_SHOW_NAME		= 0x0004,
 	SLFF_NO_OI		= 0x0008,
 	SLFF_IDX_IN_FID		= 0x0010,
-};
-
-enum scrub_status {
-	/* The scrub file is new created, for new MDT, upgrading from old disk,
-	 * or re-creating the scrub file manually. */
-	SS_INIT		= 0,
-
-	/* The scrub is checking/repairing the OI files. */
-	SS_SCANNING	= 1,
-
-	/* The scrub checked/repaired the OI files successfully. */
-	SS_COMPLETED	= 2,
-
-	/* The scrub failed to check/repair the OI files. */
-	SS_FAILED	= 3,
-
-	/* The scrub is stopped manually, the OI files may be inconsistent. */
-	SS_STOPPED	= 4,
-
-	/* The scrub is paused automatically when umount. */
-	SS_PAUSED	= 5,
-
-	/* The scrub crashed during the scanning, should be restarted. */
-	SS_CRASHED	= 6,
-};
-
-enum scrub_flags {
-	/* OI files have been recreated, OI mappings should be re-inserted. */
-	SF_RECREATED	= 0x0000000000000001ULL,
-
-	/* OI files are invalid, should be rebuild ASAP */
-	SF_INCONSISTENT	= 0x0000000000000002ULL,
-
-	/* OI scrub is triggered automatically. */
-	SF_AUTO		= 0x0000000000000004ULL,
-
-	/* The device is upgraded from 1.8 format. */
-	SF_UPGRADE	= 0x0000000000000008ULL,
-};
-
-enum scrub_param {
-	/* Exit when fail. */
-	SP_FAILOUT	= 0x0001,
-
-	/* Check only without repairing. */
-	SP_DRYRUN	= 0x0002,
 };
 
 enum scrub_start {
@@ -183,80 +130,6 @@ enum auto_scrub {
 	/* Enable auto detect OI inconsistency one month (60 * 60 * 24 * 30)
 	 * after last OI scrub. */
 	AS_DEFAULT	= 2592000LL,
-};
-
-struct scrub_file {
-	/* 128-bit uuid for volume. */
-	guid_t	sf_uuid;
-
-	/* See 'enum scrub_flags'. */
-	__u64   sf_flags;
-
-	/* The scrub magic. */
-	__u32   sf_magic;
-
-	/* See 'enum scrub_status'. */
-	__u16   sf_status;
-
-	/* See 'enum scrub_param'. */
-	__u16   sf_param;
-
-	/* The time for the last OI scrub completed. */
-	time64_t sf_time_last_complete;
-
-	/* The ttime for the latest OI scrub ran. */
-	time64_t sf_time_latest_start;
-
-	/* The time for the last OI scrub checkpoint. */
-	time64_t sf_time_last_checkpoint;
-
-	/* The position for the latest OI scrub started from. */
-	__u64   sf_pos_latest_start;
-
-	/* The position for the last OI scrub checkpoint. */
-	__u64   sf_pos_last_checkpoint;
-
-	/* The position for the first should be updated object. */
-	__u64   sf_pos_first_inconsistent;
-
-	/* How many objects have been checked. */
-	__u64   sf_items_checked;
-
-	/* How many objects have been updated. */
-	__u64   sf_items_updated;
-
-	/* How many objects failed to be processed. */
-	__u64   sf_items_failed;
-
-	/* How many prior objects have been updated during scanning. */
-	__u64   sf_items_updated_prior;
-
-	/* How many objects marked as LDISKFS_STATE_LUSTRE_NOSCRUB. */
-	__u64   sf_items_noscrub;
-
-	/* How many IGIF objects. */
-	__u64   sf_items_igif;
-
-	/* How long the OI scrub has run in seconds. Do NOT change
-	 * to time64_t since this breaks backwards compatibility.
-	 * It shouldn't take more than 136 years to complete :-)
-	 */
-	s32	sf_run_time;
-
-	/* How many completed OI scrub ran on the device. */
-	__u32   sf_success_count;
-
-	/* How many OI files. */
-	__u16   sf_oi_count;
-
-	/* Keep the flags after scrub reset. See 'enum scrub_internal_flags' */
-	__u16	sf_internal_flags;
-
-	__u32	sf_reserved_1;
-	__u64	sf_reserved_2[16];
-
-	/* Bitmap for OI files recreated case. */
-	__u8    sf_oi_bitmap[SCRUB_OI_BITMAP_SIZE];
 };
 
 struct lustre_scrub {

@@ -41,6 +41,7 @@
  * @{
  */
 #include <linux/types.h>
+#include <linux/uuid.h>
 
 /****************** on-disk files ********************/
 
@@ -135,11 +136,10 @@ struct lustre_disk_data {
 
 enum ldd_mount_type {
 	LDD_MT_EXT3 = 0,
-	LDD_MT_LDISKFS,
-	LDD_MT_SMFS,
-	LDD_MT_REISERFS,
-	LDD_MT_LDISKFS2,
-	LDD_MT_ZFS,
+	LDD_MT_LDISKFS = 1,
+	LDD_MT_REISERFS = 3,
+	LDD_MT_LDISKFS2 = 4,
+	LDD_MT_ZFS = 5,
 	LDD_MT_LAST
 };
 
@@ -332,6 +332,89 @@ struct nodemap_key {
 
 #define NM_TYPE_MASK 0x0FFFFFFF
 #define NM_TYPE_SHIFT 28
+
+/* file structure used for saving OI scrub bookmark state for restart */
+#define OSD_OI_FID_OID_BITS_MAX	10
+#define OSD_OI_FID_NR_MAX	(1UL << OSD_OI_FID_OID_BITS_MAX)
+#define SCRUB_OI_BITMAP_SIZE	(OSD_OI_FID_NR_MAX >> 3)
+
+#define SCRUB_MAGIC_V1			0x4C5FD252
+#define SCRUB_MAGIC_V2			0x4C5FE253
+
+enum scrub_flags {
+	/* OI files have been recreated, OI mappings should be re-inserted. */
+	SF_RECREATED	= 0x0000000000000001ULL,
+
+	/* OI files are invalid, should be rebuild ASAP */
+	SF_INCONSISTENT	= 0x0000000000000002ULL,
+
+	/* OI scrub is triggered automatically. */
+	SF_AUTO		= 0x0000000000000004ULL,
+
+	/* The device is upgraded from 1.8 format. */
+	SF_UPGRADE	= 0x0000000000000008ULL,
+};
+
+enum scrub_status {
+	/* The scrub file is new created, for new MDT, upgrading from old disk,
+	 * or re-creating the scrub file manually. */
+	SS_INIT		= 0,
+
+	/* The scrub is checking/repairing the OI files. */
+	SS_SCANNING	= 1,
+
+	/* The scrub checked/repaired the OI files successfully. */
+	SS_COMPLETED	= 2,
+
+	/* The scrub failed to check/repair the OI files. */
+	SS_FAILED	= 3,
+
+	/* The scrub is stopped manually, the OI files may be inconsistent. */
+	SS_STOPPED	= 4,
+
+	/* The scrub is paused automatically when umount. */
+	SS_PAUSED	= 5,
+
+	/* The scrub crashed during the scanning, should be restarted. */
+	SS_CRASHED	= 6,
+};
+
+enum scrub_param {
+	/* Exit when fail. */
+	SP_FAILOUT	= 0x0001,
+
+	/* Check only without repairing. */
+	SP_DRYRUN	= 0x0002,
+};
+
+struct scrub_file {
+	guid_t	sf_uuid;		    /* 128-bit uuid for volume */
+	__u64	sf_flags;		    /* see 'enum scrub_flags' */
+	__u32	sf_magic;		    /* SCRUB_MAGIC_V1/V2 */
+	__u16	sf_status;		    /* see 'enum scrub_status' */
+	__u16	sf_param;		    /* see 'enum scrub_param' */
+	__s64	sf_time_last_complete;      /* wallclock of last scrub finish */
+	__s64	sf_time_latest_start;	    /* wallclock of last scrub run */
+	__s64   sf_time_last_checkpoint;    /* wallclock of last checkpoint */
+	__u64	sf_pos_latest_start;	    /* OID of last scrub start */
+	__u64	sf_pos_last_checkpoint;     /* OID of last scrub checkpoint */
+	__u64	sf_pos_first_inconsistent;  /* OID first object to update */
+	__u64	sf_items_checked;	    /* number objects checked */
+	__u64	sf_items_updated;           /* number objects updated */
+	__u64	sf_items_failed;	    /* number objects unrepairable */
+	__u64	sf_items_updated_prior;     /* num objects fixed before scan */
+	__u64	sf_items_noscrub;	    /* number of objects skipped due to
+					     * LDISKFS_STATE_LUSTRE_NOSCRUB */
+	__u64   sf_items_igif;		    /* number of IGIF(no FID) objects */
+	__u32	sf_run_time;		    /* scrub runtime in seconds */
+	__u32	sf_success_count;	    /* number of completed runs */
+	__u16	sf_oi_count;		    /* number of OI files */
+	__u16	sf_internal_flags;	    /* flags to keep after reset, see
+					     * 'enum scrub_internal_flags' */
+	__u32	sf_reserved_1;
+	__u64	sf_reserved_2[16];
+	__u8    sf_oi_bitmap[SCRUB_OI_BITMAP_SIZE]; /* OI files recreated */
+};
 
 /** @} disk */
 

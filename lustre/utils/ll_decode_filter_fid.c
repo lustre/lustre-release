@@ -44,9 +44,6 @@
 #include <asm/byteorder.h>
 #include <linux/lustre/lustre_user.h>
 
-#define PFID_STRIPE_IDX_BITS	16
-#define PFID_STRIPE_COUNT_MASK	((1 << PFID_STRIPE_IDX_BITS) - 1)
-
 #if __BYTE_ORDER == __BIG_ENDIAN
 static void lustre_swab_lu_fid(struct lu_fid *fid)
 {

@@ -453,6 +453,9 @@ struct lustre_mdt_attrs {
 	struct lu_fid  lma_self_fid;
 };
 
+#define PFID_STRIPE_IDX_BITS   16
+#define PFID_STRIPE_COUNT_MASK ((1 << PFID_STRIPE_IDX_BITS) - 1)
+
 struct lustre_ost_attrs {
 	/* Use lustre_mdt_attrs directly for now, need a common header
 	 * structure if want to change lustre_mdt_attrs in future. */

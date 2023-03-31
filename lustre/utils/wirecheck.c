@@ -243,8 +243,7 @@ check_lustre_mdt_attrs(void)
 	CHECK_VALUE_X(LMAI_ENCRYPT);
 }
 
-static void
-check_lustre_ost_attrs(void)
+static void check_lustre_ost_attrs(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(lustre_ost_attrs);
@@ -254,6 +253,20 @@ check_lustre_ost_attrs(void)
 	CHECK_MEMBER(lustre_ost_attrs, loa_comp_id);
 	CHECK_MEMBER(lustre_ost_attrs, loa_comp_start);
 	CHECK_MEMBER(lustre_ost_attrs, loa_comp_end);
+
+	CHECK_DEFINE(PFID_STRIPE_IDX_BITS);
+	CHECK_DEFINE_X(PFID_STRIPE_COUNT_MASK);
+}
+
+static void check_ost_layout(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(ost_layout);
+	CHECK_MEMBER(ost_layout, ol_stripe_size);
+	CHECK_MEMBER(ost_layout, ol_stripe_count);
+	CHECK_MEMBER(ost_layout, ol_comp_start);
+	CHECK_MEMBER(ost_layout, ol_comp_end);
+	CHECK_MEMBER(ost_layout, ol_comp_id);
 }
 
 static void
@@ -677,18 +690,6 @@ check_obd_connect_data(void)
 	CHECK_VALUE_X(OBD_CKSUM_T10CRC512);
 	CHECK_VALUE_X(OBD_CKSUM_T10CRC4K);
 	CHECK_VALUE_X(OBD_CKSUM_T10_TOP);
-}
-
-static void
-check_ost_layout(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(ost_layout);
-	CHECK_MEMBER(ost_layout, ol_stripe_size);
-	CHECK_MEMBER(ost_layout, ol_stripe_count);
-	CHECK_MEMBER(ost_layout, ol_comp_start);
-	CHECK_MEMBER(ost_layout, ol_comp_end);
-	CHECK_MEMBER(ost_layout, ol_comp_id);
 }
 
 static void
@@ -2677,6 +2678,133 @@ static void check_out_update_buffer(void)
 	CHECK_MEMBER(out_update_buffer, oub_padding);
 }
 
+static void check_lustre_disk_data(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lustre_disk_data);
+	CHECK_MEMBER(lustre_disk_data, ldd_magic);
+	CHECK_MEMBER(lustre_disk_data, ldd_feature_compat);
+	CHECK_MEMBER(lustre_disk_data, ldd_feature_rocompat);
+	CHECK_MEMBER(lustre_disk_data, ldd_feature_incompat);
+	CHECK_MEMBER(lustre_disk_data, ldd_config_ver);
+	CHECK_MEMBER(lustre_disk_data, ldd_flags);
+	CHECK_MEMBER(lustre_disk_data, ldd_svindex);
+	CHECK_MEMBER(lustre_disk_data, ldd_mount_type);
+	CHECK_MEMBER(lustre_disk_data, ldd_fsname);
+	CHECK_MEMBER(lustre_disk_data, ldd_svname);
+	CHECK_MEMBER(lustre_disk_data, ldd_uuid);
+	CHECK_MEMBER(lustre_disk_data, ldd_userdata);
+	CHECK_MEMBER(lustre_disk_data, ldd_padding);
+	CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
+	CHECK_MEMBER(lustre_disk_data, ldd_params);
+
+	CHECK_DEFINE_X(LDD_F_SV_TYPE_MDT);
+	CHECK_DEFINE_X(LDD_F_SV_TYPE_OST);
+	CHECK_DEFINE_X(LDD_F_SV_TYPE_MGS);
+	CHECK_DEFINE_X(LDD_F_NEED_INDEX);
+	CHECK_DEFINE_X(LDD_F_VIRGIN);
+	CHECK_DEFINE_X(LDD_F_UPDATE);
+	CHECK_DEFINE_X(LDD_F_REWRITE_LDD);
+	CHECK_DEFINE_X(LDD_F_WRITECONF);
+	CHECK_DEFINE_X(LDD_F_PARAM);
+	CHECK_DEFINE_X(LDD_F_NO_PRIMNODE);
+	CHECK_DEFINE_X(LDD_F_ERROR);
+	CHECK_DEFINE_X(LDD_F_PARAM2);
+	CHECK_DEFINE_X(LDD_F_NO_LOCAL_LOGS);
+
+	CHECK_DEFINE_X(LDD_MAGIC);
+
+	CHECK_VALUE(LDD_MT_EXT3);
+	CHECK_VALUE(LDD_MT_LDISKFS);
+	CHECK_VALUE(LDD_MT_EXT3);
+	CHECK_VALUE(LDD_MT_EXT3);
+	CHECK_VALUE(LDD_MT_EXT3);
+	CHECK_VALUE(LDD_MT_EXT3);
+}
+
+static void check_lr_server_data(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lr_server_data);
+	CHECK_MEMBER(lr_server_data, lsd_uuid);
+	CHECK_MEMBER(lr_server_data, lsd_last_transno);
+	CHECK_MEMBER(lr_server_data, lsd_compat14);
+	CHECK_MEMBER(lr_server_data, lsd_mount_count);
+	CHECK_MEMBER(lr_server_data, lsd_feature_compat);
+	CHECK_MEMBER(lr_server_data, lsd_feature_rocompat);
+	CHECK_MEMBER(lr_server_data, lsd_feature_incompat);
+	CHECK_MEMBER(lr_server_data, lsd_server_size);
+	CHECK_MEMBER(lr_server_data, lsd_client_start);
+	CHECK_MEMBER(lr_server_data, lsd_client_size);
+	CHECK_MEMBER(lr_server_data, lsd_subdir_count);
+	CHECK_MEMBER(lr_server_data, lsd_catalog_oid);
+	CHECK_MEMBER(lr_server_data, lsd_catalog_ogen);
+	CHECK_MEMBER(lr_server_data, lsd_peeruuid);
+	CHECK_MEMBER(lr_server_data, lsd_osd_index);
+	CHECK_MEMBER(lr_server_data, lsd_padding1);
+	CHECK_MEMBER(lr_server_data, lsd_start_epoch);
+	CHECK_MEMBER(lr_server_data, lsd_trans_table);
+	CHECK_MEMBER(lr_server_data, lsd_trans_table_time);
+	CHECK_MEMBER(lr_server_data, lsd_expire_intervals);
+	CHECK_MEMBER(lr_server_data, lsd_padding);
+
+	CHECK_VALUE(LR_SERVER_SIZE);
+	CHECK_VALUE(LR_EXPIRE_INTERVALS);
+	CHECK_VALUE(LR_CLIENT_START);
+	CHECK_VALUE(LR_CLIENT_SIZE);
+	CHECK_VALUE_SAME(LR_CLIENT_SIZE, (int)sizeof(struct lsd_client_data));
+
+	CHECK_STRUCT(lsd_client_data);
+	CHECK_MEMBER(lsd_client_data, lcd_uuid);
+	CHECK_MEMBER(lsd_client_data, lcd_last_transno);
+	CHECK_MEMBER(lsd_client_data, lcd_last_xid);
+	CHECK_MEMBER(lsd_client_data, lcd_last_result);
+	CHECK_MEMBER(lsd_client_data, lcd_last_data);
+	CHECK_MEMBER(lsd_client_data, lcd_last_close_transno);
+	CHECK_MEMBER(lsd_client_data, lcd_last_close_xid);
+	CHECK_MEMBER(lsd_client_data, lcd_last_close_result);
+	CHECK_MEMBER(lsd_client_data, lcd_last_close_data);
+	CHECK_MEMBER(lsd_client_data, lcd_pre_versions);
+	CHECK_MEMBER(lsd_client_data, lcd_last_epoch);
+	CHECK_MEMBER(lsd_client_data, lcd_generation);
+	CHECK_MEMBER(lsd_client_data, lcd_padding);
+}
+
+static void check_lsd_reply_data(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lsd_reply_data_v1);
+	CHECK_MEMBER(lsd_reply_data_v1, lrd_transno);
+	CHECK_MEMBER(lsd_reply_data_v1, lrd_xid);
+	CHECK_MEMBER(lsd_reply_data_v1, lrd_data);
+	CHECK_MEMBER(lsd_reply_data_v1, lrd_result);
+	CHECK_MEMBER(lsd_reply_data_v1, lrd_client_gen);
+
+	CHECK_STRUCT(lsd_reply_data_v2);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_transno);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_xid);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_data);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_result);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_client_gen);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_batch_idx);
+	CHECK_MEMBER(lsd_reply_data_v2, lrd_padding);
+
+	CHECK_MEMBER_SAME(lsd_reply_data_v1, lsd_reply_data_v2, lrd_transno);
+	CHECK_MEMBER_SAME(lsd_reply_data_v1, lsd_reply_data_v2, lrd_xid);
+	CHECK_MEMBER_SAME(lsd_reply_data_v1, lsd_reply_data_v2, lrd_data);
+	CHECK_MEMBER_SAME(lsd_reply_data_v1, lsd_reply_data_v2, lrd_result);
+	CHECK_MEMBER_SAME(lsd_reply_data_v1, lsd_reply_data_v2, lrd_client_gen);
+
+	CHECK_VALUE_X(LRH_MAGIC_V1);
+	CHECK_VALUE_X(LRH_MAGIC_V2);
+
+	CHECK_STRUCT(lsd_reply_header);
+	CHECK_MEMBER(lsd_reply_header, lrh_magic);
+	CHECK_MEMBER(lsd_reply_header, lrh_header_size);
+	CHECK_MEMBER(lsd_reply_header, lrh_reply_size);
+	CHECK_MEMBER(lsd_reply_header, lrh_pad);
+}
+
 static void check_nodemap_cluster_rec(void)
 {
 	BLANK_LINE();
@@ -2797,6 +2925,57 @@ static void check_nodemap_key(void)
 	CHECK_VALUE_X(NODEMAP_RBAC_FSCRYPT_ADMIN);
 	CHECK_VALUE_X(NODEMAP_RBAC_NONE);
 	CHECK_VALUE_X(NODEMAP_RBAC_ALL);
+}
+
+static void check_scrub_file(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(scrub_file);
+	CHECK_MEMBER(scrub_file, sf_uuid);
+	CHECK_MEMBER(scrub_file, sf_flags);
+	CHECK_MEMBER(scrub_file, sf_magic);
+	CHECK_MEMBER(scrub_file, sf_status);
+	CHECK_MEMBER(scrub_file, sf_param);
+	CHECK_MEMBER(scrub_file, sf_time_last_complete);
+	CHECK_MEMBER(scrub_file, sf_time_latest_start);
+	CHECK_MEMBER(scrub_file, sf_time_last_checkpoint);
+	CHECK_MEMBER(scrub_file, sf_pos_latest_start);
+	CHECK_MEMBER(scrub_file, sf_pos_last_checkpoint);
+	CHECK_MEMBER(scrub_file, sf_pos_first_inconsistent);
+	CHECK_MEMBER(scrub_file, sf_items_checked);
+	CHECK_MEMBER(scrub_file, sf_items_updated);
+	CHECK_MEMBER(scrub_file, sf_items_failed);
+	CHECK_MEMBER(scrub_file, sf_items_updated_prior);
+	CHECK_MEMBER(scrub_file, sf_items_noscrub);
+	CHECK_MEMBER(scrub_file, sf_items_igif);
+	CHECK_MEMBER(scrub_file, sf_run_time);
+	CHECK_MEMBER(scrub_file, sf_success_count);
+	CHECK_MEMBER(scrub_file, sf_oi_count);
+	CHECK_MEMBER(scrub_file, sf_internal_flags);
+	CHECK_MEMBER(scrub_file, sf_reserved_1);
+	CHECK_MEMBER(scrub_file, sf_reserved_2);
+	CHECK_MEMBER(scrub_file, sf_oi_bitmap);
+
+	CHECK_VALUE(SCRUB_OI_BITMAP_SIZE);
+
+	CHECK_DEFINE_X(SCRUB_MAGIC_V1);
+	CHECK_DEFINE_X(SCRUB_MAGIC_V2);
+
+	CHECK_VALUE_X(SF_RECREATED);
+	CHECK_VALUE_X(SF_INCONSISTENT);
+	CHECK_VALUE_X(SF_AUTO);
+	CHECK_VALUE_X(SF_UPGRADE);
+
+	CHECK_VALUE_X(SS_INIT);
+	CHECK_VALUE_X(SS_SCANNING);
+	CHECK_VALUE_X(SS_COMPLETED);
+	CHECK_VALUE_X(SS_FAILED);
+	CHECK_VALUE_X(SS_STOPPED);
+	CHECK_VALUE_X(SS_PAUSED);
+	CHECK_VALUE_X(SS_CRASHED);
+
+	CHECK_VALUE_X(SP_FAILOUT);
+	CHECK_VALUE_X(SP_DRYRUN);
 }
 
 static void check_ofd_access_entry_v1(void)
@@ -3242,6 +3421,7 @@ main(int argc, char **argv)
 	CHECK_COND_START(HAVE_SERVER_SUPPORT);
 	check_lustre_mdt_attrs();
 	check_lustre_ost_attrs();
+	check_ost_layout();
 
 	CHECK_VALUE(OUT_CREATE);
 	CHECK_VALUE(OUT_DESTROY);
@@ -3275,7 +3455,6 @@ main(int argc, char **argv)
 	check_lustre_msg_v2();
 	check_ptlrpc_body();
 	check_obd_connect_data();
-	check_ost_layout();
 	check_obdo();
 	check_lov_ost_data_v1();
 	check_lov_mds_md_v1();
@@ -3406,6 +3585,10 @@ main(int argc, char **argv)
 	check_out_update_header();
 	check_out_update_buffer();
 
+	check_lustre_disk_data();
+	check_lr_server_data();
+	check_lsd_reply_data();
+
 	check_nodemap_cluster_rec();
 	check_nodemap_range_rec();
 	check_nodemap_id_rec();
@@ -3413,6 +3596,8 @@ main(int argc, char **argv)
 	check_nodemap_cluster_roles_rec();
 	check_nodemap_rec();
 	check_nodemap_key();
+
+	check_scrub_file();
 
 	check_ofd_access_entry_v1();
 	check_lustre_access_log_info_v1();
