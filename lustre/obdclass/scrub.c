@@ -47,7 +47,7 @@ static inline struct dt_device *scrub_obj2dev(struct dt_object *obj)
 
 static void scrub_file_to_cpu(struct scrub_file *des, struct scrub_file *src)
 {
-	uuid_copy(&des->sf_uuid, &src->sf_uuid);
+	guid_copy(&des->sf_uuid, &src->sf_uuid);
 	des->sf_flags	= le64_to_cpu(src->sf_flags);
 	des->sf_magic	= le32_to_cpu(src->sf_magic);
 	des->sf_status	= le16_to_cpu(src->sf_status);
@@ -81,7 +81,7 @@ static void scrub_file_to_cpu(struct scrub_file *des, struct scrub_file *src)
 
 static void scrub_file_to_le(struct scrub_file *des, struct scrub_file *src)
 {
-	uuid_copy(&des->sf_uuid, &src->sf_uuid);
+	guid_copy(&des->sf_uuid, &src->sf_uuid);
 	des->sf_flags	= cpu_to_le64(src->sf_flags);
 	des->sf_magic	= cpu_to_le32(src->sf_magic);
 	des->sf_status	= cpu_to_le16(src->sf_status);
@@ -113,18 +113,18 @@ static void scrub_file_to_le(struct scrub_file *des, struct scrub_file *src)
 	memcpy(des->sf_oi_bitmap, src->sf_oi_bitmap, SCRUB_OI_BITMAP_SIZE);
 }
 
-void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid)
+void scrub_file_init(struct lustre_scrub *scrub, guid_t uuid)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
 	memset(sf, 0, sizeof(*sf));
-	uuid_copy(&sf->sf_uuid, &uuid);
+	guid_copy(&sf->sf_uuid, &uuid);
 	sf->sf_magic = SCRUB_MAGIC_V2;
 	sf->sf_status = SS_INIT;
 }
 EXPORT_SYMBOL(scrub_file_init);
 
-void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
+void scrub_file_reset(struct lustre_scrub *scrub, guid_t uuid, u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
@@ -132,7 +132,7 @@ void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
 	       "%#llx, add flags = %#llx\n",
 	       scrub->os_name, sf->sf_flags, flags);
 
-	uuid_copy(&sf->sf_uuid, &uuid);
+	guid_copy(&sf->sf_uuid, &uuid);
 	sf->sf_magic = SCRUB_MAGIC_V2;
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
@@ -298,7 +298,7 @@ int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub)
 EXPORT_SYMBOL(scrub_checkpoint);
 
 int scrub_thread_prep(const struct lu_env *env, struct lustre_scrub *scrub,
-		      uuid_t uuid, u64 start)
+		      guid_t uuid, u64 start)
 {
 	struct scrub_file *sf = &scrub->os_file;
 	u32 flags = scrub->os_start_flags;

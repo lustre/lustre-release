@@ -40,15 +40,16 @@
 #define D_MOUNT (D_SUPER|D_CONFIG/*|D_WARNING */)
 #define PRINT_CMD CDEBUG
 
+#include <linux/random.h>
+#include <linux/uuid.h>
+#include <linux/version.h>
+
 #include <obd.h>
 #include <obd_class.h>
-#include <linux/random.h>
-#include <libcfs/linux/linux-uuid.h>
-#include <linux/version.h>
+#include <lustre_crypto.h>
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_param.h>
-#include <lustre_crypto.h>
 
 /**************** config llog ********************/
 

@@ -2654,11 +2654,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	if (IS_ERR_OR_NULL(obj))
 		RETURN(obj ? PTR_ERR(obj) : -ENOENT);
 
-#ifndef HAVE_S_UUID_AS_UUID_T
-	memcpy(dev->od_uuid.b, sb->s_uuid, sizeof(dev->od_uuid));
-#else
-	uuid_copy(&dev->od_uuid, &sb->s_uuid);
-#endif
+	guid_copy(&dev->od_uuid, (guid_t *)&sb->s_uuid);
 	scrub->os_obj = obj;
 	rc = scrub_file_load(env, scrub);
 	if (rc == -ENOENT || rc == -EFAULT) {
@@ -2681,7 +2677,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	} else if (rc < 0) {
 		GOTO(cleanup_obj, rc);
 	} else {
-		if (!uuid_equal(&sf->sf_uuid, &dev->od_uuid)) {
+		if (!guid_equal(&sf->sf_uuid, &dev->od_uuid)) {
 			CDEBUG(D_LFSCK,
 			       "%s: UUID has been changed from %pU to %pU\n",
 			       osd_dev2name(dev), &sf->sf_uuid, &dev->od_uuid);

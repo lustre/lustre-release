@@ -33,7 +33,7 @@
 #ifndef _LUSTRE_SCRUB_H
 # define _LUSTRE_SCRUB_H
 
-#include <libcfs/linux/linux-uuid.h>
+#include <linux/uuid.h>
 #include <dt_object.h>
 #include <lustre_net.h>
 
@@ -187,7 +187,7 @@ enum auto_scrub {
 
 struct scrub_file {
 	/* 128-bit uuid for volume. */
-	uuid_t	sf_uuid;
+	guid_t	sf_uuid;
 
 	/* See 'enum scrub_flags'. */
 	__u64   sf_flags;
@@ -347,15 +347,15 @@ struct lustre_index_restore_unit {
 	char			liru_name[0];
 };
 
-void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid);
-void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags);
+void scrub_file_init(struct lustre_scrub *scrub, guid_t uuid);
+void scrub_file_reset(struct lustre_scrub *scrub, guid_t uuid, u64 flags);
 int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_file_store(const struct lu_env *env, struct lustre_scrub *scrub);
 bool scrub_needs_check(struct lustre_scrub *scrub, const struct lu_fid *fid,
 		       u64 index);
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_thread_prep(const struct lu_env *env, struct lustre_scrub *scrub,
-		      uuid_t uuid, u64 start);
+		      guid_t uuid, u64 start);
 int scrub_thread_post(const struct lu_env *env, struct lustre_scrub *scrub,
 		      int result);
 int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,

@@ -323,21 +323,21 @@ struct osd_device {
 	atomic_t		od_r_in_flight;
 	atomic_t		od_w_in_flight;
 
-	struct mutex		  od_otable_mutex;
-	struct osd_otable_it	 *od_otable_it;
-	struct osd_scrub	  od_scrub;
-	struct list_head		  od_ios_list;
+	struct mutex		 od_otable_mutex;
+	struct osd_otable_it	*od_otable_it;
+	struct osd_scrub	 od_scrub;
+	struct list_head	 od_ios_list;
 
 	/* service name associated with the osd device */
-	char                      od_svname[MAX_OBD_NAME];
-	char                      od_mntdev[MAX_OBD_NAME];
-	uuid_t			od_uuid;
+	char			 od_svname[MAX_OBD_NAME];
+	char			 od_mntdev[MAX_OBD_NAME];
+	guid_t			 od_uuid;
 
 	/* quota slave instance for inode */
-	struct qsd_instance      *od_quota_slave_md;
+	struct qsd_instance	*od_quota_slave_md;
 
 	/* quota slave instance for block */
-	struct qsd_instance	 *od_quota_slave_dt;
+	struct qsd_instance	*od_quota_slave_dt;
 
 	/* osd seq instance */
 	struct lu_client_seq	*od_cl_seq;

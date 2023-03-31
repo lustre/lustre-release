@@ -364,7 +364,7 @@ struct osd_device {
 	enum lustre_index_backup_policy od_index_backup_policy;
 	char			 od_mntdev[128];
 	char			 od_svname[128];
-	uuid_t			 od_uuid;
+	guid_t			 od_uuid;
 
 	int			 od_connects;
 	int			 od_index;

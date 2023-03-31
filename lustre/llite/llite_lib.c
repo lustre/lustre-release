@@ -42,7 +42,7 @@
 #include <linux/time.h>
 #include <linux/file.h>
 #include <linux/types.h>
-#include <libcfs/linux/linux-uuid.h>
+#include <linux/uuid.h>
 #include <linux/version.h>
 #include <linux/mm.h>
 #include <linux/user_namespace.h>

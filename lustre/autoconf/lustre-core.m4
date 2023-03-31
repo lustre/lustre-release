@@ -2354,26 +2354,6 @@ AC_DEFUN([LC_HAVE_GET_INODE_USAGE], [
 ]) # LC_HAVE_GET_INODE_USAGE
 
 #
-# Kernel version 4.12-rc3 85787090a21eb749d8b347eaf9ff1a455637473c
-# changed struct super_block s_uuid into a proper uuid_t
-#
-AC_DEFUN([LC_SRC_SUPER_BLOCK_S_UUID], [
-	LB2_LINUX_TEST_SRC([super_block_s_uuid], [
-		#include <linux/fs.h>
-	],[
-		struct super_block sb;
-
-		uuid_parse(NULL, &sb.s_uuid);
-	])
-])
-AC_DEFUN([LC_SUPER_BLOCK_S_UUID], [
-	AC_MSG_CHECKING([if 'struct super_block' s_uuid is uuid_t])
-	LB2_LINUX_TEST_RESULT([super_block_s_uuid], [
-		AC_DEFINE(HAVE_S_UUID_AS_UUID_T, 1, ['s_uuid' is an uuid_t])
-	])
-]) # LC_SUPER_BLOCK_S_UUID
-
-#
 # LC_SUPER_SETUP_BDI_NAME
 #
 # Kernel version 4.12 commit 9594caf216dc0fe3e318b34af0127276db661241
@@ -3689,7 +3669,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 4.12
 	LC_SRC_CURRENT_TIME
-	LC_SRC_SUPER_BLOCK_S_UUID
 	LC_SRC_SUPER_SETUP_BDI_NAME
 	LC_SRC_BI_STATUS
 
@@ -3931,7 +3910,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 4.12
 	LC_CURRENT_TIME
-	LC_SUPER_BLOCK_S_UUID
 	LC_SUPER_SETUP_BDI_NAME
 	LC_BI_STATUS
 

@@ -1369,7 +1369,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	} else if (rc < 0) {
 		GOTO(cleanup_obj, rc);
 	} else {
-		if (!uuid_equal(&sf->sf_uuid, &dev->od_uuid)) {
+		if (!guid_equal(&sf->sf_uuid, &dev->od_uuid)) {
 			CDEBUG(D_LFSCK,
 			       "%s: UUID has been changed from %pU to %pU\n",
 			       osd_name(dev), &sf->sf_uuid, &dev->od_uuid);
