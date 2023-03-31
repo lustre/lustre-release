@@ -32,3 +32,4 @@ rhel8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-filename-encode.patch
 rhel8/ext4-encdata.patch
+rhel8.5/ext4-limit-per-inode-preallocation-list.patch
