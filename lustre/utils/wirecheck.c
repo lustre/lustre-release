@@ -196,6 +196,14 @@ do {								\
 			 (int)sizeof(((struct s2 *)0)->m));	\
 } while (0)
 
+/* could maybe check this in the future, just add a comment for now */
+#define CHECK_BITFIELD(s, m)					\
+	COMMENT(""#s"."#m" is a bitfield and cannot be checked")
+
+#define CHECK_COND_START(cond)	printf("\n#ifdef "#cond"\n")
+#define CHECK_COND_STARTN(cond)	printf("\n#ifndef "#cond"\n")
+#define CHECK_COND_FINISH(cond)	printf("#endif /* "#cond" */\n")
+
 static void
 check_lu_seq_range(void)
 {
@@ -2645,10 +2653,8 @@ static void check_nodemap_cluster_rec(void)
 	CHECK_STRUCT(nodemap_cluster_rec);
 	CHECK_CDEFINE(LUSTRE_NODEMAP_NAME_LENGTH);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1]);
-#if 0 /* cannot check offset of 8-bit bitfield */
-	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags);
-	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags2);
-#endif
+	CHECK_BITFIELD(nodemap_cluster_rec, ncr_flags);
+	CHECK_BITFIELD(nodemap_cluster_rec, ncr_flags2);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding1);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_projid);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_uid);
@@ -3203,7 +3209,7 @@ main(int argc, char **argv)
 	check_lu_seq_range();
 	check_som_attrs();
 #ifndef HAVE_NATIVE_LINUX_CLIENT
-	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	CHECK_COND_START(HAVE_SERVER_SUPPORT);
 	check_lustre_mdt_attrs();
 	check_lustre_ost_attrs();
 
@@ -3227,7 +3233,7 @@ main(int argc, char **argv)
 	CHECK_VALUE(OUT_XATTR_LIST);
 
 	check_hsm_attrs();
-	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+	CHECK_COND_FINISH(HAVE_SERVER_SUPPORT);
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_ost_id();
 	check_lu_dirent();
@@ -3251,10 +3257,10 @@ main(int argc, char **argv)
 	check_obd_ioobj();
 	check_obd_quotactl();
 #ifndef HAVE_NATIVE_LINUX_CLIENT
-	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	CHECK_COND_START(HAVE_SERVER_SUPPORT);
 	check_obd_quotactl_server();
 	check_obd_idx_read();
-	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+	CHECK_COND_FINISH(HAVE_SERVER_SUPPORT);
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_niobuf_remote();
 	check_ost_body();
@@ -3286,10 +3292,10 @@ main(int argc, char **argv)
 	check_ldlm_lquota_lvb();
 	check_ldlm_gl_lquota_desc();
 #ifndef HAVE_NATIVE_LINUX_CLIENT
-	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	CHECK_COND_START(HAVE_SERVER_SUPPORT);
 	check_ldlm_gl_barrier_desc();
 	check_ldlm_barrier_lvb();
-printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+	CHECK_COND_FINISH(HAVE_SERVER_SUPPORT);
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
 	check_mgs_send_param();
@@ -3350,15 +3356,17 @@ printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 	check_hsm_user_request();
 	check_hsm_user_import();
 
+	CHECK_COND_STARTN(HAVE_NATIVE_LINUX_CLIENT);
 	check_netobj_s();
 	check_rawobj_s();
 	check_gss_header();
 	check_gss_rep_header();
 	check_gss_err_header();
 	check_gss_wire_ctx();
+	CHECK_COND_FINISH(HAVE_NATIVE_LINUX_CLIENT);
 
 #ifndef HAVE_NATIVE_LINUX_CLIENT
-	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	CHECK_COND_START(HAVE_SERVER_SUPPORT);
 	check_object_update_param();
 	check_object_update();
 	check_object_update_request();
@@ -3386,7 +3394,7 @@ printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 	check_update_ops();
 	check_update_records();
 	check_llog_update_record();
-	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+	CHECK_COND_FINISH(HAVE_SERVER_SUPPORT);
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_lustre_cfg();
 

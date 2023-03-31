@@ -440,6 +440,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lustre_som_attrs, lsa_blocks));
 	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks));
+
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct lustre_mdt_attrs */
@@ -2191,6 +2192,7 @@ void lustre_assert_wire_constants(void)
 		Q_GETOQUOTA);
 	LASSERTF(Q_FINVALIDATE == 0x800104, "found 0x%.8x\n",
 		Q_FINVALIDATE);
+
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct lquota_acct_rec */
@@ -3874,6 +3876,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_pad2));
 	LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2));
+
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct ldlm_gl_barrier_desc */
@@ -5214,6 +5217,8 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct hsm_user_import *)0)->hui_archive_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_user_import *)0)->hui_archive_id));
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+
 	/* Checks for struct netobj_s */
 	LASSERTF((int)sizeof(struct netobj_s) == 4, "found %lld\n",
 		 (long long)(int)sizeof(struct netobj_s));
@@ -5405,6 +5410,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct gss_wire_ctx, gw_handle));
 	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_handle) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_handle));
+#endif /* HAVE_NATIVE_LINUX_CLIENT */
+
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct object_update_param */
@@ -5575,6 +5582,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name[16 + 1]));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]));
+	/* nodemap_cluster_rec.ncr_flags is a bitfield and cannot be checked */
+	/* nodemap_cluster_rec.ncr_flags2 is a bitfield and cannot be checked */
 	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding1) == 19, "found %lld\n",
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_padding1));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1) == 1, "found %lld\n",
