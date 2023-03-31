@@ -166,13 +166,15 @@ static inline int lmv_stripe_md_size(int stripe_count)
 
 /* for file under migrating directory, return the target stripe info */
 static inline const struct lmv_oinfo *
-lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
+lsm_name_to_stripe_info(const struct lmv_stripe_object *lso, const char *name,
 			int namelen, bool new_layout)
 {
+	const struct lmv_stripe_md *lsm;
 	int stripe_index;
 
-	LASSERT(lmv_dir_striped(lsm));
+	LASSERT(lmv_dir_striped(lso));
 
+	lsm = &lso->lso_lsm;
 	stripe_index = __lmv_name_to_stripe_index(lsm->lsm_md_hash_type,
 						  lsm->lsm_md_stripe_count,
 						  lsm->lsm_md_migrate_hash,
@@ -186,18 +188,18 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 
 static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 {
-	const struct lmv_stripe_md *lsm = op_data->op_mea1;
+	const struct lmv_stripe_object *lso = op_data->op_lso1;
 
-	if (!lsm)
+	if (!lso)
 		return false;
 
-	if (lmv_dir_layout_changing(lsm) && !op_data->op_new_layout) {
+	if (lmv_dir_layout_changing(lso) && !op_data->op_new_layout) {
 		op_data->op_new_layout = true;
 		return true;
 	}
 
-	if (lmv_dir_bad_hash(lsm) &&
-	    op_data->op_stripe_index < lsm->lsm_md_stripe_count - 1) {
+	if (lmv_dir_bad_hash(lso) &&
+	    op_data->op_stripe_index < lso->lso_lsm.lsm_md_stripe_count - 1) {
 		op_data->op_stripe_index++;
 		return true;
 	}

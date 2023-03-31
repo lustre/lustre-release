@@ -54,31 +54,39 @@ struct lmv_stripe_md {
 	struct lmv_oinfo lsm_md_oinfo[0];
 };
 
-static inline bool lmv_dir_striped(const struct lmv_stripe_md *lsm)
+struct lmv_stripe_object {
+	atomic_t			lso_refs;
+	union {
+		struct lmv_stripe_md	lso_lsm;
+		struct lmv_foreign_md	lso_lfm;
+	};
+};
+
+static inline bool lmv_dir_striped(const struct lmv_stripe_object *lso)
 {
-	return lsm && lsm->lsm_md_magic == LMV_MAGIC;
+	return lso && lso->lso_lsm.lsm_md_magic == LMV_MAGIC;
 }
 
-static inline bool lmv_dir_foreign(const struct lmv_stripe_md *lsm)
+static inline bool lmv_dir_foreign(const struct lmv_stripe_object *lso)
 {
-	return lsm && lsm->lsm_md_magic == LMV_MAGIC_FOREIGN;
+	return lso && lso->lso_lsm.lsm_md_magic == LMV_MAGIC_FOREIGN;
 }
 
-static inline bool lmv_dir_layout_changing(const struct lmv_stripe_md *lsm)
+static inline bool lmv_dir_layout_changing(const struct lmv_stripe_object *lso)
 {
-	return lmv_dir_striped(lsm) &&
-	       lmv_hash_is_layout_changing(lsm->lsm_md_hash_type);
+	return lmv_dir_striped(lso) &&
+	       lmv_hash_is_layout_changing(lso->lso_lsm.lsm_md_hash_type);
 }
 
-static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
+static inline bool lmv_dir_bad_hash(const struct lmv_stripe_object *lso)
 {
-	if (!lmv_dir_striped(lsm))
+	if (!lmv_dir_striped(lso))
 		return false;
 
-	if (lsm->lsm_md_hash_type & LMV_HASH_FLAG_BAD_TYPE)
+	if (lso->lso_lsm.lsm_md_hash_type & LMV_HASH_FLAG_BAD_TYPE)
 		return true;
 
-	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
+	return !lmv_is_known_hash_type(lso->lso_lsm.lsm_md_hash_type);
 }
 
 static inline __u8 lmv_inherit_next(__u8 inherit)
@@ -108,9 +116,11 @@ static inline bool lmv_is_inheritable(__u8 inherit)
 	       (inherit > LMV_INHERIT_END && inherit <= LMV_INHERIT_MAX);
 }
 
-static inline bool
-lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
+static inline bool lsm_md_eq(const struct lmv_stripe_object *lso1,
+			     const struct lmv_stripe_object *lso2)
 {
+	const struct lmv_stripe_md *lsm1 = &lso1->lso_lsm;
+	const struct lmv_stripe_md *lsm2 = &lso2->lso_lsm;
 	__u32 idx;
 
 	if (lsm1->lsm_md_magic != lsm2->lsm_md_magic ||
@@ -130,7 +140,7 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 		    sizeof(lsm1->lsm_md_pool_name)) != 0)
 		return false;
 
-	if (lmv_dir_striped(lsm1)) {
+	if (lmv_dir_striped(lso1)) {
 		for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
 			if (!lu_fid_eq(&lsm1->lsm_md_oinfo[idx].lmo_fid,
 				       &lsm2->lsm_md_oinfo[idx].lmo_fid))
@@ -147,14 +157,16 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 	return true;
 }
 
-static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
+static inline void
+lmv_stripe_object_dump(int mask, const struct lmv_stripe_object *lsmo)
 {
+	const struct lmv_stripe_md *lsm = &lsmo->lso_lsm;
 	int i;
 
 	CDEBUG_LIMIT(mask,
-	       "dump LMV: magic=%#x count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
-	       lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
-	       lsm->lsm_md_master_mdt_index,
+	       "dump LMV: refs %u magic=%#x count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
+	       lsm->lsm_md_magic, atomic_read(&lsmo->lso_refs),
+	       lsm->lsm_md_stripe_count, lsm->lsm_md_master_mdt_index,
 	       lmv_is_known_hash_type(lsm->lsm_md_hash_type) ?
 		mdt_hash_name[lsm->lsm_md_hash_type & LMV_HASH_TYPE_MASK] :
 		"invalid", lsm->lsm_md_hash_type,
@@ -165,7 +177,7 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 		"invalid", lsm->lsm_md_migrate_hash,
 	       LOV_MAXPOOLNAME, lsm->lsm_md_pool_name);
 
-	if (!lmv_dir_striped(lsm))
+	if (!lmv_dir_striped(lsmo))
 		return;
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
@@ -174,24 +186,34 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 }
 
 static inline bool
-lsm_md_inherited(const struct lmv_stripe_md *plsm,
-		 const struct lmv_stripe_md *clsm)
+lmv_object_inherited(const struct lmv_stripe_object *plsm,
+		     const struct lmv_stripe_object *clsm)
 {
 	return plsm && clsm &&
-	       plsm->lsm_md_magic == clsm->lsm_md_magic &&
-	       plsm->lsm_md_stripe_count == clsm->lsm_md_stripe_count &&
-	       plsm->lsm_md_master_mdt_index ==
-			clsm->lsm_md_master_mdt_index &&
-	       plsm->lsm_md_hash_type == clsm->lsm_md_hash_type &&
-	       lmv_inherit_next(plsm->lsm_md_max_inherit) ==
-			clsm->lsm_md_max_inherit &&
-	       lmv_inherit_rr_next(plsm->lsm_md_max_inherit_rr) ==
-			clsm->lsm_md_max_inherit_rr;
+	       plsm->lso_lsm.lsm_md_magic ==
+			clsm->lso_lsm.lsm_md_magic &&
+	       plsm->lso_lsm.lsm_md_stripe_count ==
+			clsm->lso_lsm.lsm_md_stripe_count &&
+	       plsm->lso_lsm.lsm_md_master_mdt_index ==
+			clsm->lso_lsm.lsm_md_master_mdt_index &&
+	       plsm->lso_lsm.lsm_md_hash_type ==
+			clsm->lso_lsm.lsm_md_hash_type &&
+	       lmv_inherit_next(plsm->lso_lsm.lsm_md_max_inherit) ==
+			clsm->lso_lsm.lsm_md_max_inherit &&
+	       lmv_inherit_rr_next(plsm->lso_lsm.lsm_md_max_inherit_rr) ==
+			clsm->lso_lsm.lsm_md_max_inherit_rr;
 }
 
 union lmv_mds_md;
 
-void lmv_free_memmd(struct lmv_stripe_md *lsm);
+struct lmv_stripe_object *lmv_stripe_object_alloc(__u32 magic,
+						  const union lmv_mds_md *lmm,
+						  size_t lmm_size);
+
+void lmv_stripe_object_put(struct lmv_stripe_object **lsm_obj);
+
+struct lmv_stripe_object *
+	lmv_stripe_object_get(struct lmv_stripe_object *lsm_obj);
 
 static inline void lmv1_le_to_cpu(struct lmv_mds_md_v1 *lmv_dst,
 				  const struct lmv_mds_md_v1 *lmv_src)

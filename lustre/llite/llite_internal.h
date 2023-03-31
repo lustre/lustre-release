@@ -192,15 +192,15 @@ struct ll_inode_info {
 			 * is for old server, or default LMV is set by
 			 * "lfs setdirstripe -D".
 			 */
-							lli_default_lmv_set:1;
+							lli_def_lsm_obj_set:1;
 			/* generation for statahead */
 			unsigned int			lli_sa_generation;
 			/* rw lock protects lli_lsm_md */
 			struct rw_semaphore		lli_lsm_sem;
 			/* directory stripe information */
-			struct lmv_stripe_md		*lli_lsm_md;
+			struct lmv_stripe_object	*lli_lsm_obj;
 			/* directory default LMV */
-			struct lmv_stripe_md		*lli_default_lsm_md;
+			struct lmv_stripe_object	*lli_def_lsm_obj;
 		};
 
 		/* for non-directory */
@@ -1546,9 +1546,18 @@ static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 
 static inline bool ll_dir_striped(struct inode *inode)
 {
+	bool rc;
 	LASSERT(inode);
-	return S_ISDIR(inode->i_mode) &&
-	       lmv_dir_striped(ll_i2info(inode)->lli_lsm_md);
+
+	if (!S_ISDIR(inode->i_mode))
+		return false;
+
+	down_read(&ll_i2info(inode)->lli_lsm_sem);
+	rc = !!(ll_i2info(inode)->lli_lsm_obj &&
+		lmv_dir_striped(ll_i2info(inode)->lli_lsm_obj));
+	up_read(&ll_i2info(inode)->lli_lsm_sem);
+
+	return rc;
 }
 
 static inline loff_t ll_file_maxbytes(struct inode *inode)

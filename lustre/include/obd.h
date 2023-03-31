@@ -894,11 +894,9 @@ struct md_op_data {
 	s64			op_mod_time;
 	const char		*op_name;
 	size_t			op_namelen;
-	struct rw_semaphore	*op_mea1_sem;
-	struct rw_semaphore	*op_mea2_sem;
-	struct lmv_stripe_md	*op_mea1;
-	struct lmv_stripe_md	*op_mea2;
-	struct lmv_stripe_md	*op_default_mea1;	/* default LMV */
+	struct lmv_stripe_object *op_lso1;
+	struct lmv_stripe_object *op_lso2;
+	struct lmv_stripe_object *op_default_lso1; /* default LMV */
 	__u32			op_suppgids[2];
 	__u32			op_fsuid;
 	__u32			op_fsgid;
@@ -1156,15 +1154,12 @@ struct obd_ops {
 
 /* lmv structures */
 struct lustre_md {
-	struct mdt_body         *body;
-	struct lu_buf		 layout;
-	union {
-		struct lmv_stripe_md    *lmv;
-		struct lmv_foreign_md   *lfm;
-	};
-	struct lmv_stripe_md    *default_lmv;
+	struct mdt_body			*body;
+	struct lu_buf			layout;
+	struct lmv_stripe_object	*lsm_obj;
+	struct lmv_stripe_object	*def_lsm_obj;
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-	struct posix_acl        *posix_acl;
+	struct posix_acl		*posix_acl;
 #endif
 };
 
@@ -1276,10 +1271,10 @@ struct md_ops {
 			       struct obd_export *, struct obd_export *,
 			       struct lustre_md *);
 
-	int (*m_free_lustre_md)(struct obd_export *, struct lustre_md *);
+	int (*m_put_lustre_md)(struct obd_export *, struct lustre_md *);
 
 	int (*m_merge_attr)(struct obd_export *,
-			    const struct lmv_stripe_md *lsm,
+			    const struct lmv_stripe_object *,
 			    struct cl_attr *attr, ldlm_blocking_callback);
 
 	int (*m_set_open_replay_data)(struct obd_export *,
@@ -1302,11 +1297,13 @@ struct md_ops {
 			       enum ldlm_cancel_flags flags, void *opaque);
 
 	int (*m_get_fid_from_lsm)(struct obd_export *,
-				  const struct lmv_stripe_md *,
+				  const struct lmv_stripe_object *,
 				  const char *name, int namelen,
 				  struct lu_fid *fid);
-	int (*m_unpackmd)(struct obd_export *exp, struct lmv_stripe_md **plsm,
-			  const union lmv_mds_md *lmv, size_t lmv_size);
+	int (*m_stripe_object_create)(struct obd_export *exp,
+				      struct lmv_stripe_object **plso,
+				      const union lmv_mds_md *lmv,
+				      size_t lmv_size);
 	int (*m_rmfid)(struct obd_export *exp, struct fid_array *fa, int *rcs,
 		       struct ptlrpc_request_set *set);
 	struct lu_batch *(*m_batch_create)(struct obd_export *exp,

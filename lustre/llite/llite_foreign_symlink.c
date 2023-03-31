@@ -219,6 +219,7 @@ static int ll_foreign_readlink_internal(struct inode *inode, char **symname)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct lmv_stripe_object *lsm_obj = NULL;
 	struct lov_foreign_md *lfm = NULL;
 	char *destname = NULL;
 	size_t lfm_size = 0;
@@ -278,8 +279,11 @@ static int ll_foreign_readlink_internal(struct inode *inode, char **symname)
 		 * and LMV formats are identical, and then we also only need
 		 * one set of parsing routines for both foreign files and dirs!
 		 */
-		lfm = (struct lov_foreign_md *)(lli->lli_lsm_md);
-		if (lfm != NULL) {
+		lsm_obj = lmv_stripe_object_get(lli->lli_lsm_obj);
+		up_read(&lli->lli_lsm_sem);
+
+		if (lsm_obj != NULL) {
+			lfm = (struct lov_foreign_md *)&lsm_obj->lso_lfm;
 			CDEBUG(D_INFO, "%s: inode "DFID": LMV cached found\n",
 			       sbi->ll_fsname, PFID(ll_inode2fid(inode)));
 		} else {
@@ -299,7 +303,7 @@ static int ll_foreign_readlink_internal(struct inode *inode, char **symname)
 
 failed:
 	if (S_ISDIR(inode->i_mode))
-		up_read(&lli->lli_lsm_sem);
+		lmv_stripe_object_put(&lsm_obj);
 
 	if (S_ISREG(inode->i_mode) && lfm)
 		OBD_FREE(lfm, lfm_size);

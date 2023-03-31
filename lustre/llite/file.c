@@ -5172,7 +5172,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 
 	/* migrate dirent only for subdirs if MDS_MIGRATE_NSONLY set */
 	if (S_ISDIR(child_inode->i_mode) && (flags & MDS_MIGRATE_NSONLY) &&
-	    lmv_dir_layout_changing(ll_i2info(parent)->lli_lsm_md))
+	    lmv_dir_layout_changing(op_data->op_lso1))
 		op_data->op_bias |= MDS_MIGRATE_NSONLY;
 
 again:
@@ -5424,18 +5424,22 @@ out:
 static int ll_merge_md_attr(struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct lmv_stripe_object *lsm_obj;
 	struct cl_attr attr = { 0 };
 	int rc;
 
-	LASSERT(lli->lli_lsm_md != NULL);
-
-	if (!lmv_dir_striped(lli->lli_lsm_md))
+	if (!ll_dir_striped(inode))
 		RETURN(0);
 
 	down_read(&lli->lli_lsm_sem);
-	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
-			   &attr, ll_md_blocking_ast);
+	LASSERT(lli->lli_lsm_obj != NULL);
+
+	lsm_obj = lmv_stripe_object_get(lli->lli_lsm_obj);
 	up_read(&lli->lli_lsm_sem);
+
+	rc = md_merge_attr(ll_i2mdexp(inode), lsm_obj,
+			   &attr, ll_md_blocking_ast);
+	lmv_stripe_object_put(&lsm_obj);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -5531,7 +5535,7 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	} else {
 		/* If object isn't regular a file then don't validate size. */
 		/* foreign dir is not striped dir */
-		if (ll_dir_striped(inode) && !foreign) {
+		if (!foreign) {
 			rc = ll_merge_md_attr(inode);
 			if (rc < 0)
 				RETURN(rc);

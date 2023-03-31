@@ -776,10 +776,12 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 
 		/* If it is striped directory, get the real stripe parent */
 		if (unlikely(ll_dir_striped(parent))) {
+			down_read(&ll_i2info(parent)->lli_lsm_sem);
 			rc = md_get_fid_from_lsm(ll_i2mdexp(parent),
-						 ll_i2info(parent)->lli_lsm_md,
+						 ll_i2info(parent)->lli_lsm_obj,
 						 (*de)->d_name.name,
 						 (*de)->d_name.len, &fid);
+			up_read(&ll_i2info(parent)->lli_lsm_sem);
 			if (rc != 0)
 				GOTO(out, rc);
 		}
@@ -1502,11 +1504,11 @@ static void ll_qos_mkdir_prep(struct md_op_data *op_data, struct inode *dir)
 	depth = lli->lli_dir_depth;
 
 	/* parent directory is striped */
-	if (unlikely(lli->lli_lsm_md))
+	if (unlikely(ll_dir_striped(dir)))
 		return;
 
 	/* default LMV set on parent directory */
-	if (unlikely(lli->lli_default_lsm_md))
+	if (unlikely(lli->lli_def_lsm_obj))
 		return;
 
 	/* parent is ROOT */
@@ -1514,13 +1516,13 @@ static void ll_qos_mkdir_prep(struct md_op_data *op_data, struct inode *dir)
 		return;
 
 	/* default LMV not set on ROOT */
-	if (!rlli->lli_default_lsm_md)
+	if (!rlli->lli_def_lsm_obj)
 		return;
 
 	down_read(&rlli->lli_lsm_sem);
-	lsm = rlli->lli_default_lsm_md;
-	if (!lsm)
+	if (!rlli->lli_def_lsm_obj)
 		goto unlock;
+	lsm = &rlli->lli_def_lsm_obj->lso_lsm;
 
 	/* not space balanced */
 	if (lsm->lsm_md_master_mdt_index != LMV_OFFSET_DEFAULT)
@@ -1580,7 +1582,7 @@ again:
 		ll_qos_mkdir_prep(op_data, dir);
 		if ((exp_connect_flags2(ll_i2mdexp(dir)) &
 		     OBD_CONNECT2_DMV_IMP_INHERIT) &&
-		    op_data->op_default_mea1 && !lum) {
+		    op_data->op_default_lso1 && !lum) {
 			const struct lmv_stripe_md *lsm;
 
 			/* once DMV_IMP_INHERIT is set, pack default LMV in
@@ -1590,7 +1592,7 @@ again:
 			if (!lum)
 				GOTO(err_exit, err = -ENOMEM);
 
-			lsm = op_data->op_default_mea1;
+			lsm = &op_data->op_default_lso1->lso_lsm;
 			lum->lum_magic = cpu_to_le32(lsm->lsm_md_magic);
 			lum->lum_stripe_count =
 				cpu_to_le32(lsm->lsm_md_stripe_count);
@@ -1697,40 +1699,41 @@ again:
 		if (err2 == 0) {
 			struct lustre_md md = { NULL };
 
+
 			md.body = req_capsule_server_get(&request->rq_pill,
 							 &RMF_MDT_BODY);
 			if (!md.body)
 				GOTO(err_exit, err = -EPROTO);
 
-			OBD_ALLOC_PTR(md.default_lmv);
-			if (!md.default_lmv)
+			OBD_ALLOC_PTR(md.def_lsm_obj);
+			if (!md.def_lsm_obj)
 				GOTO(err_exit, err = -ENOMEM);
 
-			md.default_lmv->lsm_md_magic = lum->lum_magic;
-			md.default_lmv->lsm_md_stripe_count =
+			md.def_lsm_obj->lso_lsm.lsm_md_magic = lum->lum_magic;
+			md.def_lsm_obj->lso_lsm.lsm_md_stripe_count =
 				lum->lum_stripe_count;
-			md.default_lmv->lsm_md_master_mdt_index =
+			md.def_lsm_obj->lso_lsm.lsm_md_master_mdt_index =
 				lum->lum_stripe_offset;
-			md.default_lmv->lsm_md_hash_type = lum->lum_hash_type;
-			md.default_lmv->lsm_md_max_inherit =
+			md.def_lsm_obj->lso_lsm.lsm_md_hash_type =
+				lum->lum_hash_type;
+			md.def_lsm_obj->lso_lsm.lsm_md_max_inherit =
 				lum->lum_max_inherit;
-			md.default_lmv->lsm_md_max_inherit_rr =
+			md.def_lsm_obj->lso_lsm.lsm_md_max_inherit_rr =
 				lum->lum_max_inherit_rr;
+			atomic_set(&md.def_lsm_obj->lso_refs, 1);
 
 			err = ll_update_inode(dir, &md);
-			md_free_lustre_md(sbi->ll_md_exp, &md);
+			md_put_lustre_md(sbi->ll_md_exp, &md);
 			if (err)
 				GOTO(err_exit, err);
-		} else if (err2 == -ENODATA && lli->lli_default_lsm_md) {
+		} else if (err2 == -ENODATA && lli->lli_def_lsm_obj) {
 			/*
 			 * If there are no default stripe EA on the MDT, but the
 			 * client has default stripe, then it probably means
 			 * default stripe EA has just been deleted.
 			 */
 			down_write(&lli->lli_lsm_sem);
-			if (lli->lli_default_lsm_md)
-				OBD_FREE_PTR(lli->lli_default_lsm_md);
-			lli->lli_default_lsm_md = NULL;
+			lmv_stripe_object_put(&lli->lli_def_lsm_obj);
 			up_write(&lli->lli_lsm_sem);
 		} else {
 			GOTO(err_exit, err);
