@@ -17,8 +17,16 @@
  */
 #ifndef LDLM_ALL_FLAGS_MASK
 
-/** l_flags bits marked as "all_flags" bits */
-#define LDLM_FL_ALL_FLAGS_MASK          0x00FFFFFFC28F932FULL
+/** flags sent on wire on ldlm requests */
+#define LDLM_FL_WIRE_REQ_FLAGS_MASK					\
+	(LDLM_FL_BLOCK_GRANTED		| LDLM_FL_BLOCK_WAIT		|\
+	 LDLM_FL_SPECULATIVE		| LDLM_FL_REPLAY		|\
+	 LDLM_FL_INTENT_ONLY		| LDLM_FL_HAS_INTENT		|\
+	 LDLM_FL_BLOCK_NOWAIT		| LDLM_FL_TEST_LOCK		|\
+	 LDLM_FL_CANCEL_ON_BLOCK	| LDLM_FL_NO_EXPANSION		|\
+	 LDLM_FL_DENY_ON_CONTENTION	| LDLM_FL_AST_DISCARD_DATA)
+
+#define LDLM_FL_WIRE_AST_FLAGS_MASK	(LDLM_FL_AST_MASK | LDLM_FL_AST_SENT)
 
 /** extent, mode, or resource changed */
 #define LDLM_FL_LOCK_CHANGED            0x0000000000000001ULL // bit   0
@@ -34,15 +42,6 @@
 #define ldlm_is_block_granted(_l)       LDLM_TEST_FLAG((_l), 1ULL <<  1)
 #define ldlm_set_block_granted(_l)      LDLM_SET_FLAG((_l), 1ULL <<  1)
 #define ldlm_clear_block_granted(_l)    LDLM_CLEAR_FLAG((_l), 1ULL <<  1)
-
-/**
- * Server placed lock on conv list, or a recovering client wants the lock
- * added to the conv list, no questions asked. (obsoleted)
- */
-#define LDLM_FL_BLOCK_CONV              0x0000000000000004ULL // bit   2
-#define ldlm_is_block_conv(_l)          LDLM_TEST_FLAG((_l), 1ULL <<  2)
-#define ldlm_set_block_conv(_l)         LDLM_SET_FLAG((_l), 1ULL <<  2)
-#define ldlm_clear_block_conv(_l)       LDLM_CLEAR_FLAG((_l), 1ULL <<  2)
 
 /**
  * Server placed lock on wait list, or a recovering client wants the lock
