@@ -3997,26 +3997,6 @@ h2nettype() {
 }
 declare -fx h2nettype
 
-# Wrapper function to print the deprecation warning
-h2tcp() {
-	echo "h2tcp: deprecated, use h2nettype instead" 1>&2
-	if [[ -n "$NETTYPE" ]]; then
-		h2nettype "$@"
-	else
-		h2nettype "$1" "tcp"
-	fi
-}
-
-# Wrapper function to print the deprecation warning
-h2o2ib() {
-	echo "h2o2ib: deprecated, use h2nettype instead" 1>&2
-	if [[ -n "$NETTYPE" ]]; then
-		h2nettype "$@"
-	else
-		h2nettype "$1" "o2ib"
-	fi
-}
-
 # This enables variables in cfg/"setup".sh files to support the pdsh HOSTLIST
 # expressions format. As a bonus we can then just pass in those variables
 # to pdsh. What this function does is take a HOSTLIST type string and
