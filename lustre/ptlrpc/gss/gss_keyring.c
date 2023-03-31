@@ -617,26 +617,31 @@ static inline int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
 }
 
 /*
- * kernel 5.3: commit 0f44e4d976f96c6439da0d6717238efa4b91196e
- * keys: Move the user and user-session keyrings to the user_namespace
- *
  * When lookup_user_key is available use the kernel API rather than directly
  * accessing the uid_keyring and session_keyring via the current process
  * credentials.
  */
 #ifdef HAVE_LOOKUP_USER_KEY
 
+#ifdef HAVE_KEY_NEED_UNLINK
 /* from Linux security/keys/internal.h: */
-#ifndef KEY_LOOKUP_FOR_UNLINK
-#define KEY_LOOKUP_FOR_UNLINK		0x04
-#endif
+#  ifndef KEY_LOOKUP_PARTIAL
+#    define KEY_LOOKUP_PARTIAL 0x2
+#  endif
+#else
+#  define KEY_NEED_UNLINK 0
+#  ifndef KEY_LOOKUP_FOR_UNLINK
+#    define KEY_LOOKUP_FOR_UNLINK 0x4
+#  endif
+#  define KEY_LOOKUP_PARTIAL KEY_LOOKUP_FOR_UNLINK
+#endif /* HAVE_KEY_NEED_UNLINK */
 
 static struct key *_user_key(key_serial_t id)
 {
 	key_ref_t ref;
 
 	might_sleep();
-	ref = lookup_user_key(id, KEY_LOOKUP_FOR_UNLINK, 0);
+	ref = lookup_user_key(id, KEY_LOOKUP_PARTIAL, KEY_NEED_UNLINK);
 	if (IS_ERR(ref))
 		return NULL;
 	return key_ref_to_ptr(ref);
