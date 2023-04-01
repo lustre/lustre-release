@@ -1279,10 +1279,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 #define MAX_STRING_SIZE 128
 
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
-#ifndef HAVE_BDI_CAP_MAP_COPY
-# define BDI_CAP_MAP_COPY	0
-#endif
-
 static int super_setup_bdi_name(struct super_block *sb, char *fmt, ...)
 {
 	struct  lustre_sb_info *lsi = s2lsi(sb);
@@ -1399,7 +1395,10 @@ int ll_fill_super(struct super_block *sb)
 #ifdef HAVE_BDI_IO_PAGES
 	sb->s_bdi->io_pages = 0;
 #endif
-
+	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
+#ifdef SB_I_CGROUPWB
+	sb->s_iflags |= SB_I_CGROUPWB;
+#endif
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.
 	 */

@@ -1287,30 +1287,6 @@ AC_DEFUN([LC_BACKING_DEV_INFO_REMOVAL], [
 ]) # LC_BACKING_DEV_INFO_REMOVAL
 
 #
-# LC_HAVE_BDI_CAP_MAP_COPY
-#
-# 3.20  removed mmap handling for backing devices since
-#	it breaks on non-MMU systems. See kernel commit
-#	b4caecd48005fbed3949dde6c1cb233142fd69e9
-#
-AC_DEFUN([LC_SRC_HAVE_BDI_CAP_MAP_COPY], [
-	LB2_LINUX_TEST_SRC([bdi_cap_map_copy], [
-		#include <linux/backing-dev.h>
-	],[
-		struct backing_dev_info info;
-
-		info.capabilities = BDI_CAP_MAP_COPY;
-	])
-]) # LC_HAVE_BDI_CAP_MAP_COPY
-AC_DEFUN([LC_HAVE_BDI_CAP_MAP_COPY], [
-	AC_MSG_CHECKING([if have 'BDI_CAP_MAP_COPY'])
-	LB2_LINUX_TEST_RESULT([bdi_cap_map_copy], [
-		AC_DEFINE(HAVE_BDI_CAP_MAP_COPY, 1,
-			[BDI_CAP_MAP_COPY exist])
-	])
-]) # LC_HAVE_BDI_CAP_MAP_COPY
-
-#
 # LC_HAVE_PROJECT_QUOTA
 #
 # Kernel version v4.0-rc1-197-g847aac644e92
@@ -3886,7 +3862,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 3.20
 	LC_SRC_BACKING_DEV_INFO_REMOVAL
-	LC_SRC_HAVE_BDI_CAP_MAP_COPY
 
 	# 4.1.0
 	LC_SRC_IOV_ITER_RW
@@ -4141,7 +4116,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 3.20
 	LC_BACKING_DEV_INFO_REMOVAL
-	LC_HAVE_BDI_CAP_MAP_COPY
 
 	# 4.1.0
 	LC_IOV_ITER_RW

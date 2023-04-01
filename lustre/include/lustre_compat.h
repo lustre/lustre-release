@@ -41,6 +41,7 @@
 #include <linux/xattr.h>
 #include <linux/workqueue.h>
 #include <linux/blkdev.h>
+#include <linux/backing-dev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
 #include <libcfs/linux/linux-fs.h>
@@ -541,6 +542,29 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 	return inode->i_op->removexattr(dentry, name);
 #endif
 }
+
+/* until v3.19-rc5-3-gb4caecd48005 */
+#ifndef BDI_CAP_MAP_COPY
+#define BDI_CAP_MAP_COPY		0
+#endif
+
+/* from v4.1-rc2-56-g89e9b9e07a39, until v5.9-rc3-161-gf56753ac2a90 */
+#ifndef BDI_CAP_CGROUP_WRITEBACK
+#define BDI_CAP_CGROUP_WRITEBACK	0
+#endif
+
+/* from v5.9-rc3-161-gf56753ac2a90 */
+#ifndef BDI_CAP_WRITEBACK
+#define BDI_CAP_WRITEBACK		0
+#endif
+
+/* from v5.9-rc3-161-gf56753ac2a90 */
+#ifndef BDI_CAP_WRITEBACK_ACCT
+#define BDI_CAP_WRITEBACK_ACCT		0
+#endif
+
+#define LL_BDI_CAP_FLAGS	(BDI_CAP_CGROUP_WRITEBACK | BDI_CAP_MAP_COPY | \
+				 BDI_CAP_WRITEBACK | BDI_CAP_WRITEBACK_ACCT)
 
 #ifndef FALLOC_FL_COLLAPSE_RANGE
 #define FALLOC_FL_COLLAPSE_RANGE 0x08 /* remove a range of a file */
