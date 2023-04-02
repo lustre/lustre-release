@@ -888,7 +888,9 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
  * newer kernels treat them like any other writeback.
  * (see Linux commit: v5.7-467-g8d92890bd6b8)
  */
-#define NR_WRITEBACK NR_UNSTABLE_NFS
+#define NR_ZONE_WRITE_PENDING		((enum zone_stat_item)NR_UNSTABLE_NFS)
+#elif !defined(HAVE_NR_ZONE_WRITE_PENDING)
+#define NR_ZONE_WRITE_PENDING		((enum zone_stat_item)NR_WRITEBACK)
 #endif
 
 static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
@@ -915,8 +917,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		}
 
 		if (count > 0) {
-			mod_zone_page_state(zone,
-					    (enum zone_stat_item)NR_WRITEBACK,
+			mod_zone_page_state(zone, NR_ZONE_WRITE_PENDING,
 					    factor * count);
 			count = 0;
 		}
@@ -924,7 +925,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		++count;
 	}
 	if (count > 0)
-		mod_zone_page_state(zone, (enum zone_stat_item)NR_WRITEBACK,
+		mod_zone_page_state(zone, NR_ZONE_WRITE_PENDING,
 				    factor * count);
 
 	EXIT;
