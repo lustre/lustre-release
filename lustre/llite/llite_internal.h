@@ -1157,6 +1157,9 @@ void ll_update_times(struct ptlrpc_request *request, struct inode *inode);
 int ll_writepage(struct page *page, struct writeback_control *wbc);
 int ll_writepages(struct address_space *, struct writeback_control *wbc);
 int ll_readpage(struct file *file, struct page *page);
+#ifdef HAVE_AOPS_READ_FOLIO
+int ll_read_folio(struct file *file, struct folio *folio);
+#endif
 int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			   struct cl_page *page, struct file *file);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);

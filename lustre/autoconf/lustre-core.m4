@@ -3273,23 +3273,122 @@ AC_DEFUN([LC_HAVE_DIRTY_FOLIO], [
 # linux commit v5.17-49-g8b9f3ac5b01d
 #   fs: introduce alloc_inode_sb() to allocate filesystems specific inode
 #
-AC_DEFUN([LC_HAVE_ALLOC_INODE_SB], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if alloc_inode_sb() exists],
-alloc_inode_sb, [
+AC_DEFUN([LC_SRC_HAVE_ALLOC_INODE_SB], [
+	LB2_LINUX_TEST_SRC([alloc_inode_sb], [
 		#include <linux/fs.h>
 	],[
 		struct super_block *sb = NULL;
 		struct kmem_cache *cache = NULL;
 
 		(void)alloc_inode_sb(sb, cache, GFP_NOFS);
-	],[
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ALLOC_INODE_SB], [
+	AC_MSG_CHECKING([if alloc_inode_sb() exists])
+	LB2_LINUX_TEST_RESULT([alloc_inode_sb], [
 		AC_DEFINE(HAVE_ALLOC_INODE_SB, 1,
 			[alloc_inode_sb() exists])
 	])
-EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_ALLOC_INODE_SB
+
+#
+# LC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
+#
+# Linux commit v5.18-rc5-221-gb7446e7cf15f
+#   fs: Remove aop flags parameter from grab_cache_page_write_begin()
+#
+AC_DEFUN([LC_SRC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS], [
+	LB2_LINUX_TEST_SRC([grab_cache_page_write_begin_with_flags], [
+		#include <linux/pagemap.h>
+	],[
+		struct address_space *mapping = NULL;
+		(void)grab_cache_page_write_begin(mapping, 0, 1);
+	],[-Werror])
+]) 
+AC_DEFUN([LC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS], [
+	AC_MSG_CHECKING([if grab_cache_page_write_begin() has flags argument])
+	LB2_LINUX_TEST_RESULT([grab_cache_page_write_begin_with_flags], [
+		AC_DEFINE(HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS, 1,
+			[grab_cache_page_write_begin() has flags argument])
+	])
+]) # LC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
+
+#
+# LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
+#
+# Linux commit v5.18-rc5-241-g5efe7448a142
+#   fs: Introduce aops->read_folio
+#
+AC_DEFUN([LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO], [
+	LB2_LINUX_TEST_SRC([address_space_operations_read_folio], [
+		#include <linux/fs.h>
+	],[
+		struct address_space_operations *aops = NULL;
+		struct file *file = NULL;
+		struct folio *folio = NULL;
+		int err = aops->read_folio(file, folio);
+		(void)err;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO], [
+	AC_MSG_CHECKING([if struct address_space_operations() has read_folio()])
+	LB2_LINUX_TEST_RESULT([address_space_operations_read_folio], [
+		AC_DEFINE(HAVE_AOPS_READ_FOLIO, 1,
+			[struct address_space_operations() has read_folio()])
+	])
+]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
+
+#
+# LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+#
+# Linux commit v5.18-rc5-280-ge9b5b23e957e
+#   fs: Change the type of filler_t
+#
+AC_DEFUN([LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE], [
+	LB2_LINUX_TEST_SRC([read_cache_page_filler_with_file], [
+		#include <linux/pagemap.h>
+		static inline int _filler(struct file *file, struct folio *f)
+		{
+			return 0;
+		}
+	],[
+		struct address_space *mapping = NULL;
+		struct file *file = NULL;
+		struct page *page = read_cache_page(mapping, 0, _filler, file);
+		(void)page;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE], [
+	AC_MSG_CHECKING([if read_cache_page() filler_t needs struct file])
+	LB2_LINUX_TEST_RESULT([read_cache_page_filler_with_file], [
+		AC_DEFINE(HAVE_READ_CACHE_PAGE_WANTS_FILE, 1,
+			[read_cache_page() filler_t needs struct file])
+	])
+]) # LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+
+#
+# LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
+#
+# Linux commit v5.18-rc5-282-gfa29000b6b26
+#  fs: Add aops->release_folio
+#
+AC_DEFUN([LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO], [
+	LB2_LINUX_TEST_SRC([address_space_operations_release_folio], [
+		#include <linux/fs.h>
+	],[
+		struct address_space_operations *aops = NULL;
+		struct folio *folio = NULL;
+		int err = aops->release_folio(folio, GFP_KERNEL);
+		(void)err;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO], [
+	AC_MSG_CHECKING([if struct address_space_operations() has release_folio()])
+	LB2_LINUX_TEST_RESULT([address_space_operations_release_folio], [
+		AC_DEFINE(HAVE_AOPS_RELEASE_FOLIO, 1,
+			[struct address_space_operations() has release_folio()])
+	])
+]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 #
 # LC_PROG_LINUX
@@ -3503,9 +3602,18 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_SRC_HAVE_KIOCB_COMPLETE_2ARGS
 
-	# 5.18
+	# 5.17
 	LC_SRC_HAVE_INVALIDATE_FOLIO
 	LC_SRC_HAVE_DIRTY_FOLIO
+
+	# 5.18
+	LC_SRC_HAVE_ALLOC_INODE_SB
+
+	# 5.19
+	LC_SRC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
+	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
+	LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -3739,6 +3847,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.18
 	LC_HAVE_ALLOC_INODE_SB
+
+	# 5.19
+	LC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
+	LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
+	LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

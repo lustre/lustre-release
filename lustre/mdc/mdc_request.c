@@ -1330,7 +1330,7 @@ struct readpage_param {
  * in PAGE_SIZE (if PAGE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted.
  **/
-static int mdc_read_page_remote(void *data, struct page *page0)
+static int ll_mdc_read_page_remote(void *data, struct page *page0)
 {
 	struct readpage_param *rp = data;
 	struct page **page_pool;
@@ -1426,6 +1426,16 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	RETURN(rc);
 }
 
+#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
+static inline int mdc_read_folio_remote(struct file *file, struct folio *folio)
+{
+	return ll_mdc_read_page_remote(file->private_data,
+				       folio_page(folio, 0));
+}
+#else
+#define mdc_read_folio_remote	ll_mdc_read_page_remote
+#endif
+
 /**
  * Read dir page from cache first, if it can not find it, read it from
  * server and add into the cache.
@@ -1508,10 +1518,10 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 
 	rp_param.rp_exp = exp;
 	rp_param.rp_mod = op_data;
-	page = read_cache_page(mapping,
-			       hash_x_index(rp_param.rp_off,
-					    rp_param.rp_hash64),
-			       mdc_read_page_remote, &rp_param);
+	page = ll_read_cache_page(mapping,
+				  hash_x_index(rp_param.rp_off,
+					       rp_param.rp_hash64),
+				  mdc_read_folio_remote, &rp_param);
 	if (IS_ERR(page)) {
 		CDEBUG(D_INFO, "%s: read cache page: "DFID" at %llu: %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),

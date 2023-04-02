@@ -491,6 +491,15 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	return rc;
 }
 
+#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
+static inline int ll_dom_read_folio(struct file *file, struct folio *folio0)
+{
+	return ll_dom_readpage(file->private_data, folio_page(folio0, 0));
+}
+#else
+#define ll_dom_read_folio	ll_dom_readpage
+#endif
+
 void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 {
 	struct lu_env *env;
@@ -568,8 +577,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 		if (lnb.lnb_len > PAGE_SIZE)
 			lnb.lnb_len = PAGE_SIZE;
 
-		vmpage = read_cache_page(mapping, index + start,
-					 ll_dom_readpage, &lnb);
+		vmpage = ll_read_cache_page(mapping, index + start,
+					    ll_dom_read_folio, &lnb);
 		if (IS_ERR(vmpage)) {
 			CWARN("%s: cannot fill page %lu for "DFID
 			      " with data: rc = %li\n",
