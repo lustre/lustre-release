@@ -3201,7 +3201,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 		iattr.ia_gid = make_kgid(&init_user_ns, attr->la_gid);
 
 		lock_dquot_transfer(inode);
-		rc = dquot_transfer(inode, &iattr);
+		rc = osd_dquot_transfer(&init_user_ns, inode, &iattr);
 		unlock_dquot_transfer(inode);
 		if (rc) {
 			CERROR("%s: quota transfer failed. Is quota enforcement enabled on the ldiskfs filesystem? rc = %d\n",
