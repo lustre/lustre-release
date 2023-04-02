@@ -255,11 +255,7 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 	size_t start;
 	size_t result;
 
-	/*
-	 * iov_iter_get_pages_alloc() is introduced in 3.16 similar
-	 * to HAVE_DIO_ITER.
-	 */
-	result = iov_iter_get_pages_alloc(iter, pages, maxsize, &start);
+	result = iov_iter_get_pages_alloc2(iter, pages, maxsize, &start);
 	if (result > 0)
 		*npages = DIV_ROUND_UP(result + start, PAGE_SIZE);
 
@@ -989,12 +985,12 @@ out:
 }
 
 #ifdef CONFIG_MIGRATION
-static int ll_migratepage(struct address_space *mapping,
-			  struct page *newpage, struct page *page,
-			  enum migrate_mode mode)
+static int ll_migrate_folio(struct address_space *mapping,
+			    struct folio_migr *newpage, struct folio_migr *page,
+			    enum migrate_mode mode)
 {
-        /* Always fail page migration until we have a proper implementation */
-        return -EIO;
+	/* Always fail page migration until we have a proper implementation */
+	return -EIO;
 }
 #endif
 
@@ -1025,6 +1021,6 @@ const struct address_space_operations ll_aops = {
 	.write_begin		= ll_write_begin,
 	.write_end		= ll_write_end,
 #ifdef CONFIG_MIGRATION
-	.migratepage		= ll_migratepage,
+	.migrate_folio		= ll_migrate_folio,
 #endif
 };

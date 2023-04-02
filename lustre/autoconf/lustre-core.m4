@@ -3391,6 +3391,112 @@ AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO], [
 ]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 #
+# LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
+#
+# Linux commit v5.19-rc3-392-g5490da4f06d1
+#  fs: Add aops->migrate_folio
+#
+AC_DEFUN([LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO], [
+	LB2_LINUX_TEST_SRC([address_space_operations_migrate_folio], [
+		#include <linux/fs.h>
+	],[
+		struct address_space_operations *aops = NULL;
+		struct address_space *m = NULL;
+		struct folio *src = NULL;
+		struct folio *dst = NULL;
+		int err = aops->migrate_folio(m, dst, src, MIGRATE_ASYNC);
+		(void)err;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO], [
+	AC_MSG_CHECKING([if struct address_space_operations() has migrate_folio()])
+	LB2_LINUX_TEST_RESULT([address_space_operations_migrate_folio], [
+		AC_DEFINE(HAVE_AOPS_MIGRATE_FOLIO, 1,
+			[struct address_space_operations() has migrate_folio()])
+	])
+]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
+
+#
+# LC_REGISTER_SHRINKER_FORMAT_NAMED
+#
+# Linux commit v5.19-rc4-52-ge33c267ab70d
+#   mm: shrinkers: provide shrinkers with names
+#
+AC_DEFUN([LC_SRC_REGISTER_SHRINKER_FORMAT_NAMED], [
+	LB2_LINUX_TEST_SRC([register_shrinker_format], [
+		#include <linux/mm.h>
+	],[
+		if (register_shrinker(NULL, "lustre-%ps", __func__))
+			unregister_shrinker(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_REGISTER_SHRINKER_FORMAT_NAMED], [
+	AC_MSG_CHECKING([if register_shrinker() returns status])
+	LB2_LINUX_TEST_RESULT([address_space_operations_migrate_folio], [
+		AC_DEFINE(HAVE_REGISTER_SHRINKER_FORMAT_NAMED, 1,
+			[register_shrinker() returns status])
+	])
+]) # LC_REGISTER_SHRINKER_FORMAT_NAMED
+
+#
+# LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
+#
+# From Linux commit v5.19-rc5-17-g0c5fd887d2bb
+#   acl: move idmapped mount fixup into vfs_{g,s}etxattr()
+# Until Linux commit v6.0-rc3-6-g6344e66970c6
+#   xattr: constify value argument in vfs_setxattr()
+#
+AC_DEFUN([LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE], [
+	LB2_LINUX_TEST_SRC([vfs_setxattr_non_const_value_arg], [
+		#include <linux/xattr.h>
+	],[
+		struct dentry *de = NULL;
+		const char *name = "an.xattr";
+		const void *value = NULL;
+		int err = vfs_setxattr(&init_user_ns, de, name, value, 0, 0);
+		(void)err;
+	],[-Werror])
+]) # LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
+AC_DEFUN([LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE], [
+	AC_MSG_CHECKING([if vfs_setxattr() value argument is non-const])
+	LB2_LINUX_TEST_RESULT([vfs_setxattr_non_const_value_arg], [
+		AC_DEFINE([VFS_SETXATTR_VALUE(value)],
+			  [(value)],
+			  [vfs_setxattr() value argument is const void *])
+	],[
+		AC_DEFINE([VFS_SETXATTR_VALUE(value)],
+			  [((void *)(value))],
+			  [vfs_setxattr() value argument is non-const])
+	])
+]) # LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
+
+#
+# LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
+#
+# Linux commit v5.19-10313-geba2d3d79829
+#   get rid of non-advancing variants
+#
+AC_DEFUN([LC_SRC_HAVE_IOV_ITER_GET_PAGES_ALLOC2], [
+	LB2_LINUX_TEST_SRC([iov_iter_get_pages_alloc2], [
+		#include <linux/uio.h>
+	],[
+		struct iov_iter *iter = NULL;
+		struct page ***pages = NULL;
+		size_t maxsize = 1;
+		size_t start;
+		size_t result __attribute__ ((unused));
+		result = iov_iter_get_pages_alloc2(iter, pages, maxsize, &start);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2], [
+	AC_MSG_CHECKING([if iov_iter_get_pages_alloc2() is available])
+	LB2_LINUX_TEST_RESULT([iov_iter_get_pages_alloc2], [
+		AC_DEFINE(HAVE_IOV_ITER_GET_PAGES_ALLOC2, 1,
+			[iov_iter_get_pages_alloc2() is available])
+	])
+]) # LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3614,6 +3720,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
+
+	# 6.0
+	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
+	LC_SRC_REGISTER_SHRINKER_FORMAT_NAMED
+	LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
+	LC_SRC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -3853,6 +3965,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
+
+	# 6.0
+	LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
+	LC_REGISTER_SHRINKER_FORMAT_NAMED
+	LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
+	LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
