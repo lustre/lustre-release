@@ -1210,12 +1210,21 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		      unsigned int flags, bool foreign);
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-struct posix_acl *ll_get_acl(struct inode *inode, int type
-#ifdef HAVE_GET_ACL_RCU_ARG
-			     , bool rcu
-#endif /* HAVE_GET_ACL_RCU_ARG */
-			     );
-int ll_set_acl(struct user_namespace *mnt_userns, struct inode *inode,
+struct posix_acl *ll_get_acl(
+ #ifdef HAVE_ACL_WITH_DENTRY
+	struct user_namespace *, struct dentry *, int);
+ #elif defined HAVE_GET_ACL_RCU_ARG
+	struct inode *inode, int type, bool rcu);
+ #else
+	struct inode *inode, int type);
+ #endif /* HAVE_GET_ACL_RCU_ARG */
+
+int ll_set_acl(struct user_namespace *mnt_userns,
+ #ifdef HAVE_ACL_WITH_DENTRY
+	       struct dentry *dentry,
+ #else
+	       struct inode *inode,
+ #endif
 	       struct posix_acl *acl, int type);
 #else  /* !CONFIG_LUSTRE_FS_POSIX_ACL */
 #define ll_get_acl NULL

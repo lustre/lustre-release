@@ -255,11 +255,11 @@ static int nrs_delay_req_add(struct ptlrpc_nrs_policy *policy,
 
 	if (delay_data->delay_pct == 0 || /* Not delaying anything */
 	    (delay_data->delay_pct != 100 &&
-	     delay_data->delay_pct < prandom_u32_max(100)))
+	     delay_data->delay_pct < get_random_u32_below(100)))
 		return 1;
 
 	nrq->nr_u.delay.req_start_time = ktime_get_real_seconds() +
-					 prandom_u32_max(delay_data->max_delay - delay_data->min_delay + 1) +
+					 get_random_u32_below(delay_data->max_delay - delay_data->min_delay + 1) +
 					 delay_data->min_delay;
 
 	return binheap_insert(delay_data->delay_binheap, &nrq->nr_node);

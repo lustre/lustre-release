@@ -214,6 +214,7 @@ page_cache_release||put_page
 PAGE_CACHE_SHIFT||PAGE_SHIFT
 PAGE_CACHE_SIZE||PAGE_SIZE
 prandom_u32||get_random_u32
+prandom_u32_max||get_random_u32_below
 return seq_printf||seq_printf
 setup_timer||cfs_timer_setup
 = seq_printf||seq_printf

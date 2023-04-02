@@ -38,12 +38,18 @@
 
 #include "llite_internal.h"
 
-struct posix_acl *ll_get_acl(struct inode *inode, int type
-#ifdef HAVE_GET_ACL_RCU_ARG
-			     , bool rcu
-#endif /* HAVE_GET_ACL_RCU_ARG */
-			    )
+struct posix_acl *ll_get_acl(
+ #ifdef HAVE_ACL_WITH_DENTRY
+	struct user_namespace *ns, struct dentry *dentry, int type)
+ #elif defined HAVE_GET_ACL_RCU_ARG
+	struct inode *inode, int type, bool rcu)
+ #else
+	struct inode *inode, int type)
+ #endif /* HAVE_GET_ACL_RCU_ARG */
 {
+#ifdef HAVE_ACL_WITH_DENTRY
+	struct inode *inode = dentry->d_inode;
+#endif
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct posix_acl *acl = NULL;
 	ENTRY;
@@ -62,9 +68,17 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type
 }
 
 #ifdef HAVE_IOP_SET_ACL
-int ll_set_acl(struct user_namespace *mnt_userns, struct inode *inode,
+int ll_set_acl(struct user_namespace *mnt_userns,
+#ifdef HAVE_ACL_WITH_DENTRY
+	       struct dentry *dentry,
+#else
+	       struct inode *inode,
+#endif
 	       struct posix_acl *acl, int type)
 {
+#ifdef HAVE_ACL_WITH_DENTRY
+	struct inode *inode = dentry->d_inode;
+#endif
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
 	const char *name = NULL;
