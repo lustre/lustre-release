@@ -634,6 +634,7 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
 #define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
+#define LL_IOC_PCC_ATTACH		_IOW('f', 252, struct lu_pcc_attach)
 #define LL_IOC_PCC_DETACH		_IOW('f', 252, struct lu_pcc_detach)
 #define LL_IOC_PCC_DETACH_BY_FID	_IOW('f', 252, struct lu_pcc_detach_fid)
 #define LL_IOC_PCC_STATE		_IOR('f', 252, struct lu_pcc_state)
@@ -1134,9 +1135,18 @@ struct lustre_foreign_type {
  **/
 enum lustre_foreign_types {
 	LU_FOREIGN_TYPE_NONE = 0,
+	/* HSM copytool lhsm_posix */
+	LU_FOREIGN_TYPE_POSIX	= 1,
+	/* Used for PCC-RW. PCCRW components are local to a single archive. */
+	LU_FOREIGN_TYPE_PCCRW	= 2,
+	/* Used for PCC-RO. PCCRO components may be shared between archives. */
+	LU_FOREIGN_TYPE_PCCRO	= 3,
+	/* Used for S3 */
+	LU_FOREIGN_TYPE_S3	= 4,
+	/* Used for DAOS */
 	LU_FOREIGN_TYPE_SYMLINK = 0xda05,
 	/* must be the max/last one */
-	LU_FOREIGN_TYPE_UNKNOWN = 0xffffffff,
+	LU_FOREIGN_TYPE_UNKNOWN	= 0xffffffff,
 };
 
 extern struct lustre_foreign_type lu_foreign_types[];
@@ -2255,6 +2265,8 @@ enum hsm_states {
 	HS_NORELEASE	= 0x00000010,
 	HS_NOARCHIVE	= 0x00000020,
 	HS_LOST		= 0x00000040,
+	HS_PCCRW	= 0x00000080,
+	HS_PCCRO	= 0x00000100,
 };
 
 /* HSM user-setable flags. */
@@ -2704,6 +2716,7 @@ enum lu_pcc_type {
 	LU_PCC_READWRITE	= 0x01,
 	LU_PCC_READONLY		= 0x02,
 	LU_PCC_TYPE_MASK	= LU_PCC_READWRITE | LU_PCC_READONLY,
+	LU_PCC_FL_ASYNC		= 0x10,
 	LU_PCC_MAX
 };
 
@@ -2747,6 +2760,8 @@ enum lu_pcc_state_flags {
 	PCC_STATE_FL_ATTR_VALID		= 0x01,
 	/* The file is being attached into PCC */
 	PCC_STATE_FL_ATTACHING		= 0x02,
+	/* The PCC copy is unlinked */
+	PCC_STATE_FL_UNLINKED		= 0x04,
 };
 
 struct lu_pcc_state {

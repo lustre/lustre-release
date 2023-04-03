@@ -4900,6 +4900,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)LAYOUT_INTENT_RELEASE);
 	LASSERTF(LAYOUT_INTENT_RESTORE == 6, "found %lld\n",
 		 (long long)LAYOUT_INTENT_RESTORE);
+	LASSERTF(LAYOUT_INTENT_PCCRO_SET == 7, "found %lld\n",
+		 (long long)LAYOUT_INTENT_PCCRO_SET);
+	LASSERTF(LAYOUT_INTENT_PCCRO_CLEAR == 8, "found %lld\n",
+		 (long long)LAYOUT_INTENT_PCCRO_CLEAR);
 
 	/* Checks for struct hsm_action_item */
 	LASSERTF((int)sizeof(struct hsm_action_item) == 72, "found %lld\n",

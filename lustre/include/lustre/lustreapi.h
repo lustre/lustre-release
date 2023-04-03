@@ -841,6 +841,7 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 #define LLAPI_LAYOUT_RAID0		0ULL
 #define LLAPI_LAYOUT_MDT		2ULL
 #define LLAPI_LAYOUT_OVERSTRIPING	4ULL
+#define LLAPI_LAYOUT_FOREIGN		8ULL
 
 /**
  * The layout includes a specific set of OSTs on which to allocate.
@@ -1121,6 +1122,23 @@ static const struct comp_flag_name {
 	{ LCME_FL_NOSYNC,	"nosync" },
 	{ LCME_FL_EXTENSION,	"extension" },
 	{ LCME_FL_PARITY,	"parity" },
+};
+
+/* HSM component flags table */
+static const struct hsm_flag_name {
+	enum hsm_states	 hfn_flag;
+	const char	*hfn_name;
+} hsm_flags_table[] = {
+	{ HS_NONE,	"none" },
+	{ HS_EXISTS,	"exists" },
+	{ HS_DIRTY,	"dirty" },
+	{ HS_RELEASED,	"released" },
+	{ HS_ARCHIVED,	"archived" },
+	{ HS_NORELEASE,	"norelease" },
+	{ HS_NOARCHIVE,	"noarchive" },
+	{ HS_LOST,	"lost" },
+	{ HS_PCCRW,	"pccrw" },
+	{ HS_PCCRO,	"pccro" },
 };
 
 /**

@@ -3336,6 +3336,8 @@ enum layout_intent_opc {
 	LAYOUT_INTENT_TRUNC	= 4,	/** truncate file, for comp layout */
 	LAYOUT_INTENT_RELEASE	= 5,	/** reserved for HSM release */
 	LAYOUT_INTENT_RESTORE	= 6,	/** reserved for HSM restore */
+	LAYOUT_INTENT_PCCRO_SET	= 7,	/** set read-only layout for PCC */
+	LAYOUT_INTENT_PCCRO_CLEAR = 8,	/** clear read-only layout */
 };
 
 /* enqueue layout lock with intent */

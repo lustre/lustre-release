@@ -1827,6 +1827,43 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LOV_PATTERN_OVERSTRIPING == 0x00000200UL, "found 0x%.8xUL\n",
 		(unsigned)LOV_PATTERN_OVERSTRIPING);
 
+	/* Checks for struct lov_foreign_md */
+	LASSERTF((int)sizeof(struct lov_foreign_md) == 16, "found %lld\n",
+		(long long)(int)sizeof(struct lov_foreign_md));
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_magic));
+	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_magic));
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_length) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_length));
+	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_length) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_length));
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_type) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_type));
+	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_type));
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_flags) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_flags));
+	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_flags));
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_value) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_value));
+	LASSERTF(LU_FOREIGN_TYPE_NONE == 0, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_NONE);
+	LASSERTF(LU_FOREIGN_TYPE_POSIX == 1, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_POSIX);
+	LASSERTF(LU_FOREIGN_TYPE_PCCRW == 2, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_PCCRW);
+	LASSERTF(LU_FOREIGN_TYPE_PCCRO == 3, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_PCCRO);
+	LASSERTF(LU_FOREIGN_TYPE_S3 == 4, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_S3);
+	LASSERTF(LU_FOREIGN_TYPE_SYMLINK == 0x0000da05, "found 0x%.8xUL\n",
+		 (unsigned)LU_FOREIGN_TYPE_SYMLINK);
+	BUILD_BUG_ON(LOV_MAGIC_FOREIGN != (0x0BD70000 | 0x0BD0));
+	LASSERTF(LOV_PATTERN_FOREIGN == 0x00000400, "found 0x%.8xUL\n",
+		 (unsigned)LOV_PATTERN_FOREIGN);
+
 	/* Checks for struct lov_comp_md_entry_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_entry_v1) == 48, "found %lld\n",
 		 (long long)(int)sizeof(struct lov_comp_md_entry_v1));
@@ -4926,6 +4963,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)LAYOUT_INTENT_RELEASE);
 	LASSERTF(LAYOUT_INTENT_RESTORE == 6, "found %lld\n",
 		 (long long)LAYOUT_INTENT_RESTORE);
+	LASSERTF(LAYOUT_INTENT_PCCRO_SET == 7, "found %lld\n",
+		 (long long)LAYOUT_INTENT_PCCRO_SET);
+	LASSERTF(LAYOUT_INTENT_PCCRO_CLEAR == 8, "found %lld\n",
+		 (long long)LAYOUT_INTENT_PCCRO_CLEAR);
 
 	/* Checks for struct hsm_action_item */
 	LASSERTF((int)sizeof(struct hsm_action_item) == 72, "found %lld\n",

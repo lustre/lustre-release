@@ -858,6 +858,29 @@ check_lov_mds_md_v3(void)
 }
 
 static void
+check_lov_foreign_md(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_foreign_md);
+	CHECK_MEMBER(lov_foreign_md, lfm_magic);
+	CHECK_MEMBER(lov_foreign_md, lfm_length);
+	CHECK_MEMBER(lov_foreign_md, lfm_type);
+	CHECK_MEMBER(lov_foreign_md, lfm_flags);
+	CHECK_MEMBER(lov_foreign_md, lfm_value[0]);
+
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_NONE);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_POSIX);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_PCCRW);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_PCCRO);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_S3);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_DAOS);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_UNKNOWN);
+
+	CHECK_CDEFINE(LOV_MAGIC_FOREIGN);
+	CHECK_VALUE_X(LOV_PATTERN_FOREIGN);
+}
+
+static void
 check_lov_comp_md_entry_v1(void)
 {
 	BLANK_LINE();
@@ -2415,6 +2438,8 @@ static void check_layout_intent(void)
 	CHECK_VALUE(LAYOUT_INTENT_TRUNC);
 	CHECK_VALUE(LAYOUT_INTENT_RELEASE);
 	CHECK_VALUE(LAYOUT_INTENT_RESTORE);
+	CHECK_VALUE(LAYOUT_INTENT_PCCRO_SET);
+	CHECK_VALUE(LAYOUT_INTENT_PCCRO_CLEAR);
 }
 
 static void check_hsm_state_set(void)
@@ -3255,6 +3280,7 @@ main(int argc, char **argv)
 	check_lov_ost_data_v1();
 	check_lov_mds_md_v1();
 	check_lov_mds_md_v3();
+	check_lov_foreign_md();
 	check_lov_comp_md_entry_v1();
 	check_lov_comp_md_v1();
 	check_lmv_mds_md_v1();
