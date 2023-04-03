@@ -6277,6 +6277,53 @@ test_114() {
 }
 run_test 114 "implicit default LMV inherit"
 
+test_115() {
+	local td=$DIR/$tdir
+
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip_env "ldiskfs only test"
+
+	mkdir_on_mdt0 $td || error "can't mkdir"
+	# turn it htree (don't really needed)
+	createmany -m $td/f 3000 || error "can't createmany"
+
+	# here is an example of debugfs output for htree command:
+	# Entry #0: Hash 0x00000000, block 27
+	# Reading directory block 27, phys 16760
+	# 938 0x0016fb58-7f3d21f5 (32) f775   834 0x001db8c8-d31a4e0e (32) f671
+	# 1085 0x0040cb70-4498abd4 (32) f922   1850 0x0066a1e6-f6f0dc69 (32) f1687
+	# 2005 0x006c1a46-ef466058 (32) f1842   2025 0x007e64d4-8b28b734 (32) f1862
+	# 642 0x008b53a0-77adc601 (32) f479   447 0x009ec152-af54eea3 (32) f284
+	# 1740 0x00c38f56-ed310e61 (32) f1577   2165 0x00cdfd66-f429a93f (32) f2002
+	# 930 0x00d7ada4-b80421c9 (32) f767   1946 0x00da6a7a-e8080600 (32) f1783
+	# 273 0x00f8ea00-760bf97c (32) f110   1589 0x0103c4ee-94fad5dd (32) f1426
+	# 1383 0x01193516-83120b48 (32) f1220   2379 0x01431e3c-e85b5bd9 (32) f2216
+	#
+	# find couple names in a same htree block of the same size
+	mdt_dev=$(facet_device $SINGLEMDS)
+	de=( $(do_facet $SINGLEMDS "debugfs -c -R 'htree /ROOT/$tdir' $mdt_dev" |
+		awk '/Reading directory block/ { getline; print $4,$8; exit; }' ))
+	local de1=${de[0]}
+	local de2=${de[1]}
+	[[ $de1 == "" || $de2 == "" ]] && error "de1=$de1 de2=$de2"
+	echo "USE: $de1 $de2"
+	# release one mkdir will lookup
+	rm $DIR/$tdir/$de2
+#define OBD_FAIL_MDS_PAUSE_CREATE_AFTER_LOOKUP	0x2401
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80002401 fail_val=5
+	mkdir $DIR/$tdir/$de2 &
+	sleep 0.3
+	local PID1=$!
+	# recreate $de2
+	mkdir $DIR2/$tdir/$de2
+	# release space $de1 (should be enough to save $de2)
+	rm $DIR2/$tdir/$de1
+	# ready to create a dup of $de2
+	wait $PID1
+	local found=$(ls $DIR/$tdir/|grep "^$de2\$"|wc -l)
+	(( $found == 1 )) || error "found $found"
+}
+run_test 115 "ldiskfs doesn't check direntry for uniqueness"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

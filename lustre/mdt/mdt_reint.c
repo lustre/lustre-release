@@ -622,6 +622,8 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (rc != -ENOENT)
 		GOTO(put_parent, rc);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_CREATE_AFTER_LOOKUP, cfs_fail_val);
+
 	/* save version of file name for replay, it must be ENOENT here */
 	mdt_enoent_version_save(info, 1);
 
@@ -637,6 +639,17 @@ static int mdt_create(struct mdt_thread_info *info)
 		if (rc)
 			GOTO(unlock_parent, rc);
 	}
+
+	/*
+	 * now repeat the lookup having a LDLM lock on the parent dir,
+	 * as another thread could create the same name. notice this
+	 * lookup is supposed to hit cache in OSD and be cheap if the
+	 * directory is not being modified concurrently.
+	 */
+	rc = mdo_lookup(info->mti_env, mdt_object_child(parent), &rr->rr_name,
+			&info->mti_tmp_fid1, &info->mti_spec);
+	if (unlikely(rc == 0))
+		GOTO(unlock_parent, rc = -EEXIST);
 
 	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
 	if (unlikely(IS_ERR(child)))

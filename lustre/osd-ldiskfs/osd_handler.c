@@ -42,6 +42,11 @@
 #include <linux/module.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
+#ifdef HAVE_INODE_IVERSION
+#include <linux/iversion.h>
+#else
+#define inode_peek_iversion(__inode)	((__inode)->i_version)
+#endif
 
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>
@@ -115,6 +120,8 @@ static struct lu_kmem_descr ldiskfs_caches[] = {
 		.ckd_cache = NULL
 	}
 };
+
+static atomic_t osd_mount_seq;
 
 static const char dot[] = ".";
 static const char dotdot[] = "..";
@@ -6337,7 +6344,7 @@ again:
  * \retval -ve, on error
  */
 static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
-			     struct dt_rec *rec, const struct dt_key *key)
+			     struct dt_rec *rec, const struct lu_name *ln)
 {
 	struct inode *dir = obj->oo_inode;
 	struct dentry *dentry;
@@ -6345,7 +6352,6 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	struct buffer_head *bh;
 	struct lu_fid *fid = (struct lu_fid *)rec;
 	struct htree_lock *hlock = NULL;
-	struct lu_name ln;
 	int ino;
 	int rc;
 
@@ -6354,11 +6360,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	LASSERT(dir->i_op != NULL);
 	LASSERT(dir->i_op->lookup != NULL);
 
-	rc = obj_name2lu_name(obj, (char *)key, strlen((char *)key), &ln);
-	if (rc)
-		RETURN(rc);
-
-	dentry = osd_child_dentry_get(env, obj, ln.ln_name, ln.ln_namelen);
+	dentry = osd_child_dentry_get(env, obj, ln->ln_name, ln->ln_namelen);
 
 	if (obj->oo_hl_head != NULL) {
 		hlock = osd_oti_get(env)->oti_hlock;
@@ -6387,15 +6389,13 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		brelse(bh);
 		if (rc != 0) {
 			if (unlikely(is_remote_parent_ino(dev, ino))) {
-				const char *name = (const char *)key;
-
 				/*
 				 * If the parent is on remote MDT, and there
 				 * is no FID-in-dirent, then we have to get
 				 * the parent FID from the linkEA.
 				 */
-				if (likely(strlen(name) == 2 &&
-					   name[0] == '.' && name[1] == '.'))
+				if (likely(ln->ln_namelen == 2 &&
+					   ln->ln_name[0] == '.' && ln->ln_name[1] == '.'))
 					rc = osd_get_pfid_from_linkea(env, obj,
 								      fid);
 			} else {
@@ -6424,7 +6424,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 						 osd_obj2dev(obj), id, fid);
 		}
 		CDEBUG(D_INODE, DFID"/"DNAME" => "DFID"\n",
-		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), PNAME(&ln),
+		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), PNAME(ln),
 		       PFID(fid));
 	} else {
 		rc = PTR_ERR(bh);
@@ -6437,8 +6437,6 @@ out:
 		ldiskfs_htree_unlock(hlock);
 	else
 		up_read(&obj->oo_ext_idx_sem);
-	if (ln.ln_name != (char *)key)
-		kfree(ln.ln_name);
 	RETURN(rc);
 }
 
@@ -7852,6 +7850,96 @@ static int osd_it_ea_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
+int osd_olc_lookup(const struct lu_env *env, struct osd_object *obj,
+			  u64 iversion, struct dt_rec *rec,
+			  const struct lu_name *ln, int *result)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_lookup_cache *olc = oti->oti_lookup_cache;
+	struct osd_device *osd = osd_obj2dev(obj);
+	struct osd_lookup_cache_object *cobj = &oti->oti_cobj;
+	int i;
+
+	if (unlikely(olc == NULL))
+		return 0;
+
+	if (unlikely(atomic_read(&osd_mount_seq) != olc->olc_mount_seq)) {
+		/*
+		 * umount has happened, a new OSD could land to the previous
+		 * address so we can't use it any more, invalidate our cache
+		 */
+		memset(olc, 0, sizeof(*olc));
+		olc->olc_mount_seq = atomic_read(&osd_mount_seq);
+		return 0;
+	}
+
+	memset(cobj, 0, sizeof(*cobj));
+	cobj->lco_osd = osd;
+	cobj->lco_ino = obj->oo_inode->i_ino;
+	cobj->lco_gen = obj->oo_inode->i_generation;
+	cobj->lco_version = iversion;
+
+	for (i = 0; i < OSD_LOOKUP_CACHE_MAX; i++) {
+		struct osd_lookup_cache_entry *entry;
+
+		entry = &olc->olc_entry[i];
+		/* compare if osd/ino/generation/version match */
+		if (memcmp(&entry->lce_obj, cobj, sizeof(*cobj)) != 0)
+			continue;
+		if (entry->lce_namelen != ln->ln_namelen)
+			continue;
+		if (memcmp(entry->lce_name, ln->ln_name, ln->ln_namelen) != 0)
+			continue;
+		/* match */
+		memcpy(rec, &entry->lce_fid, sizeof(entry->lce_fid));
+		*result = entry->lce_rc;
+		return 1;
+	}
+	return 0;
+}
+
+void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
+			  struct dt_rec *rec, const struct lu_name *ln,
+			  const int result, u64 iversion)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_lookup_cache_entry *entry;
+	struct osd_lookup_cache *olc;
+
+	if (unlikely(oti->oti_lookup_cache == NULL)) {
+		OBD_ALLOC_PTR(oti->oti_lookup_cache);
+		if (oti->oti_lookup_cache == NULL)
+			return;
+	}
+
+	olc = oti->oti_lookup_cache;
+	if (unlikely(atomic_read(&osd_mount_seq) != olc->olc_mount_seq)) {
+		memset(olc, 0, sizeof(*olc));
+		olc->olc_mount_seq = atomic_read(&osd_mount_seq);
+	}
+
+	entry = &olc->olc_entry[olc->olc_cur];
+
+	/* invaliate cache slot if needed */
+	if (entry->lce_obj.lco_osd)
+		memset(&entry->lce_obj, 0, sizeof(entry->lce_obj));
+
+	/* XXX: some kind of LRU */
+	entry->lce_obj.lco_osd = osd_obj2dev(obj);
+	entry->lce_obj.lco_ino = obj->oo_inode->i_ino;
+	entry->lce_obj.lco_gen = obj->oo_inode->i_generation;
+	entry->lce_obj.lco_version = iversion;
+
+	LASSERT(ln->ln_namelen <= LDISKFS_NAME_LEN);
+	entry->lce_namelen = ln->ln_namelen;
+	memcpy(entry->lce_name, ln->ln_name, ln->ln_namelen);
+	memcpy(&entry->lce_fid, rec, sizeof(entry->lce_fid));
+	entry->lce_rc = result;
+
+	if (++olc->olc_cur == OSD_LOOKUP_CACHE_MAX)
+		olc->olc_cur = 0;
+}
+
 /**
  * Index lookup function for interoperability mode (b11826).
  *
@@ -7864,16 +7952,37 @@ static int osd_index_ea_lookup(const struct lu_env *env, struct dt_object *dt,
 			       struct dt_rec *rec, const struct dt_key *key)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
-	int rc = 0;
+	struct lu_name ln;
+	int rc, result;
+	u64 iversion;
 
 	ENTRY;
 
 	LASSERT(S_ISDIR(obj->oo_inode->i_mode));
 	LINVRNT(osd_invariant(obj));
 
-	rc = osd_ea_lookup_rec(env, obj, rec, key);
+	rc = obj_name2lu_name(obj, (char *)key, strlen((char *)key), &ln);
+	if (rc)
+		RETURN(rc);
+
+	/*
+	 * grab version before actual lookup, so that we recognize potential
+	 * insert between osd_ea_lookup_rec() and osd_olc_save()
+	 */
+	iversion = inode_peek_iversion(obj->oo_inode);
+
+	if (osd_olc_lookup(env, obj, iversion, rec, &ln, &result))
+		GOTO(out, rc = result);
+
+	rc = osd_ea_lookup_rec(env, obj, rec, &ln);
 	if (rc == 0)
 		rc = 1;
+
+	osd_olc_save(env, obj, rec, &ln, rc, iversion);
+
+out:
+	if (ln.ln_name != (char *)key)
+		kfree(ln.ln_name);
 	RETURN(rc);
 }
 
@@ -7968,6 +8077,8 @@ static void osd_key_fini(const struct lu_context *ctx,
 		info->oti_ins_cache = NULL;
 		info->oti_ins_cache_size = 0;
 	}
+	if (info->oti_lookup_cache)
+		OBD_FREE_PTR(info->oti_lookup_cache);
 	OBD_FREE_PTR(info);
 }
 
@@ -7975,7 +8086,10 @@ static void osd_key_exit(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
 	struct osd_thread_info *info = data;
+	struct osd_lookup_cache *olc = info->oti_lookup_cache;
 
+	if (olc)
+		memset(olc, 0, sizeof(*olc));
 	LASSERT(info->oti_r_locks == 0);
 	LASSERT(info->oti_w_locks == 0);
 	LASSERT(info->oti_txns    == 0);
@@ -8076,6 +8190,8 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 static void osd_umount(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
+
+	atomic_inc(&osd_mount_seq);
 
 	if (o->od_mnt != NULL) {
 		shrink_dcache_sb(osd_sb(o));

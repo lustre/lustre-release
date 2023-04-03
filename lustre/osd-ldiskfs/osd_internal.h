@@ -628,6 +628,36 @@ static inline struct osd_timespec osd_inode_time(struct inode *inode,
 	return ts;
 }
 
+/*
+ * any object can be identified unique way:
+ *  - OSD (filesystem)
+ *  - inode + generation (unique object within a given filesystem)
+ *
+ * version increments each insert/delete in a directory
+ */
+struct osd_lookup_cache_object {
+	struct osd_device *lco_osd;
+	u32		lco_ino;
+	u32		lco_gen;
+	u32		lco_version;
+};
+
+struct osd_lookup_cache_entry {
+	struct osd_lookup_cache_object lce_obj;
+	struct lu_fid	lce_fid;
+	short		lce_rc;
+	short		lce_namelen;
+	char		lce_name[LDISKFS_NAME_LEN];
+};
+
+#define OSD_LOOKUP_CACHE_MAX	3
+
+struct osd_lookup_cache {
+	struct osd_lookup_cache_entry	olc_entry[OSD_LOOKUP_CACHE_MAX];
+	int				olc_cur;
+	int				olc_mount_seq;
+};
+
 #define OSD_INS_CACHE_SIZE	8
 
 struct osd_thread_info {
@@ -737,6 +767,9 @@ struct osd_thread_info {
 
 	struct osd_it_ea_dirent *oti_seq_dirent;
 	struct osd_it_ea_dirent *oti_dir_dirent;
+
+	struct osd_lookup_cache_object oti_cobj; /* cache object id */
+	struct osd_lookup_cache	*oti_lookup_cache;
 };
 
 extern int ldiskfs_pdo;
