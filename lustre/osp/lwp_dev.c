@@ -177,10 +177,6 @@ static int lwp_disconnect(struct lwp_device *d)
 	 */
 	ptlrpc_pinger_del_import(imp);
 	rc = ptlrpc_disconnect_import(imp, 0);
-	if (rc != 0)
-		CWARN("%s: can't disconnect: rc = %d\n",
-		      d->lpd_obd->obd_name, rc);
-
 	ptlrpc_invalidate_import(imp);
 
 	RETURN(rc);

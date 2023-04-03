@@ -993,7 +993,8 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 							lwp->obd_lu_dev, lcfg);
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 					      lcfg->lcfg_buflens));
-		if (rc != 0 && rc != -ETIMEDOUT) {
+		if (rc != 0 && rc != -ETIMEDOUT && rc != -ENODEV &&
+		    rc != -ENOTCONN && rc != -ESHUTDOWN) {
 			CERROR("%s: fail to disconnect LWP: rc = %d\n",
 			       lwp->obd_name, rc);
 			rc1 = rc;
@@ -1621,7 +1622,7 @@ static void server_put_super(struct super_block *sb)
 		int	rc;
 
 		rc = lustre_disconnect_lwp(sb);
-		if (rc != 0 && rc != -ETIMEDOUT &&
+		if (rc != 0 && rc != -ETIMEDOUT && rc != -ENODEV &&
 		    rc != -ENOTCONN && rc != -ESHUTDOWN)
 			CWARN("%s: failed to disconnect lwp: rc= %d\n",
 			      tmpname, rc);
@@ -1715,7 +1716,7 @@ static void server_put_super(struct super_block *sb)
 		OBD_FREE(extraname, strlen(extraname) + 1);
 	}
 
-	LCONSOLE_WARN("server umount %s complete\n", tmpname);
+	LCONSOLE(D_WARNING, "server umount %s complete\n", tmpname);
 	OBD_FREE(tmpname, tmpname_sz);
 	EXIT;
 }
