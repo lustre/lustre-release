@@ -14242,6 +14242,7 @@ test_125() { # 13358
 	$LCTL get_param -n mdc.*-mdc-*.connect_flags | grep -q acl ||
 		skip_env "must have acl enabled"
 	[ -z "$(which setfacl)" ] && skip_env "must have setfacl tool"
+	id $USER0 || skip_env "missing user $USER0"
 
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -S 65536 -c -1 $DIR/$tdir || error "setstripe failed"
@@ -16102,6 +16103,7 @@ dot_lustre_fid_permission_check() {
 	echo "link fid $fid"
 	ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
 	if [[ $($LCTL get_param -n mdc.*-mdc-*.connect_flags) =~ acl ]]; then
+		id $USER0 || skip_env "missing user $USER0"
 		echo "setfacl fid $fid"
 		setfacl -R -m u:$USER0:rwx $ffid ||
 			error "setfacl $ffid failed"
