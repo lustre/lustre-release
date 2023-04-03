@@ -9866,11 +9866,11 @@ static int lfs_path2fid(int argc, char **argv)
 #define MAX_ERRNO	4095
 #define IS_ERR_VALUE(x) ((unsigned long)(x) >= (unsigned long)-MAX_ERRNO)
 
-static int lfs_rmfid_and_show_errors(const char *device, struct fid_array *fa)
+static int lfs_rmfid_and_show_errors(int rootfd, struct fid_array *fa)
 {
 	int rc, rc2, k;
 
-	rc = llapi_rmfid(device, fa);
+	rc = llapi_rmfid_at(rootfd, fa);
 	if (rc < 0) {
 		fprintf(stderr, "%s rmfid: cannot remove FIDs: %s\n",
 			progname, strerror(-rc));
@@ -9896,50 +9896,81 @@ static int lfs_rmfid_and_show_errors(const char *device, struct fid_array *fa)
 static int lfs_rmfid(int argc, char **argv)
 {
 	char *fidstr, *device;
-	int rc = 0, rc2, nr;
+	int rc = 0, rc2, rc3 = 0, nr;
 	struct fid_array *fa;
+	int rootfd;
+
+	/* Interactive mode: Adjust optind */
+	if (!optind)
+		optind++;
+
+	device = argv[optind++];
 
 	if (optind > argc - 1) {
 		fprintf(stderr, "%s rmfid: missing dirname\n", progname);
 		return CMD_HELP;
 	}
 
-	device = argv[optind++];
-
 	nr = argc - optind;
+
+	rc = llapi_root_path_open(device, &rootfd);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s rmfid: error opening device/fsname '%s': %s\n",
+			progname, device, strerror(-rc));
+		return -rc;
+	}
+
 	fa = malloc(offsetof(struct fid_array, fa_fids[nr + 1]));
-	if (!fa)
+	if (!fa) {
+		fprintf(stderr, "%s rmfid: error allocating %zd bytes: %s\n",
+			progname, offsetof(struct fid_array, fa_fids[nr + 1]),
+			strerror(errno));
 		return -ENOMEM;
+	}
 
 	fa->fa_nr = 0;
 	rc = 0;
 	while (optind < argc) {
+		char *origfidstr;
 		int found;
 
-		fidstr = argv[optind++];
+		origfidstr = fidstr = argv[optind++];
 		while (*fidstr == '[')
 			fidstr++;
 		found = sscanf(fidstr, SFID, RFID(&fa->fa_fids[fa->fa_nr]));
 		if (found != 3) {
-			fprintf(stderr, "unrecognized FID: %s\n",
-				argv[optind - 1]);
-			exit(1);
+			fprintf(stderr, "lfs rmfid: '%s': Wrong FID format\n",
+				origfidstr);
+			if (!rc3)
+				rc3 = -EINVAL; /* Invalid argument */
+			continue;
 		}
 		fa->fa_nr++;
 		if (fa->fa_nr == OBD_MAX_FIDS_IN_ARRAY) {
 			/* start another batch */
-			rc2 = lfs_rmfid_and_show_errors(device, fa);
+			rc2 = lfs_rmfid_and_show_errors(rootfd, fa);
 			if (rc2 && !rc)
 				rc = rc2;
+			if (rc3)
+				rc = rc3;
 			fa->fa_nr = 0;
 		}
 	}
 	if (fa->fa_nr) {
-		rc2 = lfs_rmfid_and_show_errors(device, fa);
+		rc2 = lfs_rmfid_and_show_errors(rootfd, fa);
 		if (rc2 && !rc)
 			rc = rc2;
+		if (rc3)
+			rc = rc3;
 	}
 
+	if (fa) {
+		free(fa);
+		fa = NULL;
+	}
+
+	close(rootfd);
 	return rc;
 }
 

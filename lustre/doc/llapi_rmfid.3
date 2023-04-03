@@ -6,6 +6,7 @@ llapi_rmfid \- Remove files by their FIDs in Lustre.
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_rmfid(const char *" path ", struct fid_array *" fa ");
+.BI "int llapi_rmfid_at(int " fd ", struct fid_array *" fa ");
 
 .sp
 .fi
@@ -22,9 +23,19 @@ only for root or regular users on filesystems mounted with
 mount option to delete files that they own and are in a directory in which
 they have write permission.
 
+.BR llapi_rmfid_at()
+Is similar to
+.I llapi_rmfid.
+It tries to remove Lustre files by FIDs stored in
+.I fa->fa_fids
+where path or device is pointed by an already verifed
+.I fd.
+
 .SH RETURN VALUES
 .LP
 .B llapi_rmfid()
+and
+.B llapi_rmfid_at()
 return 0 on success or a negative errno value on failure. Result for each file
 is stored in the corresponding
 .I fa->fa_fid[N].f_ver
@@ -48,3 +59,4 @@ Invalid FID is passed
 Not enough memory to process the request
 .SH "SEE ALSO"
 .BR lustreapi (7)
+.BR llapi_rmfid_at (3)

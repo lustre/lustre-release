@@ -1,0 +1,34 @@
+.TH llapi_root_path_open 3 "2023 Apr 21" "Lustre User API"
+.SH NAME
+llapi_root_path_open \- Return open fd for a given device/path provided
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+
+.sp
+.BI "int llapi_root_path_open(char *"device ", int *" fd " );
+
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_root_path_open(\|)
+is called with
+.I device
+which points to the FSNAME or complet path. On success
+.I fd
+is populated with valid descriptor.
+
+.SH RETURN VALUES
+.LP
+.B llapi_root_path_open(\|)
+return:
+.TP
+>=0
+on success.
+.TP
+<0
+on failure.
+.fi
+.SH "SEE ALSO"
+.BR lustreapi (7)

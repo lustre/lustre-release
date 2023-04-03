@@ -287,27 +287,66 @@ int llapi_search_ost(const char *fsname, const char *poolname,
 	return llapi_search_tgt(fsname, poolname, ostname, false);
 }
 
+/**
+ * Return the open fd for a given device/path provided
+ *
+ * \param device[in]		buffer holding device or path string
+ * \param rootfd[out]		file descriptor after successful opening of
+ *                              of above path or device
+ *
+ * \retval			0 on success
+ * \retval			-ve on failure
+ */
+int llapi_root_path_open(char *device, int *rootfd)
+{
+	int tmp_fd, rc;
+
+	if (*device == '/')
+		rc = get_root_path(WANT_FD, NULL, &tmp_fd,
+				   (char *)device, -1, NULL, NULL);
+	else
+		rc = get_root_path(WANT_FD, (char *)device, &tmp_fd,
+				   NULL, -1, NULL, NULL);
+
+	if (!rc)
+		*rootfd = dup(tmp_fd);
+
+	return rc;
+}
+
+/**
+ * Call IOCTL to remove file by fid. The fd must be valid and fa
+ * (fid_array) struct must allready be populated.
+ *
+ * \param fd[in]		valid descriptor of device/path
+ * \param fa[in]		fid_array struct holding fids
+ *
+ * \retval			0 on success
+ * \retval			-ve/errno on failure
+ */
+int llapi_rmfid_at(int fd, struct fid_array *fa)
+{
+	return ioctl(fd, LL_IOC_RMFID, fa) ? -errno : 0;
+}
+
 int llapi_rmfid(const char *path, struct fid_array *fa)
 {
-	char rootpath[PATH_MAX];
-	int fd, rc;
+	int rootfd, rc;
 
-retry_open:
-	fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
-	if (fd < 0) {
-		if (errno == ENOENT && path != rootpath) {
-			rc = llapi_search_rootpath(rootpath, path);
-			if (!rc) {
-				path = rootpath;
-				goto retry_open;
-			}
-		} else {
-			return -errno;
-		}
+	rc = llapi_root_path_open((char *)path, &rootfd);
+	if (rc < 0) {
+		fprintf(stderr,
+			"lfs rmfid: error opening device/fsname '%s': %s\n",
+			path, strerror(-rc));
+		return -rc;
 	}
 
-	rc = ioctl(fd, LL_IOC_RMFID, fa);
-	close(fd);
+	rc = llapi_rmfid_at(rootfd, fa);
+	if (rc < 0) {
+		fprintf(stderr, "lfs rmfid: cannot remove FIDs: %s\n",
+			strerror(-rc));
+		return rc;
+	}
 
 	return rc ? -errno : 0;
 }

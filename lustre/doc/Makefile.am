@@ -198,6 +198,7 @@ LIBMAN = 					\
 	llapi_pcc_state_get_fd.3		\
 	llapi_quotactl.3			\
 	llapi_rmfid.3				\
+	llapi_rmfid_at.3			\
 	llapi_search_mdt.3			\
 	llapi_search_ost.3			\
 	llapi_search_tgt.3			\
