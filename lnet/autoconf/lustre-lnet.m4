@@ -84,6 +84,7 @@ case $with_o2ib in
 
 			if test -n "$O2IBDIR_PATH"; then
 				O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
+					egrep "`uname -r`|default" |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
 			fi
 
