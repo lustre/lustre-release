@@ -2604,7 +2604,7 @@ zconf_mount_clients() {
 				fi
 				do_node $nmclient "! grep -q $mnt' ' \
 					/proc/mounts || umount $mnt"
-				local prunedopts=$(add_sk_mntflag $prunedopts);
+				local prunedopts=$(add_sk_mntflag $opts);
 				prunedopts=$(echo $prunedopts | sed -e \
 					"s#skpath=[^ ^,]*#skpath=$mountkey#g")
 				set -x
