@@ -1,0 +1,30 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+
+#
+# Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
+#
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# contrib/scripts/license-status
+#
+# Display the license status of files in the current directory
+#
+# Author: Gordon Matzigkeit <gord@fig.org>, 2001-09-27
+# Author: Timothy Day <timday@amazon.com>, 2023-04-03
+#
+
+for file in $(git ls-tree -r HEAD --name-only); do
+	if head -20 "$file" | egrep -e 'SPDX' > /dev/null; then
+		license="$(grep SPDX $file | awk '{ print $3; exit; }')"
+		printf "%-10s %-15s %-s\n" "SPDX" "$license" "$file"
+	elif head -20 "$file" | egrep -e 'GNU General Public License' > /dev/null; then
+		printf "%-10s %-15s %-s\n" "guess" "gpled" "$file"
+	elif head -20 "$file" | egrep -e '\([Cc]\)' > /dev/null; then
+		printf "%-10s %-15s %-s\n" "guess" "copyright" "$file"
+	else
+		printf "%-10s %-15s %-s\n" "guess" "unknown" "$file"
+	fi
+done | sort
