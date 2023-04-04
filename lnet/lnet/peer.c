@@ -1498,8 +1498,10 @@ LNetPrimaryNID(lnet_nid_t nid)
 	 */
 again:
 	spin_lock(&lp->lp_lock);
-	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY) && lock_prim_nid)
+	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY) && lock_prim_nid) {
 		lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
+		lp->lp_prim_lock_ts = ktime_get_ns();
+	}
 
 	/* DD disabled, nothing to do */
 	if (lnet_peer_discovery_disabled) {
@@ -1646,8 +1648,10 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 			lnet_peer_clr_non_mr_pref_nids(lp);
 		}
 	}
-	if (flags & LNET_PEER_LOCK_PRIMARY)
+	if (flags & LNET_PEER_LOCK_PRIMARY) {
 		lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
+		lp->lp_prim_lock_ts = ktime_get_ns();
+	}
 	spin_unlock(&lp->lp_lock);
 
 	lp->lp_nnis++;
@@ -1836,24 +1840,53 @@ lnet_peer_add_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 			struct lnet_peer *lp2 =
 				lpni->lpni_peer_net->lpn_peer;
 			int rtr_refcount = lp2->lp_rtr_refcount;
+			unsigned int peer2_state;
+			__u64 peer2_prim_lock_ts;
 
-			/* If the new peer that this NID belongs to is
-			 * a primary NID for another peer which we're
-			 * suppose to preserve the Primary for then we
-			 * don't want to mess with it. But the
-			 * configuration is wrong at this point, so we
-			 * should flag both of these peers as in a bad
+			/* If there's another peer that this NID belongs to
+			 * and the primary NID for that peer is locked,
+			 * then, unless it is the only NID, we don't want
+			 * to mess with it.
+			 * But the configuration is wrong at this point,
+			 * so we should flag both of these peers as in a bad
 			 * state
 			 */
-			if (lp2->lp_state & LNET_PEER_LOCK_PRIMARY) {
+			spin_lock(&lp2->lp_lock);
+			if (lp2->lp_state & LNET_PEER_LOCK_PRIMARY &&
+			    lp2->lp_nnis > 1) {
+				lp2->lp_state |= LNET_PEER_BAD_CONFIG;
+				spin_unlock(&lp2->lp_lock);
 				spin_lock(&lp->lp_lock);
 				lp->lp_state |= LNET_PEER_BAD_CONFIG;
 				spin_unlock(&lp->lp_lock);
-				spin_lock(&lp2->lp_lock);
-				lp2->lp_state |= LNET_PEER_BAD_CONFIG;
-				spin_unlock(&lp2->lp_lock);
+				CERROR("Peer %s NID %s is already locked with peer %s\n",
+					libcfs_nidstr(&lp->lp_primary_nid),
+					libcfs_nidstr(&nid),
+					libcfs_nidstr(&lp2->lp_primary_nid));
 				goto out_free_lpni;
 			}
+			peer2_state = lp2->lp_state;
+			peer2_prim_lock_ts = lp2->lp_prim_lock_ts;
+			spin_unlock(&lp2->lp_lock);
+
+			/* NID which got locked the earliest should be
+			 * kept as primary. In case if the peers were
+			 * created by Lustre, this allows the
+			 * first listed NID to stay primary as intended
+			 * for the purpose of communicating with Lustre
+			 * even if peer discovery succeeded using
+			 * a different NID of MR peer.
+			 */
+			spin_lock(&lp->lp_lock);
+			if (peer2_state & LNET_PEER_LOCK_PRIMARY &&
+			    ((lp->lp_state & LNET_PEER_LOCK_PRIMARY &&
+			    peer2_prim_lock_ts < lp->lp_prim_lock_ts) ||
+			     !(lp->lp_state & LNET_PEER_LOCK_PRIMARY))) {
+				lp->lp_prim_lock_ts = peer2_prim_lock_ts;
+				lp->lp_primary_nid = nid;
+				lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
+			}
+			spin_unlock(&lp->lp_lock);
 			/*
 			 * if we're trying to delete a router it means
 			 * we're moving this peer NI to a new peer so must

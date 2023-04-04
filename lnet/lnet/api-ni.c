@@ -4304,6 +4304,30 @@ LNetCtl(unsigned int cmd, void *arg)
 		return 0;
 	}
 
+	case IOC_LIBCFS_SET_PEER: {
+		struct lnet_ioctl_peer_cfg *cfg = arg;
+		struct lnet_peer *lp;
+
+		if (cfg->prcfg_hdr.ioc_len < sizeof(*cfg))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_nid4_to_nid(cfg->prcfg_prim_nid, &nid);
+		lp = lnet_find_peer(&nid);
+		if (!lp) {
+			mutex_unlock(&the_lnet.ln_api_mutex);
+			return -ENOENT;
+		}
+		spin_lock(&lp->lp_lock);
+		lp->lp_state = cfg->prcfg_state;
+		spin_unlock(&lp->lp_lock);
+		lnet_peer_decref_locked(lp);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		CDEBUG(D_NET, "Set peer %s state to %u\n",
+		       libcfs_nid2str(cfg->prcfg_prim_nid), cfg->prcfg_state);
+		return 0;
+	}
+
 	case IOC_LIBCFS_SET_CONNS_PER_PEER: {
 		struct lnet_ioctl_reset_conns_per_peer_cfg *cfg = arg;
 		int value;

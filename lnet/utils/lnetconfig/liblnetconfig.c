@@ -1838,6 +1838,31 @@ lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
 	return rc;
 }
 
+static int
+lustre_lnet_config_peer(int state, lnet_nid_t nid, char *name,
+			int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_peer_cfg data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+
+	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+	data.prcfg_state = state;
+	data.prcfg_prim_nid = nid;
+	data.prcfg_cfg_nid = LNET_NID_ANY;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_PEER, &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str), "Can not set peer property: %s",
+			 strerror(errno));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
 
 static int
 lustre_lnet_config_conns_per_peer(int value, bool all, lnet_nid_t nid,
@@ -1898,6 +1923,19 @@ int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *lpni_nid,
 	return lustre_lnet_config_healthv(value, all, nid,
 					  LNET_HEALTH_TYPE_PEER_NI,
 					  "peer_ni healthv", seq_no, err_rc);
+}
+
+int lustre_lnet_set_peer_state(int state, char *lpni_nid, int seq_no,
+			       struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+
+	if (lpni_nid)
+		nid = libcfs_str2nid(lpni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_peer(state, nid, "peer state", seq_no,
+				       err_rc);
 }
 
 int lustre_lnet_config_ni_conns_per_peer(int value, bool all, char *ni_nid,

@@ -2946,6 +2946,74 @@ test_300() {
 }
 run_test 300 "packaged LNet UAPI headers can be compiled"
 
+test_304() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	reinit_dlc || return $?
+
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp" "$FAKE_IF" || return $?
+
+	local nid1=$(lctl list_nids | head -n 1)
+	local nid2=$(lctl list_nids | tail --lines 1)
+
+	check_ni_status "$nid1" up
+	check_ni_status "$nid2" up
+
+	do_lnetctl peer add --prim_nid ${nid2} --lock_prim ||
+		error "peer add failed $?"
+	local locked_peer_state=($(do_lnetctl peer show -v 4 --nid ${nid2} |
+		awk '/peer state/{print $NF}'))
+
+	# Expect peer state bits:
+	#   LNET_PEER_MULTI_RAIL(0) | LNET_PEER_CONFIGURED(3) |
+	#   LNET_PEER_LOCK_PRIMARY(20)
+	(( $locked_peer_state != "1048585")) &&
+		error "Wrong peer state \"$locked_peer_state\" expected 1048585"
+
+	# Clear LNET_PEER_CONFIGURED bit and verify
+	do_lnetctl peer set --nid ${nid2} --state 1048577 ||
+		error "peer add failed $?"
+	locked_peer_state=($(do_lnetctl peer show -v 4 --nid ${nid2} |
+		awk '/peer state/{print $NF}'))
+	(( $locked_peer_state != "1048577")) &&
+		error "Wrong peer state \"$locked_peer_state\" expected 1048577"
+	do_lnetctl discover ${nid1} ||
+		error "Failed to discover peer"
+
+	# Expect nid2 and nid1 peer entries to be consolidated,
+	# nid2 to stay primary
+	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: ${nid2}
+      Multi-Rail: True
+      peer ni:
+        - nid: ${nid1}
+          state: NA
+        - nid: ${nid2}
+          state: NA
+EOF
+	$LNETCTL peer show > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files ||
+		error "Unexpected peer configuration"
+
+	locked_peer_state=($(do_lnetctl peer show -v 4 --nid ${nid2} |
+		awk '/peer state/{print $NF}'))
+	# Expect peer state bits to be added:
+	#   LNET_PEER_DISCOVERED(4) | LNET_PEER_NIDS_UPTODATE(8)
+	(( $locked_peer_state != "1048849")) &&
+		error "Wrong peer state \"$locked_peer_state\" expected 1048849"
+	return 0
+}
+run_test 304 "Check locked primary peer nid consolidation"
+
 complete $SECONDS
 
 cleanup_testsuite

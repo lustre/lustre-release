@@ -274,7 +274,8 @@ command_t peer_cmds[] = {
 	{"set", jt_set_peer_ni_value, 0, "set peer ni specific parameter\n"
 	 "\t--nid: Peer NI NID to set the\n"
 	 "\t--health: specify health value to set\n"
-	 "\t--all: set all peer_nis values to the one specified\n"},
+	 "\t--all: set all peer_nis values to the one specified\n"
+	 "\t--state: set peer state (DANGEROUS: for test/debug only)"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1334,13 +1335,15 @@ static int set_value_helper(int argc, char **argv,
 	char *nid = NULL;
 	long int healthv = -1;
 	bool all = false;
+	long int state = -1;
 	int rc, opt;
 	struct cYAML *err_rc = NULL;
 
-	const char *const short_options = "t:n:a";
+	const char *const short_options = "t:n:s:a";
 	static const struct option long_options[] = {
 		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
 		{ .name = "health", .has_arg = required_argument, .val = 't' },
+		{ .name = "state", .has_arg = required_argument, .val = 's' },
 		{ .name = "all", .has_arg = no_argument, .val = 'a' },
 		{ .name = NULL } };
 
@@ -1358,6 +1361,10 @@ static int set_value_helper(int argc, char **argv,
 			if (parse_long(optarg, &healthv) != 0)
 				healthv = -1;
 			break;
+		case 's':
+			if (parse_long(optarg, &state) != 0)
+				state = -1;
+			break;
 		case 'a':
 			all = true;
 			break;
@@ -1366,7 +1373,10 @@ static int set_value_helper(int argc, char **argv,
 		}
 	}
 
-	rc = cb(healthv, all, nid, -1, &err_rc);
+	if (state > -1)
+		rc = lustre_lnet_set_peer_state(state, nid, -1, &err_rc);
+	else
+		rc = cb(healthv, all, nid, -1, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

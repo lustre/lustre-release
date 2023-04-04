@@ -757,6 +757,9 @@ struct lnet_peer {
 
 	/* cached peer aliveness */
 	bool			lp_alive;
+
+	/* timestamp of primary nid lock */
+	__u64			lp_prim_lock_ts;
 };
 
 /*
