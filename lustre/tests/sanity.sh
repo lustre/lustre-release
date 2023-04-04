@@ -2602,6 +2602,31 @@ test_27Cg() {
 }
 run_test 27Cg "test setstripe with wrong OST idx"
 
+test_27Ch() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	(( $MDS1_VERSION >= $(version_code 2.15.55.102) )) ||
+		skip "need MDS >= 2.12.55.102 for mdt_dump_lmm fix"
+
+	stack_trap "rm -f $DIR/$tfile"
+	# start_full_debug_logging
+	$LFS setstripe -S 64K -C -1 $DIR/$tfile || error "create $tfile failed"
+	$LFS getstripe -c $DIR/$tfile || error "getstripe $tfile failed"
+	cancel_lru_locks
+	$LFS getstripe -c $DIR/$tfile || error "getstripe failed after clear"
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir/$tfile"
+	$LFS setstripe -S 64K -C -1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS getstripe -y $DIR/$tdir || error "getstripe $tdir failed"
+	touch $DIR/$tdir/$tfile || error "create $tdir/$tfile failed"
+	cancel_lru_locks
+	$LFS getstripe -c $DIR/$tdir/$tfile ||
+		error "getstripe $tdir/$tfile failed"
+	#stop_full_debug_logging
+}
+run_test 27Ch "overstriping with -C -1 in mdt_dump_lmm"
+
 test_27D() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"

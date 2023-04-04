@@ -660,17 +660,18 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 	if (likely(!cfs_cdebug_show(level, DEBUG_SUBSYSTEM)))
 		return;
 
-	CDEBUG(level, "objid "DOSTID", magic 0x%08X, pattern %#X\n",
-	       POSTID(&lmm->lmm_oi), lmm_magic,
-	       le32_to_cpu(lmm->lmm_pattern));
+	CDEBUG_LIMIT(level, "objid="DOSTID" magic=0x%08X pattern=%#X\n",
+		     POSTID(&lmm->lmm_oi), lmm_magic,
+		     le32_to_cpu(lmm->lmm_pattern));
 
-	/* No support for compount layouts yet */
+	/* No support for compound layouts yet */
 	if (lmm_magic != LOV_MAGIC_V1 && lmm_magic != LOV_MAGIC_V3)
 		return;
 
 	count = le16_to_cpu(((struct lov_user_md *)lmm)->lmm_stripe_count);
-	CDEBUG(level, "stripe_size=0x%x, stripe_count=0x%x\n",
-	       le32_to_cpu(lmm->lmm_stripe_size), count);
+	CDEBUG_LIMIT(level, "stripe_size=0x%x, %sstripe_count=0x%x\n",
+		     le32_to_cpu(lmm->lmm_stripe_size),
+		     count > LOV_MAX_STRIPE_COUNT ? "bad " : "", count);
 
 	/* If it's a directory or a released file, then there are
 	 * no actual objects to print, so bail out. */
@@ -678,13 +679,15 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 	    le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_RELEASED)
 		return;
 
-	LASSERT(count <= LOV_MAX_STRIPE_COUNT);
+	if (unlikely(count > LOV_MAX_STRIPE_COUNT))
+		return;
+
 	for (i = 0, lod = lmm->lmm_objects; i < count; i++, lod++) {
 		struct ost_id oi;
 
 		ostid_le_to_cpu(&lod->l_ost_oi, &oi);
-		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n",
-		       i, le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
+		CDEBUG_LIMIT(level, "stripe %u idx %u subobj "DOSTID"\n",
+			     i, le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
 	}
 }
 
