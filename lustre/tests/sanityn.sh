@@ -708,6 +708,120 @@ test_16i() {
 }
 run_test 16i "read after truncate file"
 
+test_16j()
+{
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local stripe_size=$((1024 * 1024)) #1 MiB
+	# Max i/o below is ~ 4 * stripe_size, so this gives ~5 i/os
+	local file_size=$((25 * stripe_size))
+	local bsizes
+
+	$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.1
+	stack_trap "rm -f $DIR/$tfile.1"
+
+	# Just a bit bigger than the largest size in the test set below
+	dd if=/dev/urandom bs=$file_size count=1 of=$DIR/$tfile.1 ||
+		error "buffered i/o to create file failed"
+
+	if zfs_or_rotational; then
+		# DIO on ZFS can take up to 2 seconds per IO
+		# rotational is better, but still slow.
+		# Limit testing on those media to larger sizes
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size"
+	else
+		bsizes="$PAGE_SIZE $((PAGE_SIZE * 4)) $stripe_size \
+			$((stripe_size * 4))"
+	fi
+
+	# 1 process (BIO or DIO) on each client
+	for bs in $bsizes; do
+		$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.2
+		echo "bs: $bs, file_size $file_size"
+		dd if=$DIR/$tfile.1 bs=$((bs *2 )) of=$DIR/tfile.2 \
+			conv=notrunc oflag=direct iflag=direct &
+		pid_dio1=$!
+		# Buffered I/O with similar but not the same block size
+		dd if=$DIR2/$tfile.1 bs=$((bs * 2)) of=$DIR2/$tfile.2 \
+			conv=notrunc &
+		pid_bio2=$!
+		wait $pid_dio1
+		rc1=$?
+		wait $pid_bio2
+		rc2=$?
+		if (( rc1 != 0 )); then
+			error "dio copy 1 w/bsize $bs failed: $rc1"
+		fi
+		if (( rc2 != 0 )); then
+			error "buffered copy 2 w/bsize $bs failed: $rc2"
+		fi
+
+		$CHECKSTAT -t file -s $file_size $DIR/$tfile.2 ||
+			error "size incorrect"
+		$CHECKSTAT -t file -s $file_size $DIR2/$tfile.2 ||
+			error "size incorrect - mount 2"
+		cmp --verbose $DIR/$tfile.1 $DIR/$tfile.2 ||
+			error "files differ, bsize $bs"
+		cmp --verbose $DIR2/$tfile.1 $DIR2/$tfile.2 ||
+			error "files differ, bsize $bs - mount 2"
+		rm -f $DIR/$tfile.2
+	done
+
+	# 2 processes - both DIO and BIO - on each client
+	for bs in $bsizes; do
+		$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.2
+		echo "bs: $bs, file_size $file_size"
+		# Client 1
+		dd if=$DIR/$tfile.1 bs=$((bs *2 )) of=$DIR/tfile.2 \
+			conv=notrunc oflag=direct iflag=direct &
+		pid_dio1=$!
+		# Buffered I/O with similar but not the same block size
+		dd if=$DIR/$tfile.1 bs=$((bs * 2)) of=$DIR/$tfile.2 \
+			conv=notrunc &
+		pid_bio2=$!
+		# Client 2
+		dd if=$DIR2/$tfile.1 bs=$((bs *2 )) of=$DIR2/tfile.2 \
+			conv=notrunc oflag=direct iflag=direct &
+		pid_dio3=$!
+		# Buffered I/O with similar but not the same block size
+		dd if=$DIR2/$tfile.1 bs=$((bs * 2)) of=$DIR2/$tfile.2 \
+			conv=notrunc &
+		pid_bio4=$!
+		wait $pid_dio1
+		rc1=$?
+		wait $pid_bio2
+		rc2=$?
+		wait $pid_dio3
+		rc3=$?
+		wait $pid_bio4
+		rc4=$?
+
+		if (( rc1 != 0 )); then
+			error "dio copy 1 w/bsize $bs failed: $rc1"
+		fi
+		if (( rc2 != 0 )); then
+			error "buffered copy 2 w/bsize $bs failed: $rc2"
+		fi
+		if (( rc3 != 0 )); then
+			error "dio copy 3 w/bsize $bs failed: $rc1"
+		fi
+		if (( rc4 != 0 )); then
+			error "buffered copy 4 w/bsize $bs failed: $rc2"
+		fi
+
+		$CHECKSTAT -t file -s $file_size $DIR/$tfile.2 ||
+			error "size incorrect"
+		$CHECKSTAT -t file -s $file_size $DIR2/$tfile.2 ||
+			error "size incorrect - mount 2"
+		cmp --verbose $DIR/$tfile.1 $DIR/$tfile.2 ||
+			error "files differ, bsize $bs"
+		cmp --verbose $DIR2/$tfile.1 $DIR2/$tfile.2 ||
+			error "files differ, bsize $bs - mount 2"
+		rm -f $DIR/$tfile.2
+	done
+}
+run_test 16j "race dio with buffered i/o"
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
