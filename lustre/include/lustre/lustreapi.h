@@ -1274,6 +1274,8 @@ typedef int (*llapi_layout_iter_cb)(struct llapi_layout *layout, void *cbdata);
 int llapi_layout_comp_iterate(struct llapi_layout *layout,
 			      llapi_layout_iter_cb cb, void *cbdata);
 
+int llapi_verify_pool_name(struct llapi_layout *layout, void *arg);
+
 /**
  * FLR: mirror operation APIs
  */
@@ -1294,6 +1296,8 @@ int llapi_heat_set(int fd, __u64 flags);
 int llapi_ioctl(int fd, unsigned int cmd, void *buf);
 
 int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr);
+int llapi_layout_v2_sanity(struct llapi_layout *layout, bool incomplete,
+			   bool flr, char *fsname);
 void llapi_layout_sanity_perror(int error);
 int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size);
 

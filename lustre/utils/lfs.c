@@ -1631,33 +1631,22 @@ enum mirror_flags {
  * Return: 0 on success or a negative error code on failure.
  */
 static int mirror_create_sanity_check(const char *fname,
-				      struct mirror_args *list,
-				      bool check_fname)
+				      struct mirror_args *list)
 {
 	int rc = 0;
 	bool has_m_file = false;
+	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	bool has_m_layout = false;
 
 	if (!list)
 		return -EINVAL;
 
-	if (fname && check_fname) {
-		struct llapi_layout *layout;
-
-		layout = llapi_layout_get_by_path(fname, 0);
-		if (!layout) {
-			fprintf(stderr,
-				"error: %s: file '%s' couldn't get layout\n",
-				progname, fname);
-			return -ENODATA;
-		}
-
-		rc = llapi_layout_sanity(layout, false, true);
-
-		llapi_layout_free(layout);
-
+	if (fname) {
+		rc = llapi_search_fsname(fname, fsname);
 		if (rc) {
-			llapi_layout_sanity_perror(rc);
+			fprintf(stderr,
+				"error: %s: file '%s' has no fsname\n",
+					progname, fname);
 			return rc;
 		}
 	}
@@ -1683,8 +1672,8 @@ static int mirror_create_sanity_check(const char *fname,
 				return -EINVAL;
 			}
 		}
-
-		rc = llapi_layout_sanity(list->m_layout, false, true);
+		rc = llapi_layout_v2_sanity(list->m_layout, false, true,
+					    fsname);
 		if (rc) {
 			llapi_layout_sanity_perror(rc);
 			return rc;
@@ -1740,7 +1729,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 	int i = 0;
 	int rc = 0;
 
-	rc = mirror_create_sanity_check(fname, mirror_list, false);
+	rc = mirror_create_sanity_check(fname, mirror_list);
 	if (rc)
 		return rc;
 
@@ -4508,7 +4497,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
+	for (fname = argv[optind]; (optind < argc) && (fname != NULL);
+	     fname = argv[++optind]) {
 		if (from_copy) {
 			layout = llapi_layout_get_by_path(template ?: fname, 0);
 			if (!layout) {

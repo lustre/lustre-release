@@ -361,6 +361,9 @@ test_0b() {
 	$LFS setstripe -S 8M -c -1 -p $pool_name $td ||
 		error "$LFS setstripe $td failed"
 
+	create_pool $FSNAME.flash || error "create OST pool flash failed"
+	create_pool $FSNAME.archive || error "create OST pool archive failed"
+
 	# create a mirrored file with plain layout mirrors
 	$mirror_cmd -N -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
 		    -N -S 16M -N -c -1 -N -p archive -N -p none $tf ||
@@ -435,6 +438,11 @@ test_0c() {
 	mkdir $td || error "mkdir $td failed"
 	$LFS setstripe -E 32M -S 8M -c -1 -p $pool_name -E eof -S 16M $td ||
 		error "$LFS setstripe $td failed"
+
+	create_pool $FSNAME.flash ||
+		error "create OST pool flash failed"
+	create_pool $FSNAME.archive ||
+		error "create OST pool archive failed"
 
 	# create a mirrored file with composite layout mirrors
 	$mirror_cmd -N2 -E 8M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
@@ -549,9 +557,17 @@ test_0e() {
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
 
+	create_pool $FSNAME.ssd ||
+		error "create OST pool ssd failed"
+
 	# create a mirrored file with plain layout mirrors
 	$LFS mirror create -N -S 32M -c 3 -p ssd -i 1 -o 1,2,3 $tf ||
 		error "create mirrored file $tf failed"
+
+	create_pool $FSNAME.flash ||
+		error "create OST pool flash failed"
+	create_pool $FSNAME.archive ||
+		error "create OST pool archive failed"
 
 	# extend the mirrored file with plain layout mirrors
 	$mirror_cmd -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
@@ -607,9 +623,17 @@ test_0f() {
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
 
+	create_pool $FSNAME.ssd ||
+		error "create OST pool ssd failed"
+
 	# create a mirrored file with composite layout mirror
 	$LFS mirror create -N -E 32M -S 16M -p ssd -E eof -S 32M $tf ||
 		error "create mirrored file $tf failed"
+
+	create_pool $FSNAME.flash ||
+		error "create OST pool flash failed"
+	create_pool $FSNAME.archive ||
+		error "create OST pool archive failed"
 
 	# extend the mirrored file with composite layout mirrors
 	$mirror_cmd -N -p archive \

@@ -844,9 +844,13 @@ test_14() {
 	local file=$DIR/$tdir/$tfile
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
+	local p1="pool1"
+	local p2="pool2"
 
-	$LFS setstripe -E1m -c1 -S1m --pool="pool1" -E2m \
-			-E4m -c2 -S2m --pool="pool2" -E-1 $file ||
+	create_pool $FSNAME.$p1 || error "create_pool $FSNAME.$p1 failed"
+	create_pool $FSNAME.$p2 || error "create_pool $FSNAME.$p2 failed"
+	$LFS setstripe -E1m -c1 -S1m --pool=$p1 -E2m \
+			-E4m -c2 -S2m --pool=$p2 -E-1 $file ||
 		error "Create $file failed"
 
 	# check --pool inheritance

@@ -693,7 +693,7 @@ test_7c()
 
 	# setstripe with the same pool name plus 1 letter
 	$LFS setstripe -c 1 $DIR/$tdir/testfile1 --pool "${pool}X" &&
-		error "setstripe succedeed"
+		error "setstripe succeeded"
 
 	rm -f $DIR/$tdir/testfile1
 
@@ -1891,16 +1891,20 @@ test_32() { # LU-15707
 	( $LFS getstripe -p $DIR/$tdir | grep -q $pool ) ||
 		error "fail to set pool on $DIR/$tdir"
 
-	$LFS setstripe -p ignore $DIR/$tdir/$tfile ||
+	local ig_pool="ignore_pool"
+
+	pool_add $ig_pool || error "add $ig_pool failed"
+
+	$LFS setstripe -p $ig_pool $DIR/$tdir/$tfile ||
 		error "setstripe fail on $DIR/$tdir/$tfile"
 
-	! ( $LFS getstripe -p $DIR/$tdir/$tfile | egrep -q "[^ ]+" ) ||
+	( $LFS getstripe -p $DIR/$tdir/$tfile | grep -q $ig_pool ) ||
 		error "fail to create $DIR/$tdir/$tfile without pool"
 
 	# Test with start index
 	local got idx
 	for ((idx = 0; idx < OSTCOUNT; idx++)); do
-		$LFS setstripe -p ignore -i $idx $DIR/$tdir/$tfile.$idx ||
+		$LFS setstripe -p $ig_pool -i $idx $DIR/$tdir/$tfile.$idx ||
 			error "setstripe -i fail on $DIR/$tdir/$tfile.$idx"
 
 		got=$($LFS getstripe -i $DIR/$tdir/$tfile.$idx)
@@ -1909,7 +1913,7 @@ test_32() { # LU-15707
 	done
 
 	# Test with ost list
-	$LFS setstripe -p ignore -o 1,0 $DIR/$tdir/$tfile.1_0 ||
+	$LFS setstripe -p $ig_pool -o 1,0 $DIR/$tdir/$tfile.1_0 ||
 		error "setstripe --ost fail on $DIR/$tdir/$tfile.1_0"
 
 	got=$($LFS getstripe -i $DIR/$tdir/$tfile.1_0)
