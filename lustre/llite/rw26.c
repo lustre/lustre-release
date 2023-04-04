@@ -956,16 +956,10 @@ static int ll_tiny_write_end(struct file *file, struct address_space *mapping,
 	struct cl_page *clpage = (struct cl_page *) vmpage->private;
 	loff_t kms = pos+copied;
 	loff_t to = kms & (PAGE_SIZE-1) ? kms & (PAGE_SIZE-1) : PAGE_SIZE;
-	__u16 refcheck;
-	struct lu_env *env = cl_env_get(&refcheck);
+	struct lu_env *env;
 	int rc = 0;
 
 	ENTRY;
-
-	if (IS_ERR(env)) {
-		rc = PTR_ERR(env);
-		goto out;
-	}
 
 	/* This page is dirty in cache, so it should have a cl_page pointer
 	 * set in vmpage->private.
@@ -973,16 +967,17 @@ static int ll_tiny_write_end(struct file *file, struct address_space *mapping,
 	LASSERT(clpage != NULL);
 
 	if (copied == 0)
-		goto out_env;
+		goto out;
+
+	/* env_percpu_get cannot fail */
+	env = cl_env_percpu_get();
 
 	/* Update the underlying size information in the OSC/LOV objects this
 	 * page is part of.
 	 */
 	cl_page_touch(env, clpage, to);
 
-out_env:
-	cl_env_put(env, &refcheck);
-
+	cl_env_percpu_put(env);
 out:
 	/* Must return page unlocked. */
 	unlock_page(vmpage);
