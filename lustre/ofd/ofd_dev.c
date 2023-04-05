@@ -1122,9 +1122,6 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (rc)
 			RETURN(err_serious(rc));
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_OST_GET_LAST_FID))
-			RETURN(-EAGAIN);
-
 		fid = req_capsule_client_get(tsi->tsi_pill, &RMF_FID);
 		if (fid == NULL)
 			RETURN(err_serious(-EPROTO));

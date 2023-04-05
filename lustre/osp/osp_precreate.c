@@ -711,9 +711,6 @@ out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
 
-	/* pause to let osp_precreate_reserve to go first */
-	CFS_FAIL_TIMEOUT(OBD_FAIL_OSP_PRECREATE_PAUSE, 2);
-
 	ptlrpc_req_finished(req);
 	RETURN(rc);
 }
@@ -887,8 +884,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	*last_fid = d->opd_last_used_fid;
 	/* The OSP should already get the valid seq now */
 	LASSERT(!fid_is_zero(last_fid));
-	if (fid_oid(&d->opd_last_used_fid) < 2 ||
-	    OBD_FAIL_CHECK(OBD_FAIL_OSP_GET_LAST_FID)) {
+	if (fid_oid(&d->opd_last_used_fid) < 2) {
 		/* lastfid looks strange... ask OST */
 		rc = osp_get_lastfid_from_ost(env, d, true);
 		if (rc)
@@ -1335,11 +1331,6 @@ static int osp_precreate_thread(void *_args)
 
 			if (d->opd_pre == NULL)
 				continue;
-
-			if (OBD_FAIL_CHECK(OBD_FAIL_OSP_GET_LAST_FID)) {
-				d->opd_pre_recovering = 1;
-				break;
-			}
 
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is
