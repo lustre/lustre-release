@@ -2101,13 +2101,21 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		CDEBUG(D_PAGE | D_HA, "GRD tags per page = %u\n", guard_number);
 	for (i = 0; i < npages; i++) {
 		bool use_t10_grd;
+		int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
+		int len = local_nb[i].lnb_len;
+		int guards_needed = DIV_ROUND_UP(off + len, sector_size) -
+					(off / sector_size);
+
+		if (guards_needed > guard_number - used_number) {
+			cfs_crypto_hash_update_page(req, __page, 0,
+				used_number * sizeof(*guard_start));
+			used_number = 0;
+		}
 
 		/* corrupt the data before we compute the checksum, to
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
-			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
-			int len = local_nb[i].lnb_len;
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
@@ -2140,7 +2148,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			      local_nb[i].lnb_len == PAGE_SIZE &&
 			      local_nb[i].lnb_guard_disk;
 		if (use_t10_grd) {
-			used = DIV_ROUND_UP(local_nb[i].lnb_len, sector_size);
+			used = guards_needed;
 			if (used > (guard_number - used_number)) {
 				rc = -E2BIG;
 				CDEBUG(D_PAGE | D_HA,
@@ -2223,18 +2231,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		}
 
 		used_number += used;
-		if (used_number == guard_number) {
-			cfs_crypto_hash_update_page(req, __page, 0,
-				used_number * sizeof(*guard_start));
-			used_number = 0;
-		}
 
 		 /* corrupt the data after we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))) {
-			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
-			int len = local_nb[i].lnb_len;
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {

@@ -1189,12 +1189,12 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	struct page *__page;
 	unsigned char *buffer;
 	__be16 *guard_start;
-	unsigned int bufsize;
 	int guard_number;
 	int used_number = 0;
 	int used;
 	u32 cksum;
-	int rc = 0;
+	unsigned int bufsize = sizeof(cksum);
+	int rc = 0, rc2;
 	int i = 0;
 
 	LASSERT(pg_count > 0);
@@ -1219,14 +1219,22 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	       guard_number, resend, nob, pg_count);
 
 	while (nob > 0 && pg_count > 0) {
+		int off = pga[i]->off & ~PAGE_MASK;
 		unsigned int count = pga[i]->count > nob ? nob : pga[i]->count;
+		int guards_needed = DIV_ROUND_UP(off + count, sector_size) -
+					(off / sector_size);
+
+		if (guards_needed > guard_number - used_number) {
+			cfs_crypto_hash_update_page(req, __page, 0,
+				used_number * sizeof(*guard_start));
+			used_number = 0;
+		}
 
 		/* corrupt the data before we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))) {
 			unsigned char *ptr = kmap(pga[i]->pg);
-			int off = pga[i]->off & ~PAGE_MASK;
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
 			kunmap(pga[i]->pg);
@@ -1253,33 +1261,31 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 			break;
 
 		used_number += used;
-		if (used_number == guard_number) {
-			cfs_crypto_hash_update_page(req, __page, 0,
-				used_number * sizeof(*guard_start));
-			used_number = 0;
-		}
-
 		nob -= pga[i]->count;
 		pg_count--;
 		i++;
 	}
 	kunmap(__page);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_hash, rc);
 
 	if (used_number != 0)
 		cfs_crypto_hash_update_page(req, __page, 0,
 			used_number * sizeof(*guard_start));
 
-	bufsize = sizeof(cksum);
-	cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
+out_hash:
+	rc2 = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
+	if (!rc)
+		rc = rc2;
+	if (rc == 0) {
+		/* For sending we only compute the wrong checksum instead
+		 * of corrupting the data so it is still correct on a redo */
+		if (opc == OST_WRITE &&
+				OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
+			cksum++;
 
-	/* For sending we only compute the wrong checksum instead
-	 * of corrupting the data so it is still correct on a redo */
-	if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
-		cksum++;
-
-	*check_sum = cksum;
+		*check_sum = cksum;
+	}
 out:
 	__free_page(__page);
 	return rc;
