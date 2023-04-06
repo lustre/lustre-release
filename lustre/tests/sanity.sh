@@ -16250,6 +16250,26 @@ test_154g()
 }
 run_test 154g "various llapi FID tests"
 
+test_154h()
+{
+	(( $CLIENT_VERSION >= $(version_code 2.15.55.1) )) ||
+		skip "Need client at least version 2.15.55.1"
+
+	# Create an empty file
+	touch $DIR/$tfile
+
+	# Get FID (interactive mode) and save under $TMP/$tfile.log
+	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log
+		path2fid $DIR/$tfile
+	EOF
+
+	fid=$(cat $TMP/$tfile.log)
+	# $fid should not be empty
+	[[ ! -z $fid ]] || error "FID is empty"
+	$LFS rmfid $DIR "$fid" || error "rmfid failed for $fid"
+}
+run_test 154h "Verify interactive path2fid"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile

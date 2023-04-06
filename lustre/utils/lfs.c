@@ -9818,7 +9818,7 @@ static int lfs_path2fid(int argc, char **argv)
 	}
 
 	rc = 0;
-	for (path = argv + optind; *path != NULL; path++) {
+	for (path = argv + optind; optind < argc; path++, optind++) {
 		int err = 0;
 
 		if (!show_parents) {
