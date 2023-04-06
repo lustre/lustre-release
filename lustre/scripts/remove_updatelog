@@ -31,6 +31,18 @@
 # via GZIP env variable:
 #    # GZIP=xz bash remove_updatelog -n -z /tmp/llogs_saved <ldiskfs_mount>
 # Archive name will ends with .xz in that case instead of .gz
+#
+# Script allows to cleanup llogs related to specific MDTs by their indices:
+# # bash remove_updatelog -m 0,1 /mnt/mdt0
+#
+# That can be useful when llog corruption occurred over particular MDT
+# pair, e.g. lustre-MDT0001-osp-MDT0003 reports llog problems, that means
+# the problem reported by MDT0003 communicating to MDT0001, so remote MDT0003
+# llog on MDT0001 is corrupted and the script should be ran on MDT0001 to
+# remove MDT0003 update llog after MDT0001 local ldiskfs/ZFS mount:
+# #bash remove_updatelog -m 3 <mdt1_mount_point>
+#
+
 
 ECHO=echo
 PROG=$(basename $0)
@@ -39,10 +51,12 @@ GZIP=${GZIP:-gzip}
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: remove_updatelog [--dry-run|-n] [--help|-h] [--quiet|-q] <localmount>
-	--help|-h	   show this usage message
-	--dry-run|-n	   only print the names of files to be removed
-	--quiet|-q	   run quietly (don't print filenames or status)
+usage: remove_updatelog [--dry-run|-n] [--mdt|-m indices] [--help|-h]\n
+			[--quiet|-q] <localmount>
+	--help|-h	     show this usage message
+	--mdt|-m <index,...> delete llogs of selected MDTs only
+	--dry-run|-n	     only print the names of files to be removed
+	--quiet|-q	     run quietly (don't print filenames or status)
 	--zip|-z <name_prefix>
 			save all llogs into compressed tar archive with given
 			name prefix using gzip by default. Other compression
@@ -53,7 +67,8 @@ The 'localmount' argument should be an ldiskfs mounted MDT device mountpoint.
 Examples:
       remove_updatelog /mnt/mdt0
       remove_updatelog --dry-run /mnt/mdt0
-      remove_changelog -z /tmp/llogs /mnt/mdt0
+      remove_updatelog -z /tmp/llogs /mnt/mdt0
+      remove_updatelog -m 0,1 /mnt/mdt0
 USAGE
     exit 1
 }
@@ -62,12 +77,14 @@ OPT_DRYRUN=false
 OPT_ARCH=""
 OPT_MOUNT=""
 OPT_MDTS=()
+OPT_MDTIDX=()
 
 # Examine any long options and arguments
 while [ -n "$*" ]; do
 	arg="$1"
 	case "$arg" in
 	-h|--help) usage;;
+	-m|--mdt) OPT_MDTIDX=($(echo $2 | tr "," " "));;
 	-n|--dry-run) OPT_DRYRUN=true;;
 	-q|--quiet) ECHO=:;;
 	-z|--zip) OPT_ARCH="$2.tar"; shift;;
@@ -84,10 +101,10 @@ remove_updatelog() {
 	local arch=$OPT_ARCH
 	local length=0
 
-	if [[ -z $(df -t ldiskfs $mntpoint 2>/dev/null) ]] ; then
-		echo "$PROG: '$mntpoint' is not ldiskfs mount."
-		exit 1
-	fi
+#	if [[ -z $(df -t ldiskfs $mntpoint 2>/dev/null) ]] ; then
+#		echo "$PROG: '$mntpoint' is not ldiskfs mount."
+#		exit 1
+#	fi
 
 	if $OPT_DRYRUN; then
 		$ECHO "Dry run was requested, no changes will be applied"
@@ -97,19 +114,27 @@ remove_updatelog() {
 	if [[ ! -f $catlist ]] ; then
 		echo "$PROG: $catlist doesn't exist already."
 	else
-		read -r -d '' -a OPT_MDTS < <(hexdump -v -e '2/8 " %16x" 2/8 "\n"' $catlist |
-					      awk '{print "[0x"$2":0x"$1":0x0]"}')
+		read -r -d '' -a OPT_MDTS <<< $(hexdump -v -e '2/8 " %16x" 2/8 "\n"' $catlist |
+						awk '{print "[0x"$2":0x"$1":0x0]"}')
 
 		if [[ ! $(which $LLOG_READER 2>/dev/null) ]] ; then
 			echo "$PROG: $LLOG_READER is missing."
 			exit 1
 		fi
 		[[ -z $arch ]] || tar -cf $arch $catlist 2>/dev/null
+
 		length=${#OPT_MDTS[@]}
-		for (( i = 0; i < ${length}; i++ )); do
+		(( ${#OPT_MDTIDX[@]} > 0 )) || OPT_MDTIDX=($(seq 0 $((length - 1))))
+		echo "Selected MDTS: ${OPT_MDTIDX[*]}"
+		for i in ${OPT_MDTIDX[@]} ; do
 			local catalog=$dir/${OPT_MDTS[$i]}
 
-			$ECHO "Processing MDT$i llogs ..."
+			if (( $i >= $length)) ; then
+				echo "skip wrong index $i, total $length MDTs"
+				continue
+			fi
+
+			$ECHO "Processing MDT$i llog catalog ${OPT_MDTS[$i]} ..."
 			if [[ ! -f $catalog ]] ; then
 				echo "$PROG: $catalog doesn't exist already."
 				continue

@@ -10539,6 +10539,55 @@ test_135() {
 }
 run_test 135 "check the behavior when changelog is wrapped around"
 
+test_140() {
+	(( MDS1_VERSION >= $(version_code 2.15.55) )) ||
+		skip "need MDS version at least 2.15.55"
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+
+	RM_UPDATELOG=$(do_facet mds2 "which remove_updatelog 2> /dev/null")
+	RM_UPDATELOG=${RM_UPDATELOG:-"$LUSTRE/scripts/remove_updatelog"}
+
+	[ -f "$RM_UPDATELOG" ] ||
+		skip_env "remove_updatelog is not found on mds2"
+
+	local mntpt=$(facet_mntpt mds2)
+
+	setup_noconfig
+	test_mkdir -c $MDSCOUNT -p $DIR/$tdir ||
+		error "mkdir $DIR/$tdir failed"
+	mkdir $DIR/$tdir/d{1..256}
+
+	stop_mdt 1
+	stop_mdt 2
+
+	mount_fstype mds2 || error "mount as fstype mds2 failed"
+	do_facet mds2 $RM_UPDATELOG -n $mntpt
+	MDTS=($(do_facet mds2 $RM_UPDATELOG -n $mntpt |
+		grep -o "Processing MDT[0-9]*" | awk -F'MDT' '{print $2}'))
+	(( ${#MDTS[@]} == MDSCOUNT )) ||
+		error "Processed ${#MDTS[@]} from $MDSCOUNT"
+
+	do_facet mds2 $RM_UPDATELOG -n -m 1,0 $mntpt
+	MDTS=($(do_facet mds2 $RM_UPDATELOG -n -m 1,0 $mntpt |
+		grep -o "Processing MDT[0-9]*" | awk -F'MDT' '{print $2}'))
+	(( ${#MDTS[@]} == 2 )) ||
+		error "Processed ${#MDTS[@]} instead of 2"
+	(( ${MDTS[0]} == 1 && ${MDTS[1]} == 0 )) ||
+		error "Processed: ${MDTS[*]}, expected: 1 0"
+
+	do_facet mds2 $RM_UPDATELOG -m 0 $mntpt
+	unmount_fstype mds2
+	start_mdt 2 || error "mds2 start fail"
+	start_mdt 1 || error "mds1 start fail"
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds1 FULL
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds2 FULL
+
+	rm -rf $DIR/$tdir || error "Can't remove $tdir"
+	stopall
+	reformat_and_config
+}
+run_test 140 "remove_updatelog script actions"
+
 #
 # (This was sanity/802a)
 #
