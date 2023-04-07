@@ -3579,6 +3579,19 @@ test_401() {
 }
 run_test 401 "Discover peer after adding peer net UDSP rule"
 
+test_402() {
+	reinit_dlc || return $?
+
+	do_lnetctl udsp add --dst kfi --priority 0 ||
+		error "Failed to add UDSP rule"
+
+	do_lnetctl peer add --prim 402@kfi ||
+		error "Failed to add peer"
+
+	return 0
+}
+run_test 402 "Destination net rule should not panic"
+
 complete $SECONDS
 
 cleanup_testsuite
