@@ -55,7 +55,6 @@
 
 struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
 static unsigned int session_key;
-static int lst_list_commands(int argc, char **argv);
 
 /* All nodes running 2.6.50 or later understand feature LST_FEAT_BULK_LEN */
 static unsigned int session_features = LST_FEATS_MASK;
@@ -361,7 +360,9 @@ lst_test_name2type(char *name)
 void
 lst_print_usage(char *cmd)
 {
-        Parser_printhelp(cmd);
+	char *argv[] = { "help", cmd };
+
+	cfs_parser(2, argv, NULL);
 }
 
 void
@@ -3952,8 +3953,6 @@ static command_t lst_cmdlist[] = {
         {"add_test",            jt_lst_add_test,        NULL,
          "Usage: lst add_test [--batch BATCH] [--loop #] [--concurrency #] "
          " [--distribute #:#] [--from GROUP] [--to GROUP] TEST..."                      },
-        {"help",                Parser_help,            0,     "help"                   },
-	{"--list-commands",     lst_list_commands,      0,     "list commands"          },
         {0,                     0,                      0,      NULL                    }
 };
 
@@ -3987,37 +3986,22 @@ lst_initialize(void)
         return 0;
 }
 
-static int lst_list_commands(int argc, char **argv)
+int main(int argc, char **argv)
 {
-	Parser_list_commands(lst_cmdlist, 80, 4);
+	int rc = 0;
 
-	return 0;
-}
+	setlinebuf(stdout);
 
-int
-main(int argc, char **argv)
-{
-        int rc = 0;
-
-        setlinebuf(stdout);
-
-        rc = lst_initialize();
-        if (rc < 0)
-                goto errorout;
+	rc = lst_initialize();
+	if (rc < 0)
+		goto errorout;
 
 	rc = lustre_lnet_config_lib_init();
 	if (rc < 0)
 		goto errorout;
 
-        Parser_init("lst > ", lst_cmdlist);
-
-        if (argc != 1)  {
-                rc = Parser_execarg(argc - 1, argv + 1, lst_cmdlist);
-                goto errorout;
-        }
-
-        Parser_commands();
+	rc = cfs_parser(argc, argv, lst_cmdlist);
 
 errorout:
-        return rc;
+	return rc;
 }

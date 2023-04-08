@@ -124,8 +124,6 @@ static int lfs_getsom(int argc, char **argv);
 static int lfs_heat_get(int argc, char **argv);
 static int lfs_heat_set(int argc, char **argv);
 static int lfs_mirror(int argc, char **argv);
-static int lfs_mirror_list_commands(int argc, char **argv);
-static int lfs_list_commands(int argc, char **argv);
 static inline int lfs_mirror_resync(int argc, char **argv);
 static inline int lfs_mirror_verify(int argc, char **argv);
 static inline int lfs_mirror_read(int argc, char **argv);
@@ -137,7 +135,6 @@ static int lfs_pcc_detach(int argc, char **argv);
 static int lfs_pcc_detach_fid(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
-static int lfs_pcc_list_commands(int argc, char **argv);
 
 enum stats_flag {
 	STATS_ON,
@@ -288,11 +285,6 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Verify mirrored file(s).\n"
 		"usage: lfs mirror verify [--only MIRROR_ID[,...]]\n"
 		"\t\t[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n" },
-	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
-	  .pc_help = "list commands supported by lfs mirror"},
-	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
-	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
-	{ .pc_name = "quit", .pc_func = Parser_quit, .pc_help = "quit" },
 	{ .pc_help = NULL }
 };
 
@@ -318,11 +310,6 @@ command_t pcc_cmdlist[] = {
 	{ .pc_name = "detach_fid", .pc_func = lfs_pcc_detach_fid,
 	  .pc_help = "Detach given files from PCC by FID(s).\n"
 		"usage: lfs pcc detach_fid <mntpath> <fid>...\n" },
-	{ .pc_name = "--list-commands", .pc_func = lfs_pcc_list_commands,
-	  .pc_help = "list commands supported by lfs pcc"},
-	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
-	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
-	{ .pc_name = "quit", .pc_func = Parser_quit, .pc_help = "quit" },
 	{ .pc_help = NULL }
 };
 
@@ -594,13 +581,6 @@ command_t cmdlist[] = {
 	 "lfs pcc state  - display the PCC state for given files\n"
 	 "lfs pcc detach - detach given files from Persistent Client Cache\n"
 	 "lfs pcc detach_fid - detach given files from PCC by FID(s)\n"},
-	{"help", Parser_help, 0, "help"},
-	{"exit", Parser_quit, 0, "quit"},
-	{"quit", Parser_quit, 0, "quit"},
-	{"--version", Parser_version, 0,
-	 "output build version of the utility and exit"},
-	{"--list-commands", lfs_list_commands, 0,
-	 "list commands supported by the utility and exit"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -12743,15 +12723,10 @@ static int lfs_mirror(int argc, char **argv)
 
 	setlinebuf(stdout);
 
-	Parser_init("lfs-mirror > ", mirror_cmdlist);
-
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	program_invocation_short_name = cmd;
-	if (argc > 1)
-		rc = Parser_execarg(argc - 1, argv + 1, mirror_cmdlist);
-	else
-		rc = Parser_commands();
+	rc = cfs_parser(argc, argv, mirror_cmdlist);
 
 	return rc < 0 ? -rc : rc;
 }
@@ -12843,22 +12818,6 @@ static int lfs_getsom(int argc, char **argv)
 		fprintf(stderr, "%s: unknown option\n", progname);
 		return CMD_HELP;
 	}
-
-	return 0;
-}
-
-/**
- * lfs_mirror_list_commands() - List lfs mirror commands.
- * @argc: The count of command line arguments.
- * @argv: Array of strings for command line arguments.
- *
- * This function lists lfs mirror commands defined in mirror_cmdlist[].
- *
- * Return: 0 on success.
- */
-static int lfs_mirror_list_commands(int argc, char **argv)
-{
-	Parser_list_commands(mirror_cmdlist, 80, 4);
 
 	return 0;
 }
@@ -13167,22 +13126,6 @@ static int lfs_pcc_state(int argc, char **argv)
 }
 
 /**
- * lfs_pcc_list_commands() - List lfs pcc commands.
- * @argc: The count of command line arguments.
- * @argv: Array of strings for command line arguments.
- *
- * This function lists lfs pcc commands defined in pcc_cmdlist[].
- *
- * Return: 0 on success.
- */
-static int lfs_pcc_list_commands(int argc, char **argv)
-{
-	Parser_list_commands(pcc_cmdlist, 80, 4);
-
-	return 0;
-}
-
-/**
  * lfs_pcc() - Parse and execute lfs pcc commands.
  * @argc: The count of lfs pcc command line arguments.
  * @argv: Array of strings for lfs pcc command line arguments.
@@ -13199,24 +13142,12 @@ static int lfs_pcc(int argc, char **argv)
 
 	setlinebuf(stdout);
 
-	Parser_init("lfs-pcc > ", pcc_cmdlist);
-
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	program_invocation_short_name = cmd;
-	if (argc > 1)
-		rc = Parser_execarg(argc - 1, argv + 1, pcc_cmdlist);
-	else
-		rc = Parser_commands();
+	rc = cfs_parser(argc, argv, pcc_cmdlist);
 
 	return rc < 0 ? -rc : rc;
-}
-
-static int lfs_list_commands(int argc, char **argv)
-{
-	Parser_list_commands(cmdlist, 80, 4);
-
-	return 0;
 }
 
 int main(int argc, char **argv)
@@ -13230,18 +13161,10 @@ int main(int argc, char **argv)
 	setlinebuf(stdout);
 	opterr = 0;
 
-	Parser_init("lfs > ", cmdlist);
-
 	progname = program_invocation_short_name; /* Used in error messages */
-	if (argc > 1) {
-		llapi_set_command_name(argv[1]);
-		rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
-		llapi_clear_command_name();
-	} else {
-		rc = Parser_commands();
-	}
-
-	Parser_exit(argc, argv);
+	llapi_set_command_name(argv[1]);
+	rc = cfs_parser(argc, argv, cmdlist);
+	llapi_clear_command_name();
 
 	return rc < 0 ? -rc : rc;
 }

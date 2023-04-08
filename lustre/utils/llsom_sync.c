@@ -49,7 +49,6 @@
 #include <linux/lustre/lustre_fid.h>
 #include <libcfs/util/hash.h>
 #include <libcfs/util/list.h>
-#include <libcfs/util/parser.h>
 
 #define container_of(ptr, type, member) ({                      \
 	const typeof(((type *) 0)->member) * __mptr = (ptr);     \
@@ -58,6 +57,7 @@
 #define CHLG_POLL_INTV	60
 #define REC_MIN_AGE	600
 #define DEF_CACHE_SIZE	(256 * 1048576) /* 256MB */
+#define ONE_MB 0x100000
 
 struct options {
 	const char	*o_chlg_user;
@@ -389,14 +389,15 @@ static unsigned long get_fid_cache_size(int pct)
 
 int main(int argc, char **argv)
 {
-	int			 c;
-	int			 rc;
-	void			*chglog_hdlr;
-	struct changelog_rec	*rec;
-	bool			 stop = 0;
-	int			 ret = 0;
-	unsigned long		 cache_size = DEF_CACHE_SIZE;
-	char			 fsname[MAX_OBD_NAME + 1];
+	int c;
+	int rc;
+	void *chglog_hdlr;
+	struct changelog_rec *rec;
+	bool stop = 0;
+	int ret = 0;
+	unsigned long long cache_size = DEF_CACHE_SIZE;
+	char fsname[MAX_OBD_NAME + 1];
+	unsigned long long unit;
 	static struct option options[] = {
 		{ "mdt", required_argument, NULL, 'm' },
 		{ "user", required_argument, 0, 'u'},
@@ -456,7 +457,8 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'c':
-			rc = Parser_size(&cache_size, optarg);
+			unit = ONE_MB;
+			rc = llapi_parse_size(optarg, &cache_size, &unit, 0);
 			if (rc < 0) {
 				rc = -EINVAL;
 				llapi_error(LLAPI_MSG_ERROR, rc,
@@ -469,7 +471,7 @@ int main(int argc, char **argv)
 			 */
 			if (cache_size < 100)
 				cache_size = get_fid_cache_size(cache_size);
-			llapi_printf(LLAPI_MSG_INFO, "Cache size: %lu\n",
+			llapi_printf(LLAPI_MSG_INFO, "Cache size: %llu\n",
 				     cache_size);
 			break;
 		case 'v':

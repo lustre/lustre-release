@@ -71,7 +71,6 @@ static int jt_list_peer(int argc, char **argv);
 static int jt_add_udsp(int argc, char **argv);
 static int jt_del_udsp(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
-static int lnetctl_list_commands(int argc, char **argv);
 static int jt_import(int argc, char **argv);
 static int jt_export(int argc, char **argv);
 static int jt_ping(int argc, char **argv);
@@ -121,10 +120,6 @@ command_t cmd_list[] = {
 	{"cpt-of-nid", jt_calc_cpt_of_nid, 0, "Calculate the CPT associated with NID\n"
 	 "\t--nid: NID to calculate the CPT of\n"
 	 "\t--ncpt: Number of CPTs to consider in the calculation\n"},
-	{"help", Parser_help, 0, "help"},
-	{"exit", Parser_quit, 0, "quit"},
-	{"quit", Parser_quit, 0, "quit"},
-	{"--list-commands", lnetctl_list_commands, 0, "list commands"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -2859,7 +2854,7 @@ static int jt_lnet(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], lnet_cmds);
+	return cfs_parser(argc, argv, lnet_cmds);
 }
 
 static int jt_route(int argc, char **argv)
@@ -2870,7 +2865,7 @@ static int jt_route(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], route_cmds);
+	return cfs_parser(argc, argv, route_cmds);
 }
 
 static int jt_net(int argc, char **argv)
@@ -2881,7 +2876,7 @@ static int jt_net(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], net_cmds);
+	return cfs_parser(argc, argv, net_cmds);
 }
 
 static int jt_routing(int argc, char **argv)
@@ -2892,7 +2887,7 @@ static int jt_routing(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], routing_cmds);
+	return cfs_parser(argc, argv, routing_cmds);
 }
 
 static int jt_stats(int argc, char **argv)
@@ -2903,7 +2898,7 @@ static int jt_stats(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], stats_cmds);
+	return cfs_parser(argc, argv, stats_cmds);
 }
 
 static int jt_debug(int argc, char **argv)
@@ -2914,7 +2909,7 @@ static int jt_debug(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], debug_cmds);
+	return cfs_parser(argc, argv, debug_cmds);
 }
 
 static int jt_global(int argc, char **argv)
@@ -2925,7 +2920,7 @@ static int jt_global(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], global_cmds);
+	return cfs_parser(argc, argv, global_cmds);
 }
 
 static int jt_peers(int argc, char **argv)
@@ -2936,7 +2931,7 @@ static int jt_peers(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], peer_cmds);
+	return cfs_parser(argc, argv, peer_cmds);
 }
 
 static int jt_set(int argc, char **argv)
@@ -2947,7 +2942,7 @@ static int jt_set(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], set_cmds);
+	return cfs_parser(argc, argv, set_cmds);
 }
 
 static int jt_udsp(int argc, char **argv)
@@ -2958,7 +2953,7 @@ static int jt_udsp(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], udsp_cmds);
+	return cfs_parser(argc, argv, udsp_cmds);
 }
 
 static int jt_import(int argc, char **argv)
@@ -3588,13 +3583,6 @@ static int jt_del_udsp(int argc, char **argv)
 	return rc;
 }
 
-static int lnetctl_list_commands(int argc, char **argv)
-{
-	Parser_list_commands(cmd_list, 80, 4);
-
-	return 0;
-}
-
 int main(int argc, char **argv)
 {
 	int rc = 0;
@@ -3608,14 +3596,5 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	Parser_init("lnetctl > ", cmd_list);
-	if (argc > 1) {
-		rc = Parser_execarg(argc - 1, &argv[1], cmd_list);
-		goto errorout;
-	}
-
-	Parser_commands();
-
-errorout:
-	return rc;
+	return cfs_parser(argc, argv, cmd_list);
 }

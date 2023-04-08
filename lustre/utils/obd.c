@@ -596,7 +596,7 @@ int jt_opt_device(int argc, char **argv)
 	rc = do_device("device", argv[1]);
 
 	if (!rc)
-		rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
+		rc = cfs_parser(argc - 1, argv + 1, cmdlist);
 
 	ret = do_disconnect(argv[0], 0);
 	if (!rc)
@@ -775,7 +775,7 @@ int jt_opt_net(int argc, char **argv)
 	rc = jt_ptl_network(2, arg2);
 
 	if (!rc)
-		rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
+		rc = cfs_parser(argc - 1, argv + 1, cmdlist);
 
 	return rc;
 }

@@ -1,22 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (C) 2001 Cluster File Systems, Inc.
  *
  * Copyright (c) 2014, 2017, Intel Corporation.
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ */
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * libcfs/libcfs/parser.c
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * A command line parser.
  *
  */
 
@@ -38,10 +34,8 @@
 #include <libcfs/util/parser.h>
 #include <linux/lustre/lustre_ver.h>
 
-/* Top level of commands, initialized by InitParser */
+/* Top level of commands */
 static command_t *top_level;
-/* Parser prompt, set by InitParser */
-static char *parser_prompt;
 /* Set to 1 if user types exit or quit */
 static int done;
 /*
@@ -50,12 +44,43 @@ static int done;
  */
 static int ignore_errors;
 
-/* static functions */
 static char *skipwhitespace(char *s);
 static char *skiptowhitespace(char *s);
 static command_t *find_cmd(char *name, command_t cmds[], char **next);
 static int process(char *s, char **next, command_t *lookup, command_t **result,
 		   char **prev);
+static int line2args(char *line, char **argv, int maxargs);
+static int cfs_parser_commands(command_t *cmds);
+static int cfs_parser_execarg(int argc, char **argv, command_t cmds[]);
+static int cfs_parser_list_commands(const command_t *cmdlist, int line_len,
+				int col_num);
+static int cfs_parser_list(int argc, char **argv);
+static int cfs_parser_help(int argc, char **argv);
+static int cfs_parser_quit(int argc, char **argv);
+static int cfs_parser_version(int argc, char **argv);
+static int cfs_parser_ignore_errors(int argc, char **argv);
+
+command_t override_cmdlist[] = {
+	{ .pc_name = "quit", .pc_func = cfs_parser_quit, .pc_help = "quit" },
+	{ .pc_name = "exit", .pc_func = cfs_parser_quit, .pc_help = "exit" },
+	{ .pc_name = "help", .pc_func = cfs_parser_help, .pc_help = "help" },
+	{ .pc_name = "--help", .pc_func = cfs_parser_help, .pc_help = "help" },
+	{ .pc_name = "version", .pc_func = cfs_parser_version,
+	  .pc_help = "version" },
+	{ .pc_name = "--version", .pc_func = cfs_parser_version,
+	  .pc_help = "version" },
+	{ .pc_name = "list-commands", .pc_func = cfs_parser_list,
+	  .pc_help = "list" },
+	{ .pc_name = "--list-commands", .pc_func = cfs_parser_list,
+	  .pc_help = "list" },
+	{ .pc_name = "--ignore_errors", .pc_func = cfs_parser_ignore_errors,
+	  .pc_help = "ignore errors that occur during script processing\n"
+		"--ignore_errors"},
+	{ .pc_name = "ignore_errors", .pc_func = cfs_parser_ignore_errors,
+	  .pc_help = "ignore errors that occur during script processing\n"
+		"ignore_errors"},
+	{ .pc_name = 0, .pc_func = NULL, .pc_help = 0 }
+};
 
 static char *skipwhitespace(char *s)
 {
@@ -93,7 +118,7 @@ static int line2args(char *line, char **argv, int maxargs)
 }
 
 /* find a command -- return it if unique otherwise print alternatives */
-static command_t *Parser_findargcmd(char *name, command_t cmds[])
+static command_t *cfs_parser_findargcmd(char *name, command_t cmds[])
 {
 	command_t *cmd;
 
@@ -104,16 +129,40 @@ static command_t *Parser_findargcmd(char *name, command_t cmds[])
 	return NULL;
 }
 
-void Parser_ignore_errors(int ignore)
+static int cfs_parser_ignore_errors(int argc, char **argv)
 {
-	ignore_errors = ignore;
+	(void) argc;
+	(void) argv;
+
+	ignore_errors = 1;
+
+	return 0;
 }
 
-int Parser_execarg(int argc, char **argv, command_t cmds[])
+int cfs_parser(int argc, char **argv, command_t cmds[])
+{
+	int rc = 0;
+
+	done = 0;
+	top_level = cmds;
+
+	if (argc > 1)
+		rc = cfs_parser_execarg(argc - 1, argv + 1, cmds);
+	else
+		rc = cfs_parser_commands(cmds);
+
+	return rc;
+}
+
+static int cfs_parser_execarg(int argc, char **argv, command_t cmds[])
 {
 	command_t *cmd;
 
-	cmd = Parser_findargcmd(argv[0], cmds);
+	cmd = cfs_parser_findargcmd(argv[0], override_cmdlist);
+
+	if (!cmd)
+		cmd = cfs_parser_findargcmd(argv[0], cmds);
+
 	if (cmd && cmd->pc_func) {
 		int rc = cmd->pc_func(argc, argv);
 
@@ -123,17 +172,7 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 		}
 		return rc;
 	}
-	/*
-	 * handle --help here as a synonym of --list-commands so that it can be
-	 * applied to all commands without needing to individually add a --help
-	 * option to each command.
-	 * This does not apply to lctl which has its own --help option because
-	 * `lctl --list-commands` uses a unique format.
-	 */
-	if (strcmp(argv[0], "--help") == 0) {
-		Parser_list_commands(cmds, 80, 4);
-		return 0;
-	}
+
 	fprintf(stderr,
 		"%s: '%s' is not a valid command. See '%s --list-commands'.\n",
 		program_invocation_short_name, argv[0],
@@ -165,6 +204,12 @@ static command_t *find_cmd(char *name, command_t cmds[], char **next)
 	if (len == 0)
 		return NULL;
 
+	for (i = 0; override_cmdlist[i].pc_name; i++) {
+		if (strncasecmp(name, override_cmdlist[i].pc_name, len) == 0) {
+			*next = skipwhitespace(*next);
+			return &override_cmdlist[i];
+		}
+	}
 	for (i = 0; cmds[i].pc_name; i++) {
 		if (strncasecmp(name, cmds[i].pc_name, len) == 0) {
 			*next = skipwhitespace(*next);
@@ -402,7 +447,7 @@ outfree:
 #endif
 
 /* this is the command execution machine */
-int Parser_commands(void)
+static int cfs_parser_commands(command_t *cmds)
 {
 	char *line, *s;
 	int rc = 0, save_error = 0;
@@ -411,7 +456,7 @@ int Parser_commands(void)
 	interactive = init_input();
 
 	while (!done) {
-		line = readline(interactive ? parser_prompt : NULL);
+		line = readline(interactive ? "> " : NULL);
 
 		if (!line)
 			break;
@@ -438,52 +483,7 @@ int Parser_commands(void)
 	return rc;
 }
 
-/* sets the parser prompt */
-void Parser_init(char *prompt, command_t *cmds)
-{
-	done = 0;
-	top_level = cmds;
-	if (parser_prompt)
-		free(parser_prompt);
-	parser_prompt = strdup(prompt);
-}
-
-/* frees the parser prompt */
-void Parser_exit(int argc, char *argv[])
-{
-	done = 1;
-	free(parser_prompt);
-	parser_prompt = NULL;
-}
-
-/* convert a string to an integer */
-int Parser_int(char *s, int *val)
-{
-	int ret;
-
-	if (*s != '0') {
-		ret = sscanf(s, "%d", val);
-	} else if (*(s + 1) != 'x') {
-		ret = sscanf(s, "%o", val);
-	} else {
-		s++;
-		ret = sscanf(++s, "%x", val);
-	}
-
-	return ret;
-}
-
-void Parser_qhelp(int argc, char *argv[])
-{
-	printf("usage: %s [COMMAND] [OPTIONS]... [ARGS]\n",
-	       program_invocation_short_name);
-	printf("Without any parameters, interactive mode is invoked\n");
-
-	printf("Try '%s help <COMMAND>', or '%s --list-commands' for a list of commands.\n",
-		program_invocation_short_name, program_invocation_short_name);
-}
-
-int Parser_help(int argc, char **argv)
+static int cfs_parser_help(int argc, char **argv)
 {
 	char line[1024];
 	char *next, *prev, *tmp;
@@ -491,7 +491,12 @@ int Parser_help(int argc, char **argv)
 	int i;
 
 	if (argc == 1) {
-		Parser_qhelp(argc, argv);
+		printf("usage: %s [COMMAND] [OPTIONS]... [ARGS]\n",
+			program_invocation_short_name);
+		printf("Without any parameters, interactive mode is invoked\n");
+		printf("Try '%s help <COMMAND>', or '%s --list-commands' for a list of commands.\n",
+			program_invocation_short_name,
+			program_invocation_short_name);
 		return 0;
 	}
 
@@ -542,17 +547,8 @@ int Parser_help(int argc, char **argv)
 	return 0;
 }
 
-void Parser_printhelp(char *cmd)
-{
-	char *argv[] = { "help", cmd };
-
-	Parser_help(2, argv);
-}
-
-/* COMMANDS */
-
 /**
- * Parser_list_commands() - Output a list of the supported commands.
+ * cfs_parser_list_commands() - Output a list of the supported commands.
  * @cmdlist:	  Array of structures describing the commands.
  * @line_len:	  Length of output line.
  * @col_num:	  The number of commands printed in a single row.
@@ -562,8 +558,8 @@ void Parser_printhelp(char *cmd)
  *
  * Return: The number of items that were printed.
  */
-int Parser_list_commands(const command_t *cmdlist, int line_len,
-			 int col_num)
+static int cfs_parser_list_commands(const command_t *cmdlist, int line_len,
+				int col_num)
 {
 	int char_max;
 	int count = 0;
@@ -600,243 +596,47 @@ int Parser_list_commands(const command_t *cmdlist, int line_len,
 	return count;
 }
 
-char *Parser_getstr(const char *prompt, const char *deft, char *res,
-		    size_t len)
-{
-	char *line = NULL;
-	int size = strlen(prompt) + strlen(deft) + 8;
-	char *theprompt;
-
-	theprompt = malloc(size);
-	assert(theprompt);
-
-	snprintf(theprompt, size, "%s [%s]: ", prompt, deft);
-
-	line  = readline(theprompt);
-	free(theprompt);
-
-	/*
-	 * The function strlcpy() cannot be used here because of
-	 * this function is used in LNet utils that is not linked
-	 * with libcfs.a.
-	 */
-	if (!line || *line == '\0')
-		strncpy(res, deft, len);
-	else
-		strncpy(res, line, len);
-	res[len - 1] = '\0';
-
-	if (line) {
-		free(line);
-		return res;
-	}
-	return NULL;
-}
-
-/* get integer from prompt, loop forever to get it */
-int Parser_getint(const char *prompt, long min, long max, long deft, int base)
-{
-	int rc;
-	long result;
-	char *line;
-	int size = strlen(prompt) + 40;
-	char *theprompt = malloc(size);
-
-	assert(theprompt);
-	snprintf(theprompt, size, "%s [%ld, (0x%lx)]: ", prompt, deft, deft);
-	fflush(stdout);
-
-	do {
-		line = NULL;
-		line = readline(theprompt);
-		if (!line) {
-			fprintf(stdout, "Please enter an integer.\n");
-			fflush(stdout);
-			continue;
-		}
-		if (*line == '\0') {
-			free(line);
-			result =  deft;
-			break;
-		}
-		rc = Parser_arg2int(line, &result, base);
-		free(line);
-		if (rc != 0) {
-			fprintf(stdout, "Invalid string.\n");
-			fflush(stdout);
-		} else if (result > max || result < min) {
-			fprintf(stdout,
-				"Error: response must lie between %ld and %ld.\n",
-				min, max);
-			fflush(stdout);
-		} else {
-			break;
-		}
-	} while (1);
-
-	if (theprompt)
-		free(theprompt);
-	return result;
-}
-
-/* get boolean (starting with YyNn; loop forever */
-int Parser_getbool(const char *prompt, int deft)
-{
-	int result = 0;
-	char *line;
-	int size = strlen(prompt) + 8;
-	char *theprompt = malloc(size);
-
-	assert(theprompt);
-	fflush(stdout);
-
-	if (deft != 0 && deft != 1) {
-		fprintf(stderr, "Error: Parser_getbool given bad default %d\n",
-			deft);
-		assert(0);
-	}
-	snprintf(theprompt, size, "%s [%s]: ", prompt, (deft == 0) ? "N" : "Y");
-
-	do {
-		line = NULL;
-		line = readline(theprompt);
-		if (!line) {
-			result = deft;
-			break;
-		}
-		if (*line == '\0') {
-			result = deft;
-			break;
-		}
-		if (*line == 'y' || *line == 'Y') {
-			result = 1;
-			break;
-		}
-		if (*line == 'n' || *line == 'N') {
-			result = 0;
-			break;
-		}
-		if (line)
-			free(line);
-		fprintf(stdout, "Invalid string. Must start with yY or nN\n");
-		fflush(stdout);
-	} while (1);
-
-	if (line)
-		free(line);
-	if (theprompt)
-		free(theprompt);
-
-	return result;
-}
-
-/* parse int out of a string or prompt for it */
-long Parser_intarg(const char *inp, const char *prompt, int deft,
-		   int min, int max, int base)
-{
-	long result;
-	int rc;
-
-	rc = Parser_arg2int(inp, &result, base);
-	if (rc == 0)
-		return result;
-	else
-		return Parser_getint(prompt, deft, min, max, base);
-}
-
-/* parse int out of a string or prompt for it */
-char *Parser_strarg(char *inp, const char *prompt, const char *deft,
-		    char *answer, int len)
-{
-	if (!inp || *inp == '\0')
-		return Parser_getstr(prompt, deft, answer, len);
-	else
-		return inp;
-}
-
-/*
- * change a string into a number: return 0 on success. No invalid characters
- * allowed. The processing of base and validity follows strtol(3)
- */
-int Parser_arg2int(const char *inp, long *result, int base)
-{
-	char *endptr;
-
-	if ((base != 0) && (base < 2 || base > 36))
-		return 1;
-
-	*result = strtol(inp, &endptr, base);
-
-	if (*inp != '\0' && *endptr == '\0')
-		return 0;
-	else
-		return 1;
-}
-
-/* Convert human readable size string to and int; "1k" -> 1000 */
-int Parser_size(unsigned long *sizep, char *str)
-{
-	unsigned long size;
-	char mod[32];
-
-	switch (sscanf(str, "%lu%1[gGmMkK]", &size, mod)) {
-	default:
-		return -1;
-	case 1:
-		*sizep = size;
-		return 0;
-	case 2:
-		switch (*mod) {
-		case 'g':
-		case 'G':
-			*sizep = size << 30;
-			return 0;
-		case 'm':
-		case 'M':
-			*sizep = size << 20;
-			return 0;
-		case 'k':
-		case 'K':
-			*sizep = size << 10;
-			return 0;
-		default:
-			*sizep = size;
-			return 0;
-		}
-	}
-}
-
-/* Convert a string boolean to an int; "enable" -> 1 */
-int Parser_bool(int *b, char *str)
-{
-	if (!strcasecmp(str, "no") || !strcasecmp(str, "n") ||
-	    !strcasecmp(str, "off") || !strcasecmp(str, "down") ||
-	    !strcasecmp(str, "disable")) {
-		*b = 0;
-		return 0;
-	}
-
-	if (!strcasecmp(str, "yes") || !strcasecmp(str, "y") ||
-	    !strcasecmp(str, "on") || !strcasecmp(str, "up") ||
-	    !strcasecmp(str, "enable")) {
-		*b = 1;
-		return 0;
-	}
-
-	return -1;
-}
-
-int Parser_quit(int argc, char **argv)
+static int cfs_parser_quit(int argc, char **argv)
 {
 	(void) argc;
 	(void) argv;
+
 	done = 1;
+
 	return 0;
 }
 
-int Parser_version(int argc, char **argv)
+static int cfs_parser_version(int argc, char **argv)
 {
+	(void) argc;
+	(void) argv;
+
 	fprintf(stdout, "%s %s\n", program_invocation_short_name,
 		LUSTRE_VERSION_STRING);
+
+	return 0;
+}
+
+static int cfs_parser_list(int argc, char **argv)
+{
+	command_t *cmd;
+	int num_cmds_listed;
+
+	(void) argc;
+	(void) argv;
+
+	cmd = top_level;
+	while (cmd->pc_name != NULL) {
+		if (!cmd->pc_func) {
+			/*
+			 * print the command category
+			 */
+			printf("\n%s\n", cmd->pc_name);
+			cmd++;
+		}
+		num_cmds_listed = cfs_parser_list_commands(cmd, 80, 4);
+		cmd += num_cmds_listed;
+	}
+
 	return 0;
 }

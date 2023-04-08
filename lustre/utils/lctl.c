@@ -46,15 +46,6 @@
 #include <linux/lustre/lustre_ver.h>
 #include <lustre/lustreapi.h>
 
-static int lctl_list_commands(int argc, char **argv);
-
-static int jt_opt_ignore_errors(int argc, char **argv)
-{
-	Parser_ignore_errors(1);
-	return 0;
-}
-
-static int jt_pcc_list_commands(int argc, char **argv);
 static int jt_pcc(int argc, char **argv);
 
 /**
@@ -76,11 +67,6 @@ command_t pccdev_cmdlist[] = {
 	{ .pc_name = "list", .pc_func = jt_pcc_list,
 	  .pc_help = "List all PCC backends on a client.\n"
 		"usage: lctl pcc list <mntpath>\n" },
-	{ .pc_name = "--list-commands", .pc_func = jt_pcc_list_commands,
-	  .pc_help = "list commands supported by lctl pcc"},
-	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
-	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
-	{ .pc_name = "quit", .pc_func = Parser_quit, .pc_help = "quit" },
 	{ .pc_help = NULL }
 };
 
@@ -90,28 +76,12 @@ command_t cmdlist[] = {
 	{"--device", jt_opt_device, 0,
 	 "run <command> after connecting to device <devno>\n"
 	 "--device <devno> <command [args ...]>"},
-	{"--ignore_errors", jt_opt_ignore_errors, 0,
-	 "ignore errors that occur during script processing\n"
-	 "--ignore_errors"},
-	{"ignore_errors", jt_opt_ignore_errors, 0,
-	 "ignore errors that occur during script processing\n"
-	 "ignore_errors"},
 
 	/* User interface commands */
 	{"======== control =========", NULL, 0, "control commands"},
-	{"help", Parser_help, 0, "help"},
 	{"lustre_build_version", jt_get_version, 0,
 	 "print version of Lustre modules\n"
 	 "usage: lustre_build_version"},
-	{"exit", Parser_quit, 0, "quit"},
-	{"quit", Parser_quit, 0, "quit"},
-	{"--version", Parser_version, 0,
-	 "print build version of this utility and exit"},
-	{"--list-commands", lctl_list_commands, 0,
-	 "list commands supported by this utility and exit"},
-	/* help is a synonym of --list-commands */
-	{"--help", lctl_list_commands, 0,
-	 "list commands supported by this utility and exit"},
 
 	/* Network configuration commands */
 	{"===== network config =====", NULL, 0, "network config"},
@@ -593,22 +563,6 @@ command_t cmdlist[] = {
 };
 
 /**
- * jt_pcc_list_commands() - List lctl pcc commands.
- * @argc: The count of command line arguments.
- * @argv: Array of strings for command line arguments.
- *
- * This function lists lctl pcc commands defined in pccdev_cmdlist[].
- *
- * Return: 0 on success.
- */
-static int jt_pcc_list_commands(int argc, char **argv)
-{
-	Parser_list_commands(pccdev_cmdlist, 80, 4);
-
-	return 0;
-}
-
-/**
  * jt_pcc() - Parse and execute lctl pcc commands.
  * @argc: The count of lctl pcc command line arguments.
  * @argv: Array of strings for lctl pcc command line arguments.
@@ -625,15 +579,10 @@ static int jt_pcc(int argc, char **argv)
 
 	setlinebuf(stdout);
 
-	Parser_init("lctl-pcc > ", pccdev_cmdlist);
-
 	snprintf(cmd, sizeof(cmd), "%s %s", program_invocation_short_name,
 		 argv[0]);
 	program_invocation_short_name = cmd;
-	if (argc > 1)
-		rc = Parser_execarg(argc - 1, argv + 1, pccdev_cmdlist);
-	else
-		rc = Parser_commands();
+	rc = cfs_parser(argc, argv, pccdev_cmdlist);
 
 	return rc < 0 ? -rc : rc;
 }
@@ -651,35 +600,12 @@ int lctl_main(int argc, char **argv)
 	if (dbg_initialize(argc, argv) < 0)
 		exit(3);
 
-	Parser_init("lctl > ", cmdlist);
-
-	if (argc > 1) {
-		llapi_set_command_name(argv[1]);
-		rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
-		llapi_clear_command_name();
-	} else {
-		rc = Parser_commands();
-	}
-
+	llapi_set_command_name(argv[1]);
+	rc = cfs_parser(argc, argv, cmdlist);
+	llapi_clear_command_name();
 	obd_finalize(argc, argv);
-	Parser_exit(argc, argv);
+
 	return rc < 0 ? -rc : rc;
-}
-
-static int lctl_list_commands(int argc, char **argv)
-{
-	command_t *cmd;
-	int rc;
-
-	cmd = cmdlist;
-	while (cmd->pc_name != NULL) {
-		printf("\n%s\n", cmd->pc_name); /* Command category */
-		cmd++;
-		rc = Parser_list_commands(cmd, 80, 4);
-		cmd += rc;
-	}
-
-	return 0;
 }
 
 int main(int argc, char **argv)
