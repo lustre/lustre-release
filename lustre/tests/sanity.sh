@@ -28914,11 +28914,8 @@ test_806() {
 
 	$LFS setstripe -c-1 $DIR/$tfile || error "setstripe $tfile failed"
 
-	# Disable opencache
-	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	save_lustre_params client "llite.*.opencache_threshold_count" > $save
-	lctl set_param llite.*.opencache_threshold_count=0
-	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	disable_opencache
+	stack_trap "restore_opencache"
 
 	# single-threaded write
 	echo "Test SOM for single-threaded write"
