@@ -1293,7 +1293,7 @@ static void sec_cop_destroy_sec(struct ptlrpc_sec *sec)
 	LASSERT_ATOMIC_ZERO(&sec->ps_nctx);
 	LASSERT(policy->sp_cops->destroy_sec);
 
-	CDEBUG(D_SEC, "%s@%p: being destroied\n", sec->ps_policy->sp_name, sec);
+	CDEBUG(D_SEC, "%s@%p: being destroyed\n", sec->ps_policy->sp_name, sec);
 
 	policy->sp_cops->destroy_sec(sec);
 	sptlrpc_policy_put(policy);

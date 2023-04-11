@@ -622,7 +622,7 @@ cfg_kdc() {
 	local tmpacl=$tmpdir/kadm5.acl
 
 	echo "+++ Configuring KDC on $MY_KDCNODE"
-	echo "Warning: old KDC setting on $MY_KDCNODE will be destroied!!!"
+	echo "Warning: old KDC setting on $MY_KDCNODE will be destroyed!!!"
 
 	echo -n "Checking the existence of KDC config dir..."
 	do_kdc_mute "[ -d $KDC_CONF_DIR ]"

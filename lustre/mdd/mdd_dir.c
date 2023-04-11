@@ -2618,7 +2618,7 @@ err_initlized:
 		int rc2;
 		if (S_ISDIR(attr->la_mode)) {
 			/* Drop the reference, no need to delete "."/"..",
-			 * because the object to be destroied directly. */
+			 * because the object to be destroyed directly. */
 			rc2 = mdo_ref_del(env, son, handle);
 			if (rc2 != 0)
 				GOTO(unlock, rc);

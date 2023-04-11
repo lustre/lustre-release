@@ -3663,7 +3663,7 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
 			RETURN(-EINVAL);
 	}
 
-	/* preapre room for this coming rule. svcname format should be:
+	/* prepare room for this coming rule. svcname format should be:
 	 * - fsname: general rule
 	 * - fsname-tgtname: target-specific rule
 	 */
@@ -3725,7 +3725,7 @@ static int mgs_srpc_set_param(const struct lu_env *env,
 #ifndef HAVE_GSS
 	RETURN(-EINVAL);
 #endif
-	/* keep a copy of original param, which could be destroied
+	/* keep a copy of original param, which could be destroyed
 	 * during parsing
 	 */
 	copy_size = strlen(param) + 1;
