@@ -65,12 +65,12 @@ def print_one_device(obd, stats_flag):
     connect_cnt = 0
     inflight=0
     if obd.u.cli.cl_import:
-          impstate=IMP_STATE.get(obd.u.cli.cl_import.imp_state)
-          index=obd.u.cli.cl_import.imp_state_hist_idx - 1
-          if index > 0 and index < 16:
-            ish_time=obd.u.cli.cl_import.imp_state_hist[index].ish_time
-          inflight=obd.u.cli.cl_import.imp_inflight.counter
-          connect_cnt = obd.u.cli.cl_import.imp_conn_cnt
+        impstate = IMP_STATE.get(obd.u.cli.cl_import.imp_state)
+        index = obd.u.cli.cl_import.imp_state_hist_idx - 1
+        if index > 0 and index < 16:
+            ish_time = obd.u.cli.cl_import.imp_state_hist[index].ish_time
+        inflight = obd.u.cli.cl_import.imp_inflight.counter
+        connect_cnt = obd.u.cli.cl_import.imp_conn_cnt
 
     print("0x%-17x %-22s\t%-22s\t 0x%-17x 0x%-17x %-10s %-10d %5d %5d" % \
           (Addr(obd),
@@ -106,8 +106,8 @@ if __name__ == "__main__":
     description = "Displays the contents of global 'obd_devs'"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("obd_device", nargs="?", default = [], type=toint,
-        help="print obd_device at argument address")
+        help = "print obd_device at argument address")
     parser.add_argument("-r", dest="stats_flag", action="count",
-        help="print the rpc_stats sequence for each client_obd")
+        help = "print the rpc_stats sequence for each client_obd")
     args = parser.parse_args()
     obd_devs(args)

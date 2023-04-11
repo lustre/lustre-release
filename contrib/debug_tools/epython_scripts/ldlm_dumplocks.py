@@ -39,7 +39,7 @@ def lockmode2str(mode):
 def ldlm_dump_lock(lock, pos, lstname):
     obd = None
     imp = None
-    if(lock == None):
+    if lock == None:
         print("   NULL LDLM lock")
         return
     try:
@@ -51,13 +51,13 @@ def ldlm_dump_lock(lock, pos, lstname):
         print("   -- Lock: (ldlm_lock) %#x/%#x (rc: %d) (pos: %d/%s) (pid: %d)" % \
               (Addr(lock), lock.l_handle.h_cookie, refcounter,
               pos, lstname, lock.l_pid))
-        if(lock.l_conn_export):
+        if lock.l_conn_export:
             obd = lock.l_conn_export.exp_obd
-        if(lock.l_export and lock.l_export.exp_connection):
+        if lock.l_export and lock.l_export.exp_connection:
             print("       Node: NID %s (remote: %#x) export" % \
                   (ll.nid2str(lock.l_export.exp_connection.c_peer.nid),
                   lock.l_remote_handle.cookie))
-        elif(obd == None):
+        elif obd == None:
             print("       Node: local")
         else:
             imp = obd.u.cli.cl_import
@@ -80,17 +80,17 @@ def ldlm_dump_lock(lock, pos, lstname):
               lock.l_flags))
 
         lr_type = lock.l_resource.lr_type
-        if(lr_type == enum_LDLM_EXTENT):
+        if lr_type == enum_LDLM_EXTENT:
             print("       Extent: %d -> %d (req %d-%d)" % \
                   (lock.l_policy_data.l_extent.start,
                   lock.l_policy_data.l_extent.end,
                   lock.l_req_extent.start, lock.l_req_extent.end))
-        elif(lr_type == enum_LDLM_FLOCK):
+        elif lr_type == enum_LDLM_FLOCK:
             print("       Pid: %d Flock: 0x%x -> 0x%x" % \
                   (lock.l_policy_data.l_flock.pid,
                   lock.l_policy_data.l_flock.start,
                   lock.l_policy_data.l_flock.end))
-        elif(lr_type == enum_LDLM_IBITS):
+        elif lr_type == enum_LDLM_IBITS:
             print("       Bits: %#x" % \
                   (lock.l_policy_data.l_inodebits.bits))
     except (crash.error, IndexError):

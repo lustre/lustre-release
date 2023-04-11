@@ -15,7 +15,7 @@ def ptov(physaddr):
 
 def phys2pfn(physaddr):
     """Convert a physical address to a page offset."""
-    return physaddr >> crashlib.cid.mdtbl.pageshift
+    return physaddr >> int(crashlib.cid.mdtbl.pageshift)
 
 def pfn2phys(pfn):
     """Convert a page offset into a physical address."""
