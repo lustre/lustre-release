@@ -307,17 +307,20 @@ static int mgs_check_target(const struct lu_env *env,
 /* Ensure this is not a failover node that is connecting first*/
 static int mgs_check_failover_reg(struct mgs_target_info *mti)
 {
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 	char *ptr;
 	int i;
 
 	ptr = mti->mti_params;
 	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
-		while (class_parse_nid4_quiet(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
 			for (i = 0; i < mti->mti_nid_count; i++) {
-				if (nid == mti->mti_nids[i]) {
+				struct lnet_nid nid2;
+
+				lnet_nid4_to_nid(mti->mti_nids[i], &nid2);
+				if (nid_same(&nid, &nid2)) {
 					LCONSOLE_WARN("Denying initial registration attempt from nid %s, specified as failover\n",
-						      libcfs_nid2str(nid));
+						      libcfs_nidstr(&nid));
 					return -EADDRNOTAVAIL;
 				}
 			}

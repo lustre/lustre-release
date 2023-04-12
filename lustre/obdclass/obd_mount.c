@@ -180,6 +180,15 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 	return rc;
 }
 
+static int do_lcfg_nid(char *cfgname, struct lnet_nid *nid, int cmd,
+		       char *s1)
+{
+	if (nid_is_nid4(nid))
+		return do_lcfg(cfgname, lnet_nid_to_nid4(nid), cmd, s1,
+			       NULL, NULL, NULL);
+	return -EINVAL;
+}
+
 /**
  * Call class_attach and class_setup.  These methods in turn call
  * OBD type-specific methods.
@@ -222,7 +231,7 @@ int lustre_start_mgc(struct super_block *sb)
 	struct obd_export *exp;
 	struct obd_uuid *uuid = NULL;
 	uuid_t uuidc;
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 	char nidstr[LNET_NIDSTR_SIZE];
 	char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
 	char *ptr;
@@ -238,7 +247,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* mount -o mgsnode=nid */
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		if (lsi->lsi_lmd->lmd_mgs &&
-		    (class_parse_nid4(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
+		    (class_parse_nid(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
 			i++;
 		} else if (IS_MGS(lsi)) {
 			struct lnet_processid id;
@@ -246,7 +255,7 @@ int lustre_start_mgc(struct super_block *sb)
 			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
 				if (nid_is_lo0(&id.nid))
 					continue;
-				nid = lnet_nid_to_nid4(&id.nid);
+				nid = id.nid;
 				i++;
 				break;
 			}
@@ -254,7 +263,7 @@ int lustre_start_mgc(struct super_block *sb)
 	} else { /* client */
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
-		if (class_parse_nid4(ptr, &nid, &ptr) == 0)
+		if (class_parse_nid(ptr, &nid, &ptr) == 0)
 			i++;
 	}
 	if (i == 0) {
@@ -264,7 +273,7 @@ int lustre_start_mgc(struct super_block *sb)
 
 	mutex_lock(&mgc_start_lock);
 
-	libcfs_nid2str_r(nid, nidstr, sizeof(nidstr));
+	libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
 	len = strlen(LUSTRE_MGC_OBDNAME) + strlen(nidstr) + 1;
 	OBD_ALLOC(mgcname, len);
 	OBD_ALLOC(niduuid, len + 2);
@@ -352,9 +361,9 @@ int lustre_start_mgc(struct super_block *sb)
 			struct lnet_processid id;
 
 			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-				rc = do_lcfg(mgcname, lnet_nid_to_nid4(&id.nid),
-					     LCFG_ADD_UUID,
-					     niduuid, NULL, NULL, NULL);
+				rc = do_lcfg_nid(mgcname, &id.nid,
+						 LCFG_ADD_UUID,
+						 niduuid);
 			}
 		} else {
 			/* Use mgsnode= nids */
@@ -371,9 +380,10 @@ int lustre_start_mgc(struct super_block *sb)
 			 * Multiple NIDs on one MGS node are separated
 			 * by commas.
 			 */
-			while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
-				rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
-					     niduuid, NULL, NULL, NULL);
+			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+				rc = do_lcfg_nid(mgcname, &nid,
+						 LCFG_ADD_UUID,
+						 niduuid);
 				if (rc == 0)
 					++i;
 				/* Stop at the first failover NID */
@@ -384,9 +394,9 @@ int lustre_start_mgc(struct super_block *sb)
 	} else { /* client */
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
-		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
-			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
-				     niduuid, NULL, NULL, NULL);
+		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID,
+					 niduuid);
 			if (rc == 0)
 				++i;
 			/* Stop at the first failover NID */
@@ -422,9 +432,9 @@ int lustre_start_mgc(struct super_block *sb)
 		/* New failover node */
 		sprintf(niduuid, "%s_%x", mgcname, i);
 		j = 0;
-		while (class_parse_nid4_quiet(ptr, &nid, &ptr) == 0) {
-			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
-				     niduuid, NULL, NULL, NULL);
+		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID,
+					 niduuid);
 			if (rc == 0)
 				++j;
 			if (*ptr == ':')
@@ -1149,14 +1159,14 @@ static int lmd_parse_string(char **handle, char *ptr)
 /* Collect multiple values for mgsnid specifiers */
 static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
 {
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 	char *tail = *ptr;
 	char *mgsnid;
 	int length;
 	int oldlen = 0;
 
 	/* Find end of NID-list */
-	while (class_parse_nid4_quiet(tail, &nid, &tail) == 0)
+	while (class_parse_nid_quiet(tail, &nid, &tail) == 0)
 		; /* do nothing */
 
 	length = tail - *ptr;

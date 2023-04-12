@@ -1130,7 +1130,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 			   struct mgs_replace_data *mrd)
 {
 	int nids_added = 0;
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 	char *ptr;
 	int rc = 0;
 
@@ -1139,32 +1139,29 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		/* LCFG_ADD_UUID command found. Let's skip original command
 		   and add passed nids */
 		ptr = mrd->target.mti_params;
-		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
-			struct lnet_nid lnid;
-
+		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 			if (!mrd->nodeuuid) {
 				rc = name_create(&mrd->nodeuuid,
-						 libcfs_nid2str(nid), "");
+						 libcfs_nidstr(&nid), "");
 				if (rc) {
 					CERROR("Can't create uuid for "
 						"nid  %s, device %s\n",
-						libcfs_nid2str(nid),
+						libcfs_nidstr(&nid),
 						mrd->target.mti_svname);
 					return rc;
 				}
 			}
-			CDEBUG(D_MGS, "add nid %s with uuid %s, "
-			       "device %s\n", libcfs_nid2str(nid),
-				mrd->target.mti_params,
-				mrd->nodeuuid);
-			lnet_nid4_to_nid(nid, &lnid);
+			CDEBUG(D_MGS, "add nid %s with uuid %s, device %s\n",
+			       libcfs_nidstr(&nid),
+			       mrd->target.mti_params,
+			       mrd->nodeuuid);
 			rc = record_add_uuid(env,
-					     mrd->temp_llh, &lnid,
+					     mrd->temp_llh, &nid,
 					     mrd->nodeuuid);
 			if (rc)
 				CWARN("%s: Can't add nid %s for uuid %s :rc=%d\n",
 					mrd->target.mti_svname,
-					libcfs_nid2str(nid),
+					libcfs_nidstr(&nid),
 					mrd->nodeuuid, rc);
 			else
 				nids_added++;
@@ -1176,8 +1173,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		}
 
 		if (nids_added == 0) {
-			CERROR("No new nids were added, nid %s with uuid %s, "
-			       "device %s\n", libcfs_nid2str(nid),
+			CERROR("No new nids were added, nid %s with uuid %s, device %s\n",
+			       libcfs_nidstr(&nid),
 			       mrd->nodeuuid ? mrd->nodeuuid : "NULL",
 			       mrd->target.mti_svname);
 			name_destroy(&mrd->nodeuuid);
@@ -1209,26 +1206,23 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 
 		if (mrd->failover) {
 			ptr = mrd->failover;
-			while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
-				struct lnet_nid lnid;
-
+			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 				if (mrd->nodeuuid == NULL) {
 					rc =  name_create(&mrd->nodeuuid,
-							  libcfs_nid2str(nid),
+							  libcfs_nidstr(&nid),
 							  "");
 					if (rc)
 						return rc;
 				}
 
 				CDEBUG(D_MGS, "add nid %s for failover %s\n",
-				       libcfs_nid2str(nid), mrd->nodeuuid);
-				lnet_nid4_to_nid(nid, &lnid);
-				rc = record_add_uuid(env, mrd->temp_llh, &lnid,
+				       libcfs_nidstr(&nid), mrd->nodeuuid);
+				rc = record_add_uuid(env, mrd->temp_llh, &nid,
 						     mrd->nodeuuid);
 				if (rc) {
 					CWARN("%s: Can't add nid %s for failover %s :rc = %d\n",
 						mrd->target.mti_svname,
-						libcfs_nid2str(nid),
+						libcfs_nidstr(&nid),
 						mrd->nodeuuid, rc);
 					name_destroy(&mrd->nodeuuid);
 					return rc;
@@ -2497,7 +2491,7 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 {
 	char *failnodeuuid = NULL;
 	char *ptr = mti->mti_params;
-	lnet_nid_t nid;
+	struct lnet_nid nid;
 	int rc = 0;
 
 	/*
@@ -2511,29 +2505,27 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 
 	/*
 	 * Pull failnid info out of params string, which may contain something
-	 * like "<nid1>,<nid2>:<nid3>,<nid4>".  class_parse_nid4() does not
+	 * like "<nid1>,<nid2>:<nid3>,<nid4>".  class_parse_nid() does not
 	 * complain about abnormal inputs like ",:<nid1>", "<nid1>:,<nid2>",
 	 * etc.  However, convert_hostnames() should have caught those.
 	 */
 	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
-		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
+		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 			char nidstr[LNET_NIDSTR_SIZE];
-			struct lnet_nid lnid;
 
 			if (failnodeuuid == NULL) {
 				/* We don't know the failover node name,
 				 * so just use the first nid as the uuid */
-				libcfs_nid2str_r(nid, nidstr, sizeof(nidstr));
+				libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
 				rc = name_create(&failnodeuuid, nidstr, "");
 				if (rc != 0)
 					return rc;
 			}
 			CDEBUG(D_MGS,
 			       "add nid %s for failover uuid %s, client %s\n",
-			       libcfs_nid2str_r(nid, nidstr, sizeof(nidstr)),
+			       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)),
 			       failnodeuuid, cliname);
-			lnet_nid4_to_nid(nid, &lnid);
-			rc = record_add_uuid(env, llh, &lnid, failnodeuuid);
+			rc = record_add_uuid(env, llh, &nid, failnodeuuid);
 			/*
 			 * If *ptr is ':', we have added all NIDs for
 			 * failnodeuuid.
