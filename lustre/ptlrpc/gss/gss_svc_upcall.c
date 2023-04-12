@@ -836,9 +836,9 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         rscp->target = imp->imp_obd;
         rawobj_dup(&gctx->gc_svc_handle, &rscp->handle);
 
-	CWARN("create reverse svc ctx %p to %s: idx %#llx\n",
-              &rscp->ctx, obd2cli_tgt(imp->imp_obd), gsec->gs_rvs_hdl);
-        rc = 0;
+	CDEBUG(D_SEC, "create reverse svc ctx %p to %s: idx %#llx\n",
+	       &rscp->ctx, obd2cli_tgt(imp->imp_obd), gsec->gs_rvs_hdl);
+	rc = 0;
 out:
         if (rscp)
                 cache_put(&rscp->h, &rsc_cache);

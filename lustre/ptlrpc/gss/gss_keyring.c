@@ -1092,7 +1092,7 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
 
-	CWARN("running gc\n");
+	CDEBUG(D_SEC, "running gc\n");
 
 	spin_lock(&sec->ps_lock);
 	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,

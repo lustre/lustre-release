@@ -375,11 +375,11 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
 	might_sleep();
 
-	CWARN("%s ctx %p idx %#llx (%u->%s)\n",
-	      sec_is_reverse(ctx->cc_sec) ?
-	      "server finishing reverse" : "client finishing forward",
-	      ctx, gss_handle_to_u64(&gctx->gc_handle),
-	      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+	CDEBUG(D_SEC, "%s ctx %p idx %#llx (%u->%s)\n",
+	       sec_is_reverse(ctx->cc_sec) ?
+	       "server finishing reverse" : "client finishing forward",
+	       ctx, gss_handle_to_u64(&gctx->gc_handle),
+	       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 

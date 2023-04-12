@@ -308,11 +308,11 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 		if (!ctx->cc_early_expire)
 			clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-		CWARN("ctx %p(%u->%s) get expired: %lld(%+llds)\n",
-		      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
-		      ctx->cc_expire,
-		      ctx->cc_expire == 0 ? 0 :
-		      ctx->cc_expire - ktime_get_real_seconds());
+		CDEBUG(D_SEC, "ctx %p(%u->%s) get expired: %lld(%+llds)\n",
+		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		       ctx->cc_expire,
+		       ctx->cc_expire == 0 ? 0 :
+		       ctx->cc_expire - ktime_get_real_seconds());
 
 		sptlrpc_cli_ctx_wakeup(ctx);
 		return 1;
@@ -363,18 +363,16 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 	set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
 	if (sec_is_reverse(ctx->cc_sec)) {
-		CWARN("server installed reverse ctx %p idx %#llx, "
-		      "expiry %lld(%+llds)\n", ctx,
-		      gss_handle_to_u64(&gctx->gc_handle),
-		      ctx->cc_expire,
-		      ctx->cc_expire - ktime_get_real_seconds());
+		CDEBUG(D_SEC, "server installed reverse ctx %p idx %#llx, expiry %lld(%+llds)\n",
+		       ctx, gss_handle_to_u64(&gctx->gc_handle),
+		       ctx->cc_expire,
+		       ctx->cc_expire - ktime_get_real_seconds());
         } else {
-		CWARN("client refreshed ctx %p idx %#llx (%u->%s), "
-		      "expiry %lld(%+llds)\n", ctx,
-		      gss_handle_to_u64(&gctx->gc_handle),
-		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
-		      ctx->cc_expire,
-		      ctx->cc_expire - ktime_get_real_seconds());
+		CDEBUG(D_SEC, "client refreshed ctx %p idx %#llx (%u->%s), expiry %lld(%+llds)\n",
+		       ctx, gss_handle_to_u64(&gctx->gc_handle),
+		       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		       ctx->cc_expire,
+		       ctx->cc_expire - ktime_get_real_seconds());
 
 		/* install reverse svc ctx for root context */
 		if (ctx->cc_vcred.vc_uid == 0)
@@ -1216,12 +1214,12 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
 	}
 
 	if (sec_is_reverse(sec))
-		CWARN("reverse sec %p: destroy ctx %p\n",
-		      ctx->cc_sec, ctx);
+		CDEBUG(D_SEC, "reverse sec %p: destroy ctx %p\n",
+		       ctx->cc_sec, ctx);
 	else
-		CWARN("%s@%p: destroy ctx %p(%u->%s)\n",
-		      sec->ps_policy->sp_name, ctx->cc_sec,
-		      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+		CDEBUG(D_SEC, "%s@%p: destroy ctx %p(%u->%s)\n",
+		       sec->ps_policy->sp_name, ctx->cc_sec,
+		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
 	return 0;
 }
@@ -2055,15 +2053,15 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
 
 	if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_oss ||
 	    grctx->src_ctx->gsc_usr_root)
-		CWARN("create svc ctx %p: user from %s authenticated as %s\n",
-		      grctx->src_ctx, libcfs_nidstr(&req->rq_peer.nid),
-		      grctx->src_ctx->gsc_usr_root ? "root" :
-		      (grctx->src_ctx->gsc_usr_mds ? "mds" :
-		       (grctx->src_ctx->gsc_usr_oss ? "oss" : "null")));
+		CDEBUG(D_SEC, "create svc ctx %p: user from %s authenticated as %s\n",
+		       grctx->src_ctx, libcfs_nidstr(&req->rq_peer.nid),
+		       grctx->src_ctx->gsc_usr_root ? "root" :
+		       (grctx->src_ctx->gsc_usr_mds ? "mds" :
+		        (grctx->src_ctx->gsc_usr_oss ? "oss" : "null")));
 	else
-		CWARN("create svc ctx %p: accept user %u from %s\n",
-		      grctx->src_ctx, grctx->src_ctx->gsc_uid,
-		      libcfs_nidstr(&req->rq_peer.nid));
+		CDEBUG(D_SEC, "create svc ctx %p: accept user %u from %s\n",
+		       grctx->src_ctx, grctx->src_ctx->gsc_uid,
+		       libcfs_nidstr(&req->rq_peer.nid));
 
         if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (reqbuf->lm_bufcount < 4) {
@@ -2317,9 +2315,9 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
         if (gss_svc_verify_request(req, grctx, gw, &major))
                 RETURN(SECSVC_DROP);
 
-	CWARN("destroy svc ctx %p idx %#llx (%u->%s)\n",
-	      grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
-	      grctx->src_ctx->gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
+	CDEBUG(D_SEC, "destroy svc ctx %p idx %#llx (%u->%s)\n",
+	       grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
+	       grctx->src_ctx->gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
 
         gss_svc_upcall_destroy_ctx(grctx->src_ctx);
 
