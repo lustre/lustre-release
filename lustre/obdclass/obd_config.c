@@ -408,19 +408,6 @@ int class_match_param(char *buf, const char *key, char **valp)
 }
 EXPORT_SYMBOL(class_match_param);
 
-static int parse_nid4(char *buf, void *value, int quiet)
-{
-	lnet_nid_t *nid4 = (lnet_nid_t *)value;
-
-	*nid4 = libcfs_str2nid(buf);
-	if (*nid4 != LNET_NID_ANY)
-		return 0;
-
-	if (!quiet)
-		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
-	return -EINVAL;
-}
-
 static int parse_nid(char *buf, void *value, int quiet)
 {
 	struct lnet_nid *nid = value;
@@ -443,8 +430,7 @@ static int parse_net(char *buf, void *value)
 }
 
 enum {
-	CLASS_PARSE_NID4 = 1,
-	CLASS_PARSE_NID,
+	CLASS_PARSE_NID = 1,
 	CLASS_PARSE_NET,
 };
 
@@ -478,9 +464,6 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 	switch (opc) {
 	default:
 		LBUG();
-	case CLASS_PARSE_NID4:
-		rc = parse_nid4(buf, value, quiet);
-		break;
 	case CLASS_PARSE_NID:
 		rc = parse_nid(buf, value, quiet);
 		break;
@@ -495,18 +478,6 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 		*endh = endp;
 	return 0;
 }
-
-int class_parse_nid4(char *buf, lnet_nid_t *nid4, char **endh)
-{
-	return class_parse_value(buf, CLASS_PARSE_NID4, (void *)nid4, endh, 0);
-}
-EXPORT_SYMBOL(class_parse_nid4);
-
-int class_parse_nid4_quiet(char *buf, lnet_nid_t *nid4, char **endh)
-{
-	return class_parse_value(buf, CLASS_PARSE_NID4, (void *)nid4, endh, 1);
-}
-EXPORT_SYMBOL(class_parse_nid4_quiet);
 
 int class_parse_nid(char *buf, struct lnet_nid *nid, char **endh)
 {
