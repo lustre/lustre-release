@@ -1089,10 +1089,13 @@ static int record_base(const struct lu_env *env, struct llog_handle *llh,
 
 static inline int record_add_uuid(const struct lu_env *env,
 				  struct llog_handle *llh,
-				  uint64_t nid, char *uuid)
+				  struct lnet_nid *nid, char *uuid)
 {
-	return record_base(env, llh, NULL, nid, LCFG_ADD_UUID, uuid,
-			   NULL, NULL, NULL);
+	if (nid_is_nid4(nid))
+		return record_base(env, llh, NULL, lnet_nid_to_nid4(nid),
+				   LCFG_ADD_UUID, uuid,
+				   NULL, NULL, NULL);
+	return -EINVAL;
 }
 
 static inline int record_add_conn(const struct lu_env *env,
@@ -1137,6 +1140,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		   and add passed nids */
 		ptr = mrd->target.mti_params;
 		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
+			struct lnet_nid lnid;
+
 			if (!mrd->nodeuuid) {
 				rc = name_create(&mrd->nodeuuid,
 						 libcfs_nid2str(nid), "");
@@ -1152,8 +1157,9 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 			       "device %s\n", libcfs_nid2str(nid),
 				mrd->target.mti_params,
 				mrd->nodeuuid);
+			lnet_nid4_to_nid(nid, &lnid);
 			rc = record_add_uuid(env,
-					     mrd->temp_llh, nid,
+					     mrd->temp_llh, &lnid,
 					     mrd->nodeuuid);
 			if (rc)
 				CWARN("%s: Can't add nid %s for uuid %s :rc=%d\n",
@@ -1204,6 +1210,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		if (mrd->failover) {
 			ptr = mrd->failover;
 			while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
+				struct lnet_nid lnid;
+
 				if (mrd->nodeuuid == NULL) {
 					rc =  name_create(&mrd->nodeuuid,
 							  libcfs_nid2str(nid),
@@ -1214,7 +1222,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 
 				CDEBUG(D_MGS, "add nid %s for failover %s\n",
 				       libcfs_nid2str(nid), mrd->nodeuuid);
-				rc = record_add_uuid(env, mrd->temp_llh, nid,
+				lnet_nid4_to_nid(nid, &lnid);
+				rc = record_add_uuid(env, mrd->temp_llh, &lnid,
 						     mrd->nodeuuid);
 				if (rc) {
 					CWARN("%s: Can't add nid %s for failover %s :rc = %d\n",
@@ -2509,6 +2518,7 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
 		while (class_parse_nid4(ptr, &nid, &ptr) == 0) {
 			char nidstr[LNET_NIDSTR_SIZE];
+			struct lnet_nid lnid;
 
 			if (failnodeuuid == NULL) {
 				/* We don't know the failover node name,
@@ -2522,7 +2532,8 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 			       "add nid %s for failover uuid %s, client %s\n",
 			       libcfs_nid2str_r(nid, nidstr, sizeof(nidstr)),
 			       failnodeuuid, cliname);
-			rc = record_add_uuid(env, llh, nid, failnodeuuid);
+			lnet_nid4_to_nid(nid, &lnid);
+			rc = record_add_uuid(env, llh, &lnid, failnodeuuid);
 			/*
 			 * If *ptr is ':', we have added all NIDs for
 			 * failnodeuuid.
@@ -2595,11 +2606,13 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 	if (rc)
 		GOTO(out_end, rc);
 	for (i = 0; i < mti->mti_nid_count; i++) {
-		CDEBUG(D_MGS, "add nid %s for mdt\n",
-		       libcfs_nid2str_r(mti->mti_nids[i],
-					nidstr, sizeof(nidstr)));
+		struct lnet_nid nid;
 
-		rc = record_add_uuid(env, llh, mti->mti_nids[i], nodeuuid);
+		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
+		CDEBUG(D_MGS, "add nid %s for mdt\n",
+		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+
+		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
 	}
@@ -2748,10 +2761,12 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 		GOTO(out_destory, rc);
 
 	for (i = 0; i < mti->mti_nid_count; i++) {
+		struct lnet_nid nid;
+
+		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
 		CDEBUG(D_MGS, "add nid %s for mdt\n",
-		       libcfs_nid2str_r(mti->mti_nids[i],
-					nidstr, sizeof(nidstr)));
-		rc = record_add_uuid(env, llh, mti->mti_nids[i], nodeuuid);
+		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
 	}
@@ -3056,10 +3071,12 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	 * See mgs_steal_client_llog_handler() LCFG_ADD_UUID.
 	 */
 	for (i = 0; i < mti->mti_nid_count; i++) {
+		struct lnet_nid nid;
+
+		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
 		CDEBUG(D_MGS, "add nid %s\n",
-		       libcfs_nid2str_r(mti->mti_nids[i],
-					nidstr, sizeof(nidstr)));
-		rc = record_add_uuid(env, llh, mti->mti_nids[i], nodeuuid);
+		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
 	}
