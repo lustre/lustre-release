@@ -1078,7 +1078,10 @@ struct obd_ops {
 	/* connect to the target device with given connection
 	 * data. @ocd->ocd_connect_flags is modified to reflect flags actually
 	 * granted by the target, which are guaranteed to be a subset of flags
-	 * asked for. If @ocd == NULL, use default parameters. */
+	 * asked for. If @ocd == NULL, use default parameters.
+	 * On the client, localdata is a struct cl_client_cache *.
+	 * On the server, localdata is a struct lnet_nid *.
+	 */
 	int (*o_connect)(const struct lu_env *env,
 			 struct obd_export **exp, struct obd_device *src,
 			 struct obd_uuid *cluuid, struct obd_connect_data *ocd,

@@ -1089,7 +1089,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 	bool new_mds_mds_conn = false;
 	struct obd_connect_data *data, *tmpdata;
 	int size, tmpsize;
-	lnet_nid_t client_nid;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	int tmp_exp_old_falloc;
 #endif
@@ -1391,7 +1390,6 @@ no_export:
 	/* Tell the client if we support replayable requests. */
 	if (target->obd_replayable)
 		lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
-	client_nid = lnet_nid_to_nid4(&req->rq_peer.nid);
 
 	if (export == NULL) {
 		/* allow lightweight connections during recovery */
@@ -1437,7 +1435,7 @@ no_export:
 dont_check_exports:
 			rc = obd_connect(req->rq_svc_thread->t_env,
 					 &export, target, &cluuid, data,
-					 &client_nid);
+					 &req->rq_peer.nid);
 			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
 							MSG_CONNECT_RECOVERING);
@@ -1456,7 +1454,8 @@ dont_check_exports:
 			class_export_put(export);
 		}
 		rc = obd_reconnect(req->rq_svc_thread->t_env,
-				   export, target, &cluuid, data, &client_nid);
+				   export, target, &cluuid, data,
+				   &req->rq_peer.nid);
 		if (rc == 0)
 			reconnected = true;
 	}

@@ -7008,7 +7008,7 @@ static int mdt_obd_connect(const struct lu_env *env,
 	struct lustre_handle	conn = { 0 };
 	struct mdt_device	*mdt;
 	int			 rc;
-	lnet_nid_t		*client_nid = localdata;
+	struct lnet_nid		*client_nid = localdata;
 	ENTRY;
 
 	LASSERT(env != NULL);
@@ -7042,9 +7042,11 @@ static int mdt_obd_connect(const struct lu_env *env,
 	lexp = class_conn2export(&conn);
 	LASSERT(lexp != NULL);
 
-	rc = nodemap_add_member(*client_nid, lexp);
-	if (rc != 0 && rc != -EEXIST)
-		GOTO(out, rc);
+	if (nid_is_nid4(client_nid)) {
+		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), lexp);
+		if (rc != 0 && rc != -EEXIST)
+			GOTO(out, rc);
+	}
 
 	rc = mdt_connect_internal(env, lexp, mdt, data, false);
 	if (rc == 0) {
@@ -7081,16 +7083,18 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 			     struct obd_connect_data *data,
 			     void *localdata)
 {
-	lnet_nid_t	       *client_nid = localdata;
-	int                     rc;
+	struct lnet_nid *client_nid = localdata;
+	int rc;
 	ENTRY;
 
 	if (exp == NULL || obd == NULL || cluuid == NULL)
 		RETURN(-EINVAL);
 
-	rc = nodemap_add_member(*client_nid, exp);
-	if (rc != 0 && rc != -EEXIST)
-		RETURN(rc);
+	if (nid_is_nid4(client_nid)) {
+		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
+		if (rc != 0 && rc != -EEXIST)
+			RETURN(rc);
+	}
 
 	rc = mdt_connect_internal(env, exp, mdt_dev(obd->obd_lu_dev), data,
 				  true);

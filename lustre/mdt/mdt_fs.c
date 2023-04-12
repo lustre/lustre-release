@@ -63,18 +63,13 @@ static const struct proc_ops mdt_open_files_seq_fops = {
 int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 			  void *localdata)
 {
-	lnet_nid_t *client_nid4 = localdata;
+	struct lnet_nid *client_nid = localdata;
 	struct nid_stat *stats;
 	int rc;
 	ENTRY;
 
-	if (client_nid4) {
-		struct lnet_nid client_nid;
+	rc = lprocfs_exp_setup(exp, client_nid);
 
-		lnet_nid4_to_nid(*client_nid4, &client_nid);
-		rc = lprocfs_exp_setup(exp, &client_nid);
-	} else
-		rc = lprocfs_exp_setup(exp, NULL);
 	if (rc != 0)
 		/* Mask error for already created /proc entries */
 		RETURN(rc == -EALREADY ? 0 : rc);

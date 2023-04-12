@@ -64,7 +64,7 @@
  */
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp,
-				 lnet_nid_t *client_nid4)
+				 struct lnet_nid *client_nid)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
@@ -76,13 +76,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		/* Self-export gets no proc entry */
 		RETURN(0);
 
-	if (client_nid4) {
-		struct lnet_nid client_nid;
-
-		lnet_nid4_to_nid(*client_nid4, &client_nid);
-		rc = lprocfs_exp_setup(exp, &client_nid);
-	} else
-		rc = lprocfs_exp_setup(exp, NULL);
+	rc = lprocfs_exp_setup(exp, client_nid);
 	if (rc != 0)
 		/* Mask error for already created /proc entries */
 		RETURN(rc == -EALREADY ? 0 : rc);
@@ -303,9 +297,10 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
 			     struct obd_connect_data *data,
-			     void *client_nid)
+			     void *localdata)
 {
 	struct ofd_device *ofd;
+	struct lnet_nid *client_nid = localdata;
 	int rc;
 
 	ENTRY;
@@ -313,9 +308,11 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 	if (!exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
-	rc = nodemap_add_member(*(lnet_nid_t *)client_nid, exp);
-	if (rc != 0 && rc != -EEXIST)
-		RETURN(rc);
+	if (nid_is_nid4(client_nid)) {
+		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
+		if (rc != 0 && rc != -EEXIST)
+			RETURN(rc);
+	}
 
 	ofd = ofd_dev(obd->obd_lu_dev);
 
@@ -352,6 +349,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	struct obd_export *exp;
 	struct ofd_device *ofd;
 	struct lustre_handle conn = { 0 };
+	struct lnet_nid *client_nid = localdata;
 	int rc;
 
 	ENTRY;
@@ -368,8 +366,8 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	exp = class_conn2export(&conn);
 	LASSERT(exp != NULL);
 
-	if (localdata) {
-		rc = nodemap_add_member(*(lnet_nid_t *)localdata, exp);
+	if (client_nid && nid_is_nid4(client_nid)) {
+		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
 		if (rc != 0 && rc != -EEXIST)
 			GOTO(out, rc);
 	} else {
@@ -390,7 +388,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 		rc = tgt_client_new(env, exp);
 		if (rc != 0)
 			GOTO(out, rc);
-		ofd_export_stats_init(ofd, exp, localdata);
+		ofd_export_stats_init(ofd, exp, client_nid);
 	}
 
 	CDEBUG(D_HA, "%s: get connection from MDS %d\n", obd->obd_name,
