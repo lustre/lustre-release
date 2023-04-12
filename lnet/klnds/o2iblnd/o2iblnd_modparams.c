@@ -316,6 +316,8 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 			conns_per_peer : 1;
 	}
 
+	tunables->lnd_timeout = kiblnd_timeout();
+
 	return 0;
 }
 

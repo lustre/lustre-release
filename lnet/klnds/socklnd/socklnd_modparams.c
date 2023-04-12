@@ -377,4 +377,6 @@ void ksocknal_tunables_setup(struct lnet_ni *ni)
 	if (!tunables->lnd_conns_per_peer)
 		tunables->lnd_conns_per_peer =
 			ksocklnd_lookup_conns_per_peer(ni);
+
+	tunables->lnd_timeout = ksocknal_timeout();
 }

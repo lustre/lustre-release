@@ -898,6 +898,13 @@ extern void kgnilnd_destroy_conn(kgn_conn_t *conn);
 extern int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld, int lock_held);
 extern int _kgnilnd_schedule_delay_conn(kgn_conn_t *conn);
 
+static inline int kgnilnd_timeout(void)
+{
+	return *kgnilnd_tunables.kgn_timeout ?
+	       *kgnilnd_tunables.kgn_timeout :
+	       lnet_get_lnd_timeout();
+}
+
 /* Macro wrapper for _kgnilnd_schedule_conn. This will store the function
  * and the line of the calling function to allow us to debug problematic
  * schedule calls in the future without the programmer having to mark

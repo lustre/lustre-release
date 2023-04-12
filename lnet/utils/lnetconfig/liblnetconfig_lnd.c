@@ -70,6 +70,10 @@ lustre_o2iblnd_show_tun(struct cYAML *lndparams,
 				lnd_cfg->lnd_conns_per_peer) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
+	if (cYAML_create_number(lndparams, "timeout",
+				lnd_cfg->lnd_timeout) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
@@ -80,6 +84,10 @@ lustre_socklnd_show_tun(struct cYAML *lndparams,
 {
 	if (cYAML_create_number(lndparams, "conns_per_peer",
 				lnd_cfg->lnd_conns_per_peer) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (cYAML_create_number(lndparams, "timeout",
+				lnd_cfg->lnd_timeout) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	return LUSTRE_CFG_RC_NO_ERR;
@@ -115,6 +123,17 @@ lustre_kfilnd_show_tun(struct cYAML *lndparams,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 #endif
+
+static int
+lustre_gnilnd_show_tun(struct cYAML *lndparams,
+			struct lnet_ioctl_config_gnilnd_tunables *lnd_cfg)
+{
+	if (cYAML_create_number(lndparams, "timeout",
+				lnd_cfg->lnd_timeout) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
 
 int
 lustre_net_show_tunables(struct cYAML *tunables,
@@ -167,7 +186,9 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 					    &lnd->lnd_tun_u.lnd_kfi,
 					    backup);
 #endif
-
+	else if (net_type == GNILND)
+		rc = lustre_gnilnd_show_tun(lnd_tunables,
+					    &lnd->lnd_tun_u.lnd_gni);
 	return rc;
 }
 

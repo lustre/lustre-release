@@ -2609,12 +2609,8 @@ kgnilnd_startup(struct lnet_ni *ni)
 	INIT_LIST_HEAD(&net->gnn_list);
 	ni->ni_data = net;
 	net->gnn_ni = ni;
-	if (!ni->ni_net->net_tunables_set) {
-		ni->ni_net->net_tunables.lct_max_tx_credits =
-			*kgnilnd_tunables.kgn_credits;
-		ni->ni_net->net_tunables.lct_peer_tx_credits =
-			*kgnilnd_tunables.kgn_peer_credits;
-	}
+
+	kgnilnd_tunables_setup(ni);
 
 	if (!ni->ni_interface) {
 		rc = lnet_ni_add_interface(ni, "ipogif0");

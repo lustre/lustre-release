@@ -3494,6 +3494,62 @@ test_303() {
 }
 run_test 303 "Check peer NI health after link down"
 
+
+check_parameter() {
+	local para=$1
+	local value=$2
+
+	echo "check parameter ${para} value ${value}"
+
+	return $(( $(do_lnetctl net show -v | \
+		     tee /dev/stderr | \
+		     grep -c "^ \+${para}: ${value}$") != 1 ))
+}
+
+static_config() {
+	local module=$1
+	local setting=$2
+
+	cleanup_lnet || error "Failed to cleanup LNet"
+
+	load_module ../libcfs/libcfs/libcfs ||
+		error "Failed to load module libcfs rc = $?"
+
+	load_module ../lnet/lnet/lnet ||
+		error "Failed to load module lnet rc = $?"
+
+	echo "loading ${module} ${setting} type ${NETTYPE}"
+	load_module "${module}" "${setting}" ||
+		error "Failed to load module ${module} rc = $?"
+
+	do_lnetctl lnet configure --all || error "lnet configure failed rc = $?"
+
+	return 0
+}
+
+test_310() {
+	local value=65
+
+	if [[ ${NETTYPE} == tcp* ]];then
+		static_config "../lnet/klnds/socklnd/ksocklnd" \
+			      "sock_timeout=${value}"
+	elif [[ ${NETTYPE} == o2ib* ]]; then
+		static_config "../lnet/klnds/o2iblnd/ko2iblnd" \
+			      "timeout=${value}"
+	elif [[ ${NETTYPE} == gni* ]]; then
+		static_config "../lnet/klnds/gnilnd/kgnilnd" \
+			      "timeout=${value}"
+	else
+		skip "NETTYPE ${NETTYPE} not supported"
+	fi
+
+	check_parameter "timeout" $value
+
+	return $?
+}
+run_test 310 "Set timeout and verify"
+
+
 check_udsp_prio() {
 	local target_net="${1}"
 	local target_nid="${2}"

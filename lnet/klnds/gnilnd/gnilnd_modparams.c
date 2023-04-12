@@ -310,3 +310,22 @@ kgnilnd_tunables_init(void)
 out:
 	return rc;
 }
+
+void
+kgninal_tunables_setup(struct lnet_ni *ni)
+{
+	struct lnet_ioctl_config_gnilnd_tunables *tunables;
+
+	if (!ni->ni_net->net_tunables_set) {
+		ni->ni_net->net_tunables.lct_max_tx_credits =
+			*kgnilnd_tunables.kgn_credits;
+		ni->ni_net->net_tunables.lct_peer_tx_credits =
+			*kgnilnd_tunables.kgn_peer_credits;
+	}
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_gni;
+
+	tunables->lnd_version = CURRENT_LND_VERSION;
+
+	tunables->lnd_timeout = kgnilnd_timeout();
+}
