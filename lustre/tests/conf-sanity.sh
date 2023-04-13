@@ -166,7 +166,7 @@ stop_mgs() {
 start_ost() {
 	echo "start ost1 service on `facet_active_host ost1`"
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS "$@" || return 95
-	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost1 FULL
+	wait_clients_import_ready ${CLIENTS:-$HOSTNAME} ost1
 }
 
 stop_ost() {
@@ -178,7 +178,7 @@ stop_ost() {
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
 	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS "$@" || return 92
-	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost2 FULL
+	wait_clients_import_ready ${CLIENTS:-$HOSTNAME} ost2
 }
 
 stop_ost2() {
@@ -8061,7 +8061,7 @@ test_101b () {
 	sleep 25
 	start_ost
 
-	wait_osc_import_state client ost1 FULL
+	wait_osc_import_ready client ost1
 	touch $dir/$tfile || error "Can't create file"
 
 	cleanup
@@ -9034,8 +9034,8 @@ test_112() {
 
 	mount_client $MOUNT || error "mount client failed"
 	wait_osc_import_state mds1 ost1 FULL
-	wait_osc_import_state client ost1 FULL
-	wait_osc_import_state client ost2 FULL
+	wait_osc_import_ready client ost1
+	wait_osc_import_ready client ost2
 
 	$LFS setstripe -i 0 $DIR/$tfile.0 ||
 		error "problem creating $tfile.0 on OST0000"
