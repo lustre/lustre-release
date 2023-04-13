@@ -17,7 +17,6 @@ build_test_filter
 
 remote_mds_nodsh && skip "remote MDS with nodsh"
 
-[ -z "$CLIENTS" ] && skip_env "$TESTSUITE: Need two or more clients"
 [ $CLIENTCOUNT -lt 2 ] &&
 	skip_env "$TESTSUITE: Need 2+ clients, have only $CLIENTCOUNT"
 

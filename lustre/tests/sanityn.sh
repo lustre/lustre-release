@@ -1073,7 +1073,6 @@ print_jbd_stat () {
 test_33a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	[ -z "$CLIENTS" ] && skip "Need two or more clients, have $CLIENTS"
 	[ $CLIENTCOUNT -lt 2 ] &&
 		skip "Need two or more clients, have $CLIENTCOUNT"
 
@@ -1124,7 +1123,6 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 test_33b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
 	[ $CLIENTCOUNT -ge 2 ] ||
 		{ skip "Need two or more clients, have $CLIENTCOUNT" &&
 								return 0; }
@@ -1280,7 +1278,6 @@ test_33d() {
 run_test 33d "DNE distributed operation should trigger COS"
 
 test_33e() {
-	[ -n "$CLIENTS" ] || skip "Need two or more clients"
 	[ $CLIENTCOUNT -ge 2 ] ||
 		skip "Need two or more clients, have $CLIENTCOUNT"
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"

@@ -23,7 +23,7 @@ build_test_filter
 remote_mds_nodsh && skip_env "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip_env "remote OST with nodsh" && exit 0
 
-[ -z "$CLIENTS" -o $CLIENTCOUNT -lt 3 ] &&
+[ $CLIENTCOUNT -lt 3 ] &&
     skip_env "need three or more clients" && exit 0
 
 if [ -z "$SHARED_DIRECTORY" ] || ! check_shared_dir $SHARED_DIRECTORY; then

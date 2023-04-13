@@ -551,7 +551,6 @@ test_21b_sub () {
 }
 
 test_21b() {
-	[ -z "$CLIENTS" ] && skip "Need two or more clients" && return
 	[ $CLIENTCOUNT -lt 2 ] &&
 		{ skip "Need 2+ clients, have $CLIENTCOUNT" && return; }
 

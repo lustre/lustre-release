@@ -2042,8 +2042,6 @@ at_cleanup
 
 # start multi-client tests
 test_70a () {
-	[ -z "$CLIENTS" ] &&
-		{ skip "Need two or more clients." && return; }
 	[ $CLIENTCOUNT -lt 2 ] &&
 		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
 
@@ -2406,8 +2404,6 @@ test_70f_cleanup() {
 test_70f() {
 #	[ x$ost1failover_HOST = x$ost_HOST ] &&
 #		{ skip "Failover host not defined" && return; }
-#	[ -z "$CLIENTS" ] &&
-#		{ skip "CLIENTS are not specified." && return; }
 #	[ $CLIENTCOUNT -lt 2 ] &&
 #		{ skip "Need 2 or more clients, have $CLIENTCOUNT" && return; }
 

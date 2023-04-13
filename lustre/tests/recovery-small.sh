@@ -2793,7 +2793,6 @@ test_133() {
 run_test 133 "don't fail on flock resend"
 
 test_134() {
-	[ -z "$CLIENTS" ] && skip "Need two or more clients" && return
 	[ $CLIENTCOUNT -lt 2 ] &&
 		{ skip "Need 2+ clients, have $CLIENTCOUNT" && return; }
 
