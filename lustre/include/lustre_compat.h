@@ -172,6 +172,11 @@ static inline bool d_is_positive(const struct dentry *dentry)
 # define inode_trylock(inode) mutex_trylock(&(inode)->i_mutex)
 #endif
 
+#ifndef HAVE_PAGECACHE_GET_PAGE
+#define pagecache_get_page(mapping, index, fp, gfp) \
+	grab_cache_page_nowait(mapping, index)
+#endif
+
 /* Old kernels lacked both Xarray support and the page cache
  * using Xarrays. Our back ported Xarray support introduces
  * the real xa_is_value() but we need a wrapper as well for

@@ -215,7 +215,16 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 
 	switch (hint) {
 	case MAYNEED:
-		vmpage = grab_cache_page_nowait(inode->i_mapping, index);
+		/*
+		 * We need __GFP_NORETRY here for read-ahead page, otherwise
+		 * the process will fail with OOM killed due to memcg limit.
+		 * See @readahead_gfp_mask for an example.
+		 */
+		vmpage = pagecache_get_page(inode->i_mapping, index,
+					    FGP_LOCK | FGP_CREAT |
+					    FGP_NOFS | FGP_NOWAIT,
+					    mapping_gfp_mask(inode->i_mapping) |
+					    __GFP_NORETRY | __GFP_NOWARN);
 		if (vmpage == NULL) {
 			which = RA_STAT_FAILED_GRAB_PAGE;
 			msg   = "g_c_p_n failed";
