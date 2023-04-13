@@ -3829,7 +3829,7 @@ fail() {
 	export SK_NO_KEY=$SK_NO_KEY_save
 	# to initiate all OSC idling connections
 	clients_up
-	wait_clients_import_state "$clients" "$facets" "\(FULL\|IDLE\)"
+	wait_clients_import_ready "$clients" "$facets"
 	clients_up || error "post-failover stat: $?"
 }
 
@@ -7852,6 +7852,10 @@ wait_clients_import_state () {
 		error "import is not in ${expected} state"
 		return 1
 	fi
+}
+
+wait_clients_import_ready() {
+	wait_clients_import_state "$1" "$2" "\(FULL\|IDLE\)"
 }
 
 wait_osp_active() {

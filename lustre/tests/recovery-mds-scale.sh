@@ -178,10 +178,9 @@ failover_target() {
 		    exit 7
 		fi
 
-		local want="FULL\|IDLE"
-		log "Checking clients are in $want state before next failover"
-		wait_clients_import_state $NODES_TO_USE $serverfacet "$want" ||
-			echo "Client import not $want, please consider to" \
+		log "Checking clients are in FULL or IDLE state before next failover"
+		wait_clients_import_ready $NODES_TO_USE $serverfacet ||
+			echo "Client import is not ready, please consider to" \
 			"increase SERVER_FAILOVER_PERIOD=" \
 			"$SERVER_FAILOVER_PERIOD!"
 
