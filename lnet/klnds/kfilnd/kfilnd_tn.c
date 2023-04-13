@@ -1090,6 +1090,15 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 					 CFS_KFI_FAIL_WAIT_SEND_COMP2 |
 					 CFS_FAIL_ONCE))
 			break;
+		if (unlikely(tn->msg_type == KFILND_MSG_BULK_PUT_REQ ||
+			     tn->msg_type == KFILND_MSG_BULK_GET_REQ) &&
+		    CFS_FAIL_CHECK(CFS_KFI_FAIL_WAIT_SEND_COMP3)) {
+			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
+			kfilnd_tn_status_update(tn, -EIO, hstatus);
+			kfilnd_peer_tn_failed(tn->tn_kp, -EIO);
+			kfilnd_tn_state_change(tn, TN_STATE_FAIL);
+			break;
+		}
 		kfilnd_peer_alive(tn->tn_kp);
 		kfilnd_tn_timeout_enable(tn);
 		kfilnd_tn_state_change(tn, TN_STATE_WAIT_TAG_COMP);
@@ -1320,6 +1329,20 @@ static int kfilnd_tn_state_fail(struct kfilnd_transaction *tn,
 
 	case TN_EVENT_TX_OK:
 		kfilnd_peer_alive(tn->tn_kp);
+		break;
+
+	case TN_EVENT_TAG_RX_OK:
+		kfilnd_peer_alive(tn->tn_kp);
+		if (tn->tn_status != status) {
+			KFILND_TN_DEBUG(tn, "%d -> %d status change",
+					tn->tn_status, status);
+			tn->tn_status = status;
+		}
+		if (tn->hstatus != LNET_MSG_STATUS_OK) {
+			KFILND_TN_DEBUG(tn, "%d -> %d health status change",
+					tn->hstatus, LNET_MSG_STATUS_OK);
+			tn->hstatus = LNET_MSG_STATUS_OK;
+		}
 		break;
 
 	case TN_EVENT_TAG_RX_FAIL:
