@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Was Test 11 in cmd3.
-# For duration of 24 hours repeatedly failover a random MDS at
+# For duration of 24 hours repeatedly failover a random OSS at
 # 10 minute intervals and verify that no application errors occur.
 
 # Test runs one of CLIENT_LOAD progs on remote clients.
@@ -16,12 +16,12 @@ init_test_env "$@"
 init_logging
 
 # bug number for skipped test:
-ALWAYS_EXCEPT="$RECOVERY_MDS_SCALE_EXCEPT "
+ALWAYS_EXCEPT="$RECOVERY_OSS_SCALE_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 build_test_filter
 
-remote_mds_nodsh && skip_env "remote MDS with nodsh"
+remote_ost_nodsh && skip_env "remote OST with nodsh"
 
 if (( CLIENTCOUNT < 3 )); then
 	skip_env "need three or more clients"
@@ -50,11 +50,11 @@ run_info $SERVER_FAILOVER_PERIOD $DURATION $MINSLEEP $SLOW $REQFAIL \
 	$SHARED_DIRECTORY $END_RUN_FILE $LOAD_PID_FILE $VMSTAT_PID_FILE \
 	$CLIENTCOUNT $MDTS $OSTS
 
-test_failover_mds() {
-	# failover a random MDS
-	failover_target MDS
+test_failover_ost() {
+	# failover a random OST
+	failover_target OST
 }
-run_test failover_mds "failover MDS"
+run_test failover_ost "failover OST"
 
 zconf_mount $HOSTNAME $MOUNT || error "mount $MOUNT on $HOSTNAME failed"
 client_up || error "start client on $HOSTNAME failed"
