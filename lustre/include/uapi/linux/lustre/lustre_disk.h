@@ -233,7 +233,7 @@ struct lsd_reply_data_v2 {
 /* Header of the reply_data file */
 #define LRH_MAGIC_V1		0xbdabda01
 #define LRH_MAGIC_V2		0xbdabda02
-#define LRH_MAGIC		LRH_MAGIC_V2
+#define LRH_MAGIC		LRH_MAGIC_V1
 
 /* Don't change the header size for compatibility. */
 struct lsd_reply_header {

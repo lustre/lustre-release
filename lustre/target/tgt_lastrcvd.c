@@ -261,9 +261,10 @@ static int tgt_reply_data_write(const struct lu_env *env, struct lu_target *tgt,
 				struct lsd_reply_data *lrd, loff_t off,
 				struct thandle *th)
 {
-	struct tgt_thread_info	*tti = tgt_th_info(env);
-	struct dt_object	*dto;
-	struct lsd_reply_data	*buf = &tti->tti_lrd;
+	struct tgt_thread_info *tti = tgt_th_info(env);
+	struct lsd_reply_data *buf = &tti->tti_lrd;
+	struct lsd_reply_header *lrh = &tgt->lut_reply_header;
+	struct dt_object *dto;
 
 	lrd->lrd_result = ptlrpc_status_hton(lrd->lrd_result);
 
@@ -275,9 +276,12 @@ static int tgt_reply_data_write(const struct lu_env *env, struct lu_target *tgt,
 
 	lrd->lrd_result = ptlrpc_status_ntoh(lrd->lrd_result);
 
+	if (lrh->lrh_magic > LRH_MAGIC_V1)
+		buf->lrd_batch_idx = cpu_to_le32(lrd->lrd_batch_idx);
+
 	tti->tti_off = off;
 	tti->tti_buf.lb_buf = buf;
-	tti->tti_buf.lb_len = sizeof(*buf);
+	tti->tti_buf.lb_len = lrh->lrh_reply_size;
 
 	dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
 	return dt_record_write(env, dto, &tti->tti_buf, &tti->tti_off, th);
@@ -288,7 +292,7 @@ static int tgt_reply_data_write(const struct lu_env *env, struct lu_target *tgt,
  */
 static int tgt_reply_data_read(const struct lu_env *env, struct lu_target *tgt,
 			       struct lsd_reply_data *lrd, loff_t off,
-			       __u32 magic)
+			       struct lsd_reply_header *lrh)
 {
 	struct tgt_thread_info *tti = tgt_th_info(env);
 	struct lsd_reply_data *buf = &tti->tti_lrd;
@@ -296,13 +300,7 @@ static int tgt_reply_data_read(const struct lu_env *env, struct lu_target *tgt,
 
 	tti->tti_off = off;
 	tti->tti_buf.lb_buf = buf;
-
-	if (magic == LRH_MAGIC)
-		tti->tti_buf.lb_len = sizeof(*buf);
-	else if (magic == LRH_MAGIC_V1)
-		tti->tti_buf.lb_len = sizeof(struct lsd_reply_data_v1);
-	else
-		return -EINVAL;
+	tti->tti_buf.lb_len = lrh->lrh_reply_size;
 
 	rc = dt_record_read(env, tgt->lut_reply_data, &tti->tti_buf,
 			    &tti->tti_off);
@@ -315,7 +313,7 @@ static int tgt_reply_data_read(const struct lu_env *env, struct lu_target *tgt,
 	lrd->lrd_result = le32_to_cpu(buf->lrd_result);
 	lrd->lrd_client_gen = le32_to_cpu(buf->lrd_client_gen);
 
-	if (magic == LRH_MAGIC)
+	if (lrh->lrh_magic > LRH_MAGIC_V1)
 		lrd->lrd_batch_idx = le32_to_cpu(buf->lrd_batch_idx);
 	else
 		lrd->lrd_batch_idx = 0;
@@ -806,7 +804,7 @@ static void tgt_client_epoch_update(const struct lu_env *env,
 static int tgt_reply_data_upgrade_check(const struct lu_env *env,
 					struct lu_target *tgt)
 {
-	struct lsd_reply_header lrh;
+	struct lsd_reply_header *lrh = &tgt->lut_reply_header;
 	int rc;
 
 	/*
@@ -817,14 +815,14 @@ static int tgt_reply_data_upgrade_check(const struct lu_env *env,
 	if (tgt->lut_reply_data == NULL)
 		RETURN(0);
 
-	rc = tgt_reply_header_read(env, tgt, &lrh);
+	rc = tgt_reply_header_read(env, tgt, lrh);
 	if (rc) {
 		CERROR("%s: failed to read %s: rc = %d\n",
 		       tgt_name(tgt), REPLY_DATA, rc);
 		RETURN(rc);
 	}
 
-	if (lrh.lrh_magic == LRH_MAGIC)
+	if (lrh->lrh_magic == LRH_MAGIC)
 		RETURN(0);
 
 	rc = tgt_truncate_object(env, tgt, tgt->lut_reply_data, 0);
@@ -834,10 +832,14 @@ static int tgt_reply_data_upgrade_check(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	lrh.lrh_magic = LRH_MAGIC;
-	lrh.lrh_header_size = sizeof(struct lsd_reply_header);
-	lrh.lrh_reply_size = sizeof(struct lsd_reply_data);
-	rc = tgt_reply_header_write(env, tgt, &lrh);
+	lrh->lrh_magic = LRH_MAGIC;
+	lrh->lrh_header_size = sizeof(struct lsd_reply_header);
+	if (lrh->lrh_magic == LRH_MAGIC_V1)
+		lrh->lrh_reply_size = sizeof(struct lsd_reply_data_v1);
+	else
+		lrh->lrh_reply_size = sizeof(struct lsd_reply_data_v2);
+
+	rc = tgt_reply_header_write(env, tgt, lrh);
 	if (rc)
 		CERROR("%s: failed to write header for %s: rc = %d\n",
 		       tgt_name(tgt), REPLY_DATA, rc);
@@ -1317,10 +1319,11 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 	}
 
 	if (update_lrd_file) {
+		struct lsd_reply_header *lrh = &tgt->lut_reply_header;
 		loff_t	off;
 
 		/* write reply data to disk */
-		off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
+		off = lrh->lrh_header_size + lrh->lrh_reply_size * i;
 		rc = tgt_reply_data_write(env, tgt, lrd, off, th);
 		if (unlikely(rc != 0)) {
 			CERROR("%s: can't update %s file: rc = %d\n",
@@ -2142,7 +2145,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 	struct lsd_reply_data	*lrd = &tti->tti_lrd;
 	unsigned long		 reply_data_size;
 	int			 rc;
-	struct lsd_reply_header	*lrh = NULL;
+	struct lsd_reply_header	*lrh = &tgt->lut_reply_header;
 	struct tg_reply_data	*trd = NULL;
 	int                      idx;
 	loff_t			 off;
@@ -2156,16 +2159,15 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		GOTO(out, rc);
 	reply_data_size = (unsigned long)tti->tti_attr.la_size;
 
-	OBD_ALLOC_PTR(lrh);
-	if (lrh == NULL)
-		GOTO(out, rc = -ENOMEM);
-
 	if (reply_data_size == 0) {
 		CDEBUG(D_INFO, "%s: new reply_data file, initializing\n",
 		       tgt_name(tgt));
 		lrh->lrh_magic = LRH_MAGIC;
-		lrh->lrh_header_size = sizeof(*lrh);
-		lrh->lrh_reply_size = sizeof(*lrd);
+		lrh->lrh_header_size = sizeof(struct lsd_reply_header);
+		if (lrh->lrh_magic == LRH_MAGIC_V1)
+			lrh->lrh_reply_size = sizeof(struct lsd_reply_data_v1);
+		else
+			lrh->lrh_reply_size = sizeof(struct lsd_reply_data_v2);
 		rc = tgt_reply_header_write(env, tgt, lrh);
 		if (rc) {
 			CERROR("%s: error writing %s: rc = %d\n",
@@ -2192,8 +2194,11 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			recsz = sizeof(struct lsd_reply_data_v1);
 			lrd_ver = "v1";
 
-			CWARN("%s: %s v1 will be upgraded to new record size\n",
-			      tgt_name(tgt), REPLY_DATA);
+			if (lrh->lrh_magic != LRH_MAGIC)
+				CWARN("%s: %s record size will be %s\n",
+				      tgt_name(tgt), REPLY_DATA,
+				      lrh->lrh_magic < LRH_MAGIC ?
+				      "upgraded" : "downgraded");
 			fallthrough;
 #endif
 		case LRH_MAGIC_V2:
@@ -2228,8 +2233,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		/* Load reply_data from disk */
 		for (idx = 0, off = lrh->lrh_header_size;
 		     off < reply_data_size; idx++, off += recsz) {
-			rc = tgt_reply_data_read(env, tgt, lrd, off,
-						 lrh->lrh_magic);
+			rc = tgt_reply_data_read(env, tgt, lrd, off, lrh);
 			if (rc) {
 				CERROR("%s: error reading %s: rc = %d\n",
 				       tgt_name(tgt), REPLY_DATA, rc);
@@ -2313,8 +2317,6 @@ out:
 		cfs_hash_putref(hash);
 	if (trd != NULL)
 		OBD_FREE_PTR(trd);
-	if (lrh != NULL)
-		OBD_FREE_PTR(lrh);
 	return rc;
 }
 

@@ -1075,13 +1075,14 @@ static void update_recovery_update_ses(struct lu_env *env,
 				      struct distribute_txn_replay_req *dtrq,
 				      struct tx_arg *ta_arg)
 {
-	struct tgt_session_info	*tsi;
-	struct lu_target	*lut = tdtd->tdtd_lut;
-	struct obd_export	*export;
-	struct cfs_hash		*hash;
-	struct top_thandle	*top_th;
-	struct lsd_reply_data	*lrd;
-	size_t			size;
+	struct tgt_session_info *tsi;
+	struct lu_target *lut = tdtd->tdtd_lut;
+	struct lsd_reply_header *lrh = &lut->lut_reply_header;
+	struct lsd_reply_data *lrd;
+	struct top_thandle *top_th;
+	struct obd_export *export;
+	struct cfs_hash *hash;
+	size_t size;
 
 	tsi = tgt_ses_info(env);
 	if (tsi->tsi_exp != NULL)
@@ -1089,7 +1090,7 @@ static void update_recovery_update_ses(struct lu_env *env,
 
 	size = ta_arg->u.write.buf.lb_len;
 	lrd = ta_arg->u.write.buf.lb_buf;
-	if (size != sizeof(*lrd) || lrd == NULL)
+	if (size != lrh->lrh_reply_size || lrd == NULL)
 		return;
 
 	lrd->lrd_transno         = le64_to_cpu(lrd->lrd_transno);

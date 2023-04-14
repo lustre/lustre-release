@@ -280,7 +280,7 @@ int print_reply_data(FILE *fp)
 			(unsigned int)sizeof(struct lsd_reply_header));
 		rc = EINVAL;
 	}
-	if (lrh.lrh_magic == LRH_MAGIC) {
+	if (lrh.lrh_magic == LRH_MAGIC_V2) {
 		if (lrh.lrh_reply_size != sizeof(struct lsd_reply_data)) {
 			fprintf(stderr,
 				"%s: invalid %s header: lrh_reply_size=0x%08x expected 0x%08x\n",
@@ -303,8 +303,8 @@ int print_reply_data(FILE *fp)
 	} else {
 		fprintf(stderr,
 			"%s: invalid %s header: lrh_magic=0x%08x expected 0x%08x or 0x%08x\n",
-			progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC,
-			LRH_MAGIC_V1);
+			progname, REPLY_DATA, lrh.lrh_magic, LRH_MAGIC_V1,
+			LRH_MAGIC_V2);
 		rc = EINVAL;
 	}
 
@@ -338,20 +338,20 @@ int print_reply_data(FILE *fp)
 		lrd.lrd_result = __le32_to_cpu(lrd.lrd_result);
 		lrd.lrd_client_gen = __le32_to_cpu(lrd.lrd_client_gen);
 
-		if (lrh.lrh_magic == LRH_MAGIC)
+		if (lrh.lrh_magic > LRH_MAGIC_V1)
 			lrd.lrd_batch_idx = __le32_to_cpu(lrd.lrd_batch_idx);
 
 		printf("  %lld:\n", slot);
 		printf("    client_generation: %u\n",
 		       lrd.lrd_client_gen);
-		printf("    last_transaction: %lluu\n",
+		printf("    last_transaction: %llu\n",
 		       (unsigned long long)lrd.lrd_transno);
 		printf("    last_xid: %llu\n",
 		       (unsigned long long)lrd.lrd_xid);
 		printf("    last_result: %u\n", lrd.lrd_result);
 		printf("    last_data: %llu\n\n",
 		       (unsigned long long)lrd.lrd_data);
-		if (lrh.lrh_magic == LRH_MAGIC)
+		if (lrh.lrh_magic > LRH_MAGIC_V1)
 			printf("    batch_idx: %u\n", lrd.lrd_batch_idx);
 	}
 

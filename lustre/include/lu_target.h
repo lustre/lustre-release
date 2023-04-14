@@ -200,6 +200,8 @@ struct lu_target {
 	atomic_t		 lut_client_generation;
 	/** reply_data file */
 	struct dt_object	*lut_reply_data;
+	/** reply data header */
+	struct lsd_reply_header	 lut_reply_header;
 	/** Bitmap of used slots in the reply data file */
 	unsigned long		**lut_reply_bitmap;
 	/** target sync count, used for debug & test */
