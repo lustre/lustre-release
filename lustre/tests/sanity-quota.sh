@@ -3510,7 +3510,7 @@ test_35() {
 		error "write failed"
 	is_project_quota_supported &&
 		change_project -p $TSTPRJID $DIR/$tdir/$tfile
-	cancel_lru_locks osc
+	cancel_lru_locks
 
 	echo "Wait for setattr on objects finished..."
 	wait_delete_completed
@@ -3546,13 +3546,17 @@ test_35() {
 	log "Restart..."
 	stopall
 	setupall
+	wait_recovery_complete
 	quota_init
 
 	echo "Verify disk usage after restart"
 	local USED=$(getquota -u $TSTID global curspace)
-	[ $USED -eq $ORIG_USR_SPACE ] ||
+	(( $USED == $ORIG_USR_SPACE )) || {
+		ls -al $DIR/$tdir/$tfile
+		$LFS quota -v -u $TSTID $DIR
 		error "Used space for user $TSTID changed from " \
 			"$ORIG_USR_SPACE to $USED"
+	}
 	USED=$(getquota -u $TSTID global curinodes)
 	[ $USED -eq $ORIG_USR_INODES ] ||
 		error "Used inodes for user $TSTID changed from " \
@@ -3565,9 +3569,9 @@ test_35() {
 	[ $USED -eq $ORIG_GRP_INODES ] ||
 		error "Used inodes for group $TSTID changed from " \
 			"$ORIG_GRP_INODES to $USED"
-	if [ $project_supported == "yes" ]; then
+	if [[ $project_supported == "yes" ]]; then
 		USED=$(getquota -p $TSTPRJID global curinodes)
-		[ $USED -eq $ORIG_PRJ_INODES ] ||
+		(( $USED == $ORIG_PRJ_INODES )) ||
 			error "Used inodes for project $TSTPRJID " \
 				"changed from $ORIG_PRJ_INODES to $USED"
 		USED=$(getquota -p $TSTPRJID global curspace)
@@ -3592,9 +3596,9 @@ test_35() {
 	[ $USED -gt $ORIG_GRP_SPACE ] ||
 		error "Used space for group $TSTID isn't increased" \
 			"orig:$ORIG_GRP_SPACE, now:$USED"
-	if [ $project_supported == "yes" ]; then
+	if [[ $project_supported == "yes" ]]; then
 		USED=$(getquota -p $TSTPRJID global curspace)
-		[ $USED -gt $ORIG_PRJ_SPACE ] ||
+		(( $USED > $ORIG_PRJ_SPACE )) ||
 			error "Used space for project $TSTPRJID isn't " \
 				"increased orig:$ORIG_PRJ_SPACE, now:$USED"
 	fi
