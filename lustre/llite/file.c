@@ -1324,7 +1324,7 @@ static int ll_swap_layouts_close(struct obd_client_handle *och,
 		GOTO(out_free_och, rc = -EINVAL);
 
 	/* Close the file and {swap,merge} layouts between inode & inode2.
-	 * NB: lease lock handle is released in mdc_close_layout_swap_pack()
+	 * NB: local lease handle is released in mdc_close_intent_pack()
 	 * because we still need it to pack l_remote_handle to MDT. */
 	rc = ll_close_inode_openhandle(inode, och, MDS_CLOSE_LAYOUT_SWAP,
 				       inode2);

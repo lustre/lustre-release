@@ -1160,9 +1160,6 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				 struct hsm_progress_kernel *pgs);
 
-int mdt_close_swap_layouts(struct mdt_thread_info *info,
-			   struct mdt_object *o, struct md_attr *ma);
-
 extern struct lu_context_key       mdt_thread_key;
 
 /* debug issues helper starts here*/
