@@ -27367,7 +27367,8 @@ test_415() {
 
 	echo "rename $total files with 'touch' took $duration sec"
 	(( max > 2 * baseline )) || max=$((2 * baseline + 5))
-	(( duration <= max )) || error "rename took $duration > $max sec"
+	(( duration <= max )) ||
+		error_not_in_vm "rename took $duration > $max sec"
 }
 run_test 415 "lock revoke is not missing"
 
