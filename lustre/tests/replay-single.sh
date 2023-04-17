@@ -4853,6 +4853,12 @@ test_131b() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
+	# refresh grants so write after replay_barrier doesn't
+	# turn sync
+	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile-2
+	stack_trap "rm -f $DIR/$tfile-2"
+	dd if=/dev/zero of=$DIR/$tfile-2 bs=64k count=2 ||
+		error "can't dd"
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
 	replay_barrier $SINGLEMDS
 	echo "dom_data" | dd of=$DIR/$tfile bs=8 count=1
