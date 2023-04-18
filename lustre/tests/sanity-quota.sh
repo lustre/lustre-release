@@ -5816,9 +5816,31 @@ test_84()
 	$RUNAS $DD of=$TESTFILE1 count=60 conv=nocreat oflag=direct ||
 		quota_error g $TSTUSR "write failed"
 
-	sync
+	sync_all_data || true
 	sleep 3
 	$LFS quota -gv $TSTUSR $DIR
+	$LFS quota -gv --pool $qp $TSTUSR $DIR
+
+	# the grant quota should be larger than 0
+	waited=0
+	while (( $waited < 60 )); do
+		grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+		(( ${grant} > 0 && ${grant2} > 0 )) && break
+
+		do_facet ost1 $LCTL set_param \
+				osd-*.*-OST0000.quota_slave.force_reint=1
+		sleep 1
+		waited=$((waited + 1))
+	done
+
+	(( $waited >= 60)) && {
+		$LFS quota -gv $TSTUSR $DIR
+		$LFS quota -gv --pool $qp $TSTUSR $DIR
+	}
+
+	(( ${grant} > 0 )) || error "pool grant is not increased after dd"
+	(( ${grant2} > 0 )) || error "grant is not increased after dd"
 
 #define OBD_FAIL_QUOTA_GRANT 0xA08
 	lustre_fail mds 0xa08
@@ -5829,6 +5851,7 @@ test_84()
 	$LFS setquota -g $TSTUSR -b 0 -B 0 $DIR ||
 		error "failed to clear the group quota for $TSTUSR"
 	$LFS quota -gv $TSTUSR $DIR
+	$LFS quota -gv --pool $qp $TSTUSR $DIR
 
 	# the grant quota should be set as insane value
 	waited=0
@@ -5840,6 +5863,11 @@ test_84()
 		sleep 1
 		waited=$((waited + 1))
 	done
+
+	(( $waited >= 60)) && {
+		$LFS quota -gv $TSTUSR $DIR
+		$LFS quota -gv --pool $qp $TSTUSR $DIR
+	}
 
 	(( ${#grant} == 20 )) || error "pool grant is not set as insane value"
 	(( ${#grant2} == 20 )) || error "grant is not set as insane value"
@@ -5853,6 +5881,7 @@ test_84()
 
 	sleep 3
 	$LFS quota -gv $TSTUSR $DIR
+	$LFS quota -gv --pool $qp $TSTUSR $DIR
 
 	# the grant quota should be reset
 	grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
@@ -5861,6 +5890,7 @@ test_84()
 	(( ${#grant} == 20 )) && error "pool grant is not cleared"
 
 	$LFS quota -gv $TSTUSR --pool $qp $DIR
+	$LFS quota -gv --pool $qp $TSTUSR $DIR
 	local hlimit=$(getquota -g $TSTUSR global bhardlimit $qp)
 	 [ $hlimit -eq 5242880 ] || error "pool limit is changed"
 
