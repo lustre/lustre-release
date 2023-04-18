@@ -5148,6 +5148,11 @@ test_84() {
 }
 run_test 84 "0-nlink race in lu_object_find()"
 
+test_85() {
+	llapi_root_test $DIR/$tfile $DIR2/$tfile
+}
+run_test 85 "Lustre API root cache race"
+
 test_90() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local pid1

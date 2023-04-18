@@ -250,6 +250,10 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 		/* Cache the mount point information */
 		pthread_rwlock_wrlock(&root_cached_lock);
 
+		/* If the entry matches the saved one -> no update needed */
+		if (strcmp(root_cached.mnt_dir, mnt.mnt_dir) == 0)
+			goto unlock_root_cached;
+
 		if (root_cached.fd > 0) {
 			close(root_cached.fd);
 			root_cached.fd = 0;
@@ -266,6 +270,7 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 			ptr_end - mnt.mnt_fsname);
 		root_cached.nid[ptr_end - mnt.mnt_fsname] = '\0';
 
+unlock_root_cached:
 		pthread_rwlock_unlock(&root_cached_lock);
 	}
 

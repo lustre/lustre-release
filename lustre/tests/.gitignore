@@ -17,6 +17,7 @@
 /llapi_fid_test
 /llapi_hsm_test
 /llapi_layout_test
+/llapi_root_test
 /createdestroy
 /createmany
 /createtest
