@@ -1329,13 +1329,13 @@ int jt_lcfg_listparam(int argc, char **argv)
 
 		rc2 = param_display(&popt, path, NULL, LIST_PARAM);
 		if (rc2 < 0) {
-			if (rc2 == -ENOENT && getuid() != 0)
-				rc2 = llapi_param_display_value(path, 0, 0,
-								stdout);
 			if (rc == 0)
 				rc = rc2;
 
-			if (rc < 0) {
+			if (rc2 == -ENOENT && getuid() != 0)
+				rc2 = llapi_param_display_value(path, 0, 0,
+								stdout);
+			if (rc2 < 0) {
 				fprintf(stderr, "error: %s: listing '%s': %s\n",
 					jt_cmdname(argv[0]), path,
 					strerror(-rc2));
@@ -1417,11 +1417,12 @@ int jt_lcfg_getparam(int argc, char **argv)
 
 		rc2 = param_display(&popt, path, NULL, mode);
 		if (rc2 < 0) {
+			if (rc == 0)
+				rc = rc2;
+
 			if (rc2 == -ENOENT && getuid() != 0)
 				rc2 = llapi_param_display_value(path, version,
 								flags, stdout);
-			if (rc == 0)
-				rc = rc2;
 			continue;
 		}
 	}

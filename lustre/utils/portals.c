@@ -346,7 +346,9 @@ int jt_ptl_network(int argc, char **argv)
 	return 0;
 }
 
+#ifndef IOC_LIBCFS_GET_NI
 #define IOC_LIBCFS_GET_NI	_IOWR('e', 50, IOCTL_LIBCFS_TYPE)
+#endif
 
 int
 jt_ptl_list_nids(int argc, char **argv)
@@ -1072,7 +1074,9 @@ int jt_ptl_push_connection(int argc, char **argv)
 	return 0;
 }
 
-#define IOC_LIBCFS_PING	_IOWR('e', 61, IOCTL_LIBCFS_TYPE)
+#ifndef IOC_LIBCFS_PING_PEER
+#define IOC_LIBCFS_PING_PEER		_IOWR('e', 62, IOCTL_LIBCFS_TYPE)
+#endif
 
 int jt_ptl_ping(int argc, char **argv)
 {
@@ -1080,9 +1084,10 @@ int jt_ptl_ping(int argc, char **argv)
 	int rc;
 	int timeout;
 	struct lnet_process_id id;
-	struct lnet_process_id ids[16];
+	struct lnet_process_id ids[LNET_INTERFACES_MAX_DEFAULT];
+	lnet_nid_t src = LNET_NID_ANY;
 	int maxids = sizeof(ids) / sizeof(ids[0]);
-	struct libcfs_ioctl_data data;
+	struct lnet_ioctl_ping_data ping = { { 0 } };
 	yaml_emitter_t request;
 	yaml_parser_t reply;
 	yaml_event_t event;
@@ -1092,14 +1097,14 @@ int jt_ptl_ping(int argc, char **argv)
 
 	if (argc < 2) {
 		fprintf(stderr, "usage: %s id [timeout (secs)]\n", argv[0]);
-		return 0;
+		return -EINVAL;
 	}
 
 	sep = strchr(argv[1], '-');
 	if (!sep) {
 		rc = lnet_parse_nid(argv[1], &id);
 		if (rc != 0)
-			return -1;
+			return -EINVAL;
 	} else {
 		char   *end;
 
@@ -1112,7 +1117,7 @@ int jt_ptl_ping(int argc, char **argv)
 		if (end != sep) { /* assuming '-' is part of hostname */
 			rc = lnet_parse_nid(argv[1], &id);
 			if (rc != 0)
-				return -1;
+				return -EINVAL;
 		} else {
 			id.nid = libcfs_str2nid(sep + 1);
 
@@ -1120,7 +1125,7 @@ int jt_ptl_ping(int argc, char **argv)
 				fprintf(stderr,
 					"Can't parse process id \"%s\"\n",
 					argv[1]);
-				return -1;
+				return -EINVAL;
 			}
 		}
 	}
@@ -1130,7 +1135,7 @@ int jt_ptl_ping(int argc, char **argv)
 		if (timeout > 120 * 1000) {
 			fprintf(stderr, "Timeout %s is to large\n",
 				argv[2]);
-			return -1;
+			return -EINVAL;
 		}
 	} else {
 		timeout = 1000; /* default 1 second timeout */
@@ -1143,10 +1148,8 @@ int jt_ptl_ping(int argc, char **argv)
 
 	/* Setup parser to recieve Netlink packets */
 	rc = yaml_parser_initialize(&reply);
-	if (rc == 0) {
-		nl_socket_free(sk);
+	if (rc == 0)
 		goto old_api;
-	}
 
 	rc = yaml_parser_set_input_netlink(&reply, sk, false);
 	if (rc == 0)
@@ -1228,10 +1231,11 @@ int jt_ptl_ping(int argc, char **argv)
 	if (rc == 0)
 		goto emitter_error;
 
+	/* convert NID to string, in case libcfs_str2nid() did name lookup */
 	yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)argv[1],
-				     strlen(argv[1]), 1, 0,
+				     (yaml_char_t *)libcfs_nid2str(id.nid),
+				     strlen(libcfs_nid2str(id.nid)), 1, 0,
 				     YAML_PLAIN_SCALAR_STYLE);
 	rc = yaml_emitter_emit(&request, &event);
 	if (rc == 0)
@@ -1262,6 +1266,7 @@ emitter_error:
 	if (rc == 0) {
 		yaml_emitter_log_error(&request, stderr);
 		rc = -EINVAL;
+		goto old_api;
 	}
 	yaml_emitter_delete(&request);
 
@@ -1298,6 +1303,7 @@ emitter_error:
 			rc = strtol((char *)event.data.scalar.value, NULL, 10);
 			fprintf(stdout, "failed to ping %s: %s\n",
 				argv[1], strerror(-rc));
+			break; /* "rc" is clobbered if loop is run again */
 		}
 skip:
 		done = (event.type == YAML_STREAM_END_EVENT);
@@ -1305,9 +1311,10 @@ skip:
 	}
 free_reply:
 	if (rc == 0) {
+		/* yaml_* functions return 0 for error */
 		const char *msg = yaml_parser_get_reader_error(&reply);
 
-		rc = -errno;
+		rc = errno ? -errno : -EHOSTUNREACH;
 		if (strcmp(msg, "Unspecific failure") != 0) {
 			fprintf(stdout, "failed to ping %s: %s\n",
 				argv[1], msg);
@@ -1315,32 +1322,37 @@ free_reply:
 			fprintf(stdout, "failed to ping %s: %s\n",
 				argv[1], strerror(errno));
 		}
+	} else if (rc == 1) {
+		/* yaml_* functions return 1 for success */
+		rc = 0;
 	}
 	yaml_parser_delete(&reply);
 	nl_socket_free(sk);
 	return rc;
 old_api:
-	LIBCFS_IOC_INIT(data);
-	data.ioc_nid     = id.nid;
-	data.ioc_u32[0]  = id.pid;
-	data.ioc_u32[1]  = timeout;
-	data.ioc_plen1   = sizeof(ids);
-	data.ioc_pbuf1   = (char *)ids;
+	if (sk)
+		nl_socket_free(sk);
 
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING, &data);
+	LIBCFS_IOC_INIT_V2(ping, ping_hdr);
+	ping.ping_hdr.ioc_len = sizeof(ping);
+	ping.ping_id = id;
+	ping.ping_src = src;
+	ping.op_param = timeout;
+	ping.ping_count = maxids;
+	ping.ping_buf = ids;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING_PEER, &ping);
 	if (rc != 0) {
-		fprintf(stderr, "failed to ping %s: %s\n",
-			id.pid == LNET_PID_ANY ?
-			libcfs_nid2str(id.nid) : libcfs_id2str(id),
+		fprintf(stderr, "failed to ping %s: %s\n", argv[1],
 			strerror(errno));
-		return -1;
+		return rc;
 	}
 
-	for (i = 0; i < data.ioc_count && i < maxids; i++)
+	for (i = 0; i < ping.ping_count && i < maxids; i++)
 		printf("%s\n", libcfs_id2str(ids[i]));
 
-	if (data.ioc_count > maxids)
-		printf("%d out of %d ids listed\n", maxids, data.ioc_count);
+	if (ping.ping_count > maxids)
+		printf("%d out of %d ids listed\n", maxids, ping.ping_count);
 
 	return 0;
 }

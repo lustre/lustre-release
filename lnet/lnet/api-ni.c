@@ -4105,6 +4105,13 @@ LNetCtl(unsigned int cmd, void *arg)
 		     sizeof(struct lnet_ioctl_config_data) > LIBCFS_IOC_DATA_MAX);
 
 	switch (cmd) {
+	case IOC_LIBCFS_GET_NI: {
+		struct lnet_processid id = {};
+
+		rc = LNetGetId(data->ioc_count, &id);
+		data->ioc_nid = lnet_nid_to_nid4(&id.nid);
+		return rc;
+	}
 	case IOC_LIBCFS_FAIL_NID:
 		return lnet_fail_nid(data->ioc_nid, data->ioc_count);
 

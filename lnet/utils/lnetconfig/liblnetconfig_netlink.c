@@ -48,8 +48,8 @@
 #define NLM_F_ACK_TLVS	0x200	/* extended ACK TVLs were included */
 #endif
 
-#ifndef NLA_NUL_STRING
-# define NLA_NUL_STRING 10
+#ifndef NLA_S8
+# define NLA_S8 12
 #endif
 
 #ifndef NLA_S16
@@ -97,7 +97,121 @@ int64_t nla_get_s64(const struct nlattr *nla)
 #define NLA_PUT_S64(msg, attrtype, value) \
 	NLA_PUT_TYPE(msg, int64_t, attrtype, value)
 
-#endif /* ! HAVE_NLA_GET_S64 */
+#ifndef NLA_NUL_STRING
+#define NLA_NUL_STRING 10
+#endif
+
+enum nla_types {
+	LNET_NLA_UNSPEC		= NLA_UNSPEC,
+	LNET_NLA_U8		= NLA_U8,
+	LNET_NLA_U16		= NLA_U16,
+	LNET_NLA_U32		= NLA_U32,
+	LNET_NLA_U64		= NLA_U64,
+	LNET_NLA_STRING		= NLA_STRING,
+	LNET_NLA_FLAG		= NLA_FLAG,
+	LNET_NLA_MSECS		= NLA_MSECS,
+	LNET_NLA_NESTED		= NLA_NESTED,
+	LNET_NLA_NESTED_COMPAT	= NLA_NESTED + 1,
+	LNET_NLA_NUL_STRING	= NLA_NUL_STRING,
+	LNET_NLA_BINARY		= NLA_NUL_STRING + 1,
+	LNET_NLA_S8		= NLA_S8,
+	LNET_NLA_S16		= NLA_S16,
+	LNET_NLA_S32		= NLA_S32,
+	LNET_NLA_S64		= NLA_S64,
+	__LNET_NLA_TYPE_MAX,
+};
+
+#define LNET_NLA_TYPE_MAX (__LNET_NLA_TYPE_MAX - 1)
+
+static uint16_t nla_attr_minlen[LNET_NLA_TYPE_MAX+1] = {
+	[NLA_U8]        = sizeof(uint8_t),
+	[NLA_U16]       = sizeof(uint16_t),
+	[NLA_U32]       = sizeof(uint32_t),
+	[NLA_U64]       = sizeof(uint64_t),
+	[NLA_STRING]    = 1,
+	[NLA_FLAG]      = 0,
+};
+
+static int lnet_validate_nla(const struct nlattr *nla, int maxtype,
+			     const struct nla_policy *policy)
+{
+	const struct nla_policy *pt;
+	unsigned int minlen = 0;
+	int type = nla_type(nla);
+
+	if (type < 0 || type > maxtype)
+		return 0;
+
+	pt = &policy[type];
+
+	if (pt->type > NLA_TYPE_MAX)
+		return -NLE_INVAL;
+
+	if (pt->minlen)
+		minlen = pt->minlen;
+	else if (pt->type != NLA_UNSPEC)
+		minlen = nla_attr_minlen[pt->type];
+
+	if (nla_len(nla) < minlen)
+		return -NLE_RANGE;
+
+	if (pt->maxlen && nla_len(nla) > pt->maxlen)
+		return -NLE_RANGE;
+
+	if (pt->type == NLA_STRING) {
+		const char *data = nla_data(nla);
+
+		if (data[nla_len(nla) - 1] != '\0')
+			return -NLE_INVAL;
+	}
+
+	return 0;
+}
+
+int lnet_nla_parse(struct nlattr *tb[], int maxtype, struct nlattr *head,
+		   int len, const struct nla_policy *policy)
+{
+	struct nlattr *nla;
+	int rem, err;
+
+	memset(tb, 0, sizeof(struct nlattr *) * (maxtype + 1));
+
+	nla_for_each_attr(nla, head, len, rem) {
+		int type = nla_type(nla);
+
+		if (type > maxtype)
+			continue;
+
+		if (policy) {
+			err = lnet_validate_nla(nla, maxtype, policy);
+			if (err < 0)
+				return err;
+		}
+
+		tb[type] = nla;
+	}
+
+	return 0;
+}
+
+int lnet_genlmsg_parse(struct nlmsghdr *nlh, int hdrlen, struct nlattr *tb[],
+		       int maxtype, const struct nla_policy *policy)
+{
+	struct genlmsghdr *ghdr;
+
+	if (!genlmsg_valid_hdr(nlh, hdrlen))
+		return -NLE_MSG_TOOSHORT;
+
+	ghdr = nlmsg_data(nlh);
+	return lnet_nla_parse(tb, maxtype, genlmsg_attrdata(ghdr, hdrlen),
+			      genlmsg_attrlen(ghdr, hdrlen), policy);
+}
+
+#else /* !HAVE_NLA_GET_S64 */
+
+#define lnet_genlmsg_parse	genlmsg_parse
+
+#endif /* HAVE_NLA_GET_S64 */
 
 /**
  * Set NETLINK_BROADCAST_ERROR flags on socket to report ENOBUFS errors.
@@ -760,8 +874,8 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 		struct genlmsghdr *ghdr = genlmsg_hdr(nlh);
 		struct nlattr *attrs[LN_SCALAR_MAX + 1];
 
-		if (genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX,
-				  scalar_attr_policy))
+		if (lnet_genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX,
+				       scalar_attr_policy))
 			return NL_SKIP;
 
 		if (attrs[LN_SCALAR_ATTR_LIST]) {
@@ -796,7 +910,7 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 		for (i = 1; i < maxtype; i++)
 			policy[i].type = data->cur->keys.lkl_list[i].lkp_data_type;
 
-		if (genlmsg_parse(nlh, 0, attrs, maxtype, policy))
+		if (lnet_genlmsg_parse(nlh, 0, attrs, maxtype, policy))
 			return NL_SKIP;
 
 		size = data->parser->raw_buffer.end -

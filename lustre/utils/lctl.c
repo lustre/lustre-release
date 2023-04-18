@@ -143,7 +143,7 @@ command_t cmdlist[] = {
 	 "print the LNet routing table, same as 'route_list'\n"
 	 "usage: show_route"},
 	{"ping", jt_ptl_ping, 0, "Check LNET connectivity\n"
-	 "usage: ping nid [timeout] [pid]"},
+	 "usage: ping nid [timeout [pid]]"},
 	{"net_drop_add", jt_ptl_drop_add, 0, "Add LNet drop rule\n"
 	 "usage: net_drop_add <-s | --source NID>\n"
 	 "		      <-d | --dest NID>\n"

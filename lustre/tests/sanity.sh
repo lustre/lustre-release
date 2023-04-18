@@ -20206,34 +20206,42 @@ test_217() { # bug 22430
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local node
-	local nid
 
 	for node in $(nodes_list); do
-		nid=$(host_nids_address $node $NETTYPE)
-		if [[ $nid = *-* ]] ; then
-			echo "lctl ping $(h2nettype $nid)"
+		local nid=$(host_nids_address $node $NETTYPE)
+		local node_ip=$(do_node $node getent ahostsv4 $node |
+				awk '{ print $1; exit; }')
+
+		echo "node: '$node', nid: '$nid', node_ip='$node_ip'"
+		# if hostname matches any NID, use hostname for better testing
+		if [[ -z "$nid" || "$nid" =~ "$node_ip" ]]; then
+			echo "lctl ping node $node@$NETTYPE"
+			lctl ping $node@$NETTYPE
+		else # otherwise, at least test 'lctl ping' is working
+			echo "lctl ping nid $(h2nettype $nid)"
 			lctl ping $(h2nettype $nid)
-		else
 			echo "skipping $node (no hyphen detected)"
 		fi
 	done
 }
-run_test 217 "check lctl ping for hostnames with hiphen ('-')"
+run_test 217 "check lctl ping for hostnames with embedded hyphen ('-')"
 
 test_218() {
-       # do directio so as not to populate the page cache
-       log "creating a 10 Mb file"
-       $MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
-       log "starting reads"
-       dd if=$DIR/$tfile of=/dev/null bs=4096 &
-       log "truncating the file"
-       $MULTIOP $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
-       log "killing dd"
-       kill %+ || true # reads might have finished
-       echo "wait until dd is finished"
-       wait
-       log "removing the temporary file"
-       rm -rf $DIR/$tfile || error "tmp file removal failed"
+	# do directio so as not to populate the page cache
+	log "creating a 10 Mb file"
+	$MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c ||
+		error "multiop failed while creating a file"
+	log "starting reads"
+	dd if=$DIR/$tfile of=/dev/null bs=4096 &
+	log "truncating the file"
+	$MULTIOP $DIR/$tfile oO_TRUNC:c ||
+		error "multiop failed while truncating the file"
+	log "killing dd"
+	kill %+ || true # reads might have finished
+	echo "wait until dd is finished"
+	wait
+	log "removing the temporary file"
+	rm -rf $DIR/$tfile || error "tmp file removal failed"
 }
 run_test 218 "parallel read and truncate should not deadlock"
 
@@ -28381,10 +28389,11 @@ test_430c() {
 
 	# cp version 8.33+ prefers lseek over fiemap
 	local ver=$(cp --version | awk '{ print $4; exit; }')
+
 	echo "cp $ver installed"
 	if (( $(version_code $ver) >= $(version_code 8.33) )); then
 		start=$SECONDS
-		time cp -v $file $file.tmp
+		time cp -v $file $file.tmp || error "cp $file failed"
 		(( SECONDS - start < 5 )) || {
 			strace cp $file $file.tmp |&
 				grep -E "open|read|seek|FIEMAP" |
@@ -28394,12 +28403,13 @@ test_430c() {
 	else
 		echo "cp test skipped due to $ver < 8.33"
 	fi
+
 	# tar version 1.29+ supports SEEK_HOLE/DATA
 	ver=$(tar --version | awk '{ print $4; exit; }')
 	echo "tar $ver installed"
 	if (( $(version_code $ver) >= $(version_code 1.29) )); then
 		start=$SECONDS
-		time tar cvf $file.tmp --sparse $file || error "tar $file failed"
+		time tar cvf $file.tmp --sparse $file || error "tar $file error"
 		(( SECONDS - start < 5 )) || {
 			strace tar cf $file.tmp --sparse $file |&
 				grep -E "open|read|seek|FIEMAP" |
