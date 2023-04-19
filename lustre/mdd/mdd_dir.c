@@ -851,7 +851,7 @@ bool mdd_changelog_is_space_safe(const struct lu_env *env,
 	 * if changelog consumes more than 1/4 of available space then start
 	 * emergency cleanup.
 	 */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_ENOSPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_ENOSPC))
 		free_space_limit = cfs_fail_val;
 	else
 		free_space_limit = (sfs.os_bfree * sfs.os_bsize) >> 2;
@@ -935,7 +935,7 @@ bool mdd_changelog_need_gc(const struct lu_env *env, struct mdd_device *mdd,
 
 	return mdd_changelog_emrg_cleanup(env, mdd, lgh) ||
 	       mdd_changelog_is_too_idle(mdd, mc->mc_minrec, mc->mc_mintime) ||
-	       OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD);
+	       CFS_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD);
 }
 
 /** Add a changelog entry \a rec to the changelog llog
@@ -969,7 +969,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	if (IS_ERR(llog_th))
 		GOTO(out_put, rc = PTR_ERR(llog_th));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_CHANGELOG_REORDER, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_CHANGELOG_REORDER, cfs_fail_val);
 	/* nested journal transaction */
 	rc = llog_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, llog_th);
 
@@ -981,7 +981,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 		/* save a spin_lock trip */
 		goto out_put;
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_IDX_PUMP)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_IDX_PUMP)) {
 		spin_lock(&mdd->mdd_cl.mc_lock);
 		mdd->mdd_cl.mc_index += cfs_fail_val;
 		spin_unlock(&mdd->mdd_cl.mc_lock);
@@ -996,7 +996,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 		if (unlikely(need_gc)) {
 			CWARN("%s:%s starting changelog garbage collection\n",
 			      obd->obd_name,
-			      OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD) ?
+			      CFS_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD) ?
 			      " simulate" : "");
 			/* indicate further kthread run will occur outside
 			 * right after current journal transaction filling has
@@ -1218,7 +1218,7 @@ static int __mdd_links_add(const struct lu_env *env,
 			return -EEXIST;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE)) {
 		struct lu_fid *tfid = &mdd_env_info(env)->mdi_fid2;
 
 		*tfid = *pfid;
@@ -1226,7 +1226,7 @@ static int __mdd_links_add(const struct lu_env *env,
 		linkea_add_buf(ldata, lname, tfid, false);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE2))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE2))
 		linkea_add_buf(ldata, lname, pfid, false);
 
 	/* For encrypted file, we want to limit number of hard links to what
@@ -1277,7 +1277,7 @@ static int mdd_linkea_prepare(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_IGIF))
 		RETURN(0);
 
 	LASSERT(oldpfid != NULL || newpfid != NULL);
@@ -1405,7 +1405,7 @@ int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 	    ldata->ld_leh == NULL)
 		return 0;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
 		return 0;
 
 again:
@@ -1471,7 +1471,7 @@ static int mdd_declare_link(const struct lu_env *env,
 	struct lu_fid tfid = *mdd_object_fid(c);
 	int rc;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
 		tfid.f_oid = cfs_fail_val;
 
 	rc = mdo_declare_index_insert(env, p, &tfid, mdd_object_type(c),
@@ -1569,14 +1569,14 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LESS_NLINK)) {
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LESS_NLINK)) {
 		rc = mdo_ref_add(env, mdd_sobj, handle);
 		if (rc != 0)
 			GOTO(out_unlock, rc);
 	}
 
 	*tfid = *mdd_object_fid(mdd_sobj);
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
 		tfid->f_oid = cfs_fail_val;
 
 	rc = __mdd_index_insert_only(env, mdd_tobj, tfid,
@@ -1729,7 +1729,7 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	int rc;
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		if (likely(no_name == 0)) {
 			rc = mdo_declare_index_delete(env, p, name->ln_name,
 						      handle);
@@ -1891,14 +1891,14 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		name[lname->ln_namelen] = '\0';
 	}
 
-	if (likely(no_name == 0) && !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
+	if (likely(no_name == 0) && !CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle);
 		if (rc)
 			GOTO(cleanup, rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MUL_REF) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_NAMEENTRY))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_MUL_REF) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_NAMEENTRY))
 		GOTO(cleanup, rc = 0);
 
 	if (likely(mdd_cobj != NULL)) {
@@ -2750,7 +2750,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		RETURN(rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
 		GOTO(out_free, rc = -EINPROGRESS);
 
 	handle = mdd_trans_create(env, mdd);
@@ -2791,7 +2791,7 @@ use_bigger_buffer:
 	mdd_object_make_hint(env, mdd_pobj, son, attr, spec, hint);
 
 	memset(ldata, 0, sizeof(*ldata));
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
 		struct lu_fid tfid = *mdd_object_fid(mdd_pobj);
 
 		tfid.f_oid--;

@@ -581,7 +581,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 	 * pre-2.4 servers where a very strange reply is sent on error
 	 * that looks like it was actually almost successful and a
 	 * failure at the same time.) */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_NEGATIVE_POSITIVE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_NEGATIVE_POSITIVE)) {
 		mdt_set_disposition(info, rep, DISP_OPEN_OPEN |
 					       DISP_LOOKUP_NEG |
 					       DISP_LOOKUP_POS);
@@ -632,8 +632,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 	} else if (open_flags & MDS_OPEN_DIRECTORY)
 		RETURN(-ENOTDIR);
 
-	if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_OPEN_CREATE,
-				 OBD_FAIL_MDS_LDLM_REPLY_NET | OBD_FAIL_ONCE))
+	if (CFS_FAIL_CHECK_RESET(OBD_FAIL_MDS_OPEN_CREATE,
+				 OBD_FAIL_MDS_LDLM_REPLY_NET | CFS_FAIL_ONCE))
 		RETURN(-EAGAIN);
 
 	mfd = NULL;
@@ -903,7 +903,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	 * there should not be any downsides from doing it for normal
 	 * operations now.
 	 */
-	if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_OPEN) && try_layout) {
+	if (!CFS_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_OPEN) && try_layout) {
 		if (!(*ibits & MDS_INODELOCK_LOOKUP))
 			trybits |= MDS_INODELOCK_LOOKUP;
 		trybits |= MDS_INODELOCK_LAYOUT;
@@ -946,7 +946,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		rc = mdt_object_lock(info, obj, ll, MDS_INODELOCK_LAYOUT,
 				     LCK_EX, false);
 
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LL_BLOCK, 2);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LL_BLOCK, 2);
 	}
 
 	/* Check if there is any other open handles after acquiring
@@ -1389,7 +1389,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	ktime_t kstart = ktime_get();
 
 	ENTRY;
-	OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
+	CFS_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, CFS_FAIL_ONCE,
 			       (obd_timeout + 1) / 4);
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
@@ -1456,7 +1456,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
 		GOTO(out, result = err_serious(-ENOMEM));
 
 	mdt_set_disposition(info, ldlm_rep,
@@ -1493,7 +1493,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	result = -ENOENT;
 	lock_mode = mdt_open_lock_mode(info, parent, &rr->rr_name, open_flags);
 
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN);
 again_pw:
 	if (lock_mode != LCK_NL) {
 		lh = &info->mti_lh[MDT_LH_PARENT];
@@ -1514,7 +1514,7 @@ again_pw:
 	if (result != 0 && result != -ENOENT)
 		GOTO(out_parent_unlock, result);
 
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 
 	if (result == -ENOENT) {
 		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -2702,10 +2702,10 @@ int mdt_close(struct tgt_session_info *tsi)
 	}
 
 	mdt_exit_ucred(info);
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
 		GOTO(out, rc = err_serious(-ENOMEM));
 
-	if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MDS_CLOSE_NET_REP,
+	if (CFS_FAIL_CHECK_RESET(OBD_FAIL_MDS_CLOSE_NET_REP,
 				 OBD_FAIL_MDS_CLOSE_NET_REP))
 		tsi->tsi_reply_fail_id = OBD_FAIL_MDS_CLOSE_NET_REP;
 out:

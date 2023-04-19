@@ -405,11 +405,11 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 		/* records are in order, so we're done */
 		RETURN(LLOG_PROC_BREAK);
 
-	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_RACE))) {
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_RACE))) {
 		if (cfs_fail_val == 0)
 			cfs_fail_val = hdr->lrh_index;
 		if (cfs_fail_val == hdr->lrh_index)
-			OBD_RACE(OBD_FAIL_MDS_CHANGELOG_RACE);
+			CFS_RACE(OBD_FAIL_MDS_CHANGELOG_RACE);
 	}
 
 	/* Records folow one by one, cr_index++. We could calculate the
@@ -420,10 +420,10 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 				   cl_cookie->endrec)) {
 		int rc;
 
-		if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL))) {
+		if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL))) {
 			if (cfs_fail_val == 0) {
 				cfs_fail_val = (unsigned long)llh & 0xFFFFFFFF;
-				OBD_RACE(OBD_FAIL_MDS_CHANGELOG_DEL);
+				CFS_RACE(OBD_FAIL_MDS_CHANGELOG_DEL);
 			}
 		}
 		rc = llog_destroy(env, llh);
@@ -529,7 +529,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	ENTRY;
 
 	/* LU-2844 mdd setup failure should not cause umount oops */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_INIT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_INIT))
 		RETURN(-EIO);
 
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
@@ -1796,7 +1796,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rec->cur_time = (__u32)ktime_get_real_seconds();
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_TIME_IN_CHLOG_USER)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_TIME_IN_CHLOG_USER)) {
 		rec->cur_time -= min(cfs_fail_val, rec->cur_time);
 		spin_lock(&mdd->mdd_cl.mc_user_lock);
 		mdd->mdd_cl.mc_mintime = rec->cur_time;
@@ -2022,7 +2022,7 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PURGE_DELAY, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLOG_PURGE_DELAY, cfs_fail_val);
 	if (mcup.mcup_usercount == 0) {
 		spin_lock(&mdd->mdd_cl.mc_user_lock);
 		if (mdd->mdd_cl.mc_users == 0) {

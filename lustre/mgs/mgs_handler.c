@@ -434,7 +434,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 			GOTO(out_norevoke, rc);
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
 
 	if (mti->mti_flags & LDD_F_WRITECONF) {
 		if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&

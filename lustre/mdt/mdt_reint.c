@@ -621,7 +621,7 @@ static int mdt_create(struct mdt_thread_info *info)
 	/* save version of file name for replay, it must be ENOENT here */
 	mdt_enoent_version_save(info, 1);
 
-	OBD_RACE(OBD_FAIL_MDS_CREATE_RACE);
+	CFS_RACE(OBD_FAIL_MDS_CREATE_RACE);
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	rc = mdt_parent_lock(info, parent, lh, &rr->rr_name, LCK_PW, false);
@@ -852,7 +852,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-	OBD_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
+	CFS_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 	mo = mdt_object_find(info->mti_env, mdt, rr->rr_fid1);
@@ -1063,7 +1063,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 	int                     rc;
 
 	ENTRY;
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
 		RETURN(err_serious(-ESTALE));
 
 	if (info->mti_dlm_req)
@@ -1132,7 +1132,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
 		RETURN(err_serious(-ENOENT));
 
 	if (!fid_is_md_operative(rr->rr_fid1))
@@ -1154,8 +1154,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	    mp->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD)
 		GOTO(put_parent, rc = -EPERM);
 
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 relock:
 	parent_lh = &info->mti_lh[MDT_LH_PARENT];
 	rc = mdt_parent_lock(info, mp, parent_lh, &rr->rr_name, LCK_PW,
@@ -1379,11 +1379,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/"DNAME,
 		  PFID(rr->rr_fid1), PFID(rr->rr_fid2), PNAME(&rr->rr_name));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
 		RETURN(err_serious(-ENOENT));
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE) ||
-	    OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE) ||
+	    CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND)) {
 		req->rq_no_reply = 1;
 		RETURN(err_serious(-ENOENT));
 	}
@@ -1427,14 +1427,14 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 	cos_incompat = (mdt_object_remote(mp) || mdt_object_remote(ms));
 
-	OBD_RACE(OBD_FAIL_MDS_LINK_RENAME_RACE);
+	CFS_RACE(OBD_FAIL_MDS_LINK_RENAME_RACE);
 
 	lhp = &info->mti_lh[MDT_LH_PARENT];
 	rc = mdt_parent_lock(info, mp, lhp, &rr->rr_name, LCK_PW, cos_incompat);
 	if (rc != 0)
 		GOTO(put_source, rc);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
 	lhs = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_lock(info, ms, lhs,
@@ -2579,7 +2579,7 @@ static int mdt_lock_two_dirs(struct mdt_thread_info *info,
 		return rc;
 
 	mdt_version_get_save(info, mfirstdir, 0);
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
 
 	if (mfirstdir != mseconddir) {
 		rc = mdt_parent_lock(info, mseconddir, lh_seconddirp,
@@ -2590,7 +2590,7 @@ static int mdt_lock_two_dirs(struct mdt_thread_info *info,
 			rc = mdt_object_pdo_lock(info, mseconddir,
 						 lh_seconddirp, secondname,
 						 LCK_PW, false, cos_incompat);
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
+			CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
 		}
 	}
 	mdt_version_get_save(info, mseconddir, 1);
@@ -2653,7 +2653,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	if (rc)
 		GOTO(out_put_srcdir, rc);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
 	if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
 		mtgtdir = msrcdir;
@@ -2736,14 +2736,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	cos_incompat = (mdt_object_remote(msrcdir) ||
 			mdt_object_remote(mtgtdir));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
 
 	/* lock parents in the proper order. */
 	lh_srcdirp = &info->mti_lh[MDT_LH_PARENT];
 	lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
 
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
-	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN);
+	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 relock:
 	mdt_lock_pdo_init(lh_srcdirp, LCK_PW, &rr->rr_name);
 	mdt_lock_pdo_init(lh_tgtdirp, LCK_PW, &rr->rr_tgt_name);
@@ -2754,7 +2754,7 @@ relock:
 	 */
 	if (!mdt_object_remote(mtgtdir) && mtgtdir == msrcdir)
 		reverse = lh_srcdirp->mlh_pdo_hash > lh_tgtdirp->mlh_pdo_hash;
-	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK)))
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK)))
 		reverse = 0;
 
 	if (reverse)
@@ -2769,8 +2769,8 @@ relock:
 	if (rc != 0)
 		GOTO(out_unlock_rename, rc);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME2, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME2, 5);
 
 	/* find mold object. */
 	fid_zero(old_fid);
@@ -2985,7 +2985,7 @@ out_put_srcdir:
 		mdt_dom_discard_data(info, mnew);
 		mdt_object_put(info->mti_env, mnew);
 	}
-	OBD_RACE(OBD_FAIL_MDS_LINK_RENAME_RACE);
+	CFS_RACE(OBD_FAIL_MDS_LINK_RENAME_RACE);
 	return rc;
 }
 

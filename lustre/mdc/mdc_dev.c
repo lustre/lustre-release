@@ -675,10 +675,10 @@ int mdc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 	ldlm_lock_addref(lockh, mode);
 
 	/* Let cl_lock_state_wait fail with -ERESTARTSYS to unuse sublocks. */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_HANG, 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_HANG, 2);
 
 	/* Let CP AST to grant the lock first. */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 1);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 1);
 
 	/* Complete obtaining the lock procedure. */
 	rc = ldlm_cli_enqueue_fini(aa->oa_exp, &req->rq_pill, &einfo, 1,
@@ -688,7 +688,7 @@ int mdc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 	rc = mdc_enqueue_fini(aa->oa_exp, req, aa->oa_upcall, aa->oa_cookie,
 			      lockh, mode, aa->oa_flags, rc);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
 
 	ldlm_lock_decref(lockh, mode);
 	LDLM_LOCK_PUT(lock);
@@ -743,7 +743,7 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 
 		matched = ldlm_handle2lock(&lockh);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GLIMPSE_DDOS))
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDC_GLIMPSE_DDOS))
 			ldlm_set_kms_ignore(matched);
 
 		if (mdc_set_dom_lock_data(matched, einfo->ei_cbdata)) {

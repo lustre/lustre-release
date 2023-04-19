@@ -260,7 +260,7 @@ int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 	key = mdd_orphan_key_fill(env, mdd_object_fid(obj));
 	dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ORPHAN_DELETE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_ORPHAN_DELETE))
 		goto ref_del;
 
 	rc = dt_delete(env, mdd->mdd_orphans, key, th);

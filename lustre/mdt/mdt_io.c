@@ -625,7 +625,7 @@ retry:
 		}
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
 		GOTO(out_stop, rc = -EINPROGRESS);
 
 	rc = dt_declare_write_commit(env, dob, lnb, niocount, th);

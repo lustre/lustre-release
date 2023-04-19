@@ -4439,7 +4439,7 @@ int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 		rc = 0;
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_WRITE_TARGET_DELAY, cfs_fail_val > 0 ?
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MGS_WRITE_TARGET_DELAY, cfs_fail_val > 0 ?
 			 cfs_fail_val : 10);
 
 	mutex_lock(&fsdb->fsdb_mutex);
@@ -4596,7 +4596,7 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 	out = data->ioc_bulk;
 	remains = data->ioc_inllen1;
 	/* OBD_FAIL: fetch the config_log records from the specified one */
-	if (OBD_FAIL_CHECK(OBD_FAIL_CATLIST))
+	if (CFS_FAIL_CHECK(OBD_FAIL_CATLIST))
 		data->ioc_count = cfs_fail_val;
 
 	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {

@@ -132,7 +132,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info *info)
 	if (rc2 < 0)
 		RETURN(rc2);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
 		RETURN(-ENOMEM);
 
 	RETURN(rc < 0 ? rc : size);
@@ -540,7 +540,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
 		RETURN(err_serious(-ENOMEM));
 
 	rc = mdt_init_ucred_reint(info);

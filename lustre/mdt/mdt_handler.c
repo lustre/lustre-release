@@ -431,7 +431,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	if (rc)
 		GOTO(out, rc = err_serious(rc));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GET_ROOT_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_GET_ROOT_PACK))
 		GOTO(out, rc = err_serious(-ENOMEM));
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
@@ -499,7 +499,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	svcpt = req->rq_rqbd->rqbd_svcpt;
 
 	/* This will trigger a watchdog timeout */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
 			 (MDT_SERVICE_WATCHDOG_FACTOR *
 			  at_get(&svcpt->scp_at_estimate)) + 1);
 
@@ -507,7 +507,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	if (rc)
 		GOTO(out, rc = err_serious(rc));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
 		GOTO(out, rc = err_serious(-ENOMEM));
 
 	osfs = req_capsule_server_get(info->mti_pill, &RMF_OBD_STATFS);
@@ -1384,7 +1384,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
 		RETURN(err_serious(-ENOMEM));
 
 	repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
@@ -1582,7 +1582,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		} else {
 			int print_limit = min_t(int, PAGE_SIZE - 128, rc);
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
+			if (CFS_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
 				rc -= 2;
 			repbody->mbo_valid |= OBD_MD_LINKNAME;
 			/* we need to report back size with NULL-terminator
@@ -2297,7 +2297,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		}
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout * 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout * 2);
 	if (!mdt_object_exists(child)) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&child->mot_obj,
@@ -2336,7 +2336,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		LASSERT(!(child_bits & MDS_INODELOCK_LAYOUT));
 		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && ldlm_rep != NULL) {
-			if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
+			if (!CFS_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
 			    exp_connect_layout(info->mti_exp)) {
 				/* try to grant layout lock for regular file. */
 				try_bits = MDS_INODELOCK_LAYOUT;
@@ -2430,9 +2430,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
 
-		if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND))) {
+		if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND))) {
 			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
-				OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_ENQ_RESEND,
+				CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_ENQ_RESEND,
 						 req->rq_deadline -
 						 req->rq_arrival_time.tv_sec +
 						 cfs_fail_val ?: 3);
@@ -2868,7 +2868,7 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
 		RETURN(err_serious(-ENOMEM));
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_MDT_BODY);
@@ -2920,7 +2920,7 @@ free_rdpg:
 			__free_page(rdpg->rp_pages[i]);
 	OBD_FREE_PTR_ARRAY_LARGE(rdpg->rp_pages, rdpg->rp_npages);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
 		RETURN(0);
 
 	return rc;
@@ -3028,7 +3028,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 		repbody->mbo_aclsize = 0;
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
 
 	/* for replay no cookkie / lmm need, because client have this already */
 	if (info->mti_spec.no_create)
@@ -3185,7 +3185,7 @@ static int mdt_sync(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
 		RETURN(err_serious(-ENOMEM));
 
 	if (fid_seq(&tsi->tsi_mdt_body->mbo_fid1) == 0) {
@@ -3874,10 +3874,10 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 			  policy, res_id, dlmflags, cookie);
 	if (rc)
 		mdt_object_unlock(info, obj, lh, 1);
-	else if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK) &&
+	else if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK) &&
 		   lh->mlh_pdo_hash != 0 &&
 		   (lh->mlh_reg_mode == LCK_PW || lh->mlh_reg_mode == LCK_EX))
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK, 15);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK, 15);
 
 	return rc;
 }
@@ -4506,7 +4506,7 @@ struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi)
 
 static int mdt_tgt_connect(struct tgt_session_info *tsi)
 {
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
 	    cfs_fail_val ==
 	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id)
 		schedule_timeout_uninterruptible(cfs_time_seconds(3));
@@ -4702,7 +4702,7 @@ static int mdt_intent_getxattr(enum ldlm_intent_flags it_opc,
 		ldlm_rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
 
 	if (ldlm_rep == NULL ||
-	    OBD_FAIL_CHECK(OBD_FAIL_MDS_XATTR_REP)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_MDS_XATTR_REP)) {
 		mdt_object_unlock(info,  info->mti_object, lhc, 1);
 		if (is_serious(rc))
 			RETURN(rc);
@@ -5106,7 +5106,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	if (it_handler_flags & IS_MUTABLE && mdt_rdonly(req->rq_export))
 		RETURN(-EROFS);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_INTENT_DELAY, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_INTENT_DELAY, 10);
 
 	/* execute policy */
 	rc = (*it_handler)(it_opc, info, lockp, flags);
@@ -5823,7 +5823,7 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 	mdt->mdt_qmt_dev = obd->obd_lu_dev;
 
 	/* configure local quota objects */
-	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_INIT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_INIT))
 		rc = -EBADF;
 	else
 		rc = mdt->mdt_qmt_dev->ld_ops->ldo_prepare(env,
@@ -6306,7 +6306,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	else
 		m->mdt_brw_size = ONE_MB_BRW_SIZE;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
 		GOTO(err_tgt, rc = -ENOENT);
 
 	fid.f_seq = FID_SEQ_LOCAL_NAME;

@@ -1155,7 +1155,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 			/* balanced in ll_file_open */
 			ptlrpc_request_addref(request);
 			/* eviction in middle of open RPC processing b=11546 */
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_ENQUEUE_PAUSE,
+			CFS_FAIL_TIMEOUT(OBD_FAIL_MDC_ENQUEUE_PAUSE,
 					 obd_timeout);
 		}
 
@@ -1382,7 +1382,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	__u64 flags = LDLM_FL_HAS_INTENT;
 
 	ENTRY;
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
 		rc = -ETIMEDOUT;
 
 	rc = ldlm_cli_enqueue_fini(exp, pill, einfo, 1, &flags, NULL, 0,

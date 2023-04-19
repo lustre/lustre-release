@@ -366,7 +366,7 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 				GOTO(out, rc = -EPROTO);
 
 			/* LU-15132 */
-			OBD_RACE(OBD_FAIL_MDS_HSM_RESTORE_RACE);
+			CFS_RACE(OBD_FAIL_MDS_HSM_RESTORE_RACE);
 
 			rc = cdt_restore_handle_add(mti, cdt, &hai->hai_fid,
 						    &hai->hai_extent);
@@ -386,7 +386,7 @@ record:
 		 * ldlm_resource_clean and protections may not work.
 		 * See LU-9266 and sanity-hsm_407 for details.
 		 */
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_HSM_CDT_DELAY, cfs_fail_val);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_HSM_CDT_DELAY, cfs_fail_val);
 		/* record request */
 		rc = mdt_agent_record_add(mti->mti_env, mdt, archive_id, flags,
 					  hai);

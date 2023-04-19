@@ -2707,7 +2707,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc != 0)
 		GOTO(unlock, rc);
 
-	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
+	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
 		rc = -EOPNOTSUPP;
 	} else {
 		if (fst_buf->lb_buf != NULL)
@@ -3667,7 +3667,7 @@ static int mdd_dir_page_build(const struct lu_env *env, struct dt_object *obj,
 		recsize = lu_dirent_calc_size(len, attr);
 
 		if (bytes >= recsize &&
-		    !OBD_FAIL_CHECK(OBD_FAIL_MDS_DIR_PAGE_WALK)) {
+		    !CFS_FAIL_CHECK(OBD_FAIL_MDS_DIR_PAGE_WALK)) {
 			result = iops->rec(env, it, (struct dt_rec *)ent, attr);
 			if (result == -ESTALE)
 				GOTO(next, result);
