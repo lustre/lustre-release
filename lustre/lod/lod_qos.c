@@ -702,7 +702,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	lod_qos_tgt_in_use(env, stripe_idx, ost_idx);
 	stripe[stripe_idx] = o;
 	ost_indices[stripe_idx] = ost_idx;
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOV_CREATE_RACE, 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LOV_CREATE_RACE, 2);
 	stripe_idx++;
 	*s_idx = stripe_idx;
 
@@ -827,13 +827,13 @@ repeat_find:
 
 		/* Fail Check before osc_precreate() is called
 		   so we can only 'fail' single OSC. */
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
 			continue;
 
-		if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LOD_CREATE_PAUSE)) {
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_LOD_CREATE_PAUSE)) {
 			clear_bit(LQ_SAME_SPACE,
 				  &m->lod_ost_descs.ltd_qos.lq_flags);
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOD_CREATE_PAUSE,
+			CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LOD_CREATE_PAUSE,
 					 cfs_fail_val);
 		}
 		rc = lod_check_and_reserve_ost(env, lo, lod_comp, ost_idx,
@@ -1284,7 +1284,7 @@ repeat_find:
 
 		/* Fail Check before osc_precreate() is called
 		   so we can only 'fail' single OSC. */
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
 			continue;
 
 		/*
@@ -1635,7 +1635,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		/* Fail Check before osc_precreate() is called
 		 * so we can only 'fail' single OSC.
 		 */
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) &&
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) &&
 				   osts->op_array[i] == 0)
 			continue;
 

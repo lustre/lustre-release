@@ -490,7 +490,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		RETURN(-EINVAL);
 
 	if (IS_DEADDIR(parent) &&
-	    !OBD_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
+	    !CFS_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
 		RETURN(-ENOENT);
 
 	/* MDS < 2.14 doesn't support 'crush' hash type, and cannot handle

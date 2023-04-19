@@ -1279,7 +1279,7 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 			RETURN(rc);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
 			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID | LA_MODE |
@@ -1330,13 +1330,13 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	    !S_ISREG(attr->la_mode))
 		RETURN(0);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
 		rc = lod_sub_declare_xattr_del(env, next, XATTR_NAME_LOV, th);
 		RETURN(rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 
@@ -1378,7 +1378,7 @@ static int lod_attr_set(const struct lu_env *env,
 		if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 			RETURN(rc);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
 			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE | LA_PROJID |
@@ -1430,12 +1430,12 @@ static int lod_attr_set(const struct lu_env *env,
 	    !S_ISREG(attr->la_mode))
 		RETURN(0);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
 		rc = lod_sub_xattr_del(env, next, XATTR_NAME_LOV, th);
 		RETURN(rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE)) {
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 		struct ost_id *oi = &info->lti_ostid;
@@ -1473,7 +1473,7 @@ static int lod_attr_set(const struct lu_env *env,
 
 		rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LOV,
 				       LU_XATTR_REPLACE, th);
-	} else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
+	} else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 		struct lov_comp_md_v1 *lcm;
@@ -1921,7 +1921,7 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 			if (rc != 0)
 				GOTO(out, rc);
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
 			    cfs_fail_val == i)
 				snprintf(stripe_name, sizeof(info->lti_key),
 					 DFID":%u",
@@ -1959,9 +1959,9 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 				GOTO(out, rc);
 		}
 
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
+		if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
 		    cfs_fail_val != i) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
 			    cfs_fail_val == i)
 				slave_lmm->lmv_master_mdt_index =
 							cpu_to_le32(i + 1);
@@ -2047,7 +2047,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 			       idx, lod->lod_remote_mdt_count + 1, stripe_idx);
 
 			if (likely(!is_specific &&
-				   !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
+				   !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
 				/* check whether the idx already exists
 				 * in current allocated array */
 				for (k = 0; k < stripe_idx; k++) {
@@ -2112,7 +2112,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 			 * remote MDT, otherwise we may save too many local
 			 * slave locks which will exceed RS_MAX_LOCKS.
 			 */
-			if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)))
+			if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)))
 				idx = master_index;
 			mdt_indices[stripe_idx + 1] = (idx + 1) %
 					   (lod->lod_remote_mdt_count + 1);
@@ -2123,7 +2123,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 		LASSERT(fid_is_sane(&fid));
 
 		/* fail a remote stripe FID allocation */
-		if (stripe_idx && OBD_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_FID))
+		if (stripe_idx && CFS_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_FID))
 			continue;
 
 		dto = dt_locate_at(env, tgt_dt, &fid,
@@ -4275,7 +4275,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		/* fail a remote stripe creation */
-		if (i && OBD_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_CREATE))
+		if (i && CFS_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_CREATE))
 			continue;
 
 		/* don't create stripe if:
@@ -4307,9 +4307,9 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 				GOTO(out, rc);
 		}
 
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
+		if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
 		    cfs_fail_val != i) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
 			    cfs_fail_val == i)
 				slave_lmm->lmv_master_mdt_index =
 							cpu_to_le32(i + 1);
@@ -4338,7 +4338,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		if (rc != 0)
 			GOTO(out, rc);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
 		    cfs_fail_val == i)
 			snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
 				 PFID(lu_object_fid(&dto->do_lu)), i + 1);
@@ -4371,7 +4371,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			GOTO(out, rc);
 	}
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MASTER_LMV))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MASTER_LMV))
 		rc = lod_sub_xattr_set(env, dt_object_child(dt),
 				       &lmv_buf, XATTR_NAME_LMV, fl, th);
 out:
@@ -5772,7 +5772,7 @@ static void lod_ah_init(const struct lu_env *env,
 
 		/* shrink the stripe_count to the avaible MDT count */
 		if (lc->ldo_dir_stripe_count > d->lod_remote_mdt_count + 1 &&
-		    !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)) {
+		    !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)) {
 			lc->ldo_dir_stripe_count = d->lod_remote_mdt_count + 1;
 			if (lc->ldo_dir_stripe_count == 1)
 				lc->ldo_dir_stripe_count = 0;
@@ -6018,7 +6018,7 @@ int lod_declare_striped_create(const struct lu_env *env, struct dt_object *dt,
 	int			 rc;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOC_OBDO))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_ALLOC_OBDO))
 		GOTO(out, rc = -ENOMEM);
 
 	if (!dt_object_remote(next)) {
@@ -6165,7 +6165,7 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 		 * striped directory with specified stripeEA, then it
 		 * should ignore the default stripeEA */
 		if (hint != NULL && hint->dah_eadata == NULL) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
+			if (CFS_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
 				GOTO(out, rc = -EREMOTE);
 
 			if (lo->ldo_dir_stripe_offset != LMV_OFFSET_DEFAULT &&
@@ -6419,7 +6419,7 @@ lod_obj_stripe_destroy_cb(const struct lu_env *env, struct lod_object *lo,
 	if (data->locd_declare)
 		return lod_sub_declare_destroy(env, dt, th);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
 	    stripe_idx == cfs_fail_val)
 		return lod_sub_destroy(env, dt, th);
 
@@ -6491,8 +6491,8 @@ static int lod_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (rc)
 		RETURN(rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
 		RETURN(0);
 
 	if (!lod_obj_is_striped(dt))
@@ -6583,8 +6583,8 @@ static int lod_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		RETURN(rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
 		RETURN(0);
 
 	if (!lod_obj_is_striped(dt))
@@ -6600,7 +6600,7 @@ static int lod_destroy(const struct lu_env *env, struct dt_object *dt,
 			if (!dt_object_exists(stripe))
 				continue;
 
-			if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
+			if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
 			    i == cfs_fail_val) {
 				dt_write_lock(env, stripe, DT_TGT_CHILD);
 				rc = lod_sub_ref_del(env, stripe, th);
@@ -7679,7 +7679,7 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 	int picked = -1, second_pick = -1, third_pick = -1;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
 		get_random_bytes(&seq, sizeof(seq));
 		seq %= lo->ldo_mirror_count;
 	}

@@ -1715,7 +1715,7 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
 		return tgt;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NAME_HASH)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NAME_HASH)) {
 		if (cfs_fail_val >= lsm->lsm_md_stripe_count)
 			return ERR_PTR(-EBADF);
 		oinfo = &lsm->lsm_md_oinfo[cfs_fail_val];

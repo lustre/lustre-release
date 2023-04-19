@@ -221,7 +221,7 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	}
 	obdo_from_inode(oa, inode, valid_flags & attr->cra_flags);
 	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
 
 	attr->cra_uid = lli->lli_uid;

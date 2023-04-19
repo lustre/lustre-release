@@ -1875,9 +1875,9 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	int result;
 	ENTRY;
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
 		unlock_page(vmpage);
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
 		lock_page(vmpage);
 	}
 

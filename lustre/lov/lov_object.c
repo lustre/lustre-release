@@ -134,7 +134,7 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 	int stripe = lov_comp_stripe(idx);
 	int result;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LOV_INIT)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LOV_INIT)) {
 		/* For sanity:test_206.
 		 * Do not leave the object in cache to avoid accessing
 		 * freed memory. This is because osc_object is referring to

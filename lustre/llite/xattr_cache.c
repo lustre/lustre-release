@@ -498,7 +498,7 @@ static int ll_xattr_cache_refill(struct inode *inode)
 		} else if (xval + *xsizes > xvtail) {
 			CERROR("xattr protocol violation (vals are broken)\n");
 			rc = -EPROTO;
-		} else if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_XATTR_ENOMEM)) {
+		} else if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_XATTR_ENOMEM)) {
 			rc = -ENOMEM;
 		} else if (!strcmp(xdata, XATTR_NAME_ACL_ACCESS)) {
 			/* Filter out ACL ACCESS since it's cached separately */

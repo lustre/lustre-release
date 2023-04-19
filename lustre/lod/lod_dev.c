@@ -470,9 +470,9 @@ static int lod_sub_recovery_thread(void *arg)
 
 again:
 
-	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_TGT_RECOVERY_CONNECT)) &&
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_TGT_RECOVERY_CONNECT)) &&
 	    lrd->lrd_ltd) {
-		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val);
 		rc = -EIO;
 	} else {
 		rc = lod_sub_prep_llog(env, lod, dt, lrd->lrd_idx);
@@ -1127,7 +1127,7 @@ static int lod_process_config(const struct lu_env *env,
 	case LCFG_PRE_CLEANUP: {
 		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
 		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
-		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val * 2);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val * 2);
 		next = &lod->lod_child->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc != 0)
@@ -1823,7 +1823,7 @@ static int lod_add_noop_records(const struct lu_env *env,
 static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	if (OBD_FAIL_CHECK(OBD_FAIL_SPLIT_UPDATE_REC)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_SPLIT_UPDATE_REC)) {
 		int rc;
 
 		rc = lod_add_noop_records(env, dt, th, 5000);

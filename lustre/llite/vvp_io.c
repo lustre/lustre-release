@@ -75,7 +75,7 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 		/* don't need lock here to check lli_layout_gen as we have held
 		 * extent lock and GROUP lock has to hold to swap layout */
 		if (ll_layout_version_get(lli) != vio->vui_layout_gen ||
-		    OBD_FAIL_CHECK_RESET(OBD_FAIL_LLITE_LOST_LAYOUT, 0)) {
+		    CFS_FAIL_CHECK_RESET(OBD_FAIL_LLITE_LOST_LAYOUT, 0)) {
 			io->ci_need_restart = 1;
 			/* this will cause a short read/write */
 			io->ci_continue = 0;
@@ -1310,10 +1310,10 @@ static int vvp_io_write_start(const struct lu_env *env,
 	}
 
 	/* Tests to verify we take the i_mutex correctly */
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_SEC) && !lock_inode)
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_SEC) && !lock_inode)
 		RETURN(-EINVAL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_NOSEC) && lock_inode)
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_NOSEC) && lock_inode)
 		RETURN(-EINVAL);
 
 	if (!(file->f_flags & O_DIRECT)) {
@@ -1515,7 +1515,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	vmpage = cfio->ft_vmpage;
 	LASSERT(PageLocked(vmpage));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
 		generic_error_remove_page(vmpage->mapping, vmpage);
 
 	size = i_size_read(inode);

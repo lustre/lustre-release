@@ -637,7 +637,7 @@ static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
 
 	/* if server supports open-by-fid, or file name is invalid, don't pack
 	 * name in open request */
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_OPEN_BY_NAME) ||
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_OPEN_BY_NAME) ||
 	    !(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_OPEN_BY_FID)) {
 retry:
 		len = de->d_name.len;
@@ -671,7 +671,7 @@ retry:
 	op_data->op_data = lmm;
 	op_data->op_data_size = lmmsize;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_OPEN_DELAY, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_OPEN_DELAY, cfs_fail_val);
 
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
 			    &ll_md_blocking_ast, 0);
@@ -1460,7 +1460,7 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	ctime = inode->i_ctime.tv_sec;
 
 	cl_object_attr_lock(obj);
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_MERGE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDC_MERGE))
 		rc = -EINVAL;
 	else
 		rc = cl_object_attr_get(env, obj, attr);
@@ -5535,7 +5535,7 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	}
 
 fill_attr:
-	OBD_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
 
 	if (ll_need_32bit_api(sbi)) {
 		stat->ino = cl_fid_build_ino(&lli->lli_fid, 1);

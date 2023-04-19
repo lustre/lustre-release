@@ -744,7 +744,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	lmm->lmm_magic = cpu_to_le32(magic);
 	lmm->lmm_pattern = cpu_to_le32(lod_comp->llc_pattern);
 	fid_to_lmm_oi(fid, &lmm->lmm_oi);
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_LMMOI))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_LMMOI))
 		lmm->lmm_oi.oi.oi_id++;
 	lmm_oi_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
 
@@ -800,7 +800,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 			/* instantiated component */
 			info->lti_fid = *lu_object_fid(&object->do_lu);
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
 			    comp_idx == 0) {
 				if (cfs_fail_val == 0)
 					cfs_fail_val = info->lti_fid.f_oid;
@@ -813,7 +813,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 
 			ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
 			objs[i].l_ost_gen = cpu_to_le32(0);
-			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
+			if (CFS_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
 				rc = -ENOENT;
 			else
 				rc = lod_fld_lookup(env, lod, &info->lti_fid,
@@ -1828,7 +1828,7 @@ static __u32 lod_dom_stripesize_limit(const struct lu_env *env,
 	int rc;
 
 	/* set bfree as fraction of total space */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_SPOOF)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_STATFS_SPOOF)) {
 		spin_lock(&d->lod_lsfs_lock);
 		d->lod_lsfs_free_mb = mult_frac(d->lod_lsfs_total_mb,
 					min_t(int, cfs_fail_val, 100), 100);

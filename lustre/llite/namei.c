@@ -224,7 +224,7 @@ static int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_REPLAY_PAUSE, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_REPLAY_PAUSE, cfs_fail_val);
 
 	/* reach MDC layer to flush data under  the DoM ldlm lock */
 	rc = cl_object_flush(env, lli->lli_clob, lock);
@@ -1230,7 +1230,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		}
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE2, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE2, cfs_fail_val);
 
 	/* We can only arrive at this path when we have no inode, so
 	 * we only need to request open lock if it was requested
@@ -1356,7 +1356,7 @@ static struct inode *ll_create_node(struct inode *dir, struct lookup_intent *it)
 		GOTO(out, inode = ERR_PTR(rc));
 
 	/* Pause to allow for a race with concurrent access by fid */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_NODE_PAUSE, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_NODE_PAUSE, cfs_fail_val);
 
         /* We asked for a lock on the directory, but were granted a
          * lock on the inode.  Since we finally have an inode pointer,
