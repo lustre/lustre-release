@@ -305,8 +305,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 	if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
 		ptlrpc_deactivate_import(imp);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CONNECT_RACE)) {
-		OBD_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CONNECT_RACE)) {
+		CFS_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
 		msleep(10 * MSEC_PER_SEC);
 	}
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MGS_CONNECT_NET, 3 * cfs_fail_val / 2);
@@ -324,7 +324,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 		 * out. Use obd_timeout if calculated value is smaller
 		 * than it.
 		 */
-		if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
+		if (!CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
 			timeout = ptlrpc_inflight_timeout(imp);
 			timeout += div_u64(timeout, 3);
 
@@ -1474,7 +1474,7 @@ static int signal_completed_replay(struct obd_import *imp)
 	struct ptlrpc_request *req;
 	ENTRY;
 
-	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
+	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
 		RETURN(0);
 
 	if (!atomic_add_unless(&imp->imp_replay_inflight, 1, 1))
@@ -1876,12 +1876,12 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 
 	req->rq_interpret_reply = ptlrpc_disconnect_idle_interpret;
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_IDLE_RACE)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_IDLE_RACE)) {
 		__u32 idx;
 
 		server_name2index(imp->imp_obd->obd_name, &idx, NULL);
 		if (idx == 0)
-			OBD_RACE(OBD_FAIL_PTLRPC_IDLE_RACE);
+			CFS_RACE(OBD_FAIL_PTLRPC_IDLE_RACE);
 	}
 
 	spin_lock(&imp->imp_lock);

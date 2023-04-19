@@ -1878,13 +1878,13 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 			LASSERT(req->rq_next_phase != RQ_PHASE_UNDEFINED);
 
 			if (req->rq_req_deadline &&
-			    !OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REQ_UNLINK))
+			    !CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REQ_UNLINK))
 				req->rq_req_deadline = 0;
 			if (req->rq_reply_deadline &&
-			    !OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK))
+			    !CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK))
 				req->rq_reply_deadline = 0;
 			if (req->rq_bulk_deadline &&
-			    !OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK))
+			    !CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK))
 				req->rq_bulk_deadline = 0;
 
 			/*
@@ -1905,13 +1905,13 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 			 * Turn fail_loc off to prevent it from looping
 			 * forever.
 			 */
-			if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
-				OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK,
-						     OBD_FAIL_ONCE);
+			if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
+				CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK,
+						     CFS_FAIL_ONCE);
 			}
-			if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK)) {
-				OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK,
-						     OBD_FAIL_ONCE);
+			if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK)) {
+				CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK,
+						     CFS_FAIL_ONCE);
 			}
 
 			/*
@@ -2778,7 +2778,7 @@ static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 	LASSERT(!in_interrupt());
 
 	/* Let's setup deadline for reply unlink. */
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
 	    async && request->rq_reply_deadline == 0 && cfs_fail_val == 0)
 		request->rq_reply_deadline = ktime_get_real_seconds() +
 					     PTLRPC_REQ_LONG_UNLINK;

@@ -201,7 +201,7 @@ int ptlrpc_resend(struct obd_import *imp)
 	}
 	spin_unlock(&imp->imp_lock);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT, 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT, 2);
 	RETURN(0);
 }
 
@@ -333,7 +333,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 	if (rc)
 		GOTO(out, rc);
 
-	OBD_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
+	CFS_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
 
 	rc = ptlrpc_connect_import(imp);
 	if (rc)

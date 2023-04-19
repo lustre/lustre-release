@@ -141,7 +141,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL)
 		RETURN(-ENODEV);
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE))
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE))
 		cfs_fail_val = 1;
 
 	rc = llog_open(req->rq_svc_thread->t_env, ctxt, &loghandle,

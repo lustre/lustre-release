@@ -1504,7 +1504,7 @@ static int nodemap_page_build(const struct lu_env *env, struct dt_object *obj,
 		hash = iops->store(env, it);
 		ii->ii_hash_end = hash;
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
 			if (lip->lip_nr != 0)
 				GOTO(out, rc = 0);
 		}

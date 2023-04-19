@@ -57,7 +57,7 @@
 #include <lustre_lib.h>
 #include <lustre_ha.h>
 #include <obd_class.h>   /* for obd_zombie */
-#include <obd_support.h> /* for OBD_FAIL_CHECK */
+#include <obd_support.h>
 #include <cl_object.h> /* cl_env_{get,put}() */
 #include <lprocfs_status.h>
 

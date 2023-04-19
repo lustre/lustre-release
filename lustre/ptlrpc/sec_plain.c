@@ -316,7 +316,7 @@ int plain_cli_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
 		 * for sending we only compute the wrong checksum instead
 		 * of corrupting the data so it is still correct on a redo
 		 */
-		if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND) &&
+		if (CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND) &&
 		    req->rq_flvr.u_bulk.hash.hash_alg != BULK_HASH_ALG_NULL)
 			token->pbt_hash[0] ^= 0x1;
 	}
@@ -960,7 +960,7 @@ int plain_svc_wrap_bulk(struct ptlrpc_request *req,
 		CERROR("bulk read: server failed to compute checksum: %d\n",
 		       rc);
 	} else {
-		if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
+		if (CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
 			corrupt_bulk_data(desc);
 	}
 

@@ -1936,9 +1936,6 @@ int gss_pack_err_notify(struct ptlrpc_request *req, __u32 major, __u32 minor)
         int                        rc;
         ENTRY;
 
-        //if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_SVCGSS_ERR_NOTIFY, OBD_FAIL_ONCE))
-        //      RETURN(-EINVAL);
-
         grctx->src_err_notify = 1;
         grctx->src_reserve_len = 0;
 

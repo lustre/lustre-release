@@ -69,8 +69,8 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 		md.options |= LNET_MD_BULK_HANDLE;
 	}
 
-	if (unlikely(ack == LNET_ACK_REQ &&
-		     OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, OBD_FAIL_ONCE))){
+	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, CFS_FAIL_ONCE) &&
+	    ack == LNET_ACK_REQ) {
 		/* don't ask for the ack to simulate failing client */
 		ack = LNET_NOACK_REQ;
 	}
@@ -169,7 +169,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	struct lnet_md		 md;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
 		RETURN(0);
 
 	/* NB no locking required until desc is on the network */
@@ -223,7 +223,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 		/* sanity.sh 224c: lets skip last md */
 		if (posted_md == desc->bd_md_max_brw - 1)
-			OBD_FAIL_CHECK_RESET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
+			CFS_FAIL_CHECK_RESET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
 					     CFS_FAIL_PTLRPC_OST_BULK_CB2);
 
 		/* Network is about to get at the memory */
@@ -324,8 +324,8 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	struct lnet_md md;
 	ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
-                RETURN(0);
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
+		RETURN(0);
 
 	/* NB no locking required until desc is on the network */
 	LASSERT(desc->bd_nob > 0);
@@ -378,7 +378,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 		ptlrpc_fill_bulk_md(&md, desc, posted_md);
 
 		if (posted_md > 0 && posted_md + 1 == desc->bd_md_count &&
-		    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_ATTACH)) {
+		    CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_ATTACH)) {
 			rc = -ENOMEM;
 		} else {
 			me = LNetMEAttach(desc->bd_portal, &peer, mbits, 0,
@@ -451,7 +451,7 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 		desc->bd_registered = 0;
 
 	/* Let's setup deadline for reply unlink. */
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
 	    async && req->rq_bulk_deadline == 0 && cfs_fail_val == 0)
 		req->rq_bulk_deadline = ktime_get_real_seconds() +
 					PTLRPC_REQ_LONG_UNLINK;
@@ -720,10 +720,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	LNetInvalidateMDHandle(&bulk_cookie);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
 		RETURN(0);
 
-	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DELAY_RECOV) &&
+	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DELAY_RECOV) &&
 		     lustre_msg_get_opc(request->rq_reqmsg) == MDS_CONNECT &&
 		     strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) == 0)) {
 		RETURN(0);
@@ -860,7 +860,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 		peer = connection->c_peer;
 		if (request->rq_bulk &&
-		    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH)) {
+		    CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH)) {
 			reply_me = ERR_PTR(-ENOMEM);
 		} else {
 			reply_me = LNetMEAttach(request->rq_reply_portal,
@@ -932,7 +932,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
 				    atomic_read(&imp->imp_inflight));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
 	request->rq_sent_ns = ktime_get_real();
 	request->rq_sent = ktime_get_real_seconds();
@@ -943,7 +943,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		ptlrpc_at_get_net_latency(request);
 
 	if (unlikely(opc == OBD_PING &&
-	    OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND_FAIL, cfs_fail_val)))
+	    CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND_FAIL, cfs_fail_val)))
 		GOTO(skip_send, rc);
 
 	DEBUG_REQ(D_INFO, request, "send flags=%x",
@@ -1004,7 +1004,7 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 	CDEBUG(D_NET, "%s: registering portal %d\n", service->srv_name,
 	       service->srv_req_portal);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
 		return -ENOMEM;
 
 	/* NB: CPT affinity service should use new LNet flag LNET_INS_LOCAL,
