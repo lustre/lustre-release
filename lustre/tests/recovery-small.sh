@@ -752,7 +752,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	rc=$?
 	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
 }
-run_test 20a "ldlm_handle_enqueue error (should return error)" 
+run_test 20a "ldlm_handle_enqueue error (should return error)"
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
@@ -3444,6 +3444,7 @@ test_153() {
 	do_facet mds1 "$LCTL set_param fail_loc=0"
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
 		error "Fail to start $SINGLEMDS"
+	wait_recovery_complete mds1 || error "MDS recovery not done"
 }
 run_test 153 "evict vs reconnect race"
 
