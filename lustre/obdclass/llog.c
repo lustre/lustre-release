@@ -627,11 +627,11 @@ repeat:
 			    synced_idx == LLOG_HDR_TAIL(llh)->lrt_index)
 				GOTO(out, rc = 0);
 
-			if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
+			if (CFS_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
 				cfs_fail_val == (unsigned int)
 					(loghandle->lgh_id.lgl_oi.oi.oi_id &
 					 0xFFFFFFFF)) {
-				OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
+				CFS_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
 			}
 
 			/* the bitmap could be changed during processing

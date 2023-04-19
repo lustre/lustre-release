@@ -202,7 +202,7 @@ static struct cl_page *__cl_page_alloc(struct cl_object *o)
 	struct cl_page *cl_page = NULL;
 	unsigned short bufsize = cl_object_header(o)->coh_page_bufsize;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_PAGE_ALLOC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PAGE_ALLOC))
 		return NULL;
 
 check:

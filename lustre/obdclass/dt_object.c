@@ -115,7 +115,7 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 	if (th->th_local)
 		return 0;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_DT_TXN_STOP))
+	if (CFS_FAIL_CHECK(OBD_FAIL_DT_TXN_STOP))
 		return -EIO;
 
 	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
@@ -757,7 +757,7 @@ static int dt_index_page_build(const struct lu_env *env, struct dt_object *obj,
 		hash = iops->store(env, it);
 		ii->ii_hash_end = hash;
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
 			if (lip->lip_nr != 0)
 				GOTO(out, rc = 0);
 		}

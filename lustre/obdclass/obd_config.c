@@ -822,7 +822,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	char *flag;
 	ENTRY;
 
-	OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
+	CFS_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
 
 	if (!obd->obd_set_up) {
 		CERROR("Device %d not setup\n", obd->obd_minor);

@@ -556,7 +556,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 	/* simulate ENOSPC when new plain llog is being added to the
 	 * catalog */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED2) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED2) &&
 	    llh->llh_flags & LLOG_F_IS_CAT)
 		RETURN(-ENOSPC);
 
@@ -599,7 +599,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	down_write(&loghandle->lgh_last_sem);
 	/* increment the last_idx along with llh_tail index, they should
 	 * be equal for a llog lifetime */
-	if (OBD_FAIL_CHECK(OBD_FAIL_LLOG_ADD_GAP) && --cfs_fail_val == 0)
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLOG_ADD_GAP) && --cfs_fail_val == 0)
 		loghandle->lgh_last_idx++;
 	loghandle->lgh_last_idx++;
 	index = loghandle->lgh_last_idx;
@@ -684,9 +684,9 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(out_unlock, rc);
 	}
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PAUSE_AFTER_PAD) && pad) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLOG_PAUSE_AFTER_PAD) && pad) {
 		/* a window for concurrent llog reader, see LU-12577 */
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PAUSE_AFTER_PAD,
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LLOG_PAUSE_AFTER_PAD,
 				 cfs_fail_val ?: 1);
 	}
 
@@ -698,10 +698,10 @@ out_unlock:
 		GOTO(out, rc);
 	}
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
 	   cfs_fail_val == (unsigned int)(loghandle->lgh_id.lgl_oi.oi.oi_id &
 					  0xFFFFFFFF)) {
-		OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
+		CFS_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
 		msleep(1 * MSEC_PER_SEC);
 	}
 	/* computed index can be used to determine offset for fixed-size
@@ -927,9 +927,9 @@ static int llog_osd_next_block(const struct lu_env *env,
 	LASSERT(loghandle);
 	LASSERT(loghandle->lgh_ctxt);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL) &&
 	    cfs_fail_val == ((unsigned long)loghandle & 0xFFFFFFFF)) {
-		OBD_RACE(OBD_FAIL_MDS_CHANGELOG_DEL);
+		CFS_RACE(OBD_FAIL_MDS_CHANGELOG_DEL);
 		msleep(MSEC_PER_SEC >> 2);
 	}
 
@@ -1353,10 +1353,10 @@ generate:
 			GOTO(out, rc);
 		new_id = true;
 	}
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
 	    cfs_fail_val == 1) {
 		cfs_fail_val = 2;
-		OBD_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
+		CFS_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
 		msleep(MSEC_PER_SEC);
 	}
 	o = ls_locate(env, ls, &lgi->lgi_fid, NULL);

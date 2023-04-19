@@ -1011,7 +1011,7 @@ static int lustre_index_backup_one(const struct lu_env *env,
 	if (!rc)
 		rc = lustre_index_update_lma(env, tgt_obj, buf, bufsize);
 
-	if (!rc && OBD_FAIL_CHECK(OBD_FAIL_OSD_INDEX_CRASH)) {
+	if (!rc && CFS_FAIL_CHECK(OBD_FAIL_OSD_INDEX_CRASH)) {
 		LASSERT(bufsize >= 512);
 
 		pos = 0;

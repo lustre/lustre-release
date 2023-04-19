@@ -96,9 +96,9 @@ int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
 	int             reclen;
 
 	tmpfid = *pfid;
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MUL_REF))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_MUL_REF))
 		tmpfid.f_oid--;
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_CRASH))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_CRASH))
 		tmpfid.f_ver = ~0;
 	fid_cpu_to_be(&tmpfid, &tmpfid);
 	memcpy(&lee->lee_parent_fid, &tmpfid, sizeof(tmpfid));

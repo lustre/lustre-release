@@ -540,7 +540,7 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 	out = data->ioc_bulk;
 	remains = data->ioc_inllen1;
 	/* OBD_FAIL: fetch the catalog records from the specified one */
-	if (OBD_FAIL_CHECK(OBD_FAIL_CATLIST))
+	if (CFS_FAIL_CHECK(OBD_FAIL_CATLIST))
 		data->ioc_count = cfs_fail_val - 1;
 	for (i = data->ioc_count; i < count; i++) {
 		id = &idarray[i].lci_logid;

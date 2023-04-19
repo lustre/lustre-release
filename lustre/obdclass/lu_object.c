@@ -434,7 +434,7 @@ int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
 	int                      bnr;
 	unsigned int             i;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
 		RETURN(0);
 
 	/*
@@ -843,7 +843,7 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 	s  = dev->ld_site;
 	hs = &s->ls_obj_hash;
 
-	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_OBD_ZERO_NLINK_RACE)))
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_OBD_ZERO_NLINK_RACE)))
 		lu_site_purge(env, s, -1);
 
 	bkt = &s->ls_bkts[lu_bkt_hash(s, f)];

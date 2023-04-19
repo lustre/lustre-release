@@ -488,7 +488,7 @@ int libcfs_kkuc_group_put(const struct obd_uuid *uuid, int group, void *payload)
 	down_write(&kg_sem);
 
 	if (unlikely(list_empty(&kkuc_groups[group])) ||
-	    unlikely(OBD_FAIL_CHECK(OBD_FAIL_MDS_HSM_CT_REGISTER_NET))) {
+	    unlikely(CFS_FAIL_CHECK(OBD_FAIL_MDS_HSM_CT_REGISTER_NET))) {
 		/* no agent have fully registered, CDT will retry */
 		up_write(&kg_sem);
 		RETURN(-EAGAIN);

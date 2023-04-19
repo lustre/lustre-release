@@ -1560,7 +1560,7 @@ static int cat_check_old_cb(const struct lu_env *env, struct llog_handle *llh,
 	}
 
 	if (prev_fid->f_oid == 0) {
-		cfs_fail_loc = OBD_FAIL_ONCE | OBD_FAIL_LLOG_PROCESS_TIMEOUT;
+		cfs_fail_loc = CFS_FAIL_ONCE | OBD_FAIL_LLOG_PROCESS_TIMEOUT;
 		cfs_fail_val = (unsigned int) (llh->lgh_id.lgl_oi.oi.oi_id &
 					       0xFFFFFFFF);
 		msleep(1 * MSEC_PER_SEC);

@@ -793,7 +793,7 @@ static int __init obdclass_init(void)
 	/* simulate a late OOM situation now to require all
 	 * alloc'ed/initialized resources to be freed
 	 */
-	if (OBD_FAIL_CHECK(OBD_FAIL_OBDCLASS_MODULE_LOAD)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OBDCLASS_MODULE_LOAD)) {
 		/* force error to ensure module will be unloaded/cleaned */
 		err = -ENOMEM;
 		goto cleanup_all;

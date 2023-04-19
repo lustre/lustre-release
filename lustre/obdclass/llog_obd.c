@@ -196,7 +196,7 @@ int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	}
 
 	if (op->lop_setup) {
-		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP))
+		if (CFS_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP))
 			rc = -EOPNOTSUPP;
 		else
 			rc = op->lop_setup(env, obd, olg, index, disk_obd);

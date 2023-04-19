@@ -102,7 +102,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 		RETURN(-ENOSPC);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
 		RETURN(-ENOSPC);
 
 	if (loghandle->lgh_hdr != NULL) {
@@ -199,8 +199,8 @@ static int llog_cat_new_log(const struct lu_env *env,
 		if (freespace > (128 << 20))
 			loghandle->lgh_max_size = 128 << 20;
 	}
-	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_PLAIN_RECORDS) ||
-		     OBD_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK))) {
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PLAIN_RECORDS) ||
+		     CFS_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK))) {
 		// limit the numer of plain records for test
 		loghandle->lgh_max_size = loghandle->lgh_hdr_size +
 		       cfs_fail_val * 64;
@@ -481,7 +481,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         ENTRY;
 
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED2)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED2)) {
 		down_write_nested(&cathandle->lgh_lock, LLOGH_CAT);
 		GOTO(next, loghandle);
 	}
@@ -1046,7 +1046,7 @@ EXPORT_SYMBOL(llog_cat_size);
 __u32 llog_cat_free_space(struct llog_handle *cat_llh)
 {
 	/* simulate almost full Catalog */
-	if (OBD_FAIL_CHECK(OBD_FAIL_CAT_FREE_RECORDS))
+	if (CFS_FAIL_CHECK(OBD_FAIL_CAT_FREE_RECORDS))
 		return cfs_fail_val;
 
 	if (cat_llh->lgh_hdr->llh_count == 1)
