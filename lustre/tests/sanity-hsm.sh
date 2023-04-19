@@ -1410,7 +1410,7 @@ test_12s() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f || error "release of $f failed"
 
-#define OBD_FAIL_ONCE|OBD_FAIL_MDS_HSM_RESTORE_RACE 0x8000018b
+#define CFS_FAIL_ONCE|OBD_FAIL_MDS_HSM_RESTORE_RACE 0x8000018b
 	do_facet mds1 $LCTL set_param fail_loc=0x8000018b
 	cat $f > /dev/null & pid1=$!
 	cat $f > /dev/null & pid2=$!

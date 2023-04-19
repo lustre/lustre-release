@@ -60,7 +60,7 @@ test_0a() {
 	echo "Check file is LU482_FAILED=$LU482_FAILED"
 	touch $MOUNT2/$tfile-A # force sync FLD/SEQ update before barrier
 	replay_barrier $SINGLEMDS
-#define OBD_FAIL_PTLRPC_FINISH_REPLAY | OBD_FAIL_ONCE
+#define OBD_FAIL_PTLRPC_FINISH_REPLAY | CFS_FAIL_ONCE
 	touch $MOUNT2/$tfile
 	createmany -o $MOUNT1/$tfile- 50
 	$LCTL set_param fail_loc=0x80000514

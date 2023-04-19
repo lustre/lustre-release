@@ -10269,7 +10269,7 @@ test_74a() { # bug 6149, 6184
 	touch $DIR/f74a
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 	#
-	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
+	# very important to OR with CFS_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
 	$LCTL set_param fail_loc=0x8000030e
 	# get any lock that won't be difficult - lookup works.
@@ -10285,7 +10285,7 @@ test_74b() { # bug 13310
 
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 	#
-	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
+	# very important to OR with CFS_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
 	$LCTL set_param fail_loc=0x8000030e
 	# get a "difficult" lock
@@ -10921,7 +10921,7 @@ test_81a() { # LU-456
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	# define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
-	# MUST OR with the OBD_FAIL_ONCE (0x80000000)
+	# MUST OR with the CFS_FAIL_ONCE (0x80000000)
 	do_facet ost1 lctl set_param fail_loc=0x80000228
 
 	# write should trigger a retry and success
@@ -10939,7 +10939,7 @@ test_81b() { # LU-456
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	# define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
-	# Don't OR with the OBD_FAIL_ONCE (0x80000000)
+	# Don't OR with the CFS_FAIL_ONCE (0x80000000)
 	do_facet ost1 lctl set_param fail_loc=0x228
 
 	# write should retry several times and return -ENOSPC finally
@@ -18129,7 +18129,7 @@ test_161d() {
 	mkdir $DIR/$tdir
 	[[ $? -eq 0 ]] || error "mkdir failed"
 
-	#define OBD_FAIL_LLITE_CREATE_NODE_PAUSE 0x140c | OBD_FAIL_ONCE
+	#define OBD_FAIL_LLITE_CREATE_NODE_PAUSE 0x140c | CFS_FAIL_ONCE
 	$LCTL set_param fail_loc=0x8000140c
 	# 5s pause
 	$LCTL set_param fail_val=5
@@ -28020,7 +28020,7 @@ test_423() {
 run_test 423 "statfs should return a right data"
 
 test_424() {
-#define OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH      0x522 | OBD_FAIL_ONCE
+#define OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH      0x522 | CFS_FAIL_ONCE
 	$LCTL set_param fail_loc=0x80000522
 	dd if=/dev/zero of=$DIR/$tfile bs=2M count=1 oflag=sync
 	rm -f $DIR/$tfile

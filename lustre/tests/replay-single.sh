@@ -169,7 +169,7 @@ run_test 3a "replay failed open(O_DIRECTORY)"
 
 test_3b() {
 	replay_barrier $SINGLEMDS
-	#define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
+	#define OBD_FAIL_MDS_OPEN_PACK | CFS_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000114"
 	touch $DIR/$tfile
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -182,7 +182,7 @@ run_test 3b "replay failed open -ENOMEM"
 
 test_3c() {
 	replay_barrier $SINGLEMDS
-	#define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
+	#define OBD_FAIL_MDS_ALLOC_OBDO | CFS_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000128"
 	touch $DIR/$tfile
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -1478,7 +1478,7 @@ run_test 53h "open request and close reply while two MDC requests in flight"
 
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
-# OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
+# OBD_FAIL_MDS_OPEN_CREATE | CFS_FAIL_ONCE
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012b"
     touch $DIR/$tfile &
     # give touch a chance to run

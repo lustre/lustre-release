@@ -361,7 +361,7 @@ run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 test_13() {
 	mkdir_on_mdt0 $DIR/$tdir || { error "mkdir failed: $?"; return 1; }
 	touch $DIR/$tdir/newentry || { error "touch failed: $?"; return 2; }
-# OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
+# OBD_FAIL_MDS_READPAGE_NET|CFS_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000104"
 	ls $DIR/$tdir || { error "ls failed: $?"; return 3; }
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -373,7 +373,7 @@ run_test 13 "mdc_readpage restart test (bug 1138)"
 test_14() {
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/newentry
-# OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
+# OBD_FAIL_MDS_SENDPAGE|CFS_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000106"
 	ls $DIR/$tdir || return 1
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -406,7 +406,7 @@ test_16() {
 	sync
 	stop_read_ahead
 
-#define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
+#define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | CFS_FAIL_ONCE
 	do_facet ost1 "lctl set_param fail_loc=0x80000504"
 	cancel_lru_locks osc
 	# OST bulk will time out here, client resends
@@ -436,7 +436,7 @@ test_17a() {
 		at_max_set $TIMEOUT ost1
 	fi
 
-	# OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
+	# OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | CFS_FAIL_ONCE
 	# OST bulk will time out here, client retries
 	do_facet ost1 lctl set_param fail_loc=0x80000503
 	# need to ensure we send an RPC
