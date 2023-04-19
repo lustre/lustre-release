@@ -327,7 +327,7 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 	int rc = 0;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0) {
 		wait_var_event_timeout(
 			scrub,
 			!list_empty(&scrub->os_inconsistent_items) ||
@@ -338,14 +338,14 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 			RETURN(SCRUB_NEXT_EXIT);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
 		spin_lock(&scrub->os_lock);
 		scrub->os_running = 0;
 		spin_unlock(&scrub->os_lock);
 		RETURN(SCRUB_NEXT_CRASH);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_FATAL))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_FATAL))
 		RETURN(SCRUB_NEXT_FATAL);
 
 again:

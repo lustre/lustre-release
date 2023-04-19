@@ -711,7 +711,7 @@ static int osd_create_agent_object(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTOBJ))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTOBJ))
 		RETURN(0);
 
 	rc = -nvlist_alloc(&nvbuf, NV_UNIQUE_NAME, KM_SLEEP);
@@ -780,7 +780,7 @@ int osd_add_to_remote_parent(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
 		RETURN(0);
 
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
@@ -1066,7 +1066,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 				GOTO(out, rc = 0);
 			} else if (name[1] == '.' && name[2] == 0) {
 				uint64_t dnode = idc->oic_dnode;
-				if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT))
+				if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT))
 					dnode--;
 
 				/* update parent dnode in the child.
@@ -1081,12 +1081,12 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		zde->lzd_reg.zde_dnode = idc->oic_dnode;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INDIR))
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_INDIR))
 		zde->lzd_fid.f_ver = ~0;
 
 	/* The logic is not related with IGIF, just re-use the fail_loc value
 	 * to be consistent with ldiskfs case, then share the same test logic */
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_IGIF))
 		num = 1;
 
 	/* Insert (key,oid) into ZAP */
@@ -1563,7 +1563,7 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 			GOTO(pack_attr, rc = 0);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
 		RETURN(-ENOENT);
 
 	rc = osd_get_fid_by_oid(env, osd, zde->lzd_reg.zde_dnode, fid);

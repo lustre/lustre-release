@@ -393,7 +393,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 	if (scrub->os_in_prior) {
 		oii = list_entry(oic, struct osd_inconsistent_item,
 				 oii_cache);
-		if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
+		if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
 			GOTO(out, rc = -ESTALE);
 	}
 
@@ -424,7 +424,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	if ((val == SCRUB_NEXT_NOLMA) &&
-	    (!scrub->os_convert_igif || OBD_FAIL_CHECK(OBD_FAIL_FID_NOLMA)))
+	    (!scrub->os_convert_igif || CFS_FAIL_CHECK(OBD_FAIL_FID_NOLMA)))
 		GOTO(out, rc = 0);
 
 	if ((oii != NULL && oii->oii_insert) || (val == SCRUB_NEXT_NOLMA)) {
@@ -536,7 +536,7 @@ out:
 			       lid->oii_gen, rc);
 		}
 	} else {
-		if (!oii && !OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE)) {
+		if (!oii && !CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE)) {
 			osd_scrub_oi_resurrect(scrub, fid);
 			CDEBUG(D_LFSCK,
 			       "%s: resurrect OI "DFID" -> %u/%u\n",
@@ -791,21 +791,21 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 	struct osd_inode_id *lid;
 	int rc;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0)
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0)
 		wait_var_event_timeout(
 			scrub,
 			!list_empty(&scrub->os_inconsistent_items) ||
 			kthread_should_stop(),
 			cfs_time_seconds(cfs_fail_val));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
 		spin_lock(&scrub->os_lock);
 		scrub->os_running = 0;
 		spin_unlock(&scrub->os_lock);
 		return SCRUB_NEXT_CRASH;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_FATAL))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_FATAL))
 		return SCRUB_NEXT_FATAL;
 
 	if (kthread_should_stop())
@@ -1100,7 +1100,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 			}
 
 wait:
-			if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) &&
 			    cfs_fail_val > 0)
 				continue;
 

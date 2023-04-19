@@ -49,9 +49,9 @@
 
 /*
  * struct OBD_{ALLOC,FREE}*()
- * OBD_FAIL_CHECK
  */
 #include <obd_support.h>
+#include <libcfs/libcfs.h>
 
 #include "osd_internal.h"
 
@@ -411,7 +411,7 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 
 	/* Verify and inject fault only when writing */
 	if (iobuf->dr_rw == 1) {
-		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
 			rc = osd_bio_integrity_compare(bio, sb->s_bdev, iobuf,
 						       start_page_idx);
 			if (rc)
@@ -521,7 +521,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 	ENTRY;
 
-	fault_inject = OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
+	fault_inject = CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
 	LASSERT(iobuf->dr_npages == npages);
 
 	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
@@ -1232,7 +1232,7 @@ cont_map:
 				GOTO(cleanup, rc = -EAGAIN);
 			}
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_OST_RESTART_IO))
+			if (CFS_FAIL_CHECK(OBD_FAIL_OST_RESTART_IO))
 				oh->oh_declared_ext = 0;
 			else
 				oh->oh_declared_ext--;
@@ -1725,7 +1725,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	osd_trans_exec_op(env, thandle, OSD_OT_WRITE);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
 		rc = -ENOSPC;
 	} else if (iobuf->dr_npages > 0) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf, osd,
@@ -1793,7 +1793,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		lnb[i].lnb_rc = lnb[i].lnb_len;
 
 		/* Bypass disk read if fail_loc is set properly */
-		if (OBD_FAIL_CHECK_QUIET(OBD_FAIL_OST_FAKE_RW))
+		if (CFS_FAIL_CHECK_QUIET(OBD_FAIL_OST_FAKE_RW))
 			SetPageUptodate(lnb[i].lnb_page);
 
 		if (PageUptodate(lnb[i].lnb_page)) {
@@ -2932,7 +2932,7 @@ void osd_execute_truncate(struct osd_object *obj)
 	__u64 size;
 
 	/* simulate crash before (in the middle) of delayed truncate */
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FAIL_AT_TRUNCATE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_FAIL_AT_TRUNCATE)) {
 		struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
 		struct ldiskfs_sb_info *sbi = LDISKFS_SB(inode->i_sb);
 

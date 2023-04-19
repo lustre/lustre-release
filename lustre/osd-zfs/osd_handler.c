@@ -208,7 +208,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		RETURN(rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
 		/* Unlike ldiskfs, ZFS checks for available space and returns
 		 * -ENOSPC when assigning txg */
 		RETURN(-EIO);

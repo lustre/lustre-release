@@ -668,7 +668,7 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 	int			rc = 0;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
 		RETURN(-ENOENT);
 
 	LASSERT(!fid_is_acct(fid));

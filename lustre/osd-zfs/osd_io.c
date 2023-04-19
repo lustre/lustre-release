@@ -968,7 +968,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	    osd->od_readcache_max_filesize)
 		drop_cache = 1;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC))
 		RETURN(-ENOSPC);
 
 	/* if la_size is already bigger than specified user_size,

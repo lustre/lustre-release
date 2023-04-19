@@ -44,9 +44,9 @@
 
 /*
  * struct OBD_{ALLOC,FREE}*()
- * OBD_FAIL_CHECK
  */
 #include <obd_support.h>
+#include <libcfs/libcfs.h>
 
 #include "osd_internal.h"
 #include "osd_oi.h"
@@ -336,7 +336,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	struct dentry *parent;
 	int rc;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
 		RETURN(0);
 
 	/*
@@ -871,7 +871,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY))
 		RETURN(0);
 
 	LASSERT(th != NULL);
@@ -898,7 +898,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 	child->d_parent = dir;
 	child->d_inode = inode;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
 		inode->i_ino++;
 
 	dquot_initialize(dir->d_inode);

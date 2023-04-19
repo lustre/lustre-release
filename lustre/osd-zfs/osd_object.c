@@ -1296,7 +1296,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	   transaction group. */
 	LASSERT(oh->ot_tx->tx_txg != 0);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) && !osd->od_is_ost) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) && !osd->od_is_ost) {
 		struct zpl_direntry *zde = &info->oti_zde.lzd_reg;
 		char *buf = info->oti_str;
 		dnode_t *zdn = NULL;
@@ -2028,10 +2028,10 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	zapid = osd_get_name_n_idx(env, osd, fid, buf,
 				   sizeof(info->oti_str), &zdn);
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY) ||
-	    (osd->od_is_ost && OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY)))
+	    (osd->od_is_ost && CFS_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY)))
 		goto skip_add;
 
-	if (osd->od_is_ost && OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
+	if (osd->od_is_ost && CFS_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
 		zde->zde_dnode++;
 
 	rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1, zde, oh->ot_tx);

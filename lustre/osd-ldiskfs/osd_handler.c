@@ -56,9 +56,9 @@
 #undef ENTRY
 /*
  * struct OBD_{ALLOC,FREE}*()
- * OBD_FAIL_CHECK
  */
 #include <obd_support.h>
+#include <libcfs/libcfs.h>
 /* struct ptlrpc_thread */
 #include <lustre_net.h>
 #include <lustre_fid.h>
@@ -1136,7 +1136,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	LASSERT(info);
 	oic = &info->oti_cache;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
 		RETURN(-ENOENT);
 
 	/*
@@ -1163,7 +1163,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		RETURN(-EINPROGRESS);
 
 	stale = fid_in_scrub_list(scrub, &scrub->os_stale_items, fid);
-	if (stale && OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
+	if (stale && CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
 		RETURN(-ESTALE);
 
 	/*
@@ -1209,7 +1209,7 @@ iget:
 		goto check_lma;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
 		goto trigger;
 
 	result = PTR_ERR(inode);
@@ -1481,7 +1481,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	LINVRNT(osd_invariant(obj));
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
 	    cfs_fail_val == 2) {
 		struct osd_thread_info *info = osd_oti_get(env);
 		struct osd_idmap_cache *oic = &info->oti_cache;
@@ -2046,7 +2046,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			oh->ot_credits = osd_transaction_size(dev);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
 		GOTO(out, rc = -EIO);
 
 	 /*
@@ -3252,7 +3252,7 @@ static int osd_attr_set(const struct lu_env *env,
 
 	osd_trans_exec_op(env, handle, OSD_OT_ATTR_SET);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) &&
 	    !osd_obj2dev(obj)->od_is_ost) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		const struct lu_fid *fid0 = lu_object_fid(&dt->do_lu);
@@ -3309,7 +3309,7 @@ static int osd_attr_set(const struct lu_env *env,
 	 */
 	if (!(LDISKFS_I(obj->oo_inode)->i_flags & LDISKFS_ENCRYPT_FL) &&
 	    attr->la_flags & LUSTRE_ENCRYPT_FL && osd->od_is_ost &&
-	    !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
+	    !CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
 		struct lu_buf buf;
 
 		/* use a dummy enc ctx, fine with e2fsprogs */
@@ -3869,7 +3869,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	 * Recycle idle OI leaf may cause additional three OI blocks
 	 * to be changed.
 	 */
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
 		osd_trans_declare_op(env, oh, OSD_OT_DELETE,
 			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
 	/* one less inode */
@@ -3937,7 +3937,7 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
 		result = osd_oi_delete(osd_oti_get(env), osd, fid,
 				       oh->ot_handle, OI_CHECK_FLD);
 
@@ -3971,10 +3971,10 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INLMA))
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_INLMA))
 		RETURN(0);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_OST_EA_FID_SET))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_OST_EA_FID_SET))
 		rc = -ENOMEM;
 
 	lustre_loa_init(loa, fid, compat, incompat);
@@ -4042,7 +4042,7 @@ static void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
 					 const struct lu_fid *fid)
 {
 	if (!fid_is_namespace_visible(fid) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
 		param->edp_magic = 0;
 		return;
 	}
@@ -4089,7 +4089,7 @@ static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 	__u32 saved_nlink = dir->i_nlink;
 	int rc;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_DOTDOT_ENOSPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_DOTDOT_ENOSPC))
 		return -ENOSPC;
 
 	dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
@@ -4500,7 +4500,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_is_write_locked(env, obj));
 	LASSERT(th != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_REF_DEL))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_REF_DEL))
 		return -EIO;
 
 	oh = container_of(th, struct osd_thandle, ot_super);
@@ -5902,7 +5902,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	dquot_initialize(pobj->oo_inode);
 	rc = osd_ldiskfs_add_entry(info, osd_obj2dev(pobj), oth->ot_handle,
 				   child, cinode, hlock);
-	if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
+	if (rc == 0 && CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
 		struct ldiskfs_dir_entry_2	*de;
 		struct buffer_head		*bh;
 		int				 rc1;
@@ -5976,7 +5976,7 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 						dot_dot_fid, NULL, th);
 		}
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
 			struct lu_fid tfid = *dot_dot_fid;
 
 			tfid.f_oid--;
@@ -6031,7 +6031,7 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 			down_write(&pobj->oo_ext_idx_sem);
 		}
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_FID_INDIR)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_FID_INDIR)) {
 			struct lu_fid *tfid = &info->oti_fid;
 
 			*tfid = *fid;
@@ -6354,7 +6354,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		struct osd_device *dev = osd_obj2dev(obj);
 
 		ino = le32_to_cpu(de->inode);
-		if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_FID_LOOKUP)) {
 			brelse(bh);
 			rc = osd_fail_fid_lookup(oti, dev, fid, ino);
 			GOTO(out, rc);
@@ -7749,7 +7749,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 				rc = osd_get_pfid_from_linkea(env, obj, fid);
 			} else {
 				if (is_dotdot == false &&
-				    OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
+				    CFS_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
 					RETURN(-ENOENT);
 
 				rc = osd_ea_fid_get(env, obj, ino, fid, id);
