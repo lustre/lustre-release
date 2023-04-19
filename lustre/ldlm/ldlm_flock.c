@@ -659,12 +659,12 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	int rc = 0;
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT2, 4);
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT3)) {
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT2, 4);
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT3)) {
 		lock_res_and_lock(lock);
 		lock->l_flags |= LDLM_FL_FAIL_LOC;
 		unlock_res_and_lock(lock);
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT3, 4);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT3, 4);
 	}
 	CDEBUG(D_DLMTRACE, "flags: %#llx data: %p getlk: %p\n",
 	       flags, data, getlk);
@@ -707,22 +707,22 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	}
 
 granted:
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT4)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT4)) {
 		lock_res_and_lock(lock);
 		/* DEADLOCK is always set with CBPENDING */
 		lock->l_flags |= LDLM_FL_FLOCK_DEADLOCK | LDLM_FL_CBPENDING;
 		unlock_res_and_lock(lock);
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT4, 4);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT4, 4);
 	}
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT5)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT5)) {
 		lock_res_and_lock(lock);
 		/* DEADLOCK is always set with CBPENDING */
 		lock->l_flags |= (LDLM_FL_FAIL_LOC |
 				  LDLM_FL_FLOCK_DEADLOCK | LDLM_FL_CBPENDING);
 		unlock_res_and_lock(lock);
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT5, 4);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT5, 4);
 	}
 
 	lock_res_and_lock(lock);

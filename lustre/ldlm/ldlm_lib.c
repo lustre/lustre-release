@@ -1098,7 +1098,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	ENTRY;
 
-	OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
+	CFS_RACE(OBD_FAIL_TGT_CONN_RACE);
 
 	str = req_capsule_client_get(&req->rq_pill, &RMF_TGTUUID);
 	if (str == NULL) {
@@ -1327,7 +1327,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 		rc = -EALREADY;
 		class_export_put(export);
 		export = NULL;
-	} else if (OBD_FAIL_PRECHECK(OBD_FAIL_TGT_RECOVERY_CONNECT) &&
+	} else if (CFS_FAIL_PRECHECK(OBD_FAIL_TGT_RECOVERY_CONNECT) &&
 		   !lw_client) {
 		spin_unlock(&export->exp_lock);
 		rc = -EAGAIN;
@@ -1342,7 +1342,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	/* If we found an export, we already unlocked. */
 	if (!export) {
 no_export:
-		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
 	} else if (req->rq_export == NULL &&
 		   atomic_read(&export->exp_rpc_count) > 0) {
 		LCONSOLE_WARN("%s: Client %s (at %s) refused connection, still busy with %d references\n",
@@ -1358,7 +1358,7 @@ no_export:
 				      libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -EALREADY);
 	} else {
-		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
 	}
 
 	if (rc < 0)
@@ -1437,7 +1437,7 @@ dont_check_exports:
 			rc = obd_connect(req->rq_svc_thread->t_env,
 					 &export, target, &cluuid, data,
 					 &req->rq_peer.nid);
-			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
+			if (mds_conn && CFS_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
 							MSG_CONNECT_RECOVERING);
 			if (rc == 0) {
@@ -2044,7 +2044,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
 	 */
 	service_timeout = at_est2timeout(service_timeout);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_SLUGGISH_NET) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_SLUGGISH_NET) &&
 	    service_timeout < at_extra)
 		service_timeout = at_extra;
 
@@ -2171,7 +2171,7 @@ static int check_for_next_transno(struct lu_target *lut)
 	} else if (atomic_read(&obd->obd_req_replay_clients) == 0) {
 		CDEBUG(D_HA, "waking for completed recovery\n");
 		wake_up = 1;
-	} else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
+	} else if (CFS_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
 		CDEBUG(D_HA,
 		       "accepting transno gaps is explicitly allowed by fail_lock, waking up (%lld)\n",
 		       next_transno);
@@ -2813,7 +2813,7 @@ static int target_recovery_thread(void *arg)
 		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing lock from %s:",
 			  libcfs_nidstr(&req->rq_peer.nid));
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_LOCK_REPLAY)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_LOCK_REPLAY)) {
 			req->rq_status = -ENODEV;
 			target_request_copy_put(req);
 			continue;
@@ -3043,7 +3043,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 	target_process_req_flags(obd, req);
 
 	if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LOCK_REPLAY_DONE) {
-		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
 			if (cfs_fail_val == 1) {
 				cfs_race_state = 1;
 				cfs_fail_val = 0;
@@ -3167,7 +3167,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_DROP))
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_DROP))
 		RETURN(0);
 
 	target_request_copy_get(req);
@@ -3266,7 +3266,7 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 static int target_send_reply_msg(struct ptlrpc_request *req,
 				 int rc, int fail_id)
 {
-	if (OBD_FAIL_CHECK_ORSET(fail_id & ~OBD_FAIL_ONCE, OBD_FAIL_ONCE)) {
+	if (CFS_FAIL_CHECK_ORSET(fail_id & ~CFS_FAIL_ONCE, CFS_FAIL_ONCE)) {
 		DEBUG_REQ(D_ERROR, req, "dropping reply");
 		return -ECOMM;
 	}
@@ -3276,7 +3276,7 @@ static int target_send_reply_msg(struct ptlrpc_request *req,
 	 */
 	if (req->rq_reqmsg &&
 	    unlikely(lustre_msg_get_opc(req->rq_reqmsg) == MDS_REINT &&
-	    OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET_REP)))
+	    CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET_REP)))
 		return -ECOMM;
 
 	if (unlikely(rc)) {
@@ -3540,7 +3540,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 		RETURN(rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
 		ptlrpc_abort_bulk(desc);
 		RETURN(0);
 	}

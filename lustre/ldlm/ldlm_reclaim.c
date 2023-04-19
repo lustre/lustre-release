@@ -142,7 +142,7 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		if (!ldlm_lock_reclaimable(lock))
 			continue;
 
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW) &&
+		if (!CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW) &&
 		    ktime_before(ktime_get(),
 				 ktime_add_ns(lock->l_last_used,
 					      data->rcd_age_ns)))
@@ -329,14 +329,14 @@ bool ldlm_reclaim_full(void)
 	__u64 high = ldlm_lock_limit;
 	__u64 low = ldlm_reclaim_threshold;
 
-	if (low != 0 && OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW))
+	if (low != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW))
 		low = cfs_fail_val;
 
 	if (low != 0 &&
 	    percpu_counter_sum_positive(&ldlm_granted_total) > low)
 		ldlm_reclaim_ns();
 
-	if (high != 0 && OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_HIGH))
+	if (high != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_HIGH))
 		high = cfs_fail_val;
 
 	if (high != 0 &&

@@ -1552,7 +1552,7 @@ found:
 
 	cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
 
 	/* Let's see if we happened to be the very first resource in this
 	 * namespace. If so, and this is a client namespace, we need to move

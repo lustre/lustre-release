@@ -323,7 +323,7 @@ static bool ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
 	struct ldlm_resource *res = lock->l_resource;
 	time64_t now = ktime_get_seconds();
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
 		return true;
 
 	CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
@@ -670,7 +670,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 {
 	timeout_t timeout;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PROLONG_PAUSE, 3);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_PROLONG_PAUSE, 3);
 
 	if (arg->lpa_export != lock->l_export ||
 	    lock->l_flags & LDLM_FL_DESTROYED)
@@ -803,7 +803,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 
 		ldlm_resource_unlink_lock(lock);
 
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_EVICT_RACE))
+		if (!CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_EVICT_RACE))
 			ldlm_extent_policy(res, lock, flags);
 		ldlm_grant_lock(lock, grant_work);
 		RETURN(LDLM_ITER_CONTINUE);
@@ -1062,7 +1062,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 	 * add the locks into grant list, for debug purpose, .. */
 	ldlm_resource_add_lock(res, &res->lr_granted, lock);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GRANT_CHECK)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_GRANT_CHECK)) {
 		struct ldlm_lock *lck;
 
 		list_for_each_entry_reverse(lck, &res->lr_granted,

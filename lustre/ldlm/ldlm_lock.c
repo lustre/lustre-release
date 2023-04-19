@@ -884,7 +884,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 		unlock_res_and_lock(lock);
 
 		if (ldlm_is_fail_loc(lock))
-			OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+			CFS_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
 		if (ldlm_is_atomic_cb(lock) ||
                     ldlm_bl_to_thread_lock(ns, NULL, lock) != 0)
@@ -903,7 +903,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 		LDLM_DEBUG(lock, "add lock into lru list");
 
 		if (ldlm_is_fail_loc(lock))
-			OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+			CFS_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
 		ldlm_pool_recalc(&ns->ns_pool, true);
 	} else {
@@ -1726,7 +1726,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 	}
 
 	lock->l_lvb_type = lvb_type;
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
 		GOTO(out, rc = -ENOENT);
 
 	RETURN(lock);
@@ -2070,7 +2070,7 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 	rc = ldlm_run_ast_work(ldlm_res_to_ns(res), rpc_list,
 			       LDLM_WORK_BL_AST);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
 	    !ns_is_client(ldlm_res_to_ns(res)))
 		class_fail_export(lock->l_export);
 

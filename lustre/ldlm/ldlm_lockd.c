@@ -241,7 +241,7 @@ static int expired_lock_main(void *arg)
 			spin_unlock_bh(&waiting_locks_spinlock);
 
 			/* Check if we need to prolong timeout */
-			if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
+			if (!CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
 			    lock->l_callback_timestamp != 0 && /* not AST error */
 			    ldlm_lock_busy(lock)) {
 				LDLM_DEBUG(lock, "prolong the busy lock");
@@ -386,8 +386,8 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t delay)
 	if (!list_empty(&lock->l_pending_chain))
 		return 0;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
-	    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
 		delay = 1;
 
 	deadline = lock->l_blast_sent + delay;
@@ -943,7 +943,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 		/* Don't need to do anything here. */
 		RETURN(0);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_BL_AST)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_BL_AST)) {
 		LDLM_DEBUG(lock, "dropping BL AST");
 		RETURN(0);
 	}
@@ -1054,7 +1054,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	LASSERT(lock != NULL);
 	LASSERT(data != NULL);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_CP_AST)) {
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_CP_AST)) {
 		LDLM_DEBUG(lock, "dropping CP AST");
 		RETURN(0);
 	}
@@ -1386,7 +1386,7 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 		}
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
 	/*
 	 * Don't enqueue a lock onto the export if it is been disonnected
 	 * due to eviction (b=3822) or server umount (b=24324).
@@ -1434,7 +1434,7 @@ existing_lock:
 		req_capsule_set_size(pill, &RMF_DLM_LVB,
 				     RCL_SERVER, ldlm_lvbo_size(lock));
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
 			GOTO(out, rc = -ENOMEM);
 
 		rc = req_capsule_server_pack(pill);
@@ -1455,7 +1455,7 @@ existing_lock:
 	ldlm_lock2handle(lock, &dlm_rep->lock_handle);
 
 	if (lock->l_resource->lr_type == LDLM_EXTENT)
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_BL_EVICT, 6);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_BL_EVICT, 6);
 
 	/*
 	 * We never send a blocking AST until the lock is granted, but
@@ -1476,7 +1476,7 @@ existing_lock:
 	 * Cancel it now instead.
 	 */
 	if (unlikely(req->rq_export->exp_disconnected ||
-		     OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT))) {
+		     CFS_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT))) {
 		LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
 		rc = -ENOTCONN;
 	} else if (ldlm_is_ast_sent(lock)) {
@@ -1984,7 +1984,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
 	LDLM_DEBUG(lock, "client completion callback handler START");
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
 		long to = cfs_time_seconds(1);
 
 		ldlm_callback_reply(req, 0);
@@ -2093,7 +2093,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
 	 * Let Enqueue to call osc_lock_upcall() and initialize
 	 * l_ast_data
 	 */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 2);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 2);
 
 	ldlm_run_ast_work(ns, &ast_list, LDLM_WORK_CP_AST);
 
@@ -2401,18 +2401,18 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
 	case LDLM_BL_CALLBACK:
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK_NET)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK_NET)) {
 			if (cfs_fail_err)
 				ldlm_callback_reply(req, -(int)cfs_fail_err);
 			RETURN(0);
 		}
 		break;
 	case LDLM_CP_CALLBACK:
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CP_CALLBACK_NET))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_CP_CALLBACK_NET))
 			RETURN(0);
 		break;
 	case LDLM_GL_CALLBACK:
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK_NET))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK_NET))
 			RETURN(0);
 		break;
 	case LDLM_SET_INFO:
@@ -2443,7 +2443,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 	 * Force a known safe race, send a cancel to the server for a lock
 	 * which the server has already started a blocking callback on.
 	 */
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE) &&
 	    lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
 		rc = ldlm_cli_cancel(&dlm_req->lock_handle[0], 0);
 		if (rc < 0)
@@ -2463,7 +2463,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
 	if (ldlm_is_fail_loc(lock) &&
 	    lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
-		OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+		CFS_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
 	/* Copy hints/flags (e.g. LDLM_FL_DISCARD_DATA) from AST. */
 	lock_res_and_lock(lock);
@@ -2527,7 +2527,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 		LDLM_DEBUG(lock, "completion ast\n");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_CP_CALLBACK);
 		rc = ldlm_handle_cp_callback(req, ns, dlm_req, lock);
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE))
+		if (!CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE))
 			ldlm_callback_reply(req, rc);
 		break;
 	case LDLM_GL_CALLBACK:
@@ -2922,7 +2922,7 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 	if (blwi->blwi_mem_pressure)
 		mpflags = memalloc_noreclaim_save();
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL2, 4);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL2, 4);
 
 	if (blwi->blwi_count) {
 		int count;
@@ -2972,7 +2972,7 @@ static int ldlm_bl_thread_exports(struct ldlm_bl_pool *blp,
 
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_BL_EVICT, 4);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_BL_EVICT, 4);
 
 	num = ldlm_export_cancel_blocked_locks(exp);
 	if (num == 0)

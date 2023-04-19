@@ -305,8 +305,8 @@ noreproc:
 	}
 
 	if (ns_is_client(ldlm_lock_to_ns(lock)) &&
-	    OBD_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
-				 OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE)) {
+	    CFS_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
+				 OBD_FAIL_LDLM_CP_BL_RACE | CFS_FAIL_ONCE)) {
 		ldlm_set_fail_loc(lock);
 		rc = -EINTR;
 	} else {
@@ -1292,7 +1292,7 @@ static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
 		bool local_only;
 
 		LDLM_DEBUG(lock, "client-side cancel");
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL_LOCAL,
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL_LOCAL,
 				 cfs_fail_val);
 
 		/* Set this flag to prevent others from getting new references*/
@@ -1656,7 +1656,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	unlock_res_and_lock(lock);
 
 	if (flags & LCF_LOCAL)
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE,
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE,
 				 cfs_fail_val);
 
 	rc = ldlm_cli_cancel_local(lock);
@@ -2636,7 +2636,7 @@ static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 	       "Dropping as many unused locks as possible before replay for namespace %s (%d)\n",
 	       ldlm_ns_name(ns), ns->ns_nr_unused);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_REPLAY_PAUSE, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_REPLAY_PAUSE, cfs_fail_val);
 
 	/*
 	 * We don't need to care whether or not LRU resize is enabled
