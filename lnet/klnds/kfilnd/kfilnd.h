@@ -158,6 +158,10 @@ extern unsigned int rx_cq_scale_factor;
 extern unsigned int tx_cq_scale_factor;
 extern unsigned int eq_size;
 extern unsigned int immediate_rx_buf_count;
+extern unsigned int prov_cpu_exclusive;
+extern unsigned int wq_high_priority;
+extern unsigned int wq_cpu_intensive;
+extern unsigned int wq_max_active;
 
 int kfilnd_tunables_setup(struct lnet_ni *ni);
 int kfilnd_tunables_init(void);

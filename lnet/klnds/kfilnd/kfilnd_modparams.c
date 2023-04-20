@@ -65,6 +65,26 @@ module_param(immediate_rx_buf_count, uint, 0444);
 MODULE_PARM_DESC(immediate_rx_buf_count,
 		 "Number of immediate multi-receive buffers posted per CPT");
 
+unsigned int prov_cpu_exclusive;
+module_param(prov_cpu_exclusive, uint, 0644);
+MODULE_PARM_DESC(prov_cpu_exclusive,
+		 "Enables kfabric provider exclusive use of CPT's base CPU. Disabled by default. Set > 0 to enable.");
+
+unsigned int wq_high_priority = 1;
+module_param(wq_high_priority, uint, 0444);
+MODULE_PARM_DESC(wq_high_priority,
+		 "Enables work queue to run at high priority. Enabled by default. Set > 0 to enable.");
+
+unsigned int wq_cpu_intensive;
+module_param(wq_cpu_intensive, uint, 0444);
+MODULE_PARM_DESC(wq_cpu_intensive,
+		 "Marks work queue as CPU intensive. Disabled by default. Set > 0 to enable.");
+
+unsigned int wq_max_active = 512;
+module_param(wq_max_active, uint, 0444);
+MODULE_PARM_DESC(wq_max_active,
+		 "Max work queue work items active per CPU. Default is 512. Valid values 0 to 512.");
+
 /* Common LND network tunables. */
 static int credits = 256;
 module_param(credits, int, 0444);
@@ -219,6 +239,9 @@ int kfilnd_tunables_init(void)
 		CERROR("Immediate multi-receive buffer count less than 2");
 		return -EINVAL;
 	}
+
+	if (wq_max_active > WQ_MAX_ACTIVE)
+		wq_max_active = WQ_MAX_ACTIVE;
 
 	if (auth_key < 1) {
 		CERROR("Authorization key cannot be less than 1");

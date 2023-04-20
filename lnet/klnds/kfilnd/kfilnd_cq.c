@@ -188,8 +188,14 @@ static void kfilnd_cq_completion(struct kfid_cq *cq, void *context)
 	struct kfilnd_cq *kfilnd_cq = context;
 	struct kfilnd_cq_work *cq_work;
 	unsigned int i;
+	unsigned int start_count;
 
-	for (i = 0; i < kfilnd_cq->cq_work_count; i++) {
+	/* kcxi provider queues on signaling vector (index 0 cpu),
+	 * optionally don't queue kfilnd on that cpu
+	 */
+	start_count = kfilnd_cq->cq_work_count > 1 &&
+			prov_cpu_exclusive ? 1 : 0;
+	for (i = start_count; i < kfilnd_cq->cq_work_count; i++) {
 		cq_work = &kfilnd_cq->cq_works[i];
 		queue_work_on(cq_work->work_cpu, kfilnd_wq, &cq_work->work);
 	}

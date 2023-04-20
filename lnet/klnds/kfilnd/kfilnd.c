@@ -34,14 +34,6 @@
 #include "kfilnd_tn.h"
 #include "kfilnd_dev.h"
 
-/* These are temp constants to get stuff to compile */
-#define KFILND_DEFAULT_DEVICE "eth0"
-
-/* Some constants which should be turned into tunables */
-#define KFILND_MAX_WORKER_THREADS 4
-#define KFILND_MAX_EVENT_QUEUE 100
-
-#define KFILND_WQ_FLAGS (WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_SYSFS)
 struct workqueue_struct *kfilnd_wq;
 struct dentry *kfilnd_debug_dir;
 
@@ -485,6 +477,7 @@ static void __exit kfilnd_exit(void)
 static int __init kfilnd_init(void)
 {
 	int rc;
+	unsigned int flags;
 
 	kfilnd_debug_dir = debugfs_create_dir("kfilnd", NULL);
 
@@ -499,8 +492,13 @@ static int __init kfilnd_init(void)
 		goto err;
 	}
 
-	kfilnd_wq = alloc_workqueue("kfilnd_wq", KFILND_WQ_FLAGS,
-				    WQ_MAX_ACTIVE);
+	flags = WQ_MEM_RECLAIM | WQ_SYSFS;
+	if (wq_cpu_intensive)
+		flags = flags | WQ_CPU_INTENSIVE;
+	if (wq_high_priority)
+		flags = flags | WQ_HIGHPRI;
+
+	kfilnd_wq = alloc_workqueue("kfilnd_wq", flags, wq_max_active);
 	if (!kfilnd_wq) {
 		rc = -ENOMEM;
 		CERROR("Failed to allocated kfilnd work queue\n");
