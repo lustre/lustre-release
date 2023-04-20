@@ -427,6 +427,9 @@ test_10() {
 run_test 10 "conflicting PW & PR locks on a client"
 
 test_12a() {
+	(( $OST1_VERSION >= $(version_code 2.14.57) )) ||
+		skip "Need OSS version at least 2.14.57"
+
 	remote_ost || { skip "need remote OST" && return 0; }
 
 	local tmp=$TMP/$tdir
