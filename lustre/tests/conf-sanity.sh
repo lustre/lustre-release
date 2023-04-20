@@ -8346,9 +8346,13 @@ run_test 105 "check file creation for ro and rw bind mnt pt"
 
 test_106() {
 	local repeat=5
+	local creates=64768	# one full plain llog
 
+	# ensure there are enough inodes in the filesystem
+	(( OSTSIZE < (creates + 1024) * 8)) && OSTSIZE=$(((creates + 1024) * 8))
 	reformat
 	setup_noconfig
+	lfs df -i
 	mkdir -p $DIR/$tdir || error "create $tdir failed"
 	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
 		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
@@ -8357,13 +8361,10 @@ test_106() {
 	do_facet mds1 $LCTL set_param fail_loc=0x1312 fail_val=$repeat
 
 	for ((i = 1; i <= $repeat; i++)); do
-
-		#one full plain llog
-		createmany -o $DIR/$tdir/f- 64768
-
-		createmany -u $DIR/$tdir/f- 64768
+		createmany -o $DIR/$tdir/f- $creates || lfs df -i
+		createmany -u $DIR/$tdir/f- $creates
+		wait_delete_completed $((TIMEOUT * 7))
 	done
-	wait_delete_completed $((TIMEOUT * 7))
 #ASSERTION osp_sync_thread() ( thread->t_flags != SVC_RUNNING ) failed
 #shows that osp code is buggy
 	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
