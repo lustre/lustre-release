@@ -1,5 +1,29 @@
+  _           _
+ | |         | |
+ | |_   _ ___| |_ _ __ ___
+ | | | | / __| __| '__/ _ \
+ | | |_| \__ | |_| | |  __/
+ |_|\__,_|___/\__|_|  \___|
+
+Lustre is an open-source, distributed parallel file system designed for
+scalability, high-performance, and high-availability.
+
+Lustre is purpose-built to provide a coherent, global POSIX-compliant
+namespace for very large scale computer clusters, including the world's
+largest supercomputer platforms.
+
+It can support hundreds of petabytes of data storage and hundreds of
+gigabytes per second in simultaneous, aggregate throughput.
+
+
+More information about Lustre:
+    http://www.lustre.org/
 Many resources for using, configuring, and troubleshooting Lustre are at:
     http://wiki.lustre.org/
+
++-----------+
+| Community |
++-----------+
 
 The low-volume list for announcements of new releases is at:
     http://lists.lustre.org/listinfo.cgi/lustre-announce-lustre.org
@@ -8,21 +32,52 @@ The generic Lustre discussion mailing list is available at:
 The Lustre developer mailing list is at:
     http://lists.lustre.org/pipermail/lustre-devel-lustre.org
 
-Instructions for building, configuring and running Lustre:
+To report bugs, please visit:
+    https://jira.whamcloud.com/
+
+The official repository is hosted at:
+    https://git.whamcloud.com/
+
++----------------------+
+| Building and Testing |
++----------------------+
+
+Detailed instructions for building, configuring and running Lustre:
     http://wiki.lustre.org/Compiling_Lustre
 and
     https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre.
+
+
+To build Lustre:
+
+    bash autogen.sh
+    ./configure
+    make
+
+To play with a test Lustre filesystem:
+
+    ./lustre/tests/llmount.sh
+
+To clean up:
+
+    ./lustre/tests/llmountcleanup.sh
+
++--------------+
+| Contributing |
++--------------+
 
 Instructions for contributing patches for Lustre:
     http://wiki.lustre.org/Submitting_Changes
 and
     http://wiki.lustre.org/Using_Gerrit
 
+
 The Lustre Coding Style Guidelines can be found at:
     http://wiki.lustre.org/Lustre_Coding_Style_Guidelines
 
 The Lustre Test Script Style Guidelines can be found at:
     http://wiki.lustre.org/Lustre_Script_Coding_Style
+
 
 In order to improve the quality of patches submitted to the Lustre tree,
 it is possible to automatically check every patch and commit against the

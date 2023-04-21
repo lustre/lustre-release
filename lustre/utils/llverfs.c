@@ -1,57 +1,22 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
  * Copyright (c) 2011, Intel Corporation.
+ *
  */
+
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
  * lustre/utils/llverfs.c
  *
- * Filesystem Verification Tool.
- * This program tests the correct operation of large filesystems and
- * the underlying block storage device(s).
- * This tool have two working modes
- * 1. full mode
- * 2. partial mode
+ * Filesystem Verification Tool: this program tests the correct operation of
+ * large filesystems and the underlying block storage device(s). For more
+ * information, see the llverfs.8 man page.
  *
- * In full mode, the program creates a subdirectory in the test
- * filesystem, writes n(files_in_dir, default=32) large(4GB) files to
- * the directory with the test pattern at the start of each 4kb block.
- * The test pattern contains timestamp, relative file offset and per
- * file unique identifier(inode number).  This continues until the
- * whole filesystem is full and then the tool verifies that the data
- * in all of the test files is correct.
- *
- * In partial mode, the tool creates test directories with the
- * EXT3_TOPDIR_FL flag set (if supported) to spread the directory data
- * around the block device instead of localizing it in a single place.
- * The number of directories equals to the number of block groups in the
- * filesystem (e.g. 65536 directories for 8TB ext3/ext4 filesystem) and
- * then writes a single 1MB file in each directory. The tool then verifies
- * that the data in each file is correct.
  */
 
 #ifndef _GNU_SOURCE
