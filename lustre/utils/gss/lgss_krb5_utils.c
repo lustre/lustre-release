@@ -302,7 +302,9 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 	else
 		return -1;
 
-	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name)) {
+	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name) &&
+	    (strcmp(princ_name, LGSS_USR_ROOT_STR) ||
+	    lgss_krb5_strcmp(krb5_princ_name(ctx, princ), LGSS_SVC_HOST_STR))) {
 		logmsg(LL_WARN, "%.*s: we expect %s instead\n",
 		       krb5_princ_name(ctx, princ)->length,
 		       krb5_princ_name(ctx, princ)->data,
@@ -840,13 +842,14 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 		princname = krb5_princ_name(ctx, kte.principal);
 
 		if ((root_flags & LGSS_ROOT_CRED_ROOT) != 0 &&
-		    lgss_krb5_strcmp(princname, LGSS_USR_ROOT_STR) == 0) {
+		    (!lgss_krb5_strcmp(princname, LGSS_USR_ROOT_STR) ||
+		     !lgss_krb5_strcmp(princname, LGSS_SVC_HOST_STR))) {
 			flag = LGSS_ROOT_CRED_ROOT;
 		} else if ((root_flags & LGSS_ROOT_CRED_MDT) != 0 &&
-			   lgss_krb5_strcmp(princname, LGSS_SVC_MDS_STR) == 0) {
+			   !lgss_krb5_strcmp(princname, LGSS_SVC_MDS_STR)) {
 			flag = LGSS_ROOT_CRED_MDT;
 		} else if ((root_flags & LGSS_ROOT_CRED_OST) != 0 &&
-			   lgss_krb5_strcmp(princname, LGSS_SVC_OSS_STR) == 0) {
+			   !lgss_krb5_strcmp(princname, LGSS_SVC_OSS_STR)) {
 			flag = LGSS_ROOT_CRED_OST;
 		} else {
 			logmsg(LL_TRACE, "not what we want, skip\n");

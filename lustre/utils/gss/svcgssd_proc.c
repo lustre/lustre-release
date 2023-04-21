@@ -340,7 +340,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 
 		/* Now we know we are dealing with a local realm */
 
-		if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
+		if (!strcmp(sname, LUSTRE_ROOT_NAME) ||
+		    !strcmp(sname, GSSD_SERVICE_HOST)) {
 			cred->cr_uid = 0;
 			cred->cr_usr_root = 1;
 			goto valid;
@@ -383,7 +384,8 @@ valid:
 		}
 		fallthrough;
 	case LUSTRE_GSS_SVC_OSS:
-		if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
+		if (!strcmp(sname, LUSTRE_ROOT_NAME) ||
+		    !strcmp(sname, GSSD_SERVICE_HOST)) {
 			cred->cr_uid = 0;
 			cred->cr_usr_root = 1;
 		} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
