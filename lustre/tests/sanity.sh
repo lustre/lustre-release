@@ -21871,6 +21871,31 @@ test_230x() {
 }
 run_test 230x "dir migration check space"
 
+test_230y() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.15.55.45) )) ||
+		skip "Need MDS version at least 2.15.55.45"
+
+	local pid
+
+	test_mkdir -c -1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS getdirstripe $DIR/$tdir
+	createmany -d $DIR/$tdir/d 100 || error "createmany failed"
+	$LFS migrate -m 1 -c 2 $DIR/$tdir &
+	pid=$!
+	sleep 1
+
+	#OBD_FAIL_MIGRATE_BAD_HASH	0x1802
+	do_facet mds2 lctl set_param fail_loc=0x1802
+
+	wait $pid
+	do_facet mds2 lctl set_param fail_loc=0
+	$LFS getdirstripe $DIR/$tdir
+	unlinkmany -d $DIR/$tdir/d 100 || error "unlinkmany failed"
+	rmdir $DIR/$tdir || error "rmdir $tdir failed"
+}
+run_test 230y "unlink dir with bad hash type"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

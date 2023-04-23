@@ -699,6 +699,7 @@ extern char obd_jobid_var[];
 
 /* MIGRATE */
 #define OBD_FAIL_MIGRATE_ENTRIES		0x1801
+#define OBD_FAIL_MIGRATE_BAD_HASH		0x1802
 
 /* LMV */
 #define OBD_FAIL_LMV_UNKNOWN_STRIPE		0x1901

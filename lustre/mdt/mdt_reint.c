@@ -2223,6 +2223,24 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	if (rc)
 		GOTO(put_parent, rc);
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_MIGRATE_BAD_HASH) &&
+	    (ma->ma_valid & MA_LMV) &&
+	    lmv_is_migrating(&ma->ma_lmv->lmv_md_v1)) {
+		struct lu_buf *buf = &info->mti_buf;
+		struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
+		__u32 version = le32_to_cpu(lmv->lmv_layout_version);
+
+		lmv->lmv_hash_type = cpu_to_le32(LMV_HASH_TYPE_UNKNOWN |
+						 LMV_HASH_FLAG_BAD_TYPE);
+		lmv->lmv_layout_version = cpu_to_le32(version + 1);
+		buf->lb_buf = lmv;
+		buf->lb_len = sizeof(*lmv);
+		rc = mo_xattr_set(env, mdt_object_child(pobj), buf,
+				  XATTR_NAME_LMV, LU_XATTR_REPLACE);
+		mo_invalidate(env, mdt_object_child(pobj));
+		GOTO(put_parent, rc);
+	}
+
 	/* @spobj is the parent stripe of @sobj if @pobj is striped directory,
 	 * if @pobj is migrating too, tpobj is the target parent stripe.
 	 */
