@@ -570,6 +570,8 @@ static inline void lnet_hdr_from_nid16(struct lnet_hdr *hdr,
 	hdr->src_pid = le32_to_cpu(hdr16->src_pid);
 	hdr->type = le32_to_cpu(hdr16->type);
 	hdr->payload_length = le32_to_cpu(hdr16->payload_length);
+
+	hdr->msg = hdr16->msg;
 }
 
 static inline void lnet_hdr_to_nid16(const struct lnet_hdr *hdr,
@@ -583,6 +585,8 @@ static inline void lnet_hdr_to_nid16(const struct lnet_hdr *hdr,
 	hdr16->src_pid = cpu_to_le32(hdr->src_pid);
 	hdr16->type = cpu_to_le32(hdr->type);
 	hdr16->payload_length = cpu_to_le32(hdr->payload_length);
+
+	hdr16->msg = hdr->msg;
 }
 
 extern const struct lnet_lnd the_lolnd;
