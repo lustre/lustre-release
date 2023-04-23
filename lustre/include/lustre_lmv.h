@@ -438,7 +438,7 @@ static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
 	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
 		goto insane;
 
-	if (!lmv_is_known_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
+	if (!lmv_is_sane_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
 		goto insane;
 
 	return true;
@@ -460,7 +460,7 @@ static inline bool lmv_is_sane2(const struct lmv_mds_md_v1 *lmv)
 	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
 		goto insane;
 
-	if (!lmv_is_known_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
+	if (!lmv_is_sane_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
 		goto insane;
 
 	return true;

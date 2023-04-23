@@ -1046,6 +1046,16 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 
 #define LMV_HASH_FLAG_KNOWN		0xbe000000
 
+/* migration failure may leave hash type as
+ * LMV_HASH_TYPE_UNKNOWN|LMV_HASH_FLAG_BAD_TYPE, which should be treated as
+ * sane, so such directory can be accessed (resume migration or unlink).
+ */
+static inline bool lmv_is_sane_hash_type(__u32 type)
+{
+	return lmv_is_known_hash_type(type) ||
+	       type == (LMV_HASH_TYPE_UNKNOWN | LMV_HASH_FLAG_BAD_TYPE);
+}
+
 /* both SPLIT and MIGRATION are set for directory split */
 static inline bool lmv_hash_is_splitting(__u32 hash)
 {
