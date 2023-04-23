@@ -15,6 +15,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
 	91)     LDISKFS_SERIES="5.14-rhel9.1.series"    ;;
 	90)     LDISKFS_SERIES="5.14-rhel9.series"      ;;
+	88)     LDISKFS_SERIES="4.18-rhel8.8.series"    ;;
 	87)     LDISKFS_SERIES="4.18-rhel8.7.series"    ;;
 	86)     LDISKFS_SERIES="4.18-rhel8.6.series"    ;;
 	85)     LDISKFS_SERIES="4.18-rhel8.5.series"    ;;
