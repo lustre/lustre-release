@@ -246,7 +246,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			O2IB_SYMVER=$LINUX_OBJ/Module.symvers
 		fi
 		if test -n "$O2IB_SYMVER"; then
-			if test ！"$O2IB_SYMVER" -ef "$LINUX_OBJ/Module.symvers"; then
+			if test ! "$O2IB_SYMVER" -ef "$LINUX_OBJ/Module.symvers"; then
 				AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path O2IB])
 				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
 				AC_SUBST(EXTRA_SYMBOLS)
@@ -609,6 +609,34 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		LB2_LINUX_TEST_RESULT([ib_post_send_recv_const], [
 			AC_DEFINE(HAVE_IB_POST_SEND_RECV_CONST, 1,
 				[ib_post_send and ib_post_recv have const parameters])
+		])
+	])
+
+	# MOFED 5.5 fails with:
+	#   ERROR: "ib_dma_virt_map_sg" [.../ko2iblnd.ko] undefined!
+	# See if we have a broken ib_dma_map_sg()
+	AC_DEFUN([LN_SRC_SANE_IB_DMA_MAP_SG], [
+		LB2_LINUX_TEST_SRC([sane_ib_dma_map_sg], [
+			#ifdef HAVE_COMPAT_RDMA
+			#undef PACKAGE_NAME
+			#undef PACKAGE_TARNAME
+			#undef PACKAGE_VERSION
+			#undef PACKAGE_STRING
+			#undef PACKAGE_BUGREPORT
+			#undef PACKAGE_URL
+			#include <linux/compat-2.6.h>
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_dma_map_sg((struct ib_device *)NULL,
+				      (struct scatterlist *)NULL, 1, 0);
+		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
+	])
+	AC_DEFUN([LN_SANE_IB_DMA_MAP_SG], [
+		AC_MSG_CHECKING([if ib_dma_map_sg() is sane])
+		LB2_LINUX_TEST_RESULT([sane_ib_dma_map_sg], [
+			AC_DEFINE(HAVE_SANE_IB_DMA_MAP_SG, 1,
+				[ib_dma_map_sg is sane])
 		])
 	])
 

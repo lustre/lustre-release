@@ -1078,15 +1078,33 @@ static inline void kiblnd_dma_unmap_single(struct ib_device *dev,
 static inline
 int kiblnd_dma_map_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 {
+	struct ib_device *dev = hdev->ibh_ibdev;
 	struct scatterlist *sg = tx->tx_frags;
 	int nents = tx->tx_nfrags;
 	enum dma_data_direction direction = tx->tx_dmadir;
 
 	if (tx->tx_gpu)
-		return lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
-					      sg, nents, direction);
+		return lnet_rdma_map_sg_attrs(dev->dma_device, sg, nents,
+					      direction);
 
-	return ib_dma_map_sg(hdev->ibh_ibdev, sg, nents, direction);
+#ifdef HAVE_SANE_IB_DMA_MAP_SG
+	return ib_dma_map_sg(dev, sg, nents, direction);
+#else
+ #ifdef CONFIG_INFINIBAND_VIRT_DMA
+	if (!dev->dma_device) {
+		struct scatterlist *s;
+		int i;
+
+		/* NOTE: open coded ib_dma_virt_map_sg() */
+		for_each_sg(sg, s, nents, i) {
+			sg_dma_address(s) = (uintptr_t)sg_virt(s);
+			sg_dma_len(s) = s->length;
+		}
+		return nents;
+	}
+ #endif
+	return dma_map_sg_attrs(dev->dma_device, sg, nents, direction, 0);
+#endif
 }
 
 static inline
