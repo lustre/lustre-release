@@ -2237,6 +2237,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	ktime_t arrived;
 	s64 timediff_usecs;
 	s64 arrived_usecs;
+	__u32 op;
 	int fail_opc = 0;
 
 	ENTRY;
@@ -2244,6 +2245,8 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	request = ptlrpc_server_request_get(svcpt, false);
 	if (request == NULL)
 		RETURN(0);
+
+	op = lustre_msg_get_opc(request->rq_reqmsg);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT))
 		fail_opc = OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT;
@@ -2286,7 +2289,8 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	 * Discard requests queued for longer than the deadline.
 	 * The deadline is increased if we send an early reply.
 	 */
-	if (ktime_get_real_seconds() > request->rq_deadline) {
+	if (op != LDLM_CANCEL &&
+	    ktime_get_real_seconds() > request->rq_deadline) {
 		DEBUG_REQ(D_ERROR, request,
 			  "Dropping timed-out request from %s: deadline %lld/%llds ago",
 			  libcfs_id2str(request->rq_peer),
@@ -2304,11 +2308,10 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       (request->rq_export ?
 		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
-	       libcfs_id2str(request->rq_peer),
-	       lustre_msg_get_opc(request->rq_reqmsg),
+	       libcfs_id2str(request->rq_peer), op,
 	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "");
 
-	if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
+	if (op != OBD_PING)
 		CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
 
 	CDEBUG(D_NET, "got req %llu\n", request->rq_xid);
@@ -2345,8 +2348,7 @@ put_conn:
 		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg),
 	       request->rq_xid,
-	       libcfs_id2str(request->rq_peer),
-	       lustre_msg_get_opc(request->rq_reqmsg),
+	       libcfs_id2str(request->rq_peer), op,
 	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "",
 	       timediff_usecs,
 	       arrived_usecs,
@@ -2357,7 +2359,6 @@ put_conn:
 	       (request->rq_repmsg ?
 	       lustre_msg_get_status(request->rq_repmsg) : -999));
 	if (likely(svc->srv_stats != NULL && request->rq_reqmsg != NULL)) {
-		__u32 op = lustre_msg_get_opc(request->rq_reqmsg);
 		int opc = opcode_offset(op);
 
 		if (opc > 0 && !(op == LDLM_ENQUEUE || op == MDS_REINT)) {
