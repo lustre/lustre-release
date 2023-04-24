@@ -118,13 +118,12 @@
  *
  * 1. directory positioning
  *
- * When seekdir(hash) is called, original
+ * When seekdir(hash) is called.
  *
- *
- *
- *
- *
- *
+ * seekdir() sets the location in the directory stream from which the next
+ * readdir() call will start. mdc_page_locate() is used to find page with
+ * starting hash and will issue RPC to fetch that page. If there is a hash
+ * collision the concerned page is removed.
  *
  *
  * Server.
@@ -289,16 +288,11 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		next = le64_to_cpu(dp->ldp_hash_end);
 		pos = next;
 		if (pos == MDS_DIR_END_OFF) {
-			/*
-			 * End of directory reached.
-			 */
+			/* End of directory reached. */
 			done = 1;
 			ll_release_page(inode, page, false);
 		} else {
-			/*
-			 * Normal case: continue to the next
-			 * page.
-			 */
+			/* Normal case: continue to the next page.*/
 			ll_release_page(inode, page,
 					le32_to_cpu(dp->ldp_flags) &
 					LDF_COLLIDE);
@@ -352,16 +346,11 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	}
 
 	if (pos == MDS_DIR_END_OFF)
-		/*
-		 * end-of-file.
-		 */
+		/* end-of-file. */
 		GOTO(out, rc = 0);
 
 	if (unlikely(ll_dir_striped(inode))) {
-		/*
-		 * This is only needed for striped dir to fill ..,
-		 * see lmv_read_page()
-		 */
+		/* Only needed for striped dir to fill ..see lmv_read_page() */
 		if (file_dentry(filp)->d_parent != NULL &&
 		    file_dentry(filp)->d_parent->d_inode != NULL) {
 			__u64 ibits = MDS_INODELOCK_LOOKUP;
@@ -604,7 +593,7 @@ out_op_data:
 }
 
 int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
-                     int set_default)
+		     int set_default)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct md_op_data *op_data;
@@ -657,15 +646,14 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 			break;
 		}
 		default:
-			CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-					" %#08x != %#08x nor %#08x\n",
-					lump->lmm_magic, LOV_USER_MAGIC_V1,
-					LOV_USER_MAGIC_V3);
+			CDEBUG(D_IOCTL,
+			       "bad userland LOV MAGIC: %#08x != %#08x nor %#08x\n",
+			       lump->lmm_magic, LOV_USER_MAGIC_V1,
+			       LOV_USER_MAGIC_V3);
 			RETURN(-EINVAL);
 		}
 
-		/*
-		 * This is coming from userspace, so should be in
+		/* This is coming from userspace, so should be in
 		 * local endian.  But the MDS would like it in little
 		 * endian, so we swab it before we send it.
 		 */
@@ -800,8 +788,7 @@ int ll_dir_get_default_layout(struct inode *inode, void **plmm, int *plmm_size,
 					   &RMF_MDT_MD, lmm_size);
 	LASSERT(lmm != NULL);
 
-	/*
-	 * This is coming from the MDS, so is probably in
+	/* This is coming from the MDS, so is probably in
 	 * little endian.  We convert it to host endian before
 	 * passing it to userspace.
 	 */
@@ -834,8 +821,9 @@ int ll_dir_get_default_layout(struct inode *inode, void **plmm, int *plmm_size,
 		break;
 	}
 	default:
-		CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
 		rc = -EPROTO;
+		CERROR("%s: unknown magic: %lX: rc = %d\n", sbi->ll_fsname,
+		       (unsigned long)lmm->lmm_magic, rc);
 	}
 out:
 	*plmm = lmm;
@@ -1077,8 +1065,8 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 		rc = ll_data_version(inode, &data_version, LL_DV_RD_FLUSH);
 		iput(inode);
 		if (rc) {
-			CDEBUG(D_HSM, "Could not read file data version. "
-				      "Request could not be confirmed.\n");
+			CDEBUG(D_HSM,
+			       "Could not read file data version. Request could not be confirmed.\n");
 			if (hpk.hpk_errval == 0)
 				hpk.hpk_errval = -rc;
 			GOTO(progress, rc);
@@ -1204,8 +1192,7 @@ static int copy_and_ct_start(int cmd, struct obd_export *exp,
 		for (i = 0; i < lk->lk_data_count; i++) {
 			if (lk->lk_data[i] > LL_HSM_ORIGIN_MAX_ARCHIVE) {
 				rc = -EINVAL;
-				CERROR("%s: archive id %d requested but only "
-				       "[0 - %zu] supported: rc = %d\n",
+				CERROR("%s: archive id %d requested but only [0 - %zu] supported: rc = %d\n",
 				       exp->exp_obd->obd_name, lk->lk_data[i],
 				       LL_HSM_ORIGIN_MAX_ARCHIVE, rc);
 				GOTO(out_lk, rc);
@@ -1283,7 +1270,8 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 	case LUSTRE_Q_GETINFOPOOL:
 		break;
 	default:
-		CERROR("unsupported quotactl op: %#x\n", cmd);
+		CERROR("%s: unsupported quotactl op: %#x: rc = %d\n",
+		       sbi->ll_fsname, cmd, -ENOTSUPP);
 		RETURN(-ENOTSUPP);
 	}
 
@@ -1338,8 +1326,9 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 			OBD_FREE(oqctl, oqctl_len);
 			RETURN(rc);
 		}
-                /* If QIF_SPACE is not set, client should collect the
-                 * space usage from OSSs by itself */
+		/* If QIF_SPACE is not set, client should collect the
+		 * space usage from OSSs by itself
+		 */
 		if ((cmd == Q_GETQUOTA || cmd == LUSTRE_Q_GETQUOTAPOOL) &&
 		    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
 		    !oqctl->qc_dqblk.dqb_curspace) {
@@ -1358,17 +1347,17 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 			} else {
 				oqctl_tmp->qc_cmd = Q_GETOQUOTA;
 			}
-                        oqctl_tmp->qc_id = oqctl->qc_id;
-                        oqctl_tmp->qc_type = oqctl->qc_type;
+			oqctl_tmp->qc_id = oqctl->qc_id;
+			oqctl_tmp->qc_type = oqctl->qc_type;
 
-                        /* collect space usage from OSTs */
-                        oqctl_tmp->qc_dqblk.dqb_curspace = 0;
-                        rc = obd_quotactl(sbi->ll_dt_exp, oqctl_tmp);
-                        if (!rc || rc == -EREMOTEIO) {
-                                oqctl->qc_dqblk.dqb_curspace =
-                                        oqctl_tmp->qc_dqblk.dqb_curspace;
-                                oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
-                        }
+			/* collect space usage from OSTs */
+			oqctl_tmp->qc_dqblk.dqb_curspace = 0;
+			rc = obd_quotactl(sbi->ll_dt_exp, oqctl_tmp);
+			if (!rc || rc == -EREMOTEIO) {
+				oqctl->qc_dqblk.dqb_curspace =
+					oqctl_tmp->qc_dqblk.dqb_curspace;
+				oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
+			}
 
 			/* collect space & inode usage from MDTs */
 			oqctl_tmp->qc_cmd = Q_GETOQUOTA;
@@ -1386,7 +1375,7 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 			}
 
 			OBD_FREE(oqctl_tmp, qctl_len);
-                }
+		}
 out:
 		QCTL_COPY(qctl, oqctl);
 		OBD_FREE(oqctl, oqctl_len);
@@ -1402,7 +1391,7 @@ int ll_rmfid(struct file *file, void __user *arg)
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct fid_array *lfa = NULL;
 	size_t size;
-	unsigned nr;
+	unsigned int nr;
 	int i, rc, *rcs = NULL;
 	ENTRY;
 
@@ -1778,8 +1767,9 @@ out:
 
 				stripe_count = lmv_foreign_to_md_stripes(size);
 			} else {
-				CERROR("invalid %d foreign size returned\n",
-					    lfm->lfm_length);
+				CERROR("%s: invalid %d foreign size returned: rc = %d\n",
+				       sbi->ll_fsname, lfm->lfm_length,
+				       -EINVAL);
 				return -EINVAL;
 			}
 		} else {
@@ -2016,8 +2006,7 @@ out_rmdir:
 			stx.stx_dev_minor = MINOR(inode->i_sb->s_dev);
 			stx.stx_mask |= STATX_BASIC_STATS | STATX_BTIME;
 
-			/*
-			 * For a striped directory, the size and blocks returned
+			/* For a striped directory, the size and blocks returned
 			 * from MDT is not correct.
 			 * The size and blocks are aggregated by client across
 			 * all stripes.
@@ -2390,14 +2379,14 @@ out:
 
 static int ll_dir_open(struct inode *inode, struct file *file)
 {
-        ENTRY;
-        RETURN(ll_file_open(inode, file));
+	ENTRY;
+	RETURN(ll_file_open(inode, file));
 }
 
 static int ll_dir_release(struct inode *inode, struct file *file)
 {
-        ENTRY;
-        RETURN(ll_file_release(inode, file));
+	ENTRY;
+	RETURN(ll_file_release(inode, file));
 }
 
 /* notify error if partially read striped directory */
