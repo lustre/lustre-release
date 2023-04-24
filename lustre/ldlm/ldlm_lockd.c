@@ -1773,8 +1773,14 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
 		if (!lock) {
 			/* below message checked in replay-single.sh test_36 */
-			LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (cookie %llu)",
+			LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (cookie %llx)",
 					  dlm_req->lock_handle[i].cookie);
+			continue;
+		}
+		if (lock->l_export != req->rq_export) {
+			LDLM_DEBUG_NOLOCK("server-side cancel mismatched export (cookie %llx)",
+					dlm_req->lock_handle[i].cookie);
+			LDLM_LOCK_PUT(lock);
 			continue;
 		}
 
