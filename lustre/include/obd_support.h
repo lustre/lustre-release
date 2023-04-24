@@ -428,7 +428,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 /* #define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b Obsolete since 2.9 */
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
-#define OBD_FAIL_OSC_DIO_PAUSE           0x40d
+/*#define OBD_FAIL_OSC_DIO_PAUSE           0x40d removed in 2.0 */
 #define OBD_FAIL_OSC_OBJECT_CONTENTION   0x40e
 #define OBD_FAIL_OSC_CP_CANCEL_RACE      0x40f
 #define OBD_FAIL_OSC_CP_ENQ_RACE         0x410

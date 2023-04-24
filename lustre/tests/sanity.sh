@@ -13269,33 +13269,6 @@ test_119c() # bug 13099
 }
 run_test 119c "Testing for direct read hitting hole"
 
-test_119d() # bug 15950
-{
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-
-        MAX_RPCS_IN_FLIGHT=`$LCTL get_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight`
-        $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight 1
-        BSIZE=1048576
-        $LFS setstripe $DIR/$tfile -i 0 -c 1 || error "setstripe failed"
-        $DIRECTIO write $DIR/$tfile 0 1 $BSIZE || error "first directio failed"
-        #define OBD_FAIL_OSC_DIO_PAUSE           0x40d
-        lctl set_param fail_loc=0x40d
-        $DIRECTIO write $DIR/$tfile 1 4 $BSIZE &
-        pid_dio=$!
-        sleep 1
-        cat $DIR/$tfile > /dev/null &
-        lctl set_param fail_loc=0
-        pid_reads=$!
-        wait $pid_dio
-        log "the DIO writes have completed, now wait for the reads (should not block very long)"
-        sleep 2
-        [ -n "`ps h -p $pid_reads -o comm`" ] && \
-        error "the read rpcs have not completed in 2s"
-        rm -f $DIR/$tfile
-        $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight $MAX_RPCS_IN_FLIGHT
-}
-run_test 119d "The DIO path should try to send a new rpc once one is completed"
-
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
