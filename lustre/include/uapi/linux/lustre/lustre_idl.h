@@ -3774,10 +3774,15 @@ enum batch_update_cmd {
 
 /** layout swap request structure
  * fid1 and fid2 are in mdt_body
+ *
+ * /!\ msl_dv1 and msl_dv2 are valid only if msl_flags contains
+ *     SWAP_LAYOUTS_WITH_DV12
  */
 struct mdc_swap_layouts {
 	__u64           msl_flags;
-} __attribute__((packed));
+	__u64		msl_dv1; /* data version of file 1 */
+	__u64		msl_dv2; /* data version of file 2 */
+};
 
 #define INLINE_RESYNC_ARRAY_SIZE	15
 struct close_data_resync_done {

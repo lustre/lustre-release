@@ -1070,10 +1070,11 @@ static int migrate_block(int fd_src, int fd_dst,
 			 long stats_interval_sec, char **err_str)
 {
 	struct stat st;
-	__u64	dv1;
-	int	gid;
-	int	rc;
-	int	rc2;
+	__u64 dv1;
+	__u64 dv2;
+	int gid;
+	int rc;
+	int rc2;
 
 	do
 		gid = random();
@@ -1101,7 +1102,7 @@ static int migrate_block(int fd_src, int fd_dst,
 	 */
 	rc = llapi_get_data_version(fd_src, &dv1, 0);
 	if (rc < 0) {
-		*err_str = "cannot get dataversion";
+		*err_str = "cannot get initial dataversion";
 		goto out_unlock;
 	}
 
@@ -1119,6 +1120,11 @@ static int migrate_block(int fd_src, int fd_dst,
 		goto out_unlock;
 	}
 
+	rc = llapi_get_data_version(fd_dst, &dv2, LL_DV_RD_FLUSH);
+	if (rc < 0) {
+		*err_str = "cannot get dataversion after copy";
+		goto out_unlock;
+	}
 	/*
 	 * swap layouts
 	 * for a migration we need to check data version on file did
@@ -1126,7 +1132,7 @@ static int migrate_block(int fd_src, int fd_dst,
 	 *
 	 * Pass in gid=0 since we already own grouplock.
 	 */
-	rc = llapi_fswap_layouts_grouplock(fd_src, fd_dst, dv1, 0, 0,
+	rc = llapi_fswap_layouts_grouplock(fd_src, fd_dst, dv1, dv2, 0,
 					   SWAP_LAYOUTS_CHECK_DV1);
 	if (rc == -EAGAIN) {
 		*err_str = "file changed";

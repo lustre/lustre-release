@@ -191,7 +191,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(MDS_BATCH == 63, "found %lld\n",
 		 (long long)MDS_BATCH);
 	LASSERTF(MDS_HSM_DATA_VERSION == 64, "found %lld\n",
-		 (long long)MDS_BATCH);
+		 (long long)MDS_HSM_DATA_VERSION);
 	LASSERTF(MDS_LAST_OPC == 65, "found %lld\n",
 		 (long long)MDS_LAST_OPC);
 	LASSERTF(REINT_SETATTR == 1, "found %lld\n",
@@ -5425,12 +5425,20 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct lustre_swap_layouts *)0)->sl_dv2));
 
 	/* Checks for struct mdc_swap_layouts */
-	LASSERTF((int)sizeof(struct mdc_swap_layouts) == 8, "found %lld\n",
+	LASSERTF((int)sizeof(struct mdc_swap_layouts) == 24, "found %lld\n",
 		 (long long)(int)sizeof(struct mdc_swap_layouts));
 	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_flags) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_flags));
 	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_flags) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_flags));
+	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_dv1) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_dv1));
+	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv1));
+	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_dv2) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_dv2));
+	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv2));
 
 	/* Checks for mdc_swap_layouts::msl_flags */
 	LASSERTF(SWAP_LAYOUTS_CHECK_DV1 == 1, "found %lld\n",
@@ -5443,6 +5451,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)SWAP_LAYOUTS_KEEP_ATIME);
 	LASSERTF(SWAP_LAYOUTS_CLOSE == 16, "found %lld\n",
 		 (long long)SWAP_LAYOUTS_CLOSE);
+	LASSERTF(SWAP_LAYOUTS_MDS_RELEASE == 2147483648, "found %lld\n",
+		 (long long)SWAP_LAYOUTS_MDS_RELEASE);
+	LASSERTF(SWAP_LAYOUTS_WITH_DV12 == 32, "found %lld\n",
+		 (long long)SWAP_LAYOUTS_WITH_DV12);
 
 	/* Checks for struct hsm_state_set */
 	LASSERTF((int)sizeof(struct hsm_state_set) == 24, "found %lld\n",

@@ -2564,6 +2564,8 @@ static void check_swap_layout(void)
 	BLANK_LINE();
 	CHECK_STRUCT(mdc_swap_layouts);
 	CHECK_MEMBER(mdc_swap_layouts, msl_flags);
+	CHECK_MEMBER(mdc_swap_layouts, msl_dv1);
+	CHECK_MEMBER(mdc_swap_layouts, msl_dv2);
 
 	BLANK_LINE();
 	COMMENT("Checks for mdc_swap_layouts::msl_flags");
@@ -2573,7 +2575,7 @@ static void check_swap_layout(void)
 	CHECK_VALUE(SWAP_LAYOUTS_KEEP_ATIME);
 	CHECK_VALUE(SWAP_LAYOUTS_CLOSE);
 	CHECK_VALUE(SWAP_LAYOUTS_MDS_RELEASE);
-
+	CHECK_VALUE(SWAP_LAYOUTS_WITH_DV12);
 }
 
 static void check_hsm_state_set(void)

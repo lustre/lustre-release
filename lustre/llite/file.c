@@ -3618,10 +3618,10 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 			   struct lustre_swap_layouts *lsl)
 {
 	struct mdc_swap_layouts msl;
+	struct ll_swap_stack *llss;
 	struct md_op_data *op_data;
 	__u32 gid;
 	__u64 dv;
-	struct ll_swap_stack *llss = NULL;
 	int rc;
 
 	OBD_ALLOC_PTR(llss);
@@ -3696,7 +3696,9 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 	 * flags from user space have to be converted before they are send to
 	 * server, no flag is sent today, they are only used on the client
 	 */
-	msl.msl_flags = 0;
+	msl.msl_flags = SWAP_LAYOUTS_WITH_DV12;
+	msl.msl_dv1 = llss->dv1;
+	msl.msl_dv2 = llss->dv2;
 	rc = -ENOMEM;
 	op_data = ll_prep_md_op_data(NULL, llss->inode1, llss->inode2, NULL, 0,
 				     0, LUSTRE_OPC_ANY, &msl);

@@ -1701,15 +1701,23 @@ struct lqa_id_range {
 #define LQA_RANGE_SIZE (sizeof(struct lqa_id_range)) /* LQA range size: %u%u */
 
 /* swap layout flags */
-#define SWAP_LAYOUTS_CHECK_DV1		(1 << 0)
-#define SWAP_LAYOUTS_CHECK_DV2		(1 << 1)
-#define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
-#define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
-#define SWAP_LAYOUTS_CLOSE		(1 << 4)
-#define SWAP_LAYOUTS_WITH_DV12		(1 << 5)
+enum lustre_swap_layouts_flags {
+	SWAP_LAYOUTS_CHECK_DV1		= 0x00000001,
+	SWAP_LAYOUTS_CHECK_DV2		= 0x00000002,
+	SWAP_LAYOUTS_KEEP_MTIME		= 0x00000004,
+	SWAP_LAYOUTS_KEEP_ATIME		= 0x00000008,
+	SWAP_LAYOUTS_CLOSE		= 0x00000010,
 
-/* Skip the UID/GID check before a swap layout for a release (server only) */
-#define SWAP_LAYOUTS_MDS_RELEASE	(1 << 31)
+	/* Sent to the MDT through mdc_swap_layouts::msl_flags to indicate that
+	 * mdc_swap_layouts contains valid msl_dv1 and msl_dv2.
+	 */
+	SWAP_LAYOUTS_WITH_DV12		= 0x00000020,
+
+	/* Skip the UID/GID check before a swap layout for a release
+	 * (server only)
+	 */
+	SWAP_LAYOUTS_MDS_RELEASE	= 0x80000000,
+};
 
 struct lustre_swap_layouts {
 	__u64	sl_flags;

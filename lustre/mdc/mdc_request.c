@@ -2234,10 +2234,12 @@ out:
 static int mdc_ioc_swap_layouts(struct obd_export *exp,
 				struct md_op_data *op_data)
 {
+	struct mdc_swap_layouts *payload;
+	struct mdc_swap_layouts *msl;
+	struct ptlrpc_request *req;
 	LIST_HEAD(cancels);
-	struct ptlrpc_request	*req;
-	int			 rc, count;
-	struct mdc_swap_layouts *msl, *payload;
+	int count;
+	int rc;
 
 	ENTRY;
 	msl = op_data->op_data;

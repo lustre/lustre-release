@@ -3067,6 +3067,15 @@ EXPORT_SYMBOL(lustre_swab_but_update_buffer);
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl)
 {
 	__swab64s(&msl->msl_flags);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
+	/* Only swab dv1/dv2 fields if WITH_DV12 flag is sent by client, to
+	 * avoid access beyond the end of old struct mdc_swap_layouts.
+	 */
+	if (!(msl->msl_flags & SWAP_LAYOUTS_WITH_DV12))
+		return;
+ #endif
+	__swab64s(&msl->msl_dv1);
+	__swab64s(&msl->msl_dv2);
 }
 
 void lustre_swab_close_data(struct close_data *cd)
