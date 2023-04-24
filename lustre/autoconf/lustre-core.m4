@@ -4651,7 +4651,6 @@ lustre/autoMakefile
 lustre/autoconf/Makefile
 lustre/conf/Makefile
 lustre/conf/resource/Makefile
-lustre/contrib/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile

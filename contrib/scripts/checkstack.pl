@@ -1,4 +1,5 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
+# SPDX-License-Identifier: GPL-2.0
 
 #	Check the stack usage of functions
 #
@@ -12,18 +13,17 @@
 #	sh64 port by Paul Mundt
 #	Random bits by Matt Mackall <mpm@selenic.com>
 #	M68k port by Geert Uytterhoeven and Andreas Schwab
-#	AVR32 port by Haavard Skinnemoen <hskinnemoen@atmel.com>
-#	PARISC port by Kyle McMartin <kyle@parisc-linux.org>
+#	AArch64, PARISC ports by Kyle McMartin
 #	sparc port by Martin Habets <errandir_news@mph.eclipse.co.uk>
+#	ppc64le port by Breno Leitao <leitao@debian.org>
+#	riscv port by Wadim Mueller <wafgo01@gmail.com>
 #
 #	Usage:
 #	objdump -d vmlinux | scripts/checkstack.pl [arch]
 #
-#	find <moduledir> -name "*.o" | while read M; do
-#		objdump -d $M | perl ~/checkstack.pl <arch> | \
-#			sed "s/^/`basename $M`: /" ; done | \
-#	awk '/esp/ { print $5, $2, $4 }' | sort -nr
 #	TODO :	Port to all architectures (one regex per arch)
+
+use strict;
 
 # check for arch
 #
@@ -35,8 +35,10 @@
 # $& (whole re) matches the complete objdump line with the stack growth
 # $1 (first bracket) matches the dynamic amount of the stack growth
 #
+# $sub: subroutine for special handling to check stack usage.
+#
 # use anything else and feel the pain ;)
-my (@stack, $re, $dre, $x, $xs);
+my (@stack, $re, $dre, $sub, $x, $xs, $funcre, $min_stack);
 {
 	my $arch = shift;
 	if ($arch eq "") {
@@ -44,23 +46,29 @@ my (@stack, $re, $dre, $x, $xs);
 		chomp($arch);
 	}
 
+	$min_stack = shift;
+	if ($min_stack eq "" || $min_stack !~ /^\d+$/) {
+		$min_stack = 100;
+	}
+
 	$x	= "[0-9a-f]";	# hex character
 	$xs	= "[0-9a-f ]";	# hex character or space
-	if ($arch eq 'arm') {
+	$funcre = qr/^$x* <(.*)>:$/;
+	if ($arch =~ '^(aarch|arm)64$') {
+		#ffffffc0006325cc:       a9bb7bfd        stp     x29, x30, [sp, #-80]!
+		#a110:       d11643ff        sub     sp, sp, #0x590
+		$re = qr/^.*stp.*sp, \#-([0-9]{1,8})\]\!/o;
+		$dre = qr/^.*sub.*sp, sp, #(0x$x{1,8})/o;
+	} elsif ($arch eq 'arm') {
 		#c0008ffc:	e24dd064	sub	sp, sp, #100	; 0x64
-		$re = qr/.*sub.*sp, sp, #(([0-9]{2}|[3-9])[0-9]{2})/o;
-	} elsif ($arch eq 'avr32') {
-		#8000008a:       20 1d           sub sp,4
-		#80000ca8:       fa cd 05 b0     sub sp,sp,1456
-		$re = qr/^.*sub.*sp.*,([0-9]{1,8})/o;
-	} elsif ($arch =~ /^i[3456]86$/) {
+		$re = qr/.*sub.*sp, sp, #([0-9]{1,4})/o;
+		$sub = \&arm_push_handling;
+	} elsif ($arch =~ /^x86(_64)?$/ || $arch =~ /^i[3456]86$/) {
 		#c0105234:       81 ec ac 05 00 00       sub    $0x5ac,%esp
-		$re = qr/^.*[as][du][db]    \$(0x$x{1,8}),\%esp$/o;
-		$dre = qr/^.*[as][du][db]    (%.*),\%esp$/o;
-	} elsif ($arch eq 'x86_64') {
-		#    2f60:	48 81 ec e8 05 00 00 	sub    $0x5e8,%rsp
-		$re = qr/^.*[as][du][db]    \$(0x$x{1,8}),\%rsp$/o;
-		$dre = qr/^.*[as][du][db]    (\%.*),\%rsp$/o;
+		# or
+		#    2f60:    48 81 ec e8 05 00 00       sub    $0x5e8,%rsp
+		$re = qr/^.*[as][du][db]    \$(0x$x{1,8}),\%(e|r)sp$/o;
+		$dre = qr/^.*[as][du][db]    (%.*),\%(e|r)sp$/o;
 	} elsif ($arch eq 'ia64') {
 		#e0000000044011fc:       01 0f fc 8c     adds r12=-384,r12
 		$re = qr/.*adds.*r12=-(([0-9]{2}|[3-9])[0-9]{2}),r12/o;
@@ -74,15 +82,17 @@ my (@stack, $re, $dre, $x, $xs);
 	} elsif ($arch eq 'mips') {
 		#88003254:       27bdffe0        addiu   sp,sp,-32
 		$re = qr/.*addiu.*sp,sp,-(([0-9]{2}|[3-9])[0-9]{2})/o;
+	} elsif ($arch eq 'nios2') {
+		#25a8:	defffb04 	addi	sp,sp,-20
+		$re = qr/.*addi.*sp,sp,-(([0-9]{2}|[3-9])[0-9]{2})/o;
+	} elsif ($arch eq 'openrisc') {
+		# c000043c:       9c 21 fe f0     l.addi r1,r1,-272
+		$re = qr/.*l\.addi.*r1,r1,-(([0-9]{2}|[3-9])[0-9]{2})/o;
 	} elsif ($arch eq 'parisc' || $arch eq 'parisc64') {
 		$re = qr/.*ldo ($x{1,8})\(sp\),sp/o;
-	} elsif ($arch eq 'ppc') {
-		#c00029f4:       94 21 ff 30     stwu    r1,-208(r1)
-		$re = qr/.*stwu.*r1,-($x{1,8})\(r1\)/o;
-	} elsif ($arch eq 'ppc64') {
-		#XXX
-		$re = qr/.*stdu.*r1,-($x{1,8})\(r1\)/o;
-	} elsif ($arch eq 'powerpc') {
+	} elsif ($arch eq 'powerpc' || $arch =~ /^ppc(64)?(le)?$/ ) {
+		# powerpc    : 94 21 ff 30     stwu    r1,-208(r1)
+		# ppc64(le)  : 81 ff 21 f8     stdu    r1,-128(r1)
 		$re = qr/.*st[dw]u.*r1,-($x{1,8})\(r1\)/o;
 	} elsif ($arch =~ /^s390x?$/) {
 		#   11160:       a7 fb ff 60             aghi   %r15,-160
@@ -96,35 +106,63 @@ my (@stack, $re, $dre, $x, $xs);
 		#     pair for larger users. -- PFM.
 		#a00048e0:       d4fc40f0        addi.l  r15,-240,r15
 		$re = qr/.*addi\.l.*r15,-(([0-9]{2}|[3-9])[0-9]{2}),r15/o;
-	} elsif ($arch =~ /^blackfin$/) {
-		#   0:   00 e8 38 01     LINK 0x4e0;
-		$re = qr/.*[[:space:]]LINK[[:space:]]*(0x$x{1,8})/o;
 	} elsif ($arch eq 'sparc' || $arch eq 'sparc64') {
 		# f0019d10:       9d e3 bf 90     save  %sp, -112, %sp
 		$re = qr/.*save.*%sp, -(([0-9]{2}|[3-9])[0-9]{2}), %sp/o;
+	} elsif ($arch =~ /^riscv(64)?$/) {
+		#ffffffff8036e868:	c2010113          	addi	sp,sp,-992
+		$re = qr/.*addi.*sp,sp,-(([0-9]{2}|[3-9])[0-9]{2})/o;
 	} else {
 		print("wrong or unknown architecture \"$arch\"\n");
 		exit
 	}
 }
 
-sub bysize($) {
-	my ($asize, $bsize);
-	($asize = $a) =~ s/.*:	*(.*)$/$1/;
-	($bsize = $b) =~ s/.*:	*(.*)$/$1/;
-	$bsize <=> $asize
+#
+# To count stack usage of push {*, fp, ip, lr, pc} instruction in ARM,
+# if FRAME POINTER is enabled.
+# e.g. c01f0d48: e92ddff0 push {r4, r5, r6, r7, r8, r9, sl, fp, ip, lr, pc}
+#
+sub arm_push_handling {
+	my $regex = qr/.*push.*fp, ip, lr, pc}/o;
+	my $size = 0;
+	my $line_arg = shift;
+
+	if ($line_arg =~ m/$regex/) {
+		$size = $line_arg =~ tr/,//;
+		$size = ($size + 1) * 4;
+	}
+
+	return $size;
 }
 
 #
 # main()
 #
-my $funcre = qr/^$x* <(.*)>:$/;
-my $func;
-my $file, $lastslash;
+my ($func, $file, $lastslash, $total_size, $addr, $intro);
+
+$total_size = 0;
 
 while (my $line = <STDIN>) {
 	if ($line =~ m/$funcre/) {
 		$func = $1;
+		next if $line !~ m/^($xs*)/;
+		if ($total_size > $min_stack) {
+			push @stack, "$intro$total_size\n";
+		}
+
+		$addr = $1;
+		$addr =~ s/ /0/g;
+		$addr = "0x$addr";
+
+		$intro = "$addr $func [$file]:";
+		my $padlen = 56 - length($intro);
+		while ($padlen > 0) {
+			$intro .= '	';
+			$padlen -= 8;
+		}
+
+		$total_size = 0;
 	}
 	elsif ($line =~ m/(.*):\s*file format/) {
 		$file = $1;
@@ -145,38 +183,23 @@ while (my $line = <STDIN>) {
 		}
 		next if ($size > 0x10000000);
 
-		next if $line !~ m/^($xs*)/;
-		my $addr = $1;
-		$addr =~ s/ /0/g;
-		$addr = "0x$addr";
-
-#		my $intro = "$addr $func [$file]:";
-#		my $padlen = 56 - length($intro);
-#		while ($padlen > 0) {
-#			$intro .= '	';
-#			$padlen -= 8;
-#		}
-#		next if ($size < 100);
-#		push @stack, "$intro$size\n";
-		push @stack, "$size $file:$func\n";
+		$total_size += $size;
 	}
 	elsif (defined $dre && $line =~ m/$dre/) {
-		my $size = "Dynamic ($1)";
+		my $size = $1;
 
-		next if $line !~ m/^($xs*)/;
-		my $addr = $1;
-		$addr =~ s/ /0/g;
-		$addr = "0x$addr";
+		$size = hex($size) if ($size =~ /^0x/);
+		$total_size += $size;
+	}
+	elsif (defined $sub) {
+		my $size = &$sub($line);
 
-#		my $intro = "$addr $func [$file]:";
-#		my $padlen = 56 - length($intro);
-#		while ($padlen > 0) {
-#			$intro .= '	';
-#			$padlen -= 8;
-#		}
-#		push @stack, "$intro$size\n";
-		push @stack, "$size $file:$func\n";
+		$total_size += $size;
 	}
 }
+if ($total_size > $min_stack) {
+	push @stack, "$intro$total_size\n";
+}
 
-print sort bysize @stack;
+# Sort output by size (last field)
+print sort { ($b =~ /:\t*(\d+)$/)[0] <=> ($a =~ /:\t*(\d+)$/)[0] } @stack;
