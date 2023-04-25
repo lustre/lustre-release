@@ -5777,7 +5777,7 @@ err_free:
 		case 'P': /* we always print, this option is a no-op */
 			break;
 		case LFS_PRINTF_OPT:
-			param.fp_format_printf_str = optarg;
+			param.fp_format_printf_str = strdup(optarg);
 			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
@@ -5964,6 +5964,9 @@ err:
 
 	if (param.fp_mdt_uuid && param.fp_num_alloc_mdts)
 		free(param.fp_mdt_uuid);
+
+	if (param.fp_format_printf_str)
+		free(param.fp_format_printf_str);
 
 	return ret;
 }
