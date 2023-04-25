@@ -402,10 +402,13 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	if (rc)
 		GOTO(out_exp, rc);
 
-	if (need_revoke && qmt_set_revoke(env, lqe, stype, idx) &&
-	    lqe->lqe_glbl_data) {
-		qmt_seed_glbe_edquot(env, lqe->lqe_glbl_data);
-		qmt_id_lock_notify(qmt, lqe);
+	if (need_revoke && qmt_set_revoke(env, lqe, stype, idx)) {
+		mutex_lock(&lqe->lqe_glbl_data_lock);
+		if (lqe->lqe_glbl_data) {
+			qmt_seed_glbe_edquot(env, lqe->lqe_glbl_data);
+			qmt_id_lock_notify(qmt, lqe);
+		}
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
 	}
 
 	if (lvb->lvb_id_rel) {
@@ -520,12 +523,13 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 
 	if (res->lr_name.name[LUSTRE_RES_ID_QUOTA_SEQ_OFF] != 0) {
 		struct lquota_entry *lqe = res->lr_lvb_data;
-		struct lqe_glbl_data *lgd = lqe->lqe_glbl_data;
+		struct lqe_glbl_data *lgd;
 
 		mutex_lock(&lqe->lqe_glbl_data_lock);
+		lgd = lqe->lqe_glbl_data;
 		lqe->lqe_glbl_data = NULL;
-		qmt_free_lqe_gd(lgd);
 		mutex_unlock(&lqe->lqe_glbl_data_lock);
+		qmt_free_lqe_gd(lgd);
 
 		/* release lqe reference */
 		lqe_putref(lqe);
@@ -573,6 +577,7 @@ static int qmt_alloc_lock_array(struct ldlm_resource *res,
 				struct qmt_gl_lock_array *array,
 				qmt_glimpse_cb_t cb, void *arg)
 {
+	struct lquota_entry *lqe = arg;
 	struct list_head *pos;
 	unsigned long count = 0;
 	int fail_cnt = 0;
@@ -580,6 +585,8 @@ static int qmt_alloc_lock_array(struct ldlm_resource *res,
 
 	LASSERT(!array->q_max && !array->q_cnt && !array->q_locks);
 again:
+	if (cb)
+		mutex_lock(&lqe->lqe_glbl_data_lock);
 	lock_res(res);
 	/* scan list of granted locks */
 	list_for_each(pos, &res->lr_granted) {
@@ -603,6 +610,8 @@ again:
 		}
 	}
 	unlock_res(res);
+	if (cb)
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
 
 	if (count > array->q_max) {
 		qmt_free_lock_array(array);
@@ -630,7 +639,6 @@ void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
 		       struct lquota_entry *lqe)
 {
 	struct obd_uuid *uuid = &(lock)->l_export->exp_client_uuid;
-	struct lqe_glbl_data *lgd = lqe->lqe_glbl_data;
 	int idx, stype;
 	__u64 qunit;
 	bool edquot;
@@ -643,8 +651,18 @@ void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
 		edquot = lqe->lqe_edquot;
 		qunit = lqe->lqe_qunit;
 	} else {
-		edquot = lgd->lqeg_arr[idx].lge_edquot;
-		qunit = lgd->lqeg_arr[idx].lge_qunit;
+		struct lqe_glbl_data *lgd;
+
+		mutex_lock(&lqe->lqe_glbl_data_lock);
+		lgd = lqe->lqe_glbl_data;
+		if (lgd) {
+			edquot = lgd->lqeg_arr[idx].lge_edquot;
+			qunit = lgd->lqeg_arr[idx].lge_qunit;
+		} else {
+			edquot = lqe->lqe_edquot;
+			qunit = lqe->lqe_qunit;
+		}
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
 	}
 
 	/* fill glimpse descriptor with lqe settings */
@@ -673,7 +691,6 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 			    qmt_glimpse_cb_t cb, struct lquota_entry *lqe)
 {
 	union ldlm_gl_desc *descs = NULL;
-	struct lqe_glbl_data *gld;
 	struct list_head *tmp, *pos;
 	LIST_HEAD(gl_list);
 	struct qmt_gl_lock_array locks;
@@ -681,7 +698,6 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 	int rc = 0;
 	ENTRY;
 
-	gld = lqe ? lqe->lqe_glbl_data : NULL;
 	memset(&locks, 0, sizeof(locks));
 	rc = qmt_alloc_lock_array(res, &locks, cb, lqe);
 	if (rc) {
@@ -698,7 +714,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 	locks_count = locks.q_cnt;
 
 	/* Use one desc for all works, when called from qmt_glb_lock_notify */
-	if (gld && locks.q_cnt > 1) {
+	if (cb && locks.q_cnt > 1) {
 		/* TODO: think about to store this preallocated descs
 		 * in lqe_global in lqeg_arr as a part of lqe_glbl_entry.
 		 * The benefit is that we don't need to allocate/free
@@ -725,7 +741,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 			continue;
 		}
 
-		if (gld) {
+		if (cb) {
 			if (descs)
 				desc = &descs[i - 1];
 			qmt_setup_id_desc(locks.q_locks[i - 1], desc, lqe);
@@ -849,8 +865,8 @@ static int qmt_id_lock_cb(struct ldlm_lock *lock, struct lquota_entry *lqe)
 	if (qmt_dom(lqe_rtype(lqe), stype))
 		return 1;
 	else
-		return lgd->lqeg_arr[idx].lge_edquot_nu ||
-		       lgd->lqeg_arr[idx].lge_qunit_nu;
+		return lgd ? lgd->lqeg_arr[idx].lge_edquot_nu ||
+		       lgd->lqeg_arr[idx].lge_qunit_nu : 0;
 }
 
 
