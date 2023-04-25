@@ -1074,7 +1074,11 @@ build_spl_zfs() {
 	    speclist="$pkg.spec $rpmpkg.spec"
 	else
 	    rpmpkg=kmod-$pkg-devel
-	    specdir=rpm/generic
+	    if [[ $DISTROMAJ > "rhel8" ]]; then
+		specdir=rpm/redhat
+	    else
+		specdir=rpm/generic
+	    fi
 	    speclist="$pkg.spec $pkg-kmod.spec $pkg-dkms.spec"
 	fi
 
