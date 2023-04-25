@@ -1092,10 +1092,14 @@ static int qmt_site_recalc_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			/* Find all lqes with lqe_id to reseed lgd array */
 			rc = qmt_pool_lqes_lookup_spec(env, qmt, lqe_rtype(lqe),
 						lqe_qtype(lqe), &lqe->lqe_id);
-			if (!rc && qti_lqes_glbl(env)->lqe_glbl_data) {
-				qmt_seed_glbe(env,
-					qti_lqes_glbl(env)->lqe_glbl_data);
-				qmt_id_lock_notify(qmt, qti_lqes_glbl(env));
+			if (!rc) {
+				struct lquota_entry *lqeg = qti_lqes_glbl(env);
+
+				mutex_lock(&lqeg->lqe_glbl_data_lock);
+				if (lqeg->lqe_glbl_data)
+					qmt_seed_glbe(env, lqeg->lqe_glbl_data);
+				mutex_unlock(&lqeg->lqe_glbl_data_lock);
+				qmt_id_lock_notify(qmt, lqeg);
 			}
 			qti_lqes_fini(env);
 		}

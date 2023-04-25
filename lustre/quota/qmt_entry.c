@@ -1087,6 +1087,9 @@ struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *pool, int qtype)
 
 void qmt_free_lqe_gd(struct lqe_glbl_data *lgd)
 {
+	if (unlikely(!lgd))
+		return;
+
 	OBD_FREE(lgd->lqeg_arr,
 		 sizeof(struct lqe_glbl_entry) * lgd->lqeg_num_alloc);
 	OBD_FREE(lgd, sizeof(struct lqe_glbl_data));
