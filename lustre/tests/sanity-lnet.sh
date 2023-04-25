@@ -2569,9 +2569,8 @@ do_net_add() {
 	local node=$1
 	local net=$2
 	local if=$3
-	local opts=$4
 
-	do_rpc_nodes $node "$LNETCTL net add --net $net --if $if $opts" ||
+	do_rpc_nodes $node "$LNETCTL net add --net $net --if $if" ||
 		error "add $net on interface $if on node $node failed rc=$?"
 }
 
@@ -2628,8 +2627,7 @@ LNIDS=()
 LOCAL_NET=${NETTYPE}1
 REMOTE_NET=${NETTYPE}2
 setup_router_test() {
-	local mod_opts="$1"
-	local rtr_net_opts="$2"
+	local mod_opts="$@"
 
 	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
 		skip "need at least 2.15.0 for load_lnet"
@@ -2655,7 +2653,7 @@ setup_router_test() {
 	do_nodes $all_nodes "$LNETCTL lnet configure" ||
 		error "Failed to initialize DLC"
 
-	do_net_add $ROUTER $LOCAL_NET ${ROUTER_INTERFACES[0]} $rtr_net_opts ||
+	do_net_add $ROUTER $LOCAL_NET ${ROUTER_INTERFACES[0]} ||
 		return $?
 
 	do_net_add $ROUTER $REMOTE_NET ${ROUTER_INTERFACES[0]} ||
@@ -2915,7 +2913,7 @@ run_test 222 "Check avoid_asym_router_failure=1"
 test_223() {
 	local opts="avoid_asym_router_failure=1 lnet_peer_discovery_disabled=1"
 
-	setup_router_test "$opts" || return $?
+	setup_router_test $opts || return $?
 
 	do_aarf_enabled_test || return $?
 
@@ -2984,7 +2982,7 @@ run_test 224 "Check avoid_asym_router_failure=0"
 test_225() {
 	local opts="avoid_asym_router_failure=0 lnet_peer_discovery_disabled=1"
 
-	setup_router_test "$opts" || return $?
+	setup_router_test $opts || return $?
 
 	do_aarf_disabled_test || return $?
 
@@ -2992,86 +2990,6 @@ test_225() {
 		return $?
 }
 run_test 225 "Check avoid_asym_router_failure=0 w/DD disabled"
-
-do_rtr_peer_health_test() {
-	local expected="$1"
-
-	do_node $ROUTER "$LNETCTL set routing 1" ||
-		error "Unable to enable routing on $ROUTER"
-
-	do_route_add $HOSTNAME $REMOTE_NET ${ROUTER_NIDS[0]} ||
-		return $?
-
-	do_route_add $RPEER $LOCAL_NET ${ROUTER_NIDS[1]} ||
-		return $?
-
-	check_router_ni_status "up" "up" ||
-		return $?
-
-	check_route_aliveness "$HOSTNAME" "up" ||
-		return $?
-
-	check_route_aliveness "$RPEER" "up" ||
-		return $?
-
-	do_lnetctl ping ${RPEER_NIDS[0]} ||
-		error "Failed to ping ${RPEER_NIDS[0]}"
-
-	do_node $RPEER "$LNETCTL ping ${LNIDS[0]}" ||
-		error "$RPEER failed to ping ${LNIDS[0]}"
-
-	# Stop LNet on local host
-	do_lnetctl lnet unconfigure ||
-		error "Failed to stop LNet rc=$?"
-
-	check_router_ni_status "down" "up" ||
-		return $?
-
-	check_route_aliveness "$RPEER" "up" ||
-		return $?
-
-	# The NI used to send the message to the destination will be the
-	# router's NI on LOCAL_NET, so that's the drop count that will be
-	# incremented
-	local d1=$(do_node $ROUTER $LNETCTL net show -v --net $LOCAL_NET | \
-				   awk '/drop_count:/{print $NF}')
-
-	# Ping from RPEER to local host should be dropped by the router
-	do_node $RPEER "$LCTL ping ${LNIDS[0]}" &&
-		error "$RPEER expected ping to fail"
-
-	local d2=$(do_node $ROUTER $LNETCTL net show -v --net $LOCAL_NET | \
-				   awk '/drop_count:/{print $NF}')
-
-	[[ $((d2 - d1)) -ne $expected ]] &&
-		error "Expected drop count change by $expected: $d1 -> $d2"
-
-	return 0
-}
-
-test_226() {
-	setup_router_test avoid_asym_router_failure=0 --peer-timeout=10 ||
-		return $?
-
-	do_rtr_peer_health_test 1 ||
-		return $?
-
-	cleanup_router_test ||
-		return $?
-}
-run_test 226 "Check router peer health enabled"
-
-test_227() {
-	setup_router_test avoid_asym_router_failure=0 --peer-timeout=0 ||
-		return $?
-
-	do_rtr_peer_health_test 0 ||
-		return $?
-
-	cleanup_router_test ||
-		return $?
-}
-run_test 227 "Check router peer health disabled"
 
 test_230() {
 	[[ ${NETTYPE} == tcp* ]] ||

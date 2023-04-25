@@ -809,9 +809,12 @@ lnet_check_message_drop(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 	/* assume peer_ni is alive as long as we're within the configured
 	 * peer timeout
 	 */
-	if (ktime_get_seconds() >=
+	if (ktime_get_seconds() <
 	    (lpni->lpni_last_alive +
 	     lpni->lpni_net->net_tunables.lct_peer_timeout))
+		return 0;
+
+	if (!lnet_is_peer_ni_alive(lpni))
 		return -EHOSTUNREACH;
 
 	return 0;
