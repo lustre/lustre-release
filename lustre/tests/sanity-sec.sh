@@ -2299,6 +2299,8 @@ test_30b() {
 run_test 30b "basic test of all different SSK flavors"
 
 cleanup_31() {
+	local failover_mds1=$1
+
 	# unmount client
 	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
 
@@ -2312,6 +2314,22 @@ cleanup_31() {
 	KZPOOL=$KEEP_ZPOOL
 	export KEEP_ZPOOL="true"
 	stopall
+
+	do_facet mds1 $TUNEFS --erase-param failover.node $(mdsdevname 1)
+	if [ -n "$failover_mds1" ]; then
+		do_facet mds1 $TUNEFS \
+			--servicenode=$failover_mds1 $(mdsdevname 1)
+	else
+		# If no service node previously existed, setting one in test_31
+		# added the no_primnode flag to the target. To remove everything
+		# and clear the flag, add a meaningless failnode and remove it.
+		do_facet mds1 $TUNEFS \
+			--failnode=$(do_facet mds1 $LCTL list_nids | head -1) \
+			$(mdsdevname 1)
+		do_facet mds1 $TUNEFS \
+			--erase-param failover.node $(mdsdevname 1)
+	fi
+
 	export SK_MOUNTED=false
 	writeconf_all
 	setupall || echo 1
@@ -2326,13 +2344,22 @@ test_31() {
 	local mdsnid=$(do_facet mds1 $LCTL list_nids | head -1)
 	local addr1=${mdsnid%@*}
 	local addr2=${addr1%.*}.$(((${addr1##*.} + 11) % 256))
+	local failover_mds1
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
 	[ -z "$LNETCTL" ] && skip "without lnetctl support." && return
 	local_mode && skip "in local mode."
 
-	stack_trap cleanup_31 EXIT
+	# save mds failover nids for restore at cleanup
+	failover_mds1=$(do_facet mds1 $TUNEFS --dryrun $(mdsdevname 1))
+	if [ -n "$failover_mds1" ]; then
+		failover_mds1=${failover_mds1##*Parameters:}
+		failover_mds1=${failover_mds1%%exiting*}
+		failover_mds1=$(echo $failover_mds1 | tr ' ' '\n' |
+				grep failover.node | cut -d'=' -f2-)
+	fi
+	stack_trap "cleanup_31 $failover_mds1" EXIT
 
 	# umount client
 	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
