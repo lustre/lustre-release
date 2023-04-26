@@ -15859,6 +15859,8 @@ function set_cache() {
 test_151() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( CLIENT_VERSION == OST1_VERSION )) ||
+		skip "LU-13081: no interop testing for OSS cache"
 
 	local CPAGES=3
 	local list=$(comma_list $(osts_nodes))
@@ -16560,6 +16562,8 @@ test_156() {
 		skip "stats not implemented on old servers"
 	[ "$ost1_FSTYPE" = "zfs" ] &&
 		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS"
+	(( CLIENT_VERSION == OST1_VERSION )) ||
+		skip "LU-13081: no interop testing for OSS cache"
 
 	local CPAGES=3
 	local BEFORE
