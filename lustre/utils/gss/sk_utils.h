@@ -34,6 +34,7 @@
 #include <keyutils.h>
 #endif
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_disk.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>

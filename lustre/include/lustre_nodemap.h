@@ -30,7 +30,7 @@
 #ifndef _LUSTRE_NODEMAP_H
 #define _LUSTRE_NODEMAP_H
 
-#include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 

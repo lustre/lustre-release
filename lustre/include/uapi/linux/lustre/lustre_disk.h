@@ -42,6 +42,7 @@
  */
 #include <linux/types.h>
 #include <linux/uuid.h>
+#include <linux/lnet/lnet-types.h> /* for lnet_nid_t */
 
 /****************** on-disk files ********************/
 
@@ -254,6 +255,24 @@ enum nodemap_idx_type {
 	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
 };
 
+#define LUSTRE_NODEMAP_NAME_LENGTH	16
+
+/* lu_nodemap flags */
+enum nm_flag_bits {
+	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
+	NM_FL_TRUST_CLIENT_IDS = 0x2,
+	NM_FL_DENY_UNKNOWN = 0x4,
+	NM_FL_MAP_UID = 0x8,
+	NM_FL_MAP_GID = 0x10,
+	NM_FL_ENABLE_AUDIT = 0x20,
+	NM_FL_FORBID_ENCRYPT = 0x40,
+	NM_FL_MAP_PROJID = 0x80,
+};
+
+enum nm_flag2_bits {
+	NM_FL2_READONLY_MOUNT = 0x1,
+};
+
 /* Nodemap records, uses 32 byte record length.
  * New nodemap config records can be added into NODEMAP_CLUSTER_IDX
  * with a new nk_cluster_subid value, as long as the records are
@@ -388,7 +407,7 @@ enum scrub_param {
 };
 
 struct scrub_file {
-	guid_t	sf_uuid;		    /* 128-bit uuid for volume */
+	uuid_le	sf_uuid;		    /* 128-bit uuid for volume */
 	__u64	sf_flags;		    /* see 'enum scrub_flags' */
 	__u32	sf_magic;		    /* SCRUB_MAGIC_V1/V2 */
 	__u16	sf_status;		    /* see 'enum scrub_status' */
