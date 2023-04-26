@@ -1647,7 +1647,7 @@ int llapi_hsm_request(const char *path, const struct hsm_user_request *request)
 	int rc;
 	int fd;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, (char *)path, -1, NULL, NULL);
+	rc = llapi_root_path_open(path, &fd);
 	if (rc)
 		return rc;
 
@@ -1655,7 +1655,7 @@ int llapi_hsm_request(const char *path, const struct hsm_user_request *request)
 	/* If error, save errno value */
 	rc = rc ? -errno : 0;
 
-	/* fd is cached internally, no need to close it */
+	close(fd);
 	return rc;
 }
 

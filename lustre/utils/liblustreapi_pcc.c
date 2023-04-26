@@ -215,7 +215,7 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 	int fd;
 	struct lu_pcc_detach_fid detach;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, (char *)mntpath, -1, NULL, NULL);
+	rc = llapi_root_path_open(mntpath, &fd);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get root path: %s",
 			    mntpath);
@@ -232,10 +232,10 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 	detach.pccd_fid = *fid;
 	detach.pccd_opt = option;
 
-	/* fd is cached internally, no need to close */
 	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	rc = rc ? -errno : 0;
 
+	close(fd);
 	return rc;
 }
 

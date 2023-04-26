@@ -233,18 +233,13 @@ int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		goto out;
 	}
 
-	if (path_or_device[0] == '/')
-		rc = get_root_path(WANT_FD, NULL, &mnt_fd,
-				   (char *)path_or_device, -1, NULL, NULL);
-	else
-		rc = get_root_path(WANT_FD, (char *)path_or_device,
-				   &mnt_fd, NULL, -1, NULL, NULL);
-
+	rc = llapi_root_path_open(path_or_device, &mnt_fd);
 	if (rc < 0)
 		goto out;
 
 	/* mnt_fd is cached internally, no need to close it */
 	rc = llapi_fid2path_at(mnt_fd, &fid, path, pathlen, recno, linkno);
+	close(mnt_fd);
 
 out:
 	return rc;
@@ -479,8 +474,8 @@ int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 
 	/* this will return a cached FD if available, so only one open needed.
 	 * WANT_FD doesn't modify lustre_dir so casting away "const" is OK */
-	rc = get_root_path(WANT_FD, NULL, &mnt_fd, (char *)lustre_dir, 0, NULL,
-			   NULL);
+
+	rc = llapi_root_path_open(lustre_dir, &mnt_fd);
 	if (rc)
 		goto out;
 
