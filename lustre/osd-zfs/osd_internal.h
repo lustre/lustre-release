@@ -295,6 +295,7 @@ struct osd_thandle {
 	struct list_head	 ot_sa_list;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
+	__u64			 ot_txg;
 	__u32			 ot_assigned:1;
 };
 
@@ -324,6 +325,8 @@ struct osd_seq_list {
 };
 
 #define OSD_OST_MAP_SIZE	32
+#define OSD_TXG_MAP_SIZE	8
+#define OSD_TXG_MAP_MASK	(OSD_TXG_MAP_SIZE-1)
 
 /*
  * osd device.
@@ -404,6 +407,12 @@ struct osd_device {
 	struct list_head	 od_index_restore_list;
 	spinlock_t		 od_lock;
 	unsigned long long	 od_readcache_max_filesize;
+
+	/* slots to track per-txg commit callbacks */
+	atomic_t		 od_commit_cb_in_txg[OSD_TXG_MAP_SIZE];
+	wait_queue_head_t	 od_commit_cb_waitq;
+	/* last seen txg, used to count commit callbacks in a specific slot */
+	atomic64_t		 od_last_txg;
 };
 
 static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)

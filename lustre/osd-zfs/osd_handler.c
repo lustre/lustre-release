@@ -117,6 +117,7 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	struct osd_device *osd = osd_dt_dev(th->th_dev);
 	struct lu_device *lud = &th->th_dev->dd_lu_dev;
 	struct dt_txn_commit_cb *dcb, *tmp;
+	int slot;
 
 	ENTRY;
 	if (error) {
@@ -147,6 +148,11 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	qsd_op_end(NULL, osd->od_quota_slave_dt, &oh->ot_quota_trans);
 	if (osd->od_quota_slave_md != NULL)
 		qsd_op_end(NULL, osd->od_quota_slave_md, &oh->ot_quota_trans);
+
+	slot = oh->ot_txg & OSD_TXG_MAP_MASK;
+	LASSERT(atomic_read(&osd->od_commit_cb_in_txg[slot]) > 0);
+	if (atomic_dec_and_test(&osd->od_commit_cb_in_txg[slot]))
+		wake_up(&osd->od_commit_cb_waitq);
 
 	lu_device_put(lud);
 	th->th_dev = NULL;
@@ -210,8 +216,19 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			CERROR("%s: can't assign tx: rc = %d\n",
 			       osd->od_svname, rc);
 	} else {
+		int slot;
+
 		/* add commit callback */
 		dmu_tx_callback_register(oh->ot_tx, osd_trans_commit_cb, oh);
+
+		/* count all registered commit callbacks in txg-specific slot,
+		 * we can wait for the callbacks to complete later */
+		if (oh->ot_tx->tx_txg > atomic64_read(&osd->od_last_txg))
+			atomic64_set(&osd->od_last_txg, oh->ot_tx->tx_txg);
+		oh->ot_txg = oh->ot_tx->tx_txg;
+		slot = oh->ot_txg & OSD_TXG_MAP_MASK;
+		atomic_inc(&osd->od_commit_cb_in_txg[slot]);
+
 		oh->ot_assigned = 1;
 		osd_oti_get(env)->oti_in_trans = 1;
 		lu_device_get(&d->dd_lu_dev);
@@ -659,6 +676,9 @@ static void osd_conf_get(const struct lu_env *env,
  */
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
+	struct osd_device *osd = osd_dt_dev(d);
+	int slot = atomic64_read(&osd->od_last_txg) & OSD_TXG_MAP_MASK;
+
 	if (!d->dd_rdonly) {
 		struct osd_device  *osd = osd_dt_dev(d);
 
@@ -667,6 +687,8 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 		CDEBUG(D_CACHE, "synced OSD %s\n", LUSTRE_OSD_ZFS_NAME);
 	}
 
+	wait_event(osd->od_commit_cb_waitq,
+		   atomic_read(&osd->od_commit_cb_in_txg[slot]) == 0);
 	return 0;
 }
 
@@ -1268,9 +1290,15 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 #endif
 
 	if (o->od_os != NULL) {
+		int slot;
+
 		if (!o->od_dt_dev.dd_rdonly)
 			/* force a txg sync to get all commit callbacks */
 			txg_wait_synced(dmu_objset_pool(o->od_os), 0ULL);
+
+		for (slot = 0; slot < OSD_TXG_MAP_SIZE; slot++)
+			wait_event(o->od_commit_cb_waitq,
+				   !atomic_read(&o->od_commit_cb_in_txg[slot]));
 
 		/* close the object set */
 		osd_dmu_objset_disown(o->od_os, B_TRUE, o);
@@ -1376,6 +1404,7 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 	INIT_LIST_HEAD(&dev->od_index_restore_list);
 	spin_lock_init(&dev->od_lock);
 	dev->od_index_backup_policy = LIBP_NONE;
+	init_waitqueue_head(&dev->od_commit_cb_waitq);
 
 	rc = dt_device_init(&dev->od_dt_dev, type);
 	if (rc == 0) {
