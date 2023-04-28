@@ -1567,7 +1567,11 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 		GOTO(log, rc = 1);
 
 	*lmv2 = llmv->ll_lmv;
-	lmv2->lmv_hash_type = LMV_HASH_TYPE_UNKNOWN | LMV_HASH_FLAG_BAD_TYPE;
+	/* only set BAD_TYPE here, do not clear hash type or MIGRATION flag,
+	 * so that user can resume dir migration if this is caused by dir
+	 * migration failure.
+	 */
+	lmv2->lmv_hash_type |= LMV_HASH_FLAG_BAD_TYPE;
 	rc = lfsck_namespace_set_lmv_master(env, com, parent, lmv2,
 					    lfsck_dto2fid(shard),
 					    llmv->ll_lmv.lmv_master_mdt_index,
