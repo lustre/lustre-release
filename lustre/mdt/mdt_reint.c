@@ -2207,6 +2207,17 @@ close:
 	return rc ?: rc2;
 }
 
+/* LFSCK used to clear hash type and MIGRATION flag upon migration failure */
+static inline bool lmv_is_failed_migration(const struct lmv_mds_md_v1 *lmv)
+{
+	return le32_to_cpu(lmv->lmv_hash_type) ==
+		(LMV_HASH_TYPE_UNKNOWN | LMV_HASH_FLAG_BAD_TYPE) &&
+	       lmv_is_known_hash_type(le32_to_cpu(lmv->lmv_migrate_hash)) &&
+	       le32_to_cpu(lmv->lmv_migrate_offset) > 0 &&
+	       le32_to_cpu(lmv->lmv_migrate_offset) <
+		le32_to_cpu(lmv->lmv_stripe_count);
+}
+
 /*
  * migrate file in below steps:
  *  1. lock parent and its stripes
@@ -2384,6 +2395,27 @@ lock_parent:
 		if ((ma->ma_valid & MA_LMV) &&
 		    lmv_is_restriping(&ma->ma_lmv->lmv_md_v1))
 			GOTO(unlock_links, rc = -EBUSY);
+		else if (lmv_is_failed_migration(&ma->ma_lmv->lmv_md_v1)) {
+			struct lu_buf *buf = &info->mti_buf;
+			struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
+			__u32 version = le32_to_cpu(lmv->lmv_layout_version);
+
+			/* migration failed before, and LFSCK cleared hash type
+			 * and flags, fake it to resume migration.
+			 */
+			lmv->lmv_hash_type =
+				cpu_to_le32(LMV_HASH_TYPE_FNV_1A_64 |
+					    LMV_HASH_FLAG_MIGRATION |
+					    LMV_HASH_FLAG_BAD_TYPE |
+					    LMV_HASH_FLAG_FIXED);
+			lmv->lmv_layout_version = cpu_to_le32(version + 1);
+			buf->lb_buf = lmv;
+			buf->lb_len = sizeof(*lmv);
+			rc = mo_xattr_set(env, mdt_object_child(sobj), buf,
+					  XATTR_NAME_LMV, LU_XATTR_REPLACE);
+			mo_invalidate(env, mdt_object_child(sobj));
+			GOTO(unlock_links, rc = -EALREADY);
+		}
 	}
 
 	/* if migration HSM is allowed */

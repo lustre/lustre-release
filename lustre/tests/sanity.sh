@@ -20661,6 +20661,36 @@ test_230y() {
 }
 run_test 230y "unlink dir with bad hash type"
 
+test_230z() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.15.3) )) ||
+		skip "Need MDS version at least 2.15.3"
+
+	local pid
+
+	test_mkdir -c -1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS getdirstripe $DIR/$tdir
+	createmany -d $DIR/$tdir/d 100 || error "createmany failed"
+	$LFS migrate -m 1 -c 2 -H fnv_1a_64 $DIR/$tdir &
+	pid=$!
+	sleep 1
+
+	#OBD_FAIL_MIGRATE_BAD_HASH	0x1802
+	do_facet mds2 lctl set_param fail_loc=0x1802
+
+	wait $pid
+	do_facet mds2 lctl set_param fail_loc=0
+	$LFS getdirstripe $DIR/$tdir
+
+	# resume migration
+	$LFS migrate -m 1 -c 2 -H fnv_1a_64 $DIR/$tdir ||
+		error "resume migration failed"
+	$LFS getdirstripe $DIR/$tdir
+	[ $($LFS getdirstripe -H $DIR/$tdir) == "fnv_1a_64,fixed" ] ||
+		error "migration is not finished"
+}
+run_test 230z "resume dir migration with bad hash type"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
