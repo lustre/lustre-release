@@ -1364,8 +1364,8 @@ static inline const char *lu_dev_name(const struct lu_device *lu_dev)
 static inline bool filename_is_volatile(const char *name, size_t namelen,
 					int *idx)
 {
-	const char	*start;
-	char		*end;
+	const char *start;
+	int rnd, fd, rc;
 
 	if (strncmp(name, LUSTRE_VOLATILE_HDR, LUSTRE_VOLATILE_HDR_LEN) != 0)
 		return false;
@@ -1387,12 +1387,11 @@ static inline bool filename_is_volatile(const char *name, size_t namelen,
 	}
 	/* we have an idx, read it */
 	start = name + LUSTRE_VOLATILE_HDR_LEN + 1;
-	*idx = simple_strtoul(start, &end, 16);
-	/* error cases:
-	 * no digit, no trailing :, negative value
+	rc = sscanf(start, "%4x:%4x:fd=%2d", idx, &rnd, &fd);
+	/* error cases: no digit or negative value
+	 * rc will never be larger then 3
 	 */
-	if (((*idx == 0) && (end == start)) ||
-	    (*end != ':') || (*idx < 0))
+	if (rc <= 0 || *idx < 0)
 		goto bad_format;
 
 	return true;

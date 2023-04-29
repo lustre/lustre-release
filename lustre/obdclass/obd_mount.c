@@ -870,16 +870,16 @@ EXPORT_SYMBOL(server_name_is_ost);
  * Get the index from the target name MDTXXXX/OSTXXXX
  * rc = server type, or rc < 0  on error
  **/
-int target_name2index(const char *tgtname, __u32 *idx, const char **endptr)
+int target_name2index(const char *tgtname, u32 *idx, const char **endptr)
 {
 	const char *dash = tgtname;
-	unsigned long index;
-	int rc;
+	int type, len, rc;
+	u16 index;
 
 	if (strncmp(dash, "MDT", 3) == 0)
-		rc = LDD_F_SV_TYPE_MDT;
+		type = LDD_F_SV_TYPE_MDT;
 	else if (strncmp(dash, "OST", 3) == 0)
-		rc = LDD_F_SV_TYPE_OST;
+		type = LDD_F_SV_TYPE_OST;
 	else
 		return -EINVAL;
 
@@ -888,17 +888,34 @@ int target_name2index(const char *tgtname, __u32 *idx, const char **endptr)
 	if (strncmp(dash, "all", 3) == 0) {
 		if (endptr != NULL)
 			*endptr = dash + 3;
-		return rc | LDD_F_SV_ALL;
+		return type | LDD_F_SV_ALL;
 	}
 
-	index = simple_strtoul(dash, (char **)endptr, 16);
-	if (idx != NULL)
-		*idx = index;
-
-	if (index > 0xffff)
+	len = strspn(dash, "0123456789ABCDEFabcdef");
+	if (len > 4)
 		return -ERANGE;
 
-	return rc;
+	if (strlen(dash) != len) {
+		char num[5];
+
+		num[4] = '\0';
+		memcpy(num, dash, sizeof(num) - 1);
+		rc = kstrtou16(num, 16, &index);
+		if (rc < 0)
+			return rc;
+	} else {
+		rc = kstrtou16(dash, 16, &index);
+		if (rc < 0)
+			return rc;
+	}
+
+	if (idx)
+		*idx = index;
+
+	if (endptr)
+		*endptr = dash  + len;
+
+	return type;
 }
 EXPORT_SYMBOL(target_name2index);
 
