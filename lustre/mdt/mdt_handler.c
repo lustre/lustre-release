@@ -6166,7 +6166,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 			RETURN(rc);
 
 		obd_obt_init(obd);
-		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+		if (test_bit(LMD_FLG_SKIP_LFSCK, lsi->lsi_lmd->lmd_flags))
 			m->mdt_skip_lfsck = 1;
 	}
 
@@ -6356,7 +6356,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
 		ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
 
-	if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_LOCAL_RECOV))
+	if (test_bit(LMD_FLG_LOCAL_RECOV, lsi->lsi_lmd->lmd_flags))
 		m->mdt_lut.lut_local_recovery = 1;
 
 	rc = mdt_restriper_start(m);

@@ -162,7 +162,7 @@ out:
  */
 static int ofd_stack_init(const struct lu_env *env,
 			  struct ofd_device *m, struct lustre_cfg *cfg,
-			  u32 *lmd_flags)
+			  unsigned long *lmd_flags)
 {
 	const char		*dev = lustre_cfg_string(cfg, 0);
 	struct lu_device	*d;
@@ -182,11 +182,11 @@ static int ofd_stack_init(const struct lu_env *env,
 
 	lmd = s2lsi(lmi->lmi_sb)->lsi_lmd;
 	if (lmd) {
-		if (lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+		if (test_bit(LMD_FLG_SKIP_LFSCK, lmd->lmd_flags))
 			m->ofd_skip_lfsck = 1;
-		if (lmd->lmd_flags & LMD_FLG_NO_PRECREATE)
+		if (test_bit(LMD_FLG_NO_PRECREATE, lmd->lmd_flags))
 			m->ofd_no_precreate = 1;
-		*lmd_flags = lmd->lmd_flags;
+		bitmap_copy(lmd_flags, lmd->lmd_flags, LMD_FLG_NUM_FLAGS);
 	}
 
 	/* find bottom osd */
@@ -2939,10 +2939,10 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	struct ofd_thread_info *info = NULL;
 	struct obd_device *obd;
 	struct tg_grants_data *tgd = &m->ofd_lut.lut_tgd;
+	DECLARE_BITMAP(lmd_flags, LMD_FLG_NUM_FLAGS);
 	struct lu_fid fid;
 	struct nm_config_file *nodemap_config;
 	struct obd_device_target *obt;
-	u32 lmd_flags = 0;
 	int rc;
 
 	ENTRY;
@@ -2997,7 +2997,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (info == NULL)
 		RETURN(-EFAULT);
 
-	rc = ofd_stack_init(env, m, cfg, &lmd_flags);
+	rc = ofd_stack_init(env, m, cfg, lmd_flags);
 	if (rc) {
 		CERROR("%s: can't init device stack, rc %d\n",
 		       obd->obd_name, rc);
@@ -3032,9 +3032,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc)
 		GOTO(err_free_ns, rc);
 
-	if (lmd_flags & LMD_FLG_SKIP_LFSCK)
+	if (test_bit(LMD_FLG_SKIP_LFSCK, lmd_flags))
 		m->ofd_skip_lfsck = 1;
-	if (lmd_flags & LMD_FLG_LOCAL_RECOV)
+	if (test_bit(LMD_FLG_LOCAL_RECOV, lmd_flags))
 		m->ofd_lut.lut_local_recovery = 1;
 
 	rc = ofd_tunables_init(m);

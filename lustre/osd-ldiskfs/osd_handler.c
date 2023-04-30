@@ -8215,7 +8215,7 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out_mnt, rc = -EINVAL);
 	}
 
-	if (lmd_flags & LMD_FLG_DEV_RDONLY) {
+	if (test_bit(LMD_FLG_DEV_RDONLY, &lmd_flags)) {
 		LCONSOLE_WARN("%s: not support dev_rdonly on this device\n",
 			      name);
 
@@ -8263,7 +8263,7 @@ static int osd_mount(const struct lu_env *env,
 		}
 	}
 
-	if (lmd_flags & LMD_FLG_NOSCRUB)
+	if (test_bit(LMD_FLG_NOSCRUB, &lmd_flags))
 		o->od_scrub.os_scrub.os_auto_scrub_interval = AS_NEVER;
 
 	if (blk_queue_nonrot(bdev_get_queue(osd_sb(o)->s_bdev))) {

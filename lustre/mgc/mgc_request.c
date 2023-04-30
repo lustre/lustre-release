@@ -408,7 +408,7 @@ config_log_add(struct obd_device *obd, char *logname,
 	}
 
 	LASSERT(lsi->lsi_lmd);
-	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR) &&
+	if (!test_bit(LMD_FLG_NOIR, lsi->lsi_lmd->lmd_flags) &&
 	    cfg->cfg_sub_clds & CONFIG_SUB_RECOVER) {
 		struct config_llog_data *recover_cld;
 

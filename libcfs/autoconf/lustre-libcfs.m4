@@ -1383,6 +1383,28 @@ AC_DEFUN([LIBCFS_LOCKDEP_IS_HELD], [
 ]) # LIBCFS_LOCKDEP_IS_HELD
 
 #
+# LIBCFS_BITMAP_TO_ARR32
+#
+# Kernel commit v4.15-10794-gc724f19 introduced
+# bitmap_{from,to}_arr32, which are handy functions, to move
+# data back and forth between a bitmap and a u32 array
+#
+AC_DEFUN([LIBCFS_SRC_BITMAP_TO_ARR32], [
+	LB2_LINUX_TEST_SRC([bitmap_to_arr32], [
+		#include <linux/bitmap.h>
+	],[
+		bitmap_to_arr32(NULL, NULL, 0);
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_BITMAP_TO_ARR32], [
+	AC_MSG_CHECKING([if 'bitmap_to_arr32()' exist])
+	LB2_LINUX_TEST_RESULT([bitmap_to_arr32], [
+		AC_DEFINE(HAVE_BITMAP_TO_ARR32, 1,
+			[bitmap_to_arr32() exist])
+	])
+]) # LIBCFS_BITMAP_TO_ARR32
+
+#
 # LIBCFS_TIMER_SETUP
 #
 # Kernel version 4.15 commit e99e88a9d2b067465adaa9c111ada99a041bef9a
@@ -2381,6 +2403,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_SRC_LOCKDEP_IS_HELD
+	LIBCFS_SRC_BITMAP_TO_ARR32
 	LIBCFS_SRC_TIMER_SETUP
 	# 4.16
 	LIBCFS_SRC_HAVE_NS_TO_TIMESPEC64
@@ -2525,6 +2548,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_LOCKDEP_IS_HELD
+	LIBCFS_BITMAP_TO_ARR32
 	LIBCFS_TIMER_SETUP
 	# 4.16
 	LIBCFS_HAVE_NS_TO_TIMESPEC64

@@ -192,6 +192,10 @@ static inline void *cfs_kallsyms_lookup_name(const char *name)
 #define strscpy(s1, s2, sz)    strlcpy((s1), (s2), (sz))
 #endif
 
+#ifndef HAVE_BITMAP_TO_ARR32
+void bitmap_to_arr32(u32 *buf, const unsigned long *bitmap, unsigned int nbits);
+#endif
+
 #ifndef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
 #define default_groups			default_attrs
 #define KOBJ_ATTR_GROUPS(_name)		_name##_attrs

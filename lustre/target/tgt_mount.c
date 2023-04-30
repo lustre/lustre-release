@@ -1177,7 +1177,7 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 		/* server use --servicenode param, only allow specified
 		 * nids be registered
 		 */
-		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) != 0 &&
+		if (test_bit(LMD_FLG_NO_PRIMNODE, lsi->lsi_lmd->lmd_flags) &&
 		    class_match_nid(lsi->lsi_lmd->lmd_params,
 				    PARAM_FAILNODE, &id.nid) < 1)
 			continue;
@@ -1497,12 +1497,15 @@ static int server_start_targets(struct super_block *sb)
 	/* abort recovery only on the complete stack:
 	 * many devices can be involved
 	 */
-	if ((lsi->lsi_lmd->lmd_flags &
-	     (LMD_FLG_ABORT_RECOV | LMD_FLG_ABORT_RECOV_MDT)) &&
+	if ((test_bit(LMD_FLG_ABORT_RECOV, lsi->lsi_lmd->lmd_flags) ||
+	    (test_bit(LMD_FLG_ABORT_RECOV_MDT, lsi->lsi_lmd->lmd_flags))) &&
 	    (OBP(obd, iocontrol))) {
-		struct obd_ioctl_data karg = {
-			.ioc_type = lsi->lsi_lmd->lmd_flags,
-		};
+		struct obd_ioctl_data karg;
+
+		if (test_bit(LMD_FLG_ABORT_RECOV, lsi->lsi_lmd->lmd_flags))
+			karg.ioc_type = OBD_FLG_ABORT_RECOV_OST;
+		else
+			karg.ioc_type = OBD_FLG_ABORT_RECOV_MDT;
 
 		obd_iocontrol(OBD_IOC_ABORT_RECOVERY, obd->obd_self_export, 0,
 			      &karg, NULL);
@@ -1563,10 +1566,10 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	/* Determine server type */
 	rc = server_name2index(lsi->lsi_svname, &index, NULL);
 	if (rc < 0) {
-		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) {
+		if (test_bit(LMD_FLG_MGS, lsi->lsi_lmd->lmd_flags)) {
 			/* Assume we're a bare MGS */
 			rc = 0;
-			lsi->lsi_lmd->lmd_flags |= LMD_FLG_NOSVC;
+			set_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags);
 		} else {
 			LCONSOLE_ERROR("Can't determine server type of '%s'\n",
 				       lsi->lsi_svname);
@@ -1578,18 +1581,18 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	/* Add mount line flags that used to be in ldd:
 	 * writeconf, mgs, anything else?
 	 */
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
-		LDD_F_WRITECONF : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_LOCAL_LOGS) ?
-		LDD_F_NO_LOCAL_LOGS : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
-		LDD_F_VIRGIN : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_UPDATE) ?
-		LDD_F_UPDATE : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
-		LDD_F_SV_TYPE_MGS : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
-		LDD_F_NO_PRIMNODE : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_WRITECONF, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_WRITECONF : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_NO_LOCAL_LOGS, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_NO_LOCAL_LOGS : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_VIRGIN, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_VIRGIN : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_UPDATE, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_UPDATE : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_MGS, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_SV_TYPE_MGS : 0;
+	lsi->lsi_flags |= test_bit(LMD_FLG_NO_PRIMNODE, lsi->lsi_lmd->lmd_flags) ?
+			  LDD_F_NO_PRIMNODE : 0;
 
 	RETURN(0);
 }
@@ -1614,7 +1617,7 @@ static void server_put_super(struct super_block *sb)
 	OBD_ALLOC(tmpname, tmpname_sz);
 	memcpy(tmpname, lsi->lsi_svname, tmpname_sz);
 	CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
-	if (IS_MDT(lsi) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
+	if (IS_MDT(lsi) && test_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags))
 		snprintf(tmpname, tmpname_sz, "MGS");
 
 	/* disconnect the lwp first to drain off the inflight request */
@@ -1629,7 +1632,7 @@ static void server_put_super(struct super_block *sb)
 	}
 
 	/* Stop the target */
-	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
+	if (!test_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags) &&
 	    (IS_MDT(lsi) || IS_OST(lsi))) {
 		struct lustre_profile *lprof = NULL;
 
@@ -1680,7 +1683,7 @@ static void server_put_super(struct super_block *sb)
 	lustre_stop_mgc(sb);
 	if (IS_MGS(lsi)) {
 		/* if MDS start with --nomgs, don't stop MGS then */
-		if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
+		if (!test_bit(LMD_FLG_NOMGS, lsi->lsi_lmd->lmd_flags))
 			server_stop_mgs(sb);
 	}
 
@@ -1791,8 +1794,7 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 			 * Also, if server is mounted with "rdonly_dev"
 			 * (LMD_FLG_DEV_RDONLY) then force flag to be 'ro'
 			 */
-
-			if (!(lmd->lmd_flags & LMD_FLG_DEV_RDONLY) &&
+			if (!test_bit(LMD_FLG_DEV_RDONLY, lmd->lmd_flags) &&
 			    !(osfs.os_state & OS_STATFS_READONLY))
 				sb->s_flags &= ~SB_RDONLY;
 		}
@@ -1800,27 +1802,28 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 
 	seq_printf(seq, ",svname=%s", lmd->lmd_profile);
 
-	if  (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
+	if (test_bit(LMD_FLG_ABORT_RECOV, lmd->lmd_flags))
 		seq_puts(seq, ",abort_recov");
 
-	if (lmd->lmd_flags & LMD_FLG_NOIR)
+	if (test_bit(LMD_FLG_NOIR, lmd->lmd_flags))
 		seq_puts(seq, ",noir");
 
-	if (lmd->lmd_flags & LMD_FLG_NOSVC)
+	if (test_bit(LMD_FLG_NOSVC, lmd->lmd_flags))
 		seq_puts(seq, ",nosvc");
 
-	if (lmd->lmd_flags & LMD_FLG_NOMGS)
+	if (test_bit(LMD_FLG_NOMGS, lmd->lmd_flags))
 		seq_puts(seq, ",nomgs");
 
-	if (lmd->lmd_flags & LMD_FLG_NOSCRUB)
+	if (test_bit(LMD_FLG_NOSCRUB, lmd->lmd_flags))
 		seq_puts(seq, ",noscrub");
-	if (lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+
+	if (test_bit(LMD_FLG_SKIP_LFSCK, lmd->lmd_flags))
 		seq_puts(seq, ",skip_lfsck");
 
-	if (lmd->lmd_flags & LMD_FLG_DEV_RDONLY)
+	if (test_bit(LMD_FLG_DEV_RDONLY, lmd->lmd_flags))
 		seq_puts(seq, ",rdonly_dev");
 
-	if (lmd->lmd_flags & LMD_FLG_MGS)
+	if (test_bit(LMD_FLG_MGS, lmd->lmd_flags))
 		seq_puts(seq, ",mgs");
 
 	if (lmd->lmd_mgs)
@@ -1965,6 +1968,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	struct obd_device *obd;
 	struct dt_device_param p;
 	char flagstr[20 + 1 + 10 + 1];
+	u32 lmd_flags;
 	int rc;
 
 	ENTRY;
@@ -1975,7 +1979,8 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	sprintf(lsi->lsi_osd_obdname, "%s-osd", lsi->lsi_svname);
 	strcpy(lsi->lsi_osd_uuid, lsi->lsi_osd_obdname);
 	strcat(lsi->lsi_osd_uuid, "_UUID");
-	snprintf(flagstr, sizeof(flagstr), "%lu:%u", mflags, lmd->lmd_flags);
+	bitmap_to_arr32(&lmd_flags, lmd->lmd_flags, LMD_FLG_NUM_FLAGS);
+	snprintf(flagstr, sizeof(flagstr), "%lu:%u", mflags, lmd_flags);
 
 	obd = class_name2obd(lsi->lsi_osd_obdname);
 	if (!obd) {
@@ -1993,10 +1998,10 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 		/* but continue setup to allow special case of MDT and internal
 		 * MGT being started separately.
 		 */
-		if (!((IS_MGS(lsi) && (lsi->lsi_lmd->lmd_flags &
-				      LMD_FLG_NOMGS)) ||
-		     (IS_MDT(lsi) && (lsi->lsi_lmd->lmd_flags &
-				      LMD_FLG_NOSVC))))
+		if (!((IS_MGS(lsi) &&
+		       test_bit(LMD_FLG_NOMGS, lsi->lsi_lmd->lmd_flags)) ||
+		     (IS_MDT(lsi) &&
+		      test_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags))))
 			RETURN(-EALREADY);
 	}
 
@@ -2065,7 +2070,7 @@ int server_fill_super(struct super_block *sb)
 	}
 
 	/* Start MGS before MGC */
-	if (IS_MGS(lsi) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
+	if (IS_MGS(lsi) && !test_bit(LMD_FLG_NOMGS, lsi->lsi_lmd->lmd_flags)) {
 		rc = server_start_mgs(sb);
 		if (rc < 0)
 			GOTO(out_mnt, rc);
@@ -2077,7 +2082,7 @@ int server_fill_super(struct super_block *sb)
 		GOTO(out_mnt, rc);
 
 	/* Set up all obd devices for service */
-	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
+	if (!test_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags) &&
 	    (IS_OST(lsi) || IS_MDT(lsi))) {
 		rc = server_start_targets(sb);
 		if (rc < 0) {
@@ -2131,7 +2136,7 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 	if (lmd) {
 		soft   = lmd->lmd_recovery_time_soft;
 		hard   = lmd->lmd_recovery_time_hard;
-		has_ir = has_ir && !(lmd->lmd_flags & LMD_FLG_NOIR);
+		has_ir = has_ir && !test_bit(LMD_FLG_NOIR, lmd->lmd_flags);
 		obd->obd_no_ir = !has_ir;
 	}
 

@@ -1128,13 +1128,13 @@ static int osd_mount(const struct lu_env *env,
 		if (rc)
 			RETURN(-EINVAL);
 
-		if (flags & LMD_FLG_DEV_RDONLY) {
+		if (test_bit(LMD_FLG_DEV_RDONLY, &flags)) {
 			o->od_dt_dev.dd_rdonly = 1;
 			LCONSOLE_WARN("%s: set dev_rdonly on this device\n",
 				      svname);
 		}
 
-		if (flags & LMD_FLG_NOSCRUB)
+		if (test_bit(LMD_FLG_NOSCRUB, &flags))
 			interval = AS_NEVER;
 	}
 

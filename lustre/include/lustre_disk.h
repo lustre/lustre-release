@@ -82,10 +82,38 @@
 #define LMD_MAGIC		0xbdacbd03
 #define LMD_PARAMS_MAXLEN	4096
 
+enum lmd_flags {
+	LMD_FLG_SERVER		= 0,	/* Mounting a server */
+	LMD_FLG_CLIENT,			/* Mounting a client */
+	LMD_FLG_SKIP_LFSCK,		/* NOT auto resume LFSCK when mount */
+	LMD_FLG_ABORT_RECOV,		/* Abort recovery */
+	LMD_FLG_NOSVC,			/* Only start MGS/MGC for servers,
+					 * no other services
+					 */
+	LMD_FLG_NOMGS,			/* Only start target for servers,
+					 * reusing existing MGS services
+					 */
+	LMD_FLG_WRITECONF,		/* Rewrite config log */
+	LMD_FLG_NOIR,			/* NO imperative recovery */
+	LMD_FLG_NOSCRUB,			/* Do not trigger scrub automatically */
+	LMD_FLG_MGS,			/* Also start MGS along with server */
+	LMD_FLG_IAM,			/* IAM dir */
+	LMD_FLG_NO_PRIMNODE,		/* all nodes are service nodes */
+	LMD_FLG_VIRGIN,			/* the service registers first time */
+	LMD_FLG_UPDATE,			/* update parameters */
+	LMD_FLG_HSM,			/* Start coordinator */
+	LMD_FLG_DEV_RDONLY,		/* discard modification quitely */
+	LMD_FLG_NO_PRECREATE,		/* do not allow OST object creation */
+	LMD_FLG_LOCAL_RECOV,		/* force recovery for local clients */
+	LMD_FLG_ABORT_RECOV_MDT,	/* Abort recovery between MDTs */
+	LMD_FLG_NO_LOCAL_LOGS,		/* Use config logs from MGS */
+	LMD_FLG_NUM_FLAGS
+};
+
 /* gleaned from the mount command - no persistent info here */
 struct lustre_mount_data {
 	u32	lmd_magic;
-	u32	lmd_flags;	/* lustre mount flags */
+	DECLARE_BITMAP(lmd_flags, LMD_FLG_NUM_FLAGS); /* lustre mount flags */
 	int	lmd_mgs_failnodes; /* mgs failover node count */
 	int	lmd_exclude_count;
 	int	lmd_recovery_time_soft;
@@ -103,30 +131,7 @@ struct lustre_mount_data {
 	char   *lmd_nidnet;     /* network to restrict this client to */
 };
 
-#define LMD_FLG_SERVER		0x0001	/* Mounting a server */
-#define LMD_FLG_CLIENT		0x0002	/* Mounting a client */
-#define LMD_FLG_SKIP_LFSCK	0x0004	/* NOT auto resume LFSCK when mount */
-#define LMD_FLG_ABORT_RECOV	0x0008	/* Abort recovery */
-#define LMD_FLG_NOSVC		0x0010	/* Only start MGS/MGC for servers,
-					   no other services */
-#define LMD_FLG_NOMGS		0x0020	/* Only start target for servers, reusing
-					   existing MGS services */
-#define LMD_FLG_WRITECONF	0x0040	/* Rewrite config log */
-#define LMD_FLG_NOIR		0x0080	/* NO imperative recovery */
-#define LMD_FLG_NOSCRUB		0x0100	/* Do not trigger scrub automatically */
-#define LMD_FLG_MGS		0x0200	/* Also start MGS along with server */
-#define LMD_FLG_IAM		0x0400	/* IAM dir */
-#define LMD_FLG_NO_PRIMNODE	0x0800	/* all nodes are service nodes */
-#define LMD_FLG_VIRGIN		0x1000	/* the service registers first time */
-#define LMD_FLG_UPDATE		0x2000	/* update parameters */
-#define LMD_FLG_HSM		0x4000	/* Start coordinator */
-#define LMD_FLG_DEV_RDONLY	0x8000	/* discard modification quitely */
-#define LMD_FLG_NO_PRECREATE	0x10000	/* do not allow OST object creation */
-#define LMD_FLG_LOCAL_RECOV	0x20000 /* force recovery for local clients */
-#define LMD_FLG_ABORT_RECOV_MDT	0x40000 /* Abort recovery between MDTs */
-#define LMD_FLG_NO_LOCAL_LOGS	0x80000 /* Use config logs from MGS */
-
-#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
+#define lmd_is_client(x) (test_bit(LMD_FLG_CLIENT, (x)->lmd_flags))
 
 /****************** superblock additional info *********************/
 struct ll_sb_info;
