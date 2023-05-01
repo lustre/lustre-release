@@ -1610,20 +1610,31 @@ static unsigned int
 lnet_nid4_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
 	__u64 key = nid;
-	__u64 pair_bits = 0x0001000100010001LLU;
-	__u64 mask = pair_bits * 0xFF;
-	__u64 pair_sum;
+	__u16 lnd = LNET_NETTYP(LNET_NIDNET(nid));
+	unsigned int cpt;
 
-	/* Use (sum-by-multiplication of nid bytes) mod (number of CPTs)
-	 * to match nid to a CPT.
-	 */
-	pair_sum = (key & mask) + ((key >> 8) & mask);
-	pair_sum = (pair_sum * pair_bits) >> 48;
+	if (lnd == KFILND || lnd == GNILND) {
+		cpt = hash_long(key, LNET_CPT_BITS);
+
+		/* NB: The number of CPTs needn't be a power of 2 */
+		if (cpt >= number)
+			cpt = (key + cpt + (cpt >> 1)) % number;
+	} else {
+		__u64 pair_bits = 0x0001000100010001LLU;
+		__u64 mask = pair_bits * 0xFF;
+		__u64 pair_sum;
+		/* For ipv4 NIDs, use (sum-by-multiplication of nid bytes) mod
+		 * (number of CPTs) to match nid to a CPT.
+		 */
+		pair_sum = (key & mask) + ((key >> 8) & mask);
+		pair_sum = (pair_sum * pair_bits) >> 48;
+		cpt = (unsigned int)(pair_sum) % number;
+	}
 
 	CDEBUG(D_NET, "Match nid %s to cpt %u\n",
-	       libcfs_nid2str(nid), (unsigned int)(pair_sum) % number);
+	       libcfs_nid2str(nid), cpt);
 
-	return (unsigned int)(pair_sum) % number;
+	return cpt;
 }
 
 unsigned int

@@ -44,6 +44,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/hash.h>
 #include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
 #include <sys/types.h>
@@ -3872,26 +3873,41 @@ out:
 }
 
 unsigned int
-lnet_nid_cpt_hash(lnet_nid_t nid, long int number)
+lnet_nid_cpt_hash(lnet_nid_t nid, long int number, unsigned int cpt_bits)
 {
 	__u64 key = nid;
-	__u64 pair_bits = 0x0001000100010001LLU;
-	__u64 mask = pair_bits * 0xFF;
-	__u64 pair_sum;
+	__u16 lnd = LNET_NETTYP(LNET_NIDNET(nid));
+	unsigned int cpt;
 
 	if (number == 1)
 		return 0;
 
-	pair_sum = (key & mask) + ((key >> 8) & mask);
-	pair_sum = (pair_sum * pair_bits) >> 48;
+	if (lnd == KFILND || lnd == GNILND) {
+		cpt = hash_long(key, cpt_bits);
 
-	return (unsigned int)(pair_sum) % number;
+		/* NB: The number of CPTs needn't be a power of 2 */
+		if (cpt >= number)
+			cpt = (key + cpt + (cpt >> 1)) % number;
+	} else {
+		__u64 pair_bits = 0x0001000100010001LLU;
+		__u64 mask = pair_bits * 0xFF;
+		__u64 pair_sum;
+		/* For ipv4 NIDs, use (sum-by-multiplication of nid bytes) mod
+		 * (number of CPTs) to match nid to a CPT.
+		 */
+		pair_sum = (key & mask) + ((key >> 8) & mask);
+		pair_sum = (pair_sum * pair_bits) >> 48;
+		cpt = (unsigned int)(pair_sum) % number;
+	}
+
+	return cpt;
 }
 
 int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
 {
 	int rc = LUSTRE_CFG_RC_BAD_PARAM;
 	lnet_nid_t nid;
+	unsigned int cpt_bits;
 
 	if (!nidc) {
 		fprintf(stderr, "error:\n    msg: \"no NID provided\"\n");
@@ -3903,6 +3919,15 @@ int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
 		return rc;
 	}
 
+	if (ncpts < 1) {
+		fprintf(stderr, "error:\n    msg: \"number of CPTs must be >= 1\"\n");
+		return rc;
+	}
+
+	cpt_bits = 1;
+	while ((1 << cpt_bits) < ncpts)
+		cpt_bits++;
+
 	nid = libcfs_str2nid(nidc);
 	if (nid == LNET_NID_ANY) {
 		fprintf(stderr, "error:\n    msg: \"bad NID provided %s\"\n",
@@ -3910,7 +3935,7 @@ int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
 		return rc;
 	}
 
-	return (int)lnet_nid_cpt_hash(nid, ncpts);
+	return (int)lnet_nid_cpt_hash(nid, ncpts, cpt_bits);
 }
 
 int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
