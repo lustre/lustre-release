@@ -47,12 +47,6 @@ CLIENT1=${CLIENT1:-$HOSTNAME}
 # Exception is the test which need two separate nodes
 CLIENT2=${CLIENT2:-$CLIENT1}
 
-# LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
-if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
-	sync
-	do_facet $SINGLEMDS "sync; sleep 10; sync; sleep 10; sync"
-fi
-
 force_new_seq_all
 
 LU482_FAILED=$(mktemp -u $TMP/$TESTSUITE.lu482.XXXXXX)

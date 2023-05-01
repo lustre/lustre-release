@@ -31,12 +31,6 @@ mkdir -p $DIR
 assert_DIR
 rm -rf $DIR/[df][0-9]* $DIR/f.$TESTSUITE.*
 
-# LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
-if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
-    sync
-    do_facet $SINGLEMDS sync
-fi
-
 force_new_seq_all
 
 test_0a() {	# was test_0

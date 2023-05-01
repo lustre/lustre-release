@@ -2973,8 +2973,6 @@ run_test 50c "punch_hole/mmap_write stale other mirrors"
 test_50d() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"
-	(( $LINUX_VERSION_CODE > $(version_code 3.0.0) )) ||
-		skip "client kernel does not support SEEK_HOLE"
 	[ "$FSTYPE" != "zfs" ] ||
 		skip "lseek for ZFS is not accurate if obj is not committed"
 
