@@ -1,0 +1,16 @@
+--- linux-stage.orig/fs/ext4/extents.c	2022-09-05 09:04:31.628122705 -0600
++++ linux-stage/fs/ext4/extents.c	2022-09-06 05:32:57.083369853 -0600
+@@ -5064,6 +5064,13 @@ static int ext4_find_delayed_extent(s
+ 	struct extent_status es;
+ 	ext4_lblk_t block, next_del;
+ 
++	if (!test_opt(inode->i_sb, DELALLOC)) {
++		if (newes->es_pblk == 0)
++			return 0;
++
++		return EXT_MAX_BLOCKS;
++	}
++
+ 	if (newes->es_pblk == 0) {
+ 		ext4_es_find_extent_range(inode, &ext4_es_is_delayed,
+ 					  newes->es_lblk,
