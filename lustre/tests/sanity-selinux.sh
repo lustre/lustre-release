@@ -590,7 +590,7 @@ test_21a() {
 		export SK_UNIQUE_NM=true
 
 		# load specific key on servers
-		do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server \
+		do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -t server \
 						    -l $SK_PATH/nodemap/c0.key"
 
 		# set perms for per-nodemap keys else permission denied
@@ -678,7 +678,7 @@ test_21b() {
 		export SK_UNIQUE_NM=true
 
 		# load specific key on servers
-		do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server \
+		do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -t server \
 						    -l $SK_PATH/nodemap/c0.key"
 
 		# set perms for per-nodemap keys else permission denied

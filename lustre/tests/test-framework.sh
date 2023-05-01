@@ -374,7 +374,11 @@ init_test_env() {
 
 	if $SHARED_KEY; then
 		$RPC_MODE || echo "Using GSS shared-key feature"
-		which lgss_sk > /dev/null 2>&1 ||
+		[ -n "$LGSS_SK" ] ||
+			export LGSS_SK=$(which lgss_sk 2> /dev/null)
+		[ -n "$LGSS_SK" ] ||
+			export LGSS_SK="$LUSTRE/utils/gss/lgss_sk"
+		[ -n "$LGSS_SK" ] ||
 			error_exit "built with lgss_sk disabled! SEC=$SEC"
 		GSS=true
 		GSS_SK=true
@@ -1121,7 +1125,7 @@ init_gss() {
 	if $GSS_SK && ! $SK_NO_KEY; then
 		echo "Loading basic SSK keys on all servers"
 		do_nodes $(comma_list $(all_server_nodes)) \
-			"lgss_sk -t server -l $SK_PATH/$FSNAME.key || true"
+			"$LGSS_SK -t server -l $SK_PATH/$FSNAME.key || true"
 		do_nodes $(comma_list $(all_server_nodes)) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
@@ -1179,19 +1183,19 @@ init_gss() {
 		# and S2S now requires keys as well, both for "client"
 		# and for "server"
 		if $SK_S2S; then
-			lgss_sk -t server -f$FSNAME -n $SK_S2SNMCLI \
+			$LGSS_SK -t server -f$FSNAME -n $SK_S2SNMCLI \
 				-w $SK_PATH/$FSNAME-nmclient.key \
 				-d /dev/urandom >/dev/null 2>&1
-			lgss_sk -t mgs,server -f$FSNAME -n $SK_S2SNM \
+			$LGSS_SK -t mgs,server -f$FSNAME -n $SK_S2SNM \
 				-w $SK_PATH/$FSNAME-s2s-server.key \
 				-d /dev/urandom >/dev/null 2>&1
 		fi
 		# basic key create
-		lgss_sk -t server -f$FSNAME -w $SK_PATH/$FSNAME.key \
+		$LGSS_SK -t server -f$FSNAME -w $SK_PATH/$FSNAME.key \
 			-d /dev/urandom >/dev/null 2>&1
 		# per-nodemap keys
 		for i in $(seq 0 $((numclients - 1))); do
-			lgss_sk -t server -f$FSNAME -n c$i \
+			$LGSS_SK -t server -f$FSNAME -n c$i \
 				-w $SK_PATH/nodemap/c$i.key -d /dev/urandom \
 				>/dev/null 2>&1
 		done
@@ -1203,27 +1207,28 @@ init_gss() {
 		fi
 		# Set client keys to client type to generate prime P
 		if local_mode; then
-			do_nodes $(all_nodes) "lgss_sk -t client,server -m \
+			do_nodes $(all_nodes) "$LGSS_SK -t client,server -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1"
 		else
-			do_nodes $clients "lgss_sk -t client -m \
+			do_nodes $clients "$LGSS_SK -t client -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1"
-			do_nodes $clients "find $SK_PATH/nodemap -name \*.key | \
-				xargs -IX lgss_sk -t client -m X >/dev/null 2>&1"
+			do_nodes $clients "find $SK_PATH/nodemap \
+				-name \*.key | xargs -IX $LGSS_SK -t client \
+				-m X >/dev/null 2>&1"
 		fi
 		# This is required for servers as well, if S2S in use
 		if $SK_S2S; then
 			do_nodes $(comma_list $(mdts_nodes)) \
 				"cp $SK_PATH/$FSNAME-s2s-server.key \
-				$SK_PATH/$FSNAME-s2s-client.key; lgss_sk \
+				$SK_PATH/$FSNAME-s2s-client.key; $LGSS_SK \
 				-t client -m $SK_PATH/$FSNAME-s2s-client.key \
 				>/dev/null 2>&1"
 			do_nodes $(comma_list $(osts_nodes)) \
 				"cp $SK_PATH/$FSNAME-s2s-server.key \
-				$SK_PATH/$FSNAME-s2s-client.key; lgss_sk \
+				$SK_PATH/$FSNAME-s2s-client.key; $LGSS_SK \
 				-t client -m $SK_PATH/$FSNAME-s2s-client.key \
 				>/dev/null 2>&1"
-			do_nodes $clients "lgss_sk -t client \
+			do_nodes $clients "$LGSS_SK -t client \
 				-m $SK_PATH/$FSNAME-nmclient.key \
 				 >/dev/null 2>&1"
 		fi
@@ -2590,8 +2595,8 @@ zconf_mount_clients() {
 			local i=0
 			# Mount all server nodes first with per-NM keys
 			for nmclient in ${clients//,/ }; do
-				# do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server -l $SK_PATH/nodemap/c$i.key -n c$i"
-				do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server -l $SK_PATH/nodemap/c$i.key"
+				do_nodes $(comma_list $(all_server_nodes)) \
+				"$LGSS_SK -t server -l $SK_PATH/nodemap/c$i.key"
 				i=$((i + 1))
 			done
 			# set perms for per-nodemap keys else permission denied
@@ -8326,7 +8331,7 @@ gather_logs () {
 		$LCTL dk > ${prefix}.debug_log.$(hostname -s).${suffix}
 		dmesg > ${prefix}.dmesg.$(hostname -s).${suffix}
 		[ "$SHARED_KEY" = true ] && find $SK_PATH -name '*.key' -exec \
-			lgss_sk -r {} \; &> \
+			$LGSS_SK -r {} \; &> \
 			${prefix}.ssk_keys.$(hostname -s).${suffix}
 		[ "$SHARED_KEY" = true ] && lctl get_param 'nodemap.*.*' > \
 			${prefix}.nodemaps.$(hostname -s).${suffix}
@@ -8342,7 +8347,7 @@ gather_logs () {
 		dmesg > ${prefix}.dmesg.\\\$(hostname -s).${suffix}"
 	if [ "$SHARED_KEY" = true ]; then
 		do_nodesv $list "find $SK_PATH -name '*.key' -exec \
-			lgss_sk -r {} \; &> \
+			$LGSS_SK -r {} \; &> \
 			${prefix}.ssk_keys.\\\$(hostname -s).${suffix}"
 		do_facet mds1 "lctl get_param 'nodemap.*.*' > \
 			${prefix}.nodemaps.\\\$(hostname -s).${suffix}"

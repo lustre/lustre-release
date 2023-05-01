@@ -2236,7 +2236,7 @@ test_30() {
 	do_node ${clients_arr[0]} "keyctl show |
 		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
 	# generate key with bogus filesystem name
-	do_node ${clients_arr[0]} "lgss_sk -w $SK_PATH/$FSNAME-bogus.key \
+	do_node ${clients_arr[0]} "$LGSS_SK -w $SK_PATH/$FSNAME-bogus.key \
 		-f $FSNAME.bogus -t client -d /dev/urandom" ||
 		error "lgss_sk failed (1)"
 	do_facet $SINGLEMDS lfs flushctx || error "could not run flushctx"
@@ -2512,16 +2512,16 @@ test_32() {
 	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 
 	# add mgs key type and MGS NIDs in key on MGS
-	do_nodes $mgs_HOST "lgss_sk -t mgs,server -g $MGSNID -m \
+	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
 	# load modified key file on MGS
-	do_nodes $mgs_HOST "lgss_sk -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+	do_nodes $mgs_HOST "$LGSS_SK -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not load keyfile on MGS"
 
 	# add MGS NIDs in key on client
-	do_nodes ${clients_arr[0]} "lgss_sk -g $MGSNID -m \
+	do_nodes ${clients_arr[0]} "$LGSS_SK -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
@@ -2627,16 +2627,16 @@ test_33() {
 	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 
 	# add mgs key type and MGS NIDs in key on MGS
-	do_nodes $mgs_HOST "lgss_sk -t mgs,server -g $MGSNID -m \
+	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
 	# load modified key file on MGS
-	do_nodes $mgs_HOST "lgss_sk -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+	do_nodes $mgs_HOST "$LGSS_SK -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not load keyfile on MGS"
 
 	# add MGS NIDs in key on client
-	do_nodes ${clients_arr[0]} "lgss_sk -g $MGSNID -m \
+	do_nodes ${clients_arr[0]} "$LGSS_SK -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
