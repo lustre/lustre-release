@@ -924,6 +924,7 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 # $1 - *unique* name matching the LB2_LINUX_TEST_SRC macro
 # $2 - run on success (valid .ko generated)
 # $3 - run on failure (unable to compile)
+# $4 - compile only
 #
 AC_DEFUN([LB2_LINUX_TEST_RESULT],[
 	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
@@ -964,8 +965,13 @@ AC_DEFUN([LB2_LINUX_TEST_RESULT],[
 	# Abort if key does not exist
 	AS_IF([test -f ${O}.tested], [],
 		[AC_MSG_ERROR([*** Compile test for $1 was not run.])])
+	# Default is to expect only the <module>.o be generated.
+	NEED_KO=0
+	# Require the <module>.ko file when "module" is passed
+	AS_IF([test "X'$4'" == "X'module'"], [NEED_KO=1])
 	# If test was compiled and if we got an object ...
-	AS_IF([test -f ${O}.o], [touch ${O}.ko])
+	AS_IF([test ${NEED_KO} -eq 0], [AS_IF([test ! -f ${O}.ko], [AS_IF(
+		[test -f ${O}.o], [touch ${O}.ko])])])
 	# key is valid. Cache should be valid, set the variable
 	AC_CACHE_CHECK([for $1], lb_test,
 		AS_IF([test -f ${O}.ko],
