@@ -546,7 +546,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 					      &op_data->op_file_secctx_name,
 					      &op_data->op_file_secctx_name_size,
 					      &op_data->op_file_secctx,
-					      &op_data->op_file_secctx_size);
+					      &op_data->op_file_secctx_size,
+					      &op_data->op_file_secctx_slot);
 		if (err < 0)
 			GOTO(out_op_data, err);
 	}

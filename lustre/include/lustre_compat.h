@@ -597,12 +597,26 @@ static inline bool is_root_inode(struct inode *inode)
 #define ll_access_ok(ptr, len) access_ok(ptr, len)
 #endif
 
-static inline void ll_security_release_secctx(char *secdata, u32 seclen)
+#ifdef HAVE_SEC_RELEASE_SECCTX_1ARG
+#ifndef HAVE_LSMCONTEXT_INIT
+/* Ubuntu 5.19 */
+static inline void lsmcontext_init(struct lsmcontext *cp, char *context,
+				   u32 size, int slot)
+{
+	cp->slot = slot;
+	cp->context = context;
+	cp->len = size;
+}
+#endif
+#endif
+
+static inline void ll_security_release_secctx(char *secdata, u32 seclen,
+					      int slot)
 {
 #ifdef HAVE_SEC_RELEASE_SECCTX_1ARG
 	struct lsmcontext context = { };
 
-	lsmcontext_init(&context, secdata, seclen, 0);
+	lsmcontext_init(&context, secdata, seclen, slot);
 	return security_release_secctx(&context);
 #else
 	return security_release_secctx(secdata, seclen);

@@ -3679,7 +3679,8 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
 {
 	ll_unlock_md_op_lsm(op_data);
 	ll_security_release_secctx(op_data->op_file_secctx,
-				   op_data->op_file_secctx_size);
+				   op_data->op_file_secctx_size,
+				   op_data->op_file_secctx_slot);
 	if (op_data->op_flags & MF_OPNAME_KMALLOCED)
 		/* allocated via ll_setup_filename called
 		 * from ll_prep_md_op_data

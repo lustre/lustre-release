@@ -810,6 +810,7 @@ out:
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
 				   void **secctx, __u32 *secctxlen,
+				   int *secctxslot,
 				   struct pcc_create_attach *pca,
 				   bool encrypt,
 				   void **encctx, __u32 *encctxlen)
@@ -882,18 +883,23 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 					     &op_data->op_file_secctx_name,
 					     &op_data->op_file_secctx_name_size,
 					     &op_data->op_file_secctx,
-					     &op_data->op_file_secctx_size);
+					     &op_data->op_file_secctx_size,
+					     &op_data->op_file_secctx_slot);
 		if (rc < 0)
 			GOTO(out, retval = ERR_PTR(rc));
 		if (secctx != NULL)
 			*secctx = op_data->op_file_secctx;
 		if (secctxlen != NULL)
 			*secctxlen = op_data->op_file_secctx_size;
+		if (secctxslot != NULL)
+			*secctxslot = op_data->op_file_secctx_slot;
 	} else {
 		if (secctx != NULL)
 			*secctx = NULL;
 		if (secctxlen != NULL)
 			*secctxlen = 0;
+		if (secctxslot != NULL)
+			*secctxslot = 0;
 	}
 	if (it->it_op & IT_CREAT && encrypt) {
 		if (unlikely(filename_is_volatile(dentry->d_name.name,
@@ -1107,7 +1113,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 		itp = NULL;
 	else
 		itp = &it;
-	de = ll_lookup_it(parent, dentry, itp, NULL, NULL, NULL, false,
+	de = ll_lookup_it(parent, dentry, itp, NULL, NULL, NULL, NULL, false,
 			  NULL, NULL);
 
 	if (itp != NULL)
@@ -1149,6 +1155,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	long long lookup_flags = LOOKUP_OPEN;
 	void *secctx = NULL;
 	__u32 secctxlen = 0;
+	int secctxslot = 0;
 	void *encctx = NULL;
 	__u32 encctxlen = 0;
 	struct ll_sb_info *sbi = NULL;
@@ -1247,8 +1254,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		it->it_flags |= MDS_OPEN_LOCK;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
-	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &pca, encrypt,
-			  &encctx, &encctxlen);
+	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &secctxslot,
+			  &pca, encrypt, &encctx, &encctxlen);
 	if (IS_ERR(de))
 		rc = PTR_ERR(de);
 	else if (de != NULL)
@@ -1262,7 +1269,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			rc = ll_create_it(dir, dentry, it, secctx, secctxlen,
 					  encrypt, encctx, encctxlen,
 					  open_flags);
-			ll_security_release_secctx(secctx, secctxlen);
+			ll_security_release_secctx(secctx, secctxlen,
+						   secctxslot);
 			llcrypt_free_ctx(encctx, encctxlen);
 			if (rc) {
 				/* We dget in ll_splice_alias. */
@@ -1559,7 +1567,8 @@ again:
 					      &op_data->op_file_secctx_name,
 					      &op_data->op_file_secctx_name_size,
 					      &op_data->op_file_secctx,
-					      &op_data->op_file_secctx_size);
+					      &op_data->op_file_secctx_size,
+					      &op_data->op_file_secctx_slot);
 		if (err < 0)
 			GOTO(err_exit, err);
 	}

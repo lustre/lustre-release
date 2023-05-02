@@ -931,6 +931,7 @@ struct md_op_data {
 	__u32			op_file_secctx_name_size;
 	void		       *op_file_secctx;
 	__u32			op_file_secctx_size;
+	int			op_file_secctx_slot;
 
 	/* File encryption context, for creates/metadata ops */
 	void		       *op_file_encctx;

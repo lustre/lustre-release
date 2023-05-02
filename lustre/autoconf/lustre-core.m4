@@ -2349,7 +2349,7 @@ AC_DEFUN([LC_CURRENT_TIME], [
 		AC_DEFINE(HAVE_CURRENT_TIME, 1,
 			[current_time() has replaced CURRENT_TIME])
 	])
-]) # LIBCFS_CURRENT_TIME
+]) # LC_CURRENT_TIME
 
 #
 # LC_HAVE_GET_INODE_USAGE
@@ -3416,6 +3416,58 @@ AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO], [
 ]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 #
+# LC_HAVE_LSMCONTEXT_INIT
+#
+# repo: git://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/jammy
+# kernel linux-hwe-5.19 commit fef1deb99dad87dd700afae76b35c5b5750e33a8
+# LSM: Removed scaffolding function lsmcontext_init
+#
+AC_DEFUN([LC_SRC_HAVE_LSMCONTEXT_INIT], [
+	LB2_LINUX_TEST_SRC([lsmcontext_init], [
+		#include <linux/security.h>
+	],[
+		struct lsmcontext ctx = {};
+
+		lsmcontext_init(&ctx, "", 0, 0);
+	],[])
+])
+AC_DEFUN([LC_HAVE_LSMCONTEXT_INIT], [
+	AC_MSG_CHECKING([if lsmcontext_init is available])
+	LB2_LINUX_TEST_RESULT([lsmcontext_init], [
+		AC_DEFINE(HAVE_LSMCONTEXT_INIT, 1,
+			[lsmcontext_init is available])
+	])
+]) # LC_HAVE_LSMCONTEXT_INIT
+
+#
+# LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
+#
+# repo: git://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/jammy
+# kernel linux-hwe-5.19 commit 57d0004bc811254916be30f94c86d9607867deb0
+# LSM: Use lsmcontext in security_dentry_init_security
+#
+AC_DEFUN([LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
+	LB2_LINUX_TEST_SRC([security_dentry_init_security_with_ctx], [
+		#include <linux/security.h>
+	],[
+		struct dentry *dentry = NULL;
+		const struct qstr *name = NULL;
+		struct lsmcontext *ctx = NULL;
+		const char *xattr_name = "";
+
+		(void)security_dentry_init_security(dentry, 0, name,
+						    &xattr_name, ctx);
+	],[-Werror])
+])
+AC_DEFUN([LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
+	AC_MSG_CHECKING([if security_dentry_init_security needs lsmcontext])
+	LB2_LINUX_TEST_RESULT([security_dentry_init_security_with_ctx], [
+		AC_DEFINE(HAVE_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX, 1,
+			[security_dentry_init_security needs lsmcontext])
+	])
+]) # LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
+
+#
 # LC_HAVE_NO_LLSEEK
 #
 # Linux commit v5.19-rc2-6-g868941b14441
@@ -3888,6 +3940,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
+	LC_SRC_HAVE_LSMCONTEXT_INIT
+	LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
 
 	# 6.0
 	LC_SRC_HAVE_NO_LLSEEK
@@ -4143,6 +4197,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
+	LC_HAVE_LSMCONTEXT_INIT
+	LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
 
 	# 6.0
 	LC_HAVE_NO_LLSEEK
