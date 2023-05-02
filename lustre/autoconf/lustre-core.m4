@@ -2510,7 +2510,7 @@ LB_CHECK_COMPILE([if IS_ENCRYPTED is defined],
 is_encrypted, [
 	#include <linux/fs.h>
 ],[
-	IS_ENCRYPTED((struct inode *)0);
+	(void)IS_ENCRYPTED((struct inode *)1);
 ],[
 	has_is_encrypted="yes"
 ])
