@@ -13,10 +13,6 @@ sbin_PROGRAMS += lgss_sk
 endif
 endif
 
-if GSS_PIPEFS
-sbin_PROGRAMS += lgssd
-endif
-
 COMMON_SRCS = \
         context.c \
         context_lucid.c \
@@ -32,26 +28,12 @@ COMMON_SRCS = \
         err_util.h \
         gss_oids.h \
         gss_util.h \
-        lsupport.h
+        lsupport.h \
+        write_bytes.h
 
 if GSS_SSK
 COMMON_SRCS += sk_utils.h sk_utils.c
 endif
-
-lgssd_SOURCES = \
-        $(COMMON_SRCS) \
-        gssd.c \
-        gssd_main_loop.c \
-        gssd_proc.c \
-        krb5_util.c \
-        \
-        gssd.h \
-        krb5_util.h \
-        write_bytes.h
-
-lgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
-lgssd_LDADD =  $(GSSAPI_LIBS) $(KRBLIBS)
-lgssd_LDFLAGS = $(KRBLDFLAGS)
 
 lsvcgssd_SOURCES = \
         $(COMMON_SRCS) \

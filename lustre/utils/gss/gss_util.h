@@ -32,7 +32,6 @@
 #define _GSS_UTIL_H_
 
 #include <stdlib.h>
-#include "write_bytes.h"
 
 #ifndef fallthrough
 # if defined(__GNUC__) && __GNUC__ >= 7

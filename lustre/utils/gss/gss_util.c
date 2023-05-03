@@ -62,7 +62,9 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <krb5.h>
 #include <sys/param.h>
+#include <sys/types.h>
 #include <gssapi/gssapi.h>
 #if defined(HAVE_KRB5) && !defined(GSS_C_NT_HOSTBASED_SERVICE)
 #include <gssapi/gssapi_generic.h>
@@ -70,7 +72,6 @@
 #endif
 #include "gss_util.h"
 #include "err_util.h"
-#include "gssd.h"
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
@@ -79,6 +80,10 @@
 # include <com_err.h>
 #endif
 #include "lsupport.h"
+
+#define GSSD_SERVICE_MGS			"lustre_mgs"
+#define GSSD_SERVICE_MDS			"lustre_mds"
+#define GSSD_SERVICE_OSS			"lustre_oss"
 
 /* Global gssd_credentials handle */
 gss_cred_id_t  gssd_cred_mgs;
@@ -375,8 +380,6 @@ out:
 /*********************************
  * FIXME should be in krb5_util.c
  *********************************/
-
-#include "krb5_util.h"
 
 /* realm of this node */
 char *this_realm = NULL;

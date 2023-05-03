@@ -4458,8 +4458,6 @@ AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
 LC_MDS_MAX_THREADS
 
 # lustre/utils/gss/gss_util.c
-# lustre/utils/gss/gssd_proc.c
-# lustre/utils/gss/krb5_util.c
 # lustre/utils/llog_reader.c
 # lustre/utils/create_iam.c
 # lustre/utils/libiam.c
@@ -4627,7 +4625,6 @@ AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)
-AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(GSS_SSK, test x$enable_ssk = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")

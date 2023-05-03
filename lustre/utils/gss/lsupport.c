@@ -62,7 +62,7 @@
 # include "lgss_utils.h"
 #else
 # include "err_util.h"
-# include "gssd.h"
+# include <gssapi/gssapi.h>
 #endif
 #include "lsupport.h"
 

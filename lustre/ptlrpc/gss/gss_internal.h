@@ -45,17 +45,10 @@ int buffer_extract_bytes(const void **buf, __u32 *buflen,
                          void *res, __u32 reslen);
 
 /*
- * several timeout values. client refresh upcall timeout we using
- * default in pipefs implemnetation.
+ * several timeout values. client refresh upcall timeout
  */
 #define __TIMEOUT_DELTA                 (10)
 
-#define GSS_SECINIT_RPC_TIMEOUT                                         \
-        (obd_timeout < __TIMEOUT_DELTA ?                                \
-         __TIMEOUT_DELTA : obd_timeout - __TIMEOUT_DELTA)
-
-#define GSS_SECFINI_RPC_TIMEOUT         (__TIMEOUT_DELTA)
-#define GSS_SECSVC_UPCALL_TIMEOUT       (GSS_SECINIT_RPC_TIMEOUT)
 
 /*
  * default gc interval
@@ -231,12 +224,6 @@ struct gss_sec {
 	__u64			gs_rvs_hdl;
 };
 
-struct gss_sec_pipefs {
-	struct gss_sec		gsp_base;
-	int			gsp_chash_size;	/* must be 2^n */
-	struct hlist_head	gsp_chash[0];
-};
-
 /*
  * FIXME cleanup the keyring upcall mutexes
  */
@@ -278,11 +265,6 @@ struct gss_cli_ctx_keyring *ctx2gctx_keyring(struct ptlrpc_cli_ctx *ctx)
 static inline struct gss_sec *sec2gsec(struct ptlrpc_sec *sec)
 {
         return container_of(sec, struct gss_sec, gs_base);
-}
-
-static inline struct gss_sec_pipefs *sec2gsec_pipefs(struct ptlrpc_sec *sec)
-{
-        return container_of(sec2gsec(sec), struct gss_sec_pipefs, gsp_base);
 }
 
 static inline struct gss_sec_keyring *sec2gsec_keyring(struct ptlrpc_sec *sec)
@@ -389,15 +371,6 @@ int  __init gss_init_keyring(void);
 void __exit gss_exit_keyring(void);
 #endif
 extern unsigned int gss_check_upcall_ns;
-
-/* gss_pipefs.c */
-#ifndef HAVE_GSS_PIPEFS
-static inline int  __init gss_init_pipefs(void) { return 0; }
-static inline void __exit gss_exit_pipefs(void) { return; }
-#else
-int  __init gss_init_pipefs(void);
-void __exit gss_exit_pipefs(void);
-#endif
 
 /* gss_bulk.c */
 int gss_cli_prep_bulk(struct ptlrpc_request *req,

@@ -33,7 +33,6 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
-#include <netinet/in.h>		/* for ntohl */
 
 static inline int
 write_bytes(char **ptr, const char *end, const void *arg, int arg_len)
@@ -74,85 +73,6 @@ write_oid(char **p, char *end, gss_OID_desc *arg)
 	memcpy(*p, arg->elements, len);
 	*p += len;
 	return 0;
-}
-
-static inline int
-get_bytes(char **ptr, const char *end, void *res, int len)
-{
-	char *p, *q;
-	p = *ptr;
-	q = p + len;
-	if (q > end || q < p)
-		return -1;
-	memcpy(res, p, len);
-	*ptr = q;
-	return 0;
-}
-
-static inline int
-get_buffer(char **ptr, const char *end, gss_buffer_desc *res)
-{
-	char *p, *q;
-	p = *ptr;
-	int len;
-	if (get_bytes(&p, end, &len, sizeof(len)))
-		return -1;
-	res->length = len;		/* promote to size_t if necessary */
-	q = p + res->length;
-	if (q > end || q < p)
-		return -1;
-	if (!(res->value = malloc(res->length)))
-		return -1;
-	memcpy(res->value, p, res->length);
-	*ptr = q;
-	return 0;
-}
-
-static inline int
-xdr_get_u32(u_int32_t **ptr, const u_int32_t *end, u_int32_t *res)
-{
-	if (get_bytes((char **)ptr, (char *)end, res, sizeof(res)))
-		return -1;
-	*res = ntohl(*res);
-	return 0;
-}
-
-static inline int
-xdr_get_buffer(u_int32_t **ptr, const u_int32_t *end, gss_buffer_desc *res)
-{
-	u_int32_t *p, *q;
-	u_int32_t len;
-	p = *ptr;
-	if (xdr_get_u32(&p, end, &len))
-		return -1;
-	res->length = len;
-	q = p + ((res->length + 3) >> 2);
-	if (q > end || q < p)
-		return -1;
-	if (!(res->value = malloc(res->length)))
-		return -1;
-	memcpy(res->value, p, res->length);
-	*ptr = q;
-	return 0;
-}
-
-static inline int
-xdr_write_u32(u_int32_t **ptr, const u_int32_t *end, u_int32_t arg)
-{
-	u_int32_t tmp;
-
-	tmp = htonl(arg);
-	return WRITE_BYTES((char **)ptr, (char *)end, tmp);
-}
-
-static inline int
-xdr_write_buffer(u_int32_t **ptr, const u_int32_t *end, gss_buffer_desc *arg)
-{
-	int len = arg->length;
-	if (xdr_write_u32(ptr, end, len))
-		return -1;
-	return write_bytes((char **)ptr, (char *)end, arg->value,
-			   (arg->length + 3) & ~3);
 }
 
 #endif /* _WRITE_BYTES_H_ */

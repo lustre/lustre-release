@@ -11,7 +11,6 @@ export VERBOSE=${VERBOSE:-false}
 export GSS=${GSS:-false}
 export GSS_SK=${GSS_SK:-false}
 export GSS_KRB5=false
-export GSS_PIPEFS=false
 export SHARED_KEY=${SHARED_KEY:-false}
 export SK_PATH=${SK_PATH:-/tmp/test-framework-keys}
 export SK_OM_PATH=$SK_PATH'/tmp-request-mount'
@@ -352,9 +351,6 @@ init_test_env() {
 	[ ! -f "$LSOM_SYNC" ] &&
 		export LSOM_SYNC=$(which llsom_sync 2> /dev/null)
 	[ -z "$LSOM_SYNC" ] && export LSOM_SYNC="/usr/sbin/llsom_sync"
-	export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
-	[ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] &&
-		export LGSSD=$(which lgssd)
 	export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
 	[ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd 2> /dev/null)
 	export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
@@ -1019,9 +1015,6 @@ start_gss_daemons() {
 	else
 		do_nodes $nodes "$LSVCGSSD -vvv" || return 1
 	fi
-	if $GSS_PIPEFS; then
-		do_nodes $nodes "$LGSSD -v" || return 2
-	fi
 
 	nodes=$(comma_list $(osts_nodes))
 	echo "Starting gss daemon on ost: $nodes"
@@ -1035,11 +1028,6 @@ start_gss_daemons() {
 
 	local clients=${CLIENTS:-$HOSTNAME}
 
-	if $GSS_PIPEFS; then
-		echo "Starting $LGSSD on clients $clients "
-		do_nodes $clients  "$LGSSD -v" || return 4
-	fi
-
 	# wait daemons entering "stable" status
 	sleep 5
 
@@ -1048,13 +1036,6 @@ start_gss_daemons() {
 	#
 	nodes=$(comma_list $(mdts_nodes) $(osts_nodes))
 	check_gss_daemon_nodes $nodes lsvcgssd || return 5
-	if $GSS_PIPEFS; then
-		nodes=$(comma_list $(mdts_nodes))
-		check_gss_daemon_nodes $nodes lgssd || return 6
-	fi
-	if $GSS_PIPEFS; then
-		check_gss_daemon_nodes $clients lgssd || return 7
-	fi
 }
 
 stop_gss_daemons() {

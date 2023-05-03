@@ -155,27 +155,17 @@ test_0() {
 
 	echo "check with someone already running..."
 	check_multiple_gss_daemons $my_facet $LSVCGSSD
-	if $GSS_PIPEFS; then
-		check_multiple_gss_daemons $my_facet $LGSSD
-	fi
 
 	echo "check with someone run & finished..."
 	do_facet $my_facet killall -q -2 lgssd $LSVCGSSD || true
 	sleep 5 # wait fully exit
 	check_multiple_gss_daemons $my_facet $LSVCGSSD
-	if $GSS_PIPEFS; then
-		check_multiple_gss_daemons $my_facet $LGSSD
-	fi
 
 	echo "check refresh..."
 	do_facet $my_facet killall -q -2 lgssd $LSVCGSSD || true
 	sleep 5 # wait fully exit
 	do_facet $my_facet ipcrm -S 0x3b92d473
 	check_multiple_gss_daemons $my_facet $LSVCGSSD
-	if $GSS_PIPEFS; then
-		do_facet $my_facet ipcrm -S 0x3a92d473
-		check_multiple_gss_daemons $my_facet $LGSSD
-	fi
 }
 run_test 0 "start multiple gss daemons"
 
@@ -261,40 +251,6 @@ test_3() {
 	echo "$RUNAS_ID read file data OK"
 }
 run_test 3 "local cache under DLM lock"
-
-test_4() {
-	local file1=$DIR/$tfile-1
-	local file2=$DIR/$tfile-2
-
-	! $GSS_PIPEFS && skip "pipefs not used" && return
-
-	chmod 0777 $DIR || error "chmod $DIR failed"
-	# current access should be ok
-	$RUNAS touch $file1 || error "can't touch $file1"
-	[ -f $file1 ] || error "$file1 not found"
-
-	# stop lgssd
-	send_sigint client lgssd
-	sleep 5
-	check_gss_daemon_facet client lgssd && error "lgssd still running"
-
-	# flush context, and touch
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-	$RUNAS touch $file2 &
-	TOUCHPID=$!
-	echo "waiting touch pid $TOUCHPID"
-	wait $TOUCHPID && error "touch should fail"
-
-	# restart lgssd
-	do_facet client "$LGSSD -v"
-	sleep 5
-	check_gss_daemon_facet client lgssd
-
-	# touch new should succeed
-	$RUNAS touch $file2 || error "can't touch $file2"
-	[ -f $file2 ] || error "$file2 not found"
-}
-run_test 4 "lgssd dead, operations should wait timeout and fail"
 
 test_5() {
 	local file1=$DIR/$tdir/$tfile-1

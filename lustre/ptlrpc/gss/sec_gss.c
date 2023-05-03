@@ -2876,16 +2876,10 @@ static int __init sptlrpc_gss_init(void)
 	if (rc)
 		goto out_sk;
 
-	rc = gss_init_pipefs();
-	if (rc)
-		goto out_keyring;
-
 	gss_init_at_reply_offset();
 
 	return 0;
 
-out_keyring:
-	gss_exit_keyring();
 out_sk:
 	cleanup_sk_module();
 out_kerberos:
@@ -2904,7 +2898,6 @@ out_tunables:
 static void __exit sptlrpc_gss_exit(void)
 {
         gss_exit_keyring();
-        gss_exit_pipefs();
         cleanup_kerberos_module();
         gss_exit_svc_upcall();
         gss_exit_cli_upcall();
