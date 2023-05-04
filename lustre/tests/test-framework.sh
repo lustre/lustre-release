@@ -1017,7 +1017,7 @@ start_gss_daemons() {
 		# Start all versions, in case of switching
 		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z" || return 1
 	else
-		do_nodes $nodes "$LSVCGSSD -v" || return 1
+		do_nodes $nodes "$LSVCGSSD -vvv" || return 1
 	fi
 	if $GSS_PIPEFS; then
 		do_nodes $nodes "$LGSSD -v" || return 2
@@ -1029,7 +1029,7 @@ start_gss_daemons() {
 		# Start all versions, in case of switching
 		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z" || return 3
 	else
-		do_nodes $nodes "$LSVCGSSD -v" || return 3
+		do_nodes $nodes "$LSVCGSSD -vvv" || return 3
 	fi
 	# starting on clients
 
@@ -8032,7 +8032,7 @@ wait_mgc_import_state() {
 					       $error_on_failure || return
 		done
 	else
-		_wait_mgc_import_state "$facet" "$expected"
+		_wait_mgc_import_state "$facet" "$expected" \
 				       $error_on_failure || return
 	fi
 }
@@ -8335,9 +8335,9 @@ gather_logs () {
 			${prefix}.ssk_keys.$(hostname -s).${suffix}
 		[ "$SHARED_KEY" = true ] && lctl get_param 'nodemap.*.*' > \
 			${prefix}.nodemaps.$(hostname -s).${suffix}
-		[ "$GSS_SK" = true ] && keyctl show > \
+		[ "$GSS" = true ] && keyctl show > \
 			${prefix}.keyring.$(hostname -s).${suffix}
-		[ "$GSS_SK" = true ] && journalctl -a > \
+		[ "$GSS" = true ] && journalctl -a > \
 			${prefix}.journal.$(hostname -s).${suffix}
 		return
 	fi
@@ -8352,7 +8352,7 @@ gather_logs () {
 		do_facet mds1 "lctl get_param 'nodemap.*.*' > \
 			${prefix}.nodemaps.\\\$(hostname -s).${suffix}"
 	fi
-	if [ "$GSS_SK" = true ]; then
+	if [ "$GSS" = true ]; then
 		do_nodesv $list "keyctl show > \
 			${prefix}.keyring.\\\$(hostname -s).${suffix}"
 		do_nodesv $list "journalctl -a > \
@@ -8832,8 +8832,12 @@ set_flavor_all()
 		fi
 		echo "GSS_SK now at flavor: $flavor"
 	else
-		set_rule $FSNAME any any $flavor
-		wait_flavor all2all $flavor
+		set_rule $FSNAME any cli2mdt $flavor
+		set_rule $FSNAME any cli2ost $flavor
+		set_rule $FSNAME any mdt2ost null
+		set_rule $FSNAME any mdt2mdt null
+		wait_flavor cli2mdt $flavor
+		wait_flavor cli2ost $flavor
 	fi
 }
 

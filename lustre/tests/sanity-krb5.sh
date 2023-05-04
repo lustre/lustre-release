@@ -31,9 +31,6 @@ unset SEC
 #
 # global variables of this sanity
 #
-KRB5_CCACHE_DIR=/tmp
-KRB5_CRED=$KRB5_CCACHE_DIR/krb5cc_$RUNAS_ID
-KRB5_CRED_SAVE=$KRB5_CCACHE_DIR/krb5cc.sanity.save
 DBENCH_PID=0
 
 # set manually
@@ -42,12 +39,8 @@ GSS_KRB5=true
 
 prepare_krb5_creds() {
 	echo prepare krb5 cred
-	rm -f $KRB5_CRED_SAVE
 	echo RUNAS=$RUNAS
 	$RUNAS krb5_login.sh || exit 1
-	[ -f $KRB5_CRED ] || exit 2
-	echo CRED=$KRB5_CRED
-	cp $KRB5_CRED $KRB5_CRED_SAVE
 }
 
 prepare_krb5_creds
@@ -64,7 +57,7 @@ start_dbench()
 {
 	local NPROC=$(grep -c ^processor /proc/cpuinfo)
 	[ $NPROC -gt 2 ] && NPROC=2
-	bash rundbench $NPROC 1>/dev/null &
+	bash rundbench -D $DIR/$tdir $NPROC 1>/dev/null &
 	DBENCH_PID=$!
 	sleep 2
 
@@ -110,11 +103,24 @@ stop_dbench()
 	sync || true
 }
 
+error_dbench()
+{
+	local err_str=$1
+
+	killall -9 dbench
+	sleep 1
+
+	error $err_str
+}
+
 restore_krb5_cred() {
-	keyctl reap
-	cp $KRB5_CRED_SAVE $KRB5_CRED
-	chown $RUNAS_ID:$RUNAS_ID $KRB5_CRED
-	chmod 0600 $KRB5_CRED
+	local keys=$(keyctl show | awk '$6 ~ "^lgssc:" {print $1}')
+
+	for key in $keys; do
+		keyctl unlink $key
+	done
+	echo RUNAS=$RUNAS
+	$RUNAS krb5_login.sh || exit 1
 }
 
 check_multiple_gss_daemons() {
@@ -123,7 +129,7 @@ check_multiple_gss_daemons() {
 	local gssd_name=$(basename $gssd)
 
 	for ((i = 0; i < 10; i++)); do
-		do_facet $facet "$gssd -v"
+		do_facet $facet "$gssd -vvv"
 	done
 
 	# wait daemons entering "stable" status
@@ -154,7 +160,7 @@ test_0() {
 	fi
 
 	echo "check with someone run & finished..."
-	do_facet $my_facet killall -q -2 lgssd lsvcgssd || true
+	do_facet $my_facet killall -q -2 lgssd $LSVCGSSD || true
 	sleep 5 # wait fully exit
 	check_multiple_gss_daemons $my_facet $LSVCGSSD
 	if $GSS_PIPEFS; then
@@ -162,7 +168,7 @@ test_0() {
 	fi
 
 	echo "check refresh..."
-	do_facet $my_facet killall -q -2 lgssd lsvcgssd || true
+	do_facet $my_facet killall -q -2 lgssd $LSVCGSSD || true
 	sleep 5 # wait fully exit
 	do_facet $my_facet ipcrm -S 0x3b92d473
 	check_multiple_gss_daemons $my_facet $LSVCGSSD
@@ -176,13 +182,14 @@ run_test 0 "start multiple gss daemons"
 set_flavor_all krb5p
 
 test_1() {
-	local file=$DIR/$tfile
+	local file=$DIR/$tdir/$tfile
 
-	chmod 0777 $DIR || error "chmod $DIR failed"
-	$RUNAS touch $DIR
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS ls -ld $DIR/$tdir
+
 	# access w/o cred
-	$RUNAS kdestroy
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context"
 	$RUNAS touch $file && error "unexpected success"
 
 	# access w/ cred
@@ -193,17 +200,18 @@ test_1() {
 run_test 1 "access with or without krb5 credential"
 
 test_2() {
-	local file1=$DIR/$tfile-1
-	local file2=$DIR/$tfile-2
+	local file1=$DIR/$tdir/$tfile-1
+	local file2=$DIR/$tdir/$tfile-2
 
-	chmod 0777 $DIR || error "chmod $DIR failed"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+
 	# current access should be ok
 	$RUNAS touch $file1 || error "can't touch $file1"
 	[ -f $file1 ] || error "$file1 not found"
 
 	# cleanup all cred/ctx and touch
-	$RUNAS kdestroy
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context"
 	$RUNAS touch $file2 && error "unexpected success"
 
 	# restore and touch
@@ -214,7 +222,10 @@ test_2() {
 run_test 2 "lfs flushctx"
 
 test_3() {
-	local file=$DIR/$tfile
+	local file=$DIR/$tdir/$tfile
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
 
 	# create file
 	echo "aaaaaaaaaaaaaaaaa" > $file
@@ -230,10 +241,9 @@ test_3() {
 	sleep 1
 
 	# cleanup all cred/ctx and check
-	# metadata check should fail, but file data check should success
+	# metadata check should fail, but file data check should succeed
 	# because we always use root credential to OSTs
-	$RUNAS kdestroy
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context"
 	echo "destroyed credentials/contexs for $RUNAS_ID"
 	$RUNAS $CHECKSTAT -p 0666 $file && error "checkstat succeed"
 	kill -s 10 $OPPID
@@ -287,32 +297,36 @@ test_4() {
 run_test 4 "lgssd dead, operations should wait timeout and fail"
 
 test_5() {
-	local file1=$DIR/$tfile-1
-	local file2=$DIR/$tfile-2
+	local file1=$DIR/$tdir/$tfile-1
+	local file2=$DIR/$tdir/$tfile-2
 	local wait_time=$((TIMEOUT + TIMEOUT / 2))
 
-	chmod 0777 $DIR || error "chmod $DIR failed"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+
 	# current access should be ok
 	$RUNAS touch $file1 || error "can't touch $file1"
 	[ -f $file1 ] || error "$file1 not found"
 
 	# stop lsvcgssd
-	send_sigint $(comma_list $(mdts_nodes)) lsvcgssd
+	send_sigint $(comma_list $(mdts_nodes)) $LSVCGSSD
 	sleep 5
-	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd &&
-		error "lsvcgssd still running"
+	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD &&
+		error "$LSVCGSSD still running"
 
 	# flush context, and touch
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-	$RUNAS touch $file2 && error 'should fail without lsvcgssd'
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (1)"
+	restore_krb5_cred
+	$RUNAS touch $file2 && error "should fail without $LSVCGSSD"
 
-	# restart lsvcgssd, expect touch suceed
-	echo "restart lsvcgssd and recovering"
-	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -v"
+	# restart lsvcgssd, expect touch succeed
+	echo "restart $LSVCGSSD and recovering"
+	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -vvv"
 	sleep 5
-	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd
-	$RUNAS keyctl reap
-	$RUNAS touch $file2 || error 'should not fail now'
+	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (2)"
+	restore_krb5_cred
+	$RUNAS touch $file2 || error "should not fail now"
 	[ -f $file2 ] || error "$file2 not found"
 }
 run_test 5 "lsvcgssd dead, operations fail"
@@ -320,19 +334,18 @@ run_test 5 "lsvcgssd dead, operations fail"
 test_6() {
 	local nfile=10
 
-	mkdir $DIR/d6 || error "mkdir $DIR/d6 failed"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	for ((i=0; i<$nfile; i++)); do
-		dd if=/dev/zero of=$DIR/d6/file$i bs=8k count=1 ||
-		    error "dd file$i failed"
+		dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=8k count=1 ||
+		    error "dd $tfile-$i failed"
 	done
-	ls -l $DIR/d6/* > /dev/null || error "ls failed"
-	rm -rf $DIR2/d6/* || error "rm failed"
-	rmdir $DIR2/d6/ || error "rmdir failed"
+	ls -l $DIR/$tdir/* > /dev/null || error "ls failed"
+	rm -rf $DIR2/$tdir/* || error "rm failed"
+	rmdir $DIR2/$tdir || error "rmdir failed"
 }
 run_test 6 "test basic DLM callback works"
 
 test_7() {
-	local tdir=$DIR/d7
 	local num_osts
 
 	# for open(), client only reserve space for default stripe count lovea,
@@ -343,59 +356,60 @@ test_7() {
 	# Note: current script does NOT guarantee enlarge_reqbuf() will be in
 	# the path, however it does work in local test which has 2 OSTs and
 	# default stripe count is 1.
-	num_osts=$($LFS getstripe $MOUNT | egrep -c "^[0-9]*:.*ACTIVE")
-	echo "found $num_osts active OSTs"
-	[ $num_osts -lt 2 ] &&
-		echo "skipping $TESTNAME (must have >= 2 OSTs)" && return
+	[[ $OSTCOUNT -ge 2 ]] || skip_env "needs >= 2 OSTs"
 
-	mkdir $tdir || error "mkdir $tdir failed"
-	$LFS setstripe -c $num_osts $tdir || error "setstripe -c $num_osts"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$LFS setstripe -c $OSTCOUNT $DIR/$tdir || error "setstripe -c $OSTCOUNT"
 
 	echo "creating..."
 	for ((i = 0; i < 20; i++)); do
-		dd if=/dev/zero of=$tdir/f$i bs=4k count=16 2>/dev/null
+		dd if=/dev/zero of=$DIR/$tdir/f$i bs=4k count=16 2>/dev/null
 	done
 	echo "reading..."
 	for ((i = 0; i < 20; i++)); do
-		dd if=$tdir/f$i of=/dev/null bs=4k count=16 2>/dev/null
+		dd if=$DIR/$tdir/f$i of=/dev/null bs=4k count=16 2>/dev/null
 	done
-	rm -rf $tdir
 }
 run_test 7 "exercise enlarge_reqbuf()"
 
 test_8()
 {
-	local ATHISTORY=$(do_facet $SINGLEMDS "find /sys/ -name at_history")
-	local ATOLDBASE=$(do_facet $SINGLEMDS "cat $ATHISTORY")
-	local REQ_DELAY
-	do_facet $SINGLEMDS "echo 8 >> $ATHISTORY"
+	local atoldbase=$(do_facet $SINGLEMDS "$LCTL get_param -n at_history")
+	local req_delay
 
-	mkdir -p $DIR/d8
-	chmod a+w $DIR/d8
+	do_facet $SINGLEMDS "$LCTL set_param at_history=8" || true
+	stack_trap \
+		"do_facet $SINGLEMDS $LCTL set_param at_history=$atoldbase" EXIT
+
+	mkdir -p $DIR/$tdir
+	chmod a+w $DIR/$tdir
 
 	$LCTL dk > /dev/null
 	debugsave
-	sysctl -w lnet.debug="+other"
+	stack_trap debugrestore EXIT
+	$LCTL set_param debug=+other
 
 	# wait for the at estimation come down, this is faster
 	while [ true ]; do
-		REQ_DELAY=$(lctl get_param -n \
+		req_delay=$($LCTL get_param -n \
 			mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
 			awk '/portal 12/ {print $5}' | tail -1)
-		[ $REQ_DELAY -le 5 ] && break
-		echo "current AT estimation is $REQ_DELAY, wait a little bit"
+		[ $req_delay -le 5 ] && break
+		echo "current AT estimation is $req_delay, wait a little bit"
 		sleep 8
 	done
-	REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
+	req_delay=$((${req_delay} + ${req_delay} / 4 + 5))
 
 	# sleep sometime in ctx handle
-	do_facet $SINGLEMDS lctl set_param fail_val=$REQ_DELAY
+	do_facet $SINGLEMDS $LCTL set_param fail_val=$req_delay
 	#define OBD_FAIL_SEC_CTX_HDL_PAUSE	 0x1204
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x1204
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1204
 
-	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS $LFS flushctx -k -r $MOUNT ||
+		error "can't flush context on $MOUNT"
+	restore_krb5_cred
 
-	$RUNAS touch $DIR/d8/f &
+	$RUNAS touch $DIR/$tdir/$tfile &
 	TOUCHPID=$!
 	echo "waiting for touch (pid $TOUCHPID) to finish..."
 	sleep 2 # give it a chance to really trigger context init rpc
@@ -403,9 +417,6 @@ test_8()
 	wait $TOUCHPID || error "touch should have succeeded"
 
 	$LCTL dk | grep -i "Early reply #" || error "No early reply"
-
-	debugrestore
-	do_facet $SINGLEMDS "echo $ATOLDBASE >> $ATHISTORY" || true
 }
 run_test 8 "Early reply sent for slow gss context negotiation"
 
@@ -421,17 +432,19 @@ test_90() {
 		total=60
 	fi
 
+	mkdir $DIR/$tdir
+
 	restore_to_default_flavor
-	set_rule $FSNAME any any krb5p
-	wait_flavor all2all krb5p
+	set_flavor_all krb5p
 
 	start_dbench
 
-	for ((n=0;n<$total;n++)); do
+	for ((n = 1; n <= $total; n++)); do
 		sleep 2
 		check_dbench
 		echo "flush ctx ($n/$total) ..."
-		$LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+		$LFS flushctx -k -r $MOUNT ||
+			error "can't flush context on $MOUNT"
 	done
 	check_dbench
 	#sleep to let ctxs be re-established
@@ -443,7 +456,7 @@ run_test 90 "recoverable from losing contexts under load"
 test_99() {
 	local nrule_old
 	local nrule_new=0
-	local max=64
+	local max=32
 
 	#
 	# general rules
@@ -453,10 +466,25 @@ test_99() {
 	echo "original general rules: $nrule_old"
 
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME ${NETTYPE}$i any krb5n || error "set rule $i"
+		set_rule $FSNAME ${NETTYPE}$i cli2mdt krb5n ||
+			error "set rule $i (1)"
+		set_rule $FSNAME ${NETTYPE}$i cli2ost krb5n ||
+			error "set rule $i (2)"
+		set_rule $FSNAME ${NETTYPE}$i mdt2ost null ||
+			error "set rule $i (3)"
+		set_rule $FSNAME ${NETTYPE}$i mdt2mdt null ||
+			error "set rule $i (4)"
 	done
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME ${NETTYPE}$i any || error "remove rule $i"
+		set_rule $FSNAME ${NETTYPE}$i cli2mdt ||
+			error "remove rule $i (1)"
+		set_rule $FSNAME ${NETTYPE}$i cli2ost ||
+			error "remove rule $i (2)"
+		set_rule $FSNAME ${NETTYPE}$i mdt2ost ||
+			error "remove rule $i (3)"
+		set_rule $FSNAME ${NETTYPE}$i mdt2mdt ||
+			error "remove rule $i (4)"
+
 	done
 
 	nrule_new=$(do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME \
@@ -473,10 +501,20 @@ test_99() {
 	echo "original target rules: $nrule_old"
 
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME-MDT0000 ${NETTYPE}$i any krb5i || error "set rule $i"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i cli2mdt krb5i ||
+			error "set new rule $i (1)"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i mdt2ost null ||
+			error "set new rule $i (2)"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i mdt2mdt null ||
+			error "set new rule $i (3)"
 	done
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME-MDT0000 ${NETTYPE}$i any || error "remove rule $i"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i cli2mdt ||
+			error "remove new rule $i (1)"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i mdt2ost ||
+			error "remove new rule $i (2)"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i mdt2mdt ||
+			error "remove new rule $i (3)"
 	done
 
 	nrule_new=$(do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME \
@@ -487,106 +525,59 @@ test_99() {
 }
 run_test 99 "set large number of sptlrpc rules"
 
-error_dbench()
-{
-	local err_str=$1
-
-	killall -9 dbench
-	sleep 1
-
-	error $err_str
-}
-
 test_100() {
 	# started from default flavors
 	restore_to_default_flavor
 
-	# running dbench background
+	mkdir $DIR/$tdir
+
+	# running dbench in background
 	start_dbench
 
 	#
-	# all: null -> krb5n -> krb5a -> krb5i -> krb5p -> plain
+	# all: null -> krb5n -> krb5a -> krb5i -> krb5p
 	#
-	set_rule $FSNAME any any krb5n
-	wait_flavor all2all krb5n || error_dbench "1"
+	set_flavor_all krb5n
 	check_dbench
 
-	set_rule $FSNAME any any krb5a
-	wait_flavor all2all krb5a || error_dbench "2"
+	set_flavor_all krb5a
 	check_dbench
 
-	set_rule $FSNAME any any krb5i
-	wait_flavor all2all krb5i || error_dbench "3"
+	set_flavor_all krb5i
 	check_dbench
 
-	set_rule $FSNAME any any krb5p
-	wait_flavor all2all krb5p || error_dbench "4"
-	check_dbench
-
-	set_rule $FSNAME any any plain
-	wait_flavor all2all plain || error_dbench "5"
+	set_flavor_all krb5p
 	check_dbench
 
 	#
-	# M - M: krb5a
-	# C - M: krb5i
-	# M - O: krb5p
-	# C - O: krb5n
-	#
-	set_rule $FSNAME any mdt2mdt krb5a
-	wait_flavor mdt2mdt krb5a || error_dbench "6"
-	check_dbench
-
-	set_rule $FSNAME any cli2mdt krb5i
-	wait_flavor cli2mdt krb5i || error_dbench "7"
-	check_dbench
-
-	set_rule $FSNAME any mdt2ost krb5p
-	wait_flavor mdt2ost krb5p || error_dbench "8"
-	check_dbench
-
-	set_rule $FSNAME any cli2ost krb5n
-	wait_flavor cli2ost krb5n || error_dbench "9"
-	check_dbench
-
-	#
-	# * - MDT0: krb5p
+	# * - MDT0: krb5a
 	# * - OST0: krb5i
 	#
-	# nothing should be changed because they are override by above dir rules
+	# nothing should be changed because they are overridden by above rules
 	#
-	set_rule $FSNAME-MDT0000 any any krb5p
-	set_rule $FSNAME-OST0000 any any krb5i
-	wait_flavor mdt2mdt krb5a || error_dbench "10"
-	wait_flavor cli2mdt krb5i || error_dbench "11"
+	set_rule $FSNAME-MDT0000 any cli2mdt krb5a
+	set_rule $FSNAME-OST0000 any cli2ost krb5i
+	wait_flavor cli2mdt krb5p || error_dbench "1"
 	check_dbench
-	wait_flavor mdt2ost krb5p || error_dbench "12"
-	wait_flavor cli2ost krb5n || error_dbench "13"
+	wait_flavor cli2ost krb5p || error_dbench "2"
 
 	#
-	# delete all dir-specific rules
+	# remove:
+	#  * - MDT0: krb5a
+	#  * - OST0: krb5i
+	#
+	set_rule $FSNAME-MDT0000 any cli2mdt
+	set_rule $FSNAME-OST0000 any cli2ost
+	check_dbench
+
+	#
+	# delete all rules
 	#
 	set_rule $FSNAME any mdt2mdt
 	set_rule $FSNAME any cli2mdt
 	set_rule $FSNAME any mdt2ost
 	set_rule $FSNAME any cli2ost
-	wait_flavor mdt2mdt krb5p $((MDSCOUNT - 1)) || error_dbench "14"
-	wait_flavor cli2mdt krb5p $(get_clients_mount_count) ||
-		error_dbench "15"
-	check_dbench
-	wait_flavor mdt2ost krb5i $MDSCOUNT || error_dbench "16"
-	wait_flavor cli2ost krb5i $(get_clients_mount_count) ||
-		error_dbench "17"
-	check_dbench
-
-	#
-	# remove:
-	#  * - MDT0: krb5p
-	#  * - OST0: krb5i
-	#
-	set_rule $FSNAME-MDT0000 any any
-	set_rule $FSNAME-OST0000 any any || error_dbench "18"
-	wait_flavor all2all plain || error_dbench "19"
+	restore_to_default_flavor
 	check_dbench
 
 	stop_dbench
@@ -602,7 +593,7 @@ switch_sec_test()
 	local num
 
 	#
-	# after set to flavor0, start multop which use flavor0 rpc, and let
+	# after setting flavor0, start multiop which uses flavor0 rpc, and let
 	# server drop the reply; then switch to flavor1, the resend should be
 	# completed using flavor1. To exercise the code of switching ctx/sec
 	# for a resend request.
@@ -640,16 +631,11 @@ test_101()
 	# started from default flavors
 	restore_to_default_flavor
 
-	switch_sec_test null  plain
-	switch_sec_test plain krb5n
+	switch_sec_test null  krb5n
 	switch_sec_test krb5n krb5a
 	switch_sec_test krb5a krb5i
 	switch_sec_test krb5i krb5p
 	switch_sec_test krb5p null
-	switch_sec_test null  krb5p
-	switch_sec_test krb5p krb5i
-	switch_sec_test krb5i plain
-	switch_sec_test plain krb5p
 }
 run_test 101 "switch ctx/sec for resending request"
 
@@ -667,19 +653,18 @@ test_102() {
 	# started from default flavors
 	restore_to_default_flavor
 
+	mkdir $DIR/$tdir
+
 	# run dbench background
 	start_dbench
 
-	echo "Testing null->krb5n->krb5a->krb5i->krb5p->plain->null"
-	set_rule $FSNAME any any krb5n
-	set_rule $FSNAME any any krb5a
-	set_rule $FSNAME any any krb5i
-	set_rule $FSNAME any any krb5p
-	set_rule $FSNAME any any plain
-	set_rule $FSNAME any any null
+	echo "Testing null->krb5n->krb5a->krb5i->krb5p->null"
+	set_flavor_all krb5n
+	set_flavor_all krb5a
+	set_flavor_all krb5i
+	set_flavor_all krb5p
+	set_flavor_all null
 
-	check_dbench
-	wait_flavor all2all null || error_dbench "1"
 	check_dbench
 
 	echo "waiting for 15s and check again"
@@ -687,14 +672,12 @@ test_102() {
 	check_dbench
 
 	echo "Testing null->krb5i->null->krb5i->null..."
-	for ((i=0; i<10; i++)); do
-		set_rule $FSNAME any any krb5i
-		set_rule $FSNAME any any null
+	for ((idx = 0; idx < 5; idx++)); do
+		set_flavor_all krb5i
+		set_flavor_all null
 	done
-	set_rule $FSNAME any any krb5i
+	set_flavor_all krb5i
 
-	check_dbench
-	wait_flavor all2all krb5i || error_dbench "2"
 	check_dbench
 
 	echo "waiting for 15s and check again"
@@ -703,7 +686,7 @@ test_102() {
 
 	stop_dbench
 }
-run_test 102 "survive from insanely fast flavor switch"
+run_test 102 "survive from fast flavor switch"
 
 test_150() {
 	local mount_opts
@@ -716,81 +699,88 @@ test_150() {
 	restore_to_default_flavor
 
 	# at this time no rules has been set on mgs; mgc use null
-	# flavor connect to mgs.
+	# flavor to connect to mgs
 	count=$(flvr_cnt_mgc2mgs null)
-	[ $count -eq 1 ] || error "$count mgc connection use null flavor"
+	[ $count -eq 1 ] || error "$count mgc connections use null flavor"
 
-	zconf_umount_clients $clients $MOUNT || return 1
+	zconf_umount_clients $clients $MOUNT || error "umount failed (1)"
 
 	# mount client with conflict flavor - should fail
 	mount_opts="${MOUNT_OPTS:+$MOUNT_OPTS,}mgssec=krb5p"
 	zconf_mount_clients $clients $MOUNT $mount_opts &&
-	    error "mount with conflict flavor should have failed"
+		error "mount with conflict flavor should have failed"
 
 	# mount client with same flavor - should succeed
 	mount_opts="${MOUNT_OPTS:+$MOUNT_OPTS,}mgssec=null"
 	zconf_mount_clients $clients $MOUNT $mount_opts ||
-	    error "mount with same flavor should have succeeded"
-	zconf_umount_clients $clients $MOUNT || return 2
+		error "mount with same flavor should have succeeded"
+	zconf_umount_clients $clients $MOUNT || error "umount failed (2)"
 
 	# mount client with default flavor - should succeed
 	zconf_mount_clients $clients $MOUNT ||
-	    error "mount with default flavor should have succeeded"
+		error "mount with default flavor should have succeeded"
 }
 run_test 150 "secure mgs connection: client flavor setting"
 
-test_151() {
-	local save_opts
+exit_151() {
+	# remove mgs rule
+	set_rule _mgs any any
 
-	# set mgs only accept krb5p
+	# umount everything, then remount
+	stopall
+	setupall
+}
+
+test_151() {
+	local new_opts
+
+	stack_trap exit_151 EXIT
+
+	# set mgs rule to only accept krb5p
 	set_rule _mgs any any krb5p
 
 	# umount everything, modules still loaded
 	stopall
 
 	# start gss daemon on mgs node
-	combined_mgs_mds || start_gss_daemons $mgs_HOST "$LSVCGSSD -v"
+	combined_mgs_mds || start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv"
 
 	# start mgs
 	start mgs $(mgsdevname 1) $MDS_MOUNT_OPTS
 
-	# mount mgs with default flavor, in current framework it means mgs+mdt1.
-	# the connection of mgc of mdt1 to mgs is expected fail.
-	DEVNAME=$(mdsdevname 1)
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS
-	wait_mgc_import_state mds FULL 0 &&
-	    error "mount with default flavor should have failed"
-	stop mds1
+	# mount with default flavor, expected to fail
+	start ost1 "$(ostdevname 1)" $OST_MOUNT_OPTS
+	wait_mgc_import_state ost1 FULL 0 &&
+		error "mount with default flavor should have failed"
+	stop ost1
 
 	# mount with unauthorized flavor should fail
-	save_opts=$MDS_MOUNT_OPTS
-	if [ -z "$MDS_MOUNT_OPTS" ]; then
-	    MDS_MOUNT_OPTS="-o mgssec=null"
+	if [ -z "$OST_MOUNT_OPTS" ]; then
+		new_opts="-o mgssec=null"
 	else
-	MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=null"
+		new_opts="$OST_MOUNT_OPTS,mgssec=null"
 	fi
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS
-	wait_mgc_import_state mds FULL 0 &&
-	    error "mount with unauthorized flavor should have failed"
-	MDS_MOUNT_OPTS=$save_opts
-	stop mds1
+	start ost1 "$(ostdevname 1)" $new_opts
+	wait_mgc_import_state ost1 FULL 0 &&
+		error "mount with unauthorized flavor should have failed"
+	stop ost1
 
 	# mount with designated flavor should succeed
-	save_opts=$MDS_MOUNT_OPTS
-	if [ -z "$MDS_MOUNT_OPTS" ]; then
-	    MDS_MOUNT_OPTS="-o mgssec=krb5p"
+	if [ -z "$OST_MOUNT_OPTS" ]; then
+		new_opts="-o mgssec=krb5p"
 	else
-	MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=krb5p"
+		new_opts="$OST_MOUNT_OPTS,mgssec=krb5p"
 	fi
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS
-	wait_mgc_import_state mds FULL 0 ||
-	    error "mount with designated flavor should have succeeded"
-	MDS_MOUNT_OPTS=$save_opts
+	start ost1 "$(ostdevname 1)" $new_opts
+	wait_mgc_import_state ost1 FULL 0 ||
+		error "mount with designated flavor should have succeeded"
 
-	stop mds1 -f
+	stop ost1 -f
 }
 run_test 151 "secure mgs connection: server flavor control"
 
 complete $SECONDS
+set_flavor_all null
+cleanup_gss
 check_and_cleanup_lustre
 exit_status
