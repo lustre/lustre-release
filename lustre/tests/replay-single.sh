@@ -5017,10 +5017,21 @@ test_200() {
 
 	local rcli old
 
-	rcli=$(echo "$RCLIENTS" | cut -d ' ' -f 1)
-	old=$(do_node "$rcli" "$LCTL get_param -n osc.*OST0000*.idle_timeout")
+	rcli=$(echo $RCLIENTS | cut -d ' ' -f 1)
 
-	if ((old != 0)); then
+	echo "Selected \"$rcli\" from \"$RCLIENTS\""
+
+	# We want idle disconnect enabled on all targets except OST0000. Test
+	# assumes all nodes are configured the same.
+	old=$(do_node $rcli "$LCTL get_param -n *.*.idle_timeout 2>/dev/null |
+	      head -n 1")
+	[[ -n $old ]] || error "Cannot determine current idle_timeout"
+
+	if ((old == 0)); then
+		do_node "$rcli" "$LCTL set_param *.*.idle_timeout=10"
+		do_node "$rcli" "$LCTL set_param osc.*OST0000*.idle_timeout=0"
+		stack_trap "do_node $rcli $LCTL set_param *.*.idle_timeout=$old"
+	else
 		do_node "$rcli" "$LCTL set_param osc.*OST0000*.idle_timeout=0"
 		stack_trap "do_node $rcli $LCTL set_param osc.*OST0000*.idle_timeout=$old"
 	fi
@@ -5056,15 +5067,13 @@ test_200() {
 	# unsigned int ping_interval = (OBD_TIMEOUT_DEFAULT > 4) ?
 	#			       (OBD_TIMEOUT_DEFAULT / 4) : 1;
 	# Delay a ping for 3 intervals
-	local timeout delay ts1 ts2 elapsed
+	local timeout delay
 
 	timeout=$(do_node "$rcli" "$LCTL get_param -n timeout")
 	(( timeout > 4 )) && delay=$((3 * timeout / 4)) || delay=3
 
 	do_node "$rcli" "$LCTL clear"
 	log "delay ping ${delay}s"
-
-	ts1=$(date +%s)
 
 	#define OBD_FAIL_PTLRPC_DELAY_SEND_FAIL    0x535
 	do_node "$rcli" "$LCTL set_param fail_loc=0x80000535 fail_val=${delay}"
@@ -5073,49 +5082,52 @@ test_200() {
 	# thread is delayed instead
 	do_node "$rcli" "lctl set_param osc.*OST0000*.ping=1"
 
-	# Make sure we hit the fail_loc
-	wait_update --quiet "$rcli" \
-		"dmesg | tail -n 10 | \
-		 grep -c 'fail_timeout id 535 sleeping for'" \
-		"1" "${timeout}"
+	local logfile="$TMP/lustre-log-${TESTNAME}.log"
 
-	(( $? != 0 )) && error "Did not hit fail_loc"
+	local nsent expired
+	local waited=0
+	local begin=$SECONDS
+	local max_wait=$((delay + 1))
+	local reason=""
+	local sleep=""
+	while (( $waited <= $max_wait )); do
+		[[ -z $sleep ]] || sleep $sleep
+		sleep=1
+		waited=$((SECONDS - begin))
+		do_node "$rcli" "$LCTL dk" >> ${logfile}
 
-	ts2=$(date +%s)
+		if ! grep -q 'fail_timeout id 535 sleeping for' $logfile; then
+			reason="Did not hit fail_loc"
+			continue
+		fi
 
-	# If we raced with pinger thread then we need to wait ${delay} seconds
-	# for the ping to fail
-	elapsed=$((ts2 - ts1))
+		if ! grep -q 'cfs_fail_timeout id 535 awake' $logfile; then
+			reason="Delayed send did not wake"
+			continue
+		fi
 
-	if (( elapsed < delay )); then
-		sleep $(((delay - elapsed) + 1))
-	fi
+		nsent=$(grep -c "ptl_send_rpc.*o400->.*OST0000" $logfile)
+		if (( nsent <= 1 )); then
+			reason="Did not send more than 1 obd ping"
+			continue
+		fi
 
-	do_node "$rcli" "$LCTL dk" > "$TMP/lustre-log-${TESTNAME}.log"
+		expired=$(grep "Request sent has timed out .* o400->" $logfile)
+		if [[ -z $expired ]]; then
+			reason="RPC did not time out"
+			continue
+		fi
+		reason=""
+		break
+	done
 
-	local nsent
-
-	nsent=$(grep -c "ptl_send_rpc.*o400->.*OST0000" \
-		"$TMP/lustre-log-${TESTNAME}.log")
-
-	if (( nsent <= 1)); then
-		cat "$TMP/lustre-log-${TESTNAME}.log"
-		rm -f "$TMP/lustre-log-${TESTNAME}.log"
-		error "Did not send more than 1 obd ping"
-	fi
-
-	local expired
-
-	expired=$(grep "Request sent has timed out .* o400->" \
-		  "$TMP/lustre-log-${TESTNAME}.log")
-
-	if [[ -z $expired ]]; then
-		cat "$TMP/lustre-log-${TESTNAME}.log"
-		rm -f "$TMP/lustre-log-${TESTNAME}.log"
-		error "RPC did not time out"
+	if [[ -n $reason ]]; then
+		cat $logfile
+		rm -f $logfile
+		error "$reason"
 	else
 		echo "${expired}"
-		rm -f "$TMP/lustre-log-${TESTNAME}.log"
+		rm -f $logfile
 	fi
 
 	declare -a conns2

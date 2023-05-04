@@ -942,12 +942,15 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	request->rq_deadline = request->rq_sent + request->rq_timeout +
 		ptlrpc_at_get_net_latency(request);
 
-	if (unlikely(opc == OBD_PING &&
-	    CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND_FAIL, cfs_fail_val)))
-		GOTO(skip_send, rc);
-
 	DEBUG_REQ(D_INFO, request, "send flags=%x",
 		  lustre_msg_get_flags(request->rq_reqmsg));
+
+	if (unlikely(opc == OBD_PING &&
+	    CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND_FAIL, cfs_fail_val))) {
+		DEBUG_REQ(D_INFO, request, "Simulate delay send failure");
+		GOTO(skip_send, rc);
+	}
+
 	rc = ptl_send_buf(&request->rq_req_md_h,
 			  request->rq_reqbuf, request->rq_reqdata_len,
 			  LNET_NOACK_REQ, &request->rq_req_cbid,
