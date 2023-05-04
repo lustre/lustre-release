@@ -287,14 +287,14 @@ static int ll_get_name(struct dentry *dentry, char *name, struct dentry *child)
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
-	inode_lock(dir);
+	ll_inode_lock(dir);
 #ifdef HAVE_DIR_CONTEXT
 	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx, NULL);
 #else
 	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir,
 			 NULL);
 #endif
-	inode_unlock(dir);
+	ll_inode_unlock(dir);
 	ll_finish_md_op_data(op_data);
 	if (!rc && !lgd.lgd_found)
 		rc = -ENOENT;

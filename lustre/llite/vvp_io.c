@@ -1345,10 +1345,10 @@ static int vvp_io_write_start(const struct lu_env *env,
 		iter = *vio->vui_iter;
 
 		if (unlikely(lock_inode))
-			inode_lock(inode);
+			ll_inode_lock(inode);
 		result = __generic_file_write_iter(vio->vui_iocb, &iter);
 		if (unlikely(lock_inode))
-			inode_unlock(inode);
+			ll_inode_unlock(inode);
 
 		written = result;
 		if (result > 0)
@@ -1733,7 +1733,7 @@ static int vvp_io_lseek_start(const struct lu_env *env,
 	struct inode *inode = vvp_object_inode(io->ci_obj);
 	__u64 start = io->u.ci_lseek.ls_start;
 
-	inode_lock(inode);
+	ll_inode_lock(inode);
 	inode_dio_wait(inode);
 
 	/* At the moment we have DLM lock so just update inode
@@ -1756,7 +1756,7 @@ static void vvp_io_lseek_end(const struct lu_env *env,
 	if (io->u.ci_lseek.ls_result > i_size_read(inode))
 		io->u.ci_lseek.ls_result = -ENXIO;
 
-	inode_unlock(inode);
+	ll_inode_unlock(inode);
 }
 
 static const struct cl_io_operations vvp_io_ops = {

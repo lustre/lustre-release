@@ -206,7 +206,8 @@ struct ll_inode_info {
 		/* for non-directory */
 		struct {
 			struct mutex		lli_size_mutex;
-			char		       *lli_symlink_name;
+			struct task_struct	*lli_size_lock_owner;
+			char			*lli_symlink_name;
 			struct ll_trunc_sem	lli_trunc_sem;
 			struct range_lock_tree	lli_write_tree;
 			struct mutex		lli_setattr_mutex;
@@ -291,6 +292,8 @@ struct ll_inode_info {
 	struct list_head		lli_xattrs; /* ll_xattr_entry->xe_list */
 	struct list_head		lli_lccs; /* list of ll_cl_context */
 	seqlock_t			lli_page_inv_lock;
+
+	struct task_struct		*lli_inode_lock_owner;
 };
 
 #ifndef HAVE_USER_NAMESPACE_ARG
@@ -434,7 +437,7 @@ static inline void ll_layout_version_set(struct ll_inode_info *lli, __u32 gen)
 	spin_unlock(&lli->lli_layout_lock);
 }
 
-enum ll_file_flags {
+enum ll_inode_flags {
 	/* File data is modified. */
 	LLIF_DATA_MODIFIED      = 0,
 	/* File is being restored */
@@ -447,6 +450,7 @@ enum ll_file_flags {
 	LLIF_UPDATE_ATIME	= 4,
 	/* foreign file/dir can be unlinked unconditionnaly */
 	LLIF_FOREIGN_REMOVABLE	= 5,
+	/* 6 is not used for now */
 	/* Xattr cache is filled */
 	LLIF_XATTR_CACHE_FILLED	= 7,
 
@@ -586,6 +590,35 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 {
 	return ll_i2info(inode)->lli_pcc_inode;
+}
+
+static inline void ll_set_inode_lock_owner(struct inode *inode)
+{
+	ll_i2info(inode)->lli_inode_lock_owner = current;
+}
+
+static inline void ll_clear_inode_lock_owner(struct inode *inode)
+{
+	ll_i2info(inode)->lli_inode_lock_owner = NULL;
+}
+
+static inline struct task_struct *ll_get_inode_lock_owner(struct inode *inode)
+{
+	return ll_i2info(inode)->lli_inode_lock_owner;
+}
+
+/* lock inode and set inode lock owener */
+static inline void ll_inode_lock(struct inode *inode)
+{
+	inode_lock(inode);
+	ll_set_inode_lock_owner(inode);
+}
+
+/* clear inode lock owner and unlock it */
+static inline void ll_inode_unlock(struct inode *inode)
+{
+	ll_clear_inode_lock_owner(inode);
+	inode_unlock(inode);
 }
 
 /* default to use at least 16M for fast read if possible */
@@ -1331,7 +1364,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags);
 void ll_update_dir_depth_dmv(struct inode *dir, struct dentry *de);
 int ll_read_inode2(struct inode *inode, void *opaque);
-void ll_truncate_inode_pages_final(struct inode *inode, struct cl_io *io);
+void ll_truncate_inode_pages_final(struct inode *inode);
 void ll_delete_inode(struct inode *inode);
 int ll_iocontrol(struct inode *inode, struct file *file,
 		 unsigned int cmd, void __user *uarg);

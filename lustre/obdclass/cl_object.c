@@ -428,6 +428,25 @@ int cl_object_flush(const struct lu_env *env, struct cl_object *top,
 }
 EXPORT_SYMBOL(cl_object_flush);
 
+int cl_object_inode_ops(const struct lu_env *env, struct cl_object *top,
+			enum coo_inode_opc opc, void *data)
+{
+	struct cl_object *obj;
+	int rc = 0;
+
+	ENTRY;
+
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_inode_ops) {
+			rc = obj->co_ops->coo_inode_ops(env, obj, opc, data);
+			if (rc)
+				break;
+		}
+	}
+	RETURN(rc);
+}
+EXPORT_SYMBOL(cl_object_inode_ops);
+
 /**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.
