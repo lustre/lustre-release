@@ -6205,6 +6205,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	/* Set this lu_device to obd for error handling purposes. */
 	obd->obd_lu_dev = &m->mdt_lu_dev;
 
+	strncpy(m->mdt_job_xattr, XATTR_NAME_JOB_DEFAULT, XATTR_JOB_MAX_LEN);
+
 	/* init the stack */
 	rc = mdt_stack_init((struct lu_env *)env, m, cfg);
 	if (rc) {

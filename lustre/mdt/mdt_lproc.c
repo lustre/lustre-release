@@ -1542,12 +1542,97 @@ static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+ssize_t job_xattr_show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	if (mdt->mdt_job_xattr[0] == '\0')
+		return scnprintf(buf, PAGE_SIZE, "NONE\n");
+
+	return scnprintf(buf, PAGE_SIZE, "%s\n", mdt->mdt_job_xattr);
+}
+
+/**
+ * Read in a name for the jobid xattr and validate it.
+ * The only valid names are "trusted.job" or "user.*" where the name portion
+ * is <= 7 bytes in the user namespace. Only alphanumeric characters are
+ * allowed, aside from the namespace separator '.'.
+ *
+ * "none" is a valid value to turn this feature off.
+ *
+ * @return -EINVAL if the name is invalid, else count
+ */
+ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
+			const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	char name[XATTR_JOB_MAX_LEN] = { 0 };
+	char *p;
+
+
+	/* writing "none" turns this off by leaving the name empty */
+	if (!strncmp(buffer, "none", 4) ||
+	    !strncmp(buffer, "NONE", 4)) {
+		memset(mdt->mdt_job_xattr, 0, sizeof(mdt->mdt_job_xattr));
+		return count;
+	}
+
+	/* account for stripping \n before rejecting name for being too long */
+	if (count > XATTR_JOB_MAX_LEN - 1 &&
+	    buffer[XATTR_JOB_MAX_LEN - 1] != '\n')
+		return -EINVAL;
+
+	strncpy(name, buffer, XATTR_JOB_MAX_LEN - 1);
+
+	/* reject if not in namespace.name format */
+	p = strchr(name, '.');
+	if (p == NULL)
+		return -EINVAL;
+
+	p++;
+	for (; *p != '\0'; p++) {
+		/*
+		 * if there are any non-alphanumeric characters, the name is
+		 * invalid unless it's a newline, in which case overwrite it
+		 * with '\0' and that's the end of the name.
+		 */
+		if (!isalnum(*p)) {
+			if (*p != '\n')
+				return -EINVAL;
+			*p = '\0';
+		}
+	}
+
+	/* trusted.job is only valid name in trusted namespace */
+	if (!strncmp(name, "trusted.job", 12)) {
+		strncpy(mdt->mdt_job_xattr, name, XATTR_JOB_MAX_LEN);
+		return count;
+	}
+
+	/* only other valid namespace is user */
+	if (strncmp(name, XATTR_USER_PREFIX, sizeof(XATTR_USER_PREFIX) - 1))
+		return -EINVAL;
+
+	/* ensure that a name was specified */
+	if (name[sizeof(XATTR_USER_PREFIX) - 1] == '\0')
+		return -EINVAL;
+
+	strncpy(mdt->mdt_job_xattr, name, XATTR_JOB_MAX_LEN);
+
+	return count;
+}
+
 LPROC_SEQ_FOPS_RO(mdt_checksum_type);
 
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, checksum_dump);
 LUSTRE_RW_ATTR(job_cleanup_interval);
+LUSTRE_RW_ATTR(job_xattr);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
 LUSTRE_RW_ATTR(hsm_control);
 
@@ -1603,6 +1688,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_migrate_hsm_allowed.attr,
 	&lustre_attr_hsm_control.attr,
 	&lustre_attr_job_cleanup_interval.attr,
+	&lustre_attr_job_xattr.attr,
 	&lustre_attr_readonly.attr,
 	&lustre_attr_dir_split_count.attr,
 	&lustre_attr_dir_split_delta.attr,

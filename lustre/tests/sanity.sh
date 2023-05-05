@@ -12225,6 +12225,12 @@ test_103a() {
 	which setfacl || skip_env "could not find setfacl"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
+	local mdts=$(comma_list $(mdts_nodes))
+	local saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE
+	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$saved" EXIT
+
 	ACLBIN=${ACLBIN:-"bin"}
 	ACLDMN=${ACLDMN:-"daemon"}
 	ACLGRP=${ACLGRP:-"users"}
@@ -19948,6 +19954,84 @@ test_205g() {
 	[[ $SLOW == "no" ]] && sleep 90 || sleep 240
 }
 run_test 205g "stress test for job_stats procfile"
+
+test_205h() {
+	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
+
+	local dir=$DIR/$tdir
+	local f=$dir/$tfile
+	local f2=$dir/$tfile-2
+	local f3=$dir/$tfile-3
+	local subdir=$DIR/dir
+	local val
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local mds_saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
+	local client_saved=$($LCTL get_param -n jobid_var)
+
+	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$mds_saved" EXIT
+	stack_trap "$LCTL set_param jobid_var=$client_saved" EXIT
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=user.job ||
+		error "failed to set job_xattr parameter to user.job"
+	$LCTL set_param jobid_var=procname.uid ||
+		error "failed to set jobid_var parameter"
+
+	test_mkdir $dir
+
+	touch $f
+	val=$(getfattr -n user.job $f | grep user.job)
+	[[ $val = user.job=\"touch.0\" ]] ||
+		error "expected user.job=\"touch.0\", got '$val'"
+
+	mkdir $subdir
+	val=$(getfattr -n user.job $subdir | grep user.job)
+	[[ $val = user.job=\"mkdir.0\" ]] ||
+		error "expected user.job=\"mkdir.0\", got '$val'"
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE ||
+		error "failed to set job_xattr parameter to NONE"
+
+	touch $f2
+	val=$(getfattr -d $f2)
+	[[ -z $val ]] ||
+		error "expected no user xattr, got '$val'"
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=trusted.job ||
+		error "failed to set job_xattr parameter to trusted.job"
+
+	touch $f3
+	val=$(getfattr -n trusted.job $f3 | grep trusted.job)
+	[[ $val = trusted.job=\"touch.0\" ]] ||
+		error "expected trusted.job=\"touch.0\", got '$val'"
+}
+run_test 205h "check jobid xattr is stored correctly"
+
+test_205i() {
+	local mdts=$(comma_list $(mdts_nodes))
+	local mds_saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
+
+	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$mds_saved" EXIT
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=user.1234567 ||
+		error "failed to set mdt.*.job_xattr to user.1234567"
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=user.12345678 &&
+		error "failed to reject too long job_xattr name"
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=userjob &&
+		error "failed to reject job_xattr name in bad format"
+
+	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=user.job/ &&
+		error "failed to reject job_xattr name with invalid character"
+
+	do_nodes $mdts "printf 'mdt.*.job_xattr=user.job\x80' |
+			xargs $LCTL set_param" &&
+		error "failed to reject job_xattr name with non-ascii character"
+
+	return 0
+}
+run_test 205i "check job_xattr parameter accepts and rejects values correctly"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {

@@ -177,6 +177,9 @@ struct md_op_spec {
 
 	/** to create directory */
 	const struct dt_index_features *sp_feat;
+
+	/* name of xattr used to store jobid in inode, or empty if disabled */
+	char sp_cr_job_xattr[XATTR_JOB_MAX_LEN];
 };
 
 enum md_layout_opc {

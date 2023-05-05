@@ -354,6 +354,9 @@ struct mdt_device {
 
 	/* count of old clients that doesn't support DMV implicite inherit */
 	atomic_t		   mdt_dmv_old_client_count;
+
+	/* name of xattr used to store jobid in mdt inode */
+	char			   mdt_job_xattr[XATTR_JOB_MAX_LEN];
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)

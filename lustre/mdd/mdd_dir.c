@@ -2500,9 +2500,13 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct lu_buf *def_acl_buf,
 			     struct lu_buf *hsm_buf,
 			     struct dt_allocation_hint *hint,
-			     struct thandle *handle, bool initsecctx)
+			     struct thandle *handle, bool initial_create)
 {
+	const struct lu_fid *son_fid = mdd_object_fid(son);
+	const struct lu_ucred *uc = lu_ucred(env);
+	const char *jobid = uc->uc_jobid;
 	const struct lu_buf *buf;
+	size_t jobid_len;
 	int rc;
 
 	mdd_write_lock(env, son, DT_TGT_CHILD);
@@ -2595,7 +2599,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_initlized, rc = -EFAULT);
 	}
 
-	if (initsecctx && spec->sp_cr_file_secctx_name != NULL) {
+	if (initial_create && spec->sp_cr_file_secctx_name != NULL) {
 		buf = mdd_buf_get_const(env, spec->sp_cr_file_secctx,
 					spec->sp_cr_file_secctx_size);
 		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_file_secctx_name,
@@ -2612,6 +2616,25 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 				   handle);
 		if (rc < 0)
 			GOTO(err_initlized, rc);
+	}
+
+	if (initial_create &&
+	    spec->sp_cr_job_xattr[0] != '\0' &&
+	    jobid[0] != '\0' &&
+	    (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode))) {
+		jobid_len = strnlen(jobid, LUSTRE_JOBID_SIZE);
+		buf = mdd_buf_get_const(env, jobid, jobid_len);
+
+		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_job_xattr,
+				   LU_XATTR_CREATE, handle);
+
+		/* this xattr is nonessential, so ignore errors. */
+		if (rc != 0) {
+			CDEBUG(D_INODE,
+			       DFID" failed to set xattr '%s': rc = %d\n",
+			       PFID(son_fid), spec->sp_cr_job_xattr, rc);
+			rc = 0;
+		}
 	}
 
 err_initlized:

@@ -1231,6 +1231,10 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_ns"
 #define XATTR_NAME_MAX_LEN	32 /* increase this, if there is longer name. */
 
+#define XATTR_NAME_JOB_DEFAULT	"user.job"
+/* longest allowed jobid xattr name is "user." + 7 chars + null terminator */
+#define XATTR_JOB_MAX_LEN	13
+
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
