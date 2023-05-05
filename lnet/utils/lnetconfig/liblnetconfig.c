@@ -4547,6 +4547,11 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 	bool found = false;
 
 	memset(&tunables, 0, sizeof(tunables));
+	/* Use LND defaults */
+	tunables.lt_cmn.lct_peer_timeout = -1;
+	tunables.lt_cmn.lct_peer_tx_credits = -1;
+	tunables.lt_cmn.lct_peer_rtr_credits = -1;
+	tunables.lt_cmn.lct_max_tx_credits = -1;
 
 	INIT_LIST_HEAD(&nw_descr.network_on_rule);
 	INIT_LIST_HEAD(&nw_descr.nw_intflist);
