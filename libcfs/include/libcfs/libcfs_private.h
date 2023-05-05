@@ -254,66 +254,22 @@ int libcfs_debug_mark_buffer(const char *text);
 #define LASSERT_ATOMIC_EQ(a, v)				\
 	LASSERTF(atomic_read(a) == v, "value: %d\n", atomic_read((a)));
 
-/** assert value of @a is unequal to @v */
-#define LASSERT_ATOMIC_NE(a, v)				\
-	LASSERTF(atomic_read(a) != v, "value: %d\n", atomic_read((a)));
-
-/** assert value of @a is little than @v */
-#define LASSERT_ATOMIC_LT(a, v)				\
-	LASSERTF(atomic_read(a) < v, "value: %d\n", atomic_read((a)));
-
-/** assert value of @a is little/equal to @v */
-#define LASSERT_ATOMIC_LE(a, v)				\
-	LASSERTF(atomic_read(a) <= v, "value: %d\n", atomic_read((a)));
-
 /** assert value of @a is great than @v */
 #define LASSERT_ATOMIC_GT(a, v)				\
 	LASSERTF(atomic_read(a) > v, "value: %d\n", atomic_read((a)));
 
-/** assert value of @a is great/equal to @v */
-#define LASSERT_ATOMIC_GE(a, v)				\
-	LASSERTF(atomic_read(a) >= v, "value: %d\n", atomic_read((a)));
-
 /** assert value of @a is great than @v1 and little than @v2 */
-#define LASSERT_ATOMIC_GT_LT(a, v1, v2)			\
-do {							\
-	int __v = atomic_read(a);			\
-	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);\
-} while (0)
-
-/** assert value of @a is great than @v1 and little/equal to @v2 */
-#define LASSERT_ATOMIC_GT_LE(a, v1, v2)			\
-do {							\
-	int __v = atomic_read(a);			\
-	LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);\
-} while (0)
-
-/** assert value of @a is great/equal to @v1 and little than @v2 */
-#define LASSERT_ATOMIC_GE_LT(a, v1, v2)			\
-do {							\
-	int __v = atomic_read(a);			\
-	LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);\
-} while (0)
-
-/** assert value of @a is great/equal to @v1 and little/equal to @v2 */
-#define LASSERT_ATOMIC_GE_LE(a, v1, v2)                         \
-do {                                                            \
-	int __v = atomic_read(a);				\
-	LASSERTF(__v >= v1 && __v <= v2, "value: %d\n", __v);   \
+#define LASSERT_ATOMIC_GT_LT(a, v1, v2)                        \
+do {                                                           \
+	int __v = atomic_read(a);                              \
+	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);    \
 } while (0)
 
 #else /* !LASSERT_ATOMIC_ENABLED */
 
 #define LASSERT_ATOMIC_EQ(a, v)                 do {} while (0)
-#define LASSERT_ATOMIC_NE(a, v)                 do {} while (0)
-#define LASSERT_ATOMIC_LT(a, v)                 do {} while (0)
-#define LASSERT_ATOMIC_LE(a, v)                 do {} while (0)
 #define LASSERT_ATOMIC_GT(a, v)                 do {} while (0)
-#define LASSERT_ATOMIC_GE(a, v)                 do {} while (0)
 #define LASSERT_ATOMIC_GT_LT(a, v1, v2)         do {} while (0)
-#define LASSERT_ATOMIC_GT_LE(a, v1, v2)         do {} while (0)
-#define LASSERT_ATOMIC_GE_LT(a, v1, v2)         do {} while (0)
-#define LASSERT_ATOMIC_GE_LE(a, v1, v2)         do {} while (0)
 
 #endif /* LASSERT_ATOMIC_ENABLED */
 
