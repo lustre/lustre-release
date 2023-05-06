@@ -72,7 +72,7 @@ while [ -n "$*" ]; do
 	-q|--quiet) ECHO=:;;
 	-z|--zip) OPT_ARCH="$2.tar"; shift;;
 	*)
-	   [ -e "$arg" ] && OPT_MOUNT="$arg" && break
+	   [ -d "$arg" ] && OPT_MOUNT="$arg";;
 	esac
 	shift
 done
