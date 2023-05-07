@@ -8682,8 +8682,8 @@ test_56ea() { #LU-10378
 	touch $path/$tfile || error "touch $path/$tfile failed"
 
 	# Compare basic file attributes from -printf and stat
-	local attr_printf=$($LFS find $path/$tfile -printf "%A@ %T@ %C@ %U %G")
-	local attr_stat=$(stat -c "%X %Y %Z %u %g" $path/$tfile)
+	local attr_printf=$($LFS find $path/$tfile -printf "%A@ %T@ %C@ %U %G %n")
+	local attr_stat=$(stat -c "%X %Y %Z %u %g %h" $path/$tfile)
 
 	[[ "${attr_printf}" == "${attr_stat}" ]] ||
 		error "Attrs from lfs find and stat don't match"
@@ -8758,6 +8758,53 @@ test_56ec() {
 	fi
 }
 run_test 56ec "check lfs getstripe,setstripe --hex --yaml"
+
+test_56eda() {
+	local dir=$DIR/$tdir
+	local subdir=$dir/subdir
+	local file1=$dir/$tfile
+	local file2=$dir/$tfile\2
+	local link=$dir/$tfile-link
+	local nfiles
+
+	test_mkdir -p $dir
+	$LFS setdirstripe -c1 $subdir
+	touch $file1
+	touch $file2
+	ln $file2 $link
+
+	nfiles=$($LFS find --links 1 $dir | wc -l)
+	(( $nfiles == 1 )) ||
+		error "lfs find --links expected 1 file, got $nfiles"
+
+	nfiles=$($LFS find --type f --links 2 $dir | wc -l)
+	(( $nfiles == 2 )) ||
+		error "lfs find --links expected 2 files, got $nfiles"
+
+	nfiles=$($LFS find --type d --links 2 $dir | wc -l)
+	(( $nfiles == 1 )) ||
+		error "lfs find --links expected 1 directory, got $nfiles"
+}
+run_test 56eda "check lfs find --links"
+
+test_56edb() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+
+	local dir=$DIR/$tdir
+	local stripedir=$dir/stripedir
+	local nfiles
+
+	test_mkdir -p $dir
+
+	$LFS setdirstripe -c2 $stripedir
+
+	$LFS getdirstripe $stripedir
+
+	nfiles=$($LFS find --type d --links 2 $stripedir | wc -l)
+	(( $nfiles == 1 )) ||
+		error "lfs find --links expected 1 directory, got $nfiles"
+}
+run_test 56edb "check lfs find --links for directory striped on multiple MDTs"
 
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

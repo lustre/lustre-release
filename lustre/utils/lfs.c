@@ -426,7 +426,7 @@ command_t cmdlist[] = {
 	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>] [--help|-h]\n"
-	 "     [[!] --layout|-L released,raid0,mdt] [--lazy]\n"
+	 "     [[!] --layout|-L released,raid0,mdt] [--lazy|-l] [[!] --links [+-]n]\n"
 	 "     [--maxdepth|-D N] [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <[^][blm],[^]fnv_1a_64,all_char,crush,...>\n"
 	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
@@ -3528,7 +3528,8 @@ enum {
 	LFS_NO_FOLLOW_OPT,
 	LFS_HEX_IDX_OPT,
 	LFS_STATS_OPT,
-	LFS_STATS_INTERVAL_OPT
+	LFS_STATS_INTERVAL_OPT,
+	LFS_LINKS_OPT
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -5136,6 +5137,8 @@ static int lfs_find(int argc, char **argv)
 /* getstripe { .val = 'I', .name = "comp-id",	.has_arg = required_argument }*/
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
+	{ .val = LFS_LINKS_OPT,
+			.name = "links",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument },
@@ -5186,7 +5189,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-		"-0A:b:B:c:C:D:E:g:G:hH:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
+		"-0A:b:B:c:C:D:E:g:G:hH:i:lL:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
 		long_opts, &optidx)) >= 0) {
 		xtime = NULL;
 		xsign = NULL;
@@ -5632,6 +5635,24 @@ static int lfs_find(int argc, char **argv)
 				goto err;
 			param.fp_exclude_layout = !!neg_opt;
 			param.fp_check_layout = 1;
+			break;
+		case LFS_LINKS_OPT:
+			if (optarg[0] == '+') {
+				param.fp_nlink_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_nlink_sign =  1;
+				optarg++;
+			}
+			errno = 0;
+			param.fp_nlink = strtoul(optarg, &endptr, 0);
+			if (errno != 0 || *endptr != '\0' || !param.fp_nlink) {
+				fprintf(stderr, "error: bad link count '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
+			param.fp_exclude_nlink = !!neg_opt;
 			break;
 		case 'u':
 		case 'U':

@@ -246,6 +246,10 @@ enum lfs_find_perm {
 	LFS_FIND_PERM_ALL   =  1,
 };
 
+/*
+ * new fields should be added to the end of this struct (unless filling a hole
+ * such as in a bitfield), to preserve the ABI
+ */
 struct find_param {
 	unsigned int		 fp_max_depth;
 	dev_t			 fp_dev;
@@ -275,7 +279,7 @@ struct find_param {
 				 fp_blocks_sign:2,
 				 fp_ext_size_sign:2,
 				 fp_perm_sign:2,
-				 fp_unused2_sign:2, /* Once used we must add  */
+				 fp_nlink_sign:2,   /* Once used we must add  */
 				 fp_unused3_sign:2, /* a separate flag field  */
 				 fp_unused4_sign:2; /* at end of the struct.  */
 	unsigned long long	 fp_size;
@@ -342,7 +346,7 @@ struct find_param {
 				 fp_exclude_btime:1,
 				 fp_exclude_perm:1,
 				 fp_stop_on_error:1, /* stop iteration on error */
-				 fp_unused_bit5:1, /* are used we need to add */
+				 fp_exclude_nlink:1, /* Once used, we must add*/
 				 fp_unused_bit6:1, /* a separate flag field at*/
 				 fp_unused_bit7:1; /* the end of the struct.  */
 
@@ -419,6 +423,7 @@ struct find_param {
 	unsigned int		 fp_hash_exflags;
 	/* Print all information (lfs find only) */
 	char			 *fp_format_printf_str;
+	nlink_t			 fp_nlink;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

@@ -16,9 +16,9 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR \fIGNAME\fR|\fIGID\fR>]
       [\fB--help\fR|\fB-h\fR]
 [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
-[\fB--lazy\fR]
-      [\fB--maxdepth\fR|\fB-D\fI n\fR]
-[[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR \fIUUID\fR|\fIINDEX\fR,...]
+[\fB--lazy|-l\fR]
+      [[\fB!\fR] \fB--links\fR [\fB+-\fR]\fIn\fR] [\fB--maxdepth\fR|\fB-D\fI n\fR]
+      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR \fIUUID\fR|\fIINDEX\fR,...]
       [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
 [[\fB!\fR] \fB--mdt-hash\fR|\fB-H \fR<[^]\fIHASHFLAG\fR,[^]\fIHASHTYPE\fR,...>]
       [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
@@ -145,8 +145,11 @@ HSM-archived files that are not resident in the filesystem.
 Files that have the first data component on an MDT.
 .RE
 .TP
-.BR --lazy
+.BR --lazy|-l
 Use file size and blocks from MDT, if available, to avoid extra RPCs.
+.TP
+.BR --links
+File has \fIn\fR links.
 .TP
 .BR --maxdepth
 Limits find to decend at most \fIn\fR levels of directory tree.
@@ -331,6 +334,9 @@ File\'s numeric group ID.
 .TP
 .B %m
 File permission bits (in octal).
+.TP
+.B %n
+Number of hard links to file.
 .TP
 .B %p
 File's name.

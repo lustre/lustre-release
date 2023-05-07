@@ -5081,6 +5081,10 @@ int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
 	case 'm':	/* file mode in octal */
 		*wrote = snprintf(buffer, size, "%#o", (mode & (~S_IFMT)));
 		break;
+	case 'n':	/* number of links */
+		*wrote = snprintf(buffer, size, "%u",
+				  param->fp_lmd->lmd_stx.stx_nlink);
+		break;
 	case 'p':	/* Path name of file */
 		*wrote = snprintf(buffer, size, "%s", path);
 		break;
@@ -5301,6 +5305,7 @@ static int cb_find_init(char *path, int p, int *dp,
 	    find_check_lmm_info(param) ||
 	    param->fp_check_mdt_count || param->fp_hash_type ||
 	    param->fp_check_hash_flag || param->fp_perm_sign ||
+	    param->fp_nlink ||
 	    gather_all)
 		decision = 0;
 
@@ -5311,7 +5316,12 @@ static int cb_find_init(char *path, int p, int *dp,
 		if (d != -1 &&
 		    (param->fp_check_mdt_count || param->fp_hash_type ||
 		     param->fp_check_hash_flag || param->fp_check_foreign ||
-		     gather_all)) {
+		     /*
+		      * cb_get_dirstripe is needed when checking nlink because
+		      * nlink is handled differently for multi-stripe directory
+		      * vs. single-stripe directory
+		      */
+		     param->fp_nlink || gather_all)) {
 			param->fp_get_lmv = 1;
 			ret = cb_get_dirstripe(path, &d, param);
 			if (ret != 0) {
@@ -5671,6 +5681,18 @@ obd_matches:
 		decision = 0;
 
 	/*
+	 * When checking nlink, stat(2) is needed for multi-striped directories
+	 * because the nlink value retrieved from the MDS above comes from
+	 * the number of stripes for the dir.
+	 * The posix stat call below fills in the correct number of links.
+	 * Single-stripe directories and regular files already have the
+	 * correct nlink value.
+	 */
+	if (param->fp_nlink && S_ISDIR(lmd->lmd_stx.stx_mode) &&
+	    (param->fp_lmv_md->lum_stripe_count != 0))
+		decision = 0;
+
+	/*
 	 * If file still fits the request, ask ost for updated info.
 	 * The regular stat is almost of the same speed as some new
 	 * 'glimpse-size-ioctl'.
@@ -5726,6 +5748,14 @@ obd_matches:
 				goto out;
 			}
 		}
+	}
+
+	if (param->fp_nlink) {
+		decision = find_value_cmp(lmd->lmd_stx.stx_nlink,
+					  param->fp_nlink, param->fp_nlink_sign,
+					  param->fp_exclude_nlink, 1, 0);
+		if (decision == -1)
+			goto decided;
 	}
 
 	if (param->fp_check_size) {
@@ -5979,7 +6009,7 @@ int validate_printf_esc(char *c)
  */
 int validate_printf_fmt(char *c)
 {
-	char *valid_fmt_single = "abcGkmpstUwy%";
+	char *valid_fmt_single = "abcGkmnpstUwy%";
 	char *valid_fmt_double = "ACTW";
 	char *valid_fmt_lustre = "cFhioPpS";
 	char curr = *c, next;
