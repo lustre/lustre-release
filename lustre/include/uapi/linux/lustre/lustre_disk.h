@@ -406,6 +406,11 @@ enum scrub_param {
 	SP_DRYRUN	= 0x0002,
 };
 
+#ifdef __KERNEL__
+/* v6.2-rc5-72-g5e6a51787fef kernel APIs need type to be guid_t */
+#define uuid_le        guid_t
+#endif
+
 struct scrub_file {
 	uuid_le	sf_uuid;		    /* 128-bit uuid for volume */
 	__u64	sf_flags;		    /* see 'enum scrub_flags' */
