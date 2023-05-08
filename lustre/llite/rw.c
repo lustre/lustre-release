@@ -1977,9 +1977,6 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	}
 
 	if (lcc && lcc->lcc_type != LCC_MMAP) {
-		CDEBUG(D_VFSTRACE, "pgno:%ld, beyond read end_index:%ld\n",
-		       vmpage->index, lcc->lcc_end_index);
-
 		/*
 		 * This handles a kernel bug introduced in kernel 5.12:
 		 * comment: cbd59c48ae2bcadc4a7599c29cf32fd3f9b78251
@@ -2005,6 +2002,10 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		 * mentioned above.
 		 */
 		if (vmpage->index >= lcc->lcc_end_index) {
+			CDEBUG(D_VFSTRACE,
+			       "pgno:%ld, beyond read end_index:%ld\n",
+			       vmpage->index, lcc->lcc_end_index);
+
 			result = cl_io_read_ahead(env, io, vmpage->index, &ra);
 			if (result < 0 || vmpage->index > ra.cra_end_idx) {
 				cl_read_ahead_release(env, &ra);
