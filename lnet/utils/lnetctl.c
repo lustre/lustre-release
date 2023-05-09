@@ -3481,6 +3481,11 @@ static int jt_discover(int argc, char **argv)
 		}
 	}
 
+	if (optind == argc) {
+		printf("Missing nid argument\n");
+		return -1;
+	}
+
 	for (; optind < argc; optind++)
 		rc = lustre_lnet_discover_nid(argv[optind], force, -1, &show_rc,
 					      &err_rc);
