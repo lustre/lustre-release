@@ -481,15 +481,27 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte,
 		goto out;
 	}
 
+	if (!(src || rte || dst)) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"Missing required argument(s)\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
 	/* sanitize parameters:
 	 * src-dst can be simultaneously present
 	 * dst-rte can be simultaneously present
 	 */
-	if ((!src && !rte && !dst) ||
-	    (src && rte && dst) ||
-	    (src && rte && !dst)) {
+	if (src && rte && dst) {
 		snprintf(err_str, sizeof(err_str),
 		  "\"The combination of src, dst and rte is not supported\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	if (src && rte) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"src and rte cannot be combined\"");
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
@@ -523,7 +535,7 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte,
 		if (rc < 0) {
 			snprintf(err_str,
 				 sizeof(err_str),
-				 "\failed to parse src parameter\"");
+				 "\"failed to parse src parameter\"");
 			goto out;
 		}
 	}
@@ -534,7 +546,7 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte,
 		if (rc < 0) {
 			snprintf(err_str,
 				 sizeof(err_str),
-				 "\failed to parse dst parameter\"");
+				 "\"failed to parse dst parameter\"");
 			goto out;
 		}
 	}
@@ -545,7 +557,7 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte,
 		if (rc < 0) {
 			snprintf(err_str,
 				 sizeof(err_str),
-				 "\failed to parse rte parameter\"");
+				 "\"failed to parse rte parameter\"");
 			goto out;
 		}
 	}
@@ -605,11 +617,9 @@ int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc)
 	udsp_bulk.iou_idx = idx;
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_UDSP, &udsp_bulk);
-	if (rc < 0) {
-		rc = -errno;
+	if (rc < 0)
 		snprintf(err_str, sizeof(err_str),
-			 "\"cannot del udsp: %s\"", strerror(rc));
-	}
+			 "\"cannot del udsp: %s\"", strerror(errno));
 
 	cYAML_build_error(rc, seq_no, ADD_CMD, "udsp", err_str, err_rc);
 	return rc;

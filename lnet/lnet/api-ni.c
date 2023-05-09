@@ -4622,12 +4622,6 @@ report_ping_err:
 
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_udsp_del_policy(idx);
-		if (!rc) {
-			rc = lnet_udsp_apply_policies(NULL, false);
-			CDEBUG(D_NET, "policy re-application returned %d\n",
-			       rc);
-			rc = 0;
-		}
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
 		return rc;

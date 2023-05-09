@@ -982,6 +982,9 @@ lnet_udsp_del_policy(int idx)
 		}
 	}
 
+	if (!removed)
+		return -ENOENT;
+
 	return 0;
 }
 

@@ -283,16 +283,19 @@ command_t peer_cmds[] = {
 
 command_t udsp_cmds[] = {
 	{"add", jt_add_udsp, 0, "add a udsp\n"
-	 "\t--src: ip2nets syntax specifying the local NID to match\n"
-	 "\t--dst: ip2nets syntax specifying the remote NID to match\n"
-	 "\t--rte: ip2nets syntax specifying the router NID to match\n"
-	 "\t--priority: priority value (0 - highest priority)\n"
-	 "\t--idx: index of where to insert the rule.\n"
-	 "\t       By default, appends to the end of the rule list.\n"},
+	 "\t--src nid|net: ip2nets syntax specifying the local NID or network to match.\n"
+	 "\t--dst nid:     ip2nets syntax specifying the remote NID to match.\n"
+	 "\t--rte nid:     ip2nets syntax specifying the router NID to match.\n"
+	 "\t--priority p:  Assign priority value p where p >= 0.\n"
+	 "\t               Note: 0 is the highest priority.\n"
+	 "\t--idx n:       Insert the rule in the n'th position on the list of rules.\n"
+	 "\t               By default, rules are appended to the end of the rule list.\n"},
 	{"del", jt_del_udsp, 0, "delete a udsp\n"
-	"\t--idx: index of the Policy.\n"},
+	 "\t--all:   Delete all rules.\n"
+	 "\t--idx n: Delete the rule at index n.\n"},
 	{"show", jt_show_udsp, 0, "show udsps\n"
-	 "\t --idx: index of the policy to show.\n"},
+	 "\t--idx n: Show the rule at at index n.\n"
+	 "\t         By default, all rules are shown.\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -2709,7 +2712,7 @@ static int jt_show_stats(int argc, char **argv)
 
 static int jt_show_udsp(int argc, char **argv)
 {
-	int idx = -1;
+	long int idx = -1;
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 
@@ -2727,7 +2730,11 @@ static int jt_show_udsp(int argc, char **argv)
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
-			idx = atoi(optarg);
+			rc = parse_long(optarg, &idx);
+			if (rc != 0 || idx < -1) {
+				printf("Invalid index \"%s\"\n", optarg);
+				return -EINVAL;
+			}
 			break;
 		case '?':
 			print_help(net_cmds, "net", "show");
@@ -3516,21 +3523,30 @@ static int jt_add_udsp(int argc, char **argv)
 			break;
 		case 'p':
 			rc = parse_long(optarg, &priority);
-			if (rc != 0)
-				priority = -1;
+			if (rc != 0 || priority < 0) {
+				printf("Invalid priority \"%s\"\n", optarg);
+				return -EINVAL;
+			}
 			action_type = "priority";
 			udsp_action.udsp_priority = priority;
 			break;
 		case 'i':
 			rc = parse_long(optarg, &idx);
-			if (rc != 0)
-				idx = 0;
+			if (rc != 0 || idx < 0) {
+				printf("Invalid index \"%s\"\n", optarg);
+				return -EINVAL;
+			}
 			break;
 		case '?':
 			print_help(udsp_cmds, "udsp", "add");
 		default:
 			return 0;
 		}
+	}
+
+	if (!(src || dst || rte)) {
+		print_help(udsp_cmds, "udsp", "add");
+		return 0;
 	}
 
 	rc = lustre_lnet_add_udsp(src, dst, rte, action_type, &udsp_action,
@@ -3547,11 +3563,13 @@ static int jt_add_udsp(int argc, char **argv)
 static int jt_del_udsp(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
-	long int idx = 0;
+	long int idx = -2;
 	int opt, rc = 0;
+	bool all = false;
 
-	const char *const short_options = "i:";
+	const char *const short_options = "ai:";
 	static const struct option long_options[] = {
+	{ .name = "all",	.has_arg = no_argument, .val = 'a' },
 	{ .name = "idx",	.has_arg = required_argument, .val = 'i' },
 	{ .name = NULL } };
 
@@ -3562,16 +3580,31 @@ static int jt_del_udsp(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
 		switch (opt) {
+		case 'a':
+			all = true;
+			break;
 		case 'i':
 			rc = parse_long(optarg, &idx);
-			if (rc != 0)
-				idx = 0;
+			if (rc != 0 || idx < -1) {
+				printf("Invalid index \"%s\"\n", optarg);
+				return -EINVAL;
+			}
 			break;
 		case '?':
 			print_help(udsp_cmds, "udsp", "del");
 		default:
 			return 0;
 		}
+	}
+
+	if (all && idx != -2) {
+		printf("Cannot combine --all with --idx\n");
+		return -EINVAL;
+	} else if (all) {
+		idx = -1;
+	} else if (idx == -2) {
+		printf("Must specify --idx or --all\n");
+		return -EINVAL;
 	}
 
 	rc = lustre_lnet_del_udsp(idx, -1, &err_rc);
