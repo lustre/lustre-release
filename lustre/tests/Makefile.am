@@ -83,7 +83,7 @@ THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 THETESTS += create_foreign_file parse_foreign_file
 THETESTS += create_foreign_dir parse_foreign_dir
 THETESTS += check_fallocate splice-test lseek_test expand_truncate_test
-THETESTS += foreign_symlink_striping lov_getstripe_old
+THETESTS += foreign_symlink_striping lov_getstripe_old fadvise_dontneed_helper
 
 if LIBAIO
 THETESTS += aiocp
