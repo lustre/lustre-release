@@ -85,7 +85,6 @@ static const struct rhashtable_params uuid_hash_params = {
 	.key_offset	= offsetof(struct obd_export, exp_client_uuid),
 	.head_offset	= offsetof(struct obd_export, exp_uuid_hash),
 	.obj_cmpfn	= uuid_keycmp,
-	.max_size	= MAX_OBD_DEVICES,
 	.automatic_shrinking = true,
 };
 
@@ -804,10 +803,10 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 		RETURN(-ENODEV);
 	}
 	obd->obd_attached = 0;
-	spin_unlock(&obd->obd_dev_lock);
 
 	/* cleanup in progress. we don't like to find this device after now */
 	class_unregister_device(obd);
+	spin_unlock(&obd->obd_dev_lock);
 
 	CDEBUG(D_IOCTL, "detach on obd %s (uuid %s)\n",
 	       obd->obd_name, obd->obd_uuid.uuid);

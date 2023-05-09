@@ -170,12 +170,14 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 {
 	struct genl_dev_list *glist = device_dump_ctx(cb);
 	struct obd_device *filter = glist->gdl_target;
+	struct obd_device *obd = NULL;
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK
 	struct netlink_ext_ack *extack = NULL;
 #endif
 	int portid = NETLINK_CB(cb->skb).portid;
 	int seq = cb->nlh->nlmsg_seq;
-	int idx, rc = 0;
+	unsigned long idx = 0;
+	int rc = 0;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
 	extack = cb->extack;
@@ -195,14 +197,10 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 		}
 	}
 
-	for (idx = glist->gdl_start; idx < class_devno_max(); idx++) {
-		struct obd_device *obd;
+	obd_device_lock();
+	obd_device_for_each_start(idx, obd, glist->gdl_start) {
 		const char *status;
 		void *hdr;
-
-		obd = class_num2obd(idx);
-		if (!obd)
-			continue;
 
 		if (filter && filter != obd)
 			continue;
@@ -255,9 +253,11 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 
 		genlmsg_end(msg, hdr);
 	}
+	obd_device_unlock();
 
-	glist->gdl_start = idx;
+	glist->gdl_start = idx + 1;
 	rc = lnet_nl_send_error(cb->skb, portid, seq, rc);
+
 	return rc < 0 ? rc : msg->len;
 }
 

@@ -45,7 +45,30 @@
 					 * device.
 					 */
 
-extern rwlock_t obd_dev_lock;
+#define OBD_MAX_INDEX xa_limit_31b.max
+
+#define obd_device_find(devno)						\
+	xa_find(&obd_devs, &devno, OBD_MAX_INDEX, XA_PRESENT)
+
+#define obd_device_find_after(devno)					\
+	xa_find_after(&obd_devs, &devno, OBD_MAX_INDEX, XA_PRESENT)
+
+#define obd_device_for_each(devno, obd)			\
+	xa_for_each(&obd_devs, devno, obd)
+
+#define obd_device_for_each_start(devno, obd, start)	\
+	xa_for_each_start(&obd_devs, devno, obd, start)
+
+#define obd_device_for_each_cond(devno, obd, cond)	 \
+	obd_device_for_each(devno, obd)			 \
+	if (cond)
+
+#define obd_device_for_each_uuid(devno, obd, uuid)	 \
+	obd_device_for_each_cond(devno, obd,		 \
+				 obd_uuid_equals(uuid, &obd->obd_uuid))
+
+#define obd_device_lock() xa_lock(&obd_devs)
+#define obd_device_unlock() xa_unlock(&obd_devs)
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_exp2obd(struct obd_export *);
@@ -60,6 +83,7 @@ int jobid_set_current(char *jobid);
 struct lu_device_type;
 
 /* genops.c */
+extern struct xarray obd_devs;
 struct obd_export *class_conn2export(struct lustre_handle *);
 #ifdef HAVE_SERVER_SUPPORT
 struct obd_type *class_add_symlinks(const char *name, bool enable_proc);
@@ -75,19 +99,16 @@ int class_register_device(struct obd_device *obd);
 void class_unregister_device(struct obd_device *obd);
 void class_free_dev(struct obd_device *obd);
 
-struct obd_device *class_dev_by_str(const char *str);
+struct obd_device *class_str2obd(const char *str);
 int class_name2dev(const char *name);
 struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
-void class_obd_list(void);
 struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
 					 const char *type_name,
 					 struct obd_uuid *grp_uuid);
-struct obd_device *class_devices_in_group(struct obd_uuid *grp_uuid,
-					  int *next);
 struct obd_device *class_num2obd(int num);
-int get_devices_count(void);
+int class_obd_devs_count(void);
 
 int class_notify_sptlrpc_conf(const char *fsname, int namelen);
 
@@ -456,11 +477,6 @@ static inline int exp_check_ops(struct obd_export *exp)
 		RETURN(-EOPNOTSUPP);
 	}
 	RETURN(0);
-}
-
-static inline int class_devno_max(void)
-{
-	return MAX_OBD_DEVICES;
 }
 
 static inline int obd_get_info(const struct lu_env *env, struct obd_export *exp,

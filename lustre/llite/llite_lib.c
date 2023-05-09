@@ -1504,9 +1504,10 @@ void ll_put_super(struct super_block *sb)
 	struct obd_device *obd;
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	unsigned long dev_no = 0;
 	char *profilenm = get_profile_name(sb);
 	unsigned long cfg_instance = ll_get_cfg_instance(sb);
-	int next, force = 1;
+	int force = 1;
 
 	ENTRY;
 
@@ -1533,11 +1534,10 @@ void ll_put_super(struct super_block *sb)
 	 * lustre_common_put_super, since l_d cleans up osc's as well.
 	 */
 	if (force) {
-		next = 0;
-		while ((obd = class_devices_in_group(&sbi->ll_sb_uuid,
-						     &next)) != NULL) {
+		obd_device_lock();
+		obd_device_for_each_uuid(dev_no, obd, &sbi->ll_sb_uuid)
 			obd->obd_force = force;
-		}
+		obd_device_unlock();
 	}
 
 	if (sbi->ll_client_common_fill_super_succeeded) {
@@ -1549,8 +1549,12 @@ void ll_put_super(struct super_block *sb)
 	if (CFS_FAIL_CHECK(OBD_FAIL_OBD_CLEANUP))
 		goto skip_cleanup;
 
-	next = 0;
-	while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)))
+	/*
+	 * Cleanup, detach OBD devices, and remove them from Xarray.
+	 * We don't grab the xa_lock() since class_manual_cleanup()
+	 * uses the lock internally.
+	 */
+	obd_device_for_each_uuid(dev_no, obd, &sbi->ll_sb_uuid)
 		class_manual_cleanup(obd);
 
 skip_cleanup:

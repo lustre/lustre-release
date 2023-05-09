@@ -381,8 +381,8 @@ static int lov_add_mdc_target(const struct lu_env *env, struct lu_device *d,
 {
 	struct lov_device *ld = lu2lov_dev(d);
 	struct obd_device *lov_obd = d->ld_obd;
-	struct obd_device *lmv_obd;
-	int next;
+	struct obd_device *lmv_obd = NULL;
+	unsigned long dev_no = 0;
 	int rc = 0;
 
 	ENTRY;
@@ -404,23 +404,26 @@ static int lov_add_mdc_target(const struct lu_env *env, struct lu_device *d,
 	 * to be sure LMV is set up and can be found
 	 */
 	if (!ld->ld_lmv) {
-		next = 0;
-		while ((lmv_obd = class_devices_in_group(&lov_obd->obd_uuid,
-							 &next)) != NULL) {
+		obd_device_lock();
+		obd_device_for_each_uuid(dev_no, lmv_obd,
+					 &lov_obd->obd_uuid) {
 			if ((strncmp(lmv_obd->obd_type->typ_name,
 				     LUSTRE_LMV_NAME,
-				     strlen(LUSTRE_LMV_NAME)) == 0))
+				     strlen(LUSTRE_LMV_NAME)) == 0)) {
+				spin_lock(&lmv_obd->obd_dev_lock);
+				class_incref(lmv_obd, "lov", ld);
+				spin_unlock(&lmv_obd->obd_dev_lock);
 				break;
+			}
 		}
+		obd_device_unlock();
+
 		if (!lmv_obd) {
 			CERROR("%s: cannot find LMV OBD by UUID (%s)\n",
 			       lov_obd->obd_name,
 			       obd_uuid2str(&lmv_obd->obd_uuid));
 			RETURN(-ENODEV);
 		}
-		spin_lock(&lmv_obd->obd_dev_lock);
-		class_incref(lmv_obd, "lov", ld);
-		spin_unlock(&lmv_obd->obd_dev_lock);
 		ld->ld_lmv = lmv_obd;
 	}
 

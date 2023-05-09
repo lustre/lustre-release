@@ -490,11 +490,8 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 		if (strnlen(data->ioc_inlbuf4, MAX_OBD_NAME) >= MAX_OBD_NAME)
 			GOTO(out, rc = -EINVAL);
 		obd = class_name2obd(data->ioc_inlbuf4);
-	} else if (data->ioc_dev < class_devno_max()) {
-		obd = class_num2obd(data->ioc_dev);
 	} else {
-		rc = OBD_IOC_ERROR("obdclass", cmd, "no device", -EINVAL);
-		GOTO(out, rc);
+		obd = class_num2obd(data->ioc_dev);
 	}
 
 	if (obd == NULL) {

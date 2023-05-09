@@ -6391,7 +6391,11 @@ run_test 55a "OBD device life cycle unit tests"
 test_55b() {
 	local dev_path="/sys/kernel/debug/lustre/devices"
 	local dev_count="$(wc -l $dev_path | awk '{print $1}')"
-	local num_dev_to_create="$((8192 - $dev_count))"
+
+	# Set up a large number of devices, using the number
+	# that can be set up in about a minute (based on prior
+	# testing). We don't want to run this test forever.
+	local num_dev_to_create="$(( 24000 - $dev_count))"
 
 	load_module obdclass/obd_test || error "load_module failed"
 

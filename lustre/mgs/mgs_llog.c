@@ -1539,8 +1539,7 @@ static int mgs_parse_devname(char *devname, char *fsname, u32 *index)
 /* This is only called during replace_nids */
 static int only_mgs_is_running(struct obd_device *mgs_obd)
 {
-	/* TDB: Is global variable with devices count exists? */
-	int num_devices = get_devices_count();
+	int num_devices = class_obd_devs_count();
 	int num_exports = 0;
 	struct obd_export *exp;
 

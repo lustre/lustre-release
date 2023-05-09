@@ -109,7 +109,6 @@ out:
 				   "%s: Confguration from log %s failed from MGS %d. Communication error between node & MGS, a bad configuration, or other errors. See syslog for more info\n",
 				   mgc->obd_name, logname, rc);
 
-	/* class_obd_list(); */
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_process_log);

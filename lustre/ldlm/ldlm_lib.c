@@ -1102,7 +1102,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 		GOTO(out, rc = -EINVAL);
 	}
 
-	target = class_dev_by_str(str);
+	target = class_str2obd(str);
 	if (!target) {
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_ERROR_MSG(0x137,
