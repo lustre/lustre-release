@@ -1070,14 +1070,6 @@ static inline bool __page_in_use(const struct cl_page *page, int refc)
  */
 #define cl_page_in_use_noref(pg) __page_in_use(pg, 0)
 
-/* references: cl_page, page cache, optional + refcount for caller reference
- * (always 0 or 1 currently)
- */
-static inline int vmpage_in_use(struct page *vmpage, int refcount)
-{
-	return (page_count(vmpage) - page_mapcount(vmpage) > 2 + refcount);
-}
-
 /** @} cl_page */
 
 /** \addtogroup cl_lock cl_lock
