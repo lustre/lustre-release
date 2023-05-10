@@ -10,21 +10,22 @@ USE_KABI=false
 RPM_HELPERS_DIR="/usr/lib/rpm/openEuler"
 # Pkg which contains ext4 source code
 KERNEL_DEBUGINFO="kernel-debugsource-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
+DISTRO_REPO_MIRROR=${DISTRO_REPO_MIRROR:-"https://repo.openeuler.org"}
 
 # force local definition of %dist into ~/.rpmmacros
 # to avoid verbose extended strings like ".el9.centos"
 # in kernel version and rpm names
 #
 RMAC=$HOME/.rpmmacros
-grep '^%dist' $RMAC &> /dev/null || echo '%dist .oe2203' >> $RMAC
+grep '^%dist' $RMAC &> /dev/null || echo '%dist .oe2203sp1' >> $RMAC
 
-unpack_linux_devel_rpm-oe2203() {
+unpack_linux_devel_rpm-oe2203sp1() {
 	local callers_rpm="$1"
 
 	unpack_linux_devel_rpm-rhel "$callers_rpm"
 }
 
-find_linux_rpm-oe2203() {
+find_linux_rpm-oe2203sp1() {
 	local prefix="$1"
 	local wanted_kernel="$2"
 	local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
@@ -33,7 +34,7 @@ find_linux_rpm-oe2203() {
 }
 
 kernel_debuginfo_location() {
-	local base_os="https://repo.openeuler.org/openEuler-22.03-LTS"
+	local base_os="$DISTRO_REPO_MIRROR/openEuler-22.03-LTS-SP1"
 
 	echo "$base_os/update/$TARGET_ARCH/Packages/"
 }

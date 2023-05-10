@@ -142,6 +142,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 ], [test x$OPENEULER_KERNEL = xyes], [
 	case $OPENEULER_VERSION_NO in
 	2203.0) LDISKFS_SERIES="5.10.0-oe2203.series" ;;
+	2203.1) LDISKFS_SERIES="5.10.0-oe2203sp1.series" ;;
 	esac
 ])
 ])

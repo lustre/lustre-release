@@ -156,8 +156,17 @@ autodetect_distro() {
                 ;;
 	    "openEuler")
 		name="oe"
+		# For LTS SP release the codename is 'LTS-SPx' e.g. 'LTS-SP1'
+		# otherwise the codename is 'n/a'.
+		lts_sp=$(lsb_release -s -c)
 		# Change from YY.MM to YYMM, let DISTROMAJ contain MM part
 		version=${version/./}
+		# Append LTS SP
+		if [[ "$lts_sp" != "n/a" ]]; then
+			lts_sp=${lts_sp##*-}
+			lts_sp=${lts_sp,,}
+			version="${version}${lts_sp}"
+		fi
 		;;
             *)
                 fatal 1 "I don't know what distro name $name and version $version is.\nEither update autodetect_distro() or use the --distro argument."
@@ -213,6 +222,7 @@ autodetect_target() {
 	sles15.4) target="$(uname -r | cut -d . -f 1,2)-sles15sp4";;
           fc18)   target="3.x-fc18";;
 	  oe2203) target="5.10-oe2203";;
+       oe2203sp1) target="5.10-oe2203sp1";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
 

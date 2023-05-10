@@ -332,6 +332,9 @@ check_options() {
 		5.10-oe2203)
 			CANONICAL_TARGET="oe2203"
 			;;
+		5.10-oe2203sp1)
+			CANONICAL_TARGET="oe2203sp1"
+			;;
 	esac
 
     local timestampnodig=$(echo $TIMESTAMP | sed -e s/[0-9]*//g)
