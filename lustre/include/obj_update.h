@@ -36,7 +36,7 @@
 static inline size_t
 object_update_param_size(const struct object_update_param *param)
 {
-	return cfs_size_round(sizeof(*param) + param->oup_len);
+	return round_up(sizeof(*param) + param->oup_len, 8);
 }
 
 static inline size_t
@@ -98,13 +98,13 @@ object_update_result_get(const struct object_update_reply *reply,
 		return NULL;
 
 	ptr = (char *)reply +
-	      cfs_size_round(offsetof(struct object_update_reply,
-				      ourp_lens[count]));
+	      round_up(offsetof(struct object_update_reply,
+				ourp_lens[count]), 8);
 	for (i = 0; i < index; i++) {
 		if (reply->ourp_lens[i] == 0)
 			return NULL;
 
-		ptr += cfs_size_round(reply->ourp_lens[i]);
+		ptr += round_up(reply->ourp_lens[i], 8);
 	}
 
 	if (size != NULL)

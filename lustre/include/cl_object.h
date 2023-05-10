@@ -2143,7 +2143,7 @@ static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
 static inline void cl_object_page_init(struct cl_object *clob, int size)
 {
 	clob->co_slice_off = cl_object_header(clob)->coh_page_bufsize;
-	cl_object_header(clob)->coh_page_bufsize += cfs_size_round(size);
+	cl_object_header(clob)->coh_page_bufsize += round_up(size, 8);
 	WARN_ON(cl_object_header(clob)->coh_page_bufsize > 512);
 }
 

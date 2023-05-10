@@ -3100,8 +3100,8 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 			cb(env, dev, inode, oie);
 
 		oie->oie_dirent = (void *)oie->oie_dirent +
-				cfs_size_round(sizeof(struct osd_it_ea_dirent) +
-				oie->oie_dirent->oied_namelen);
+				  round_up(sizeof(struct osd_it_ea_dirent) +
+					   oie->oie_dirent->oied_namelen, 8);
 
 		oie->oie_it_dirent++;
 		if (oie->oie_it_dirent <= oie->oie_rd_dirent)

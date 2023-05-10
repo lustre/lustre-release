@@ -109,7 +109,7 @@ int out_update_header_pack(const struct lu_env *env,
 	/* Check whether the packing exceeding the maxima update length */
 	update_size = sizeof(*update);
 	for (i = 0; i < param_count; i++)
-		update_size += cfs_size_round(sizeof(*param) + param_sizes[i]);
+		update_size += round_up(sizeof(*param) + param_sizes[i], 8);
 
 	if (unlikely(update_size >= *max_update_size)) {
 		*max_update_size = update_size;

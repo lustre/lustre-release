@@ -7109,7 +7109,7 @@ static int osd_ldiskfs_filldir(void *ctx,
 	ent->oied_type    = d_type;
 
 	it->oie_rd_dirent++;
-	it->oie_dirent = (void *)ent + cfs_size_round(sizeof(*ent) + ent->oied_namelen);
+	it->oie_dirent = (void *)ent + round_up(sizeof(*ent) + ent->oied_namelen, 8);
 	RETURN(0);
 }
 
@@ -7200,8 +7200,8 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
 	if (it->oie_it_dirent < it->oie_rd_dirent) {
 		it->oie_dirent =
 			(void *)it->oie_dirent +
-			cfs_size_round(sizeof(struct osd_it_ea_dirent) +
-				       it->oie_dirent->oied_namelen);
+			round_up(sizeof(struct osd_it_ea_dirent) +
+				       it->oie_dirent->oied_namelen, 8);
 		it->oie_it_dirent++;
 		rc = 0;
 	} else {

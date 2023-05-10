@@ -4684,7 +4684,7 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 		memcpy(n_buf + n_namelen, o_buf + o_namelen,
 		       o_buflen - o_namelen);
 		lustre_cfg_bufs_reset(n_bufs, n_buf);
-		n_buf += cfs_size_round(o_buflen + diff);
+		n_buf += round_up(o_buflen + diff, 8);
 	} else {
 		lustre_cfg_bufs_reset(n_bufs, o_buflen != 0 ? o_buf : NULL);
 	}
@@ -4752,7 +4752,7 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 		memcpy(n_buf + n_namelen, o_buf + o_namelen,
 		       o_buflen - o_namelen);
 		lustre_cfg_bufs_set(n_bufs, 1, n_buf, o_buflen + diff);
-		n_buf += cfs_size_round(o_buflen + diff);
+		n_buf += round_up(o_buflen + diff, 8);
 
 		/* buf[2] is the pool name, reuse it directly */
 		lustre_cfg_bufs_set(n_bufs, 2, lustre_cfg_buf(o_lcfg, 2),
@@ -4841,14 +4841,14 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 			if (o_buflen == o_namelen) {
 				lustre_cfg_bufs_set(n_bufs, i, n_buf,
 						    n_namelen);
-				n_buf += cfs_size_round(n_namelen);
+				n_buf += round_up(n_namelen, 8);
 				continue;
 			}
 
 			memcpy(n_buf + n_namelen, o_buf + o_namelen,
 			       o_buflen - o_namelen);
 			lustre_cfg_bufs_set(n_bufs, i, n_buf, o_buflen + diff);
-			n_buf += cfs_size_round(o_buflen + diff);
+			n_buf += round_up(o_buflen + diff, 8);
 		}
 		break;
 	}

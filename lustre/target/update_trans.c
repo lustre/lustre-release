@@ -359,13 +359,11 @@ static int prepare_writing_updates(const struct lu_env *env,
 	params_size = update_params_size(tur->tur_update_params,
 					 tur->tur_update_param_count);
 	LASSERT(lur->lur_update_rec.ur_param_count == 0);
-	update_size = llog_update_record_size(lur);
-	if (cfs_size_round(update_size + params_size) >
-	    tur->tur_update_records_buf_size) {
+	update_size = round_up(llog_update_record_size(lur) + params_size, 8);
+	if (update_size > tur->tur_update_records_buf_size) {
 		int rc;
 
-		rc = tur_update_records_extend(tur,
-			cfs_size_round(update_size + params_size));
+		rc = tur_update_records_extend(tur, update_size);
 		if (rc < 0)
 			return rc;
 

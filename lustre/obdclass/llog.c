@@ -1182,7 +1182,7 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		RETURN(-EOPNOTSUPP);
 
 	buflen = rec->lrh_len;
-	LASSERT(cfs_size_round(buflen) == buflen);
+	LASSERT(round_up(buflen, 8) == buflen);
 
 	old_cred = llog_raise_resource();
 	rc = lop->lop_write_rec(env, handle, rec, logcookies, idx, th);

@@ -2576,10 +2576,11 @@ __u32 req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
 	if (size == 0)
 		return size;
 
-	for (; i < fmt->rf_fields[loc].nr; ++i)
-		if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
-			size += cfs_size_round(fmt->rf_fields[loc].d[i]->
-					       rmf_size);
+	for (; i < fmt->rf_fields[loc].nr; ++i) {
+		if (fmt->rf_fields[loc].d[i]->rmf_size == -1)
+			continue;
+		size += round_up(fmt->rf_fields[loc].d[i]->rmf_size, 8);
+	}
 	return size;
 }
 EXPORT_SYMBOL(req_capsule_fmt_size);

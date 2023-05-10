@@ -182,7 +182,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 			RETURN(hsd->hsd_housekeeping ? 0 : LLOG_PROC_BREAK);
 	}
 
-	hai_size = cfs_size_round(larr->arr_hai.hai_len);
+	hai_size = round_up(larr->arr_hai.hai_len, 8);
 	archive_id = larr->arr_archive_id;
 
 	/* Can we add this action to one of the existing HALs in hsd. */
@@ -220,7 +220,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 				for (i = 0; i < request->hal->hal_count; i++)
 					hai = hai_next(hai);
 				request->hal_used_sz -=
-					cfs_size_round(hai->hai_len);
+					round_up(hai->hai_len, 8);
 				hsd->hsd_action_count--;
 			} while (request->hal_used_sz + hai_size >
 				 LDLM_MAXREQSIZE);
@@ -242,6 +242,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	}
 
 	if (!request) {
+		size_t count = round_up(MTI_NAME_MAXLEN + 1, 8) + 2 * hai_size;
 		struct hsm_action_list *hal;
 
 		LASSERT(hsd->hsd_request_count < hsd->hsd_request_len);
@@ -249,8 +250,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 
 		/* allocates hai vector size just needs to be large
 		 * enough */
-		request->hal_sz = sizeof(*request->hal) +
-			cfs_size_round(MTI_NAME_MAXLEN + 1) + 2 * hai_size;
+		request->hal_sz = sizeof(*request->hal) + count;
 		OBD_ALLOC_LARGE(hal, request->hal_sz);
 		if (!hal)
 			RETURN(-ENOMEM);
@@ -1859,8 +1859,8 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 		}
 
 		/* needed size */
-		hal_len = sizeof(*hal) + cfs_size_round(MTI_NAME_MAXLEN + 1) +
-			  cfs_size_round(car->car_hai->hai_len);
+		hal_len = sizeof(*hal) + round_up(MTI_NAME_MAXLEN + 1, 8) +
+			  round_up(car->car_hai->hai_len, 8);
 
 		if (hal_len > hal_sz && hal_sz > 0) {
 			/* not enough room, free old buffer */

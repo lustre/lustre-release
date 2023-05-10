@@ -733,8 +733,8 @@ out_free:
 out:
 	/* Insert read buffer */
 	update_result->our_rc = ptlrpc_status_hton(rc);
-	reply->ourp_lens[index] = cfs_size_round(update_result->our_datalen +
-						 sizeof(*update_result));
+	reply->ourp_lens[index] = round_up(update_result->our_datalen +
+					   sizeof(*update_result), 8);
 	RETURN(rc);
 }
 

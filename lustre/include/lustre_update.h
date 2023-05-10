@@ -141,8 +141,7 @@ update_param_next_param(const struct update_param *param)
 static inline size_t
 __update_records_size(size_t raw_size)
 {
-	return cfs_size_round(offsetof(struct update_records, ur_ops) +
-			      raw_size);
+	return round_up(offsetof(struct update_records, ur_ops) + raw_size, 8);
 }
 
 static inline size_t
@@ -167,8 +166,8 @@ update_records_size(const struct update_records *record)
 static inline size_t
 __llog_update_record_size(size_t records_size)
 {
-	return cfs_size_round(sizeof(struct llog_rec_hdr) + records_size +
-			      sizeof(struct llog_rec_tail));
+	return round_up(sizeof(struct llog_rec_hdr) + records_size +
+			sizeof(struct llog_rec_tail), 8);
 }
 
 static inline size_t
@@ -252,8 +251,9 @@ object_update_result_insert(struct object_update_reply *reply,
 		update_result->our_datalen = data_len;
 	}
 
-	reply->ourp_lens[index] = cfs_size_round(data_len +
-					sizeof(struct object_update_result));
+	reply->ourp_lens[index] = round_up(data_len +
+					   sizeof(struct object_update_result),
+					   8);
 }
 
 static inline int
@@ -267,7 +267,7 @@ object_update_result_data_get(const struct object_update_reply *reply,
 	LASSERT(lbuf != NULL);
 	update_result = object_update_result_get(reply, index, &size);
 	if (update_result == NULL ||
-	    size < cfs_size_round(sizeof(struct object_update_reply)) ||
+	    size < round_up(sizeof(struct object_update_reply), 8) ||
 	    update_result->our_datalen > size)
 		RETURN(-EFAULT);
 

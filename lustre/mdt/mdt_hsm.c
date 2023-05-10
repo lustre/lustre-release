@@ -563,8 +563,8 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 		GOTO(out_ucred, rc = -EINVAL);
 	}
 
-	hal_size = sizeof(*hal) + cfs_size_round(MTI_NAME_MAXLEN) /* fsname */ +
-		   (sizeof(*hai) + cfs_size_round(hr->hr_data_len)) *
+	hal_size = sizeof(*hal) + round_up(MTI_NAME_MAXLEN, 8) /* fsname */ +
+		   (sizeof(*hai) + round_up(hr->hr_data_len, 8)) *
 		   hr->hr_itemcount;
 
 	MDT_HSM_ALLOC(hal, hal_size);

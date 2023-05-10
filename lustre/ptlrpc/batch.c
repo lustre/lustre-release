@@ -134,16 +134,13 @@ static int batch_prep_update_req(struct batch_update_head *head,
 	struct batch_update_buffer *buf;
 	struct but_update_header *buh;
 	struct but_update_buffer *bub;
+	int repsize = head->buh_repsize;
 	int page_count = 0;
 	int total = 0;
-	int repsize;
 	int rc;
 
 	ENTRY;
-
-	repsize = head->buh_repsize +
-		  cfs_size_round(offsetof(struct batch_update_reply,
-					  burp_repmsg[0]));
+	repsize += round_up(offsetof(struct batch_update_reply, burp_repmsg[0]), 8);
 	if (repsize < OUT_UPDATE_REPLY_SIZE)
 		repsize = OUT_UPDATE_REPLY_SIZE;
 

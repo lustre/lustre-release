@@ -292,7 +292,7 @@ do {                                                           \
 #ifndef HAVE_CFS_SIZE_ROUND
 static inline size_t cfs_size_round(size_t val)
 {
-        return (val + 7) & (~0x7);
+	return round_up(val, 8);
 }
 #define HAVE_CFS_SIZE_ROUND
 #endif

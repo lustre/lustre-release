@@ -392,7 +392,7 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	case OBD_IOC_LLOG_INFO: {
 		int l;
 		int remains = data->ioc_inllen2 +
-				   cfs_size_round(data->ioc_inllen1);
+			      round_up(data->ioc_inllen1, 8);
 		char *out = data->ioc_bulk;
 
 		l = snprintf(out, remains,

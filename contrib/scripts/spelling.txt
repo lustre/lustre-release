@@ -86,6 +86,7 @@ cfs_proc_dir_entry_t||struct proc_dir_entry
 cfs_rcu_head_t||struct rcu_head
 cfs_rand||get_random_u32
 cfs_srand||add_device_randomness
+cfs_size_round||round_up
 cfs_trimwhite||strim
 cfs_time_add_64||ktime_add
 cfs_time_after||time_after

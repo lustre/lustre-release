@@ -378,7 +378,7 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
 
 static inline int llog_data_len(int len)
 {
-	return cfs_size_round(len);
+	return round_up(len, 8);
 }
 
 static inline int llog_get_size(struct llog_handle *loghandle)

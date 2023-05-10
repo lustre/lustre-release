@@ -371,7 +371,7 @@ static struct lu_object *echo_object_alloc(const struct lu_env *env,
 
 		obj = &echo_obj2cl(eco)->co_lu;
 		cl_object_header_init(hdr);
-		hdr->coh_page_bufsize = cfs_size_round(sizeof(struct cl_page));
+		hdr->coh_page_bufsize = round_up(sizeof(struct cl_page), 8);
 
 		lu_object_init(obj, &hdr->coh_lu, dev);
 		lu_object_add_top(&hdr->coh_lu, obj);

@@ -7564,7 +7564,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 	struct lu_fid *root_fid = NULL;
 	int rc = 0;
 
-	fpin = key + cfs_size_round(sizeof(KEY_FID2PATH));
+	fpin = key + round_up(sizeof(KEY_FID2PATH), 8);
 	fpout = val;
 
 	if (req_capsule_req_need_swab(info->mti_pill))
@@ -7574,7 +7574,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 	if (fpout->gf_pathlen != vallen - sizeof(*fpin))
 		RETURN(-EINVAL);
 
-	if (keylen >= cfs_size_round(sizeof(KEY_FID2PATH)) + sizeof(*fpin) +
+	if (keylen >= round_up(sizeof(KEY_FID2PATH), 8) + sizeof(*fpin) +
 		      sizeof(struct lu_fid)) {
 		/* client sent its root FID, which is normally fileset FID */
 		root_fid = fpin->gf_u.gf_root_fid;

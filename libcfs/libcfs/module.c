@@ -130,7 +130,7 @@ int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
 
 	if (data->ioc_inllen2 != 0)
 		data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-				    cfs_size_round(data->ioc_inllen1);
+				    round_up(data->ioc_inllen1, 8);
 
 	RETURN(0);
 }

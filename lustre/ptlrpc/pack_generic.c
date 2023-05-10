@@ -53,8 +53,7 @@
 
 static inline __u32 lustre_msg_hdr_size_v2(__u32 count)
 {
-	return cfs_size_round(offsetof(struct lustre_msg_v2,
-				       lm_buflens[count]));
+	return round_up(offsetof(struct lustre_msg_v2, lm_buflens[count]), 8);
 }
 
 __u32 lustre_msg_hdr_size(__u32 magic, __u32 count)
@@ -114,7 +113,7 @@ __u32 lustre_msg_size_v2(int count, __u32 *lengths)
 	LASSERT(count > 0);
 	size = lustre_msg_hdr_size_v2(count);
 	for (i = 0; i < count; i++)
-		size += cfs_size_round(lengths[i]);
+		size += round_up(lengths[i], 8);
 
 	return size;
 }
@@ -189,7 +188,7 @@ void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
 
 		if (tmp)
 			memcpy(ptr, tmp, lens[i]);
-		ptr += cfs_size_round(lens[i]);
+		ptr += round_up(lens[i], 8);
 	}
 }
 EXPORT_SYMBOL(lustre_init_msg_v2);
@@ -410,7 +409,7 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, __u32 n, __u32 min_size)
 
 	offset = lustre_msg_hdr_size_v2(bufcount);
 	for (i = 0; i < n; i++)
-		offset += cfs_size_round(m->lm_buflens[i]);
+		offset += round_up(m->lm_buflens[i], 8);
 
 	return (char *)m + offset;
 }
@@ -444,7 +443,7 @@ static int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, __u32 segment,
 	if (move_data && msg->lm_bufcount > segment + 1) {
 		tail = lustre_msg_buf_v2(msg, segment + 1, 0);
 		for (n = segment + 1; n < msg->lm_bufcount; n++)
-			tail_len += cfs_size_round(msg->lm_buflens[n]);
+			tail_len += round_up(msg->lm_buflens[n], 8);
 	}
 
 	msg->lm_buflens[segment] = newlen;
@@ -503,7 +502,7 @@ static int lustre_grow_msg_v2(struct lustre_msg_v2 *msg, __u32 segment,
 	if (msg->lm_bufcount > segment + 1) {
 		tail = lustre_msg_buf_v2(msg, segment + 1, 0);
 		for (n = segment + 1; n < msg->lm_bufcount; n++)
-			tail_len += cfs_size_round(msg->lm_buflens[n]);
+			tail_len += round_up(msg->lm_buflens[n], 8);
 	}
 
 	msg->lm_buflens[segment] = newlen;
@@ -594,7 +593,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
 	for (i = 0; i < m->lm_bufcount; i++) {
 		if (swabbed)
 			__swab32s(&m->lm_buflens[i]);
-		buflen = cfs_size_round(m->lm_buflens[i]);
+		buflen = round_up(m->lm_buflens[i], 8);
 		if (buflen < 0 || buflen > PTLRPC_MAX_BUFLEN) {
 			CERROR("buffer %d length %d is not valid\n", i, buflen);
 			return -EINVAL;
