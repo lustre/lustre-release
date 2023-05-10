@@ -9899,9 +9899,10 @@ static int lfs_rmfid_and_show_errors(int rootfd, struct fid_array *fa)
 
 static int lfs_rmfid(int argc, char **argv)
 {
-	char *fidstr, *device;
 	int rc = 0, rc2, rc3 = 0, nr;
 	struct fid_array *fa;
+	const char *device;
+	char *fidstr;
 	int rootfd;
 
 	/* Interactive mode: Adjust optind */

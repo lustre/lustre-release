@@ -297,7 +297,7 @@ int llapi_search_ost(const char *fsname, const char *poolname,
  * \retval			0 on success
  * \retval			-ve on failure
  */
-int llapi_root_path_open(char *device, int *rootfd)
+int llapi_root_path_open(const char *device, int *rootfd)
 {
 	int tmp_fd, rc;
 
@@ -333,7 +333,7 @@ int llapi_rmfid(const char *path, struct fid_array *fa)
 {
 	int rootfd, rc;
 
-	rc = llapi_root_path_open((char *)path, &rootfd);
+	rc = llapi_root_path_open(path, &rootfd);
 	if (rc < 0) {
 		fprintf(stderr,
 			"lfs rmfid: error opening device/fsname '%s': %s\n",

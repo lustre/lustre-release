@@ -57,6 +57,10 @@ Invalid FID is passed
 .TP
 .SM -ENOMEM
 Not enough memory to process the request
+.TP
+.SM -ENOTTY
+.I file
+may not point to a Lustre filesystem mountpoint
 .SH "SEE ALSO"
 .BR lustreapi (7)
 .BR llapi_rmfid_at (3)
