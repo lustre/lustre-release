@@ -20,13 +20,13 @@ is one of the following properties:
 .PP
 admin
 .RS 4
-Defaults to off. If set to on, then root will NOT be squashed. By default,
+Defaults to 0. If set to 1, then root will NOT be squashed. By default,
 the root user is mapped to the value of squash_uid.
 .RE
 .PP
 trusted
 .RS 4
-Defaults to off. If set to on, then user mapping will be disabled for all
+Defaults to 0. If set to 1, then user mapping will be disabled for all
 non-root users. This means that the identities provided by the client will be
 trusted to match the identities of the file system. By default, the client user
 identities are mapped to the file system identities based on the nodemap rules.
@@ -49,7 +49,7 @@ Defaults to 99. The project ID that unknown projects (if not trusted) should be 
 .PP
 deny_unknown
 .RS 4
-Defaults to off. If set to on then unknown (squashed) users will be denied
+Defaults to 0. If set to 1 then unknown (squashed) users will be denied
 access to the filesystem completely instead of just being squashed. Users are
 considered unknown by nodemap if the admin flag is off and the user is root, or
 trusted are set to off and the user is not mapped.
@@ -60,7 +60,7 @@ users located on the same client, though the contents of the files will not be.
 .PP
 audit_mode
 .RS 4
-Defaults to on, which lets clients record file system access events to the
+Defaults to 1, which lets clients record file system access events to the
 Changelogs, if Changelogs are otherwise activated. If set to 0, events from
 these clients are not logged into the Changelogs, no matter if Changelogs are
 activated or not.
@@ -75,9 +75,15 @@ Other possible values (multiple can be specified, comma separated) are uid to
 map UIDs, gid to map GIDs, both to map UIDs and GIDs, and projid to map PROJIDs.
 .RE
 .PP
+forbid_encryption
+.RS 4
+Defaults to 0, which means encryption is allowed.
+Set to 1 to prevent clients from using encryption.
+.RE
+.PP
 readonly_mount
 .RS 4
-Defaults to off, which lets clients mount in read-write mode. If set to 1,
+Defaults to 0, which lets clients mount in read-write mode. If set to 1,
 clients are forced to a read-only mount if not specified explicitly.
 .RE
 .PP
@@ -85,15 +91,22 @@ rbac
 .RS 4
 Defaults to all, which means all roles are allowed. Other possible values
 (multiple can be specified, comma separated) are:
+.br
 - byfid_ops, to allow operations by FID (e.g. 'lfs rmfid').
+.br
 - chlg_ops, to allow access to Lustre Changelogs.
+.br
 - dne_ops, to allow operations related to DNE (e.g. 'lfs mkdir').
+.br
 - file_perms, to allow modifications of file permissions and owners.
+.br
 - fscrypt_admin, to allow fscrypt related admin tasks (create or modify
 protectors/policies). Note that even without this role, it is still possible
 to lock or unlock encrypted directories, as these operations only need read
 access to fscrypt metadata.
+.br
 - quota_ops, to allow quota modifications.
+.br
 Apart from all, any role not explicitly specified is forbidden. And to forbid
 all roles, use 'none' value.
 .RE
