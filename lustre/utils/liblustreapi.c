@@ -5499,20 +5499,22 @@ obd_matches:
 		int projid = 0;
 
 		if (fd == -2)
-			fd = open(path, O_RDONLY);
+			fd = open(path, O_RDONLY | O_NONBLOCK);
 
 		if (fd > 0)
 			ret = fget_projid(fd, &projid);
 		else
 			ret = -errno;
-		if (ret)
-			goto out;
-		if (projid == param->fp_projid) {
-			if (param->fp_exclude_projid)
-				goto decided;
-		} else {
-			if (!param->fp_exclude_projid)
-				goto decided;
+		if (param->fp_check_projid) {
+			if (ret)
+				goto out;
+			if (projid == param->fp_projid) {
+				if (param->fp_exclude_projid)
+					goto decided;
+			} else {
+				if (!param->fp_exclude_projid)
+					goto decided;
+			}
 		}
 	}
 

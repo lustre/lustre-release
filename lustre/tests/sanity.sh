@@ -7184,6 +7184,22 @@ test_56rc() {
 }
 run_test 56rc "check lfs find --mdt-count/--mdt-hash works"
 
+test_56rd() {
+	local dir=$DIR/$tdir
+
+	test_mkdir $dir
+
+	mkfifo $dir/fifo || error "failed to create fifo file"
+	found=$($LFS find $dir -t p --printf "%y")
+	[[ "p" = $found ]] || error "found $found, expect p"
+
+	mknod $dir/chardev c 1 5 ||
+		error "failed to create character device file"
+	found=$($LFS find $dir -t c --printf "%y")
+	[[ "c" = $found ]] || error "found $found, expect c"
+}
+run_test 56rd "check lfs find --printf special files"
+
 test_56s() { # LU-611 #LU-9369
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
 
