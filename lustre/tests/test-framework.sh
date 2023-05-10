@@ -187,6 +187,9 @@ init_test_env() {
 	export KEEP_ZPOOL=${KEEP_ZPOOL:-false}
 	export CLEANUP_DM_DEV=false
 	export PAGE_SIZE=$(get_page_size client)
+	export NAME=${NAME:-local}
+
+	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 	export MKE2FS=$MKE2FS
 	if [ -z "$MKE2FS" ]; then
@@ -349,7 +352,6 @@ init_test_env() {
 	[ ! -f "$LSOM_SYNC" ] &&
 		export LSOM_SYNC=$(which llsom_sync 2> /dev/null)
 	[ -z "$LSOM_SYNC" ] && export LSOM_SYNC="/usr/sbin/llsom_sync"
-	export NAME=${NAME:-local}
 	export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
 	[ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] &&
 		export LGSSD=$(which lgssd)
@@ -447,7 +449,6 @@ init_test_env() {
 
 	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
-	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 	get_lustre_env
 
 	# use localrecov to enable recovery for local clients, LU-12722
