@@ -7188,15 +7188,23 @@ test_56rd() {
 	local dir=$DIR/$tdir
 
 	test_mkdir $dir
+	rm -f $dir/*
 
 	mkfifo $dir/fifo || error "failed to create fifo file"
+	$LFS find $dir -t p --printf "%p %y %LP\n" ||
+		error "should not fail even cannot get projid from pipe file"
 	found=$($LFS find $dir -t p --printf "%y")
-	[[ "p" = $found ]] || error "found $found, expect p"
+	[[ "p" == $found ]] || error "found $found, expect p"
 
 	mknod $dir/chardev c 1 5 ||
 		error "failed to create character device file"
+	$LFS find $dir -t c --printf "%p %y %LP\n" ||
+		error "should not fail even cannot get projid from chardev file"
 	found=$($LFS find $dir -t c --printf "%y")
-	[[ "c" = $found ]] || error "found $found, expect c"
+	[[ "c" == $found ]] || error "found $found, expect c"
+
+	found=$($LFS find $dir ! -type d --printf "%p %y %LP\n" | wc -l)
+	(( found == 2 )) || error "unable to list all files"
 }
 run_test 56rd "check lfs find --printf special files"
 

@@ -85,6 +85,10 @@
 
 #define FORMATTED_BUF_LEN	1024
 
+#ifndef INVALID_PROJID
+#define INVALID_PROJID	-1
+#endif
+
 static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
 
@@ -4761,7 +4765,7 @@ format_done:
  *			as part of the format (0 for an unknown format)
  */
 int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
-			 struct find_param *param, char *path, int projid,
+			 struct find_param *param, char *path, __u32 projid,
 			 int d)
 {
 	struct lmv_user_md *lum;
@@ -4796,7 +4800,10 @@ int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
 		*wrote = snprintf(buffer, size, DFID_NOBRACE, PFID(&fid));
 		goto format_done;
 	case 'P':
-		*wrote = snprintf(buffer, size, "%d", projid);
+		if (projid == INVALID_PROJID)
+			*wrote = snprintf(buffer, size, "-1");
+		else
+			*wrote = snprintf(buffer, size, "%u", projid);
 		goto format_done;
 	}
 
@@ -4958,7 +4965,7 @@ format_done:
  *			as part of the format (0 for an unknown format)
  */
 int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
-			 struct find_param *param, char *path, int projid,
+			 struct find_param *param, char *path, __u32 projid,
 			 int d)
 {
 	__u16 mode = param->fp_lmd->lmd_stx.stx_mode;
@@ -5054,7 +5061,7 @@ int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
  *			non-directory file)
  */
 void printf_format_string(struct find_param *param, char *path,
-			   int projid, int d)
+			  __u32 projid, int d)
 {
 	char output[FORMATTED_BUF_LEN];
 	char *fmt_char = param->fp_format_printf_str;
@@ -5104,14 +5111,16 @@ void printf_format_string(struct find_param *param, char *path,
  * by the open fd resides on.
  * Return 0 and project id on success, or -ve errno.
  */
-static int fget_projid(int fd, int *projid)
+static int fget_projid(int fd, __u32 *projid)
 {
 	struct fsxattr fsx;
 	int rc;
 
 	rc = ioctl(fd, FS_IOC_FSGETXATTR, &fsx);
-	if (rc)
+	if (rc) {
+		*projid = INVALID_PROJID;
 		return -errno;
+	}
 
 	*projid = fsx.fsx_projid;
 	return 0;
@@ -5159,7 +5168,7 @@ static int cb_find_init(char *path, int p, int *dp,
 	__u32 stripe_count = 0;
 	__u64 flags;
 	int fd = -2;
-	int projid = 0;
+	__u32 projid = INVALID_PROJID;
 	bool gather_all = false;
 
 	if (p == -1 && d == -1)
@@ -5496,8 +5505,6 @@ obd_matches:
 	}
 
 	if (param->fp_check_projid || gather_all) {
-		int projid = 0;
-
 		if (fd == -2)
 			fd = open(path, O_RDONLY | O_NONBLOCK);
 
