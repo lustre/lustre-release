@@ -2711,10 +2711,16 @@ static int mdc_rmfid(struct obd_export *exp, struct fid_array *fa,
 static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 			    enum obd_import_event event)
 {
-	struct client_obd *cli = &obd->u.cli;
+	struct client_obd *cli;
 	int rc = 0;
 
-	LASSERT(imp->imp_obd == obd);
+	ENTRY;
+	if (WARN_ON_ONCE(!obd || !imp || imp->imp_obd != obd))
+		RETURN(-ENODEV);
+
+	cli = &obd->u.cli;
+	if (!cli)
+		RETURN(-ENODEV);
 
 	switch (event) {
 	case IMP_EVENT_DISCON:

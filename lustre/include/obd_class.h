@@ -1268,6 +1268,9 @@ static inline int obd_notify_observer(struct obd_device *observer,
 	int rc2 = 0;
 	struct obd_notify_upcall *onu;
 
+	if (WARN_ON_ONCE(!observer))
+		return -ENODEV;
+
 	if (observer->obd_observer)
 		rc = obd_notify(observer->obd_observer, observed, ev);
 

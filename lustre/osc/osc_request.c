@@ -3598,38 +3598,40 @@ int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 }
 EXPORT_SYMBOL(osc_ldlm_resource_invalidate);
 
-static int osc_import_event(struct obd_device *obd,
-                            struct obd_import *imp,
-                            enum obd_import_event event)
+static int osc_import_event(struct obd_device *obd, struct obd_import *imp,
+			    enum obd_import_event event)
 {
-        struct client_obd *cli;
-        int rc = 0;
+	struct client_obd *cli;
+	int rc = 0;
 
-        ENTRY;
-        LASSERT(imp->imp_obd == obd);
+	ENTRY;
+	if (WARN_ON_ONCE(!obd || !imp || imp->imp_obd != obd))
+		RETURN(-ENODEV);
 
-        switch (event) {
-        case IMP_EVENT_DISCON: {
-                cli = &obd->u.cli;
+	switch (event) {
+	case IMP_EVENT_DISCON: {
+		cli = &obd->u.cli;
+		if (!cli)
+			RETURN(-ENODEV);
 		spin_lock(&cli->cl_loi_list_lock);
 		cli->cl_avail_grant = 0;
 		cli->cl_lost_grant = 0;
 		spin_unlock(&cli->cl_loi_list_lock);
-                break;
-        }
-        case IMP_EVENT_INACTIVE: {
+		break;
+	}
+	case IMP_EVENT_INACTIVE: {
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
-                break;
-        }
-        case IMP_EVENT_INVALIDATE: {
-                struct ldlm_namespace *ns = obd->obd_namespace;
-                struct lu_env         *env;
-		__u16                  refcheck;
+		break;
+	}
+	case IMP_EVENT_INVALIDATE: {
+		struct ldlm_namespace *ns = obd->obd_namespace;
+		struct lu_env *env;
+		__u16 refcheck;
 
 		ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
-                env = cl_env_get(&refcheck);
-                if (!IS_ERR(env)) {
+		env = cl_env_get(&refcheck);
+		if (!IS_ERR(env)) {
 			osc_io_unplug(env, &obd->u.cli, NULL);
 
 			cfs_hash_for_each_nolock(ns->ns_rs_hash,
@@ -3638,40 +3640,43 @@ static int osc_import_event(struct obd_device *obd,
 			cl_env_put(env, &refcheck);
 
 			ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
-                } else
-                        rc = PTR_ERR(env);
-                break;
-        }
-        case IMP_EVENT_ACTIVE: {
+		} else {
+			rc = PTR_ERR(env);
+		}
+		break;
+	}
+	case IMP_EVENT_ACTIVE: {
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
-                break;
-        }
-        case IMP_EVENT_OCD: {
-                struct obd_connect_data *ocd = &imp->imp_connect_data;
+		break;
+	}
+	case IMP_EVENT_OCD: {
+		struct obd_connect_data *ocd = &imp->imp_connect_data;
 
-                if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT)
-                        osc_init_grant(&obd->u.cli, ocd);
+		if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT)
+			osc_init_grant(&obd->u.cli, ocd);
 
-                /* See bug 7198 */
-                if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
-                        imp->imp_client->cli_request_portal =OST_REQUEST_PORTAL;
+		/* See bug 7198 */
+		if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
+			imp->imp_client->cli_request_portal =
+				OST_REQUEST_PORTAL;
 
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
-                break;
-        }
-        case IMP_EVENT_DEACTIVATE: {
+		break;
+	}
+	case IMP_EVENT_DEACTIVATE: {
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_DEACTIVATE);
-                break;
-        }
-        case IMP_EVENT_ACTIVATE: {
+		break;
+	}
+	case IMP_EVENT_ACTIVATE: {
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVATE);
-                break;
-        }
-        default:
-                CERROR("Unknown import event %d\n", event);
-                LBUG();
-        }
-        RETURN(rc);
+		break;
+	}
+	default:
+		CERROR("%s: Unknown import event %d: rc = %d\n",
+		       obd->obd_name, event, -EINVAL);
+		LBUG();
+	}
+	RETURN(rc);
 }
 
 /**
