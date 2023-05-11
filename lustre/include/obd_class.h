@@ -303,52 +303,52 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_rpc_inc(exp)                                       \
 ({                                                                      \
-	atomic_inc(&(exp)->exp_rpc_count);                          	\
+	atomic_inc(&(exp)->exp_rpc_count);                              \
 	CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
-	       (exp), atomic_read(&(exp)->exp_rpc_count));          	\
+	       (exp), atomic_read(&(exp)->exp_rpc_count));              \
 })
 
 #define class_export_rpc_dec(exp)                                       \
 ({                                                                      \
-	LASSERT_ATOMIC_POS(&exp->exp_rpc_count);                        \
-	atomic_dec(&(exp)->exp_rpc_count);                          	\
+	LASSERT(atomic_read(&(exp)->exp_rpc_count) > 0);                \
+	atomic_dec(&(exp)->exp_rpc_count);                              \
 	CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
-	       (exp), atomic_read(&(exp)->exp_rpc_count));          	\
+	       (exp), atomic_read(&(exp)->exp_rpc_count));              \
 })
 
 #define class_export_lock_get(exp, lock)                                \
 ({                                                                      \
-	atomic_inc(&(exp)->exp_locks_count);                        	\
+	atomic_inc(&(exp)->exp_locks_count);                            \
 	__class_export_add_lock_ref(exp, lock);                         \
 	CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
-	       (exp), atomic_read(&(exp)->exp_locks_count));        	\
+	       (exp), atomic_read(&(exp)->exp_locks_count));            \
 	class_export_get(exp);                                          \
 })
 
 #define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
-	LASSERT_ATOMIC_POS(&exp->exp_locks_count);                      \
-	atomic_dec(&(exp)->exp_locks_count);                        	\
+	LASSERT(atomic_read(&(exp)->exp_locks_count) > 0);              \
+	atomic_dec(&(exp)->exp_locks_count);                            \
 	__class_export_del_lock_ref(exp, lock);                         \
 	CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
-	       (exp), atomic_read(&(exp)->exp_locks_count));        	\
+	       (exp), atomic_read(&(exp)->exp_locks_count));            \
 	class_export_put(exp);                                          \
 })
 
 #define class_export_cb_get(exp)                                        \
 ({                                                                      \
-	atomic_inc(&(exp)->exp_cb_count);                           	\
+	atomic_inc(&(exp)->exp_cb_count);                               \
 	CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
-	       (exp), atomic_read(&(exp)->exp_cb_count));           	\
+	       (exp), atomic_read(&(exp)->exp_cb_count));               \
 	class_export_get(exp);                                          \
 })
 
 #define class_export_cb_put(exp)                                        \
 ({                                                                      \
-	LASSERT_ATOMIC_POS(&exp->exp_cb_count);                         \
-	atomic_dec(&(exp)->exp_cb_count);                           	\
+	LASSERT(atomic_read(&(exp)->exp_cb_count) > 0);                 \
+	atomic_dec(&(exp)->exp_cb_count);                               \
 	CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
-	       (exp), atomic_read(&(exp)->exp_cb_count));           	\
+	       (exp), atomic_read(&(exp)->exp_cb_count));               \
 	class_export_put(exp);                                          \
 })
 

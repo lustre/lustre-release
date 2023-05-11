@@ -1378,7 +1378,7 @@ static void class_export_recovery_cleanup(struct obd_export *exp)
 			spin_lock(&exp->exp_lock);
 			exp->exp_in_recovery = 0;
 			spin_unlock(&exp->exp_lock);
-			LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
+			LASSERT(atomic_read(&(obd)->obd_connected_clients) > 0);
 			atomic_dec(&obd->obd_connected_clients);
 		}
 

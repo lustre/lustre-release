@@ -793,7 +793,7 @@ static inline void kiblnd_conn_decref(struct kib_conn *conn)
 	CDEBUG(D_NET, "conn[%p] (%d)--\n",
 	       (conn), atomic_read(&(conn)->ibc_refcount));
 #endif
-	LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);
+	LASSERT(atomic_read(&(conn)->ibc_refcount) > 0);
 	if (atomic_dec_and_test(&(conn)->ibc_refcount)) {
 		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 		list_add_tail(&(conn)->ibc_list,

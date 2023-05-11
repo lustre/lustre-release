@@ -1699,7 +1699,7 @@ static void target_request_copy_get(struct ptlrpc_request *req)
 static void target_request_copy_put(struct ptlrpc_request *req)
 {
 	LASSERT(list_empty(&req->rq_replay_list));
-	LASSERT_ATOMIC_POS(&req->rq_export->exp_replay_count);
+	LASSERT(atomic_read(&(req)->rq_export->exp_replay_count) > 0);
 
 	atomic_dec(&req->rq_export->exp_replay_count);
 	class_export_rpc_dec(req->rq_export);
@@ -3001,7 +3001,8 @@ static int target_process_req_flags(struct obd_device *obd,
 			exp->exp_req_replay_needed = 0;
 			spin_unlock(&exp->exp_lock);
 
-			LASSERT_ATOMIC_POS(&obd->obd_req_replay_clients);
+			LASSERT(atomic_read(&(obd)->obd_req_replay_clients) >
+				0);
 			atomic_dec(&obd->obd_req_replay_clients);
 		} else {
 			spin_unlock(&exp->exp_lock);
@@ -3017,7 +3018,8 @@ static int target_process_req_flags(struct obd_device *obd,
 			exp->exp_lock_replay_needed = 0;
 			spin_unlock(&exp->exp_lock);
 
-			LASSERT_ATOMIC_POS(&obd->obd_lock_replay_clients);
+			LASSERT(atomic_read(&(obd)->obd_lock_replay_clients) >
+				0);
 			atomic_dec(&obd->obd_lock_replay_clients);
 		} else {
 			spin_unlock(&exp->exp_lock);
