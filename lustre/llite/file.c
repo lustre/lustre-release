@@ -5578,8 +5578,11 @@ fill_attr:
 	if (sbi->ll_stat_blksize)
 		stat->blksize = sbi->ll_stat_blksize;
 	else if (S_ISREG(inode->i_mode))
-		stat->blksize = 1 << min(PTLRPC_MAX_BRW_BITS + 1,
-					 LL_MAX_BLKSIZE_BITS);
+		stat->blksize = min(PTLRPC_MAX_BRW_SIZE,
+				    1U << LL_MAX_BLKSIZE_BITS);
+	else if (S_ISDIR(inode->i_mode))
+		stat->blksize = min(MD_MAX_BRW_SIZE,
+				    1U << LL_MAX_BLKSIZE_BITS);
 	else
 		stat->blksize = 1 << inode->i_sb->s_blocksize_bits;
 
