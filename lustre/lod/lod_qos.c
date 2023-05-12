@@ -749,7 +749,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	__u32 stripe_idx = 0;
 	__u32 stripe_count, stripe_count_min, ost_idx;
 	int rc, speed = 0, ost_connecting = 0;
-	int stripes_per_ost = 1;
+	int idx, stripes_per_ost = 1;
 	bool overstriped = false;
 	ENTRY;
 
@@ -808,11 +808,13 @@ repeat_find:
 		  lqr->lqr_start_count, lqr->lqr_offset_idx, osts->op_count,
 		  osts->op_count);
 
-	for (i = 0; i < osts->op_count * stripes_per_ost &&
+	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
-		int idx;
+		if (likely(speed < 2) || i == 0)
+			idx = atomic_inc_return(&lqr->lqr_start_idx);
+		else
+			idx++;
 
-		idx = atomic_inc_return(&lqr->lqr_start_idx);
 		array_idx = (idx + lqr->lqr_offset_idx) %
 				osts->op_count;
 		ost_idx = lqr->lqr_pool.op_array[array_idx];
