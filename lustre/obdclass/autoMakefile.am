@@ -1,9 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/obdclass/autoMakefile.am
+#
+# autoMakefile for obdclass
+#
+
 if MODULES
 
 if LINUX
 modulefs_DATA = obdclass$(KMODEXT)
 if TESTS
 modulefs_DATA += llog_test$(KMODEXT)
+modulefs_DATA += obd_test$(KMODEXT)
 endif # TESTS
 endif # LINUX
 

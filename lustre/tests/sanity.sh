@@ -6336,6 +6336,64 @@ test_54e() {
 }
 run_test 54e "console/tty device works in lustre ======================"
 
+test_55a() {
+	local dev_path="/sys/kernel/debug/lustre/devices"
+
+	load_module obdclass/obd_test verbose=2 || error "load_module failed"
+
+	# This must be run in iteractive mode, since attach and setup
+	# are stateful
+	eval "$LCTL <<-EOF || error 'OBD device creation failed'
+		attach obd_test obd_name obd_uuid
+		setup obd_test
+	EOF"
+
+	echo "Devices:"
+	cat "$dev_path" | tail -n 10
+
+	$LCTL --device "obd_name" cleanup
+	$LCTL --device "obd_name" detach
+
+	dmesg | tail -n 25 | grep "Lustre: OBD:.*FAIL" &&
+		error "OBD unit test failed"
+
+	rmmod -v obd_test ||
+		error "rmmod failed (may trigger a failure in a later test)"
+}
+run_test 55a "OBD device life cycle unit tests"
+
+test_55b() {
+	local dev_path="/sys/kernel/debug/lustre/devices"
+	local dev_count="$(wc -l $dev_path | awk '{print $1}')"
+	local num_dev_to_create="$((8192 - $dev_count))"
+
+	load_module obdclass/obd_test || error "load_module failed"
+
+	local start=$SECONDS
+
+	# This must be run in iteractive mode, since attach and setup
+	# are stateful
+	for ((i = 1; i <= num_dev_to_create; i++)); do
+		echo "attach obd_test obd_name_$i obd_uuid_$i"
+		echo "setup obd_test_$i"
+	done | $LCTL || error "OBD device creation failed"
+
+	echo "Load time: $((SECONDS - start))"
+	echo "Devices:"
+	cat "$dev_path" | tail -n 10
+
+	for ((i = 1; i <= num_dev_to_create; i++)); do
+		echo "--device obd_name_$i cleanup"
+		echo "--device obd_name_$i detach"
+	done | $LCTL || error "OBD device cleanup failed"
+
+	echo "Unload time: $((SECONDS - start))"
+
+	rmmod -v obd_test ||
+		error "rmmod failed (may trigger a failure in a later test)"
+}
+run_test 55b "Load and unload max OBD devices"
+
 test_56a() {
 	local numfiles=3
 	local numdirs=2

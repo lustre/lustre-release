@@ -1,4 +1,14 @@
-MODULES := obdclass llog_test
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/obdclass/Makefile.in
+#
+# Makefile template for obdclass
+#
+
+MODULES := obdclass llog_test obd_test
 
 default: all
 
@@ -28,7 +38,7 @@ obdclass-objs := $(obdclass-all-objs)
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
-EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
+EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c obd_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
 EXTRA_DIST += range_lock.c interval_tree.c
 
