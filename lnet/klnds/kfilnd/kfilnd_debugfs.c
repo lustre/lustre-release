@@ -147,15 +147,16 @@ static void seq_print_tn_stats(struct seq_file *s, struct kfilnd_dev *dev,
 	else
 		stats = &dev->target_stats;
 
-	seq_printf(s, "%16s %16s %16s %16s\n", "MSG_SIZE", "MIN", "MAX",
-		   "AVE");
+	seq_printf(s, "%16s %16s %16s %16s %16s\n", "MSG_SIZE", "MIN", "MAX",
+		   "AVE", "COUNT");
 
 	for (data_size = 0; data_size < KFILND_DATA_SIZE_BUCKETS; data_size++) {
-		seq_printf(s, "%16lu %16llu %16llu %16llu\n",
+		seq_printf(s, "%16lu %16llu %16llu %16llu %16d\n",
 			   data_size == 0 ? 0 : BIT(data_size - 1),
 			   get_min_duration(&stats->data_size[data_size]),
 			   atomic64_read(&stats->data_size[data_size].max_duration),
-			   get_ave_duration(&stats->data_size[data_size]));
+			   get_ave_duration(&stats->data_size[data_size]),
+			   atomic_read(&stats->data_size[data_size].accumulated_count));
 	}
 }
 
