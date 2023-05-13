@@ -917,8 +917,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	}
 
 	if (*ibits | trybits)
-		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, lm,
-					 false);
+		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, lm);
 
 	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
 	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",
@@ -944,7 +943,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 		LASSERT(!try_layout);
 		rc = mdt_object_lock(info, obj, ll, MDS_INODELOCK_LAYOUT,
-				     LCK_EX, false);
+				     LCK_EX);
 
 		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LL_BLOCK, 2);
 	}
@@ -1331,7 +1330,7 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 
 	mdt_lock_reg_init(lh, LCK_PR);
 	rc = mdt_object_lock_internal(info, md_root, mdt_object_fid(md_root),
-				      lh, &ibits, 0, true, false);
+				      lh, &ibits, 0, true);
 	if (rc < 0)
 		return rc;
 
@@ -1498,7 +1497,7 @@ again_pw:
 	if (lock_mode != LCK_NL) {
 		lh = &info->mti_lh[MDT_LH_PARENT];
 		result = mdt_parent_lock(info, parent, lh, &rr->rr_name,
-					 lock_mode, false);
+					 lock_mode);
 		if (result != 0)
 			GOTO(out_parent, result);
 
@@ -1613,7 +1612,7 @@ again_pw:
 				GOTO(out_child, result = rc);
 			else if (rc > 0)
 				rc = mdt_object_lookup_lock(info, NULL, child,
-							    lhc, LCK_PR, false);
+							    lhc, LCK_PR);
 			repbody->mbo_fid1 = *mdt_object_fid(child);
 			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
 			if (rc != 0)
@@ -2052,7 +2051,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	ma->ma_hsm.mh_flags &= ~HS_RELEASED;
 
 	rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR, LCK_EX, false);
+			     MDS_INODELOCK_XATTR, LCK_EX);
 	if (rc != 0)
 		GOTO(out_close, rc);
 
@@ -2219,13 +2218,13 @@ static int mdt_close_handle_layouts(struct mdt_thread_info *info,
 		GOTO(out_unlock_sem, rc = -ESTALE);
 
 	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR, LCK_EX, false);
+			     MDS_INODELOCK_XATTR, LCK_EX);
 	if (rc < 0)
 		GOTO(out_unlock_sem, rc);
 
 	if (o2) {
 		rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
-				     MDS_INODELOCK_XATTR, LCK_EX, false);
+				     MDS_INODELOCK_XATTR, LCK_EX);
 		if (rc < 0)
 			GOTO(out_unlock1, rc);
 	}

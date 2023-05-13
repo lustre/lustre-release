@@ -2455,14 +2455,14 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 					 * ptlrpc_hr_select, so REP-ACK hr may
 					 * race with trans commit, while the
 					 * latter will release locks, get locks
-					 * here early to convert to COS mode
+					 * here early to downgrade to TXN mode
 					 * safely.
 					 */
 					lock = ldlm_handle2lock(
 							&rs->rs_locks[nlocks]);
 					LASSERT(lock);
 					ack_locks[nlocks] = lock;
-					rs->rs_modes[nlocks] = LCK_COS;
+					rs->rs_modes[nlocks] = LCK_TXN;
 				}
 				nlocks = rs->rs_nlocks;
 				rs->rs_convert_lock = 0;
@@ -2475,7 +2475,7 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 
 				while (nlocks-- > 0) {
 					lock = ack_locks[nlocks];
-					ldlm_lock_mode_downgrade(lock, LCK_COS);
+					ldlm_lock_mode_downgrade(lock, LCK_TXN);
 					LDLM_LOCK_PUT(lock);
 				}
 				RETURN(0);

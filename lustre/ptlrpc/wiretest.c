@@ -332,9 +332,11 @@ void lustre_assert_wire_constants(void)
 		 (long long)LCK_GROUP);
 	LASSERTF(LCK_COS == 128, "found %lld\n",
 		 (long long)LCK_COS);
-	LASSERTF(LCK_MAXMODE == 129, "found %lld\n",
+	LASSERTF(LCK_TXN == 256, "found %lld\n",
+		 (long long)LCK_TXN);
+	LASSERTF(LCK_MAXMODE == 257, "found %lld\n",
 		 (long long)LCK_MAXMODE);
-	LASSERTF(LCK_MODE_NUM == 8, "found %lld\n",
+	LASSERTF(LCK_MODE_NUM == 9, "found %lld\n",
 		 (long long)LCK_MODE_NUM);
 	BUILD_BUG_ON(LDLM_PLAIN != 10);
 	BUILD_BUG_ON(LDLM_EXTENT != 11);
@@ -3634,7 +3636,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct ldlm_extent *)0)->gid));
 
 	/* Checks for struct ldlm_inodebits */
-	LASSERTF((int)sizeof(struct ldlm_inodebits) == 24, "found %lld\n",
+	LASSERTF((int)sizeof(struct ldlm_inodebits) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct ldlm_inodebits));
 	LASSERTF((int)offsetof(struct ldlm_inodebits, bits) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_inodebits, bits));
@@ -3655,6 +3657,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_inodebits, li_gid));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_gid) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->li_gid));
+	LASSERTF((int)offsetof(struct ldlm_inodebits, li_padding) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_inodebits, li_padding));
+	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_padding) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->li_padding));
+	LASSERTF((int)offsetof(struct ldlm_inodebits, li_initiator_id) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_inodebits, li_initiator_id));
+	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_initiator_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->li_initiator_id));
 
 	/* Checks for struct ldlm_flock_wire */
 	LASSERTF((int)sizeof(struct ldlm_flock_wire) == 32, "found %lld\n",

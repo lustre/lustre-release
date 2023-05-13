@@ -979,17 +979,14 @@ static int osp_md_object_lock(const struct lu_env *env,
 	res_id = einfo->ei_res_id;
 	LASSERT(res_id != NULL);
 
-	if (einfo->ei_mode & (LCK_EX | LCK_PW))
-		flags |= LDLM_FL_COS_INCOMPAT;
-
 	req = ldlm_enqueue_pack(osp->opd_exp, 0);
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
 
 	osp_set_req_replay(osp, req);
 	rc = ldlm_cli_enqueue(osp->opd_exp, &req, einfo, res_id,
-			      (const union ldlm_policy_data *)policy,
-			      &flags, NULL, 0, LVB_T_NONE, lh, 0);
+			      (const union ldlm_policy_data *)policy, &flags,
+			      NULL, 0, LVB_T_NONE, lh, 0);
 
 	ptlrpc_req_finished(req);
 

@@ -1773,7 +1773,7 @@ int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 		if (layout->mlc_opc == MD_LAYOUT_WRITE)
 			lockpart |= MDS_INODELOCK_UPDATE;
 
-		rc = mdt_object_lock(info, obj, lhc, lockpart, LCK_EX, false);
+		rc = mdt_object_lock(info, obj, lhc, lockpart, LCK_EX);
 		if (rc)
 			RETURN(rc);
 	}
@@ -1873,12 +1873,12 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 	lh1 = &info->mti_lh[MDT_LH_NEW];
 	lh2 = &info->mti_lh[MDT_LH_OLD];
 	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR, LCK_EX, false);
+			     MDS_INODELOCK_XATTR, LCK_EX);
 	if (rc < 0)
 		GOTO(put, rc);
 
 	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
-			     MDS_INODELOCK_XATTR, LCK_EX, false);
+			     MDS_INODELOCK_XATTR, LCK_EX);
 	if (rc < 0)
 		GOTO(unlock1, rc);
 
@@ -2102,7 +2102,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 					MDS_INODELOCK_LAYOUT);
 			child_bits |= MDS_INODELOCK_PERM;
 			rc = mdt_object_lock(info, child, lhc, child_bits,
-					     LCK_PR, false);
+					     LCK_PR);
 			if (rc < 0)
 				RETURN(rc);
 		}
@@ -2257,8 +2257,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		/* step 1: lock parent only if parent is a directory */
 		if (S_ISDIR(lu_object_attr(&parent->mot_obj))) {
 			lhp = &info->mti_lh[MDT_LH_PARENT];
-			rc = mdt_parent_lock(info, parent, lhp, lname, LCK_PR,
-					      false);
+			rc = mdt_parent_lock(info, parent, lhp, lname, LCK_PR);
 			if (unlikely(rc != 0))
 				RETURN(rc);
 		}
@@ -2373,7 +2372,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			/* try layout lock, it may fail to be granted due to
 			 * contention at LOOKUP or UPDATE */
 			rc = mdt_object_lock_try(info, child, lhc, &child_bits,
-						 try_bits, LCK_PR, false);
+						 try_bits, LCK_PR);
 			if (child_bits & MDS_INODELOCK_LAYOUT)
 				ma_need |= MA_LOV;
 		} else {
@@ -2381,10 +2380,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 * client will enqueue the lock to the remote MDT */
 			if (mdt_object_remote(child))
 				rc = mdt_object_lookup_lock(info, NULL, child,
-							    lhc, LCK_PR, false);
+							    lhc, LCK_PR);
 			else
 				rc = mdt_object_lock(info, child, lhc,
-						     child_bits, LCK_PR, false);
+						     child_bits, LCK_PR);
 		}
 		if (unlikely(rc != 0))
 			GOTO(out_child, rc);
@@ -2530,7 +2529,6 @@ static int mdt_rmfid_unlink(struct mdt_thread_info *info,
 	struct mdt_lock_handle *parent_lh;
 	struct mdt_lock_handle *child_lh;
 	struct mdt_object *pobj;
-	bool cos_incompat = false;
 	int rc;
 	ENTRY;
 
@@ -2538,11 +2536,8 @@ static int mdt_rmfid_unlink(struct mdt_thread_info *info,
 	if (IS_ERR(pobj))
 		GOTO(out, rc = PTR_ERR(pobj));
 
-	if (mdt_object_remote(pobj))
-		cos_incompat = true;
-
 	parent_lh = &info->mti_lh[MDT_LH_PARENT];
-	rc = mdt_parent_lock(info, pobj, parent_lh, name, LCK_PW, cos_incompat);
+	rc = mdt_parent_lock(info, pobj, parent_lh, name, LCK_PW);
 	if (rc != 0)
 		GOTO(put_parent, rc);
 
@@ -2557,8 +2552,7 @@ static int mdt_rmfid_unlink(struct mdt_thread_info *info,
 	child_lh = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, pobj, obj, child_lh, einfo,
 				     MDS_INODELOCK_LOOKUP |
-				     MDS_INODELOCK_UPDATE,
-				     LCK_EX, cos_incompat);
+				     MDS_INODELOCK_UPDATE, LCK_EX);
 	if (rc != 0)
 		GOTO(unlock_parent, rc);
 
@@ -3589,8 +3583,8 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	struct ldlm_cb_set_arg *arg = data;
 	bool commit_async = false;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (flag == LDLM_CB_CANCELING)
 		RETURN(0);
 
@@ -3610,25 +3604,26 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		goto skip_cos_checks;
 
 	if (lock->l_req_mode & (LCK_PW | LCK_EX)) {
-		if (mdt_cos_is_enabled(mdt)) {
-			if (!arg->bl_desc->bl_same_client)
-				mdt_set_lock_sync(lock);
-		} else if (mdt_slc_is_enabled(mdt) &&
-			   arg->bl_desc->bl_cos_incompat) {
+		if (mdt_cos_is_enabled(mdt) &&
+		    !arg->bl_desc->bl_same_client) {
 			mdt_set_lock_sync(lock);
-			/*
-			 * we may do extra commit here, but there is a small
-			 * window to miss a commit: lock was unlocked (saved),
-			 * then a conflict lock queued and we come here, but
-			 * REP-ACK not received, so lock was not converted to
-			 * COS mode yet.
-			 * Fortunately this window is quite small, so the
-			 * extra commit should be rare (not to say distributed
-			 * operation is rare too).
+		} else if (mdt_slc_is_enabled(mdt) &&
+			   arg->bl_desc->bl_txn_dependent) {
+			mdt_set_lock_sync(lock);
+			/* we may do extra commit here, because there is a small
+			 * window to miss a commit:
+			 * 1. lock was unlocked (saved), but not downgraded to
+			 * TXN mode yet (REP-ACK not received).
+			 * 2. a conflict lock enqueued and we come herej if we
+			 * don't trigger commit now, the enqueued lock will wait
+			 * untill system periodic commit.
+			 *
+			 * Fortunately this window is quite small, not to say
+			 * distributed operation is rare too.
 			 */
 			commit_async = true;
 		}
-	} else if (lock->l_req_mode == LCK_COS) {
+	} else if (lock->l_req_mode == LCK_COS || lock->l_req_mode == LCK_TXN) {
 		commit_async = true;
 	}
 
@@ -3816,7 +3811,7 @@ static int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
  */
 int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 			struct mdt_lock_handle *lh, const struct lu_name *name,
-			enum ldlm_mode mode, bool pdo_lock, bool cos_incompat)
+			enum ldlm_mode mode, bool pdo_lock)
 {
 	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
 	union ldlm_policy_data *policy = &info->mti_policy;
@@ -3841,16 +3836,10 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 	if (!S_ISDIR(lu_object_attr(&obj->mot_obj)))
 		return -ENOTDIR;
 
-	if (cos_incompat) {
-		LASSERT(mode == LCK_PW || mode == LCK_EX);
-		dlmflags |= LDLM_FL_COS_INCOMPAT;
-	} else if (mdt_cos_is_enabled(info->mti_mdt)) {
-		dlmflags |= LDLM_FL_COS_ENABLED;
-	}
-
 	policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 	policy->l_inodebits.try_bits = 0;
 	policy->l_inodebits.li_gid = 0;
+	policy->l_inodebits.li_initiator_id = mdt_node_id(info->mti_mdt);
 	fid_build_reg_res_name(mdt_object_fid(obj), res_id);
 	if (info->mti_exp)
 		cookie = &info->mti_exp->exp_handle.h_cookie;
@@ -3885,7 +3874,7 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 int mdt_object_lock_internal(struct mdt_thread_info *info,
 			     struct mdt_object *obj, const struct lu_fid *fid,
 			     struct mdt_lock_handle *lh, __u64 *ibits,
-			     __u64 trybits, bool cache, bool cos_incompat)
+			     __u64 trybits, bool cache)
 {
 	union ldlm_policy_data *policy = &info->mti_policy;
 	struct ldlm_res_id *res_id = &info->mti_res_id;
@@ -3895,6 +3884,7 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 	policy->l_inodebits.bits = *ibits;
 	policy->l_inodebits.try_bits = trybits;
 	policy->l_inodebits.li_gid = lh->mlh_gid;
+	policy->l_inodebits.li_initiator_id = mdt_node_id(info->mti_mdt);
 	fid_build_reg_res_name(fid, res_id);
 
 	if (obj && mdt_object_remote(obj)) {
@@ -3920,14 +3910,6 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 		LASSERT(!lustre_handle_is_used(handle));
 		LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
 		LASSERT(lh->mlh_type != MDT_NUL_LOCK);
-
-		if (cos_incompat) {
-			LASSERT(lh->mlh_reg_mode == LCK_PW ||
-				lh->mlh_reg_mode == LCK_EX);
-			dlmflags |= LDLM_FL_COS_INCOMPAT;
-		} else if (mdt_cos_is_enabled(info->mti_mdt)) {
-			dlmflags |= LDLM_FL_COS_ENABLED;
-		}
 
 		/* Lease lock are granted with LDLM_FL_CANCEL_ON_BLOCK */
 		if (lh->mlh_type == MDT_REG_LOCK &&
@@ -3988,20 +3970,19 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
  * \param lh		lock handle
  * \param ibits		MDS inode lock bits
  * \param mode		lock mode
- * \param cos_incompat	DNE COS incompatible
  *
  * \retval		0 on success, -ev on error.
  */
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 		    struct mdt_lock_handle *lh, __u64 ibits,
-		    enum ldlm_mode mode, bool cos_incompat)
+		    enum ldlm_mode mode)
 {
 	int rc;
 
 	ENTRY;
 	mdt_lock_reg_init(lh, mode);
 	rc = mdt_object_lock_internal(info, obj, mdt_object_fid(obj), lh,
-				      &ibits, 0, false, cos_incompat);
+				      &ibits, 0, false);
 	RETURN(rc);
 }
 
@@ -4020,14 +4001,13 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
  * \param lh		lock handle
  * \param ibits		MDS inode lock bits
  * \param mode		lock mode
- * \param cos_incompat	DNE COS incompatible
  *
  * \retval		0 on success, -ev on error.
  */
 int mdt_object_check_lock(struct mdt_thread_info *info,
 			  struct mdt_object *parent, struct mdt_object *child,
 			  struct mdt_lock_handle *lh, __u64 ibits,
-			  enum ldlm_mode mode, bool cos_incompat)
+			  enum ldlm_mode mode)
 {
 	int rc;
 
@@ -4046,8 +4026,7 @@ int mdt_object_check_lock(struct mdt_thread_info *info,
 
 		rc = mdt_object_lock_internal(info, parent,
 					      mdt_object_fid(child), lh,
-					      &lookup_ibits, 0, false,
-					      cos_incompat);
+					      &lookup_ibits, 0, false);
 		if (rc)
 			RETURN(rc);
 
@@ -4055,7 +4034,7 @@ int mdt_object_check_lock(struct mdt_thread_info *info,
 	}
 
 	rc = mdt_object_lock_internal(info, child, mdt_object_fid(child), lh,
-				      &ibits, 0, false, cos_incompat);
+				      &ibits, 0, false);
 	if (rc && !(ibits & MDS_INODELOCK_LOOKUP))
 		mdt_object_unlock(info, NULL, lh, 1);
 
@@ -4072,13 +4051,12 @@ int mdt_object_check_lock(struct mdt_thread_info *info,
  * \param lh	lock handle
  * \param lname	child name
  * \param mode	lock mode
- * \param cos_incompat	DNE COS incompatible
  *
  * \retval	0 on success, -ev on error.
  */
 int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 		    struct mdt_lock_handle *lh, const struct lu_name *lname,
-		    enum ldlm_mode mode, bool cos_incompat)
+		    enum ldlm_mode mode)
 {
 	int rc;
 
@@ -4089,11 +4067,9 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 
 		mdt_lock_reg_init(lh, mode);
 		rc = mdt_object_lock_internal(info, obj, mdt_object_fid(obj),
-					      lh, &ibits, 0, false,
-					      cos_incompat);
+					      lh, &ibits, 0, false);
 	} else {
-		rc = mdt_object_pdo_lock(info, obj, lh, lname, mode, true,
-					 cos_incompat);
+		rc = mdt_object_pdo_lock(info, obj, lh, lname, mode, true);
 	}
 	RETURN(rc);
 }
@@ -4112,13 +4088,12 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
  * \param ibits		MDS inode lock bits
  * \param trybits	optional inode lock bits
  * \param mode		lock mode
- * \param cos_incompat	DNE COS incompatible
  *
  * \retval		0 on success, -ev on error.
  */
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *obj,
 			struct mdt_lock_handle *lh, __u64 *ibits,
-			__u64 trybits, enum ldlm_mode mode, bool cos_incompat)
+			__u64 trybits, enum ldlm_mode mode)
 {
 	bool trylock_only = *ibits == 0;
 	int rc;
@@ -4127,7 +4102,7 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *obj,
 	LASSERT(!(*ibits & trybits));
 	mdt_lock_reg_init(lh, mode);
 	rc = mdt_object_lock_internal(info, obj, mdt_object_fid(obj), lh, ibits,
-				      trybits, false, cos_incompat);
+				      trybits, false);
 	if (rc && trylock_only) { /* clear error for try ibits lock only */
 		LASSERT(*ibits == 0);
 		rc = 0;
@@ -4142,8 +4117,7 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *obj,
  */
 int mdt_object_lookup_lock(struct mdt_thread_info *info,
 			   struct mdt_object *pobj, struct mdt_object *obj,
-			   struct mdt_lock_handle *lh, enum ldlm_mode mode,
-			   bool cos_incompat)
+			   struct mdt_lock_handle *lh, enum ldlm_mode mode)
 {
 	__u64 ibits = MDS_INODELOCK_LOOKUP;
 	int rc;
@@ -4155,7 +4129,7 @@ int mdt_object_lookup_lock(struct mdt_thread_info *info,
 	LASSERT(ergo(!pobj, mdt_object_remote(obj)));
 	mdt_lock_reg_init(lh, mode);
 	rc = mdt_object_lock_internal(info, pobj, mdt_object_fid(obj), lh,
-				      &ibits, 0, false, cos_incompat);
+				      &ibits, 0, false);
 	RETURN(rc);
 }
 
@@ -4305,7 +4279,7 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 	if (!IS_ERR(o)) {
 		int rc;
 
-		rc = mdt_object_lock(info, o, lh, ibits, mode, false);
+		rc = mdt_object_lock(info, o, lh, ibits, mode);
 		if (rc != 0) {
 			mdt_object_put(info->mti_env, o);
 			o = ERR_PTR(rc);
@@ -4690,8 +4664,7 @@ static int mdt_intent_getxattr(enum ldlm_intent_flags it_opc,
 	mdt_intent_fixup_resent(info, *lockp, lhc, flags);
 	if (!lustre_handle_is_used(&lhc->mlh_reg_lh)) {
 		rc = mdt_object_lock(info, info->mti_object, lhc,
-				     MDS_INODELOCK_XATTR, (*lockp)->l_req_mode,
-				     false);
+				     MDS_INODELOCK_XATTR, (*lockp)->l_req_mode);
 		if (rc)
 			return rc;
 	}

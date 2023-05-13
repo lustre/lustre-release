@@ -1631,6 +1631,8 @@ check_ldlm_inodebits(void)
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif
 	CHECK_MEMBER(ldlm_inodebits, li_gid);
+	CHECK_MEMBER(ldlm_inodebits, li_padding);
+	CHECK_MEMBER(ldlm_inodebits, li_initiator_id);
 }
 
 static void
@@ -3377,6 +3379,7 @@ main(int argc, char **argv)
 	CHECK_VALUE(LCK_NL);
 	CHECK_VALUE(LCK_GROUP);
 	CHECK_VALUE(LCK_COS);
+	CHECK_VALUE(LCK_TXN);
 	CHECK_VALUE(LCK_MAXMODE);
 	CHECK_VALUE(LCK_MODE_NUM);
 

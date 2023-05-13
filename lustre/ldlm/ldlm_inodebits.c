@@ -143,6 +143,23 @@ restart:
 	RETURN(rc);
 }
 
+/* lock of COS mode is compatible with locks from the same client. */
+static inline bool ldlm_cos_same_client(const struct ldlm_lock *req,
+					const struct ldlm_lock *lock)
+{
+	return lock->l_req_mode == LCK_COS &&
+	       lock->l_client_cookie == req->l_client_cookie;
+}
+
+/* lock of TXN mode is compatible with locks from the same MDT. */
+static inline bool ldlm_txn_same_server(const struct ldlm_lock *req,
+					const struct ldlm_lock *lock)
+{
+	return lock->l_req_mode == LCK_TXN &&
+	       lock->l_policy_data.l_inodebits.li_initiator_id ==
+			req->l_policy_data.l_inodebits.li_initiator_id;
+}
+
 /**
  * Determine if the lock is compatible with all locks on the queue.
  *
@@ -202,16 +219,6 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 		mode_tail = &list_entry(lock->l_sl_mode.prev, struct ldlm_lock,
 					l_sl_mode)->l_res_link;
 
-		/* if request lock is not COS_INCOMPAT and COS is disabled,
-		 * they are compatible, IOW this request is from a local
-		 * transaction on a DNE system. */
-		if (lock->l_req_mode == LCK_COS && !ldlm_is_cos_incompat(req) &&
-		    !ldlm_is_cos_enabled(req)) {
-			/* jump to last lock in mode group */
-			tmp = mode_tail;
-			continue;
-		}
-
 		if (lockmode_compat(lock->l_req_mode, req_mode)) {
 			/* non group locks are compatible, bits don't matter */
 			if (likely(req_mode != LCK_GROUP)) {
@@ -232,7 +239,15 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				ldlm_resource_insert_lock_after(lock, req);
 				RETURN(0);
 			}
+		} else if (ldlm_cos_same_client(req, lock) ||
+			   ldlm_txn_same_server(req, lock)) {
+			/* COS/TXN locks need to be checked one by one, 
+			 * because client cookie or initiator id may be
+			 * different for locks in mode/policy skiplist.
+			 */
+			continue;
 		}
+
 
 		/* GROUP locks are placed to a head of the waiting list, but
 		 * grouped by gid. */
@@ -276,15 +291,6 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 			/* Locks with overlapping bits conflict. */
 			if (lock->l_policy_data.l_inodebits.bits & req_bits) {
-				/* COS lock mode has a special compatibility
-				 * requirement: it is only compatible with
-				 * locks from the same client. */
-				if (lock->l_req_mode == LCK_COS &&
-				    !ldlm_is_cos_incompat(req) &&
-				    ldlm_is_cos_enabled(req) &&
-				    lock->l_client_cookie == req->l_client_cookie)
-					goto skip_work_list;
-
 				compat = 0;
 
 				if (unlikely(lock->l_req_mode == LCK_GROUP)) {
@@ -452,6 +458,8 @@ void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy)
 {
 	lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
+	lpolicy->l_inodebits.li_initiator_id =
+		wpolicy->l_inodebits.li_initiator_id;
 	/**
 	 * try_bits and li_gid are to be handled outside of generic
 	 * write_to_local due to different behavior on a server and client.
@@ -465,6 +473,8 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_inodebits.bits = lpolicy->l_inodebits.bits;
 	wpolicy->l_inodebits.try_bits = lpolicy->l_inodebits.try_bits;
 	wpolicy->l_inodebits.li_gid = lpolicy->l_inodebits.li_gid;
+	wpolicy->l_inodebits.li_initiator_id =
+		lpolicy->l_inodebits.li_initiator_id;
 }
 
 /**

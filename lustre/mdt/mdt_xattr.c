@@ -376,7 +376,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	lhp = &info->mti_lh[MDT_LH_PARENT];
 	if (le32_to_cpu(lmu->lum_stripe_count) < 2) {
 		rc = mdt_object_lock(info, pobj, lhp, MDS_INODELOCK_UPDATE,
-				     LCK_PW, true);
+				     LCK_PW);
 		if (rc)
 			GOTO(put_pobj, rc);
 	}
@@ -384,7 +384,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, pobj, obj, lhc, einfo,
-				     MDS_INODELOCK_FULL, LCK_EX, true);
+				     MDS_INODELOCK_FULL, LCK_EX);
 	if (rc)
 		GOTO(unlock_pobj, rc);
 

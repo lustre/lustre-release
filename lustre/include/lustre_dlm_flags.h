@@ -138,15 +138,6 @@
 #define ldlm_set_cancel_on_block(_l)    LDLM_SET_FLAG((  _l), 1ULL << 23)
 #define ldlm_clear_cancel_on_block(_l)  LDLM_CLEAR_FLAG((_l), 1ULL << 23)
 
-/** Flag whether a lock is enqueued from a distributed transaction, and the
- *  requesting lock mode is PW/EX, if so, it will check compatibility with COS
- *  locks, and different from original COS semantic, transactions from the same
- *  client is also treated as lock conflict. */
-#define LDLM_FL_COS_INCOMPAT		0x0000000001000000ULL /* bit  24 */
-#define ldlm_is_cos_incompat(_l)	LDLM_TEST_FLAG((_l), 1ULL << 24)
-#define ldlm_set_cos_incompat(_l)	LDLM_SET_FLAG((_l), 1ULL << 24)
-#define ldlm_clear_cos_incompat(_l)	LDLM_CLEAR_FLAG((_l), 1ULL << 24)
-
 /*
  * Flag indicates that lock is being converted (downgraded) during the blocking
  * AST instead of cancelling. Used for IBITS locks now and drops conflicting
@@ -367,14 +358,6 @@
 
 /** Flag whether a lock is found on server for re-sent RPC. */
 #define LDLM_FL_RESENT                   0x0100000000000000ULL // bit  56
-
-/** Flag whether Commit-on-Sharing is enabled, if LDLM_FL_COS_INCOMPAT is set
- *  this flag may not be set because once the former is set this flag won't be
- *  checked, and for cross-MDT lock COS_INCOMPAT is always set but ast handle is
- *  in ldlm context which doesn't know whether COS is enabled or not. */
-#define LDLM_FL_COS_ENABLED              0x0200000000000000ULL /* bit  57 */
-#define ldlm_is_cos_enabled(_l)          LDLM_TEST_FLAG((_l), 1ULL << 57)
-#define ldlm_set_cos_enabled(_l)         LDLM_SET_FLAG((_l), 1ULL << 57)
 
 /**
  * This flags means to use non-delay RPC to send dlm request RPC.

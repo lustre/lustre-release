@@ -389,13 +389,13 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 		GOTO(restriping_clear, rc);
 
 	lhp = &info->mti_lh[MDT_LH_PARENT];
-	rc = mdt_parent_lock(info, parent, lhp, lname, LCK_PW, true);
+	rc = mdt_parent_lock(info, parent, lhp, lname, LCK_PW);
 	if (rc)
 		GOTO(restriping_clear, rc);
 
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, parent, child, lhc, einfo,
-				     MDS_INODELOCK_FULL, LCK_EX, true);
+				     MDS_INODELOCK_FULL, LCK_EX);
 	if (rc)
 		GOTO(unlock_parent, rc);
 
@@ -458,8 +458,7 @@ static int mdt_restripe_migrate_finish(struct mdt_thread_info *info,
 	buf.lb_len = sizeof(*lmv);
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
-	rc = mdt_object_lock(info, stripe, lh, MDS_INODELOCK_XATTR, LCK_EX,
-			     false);
+	rc = mdt_object_lock(info, stripe, lh, MDS_INODELOCK_XATTR, LCK_EX);
 	if (!rc)
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(stripe), &buf,
 				  XATTR_NAME_LMV, LU_XATTR_REPLACE);

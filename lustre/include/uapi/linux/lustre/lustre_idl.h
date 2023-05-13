@@ -2446,10 +2446,11 @@ enum ldlm_mode {
 	LCK_NL		= 32,
 	LCK_GROUP	= 64,
 	LCK_COS		= 128,
+	LCK_TXN		= 256,
 	LCK_MAXMODE
 };
 
-#define LCK_MODE_NUM    8
+#define LCK_MODE_NUM    9
 
 enum ldlm_type {
 	LDLM_PLAIN	= 10,
@@ -2480,6 +2481,8 @@ struct ldlm_inodebits {
 		__u64 cancel_bits; /* for lock convert */
 	};
 	__u64 li_gid;
+	__u32 li_padding;
+	__u32 li_initiator_id; /* index of MDT that initiated this lock */
 };
 
 struct ldlm_flock_wire {

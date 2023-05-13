@@ -56,7 +56,8 @@ char *ldlm_lockname[] = {
 	[LCK_CR] = "CR",
 	[LCK_NL] = "NL",
 	[LCK_GROUP] = "GROUP",
-	[LCK_COS] = "COS"
+	[LCK_COS] = "COS",
+	[LCK_TXN] = "TXN"
 };
 EXPORT_SYMBOL(ldlm_lockname);
 
@@ -753,18 +754,18 @@ EXPORT_SYMBOL(ldlm_lock_addref);
 void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock,
 				      enum ldlm_mode mode)
 {
-        ldlm_lock_remove_from_lru(lock);
-        if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
-                lock->l_readers++;
-                lu_ref_add_atomic(&lock->l_reference, "reader", lock);
-        }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS)) {
-                lock->l_writers++;
-                lu_ref_add_atomic(&lock->l_reference, "writer", lock);
-        }
-        LDLM_LOCK_GET(lock);
-        lu_ref_add_atomic(&lock->l_reference, "user", lock);
-        LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
+	ldlm_lock_remove_from_lru(lock);
+	if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
+		lock->l_readers++;
+		lu_ref_add_atomic(&lock->l_reference, "reader", lock);
+	}
+	if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS | LCK_TXN)) {
+		lock->l_writers++;
+		lu_ref_add_atomic(&lock->l_reference, "writer", lock);
+	}
+	LDLM_LOCK_GET(lock);
+	lu_ref_add_atomic(&lock->l_reference, "user", lock);
+	LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
 /**
@@ -818,20 +819,20 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock,
 				      enum ldlm_mode mode)
 {
-        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
-        if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
-                LASSERT(lock->l_readers > 0);
-                lu_ref_del(&lock->l_reference, "reader", lock);
-                lock->l_readers--;
-        }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS)) {
-                LASSERT(lock->l_writers > 0);
-                lu_ref_del(&lock->l_reference, "writer", lock);
-                lock->l_writers--;
-        }
+	LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
+	if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
+		LASSERT(lock->l_readers > 0);
+		lu_ref_del(&lock->l_reference, "reader", lock);
+		lock->l_readers--;
+	}
+	if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS | LCK_TXN)) {
+		LASSERT(lock->l_writers > 0);
+		lu_ref_del(&lock->l_reference, "writer", lock);
+		lock->l_writers--;
+	}
 
-        lu_ref_del(&lock->l_reference, "user", lock);
-        LDLM_LOCK_RELEASE(lock);    /* matches the LDLM_LOCK_GET() in addref */
+	lu_ref_del(&lock->l_reference, "user", lock);
+	LDLM_LOCK_RELEASE(lock);    /* matches the LDLM_LOCK_GET() in addref */
 }
 
 /**
@@ -1786,22 +1787,23 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 #endif
 	ENTRY;
 
-        /* policies are not executed on the client or during replay */
-        if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
-            && !local && ns->ns_policy) {
+	/* policies are not executed on the client or during replay */
+	if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
+	    && !local && ns->ns_policy) {
 		rc = ns->ns_policy(env, ns, lockp, cookie, lock->l_req_mode,
 				   *flags, NULL);
-                if (rc == ELDLM_LOCK_REPLACED) {
-                        /* The lock that was returned has already been granted,
-                         * and placed into lockp.  If it's not the same as the
-                         * one we passed in, then destroy the old one and our
-                         * work here is done. */
-                        if (lock != *lockp) {
-                                ldlm_lock_destroy(lock);
-                                LDLM_LOCK_RELEASE(lock);
-                        }
-                        *flags |= LDLM_FL_LOCK_CHANGED;
-                        RETURN(0);
+		if (rc == ELDLM_LOCK_REPLACED) {
+			/* The lock that was returned has already been granted,
+			 * and placed into lockp.  If it's not the same as the
+			 * one we passed in, then destroy the old one and our
+			 * work here is done.
+			 */
+			if (lock != *lockp) {
+				ldlm_lock_destroy(lock);
+				LDLM_LOCK_RELEASE(lock);
+			}
+			*flags |= LDLM_FL_LOCK_CHANGED;
+			RETURN(0);
 		} else if (rc != ELDLM_OK &&
 			   ldlm_is_granted(lock)) {
 			LASSERT(*flags & LDLM_FL_RESENT);
@@ -1810,14 +1812,15 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 			 * error occurs. It is unclear if lock reached the
 			 * client in the original reply, just leave the lock on
 			 * server, not returning it again to client. Due to
-			 * LU-6529, the server will not OOM. */
+			 * LU-6529, the server will not OOM.
+			 */
 			RETURN(rc);
-                } else if (rc != ELDLM_OK ||
-                           (rc == ELDLM_OK && (*flags & LDLM_FL_INTENT_ONLY))) {
-                        ldlm_lock_destroy(lock);
-                        RETURN(rc);
-                }
-        }
+		} else if (rc != ELDLM_OK ||
+			   (rc == ELDLM_OK && (*flags & LDLM_FL_INTENT_ONLY))) {
+			ldlm_lock_destroy(lock);
+			RETURN(rc);
+		}
+	}
 
 	if (*flags & LDLM_FL_RESENT) {
 		/* Reconstruct LDLM_FL_SRV_ENQ_MASK @flags for reply.
@@ -1878,24 +1881,24 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		res = lock_res_and_lock(lock);
 	}
 	if (local && ldlm_is_granted(lock)) {
-                /* The server returned a blocked lock, but it was granted
-                 * before we got a chance to actually enqueue it.  We don't
-                 * need to do anything else. */
-                *flags &= ~LDLM_FL_BLOCKED_MASK;
+		/* The server returned a blocked lock, but it was granted
+		 * before we got a chance to actually enqueue it.  We don't
+		 * need to do anything else. */
+		*flags &= ~LDLM_FL_BLOCKED_MASK;
 		GOTO(out, rc = ELDLM_OK);
-        }
+	}
 
-        ldlm_resource_unlink_lock(lock);
-        if (res->lr_type == LDLM_EXTENT && lock->l_tree_node == NULL) {
-                if (node == NULL) {
-                        ldlm_lock_destroy_nolock(lock);
-                        GOTO(out, rc = -ENOMEM);
-                }
+	ldlm_resource_unlink_lock(lock);
+	if (res->lr_type == LDLM_EXTENT && lock->l_tree_node == NULL) {
+		if (node == NULL) {
+			ldlm_lock_destroy_nolock(lock);
+			GOTO(out, rc = -ENOMEM);
+		}
 
 		INIT_LIST_HEAD(&node->li_group);
-                ldlm_interval_attach(node, lock);
-                node = NULL;
-        }
+		ldlm_interval_attach(node, lock);
+		node = NULL;
+	}
 
 	/* Some flags from the enqueue want to make it into the AST, via the
 	 * lock's l_flags. */
@@ -1903,10 +1906,6 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		ldlm_set_ast_discard_data(lock);
 	if (*flags & LDLM_FL_TEST_LOCK)
 		ldlm_set_test_lock(lock);
-	if (*flags & LDLM_FL_COS_INCOMPAT)
-		ldlm_set_cos_incompat(lock);
-	if (*flags & LDLM_FL_COS_ENABLED)
-		ldlm_set_cos_enabled(lock);
 
 	/* This distinction between local lock trees is very important; a client
 	 * namespace only has information about locks taken by that client, and
@@ -1919,7 +1918,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	 *
 	 * FIXME (bug 268): Detect obvious lies by checking compatibility in
 	 * granted queue. */
-        if (local) {
+	if (local) {
 		if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED))
 			ldlm_resource_add_lock(res, &res->lr_waiting, lock);
 		else
@@ -1940,15 +1939,15 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	rc = ldlm_lock_enqueue_helper(lock, flags);
 	GOTO(out, rc);
 #else
-        } else {
-                CERROR("This is client-side-only module, cannot handle "
-                       "LDLM_NAMESPACE_SERVER resource type lock.\n");
-                LBUG();
-        }
+	} else {
+		CERROR("This is client-side-only module, cannot handle "
+		       "LDLM_NAMESPACE_SERVER resource type lock.\n");
+		LBUG();
+	}
 #endif
 
 out:
-        unlock_res_and_lock(lock);
+	unlock_res_and_lock(lock);
 
 #ifdef HAVE_SERVER_SUPPORT
 	if (reconstruct) {
@@ -1959,9 +1958,9 @@ out:
 				  req, 0, NULL, false, 0);
 	}
 #endif
-        if (node)
-                OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
-        return rc;
+	if (node)
+		OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
+	return rc;
 }
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -2178,7 +2177,17 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	 */
 	bld.bl_same_client = lock->l_client_cookie ==
 			     lock->l_blocking_lock->l_client_cookie;
-	bld.bl_cos_incompat = ldlm_is_cos_incompat(lock->l_blocking_lock);
+	/* if two locks are initiated from the same MDT, transactions are
+	 * independent, or the request lock mode is CR|PR|CW, no need to trigger
+	 * CoS because current lock will be downgraded to TXN mode soon, then
+	 * the blocking lock can be granted.
+	 */
+	if (lock->l_blocking_lock->l_policy_data.l_inodebits.li_initiator_id ==
+		lock->l_policy_data.l_inodebits.li_initiator_id ||
+	    lock->l_blocking_lock->l_req_mode & (LCK_CR | LCK_PR | LCK_CW))
+		bld.bl_txn_dependent = false;
+	else
+		bld.bl_txn_dependent = true;
 	arg->bl_desc = &bld;
 
 	LASSERT(ldlm_is_ast_sent(lock));
@@ -2708,7 +2717,7 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
 }
 
 /**
- * Downgrade an PW/EX lock to COS | CR mode.
+ * Downgrade an PW/EX lock to COS, TXN or CR mode.
  *
  * A lock mode convertion from PW/EX mode to less conflict mode. The
  * convertion may fail if lock was canceled before downgrade, but it doesn't
@@ -2720,6 +2729,8 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
  * things are cleared, so any pending or new blocked lock on that lock will
  * cause new call to blocking_ast and force resource object commit.
  *
+ * Used by DNE to force commit upon operation dependency.
+ *
  * Also used by layout_change to replace EX lock to CR lock.
  *
  * \param lock A lock to convert
@@ -2730,7 +2741,8 @@ void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 #ifdef HAVE_SERVER_SUPPORT
 	ENTRY;
 
-	LASSERT(new_mode == LCK_COS || new_mode == LCK_CR);
+	LASSERT(new_mode == LCK_COS || new_mode == LCK_TXN ||
+		new_mode == LCK_CR);
 
 	lock_res_and_lock(lock);
 
@@ -2887,7 +2899,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 
 	case LDLM_IBITS:
 		libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d initiator: MDT%d\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2905,7 +2917,8 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
-				 lock->l_lvb_type);
+				 lock->l_lvb_type,
+				 lock->l_policy_data.l_inodebits.li_initiator_id);
 		break;
 
 	default:

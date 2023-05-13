@@ -1215,45 +1215,86 @@ test_33b() {
 }
 run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
 
+# arg1 is description, arg2 is operations before Sync-on-Lock-Cancel, arg3 is
+# the operation that triggers SoLC
+op_trigger_solc() {
+	local sync_count
+	local total=0
+	local nodes=$(comma_list $(mdts_nodes))
+
+	sync_all_data
+
+	# trigger CoS twice in case transaction commit before unlock
+	for i in 1 2; do
+		bash -c "$2"
+		do_nodes $nodes "$LCTL set_param -n mdt.*.sync_count=0"
+		bash -c "$3"
+		sync_count=$(do_nodes $nodes \
+			"lctl get_param -n mdt.*MDT*.sync_count" | calc_sum)
+		total=$((total + sync_count));
+		rm -rf $DIR/$tdir/*
+		sync_all_data
+	done
+
+	echo $1
+	echo "  $2"
+	echo "  $3"
+	echo "  SoLC count $total"
+	(( total > 0 )) || error "$3 didn't trigger SoLC"
+}
+
+test_33_run() {
+	echo $1
+	echo "  $2"
+	eval $2
+#	bash -c "$2"
+}
+
 test_33c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.7.63) )) ||
 		skip "DNE CoS not supported"
 
 	# LU-13522
 	stop mds1
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "start mds1 failed"
 
-	local sync_count
-
 	mkdir_on_mdt0 $DIR/$tdir
 	sync_all_data
-	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
-	# do twice in case transaction is committed before unlock, see LU-8200
-	for i in 1 2; do
-		# remote dir is created on MDT1, which enqueued lock of $tdir on
-		# MDT0
-		$LFS mkdir -i 1 $DIR/$tdir/remote.$i
-		mkdir $DIR/$tdir/local.$i
-	done
-	sync_count=$(do_facet mds1 "lctl get_param -n mdt.*MDT0000.sync_count")
-	echo "sync_count $sync_count"
-	[ $sync_count -eq 0 ] && error "Sync-Lock-Cancel not triggered"
 
+	op_trigger_solc "create remote dir and local dir" \
+		"$LFS mkdir -i 1 $DIR/$tdir/remote" \
+		"$LFS mkdir -i 0 $DIR/$tdir/local"
+	(( MDSCOUNT > 2 )) &&
+	op_trigger_solc "create remote dirs on different MDTs" \
+		"$LFS mkdir -i 1 $DIR/$tdir/remote.1" \
+		"$LFS mkdir -i 2 $DIR/$tdir/remote.2"
+	op_trigger_solc "create file on 2nd stripe under striped directory" \
+		"$LFS mkdir -i 0 -c 2 $DIR/$tdir/striped" \
+		"touch $DIR2/$tdir/striped/subfile"
+
+	echo
+	echo "Below operations shouldn't trigger Solc:"
+	$LFS mkdir -i 0 -c 2 $DIR/$tdir/striped
 	sync_all_data
 	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
-	$LFS mkdir -i 1 $DIR/$tdir/remote.3
-	# during sleep remote mkdir should have been committed and canceled
-	# remote lock spontaneously, which shouldn't trigger sync
-	sleep 6
-	mkdir $DIR/$tdir/local.3
+	if (( MDS1_VERSION >= $(version_code 2.15.55.133) )); then
+		test_33_run "create file on 2nd stripe after setattr" \
+			"chmod 777 $DIR/$tdir/striped; \
+			 touch $DIR2/$tdir/striped/subfile"
+	fi
+	test_33_run "create local dir after remote dir creation transaction commit" \
+		"$LFS mkdir -i 1 $DIR/$tdir/remote.3; \
+		 do_facet mds2 $LCTL set_param -n osd*.*MDT0001.force_sync 1;
+		 mkdir $DIR/$tdir/local.3"
 	sync_count=$(do_facet mds1 "lctl get_param -n mdt.*MDT0000.sync_count")
-	echo "sync_count $sync_count"
+	echo "Solc count $sync_count"
 	[ $sync_count -eq 0 ] || error "Sync-Lock-Cancel triggered"
 }
-run_test 33c "Cancel cross-MDT lock should trigger Sync-Lock-Cancel"
+run_test 33c "Cancel cross-MDT lock should trigger Sync-on-Lock-Cancel"
 
-# arg1 is operations done before CoS, arg2 is the operation that triggers CoS
+# arg1 is description, arg2 is operations done before CoS, arg3 is the operation
+# that triggers CoS
 op_trigger_cos() {
 	local commit_nr
 	local total=0
@@ -1263,9 +1304,9 @@ op_trigger_cos() {
 
 	# trigger CoS twice in case transaction commit before unlock
 	for i in 1 2; do
-		bash -c "$1"
-		do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
 		bash -c "$2"
+		do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
+		bash -c "$3"
 		commit_nr=$(do_nodes $nodes \
 			"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
 		total=$((total + commit_nr));
@@ -1273,74 +1314,101 @@ op_trigger_cos() {
 		sync_all_data
 	done
 
-	echo "CoS count $total"
-	[ $total -gt 0 ] || error "$2 didn't trigger CoS"
+	echo $1
+	echo "  $2"
+	echo "  $3"
+	echo "  CoS count $total"
+	(( total > 0 )) || error "$3 didn't trigger CoS"
 }
 
 test_33d() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.7.63) )) ||
 		skip "DNE CoS not supported"
 
-	# remote directory create
-	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
-	# remote directory unlink
-	op_trigger_cos "$LFS mkdir -i 1 $DIR/$tdir" "rmdir $DIR/$tdir"
-	# striped directory create
-	op_trigger_cos "mkdir $DIR/$tdir" "$LFS mkdir -c 2 $DIR/$tdir/subdir"
-	# striped directory setattr
-	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; touch $DIR/$tdir" \
-		"chmod 713 $DIR/$tdir"
-	# striped directory unlink
-	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; touch $DIR/$tdir" \
-		"rmdir $DIR/$tdir"
-	# cross-MDT link
-	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; \
+	if (( $MDS1_VERSION < $(version_code 2.15.55.133) )); then
+		op_trigger_cos "remote directory unlink" \
+			"$LFS mkdir -i 1 $DIR/$tdir" "rmdir $DIR2/$tdir"
+		op_trigger_cos "striped directory create" "mkdir $DIR/$tdir" \
+			"$LFS mkdir -c 2 $DIR2/$tdir/subdir"
+		op_trigger_cos "striped directory setattr" \
+			"$LFS mkdir -c 2 $DIR/$tdir" "chmod 713 $DIR2/$tdir"
+		op_trigger_cos "striped directory unlink" \
+			"$LFS mkdir -c 2 $DIR/$tdir" "rmdir $DIR2/$tdir"
+		op_trigger_cos "cross-MDT link" \
+			"mkdir $DIR/$tdir; \
 			$LFS mkdir -i 0 $DIR/$tdir/d1; \
 			$LFS mkdir -i 1 $DIR/$tdir/d2; \
 			touch $DIR/$tdir/d1/tgt" \
-		"ln $DIR/$tdir/d1/tgt $DIR/$tdir/d2/src"
-	# cross-MDT rename
-	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; \
-			$LFS mkdir -i 0 $DIR/$tdir/d1; \
-			$LFS mkdir -i 1 $DIR/$tdir/d2; \
-			touch $DIR/$tdir/d1/src" \
-		"mv $DIR/$tdir/d1/src $DIR/$tdir/d2/tgt"
-	# migrate
-	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" \
-		"$LFS migrate -m 1 $DIR/$tdir"
+			"ln $DIR2/$tdir/d1/tgt $DIR2/$tdir/d2/src"
+	fi
+	
+	op_trigger_cos "remote directory create" "$LFS mkdir -i 0 $DIR/$tdir" \
+		"$LFS mkdir -i 1 $DIR2/$tdir/subdir"
+	op_trigger_cos "cross-MDT rename" \
+		"mkdir $DIR/$tdir; \
+		$LFS mkdir -i 0 $DIR/$tdir/d1; \
+		$LFS mkdir -i 1 $DIR/$tdir/d2; \
+		touch $DIR/$tdir/d1/src" \
+		"mv $DIR2/$tdir/d1/src $DIR2/$tdir/d2/tgt"
+	op_trigger_cos "migrate" \
+		"$LFS mkdir -i 0 $DIR/$tdir" \
+		"$LFS migrate -m 1 $DIR2/$tdir"
 
 	return 0
 }
-run_test 33d "DNE distributed operation should trigger COS"
+run_test 33d "dependent transactions should trigger COS"
 
 test_33e() {
-	[ $CLIENTCOUNT -ge 2 ] ||
-		skip "Need two or more clients, have $CLIENTCOUNT"
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.7.63) )) ||
 		skip "DNE CoS not supported"
 
-	local client2=${CLIENT2:-$(hostname)}
-
-	sync
+	$LFS mkdir -i 0 $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/d1
+	$LFS mkdir -i 1 $DIR/$tdir/d2
 
 	local nodes=$(comma_list $(mdts_nodes))
 	do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
 
-	$LFS mkdir -c 2 $DIR/$tdir
-	mkdir $DIR/$tdir/subdir
-	echo abc > $DIR/$tdir/$tfile
-	do_node $client2 echo dfg >> $DIR/$tdir/$tfile
-	do_node $client2 touch $DIR/$tdir/subdir
+	test_33_run "plain dir creation" "mkdir $DIR2/$tdir/plain"
+	test_33_run "open file and write" "echo abc > $DIR2/$tdir/$tfile"
+	test_33_run "append write" "echo dfg >> $DIR2/$tdir/$tfile"
+	test_33_run "setattr" "touch $DIR2/$tdir/$tfile"
+	test_33_run "file unlink" "rm $DIR2/$tdir/$tfile"
+	test_33_run "plain dir unlink" "rmdir $DIR2/$tdir/plain"
+	if (( MDS1_VERSION >= $(version_code 2.15.55.133) )); then
+		test_33_run "striped directory creation" \
+			"$LFS mkdir -i 0 -c 2 $DIR2/$tdir/striped"
+		test_33_run "set default LMV to create striped subdir" \
+			"$LFS setdirstripe -D -c 2 $DIR/$tdir"
+		test_33_run "striped subdir creation" \
+			"createmany -d $DIR/$tdir/subdir 100"
+		test_33_run "sub file creation and write" \
+			"createmany -o $DIR/$tdir/subfile 100; \
+			echo abc > $DIR/$tdir/subfile1"
+		test_33_run "sub file append write" \
+			"echo dfg >> $DIR2/$tdir/subfile2"
+		test_33_run "subdir setatttr" "touch $DIR2/$tdir/subdir1"
+		test_33_run "subdir unlink" \
+			"unlinkmany -d $DIR/$tdir/subdir 100"
+		test_33_run "sub file unlink" \
+			"unlinkmany $DIR2/$tdir/subfile 100"
+		test_33_run "sub file creation follows striped dir chmod" \
+			"chmod 777 $DIR/$tdir/striped; \
+			 touch $DIR/$tdir/striped/subfile"
+		test_33_run "striped directory unlink" \
+			"rm -rf $DIR2/$tdir/striped"
+	fi
+
+	test_33_run "directory unlink" "rm -rf $DIR2/$tdir"
 
 	local async_commit_count=$(do_nodes $nodes \
 		"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
-	[ $async_commit_count -gt 0 ] && error "CoS triggerred"
-
-	return 0
+	echo "CoS count $async_commit_count"
+	(( async_commit_count == 0 )) || error "CoS triggerred"
 }
-run_test 33e "DNE local operation shouldn't trigger COS"
+run_test 33e "independent transactions shouldn't trigger COS"
 
 # End commit on sharing tests
 

@@ -1614,7 +1614,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			/* flush UPDATE lock so attributes are upadated */
 			lh = &mti->mti_lh[MDT_LH_OLD];
 			mdt_object_lock(mti, obj, lh, MDS_INODELOCK_UPDATE,
-					LCK_EX, false);
+					LCK_EX);
 			mdt_object_unlock(mti, obj, lh, 1);
 		}
 	}

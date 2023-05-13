@@ -113,7 +113,7 @@ enum ldlm_side {
  * Lock types are described in their respective implementation files:
  * ldlm_{extent,flock,inodebits,plain}.c.
  *
- * There are six lock modes along with a compatibility matrix to indicate if
+ * There are nine lock modes along with a compatibility matrix to indicate if
  * two locks are compatible.
  *
  * - EX: Exclusive mode. Before a new file is created, MDS requests EX lock
@@ -128,26 +128,37 @@ enum ldlm_side {
  * - CR Concurrent Read mode. When a client performs a path lookup, MDS grants
  *   an inodebit lock with the CR mode on the intermediate path component.
  * - NL Null mode.
+ * - GROUP: Group mode. Locks with the same group ID are compatible with each
+ *   other.
+ * - COS: Commit-on-Sharing mode. If Commit-on-Sharing is enabled, PW/EX locks
+ *   held in transactions are downgraded to COS mode after transaction stop.
+ * - TXN: Transaction mode. If Commit-on-Sharing is diabled on a DNE system,
+ *   PW/EX locks held in transactions are downgraded to TXN mode after
+ *   transaction stop.
  *
  * <PRE>
- *       NL  CR  CW  PR  PW  EX
- *  NL    1   1   1   1   1   1
- *  CR    1   1   1   1   1   0
- *  CW    1   1   1   0   0   0
- *  PR    1   1   0   1   0   0
- *  PW    1   1   0   0   0   0
- *  EX    1   0   0   0   0   0
+ *       NL  CR  CW  PR  PW  EX GROUP COS TXN
+ *  NL    1   1   1   1   1   1   1   1   1
+ *  CR    1   1   1   1   1   0   0   0   1
+ *  CW    1   1   1   0   0   0   0   0   1
+ *  PR    1   1   0   1   0   0   0   0   1
+ *  PW    1   1   0   0   0   0   0   0   0
+ *  EX    1   0   0   0   0   0   0   0   0
+ *  GROUP 1   0   0   0   0   0   1   0   0
+ *  COS   1   0   0   0   0   0   0   1   0
+ *  TXN   1   1   1   1   0   0   0   0   1
  * </PRE>
  */
 /** @{ */
-#define LCK_COMPAT_EX  LCK_NL
-#define LCK_COMPAT_PW  (LCK_COMPAT_EX | LCK_CR)
-#define LCK_COMPAT_PR  (LCK_COMPAT_PW | LCK_PR)
-#define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
-#define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
-#define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX | LCK_GROUP)
-#define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
-#define LCK_COMPAT_COS (LCK_COS)
+#define LCK_COMPAT_EX    LCK_NL
+#define LCK_COMPAT_PW    (LCK_COMPAT_EX | LCK_CR)
+#define LCK_COMPAT_PR    (LCK_COMPAT_PW | LCK_PR | LCK_TXN)
+#define LCK_COMPAT_CW    (LCK_COMPAT_PW | LCK_CW | LCK_TXN)
+#define LCK_COMPAT_CR    (LCK_COMPAT_CW | LCK_PR | LCK_PW | LCK_TXN)
+#define LCK_COMPAT_NL    (LCK_COMPAT_CR | LCK_EX | LCK_GROUP | LCK_COS)
+#define LCK_COMPAT_GROUP (LCK_NL | LCK_GROUP)
+#define LCK_COMPAT_COS   (LCK_NL | LCK_COS)
+#define LCK_COMPAT_TXN   (LCK_COMPAT_PR | LCK_CW)
 /** @} Lock Compatibility Matrix */
 
 extern enum ldlm_mode lck_compat_array[];
@@ -657,8 +668,10 @@ struct ldlm_glimpse_work {
 };
 
 struct ldlm_bl_desc {
-	unsigned int bl_same_client:1,
-		     bl_cos_incompat:1;
+	unsigned int bl_same_client:1,	/* both ops are from the same client. */
+		     bl_txn_dependent:1;/* the op that enqueues lock depends on
+					 * the op that holds lock.
+					 */
 };
 
 struct ldlm_cb_set_arg {

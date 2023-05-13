@@ -1533,7 +1533,7 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 		 * process.
 		 */
 		rc = mdt_object_lock_internal(mti, mo, mdt_object_fid(mo), lhc,
-					      &ibits, 0, false, false);
+					      &ibits, 0, false);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -1969,6 +1969,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 
 	policy.l_inodebits.bits = MDS_INODELOCK_DOM;
 	policy.l_inodebits.try_bits = 0;
+	policy.l_inodebits.li_initiator_id = mdt_node_id(mdt);
 	fid_build_reg_res_name(mdt_object_fid(mo), &res_id);
 
 	/* Keep blocking version of discard for an old client to avoid

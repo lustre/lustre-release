@@ -721,6 +721,11 @@ static inline struct seq_server_site *mdt_seq_site(struct mdt_device *mdt)
 	return &mdt->mdt_seq_site;
 }
 
+static inline u32 mdt_node_id(const struct mdt_device *mdt)
+{
+	return mdt->mdt_seq_site.ss_node_id;
+}
+
 static inline void mdt_export_evict(struct obd_export *exp)
 {
         class_fail_export(exp);
@@ -824,35 +829,34 @@ int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 		    struct mdt_lock_handle *lh, __u64 ibits,
-		    enum ldlm_mode mode, bool cos_incompat);
+		    enum ldlm_mode mode);
 int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *o,
 		    struct mdt_lock_handle *lh, const struct lu_name *lname,
-		    enum ldlm_mode mode, bool cos_incompat);
+		    enum ldlm_mode mode);
 int mdt_object_stripes_lock(struct mdt_thread_info *info,
 			    struct mdt_object *pobj, struct mdt_object *o,
 			    struct mdt_lock_handle *lh,
 			    struct ldlm_enqueue_info *einfo, __u64 ibits,
-			    enum ldlm_mode mode, bool cos_incompat);
+			    enum ldlm_mode mode);
 int mdt_object_check_lock(struct mdt_thread_info *info,
 			  struct mdt_object *parent, struct mdt_object *child,
 			  struct mdt_lock_handle *lh, __u64 ibits,
-			  enum ldlm_mode mode, bool cos_incompat);
+			  enum ldlm_mode mode);
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct mdt_lock_handle *lh, __u64 *ibits,
-			__u64 trybits, enum ldlm_mode mode, bool cos_incompat);
+			__u64 trybits, enum ldlm_mode mode);
 
 /* below three lock functions are used internally */
 int mdt_object_lock_internal(struct mdt_thread_info *info,
 			     struct mdt_object *obj, const struct lu_fid *fid,
 			     struct mdt_lock_handle *lh, __u64 *ibits,
-			     __u64 trybits, bool cache, bool cos_incompat);
+			     __u64 trybits, bool cache);
 int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 			struct mdt_lock_handle *lh, const struct lu_name *name,
-			enum ldlm_mode mode, bool pdo_lock, bool cos_incompat);
+			enum ldlm_mode mode, bool pdo_lock);
 int mdt_object_lookup_lock(struct mdt_thread_info *info,
 			   struct mdt_object *pobj, struct mdt_object *obj,
-			   struct mdt_lock_handle *lh, enum ldlm_mode mode,
-			   bool cos_incompat);
+			   struct mdt_lock_handle *lh, enum ldlm_mode mode);
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);

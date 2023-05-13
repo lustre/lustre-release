@@ -373,6 +373,7 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = bits;
+	policy->l_inodebits.li_initiator_id = lfsck_dev_idx(lfsck);
 	if (dt_object_remote(obj)) {
 		struct ldlm_enqueue_info *einfo = &info->lti_einfo;
 

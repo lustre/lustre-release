@@ -6841,10 +6841,6 @@ static int lod_object_lock(const struct lu_env *env,
 			ldlm_completion_callback completion = einfo->ei_cb_cp;
 			__u64 dlmflags = LDLM_FL_ATOMIC_CB;
 
-			if (einfo->ei_mode == LCK_PW ||
-			    einfo->ei_mode == LCK_EX)
-				dlmflags |= LDLM_FL_COS_INCOMPAT;
-
 			LASSERT(ns != NULL);
 			rc = ldlm_cli_enqueue_local(env, ns, res_id, LDLM_IBITS,
 						    policy, einfo->ei_mode,
