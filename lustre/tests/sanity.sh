@@ -15292,6 +15292,7 @@ test_133g() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	local proc_dirs_str=$(eval echo $proc_dirs)
 	local skipped_params="'force_lbug|changelog_mask|daemon_file'"
 	local facet
 	for facet in mds1 ost1; do
@@ -15304,7 +15305,7 @@ test_133g() {
 		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
 			do_facet $facet "$LCTL list_param -FR '*' | grep '=' |
 				tr -d = | egrep -v $skipped_params |
-				xargs -n 1 find $proc_dirs -name |
+				xargs -n 1 find $proc_dirs_str -name |
 				xargs -n 1 badarea_io" ||
 					error "$facet badarea_io failed"
 		else
