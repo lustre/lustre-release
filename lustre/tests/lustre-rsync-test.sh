@@ -85,21 +85,22 @@ cleanup_src_tgt() {
 # "small" - large xattr is unsupported but small xattr is supported
 # "no"    - xattr is unsupported
 check_xattr() {
-    local tgt=$1
-    local xattr="no"
+	local tgt=$1
+	local xattr="no"
 
-    touch $tgt
+	touch $tgt
 
-    local val="$(generate_string $(max_xattr_size))"
-    if large_xattr_enabled &&
-       setfattr -n user.foo -v $val $tgt 2>/dev/null; then
-            xattr="large"
-    else
-        setfattr -n user.foo -v bar $tgt 2>/dev/null && xattr="small"
-    fi
+	local val="$(generate_string $(max_xattr_size))"
 
-    rm -f $tgt
-    echo $xattr
+	if large_xattr_enabled &&
+		setfattr -n user.foo -v $val $tgt 2>/dev/null; then
+		xattr="large"
+	else
+		setfattr -n user.foo -v bar $tgt 2>/dev/null && xattr="small"
+	fi
+
+	rm -f $tgt
+	echo $xattr
 }
 
 check_diff() {
@@ -149,38 +150,38 @@ stop_procs() {
 
 # Test 1A - test basic operations
 test_1A() { # was test_1
-    init_src
-    init_changelog
-    local xattr=$(check_xattr $TGT/foo)
+	init_src
+	init_changelog
+	local xattr=$(check_xattr $TGT/foo)
 
-    # Directory create
-    mkdir $DIR/$tdir/d1
-    mkdir $DIR/$tdir/d2
+	# Directory create
+	mkdir $DIR/$tdir/d1
+	mkdir $DIR/$tdir/d2
 
-    # File create
-    touch $DIR/$tdir/file1
-    cp /etc/hosts  $DIR/$tdir/d1/
-    touch  $DIR/$tdir/d1/"space in filename"
-    touch  $DIR/$tdir/d1/file2
+	# File create
+	touch $DIR/$tdir/file1
+	cp /etc/hosts  $DIR/$tdir/d1/
+	touch $DIR/$tdir/d1/"space in filename"
+	touch $DIR/$tdir/d1/file2
 
-    # File rename
-    mv $DIR/$tdir/d1/file2 $DIR/$tdir/d2/file3
+	# File rename
+	mv $DIR/$tdir/d1/file2 $DIR/$tdir/d2/file3
 
-    # File and directory delete
-    touch $DIR/$tdir/d1/file4
-    mkdir $DIR/$tdir/d1/del
-    touch  $DIR/$tdir/d1/del/del1
-    touch  $DIR/$tdir/d1/del/del2
-    rm -rf $DIR/$tdir/d1/del
-    rm $DIR/$tdir/d1/file4
+	# File and directory delete
+	touch $DIR/$tdir/d1/file4
+	mkdir $DIR/$tdir/d1/del
+	touch $DIR/$tdir/d1/del/del1
+	touch $DIR/$tdir/d1/del/del2
+	rm -rf $DIR/$tdir/d1/del
+	rm $DIR/$tdir/d1/file4
 
-    #hard and soft links
-    cat /etc/hosts > $DIR/$tdir/d1/link1
-    ln  $DIR/$tdir/d1/link1  $DIR/$tdir/d1/link2
-    ln -s $DIR/$tdir/d1/link1  $DIR/$tdir/d1/link3
+	# Hard and soft links
+	cat /etc/hosts > $DIR/$tdir/d1/link1
+	ln $DIR/$tdir/d1/link1  $DIR/$tdir/d1/link2
+	ln -s $DIR/$tdir/d1/link1  $DIR/$tdir/d1/link3
 
-    # Device files
-    #mknod $DIR/$tdir/dev1 b 8 1
+	# Device files
+	#mknod $DIR/$tdir/dev1 b 8 1
 
 	# Replicate
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
@@ -188,18 +189,19 @@ test_1A() { # was test_1
 	$LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG \
 		-D $LRSYNC_LOG
 
-    # Set attributes
-    chmod 000 $DIR/$tdir/d2/file3
-    chown nobody:$GROUP $DIR/$tdir/d2/file3
+	# Set attributes
+	chmod 000 $DIR/$tdir/d2/file3
+	chown nobody:$GROUP $DIR/$tdir/d2/file3
 
-    # Set xattrs
-    if [[ "$xattr" != "no" ]]; then
-        local value
-        touch $DIR/$tdir/file5
-        [[ "$xattr" = "large" ]] &&
-            value="$(generate_string $(max_xattr_size))" || value="bar"
-        setfattr -n user.foo -v $value $DIR/$tdir/file5
-    fi
+	# Set xattrs
+	if [[ "$xattr" != "no" ]]; then
+		local value
+		touch $DIR/$tdir/file5
+		[[ "$xattr" = "large" ]] &&
+			value="$(generate_string $(max_xattr_size))" || value="bar"
+		setfattr -n user.foo -v $value $DIR/$tdir/file5 ||
+			error "setfattr failed"
+	fi
 
 	echo "Replication #2"
 	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG

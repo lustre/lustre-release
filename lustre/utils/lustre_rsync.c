@@ -482,16 +482,27 @@ int lr_copy_xattr(struct lr_info *info)
 	while (start < len) {
 		size = info->xvsize;
 		rc = lgetxattr(info->src, info->xlist + start,
-			       info->xvalue, size);
-		if (!info->xvalue || errno == ERANGE) {
-			size = rc > PATH_MAX ? rc : PATH_MAX;
+			       NULL, 0);
+		if (rc < 0) {
+			lr_debug(DTRACE, "\t(%s,0) rc=%d, errno=%d\n",
+				 info->xlist + start, rc, errno);
+			start += strlen(info->xlist + start) + 1;
+			continue;
+		}
+		if (rc > size) {
+			/*
+			 * XATTR_SIZE_MAX should be the upper limit, but
+			 * just in case.
+			 */
+			size = rc > XATTR_SIZE_MAX ? rc : XATTR_SIZE_MAX;
 			info->xvalue = lr_grow_buf(info->xvalue, size);
 			if (!info->xvalue)
 				return -ENOMEM;
 			info->xvsize = size;
-			rc = lgetxattr(info->src, info->xlist + start,
-				       info->xvalue, size);
 		}
+
+		rc = lgetxattr(info->src, info->xlist + start,
+			       info->xvalue, size);
 		lr_debug(DTRACE, "\t(%s,%d) rc=%p\n", info->xlist + start,
 			 info->xvalue, rc);
 		if (rc > 0) {
