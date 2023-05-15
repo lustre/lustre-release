@@ -4184,6 +4184,50 @@ test_23c() {
 }
 run_test 23c "LFSCK can repair dangling name entry (3)"
 
+test_23d() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	[[ $mds1_FSTYPE == ldiskfs ]] ||
+		skip "ldiskfs-only test due to a low-level mds fs access"
+
+	mkdir $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/mdt0dir
+	$LFS mkdir -i 1 $DIR/$tdir/mdt1dir
+
+	echo "b-a-r" > $DIR/$tdir/mdt0dir/foo
+	local foofid=$($LFS path2fid $DIR/$tdir/mdt0dir/foo | sed -E 's/^.(.*).$/\1/')
+
+	mv $DIR/$tdir/mdt0dir/foo $DIR/$tdir/mdt1dir/
+
+	stop mds1
+
+	local devname=$(mdsdevname 1)
+	local cmd="$DEBUGFS -w -R \\\"rm /REMOTE_PARENT_DIR/${foofid}\\\" $devname"
+	do_facet mds1 "$cmd"
+
+	start mds1 $devname $MDS_MOUNT_OPTS || error "start mds1 failed"
+
+	cat $DIR/$tdir/mdt1dir/foo && error "file read should fail"
+
+	do_facet mds2 $LCTL lfsck_start -M ${FSNAME}-MDT0001 -t namespace -C ||
+		error "lfsck namespace failed to start"
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.${FSNAME}-MDT0001.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error " unexpected lfsck status"
+
+	cat $DIR/$tdir/mdt1dir/foo || error "file read should succeed"
+
+	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -o ||
+		error "lfsck namespace failed to start"
+	wait_update_facet mds1 "$LCTL get_param -n \
+		mdd.${FSNAME}-MDT0000.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error " unexpected lfsck status"
+
+	cmp $DIR/$tdir/mdt1dir/foo <(echo "b-a-r") || error "file body has changed"
+}
+run_test 23d "LFSCK can repair a dangling name entry to a remote object"
+
 test_24() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
