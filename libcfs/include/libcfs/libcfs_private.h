@@ -259,12 +259,4 @@ int libcfs_debug_mark_buffer(const char *text);
 /* logical equivalence */
 #define equi(a, b) (!!(a) == !!(b))
 
-#ifndef HAVE_CFS_SIZE_ROUND
-static inline size_t cfs_size_round(size_t val)
-{
-	return round_up(val, 8);
-}
-#define HAVE_CFS_SIZE_ROUND
-#endif
-
 #endif
