@@ -2035,7 +2035,7 @@ static int cfs_num_min_max(struct list_head *nidlist, __u32 *min_nid,
 			if (tmp_min_addr < min_addr || min_addr == 0)
 				min_addr = tmp_min_addr;
 			if (tmp_max_addr > max_addr)
-				max_addr = tmp_min_addr;
+				max_addr = tmp_max_addr;
 		}
 	}
 	if (max_nid != NULL)
