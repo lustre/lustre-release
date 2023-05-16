@@ -246,22 +246,6 @@ int libcfs_debug_cleanup(void);
 int libcfs_debug_clear_buffer(void);
 int libcfs_debug_mark_buffer(const char *text);
 
-#define LASSERT_ATOMIC_ENABLED          (1)
-
-#if LASSERT_ATOMIC_ENABLED
-
-/** assert value of @a is equal to @v */
-#define LASSERT_ATOMIC_EQ(a, v)				\
-	LASSERTF(atomic_read(a) == v, "value: %d\n", atomic_read((a)));
-
-#else /* !LASSERT_ATOMIC_ENABLED */
-
-#define LASSERT_ATOMIC_EQ(a, v)                 do {} while (0)
-
-#endif /* LASSERT_ATOMIC_ENABLED */
-
-#define LASSERT_ATOMIC_ZERO(a)                  LASSERT_ATOMIC_EQ(a, 0)
-
 #define CFS_ALLOC_PTR(ptr)      LIBCFS_ALLOC(ptr, sizeof(*(ptr)));
 #define CFS_ALLOC_PTR_ARRAY(ptr, count)			\
 	LIBCFS_ALLOC(ptr, (count) * sizeof(*(ptr)))

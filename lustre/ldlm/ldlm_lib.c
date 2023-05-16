@@ -1675,10 +1675,10 @@ void target_destroy_export(struct obd_export *exp)
 	if (imp != NULL)
 		client_destroy_import(imp);
 
-	LASSERT_ATOMIC_ZERO(&exp->exp_locks_count);
-	LASSERT_ATOMIC_ZERO(&exp->exp_rpc_count);
-	LASSERT_ATOMIC_ZERO(&exp->exp_cb_count);
-	LASSERT_ATOMIC_ZERO(&exp->exp_replay_count);
+	LASSERT(atomic_read(&exp->exp_locks_count) == 0);
+	LASSERT(atomic_read(&exp->exp_rpc_count) == 0);
+	LASSERT(atomic_read(&exp->exp_cb_count) == 0);
+	LASSERT(atomic_read(&exp->exp_replay_count) == 0);
 }
 EXPORT_SYMBOL(target_destroy_export);
 
