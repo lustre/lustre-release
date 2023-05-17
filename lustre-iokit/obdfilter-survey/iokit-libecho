@@ -278,11 +278,15 @@ get_ec_devno () {
 		exit 1
 	fi
 	client_name=${ost_name}_ecc
-	remote_shell $host \
-		"$lctl <<-EOF
-			attach echo_client $client_name ${client_name}_UUID
-			setup $ost_name $stack_type
-		EOF"
+	# Only 'attach' if '{client_name}_uuid' not already present
+	if ! [[ $(lctl dl) =~ $client_name ]]; then
+		remote_shell $host \
+			"$lctl <<-EOF
+				attach echo_client $client_name \
+					${client_name}_UUID
+				setup $ost_name $stack_type
+			EOF"
+	fi
 	ec=$(get_devno $host echo_client $client_name)
 	if [ -z "$ec" ]; then
 		echo "Can't setup echo-client"
