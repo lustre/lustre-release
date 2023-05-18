@@ -632,6 +632,13 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		RETURN(-ENOMEM);
 	req->rq_request_portal = OST_CREATE_PORTAL;
 
+	/* We should not resend create request - anyway we will have delorphan
+	 * and kill these objects.
+	 * Only needed for MDS+OSS rolling upgrade interop with 2.16+older.
+	 */
+	if (unlikely(!imp_connect_replay_create(imp)))
+		req->rq_no_delay = req->rq_no_resend = 1;
+
 	/* Delorphan happens only with a first MDT-OST connect. resend/replay
 	 * handles objects creation on reconnects, no need to do delorhpan
 	 * in this case.
@@ -859,7 +866,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct lu_fid		*last_fid = &osi->osi_fid;
 	struct ptlrpc_request	*req = NULL;
-	struct obd_import	*imp;
+	struct obd_import	*imp = d->opd_obd->u.cli.cl_import;
 	struct ost_body		*body;
 	int			 update_status = 0;
 	int			 rc;
@@ -872,7 +879,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 * all precreate requests uses resend/replay flags to support OST
 	 * failover/reconnect.
 	 */
-	if (d->opd_cleanup_orphans_done) {
+	if (d->opd_cleanup_orphans_done && imp_connect_replay_create(imp)) {
 		rc = osp_get_lastfid_from_ost(env, d, false);
 		RETURN(0);
 	}

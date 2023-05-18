@@ -1079,7 +1079,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	next_id = ofd_seq_last_oid(oseq) + 1;
 	count = ofd_precreate_batch(ofd, (int)diff);
 
-	rc = ofd_precreate_objects(env, ofd, next_id, oseq, count, 0);
+	rc = ofd_precreate_objects(env, ofd, next_id, oseq, count, 0, false);
 	if (rc < 0) {
 		CERROR("%s: unable to precreate: rc = %d\n",
 		       ofd_name(ofd), rc);

@@ -748,7 +748,8 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 				int count = ofd_precreate_batch(ofd, diff);
 
 				rc = ofd_precreate_objects(env, ofd, next_id,
-							   oseq, count, sync);
+							   oseq, count, sync,
+							   false);
 				if (rc < 0) {
 					mutex_unlock(&oseq->os_create_lock);
 					ofd_seq_put(env, oseq);

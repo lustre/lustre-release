@@ -41,6 +41,7 @@
 
 #include <dt_object.h>
 #include <lustre_lfsck.h>
+#include <lustre_export.h>
 
 #include "ofd_internal.h"
 
@@ -236,18 +237,20 @@ static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
  * update the inode. The ctime = 0 case is also handled specially in
  * osd_inode_setattr(). See LU-221, LU-1042 for details.
  *
- * \param[in] env	execution environment
- * \param[in] ofd	OFD device
- * \param[in] id	object ID to start precreation from
- * \param[in] oseq	object sequence
- * \param[in] nr	number of objects to precreate
- * \param[in] sync	synchronous precreation flag
+ * \param[in] env		execution environment
+ * \param[in] ofd		OFD device
+ * \param[in] id		object ID to start precreation from
+ * \param[in] oseq		object sequence
+ * \param[in] nr		number of objects to precreate
+ * \param[in] sync		synchronous precreation flag
+ * \param[in] trans_local	start local transaction
  *
  * \retval		0 if successful
  * \retval		negative value on error
  */
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  u64 id, struct ofd_seq *oseq, int nr, int sync)
+			  u64 id, struct ofd_seq *oseq, int nr, int sync,
+			  bool trans_local)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_object	*fo = NULL;
@@ -359,7 +362,11 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		}
 	}
 
-	rc = dt_trans_start(env, ofd->ofd_osd, th);
+	/* Only needed for MDS+OSS rolling upgrade interop with 2.16+older. */
+	if (unlikely(trans_local))
+		rc = dt_trans_start_local(env, ofd->ofd_osd, th);
+	else
+		rc = dt_trans_start(env, ofd->ofd_osd, th);
 	if (rc)
 		GOTO(trans_stop, rc);
 

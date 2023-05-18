@@ -846,6 +846,8 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ENCRYPT_NAME	  0x8000000ULL /* name encrypt */
 #define OBD_CONNECT2_DMV_IMP_INHERIT	 0x20000000ULL /* client handle DMV inheritance */
 #define OBD_CONNECT2_ENCRYPT_FID2PATH	 0x40000000ULL /* fid2path enc file */
+/* For MDS+OSS rolling upgrade interop with 2.16+older, ignored after 2.20.53 */
+#define OBD_CONNECT2_REPLAY_CREATE	 0x80000000ULL /* replay OST_CREATE */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -937,7 +939,8 @@ struct ptlrpc_body_v2 {
 
 #define OST_CONNECT_SUPPORTED2 (OBD_CONNECT2_LOCKAHEAD | OBD_CONNECT2_INC_XID |\
 				OBD_CONNECT2_ENCRYPT | OBD_CONNECT2_LSEEK |\
-				OBD_CONNECT2_REP_MBITS)
+				OBD_CONNECT2_REP_MBITS |\
+				OBD_CONNECT2_REPLAY_CREATE)
 
 #define ECHO_CONNECT_SUPPORTED (OBD_CONNECT_FID | OBD_CONNECT_FLAGS2)
 #define ECHO_CONNECT_SUPPORTED2 OBD_CONNECT2_REP_MBITS

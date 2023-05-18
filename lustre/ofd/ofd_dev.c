@@ -1605,6 +1605,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	}
 	if (diff > 0) {
 		time64_t enough_time = ktime_get_seconds() + DISK_TIMEOUT;
+		bool trans_local;
 		u64 next_id;
 		int created = 0;
 		int count;
@@ -1644,7 +1645,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			}
 		}
 
-
+		trans_local = !exp_connect_replay_create(req->rq_export);
 		while (diff > 0) {
 			next_id = ofd_seq_last_oid(oseq) + 1;
 			count = ofd_precreate_batch(ofd, (int)diff);
@@ -1663,7 +1664,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			}
 
 			rc = ofd_precreate_objects(tsi->tsi_env, ofd, next_id,
-						   oseq, count, sync_trans);
+						   oseq, count, sync_trans,
+						   trans_local);
 			if (rc > 0) {
 				created += rc;
 				diff -= rc;

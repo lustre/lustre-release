@@ -382,7 +382,8 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo);
 int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 			 const struct obdo *oa, struct filter_fid *ff);
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  u64 id, struct ofd_seq *oseq, int nr, int sync);
+			  u64 id, struct ofd_seq *oseq, int nr, int sync,
+			  bool trans_local);
 
 static inline void ofd_object_put(const struct lu_env *env,
 				  struct ofd_object *fo)

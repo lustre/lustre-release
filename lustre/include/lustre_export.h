@@ -44,8 +44,9 @@
 #include <linux/rhashtable.h>
 #include <linux/workqueue.h>
 
-#include <lprocfs_status.h>
 #include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_ver.h>
+#include <lprocfs_status.h>
 #include <lustre_dlm.h>
 
 struct mds_client_data;
@@ -499,6 +500,29 @@ static inline int exp_connect_dom_lvb(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_DOM_LVB);
 }
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
+/* Only needed for interop with older MDS and 2.16+ OSS for rolling upgrade.
+ * This is typically unsupported for long periods, especially between large
+ * large version differences, so assume this is always true in the future
+ * and the OBD_CONNECT2_REPLAY_CREATE flag can be removed/reused in 2.21+.
+ */
+static inline bool exp_connect_replay_create(struct obd_export *exp)
+{
+	return exp_connect_flags2(exp) & OBD_CONNECT2_REPLAY_CREATE;
+}
+
+static inline bool imp_connect_replay_create(struct obd_import *imp)
+{
+	struct obd_connect_data *ocd = &imp->imp_connect_data;
+
+	return (ocd->ocd_connect_flags & OBD_CONNECT_FLAGS2) &&
+		(ocd->ocd_connect_flags2 & OBD_CONNECT2_REPLAY_CREATE);
+}
+#else
+#define exp_connect_replay_create(exp) true
+#define imp_connect_replay_create(exp) true
+#endif
 
 enum {
 	/* archive_ids in array format */
