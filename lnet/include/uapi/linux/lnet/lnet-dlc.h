@@ -54,10 +54,11 @@
 
 /* enum lnet_commands	      - Supported core LNet Netlink commands
  *
- *  @LNET_CMD_UNSPEC:		unspecified command to catch errors
+ * @LNET_CMD_UNSPEC:		unspecified command to catch errors
  *
- *  @LNET_CMD_NETS:		command to manage the LNet networks
- *  @LNET_CMD_PING:		command to send pings to LNet connections
+ * @LNET_CMD_NETS:		command to manage the LNet networks
+ * @LNET_CMD_ROUTES:		command to manage LNet routes
+ * @LNET_CMD_PING:		command to send pings to LNet connections
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,

@@ -548,6 +548,46 @@ enum lnet_net_local_ni_tunables_attr {
 
 #define LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX (__LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
 
+/** enum lnet_route_attrs		      - LNet route netlink
+ *						attributes that describe
+ *						LNet routes
+ *
+ * @LNET_ROUTE_ATTR_UNSPEC:			unspecified attribute to
+ *						catch errors
+ *
+ * @LNET_ROUTE_ATTR_HDR:			grouping for LNet route data
+ *						(NLA_NUL_STRING)
+ * @LNET_ROUTE_ATTR_NET:			LNet remote network reached
+ *						by the route (NLA_STRING)
+ * @LNET_ROUTE_ATTR_GATEWAY:			gateway for the route
+ *						(NLA_STRING)
+ * @LNET_ROUTE_ATTR_HOP:			route hop count (NLA_S32)
+ *
+ * @LNET_ROUTE_ATTR_PRIORITY:			rank of this network path
+ *						(NLA_U32)
+ * @LNET_ROUTE_ATTR_HEALTH_SENSITIVITY:		rate of health value change
+ *						for the route (NLA_U32)
+ * @LNET_ROUTE_ATTR_STATE:			state of route (NLA_STRING)
+ *
+ * @LNET_ROUTE_ATTR_TYPE:			Report if we support multi-hop
+ *						(NLA_STRING)
+ */
+enum lnet_route_attrs {
+	LNET_ROUTE_ATTR_UNSPEC = 0,
+
+	LNET_ROUTE_ATTR_HDR,
+	LNET_ROUTE_ATTR_NET,
+	LNET_ROUTE_ATTR_GATEWAY,
+	LNET_ROUTE_ATTR_HOP,
+	LNET_ROUTE_ATTR_PRIORITY,
+	LNET_ROUTE_ATTR_HEALTH_SENSITIVITY,
+	LNET_ROUTE_ATTR_STATE,
+	LNET_ROUTE_ATTR_TYPE,
+	__LNET_ROUTE_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_ROUTE_ATTR_MAX (__LNET_ROUTE_ATTR_MAX_PLUS_ONE - 1)
+
 /** LNet netlink ping API */
 
 /** enum lnet_ping_atts				      - LNet ping netlink properties
