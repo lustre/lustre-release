@@ -26357,7 +26357,7 @@ test_398a() { # LU-4198
 			   ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -eq 0 ]] || error "lock should be cancelled by direct IO"
 
-	$LCTL set_param ldlm.namespaces.*-OST0000-osc-ffff*.lru_size=clear
+	$LCTL set_param ldlm.namespaces.$imp_name.lru_size=clear
 
 	# no lock cached, should use lockless DIO and not enqueue new lock
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
@@ -26365,13 +26365,13 @@ test_398a() { # LU-4198
 		     ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -eq 0 ]] || error "no lock should be held by direct IO"
 
-	$LCTL set_param ldlm.namespaces.*-OST0000-osc-ffff*.lru_size=clear
+	$LCTL set_param ldlm.namespaces.$imp_name.lru_size=clear
 
 	# no lock cached, should use locked DIO append
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct oflag=append \
 		conv=notrunc || error "DIO append failed"
 	lock_count=$($LCTL get_param -n \
-		     ldlm.namespaces.*-OST0000-osc-ffff*.lru_size)
+		     ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -ne 0 ]] || error "lock still must be held by DIO append"
 }
 run_test 398a "direct IO should cancel lock otherwise lockless"
