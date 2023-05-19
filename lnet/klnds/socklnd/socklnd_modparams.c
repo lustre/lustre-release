@@ -211,11 +211,11 @@ static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
 		if (!(flags & IFF_UP))
 			continue;
 
-		in_dev = __in_dev_get_rcu(dev);
+		in_dev = __in_dev_get_rtnl(dev);
 		if (!in_dev)
 			continue;
 
-		in_dev_for_each_ifa_rcu(ifa, in_dev) {
+		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
 			if (strcmp(ifa->ifa_label, ni->ni_interface) == 0)
 				intf_idx = dev->ifindex;
 		}
