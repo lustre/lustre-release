@@ -34,6 +34,7 @@
 #include <linux/ctype.h>
 #include <linux/inetdevice.h>
 #include <linux/nsproxy.h>
+#include <linux/ethtool.h>
 #include <net/net_namespace.h>
 #include <lnet/lib-lnet.h>
 #include <net/addrconf.h>
@@ -1501,6 +1502,37 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	*networksp = networks;
 	return count;
 }
+
+__u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state)
+{
+	CDEBUG(D_NET, "%s: set link fatal state to %u\n",
+	       libcfs_nidstr(&ni->ni_nid), link_state);
+	return atomic_xchg(&ni->ni_fatal_error_on, link_state);
+}
+EXPORT_SYMBOL(lnet_set_link_fatal_state);
+
+int lnet_get_link_status(struct net_device *dev)
+{
+	int ret = -1;
+
+	if (!dev)
+		return -1;
+
+	if (!netif_running(dev)) {
+		ret = 0;
+		CDEBUG(D_NET, "device idx %d not running\n", dev->ifindex);
+	}
+	/* Some devices may not be providing link settings */
+	else if (dev->ethtool_ops->get_link) {
+		ret = dev->ethtool_ops->get_link(dev);
+		CDEBUG(D_NET, "device idx %d get_link %u\n",
+		       ret,
+		       dev->ifindex);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(lnet_get_link_status);
 
 int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 {

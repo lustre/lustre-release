@@ -960,6 +960,8 @@ void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
 struct lnet_ping_buffer *lnet_ping_buffer_alloc(int bytes, gfp_t gfp);
 void lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf);
+int lnet_get_link_status(struct net_device *dev);
+__u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state);
 
 static inline void lnet_ping_buffer_addref(struct lnet_ping_buffer *pbuf)
 {
