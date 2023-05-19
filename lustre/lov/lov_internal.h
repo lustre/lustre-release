@@ -184,6 +184,12 @@ struct lsm_operations {
 const struct lsm_operations *lsm_op_find(int magic);
 void lsm_free(struct lov_stripe_md *lsm);
 
+static inline bool lov_supported_comp_magic(unsigned int magic)
+{
+	return magic == LOV_MAGIC_V1 || magic == LOV_MAGIC_V3 ||
+	       magic == LOV_MAGIC_FOREIGN;
+}
+
 /* lov_do_div64(a, b) returns a % b, and a = a / b.
  * The 32-bit code is LOV-specific due to knowing about stripe limits in
  * order to reduce the divisor to a 32-bit number.  If the divisor is

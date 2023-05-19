@@ -675,16 +675,40 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		case LOV_PATTERN_FOREIGN:
 			lle->lle_comp_ops = NULL;
 			break;
-		default:
-			CERROR("%s: unknown composite layout entry type %i\n",
-			       lov2obd(dev->ld_lov)->obd_name,
-			       lsm->lsm_entries[i]->lsme_pattern);
-			dump_lsm(D_ERROR, lsm);
-			RETURN(-EIO);
+		default: {
+			static int nr;
+			static ktime_t time2_clear_nr;
+			ktime_t now = ktime_get();
+
+			lle->lle_comp_ops = NULL;
+
+			/* limit this message 20 times within 24h */
+			if (ktime_after(now, time2_clear_nr)) {
+				nr = 0;
+				time2_clear_nr = ktime_add_ms(now,
+						      24 * 3600 * MSEC_PER_SEC);
+			}
+			if (nr++ < 20) {
+				CWARN("%s: unknown layout entry %d pattern %#x"
+				      " could be an unrecognizable component"
+				      " set by other clients, skip to"
+				      " initialize the next component.\n",
+					lov2obd(dev->ld_lov)->obd_name,
+					i,
+					lsm->lsm_entries[i]->lsme_pattern);
+				dump_lsm(D_ERROR, lsm);
+			}
+		}
 		}
 
 		lle->lle_extent = &lle->lle_lsme->lsme_extent;
-		lle->lle_valid = !(lle->lle_lsme->lsme_flags & LCME_FL_STALE);
+		if (!lov_pattern_supported(
+				lov_pattern(lle->lle_lsme->lsme_pattern)) ||
+		    !lov_supported_comp_magic(lle->lle_lsme->lsme_magic))
+			lle->lle_valid = 0;
+		else
+			lle->lle_valid =
+				!(lle->lle_lsme->lsme_flags & LCME_FL_STALE);
 
 		if (flr_state != LCM_FL_NONE)
 			mirror_id = mirror_id_of(lle->lle_lsme->lsme_id);
@@ -744,6 +768,11 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		if (lsme_is_foreign(lle->lle_lsme))
 			continue;
 
+		if (!lov_pattern_supported(
+				lov_pattern(lle->lle_lsme->lsme_pattern)) ||
+		    !lov_supported_comp_magic(lle->lle_lsme->lsme_magic))
+			continue;
+
 		result = lle->lle_comp_ops->lco_init(env, dev, lov, index,
 						     conf, lle);
 		if (result < 0)
@@ -769,6 +798,9 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 			continue;
 
 		if (lre->lre_foreign)
+			continue;
+
+		if (!lre->lre_valid)
 			continue;
 
 		mirror_count++; /* valid mirror */
@@ -859,6 +891,10 @@ static int lov_delete_composite(const struct lu_env *env,
 	lov_layout_wait(env, lov);
 	lov_foreach_layout_entry(lov, entry) {
 		if (entry->lle_lsme && lsme_is_foreign(entry->lle_lsme))
+			continue;
+		if (!lov_pattern_supported(
+				lov_pattern(entry->lle_lsme->lsme_pattern)) ||
+		    !lov_supported_comp_magic(entry->lle_lsme->lsme_magic))
 			continue;
 
 		rc = lov_delete_raid0(env, lov, entry);
@@ -2369,7 +2405,10 @@ int lov_read_and_clear_async_rc(struct cl_object *clob)
 						lsm->lsm_entries[i];
 				int j;
 
-				if (!lsme_inited(lse))
+				if (!lsme_inited(lse) ||
+				    !lov_pattern_supported(
+					    lov_pattern(lse->lsme_pattern)) ||
+				    !lov_supported_comp_magic(lse->lsme_magic))
 					break;
 
 				for (j = 0; j < lse->lsme_stripe_count; j++) {

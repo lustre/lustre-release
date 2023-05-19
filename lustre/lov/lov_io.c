@@ -215,6 +215,7 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 static int lov_io_mirror_write_intent(struct lov_io *lio,
 	struct lov_object *obj, struct cl_io *io)
 {
+	struct lu_object *lobj = lov2lu(obj);
 	struct lov_layout_composite *comp = &obj->u.composite;
 	struct lu_extent *ext = &io->ci_write_intent;
 	struct lov_mirror_entry *lre;
@@ -254,7 +255,19 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	 * multiple components covering the writing component
 	 */
 	primary = &comp->lo_mirrors[comp->lo_preferred_mirror];
-	LASSERT(!primary->lre_stale);
+	if (primary->lre_stale || !primary->lre_valid) {
+		/**
+		 * new server could pick a primary mirror which old client
+		 * does not recognize, and old client would mark it as
+		 * invalid.
+		 */
+		CERROR(DFID ": cannot find known valid non-stale mirror, "
+		       "could be new server picked a mirror which this client "
+		       "does not recognize.\n",
+		       PFID(lu_object_fid(lobj)));
+		RETURN(-EIO);
+	}
+
 	lov_foreach_mirror_layout_entry(obj, lle, primary) {
 		LASSERT(lle->lle_valid);
 		if (!lu_extent_is_overlapped(ext, lle->lle_extent))
@@ -267,7 +280,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	if (count == 0) {
 		CERROR(DFID ": cannot find any valid components covering "
 		       "file extent "DEXT", mirror: %d\n",
-		       PFID(lu_object_fid(lov2lu(obj))), PEXT(ext),
+		       PFID(lu_object_fid(lobj)), PEXT(ext),
 		       primary->lre_mirror_id);
 		RETURN(-EIO);
 	}
@@ -290,7 +303,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 
 	CDEBUG(D_VFSTRACE, DFID "there are %zd components to be staled to "
 	       "modify file extent "DEXT", iot: %d\n",
-	       PFID(lu_object_fid(lov2lu(obj))), count, PEXT(ext), io->ci_type);
+	       PFID(lu_object_fid(lobj)), count, PEXT(ext), io->ci_type);
 
 	io->ci_need_write_intent = count > 0;
 

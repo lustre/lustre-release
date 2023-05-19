@@ -3226,6 +3226,39 @@ test_61c() { # LU-14508
 }
 run_test 61c "mirror resync preserves timestamps"
 
+test_62() {
+	local file=$DIR/$tdir/$tfile
+
+	mkdir -p $DIR/$tdir
+
+	echo "create mirror file with unknown magic"
+	#define OBD_FAIL_LOV_COMP_MAGIC 0x1426
+	# mirror 2 in-memory magic is bad
+	$LCTL set_param fail_loc=0x1426 fail_val=2
+	$LFS setstripe -N --flags=prefer -N2 $file ||
+		error "failed to create mirror file $file"
+	magic=$($LFS getstripe -v -I131074 $file | awk '/lmm_magic/{print $2}')
+	[[ $magic == 0x0BAD0BD0 ]] ||
+		error "mirror 2 magic $magic is not bad as expected"
+	cat /etc/passwd > $file || error "cannot write to $file"
+	diff /etc/passwd $file || error "read $file error"
+
+	rm -f $file
+
+	echo "create mirror file with unknown pattern"
+	#define OBD_FAIL_LOV_COMP_PATTERN 0x1427
+	# mirror 1 in-memory pattern is bad
+	$LCTL set_param fail_loc=0x1427 fail_val=1
+	$LFS setstripe -N -N --flags=prefer $file ||
+		error "failed to create mirror file $file"
+	pattern=$($LFS getstripe -I65537 $file | awk '/lmm_pattern/{print $2}')
+	[[ $pattern == 502 ]] ||
+		error "mirror 1 pattern $pattern is not bad as expected"
+	cat /etc/passwd > $file || error "cannot write to $file"
+	diff /etc/passwd $file || error "read $file error"
+}
+run_test 62 "read/write with unknown type of mirror"
+
 test_70() {
 	local tf=$DIR/$tdir/$tfile
 

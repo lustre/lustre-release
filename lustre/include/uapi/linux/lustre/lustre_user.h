@@ -721,6 +721,10 @@ struct fsxattr {
 #define LOV_PATTERN_FOREIGN		0x400
 #define LOV_PATTERN_COMPRESS		0x800
 
+/* combine exclusive patterns as a bad pattern */
+#define LOV_PATTERN_BAD		(LOV_PATTERN_RAID1 | LOV_PATTERN_MDT | \
+				 LOV_PATTERN_FOREIGN)
+
 #define LOV_PATTERN_F_MASK	0xffff0000
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
 #define LOV_PATTERN_F_RELEASED	0x80000000 /* HSM released file */

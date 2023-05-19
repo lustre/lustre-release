@@ -99,9 +99,21 @@ static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 	}
 
 	if (!lov_pattern_supported(lov_pattern(pattern))) {
-		rc = -EINVAL;
-		CERROR("lov: unrecognized striping pattern: rc = %d\n", rc);
-		lov_dump_lmm_common(D_WARNING, lmm);
+		static int nr;
+		static ktime_t time2_clear_nr;
+		ktime_t now = ktime_get();
+
+		/* limit this message 20 times within 24h */
+		if (ktime_after(now, time2_clear_nr)) {
+			nr = 0;
+			time2_clear_nr = ktime_add_ms(now,
+						      24 * 3600 * MSEC_PER_SEC);
+		}
+		if (nr++ < 20) {
+			CWARN("lov: unrecognized striping pattern: rc = %d\n",
+			      rc);
+			lov_dump_lmm_common(D_WARNING, lmm);
+		}
 		goto out;
 	}
 
@@ -138,7 +150,9 @@ static void lsme_free(struct lov_stripe_md_entry *lsme)
 
 	stripe_count = lsme->lsme_stripe_count;
 	if (!lsme_inited(lsme) ||
-	    lsme->lsme_pattern & LOV_PATTERN_F_RELEASED)
+	    lsme->lsme_pattern & LOV_PATTERN_F_RELEASED ||
+	    !lov_supported_comp_magic(lsme->lsme_magic) ||
+	    !lov_pattern_supported(lov_pattern(lsme->lsme_pattern)))
 		stripe_count = 0;
 	for (i = 0; i < stripe_count; i++)
 		OBD_SLAB_FREE_PTR(lsme->lsme_oinfo[i], lov_oinfo_slab);
@@ -191,7 +205,8 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 		RETURN(ERR_PTR(-EINVAL));
 
 	pattern = le32_to_cpu(lmm->lmm_pattern);
-	if (pattern & LOV_PATTERN_F_RELEASED || !inited)
+	if (pattern & LOV_PATTERN_F_RELEASED || !inited ||
+	    !lov_pattern_supported(lov_pattern(pattern)))
 		stripe_count = 0;
 	else
 		stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
@@ -451,9 +466,16 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 	unsigned int magic;
 
 	magic = le32_to_cpu(lmm->lmm_magic);
-	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
-	    magic != LOV_MAGIC_FOREIGN)
-		RETURN(ERR_PTR(-EINVAL));
+	if (!lov_supported_comp_magic(magic)) {
+		struct lov_stripe_md_entry *lsme;
+
+		/* allocate a lsme holder for invalid magic lmm */
+		OBD_ALLOC_LARGE(lsme, offsetof(typeof(*lsme), lsme_oinfo[0]));
+		lsme->lsme_magic = magic;
+		lsme->lsme_pattern = le32_to_cpu(lmm->lmm_pattern);
+
+		return lsme;
+	}
 
 	if (magic != LOV_MAGIC_FOREIGN &&
 	    le16_to_cpu(lmm->lmm_stripe_count) == 0 &&
@@ -517,6 +539,16 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		blob_size = le32_to_cpu(lcme->lcme_size);
 		blob = (char *)lcm + blob_offset;
 
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_LOV_COMP_MAGIC) &&
+			     (cfs_fail_val == i + 1)))
+			((struct lov_mds_md *)blob)->lmm_magic = LOV_MAGIC_BAD;
+
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_LOV_COMP_PATTERN) &&
+			     (cfs_fail_val == i + 1))) {
+			((struct lov_mds_md *)blob)->lmm_pattern =
+								LOV_PATTERN_BAD;
+		}
+
 		lsme = lsme_unpack_comp(lov, blob, blob_size,
 					le32_to_cpu(lcme->lcme_flags) &
 					LCME_FL_INIT,
@@ -525,6 +557,10 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		if (IS_ERR(lsme))
 			GOTO(out_lsm, rc = PTR_ERR(lsme));
 
+		/**
+		 * pressume that unrecognized magic component also has valid
+		 * lsme_id/lsme_flags/lsme_extent
+		 */
 		if (!(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
 			lsm->lsm_is_released = false;
 
@@ -654,7 +690,9 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 		       lse->lsme_stripe_count, lse->lsme_stripe_size,
 		       lse->lsme_pool_name);
 		if (!lsme_inited(lse) ||
-		    lse->lsme_pattern & LOV_PATTERN_F_RELEASED)
+		    lse->lsme_pattern & LOV_PATTERN_F_RELEASED ||
+		    !lov_supported_comp_magic(lse->lsme_magic) ||
+		    !lov_pattern_supported(lov_pattern(lse->lsme_pattern)))
 			continue;
 		for (j = 0; j < lse->lsme_stripe_count; j++) {
 			CDEBUG(level, "   oinfo:%p: ostid: "DOSTID
