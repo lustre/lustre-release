@@ -1939,7 +1939,7 @@ static long server_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct vfsmount *root_mnt;
 	struct file *root_filp;
 	struct inode *root_inode;
-	int err = -EOPNOTSUPP;
+	int err = -ENOTTY;
 
 	if (!is_cmd_supported(cmd))
 		return err;
