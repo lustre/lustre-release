@@ -1140,6 +1140,42 @@ static ssize_t tiny_write_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(tiny_write);
 
+static ssize_t unaligned_dio_show(struct kobject *kobj,
+				  struct attribute *attr,
+				  char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 test_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags));
+}
+
+static ssize_t unaligned_dio_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer,
+				   size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val)
+		set_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags);
+	else
+		clear_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags);
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(unaligned_dio);
+
 static ssize_t parallel_dio_show(struct kobject *kobj,
 				 struct attribute *attr,
 				 char *buf)
@@ -1892,6 +1928,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_fast_read.attr,
 	&lustre_attr_tiny_write.attr,
 	&lustre_attr_parallel_dio.attr,
+	&lustre_attr_unaligned_dio.attr,
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,

@@ -779,6 +779,7 @@ enum ll_sbi_flags {
 	LL_SBI_FILE_HEAT,		/* file heat support */
 	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
 	LL_SBI_ENCRYPT_NAME,		/* name encryption */
+	LL_SBI_UNALIGNED_DIO,		/* unaligned DIO */
 	LL_SBI_NUM_FLAGS
 };
 
@@ -1121,6 +1122,11 @@ static inline bool ll_sbi_has_foreign_symlink(struct ll_sb_info *sbi)
 static inline bool ll_sbi_has_parallel_dio(struct ll_sb_info *sbi)
 {
 	return test_bit(LL_SBI_PARALLEL_DIO, sbi->ll_flags);
+}
+
+static inline bool ll_sbi_has_unaligned_dio(struct ll_sb_info *sbi)
+{
+	return test_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags);
 }
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t bytes);

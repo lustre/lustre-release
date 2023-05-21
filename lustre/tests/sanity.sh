@@ -13565,6 +13565,15 @@ test_119e()
 		iflag=direct oflag=direct ||
 		error "trivial unaligned dio failed"
 
+	# Test of disabling unaligned DIO support
+	$LCTL set_param llite.*.unaligned_dio=0
+	stack_trap "$LCTL set_param llite.*.unaligned_dio=1"
+	echo "testing disabling unaligned DIO - 'invalid argument' expected:"
+	dd if=$DIR/$tfile.1 bs=1024 of=$DIR/$tfile.2 count=4 \
+		iflag=direct oflag=direct &&
+		error "unaligned dio succeeded when disabled"
+	$LCTL set_param llite.*.unaligned_dio=1
+
 	# Clean up before next part of test
 	rm -f $DIR/$tfile.2
 

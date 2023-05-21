@@ -498,10 +498,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	ENTRY;
 
-	/* Check EOF by ourselves */
-	if (rw == READ && file_offset >= i_size_read(inode))
-		RETURN(0);
-
 	if (file_offset & ~PAGE_MASK)
 		unaligned = true;
 
@@ -518,6 +514,14 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	       file_offset, file_offset,
 	       (count >> PAGE_SHIFT) + !!(count & ~PAGE_MASK),
 	       MAX_DIO_SIZE >> PAGE_SHIFT, unaligned ? ", unaligned" : "");
+
+	/* Check EOF by ourselves */
+	if (rw == READ && file_offset >= i_size_read(inode))
+		RETURN(0);
+
+	/* unaligned DIO support can be turned off, so is it on? */
+	if (unaligned && !ll_sbi_has_unaligned_dio(ll_i2sbi(inode)))
+		RETURN(-EINVAL);
 
 	/* the requirement to not return EIOCBQUEUED for pipes (see bottom of
 	 * this function) plays havoc with the unaligned I/O lifecycle, so
