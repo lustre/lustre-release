@@ -1,0 +1,29 @@
+From 13cc3eebdb3ef14c782cc4772b33448e38ded07a Mon Sep 17 00:00:00 2001
+From: Shaun Tancheff <shaun.tancheff@hpe.com>
+Date: Sat, 21 Jan 2023 06:30:19 -0600
+Subject: [PATCH] P: linux-6.1/ext4-dont-check-before-replay.patch
+
+---
+ fs/ext4/super.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 3aafe71..56b993a 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -5325,6 +5325,12 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 		needs_recovery = 0;
+ 	}
+ 
++	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		ret = -EFSCORRUPTED;
++		goto failed_mount3a;
++	}
++
+ 	if (!test_opt(sb, NO_MBCACHE)) {
+ 		sbi->s_ea_block_cache = ext4_xattr_create_cache();
+ 		if (!sbi->s_ea_block_cache) {
+-- 
+2.34.1
+

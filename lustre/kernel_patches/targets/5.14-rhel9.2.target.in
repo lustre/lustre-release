@@ -1,8 +1,8 @@
 lnxmaj="5.14.0"
-lnxrel="283.el9"
+lnxrel="284.11.1.el9_2"
 
 KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
-SERIES=
+SERIES=5.14-rhel9.2.series
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 LUSTRE_VERSION=@VERSION@
 

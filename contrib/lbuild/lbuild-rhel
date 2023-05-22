@@ -60,7 +60,7 @@ prepare_and_build_srpm() {
 	popd >/dev/null
 
 	# copy our .config into the RPM build tree
-	if [[ $DISTROMAJ == "rhel7" ]];then
+	if [[ $DISTROMAJ == "rhel7" || $DISTROMAJ == "rhel9" ]];then
 		local cfg_file_name=kernel-$lnxmaj-${TARGET_ARCH}.config
 	else
 		local cfg_file_name=kernel-${TARGET_ARCH}.config

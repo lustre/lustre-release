@@ -6,7 +6,7 @@ BUILD_GEN+=".0"
 
 SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."
-USE_KABI=false
+USE_KABI=true
 
 # force local definition of %dist into ~/.rpmmacros
 # to avoid verbose extended strings like ".el9.centos"
@@ -43,6 +43,7 @@ Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
 	       -e '/^    find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
 	cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4\
 	rm -f $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4/ext4-inode-test*' \
+		-e '/^%global efiuki 1/s/1/0/'\
 	SPECS/$SPEC_NAME 2>&1 ||
 		fatal 1 "Error while editing SPECS/$SPEC_NAME"
 }
