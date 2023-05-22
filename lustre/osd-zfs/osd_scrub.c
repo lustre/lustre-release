@@ -1570,7 +1570,7 @@ static void osd_otable_it_preload(const struct lu_env *env,
 		if (rc)
 			break;
 
-		osd_dmu_prefetch(dev->od_os, it->ooi_prefetched_dnode,
+		dmu_prefetch(dev->od_os, it->ooi_prefetched_dnode,
 				 0, 0, 0, ZIO_PRIORITY_ASYNC_READ);
 		it->ooi_prefetched++;
 	}

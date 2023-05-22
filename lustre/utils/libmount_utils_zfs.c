@@ -26,11 +26,6 @@
 /*
  * Author: Brian Behlendorf <behlendorf1@llnl.gov>
  */
-#ifndef HAVE_ZFS_MULTIHOST
-#include <sys/list.h>
-#define list_move_tail(a, b) spl_list_move_tail(a, b)
-#include <sys/spa.h>
-#endif
 #include "mount_utils.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -229,114 +224,6 @@ static int zfs_erase_allprops(zfs_handle_t *zhp)
 	free(strs);
 	return rc;
 }
-/*
- * ZFS on linux 0.7.0-rc5 commit 379ca9cf2beba802f096273e89e30914a2d6bafc
- * Multi-modifier protection (MMP)
- *
- * Introduced spa_get_hostid() along with a few constants like
- * ZPOOL_CONFIG_MMP_HOSTID that can be checked to imply availablity of
- * spa_get_hostid. Supply a fallback when spa_get_hostid is not
- * available.
- *
- * This can be removed when zfs 0.6.x support is dropped.
- */
-#if !defined(ZPOOL_CONFIG_MMP_HOSTID) && !defined(HAVE_ZFS_MULTIHOST)
-unsigned long _hostid_from_proc(void)
-{
-	FILE *f;
-	unsigned long hostid;
-	int rc;
-
-	f = fopen("/proc/sys/kernel/spl/hostid", "r");
-	if (f == NULL)
-		goto out;
-
-	rc = fscanf(f, "%lx", &hostid);
-	fclose(f);
-	if (rc == 1)
-		return hostid;
-out:
-	return 0;
-}
-
-unsigned long _hostid_from_module_param(void)
-{
-	FILE *f;
-	unsigned long hostid;
-	int rc;
-
-	f = fopen("/sys/module/spl/parameters/spl_hostid", "r");
-	if (f == NULL)
-		goto out;
-
-	rc = fscanf(f, "%li", &hostid);
-	fclose(f);
-	if (rc == 1)
-		return hostid;
-out:
-	return 0;
-}
-
-unsigned long _from_module_param_indirect(void)
-{
-	FILE *f;
-	unsigned long hostid = 0;
-	uint32_t hwid;
-	int rc;
-	char *spl_hostid_path = NULL;
-
-	/* read the module parameter for HW_HOSTID_PATH */
-	f = fopen("/sys/module/spl/parameters/spl_hostid_path", "r");
-	if (f == NULL) {
-		fatal();
-		fprintf(stderr, "Failed to open spl_hostid_path param: %s\n",
-			strerror(errno));
-		goto out;
-	}
-
-	rc = fscanf(f, "%ms%*[\n]", &spl_hostid_path);
-	fclose(f);
-	if (rc == 0 || !spl_hostid_path)
-		goto out;
-
-	/* read the hostid from the file */
-	f = fopen(spl_hostid_path, "r");
-	if (f == NULL) {
-		fatal();
-		fprintf(stderr, "Failed to open %s param: %s\n",
-			spl_hostid_path, strerror(errno));
-		goto out;
-	}
-
-	/* hostid is the first 4 bytes in native endian order */
-	rc = fread(&hwid, sizeof(uint32_t), 1, f);
-	fclose(f);
-	if (rc == 1)
-		hostid = (unsigned long)hwid;
-
-out:
-	if (spl_hostid_path)
-		free(spl_hostid_path);
-
-	return hostid;
-}
-
-unsigned long spa_get_hostid(void)
-{
-	unsigned long hostid;
-
-	hostid = _hostid_from_proc();
-	if (hostid)
-		return hostid;
-
-	/* if /proc isn't available, try /sys */
-	hostid = _hostid_from_module_param();
-	if (hostid)
-		return hostid;
-
-	return _from_module_param_indirect();
-}
-#endif
 
 /*
  * Map '<key>=<value> ...' pairs in the passed string to dataset properties
@@ -391,11 +278,7 @@ static int zfs_check_hostid(struct mkfs_opts *mop)
 	if (strstr(mop->mo_ldd.ldd_params, PARAM_FAILNODE) == NULL)
 		return 0;
 
-#ifdef HAVE_ZFS_MULTIHOST
 	hostid = get_system_hostid();
-#else
-	hostid = spa_get_hostid();
-#endif
 	if (hostid == 0) {
 		if (mop->mo_flags & MO_NOHOSTID_CHECK) {
 			fprintf(stderr, "WARNING: spl_hostid not set. ZFS has "
@@ -587,7 +470,6 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 	ldd->ldd_mount_type = LDD_MT_ZFS;
 	ret = 0;
 
-#ifdef HAVE_ZFS_MULTIHOST
 	if (strstr(ldd->ldd_params, PARAM_FAILNODE) != NULL) {
 		zpool_handle_t *pool = zfs_get_pool_handle(zhp);
 		uint64_t mh = zpool_get_prop_int(pool, ZPOOL_PROP_MULTIHOST,
@@ -597,7 +479,6 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 				"but zpool does not have multihost enabled\n",
 				progname, ds);
 	}
-#endif
 
 out_close:
 	zfs_close(zhp);
@@ -832,18 +713,12 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	 * 0.7.0 - multihost=on
 	 * 0.7.0 - feature@userobj_accounting=enabled
 	 */
-#if defined(HAVE_ZFS_MULTIHOST) || defined(HAVE_DMU_USEROBJ_ACCOUNTING)
 	php = zpool_open(g_zfs, pool);
 	if (php) {
-#ifdef HAVE_ZFS_MULTIHOST
 		zpool_set_prop(php, "multihost", "on");
-#endif
-#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
 		zpool_set_prop(php, "feature@userobj_accounting", "enabled");
-#endif
 		zpool_close(php);
 	}
-#endif
 
 	/*
 	 * Create the ZFS filesystem with any required mkfs options:

@@ -576,7 +576,7 @@ static int osd_blk_insert_cost(struct osd_device *osd)
 
 	/* max_blockshift is the log2 of the number of blocks needed to reach
 	 * the maximum filesize (that's to say 2^64) */
-	bshift = osd_spa_maxblockshift(dmu_objset_spa(osd->od_os));
+	bshift = fls64(spa_maxblocksize(dmu_objset_spa(osd->od_os)) - 1);
 	max_blockshift = DN_MAX_OFFSET_SHIFT - bshift;
 
 	/* nr_blkptrshift is the log2 of the number of block pointers that can
@@ -833,7 +833,7 @@ static void osd_recordsize_changed_cb(void *arg, uint64_t newval)
 {
 	struct osd_device *osd = arg;
 
-	LASSERT(newval <= osd_spa_maxblocksize(dmu_objset_spa(osd->od_os)));
+	LASSERT(newval <= spa_maxblocksize(dmu_objset_spa(osd->od_os)));
 	LASSERT(newval >= SPA_MINBLOCKSIZE);
 	LASSERT(ISP2(newval));
 
@@ -847,14 +847,13 @@ static void osd_readonly_changed_cb(void *arg, uint64_t newval)
 	osd->od_prop_rdonly = !!newval;
 }
 
-#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
 static void osd_dnodesize_changed_cb(void *arg, uint64_t newval)
 {
 	struct osd_device *osd = arg;
 
 	osd->od_dnsize = newval;
 }
-#endif
+
 /*
  * This function unregisters all registered callbacks.  It's harmless to
  * unregister callbacks that were never registered so it is used to safely
@@ -870,10 +869,8 @@ static void osd_objset_unregister_callbacks(struct osd_device *o)
 				   osd_recordsize_changed_cb, o);
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_READONLY),
 				   osd_readonly_changed_cb, o);
-#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_DNODESIZE),
 				   osd_dnodesize_changed_cb, o);
-#endif
 
 	if (o->arc_prune_cb != NULL) {
 		arc_remove_prune_callback(o->arc_prune_cb);
@@ -910,12 +907,10 @@ static int osd_objset_register_callbacks(struct osd_device *o)
 	if (rc)
 		GOTO(err, rc);
 
-#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
 	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_DNODESIZE),
 				osd_dnodesize_changed_cb, o);
 	if (rc)
 		GOTO(err, rc);
-#endif
 
 	o->arc_prune_cb = arc_add_prune_callback(arc_prune_func, o);
 err:
@@ -1146,7 +1141,7 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(rc);
 
 	o->od_xattr_in_sa = B_TRUE;
-	o->od_max_blksz = osd_spa_maxblocksize(o->od_os->os_spa);
+	o->od_max_blksz = spa_maxblocksize(o->od_os->os_spa);
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 
 	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
@@ -1230,12 +1225,10 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(err, rc);
 	}
 
-#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
 	if (!osd_dmu_userobj_accounting_available(o))
 		CWARN("%s: dnode accounting not enabled: "
 		      "enable feature@userobj_accounting in pool\n",
 		      o->od_mntdev);
-#endif
 
 	/* parse mount option "noacl", and enable ACL by default */
 	if (opts == NULL || strstr(opts, "noacl") == NULL)

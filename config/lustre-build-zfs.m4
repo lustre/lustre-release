@@ -454,40 +454,35 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DSL_POOL_CONFIG, 1,
 				[Have dsl_pool_config_enter/exit in ZFS])
+		],[
+			AC_MSG_ERROR([dsl_pool_config_enter/exit do not exist])
 		])
-		LB_CHECK_COMPILE([if zfs defines dsl_sync_task_do_nowait],
-		dsl_sync_task_do_nowait, [
-			#include <sys/dsl_synctask.h>
+		LB_CHECK_COMPILE([if zfs defines zio_buf_alloc/free],
+		zio_buf_alloc, [
+			#include <sys/zio.h>
 		],[
-			dsl_sync_task_do_nowait(NULL, NULL, NULL, NULL, NULL, 0, NULL);
-		],[
-			AC_DEFINE(HAVE_DSL_SYNC_TASK_DO_NOWAIT, 1,
-				[Have dsl_sync_task_do_nowait in ZFS])
-		])
-		LB_CHECK_COMPILE([if zfs defines sa_spill_alloc],
-		sa_spill_alloc, [
-			#include <sys/kmem.h>
-			#include <sys/sa.h>
-		],[
-			void *ptr;
+			void *ptr = zio_buf_alloc(1024);
 
-			ptr = sa_spill_alloc(KM_SLEEP);
-			sa_spill_free(ptr);
+			(void)ptr;
 		],[
-			AC_DEFINE(HAVE_SA_SPILL_ALLOC, 1,
-				[Have sa_spill_alloc in ZFS])
+			AC_DEFINE(HAVE_ZIO_BUF_ALLOC, 1,
+				[Have zio_buf_alloc/free in ZFS])
+		],[
+			AC_MSG_ERROR([zio_buf_alloc/free do not exist])
 		])
 		LB_CHECK_COMPILE([if zfs defines spa_maxblocksize],
 		spa_maxblocksize, [
 			#include <sys/spa.h>
 		],[
 			spa_t *spa = NULL;
-			int size;
+			int size = spa_maxblocksize(spa);
 
-			size = spa_maxblocksize(spa);
+			(void)size;
 		],[
 			AC_DEFINE(HAVE_SPA_MAXBLOCKSIZE, 1,
 				[Have spa_maxblocksize in ZFS])
+		],[
+			AC_MSG_ERROR([spa_maxblocksize does not exist])
 		])
 
 		dnl #
@@ -518,6 +513,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_OBJECT_ALLOC_DNSIZE, 1,
 				[Have dmu_object_alloc_dnsize in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_object_alloc_dnsize does not exist])
 		])
 
 		dnl #
@@ -541,6 +538,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_PREFETCH_6ARG, 1,
 				[Have 6 argument dmu_pretch in ZFS])
+		],[
+			AC_MSG_ERROR([6 argument dmu_pretch does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.0 feature: SPA_FEATURE_USEROBJ_ACCOUNTING
@@ -553,28 +552,25 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_USEROBJ_ACCOUNTING, 1,
 				[Have native dnode accounting in ZFS])
+		],[
+			AC_MSG_ERROR([native dnode accounting does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.0 feature: MULTIHOST
 		dnl #
-		restore_CFLAGS=$CFLAGS
-		CFLAGS="$CFLAGS $ZFS_LIBZFS_INCLUDE -Werror"
-		AC_MSG_CHECKING([[if ZFS has multihost protection]])
-		AC_COMPILE_IFELSE([
-		  AC_LANG_PROGRAM(
-		  [[
-		    #define _LARGEFILE64_SOURCE 1
-		    #include <sys/sysmacros.h>
-		    #include <sys/spa.h>
-		  ]], [[
-			spa_multihost(NULL);
-		  ]])
-		  ],[
-		  AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
-			[Have multihost protection in ZFS])
-		  spa_multihost_fn="yes"],[spa_multihost_fn="no"]),
-		AC_MSG_RESULT([$spa_multihost_fn])
-		CFLAGS=$restore_CFLAGS
+		LB_CHECK_COMPILE([if ZFS has multihost protection],
+		spa_multihost, [
+			#include <sys/fs/zfs.h>
+		],[
+			zpool_prop_t prop = ZPOOL_PROP_MULTIHOST;
+
+			(void)prop;
+		],[
+			AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
+				[Have multihost protection in ZFS])
+		],[
+			AC_MSG_ERROR([multihost protection does not exist])
+		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method zap_lookup_by_dnode
 		dnl #
@@ -588,6 +584,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_ZAP_LOOKUP_BY_DNODE, 1,
 				[Have zap_lookup_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([zap_lookup_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method zap_add_by_dnode
@@ -602,6 +600,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_ZAP_ADD_BY_DNODE, 1,
 				[Have zap_add_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([zap_add_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method zap_remove_by_dnode
@@ -616,6 +616,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_ZAP_REMOVE_ADD_BY_DNODE, 1,
 				[Have zap_remove_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([zap_remove_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method dmu_tx_hold_zap_by_dnode
@@ -630,6 +632,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_TX_HOLD_ZAP_BY_DNODE, 1,
 				[Have dmu_tx_hold_zap_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_tx_hold_zap_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method dmu_tx_hold_write_by_dnode
@@ -644,6 +648,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_TX_HOLD_WRITE_BY_DNODE, 1,
 				[Have dmu_tx_hold_write_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_tx_hold_write_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method dmu_write_by_dnode
@@ -658,6 +664,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
 				[Have dmu_write_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_write_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.x adds new method dmu_read_by_dnode
@@ -672,6 +680,8 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_READ_BY_DNODE, 1,
 				[Have dmu_read_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_read_by_dnode does not exist])
 		])
 		dnl #
 		dnl # ZFS 0.7.2 adds new method dmu_tx_mark_netfree
