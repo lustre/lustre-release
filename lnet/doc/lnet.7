@@ -1,0 +1,44 @@
+.TH LNET 7 "2023 Oct 8" LNet "Lustre networking layer"
+.SH NAME
+LNet
+.SH SYNOPSIS
+A lightweight and efficient network communication protocol that supports
+message passing for RPC request processing and RDMA for bulk data movement.
+.SH DESCRIPTION
+.B LNet
+is a high performance networking protocol. It is most commonly used by the
+Lustre filesystem.
+
+LNet supports many commonly-used network types, such as InfiniBand and IP
+networks, and allows simultaneous availability across multiple network types
+with routing between them. Remote direct memory access (RDMA) is permitted
+when supported by underlying networks using the appropriate Lustre network
+driver (LND). High availability and recovery features enable transparent
+recovery in conjunction with failover servers.
+
+.SH COMMANDS
+.TP
+.BR lnetctl (8)
+A low-level tool for administrators to control LNet configuration.
+.TP
+.BR lst (8)
+A low-level tool for administrators to confirm that LNet has been properly
+installed and configured. The self-test also confirms that LNet and the
+network software and hardware underlying it are performing according to
+expectations.
+.SH BUGS
+Please report all bugs to https://jira.whamcloud.com/
+.SH AVAILABILITY
+.B The
+.BR LNet (7)
+packages are available for download, alongside Lustre, at:
+.br
+https://downloads.whamcloud.com/
+and GPL source code is available at:
+.br
+https://git.whamcloud.com/
+.SH SEE ALSO
+.BR lnetctl (8),
+.BR lst (8),
+.BR lctl (8),
+.BR lustre (7)

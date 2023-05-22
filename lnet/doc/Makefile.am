@@ -10,7 +10,8 @@
 
 MANFILES =					\
 	lnetctl.8				\
-	lst.8
+	lst.8					\
+	lnet.7
 
 if MANPAGES
 if UTILS
