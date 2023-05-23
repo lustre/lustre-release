@@ -1,0 +1,220 @@
+Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/extents.c
+===================================================================
+--- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/extents.c
++++ linux-4.18.0-80.1.2.el8_0/fs/ext4/extents.c
+@@ -1888,7 +1944,7 @@ static void ext4_ext_try_to_merge_up(
+  * This function tries to merge the @ex extent to neighbours in the tree, then
+  * tries to collapse the extent tree into the inode.
+  */
+-static void ext4_ext_try_to_merge(handle_t *handle,
++static int ext4_ext_try_to_merge(handle_t *handle,
+ 				  struct inode *inode,
+ 				  struct ext4_ext_path *path,
+ 				  struct ext4_extent *ex)
+@@ -1905,9 +1961,178 @@ static void ext4_ext_try_to_merge(han
+ 		merge_done = ext4_ext_try_to_merge_right(inode, path, ex - 1);
+ 
+ 	if (!merge_done)
+-		(void) ext4_ext_try_to_merge_right(inode, path, ex);
++		merge_done = ext4_ext_try_to_merge_right(inode, path, ex);
+ 
+ 	ext4_ext_try_to_merge_up(handle, inode, path);
++
++	return merge_done;
++}
++
++/*
++ * This function tries to merge blocks from @path into @npath
++ */
++static int ext4_ext_merge_blocks(handle_t *handle,
++				struct inode *inode,
++				struct ext4_ext_path *path,
++				struct ext4_ext_path *npath)
++{
++	unsigned int depth = ext_depth(inode);
++	int used, nused, free, i, k, err;
++	ext4_lblk_t next;
++
++	if (path[depth].p_hdr == npath[depth].p_hdr)
++		return 0;
++
++	used = le16_to_cpu(path[depth].p_hdr->eh_entries);
++	free = le16_to_cpu(npath[depth].p_hdr->eh_max) -
++		le16_to_cpu(npath[depth].p_hdr->eh_entries);
++	if (free < used)
++		return 0;
++
++	err = ext4_ext_get_access(handle, inode, path + depth);
++	if (err)
++		return err;
++	err = ext4_ext_get_access(handle, inode, npath + depth);
++	if (err)
++		return err;
++
++	/* move entries from the current leave to the next one */
++	nused = le16_to_cpu(npath[depth].p_hdr->eh_entries);
++	memmove(EXT_FIRST_EXTENT(npath[depth].p_hdr) + used,
++		EXT_FIRST_EXTENT(npath[depth].p_hdr),
++		nused * sizeof(struct ext4_extent));
++	memcpy(EXT_FIRST_EXTENT(npath[depth].p_hdr),
++		EXT_FIRST_EXTENT(path[depth].p_hdr),
++		used * sizeof(struct ext4_extent));
++	le16_add_cpu(&npath[depth].p_hdr->eh_entries, used);
++	le16_add_cpu(&path[depth].p_hdr->eh_entries, -used);
++	ext4_ext_try_to_merge_right(inode, npath,
++					EXT_FIRST_EXTENT(npath[depth].p_hdr));
++
++	err = ext4_ext_dirty(handle, inode, path + depth);
++	if (err)
++		return err;
++	err = ext4_ext_dirty(handle, inode, npath + depth);
++	if (err)
++		return err;
++
++	/* otherwise the index won't get corrected */
++	npath[depth].p_ext = EXT_FIRST_EXTENT(npath[depth].p_hdr);
++	err = ext4_ext_correct_indexes(handle, inode, npath);
++	if (err)
++		return err;
++
++	for (i = depth - 1; i >= 0; i--) {
++
++		next = ext4_idx_pblock(path[i].p_idx);
++		ext4_free_blocks(handle, inode, NULL, next, 1,
++				EXT4_FREE_BLOCKS_METADATA |
++				EXT4_FREE_BLOCKS_FORGET);
++		err = ext4_ext_get_access(handle, inode, path + i);
++		if (err)
++			return err;
++		le16_add_cpu(&path[i].p_hdr->eh_entries, -1);
++		if (le16_to_cpu(path[i].p_hdr->eh_entries) == 0) {
++			/* whole index block collapsed, go up */
++			continue;
++		}
++		/* remove index pointer */
++		used = EXT_LAST_INDEX(path[i].p_hdr) - path[i].p_idx + 1;
++		memmove(path[i].p_idx, path[i].p_idx + 1,
++			used * sizeof(struct ext4_extent_idx));
++
++		err = ext4_ext_dirty(handle, inode, path + i);
++		if (err)
++			return err;
++
++		if (path[i].p_hdr == npath[i].p_hdr)
++			break;
++
++		/* try to move index pointers */
++		used = le16_to_cpu(path[i].p_hdr->eh_entries);
++		free = le16_to_cpu(npath[i].p_hdr->eh_max) -
++			le16_to_cpu(npath[i].p_hdr->eh_entries);
++		if (used > free)
++			break;
++		err = ext4_ext_get_access(handle, inode, npath + i);
++		if (err)
++			return err;
++		memmove(EXT_FIRST_INDEX(npath[i].p_hdr) + used,
++			EXT_FIRST_INDEX(npath[i].p_hdr),
++			npath[i].p_hdr->eh_entries * sizeof(struct ext4_extent_idx));
++		memcpy(EXT_FIRST_INDEX(npath[i].p_hdr), EXT_FIRST_INDEX(path[i].p_hdr),
++			used * sizeof(struct ext4_extent_idx));
++		le16_add_cpu(&path[i].p_hdr->eh_entries, -used);
++		le16_add_cpu(&npath[i].p_hdr->eh_entries, used);
++		err = ext4_ext_dirty(handle, inode, path + i);
++		if (err)
++			return err;
++		err = ext4_ext_dirty(handle, inode, npath + i);
++		if (err)
++			return err;
++
++		/* correct index above */
++		for (k = i; k > 0; k--) {
++			err = ext4_ext_get_access(handle, inode, npath + k - 1);
++			if (err)
++				return err;
++			npath[k-1].p_idx->ei_block =
++				EXT_FIRST_INDEX(npath[k].p_hdr)->ei_block;
++			err = ext4_ext_dirty(handle, inode, npath + k - 1);
++			if (err)
++				return err;
++		}
++	}
++
++	/*
++	 * TODO: given we've got two paths, it should be possible to
++	 * collapse those two blocks into the root one in some cases
++	 */
++	return 1;
++}
++
++static int ext4_ext_try_to_merge_blocks(handle_t *handle,
++		struct inode *inode,
++		struct ext4_ext_path *path)
++{
++	struct ext4_ext_path *npath = NULL;
++	unsigned int depth = ext_depth(inode);
++	ext4_lblk_t next;
++	int used, rc = 0;
++
++	if (depth == 0)
++		return 0;
++
++	used = le16_to_cpu(path[depth].p_hdr->eh_entries);
++	/* don't be too agressive as checking space in
++	 * the next block is not free */
++	if (used > ext4_ext_space_block(inode, 0) / 4)
++		return 0;
++
++	/* try to merge to the next block */
++	next = ext4_ext_next_leaf_block(path);
++	if (next == EXT_MAX_BLOCKS)
++		return 0;
++	npath = ext4_ext_find_extent(inode, next, NULL, 0);
++	if (IS_ERR(npath))
++		return 0;
++	rc = ext4_ext_merge_blocks(handle, inode, path, npath);
++	ext4_ext_drop_refs(npath);
++	kfree(npath);
++	if (rc)
++		return rc > 0 ? 0 : rc;
++
++	/* try to merge with the previous block */
++	if (EXT_FIRST_EXTENT(path[depth].p_hdr)->ee_block == 0)
++		return 0;
++	next = EXT_FIRST_EXTENT(path[depth].p_hdr)->ee_block - 1;
++	npath = ext4_ext_find_extent(inode, next, NULL, 0);
++	if (IS_ERR(npath))
++		return 0;
++	rc = ext4_ext_merge_blocks(handle, inode, npath, path);
++	ext4_ext_drop_refs(npath);
++	kfree(npath);
++	return rc > 0 ? 0 : rc;
+ }
+ 
+ /*
+@@ -1979,6 +2205,7 @@ int ext4_ext_insert_extent(handle_t *
+ 	int depth, len, err;
+ 	ext4_lblk_t next;
+ 	int mb_flags = 0, unwritten;
++	int merged = 0;
+ 
+ 	if (gb_flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE)
+ 		mb_flags |= EXT4_MB_DELALLOC_RESERVED;
+@@ -2172,8 +2399,7 @@ has_space:
+ merge:
+ 	/* try to merge extents */
+ 	if (!(gb_flags & EXT4_GET_BLOCKS_PRE_IO))
+-		ext4_ext_try_to_merge(handle, inode, path, nearex);
+-
++		merged = ext4_ext_try_to_merge(handle, inode, path, nearex);
+ 
+ 	/* time to correct all indexes above */
+ 	err = ext4_ext_correct_indexes(handle, inode, path);
+@@ -2181,6 +2407,8 @@ merge:
+ 		goto cleanup;
+ 
+ 	err = ext4_ext_dirty(handle, inode, path + path->p_depth);
++	if (!err && merged)
++		err = ext4_ext_try_to_merge_blocks(handle, inode, path);
+ 
+ cleanup:
+ 	ext4_ext_drop_refs(npath);

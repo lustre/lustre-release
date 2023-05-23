@@ -40,6 +40,7 @@ rhel7.7/ext4-fix-project-with-unpatched-kernel.patch
 rhel7.6/ext4-simple-blockalloc.patch
 rhel7.6/ext4-mballoc-skip-uninit-groups-cr0.patch
 rhel7.7/ext4-mballoc-prefetch.patch
+rhel7.9/ext4-ext-merge.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel7.6/ext4-dquot-commit-speedup.patch
 rhel7.7/ext4-ialloc-uid-gid-and-pass-owner-down.patch

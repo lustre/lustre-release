@@ -30,6 +30,7 @@ rhel7.6/ext4-dquot-commit-speedup.patch
 rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 base/ext4-projid-xattrs.patch
 rhel8.5/ext4-enc-flag.patch
+rhel8/ext4-ext-merge.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-add-periodic-superblock-update.patch
 rhel8.7/ext4-filename-encode.patch

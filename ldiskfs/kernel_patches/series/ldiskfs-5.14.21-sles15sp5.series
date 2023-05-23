@@ -27,6 +27,7 @@ linux-5.8/ext4-no-max-dir-size-limit-for-iam-objects.patch
 linux-5.14/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 linux-5.14/ext4-projid-xattrs.patch
 base/ext4-delayed-iput.patch
+rhel8/ext4-ext-merge.patch
 linux-5.14/ext4-xattr-disable-credits-check.patch
 linux-5.10/ext4-fiemap-kernel-data.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
