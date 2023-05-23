@@ -9283,21 +9283,6 @@ test_61b() {
 }
 run_test 61b "mmap() of unstriped file is successful"
 
-# bug 2330 - insufficient obd_match error checking causes LBUG
-test_62() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-
-	f="$DIR/f62"
-	echo foo > $f
-	cancel_lru_locks osc
-	lctl set_param fail_loc=0x405
-	cat $f && error "cat succeeded, expect -EIO"
-	lctl set_param fail_loc=0
-}
-# This test is now irrelevant (as of bug 10718 inclusion), we no longer
-# match every page all of the time.
-#run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
-
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 # Though this test is irrelevant anymore, it helped to reveal some
 # other grant bugs (LU-4482), let's keep it.
