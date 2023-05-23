@@ -3147,31 +3147,6 @@ AC_DEFUN([LC_HAVE_USER_NAMESPACE_ARG], [
 ]) # LC_HAVE_USER_NAMESPACE_ARG
 
 #
-# LC_HAVE_FILEATTR_GET
-#
-# kernel 5.13 4c5b479975212065ef39786e115fde42847e95a9
-# vfs: add fileattr ops
-# Add inode operations to replace FS_IOC_[SG]ETFLAGS ioctl
-# The type signature of ->fileattr_set is not stable for the
-# first few iterations, so don't commit to a particular signature
-# here.  Hopefully we will only want to support the final version.
-#
-AC_DEFUN([LC_HAVE_FILEATTR_GET], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if 'inode_operations' has fileattr_get (and fileattr_set)],
-fileattr_set, [
-	#include <linux/fs.h>
-],[
-	((struct inode_operations *)1)->fileattr_get(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_FILEATTR_GET, 1,
-		['inode_operations' has fileattr_get and fileattr_set])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LC_HAVE_FILEATTR_GET
-
-#
 # LC_HAVE_GET_ACL_RCU_ARG
 #
 # kernel 5.15 commit 0cad6246621b5887d5b33fea84219d2a71f2f99a
@@ -4147,9 +4122,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.12
 	LC_HAVE_USER_NAMESPACE_ARG
-
-	# 5.13
-	LC_HAVE_FILEATTR_GET
 
 	# 5.15
 	LC_HAVE_GET_ACL_RCU_ARG
