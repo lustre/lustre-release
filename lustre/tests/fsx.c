@@ -1442,7 +1442,12 @@ do_mirror_ops(int op)
 		rc = WEXITSTATUS(rc);
 		if (rc > 0) {
 			prt("%s: %d\n", cmd, rc);
-			report_failure(184);
+			/**
+			 * mirror split won't delete the last non-stale mirror,
+			 * and returns EUCLEAN
+			 */
+			if (rc != EUCLEAN)
+				report_failure(184);
 		}
 	}
 	output_debug(monitorstart, 0, cmd);

@@ -3255,7 +3255,7 @@ test_70() {
 }
 run_test 70 "mirror create and split race"
 
-test_100() {
+test_70a() {
 	local tf=$DIR/$tdir/$tfile
 
 	(( $OST1_VERSION >= $(version_code 2.14.51) )) ||
@@ -3271,7 +3271,7 @@ test_100() {
 	FSXNUM=${FSXNUM:-1000}
 	$FSX -p 5 -N $FSXNUM -S 0 -M $tf || error "fsx FLR file $tf failed"
 }
-run_test 100 "flr mode fsx test"
+run_test 70a "flr mode fsx test"
 
 write_file_200() {
 	local tf=$1
