@@ -916,7 +916,7 @@ int osc_io_write_start(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_SETTIME, 1);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_SETTIME, 1);
 	cl_object_attr_lock(obj);
 	attr->cat_mtime = attr->cat_ctime = ktime_get_real_seconds();
 	rc = cl_object_attr_update(env, obj, attr, CAT_MTIME | CAT_CTIME);

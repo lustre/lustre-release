@@ -1573,7 +1573,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 	/* force the caller to try sync io.  this can jump the list
 	 * of queued writes and create a discontiguous rpc stream */
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_NO_GRANT) ||
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSC_NO_GRANT) ||
 	    cli->cl_dirty_max_pages == 0 ||
 	    cli->cl_ar.ar_force_sync || loi->loi_ar.ar_force_sync) {
 		OSC_DUMP_GRANT(D_CACHE, cli, "forced sync i/o\n");
@@ -3116,7 +3116,7 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		if (!res)
 			break;
 
-		OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SLOW_PAGE_EVICT,
+		CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_SLOW_PAGE_EVICT,
 				 cfs_fail_val ?: 20);
 
 		if (io->ci_type == CIT_MISC &&

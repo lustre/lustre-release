@@ -416,7 +416,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 
 	unlock_res_and_lock(dlmlock);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_CANCEL, 5);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_CANCEL, 5);
 
 	/* if l_ast_data is NULL, the dlmlock was enqueued by AGL or
 	 * the object has been destroyed. */
@@ -589,7 +589,7 @@ int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 		dlmlock = NULL;
 
 		if (obj == NULL && res->lr_type == LDLM_EXTENT) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_OSC_NO_SIZE_DATA))
+			if (CFS_FAIL_CHECK(OBD_FAIL_OSC_NO_SIZE_DATA))
 				break;
 
 			lock_res(res);
@@ -1032,8 +1032,8 @@ enqueue_base:
 		if (osc_lock_is_lockless(oscl)) {
 			oio->oi_lockless = 1;
 		} else if (!async) {
-			if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_IDLE_RACE)) {
-				OBD_RACE(OBD_FAIL_PTLRPC_IDLE_RACE);
+			if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_IDLE_RACE)) {
+				CFS_RACE(OBD_FAIL_PTLRPC_IDLE_RACE);
 				set_current_state(TASK_UNINTERRUPTIBLE);
 				schedule_timeout(cfs_time_seconds(1) / 2);
 			}
