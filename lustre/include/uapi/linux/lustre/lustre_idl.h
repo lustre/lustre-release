@@ -848,6 +848,8 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ENCRYPT_FID2PATH	 0x40000000ULL /* fid2path enc file */
 /* For MDS+OSS rolling upgrade interop with 2.16+older, ignored after 2.20.53 */
 #define OBD_CONNECT2_REPLAY_CREATE	 0x80000000ULL /* replay OST_CREATE */
+#define OBD_CONNECT2_LARGE_NID		0x100000000ULL /* understands large/IPv6 NIDs */
+#define OBD_CONNECT2_COMPRESS		0x200000000ULL /* compressed file */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -987,7 +989,7 @@ struct obd_connect_data {
 	__u16 padding0;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u32 padding1;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u64 ocd_connect_flags2;/* OBD_CONNECT2_* per above */
-	__u64 padding3;		 /* READ BELOW! also fix lustre_swab_connect */
+	__u64 ocd_compr_type;	 /* bitmask of supported compression types */
 	__u64 padding4;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u64 padding5;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u64 padding6;		 /* READ BELOW! also fix lustre_swab_connect */

@@ -577,7 +577,7 @@ check_obd_connect_data(void)
 	CHECK_MEMBER(obd_connect_data, padding0);
 	CHECK_MEMBER(obd_connect_data, padding1);
 	CHECK_MEMBER(obd_connect_data, ocd_connect_flags2);
-	CHECK_MEMBER(obd_connect_data, padding3);
+	CHECK_MEMBER(obd_connect_data, ocd_compr_type);
 	CHECK_MEMBER(obd_connect_data, padding4);
 	CHECK_MEMBER(obd_connect_data, padding5);
 	CHECK_MEMBER(obd_connect_data, padding6);
@@ -683,6 +683,8 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT2_DMV_IMP_INHERIT);
 	CHECK_DEFINE_64X(OBD_CONNECT2_ENCRYPT_FID2PATH);
 	CHECK_DEFINE_64X(OBD_CONNECT2_REPLAY_CREATE);
+	CHECK_DEFINE_64X(OBD_CONNECT2_LARGE_NID);
+	CHECK_DEFINE_64X(OBD_CONNECT2_COMPRESS);
 
 	BLANK_LINE();
 	CHECK_VALUE_X(OBD_CKSUM_CRC32);

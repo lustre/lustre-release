@@ -652,6 +652,8 @@ static const char *const obd_connect_names[] = {
 	"dmv_imp_inherit",		/* 0x20000000 */
 	"encryption_fid2path",		/* 0x40000000 */
 	"replay_create",		/* 0x80000000 */
+	"large_nid",			/* 0x100000000 */
+	"compressed_file",		/* 0x200000000 */
 	NULL
 };
 
