@@ -720,7 +720,8 @@ struct ptlrpc_body_v2 {
         /* padding for future needs */
 	__u64 pb_padding64_0;
 	__u64 pb_padding64_1;
-	__u64 pb_padding64_2;
+	__u32 pb_uid;		/* req: process uid, use by tbf rules */
+	__u32 pb_gid;		/* req: process gid, use by tbf rules */
 };
 
 /* message body offset for lustre_msg_v2 */

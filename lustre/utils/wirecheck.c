@@ -500,11 +500,8 @@ check_ptlrpc_body(void)
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_mbits);
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding64_0);
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding64_1);
-	CHECK_VALUE_SAME((int)offsetof(struct ptlrpc_body_v3, pb_uid),
-			 (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2));
-	CHECK_VALUE_SAME((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid +
-				     (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid),
-			 (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2));
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_uid);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_gid);
 
 	CHECK_VALUE(MSG_PTLRPC_BODY_OFF);
 	CHECK_VALUE(REQ_REC_OFF);

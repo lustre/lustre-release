@@ -1089,12 +1089,14 @@ void lustre_assert_wire_constants(void)
 		 (int)offsetof(struct ptlrpc_body_v3, pb_padding64_1), (int)offsetof(struct ptlrpc_body_v2, pb_padding64_1));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_1), "%d != %d\n",
 		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding64_1), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_1));
-	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_uid) == (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2), "%d != %d\n",
-		 (int)offsetof(struct ptlrpc_body_v3, pb_uid), (int)offsetof(struct ptlrpc_body_v2, pb_padding64_2));
-	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) + (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid) ==
-		 (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2), "%d != %d\n",
-		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) + (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid),
-		 (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding64_2));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_uid) == (int)offsetof(struct ptlrpc_body_v2, pb_uid), "%d != %d\n",
+		 (int)offsetof(struct ptlrpc_body_v3, pb_uid), (int)offsetof(struct ptlrpc_body_v2, pb_uid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_uid), "%d != %d\n",
+		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_uid), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_uid));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_gid) == (int)offsetof(struct ptlrpc_body_v2, pb_gid), "%d != %d\n",
+		 (int)offsetof(struct ptlrpc_body_v3, pb_gid), (int)offsetof(struct ptlrpc_body_v2, pb_gid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_gid), "%d != %d\n",
+		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_gid), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_gid));
 	LASSERTF(MSG_PTLRPC_BODY_OFF == 0, "found %lld\n",
 		 (long long)MSG_PTLRPC_BODY_OFF);
 	LASSERTF(REQ_REC_OFF == 1, "found %lld\n",

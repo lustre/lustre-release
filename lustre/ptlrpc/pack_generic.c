@@ -2890,7 +2890,7 @@ void _debug_req(struct ptlrpc_request *req,
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	libcfs_debug_msg(msgdata,
-			 "%pV req@%p x%llu/t%lld(%llu) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d uid:%u gid:%u job:'%s'\n",
+			 "%pV req@%p x%llu/t%lld(%llu) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d job:'%s' uid:%u gid:%u\n",
 			 &vaf,
 			 req, req->rq_xid, req->rq_transno, req_transno,
 			 req_opc,
@@ -2907,7 +2907,7 @@ void _debug_req(struct ptlrpc_request *req,
 			 atomic_read(&req->rq_refcount),
 			 DEBUG_REQ_FLAGS(req), req_flags, rep_flags,
 			 req->rq_status, rep_status,
-			 req_uid, req_gid, req_jobid ?: "");
+			 req_jobid ?: "", req_uid, req_gid);
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);
