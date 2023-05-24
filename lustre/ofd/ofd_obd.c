@@ -170,7 +170,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		RETURN(-EPROTO);
 
 	/* Determine optimal brw size before calculating grant */
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
 		data->ocd_brw_size = 65536;
 	} else if (OCD_HAS_FLAG(data, BRW_SIZE)) {
 		if (data->ocd_brw_size > ofd->ofd_brw_size)
@@ -766,7 +766,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
 	       osfs->os_files, osfs->os_ffree, osfs->os_state);
 
-	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
+	if (CFS_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
 				 ofd->ofd_lut.lut_lsd.lsd_osd_index)) {
 		/* Reduce free inode count to zero, but keep "used" intact */
 		osfs->os_files -= osfs->os_ffree;
@@ -796,7 +796,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_bsize    = 1 << COMPAT_BSIZE_SHIFT;
 	}
 
-	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
+	if (CFS_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
 				 ofd->ofd_lut.lut_lsd.lsd_osd_index)) {
 		/* Reduce free blocks count near zero, but keep "used" intact */
 		osfs->os_bavail -= osfs->os_bavail - 2;

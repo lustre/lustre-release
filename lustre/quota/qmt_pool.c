@@ -1177,7 +1177,7 @@ static int qmt_pool_recalc(void *args)
 		while (obd->obd_process_conf)
 			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_RECALC, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_QUOTA_RECALC, cfs_fail_val);
 	sem = qmt_sarr_rwsem(pool);
 	LASSERT(sem);
 	down_read(sem);

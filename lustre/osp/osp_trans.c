@@ -1480,7 +1480,7 @@ int osp_send_update_thread(void *arg)
 			osp_trans_callback(env, our->our_th,
 				our->our_th->ot_super.th_result);
 			rc = our->our_th->ot_super.th_result;
-		} else if (OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
+		} else if (CFS_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
 			rc = -EIO;
 			osp_trans_callback(env, our->our_th, rc);
 		} else {

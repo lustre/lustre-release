@@ -1011,7 +1011,7 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(buf != NULL);
 	LASSERT(name != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NETWORK) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NETWORK) &&
 	    osp->opd_index == cfs_fail_val) {
 		if (is_ost_obj(&dt->do_lu)) {
 			if (osp_dev2node(osp) == cfs_fail_val)
@@ -1476,7 +1476,7 @@ static int osp_declare_create(const struct lu_env *env, struct dt_object *dt,
 	/* should happen to non-0 OSP only so that at least one object
 	 * has been already declared in the scenario and LOD should
 	 * cleanup that */
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL) && d->opd_index == 1)
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL) && d->opd_index == 1)
 		RETURN(-ENOSPC);
 
 	LASSERT(d->opd_last_used_oid_file);
@@ -1681,7 +1681,7 @@ int osp_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!osp->opd_connect_mdt);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ))
 		rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th);
 
 	RETURN(rc);
@@ -1717,7 +1717,7 @@ static int osp_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!osp->opd_connect_mdt);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ)) {
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ)) {
 		/* once transaction is committed put proper command on
 		 * the queue going to our OST. */
 		rc = osp_sync_add(env, o, MDS_UNLINK64_REC, th, NULL);

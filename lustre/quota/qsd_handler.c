@@ -381,7 +381,7 @@ static void qsd_req_completion(const struct lu_env *env,
 		 * We don't update the version of slave index copy on DQACQ.
 		 * No locking is necessary since nobody can change
 		 * lqe->lqe_granted while lqe->lqe_pending_req > 0 */
-		if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_GRANT))
+		if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_GRANT))
 			qti->qti_rec.lqr_slv_rec.qsr_granted =
 							0xFFFFFFFFFFDEC80CULL;
 		qsd_upd_schedule(qqi, lqe, &lqe->lqe_id, &qti->qti_rec, 0,

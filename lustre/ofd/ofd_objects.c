@@ -379,7 +379,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	  * To make above mechanism to work, before OFD pre-create OST-objects,
 	  * it needs to update the LAST_ID file firstly, otherwise, the LFSCK
 	  * may cannot get latest last_id although new OST-object created. */
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_SKIP_LASTID)) {
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_SKIP_LASTID)) {
 		tmp = cpu_to_le64(id + nr - 1);
 		dt_write_lock(env, oseq->os_lastid_obj, DT_LASTID);
 		rc = dt_record_write(env, oseq->os_lastid_obj,
@@ -405,7 +405,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		}
 
 		if (likely(!ofd_object_exists(fo) &&
-			   !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING))) {
+			   !CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING))) {
 			next = ofd_object_child(fo);
 			LASSERT(next != NULL);
 
@@ -714,11 +714,11 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(unlock, rc = fl);
 
 	if (fl) {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
 			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
-		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+		else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
 			le32_add_cpu(&ff->ff_parent.f_oid, -1);
-		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+		else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
 			GOTO(unlock, rc);
 
 		info->fti_buf.lb_buf = ff;
@@ -968,11 +968,11 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(unlock, rc);
 
 	if (fl) {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
 			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
-		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+		else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
 			le32_add_cpu(&ff->ff_parent.f_oid, -1);
-		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+		else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
 			GOTO(unlock, rc);
 
 		info->fti_buf.lb_buf = ff;

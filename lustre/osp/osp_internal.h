@@ -589,7 +589,7 @@ static bool osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid,
 	/* Skip IDIF sequence for MDT0000 */
 	if (fid_is_idif(fid))
 		return true;
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_FORCE_NEW_SEQ))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_FORCE_NEW_SEQ))
 		return true;
 	return fid_oid(fid) >= min(OBIF_MAX_OID, seq_width);
 }

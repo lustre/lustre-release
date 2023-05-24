@@ -114,7 +114,7 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	ofd = ldlm_res_to_ns(res)->ns_lvbp;
 	LASSERT(ofd != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
 		RETURN(-ENOMEM);
 
 	env = lu_env_find();

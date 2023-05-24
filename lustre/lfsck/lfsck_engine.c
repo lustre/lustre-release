@@ -766,7 +766,7 @@ checkpoint:
 			GOTO(out, rc = 0);
 		}
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
 			spin_lock(&lfsck->li_lock);
 			thread_set_flags(thread, SVC_STOPPING);
 			spin_unlock(&lfsck->li_lock);
@@ -854,7 +854,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 			RETURN(0);
 		}
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
 			RETURN(0);
 
 		lfsck->li_current_oit_processed = 1;
@@ -976,7 +976,7 @@ checkpoint:
 		/* Rate control. */
 		lfsck_control_speed(lfsck);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL1)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL1)) {
 			spin_lock(&lfsck->li_lock);
 			thread_set_flags(thread, SVC_STOPPING);
 			spin_unlock(&lfsck->li_lock);
@@ -1093,7 +1093,7 @@ int lfsck_master_engine(void *args)
 	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
 	       current->pid, rc);
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
 		rc = lfsck_post(env, lfsck, rc);
 	else
 		lfsck_close_dir(env, lfsck, rc);
@@ -1697,7 +1697,7 @@ int lfsck_assistant_engine(void *args)
 			       "scan start, synced: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), rc2);
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
 				GOTO(cleanup, rc = 0);
 
 			while (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {

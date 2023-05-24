@@ -488,7 +488,7 @@ static int qsd_reint_main(void *_args)
 	if (kthread_should_stop())
 		GOTO(out_lock, rc = 0);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_DELAY_REINT, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_QUOTA_DELAY_REINT, 10);
 
 	if (qqi->qqi_glb_ver != qti->qti_lvb.lvb_glb_ver) {
 		rc = qsd_reint_index(env, qqi, true);

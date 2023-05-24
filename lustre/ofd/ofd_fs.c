@@ -419,7 +419,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (info->fti_attr.la_size == 0) {
 		/* object is just created, initialize last id */
-		if (OBD_FAIL_CHECK(OBD_FAIL_OFD_SET_OID)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_OFD_SET_OID)) {
 			struct seq_server_site *ss = &ofd->ofd_seq_site;
 			struct lu_client_seq *client_seq = ss->ss_client_seq;
 			__u64 seq_width = fid_seq_is_norm(seq) ?
@@ -654,7 +654,7 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	if (rc)
 		GOTO(out, rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
 		GOTO(out_seqs, rc = -ENOENT);
 
 	lu_local_obj_fid(&info->fti_fid, OFD_HEALTH_CHECK_OID);

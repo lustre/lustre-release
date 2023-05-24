@@ -905,10 +905,10 @@ int qmt_dqacq0(const struct lu_env *env, struct qmt_device *qmt,
 	memset(repbody, 0, sizeof(*repbody));
 	memcpy(&repbody->qb_id, &lqe->lqe_id, sizeof(repbody->qb_id));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_RECOVERABLE_ERR))
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_RECOVERABLE_ERR))
 		RETURN(-cfs_fail_val);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_PREACQ) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_PREACQ) &&
 	   (req_is_preacq(qb_flags) || req_is_rel(qb_flags)))
 		RETURN(-EAGAIN);
 
@@ -1061,7 +1061,7 @@ out_write:
 	/* start/stop grace timer if required */
 	qmt_lqes_tune_grace(env, now);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_GRANT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_GRANT))
 		slv_granted = 0xFFFFFFFFFFF00000;
 
 	/* Update slave index first since it is easier to roll back */
@@ -1115,7 +1115,7 @@ out:
 		dt_object_put(env, slv_obj);
 
 	if ((req_is_acq(qb_flags) || req_is_preacq(qb_flags)) &&
-	    OBD_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT)) {
 		/* introduce inconsistency between granted value in slave index
 		 * and slave index copy of slave */
 		repbody->qb_count = 0;

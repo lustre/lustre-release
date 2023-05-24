@@ -1437,7 +1437,7 @@ lfsck_layout_lastid_load(const struct lu_env *env,
 			       "LAST_ID file for sequence %#llx\n",
 			       lfsck_lfsck2name(lfsck), lls->lls_seq);
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY4) &&
+			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY4) &&
 			    cfs_fail_val > 0) {
 				struct ptlrpc_thread *thread =
 					&lfsck->li_thread;
@@ -5946,7 +5946,7 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 
 	LASSERT(llsd != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY5) &&
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY5) &&
 	    cfs_fail_val == lfsck_dev_idx(lfsck)) {
 		struct ptlrpc_thread	*thread = &lfsck->li_thread;
 

@@ -672,7 +672,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 
 	ptlrpc_request_set_replen(req);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_FAKE_PRECREATE))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_FAKE_PRECREATE))
 		GOTO(ready, rc = 0);
 
 	rc = ptlrpc_queue_wait(req);
@@ -903,7 +903,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	CDEBUG(D_HA, "%s: going to cleanup orphans since "DFID"\n",
 	       d->opd_obd->obd_name, PFID(&d->opd_last_used_fid));
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_DELORPHAN, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_DELORPHAN, cfs_fail_val);
 
 	*last_fid = d->opd_last_used_fid;
 	/* The OSP should already get the valid seq now */
@@ -1283,7 +1283,7 @@ static int osp_precreate_thread(void *_args)
 			if (!d->opd_new_connection)
 				continue;
 
-			OBD_FAIL_TIMEOUT(OBD_FAIL_OSP_CON_EVENT_DELAY,
+			CFS_FAIL_TIMEOUT(OBD_FAIL_OSP_CON_EVENT_DELAY,
 					 cfs_fail_val);
 			d->opd_new_connection = 0;
 			d->opd_got_disconnected = 0;

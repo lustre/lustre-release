@@ -219,7 +219,7 @@ static int range_alloc_set(const struct lu_env *env,
 	if (lu_seq_range_is_zero(loset))
 		__seq_set_init(env, seq);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_ALLOC)) /* exhaust set */
+	if (CFS_FAIL_CHECK(OBD_FAIL_SEQ_ALLOC)) /* exhaust set */
 		loset->lsr_start = loset->lsr_end;
 
 	if (lu_seq_range_is_exhausted(loset)) {

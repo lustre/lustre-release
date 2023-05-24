@@ -647,7 +647,7 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
 
 	target_recovery_init(&ofd->ofd_lut, tgt_request_handle);
-	OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_PREPARE_DELAY, OBD_FAIL_ONCE,
+	CFS_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_PREPARE_DELAY, CFS_FAIL_ONCE,
 			       (OBD_TIMEOUT_DEFAULT + 1) / 4);
 	LASSERT(obd->obd_no_conn);
 	spin_lock(&obd->obd_dev_lock);
@@ -1384,7 +1384,7 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	LASSERT(exp != NULL);
 	skip_orphan = !!(exp_connect_flags(exp) & OBD_CONNECT_SKIP_ORPHAN);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_NODESTROY))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_NODESTROY))
 		goto done;
 
 	LCONSOLE(D_INFO, "%s: deleting orphan objects from "DOSTID
@@ -1465,7 +1465,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_EROFS))
 		RETURN(-EROFS);
 
 	if (ofd->ofd_no_precreate)
@@ -1739,7 +1739,7 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_EROFS))
 		RETURN(-EROFS);
 
 	/* This is old case for clients before Lustre 2.4 */
@@ -1822,7 +1822,7 @@ static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_STATFS_DELAY, 10);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_STATFS_DELAY, 10);
 
 	osfs = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_STATFS);
 
@@ -1832,7 +1832,7 @@ static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 		CERROR("%s: statfs failed: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_STATFS_EINPROGRESS))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_STATFS_EINPROGRESS))
 		rc = -EINPROGRESS;
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_STATFS,
@@ -2079,7 +2079,7 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_PAUSE_PUNCH, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_PAUSE_PUNCH, cfs_fail_val);
 
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
 	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))

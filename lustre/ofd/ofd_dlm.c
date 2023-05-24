@@ -161,7 +161,7 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 			GOTO(out_release, rc);
 	}
 
-	if (!OBD_FAIL_CHECK(OBD_FAIL_OST_GL_WORK_ALLOC))
+	if (!CFS_FAIL_CHECK(OBD_FAIL_OST_GL_WORK_ALLOC))
 		OBD_SLAB_ALLOC_PTR_GFP(gl_work, ldlm_glimpse_work_kmem,
 				       GFP_ATOMIC);
 
@@ -264,9 +264,9 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 	 */
 
 	if (flags & LDLM_FL_BLOCK_NOWAIT) {
-		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_AGL_DELAY, 5);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_AGL_DELAY, 5);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_AGL_NOLOCK))
+		if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_AGL_NOLOCK))
 			RETURN(ELDLM_LOCK_ABORTED);
 	}
 
@@ -286,7 +286,7 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 
 	/* The lock met with no resistance; we're finished. */
 	if (rc == LDLM_ITER_CONTINUE) {
-		if (OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2)) {
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_GLIMPSE, 2)) {
 			ldlm_resource_unlink_lock(lock);
 			err = ELDLM_LOCK_ABORTED;
 		} else {

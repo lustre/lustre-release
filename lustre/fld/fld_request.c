@@ -385,7 +385,7 @@ again:
 	req->rq_reply_portal = MDC_REPLY_PORTAL;
 	ptlrpc_at_set_req_timeout(req);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FLD_QUERY_REQ) && req->rq_no_delay) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_FLD_QUERY_REQ) && req->rq_no_delay) {
 		/* the same error returned by ptlrpc_import_delay_req */
 		rc = -EAGAIN;
 		req->rq_status = rc;

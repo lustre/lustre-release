@@ -3110,7 +3110,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	/* start == NULL means auto trigger paused LFSCK. */
 	if (!start) {
 		if (list_empty(&lfsck->li_list_scan) ||
-		    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AUTO))
+		    CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AUTO))
 			GOTO(put, rc = 0);
 	} else if (start->ls_flags & LPF_BROADCAST && !lfsck->li_master) {
 		CERROR("%s: only allow to specify '-A | -o' via MDS\n",

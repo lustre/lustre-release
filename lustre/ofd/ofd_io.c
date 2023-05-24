@@ -442,7 +442,7 @@ int ofd_verify_layout_version(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_OST_SKIP_LV_CHECK)))
+	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_SKIP_LV_CHECK)))
 		GOTO(out, rc = 0);
 
 	rc = ofd_object_ff_load(env, fo);
@@ -493,7 +493,7 @@ static void ofd_handle_attrs(const struct lu_env *env, struct ofd_device *ofd,
 	if (need_atime && ofd->ofd_atime_diff == 0)
 		need_atime = false;
 
-	if (need_encfl && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG))
+	if (need_encfl && CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG))
 		need_encfl = false;
 
 	if (!need_atime && !need_encfl)
@@ -622,7 +622,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		begin = min_t(__u64, begin, rnb[i].rnb_offset);
 		end = max_t(__u64, end, rnb[i].rnb_offset + rnb[i].rnb_len);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
+		if (CFS_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
 			rnb[i].rnb_len = 100 * 1024 * 1024;
 
 		rc = dt_bufs_get(env, ofd_object_child(fo), rnb + i,
@@ -795,7 +795,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		begin = min_t(__u64, begin, rnb[i].rnb_offset);
 		end = max_t(__u64, end, rnb[i].rnb_offset + rnb[i].rnb_len);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
+		if (CFS_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
 			rnb[i].rnb_len += PAGE_SIZE;
 		rc = dt_bufs_get(env, ofd_object_child(fo),
 				 rnb + i, lnb + j, maxlnb, dbt);
@@ -915,7 +915,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	LASSERT(oa != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_SRV_ENOENT)) {
 		struct ofd_seq		*oseq;
 
 		oseq = ofd_seq_load(env, ofd, ostid_seq(&oa->o_oi));
@@ -1033,7 +1033,7 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 
 	la->la_valid &= LA_UID | LA_GID | LA_PROJID;
 	if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & LUSTRE_ENCRYPT_FL &&
-	    !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
+	    !CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_ENCFLAG)) {
 		la->la_valid |= LA_FLAGS;
 		la->la_flags = LUSTRE_ENCRYPT_FL;
 	}
@@ -1100,11 +1100,11 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	 * write RPCs only modify ff_{parent,layout} and those information will
 	 * be the same from all the write RPCs. The reason that fl is not used
 	 * in dt_xattr_set() is to allow this race. */
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
 		GOTO(out_unlock, rc);
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
 		ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
-	else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+	else if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
 		le32_add_cpu(&ff->ff_parent.f_oid, -1);
 
 	info->fti_buf.lb_buf = ff;
@@ -1266,7 +1266,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	la->la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
 
 	/* do fake write, to simulate the write case for performance testing */
-	if (OBD_FAIL_CHECK_QUIET(OBD_FAIL_OST_FAKE_RW)) {
+	if (CFS_FAIL_CHECK_QUIET(OBD_FAIL_OST_FAKE_RW)) {
 		struct niobuf_local *last = &lnb[niocount - 1];
 		__u64 file_size = last->lnb_file_offset + last->lnb_len;
 		__u64 valid = la->la_valid;
@@ -1306,7 +1306,7 @@ retry:
 		}
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
 		GOTO(out_stop, rc = -EINPROGRESS);
 
 	if (likely(!fake_write)) {
@@ -1345,8 +1345,8 @@ retry:
 	}
 
 	if (likely(!fake_write)) {
-		OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_WR_ATTR_DELAY,
-				       OBD_FAIL_ONCE, cfs_fail_val);
+		CFS_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_WR_ATTR_DELAY,
+				       CFS_FAIL_ONCE, cfs_fail_val);
 		rc = dt_write_commit(env, o, lnb, niocount, th, oa->o_size);
 		if (rc) {
 			restart = th->th_restart_tran;

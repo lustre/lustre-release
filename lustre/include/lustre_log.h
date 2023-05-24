@@ -529,7 +529,7 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
 
 static inline int llog_max_idx(struct llog_log_hdr *lh)
 {
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) &&
 	    unlikely(lh->llh_flags & LLOG_F_IS_CAT))
 		return cfs_fail_val;
 	else

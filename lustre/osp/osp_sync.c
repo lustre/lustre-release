@@ -677,7 +677,7 @@ static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
 	imp = d->opd_obd->u.cli.cl_import;
 	LASSERT(imp);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CHECK_ENOMEM))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_CHECK_ENOMEM))
 		RETURN(ERR_PTR(-ENOMEM));
 
 	req = ptlrpc_request_alloc(imp, format);
@@ -724,7 +724,7 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_SETATTR64_REC);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CHECK_INVALID_REC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_CHECK_INVALID_REC))
 		RETURN(1);
 
 	/* lsr_valid can only be 0 or HAVE OBD_MD_{FLUID, FLGID, FLPROJID} set,
@@ -1164,7 +1164,7 @@ static int osp_sync_process_queues(const struct lu_env *env,
 			llh = NULL;
 			rec = NULL;
 		}
-		if (OBD_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK) &&
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK) &&
 			    cfs_fail_val != 1)
 			msleep(1 * MSEC_PER_SEC);
 
@@ -1240,7 +1240,7 @@ again:
 		int	size;
 
 		wrapped = llog_cat_is_wrapped(llh);
-		if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
 			rc = -EINPROGRESS;
 			goto next;
 		}

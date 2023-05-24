@@ -1702,7 +1702,7 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(out, rc = 0);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
 			spin_lock(&lfsck->li_lock);
 			thread_set_flags(thread, SVC_STOPPING);
 			spin_unlock(&lfsck->li_lock);
