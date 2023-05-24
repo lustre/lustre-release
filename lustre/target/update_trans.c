@@ -1024,11 +1024,11 @@ stop_master_trans:
 	/* Step 3: write updates to other MDTs */
 	if (write_updates) {
 		struct llog_update_record *lur;
-		if (OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 			if (cfs_fail_val == 1) {
 				long timeout = cfs_time_seconds(1) / 10;
 
-				OBD_RACE(OBD_FAIL_OUT_OBJECT_MISS);
+				CFS_RACE(OBD_FAIL_OUT_OBJECT_MISS);
 				set_current_state(TASK_UNINTERRUPTIBLE);
 				schedule_timeout(schedule_timeout(timeout));
 				cfs_fail_loc = 0;
@@ -1281,7 +1281,7 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 	struct sub_thandle *st;
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_TXN_NO_CANCEL))
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_TXN_NO_CANCEL))
 		RETURN(0);
 
 	top_multiple_thandle_dump(tmt, D_INFO);
@@ -1608,7 +1608,7 @@ static int distribute_txn_commit_thread(void *_arg)
 		if (!task_is_running(current))
 			schedule();
 
-		if (OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 			set_current_state(TASK_UNINTERRUPTIBLE);
 			schedule_timeout(cfs_time_seconds(5));
 		}

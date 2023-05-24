@@ -1064,7 +1064,7 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 	idx = find_first_zero_bit(tgt->lut_client_bitmap, LR_MAX_CLIENTS);
 repeat:
 	if (idx >= LR_MAX_CLIENTS ||
-	    OBD_FAIL_CHECK(OBD_FAIL_MDS_CLIENT_ADD)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_MDS_CLIENT_ADD)) {
 		CERROR("%s: no room for %u clients - fix LR_MAX_CLIENTS\n",
 		       tgt->lut_obd->obd_name,  idx);
 		RETURN(-EOVERFLOW);
@@ -1109,7 +1109,7 @@ repeat:
 	       tgt->lut_obd->obd_name, ted->ted_lr_idx, ted->ted_lr_off,
 	       ted->ted_lcd->lcd_uuid, ted->ted_lcd->lcd_generation);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
 		RETURN(-ENOSPC);
 
 	rc = tgt_client_data_update(env, exp);
@@ -1216,7 +1216,7 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 	if (exp->exp_flags & OBD_OPT_FAILOVER)
 		RETURN(0);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_DEL))
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_DEL))
 		RETURN(0);
 
 	/* Make sure the server's last_transno is up to date.

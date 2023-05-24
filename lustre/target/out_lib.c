@@ -693,7 +693,7 @@ static int out_tx_write_exec(const struct lu_env *env, struct thandle *th,
 	       PFID(lu_object_fid(&dt_obj->do_lu)), arg->u.write.pos,
 	       arg->u.write.buf.lb_buf, (unsigned long)arg->u.write.buf.lb_len);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OUT_ENOSPC)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OUT_ENOSPC)) {
 		rc = -ENOSPC;
 	} else {
 		dt_write_lock(env, dt_obj, DT_TGT_CHILD);
@@ -751,7 +751,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 	       arg->u.xattr_set.name, arg->u.xattr_set.flags);
 
 	if (!lu_object_exists(&dt_obj->do_lu) ||
-	    OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
+	    CFS_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 		rc = -ENOENT;
 	} else {
 		struct linkea_data ldata = { 0 };

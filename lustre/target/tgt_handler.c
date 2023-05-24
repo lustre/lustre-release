@@ -413,15 +413,15 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 	 * network failure. Do not send any reply in case any of NET related
 	 * fail_id has occured.
 	 */
-	if (OBD_FAIL_CHECK_ORSET(h->th_fail_id, OBD_FAIL_ONCE))
+	if (CFS_FAIL_CHECK_ORSET(h->th_fail_id, CFS_FAIL_ONCE))
 		RETURN(0);
 	if (unlikely(lustre_msg_get_opc(req->rq_reqmsg) == MDS_REINT &&
-		     OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET)))
+		     CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET)))
 		RETURN(0);
 
 	/* drop OUT_UPDATE rpc */
 	if (unlikely(lustre_msg_get_opc(req->rq_reqmsg) == OUT_UPDATE &&
-		     OBD_FAIL_CHECK(OBD_FAIL_OUT_UPDATE_DROP)))
+		     CFS_FAIL_CHECK(OBD_FAIL_OUT_UPDATE_DROP)))
 		RETURN(0);
 
 	rc = tgt_request_preprocess(tsi, h, req);
@@ -648,7 +648,7 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 		goto err_unsupported;
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_OPCODE) && opc == cfs_fail_val)
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_OPCODE) && opc == cfs_fail_val)
 		goto err_unsupported;
 
 	RETURN(h);
@@ -758,7 +758,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	bool			 is_connect = false;
 	ENTRY;
 
-	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
+	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
 		if (cfs_fail_val == 0 &&
 		    lustre_msg_get_opc(msg) != OBD_PING &&
 		    lustre_msg_get_flags(msg) & MSG_REQ_REPLAY_DONE) {
@@ -785,7 +785,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		}
 		/* recovery-small test 18c asks to drop connect reply */
 		if (unlikely(opc == OST_CONNECT &&
-			     OBD_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET2)))
+			     CFS_FAIL_CHECK(OBD_FAIL_OST_CONNECT_NET2)))
 			GOTO(out, rc = 0);
 	}
 
@@ -1107,7 +1107,7 @@ int tgt_disconnect(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_DISCONNECT_DELAY, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_DISCONNECT_DELAY, cfs_fail_val);
 
 	rc = target_handle_disconnect(tgt_ses_req(tsi));
 	if (rc)
@@ -1856,7 +1856,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 		/* corrupt the data before we compute the checksum, to
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
-		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
+		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
 			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
 			int len = local_nb[i].lnb_len;
 			struct page *np = tgt_page_to_corrupt;
@@ -1888,7 +1888,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 		 /* corrupt the data after we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (i == 0 && opc == OST_READ &&
-		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
+		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
 			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
 			int len = local_nb[i].lnb_len;
 			struct page *np = tgt_page_to_corrupt;
@@ -2115,7 +2115,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		/* corrupt the data before we compute the checksum, to
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
-		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
+		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
@@ -2235,7 +2235,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 /* corrupt the data after we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (unlikely(i == 0 && opc == OST_READ &&
-			     OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))) {
+			     CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))) {
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
@@ -2331,7 +2331,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	req->rq_bulk_read = 1;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK)) {
 		/* optionally use cfs_fail_val - 1 to select a specific OST on
 		 * this server to fail requests.
 		 */
@@ -2348,7 +2348,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		}
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
 			 cfs_fail_val : (obd_timeout + 1) / 4);
 
 	/* Check if there is eviction in progress, and if so, wait for it to
@@ -2391,7 +2391,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	 * client was willing to wait, drop it. b=11330
 	 */
 	if (ktime_get_real_seconds() > req->rq_deadline ||
-	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = 1;
 		CERROR("Dropping timed-out read from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
 		       libcfs_idstr(&req->rq_peer), POSTID(&ioo->ioo_oid),
@@ -2570,7 +2570,7 @@ out_lock:
 		target_send_reply(req, 0, 0);
 
 		CDEBUG(D_INFO, "reorder BULK\n");
-		OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,
+		CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,
 				 cfs_fail_val ? : 3);
 
 		target_bulk_io(exp, desc);
@@ -2689,16 +2689,16 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
 		RETURN(err_serious(-ENOSPC));
-	if (OBD_FAIL_TIMEOUT(OBD_FAIL_OST_EROFS, 1))
+	if (CFS_FAIL_TIMEOUT(OBD_FAIL_OST_EROFS, 1))
 		RETURN(err_serious(-EROFS));
 
 	req->rq_bulk_write = 1;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
 		rc = -EIO;
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
 		rc = -EFAULT;
 	if (rc < 0) {
 		/* optionally use cfs_fail_val - 1 to select a specific OST on
@@ -2779,7 +2779,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	 * client was willing to wait, drop it. b=11330
 	 */
 	if (ktime_get_real_seconds() > req->rq_deadline ||
-	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
+	    CFS_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = true;
 		CERROR("%s: Dropping timed-out write from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
 		       tgt_name(tsi->tsi_tgt), libcfs_idstr(&req->rq_peer),
@@ -2885,7 +2885,7 @@ skip_transfer:
 		}
 	}
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, cfs_fail_val);
 
 out_commitrw:
 	/* calculate the expected actual write bytes (nob) for OFD stats.

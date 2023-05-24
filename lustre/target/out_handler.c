@@ -589,7 +589,7 @@ static int out_destroy(struct tgt_session_info *tsi)
 			    tti->tti_u.update.tti_update_reply,
 			    tti->tti_u.update.tti_update_reply_index);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OUT_DROP_DESTROY))
+	if (CFS_FAIL_CHECK(OBD_FAIL_OUT_DROP_DESTROY))
 		tsi->tsi_pill->rc_req->rq_no_reply = 1;
 
 	RETURN(rc);
@@ -1194,7 +1194,7 @@ int out_handle(struct tgt_session_info *tsi)
 				}
 			}
 
-			if (OBD_FAIL_CHECK(OBD_FAIL_OUT_EIO))
+			if (CFS_FAIL_CHECK(OBD_FAIL_OUT_EIO))
 				rc = -EIO;
 			else
 				rc = h->th_act(tsi);

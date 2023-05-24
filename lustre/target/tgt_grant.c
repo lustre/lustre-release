@@ -912,7 +912,7 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 
 	ENTRY;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_NO_GRANT))
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_NO_GRANT))
 		RETURN(0);
 
 	/* When tgd_grant_compat_disable is set, we don't grant any space to

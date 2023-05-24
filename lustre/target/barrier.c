@@ -319,7 +319,7 @@ int barrier_handler(struct dt_device *key, struct ptlrpc_request *req)
 		break;
 	case BS_FREEZING_P1:
 	case BS_FREEZING_P2:
-		if (OBD_FAIL_CHECK(OBD_FAIL_BARRIER_FAILURE))
+		if (CFS_FAIL_CHECK(OBD_FAIL_BARRIER_FAILURE))
 			GOTO(fini, rc = -EINVAL);
 
 		barrier->bi_deadline = ktime_get_real_seconds() +

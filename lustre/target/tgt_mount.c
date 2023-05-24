@@ -140,7 +140,7 @@ static int server_deregister_mount(const char *name)
 	OBD_FREE(lmi, sizeof(*lmi));
 	mutex_unlock(&lustre_mount_info_lock);
 
-	OBD_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
+	CFS_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
 	RETURN(0);
 }
 
@@ -1408,9 +1408,9 @@ static int server_start_targets(struct super_block *sb)
 	}
 	lsi->lsi_server_started = 1;
 	mutex_unlock(&server_start_lock);
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE) &&
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE) &&
 	    IS_MDT(lsi)) {
-		OBD_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
+		CFS_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
 		msleep(2 * MSEC_PER_SEC);
 	}
 
@@ -1663,13 +1663,13 @@ static void server_put_super(struct super_block *sb)
 			 */
 			obd->obd_force = 1;
 			class_manual_cleanup(obd);
-			if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE)) {
+			if (CFS_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE)) {
 				int idx;
 
 				server_name2index(lsi->lsi_svname, &idx, NULL);
 				/* sleeping for MDT0001 */
 				if (idx == 1)
-					OBD_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
+					CFS_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
 			}
 		} else {
 			CERROR("no obd %s\n", lsi->lsi_svname);
@@ -2091,7 +2091,7 @@ int server_fill_super(struct super_block *sb)
 
 	ENTRY;
 	/* to simulate target mount race */
-	OBD_RACE(OBD_FAIL_TGT_MOUNT_RACE);
+	CFS_RACE(OBD_FAIL_TGT_MOUNT_RACE);
 
 	rc = lsi_prepare(lsi);
 	if (rc < 0) {
