@@ -924,9 +924,9 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
 	if (request) {
 		ptlrpc_cli_req_init(request);
 
-		LASSERTF((unsigned long)imp > 0x1000, "%p\n", imp);
+		LASSERTF((unsigned long)imp > 0x1000, "%px\n", imp);
 		LASSERT(imp != LP_POISON);
-		LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p\n",
+		LASSERTF((unsigned long)imp->imp_client > 0x1000, "%px\n",
 			 imp->imp_client);
 		LASSERT(imp->imp_client != LP_POISON);
 
@@ -2650,10 +2650,10 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 
 	LASSERT(!request->rq_srv_req);
 	LASSERT(request->rq_export == NULL);
-	LASSERTF(!request->rq_receiving_reply, "req %p\n", request);
-	LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
-	LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
-	LASSERTF(!request->rq_replay, "req %p\n", request);
+	LASSERTF(!request->rq_receiving_reply, "req %px\n", request);
+	LASSERTF(list_empty(&request->rq_list), "req %px\n", request);
+	LASSERTF(list_empty(&request->rq_set_chain), "req %px\n", request);
+	LASSERTF(!request->rq_replay, "req %px\n", request);
 
 	req_capsule_fini(&request->rq_pill);
 
@@ -2669,7 +2669,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 		if (!locked)
 			spin_unlock(&request->rq_import->imp_lock);
 	}
-	LASSERTF(list_empty(&request->rq_replay_list), "req %p\n", request);
+	LASSERTF(list_empty(&request->rq_replay_list), "req %px\n", request);
 
 	if (atomic_read(&request->rq_refcount) != 0) {
 		DEBUG_REQ(D_ERROR, request,

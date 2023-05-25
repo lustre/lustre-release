@@ -1819,28 +1819,28 @@ no_bulk:
 
 	LASSERT(page_count > 0);
 	pg_prev = pga[0];
-        for (requested_nob = i = 0; i < page_count; i++, niobuf++) {
-                struct brw_page *pg = pga[i];
+	for (requested_nob = i = 0; i < page_count; i++, niobuf++) {
+		struct brw_page *pg = pga[i];
 		int poff = pg->bp_off & ~PAGE_MASK;
 
-                LASSERT(pg->bp_count > 0);
-                /* make sure there is no gap in the middle of page array */
+		LASSERT(pg->bp_count > 0);
+		/* make sure there is no gap in the middle of page array */
 		LASSERTF(page_count == 1 ||
 			 (ergo(i == 0, poff + pg->bp_count == PAGE_SIZE) &&
 			  ergo(i > 0 && i < page_count - 1,
 			       poff == 0 && pg->bp_count == PAGE_SIZE)   &&
 			  ergo(i == page_count - 1, poff == 0)),
-			 "i: %d/%d pg: %p off: %llu, count: %u\n",
+			 "i: %d/%d pg: %px off: %llu, count: %u\n",
 			 i, page_count, pg, pg->bp_off, pg->bp_count);
-                LASSERTF(i == 0 || pg->bp_off > pg_prev->bp_off,
-			 "i %d p_c %u pg %p [pri %lu ind %lu] off %llu"
-			 " prev_pg %p [pri %lu ind %lu] off %llu\n",
-                         i, page_count,
-                         pg->bp_page, page_private(pg->bp_page), pg->bp_page->index, pg->bp_off,
-                         pg_prev->bp_page, page_private(pg_prev->bp_page),
-                         pg_prev->bp_page->index, pg_prev->bp_off);
-                LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
-                        (pg->bp_flag & OBD_BRW_SRVLOCK));
+		LASSERTF(i == 0 || pg->bp_off > pg_prev->bp_off,
+			 "i %d p_c %u pg %px [pri %lu ind %lu] off %llu prev_pg %px [pri %lu ind %lu] off %llu\n",
+			 i, page_count,
+			 pg->bp_page, page_private(pg->bp_page),
+			 pg->bp_page->index, pg->bp_off,
+			 pg_prev->bp_page, page_private(pg_prev->bp_page),
+			 pg_prev->bp_page->index, pg_prev->bp_off);
+		LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
+			(pg->bp_flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {
 			unsigned char *ptr = kmap_atomic(pg->bp_page);
 
@@ -1855,33 +1855,34 @@ no_bulk:
 		}
 		requested_nob += pg->bp_count;
 
-                if (i > 0 && can_merge_pages(pg_prev, pg)) {
-                        niobuf--;
+		if (i > 0 && can_merge_pages(pg_prev, pg)) {
+			niobuf--;
 			niobuf->rnb_len += pg->bp_count;
 		} else {
 			niobuf->rnb_offset = pg->bp_off;
 			niobuf->rnb_len    = pg->bp_count;
 			niobuf->rnb_flags  = pg->bp_flag;
-                }
-                pg_prev = pg;
-        }
+		}
+		pg_prev = pg;
+	}
 
-        LASSERTF((void *)(niobuf - niocount) ==
-                req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE),
-                "want %p - real %p\n", req_capsule_client_get(&req->rq_pill,
-                &RMF_NIOBUF_REMOTE), (void *)(niobuf - niocount));
+	LASSERTF((void *)(niobuf - niocount) ==
+		 req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE),
+		 "want %px - real %px\n",
+		 req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE),
+		 (void *)(niobuf - niocount));
 
-        osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
-        if (resend) {
-                if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
-                        body->oa.o_valid |= OBD_MD_FLFLAGS;
-                        body->oa.o_flags = 0;
-                }
-                body->oa.o_flags |= OBD_FL_RECOV_RESEND;
-        }
+	osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
+	if (resend) {
+		if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
+			body->oa.o_valid |= OBD_MD_FLFLAGS;
+			body->oa.o_flags = 0;
+		}
+		body->oa.o_flags |= OBD_FL_RECOV_RESEND;
+	}
 
-        if (osc_should_shrink_grant(cli))
-                osc_shrink_grant_local(cli, &body->oa);
+	if (osc_should_shrink_grant(cli))
+		osc_shrink_grant_local(cli, &body->oa);
 
 	if (!cli->cl_checksum || sptlrpc_flavor_has_bulk(&req->rq_flvr))
 		enable_checksum = false;
@@ -2421,7 +2422,7 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 	list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
 		if (oap->oap_request != NULL) {
 			LASSERTF(request == oap->oap_request,
-				 "request %p != oap_request %p\n",
+				 "request %px != oap_request %px\n",
 				 request, oap->oap_request);
 		}
 	}
@@ -2979,7 +2980,7 @@ static int osc_enqueue_interpret(const struct lu_env *env,
 	 * be valid. */
 	lock = ldlm_handle2lock(lockh);
 	LASSERTF(lock != NULL,
-		 "lockh %#llx, req %p, aa %p - client evicted?\n",
+		 "lockh %#llx, req %px, aa %px - client evicted?\n",
 		 lockh->cookie, req, aa);
 
 	/* Take an additional reference so that a blocking AST that

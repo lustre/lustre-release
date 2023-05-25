@@ -184,10 +184,10 @@ void null_free_reqbuf(struct ptlrpc_sec *sec,
 {
 	if (!req->rq_pool) {
 		LASSERTF(req->rq_reqmsg == req->rq_reqbuf,
-			 "req %p: reqmsg %p is not reqbuf %p in null sec\n",
+			 "req %px: reqmsg %px is not reqbuf %px in null sec\n",
 			 req, req->rq_reqmsg, req->rq_reqbuf);
 		LASSERTF(req->rq_reqbuf_len >= req->rq_reqlen,
-			 "req %p: reqlen %d should smaller than buflen %d\n",
+			 "req %px: reqlen %d should smaller than buflen %d\n",
 			 req, req->rq_reqlen, req->rq_reqbuf_len);
 
 		OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);

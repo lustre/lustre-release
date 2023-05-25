@@ -958,7 +958,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
         ENTRY;
 
 	LASSERTF(ergo(oscl->ols_glimpse, lock->cll_descr.cld_mode <= CLM_READ),
-		"lock = %p, ols = %p\n", lock, oscl);
+		"lock = %px, ols = %px\n", lock, oscl);
 
 	if (oscl->ols_state == OLS_GRANTED)
 		RETURN(0);

@@ -96,9 +96,9 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx)
 
 	ASSERT_CTXT_MAGIC(saved->magic);
 
-	LASSERTF(current->fs->pwd.dentry == new_ctx->pwd, "%p != %p\n",
+	LASSERTF(current->fs->pwd.dentry == new_ctx->pwd, "%px != %px\n",
 		 current->fs->pwd.dentry, new_ctx->pwd);
-	LASSERTF(current->fs->pwd.mnt == new_ctx->pwdmnt, "%p != %p\n",
+	LASSERTF(current->fs->pwd.mnt == new_ctx->pwdmnt, "%px != %px\n",
 		 current->fs->pwd.mnt, new_ctx->pwdmnt);
 
 	ll_set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);

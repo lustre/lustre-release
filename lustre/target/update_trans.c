@@ -1556,9 +1556,8 @@ static int distribute_txn_commit_thread(void *_arg)
 			} else if (!tdtd->tdtd_lut->lut_obd->obd_recovering) {
 				__set_current_state(TASK_RUNNING);
 				LASSERTF(tmt->tmt_batchid >= batchid,
-					 "tmt %p tmt_batchid: %llu, batchid "
-					  "%llu\n", tmt, tmt->tmt_batchid,
-					 batchid);
+					 "tmt %px tmt_batchid: %llu, batchid %llu\n",
+					 tmt, tmt->tmt_batchid, batchid);
 				/* There are three types of distribution
 				 * transaction result
 				 *

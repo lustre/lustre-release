@@ -628,10 +628,10 @@ int class_attach(struct lustre_cfg *lcfg)
 		RETURN(rc);
 	}
 	LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
-		 "obd %p obd_magic %08X != %08X\n",
+		 "obd %px obd_magic %08X != %08X\n",
 		 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 	LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0,
-		 "%p obd_name %s != %s\n", obd, obd->obd_name, name);
+		 "%px obd_name %s != %s\n", obd, obd->obd_name, name);
 
 	exp = class_new_export_self(obd, &obd->obd_uuid);
 	if (IS_ERR(exp)) {
@@ -670,10 +670,10 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	LASSERT(obd != NULL);
 	LASSERTF(obd == class_num2obd(obd->obd_minor),
-		 "obd %p != obd_devs[%d] %p\n",
+		 "obd %px != obd_devs[%d] %px\n",
 		 obd, obd->obd_minor, class_num2obd(obd->obd_minor));
 	LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
-		 "obd %p obd_magic %08x != %08x\n",
+		 "obd %px obd_magic %08x != %08x\n",
 		 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 
 	/* have we attached a type to this device? */

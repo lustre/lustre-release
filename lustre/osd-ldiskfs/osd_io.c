@@ -117,7 +117,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	int blocks, i;
 
 	LASSERTF(iobuf->dr_elapsed_valid == 0,
-		 "iobuf %p, reqs %d, rw %d, line %d\n", iobuf,
+		 "iobuf %px, reqs %d, rw %d, line %d\n", iobuf,
 		 atomic_read(&iobuf->dr_numreqs), iobuf->dr_rw,
 		 iobuf->dr_init_at);
 	LASSERT(pages <= PTLRPC_MAX_BRW_PAGES);

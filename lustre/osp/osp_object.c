@@ -1585,7 +1585,7 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 
 	memcpy(fid, lu_object_fid(&dt->do_lu), sizeof(*fid));
 
-	LASSERTF(fid_is_sane(fid), "fid for osp_object %p is insane"DFID"!\n",
+	LASSERTF(fid_is_sane(fid), "fid for osp_object %px is insane"DFID"!\n",
 		 o, PFID(fid));
 
 	if (!o->opo_reserved) {
