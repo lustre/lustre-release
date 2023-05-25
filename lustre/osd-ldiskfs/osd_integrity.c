@@ -260,3 +260,138 @@ int osd_get_integrity_profile(struct osd_device *osd,
 	return 0;
 }
 #endif /* CONFIG_CRC_T10DIF */
+
+#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) && defined(HAVE_BIO_INTEGRITY_PREP_FN)
+/*
+ * This function will change the data written, thus it should only be
+ * used when checking data integrity feature
+ */
+static void bio_integrity_fault_inject(struct bio *bio)
+{
+	struct bio_vec *bvec;
+	DECLARE_BVEC_ITER_ALL(iter_all);
+	void *kaddr;
+	char *addr;
+
+	bio_for_each_segment_all(bvec, bio, iter_all) {
+		struct page *page = bvec->bv_page;
+
+		kaddr = kmap(page);
+		addr = kaddr;
+		*addr = ~(*addr);
+		kunmap(page);
+		break;
+	}
+}
+
+static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
+			   unsigned int sectors, int tuple_size)
+{
+	__be16 *expected_guard;
+	__be16 *bio_guard;
+	int i;
+
+	expected_guard = expected_guard_buf;
+	for (i = 0; i < sectors; i++) {
+		bio_guard = (__u16 *)bio_prot_buf;
+		if (*bio_guard != *expected_guard) {
+			CERROR(
+			       "unexpected guard tags on sector %d expected guard %u, bio guard %u, sectors %u, tuple size %d\n",
+			       i, *expected_guard, *bio_guard, sectors,
+			       tuple_size);
+			return -EIO;
+		}
+		expected_guard++;
+		bio_prot_buf += tuple_size;
+	}
+	return 0;
+}
+
+static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
+				     struct osd_iobuf *iobuf, int index)
+{
+	struct blk_integrity *bi = bdev_get_integrity(bdev);
+	struct bio_integrity_payload *bip = bio->bi_integrity;
+	struct niobuf_local *lnb = NULL;
+	unsigned short sector_size = blk_integrity_interval(bi);
+	void *bio_prot_buf = page_address(bip->bip_vec->bv_page) +
+		bip->bip_vec->bv_offset;
+	struct bio_vec *bv;
+	sector_t sector = bio_start_sector(bio);
+	unsigned int i, sectors, total;
+	DECLARE_BVEC_ITER_ALL(iter_all);
+	__be16 *expected_guard;
+	int rc;
+
+	total = 0;
+	bio_for_each_segment_all(bv, bio, iter_all) {
+		for (i = index; i < iobuf->dr_npages; i++) {
+			if (iobuf->dr_pages[i] == bv->bv_page) {
+				lnb = iobuf->dr_lnbs[i];
+				break;
+			}
+		}
+		if (!lnb)
+			continue;
+		expected_guard = lnb->lnb_guards;
+		sectors = bv->bv_len / sector_size;
+		if (lnb->lnb_guard_rpc) {
+			rc = bio_dif_compare(expected_guard, bio_prot_buf,
+					     sectors, bi->tuple_size);
+			if (rc)
+				return rc;
+		}
+
+		sector += sectors;
+		bio_prot_buf += sectors * bi->tuple_size;
+		total += sectors * bi->tuple_size;
+		LASSERT(total <= bip_size(bio->bi_integrity));
+		index++;
+		lnb = NULL;
+	}
+	return 0;
+}
+
+int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
+				    struct osd_iobuf *iobuf,
+				    int start_page_idx, bool fault_inject,
+				    bool integrity_enabled)
+{
+	struct super_block *sb = osd_sb(osd);
+	integrity_gen_fn *generate_fn = NULL;
+	integrity_vrfy_fn *verify_fn = NULL;
+	int rc;
+
+	ENTRY;
+
+	if (!integrity_enabled)
+		RETURN(0);
+
+	rc = osd_get_integrity_profile(osd, &generate_fn, &verify_fn);
+	if (rc)
+		RETURN(rc);
+
+# ifdef HAVE_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
+	if (!bio_integrity_prep_fn(bio, generate_fn, verify_fn))
+		RETURN(blk_status_to_errno(bio->bi_status));
+# else
+	rc = bio_integrity_prep_fn(bio, generate_fn, verify_fn);
+	if (rc)
+		RETURN(rc);
+# endif
+
+	/* Verify and inject fault only when writing */
+	if (iobuf->dr_rw == 1) {
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
+			rc = osd_bio_integrity_compare(bio, sb->s_bdev, iobuf,
+						       start_page_idx);
+			if (rc)
+				RETURN(rc);
+		}
+
+		if (unlikely(fault_inject))
+			bio_integrity_fault_inject(bio);
+	}
+	RETURN(0);
+}
+#endif /* CONFIG_BLK_DEV_INTEGRITY */

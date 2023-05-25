@@ -97,6 +97,11 @@ struct kmem_cache *osd_itea_cachep;
 
 static struct lu_kmem_descr ldiskfs_caches[] = {
 	{
+		.ckd_cache = &biop_cachep,
+		.ckd_name  = "biop_cache",
+		.ckd_size  = sizeof(struct osd_bio_private)
+	},
+	{
 		.ckd_cache = &dynlock_cachep,
 		.ckd_name  = "dynlock_cache",
 		.ckd_size  = sizeof(struct dynlock_handle)

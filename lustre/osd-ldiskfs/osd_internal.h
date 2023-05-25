@@ -1577,12 +1577,6 @@ void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list);
 int osd_process_truncates(const struct lu_env *env, struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
-#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
-#define osd_dio_complete_routine(bio, error) dio_complete_routine(bio)
-#else
-#define osd_dio_complete_routine(bio, error) dio_complete_routine(bio, error)
-#endif
-
 #ifndef HAVE___BI_CNT
 #define __bi_cnt bi_cnt
 #endif
@@ -1607,6 +1601,17 @@ struct osd_bio_private {
 	/* Start page index in the obp_iobuf for the bio */
 	int			 obp_start_page_idx;
 };
+extern struct kmem_cache *biop_cachep;
+
+#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) && defined(HAVE_BIO_INTEGRITY_PREP_FN)
+int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
+				    struct osd_iobuf *iobuf,
+				    int start_page_idx, bool fault_inject,
+				    bool integrity_enabled);
+#else  /* !CONFIG_BLK_DEV_INTEGRITY */
+#define osd_bio_integrity_handle(osd, bio, iobuf, start_page_idx, \
+				 fault_inject, integrity_enabled) 0
+#endif
 
 #ifdef HAVE_BIO_INTEGRITY_PREP_FN
 # ifdef HAVE_BLK_INTEGRITY_ITER
