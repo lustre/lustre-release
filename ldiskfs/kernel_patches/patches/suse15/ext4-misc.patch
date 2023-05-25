@@ -75,7 +75,7 @@
   * NOTE! When we get the inode, we're the only people
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6253,3 +6253,18 @@ int ext4_get_next_extent(struct inode *i
+@@ -6253,3 +6253,19 @@ int ext4_get_next_extent(struct inode *i
  	result->es_len = 0;
  	return 0;
  }
@@ -94,6 +94,7 @@
 +EXPORT_SYMBOL(__ext4_std_error);
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -48,7 +48,7 @@

@@ -974,37 +974,6 @@ cleanup:
 		osd_bufs_put(env, dt, lnb - i, i);
 	return rc;
 }
-/* Borrow @ext4_chunk_trans_blocks */
-static int osd_chunk_trans_blocks(struct inode *inode, int nrblocks)
-{
-	ldiskfs_group_t groups;
-	int gdpblocks;
-	int idxblocks;
-	int depth;
-	int ret;
-
-	depth = ext_depth(inode);
-	idxblocks = depth * 2;
-
-	/*
-	 * Now let's see how many group bitmaps and group descriptors need
-	 * to account.
-	 */
-	groups = idxblocks + 1;
-	gdpblocks = groups;
-	if (groups > LDISKFS_SB(inode->i_sb)->s_groups_count)
-		groups = LDISKFS_SB(inode->i_sb)->s_groups_count;
-	if (gdpblocks > LDISKFS_SB(inode->i_sb)->s_gdb_count)
-		gdpblocks = LDISKFS_SB(inode->i_sb)->s_gdb_count;
-
-	/* bitmaps and block group descriptor blocks */
-	ret = idxblocks + groups + gdpblocks;
-
-	/* Blocks for super block, inode, quota and xattr blocks */
-	ret += LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
-
-	return ret;
-}
 
 #ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
 static int osd_extend_restart_trans(handle_t *handle, int needed,
@@ -2442,7 +2411,7 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 	/*
 	 * credits to insert 1 extent into extent tree.
 	 */
-	credits = osd_chunk_trans_blocks(inode, blen);
+	credits = ldiskfs_chunk_trans_blocks(inode, blen);
 	depth = ext_depth(inode);
 
 	while (rc >= 0 && blen) {
@@ -2452,7 +2421,7 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		 * Recalculate credits when extent tree depth changes.
 		 */
 		if (depth != ext_depth(inode)) {
-			credits = osd_chunk_trans_blocks(inode, blen);
+			credits = ldiskfs_chunk_trans_blocks(inode, blen);
 			depth = ext_depth(inode);
 		}
 

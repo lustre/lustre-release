@@ -73,7 +73,7 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index 306d64b..890aa90 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6325,3 +6325,18 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
+@@ -6325,3 +6325,19 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
  
  	return ret;
  }
@@ -92,6 +92,7 @@ index 306d64b..890aa90 100644
 +EXPORT_SYMBOL(__ext4_std_error);
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
 index 41aa6d9..88a84ec 100644
 --- a/fs/ext4/namei.c

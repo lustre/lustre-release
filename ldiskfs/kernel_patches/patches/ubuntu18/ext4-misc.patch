@@ -73,7 +73,7 @@ Index: linux-4.15.0/fs/ext4/inode.c
 ===================================================================
 --- linux-4.15.0.orig/fs/ext4/inode.c
 +++ linux-4.15.0/fs/ext4/inode.c
-@@ -6179,3 +6179,18 @@ int ext4_filemap_fault(struct vm_fault *
+@@ -6179,3 +6179,19 @@ int ext4_filemap_fault(struct vm_fault *
  
  	return err;
  }
@@ -92,6 +92,7 @@ Index: linux-4.15.0/fs/ext4/inode.c
 +EXPORT_SYMBOL(__ext4_std_error);
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 Index: linux-4.15.0/fs/ext4/mballoc.c
 ===================================================================
 --- linux-4.15.0.orig/fs/ext4/mballoc.c

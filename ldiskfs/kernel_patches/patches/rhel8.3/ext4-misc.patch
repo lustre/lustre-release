@@ -73,7 +73,7 @@ Index: linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
 ===================================================================
 --- linux-4.18.0-240.1.1.el8.orig/fs/ext4/inode.c
 +++ linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
-@@ -6343,3 +6343,19 @@ vm_fault_t ext4_filemap_fault(struct vm_
+@@ -6343,3 +6343,20 @@ vm_fault_t ext4_filemap_fault(struct vm_
  
  	return ret;
  }
@@ -93,10 +93,11 @@ Index: linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
 +EXPORT_SYMBOL(__ext4_journal_ensure_credits);
-Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/namei.c
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
+Index: linux-stage/fs/ext4/namei.c
 ===================================================================
---- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/namei.c
-+++ linux-4.18.0-80.1.2.el8_0/fs/ext4/namei.c
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
 @@ -49,7 +49,7 @@
  #define NAMEI_RA_BLOCKS  4
  #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)

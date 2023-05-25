@@ -70,7 +70,7 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 --- a/fs/ext4/inode.c	2022-03-24 16:23:11.721060900 -0600
 +++ b/fs/ext4/inode.c	2022-03-24 16:24:35.412642805 -0600
-@@ -6222,3 +6222,19 @@
+@@ -6222,3 +6222,20 @@
  
  	return ret;
  }
@@ -90,6 +90,7 @@ diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
 +EXPORT_SYMBOL(__ext4_journal_ensure_credits);
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
 --- a/fs/ext4/namei.c	2022-03-24 16:23:11.725060881 -0600
 +++ b/fs/ext4/namei.c	2022-03-24 16:24:35.420642764 -0600

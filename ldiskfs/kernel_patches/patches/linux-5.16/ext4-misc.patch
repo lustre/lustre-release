@@ -73,7 +73,7 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index f0206e2..88e82d6 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6145,3 +6145,19 @@ out_error:
+@@ -6145,3 +6145,20 @@ out_error:
  	ext4_journal_stop(handle);
  	goto out;
  }
@@ -93,6 +93,7 @@ index f0206e2..88e82d6 100644
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
 +EXPORT_SYMBOL(__ext4_journal_ensure_credits);
++EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
 index 249836e..627b9eb 100644
 --- a/fs/ext4/namei.c
