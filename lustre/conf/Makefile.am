@@ -34,14 +34,13 @@
 SUBDIRS = resource
 DIST_SUBDIRS = resource
 
-EXTRA_DIST = lustre.dtd lustre.xml lustre2ldif.xsl top.ldif \
-             99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
-             lnet_routes.conf lnet.conf lgssc.conf 99-lustre-server.rules
+EXTRA_DIST = lustre.xml 99-lustre.rules lustre ldev.conf ko2iblnd.conf \
+             lsvcgss lnet_routes.conf lnet.conf lgssc.conf \
+             99-lustre-server.rules
 
 sysconf_DATA = lnet.conf
 
 if UTILS
-noinst_DATA = top.ldif lustre2ldif.xsl
 sysconf_DATA += lnet_routes.conf
 endif
 
