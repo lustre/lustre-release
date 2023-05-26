@@ -2292,6 +2292,9 @@ test_214() {
 	check_ni_status "$nid1" up
 	check_ni_status "$nid2" up
 
+	do_lnetctl ping --source $nid2 $nid1 ||
+		error "$LNETCTL ping --source $nid2 $nid1 failed"
+
 	echo "Set $FAKE_IF down"
 	echo "ip link set dev $FAKE_IF down"
 	ip link set dev $FAKE_IF down

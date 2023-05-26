@@ -46,80 +46,6 @@
 static const struct lnet_lnd the_ksocklnd;
 struct ksock_nal_data ksocknal_data;
 
-static struct ksock_interface *
-ksocknal_index2iface(struct lnet_ni *ni, int index)
-{
-	struct ksock_net *net = ni->ni_data;
-	struct ksock_interface *iface;
-
-	iface = &net->ksnn_interface;
-
-	if (iface->ksni_index == index)
-		return iface;
-
-	return NULL;
-}
-
-static int ksocknal_ip2index(struct sockaddr *addr, struct lnet_ni *ni)
-{
-	struct net_device *dev;
-	int ret = -1;
-	DECLARE_CONST_IN_IFADDR(ifa);
-
-	if (addr->sa_family != AF_INET && addr->sa_family != AF_INET6)
-		return ret;
-
-	rcu_read_lock();
-	for_each_netdev(ni->ni_net_ns, dev) {
-		int flags = dev_get_flags(dev);
-		struct in_device *in_dev;
-
-		if (flags & IFF_LOOPBACK) /* skip the loopback IF */
-			continue;
-
-		if (!(flags & IFF_UP))
-			continue;
-
-		switch (addr->sa_family) {
-		case AF_INET:
-			in_dev = __in_dev_get_rcu(dev);
-			if (!in_dev)
-				continue;
-
-			in_dev_for_each_ifa_rcu(ifa, in_dev) {
-				if (ifa->ifa_local ==
-				    ((struct sockaddr_in *)addr)->sin_addr.s_addr)
-					ret = dev->ifindex;
-			}
-			endfor_ifa(in_dev);
-			break;
-#if IS_ENABLED(CONFIG_IPV6)
-		case AF_INET6: {
-			struct inet6_dev *in6_dev;
-			const struct inet6_ifaddr *ifa6;
-			struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)addr;
-
-			in6_dev = __in6_dev_get(dev);
-			if (!in6_dev)
-				continue;
-
-			list_for_each_entry_rcu(ifa6, &in6_dev->addr_list, if_list) {
-				if (ipv6_addr_cmp(&ifa6->addr,
-						 &addr6->sin6_addr) == 0)
-					ret = dev->ifindex;
-			}
-			break;
-			}
-#endif /* IS_ENABLED(CONFIG_IPV6) */
-		}
-		if (ret >= 0)
-			break;
-	}
-	rcu_read_unlock();
-
-	return ret;
-}
-
 static struct ksock_conn_cb *
 ksocknal_create_conn_cb(struct sockaddr *addr)
 {
@@ -135,7 +61,6 @@ ksocknal_create_conn_cb(struct sockaddr *addr)
 	rpc_copy_addr((struct sockaddr *)&conn_cb->ksnr_addr, addr);
 	rpc_set_port((struct sockaddr *)&conn_cb->ksnr_addr,
 		     rpc_get_port(addr));
-	conn_cb->ksnr_myiface = -1;
 	conn_cb->ksnr_scheduled = 0;
 	conn_cb->ksnr_connecting = 0;
 	conn_cb->ksnr_connected = 0;
@@ -333,6 +258,7 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 	struct ksock_conn_cb *conn_cb;
 	int i;
 	int rc = -ENOENT;
+	struct ksock_net *net;
 
 	read_lock(&ksocknal_data.ksnd_global_lock);
 
@@ -358,9 +284,9 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 			if (conn_cb->ksnr_addr.ss_family == AF_INET) {
 				struct sockaddr_in *sa =
 					(void *)&conn_cb->ksnr_addr;
-
+				net = ni->ni_data;
 				rc = choose_ipv4_src(myip,
-						     conn_cb->ksnr_myiface,
+						     net->ksnn_interface.ksni_index,
 						     ntohl(sa->sin_addr.s_addr),
 						     ni->ni_net_ns);
 				*peer_ip = ntohl(sa->sin_addr.s_addr);
@@ -503,43 +429,10 @@ static void
 ksocknal_associate_cb_conn_locked(struct ksock_conn_cb *conn_cb,
 				  struct ksock_conn *conn)
 {
-	struct ksock_peer_ni *peer_ni = conn_cb->ksnr_peer;
 	int type = conn->ksnc_type;
-	struct ksock_interface *iface;
-	int conn_iface;
 
-	conn_iface = ksocknal_ip2index((struct sockaddr *)&conn->ksnc_myaddr,
-				       peer_ni->ksnp_ni);
 	conn->ksnc_conn_cb = conn_cb;
 	ksocknal_conn_cb_addref(conn_cb);
-
-	if (conn_cb->ksnr_myiface != conn_iface) {
-		if (conn_cb->ksnr_myiface < 0) {
-			/* route wasn't bound locally yet (the initial route) */
-			CDEBUG(D_NET, "Binding %s %pISc to interface %d\n",
-			       libcfs_idstr(&peer_ni->ksnp_id),
-			       &conn_cb->ksnr_addr,
-			       conn_iface);
-		} else {
-			CDEBUG(D_NET,
-			       "Rebinding %s %pISc from interface %d to %d\n",
-			       libcfs_idstr(&peer_ni->ksnp_id),
-			       &conn_cb->ksnr_addr,
-			       conn_cb->ksnr_myiface,
-			       conn_iface);
-
-			iface = ksocknal_index2iface(peer_ni->ksnp_ni,
-						     conn_cb->ksnr_myiface);
-			if (iface)
-				iface->ksni_nroutes--;
-		}
-		conn_cb->ksnr_myiface = conn_iface;
-		iface = ksocknal_index2iface(peer_ni->ksnp_ni,
-					     conn_cb->ksnr_myiface);
-		if (iface)
-			iface->ksni_nroutes++;
-	}
-
 	ksocknal_incr_conn_count(conn_cb, type);
 
 	/* Successful connection => further attempts can
@@ -564,18 +457,15 @@ ksocknal_add_conn_cb_locked(struct ksock_peer_ni *peer_ni,
 	conn_cb->ksnr_peer = peer_ni;
 	ksocknal_peer_addref(peer_ni);
 
-	/* set the conn_cb's interface to the current net's interface */
-	conn_cb->ksnr_myiface = net->ksnn_interface.ksni_index;
-	net->ksnn_interface.ksni_nroutes++;
-
 	/* peer_ni's route list takes over my ref on 'route' */
 	peer_ni->ksnp_conn_cb = conn_cb;
+	net->ksnn_interface.ksni_nroutes++;
 
 	list_for_each_entry(conn, &peer_ni->ksnp_conns, ksnc_list) {
 		if (!rpc_cmp_addr((struct sockaddr *)&conn->ksnc_peeraddr,
 				  (struct sockaddr *)&conn_cb->ksnr_addr))
 			continue;
-
+		CDEBUG(D_NET, "call ksocknal_associate_cb_conn_locked\n");
 		ksocknal_associate_cb_conn_locked(conn_cb, conn);
 		/* keep going (typed conns) */
 	}
@@ -585,9 +475,9 @@ static void
 ksocknal_del_conn_cb_locked(struct ksock_conn_cb *conn_cb)
 {
 	struct ksock_peer_ni *peer_ni = conn_cb->ksnr_peer;
-	struct ksock_interface *iface;
 	struct ksock_conn *conn;
 	struct ksock_conn *cnxt;
+	struct ksock_net *net;
 
 	LASSERT(!conn_cb->ksnr_deleted);
 
@@ -599,12 +489,9 @@ ksocknal_del_conn_cb_locked(struct ksock_conn_cb *conn_cb)
 		ksocknal_close_conn_locked(conn, 0);
 	}
 
-	if (conn_cb->ksnr_myiface >= 0) {
-		iface = ksocknal_index2iface(peer_ni->ksnp_ni,
-					     conn_cb->ksnr_myiface);
-		if (iface)
-			iface->ksni_nroutes--;
-	}
+	net = (struct ksock_net *)(peer_ni->ksnp_ni->ni_data);
+	net->ksnn_interface.ksni_nroutes--;
+	LASSERT(net->ksnn_interface.ksni_nroutes >= 0);
 
 	conn_cb->ksnr_deleted = 1;
 	ksocknal_conn_cb_decref(conn_cb);		/* drop peer_ni's ref */

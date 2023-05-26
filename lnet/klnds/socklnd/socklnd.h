@@ -384,7 +384,6 @@ struct ksock_conn_cb {
 						 * can happen next
 						 */
 	time64_t		ksnr_retry_interval;/* secs between retries */
-	int			ksnr_myiface;	/* interface index */
 	struct sockaddr_storage	ksnr_addr;	/* IP address to connect to */
 	unsigned int		ksnr_scheduled:1;/* scheduled for attention */
 	unsigned int		ksnr_connecting:1;/* connection in progress */
