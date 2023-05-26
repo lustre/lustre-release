@@ -611,6 +611,8 @@ struct osd_iobuf {
 };
 
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
+#define osd_i_blocks(inode, size) ((size) >> (inode)->i_blkbits)
+
 
 #ifdef HAVE_INODE_TIMESPEC64
 # define osd_timespec			timespec64

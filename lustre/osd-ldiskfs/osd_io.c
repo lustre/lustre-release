@@ -1216,21 +1216,14 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-struct osd_fextent {
-	sector_t	start;
-	sector_t	end;
-	__u32		flags;
-	unsigned int	mapped:1;
-};
-
 #ifdef KERNEL_DS
-#define DECLARE_MM_SEGMENT_T(name)		mm_segment_t name
+#define DECLARE_MM_SEGMENT_T(name)             mm_segment_t name
 #define access_set_kernel(saved_fs, fei)				\
 do {									\
 	saved_fs = get_fs();						\
 	set_fs(KERNEL_DS);						\
 } while (0)
-#define access_unset_kernel(saved_fs, fei)		set_fs((saved_fs))
+#define access_unset_kernel(saved_fs, fei)             set_fs((saved_fs))
 #else
 #define DECLARE_MM_SEGMENT_T(name)
 #define access_set_kernel(saved_fs, fei)				\
@@ -1240,59 +1233,34 @@ do {									\
 #endif /* KERNEL_DS */
 
 static int osd_is_mapped(struct dt_object *dt, __u64 offset,
-			 struct osd_fextent *cached_extent)
+			 struct ldiskfs_map_blocks *map)
 {
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
-	sector_t block = offset >> inode->i_blkbits;
-	sector_t start;
-	struct fiemap_extent_info fei = { 0 };
-	struct fiemap_extent fe = { 0 };
-	int rc;
-	DECLARE_MM_SEGMENT_T(saved_fs);
-
-	if (block >= cached_extent->start && block < cached_extent->end)
-		return cached_extent->mapped;
+	int mapped;
+	sector_t block = osd_i_blocks(inode, offset);
+	sector_t end;
 
 	if (i_size_read(inode) == 0)
 		return 0;
 
 	/* Beyond EOF, must not be mapped */
-	if (((i_size_read(inode) - 1) >> inode->i_blkbits) < block)
+	if ((i_size_read(inode) - 1) < offset)
 		return 0;
 
-	fei.fi_extents_max = 1;
-	fei.fi_extents_start = &fe;
-	access_set_kernel(saved_fs, &fei);
-	rc = inode->i_op->fiemap(inode, &fei, offset, FIEMAP_MAX_OFFSET-offset);
-	access_unset_kernel(saved_fs, &fei);
-	if (rc != 0)
-		return 0;
+	end = map->m_lblk + map->m_len;
+	if (block >= map->m_lblk && block < end)
+		return map->m_flags & LDISKFS_MAP_MAPPED;
 
-	start = fe.fe_logical >> inode->i_blkbits;
-	cached_extent->flags = fe.fe_flags;
-	if (fei.fi_extents_mapped == 0) {
-		/* a special case - no extent found at this offset and forward.
-		 * we can consider this as a hole to EOF. it's safe to cache
-		 * as other threads can not allocate/punch blocks this thread
-		 * is working on (LDLM). */
-		cached_extent->start = block;
-		cached_extent->end = i_size_read(inode) >> inode->i_blkbits;
-		cached_extent->mapped = 0;
+	map->m_lblk = block;
+	map->m_len = INT_MAX;
+
+	mapped = ldiskfs_map_blocks(NULL, inode, map, 0);
+	if (mapped < 0) {
+		map->m_len = 0;
 		return 0;
 	}
 
-	if (start > block) {
-		cached_extent->start = block;
-		cached_extent->end = start;
-		cached_extent->mapped = 0;
-	} else {
-		cached_extent->start = start;
-		cached_extent->end = (fe.fe_logical + fe.fe_length) >>
-				      inode->i_blkbits;
-		cached_extent->mapped = 1;
-	}
-
-	return cached_extent->mapped;
+	return map->m_flags & LDISKFS_MAP_MAPPED;
 }
 
 #define MAX_EXTENTS_PER_WRITE 100
@@ -1311,10 +1279,12 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int			rc = 0;
 	int			credits = 0;
 	long long		quota_space = 0;
-	struct osd_fextent	mapped = { 0 }, extent = { 0 };
+	struct ldiskfs_map_blocks map;
 	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	unsigned int		extent_bytes;
+	loff_t extent_start = 0;
+	loff_t extent_end = 0;
 	ENTRY;
 
 	LASSERT(handle != NULL);
@@ -1346,8 +1316,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		 * Convert unwritten extent might need split extents, could
 		 * not skip it.
 		 */
-		if (osd_is_mapped(dt, lnb[i].lnb_file_offset, &mapped) &&
-		    !(mapped.flags & FIEMAP_EXTENT_UNWRITTEN)) {
+		if (osd_is_mapped(dt, lnb[i].lnb_file_offset, &map) &&
+		    !(map.m_flags & LDISKFS_MAP_UNWRITTEN)) {
 			lnb[i].lnb_flags |= OBD_BRW_MAPPED;
 			continue;
 		}
@@ -1359,14 +1329,14 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 		/* count only unmapped changes */
 		new_blocks++;
-		if (lnb[i].lnb_file_offset != extent.end || extent.end == 0) {
-			if (extent.end != 0)
-				extents += (extent.end - extent.start +
+		if (lnb[i].lnb_file_offset != extent_end || extent_end == 0) {
+			if (extent_end != 0)
+				extents += (extent_end - extent_start +
 					    extent_bytes - 1) / extent_bytes;
-			extent.start = lnb[i].lnb_file_offset;
-			extent.end = lnb[i].lnb_file_offset + lnb[i].lnb_len;
+			extent_start = lnb[i].lnb_file_offset;
+			extent_end = lnb[i].lnb_file_offset + lnb[i].lnb_len;
 		} else {
-			extent.end += lnb[i].lnb_len;
+			extent_end += lnb[i].lnb_len;
 		}
 
 		quota_space += PAGE_SIZE;
@@ -1377,10 +1347,10 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * overwrite case, no need to modify tree and
 	 * allocate blocks.
 	 */
-	if (!extent.end)
+	if (!extent_end)
 		goto out_declare;
 
-	extents += (extent.end - extent.start +
+	extents += (extent_end - extent_start +
 		    extent_bytes - 1) / extent_bytes;
 	/**
 	 * with system space usage growing up, mballoc codes won't
@@ -2223,8 +2193,8 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 
 	LASSERT(th);
 
-	boff = start >> inode->i_blkbits;
-	blen = (ALIGN(end, 1 << inode->i_blkbits) >> inode->i_blkbits) - boff;
+	boff = osd_i_blocks(inode, start);
+	blen = osd_i_blocks(inode, ALIGN(end, 1 << inode->i_blkbits)) - boff;
 
 	/* Create and mark new extents as either zero or unwritten */
 	flags = (osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks ||
