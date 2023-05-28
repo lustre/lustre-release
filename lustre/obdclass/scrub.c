@@ -127,6 +127,7 @@ EXPORT_SYMBOL(scrub_file_init);
 void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
+	ENTRY;
 
 	CDEBUG(D_LFSCK, "%s: reset OI scrub file, old flags = "
 	       "%#llx, add flags = %#llx\n",
@@ -150,6 +151,7 @@ void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
 	sf->sf_items_igif = 0;
 	if (!scrub->os_in_join)
 		sf->sf_items_updated_prior = 0;
+	EXIT;
 }
 EXPORT_SYMBOL(scrub_file_reset);
 
