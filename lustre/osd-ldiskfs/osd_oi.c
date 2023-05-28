@@ -316,7 +316,7 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 
 		if (rc == -ENOENT && create == false) {
 			if (oi_count == 0)
-				return count;
+				RETURN(count);
 
 			rc = 0;
 			ldiskfs_set_bit(i, sf->sf_oi_bitmap);
@@ -425,23 +425,20 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 		if (count == sf->sf_oi_count)
 			GOTO(out, rc = count);
 
-		if (sf->sf_oi_count == 0) {
-			if (likely((count & (count - 1)) == 0))
-				GOTO(out, rc = count);
-
-			LCONSOLE_WARN(
-				      "%s: invalid oi count %d, remove them, then set it to %d\n",
+		/* Trust the counted number of OI files if it is sane */
+		if ((count & (count - 1)) != 0) {
+			LCONSOLE_WARN("%s: invalid oi count %d, remove them, then set it to %d\n",
 				      osd_dev2name(osd), count, osd_oi_count);
 			osd_oi_table_put(info, oi, count);
 			rc = osd_remove_ois(info, osd);
 			if (rc)
 				GOTO(out, rc);
 
-			sf->sf_oi_count = osd_oi_count;
+			count = osd_oi_count;
 		}
 
 		scrub_file_reset(scrub, osd->od_uuid, SF_RECREATED);
-		count = sf->sf_oi_count;
+		sf->sf_oi_count = count;
 		goto create;
 	}
 
