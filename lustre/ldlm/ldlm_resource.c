@@ -1604,9 +1604,12 @@ static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
 	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
-	struct cfs_hash_bd   bd;
+	struct cfs_hash_bd bd;
+	int refcount;
 
-	LASSERT_ATOMIC_GT_LT(&res->lr_refcount, 0, LI_POISON);
+	refcount = atomic_read(&res->lr_refcount);
+	LASSERT(refcount > 0 && refcount < LI_POISON);
+
 	CDEBUG(D_INFO, "putref res: %p count: %d\n",
 	       res, atomic_read(&res->lr_refcount) - 1);
 

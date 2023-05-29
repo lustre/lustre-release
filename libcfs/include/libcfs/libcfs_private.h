@@ -254,17 +254,9 @@ int libcfs_debug_mark_buffer(const char *text);
 #define LASSERT_ATOMIC_EQ(a, v)				\
 	LASSERTF(atomic_read(a) == v, "value: %d\n", atomic_read((a)));
 
-/** assert value of @a is great than @v1 and little than @v2 */
-#define LASSERT_ATOMIC_GT_LT(a, v1, v2)                        \
-do {                                                           \
-	int __v = atomic_read(a);                              \
-	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);    \
-} while (0)
-
 #else /* !LASSERT_ATOMIC_ENABLED */
 
 #define LASSERT_ATOMIC_EQ(a, v)                 do {} while (0)
-#define LASSERT_ATOMIC_GT_LT(a, v1, v2)         do {} while (0)
 
 #endif /* LASSERT_ATOMIC_ENABLED */
 
