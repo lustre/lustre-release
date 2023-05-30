@@ -98,7 +98,6 @@ static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
 
 static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 {
-#ifdef CONFIG_LUSTRE_FS_PINGER
 	time64_t time = soon ? PING_INTERVAL_SHORT : PING_INTERVAL;
 
 	if (imp->imp_state == LUSTRE_IMP_DISCON) {
@@ -109,7 +108,6 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 		time = min(time, dtime);
 	}
 	imp->imp_next_ping = ktime_get_seconds() + time;
-#endif /* CONFIG_LUSTRE_FS_PINGER */
 }
 
 static int ptlrpc_ping(struct obd_import *imp)
@@ -310,7 +308,6 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 
 int ptlrpc_start_pinger(void)
 {
-#ifdef CONFIG_LUSTRE_FS_PINGER
 	if (pinger_wq)
 		return -EALREADY;
 
@@ -325,20 +322,17 @@ int ptlrpc_start_pinger(void)
 
 	if (suppress_pings)
 		CWARN("Pings will be suppressed at the request of the administrator. The configuration shall meet the additional requirements described in the manual. (Search for the \"suppress_pings\" kernel module parameter.)\n");
-#endif
 	return 0;
 }
 
 int ptlrpc_stop_pinger(void)
 {
-#ifdef CONFIG_LUSTRE_FS_PINGER
 	if (!pinger_wq)
 		return -EALREADY;
 
 	cancel_delayed_work_sync(&ping_work);
 	destroy_workqueue(pinger_wq);
 	pinger_wq = NULL;
-#endif
 	return 0;
 }
 
@@ -406,9 +400,7 @@ EXPORT_SYMBOL(ptlrpc_pinger_del_import);
 
 void ptlrpc_pinger_wake_up(void)
 {
-#ifdef CONFIG_LUSTRE_FS_PINGER
 	mod_delayed_work(pinger_wq, &ping_work, 0);
-#endif
 }
 
 /* Ping evictor thread */

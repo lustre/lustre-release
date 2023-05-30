@@ -129,26 +129,6 @@ AC_MSG_RESULT([$with_mds_max_threads])
 ]) # LC_MDS_MAX_THREADS
 
 #
-# LC_CONFIG_PINGER
-#
-# the pinger is temporary, until we have the recovery node in place
-#
-AC_DEFUN([LC_CONFIG_PINGER], [
-AC_MSG_CHECKING([whether to enable Lustre pinger support])
-AC_ARG_ENABLE([pinger],
-	AS_HELP_STRING([--disable-pinger],
-		[disable recovery pinger support]),
-	[], [enable_pinger="yes"])
-AC_MSG_RESULT([$enable_pinger])
-AS_IF([test "x$enable_pinger" != xno], [
-	AC_DEFINE(CONFIG_LUSTRE_FS_PINGER, 1, [Use the Pinger])
-	AC_SUBST(ENABLE_PINGER, yes)
-], [
-	AC_SUBST(ENABLE_PINGER, no)
-])
-]) # LC_CONFIG_PINGER
-
-#
 # LC_CONFIG_QUOTA
 #
 # Quota support. The kernel must support CONFIG_QUOTA.
@@ -4336,7 +4316,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	AC_MSG_NOTICE([Lustre kernel checks
 ==============================================================================])
 
-	LC_CONFIG_PINGER
 	LC_CONFIG_GSS
 
 	LC_GLIBC_SUPPORT_FHANDLES

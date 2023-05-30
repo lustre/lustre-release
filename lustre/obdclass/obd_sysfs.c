@@ -264,17 +264,6 @@ static ssize_t version_show(struct kobject *kobj, struct attribute *attr,
 	return sprintf(buf, "%s\n", LUSTRE_VERSION_STRING);
 }
 
-static ssize_t pinger_show(struct kobject *kobj, struct attribute *attr,
-			   char *buf)
-{
-#ifdef CONFIG_LUSTRE_FS_PINGER
-	const char *state = "on";
-#else
-	const char *state = "off";
-#endif
-	return sprintf(buf, "%s\n", state);
-}
-
 /**
  * Check all obd devices health
  *
@@ -620,7 +609,6 @@ EXPORT_SYMBOL(proc_lustre_root);
 #endif /* CONFIG_PROC_FS */
 
 LUSTRE_RO_ATTR(version);
-LUSTRE_RO_ATTR(pinger);
 LUSTRE_RO_ATTR(health_check);
 LUSTRE_RW_ATTR(jobid_var);
 LUSTRE_RW_ATTR(jobid_name);
@@ -632,7 +620,6 @@ LUSTRE_RW_ATTR(lbug_on_eviction);
 
 static struct attribute *lustre_attrs[] = {
 	&lustre_attr_version.attr,
-	&lustre_attr_pinger.attr,
 	&lustre_sattr_enable_stats_header.u.attr,
 	&lustre_attr_health_check.attr,
 	&lustre_attr_jobid_name.attr,

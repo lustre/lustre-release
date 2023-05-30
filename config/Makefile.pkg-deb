@@ -111,11 +111,6 @@ debs: debs_common
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"
 		export SYSTEMD_OPTIONS="--with-systemdsystemunitdir=$(systemdsystemunitdir)"
 	fi
-	if test "x$(ENABLE_PINGER)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} pinger"
-	elif test "x$(ENABLE_PINGER)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nopinger"
-	fi
 	if test "x$(ENABLE_MINDF)" = "xyes"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} mindf"
 	elif test "x$(ENABLE_MINDF)" = "xno"; then
