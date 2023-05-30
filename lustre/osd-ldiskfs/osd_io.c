@@ -59,6 +59,10 @@
 #include <ldiskfs/ldiskfs_extents.h>
 #include <ldiskfs/ldiskfs.h>
 
+#ifndef SECTOR_SHIFT
+#define SECTOR_SHIFT 9
+#endif
+
 struct kmem_cache *biop_cachep;
 
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
@@ -304,21 +308,49 @@ static void record_start_io(struct osd_iobuf *iobuf, int size)
 	}
 }
 
-static void osd_submit_bio(int rw, struct bio *bio)
+static int osd_submit_bio(struct osd_device *osd, struct block_device *bdev,
+			  struct osd_iobuf *iobuf,
+			  struct bio *bio, int bio_start_page_idx)
 {
-	LASSERTF(rw == 0 || rw == 1, "%x\n", rw);
+	struct request_queue *q;
+	unsigned int bi_size;
+	int rc = 0;
+
+	if (bio == NULL)
+		return 0;
+
+	q = bio_get_queue(bio);
+	bi_size = bio_sectors(bio) << SECTOR_SHIFT;
+	/* Dang! I have to fragment this I/O */
+	CDEBUG(D_INODE,
+	       "bio++ sz %d vcnt %d(%d) sectors %d(%d) psg %d(%d)\n",
+	       bi_size, bio->bi_vcnt, bio->bi_max_vecs,
+	       bio_sectors(bio),
+	       queue_max_sectors(q),
+	       osd_bio_nr_segs(bio),
+	       queue_max_segments(q));
+
+	rc = osd_bio_integrity_handle(osd, bio,
+		iobuf, bio_start_page_idx,
+		CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT),
+		bdev_integrity_enabled(bdev, iobuf->dr_rw));
+	if (rc)
+		goto out;
+
+	record_start_io(iobuf, bi_size);
+
 #ifdef HAVE_SUBMIT_BIO_2ARGS
-	submit_bio(rw ? WRITE : READ, bio);
+	submit_bio(iobuf->dr_rw ? WRITE : READ, bio);
 #else
-	bio->bi_opf |= rw;
+	bio->bi_opf |= iobuf->dr_rw;
 	submit_bio(bio);
 #endif
+out:
+	return rc;
 }
 
 static int can_be_merged(struct bio *bio, sector_t sector)
 {
-	if (bio == NULL)
-		return 0;
 
 	return bio_end_sector(bio) == sector ? 1 : 0;
 }
@@ -356,11 +388,11 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int npages = iobuf->dr_npages;
 	sector_t *blocks = iobuf->dr_blocks;
 	struct super_block *sb = inode->i_sb;
-	int sector_bits = sb->s_blocksize_bits - 9;
+	int sector_bits = sb->s_blocksize_bits - SECTOR_SHIFT;
 	unsigned int blocksize = sb->s_blocksize;
 	struct block_device *bdev = sb->s_bdev;
 	struct bio *bio = NULL;
-	int bio_start_page_idx;
+	int bio_start_page_idx = 0;
 	struct page *page;
 	unsigned int page_offset;
 	sector_t sector;
@@ -369,20 +401,16 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int page_idx, page_idx_start;
 	int i;
 	int rc = 0;
-	bool fault_inject;
 	bool integrity_enabled;
 	struct blk_plug plug;
 	int blocks_left_page;
 
 	ENTRY;
 
-	fault_inject = CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
 	LASSERT(iobuf->dr_npages == npages);
-
-	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
-
 	osd_brw_stats_update(osd, iobuf);
 	iobuf->dr_start_time = ktime_get();
+	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
 
 	if (!count)
 		count = npages * blocks_per_page;
@@ -441,28 +469,10 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 					 page_offset) != 0)
 				continue;       /* added this frag OK */
 
-			if (bio != NULL) {
-				struct request_queue *q = bio_get_queue(bio);
-				unsigned int bi_size = bio_sectors(bio) << 9;
-
-				/* Dang! I have to fragment this I/O */
-				CDEBUG(D_INODE,
-				       "bio++ sz %d vcnt %d(%d) sectors %d(%d) psg %d(%d)\n",
-				       bi_size, bio->bi_vcnt, bio->bi_max_vecs,
-				       bio_sectors(bio),
-				       queue_max_sectors(q),
-				       osd_bio_nr_segs(bio),
-				       queue_max_segments(q));
-				rc = osd_bio_integrity_handle(osd, bio,
-					iobuf, bio_start_page_idx,
-					fault_inject, integrity_enabled);
-				if (rc) {
-					goto out;
-				}
-
-				record_start_io(iobuf, bi_size);
-				osd_submit_bio(iobuf->dr_rw, bio);
-			}
+			rc = osd_submit_bio(osd, bdev, iobuf, bio,
+					    bio_start_page_idx);
+			if (rc)
+				goto out;
 
 			bio_start_page_idx = page_idx;
 			/* allocate new bio */
@@ -491,20 +501,9 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 			LASSERT(rc != 0);
 		}
 	}
-
-	if (bio != NULL) {
-		rc = osd_bio_integrity_handle(osd, bio, iobuf,
-					      bio_start_page_idx,
-					      fault_inject,
-					      integrity_enabled);
-		if (rc)
-			goto out;
-
-		record_start_io(iobuf, bio_sectors(bio) << 9);
-		osd_submit_bio(iobuf->dr_rw, bio);
-		rc = 0;
-	}
-
+	rc = osd_submit_bio(osd, bdev, iobuf, bio, bio_start_page_idx);
+	if (rc)
+		goto out;
 out:
 	blk_finish_plug(&plug);
 
@@ -513,16 +512,17 @@ out:
 	 * parallel and wait for IO completion once transaction is stopped
 	 * see osd_trans_stop() for more details -bzzz
 	 */
-	if (iobuf->dr_rw == 0 || fault_inject)
+	if (iobuf->dr_rw == 0 || CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT)) {
 		wait_event(iobuf->dr_wait,
 			   atomic_read(&iobuf->dr_numreqs) == 0);
+	}
 
 	if (rc == 0)
 		rc = iobuf->dr_error;
 	else
 		osd_bio_fini(bio);
 
-	if (iobuf->dr_rw == 0 || fault_inject)
+	if (iobuf->dr_rw == 0 || CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT))
 		osd_fini_iobuf(osd, iobuf);
 
 	/* Write only now */
