@@ -5368,7 +5368,7 @@ test_dom_75() {
 
 	$dd_failed && quota_error u $qid "write failed, expect succeed (3)"
 
-	$DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) conv=fsync &&
+	$DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) oflag=direct &&
 		quota_error u $qid "write succeed, expect EDQUOT (3)"
 	true
 }
