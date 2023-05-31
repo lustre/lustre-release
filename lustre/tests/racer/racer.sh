@@ -12,27 +12,31 @@ RACER_MAX_CLEANUP_WAIT=${RACER_MAX_CLEANUP_WAIT:-$DURATION}
 
 mkdir -p $DIR
 
-RACER_PROGS=${RACER_PROGS:-"file_create dir_create file_rm file_rename \
-file_link file_symlink file_list file_concat file_exec file_chown \
-file_chmod file_mknod file_truncate file_delxattr file_getxattr \
-file_setxattr"}
+if [[ -z "$RACER_PROGS" ]]; then
+	RACER_PROGS="file_create dir_create file_rm file_rename file_link"
+	RACER_PROGS+=" file_symlink file_list file_concat file_exec file_chown"
+	RACER_PROGS+=" file_chmod file_mknod file_truncate file_delxattr"
+	RACER_PROGS+=" file_getxattr file_setxattr"
 
-# allow e.g. RACER_EXTRA=dir_create:5,file_link:10 to launch extra tasks
-for PROG in ${RACER_EXTRA//,/ }; do
+	if $RACER_ENABLE_REMOTE_DIRS || $RACER_ENABLE_STRIPED_DIRS; then
+		RACER_PROGS+=" dir_remote"
+	fi
+
+	if $RACER_ENABLE_MIGRATION; then
+		RACER_PROGS+=" dir_migrate"
+	fi
+fi
+RACER_PROGS=${RACER_PROGS//[,+]/ }
+
+# allow e.g. RACER_EXTRA=dir_create:5,file_link:10 or
+# RACER_EXTRA=dir_create:5+file_link:10 to launch extra tasks
+for PROG in ${RACER_EXTRA//[,+]/ }; do
 	prog=(${PROG/:/ })
 	count=${prog[1]:-1}
 	for ((i = 0; i < count; i++)); do
 		RACER_PROGS+=" ${prog[0]}"
 	done
 done
-
-if $RACER_ENABLE_REMOTE_DIRS || $RACER_ENABLE_STRIPED_DIRS; then
-	RACER_PROGS+=' dir_remote'
-fi
-
-if $RACER_ENABLE_MIGRATION; then
-	RACER_PROGS+=' dir_migrate'
-fi
 
 racer_cleanup()
 {
@@ -80,13 +84,13 @@ RC=0
 
 echo "Running $0 for $DURATION seconds. CTRL-C to exit"
 trap "
-	echo \"Cleaning up\" 
+	echo 'Cleaning up'
 	racer_cleanup
 	exit 0
 " INT TERM
 
-cd `dirname $0`
-for N in `seq 1 $NUM_THREADS`; do
+cd $(dirname $0)
+for ((N = 1; N <= $NUM_THREADS; N++)); do
 	for P in $RACER_PROGS; do
 		RACER_MIGRATE_STRIPE_MAX=$RACER_MIGRATE_STRIPE_MAX \
 		./$P.sh $DIR $MAX_FILES &
@@ -99,5 +103,5 @@ racer_cleanup || RC=$?
 # Check our to see whether our test DIR is still available.
 df $DIR
 (( RC+=$? ))
-[ $RC -eq 0 ] && echo "We survived $0 for $DURATION seconds."
+(( $RC == 0 )) && echo "We survived $0 for $DURATION seconds."
 exit $RC
