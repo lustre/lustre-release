@@ -23058,10 +23058,12 @@ test_255a() {
 		error "Ladvise succeeded with conflicting -l and -e arguments"
 
 	echo "Synchronous ladvise should wait"
-	local delay=4
+	local delay=8
 #define OBD_FAIL_OST_LADVISE_PAUSE	 0x237
 	do_nodes $(comma_list $(osts_nodes)) \
 		$LCTL set_param fail_val=$delay fail_loc=0x237
+	stack_trap "do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param fail_loc=0"
 
 	local start_ts=$SECONDS
 	lfs ladvise -a willread $DIR/$tfile ||
@@ -23084,7 +23086,6 @@ test_255a() {
 		error "Asynchronous advice blocked"
 	fi
 
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
 	ladvise_willread_performance
 }
 run_test 255a "check 'lfs ladvise -a willread'"
