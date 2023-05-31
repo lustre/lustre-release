@@ -302,6 +302,101 @@ debs: undef.h debs_common
 	if test "x@systemdsystemunitdir@" != "x"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"; \
 	fi; \
+	if test "x@ENABLE_PINGER@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} pinger"; \
+	elif test "x@ENABLE_PINGER@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nopinger"; \
+	fi; \
+	if test "x@ENABLE_CHECKSUM@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} checksum"; \
+	elif test "x@ENABLE_CHECKSUM@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nochecksum"; \
+	fi; \
+	if test "x@ENABLE_FLOCK@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} flock"; \
+	elif test "x@ENABLE_FLOCK@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noflock"; \
+	fi; \
+	if test "x@ENABLE_HEALTH_WRITE@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} health_write"; \
+	elif test "x@ENABLE_HEALTH_WRITE@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nohealth_write"; \
+	fi; \
+	if test "x@ENABLE_LRU_RESIZE@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} lru-resize"; \
+	elif test "x@ENABLE_LRU_RESIZE@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolru-resize"; \
+	fi; \
+	if test "x@ENABLE_MINDF@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} mindf"; \
+	elif test "x@ENABLE_MINDF@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nomindf"; \
+	fi; \
+	if test "x@ENABLE_FAIL_ALLOC@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} fail-alloc"; \
+	elif test "x@ENABLE_FAIL_ALLOC@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nofail-alloc"; \
+	fi; \
+	if test "x@ENABLE_INVARIANTS@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} invariants"; \
+	elif test "x@ENABLE_INVARIANTS@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noinvariants"; \
+	fi; \
+	if test "x@ENABLE_LU_REF@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} lu_ref"; \
+	elif test "x@ENABLE_LU_REF@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolu_ref"; \
+	fi; \
+	if test "x@ENABLE_PGSTAT_TRACK@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} pgstate-track"; \
+	elif test "x@ENABLE_PGSTAT_TRACK@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nopgstate-track"; \
+	fi; \
+	if test "x@ENABLE_LIBCFS_CDEBUG@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} libcfs-cdebug"; \
+	elif test "x@ENABLE_LIBCFS_CDEBUG@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolibcfs-cdebug"; \
+	fi; \
+	if test "x@ENABLE_LIBCFS_TRACE@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} libcfs-trace"; \
+	elif test "x@ENABLE_LIBCFS_TRACE@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolibcfs-trace"; \
+	fi; \
+	if test "x@ENABLE_LIBCFS_ASSERT@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} libcfs-assert"; \
+	elif test "x@ENABLE_LIBCFS_ASSERT@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolibcfs-assert"; \
+	fi; \
+	if test "x@ENABLE_PANIC_DUMPLOG@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} panic_dumplog"; \
+	elif test "x@ENABLE_PANIC_DUMPLOG@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nopanic_dumplog"; \
+	fi; \
+	if test "x@ENABLE_READLINE@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} readline"; \
+	elif test "x@ENABLE_READLINE@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noreadline"; \
+	fi; \
+	if test "x@ENABLE_LIBPTHREAD@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} libpthread"; \
+	elif test "x@ENABLE_LIBPTHREAD@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolibpthread"; \
+	fi; \
+	if test "x@ENABLE_BACKOFF@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} backoff"; \
+	elif test "x@ENABLE_BACKOFF@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nobackoff"; \
+	fi; \
+	if test "x@ENABLE_GNI@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gni"; \
+	elif test "x@ENABLE_GNI@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogni"; \
+	fi; \
+	if test "x@ENABLE_EFENCE@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} efence"; \
+	elif test "x@ENABLE_EFENCE@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noefence"; \
+	fi; \
 	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \

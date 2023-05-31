@@ -189,16 +189,18 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "o2ib"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=$${O2IB_SRC}"; \
 	fi; \
-	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "gss"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-gss"; \
-	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nogss"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-gss"; \
-	fi; \
-	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "crypto"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-crypto"; \
-	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
-	fi; \
+	options="gss crypto pinger checksum flock health_write lru-resize"; \
+	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \
+	options="$${options} libcfs-cdebug libcfs-trace libcfs-assert"; \
+	options="$${options} panic_dumplog readline libpthread"; \
+	options="$${options} backoff gni efence"; \
+	for option in $${options}; do \
+		if echo "$${DEB_BUILD_PROFILES}" | grep -qw "$${option}"; then \
+			export EXTRAFLAGS="$${EXTRAFLAGS} --enable-$${option}"; \
+		elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "no$${option}"; then \
+			export EXTRAFLAGS="$${EXTRAFLAGS} --disable-$${option}"; \
+		fi; \
+	done; \
 	if [ -f "$${CONFIG_CACHE_FILE}" ]; then \
 		export TMP_CACHE_FILE=$$(mktemp); \
 		sed -e "/ac_cv_env/d" \
@@ -490,11 +492,18 @@ kdist_config: prep-deb-files patch-stamp
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "o2ib"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=$${O2IB_SRC}"; \
 	fi; \
-	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "crypto"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-crypto"; \
-	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
-		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
-	fi; \
+	options="gss crypto pinger checksum flock health_write lru-resize"; \
+	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \
+	options="$${options} libcfs-cdebug libcfs-trace libcfs-assert"; \
+	options="$${options} panic_dumplog readline libpthread"; \
+	options="$${options} backoff gni efence"; \
+	for option in $${options}; do \
+		if echo "$${DEB_BUILD_PROFILES}" | grep -qw "$${option}"; then \
+			export EXTRAFLAGS="$${EXTRAFLAGS} --enable-$${option}"; \
+		elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "no$${option}"; then \
+			export EXTRAFLAGS="$${EXTRAFLAGS} --disable-$${option}"; \
+		fi; \
+	done; \
 	if [ -f "$${CONFIG_CACHE_FILE}" ]; then \
 		export TMP_CACHE_FILE=$$(mktemp --tmpdir newconfig-XXXXXXXX.cache); \
 		sed -e "/ac_cv_env/d" \

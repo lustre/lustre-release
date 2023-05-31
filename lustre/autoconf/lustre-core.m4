@@ -137,8 +137,12 @@ AC_ARG_ENABLE([pinger],
 		[disable recovery pinger support]),
 	[], [enable_pinger="yes"])
 AC_MSG_RESULT([$enable_pinger])
-AS_IF([test "x$enable_pinger" != xno],
-	[AC_DEFINE(CONFIG_LUSTRE_FS_PINGER, 1,[Use the Pinger])])
+AS_IF([test "x$enable_pinger" != xno], [
+	AC_DEFINE(CONFIG_LUSTRE_FS_PINGER, 1, [Use the Pinger])
+	AC_SUBST(ENABLE_PINGER, yes)
+], [
+	AC_SUBST(ENABLE_PINGER, no)
+])
 ]) # LC_CONFIG_PINGER
 
 #
@@ -153,8 +157,12 @@ AC_ARG_ENABLE([checksum],
 		[disable data checksum support]),
 	[], [enable_checksum="yes"])
 AC_MSG_RESULT([$enable_checksum])
-AS_IF([test "x$enable_checksum" != xno],
-	[AC_DEFINE(ENABLE_CHECKSUM, 1, [do data checksums])])
+AS_IF([test "x$enable_checksum" != xno], [
+	AC_DEFINE(CONFIG_ENABLE_CHECKSUM, 1, [do data checksums])
+	AC_SUBST(ENABLE_CHECKSUM, yes)
+], [
+	AC_SUBST(ENABLE_CHECKSUM, no)
+])
 ]) # LC_CONFIG_CHECKSUM
 
 #
@@ -169,8 +177,12 @@ AC_ARG_ENABLE([flock],
 		[disable flock by default]),
 	[], [enable_flock="yes"])
 AC_MSG_RESULT([$enable_flock])
-AS_IF([test "x$enable_flock" != xno],
-	[AC_DEFINE(ENABLE_FLOCK, 1, [enable flock by default])])
+AS_IF([test "x$enable_flock" != xno], [
+	AC_DEFINE(CONFIG_ENABLE_FLOCK, 1, [enable flock by default])
+	AC_SUBST(ENABLE_FLOCK, yes)
+], [
+	AC_SUBST(ENABLE_FLOCK, no)
+])
 ]) # LC_CONFIG_FLOCK
 
 #
@@ -185,8 +197,12 @@ AC_ARG_ENABLE([health_write],
 		[enable disk writes when doing health check]),
 	[], [enable_health_write="no"])
 AC_MSG_RESULT([$enable_health_write])
-AS_IF([test "x$enable_health_write" != xno],
-	[AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, [Write when Checking Health])])
+AS_IF([test "x$enable_health_write" != xno], [
+	AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, [Write when Checking Health])
+	AC_SUBST(ENABLE_HEALTH_WRITE, yes)
+], [
+	AC_SUBST(ENABLE_HEALTH_WRITE, no)
+])
 ]) # LC_CONFIG_HEALTH_CHECK_WRITE
 
 #
@@ -199,8 +215,12 @@ AC_ARG_ENABLE([lru_resize],
 		[enable lru resize support]),
 	[], [enable_lru_resize="yes"])
 AC_MSG_RESULT([$enable_lru_resize])
-AS_IF([test "x$enable_lru_resize" != xno],
-	[AC_DEFINE(HAVE_LRU_RESIZE_SUPPORT, 1, [Enable lru resize support])])
+AS_IF([test "x$enable_lru_resize" != xno], [
+	AC_DEFINE(HAVE_LRU_RESIZE_SUPPORT, 1, [Enable lru resize support])
+	AC_SUBST(ENABLE_LRU_RESIZE, yes)
+], [
+	AC_SUBST(ENABLE_LRU_RESIZE, no)
+])
 ]) # LC_CONFIG_LRU_RESIZE
 
 #
@@ -3311,8 +3331,12 @@ AC_ARG_ENABLE([mindf],
 		[Make statfs report the minimum available space on any single OST instead of the sum of free space on all OSTs]),
 	[], [enable_mindf="no"])
 AC_MSG_RESULT([$enable_mindf])
-AS_IF([test "$enable_mindf" = "yes"],
-	[AC_DEFINE([MIN_DF], 1, [Report minimum OST free space])])
+AS_IF([test "$enable_mindf" = "yes"], [
+	AC_DEFINE([MIN_DF], 1, [Report minimum OST free space])
+	AC_SUBST(ENABLE_MINDF, yes)
+], [
+	AC_SUBST(ENABLE_MINDF, no)
+])
 
 AC_MSG_CHECKING([whether to randomly failing memory alloc])
 AC_ARG_ENABLE([fail_alloc],
@@ -3320,9 +3344,12 @@ AC_ARG_ENABLE([fail_alloc],
 		[disable randomly alloc failure]),
 	[], [enable_fail_alloc="yes"])
 AC_MSG_RESULT([$enable_fail_alloc])
-AS_IF([test "x$enable_fail_alloc" != xno],
-	[AC_DEFINE([RANDOM_FAIL_ALLOC], 1,
-		[enable randomly alloc failure])])
+AS_IF([test "x$enable_fail_alloc" != xno], [
+	AC_DEFINE([RANDOM_FAIL_ALLOC], 1, [enable randomly alloc failure])
+	AC_SUBST(ENABLE_FAIL_ALLOC, yes)
+], [
+	AC_SUBST(ENABLE_FAIL_ALLOC, no)
+])
 
 AC_MSG_CHECKING([whether to check invariants (expensive cpu-wise)])
 AC_ARG_ENABLE([invariants],
@@ -3330,9 +3357,13 @@ AC_ARG_ENABLE([invariants],
 		[enable invariant checking (cpu intensive)]),
 	[], [enable_invariants="no"])
 AC_MSG_RESULT([$enable_invariants])
-AS_IF([test "x$enable_invariants" = xyes],
-	[AC_DEFINE([CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK], 1,
-		[enable invariant checking])])
+AS_IF([test "x$enable_invariants" = xyes], [
+	AC_DEFINE([CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK], 1,
+		  [enable invariant checking])
+	AC_SUBST(ENABLE_INVARIANTS, yes)
+], [
+	AC_SUBST(ENABLE_INVARIANTS, no)
+])
 
 AC_MSG_CHECKING([whether to track references with lu_ref])
 AC_ARG_ENABLE([lu_ref],
@@ -3340,9 +3371,13 @@ AC_ARG_ENABLE([lu_ref],
 		[enable lu_ref reference tracking code]),
 	[], [enable_lu_ref="no"])
 AC_MSG_RESULT([$enable_lu_ref])
-AS_IF([test "x$enable_lu_ref" = xyes],
-	[AC_DEFINE([CONFIG_LUSTRE_DEBUG_LU_REF], 1,
-		[enable lu_ref reference tracking code])])
+AS_IF([test "x$enable_lu_ref" = xyes], [
+	AC_DEFINE([CONFIG_LUSTRE_DEBUG_LU_REF], 1,
+		  [enable lu_ref reference tracking code])
+	AC_SUBST(ENABLE_LU_REF, yes)
+], [
+	AC_SUBST(ENABLE_LU_REF, no)
+])
 
 AC_MSG_CHECKING([whether to enable page state tracking])
 AC_ARG_ENABLE([pgstate-track],
@@ -3350,9 +3385,13 @@ AC_ARG_ENABLE([pgstate-track],
 		[enable page state tracking]),
 	[], [enable_pgstat_track="no"])
 AC_MSG_RESULT([$enable_pgstat_track])
-AS_IF([test "x$enable_pgstat_track" = xyes],
-	[AC_DEFINE([CONFIG_DEBUG_PAGESTATE_TRACKING], 1,
-		[enable page state tracking code])])
+AS_IF([test "x$enable_pgstat_track" = xyes], [
+	AC_DEFINE([CONFIG_DEBUG_PAGESTATE_TRACKING], 1,
+		  [enable page state tracking code])
+	AC_SUBST(ENABLE_PGSTAT_TRACK, yes)
+], [
+	AC_SUBST(ENABLE_PGSTAT_TRACK, no)
+])
 
 PKG_PROG_PKG_CONFIG
 AC_MSG_CHECKING([systemd unit file directory])

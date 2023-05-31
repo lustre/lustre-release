@@ -162,10 +162,10 @@ static struct ll_sb_info *ll_init_sbi(void)
 	atomic_set(&sbi->ll_ra_info.ra_async_inflight, 0);
 
 	set_bit(LL_SBI_VERBOSE, sbi->ll_flags);
-#ifdef ENABLE_CHECKSUM
+#ifdef CONFIG_ENABLE_CHECKSUM
 	set_bit(LL_SBI_CHECKSUM, sbi->ll_flags);
 #endif
-#ifdef ENABLE_FLOCK
+#ifdef CONFIG_ENABLE_FLOCK
 	set_bit(LL_SBI_FLOCK, sbi->ll_flags);
 #endif
 

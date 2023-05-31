@@ -465,7 +465,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
 	cli->cl_preferred_cksum_type = 0;
-#ifdef ENABLE_CHECKSUM
+#ifdef CONFIG_ENABLE_CHECKSUM
 	/* Turn on checksumming by default. */
 	cli->cl_checksum = 1;
 	/*
