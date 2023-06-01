@@ -2,3 +2,6 @@ License:        GPL-2.0-only
 %if 0%{?suse_version} > 1
 Requires:       kernel-%1
 %endif
+%if %{with lustre_modules}
+Requires:       %{requires_kmod_name} = %{requires_kmod_version}
+%endif
