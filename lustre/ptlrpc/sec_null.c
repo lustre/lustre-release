@@ -332,7 +332,7 @@ int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
 static
 void null_free_rs(struct ptlrpc_reply_state *rs)
 {
-	LASSERT_ATOMIC_GT(&rs->rs_svc_ctx->sc_refcount, 1);
+	LASSERT(atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
 	atomic_dec(&rs->rs_svc_ctx->sc_refcount);
 
 	if (!rs->rs_prealloc)
