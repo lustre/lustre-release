@@ -1423,6 +1423,38 @@ test_20() {
 }
 run_test 20 "Don't trigger OI scrub for irreparable oi repeatedly"
 
+test_21() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
+
+	local timeout
+	local td=$TMP/$tdir
+	local device=$(mdsdevname 1)
+
+	echo $device
+
+	timeout=$(do_facet mds2 "$LCTL get_param -n \
+		mdt.$FSNAME-MDT0001.recovery_time_hard")
+	for idx in $(seq $MDSCOUNT); do
+	    stop mds${idx}
+	done
+
+	#test reproduce simple situation, when  OI record exist
+	#and inode was reused/wrong. Scrub should handle it.
+	do_facet mds1 "mkdir -p $td && mount -t ldiskfs $device $td &&
+	    rm -rf $td/update_log_dir/*; umount $td; rm -rf $td"
+
+	for idx in $(seq $MDSCOUNT); do
+	    start mds${idx} $(mdsdevname $idx) $MDS_MOUNT_OPTS ||
+		error "mount mds$idx failed"
+	done
+
+	wait_recovery_complete mds2 $((timeout + TIMEOUT))
+
+}
+run_test 21 "don't hang MDS recovery when failed to get update log"
+
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

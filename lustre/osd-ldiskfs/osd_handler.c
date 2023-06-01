@@ -488,10 +488,11 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 /*
  * retrieve object from backend ext fs.
  **/
-struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
-		       struct osd_inode_id *id)
+static struct inode *osd_iget2(struct osd_thread_info *info,
+			       struct osd_device *dev, struct osd_inode_id *id,
+			       int *err)
 {
-	int rc;
+	int rc = 0;
 	struct inode *inode = NULL;
 
 	/*
@@ -510,32 +511,27 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		CDEBUG(D_INODE, "unmatched inode: ino = %u, oii_gen = %u, "
 		       "i_generation = %u\n",
 		       id->oii_ino, id->oii_gen, inode->i_generation);
-		iput(inode);
-		inode = ERR_PTR(-ESTALE);
+		rc = -ESTALE;
 	} else if (inode->i_nlink == 0) {
 		/*
 		 * due to parallel readdir and unlink,
 		 * we can have dead inode here.
 		 */
 		CDEBUG(D_INODE, "stale inode: ino = %u\n", id->oii_ino);
-		iput(inode);
-		inode = ERR_PTR(-ESTALE);
+		rc = -ESTALE;
 	} else if (is_bad_inode(inode)) {
 		CWARN("%s: bad inode: ino = %u: rc = %d\n",
 		      osd_dev2name(dev), id->oii_ino, -ENOENT);
-		iput(inode);
-		inode = ERR_PTR(-ENOENT);
+		rc = -ENOENT;
 	} else  if (osd_is_ea_inode(inode)) {
 		/*
 		 * EA inode is internal ldiskfs object, should don't visible
 		 * on osd
 		 */
 		CDEBUG(D_INODE, "EA inode: ino = %u\n", id->oii_ino);
-		iput(inode);
-		inode = ERR_PTR(-ENOENT);
+		rc = -ENOENT;
 	} else if ((rc = osd_attach_jinode(inode))) {
-		iput(inode);
-		inode = ERR_PTR(rc);
+		CDEBUG(D_INODE, "jbd: ino = %u rc = %d\n", id->oii_ino, rc);
 	} else {
 		ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 		if (id->oii_gen == OSD_OII_NOGEN)
@@ -551,6 +547,25 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		if (!(inode->i_flags & S_NOCMTIME))
 			inode->i_flags |= S_NOCMTIME;
 	}
+
+	*err = rc;
+
+	return inode;
+}
+
+struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
+		       struct osd_inode_id *id)
+{
+	struct inode *inode;
+	int rc = 0;
+
+	inode = osd_iget2(info, dev, id, &rc);
+
+	if (rc) {
+		iput(inode);
+		inode = ERR_PTR(rc);
+	}
+
 	return inode;
 }
 
@@ -645,9 +660,8 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 	 */
 
 again:
-	inode = osd_iget(info, dev, id);
-	if (IS_ERR(inode)) {
-		rc = PTR_ERR(inode);
+	inode = osd_iget2(info, dev, id, &rc);
+	if (rc) {
 		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
 			goto check_oi;
 

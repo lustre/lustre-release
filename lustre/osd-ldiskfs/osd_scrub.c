@@ -474,10 +474,20 @@ iget:
 			break;
 		}
 	} else if (osd_id_eq(lid, lid2)) {
-		if (converted)
-			sf->sf_items_updated++;
+		/*
+		 * OI records from request and current are the same
+		 * checking inode generation at osd_iget()
+		 */
+		if (!inode) {
+			inode = osd_iget(info, dev, lid);
+			if (IS_ERR(inode))
+				ops = DTO_INDEX_DELETE;
+		}
 
-		GOTO(out, rc = 0);
+		if (converted && !IS_ERR(inode)) {
+			sf->sf_items_updated++;
+			GOTO(out, rc = 0);
+		}
 	} else {
 		if (!scrub->os_partial_scan) {
 			spin_lock(&scrub->os_lock);
@@ -545,9 +555,10 @@ out:
 		} else if (oii) {
 			/* release fixed inconsistent item */
 			CDEBUG(D_LFSCK,
-			       "%s: inconsistent OI "DFID" -> %u/%u fixed\n",
+			       "%s: inconsistent OI "DFID" -> %u/%u %s\n",
 			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
-			       lid->oii_gen);
+			       lid->oii_gen, ops == DTO_INDEX_DELETE ?
+			       "deleted" : "fixed");
 			spin_lock(&scrub->os_lock);
 			list_del_init(&oii->oii_list);
 			spin_unlock(&scrub->os_lock);
