@@ -3448,6 +3448,38 @@ test_153() {
 }
 run_test 153 "evict vs reconnect race"
 
+test_154() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	stop mds2
+
+	local mnt=$(facet_mntpt mds2)
+
+	mount_fstype mds2
+	local ula=($(do_facet mds2 od -t u8 $mnt/update_log | \
+		awk '{ if($2 > 0) printf "0x%x:0x%x:0x0 ", $3, $2  }'))
+	[ ${#ula[@]} -lt 2 ] && error "update_log file corruption"
+
+	local catfile=$mnt/update_log_dir/\[${ula[0]}\]
+
+	echo replace file $catfile
+	do_facet mds2 dd if=/dev/urandom of=$catfile count=100 ||
+		error "Write file $catfile error"
+	unmount_fstype mds2
+
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS || error "mds2 start fail"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "mds1 start fail"
+
+	echo waiting mds1 recovery....
+	wait_recovery_complete mds1 20
+
+	do_facet mds1 $LCTL get_param mdt.$FSNAME-MDT0000.recovery_status | \
+		grep -w COMPLETE || error "Recovery was blocked"
+}
+run_test 154 "corruption update llog can be skipped"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
