@@ -49,7 +49,8 @@ kgnilnd_map_fmablk(kgn_device_t *device, kgn_fma_memblock_t *fma_blk)
 	fma_blk->gnm_hold_timeout = 0;
 
 	/* make sure we are mapping a clean block */
-	LASSERTF(fma_blk->gnm_hndl.qword1 == 0UL, "fma_blk %p dirty\n", fma_blk);
+	LASSERTF(fma_blk->gnm_hndl.qword1 == 0UL,
+		 "fma_blk %px dirty\n", fma_blk);
 
 	rrc = kgnilnd_mem_register(device->gnd_handle, (__u64)fma_blk->gnm_block,
 				   fma_blk->gnm_blk_size, device->gnd_rcv_fma_cqh,
@@ -286,7 +287,7 @@ kgnilnd_unmap_fmablk(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 	       fma_blk->gnm_mbox_size, fma_blk->gnm_hold_timeout);
 
 	LASSERTF(rrc == GNI_RC_SUCCESS,
-		"tried to double unmap or something bad, fma_blk %p (rrc %d)\n",
+		"tried to double unmap or something bad, fma_blk %px (rrc %d)\n",
 		fma_blk, rrc);
 
 	if (fma_blk->gnm_hold_timeout &&
@@ -318,7 +319,7 @@ void
 kgnilnd_free_fmablk_locked(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 {
 	LASSERTF(fma_blk->gnm_avail_mboxs == fma_blk->gnm_num_mboxs,
-		 "fma_blk %p@%d free in bad state (%d): blk total %d avail %d held %d\n",
+		 "fma_blk %px@%d free in bad state (%d): blk total %d avail %d held %d\n",
 		 fma_blk, fma_blk->gnm_state, fma_blk->gnm_hold_timeout, fma_blk->gnm_num_mboxs,
 		fma_blk->gnm_avail_mboxs, fma_blk->gnm_held_mboxs);
 
@@ -412,7 +413,8 @@ kgnilnd_find_free_mbox(kgn_conn_t *conn)
 		/* We'll set the hndl to zero for PHYS blocks unmapped during stack
 		 * reset and re-use the same fma_blk after stack reset. This ensures we've
 		 * properly mapped it before we use it */
-		LASSERTF(fma_blk->gnm_hndl.qword1 != 0UL, "unmapped fma_blk %p, state %d\n",
+		LASSERTF(fma_blk->gnm_hndl.qword1 != 0UL,
+			"unmapped fma_blk %px, state %d\n",
 			 fma_blk, fma_blk->gnm_state);
 
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p "
@@ -495,8 +497,9 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 			break;
 		}
 	}
-	LASSERTF(found, "unable to find conn 0x%p with gnc_fma_blk %p "
-		 "anywhere in the world\n", conn, conn->gnc_fma_blk);
+	LASSERTF(found,
+		"unable to find conn 0x%p with gnc_fma_blk %px anywhere in the world\n",
+		 conn, conn->gnc_fma_blk);
 
 	LASSERTF(id < fma_blk->gnm_num_mboxs,
 		"bad id %d max %d\n",
@@ -544,7 +547,7 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 		 * not worry about state so much in kgnilnd_destroy_conn
 		 * and makes the guaranteed cleanup of the resources easier */
 		LASSERTF(test_and_clear_bit(id, fma_blk->gnm_bit_array),
-			"conn %p bit %d already cleared in fma_blk %p\n",
+			"conn %px bit %d already cleared in fma_blk %px\n",
 			 conn, id, fma_blk);
 		conn->gnc_fma_blk = NULL;
 		mbox->mbx_nallocs--;

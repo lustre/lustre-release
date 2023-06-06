@@ -1465,7 +1465,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 		if (rpcev != &crpc->crpc_reqstev &&
 		    rpcev != &crpc->crpc_replyev &&
 		    rpcev != &crpc->crpc_bulkev) {
-			CERROR("rpcev %p, crpc %p, reqstev %p, replyev %p, bulkev %p\n",
+			CERROR("rpcev %px, crpc %px, reqstev %px, replyev %px, bulkev %px\n",
 			       rpcev, crpc, &crpc->crpc_reqstev,
 			       &crpc->crpc_replyev, &crpc->crpc_bulkev);
 			CERROR("Bad event: status %d, type %d, lnet %d\n",

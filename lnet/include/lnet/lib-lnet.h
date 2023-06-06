@@ -307,7 +307,7 @@ lnet_md_free(struct lnet_libmd *md)
 {
 	unsigned int  size;
 
-	LASSERTF(md->md_rspt_ptr == NULL, "md %p rsp %p\n", md, md->md_rspt_ptr);
+	LASSERTF(!md->md_rspt_ptr, "md %px rsp %px\n", md, md->md_rspt_ptr);
 
 	size = offsetof(struct lnet_libmd, md_kiov[md->md_niov]);
 

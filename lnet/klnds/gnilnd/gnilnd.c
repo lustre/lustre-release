@@ -372,7 +372,7 @@ kgnilnd_find_conn_locked(kgn_peer_t *peer)
 		/* kgnilnd_finish_connect doesn't put connections on the
 		 * peer list until they are actually established */
 		LASSERTF(conn->gnc_state >= GNILND_CONN_ESTABLISHED,
-			"found conn %p state %s on peer %p (%s)\n",
+			"found conn %px state %s on peer %px (%s)\n",
 			conn, kgnilnd_conn_state2str(conn), peer,
 			libcfs_nid2str(peer->gnp_nid));
 		if (conn->gnc_state != GNILND_CONN_ESTABLISHED)
@@ -683,7 +683,7 @@ kgnilnd_close_conn_locked(kgn_conn_t *conn, int error)
 	}
 
 	LASSERTF(conn->gnc_state == GNILND_CONN_ESTABLISHED,
-		"conn %p to %s with bogus state %s\n", conn,
+		"conn %px to %s with bogus state %s\n", conn,
 		libcfs_nid2str(conn->gnc_peer->gnp_nid),
 		kgnilnd_conn_state2str(conn));
 	LASSERT(!list_empty(&conn->gnc_hashlist));
@@ -1097,7 +1097,7 @@ kgnilnd_destroy_peer(kgn_peer_t *peer)
 		 "peer 0x%p->%s dirty eps %d\n",
 		 peer, libcfs_nid2str(peer->gnp_nid),
 		 atomic_read(&peer->gnp_dirty_eps));
-	LASSERTF(peer->gnp_net != NULL, "peer %p (%s) with NULL net\n",
+	LASSERTF(peer->gnp_net != NULL, "peer %px (%s) with NULL net\n",
 		 peer, libcfs_nid2str(peer->gnp_nid));
 	LASSERTF(!kgnilnd_peer_active(peer),
 		 "peer 0x%p->%s\n",
@@ -1138,13 +1138,13 @@ kgnilnd_add_purgatory_locked(kgn_conn_t *conn, kgn_peer_t *peer)
 	/* NB - the caller should own conn by removing him from the
 	 * scheduler thread when finishing the close */
 
-	LASSERTF(peer != NULL, "conn %p with NULL peer\n", conn);
+	LASSERTF(peer != NULL, "conn %px with NULL peer\n", conn);
 
 	/* If this is still true, need to add the calls to unlink back in and
 	 * figure out how to close the hole on loopback conns */
-	LASSERTF(kgnilnd_peer_active(peer), "can't use inactive peer %s (%p)"
-		" we'll never recover the resources\n",
-		libcfs_nid2str(peer->gnp_nid), peer);
+	LASSERTF(kgnilnd_peer_active(peer),
+		"can't use inactive peer %s (%px) we'll never recover the resources\n",
+		 libcfs_nid2str(peer->gnp_nid), peer);
 
 	CDEBUG(D_NET, "conn %p peer %p dev %p\n", conn, peer,
 		conn->gnc_device);
@@ -1221,8 +1221,9 @@ kgnilnd_detach_purgatory_locked(kgn_conn_t *conn, struct list_head *conn_list)
 		 * peer.
 		 */
 
-		LASSERTF(conn->gnc_state == GNILND_CONN_DONE, "Conn in invalid state  %p@%s \n",
-				conn, kgnilnd_conn_state2str(conn));
+		LASSERTF(conn->gnc_state == GNILND_CONN_DONE,
+			"Conn in invalid state  %px@%s\n",
+			 conn, kgnilnd_conn_state2str(conn));
 
 		/* move from peer to the delayed release list */
 		list_add_tail(&conn->gnc_list, conn_list);
@@ -1564,7 +1565,7 @@ kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command,
 		list_for_each_entry_safe(peer, pnxt, &kgnilnd_data.kgn_peers[i],
 					 gnp_list) {
 			LASSERTF(peer->gnp_net != NULL,
-				"peer %p (%s) with NULL net\n",
+				"peer %px (%s) with NULL net\n",
 				 peer, libcfs_nid2str(peer->gnp_nid));
 
 			if (net != NULL && peer->gnp_net != net)
@@ -2743,13 +2744,13 @@ kgnilnd_shutdown(struct lnet_ni *ni)
 	}
 
 	LASSERTF(ni == net->gnn_ni,
-		"ni %p gnn_ni %p\n", net, net->gnn_ni);
+		"ni %px gnn_ni %px\n", net, net->gnn_ni);
 
 	ni->ni_data = NULL;
 
 	LASSERT(!net->gnn_shutdown);
 	LASSERTF(atomic_read(&net->gnn_refcount) != 0,
-		"net %p refcount %d\n",
+		"net %px refcount %d\n",
 		 net, atomic_read(&net->gnn_refcount));
 
 	if (!list_empty(&net->gnn_list)) {
@@ -2796,7 +2797,7 @@ kgnilnd_shutdown(struct lnet_ni *ni)
 
 	/* not locking, this can't race with writers */
 	LASSERTF(atomic_read(&net->gnn_refcount) == 0,
-		"net %p refcount %d\n",
+		"net %px refcount %d\n",
 		 net, atomic_read(&net->gnn_refcount));
 	LIBCFS_FREE(net, sizeof(*net));
 

@@ -145,7 +145,7 @@ kgnilnd_schedule_process_conn(kgn_conn_t *conn, int sched_intent)
 	conn_sched = xchg(&conn->gnc_scheduled, GNILND_CONN_IDLE);
 	LASSERTF(conn_sched == GNILND_CONN_WANTS_SCHED ||
 		 conn_sched == GNILND_CONN_PROCESS,
-		 "conn %p after process in bad state: %d\n",
+		 "conn %px after process in bad state: %d\n",
 		 conn, conn_sched);
 
 	if (sched_intent >= 0) {
@@ -189,7 +189,8 @@ _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refhe
 			 */
 			kgnilnd_conn_addref(conn);
 		}
-		LASSERTF(list_empty(&conn->gnc_schedlist), "conn %p already sched state %d\n",
+		LASSERTF(list_empty(&conn->gnc_schedlist),
+			"conn %px already sched state %d\n",
 			 conn, sched);
 
 		CDEBUG(D_INFO, "scheduling conn 0x%p caller %s:%d\n", conn, caller, line);
@@ -249,7 +250,7 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 	LASSERTF((tx->tx_list_p == NULL &&
 		  tx->tx_list_state == GNILND_TX_ALLOCD) &&
 		list_empty(&tx->tx_list),
-		"tx %p with bad state %s (list_p %p) tx_list %s\n",
+		"tx %px with bad state %s (list_p %px) tx_list %s\n",
 		tx, kgnilnd_tx_state2str(tx->tx_list_state), tx->tx_list_p,
 		list_empty(&tx->tx_list) ? "empty" : "not empty");
 
@@ -547,7 +548,7 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 		}
 
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
-			"bad niov %d msg %p kiov %p offset %d nob%d\n",
+			"bad niov %d msg %px kiov %px offset %d nob%d\n",
 			niov, msg, kiov, offset, nob);
 
 		for (i = 0; i < niov; i++) {
@@ -989,7 +990,7 @@ kgnilnd_map_buffer(kgn_tx_t *tx)
 	 * that our concurrency doesn't result in the kgn_device_t
 	 * getting nuked while we are in here */
 
-	LASSERTF(conn != NULL, "tx %p with NULL conn, someone forgot"
+	LASSERTF(conn != NULL, "tx %px with NULL conn, someone forgot"
 		" to set tx_conn before calling %s\n", tx, __FUNCTION__);
 
 	if (unlikely(CFS_FAIL_CHECK(CFS_FAIL_GNI_MAP_TX)))
@@ -1183,7 +1184,7 @@ kgnilnd_tx_done(kgn_tx_t *tx, int completion)
 
 		LASSERTF(test_and_clear_bit(tx->tx_id.txe_idx,
 			(volatile unsigned long *)&conn->gnc_tx_bits),
-			"conn %p tx %p bit %d already cleared\n",
+			"conn %px tx %px bit %d already cleared\n",
 			conn, tx, tx->tx_id.txe_idx);
 
 		LASSERTF(conn->gnc_tx_ref_table[tx->tx_id.txe_idx] != NULL,
@@ -1692,7 +1693,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_processid *target)
 	 * failure on any problems */
 
 	GNITX_ASSERTF(tx, tx->tx_conn == NULL,
-		      "tx already has connection %p", tx->tx_conn);
+		      "tx already has connection %px", tx->tx_conn);
 
 	/* do all of the peer & conn searching in one swoop - this avoids
 	 * nastiness when dropping locks and needing to maintain a sane state
@@ -1795,14 +1796,14 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	void *desc_buffer = tx->tx_buffer;
 	gni_mem_handle_t desc_map_key = tx->tx_map_key;
 	LASSERTF(kgnilnd_tx_mapped(tx),
-		"unmapped tx %p\n", tx);
+		"unmapped tx %px\n", tx);
 	LASSERTF(conn != NULL,
-		"NULL conn on tx %p, naughty, naughty\n", tx);
+		"NULL conn on tx %px, naughty, naughty\n", tx);
 	LASSERTF(nob <= sink->gnrd_nob,
-		"nob %u > sink->gnrd_nob %d (%p)\n",
+		"nob %u > sink->gnrd_nob %d (%px)\n",
 		nob, sink->gnrd_nob, sink);
 	LASSERTF(nob <= tx->tx_nob,
-		"nob %d > tx(%p)->tx_nob %d\n",
+		"nob %d > tx(%px)->tx_nob %d\n",
 		nob, tx, tx->tx_nob);
 
 	switch (type) {
@@ -1899,7 +1900,8 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	}
 
 	/* Don't lie (CLOSE == RDMA idle) */
-	LASSERTF(!conn->gnc_close_sent, "tx %p on conn %p after close sent %d\n",
+	LASSERTF(!conn->gnc_close_sent,
+		"tx %px on conn %px after close sent %d\n",
 		 tx, conn, conn->gnc_close_sent);
 
 	GNIDBG_TX(D_NET, tx, "Post RDMA type 0x%02x conn %p dlvr_mode "
@@ -2041,7 +2043,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	       type, nob, niov, libcfs_idstr(target));
 
 	LASSERTF(nob == 0 || niov > 0,
-		"lntmsg %p nob %d niov %d\n", lntmsg, nob, niov);
+		"lntmsg %px nob %d niov %d\n", lntmsg, nob, niov);
 
 	if (msg_vmflush)
 		mpflag = memalloc_noreclaim_save();
@@ -2053,7 +2055,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		LBUG();
 
 	case LNET_MSG_ACK:
-		LASSERTF(nob == 0, "lntmsg %p nob %d\n",
+		LASSERTF(nob == 0, "lntmsg %px nob %d\n",
 			lntmsg, nob);
 		break;
 
@@ -3123,7 +3125,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 			tx->tx_msg.gnm_type == GNILND_MSG_GET_DONE ||
 			tx->tx_msg.gnm_type == GNILND_MSG_PUT_DONE_REV ||
 			tx->tx_msg.gnm_type == GNILND_MSG_GET_DONE_REV,
-			"tx %p with type %d\n", tx, tx->tx_msg.gnm_type);
+			"tx %px with type %d\n", tx, tx->tx_msg.gnm_type);
 
 		GNIDBG_TX(D_NET, tx, "RDMA completion for %d bytes", tx->tx_nob);
 
@@ -3663,7 +3665,7 @@ kgnilnd_process_fmaq(kgn_conn_t *conn)
 	if (conn->gnc_ephandle == NULL)
 		return;
 
-	LASSERTF(!conn->gnc_close_sent, "Conn %p close was sent\n", conn);
+	LASSERTF(!conn->gnc_close_sent, "Conn %px close was sent\n", conn);
 
 	spin_lock(&conn->gnc_list_lock);
 
@@ -3916,9 +3918,7 @@ _kgnilnd_match_reply(kgn_conn_t *conn, int type1, int type2, __u64 cookie)
 
 		GNITX_ASSERTF(tx, ((tx->tx_id.txe_idx == ev_id.txe_idx) &&
 				  (tx->tx_id.txe_cookie = cookie)),
-			      "conn 0x%p->%s tx_ref_table hosed: wanted "
-			      "txe_cookie %#llx txe_idx %d "
-			      "found tx %p cookie %#llx txe_idx %d\n",
+			     "conn 0x%p->%s tx_ref_table hosed: wanted txe_cookie %#llx txe_idx %d found tx %px cookie %#llx txe_idx %d\n",
 			      conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
 			      cookie, ev_id.txe_idx,
 			      tx, tx->tx_id.txe_cookie, tx->tx_id.txe_idx);
@@ -4094,7 +4094,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	}
 
 	LASSERTF(rrc == GNI_RC_SUCCESS,
-		"bad rc %d on conn %p from peer %s\n",
+		"bad rc %d on conn %px from peer %s\n",
 		rrc, conn, libcfs_nid2str(peer->gnp_nid));
 
 	msg = (kgn_msg_t *)prefix;
@@ -4819,7 +4819,7 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 
 		LASSERTF(conn_sched != GNILND_CONN_IDLE &&
 			 conn_sched != GNILND_CONN_PROCESS,
-			 "conn %p on ready list but in bad state: %d\n",
+			 "conn %px on ready list but in bad state: %d\n",
 			 conn, conn_sched);
 
 		CDEBUG(D_INFO, "conn %p@%s for processing\n",

@@ -1175,7 +1175,7 @@ do {									\
 #define kgnilnd_net_addref(net)						\
 do {									\
 	int     val = atomic_inc_return(&net->gnn_refcount);		\
-	LASSERTF(val > 1, "net %p refcount %d\n", net, val);		\
+	LASSERTF(val > 1, "net %px refcount %d\n", net, val);		\
 	CDEBUG(D_NETTRACE, "net %p->%s++ (%d)\n", net,			\
 		libcfs_nidstr(&net->gnn_ni->ni_nid), val);		\
 } while (0)
@@ -1183,46 +1183,46 @@ do {									\
 #define kgnilnd_net_decref(net)						\
 do {									\
 	int     val = atomic_dec_return(&net->gnn_refcount);		\
-	LASSERTF(val >= 0, "net %p refcount %d\n", net, val);		\
+	LASSERTF(val >= 0, "net %px refcount %d\n", net, val);		\
 	CDEBUG(D_NETTRACE, "net %p->%s-- (%d)\n", net,			\
 	       libcfs_nidstr(&net->gnn_ni->ni_nid), val);		\
 } while (0)
 
-#define kgnilnd_peer_addref(peer)                                               \
-do {                                                                            \
-	int     val = atomic_inc_return(&peer->gnp_refcount);                   \
-	LASSERTF(val > 1, "peer %p refcount %d\n", peer, val);                  \
-	CDEBUG(D_NETTRACE, "peer %p->%s++ (%d)\n", peer,                        \
-	       libcfs_nid2str(peer->gnp_nid), val);                             \
+#define kgnilnd_peer_addref(peer)					\
+do {									\
+	int     val = atomic_inc_return(&peer->gnp_refcount);		\
+	LASSERTF(val > 1, "peer %px refcount %d\n", peer, val);		\
+	CDEBUG(D_NETTRACE, "peer %p->%s++ (%d)\n", peer,		\
+	       libcfs_nid2str(peer->gnp_nid), val);			\
 } while (0)
 
-#define kgnilnd_peer_decref(peer)                                               \
-do {                                                                            \
-	int     val = atomic_dec_return(&peer->gnp_refcount);                   \
-	LASSERTF(val >= 0, "peer %p refcount %d\n", peer, val);                 \
-	CDEBUG(D_NETTRACE, "peer %p->%s--(%d)\n", peer,                         \
-	       libcfs_nid2str(peer->gnp_nid), val);                             \
-	if (val == 0)      				                        \
-		kgnilnd_destroy_peer(peer);                                     \
+#define kgnilnd_peer_decref(peer)					\
+do {									\
+	int     val = atomic_dec_return(&peer->gnp_refcount);		\
+	LASSERTF(val >= 0, "peer %px refcount %d\n", peer, val);	\
+	CDEBUG(D_NETTRACE, "peer %p->%s--(%d)\n", peer,			\
+	       libcfs_nid2str(peer->gnp_nid), val);			\
+	if (val == 0)							\
+		kgnilnd_destroy_peer(peer);				\
 } while(0)
 
-#define kgnilnd_conn_addref(conn)                                       \
-do {                                                                    \
-	int     val;                                                    \
+#define kgnilnd_conn_addref(conn)					\
+do {									\
+	int val;							\
 									\
-	smp_wmb();                                                      \
-	val = atomic_inc_return(&conn->gnc_refcount);                   \
-	LASSERTF(val > 1 && conn->gnc_magic == GNILND_CONN_MAGIC,       \
-		"conn %p refc %d to %s\n",                              \
-		conn, val,                                              \
-		conn->gnc_peer                                          \
-			? libcfs_nid2str(conn->gnc_peer->gnp_nid)       \
-			: "<?>");                                       \
-	CDEBUG(D_NETTRACE, "conn %p->%s++ (%d)\n", conn,                \
-		conn->gnc_peer                                          \
-			? libcfs_nid2str(conn->gnc_peer->gnp_nid)       \
-			: "<?>",                                        \
-		val);                                                   \
+	smp_wmb();							\
+	val = atomic_inc_return(&conn->gnc_refcount);			\
+	LASSERTF(val > 1 && conn->gnc_magic == GNILND_CONN_MAGIC,	\
+		"conn %px refc %d to %s\n",				\
+		conn, val,						\
+		conn->gnc_peer						\
+			? libcfs_nid2str(conn->gnc_peer->gnp_nid)	\
+			: "<?>");					\
+	CDEBUG(D_NETTRACE, "conn %p->%s++ (%d)\n", conn,		\
+		conn->gnc_peer						\
+			? libcfs_nid2str(conn->gnc_peer->gnp_nid)	\
+			: "<?>",					\
+		val);							\
 } while (0)
 
 /* we hijack conn_decref && gnc_refcount = 1 to allow us to push the conn
@@ -1275,31 +1275,31 @@ do {                                                                    \
  * Clearly, we are totally safe. Clearly.
  */
 
-#define kgnilnd_conn_decref(conn)                                       \
-do {                                                                    \
-	int     val;                                                    \
+#define kgnilnd_conn_decref(conn)					\
+do {									\
+	int val;							\
 									\
-	smp_wmb();                                                      \
-	val = atomic_dec_return(&conn->gnc_refcount);                   \
-	LASSERTF(val >= 0, "conn %p refc %d to %s\n",                   \
-		conn, val,                                              \
-		conn->gnc_peer                                          \
-			? libcfs_nid2str(conn->gnc_peer->gnp_nid)       \
-			: "<?>");                                       \
-	CDEBUG(D_NETTRACE, "conn %p->%s-- (%d)\n", conn,                \
-		conn->gnc_peer                                          \
-			? libcfs_nid2str(conn->gnc_peer->gnp_nid)       \
-			: "<?>",                                        \
-		val);                                                   \
-	smp_rmb();                                                      \
-	if ((val == 1) &&                                               \
-	    (conn->gnc_ephandle != NULL) &&                             \
-	    (conn->gnc_state != GNILND_CONN_DESTROY_EP)) {              \
-		set_mb(conn->gnc_state, GNILND_CONN_DESTROY_EP);        \
-		kgnilnd_schedule_conn(conn);                            \
-	} else if (val == 0) {                                          \
-		kgnilnd_destroy_conn(conn);                             \
-	}                                                               \
+	smp_wmb();							\
+	val = atomic_dec_return(&conn->gnc_refcount);			\
+	LASSERTF(val >= 0, "conn %px refc %d to %s\n",			\
+		conn, val,						\
+		conn->gnc_peer						\
+			? libcfs_nid2str(conn->gnc_peer->gnp_nid)	\
+			: "<?>");					\
+	CDEBUG(D_NETTRACE, "conn %p->%s-- (%d)\n", conn,		\
+		conn->gnc_peer						\
+			? libcfs_nid2str(conn->gnc_peer->gnp_nid)	\
+			: "<?>",					\
+		val);							\
+	smp_rmb();							\
+	if ((val == 1) &&						\
+	    (conn->gnc_ephandle != NULL) &&				\
+	    (conn->gnc_state != GNILND_CONN_DESTROY_EP)) {		\
+		set_mb(conn->gnc_state, GNILND_CONN_DESTROY_EP);	\
+		kgnilnd_schedule_conn(conn);				\
+	} else if (val == 0) {						\
+		kgnilnd_destroy_conn(conn);				\
+	}								\
 } while (0)
 
 static inline struct list_head *
@@ -1677,7 +1677,7 @@ kgnilnd_validate_tx_ev_id(kgn_tx_ev_id_t *ev_id, kgn_tx_t **txp, kgn_conn_t **co
 
 	GNITX_ASSERTF(tx, tx->tx_id.txe_idx == ev_id->txe_idx,
 		      "conn 0x%p->%s tx_ref_table hosed: wanted txe_idx %d "
-		      "found tx %p txe_idx %d",
+		      "found tx %px txe_idx %d",
 		      conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
 		      ev_id->txe_idx, tx, tx->tx_id.txe_idx);
 

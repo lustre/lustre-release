@@ -247,7 +247,7 @@ kgnilnd_reset_stack(void)
 
 			LASSERTF(conn_sched != GNILND_CONN_IDLE &&
 				 conn_sched != GNILND_CONN_PROCESS,
-				 "conn %p on ready list but in bad state: %d\n",
+				 "conn %px on ready list but in bad state: %d\n",
 				 conn, conn_sched);
 
 			list_del_init(&conn->gnc_schedlist);

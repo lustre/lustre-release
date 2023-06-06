@@ -1260,7 +1260,7 @@ cfs_hash_find_or_add(struct cfs_hash *hs, const void *key,
 	struct cfs_hash_bd     bds[2];
 	int               bits = 0;
 
-	LASSERTF(hlist_unhashed(hnode), "hnode = %p\n", hnode);
+	LASSERTF(hlist_unhashed(hnode), "hnode = %px\n", hnode);
 
 	cfs_hash_lock(hs, 0);
 	cfs_hash_dual_bd_get_and_lock(hs, key, bds, 1);
