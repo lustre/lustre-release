@@ -473,7 +473,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				       page_idx, ra.cra_end_idx,
 				       ra.cra_rpc_pages);
 				LASSERTF(ra.cra_end_idx >= page_idx,
-					 "object: %p, indcies %lu / %lu\n",
+					 "object: %px, indcies %lu / %lu\n",
 					 io->ci_obj, ra.cra_end_idx, page_idx);
 				/* update read ahead RPC size.
 				 * NB: it's racy but doesn't matter */

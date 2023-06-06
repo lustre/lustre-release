@@ -1012,7 +1012,7 @@ restart:
 			GOTO(out_och_free, rc);
 
 		LASSERTF(it_disposition(it, DISP_ENQ_OPEN_REF),
-			 "inode %p: disposition %x, status %d\n", inode,
+			 "inode %px: disposition %x, status %d\n", inode,
 			 it_disposition(it, ~0), it->it_status);
 
 		rc = ll_local_open(file, it, fd, *och_p);

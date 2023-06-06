@@ -2801,7 +2801,7 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 
 			/* @hash should be the last dirent hash */
 			LASSERTF(hash <= end,
-				 "ctxt@%p stripe@%p hash %llx end %llx\n",
+				 "ctxt@%px stripe@%px hash %llx end %llx\n",
 				 ctxt, stripe, hash, end);
 			/* unload last page */
 			stripe_dirent_unload(stripe);

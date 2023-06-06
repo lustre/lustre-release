@@ -919,7 +919,7 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	if (likely(mod != NULL)) {
 		LASSERTF(mod->mod_open_req != NULL &&
 			 mod->mod_open_req->rq_type != LI_POISON,
-			 "POISONED open %p!\n", mod->mod_open_req);
+			 "POISONED open %px!\n", mod->mod_open_req);
 
 		mod->mod_close_req = req;
 

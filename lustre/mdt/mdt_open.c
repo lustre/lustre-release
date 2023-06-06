@@ -1312,7 +1312,7 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 
 			LASSERTF(mdt->mdt_md_root == md_root,
 				 "Different root object ("
-				 DFID") instances, %p, %p\n",
+				 DFID") instances, %px, %px\n",
 				 PFID(&info->mti_tmp_fid1),
 				 mdt->mdt_md_root, md_root);
 			LASSERT(atomic_read(

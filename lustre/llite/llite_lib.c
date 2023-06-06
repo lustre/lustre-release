@@ -2811,8 +2811,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		/* FID shouldn't be changed! */
 		if (fid_is_sane(&lli->lli_fid)) {
 			LASSERTF(lu_fid_eq(&lli->lli_fid, &body->mbo_fid1),
-				 "Trying to change FID "DFID
-				 " to the "DFID", inode "DFID"(%p)\n",
+				 "Trying to change FID "DFID" to the "DFID", inode "DFID"(%px)\n",
 				 PFID(&lli->lli_fid), PFID(&body->mbo_fid1),
 				 PFID(ll_inode2fid(inode)), inode);
 		} else {
@@ -3040,7 +3039,7 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 	unsigned long flags;
 
 	LASSERTF((inode->i_state & I_FREEING) || inode_is_locked(inode),
-		 DFID ":inode %p state %#lx, lli_flags %#lx\n",
+		 DFID ":inode %px state %#lx, lli_flags %#lx\n",
 		 PFID(ll_inode2fid(inode)), inode, inode->i_state,
 		 ll_i2info(inode)->lli_flags);
 
@@ -3089,7 +3088,7 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 			LASSERTF(!PageUptodate(page) &&
 				 !PageDirty(page) &&
 				 !PagePrivate(page),
-				 "%p", page);
+				 "%px", page);
 		}
 		rcu_read_unlock();
 #endif

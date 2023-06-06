@@ -1562,7 +1562,7 @@ out:
 
 retry:
 			buf = req_capsule_server_get(pill, &RMF_DLM_LVB);
-			LASSERTF(buf != NULL, "req %p, lock %p\n", req, lock);
+			LASSERTF(buf != NULL, "req %px, lock %px\n", req, lock);
 			buflen = req_capsule_get_size(pill, &RMF_DLM_LVB,
 						      RCL_SERVER);
 			/*

@@ -2168,7 +2168,7 @@ static struct lu_device *lod_device_free(const struct lu_env *env,
 		lu_site_print(env, lu->ld_site, &lu->ld_ref, D_ERROR,
 			      lu_cdebug_printer);
 	}
-	LASSERTF(atomic_read(&lu->ld_ref) == 0, "lu is %p\n", lu);
+	LASSERTF(atomic_read(&lu->ld_ref) == 0, "lu is %px\n", lu);
 	dt_device_fini(&lod->lod_dt_dev);
 	OBD_FREE_PTR(lod);
 	RETURN(next);

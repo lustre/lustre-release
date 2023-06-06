@@ -157,16 +157,14 @@ struct nid_stat {
 						       exp_nid_stats */
 };
 
-#define nidstat_getref(nidstat)                                                \
-do {                                                                           \
-	atomic_inc(&(nidstat)->nid_exp_ref_count);                         \
-} while(0)
+#define nidstat_getref(nidstat)	\
+	atomic_inc(&(nidstat)->nid_exp_ref_count)
 
-#define nidstat_putref(nidstat)                                                \
-do {                                                                           \
-	atomic_dec(&(nidstat)->nid_exp_ref_count);                         \
-	LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,          \
-		 "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
+#define nidstat_putref(nidstat)						\
+do {									\
+	atomic_dec(&(nidstat)->nid_exp_ref_count);			\
+	LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,	\
+		 "stat %px nid_exp_ref_count < 0\n", nidstat);		\
 } while(0)
 
 enum obd_option {

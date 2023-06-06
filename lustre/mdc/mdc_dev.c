@@ -667,7 +667,7 @@ static int mdc_enqueue_interpret(const struct lu_env *env,
 	 * be valid. */
 	lock = ldlm_handle2lock(lockh);
 	LASSERTF(lock != NULL,
-		 "lockh %#llx, req %p, aa %p - client evicted?\n",
+		 "lockh %#llx, req %px, aa %px - client evicted?\n",
 		 lockh->cookie, req, aa);
 
 	/* Take an additional reference so that a blocking AST that
@@ -870,7 +870,7 @@ static int mdc_lock_enqueue(const struct lu_env *env,
 	ENTRY;
 
 	LASSERTF(ergo(oscl->ols_glimpse, lock->cll_descr.cld_mode <= CLM_READ),
-		"lock = %p, ols = %p\n", lock, oscl);
+		"lock = %px, ols = %px\n", lock, oscl);
 
 	if (oscl->ols_state == OLS_GRANTED)
 		RETURN(0);
