@@ -380,6 +380,14 @@ struct cl_object_operations {
          */
 	int (*coo_attr_update)(const struct lu_env *env, struct cl_object *obj,
 			       const struct cl_attr *attr, unsigned valid);
+	/**
+	 * Mark the inode dirty. By this way, the inode will add into the
+	 * writeback list of the corresponding @bdi_writeback, and then it will
+	 * defer to write out the dirty pages to OSTs via the kernel writeback
+	 * mechanism.
+	 */
+	void (*coo_dirty_for_sync)(const struct lu_env *env,
+				   struct cl_object *obj);
         /**
          * Update object configuration. Called top-to-bottom to modify object
          * configuration.
@@ -1707,14 +1715,16 @@ enum cl_io_lock_dmd {
 
 enum cl_fsync_mode {
 	/** start writeback, do not wait for them to finish */
-	CL_FSYNC_NONE  = 0,
+	CL_FSYNC_NONE		= 0,
 	/** start writeback and wait for them to finish */
-	CL_FSYNC_LOCAL = 1,
+	CL_FSYNC_LOCAL		= 1,
 	/** discard all of dirty pages in a specific file range */
-	CL_FSYNC_DISCARD = 2,
+	CL_FSYNC_DISCARD	= 2,
 	/** start writeback and make sure they have reached storage before
 	 * return. OST_SYNC RPC must be issued and finished */
-	CL_FSYNC_ALL   = 3
+	CL_FSYNC_ALL		= 3,
+	/** start writeback, thus the kernel can reclaim some memory */
+	CL_FSYNC_RECLAIM	= 4,
 };
 
 struct cl_io_rw_common {
@@ -2138,6 +2148,7 @@ int  cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 			struct cl_attr *attr);
 int  cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
                            const struct cl_attr *attr, unsigned valid);
+void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *obj);
 int  cl_object_glimpse    (const struct lu_env *env, struct cl_object *obj,
                            struct ost_lvb *lvb);
 int  cl_conf_set          (const struct lu_env *env, struct cl_object *obj,

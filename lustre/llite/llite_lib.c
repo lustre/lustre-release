@@ -1486,8 +1486,8 @@ void ll_put_super(struct super_block *sb)
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	char *profilenm = get_profile_name(sb);
 	unsigned long cfg_instance = ll_get_cfg_instance(sb);
-	long ccc_count;
-	int next, force = 1, rc = 0;
+	int next, force = 1;
+
 	ENTRY;
 
 	if (IS_ERR(sbi))
@@ -1508,17 +1508,6 @@ void ll_put_super(struct super_block *sb)
 		if (obd)
 			force = obd->obd_force;
 	}
-
-	/* Wait for unstable pages to be committed to stable storage */
-	if (force == 0) {
-		rc = l_wait_event_abortable(
-			sbi->ll_cache->ccc_unstable_waitq,
-			atomic_long_read(&sbi->ll_cache->ccc_unstable_nr) == 0);
-	}
-
-	ccc_count = atomic_long_read(&sbi->ll_cache->ccc_unstable_nr);
-	if (force == 0 && rc != -ERESTARTSYS)
-		LASSERTF(ccc_count == 0, "count: %li\n", ccc_count);
 
 	/* We need to set force before the lov_disconnect in
 	 * lustre_common_put_super, since l_d cleans up osc's as well.

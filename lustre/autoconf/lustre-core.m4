@@ -3301,6 +3301,28 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 			[delete_from_page_cache is exported])])
 ]) # LC_EXPORTS_DELETE_FROM_PAGE_CACHE
 
+
+#
+# LC_HAVE_WB_STAT_MOD
+#
+# Kernel 5.16-rc1 bd3488e7b4d61780eb3dfaca1cc6f4026bcffd48
+# mm/writeback: Rename __add_wb_stat() to wb_stat_mod()
+#
+AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if wb_stat_mod() exists],
+wb_stat_mode, [
+	#include <linux/backing-dev.h>
+],[
+	wb_stat_mod(NULL, WB_WRITEBACK, 1);
+],[
+	AC_DEFINE(HAVE_WB_STAT_MOD, 1,
+		[wb_stat_mod() exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_WB_STAT_MOD
+
 #
 # LC_HAVE_INVALIDATE_FOLIO
 #
@@ -4385,6 +4407,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
 	LC_EXPORTS_DELETE_FROM_PAGE_CACHE
+	LC_HAVE_WB_STAT_MOD
 
 	# 5.17
 	LC_HAVE_INVALIDATE_FOLIO

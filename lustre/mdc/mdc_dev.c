@@ -1193,6 +1193,16 @@ static int mdc_io_fsync_start(const struct lu_env *env,
 
 	ENTRY;
 
+	if (fio->fi_mode == CL_FSYNC_RECLAIM) {
+		struct client_obd *cli = osc_cli(osc);
+
+		if (!atomic_long_read(&cli->cl_unstable_count)) {
+			/* Stop flush when there are no unstable pages? */
+			CDEBUG(D_CACHE, "unstable count is zero\n");
+			RETURN(0);
+		}
+	}
+
 	/* a MDC lock always covers whole object, do sync for whole
 	 * possible range despite of supplied start/end values.
 	 */
@@ -1202,19 +1212,25 @@ static int mdc_io_fsync_start(const struct lu_env *env,
 		fio->fi_nr_written += result;
 		result = 0;
 	}
-	if (fio->fi_mode == CL_FSYNC_ALL) {
+	if (fio->fi_mode == CL_FSYNC_ALL || fio->fi_mode == CL_FSYNC_RECLAIM) {
+		struct osc_io *oio = cl2osc_io(env, slice);
+		struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 		int rc;
 
-		rc = osc_cache_wait_range(env, osc, 0, CL_PAGE_EOF);
-		if (result == 0)
-			result = rc;
+		if (fio->fi_mode == CL_FSYNC_ALL) {
+			rc = osc_cache_wait_range(env, osc, 0, CL_PAGE_EOF);
+			if (result == 0)
+				result = rc;
+		}
 		/* Use OSC sync code because it is asynchronous.
 		 * It is to be added into MDC and avoid the using of
 		 * OST_SYNC at both MDC and MDT.
 		 */
 		rc = osc_fsync_ost(env, osc, fio);
-		if (result == 0)
+		if (result == 0) {
+			cbargs->opc_rpc_sent = 1;
 			result = rc;
+		}
 	}
 
 	RETURN(result);

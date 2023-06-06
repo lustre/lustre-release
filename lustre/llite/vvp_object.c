@@ -127,6 +127,13 @@ static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
 	return 0;
 }
 
+static void vvp_dirty_for_sync(const struct lu_env *env, struct cl_object *obj)
+{
+	struct inode *inode = vvp_object_inode(obj);
+
+	__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
+}
+
 static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 			const struct cl_object_conf *conf)
 {
@@ -291,6 +298,7 @@ static const struct cl_object_operations vvp_ops = {
 	.coo_io_init      = vvp_io_init,
 	.coo_attr_get     = vvp_attr_get,
 	.coo_attr_update  = vvp_attr_update,
+	.coo_dirty_for_sync = vvp_dirty_for_sync,
 	.coo_conf_set     = vvp_conf_set,
 	.coo_prune        = vvp_prune,
 	.coo_glimpse      = vvp_object_glimpse,

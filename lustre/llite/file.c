@@ -4809,7 +4809,8 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	ENTRY;
 
 	if (mode != CL_FSYNC_NONE && mode != CL_FSYNC_LOCAL &&
-	    mode != CL_FSYNC_DISCARD && mode != CL_FSYNC_ALL)
+	    mode != CL_FSYNC_DISCARD && mode != CL_FSYNC_ALL &&
+	    mode != CL_FSYNC_RECLAIM)
 		RETURN(-EINVAL);
 
 	env = cl_env_get(&refcheck);

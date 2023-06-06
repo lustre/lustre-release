@@ -58,7 +58,12 @@ fi
 # skip cgroup tests on RHEL8.1 kernels until they are fixed
 if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
       $LINUX_VERSION_CODE <  $(version_code 5.4.0) )); then
-	always_except LU-13063 411
+	always_except LU-13063 411a
+fi
+
+# skip cgroup tests for kernels < v4.18.0
+if (( $LINUX_VERSION_CODE < $(version_code 4.18.0) )); then
+	always_except LU-13063 411b
 fi
 
 #                                  5              12     8   12  15   (min)"
@@ -27472,10 +27477,11 @@ run_test 410 "Test inode number returned from kernel thread"
 
 cleanup_test411_cgroup() {
 	trap 0
+	cat $1/memory.stat
 	rmdir "$1"
 }
 
-test_411() {
+test_411a() {
 	local cg_basedir=/sys/fs/cgroup/memory
 	# LU-9966
 	test -f "$cg_basedir/memory.kmem.limit_in_bytes" ||
@@ -27500,7 +27506,90 @@ test_411() {
 
 	return 0
 }
-run_test 411 "Slab allocation error with cgroup does not LBUG"
+run_test 411a "Slab allocation error with cgroup does not LBUG"
+
+test_411b() {
+	local cg_basedir=/sys/fs/cgroup/memory
+	# LU-9966
+	[ -e "$cg_basedir/memory.kmem.limit_in_bytes" ] ||
+		skip "no setup for cgroup"
+	$LFS setstripe -c 2 $DIR/$tfile || error "unable to setstripe"
+	# testing suggests we can't reliably avoid OOM with a 64M limit, but it
+	# seems reasonable to ask that we have at least 128M in the cgroup
+	local memlimit_mb=256
+
+	# Create a cgroup and set memory limit
+	# (tfile is used as an easy way to get a recognizable cgroup name)
+	local cgdir=$cg_basedir/$tfile
+	mkdir $cgdir || error "cgroup mkdir '$cgdir' failed"
+	stack_trap "cleanup_test411_cgroup $cgdir" EXIT
+	echo $((memlimit_mb * 1024 * 1024)) > $cgdir/memory.limit_in_bytes
+
+	echo "writing first file"
+	# Write a file 4x the memory limit in size
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile bs=1M count=$((memlimit_mb * 4))" ||
+		error "(1) failed to write successfully"
+
+	sync
+	cancel_lru_locks osc
+
+	rm -f $DIR/$tfile
+	$LFS setstripe -c 2 $DIR/$tfile || error "unable to setstripe"
+
+	# Try writing at a larger block size
+	# NB: if block size is >= 1/2 cgroup size, we sometimes get OOM killed
+	# so test with 1/4 cgroup size (this seems reasonable to me - we do
+	# need *some* memory to do IO in)
+	echo "writing at larger block size"
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile bs=64M count=$((memlimit_mb * 4 / 128))" ||
+		error "(3) failed to write successfully"
+
+	sync
+	cancel_lru_locks osc
+	rm -f $DIR/$tfile
+	$LFS setstripe -c 2 $DIR/$tfile.{1..4} || error "unable to setstripe"
+
+	# Try writing multiple files at once
+	echo "writing multiple files"
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile.1 bs=32M count=$((memlimit_mb * 4 / 64))" &
+	local pid1=$!
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile.2 bs=32M count=$((memlimit_mb * 4 / 64))" &
+	local pid2=$!
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile.3 bs=32M count=$((memlimit_mb * 4 / 64))" &
+	local pid3=$!
+	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile.4 bs=32M count=$((memlimit_mb * 4 / 64))" &
+	local pid4=$!
+
+	wait $pid1
+	local rc1=$?
+	wait $pid2
+	local rc2=$?
+	wait $pid3
+	local rc3=$?
+	wait $pid4
+	local rc4=$?
+	if (( rc1 != 0)); then
+		error "error writing to file from $pid1"
+	fi
+	if (( rc2 != 0)); then
+		error "error writing to file from $pid2"
+	fi
+	if (( rc3 != 0)); then
+		error "error writing to file from $pid3"
+	fi
+	if (( rc4 != 0)); then
+		error "error writing to file from $pid4"
+	fi
+
+	sync
+	cancel_lru_locks osc
+
+	# These files can be large-ish (~1 GiB total), so delete them rather
+	# than leave for later cleanup
+	rm -f $DIR/$tfile.*
+	return 0
+}
+run_test 411b "confirm Lustre can avoid OOM with reasonable cgroups limits"
 
 test_412() {
 	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"

@@ -253,6 +253,25 @@ int cl_object_attr_update(const struct lu_env *env, struct cl_object *top,
 EXPORT_SYMBOL(cl_object_attr_update);
 
 /**
+ * Mark the inode as dirty when the inode has uncommitted (unstable) pages.
+ * Thus when the system is under momory pressure, it will trigger writeback
+ * on background to commit and unpin the pages.
+ */
+void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *top)
+{
+	struct cl_object *obj;
+
+	ENTRY;
+
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_dirty_for_sync != NULL)
+			obj->co_ops->coo_dirty_for_sync(env, obj);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(cl_object_dirty_for_sync);
+
+/**
  * Notifies layers (bottom-to-top) that glimpse AST was received.
  *
  * Layers have to fill \a lvb fields with information that will be shipped

@@ -1555,6 +1555,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	enum cl_fsync_mode mode;
 	int range_whole = 0;
 	int result;
+
 	ENTRY;
 
 	if (wbc->range_cyclic) {
@@ -1572,6 +1573,37 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	mode = CL_FSYNC_NONE;
 	if (wbc->sync_mode == WB_SYNC_ALL)
 		mode = CL_FSYNC_LOCAL;
+
+	if (wbc->sync_mode == WB_SYNC_NONE) {
+#ifdef SB_I_CGROUPWB
+		struct bdi_writeback *wb;
+
+		/*
+		 * As it may break full stripe writes on the inode,
+		 * disable periodic kupdate writeback (@wbc->for_kupdate)?
+		 */
+
+		/*
+		 * The system is under memory pressure and it is now reclaiming
+		 * cache pages.
+		 */
+		wb = inode_to_wb(inode);
+		if (wbc->for_background ||
+		    (wb->start_all_reason == WB_REASON_VMSCAN &&
+		     test_bit(WB_start_all, &wb->state)))
+			mode = CL_FSYNC_RECLAIM;
+#else
+		/*
+		 * We have no idea about writeback reason for memory reclaim
+		 * WB_REASON_TRY_TO_FREE_PAGES in the old kernel such as rhel7
+		 * (WB_REASON_VMSCAN in the newer kernel) ...
+		 * Here set mode with CL_FSYNC_RECLAIM forcely on the old
+		 * kernel.
+		 */
+		if (!wbc->for_kupdate)
+			mode = CL_FSYNC_RECLAIM;
+#endif
+	}
 
 	if (ll_i2info(inode)->lli_clob == NULL)
 		RETURN(0);

@@ -957,14 +957,25 @@ EXPORT_SYMBOL(osc_fsync_ost);
 static int osc_io_fsync_start(const struct lu_env *env,
 			      const struct cl_io_slice *slice)
 {
-	struct cl_io       *io  = slice->cis_io;
+	struct cl_io *io = slice->cis_io;
 	struct cl_fsync_io *fio = &io->u.ci_fsync;
-	struct cl_object   *obj = slice->cis_obj;
-	struct osc_object  *osc = cl2osc(obj);
-	pgoff_t start  = fio->fi_start >> PAGE_SHIFT;
-	pgoff_t end    = fio->fi_end >> PAGE_SHIFT;
-	int     result = 0;
+	struct cl_object *obj = slice->cis_obj;
+	struct osc_object *osc = cl2osc(obj);
+	pgoff_t start = fio->fi_start >> PAGE_SHIFT;
+	pgoff_t end = fio->fi_end >> PAGE_SHIFT;
+	int result = 0;
+
 	ENTRY;
+
+	if (fio->fi_mode == CL_FSYNC_RECLAIM) {
+		struct client_obd *cli = osc_cli(osc);
+
+		if (!atomic_long_read(&cli->cl_unstable_count)) {
+			/* Stop flush when there are no unstable pages? */
+			CDEBUG(D_CACHE, "unstable count is zero\n");
+			RETURN(0);
+		}
+	}
 
 	if (fio->fi_end == OBD_OBJECT_EOF)
 		end = CL_PAGE_EOF;
@@ -982,20 +993,30 @@ static int osc_io_fsync_start(const struct lu_env *env,
 		fio->fi_nr_written += result;
 		result = 0;
 	}
-	if (fio->fi_mode == CL_FSYNC_ALL) {
+	if (fio->fi_mode == CL_FSYNC_ALL || fio->fi_mode == CL_FSYNC_RECLAIM) {
+		struct osc_io *oio = cl2osc_io(env, slice);
+		struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 		int rc;
 
 		/* we have to wait for writeback to finish before we can
 		 * send OST_SYNC RPC. This is bad because it causes extents
 		 * to be written osc by osc. However, we usually start
 		 * writeback before CL_FSYNC_ALL so this won't have any real
-		 * problem. */
-		rc = osc_cache_wait_range(env, osc, start, end);
-		if (result == 0)
-			result = rc;
+		 * problem.
+		 * We do not have to wait for waitback to finish in the memory
+		 * reclaim environment.
+		 */
+		if (fio->fi_mode == CL_FSYNC_ALL) {
+			rc = osc_cache_wait_range(env, osc, start, end);
+			if (result == 0)
+				result = rc;
+		}
+
 		rc = osc_fsync_ost(env, osc, fio);
-		if (result == 0)
+		if (result == 0) {
+			cbargs->opc_rpc_sent = 1;
 			result = rc;
+		}
 	}
 
 	RETURN(result);
@@ -1005,16 +1026,17 @@ void osc_io_fsync_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice)
 {
 	struct cl_fsync_io *fio = &slice->cis_io->u.ci_fsync;
-	struct cl_object   *obj = slice->cis_obj;
+	struct cl_object *obj = slice->cis_obj;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 	pgoff_t start = fio->fi_start >> PAGE_SHIFT;
 	pgoff_t end   = fio->fi_end >> PAGE_SHIFT;
 	int result = 0;
 
 	if (fio->fi_mode == CL_FSYNC_LOCAL) {
 		result = osc_cache_wait_range(env, cl2osc(obj), start, end);
-	} else if (fio->fi_mode == CL_FSYNC_ALL) {
-		struct osc_io           *oio    = cl2osc_io(env, slice);
-		struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+	} else if (cbargs->opc_rpc_sent && (fio->fi_mode == CL_FSYNC_ALL ||
+					    fio->fi_mode == CL_FSYNC_RECLAIM)) {
 
 		wait_for_completion(&cbargs->opc_sync);
 		if (result == 0)

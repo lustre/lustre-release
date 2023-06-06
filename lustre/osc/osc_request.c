@@ -2512,6 +2512,7 @@ static int brw_interpret(const struct lu_env *env,
 	struct osc_extent *tmp;
 	struct client_obd *cli = aa->aa_cli;
 	unsigned long transferred = 0;
+	struct cl_object *obj = NULL;
 
 	ENTRY;
 
@@ -2552,7 +2553,6 @@ static int brw_interpret(const struct lu_env *env,
 		struct obdo *oa = aa->aa_oa;
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 		unsigned long valid = 0;
-		struct cl_object *obj;
 		struct osc_async_page *last;
 
 		last = brw_page2oap(aa->aa_ppga[aa->aa_page_count - 1]);
@@ -2602,8 +2602,16 @@ static int brw_interpret(const struct lu_env *env,
 	OBD_SLAB_FREE_PTR(aa->aa_oa, osc_obdo_kmem);
 	aa->aa_oa = NULL;
 
-	if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE && rc == 0)
+	if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE && rc == 0) {
 		osc_inc_unstable_pages(req);
+		/*
+		 * If req->rq_committed is set, it means that the dirty pages
+		 * have already committed into the stable storage on OSTs
+		 * (i.e. Direct I/O).
+		 */
+		if (!req->rq_committed)
+			cl_object_dirty_for_sync(env, cl_object_top(obj));
+	}
 
 	list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
 		list_del_init(&ext->oe_link);
