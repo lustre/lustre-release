@@ -210,8 +210,18 @@ umount_loopdev() {
 	local facet=$1
 	local mntpt=$2
 	local rc
+	local i
 
-	do_facet $facet lsof $mntpt || true
+	for ((i = 0; i < 10; i++)); do
+		if do_facet $facet lsof $mntpt; then
+			echo "$mntpt is busy, wait 1 second..."
+			sleep 1
+		else
+			echo "$mntpt is idle now"
+			break
+		fi
+	done
+
 	do_facet $facet $UMOUNT $mntpt
 	rc=$?
 	return $rc
@@ -230,8 +240,11 @@ setup_loopdev() {
 	do_facet $facet mount
 	do_facet $facet $UMOUNT $mntpt
 	do_facet $facet mount
-	do_facet $facet mkfs.ext4 $file ||
-		error "mkfs.ext4 $file failed"
+	do_facet $facet mkfs.ext4 $file || error "mkfs.ext4 $file failed"
+	local mcs=$(do_facet $facet tune2fs -l $file |& grep metadata_csum_seed)
+	[[ -z "$mcs" ]] ||
+		do_facet $facet "tune2fs -O ^metadata_csum_seed $file" ||
+		error "failed to turn off metadata_csum_seed feature"
 	do_facet $facet file $file
 	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
 		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
@@ -251,6 +264,10 @@ setup_loopdev_project() {
 	do_facet $facet $UMOUNT $mntpt
 	do_facet $facet mkfs.ext4 -O project,quota $file ||
 		error "mkfs.ext4 -O project,quota $file failed"
+	local mcs=$(do_facet $facet tune2fs -l $file |& grep metadata_csum_seed)
+	[[ -z "$mcs" ]] ||
+		do_facet $facet "tune2fs -O ^metadata_csum_seed $file" ||
+		error "failed to turn off metadata_csum_seed feature"
 	do_facet $facet file $file
 	do_facet $facet mount -t ext4 -o loop,prjquota $file $mntpt ||
 		error "mount -o loop,prjquota $file $mntpt failed"
