@@ -2939,6 +2939,11 @@ unlock_parent:
 	return rc;
 }
 
+enum lsm_sem_class {
+	LSM_SEM_PARENT,
+	LSM_SEM_CHILD,
+};
+
 /**
  * Update directory depth and default LMV
  *
@@ -2965,8 +2970,8 @@ void ll_update_dir_depth_dmv(struct inode *dir, struct dentry *de)
 	lli->lli_dir_depth = plli->lli_dir_depth + 1;
 	if (lli->lli_default_lsm_md && lli->lli_default_lmv_set) {
 		if (plli->lli_default_lsm_md) {
-			down_read(&plli->lli_lsm_sem);
-			down_read(&lli->lli_lsm_sem);
+			down_read_nested(&plli->lli_lsm_sem, LSM_SEM_PARENT);
+			down_read_nested(&lli->lli_lsm_sem, LSM_SEM_CHILD);
 			if (lsm_md_inherited(plli->lli_default_lsm_md,
 					     lli->lli_default_lsm_md))
 				lli->lli_inherit_depth =
