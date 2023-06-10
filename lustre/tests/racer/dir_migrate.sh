@@ -5,7 +5,7 @@ DIR=$1
 MAX=$2
 
 MDTCOUNT=${MDSCOUNT:-$($LFS df $DIR 2> /dev/null | grep -c MDT)}
-while /bin/true ; do
+while (( MDTCOUNT > 1 )) ; do
 	migrate_dir=$((RANDOM % MAX))
 	file=$((RANDOM % MAX))
 	mdt_idx=$((RANDOM % MDTCOUNT))
