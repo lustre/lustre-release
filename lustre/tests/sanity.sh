@@ -12530,6 +12530,30 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
+test_67() {
+	[[ -n "$(type -p man)" ]] || skip_env "man not available"
+
+	local tmp1=$TMP/$tfile.tmp1
+	local tmp2=$TMP/$tfile.tmp2
+	local man_page="$LUSTRE/../Documentation/man1/lfs-setstripe.1"
+
+	if [[ ! -f "$man_page" ]]; then
+		man_page="lfs-setstripe"
+		man -w $man_page > /dev/null 2>&1 ||
+			skip_env "lfs-setstripe man page not installed"
+	fi
+
+	$LFS help setstripe > $tmp1 || error "lfs help setstripe failed"
+	man $man_page > $tmp2 || error "man $man_page failed"
+
+	echo "lfs help setstripe: $(wc -l < $tmp1) lines"
+	echo "man $man_page: $(wc -l < $tmp2) lines"
+
+	diff -u $tmp1 $tmp2 ||
+		error "lfs help setstripe doesn't match man lfs-setstripe.1"
+}
+run_test 67 "test lfs help"
+
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_SRV_ENOENT 0x217
 test_69() {

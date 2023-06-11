@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
+#include <glob.h>
 #include <malloc.h>
 #ifdef HAVE_LIBREADLINE
 # include <readline/history.h>
@@ -30,6 +31,7 @@
 #endif /* HAVE_LIBREADLINE */
 #include <string.h>
 #include <unistd.h>
+#include <linux/limits.h>
 
 #include <libcfs/util/parser.h>
 #include <linux/lustre/lustre_ver.h>
@@ -514,6 +516,80 @@ static int cfs_parser_commands(command_t *cmds)
 	return rc;
 }
 
+/**
+ * cmd_to_man_page() - Convert a sub_cmd into a valid man page name.
+ * @sub_cmd:	Subcommand.
+ * @man_page:	Buffer to hold the name of the man page for the subcommand.
+ * @size:	Size of @man_page.
+ *
+ * If no subcommand is provided, the program invocation name is
+ * used. This could be something like 'lctl' or 'lfs-mirror',
+ * since commands like 'mirror' have their own sub-commands.
+ *
+ * If the program is being invoked directly from the Lustre
+ * tree, remove the 'lt-' prefix.
+ */
+static void cmd_to_man_page(const char *sub_cmd, char *man_page, size_t size)
+{
+	const char *prog = program_invocation_short_name;
+	int i;
+
+	if (!strncmp(prog, "lt-", 3))
+		prog += 3;
+
+	if (sub_cmd)
+		snprintf(man_page, size, "%s-%s", prog, sub_cmd);
+	else
+		snprintf(man_page, size, "%s", prog);
+
+	for (i = 0; man_page[i] != '\0'; i++) {
+		if (isspace(man_page[i]))
+			man_page[i] = '-';
+	}
+}
+
+/**
+ * show_man_page() - Make a best-effort to show the man page of
+ *                   the given subcommand.
+ * @sub_cmd:	Subcommand.
+ *
+ * If the LUSTRE environment variable is defined, we're likely
+ * running inside the Lustre dev tree. Prefer the man pages in
+ * the tree over the system pages, if they exist.
+ *
+ * Not every Lustre command and subcommand has a man page
+ * currently. Hence, return an error if the man page can't
+ * be found so the parser can still provide a helpful
+ * command hint. Errors from 'man' are suppressed so the
+ * fallback help text isn't preceded by a spurious error.
+ */
+static int show_man_page(const char *sub_cmd)
+{
+	const char *lustre = getenv("LUSTRE");
+	char man_page[NAME_MAX + 1];
+	char cmd[PATH_MAX + 32];
+	glob_t gl = { 0 };
+	int rc;
+
+	cmd_to_man_page(sub_cmd, man_page, sizeof(man_page));
+
+	if (lustre) {
+		char pattern[PATH_MAX];
+
+		snprintf(pattern, sizeof(pattern),
+			 "%s/../Documentation/man*/%s.*", lustre, man_page);
+		glob(pattern, 0, NULL, &gl);
+	}
+
+	snprintf(cmd, sizeof(cmd), "man '%s' 2>/dev/null",
+		 gl.gl_pathc > 0 ? gl.gl_pathv[0] : man_page);
+	globfree(&gl);
+
+	rc = system(cmd);
+
+	return rc;
+}
+
 static int cfs_parser_help(int argc, char **argv)
 {
 	char line[1024];
@@ -552,7 +628,8 @@ static int cfs_parser_help(int argc, char **argv)
 
 	switch (process(line, &next, top_level, &result, &prev)) {
 	case CMD_COMPLETE:
-		fprintf(stderr, "%s: %s\n", line, result->pc_help);
+		if (show_man_page(result->pc_name) != 0)
+			fprintf(stderr, "%s: %s\n", line, result->pc_help);
 		break;
 	case CMD_NONE:
 		fprintf(stderr, "%s: '%s' is not a valid command. See '%s --list-commands'.\n",
