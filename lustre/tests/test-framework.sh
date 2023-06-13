@@ -11264,9 +11264,11 @@ force_new_seq() {
 
 force_new_seq_all() {
 	local i
+
 	for (( i=0; i < MDSCOUNT; i++ )) ; do
-		force_new_seq mds$((i + 1))
+		force_new_seq mds$((i + 1)) &
 	done
+	wait
 	sleep_maxage
 }
 
