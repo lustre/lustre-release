@@ -355,7 +355,7 @@ int mdt_object_stripes_lock(struct mdt_thread_info *info,
 
 	/* lock stripes for striped directory */
 	rc = mdt_stripes_lock(info, child, lh->mlh_reg_mode, ibits, einfo);
-	if (rc == -EIO && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME))
+	if (rc == -EIO && CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME))
 		rc = 0;
 
 unlock:
@@ -1986,7 +1986,7 @@ static int mdt_migrate_lookup(struct mdt_thread_info *info,
 				&info->mti_spec);
 		if ((rc == -ENOENT || rc == 0) && lmv_is_layout_changing(lmv)) {
 			/* fail check here to let top dir migration succeed. */
-			if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
+			if (CFS_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
 				GOTO(spobj_put, rc = -EIO);
 
 			/*

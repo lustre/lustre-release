@@ -117,7 +117,7 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 		if (ioret == -ENOSPC) {
 			set_bit(AS_ENOSPC, &inode->i_mapping->flags);
 		} else {
-			if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
+			if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
 				LBUG();
 			set_bit(AS_EIO, &inode->i_mapping->flags);
 		}

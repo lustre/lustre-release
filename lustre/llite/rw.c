@@ -2057,7 +2057,7 @@ out:
 	 * races with the page being unlocked after readpage() but before it's
 	 * used by the caller
 	 */
-	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE2, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE2, cfs_fail_val);
 
 	RETURN(result);
 }

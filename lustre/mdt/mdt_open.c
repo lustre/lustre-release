@@ -1669,7 +1669,7 @@ again_pw:
 	} else {
 		/* get openlock if this isn't replay and client requested it */
 		if (!req_is_replay(req)) {
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_OPEN, cfs_fail_val);
+			CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_OPEN, cfs_fail_val);
 			rc = mdt_object_open_lock(info, child, lhc, &ibits);
 			object_locked = 1;
 			if (rc != 0)
