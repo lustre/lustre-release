@@ -2409,9 +2409,6 @@ static inline int cl_io_is_fallocate(const struct cl_io *io)
 
 struct cl_io *cl_io_top(struct cl_io *io);
 
-void cl_io_print(const struct lu_env *env, void *cookie,
-                 lu_printer_t printer, const struct cl_io *io);
-
 #define CL_IO_SLICE_CLEAN(obj, base) memset_startat(obj, 0, base)
 
 /** @} cl_io */

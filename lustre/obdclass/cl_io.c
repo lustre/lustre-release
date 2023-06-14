@@ -1,37 +1,21 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
  * Copyright (c) 2011, 2017, Intel Corporation.
+ *
  */
+
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
  * Client IO.
  *
- *   Author: Nikita Danilov <nikita.danilov@sun.com>
- *   Author: Jinshan Xiong <jinshan.xiong@intel.com>
+ * Author: Nikita Danilov <nikita.danilov@sun.com>
+ * Author: Jinshan Xiong <jinshan.xiong@intel.com>
+ *
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -45,39 +29,33 @@
 #include <cl_object.h>
 #include "cl_internal.h"
 
-/*****************************************************************************
- *
+/*
  * cl_io interface.
- *
  */
 
 static inline int cl_io_type_is_valid(enum cl_io_type type)
 {
-        return CIT_READ <= type && type < CIT_OP_NR;
+	return CIT_READ <= type && type < CIT_OP_NR;
 }
 
 static inline int cl_io_is_loopable(const struct cl_io *io)
 {
-        return cl_io_type_is_valid(io->ci_type) && io->ci_type != CIT_MISC;
+	return cl_io_type_is_valid(io->ci_type) && io->ci_type != CIT_MISC;
 }
 
 /**
  * cl_io invariant that holds at all times when exported cl_io_*() functions
  * are entered and left.
  */
-static int cl_io_invariant(const struct cl_io *io)
+static inline int cl_io_invariant(const struct cl_io *io)
 {
-        struct cl_io *up;
-
-        up = io->ci_parent;
-        return
-                /*
-                 * io can own pages only when it is ongoing. Sub-io might
-                 * still be in CIS_LOCKED state when top-io is in
-                 * CIS_IO_GOING.
-                 */
-                ergo(io->ci_owned_nr > 0, io->ci_state == CIS_IO_GOING ||
-                     (io->ci_state == CIS_LOCKED && up != NULL));
+	/*
+	 * io can own pages only when it is ongoing. Sub-io might
+	 * still be in CIS_LOCKED state when top-io is in
+	 * CIS_IO_GOING.
+	 */
+	return ergo(io->ci_owned_nr > 0, io->ci_state == CIS_IO_GOING ||
+		    (io->ci_state == CIS_LOCKED && io->ci_parent != NULL));
 }
 
 /**
@@ -87,24 +65,24 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 {
 	struct cl_io_slice    *slice;
 
-        LINVRNT(cl_io_type_is_valid(io->ci_type));
-        LINVRNT(cl_io_invariant(io));
-        ENTRY;
+	LINVRNT(cl_io_type_is_valid(io->ci_type));
+	LINVRNT(cl_io_invariant(io));
+	ENTRY;
 
 	while (!list_empty(&io->ci_layers)) {
-                slice = container_of(io->ci_layers.prev, struct cl_io_slice,
-                                     cis_linkage);
+		slice = container_of(io->ci_layers.prev, struct cl_io_slice,
+				     cis_linkage);
 		list_del_init(&slice->cis_linkage);
-                if (slice->cis_iop->op[io->ci_type].cio_fini != NULL)
-                        slice->cis_iop->op[io->ci_type].cio_fini(env, slice);
-                /*
-                 * Invalidate slice to catch use after free. This assumes that
-                 * slices are allocated within session and can be touched
-                 * after ->cio_fini() returns.
-                 */
-                slice->cis_io = NULL;
-        }
-        io->ci_state = CIS_FINI;
+		if (slice->cis_iop->op[io->ci_type].cio_fini != NULL)
+			slice->cis_iop->op[io->ci_type].cio_fini(env, slice);
+		/*
+		 * Invalidate slice to catch use after free. This assumes that
+		 * slices are allocated within session and can be touched
+		 * after ->cio_fini() returns.
+		 */
+		slice->cis_io = NULL;
+	}
+	io->ci_state = CIS_FINI;
 
 	/* sanity check for layout change */
 	switch(io->ci_type) {
@@ -136,30 +114,30 @@ EXPORT_SYMBOL(cl_io_fini);
 static int __cl_io_init(const struct lu_env *env, struct cl_io *io,
 			enum cl_io_type iot, struct cl_object *obj)
 {
-        struct cl_object *scan;
-        int result;
+	struct cl_object *scan;
+	int result;
 
-        LINVRNT(io->ci_state == CIS_ZERO || io->ci_state == CIS_FINI);
-        LINVRNT(cl_io_type_is_valid(iot));
-        LINVRNT(cl_io_invariant(io));
-        ENTRY;
+	LINVRNT(io->ci_state == CIS_ZERO || io->ci_state == CIS_FINI);
+	LINVRNT(cl_io_type_is_valid(iot));
+	LINVRNT(cl_io_invariant(io));
+	ENTRY;
 
-        io->ci_type = iot;
+	io->ci_type = iot;
 	INIT_LIST_HEAD(&io->ci_lockset.cls_todo);
 	INIT_LIST_HEAD(&io->ci_lockset.cls_done);
 	INIT_LIST_HEAD(&io->ci_layers);
 
-        result = 0;
-        cl_object_for_each(scan, obj) {
-                if (scan->co_ops->coo_io_init != NULL) {
-                        result = scan->co_ops->coo_io_init(env, scan, io);
-                        if (result != 0)
-                                break;
-                }
-        }
-        if (result == 0)
-                io->ci_state = CIS_INIT;
-        RETURN(result);
+	result = 0;
+	cl_object_for_each(scan, obj) {
+		if (scan->co_ops->coo_io_init != NULL) {
+			result = scan->co_ops->coo_io_init(env, scan, io);
+			if (result != 0)
+				break;
+		}
+	}
+	if (result == 0)
+		io->ci_state = CIS_INIT;
+	RETURN(result);
 }
 
 /**
@@ -168,9 +146,9 @@ static int __cl_io_init(const struct lu_env *env, struct cl_io *io,
  * \pre obj != cl_object_top(obj)
  */
 int cl_io_sub_init(const struct lu_env *env, struct cl_io *io,
-                   enum cl_io_type iot, struct cl_object *obj)
+		   enum cl_io_type iot, struct cl_object *obj)
 {
-        LASSERT(obj != cl_object_top(obj));
+	LASSERT(obj != cl_object_top(obj));
 
 	return __cl_io_init(env, io, iot, obj);
 }
@@ -187,7 +165,7 @@ EXPORT_SYMBOL(cl_io_sub_init);
  * \post cl_io_type_is_valid(io->ci_type) && io->ci_type == iot
  */
 int cl_io_init(const struct lu_env *env, struct cl_io *io,
-               enum cl_io_type iot, struct cl_object *obj)
+	       enum cl_io_type iot, struct cl_object *obj)
 {
 	LASSERT(obj == cl_object_top(obj));
 
@@ -306,14 +284,14 @@ static int cl_lockset_lock(const struct lu_env *env, struct cl_io *io,
  */
 int cl_io_lock(const struct lu_env *env, struct cl_io *io)
 {
-        const struct cl_io_slice *scan;
-        int result = 0;
+	const struct cl_io_slice *scan;
+	int result = 0;
 
-        LINVRNT(cl_io_is_loopable(io));
-        LINVRNT(io->ci_state == CIS_IT_STARTED);
-        LINVRNT(cl_io_invariant(io));
+	LINVRNT(cl_io_is_loopable(io));
+	LINVRNT(io->ci_state == CIS_IT_STARTED);
+	LINVRNT(cl_io_invariant(io));
 
-        ENTRY;
+	ENTRY;
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_lock == NULL)
 			continue;
@@ -321,19 +299,19 @@ int cl_io_lock(const struct lu_env *env, struct cl_io *io)
 		if (result != 0)
 			break;
 	}
-        if (result == 0) {
+	if (result == 0) {
 		/*
 		 * Sort locks in lexicographical order of their (fid,
 		 * start-offset) pairs to avoid deadlocks.
 		 */
 		list_sort(NULL, &io->ci_lockset.cls_todo, cl_lock_descr_cmp);
-                result = cl_lockset_lock(env, io, &io->ci_lockset);
-        }
-        if (result != 0)
-                cl_io_unlock(env, io);
-        else
-                io->ci_state = CIS_LOCKED;
-        RETURN(result);
+		result = cl_lockset_lock(env, io, &io->ci_lockset);
+	}
+	if (result != 0)
+		cl_io_unlock(env, io);
+	else
+		io->ci_state = CIS_LOCKED;
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_lock);
 
@@ -342,17 +320,17 @@ EXPORT_SYMBOL(cl_io_lock);
  */
 void cl_io_unlock(const struct lu_env *env, struct cl_io *io)
 {
-        struct cl_lockset        *set;
-        struct cl_io_lock_link   *link;
-        struct cl_io_lock_link   *temp;
-        const struct cl_io_slice *scan;
+	struct cl_lockset *set;
+	struct cl_io_lock_link *link;
+	struct cl_io_lock_link *temp;
+	const struct cl_io_slice *scan;
 
-        LASSERT(cl_io_is_loopable(io));
-        LASSERT(CIS_IT_STARTED <= io->ci_state && io->ci_state < CIS_UNLOCKED);
-        LINVRNT(cl_io_invariant(io));
+	LASSERT(cl_io_is_loopable(io));
+	LASSERT(CIS_IT_STARTED <= io->ci_state && io->ci_state < CIS_UNLOCKED);
+	LINVRNT(cl_io_invariant(io));
 
-        ENTRY;
-        set = &io->ci_lockset;
+	ENTRY;
+	set = &io->ci_lockset;
 
 	list_for_each_entry_safe(link, temp, &set->cls_todo, cill_linkage) {
 		list_del_init(&link->cill_linkage);
@@ -385,15 +363,15 @@ EXPORT_SYMBOL(cl_io_unlock);
  */
 int cl_io_iter_init(const struct lu_env *env, struct cl_io *io)
 {
-        const struct cl_io_slice *scan;
-        int result;
+	const struct cl_io_slice *scan;
+	int result;
 
-        LINVRNT(cl_io_is_loopable(io));
-        LINVRNT(io->ci_state == CIS_INIT || io->ci_state == CIS_IT_ENDED);
-        LINVRNT(cl_io_invariant(io));
+	LINVRNT(cl_io_is_loopable(io));
+	LINVRNT(io->ci_state == CIS_INIT || io->ci_state == CIS_IT_ENDED);
+	LINVRNT(cl_io_invariant(io));
 
-        ENTRY;
-        result = 0;
+	ENTRY;
+	result = 0;
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_iter_init == NULL)
 			continue;
@@ -402,9 +380,9 @@ int cl_io_iter_init(const struct lu_env *env, struct cl_io *io)
 		if (result != 0)
 			break;
 	}
-        if (result == 0)
-                io->ci_state = CIS_IT_STARTED;
-        RETURN(result);
+	if (result == 0)
+		io->ci_state = CIS_IT_STARTED;
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_iter_init);
 
@@ -462,32 +440,32 @@ void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t nob)
  * Adds a lock to a lockset.
  */
 int cl_io_lock_add(const struct lu_env *env, struct cl_io *io,
-                   struct cl_io_lock_link *link)
+		   struct cl_io_lock_link *link)
 {
-        int result;
+	int result;
 
-        ENTRY;
-        if (cl_lockset_merge(&io->ci_lockset, &link->cill_descr))
-                result = +1;
-        else {
+	ENTRY;
+	if (cl_lockset_merge(&io->ci_lockset, &link->cill_descr))
+		result = +1;
+	else {
 		list_add(&link->cill_linkage, &io->ci_lockset.cls_todo);
-                result = 0;
-        }
-        RETURN(result);
+		result = 0;
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_lock_add);
 
 static void cl_free_io_lock_link(const struct lu_env *env,
-                                 struct cl_io_lock_link *link)
+				 struct cl_io_lock_link *link)
 {
-        OBD_FREE_PTR(link);
+	OBD_FREE_PTR(link);
 }
 
 /**
  * Allocates new lock link, and uses it to add a lock to a lockset.
  */
 int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                         struct cl_lock_descr *descr)
+			 struct cl_lock_descr *descr)
 {
 	struct cl_io_lock_link *link;
 	int result;
@@ -496,7 +474,7 @@ int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
 	OBD_ALLOC_PTR(link);
 	if (link != NULL) {
 		link->cill_descr = *descr;
-		link->cill_fini  = cl_free_io_lock_link;
+		link->cill_fini	 = cl_free_io_lock_link;
 		result = cl_io_lock_add(env, io, link);
 		if (result) /* lock match */
 			link->cill_fini(env, link);
@@ -512,15 +490,15 @@ EXPORT_SYMBOL(cl_io_lock_alloc_add);
  */
 int cl_io_start(const struct lu_env *env, struct cl_io *io)
 {
-        const struct cl_io_slice *scan;
-        int result = 0;
+	const struct cl_io_slice *scan;
+	int result = 0;
 
-        LINVRNT(cl_io_is_loopable(io));
-        LINVRNT(io->ci_state == CIS_LOCKED);
-        LINVRNT(cl_io_invariant(io));
-        ENTRY;
+	LINVRNT(cl_io_is_loopable(io));
+	LINVRNT(io->ci_state == CIS_LOCKED);
+	LINVRNT(cl_io_invariant(io));
+	ENTRY;
 
-        io->ci_state = CIS_IO_GOING;
+	io->ci_state = CIS_IO_GOING;
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_start == NULL)
 			continue;
@@ -528,9 +506,9 @@ int cl_io_start(const struct lu_env *env, struct cl_io *io)
 		if (result != 0)
 			break;
 	}
-        if (result >= 0)
-                result = 0;
-        RETURN(result);
+	if (result >= 0)
+		result = 0;
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_start);
 
@@ -540,20 +518,20 @@ EXPORT_SYMBOL(cl_io_start);
  */
 void cl_io_end(const struct lu_env *env, struct cl_io *io)
 {
-        const struct cl_io_slice *scan;
+	const struct cl_io_slice *scan;
 
-        LINVRNT(cl_io_is_loopable(io));
-        LINVRNT(io->ci_state == CIS_IO_GOING);
-        LINVRNT(cl_io_invariant(io));
-        ENTRY;
+	LINVRNT(cl_io_is_loopable(io));
+	LINVRNT(io->ci_state == CIS_IO_GOING);
+	LINVRNT(cl_io_invariant(io));
+	ENTRY;
 
 	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_end != NULL)
 			scan->cis_iop->op[io->ci_type].cio_end(env, scan);
 		/* TODO: error handling. */
 	}
-        io->ci_state = CIS_IO_FINISHED;
-        EXIT;
+	io->ci_state = CIS_IO_FINISHED;
+	EXIT;
 }
 EXPORT_SYMBOL(cl_io_end);
 
@@ -566,7 +544,7 @@ int cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
 		     pgoff_t start, struct cl_read_ahead *ra)
 {
 	const struct cl_io_slice *scan;
-	int                       result = 0;
+	int result = 0;
 
 	LINVRNT(io->ci_type == CIT_READ ||
 		io->ci_type == CIT_FAULT ||
@@ -984,7 +962,6 @@ void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist)
 	struct cl_page *page;
 	struct cl_page *temp;
 
-
 	ENTRY;
 	cl_page_list_for_each_safe(page, temp, plist)
 		cl_page_list_del(env, plist, page);
@@ -1000,7 +977,6 @@ void cl_page_list_assume(const struct lu_env *env,
 			 struct cl_io *io, struct cl_page_list *plist)
 {
 	struct cl_page *page;
-
 
 	cl_page_list_for_each(page, plist)
 		cl_page_assume(env, io, page);
@@ -1026,10 +1002,10 @@ EXPORT_SYMBOL(cl_page_list_discard);
  */
 void cl_2queue_init(struct cl_2queue *queue)
 {
-        ENTRY;
-        cl_page_list_init(&queue->c2_qin);
-        cl_page_list_init(&queue->c2_qout);
-        EXIT;
+	ENTRY;
+	cl_page_list_init(&queue->c2_qin);
+	cl_page_list_init(&queue->c2_qout);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_init);
 
@@ -1038,10 +1014,10 @@ EXPORT_SYMBOL(cl_2queue_init);
  */
 void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue)
 {
-        ENTRY;
-        cl_page_list_disown(env, &queue->c2_qin);
-        cl_page_list_disown(env, &queue->c2_qout);
-        EXIT;
+	ENTRY;
+	cl_page_list_disown(env, &queue->c2_qin);
+	cl_page_list_disown(env, &queue->c2_qout);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_disown);
 
@@ -1049,12 +1025,12 @@ EXPORT_SYMBOL(cl_2queue_disown);
  * Discard (truncate) pages in both lists of a 2-queue.
  */
 void cl_2queue_discard(const struct lu_env *env,
-                       struct cl_io *io, struct cl_2queue *queue)
+		       struct cl_io *io, struct cl_2queue *queue)
 {
-        ENTRY;
-        cl_page_list_discard(env, io, &queue->c2_qin);
-        cl_page_list_discard(env, io, &queue->c2_qout);
-        EXIT;
+	ENTRY;
+	cl_page_list_discard(env, io, &queue->c2_qin);
+	cl_page_list_discard(env, io, &queue->c2_qout);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_discard);
 
@@ -1062,10 +1038,10 @@ EXPORT_SYMBOL(cl_2queue_discard);
  * Assume to own the pages in cl_2queue
  */
 void cl_2queue_assume(const struct lu_env *env,
-                      struct cl_io *io, struct cl_2queue *queue)
+		      struct cl_io *io, struct cl_2queue *queue)
 {
-        cl_page_list_assume(env, io, &queue->c2_qin);
-        cl_page_list_assume(env, io, &queue->c2_qout);
+	cl_page_list_assume(env, io, &queue->c2_qin);
+	cl_page_list_assume(env, io, &queue->c2_qout);
 }
 
 /**
@@ -1073,10 +1049,10 @@ void cl_2queue_assume(const struct lu_env *env,
  */
 void cl_2queue_fini(const struct lu_env *env, struct cl_2queue *queue)
 {
-        ENTRY;
-        cl_page_list_fini(env, &queue->c2_qout);
-        cl_page_list_fini(env, &queue->c2_qin);
-        EXIT;
+	ENTRY;
+	cl_page_list_fini(env, &queue->c2_qout);
+	cl_page_list_fini(env, &queue->c2_qin);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_2queue_fini);
 
@@ -1102,20 +1078,12 @@ EXPORT_SYMBOL(cl_2queue_init_page);
  */
 struct cl_io *cl_io_top(struct cl_io *io)
 {
-        ENTRY;
-        while (io->ci_parent != NULL)
-                io = io->ci_parent;
-        RETURN(io);
+	ENTRY;
+	while (io->ci_parent != NULL)
+		io = io->ci_parent;
+	RETURN(io);
 }
 EXPORT_SYMBOL(cl_io_top);
-
-/**
- * Prints human readable representation of \a io to the \a f.
- */
-void cl_io_print(const struct lu_env *env, void *cookie,
-                 lu_printer_t printer, const struct cl_io *io)
-{
-}
 
 /**
  * Fills in attributes that are passed to server together with transfer. Only
@@ -1145,7 +1113,6 @@ EXPORT_SYMBOL(cl_req_attr_set);
  *  trigger erasure coding, integrity, dedupe, or similar operation.
  * \q end is called with a spinlock on anchor->csi_waitq.lock
  */
-
 void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr,
 			    void *dio_aio, cl_sync_io_end_t *end)
 {
@@ -1311,6 +1278,7 @@ void cl_sub_dio_free(struct cl_sub_dio *sdio)
 		OBD_SLAB_FREE_PTR(sdio, cl_sub_dio_kmem);
 }
 EXPORT_SYMBOL(cl_sub_dio_free);
+
 /*
  * ll_release_user_pages - tear down page struct array
  * @pages: array of page struct pointers underlying target buffer
