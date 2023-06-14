@@ -132,20 +132,21 @@ LPROC_SEQ_FOPS_RO(qsd_state);
 
 static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 {
-	struct qsd_instance	*qsd = m->private;
-	char			 enabled[5];
+	struct qsd_instance *qsd = m->private;
+	char enabled[5] = "";
+	int types = 0;
 
 	LASSERT(qsd != NULL);
 
 	memset(enabled, 0, sizeof(enabled));
 	if (qsd_type_enabled(qsd, USRQUOTA))
-		strncat(enabled, "u", sizeof(enabled) - strlen(enabled));
+		enabled[types++] = 'u';
 	if (qsd_type_enabled(qsd, GRPQUOTA))
-		strncat(enabled, "g", sizeof(enabled) - strlen(enabled));
+		enabled[types++] = 'g';
 	if (qsd_type_enabled(qsd, PRJQUOTA))
-		strncat(enabled, "p", sizeof(enabled) - strlen(enabled));
-	if (strlen(enabled) == 0)
-		strncat(enabled, "none", sizeof(enabled) - strlen(enabled));
+		enabled[types++] = 'p';
+	if (!types)
+		strncpy(enabled, "none", 4);
 
 	seq_printf(m, "%s\n", enabled);
 	return 0;

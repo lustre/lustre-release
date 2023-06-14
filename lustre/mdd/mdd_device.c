@@ -2408,7 +2408,7 @@ int mdd_generic_thread_start(struct mdd_generic_thread *thread,
 	thread->mgt_abort = false;
 	thread->mgt_init = true;
 
-	task = kthread_run(func, thread, name);
+	task = kthread_run(func, thread, "%s", name);
 	if (IS_ERR(task)) {
 		complete(&thread->mgt_finished);
 		return PTR_ERR(task);

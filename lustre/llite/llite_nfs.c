@@ -266,7 +266,7 @@ static int ll_get_name(struct dentry *dentry, char *name, struct dentry *child)
 		.lgd_name = name,
 		.lgd_fid = ll_i2info(child->d_inode)->lli_fid,
 #ifdef HAVE_DIR_CONTEXT
-		.ctx.actor = ll_nfs_get_name_filldir,
+		.ctx.actor = (filldir_t)ll_nfs_get_name_filldir,
 #endif
 		.lgd_found = 0,
 	};

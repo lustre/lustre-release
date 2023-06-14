@@ -64,7 +64,7 @@ static struct ldlm_lock *osc_handle_ptr(struct lustre_handle *handle)
 /**
  * Invariant that has to be true all of the time.
  */
-static int osc_lock_invariant(struct osc_lock *ols)
+static inline int osc_lock_invariant(struct osc_lock *ols)
 {
 	struct ldlm_lock *lock	      = osc_handle_ptr(&ols->ols_handle);
 	struct ldlm_lock *olock	      = ols->ols_dlmlock;

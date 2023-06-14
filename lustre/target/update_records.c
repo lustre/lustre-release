@@ -236,7 +236,7 @@ static int update_records_update_pack(const struct lu_env *env,
 
 		op->uop_params_off[i] = index;
 	}
-	CDEBUG(D_INFO, "%huth "DFID" %s param_count = %u\n",
+	CDEBUG(D_INFO, "%uth "DFID" %s param_count = %u\n",
 	       *op_count, PFID(fid), update_op_str(op_type), *param_count);
 
 	*op_count = *op_count + 1;

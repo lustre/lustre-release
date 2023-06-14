@@ -978,10 +978,6 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 * This empties the pre-creation pool and effectively blocks any new
 	 * reservations.
 	 */
-	LASSERTF(fid_oid(&d->opd_pre_last_created_fid) <= IDIF_MAX_OID,
-		 "%s: last_created_fid "DFID" > %llu\n",
-		 d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
-		 IDIF_MAX_OID);
 	d->opd_pre_used_fid = d->opd_pre_last_created_fid;
 	d->opd_pre_create_slow = 0;
 	if ((body->oa.o_valid & OBD_MD_FLSIZE) && body->oa.o_size)

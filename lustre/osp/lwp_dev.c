@@ -449,7 +449,7 @@ static void lwp_notify_users(struct obd_export *exp)
 		return;
 	}
 
-	task = kthread_create(lwp_notify_main, exp, name);
+	task = kthread_create(lwp_notify_main, exp, "%s", name);
 	if (IS_ERR(task)) {
 		CERROR("Failed to start LWP notify thread:%s. %lu\n",
 		       name, PTR_ERR(task));

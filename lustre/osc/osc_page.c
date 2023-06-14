@@ -887,6 +887,7 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
 #ifdef HAVE_NR_UNSTABLE_NFS
 /* Old kernels use a separate counter for unstable pages,
  * newer kernels treat them like any other writeback.
+ * (see Linux commit: v5.7-467-g8d92890bd6b8)
  */
 #define NR_WRITEBACK NR_UNSTABLE_NFS
 #endif
@@ -919,7 +920,8 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		}
 
 		if (count > 0) {
-			mod_zone_page_state(zone, NR_WRITEBACK,
+			mod_zone_page_state(zone,
+					    (enum zone_stat_item)NR_WRITEBACK,
 					    factor * count);
 			count = 0;
 		}
@@ -927,7 +929,8 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		++count;
 	}
 	if (count > 0)
-		mod_zone_page_state(zone, NR_WRITEBACK, factor * count);
+		mod_zone_page_state(zone, (enum zone_stat_item)NR_WRITEBACK,
+				    factor * count);
 }
 
 static inline void add_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,

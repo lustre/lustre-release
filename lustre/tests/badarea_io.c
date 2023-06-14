@@ -34,7 +34,7 @@
 
 int main(int argc, char **argv)
 {
-	int rc;
+	ssize_t rc;
 	int fd;
 	void *volatile buf = (void *)0x4096000;
 	void *volatile fd_ptr;
@@ -64,9 +64,9 @@ int main(int argc, char **argv)
 	if (rc != 2UL*1024*1024)
 		perror("write 2M");
 
-	rc = write(fd, fd_ptr, 2UL*1024*1024*1024);
-	if (rc != 2UL*1024*1024*1024)
-		perror("write 2G");
+	rc = write(fd, fd_ptr, 1UL*(1024+512)*1024*1024);
+	if (rc != 1UL*(1024+512)*1024*1024)
+		perror("write 1.5G");
 
 	rc = write(fd, fd_ptr, -2);
 	if (rc != -2)

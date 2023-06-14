@@ -2533,7 +2533,7 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 	if (IS_ERR(lta))
 		RETURN(PTR_ERR(lta));
 
-	task = kthread_run(lfsck_assistant_engine, lta, lad->lad_name);
+	task = kthread_run(lfsck_assistant_engine, lta, "%s", lad->lad_name);
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start LFSCK assistant thread for %s: "

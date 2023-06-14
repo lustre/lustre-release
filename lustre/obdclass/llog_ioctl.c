@@ -349,8 +349,8 @@ static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
 	RETURN(rc);
 }
 
-int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
-	       struct obd_ioctl_data *data)
+int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt,
+	       unsigned int cmd, struct obd_ioctl_data *data)
 {
 	struct llog_logid logid;
 	int rc = 0;

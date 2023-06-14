@@ -2083,7 +2083,7 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 	if (max > OBD_MAX_RIF_MAX || max < 1)
 		return -ERANGE;
 
-	CDEBUG(D_INFO, "%s: max = %hu max_mod = %u rif = %u\n",
+	CDEBUG(D_INFO, "%s: max = %u max_mod = %u rif = %u\n",
 	       cli->cl_import->imp_obd->obd_name, max,
 	       cli->cl_max_mod_rpcs_in_flight, cli->cl_max_rpcs_in_flight);
 
@@ -2156,7 +2156,7 @@ int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max)
 	 */
 	if (max >= cli->cl_max_rpcs_in_flight) {
 		CDEBUG(D_INFO,
-		       "%s: increasing max_rpcs_in_flight=%hu to allow larger max_mod_rpcs_in_flight=%u\n",
+		       "%s: increasing max_rpcs_in_flight=%u to allow larger max_mod_rpcs_in_flight=%u\n",
 		       cli->cl_import->imp_obd->obd_name, max + 1, max);
 		obd_set_max_rpcs_in_flight(cli, max + 1);
 	}
