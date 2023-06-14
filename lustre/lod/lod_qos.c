@@ -2251,6 +2251,7 @@ static void lod_qos_set_pool(struct lod_object *lo, int pos, char *pool_name,
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_layout_component *lod_comp;
 	struct pool_desc *pool = NULL;
+	__u32 idx;
 	int j, rc = 0;
 
 	/* In the function below, .hs_keycmp resolves to
@@ -2259,43 +2260,46 @@ static void lod_qos_set_pool(struct lod_object *lo, int pos, char *pool_name,
 	if (pool_name)
 		pool = lod_find_pool(d, pool_name);
 
-	if (pool) {
-		lod_comp = &lo->ldo_comp_entries[pos];
-		if (lod_comp->llc_stripe_offset != LOV_OFFSET_DEFAULT) {
-			if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
-				struct lov_user_md_v3 *v3;
+	if (!pool)
+		goto out_setpool;
 
-				v3 = (struct lov_user_md_v3 *)v1;
-				for (j = 0; j < v3->lmm_stripe_count; j++) {
-					__u32 num;
+	lod_comp = &lo->ldo_comp_entries[pos];
+	if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT)
+		goto out_checkcount;
 
-					num = lod_comp->llc_ostlist.op_array[j];
-					rc = lod_check_index_in_pool(num, pool);
-					if (rc)
-						break;
-				}
-			} else {
-				rc = lod_check_index_in_pool(
-					lod_comp->llc_stripe_offset, pool);
-			}
-			if (rc < 0) {
-				CDEBUG(D_LAYOUT, "%s: index %u is not in the "
-				       "pool %s, dropping the pool\n",
-				       lod2obd(d)->obd_name,
-				       lod_comp->llc_stripe_offset,
-				       pool_name);
-				pool_name = NULL;
-			}
+	if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+		struct lov_user_md_v3 *v3;
+
+		v3 = (struct lov_user_md_v3 *)v1;
+		for (j = 0; j < v3->lmm_stripe_count; j++) {
+			idx = lod_comp->llc_ostlist.op_array[j];
+			rc = lod_check_index_in_pool(idx, pool);
+			if (rc)
+				break;
 		}
-
-		if (lod_comp->llc_stripe_count > pool_tgt_count(pool) &&
-		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
-			lod_comp->llc_stripe_count = pool_tgt_count(pool);
-
-		lod_pool_putref(pool);
+	} else {
+		idx = lod_comp->llc_stripe_offset;
+		rc = lod_check_index_in_pool(idx, pool);
 	}
 
+	if (!rc)
+		goto out_checkcount;
+
+	CDEBUG(D_LAYOUT,
+	       "%s: index %u is not in the pool %s, dropping the pool\n",
+	       lod2obd(d)->obd_name, idx, pool_name);
+	pool_name = NULL;
+	goto out_putref;
+
+out_checkcount:
+	if (lod_comp->llc_stripe_count > pool_tgt_count(pool) &&
+	    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
+		lod_comp->llc_stripe_count = pool_tgt_count(pool);
+out_putref:
+	lod_pool_putref(pool);
+out_setpool:
 	lod_obj_set_pool(lo, pos, pool_name);
+
 }
 
 /**
