@@ -2228,9 +2228,11 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	 */
 	wait_event(iobuf->dr_wait,
 		       atomic_read(&iobuf->dr_numreqs) == 0);
-	osd_fini_iobuf(osd, iobuf);
+
 	if (!rc)
 		rc = iobuf->dr_error;
+
+	osd_fini_iobuf(osd, iobuf);
 
 	if (unlikely(remove_agents != 0))
 		osd_process_scheduled_agent_removals(env, osd);

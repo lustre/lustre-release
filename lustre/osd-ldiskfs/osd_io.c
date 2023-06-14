@@ -195,6 +195,8 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_R_IO_TIME+rw],
 					   ktime_to_ms(iobuf->dr_elapsed));
 	}
+
+	iobuf->dr_error = 0;
 }
 
 
@@ -511,16 +513,17 @@ out:
 	 * parallel and wait for IO completion once transaction is stopped
 	 * see osd_trans_stop() for more details -bzzz
 	 */
-	if (iobuf->dr_rw == 0 || fault_inject) {
+	if (iobuf->dr_rw == 0 || fault_inject)
 		wait_event(iobuf->dr_wait,
 			   atomic_read(&iobuf->dr_numreqs) == 0);
-		osd_fini_iobuf(osd, iobuf);
-	}
 
 	if (rc == 0)
 		rc = iobuf->dr_error;
 	else
 		osd_bio_fini(bio);
+
+	if (iobuf->dr_rw == 0 || fault_inject)
+		osd_fini_iobuf(osd, iobuf);
 
 	/* Write only now */
 	if (rc == 0 && iobuf->dr_rw)
