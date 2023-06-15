@@ -2884,7 +2884,7 @@ test_18_sub () {
 	$LFS setstripe $TESTFILE -i 0 -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
-	local timeout=$(sysctl -n lustre.timeout)
+	local timeout=$($LCTL get_param -n timeout)
 
 	if [ $io_type = "directio" ]; then
 		log "Write 100M (directio) ..."
@@ -2903,7 +2903,7 @@ test_18_sub () {
 	if at_is_enabled; then
 		timeout=$(at_max_get mds)
 	else
-		timeout=$(lctl get_param -n timeout)
+		timeout=$($LCTL get_param -n timeout)
 	fi
 
 	while [ true ]; do
