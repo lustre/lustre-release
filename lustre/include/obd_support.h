@@ -45,8 +45,8 @@
 /* global variables */
 extern struct lprocfs_stats *obd_memory;
 enum {
-        OBD_MEMORY_STAT = 0,
-        OBD_STATS_NUM,
+	OBD_MEMORY_STAT = 0,
+	OBD_STATS_NUM,
 };
 
 extern unsigned int obd_debug_peer_on_timeout;
@@ -54,7 +54,7 @@ extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_lbug_on_eviction;
 /* obd_timeout should only be used for recovery, not for
-   networking / disk / timings affected by load (use Adaptive Timeouts) */
+ * networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int ping_interval;	  /* seconds */
@@ -544,7 +544,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MGS_LDLM_REPLY_NET	 0x90d
 #define OBD_FAIL_MGS_WRITE_TARGET_DELAY	 0x90e
 
-#define OBD_FAIL_QUOTA_DQACQ_NET			0xA01
+#define OBD_FAIL_QUOTA_DQACQ_NET         0xA01
 #define OBD_FAIL_QUOTA_EDQUOT            0xA02
 #define OBD_FAIL_QUOTA_DELAY_REINT       0xA03
 #define OBD_FAIL_QUOTA_RECOVERABLE_ERR   0xA04
@@ -707,7 +707,7 @@ extern char obd_jobid_var[];
 /* FLR */
 #define OBD_FAIL_FLR_LV_DELAY			0x1A01
 #define OBD_FAIL_FLR_LV_INC			0x1A02 /* unused since 2.15 */
-#define OBD_FAIL_FLR_RANDOM_PICK_MIRROR	0x1A03
+#define OBD_FAIL_FLR_RANDOM_PICK_MIRROR		0x1A03
 
 /* DT */
 #define OBD_FAIL_DT_DECLARE_ATTR_GET		0x2000
@@ -798,14 +798,14 @@ extern __u64 obd_max_alloc;
 
 static inline void obd_memory_add(long size)
 {
-        obd_alloc += size;
-        if (obd_alloc > obd_max_alloc)
-                obd_max_alloc = obd_alloc;
+	obd_alloc += size;
+	if (obd_alloc > obd_max_alloc)
+		obd_max_alloc = obd_alloc;
 }
 
 static inline void obd_memory_sub(long size)
 {
-        obd_alloc -= size;
+	obd_alloc -= size;
 }
 
 #define obd_memory_sum() (obd_alloc)
@@ -824,9 +824,12 @@ static inline void obd_memory_sub(long size)
 
 /* message format here needs to match regexp in lustre/tests/leak_finder.pl */
 #define OBD_FREE_PRE(ptr, size, name)					\
-	LASSERT(ptr);							\
-	obd_memory_sub(size);						\
-	LIBCFS_MEM_MSG(ptr, size, name)
+do {									\
+	if (likely(ptr)) {						\
+		obd_memory_sub(size);					\
+		LIBCFS_MEM_MSG(ptr, size, name);			\
+	}								\
+} while (0)
 
 #else /* !OBD_DEBUG_MEMUSAGE */
 
@@ -899,7 +902,7 @@ do {                                                                          \
 		OBD_ALLOC_GFP(ptr, size, GFP_NOFS | __GFP_NOWARN |	      \
 			      (((size) > PAGE_SIZE) ? __GFP_NORETRY : 0));    \
 	if (ptr == NULL)                                                      \
-                OBD_VMALLOC(ptr, size);                                       \
+		OBD_VMALLOC(ptr, size);                                       \
 } while (0)
 
 #define OBD_ALLOC_PTR_ARRAY_LARGE(ptr, n)				\
@@ -929,10 +932,12 @@ do {									      \
 
 #define OBD_FREE(ptr, size)						      \
 do {									      \
-	OBD_FREE_PRE(ptr, size, "kfreed");				      \
-	POISON(ptr, 0x5a, size);					      \
-	kfree(ptr);							      \
-	POISON_PTR(ptr);						      \
+	if (likely(ptr)) {						      \
+		OBD_FREE_PRE(ptr, size, "kfreed");			      \
+		POISON(ptr, 0x5a, size);				      \
+		kfree(ptr);						      \
+		POISON_PTR(ptr);					      \
+	}								      \
 } while (0)
 
 #define OBD_FREE_LARGE(ptr, size)					      \
@@ -955,9 +960,9 @@ do {									      \
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
 #define OBD_SLAB_FREE_RTN0(ptr, slab)                                         \
 ({                                                                            \
-	kmem_cache_free((slab), (ptr));                                    \
-        (ptr) = NULL;                                                         \
-        0;                                                                    \
+	kmem_cache_free((slab), (ptr));                                       \
+	(ptr) = NULL;                                                         \
+	0;                                                                    \
 })
 
 #define __OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, type)	      \
@@ -979,11 +984,13 @@ do {									      \
 #define OBD_FREE_PTR_ARRAY(ptr, n) OBD_FREE(ptr, (n) * sizeof(*(ptr)))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
-do {                                                                          \
-        OBD_FREE_PRE(ptr, size, "slab-freed");                                \
-	POISON(ptr, 0x5a, size);					      \
-	kmem_cache_free(slab, ptr);                                        \
-        POISON_PTR(ptr);                                                      \
+do {									      \
+	if (likely(ptr)) {						      \
+		OBD_FREE_PRE(ptr, size, "slab-freed");			      \
+		POISON(ptr, 0x5a, size);				      \
+		kmem_cache_free(slab, ptr);				      \
+		POISON_PTR(ptr);					      \
+	}								      \
 } while(0)
 
 #define OBD_SLAB_ALLOC(ptr, slab, size)					      \
@@ -1001,7 +1008,7 @@ do {                                                                          \
 #define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, flags)			      \
 	OBD_SLAB_ALLOC_GFP(ptr, slab, sizeof(*(ptr)), flags)
 
-#define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, cptab, cpt, flags)		      \
+#define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, cptab, cpt, flags)	      \
 	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, sizeof(*(ptr)), flags)
 
 #define OBD_SLAB_FREE_PTR(ptr, slab)					      \
