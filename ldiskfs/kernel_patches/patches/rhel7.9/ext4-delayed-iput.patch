@@ -1,0 +1,174 @@
+When changing a large xattr value to a different large xattr value,
+the old xattr inode is freed. Truncate during the final iput causes
+current transaction restart. Eventually, parent inode bh is marked
+dirty and kernel panic happens when jbd2 figures out that this bh
+belongs to the committed transaction.
+
+A possible fix is to call this final iput in a separate thread.
+This way, setxattr transactions will never be split into two.
+Since the setxattr code adds xattr inodes with nlink=0 into the
+orphan list, old xattr inodes will be properly cleaned up in
+any case.
+
+Signed-off-by: Andrew Perepechko <andrew.perepechko@hpe.com>
+HPE-bug-id: LUS-10534
+
+Changes since v1:
+- fixed a bug added during the porting
+- fixed a workqueue related deadlock reported by Tetsuo Handa
+---
+ fs/ext4/ext4.h    |  7 +++++--
+ fs/ext4/page-io.c |  2 +-
+ fs/ext4/super.c   | 15 ++++++++-------
+ fs/ext4/xattr.c   | 39 +++++++++++++++++++++++++++++++++++++--
+ 4 files changed, 51 insertions(+), 12 deletions(-)
+
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1464,8 +1464,11 @@ struct ext4_sb_info {
+ 	struct flex_groups *s_flex_groups;
+ 	ext4_group_t s_flex_groups_allocated;
+ 
+-	/* workqueue for reserved extent conversions (buffered io) */
+-	struct workqueue_struct *rsv_conversion_wq;
++	/*
++	 * workqueue for reserved extent conversions (buffered io)
++	 * and large ea inodes reclaim
++	 */
++	struct workqueue_struct *s_misc_wq;
+ 
+ 	/* timer for periodic error stats printing */
+ 	struct timer_list s_err_report;
+Index: linux-stage/fs/ext4/page-io.c
+===================================================================
+--- linux-stage.orig/fs/ext4/page-io.c
++++ linux-stage/fs/ext4/page-io.c
+@@ -191,7 +191,7 @@ static void ext4_add_complete_io(ext4_io
+ 	WARN_ON(!(io_end->flag & EXT4_IO_END_UNWRITTEN));
+ 	WARN_ON(!io_end->handle);
+ 	spin_lock_irqsave(&ei->i_completed_io_lock, flags);
+-	wq = EXT4_SB(io_end->inode->i_sb)->rsv_conversion_wq;
++	wq = EXT4_SB(io_end->inode->i_sb)->s_misc_wq;
+ 	if (list_empty(&ei->i_rsv_conversion_list))
+ 		queue_work(wq, &ei->i_rsv_conversion_work);
+ 	list_add_tail(&io_end->list, &ei->i_rsv_conversion_list);
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -849,10 +849,10 @@ static void ext4_put_super(struct super_
+ 	int i, err;
+ 
+ 	ext4_unregister_li_request(sb);
++	flush_workqueue(sbi->s_misc_wq);
+ 	ext4_quota_off_umount(sb);
+ 
+-	flush_workqueue(sbi->rsv_conversion_wq);
+-	destroy_workqueue(sbi->rsv_conversion_wq);
++	destroy_workqueue(sbi->s_misc_wq);
+ 
+ 	if (sbi->s_journal) {
+ 		aborted = is_journal_aborted(sbi->s_journal);
+@@ -4479,9 +4479,9 @@ no_journal:
+ 	 * The maximum number of concurrent works can be high and
+ 	 * concurrency isn't really necessary.  Limit it to 1.
+ 	 */
+-	EXT4_SB(sb)->rsv_conversion_wq =
+-		alloc_workqueue("ext4-rsv-conversion", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
+-	if (!EXT4_SB(sb)->rsv_conversion_wq) {
++	EXT4_SB(sb)->s_misc_wq =
++		alloc_workqueue("ext4-misc", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
++	if (!EXT4_SB(sb)->s_misc_wq) {
+ 		printk(KERN_ERR "EXT4-fs: failed to create workqueue\n");
+ 		ret = -ENOMEM;
+ 		goto failed_mount4;
+@@ -4665,8 +4665,8 @@ failed_mount4a:
+ 	sb->s_root = NULL;
+ failed_mount4:
+ 	ext4_msg(sb, KERN_ERR, "mount failed");
+-	if (EXT4_SB(sb)->rsv_conversion_wq)
+-		destroy_workqueue(EXT4_SB(sb)->rsv_conversion_wq);
++	if (EXT4_SB(sb)->s_misc_wq)
++		destroy_workqueue(EXT4_SB(sb)->s_misc_wq);
+ failed_mount_wq:
+ 	if (sbi->s_journal) {
+ 		jbd2_journal_destroy(sbi->s_journal);
+@@ -5130,7 +5130,7 @@ static int ext4_sync_fs(struct super_blo
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 
+ 	trace_ext4_sync_fs(sb, wait);
+-	flush_workqueue(sbi->rsv_conversion_wq);
++	flush_workqueue(sbi->s_misc_wq);
+ 	/*
+ 	 * Writeback quota in non-journalled quota case - journalled quota has
+ 	 * no dirty dquots
+@@ -5165,7 +5165,7 @@ static int ext4_sync_fs_nojournal(struct
+ 	int ret = 0;
+ 
+ 	trace_ext4_sync_fs(sb, wait);
+-	flush_workqueue(EXT4_SB(sb)->rsv_conversion_wq);
++	flush_workqueue(EXT4_SB(sb)->s_misc_wq);
+ 	dquot_writeback_dquots(sb, -1);
+ 	if (wait && test_opt(sb, BARRIER))
+ 		ret = blkdev_issue_flush(sb->s_bdev, GFP_KERNEL, NULL);
+Index: linux-stage/fs/ext4/xattr.c
+===================================================================
+--- linux-stage.orig/fs/ext4/xattr.c
++++ linux-stage/fs/ext4/xattr.c
+@@ -929,6 +929,36 @@ ext4_xattr_inode_create(handle_t *handle
+ 	return ea_inode;
+ }
+ 
++struct delayed_iput_work {
++	struct work_struct work;
++	struct inode *inode;
++};
++
++static void delayed_iput_fn(struct work_struct *work)
++{
++	struct delayed_iput_work *diwork;
++
++	diwork = container_of(work, struct delayed_iput_work, work);
++	iput(diwork->inode);
++	kfree(diwork);
++}
++
++static void delayed_iput(struct inode *inode, struct delayed_iput_work *work)
++{
++	if (!inode) {
++		kfree(work);
++		return;
++	}
++
++	if (!work) {
++		iput(inode);
++	} else {
++		INIT_WORK(&work->work, delayed_iput_fn);
++		work->inode = inode;
++		queue_work(EXT4_SB(inode->i_sb)->s_misc_wq, &work->work);
++	}
++}
++
+ /*
+  * Unlink the inode storing the value of the EA.
+  */
+@@ -936,14 +966,16 @@ int
+ ext4_xattr_inode_unlink(struct inode *inode, unsigned long ea_ino)
+ {
+ 	struct inode *ea_inode = NULL;
++	struct delayed_iput_work *diwork = NULL;
+ 	int err;
+ 
++	diwork = kmalloc(sizeof(*diwork), GFP_NOFS);
+ 	ea_inode = ext4_xattr_inode_iget(inode, ea_ino, &err);
+ 	if (err)
+ 		return err;
+ 
+ 	clear_nlink(ea_inode);
+-	iput(ea_inode);
++	delayed_iput(ea_inode, diwork);
+ 
+ 	return 0;
+ }
