@@ -35,7 +35,7 @@
 #include <linux/lustre/lustre_ver.h>
 
 /* Top level of commands */
-static command_t *top_level;
+static command_t top_level[MAXCMDS];
 /* Set to 1 if user types exit or quit */
 static int done;
 /*
@@ -63,22 +63,22 @@ static int cfs_parser_ignore_errors(int argc, char **argv);
 command_t override_cmdlist[] = {
 	{ .pc_name = "quit", .pc_func = cfs_parser_quit, .pc_help = "quit" },
 	{ .pc_name = "exit", .pc_func = cfs_parser_quit, .pc_help = "exit" },
-	{ .pc_name = "help", .pc_func = cfs_parser_help, .pc_help = "help" },
-	{ .pc_name = "--help", .pc_func = cfs_parser_help, .pc_help = "help" },
+	{ .pc_name = "help", .pc_func = cfs_parser_help,
+	  .pc_help = "provide useful information about a command" },
+	{ .pc_name = "--help", .pc_func = cfs_parser_help,
+	  .pc_help = "provide useful information about a command" },
 	{ .pc_name = "version", .pc_func = cfs_parser_version,
-	  .pc_help = "version" },
+	  .pc_help = "show program version" },
 	{ .pc_name = "--version", .pc_func = cfs_parser_version,
-	  .pc_help = "version" },
+	  .pc_help = "show program version" },
 	{ .pc_name = "list-commands", .pc_func = cfs_parser_list,
-	  .pc_help = "list" },
+	  .pc_help = "list available commands" },
 	{ .pc_name = "--list-commands", .pc_func = cfs_parser_list,
-	  .pc_help = "list" },
+	  .pc_help = "list available commands" },
 	{ .pc_name = "--ignore_errors", .pc_func = cfs_parser_ignore_errors,
-	  .pc_help = "ignore errors that occur during script processing\n"
-		"--ignore_errors"},
+	  .pc_help = "ignore errors that occur during script processing"},
 	{ .pc_name = "ignore_errors", .pc_func = cfs_parser_ignore_errors,
-	  .pc_help = "ignore errors that occur during script processing\n"
-		"ignore_errors"},
+	  .pc_help = "ignore errors that occur during script processing"},
 	{ .pc_name = 0, .pc_func = NULL, .pc_help = 0 }
 };
 
@@ -141,10 +141,17 @@ static int cfs_parser_ignore_errors(int argc, char **argv)
 
 int cfs_parser(int argc, char **argv, command_t cmds[])
 {
+	command_t *cmd;
 	int rc = 0;
+	int i = 0;
 
 	done = 0;
-	top_level = cmds;
+
+	for (cmd = override_cmdlist; cmd->pc_name && i < MAXCMDS; cmd++)
+		top_level[i++] = *cmd;
+
+	for (cmd = cmds; cmd->pc_name && i < MAXCMDS; cmd++)
+		top_level[i++] = *cmd;
 
 	if (argc > 1)
 		rc = cfs_parser_execarg(argc - 1, argv + 1, cmds);
@@ -204,12 +211,6 @@ static command_t *find_cmd(char *name, command_t cmds[], char **next)
 	if (len == 0)
 		return NULL;
 
-	for (i = 0; override_cmdlist[i].pc_name; i++) {
-		if (strncasecmp(name, override_cmdlist[i].pc_name, len) == 0) {
-			*next = skipwhitespace(*next);
-			return &override_cmdlist[i];
-		}
-	}
 	for (i = 0; cmds[i].pc_name; i++) {
 		if (strncasecmp(name, cmds[i].pc_name, len) == 0) {
 			*next = skipwhitespace(*next);
@@ -227,6 +228,8 @@ static command_t *find_cmd(char *name, command_t cmds[], char **next)
 static int process(char *s, char **next, command_t *lookup,
 		   command_t **result, char **prev)
 {
+	static int depth;
+
 	*result = find_cmd(s, lookup, next);
 	*prev = s;
 
@@ -255,6 +258,18 @@ static int process(char *s, char **next, command_t *lookup,
 			another_result = find_cmd(s, another_result + 1,
 						  &another_next);
 			found_another = 1;
+
+			/*
+			 * In some circumstances, process will fail to find a
+			 * suitable command. We want to be able to escape both
+			 * the while loop and the recursion. So, track the
+			 * number of times we've been here and give up if
+			 * things start to get out-of-hand.
+			 */
+			if (depth > 50)
+				return CMD_NONE;
+
+			depth++;
 		}
 		if (found_another)
 			return CMD_AMBIG;
@@ -338,7 +353,7 @@ static int execute_line(char *line)
 		fprintf(stderr, "\n");
 		break;
 	case CMD_NONE:
-		fprintf(stderr, "No such command, type help\n");
+		fprintf(stderr, "No such command. Try --list-commands to see available commands.\n");
 		break;
 	case CMD_INCOMPLETE:
 		fprintf(stderr,
@@ -524,7 +539,9 @@ static int cfs_parser_help(int argc, char **argv)
 		fprintf(stderr, "%s: %s\n", line, result->pc_help);
 		break;
 	case CMD_NONE:
-		fprintf(stderr, "%s: Unknown command.\n", line);
+		fprintf(stderr, "%s: '%s' is not a valid command. See '%s --list-commands'.\n",
+			program_invocation_short_name, line,
+			program_invocation_short_name);
 		break;
 	case CMD_INCOMPLETE:
 		fprintf(stderr,

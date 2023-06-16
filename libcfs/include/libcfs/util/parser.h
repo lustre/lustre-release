@@ -20,8 +20,9 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
-#define HISTORY	100
+#define HISTORY 100
 #define MAXARGS 512
+#define MAXCMDS 1024
 
 #define CMD_COMPLETE	0
 #define CMD_INCOMPLETE	1
