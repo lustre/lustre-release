@@ -1862,7 +1862,9 @@ void kgnilnd_wakeup_rca_thread(void);
 int kgnilnd_start_rca_thread(void);
 int kgnilnd_get_node_state(__u32 nid);
 
+int kgnilnd_tunables_setup(struct lnet_ni *ni);
 int kgnilnd_tunables_init(void);
+
 void kgnilnd_init_msg(kgn_msg_t *msg, int type, lnet_nid_t source);
 
 void kgnilnd_bump_timeouts(__u32 nap_time, char *reason);

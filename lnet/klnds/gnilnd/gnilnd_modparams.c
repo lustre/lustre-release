@@ -25,6 +25,8 @@
 
 #include "gnilnd.h"
 
+#define CURRENT_LND_VERSION 1
+
 static int credits = GNILND_DEFAULT_CREDITS;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "# concurrent sends");
@@ -311,8 +313,8 @@ out:
 	return rc;
 }
 
-void
-kgninal_tunables_setup(struct lnet_ni *ni)
+int
+kgnilnd_tunables_setup(struct lnet_ni *ni)
 {
 	struct lnet_ioctl_config_gnilnd_tunables *tunables;
 
@@ -328,4 +330,6 @@ kgninal_tunables_setup(struct lnet_ni *ni)
 	tunables->lnd_version = CURRENT_LND_VERSION;
 
 	tunables->lnd_timeout = kgnilnd_timeout();
+
+	return 0;
 }
