@@ -3023,10 +3023,10 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 		ssize_t bytes_read;
 		size_t to_read;
 		size_t to_write;
+		size_t data_size;
 
 		if (pos >= data_end) {
 			off_t tmp_off;
-			size_t data_size;
 
 			if (pos >= mirror_end || !src) {
 				rc = llapi_mirror_find(layout, pos, end,
@@ -3078,23 +3078,22 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 				else
 					to_punch = data_off - cur_pos;
 
-				if (comp_array[i].lrc_end == OBD_OBJECT_EOF) {
+				if (comp_array[i].lrc_end == OBD_OBJECT_EOF)
 					/* the last component can be truncated
 					 * safely
 					 */
 					rc = llapi_mirror_truncate(fd, mid,
 								   cur_pos);
-					/* hole at the end of file, so just
-					 * truncate up to set size.
-					 */
-					if (!rc && data_off == data_end)
-						rc = llapi_mirror_truncate(fd,
+				else if (data_size)
+					rc = llapi_mirror_punch(fd, mid,
+							cur_pos, to_punch);
+				/**
+				 * hole at the end of file, so just truncate up
+				 * to set size.
+				 */
+				if (!rc && data_off == data_end && !data_size)
+					rc = llapi_mirror_truncate(fd,
 								mid, data_end);
-				} else {
-					rc = llapi_mirror_punch(fd,
-						comp_array[i].lrc_mirror_id,
-						cur_pos, to_punch);
-				}
 				/* if failed then read failed hole range */
 				if (rc < 0) {
 					rc = 0;

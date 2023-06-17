@@ -12532,10 +12532,11 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 				rc = -EINVAL;
 
 				fprintf(stderr,
-					"%s: chunk "DEXT" has different checksum value on mirror %u and mirror %u.\n",
+					"%s: chunk "DEXT" has different checksum value on mirror %u:%lx and mirror %u:%lx.\n",
 					progname, PEXT(&chunk->chunk),
-					chunk->mirror_id[0],
-					chunk->mirror_id[i]);
+					chunk->mirror_id[0], crc_array[0],
+					chunk->mirror_id[i], crc_array[i]);
+				print_checksums(chunk, crc_array, pos, buflen);
 			}
 		}
 

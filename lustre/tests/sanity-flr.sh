@@ -3269,7 +3269,7 @@ test_70a() {
 		error "setstripe $tf failed"
 
 	FSXNUM=${FSXNUM:-1000}
-	$FSX -p 5 -N $FSXNUM -S 0 -M $tf || error "fsx FLR file $tf failed"
+	$FSX -p 1 -N $FSXNUM -S 0 -M $tf || error "fsx FLR file $tf failed"
 }
 run_test 70a "flr mode fsx test"
 

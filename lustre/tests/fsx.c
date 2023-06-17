@@ -1465,12 +1465,12 @@ do_mirror_ops(int op)
 
 		rc = system(cmd);
 		if (rc < 0) {
-			prt("%s: %d\n", cmd, errno);
+			prt("mirror op %d: %s: %d\n", op, cmd, errno);
 			report_failure(184);
 		} else if (WIFEXITED(rc)) {
 			rc = WEXITSTATUS(rc);
 			if (rc > 0) {
-				prt("%s: %d\n", cmd, rc);
+				prt("mirror op %d: %s: %d\n", op, cmd, rc);
 				snprintf(cmd, sizeof(cmd),
 					 "lfs mirror verify -v %s", tf->path);
 				rc = system(cmd);
