@@ -2142,8 +2142,8 @@ out:
 }
 LDEBUGFS_SEQ_FOPS(mdt_hsm_policy);
 
-ssize_t loop_period_show(struct kobject *kobj, struct attribute *attr,
-			 char *buf)
+static ssize_t loop_period_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2151,8 +2151,8 @@ ssize_t loop_period_show(struct kobject *kobj, struct attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_loop_period);
 }
 
-ssize_t loop_period_store(struct kobject *kobj, struct attribute *attr,
-			  const char *buffer, size_t count)
+static ssize_t loop_period_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2170,8 +2170,8 @@ ssize_t loop_period_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(loop_period);
 
-ssize_t grace_delay_show(struct kobject *kobj, struct attribute *attr,
-			 char *buf)
+static ssize_t grace_delay_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2179,8 +2179,8 @@ ssize_t grace_delay_show(struct kobject *kobj, struct attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_grace_delay);
 }
 
-ssize_t grace_delay_store(struct kobject *kobj, struct attribute *attr,
-			  const char *buffer, size_t count)
+static ssize_t grace_delay_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2198,9 +2198,9 @@ ssize_t grace_delay_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(grace_delay);
 
-ssize_t active_request_timeout_show(struct kobject *kobj,
-				    struct attribute *attr,
-				    char *buf)
+static ssize_t active_request_timeout_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2208,9 +2208,9 @@ ssize_t active_request_timeout_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", cdt->cdt_active_req_timeout);
 }
 
-ssize_t active_request_timeout_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count)
+static ssize_t active_request_timeout_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer, size_t count)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2228,8 +2228,8 @@ ssize_t active_request_timeout_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(active_request_timeout);
 
-ssize_t max_requests_show(struct kobject *kobj, struct attribute *attr,
-			  char *buf)
+static ssize_t max_requests_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2237,8 +2237,8 @@ ssize_t max_requests_show(struct kobject *kobj, struct attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", cdt->cdt_max_requests);
 }
 
-ssize_t max_requests_store(struct kobject *kobj, struct attribute *attr,
-			   const char *buffer, size_t count)
+static ssize_t max_requests_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2256,8 +2256,8 @@ ssize_t max_requests_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(max_requests);
 
-ssize_t default_archive_id_show(struct kobject *kobj, struct attribute *attr,
-				char *buf)
+static ssize_t default_archive_id_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
@@ -2265,8 +2265,9 @@ ssize_t default_archive_id_show(struct kobject *kobj, struct attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_default_archive_id);
 }
 
-ssize_t default_archive_id_store(struct kobject *kobj, struct attribute *attr,
-				 const char *buffer, size_t count)
+static ssize_t default_archive_id_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
 {
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
