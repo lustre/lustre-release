@@ -1952,7 +1952,7 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	 * This is a Cray extension to the "standard" LND behavior.
 	 */
 	lnet_nid4_to_nid(peer->gnp_nid, &peer_nid);
-	lnet_notify(peer->gnp_net->gnn_ni, &peed_nid, true, true,
+	lnet_notify(peer->gnp_net->gnn_ni, &peer_nid, true, true,
 		    ktime_get_seconds());
 
 	/* drop our 'hold' ref */

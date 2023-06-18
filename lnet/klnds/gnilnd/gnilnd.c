@@ -602,7 +602,8 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 					 &peer_nid);
 
 			CDEBUG(D_NET, "peer 0x%p->%s last_alive %lld (%llds ago)\n",
-				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
+				peer, libcfs_nidstr(&peer_nid),
+				peer->gnp_last_alive,
 				ktime_get_seconds() - peer->gnp_last_alive);
 
 			lnet_notify(net->gnn_ni, &peer_nid, alive, true,
