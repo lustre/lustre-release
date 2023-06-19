@@ -118,7 +118,7 @@ static int sk_verify_header(struct sk_hdr *skh)
 	return GSS_S_COMPLETE;
 }
 
-void sk_construct_rfc3686_iv(__u8 *iv, __u32 nonce, __u64 partial_iv)
+static void sk_construct_rfc3686_iv(__u8 *iv, __u32 nonce, __u64 partial_iv)
 {
 	__u32 ctr = cpu_to_be32(1);
 
@@ -884,7 +884,7 @@ void gss_delete_sec_context_sk(void *internal_context)
 	sk_delete_context(sk_context);
 }
 
-int gss_display_sk(struct gss_ctx *gss_context, char *buf, int bufsize)
+static int gss_display_sk(struct gss_ctx *gss_context, char *buf, int bufsize)
 {
 	return scnprintf(buf, bufsize, "sk");
 }

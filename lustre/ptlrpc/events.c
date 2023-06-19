@@ -599,7 +599,7 @@ lnet_pid_t ptl_get_pid(void)
 	return LNET_PID_LUSTRE;
 }
 
-int ptlrpc_ni_init(void)
+static int ptlrpc_ni_init(void)
 {
 	int rc;
 	lnet_pid_t pid;

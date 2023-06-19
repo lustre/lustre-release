@@ -145,6 +145,7 @@ void gss_delete_sec_context_null(void *internal_context)
 	OBD_FREE_PTR(null_context);
 }
 
+static
 int gss_display_null(struct gss_ctx *gss_context, char *buf, int bufsize)
 {
 	return scnprintf(buf, bufsize, "null");

@@ -1108,9 +1108,10 @@ out:
 /**
  * Step through active config and write to disk.
  */
-struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
-					    struct dt_device *dev,
-					    struct local_oid_storage *los)
+static struct dt_object *
+nodemap_save_config_cache(const struct lu_env *env,
+			  struct dt_device *dev,
+			  struct local_oid_storage *los)
 {
 	struct dt_object *o;
 	struct lu_nodemap *nodemap;
@@ -1578,7 +1579,6 @@ out:
 		ii->ii_hash_end = II_END_OFF;
 	return rc;
 }
-
 
 int nodemap_index_read(struct lu_env *env,
 		       struct nm_config_file *ncf,

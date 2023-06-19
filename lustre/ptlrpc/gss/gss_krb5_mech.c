@@ -1524,9 +1524,8 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
 	return GSS_S_COMPLETE;
 }
 
-int gss_display_kerberos(struct gss_ctx        *ctx,
-			 char                  *buf,
-			 int                    bufsize)
+static int gss_display_kerberos(struct gss_ctx *ctx,
+				char *buf, int bufsize)
 {
 	struct krb5_ctx    *kctx = ctx->internal_ctx_id;
 	int                 written;
