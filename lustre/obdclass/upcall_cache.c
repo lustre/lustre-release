@@ -229,15 +229,18 @@ find_again:
 		if (UC_CACHE_IS_ACQUIRING(entry)) {
 			/* we're interrupted or upcall failed in the middle */
 			rc = left > 0 ? -EINTR : -ETIMEDOUT;
-			CERROR("acquire for key %llu: error %d\n",
-			       entry->ue_key, rc);
 			put_entry(cache, entry);
 			if (!failedacquiring) {
 				spin_unlock(&cache->uc_lock);
 				failedacquiring = true;
 				new = NULL;
+				CDEBUG(D_OTHER,
+				       "retry acquire for key %llu (got %d)\n",
+				       entry->ue_key, rc);
 				goto find_again;
 			}
+			CERROR("acquire for key %llu: error %d\n",
+			       entry->ue_key, rc);
 			GOTO(out, entry = ERR_PTR(rc));
 		}
 	}
