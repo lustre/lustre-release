@@ -72,7 +72,7 @@ static void dio_complete_routine(struct bio *bio, int error);
 #endif
 
 static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
-			bool integrity_enabled, int start_page_idx)
+			int start_page_idx)
 {
 	struct osd_bio_private *bio_private = NULL;
 	ENTRY;
@@ -111,7 +111,8 @@ static inline bool osd_use_page_cache(struct osd_device *d)
 }
 
 static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
-			    int rw, int line, int pages)
+			    struct inode *inode,
+			    int rw, const short line, int pages)
 {
 	int blocks, i;
 
@@ -131,6 +132,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	/* must be counted before, so assert */
 	iobuf->dr_rw = rw;
 	iobuf->dr_init_at = line;
+	iobuf->dr_inode = inode;
 
 	/* Init dr_start_pg_wblks to 0 for osd_read/write_prep().
 	 * For osd_write_commit() need to keep the value assigned in
@@ -180,8 +182,14 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 
 	return 0;
 }
-#define osd_init_iobuf(dev, iobuf, rw, pages) \
-	__osd_init_iobuf(dev, iobuf, rw, __LINE__, pages)
+
+#define osd_init_iobuf(dev, iobuf, inode, rw, pages)			\
+({									\
+	int __r;							\
+	BUILD_BUG_ON(__LINE__ >= (1 << 16));				\
+	__r = __osd_init_iobuf(dev, iobuf, inode, rw, __LINE__, pages);	\
+	__r;								\
+})
 
 static void osd_iobuf_add_page(struct osd_iobuf *iobuf,
 			       struct niobuf_local *lnb)
@@ -210,7 +218,6 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 
 	iobuf->dr_error = 0;
 }
-
 
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
@@ -308,9 +315,9 @@ static void record_start_io(struct osd_iobuf *iobuf, int size)
 	}
 }
 
-static int osd_submit_bio(struct osd_device *osd, struct block_device *bdev,
+static int osd_submit_bio(struct osd_device *osd,
 			  struct osd_iobuf *iobuf,
-			  struct bio *bio, int bio_start_page_idx)
+			  struct bio *bio)
 {
 	struct request_queue *q;
 	unsigned int bi_size;
@@ -330,10 +337,7 @@ static int osd_submit_bio(struct osd_device *osd, struct block_device *bdev,
 	       osd_bio_nr_segs(bio),
 	       queue_max_segments(q));
 
-	rc = osd_bio_integrity_handle(osd, bio,
-		iobuf, bio_start_page_idx,
-		CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT),
-		bdev_integrity_enabled(bdev, iobuf->dr_rw));
+	rc = osd_bio_integrity_handle(osd, bio, iobuf);
 	if (rc)
 		goto out;
 
@@ -469,8 +473,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 					 page_offset) != 0)
 				continue;       /* added this frag OK */
 
-			rc = osd_submit_bio(osd, bdev, iobuf, bio,
-					    bio_start_page_idx);
+			rc = osd_submit_bio(osd, iobuf, bio);
 			if (rc)
 				goto out;
 
@@ -491,8 +494,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 				goto out;
 			}
 			bio_set_sector(bio, sector);
-			rc = osd_bio_init(bio, iobuf, integrity_enabled,
-					  bio_start_page_idx);
+			rc = osd_bio_init(bio, iobuf, bio_start_page_idx);
 			if (rc)
 				goto out;
 
@@ -501,7 +503,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 			LASSERT(rc != 0);
 		}
 	}
-	rc = osd_submit_bio(osd, bdev, iobuf, bio, bio_start_page_idx);
+	rc = osd_submit_bio(osd, iobuf, bio);
 	if (rc)
 		goto out;
 out:
@@ -1139,7 +1141,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(inode);
 
-	rc = osd_init_iobuf(osd, iobuf, 0, npages);
+	rc = osd_init_iobuf(osd, iobuf, inode, 0, npages);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
@@ -1440,7 +1442,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(inode);
 
-	rc = osd_init_iobuf(osd, iobuf, 1, npages);
+	rc = osd_init_iobuf(osd, iobuf, inode, 1, npages);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
@@ -1534,7 +1536,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(inode);
 
-	rc = osd_init_iobuf(osd, iobuf, 0, npages);
+	rc = osd_init_iobuf(osd, iobuf, inode, 0, npages);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 

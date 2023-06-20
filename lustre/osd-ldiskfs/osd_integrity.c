@@ -353,18 +353,15 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 }
 
 int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
-				    struct osd_iobuf *iobuf,
-				    int start_page_idx, bool fault_inject,
-				    bool integrity_enabled)
+			     struct osd_iobuf *iobuf)
 {
-	struct super_block *sb = osd_sb(osd);
 	integrity_gen_fn *generate_fn = NULL;
 	integrity_vrfy_fn *verify_fn = NULL;
 	int rc;
 
 	ENTRY;
 
-	if (!integrity_enabled)
+	if (!iobuf->dr_integrity)
 		RETURN(0);
 
 	rc = osd_get_integrity_profile(osd, &generate_fn, &verify_fn);
@@ -383,13 +380,17 @@ int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 	/* Verify and inject fault only when writing */
 	if (iobuf->dr_rw == 1) {
 		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
+			struct super_block *sb = osd_sb(osd);
+			struct osd_bio_private *b_priv = bio->bi_private;
+			int st_page_index = b_priv->obp_start_page_idx;
+
 			rc = osd_bio_integrity_compare(bio, sb->s_bdev, iobuf,
-						       start_page_idx);
+						       st_page_index);
 			if (rc)
 				RETURN(rc);
 		}
 
-		if (unlikely(fault_inject))
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT)))
 			bio_integrity_fault_inject(bio);
 	}
 	RETURN(0);

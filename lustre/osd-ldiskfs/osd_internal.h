@@ -596,8 +596,10 @@ struct osd_iobuf {
 	int                dr_npages;
 	int                dr_error;
 	int                dr_frags;
-	unsigned int       dr_elapsed_valid:1; /* we really did count time */
-	unsigned int       dr_rw:1;
+	unsigned int       dr_init_at:16, /* the line iobuf was initialized */
+			   dr_elapsed_valid:1, /* we really did count time */
+			   dr_rw:1,
+			   dr_integrity:1;
 	struct lu_buf	   dr_pg_buf;
 	struct page      **dr_pages;
 	struct niobuf_local	**dr_lnbs;
@@ -607,9 +609,9 @@ struct osd_iobuf {
 	ktime_t		   dr_start_time;
 	ktime_t		   dr_elapsed;	/* how long io took */
 	struct osd_device *dr_dev;
-	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 	/* Already written blocks of the start page */
 	unsigned int	   dr_start_pg_wblks;
+	struct inode 	  *dr_inode;
 };
 
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
@@ -1638,12 +1640,9 @@ extern struct kmem_cache *biop_cachep;
 
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) && defined(HAVE_BIO_INTEGRITY_PREP_FN)
 int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
-				    struct osd_iobuf *iobuf,
-				    int start_page_idx, bool fault_inject,
-				    bool integrity_enabled);
+				    struct osd_iobuf *iobuf);
 #else  /* !CONFIG_BLK_DEV_INTEGRITY */
-#define osd_bio_integrity_handle(osd, bio, iobuf, start_page_idx, \
-				 fault_inject, integrity_enabled) 0
+#define osd_bio_integrity_handle(osd, bio, iobuf) (0)
 #endif
 
 #ifdef HAVE_BIO_INTEGRITY_PREP_FN
