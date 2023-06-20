@@ -8510,8 +8510,8 @@ test_56ba() {
 	setup_56 $dir/1Mfiles 5 1 "-S 1M --component-end 1M"
 	# Create composite files with three components
 	setup_56 $dir/2Mfiles 5 2 "-E 2M -S 1M -E 4M -E 6M"
-	# Create non-composite files
-	createmany -o $dir/${tfile}- 10
+	# LU-16904 Create plain layout files
+	lfs setstripe -c 1 $dir/$tfile-{1..10}
 
 	local nfiles=$($LFS find --component-end 1M --type f $dir | wc -l)
 
@@ -8874,8 +8874,10 @@ test_57b() {
 	done
 
 	# verify that files have EAs now
-	$LFS getstripe $file1 | grep -q "obdidx" || error "$file1 missing EA"
-	$LFS getstripe $fileN | grep -q "obdidx" || error "$fileN missing EA"
+	$LFS getstripe -y $file1 | grep -q "l_ost_idx" ||
+		error "$file1 missing EA"
+	$LFS getstripe -y $fileN | grep -q "l_ost_idx" ||
+		error "$fileN missing EA"
 
 	sleep 1  #make sure we get new statfs data
 	df $dir
@@ -9764,6 +9766,10 @@ run_test 65d "directory setstripe -S stripe_size -c stripe_count"
 test_65e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	# LU-16904 delete layout when root is set as PFL layout
+	save_layout_restore_at_exit $MOUNT
+	$LFS setstripe -d $MOUNT || error "setstripe failed"
+
 	test_mkdir $DIR/$tdir
 
 	$LFS setstripe $DIR/$tdir || error "setstripe"
@@ -9785,6 +9791,10 @@ run_test 65f "dir setstripe permission (should return error) ==="
 
 test_65g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	# LU-16904 delete layout when root is set as PFL layout
+	save_layout_restore_at_exit $MOUNT
+	$LFS setstripe -d $MOUNT || error "setstripe failed"
 
 	test_mkdir $DIR/$tdir
 	local STRIPESIZE=$($LFS getstripe -S $DIR/$tdir)
@@ -9955,10 +9965,15 @@ test_65n() {
 
 	# new subdirectory under root directory should not inherit
 	# the default layout from root
-	local dir1=$MOUNT/$tdir-1
-	mkdir $dir1 || error "mkdir $dir1 failed"
-	! getfattr -n trusted.lov $dir1 &> /dev/null ||
-		error "$dir1 shouldn't have LOV EA"
+	# LU-16904 check if the root is set as PFL layout
+	local numcomp=$($LFS getstripe --component-count $MOUNT)
+
+	if [[ $numcomp -eq 0 ]]; then
+		local dir1=$MOUNT/$tdir-1
+		mkdir $dir1 || error "mkdir $dir1 failed"
+		! getfattr -n trusted.lov $dir1 &> /dev/null ||
+			error "$dir1 shouldn't have LOV EA"
+	fi
 
 	# delete the default layout on root directory
 	$LFS setstripe -d $MOUNT || error "delete root default layout failed"
@@ -19475,7 +19490,14 @@ test_204e() {
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -d $DIR/$tdir
 
-	check_default_stripe_attr --stripe-count --raw
+	# LU-16904 check if root is set as PFL layout
+	local numcomp=$($LFS getstripe --component-count $MOUNT)
+
+	if [[ $numcomp -gt 0 ]]; then
+		check_default_stripe_attr --stripe-count
+	else
+		check_default_stripe_attr --stripe-count --raw
+	fi
 	check_default_stripe_attr --stripe-size --raw
 	check_default_stripe_attr --stripe-index --raw
 }
