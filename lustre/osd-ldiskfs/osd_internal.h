@@ -591,9 +591,11 @@ struct osd_it_quota {
 
 struct osd_iobuf {
 	wait_queue_head_t  dr_wait;
-	atomic_t       dr_numreqs;  /* number of reqs being processed */
+	atomic_t	   dr_numreqs;  /* number of reqs being processed */
 	int                dr_max_pages;
 	int                dr_npages;
+	unsigned int	   dr_pextents; /* number block extents */
+	unsigned int	   dr_lextents; /* number a logical extents */
 	int                dr_error;
 	int                dr_frags;
 	unsigned int       dr_init_at:16, /* the line iobuf was initialized */

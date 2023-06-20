@@ -125,6 +125,9 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	init_waitqueue_head(&iobuf->dr_wait);
 	atomic_set(&iobuf->dr_numreqs, 0);
 	iobuf->dr_npages = 0;
+	iobuf->dr_lextents = 0;
+	iobuf->dr_pextents = 0;
+
 	iobuf->dr_error = 0;
 	iobuf->dr_dev = d;
 	iobuf->dr_frags = 0;
@@ -412,7 +415,6 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	ENTRY;
 
 	LASSERT(iobuf->dr_npages == npages);
-	osd_brw_stats_update(osd, iobuf);
 	iobuf->dr_start_time = ktime_get();
 	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
 
@@ -666,10 +668,13 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_iobuf *iobuf = &oti->oti_iobuf;
 	struct pagevec pvec;
 	int i;
 
+	osd_brw_stats_update(osd, iobuf);
 	ll_pagevec_init(&pvec, 0);
 
 	for (i = 0; i < npages; i++) {
@@ -966,6 +971,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 		if (fp == NULL) { /* start new extent */
 			fp = *page++;
 			clen = 1;
+			iobuf->dr_lextents++;
 			if (++i != pages)
 				continue;
 		} else if (fp->index + clen == (*page)->index) {
@@ -1040,6 +1046,8 @@ cont_map:
 		if (rc >= 0) {
 			struct brw_stats *h = &osd->od_brw_stats;
 			int idx, c = 0;
+
+			iobuf->dr_pextents++;
 
 			idx = map.m_flags & LDISKFS_MAP_NEW ?
 				BRW_ALLOC_TIME : BRW_MAP_TIME;

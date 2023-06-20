@@ -42,39 +42,18 @@
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 {
 	struct brw_stats *bs = &osd->od_brw_stats;
-	sector_t	 *last_block = NULL;
-	struct page     **pages = iobuf->dr_pages;
-	struct page      *last_page = NULL;
-	unsigned long     discont_pages = 0;
-	unsigned long     discont_blocks = 0;
-	sector_t	 *blocks = iobuf->dr_blocks;
-	int               i, nr_pages = iobuf->dr_npages;
-	int               blocks_per_page;
-	int               rw = iobuf->dr_rw;
+	int nr_pages = iobuf->dr_npages;
+	int rw = iobuf->dr_rw;
 
 	if (unlikely(nr_pages == 0))
 		return;
 
-	blocks_per_page = PAGE_SIZE >> osd_sb(osd)->s_blocksize_bits;
-
 	lprocfs_oh_tally_log2_pcpu(&bs->bs_hist[BRW_R_PAGES + rw], nr_pages);
 
-	while (nr_pages-- > 0) {
-		if (last_page && (*pages)->index != (last_page->index + 1))
-			discont_pages++;
-		last_page = *pages;
-		pages++;
-		for (i = 0; i < blocks_per_page; i++) {
-			if (last_block && *blocks != (*last_block + 1))
-				discont_blocks++;
-			last_block = blocks++;
-		}
-	}
-
 	lprocfs_oh_tally_pcpu(&bs->bs_hist[BRW_R_DISCONT_PAGES+rw],
-			      discont_pages);
+			      iobuf->dr_lextents);
 	lprocfs_oh_tally_pcpu(&bs->bs_hist[BRW_R_DISCONT_BLOCKS+rw],
-			      discont_blocks);
+			      iobuf->dr_pextents);
 }
 
 static int osd_stats_init(struct osd_device *osd)
