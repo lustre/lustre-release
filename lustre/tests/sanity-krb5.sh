@@ -735,7 +735,7 @@ test_151() {
 }
 run_test 151 "secure mgs connection: server flavor control"
 
-complete $SECONDS
+complete_test $SECONDS
 set_flavor_all null
 cleanup_gss
 check_and_cleanup_lustre

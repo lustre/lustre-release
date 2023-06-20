@@ -678,6 +678,6 @@ test_9() {
 run_test 9 "Replicate recursive directory removal"
 
 cd $ORIG_PWD
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

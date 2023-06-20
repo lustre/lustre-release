@@ -249,5 +249,5 @@ test_iozone() {
 }
 run_test iozone "iozone on cifs clients"
 
-complete $SECONDS
+complete_test $SECONDS
 exit_status

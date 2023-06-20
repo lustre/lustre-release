@@ -206,6 +206,6 @@ test_1() {
 }
 run_test 1 "racer on clients: ${CLIENTS:-$(hostname)} DURATION=$DURATION"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

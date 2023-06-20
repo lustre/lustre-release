@@ -224,6 +224,6 @@ test_fsx_partial_punch() {
 }
 run_test fsx_partial_punch "Verify fsx with partial punch via fallocate"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

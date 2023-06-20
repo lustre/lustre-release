@@ -375,6 +375,6 @@ run_test 4 "create/delete snapshot after MGS remount"
 lss_cleanup
 do_facet mgs $LCTL set_param debug=-snapshot
 do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param debug=-snapshot
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

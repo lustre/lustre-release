@@ -183,6 +183,6 @@ run_test xdd "xdd"
 [ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ] &&
 	SLOW=$ZFSSLOW
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

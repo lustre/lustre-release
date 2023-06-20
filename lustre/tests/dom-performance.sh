@@ -431,6 +431,6 @@ run_test compbench "Performance comparision: compilebench"
 FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
 $LCTL set_param -n debug="$SAVED_DEBUG"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

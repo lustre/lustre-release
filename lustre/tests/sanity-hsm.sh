@@ -5778,6 +5778,6 @@ test_606() {
 }
 run_test 606 "llog_reader groks changelog fields"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

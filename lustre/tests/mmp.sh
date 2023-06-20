@@ -670,7 +670,7 @@ run_test 10 "e2fsck with mounted filesystem"
 mmp_fini
 FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
 
-complete $SECONDS
+complete_test $SECONDS
 $MMP_RESTORE_MOUNT && setupall
 check_and_cleanup_lustre
 exit_status

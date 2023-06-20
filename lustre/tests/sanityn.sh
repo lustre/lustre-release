@@ -6285,7 +6285,7 @@ log "cleanup: ======================================================"
 [ "$(mount | grep $MOUNT2)" ] && wait_update $HOSTNAME "fuser -m $MOUNT2" "" ||
 	true
 
-complete $SECONDS
+complete_test $SECONDS
 rm -f $SAMPLE_FILE
 check_and_cleanup_lustre
 exit_status

@@ -148,7 +148,7 @@ else
 	fi
 fi
 
-complete $SECONDS
+complete_test $SECONDS
 restore_lustre_params < $p
 mdsrate_cleanup_all
 rmdir $BASEDIR || true

@@ -850,6 +850,6 @@ test_21b() {
 }
 run_test 21b "Send sepol for metadata ops"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

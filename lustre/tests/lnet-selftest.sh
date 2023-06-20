@@ -198,7 +198,7 @@ test_smoke () {
 }
 run_test smoke "lst regression test"
 
-complete $SECONDS
+complete_test $SECONDS
 _restore_mount
 check_and_cleanup_lustre
 exit_status

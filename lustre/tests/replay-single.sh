@@ -5142,6 +5142,6 @@ test_200() {
 }
 run_test 200 "Dropping one OBD_PING should not cause disconnect"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -140,6 +140,6 @@ test_1() {
 }
 run_test 1 "install, build, run posix on $BASELINE_FS and lustre, then compare"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

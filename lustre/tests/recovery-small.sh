@@ -3480,6 +3480,6 @@ test_154() {
 }
 run_test 154 "corruption update llog can be skipped"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

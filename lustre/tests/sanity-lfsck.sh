@@ -6194,6 +6194,6 @@ OSTCOUNT=${SAVED_OSTCOUNT}
 # cleanup the system at last
 REFORMAT="yes" cleanup_and_setup_lustre
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

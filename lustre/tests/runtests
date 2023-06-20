@@ -148,6 +148,6 @@ test_1() {
 }
 run_test 1 "All Runtests"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

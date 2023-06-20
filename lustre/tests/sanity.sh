@@ -30221,7 +30221,7 @@ test_906() {
 }
 run_test 906 "Simple test for io_uring I/O engine via fio"
 
-complete $SECONDS
+complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then

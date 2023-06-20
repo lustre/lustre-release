@@ -183,6 +183,6 @@ run_test 0 "OI scrub performance test"
 
 # cleanup the system at last
 scrub_cleanup
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

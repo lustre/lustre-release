@@ -498,6 +498,6 @@ test_12b() {
 }
 run_test 12b "write after OST failover to a missing object"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

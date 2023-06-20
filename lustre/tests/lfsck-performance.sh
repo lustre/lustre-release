@@ -1028,6 +1028,6 @@ run_test 8 "lfsck namespace impact on create performance"
 
 # cleanup the system at last
 lfsck_cleanup
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

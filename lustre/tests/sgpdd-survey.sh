@@ -76,5 +76,5 @@ test_2 () {
 }
 run_test 2 "sgpdd-survey, osts, scsidevs"
 
-complete $SECONDS
+complete_test $SECONDS
 exit_status

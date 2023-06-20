@@ -97,6 +97,6 @@ run_test sanity "Run sanity parallel on different directories at the same time"
 
 cleanup_running_directories || error "unlink running directories"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

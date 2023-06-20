@@ -166,7 +166,7 @@ else
     fi
 fi
 
-complete $SECONDS
+complete_test $SECONDS
 restore_lustre_params < $p
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE

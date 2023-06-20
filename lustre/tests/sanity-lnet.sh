@@ -3718,7 +3718,6 @@ test_402() {
 }
 run_test 402 "Destination net rule should not panic"
 
-complete $SECONDS
-
+complete_test $SECONDS
 cleanup_testsuite
 exit_status

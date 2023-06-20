@@ -5960,7 +5960,7 @@ reset_quota_settings
 quota_fini
 
 cd $ORIG_PWD
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
 exit_status

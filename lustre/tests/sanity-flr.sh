@@ -4266,6 +4266,6 @@ test_208b() {
 }
 run_test 208b "mirror selection to prefer non-rotational devices for writes"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -1928,7 +1928,7 @@ run_test 32 "force to create a file without pool (no inheritance)"
 
 cd $ORIG_PWD
 
-complete $SECONDS
+complete_test $SECONDS
 destroy_test_pools $FSNAME
 if ! combined_mgs_mds; then
 	zconf_umount $mgs_HOST $MOUNT

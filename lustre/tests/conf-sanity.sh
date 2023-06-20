@@ -10665,6 +10665,6 @@ MDSSIZE=$STORED_MDSSIZE
 OSTSIZE=$STORED_OSTSIZE
 reformat
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

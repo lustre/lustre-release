@@ -137,5 +137,5 @@ test_racer_on_nfs() {
 }
 run_test racer_on_nfs "racer on NFS client"
 
-complete $SECONDS
+complete_test $SECONDS
 exit_status

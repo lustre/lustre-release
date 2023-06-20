@@ -2539,6 +2539,6 @@ test_27() {
 }
 run_test 27 "overstriping with -C -1 in mdt_dump_lmm"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

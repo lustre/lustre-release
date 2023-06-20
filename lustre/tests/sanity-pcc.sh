@@ -1656,6 +1656,6 @@ test_102() {
 }
 run_test 102 "PCC-RO should not hange for io_uring I/O engine"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

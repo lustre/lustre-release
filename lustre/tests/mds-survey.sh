@@ -127,7 +127,7 @@ run_test 2 "Metadata survey with stripe_count = 1"
 # remount the clients
 restore_mount $MOUNT
 
-complete $SECONDS
+complete_test $SECONDS
 cleanup_echo_devs
 check_and_cleanup_lustre
 exit_status

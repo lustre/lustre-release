@@ -75,7 +75,7 @@ run_test 0a "expired recovery with lost client"
 if [ -f "$LU482_FAILED" ]; then
 	log "Found check file $LU482_FAILED, aborting test script"
 	rm -vf "$LU482_FAILED"
-	complete $SECONDS
+	complete_test $SECONDS
 	do_nodes $CLIENTS umount -f $MOUNT2 || true
 	do_nodes $CLIENTS umount -f $MOUNT || true
 	# copied from stopall, but avoid the MDS recovery
@@ -1286,7 +1286,7 @@ test_33() { # LU-15935
 }
 run_test 33 "Check for OBD_INCOMPAT_MULTI_RPCS in last_rcvd after abort_recovery"
 
-complete $SECONDS
+complete_test $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 [ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true

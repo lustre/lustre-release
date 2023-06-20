@@ -59,6 +59,6 @@ run_test failover_mds "failover MDS"
 zconf_mount $HOSTNAME $MOUNT || error "mount $MOUNT on $HOSTNAME failed"
 client_up || error "start client on $HOSTNAME failed"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

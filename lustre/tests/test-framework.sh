@@ -6893,12 +6893,12 @@ trace() {
 	return 1
 }
 
-complete () {
+complete_test() {
 	local duration=$1
 
-	banner test complete, duration $duration sec
+	banner "test complete, duration $duration sec"
 	[ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
-	echo duration $duration >>$TESTSUITELOG
+	echo "duration $duration" >>$TESTSUITELOG
 }
 
 pass() {

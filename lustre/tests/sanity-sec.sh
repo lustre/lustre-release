@@ -5845,6 +5845,6 @@ sec_unsetup() {
 }
 sec_unsetup
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

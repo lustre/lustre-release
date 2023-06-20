@@ -1207,6 +1207,6 @@ rm -f $cos_param_file
 
 [ "$CLIENTS" ] && zconf_mount_clients $CLIENTS $DIR
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

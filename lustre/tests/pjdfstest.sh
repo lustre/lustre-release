@@ -160,7 +160,7 @@ SUBTEST
 done
 
 cat << 'TAIL'
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
 TAIL

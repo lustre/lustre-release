@@ -218,7 +218,7 @@ test_sanityn()
 }
 run_test sanityn "Run sanityn with Data-on-MDT files"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 declare -a logs=($ONLY)
 logs=("${logs[@]/#/$TMP/}")

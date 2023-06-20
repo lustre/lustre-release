@@ -107,6 +107,6 @@ test_3a() {
 
 run_test 3a "recovery time, $CLIENTCOUNT clients"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

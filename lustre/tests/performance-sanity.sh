@@ -66,7 +66,7 @@ test_8() {
 }
 run_test 8 "getattr large files ======"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 [ -f "$LOG" ] && cat $LOG || true
 exit_status

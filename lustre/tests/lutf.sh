@@ -85,7 +85,7 @@ if [ -d /tmp/lutf/ ]; then
 fi
 
 
-complete $SECONDS
+complete_test $SECONDS
 
 cleanup_testsuite
 

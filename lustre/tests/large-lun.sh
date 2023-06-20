@@ -330,7 +330,7 @@ test_4 () {
 }
 run_test 4 "run llverfs on lustre filesystem"
 
-complete $SECONDS
+complete_test $SECONDS
 $LARGE_LUN_RESTORE_MOUNT && setupall
 check_and_cleanup_lustre
 exit_status

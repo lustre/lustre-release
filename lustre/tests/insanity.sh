@@ -746,6 +746,6 @@ test_14() {
 }
 run_test 14 "Fourteen Failure Mode: OST0,OST1/CLIENTS/MDS0,MDS1 `date`"
 
-complete $SECONDS
+complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
