@@ -722,8 +722,8 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre ] ; then
 fi
 %endif
 
-%if %{with lustre_modules}
 echo '%{_prefix}/lib/firewalld/services/*.xml' >>lustre.files
+%if %{with lustre_modules}
 # mark modules executable for find-debuginfo.sh
 find $RPM_BUILD_ROOT/lib/modules -name \*.ko -type f -exec chmod u+x {} \;
 %endif
