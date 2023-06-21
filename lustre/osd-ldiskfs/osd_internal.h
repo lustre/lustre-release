@@ -602,8 +602,6 @@ struct osd_iobuf {
 			   dr_elapsed_valid:1, /* we really did count time */
 			   dr_rw:1,
 			   dr_integrity:1;
-	struct lu_buf	   dr_pg_buf;
-	struct page      **dr_pages;
 	struct niobuf_local	**dr_lnbs;
 	struct lu_buf	   dr_bl_buf;
 	struct lu_buf	   dr_lnb_buf;

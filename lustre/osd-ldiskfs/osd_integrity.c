@@ -76,11 +76,11 @@ static struct niobuf_local *find_lnb(struct blk_integrity_iter *iter)
 
 	/*
 	 * blocks are contiguous in bio but pages added to bio
-	 * could have a gap comparing to iobuf->dr_pages.
+	 * could have a gap comparing to pages.
 	 * e.g. a page mapped to a hole in the middle.
 	 */
 	for (i = index; i < iobuf->dr_npages; i++) {
-		if (iobuf->dr_pages[i] == bv->bv_page)
+		if (iobuf->dr_lnbs[i]->lnb_page == bv->bv_page)
 			return iobuf->dr_lnbs[i];
 	}
 
@@ -326,7 +326,7 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 	total = 0;
 	bio_for_each_segment_all(bv, bio, iter_all) {
 		for (i = index; i < iobuf->dr_npages; i++) {
-			if (iobuf->dr_pages[i] == bv->bv_page) {
+			if (iobuf->dr_lnbs[i]->lnb_page == bv->bv_page) {
 				lnb = iobuf->dr_lnbs[i];
 				break;
 			}

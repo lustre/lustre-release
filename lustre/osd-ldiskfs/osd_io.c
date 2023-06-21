@@ -147,8 +147,6 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 
 	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	if (iobuf->dr_bl_buf.lb_len >= blocks * sizeof(iobuf->dr_blocks[0])) {
-		LASSERT(iobuf->dr_pg_buf.lb_len >=
-			pages * sizeof(iobuf->dr_pages[0]));
 		return 0;
 	}
 
@@ -158,7 +156,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 		i <<= 1;
 
 	CDEBUG(D_OTHER, "realloc %u for %u (%u) pages\n",
-	       (unsigned int)(pages * sizeof(iobuf->dr_pages[0])), i, pages);
+	       (unsigned int)(pages * sizeof(iobuf->dr_lnbs[0])), i, pages);
 	pages = i;
 	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	iobuf->dr_max_pages = 0;
@@ -168,11 +166,6 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	lu_buf_realloc(&iobuf->dr_bl_buf, blocks * sizeof(iobuf->dr_blocks[0]));
 	iobuf->dr_blocks = iobuf->dr_bl_buf.lb_buf;
 	if (unlikely(iobuf->dr_blocks == NULL))
-		return -ENOMEM;
-
-	lu_buf_realloc(&iobuf->dr_pg_buf, pages * sizeof(iobuf->dr_pages[0]));
-	iobuf->dr_pages = iobuf->dr_pg_buf.lb_buf;
-	if (unlikely(iobuf->dr_pages == NULL))
 		return -ENOMEM;
 
 	lu_buf_realloc(&iobuf->dr_lnb_buf,
@@ -198,7 +191,6 @@ static void osd_iobuf_add_page(struct osd_iobuf *iobuf,
 			       struct niobuf_local *lnb)
 {
 	LASSERT(iobuf->dr_npages < iobuf->dr_max_pages);
-	iobuf->dr_pages[iobuf->dr_npages] = lnb->lnb_page;
 	iobuf->dr_lnbs[iobuf->dr_npages] = lnb;
 	iobuf->dr_npages++;
 }
@@ -391,7 +383,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 		      sector_t count)
 {
 	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	struct page **pages = iobuf->dr_pages;
+	struct niobuf_local **lnbs = iobuf->dr_lnbs;
 	int npages = iobuf->dr_npages;
 	sector_t *blocks = iobuf->dr_blocks;
 	struct super_block *sb = inode->i_sb;
@@ -437,7 +429,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 		 * "blocks_left_page" is reduced), and the last page may
 		 * skip some blocks at the end (limited by "count").
 		 */
-		page = pages[page_idx];
+		page = lnbs[page_idx]->lnb_page;
 		LASSERT(page_idx < iobuf->dr_npages);
 
 		i = block_idx % blocks_per_page;
@@ -935,7 +927,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 	handle_t *handle = NULL;
 	sector_t start_blocks = 0, count = 0;
 	loff_t disk_size = 0;
-	struct page **page = iobuf->dr_pages;
+	struct niobuf_local **lnbs = iobuf->dr_lnbs;
 	int pages = iobuf->dr_npages;
 	sector_t *blocks = iobuf->dr_blocks;
 	struct niobuf_local *lnb1, *lnb2;
@@ -944,7 +936,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 	max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
 	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
-		inode->i_ino, pages, (*page)->index);
+		inode->i_ino, pages, (*lnbs)->lnb_page->index);
 
 	if (create) {
 		create = LDISKFS_GET_BLOCKS_CREATE;
@@ -969,14 +961,15 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 		ktime_t time;
 
 		if (fp == NULL) { /* start new extent */
-			fp = *page++;
+			fp = (*lnbs)->lnb_page;
+			lnbs++;
 			clen = 1;
 			iobuf->dr_lextents++;
 			if (++i != pages)
 				continue;
-		} else if (fp->index + clen == (*page)->index) {
+		} else if (fp->index + clen == (*lnbs)->lnb_page->index) {
 			/* continue the extent */
-			page++;
+			lnbs++;
 			clen++;
 			if (++i != pages)
 				continue;
@@ -1607,9 +1600,10 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
 		/* early release to let others read data during the bulk */
 		for (i = 0; i < iobuf->dr_npages; i++) {
-			LASSERT(PageLocked(iobuf->dr_pages[i]));
-			if (!PagePrivate2(iobuf->dr_pages[i]))
-				unlock_page(iobuf->dr_pages[i]);
+			struct page *page = iobuf->dr_lnbs[i]->lnb_page;
+			LASSERT(PageLocked(page));
+			if (!PagePrivate2(page))
+				unlock_page(page);
 		}
 	}
 
