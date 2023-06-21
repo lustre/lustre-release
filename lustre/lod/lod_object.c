@@ -2784,8 +2784,29 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_comp->llc_flags = comp_v1->lcm_entries[i].lcme_flags;
 
-		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
+		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
+		/**
+		 * limit stripe count so that it's less than/equal to
+		 * extent_size / stripe_size.
+		 *
+		 * Note: extension size reused llc_stripe_size field and
+		 * uninstantiated component could be defined with
+		 * extent_start == extent_end as extension component will
+		 * expand it later.
+		 */
+		if (!(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
+		    (lod_comp_inited(lod_comp) ||
+		     lod_comp->llc_extent.e_start <
+		     lod_comp->llc_extent.e_end) &&
+		    lod_comp->llc_stripe_count != (__u16)-1 &&
+		    ext->e_end != (__u64)-1 &&
+		    (__u64)(lod_comp->llc_stripe_count *
+			    lod_comp->llc_stripe_size) >
+		    (ext->e_end - ext->e_start))
+			lod_comp->llc_stripe_count =
+				DIV_ROUND_UP(ext->e_end - ext->e_start,
+					     lod_comp->llc_stripe_size);
 		lod_adjust_stripe_info(lod_comp, desc, 0);
 
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {

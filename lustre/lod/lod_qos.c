@@ -2216,6 +2216,29 @@ int lod_use_defined_striping(const struct lu_env *env,
 		lod_comp->llc_pattern = le32_to_cpu(v1->lmm_pattern);
 		lod_comp->llc_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
 		lod_comp->llc_stripe_count = le16_to_cpu(v1->lmm_stripe_count);
+		/**
+		 * limit stripe count so that it's less than/equal to
+		 * extent_size / stripe_size.
+		 *
+		 * Note: extension size reused llc_stripe_size field and
+		 * uninstantiated component could be defined with
+		 * extent_start == extent_end as extension component will
+		 * expand it later.
+		 */
+		if (mo->ldo_is_composite &&
+		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
+		    (lod_comp_inited(lod_comp) ||
+		     lod_comp->llc_extent.e_start <
+		     lod_comp->llc_extent.e_end) &&
+		    lod_comp->llc_stripe_count != (__u16)-1 &&
+		    lod_comp->llc_extent.e_end != (__u64)-1 &&
+		    (__u64)lod_comp->llc_stripe_count *
+			   lod_comp->llc_stripe_size >
+		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
+			lod_comp->llc_stripe_count =
+				DIV_ROUND_UP(lod_comp->llc_extent.e_end -
+					     lod_comp->llc_extent.e_start,
+					     lod_comp->llc_stripe_size);
 		lod_comp->llc_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 		/**
 		 * The stripe_offset of an uninit-ed component is stored in
@@ -2501,6 +2524,28 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			       lod_comp->llc_stripe_count);
 			GOTO(free_comp, rc = -EINVAL);
 		}
+		/**
+		 * limit stripe count so that it's less than/equal to
+		 * extent_size / stripe_size.
+		 *
+		 * Note: extension size reused llc_stripe_size field and
+		 * uninstantiated component could be defined with
+		 * extent_start == extent_end as extension component will
+		 * expand it later.
+		 */
+		if (lo->ldo_is_composite &&
+		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
+		    lod_comp->llc_stripe_count != (__u16)-1 &&
+		    (lod_comp_inited(lod_comp) ||
+		     lod_comp->llc_extent.e_start <
+		     lod_comp->llc_extent.e_end) &&
+		    lod_comp->llc_extent.e_end != (__u64)-1 &&
+		    lod_comp->llc_stripe_count * lod_comp->llc_stripe_size >
+		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
+			lod_comp->llc_stripe_count =
+				DIV_ROUND_UP(lod_comp->llc_extent.e_end -
+					     lod_comp->llc_extent.e_start,
+					     lod_comp->llc_stripe_size);
 
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_qos_set_pool(lo, i, pool_name, v1);
