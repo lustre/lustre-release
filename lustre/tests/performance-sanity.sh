@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -e
 
 TESTNAME=$(basename $0 .sh)
@@ -10,63 +11,49 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$PERFORMANCE_SANITY_EXCEPT "
-always_except LU-16658 6
 build_test_filter
 
-[ -x "$MDSRATE" ] || FAIL_ON_ERROR=true error "No mdsrate program. Aborting."
-which mpirun > /dev/null 2>&1 ||
-	FAIL_ON_ERROR=true error "No mpirun program. Aborting."
+[[ -x "$MPIRUN" ]] || skip_env "no mpirun program found"
+[[ -x "$MDTEST" ]] || skip_env "no mdtest program found"
+
+check_and_setup_lustre
 
 get_mpiuser_id $MPI_USER
 MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
-# mdsrate-create-small
-test_3() {
-    echo "File creation performance tests for file objects"
-    bash mdsrate-create-small.sh
-}
-run_test 3 "small file create/open/delete ======"
-
-# mdsrate-create-large
-test_4() {
+test_1() {
+	echo "Small files creation performance test"
 	# LU-2600/LU-4108 - Decrease load on zfs
-	[ "$SLOW" = no -a "$mds1_FSTYPE" = zfs ] &&
+	if [[ "$SLOW" == no && "$mds1_FSTYPE" == zfs ]]; then
 		NUM_FILES=10000
-	echo "Large file creation performance"
-	bash mdsrate-create-large.sh
+	fi
+	run_mdtest create-small
 }
-run_test 4 "large file create/open/delete"
+run_test 1 "small files create/open/delete"
 
-# mdsrate-lookup-1dir
-test_5() {
-    echo "Single directory lookup retrieval rate"
-    bash mdsrate-lookup-1dir.sh
+test_2() {
+	echo "Large files creation performance test"
+	run_mdtest create-large
 }
-run_test 5 "lookup rate 10M file dir ======"
+run_test 2 "large files create/open/delete"
 
-# mdsrate-lookup-10dir
-test_6() {
-    echo "Directory lookup retrieval rate 10 directories, 1 million files each"
-    bash mdsrate-lookup-10dirs.sh
+test_3() {
+	NUM_DIRS=1
+	NUM_FILES=200000
+	echo "Single directory lookup rate for $NUM_FILES files"
+	run_mdtest lookup-single
 }
-run_test 6 "lookup rate 10M file 10 dir ======"
+run_test 3 "lookup rate 200k files in single directory"
 
-# mdsrate-stat-small
-test_7() {
-    echo "File attribute retrieval rate for small file creation"
-    bash mdsrate-stat-small.sh
+test_4() {
+	NUM_DIRS=100
+	NUM_FILES=200000
+	echo "Directory lookup rate $NUM_DIRS directories, $((NUM_FILES/NUM_DIRS)) files each"
+	run_mdtest lookup-multi
 }
-run_test 7 "getattr small file ======"
-
-# mdsrate-stat-large
-test_8() {
-    echo "File attribute retrieval rate for large file creation"
-    bash mdsrate-stat-large.sh
-}
-run_test 8 "getattr large files ======"
+run_test 4 "lookup rate 200k files in 100 directories"
 
 complete_test $SECONDS
 check_and_cleanup_lustre
-[ -f "$LOG" ] && cat $LOG || true
 exit_status

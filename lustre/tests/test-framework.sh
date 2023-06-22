@@ -7742,6 +7742,16 @@ mdsrate_inodes_available () {
 	echo $((min_inodes * 99 / 100))
 }
 
+bytes_available () {
+	echo $(df -P -B 1 "$MOUNT" | awk 'END {print $4}')
+}
+
+mdsrate_bytes_available () {
+	local bytes=$(bytes_available)
+
+	echo $((bytes * 99 / 100))
+}
+
 # reset stat counters
 clear_stats() {
 	local paramfile="$1"
@@ -7842,6 +7852,141 @@ mdsrate_cleanup () {
 			--nfiles $3 --dir $4 --filefmt $5 $6
 		rmdir $4
 	fi
+}
+
+run_mdtest () {
+	local test_type="$1"
+	local file_size=0
+	local num_files=0
+	local num_cores=0
+	local num_procs=0
+	local num_hosts=0
+	local free_space=0
+	local num_inodes=0
+	local num_entries=0
+	local num_dirs=0
+	local np=0
+	local rc=0
+
+	local mdtest_basedir
+	local mdtest_actions
+	local mdtest_options
+	local stripe_options
+	local params_file
+
+	case "$test_type" in
+	create-small)
+		stripe_options=(-c 1 -i 0)
+		mdtest_actions=(-F -R)
+		file_size=1024
+		num_files=100000
+		;;
+	create-large)
+		stripe_options=(-c -1)
+		mdtest_actions=(-F -R)
+		file_size=$((1024 * 1024 * 1024))
+		num_files=16
+		;;
+	lookup-single)
+		stripe_options=(-c 1)
+		mdtest_actions=(-C -D -E -k -r)
+		num_dirs=1
+		num_files=100000
+		;;
+	lookup-multi)
+		stripe_options=(-c 1)
+		mdtest_actions=(-C -D -E -k -r)
+		num_dirs=100
+		num_files=1000
+		;;
+	*)
+		stripe_options=(-c -1)
+		mdtest_actions=()
+		num_files=100000
+		;;
+	esac
+
+	if [[ -n "$MDTEST_DEBUG" ]]; then
+		mdtest_options+=(-v -v -v)
+	fi
+
+	num_dirs=${NUM_DIRS:-$num_dirs}
+	num_files=${NUM_FILES:-$num_files}
+	file_size=${FILE_SIZE:-$file_size}
+	free_space=$(mdsrate_bytes_available)
+
+	if (( file_size * num_files > free_space )); then
+		file_size=$((free_space / num_files))
+		log "change file size to $file_size due to" \
+			"number of files $num_files and" \
+			"free space limit in $free_space"
+	fi
+
+	if (( file_size > 0 )); then
+		log "set file size to $file_size"
+		mdtest_options+=(-w=$file_size)
+	fi
+
+	params_file=$TMP/$TESTSUITE-$TESTNAME.parameters
+	mdtest_basedir=$MOUNT/mdtest
+	mdtest_options+=(-d=$mdtest_basedir)
+
+	num_cores=$(nproc)
+	num_hosts=$(get_node_count ${CLIENTS//,/ })
+	num_procs=$((num_cores * num_hosts))
+	num_inodes=$(mdsrate_inodes_available)
+
+	if (( num_inodes < num_files )); then
+		log "change the number of files $num_files to the" \
+			"number of available inodes $num_inodes"
+		num_files=$num_inodes
+	fi
+
+	if (( num_dirs > 1 )); then
+		num_entries=$((num_files / num_dirs))
+		log "split $num_files files to $num_dirs" \
+			"with $num_entries files each"
+		mdtest_options+=(-I=$num_entries)
+	fi
+
+	generate_machine_file $CLIENTS $MACHINEFILE ||
+		error "can not generate machinefile"
+
+	install -v -d -m 0777 $mdtest_basedir
+
+	setstripe_getstripe $mdtest_basedir ${stripe_options[@]}
+
+	save_lustre_params $(get_facets MDS) \
+		mdt.*.enable_remote_dir_gid > $params_file
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param mdt.*.enable_remote_dir_gid=-1
+
+	stack_trap "restore_lustre_params < $params_file" EXIT
+
+	for np in 1 $num_procs; do
+		num_entries=$((num_files / np ))
+
+		mpi_run $MACHINEFILE_OPTION $MACHINEFILE \
+			-np $np -npernode $num_cores $MDTEST \
+			${mdtest_options[@]} -n=$num_entries \
+			${mdtest_actions[@]} 2>&1 | tee -a "$LOG"
+
+		rc=${PIPESTATUS[0]}
+
+		if (( rc != 0 )); then
+			mpi_run $MACHINEFILE_OPTION $MACHINEFILE \
+				-np $np -npernode $num_cores $MDTEST \
+				${mdtest_options[@]} -n=$num_entries \
+				-r 2>&1 | tee -a "$LOG"
+			break
+		fi
+	done
+
+	rmdir -v $mdtest_basedir
+	rm -v $state $MACHINEFILE
+
+	return $rc
 }
 
 ########################
