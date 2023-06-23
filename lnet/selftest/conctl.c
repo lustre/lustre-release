@@ -1033,7 +1033,7 @@ static char *lst_node_state2str(int state)
 	return "Unknown";
 }
 
-int lst_node_str2state(char *str)
+static int lst_node_str2state(char *str)
 {
 	int state = 0;
 

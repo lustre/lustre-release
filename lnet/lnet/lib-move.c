@@ -2086,7 +2086,7 @@ lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 	return -EHOSTUNREACH;
 }
 
-struct lnet_ni *
+static struct lnet_ni *
 lnet_find_best_ni_on_spec_net(struct lnet_ni *cur_best_ni,
 			      struct lnet_peer *peer,
 			      struct lnet_peer_net *peer_net,
@@ -2452,7 +2452,7 @@ lnet_handle_spec_router_dst(struct lnet_send_data *sd)
 	return lnet_handle_send(sd);
 }
 
-struct lnet_ni *
+static struct lnet_ni *
 lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 			       struct lnet_msg *msg, bool discovery)
 {

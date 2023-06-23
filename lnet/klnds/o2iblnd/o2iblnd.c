@@ -2657,7 +2657,7 @@ kiblnd_set_ni_fatal_on(struct kib_hca_dev *hdev, int val)
 		lnet_update_ping_buffer();
 }
 
-void
+static void
 kiblnd_event_handler(struct ib_event_handler *handler, struct ib_event *event)
 {
 	rwlock_t *g_lock = &kiblnd_data.kib_global_lock;

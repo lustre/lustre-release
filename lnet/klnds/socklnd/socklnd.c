@@ -1640,7 +1640,7 @@ ksocknal_close_matching_conns(struct lnet_processid *id, __u32 ipaddr)
 	return (count == 0 ? -ENOENT : 0);
 }
 
-void
+static void
 ksocknal_notify_gw_down(struct lnet_nid *gw_nid)
 {
 	/* The router is telling me she's been notified of a change in

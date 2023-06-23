@@ -53,7 +53,7 @@ static void kiblnd_queue_tx(struct kib_tx *tx, struct kib_conn *conn);
 static void kiblnd_unmap_tx(struct kib_tx *tx);
 static void kiblnd_check_sends_locked(struct kib_conn *conn);
 
-void
+static void
 kiblnd_tx_done(struct kib_tx *tx)
 {
 	struct lnet_msg *lntmsg[2];

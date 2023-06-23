@@ -40,7 +40,7 @@ MODULE_PARM_DESC(config_on_load, "configure network at module load");
 
 static DEFINE_MUTEX(lnet_config_mutex);
 
-int lnet_configure(void *arg)
+static int lnet_configure(void *arg)
 {
 	/* 'arg' only there so I can be passed to cfs_create_thread() */
 	int    rc = 0;
@@ -67,7 +67,7 @@ out:
 	return rc;
 }
 
-int lnet_unconfigure(void)
+static int lnet_unconfigure(void)
 {
 	int refcount;
 
