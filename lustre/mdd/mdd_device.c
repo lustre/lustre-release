@@ -930,9 +930,6 @@ static int mdd_dummy_unlink(const struct lu_env *env,
 	return -EPERM;
 }
 
-int mdd_create(const struct lu_env *env, struct md_object *pobj,
-		      const struct lu_name *lname, struct md_object *child,
-		      struct md_op_spec *spec, struct md_attr *ma);
 static int mdd_obf_create(const struct lu_env *env, struct md_object *pobj,
 		      const struct lu_name *lname, struct md_object *child,
 		      struct md_op_spec *spec, struct md_attr *ma)

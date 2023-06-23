@@ -247,7 +247,7 @@ static bool mgs_barrier_done(struct fs_db *fsdb)
 	return true;
 }
 
-bool mgs_barrier_expired(struct fs_db *fsdb, time64_t timeout)
+static bool mgs_barrier_expired(struct fs_db *fsdb, time64_t timeout)
 {
 	time64_t expired = fsdb->fsdb_barrier_latest_create_time + timeout;
 

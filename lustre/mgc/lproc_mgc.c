@@ -73,8 +73,8 @@ LUSTRE_RO_ATTR(conn_uuid);
 
 LUSTRE_RW_ATTR(ping);
 
-ssize_t dynamic_nids_show(struct kobject *kobj, struct attribute *attr,
-			  char *buf)
+static ssize_t dynamic_nids_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -86,8 +86,8 @@ ssize_t dynamic_nids_show(struct kobject *kobj, struct attribute *attr,
 	RETURN(count);
 }
 
-ssize_t dynamic_nids_store(struct kobject *kobj, struct attribute *attr,
-			   const char *buffer, size_t count)
+static ssize_t dynamic_nids_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);

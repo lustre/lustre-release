@@ -2659,8 +2659,9 @@ struct mdc_rmfid_args {
 	int mra_nr;
 };
 
-int mdc_rmfid_interpret(const struct lu_env *env, struct ptlrpc_request *req,
-			  void *args, int rc)
+static int mdc_rmfid_interpret(const struct lu_env *env,
+			       struct ptlrpc_request *req,
+			       void *args, int rc)
 {
 	struct mdc_rmfid_args *aa;
 	int *rcs, size;

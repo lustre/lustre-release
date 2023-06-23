@@ -42,7 +42,7 @@
  * \param rc  - is the SOM xattr stored in \a buf
  * \param ms  - is the md_som structure where to extract SOM attributes.
  */
-int lustre_buf2som(void *buf, int rc, struct md_som *ms)
+static int lustre_buf2som(void *buf, int rc, struct md_som *ms)
 {
 	struct lustre_som_attrs *attrs = (struct lustre_som_attrs *)buf;
 	ENTRY;

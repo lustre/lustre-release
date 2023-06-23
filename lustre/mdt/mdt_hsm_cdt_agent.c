@@ -309,8 +309,8 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 	RETURN(rc);
 }
 
-int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
-				    struct hsm_action_item *hai)
+static int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
+					       struct hsm_action_item *hai)
 {
 	struct hsm_agent *ha;
 	__u32 archive_mask = 0;

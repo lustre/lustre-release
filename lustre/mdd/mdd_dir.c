@@ -326,8 +326,8 @@ static int mdd_is_parent(const struct lu_env *env,
  * returns 0: if fid is not an ancestor of @mo;
  * returns < 0: if error
  */
-int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
-		  const struct lu_fid *fid)
+static int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
+			 const struct lu_fid *fid)
 {
 	struct mdd_device *mdd = mdo2mdd(mo);
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
@@ -928,8 +928,9 @@ static bool mdd_changelog_emrg_cleanup(const struct lu_env *env,
 	return false;
 }
 
-bool mdd_changelog_need_gc(const struct lu_env *env, struct mdd_device *mdd,
-			   struct llog_handle *lgh)
+static bool mdd_changelog_need_gc(const struct lu_env *env,
+				  struct mdd_device *mdd,
+				  struct llog_handle *lgh)
 {
 	struct mdd_changelog *mc = &mdd->mdd_cl;
 

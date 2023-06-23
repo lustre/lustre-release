@@ -234,6 +234,9 @@ int mdd_attr_set_internal(const struct lu_env *env,
 int mdd_update_time(const struct lu_env *env, struct mdd_object *obj,
 		    const struct lu_attr *oattr, struct lu_attr *attr,
 		    struct thandle *handle);
+int mdd_create(const struct lu_env *env, struct md_object *pobj,
+		      const struct lu_name *lname, struct md_object *child,
+		      struct md_op_spec *spec, struct md_attr *ma);
 int mdd_create_object_internal(const struct lu_env *env, struct mdd_object *p,
 			       struct mdd_object *c, struct lu_attr *attr,
 			       struct thandle *handle,

@@ -90,17 +90,6 @@ out:
 	RETURN(rc);
 }
 
-/**
- * Add client export data to the MGS.  This data is currently NOT stored on
- * disk in the last_rcvd file or anywhere else.  In the event of a MGS
- * crash all connections are treated as new connections.
- */
-int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
-		   void *localdata)
-{
-	return 0;
-}
-
 /* Remove client export data from the MGS */
 int mgs_client_free(struct obd_export *exp)
 {

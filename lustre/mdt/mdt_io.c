@@ -879,9 +879,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	RETURN(rc);
 }
 
-int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
-			 struct dt_object *dob, __u64 start, __u64 end,
-			 int mode, struct lu_attr *la)
+static int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
+				struct dt_object *dob, __u64 start, __u64 end,
+				int mode, struct lu_attr *la)
 {
 	struct thandle *th;
 	int rc;
@@ -1079,9 +1079,9 @@ out:
 	return rc;
 }
 
-int mdt_object_punch(const struct lu_env *env, struct dt_device *dt,
-		     struct dt_object *dob, __u64 start, __u64 end,
-		     struct lu_attr *la)
+static int mdt_object_punch(const struct lu_env *env, struct dt_device *dt,
+			    struct dt_object *dob, __u64 start, __u64 end,
+			    struct lu_attr *la)
 {
 	struct thandle *th;
 	int rc;
@@ -1242,8 +1242,8 @@ out:
  * an actual size from that client.
  *
  */
-int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
-		   struct ldlm_resource *res)
+static int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
+			  struct ldlm_resource *res)
 {
 	union ldlm_policy_data policy;
 	struct lustre_handle lockh;
@@ -1912,7 +1912,8 @@ out:
  * reprocess if lock was blocked, in the latest case l_ast_data is set to
  * the mdt_object which is kept while there are pending locks on it.
  */
-int ldlm_dom_discard_cp_ast(struct ldlm_lock *lock, __u64 flags, void *data)
+static int ldlm_dom_discard_cp_ast(struct ldlm_lock *lock, __u64 flags,
+				   void *data)
 {
 	struct mdt_object *mo;
 	struct lustre_handle dom_lh;

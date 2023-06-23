@@ -2122,8 +2122,8 @@ out_reprocess:
 	return rc;
 }
 
-int mdt_close_handle_layouts(struct mdt_thread_info *info,
-			     struct mdt_object *o, struct md_attr *ma)
+static int mdt_close_handle_layouts(struct mdt_thread_info *info,
+				    struct mdt_object *o, struct md_attr *ma)
 {
 	struct mdt_lock_handle *lh1 = &info->mti_lh[MDT_LH_NEW];
 	struct mdt_lock_handle *lh2 = &info->mti_lh[MDT_LH_OLD];
