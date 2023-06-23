@@ -1415,8 +1415,8 @@ out:
  * \retval		pointer to the directory if it is found.
  * \retval		ERR_PTR(negative errno) if it fails.
  */
-struct dt_object *llog_osd_get_regular_fid_dir(const struct lu_env *env,
-					       struct dt_object *dto)
+static struct dt_object *llog_osd_get_regular_fid_dir(const struct lu_env *env,
+						      struct dt_object *dto)
 {
 	struct llog_thread_info *lgi = llog_info(env);
 	struct seq_server_site *ss = dto->do_lu.lo_dev->ld_site->ld_seq_site;

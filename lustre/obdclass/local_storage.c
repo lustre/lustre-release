@@ -119,17 +119,6 @@ static struct ls_device *__ls_find_dev(struct dt_device *dev)
 	return ret;
 }
 
-struct ls_device *ls_find_dev(struct dt_device *dev)
-{
-	struct ls_device *ls;
-
-	mutex_lock(&ls_list_mutex);
-	ls = __ls_find_dev(dev);
-	mutex_unlock(&ls_list_mutex);
-
-	return ls;
-}
-
 static const struct lu_device_type_operations ls_device_type_ops = {
 	.ldto_start = NULL,
 	.ldto_stop  = NULL,

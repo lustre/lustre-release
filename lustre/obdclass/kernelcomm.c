@@ -276,7 +276,7 @@ int lustre_old_device_list_dump(struct sk_buff *msg,
 }
 #endif
 
-int lustre_device_done(struct netlink_callback *cb)
+static int lustre_device_done(struct netlink_callback *cb)
 {
 	struct genl_dev_list *glist;
 

@@ -2241,55 +2241,6 @@ static struct shrinker lu_site_shrinker = {
 
 #endif /* HAVE_SHRINKER_COUNT */
 
-
-/*
- * Debugging stuff.
- */
-
-/**
- * Environment to be used in debugger, contains all tags.
- */
-static struct lu_env lu_debugging_env;
-
-/**
- * Debugging printer function using printk().
- */
-int lu_printk_printer(const struct lu_env *env,
-		      void *unused, const char *format, ...)
-{
-        va_list args;
-
-        va_start(args, format);
-        vprintk(format, args);
-        va_end(args);
-        return 0;
-}
-
-int lu_debugging_setup(void)
-{
-	return lu_env_init(&lu_debugging_env, ~0);
-}
-
-void lu_context_keys_dump(void)
-{
-	unsigned int i;
-
-	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-		struct lu_context_key *key;
-
-		key = lu_keys[i];
-		if (key != NULL) {
-			CERROR("LU context keys [%d]: %p %x (%p,%p,%p) %d %d \"%s\"@%p\n",
-				i, key, key->lct_tags,
-				key->lct_init, key->lct_fini, key->lct_exit,
-				key->lct_index, atomic_read(&key->lct_used),
-				key->lct_owner ? key->lct_owner->name : "",
-				key->lct_owner);
-			lu_ref_print(&key->lct_reference);
-		}
-	}
-}
-
 /**
  * Initialization of global lu_* data.
  */

@@ -116,25 +116,6 @@ int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
 EXPORT_SYMBOL(lprocfs_recovery_stale_clients_seq_show);
 
 #ifdef CONFIG_PROC_FS
-
-int lprocfs_evict_client_open(struct inode *inode, struct file *f)
-{
-	struct obd_device *obd = pde_data(file_inode(f));
-
-	atomic_inc(&obd->obd_evict_inprogress);
-	return 0;
-}
-
-int lprocfs_evict_client_release(struct inode *inode, struct file *f)
-{
-	struct obd_device *obd = pde_data(file_inode(f));
-
-	atomic_dec(&obd->obd_evict_inprogress);
-	wake_up(&obd->obd_evict_inprogress_waitq);
-
-	return 0;
-}
-
 #define BUFLEN (UUID_MAX + 5)
 
 ssize_t
@@ -464,7 +445,8 @@ static int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_hash);
 
-int lprocfs_exp_print_replydata_seq(struct obd_export *exp, void *cb_data)
+static int lprocfs_exp_print_replydata_seq(struct obd_export *exp,
+					   void *cb_data)
 
 {
 	struct seq_file *m = cb_data;
@@ -481,7 +463,7 @@ int lprocfs_exp_print_replydata_seq(struct obd_export *exp, void *cb_data)
 	return 0;
 }
 
-int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
+static int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
@@ -490,7 +472,8 @@ int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_replydata);
 
-int lprocfs_exp_print_fmd_count_seq(struct obd_export *exp, void *cb_data)
+static int lprocfs_exp_print_fmd_count_seq(struct obd_export *exp,
+					   void *cb_data)
 {
 	struct seq_file *m = cb_data;
 	struct tg_export_data *ted = &exp->exp_target_data;
@@ -500,7 +483,7 @@ int lprocfs_exp_print_fmd_count_seq(struct obd_export *exp, void *cb_data)
 	return 0;
 }
 
-int lprocfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
+static int lprocfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 

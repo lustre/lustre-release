@@ -388,7 +388,7 @@ out:
  * then an upcall could be issued here to get the jobid by utilizing
  * the userspace tools/API. Then, the jobid must be cached.
  */
-int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
+static int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 {
 	int rc;
 

@@ -600,7 +600,7 @@ struct obd_device *class_name2obd(const char *name)
 }
 EXPORT_SYMBOL(class_name2obd);
 
-int class_uuid2dev_nolock(struct obd_uuid *uuid)
+static int class_uuid2dev_nolock(struct obd_uuid *uuid)
 {
         int i;
 
@@ -1019,8 +1019,9 @@ static void obd_zombie_exp_cull(struct work_struct *ws)
 /* Creates a new export, adds it to the hash table, and returns a
  * pointer to it. The refcount is 2: one for the hash reference, and
  * one for the pointer returned by this function. */
-struct obd_export *__class_new_export(struct obd_device *obd,
-				      struct obd_uuid *cluuid, bool is_self)
+static struct obd_export *__class_new_export(struct obd_device *obd,
+					     struct obd_uuid *cluuid,
+					     bool is_self)
 {
         struct obd_export *export;
         int rc = 0;
