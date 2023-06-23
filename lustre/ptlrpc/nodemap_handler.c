@@ -32,7 +32,9 @@
 #include <lustre_net.h>
 #include <lustre_acl.h>
 #include <obd_class.h>
+
 #include "nodemap_internal.h"
+#include "ptlrpc_internal.h"
 
 #define HASH_NODEMAP_BKT_BITS 3
 #define HASH_NODEMAP_CUR_BITS 3
@@ -1881,9 +1883,9 @@ void nodemap_mod_exit(void)
  */
 int nodemap_mod_init(void)
 {
-	struct nodemap_config	*new_config;
-	struct lu_nodemap	*nodemap;
-	int			 rc = 0;
+	struct nodemap_config *new_config;
+	struct lu_nodemap *nodemap;
+	int rc = 0;
 
 	rc = nodemap_procfs_init();
 	if (rc != 0)

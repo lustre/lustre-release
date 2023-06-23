@@ -29,6 +29,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <lustre_swab.h>
 #include <llog_swab.h>
 #include <obd_class.h>
 

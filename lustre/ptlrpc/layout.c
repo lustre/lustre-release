@@ -55,6 +55,8 @@
 #include <lustre_acl.h>
 #include <lustre_nodemap.h>
 
+#include "ptlrpc_internal.h"
+
 /*
  * RQFs (see below) refer to two struct req_msg_field arrays describing the
  * client request and server reply, respectively.
