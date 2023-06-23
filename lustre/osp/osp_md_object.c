@@ -1034,8 +1034,9 @@ static int osp_md_object_unlock(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_md_declare_destroy(const struct lu_env *env, struct dt_object *dt,
-			   struct thandle *th)
+static int osp_md_declare_destroy(const struct lu_env *env,
+				  struct dt_object *dt,
+				  struct thandle *th)
 {
 	return osp_trans_update_request_create(th);
 }
@@ -1064,8 +1065,8 @@ static int osp_destroy_interpreter(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
-		   struct thandle *th)
+static int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
+			  struct thandle *th)
 {
 	struct osp_object *o = dt2osp_obj(dt);
 	struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);

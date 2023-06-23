@@ -284,10 +284,10 @@ object_update_request_dump(const struct object_update_request *ourq,
  * \retval		0 if packing succeeds
  * \retval		negative errno if packing fails
  */
-int osp_prep_inline_update_req(const struct lu_env *env,
-			       struct ptlrpc_request *req,
-			       struct osp_update_request *our,
-			       int repsize)
+static int osp_prep_inline_update_req(const struct lu_env *env,
+				      struct ptlrpc_request *req,
+				      struct osp_update_request *our,
+				      int repsize)
 {
 	struct osp_update_request_sub *ours;
 	struct out_update_header *ouh;

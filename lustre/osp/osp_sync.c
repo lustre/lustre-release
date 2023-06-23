@@ -462,12 +462,6 @@ int osp_sync_add(const struct lu_env *env, struct osp_object *o,
 				th, attr);
 }
 
-int osp_sync_gap(const struct lu_env *env, struct osp_device *d,
-			struct lu_fid *fid, int lost, struct thandle *th)
-{
-	return osp_sync_add_rec(env, d, fid, MDS_UNLINK64_REC, lost, th, NULL);
-}
-
 /*
  * it's quite obvious we can't maintain all the structures in the memory:
  * while OST is down, MDS can be processing thousands and thousands of unlinks
@@ -1597,8 +1591,8 @@ struct osp_last_committed_cb {
 	__u64			 ospc_transno;
 };
 
-void osp_sync_local_commit_cb(struct lu_env *env, struct thandle *th,
-			      struct dt_txn_commit_cb *dcb, int err)
+static void osp_sync_local_commit_cb(struct lu_env *env, struct thandle *th,
+				     struct dt_txn_commit_cb *dcb, int err)
 {
 	struct osp_last_committed_cb	*cb;
 	struct osp_device		*d;

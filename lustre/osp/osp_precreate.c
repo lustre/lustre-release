@@ -1166,7 +1166,7 @@ update:
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-int osp_init_pre_fid(struct lu_env *env, struct osp_device *osp)
+static int osp_init_pre_fid(struct lu_env *env, struct osp_device *osp)
 {
 	struct osp_thread_info	*osi;
 	struct lu_client_seq	*cli_seq;

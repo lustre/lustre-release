@@ -848,7 +848,7 @@ static ssize_t osc_stats_seq_write(struct file *file,
 
 LPROC_SEQ_FOPS(osc_stats);
 
-int lprocfs_osc_attach_seqstat(struct obd_device *obd)
+static int lprocfs_osc_attach_seqstat(struct obd_device *obd)
 {
 	int rc;
 

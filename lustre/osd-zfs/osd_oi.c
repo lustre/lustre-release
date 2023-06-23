@@ -582,7 +582,7 @@ osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
 	return oi->oi_zapid;
 }
 
-uint64_t
+static uint64_t
 osd_get_name_n_idx_compat(const struct lu_env *env, struct osd_device *osd,
 			  const struct lu_fid *fid, char *buf, int bufsize,
 			  dnode_t **zdn)
@@ -1065,9 +1065,9 @@ struct osd_idmap_cache *osd_idc_find(const struct lu_env *env,
 	return NULL;
 }
 
-struct osd_idmap_cache *osd_idc_add(const struct lu_env *env,
-				    struct osd_device *osd,
-				    const struct lu_fid *fid)
+static struct osd_idmap_cache *osd_idc_add(const struct lu_env *env,
+					   struct osd_device *osd,
+					   const struct lu_fid *fid)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_idmap_cache *idc;

@@ -349,10 +349,10 @@ out:
 }
 
 /* the function is used to declare EAs when SA is not supported */
-void __osd_xattr_declare_legacy(const struct lu_env *env,
-				struct osd_object *obj,
-				int vallen, const char *name,
-				struct osd_thandle *oh)
+static void __osd_xattr_declare_legacy(const struct lu_env *env,
+				       struct osd_object *obj,
+				       int vallen, const char *name,
+				       struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	dmu_tx_t *tx = oh->ot_tx;

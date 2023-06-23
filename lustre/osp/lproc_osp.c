@@ -194,7 +194,8 @@ static ssize_t sync_changes_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(sync_changes);
 
 static ssize_t max_sync_changes_show(struct kobject *kobj,
-		struct attribute *attr, char *buf)
+				     struct attribute *attr,
+				     char *buf)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -205,7 +206,8 @@ static ssize_t max_sync_changes_show(struct kobject *kobj,
 
 
 static ssize_t max_sync_changes_store(struct kobject *kobj,
-		struct attribute *attr, const char *buffer, size_t count)
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -847,8 +849,8 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(ping);
 
-ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
-			   char *buf)
+static ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);

@@ -954,8 +954,8 @@ int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 }
 EXPORT_SYMBOL(osc_fsync_ost);
 
-int osc_io_fsync_start(const struct lu_env *env,
-		       const struct cl_io_slice *slice)
+static int osc_io_fsync_start(const struct lu_env *env,
+			      const struct cl_io_slice *slice)
 {
 	struct cl_io       *io  = slice->cis_io;
 	struct cl_fsync_io *fio = &io->u.ci_fsync;

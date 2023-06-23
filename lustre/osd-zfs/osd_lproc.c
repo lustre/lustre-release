@@ -167,8 +167,8 @@ static ssize_t mntdev_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(mntdev);
 
-ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
-			 const char *buffer, size_t count)
+static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -198,8 +198,8 @@ static ssize_t sync_on_lseek_show(struct kobject *kobj, struct attribute *attr,
 	return sprintf(buf, "%u\n", osd->od_sync_on_lseek);
 }
 
-ssize_t sync_on_lseek_store(struct kobject *kobj, struct attribute *attr,
-			    const char *buffer, size_t count)
+static ssize_t sync_on_lseek_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct osd_device *osd = osd_dt_dev(dt);
@@ -270,8 +270,8 @@ static ssize_t index_backup_show(struct kobject *kobj, struct attribute *attr,
 	return sprintf(buf, "%d\n", dev->od_index_backup_policy);
 }
 
-ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
-			   const char *buffer, size_t count)
+static ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);

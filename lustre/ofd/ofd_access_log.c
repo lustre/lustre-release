@@ -323,7 +323,8 @@ static ssize_t oal_file_write(struct file *filp, const char __user *buf,
 	return size > 0 ? size : rc;
 }
 
-unsigned int oal_file_poll(struct file *filp, struct poll_table_struct *wait)
+static unsigned int oal_file_poll(struct file *filp,
+				  struct poll_table_struct *wait)
 {
 	struct oal_circ_buf *ocb = filp->private_data;
 	struct ofd_access_log *oal = ocb->ocb_access_log;

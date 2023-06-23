@@ -1670,8 +1670,8 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_declare_destroy(const struct lu_env *env, struct dt_object *dt,
-			struct thandle *th)
+static int osp_declare_destroy(const struct lu_env *env, struct dt_object *dt,
+			       struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
 	struct osp_device	*osp = lu2osp_dev(dt->do_lu.lo_dev);
@@ -2191,11 +2191,11 @@ __u64 osp_it_store(const struct lu_env *env, const struct dt_it *di)
  * \retval		0 for arriving at the end of the iteration
  * \retval		negative error number on failure
  */
-int osp_orphan_it_load(const struct lu_env *env, const struct dt_it *di,
-		       __u64 hash)
+static int osp_orphan_it_load(const struct lu_env *env, const struct dt_it *di,
+			      __u64 hash)
 {
-	struct osp_it	*it	= (struct osp_it *)di;
-	int		 rc;
+	struct osp_it *it = (struct osp_it *)di;
+	int rc;
 
 	it->ooi_next = hash;
 	rc = osp_orphan_it_next(env, (struct dt_it *)di);
