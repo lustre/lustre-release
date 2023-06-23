@@ -635,8 +635,8 @@ again:
 	RETURN(0);
 }
 
-void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
-		       struct lquota_entry *lqe)
+static void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
+			      struct lquota_entry *lqe)
 {
 	struct obd_uuid *uuid = &(lock)->l_export->exp_client_uuid;
 	int idx, stype;

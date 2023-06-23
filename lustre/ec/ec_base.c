@@ -105,7 +105,7 @@ void ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls)
 }
 EXPORT_SYMBOL(ec_init_tables);
 
-unsigned char gf_mul(unsigned char a, unsigned char b)
+static unsigned char gf_mul(unsigned char a, unsigned char b)
 {
 	int i;
 
@@ -116,7 +116,7 @@ unsigned char gf_mul(unsigned char a, unsigned char b)
 	return gff_base[i > 254 ? i - 255 : i];
 }
 
-unsigned char gf_inv(unsigned char a)
+static unsigned char gf_inv(unsigned char a)
 {
 	if (a == 0)
 		return 0;

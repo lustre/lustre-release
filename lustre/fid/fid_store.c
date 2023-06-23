@@ -59,8 +59,8 @@ struct seq_update_callback {
 	struct lu_server_seq   *suc_seq;
 };
 
-void seq_update_cb(struct lu_env *env, struct thandle *th,
-		   struct dt_txn_commit_cb *cb, int err)
+static void seq_update_cb(struct lu_env *env, struct thandle *th,
+			  struct dt_txn_commit_cb *cb, int err)
 {
 	struct seq_update_callback *ccb;
 
@@ -72,7 +72,7 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
 	OBD_FREE_PTR(ccb);
 }
 
-int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
+static int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 {
 	struct seq_update_callback *ccb;
 	struct dt_txn_commit_cb *dcb;

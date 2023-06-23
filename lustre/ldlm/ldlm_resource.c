@@ -722,13 +722,13 @@ static void ldlm_namespace_debugfs_unregister(struct ldlm_namespace *ns)
 		lprocfs_stats_free(&ns->ns_stats);
 }
 
-void ldlm_namespace_sysfs_unregister(struct ldlm_namespace *ns)
+static void ldlm_namespace_sysfs_unregister(struct ldlm_namespace *ns)
 {
 	kobject_put(&ns->ns_kobj);
 	wait_for_completion(&ns->ns_kobj_unregister);
 }
 
-int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
+static int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 {
 	int err;
 
