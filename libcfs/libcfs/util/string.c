@@ -334,15 +334,6 @@ cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
 	return count;
 }
 
-void
-cfs_expr_list_values_free(__u32 *values, int num)
-{
-	/* This array is allocated by LIBCFS_ALLOC(), so it shouldn't be freed
-	 * by OBD_FREE() if it's called by module other than libcfs & LNet,
-	 * otherwise we will see fake memory leak */
-	free(values);
-}
-
 /**
  * Frees cfs_range_expr structures of \a expr_list.
  *

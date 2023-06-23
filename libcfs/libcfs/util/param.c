@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <linux/limits.h>
 #include <libcfs/util/string.h>
+#include <libcfs/util/param.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
 

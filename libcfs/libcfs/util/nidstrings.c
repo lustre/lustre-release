@@ -1202,7 +1202,7 @@ libcfs_net_str_len(const char *str)
 	return 0;
 }
 
-int
+static int
 parse_net_range(char *str, __u32 len, struct list_head *net_num,
 		__u32 *net_type)
 {
@@ -1262,7 +1262,7 @@ parse_net_range(char *str, __u32 len, struct list_head *net_num,
 				net_num);
 }
 
-int
+static int
 parse_address(struct cfs_lstr *src, const __u32 net_type,
 	      struct list_head *addr)
 {
