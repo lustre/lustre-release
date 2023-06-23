@@ -100,7 +100,7 @@ do {                                            \
         CHECK_VALUE((int)sizeof(s));            \
 } while (0)
 
-void
+static void
 check_lnet_handle_wire(void)
 {
 	CHECK_STRUCT(struct lnet_handle_wire);
@@ -108,7 +108,7 @@ check_lnet_handle_wire(void)
 	CHECK_MEMBER(struct lnet_handle_wire, wh_object_cookie);
 }
 
-void
+static void
 check_lnet_magicversion (void)
 {
 	CHECK_STRUCT(struct lnet_magicversion);
@@ -117,7 +117,7 @@ check_lnet_magicversion (void)
 	CHECK_MEMBER(struct lnet_magicversion, version_minor);
 }
 
-void
+static void
 check_lnet_hdr_nid4(void)
 {
 	CHECK_STRUCT(struct _lnet_hdr_nid4);
@@ -161,7 +161,7 @@ check_lnet_hdr_nid4(void)
 	CHECK_MEMBER(struct _lnet_hdr_nid4, msg.hello.type);
 }
 
-void
+static void
 check_lnet_ni_status(void)
 {
 	BLANK_LINE();
@@ -181,7 +181,7 @@ check_lnet_ni_status(void)
 	CHECK_MEMBER(struct lnet_ni_large_status, ns_nid);
 }
 
-void
+static void
 check_lnet_ping_info(void)
 {
 	BLANK_LINE();
@@ -206,7 +206,7 @@ check_lnet_ping_info(void)
 	CHECK_MEMBER_IS_FLEXIBLE(struct lnet_ping_info, pi_ni);
 }
 
-void
+static void
 system_string(char *cmdline, char *str, int len)
 {
         int   fds[2];

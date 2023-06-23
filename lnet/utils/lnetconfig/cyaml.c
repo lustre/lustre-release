@@ -767,7 +767,7 @@ bool cYAML_is_sequence(struct cYAML *node)
 	return (node != NULL ? node->cy_type == CYAML_TYPE_ARRAY : 0);
 }
 
-void cYAML_tree_recursive_walk(struct cYAML *node, cYAML_walk_cb cb,
+static void cYAML_tree_recursive_walk(struct cYAML *node, cYAML_walk_cb cb,
 				      bool cb_first,
 				      void *usr_data,
 				      void **out)

@@ -42,8 +42,7 @@
 
 #include <libcfs/util/param.h>
 
-double
-timenow ()
+static double timenow(void)
 {
    struct timeval tv;
 
@@ -65,7 +64,7 @@ typedef struct {
         unsigned long long   drop_length;
 } counters_t;
 
-unsigned long long subull(unsigned long long a, unsigned long long b)
+static unsigned long long subull(unsigned long long a, unsigned long long b)
 {
 	if (a < b)
 		return -1ULL - b + a + 1;
@@ -73,7 +72,7 @@ unsigned long long subull(unsigned long long a, unsigned long long b)
 	return a - b;
 }
 
-unsigned long long subul(unsigned long a, unsigned long b)
+static unsigned long long subul(unsigned long a, unsigned long b)
 {
 	if (a < b)
 		return -1UL - b + a + 1;
@@ -81,18 +80,17 @@ unsigned long long subul(unsigned long a, unsigned long b)
 	return a - b;
 }
 
-double rul(unsigned long a, double secs)
+static double rul(unsigned long a, double secs)
 {
 	return (double)a/secs;
 }
 
-double rull(unsigned long long a, double secs)
+static double rull(unsigned long long a, double secs)
 {
 	return (double)a/secs;
 }
 
-void
-do_stat (int fd)
+static void do_stat(int fd)
 {
    static char  buffer[1024];
    static double last = 0.0;

@@ -220,7 +220,7 @@ int lnet_genlmsg_parse(struct nlmsghdr *nlh, int hdrlen, struct nlattr *tb[],
  *
  * Return	0 on success or a Netlink error code.
  */
-int nl_socket_enable_broadcast_error(struct nl_sock *sk)
+static int nl_socket_enable_broadcast_error(struct nl_sock *sk)
 {
 	const int state = 1; /* enable errors */
 	int err;
@@ -245,7 +245,7 @@ int nl_socket_enable_broadcast_error(struct nl_sock *sk)
  *
  * @return 0 on success or a negative error code
  */
-int nl_socket_set_ext_ack(struct nl_sock *sk, int state)
+static int nl_socket_set_ext_ack(struct nl_sock *sk, int state)
 {
 	int err;
 
@@ -270,7 +270,7 @@ int nl_socket_set_ext_ack(struct nl_sock *sk, int state)
  *
  * Return		0 on success or a negative error code.
  */
-int lustre_netlink_register(struct nl_sock *sk, bool async_events)
+static int lustre_netlink_register(struct nl_sock *sk, bool async_events)
 {
 	int rc;
 
@@ -306,8 +306,8 @@ int lustre_netlink_register(struct nl_sock *sk, bool async_events)
  *
  * Return	0 on success or a negative error code.
  */
-int lustre_netlink_add_group(struct nl_sock *nl, const char *family,
-			     const char *group)
+static int lustre_netlink_add_group(struct nl_sock *nl, const char *family,
+				    const char *group)
 {
 	int group_id;
 

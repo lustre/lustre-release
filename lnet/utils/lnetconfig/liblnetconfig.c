@@ -83,7 +83,7 @@ struct lustre_lnet_ip2nets {
 	struct list_head ip2nets_ip_ranges;
 };
 
-int open_sysfs_file(const char *path, const char *attr, const int mode)
+static int open_sysfs_file(const char *path, const char *attr, const int mode)
 {
 	int fd;
 	char filename[LNET_MAX_STR_LEN];
@@ -143,7 +143,7 @@ close_fd:
  * free_intf_descr
  *	frees the memory allocated for an intf descriptor.
  */
-void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
+static void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
 {
 	if (!intf_descr)
 		return;
@@ -165,7 +165,7 @@ void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
  *		As a result of lnetctl command
  *		When building a NID or P2P selection rules
  */
-int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
+static int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
 {
 	struct lustre_lnet_ip_range_descr *ip_range;
 	int rc;
@@ -187,7 +187,8 @@ int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
-int lustre_lnet_add_intf_descr(struct list_head *list, char *intf, int len)
+static int lustre_lnet_add_intf_descr(struct list_head *list, char *intf,
+				      int len)
 {
 	char *open_sq_bracket = NULL, *close_sq_bracket = NULL,
 	     *intf_name;
@@ -790,9 +791,9 @@ out:
 	return rc;
 }
 
-int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
-			     int sen, int seq_no, struct cYAML **err_rc,
-			     int cmd)
+static int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
+				    int sen, int seq_no, struct cYAML **err_rc,
+				    int cmd)
 {
 	int rc, num_nids, idx;
 	__u32 rnet;
@@ -1326,9 +1327,9 @@ failed:
  *
  *	The result is that all the interfaces have to match.
  */
-int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
-				 struct list_head *intf_list,
-				 struct list_head *ip_ranges)
+static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
+					struct list_head *intf_list,
+					struct list_head *ip_ranges)
 {
 	int rc;
 	__u32 ip;
@@ -1577,7 +1578,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
-int
+static int
 lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 			   struct lnet_ioctl_config_lnd_tunables *tunables,
 			   struct cfs_expr_list *global_cpts,
@@ -2544,8 +2545,8 @@ out:
 	return rc;
 }
 
-int ioctl_set_value(__u32 val, int ioc, char *name,
-		    int seq_no, struct cYAML **err_rc)
+static int ioctl_set_value(__u32 val, int ioc, char *name,
+			   int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_set_value data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3910,7 +3911,7 @@ out:
 	return rc;
 }
 
-unsigned int
+static unsigned int
 lnet_nid_cpt_hash(lnet_nid_t nid, long int number, unsigned int cpt_bits)
 {
 	__u64 key = nid;
@@ -3976,8 +3977,9 @@ int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
 	return (int)lnet_nid_cpt_hash(nid, ncpts, cpt_bits);
 }
 
-int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
-			struct cYAML **show_rc, struct cYAML **err_rc)
+static int show_recovery_queue(enum lnet_health_type type, char *name,
+			       int seq_no, struct cYAML **show_rc,
+			       struct cYAML **err_rc)
 {
 	struct lnet_ioctl_recovery_list nid_list;
 	struct cYAML *root = NULL, *nids = NULL;

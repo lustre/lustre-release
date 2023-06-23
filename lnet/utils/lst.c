@@ -53,6 +53,14 @@
 #include <linux/lnet/nidstr.h>
 #include "lnetconfig/liblnetconfig.h"
 
+static int lst_info_batch_ioctl(char *batch, int test, int server,
+		       struct lstcon_test_batch_ent *entp, int *idxp,
+		       int *ndentp, struct lstcon_node_ent *dentsp);
+static int lst_info_group_ioctl(char *name, struct lstcon_ndlist_ent *gent,
+			int *idx, int *count, struct lstcon_node_ent *dents);
+static int lst_query_batch_ioctl(char *batch, int test, int server,
+			 int timeout, struct list_head *head);
+
 struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
 static unsigned int session_key;
 
@@ -73,7 +81,7 @@ typedef struct list_string {
 static int alloc_count = 0;
 static int alloc_nob   = 0;
 
-lstr_t *
+static lstr_t *
 alloc_lstr(int sz)
 {
         lstr_t  *lstr = malloc(offsetof(lstr_t, lstr_str[sz]));
@@ -91,7 +99,7 @@ alloc_lstr(int sz)
         return lstr;
 }
 
-void
+static void
 free_lstr(lstr_t *lstr)
 {
         alloc_count--;
@@ -99,18 +107,7 @@ free_lstr(lstr_t *lstr)
         free(lstr);
 }
 
-void
-free_lstrs(lstr_t **list)
-{
-        lstr_t   *lstr;
-
-        while ((lstr = *list) != NULL) {
-                *list = lstr->lstr_next;
-                free_lstr(lstr);
-        }
-}
-
-void
+static void
 new_lstrs(lstr_t **list, char *prefix, char *postfix,
           int lo, int hi, int stride)
 {
@@ -131,7 +128,7 @@ new_lstrs(lstr_t **list, char *prefix, char *postfix,
         } while (lo <= hi);
 }
 
-int
+static int
 expand_lstr(lstr_t **list, lstr_t *l)
 {
         int          nob = strlen(l->lstr_str);
@@ -197,7 +194,7 @@ expand_lstr(lstr_t **list, lstr_t *l)
         return 1;
 }
 
-int
+static int
 expand_strs(char *str, lstr_t **head)
 {
         lstr_t  *list = NULL;
@@ -250,7 +247,7 @@ expand_strs(char *str, lstr_t **head)
         return rc;
 }
 
-int
+static int
 lst_parse_nids(char *str, int *countp, struct lnet_process_id **idspp)
 {
         lstr_t  *head = NULL;
@@ -305,7 +302,7 @@ out:
         return rc;
 }
 
-char *
+static char *
 lst_node_state2str(int state)
 {
         if (state == LST_NODE_ACTIVE)
@@ -318,7 +315,7 @@ lst_node_state2str(int state)
         return "Unknown";
 }
 
-int
+static int
 lst_node_str2state(char *str)
 {
         if (strcasecmp(str, "active") == 0)
@@ -335,7 +332,7 @@ lst_node_str2state(char *str)
         return -1;
 }
 
-char *
+static char *
 lst_test_type2name(int type)
 {
         if (type == LST_TEST_PING)
@@ -346,7 +343,7 @@ lst_test_type2name(int type)
         return "unknown";
 }
 
-int
+static int
 lst_test_name2type(char *name)
 {
         if (strcasecmp(name, "ping") == 0)
@@ -357,7 +354,7 @@ lst_test_name2type(char *name)
         return -1;
 }
 
-void
+static void
 lst_print_usage(char *cmd)
 {
 	char *argv[] = { "help", cmd };
@@ -365,7 +362,7 @@ lst_print_usage(char *cmd)
 	cfs_parser(2, argv, NULL);
 }
 
-void
+static void
 lst_print_error(char *sub, const char *def_format, ...)
 {
         va_list ap;
@@ -402,7 +399,7 @@ lst_print_error(char *sub, const char *def_format, ...)
         }
 }
 
-void
+static void
 lst_free_rpcent(struct list_head *head)
 {
 	struct lstcon_rpc_ent *ent;
@@ -415,7 +412,7 @@ lst_free_rpcent(struct list_head *head)
 	}
 }
 
-void
+static void
 lst_reset_rpcent(struct list_head *head)
 {
 	struct lstcon_rpc_ent *ent;
@@ -428,7 +425,7 @@ lst_reset_rpcent(struct list_head *head)
 	}
 }
 
-int
+static int
 lst_alloc_rpcent(struct list_head *head, int count, int offset)
 {
 	struct lstcon_rpc_ent *ent;
@@ -452,7 +449,7 @@ lst_alloc_rpcent(struct list_head *head, int count, int offset)
 	return 0;
 }
 
-void
+static void
 lst_print_transerr(struct list_head *head, char *optstr)
 {
 	struct lstcon_rpc_ent *ent;
@@ -474,17 +471,7 @@ lst_print_transerr(struct list_head *head, char *optstr)
         }
 }
 
-int lst_info_batch_ioctl(char *batch, int test, int server,
-			struct lstcon_test_batch_ent *entp, int *idxp,
-			int *ndentp, struct lstcon_node_ent *dentsp);
-
-int lst_info_group_ioctl(char *name, struct lstcon_ndlist_ent *gent,
-			 int *idx, int *count, struct lstcon_node_ent *dents);
-
-int lst_query_batch_ioctl(char *batch, int test, int server,
-			  int timeout, struct list_head *head);
-
-int
+static int
 lst_ioctl(unsigned int opc, void *buf, int len)
 {
         struct libcfs_ioctl_data data;
@@ -516,8 +503,8 @@ lst_ioctl(unsigned int opc, void *buf, int len)
         return 0;
 }
 
-int lst_yaml_session(const char *label, const char *timeout, int nlflags,
-		     const char *errmsg)
+static int lst_yaml_session(const char *label, const char *timeout, int nlflags,
+			    const char *errmsg)
 {
 	struct lstcon_ndlist_ent ndinfo = { };
 	struct lst_sid sid = LST_INVALID_SID;
@@ -775,7 +762,7 @@ parser_error:
 	return rc == 0 ? -1 : 0;
 }
 
-int
+static int
 lst_new_session_ioctl(char *name, int timeout, int force, struct lst_sid *sid)
 {
 	struct lstio_session_new_args args = { 0 };
@@ -791,7 +778,7 @@ lst_new_session_ioctl(char *name, int timeout, int force, struct lst_sid *sid)
         return lst_ioctl (LSTIO_SESSION_NEW, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_new_session(int argc, char **argv)
 {
 	char  buf[LST_NAME_SIZE * 2 + 1];
@@ -887,7 +874,7 @@ success:
 	return 0;
 }
 
-int
+static int
 lst_session_info_ioctl(char *name, int len, int *key, unsigned *featp,
 		       struct lst_sid *sid, struct lstcon_ndlist_ent *ndinfo)
 {
@@ -903,7 +890,7 @@ lst_session_info_ioctl(char *name, int len, int *key, unsigned *featp,
 	return lst_ioctl(LSTIO_SESSION_INFO, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_show_session(int argc, char **argv)
 {
 	struct lstcon_ndlist_ent ndinfo;
@@ -933,7 +920,7 @@ jt_lst_show_session(int argc, char **argv)
         return 0;
 }
 
-int
+static int
 lst_end_session_ioctl(void)
 {
 	struct lstio_session_end_args args = { 0 };
@@ -942,7 +929,7 @@ lst_end_session_ioctl(void)
 	return lst_ioctl(LSTIO_SESSION_END, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_end_session(int argc, char **argv)
 {
         int             rc;
@@ -1374,7 +1361,7 @@ parser_error:
 	return rc;
 }
 
-int
+static int
 lst_ping_ioctl(char *str, int type, int timeout,
 	       int count, struct lnet_process_id *ids, struct list_head *head)
 {
@@ -1393,7 +1380,7 @@ lst_ping_ioctl(char *str, int type, int timeout,
         return lst_ioctl (LSTIO_DEBUG, &args, sizeof(args));
 }
 
-int
+static int
 lst_get_node_count(int type, char *str, int *countp,
 		   struct lnet_process_id **idspp)
 {
@@ -1442,7 +1429,7 @@ lst_get_node_count(int type, char *str, int *countp,
         return rc;
 }
 
-int
+static int
 jt_lst_ping(int argc,  char **argv)
 {
 	struct list_head   head;
@@ -1574,7 +1561,7 @@ out:
 
 }
 
-int
+static int
 lst_add_nodes_ioctl(char *name, int count, struct lnet_process_id *ids,
 		    unsigned *featp, struct list_head *resultp)
 {
@@ -1591,7 +1578,7 @@ lst_add_nodes_ioctl(char *name, int count, struct lnet_process_id *ids,
         return lst_ioctl(LSTIO_NODES_ADD, &args, sizeof(args));
 }
 
-int
+static int
 lst_del_group_ioctl(char *name)
 {
 	struct lstio_group_del_args args = { 0 };
@@ -1603,7 +1590,7 @@ lst_del_group_ioctl(char *name)
 	return lst_ioctl(LSTIO_GROUP_DEL, &args, sizeof(args));
 }
 
-int
+static int
 lst_del_group(char *grp_name)
 {
 	int	rc;
@@ -1639,7 +1626,7 @@ lst_del_group(char *grp_name)
 	return -1;
 }
 
-int
+static int
 lst_add_group_ioctl(char *name)
 {
 	struct lstio_group_add_args args = { 0 };
@@ -1651,7 +1638,7 @@ lst_add_group_ioctl(char *name)
         return lst_ioctl(LSTIO_GROUP_ADD, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_add_group(int argc, char **argv)
 {
 	struct list_head   head;
@@ -1783,7 +1770,7 @@ failed:
 	return rc;
 }
 
-int
+static int
 jt_lst_del_group(int argc, char **argv)
 {
         int     rc;
@@ -1804,7 +1791,7 @@ jt_lst_del_group(int argc, char **argv)
 	return rc;
 }
 
-int
+static int
 lst_update_group_ioctl(int opc, char *name, int clean, int count,
 		       struct lnet_process_id *ids, struct list_head *resultp)
 {
@@ -1822,7 +1809,7 @@ lst_update_group_ioctl(int opc, char *name, int clean, int count,
         return lst_ioctl(LSTIO_GROUP_UPDATE, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_update_group(int argc, char **argv)
 {
 	struct list_head   head;
@@ -1945,7 +1932,7 @@ jt_lst_update_group(int argc, char **argv)
         return rc;
 }
 
-int
+static int
 lst_list_group_ioctl(int len, char *name, int idx)
 {
 	struct lstio_group_list_args args = { 0 };
@@ -1958,7 +1945,7 @@ lst_list_group_ioctl(int len, char *name, int idx)
         return lst_ioctl(LSTIO_GROUP_LIST, &args, sizeof(args));
 }
 
-int
+static int
 lst_info_group_ioctl(char *name, struct lstcon_ndlist_ent *gent,
 		     int *idx, int *count, struct lstcon_node_ent *dents)
 {
@@ -1975,7 +1962,7 @@ lst_info_group_ioctl(char *name, struct lstcon_ndlist_ent *gent,
         return lst_ioctl(LSTIO_GROUP_INFO, &args, sizeof(args));
 }
 
-int
+static int
 lst_list_group_all(void)
 {
         char  name[LST_NAME_SIZE];
@@ -2003,7 +1990,7 @@ lst_list_group_all(void)
         return 0;
 }
 
-int
+static int
 jt_lst_list_group(int argc, char **argv)
 {
 	struct lstcon_ndlist_ent gent;
@@ -2174,7 +2161,7 @@ old_api:
         return rc;
 }
 
-int
+static int
 lst_stat_ioctl(char *name, int count, struct lnet_process_id *idsp,
 	       int timeout, struct list_head *resultp)
 {
@@ -2536,7 +2523,7 @@ lst_print_stat(char *name, struct list_head *resultp,
 	lst_print_lnet_stat(name, bwrt, rdwr, type, mbs);
 }
 
-int
+static int
 jt_lst_stat(int argc, char **argv)
 {
 	struct list_head	head;
@@ -2714,7 +2701,7 @@ out:
 	return rc;
 }
 
-int
+static int
 jt_lst_show_error(int argc, char **argv)
 {
 	struct list_head       head;
@@ -2837,7 +2824,7 @@ out:
 	return rc;
 }
 
-int
+static int
 lst_add_batch_ioctl(char *name)
 {
 	struct lstio_batch_add_args args = { 0 };
@@ -2849,7 +2836,7 @@ lst_add_batch_ioctl(char *name)
         return lst_ioctl (LSTIO_BATCH_ADD, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_add_batch(int argc, char **argv)
 {
         char   *name;
@@ -2883,7 +2870,7 @@ jt_lst_add_batch(int argc, char **argv)
         return -1;
 }
 
-int
+static int
 lst_start_batch_ioctl(char *name, int timeout, struct list_head *resultp)
 {
 	struct lstio_batch_run_args args = { 0 };
@@ -2897,7 +2884,7 @@ lst_start_batch_ioctl(char *name, int timeout, struct list_head *resultp)
         return lst_ioctl(LSTIO_BATCH_START, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_start_batch(int argc, char **argv)
 {
 	struct list_head  head;
@@ -2984,7 +2971,7 @@ jt_lst_start_batch(int argc, char **argv)
         return rc;
 }
 
-int
+static int
 lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
 {
 	struct lstio_batch_stop_args args = { 0 };
@@ -2998,7 +2985,7 @@ lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
         return lst_ioctl(LSTIO_BATCH_STOP, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_stop_batch(int argc, char **argv)
 {
 	struct list_head  head;
@@ -3102,7 +3089,7 @@ out:
         return rc;
 }
 
-int
+static int
 lst_list_batch_ioctl(int len, char *name, int index)
 {
 	struct lstio_batch_list_args args = { 0 };
@@ -3115,7 +3102,7 @@ lst_list_batch_ioctl(int len, char *name, int index)
         return lst_ioctl(LSTIO_BATCH_LIST, &args, sizeof(args));
 }
 
-int
+static int
 lst_info_batch_ioctl(char *batch, int test, int server,
 		     struct lstcon_test_batch_ent *entp, int *idxp,
 		     int *ndentp, struct lstcon_node_ent *dentsp)
@@ -3135,7 +3122,7 @@ lst_info_batch_ioctl(char *batch, int test, int server,
         return lst_ioctl(LSTIO_BATCH_INFO, &args, sizeof(args));
 }
 
-int
+static int
 lst_list_batch_all(void)
 {
         char name[LST_NAME_SIZE];
@@ -3162,7 +3149,7 @@ lst_list_batch_all(void)
         return 0;
 }
 
-int
+static int
 lst_list_tsb_nodes(char *batch, int test, int server,
                    int count, int active, int invalid)
 {
@@ -3212,7 +3199,7 @@ lst_list_tsb_nodes(char *batch, int test, int server,
         return 0;
 }
 
-int
+static int
 jt_lst_list_batch(int argc, char **argv)
 {
 	struct lstcon_test_batch_ent ent;
@@ -3348,7 +3335,7 @@ loop:
         return 0;
 }
 
-int
+static int
 lst_query_batch_ioctl(char *batch, int test, int server,
 		      int timeout, struct list_head *head)
 {
@@ -3365,7 +3352,7 @@ lst_query_batch_ioctl(char *batch, int test, int server,
         return lst_ioctl(LSTIO_BATCH_QUERY, &args, sizeof(args));
 }
 
-void
+static void
 lst_print_tsb_verbose(struct list_head *head,
                       int active, int idle, int error)
 {
@@ -3390,7 +3377,7 @@ lst_print_tsb_verbose(struct list_head *head,
         }
 }
 
-int
+static int
 jt_lst_query_batch(int argc, char **argv)
 {
 	struct lstcon_test_batch_ent ent;
@@ -3571,7 +3558,7 @@ jt_lst_query_batch(int argc, char **argv)
         return rc;
 }
 
-int
+static int
 lst_parse_distribute(char *dstr, int *dist, int *span)
 {
         *dist = atoi(dstr);
@@ -3589,7 +3576,7 @@ lst_parse_distribute(char *dstr, int *dist, int *span)
         return 0;
 }
 
-int
+static int
 lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
 {
         char   *tok = NULL;
@@ -3680,7 +3667,7 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
         return rc;
 }
 
-int
+static int
 lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 {
 	struct lst_test_bulk_param *bulk = NULL;
@@ -3735,7 +3722,7 @@ lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
         return type;
 }
 
-int
+static int
 lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                    int dist, int span, char *sgrp, char *dgrp,
 		   void *param, int plen, int *retp, struct list_head *resultp)
@@ -3763,7 +3750,7 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
         return lst_ioctl(LSTIO_TEST_ADD, &args, sizeof(args));
 }
 
-int
+static int
 jt_lst_add_test(int argc, char **argv)
 {
 	struct list_head head;
@@ -3956,7 +3943,7 @@ static command_t lst_cmdlist[] = {
         {0,                     0,                      0,      NULL                    }
 };
 
-int
+static int
 lst_initialize(void)
 {
 	char   *key;

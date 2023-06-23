@@ -51,7 +51,7 @@ lnet_udsp_criteria_present(struct lnet_ud_nid_descr *descr)
 	return descr->ud_net_id.udn_net_type != 0;
 }
 
-struct lnet_udsp *lnet_udsp_alloc(void)
+static struct lnet_udsp *lnet_udsp_alloc(void)
 {
 	struct lnet_udsp *udsp;
 
@@ -97,7 +97,7 @@ lnet_udsp_nid_descr_free(struct lnet_ud_nid_descr *nid_descr, bool blk)
 	}
 }
 
-void
+static void
 lnet_udsp_free(struct lnet_udsp *udsp, bool blk)
 {
 	lnet_udsp_nid_descr_free(&udsp->udsp_src, blk);
@@ -231,7 +231,7 @@ copy_ioc_udsp_descr(struct lnet_ud_nid_descr *nid_descr, char *type,
 	return 0;
 }
 
-struct lnet_udsp *
+static struct lnet_udsp *
 lnet_udsp_demarshal(void *bulk, __u32 bulk_size)
 {
 	struct lnet_ioctl_udsp *ioc_udsp;
@@ -317,7 +317,7 @@ lnet_size_marshaled_nid_descr(struct lnet_ud_nid_descr *descr)
 	return size;
 }
 
-size_t
+static size_t
 lnet_get_udsp_size(struct lnet_udsp *udsp)
 {
 	size_t size = sizeof(struct lnet_ioctl_udsp);
@@ -625,7 +625,7 @@ int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc)
 	return rc;
 }
 
-int lustre_lnet_nid_descr2str(struct lnet_ud_nid_descr *d,
+static int lustre_lnet_nid_descr2str(struct lnet_ud_nid_descr *d,
 				     char *str, size_t size)
 {
 	int left = size;
@@ -669,7 +669,7 @@ int lustre_lnet_nid_descr2str(struct lnet_ud_nid_descr *d,
 	return 0;
 }
 
-int yaml_add_udsp_action(struct cYAML *y, struct lnet_udsp *udsp)
+static int yaml_add_udsp_action(struct cYAML *y, struct lnet_udsp *udsp)
 {
 	struct cYAML *action;
 
