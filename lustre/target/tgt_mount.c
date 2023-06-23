@@ -57,6 +57,8 @@
 #include <obd.h>
 #include <obd_class.h>
 
+#include "tgt_internal.h"
+
 /*********** mount lookup *********/
 
 static DEFINE_MUTEX(lustre_mount_info_lock);
@@ -1781,7 +1783,7 @@ static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 	RETURN(0);
 }
 
-int server_show_options(struct seq_file *seq, struct dentry *dentry)
+static int server_show_options(struct seq_file *seq, struct dentry *dentry)
 {
 	struct lustre_sb_info *lsi;
 	struct lustre_mount_data *lmd;

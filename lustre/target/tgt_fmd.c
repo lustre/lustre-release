@@ -82,7 +82,7 @@ static inline void tgt_fmd_put_nolock(struct obd_export *exp,
  * \param[in] exp	OBD export
  * \param[in] fmd	FMD to put
  */
-void tgt_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
+static void tgt_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 
@@ -191,8 +191,8 @@ static struct tgt_fmd_data *tgt_fmd_find_nolock(struct obd_export *exp,
  * \retval		struct tgt_fmd_data found by FID
  * \retval		NULL indicates FMD is not found
  */
-struct tgt_fmd_data *tgt_fmd_find(struct obd_export *exp,
-				  const struct lu_fid *fid)
+static struct tgt_fmd_data *tgt_fmd_find(struct obd_export *exp,
+					 const struct lu_fid *fid)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 	struct tgt_fmd_data *fmd;
@@ -220,8 +220,8 @@ struct tgt_fmd_data *tgt_fmd_find(struct obd_export *exp,
  * \retval		struct tgt_fmd_data found by FID
  * \retval		NULL indicates FMD is not found
  */
-struct tgt_fmd_data *tgt_fmd_get(struct obd_export *exp,
-				 const struct lu_fid *fid)
+static struct tgt_fmd_data *tgt_fmd_get(struct obd_export *exp,
+					const struct lu_fid *fid)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 	struct tgt_fmd_data *found = NULL, *fmd_new = NULL;

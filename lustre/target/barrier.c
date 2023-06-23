@@ -41,6 +41,8 @@
 #include <lustre_barrier.h>
 #include <uapi/linux/lustre/lustre_barrier_user.h>
 
+#include "tgt_internal.h"
+
 static LIST_HEAD(barrier_instance_list);
 static DEFINE_SPINLOCK(barrier_instance_lock);
 

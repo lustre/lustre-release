@@ -137,8 +137,8 @@ LUSTRE_RW_ATTR(sync_lock_cancel);
  * \retval		0 and buffer filled with data on success
  * \retval		negative value on error
  */
-ssize_t tgt_fmd_count_show(struct kobject *kobj, struct attribute *attr,
-			   char *buf)
+static ssize_t tgt_fmd_count_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -160,8 +160,8 @@ ssize_t tgt_fmd_count_show(struct kobject *kobj, struct attribute *attr,
  * \retval		\a count on success
  * \retval		negative value on error
  */
-ssize_t tgt_fmd_count_store(struct kobject *kobj, struct attribute *attr,
-			    const char *buffer, size_t count)
+static ssize_t tgt_fmd_count_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -191,8 +191,9 @@ LUSTRE_RW_ATTR(tgt_fmd_count);
  * \retval		0 and buffer filled with data on success
  * \retval		negative value on error
  */
-ssize_t tgt_fmd_seconds_show(struct kobject *kobj, struct attribute *attr,
-			     char *buf)
+static ssize_t tgt_fmd_seconds_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -214,8 +215,9 @@ ssize_t tgt_fmd_seconds_show(struct kobject *kobj, struct attribute *attr,
  * \retval		\a count on success
  * \retval		negative number on error
  */
-ssize_t tgt_fmd_seconds_store(struct kobject *kobj, struct attribute *attr,
-			      const char *buffer, size_t count)
+static ssize_t tgt_fmd_seconds_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);

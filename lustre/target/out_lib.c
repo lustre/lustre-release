@@ -90,14 +90,14 @@ EXPORT_SYMBOL(update_op_str);
  * \retval			0 if packing succeeds.
  * \retval			-E2BIG if packing exceeds the maximum length.
  */
-int out_update_header_pack(const struct lu_env *env,
-			   struct object_update *update,
-			   size_t *max_update_size,
-			   enum update_type update_op,
-			   const struct lu_fid *fid,
-			   unsigned int param_count,
-			   __u16 *param_sizes,
-			   __u32 reply_size)
+static int out_update_header_pack(const struct lu_env *env,
+				  struct object_update *update,
+				  size_t *max_update_size,
+				  enum update_type update_op,
+				  const struct lu_fid *fid,
+				  unsigned int param_count,
+				  __u16 *param_sizes,
+				  __u32 reply_size)
 {
 	struct object_update_param	*param;
 	unsigned int			i;

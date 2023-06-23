@@ -1149,11 +1149,6 @@ int tgt_obd_ping(struct tgt_session_info *tsi)
 }
 EXPORT_SYMBOL(tgt_obd_ping);
 
-int tgt_obd_log_cancel(struct tgt_session_info *tsi)
-{
-	return err_serious(-EOPNOTSUPP);
-}
-
 int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 {
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);

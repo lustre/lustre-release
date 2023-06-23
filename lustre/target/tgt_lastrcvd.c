@@ -562,11 +562,11 @@ static void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
 	OBD_FREE_PTR(ccb);
 }
 
-int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
+static int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
 {
-	struct tgt_new_client_callback	*ccb;
-	struct dt_txn_commit_cb		*dcb;
-	int				 rc;
+	struct tgt_new_client_callback *ccb;
+	struct dt_txn_commit_cb	*dcb;
+	int rc;
 
 	OBD_ALLOC_PTR(ccb);
 	if (ccb == NULL)
