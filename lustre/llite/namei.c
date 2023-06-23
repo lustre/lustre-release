@@ -398,7 +398,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 
 /* Check if the given lock may be downgraded instead of canceling and
  * that convert is really needed. */
-int ll_md_need_convert(struct ldlm_lock *lock)
+static int ll_md_need_convert(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	struct inode *inode;

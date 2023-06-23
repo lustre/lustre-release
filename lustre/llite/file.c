@@ -4653,7 +4653,7 @@ out_state:
 	}
 }
 
-loff_t ll_lseek(struct file *file, loff_t offset, int whence)
+static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 {
 	struct inode *inode = file_inode(file);
 	struct lu_env *env;
@@ -5626,8 +5626,8 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 }
 #endif
 
-int cl_falloc(struct file *file, struct inode *inode, int mode, loff_t offset,
-	      loff_t len)
+static int cl_falloc(struct file *file, struct inode *inode, int mode,
+		     loff_t offset, loff_t len)
 {
 	loff_t size = i_size_read(inode);
 	struct lu_env *env;
@@ -5691,7 +5691,7 @@ out:
 	RETURN(rc);
 }
 
-long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
+static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 {
 	struct inode *inode = file_inode(filp);
 	int rc;

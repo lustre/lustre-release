@@ -1035,7 +1035,7 @@ static inline void ll_account_page_dirtied(struct page *page,
  * Backwards compat for 3.x, 5.x kernels relating to memcg handling
  * & rename of radix tree to xarray.
  */
-void vvp_set_pagevec_dirty(struct pagevec *pvec)
+static void vvp_set_pagevec_dirty(struct pagevec *pvec)
 {
 	struct page *page = pvec->pages[0];
 	int count = pagevec_count(pvec);

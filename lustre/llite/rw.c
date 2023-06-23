@@ -152,7 +152,7 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which)
 	ll_ra_stats_inc_sbi(sbi, which);
 }
 
-void ll_ra_stats_add(struct inode *inode, enum ra_stat which, long count)
+static void ll_ra_stats_add(struct inode *inode, enum ra_stat which, long count)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 

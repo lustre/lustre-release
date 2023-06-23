@@ -2022,8 +2022,8 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
  * \retval 0		on success
  * \retval negative	errno on failure
  */
-int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
-		    unsigned len)
+static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
+			   unsigned int len)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *clob = lli->lli_clob;
@@ -2860,7 +2860,7 @@ static inline bool ll_default_lmv_inherited(struct lmv_stripe_md *pdmv,
 /* if default LMV is implicitly inherited, subdir default LMV is maintained on
  * client side.
  */
-int ll_dir_default_lmv_inherit(struct inode *dir, struct inode *inode)
+static int ll_dir_default_lmv_inherit(struct inode *dir, struct inode *inode)
 {
 	struct ll_inode_info *plli = ll_i2info(dir);
 	struct ll_inode_info *lli = ll_i2info(inode);
