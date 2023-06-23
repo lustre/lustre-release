@@ -705,23 +705,6 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 	}
 }
 
-int lov_lsm_entry(const struct lov_stripe_md *lsm, __u64 offset)
-{
-	int i;
-
-	for (i = 0; i < lsm->lsm_entry_count; i++) {
-		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];
-
-		if ((offset >= lse->lsme_extent.e_start &&
-		     offset < lse->lsme_extent.e_end) ||
-		    (offset == OBD_OBJECT_EOF &&
-		     lse->lsme_extent.e_end == OBD_OBJECT_EOF))
-			return i;
-	}
-
-	return -1;
-}
-
 /**
  * lmm_layout_gen overlaps stripe_offset field, it needs to be reset back when
  * sending to MDT for passing striping checks

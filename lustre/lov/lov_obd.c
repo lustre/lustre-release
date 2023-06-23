@@ -110,8 +110,8 @@ void lov_tgts_putref(struct obd_device *obd)
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 		      enum obd_notify_event ev);
 
-int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
-		    struct obd_connect_data *data)
+static int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
+			   struct obd_connect_data *data)
 {
 	struct lov_obd *lov = &obd->u.lov;
 	struct obd_uuid *tgt_uuid;

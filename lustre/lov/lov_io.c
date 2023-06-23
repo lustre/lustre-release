@@ -1258,8 +1258,9 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	RETURN(0);
 }
 
-int lov_io_lru_reserve(const struct lu_env *env,
-		       const struct cl_io_slice *ios, loff_t pos, size_t bytes)
+static int lov_io_lru_reserve(const struct lu_env *env,
+			      const struct cl_io_slice *ios, loff_t pos,
+			      size_t bytes)
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;

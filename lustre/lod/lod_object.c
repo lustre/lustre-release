@@ -2296,7 +2296,7 @@ void lod_free_foreign_lov(struct lod_object *lo)
  * \retval              0 on success
  * \retval              negative if failed
  */
-int lod_alloc_foreign_lmv(struct lod_object *lo, size_t size)
+static int lod_alloc_foreign_lmv(struct lod_object *lo, size_t size)
 {
 	OBD_ALLOC_LARGE(lo->ldo_foreign_lmv, size);
 	if (lo->ldo_foreign_lmv == NULL)
@@ -2337,7 +2337,7 @@ static int lod_prep_md_replayed_create(const struct lu_env *env,
  *
  * \param[in] lo        object
  */
-void lod_free_foreign_lmv(struct lod_object *lo)
+static void lod_free_foreign_lmv(struct lod_object *lo)
 {
 	if (lo->ldo_foreign_lmv != NULL)
 		OBD_FREE_LARGE(lo->ldo_foreign_lmv, lo->ldo_foreign_lmv_size);

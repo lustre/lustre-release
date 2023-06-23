@@ -2557,7 +2557,8 @@ free_comp:
 /**
  * prepare enough OST avoidance bitmap space
  */
-int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
+static int lod_prepare_avoidance(const struct lu_env *env,
+				 struct lod_object *lo)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
@@ -2622,8 +2623,9 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
  * Collect information of used OSTs and OSSs in the overlapped components
  * of other mirrors
  */
-void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
-			   int comp_idx)
+static void lod_collect_avoidance(struct lod_object *lo,
+				  struct lod_avoid_guide *lag,
+				  int comp_idx)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[comp_idx];

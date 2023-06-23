@@ -1997,10 +1997,10 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	return tgt;
 }
 
-int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
-		const void *data, size_t datalen, umode_t mode, uid_t uid,
-		gid_t gid, kernel_cap_t cap_effective, __u64 rdev,
-		struct ptlrpc_request **request)
+static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
+		      const void *data, size_t datalen, umode_t mode, uid_t uid,
+		      gid_t gid, kernel_cap_t cap_effective, __u64 rdev,
+		      struct ptlrpc_request **request)
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
@@ -4157,8 +4157,8 @@ lmv_batch_locate_tgt(struct lmv_obd *lmv, struct md_op_item *item)
 	return tgt;
 }
 
-struct lu_batch *lmv_batch_lookup_sub(struct lmv_batch *lbh,
-				      struct lmv_tgt_desc *tgt)
+static struct lu_batch *lmv_batch_lookup_sub(struct lmv_batch *lbh,
+					     struct lmv_tgt_desc *tgt)
 {
 	struct lmvsub_batch *sub;
 
@@ -4170,8 +4170,8 @@ struct lu_batch *lmv_batch_lookup_sub(struct lmv_batch *lbh,
 	return NULL;
 }
 
-struct lu_batch *lmv_batch_get_sub(struct lmv_batch *lbh,
-				   struct lmv_tgt_desc *tgt)
+static struct lu_batch *lmv_batch_get_sub(struct lmv_batch *lbh,
+					  struct lmv_tgt_desc *tgt)
 {
 	struct lmvsub_batch *sbh;
 	struct lu_batch *child_bh;

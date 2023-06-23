@@ -1860,8 +1860,8 @@ struct lov_comp_md_entry_v1 *comp_entry_v1(struct lov_comp_md_v1 *comp, int i)
 				   le16_to_cpu(comp->lcm_entry_count) - 1); \
 	     entry++)
 
-int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1,
-			 struct lov_comp_md_entry_v1 *dom_ent)
+static int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1,
+				struct lov_comp_md_entry_v1 *dom_ent)
 {
 	struct lov_comp_md_entry_v1 *ent;
 	__u16 entries;
@@ -1985,10 +1985,11 @@ out:
 	return d->lod_dom_stripesize_cur_kb << 10;
 }
 
-int lod_dom_stripesize_choose(const struct lu_env *env, struct lod_device *d,
-			      struct lov_comp_md_v1 *comp_v1,
-			      struct lov_comp_md_entry_v1 *dom_ent,
-			      __u32 stripe_size)
+static int lod_dom_stripesize_choose(const struct lu_env *env,
+				     struct lod_device *d,
+				     struct lov_comp_md_v1 *comp_v1,
+				     struct lov_comp_md_entry_v1 *dom_ent,
+				     __u32 stripe_size)
 {
 	struct lov_comp_md_entry_v1 *ent;
 	struct lu_extent *dom_ext, *ext;
