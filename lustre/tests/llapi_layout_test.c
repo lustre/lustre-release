@@ -73,7 +73,7 @@ static char *poolname;
 static bool run_list_provided;
 static int num_osts = -1;
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("Usage: %s [-d lustre_dir] [-p pool_name] [-o num_osts] "
 	       "[-s $n,$m,... (skip tests)] [-t $n,$m,... (run tests)]\n",
@@ -86,7 +86,7 @@ void usage(char *prog)
 #define T0_STRIPE_SIZE		1048576
 #define T0_OST_OFFSET		(num_osts - 1)
 #define T0_DESC		"Read/write layout attributes then create a file"
-void test0(void)
+static void test0(void)
 {
 	int rc;
 	int fd;
@@ -137,7 +137,7 @@ void test0(void)
 	llapi_layout_free(layout);
 }
 
-void __test1_helper(struct llapi_layout *layout)
+static void __test1_helper(struct llapi_layout *layout)
 {
 	uint64_t ost0;
 	uint64_t ost1;
@@ -168,7 +168,7 @@ void __test1_helper(struct llapi_layout *layout)
 }
 
 #define T1_DESC		"Read test0 file by path and verify attributes"
-void test1(void)
+static void test1(void)
 {
 	char path[PATH_MAX];
 
@@ -180,7 +180,7 @@ void test1(void)
 }
 
 #define T2_DESC		"Read test0 file by FD and verify attributes"
-void test2(void)
+static void test2(void)
 {
 	int fd;
 	int rc;
@@ -202,7 +202,7 @@ void test2(void)
 }
 
 #define T3_DESC		"Read test0 file by FID and verify attributes"
-void test3(void)
+static void test3(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -228,7 +228,7 @@ void test3(void)
 #define T4_STRIPE_COUNT		2
 #define T4_STRIPE_SIZE		2097152
 #define T4_DESC		"Verify compatibility with 'lfs setstripe'"
-void test4(void)
+static void test4(void)
 {
 	int rc;
 	uint64_t ost0;
@@ -282,7 +282,7 @@ void test4(void)
 
 #define T5FILE		"t5"
 #define T5_DESC		"llapi_layout_get_by_path ENOENT handling"
-void test5(void)
+static void test5(void)
 {
 	int rc;
 	char path[PATH_MAX];
@@ -299,7 +299,7 @@ void test5(void)
 }
 
 #define T6_DESC		"llapi_layout_get_by_fd EBADF handling"
-void test6(void)
+static void test6(void)
 {
 	errno = 0;
 	struct llapi_layout *layout = llapi_layout_get_by_fd(9999, 0);
@@ -308,7 +308,7 @@ void test6(void)
 
 #define T7FILE		"t7"
 #define T7_DESC		"llapi_layout_get_by_path EACCES handling"
-void test7(void)
+static void test7(void)
 {
 	int fd;
 	int rc;
@@ -352,7 +352,7 @@ void test7(void)
  * striping attributes. */
 #define T8FILE		"t8"
 #define T8_DESC		"llapi_layout_get_by_path ENODATA handling"
-void test8(void)
+static void test8(void)
 {
 	int fd;
 	int rc;
@@ -392,7 +392,7 @@ void test8(void)
 
 /* Verify llapi_layout_patter_set() return values for various inputs. */
 #define T9_DESC		"verify llapi_layout_pattern_set() return values"
-void test9(void)
+static void test9(void)
 {
 	struct llapi_layout *layout;
 	int rc;
@@ -423,7 +423,7 @@ void test9(void)
 
 /* Verify stripe_count interfaces return errors as expected */
 #define T10_DESC	"stripe_count error handling"
-void test10(void)
+static void test10(void)
 {
 	int rc;
 	uint64_t count;
@@ -465,7 +465,7 @@ void test10(void)
 
 /* Verify stripe_size interfaces return errors as expected */
 #define T11_DESC	"stripe_size error handling"
-void test11(void)
+static void test11(void)
 {
 	int rc;
 	uint64_t size;
@@ -508,7 +508,7 @@ void test11(void)
 
 /* Verify pool_name interfaces return errors as expected */
 #define T12_DESC	"pool_name error handling"
-void test12(void)
+static void test12(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -549,7 +549,7 @@ void test12(void)
 #define T13FILE			"t13"
 #define T13_STRIPE_COUNT	2
 #define T13_DESC		"ost_index error handling"
-void test13(void)
+static void test13(void)
 {
 	int rc;
 	int fd;
@@ -614,7 +614,7 @@ void test13(void)
 
 /* Verify llapi_layout_file_create() returns errors as expected */
 #define T14_DESC	"llapi_layout_file_create error handling"
-void test14(void)
+static void test14(void)
 {
 	int rc;
 	struct llapi_layout *layout = llapi_layout_alloc();
@@ -631,7 +631,7 @@ void test14(void)
 #define T15FILE			"t15"
 #define T15_STRIPE_COUNT	2
 #define T15_DESC	"Can't change striping attributes of existing file"
-void test15(void)
+static void test15(void)
 {
 	int rc;
 	int fd;
@@ -674,7 +674,7 @@ void test15(void)
 /* Default stripe attributes are applied as expected. */
 #define T16FILE		"t16"
 #define T16_DESC	"Default stripe attributes are applied as expected"
-void test16(void)
+static void test16(void)
 {
 	int		rc;
 	int		fd;
@@ -750,7 +750,7 @@ void test16(void)
 /* Setting stripe count to LLAPI_LAYOUT_WIDE uses all available OSTs. */
 #define T17FILE		"t17"
 #define T17_DESC	"LLAPI_LAYOUT_WIDE is honored"
-void test17(void)
+static void test17(void)
 {
 	int rc;
 	int fd;
@@ -793,7 +793,7 @@ void test17(void)
 /* Setting pool with "fsname.pool" notation. */
 #define T18FILE		"t18"
 #define T18_DESC	"Setting pool with fsname.pool notation"
-void test18(void)
+static void test18(void)
 {
 	int rc;
 	int fd;
@@ -835,7 +835,7 @@ void test18(void)
 }
 
 #define T19_DESC	"Maximum length pool name is NULL-terminated"
-void test19(void)
+static void test19(void)
 {
 	struct llapi_layout *layout;
 	char *name = "0123456789abcde";
@@ -854,7 +854,7 @@ void test19(void)
 
 #define T20FILE		"t20"
 #define T20_DESC	"LLAPI_LAYOUT_DEFAULT is honored"
-void test20(void)
+static void test20(void)
 {
 	int		rc;
 	int		fd;
@@ -913,7 +913,7 @@ void test20(void)
 }
 
 #define T21_DESC	"llapi_layout_file_create fails for non-Lustre file"
-void test21(void)
+static void test21(void)
 {
 	struct llapi_layout *layout;
 	char template[PATH_MAX];
@@ -939,7 +939,7 @@ void test21(void)
 
 #define T22FILE		"t22"
 #define T22_DESC	"llapi_layout_file_create applied mode correctly"
-void test22(void)
+static void test22(void)
 {
 	int		rc;
 	int		fd;
@@ -972,7 +972,7 @@ void test22(void)
 }
 
 #define T23_DESC	"llapi_layout_get_by_path fails for non-Lustre file"
-void test23(void)
+static void test23(void)
 {
 	struct llapi_layout *layout;
 	char template[PATH_MAX];
@@ -997,7 +997,7 @@ void test23(void)
  * for file with unspecified layout. */
 #define T24FILE		"t24"
 #define T24_DESC	"LAYOUT_GET_EXPECTED works with existing file"
-void test24(void)
+static void test24(void)
 {
 	int fd;
 	int rc;
@@ -1038,7 +1038,7 @@ void test24(void)
  * for directory with unspecified layout. */
 #define T25DIR		"d25"
 #define T25_DESC	"LAYOUT_GET_EXPECTED works with directory"
-void test25(void)
+static void test25(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -1077,7 +1077,7 @@ void test25(void)
 #define T26DIR		"d26"
 #define T26_DESC	"LAYOUT_GET_EXPECTED partially specified parent"
 #define T26_STRIPE_SIZE	(1048576 * 4)
-void test26(void)
+static void test26(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -1125,7 +1125,7 @@ void test26(void)
 #define T27DIR		"d27"
 #define T27_DESC	"LAYOUT_GET_EXPECTED with non existing file"
 #define T27_STRIPE_SIZE	(1048576 * 3)
-void test27(void)
+static void test27(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -1175,7 +1175,7 @@ void test27(void)
  * with a stripe_count of -1. */
 #define T28DIR		"d28"
 #define T28_DESC	"LLAPI_LAYOUT_WIDE returned as expected"
-void test28(void)
+static void test28(void)
 {
 	int rc;
 	struct llapi_layout *layout;
@@ -1210,7 +1210,7 @@ void test28(void)
 
 #define T29FILE		"f29"
 #define T29_DESC	"set ost index to non-zero stripe number"
-void test29(void)
+static void test29(void)
 {
 	int rc, fd, i;
 	uint64_t ost0, ost1, nost;
@@ -1323,7 +1323,7 @@ void test29(void)
 
 #define T30FILE		"f30"
 #define T30_DESC	"create composite file, traverse components"
-void test30(void)
+static void test30(void)
 {
 	int rc, fd;
 	uint64_t start[3], end[3];
@@ -1425,7 +1425,7 @@ void test30(void)
 
 #define T31FILE		"f31"
 #define T31_DESC	"add/delete component to/from existing file"
-void test31(void)
+static void test31(void)
 {
 	int rc, fd, i;
 	uint64_t start[2], end[2];
@@ -1537,7 +1537,7 @@ void test31(void)
 #define T32FILE			"t32"
 #define T32_STRIPE_COUNT	(num_osts*2)
 #define T32_DESC		"Test overstriping with layout_file_create"
-void test32(void)
+static void test32(void)
 {
 	int rc;
 	int fd;
@@ -1590,7 +1590,7 @@ void test32(void)
 #define T33FILE			"t33"
 #define T33_STRIPE_COUNT	(num_osts*2)
 #define T33_DESC		"Test overstriping with llapi_file_open"
-void test33(void)
+static void test33(void)
 {
 	int rc;
 	int fd;
@@ -1628,7 +1628,7 @@ void test33(void)
 
 #define T34FILE		"f34"
 #define T34_DESC	"create simple valid & invalid self extending layouts"
-void test34(void)
+static void test34(void)
 {
 	int rc, fd;
 	uint64_t start[4], end[4];
@@ -1785,7 +1785,8 @@ static struct test_tbl_entry test_tbl[] = {
 
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
 
-void print_test_desc(int test_num, const char *test_desc, const char *status)
+static void print_test_desc(int test_num, const char *test_desc,
+			    const char *status)
 {
 	int i;
 
@@ -1797,7 +1798,8 @@ void print_test_desc(int test_num, const char *test_desc, const char *status)
 
 /* This function runs a single test by forking the process.  This way,
  * if there is a segfault during a test, the test program won't crash. */
-int test(void (*test_fn)(), const char *test_desc, bool test_skip, int test_num)
+static int test(void (*test_fn)(), const char *test_desc, bool test_skip,
+		int test_num)
 {
 	int rc = 0;
 	pid_t pid;

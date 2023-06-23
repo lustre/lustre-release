@@ -46,7 +46,7 @@
 
 #define BUFSIZE (1024 * 1024)
 
-void error(char *fmt, ...)
+static void error(char *fmt, ...)
 {
 	va_list ap;
 
@@ -56,7 +56,7 @@ void error(char *fmt, ...)
 	exit(1);
 }
 
-int compare_offsets(const void *a, const void *b)
+static int compare_offsets(const void *a, const void *b)
 {
 	off_t *A = (off_t *)a;
 	off_t *B = (off_t *)b;

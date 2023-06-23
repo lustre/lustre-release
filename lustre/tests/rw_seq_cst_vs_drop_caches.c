@@ -21,7 +21,7 @@
 
 int mmap_mode;		/* -m flag */
 
-void usage(void)
+static void usage(void)
 {
 	fprintf(stdout,
 		"%s: rw_seq_cst_vs_drop_caches [-m] /mnt/lustre/file0 /mnt/lustre2/file0\n"

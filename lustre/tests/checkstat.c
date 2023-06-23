@@ -44,7 +44,7 @@
 #include <pwd.h>
 #include <grp.h>
 
-void
+static void
 usage(char *argv0, int help)
 {
 	char *progname = strrchr(argv0, '/');
@@ -78,7 +78,7 @@ usage(char *argv0, int help)
 /* using realpath() implies the paths must be resolved/exist
  * so this will fail for dangling links
  */
-int check_canonical(char *lname, char *checklink, int verbose)
+static int check_canonical(char *lname, char *checklink, int verbose)
 {
 	char *lname_canon;
 	char *checklink_canon;

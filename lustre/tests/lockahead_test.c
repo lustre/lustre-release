@@ -90,7 +90,7 @@ static void cleanup(void)
 }
 
 /* Trivial helper for one advice */
-void setup_ladvise_lockahead(struct llapi_lu_ladvise *advice, int mode,
+static void setup_ladvise_lockahead(struct llapi_lu_ladvise *advice, int mode,
 			     int flags, size_t start, size_t end, bool async)
 {
 	advice->lla_advice = LU_LADVISE_LOCKAHEAD;

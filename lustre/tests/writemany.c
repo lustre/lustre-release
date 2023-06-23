@@ -44,7 +44,7 @@ char cmdname[512];
 int o_abort;
 int o_quiet;
 
-void usage(char *name)
+static void usage(char *name)
 {
 	fprintf(stderr, "usage: %s [opts] <dirname> <seconds> <threads>\n",
 		name);
@@ -60,7 +60,7 @@ struct kid_list_t {
 
 struct kid_list_t *head;
 
-int push_kid(pid_t kid)
+static int push_kid(pid_t kid)
 {
 	struct kid_list_t *new;
 
@@ -74,7 +74,7 @@ int push_kid(pid_t kid)
 	return 0;
 }
 
-void kill_kids(void)
+static void kill_kids(void)
 {
 	while (head) {
 		kill(head->kid, SIGTERM);
@@ -83,13 +83,13 @@ void kill_kids(void)
 }
 
 static int usr1_received;
-void usr1_handler(int unused)
+static void usr1_handler(int unused)
 {
 	usr1_received = 1;
 	kill_kids();
 }
 
-int wait_for_threads(int live_threads)
+static int wait_for_threads(int live_threads)
 {
 	int rc = 0;
 
@@ -137,14 +137,14 @@ int wait_for_threads(int live_threads)
 	return rc;
 }
 
-void print_err(char *op, char *filename, struct timeval *time, int err)
+static void print_err(char *op, char *filename, struct timeval *time, int err)
 {
 	fprintf(stderr, "%s: %d.%.06d error: %s(%s): %s\n",
 		cmdname, (int)(time->tv_sec), (int)(time->tv_usec), op,
 		filename, strerror(errno));
 }
 
-int run_one_child(char *file, int thread, int seconds)
+static int run_one_child(char *file, int thread, int seconds)
 {
 	struct timeval start, cur;
 	double diff;

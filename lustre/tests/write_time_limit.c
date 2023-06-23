@@ -48,7 +48,7 @@
 volatile sig_atomic_t keep_going = 1;
 
 /* The signal handler just clears the flag and re-enables itself. */
-void catch_alarm(int sig)
+static void catch_alarm(int sig)
 {
 	keep_going = 0;
 	signal(sig, catch_alarm);

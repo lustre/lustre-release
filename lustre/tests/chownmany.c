@@ -37,7 +37,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("usage: %s owner filenamefmt count\n", prog);
 	printf("       %s owner filenamefmt start count\n", prog);

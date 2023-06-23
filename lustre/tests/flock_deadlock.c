@@ -102,7 +102,7 @@ enum {
 		printf("%d: done\n", pid);                              	\
 	}
 
-void catch_alarm()
+static void catch_alarm(int i)
 {
 	fprintf(stderr, "lock timeout\n");
 	exit(124);

@@ -40,7 +40,7 @@
 #define S_SHIFT 12
 #endif
 
-int usage(char *prog)
+static int usage(char *prog)
 {
 	fprintf(stderr, "usage: %s <basename>\n", prog);
 	exit(1);

@@ -104,7 +104,7 @@ struct iabf_task {
 	char **it_argv;
 };
 
-long iabf_getenvl(const char *name, long def)
+static long iabf_getenvl(const char *name, long def)
 {
 	const char *s = getenv(name);
 	return s != NULL ? atol(s) : def;
@@ -388,7 +388,7 @@ static int iabf(struct iabf_control *ic, char **a, char **b)
 }
 
 /* strsep() for argvs */
-char **arg_sep(char ***pargs, const char *delim)
+static char **arg_sep(char ***pargs, const char *delim)
 {
 	char **begin, **end;
 

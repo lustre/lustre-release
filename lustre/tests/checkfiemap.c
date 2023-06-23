@@ -51,7 +51,7 @@
 /* This test executes fiemap ioctl and check
  * a) there are no file ranges marked with FIEMAP_EXTENT_UNWRITTEN
  * b) data ranges sizes sum is equal to given in second param */
-int check_fiemap(int fd, long long orig_size)
+static int check_fiemap(int fd, long long orig_size)
 {
 	/* This buffer is enougth for 1MB length file */
 	union { struct fiemap f; char c[4096]; } fiemap_buf;

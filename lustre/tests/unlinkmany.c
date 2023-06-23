@@ -37,7 +37,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("usage: %s [option] filenamefmt count\n", prog);
 	printf("       %s [option] filenamefmt start count\n", prog);

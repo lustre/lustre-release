@@ -59,7 +59,7 @@ int creat_errors;
 int rename_errors;
 int unlink_errors;
 
-void usage(const char *progname)
+static void usage(const char *progname)
 {
 	fprintf(stderr, "usage: %s [-n numfiles] [-s seed] [-v] [-x] [dir]\n"
 		"\t-c: only do the create step of first loop\n"
@@ -71,7 +71,8 @@ void usage(const char *progname)
 		"\t-x: don't exit on error\n", progname);
 }
 
-void handler(int sig) {
+static void handler(int sig)
+{
 	static long last_time;
 	long now = time(0);
 

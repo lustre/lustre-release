@@ -44,7 +44,7 @@
 /**
  * helper functions
  */
-int t_fcntl(int fd, int cmd, ...)
+static int t_fcntl(int fd, int cmd, ...)
 {
 	va_list ap;
 	long arg;
@@ -106,7 +106,7 @@ int t_fcntl(int fd, int cmd, ...)
 	return rc;
 }
 
-int t_unlink(const char *path)
+static int t_unlink(const char *path)
 {
 	int rc;
 
@@ -122,13 +122,13 @@ int t_unlink(const char *path)
  *
  * normal flock test
  */
-void t1_usage(void)
+static void t1_usage(void)
 {
 	fprintf(stderr,
 		"usage: flocks_test 1 {on|off} {-c|-f|-l} /path/to/file\n");
 }
 
-int t1(int argc, char *argv[])
+static int t1(int argc, char *argv[])
 {
 	int fd;
 	int mount_with_flock = 0;
@@ -197,7 +197,7 @@ struct thread_info {
 	int rc;
 } th_data;
 
-void *t2_thread1(void *arg)
+static void *t2_thread1(void *arg)
 {
 	struct thread_info *ti = arg;
 	struct flock *lock = ti->lock;
@@ -218,7 +218,7 @@ void *t2_thread1(void *arg)
 	return &ti->rc;
 }
 
-void *t2_thread2(void *arg)
+static void *t2_thread2(void *arg)
 {
 	struct thread_info *ti = arg;
 	struct flock *lock = ti->lock;
@@ -240,7 +240,7 @@ void *t2_thread2(void *arg)
 	return &ti->rc;
 }
 
-int t2(int argc, char *argv[])
+static int t2(int argc, char *argv[])
 {
 	struct flock lock = {
 		.l_type = F_RDLCK,
@@ -301,7 +301,7 @@ out:
  *            two conflicting flocks from different processes but same fs
  *            should succeed.
  */
-int t3(int argc, char *argv[])
+static int t3(int argc, char *argv[])
 {
 	int fd, fd2;
 	int pid;
@@ -380,7 +380,7 @@ out:
 	return rc;
 }
 
-int t4(int argc, char *argv[])
+static int t4(int argc, char *argv[])
 {
 	struct flock lock = {
 		.l_type = F_WRLCK,
@@ -511,7 +511,7 @@ out:
 "       sleep N: sleep for N secs after fcntl\n"			      \
 "       file1: fcntl is called for this file\n"
 
-int t5(int argc, char *argv[])
+static int t5(int argc, char *argv[])
 {
 	struct flock lock = {
 		.l_type = F_WRLCK,
@@ -589,7 +589,7 @@ int t5(int argc, char *argv[])
 /** ==============================================================
  * program entry
  */
-void usage(void)
+static void usage(void)
 {
 	fprintf(stderr,
 		"usage: flocks_test test# [corresponding arguments]\n");

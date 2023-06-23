@@ -78,7 +78,7 @@ static bool is_bitmap;
 
 /* Register and unregister 2000 times. Ensures there is no fd leak
  * since there is usually 1024 fd per process. */
-int test1(void)
+static int test1(void)
 {
 	int i;
 	int rc;
@@ -101,7 +101,7 @@ int test1(void)
 }
 
 /* Re-register */
-int test2(void)
+static int test2(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata1;
@@ -127,7 +127,7 @@ int test2(void)
 }
 
 /* Bad parameters to llapi_hsm_copytool_register(). */
-int test3(void)
+static int test3(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata;
@@ -173,7 +173,7 @@ int test3(void)
 }
 
 /* Bad parameters to llapi_hsm_copytool_unregister(). */
-int test4(void)
+static int test4(void)
 {
 	int rc;
 
@@ -185,7 +185,7 @@ int test4(void)
 }
 
 /* Test llapi_hsm_copytool_recv in non blocking mode */
-int test5(void)
+static int test5(void)
 {
 	int rc;
 	int i;
@@ -213,7 +213,7 @@ int test5(void)
 }
 
 /* Test llapi_hsm_copytool_recv with bogus parameters */
-int test6(void)
+static int test6(void)
 {
 	struct hsm_copytool_private *ctdata;
 	struct hsm_action_list *hal;
@@ -248,7 +248,7 @@ int test6(void)
 }
 
 /* Test polling (without actual traffic) */
-int test7(void)
+static int test7(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata;
@@ -317,7 +317,7 @@ static int create_testfile(size_t length)
 }
 
 /* Test llapi_hsm_state_get. */
-void test50(void)
+static void test50(void)
 {
 	struct hsm_user_state hus;
 	int rc;
@@ -358,7 +358,7 @@ void test50(void)
 }
 
 /* Test llapi_hsm_state_set. */
-void test51(void)
+static void test51(void)
 {
 	int rc;
 	int fd;
@@ -488,7 +488,7 @@ void test51(void)
 }
 
 /* Test llapi_hsm_current_action */
-void test52(void)
+static void test52(void)
 {
 	int rc;
 	int fd;
@@ -510,7 +510,7 @@ void test52(void)
 
 /* Helper to simulate archiving a file. No actual data movement
  * happens. */
-void helper_archiving(void (*progress)
+static void helper_archiving(void (*progress)
 		      (struct hsm_copyaction_private *hcp, size_t length),
 		      const size_t length)
 {
@@ -590,7 +590,7 @@ void helper_archiving(void (*progress)
 }
 
 /* Simple archive. No progress. */
-void test100(void)
+static void test100(void)
 {
 	const size_t length = 100;
 
@@ -625,7 +625,7 @@ static void test101_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test101(void)
+static void test101(void)
 {
 	const size_t length = 1000;
 
@@ -660,7 +660,7 @@ static void test102_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test102(void)
+static void test102(void)
 {
 	const size_t length = 1000;
 
@@ -691,7 +691,7 @@ static void test103_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test103(void)
+static void test103(void)
 {
 	const size_t length = 1000;
 
@@ -728,7 +728,7 @@ static void test104_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test104(void)
+static void test104(void)
 {
 	const size_t length = 1000;
 
@@ -762,7 +762,7 @@ static void test105_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test105(void)
+static void test105(void)
 {
 	const size_t length = 1000;
 
@@ -793,7 +793,7 @@ static void test106_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test106(void)
+static void test106(void)
 {
 	const size_t length = 1000;
 
@@ -824,7 +824,7 @@ static void test107_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test107(void)
+static void test107(void)
 {
 	const size_t length = 1000;
 
@@ -858,7 +858,7 @@ static void test108_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test108(void)
+static void test108(void)
 {
 	const size_t length = 1000;
 
@@ -889,7 +889,7 @@ static void test109_progress(struct hsm_copyaction_private *hcp, size_t length)
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-void test109(void)
+static void test109(void)
 {
 	const size_t length = 1000;
 
@@ -924,7 +924,7 @@ static void test110_progress(struct hsm_copyaction_private *hcp, size_t length)
 	}
 }
 
-void test110(void)
+static void test110(void)
 {
 	const size_t length = 1000;
 
@@ -959,7 +959,7 @@ static void test111_progress(struct hsm_copyaction_private *hcp, size_t length)
 	}
 }
 
-void test111(void)
+static void test111(void)
 {
 	const size_t length = 1000;
 
@@ -1014,7 +1014,7 @@ static void test112_progress(struct hsm_copyaction_private *hcp, size_t length)
 	}
 }
 
-void test112(void)
+static void test112(void)
 {
 	const size_t length = 1000;
 
@@ -1049,7 +1049,7 @@ static void test113_progress(struct hsm_copyaction_private *hcp, size_t length)
 	}
 }
 
-void test113(void)
+static void test113(void)
 {
 	const size_t length = 1000;
 

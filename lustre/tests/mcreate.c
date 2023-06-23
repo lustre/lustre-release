@@ -37,7 +37,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-void usage(const char *prog, int status)
+static void usage(const char *prog, int status)
 {
 	fprintf(status == 0 ? stdout : stderr,
 		"Usage: %s [OPTION]... FILE\n"

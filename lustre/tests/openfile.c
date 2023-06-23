@@ -69,7 +69,7 @@ FLAG_MAPPING flag_table[] = {
 	{"", -1}
 };
 
-void Usage_and_abort(void)
+static void Usage_and_abort(void)
 {
 	fprintf(stderr, "Usage: openfile -f flags [ -m mode ] filename\n");
 	fprintf(stderr,

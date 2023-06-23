@@ -21,7 +21,7 @@
 #define SECTOR_SIZE (sysconf(_SC_PAGESIZE))
 #define BUFFER_SIZE (150 * SECTOR_SIZE)
 
-void read_from_pipe(int fd, const char *filename, size_t size)
+static void read_from_pipe(int fd, const char *filename, size_t size)
 {
 	char buffer[SECTOR_SIZE];
 	size_t sz;
@@ -42,7 +42,7 @@ void read_from_pipe(int fd, const char *filename, size_t size)
 	}
 }
 
-void do_splice1(int fd, const char *filename, size_t size)
+static void do_splice1(int fd, const char *filename, size_t size)
 {
 	bool retried = false;
 	int pipefd[2];
@@ -69,7 +69,7 @@ void do_splice1(int fd, const char *filename, size_t size)
 	close(pipefd[1]);
 }
 
-void do_splice2(int fd, const char *filename, size_t size)
+static void do_splice2(int fd, const char *filename, size_t size)
 {
 	bool retried = false;
 	int pipefd[2];
@@ -105,7 +105,7 @@ void do_splice2(int fd, const char *filename, size_t size)
 	}
 }
 
-void usage(const char *argv0)
+static void usage(const char *argv0)
 {
 	fprintf(stderr, "USAGE: %s [-rd] {filename}\n", basename(argv0));
 	exit(2);

@@ -33,7 +33,7 @@
 #include <grp.h>
 #include <fcntl.h>
 
-void print_groups(int num_groups, gid_t *groups)
+static void print_groups(int num_groups, gid_t *groups)
 {
 	int i;
 

@@ -42,7 +42,7 @@
 #include <utime.h>
 #include <errno.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	fprintf(stderr, "usage: %s <filename> [-s <filename>]\n", prog);
 	exit(1);

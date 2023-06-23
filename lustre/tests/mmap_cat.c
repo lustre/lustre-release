@@ -45,7 +45,7 @@ char usage[] =
 "Usage: %s <file>\n"
 "       mmap <file> and cat its content\n";
 
-size_t getFilesize(const char *filename)
+static size_t getFilesize(const char *filename)
 {
 	struct stat st;
 

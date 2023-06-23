@@ -51,14 +51,14 @@
 /* global */
 loff_t	blksize;
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	fprintf(stderr, "usage: %s <filepath>\n", prog);
 	fprintf(stderr, "filepath: absolute pathname of Lustre file\n");
 	exit(1);
 }
 
-int write_data_to_file(int fd)
+static int write_data_to_file(int fd)
 {
 	char buf[blksize + 1];
 	int rc, i, j;
@@ -77,7 +77,7 @@ int write_data_to_file(int fd)
 	return 0;
 }
 
-int get_stat(int fd, struct stat *st)
+static int get_stat(int fd, struct stat *st)
 {
 	int rc = 0;
 
@@ -89,7 +89,7 @@ int get_stat(int fd, struct stat *st)
 	return rc;
 }
 
-int __do_fallocate(int fd, int mode, loff_t offset, loff_t len)
+static int __do_fallocate(int fd, int mode, loff_t offset, loff_t len)
 {
 	int rc;
 
@@ -104,7 +104,7 @@ int __do_fallocate(int fd, int mode, loff_t offset, loff_t len)
 	return rc;
 }
 
-int post_fallocate_checks(int fd, int mode, loff_t offset, loff_t len,
+static int post_fallocate_checks(int fd, int mode, loff_t offset, loff_t len,
 			  loff_t expected_new_size)
 {
 	struct stat st;
@@ -129,7 +129,7 @@ out:
 	return rc;
 }
 
-int create_hole(int fd)
+static int create_hole(int fd)
 {
 	int rc;
 
@@ -146,7 +146,8 @@ out:
 	return rc;
 }
 
-int do_fallocate(int fd, int mode, loff_t offset, loff_t expected_new_size)
+static int do_fallocate(int fd, int mode, loff_t offset,
+			loff_t expected_new_size)
 {
 	int rc;
 	loff_t len;
@@ -167,7 +168,7 @@ out:
 
 }
 
-int test_prealloc_nonsparse(int fd)
+static int test_prealloc_nonsparse(int fd)
 {
 	int rc, mode;
 	loff_t offset, expected_new_size;
@@ -191,7 +192,7 @@ out:
 	return rc;
 }
 
-int test_prealloc_sparse(int fd)
+static int test_prealloc_sparse(int fd)
 {
 	int rc, mode;
 	loff_t offset, expected_new_size;

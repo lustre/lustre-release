@@ -52,7 +52,7 @@ static const char usage[] =
 "  -j egid              switch egid to GID\n"
 "  -G[gid0,gid1,...]    set supplementary groups\n";
 
-void Usage_and_abort(const char *name)
+static void Usage_and_abort(const char *name)
 {
 	fprintf(stderr, usage, name);
 	exit(-1);

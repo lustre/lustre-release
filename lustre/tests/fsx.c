@@ -217,7 +217,7 @@ int page_mask;
 FILE *fsxlogf;
 int badoff = -1;
 
-void
+static void
 vwarnc(code, fmt, ap)
 	int code;
 	const char *fmt;
@@ -231,7 +231,7 @@ vwarnc(code, fmt, ap)
 	fprintf(stderr, "%s\n", strerror(code));
 }
 
-void
+static void
 __attribute__((format(__printf__, 1, 2)))
 warn(const char *fmt, ...)
 {
@@ -242,7 +242,7 @@ warn(const char *fmt, ...)
 	va_end(ap);
 }
 
-void
+static void
 __attribute__((format(__printf__, 1, 2)))
 prt(char *fmt, ...)
 {
@@ -264,14 +264,14 @@ prt(char *fmt, ...)
  * which transparently handles passing of function name.
  * This version also keeps checkpatch happy.
  */
-void
+static void
 ptrerr_func(const char *func, const char *prefix)
 {
 	prt("%s: %s%s%s\n", func, prefix, prefix ? ": " : "", strerror(errno));
 }
 #define prterr(prefix) ptrerr_func(__func__, prefix)
 
-void
+static void
 log4(int operation, int arg0, int arg1, int arg2)
 {
 	struct log_entry *le;
@@ -290,7 +290,7 @@ log4(int operation, int arg0, int arg1, int arg2)
 		logptr = 0;
 }
 
-const char *
+static const char *
 fill_tf_buf(const struct test_file *tf)
 {
 	static int max_tf_len;
@@ -309,7 +309,7 @@ fill_tf_buf(const struct test_file *tf)
 	return tf_buf;
 }
 
-void
+static void
 logdump(void)
 {
 	int i, count, down;
@@ -436,7 +436,7 @@ logdump(void)
 	}
 }
 
-void
+static void
 save_buffer(char *buffer, off_t bufferlength, int fd)
 {
 	off_t ret;
@@ -477,7 +477,7 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 	}
 }
 
-void
+static void
 report_failure(int status)
 {
 	logdump();
@@ -498,7 +498,7 @@ report_failure(int status)
 #define short_at(cp) ((unsigned short)((*((unsigned char *)(cp)) << 8) | \
 		      *(((unsigned char *)(cp)) + 1)))
 
-void
+static void
 check_buffers(unsigned int offset, unsigned int size)
 {
 	unsigned char c, t;
@@ -542,7 +542,7 @@ check_buffers(unsigned int offset, unsigned int size)
 	}
 }
 
-struct test_file *
+static struct test_file *
 get_tf(void)
 {
 	unsigned int index = 0;
@@ -565,7 +565,7 @@ get_tf(void)
 	return &test_files[index % num_test_files];
 }
 
-void
+static void
 assign_fd_policy(char *policy)
 {
 	if (!strcmp(policy, "random")) {
@@ -578,7 +578,7 @@ assign_fd_policy(char *policy)
 	}
 }
 
-int
+static int
 get_fd(void)
 {
 	struct test_file *tf = get_tf();
@@ -593,7 +593,7 @@ static const char *my_basename(const char *path)
 	return c ? c++ : path;
 }
 
-void
+static void
 open_test_files(char **argv, int argc)
 {
 	struct test_file *tf;
@@ -628,7 +628,7 @@ open_test_files(char **argv, int argc)
 		prt("fd %d: %s\n", i, tf->path);
 }
 
-void
+static void
 close_test_files(void)
 {
 	int i;
@@ -642,7 +642,7 @@ close_test_files(void)
 	}
 }
 
-void
+static void
 check_size(void)
 {
 	struct stat statbuf;
@@ -663,7 +663,7 @@ check_size(void)
 	}
 }
 
-void
+static void
 check_trunc_hack(void)
 {
 	struct stat statbuf;
@@ -692,7 +692,7 @@ check_trunc_hack(void)
 	}
 }
 
-void
+static void
 output_line(struct test_file *tf, int op, unsigned int offset,
 	    unsigned int size)
 {
@@ -723,7 +723,7 @@ output_line(struct test_file *tf, int op, unsigned int offset,
 	     (int)size < 0 ? -(int)size : size);
 }
 
-void
+static void
 mirror_output_line(struct test_file *tf, int op, int mirrors, int id)
 {
 	if (!(!quiet &&
@@ -747,7 +747,8 @@ mirror_output_line(struct test_file *tf, int op, int mirrors, int id)
 	}
 }
 
-void output_debug(unsigned int offset, unsigned int size, const char *what)
+static void output_debug(unsigned int offset, unsigned int size,
+			 const char *what)
 {
 	struct timeval t;
 
@@ -759,7 +760,7 @@ void output_debug(unsigned int offset, unsigned int size, const char *what)
 	}
 }
 
-void
+static void
 doflush(unsigned int offset, unsigned int size)
 {
 	unsigned int pg_offset;
@@ -792,7 +793,7 @@ doflush(unsigned int offset, unsigned int size)
 	output_debug(offset, size, "flush done");
 }
 
-void
+static void
 doread(unsigned int offset, unsigned int size)
 {
 	off_t ret;
@@ -842,7 +843,7 @@ doread(unsigned int offset, unsigned int size)
 	check_buffers(offset, size);
 }
 
-void
+static void
 check_eofpage(char *s, unsigned int offset, char *p, int size)
 {
 	long last_page, should_be_zero;
@@ -869,7 +870,7 @@ check_eofpage(char *s, unsigned int offset, char *p, int size)
 		}
 }
 
-void
+static void
 domapread(unsigned int offset, unsigned int size)
 {
 	unsigned int pg_offset;
@@ -928,7 +929,7 @@ domapread(unsigned int offset, unsigned int size)
 	check_buffers(offset, size);
 }
 
-void
+static void
 gendata(char *original_buf, char *good_buf, unsigned int offset,
 	unsigned int size)
 {
@@ -940,7 +941,7 @@ gendata(char *original_buf, char *good_buf, unsigned int offset,
 	}
 }
 
-void
+static void
 dowrite(unsigned int offset, unsigned int size)
 {
 	off_t ret;
@@ -1005,7 +1006,7 @@ dowrite(unsigned int offset, unsigned int size)
 	}
 }
 
-void
+static void
 domapwrite(unsigned int offset, unsigned int size)
 {
 	unsigned int pg_offset;
@@ -1080,7 +1081,7 @@ domapwrite(unsigned int offset, unsigned int size)
 	output_debug(offset, map_size, "munmap done");
 }
 
-void
+static void
 dotruncate(unsigned int size)
 {
 	int oldsize = file_size;
@@ -1114,7 +1115,7 @@ dotruncate(unsigned int size)
 	output_debug(size, 0, "truncate done");
 }
 
-void
+static void
 do_punch_hole(unsigned int offset, unsigned int length)
 {
 	int max_offset = 0;
@@ -1159,7 +1160,7 @@ do_punch_hole(unsigned int offset, unsigned int length)
 	memset(good_buf + max_offset, '\0', max_len);
 }
 
-void
+static void
 do_zero_range(unsigned int offset, unsigned int length)
 {
 	unsigned int end_offset;
@@ -1215,7 +1216,7 @@ do_zero_range(unsigned int offset, unsigned int length)
  * fallocate is basically a no-op unless extending,
  * then a lot like a truncate
  */
-void
+static void
 do_preallocate(unsigned int offset, unsigned int length)
 {
 	off_t end_offset;
@@ -1269,7 +1270,7 @@ do_preallocate(unsigned int offset, unsigned int length)
 	output_debug(offset, length, "fallocate done");
 }
 
-void
+static void
 writefileimage()
 {
 	ssize_t iret;
@@ -1295,7 +1296,7 @@ writefileimage()
 	}
 }
 
-void
+static void
 docloseopen(void)
 {
 	int direct = 0;
@@ -1379,7 +1380,7 @@ free:
 	return rc < 0 ? rc : count;
 }
 
-void
+static void
 do_mirror_ops(int op)
 {
 	int mirror_count;
@@ -1499,7 +1500,7 @@ do {					\
 		(len) = (size) - (off);	\
 } while (0)
 
-void
+static void
 test(void)
 {
 	unsigned long offset;
@@ -1614,7 +1615,7 @@ out:
 		check_size();
 }
 
-void
+static void
 segv(int sig)
 {
 	if (jmpbuf_good) {
@@ -1624,7 +1625,7 @@ segv(int sig)
 	report_failure(9999);
 }
 
-void
+static void
 cleanup(sig)
 	int	sig;
 {
@@ -1634,7 +1635,7 @@ cleanup(sig)
 	exit(sig);
 }
 
-void
+static void
 usage(void)
 {
 	fprintf(stdout,
@@ -1694,7 +1695,7 @@ usage(void)
 	exit(90);
 }
 
-int
+static int
 getnum(char *s, char **e)
 {
 	int ret = -1;
@@ -1727,7 +1728,7 @@ getnum(char *s, char **e)
 	return (ret);
 }
 
-int
+static int
 test_fallocate(int mode)
 {
 	int ret = 0;

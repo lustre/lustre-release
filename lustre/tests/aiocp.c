@@ -69,7 +69,7 @@ int alignment = 512;		/* buffer alignment */
 
 struct timeval delay;		/* delay between I/O */
 
-int init_iocb(int n, int iosize)
+static int init_iocb(int n, int iosize)
 {
 	void *buf;
 	int i;
@@ -100,14 +100,14 @@ int init_iocb(int n, int iosize)
 	return 0;
 }
 
-struct iocb *alloc_iocb()
+static struct iocb *alloc_iocb()
 {
 	if (!iocb_free_count)
 		return 0;
 	return iocb_free[--iocb_free_count];
 }
 
-void free_iocb(struct iocb *io)
+static void free_iocb(struct iocb *io)
 {
 	iocb_free[iocb_free_count++] = io;
 }
@@ -115,7 +115,7 @@ void free_iocb(struct iocb *io)
 /*
  * io_wait_run() - wait for an io_event and then call the callback.
  */
-int io_wait_run(io_context_t ctx, struct timespec *to)
+static int io_wait_run(io_context_t ctx, struct timespec *to)
 {
 	struct io_event events[aio_maxio];
 	struct io_event *ep;
@@ -212,7 +212,7 @@ static void rd_done(io_context_t ctx, struct iocb *iocb, long res, long res2)
 		printf("%d", iosize);
 }
 
-void usage(void)
+static void usage(void)
 {
 	fprintf(stderr,
 		"Usage: aiocp [-a align] [-s size] [-b blksize] [-n num_io] [-f open_flag] SOURCE DEST\n"
@@ -227,7 +227,7 @@ void usage(void)
 /*
  * Scale value by kilo, mega, or giga.
  */
-long long scale_by_kmg(long long value, char scale)
+static long long scale_by_kmg(long long value, char scale)
 {
 	switch (scale) {
 	case 'g':

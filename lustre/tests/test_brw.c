@@ -50,7 +50,7 @@
 #define WRITE 2
 
 #define LPDS sizeof(uint64_t)
-int block_debug_setup(void *addr, int len, uint64_t off, uint64_t id)
+static int block_debug_setup(void *addr, int len, uint64_t off, uint64_t id)
 {
 	off = htole64(off);
 	id = htole64(id);
@@ -64,7 +64,7 @@ int block_debug_setup(void *addr, int len, uint64_t off, uint64_t id)
 	return 0;
 }
 
-int block_debug_check(char *who, void *addr, int size, uint64_t off,
+static int block_debug_check(char *who, void *addr, int size, uint64_t off,
 		      uint64_t id)
 {
 	uint64_t ne_off;
@@ -100,7 +100,7 @@ int block_debug_check(char *who, void *addr, int size, uint64_t off,
 
 #undef LPDS
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	fprintf(stderr,
 		"usage: %s file count [[d]{r|w|rw} [pages_per_vec [objid]]]\n",

@@ -58,7 +58,7 @@
  * If zero bytes are read it will be treated as failure as such
  * zero cannot be returned from this function.
  */
-int read_proc_entry(char *proc_path, char *buf, int len)
+static int read_proc_entry(char *proc_path, char *buf, int len)
 {
 	int rc, fd;
 
@@ -89,7 +89,7 @@ int read_proc_entry(char *proc_path, char *buf, int len)
 	return rc;
 }
 
-int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
+static int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 	    struct lov_user_md *lum_file1, struct lov_user_md *lum_file2)
 {
 	int stripe_count = 0, min_stripe_count = 0, def_stripe_count = 1;
@@ -205,7 +205,7 @@ int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 	return 0;
 }
 
-int compare_lum(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
+static int compare_lum(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 		struct lov_user_md *lum_file1, struct lov_user_md *lum_file2)
 {
 	struct lov_comp_md_v1 *comp_dir, *comp_file1;

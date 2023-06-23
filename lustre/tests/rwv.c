@@ -52,7 +52,7 @@
 #define ACT_VERIFY      16
 #define ACT_OUTPUT	32
 
-void usage()
+static void usage(void)
 {
 	printf("usage: rwv -f filename <-r|-w> [-a] [-z] [-d] [-v]");
 	printf(" [-s offset] [-o[outf]] -n iovcnt SIZE1 SIZE2 SIZE3...\n");
@@ -66,7 +66,7 @@ void usage()
 	printf("-o  write the file content of read to an optional file\n");
 }
 
-int data_verify(struct iovec *iov, int iovcnt, char c)
+static int data_verify(struct iovec *iov, int iovcnt, char c)
 {
 	int i;
 

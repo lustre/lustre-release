@@ -47,7 +47,7 @@
 
 #define MAX_HANDLE_SZ 128
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	fprintf(stderr, "usage: %s <filepath> <mount2>\n",
 		prog);
@@ -123,7 +123,7 @@ static int debug_mark(const char *msg)
 }
 
 /* verify a file contents */
-int check_access(const char *filename,
+static int check_access(const char *filename,
 		 int mnt_fd, struct file_handle *fh, struct stat *st_orig)
 {
 	int fd2, rc, len, offset;

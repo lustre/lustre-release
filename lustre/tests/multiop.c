@@ -112,7 +112,7 @@ char usage[] =
 "	 Z[num] lseek(SEEK_CUR) [optional offset, default 0]\n"
 "	 _  wait for signal\n";
 
-void usr1_handler(int unused)
+static void usr1_handler(int unused)
 {
 	int saved_errno = errno;
 
@@ -166,7 +166,7 @@ struct flag_mapping {
 	{"", -1}
 };
 
-int get_flags(char *data, int *rflags)
+static int get_flags(char *data, int *rflags)
 {
 	char *cloned_flags;
 	char *tmp;

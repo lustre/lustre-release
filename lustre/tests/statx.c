@@ -205,7 +205,7 @@ static inline unsigned char to_uchar(char ch)
 	return ch;
 }
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("Usage: %s [options] <FILE>...\n", prog);
 	printf("Display file status via statx() syscall.\n"

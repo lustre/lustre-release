@@ -5,7 +5,7 @@
 #include <string.h>
 #include <errno.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("Usage: %s <pathname> <xattr name>\n", prog);
 }

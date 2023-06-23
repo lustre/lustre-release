@@ -75,7 +75,7 @@ static char *get_file_name(const char *fmt, long n, int has_fmt_spec)
 	return filename;
 }
 
-double now(void)
+static double now(void)
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);

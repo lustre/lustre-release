@@ -110,7 +110,7 @@ static char *create_file_name(const char *name)
 
 /* Create a file of a given size in the test directory, filed with
  * c. Will assert on error. */
-int create_file(const char *name, size_t size, unsigned char c)
+static int create_file(const char *name, size_t size, unsigned char c)
 {
 	int fd;
 	char *filename;

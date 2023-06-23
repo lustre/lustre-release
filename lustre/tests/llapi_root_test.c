@@ -89,7 +89,7 @@ static void cleanup(void)
 }
 
 #define TEST1_THR_NBR 20
-void *test1_thr(void *arg)
+static void *test1_thr(void *arg)
 {
 	char *fidstr = arg;
 	char path[PATH_MAX];

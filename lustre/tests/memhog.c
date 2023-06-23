@@ -34,7 +34,7 @@
 
 #define CHUNK (128 * 1024)
 
-void usage(const char *prog, FILE *out)
+static void usage(const char *prog, FILE *out)
 {
 	fprintf(out, "usage: %s allocsize\n", prog);
 	fprintf(out, " allocsize is kbytes, or number[KMGP] (P = pages)\n");

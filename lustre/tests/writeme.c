@@ -36,7 +36,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("usage: %s [-s] [-b <bytes>] filename\n", prog);
 	exit(1);
