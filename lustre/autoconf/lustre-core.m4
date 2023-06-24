@@ -2414,26 +2414,6 @@ AC_DEFUN([LC_BI_STATUS], [
 ]) # LC_BI_STATUS
 
 #
-# LC_BIO_INTEGRITY_ENABLED
-#
-# 4.13 removed bio_integrity_enabled
-#
-AC_DEFUN([LC_SRC_BIO_INTEGRITY_ENABLED], [
-	LB2_LINUX_TEST_SRC([bio_integrity_enabled], [
-		#include <linux/bio.h>
-	],[
-		bio_integrity_enabled(NULL);
-	])
-])
-AC_DEFUN([LC_BIO_INTEGRITY_ENABLED], [
-	AC_MSG_CHECKING([if 'bio_integrity_enabled' exist])
-	LB2_LINUX_TEST_RESULT([bio_integrity_enabled], [
-		AC_DEFINE(HAVE_BIO_INTEGRITY_ENABLED, 1,
-			['bio_integrity_enabled' is available])
-	])
-]) # LC_BIO_INTEGRITY_ENABLED
-
-#
 # LC_PAGEVEC_INIT_ONE_PARAM
 #
 # 4.14 pagevec_init takes one parameter
@@ -3935,7 +3915,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_BI_STATUS
 
 	# 4.13
-	LC_SRC_BIO_INTEGRITY_ENABLED
 	LC_SRC_HAVE_GET_INODE_USAGE
 
 	# 4.14
@@ -4190,7 +4169,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_BI_STATUS
 
 	# 4.13
-	LC_BIO_INTEGRITY_ENABLED
 	LC_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
 	LC_HAVE_GET_INODE_USAGE
 

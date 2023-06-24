@@ -1479,10 +1479,6 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 	return bh;
 }
 
-#ifndef HAVE_BIO_INTEGRITY_ENABLED
-bool bio_integrity_enabled(struct bio *bio);
-#endif
-
 #ifdef HAVE_EXT4_JOURNAL_GET_WRITE_ACCESS_4ARGS
 # define osd_ldiskfs_journal_get_write_access(handle, sb, bh, flags) \
 	 ldiskfs_journal_get_write_access((handle), (sb), (bh), (flags))

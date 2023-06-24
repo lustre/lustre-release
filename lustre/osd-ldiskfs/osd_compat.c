@@ -1467,33 +1467,3 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 
 	RETURN(rc);
 }
-
-#ifndef HAVE_BIO_INTEGRITY_ENABLED
-bool bio_integrity_enabled(struct bio *bio)
-{
-	struct blk_integrity *bi = blk_get_integrity(bio_get_disk(bio));
-
-	if (bio_op(bio) != REQ_OP_READ && bio_op(bio) != REQ_OP_WRITE)
-		return false;
-
-	if (!bio_sectors(bio))
-		return false;
-
-	 /* Already protected? */
-	if (bio_integrity(bio))
-		return false;
-
-	if (bi == NULL)
-		return false;
-
-	if (bio_data_dir(bio) == READ && bi->profile->verify_fn != NULL &&
-	    (bi->flags & BLK_INTEGRITY_VERIFY))
-		return true;
-
-	if (bio_data_dir(bio) == WRITE && bi->profile->generate_fn != NULL &&
-	    (bi->flags & BLK_INTEGRITY_GENERATE))
-		return true;
-
-	return false;
-}
-#endif
