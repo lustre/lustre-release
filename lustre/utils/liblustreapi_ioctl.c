@@ -43,6 +43,8 @@
 #include <lustre_ioctl_old.h>
 #include <linux/lustre/lustre_ver.h>
 
+#include "lustreapi_internal.h"
+
 int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 {
 	struct obd_ioctl_data *overlay;
@@ -99,7 +101,7 @@ int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
  * \param cmd		ioctl command
  * \param buf		ioctl data argument, usually obd_ioctl_data
  */
-int llapi_ioctl_dev(unsigned int dev_id, unsigned int cmd, void *buf)
+int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf)
 {
 	unsigned int oldcmd;
 	int rc;

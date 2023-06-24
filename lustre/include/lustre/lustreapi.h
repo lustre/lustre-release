@@ -44,6 +44,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <linux/lustre/lustre_user.h>
+#include <fcntl.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -458,6 +459,7 @@ int llapi_target_check(int num_types, char **obd_types, char *dir);
 int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lmv_uuid);
 int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
+int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_uuid);
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
 int llapi_is_lustre_mnttype(const char *type);
@@ -516,6 +518,7 @@ int llapi_get_lum_dir_fd(int dir_fd, __u64 *valid, lstatx_t *statx,
 			 struct lov_user_md *lum, size_t lumsize);
 
 int llapi_fd2fid(int fd, struct lu_fid *fid);
+
 /* get FID of parent dir + the related name of entry in this parent dir */
 int llapi_path2parent(const char *path, unsigned int linkno,
 		      struct lu_fid *parent_fid, char *name, size_t name_size);
@@ -526,9 +529,9 @@ int llapi_rmfid_at(int fd, struct fid_array *fa);
 int llapi_root_path_open(const char *device, int *outfd);
 int llapi_chomp_string(char *buf);
 
-struct file_handle;
 
 int llapi_handle_to_fid(struct file_handle **handle, const struct lu_fid *fid);
+int llapi_fid_to_handle(struct file_handle **handle, const struct lu_fid *fid);
 int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid,
 			 int open_flags);
 int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
@@ -662,6 +665,7 @@ int llapi_json_write_list(struct llapi_json_item_list **item_list, FILE *fp);
 
 /* File lease */
 int llapi_lease_acquire(int fd, enum ll_lease_mode mode);
+int llapi_lease_release_intent(int fd, struct ll_ioc_lease *data);
 int llapi_lease_release(int fd);
 int llapi_lease_set(int fd, const struct ll_ioc_lease *data);
 int llapi_lease_check(int fd);
@@ -1282,6 +1286,7 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 		      off_t pos, size_t count);
 off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size);
 int llapi_mirror_punch(int fd, unsigned int id, off_t start, size_t length);
+bool llapi_mirror_is_sparse(int fd, unsigned int id);
 
 int llapi_heat_get(int fd, struct lu_heat *heat);
 int llapi_heat_set(int fd, __u64 flags);

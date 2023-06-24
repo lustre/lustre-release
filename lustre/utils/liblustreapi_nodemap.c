@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <libcfs/util/param.h>
+#include <lustre/lustreapi.h>
 
 int llapi_nodemap_exists(const char *nodemap)
 {

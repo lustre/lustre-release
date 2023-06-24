@@ -411,8 +411,8 @@ out:
 	return rc;
 }
 
-int llapi_dir_stripe_limit_check(int stripe_offset, int stripe_count,
-				 int hash_type)
+static int dir_stripe_limit_check(int stripe_offset, int stripe_count,
+				  int hash_type)
 {
 	int rc;
 
@@ -776,9 +776,9 @@ static int verify_dir_param(const char *name,
 	}
 
 	/* Check if the stripe pattern is sane. */
-	rc = llapi_dir_stripe_limit_check(param->lsp_stripe_offset,
-					  param->lsp_stripe_count,
-					  param->lsp_stripe_pattern);
+	rc = dir_stripe_limit_check(param->lsp_stripe_offset,
+				    param->lsp_stripe_count,
+				    param->lsp_stripe_pattern);
 	if (rc != 0)
 		return rc;
 
@@ -2825,11 +2825,11 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
-			    struct lov_user_ost_data_v1 *objects,
-			    char *path, int obdindex, int depth,
-			    enum llapi_layout_verbose verbose,
-			    enum lov_dump_flags flags)
+static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
+				   struct lov_user_ost_data_v1 *objects,
+				   char *path, int obdindex, int depth,
+				   enum llapi_layout_verbose verbose,
+				   enum lov_dump_flags flags)
 {
 	bool is_dir = flags & LDF_IS_DIR;
 	bool indent = flags & LDF_INDENT;
@@ -2917,10 +2917,10 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
-		       char *path, int obdindex, int depth,
-		       enum llapi_layout_verbose verbose,
-		       enum lov_dump_flags flags)
+static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
+			      char *path, int obdindex, int depth,
+			      enum llapi_layout_verbose verbose,
+			      enum lov_dump_flags flags)
 {
 	struct lmv_user_mds_data *objects = lum->lum_objects;
 	char *prefix = lum->lum_magic == LMV_USER_MAGIC ? "(Default)" : "";
@@ -3645,8 +3645,8 @@ static inline bool has_any_comp_options(struct find_param *param)
 	return verbose & VERBOSE_COMP_OPTS;
 }
 
-struct lov_user_mds_data *lov_forge_comp_v1(struct lov_user_mds_data *orig,
-					    bool is_dir)
+static struct lov_user_mds_data *
+lov_forge_comp_v1(struct lov_user_mds_data *orig, bool is_dir)
 {
 	struct lov_user_md *lum = &orig->lmd_lmm;
 	struct lov_user_mds_data *new;
@@ -4592,7 +4592,8 @@ static bool find_check_lmm_info(struct find_param *param)
  *			as part of the escape sequence (0 for an unrecognized
  *			escape sequence)
  */
-int printf_format_escape(char *seq, char *buffer, size_t size, int *wrote)
+static int printf_format_escape(char *seq, char *buffer, size_t size,
+				int *wrote)
 {
 	*wrote = 0;
 	/* For now, only handle single char escape sequences: \n, \t, \\ */
@@ -4628,9 +4629,8 @@ int printf_format_escape(char *seq, char *buffer, size_t size, int *wrote)
  * @return		Number of characters from input string processed
  *			as part of the format (0 for an unknown format)
  */
-
-int printf_format_timestamp(char *seq, char *buffer, size_t size, int *wrote,
-			    struct find_param *param)
+static int printf_format_timestamp(char *seq, char *buffer, size_t size,
+				   int *wrote, struct find_param *param)
 {
 	struct statx_timestamp ts = { 0, 0 };
 	struct tm *tm;
@@ -4841,9 +4841,9 @@ format_done:
  * @return		Number of characters from input string processed
  *			as part of the format (0 for an unknown format)
  */
-int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
-			 struct find_param *param, char *path, __u32 projid,
-			 int d)
+static int printf_format_lustre(char *seq, char *buffer, size_t size,
+				int *wrote, struct find_param *param,
+				char *path, __u32 projid, int d)
 {
 	struct lmv_user_md *lum;
 	struct lmv_user_mds_data *objects;
@@ -5050,9 +5050,9 @@ format_done:
  * @return		Number of characters from input string processed
  *			as part of the format (0 for an unknown format)
  */
-int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
-			 struct find_param *param, char *path, __u32 projid,
-			 int d)
+static int printf_format_directive(char *seq, char *buffer, size_t size,
+				   int *wrote, struct find_param *param,
+				   char *path, __u32 projid, int d)
 {
 	__u16 mode = param->fp_lmd->lmd_stx.stx_mode;
 	uint64_t blocks = param->fp_lmd->lmd_stx.stx_blocks;
@@ -5146,8 +5146,8 @@ int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
  * @param[in]	d	File descriptor for current directory (or -1 for a
  *			non-directory file)
  */
-void printf_format_string(struct find_param *param, char *path,
-			  __u32 projid, int d)
+static void printf_format_string(struct find_param *param, char *path,
+				 __u32 projid, int d)
 {
 	char output[FORMATTED_BUF_LEN];
 	char *fmt_char = param->fp_format_printf_str;
@@ -5989,7 +5989,7 @@ int llapi_mv(char *path, struct find_param *param)
  * @return		Number of characters examined in the escape sequence
  *			(regardless of whether the sequence is valid or not).
  */
-int validate_printf_esc(char *c)
+static int validate_printf_esc(char *c)
 {
 	char *valid_esc = "nt\\";
 
@@ -6018,7 +6018,7 @@ int validate_printf_esc(char *c)
  * @return		Number of characters examined in the format directive
  *			(regardless of whether the directive is valid or not).
  */
-int validate_printf_fmt(char *c)
+static int validate_printf_fmt(char *c)
 {
 	char *valid_fmt_single = "abcGkmnpstUwy%";
 	char *valid_fmt_double = "ACTW";
@@ -6070,7 +6070,7 @@ check_single:
  * @param[in]	param	Structure containing info about invocation of lfs find
  * @return		None
  */
-void validate_printf_str(struct find_param *param)
+static void validate_printf_str(struct find_param *param)
 {
 	char *c = param->fp_format_printf_str;
 	int ret = 0;

@@ -54,7 +54,7 @@
  * http://json.org/
  * http://www.ietf.org/rfc/rfc4627.txt (section 2.5)
  */
-int llapi_json_escape_string(char **out_string, char *in_string)
+static int json_escape_string(char **out_string, char *in_string)
 {
 	int	i;
 	char	escape_chars[] = {'\b', '\f', '\n', '\r', '\t', '"', '\\',
@@ -147,8 +147,8 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 			fprintf(fp, "%f", item->lji_real);
 			break;
 		case LLAPI_JSON_STRING:
-			if (llapi_json_escape_string(&escaped_string,
-						     item->lji_string) < 0) {
+			if (json_escape_string(&escaped_string,
+					       item->lji_string) < 0) {
 				if (escaped_string != NULL)
 					free(escaped_string);
 				return -errno;

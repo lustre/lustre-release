@@ -438,7 +438,7 @@ int llapi_fid_to_handle(struct file_handle **_handle, const struct lu_fid *fid)
  */
 int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid, int flags)
 {
-	struct file_handle *handle;
+	struct file_handle *handle = NULL;
 	int fd;
 	int rc;
 

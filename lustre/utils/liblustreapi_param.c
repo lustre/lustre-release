@@ -505,8 +505,8 @@ static int print_out_devices(yaml_parser_t *reply, enum lctl_param_flags flags)
 	return rc;
 }
 
-int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
-			int version, char *pattern)
+static int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
+			       int version, char *pattern)
 {
 	char source[PATH_MAX / 2], group[GENL_NAMSIZ + 1];
 	char *family = "lustre", *tmp;
