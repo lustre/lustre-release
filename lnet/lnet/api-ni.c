@@ -1569,7 +1569,7 @@ lnet_nid4_cpt_hash(lnet_nid_t nid, unsigned int number)
 	__u16 lnd = LNET_NETTYP(LNET_NIDNET(nid));
 	unsigned int cpt;
 
-	if (lnd == KFILND || lnd == GNILND) {
+	if (lnd == KFILND) {
 		cpt = hash_long(key, LNET_CPT_BITS);
 
 		/* NB: The number of CPTs needn't be a power of 2 */
