@@ -1016,6 +1016,11 @@ int lfsck_master_engine(void *args)
 	int			  rc;
 	ENTRY;
 
+	/*
+	 * thread is spawned with all signals set to SIG_IGN, re-enable
+	 * SIGINT for lfsck_stop() to awaken and stop the thread.
+	 */
+	allow_signal(SIGINT);
 	spin_lock(&lfsck->li_lock);
 	lfsck->li_task = current;
 	spin_unlock(&lfsck->li_lock);
@@ -1597,6 +1602,11 @@ int lfsck_assistant_engine(void *args)
 		GOTO(fini, rc);
 	}
 
+	/*
+	 * thread is spawned with all signals set to SIG_IGN, re-enable
+	 * SIGINT for lfsck_stop() to awaken and stop the thread.
+	 */
+	allow_signal(SIGINT);
 	spin_lock(&lad->lad_lock);
 	lad->lad_task = current;
 	thread_set_flags(athread, SVC_RUNNING);

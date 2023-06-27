@@ -3403,8 +3403,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 
 	thread_set_flags(thread, SVC_STOPPING);
 
-	LASSERT(lfsck->li_task != NULL);
-	cfs_force_sig(SIGINT, lfsck->li_task);
+	LASSERT(lfsck->li_task);
+	send_sig(SIGINT, lfsck->li_task, 1);
 
 	if (lfsck->li_master) {
 		struct lfsck_component *com;
@@ -3413,16 +3413,16 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
 			lad = com->lc_data;
 			spin_lock(&lad->lad_lock);
-			if (lad->lad_task != NULL)
-				cfs_force_sig(SIGINT, lad->lad_task);
+			if (lad->lad_task)
+				send_sig(SIGINT, lad->lad_task, 1);
 			spin_unlock(&lad->lad_lock);
 		}
 
 		list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
 			lad = com->lc_data;
 			spin_lock(&lad->lad_lock);
-			if (lad->lad_task != NULL)
-				cfs_force_sig(SIGINT, lad->lad_task);
+			if (lad->lad_task)
+				send_sig(SIGINT, lad->lad_task, 1);
 			spin_unlock(&lad->lad_lock);
 		}
 	}
