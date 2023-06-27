@@ -2703,7 +2703,7 @@ test_16a()
 	$LFS setquota -g $TSTUSR -B 500M -I 10K $MOUNT ||
 		error "failed to set quota for group $TSTUSR"
 
-	$RUNAS $DD of=$DIR/$tdir/$tfile bs=1M count=50 ||
+	$RUNAS $DD of=$DIR/$tdir/$tfile count=50 ||
 		quota_error u $TSTUSR "write failure"
 
 	$LFS quota -u $TSTUSR $MOUNT ||
@@ -2782,7 +2782,7 @@ test_16b()
 	$LFS setquota -g $TSTUSR -B 100M -I 10K $MOUNT ||
 		error "failed to set quota for group $TSTUSR"
 
-	$RUNAS $DD of=$DIR/$tdir/$tfile bs=1M count=10 ||
+	$RUNAS $DD of=$DIR/$tdir/$tfile count=10 ||
 		quota_error u $TSTUSR "write failure"
 
 	cnt=$($LFS quota -v -u $TSTUSR $MOUNT | grep -ce "^$FSNAME-[MD|OS]T*")
@@ -3664,7 +3664,7 @@ test_37() {
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile ||
 		error "Create file failed"
 	# write to file
-	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 conv=notrunc \
+	$DD of=$DIR/$tdir/$tfile count=1 conv=notrunc \
 		oflag=sync || error "Write file failed"
 	# chown to the file
 	chown $TSTID $DIR/$tdir/$tfile || error "Chown to file failed"
@@ -3895,8 +3895,7 @@ test_delete_qid()
 	chmod a+rw $DIR/$tdir/$tfile
 
 	$LFS setquota $qtype $qid -B 300M $MOUNT
-	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 ||
-		error "failed to dd"
+	$RUNAS $DD of=$DIR/$tdir/$tfile count=1 || error "failed to dd"
 
 	do_facet $SINGLEMDS \
 		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
@@ -3916,8 +3915,7 @@ test_delete_qid()
 		 grep -E 'id: *$qid'" && error "QSD: qid $qid is not deleted"
 
 	$LFS setquota $qtype $qid -B 500M $MOUNT
-	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 ||
-		error "failed to dd"
+	$RUNAS $DD of=$DIR/$tdir/$tfile count=1 || error "failed to dd"
 	do_facet $SINGLEMDS \
 		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
 		 grep -E 'id: *$qid'" || error "QMT: qid $pid is not recreated"
@@ -3983,7 +3981,7 @@ test_51() {
 	used=$(getquota -p 1 global curinodes)
 	[ $used != "4" ] && error "expected 4 got $used"
 
-	$DD if=/dev/zero of=$DIR/$tdir/6 bs=1M count=1
+	$DD of=$DIR/$tdir/6 count=1
 	#try cp to dir
 	cp $DIR/$tdir/6 $dir/6
 	used=$(getquota -p 1 global curinodes)
@@ -4014,8 +4012,8 @@ test_52() {
 	$LFS project -sp 1000 $dir1 || error "fail to set project on $dir1"
 	$LFS project -sp 1001 $dir2 || error "fail to set project on $dir2"
 
-	$DD if=/dev/zero of=/$dir1/$tfile bs=1M count=100 ||
-		error "failed to create and write $tdir1/$tfile"
+	$DD of=$dir1/$tfile count=100 ||
+		error "failed to create and write $dir1/$tfile"
 
 	cancel_lru_locks osc
 	sync; sync_all_data || true
@@ -5447,20 +5445,20 @@ test_75()
 	# test for user hard limit
 	limit=$hard_limit
 	log "Write..."
-	$DD of=$testfile bs=1M count=$((limit/2)) ||
+	$DD of=$testfile count=$((limit/2)) ||
 		quota_error u $TSTID \
 			"root write failure, but expect success (3)"
 
 	log "Write out of block quota ..."
 	# possibly a cache write, ignore failure
-	$DD of=$testfile bs=1M count=$((limit/2)) seek=$((limit/2)) || true
+	$DD of=$testfile count=$((limit/2)) seek=$((limit/2)) || true
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 	# sync forced cache flush, but did not guarantee that slave
 	# got new edquot through glimpse, so wait to make sure
 	sleep 5
-	$DD of=$testfile bs=1M count=1 seek=$limit conv=fsync &&
+	$DD of=$testfile count=1 seek=$limit conv=fsync &&
 		quota_error u $TSTID \
 			"user write success, but expect EDQUOT"
 	rm -f $testfile
