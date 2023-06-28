@@ -840,7 +840,7 @@ ha_lfsck_repaired()
 
 	n=$(cat $ha_lfsck_log | awk '/repaired/ {print $3}' |\
 		awk '{sum += $1} END { print sum }')
-	[ $n -eq 0] ||
+	(( n == 0 )) ||
 		{ ha_info "Total repaired: $n";
 		ha_touch fail; return 1; }
 	return 0
