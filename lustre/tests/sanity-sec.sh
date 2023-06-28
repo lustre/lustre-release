@@ -361,8 +361,6 @@ update_idmaps() { #LU-10040
 	local new_id=$((ID0 + 100))
 	local tmp_id
 	local cmd
-	local run
-	local idtype
 	local rc=0
 
 	echo "Start to update idmaps ..."
@@ -2976,9 +2974,7 @@ run_test 37 "simple encrypted file"
 test_38() {
 	local testfile=$DIR/$tdir/$tfile
 	local tmpfile=$TMP/abc
-	local objid
 	local blksz
-	local srvsz=0
 	local filesz
 	local bsize
 	local pagesz=$(getconf PAGE_SIZE)

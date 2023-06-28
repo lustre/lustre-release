@@ -1393,7 +1393,7 @@ test_32newtarball() {
 	local flr_dir
 	local flr_file
 	local pj_quota_dir
-	local pj_quota_file
+	local pj_quota_file_old
 	local target_dir
 
 	if [ $FSNAME != t32fs -o \( -z "$MDSDEV" -a -z "$MDSDEV1" \) -o	\
@@ -4487,8 +4487,8 @@ test_51() {
 	start_ost2 || error "Unable to start OST1"
 	wait $pid
 	stop_ost2 || error "Unable to stop OST1"
-	umount_client $MOUNT -f || error “unmount $MOUNT failed”
-	cleanup_nocli || error “stop server failed”
+	umount_client $MOUNT -f || error "unmount $MOUNT failed"
+	cleanup_nocli || error "stop server failed"
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf_or_reformat
 }
@@ -5310,7 +5310,7 @@ test_64() {
 	stop_ost2 || error "Unable to stop second ost"
 	echo "$LFS df"
 	$LFS df --lazy
-	umount_client $MOUNT -f || error “unmount $MOUNT failed”
+	umount_client $MOUNT -f || error "unmount $MOUNT failed"
 	cleanup_nocli || error "cleanup_nocli failed with $?"
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf_or_reformat
@@ -6409,7 +6409,7 @@ test_79() { # LU-4227
 		> /dev/null || error "start mds1 failed"
 	add mds2 $opts_mds2 $mdsdev2 $mdsvdev2 &&
 		error "Must specify --mgsnode when formatting a mdt"
-	add ost1 $opts_ost1 $ostdev1 $ostvdev2 &&
+	add ost1 $opts_ost1 $ostdev1 $ostvdev1 &&
 		error "Must specify --mgsnode when formatting an ost"
 
 	reformat_and_config
@@ -7960,7 +7960,6 @@ run_test 97 "ldev returns correct ouput when querying based on role"
 test_98()
 {
 	local mountopt
-	local temp=$MDS_MOUNT_OPTS
 
 	setup
 	check_mount || error "mount failed"
@@ -9635,7 +9634,6 @@ test_123ae() { # LU-11566
 	local id
 	local orig
 	local new
-	local rpcs
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 	[ -d $MOUNT/.lustre ] || setupall
@@ -10422,10 +10420,10 @@ test_134() {
 		error "check_iam failed with fault or exception $rc"; }
 
 	rc=$(grep -c "^255" $out)
-	error=$(grep -c "FINISHED WITH ERRORS" $out)
+	errors=$(grep -c "FINISHED WITH ERRORS" $out)
 
-	(( rc == error )) || { cat $out &&
-		error "check_iam errcode does not fit with errors $rc $error"; }
+	(( rc == errors )) || { cat $out &&
+		error "check_iam errcode does not fit with errors $rc $errors"; }
 }
 run_test 134 "check_iam works without faults"
 

@@ -71,11 +71,9 @@ umask 077
 check_selinux_xattr() {
 	local mds=$1
 	local mds_path=$2
-	local mds_dev=$(facet_device $mds)
 	local mntpt="/tmp/mdt_"
-	local opts
 
-	do_facet $mds mkdir -p $mntpt  || error "mkdir $mntpt failed"
+	do_facet $mds mkdir -p $mntpt || error "mkdir $mntpt failed"
 	mount_fstype $mds $mntpt  || error "mount $mds failed"
 
 	local xattrval=$(do_facet $mds getfattr -n security.selinux \
@@ -97,7 +95,6 @@ get_sel_ctx() {
 }
 
 test_1() {
-	local devname=$(mdsdevname 1)
 	local filename=${DIR}/${tdir}/df1
 	local mds_path=${filename#$MOUNT}
 
@@ -114,7 +111,6 @@ test_1() {
 run_test 1 "create file and check security.selinux xattr is set on MDT"
 
 test_2a() {
-	local devname=$(mdsdevname 1)
 	local dirname=${DIR}/${tdir}/dir2a
 	local mds_path=${dirname#$MOUNT}
 
@@ -131,7 +127,6 @@ test_2a() {
 run_test 2a "create dir (mkdir) and check security.selinux xattr is set on MDT"
 
 test_2b() {
-	local devname=$(mdsdevname 1)
 	local dirname1=${DIR}/$tdir/dir2b1
 	local dirname2=${DIR}/$tdir/dir2b2
 	local mds_path=${dirname1#$MOUNT}

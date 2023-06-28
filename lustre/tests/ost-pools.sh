@@ -995,7 +995,6 @@ run_test 17 "Referencing an empty pool"
 create_perf() {
 	local cdir=$1/d
 	local numsec=$2
-	local time
 
 	mkdir -p $cdir
 	sync
@@ -1488,7 +1487,6 @@ run_test 25 "Create new pool and restart MDS"
 
 test_26() {
 	[[ $OSTCOUNT -le 2 ]] && skip_env "needs >= 3 OSTs"
-	local dev=$(mdsdevname ${SINGLEMDS//mds/})
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
 	mkdir -p $POOL_ROOT
@@ -1737,7 +1735,6 @@ test_30() {
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
 	local threshold=10
-	local spill
 	local prefix="lod.$FSNAME-MDT0000*.pool.$pool1"
 	local cmd="$LCTL get_param -n $prefix"
 
@@ -1800,7 +1797,6 @@ test_31() {
 	local pool3=${TESTNAME}-3
 	local pool4=${TESTNAME}-4
 	local threshold=10
-	local spill
 
 	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
 		skip "Need MDS version at least 2.14.53"
