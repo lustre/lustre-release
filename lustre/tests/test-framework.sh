@@ -1339,8 +1339,8 @@ node_fstypes() {
 	local facet
 
 	for facet in ${facets//,/ }; do
-		if [ $node == $(facet_host $facet) ] ||
-		   [ $node == "$(facet_failover_host $facet)" ]; then
+		if [[ $node == $(facet_host $facet) ]] ||
+		   [[ $node == "$(facet_failover_host $facet)" ]]; then
 			fstype=$(facet_fstype $facet)
 			if [[ $fstypes != *$fstype* ]]; then
 				fstypes+="${fstypes:+,}$fstype"
@@ -5795,6 +5795,9 @@ set_pools_quota () {
 }
 
 do_check_and_setup_lustre() {
+	# If auster does not want us to setup, then don't.
+	! ${do_setup} && return
+
 	echo "=== $TESTSUITE: start setup $(date +'%H:%M:%S (%s)') ==="
 
 	sanitize_parameters

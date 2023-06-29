@@ -26,6 +26,8 @@ usage() {
 Usage ${0##*/} [options]  suite [suite options] [suite [suite options]]
 Run Lustre regression tests suites.
       -c, --config CONFIG   Test environment config file
+      -C, --client-only     Run client-side sanity tests against an already setup
+                            filesystem. Users must define FSNAME and mgs_HOST manually.
       -d, --log-dir LOGDIR            Top level directory for logs
       -D, --full-log-dir FULLLOGDIR   Full directory for logs
       -f, --cfg-name STR    Config name (cfg/<name>.sh)
@@ -66,6 +68,10 @@ Run all tests in the regression group 5 times using large config.
 
   auster -f large -g test-groups/regression -i 5
 
+Run the client-only tests from sanity.
+
+  FSNAME=myfilesystem mgs_HOST=1.2.3.4 auster -C sanity
+
 EOF
 	exit
 }
@@ -79,7 +85,8 @@ reformat=false
 script_lang=bash
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export HONOR_EXCEPT=
-do_setup=true
+export do_setup=true
+export client_tests_only=false
 export "${SLOW:=no}"
 export "${NAME:=local}"
 
@@ -88,6 +95,7 @@ for arg in "$@"; do
 	shift
 	case "$arg" in
 		--config) set -- "$@" '-c';;
+		--client-only) set -- "$@" '-C';;
 		--log-dir) set -- "$@" '-d';;
 		--full-log-dir) set -- "$@" '-D';;
 		--group) set -- "$@" '-g';;
@@ -108,10 +116,11 @@ for arg in "$@"; do
 	esac
 done
 
-while getopts "c:d:D:nkf:S:g:Hi:rRslL:Nhv" opt
+while getopts "c:Cd:D:nkf:S:g:Hi:rRslL:Nhv" opt
 do
 	case "$opt" in
 		c) export CONFIG=$OPTARG;;
+		C) client_tests_only=true;;
 		d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
 		D) test_logs_dir=$OPTARG;;
 		g) test_group_file=$OPTARG;;
@@ -152,6 +161,16 @@ STARTTIME=`date +%s`
 : ${LUSTRE:=$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env
+
+# Set CLIENTONLY, while trying to discover some common
+# variables so the test runner doesn't need do this
+# manually
+if $client_tests_only; then
+	export CLIENTONLY=true;
+	export FSTYPE=${FSTYPE:-ldiskfs};
+	export MDSCOUNT="$(( $($LFS mdts | wc -l) - 1 ))"
+	export OSTCOUNT="$(( $($LFS osts | wc -l) - 1 ))"
+fi
 
 print_summary () {
     trap 0
@@ -368,9 +387,17 @@ fi
 export NAME MOUNT START CLEAN
 . ${CONFIG:-$LUSTRE/tests/cfg/$NAME.sh}
 
-assert_env mds_HOST
-assert_env ost_HOST OSTCOUNT
-assert_env FSNAME MOUNT MOUNT2
+# Only need to know where (MOUNT) and how (mgs_HOST) to
+# mount Lustre for client-side only tests
+if $client_tests_only; then
+	assert_env mgs_HOST
+else
+	assert_env mds_HOST
+	assert_env ost_HOST OSTCOUNT
+	assert_env MOUNT2
+fi
+
+assert_env FSNAME MOUNT
 
 echo "Started at `date`"
 setup_if_needed
