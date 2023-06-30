@@ -305,6 +305,9 @@ static int shmem_setup(void)
 	int rc;
 	int shmid;
 
+	if (shared_data)
+		return 0;
+
 	/* Create new segment */
 	shmid = shmget(IPC_PRIVATE, sizeof(*shared_data), 0600);
 	if (shmid == -1) {
@@ -654,6 +657,10 @@ int jt_opt_threads(int argc, char **argv)
 		printf("%s: starting %ld threads on device %s running %s\n",
 		       argv[0], threads, argv[3], cmdstr);
 	}
+
+	rc = shmem_setup();
+	if (rc)
+		return rc;
 
 	shmem_reset(threads);
 
@@ -1178,6 +1185,10 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
 	}
 
 #ifdef MAX_THREADS
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	if (thread) {
 		shmem_lock();
 		/* threads interleave */
@@ -1408,6 +1419,10 @@ int jt_obd_create(int argc, char **argv)
 	next_time.tv_sec -= verbose;
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		/*
 		 * base_id is 1 so we don't need to worry about it being
@@ -1562,6 +1577,10 @@ int jt_obd_test_setattr(int argc, char **argv)
 		       (uintmax_t)objid, ctime(&start.tv_sec));
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid > OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
@@ -1654,6 +1673,10 @@ int jt_obd_destroy(int argc, char **argv)
 	next_time.tv_sec -= verbose;
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	for (i = 1, next_count = verbose; i <= count && shmem_running();
 	     i++, id++) {
 		if (id > OBIF_MAX_OID) {
@@ -1846,6 +1869,10 @@ int jt_obd_test_getattr(int argc, char **argv)
 		       (uintmax_t)objid, ctime(&start.tv_sec));
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid > OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
@@ -2035,6 +2062,10 @@ int jt_obd_test_brw(int argc, char **argv)
 	stride = len;
 
 #ifdef MAX_THREADS
+	rc = shmem_setup();
+	if (rc)
+		return rc;
+
 	if (thread) {
 		shmem_lock();
 		if (nthr_per_obj != 0) {
@@ -3145,9 +3176,6 @@ static void signal_server(int sig)
 
 int obd_initialize(int argc, char **argv)
 {
-	if (shmem_setup() != 0)
-		return -1;
-
 	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
 	return 0;
