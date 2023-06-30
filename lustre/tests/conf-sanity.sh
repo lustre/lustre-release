@@ -2044,13 +2044,25 @@ t32_test() {
 			mopts="loop,$mopts"
 		fi
 		$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
-		$r $LCTL replace_nids $fsname-OST0000 $ostnid
+		$r $LCTL replace_nids $fsname-OST0000 $ostnid || {
+			error_noexit "replace_nids $fsname-OST0000 $ostnid failed"
+			return 1
+		}
 		if $ost2_is_available; then
-			$r $LCTL replace_nids $fsname-OST0001 $ostnid
+			$r $LCTL replace_nids $fsname-OST0001 $ostnid || {
+				error_noexit "replace_nids $fsname-OST0001 $ostnid failed"
+				return 1
+			}
 		fi
-		$r $LCTL replace_nids $fsname-MDT0000 $nid
+		$r $LCTL replace_nids $fsname-MDT0000 $nid || {
+			error_noexit "replace_nids $fsname-MDT0000 $nid failed"
+			return 1
+		}
 		if $mdt2_is_available; then
-			$r $LCTL replace_nids $fsname-MDT0001 $nid
+			$r $LCTL replace_nids $fsname-MDT0001 $nid || {
+				error_noexit "replace_nids $fsname-MDT0001 $nid failed"
+				return 1
+			}
 		fi
 		$r $UMOUNT $tmp/mnt/mdt
 
