@@ -1079,7 +1079,7 @@ static ssize_t xattr_cache_store(struct kobject *kobj,
 		return rc;
 
 	if (val && !test_bit(LL_SBI_XATTR_CACHE, sbi->ll_flags))
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	sbi->ll_xattr_cache_enabled = val;
 	sbi->ll_xattr_cache_set = 1;

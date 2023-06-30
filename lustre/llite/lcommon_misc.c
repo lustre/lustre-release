@@ -144,7 +144,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 		cl_env_put(env, &refcheck);
 		/* Does not make sense to take GL for released layout */
 		if (rc > 0)
-			rc = -ENOTSUPP;
+			rc = -EOPNOTSUPP;
 		return rc;
 	}
 

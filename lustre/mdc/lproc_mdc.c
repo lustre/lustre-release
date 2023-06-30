@@ -250,7 +250,7 @@ static ssize_t mdc_checksum_type_seq_write(struct file *file,
 				obd->u.cli.cl_cksum_type = BIT(i);
 				rc = count;
 			} else {
-				rc = -ENOTSUPP;
+				rc = -EOPNOTSUPP;
 			}
 			break;
 		}

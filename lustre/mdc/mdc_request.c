@@ -107,7 +107,7 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 	ENTRY;
 
 	if (fileset && !(exp_connect_flags(exp) & OBD_CONNECT_SUBTREE))
-		RETURN(-ENOTSUPP);
+		RETURN(-EOPNOTSUPP);
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				&RQF_MDS_GET_ROOT);

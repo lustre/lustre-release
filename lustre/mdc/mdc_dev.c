@@ -1327,7 +1327,7 @@ static void mdc_io_data_version_end(const struct lu_env *env,
 		slice->cis_io->ci_result = 0;
 		if (!(oio->oi_oa.o_valid &
 		      (OBD_MD_LAYOUT_VERSION | OBD_MD_FLDATAVERSION)))
-			slice->cis_io->ci_result = -ENOTSUPP;
+			slice->cis_io->ci_result = -EOPNOTSUPP;
 
 		if (oio->oi_oa.o_valid & OBD_MD_LAYOUT_VERSION)
 			dv->dv_layout_version = oio->oi_oa.o_layout_version;
