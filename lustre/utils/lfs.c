@@ -404,6 +404,7 @@ command_t cmdlist[] = {
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --btime|-B [+-]N[smhdwy]]\n"
 	 "     [[!] --ctime|-C [+-]N[smhdwy]] [[!] --mtime|-M [+-]N[smhdwy]]\n"
+	 "     [[!] --attrs=[^]ATTR[,...]]\n"
 	 "     [[!] --blocks|-b N] [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
@@ -3512,7 +3513,8 @@ enum {
 	LFS_HEX_IDX_OPT,
 	LFS_STATS_OPT,
 	LFS_STATS_INTERVAL_OPT,
-	LFS_LINKS_OPT
+	LFS_LINKS_OPT,
+	LFS_ATTRS_OPT
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -4790,6 +4792,63 @@ static int name2layout(__u32 *layout, char *name)
 	return 0;
 }
 
+static int name2attrs(char *name, __u64 *attrs, __u64 *neg_attrs)
+{
+	char *ptr, *attr_name = name;
+	struct attrs_name *ap;
+	int islongopt = 0; /* 1 true; 0 not known yet; -1 false. */
+
+	*attrs = 0;
+	*neg_attrs = 0;
+
+	if (strchr(name, ','))
+		islongopt = 1;
+
+	for (ptr = name; ; ptr = NULL) {
+		if (islongopt != -1)
+			attr_name = strtok(ptr, ",");
+		else
+			attr_name = attr_name + 1;
+		if (!attr_name || *attr_name == '\0')
+			break;
+
+		for (ap = (struct attrs_name *)attrs_array;
+		     ap->an_attr != 0;
+		     ap++) {
+			if (islongopt != -1 &&
+			    strcmp(attr_name, ap->an_name) == 0) {
+				*attrs |= ap->an_attr;
+				islongopt = 1;
+				break;
+			} else if (islongopt != -1 && attr_name[0] == '^' &&
+				   strcmp(attr_name + 1, ap->an_name) == 0) {
+				*neg_attrs |= ap->an_attr;
+				islongopt = 1;
+				break;
+			} else if (islongopt != 1 &&
+				   *attr_name == ap->an_shortname) {
+				*attrs |= ap->an_attr;
+				islongopt = -1;
+				break;
+			} else if (islongopt != 1 && *attr_name == '^' &&
+				   attr_name[1] == ap->an_shortname) {
+				*neg_attrs |= ap->an_attr;
+				islongopt = -1;
+				attr_name++;
+				break;
+			}
+		}
+
+		if (ap->an_attr == 0) {
+			/* provided attr is unknown */
+			fprintf(stderr, "error: bad attribute name '%s'\n",
+				attr_name);
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static int parse_symbolic(const char *input, mode_t *outmode, const char **end)
 {
 	int loop;
@@ -5030,6 +5089,8 @@ static int lfs_find(int argc, char **argv)
 	};
 	struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
+	{ .val = LFS_ATTRS_OPT,
+			.name = "attrs",	.has_arg = required_argument },
 	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "btime",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "Btime",	.has_arg = required_argument },
@@ -5251,6 +5312,13 @@ static int lfs_find(int argc, char **argv)
 			}
 			if (rc)
 				*xsign = rc;
+			break;
+		case LFS_ATTRS_OPT:
+			ret = name2attrs(optarg, &param.fp_attrs,
+					 &param.fp_neg_attrs);
+			if (ret)
+				goto err;
+			param.fp_exclude_attrs = !!neg_opt;
 			break;
 		case 'b':
 			if (optarg[0] == '+') {

@@ -4,6 +4,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
 .B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
       [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn[smhdwy]\fR]
+[[\fB!\fR] \fB--attrs\fR=\fI[^]ATTR[,...]\fR]
 [[\fB!\fR] \fB--blocks\fR|\fB-b\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--btime\fR|\fB-B\fR [\fB+-\fR]\fIn[smhdwy]\fR]
 [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn[smhdwy]\fR]
@@ -62,6 +63,11 @@ are specified, the margin of error is based on the smallest unit used, so
 has a margin of error of one day, while
 .B -atime 72h
 has a margin of error of one hour.
+.TP
+.BR --attrs
+File has ATTRS attribute flags. Supported attributes are (non exhaustive list):
+Compressed (c), Immutable (i), Append_Only (a), No_Dump (d), Encrypted (E),
+Automount (M)
 .TP
 .BR --blocks | -b
 Blocks allocated by the file is \fIn\fR Kibibytes (if no units are given),
@@ -365,6 +371,16 @@ s=socket l=symbolic link)
 .TP
 Lustre-specific information about a file can be printed using these directives:
 .TP
+.B %La
+Comma-separated list of file's named attribute flags in short form (letter), or
+hex value of any unknown attributes.
+.RE
+.TP
+.B %LA
+Comma-separated list of file's named attribute flags, or hex value of any
+unknown attributes.
+.RE
+.TP
 .B %Lc
 File\'s stripe count.  For a composite file, this is the stripe count of the last
 instantiated component.
@@ -395,7 +411,6 @@ Numeric project ID assigned to the file or directory.
 .B %LS
 File's stripe size.  For a composite file, this is the stripe size of the last
 instantiated component.
-.RE
 .TP
 .BR --projid
 File has specified numeric project ID.

@@ -1646,7 +1646,6 @@ again:
 static void convert_lmd_statx(struct lov_user_mds_data *lmd_v2, lstat_t *st,
 			      bool strict)
 {
-	memset(&lmd_v2->lmd_stx, 0, sizeof(lmd_v2->lmd_stx));
 	lmd_v2->lmd_stx.stx_blksize = st->st_blksize;
 	lmd_v2->lmd_stx.stx_nlink = st->st_nlink;
 	lmd_v2->lmd_stx.stx_uid = st->st_uid;
@@ -4545,6 +4544,26 @@ static int find_check_mirror_options(struct find_param *param)
 	return ret;
 }
 
+static int find_check_attr_options(struct find_param *param)
+{
+	bool found = true;
+	__u64 attrs;
+
+	attrs = param->fp_lmd->lmd_stx.stx_attributes_mask &
+		param->fp_lmd->lmd_stx.stx_attributes;
+
+	/* This is a AND between all (negated) specified attributes */
+	if ((param->fp_attrs && (param->fp_attrs & attrs) != param->fp_attrs) ||
+	    (param->fp_neg_attrs && (param->fp_neg_attrs & attrs)))
+		found = false;
+
+	if ((found && param->fp_exclude_attrs) ||
+	    (!found && !param->fp_exclude_attrs))
+		return -1;
+
+	return 1;
+}
+
 static bool find_check_lmm_info(struct find_param *param)
 {
 	return param->fp_check_pool || param->fp_check_stripe_count ||
@@ -4749,6 +4768,62 @@ format_done:
 }
 
 /*
+ * Print file attributes as a comma-separated list of named attribute flags,
+ * and hex value of any unknown attributes.
+ *
+ * @param[out]	buffer	Location where file attributes are written
+ * @param[in]	size	Size of the available buffer.
+ * @pararm[in]	stx	struct statx containing attributes to print
+ * @return		Number of bytes written to output buffer
+ */
+static int printf_format_file_attributes(char *buffer, size_t size,
+					 lstatx_t stx, bool longopt)
+{
+	uint64_t attrs = stx.stx_attributes_mask & stx.stx_attributes;
+	int bytes = 0, wrote = 0, first = 1;
+	uint64_t known_attrs = 0;
+	struct attrs_name *ap;
+
+	/* before all, print '---' if no attributes, and exit */
+	if (!attrs) {
+		bytes = snprintf(buffer, size - wrote, "---");
+		wrote += bytes;
+		goto format_done;
+	}
+
+	/* first, browse list of known attributes */
+	for (ap = (struct attrs_name *)attrs_array; ap->an_attr != 0; ap++) {
+		known_attrs |= ap->an_attr;
+		if (attrs & ap->an_attr) {
+			if (longopt)
+				bytes = snprintf(buffer, size - wrote, "%s%s",
+						 first ? "" : ",", ap->an_name);
+			else
+				bytes = snprintf(buffer, size - wrote, "%c",
+						 ap->an_shortname);
+			wrote += bytes;
+			first = 0;
+			if (wrote >= size)
+				goto format_done;
+			buffer += bytes;
+		}
+	}
+
+	/* second, print hex value for unknown attributes */
+	attrs &= ~known_attrs;
+	if (attrs) {
+		bytes = snprintf(buffer, size - wrote, "%s0x%lx",
+				 first ? "" : ",", attrs);
+		wrote += bytes;
+	}
+
+format_done:
+	if (wrote >= size)
+		wrote = size - 1;
+	return wrote;
+}
+
+/*
  * Parse Lustre-specific format sequences of the form %L{x}.
  *
  * @param[in]	seq	String being parsed for format sequence.  The leading
@@ -4776,6 +4851,7 @@ int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
 	uint64_t str_cnt, str_size, idx;
 	char pool_name[LOV_MAXPOOLNAME + 1] = { '\0' };
 	int err, bytes, i;
+	bool longopt = true;
 	int rc = 2;	/* all current valid sequences are 2 chars */
 	*wrote = 0;
 
@@ -4804,6 +4880,14 @@ int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
 			*wrote = snprintf(buffer, size, "-1");
 		else
 			*wrote = snprintf(buffer, size, "%u", projid);
+		goto format_done;
+	case 'a': /* file attributes */
+		longopt = false;
+		fallthrough;
+	case 'A':
+		*wrote = printf_format_file_attributes(buffer, size,
+						       param->fp_lmd->lmd_stx,
+						       longopt);
 		goto format_done;
 	}
 
@@ -5224,7 +5308,7 @@ static int cb_find_init(char *path, int p, int *dp,
 	    find_check_lmm_info(param) ||
 	    param->fp_check_mdt_count || param->fp_hash_type ||
 	    param->fp_check_hash_flag || param->fp_perm_sign ||
-	    param->fp_nlink ||
+	    param->fp_nlink || param->fp_attrs || param->fp_neg_attrs ||
 	    gather_all)
 		decision = 0;
 
@@ -5584,6 +5668,12 @@ obd_matches:
 		}
 	}
 
+	if (param->fp_attrs || param->fp_neg_attrs) {
+		decision = find_check_attr_options(param);
+		if (decision == -1)
+			goto decided;
+	}
+
 	flags = param->fp_lmd->lmd_flags;
 	if (param->fp_check_size &&
 	    ((S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) ||
@@ -5930,7 +6020,7 @@ int validate_printf_fmt(char *c)
 {
 	char *valid_fmt_single = "abcGkmnpstUwy%";
 	char *valid_fmt_double = "ACTW";
-	char *valid_fmt_lustre = "cFhioPpS";
+	char *valid_fmt_lustre = "aAcFhioPpS";
 	char curr = *c, next;
 
 	if (curr == '\0') {

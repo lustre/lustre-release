@@ -347,8 +347,8 @@ struct find_param {
 				 fp_exclude_perm:1,
 				 fp_stop_on_error:1, /* stop iteration on error */
 				 fp_exclude_nlink:1, /* Once used, we must add*/
-				 fp_unused_bit6:1, /* a separate flag field at*/
-				 fp_unused_bit7:1; /* the end of the struct.  */
+				 fp_exclude_attrs:1, /* a separate flag field */
+				 fp_unused_bit7:1;   /* at end of struct.  */
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -424,6 +424,8 @@ struct find_param {
 	/* Print all information (lfs find only) */
 	char			 *fp_format_printf_str;
 	nlink_t			 fp_nlink;
+	__u64			 fp_attrs;
+	__u64			 fp_neg_attrs;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
@@ -1155,6 +1157,23 @@ static const struct hsm_flag_name {
 	{ HS_LOST,	"lost" },
 	{ HS_PCCRW,	"pccrw" },
 	{ HS_PCCRO,	"pccro" },
+};
+
+/* Currently known file attributes.
+ * Update if more attributes are added in lustre_user.h.
+ */
+static const struct attrs_name {
+	uint64_t	 an_attr;
+	const char	*an_name;
+	const char	 an_shortname;
+} attrs_array[] = {
+	{ STATX_ATTR_COMPRESSED, "Compressed",	'c' },
+	{ STATX_ATTR_IMMUTABLE,	 "Immutable",	'i' },
+	{ STATX_ATTR_APPEND,	 "Append_Only", 'a' },
+	{ STATX_ATTR_NODUMP,	 "No_Dump",	'd' },
+	{ STATX_ATTR_ENCRYPTED,  "Encrypted",	'E' },
+	{ STATX_ATTR_AUTOMOUNT,  "Automount",	'M' },
+	{ 0,			 NULL,		 0  }
 };
 
 /**

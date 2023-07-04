@@ -2004,6 +2004,20 @@ out_rmdir:
 			stx.stx_dev_minor = MINOR(inode->i_sb->s_dev);
 			stx.stx_mask |= STATX_BASIC_STATS | STATX_BTIME;
 
+			stx.stx_attributes_mask = STATX_ATTR_IMMUTABLE |
+						  STATX_ATTR_APPEND;
+#ifdef HAVE_LUSTRE_CRYPTO
+			stx.stx_attributes_mask |= STATX_ATTR_ENCRYPTED;
+#endif
+			if (body->mbo_valid & OBD_MD_FLFLAGS) {
+				stx.stx_attributes |= body->mbo_flags;
+				/* if Lustre specific LUSTRE_ENCRYPT_FL flag is
+				 * set, also set ext4 equivalent to please statx
+				 */
+				if (body->mbo_flags & LUSTRE_ENCRYPT_FL)
+				     stx.stx_attributes |= STATX_ATTR_ENCRYPTED;
+			}
+
 			/* For a striped directory, the size and blocks returned
 			 * from MDT is not correct.
 			 * The size and blocks are aggregated by client across

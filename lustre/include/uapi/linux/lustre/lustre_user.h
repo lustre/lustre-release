@@ -238,6 +238,7 @@ struct statx {
 #define STATX_ATTR_ENCRYPTED		0x00000800 /* [I] File requires key to decrypt in fs */
 
 #define STATX_ATTR_AUTOMOUNT		0x00001000 /* Dir: Automount trigger */
+/* Update attrs_array in lustreapi.h if new attributes are added. */
 
 #define AT_STATX_SYNC_TYPE	0x6000	/* Type of synchronisation required from statx() */
 #define AT_STATX_SYNC_AS_STAT	0x0000	/* - Do whatever stat() does */

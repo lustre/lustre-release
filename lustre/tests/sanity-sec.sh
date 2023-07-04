@@ -5827,6 +5827,115 @@ test_64f() {
 }
 run_test 64f "Nodemap enforces fscrypt_admin RBAC roles"
 
+look_for_files() {
+	local pattern=$1
+	local neg=$2
+	local path=$3
+	local expected=$4
+	local res
+
+	(( neg == 1 )) || neg=""
+	$LFS find -type f ${neg:+"!"} --attrs $pattern $path > $TMP/res
+	cat $TMP/res
+	res=$(cat $TMP/res | wc -l)
+	(( res == $expected )) ||
+		error "Find $pattern $path: found $res, expected $expected"
+}
+
+test_65() {
+	local dirbis=$DIR/${tdir}_bis
+	local testfile=$DIR/$tdir/$tfile
+	local res
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	# $dirbis is not going to be encrypted, as client
+	# is not mounted with -o test_dummy_encryption yet
+	mkdir $dirbis
+	stack_trap "rm -rf $dirbis" EXIT
+	touch $dirbis/$tfile.1
+	touch $dirbis/$tfile.2
+	chattr +i $dirbis/$tfile.2
+	stack_trap "chattr -i $dirbis/$tfile.2" EXIT
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# All files/dirs under $DIR/$tdir are encrypted
+	touch $testfile.1
+	touch $testfile.2
+	chattr +i $testfile.2
+	stack_trap "chattr -i $testfile.2" EXIT
+
+	$LFS find -printf "%p %LA\n" $dirbis/$tfile.1
+	res=$($LFS find -printf "%LA" $dirbis/$tfile.1)
+	[ "$res" == "---" ] ||
+		error "$dirbis/$tfile.1 should have no attr, showed $res (1)"
+	$LFS find -printf "%p %La\n" $dirbis/$tfile.1
+	res=$($LFS find -printf "%La" $dirbis/$tfile.1)
+	[ "$res" == "---" ] ||
+		error "$dirbis/$tfile.1 should have no attr, showed $res (2)"
+	$LFS find -printf "%p %LA\n" $dirbis/$tfile.2
+	res=$($LFS find -printf "%LA" $dirbis/$tfile.2)
+	[ "$res" == "Immutable" ] ||
+		error "$dirbis/$tfile.2 should be Immutable, showed $res"
+	$LFS find -printf "%p %La\n" $dirbis/$tfile.2
+	res=$($LFS find -printf "%La" $dirbis/$tfile.2)
+	[ "$res" == "i" ] ||
+		error "$dirbis/$tfile.2 should be 'i', showed $res"
+	$LFS find -printf "%p %LA\n" $testfile.1
+	res=$($LFS find -printf "%LA" $testfile.1)
+	[ "$res" == "Encrypted" ] ||
+		error "$testfile.1 should be Encrypted, showed $res"
+	$LFS find -printf "%p %La\n" $testfile.1
+	res=$($LFS find -printf "%La" $testfile.1)
+	[ "$res" == "E" ] ||
+		error "$testfile.1 should be 'E', showed $res"
+	$LFS find -printf "%p %LA\n" $testfile.2
+	res=$($LFS find -printf "%LA" $testfile.2)
+	[ "$res" == "Immutable,Encrypted" ] ||
+		error "$testfile.2 should be Immutable,Encrypted, showed $res"
+	$LFS find -printf "%p %La\n" $testfile.2
+	res=$($LFS find -printf "%La" $testfile.2)
+	[ "$res" == "iE" ] ||
+		error "$testfile.2 should be 'iE', showed $res"
+
+	echo Expecting to find 2 encrypted files
+	look_for_files Encrypted 0 "$DIR/${tdir}*" 2
+	echo Expecting to find 2 encrypted files
+	look_for_files E 0 "$DIR/${tdir}*" 2
+
+	echo Expecting to find 2 non-encrypted files
+	look_for_files Encrypted 1 "$DIR/${tdir}*" 2
+	echo Expecting to find 2 non-encrypted files
+	look_for_files E 1 "$DIR/${tdir}*" 2
+
+	echo Expecting to find 1 encrypted+immutable file
+	look_for_files "Encrypted,Immutable" 0 "$DIR/${tdir}*" 1
+	echo Expecting to find 1 encrypted+immutable file
+	look_for_files "Ei" 0 "$DIR/${tdir}*" 1
+
+	echo Expecting to find 1 encrypted+^immutable file
+	look_for_files "Encrypted,^Immutable" 0 "$DIR/${tdir}*" 1
+	echo Expecting to find 1 encrypted+^immutable file
+	look_for_files "E^i" 0 "$DIR/${tdir}*" 1
+
+	echo Expecting to find 1 ^encrypted+immutable file
+	look_for_files "^Encrypted,Immutable" 0 "$DIR/${tdir}*" 1
+	echo Expecting to find 1 ^encrypted+immutable file
+	look_for_files "^Ei" 0 "$DIR/${tdir}*" 1
+
+	echo Expecting to find 1 ^encrypted+^immutable file
+	look_for_files "^Encrypted,^Immutable" 0 "$DIR/${tdir}*" 1
+	echo Expecting to find 1 ^encrypted+^immutable file
+	look_for_files "^E^i" 0 "$DIR/${tdir}*" 1
+}
+run_test 65 "lfs find -printf %La and --attrs support"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
