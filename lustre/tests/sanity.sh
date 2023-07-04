@@ -75,13 +75,6 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-# skip basic ops on file with foreign LOV tests on 5.16.0+ kernels
-# until the filemap_read() issue is fixed
-if (( $LINUX_VERSION_CODE >= $(version_code 5.16.0) )); then
-	# bug number for skipped test: LU-16101
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  27J"
-fi
-
 #skip ACL tests on RHEL8 and SLES15 until tests changed to use other users
 if (( $(egrep -cw "^bin|^daemon" /etc/passwd) < 2 )); then
 	# bug number:   LU-15259 LU-15259
@@ -128,10 +121,6 @@ if [ -r /etc/SuSE-release ] || [ -r /etc/SUSE-brand ]; then
 	[ $sles_version -lt $(version_code 12.0.0) ] &&
 		# bug number for skipped test: LU-3703
 		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  234"
-
-	[ $sles_version -ge $(version_code 15.4.0) ] &&
-		# bug number for skipped test: LU-16101
-		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  27J"
 elif [ -r /etc/os-release ]; then
 	if grep -qi ubuntu /etc/os-release; then
 		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
@@ -2772,8 +2761,14 @@ test_27I() {
 run_test 27I "check that root dir striping does not break parent dir one"
 
 test_27J() {
-	[[ $MDS1_VERSION -le $(version_code 2.12.51) ]] &&
+	(( $MDS1_VERSION > $(version_code 2.12.51) )) ||
 		skip "Need MDS version newer than 2.12.51"
+
+	# skip basic ops on file with foreign LOV tests on 5.12-6.2 kernels
+	# until the filemap_read() issue is fixed by v6.2-rc4-61-g5956592ce337
+	(( $LINUX_VERSION_CODE < $(version_code 5.12.0) ||
+	   $LINUX_VERSION_CODE >= $(version_code 6.2.0) )) ||
+		skip "Need kernel < 5.12.0 or >= 6.2.0 for filemap_read() fix"
 
 	test_mkdir $DIR/$tdir
 	local uuid1=$(cat /proc/sys/kernel/random/uuid)
