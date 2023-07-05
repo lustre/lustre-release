@@ -6851,33 +6851,21 @@ test_56oc() {
 	test_newerXY_base "m" "t"
 	test_newerXY_base "c" "t"
 
-	[[ $MDS1_VERSION -lt $(version_code 2.13.54) ||
-	   $CLIENT_VERSION -lt $(version_code 2.13.54) ]] &&
-		! btime_supported && echo "btime unsupported" && return 0
+	(( $MDS1_VERSION >= $(version_code v2_13_53-145-g186b97e68a) &&
+	   $CLIENT_VERSION >= $(version_code v2_13_53-145-g186b97e68a) )) ||
+		{ echo "btime needs v2_13_53-145-g186b97e68a"; return 0; }
 
 	test_newerXY_base "b" "b"
 	test_newerXY_base "b" "t"
 }
 run_test 56oc "check lfs find -newerXY work"
 
-btime_supported() {
-	local dir=$DIR/$tdir
-	local rc
-
-	mkdir -p $dir
-	touch $dir/$tfile
-	$LFS find $dir -btime -1d -type f
-	rc=$?
-	rm -rf $dir
-	return $rc
-}
-
 test_56od() {
-	[ $MDS1_VERSION -lt $(version_code 2.13.53) ] &&
-		! btime_supported && skip "btime unsupported on MDS"
+	(( $MDS1_VERSION >= $(version_code v2_13_53-145-g186b97e68a) )) ||
+		skip "btime unsupported on MDS < v2_13_53-145-g186b97e68a"
 
-	[ $CLIENT_VERSION -lt $(version_code 2.13.53) ] &&
-		! btime_supported && skip "btime unsupported on clients"
+	(( $CLIENT_VERSION >= $(version_code v2_13_53-145-g186b97e68a) )) ||
+		skip "btime unsupported on clients < v2_13_53-145-g186b97e68a"
 
 	local dir=$DIR/$tdir
 	local ref=$DIR/$tfile.ref
