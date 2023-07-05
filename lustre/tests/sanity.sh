@@ -8808,6 +8808,34 @@ test_56edb() {
 }
 run_test 56edb "check lfs find --links for directory striped on multiple MDTs"
 
+test_56ef() {
+	local dir=$DIR/$tdir
+	local dir1=$dir/d1
+	local dir2=$dir/d2
+	local nfiles
+
+	test_mkdir -p $dir
+
+	mkdir $dir1
+	mkdir $dir2
+
+	touch $dir1/f
+	touch $dir2/f
+
+	nfiles=$($LFS find $dir1 $dir2 ! -type d | wc -l)
+	(( $nfiles == 2 )) ||
+		error "(1) lfs find expected 2 files, got $nfiles"
+
+	nfiles=$($LFS find $dir1 $dir2 -type f | wc -l)
+	(( $nfiles == 2 )) ||
+		error "(2) lfs find expected 2 files, got $nfiles"
+
+	nfiles=$($LFS find -type f $dir1 $dir2 | wc -l)
+	(( $nfiles == 2 )) ||
+		error "(3) lfs find expected 2 files, got $nfiles"
+}
+run_test 56ef "lfs find with multiple paths"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

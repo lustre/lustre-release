@@ -5155,6 +5155,7 @@ static int lfs_find(int argc, char **argv)
 						.has_arg = required_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = required_argument },
 	{ .name = NULL } };
+	int prev_optind = optind;
 	int optidx = 0;
 	int pathstart = -1;
 	int pathend = -1;
@@ -5192,9 +5193,12 @@ static int lfs_find(int argc, char **argv)
 			goto err;
 		}
 		if (!isoption && pathstart == -1)
-			pathstart = optind - 1;
+			pathstart = prev_optind;
 		if (isoption && pathstart != -1 && pathend == -1)
-			pathend = optind - 2;
+			pathend = prev_optind;
+
+		prev_optind = optind;
+
 		switch (c) {
 		case 0:
 			/* Long options. */
