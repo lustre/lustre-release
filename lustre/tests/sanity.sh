@@ -2588,8 +2588,11 @@ test_27Cf() {
 run_test 27Cf "test default inheritance with overstriping"
 
 test_27Cg() {
+	(( MDS1_VERSION >= $(version_code v2_15_55-80-gd96b98ee6b) )) ||
+		skip "need MDS version at least v2_15_55-80-gd96b98ee6b for fix"
+
 	$LFS setstripe -o 0,$OSTCOUNT $DIR/$tfile
-	[ $? -ne 0 ] || error "must be an error for not existent OST#"
+	(( $? != 0 )) || error "must be an error for not existent OST#"
 }
 run_test 27Cg "test setstripe with wrong OST idx"
 
