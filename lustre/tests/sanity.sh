@@ -30242,8 +30242,8 @@ run_test 904 "virtual project ID xattr"
 
 # LU-8582
 test_905() {
-	(( $OST1_VERSION >= $(version_code 2.8.54) )) ||
-		skip "lustre < 2.8.54 does not support ladvise"
+	(( $OST1_VERSION >= $(version_code 2.15.50.220) )) ||
+		skip "need OST version >= 2.15.50.220 for fail_loc"
 
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	$LFS setstripe -c -1 -i 0 $DIR/$tfile || error "setstripe failed"
