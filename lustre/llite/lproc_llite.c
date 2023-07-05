@@ -739,6 +739,36 @@ static ssize_t stats_track_gid_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(stats_track_gid);
 
+static ssize_t enable_statahead_fname_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_enable_statahead_fname);
+}
+
+static ssize_t enable_statahead_fname_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_enable_statahead_fname = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_statahead_fname);
+
 static ssize_t statahead_running_max_show(struct kobject *kobj,
 					  struct attribute *attr,
 					  char *buf)
@@ -1916,6 +1946,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_stats_track_pid.attr,
 	&lustre_attr_stats_track_ppid.attr,
 	&lustre_attr_stats_track_gid.attr,
+	&lustre_attr_enable_statahead_fname.attr,
 	&lustre_attr_statahead_running_max.attr,
 	&lustre_attr_statahead_batch_max.attr,
 	&lustre_attr_statahead_max.attr,
