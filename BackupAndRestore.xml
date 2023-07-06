@@ -605,7 +605,7 @@ trusted.fid= \
         <para>
           <emphasis role="bold">Back up all file system data.</emphasis>
         </para>
-        <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] [--xattrs-include="trusted.*" --sparse .</screen>
+        <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] [--xattrs-include="trusted.*"] [--acls] --sparse .</screen>
         <note>
           <para>The tar 
           <literal>--sparse</literal> option is vital for backing up an MDT.
@@ -621,6 +621,9 @@ trusted.fid= \
           <literal>--xattrs-include="trusted.*"</literal> option is
           <emphasis>required</emphasis> for correct restoration of the xattrs
           when using GNU tar 1.27 or RHEL 7 and newer.</para>
+          <para>The tar <literal>--acls</literal> option is recommended for
+          MDT backup of POSIX ACLs. Or, <literal>getfacl -n -R</literal>
+          and <literal>setfacl --restore</literal> can be used instead.</para>
         </warning>
       </listitem>
       <listitem>
@@ -696,7 +699,7 @@ trusted.fid= \
       </listitem>
       <listitem>
         <para>Restore the file system backup.</para>
-        <screen>[oss]# tar xzvpf <emphasis>{backup file}</emphasis> [--xattrs] [--xattrs-include="trusted.*"] --sparse</screen>
+        <screen>[oss]# tar xzvpf <emphasis>{backup file}</emphasis> [--xattrs] [--xattrs-include="trusted.*"] [--acls] [-P] --sparse</screen>
         <warning>
           <para>The tar <literal>--xattrs</literal> option is only available
 	  in GNU tar version 1.27 or later or in RHEL 6.3 or newer.  The
@@ -705,6 +708,14 @@ trusted.fid= \
 	  MDT xattrs when using GNU tar 1.27 or RHEL 7 and newer.  Otherwise,
 	  the <literal>setfattr</literal> step below should be used.
 	  </para>
+          <para>The tar <literal>--acls</literal> option is needed for
+          correct restoration of POSIX ACLs on MDTs. Alternatively,
+          <literal>getfacl -n -R</literal> and
+          <literal>setfacl --restore</literal> can be used instead.</para>
+          <para>The tar <literal>-P</literal> (or
+          <literal>--absolute-names</literal>) option can be used to speed
+          up extraction of a trusted MDT backup archive.
+          </para>
         </warning>
       </listitem>
       <listitem>
