@@ -4849,7 +4849,9 @@ static int mdt_intent_getattr(enum ldlm_intent_flags it_opc,
 	if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
 	    ldlm_rep->lock_policy_res2) {
 		lhc->mlh_reg_lh.cookie = 0ull;
-		GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
+		/* Return error code immediately to stop batched statahead. */
+		GOTO(out_ucred, rc = info->mti_batch_env ? rc :
+				     ELDLM_LOCK_ABORTED);
 	}
 
 	rc = mdt_intent_lock_replace(info, lockp, lhc, flags, rc);

@@ -320,8 +320,6 @@ int mdt_batch(struct tgt_session_info *tsi)
 
 			tsi->tsi_batch_idx = handled_update_count;
 			rc = h->th_act(tsi);
-			if (rc)
-				GOTO(out, rc);
 next:
 			/*
 			 * As @repmsg may be changed if the reply buffer is
@@ -331,6 +329,9 @@ next:
 				repmsg = pill->rc_repmsg;
 				grown = true;
 			}
+
+			if (rc)
+				GOTO(out, rc);
 
 			repmsg->lm_result = rc;
 			mdt_thread_info_reset(info);

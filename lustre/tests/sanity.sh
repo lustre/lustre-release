@@ -14824,7 +14824,7 @@ test_123i_base() {
 	$LCTL set_param mdc.*.batch_stats=0
 
 	echo "statahead_stats (Pre):"
-	lctl get_param -n llite.*.statahead_stats
+	$LCTL get_param -n llite.*.statahead_stats
 	eval $iocmd || error "$iocmd failed"
 	echo "statahead_stats (Post):"
 	$LCTL get_param -n llite.*.statahead_stats
@@ -14875,6 +14875,36 @@ test_123i() {
 		"aheadmany -c stat -N -s 0 -e $cnt -b $tfile -d $dir"
 }
 run_test 123i "Verify statahead work with the fname indexing pattern"
+
+test_123j() {
+	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
+	local enabled
+
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+	$LCTL set_param llite.*.enable_statahead_fname=1
+
+	stack_trap "rm -rf $DIR/${tdir}.{1..11}"
+
+	mkdir $DIR/${tdir}.{1..10} ||
+		error "failed to mkdir $DIR/${tdir}.{1..10}"
+	cancel_lru_locks mdc
+
+	for i in $(seq 1 10); do
+		stat $DIR/${tdir}.$i || error "failed to stat $DIR/${tdir}.$i"
+	done
+
+	stat $DIR/${tdir}.11
+	$LFS mkdir -i $((MDSCOUNT - 1)) -c 2 -H all_char $DIR/${tdir}.11 ||
+		error "failed to mkdir $DIR/${tdir}.11"
+	touch $DIR/${tdir}.11/$tfile ||
+		error "failed to create file $DIR/${tdir}.11/$tfile"
+}
+run_test 123j "-ENOENT error from batched statahead be handled correctly"
 
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

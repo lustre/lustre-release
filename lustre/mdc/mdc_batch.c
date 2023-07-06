@@ -185,6 +185,7 @@ static int mdc_batch_getattr_interpret(struct ptlrpc_request *req,
 	struct batch_update_head *head = ouc->ouc_head;
 	struct obd_export *exp = head->buh_exp;
 	struct req_capsule *pill = item->mop_pill;
+	struct ldlm_reply *lockrep;
 
 	req_capsule_subreq_init(pill, &RQF_BUT_GETATTR, req,
 				NULL, repmsg, RCL_CLIENT);
@@ -193,6 +194,12 @@ static int mdc_batch_getattr_interpret(struct ptlrpc_request *req,
 				   NULL, 0, &item->mop_lockh, rc, false);
 	if (rc)
 		GOTO(out, rc);
+
+	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
+	LASSERT(lockrep != NULL);
+
+	lockrep->lock_policy_res2 =
+		ptlrpc_status_ntoh(lockrep->lock_policy_res2);
 
 	rc = mdc_finish_enqueue(exp, pill, einfo, &item->mop_it,
 				&item->mop_lockh, rc);
