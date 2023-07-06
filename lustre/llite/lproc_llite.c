@@ -1131,6 +1131,63 @@ static ssize_t statahead_timeout_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(statahead_timeout);
 
+static ssize_t
+statahead_fname_predict_hit_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_sa_fname_predict_hit);
+}
+
+static ssize_t
+statahead_fname_predict_hit_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_sa_fname_predict_hit = val;
+	return count;
+}
+LUSTRE_RW_ATTR(statahead_fname_predict_hit);
+
+
+static ssize_t
+statahead_fname_match_hit_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_sa_fname_match_hit);
+}
+
+static ssize_t
+statahead_fname_match_hit_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_sa_fname_match_hit = val;
+	return count;
+}
+LUSTRE_RW_ATTR(statahead_fname_match_hit);
+
 static ssize_t statahead_agl_show(struct kobject *kobj,
 				  struct attribute *attr,
 				  char *buf)
@@ -2410,6 +2467,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statahead_max.attr,
 	&lustre_attr_statahead_min.attr,
 	&lustre_attr_statahead_timeout.attr,
+	&lustre_attr_statahead_fname_predict_hit.attr,
+	&lustre_attr_statahead_fname_match_hit.attr,
 	&lustre_attr_statahead_agl.attr,
 	&lustre_attr_lazystatfs.attr,
 	&lustre_attr_statfs_max_age.attr,

@@ -148,6 +148,8 @@ enum ll_sa_pattern {
 	LSA_PATTERN_MASK		= (LSA_PATTERN_LIST |
 					   LSA_PATTERN_FNAME |
 					   LSA_PATTERN_ADVISE),
+	LSA_PATTERN_SFNAME		= (LSA_PATTERN_FNAME |
+					   LSA_PATTERN_FN_SHARED),
 	LSA_PATTERN_MAX,
 };
 
@@ -964,6 +966,7 @@ struct ll_sb_info {
 	atomic_t		  ll_sa_total;   /* sa thread started count */
 	atomic_t		  ll_sa_wrong;   /* sa stopped low hit ratio */
 	atomic_t		  ll_sa_running; /* running sa thread count */
+	atomic_t		  ll_sa_refcnt;	 /* inuse reference count */
 	atomic_t		  ll_agl_total;  /* AGL thread started count */
 	atomic_t		  ll_sa_hit_total;  /* total hit count */
 	atomic_t		  ll_sa_miss_total; /* total miss count */
@@ -977,6 +980,8 @@ struct ll_sb_info {
 	 * the user is no longer using this directory.
 	 */
 	unsigned long		  ll_sa_timeout;
+	unsigned int		  ll_sa_fname_predict_hit;
+	unsigned int		  ll_sa_fname_match_hit;
 	/* save s_dev before assign for clustred nfs */
 	dev_t			  ll_sdev_orig;
 	/* root squash */
@@ -1798,8 +1803,8 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 #define LL_SA_CACHE_SIZE        (1 << LL_SA_CACHE_BIT)
 #define LL_SA_CACHE_MASK        (LL_SA_CACHE_SIZE - 1)
 
-#define LSA_FN_PREDICT_HIT	2
-#define LSA_FN_MATCH_HIT	4
+#define LSA_FN_PREDICT_HIT_DEF	2
+#define LSA_FN_MATCH_HIT_DEF	4
 
 /* statahead controller, per process struct, for dir only */
 struct ll_statahead_info {

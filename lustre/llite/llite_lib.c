@@ -189,14 +189,18 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	set_bit(LL_SBI_LAZYSTATFS, sbi->ll_flags);
 
 	/* metadata statahead is enabled by default */
+	sbi->ll_enable_statahead_fname = 1;
 	sbi->ll_sa_running_max = LL_SA_RUNNING_DEF;
 	sbi->ll_sa_batch_max = LL_SA_BATCH_DEF;
 	sbi->ll_sa_max = LL_SA_REQ_MAX_DEF;
 	sbi->ll_sa_min = LL_SA_REQ_MIN_DEF;
 	sbi->ll_sa_timeout = LL_SA_TIMEOUT_DEF;
+	sbi->ll_sa_fname_predict_hit = LSA_FN_PREDICT_HIT_DEF;
+	sbi->ll_sa_fname_match_hit = LSA_FN_MATCH_HIT_DEF;
 	atomic_set(&sbi->ll_sa_total, 0);
 	atomic_set(&sbi->ll_sa_wrong, 0);
 	atomic_set(&sbi->ll_sa_running, 0);
+	atomic_set(&sbi->ll_sa_refcnt, 0);
 	atomic_set(&sbi->ll_agl_total, 0);
 	atomic_set(&sbi->ll_sa_hit_total, 0);
 	atomic_set(&sbi->ll_sa_miss_total, 0);
@@ -987,7 +991,8 @@ void ll_kill_super(struct super_block *sb)
 		sb->s_dev = sbi->ll_sdev_orig;
 
 		/* wait running statahead threads to quit */
-		while (atomic_read(&sbi->ll_sa_running) > 0)
+		while (atomic_read(&sbi->ll_sa_running) > 0 ||
+		       atomic_read(&sbi->ll_sa_refcnt) > 0)
 			schedule_timeout_uninterruptible(
 				cfs_time_seconds(1) >> 3);
 	}
@@ -3941,6 +3946,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 			pfid = &fid;
 		rc = ll_setup_filename(dir, &dname, lookup, &fname, pfid);
 		if (rc) {
+			CERROR("%s: failed to setup filename: rc = %d\n",
+			       ll_i2sbi(i1)->ll_fsname, rc);
 			ll_finish_md_op_data(op_data);
 			return ERR_PTR(rc);
 		}

@@ -2363,8 +2363,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (rc < 0) {
 		GOTO(out_child, rc);
 	} else if (rc > 0) {
-		if (!(child_bits & MDS_INODELOCK_UPDATE) &&
-		    !mdt_object_remote(child)) {
+		bool hardlink_check = lhp && info->mti_batch_env &&
+				      S_ISREG(lu_object_attr(&child->mot_obj));
+
+		if ((!(child_bits & MDS_INODELOCK_UPDATE) &&
+		     !mdt_object_remote(child)) || hardlink_check) {
 			struct md_attr *ma = &info->mti_attr;
 
 			ma->ma_valid = 0;
@@ -2372,6 +2375,35 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			rc = mdt_attr_get_complex(info, child, ma);
 			if (unlikely(rc != 0))
 				GOTO(out_child, rc);
+
+			/*
+			 * There is a possible deadlock between link() and batch
+			 * stat-ahead on hardlinks.
+			 * link()
+			 * - Take parent DLM lock: mdt_parent_lock PW
+			 * - Take object DLM lock: mdt_object_lock EX
+			 * batch stat-ahead
+			 * - Already hold the DLM lock on one link of the
+			 *   object which will return to the client in previous
+			 *   stat operation on MDT.
+			 * - Take parent DLM lock: mdt_parent_lock PR
+			 *
+			 * Deadlock:
+			 * The link operation, which is holding the parent PW
+			 * lock, is waiting for the batch stat-ahead to release
+			 * the DLM lock on one link of the file.
+			 * The batch statahead, which is holding the DLM lock on
+			 * the file in the previous sub stat operation in the
+			 * batch RPC, currently is trying to acquire the PR DLM
+			 * lock on the parent.
+			 * To avoid this deadlock, we simply cancel the
+			 * statahead on the hardlink in a batch RPC.
+			 * Without this fix, it failed lustre-rsync-test/test_6.
+			 */
+			if (hardlink_check && (ma->ma_valid & MA_INODE) &&
+			    (ma->ma_attr.la_valid & LA_NLINK) &&
+			    ma->ma_attr.la_nlink > 1)
+				GOTO(out_child, rc = -ECANCELED);
 
 			/* If the file has not been changed for some time, we
 			 * return not only a LOOKUP lock, but also an UPDATE
