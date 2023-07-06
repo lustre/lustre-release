@@ -3142,21 +3142,28 @@ wait_update_cond() {
 
 		eval [[ "'$result'" $cond "'$expect'" ]]
 		if [[ $? == 0 ]]; then
+			[[ -n "$quiet" ]] && return 0
 			[[ -z "$result" || $waited -le $sleep ]] ||
 				echo "Updated after ${waited}s: want '$expect' got '$result'"
 			return 0
 		fi
 		if [[ -n "$verbose" && "$result" != "$prev_result" ]]; then
-			[[ -n "$prev_result" ]] &&
+			[[ -z "$quiet" && -n "$prev_result" ]] &&
 				echo "Changed after ${waited}s: from '$prev_result' to '$result'"
 			prev_result="$result"
 		fi
-		(( $waited % $print == 0 )) &&
+		(( $waited % $print == 0 )) && {
+			[[ -z "$quiet" ]] &&
 			echo "Waiting $((max_wait - waited))s for '$expect'"
+		}
+
 		sleep $sleep
 		waited=$((SECONDS - begin))
 	done
+
+	[[ -z "$quiet" ]] &&
 	echo "Update not seen after ${max_wait}s: want '$expect' got '$result'"
+
 	return 3
 }
 
