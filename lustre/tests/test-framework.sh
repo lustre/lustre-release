@@ -7691,6 +7691,7 @@ multiop_bg_pause() {
 
 	echo "$MULTIOP_PROG $FILE v$ARGS"
 	$MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
+	local pid=$!
 
 	echo "TMPPIPE=${TMPPIPE}"
 	read -t 60 multiop_output < $TMPPIPE
@@ -7701,7 +7702,7 @@ multiop_bg_pause() {
 	rm -f $TMPPIPE
 	if [ "$multiop_output" != "PAUSING" ]; then
 		echo "Incorrect multiop output: $multiop_output"
-		kill -9 $PID
+		kill -9 $pid
 		return 1
 	fi
 
