@@ -675,6 +675,35 @@ test_4d() {
 }
 run_test 4d "FID in LMA mismatch with object FID won't block create"
 
+test_4e() {
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	check_mount_and_prep
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	local count=$(precreated_ost_obj_count 0 0)
+
+	count=$((count + 32))
+
+	#define OBD_FAIL_OSD_FID_REUSE 0x1a0
+	do_facet ost1 $LCTL set_param fail_loc=0x1a0
+	for ((i=0; i<count; i++)); do
+		echo $i > $DIR/$tdir/f_$i || error "write f_$i failed"
+	done
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	$START_SCRUB_ON_OST -r || error "start OI scrub on OST0 failed"
+	wait_update_facet ost1 "$LCTL get_param -n \
+		osd-*.$(facet_svc ost1).oi_scrub |
+		awk '/^status/ { print \\\$2 }'" "completed" 6 ||
+		error "Expected '$expected' on ost1"
+
+	for ((i=0; i<count; i++)); do
+		echo $i | cmp -l $DIR/$tdir/f_$i - || error "f_$i data corrupt"
+	done
+}
+run_test 4e "FID reuse can be fixed"
+
 test_5() {
 	formatall > /dev/null
 	setupall > /dev/null

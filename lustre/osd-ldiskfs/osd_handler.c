@@ -1375,8 +1375,6 @@ check_lma:
 		 * Others error can be returned  directly.
 		 */
 		if (result == -ENOENT) {
-			LASSERT(trusted);
-
 			obj->oo_inode = NULL;
 			result = 0;
 		}
@@ -1406,8 +1404,6 @@ check_lma:
 	 * from the OI file by race, above inode belongs to other object.
 	 */
 	if (result == -ENOENT) {
-		LASSERT(trusted);
-
 		obj->oo_inode = NULL;
 		GOTO(out, result = 0);
 	}
@@ -3746,8 +3742,21 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
-	rc = osd_oi_insert(info, osd, fid, id, oh->ot_handle,
-			   OI_CHECK_FLD, NULL);
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_FID_REUSE) && osd->od_is_ost &&
+	    fid->f_oid) {
+		struct lu_fid tfid = *fid;
+
+		tfid.f_oid--;
+		osd_oi_insert(info, osd, &tfid, id, oh->ot_handle,
+			      OI_CHECK_FLD, NULL);
+		/* clear NOSCRUB flag so that it can be scrubbed immediately */
+		ldiskfs_clear_inode_state(obj->oo_inode,
+					  LDISKFS_STATE_LUSTRE_NOSCRUB);
+		rc = 0;
+	} else {
+		rc = osd_oi_insert(info, osd, fid, id, oh->ot_handle,
+				   OI_CHECK_FLD, NULL);
+	}
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_DUPLICATE_MAP) && osd->od_is_ost) {
 		struct lu_fid next_fid = *fid;
 
