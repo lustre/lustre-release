@@ -5418,9 +5418,9 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 
 		lod_set_pool(&llc->llc_pool, pool);
 
-		if (append_stripe_count != 0 || append_pool != NULL) {
-			/* Ignore specific striping for append. */
-		} else if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+		if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC &&
+		    append_stripe_count == 0 &&
+		    append_pool == NULL) {
 			v3 = (struct lov_user_md_v3 *)v1;
 			rc = lod_comp_copy_ost_lists(llc, v3);
 			if (rc)
