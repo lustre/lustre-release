@@ -332,6 +332,9 @@ static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 #if !defined(SB_NODIRATIME) && defined(MS_NODIRATIME)
 # define SB_NODIRATIME MS_NODIRATIME
 #endif
+#if !defined(SB_KERNMOUNT) && defined(MS_KERNMOUNT)
+# define SB_KERNMOUNT MS_KERNMOUNT
+#endif
 
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 static inline void iov_iter_reexpand(struct iov_iter *i, size_t count)
