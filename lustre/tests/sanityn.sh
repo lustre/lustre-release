@@ -1361,7 +1361,6 @@ test_33_run() {
 	echo $1
 	echo "  $2"
 	eval $2
-#	bash -c "$2"
 }
 
 test_33c() {
@@ -1376,13 +1375,15 @@ test_33c() {
 	mkdir_on_mdt0 $DIR/$tdir
 	sync_all_data
 
-	op_trigger_solc "create remote dir and local dir" \
-		"$LFS mkdir -i 1 $DIR/$tdir/remote" \
-		"$LFS mkdir -i 0 $DIR/$tdir/local"
-	(( MDSCOUNT > 2 )) &&
-	op_trigger_solc "create remote dirs on different MDTs" \
-		"$LFS mkdir -i 1 $DIR/$tdir/remote.1" \
-		"$LFS mkdir -i 2 $DIR/$tdir/remote.2"
+	if (( MDS1_VERSION < $(version_code 2.15.55.204) )); then
+		op_trigger_solc "create remote dir and local dir" \
+			"$LFS mkdir -i 1 $DIR/$tdir/remote" \
+			"$LFS mkdir -i 0 $DIR/$tdir/local"
+		(( MDSCOUNT > 2 )) &&
+		op_trigger_solc "create remote dirs on different MDTs" \
+			"$LFS mkdir -i 1 $DIR/$tdir/remote.1" \
+			"$LFS mkdir -i 2 $DIR/$tdir/remote.2"
+	fi
 	op_trigger_solc "create file on 2nd stripe under striped directory" \
 		"$LFS mkdir -i 0 -c 2 $DIR/$tdir/striped" \
 		"touch $DIR2/$tdir/striped/subfile"
@@ -1392,10 +1393,17 @@ test_33c() {
 	$LFS mkdir -i 0 -c 2 $DIR/$tdir/striped
 	sync_all_data
 	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
-	if (( MDS1_VERSION >= $(version_code 2.15.55.133) )); then
+	if (( MDS1_VERSION >= $(version_code 2.15.55.204) )); then
 		test_33_run "create file on 2nd stripe after setattr" \
 			"chmod 777 $DIR/$tdir/striped; \
 			 touch $DIR2/$tdir/striped/subfile"
+		test_33_run "create remote dir and local dir" \
+			"$LFS mkdir -i 1 $DIR/$tdir/remote" \
+			"$LFS mkdir -i 0 $DIR/$tdir/local"
+		(( MDSCOUNT > 2 )) &&
+		test_33_run "create remote dirs on different MDTs" \
+			"$LFS mkdir -i 1 $DIR/$tdir/remote.1" \
+			"$LFS mkdir -i 2 $DIR/$tdir/remote.2"
 	fi
 	test_33_run "create local dir after remote dir creation transaction commit" \
 		"$LFS mkdir -i 1 $DIR/$tdir/remote.3; \

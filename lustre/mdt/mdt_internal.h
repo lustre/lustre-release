@@ -408,6 +408,7 @@ struct mdt_lock_handle {
 	struct lustre_handle	mlh_pdo_lh;
 	enum ldlm_mode		mlh_pdo_mode;
 	unsigned int		mlh_pdo_hash;
+	unsigned int		mlh_pdo_remote:1;
 
 	/* Remote regular lock */
 	struct lustre_handle	mlh_rreg_lh;

@@ -140,25 +140,25 @@ enum ldlm_side {
  *       NL  CR  CW  PR  PW  EX GROUP COS TXN
  *  NL    1   1   1   1   1   1   1   1   1
  *  CR    1   1   1   1   1   0   0   0   1
- *  CW    1   1   1   0   0   0   0   0   1
+ *  CW    1   1   1   0   0   0   0   0   0
  *  PR    1   1   0   1   0   0   0   0   1
  *  PW    1   1   0   0   0   0   0   0   0
  *  EX    1   0   0   0   0   0   0   0   0
  *  GROUP 1   0   0   0   0   0   1   0   0
  *  COS   1   0   0   0   0   0   0   1   0
- *  TXN   1   1   1   1   0   0   0   0   1
+ *  TXN   1   1   0   1   0   0   0   0   1
  * </PRE>
  */
 /** @{ */
 #define LCK_COMPAT_EX    LCK_NL
 #define LCK_COMPAT_PW    (LCK_COMPAT_EX | LCK_CR)
 #define LCK_COMPAT_PR    (LCK_COMPAT_PW | LCK_PR | LCK_TXN)
-#define LCK_COMPAT_CW    (LCK_COMPAT_PW | LCK_CW | LCK_TXN)
+#define LCK_COMPAT_CW    (LCK_COMPAT_PW | LCK_CW)
 #define LCK_COMPAT_CR    (LCK_COMPAT_CW | LCK_PR | LCK_PW | LCK_TXN)
 #define LCK_COMPAT_NL    (LCK_COMPAT_CR | LCK_EX | LCK_GROUP | LCK_COS)
 #define LCK_COMPAT_GROUP (LCK_NL | LCK_GROUP)
 #define LCK_COMPAT_COS   (LCK_NL | LCK_COS)
-#define LCK_COMPAT_TXN   (LCK_COMPAT_PR | LCK_CW)
+#define LCK_COMPAT_TXN   LCK_COMPAT_PR
 /** @} Lock Compatibility Matrix */
 
 extern enum ldlm_mode lck_compat_array[];

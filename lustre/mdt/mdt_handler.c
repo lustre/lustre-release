@@ -3832,9 +3832,16 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 	mdt_lock_pdo_mode(info, obj, lh);
 	if (lh->mlh_pdo_mode != LCK_NL) {
 		if (pdo_lock) {
-			rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_pdo_lh,
-					  lh->mlh_pdo_mode, policy, res_id,
-					  dlmflags, cookie);
+			if (mdt_object_remote(obj)) {
+				rc = mdt_remote_object_lock_try(info, obj,
+					&lh->mlh_pdo_lh, lh->mlh_pdo_mode,
+					policy, res_id, false);
+				lh->mlh_pdo_remote = 1;
+			} else {
+				rc = mdt_fid_lock(info->mti_env, ns,
+					&lh->mlh_pdo_lh, lh->mlh_pdo_mode,
+					policy, res_id, dlmflags, cookie);
+			}
 			if (rc) {
 				mdt_object_unlock(info, obj, lh, 1);
 				return rc;
@@ -3843,8 +3850,12 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 		res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
 	}
 
-	rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_reg_lh, lh->mlh_reg_mode,
-			  policy, res_id, dlmflags, cookie);
+	if (mdt_object_remote(obj))
+		rc = mdt_remote_object_lock_try(info, obj, &lh->mlh_rreg_lh,
+			lh->mlh_rreg_mode, policy, res_id, false);
+	else
+		rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_reg_lh,
+			lh->mlh_reg_mode, policy, res_id, dlmflags, cookie);
 	if (rc)
 		mdt_object_unlock(info, obj, lh, 1);
 	else if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK) &&
@@ -4028,7 +4039,8 @@ int mdt_object_check_lock(struct mdt_thread_info *info,
 /**
  * take parent UPDATE lock
  *
- * if parent is local, take PDO lock by name hash, otherwise take regular lock.
+ * if parent is local or mode is LCK_PW, take PDO lock, otherwise take regular
+ * lock.
  *
  * \param info	struct mdt_thread_info
  * \param obj	parent object
@@ -4046,7 +4058,8 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 
 	ENTRY;
 	LASSERT(obj && lname);
-	if (mdt_object_remote(obj)) {
+	LASSERT(mode == LCK_PW || mode == LCK_PR);
+	if (mdt_object_remote(obj) && mode == LCK_PR) {
 		__u64 ibits = MDS_INODELOCK_UPDATE;
 
 		mdt_lock_reg_init(lh, mode);
@@ -4250,7 +4263,11 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 {
 	ENTRY;
 
-	mdt_save_lock(info, &lh->mlh_pdo_lh, lh->mlh_pdo_mode, decref);
+	if (lh->mlh_pdo_remote)
+		mdt_save_remote_lock(info, o, &lh->mlh_pdo_lh,
+				     lh->mlh_pdo_mode, decref);
+	else
+		mdt_save_lock(info, &lh->mlh_pdo_lh, lh->mlh_pdo_mode, decref);
 	mdt_save_lock(info, &lh->mlh_reg_lh, lh->mlh_reg_mode, decref);
 	mdt_save_remote_lock(info, o, &lh->mlh_rreg_lh, lh->mlh_rreg_mode,
 			     decref);
