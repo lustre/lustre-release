@@ -418,7 +418,7 @@ test_8()
 	stack_trap \
 		"do_facet $SINGLEMDS $LCTL set_param at_history=$atoldbase" EXIT
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	chmod a+w $DIR/$tdir
 
 	$RUNAS ls $DIR/$tdir
