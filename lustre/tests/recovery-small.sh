@@ -371,7 +371,7 @@ run_test 13 "mdc_readpage restart test (bug 1138)"
 
 # Bug 113, check that readdir lost send timeout works.
 test_14() {
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	touch $DIR/$tdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|CFS_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000106"
@@ -768,8 +768,8 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
 test_21a() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	close_pid=$!
 
@@ -794,8 +794,8 @@ test_21a() {
 run_test 21a "drop close request while close and open are both in flight"
 
 test_21b() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	close_pid=$!
 
@@ -817,8 +817,8 @@ test_21b() {
 run_test 21b "drop open request while close and open are both in flight"
 
 test_21c() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	close_pid=$!
 
@@ -843,8 +843,8 @@ test_21c() {
 run_test 21c "drop both request while close and open are both in flight"
 
 test_21d() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	pid=$!
 
@@ -867,8 +867,8 @@ test_21d() {
 run_test 21d "drop close reply while close and open are both in flight"
 
 test_21e() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	pid=$!
 
@@ -889,8 +889,8 @@ test_21e() {
 run_test 21e "drop open reply while close and open are both in flight"
 
 test_21f() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	pid=$!
 
@@ -912,8 +912,8 @@ test_21f() {
 run_test 21f "drop both reply while close and open are both in flight"
 
 test_21g() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	pid=$!
 
@@ -935,8 +935,8 @@ test_21g() {
 run_test 21g "drop open reply and close request while close and open are both in flight"
 
 test_21h() {
-	mkdir -p $DIR/$tdir-1
-	mkdir -p $DIR/$tdir-2
+	mkdir_on_mdt0 $DIR/$tdir-1
+	mkdir_on_mdt0 $DIR/$tdir-2
 	multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
 	pid=$!
 
