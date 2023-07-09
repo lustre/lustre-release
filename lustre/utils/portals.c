@@ -1442,6 +1442,340 @@ jt_ptl_fail_nid(int argc, char **argv)
 	return 0;
 }
 
+static int ptl_yaml_route_display(yaml_parser_t *reply)
+{
+	char gw[LNET_MAX_STR_LEN], net[18];
+	bool done = false, alive = false;
+	int hops = -1, prio = -1;
+	yaml_event_t event;
+	int rc;
+
+	/* Now parse the reply results */
+	while (!done) {
+		char *value;
+
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_SEQUENCE_END_EVENT) {
+			printf("net %18s hops %d gw %32.128s %s pri %u\n",
+			       net, hops, gw, alive ? "up" : "down",
+			       prio);
+			memset(net, '\0', sizeof(net));
+			memset(gw, '\0', sizeof(gw));
+			prio = -1;
+			hops = -1;
+		}
+
+		if (event.type != YAML_SCALAR_EVENT)
+			goto skip;
+
+		value = (char *)event.data.scalar.value;
+		if (strcmp(value, "net") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				goto free_reply;
+			}
+
+			value = (char *)event.data.scalar.value;
+			strncpy(net, value, sizeof(net) - 1);
+		} else if (strcmp(value, "gateway") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				goto free_reply;
+			}
+
+			value = (char *)event.data.scalar.value;
+			strncpy(gw, value, sizeof(gw) - 1);
+		} else if (strcmp(value, "state") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				goto free_reply;
+			}
+
+			value = (char *)event.data.scalar.value;
+			if (strcmp(value, "up") == 0) {
+				alive = true;
+			} else if (strcmp(value, "down") == 0) {
+				alive = false;
+			}
+		} else if (strcmp(value, "hop") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				goto free_reply;
+			}
+
+			value = (char *)event.data.scalar.value;
+			hops = strtol(value, NULL, 10);
+		} else if (strcmp(value, "priority") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				goto free_reply;
+			}
+
+			value = (char *)event.data.scalar.value;
+			prio = strtol(value, NULL, 10);
+		}
+skip:
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+
+free_reply:
+	return rc;
+}
+
+static int ptl_yaml_route(char *nw, char *gws, int hops, int prio, bool enable,
+			  time_t notify_time, int flags, int version)
+{
+	struct nl_sock *sk = NULL;
+	const char *msg = NULL;
+	yaml_emitter_t output;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	int rc;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		msg = yaml_parser_get_reader_error(&reply);
+		goto free_reply;
+	}
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&output);
+	if (rc == 0) {
+		msg = "failed to initialize emitter";
+		goto free_reply;
+	}
+
+	rc = yaml_emitter_set_output_netlink(&output, sk, LNET_GENL_NAME,
+					     version, LNET_CMD_ROUTES, flags);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&output);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"route",
+				     strlen("route"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (nw || gws) {
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1,
+						     YAML_BLOCK_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG, 1,
+						    YAML_BLOCK_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		if (nw) {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"net",
+						     strlen("net"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)nw,
+						     strlen(nw), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (gws) {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"gateway",
+						     strlen("gateway"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)gws,
+						     strlen(gws), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (notify_time) {
+			char when[INT_STRING_LEN];
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"notify_time",
+						     strlen("notify_time"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			snprintf(when, sizeof(when), "%ld", notify_time);
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)when,
+						     strlen(when), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"state",
+					     strlen("state"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		if (enable)
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"up",
+						     strlen("up"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+		else
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"down",
+						     strlen("down"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	} else {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&output);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	} else {
+		if (flags != NLM_F_DUMP) {
+			yaml_document_t errmsg;
+
+			rc = yaml_parser_load(&reply, &errmsg);
+			if (rc == 1) {
+				yaml_emitter_t debug;
+
+				rc = yaml_emitter_initialize(&debug);
+				if (rc == 1) {
+					yaml_emitter_set_indent(&debug,
+								LNET_DEFAULT_INDENT);
+					yaml_emitter_set_output_file(&debug,
+								     stdout);
+					rc = yaml_emitter_dump(&debug,
+							       &errmsg);
+				} else if (rc == 0) {
+					yaml_emitter_log_error(&debug, stderr);
+					rc = -EINVAL;
+				}
+				yaml_emitter_delete(&debug);
+			}
+			yaml_document_delete(&errmsg);
+		} else {
+			rc = ptl_yaml_route_display(&reply);
+		}
+		if (rc == 0)
+			msg = yaml_parser_get_reader_error(&reply);
+	}
+	yaml_emitter_delete(&output);
+free_reply:
+	if (msg)
+		fprintf(stdout, "%s\n", msg);
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
 int
 jt_ptl_add_route(int argc, char **argv)
 {
@@ -1486,6 +1820,14 @@ jt_ptl_add_route(int argc, char **argv)
 		}
 	}
 
+	rc = ptl_yaml_route(libcfs_net2str(g_net), argv[1], hops,
+			    priority, false, 0, NLM_F_CREATE, LNET_GENL_VERSION);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
 	data.cfg_net = g_net;
 	data.cfg_config_u.cfg_route.rtr_hop = hops;
@@ -1519,6 +1861,14 @@ jt_ptl_del_route(int argc, char **argv)
 		return -1;
 	}
 
+	rc = ptl_yaml_route(g_net_set ? libcfs_net2str(g_net) : NULL, argv[1],
+			    -1, -1, false, 0, 0, LNET_GENL_VERSION);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
 	data.cfg_net = g_net_set ? g_net : LNET_NET_ANY;
 	data.cfg_nid = nid;
@@ -1575,6 +1925,14 @@ jt_ptl_notify_router(int argc, char **argv)
 		return -1;
 	}
 
+	rc = ptl_yaml_route(g_net_set ? libcfs_net2str(g_net) : NULL, argv[1],
+			    -1, -1, enable, when, NLM_F_REPLACE, LNET_GENL_VERSION);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	LIBCFS_IOC_INIT(data);
 	data.ioc_nid = nid;
 	data.ioc_flags = enable;
@@ -1599,10 +1957,18 @@ jt_ptl_print_routes(int argc, char **argv)
 	int index;
 	__u32 net;
 	lnet_nid_t nid;
-	unsigned int hops;
+	int hops;
 	int alive;
 	unsigned int pri;
 
+	rc = ptl_yaml_route(NULL, NULL, -1, -1, false, 0, NLM_F_DUMP,
+			    LNET_GENL_VERSION);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	for (index = 0; ; index++) {
 		LIBCFS_IOC_INIT_V2(data, cfg_hdr);
 		data.cfg_count = index;
@@ -1617,7 +1983,7 @@ jt_ptl_print_routes(int argc, char **argv)
 		alive   = data.cfg_config_u.cfg_route.rtr_flags & LNET_RT_ALIVE;
 		pri     = data.cfg_config_u.cfg_route.rtr_priority;
 
-		printf("net %18s hops %u gw %32s %s pri %u\n",
+		printf("net %18s hops %d gw %32s %s pri %u\n",
 		       libcfs_net2str(net), hops,
 		       libcfs_nid2str(nid), alive ? "up" : "down", pri);
 	}

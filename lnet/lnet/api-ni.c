@@ -4500,16 +4500,14 @@ LNetCtl(unsigned int cmd, void *arg)
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {
-		time64_t deadline = ktime_get_real_seconds() - data->ioc_u64[0];
-
-		/* The deadline passed in by the user should be some time in
-		 * seconds in the future since the UNIX epoch. We have to map
-		 * that deadline to the wall clock.
+		/* Convert the user-supplied real time to monotonic.
+		 * NB: "when" is always in the past
 		 */
-		deadline += ktime_get_seconds();
+		time64_t when = ktime_get_seconds() -
+				(ktime_get_real_seconds() - data->ioc_u64[0]);
+
 		lnet_nid4_to_nid(data->ioc_nid, &nid);
-		return lnet_notify(NULL, &nid, data->ioc_flags, false,
-				   deadline);
+		return lnet_notify(NULL, &nid, data->ioc_flags, false, when);
 	}
 
 	case IOC_LIBCFS_LNET_DIST:
@@ -7249,6 +7247,8 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 		u32 priority = 0, sensitivity = 1;
 		struct lnet_nid gw_nid = LNET_ANY_NID;
 		struct nlattr *route_prop;
+		bool alive = true;
+		s64 when = 0;
 		int rem2;
 
 		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
@@ -7318,6 +7318,39 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 							 "cannot parse gateway");
 					GOTO(report_err, rc = -ENODEV);
 				}
+			} else if (nla_strcmp(route_prop, "state") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "state is invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				if (nla_strcmp(route_prop, "down") == 0) {
+					alive = false;
+				} else if (nla_strcmp(route_prop, "up") == 0) {
+					alive = true;
+				} else {
+					GENL_SET_ERR_MSG(info,
+							 "status string bad value");
+					GOTO(report_err, rc = -EINVAL);
+				}
+			} else if (nla_strcmp(route_prop, "notify_time") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "notify_time is invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				when = nla_get_s64(route_prop);
+				if (ktime_get_real_seconds() < when) {
+					GENL_SET_ERR_MSG(info,
+							 "notify_time is in the future");
+					GOTO(report_err, rc = -EINVAL);
+				}
 			} else if (nla_strcmp(route_prop, "hop") == 0) {
 				route_prop = nla_next(route_prop, &rem2);
 				if (nla_type(route_prop) !=
@@ -7381,7 +7414,21 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 			GOTO(report_err, rc = -ENODEV);
 		}
 
-		if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+		if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
+			/* Convert the user-supplied real time to monotonic.
+			 * NB: "when" is always in the past
+			 */
+			when = ktime_get_seconds() -
+				(ktime_get_real_seconds() - when);
+
+			mutex_unlock(&the_lnet.ln_api_mutex);
+			rc = lnet_notify(NULL, &gw_nid, alive, false, when);
+			mutex_lock(&the_lnet.ln_api_mutex);
+			if (rc < 0)
+				GOTO(report_err, rc);
+			else if (the_lnet.ln_state != LNET_STATE_RUNNING)
+				GOTO(report_err, rc = -ENETDOWN);
+		} else if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
 			rc = lnet_add_route(net_id, hops, &gw_nid, priority,
 					    sensitivity);
 			if (rc < 0) {
