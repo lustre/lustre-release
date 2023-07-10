@@ -1279,6 +1279,7 @@ static inline void mdt_fid_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 	ldlm_lock_decref(lh, mode);
 }
 
+/* this is identical to say this is a DNE system */
 static inline bool mdt_slc_is_enabled(struct mdt_device *mdt)
 {
 	return mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING;

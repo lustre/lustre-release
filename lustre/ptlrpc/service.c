@@ -184,7 +184,7 @@ static int ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
  * Puts a lock and its mode into reply state assotiated to request reply.
  */
 void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
-		      int mode, bool no_ack, bool convert_lock)
+		      int mode, bool no_ack)
 {
 	struct ptlrpc_reply_state *rs = req->rq_reply_state;
 	int idx;
@@ -197,7 +197,6 @@ void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
 	rs->rs_modes[idx] = mode;
 	rs->rs_difficult = 1;
 	rs->rs_no_ack = no_ack;
-	rs->rs_convert_lock = convert_lock;
 }
 EXPORT_SYMBOL(ptlrpc_save_lock);
 
@@ -2437,56 +2436,6 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	 * rs_lock, which we do right next.
 	 */
 	if (!rs->rs_committed) {
-		/*
-		 * if rs was commited, no need to convert locks, don't check
-		 * rs_committed here because rs may never be added into
-		 * exp_uncommitted_replies and this flag never be set, see
-		 * target_send_reply()
-		 */
-		if (rs->rs_convert_lock &&
-		    rs->rs_transno > exp->exp_last_committed) {
-			struct ldlm_lock *lock;
-			struct ldlm_lock *ack_locks[RS_MAX_LOCKS] = { NULL };
-
-			spin_lock(&rs->rs_lock);
-			if (rs->rs_convert_lock &&
-			    rs->rs_transno > exp->exp_last_committed) {
-				nlocks = rs->rs_nlocks;
-				while (nlocks-- > 0) {
-					/*
-					 * NB don't assume rs is always handled
-					 * by the same service thread (see
-					 * ptlrpc_hr_select, so REP-ACK hr may
-					 * race with trans commit, while the
-					 * latter will release locks, get locks
-					 * here early to downgrade to TXN mode
-					 * safely.
-					 */
-					lock = ldlm_handle2lock(
-							&rs->rs_locks[nlocks]);
-					LASSERT(lock);
-					ack_locks[nlocks] = lock;
-					rs->rs_modes[nlocks] = LCK_TXN;
-				}
-				nlocks = rs->rs_nlocks;
-				rs->rs_convert_lock = 0;
-				/*
-				 * clear rs_scheduled so that commit callback
-				 * can schedule again
-				 */
-				rs->rs_scheduled = 0;
-				spin_unlock(&rs->rs_lock);
-
-				while (nlocks-- > 0) {
-					lock = ack_locks[nlocks];
-					ldlm_lock_mode_downgrade(lock, LCK_TXN);
-					LDLM_LOCK_PUT(lock);
-				}
-				RETURN(0);
-			}
-			spin_unlock(&rs->rs_lock);
-		}
-
 		spin_lock(&exp->exp_uncommitted_replies_lock);
 		list_del_init(&rs->rs_obd_list);
 		spin_unlock(&exp->exp_uncommitted_replies_lock);
@@ -2536,7 +2485,6 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	}
 
 	rs->rs_scheduled = 0;
-	rs->rs_convert_lock = 0;
 
 	if (rs->rs_unlinked) {
 		/* Off the net */

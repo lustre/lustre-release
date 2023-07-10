@@ -2178,13 +2178,13 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	bld.bl_same_client = lock->l_client_cookie ==
 			     lock->l_blocking_lock->l_client_cookie;
 	/* if two locks are initiated from the same MDT, transactions are
-	 * independent, or the request lock mode is CR|PR|CW, no need to trigger
+	 * independent, or the request lock mode isn't EX|PW, no need to trigger
 	 * CoS because current lock will be downgraded to TXN mode soon, then
 	 * the blocking lock can be granted.
 	 */
 	if (lock->l_blocking_lock->l_policy_data.l_inodebits.li_initiator_id ==
 		lock->l_policy_data.l_inodebits.li_initiator_id ||
-	    lock->l_blocking_lock->l_req_mode & (LCK_CR | LCK_PR | LCK_CW))
+	    !(lock->l_blocking_lock->l_req_mode & (LCK_EX | LCK_PW)))
 		bld.bl_txn_dependent = false;
 	else
 		bld.bl_txn_dependent = true;
@@ -2898,8 +2898,26 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 		break;
 
 	case LDLM_IBITS:
-		libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d initiator: MDT%d\n",
+		if (!lock->l_remote_handle.cookie)
+			libcfs_debug_msg(msgdata,
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s flags: %#llx pid: %u initiator: MDT%d\n",
+				 &vaf,
+				 ldlm_lock_to_ns_name(lock),
+				 lock, lock->l_handle.h_cookie,
+				 refcount_read(&lock->l_handle.h_ref),
+				 lock->l_readers, lock->l_writers,
+				 ldlm_lockname[lock->l_granted_mode],
+				 ldlm_lockname[lock->l_req_mode],
+				 PLDLMRES(resource),
+				 lock->l_policy_data.l_inodebits.bits,
+				 lock->l_policy_data.l_inodebits.try_bits,
+				 atomic_read(&resource->lr_refcount),
+				 ldlm_typename[resource->lr_type],
+				 lock->l_flags, lock->l_pid,
+				 lock->l_policy_data.l_inodebits.li_initiator_id);
+		else
+			libcfs_debug_msg(msgdata,
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2917,8 +2935,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
-				 lock->l_lvb_type,
-				 lock->l_policy_data.l_inodebits.li_initiator_id);
+				 lock->l_lvb_type);
 		break;
 
 	default:

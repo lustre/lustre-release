@@ -3600,34 +3600,17 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	 * The 'data' parameter is l_ast_data in the first case and
 	 * callback arguments in the second one. Distinguish them by that.
 	 */
-	if (!data || data == lock->l_ast_data || !arg->bl_desc)
-		goto skip_cos_checks;
-
-	if (lock->l_req_mode & (LCK_PW | LCK_EX)) {
-		if (mdt_cos_is_enabled(mdt) &&
-		    !arg->bl_desc->bl_same_client) {
-			mdt_set_lock_sync(lock);
-		} else if (mdt_slc_is_enabled(mdt) &&
-			   arg->bl_desc->bl_txn_dependent) {
-			mdt_set_lock_sync(lock);
-			/* we may do extra commit here, because there is a small
-			 * window to miss a commit:
-			 * 1. lock was unlocked (saved), but not downgraded to
-			 * TXN mode yet (REP-ACK not received).
-			 * 2. a conflict lock enqueued and we come herej if we
-			 * don't trigger commit now, the enqueued lock will wait
-			 * untill system periodic commit.
-			 *
-			 * Fortunately this window is quite small, not to say
-			 * distributed operation is rare too.
-			 */
+	if (data && data != lock->l_ast_data && arg->bl_desc) {
+		if (lock->l_req_mode & (LCK_COS | LCK_TXN))
 			commit_async = true;
-		}
-	} else if (lock->l_req_mode == LCK_COS || lock->l_req_mode == LCK_TXN) {
-		commit_async = true;
+		else if ((lock->l_req_mode & (LCK_PW | LCK_EX)) &&
+			 ((mdt_cos_is_enabled(mdt) &&
+			     !arg->bl_desc->bl_same_client) ||
+			  (mdt_slc_is_enabled(mdt) &&
+			     arg->bl_desc->bl_txn_dependent)))
+			mdt_set_lock_sync(lock);
 	}
 
-skip_cos_checks:
 	rc = ldlm_blocking_ast_nocheck(lock);
 
 	if (commit_async) {
@@ -4163,8 +4146,7 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			struct mdt_device *mdt = info->mti_mdt;
 			struct ldlm_lock *lock = ldlm_handle2lock(h);
 			struct ptlrpc_request *req = mdt_info_req(info);
-			bool cos = mdt_cos_is_enabled(mdt);
-			bool convert_lock = !cos && mdt_slc_is_enabled(mdt);
+			bool no_ack = false;
 
 			LASSERTF(lock != NULL, "no lock for cookie %#llx\n",
 				 h->cookie);
@@ -4175,15 +4157,22 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 				LDLM_DEBUG(lock, "save lock request %p reply "
 					"state %p transno %lld\n", req,
 					req->rq_reply_state, req->rq_transno);
-				if (cos) {
-					ldlm_lock_mode_downgrade(lock, LCK_COS);
+				if (mdt_cos_is_enabled(mdt)) {
 					mode = LCK_COS;
+					no_ack = true;
+					ldlm_lock_mode_downgrade(lock, mode);
+				} else if (mdt_slc_is_enabled(mdt)) {
+					no_ack = true;
+					if (mode != LCK_TXN) {
+						mode = LCK_TXN;
+						ldlm_lock_mode_downgrade(lock,
+									 mode);
+					}
 				}
 				if (req->rq_export->exp_disconnected)
 					mdt_fid_unlock(h, mode);
 				else
-					ptlrpc_save_lock(req, h, mode, cos,
-							 convert_lock);
+					ptlrpc_save_lock(req, h, mode, no_ack);
 			} else {
 				mdt_fid_unlock(h, mode);
 			}
