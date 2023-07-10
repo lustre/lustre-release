@@ -989,16 +989,12 @@ test_8()
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
 	$START_NAMESPACE
-	sleep 1
-	[ -n "$($SHOW_NAMESPACE |
-		grep -E "status: init|status: completed")" ] && {
-		$START_NAMESPACE ||
-		namespace_error "(16) Fail to start LFSCK for namespace!"
-	} || echo "lfsck for namespace has been started"
-
-	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning-phase1" ] ||
-		namespace_error "(17) Expect 'scanning-phase1', but got '$STATUS'"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "scanning-phase1" 32 || {
+		$SHOW_NAMESPACE
+		namespace_error "(17) unexpected status"
+	}
 
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(18) Fail to stop $SINGLEMDS!"
@@ -1068,11 +1064,12 @@ test_8()
 	}
 
 	# wait to process one inode at least (OBD_FAIL_LFSCK_DELAY3)
-	sleep 3
-
-	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "scanned-once,inconsistent" ] ||
-		namespace_error "(23) Expect 'scanned-once,inconsistent',but got '$FLAGS'"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^flags/ { print \\\$2 }'" "scanned-once,inconsistent" 32 || {
+		$SHOW_NAMESPACE
+		namespace_error "(23) Expect 'scanned-once,inconsistent'"
+	}
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
