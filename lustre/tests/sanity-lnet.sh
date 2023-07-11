@@ -145,7 +145,11 @@ compare_yaml_files() {
 	local rc=0
 	! [[ -e $expected ]] && echo "$expected not found" && return 1
 	! [[ -e $actual ]] && echo "$actual not found" && return 1
-	diff -upN ${actual} ${expected} || rc=$?
+	if [ verify_yaml_available ]; then
+		verify_compare_yaml $actual $expected || rc=$?
+	else
+		diff -upN ${actual} ${expected} || rc=$?
+	fi
 	echo "Expected:"
 	cat $expected
 	echo "Actual:"

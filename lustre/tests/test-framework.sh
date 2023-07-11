@@ -11303,3 +11303,7 @@ verify_yaml_available() {
 verify_yaml() {
 	python3 -c "import sys, yaml; obj = yaml.safe_load(sys.stdin)"
 }
+
+verify_compare_yaml() {
+	python3 -c "import sys, yaml; f=open(\"$1\", \"r\"); obj1 = yaml.safe_load(f); f=open(\"$2\", \"r\"); obj2 = yaml.safe_load(f); sys.exit(obj1 != obj2)"
+}
