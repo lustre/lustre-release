@@ -21071,6 +21071,77 @@ test_226c () {
 }
 run_test 226c "call path2fid and fid2path under remote dir with subdir mount"
 
+test_226d () {
+	(( $CLIENT_VERSION >= $(version_code 2.15.57) )) ||
+		skip "Need client at least version 2.15.57"
+
+	# Define First test dataset
+	local testdirs_01=$DIR/$tdir
+	local testdata_01=$testdirs_01/${tdir}_01
+	local testresult_01=${tdir}_01
+	# Define Second test dataset
+	local testdirs_02=$DIR/$tdir/$tdir
+	local testdata_02=$testdirs_02/${tdir}_02
+	local testresult_02=${tdir}_02
+	# Define third test dataset (top level)
+	local testdata_03=$DIR/${tdir}_03
+	local testresult_03=${tdir}_03
+
+	# Create first test dataset
+	mkdir -p $testdirs_01 || error "cannot create dir $testdirs_01"
+	touch $testdata_01 || error "cannot create file $testdata_01"
+
+	# Create second test dataset
+	mkdir -p $testdirs_02 || error "cannot create dir $testdirs_02"
+	touch $testdata_02 || error "cannot create file $testdata_02"
+
+	# Create third test dataset
+	touch $testdata_03 || error "cannot create file $testdata_03"
+
+	local fid01=$($LFS getstripe -F "$testdata_01") ||
+		error "getstripe failed on $testdata_01"
+	local fid02=$($LFS getstripe -F "$testdata_02") ||
+		error "getstripe failed on $testdata_01"
+	local fid03=$($LFS getstripe -F "$testdata_03") ||
+		error "getstripe failed on $testdata_03"
+
+	# Verify only -n option
+	local out1=$($LFS fid2path -n $DIR $fid01) ||
+		error "fid2path failed on $fid01"
+	local out2=$($LFS fid2path -n $DIR $fid02) ||
+		error "fid2path failed on $fid02"
+	local out3=$($LFS fid2path -n $DIR $fid03) ||
+		error "fid2path failed on $fid03"
+
+	[[ "$out1" == "$testresult_01" ]] ||
+		error "fid2path failed: Expected $testresult_01 got $out1"
+	[[ "$out2" == "$testresult_02" ]] ||
+		error "fid2path failed: Expected $testresult_02 got $out2"
+	[[ "$out3" == "$testresult_03" ]] ||
+		error "fid2path failed: Expected $testresult_03 got $out3"
+
+	# Verify with option -fn together
+	out1=$($LFS fid2path -fn $DIR $fid01) ||
+		error "fid2path -fn failed on $fid01"
+	out2=$($LFS fid2path -fn $DIR $fid02) ||
+		error "fid2path -fn failed on $fid02"
+	out3=$($LFS fid2path -fn $DIR $fid03) ||
+		error "fid2path -fn failed on $fid03"
+
+	local tmpout=$(echo $out1 | cut -d" " -f2)
+	[[ "$tmpout" == "$testresult_01" ]] ||
+		error "fid2path -fn failed: Expected $testresult_01 got $out1"
+
+	tmpout=$(echo $out2 | cut -d" " -f2)
+	[[ "$tmpout" == "$testresult_02" ]] ||
+		error "fid2path -fn failed: Expected $testresult_02 got $out2"
+
+	tmpout=$(echo $out3 | cut -d" " -f2)
+	[[ "$tmpout" == "$testresult_03" ]] ||
+		error "fid2path -fn failed: Expected $testresult_03 got $out3"
+}
+run_test 226d "verify fid2path with -n and -fn option"
+
 test_226e () {
 	(( $CLIENT_VERSION >= $(version_code 2.15.56) )) ||
 		skip "Need client at least version 2.15.56"

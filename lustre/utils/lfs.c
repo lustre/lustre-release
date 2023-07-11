@@ -77,6 +77,7 @@
 #include <linux/lnet/nidstr.h>
 #include <lnetconfig/cyaml.h>
 #include "lstddef.h"
+#include <uapi/linux/lustre/lustre_idl.h>
 
 #ifndef NSEC_PER_SEC
 # define NSEC_PER_SEC 1000000000UL
@@ -482,8 +483,8 @@ command_t cmdlist[] = {
 	{"fid2path", lfs_fid2path, 0,
 	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
 	 "specify link number <linkno>.\n"
-	 "usage: fid2path [--print-fid|-f] [--print-link|-c] [--link|-l <linkno>] "
-	 "[--print0|-0] <fsname|root> <fid>..."},
+	 "usage: fid2path [--print0|-0] [--print-fid|-f] [--print-link|-c] "
+	 "[--link|-l <linkno>] [--name|-n] <fsname|root> <fid>..."},
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
@@ -9706,6 +9707,72 @@ static void rstripc(char *str, int c)
 		end[-1] = '\0';
 }
 
+/* Helper function to lfs_fid2path. To print out only the file names and
+ * not the full path. Do not call OBD_IOC_FID2PATH for every file. Instead
+ * read the trusted.link xattr and loop over all the records to get all the
+ * file names.
+ */
+static int lfs_fid2path_prn_name(char *mnt_dir, char *path_buf,
+				 bool print_linkno, bool print_fid, char *ptr,
+				 const char *fid_str, int linktmp)
+{
+	char buf[65536]; /* BUFFER_SIZE 65536 */
+	char full_path[PATH_MAX * 2 + 2];
+	struct link_ea_header *leh;
+	struct link_ea_entry *lee;
+	ssize_t size;
+	int reclen, i, rc = 0;
+
+	/* Generate full_path */
+	snprintf(full_path, sizeof(full_path) - 1, "%s/%s", mnt_dir, path_buf);
+
+	size = getxattr(full_path, "trusted.link", buf, sizeof(buf));
+	if (size < 0) {
+		fprintf(stderr, "%s: failed to read %s xattr: %s\n", path_buf,
+			"trusted.link", strerror(errno));
+		rc = -errno;
+		goto fail;
+	}
+
+	leh = (struct link_ea_header *)buf;
+
+	if (leh->leh_magic == __swab32(LINK_EA_MAGIC))
+		leh->leh_reccount = __swab32(leh->leh_reccount);
+
+	lee = (struct link_ea_entry *)(leh + 1);
+
+	for (i = 0; i < leh->leh_reccount; i++) {
+		reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
+
+		/* handle -n -l case */
+		if (print_linkno) {
+			ptr = strrchr(path_buf, '/');
+			if (!ptr)
+				ptr = path_buf;
+			else
+				ptr = ptr + 1;
+
+			if (strcmp(ptr, lee->lee_name) == 0) {
+				if (print_fid)
+					printf("%s ", fid_str);
+
+				printf("%d ", linktmp);
+				printf("%s\n", lee->lee_name);
+				break;
+			}
+		} else {
+			if (print_fid)
+				printf("%s ", fid_str);
+			printf("%s\n", lee->lee_name);
+		}
+
+		/* Get next record */
+		lee = (struct link_ea_entry *)((char *)lee + reclen);
+	}
+fail:
+	return rc;
+}
+
 static int lfs_fid2path(int argc, char **argv)
 {
 	struct option long_opts[] = {
@@ -9715,8 +9782,11 @@ static int lfs_fid2path(int argc, char **argv)
 		{ .val = 'c',	.name = "print-link",	.has_arg = no_argument },
 		{ .val = 'f',	.name = "print-fid",	.has_arg = no_argument },
 		{ .val = 'l',	.name = "link",	.has_arg = required_argument },
+		{ .val = 'n',	.name = "name",	.has_arg = no_argument },
 		{ .name = NULL } };
-	char short_opts[] = "0cfl:pr:";
+	char short_opts[] = "0cfl:pr:n";
+	bool print_only_fname = false;
+	bool print_linkno = false;
 	bool print_link = false;
 	bool print_fid = false;
 	bool print_mnt_dir;
@@ -9731,7 +9801,8 @@ static int lfs_fid2path(int argc, char **argv)
 	int c;
 	int i;
 
-	while ((c = getopt_long(argc, argv, short_opts, long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, short_opts,long_opts, NULL)) !=
+		-1) {
 		switch (c) {
 		case '0':
 			link_separator = '\0';
@@ -9751,6 +9822,12 @@ static int lfs_fid2path(int argc, char **argv)
 					progname, optarg);
 				return CMD_HELP;
 			}
+			print_linkno = true;
+			break;
+		case 'n':
+			/* Bypass the full parent path if true
+			 * only print the final filename */
+			print_only_fname = true;
 			break;
 		case 'r':
 			/* recno is something to do with changelogs
@@ -9812,6 +9889,7 @@ static int lfs_fid2path(int argc, char **argv)
 	for (i = optind + 1; i < argc; i++) {
 		const char *fid_str = argv[i];
 		struct lu_fid fid;
+		char *ptr = NULL;
 		int rc2;
 
 		rc2 = llapi_fid_parse(fid_str, &fid, NULL);
@@ -9826,13 +9904,15 @@ static int lfs_fid2path(int argc, char **argv)
 		}
 
 		int linktmp = (linkno >= 0) ? linkno : 0;
+
 		while (1) {
 			int oldtmp = linktmp;
 			long long rectmp = recno;
 			char path_buf[PATH_MAX];
 
-			rc2 = llapi_fid2path_at(mnt_fd, &fid,
-				path_buf, sizeof(path_buf), &rectmp, &linktmp);
+			rc2 = llapi_fid2path_at(mnt_fd, &fid, path_buf,
+						sizeof(path_buf), &rectmp,
+						&linktmp);
 			if (rc2 < 0) {
 				fprintf(stderr,
 					"%s fid2path: cannot find %s %s: %s\n",
@@ -9840,6 +9920,25 @@ static int lfs_fid2path(int argc, char **argv)
 					strerror(-rc2));
 				if (rc == 0)
 					rc = rc2;
+				break;
+			}
+
+			if (print_only_fname && !print_link) {
+				/* '-n' is passed as option here.
+				 * For all other cases of -c fall back
+				 * to default(else) path as to get the link
+				 * count associated with the file name call
+				 * to OBD_IOC_FID2PATH is required
+				 */
+				rc = lfs_fid2path_prn_name(mnt_dir,
+							   path_buf,
+							   print_linkno,
+							   print_fid, ptr,
+							   fid_str, linktmp);
+				/* llapi_fid2path_at() is already called once
+				 * in this case. No need to call it again.
+				 * Break out as we have all the filenames.
+				 */
 				break;
 			}
 
@@ -9859,11 +9958,18 @@ static int lfs_fid2path(int argc, char **argv)
 			 *
 			 * Note that llapi_fid2path() returns "" for the root
 			 * FID. */
-
-			printf("%s%s%s%c",
-			       print_mnt_dir ? mnt_dir : "",
-			       (print_mnt_dir || *path_buf == '\0') ?
-			       "/" : "", path_buf, link_separator);
+			if (!print_only_fname) {
+				printf("%s%s%s%c",
+				       print_mnt_dir ? mnt_dir : "",
+				       (print_mnt_dir || *path_buf == '\0') ?
+				       "/" : "", path_buf, link_separator);
+			} else {
+				ptr = strrchr(path_buf, '/');
+				if (!ptr)
+					printf("%s\n", path_buf);
+				else
+					printf("%s\n", ptr + 1);
+			}
 
 			if (linkno >= 0)
 				/* specified linkno */
@@ -13293,8 +13399,3 @@ int main(int argc, char **argv)
 
 	return rc < 0 ? -rc : rc;
 }
-
-#ifdef _LUSTRE_IDL_H_
-/* Everything we need here should be included by lustreapi.h. */
-# error "lfs should not depend on lustre_idl.h"
-#endif /* _LUSTRE_IDL_H_ */

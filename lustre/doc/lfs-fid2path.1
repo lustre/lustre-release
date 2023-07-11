@@ -30,6 +30,9 @@ If a file has multiple hard links, then print only the specified LINK,
 starting at link 0.  If multiple FIDs are given, but only one
 pathname is needed for each file, use
 .BR "--link=0" .
+.TP
+\fB\-n\fR, \fB\-\-name\fR
+Print only the filename instead of whole pathname
 .SH EXAMPLES
 .TP
 .B $ lfs fid2path /mnt/testfs [0x200000403:0x11f:0x0]
@@ -41,7 +44,9 @@ pathname is needed for each file, use
  file /mnt/lustre/Link_
 .br
  file
-
+.TP
+.B $ lfs fid2path -n /mnt/testfs [0x200000403:0x11f:0x0]
+hosts
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-getstripe (1),
