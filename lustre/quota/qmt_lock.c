@@ -907,6 +907,12 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	}
 
 	lqe_write_lock(lqe);
+	/*
+	 * It is possible to add an lqe in a 2nd time while the same lqe
+	 * from the 1st time is still sending glimpse
+	 */
+	if (lqe->lqe_gl)
+		GOTO(out, 0);
 	/* The purpose of glimpse callback on per-ID lock is twofold:
 	 * - notify slaves of new qunit value and hope they will release some
 	 *   spare quota space in return
@@ -925,8 +931,6 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 		 * replies if needed */
 		lqe->lqe_may_rel = 0;
 
-	/* The rebalance thread is the only thread which can issue glimpses */
-	LASSERT(!lqe->lqe_gl);
 	lqe->lqe_gl = true;
 	lqe_write_unlock(lqe);
 
@@ -943,8 +947,8 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	}
 	LASSERT(lqe->lqe_gl);
 	lqe->lqe_gl = false;
+out:
 	lqe_write_unlock(lqe);
-
 	ldlm_resource_putref(res);
 	EXIT;
 }
