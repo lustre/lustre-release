@@ -355,7 +355,7 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 		}
 	}
 
-	if (!inode_owner_or_capable(&init_user_ns, inode))
+	if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
 		return -EACCES;
 
 	ret = mnt_want_write_file(filp);

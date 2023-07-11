@@ -40,7 +40,7 @@
 
 struct posix_acl *ll_get_acl(
  #ifdef HAVE_ACL_WITH_DENTRY
-	struct user_namespace *ns, struct dentry *dentry, int type)
+	struct mnt_idmap *map, struct dentry *dentry, int type)
  #elif defined HAVE_GET_ACL_RCU_ARG
 	struct inode *inode, int type, bool rcu)
  #else
@@ -68,7 +68,7 @@ struct posix_acl *ll_get_acl(
 }
 
 #ifdef HAVE_IOP_SET_ACL
-int ll_set_acl(struct user_namespace *mnt_userns,
+int ll_set_acl(struct mnt_idmap *map,
 #ifdef HAVE_ACL_WITH_DENTRY
 	       struct dentry *dentry,
 #else
@@ -91,7 +91,7 @@ int ll_set_acl(struct user_namespace *mnt_userns,
 	case ACL_TYPE_ACCESS:
 		name = XATTR_NAME_POSIX_ACL_ACCESS;
 		if (acl)
-			rc = posix_acl_update_mode(mnt_userns, inode,
+			rc = posix_acl_update_mode(map, inode,
 						   &inode->i_mode, &acl);
 		break;
 

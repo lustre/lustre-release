@@ -52,6 +52,9 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/list.h>
+#ifdef HAVE_LINUX_FILELOCK_HEADER
+#include <linux/filelock.h>
+#endif
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd_class.h>

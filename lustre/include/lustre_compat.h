@@ -147,6 +147,11 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define vfs_unlink(ns, dir, de) vfs_unlink(dir, de)
 #endif
 
+#ifndef HAVE_MNT_IDMAP_ARG
+#define mnt_idmap	user_namespace
+#define nop_mnt_idmap	init_user_ns
+#endif
+
 static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 				 u32 request_mask, unsigned int flags)
 {
@@ -256,7 +261,9 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-#if !defined(HAVE_USER_NAMESPACE_ARG) && !defined(HAVE_POSIX_ACL_UPDATE_MODE)
+#if !defined(HAVE_USER_NAMESPACE_ARG) \
+ && !defined(HAVE_POSIX_ACL_UPDATE_MODE) \
+ && !defined(HAVE_MNT_IDMAP_ARG)
 static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 			  struct posix_acl **acl)
 {
@@ -511,8 +518,8 @@ static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  void *value, size_t size)
 {
-#ifdef HAVE_USER_NAMESPACE_ARG
-	return vfs_getxattr(&init_user_ns, dentry, name, value, size);
+#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
+	return vfs_getxattr(&nop_mnt_idmap, dentry, name, value, size);
 #elif defined(HAVE_VFS_SETXATTR)
 	return __vfs_getxattr(dentry, inode, name, value, size);
 #else
@@ -527,8 +534,8 @@ static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  const void *value, size_t size, int flags)
 {
-#ifdef HAVE_USER_NAMESPACE_ARG
-	return vfs_setxattr(&init_user_ns, dentry, name,
+#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
+	return vfs_setxattr(&nop_mnt_idmap, dentry, name,
 			    VFS_SETXATTR_VALUE(value), size, flags);
 #elif defined(HAVE_VFS_SETXATTR)
 	return __vfs_setxattr(dentry, inode, name, value, size, flags);
@@ -543,8 +550,8 @@ static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 				     const char *name)
 {
-#ifdef HAVE_USER_NAMESPACE_ARG
-	return vfs_removexattr(&init_user_ns, dentry, name);
+#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
+	return vfs_removexattr(&nop_mnt_idmap, dentry, name);
 #elif defined(HAVE_VFS_SETXATTR)
 	return __vfs_removexattr(dentry, name);
 #else
@@ -659,7 +666,7 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #endif
 }
 
-#ifndef HAVE_USER_NAMESPACE_ARG
+#if !defined(HAVE_USER_NAMESPACE_ARG) && !defined(HAVE_MNT_IDMAP_ARG)
 #define posix_acl_update_mode(ns, inode, mode, acl) \
 	posix_acl_update_mode(inode, mode, acl)
 #define notify_change(ns, de, attr, inode)	notify_change(de, attr, inode)

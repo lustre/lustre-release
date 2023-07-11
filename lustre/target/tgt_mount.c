@@ -1866,9 +1866,9 @@ static const struct super_operations server_ops = {
 };
 
 #if defined(HAVE_USER_NAMESPACE_ARG)
-# define USERNS_ARG mnt_userns,
+# define IDMAP_ARG idmap,
 #else
-# define USERNS_ARG
+# define IDMAP_ARG
 # ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 #  define server_getattr(ns, path, st, rq, fl) server_getattr(path, st, rq, fl)
 # endif
@@ -1878,7 +1878,7 @@ static const struct super_operations server_ops = {
  * inode operations for Lustre server mountpoints
  */
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
-static int server_getattr(struct user_namespace *mnt_userns,
+static int server_getattr(struct mnt_idmap *idmap,
 			  const struct path *path, struct kstat *stat,
 			  u32 request_mask, unsigned int flags)
 {
@@ -1904,7 +1904,7 @@ static int server_getattr(struct vfsmount *mnt, struct dentry *de,
 	CDEBUG(D_SUPER, "%s: root_inode from %s ino=%lu, dev=%x\n",
 	       lsi->lsi_svname, root_inode == inode ? "lsi" : "vfsmnt",
 	       root_inode->i_ino, root_inode->i_rdev);
-	generic_fillattr(USERNS_ARG root_inode, stat);
+	generic_fillattr(IDMAP_ARG root_inode, stat);
 	iput(root_inode);
 
 	return 0;
