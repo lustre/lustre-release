@@ -1,0 +1,110 @@
+From 45c922115d9e44c0d62fd2012ccb4d020bbe8edc Mon Sep 17 00:00:00 2001
+From: "Vitaliy Kuznetsov" <vk.en.mail@gmail.com>
+Date: Thu, 15 Jun 2023 11:17:14 +0300
+Subject: [PATCH] ext4: Add periodic superblock update check
+
+This patch introduces a mechanism to periodically check and update
+the superblock within the ext4 file system. The main purpose of this
+patch is to keep the disk superblock up to date. The update will be
+performed if more than one hour has passed since the last update, and
+if more than 16MB of data have been written to disk.
+
+This check and update is performed within the ext4_journal_commit_callback
+function, ensuring that the superblock is written while the disk is
+active, rather than based on a timer that may trigger during disk idle
+periods.
+
+Signed-off-by: Vitaliy Kuznetsov <vk.en.mail@gmail.com>
+---
+ fs/ext4/super.c | 50 +++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/sysfs.c |  4 ++--
+ 2 files changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index dfa09a277b56..0d2bf85cee34 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -439,6 +439,55 @@ static int block_device_ejected(struct super_block *sb)
+ 	return bdi->dev == NULL;
+ }
+
++#define EXT4_SB_REFRESH_INTERVAL_SEC (3600) /* seconds (1 hour) */
++#define EXT4_SB_REFRESH_INTERVAL_KB (16384) /* kilobytes (16MB) */
++
++/*
++ * The ext4_maybe_update_superblock() function checks and updates the
++ * superblock if needed.
++ *
++ * This function is designed to update the on-disk superblock only under
++ * certain conditions to prevent excessive disk writes and unnecessary
++ * waking of the disk from sleep. The superblock will be updated if:
++ * 1. More than an hour has passed since the last superblock update, and
++ * 2. More than 16MB have been written since the last superblock update.
++ *
++ * @sb: The superblock
++ */
++static void ext4_maybe_update_superblock(struct super_block *sb)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	struct ext4_super_block *es = sbi->s_es;
++	time64_t now;
++	__u64 last_update;
++	__u64 lifetime_write_kbytes;
++	__u64 diff_size;
++
++	if (sb_rdonly(sb))
++		return;
++
++	now = ktime_get_real_seconds();
++	last_update = ext4_get_tstamp(es, s_wtime);
++
++	if (likely(now - last_update < EXT4_SB_REFRESH_INTERVAL_SEC))
++		return;
++
++	lifetime_write_kbytes = sbi->s_kbytes_written +
++		((part_stat_read(sb->s_bdev, sectors[STAT_WRITE]) -
++		  sbi->s_sectors_written_start) >> 1);
++
++	/* Get the number of kilobytes not written to disk to account
++	 * for statistics and compare with a multiple of 16 MB. This
++	 * is used to determine when the next superblock commit should
++	 * occur (i.e. not more often than once per 16MB if there was
++	 * less written in an hour).
++	 */
++	diff_size = lifetime_write_kbytes - le64_to_cpu(es->s_kbytes_written);
++
++	if (diff_size > EXT4_SB_REFRESH_INTERVAL_KB)
++		schedule_work(&EXT4_SB(sb)->s_error_work);
++}
++
+ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
+ {
+ 	struct super_block		*sb = journal->j_private;
+@@ -449,6 +498,7 @@ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
+ 	BUG_ON(txn->t_state == T_FINISHED);
+
+ 	ext4_process_freed_data(sb, txn->t_tid);
++	ext4_maybe_update_superblock(sb);
+
+ 	spin_lock(&sbi->s_md_lock);
+ 	while (!list_empty(&txn->t_private_list)) {
+diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
+index 2314f7446592..a7219cc2fdc5 100644
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -508,7 +508,8 @@ static struct kobj_type ext4_feat_ktype = {
+
+ void ext4_notify_error_sysfs(struct ext4_sb_info *sbi)
+ {
+-	sysfs_notify(&sbi->s_kobj, NULL, "errors_count");
++	if (sbi->s_add_error_count > 0)
++		sysfs_notify(&sbi->s_kobj, NULL, "errors_count");
+ }
+
+ static struct kobject *ext4_root;
+@@ -598,4 +599,3 @@ void ext4_exit_sysfs(void)
+ 	remove_proc_entry(proc_dirname, NULL);
+ 	ext4_proc_root = NULL;
+ }
+-
+--

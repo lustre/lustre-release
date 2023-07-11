@@ -1,0 +1,304 @@
+From 332f8696f462ae8affc0a44494423e4edd88bb29 Mon Sep 17 00:00:00 2001
+From: "Vitaliy Kuznetsov" <vk.en.mail@gmail.com>
+Date: Thu, 15 Jun 2023 11:17:14 +0300
+Subject: [PATCH] ext4: Add periodic superblock update check
+
+This patch introduces a mechanism to periodically check and update
+the superblock within the ext4 file system. The main purpose of this
+patch is to keep the disk superblock up to date. The update will be
+performed if more than one hour has passed since the last update, and
+if more than 16MB of data have been written to disk.
+
+This check and update is performed within the ext4_journal_commit_callback
+function, ensuring that the superblock is written while the disk is
+active, rather than based on a timer that may trigger during disk idle
+periods.
+
+Signed-off-by: Vitaliy Kuznetsov <vk.en.mail@gmail.com>
+---
+ fs/ext4/ext4.h  |   1 +
+ fs/ext4/super.c | 186 +++++++++++++++++++++++++++++++++++++-----------
+ 2 files changed, 146 insertions(+), 41 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 7c7123f265c2..44f69f5c6931 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1446,6 +1446,7 @@ struct ext4_sb_info {
+ 	/* for write statistics */
+ 	unsigned long s_sectors_written_start;
+ 	u64 s_kbytes_written;
++	struct work_struct s_stats_work;
+
+ 	/* the size of zero-out chunk */
+ 	unsigned int s_extent_max_zeroout_kb;
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 10c45b3b7910..9d6e8b48f775 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -64,6 +64,7 @@ static struct ratelimit_state ext4_mount_msg_ratelimit;
+ static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
+ 			     unsigned long journal_devnum);
+ static int ext4_show_options(struct seq_file *seq, struct dentry *root);
++static void ext4_update_super(struct super_block *sb, int sync);
+ static int ext4_commit_super(struct super_block *sb, int sync);
+ static void ext4_mark_recovery_complete(struct super_block *sb,
+ 					struct ext4_super_block *es);
+@@ -469,6 +470,90 @@ static int block_device_ejected(struct super_block *sb)
+ 	return bdi->dev == NULL;
+ }
+
++static void flush_stashed_stats_work(struct work_struct *work)
++{
++	struct ext4_sb_info *sbi = container_of(work, struct ext4_sb_info,
++						s_stats_work);
++	journal_t *journal = sbi->s_journal;
++	struct buffer_head *sbh = sbi->s_sbh;
++	handle_t *handle;
++
++	/*
++	 * If the journal is still running, we have to write out superblock
++	 * through the journal to avoid collisions of other journalled sb
++	 * updates.
++	 */
++	if (sb_rdonly(sbi->s_sb) && !journal)
++		return;
++
++	handle = jbd2_journal_start(journal, 1);
++	if (IS_ERR(handle))
++		return;
++
++	if (jbd2_journal_get_write_access(handle, sbh)) {
++		jbd2_journal_stop(handle);
++		return;
++	}
++
++	ext4_update_super(sbi->s_sb, 1);
++	jbd2_journal_dirty_metadata(handle, sbh);
++	jbd2_journal_stop(handle);
++	return;
++}
++
++#define EXT4_SB_REFRESH_INTERVAL_SEC (3600) /* seconds (1 hour) */
++#define EXT4_SB_REFRESH_INTERVAL_KB (16384) /* kilobytes (16MB) */
++
++/*
++ * The ext4_maybe_update_superblock() function checks and updates the
++ * superblock if needed.
++ *
++ * This function is designed to update the on-disk superblock only under
++ * certain conditions to prevent excessive disk writes and unnecessary
++ * waking of the disk from sleep. The superblock will be updated if:
++ * 1. More than an hour has passed since the last superblock update, and
++ * 2. More than 16MB have been written since the last superblock update.
++ *
++ * @sb: The superblock
++ */
++static void ext4_maybe_update_superblock(struct super_block *sb)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	struct ext4_super_block *es = sbi->s_es;
++	time64_t now;
++	__u64 last_update;
++	__u64 lifetime_write_kbytes;
++	__u64 diff_size;
++
++	if (sb_rdonly(sb))
++		return;
++
++	now = ktime_get_real_seconds();
++	last_update = ext4_get_tstamp(es, s_wtime);
++
++	if (likely(now - last_update < EXT4_SB_REFRESH_INTERVAL_SEC))
++		return;
++
++	lifetime_write_kbytes = sbi->s_kbytes_written;
++	if (likely(sb->s_bdev->bd_part))
++		lifetime_write_kbytes = sbi->s_kbytes_written +
++			((part_stat_read(sb->s_bdev->bd_part, sectors[STAT_WRITE]) -
++			  sbi->s_sectors_written_start) >> 1);
++
++
++	/* Get the number of kilobytes not written to disk to account
++	 * for statistics and compare with a multiple of 16 MB. This
++	 * is used to determine when the next superblock commit should
++	 * occur (i.e. not more often than once per 16MB if there was
++	 * less written in an hour).
++	 */
++	diff_size = lifetime_write_kbytes -
++		le64_to_cpu(es->s_kbytes_written);
++
++	if (diff_size > EXT4_SB_REFRESH_INTERVAL_KB)
++		schedule_work(&EXT4_SB(sb)->s_stats_work);
++}
++
+ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
+ {
+ 	struct super_block		*sb = journal->j_private;
+@@ -479,7 +564,7 @@ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
+ 	BUG_ON(txn->t_state == T_FINISHED);
+
+ 	ext4_process_freed_data(sb, txn->t_tid);
+-
++	ext4_maybe_update_superblock(sb);
+ 	spin_lock(&sbi->s_md_lock);
+ 	while (!list_empty(&txn->t_private_list)) {
+ 		jce = list_entry(txn->t_private_list.next,
+@@ -1023,6 +1108,7 @@ static void ext4_put_super(struct super_block *sb)
+
+ 	ext4_unregister_li_request(sb);
+ 	ext4_quota_off_umount(sb);
++	flush_work(&sbi->s_stats_work);
+
+ 	destroy_workqueue(sbi->rsv_conversion_wq);
+
+@@ -4373,6 +4459,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 	}
+
+ 	timer_setup(&sbi->s_err_report, print_daily_error_info, 0);
++	INIT_WORK(&sbi->s_stats_work, flush_stashed_stats_work);
+
+ 	/* Register extent status tree shrinker */
+ 	if (ext4_es_register_shrinker(sbi))
+@@ -4985,6 +5072,53 @@ static journal_t *ext4_get_dev_journal(struct super_block *sb,
+ 	return NULL;
+ }
+
++static void ext4_update_super(struct super_block *sb, int sync)
++{
++	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
++	struct buffer_head *sbh = EXT4_SB(sb)->s_sbh;
++	if (sync)
++		lock_buffer(sbh);
++
++	/*
++	 * If the file system is mounted read-only, don't update the
++	 * superblock write time. This avoids updating the superblock
++	 * write time when we are mounting the root file system
++	 * read/only but we need to replay the journal; at that point,
++	 * for people who are east of GMT and who make their clock
++	 * tick in localtime for Windows bug-for-bug compatibility,
++	 * the clock is set in the future, and this will cause e2fsck
++	 * to complain and force a full file system check.
++	 */
++	if (!(sb->s_flags & SB_RDONLY))
++		ext4_update_tstamp(es, s_wtime);
++
++	if (sb->s_bdev->bd_part) {
++		es->s_kbytes_written =
++			cpu_to_le64(EXT4_SB(sb)->s_kbytes_written +
++			    ((part_stat_read(sb->s_bdev->bd_part,
++					     sectors[STAT_WRITE]) -
++			      EXT4_SB(sb)->s_sectors_written_start) >> 1));
++	} else {
++		es->s_kbytes_written =
++			cpu_to_le64(EXT4_SB(sb)->s_kbytes_written);
++	}
++
++	if (percpu_counter_initialized(&EXT4_SB(sb)->s_freeclusters_counter)) {
++		ext4_free_blocks_count_set(es,
++			EXT4_C2B(EXT4_SB(sb), percpu_counter_sum_positive(
++				&EXT4_SB(sb)->s_freeclusters_counter)));
++	}
++
++	if (percpu_counter_initialized(&EXT4_SB(sb)->s_freeinodes_counter)) {
++		es->s_free_inodes_count =
++			cpu_to_le32(percpu_counter_sum_positive(
++				&EXT4_SB(sb)->s_freeinodes_counter));
++	}
++
++	if (sync)
++		unlock_buffer(sbh);
++}
++
+ static int ext4_load_journal(struct super_block *sb,
+ 			     struct ext4_super_block *es,
+ 			     unsigned long journal_devnum)
+@@ -5095,7 +5229,6 @@ static int ext4_load_journal(struct super_block *sb,
+
+ static int ext4_commit_super(struct super_block *sb, int sync)
+ {
+-	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
+ 	struct buffer_head *sbh = EXT4_SB(sb)->s_sbh;
+ 	int error = 0;
+
+@@ -5109,41 +5242,9 @@ static int ext4_commit_super(struct super_block *sb, int sync)
+ 	 * device was hot-removed. Not much we can do but fail the I/O.
+ 	 */
+ 	if (!buffer_mapped(sbh))
+-		return error;
++		return -EIO;
+
+-	/*
+-	 * If the file system is mounted read-only, don't update the
+-	 * superblock write time.  This avoids updating the superblock
+-	 * write time when we are mounting the root file system
+-	 * read/only but we need to replay the journal; at that point,
+-	 * for people who are east of GMT and who make their clock
+-	 * tick in localtime for Windows bug-for-bug compatibility,
+-	 * the clock is set in the future, and this will cause e2fsck
+-	 * to complain and force a full file system check.
+-	 */
+-	if (!(sb->s_flags & SB_RDONLY))
+-		ext4_update_tstamp(es, s_wtime);
+-	if (sb->s_bdev->bd_part)
+-		es->s_kbytes_written =
+-			cpu_to_le64(EXT4_SB(sb)->s_kbytes_written +
+-			    ((part_stat_read(sb->s_bdev->bd_part,
+-					     sectors[STAT_WRITE]) -
+-			      EXT4_SB(sb)->s_sectors_written_start) >> 1));
+-	else
+-		es->s_kbytes_written =
+-			cpu_to_le64(EXT4_SB(sb)->s_kbytes_written);
+-	if (percpu_counter_initialized(&EXT4_SB(sb)->s_freeclusters_counter))
+-		ext4_free_blocks_count_set(es,
+-			EXT4_C2B(EXT4_SB(sb), percpu_counter_sum_positive(
+-				&EXT4_SB(sb)->s_freeclusters_counter)));
+-	if (percpu_counter_initialized(&EXT4_SB(sb)->s_freeinodes_counter))
+-		es->s_free_inodes_count =
+-			cpu_to_le32(percpu_counter_sum_positive(
+-				&EXT4_SB(sb)->s_freeinodes_counter));
+-	BUFFER_TRACE(sbh, "marking dirty");
+-	ext4_superblock_csum_set(sb);
+-	if (sync)
+-		lock_buffer(sbh);
++	ext4_update_super(sb, sync);
+ 	if (buffer_write_io_error(sbh) || !buffer_uptodate(sbh)) {
+ 		/*
+ 		 * Oh, dear.  A previous attempt to write the
+@@ -5153,19 +5254,19 @@ static int ext4_commit_super(struct super_block *sb, int sync)
+ 		 * be remapped.  Nothing we can do but to retry the
+ 		 * write and hope for the best.
+ 		 */
+-		ext4_msg(sb, KERN_ERR, "previous I/O error to "
+-		       "superblock detected");
++		ext4_msg(sb, KERN_ERR,
++				 "previous I/O error to superblock detected");
+ 		clear_buffer_write_io_error(sbh);
+ 		set_buffer_uptodate(sbh);
+ 	}
++	BUFFER_TRACE(sbh, "marking dirty");
+ 	mark_buffer_dirty(sbh);
+ 	if (sync) {
+-		unlock_buffer(sbh);
+ 		error = __sync_dirty_buffer(sbh,
+ 			REQ_SYNC | (test_opt(sb, BARRIER) ? REQ_FUA : 0));
+ 		if (buffer_write_io_error(sbh)) {
+-			ext4_msg(sb, KERN_ERR, "I/O error while writing "
+-			       "superblock");
++			ext4_msg(sb, KERN_ERR,
++					 "I/O error while writing superblock");
+ 			clear_buffer_write_io_error(sbh);
+ 			set_buffer_uptodate(sbh);
+ 		}
+@@ -5483,6 +5584,9 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
+ 		set_task_ioprio(sbi->s_journal->j_task, journal_ioprio);
+ 	}
+
++	/* Flush stats before changing fs state */
++	flush_work(&sbi->s_stats_work);
++
+ 	if ((bool)(*flags & SB_RDONLY) != sb_rdonly(sb)) {
+ 		if (sbi->s_mount_flags & EXT4_MF_FS_ABORTED) {
+ 			err = -EROFS;
+--

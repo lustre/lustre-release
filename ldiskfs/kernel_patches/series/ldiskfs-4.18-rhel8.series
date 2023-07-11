@@ -32,5 +32,6 @@ rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 ubuntu18/ext4-projid-xattrs.patch
 rhel8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
+rhel8/ext4-add-periodic-superblock-update.patch
 rhel8/ext4-filename-encode.patch
 rhel8/ext4-encdata.patch
