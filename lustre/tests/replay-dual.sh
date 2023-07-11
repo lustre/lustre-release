@@ -904,7 +904,7 @@ test_24 () {
 }
 run_test 24 "reconstruct on non-existing object"
 
-# end commit on sharing tests 
+# end commit on sharing tests
 
 test_25() {
 	cancel_lru_locks osc
@@ -1184,7 +1184,9 @@ test_31() {
 	$LCTL set_param fail_loc=0x80001420
 	$MULTIOP $DIR1/$tdir/mdtdir/$tfile Osw4096c &
 	multiops+=($!)
-	sleep 0.5
+	while [ ! -f $DIR1/$tdir/mdtdir/$tfile ]; do
+		sleep 0.5
+	done
 	$MULTIOP $DIR2/$tdir/mdtdir/$tfile oO_WRONLY:w4096c &
 	multiops+=($!)
 	sleep 0.5
@@ -1198,8 +1200,15 @@ test_31() {
 	wait $failpid
 	local failed=0
 
+	echo "pids: ${multiops[@]}"
 	for pid in "${multiops[@]}"; do
-		wait $pid || ((failed++))
+		local rc=0
+
+		wait $pid || rc=$?
+		if (( $rc != 0 )); then
+			echo "wait $pid failed, rc = $rc"
+			((failed++))
+		fi
 	done
 	((failed == 0)) || error "$failed multiops failed"
 }
