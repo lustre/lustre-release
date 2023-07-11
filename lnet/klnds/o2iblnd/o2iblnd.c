@@ -2649,12 +2649,13 @@ kiblnd_set_ni_fatal_on(struct kib_hca_dev *hdev, int val)
 
 		if (!update_ping_buf &&
 		    (ni->ni_state == LNET_NI_STATE_ACTIVE) &&
-		    (val != ni_state_before))
+		    (val != ni_state_before) &&
+		    (net->ibn_init == IBLND_INIT_ALL))
 			update_ping_buf = true;
 	}
 
 	if (update_ping_buf)
-		lnet_update_ping_buffer();
+		lnet_mark_ping_buffer_for_update();
 }
 
 static void
@@ -3154,12 +3155,13 @@ kiblnd_handle_link_state_change(struct net_device *dev,
 ni_done:
 		if (!update_ping_buf &&
 		    (ni->ni_state == LNET_NI_STATE_ACTIVE) &&
-		    (atomic_read(&ni->ni_fatal_error_on) != ni_state_before))
+		    (atomic_read(&ni->ni_fatal_error_on) != ni_state_before) &&
+		    (net->ibn_init == IBLND_INIT_ALL))
 			update_ping_buf = true;
 	}
 
 	if (update_ping_buf)
-		lnet_update_ping_buffer();
+		lnet_mark_ping_buffer_for_update();
 out:
 	return 0;
 }
@@ -3191,12 +3193,13 @@ kiblnd_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 		ni_state_before = lnet_set_link_fatal_state(ni, link_down);
 		if (!update_ping_buf &&
 		    (ni->ni_state == LNET_NI_STATE_ACTIVE) &&
-		    ((event == NETDEV_DOWN) != ni_state_before))
+		    ((event == NETDEV_DOWN) != ni_state_before) &&
+		    (net->ibn_init == IBLND_INIT_ALL))
 			update_ping_buf = true;
 	}
 
 	if (update_ping_buf)
-		lnet_update_ping_buffer();
+		lnet_mark_ping_buffer_for_update();
 out:
 	return 0;
 }

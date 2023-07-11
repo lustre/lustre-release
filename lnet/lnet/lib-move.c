@@ -4039,10 +4039,12 @@ lnet_monitor_thread(void *arg)
 	 *  1. Checks the aliveness of routers
 	 *  2. Checks if there are messages on the resend queue to resend
 	 *     them.
-	 *  3. Check if there are any NIs on the local recovery queue and
+	 *  3. Checks if there are any NIs on the local recovery queue and
 	 *     pings them
 	 *  4. Checks if there are any NIs on the remote recovery queue
 	 *     and pings them.
+	 *  5. Updates the ping buffer if requested by LNDs upon interface
+	 *     state change
 	 */
 	while (the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING) {
 		now = ktime_get_real_seconds();
@@ -4061,6 +4063,7 @@ lnet_monitor_thread(void *arg)
 		nlpnis = lnet_recover_peer_nis(peer_nids, LNET_MAX_NNIDS);
 		lnet_health_update_console(local_nids, nnis, peer_nids, nlpnis,
 					   now);
+		lnet_update_ping_buffer();
 
 		/*
 		 * TODO do we need to check if we should sleep without

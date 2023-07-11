@@ -1999,7 +1999,7 @@ ni_done:
 	}
 
 	if (update_ping_buf)
-		lnet_update_ping_buffer();
+		lnet_mark_ping_buffer_for_update();
 out:
 	return 0;
 }
@@ -2048,7 +2048,7 @@ ksocknal_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 	}
 
 	if (update_ping_buf)
-		lnet_update_ping_buffer();
+		lnet_mark_ping_buffer_for_update();
 out:
 	return 0;
 }

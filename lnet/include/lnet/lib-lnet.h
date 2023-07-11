@@ -1315,4 +1315,5 @@ static inline int notifier_from_ioctl_errno(int err)
 	return notifier_from_errno(err) | NOTIFY_STOP_MASK;
 }
 
+void lnet_mark_ping_buffer_for_update(void);
 #endif

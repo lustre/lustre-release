@@ -3920,12 +3920,22 @@ out:
 	return rc;
 }
 
+void lnet_mark_ping_buffer_for_update(void)
+{
+	if (the_lnet.ln_routing)
+		return;
+
+	atomic_set(&the_lnet.ln_update_ping_buf, 1);
+	complete(&the_lnet.ln_mt_wait_complete);
+}
+EXPORT_SYMBOL(lnet_mark_ping_buffer_for_update);
+
 void lnet_update_ping_buffer(void)
 {
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_handle_md ping_mdh;
 
-	if (the_lnet.ln_routing)
+	if (atomic_dec_if_positive(&the_lnet.ln_update_ping_buf) < 0)
 		return;
 
 	mutex_lock(&the_lnet.ln_api_mutex);
@@ -3938,7 +3948,6 @@ void lnet_update_ping_buffer(void)
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
 }
-EXPORT_SYMBOL(lnet_update_ping_buffer);
 
 void lnet_incr_dlc_seq(void)
 {

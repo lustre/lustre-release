@@ -1519,6 +1519,9 @@ struct lnet {
 	atomic_t			ln_late_msg_count;
 	/* Total amount of time past their deadline for all late ^ messages */
 	atomic64_t			ln_late_msg_nsecs;
+
+	/* for LNDs to signal that ping buffer needs updating */
+	atomic_t                        ln_update_ping_buf;
 };
 
 struct genl_filter_list {
