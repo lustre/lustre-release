@@ -741,6 +741,9 @@ test_1a() {
 run_test 1a "Block hard limit (normal use and out of quota)"
 
 test_1b() {
+	(( MDS1_VERSION >= $(version_code 2.15.55) )) ||
+		skip "Need MDS version at least 2.15.55"
+
 	local limit=10 # MB
 	local global_limit=20 # MB
 	local testfile="$DIR/$tdir/$tfile-0"
