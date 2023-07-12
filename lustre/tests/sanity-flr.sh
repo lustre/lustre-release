@@ -3489,6 +3489,9 @@ test_200b() {
 run_test 200b "racing IO, mirror extend and resync"
 
 test_200c() {
+	(( MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "Need MDS version at least 2.15.53"
+
 	local tf=$DIR/$tfile
 	local tf2=$DIR2/$tfile
 
