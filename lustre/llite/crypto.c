@@ -126,7 +126,7 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
  *
  * This overlay function is necessary to handle encrypted file open without
  * the key. We allow this access pattern to applications that know what they
- * are doing, by using the specific flag O_FILE_ENC.
+ * are doing, by using the specific flag O_CIPHERTEXT.
  * This flag is only compatible with O_DIRECT IOs, to make sure ciphertext
  * data is wiped from page cache once IOs are finished.
  */
@@ -139,9 +139,9 @@ int ll_file_open_encrypt(struct inode *inode, struct file *filp)
 		return rc;
 
 	if (rc == -ENOKEY &&
-	    (filp->f_flags & O_FILE_ENC) == O_FILE_ENC &&
+	    (filp->f_flags & O_CIPHERTEXT) == O_CIPHERTEXT &&
 	    filp->f_flags & O_DIRECT)
-		/* allow file open with O_FILE_ENC flag when we have O_DIRECT */
+		/* allow open with O_CIPHERTEXT flag when we have O_DIRECT */
 		rc = 0;
 
 	return rc;

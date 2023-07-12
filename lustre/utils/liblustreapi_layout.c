@@ -1079,14 +1079,14 @@ struct llapi_layout *llapi_layout_get_by_path(const char *path,
 
 	/* Always get layout in O_DIRECT */
 	/* Allow fetching layout even without the key on encrypted files */
-	open_flags = O_RDONLY | O_DIRECT | O_FILE_ENC;
+	open_flags = O_RDONLY | O_DIRECT | O_CIPHERTEXT;
 do_open:
 	fd = open(path, open_flags);
 	if (fd < 0) {
 		if (errno != EINVAL || failed)
 			return layout;
 		/* EINVAL is because a directory cannot be opened in O_DIRECT */
-		open_flags = O_RDONLY | O_FILE_ENC;
+		open_flags = O_RDONLY | O_CIPHERTEXT;
 		failed = true;
 		goto do_open;
 	}

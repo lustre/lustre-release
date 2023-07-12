@@ -1247,7 +1247,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			if (!llcrypt_has_encryption_key(dir) &&
 			    (!filename_is_volatile(dentry->d_name.name,
 						   dentry->d_name.len, NULL) ||
-			    (open_flags & O_FILE_ENC) != O_FILE_ENC ||
+			    (open_flags & O_CIPHERTEXT) != O_CIPHERTEXT ||
 			    !(open_flags & O_DIRECT)))
 				GOTO(out_release, rc = -ENOKEY);
 		}
@@ -1450,7 +1450,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 		if (!llcrypt_has_encryption_key(dir) &&
 		    filename_is_volatile(dentry->d_name.name,
 					 dentry->d_name.len, NULL) &&
-		    (open_flags & O_FILE_ENC) == O_FILE_ENC &&
+		    (open_flags & O_CIPHERTEXT) == O_CIPHERTEXT &&
 		    open_flags & O_DIRECT)
 			preload = false;
 		rc = ll_set_encflags(inode, encctx, encctxlen, preload);

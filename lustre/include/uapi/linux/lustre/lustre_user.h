@@ -686,10 +686,10 @@ struct fsxattr {
 #define O_LOV_DELAY_CREATE_MASK	(O_NOCTTY | FASYNC)
 #define O_LOV_DELAY_CREATE		(O_LOV_DELAY_CREATE_1_8 | \
 					 O_LOV_DELAY_CREATE_MASK)
-/* O_FILE_ENC principle is similar to O_LOV_DELAY_CREATE above,
+/* O_CIPHERTEXT principle is similar to O_LOV_DELAY_CREATE above,
  * for access to encrypted files without the encryption key.
  */
-#define O_FILE_ENC		(O_NOCTTY | O_NDELAY)
+#define O_CIPHERTEXT		(O_NOCTTY | O_NDELAY | O_DSYNC)
 
 #define LL_FILE_IGNORE_LOCK     0x00000001
 #define LL_FILE_GROUP_LOCKED    0x00000002
