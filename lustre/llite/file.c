@@ -6283,6 +6283,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 
 	/* take layout lock mutex to enqueue layout lock exclusively. */
 	mutex_lock(&lli->lli_layout_mutex);
+	lli->lli_layout_lock_owner = current;
 
 	while (1) {
 		/* mostly layout lock is caching on the local side, so try to
@@ -6304,6 +6305,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 
 	if (rc == 0)
 		*gen = ll_layout_version_get(lli);
+	lli->lli_layout_lock_owner = NULL;
 	mutex_unlock(&lli->lli_layout_mutex);
 
 	RETURN(rc);

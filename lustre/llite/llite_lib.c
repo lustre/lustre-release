@@ -1274,6 +1274,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_gid = (__u32) -1;
 	}
 	mutex_init(&lli->lli_layout_mutex);
+	lli->lli_layout_lock_owner = NULL;
 	/* ll_cl_context initialize */
 	INIT_LIST_HEAD(&lli->lli_lccs);
 	seqlock_init(&lli->lli_page_inv_lock);

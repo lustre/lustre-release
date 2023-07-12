@@ -235,6 +235,7 @@ static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,
 			 enum coo_inode_opc opc, void *data)
 {
 	struct inode *inode = vvp_object_inode(obj);
+	struct ll_inode_info *lli = ll_i2info(inode);
 	int rc = 0;
 
 	ENTRY;
@@ -252,16 +253,30 @@ static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,
 			rc = -ENOLCK;
 		break;
 	case COIO_SIZE_LOCK:
-		if (ll_i2info(inode)->lli_size_lock_owner != current)
+		if (lli->lli_size_lock_owner != current)
 			ll_inode_size_lock(inode);
 		else
 			rc = -EALREADY;
 		break;
 	case COIO_SIZE_UNLOCK:
-		if (ll_i2info(inode)->lli_size_lock_owner == current)
+		if (lli->lli_size_lock_owner == current)
 			ll_inode_size_unlock(inode);
 		else
 			rc = -ENOLCK;
+		break;
+	case COIO_LAYOUT_LOCK:
+		if (lli->lli_layout_lock_owner != current) {
+			mutex_lock(&lli->lli_layout_mutex);
+			lli->lli_layout_lock_owner = current;
+		}
+		break;
+	case COIO_LAYOUT_UNLOCK:
+		if (lli->lli_layout_lock_owner == current) {
+			lli->lli_layout_lock_owner = NULL;
+			mutex_unlock(&lli->lli_layout_mutex);
+		} else {
+			rc = -ENOLCK;
+		}
 		break;
 	default:
 		rc = -EINVAL;

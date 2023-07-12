@@ -1369,6 +1369,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	struct cl_object *top = cl_object_top(obj);
 	bool unlock_inode = false;
 	bool lock_inode_size = false;
+	bool lock_layout = false;
 	ENTRY;
 
 	if (conf->coc_opc == OBJECT_CONF_SET &&
@@ -1440,11 +1441,12 @@ retry:
 			/**
 			 * we need unlocked lov conf and get inode lock.
 			 * It's possible we have already taken inode's size
-			 * mutex, so we need keep such lock order, lest deadlock
-			 * happens:
-			 *   inode lock       (ll_inode_lock())
-			 *   inode size lock  (ll_inode_size_lock())
-			 *   lov conf lock    (lov_conf_lock())
+			 * mutex and/or layout mutex, so we need keep such lock
+			 * order, lest deadlock happens:
+			 *   inode lock        (ll_inode_lock())
+			 *   inode size lock   (ll_inode_size_lock())
+			 *   inode layout lock (ll_layout_refresh())
+			 *   lov conf lock     (lov_conf_lock())
 			 *
 			 * e.g.
 			 *   vfs_setxattr                inode locked
@@ -1453,10 +1455,20 @@ retry:
 			 *         ll_file_inode_init
 			 *           cl_conf_set
 			 *             lov_conf_set      lov conf locked
+			 *
+			 *   ll_migrate                  inode locked
+			 *     ...
+			 *       ll_layout_refresh       inode layout locked
+			 *         ll_layout_conf
+			 *           cl_conf_set
+			 *             lov_conf_set      lov conf locked
 			 */
 			lov_conf_unlock(lov);
-			if (cl_object_inode_ops(
-					env, top, COIO_SIZE_UNLOCK, NULL) == 0)
+			if (cl_object_inode_ops(env, top, COIO_LAYOUT_UNLOCK,
+						NULL) == 0)
+				lock_layout = true;
+			if (cl_object_inode_ops(env, top, COIO_SIZE_UNLOCK,
+						NULL) == 0)
 				lock_inode_size = true;
 
 			/* take lock in order */
@@ -1464,8 +1476,11 @@ retry:
 					env, top, COIO_INODE_LOCK, NULL) == 0)
 				unlock_inode = true;
 			if (lock_inode_size)
-				cl_object_inode_ops(
-					env, top, COIO_SIZE_LOCK, NULL);
+				cl_object_inode_ops(env, top, COIO_SIZE_LOCK,
+						    NULL);
+			if (lock_layout)
+				cl_object_inode_ops(env, top, COIO_LAYOUT_LOCK,
+						    NULL);
 			goto retry;
 		}
 		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);

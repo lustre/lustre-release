@@ -281,6 +281,7 @@ struct ll_inode_info {
 
 	/* mutex to request for layout lock exclusively. */
 	struct mutex			lli_layout_mutex;
+	struct task_struct 		*lli_layout_lock_owner;
 	/* Layout version, protected by lli_layout_lock */
 	__u32				lli_layout_gen;
 	spinlock_t			lli_layout_lock;
