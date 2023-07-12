@@ -578,7 +578,7 @@ void __cl_page_disown(const struct lu_env *env, struct cl_page *cp)
 int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io)
 {
 	struct cl_io *top = cl_io_top((struct cl_io *)io);
-	LINVRNT(cl_object_same(pg->cp_obj, io->ci_obj));
+	LINVRNT(cl_object_same(pg->cp_obj, top->ci_obj));
 	ENTRY;
 	RETURN(pg->cp_state == CPS_OWNED && pg->cp_owner == top);
 }
@@ -650,6 +650,7 @@ static int __cl_page_own(const struct lu_env *env, struct cl_io *io,
 	cl_page_state_set(env, cl_page, CPS_OWNED);
 	result = 0;
 out:
+	CDEBUG(D_INFO, "res %d\n", result);
 	PINVRNT(env, cl_page, ergo(result == 0,
 		cl_page_invariant(cl_page)));
 	RETURN(result);
@@ -693,7 +694,7 @@ void cl_page_assume(const struct lu_env *env,
 	struct page *vmpage;
 
 	ENTRY;
-	PINVRNT(env, cp, cl_object_same(cp->cp_obj, io->ci_obj));
+	PINVRNT(env, cp, cl_object_same(cp->cp_obj, cl_io_top(io)->ci_obj));
 
 	if (cp->cp_type == CPT_CACHEABLE) {
 		vmpage = cp->cp_vmpage;
@@ -754,7 +755,7 @@ EXPORT_SYMBOL(cl_page_unassume);
 void cl_page_disown(const struct lu_env *env,
                     struct cl_io *io, struct cl_page *pg)
 {
-	PINVRNT(env, pg, cl_page_is_owned(pg, io) ||
+	PINVRNT(env, pg, cl_page_is_owned(pg, cl_io_top(io)) ||
 		pg->cp_state == CPS_FREEING);
 
 	__cl_page_disown(env, pg);
