@@ -631,6 +631,31 @@ out:
 }
 
 /*
+ * jobid_print_current_comm()
+ *
+ * Print current comm name into the provided jobid buffer, and trim names of
+ * kernel threads like "kworker/0:0" to "kworker" or "ll_sa_12345" to "ll_sa"
+ *
+ * Return: number of chars printed to jobid
+ */
+static int jobid_print_current_comm(char *jobid, ssize_t joblen)
+{
+	const char *const names[] = {"kworker", "kswapd", "ll_sa", "ll_agl",
+				     "ldlm_bl", NULL};
+	int i;
+
+	if (current->flags & PF_KTHREAD) {
+		for (i = 0; names[i] != NULL; i++) {
+			if (strncmp(current->comm, names[i],
+				    strlen(names[i])) == 0)
+				return snprintf(jobid, joblen, "%s", names[i]);
+		}
+	}
+
+	return snprintf(jobid, joblen, "%s", current->comm);
+}
+
+/*
  * jobid_interpret_string()
  *
  * Interpret the jobfmt string to expand specified fields, like coredumps do:
@@ -670,7 +695,7 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 
 		switch ((f = *jobfmt++)) {
 		case 'e': /* executable name */
-			l = snprintf(jobid, joblen, "%s", current->comm);
+			l = jobid_print_current_comm(jobid, joblen);
 			break;
 		case 'g': /* group ID */
 			l = snprintf(jobid, joblen, "%u",
