@@ -149,6 +149,7 @@ struct kib_rej {
 /* peer_ni's msg queue size doesn't match mine */
 #define IBLND_REJECT_MSG_QUEUE_SIZE  7
 #define IBLND_REJECT_INVALID_SRV_ID  8
+#define IBLND_REJECT_EARLY	     9		/* NI not initialized yet */
 
 /***********************************************************************/
 

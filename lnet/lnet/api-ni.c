@@ -2550,10 +2550,6 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 		goto failed0;
 	}
 
-	lnet_ni_lock(ni);
-	ni->ni_state = LNET_NI_STATE_ACTIVE;
-	lnet_ni_unlock(ni);
-
 	/* We keep a reference on the loopback net through the loopback NI */
 	if (net->net_lnd->lnd_type == LOLND) {
 		lnet_ni_addref(ni);
@@ -2729,6 +2725,14 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 	lnet_net_lock(LNET_LOCK_EX);
 	list_splice_tail(&local_ni_list, &net_l->net_ni_list);
 	lnet_incr_dlc_seq();
+
+	list_for_each_entry(ni, &net_l->net_ni_list, ni_netlist) {
+		if (!ni)
+			break;
+		lnet_ni_lock(ni);
+		ni->ni_state = LNET_NI_STATE_ACTIVE;
+		lnet_ni_unlock(ni);
+	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* if the network is not unique then we don't want to keep
