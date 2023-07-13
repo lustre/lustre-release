@@ -93,7 +93,15 @@ endif # LINUX
 
 endif # MODULES
 
-all: undef.h
+all: plugins
+
+# compiler plugins should be built as soon as possible,
+# so they can be available to the rest of the build
+# system
+plugins: undef.h
+if CC_PLUGINS
+	$(MAKE) all -C cc-plugins
+endif # CC_PLUGINS
 
 undef.h: config.h.in
 	grep -v config.h.in config.h.in > $@
