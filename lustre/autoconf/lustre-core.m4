@@ -3597,7 +3597,7 @@ AC_DEFUN([LC_SRC_REGISTER_SHRINKER_FORMAT_NAMED], [
 ])
 AC_DEFUN([LC_REGISTER_SHRINKER_FORMAT_NAMED], [
 	AC_MSG_CHECKING([if register_shrinker() returns status])
-	LB2_LINUX_TEST_RESULT([address_space_operations_migrate_folio], [
+	LB2_LINUX_TEST_RESULT([register_shrinker_format], [
 		AC_DEFINE(HAVE_REGISTER_SHRINKER_FORMAT_NAMED, 1,
 			[register_shrinker() returns status])
 	])
@@ -3746,7 +3746,7 @@ AC_DEFUN([LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
 ])
 AC_DEFUN([LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
 	AC_MSG_CHECKING([if filemap_get_folios_contig() is available])
-	LB2_LINUX_TEST_RESULT([filldir_ctx_return_bool], [
+	LB2_LINUX_TEST_RESULT([filemap_get_folios_contig], [
 		AC_DEFINE(HAVE_FILEMAP_GET_FOLIOS_CONTIG, 1,
 			[filemap_get_folios_contig() is available])
 	])
