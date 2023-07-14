@@ -169,6 +169,19 @@ AS_IF([test "x$enable_modules" = xyes], [
 			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR])
 			LC_PROG_LINUX
 
+			# Run 'early' checks. The results of these are used in
+			# other configure tests:
+			LIBCFS_SRC_LOCKDEP_IS_HELD
+			LIBCFS_SRC_HAVE_WAIT_BIT_HEADER
+			LIBCFS_SRC_LINUX_BLK_INTEGRITY_HEADER
+
+			LB2_LINUX_TEST_COMPILE_ALL([early],
+				[for available lustre kapi interfaces])
+
+			LIBCFS_LOCKDEP_IS_HELD
+			LIBCFS_HAVE_WAIT_BIT_HEADER
+			LIBCFS_LINUX_BLK_INTEGRITY_HEADER
+
 			# Run any parallel compile tests
 			LB_PROG_LINUX_SRC
 			LIBCFS_PROG_LINUX_SRC

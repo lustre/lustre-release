@@ -1071,3 +1071,32 @@ AC_DEFUN([LB2_TEST_CHECK_CONFIG_IM], [
 		$3
 	])
 ]) # LB2_TEST_CHECK_CONFIG_IM
+
+#
+# LB2_CHECK_LINUX_HEADER_SRC
+#
+#   $1 - Header file
+#   $2 - Extra CFLAGS (ex: -Werror)
+#
+AC_DEFUN([LB2_CHECK_LINUX_HEADER_SRC], [
+	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
+	UNIQUE_ID=$(echo $1 | tr /. __)
+	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_${UNIQUE_ID}])
+	# Skip test write and build steps if the result is already known.
+	LB2_LINUX_CONFTEST_C([${UNIQUE_ID}], [LB_LANG_PROGRAM([@%:@include <$1>])])
+	LB2_LINUX_CONFTEST_MAKEFILE([${UNIQUE_ID}], [$2])
+	AS_VAR_POPDEF([lb_test])
+])
+
+#
+# LB2_CHECK_LINUX_HEADER_RESULT
+#
+#   $1 - Header file
+#   $2 - On Success
+#   $3 - On Failure
+#
+AC_DEFUN([LB2_CHECK_LINUX_HEADER_RESULT], [
+	AC_MSG_CHECKING([for linux header $1])
+	UNIQUE_ID=$(echo $1 | tr /. __)
+	LB2_LINUX_TEST_RESULT([${UNIQUE_ID}], [$2], [$3])
+])
