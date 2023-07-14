@@ -2346,15 +2346,6 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
 			 cfs_fail_val : (obd_timeout + 1) / 4);
 
-	/* Check if there is eviction in progress, and if so, wait for it to
-	 * finish */
-	if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
-		/* We do not care how long it takes */
-		wait_event_idle(
-			exp->exp_obd->obd_evict_inprogress_waitq,
-			!atomic_read(&exp->exp_obd->obd_evict_inprogress));
-	}
-
 	/* There must be big cache in current thread to process this request
 	 * if it is NULL then something went wrong and it wasn't allocated,
 	 * report -ENOMEM in that case */

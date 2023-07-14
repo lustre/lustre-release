@@ -3516,11 +3516,6 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 
 	ENTRY;
 
-	/* If there is eviction in progress, wait for it to finish. */
-	wait_event_idle(
-		exp->exp_obd->obd_evict_inprogress_waitq,
-		!atomic_read(&exp->exp_obd->obd_evict_inprogress));
-
 	/* Check if client was evicted or reconnected already. */
 	if (exp->exp_failed ||
 	    exp->exp_conn_cnt > lustre_msg_get_conn_cnt(req->rq_reqmsg)) {

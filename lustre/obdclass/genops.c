@@ -398,7 +398,6 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	/* recovery data */
 	spin_lock_init(&newdev->obd_recovery_task_lock);
 	init_waitqueue_head(&newdev->obd_next_transno_waitq);
-	init_waitqueue_head(&newdev->obd_evict_inprogress_waitq);
 	INIT_LIST_HEAD(&newdev->obd_req_replay_queue);
 	INIT_LIST_HEAD(&newdev->obd_lock_replay_queue);
 	INIT_LIST_HEAD(&newdev->obd_final_req_queue);
