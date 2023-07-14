@@ -5033,6 +5033,15 @@ mountmds() {
 	done
 }
 
+unmountoss() {
+	local num
+
+	for num in $(seq $OSTCOUNT); do
+		stop ost$num -f
+		rm -f $TMP/ost${num}active
+	done
+}
+
 mountoss() {
 	local num
 	local devname

@@ -4977,6 +4977,8 @@ test_135() {
 
 	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x32d
 	# Make sure lock replay server side never completes and errors out.
+	do_rpc_nodes $(facet_active_host ost1) \
+		load_module ../libcfs/libcfs/libcfs
 	do_facet ost1 "$LCTL set_param fail_val=20"
 	do_facet ost1 "$LCTL set_param fail_loc=0x32d"
 
@@ -4993,8 +4995,13 @@ test_135() {
 	change_active ost1
 	wait_for_facet ost1
 
+	do_rpc_nodes $(facet_active_host ost1) \
+		load_module ../libcfs/libcfs/libcfs
 	do_facet ost1 "$LCTL set_param fail_loc=0"
 	mount_facet ost1
+	unmountoss
+	mountoss
+	clients_up || clients_up || error "$LFS df $MOUNT failed"
 	echo blah > $DIR/$tdir/file.test2
 
 	rm -rf $DIR/$tdir
