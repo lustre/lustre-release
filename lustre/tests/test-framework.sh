@@ -3634,15 +3634,24 @@ wait_remote_prog () {
 	return $rc
 }
 
-lfs_df_check() {
+_lfs_df_check() {
 	local clients=${1:-$CLIENTS}
 	local rc=0
 
-	if [ -z "$clients" ]; then
+	if [[ -z "$clients" ]]; then
 		$LFS df $MOUNT > /dev/null || rc=$?
 	else
 		$PDSH $clients "$LFS df $MOUNT" > /dev/null || rc=$?
 	fi
+
+	return $rc
+}
+
+lfs_df_check() {
+	local clients=${1:-$CLIENTS}
+	local rc=0
+
+	_lfs_df_check "$clients" || rc=$?
 
 	check_lfs_df_ret_val $rc
 }
@@ -3675,7 +3684,8 @@ client_up() {
 }
 
 client_evicted() {
-    ! client_up $1
+	sleep 1
+	! _lfs_df_check $1
 }
 
 client_reconnect_try() {
