@@ -665,9 +665,6 @@ AS_IF([test x$enable_ldiskfs != xno],[
 		LB_SRC_JBD2_H_TOTAL_CREDITS
 		LB_SRC_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 		LB2_SRC_CHECK_CONFIG_IM([FS_ENCRYPTION])
-
-		LB2_LINUX_TEST_COMPILE_ALL([ldiskfs],
-			[for available ldiskfs ext4 interfaces])
 	])
 	AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [
 		LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD

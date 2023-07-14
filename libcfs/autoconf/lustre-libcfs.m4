@@ -2454,9 +2454,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 6.2
 	LIBCFS_SRC_TIMER_DELETE_SYNC
 	LIBCFS_SRC_TIMER_DELETE
-
-	LB2_LINUX_TEST_COMPILE_ALL([libcfs],
-		[for available kernel interfaces to libcfs])
 ])
 
 dnl #
