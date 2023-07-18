@@ -484,7 +484,7 @@ command_t cmdlist[] = {
 	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
 	 "specify link number <linkno>.\n"
 	 "usage: fid2path [--print-fid|-f] [--print-link|-c] [--link|-l <linkno>] "
-	 "<fsname|root> <fid>..."},
+	 "[--print0|-0] <fsname|root> <fid>..."},
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
@@ -9628,13 +9628,14 @@ static void rstripc(char *str, int c)
 static int lfs_fid2path(int argc, char **argv)
 {
 	struct option long_opts[] = {
+		{ .val = '0',	.name = "print0",	.has_arg = no_argument },
 		{ .val = 'c',	.name = "cur",	.has_arg = no_argument },
 		{ .val = 'c',	.name = "current",	.has_arg = no_argument },
 		{ .val = 'c',	.name = "print-link",	.has_arg = no_argument },
 		{ .val = 'f',	.name = "print-fid",	.has_arg = no_argument },
 		{ .val = 'l',	.name = "link",	.has_arg = required_argument },
 		{ .name = NULL } };
-	char short_opts[] = "cfl:pr:";
+	char short_opts[] = "0cfl:pr:";
 	bool print_link = false;
 	bool print_fid = false;
 	bool print_mnt_dir;
@@ -9644,12 +9645,16 @@ static int lfs_fid2path(int argc, char **argv)
 	long long recno = -1;
 	int linkno = -1;
 	char *endptr = NULL;
+	char link_separator = '\n';
 	int rc = 0;
 	int c;
 	int i;
 
 	while ((c = getopt_long(argc, argv, short_opts, long_opts, NULL)) != -1) {
 		switch (c) {
+		case '0':
+			link_separator = '\0';
+			break;
 		case 'c':
 			print_link = true;
 			break;
@@ -9774,10 +9779,10 @@ static int lfs_fid2path(int argc, char **argv)
 			 * Note that llapi_fid2path() returns "" for the root
 			 * FID. */
 
-			printf("%s%s%s\n",
+			printf("%s%s%s%c",
 			       print_mnt_dir ? mnt_dir : "",
-			       (print_mnt_dir || *path_buf == '\0') ? "/" : "",
-			       path_buf);
+			       (print_mnt_dir || *path_buf == '\0') ?
+			       "/" : "", path_buf, link_separator);
 
 			if (linkno >= 0)
 				/* specified linkno */

@@ -16,6 +16,9 @@ specified, or relative to the filesystem mount point if
 is provided.
 .SH OPTIONS
 .TP
+\fB\-0\fR, \fB\-\-print0\fR
+Print the full pathname, followed by a NUL character instead of the newline character.
+.TP
 \fB\-f\fR, \fB\-\-print\-fid\fR
 Print the FID with the path.
 .TP
@@ -31,6 +34,14 @@ pathname is needed for each file, use
 .TP
 .B $ lfs fid2path /mnt/testfs [0x200000403:0x11f:0x0]
 /mnt/testfs/etc/hosts
+.TP
+.B $ lfs fid2path -0 /mnt/lustre 0x200000401:0x6:0x0 | xargs --null
+/mnt/lustre/Test_
+.br
+ file /mnt/lustre/Link_
+.br
+ file
+
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-getstripe (1),

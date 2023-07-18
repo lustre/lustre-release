@@ -20808,6 +20808,34 @@ test_226c () {
 }
 run_test 226c "call path2fid and fid2path under remote dir with subdir mount"
 
+test_226e () {
+	(( $CLIENT_VERSION >= $(version_code 2.15.56) )) ||
+		skip "Need client at least version 2.15.56"
+
+	# Define filename with 'newline' and a space
+	local testfile="Test"$'\n'"file 01"
+	# Define link name with multiple 'newline' and a space
+	local linkfile="Link"$'\n'"file "$'\n'"01"
+	# Remove prior hard link
+	rm -f $DIR/"$linkfile"
+
+	# Create file
+	touch $DIR/"$testfile"
+	# Create link
+	ln $DIR/"$testfile" $DIR/"$linkfile"
+
+	local fid=$($LFS getstripe -F "$DIR/$testfile") ||
+		error "getstripe failed on $DIR/$testfile"
+
+	# Call with -0 option
+	local out1=$($LFS fid2path -0 $DIR $fid | xargs --null -n1 \
+		echo "FILE:" | grep -c "FILE:")
+
+	# With -0 option the output should be exactly 2 lines.
+	(( $out1 == 2 )) || error "fid2path -0 failed on $fid, $out1"
+}
+run_test 226e "Verify path2fid -0 option with newline and space"
+
 # LU-1299 Executing or running ldd on a truncated executable does not
 # cause an out-of-memory condition.
 test_227() {
