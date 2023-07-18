@@ -1,0 +1,42 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+source ${LBUILD_DIR}/lbuild-rhel
+
+DEVEL_PATH_ARCH_DELIMETER="."
+RPM_HELPERS_DIR="/usr/lib/rpm/openEuler"
+# Pkg which contains ext4 source code
+KERNEL_DEBUGINFO="kernel-debugsource-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el9.centos"
+# in kernel version and rpm names
+RMAC=$HOME/.rpmmacros
+grep '^%dist' $RMAC &> /dev/null || echo "%dist .${DISTRO/./}" >> $RMAC
+
+kernel_debuginfo_location() {
+	local base_url="https://repo.openeuler.org"
+	local distro=${DISTRO^^}
+    # convert OEYYMM.SPx to openEuler-YY.MM-LTS-SPx
+    distro=$(echo $distro | sed -E -e 's/OE/openEuler-/' \
+                -e 's/([0-9]{2})([0-9]{2})/\1.\2-/' \
+                -e 's/.(SP[0-9]+)/LTS-\1/')
+
+	echo "${base_url}/${distro}/update/$TARGET_ARCH/Packages"
+}
+
+
+eval "$(cat <<EOF
+unpack_linux_devel_rpm-${DISTROMAJ}() {
+    local callers_rpm="\$1"
+
+    unpack_linux_devel_rpm-rhel "\$callers_rpm"
+}
+
+find_linux_rpm-${DISTROMAJ}() {
+	local prefix="\$1"
+	local wanted_kernel="\$2"
+	local pathtorpms=\${3:-"\$KERNELRPMSBASE/\$lnxmaj/\$DISTROMAJ/\$TARGET_ARCH"}
+
+	find_linux_rpm-rhel "\$prefix" "\$wanted_kernel" "\$pathtorpms"
+}
+EOF
+)"

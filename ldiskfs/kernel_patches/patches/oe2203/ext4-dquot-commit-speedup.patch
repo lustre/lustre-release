@@ -1,0 +1,26 @@
+From 2f0c38b500b76273f2674276b3af721702210d9a Mon Sep 17 00:00:00 2001
+From: Xinliang Liu <xinliang.liu@linaro.org>
+Date: Fri, 1 Sep 2023 04:40:23 +0000
+Subject: [PATCH] ext4: dquot commit speedup
+
+Signed-off-by: Xinliang Liu <xinliang.liu@linaro.org>
+---
+ fs/ext4/super.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 59d219a..4af616e 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -6409,6 +6409,8 @@ static int ext4_mark_dquot_dirty(struct dquot *dquot)
+ 	/* Are we journaling quotas? */
+ 	if (ext4_has_feature_quota(sb) ||
+ 	    sbi->s_qf_names[USRQUOTA] || sbi->s_qf_names[GRPQUOTA]) {
++		if (test_bit(DQ_MOD_B, &dquot->dq_flags))
++			return 0;
+ 		dquot_mark_dquot_dirty(dquot);
+ 		return ext4_write_dquot(dquot);
+ 	} else {
+-- 
+2.33.0
+

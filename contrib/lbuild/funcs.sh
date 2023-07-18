@@ -165,7 +165,7 @@ autodetect_distro() {
 		if [[ "$lts_sp" != "n/a" ]]; then
 			lts_sp=${lts_sp##*-}
 			lts_sp=${lts_sp,,}
-			version="${version}${lts_sp}"
+			version="${version}.${lts_sp}"
 		fi
 		;;
             *)
@@ -222,7 +222,8 @@ autodetect_target() {
 	sles15.4) target="$(uname -r | cut -d . -f 1,2)-sles15sp4";;
           fc18)   target="3.x-fc18";;
 	  oe2203) target="5.10-oe2203";;
-       oe2203sp1) target="5.10-oe2203sp1";;
+       oe2203.sp1) target="5.10-oe2203sp1";;
+       oe2203.sp2) target="5.10-oe2203sp2";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
 

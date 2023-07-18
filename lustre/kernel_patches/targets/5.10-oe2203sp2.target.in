@@ -1,0 +1,21 @@
+lnxmaj="5.10.0"
+lnxrel="153.19.0.95.oe2203sp2"
+
+KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
+SERIES=""
+EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
+
+DEVEL_PATH_ARCH_DELIMETER="."
+OFED_VERSION=inkernel
+
+#SMP_ARCHS="i686 x86_64 ia64 ppc64"
+# openEuler doesn't use smp specific kernels
+SMP_ARCHS=""
+
+for cc in gcc ; do
+    if which $cc >/dev/null 2>/dev/null ; then
+        export CC=$cc
+        break
+    fi
+done

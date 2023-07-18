@@ -30,6 +30,7 @@ TBD Whamcloud
          vanilla linux 5.4.136  (ZFS + ldiskfs)
          5.10.0-60.94.0.118.oe2203 (openEuler 22.03 LTS)
          5.10.0-136.32.0.108.oe2203sp1 (openEuler 22.03 LTS SP1)
+         5.10.0-153.19.0.95.oe2203sp2 (openEuler 22.03 LTS SP2)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
          5.14.0-284.25.1.el9  (RHEL9.2)

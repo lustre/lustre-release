@@ -329,11 +329,8 @@ check_options() {
 		3.0-sles11)
 			CANONICAL_TARGET="sles11"
 			;;
-		5.10-oe2203)
+		5.10-oe2203*)
 			CANONICAL_TARGET="oe2203"
-			;;
-		5.10-oe2203sp1)
-			CANONICAL_TARGET="oe2203sp1"
 			;;
 	esac
 
