@@ -1211,6 +1211,9 @@ LB_CHECK_FILE([$GDS_PATH/nvfs-dma.h],
 )
 
 # lnet/utils/lnetconfig/liblnetconfig_netlink.c
+AS_IF([test "x$PKGCONF" = "x"],
+	[AC_MSG_ERROR([pkg-config package is required to configure Lustre])])
+
 AS_IF([test "x$enable_dist" = xno], [
 	PKG_CHECK_MODULES(LIBNL3, [libnl-genl-3.0 >= 3.1])
 ])
