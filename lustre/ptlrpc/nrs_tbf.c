@@ -1821,7 +1821,7 @@ nrs_tbf_generic_cmd_fini(struct nrs_tbf_cmd *cmd)
 #define NRS_TBF_EXPRESSION_DELIM	("=")
 
 static int
-nrs_tbf_opcode_list_parse(char *str, int len, unsigned long **bitmaptr);
+nrs_tbf_opcode_list_parse(char *str, unsigned long **bitmaptr);
 static int
 nrs_tbf_id_list_parse(char *str, struct list_head *id_list,
 		      enum nrs_tbf_flag tif);
@@ -1862,7 +1862,7 @@ nrs_tbf_expression_parse(char *str, struct list_head *cond_list)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_JOBID;
 	} else if (strcmp(field, "opcode") == 0) {
-		if (nrs_tbf_opcode_list_parse(str, len, &expr->te_opcodes) < 0)
+		if (nrs_tbf_opcode_list_parse(str, &expr->te_opcodes) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_OPCODE;
 	} else if (strcmp(field, "uid") == 0) {
@@ -2204,18 +2204,11 @@ nrs_tbf_opcode_cli_init(struct nrs_tbf_client *cli,
 
 #define MAX_OPCODE_LEN	32
 static int
-nrs_tbf_opcode_set_bit(const struct cfs_lstr *id, unsigned long *opcodes)
+nrs_tbf_opcode_set_bit(char *id, unsigned long *opcodes)
 {
-	int	op = 0;
-	char	opcode_str[MAX_OPCODE_LEN];
+	int op;
 
-	if (id->ls_len + 1 > MAX_OPCODE_LEN)
-		return -EINVAL;
-
-	memcpy(opcode_str, id->ls_str, id->ls_len);
-	opcode_str[id->ls_len] = '\0';
-
-	op = ll_str2opcode(opcode_str);
+	op = ll_str2opcode(id);
 	if (op < 0)
 		return -EINVAL;
 
@@ -2224,31 +2217,35 @@ nrs_tbf_opcode_set_bit(const struct cfs_lstr *id, unsigned long *opcodes)
 }
 
 static int
-nrs_tbf_opcode_list_parse(char *str, int len, unsigned long **bitmaptr)
+nrs_tbf_opcode_list_parse(char *orig, unsigned long **bitmaptr)
 {
 	unsigned long *opcodes;
-	struct cfs_lstr src;
-	struct cfs_lstr res;
+	char *str;
+	int cnt = 0;
 	int rc = 0;
 
 	ENTRY;
-	opcodes = bitmap_zalloc(LUSTRE_MAX_OPCODES, GFP_KERNEL);
-	if (!opcodes)
+	orig = kstrdup(orig, GFP_KERNEL);
+	if (!orig)
 		return -ENOMEM;
-
-	src.ls_str = str;
-	src.ls_len = len;
-	while (src.ls_str) {
-		rc = cfs_gettok(&src, ' ', &res);
-		if (rc == 0) {
-			rc = -EINVAL;
-			break;
-		}
-		rc = nrs_tbf_opcode_set_bit(&res, opcodes);
-		if (rc)
-			break;
+	opcodes = bitmap_zalloc(LUSTRE_MAX_OPCODES, GFP_KERNEL);
+	if (!opcodes) {
+		kfree(orig);
+		return -ENOMEM;
 	}
+	str = orig;
+	while (str && rc == 0) {
+		char *tok = strsep(&str, " ");
 
+		if (*tok) {
+			rc = nrs_tbf_opcode_set_bit(tok, opcodes);
+			cnt += 1;
+		}
+	}
+	if (cnt == 0)
+		rc = -EINVAL;
+
+	kfree(orig);
 	if (rc == 0 && bitmaptr)
 		*bitmaptr = opcodes;
 	else
@@ -2280,9 +2277,7 @@ static int nrs_tbf_opcode_parse(struct nrs_tbf_cmd *cmd, char *id)
 	strcpy(cmd->u.tc_start.ts_opcodes_str, id);
 
 	/* parse opcode list */
-	rc = nrs_tbf_opcode_list_parse(cmd->u.tc_start.ts_opcodes_str,
-				       strlen(cmd->u.tc_start.ts_opcodes_str),
-				       NULL);
+	rc = nrs_tbf_opcode_list_parse(cmd->u.tc_start.ts_opcodes_str, NULL);
 	if (rc)
 		nrs_tbf_opcode_cmd_fini(cmd);
 
@@ -2319,7 +2314,6 @@ static int nrs_tbf_opcode_rule_init(struct ptlrpc_nrs_policy *policy,
 		return 0;
 
 	rc = nrs_tbf_opcode_list_parse(rule->tr_opcodes_str,
-				       strlen(rule->tr_opcodes_str),
 				       &rule->tr_opcodes);
 	if (rc)
 		OBD_FREE(rule->tr_opcodes_str,
