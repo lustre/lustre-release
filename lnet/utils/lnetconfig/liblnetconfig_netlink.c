@@ -858,6 +858,29 @@ unwind:
 	}
 }
 
+static bool cleanup_children(struct yaml_nl_node *parent)
+{
+	struct yaml_nl_node *child;
+
+	if (nl_list_empty(&parent->children)) {
+		struct ln_key_props *keys = parent->keys.lkl_list;
+		int i;
+
+		for (i = 1; i < parent->keys.lkl_maxattr; i++)
+			if (keys[i].lkp_value)
+				free(keys[i].lkp_value);
+		nl_list_del(&parent->list);
+		return true;
+	}
+
+	while ((child = get_next_child(parent, 0)) != NULL) {
+		if (cleanup_children(child))
+			free(child);
+	}
+
+	return false;
+}
+
 /* This is the CB_VALID callback for the Netlink library that we
  * have hooked into. Any successful Netlink message is passed to
  * this function which handles both the incoming key tables and
@@ -877,6 +900,15 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 		if (lnet_genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX,
 				       scalar_attr_policy))
 			return NL_SKIP;
+
+		/* If root already exists this means we are updating the
+		 * key table. Free old key table.
+		 */
+		if (data->root && (nlh->nlmsg_flags & NLM_F_REPLACE)) {
+			cleanup_children(data->root);
+			free(data->root);
+			data->root = NULL;
+		}
 
 		if (attrs[LN_SCALAR_ATTR_LIST]) {
 			int rc = yaml_parse_key_list(data, NULL,
@@ -961,29 +993,6 @@ static int yaml_netlink_msg_error(struct sockaddr_nl *who,
 		data->complete = true;
 	}
 	return NL_STOP;
-}
-
-static bool cleanup_children(struct yaml_nl_node *parent)
-{
-	struct yaml_nl_node *child;
-
-	if (nl_list_empty(&parent->children)) {
-		struct ln_key_props *keys = parent->keys.lkl_list;
-		int i;
-
-		for (i = 1; i < parent->keys.lkl_maxattr; i++)
-			if (keys[i].lkp_value)
-				free(keys[i].lkp_value);
-		nl_list_del(&parent->list);
-		return true;
-	}
-
-	while ((child = get_next_child(parent, 0)) != NULL) {
-		if (cleanup_children(child))
-			free(child);
-	}
-
-	return false;
 }
 
 /* This is the libnl callback for when the last Netlink packet
