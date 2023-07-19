@@ -70,6 +70,7 @@
 #include <linux/errno.h>
 #include <linux/fiemap.h>
 #include <linux/types.h>
+#include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnet-types.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_ver.h>
@@ -953,7 +954,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER | \
 				OBD_CONNECT_FLAGS2)
 
-#define MGS_CONNECT_SUPPORTED2 OBD_CONNECT2_REP_MBITS
+#define MGS_CONNECT_SUPPORTED2	OBD_CONNECT2_REP_MBITS | \
+				OBD_CONNECT2_LARGE_NID
 
 /* Features required for this version of the client to work with server */
 #define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_FID |	\
@@ -2613,6 +2615,7 @@ struct mgs_send_param {
 #define MTI_NAME_MAXLEN  64
 #define MTI_PARAM_MAXLEN 4096
 #define MTI_NIDS_MAX     32
+
 struct mgs_target_info {
 	__u32		mti_lustre_ver;
 	__u32		mti_stripe_index;
@@ -2625,7 +2628,8 @@ struct mgs_target_info {
 	char		mti_uuid[sizeof(struct obd_uuid)];
 	__u64		mti_nids[MTI_NIDS_MAX]; /* host nids (lnet_nid_t) */
 	char		mti_params[MTI_PARAM_MAXLEN];
-};
+	char		mti_nidlist[][LNET_NIDSTR_SIZE];
+} __attribute__((packed));
 
 struct mgs_nidtbl_entry {
         __u64           mne_version;    /* table version of this entry */

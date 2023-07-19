@@ -44,6 +44,7 @@
 #include <libcfs/libcfs.h>
 
 #include <llog_swab.h>
+#include <lustre_disk.h>
 #include <lustre_net.h>
 #include <lustre_swab.h>
 #include <obd_cksum.h>
@@ -2076,7 +2077,12 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 	__swab32s(&mti->mti_flags);
 	__swab32s(&mti->mti_instance);
 	__swab32s(&mti->mti_nid_count);
-	BUILD_BUG_ON(sizeof(lnet_nid_t) != sizeof(__u64));
+	BUILD_BUG_ON(sizeof(lnet_nid_t) != sizeof(u64));
+
+	/* For NID string we never need to swab */
+	if (target_supports_large_nid(mti))
+		return;
+
 	for (i = 0; i < MTI_NIDS_MAX; i++)
 		__swab64s(&mti->mti_nids[i]);
 }

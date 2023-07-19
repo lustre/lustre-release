@@ -317,8 +317,19 @@ static int mgs_check_failover_reg(struct mgs_target_info *mti)
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
 			for (i = 0; i < mti->mti_nid_count; i++) {
 				struct lnet_nid nid2;
+				int rc;
 
-				lnet_nid4_to_nid(mti->mti_nids[i], &nid2);
+				if (target_supports_large_nid(mti)) {
+					rc = libcfs_strnid(&nid2, mti->mti_nidlist[i]);
+					if (rc < 0) {
+						LCONSOLE_WARN("NID %s is unsupported type or improper format\n",
+							      libcfs_nidstr(&nid));
+						return rc;
+					}
+				} else {
+					lnet_nid4_to_nid(mti->mti_nids[i], &nid2);
+				}
+
 				if (nid_same(&nid, &nid2)) {
 					LCONSOLE_WARN("Denying initial registration attempt from nid %s, specified as failover\n",
 						      libcfs_nidstr(&nid));
@@ -339,11 +350,11 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 	struct fs_db *b_fsdb = NULL; /* barrier fsdb */
 	struct fs_db *c_fsdb = NULL; /* config fsdb */
 	char barrier_name[20];
+	size_t mti_len = 0;
 	int opc;
 	int rc = 0;
 
 	ENTRY;
-
 	rc = lu_env_refill((struct lu_env *)tsi->tsi_env);
 	if (rc)
 		return err_serious(rc);
@@ -542,8 +553,21 @@ out_norevoke:
 		mti->mti_flags |= LDD_F_ERROR;
 
 	/* send back the whole mti in the reply */
+	if (target_supports_large_nid(mti)) {
+		size_t len = offsetof(struct mgs_target_info, mti_nidlist);
+		int err;
+
+		mti_len = mti->mti_nid_count * LNET_NIDSTR_SIZE;
+		err = req_capsule_server_grow(tsi->tsi_pill,
+					      &RMF_MGS_TARGET_INFO,
+					      len + mti_len);
+		if (err < 0)
+			RETURN(err);
+	}
 	rep_mti = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
 	*rep_mti = *mti;
+	if (target_supports_large_nid(mti))
+		memcpy(rep_mti->mti_nidlist, mti->mti_nidlist, mti_len);
 
 	/* Flush logs to disk */
 	dt_sync(tsi->tsi_env, mgs->mgs_bottom);

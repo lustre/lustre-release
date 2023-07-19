@@ -2162,6 +2162,7 @@ check_mgs_target_info(void)
 	CHECK_MEMBER(mgs_target_info, mti_uuid);
 	CHECK_MEMBER(mgs_target_info, mti_nids);
 	CHECK_MEMBER(mgs_target_info, mti_params);
+	CHECK_MEMBER(mgs_target_info, mti_nidlist[0]);
 }
 
 static void

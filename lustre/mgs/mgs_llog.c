@@ -2183,6 +2183,7 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 			last_step = -1;
 			got_an_osc_or_mdc = 0;
 			memset(tmti, 0, sizeof(*tmti));
+			tmti->mti_flags = mti->mti_flags;
 			rc = record_start_log(env, mgs, &mdt_llh,
 					      mti->mti_svname);
 			if (rc)
@@ -2209,6 +2210,7 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 			last_step = -1;
 			got_an_osc_or_mdc = 0;
 			memset(tmti, 0, sizeof(*tmti));
+			tmti->mti_flags = mti->mti_flags;
 			RETURN(rc);
 		}
 	}
@@ -2217,30 +2219,53 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 		RETURN(rc);
 
 	if (lcfg->lcfg_command == LCFG_ADD_UUID) {
-		__u64 nodenid = lcfg->lcfg_nid;
+		lnet_nid_t nodenid = lcfg->lcfg_nid;
+		char *nidstr = NULL;
+
 		if (!nodenid) {
-			char *nidstr = lustre_cfg_buf(lcfg, 2);
+			nidstr = lustre_cfg_buf(lcfg, 2);
 
-			if (nidstr) {
-				struct lnet_nid nid;
-
-				if (libcfs_strnid(&nid, nidstr) == 0 &&
-				    nid_is_nid4(&nid))
-					nodenid = lnet_nid_to_nid4(&nid);
-			}
+			if (!nidstr)
+				RETURN(-ENODEV);
 		}
 
 		if (strlen(tmti->mti_uuid) == 0) {
+			char *dst = NULL;
+
+			if (target_supports_large_nid(mti))
+				dst = tmti->mti_nidlist[tmti->mti_nid_count];
+
 			/* target uuid not set, this config record is before
 			 * LCFG_SETUP, this nid is one of target node nid.
 			 */
-			tmti->mti_nids[tmti->mti_nid_count] = nodenid;
+			if (nidstr) {
+				if (dst) {
+					rc = strscpy(dst, nidstr,
+						     sizeof(nidstr));
+					if (rc < 0)
+						RETURN(rc);
+				} else {
+					tmti->mti_nids[tmti->mti_nid_count] =
+						libcfs_str2nid(nidstr);
+				}
+			} else {
+				if (dst)
+					libcfs_nid2str_r(nodenid, dst,
+							 LNET_NIDSTR_SIZE);
+				else
+					tmti->mti_nids[tmti->mti_nid_count] =
+						nodenid;
+			}
 			tmti->mti_nid_count++;
 		} else {
-			char nidstr[LNET_NIDSTR_SIZE];
+			char tmp[LNET_NIDSTR_SIZE];
 
+			if (!nidstr) {
+				libcfs_nid2str_r(nodenid, tmp,
+						 LNET_NIDSTR_SIZE);
+				nidstr = tmp;
+			}
 			/* failover node nid */
-			libcfs_nid2str_r(nodenid, nidstr, sizeof(nidstr));
 			rc = add_param(tmti->mti_params, PARAM_FAILNODE,
 				       nidstr);
 		}
@@ -2311,13 +2336,14 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* fsdb->fsdb_mutex is already held  in mgs_write_log_target*/
-/* stealed from mgs_get_fsdb_from_llog*/
+/* fsdb->fsdb_mutex is already held in mgs_write_log_target */
+/* stealed from mgs_get_fsdb_from_llog */
 static int mgs_steal_llog_for_mdt_from_client(const struct lu_env *env,
 					      struct mgs_device *mgs,
 					      char *client_name,
 					      struct temp_comp *comp)
 {
+	size_t mti_len = offsetof(struct mgs_target_info, mti_nidlist);
 	struct llog_handle *loghandle;
 	struct mgs_target_info *tmti;
 	struct llog_ctxt *ctxt;
@@ -2328,10 +2354,17 @@ static int mgs_steal_llog_for_mdt_from_client(const struct lu_env *env,
 	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
 	LASSERT(ctxt != NULL);
 
-	OBD_ALLOC_PTR(tmti);
-	if (tmti == NULL)
+	/* Create the mti for the osp registered by mgc_write_log_osp_to_mdt().
+	 * The function mgs_steal_client_llog_handle() will fill in the rest.
+	 */
+	if (target_supports_large_nid(comp->comp_mti))
+		mti_len += comp->comp_mti->mti_nid_count * LNET_NIDSTR_SIZE;
+
+	OBD_ALLOC(tmti, mti_len);
+	if (!tmti)
 		GOTO(out_ctxt, rc = -ENOMEM);
 
+	tmti->mti_flags = comp->comp_mti->mti_flags;
 	comp->comp_tmti = tmti;
 	comp->comp_obd = mgs->mgs_obd;
 
@@ -2353,7 +2386,7 @@ static int mgs_steal_llog_for_mdt_from_client(const struct lu_env *env,
 out_close:
 	llog_close(env, loghandle);
 out_pop:
-	OBD_FREE_PTR(tmti);
+	OBD_FREE(tmti, mti_len);
 out_ctxt:
 	llog_ctxt_put(ctxt);
 	RETURN(rc);
@@ -2568,16 +2601,16 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 				    struct mgs_target_info *mti,
 				    char *logname, char *lmvname)
 {
+	char tmp[LNET_NIDSTR_SIZE], *nidstr;
 	struct llog_handle *llh = NULL;
 	char *mdcname = NULL;
 	char *nodeuuid = NULL;
 	char *mdcuuid = NULL;
 	char *lmvuuid = NULL;
 	char index[6];
-	char nidstr[LNET_NIDSTR_SIZE];
 	int i, rc;
-	ENTRY;
 
+	ENTRY;
 	if (mgs_log_is_empty(env, mgs, logname)) {
 		CERROR("log is empty! Logical error\n");
 		RETURN(-EINVAL);
@@ -2586,7 +2619,13 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 	CDEBUG(D_MGS, "adding mdc for %s to log %s:lmv(%s)\n",
 	       mti->mti_svname, logname, lmvname);
 
-	libcfs_nid2str_r(mti->mti_nids[0], nidstr, sizeof(nidstr));
+	if (!target_supports_large_nid(mti)) {
+		libcfs_nid2str_r(mti->mti_nids[0], tmp, sizeof(tmp));
+		nidstr = tmp;
+	} else {
+		nidstr = mti->mti_nidlist[0];
+	}
+
 	rc = name_create(&nodeuuid, nidstr, "");
 	if (rc)
 		RETURN(rc);
@@ -2612,13 +2651,19 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 			   "add mdc");
 	if (rc)
 		GOTO(out_end, rc);
+
 	for (i = 0; i < mti->mti_nid_count; i++) {
 		struct lnet_nid nid;
 
-		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
-		CDEBUG(D_MGS, "add nid %s for mdt\n",
-		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+		if (target_supports_large_nid(mti)) {
+			rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+			if (rc < 0)
+				GOTO(out_end, rc);
+		} else {
+			lnet_nid4_to_nid(mti->mti_nids[i], &nid);
+		}
 
+		CDEBUG(D_MGS, "add nid %s for mdt\n", libcfs_nidstr(&nid));
 		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
@@ -2702,6 +2747,7 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 				    struct mgs_target_info *mti,
 				    int mdt_index, char *logname)
 {
+	char tmp[LNET_NIDSTR_SIZE], *nidstr;
 	struct llog_handle	*llh = NULL;
 	char	*nodeuuid = NULL;
 	char	*ospname = NULL;
@@ -2711,7 +2757,6 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 	char	*mdtname = NULL;
 	char	*lovname = NULL;
 	char	index_str[16];
-	char	nidstr[LNET_NIDSTR_SIZE];
 	int	i, rc;
 
 	ENTRY;
@@ -2727,7 +2772,13 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	libcfs_nid2str_r(mti->mti_nids[0], nidstr, sizeof(nidstr));
+	if (!target_supports_large_nid(mti)) {
+		libcfs_nid2str_r(mti->mti_nids[0], tmp, sizeof(tmp));
+		nidstr = tmp;
+	} else {
+		nidstr = mti->mti_nidlist[0];
+	}
+
 	rc = name_create(&nodeuuid, nidstr, "");
 	if (rc)
 		GOTO(out_destory, rc);
@@ -2770,9 +2821,15 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 	for (i = 0; i < mti->mti_nid_count; i++) {
 		struct lnet_nid nid;
 
-		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
-		CDEBUG(D_MGS, "add nid %s for mdt\n",
-		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+		if (target_supports_large_nid(mti)) {
+			rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+			if (rc < 0)
+				GOTO(out_end, rc);
+		} else {
+			lnet_nid4_to_nid(mti->mti_nids[i], &nid);
+		}
+
+		CDEBUG(D_MGS, "add nid %s for mdt\n", libcfs_nidstr(&nid));
 		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
@@ -2905,6 +2962,7 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 	rc = mgs_write_log_mdt0(env, mgs, fsdb, mti);
 	if (rc)
 		RETURN(rc);
+
 	/* Append the mdt info to the client log */
 	rc = name_create(&cliname, mti->mti_fsname, "-client");
 	if (rc)
@@ -3007,6 +3065,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 				    char *logname, char *suffix, char *lovname,
 				    enum lustre_sec_part sec_part, int flags)
 {
+	char tmp[LNET_NIDSTR_SIZE], *nidstr;
 	struct llog_handle *llh = NULL;
 	char *nodeuuid = NULL;
 	char *oscname = NULL;
@@ -3014,10 +3073,9 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	char *lovuuid = NULL;
 	char *svname = NULL;
 	char index[6];
-	char nidstr[LNET_NIDSTR_SIZE];
 	int i, rc;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_INFO, "adding osc for %s to log %s\n",
 	       mti->mti_svname, logname);
 
@@ -3026,8 +3084,14 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	libcfs_nid2str_r(mti->mti_nids[0], nidstr, sizeof(nidstr));
-	rc = name_create(&nodeuuid, nidstr, "");
+	if (!target_supports_large_nid(mti)) {
+		libcfs_nid2str_r(mti->mti_nids[0], tmp, sizeof(tmp));
+		nidstr = tmp;
+	} else {
+		nidstr = mti->mti_nidlist[0];
+	}
+
+	rc = name_create(&nodeuuid, mti->mti_nidlist[0], "");
 	if (rc)
 		RETURN(rc);
 	rc = name_create(&svname, mti->mti_svname, "-osc");
@@ -3080,13 +3144,16 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	for (i = 0; i < mti->mti_nid_count; i++) {
 		struct lnet_nid nid;
 
-		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
-		CDEBUG(D_MGS, "add nid %s\n",
-		       libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr)));
+		rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+		if (rc < 0)
+			GOTO(out_end, rc);
+
+		CDEBUG(D_MGS, "add nid %s\n", libcfs_nidstr(&nid));
 		rc = record_add_uuid(env, llh, &nid, nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
 	}
+
 	rc = record_attach(env, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
 	if (rc)
 		GOTO(out_end, rc);

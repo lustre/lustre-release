@@ -4042,7 +4042,7 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 		 * in the nosquash_nids list */
 		matched = false;
 		i = 0;
-		while (LNetGetId(i++, &id) != -ENOENT) {
+		while (LNetGetId(i++, &id, false) != -ENOENT) {
 			if (nid_is_lo0(&id.nid))
 				continue;
 			if (cfs_match_nid(&id.nid,

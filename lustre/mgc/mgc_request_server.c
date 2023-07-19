@@ -180,16 +180,32 @@ static int mgc_fs_cleanup(const struct lu_env *env, struct obd_device *obd)
 static int mgc_target_register(struct obd_export *exp,
 			       struct mgs_target_info *mti)
 {
+	size_t mti_len = offsetof(struct mgs_target_info, mti_nidlist);
 	struct ptlrpc_request *req;
 	struct mgs_target_info *req_mti, *rep_mti;
 	int rc;
 
 	ENTRY;
-	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-					&RQF_MGS_TARGET_REG, LUSTRE_MGS_VERSION,
-					MGS_TARGET_REG);
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MGS_TARGET_REG);
 	if (!req)
 		RETURN(-ENOMEM);
+
+	server_mti_print("mgc_target_register: req", mti);
+	if (target_supports_large_nid(mti)) {
+		mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+
+		req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_INFO,
+				     RCL_CLIENT, mti_len);
+
+		req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_INFO,
+				     RCL_SERVER, mti_len);
+	}
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
 	req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
 	if (!req_mti) {
@@ -197,7 +213,7 @@ static int mgc_target_register(struct obd_export *exp,
 		RETURN(-ENOMEM);
 	}
 
-	memcpy(req_mti, mti, sizeof(*req_mti));
+	memcpy(req_mti, mti, mti_len);
 	ptlrpc_request_set_replen(req);
 	CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 	/* Limit how long we will wait for the enqueue to complete */
@@ -215,12 +231,18 @@ static int mgc_target_register(struct obd_export *exp,
 	if (ptlrpc_client_replied(req)) {
 		rep_mti = req_capsule_server_get(&req->rq_pill,
 						 &RMF_MGS_TARGET_INFO);
-		if (rep_mti)
-			memcpy(mti, rep_mti, sizeof(*rep_mti));
+		if (rep_mti) {
+			mti_len = offsetof(struct mgs_target_info, mti_nidlist);
+
+			if (target_supports_large_nid(mti))
+				mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+			memcpy(mti, rep_mti, mti_len);
+		}
 	}
 	if (!rc) {
 		CDEBUG(D_MGC, "register %s got index = %d\n",
 		       mti->mti_svname, mti->mti_stripe_index);
+		server_mti_print("mgc_target_register: rep", mti);
 	}
 	ptlrpc_req_finished(req);
 
@@ -238,11 +260,15 @@ int mgc_set_info_async_server(const struct lu_env *env,
 	ENTRY;
 	/* FIXME move this to mgc_process_config */
 	if (KEY_IS(KEY_REGISTER_TARGET)) {
-		struct mgs_target_info *mti;
+		size_t mti_len = offsetof(struct mgs_target_info, mti_nidlist);
+		struct mgs_target_info *mti = val;
 
-		if (vallen != sizeof(struct mgs_target_info))
+		if (target_supports_large_nid(mti))
+			mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+
+		if (vallen != mti_len)
 			RETURN(-EINVAL);
-		mti = (struct mgs_target_info *)val;
+
 		CDEBUG(D_MGC, "register_target %s %#x\n",
 		       mti->mti_svname, mti->mti_flags);
 		rc =  mgc_target_register(exp, mti);

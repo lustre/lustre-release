@@ -4105,7 +4105,7 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_GET_NI: {
 		struct lnet_processid id = {};
 
-		rc = LNetGetId(data->ioc_count, &id);
+		rc = LNetGetId(data->ioc_count, &id, false);
 		data->ioc_nid = lnet_nid_to_nid4(&id.nid);
 		return rc;
 	}
@@ -6259,15 +6259,16 @@ EXPORT_SYMBOL(LNetIsPeerLocal);
  * Retrieve the struct lnet_process_id ID of LNet interface at \a index.
  * Note that all interfaces share a same PID, as requested by LNetNIInit().
  *
- * \param index Index of the interface to look up.
- * \param id On successful return, this location will hold the
- * struct lnet_process_id ID of the interface.
+ * @index	Index of the interface to look up.
+ * @id		On successful return, this location will hold the
+ *		struct lnet_process_id ID of the interface.
+ * @large_nids	Report large NIDs if this is true.
  *
- * \retval 0 If an interface exists at \a index.
- * \retval -ENOENT If no interface has been found.
+ * RETURN	0 If an interface exists at \a index.
+ *		-ENOENT If no interface has been found.
  */
 int
-LNetGetId(unsigned int index, struct lnet_processid *id)
+LNetGetId(unsigned int index, struct lnet_processid *id, bool large_nids)
 {
 	struct lnet_ni	 *ni;
 	struct lnet_net  *net;
@@ -6280,9 +6281,9 @@ LNetGetId(unsigned int index, struct lnet_processid *id)
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			if (!nid_is_nid4(&ni->ni_nid))
-				/* FIXME this needs to be handled */
+			if (!large_nids && !nid_is_nid4(&ni->ni_nid))
 				continue;
+
 			if (index-- != 0)
 				continue;
 

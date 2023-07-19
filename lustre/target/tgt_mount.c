@@ -34,14 +34,11 @@
  *
  * Author: Nathan Rutman <nathan@clusterfs.com>
  */
-
-
 #define DEBUG_SUBSYSTEM S_CLASS
 #define D_MOUNT (D_SUPER | D_CONFIG /* | D_WARNING */)
-#define PRINT_CMD CDEBUG
-#define PRINT_MASK (D_SUPER | D_CONFIG)
 
 #include <linux/types.h>
+#include <linux/generic-radix-tree.h>
 #ifdef HAVE_LINUX_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
 #endif
@@ -1159,33 +1156,80 @@ static int server_stop_servers(int lsiflags)
 
 int server_mti_print(const char *title, struct mgs_target_info *mti)
 {
-	PRINT_CMD(PRINT_MASK, "mti %s\n", title);
-	PRINT_CMD(PRINT_MASK, "server: %s\n", mti->mti_svname);
-	PRINT_CMD(PRINT_MASK, "fs:     %s\n", mti->mti_fsname);
-	PRINT_CMD(PRINT_MASK, "uuid:   %s\n", mti->mti_uuid);
-	PRINT_CMD(PRINT_MASK, "ver: %d  flags: %#x\n",
-		  mti->mti_config_ver, mti->mti_flags);
+	CDEBUG(D_MOUNT, "mti - %s\n", title);
+	CDEBUG(D_MOUNT, "server: %s\n", mti->mti_svname);
+	CDEBUG(D_MOUNT, "fs:     %s\n", mti->mti_fsname);
+	CDEBUG(D_MOUNT, "uuid:   %s\n", mti->mti_uuid);
+	CDEBUG(D_MOUNT, "ver:    %d\n", mti->mti_config_ver);
+	CDEBUG(D_MOUNT,	"flags:\n");
+	if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
+		CDEBUG(D_MOUNT, "	 LDD_F_SV_TYPE_MDT\n");
+	if (mti->mti_flags & LDD_F_SV_TYPE_OST)
+		CDEBUG(D_MOUNT, "	 LDD_F_SV_TYPE_OST\n");
+	if (mti->mti_flags & LDD_F_SV_TYPE_MGS)
+		CDEBUG(D_MOUNT, "	 LDD_F_SV_TYPE_MGS\n");
+	if (mti->mti_flags & LDD_F_SV_ALL)
+		CDEBUG(D_MOUNT, "	 LDD_F_SV_ALL\n");
+	if (mti->mti_flags & LDD_F_NEED_INDEX)
+		CDEBUG(D_MOUNT, "	 LDD_F_NEED_INDEX\n");
+	if (mti->mti_flags & LDD_F_VIRGIN)
+		CDEBUG(D_MOUNT, "	 LDD_F_VIRIGIN\n");
+	if (mti->mti_flags & LDD_F_UPDATE)
+		CDEBUG(D_MOUNT, "	 LDD_F_UPDATE\n");
+	if (mti->mti_flags & LDD_F_REWRITE_LDD)
+		CDEBUG(D_MOUNT, "	 LDD_F_REWRITE_LDD\n");
+	if (mti->mti_flags & LDD_F_WRITECONF)
+		CDEBUG(D_MOUNT, "	 LDD_F_WRITECONF\n");
+	if (mti->mti_flags & LDD_F_PARAM)
+		CDEBUG(D_MOUNT, "	 LDD_F_PARAM\n");
+	if (mti->mti_flags & LDD_F_NO_PRIMNODE)
+		CDEBUG(D_MOUNT, "	 LDD_F_NO_PRIMNODE\n");
+	if (mti->mti_flags & LDD_F_IR_CAPABLE)
+		CDEBUG(D_MOUNT, "	 LDD_F_IR_CAPABLE\n");
+	if (mti->mti_flags & LDD_F_ERROR)
+		CDEBUG(D_MOUNT, "	 LDD_F_ERROR\n");
+	if (mti->mti_flags & LDD_F_PARAM2)
+		CDEBUG(D_MOUNT, "	 LDD_F_PARAM2\n");
+	if (mti->mti_flags & LDD_F_NO_LOCAL_LOGS)
+		CDEBUG(D_MOUNT, "	 LDD_F_NO_LOCAL_LOGS\n");
+
+	/* Upper 16 bits for target registering */
+	if (target_supports_large_nid(mti))
+		CDEBUG(D_MOUNT, "	 LDD_F_LARGE_NID\n");
+	if (mti->mti_flags & LDD_F_OPC_REG)
+		CDEBUG(D_MOUNT, "	 LDD_F_OPC_REG\n");
+	if (mti->mti_flags & LDD_F_OPC_UNREG)
+		CDEBUG(D_MOUNT, "	 LDD_F_OPC_UNREG\n");
+	if (mti->mti_flags & LDD_F_OPC_READY)
+		CDEBUG(D_MOUNT, "	 LDD_F_OPC_READY\n");
+
 	return 0;
 }
+EXPORT_SYMBOL(server_mti_print);
 
 /* Generate data for registration */
-static int server_lsi2mti(struct lustre_sb_info *lsi,
-			  struct mgs_target_info *mti)
+static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 {
-	struct lnet_processid id;
+	size_t len = offsetof(struct mgs_target_info, mti_nidlist);
+	GENRADIX(struct lnet_processid) plist;
+	struct lnet_processid id, *tmp;
+	struct mgs_target_info *mti;
+	bool large_nid = false;
+	int nid_count = 0;
 	int rc, i = 0;
 	int cplen = 0;
 
 	ENTRY;
 	if (!IS_SERVER(lsi))
-		RETURN(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 
-	if (strlcpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname))
-	    >= sizeof(mti->mti_svname))
-		RETURN(-E2BIG);
+	if (exp_connect_flags2(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp) &
+	    OBD_CONNECT2_LARGE_NID)
+		large_nid = true;
 
-	mti->mti_nid_count = 0;
-	while (LNetGetId(i++, &id) != -ENOENT) {
+	genradix_init(&plist);
+
+	while (LNetGetId(i++, &id, large_nid) != -ENOENT) {
 		if (nid_is_lo0(&id.nid))
 			continue;
 
@@ -1204,7 +1248,7 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 				       " on this node. 'network' option used in"
 				       " mkfs.lustre cannot be taken into"
 				       " account.\n");
-				RETURN(-EINVAL);
+				GOTO(free_list, mti = ERR_PTR(-EINVAL));
 			}
 		}
 
@@ -1213,42 +1257,72 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 				     PARAM_NETWORK, LNET_NID_NET(&id.nid)))
 			continue;
 
-		mti->mti_nids[mti->mti_nid_count] = lnet_nid_to_nid4(&id.nid);
-		mti->mti_nid_count++;
-		if (mti->mti_nid_count >= MTI_NIDS_MAX) {
-			CWARN("Only using first %d nids for %s\n",
-			      mti->mti_nid_count, mti->mti_svname);
-			break;
-		}
+		tmp = genradix_ptr_alloc(&plist, nid_count++, GFP_KERNEL);
+		if (!tmp)
+			GOTO(free_list, mti = ERR_PTR(-ENOMEM));
+
+		if (large_nid)
+			len += LNET_NIDSTR_SIZE;
+		*tmp = id;
 	}
 
-	if (mti->mti_nid_count == 0) {
+	if (nid_count == 0) {
 		CERROR("Failed to get NID for server %s, please check whether the target is specifed with improper --servicenode or --network options.\n",
-		       mti->mti_svname);
-		RETURN(-EINVAL);
+		       lsi->lsi_svname);
+		GOTO(free_list, mti = ERR_PTR(-EINVAL));
 	}
 
+	OBD_ALLOC(mti, len);
+	if (!mti)
+		GOTO(free_list, mti = ERR_PTR(-ENOMEM));
+
+	if (strlcpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname))
+	    >= sizeof(mti->mti_svname))
+		GOTO(free_mti, rc = -E2BIG);
+
+	mti->mti_nid_count = nid_count;
+	for (i = 0; i < mti->mti_nid_count; i++) {
+		tmp = genradix_ptr(&plist, i);
+
+		if (large_nid)
+			libcfs_nidstr_r(&tmp->nid, mti->mti_nidlist[i],
+					sizeof(mti->mti_nidlist[i]));
+		else
+			mti->mti_nids[i] = lnet_nid_to_nid4(&tmp->nid);
+	}
 	mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
 	mti->mti_config_ver = 0;
 
 	rc = server_name2fsname(lsi->lsi_svname, mti->mti_fsname, NULL);
-	if (rc != 0)
-		return rc;
+	if (rc < 0)
+		GOTO(free_mti, rc);
 
 	rc = server_name2index(lsi->lsi_svname, &mti->mti_stripe_index, NULL);
 	if (rc < 0)
-		return rc;
+		GOTO(free_mti, rc);
+
 	/* Orion requires index to be set */
 	LASSERT(!(rc & LDD_F_NEED_INDEX));
 	/* keep only LDD flags */
 	mti->mti_flags = lsi->lsi_flags & LDD_F_MASK;
 	if (mti->mti_flags & (LDD_F_WRITECONF | LDD_F_VIRGIN))
 		mti->mti_flags |= LDD_F_UPDATE;
+	/* use NID strings instead */
+	if (large_nid)
+		mti->mti_flags |= LDD_F_LARGE_NID;
 	cplen = strlcpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
 			sizeof(mti->mti_params));
 	if (cplen >= sizeof(mti->mti_params))
-		return -E2BIG;
-	return 0;
+		rc = -E2BIG;
+free_mti:
+	if (rc < 0) {
+		OBD_FREE(mti, len);
+		mti = ERR_PTR(rc);
+	}
+free_list:
+	genradix_free(&plist);
+
+	return mti;
 }
 
 /* Register an old or new target with the MGS. If needed MGS will construct
@@ -1258,42 +1332,36 @@ static int server_register_target(struct lustre_sb_info *lsi)
 {
 	struct obd_device *mgc = lsi->lsi_mgc;
 	struct mgs_target_info *mti = NULL;
+	size_t mti_len = sizeof(*mti);
 	bool must_succeed;
 	int rc;
 	int tried = 0;
 
 	ENTRY;
 	LASSERT(mgc);
-
-	if (!IS_SERVER(lsi))
-		RETURN(-EINVAL);
-
-	OBD_ALLOC_PTR(mti);
-	if (!mti)
-		RETURN(-ENOMEM);
-
-	rc = server_lsi2mti(lsi, mti);
-	if (rc < 0)
-		GOTO(out, rc);
+	mti = server_lsi2mti(lsi);
+	if (IS_ERR(mti))
+		GOTO(out, rc = PTR_ERR(mti));
 
 	CDEBUG(D_MOUNT, "Registration %s, fs=%s, %s, index=%04x, flags=%#x\n",
-	       mti->mti_svname, mti->mti_fsname,
-	       libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index,
-	       mti->mti_flags);
+	       mti->mti_svname, mti->mti_fsname, mti->mti_nidlist[0],
+	       mti->mti_stripe_index, mti->mti_flags);
 
 	/* we cannot ignore registration failure if MGS logs must be updated. */
 	must_succeed = !!(lsi->lsi_flags &
 		    (LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_WRITECONF |
 		     LDD_F_VIRGIN));
 	mti->mti_flags |= LDD_F_OPC_REG;
-
+	if (target_supports_large_nid(mti))
+		mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+	server_mti_print("server_register_target", mti);
 again:
 	/* Register the target */
 	/* FIXME use mgc_process_config instead */
 	rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
 				sizeof(KEY_REGISTER_TARGET),
 				KEY_REGISTER_TARGET,
-				sizeof(*mti), mti, NULL);
+				mti_len, mti, NULL);
 	if (rc < 0) {
 		if (mti->mti_flags & LDD_F_ERROR) {
 			LCONSOLE_ERROR_MSG(0x160,
@@ -1319,12 +1387,10 @@ again:
 			/* reset the error code for non-fatal error. */
 			rc = 0;
 		}
-		GOTO(out, rc);
 	}
 
+	OBD_FREE(mti, mti_len);
 out:
-	if (mti)
-		OBD_FREE_PTR(mti);
 	RETURN(rc);
 }
 
@@ -1337,40 +1403,35 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_device *mgc = lsi->lsi_mgc;
 	struct mgs_target_info *mti = NULL;
+	size_t mti_len = sizeof(*mti);
 	int rc;
 
 	ENTRY;
 	LASSERT(mgc);
-
-	if (!(IS_SERVER(lsi)))
-		RETURN(-EINVAL);
-
-	OBD_ALLOC_PTR(mti);
-	if (!mti)
-		RETURN(-ENOMEM);
-	rc = server_lsi2mti(lsi, mti);
-	if (rc < 0)
-		GOTO(out, rc);
+	mti = server_lsi2mti(lsi);
+	if (IS_ERR(mti))
+		GOTO(out, rc = PTR_ERR(mti));
 
 	mti->mti_instance = obd2obt(obd)->obt_instance;
 	mti->mti_flags |= LDD_F_OPC_READY;
+	if (target_supports_large_nid(mti))
+		mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+	server_mti_print("server_notify_target", mti);
 
 	/* FIXME use mgc_process_config instead */
 	rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
 				sizeof(KEY_REGISTER_TARGET),
 				KEY_REGISTER_TARGET,
-				sizeof(*mti), mti, NULL);
+				mti_len, mti, NULL);
 
 	/* Imperative recovery: if the mgs informs us to use IR? */
 	if (!rc && !(mti->mti_flags & LDD_F_ERROR) &&
 	    (mti->mti_flags & LDD_F_IR_CAPABLE))
 		lsi->lsi_flags |= LDD_F_IR_CAPABLE;
 
+	OBD_FREE(mti, mti_len);
 out:
-	if (mti)
-		OBD_FREE_PTR(mti);
 	RETURN(rc);
-
 }
 
 /* Start server targets: MDTs and OSTs */

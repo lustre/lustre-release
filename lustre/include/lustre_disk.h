@@ -184,11 +184,26 @@ struct lustre_sb_info {
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 #define     get_mount_fileset(sb)  (s2lsi(sb)->lsi_lmd->lmd_fileset)
 
+/* opc for target register, see also uapi/linux/lustre/lustre_disk.h.
+ * For mti_flags the lower 16 bits are used for mount options so these
+ * have to be masked out with LDD_F_MASK. Otherwise these values will
+ * be seen as unsupported mount options. Bit 16 is already used by
+ * LDD_F_NO_LOCAL_LOGS so 17 is next free bit.
+ */
+enum ldd_target_flags {
+	LDD_F_LARGE_NID		= BIT(17),	/* 0x20000 */
+};
+
+static inline bool target_supports_large_nid(struct mgs_target_info *mti)
+{
+	return mti->mti_flags & LDD_F_LARGE_NID;
+}
+
 # ifdef HAVE_SERVER_SUPPORT
 /* opc for target register */
-#define LDD_F_OPC_REG   0x10000000
-#define LDD_F_OPC_UNREG 0x20000000
-#define LDD_F_OPC_READY 0x40000000
+#define LDD_F_OPC_REG   0x10000000	/* bit 28 */
+#define LDD_F_OPC_UNREG 0x20000000	/* bit 29 */
+#define LDD_F_OPC_READY 0x40000000	/* bit 30 */
 #define LDD_F_OPC_MASK  0xf0000000
 
 #define LDD_F_MASK	0xFFFF

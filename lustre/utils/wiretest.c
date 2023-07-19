@@ -4699,6 +4699,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mgs_target_info, mti_params));
 	LASSERTF((int)sizeof(((struct mgs_target_info *)0)->mti_params) == 4096, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_target_info *)0)->mti_params));
+	LASSERTF((int)offsetof(struct mgs_target_info, mti_nidlist[0]) == 4544, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_target_info, mti_nidlist[0]));
+	LASSERTF((int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]) == 64, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]));
 
 	/* Checks for struct mgs_nidtbl_entry */
 	LASSERTF((int)sizeof(struct mgs_nidtbl_entry) == 24, "found %lld\n",

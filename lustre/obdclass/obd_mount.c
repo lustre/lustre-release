@@ -256,7 +256,7 @@ int lustre_start_mgc(struct super_block *sb)
 		} else if (IS_MGS(lsi)) {
 			struct lnet_processid id;
 
-			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+			while ((rc = LNetGetId(i++, &id, true)) != -ENOENT) {
 				if (nid_is_lo0(&id.nid))
 					continue;
 				nid = id.nid;
@@ -367,7 +367,7 @@ int lustre_start_mgc(struct super_block *sb)
 			/* Use local NIDs (including LO) */
 			struct lnet_processid id;
 
-			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+			while ((rc = LNetGetId(i++, &id, true)) != -ENOENT) {
 				rc = do_lcfg_nid(mgcname, &id.nid,
 						 LCFG_ADD_UUID,
 						 niduuid);
@@ -483,7 +483,8 @@ int lustre_start_mgc(struct super_block *sb)
 				  OBD_CONNECT_LVB_TYPE |
 				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER |
 				  OBD_CONNECT_FLAGS2;
-	data->ocd_connect_flags2 = OBD_CONNECT2_REP_MBITS;
+	data->ocd_connect_flags2 = OBD_CONNECT2_REP_MBITS |
+				   OBD_CONNECT2_LARGE_NID;
 
 	if (lmd_is_client(lsi->lsi_lmd) &&
 	    test_bit(LMD_FLG_NOIR, lsi->lsi_lmd->lmd_flags))

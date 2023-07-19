@@ -74,7 +74,7 @@ int LNetNIFini(void);
  *
  * \see LNetMEAttach
  * @{ */
-int LNetGetId(unsigned int index, struct lnet_processid *id);
+int LNetGetId(unsigned int index, struct lnet_processid *id, bool large_nids);
 int LNetDist(struct lnet_nid *nid, struct lnet_nid *srcnid, __u32 *order);
 void LNetPrimaryNID(struct lnet_nid *nid);
 bool LNetIsPeerLocal(struct lnet_nid *nid);

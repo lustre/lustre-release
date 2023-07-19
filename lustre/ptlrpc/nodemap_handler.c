@@ -270,7 +270,7 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 		int i = 0;
 
 		do {
-			rc = LNetGetId(i++, &id);
+			rc = LNetGetId(i++, &id, false);
 			if (rc < 0)
 				RETURN(ERR_PTR(-EINVAL));
 		} while (nid_is_lo0(&id.nid));

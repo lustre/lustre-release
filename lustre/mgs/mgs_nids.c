@@ -111,13 +111,15 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 	 */
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
 		int entry_len = sizeof(*entry);
+		int i;
 
 		if (tgt->mnt_version < version)
 			continue;
 
 		/* write target recover information */
 		mti  = &tgt->mnt_mti;
-		LASSERT(mti->mti_nid_count < MTI_NIDS_MAX);
+		if (!target_supports_large_nid(mti))
+			LASSERT(mti->mti_nid_count < MTI_NIDS_MAX);
 		entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
 
 		if (entry_len > unit_size) {
@@ -177,9 +179,36 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 		entry->mne_type      = tgt->mnt_type;
 		entry->mne_nid_type  = 0;
 		entry->mne_nid_size  = sizeof(lnet_nid_t);
-		entry->mne_nid_count = mti->mti_nid_count;
-		memcpy(entry->u.nids, mti->mti_nids,
-		       mti->mti_nid_count * sizeof(lnet_nid_t));
+		/* We have been sent the newer larger NID format but the
+		 * current nidtbl doesn't support it. So filter the NIDs
+		 * sent to reject any real larger size NIDS.
+		 */
+		if (target_supports_large_nid(mti)) {
+			entry->mne_nid_count = 0;
+
+			for (i = 0; i < mti->mti_nid_count; i++) {
+				struct lnet_nid nid;
+				int err;
+
+				err = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+				if (err < 0)
+					GOTO(out, rc = err);
+
+				/* if the large NID format represents a small
+				 * address space we can still pass it back to
+				 * the older clients.
+				 */
+				if (nid_is_nid4(&nid)) {
+					entry->u.nids[entry->mne_nid_count] =
+						lnet_nid_to_nid4(&nid);
+					entry->mne_nid_count++;
+				}
+			}
+		} else {
+			entry->mne_nid_count = mti->mti_nid_count;
+			memcpy(entry->u.nids, mti->mti_nids,
+			       mti->mti_nid_count * sizeof(lnet_nid_t));
+		}
 
 		version = tgt->mnt_version;
 		rc     += entry_len;
@@ -312,10 +341,10 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	struct mgs_nidtbl_target *tgt;
 	bool found = false;
 	int type = mti->mti_flags & LDD_F_SV_TYPE_MASK;
+	size_t mti_len = 0;
 	int rc = 0;
 
 	ENTRY;
-
 	type &= ~LDD_F_SV_TYPE_MGS;
 	LASSERT(type != 0);
 
@@ -330,8 +359,14 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 			break;
 		}
 	}
+
+	if (target_supports_large_nid(mti))
+		mti_len = mti->mti_nid_count * LNET_NIDSTR_SIZE;
 	if (!found) {
-		OBD_ALLOC_PTR(tgt);
+		size_t len = offsetof(struct mgs_nidtbl_target,
+				      mnt_mti.mti_nidlist);
+
+		OBD_ALLOC(tgt, len + mti_len);
 		if (!tgt)
 			GOTO(out, rc = -ENOMEM);
 
@@ -344,7 +379,9 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	}
 
 	tgt->mnt_version = ++tbl->mn_version;
-	tgt->mnt_mti     = *mti;
+	tgt->mnt_mti = *mti;
+	if (target_supports_large_nid(mti))
+		memcpy(tgt->mnt_mti.mti_nidlist, mti->mti_nidlist, mti_len);
 
 	list_move_tail(&tgt->mnt_list, &tbl->mn_targets);
 
@@ -362,6 +399,8 @@ out:
 static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 {
 	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
+	size_t len = offsetof(struct mgs_nidtbl_target,
+			      mnt_mti.mti_nidlist);
 	LIST_HEAD(head);
 
 	mutex_lock(&tbl->mn_lock);
@@ -371,11 +410,14 @@ static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 
 	while (!list_empty(&head)) {
 		struct mgs_nidtbl_target *tgt;
+		size_t mti_len = 0;
 
 		tgt = list_first_entry(&head, struct mgs_nidtbl_target,
 				       mnt_list);
+		if (target_supports_large_nid(&tgt->mnt_mti))
+			mti_len += tgt->mnt_mti.mti_nid_count * LNET_NIDSTR_SIZE;
 		list_del(&tgt->mnt_list);
-		OBD_FREE_PTR(tgt);
+		OBD_FREE(tgt, len + mti_len);
 	}
 }
 

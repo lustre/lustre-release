@@ -1681,7 +1681,7 @@ lstcon_new_session_id(struct lst_session_id *sid)
 
 	LASSERT(console_session.ses_state == LST_SESSION_NONE);
 
-	LNetGetId(1, &id);
+	LNetGetId(1, &id, true);
 	sid->ses_nid = id.nid;
 	sid->ses_stamp = div_u64(ktime_get_ns(), NSEC_PER_MSEC);
 }

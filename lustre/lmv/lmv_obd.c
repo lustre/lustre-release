@@ -1186,7 +1186,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * initialize rr_index to lower 32bit of netid, so that client
 	 * can distribute subdirs evenly from the beginning.
 	 */
-	while (LNetGetId(i++, &lnet_id) != -ENOENT) {
+	while (LNetGetId(i++, &lnet_id, false) != -ENOENT) {
 		if (!nid_is_lo0(&lnet_id.nid)) {
 			lmv->lmv_qos_rr_index = ntohl(lnet_id.nid.nid_addr[0]);
 			break;
@@ -1277,7 +1277,7 @@ static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
 	/* choose initial MDT for this client */
 	for (i = 0;; i++) {
 		struct lnet_processid lnet_id;
-		if (LNetGetId(i, &lnet_id) == -ENOENT)
+		if (LNetGetId(i, &lnet_id, false) == -ENOENT)
 			break;
 
 		if (!nid_is_lo0(&lnet_id.nid)) {
