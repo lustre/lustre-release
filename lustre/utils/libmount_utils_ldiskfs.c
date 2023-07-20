@@ -416,7 +416,7 @@ static bool is_e2fsprogs_feature_supp(const char *feature)
 
 	close(fd);
 
-	snprintf(cmd, sizeof(cmd), "%s -F %s %s 100 >/dev/null 2>&1",
+	snprintf(cmd, sizeof(cmd), "%s -F %s %s 200 >/dev/null 2>&1",
 		 MKE2FS, feature, imgname);
 	/* run_command() displays the output of mke2fs when it fails for
 	 * some feature, so use system() directly */
@@ -515,8 +515,6 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 
 	if (enable_64bit) {
 		append_unique(anchor, ",", "64bit", NULL, maxbuflen);
-		if (is_e2fsprogs_feature_supp("-O meta_bg"))
-			append_unique(anchor, ",", "meta_bg", NULL, maxbuflen);
 		append_unique(anchor, ",", "^resize_inode", NULL, maxbuflen);
 	}
 
@@ -879,14 +877,19 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	}
 
 	/* Avoid zeroing out the full journal - speeds up mkfs */
-	if (is_e2fsprogs_feature_supp("-E lazy_journal_init=0")) {
+	if (is_e2fsprogs_feature_supp("-E lazy_journal_init")) {
 		append_unique(start, ext_opts ? "," : " -E ",
-			      "lazy_journal_init", "0", maxbuflen);
+			      "lazy_journal_init", NULL, maxbuflen);
 		ext_opts = 1;
 	}
 	if (is_e2fsprogs_feature_supp("-E lazy_itable_init=0")) {
-		append_unique(start, ext_opts ? "," : "-E",
+		append_unique(start, ext_opts ? "," : " -E ",
 			    "lazy_itable_init", "0", maxbuflen);
+		ext_opts = 1;
+	}
+	if (is_e2fsprogs_feature_supp("-E packed_meta_blocks")) {
+		append_unique(start, ext_opts ? "," : " -E ",
+			      "packed_meta_blocks", NULL, maxbuflen);
 		ext_opts = 1;
 	}
 
