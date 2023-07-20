@@ -4454,8 +4454,8 @@ test_77ja(){
 		skip "Need OST version at least 2.11.50"
 	fi
 
-	test_id "u" "500" "5" "-u 500"
-	test_id "g" "500" "5" "-u 500 -g 500"
+	test_id "u" "$RUNAS_ID" "5" "-u $RUNAS_ID"
+	test_id "g" "$RUNAS_GID" "5" "-u $RUNAS_ID -g $RUNAS_GID"
 }
 run_test 77ja "check TBF-UID/GID NRS policy"
 
@@ -4463,8 +4463,8 @@ test_77jb() { # LU-16077
 	(( "$OST1_VERSION" >= $(version_code 2.15.51) )) ||
 		skip "Need OST version at least 2.15.51"
 
-	test_id "u" "500" "5" "-u 500" "-u 0 -g 500"
-	test_id "g" "500" "5" "-u 500 -g 500" "-u 500 -g 0"
+	test_id "u" "$RUNAS_ID" "5" "-u $RUNAS_ID" "-u 0 -g $RUNAS_GID"
+	test_id "g" "$RUNAS_GID" "5" "-u $RUNAS_ID -g $RUNAS_GID" "-u $RUNAS_ID -g 0"
 }
 run_test 77jb "check TBF-UID/GID NRS policy on files that don't belong to us"
 
@@ -4535,26 +4535,26 @@ test_77k() {
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_a" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_b" \
-			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ug\ uid={500}\&gid={1000}\ rate=5"
-	nrs_write_read "runas -u 500 -g 1000"
-	tbf_verify 5 5 "runas -u 500 -g 1000"
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ug\ uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rate=5"
+	nrs_write_read "runas -u $RUNAS_ID -g $RUNAS_GID"
+	tbf_verify 5 5 "runas -u $RUNAS_ID -g $RUNAS_GID"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_ug" \
-			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_uw\ uid={500}\&opcode={ost_write}\ rate=20" \
-			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ur\ uid={500}\&opcode={ost_read}\ rate=10"
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_uw\ uid={$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ur\ uid={$RUNAS_ID}\&opcode={ost_read}\ rate=10"
 
-	nrs_write_read "runas -u 500"
-	tbf_verify 20 10 "runas -u 500"
+	nrs_write_read "runas -u $RUNAS_ID"
+	tbf_verify 20 10 "runas -u $RUNAS_ID"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_uw" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_ur" \
-			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ uid={500},opcode={ost_write}\ rate=20" \
-			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ uid={500},opcode={ost_read}\ rate=10"
-	nrs_write_read "runas -u 500"
-	tbf_verify 10 10 "runas -u 500"
-	tbf_verify 20 10 "runas -u 500"
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ uid={$RUNAS_ID},opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ uid={$RUNAS_ID},opcode={ost_read}\ rate=10"
+	nrs_write_read "runas -u $RUNAS_ID"
+	tbf_verify 10 10 "runas -u $RUNAS_ID"
+	tbf_verify 20 10 "runas -u $RUNAS_ID"
 	cleanup_77k "ext_a ext_b" "fifo"
 }
 run_test 77k "check TBF policy with NID/JobID/OPCode expression"
