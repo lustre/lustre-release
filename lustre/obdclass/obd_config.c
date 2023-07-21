@@ -860,7 +860,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 #endif
 				obd->obd_no_recov = 1;
 				spin_unlock(&obd->obd_dev_lock);
-				if (OBP(obd, iocontrol)) {
+				if (obd->obd_type->typ_dt_ops->o_iocontrol) {
 					obd_iocontrol(OBD_IOC_SYNC,
 						      obd->obd_self_export,
 						      0, NULL, NULL);

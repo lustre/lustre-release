@@ -1806,8 +1806,8 @@ static void target_finish_recovery(struct lu_target *lut)
 	obd->obd_recovery_end = ktime_get_seconds();
 
 	/* When recovery finished, cleanup orphans on MDS and OST. */
-	if (obd->obd_type && OBP(obd, postrecov)) {
-		int rc = OBP(obd, postrecov)(obd);
+	if (obd->obd_type && obd->obd_type->typ_dt_ops->o_postrecov) {
+		int rc = obd->obd_type->typ_dt_ops->o_postrecov(obd);
 
 		if (rc < 0)
 			LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
@@ -2836,8 +2836,9 @@ static int target_recovery_thread(void *arg)
 
 	/* cancel update llogs upon recovery abort */
 	if (obd->obd_abort_recovery || obd->obd_abort_mdt_recovery)
-		OBP(obd, iocontrol)(OBD_IOC_LLOG_CANCEL, obd->obd_self_export,
-				    0, trd, NULL);
+		obd->obd_type->typ_dt_ops->o_iocontrol(OBD_IOC_LLOG_CANCEL,
+						       obd->obd_self_export,
+						       0, trd, NULL);
 
 	list_for_each_entry(req, &obd->obd_final_req_queue, rq_list) {
 		/*

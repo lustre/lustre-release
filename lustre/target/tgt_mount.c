@@ -1514,7 +1514,7 @@ static int server_start_targets(struct super_block *sb)
 	 */
 	if ((test_bit(LMD_FLG_ABORT_RECOV, lsi->lsi_lmd->lmd_flags) ||
 	    (test_bit(LMD_FLG_ABORT_RECOV_MDT, lsi->lsi_lmd->lmd_flags))) &&
-	    (OBP(obd, iocontrol))) {
+	    (obd->obd_type->typ_dt_ops->o_iocontrol)) {
 		struct obd_ioctl_data karg;
 
 		if (test_bit(LMD_FLG_ABORT_RECOV, lsi->lsi_lmd->lmd_flags))
