@@ -14452,6 +14452,35 @@ test_123f() {
 }
 run_test 123f "Retry mechanism with large wide striping files"
 
+test_123g() {
+	local dir=$DIR/$tdir
+	local num=1000
+
+	mkdir $dir || error "failed to mkdir $dir"
+	createmany -o $dir/$tfile $num || error "failed creatmany files"
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=clear
+	aheadmany -c stat -s 0 -e $num -b $tfile -d $dir ||
+		error "aheadmany $dir with $tfile failed"
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
+	$LCTL get_param -n llite.*.statahead_stats
+	$LCTL get_param -n mdc.*.batch_stats
+
+	local count
+
+	count=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/hit.total:/ {print $2}')
+	echo "Hit total: $count"
+	# Hit ratio should be >= 75%
+	(( $count > num * 75 / 100)) ||
+		error "hit total $count is be > 75% of $num"
+}
+run_test 123g "Test for stat-ahead advise"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
