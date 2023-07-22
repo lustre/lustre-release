@@ -208,6 +208,9 @@ static int lfsck_disable_master_lmv(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 0);
+
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
@@ -230,9 +233,6 @@ static int lfsck_disable_master_lmv(const struct lu_env *env,
 	dt_write_lock(env, obj, 0);
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 1);
-
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 0);
 
 	if (del_lmv) {
 		rc = dt_xattr_del(env, obj, XATTR_NAME_LMV, th);
@@ -1074,6 +1074,9 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 
 	LASSERT(lmv4 != lmv);
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(out, rc = 0);
+
 	lfsck_lmv_header_cpu_to_le(lmv4, lmv);
 	lfsck_buf_init(buf, lmv4, sizeof(*lmv4));
 
@@ -1106,9 +1109,6 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 1);
 
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 0);
-
 	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMV, 0, th);
 
 	GOTO(unlock, rc);
@@ -1123,6 +1123,8 @@ stop:
 
 log:
 	lfsck_ibits_unlock(&lh, LCK_EX);
+
+out:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK updated the %s LMV EA "
 	       "for the object "DFID": rc = %d\n",
 	       lfsck_lfsck2name(lfsck),

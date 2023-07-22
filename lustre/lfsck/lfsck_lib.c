@@ -622,6 +622,9 @@ static int lfsck_lpf_remove_name_entry(const struct lu_env *env,
 	int			 rc;
 	ENTRY;
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		RETURN(0);
+
 	rc = lfsck_lock(env, lfsck, parent, name, llh,
 			MDS_INODELOCK_UPDATE, LCK_PW);
 	if (rc != 0)
@@ -686,6 +689,9 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	int			 len	= sizeof(struct lfsck_bookmark);
 	int			 rc;
 	ENTRY;
+
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		RETURN(0);
 
 	cname = lfsck_name_get_const(env, name, strlen(name));
 	rc = linkea_links_new(&ldata, &lfsck_env_info(env)->lti_linkea_buf2,
@@ -841,6 +847,9 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	int			 len	= sizeof(struct lfsck_bookmark);
 	int			 rc;
 	ENTRY;
+
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		RETURN(0);
 
 	cname = lfsck_name_get_const(env, name, strlen(name));
 	rc = linkea_links_new(&ldata, &lfsck_env_info(env)->lti_linkea_buf2,

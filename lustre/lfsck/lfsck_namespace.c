@@ -532,6 +532,9 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 		GOTO(log, rc);
 	}
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 0);
+
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
@@ -696,6 +699,9 @@ static int lfsck_namespace_links_remove(const struct lu_env *env,
 
 	LASSERT(dt_object_remote(obj) == 0);
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(unlock, rc = 0);
+
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
@@ -711,9 +717,6 @@ static int lfsck_namespace_links_remove(const struct lu_env *env,
 	dt_write_lock(env, obj, 0);
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = -ENOENT);
-
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 0);
 
 	rc = dt_xattr_del(env, obj, XATTR_NAME_LINK, th);
 
@@ -975,6 +978,9 @@ again:
 	} else {
 		exist = false;
 	}
+
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 0);
 
 	cname->ln_name = info->lti_key;
 	cname->ln_namelen = namelen;
@@ -1713,6 +1719,9 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 	int				 rc	   = 0;
 	ENTRY;
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 0);
+
 	rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
 			      MDS_INODELOCK_UPDATE | MDS_INODELOCK_XATTR,
 			      LCK_EX);
@@ -2133,6 +2142,9 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 1);
+
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
@@ -2151,9 +2163,6 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 	dt_write_lock(env, obj, 0);
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 0);
-
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 1);
 
 	rc = dt_xattr_set(env, obj, &linkea_buf,
 			  XATTR_NAME_LINK, 0, th);
@@ -2239,6 +2248,9 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(unlock1, rc = 1);
+
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
@@ -2282,9 +2294,6 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	 * object by race. */
 	if (!lu_fid_eq(&tfid, &cfid))
 		GOTO(unlock2, rc = 0);
-
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock2, rc = 1);
 
 	rc = dt_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0)
@@ -2379,6 +2388,9 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	LASSERT(!dt_object_remote(obj));
 	LASSERT(S_ISDIR(lfsck_object_type(obj)));
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 1);
+
 	rc = linkea_links_new(&ldata, &info->lti_big_buf, cname, pfid);
 	if (rc != 0)
 		GOTO(log, rc);
@@ -2413,9 +2425,6 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	dt_write_lock(env, obj, 0);
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 0);
-
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 1);
 
 	/* The old ".." name entry maybe not exist. */
 	dt_delete(env, obj, (const struct dt_key *)dotdot, th);
@@ -3104,6 +3113,12 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 
 	LASSERT(!dt_object_remote(obj));
 
+	if (ns->ln_flags & LF_INCOMPLETE)
+		GOTO(log, rc = 0);
+
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 1);
+
 	rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
 			      MDS_INODELOCK_UPDATE, LCK_PW);
 	if (rc != 0)
@@ -3130,9 +3145,6 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	 * object with another name, so we cannot know whether this linkEA
 	 * is valid or not. So keep it there and maybe resolved when next
 	 * LFSCK run. */
-	if (ns->ln_flags & LF_INCOMPLETE)
-		GOTO(unlock, rc = 0);
-
 	rc = dt_attr_get(env, obj, la);
 	if (rc != 0)
 		GOTO(unlock, rc = (rc == -ENOENT ? 0 : rc));
@@ -3150,8 +3162,6 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 		GOTO(unlock, rc = 0);
 
 	la->la_nlink = ldata.ld_leh->leh_reccount;
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 1);
 
 	rc = dt_attr_set(env, obj, la, th);
 
@@ -3464,6 +3474,9 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 
 	LASSERT(!dt_object_remote(obj));
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(log, rc = 1);
+
 	rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
 			      MDS_INODELOCK_UPDATE, LCK_PW);
 	if (rc != 0)
@@ -3492,9 +3505,6 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 		GOTO(unlock, rc = 0);
 
 	ldata->ld_leh->leh_overflow_time = 0;
-	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 1);
-
 	lfsck_buf_init(&linkea_buf, ldata->ld_buf->lb_buf,
 		       ldata->ld_leh->leh_len);
 	rc = dt_xattr_set(env, obj, &linkea_buf, XATTR_NAME_LINK, 0, th);
@@ -6142,6 +6152,9 @@ static int lfsck_namespace_scan_local_lpf_one(const struct lu_env *env,
 		GOTO(out, rc = -ENOENT);
 	}
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		GOTO(out, rc = 1);
+
 	LASSERT(!dt_object_remote(child));
 
 	idx = lfsck_sub_trace_file_fid2idx(&ent->lde_fid);
@@ -6907,6 +6920,9 @@ int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
 	if (!S_ISDIR(lfsck_object_type(obj)))
 		RETURN(-ENOTDIR);
 
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		RETURN(0);
+
 	rc = lfsck_links_read_with_rec(env, obj, &ldata);
 	if (rc == -ENODATA) {
 		dirty = true;
@@ -7019,6 +7035,9 @@ int lfsck_update_name_entry(const struct lu_env *env,
 	int			  rc;
 	bool			  exists = true;
 	ENTRY;
+
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+		RETURN(0);
 
 	rc = lfsck_lock(env, lfsck, dir, name, llh,
 			MDS_INODELOCK_UPDATE, LCK_PW);
