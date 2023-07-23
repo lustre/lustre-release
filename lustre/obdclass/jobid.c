@@ -60,7 +60,7 @@ struct jobid_pid_map {
 	spinlock_t		jp_lock; /* protects jp_jobid */
 	char			jp_jobid[LUSTRE_JOBID_SIZE];
 	unsigned int		jp_joblen;
-	atomic_t		jp_refcount;
+	struct kref		jp_refcount;
 	pid_t			jp_pid;
 };
 
@@ -447,13 +447,13 @@ static int jobid_should_free_item(void *obj, void *data)
 		return 0;
 
 	if (jobid == NULL) {
-		WARN_ON_ONCE(atomic_read(&pidmap->jp_refcount) != 1);
+		WARN_ON_ONCE(kref_read(&pidmap->jp_refcount) != 1);
 		return 1;
 	}
 
 	spin_lock(&pidmap->jp_lock);
 	/* prevent newly inserted items from deleting */
-	if (jobid[0] == '\0' && atomic_read(&pidmap->jp_refcount) == 1)
+	if (jobid[0] == '\0' && kref_read(&pidmap->jp_refcount) == 1)
 		rc = 1;
 	else if (ktime_get_real_seconds() - pidmap->jp_time > DELETE_INTERVAL)
 		rc = 1;
@@ -561,7 +561,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 		 * hash list, init @jp_refcount as 1 to make sure memory
 		 * could be not freed during access.
 		 */
-		atomic_set(&pidmap->jp_refcount, 1);
+		kref_init(&pidmap->jp_refcount);
 
 		/*
 		 * Add the newly created map to the hash, on key collision we
@@ -819,7 +819,16 @@ static void jobid_get(struct cfs_hash *hs, struct hlist_node *hnode)
 
 	pidmap = hlist_entry(hnode, struct jobid_pid_map, jp_hash);
 
-	atomic_inc(&pidmap->jp_refcount);
+	kref_get(&pidmap->jp_refcount);
+}
+
+static void jobid_put_locked_free(struct kref *kref)
+{
+	struct jobid_pid_map *pidmap = container_of(kref, struct jobid_pid_map,
+						    jp_refcount);
+
+	CDEBUG(D_INFO, "Freeing: %d->%s\n", pidmap->jp_pid, pidmap->jp_jobid);
+	OBD_FREE_PTR(pidmap);
 }
 
 static void jobid_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -830,13 +839,8 @@ static void jobid_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 		return;
 
 	pidmap = hlist_entry(hnode, struct jobid_pid_map, jp_hash);
-	LASSERT(atomic_read(&pidmap->jp_refcount) > 0);
-	if (atomic_dec_and_test(&pidmap->jp_refcount)) {
-		CDEBUG(D_INFO, "Freeing: %d->%s\n",
-		       pidmap->jp_pid, pidmap->jp_jobid);
-
-		OBD_FREE_PTR(pidmap);
-	}
+	LASSERT(kref_read(&pidmap->jp_refcount) > 0);
+	kref_put(&pidmap->jp_refcount, jobid_put_locked_free);
 }
 
 static struct cfs_hash_ops jobid_hash_ops = {
