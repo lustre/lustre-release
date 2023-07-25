@@ -599,7 +599,7 @@ static int mdc_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 	ENTRY;
 
 	/* needed only for glimpse from an old server (< 2.14) */
-	if (glimpse && !exp_connect_dom_lvb(exp))
+	if (glimpse && !exp_connect_dom_lvb(exp) && errcode >= 0)
 		rc = mdc_fill_lvb(&req->rq_pill, &ols->ols_lvb);
 
 	if (glimpse && errcode == ELDLM_LOCK_ABORTED) {
