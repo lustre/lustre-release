@@ -1192,8 +1192,7 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 	INIT_LIST_HEAD(&rule->tr_nids);
 	if (!list_empty(&start->u.tc_start.ts_nids)) {
 		if (cfs_parse_nidlist(rule->tr_nids_str,
-				      strlen(rule->tr_nids_str),
-				      &rule->tr_nids) <= 0) {
+				      &rule->tr_nids) < 0) {
 			CERROR("nids {%s} illegal\n",
 			       rule->tr_nids_str);
 			OBD_FREE(rule->tr_nids_str,
@@ -1253,8 +1252,7 @@ static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, char *id)
 
 	/* parse NID list */
 	if (cfs_parse_nidlist(cmd->u.tc_start.ts_nids_str,
-			      strlen(cmd->u.tc_start.ts_nids_str),
-			      &cmd->u.tc_start.ts_nids) <= 0) {
+			      &cmd->u.tc_start.ts_nids) < 0) {
 		nrs_tbf_nid_cmd_fini(cmd);
 		return -EINVAL;
 	}
@@ -1854,7 +1852,7 @@ nrs_tbf_expression_parse(char *str, struct list_head *cond_list)
 	len -= 2;
 
 	if (strcmp(field, "nid") == 0) {
-		if (cfs_parse_nidlist(str, len, &expr->te_cond) <= 0)
+		if (cfs_parse_nidlist(str, &expr->te_cond) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_NID;
 	} else if (strcmp(field, "jobid") == 0) {

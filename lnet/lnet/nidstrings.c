@@ -157,11 +157,11 @@ struct addrrange {
  * \retval -errno otherwise
  */
 static int
-parse_addrange(const struct cfs_lstr *src, struct nidrange *nidrange)
+parse_addrange(char *str, struct nidrange *nidrange)
 {
 	struct addrrange *addrrange;
 
-	if (src->ls_len == 1 && src->ls_str[0] == '*') {
+	if (strcmp(str, "*") == 0) {
 		nidrange->nr_all = 1;
 		return 0;
 	}
@@ -172,8 +172,7 @@ parse_addrange(const struct cfs_lstr *src, struct nidrange *nidrange)
 	list_add_tail(&addrrange->ar_link, &nidrange->nr_addrranges);
 	INIT_LIST_HEAD(&addrrange->ar_numaddr_ranges);
 
-	return nidrange->nr_netstrfns->nf_parse_addrlist(src->ls_str,
-						src->ls_len,
+	return nidrange->nr_netstrfns->nf_parse_addrlist(str, strlen(str),
 						&addrrange->ar_numaddr_ranges);
 }
 
@@ -188,30 +187,26 @@ parse_addrange(const struct cfs_lstr *src, struct nidrange *nidrange)
  * \retval NULL if \a src does not match any network
  */
 static struct nidrange *
-add_nidrange(const struct cfs_lstr *src,
-	     struct list_head *nidlist)
+add_nidrange(char *str, struct list_head *nidlist)
 {
 	struct netstrfns *nf;
 	struct nidrange *nr;
-	int endlen;
-	unsigned netnum;
+	char *end;
+	unsigned int netnum;
 
-	if (src->ls_len >= LNET_NIDSTR_SIZE)
-		return NULL;
-
-	nf = libcfs_namenum2netstrfns(src->ls_str);
+	nf = libcfs_namenum2netstrfns(str);
 	if (nf == NULL)
 		return NULL;
-	endlen = src->ls_len - strlen(nf->nf_name);
-	if (endlen == 0)
+	end = str + strlen(nf->nf_name);
+	if (!*end) {
 		/* network name only, e.g. "elan" or "tcp" */
 		netnum = 0;
-	else {
+	} else {
 		/* e.g. "elan25" or "tcp23", refuse to parse if
 		 * network name is not appended with decimal or
-		 * hexadecimal number */
-		if (!cfs_str2num_check(src->ls_str + strlen(nf->nf_name),
-				       endlen, &netnum, 0, MAX_NUMERIC_VALUE))
+		 * hexadecimal number
+		 */
+		if (kstrtouint(end, 0, &netnum) != 0)
 			return NULL;
 	}
 
@@ -238,32 +233,34 @@ add_nidrange(const struct cfs_lstr *src,
 /**
  * Parses \<nidrange\> token of the syntax.
  *
- * \retval 1 if \a src parses to \<addrrange\> '@' \<net\>
- * \retval 0 otherwise
+ * \retval 0 if \a src parses to \<addrrange\> '@' \<net\>
+ * \retval -EINVAL otherwise
  */
 static int
-parse_nidrange(struct cfs_lstr *src, struct list_head *nidlist)
+parse_nidrange(char *str, struct list_head *nidlist)
 {
-	struct cfs_lstr addrrange;
-	struct cfs_lstr net;
+	char *addrrange;
+	char *net;
 	struct nidrange *nr;
 
-	if (cfs_gettok(src, '@', &addrrange) == 0)
+	addrrange = strim(strsep(&str, "@"));
+	if (!str)
 		goto failed;
 
-	if (cfs_gettok(src, '@', &net) == 0 || src->ls_str != NULL)
+	net = strim(str);
+	if (strchr(net, '@') != NULL || !*net)
 		goto failed;
 
-	nr = add_nidrange(&net, nidlist);
+	nr = add_nidrange(net, nidlist);
 	if (nr == NULL)
 		goto failed;
 
-	if (parse_addrange(&addrrange, nr) != 0)
+	if (parse_addrange(addrrange, nr) != 0)
 		goto failed;
 
-	return 1;
-failed:
 	return 0;
+failed:
+	return -EINVAL;
 }
 
 /**
@@ -321,32 +318,33 @@ EXPORT_SYMBOL(cfs_free_nidlist);
  * str.
  * \see cfs_match_nid
  *
- * \retval 1 on success
- * \retval 0 otherwise
+ * \retval 0 on success
+ * \retval -errno otherwise (-ENOMEM or -EINVAL)
  */
 int
-cfs_parse_nidlist(char *str, int len, struct list_head *nidlist)
+cfs_parse_nidlist(char *orig, struct list_head *nidlist)
 {
-	struct cfs_lstr src;
-	struct cfs_lstr res;
-	int rc;
+	int rc = 0;
+	char *str;
 
-	src.ls_str = str;
-	src.ls_len = len;
+	orig = kstrdup(orig, GFP_KERNEL);
+	if (!orig)
+		return -ENOMEM;
+
 	INIT_LIST_HEAD(nidlist);
-	while (src.ls_str) {
-		rc = cfs_gettok(&src, ' ', &res);
-		if (rc == 0) {
-			cfs_free_nidlist(nidlist);
-			return 0;
-		}
-		rc = parse_nidrange(&res, nidlist);
-		if (rc == 0) {
-			cfs_free_nidlist(nidlist);
-			return 0;
-		}
+	str = orig;
+	while (rc == 0 && str) {
+		char *tok = strsep(&str, " ");
+
+		if (*tok)
+			rc = parse_nidrange(tok, nidlist);
 	}
-	return 1;
+	kfree(orig);
+	if (rc)
+		cfs_free_nidlist(nidlist);
+	else if (list_empty(nidlist))
+		rc = -EINVAL;
+	return rc;
 }
 EXPORT_SYMBOL(cfs_parse_nidlist);
 

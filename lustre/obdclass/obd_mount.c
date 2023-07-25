@@ -1305,7 +1305,7 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 	tmp = *endp;
 	*endp = '\0';
 
-	if (cfs_parse_nidlist(buf, strlen(buf), &nidlist) <= 0)
+	if (cfs_parse_nidlist(buf, &nidlist) < 0)
 		rc = 1;
 	cfs_free_nidlist(&nidlist);
 

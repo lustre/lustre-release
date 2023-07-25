@@ -103,7 +103,11 @@ int libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 int libcfs_num_parse(char *str, int len, struct list_head *list);
 char *libcfs_id2str(struct lnet_process_id id);
 void cfs_free_nidlist(struct list_head *list);
+#ifdef __KERNEL__
+int cfs_parse_nidlist(char *str, struct list_head *list);
+#else
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
+#endif
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(struct lnet_nid *nid, struct list_head *list);
 int cfs_match_net(__u32 net_id, __u32 net_type,
