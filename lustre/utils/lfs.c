@@ -4151,7 +4151,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			xattr = optarg;
 			break;
 		case 'W':
-			if (!migrate_mode) {
+			if (!migrate_mode && !mirror_mode) {
 				fprintf(stderr,
 					"--bandwidth is valid only for migrate and mirror mode\n");
 				goto error;
