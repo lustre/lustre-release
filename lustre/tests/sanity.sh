@@ -3505,6 +3505,45 @@ test_27U() {
 }
 run_test 27U "append pool and stripe count work with composite default layout"
 
+test_27V() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+
+	local dir=$DIR/$tdir
+	local osp_param=osp.$FSNAME-OST0000-osc-MDT0000.max_create_count
+	local lod_param=lod.$FSNAME-MDT0000-mdtlov.qos_threshold_rr
+	local saved_max=$(do_facet mds1 $LCTL get_param -n $osp_param)
+	local saved_qos=$(do_facet mds1 $LCTL get_param -n $lod_param)
+	local pid
+
+	stack_trap "do_facet mds1 $LCTL set_param $osp_param=$saved_max"
+
+	do_facet mds1 $LCTL set_param $lod_param=0
+	stack_trap "do_facet mds1 $LCTL set_param $lod_param=$saved_qos"
+
+	$LFS setdirstripe --mdt-count=1 --mdt-index=0 $dir
+	stack_trap "rm -rf $dir"
+
+	# exercise race in LU-16981 with deactivating OST while creating a file
+	(
+		while true; do
+			do_facet mds1 $LCTL set_param $osp_param=0 > /dev/null
+			sleep 0.1
+			do_facet mds1 \
+				$LCTL set_param $osp_param=$saved_max > /dev/null
+		done
+	) &
+
+	pid=$!
+	stack_trap "kill -9 $pid"
+
+	# errors here are OK so ignore them (just don't want to crash)
+	$LFS setstripe -c -1 $dir/f.{1..200} 2> /dev/null
+
+	return 0
+}
+run_test 27V "creating widely striped file races with deactivating OST"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

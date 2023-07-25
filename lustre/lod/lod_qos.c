@@ -1730,6 +1730,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		set_bit(LQ_DIRTY, &lod->lod_ost_descs.ltd_qos.lq_flags);
 		clear_bit(LQ_SAME_SPACE, &lod->lod_ost_descs.ltd_qos.lq_flags);
 		rc = -EAGAIN;
+	} else if (nfound < lod_comp->llc_stripe_count) {
+		lod_comp->llc_stripe_count = nfound;
 	}
 
 	/* If there are enough OSTs, a component with overstriping requessted
