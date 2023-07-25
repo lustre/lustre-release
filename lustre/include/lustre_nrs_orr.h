@@ -33,6 +33,12 @@
 #ifndef _LUSTRE_NRS_ORR_H
 #define _LUSTRE_NRS_ORR_H
 
+#ifdef HAVE_XARRAY_SUPPORT
+#include <linux/xarray.h>
+#else
+#include <libcfs/linux/xarray.h>
+#endif
+
 /**
  * ORR policy operations
  */
@@ -104,8 +110,9 @@ struct nrs_orr_key {
  */
 struct nrs_orr_data {
 	struct ptlrpc_nrs_resource	od_res;
-	struct binheap	       *od_binheap;
-	struct cfs_hash		       *od_obj_hash;
+	struct binheap		       *od_binheap;
+	struct rhashtable		od_obj_hash;
+	struct xarray			od_trr_objs;
 	struct kmem_cache	       *od_cache;
 	/**
 	 * Used when a new scheduling round commences, in order to synchronize
@@ -147,7 +154,7 @@ struct nrs_orr_data {
  */
 struct nrs_orr_object {
 	struct ptlrpc_nrs_resource	oo_res;
-	struct hlist_node		oo_hnode;
+	struct rhash_head		oo_rhead;
 	/**
 	 * The round number against which requests are being scheduled for this
 	 * object or OST
@@ -159,11 +166,15 @@ struct nrs_orr_object {
 	 */
 	__u64				oo_sequence;
 	/**
-	 * The key of the object or OST for which this structure instance is
-	 * scheduling RPCs
+	 * The key of the object or OST for which this structure
+	 * instance is scheduling RPCs
 	 */
-	struct nrs_orr_key		oo_key;
-	long				oo_ref;
+	struct nrs_orr_key	oo_key;
+	/**
+	 * The reference count of this object. Once it hits zero free
+	 * it from the hash table.
+	 */
+	refcount_t			oo_ref;
 	/**
 	 * Round Robin quantum; the maximum number of RPCs that are allowed to
 	 * be scheduled for the object or OST in a single batch of each round.
@@ -173,6 +184,10 @@ struct nrs_orr_object {
 	 * # of pending requests for this object or OST, on all existing rounds
 	 */
 	__u16				oo_active;
+	/**
+	 * Needed to free this structure from the RCU.
+	 */
+	struct rcu_head			oo_rcu_head;
 };
 
 /**
