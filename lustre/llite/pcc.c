@@ -210,7 +210,7 @@ static void pcc_cmd_fini(struct pcc_cmd *cmd)
 #define PCC_EXPRESSION_DELIM	("=")
 
 static int
-pcc_fname_list_add(struct cfs_lstr *id, struct list_head *fname_list)
+pcc_fname_list_add(char *id, struct list_head *fname_list)
 {
 	struct pcc_match_fname *fname;
 
@@ -218,39 +218,33 @@ pcc_fname_list_add(struct cfs_lstr *id, struct list_head *fname_list)
 	if (fname == NULL)
 		return -ENOMEM;
 
-	OBD_ALLOC(fname->pmf_name, id->ls_len + 1);
+	OBD_ALLOC(fname->pmf_name, strlen(id) + 1);
 	if (fname->pmf_name == NULL) {
 		OBD_FREE_PTR(fname);
 		return -ENOMEM;
 	}
 
-	memcpy(fname->pmf_name, id->ls_str, id->ls_len);
+	strcpy(fname->pmf_name, id);
 	list_add_tail(&fname->pmf_linkage, fname_list);
 	return 0;
 }
 
 static int
-pcc_fname_list_parse(char *str, int len, struct list_head *fname_list)
+pcc_fname_list_parse(char *str, struct list_head *fname_list)
 {
-	struct cfs_lstr src;
-	struct cfs_lstr res;
 	int rc = 0;
 
 	ENTRY;
 
-	src.ls_str = str;
-	src.ls_len = len;
 	INIT_LIST_HEAD(fname_list);
-	while (src.ls_str) {
-		rc = cfs_gettok(&src, ' ', &res);
-		if (rc == 0) {
-			rc = -EINVAL;
-			break;
-		}
-		rc = pcc_fname_list_add(&res, fname_list);
-		if (rc)
-			break;
+	while (rc == 0 && str) {
+		char *fname = strsep(&str, " ");
+
+		if (*fname)
+			rc = pcc_fname_list_add(fname, fname_list);
 	}
+	if (list_empty(fname_list))
+		rc = -EINVAL;
 	if (rc)
 		pcc_fname_list_free(fname_list);
 	RETURN(rc);
@@ -320,7 +314,6 @@ pcc_expression_parse(char *str, struct list_head *cond_list)
 	/* Skip '{' and '}' */
 	str[len - 1] = '\0';
 	str += 1;
-	len -= 2;
 
 	if (strcmp(field, "uid") == 0) {
 		if (pcc_id_list_parse(str,
@@ -341,8 +334,7 @@ pcc_expression_parse(char *str, struct list_head *cond_list)
 			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_PROJID;
 	} else if (strcmp(field, "fname") == 0) {
-		if (pcc_fname_list_parse(str, len,
-					 &expr->pe_cond) < 0)
+		if (pcc_fname_list_parse(str, &expr->pe_cond) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_FNAME;
 	} else {
