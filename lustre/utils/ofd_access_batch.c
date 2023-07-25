@@ -172,20 +172,21 @@ int fid_hash_resize(struct list_head **phead, unsigned int *pshift, unsigned int
 	return 0;
 }
 
-enum {
+enum alr_rw {
 	ALR_READ = 0,
 	ALR_WRITE = 1,
+	ALR_RW_MAX
 };
 
 /* Entry in the batching hash. */
 struct alr_entry {
 	struct fid_hash_node alre_fid_hash_node;
-	time_t alre_time[2]; /* Not strictly needed. */
-	__u64 alre_begin[2];
-	__u64 alre_end[2];
-	__u64 alre_size[2];
-	__u64 alre_segment_count[2];
-	__u64 alre_count[2];
+	time_t alre_time[ALR_RW_MAX]; /* Not strictly needed. */
+	__u64 alre_begin[ALR_RW_MAX];
+	__u64 alre_end[ALR_RW_MAX];
+	__u64 alre_size[ALR_RW_MAX];
+	__u64 alre_segment_count[ALR_RW_MAX];
+	__u64 alre_count[ALR_RW_MAX];
 	char alre_obd_name[];
 };
 
@@ -208,7 +209,7 @@ static void alre_del_init(struct alr_entry *alre)
 static void alre_update(struct alr_entry *alre, time_t time, __u64 begin,
 			__u64 end, __u32 size, __u32 segment_count, __u32 flags)
 {
-	unsigned int d = (flags & OFD_ACCESS_READ) ? ALR_READ : ALR_WRITE;
+	enum alr_rw d = (flags & OFD_ACCESS_READ) ? ALR_READ : ALR_WRITE;
 
 	alre->alre_time[d] = max_t(time_t, alre->alre_time[d], time);
 	alre->alre_begin[d] = min_t(__u64, alre->alre_begin[d], begin);
@@ -269,7 +270,7 @@ int sort_compare(const void *a1, const void *a2)
 	return 0;
 }
 
-static void alre_printf(FILE *f, struct alr_entry *alre, int d)
+static void alre_printf(FILE *f, struct alr_entry *alre, enum alr_rw d)
 {
 	fprintf(f, "o=%s f="DFID" t=%lld b=%llu e=%llu s=%llu g=%llu n=%llu d=%c\n",
 		alre->alre_obd_name,
@@ -290,19 +291,21 @@ struct alr_thread_arg {
 	pthread_mutex_t *file_mutex;
 };
 
-void *alr_sort_and_print_thread(void *arg)
+/* Fraction < 100 */
+static void *alr_sort_and_print_thread(void *arg)
 {
 	struct alr_entry *alre, *next;
 	struct alr_thread_arg *aa = arg;
 	struct list_head *tmp = &aa->list;
 	int *sa = NULL;
-	int rc, d, i, nr = 0;
+	int rc, i, nr = 0;
+	enum alr_rw d;
 	unsigned long cut;
 
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
-		if (alre->alre_count[0] > 0)
+		if (alre->alre_count[ALR_READ] > 0)
 			nr++;
-		if (alre->alre_count[1] > 0)
+		if (alre->alre_count[ALR_WRITE] > 0)
 			nr++;
 	}
 
@@ -317,14 +320,15 @@ void *alr_sort_and_print_thread(void *arg)
 
 	i = 0;
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
-		if (alre->alre_count[0] > 0)
-			sa[i++] = alre->alre_count[0];
-		if (alre->alre_count[1] > 0)
-			sa[i++] = alre->alre_count[1];
+		if (alre->alre_count[ALR_READ] > 0)
+			sa[i++] = alre->alre_count[ALR_READ];
+		if (alre->alre_count[ALR_WRITE] > 0)
+			sa[i++] = alre->alre_count[ALR_WRITE];
 	}
 
 	qsort(sa, nr, sizeof(*sa), sort_compare);
 	i = nr * aa->fraction / 100;
+
 	cut = sa[i];
 	if (cut < 1)
 		cut = 1;
@@ -345,7 +349,7 @@ void *alr_sort_and_print_thread(void *arg)
 	 * XXX: possible optimization - move items=@cut to another list, so
 	 * that 2nd pass takes < O(n) */
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
-		for (d = 0; d < 2; d++) {
+		for (d = 0; d < ALR_RW_MAX; d++) {
 			if (alre->alre_count[d] <= cut)
 				continue;
 			alre_printf(aa->file, alre, d);
@@ -354,7 +358,7 @@ void *alr_sort_and_print_thread(void *arg)
 	}
 
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
-		for (d = 0; d < 2 && i > 0; d++) {
+		for (d = 0; d < ALR_RW_MAX && i > 0; d++) {
 			if (alre->alre_count[d] != cut)
 				continue;
 			alre_printf(aa->file, alre, d);
@@ -373,6 +377,48 @@ out:
 	fflush(aa->file);
 
 	list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
+		alre_del_init(alre);
+		free(alre);
+	}
+
+	free(aa);
+
+	return NULL;
+}
+
+/* Fraction == 100 */
+static void *alr_print_thread_fraction_100(void *arg)
+{
+	struct alr_entry *alre, *next;
+	struct alr_thread_arg *aa = arg;
+	int rc;
+
+	/* Prevent jumbled output from multiple concurrent sort and
+	 * print threads. */
+	rc = pthread_mutex_lock(aa->file_mutex);
+	if (rc != 0) {
+		fprintf(stderr, "cannot lock batch file: %s\n",	strerror(rc));
+		exit(1);
+	}
+
+	list_for_each_entry(alre, &aa->list, alre_fid_hash_node.fhn_node) {
+		enum alr_rw d;
+
+		for (d = 0; d < ALR_RW_MAX; d++) {
+			if (alre->alre_count[d] != 0)
+				alre_printf(aa->file, alre, d);
+		}
+	}
+
+	rc = pthread_mutex_unlock(aa->file_mutex);
+	if (rc != 0) {
+		fprintf(stderr, "cannot unlock batch file: %s\n", strerror(rc));
+		exit(1);
+	}
+
+	fflush(aa->file);
+
+	list_for_each_entry_safe(alre, next, &aa->list, alre_fid_hash_node.fhn_node) {
 		alre_del_init(alre);
 		free(alre);
 	}
@@ -423,7 +469,11 @@ int alr_batch_print(struct alr_batch *alrb, FILE *file,
 
 	/* as sorting may take time and we don't want to lose access
 	 * records we better do sorting and printing in a different thread */
-	rc = pthread_create(&pid, pattr, &alr_sort_and_print_thread, aa);
+
+	if (fraction >= 100) /* Print all 100% records */
+		rc = pthread_create(&pid, pattr, &alr_print_thread_fraction_100, aa);
+	else
+		rc = pthread_create(&pid, pattr, &alr_sort_and_print_thread, aa);
 	if (rc != 0)
 		goto out;
 
