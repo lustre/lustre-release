@@ -1401,9 +1401,7 @@ int ll_fill_super(struct super_block *sb)
 	sb->s_bdi->io_pages = 0;
 #endif
 	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
-#ifdef SB_I_CGROUPWB
-	sb->s_iflags |= SB_I_CGROUPWB;
-#endif
+
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.
 	 */
