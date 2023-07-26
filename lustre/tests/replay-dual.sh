@@ -1184,11 +1184,20 @@ test_31() {
 	$LCTL set_param fail_loc=0x80001420
 	$MULTIOP $DIR1/$tdir/mdtdir/$tfile Osw4096c &
 	multiops+=($!)
-	while [ ! -f $DIR1/$tdir/mdtdir/$tfile ]; do
-		sleep 0.5
+
+	for (( i=0; i<10; i++ )); do
+		if [ -w $DIR2/$tdir/mdtdir/$tfile ]; then
+			echo "file $DIR2/$tdir/mdtdir/$tfile is ready"
+			break
+		else
+			echo "file $DIR2/$tdir/mdtdir/$tfile is not ready, wait 0.5 second..."
+			sleep 0.5
+		fi
 	done
+
 	$MULTIOP $DIR2/$tdir/mdtdir/$tfile oO_WRONLY:w4096c &
 	multiops+=($!)
+
 	sleep 0.5
 	local mmrif=$($LCTL get_param -n \
 		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight | tail -1)
