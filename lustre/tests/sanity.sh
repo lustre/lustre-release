@@ -30801,6 +30801,24 @@ test_906() {
 }
 run_test 906 "Simple test for io_uring I/O engine via fio"
 
+test_907() {
+	local max_pages=$($LCTL get_param -n osc.*.max_pages_per_rpc | head -n1)
+
+	# set stripe size to max rpc size
+	$LFS setstripe -i 0 -c 2 -S $((max_pages * PAGE_SIZE)) $DIR/$tfile
+	$LFS getstripe $DIR/$tfile
+#define OBD_FAIL_OST_EROFS               0x216
+	do_facet ost1 "$LCTL set_param fail_val=3 fail_loc=0x80000216"
+
+	local bs=$((max_pages * PAGE_SIZE / 16))
+
+	# write full one stripe and one block
+	dd if=/dev/zero of=$DIR/$tfile bs=$bs count=17 || error "dd failed"
+
+	rm $DIR/$tfile || error "rm failed"
+}
+run_test 907 "write rpc error during unlink"
+
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

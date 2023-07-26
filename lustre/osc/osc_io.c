@@ -971,6 +971,13 @@ static int osc_io_fsync_start(const struct lu_env *env,
 
 	result = osc_cache_writeback_range(env, osc, start, end, 0,
 					   fio->fi_mode == CL_FSYNC_DISCARD);
+	if (result < 0 && fio->fi_mode == CL_FSYNC_DISCARD) {
+		CDEBUG(D_CACHE,
+		       "%s: ignore error %d on discarding "DFID":[%lu-%lu]\n",
+		       cli_name(osc_cli(osc)), result, PFID(fio->fi_fid),
+		       start, end);
+		result = 0;
+	}
 	if (result > 0) {
 		fio->fi_nr_written += result;
 		result = 0;
