@@ -816,7 +816,8 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			     long stats_interval_sec, off_t file_size_bytes)
 {
 	struct llapi_layout *layout;
-	size_t buf_size = 64 * 1024 * 1024;
+	size_t buf_size = 64 * ONE_MB;
+	uint64_t stripe_size = ONE_MB;
 	void *buf = NULL;
 	off_t pos = 0;
 	off_t data_end = 0;
@@ -831,8 +832,6 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 	layout = llapi_layout_get_by_fd(fd_src, 0);
 	if (layout) {
-		uint64_t stripe_size;
-
 		rc = llapi_layout_stripe_size_get(layout, &stripe_size);
 		if (rc == 0) {
 			/* We like big bufs */
@@ -845,6 +844,11 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 		llapi_layout_free(layout);
 	}
+
+	/* limit transfer size to what can be sent in one second */
+	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buf_size)
+		buf_size = (bandwidth_bytes_sec + stripe_size - 1) &
+			~(stripe_size - 1);
 
 	/* Use a page-aligned buffer for direct I/O */
 	rc = posix_memalign(&buf, page_size, buf_size);
