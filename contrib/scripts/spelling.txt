@@ -66,6 +66,12 @@ ldlm_side_t||enum ldlm_side
 ldlm_type_t||enum ldlm_type
 ldlm_wire_policy_data_t||union ldlm_wire_policy_data
 libcfs_debug_vmsg2||libcfs_debug_msg
+li_advice||lio_advice
+li_end||lio_end
+li_extent||lai_extent
+li_fid||lio_fid
+li_opc||lai_opc
+li_start||lio_start
 lnet_acceptor_connreq_t||struct lnet_acceptor_connreq
 lnet_counters_t||struct lnet_counters
 lnet_handle_wire_t||struct lnet_handle_wire

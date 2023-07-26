@@ -564,8 +564,8 @@ static int lov_io_slice_init(struct lov_io *lio,
 	}
 
 	case CIT_LADVISE: {
-		lio->lis_pos = io->u.ci_ladvise.li_start;
-		lio->lis_endpos = io->u.ci_ladvise.li_end;
+		lio->lis_pos = io->u.ci_ladvise.lio_start;
+		lio->lis_endpos = io->u.ci_ladvise.lio_end;
 		break;
 	}
 
@@ -764,11 +764,11 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		break;
 	}
 	case CIT_LADVISE: {
-		io->u.ci_ladvise.li_start = start;
-		io->u.ci_ladvise.li_end = end;
-		io->u.ci_ladvise.li_fid = parent->u.ci_ladvise.li_fid;
-		io->u.ci_ladvise.li_advice = parent->u.ci_ladvise.li_advice;
-		io->u.ci_ladvise.li_flags = parent->u.ci_ladvise.li_flags;
+		io->u.ci_ladvise.lio_start = start;
+		io->u.ci_ladvise.lio_end = end;
+		io->u.ci_ladvise.lio_fid = parent->u.ci_ladvise.lio_fid;
+		io->u.ci_ladvise.lio_advice = parent->u.ci_ladvise.lio_advice;
+		io->u.ci_ladvise.lio_flags = parent->u.ci_ladvise.lio_flags;
 		break;
 	}
 	case CIT_LSEEK: {

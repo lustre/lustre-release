@@ -4811,10 +4811,10 @@ static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 
 	CDEBUG(D_INFO, DFID "got layout change request from client: "
 	       "opc:%u flags:%#x extent "DEXT"\n",
-	       PFID(fid), intent->li_opc, intent->li_flags,
-	       PEXT(&intent->li_extent));
+	       PFID(fid), intent->lai_opc, intent->lai_flags,
+	       PEXT(&intent->lai_extent));
 
-	switch (intent->li_opc) {
+	switch (intent->lai_opc) {
 	case LAYOUT_INTENT_TRUNC:
 	case LAYOUT_INTENT_WRITE:
 	case LAYOUT_INTENT_PCCRO_SET:
@@ -4829,11 +4829,11 @@ static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 	case LAYOUT_INTENT_RELEASE:
 	case LAYOUT_INTENT_RESTORE:
 		CERROR("%s: Unsupported layout intent opc %d\n",
-		       mdt_obd_name(info->mti_mdt), intent->li_opc);
+		       mdt_obd_name(info->mti_mdt), intent->lai_opc);
 		RETURN(-ENOTSUPP);
 	default:
 		CERROR("%s: Unknown layout intent opc %d\n",
-		       mdt_obd_name(info->mti_mdt), intent->li_opc);
+		       mdt_obd_name(info->mti_mdt), intent->lai_opc);
 		RETURN(-EINVAL);
 	}
 

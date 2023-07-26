@@ -7582,22 +7582,22 @@ static int lod_declare_update_plain(const struct lu_env *env,
 	lod_comp = &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1];
 	if (lo->ldo_comp_cnt > 1 &&
 	    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-	    lod_comp->llc_extent.e_end < layout->li_extent.e_end) {
+	    lod_comp->llc_extent.e_end < layout->lai_extent.e_end) {
 		CDEBUG_LIMIT(replay ? D_ERROR : D_LAYOUT,
 			     "%s: the defined layout [0, %#llx) does not "
 			     "covers the write range "DEXT"\n",
 			     lod2obd(d)->obd_name, lod_comp->llc_extent.e_end,
-			     PEXT(&layout->li_extent));
+			     PEXT(&layout->lai_extent));
 		GOTO(out, rc = -EINVAL);
 	}
 
 	CDEBUG(D_LAYOUT, "%s: "DFID": update components "DEXT"\n",
 	       lod2obd(d)->obd_name, PFID(lod_object_fid(lo)),
-	       PEXT(&layout->li_extent));
+	       PEXT(&layout->lai_extent));
 
 	if (!replay) {
-		rc = lod_declare_update_extents(env, lo, &layout->li_extent,
-				th, 0, layout->li_opc == LAYOUT_INTENT_WRITE);
+		rc = lod_declare_update_extents(env, lo, &layout->lai_extent,
+				th, 0, layout->lai_opc == LAYOUT_INTENT_WRITE);
 		if (rc < 0)
 			GOTO(out, rc);
 		else if (rc)
@@ -7611,7 +7611,7 @@ static int lod_declare_update_plain(const struct lu_env *env,
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (lod_comp->llc_extent.e_start >= layout->li_extent.e_end)
+		if (lod_comp->llc_extent.e_start >= layout->lai_extent.e_end)
 			break;
 
 		if (!replay) {
@@ -8178,7 +8178,7 @@ static int lod_declare_update_pccro(const struct lu_env *env,
 	struct layout_intent *intent = mlc->mlc_intent;
 	int rc;
 
-	switch (intent->li_opc) {
+	switch (intent->lai_opc) {
 	case LAYOUT_INTENT_PCCRO_SET:
 		rc = lod_declare_pccro_set(env, dt, th);
 		break;
@@ -8211,10 +8211,10 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		struct layout_intent *layout = mlc->mlc_intent;
-		int write = layout->li_opc == LAYOUT_INTENT_WRITE;
+		int write = layout->lai_opc == LAYOUT_INTENT_WRITE;
 		int picked;
 
-		extent = layout->li_extent;
+		extent = layout->lai_extent;
 		CDEBUG(D_LAYOUT, DFID": trying to write :"DEXT"\n",
 		       PFID(lod_object_fid(lo)), PEXT(&extent));
 
@@ -8232,7 +8232,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out, rc);
 
-		if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
+		if (layout->lai_opc == LAYOUT_INTENT_TRUNC) {
 			/**
 			 * trunc transfers [0, size) in the intent extent, we'd
 			 * stale components overlapping [size, eof).
@@ -8247,7 +8247,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 			GOTO(out, rc);
 
 		/* restore truncate intent extent */
-		if (layout->li_opc == LAYOUT_INTENT_TRUNC)
+		if (layout->lai_opc == LAYOUT_INTENT_TRUNC)
 			extent.e_end = extent.e_start;
 
 		/* instantiate components for the picked mirror, start from 0 */
@@ -8388,11 +8388,11 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		struct layout_intent *layout = mlc->mlc_intent;
-		int write = layout->li_opc == LAYOUT_INTENT_WRITE;
+		int write = layout->lai_opc == LAYOUT_INTENT_WRITE;
 
-		LASSERT(mlc->mlc_intent != NULL);
+		LASSERT(layout != NULL);
 
-		extent = mlc->mlc_intent->li_extent;
+		extent = layout->lai_extent;
 
 		CDEBUG(D_LAYOUT, DFID": intent to write: "DEXT"\n",
 		       PFID(lod_object_fid(lo)), PEXT(&extent));
@@ -8403,7 +8403,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out, rc);
 
-		if (mlc->mlc_intent->li_opc == LAYOUT_INTENT_TRUNC) {
+		if (layout->lai_opc == LAYOUT_INTENT_TRUNC) {
 			/**
 			 * trunc transfers [0, size) in the intent extent, we'd
 			 * stale components overlapping [size, eof).
@@ -8421,7 +8421,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		 * instantiate [0, mlc->mlc_intent->e_end) */
 
 		/* restore truncate intent extent */
-		if (mlc->mlc_intent->li_opc == LAYOUT_INTENT_TRUNC)
+		if (layout->lai_opc == LAYOUT_INTENT_TRUNC)
 			extent.e_end = extent.e_start;
 		extent.e_start = 0;
 
@@ -9211,8 +9211,8 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		struct layout_intent *intent = mlc->mlc_intent;
 
-		if (intent->li_opc == LAYOUT_INTENT_PCCRO_SET ||
-		    intent->li_opc == LAYOUT_INTENT_PCCRO_CLEAR) {
+		if (intent->lai_opc == LAYOUT_INTENT_PCCRO_SET ||
+		    intent->lai_opc == LAYOUT_INTENT_PCCRO_CLEAR) {
 			if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
 				RETURN(-EINVAL);
 

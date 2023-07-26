@@ -5015,18 +5015,18 @@ void lustre_assert_wire_constants(void)
 	/* Checks for struct layout_intent */
 	LASSERTF((int)sizeof(struct layout_intent) == 24, "found %lld\n",
 		 (long long)(int)sizeof(struct layout_intent));
-	LASSERTF((int)offsetof(struct layout_intent, li_opc) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct layout_intent, li_opc));
-	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_opc) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct layout_intent *)0)->li_opc));
-	LASSERTF((int)offsetof(struct layout_intent, li_flags) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct layout_intent, li_flags));
-	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_flags) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct layout_intent *)0)->li_flags));
-	LASSERTF((int)offsetof(struct layout_intent, li_extent) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct layout_intent, li_extent));
-	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_extent) == 16, "found %lld\n",
-		 (long long)(int)sizeof(((struct layout_intent *)0)->li_extent));
+	LASSERTF((int)offsetof(struct layout_intent, lai_opc) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct layout_intent, lai_opc));
+	LASSERTF((int)sizeof(((struct layout_intent *)0)->lai_opc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct layout_intent *)0)->lai_opc));
+	LASSERTF((int)offsetof(struct layout_intent, lai_flags) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct layout_intent, lai_flags));
+	LASSERTF((int)sizeof(((struct layout_intent *)0)->lai_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct layout_intent *)0)->lai_flags));
+	LASSERTF((int)offsetof(struct layout_intent, lai_extent) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct layout_intent, lai_extent));
+	LASSERTF((int)sizeof(((struct layout_intent *)0)->lai_extent) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct layout_intent *)0)->lai_extent));
 	LASSERTF(LAYOUT_INTENT_ACCESS == 0, "found %lld\n",
 		 (long long)LAYOUT_INTENT_ACCESS);
 	LASSERTF(LAYOUT_INTENT_READ == 1, "found %lld\n",

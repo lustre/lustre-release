@@ -2995,9 +2995,9 @@ static void lustre_swab_lu_extent(struct lu_extent *le)
 
 void lustre_swab_layout_intent(struct layout_intent *li)
 {
-	__swab32s(&li->li_opc);
-	__swab32s(&li->li_flags);
-	lustre_swab_lu_extent(&li->li_extent);
+	__swab32s(&li->lai_opc);
+	__swab32s(&li->lai_flags);
+	lustre_swab_lu_extent(&li->lai_extent);
 }
 
 void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk)

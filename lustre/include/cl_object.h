@@ -1845,12 +1845,12 @@ struct cl_io {
 			unsigned int       fi_nr_written;
 		} ci_fsync;
 		struct cl_ladvise_io {
-			__u64			 li_start;
-			__u64			 li_end;
+			__u64			 lio_start;
+			__u64			 lio_end;
 			/** file system level fid */
-			struct lu_fid		*li_fid;
-			enum lu_ladvise_type	 li_advice;
-			__u64			 li_flags;
+			struct lu_fid		*lio_fid;
+			enum lu_ladvise_type	 lio_advice;
+			__u64			 lio_flags;
 		} ci_ladvise;
 		struct cl_lseek_io {
 			loff_t			 ls_start;

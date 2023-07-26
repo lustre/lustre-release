@@ -2507,9 +2507,9 @@ static void check_layout_intent(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(layout_intent);
-	CHECK_MEMBER(layout_intent, li_opc);
-	CHECK_MEMBER(layout_intent, li_flags);
-	CHECK_MEMBER(layout_intent, li_extent);
+	CHECK_MEMBER(layout_intent, lai_opc);
+	CHECK_MEMBER(layout_intent, lai_flags);
+	CHECK_MEMBER(layout_intent, lai_extent);
 
 	CHECK_VALUE(LAYOUT_INTENT_ACCESS);
 	CHECK_VALUE(LAYOUT_INTENT_READ);

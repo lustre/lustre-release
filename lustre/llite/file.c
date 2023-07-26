@@ -3796,11 +3796,11 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 
 	/* initialize parameters for ladvise */
 	lio = &io->u.ci_ladvise;
-	lio->li_start = ladvise->lla_start;
-	lio->li_end = ladvise->lla_end;
-	lio->li_fid = ll_inode2fid(inode);
-	lio->li_advice = ladvise->lla_advice;
-	lio->li_flags = flags;
+	lio->lio_start = ladvise->lla_start;
+	lio->lio_end = ladvise->lla_end;
+	lio->lio_fid = ll_inode2fid(inode);
+	lio->lio_advice = ladvise->lla_advice;
+	lio->lio_flags = flags;
 
 	if (cl_io_init(env, io, CIT_LADVISE, io->ci_obj) == 0)
 		rc = cl_io_loop(env, io);
@@ -6285,8 +6285,8 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 
 	memset(&it, 0, sizeof(it));
 	it.it_op = IT_LAYOUT;
-	if (intent->li_opc == LAYOUT_INTENT_WRITE ||
-	    intent->li_opc == LAYOUT_INTENT_TRUNC)
+	if (intent->lai_opc == LAYOUT_INTENT_WRITE ||
+	    intent->lai_opc == LAYOUT_INTENT_TRUNC)
 		it.it_flags = FMODE_WRITE;
 
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",
@@ -6328,7 +6328,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	struct ll_sb_info	*sbi = ll_i2sbi(inode);
 	struct lustre_handle lockh;
 	struct layout_intent intent = {
-		.li_opc = LAYOUT_INTENT_ACCESS,
+		.lai_opc = LAYOUT_INTENT_ACCESS,
 	};
 	enum ldlm_mode mode;
 	int rc;
@@ -6387,9 +6387,9 @@ int ll_layout_write_intent(struct inode *inode, enum layout_intent_opc opc,
 			   struct lu_extent *ext)
 {
 	struct layout_intent intent = {
-		.li_opc = opc,
-		.li_extent.e_start = ext->e_start,
-		.li_extent.e_end = ext->e_end,
+		.lai_opc = opc,
+		.lai_extent.e_start = ext->e_start,
+		.lai_extent.e_end = ext->e_end,
 	};
 	int rc;
 	ENTRY;

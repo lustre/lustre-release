@@ -1075,19 +1075,19 @@ static int osc_io_ladvise_start(const struct lu_env *env,
 	memset(ladvise_hdr, 0, buf_size);
 	ladvise_hdr->lah_magic = LADVISE_MAGIC;
 	ladvise_hdr->lah_count = num_advise;
-	ladvise_hdr->lah_flags = lio->li_flags;
+	ladvise_hdr->lah_flags = lio->lio_flags;
 
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-	obdo_set_parent_fid(oa, lio->li_fid);
+	obdo_set_parent_fid(oa, lio->lio_fid);
 
 	ladvise = ladvise_hdr->lah_advise;
-	ladvise->lla_start = lio->li_start;
-	ladvise->lla_end = lio->li_end;
-	ladvise->lla_advice = lio->li_advice;
+	ladvise->lla_start = lio->lio_start;
+	ladvise->lla_end = lio->lio_end;
+	ladvise->lla_advice = lio->lio_advice;
 
-	if (lio->li_flags & LF_ASYNC) {
+	if (lio->lio_flags & LF_ASYNC) {
 		result = osc_ladvise_base(osc_export(cl2osc(obj)), oa,
 					  ladvise_hdr, NULL, NULL, NULL);
 	} else {
@@ -1109,7 +1109,7 @@ static void osc_io_ladvise_end(const struct lu_env *env,
 	int			 result = 0;
 	struct cl_ladvise_io	*lio = &io->u.ci_ladvise;
 
-	if ((!(lio->li_flags & LF_ASYNC)) && cbargs->opc_rpc_sent) {
+	if ((!(lio->lio_flags & LF_ASYNC)) && cbargs->opc_rpc_sent) {
 		wait_for_completion(&cbargs->opc_sync);
 		result = cbargs->opc_rc;
 	}

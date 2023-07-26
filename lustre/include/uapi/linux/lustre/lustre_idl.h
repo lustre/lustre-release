@@ -3395,9 +3395,9 @@ enum layout_intent_opc {
 
 /* enqueue layout lock with intent */
 struct layout_intent {
-	__u32 li_opc;	/* intent operation for enqueue, read, write etc */
-	__u32 li_flags;
-	struct lu_extent li_extent;
+	__u32 lai_opc;	/* intent operation for enqueue, read, write etc */
+	__u32 lai_flags;
+	struct lu_extent lai_extent;
 } __attribute__((packed));
 
 /**

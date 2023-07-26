@@ -2966,8 +2966,8 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 			fl = LU_XATTR_REPLACE;
 
 		if (mlc->mlc_opc == MD_LAYOUT_WRITE &&
-		    mlc->mlc_intent->li_extent.e_end > som->lsa_size) {
-			som->lsa_size = mlc->mlc_intent->li_extent.e_end + 1;
+		    mlc->mlc_intent->lai_extent.e_end > som->lsa_size) {
+			som->lsa_size = mlc->mlc_intent->lai_extent.e_end + 1;
 			fl = LU_XATTR_REPLACE;
 		}
 	}
@@ -3060,9 +3060,9 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 
 		if (rc > 0) {
 			lustre_som_swab(som);
-			if (mlc->mlc_intent->li_extent.e_end > som->lsa_size) {
+			if (mlc->mlc_intent->lai_extent.e_end > som->lsa_size) {
 				som->lsa_size =
-					mlc->mlc_intent->li_extent.e_end + 1;
+					mlc->mlc_intent->lai_extent.e_end + 1;
 				fl = LU_XATTR_REPLACE;
 			}
 		}
@@ -3285,8 +3285,8 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	case MD_LAYOUT_WRITE: {
 		struct layout_intent *intent = mlc->mlc_intent;
 
-		if (intent->li_opc == LAYOUT_INTENT_PCCRO_SET ||
-		    intent->li_opc == LAYOUT_INTENT_PCCRO_CLEAR)
+		if (intent->lai_opc == LAYOUT_INTENT_PCCRO_SET ||
+		    intent->lai_opc == LAYOUT_INTENT_PCCRO_CLEAR)
 			RETURN(mdd_layout_update_pccro(env, o, mlc));
 	}
 	case MD_LAYOUT_RESYNC:
