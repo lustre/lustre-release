@@ -424,7 +424,6 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 
 static inline struct page *kmem_to_page(void *addr)
 {
-	LASSERT(!((unsigned long)addr & ~PAGE_MASK));
 	if (is_vmalloc_addr(addr))
 		return vmalloc_to_page(addr);
 	else

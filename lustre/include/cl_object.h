@@ -1942,7 +1942,12 @@ struct cl_io {
 	 * to userspace, only the RPCs are submitted async, then waited for at
 	 * the llite layer before returning.
 	 */
-			     ci_parallel_dio:1;
+			     ci_parallel_dio:1,
+	/**
+	 * this DIO is at least partly unaligned, and so the unaligned DIO
+	 * path is being used for this entire IO
+	 */
+			     ci_unaligned_dio:1;
 	/**
 	 * Bypass quota check
 	 */
@@ -2521,7 +2526,7 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 				    bool is_aio);
 struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 				    struct iov_iter *iter, bool write,
-				    bool sync);
+				    bool unaligned, bool sync);
 void cl_dio_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
 void cl_sub_dio_free(struct cl_sub_dio *sdio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
@@ -2553,14 +2558,14 @@ struct cl_sync_io {
 /** direct IO pages */
 struct ll_dio_pages {
 	/*
-	 * page array to be written. we don't support
-	 * partial pages except the last one.
+	 * page array for RDMA - for aligned i/o, this is the user provided
+	 * pages, but for unaligned i/o, this is the internal buffer
 	 */
-	struct page             **ldp_pages;
+	struct page		**ldp_pages;
 	/** # of pages in the array. */
-	size_t                  ldp_count;
+	size_t			ldp_count;
 	/* the file offset of the first page. */
-	loff_t                  ldp_file_offset;
+	loff_t			ldp_file_offset;
 };
 
 /* Top level struct used for AIO and DIO */
@@ -2585,7 +2590,8 @@ struct cl_sub_dio {
 	struct ll_dio_pages	csd_dio_pages;
 	struct iov_iter		csd_iter;
 	unsigned		csd_creator_free:1,
-				csd_write:1;
+				csd_write:1,
+				csd_unaligned:1;
 };
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
 	defined(HAVE_DIRECTIO_2ARGS)
@@ -2593,6 +2599,9 @@ struct cl_sub_dio {
 #endif
 
 void ll_release_user_pages(struct page **pages, int npages);
+int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size);
+void ll_free_dio_buffer(struct ll_dio_pages *pvec);
+ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov);
 
 #ifndef HAVE_KTHREAD_USE_MM
 #define kthread_use_mm(mm) use_mm(mm)

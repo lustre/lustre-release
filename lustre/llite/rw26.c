@@ -492,26 +492,39 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
 	bool sync_submit = false;
+	bool unaligned = false;
 	struct vvp_io *vio;
 	ssize_t rc2;
 
+	ENTRY;
+
 	/* Check EOF by ourselves */
 	if (rw == READ && file_offset >= i_size_read(inode))
-		return 0;
+		RETURN(0);
 
-	/* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
 	if (file_offset & ~PAGE_MASK)
-		RETURN(-EINVAL);
+		unaligned = true;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), size=%zd (max %lu), "
-	       "offset=%lld=%llx, pages %zd (max %lu)\n",
-	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
-	       file_offset, file_offset, count >> PAGE_SHIFT,
-	       MAX_DIO_SIZE >> PAGE_SHIFT);
+	if (count & ~PAGE_MASK)
+		unaligned = true;
 
 	/* Check that all user buffers are aligned as well */
 	if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
-		RETURN(-EINVAL);
+		unaligned = true;
+
+	CDEBUG(D_VFSTRACE,
+	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%llx, pages %zd (max %lu)%s\n",
+	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
+	       file_offset, file_offset,
+	       (count >> PAGE_SHIFT) + !!(count & ~PAGE_MASK),
+	       MAX_DIO_SIZE >> PAGE_SHIFT, unaligned ? ", unaligned" : "");
+
+	/* the requirement to not return EIOCBQUEUED for pipes (see bottom of
+	 * this function) plays havoc with the unaligned I/O lifecycle, so
+	 * don't allow unaligned I/O on pipes
+	 */
+	if (unaligned && iov_iter_is_pipe(iter))
+		RETURN(0);
 
 	lcc = ll_cl_find(inode);
 	if (lcc == NULL)
@@ -522,6 +535,15 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	vio = vvp_env_io(env);
 	io = lcc->lcc_io;
 	LASSERT(io != NULL);
+
+	/* if one part of an I/O is unaligned, just handle all of it that way -
+	 * otherwise we create significant complexities with managing the iovec
+	 * in different ways, etc, all for very marginal benefits
+	 */
+	if (unaligned)
+		io->ci_unaligned_dio = true;
+	if (io->ci_unaligned_dio)
+		unaligned = true;
 
 	ll_dio_aio = io->ci_dio_aio;
 	LASSERT(ll_dio_aio);
@@ -557,14 +579,28 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		 * (either in this function or from a ptlrpcd daemon)
 		 */
 		sdio = cl_sub_dio_alloc(ll_dio_aio, iter, rw == WRITE,
-					sync_submit);
+					unaligned, sync_submit);
 		if (!sdio)
 			GOTO(out, result = -ENOMEM);
 
 		pvec = &sdio->csd_dio_pages;
 		pvec->ldp_file_offset = file_offset;
 
-		result = ll_get_user_pages(rw, iter, pvec, count);
+		if (!unaligned) {
+			result = ll_get_user_pages(rw, iter, pvec, count);
+			/* ll_get_user_pages returns bytes in the IO or error*/
+			count = result;
+		} else {
+			/* same calculation used in ll_get_user_pages */
+			count = min_t(size_t, count, iter->iov->iov_len);
+			result = ll_allocate_dio_buffer(pvec, count);
+			/* allocate_dio_buffer returns number of pages or
+			 * error, so do not set count = result
+			 */
+		}
+
+		/* now we have the actual count, so store it in the sdio */
+		sdio->csd_bytes = count;
 
 		if (unlikely(result <= 0)) {
 			cl_sync_io_note(env, &sdio->csd_sync, result);
@@ -574,10 +610,33 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			}
 			GOTO(out, result);
 		}
-		count = result;
 
-		result = ll_direct_rw_pages(env, io, count,
-					    rw, inode, sdio);
+		if (unaligned && rw == WRITE) {
+			result = ll_dio_user_copy(sdio, iter);
+			if (unlikely(result <= 0)) {
+				cl_sync_io_note(env, &sdio->csd_sync, result);
+				if (sync_submit) {
+					cl_sub_dio_free(sdio);
+					LASSERT(sdio->csd_creator_free);
+				}
+				GOTO(out, result);
+			}
+		}
+
+		result = ll_direct_rw_pages(env, io, count, rw, inode, sdio);
+		/* if the i/o was unsuccessful, we zero the number of bytes to
+		 * copy back.  Note that partial I/O completion isn't possible
+		 * here - I/O either completes or fails.  So there's no need to
+		 * handle short I/O here by changing 'count' with the result
+		 * from ll_direct_rw_pages.
+		 *
+		 * This must be done before we release the reference
+		 * immediately below, because releasing the reference allows
+		 * i/o completion (and copyback to userspace, if unaligned) to
+		 * start.
+		 */
+		if (result != 0)
+			sdio->csd_bytes = 0;
 		/* We've submitted pages and can now remove the extra
 		 * reference for that
 		 */
@@ -595,12 +654,15 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			GOTO(out, result);
 
 		iov_iter_advance(iter, count);
+
 		tot_bytes += count;
 		file_offset += count;
+		CDEBUG(D_VFSTRACE,
+		       "result %zd tot_bytes %zd count %zd file_offset %lld\n",
+		       result, tot_bytes, count, file_offset);
 	}
 
 out:
-
 	if (rw == WRITE)
 		vio->u.readwrite.vui_written += tot_bytes;
 	else
@@ -612,10 +674,10 @@ out:
 	if (result == 0 && !iov_iter_is_pipe(iter))
 		result = -EIOCBQUEUED;
 
-	return result;
+	RETURN(result);
 }
 
-#if defined(HAVE_DIO_ITER)
+#ifdef HAVE_DIO_ITER
 static ssize_t ll_direct_IO(
 #ifndef HAVE_IOV_ITER_RW
 	     int rw,

@@ -3182,6 +3182,26 @@ fileattr_set, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_FILEATTR_GET
 
+# LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+#
+# Kernel 5.13 commit f0b65f39ac505e8f1dcdaa165aa7b8c0bd6fd454
+# iov_iter: replace iov_iter_copy_from_user_atomic() with iterator-advancing variant
+#
+AC_DEFUN([LC_SRC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC], [
+	LB2_LINUX_TEST_SRC([copy_page_from_iter_atomic], [
+		#include <linux/uio.h>
+	],[
+		copy_page_from_iter_atomic(NULL, 0, 0, NULL);
+	])
+])
+AC_DEFUN([LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC], [
+	AC_MSG_CHECKING([if have copy_page_from_iter_atomic])
+	LB2_LINUX_TEST_RESULT([copy_page_from_iter_atomic], [
+		AC_DEFINE(HAVE_COPY_PAGE_FROM_ITER_ATOMIC, 1,
+			['copy_page_from_iter_atomic' exists])
+	])
+]) # LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+
 #
 # LC_HAVE_GET_ACL_RCU_ARG
 #
@@ -3204,6 +3224,26 @@ AC_DEFUN([LC_HAVE_GET_ACL_RCU_ARG], [
 			['get_acl' has a rcu argument])
 	])
 ]) # LC_HAVE_GET_ACL_RCU_ARG
+
+# LC_HAVE_FAULT_IN_IOV_ITER_READABLE
+#
+# Kernel 5.15 commit a6294593e8a1290091d0b078d5d33da5e0cd3dfe
+# iov_iter: Turn iov_iter_fault_in_readable into fault_in_iov_iter_readable
+#
+AC_DEFUN([LC_SRC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
+	LB2_LINUX_TEST_SRC([fault_in_iov_iter_readable], [
+		#include <linux/uio.h>
+	],[
+		fault_in_iov_iter_readable(NULL, 0);
+	])
+])
+AC_DEFUN([LC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
+	AC_MSG_CHECKING([if have fault_in_iov_iter_readable])
+	LB2_LINUX_TEST_RESULT([fault_in_iov_iter_readable], [
+		AC_DEFINE(HAVE_FAULT_IN_IOV_ITER_READABLE, 1,
+			['fault_in_iov_iter_readable' exists])
+	])
+]) # LC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
 #
 # LC_HAVE_INVALIDATE_LOCK
@@ -4129,8 +4169,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 5.12
 	LC_SRC_HAVE_USER_NAMESPACE_ARG
 
+	# 5.13
+	LC_SRC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+
 	# 5.15
 	LC_SRC_HAVE_GET_ACL_RCU_ARG
+	LC_SRC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
 	# 5.16
 	LC_SRC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
@@ -4398,10 +4442,15 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.13
 	LC_HAVE_FILEATTR_GET
+	LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+
+        # 5.15
+        LC_HAVE_GET_ACL_RCU_ARG
 
 	# 5.15
 	LC_HAVE_GET_ACL_RCU_ARG
 	LC_HAVE_INVALIDATE_LOCK
+	LC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
 	# 5.16
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG

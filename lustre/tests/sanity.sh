@@ -13562,6 +13562,8 @@ run_test 119c "Testing for direct read hitting hole"
 
 test_119e()
 {
+	(( $MDS1_VERSION >= $(version_code 2.15.58) )) ||
+		skip "Need server version at least 2.15.58"
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
@@ -13576,14 +13578,27 @@ test_119e()
 	dd if=/dev/urandom bs=$file_size count=1 of=$DIR/$tfile.1 ||
 		error "buffered i/o to create file failed"
 
+	# trivial test of unaligned DIO
+	dd if=$DIR/$tfile.1 bs=4095 of=$DIR/$tfile.2 count=4 \
+		iflag=direct oflag=direct ||
+		error "trivial unaligned dio failed"
+
+	# Clean up before next part of test
+	rm -f $DIR/$tfile.2
+
 	if zfs_or_rotational; then
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size"
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
 	else
-		bsizes="$PAGE_SIZE $((PAGE_SIZE * 4)) $stripe_size \
-			$((stripe_size * 4))"
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
 	fi
 
 	for bs in $bsizes; do
@@ -13624,10 +13639,15 @@ test_119f()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size"
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
 	else
-		bsizes="$PAGE_SIZE $((PAGE_SIZE * 4)) $stripe_size \
-			$((stripe_size * 4))"
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
 	fi
 
 	for bs in $bsizes; do
@@ -13684,10 +13704,15 @@ test_119g()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size"
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
 	else
-		bsizes="$PAGE_SIZE $((PAGE_SIZE * 4)) $stripe_size \
-			$((stripe_size * 4))"
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
 	fi
 
 	for bs in $bsizes; do
@@ -13718,6 +13743,123 @@ test_119g()
 	done
 }
 run_test 119g "dio vs buffered I/O race"
+
+test_119h()
+{
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local stripe_size=$((1024 * 1024)) #1 MiB
+	# Max i/o below is ~ 4 * stripe_size, so this gives ~5 i/os
+	local file_size=$((25 * stripe_size))
+	local bsizes
+
+	stack_trap "rm -f $DIR/$tfile.*"
+
+	if zfs_or_rotational; then
+		# DIO on ZFS can take up to 2 seconds per IO
+		# rotational is better, but still slow.
+		# Limit testing on those media to larger sizes
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	fi
+
+	for bs in $bsizes; do
+		$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.1
+		$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.2
+		echo "unaligned writes of blocksize: $bs"
+		# Write a file with unaligned DIO and regular DIO, and compare
+		# them
+		# with 'u', multiop randomly unaligns the io from the buffer
+		$MULTIOP $DIR/$tfile.1 \
+		oO_CREAT:O_RDWR:O_DIRECT:wu${bs}wu${bs}wu${bs}wu${bs}wu${bs} ||
+			error "multiop memory unaligned write failed, $bs"
+		$MULTIOP $DIR/$tfile.2 \
+		oO_CREAT:O_RDWR:O_DIRECT:w${bs}w${bs}w${bs}w${bs}w${bs} ||
+			error "multiop memory aligned write failed, $bs"
+
+		cmp --verbose $DIR/$tfile.1 $DIR/$tfile.2 ||
+			error "files differ, bsize $bs"
+		rm -f $DIR/$tfile.*
+	done
+
+	$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.1
+	dd if=/dev/zero bs=$((stripe_size * 5)) of=$DIR/$tfile.1 count=5 ||
+		error "dd to create source file for read failed"
+
+	# Just a few quick tests to make sure unaligned DIO reads don't crash
+	for bs in $bsizes; do
+
+		echo "unaligned reads of blocksize: $bs"
+		# with 'u', multiop randomly unaligns the io from the buffer
+		$MULTIOP $DIR/$tfile.1 \
+		oO_CREAT:O_RDWR:O_DIRECT:ru${bs}ru${bs}ru${bs}ru${bs}ru${bs} ||
+			error "multiop memory unaligned read failed, $bs"
+
+	done
+	rm -f $DIR/$tfile*
+}
+run_test 119h "basic tests of memory unaligned dio"
+
+# aiocp with the '-a' option makes testing memory unaligned aio trivial
+test_119i()
+{
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	which aiocp || skip_env "no aiocp installed"
+
+	local stripe_size=$((1024 * 1024)) #1 MiB
+	# Max i/o below is ~ 4 * stripe_size, so this gives ~5 i/os
+	local file_size=$((25 * stripe_size))
+	local bsizes
+
+	$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.1
+	stack_trap "rm -f $DIR/$tfile.*"
+
+	# Just a bit bigger than the largest size in the test set below
+	dd if=/dev/urandom bs=$file_size count=1 of=$DIR/$tfile.1 ||
+		error "buffered i/o to create file failed"
+
+	if zfs_or_rotational; then
+		# DIO on ZFS can take up to 2 seconds per IO
+		# rotational is better, but still slow.
+		# Limit testing on those media to larger sizes
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	fi
+
+	# Do page aligned and NOT page aligned AIO
+	for align in 8 512 $((PAGE_SIZE)); do
+	# Deliberately includes a few aligned sizes
+	for bs in $bsizes; do
+		$LFS setstripe -c 2 -S $stripe_size $DIR/$tfile.2
+
+		echo "bs: $bs, align: $align, file_size $file_size"
+		aiocp -a $align -b $bs -s $file_size -f O_DIRECT \
+			$DIR/$tfile.1 $DIR/$tfile.2 ||
+			error "unaligned aio failed, bs: $bs, align: $align"
+
+		$CHECKSTAT -t file -s $file_size $DIR/$tfile.2 ||
+			error "size incorrect"
+		cmp --verbose $DIR/$tfile.1 $DIR/$tfile.2 ||
+			error "files differ"
+		rm -f $DIR/$tfile.2
+	done
+	done
+}
+run_test 119i "test unaligned aio at varying sizes"
 
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
@@ -26552,9 +26694,10 @@ test_398d() { #  LU-13846
 
 	diff $DIR/$tfile $aio_file || error "file diff after aiocp"
 
-	# make sure we don't crash and fail properly
-	aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file &&
-		error "aio not aligned with PAGE SIZE should fail"
+	# test memory unaligned aio
+	aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file ||
+		error "unaligned aio failed"
+	diff $DIR/$tfile $aio_file || error "file diff after aiocp"
 
 	rm -f $DIR/$tfile $aio_file
 }

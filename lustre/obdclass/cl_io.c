@@ -23,6 +23,7 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/list_sort.h>
+#include <linux/mmu_context.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
@@ -1206,8 +1207,34 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		cl_page_list_del(env, &sdio->csd_pages, page);
 	}
 
-	ll_release_user_pages(sdio->csd_dio_pages.ldp_pages,
-			      sdio->csd_dio_pages.ldp_count);
+	if (sdio->csd_unaligned) {
+		/* save the iovec pointer before it's modified by
+		 * ll_dio_user_copy
+		 */
+		struct iovec *tmp = (struct iovec *) sdio->csd_iter.iov;
+
+		CDEBUG(D_VFSTRACE,
+		       "finishing unaligned dio %s aio->cda_bytes %ld\n",
+		       sdio->csd_write ? "write" : "read", sdio->csd_bytes);
+		/* read copies *from* the kernel buffer *to* userspace
+		 * here at the end, write copies *to* the kernel
+		 * buffer from userspace at the start
+		 */
+		if (!sdio->csd_write && sdio->csd_bytes > 0)
+			ret = ll_dio_user_copy(sdio, NULL);
+		ll_free_dio_buffer(&sdio->csd_dio_pages);
+		/* handle the freeing here rather than in cl_sub_dio_free
+		 * because we have the unmodified iovec pointer
+		 */
+		OBD_FREE_PTR(tmp);
+		sdio->csd_iter.iov = NULL;
+	} else {
+		/* unaligned DIO does not get user pages, so it doesn't have to
+		 * release them, but aligned I/O must
+		 */
+		ll_release_user_pages(sdio->csd_dio_pages.ldp_pages,
+				      sdio->csd_dio_pages.ldp_count);
+	}
 	cl_sync_io_note(env, &sdio->csd_ll_aio->cda_sync, ret);
 
 	EXIT;
@@ -1246,7 +1273,7 @@ EXPORT_SYMBOL(cl_dio_aio_alloc);
 
 struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 				    struct iov_iter *iter, bool write,
-				    bool sync)
+				    bool unaligned, bool sync)
 {
 	struct cl_sub_dio *sdio;
 
@@ -1261,27 +1288,33 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 		cl_page_list_init(&sdio->csd_pages);
 
 		sdio->csd_ll_aio = ll_aio;
-		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 		sdio->csd_creator_free = sync;
 		sdio->csd_write = write;
+		sdio->csd_unaligned = unaligned;
 
-		/* we need to make a copy of the user iovec at this point in
-		 * time so we:
-		 * A) have the correct state of the iovec for this chunk of I/O
-		 * B) have a chunk-local copy; some of the things we want to
-		 * do to the iovec modify it, so to process each chunk from a
-		 * separate thread requires a local copy of the iovec
-		 */
-		memcpy(&sdio->csd_iter, iter,
-		       sizeof(struct iov_iter));
-		OBD_ALLOC_PTR(sdio->csd_iter.iov);
-		if (sdio->csd_iter.iov == NULL) {
-			cl_sub_dio_free(sdio);
-			sdio = NULL;
-			goto out;
+		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
+
+		if (unaligned) {
+			/* we need to make a copy of the user iovec at this
+			 * point in time, in order to:
+			 *
+			 * A) have the correct state of the iovec for this
+			 * chunk of I/O, ie, the main iovec is altered as we do
+			 * I/O and this chunk needs the current state
+			 * B) have a chunk-local copy; doing the IO later
+			 * modifies the iovec, so to process each chunk from a
+			 * separate thread requires a local copy of the iovec
+			 */
+			memcpy(&sdio->csd_iter, iter, sizeof(struct iov_iter));
+			OBD_ALLOC_PTR(sdio->csd_iter.iov);
+			if (sdio->csd_iter.iov == NULL) {
+				cl_sub_dio_free(sdio);
+				sdio = NULL;
+				goto out;
+			}
+			memcpy((void *) sdio->csd_iter.iov, iter->iov,
+			       sizeof(struct iovec));
 		}
-		memcpy((void *) sdio->csd_iter.iov, iter->iov,
-		       sizeof(struct iovec));
 	}
 out:
 	return sdio;
@@ -1302,14 +1335,94 @@ EXPORT_SYMBOL(cl_dio_aio_free);
 void cl_sub_dio_free(struct cl_sub_dio *sdio)
 {
 	if (sdio) {
-		void *tmp = (void *) sdio->csd_iter.iov;
+		void *tmp = (void *)sdio->csd_iter.iov;
 
-		if (tmp)
-			OBD_FREE(tmp, sizeof(struct iovec));
+		if (tmp) {
+			LASSERT(sdio->csd_unaligned);
+			OBD_FREE_PTR(tmp);
+		}
 		OBD_SLAB_FREE_PTR(sdio, cl_sub_dio_kmem);
 	}
 }
 EXPORT_SYMBOL(cl_sub_dio_free);
+
+/*
+ * For unaligned DIO.
+ *
+ * Allocate the internal buffer from/to which we will perform DIO.  This takes
+ * the user I/O parameters and allocates an internal buffer large enough to
+ * hold it.  The pages in this buffer are aligned with pages in the file (ie,
+ * they have a 1-to-1 mapping with file pages).
+ */
+int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size)
+{
+	struct page *new_page;
+	size_t pg_offset;
+	int result = 0;
+	ssize_t i;
+
+	ENTRY;
+
+	/* page level offset in the file where the I/O starts */
+	pg_offset = pvec->ldp_file_offset & ~PAGE_MASK;
+	/* this adds 1 for the first page and removes the bytes in it from the
+	 * io_size, making the rest of the calculation aligned
+	 */
+	if (pg_offset) {
+		pvec->ldp_count++;
+		io_size -= min_t(size_t, PAGE_SIZE - pg_offset, io_size);
+	}
+
+	/* calculate pages for the rest of the buffer */
+	pvec->ldp_count += (io_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+
+#ifdef HAVE_DIO_ITER
+	pvec->ldp_pages = kvzalloc(pvec->ldp_count * sizeof(struct page *),
+				    GFP_NOFS);
+#else
+	OBD_ALLOC_PTR_ARRAY_LARGE(pvec->ldp_pages, pvec->ldp_count);
+#endif
+	if (pvec->ldp_pages == NULL)
+		RETURN(-ENOMEM);
+
+	for (i = 0; i < pvec->ldp_count; i++) {
+		new_page = alloc_page(GFP_NOFS);
+		if (!new_page) {
+			result = -ENOMEM;
+			pvec->ldp_count = i;
+			goto out;
+		}
+		pvec->ldp_pages[i] = new_page;
+	}
+	WARN_ON(i != pvec->ldp_count);
+
+out:
+	if (result) {
+		if (pvec->ldp_pages)
+			ll_free_dio_buffer(pvec);
+	}
+
+	if (result == 0)
+		result = pvec->ldp_count;
+
+	RETURN(result);
+}
+EXPORT_SYMBOL(ll_allocate_dio_buffer);
+
+void ll_free_dio_buffer(struct ll_dio_pages *pvec)
+{
+	int i;
+
+	for (i = 0; i < pvec->ldp_count; i++)
+		__free_page(pvec->ldp_pages[i]);
+
+#ifdef HAVE_DIO_ITER
+	kfree(pvec->ldp_pages);
+#else
+	OBD_FREE_PTR_ARRAY_LARGE(pvec->ldp_pages, pvec->ldp_count);
+#endif
+}
+EXPORT_SYMBOL(ll_free_dio_buffer);
 
 /*
  * ll_release_user_pages - tear down page struct array
@@ -1337,6 +1450,168 @@ void ll_release_user_pages(struct page **pages, int npages)
 #endif
 }
 EXPORT_SYMBOL(ll_release_user_pages);
+
+#ifdef HAVE_FAULT_IN_IOV_ITER_READABLE
+#define ll_iov_iter_fault_in_readable(iov, bytes) \
+	fault_in_iov_iter_readable(iov, bytes)
+#else
+#define ll_iov_iter_fault_in_readable(iov, bytes) \
+	iov_iter_fault_in_readable(iov, bytes)
+#endif
+
+#ifndef HAVE_KTHREAD_USE_MM
+#define kthread_use_mm(mm) use_mm(mm)
+#define kthread_unuse_mm(mm) unuse_mm(mm)
+#endif
+
+/* copy IO data to/from internal buffer and userspace iovec */
+ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov)
+{
+	struct iov_iter *iter = write_iov ? write_iov : &sdio->csd_iter;
+	struct ll_dio_pages *pvec = &sdio->csd_dio_pages;
+	struct mm_struct *mm = sdio->csd_ll_aio->cda_mm;
+	loff_t pos = pvec->ldp_file_offset;
+	size_t count = sdio->csd_bytes;
+	size_t original_count = count;
+	int short_copies = 0;
+	bool mm_used = false;
+	int status = 0;
+	int i = 0;
+	int rw;
+
+	ENTRY;
+
+	LASSERT(sdio->csd_unaligned);
+
+	if (sdio->csd_write)
+		rw = WRITE;
+	else
+		rw = READ;
+
+	/* if there's no mm, io is being done from a kernel thread, so there's
+	 * no need to transition to its mm context anyway.
+	 *
+	 * Also, if mm == current->mm, that means this is being handled in the
+	 * thread which created it, and not in a separate kthread - so it is
+	 * unnecessary (and incorrect) to do a use_mm here
+	 */
+	if (mm && mm != current->mm) {
+		kthread_use_mm(mm);
+		mm_used = true;
+	}
+
+	/* fault in the entire userspace iovec */
+	if (rw == WRITE) {
+		if (unlikely(ll_iov_iter_fault_in_readable(iter, count)))
+			GOTO(out, status = -EFAULT);
+	}
+
+	/* modeled on kernel generic_file_buffered_read/write()
+	 *
+	 * note we only have one 'chunk' of i/o here, so we do not copy the
+	 * whole iovec here (except when the chunk is the whole iovec) so we
+	 * use the count of bytes in the chunk, csd_bytes, instead of looking
+	 * at the iovec
+	 */
+	while (true) {
+		struct page *page = pvec->ldp_pages[i];
+		unsigned long offset; /* offset into kernel buffer page */
+		size_t copied; /* bytes successfully copied */
+		size_t bytes; /* bytes to copy for this page */
+
+		LASSERT(i < pvec->ldp_count);
+
+		offset = pos & ~PAGE_MASK;
+		bytes = min_t(unsigned long, PAGE_SIZE - offset,
+			      count);
+
+		CDEBUG(D_VFSTRACE,
+		       "count %zd, offset %lu, pos %lld, ldp_count %lu\n",
+		       count, offset, pos, pvec->ldp_count);
+
+		if (fatal_signal_pending(current)) {
+			status = -EINTR;
+			break;
+		}
+
+		/* write requires a few extra steps */
+		if (rw == WRITE) {
+			/* like btrfs, we do not have a mapping since this isn't
+			 * a page cache page, so we must do this flush
+			 * unconditionally
+			 *
+			 * NB: This is a noop on x86 but active on other
+			 * architectures
+			 */
+			flush_dcache_page(page);
+
+#ifndef HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+			copied = iov_iter_copy_from_user_atomic(page, iter,
+								offset, bytes);
+			iov_iter_advance(iter, copied);
+#else
+			copied = copy_page_from_iter_atomic(page, offset, bytes,
+							    iter);
+#endif
+
+		} else /* READ */ {
+			copied = copy_page_to_iter(page, offset, bytes, iter);
+		}
+
+		pos += copied;
+		count -= copied;
+
+		if (unlikely(copied < bytes)) {
+			short_copies++;
+
+			CDEBUG(D_VFSTRACE,
+			       "short copy - copied only %zd of %lu, short %d times\n",
+			       copied, bytes, short_copies);
+			/* copies will very rarely be interrupted, but we
+			 * should retry in those cases, since the other option
+			 * is giving an IO error and this can occur in normal
+			 * operation such as with racing unaligned AIOs
+			 *
+			 * but of course we should not retry indefinitely
+			 */
+			if (short_copies > 2) {
+				CERROR("Unaligned DIO copy repeatedly short, count %zd, offset %lu, bytes %lu, copied %zd, pos %lld\n",
+				count, offset, bytes, copied, pos);
+
+				status = -EFAULT;
+				break;
+			}
+
+			continue;
+		}
+
+		if (count == 0)
+			break;
+
+		i++;
+	}
+
+out:
+	/* if we complete successfully, we should reach all of the pages */
+	LASSERTF(ergo(status == 0, i == pvec->ldp_count - 1),
+		 "status: %d, i: %d, pvec->ldp_count %zu, count %zu\n",
+		  status, i, pvec->ldp_count, count);
+
+	if (write_iov && status == 0) {
+		/* The copy function we use modifies the count in the iovec,
+		 * but that's actually the job of the caller, so we return the
+		 * iovec to the original count
+		 */
+		iov_iter_reexpand(iter, original_count);
+	}
+
+	if (mm_used)
+		kthread_unuse_mm(mm);
+
+	/* the total bytes copied, or status */
+	RETURN(original_count - count ? original_count - count : status);
+}
+EXPORT_SYMBOL(ll_dio_user_copy);
 
 /**
  * Indicate that transfer of a single page completed.

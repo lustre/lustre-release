@@ -728,10 +728,15 @@ test_16j()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size"
+		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+			$((stripe_size + 1024))"
 	else
-		bsizes="$PAGE_SIZE $((PAGE_SIZE * 4)) $stripe_size \
-			$((stripe_size * 4))"
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
+			$((stripe_size - 1)) $stripe_size \
+			$((stripe_size + 1)) $((stripe_size * 3/2)) \
+			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
 	fi
 
 	# 1 process (BIO or DIO) on each client
