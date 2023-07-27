@@ -86,7 +86,7 @@ MODULE_PARM_DESC(wq_max_active,
 		 "Max work queue work items active per CPU. Default is 512. Valid values 0 to 512.");
 
 /* Common LND network tunables. */
-static int credits = 256;
+static int credits = 512;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "Number of concurrent sends on network");
 
