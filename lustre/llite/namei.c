@@ -1185,7 +1185,11 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	/* Only negative dentries enter here */
 	LASSERT(dentry->d_inode == NULL);
 
+#ifndef HAVE_D_IN_LOOKUP
 	if (!d_unhashed(dentry)) {
+#else
+	if (!d_in_lookup(dentry)) {
+#endif
 		/* A valid negative dentry that just passed revalidation,
 		 * there's little point to try and open it server-side,
 		 * even though there's a minuscule chance it might succeed.
