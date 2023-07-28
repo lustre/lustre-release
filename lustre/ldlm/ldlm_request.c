@@ -692,7 +692,6 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct req_capsule *pill,
 		 * In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp()
 		 */
-		/* coverity[overrun-buffer-val] */
 		cfs_hash_rehash_key(exp->exp_lock_hash,
 				    &lock->l_remote_handle,
 				    &reply->lock_handle,
@@ -2517,7 +2516,6 @@ static int replay_lock_interpret(const struct lu_env *env,
 		 * In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp()
 		 */
-		/* coverity[overrun-buffer-val] */
 		cfs_hash_rehash_key(exp->exp_lock_hash,
 				    &lock->l_remote_handle,
 				    &reply->lock_handle,

@@ -2259,7 +2259,6 @@ static void lod_qos_set_pool(struct lod_object *lo, int pos, char *pool_name,
 
 	/* In the function below, .hs_keycmp resolves to
 	 * pool_hashkey_keycmp() */
-	/* coverity[overrun-buffer-val] */
 	if (pool_name)
 		pool = lod_find_pool(d, pool_name);
 

@@ -257,7 +257,6 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 		LASSERTF(subdev != NULL, "not init ost %d\n", ost_idx);
 		/* In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp() */
-		/* coverity[overrun-buffer-val] */
 		stripe = lov_sub_find(env, subdev, ofid, subconf);
 		if (IS_ERR(stripe))
 			GOTO(out, result = PTR_ERR(stripe));

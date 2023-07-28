@@ -1338,7 +1338,6 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 		 * In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp()
 		 */
-		/* coverity[overrun-buffer-val] */
 		lock = cfs_hash_lookup(req->rq_export->exp_lock_hash,
 				       (void *)&dlm_req->lock_handle[0]);
 		if (lock != NULL) {
@@ -2756,7 +2755,6 @@ static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		 * In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp()
 		 */
-		/* coverity[overrun-buffer-val] */
 		cfs_hash_del(lock->l_export->exp_lock_hash,
 			     &lock->l_remote_handle, &lock->l_exp_hash);
 	}

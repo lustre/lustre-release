@@ -947,7 +947,6 @@ cl_echo_object_find(struct echo_device *d, const struct ost_id *oi)
 	 * In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp()
 	 */
-	/* coverity[overrun-buffer-val] */
 	obj = cl_object_find(env, echo_dev2cl(d), fid, &conf->eoc_cl);
 	if (IS_ERR(obj))
 		GOTO(out, eco = (void *)obj);
@@ -1415,7 +1414,6 @@ static struct lu_object *echo_md_lookup(const struct lu_env *env,
 	 * In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp()
 	 */
-	/* coverity[overrun-buffer-val] */
 	child = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev, fid, NULL);
 
 	RETURN(child);
@@ -1755,7 +1753,6 @@ static struct lu_object *echo_resolve_path(const struct lu_env *env,
 	 * In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp()
 	 */
-	/* coverity[overrun-buffer-val] */
 	parent = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev, fid, NULL);
 	if (IS_ERR(parent)) {
 		CERROR("Can not find the parent "DFID": rc = %ld\n",
@@ -1921,7 +1918,6 @@ static int echo_md_handler(struct echo_device *ed, int command,
 		 * In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp()
 		 */
-		/* coverity[overrun-buffer-val] */
 		rc = echo_create_md_object(env, ed, parent, fid, name, namelen,
 					   id, mode, count, stripe_count,
 					   stripe_index);

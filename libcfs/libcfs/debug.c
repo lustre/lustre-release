@@ -454,7 +454,6 @@ void libcfs_debug_dumplog(void)
 }
 EXPORT_SYMBOL(libcfs_debug_dumplog);
 
-/* coverity[+kill] */
 void __noreturn lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
 	libcfs_catastrophe = 1;

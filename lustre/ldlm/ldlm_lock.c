@@ -401,7 +401,6 @@ static int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 		 * in exp_lock_hash. */
 		/* In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp() */
-		/* coverity[overrun-buffer-val] */
 		cfs_hash_del(lock->l_export->exp_lock_hash,
 			     &lock->l_remote_handle, &lock->l_exp_hash);
 	}

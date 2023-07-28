@@ -1537,7 +1537,6 @@ again_pw:
 			 PFID(child_fid));
 		/* In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp() */
-		/* coverity[overrun-buffer-val] */
 		child = mdt_object_new(info->mti_env, mdt, child_fid);
 	} else {
 		/*

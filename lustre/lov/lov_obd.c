@@ -796,7 +796,6 @@ static int lov_cleanup(struct obd_device *obd)
                 CDEBUG(D_INFO, "delete pool %p\n", pool);
 		/* In the function below, .hs_keycmp resolves to
 		 * pool_hashkey_keycmp() */
-		/* coverity[overrun-buffer-val] */
                 lov_pool_del(obd, pool->pool_name);
         }
 	lov_pool_hash_destroy(&lov->lov_pools_hash_body);
