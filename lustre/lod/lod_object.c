@@ -6288,10 +6288,10 @@ again:
 		if (i == lo->ldo_comp_cnt)
 			RETURN(pflr_id(mirror_id, id));
 	}
-	if (end == LCME_ID_MAX) {
+
+	if (end == SEQ_ID_MAX) {
+		end = min_t(__u32, start, SEQ_ID_MAX) - 1;
 		start = 1;
-		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
-			  (__u32)(LCME_ID_MAX - 1));
 		goto again;
 	}
 
