@@ -2793,6 +2793,18 @@ AC_DEFUN([LC_BIO_BI_PHYS_SEGMENTS], [
 ]) # LC_BIO_BI_PHYS_SEGMENTS
 
 #
+# LC_HAVE_FLUSH_DELAYED_FPUT
+#
+# kernel commit v3.5-rc6-284-g4a9d4b024a31 adds flush_delayed_fput()
+# kernel commit v5.3-rc2-13-g7239a40ca8bf exports flush_delayed_fput()
+#
+AC_DEFUN([LC_HAVE_FLUSH_DELAYED_FPUT], [
+LB_CHECK_EXPORT([flush_delayed_fput], [fs/file_table.c],
+	[AC_DEFINE(HAVE_FLUSH_DELAYED_FPUT, 1,
+			[flush_delayed_fput() is exported by the kernel])])
+]) # LC_FLUSH_DELAYED_FPUT
+
+#
 # LC_LM_COMPARE_OWNER_EXISTS
 #
 # kernel 5.3-rc3 commit f85d93385e9fe6886a751f647f6812a89bf6bee3
@@ -4306,6 +4318,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.3
 	LC_BIO_BI_PHYS_SEGMENTS
+	LC_HAVE_FLUSH_DELAYED_FPUT
 	LC_LM_COMPARE_OWNER_EXISTS
 
 	# 5.5
