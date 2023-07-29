@@ -2717,7 +2717,7 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 
 		rc = lnet_startup_lndni(ni, tun);
 
-		if (rc < 0)
+		if (rc != 0)
 			goto failed1;
 
 		lnet_ni_addref(ni);
