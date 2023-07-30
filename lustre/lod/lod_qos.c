@@ -46,19 +46,6 @@
 
 #include "lod_internal.h"
 
-/*
- * force QoS policy (not RR) to be used for testing purposes
- */
-#define FORCE_QOS_
-
-#define D_QOS   D_OTHER
-
-#define QOS_DEBUG(fmt, ...)     CDEBUG(D_QOS, fmt, ## __VA_ARGS__)
-#define QOS_CONSOLE(fmt, ...)   LCONSOLE(D_QOS, fmt, ## __VA_ARGS__)
-
-#define TGT_BAVAIL(i) (OST_TGT(lod,i)->ltd_statfs.os_bavail * \
-		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
-
 /* check whether a target is available for new object allocation */
 static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
 				   struct lu_tgt_desc *tgt)
@@ -326,11 +313,6 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		RETURN(-EAGAIN);
 	}
 
-#if 0
-	for (i = 0; i < lqr->lqr_pool.op_count; i++)
-		QOS_CONSOLE("rr #%d ost idx=%d\n", i, lqr->lqr_pool.op_array[i]);
-#endif
-
 	RETURN(0);
 }
 
@@ -571,8 +553,8 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 	int i;
 
 	if (!test_bit(index, lod->lod_ost_bitmap)) {
-		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
-			  index);
+		CDEBUG(D_OTHER, "OST%d: been used in conflicting mirror component\n",
+		       index);
 		return true;
 	}
 
@@ -601,8 +583,8 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 	if (!test_bit(index, lag->lag_ost_avoid_bitmap))
 		used = false;
 	else
-		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
-			  index);
+		CDEBUG(D_OTHER, "OST%d: been used in conflicting mirror component\n",
+		       index);
 	return used;
 }
 
@@ -634,7 +616,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * the first iteration, skip OSPs with no objects ready
 	 */
 	if (ost->ltd_statfs.os_fprecreated == 0 && speed == 0) {
-		QOS_DEBUG("#%d: precreation is empty\n", ost_idx);
+		CDEBUG(D_OTHER, "#%d: precreation is empty\n", ost_idx);
 		RETURN(rc);
 	}
 
@@ -642,7 +624,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * try to use another OSP if this one is degraded
 	 */
 	if (ost->ltd_statfs.os_state & OS_STATFS_DEGRADED && speed < 2) {
-		QOS_DEBUG("#%d: degraded\n", ost_idx);
+		CDEBUG(D_OTHER, "#%d: degraded\n", ost_idx);
 		RETURN(rc);
 	}
 
@@ -651,8 +633,8 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * component
 	 */
 	if (speed == 0 && lod_comp_is_ost_used(env, lo, ost_idx)) {
-		QOS_DEBUG("iter %d: OST%d used by other component\n",
-			  speed, ost_idx);
+		CDEBUG(D_OTHER, "iter %d: OST%d used by other component\n",
+		       speed, ost_idx);
 		RETURN(rc);
 	}
 
@@ -661,7 +643,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * for the first and second time.
 	 */
 	if (speed < 2 && lod_should_avoid_ost(lo, lag, ost_idx)) {
-		QOS_DEBUG("iter %d: OST%d used by conflicting mirror component\n",
+		CDEBUG(D_OTHER, "iter %d: OST%d used by conflicting mirror component\n",
 			  speed, ost_idx);
 		RETURN(rc);
 	}
@@ -788,12 +770,11 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			(lod_comp->llc_stripe_count - 1) / osts->op_count + 1;
 
 repeat_find:
-	QOS_DEBUG("pool '%s' want %d start_idx %d start_count %d offset %d "
-		  "active %d count %d\n",
-		  lod_comp->llc_pool ? lod_comp->llc_pool : "",
-		  stripe_count, atomic_read(&lqr->lqr_start_idx),
-		  lqr->lqr_start_count, lqr->lqr_offset_idx, osts->op_count,
-		  osts->op_count);
+	CDEBUG(D_OTHER, "pool '%s' want %d start_idx %d start_count %d offset %d active %d count %d\n",
+	       lod_comp->llc_pool ? lod_comp->llc_pool : "",
+	       stripe_count, atomic_read(&lqr->lqr_start_idx),
+	       lqr->lqr_start_count, lqr->lqr_offset_idx, osts->op_count,
+	       osts->op_count);
 
 	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
@@ -806,9 +787,9 @@ repeat_find:
 				osts->op_count;
 		ost_idx = lqr->lqr_pool.op_array[array_idx];
 
-		QOS_DEBUG("#%d strt %d act %d strp %d ary %d idx %d\n",
-			  i, idx, /* XXX: active*/ 0,
-			  stripe_idx, array_idx, ost_idx);
+		CDEBUG(D_OTHER, "#%d strt %d act %d strp %d ary %d idx %d\n",
+		       i, idx, /* XXX: active*/ 0,
+		       stripe_idx, array_idx, ost_idx);
 
 		if ((ost_idx == LOV_QOS_EMPTY) ||
 		    !test_bit(ost_idx, m->lod_ost_bitmap))
@@ -981,10 +962,10 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	spin_unlock(&lqr->lqr_alloc);
 
 repeat_find:
-	QOS_DEBUG("want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
-		  stripe_count - 1, atomic_read(&lqr->lqr_start_idx),
-		  lqr->lqr_start_count, lqr->lqr_offset_idx, pool->op_count,
-		  pool->op_count);
+	CDEBUG(D_OTHER, "want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
+	       stripe_count - 1, atomic_read(&lqr->lqr_start_idx),
+	       lqr->lqr_start_count, lqr->lqr_offset_idx, pool->op_count,
+	       pool->op_count);
 
 	for (i = 0; i < pool->op_count && stripe_idx < stripe_count; i++) {
 		int idx;
@@ -995,9 +976,9 @@ repeat_find:
 		mdt_idx = lqr->lqr_pool.op_array[pool_idx];
 		mdt = LTD_TGT(ltd, mdt_idx);
 
-		QOS_DEBUG("#%d strt %d act %d strp %d ary %d idx %d\n",
-			  i, idx, /* XXX: active*/ 0,
-			  stripe_idx, pool_idx, mdt_idx);
+		CDEBUG(D_OTHER, "#%d strt %d act %d strp %d ary %d idx %d\n",
+		       i, idx, /* XXX: active*/ 0,
+		       stripe_idx, pool_idx, mdt_idx);
 
 		if (mdt_idx == LOV_QOS_EMPTY ||
 		    !test_bit(mdt_idx, ltd->ltd_tgt_bitmap))
@@ -1018,13 +999,13 @@ repeat_find:
 		/* try to use another OSP if this one is degraded */
 		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED &&
 		    !use_degraded) {
-			QOS_DEBUG("#%d: degraded\n", mdt_idx);
+			CDEBUG(D_OTHER, "#%d: degraded\n", mdt_idx);
 			continue;
 		}
 
 		rc = dt_fid_alloc(env, mdt->ltd_tgt, &fid, NULL, NULL);
 		if (rc < 0) {
-			QOS_DEBUG("#%d: alloc FID failed: %dl\n", mdt_idx, rc);
+			CDEBUG(D_OTHER, "#%d: alloc FID failed: %dl\n", mdt_idx, rc);
 			continue;
 		}
 
@@ -1033,8 +1014,8 @@ repeat_find:
 				&conf);
 
 		if (IS_ERR(dto)) {
-			QOS_DEBUG("can't alloc stripe on #%u: %d\n",
-				  mdt->ltd_index, (int) PTR_ERR(dto));
+			CDEBUG(D_OTHER, "can't alloc stripe on #%u: %d\n",
+			       mdt->ltd_index, (int) PTR_ERR(dto));
 
 			if (mdt->ltd_discon)
 				tgt_connecting = 1;
@@ -1576,8 +1557,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		kernel_sigaction(SIGKILL, SIG_IGN);
 		if (rc) {
 			flush_signals(current);
-			QOS_DEBUG("%s: wakeup semaphore on timeout rc = %d\n",
-			          lod2obd(lod)->obd_name, rc);
+			CDEBUG(D_OTHER, "%s: wakeup semaphore on timeout rc = %d\n",
+			       lod2obd(lod)->obd_name, rc);
 			GOTO(out_nolock, rc = -EAGAIN);
 		}
 	}
@@ -1636,7 +1617,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		good_osts++;
 	}
 
-	QOS_DEBUG("found %d good osts\n", good_osts);
+	CDEBUG(D_OTHER, "found %d good osts\n", good_osts);
 
 	if (good_osts < stripe_count_min)
 		GOTO(out, rc = -EAGAIN);
@@ -1673,15 +1654,14 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 
 			cur_weight += ost->ltd_qos.ltq_weight;
-			QOS_DEBUG("stripe_count=%d nfound=%d cur_weight=%llu "
-				  "rand=%llu total_weight=%llu\n",
-				  stripe_count, nfound, cur_weight, rand,
-				  total_weight);
+			CDEBUG(D_OTHER, "stripe_count=%d nfound=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
+			       stripe_count, nfound, cur_weight, rand,
+			       total_weight);
 
 			if (cur_weight < rand)
 				continue;
 
-			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
+			CDEBUG(D_OTHER, "stripe=%d to idx=%d\n", nfound, idx);
 			/*
 			 * In case of QOS it makes sense to check components
 			 * only for FLR and if current component doesn't support
@@ -1702,8 +1682,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 			o = lod_qos_declare_object_on(env, lod, idx, slow, th);
 			if (IS_ERR(o)) {
-				QOS_DEBUG("can't declare object on #%u: %d\n",
-					  idx, (int) PTR_ERR(o));
+				CDEBUG(D_OTHER, "can't declare object on #%u: %d\n",
+				       idx, (int) PTR_ERR(o));
 				continue;
 			}
 
@@ -1738,8 +1718,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 * so it's possible OSP won't be able to provide us with
 		 * an object due to just changed state
 		 */
-		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
-			  lod2obd(lod)->obd_name, stripe_count, nfound);
+		CDEBUG(D_OTHER, "%s: wanted %d objects, found only %d\n",
+		       lod2obd(lod)->obd_name, stripe_count, nfound);
 		for (i = 0; i < nfound; i++) {
 			LASSERT(stripe[i] != NULL);
 			dt_object_put(env, stripe[i]);
@@ -1883,7 +1863,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		good_mdts++;
 	}
 
-	QOS_DEBUG("found %d good MDTs\n", good_mdts);
+	CDEBUG(D_OTHER, "found %d good MDTs\n", good_mdts);
 
 	if (good_mdts < stripe_count - stripe_idx)
 		GOTO(unlock, rc = -EAGAIN);
@@ -1910,23 +1890,23 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 			cur_weight += mdt->ltd_qos.ltq_weight;
 
-			QOS_DEBUG("stripe_count=%d stripe_index=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
+			CDEBUG(D_OTHER, "stripe_count=%d stripe_index=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
 				  stripe_count, stripe_idx, cur_weight, rand,
 				  total_weight);
 
 			if (cur_weight < rand)
 				continue;
 
-			QOS_DEBUG("stripe=%d to idx=%d\n",
-				  stripe_idx, mdt_idx);
+			CDEBUG(D_OTHER, "stripe=%d to idx=%d\n",
+			       stripe_idx, mdt_idx);
 
 			if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
 				continue;
 
 			rc2 = dt_fid_alloc(env, mdt->ltd_tgt, &fid, NULL, NULL);
 			if (rc2 < 0) {
-				QOS_DEBUG("can't alloc FID on #%u: %d\n",
-					  mdt_idx, rc2);
+				CDEBUG(D_OTHER, "can't alloc FID on #%u: %d\n",
+				       mdt_idx, rc2);
 				continue;
 			}
 
@@ -1935,8 +1915,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
 				&conf);
 			if (IS_ERR(dto)) {
-				QOS_DEBUG("can't alloc stripe on #%u: %d\n",
-					  mdt_idx, (int) PTR_ERR(dto));
+				CDEBUG(D_OTHER, "can't alloc stripe on #%u: %d\n",
+				       mdt_idx, (int) PTR_ERR(dto));
 				continue;
 			}
 
@@ -1961,8 +1941,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 * so it's possible OSP won't be able to provide us with
 		 * an object due to just changed state
 		 */
-		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
-			  lod2obd(lod)->obd_name, stripe_count, stripe_idx);
+		CDEBUG(D_OTHER, "%s: wanted %d objects, found only %d\n",
+		       lod2obd(lod)->obd_name, stripe_count, stripe_idx);
 		for (i = saved_idx; i < stripe_idx; i++) {
 			LASSERT(stripes[i] != NULL);
 			dt_object_put(env, stripes[i]);
@@ -2679,8 +2659,7 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 			if (test_bit(ost->ltd_index, bitmap))
 				continue;
 
-			QOS_DEBUG("OST%d used in conflicting mirror "
-				  "component\n", ost->ltd_index);
+			CDEBUG(D_OTHER, "OST%d used in conflicting mirror component\n", ost->ltd_index);
 			set_bit(ost->ltd_index, bitmap);
 			lag->lag_ost_avail--;
 
@@ -2791,8 +2770,8 @@ repeat:
 			if (rc)
 				GOTO(put_ldts, rc);
 
-			QOS_DEBUG("collecting conflict osts for comp[%d]\n",
-				  comp_idx);
+			CDEBUG(D_OTHER, "collecting conflict osts for comp[%d]\n",
+			       comp_idx);
 			lod_collect_avoidance(lo, lag, comp_idx);
 
 			rc = lod_ost_alloc_qos(env, lo, stripe, ost_indices,
@@ -2910,7 +2889,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 
 		lod_comp = &lo->ldo_comp_entries[i];
 		extent = &lod_comp->llc_extent;
-		QOS_DEBUG("comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
+		CDEBUG(D_OTHER, "comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
 		if (!lo->ldo_is_composite || size >= extent->e_start) {
 			rc = lod_qos_prep_create(env, lo, attr, th, i, 0);
 			if (rc)
