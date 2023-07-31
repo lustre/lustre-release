@@ -294,6 +294,8 @@ lfs_project_handle_dir(struct list_head *head, const char *pathname,
 				   struct project_handle_control *))
 {
 	char fullname[PATH_MAX];
+	size_t size = sizeof(fullname);
+	int namelen;
 	struct dirent *ent;
 	DIR *dir;
 	int ret = 0;
@@ -321,8 +323,10 @@ lfs_project_handle_dir(struct list_head *head, const char *pathname,
 					progname, pathname, ent->d_name);
 			continue;
 		}
-		snprintf(fullname, PATH_MAX, "%s/%s", pathname,
-			 ent->d_name);
+		namelen = snprintf(fullname, size, "%s/%s",
+				   pathname, ent->d_name);
+		if (namelen >= size)
+			fullname[size - 1] = '\0';
 
 		rc = func(fullname, phc);
 		if (rc && !ret)

@@ -1389,6 +1389,8 @@ static int do_dir_list(char const *dirname, unsigned int request_mask,
 	DIR *dir;
 	struct dirent *ent;
 	char fullname[PATH_MAX];
+	size_t size = sizeof(fullname);
+	int namelen;
 	int rc = 0;
 
 	dir = opendir(dirname);
@@ -1424,8 +1426,11 @@ static int do_dir_list(char const *dirname, unsigned int request_mask,
 					rc = -ENAMETOOLONG;
 				continue;
 			}
-			snprintf(fullname, PATH_MAX, "%s/%s",
-				 dirname, ent->d_name);
+			namelen = snprintf(fullname, size, "%s/%s",
+					   dirname, ent->d_name);
+			if (namelen >= size)
+				fullname[size - 1] = '\0';
+
 			ret = do_statx(fullname, request_mask, flags);
 			if (!ret)
 				putchar('\n');
