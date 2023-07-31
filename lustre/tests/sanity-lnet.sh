@@ -1934,90 +1934,80 @@ test_209() {
 run_test 209 "Check health, but not resends, for network timeout"
 
 check_nid_in_recovq() {
-	local recovq=$($LNETCTL debug recovery $1)
-	local expect="$2"
-	local nids=$($LCTL list_nids | xargs echo)
-	local found=false
-	local nid=""
+	local queue="$1"
+	local nid="$2"
+	local expect="$3"
+	local max_wait="${4:-10}"
+	local rc=0
 
-	echo "Check \"$1\" recovery queue"
-	echo "$recovq"
-	if [[ $(grep -c 'nid-'<<<$recovq) -ne $expect ]]; then
-		error "Expect $expect NIDs found: \"$recovq\""
-	fi
+	(($expect == 0)) &&
+		echo "$queue recovery queue should be empty" ||
+		echo "$queue recovery queue should have $nid"
 
-	[[ $expect -eq 0 ]] && return 0
-
-	for nid in ${nids}; do
-		grep -q "nid-0: $nid"<<<$recovq &&
-			found=true
-	done
-
-	if ! $found; then
-		error "Didn't find local NIDs in recovery queue: \"$recovq\""
-	fi
+	wait_update $HOSTNAME \
+		"$LNETCTL debug recovery $queue | \
+		 grep -wc \"nid-0: $nid\"" \
+		"$expect" "$max_wait"
+	rc=$?
+	do_lnetctl debug recovery $queue
+	(($rc == 0)) ||
+		error "Expect $expect NIDs in recovery."
 
 	return 0
 }
 
-# First enqueue happens at time 0.
-# 2nd at 0 + 2^0 = 1
-# 3rd at 1 + 2^1 = 3
-# 4th at 3 + 2^2 = 7
-# 5th at 7 + 2^3 = 15
-# e.g. after 10 seconds we would expect to have seen the 4th enqueue,
-# (3 pings sent, 4th about to happen) and the 5th enqueue is yet to
-# happen
-# If the recovery limit is 10 seconds, then when the 5th enqueue happens
+# First ping is sent at time 0.
+# 2nd at 0 + 2^1 = 2
+# 3rd at 2 + 2^2 = 6
+# 4th at 6 + 2^3 = 14
+# 5th at 14 + 2^4 = 30
+# e.g. after 10 seconds we would expect 3 pings to have been sent, and the
+# NI will have been enqueued for the 4th ping.
+# 
+# If the recovery limit is 10 seconds, then after the 4th ping is sent
 # we expect the peer NI to have aged out, so it will not actually be
-# queued.
+# queued for a 5th ping.
 # If max_recovery_ping_interval is set to 4 then:
-#  First enqueue happens at time 0.
-#  2nd at 0 + min(2^0, 4) = 1
-#  3rd at 1 + min(2^1, 4) = 3
-#  4th at 3 + min(2^2, 4) = 7
-#  5th at 7 + min(2^3, 4) = 11
-#  6th at 11 + min(2^4, 4) = 15
-#  7th at 15 + min(2^5, 4) = 19
-# e.g. after 4 seconds we would expect to have seen the 3rd enqueue,
-# (2 pings sent, 3rd about to happen), and the 4th enqueue is yet to happen
-# e.g. after 13 seconds we would expect to have seen the 5th enqueue,
-# (4 pings sent, 5th about to happen), and the 6th enqueue is yet to happen
+#  First ping is sent at time 0
+#  2nd at  0 + min(2^1, 4) = 2
+#  3rd at  2 + min(2^2, 4) = 6
+#  4th at  6 + min(2^3, 4) = 10
+#  5th at 10 + min(2^4, 4) = 14
+#  6th at 14 + min(2^5, 4) = 18
+#  7th at 18 + min(2^6, 4) = 22
+# e.g. after 4 seconds we would expect 2 pings to have been sent, and
+# after 13 seconds we would expect 4 pings to have been sent
 check_ping_count() {
 	local queue="$1"
-	local expect="$2"
+	local nid="$2"
+	local expect="$3"
+	local max_wait="$4"
 
 	echo "Check ping counts:"
-	local ping_count
+
+	local rc=0
 	if [[ $queue == "ni" ]]; then
-		$LNETCTL net show -v 2 | egrep 'nid|health value|ping'
-		ping_count=( $($LNETCTL net show -v 2 |
-				awk '/ping_count/{print $NF}') )
-	elif [[ $queue == "peer_ni" ]]; then
-		$LNETCTL peer show -v 2 | egrep 'nid|health value|ping'
-		ping_count=( $($LNETCTL peer show -v 2 |
-				awk '/ping_count/{print $NF}') )
+		wait_update $HOSTNAME \
+			"$LNETCTL net show -v 2 | \
+			 grep -e $nid -e ping_count | grep -wA1 $nid | \
+			 awk '/ping_count/{print \\\$NF}'" "$expect" "$max_wait"
+		rc=$?
+		$LNETCTL net show -v 2 | grep -e $nid -e ping_count
+	elif [[ $queue == peer_ni ]]; then
+		wait_update $HOSTNAME \
+			"$LNETCTL peer show -v 2 --nid $nid | \
+			 grep -v primary | \
+			 grep -e $nid -e ping_count | grep -wA1 $nid | \
+			 awk '/ping_count/{print \\\$NF}'" "$expect" "$max_wait"
+		rc=$?
+		$LNETCTL peer show -v 2 --nid $nid | grep -v primary |
+			grep -e $nid -e ping_count
 	else
 		error "Unrecognized queue \"$queue\""
 		return 1
 	fi
 
-	local count
-	local found=false
-	for count in "${ping_count[@]}"; do
-		if [[ $count -eq $expect ]]; then
-			if [[ $expect -ne 0 ]] && $found ; then
-				error "Found more than one interface matching \"$expect\" ping count"
-				return 1
-			else
-				echo "Expect ping count \"$expect\" found \"$count\""
-				found=true;
-			fi
-		elif [[ $count -ne 0 ]]; then
-			error "Found interface with ping count \"$count\" but expect \"$expect\""
-			return 1
-		fi
-	done
+	((rc == 0)) || error "Unexpected ping count"
 
 	return 0
 }
@@ -2041,21 +2031,17 @@ test_210() {
 		error "failed to set recovery_limit"
 
 	$LCTL set_param debug=+net
-	# Use local_error so LNet doesn't attempt to resend the discovery ping
 	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e local_error
-	do_lnetctl discover $prim_nid &&
-		error "Expected discovery to fail"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	do_lnetctl net set --health 0 --nid $prim_nid
 
-	# See comment for check_ping_count()
-	sleep 5
-	check_nid_in_recovq "-l" "1"
-	check_ping_count "ni" "2"
+	check_ping_count "ni" "$prim_nid" "2" "10"
+	check_nid_in_recovq "-l" "$prim_nid" "1"
 
-	sleep 5
-
-	check_nid_in_recovq "-l" "1"
-	check_ping_count "ni" "3"
+	check_ping_count "ni" "$prim_nid" "3" "10"
+	check_nid_in_recovq "-l" "$prim_nid" "1"
 
 	$LCTL net_drop_del -a
 
@@ -2077,20 +2063,17 @@ test_210() {
 		error "failed to set max_recovery_ping_interval"
 
 	$LCTL set_param debug=+net
-	# Use local_error so LNet doesn't attempt to resend the discovery ping
 	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e local_error
-	do_lnetctl discover $prim_nid &&
-		error "Expected discovery to fail"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	do_lnetctl net set --health 0 --nid $prim_nid
 
-	# See comment for check_ping_count()
-	sleep 4
-	check_nid_in_recovq "-l" "1"
-	check_ping_count "ni" "2"
+	check_ping_count "ni" "$prim_nid" "2" "10"
+	check_nid_in_recovq "-l" "$prim_nid" "1"
 
-	sleep 9
-	check_nid_in_recovq "-l" "1"
-	check_ping_count "ni" "4"
+	check_ping_count "ni" "$prim_nid" "4" "10"
+	check_nid_in_recovq "-l" "$prim_nid" "1"
 
 	$LCTL net_drop_del -a
 
@@ -2121,43 +2104,33 @@ test_211() {
 
 	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e remote_error
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e remote_error
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
-	$LNETCTL peer set --nid $prim_nid --health 0
+	do_lnetctl peer set --nid $prim_nid --health 0
 
-	# After 5 seconds, we expect the peer NI to still be in recovery
-	sleep 5
-	check_nid_in_recovq "-p" 1
-	check_ping_count "peer_ni" "2"
+	check_nid_in_recovq "-p" "$prim_nid" "1"
 
-	# After 15 seconds, the peer NI should have been fully processed out of
-	# the recovery queue. We'll allow a total of 17 seconds to account for
-	# differences in sleeping for whole seconds vs. the more accurate time
-	# keeping that is done in the recovery code.
-	sleep 12
-	check_nid_in_recovq "-p" 0
-	check_ping_count "peer_ni" "4"
+	# The peer should age out in 10-20 seconds
+	check_nid_in_recovq "-p" "$prim_nid" "0" "20"
+	# Ping count should reset to 0 when peer ages out
+	check_ping_count "peer_ni" "$prim_nid" "0"
 
 	$LCTL net_drop_del -a
 
 	# Set health to force it back onto the recovery queue. Set to 500 means
-	# in 5 seconds it should be back at maximum value. We'll wait a couple
-	# more seconds than that to be safe.
+	# in ~5 seconds it should be back at maximum value.
 	# NB: we reset the recovery limit to 0 (indefinite) so the peer NI is
 	# eligible again
 	do_lnetctl set recovery_limit 0 ||
 		error "failed to set recovery_limit"
 
-	$LNETCTL peer set --nid $prim_nid --health 500
+	do_lnetctl peer set --nid $prim_nid --health 500
 
-	check_nid_in_recovq "-p" 1
-	check_ping_count "peer_ni" "2"
-
-	sleep 7
-
-	check_nid_in_recovq "-p" 0
-	check_ping_count "peer_ni" "0"
+	check_nid_in_recovq "-p" "$prim_nid" "1"
+	check_nid_in_recovq "-p" "$prim_nid" "0" "20"
 
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
@@ -2178,19 +2151,20 @@ test_211() {
 
 	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e remote_error
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e remote_error
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
-	$LNETCTL peer set --nid $prim_nid --health 0
+	do_lnetctl peer set --nid $prim_nid --health 0
 
-	# See comment for check_ping_count()
-	sleep 4
-	check_nid_in_recovq "-p" "1"
-	check_ping_count "peer_ni" "2"
+	check_ping_count "peer_ni" "$prim_nid" "1" "4"
+	check_nid_in_recovq "-p" "$prim_nid" "1"
 
-	sleep 9
-	check_nid_in_recovq "-p" "1"
-	check_ping_count "peer_ni" "4"
+	# After we detect the 1st ping above, the 4th ping should be sent after
+	# ~13 seconds
+	check_ping_count "peer_ni" "$prim_nid" "4" "14"
+	check_nid_in_recovq "-p" "$prim_nid" "1"
 
 	$LCTL net_drop_del -a
 
@@ -2542,8 +2516,8 @@ test_216() {
 	[[ $rc -eq 0 ]] &&
 		error "expected ping to fail"
 
-	check_nid_in_recovq "-p" 0
-	check_nid_in_recovq "-l" 1
+	check_nid_in_recovq "-p" "${nids[0]}" "0"
+	check_nid_in_recovq "-l" "${nids[0]}" "1"
 
 	return 0
 }
