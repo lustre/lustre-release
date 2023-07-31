@@ -227,10 +227,8 @@ static int allocate_filesystem_keyring(struct super_block *sb)
 	return 0;
 }
 
-void llcrypt_sb_free(struct super_block *sb)
+void llcrypt_sb_free(struct lustre_sb_info *lsi)
 {
-	struct lustre_sb_info *lsi = s2lsi(sb);
-
 	if (lsi != NULL) {
 		key_put(lsi->lsi_master_keys);
 		lsi->lsi_master_keys = NULL;

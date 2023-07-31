@@ -162,10 +162,10 @@ struct lustre_mount_info *server_get_mount(const char *name)
 	}
 	lsi = s2lsi(lmi->lmi_sb);
 
-	atomic_inc(&lsi->lsi_mounts);
+	kref_get(&lsi->lsi_mounts);
 
 	CDEBUG(D_MOUNT, "get mount %p from %s, refs=%d\n", lmi->lmi_sb,
-	       name, atomic_read(&lsi->lsi_mounts));
+	       name, kref_read(&lsi->lsi_mounts));
 
 	RETURN(lmi);
 }
@@ -199,7 +199,7 @@ int server_put_mount(const char *name, bool dereg_mnt)
 	lsi = s2lsi(lmi->lmi_sb);
 
 	CDEBUG(D_MOUNT, "put mount %p from %s, refs=%d\n",
-	       lmi->lmi_sb, name, atomic_read(&lsi->lsi_mounts));
+	       lmi->lmi_sb, name, kref_read(&lsi->lsi_mounts));
 
 	if (lustre_put_lsi(lmi->lmi_sb))
 		CDEBUG(D_MOUNT, "Last put of mount %p from %s\n",

@@ -608,7 +608,7 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 
 	s2lsi_nocast(sb) = lsi;
 	/* we take 1 extra ref for our setup */
-	atomic_set(&lsi->lsi_mounts, 1);
+	kref_init(&lsi->lsi_mounts);
 
 	/* Default umount style */
 	lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
@@ -619,19 +619,17 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 }
 EXPORT_SYMBOL(lustre_init_lsi);
 
-static int lustre_free_lsi(struct super_block *sb)
+static int lustre_free_lsi(struct lustre_sb_info *lsi)
 {
-	struct lustre_sb_info *lsi = s2lsi(sb);
-
 	ENTRY;
 
 	LASSERT(lsi != NULL);
 	CDEBUG(D_MOUNT, "Freeing lsi %p\n", lsi);
 
 	/* someone didn't call server_put_mount. */
-	LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
+	LASSERT(kref_read(&lsi->lsi_mounts) == 0);
 
-	llcrypt_sb_free(sb);
+	llcrypt_sb_free(lsi);
 	if (lsi->lsi_lmd != NULL) {
 		if (lsi->lsi_lmd->lmd_dev != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_dev,
@@ -669,9 +667,24 @@ static int lustre_free_lsi(struct super_block *sb)
 
 	LASSERT(lsi->lsi_llsbi == NULL);
 	OBD_FREE_PTR(lsi);
-	s2lsi_nocast(sb) = NULL;
 
 	RETURN(0);
+}
+
+static void lustre_put_lsi_free(struct kref *kref)
+{
+	struct lustre_sb_info *lsi = container_of(kref, struct lustre_sb_info,
+						  lsi_mounts);
+
+	if (IS_SERVER(lsi) && lsi->lsi_osd_exp) {
+		lu_device_put(&lsi->lsi_dt_dev->dd_lu_dev);
+		lsi->lsi_osd_exp->exp_obd->obd_lvfs_ctxt.dt = NULL;
+		lsi->lsi_dt_dev = NULL;
+		obd_disconnect(lsi->lsi_osd_exp);
+		/* wait till OSD is gone */
+		obd_zombie_barrier();
+	}
+	lustre_free_lsi(lsi);
 }
 
 /*
@@ -686,17 +699,9 @@ int lustre_put_lsi(struct super_block *sb)
 
 	LASSERT(lsi != NULL);
 
-	CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
-	if (atomic_dec_and_test(&lsi->lsi_mounts)) {
-		if (IS_SERVER(lsi) && lsi->lsi_osd_exp) {
-			lu_device_put(&lsi->lsi_dt_dev->dd_lu_dev);
-			lsi->lsi_osd_exp->exp_obd->obd_lvfs_ctxt.dt = NULL;
-			lsi->lsi_dt_dev = NULL;
-			obd_disconnect(lsi->lsi_osd_exp);
-			/* wait till OSD is gone */
-			obd_zombie_barrier();
-		}
-		lustre_free_lsi(sb);
+	CDEBUG(D_MOUNT, "put %p %d\n", sb, kref_read(&lsi->lsi_mounts));
+	if (kref_put(&lsi->lsi_mounts, lustre_put_lsi_free)) {
+		s2lsi_nocast(sb) = NULL;
 		RETURN(1);
 	}
 	RETURN(0);

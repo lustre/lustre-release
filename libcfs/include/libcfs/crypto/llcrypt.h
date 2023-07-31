@@ -165,7 +165,7 @@ extern int llcrypt_inherit_context(struct inode *, struct inode *,
 					void *, bool);
 extern bool llcrypt_policy_has_filename_enc(struct inode *inode);
 /* keyring.c */
-extern void llcrypt_sb_free(struct super_block *sb);
+extern void llcrypt_sb_free(struct lustre_sb_info *lsi);
 extern int llcrypt_ioctl_add_key(struct file *filp, void __user *arg);
 extern int llcrypt_ioctl_remove_key(struct file *filp, void __user *arg);
 extern int llcrypt_ioctl_remove_key_all_users(struct file *filp,
@@ -423,7 +423,7 @@ static inline bool llcrypt_policy_has_filename_enc(struct inode *inode)
 }
 
 /* keyring.c */
-static inline void llcrypt_sb_free(struct super_block *sb)
+static inline void llcrypt_sb_free(struct lustre_sb_info *lsi)
 {
 }
 
