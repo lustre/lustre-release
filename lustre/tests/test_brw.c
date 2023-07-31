@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 	int fd;
 	char *buf;
 	long long count, last;
-	long pg_vec, len;
+	size_t pg_vec, len;
 	uint64_t objid, offset;
 	struct stat st;
 	int flags = 0;

@@ -5121,7 +5121,6 @@ int llog_poollist(char *fsname, char *poolname)
 		else
 			printf("%s.%s\n", fsname, tmp->lpn_name);
 		list_del(&tmp->lpn_list);
-		free(tmp);
 	}
 
 	return rc;
