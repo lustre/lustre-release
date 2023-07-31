@@ -14487,6 +14487,9 @@ test_127a() { # bug 15521
 	local name count samp unit min max sum sumsq
 	local tmpfile=$TMP/$tfile.tmp
 
+	# enable stats header if it is disabled
+	$LCTL set_param enable_stats_header=1
+
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 	echo "stats before reset"
 	stack_trap "rm -f $tmpfile"

@@ -120,6 +120,7 @@ LUSTRE_STATIC_UINT_ATTR(at_max, &at_max);
 LUSTRE_STATIC_UINT_ATTR(at_extra, &at_extra);
 LUSTRE_STATIC_UINT_ATTR(at_early_margin, &at_early_margin);
 LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
+LUSTRE_STATIC_UINT_ATTR(enable_stats_header, &obd_enable_stats_header);
 LUSTRE_STATIC_UINT_ATTR(lbug_on_eviction, &obd_lbug_on_eviction);
 LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
 LUSTRE_STATIC_UINT_ATTR(evict_multiplier, &ping_evict_timeout_multiplier);
@@ -428,6 +429,7 @@ LUSTRE_RW_ATTR(timeout);
 static struct attribute *lustre_attrs[] = {
 	&lustre_attr_version.attr,
 	&lustre_attr_pinger.attr,
+	&lustre_sattr_enable_stats_header.u.attr,
 	&lustre_attr_health_check.attr,
 	&lustre_attr_jobid_name.attr,
 	&lustre_attr_jobid_var.attr,

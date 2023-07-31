@@ -40,6 +40,9 @@
 
 #ifdef CONFIG_PROC_FS
 
+/* enable start/elapsed_time in stats headers by default */
+unsigned int obd_enable_stats_header = 1;
+
 static int lprocfs_no_percpu_stats = 0;
 module_param(lprocfs_no_percpu_stats, int, 0644);
 MODULE_PARM_DESC(lprocfs_no_percpu_stats, "Do not alloc percpu data for lprocfs stats");
@@ -1406,6 +1409,9 @@ void lprocfs_stats_header(struct seq_file *seq, ktime_t now, ktime_t ts_init,
 	ts = ktime_to_timespec64(now);
 	seq_printf(seq, "%s%-*s %llu.%09lu%s\n", prefix, width, field,
 		   (s64)ts.tv_sec, ts.tv_nsec, units);
+
+	if (!obd_enable_stats_header)
+		return;
 
 	field = (colon && colon[0]) ? "start_time:" : "start_time";
 	ts = ktime_to_timespec64(ts_init);
