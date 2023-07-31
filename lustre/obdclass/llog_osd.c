@@ -1307,7 +1307,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 		goto after_open;
 	}
 
-	ls = ls_device_get(dt);
+	ls = ls_device_find_or_init(dt);
 	if (IS_ERR(ls))
 		RETURN(PTR_ERR(ls));
 

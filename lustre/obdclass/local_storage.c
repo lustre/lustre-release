@@ -105,20 +105,6 @@ static const struct lu_device_operations ls_lu_dev_ops = {
 	.ldo_object_alloc =	ls_object_alloc
 };
 
-static struct ls_device *__ls_find_dev(struct dt_device *dev)
-{
-	struct ls_device *ls, *ret = NULL;
-
-	list_for_each_entry(ls, &ls_list_head, ls_linkage) {
-		if (ls->ls_osd == dev) {
-			atomic_inc(&ls->ls_refcount);
-			ret = ls;
-			break;
-		}
-	}
-	return ret;
-}
-
 static const struct lu_device_type_operations ls_device_type_ops = {
 	.ldto_start = NULL,
 	.ldto_stop  = NULL,
@@ -129,23 +115,18 @@ static struct lu_device_type ls_lu_type = {
 	.ldt_ops  = &ls_device_type_ops,
 };
 
-struct ls_device *ls_device_get(struct dt_device *dev)
+static
+struct ls_device *ls_device_init(struct dt_device *dev)
 {
 	struct ls_device *ls;
 
 	ENTRY;
 
-	mutex_lock(&ls_list_mutex);
-	ls = __ls_find_dev(dev);
-	if (ls)
-		GOTO(out_ls, ls);
-
-	/* not found, then create */
 	OBD_ALLOC_PTR(ls);
 	if (ls == NULL)
 		GOTO(out_ls, ls = ERR_PTR(-ENOMEM));
 
-	atomic_set(&ls->ls_refcount, 1);
+	kref_init(&ls->ls_refcount);
 	INIT_LIST_HEAD(&ls->ls_los_list);
 	mutex_init(&ls->ls_los_mutex);
 
@@ -159,25 +140,54 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 	/* finally add ls to the list */
 	list_add(&ls->ls_linkage, &ls_list_head);
 out_ls:
+	RETURN(ls);
+}
+
+struct ls_device *ls_device_find_or_init(struct dt_device *dev)
+{
+	struct ls_device *ls, *ret = NULL;
+
+	ENTRY;
+
+	mutex_lock(&ls_list_mutex);
+	/* find */
+	list_for_each_entry(ls, &ls_list_head, ls_linkage) {
+		if (ls->ls_osd == dev) {
+			kref_get(&ls->ls_refcount);
+			ret = ls;
+			break;
+		}
+	}
+	/* found */
+	if (ret)
+		GOTO(out_ls, ret);
+
+	/* not found, then create */
+	ls = ls_device_init(dev);
+out_ls:
 	mutex_unlock(&ls_list_mutex);
 	RETURN(ls);
+}
+
+static void ls_device_put_free(struct kref *kref)
+{
+	struct ls_device *ls = container_of(kref, struct ls_device,
+					    ls_refcount);
+
+	LASSERT(list_empty(&ls->ls_los_list));
+	list_del(&ls->ls_linkage);
+	mutex_unlock(&ls_list_mutex);
 }
 
 void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 {
 	LASSERT(env);
-	if (!atomic_dec_and_test(&ls->ls_refcount))
-		return;
-
-	mutex_lock(&ls_list_mutex);
-	if (atomic_read(&ls->ls_refcount) == 0) {
-		LASSERT(list_empty(&ls->ls_los_list));
-		list_del(&ls->ls_linkage);
+	if (kref_put_mutex(&ls->ls_refcount, ls_device_put_free,
+			   &ls_list_mutex)) {
 		lu_site_purge(env, ls->ls_top_dev.dd_lu_dev.ld_site, ~0);
 		lu_device_fini(&ls->ls_top_dev.dd_lu_dev);
 		OBD_FREE_PTR(ls);
 	}
-	mutex_unlock(&ls_list_mutex);
 }
 
 /**
@@ -490,7 +500,7 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 	} else {
 		struct ls_device *ls;
 
-		ls = ls_device_get(dt);
+		ls = ls_device_find_or_init(dt);
 		if (IS_ERR(ls)) {
 			dto = ERR_CAST(ls);
 		} else {
@@ -585,7 +595,7 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 	} else {
 		struct ls_device *ls;
 
-		ls = ls_device_get(dt);
+		ls = ls_device_find_or_init(dt);
 		if (IS_ERR(ls)) {
 			dto = ERR_CAST(ls);
 		} else {
@@ -799,6 +809,7 @@ static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	return rc;
 }
 
+
 /**
  * Initialize local OID storage for required sequence.
  * That may be needed for services that uses local files and requires
@@ -830,7 +841,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 
 	ENTRY;
 
-	ls = ls_device_get(dev);
+	ls = ls_device_find_or_init(dev);
 	if (IS_ERR(ls))
 		RETURN(PTR_ERR(ls));
 
@@ -847,7 +858,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	atomic_set(&(*los)->los_refcount, 1);
 	mutex_init(&(*los)->los_id_lock);
 	(*los)->los_dev = &ls->ls_top_dev;
-	atomic_inc(&ls->ls_refcount);
+	kref_get(&ls->ls_refcount);
 	list_add(&(*los)->los_list, &ls->ls_los_list);
 
 	/* Use {seq, 0, 0} to create the LAST_ID file for every
@@ -926,7 +937,7 @@ out_trans:
 out_los:
 	if (rc != 0) {
 		list_del(&(*los)->los_list);
-		atomic_dec(&ls->ls_refcount);
+		ls_device_put(env, ls);
 		OBD_FREE_PTR(*los);
 		*los = NULL;
 		if (o != NULL && !IS_ERR(o))

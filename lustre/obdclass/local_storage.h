@@ -42,7 +42,7 @@ struct ls_device {
 	/* all initialized ls_devices on this node linked by this */
 	struct list_head	 ls_linkage;
 	/* how many handle's reference this local storage */
-	atomic_t		 ls_refcount;
+	struct kref		 ls_refcount;
 	/* underlaying OSD device */
 	struct dt_device	*ls_osd;
 	/* list of all local OID storages */
@@ -74,7 +74,7 @@ static inline struct dt_object *ls_locate(const struct lu_env *env,
 			    &ls->ls_top_dev.dd_lu_dev, conf);
 }
 
-struct ls_device *ls_device_get(struct dt_device *dev);
+struct ls_device *ls_device_find_or_init(struct dt_device *dev);
 void ls_device_put(const struct lu_env *env, struct ls_device *ls);
 struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq);
 void dt_los_put(struct local_oid_storage *los);
