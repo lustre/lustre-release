@@ -350,6 +350,45 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
           <literal>forbid_encryption</literal> prevents clients from using
           encryption.</para>
         </listitem>
+
+        <listitem>
+          <para condition='l2G'>The property <literal>rbac</literal> defines
+          different Role-Based Admin Control mechanisms:
+          <itemizedlist>
+            <listitem>
+              <para><literal>byfid_ops</literal>, to allow operations by FID
+              (e.g. 'lfs rmfid').</para>
+            </listitem>
+            <listitem>
+              <para><literal>chlg_ops</literal>, to allow access to Lustre
+              Changelogs.</para>
+            </listitem>
+            <listitem>
+              <para><literal>dne_ops</literal>, to allow operations related to
+              DNE (e.g. 'lfs mkdir').</para>
+            </listitem>
+            <listitem>
+              <para><literal>file_perms</literal>, to allow modifications of
+              file permissions and owners.</para>
+            </listitem>
+            <listitem>
+              <para><literal>fscrypt_admin</literal>, to allow fscrypt related
+              admin tasks (create or modify protectors/policies). Note that even
+              without this role, it is still possible to lock or unlock
+              encrypted directories, as these operations only need read access
+              to fscrypt metadata.</para>
+            </listitem>
+            <listitem>
+              <para><literal>quota_ops</literal>, to allow quota modifications.
+              </para>
+            </listitem>
+          </itemizedlist>
+          The default value for this property is <literal>all</literal>,
+          which means all roles are allowed. Multiple values among those listed
+          above can be specified, comma separated. Apart from all, any role not
+          explicitly specified is forbidden. And to forbid all roles, use
+          <literal>none</literal> value.</para>
+        </listitem>
       </itemizedlist>
 
       <para>Alter values to either true (1) or false (0) on the MGS:</para>
