@@ -1265,13 +1265,12 @@ runas_su() {
 
 check_gss_daemon_nodes() {
 	local list=$1
-	local dname=$2
+	local dname=$(basename "$2" | awk '{print $1}')
 	local loopmax=10
 	local loop
 	local node
 	local ret
 
-	dname=$(basename "$dname" | awk '{print $1}')
 	do_nodesv $list "num=0;
 for proc in \\\$(pgrep $dname); do
 [ \\\$(ps -o ppid= -p \\\$proc) -ne 1 ] || ((num++))
@@ -1299,11 +1298,10 @@ fi; "
 
 check_gss_daemon_facet() {
 	local facet=$1
-	local dname=$2
+	local dname=$(basename "$2" | awk '{print $1}')
+	local num=$(do_facet $facet ps -o cmd -C $dname | grep -c $dname)
 
-	dname=$(basename "$dname" | awk '{print $1}')
-	num=$(do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l)
-	if [ $num -ne 1 ]; then
+	if (( $num != 1 )); then
 		echo "$num instance of $dname on $facet"
 		return 1
 	fi
@@ -6459,7 +6457,7 @@ dump_file_contents() {
 			"Invalid parameters for dump_file_contents()"
 		return 1
 	fi
-	for node in ${nodes}; do
+	for node in ${nodes//,/ }; do
 		do_node $node "for i in \\\$(find $dir -type f); do
 				echo ====\\\${i}=======================;
 				cat \\\${i};
@@ -6479,7 +6477,7 @@ dump_command_output() {
 		return 1
 	fi
 
-	for node in ${nodes}; do
+	for node in ${nodes//,/ }; do
 		do_node $node "echo ====${cmd}=======================;
 				$cmd" >> ${logname}.${node}.log
 	done
@@ -6619,12 +6617,13 @@ no_dsh() {
 comma_list() {
 	# echo is used to convert newlines to spaces, since it doesn't
 	# introduce a trailing space as using "tr '\n' ' '" does
-	echo $(tr -s " " "\n" <<< $* | sort -b -u) | tr ' ' ','
+	echo $(tr -s ", " "\n" <<< $* | sort -b -u) | tr ' ' ','
 }
 
 list_member () {
 	local list=$1
 	local item=$2
+
 	echo $list | grep -qw $item
 }
 
@@ -6676,7 +6675,7 @@ absolute_path() {
 }
 
 get_facets () {
-	local types=${1:-"OST MDS MGS"}
+	local types=${*:-"OST MDS MGS"}
 
 	local list=""
 
@@ -7809,15 +7808,20 @@ require_dsh_mds()
 	return 0
 }
 
-remote_ost ()
+# return true if any OST is on a remote node
+remote_ost()
 {
+	local osts=$(osts_nodes)
 	local node
-	for node in $(osts_nodes) ; do
+
+	for node in ${osts//,/ }; do
 		remote_node $node && return 0
 	done
+
 	return 1
 }
 
+# return true if any OST is on a remote node and no remote shell is configured
 remote_ost_nodsh()
 {
 	[ -n "$CLIENTONLY" ] && return 0 || true
@@ -7861,7 +7865,7 @@ facets_nodes () {
 		nodes="$nodes $(facet_active_host $facet)"
 	done
 
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
 
@@ -7893,7 +7897,7 @@ nodes_list () {
 		nodes="$nodes $(facets_nodes $(get_facets))"
 	fi
 
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
 
@@ -7948,7 +7952,7 @@ all_server_nodes () {
 
 	nodes="$mgs_HOST $mgsfailover_HOST $(all_mdts_nodes) $(all_osts_nodes)"
 
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
 
@@ -7965,7 +7969,7 @@ all_nodes () {
 		nodes="$nodes $(all_server_nodes)"
 	fi
 
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
 
@@ -8030,7 +8034,7 @@ check_versions () {
 get_node_count() {
 	local nodes="$@"
 
-	echo $nodes | wc -w || true
+	echo ${nodes//,/ } | wc -w || true
 }
 
 mixed_mdt_devs () {
