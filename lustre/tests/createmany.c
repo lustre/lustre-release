@@ -40,6 +40,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
+#include <sys/xattr.h>
 #include <time.h>
 #include <unistd.h>
 #include <lustre/lustreapi.h>
@@ -49,14 +50,15 @@
 
 static void usage(const char *prog)
 {
-	printf("usage: %s {-o [-k]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] "
-	       "[-i mdt_index] [-t seconds] filenamefmt [[start] count]\n",
+	printf(
+	       "usage: %s {-o [-k] [-x <size>]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] [-i mdt_index] [-t seconds] filenamefmt [[start] count]\n",
 	       prog);
 	printf("\t-i\tMDT to create the directories on\n"
 	       "\t-l\tlink files to existing <tgt> file\n"
 	       "\t-m\tmknod regular files (don't create OST objects)\n"
 	       "\t-o\topen+create files with path and printf format\n"
 	       "\t-k\t    keep files open until all files are opened\n"
+	       "\t-x\t    set an xattr with <size> length on the files\n"
 	       "\t-u\tunlink file/dir (with optional <unlinkfmt>)\n");
 	printf("\t-d\tuse directories instead of regular files\n"
 	       "\t-t\tstop creating files after <seconds> have elapsed\n");
@@ -97,8 +99,11 @@ int main(int argc, char **argv)
 	bool do_setsize = false, do_chuid = false, do_chgid = false;
 	bool do_chprj = false;
 	bool do_rmdir = false;
+	bool do_xattr = false;
 	int stripe_pattern = LMV_HASH_TYPE_FNV_1A_64;
 	int stripe_offset = -1, stripe_count = 1;
+	size_t xattr_size = 0;
+	char *xattr_buf = NULL;
 	char *filename, *progname;
 	char *fmt = NULL, *fmt_unlink = NULL, *tgt = NULL;
 	char *endp = NULL;
@@ -127,7 +132,7 @@ int main(int argc, char **argv)
 	else
 		progname = argv[0];
 
-	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:")) != -1) {
+	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:x:")) != -1) {
 		switch (c) {
 		case 'd':
 			do_mkdir = true;
@@ -179,6 +184,15 @@ int main(int argc, char **argv)
 			do_chuid = true;
 			uid = strtoul(optarg, NULL, 0);
 			break;
+		case 'x':
+			do_xattr = true;
+			xattr_size = strtoul(optarg, &endp, 0);
+			if (*endp != '\0') {
+				fprintf(stderr, "invalid xattr size '%s'\n",
+					optarg);
+				return 1;
+			}
+			break;
 		case '?':
 			fprintf(stderr, "Unknown option '%c'\n", optopt);
 			usage(progname);
@@ -198,8 +212,8 @@ int main(int argc, char **argv)
 	if (do_mkdir && do_unlink)
 		do_rmdir = true;
 
-	if (!do_open && do_keep) {
-		fprintf(stderr, "error: can only use -k with -o\n");
+	if (!do_open && (do_keep || do_xattr)) {
+		fprintf(stderr, "error: can only use -k|-x with -o\n");
 		usage(progname);
 	}
 
@@ -218,6 +232,14 @@ int main(int argc, char **argv)
 	has_fmt_spec = strchr(fmt, '%') != NULL;
 	if (fmt_unlink != NULL)
 		unlink_has_fmt_spec = strchr(fmt_unlink, '%') != NULL;
+
+	if (do_xattr) {
+		xattr_buf = malloc(xattr_size);
+		if (!xattr_buf) {
+			printf("malloc xattr buf error: %s\n", strerror(errno));
+			return errno;
+		}
+	}
 
 	for (i = 0, start = last_t = now(), end += start;
 	     i < count && now() < end; i++, begin++) {
@@ -279,6 +301,18 @@ int main(int argc, char **argv)
 					printf("ioctl(%s, %d) error: %s\n",
 					       "FS_IOC_SETXATTR", pid,
 					       strerror(errno));
+					break;
+				}
+			}
+
+			if (do_xattr) {
+				strncpy(xattr_buf, filename, xattr_size);
+				rc = fsetxattr(fd, "user.createmany", xattr_buf,
+					       xattr_size, 0);
+				if (rc < 0) {
+					printf("fsetxattr(%s) error: %s\n",
+					       filename, strerror(errno));
+					rc = errno;
 					break;
 				}
 			}
@@ -367,6 +401,9 @@ int main(int argc, char **argv)
 					     do_mknod ? "create" : "",
 	       do_unlink ? do_mkdir ? "/rmdir" : "/unlink" : "",
 	       last_t - start, ((double)total / (last_t - start)));
+
+	if (xattr_buf)
+		free(xattr_buf);
 
 	if (!do_keep)
 		return rc;
