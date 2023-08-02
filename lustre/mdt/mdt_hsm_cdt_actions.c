@@ -254,6 +254,70 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 }
 
 /**
+ *  llog_cat_process() callback, used to find last used cookie.
+ *  The processing ends at the first non-cancel record.
+ * \param env [IN] environment
+ * \param llh [IN] llog handle
+ * \param hdr [IN] llog record
+ * \param data [IN/OUT] cb data = coordinator
+ * \retval 0 success
+ * \retval -ve failure
+ */
+static int hsm_last_cookie_cb(const struct lu_env *env, struct llog_handle *llh,
+			      struct llog_rec_hdr *hdr, void *data)
+{
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_action_item *hai = &larr->arr_hai;
+	struct coordinator *cdt = data;
+
+	/* do not stop on cancel, it takes cookie from other request */
+	if (hai->hai_action == HSMA_CANCEL)
+		RETURN(0);
+
+	if (hai->hai_cookie > cdt->cdt_last_cookie)
+		cdt->cdt_last_cookie = hai->hai_cookie;
+
+	RETURN(LLOG_PROC_BREAK);
+}
+
+/**
+ * Update the last cookie used by a request.
+ * \param mti [IN] context
+ */
+static int cdt_update_last_cookie(const struct lu_env *env,
+				  struct coordinator *cdt)
+__must_hold(&cdt->cdt_llog_lock)
+{
+	struct mdt_device *mdt;
+	struct obd_device *obd;
+	struct llog_ctxt *lctxt;
+	int rc;
+
+	mdt = container_of(cdt, typeof(*mdt), mdt_coordinator);
+	obd = mdt2obd_dev(mdt);
+	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
+	if (!lctxt || !lctxt->loc_handle)
+		RETURN(-ENOENT);
+
+	rc = llog_cat_reverse_process(env, lctxt->loc_handle,
+				      hsm_last_cookie_cb, cdt);
+
+	llog_ctxt_put(lctxt);
+
+	if (rc < 0) {
+		CERROR("%s: failed to process HSM_ACTIONS llog: rc = %d\n",
+		       mdt_obd_name(mdt), rc);
+		RETURN(rc);
+	}
+
+	/* no pending request found -> start a new session */
+	if (!cdt->cdt_last_cookie)
+		cdt->cdt_last_cookie = ktime_get_real_seconds();
+
+	RETURN(0);
+}
+
+/**
  * add an entry in agent llog
  * \param env [IN] environment
  * \param mdt [IN] PDT device
@@ -293,18 +357,28 @@ int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 
 	down_write(&cdt->cdt_llog_lock);
 
+	/* If cdt_last_cookie is not set, try to initialize it.
+	 * This is used by RAoLU with non-started coordinator.
+	 */
+	if (unlikely(!cdt->cdt_last_cookie)) {
+		rc = cdt_update_last_cookie(env, cdt);
+		if (rc < 0)
+			GOTO(unlock, rc);
+	}
+
 	/* in case of cancel request, the cookie is already set to the
 	 * value of the request cookie to be cancelled
 	 * so we do not change it */
 	if (hai->hai_action == HSMA_CANCEL)
 		larr->arr_hai.hai_cookie = hai->hai_cookie;
 	else
-		larr->arr_hai.hai_cookie = cdt->cdt_last_cookie++;
+		larr->arr_hai.hai_cookie = ++cdt->cdt_last_cookie;
 
 	rc = llog_cat_add(env, lctxt->loc_handle, &larr->arr_hdr, NULL);
 	if (rc > 0)
 		rc = 0;
 
+unlock:
 	up_write(&cdt->cdt_llog_lock);
 	llog_ctxt_put(lctxt);
 

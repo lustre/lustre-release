@@ -1000,9 +1000,9 @@ static int hsm_restore_cb(const struct lu_env *env,
 
 	larr = (struct llog_agent_req_rec *)hdr;
 	hai = &larr->arr_hai;
-	if (hai->hai_cookie >= cdt->cdt_last_cookie) {
+	if (hai->hai_cookie > cdt->cdt_last_cookie) {
 		/* update the cookie to avoid collision */
-		cdt->cdt_last_cookie = hai->hai_cookie + 1;
+		cdt->cdt_last_cookie = hai->hai_cookie;
 	}
 
 	if (hai->hai_action != HSMA_RESTORE ||
@@ -1039,8 +1039,9 @@ out:
  */
 static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 {
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
 	struct hsm_restore_data	 hrd;
-	int			 rc;
+	int rc;
 	ENTRY;
 
 	hrd.hrd_mti = mti;
@@ -1048,7 +1049,14 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, hsm_restore_cb, &hrd,
 			      0, 0, WRITE);
 
-	RETURN(rc);
+	if (rc < 0)
+		RETURN(rc);
+
+	/* no pending request found -> start a new session */
+	if (!cdt->cdt_last_cookie)
+		cdt->cdt_last_cookie = ktime_get_real_seconds();
+
+	RETURN(0);
 }
 
 int hsm_init_ucred(struct lu_ucred *uc)
@@ -1228,9 +1236,6 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	BUILD_BUG_ON(BIT(CDT_POLICY_SHIFT_COUNT - 1) != CDT_POLICY_LAST);
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 
-	/* just need to be larger than previous one */
-	/* cdt_last_cookie is protected by cdt_llog_lock */
-	cdt->cdt_last_cookie = ktime_get_real_seconds();
 	atomic_set(&cdt->cdt_request_count, 0);
 	atomic_set(&cdt->cdt_archive_count, 0);
 	atomic_set(&cdt->cdt_restore_count, 0);
