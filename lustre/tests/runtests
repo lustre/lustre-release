@@ -84,7 +84,7 @@ test_1() {
 
 	log "comparing $COUNT newly copied files at $(date)"
 
-	cat $findfiles | tr "\0" "\n" | ( rc=0; while read f; do
+	cat $findfiles | tr "\0" "\n" | ( rc=0; while read -r f; do
 		diff -q "$f" "$dst/$f" || rc=18
 	done
 	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
@@ -98,7 +98,7 @@ test_1() {
 	setupall || error "setupall failed"
 
 	log "comparing $COUNT previously copied files"
-	cat $findfiles | tr "\0" "\n" | ( rc=0; while read f; do
+	cat $findfiles | tr "\0" "\n" | ( rc=0; while read -r f; do
 		diff -q "$f" "$dst/$f" || rc=22
 	done
 	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
