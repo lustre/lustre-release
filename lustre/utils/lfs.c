@@ -865,7 +865,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 		}
 	}
 
-	clock_gettime(CLOCK_REALTIME, &start_time);
+	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	now = last_bw_print = start_time;
 
 	while (1) {
@@ -930,7 +930,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			if (bandwidth_bytes_sec == 0)
 				continue;
 
-			clock_gettime(CLOCK_REALTIME, &now);
+			clock_gettime(CLOCK_MONOTONIC, &now);
 			diff = timespec_sub(&start_time, &now);
 			write_target = ((bandwidth_bytes_sec * diff.tv_sec) +
 				((bandwidth_bytes_sec *
@@ -950,7 +950,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 					NSEC_PER_SEC / bandwidth_bytes_sec;
 
 				do {
-					rc = clock_nanosleep(CLOCK_REALTIME, 0,
+					rc = clock_nanosleep(CLOCK_MONOTONIC, 0,
 							     &delay, &delay);
 				} while (rc < 0 && errno == EINTR);
 
@@ -965,7 +965,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			}
 		}
 
-		clock_gettime(CLOCK_REALTIME, &now);
+		clock_gettime(CLOCK_MONOTONIC, &now);
 		if (stats_interval_sec && (write_bytes != file_size_bytes) &&
 			(now.tv_sec >= last_bw_print.tv_sec +
 			stats_interval_sec)) {
@@ -981,7 +981,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 	/* Output at least one log, regardless of stats_interval */
 	if (stats_interval_sec) {
-		clock_gettime(CLOCK_REALTIME, &now);
+		clock_gettime(CLOCK_MONOTONIC, &now);
 		stats_log(&now, &start_time, read_bytes, write_bytes,
 			  file_size_bytes);
 	}
