@@ -15,7 +15,6 @@
 #include <linux/export.h>
 #include <linux/list.h>
 #include <linux/slab.h>
-#include <linux/radix-tree.h>
 #include <libcfs/linux/xarray.h>
 
 /*
@@ -252,18 +251,18 @@ void *xas_load(struct xa_state *xas)
 EXPORT_SYMBOL_GPL(xas_load);
 
 /* Move the radix tree node cache here */
-extern struct kmem_cache *radix_tree_node_cachep;
+extern struct kmem_cache *xarray_cachep;
 
-static inline void tag_clear(struct radix_tree_node *node, unsigned int tag,
+static inline void tag_clear(struct xa_node *node, unsigned int tag,
 			     int offset)
 {
 	__clear_bit(offset, node->tags[tag]);
 }
 
-static void radix_tree_node_rcu_free(struct rcu_head *head)
+static void xarray_node_rcu_free(struct rcu_head *head)
 {
-	struct radix_tree_node *node =
-		container_of(head, struct radix_tree_node, rcu_head);
+	struct xa_node *node =
+		container_of(head, struct xa_node, rcu_head);
 	int i;
 
 	/*
@@ -271,13 +270,13 @@ static void radix_tree_node_rcu_free(struct rcu_head *head)
 	 * can leave us with a non-NULL entry in the first slot, so clear
 	 * that here to make sure.
 	 */
-	for (i = 0; i < RADIX_TREE_MAX_TAGS; i++)
+	for (i = 0; i < XA_MAX_MARKS; i++)
 		tag_clear(node, i, 0);
 
 	node->slots[0] = NULL;
 	node->count = 0;
 
-	kmem_cache_free(radix_tree_node_cachep, node);
+	kmem_cache_free(xarray_cachep, node);
 }
 
 #define XA_RCU_FREE	((struct xarray *)1)
@@ -286,7 +285,7 @@ static void xa_node_free(struct xa_node *node)
 {
 	XA_NODE_BUG_ON(node, !list_empty(&node->private_list));
 	node->array = XA_RCU_FREE;
-	call_rcu(&node->rcu_head, radix_tree_node_rcu_free);
+	call_rcu(&node->rcu_head, xarray_node_rcu_free);
 }
 
 /*
@@ -302,7 +301,7 @@ static void xas_destroy(struct xa_state *xas)
 	if (!node)
 		return;
 	XA_NODE_BUG_ON(node, !list_empty(&node->private_list));
-	kmem_cache_free(radix_tree_node_cachep, node);
+	kmem_cache_free(xarray_cachep, node);
 	xas->xa_alloc = NULL;
 }
 
@@ -334,7 +333,7 @@ bool xas_nomem(struct xa_state *xas, gfp_t gfp)
 	if (xas->xa->xa_flags & XA_FLAGS_ACCOUNT)
 		gfp |= __GFP_ACCOUNT;
 #endif
-	xas->xa_alloc = kmem_cache_alloc(radix_tree_node_cachep, gfp);
+	xas->xa_alloc = kmem_cache_alloc(xarray_cachep, gfp);
 	if (!xas->xa_alloc)
 		return false;
 	XA_NODE_BUG_ON(xas->xa_alloc, !list_empty(&xas->xa_alloc->private_list));
@@ -367,10 +366,10 @@ static bool __xas_nomem(struct xa_state *xas, gfp_t gfp)
 #endif
 	if (gfpflags_allow_blocking(gfp)) {
 		xas_unlock_type(xas, lock_type);
-		xas->xa_alloc = kmem_cache_alloc(radix_tree_node_cachep, gfp);
+		xas->xa_alloc = kmem_cache_alloc(xarray_cachep, gfp);
 		xas_lock_type(xas, lock_type);
 	} else {
-		xas->xa_alloc = kmem_cache_alloc(radix_tree_node_cachep, gfp);
+		xas->xa_alloc = kmem_cache_alloc(xarray_cachep, gfp);
 	}
 	if (!xas->xa_alloc)
 		return false;
@@ -403,7 +402,7 @@ static void *xas_alloc(struct xa_state *xas, unsigned int shift)
 		if (xas->xa->xa_flags & XA_FLAGS_ACCOUNT)
 			gfp |= __GFP_ACCOUNT;
 #endif
-		node = kmem_cache_alloc(radix_tree_node_cachep, gfp);
+		node = kmem_cache_alloc(xarray_cachep, gfp);
 		if (!node) {
 			xas_set_err(xas, -ENOMEM);
 			return NULL;
