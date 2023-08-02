@@ -726,6 +726,12 @@ int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
 int llapi_mirror_find_stale(struct llapi_layout *layout,
 		struct llapi_resync_comp *comp, size_t comp_size,
 		__u16 *mirror_ids, int ids_nr);
+int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
+				    struct llapi_resync_comp *comp_array,
+				    int comp_size,  uint64_t start,
+				    uint64_t end,
+				    unsigned long stats_interval_sec,
+				    unsigned long bandwidth_bytes_sec);
 int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			     struct llapi_resync_comp *comp_array,
 			     int comp_size,  uint64_t start, uint64_t end);

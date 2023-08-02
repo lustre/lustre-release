@@ -5,6 +5,9 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .B lfs mirror extend
 [\fB\-\-no\-verify\fR]
 <\fB\-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]>
+<\fB\-\-bandwidth\-limit=\fR|\fB\-W\fR[\fIbandwidth_limit\fR]>
+[\fB\-\-stats\fR]
+<\fB\-\-stats\-interval\fR=\fIinterval_in_sec\fR>
 [\fIsetstripe_options\fR|\fB\-f\fR <\fIvictim_file\fR>] ...
 <\fIfilename\fR>
 .SH DESCRIPTION
@@ -63,6 +66,21 @@ option.
 .BR \-\-no\-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
 the victim file(s) contains the same data as the original mirrored file.
+.TP
+.BR \-\-stats
+This option enables progress updates every 5 seconds, in YAML format.
+.TP
+.BR \-\-stats-interval=\fIstats_interval
+This option enables progress updates every \fIstats_interval\fR seconds, in YAML format.
+.TP
+.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIbandwidth_limit\fR
+This option enables throttling so that mirror extending writes no more than
+\fIbandwidth_limit\fR bytes a second.  An optional suffix can be used to
+specify the units in
+.BR K ilobytes,
+.BR M egabytes
+or
+.BR  G igabytes.
 .SH EXAMPLES
 .TP
 .B lfs mirror extend -N2 /mnt/lustre/file1

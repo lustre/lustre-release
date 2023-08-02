@@ -8318,6 +8318,70 @@ test_56xj() { # LU-16571 "lfs migrate -b" can cause thread starvation on OSS
 }
 run_test 56xj "lfs migrate -b should not cause starvation of threads on OSS"
 
+test_56xk() {
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local size_mb=5
+	local file1=$DIR/$tfile
+
+	stack_trap "rm -f $file1"
+	$LFS setstripe -c 1 $file1
+	dd if=/dev/zero of=$file1 bs=1M count=$size_mb ||
+		error "error creating $file1"
+	$LFS mirror extend -N $file1 || error "can't mirror"
+	dd if=/dev/zero of=$file1 bs=4k count=1 conv=notrunc ||
+		error "can't dd"
+	$LFS getstripe $file1 | grep stale ||
+		error "one component must be stale"
+
+	local start=$SECONDS
+	$LFS mirror resync --stats --stats-interval=1 -W 1M $file1 ||
+		error "migrate failed rc = $?"
+	local elapsed=$((SECONDS - start))
+	$LFS getstripe $file1 | grep stale &&
+		error "all components must be sync"
+
+	# with 1MB/s, elapsed should equal size_mb
+	(( elapsed >= size_mb * 95 / 100 )) ||
+		error "'lfs mirror resync -W' too fast ($elapsed < 0.95 * $size_mb)?"
+
+	(( elapsed <= size_mb * 120 / 100 )) ||
+		error_not_in_vm "'lfs mirror resync -W' slow ($elapsed > 1.2 * $size_mb)"
+
+	(( elapsed <= size_mb * 350 / 100 )) ||
+		error "'lfs mirror resync -W' too slow in VM ($elapsed > 3.5 * $size_mb)"
+}
+run_test 56xk "lfs mirror resync bandwidth limitation support"
+
+test_56xl() {
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	verify_yaml_available || skip_env "YAML verification not installed"
+
+	local size_mb=5
+	local file1=$DIR/$tfile.1
+	local output_file=$DIR/$tfile.out
+
+	stack_trap "rm -f $file1"
+	$LFS setstripe -c 1 $file1
+	dd if=/dev/zero of=$file1 bs=1M count=$size_mb ||
+		error "error creating $file1"
+	$LFS mirror extend -N $file1 || error "can't mirror"
+	dd if=/dev/zero of=$file1 bs=4k count=1 conv=notrunc ||
+		error "can't dd"
+	$LFS getstripe $file1 | grep stale ||
+		error "one component must be stale"
+	$LFS getstripe $file1
+
+	$LFS mirror resync --stats --stats-interval=1 $file1 >$output_file ||
+		error "resync failed rc = $?"
+	$LFS getstripe $file1 | grep stale &&
+		error "all components must be sync"
+
+	cat $output_file
+	cat $output_file | verify_yaml || error "stats is not valid YAML"
+}
+run_test 56xl "lfs mirror resync stats support"
+
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"

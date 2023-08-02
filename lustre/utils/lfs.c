@@ -136,15 +136,9 @@ static int lfs_pcc_detach_fid(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 
-enum stats_flag {
-	STATS_ON,
-	STATS_OFF,
-};
-
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 			      __u64 migration_flags,
 			      unsigned long long bandwidth_bytes_sec,
-			      enum stats_flag stats_flag,
 			      long stats_interval_sec);
 
 struct pool_to_id_cbdata {
@@ -258,8 +252,10 @@ command_t mirror_cmdlist[] = {
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
 		"usage: lfs mirror extend "
-		"{--mirror-count|-N[MIRROR_COUNT]} [--no-verify] "
-		"[SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... FILENAME ...\n" },
+		"{--mirror-count|-N[MIRROR_COUNT]} [--no-verify]|\n"
+	"\t\t--stats|--stats-interval=<sec>|\n"
+	"\t\t--W <bandwidth>|--bandwidth-limit=<bandwidth>\n"
+	"\t\t[SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
 	"usage: lfs mirror split {--mirror-id MIRROR_ID |\n"
@@ -279,7 +275,9 @@ command_t mirror_cmdlist[] = {
 		"\t\t{--write-mirror|-o MIRROR_ID1[,...]} <mirrored_file>\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
-		"usage: lfs mirror resync [--only MIRROR_ID[,...]>]\n"
+		"usage: lfs mirror resync [--only MIRROR_ID[,...]>]|\n"
+		"\t\t--stats|--stats-interval=<sec>|\n"
+		"\t\t--W <bandwidth>|--bandwidth-limit=<bandwidth>\n"
 		"\t\t<mirrored_file> [<mirrored_file2>...]\n" },
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
@@ -791,28 +789,29 @@ struct timespec timespec_sub(struct timespec *before, struct timespec *after)
 }
 
 static void stats_log(struct timespec *now, struct timespec *start_time,
-		      enum stats_flag stats_flag,
 		      ssize_t read_bytes, size_t write_bytes,
 		      off_t file_size_bytes)
 {
 	struct timespec diff = timespec_sub(start_time, now);
 
-	if (stats_flag == STATS_ON && ((diff.tv_sec != 0) ||
-		(diff.tv_nsec != 0)) &&	file_size_bytes != 0)
-		printf("- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
-			diff.tv_sec,
-			(double) read_bytes/((ONE_MB * diff.tv_sec) +
-				((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-			(double) write_bytes/((ONE_MB * diff.tv_sec) +
-				((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-			write_bytes/ONE_MB,
-			file_size_bytes/ONE_MB,
-			((write_bytes*100)/file_size_bytes));
+	if (file_size_bytes == 0)
+		return;
+
+	if (diff.tv_sec == 0 && diff.tv_nsec == 0)
+		return;
+
+	printf("- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
+		diff.tv_sec,
+		(double) read_bytes/((ONE_MB * diff.tv_sec) +
+			((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+		(double) write_bytes/((ONE_MB * diff.tv_sec) +
+			((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+		write_bytes/ONE_MB, file_size_bytes/ONE_MB,
+		((write_bytes*100)/file_size_bytes));
 }
 
 static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			     unsigned long long bandwidth_bytes_sec,
-			     enum stats_flag stats_flag,
 			     long stats_interval_sec, off_t file_size_bytes)
 {
 	struct llapi_layout *layout;
@@ -954,7 +953,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 				} while (rc < 0 && errno == EINTR);
 
 				if (rc < 0) {
-					if (stats_flag == STATS_OFF)
+					if (stats_interval_sec)
 						fprintf(stderr,
 							"error %s: delay for bandwidth control failed: %s\n",
 							progname,
@@ -965,10 +964,10 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 		}
 
 		clock_gettime(CLOCK_REALTIME, &now);
-		if ((write_bytes != file_size_bytes) &&
+		if (stats_interval_sec && (write_bytes != file_size_bytes) &&
 			(now.tv_sec >= last_bw_print.tv_sec +
 			stats_interval_sec)) {
-			stats_log(&now, &start_time, stats_flag,
+			stats_log(&now, &start_time,
 				  read_bytes, write_bytes,
 				  file_size_bytes);
 			last_bw_print = now;
@@ -979,10 +978,11 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	}
 
 	/* Output at least one log, regardless of stats_interval */
-	clock_gettime(CLOCK_REALTIME, &now);
-	stats_log(&now, &start_time, stats_flag,
-		  read_bytes, write_bytes,
-		  file_size_bytes);
+	if (stats_interval_sec) {
+		clock_gettime(CLOCK_REALTIME, &now);
+		stats_log(&now, &start_time, read_bytes, write_bytes,
+			  file_size_bytes);
+	}
 
 	rc = fsync(fd_dst);
 	if (rc < 0)
@@ -1008,7 +1008,6 @@ static int migrate_set_timestamps(int fd, const struct stat *st)
 
 static int migrate_block(int fd_src, int fd_dst,
 			 unsigned long long bandwidth_bytes_sec,
-			 enum stats_flag stats_flag,
 			 long stats_interval_sec)
 {
 	struct stat st;
@@ -1048,8 +1047,7 @@ static int migrate_block(int fd_src, int fd_dst,
 	}
 
 	rc = migrate_copy_data(fd_src, fd_dst, NULL, bandwidth_bytes_sec,
-			       stats_flag, stats_interval_sec,
-			       st.st_size);
+			       stats_interval_sec, st.st_size);
 	if (rc < 0) {
 		error_loc = "data copy failed";
 		goto out_unlock;
@@ -1111,7 +1109,6 @@ static int check_lease(int fd)
 
 static int migrate_nonblock(int fd_src, int fd_dst,
 			    unsigned long long bandwidth_bytes_sec,
-			    enum stats_flag stats_flag,
 			    long stats_interval_sec)
 {
 	struct stat st;
@@ -1132,7 +1129,7 @@ static int migrate_nonblock(int fd_src, int fd_dst,
 	}
 
 	rc = migrate_copy_data(fd_src, fd_dst, check_lease,
-			       bandwidth_bytes_sec, stats_flag,
+			       bandwidth_bytes_sec,
 			       stats_interval_sec, st.st_size);
 	if (rc < 0) {
 		error_loc = "data copy failed";
@@ -1340,7 +1337,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 			struct llapi_stripe_param *param,
 			struct llapi_layout *layout,
 			unsigned long long bandwidth_bytes_sec,
-			enum stats_flag stats_flag, long stats_interval_sec)
+			long stats_interval_sec)
 {
 	struct llapi_layout *existing;
 	uint64_t dom_new, dom_cur;
@@ -1377,15 +1374,16 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	 * if new layout used bigger DOM size, then mirroring is used
 	 */
 	if (dom_new > dom_cur) {
-		rc = lfs_migrate_to_dom(fd_src, fd_dst, name, migration_flags,
-					bandwidth_bytes_sec, stats_flag,
+		rc = lfs_migrate_to_dom(fd_src, fd_dst, name,
+					migration_flags,
+					bandwidth_bytes_sec,
 					stats_interval_sec);
 		if (rc)
 			error_loc = "cannot migrate to DOM layout";
 		goto out_closed;
 	}
 
-	if (stats_flag == STATS_ON)
+	if (stats_interval_sec)
 		printf("%s:\n", name);
 
 	if (!(migration_flags & LLAPI_MIGRATION_NONBLOCK)) {
@@ -1396,7 +1394,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		 * atomic swap/close (LU-6785)
 		 */
 		rc = migrate_block(fd_src, fd_dst, bandwidth_bytes_sec,
-				   stats_flag, stats_interval_sec);
+				   stats_interval_sec);
 		goto out;
 	}
 
@@ -1406,7 +1404,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec, stats_flag,
+	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
 			      stats_interval_sec);
 	if (rc < 0) {
 		llapi_lease_release(fd_src);
@@ -1956,7 +1954,6 @@ out:
 static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 				bool inherit, uint32_t flags,
 				unsigned long long bandwidth_bytes_sec,
-				enum stats_flag stats_flag,
 				long stats_interval_sec)
 {
 	struct llapi_layout *f_layout = NULL;
@@ -2007,10 +2004,10 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		goto out;
 	}
 
-	if (stats_flag)
+	if (stats_interval_sec)
 		printf("%s:\n", name);
 
-	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec, stats_flag,
+	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
 			      stats_interval_sec);
 	if (rc < 0) {
 		llapi_lease_release(fd_src);
@@ -2060,7 +2057,7 @@ out:
 static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			 enum mirror_flags mirror_flags,
 			 unsigned long long bandwidth_bytes_sec,
-			 enum stats_flag stats_flag, long stats_interval_sec)
+			 long stats_interval_sec)
 {
 	int rc = 0;
 
@@ -2077,7 +2074,6 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 							mirror_list->m_inherit,
 							mirror_list->m_flags,
 							bandwidth_bytes_sec,
-							stats_flag,
 							stats_interval_sec);
 				if (rc)
 					break;
@@ -2507,12 +2503,13 @@ free_layout:
 
 static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
-			   __u16 *mirror_ids, int ids_nr);
+			   __u16 *mirror_ids, int ids_nr,
+			   long stats_interval_sec, long bandwidth_bytes_sec);
+
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 			      __u64 migration_flags,
 			      unsigned long long bandwidth_bytes_sec,
-			      enum stats_flag stats_flag,
 			      long stats_interval_sec)
 {
 	struct ll_ioc_lease *data = NULL;
@@ -2524,10 +2521,10 @@ static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 		goto out_close;
 	}
 
-	if (stats_flag)
+	if (stats_interval_sec)
 		printf("%s:\n", name);
 
-	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec, stats_flag,
+	rc = migrate_nonblock(fd_src, fd_dst, bandwidth_bytes_sec,
 			      stats_interval_sec);
 	if (rc < 0)
 		goto out_release;
@@ -2554,7 +2551,9 @@ static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 	close(fd_src);
 	close(fd_dst);
 
-	rc = lfs_mirror_resync_file(name, data, NULL, 0);
+	rc = lfs_mirror_resync_file(name, data, NULL, 0,
+				    stats_interval_sec,
+				    bandwidth_bytes_sec);
 	if (rc) {
 		error_loc = "cannot resync file";
 		goto out;
@@ -3569,8 +3568,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 	unsigned long long bandwidth_bytes_sec = 0;
 	unsigned long long bandwidth_unit = ONE_MB;
-	enum stats_flag stats_flag = STATS_OFF;
-	long stats_interval_sec = 5;
+	long stats_interval_sec = 0;
 
 	struct option long_opts[] = {
 /* find { .val = '0',	.name = "null",		.has_arg = no_argument }, */
@@ -3822,13 +3820,16 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			template = optarg;
 			break;
 		case LFS_STATS_OPT:
-			stats_flag = STATS_ON;
+			stats_interval_sec = 5;
 			break;
 		case LFS_STATS_INTERVAL_OPT:
-			stats_flag = STATS_ON;
 			stats_interval_sec = strtol(optarg, &end, 0);
-			if (stats_interval_sec == 0)
-				stats_interval_sec = 5;
+			if (stats_interval_sec == 0 && errno) {
+				fprintf(stderr,
+					"%s %s: invalid stats interval %s\n",
+					progname, argv[0], optarg);
+				goto usage_error;
+			}
 			break;
 		case 'b':
 			if (!migrate_mode) {
@@ -4529,7 +4530,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 			result = lfs_migrate(fname, migration_flags, param,
 					     layout, bandwidth_bytes_sec,
-					     stats_flag, stats_interval_sec);
+					     stats_interval_sec);
 		} else if (comp_set != 0) {
 			result = lfs_component_set(fname, comp_id,
 						   lsa.lsa_pool_name,
@@ -4547,7 +4548,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags,
 					       bandwidth_bytes_sec,
-					       stats_flag, stats_interval_sec);
+					       stats_interval_sec);
 		} else if (opc == SO_MIRROR_SPLIT || opc == SO_MIRROR_DELETE) {
 			if (!mirror_id && !comp_id && !lsa.lsa_pool_name) {
 				fprintf(stderr,
@@ -11180,7 +11181,8 @@ error:
 
 static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
-			   __u16 *mirror_ids, int ids_nr)
+			   __u16 *mirror_ids, int ids_nr,
+			   long stats_interval_sec, long bandwidth_bytes_sec)
 {
 	struct llapi_resync_comp comp_array[1024] = { { 0 } };
 	struct llapi_layout *layout;
@@ -11279,8 +11281,9 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		goto free_layout;
 	}
 
-	rc = llapi_mirror_resync_many(fd, layout, comp_array, comp_size,
-				      start, end);
+	rc = llapi_mirror_resync_many_params(fd, layout, comp_array, comp_size,
+					     start, end, stats_interval_sec,
+					     bandwidth_bytes_sec);
 	if (rc < 0)
 		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %s.\n",
 			progname, fname, strerror(-rc));
@@ -11335,14 +11338,24 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .val = 'W',	.name = "bandwidth",	.has_arg = required_argument },
+	{ .val = LFS_STATS_OPT,
+			.name = "stats",	.has_arg = no_argument},
+	{ .val = LFS_STATS_INTERVAL_OPT,
+			.name = "stats-interval",
+						.has_arg = required_argument},
 	{ .name = NULL } };
 	struct ll_ioc_lease *ioc = NULL;
 	__u16 mirror_ids[128] = { 0 };
+	unsigned int stats_interval_sec = 0;
+	unsigned long long bandwidth_bytes_sec = 0;
+	unsigned long long bandwidth_unit = ONE_MB;
 	int ids_nr = 0;
 	int c;
 	int rc = 0;
 
-	while ((c = getopt_long(argc, argv, "ho:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "ho:W:", long_opts, NULL)) >= 0) {
+		char *end;
 		switch (c) {
 		case 'o':
 			rc = parse_mirror_ids(mirror_ids,
@@ -11355,6 +11368,21 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 				goto error;
 			}
 			ids_nr = rc;
+			break;
+		case 'W':
+			if (llapi_parse_size(optarg, &bandwidth_bytes_sec,
+					     &bandwidth_unit, 0) < 0) {
+				fprintf(stderr,
+					"error: %s: bad value for bandwidth '%s'\n",
+					argv[0], optarg);
+				goto error;
+			}
+			break;
+		case LFS_STATS_OPT:
+			stats_interval_sec = 5;
+			break;
+		case LFS_STATS_INTERVAL_OPT:
+			stats_interval_sec = strtol(optarg, &end, 0);
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -11397,7 +11425,9 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 
 	for (; optind < argc; optind++) {
 		rc = lfs_mirror_resync_file(argv[optind], ioc,
-					    mirror_ids, ids_nr);
+					    mirror_ids, ids_nr,
+					    stats_interval_sec,
+					    bandwidth_bytes_sec);
 		/* ignore previous file's error, continue with next file */
 
 		/* reset ioc */

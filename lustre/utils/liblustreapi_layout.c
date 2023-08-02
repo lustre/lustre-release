@@ -37,6 +37,8 @@
 #include <assert.h>
 #include <sys/xattr.h>
 #include <sys/param.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include <libcfs/util/list.h>
 #include <lustre/lustreapi.h>
@@ -2930,12 +2932,59 @@ int llapi_mirror_find(struct llapi_layout *layout, uint64_t file_start,
 	return mirror_id;
 }
 
-int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
-			     struct llapi_resync_comp *comp_array,
-			     int comp_size,  uint64_t start, uint64_t end)
+#ifndef NSEC_PER_SEC
+# define NSEC_PER_SEC 1000000000UL
+#endif
+#define ONE_MB 0x100000
+static struct timespec timespec_sub(struct timespec *before,
+				    struct timespec *after)
+{
+	struct timespec ret;
+
+	ret.tv_sec = after->tv_sec - before->tv_sec;
+	if (after->tv_nsec < before->tv_nsec) {
+		ret.tv_sec--;
+		ret.tv_nsec = NSEC_PER_SEC + after->tv_nsec - before->tv_nsec;
+	} else {
+		ret.tv_nsec = after->tv_nsec - before->tv_nsec;
+	}
+
+	return ret;
+}
+
+static void stats_log(struct timespec *now, struct timespec *start_time,
+		      ssize_t read_bytes, size_t write_bytes,
+		      off_t file_size_bytes)
+{
+	struct timespec diff = timespec_sub(start_time, now);
+
+	if (file_size_bytes == 0)
+		return;
+
+	if (diff.tv_sec == 0 && diff.tv_nsec == 0)
+		return;
+
+	llapi_printf(LLAPI_MSG_NORMAL,
+		     "- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
+		     diff.tv_sec,
+		     (double) read_bytes/((ONE_MB * diff.tv_sec) +
+			     ((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+		     (double) write_bytes/((ONE_MB * diff.tv_sec) +
+			     ((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
+		     write_bytes/ONE_MB,
+		     file_size_bytes/ONE_MB,
+		     ((write_bytes*100)/file_size_bytes));
+}
+
+int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
+				    struct llapi_resync_comp *comp_array,
+				    int comp_size,  uint64_t start,
+				    uint64_t end,
+				    unsigned long stats_interval_sec,
+				    unsigned long bandwidth_bytes_sec)
 {
 	size_t page_size = sysconf(_SC_PAGESIZE);
-	const size_t buflen = 4 << 20; /* 4M */
+	size_t buflen = 64 << 20; /* 64M */
 	void *buf;
 	uint64_t pos = start;
 	uint64_t data_off = pos, data_end = pos;
@@ -2944,10 +2993,31 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 	int i;
 	int rc;
 	int rc2 = 0;
+	struct timespec start_time;
+	struct timespec now;
+	struct timespec last_bw_print;
+	size_t total_bytes_read = 0;
+	size_t total_bytes_written = 0;
+	off_t write_estimation_bytes = 0;
 
+	if (bandwidth_bytes_sec > 0 || stats_interval_sec) {
+		struct stat st;
+
+		rc = fstat(fd, &st);
+		if (rc < 0)
+			return -errno;
+		write_estimation_bytes = st.st_size * comp_size;
+	}
+
+	/* limit transfer size to what can be sent in one second */
+	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buflen)
+		buflen = (bandwidth_bytes_sec + ONE_MB - 1) & ~(ONE_MB - 1);
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc)
 		return -rc;
+
+	clock_gettime(CLOCK_MONOTONIC, &start_time);
+	now = last_bw_print = start_time;
 
 	while (pos < end) {
 		ssize_t bytes_read;
@@ -3058,11 +3128,14 @@ do_read:
 			rc = bytes_read;
 			break;
 		}
+		total_bytes_read += bytes_read;
 
 		/* round up to page align to make direct IO happy. */
 		to_write = ((bytes_read - 1) | (page_size - 1)) + 1;
 
 		for (i = 0; i < comp_size; i++) {
+			unsigned long long write_target;
+			struct timespec diff;
 			ssize_t written;
 			off_t pos2 = pos;
 			size_t to_write2 = to_write;
@@ -3105,6 +3178,55 @@ do_read:
 				continue;
 			}
 			assert(written == to_write2);
+			total_bytes_written += written;
+
+			if (bandwidth_bytes_sec == 0)
+				continue;
+
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			diff = timespec_sub(&start_time, &now);
+			write_target = ((bandwidth_bytes_sec * diff.tv_sec) +
+				((bandwidth_bytes_sec *
+				diff.tv_nsec)/NSEC_PER_SEC));
+
+			if (write_target < total_bytes_written) {
+				unsigned long long excess;
+				struct timespec delay = { 0, 0 };
+
+				excess = total_bytes_written - write_target;
+
+				if (excess == 0)
+					continue;
+
+				delay.tv_sec = excess / bandwidth_bytes_sec;
+				delay.tv_nsec = (excess % bandwidth_bytes_sec) *
+					NSEC_PER_SEC / bandwidth_bytes_sec;
+
+				do {
+					rc = clock_nanosleep(CLOCK_MONOTONIC, 0,
+							     &delay, &delay);
+				} while (rc < 0 && errno == EINTR);
+
+				if (rc < 0) {
+					llapi_error(LLAPI_MSG_ERROR, rc,
+						"errors: delay for bandwidth control failed: %s\n",
+						strerror(-rc));
+					rc = 0;
+				}
+			}
+
+			if (stats_interval_sec) {
+				clock_gettime(CLOCK_MONOTONIC, &now);
+				if ((total_bytes_written != end - start) &&
+				     (now.tv_sec >= last_bw_print.tv_sec +
+						 stats_interval_sec)) {
+					stats_log(&now, &start_time,
+						  total_bytes_read,
+						  total_bytes_written,
+						  write_estimation_bytes);
+					last_bw_print = now;
+				}
+			}
 		}
 		pos += bytes_read;
 	}
@@ -3116,6 +3238,14 @@ do_read:
 		for (i = 0; i < comp_size; i++)
 			comp_array[i].lrc_synced = false;
 		return rc;
+	}
+
+	/* Output at least one log, regardless of stats_interval */
+	if (stats_interval_sec) {
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		stats_log(&now, &start_time, total_bytes_read,
+			  total_bytes_written,
+			  write_estimation_bytes);
 	}
 
 	/**
@@ -3142,6 +3272,14 @@ do_read:
 	 * possible.
 	 */
 	return rc2;
+}
+
+int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
+			     struct llapi_resync_comp *comp_array,
+			     int comp_size,  uint64_t start, uint64_t end)
+{
+	return llapi_mirror_resync_many_params(fd, layout, comp_array,
+					       comp_size, start, end, 0, 0);
 }
 
 enum llapi_layout_comp_sanity_error {

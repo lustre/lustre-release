@@ -4,6 +4,9 @@ lfs-mirror-resync \- resynchronize an out-of-sync mirrored file
 .SH SYNOPSIS
 .B lfs mirror resync
 [\fB\-\-only\fR <\fImirror_id\fR[,...]>]
+<\fB\-\-bandwidth\-limit=\fR|\fB\-W\fR[\fIbandwidth_limit\fR]>
+[\fB\-\-stats\fR]
+<\fB\-\-stats\-interval\fR=\fIinterval_in_sec\fR>
 <\fImirrored_file\fR> [<\fImirrored_file2\fR>...]
 .SH DESCRIPTION
 This command resynchronizes out-of-sync mirrored file(s) specified by the path
@@ -27,6 +30,21 @@ This option indicates which mirror(s) specified by \fImirror_id\fR(s) needs to
 be resynchronized. The \fImirror_id\fR is the numerical unique identifier for
 a mirror. Multiple \fImirror_id\fRs are separated by comma. This option cannot
 be used when multiple mirrored files are specified.
+.TP
+.BR \-\-stats
+This option enables progress updates every 5 seconds, in YAML format.
+.TP
+.BR \-\-stats-interval=\fIstats_interval
+This option enables progress updates every \fIstats_interval\fR seconds, in YAML format.
+.TP
+.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIbandwidth_limit\fR
+This option enables throttling so that mirror extending writes no more than
+\fIbandwidth_limit\fR bytes a second.  An optional suffix can be used to
+specify the units in
+.BR K ilobytes,
+.BR M egabytes
+or
+.BR  G igabytes.
 .SH EXAMPLES
 .TP
 .B lfs mirror resync /mnt/lustre/file1 /mnt/lustre/file2
