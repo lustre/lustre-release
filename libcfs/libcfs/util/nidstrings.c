@@ -172,19 +172,33 @@ libcfs_ip_str2addr_size(const char *str, int nob,
 			__be32 *addr, size_t *alen)
 {
 	char *tmp = malloc(nob+1);
-	int ret = 1;
 
 	if (!tmp)
 		return 0;
 	memcpy(tmp, str, nob);
-	tmp[nob] = 0;
+	tmp[nob] = '\0';
 
-	if (inet_pton(AF_INET, tmp, (struct in_addr *)addr) == 0) {
-		*alen = 4;
+	*alen = 0;
+	if (inet_pton(AF_INET, tmp, (struct in_addr *)addr) == 1) {
+		struct in_addr *ipv4 = (struct in_addr *)addr;
+
+		/* Don't allow using loopback */
+		if (ipv4->s_addr != htonl(INADDR_LOOPBACK))
+			*alen = 4;
 		goto out;
 	}
-	if (inet_pton(AF_INET6, tmp, (struct in6_addr *)addr) == 0) {
-		*alen = 16;
+	if (inet_pton(AF_INET6, tmp, (struct in6_addr *)addr) == 1) {
+		struct in6_addr *ipv6 = (struct in6_addr *)addr;
+
+		/* Since link local doesn't allow forwarding packets
+		 * for router don't allow those addresses as well.
+		 * Site local is allowed since it similar to 10.0.0.0/8.
+		 * Be aware site local is deprecated by unique local
+		 * addresses.
+		 */
+		if (!IN6_IS_ADDR_LOOPBACK(ipv6->s6_addr) &&
+		    !IN6_IS_ADDR_LINKLOCAL(ipv6->s6_addr))
+			*alen = 16;
 		goto out;
 	}
 #ifdef HAVE_GETADDRINFO
@@ -223,10 +237,9 @@ libcfs_ip_str2addr_size(const char *str, int nob,
 		freeaddrinfo(ai);
 	}
 #endif
-	ret = 0;
 out:
 	free(tmp);
-	return ret;
+	return *alen != 0;
 }
 
 int

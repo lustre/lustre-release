@@ -41,6 +41,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <config.h>
+#include <linux/lnet/nidstr.h>
 #include <linux/lustre/lustre_ver.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -54,6 +55,7 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <libmount/libmount.h>
+#include <libcfs/util/string.h>
 
 #ifdef HAVE_GSS
 #ifdef HAVE_LIBKEYUTILS
@@ -941,6 +943,93 @@ int file_create(char *path, __u64 size)
 	}
 
 	return 0;
+}
+
+/* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
+#define MAXNIDSTR 1024
+
+char *convert_hostnames(char *s1, bool mount)
+{
+	char *converted, *s2 = 0, *c, *end, sep;
+	int left = MAXNIDSTR;
+	struct lnet_nid nid;
+
+	converted = malloc(left);
+	if (!converted) {
+		fprintf(stderr, "%s: cannot allocate %u bytes for NID: %s\n",
+			progname, left, strerror(ENOMEM));
+		return NULL;
+	}
+
+	/* end is different between mount and mkfs case */
+	if (mount) {
+		end = strchr(s1, '/');
+		if (!end) {
+			fprintf(stderr, "%s: Invalid mount string: %s\n",
+				progname, s1);
+			return NULL;
+		}
+		end--;
+	} else {
+		end = s1 + strlen(s1);
+	}
+
+	c = converted;
+	while ((left > 0) && (s1 < end)) {
+		int rc;
+
+		/* Needed to skip : in IPv6 / GUID strings. Lustre uses
+		 * ':' as a seperator as well which makes this complicated.
+		 */
+		s2 = strchr(s1, '@');
+		if (!s2 || s2 > end) {
+			fprintf(stderr, "%s: Invalid NID string '%s'\n",
+				progname, s1);
+			goto out_free;
+		}
+
+		s2 = strpbrk(s2, ",:");
+		if (!s2) {
+			s2 = end;
+		} else if (s2 > end) {
+			fprintf(stderr, "%s: Invalid NID string '%s'\n",
+				progname, s1);
+			goto out_free;
+		}
+		sep = *s2;
+		*s2 = '\0';
+
+		rc = libcfs_strnid(&nid, s1);
+		if (rc < 0) {
+			fprintf(stderr, "%s: Unsupported NID '%s': rc = %s.\n",
+				progname, s1, strerror(rc));
+			goto out_free;
+		}
+		*s2 = sep;	/* back to original string */
+
+		if (LNET_NID_IS_ANY(&nid)) {
+			fprintf(stderr, "%s: Cannot resolve hostname '%s'.\n",
+				progname, s1);
+			goto out_free;
+		}
+
+		if (sep != '\0')
+			c += scnprintf(c, left, "%s%c", libcfs_nidstr(&nid),
+				       sep);
+		else
+			c += scnprintf(c, left, "%s", libcfs_nidstr(&nid));
+		left = converted + MAXNIDSTR - c;
+		s1 = s2 + 1;
+	}
+
+	if (mount)
+		snprintf(c, left, "%s", s1);
+
+	return converted;
+out_free:
+	fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
+	free(converted);
+	return NULL;
 }
 
 #ifdef HAVE_SERVER_SUPPORT

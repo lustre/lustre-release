@@ -124,44 +124,6 @@ void usage(FILE *out)
 	exit((out != stdout) ? EINVAL : 0);
 }
 
-/* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
-#define MAXNIDSTR 1024
-static char *convert_hostnames(char *s1)
-{
-	char *converted, *s2 = 0, *c;
-	char sep;
-	int left = MAXNIDSTR;
-	lnet_nid_t nid;
-
-	converted = malloc(left);
-	if (!converted) {
-		fprintf(stderr, "out of memory: needed %d bytes\n",
-			MAXNIDSTR);
-		return NULL;
-	}
-	c = converted;
-	while ((left > 0) && (*s1 != '/')) {
-		s2 = strpbrk(s1, ",:");
-		if (!s2)
-			goto out_free;
-		sep = *s2;
-		*s2 = '\0';
-		nid = libcfs_str2nid(s1);
-		*s2 = sep;                      /* back to original string */
-		if (nid == LNET_NID_ANY)
-			goto out_free;
-		c += scnprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
-		left = converted + MAXNIDSTR - c;
-		s1 = s2 + 1;
-	}
-	snprintf(c, left, "%s", s1);
-	return converted;
-out_free:
-	fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
-	free(converted);
-	return NULL;
-}
-
 /*****************************************************************************
  *
  * This part was cribbed from util-linux/mount/mount.c.  There was no clear
@@ -786,7 +748,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 
 	ptr = strstr(mop->mo_usource, ":/");
 	if (ptr) {
-		mop->mo_source = convert_hostnames(mop->mo_usource);
+		mop->mo_source = convert_hostnames(mop->mo_usource, true);
 		if (!mop->mo_source)
 			usage(stderr);
 	} else {

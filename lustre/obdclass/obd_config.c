@@ -449,13 +449,20 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 
 	if (!buf)
 		return 1;
+
 	while (*buf == ',' || *buf == ':')
 		buf++;
 	if (*buf == ' ' || *buf == '/' || *buf == '\0')
 		return 1;
 
-	/* NID separators or end of NIDs */
-	endp = strpbrk(buf, ",: /");
+	/* NID separators or end of NIDs. Large NIDs can contain ':' so
+	 * skip ahead to @ and then look for one of the delimiters.
+	 */
+	endp = strchr(buf, '@');
+	if (!endp)
+		return 1;
+
+	endp = strpbrk(endp, ",: /");
 	if (!endp)
 		endp = buf + strlen(buf);
 

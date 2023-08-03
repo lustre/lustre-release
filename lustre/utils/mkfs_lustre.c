@@ -63,6 +63,7 @@
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_ver.h>
+#include <libcfs/util/string.h>
 
 #include "mount_utils.h"
 
@@ -322,52 +323,6 @@ static int erase_param(const char *const buf, const char *const param,
 }
 #endif
 
-/* from mount_lustre */
-/* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
-#define MAXNIDSTR 1024
-static char *convert_hostnames(char *s1)
-{
-	char *converted, *s2 = 0, *c, *end, sep;
-	int left = MAXNIDSTR;
-	lnet_nid_t nid;
-
-	converted = malloc(left);
-	if (!converted)
-		return NULL;
-
-	end = s1 + strlen(s1);
-	c = converted;
-	while ((left > 0) && (s1 < end)) {
-		s2 = strpbrk(s1, ",:");
-		if (!s2)
-			s2 = end;
-		sep = *s2;
-		*s2 = '\0';
-		nid = libcfs_str2nid(s1);
-		*s2 = sep;
-
-		if (nid == LNET_NID_ANY) {
-			fprintf(stderr, "%s: Cannot resolve hostname '%s'.\n",
-				progname, s1);
-			free(converted);
-			return NULL;
-		}
-		if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
-			    strlen("127.0.0.1")) == 0) {
-			fprintf(stderr,
-				"%s: The NID '%s' resolves to the loopback address '%s'.  Lustre requires a non-loopback address.\n",
-				progname, s1, libcfs_nid2str(nid));
-			free(converted);
-			return NULL;
-		}
-
-		c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
-		left = converted + MAXNIDSTR - c;
-		s1 = s2 + 1;
-	}
-	return converted;
-}
-
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	       char **mountopts, char *old_fsname)
 {
@@ -470,7 +425,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 				return 1;
 			}
 
-			nids = convert_hostnames(optarg);
+			nids = convert_hostnames(optarg, false);
 			if (!nids)
 				return 1;
 
@@ -554,7 +509,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			break;
 		}
 		case 'm': {
-			char *nids = convert_hostnames(optarg);
+			char *nids = convert_hostnames(optarg, false);
 
 			if (!nids)
 				return 1;
