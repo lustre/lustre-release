@@ -3607,6 +3607,47 @@ test_71b() {
 }
 run_test 71b "check fiemap support for stripecount > 1"
 
+_check_last_flag_with_filefrag()
+{
+	local file=$1
+	local count=$2
+	local i
+	local offset
+
+	echo "check last flag for file with $count extents"
+	rm -f $file
+	for ((i=0; i<$count; i++)); do
+		offset=$((i * 256))
+		dd if=/dev/zero of=$file bs=4K count=1 seek=$offset 2> /dev/null
+	done
+
+	filefrag -s -v $file | grep "last" ||
+		error "test file with $i extents failed"
+
+	rm -f $file
+}
+
+test_71c() {
+	local file="$DIR1/$tdir/$tfile"
+
+	(( $CLIENT_VERSION >= $(version_code 2.15.3) )) ||
+		skip "Need client version >= 2.15.3"
+	[ $(facet_fstype ost1) = "ldiskfs" ] ||
+		skip "support only ldiskfs ost"
+	filefrag -V | grep wc ||
+		skip "need whamcloud version of e2fsprogs"
+
+	mkdir -p $DIR1/$tdir
+
+	# filefrag uses u64[2028] buffer to fetch fiemap. The number of extents
+	# in the buffer is (8 * 2048 - 32) / 56 = 292. Test file with 291, 292
+	# and 293 extents
+	_check_last_flag_with_filefrag $file 291
+	_check_last_flag_with_filefrag $file 292
+	_check_last_flag_with_filefrag $file 293
+}
+run_test 71c "check FIEMAP_EXTENT_LAST flag with different extents number"
+
 test_72() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
 	local tlink1
