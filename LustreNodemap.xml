@@ -352,6 +352,14 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
         </listitem>
 
         <listitem>
+          <para condition='l2G'>The property
+          <literal>readonly_mount</literal> forces clients to a read-only
+          mount if not specified explicitly. By default it is set to 0 which
+          means clients are allowed to mount in read-write mode. Set it to 1
+          to force read-only mount.</para>
+        </listitem>
+
+        <listitem>
           <para condition='l2G'>The property <literal>rbac</literal> defines
           different Role-Based Admin Control mechanisms:
           <itemizedlist>
