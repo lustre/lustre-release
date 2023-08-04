@@ -3037,13 +3037,13 @@ out_free:
 
 /* has not mdd_write{read}_lock on any obj yet. */
 static int mdd_rename_sanity_check(const struct lu_env *env,
-                                   struct mdd_object *src_pobj,
-				   const struct lu_attr *pattr,
-                                   struct mdd_object *tgt_pobj,
+				   struct mdd_object *src_pobj,
+				   const struct lu_attr *spattr,
+				   struct mdd_object *tgt_pobj,
 				   const struct lu_attr *tpattr,
-                                   struct mdd_object *sobj,
-				   const struct lu_attr *cattr,
-                                   struct mdd_object *tobj,
+				   struct mdd_object *sobj,
+				   const struct lu_attr *sattr,
+				   struct mdd_object *tobj,
 				   const struct lu_attr *tattr)
 {
 	int rc = 0;
@@ -3059,23 +3059,20 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * into our tree when the project IDs are the same; otherwise
 	 * tree quota mechanism would be circumvented.
 	 */
-	if ((((tpattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
-	    tpattr->la_projid != cattr->la_projid) ||
-	    ((pattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
-	    (pattr->la_projid != tpattr->la_projid))) &&
-	    S_ISDIR(cattr->la_mode))
+	if ((tpattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
+	     tpattr->la_projid != sattr->la_projid && S_ISDIR(sattr->la_mode))
 		RETURN(-EXDEV);
 
 	/* we prevent an encrypted file from being renamed
 	 * into an unencrypted dir
 	 */
-	if ((pattr->la_valid & LA_FLAGS &&
-	     pattr->la_flags & LUSTRE_ENCRYPT_FL) &&
+	if ((spattr->la_valid & LA_FLAGS &&
+	     spattr->la_flags & LUSTRE_ENCRYPT_FL) &&
 	    !(tpattr->la_valid & LA_FLAGS &&
 	      tpattr->la_flags & LUSTRE_ENCRYPT_FL))
 		RETURN(-EXDEV);
 
-	rc = mdd_may_delete(env, src_pobj, pattr, sobj, cattr, NULL, 1, 0);
+	rc = mdd_may_delete(env, src_pobj, spattr, sobj, sattr, NULL, 1, 0);
 	if (rc)
 		RETURN(rc);
 
@@ -3088,26 +3085,22 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 		rc = mdd_may_create(env, tgt_pobj, tpattr, NULL,
 				    (src_pobj != tgt_pobj));
 	else
-		rc = mdd_may_delete(env, tgt_pobj, tpattr, tobj, tattr, cattr,
+		rc = mdd_may_delete(env, tgt_pobj, tpattr, tobj, tattr, sattr,
 				    (src_pobj != tgt_pobj), 1);
 
-	if (!rc && !tobj && (src_pobj != tgt_pobj) && S_ISDIR(cattr->la_mode))
+	if (!rc && !tobj && (src_pobj != tgt_pobj) && S_ISDIR(sattr->la_mode))
 		rc = __mdd_may_link(env, tgt_pobj, tpattr);
 
 	RETURN(rc);
 }
 
-static int mdd_declare_rename(const struct lu_env *env,
-			      struct mdd_device *mdd,
-			      struct mdd_object *mdd_spobj,
-			      struct mdd_object *mdd_tpobj,
-			      struct mdd_object *mdd_sobj,
-			      struct mdd_object *mdd_tobj,
-			      const struct lu_name *sname,
-			      const struct lu_name *tname,
-			      struct md_attr *ma,
-			      struct linkea_data *ldata, bool change_projid,
-			      struct thandle *handle)
+static
+int mdd_declare_rename(const struct lu_env *env, struct mdd_device *mdd,
+		     struct mdd_object *mdd_spobj, struct mdd_object *mdd_tpobj,
+		     struct mdd_object *mdd_sobj, struct mdd_object *mdd_tobj,
+		     const struct lu_name *sname, const struct lu_name *tname,
+		     struct md_attr *ma, struct linkea_data *ldata,
+		     bool change_projid, struct thandle *handle)
 {
 	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	int rc;
@@ -3177,29 +3170,30 @@ static int mdd_declare_rename(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-        if (mdd_tobj && mdd_object_exists(mdd_tobj)) {
-                /* delete target child in target parent directory */
+	if (mdd_tobj && mdd_object_exists(mdd_tobj)) {
+		/* delete target child in target parent directory */
 		rc = mdo_declare_index_delete(env, mdd_tpobj, tname->ln_name,
 					      handle);
 		if (rc)
 			return rc;
 
-                rc = mdo_declare_ref_del(env, mdd_tobj, handle);
-                if (rc)
-                        return rc;
+		rc = mdo_declare_ref_del(env, mdd_tobj, handle);
+		if (rc)
+			return rc;
 
-                if (S_ISDIR(mdd_object_type(mdd_tobj))) {
-                        /* target child can be directory,
-                         * delete "." reference in target child directory */
-                        rc = mdo_declare_ref_del(env, mdd_tobj, handle);
-                        if (rc)
-                                return rc;
+		if (S_ISDIR(mdd_object_type(mdd_tobj))) {
+			/* target child can be directory,
+			 * delete "." reference in target child directory
+			 */
+			rc = mdo_declare_ref_del(env, mdd_tobj, handle);
+			if (rc)
+				return rc;
 
-                        /* delete ".." reference in target parent directory */
-                        rc = mdo_declare_ref_del(env, mdd_tpobj, handle);
-                        if (rc)
-                                return rc;
-                }
+			/* delete ".." reference in target parent directory */
+			rc = mdo_declare_ref_del(env, mdd_tpobj, handle);
+			if (rc)
+				return rc;
+		}
 
 		la->la_valid = LA_CTIME;
 		rc = mdo_declare_attr_set(env, mdd_tobj, la, handle);
@@ -3209,49 +3203,45 @@ static int mdd_declare_rename(const struct lu_env *env,
 		rc = mdd_declare_finish_unlink(env, mdd_tobj, handle);
 		if (rc)
 			return rc;
-        }
+	}
 
 	rc = mdd_declare_changelog_store(env, mdd, CL_RENAME, tname, sname,
 					 handle);
-        if (rc)
-                return rc;
+	if (rc)
+		return rc;
 
-        return rc;
+	return rc;
 }
 
-static int mdd_migrate_object(const struct lu_env *env,
-			      struct mdd_object *spobj,
-			      struct mdd_object *tpobj,
-			      struct mdd_object *sobj,
-			      struct mdd_object *tobj,
-			      const struct lu_name *sname,
-			      const struct lu_name *tname,
-			      struct md_op_spec *spec,
-			      struct md_attr *ma);
+static
+int mdd_migrate_object(const struct lu_env *env, struct mdd_object *spobj,
+		       struct mdd_object *tpobj, struct mdd_object *sobj,
+		       struct mdd_object *tobj, const struct lu_name *sname,
+		       const struct lu_name *tname, struct md_op_spec *spec,
+		       struct md_attr *ma);
 
 /* src object can be remote that is why we use only fid and type of object */
-static int mdd_rename(const struct lu_env *env,
-                      struct md_object *src_pobj, struct md_object *tgt_pobj,
-                      const struct lu_fid *lf, const struct lu_name *lsname,
-                      struct md_object *tobj, const struct lu_name *ltname,
-                      struct md_attr *ma)
+static int mdd_rename(const struct lu_env *env,  struct md_object *src_pobj,
+		      struct md_object *tgt_pobj, const struct lu_fid *lf,
+		      const struct lu_name *lsname, struct md_object *tobj,
+		      const struct lu_name *ltname, struct md_attr *ma)
 {
 	const char *sname = lsname->ln_name;
 	const char *tname = ltname->ln_name;
-	struct lu_attr    *la = &mdd_env_info(env)->mdi_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj); /* source parent */
-	struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
-	struct mdd_device *mdd = mdo2mdd(src_pobj);
-	struct mdd_object *mdd_sobj = NULL;                  /* source object */
-	struct mdd_object *mdd_tobj = NULL;
-	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
-	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
+	struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj); /* target parent */
+	struct mdd_object *mdd_sobj = NULL;		     /* source object */
+	struct mdd_object *mdd_tobj = NULL;	  /* (possible) target object */
+	struct lu_attr *sattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *spattr = MDD_ENV_VAR(env, pattr);
 	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
 	struct lu_attr *tpattr = MDD_ENV_VAR(env, tpattr);
-	struct thandle *handle;
-	struct linkea_data  *ldata = &mdd_env_info(env)->mdi_link_data;
+	struct linkea_data *ldata = &mdd_env_info(env)->mdi_link_data;
 	const struct lu_fid *tpobj_fid = mdd_object_fid(mdd_tpobj);
 	const struct lu_fid *spobj_fid = mdd_object_fid(mdd_spobj);
+	struct mdd_device *mdd = mdo2mdd(src_pobj);
+	struct thandle *handle;
 	bool is_dir;
 	bool tobj_ref = 0;
 	bool tobj_locked = 0;
@@ -3270,15 +3260,15 @@ static int mdd_rename(const struct lu_env *env,
 	if (IS_ERR(mdd_sobj))
 		RETURN(PTR_ERR(mdd_sobj));
 
-	rc = mdd_la_get(env, mdd_sobj, cattr);
+	rc = mdd_la_get(env, mdd_sobj, sattr);
 	if (rc)
 		GOTO(out_pending, rc);
 
 	/* if rename is cross MDTs, migrate symlink if it doesn't have other
 	 * hard links, and target doesn't exist.
 	 */
-	if (mdd_object_remote(mdd_sobj) && S_ISLNK(cattr->la_mode) &&
-	    cattr->la_nlink == 1 && !tobj) {
+	if (mdd_object_remote(mdd_sobj) && S_ISLNK(sattr->la_mode) &&
+	    sattr->la_nlink == 1 && !tobj) {
 		struct md_op_spec *spec = &mdd_env_info(env)->mdi_spec;
 		struct lu_device *ld = &mdd->mdd_md_dev.md_lu_dev;
 		struct lu_fid tfid;
@@ -3299,7 +3289,7 @@ static int mdd_rename(const struct lu_env *env,
 		GOTO(out_pending, rc);
 	}
 
-	rc = mdd_la_get(env, mdd_spobj, pattr);
+	rc = mdd_la_get(env, mdd_spobj, spattr);
 	if (rc)
 		GOTO(out_pending, rc);
 
@@ -3318,8 +3308,8 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc)
 		GOTO(out_pending, rc);
 
-	rc = mdd_rename_sanity_check(env, mdd_spobj, pattr, mdd_tpobj, tpattr,
-				     mdd_sobj, cattr, mdd_tobj, tattr);
+	rc = mdd_rename_sanity_check(env, mdd_spobj, spattr, mdd_tpobj, tpattr,
+				     mdd_sobj, sattr, mdd_tobj, tattr);
 	if (rc)
 		GOTO(out_pending, rc);
 
@@ -3327,18 +3317,17 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_pending, rc);
 
-        handle = mdd_trans_create(env, mdd);
-        if (IS_ERR(handle))
-                GOTO(out_pending, rc = PTR_ERR(handle));
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		GOTO(out_pending, rc = PTR_ERR(handle));
 
 	memset(ldata, 0, sizeof(*ldata));
-	rc = mdd_linkea_prepare(env, mdd_sobj, mdd_object_fid(mdd_spobj),
-				lsname, mdd_object_fid(mdd_tpobj), ltname,
-				1, 0, ldata);
+	rc = mdd_linkea_prepare(env, mdd_sobj, spobj_fid, lsname, tpobj_fid,
+				ltname, 1, 0, ldata);
 	if (rc)
 		GOTO(stop, rc);
 
-	if (tpattr->la_projid != cattr->la_projid &&
+	if (tpattr->la_projid != sattr->la_projid &&
 	    tpattr->la_flags & LUSTRE_PROJINHERIT_FL)
 		change_projid = true;
 
@@ -3348,44 +3337,44 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc)
 		GOTO(stop, rc);
 
-        rc = mdd_trans_start(env, mdd, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-	is_dir = S_ISDIR(cattr->la_mode);
+	is_dir = S_ISDIR(sattr->la_mode);
 
 	/* Remove source name from source directory */
 	rc = __mdd_index_delete(env, mdd_spobj, sname, is_dir, handle);
-	if (rc != 0)
+	if (rc)
 		GOTO(stop, rc);
 
 	/* "mv dir1 dir2" needs "dir1/.." link update */
 	if (is_dir && !lu_fid_eq(spobj_fid, tpobj_fid)) {
 		rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle);
-		if (rc != 0)
+		if (rc)
 			GOTO(fixup_spobj2, rc);
 
 		rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, S_IFDIR,
 					     dotdot, handle);
-		if (rc != 0)
-                        GOTO(fixup_spobj, rc);
-        }
+		if (rc)
+			GOTO(fixup_spobj, rc);
+	}
 
 	if (mdd_tobj != NULL && mdd_object_exists(mdd_tobj)) {
 		rc = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle);
-		if (rc != 0)
+		if (rc)
 			/* tname might been renamed to something else */
 			GOTO(fixup_spobj, rc);
 	}
 
-        /* Insert new fid with target name into target dir */
-	rc = __mdd_index_insert(env, mdd_tpobj, lf, cattr->la_mode,
+	/* Insert new fid with target name into target dir */
+	rc = __mdd_index_insert(env, mdd_tpobj, lf, sattr->la_mode,
 				tname, handle);
-	if (rc != 0)
-                GOTO(fixup_tpobj, rc);
+	if (rc)
+		GOTO(fixup_tpobj, rc);
 
-        LASSERT(ma->ma_attr.la_valid & LA_CTIME);
-        la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
 	/* XXX: mdd_sobj must be local one if it is NOT NULL. */
 	la->la_valid = LA_CTIME;
@@ -3394,7 +3383,7 @@ static int mdd_rename(const struct lu_env *env,
 		la->la_valid |= LA_PROJID;
 		la->la_projid = tpattr->la_projid;
 	}
-	rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
+	rc = mdd_update_time(env, mdd_sobj, sattr, la, handle);
 	if (rc)
 		GOTO(fixup_tpobj, rc);
 
@@ -3412,44 +3401,41 @@ static int mdd_rename(const struct lu_env *env,
 	   updated -- fid2path will use alternate lookup method. */
 	rc = 0;
 
-        /* Remove old target object
-         * For tobj is remote case cmm layer has processed
-         * and set tobj to NULL then. So when tobj is NOT NULL,
-         * it must be local one.
-         */
-        if (tobj && mdd_object_exists(mdd_tobj)) {
+	/* Remove old target object
+	 * For tobj is remote case cmm layer has processed
+	 * and set tobj to NULL then. So when tobj is NOT NULL,
+	 * it must be local one.
+	 */
+	if (tobj && mdd_object_exists(mdd_tobj)) {
 		mdd_write_lock(env, mdd_tobj, DT_TGT_CHILD);
 		tobj_locked = 1;
-                if (mdd_is_dead_obj(mdd_tobj)) {
-                        /* shld not be dead, something is wrong */
-                        CERROR("tobj is dead, something is wrong\n");
-                        rc = -EINVAL;
-                        goto cleanup;
-                }
-                mdo_ref_del(env, mdd_tobj, handle);
+		if (mdd_is_dead_obj(mdd_tobj)) {
+			/* should not be dead, something is wrong */
+			rc = -EINVAL;
+			CERROR("%s: something bad, dead tobj "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc);
+			goto cleanup;
+		}
+		mdo_ref_del(env, mdd_tobj, handle);
 
-                /* Remove dot reference. */
+		/* Remove dot reference. */
 		if (S_ISDIR(tattr->la_mode))
-                        mdo_ref_del(env, mdd_tobj, handle);
+			mdo_ref_del(env, mdd_tobj, handle);
 		tobj_ref = 1;
 
 		/* fetch updated nlink */
 		rc = mdd_la_get(env, mdd_tobj, tattr);
-		if (rc != 0) {
-			CERROR("%s: Failed to get nlink for tobj "
-				DFID": rc = %d\n",
-				mdd2obd_dev(mdd)->obd_name,
-				PFID(tpobj_fid), rc);
+		if (rc) {
+			CERROR("%s: failed get nlink of tobj "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
 		}
 
 		la->la_valid = LA_CTIME;
 		rc = mdd_update_time(env, mdd_tobj, tattr, la, handle);
-		if (rc != 0) {
-			CERROR("%s: Failed to set ctime for tobj "
-				DFID": rc = %d\n",
-				mdd2obd_dev(mdd)->obd_name,
-				PFID(tpobj_fid), rc);
+		if (rc) {
+			CERROR("%s: failed set ctime of tobj "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
 		}
 
@@ -3458,11 +3444,9 @@ static int mdd_rename(const struct lu_env *env,
 		ma->ma_valid |= MA_INODE;
 		rc = mdd_finish_unlink(env, mdd_tobj, ma, mdd_tpobj, ltname,
 				       handle);
-		if (rc != 0) {
-			CERROR("%s: Failed to unlink tobj "
-				DFID": rc = %d\n",
-				mdd2obd_dev(mdd)->obd_name,
-				PFID(tpobj_fid), rc);
+		if (rc) {
+			CERROR("%s: failed to unlink tobj "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
 		}
 
@@ -3473,11 +3457,9 @@ static int mdd_rename(const struct lu_env *env,
 			 * return the latest known attributes */
 			tattr->la_nlink = 0;
 			rc = 0;
-		} else if (rc != 0) {
-			CERROR("%s: Failed to get nlink for tobj "
-				DFID": rc = %d\n",
-				mdd2obd_dev(mdd)->obd_name,
-				PFID(tpobj_fid), rc);
+		} else if (rc) {
+			CERROR("%s: failed get nlink of tobj "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
 		}
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
@@ -3488,10 +3470,10 @@ static int mdd_rename(const struct lu_env *env,
 			cl_flags |= CLF_RENAME_LAST;
 		else
 			cl_flags &= ~CLF_RENAME_LAST_EXISTS;
-        }
+	}
 
 	la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_update_time(env, mdd_spobj, pattr, la, handle);
+	rc = mdd_update_time(env, mdd_spobj, spattr, la, handle);
 	if (rc)
 		GOTO(fixup_tpobj, rc);
 
@@ -3502,28 +3484,30 @@ static int mdd_rename(const struct lu_env *env,
 			GOTO(fixup_tpobj, rc);
 	}
 
-        EXIT;
+	EXIT;
 
 fixup_tpobj:
-        if (rc) {
+	if (rc) {
 		rc2 = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle);
-                if (rc2)
-                        CWARN("tp obj fix error %d\n",rc2);
+		if (rc2)
+			CWARN("%s: tpobj "DFID" fix error: rc = %d\n",
+			      mdd2obd_dev(mdd)->obd_name, PFID(tpobj_fid), rc2);
 
-                if (mdd_tobj && mdd_object_exists(mdd_tobj) &&
-                    !mdd_is_dead_obj(mdd_tobj)) {
+		if (mdd_tobj && mdd_object_exists(mdd_tobj) &&
+		    !mdd_is_dead_obj(mdd_tobj)) {
 			if (tobj_ref) {
 				mdo_ref_add(env, mdd_tobj, handle);
 				if (is_dir)
 					mdo_ref_add(env, mdd_tobj, handle);
 			}
 
-			rc2 = __mdd_index_insert(env, mdd_tpobj,
-						 mdd_object_fid(mdd_tobj),
+			rc2 = __mdd_index_insert(env, mdd_tpobj, tpobj_fid,
 						 mdd_object_type(mdd_tobj),
 						 tname, handle);
-			if (rc2 != 0)
-				CWARN("tp obj fix error: rc = %d\n", rc2);
+			if (rc2)
+				CWARN("%s: tpobj "DFID" fix error: rc = %d\n",
+				      mdd2obd_dev(mdd)->obd_name,
+				      PFID(tpobj_fid), rc2);
 		}
 	}
 
@@ -3531,24 +3515,25 @@ fixup_spobj:
 	if (rc && is_dir && mdd_sobj && mdd_spobj != mdd_tpobj) {
 		rc2 = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle);
 		if (rc2)
-			CWARN("%s: sp obj dotdot delete error: rc = %d\n",
-			       mdd2obd_dev(mdd)->obd_name, rc2);
+			CWARN("%s: spobj "DFID" dotdot delete error: rc = %d\n",
+			      mdd2obd_dev(mdd)->obd_name, PFID(spobj_fid), rc2);
 
 
 		rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid, S_IFDIR,
 					      dotdot, handle);
-		if (rc2 != 0)
-			CWARN("%s: sp obj dotdot insert error: rc = %d\n",
-			      mdd2obd_dev(mdd)->obd_name, rc2);
+		if (rc2)
+			CWARN("%s: spobj "DFID" dotdot insert error: rc = %d\n",
+			      mdd2obd_dev(mdd)->obd_name, PFID(spobj_fid), rc2);
 	}
 
 fixup_spobj2:
-	if (rc != 0) {
+	if (rc) {
 		rc2 = __mdd_index_insert(env, mdd_spobj, lf,
 					 mdd_object_type(mdd_sobj), sname,
 					 handle);
-		if (rc2 != 0)
-			CWARN("sp obj fix error: rc = %d\n", rc2);
+		if (rc2)
+			CWARN("%s: spobj "DFID" fix error: rc = %d\n",
+			      mdd2obd_dev(mdd)->obd_name, PFID(spobj_fid), rc2);
 	}
 
 cleanup:
@@ -3558,7 +3543,7 @@ cleanup:
 	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, cl_flags,
 					    mdd_tobj, mdd_tpobj, tpattr, lf,
-					    mdd_spobj, pattr, ltname, lsname,
+					    mdd_spobj, spattr, ltname, lsname,
 					    handle);
 
 stop:
@@ -3566,6 +3551,7 @@ stop:
 
 out_pending:
 	mdd_object_put(env, mdd_sobj);
+
 	return rc;
 }
 

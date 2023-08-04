@@ -22714,8 +22714,8 @@ run_test 230s "lfs mkdir should return -EEXIST if target exists"
 
 test_230t()
 {
-	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
-	[[ $MDS1_VERSION -ge $(version_code 2.14.50) ]] ||
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.14.50) )) ||
 		skip "Need MDS version at least 2.14.50"
 
 	test_mkdir $DIR/$tdir || error "mkdir $tdir failed"
@@ -22724,7 +22724,29 @@ test_230t()
 		error "set $tdir project id failed"
 	$LFS project -p 2 -s $DIR/$tdir/subdir ||
 		error "set subdir project id failed"
+	local pbefore="$($LFS project -d $DIR/$tdir)"
+	local sbefore="$($LFS project -d $DIR/$tdir/subdir)"
 	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir || error "migrate failed"
+
+	local pafter="$($LFS project -d $DIR/$tdir)"
+	local safter="$($LFS project -d $DIR/$tdir/subdir)"
+	[[ "$pbefore" == "$pafter" ]] || error "projid '$pbefore' != '$pafter'"
+	[[ "$sbefore" == "$safter" ]] || error "projid '$sbefore' != '$safter'"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.59.107) )) ||
+		{ echo "Need MDS >= 2.15.59.107 for projid rename"; return 0; }
+
+	# check rename works, even if source parent projid differs (LU-17016)
+	test_mkdir $DIR/$tdir.2 || error "mkdir $tdir.2 failed"
+	local fid_before=$($LFS path2fid $DIR/$tdir/subdir)
+
+	$LFS project -p 2 -s $DIR/$tdir.2 || error "set $tdir.2 projid failed"
+	mrename $DIR/$tdir/subdir $DIR/$tdir.2/subdir ||
+		error "subdir failed rename for different source parent projid"
+	local fid_after=$($LFS path2fid $DIR/$tdir.2/subdir)
+
+	[[ "$fid_before" == "$fid_after" ]] ||
+		error "fid before '$fid_before' != after '$fid_after'"
 }
 run_test 230t "migrate directory with project ID set"
 
