@@ -860,10 +860,10 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 			lnet_incr_stats(&msg->msg_txpeer->lpni_stats,
 					msg->msg_type,
 					LNET_STATS_TYPE_DROP);
-		if (msg->msg_txni)
-			lnet_incr_stats(&msg->msg_txni->ni_stats,
-					msg->msg_type,
-					LNET_STATS_TYPE_DROP);
+
+		lnet_incr_stats(&msg->msg_txni->ni_stats,
+				msg->msg_type,
+				LNET_STATS_TYPE_DROP);
 
 		if (rc == -EHOSTUNREACH) {
 			CNETERR("Dropping message for %s: peer not alive\n",
@@ -1250,10 +1250,9 @@ routing_off:
 		LASSERT(rxpeerni->lpni_peer_net);
 		LASSERT(rxpeerni->lpni_peer_net->lpn_peer);
 
+		spin_lock(&rxpeerni->lpni_lock);
 		/* give back peer router credits */
 		msg->msg_peerrtrcredit = 0;
-
-		spin_lock(&rxpeerni->lpni_lock);
 		rxpeerni->lpni_rtrcredits++;
 		spin_unlock(&rxpeerni->lpni_lock);
 
@@ -1361,30 +1360,19 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, struct lnet_nid *dst_nid,
 		/* pick the healthiest peer ni */
 		if (lpni_healthv < best_lpni_healthv)
 			continue;
-		else if (lpni_healthv > best_lpni_healthv) {
-			if (best_lpni_is_preferred)
-				best_lpni_is_preferred = false;
+		else if (lpni_healthv > best_lpni_healthv)
 			goto select_lpni;
-		}
 
 		if (lpni_sel_prio > best_sel_prio)
 			continue;
-		else if (lpni_sel_prio < best_sel_prio) {
-			if (best_lpni_is_preferred)
-				best_lpni_is_preferred = false;
+		else if (lpni_sel_prio < best_sel_prio)
 			goto select_lpni;
-		}
 
-		/* if this is a preferred peer use it */
-		if (!best_lpni_is_preferred && lpni_is_preferred) {
-			best_lpni_is_preferred = true;
+		/* If this is a preferred peer - use it. Otherwise, ignore it */
+		if (!best_lpni_is_preferred && lpni_is_preferred)
 			goto select_lpni;
-		} else if (best_lpni_is_preferred && !lpni_is_preferred) {
-			/* this is not the preferred peer so let's ignore
-			 * it.
-			 */
+		else if (best_lpni_is_preferred && !lpni_is_preferred)
 			continue;
-		}
 
 		if (lpni->lpni_txcredits < best_lpni_credits)
 			/* We already have a peer that has more credits
@@ -2506,7 +2494,7 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 		net_healthv = lnet_get_net_healthv_locked(net);
 		net_sel_prio = net->net_sel_priority;
 
-		if (!best_lpn)
+		if (!best_lpn || !best_net)
 			goto select_lpn;
 		else
 			CDEBUG(D_NET,
@@ -5234,6 +5222,7 @@ LNetPut(struct lnet_nid *self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 		if (!rspt) {
 			CERROR("Dropping PUT to %s: ENOMEM on response tracker\n",
 				libcfs_idstr(target));
+			lnet_msg_free(msg);
 			return -ENOMEM;
 		}
 		INIT_LIST_HEAD(&rspt->rspt_on_list);
@@ -5464,6 +5453,7 @@ LNetGet(struct lnet_nid *self, struct lnet_handle_md mdh,
 	if (!rspt) {
 		CERROR("Dropping GET to %s: ENOMEM on response tracker\n",
 		       libcfs_idstr(target));
+		lnet_msg_free(msg);
 		return -ENOMEM;
 	}
 	INIT_LIST_HEAD(&rspt->rspt_on_list);
