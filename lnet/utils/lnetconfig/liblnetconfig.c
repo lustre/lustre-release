@@ -32,7 +32,7 @@
  *  2. APIs that take a YAML file and parses out the information there and
  *  calls the APIs mentioned in 1
  */
-
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <byteswap.h>
@@ -1494,6 +1494,293 @@ static int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 
 	freeifaddrs(ifa);
 
+	return rc;
+}
+
+void lustre_lnet_free_list(struct nid_node *head)
+{
+	struct nid_node *entry, *tmp;
+
+	nl_list_for_each_entry_safe(entry, tmp, &head->children, list) {
+		nl_list_del(&entry->list);
+		free(entry);
+	}
+}
+
+static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
+				 char *tmp, char *tmp2, char *nidstr,
+				 const char **errmsg)
+{
+	unsigned int first = 0, last = 0, off = 0, inc = 1;
+	bool slash = false, hyphen = false;
+	char num[INT_STRING_LEN] = "";
+	char *range = tmp + 1;
+	int base = 10;
+	int rc;
+
+	if (!tmp && !tmp2) {
+		*errmsg = "Unable to parse nidlist: [] are missing";
+		return -ERANGE;
+	}
+
+	if ((tmp && !tmp2) || (!tmp && tmp2)) {
+		*errmsg = "Unable to parse nidlist: incomplete bracket set";
+		return -EINVAL;
+	}
+
+	if (range > tmp2) {
+		*errmsg = "Unable to parse nidlist: improper bracket ordering";
+		return -EINVAL;
+	}
+
+	if (strchr(nid, ':'))
+		base = 16;
+
+	while (range < tmp2) {
+		if (isxdigit(*range)) {
+			if (off > INT_STRING_LEN)
+				return -E2BIG;
+			num[off++] = *range++;
+		} else if (*range == ':') {
+			/* skip ':' for IPv6 and IB GUID */
+			range++;
+		} else if (*range == '-') {
+			range++;
+			if (!isxdigit(*range)) {
+				*errmsg = "Unable to parse nidlist: range needs number after -";
+				return -ERANGE;
+			}
+
+			first = strtoul(num, NULL, base);
+			memset(num, 0, sizeof(num));
+			hyphen = true;
+			off = 0;
+		} else if (*range == '/') {
+			range++;
+			if (!isdigit(*range)) {
+				*errmsg = "Unable to parse nidlist: range needs number after /";
+				return -ERANGE;
+			}
+
+			/* Don't lose last number. This should be the very last item */
+			if (strlen(num)) {
+				last = strtoul(num, NULL, base);
+				memset(num, 0, sizeof(num));
+				slash = true;
+				off = 0;
+			}
+		} else if (*range == ',') {
+			char *end = strchr(nidstr, ',');
+			int count = strlen(tmp2 + 1);
+			struct nid_node *item;
+			int len = tmp - nid;
+
+			range++;
+			if (!isxdigit(*range)) {
+				*errmsg = "Unable to parse nidlist: range needs number after ,";
+				return -ERANGE;
+			}
+
+			/* If hyphen is true then we have the foramt '[first - last],' format.
+			 * The other format is just x, y, z, ... format.
+			 */
+			if (hyphen) {
+				if (slash)
+					inc = strtoul(num, NULL, base);
+				else
+					last = strtoul(num, NULL, base);
+
+				if (first > last) {
+					*errmsg = "Unable to parse nidlist: range is wrong order";
+					return -ERANGE;
+				}
+
+				while (last >= first) {
+					char hdr[LNET_MAX_STR_LEN], *next;
+
+					snprintf(hdr, sizeof(hdr), "%.*s%d%.*s",
+						 len, nid, first, count,
+						 tmp2 + 1);
+					next = strchr(hdr, '[');
+					if (next && strchr(next, ']')) {
+						rc = unroll_nid_range_scan(list, hdr, next,
+									   strchr(next, ']'),
+									   nidstr, errmsg);
+						if (rc < 0)
+							return rc;
+					} else {
+						item = calloc(1, sizeof(struct nid_node));
+						if (!item) {
+							*errmsg = "Unable to parse nidlist: allocation failed";
+							return -ENOMEM;
+						}
+						snprintf(item->nidstr, sizeof(item->nidstr),
+							 "%s@%s", hdr, nidstr);
+						nl_init_list_head(&item->list);
+						nl_list_add_tail(&item->list, &list->children);
+					}
+					first += inc;
+				}
+				/* reset slash / hyphen handing */
+				hyphen = false;
+				slash = false;
+				inc = 1;
+			} else {
+				int end_len = end ? end - nidstr : strlen(nidstr);
+
+				item = calloc(1, sizeof(struct nid_node));
+				if (!item) {
+					*errmsg = "Unable to parse nidlist: allocation failed";
+					return -ENOMEM;
+				}
+				snprintf(item->nidstr, sizeof(item->nidstr),
+					 "%.*s%s%.*s@%.*s", len, nid, num,
+					 count, tmp2 + 1, end_len, nidstr);
+				nl_init_list_head(&item->list);
+				nl_list_add_tail(&item->list, &list->children);
+			}
+
+			memset(num, 0, sizeof(num));
+			off = 0;
+		} else {
+			*errmsg = "Unable to parse nidlist: invalid character in range";
+			return -EINVAL;
+		}
+	}
+
+	if (strlen(num)) {
+		if (slash)
+			inc = strtoul(num, NULL, base);
+		else
+			last = strtoul(num, NULL, base);
+		memset(num, 0, sizeof(num));
+	}
+
+	if (!hyphen)
+		first = last;
+
+	/* This is the last set of [ first - last ]. We reach this point because
+	 * the above loop reached the end of the range and no ',' was found so
+	 * the final set of number range wasn't processed. Do that handling here.
+	 */
+	if (first || last) {
+		char *next = tmp2 + 1;
+		int len = strlen(nid);
+
+		if (first > last) {
+			*errmsg = "Unable to parse nidlist: range is wrong order";
+			return -ERANGE;
+		}
+
+		if (strchr(nid, '['))
+			len = strchr(nid, '[') - nid;
+
+		tmp = strchr(tmp2, '[');
+		if (tmp)
+			tmp2 = strchr(tmp, ']');
+
+		while (last >= first) {
+			char str[LNET_MAX_STR_LEN];
+
+			snprintf(str, sizeof(str), "%.*s%u%.*s",
+				 len, nid, first, (int)(tmp - next), next);
+			if (tmp && tmp2) {
+				rc = unroll_nid_range_scan(list, str, tmp, tmp2,
+							   nidstr, errmsg);
+				if (rc < 0)
+					return rc;
+			} else {
+				char *end = strchr(nidstr, ',');
+				int count = end ? end - nidstr : strlen(nidstr);
+				struct nid_node *item;
+
+				item = calloc(1, sizeof(struct nid_node));
+				if (!item) {
+					*errmsg = "Unable to parse nidlist: allocation failed";
+					return -ENOMEM;
+				}
+				snprintf(item->nidstr, sizeof(item->nidstr),
+					 "%s@%.*s", str, count, nidstr);
+				nl_init_list_head(&item->list);
+				nl_list_add_tail(&item->list, &list->children);
+			}
+			first += inc;
+		}
+	}
+
+	return 0;
+}
+
+int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
+				const char **errmsg)
+{
+	int rc = 0;
+	char *nid;
+
+	if (!nidstr) {
+		*errmsg = "supplied nidstr is NULL";
+		return -EINVAL;
+	}
+
+	if (strchr(nidstr, '*')) {
+		*errmsg = "asterisk not allowed in nidstring";
+		return -EINVAL;
+	}
+
+	if (strstr(nidstr, "<?>")) {
+		*errmsg = "Unable to parse nidlist: LNET_ANY_NID is unsupported";
+		return -EINVAL;
+	}
+
+	if (strchr(nidstr, '@') == NULL) {
+		*errmsg = "Unable to parse nidlist: no valid NIDs in string";
+		return -EINVAL;
+	}
+
+	while ((nid = strsep(&nidstr, "@")) != NULL) {
+		char *tmp = NULL, *tmp2 = NULL, *end = NULL;
+
+		if (!nid) {
+			*errmsg = "Unable to parse nidlist: no proper NID string";
+			return -ENOENT;
+		}
+
+		tmp = strchr(nid, '[');
+		tmp2 = strchr(nid, ']');
+
+		if (!tmp && !tmp2) {
+			char *end = strchr(nidstr, ',');
+			struct nid_node *item;
+			int count;
+
+			item = calloc(1, sizeof(struct nid_node));
+			if (!item) {
+				*errmsg = "Unable to parse nidlist: allocation failed";
+				rc = -ENOMEM;
+				goto err;
+			}
+
+			count = end ? end - nidstr : strlen(nidstr);
+			snprintf(item->nidstr, sizeof(item->nidstr),
+				 "%s@%.*s", nid, count, nidstr);
+			nl_init_list_head(&item->list);
+			nl_list_add_tail(&item->list, &head->children);
+		} else {
+			rc = unroll_nid_range_scan(head, nid, tmp, tmp2,
+						   nidstr, errmsg);
+			if (rc < 0)
+				goto err;
+		}
+
+		if (nidstr) {
+			end = strchr(nidstr, ',');
+			if (end)
+				nidstr = end + 1;
+			else
+				nidstr = NULL;
+		}
+	}
+err:
 	return rc;
 }
 

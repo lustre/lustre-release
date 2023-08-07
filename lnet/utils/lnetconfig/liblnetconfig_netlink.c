@@ -1291,7 +1291,17 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 		if (!strlen(sep))
 			goto nla_put_failure;
 
-		if (strspn(sep, "-0123456789") == strlen(sep)) {
+		if (strcasecmp(sep, "yes") == 0 ||
+		    strcasecmp(sep, "true") == 0 ||
+		    strcasecmp(sep, "on") == 0 ||
+		    strcasecmp(sep, "y") == 0) {
+			NLA_PUT_S64(msg, LN_SCALAR_ATTR_INT_VALUE, 1);
+		} else if (strcasecmp(sep, "no") == 0 ||
+			   strcasecmp(sep, "false") == 0 ||
+			   strcasecmp(sep, "off") == 0 ||
+			   strcasecmp(sep, "n") == 0) {
+			NLA_PUT_S64(msg, LN_SCALAR_ATTR_INT_VALUE, 0);
+		} else if (strspn(sep, "-0123456789") == strlen(sep)) {
 			num = strtoll(sep, NULL, 0);
 			NLA_PUT_S64(msg, LN_SCALAR_ATTR_INT_VALUE, num);
 		} else {

@@ -1170,6 +1170,10 @@ libcfs_strnid(struct lnet_nid *nid, const char *str)
 		if (nf == NULL)
 			return -EINVAL;
 	} else {
+		if (strcmp(str, "<?>") == 0) {
+			memcpy(nid, &LNET_ANY_NID, sizeof(*nid));
+			return 0;
+		}
 		sep = str + strlen(str);
 		net = LNET_MKNET(SOCKLND, 0);
 		nf = libcfs_lnd2netstrfns(SOCKLND);

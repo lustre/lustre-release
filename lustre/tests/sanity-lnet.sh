@@ -346,6 +346,9 @@ EOF
 
 	echo "Add peer with nidranage that overlaps primary nid (o2ib)"
 	compare_peer_add "5.5.5.5@o2ib" "5.5.5.[1-4]@o2ib"
+
+	echo "Add peer with nidranage that contain , plus primary nid (o2ib)"
+	compare_peer_add "5.5.5.5@o2ib" "5.5.5.[1,2,3-4]@o2ib"
 }
 run_test 5 "Add peer with nidrange (o2ib)"
 

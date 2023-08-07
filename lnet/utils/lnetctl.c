@@ -2442,7 +2442,7 @@ old_api:
 }
 
 static int set_value_helper(int argc, char **argv,
-			    int (*cb)(int, bool, char*, int, struct cYAML**))
+			    int (*cb)(int, bool, char*, int, int, struct cYAML**))
 {
 	char *nid = NULL;
 	long int healthv = -1;
@@ -2450,21 +2450,17 @@ static int set_value_helper(int argc, char **argv,
 	long int state = -1;
 	int rc, opt;
 	struct cYAML *err_rc = NULL;
-
 	const char *const short_options = "t:n:s:a";
 	static const struct option long_options[] = {
 		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
 		{ .name = "health", .has_arg = required_argument, .val = 't' },
 		{ .name = "state", .has_arg = required_argument, .val = 's' },
 		{ .name = "all", .has_arg = no_argument, .val = 'a' },
-		{ .name = NULL } };
-
-	rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
-	if (rc)
-		return rc;
+		{ .name = NULL }
+	};
 
 	while ((opt = getopt_long(argc, argv, short_options,
-				   long_options, NULL)) != -1) {
+				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
 			nid = optarg;
@@ -2485,11 +2481,7 @@ static int set_value_helper(int argc, char **argv,
 		}
 	}
 
-	if (state > -1)
-		rc = lustre_lnet_set_peer_state(state, nid, -1, &err_rc);
-	else
-		rc = cb(healthv, all, nid, -1, &err_rc);
-
+	rc = cb(healthv, all, nid, state, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -2765,6 +2757,241 @@ static int yaml_lnet_peer(char *prim_nid, char *nidstr, bool disable_mr,
 		if (rc == 0)
 			goto emitter_error;
 
+		if (disable_mr) {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"Multi-Rail",
+						     strlen("Multi-Rail"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_BOOL_TAG,
+						     (yaml_char_t *)"False",
+						     strlen("False"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (state != -1) {
+			char peer_state[INT_STRING_LEN];
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"peer state",
+						     strlen("peer state"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			snprintf(peer_state, sizeof(peer_state), "%d", state);
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)peer_state,
+						     strlen(peer_state), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (!nidstr && health_value == -1)
+			goto skip_peer_nis;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"peer ni",
+					     strlen("peer ni"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1, YAML_BLOCK_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		if (nidstr) {
+			struct nid_node head, *entry;
+			int count = 0;
+
+			/* If we have LNET_ANY_NID and its NLM_F_REPLACE we
+			 * treat it as the all flag case for lnetctl peer set
+			 */
+			if (strcmp(nidstr, "<?>") == 0) {
+				yaml_mapping_start_event_initialize(&event, NULL,
+								    (yaml_char_t *)YAML_MAP_TAG,
+								    1, YAML_BLOCK_MAPPING_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)"nid",
+							     strlen("nid"), 1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)nidstr,
+							     strlen(nidstr), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_mapping_end_event_initialize(&event);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				goto handle_health;
+			}
+
+			NL_INIT_LIST_HEAD(&head.children);
+			nl_init_list_head(&head.list);
+			rc = lustre_lnet_parse_nid_range(&head, nidstr, &msg);
+			if (rc < 0) {
+				fprintf(stdout, "can't parse nidrange: \"%s\"\n", nidstr);
+				lustre_lnet_free_list(&head);
+				yaml_emitter_delete(&output);
+				errno = rc;
+				rc = 0;
+				goto free_reply;
+			}
+
+			if (nl_list_empty(&head.children)) {
+				lustre_lnet_free_list(&head);
+				yaml_emitter_delete(&output);
+				msg = "Unable to parse nidlist: did not expand to any nids";
+				errno = -ENOENT;
+				rc = 0;
+				goto free_reply;
+			}
+			rc = 1; /* one means its working */
+
+			nl_list_for_each_entry(entry, &head.children, list) {
+				char *nid = entry->nidstr;
+
+				if (count++ > LNET_MAX_NIDS_PER_PEER) {
+					lustre_lnet_free_list(&head);
+					yaml_emitter_delete(&output);
+					msg = "Unable to parse nidlist: specifies more NIDs than allowed";
+					errno = -E2BIG;
+					rc = 0;
+					goto free_reply;
+				}
+
+				yaml_mapping_start_event_initialize(&event, NULL,
+								    (yaml_char_t *)YAML_MAP_TAG,
+								    1, YAML_BLOCK_MAPPING_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)"nid",
+							     strlen("nid"), 1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)nid,
+							     strlen(nid), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+
+				yaml_mapping_end_event_initialize(&event);
+				rc = yaml_emitter_emit(&output, &event);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			lustre_lnet_free_list(&head);
+		}
+handle_health:
+		if (health_value >= 0) {
+			char health[INT_STRING_LEN];
+
+			/* Create the mapping for 'health stats'. The value field for
+			 * the mapping is not provided so its treated as a empty string.
+			 */
+			yaml_mapping_start_event_initialize(&event, NULL,
+							    (yaml_char_t *)YAML_MAP_TAG,
+							    1, YAML_BLOCK_MAPPING_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"health stats",
+						     strlen("health stats"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			/* Setup all mappings for data related to the 'health stats' */
+			yaml_mapping_start_event_initialize(&event, NULL,
+							    (yaml_char_t *)YAML_MAP_TAG,
+							    1, YAML_BLOCK_MAPPING_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"health value",
+						     strlen("health value"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			snprintf(health, sizeof(health), "%d", health_value);
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)health,
+						     strlen(health), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_mapping_end_event_initialize(&event);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_mapping_end_event_initialize(&event);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+skip_peer_nis:
 		yaml_mapping_end_event_initialize(&event);
 		rc = yaml_emitter_emit(&output, &event);
 		if (rc == 0)
@@ -2822,9 +3049,41 @@ free_reply:
 	return rc == 1 ? 0 : rc;
 }
 
+int yaml_lnet_config_peer_ni_healthv(int healthv, bool all, char *lpni_nid,
+				     int state, int seq_no, struct cYAML **err_rc)
+{
+	int rc;
+
+	rc = yaml_lnet_peer(lpni_nid ? lpni_nid : "<?>", all ? "<?>" : NULL,
+			    false, healthv, state, false, LNET_GENL_VERSION,
+			    NLM_F_REPLACE);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
+	if (state == -1)
+		rc = lustre_lnet_config_peer_ni_healthv(healthv, all, lpni_nid,
+							seq_no, err_rc);
+	else
+		rc = lustre_lnet_set_peer_state(state, lpni_nid, -1, err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, *err_rc);
+
+	cYAML_free_tree(*err_rc);
+
+	return rc;
+}
+
 static int jt_set_peer_ni_value(int argc, char **argv)
 {
-	return set_value_helper(argc, argv, lustre_lnet_config_peer_ni_healthv);
+	int rc = check_cmd(peer_cmds, "peer", "set", 0, argc, argv);
+
+	if (rc < 0)
+		return rc;
+
+	return set_value_helper(argc, argv, yaml_lnet_config_peer_ni_healthv);
 }
 
 static int jt_show_recovery(int argc, char **argv)
@@ -3519,13 +3778,13 @@ static int jt_export(int argc, char **argv)
 
 static int jt_peer_nid_common(int argc, char **argv, int cmd)
 {
+	int flags = cmd == LNETCTL_ADD_CMD ? NLM_F_CREATE : 0;
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt;
 	bool is_mr = true;
 	char *prim_nid = NULL, *nidstr = NULL;
 	char err_str[LNET_MAX_STR_LEN] = "Error";
 	struct cYAML *err_rc = NULL;
 	int force_lock = 0;
-
 	const char *const short_opts = "k:m:n:f:l";
 	const struct option long_opts[] = {
 	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
@@ -3535,7 +3794,8 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 	{ .name = "lock_prim",	.has_arg = no_argument,		.val = 'l' },
 	{ .name = NULL } };
 
-	rc = check_cmd(peer_cmds, "peer", "add", 2, argc, argv);
+	rc = check_cmd(peer_cmds, "peer",
+		       cmd == LNETCTL_ADD_CMD ? "add" : "del", 2, argc, argv);
 	if (rc)
 		return rc;
 
@@ -3564,6 +3824,7 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 					 "Unrecognized option '-%c'", opt);
 			}
 			force_lock = 1;
+			flags |= NLM_F_EXCL;
 			break;
 		case 'l':
 			if (cmd == LNETCTL_DEL_CMD) {
@@ -3572,6 +3833,7 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 					 "Unrecognized option '-%c'", opt);
 			}
 			force_lock = 1;
+			flags |= NLM_F_EXCL;
 			break;
 		case '?':
 			print_help(peer_cmds, "peer",
@@ -3581,6 +3843,14 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 		}
 	}
 
+	rc = yaml_lnet_peer(prim_nid, nidstr, !is_mr, -1, -1, false,
+			    LNET_GENL_VERSION, flags);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	rc = lustre_lnet_modify_peer(prim_nid, nidstr, is_mr, cmd,
 				     force_lock, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)

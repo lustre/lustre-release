@@ -4487,13 +4487,12 @@ lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 
 /* Call with the ln_api_mutex held */
 void
-lnet_peer_ni_set_healthv(lnet_nid_t nid4, int value, bool all)
+lnet_peer_ni_set_healthv(struct lnet_nid *nid, int value, bool all)
 {
 	struct lnet_peer_table *ptable;
 	struct lnet_peer *lp;
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
-	struct lnet_nid nid;
 	int lncpt;
 	int cpt;
 	time64_t now;
@@ -4501,12 +4500,11 @@ lnet_peer_ni_set_healthv(lnet_nid_t nid4, int value, bool all)
 	if (the_lnet.ln_state != LNET_STATE_RUNNING)
 		return;
 
-	lnet_nid4_to_nid(nid4, &nid);
 	now = ktime_get_seconds();
 
 	if (!all) {
 		lnet_net_lock(LNET_LOCK_EX);
-		lpni = lnet_peer_ni_find_locked(&nid);
+		lpni = lnet_peer_ni_find_locked(nid);
 		if (!lpni) {
 			lnet_net_unlock(LNET_LOCK_EX);
 			return;

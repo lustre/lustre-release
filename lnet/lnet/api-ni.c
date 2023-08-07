@@ -4426,6 +4426,7 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_SET_HEALHV: {
 		struct lnet_ioctl_reset_health_cfg *cfg = arg;
 		int value;
+
 		if (cfg->rh_hdr.ioc_len < sizeof(*cfg))
 			return -EINVAL;
 		if (cfg->rh_value < 0 ||
@@ -4436,13 +4437,13 @@ LNetCtl(unsigned int cmd, void *arg)
 		CDEBUG(D_NET, "Manually setting healthv to %d for %s:%s. all = %d\n",
 		       value, (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI) ?
 		       "local" : "peer", libcfs_nid2str(cfg->rh_nid), cfg->rh_all);
+		lnet_nid4_to_nid(cfg->rh_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
 		if (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI)
 			lnet_ni_set_healthv(cfg->rh_nid, value,
 					     cfg->rh_all);
 		else
-			lnet_peer_ni_set_healthv(cfg->rh_nid, value,
-						  cfg->rh_all);
+			lnet_peer_ni_set_healthv(&nid, value, cfg->rh_all);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}
@@ -5913,6 +5914,272 @@ out:
 	return rc;
 }
 
+/* Called with ln_api_mutex */
+static int lnet_parse_peer_nis(struct nlattr *rlist, struct lnet_nid *pnid,
+			       bool mr, struct genl_info *info)
+{
+	struct lnet_nid snid = LNET_ANY_NID;
+	struct nlattr *props;
+	bool all = false;
+	int rem, rc = 0;
+	s64 num = -1;
+
+	nla_for_each_nested(props, rlist, rem) {
+		if (nla_type(props) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(props, "nid") == 0) {
+			char nidstr[LNET_NIDSTR_SIZE];
+
+			props = nla_next(props, &rem);
+			if (nla_type(props) != LN_SCALAR_ATTR_VALUE) {
+				GENL_SET_ERR_MSG(info,
+						 "invalid secondary NID");
+				GOTO(report_err, rc = -EINVAL);
+			}
+
+			rc = nla_strscpy(nidstr, props, sizeof(nidstr));
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to get secondary NID");
+				GOTO(report_err, rc);
+			}
+
+			rc = libcfs_strnid(&snid, strim(nidstr));
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info, "unsupported secondary NID");
+				GOTO(report_err, rc);
+			}
+
+			if (LNET_NID_IS_ANY(&snid))
+				all = true;
+		} else if (nla_strcmp(props, "health stats") == 0) {
+			struct nlattr *health;
+			int rem2;
+
+			props = nla_next(props, &rem);
+			if (nla_type(props) !=
+			      LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "invalid health configuration");
+				GOTO(report_err, rc = -EINVAL);
+			}
+
+			nla_for_each_nested(health, props, rem2) {
+				if (nla_type(health) != LN_SCALAR_ATTR_VALUE ||
+				    nla_strcmp(health, "health value") != 0) {
+					GENL_SET_ERR_MSG(info,
+							 "wrong health config format");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				health = nla_next(health, &rem2);
+				if (nla_type(health) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid health config format");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				num = nla_get_s64(health);
+				clamp_t(s64, num, 0, LNET_MAX_HEALTH_VALUE);
+			}
+		}
+	}
+
+	if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && num != -1) {
+		lnet_peer_ni_set_healthv(pnid, num, all);
+	} else if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+		bool lock_prim = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
+
+		rc = lnet_user_add_peer_ni(pnid, &snid, mr, lock_prim);
+		if (rc < 0)
+			GENL_SET_ERR_MSG(info,
+					 "failed to add peer");
+	} else if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+		bool force = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
+
+		rc = lnet_del_peer_ni(pnid, &snid, force);
+		if (rc < 0)
+			GENL_SET_ERR_MSG(info,
+					 "failed to del peer");
+	}
+report_err:
+	return rc;
+}
+
+static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	int msg_len, rem, rc = 0;
+	struct nlattr *attr;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		GENL_SET_ERR_MSG(info, "Network is down");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENETDOWN;
+	}
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOMSG;
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -EINVAL;
+	}
+
+	nla_for_each_nested(attr, params, rem) {
+		struct lnet_nid pnid = LNET_ANY_NID;
+		bool parse_peer_nis = false;
+		struct nlattr *pnid_prop;
+		int rem2;
+
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(pnid_prop, attr, rem2) {
+			bool mr = true;
+
+			if (nla_type(pnid_prop) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			if (nla_strcmp(pnid_prop, "primary nid") == 0) {
+				char nidstr[LNET_NIDSTR_SIZE];
+
+				pnid_prop = nla_next(pnid_prop, &rem2);
+				if (nla_type(pnid_prop) !=
+				    LN_SCALAR_ATTR_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							  "invalid primary NID type");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				rc = nla_strscpy(nidstr, pnid_prop,
+						 sizeof(nidstr));
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "failed to get primary NID");
+					GOTO(report_err, rc);
+				}
+
+				rc = libcfs_strnid(&pnid, strim(nidstr));
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "unsupported primary NID");
+					GOTO(report_err, rc);
+				}
+
+				/* we must create primary NID for peer ni
+				 * creation
+				 */
+				if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+					bool lock_prim;
+
+					lock_prim = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
+					rc = lnet_user_add_peer_ni(&pnid,
+								   &LNET_ANY_NID,
+								   true, lock_prim);
+					if (rc < 0) {
+						GENL_SET_ERR_MSG(info,
+								 "failed to add primary peer");
+						GOTO(report_err, rc);
+					}
+				}
+			} else if (nla_strcmp(pnid_prop, "Multi-Rail") == 0) {
+				pnid_prop = nla_next(pnid_prop, &rem2);
+				if (nla_type(pnid_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							  "invalid MR flag param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				if (nla_get_s64(pnid_prop) == 0)
+					mr = false;
+			} else if (nla_strcmp(pnid_prop, "peer state") == 0) {
+				struct lnet_peer_ni *lpni;
+				struct lnet_peer *lp;
+
+				pnid_prop = nla_next(pnid_prop, &rem2);
+				if (nla_type(pnid_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							  "invalid peer state param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				lpni = lnet_peer_ni_find_locked(&pnid);
+				if (!lpni) {
+					GENL_SET_ERR_MSG(info,
+							  "invalid peer state param");
+					GOTO(report_err, rc = -ENOENT);
+				}
+				lnet_peer_ni_decref_locked(lpni);
+				lp = lpni->lpni_peer_net->lpn_peer;
+				lp->lp_state = nla_get_s64(pnid_prop);
+			} else if (nla_strcmp(pnid_prop, "peer ni") == 0) {
+				struct nlattr *rlist;
+				int rem3;
+
+				if (LNET_NID_IS_ANY(&pnid)) {
+					GENL_SET_ERR_MSG(info,
+							 "missing required primary NID");
+					GOTO(report_err, rc);
+				}
+
+				pnid_prop = nla_next(pnid_prop, &rem2);
+				if (nla_type(pnid_prop) !=
+				    LN_SCALAR_ATTR_LIST) {
+					GENL_SET_ERR_MSG(info,
+							  "invalid NIDs list");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				nla_for_each_nested(rlist, pnid_prop, rem3) {
+					rc = lnet_parse_peer_nis(rlist, &pnid,
+								 mr, info);
+					if (rc < 0)
+						GOTO(report_err, rc);
+				}
+				parse_peer_nis = true;
+			}
+		}
+
+		/* If we have remote peer ni's we already add /del peers */
+		if (parse_peer_nis)
+			continue;
+
+		if (LNET_NID_IS_ANY(&pnid)) {
+			GENL_SET_ERR_MSG(info, "missing primary NID");
+			GOTO(report_err, rc);
+		}
+
+		if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+			bool force = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
+
+			rc = lnet_del_peer_ni(&pnid, &LNET_ANY_NID,
+					      force);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to del peer");
+				GOTO(report_err, rc);
+			}
+		}
+	}
+report_err:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return rc;
+}
+
 /** LNet route handling */
 
 /* We can't use struct lnet_ioctl_config_data since it lacks
@@ -7307,6 +7574,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 	},
 	{
 		.cmd		= LNET_CMD_PEERS,
+		.flags		= GENL_ADMIN_PERM,
 #ifdef HAVE_NETLINK_CALLBACK_START
 		.start		= lnet_peer_ni_show_start,
 		.dumpit		= lnet_peer_ni_show_dump,
@@ -7314,6 +7582,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_peer_ni_show_dump,
 #endif
 		.done		= lnet_peer_ni_show_done,
+		.doit		= lnet_peer_ni_cmd,
 	},
 	{
 		.cmd		= LNET_CMD_ROUTES,

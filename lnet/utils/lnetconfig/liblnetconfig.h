@@ -788,6 +788,16 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc,
 int lustre_yaml_exec(char *f, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
 
+struct nid_node {
+	char nidstr[LNET_MAX_STR_LEN * 2];
+	struct nl_list_head children;
+	struct nl_list_head list;
+};
+
+int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
+				const char **errmsg);
+void lustre_lnet_free_list(struct nid_node *head);
+
 /**
  * yaml_emitter_set_output_netlink
  *
