@@ -112,7 +112,7 @@ Package: lustre-client-modules-dkms
 Section: admin
 Architecture: i386 armhf powerpc ppc64el amd64 ia64
 Priority: optional
-Depends: autoconf, automake, bison, build-essential, dkms, flex, libaio-dev, libkeyutils-dev, libkrb5-dev, libtool, libselinux-dev, libssl-dev, libyaml-dev, linux-base, linux-image >= 3.10 | linux-image-amd64 >= 3.10 | linux-image-arm64 >= 3.10, linux-headers-generic | linux-headers-amd64, module-assistant, pkg-config, python3-distutils | python3-distutils-extra, python3-dev, libnl-genl-3-dev, zlib1g-dev, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
+Depends: autoconf, automake, bison, build-essential, dkms, flex, libaio-dev, libkeyutils-dev, libkrb5-dev, libtool, libselinux-dev, libssl-dev, libyaml-dev, linux-base, linux-image (>= 3.10) | linux-image-generic (>= 3.10) | linux-image-amd64 (>= 3.10) | linux-image-arm64 (>= 3.10), linux-headers-generic | linux-headers-amd64, module-assistant, pkg-config, python3-distutils | python3-distutils-extra, python3-dev, libnl-genl-3-dev, zlib1g-dev, libmount1, libmount-dev, libkeyutils1, libkeyutils-dev
 Provides: lustre-client-modules
 Description: Lustre Linux kernel module (DKMS)
  This package contains the loadable kernel modules for the patchless client
