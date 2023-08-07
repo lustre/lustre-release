@@ -6402,8 +6402,14 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 							       "failed to get route param");
 						GOTO(report_err, rc);
 					}
+
+					rc = libcfs_strnid(&tmp.lrp_gateway, strim(gw));
+					if (rc < 0) {
+						NL_SET_ERR_MSG(extack,
+							       "cannot parse gateway");
+						GOTO(report_err, rc = -ENODEV);
+					}
 					rc = 0;
-					libcfs_strnid(&tmp.lrp_gateway, strim(gw));
 				} else if (nla_strcmp(route, "hop") == 0) {
 					route = nla_next(route, &rem2);
 					if (nla_type(route) !=
@@ -7210,6 +7216,214 @@ static int lnet_old_peer_ni_show_dump(struct sk_buff *msg,
 }
 #endif
 
+static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	int msg_len, rem, rc = 0;
+	struct nlattr *attr;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		GENL_SET_ERR_MSG(info, "Network is down");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENETDOWN;
+	}
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOMSG;
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -EINVAL;
+	}
+
+	nla_for_each_nested(attr, params, rem) {
+		u32 net_id = LNET_NET_ANY, hops = LNET_UNDEFINED_HOPS;
+		u32 priority = 0, sensitivity = 1;
+		struct lnet_nid gw_nid = LNET_ANY_NID;
+		struct nlattr *route_prop;
+		int rem2;
+
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(route_prop, attr, rem2) {
+			char tmp[LNET_NIDSTR_SIZE];
+			ssize_t len;
+			s64 num;
+
+			if (nla_type(route_prop) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			if (nla_strcmp(route_prop, "net") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "net is invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				len = nla_strscpy(tmp, route_prop, sizeof(tmp));
+				if (len < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "net key string is invalid");
+					GOTO(report_err, rc = len);
+				}
+
+				net_id = libcfs_str2net(tmp);
+				if (!net_id) {
+					GENL_SET_ERR_MSG(info,
+							 "cannot parse remote net");
+					GOTO(report_err, rc = -ENODEV);
+				}
+
+				if (LNET_NETTYP(net_id) == LOLND) {
+					GENL_SET_ERR_MSG(info,
+							 "setting @lo not allowed");
+					GOTO(report_err, rc = -EACCES);
+				}
+
+				if (net_id == LNET_NET_ANY) {
+					GENL_SET_ERR_MSG(info,
+							 "setting LNET_NET_ANY not allowed");
+					GOTO(report_err, rc = -ENXIO);
+				}
+			} else if (nla_strcmp(route_prop, "gateway") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "gateway is invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				len = nla_strscpy(tmp, route_prop, sizeof(tmp));
+				if (len < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "gateway string is invalid");
+					GOTO(report_err, rc = len);
+				}
+
+				rc = libcfs_strnid(&gw_nid, strim(tmp));
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "cannot parse gateway");
+					GOTO(report_err, rc = -ENODEV);
+				}
+			} else if (nla_strcmp(route_prop, "hop") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "hop has invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				hops = nla_get_s64(route_prop);
+				if (hops < 1 || hops > 255) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid hop count must be between 1 and 255");
+					GOTO(report_err, rc = -EINVAL);
+				}
+			} else if (nla_strcmp(route_prop, "priority") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "priority has invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				num = nla_get_s64(route_prop);
+				if (num < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid priority, must not be negative");
+					GOTO(report_err, rc = -EINVAL);
+				}
+				priority = num;
+			} else if (nla_strcmp(route_prop,
+					      "health_sensitivity") == 0) {
+				route_prop = nla_next(route_prop, &rem2);
+				if (nla_type(route_prop) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "sensitivity has invalid key");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				num = nla_get_s64(route_prop);
+				if (num < 1) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid health sensitivity, must be 1 or greater");
+					GOTO(report_err, rc = -EINVAL);
+				}
+				sensitivity = num;
+			}
+		}
+
+		if (net_id == LNET_NET_ANY) {
+			GENL_SET_ERR_MSG(info,
+					 "missing mandatory parameter: network");
+			GOTO(report_err, rc = -ENODEV);
+		}
+
+		if (LNET_NID_IS_ANY(&gw_nid)) {
+			GENL_SET_ERR_MSG(info,
+					 "missing mandatory parameter: gateway");
+			GOTO(report_err, rc = -ENODEV);
+		}
+
+		if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+			rc = lnet_add_route(net_id, hops, &gw_nid, priority,
+					    sensitivity);
+			if (rc < 0) {
+				switch (rc) {
+				case -EINVAL:
+					GENL_SET_ERR_MSG(info,
+							 "invalid settings for route creation");
+					break;
+				case -EHOSTUNREACH:
+					GENL_SET_ERR_MSG(info,
+							 "No interface configured on the same net as gateway");
+					break;
+				case -ESHUTDOWN:
+					GENL_SET_ERR_MSG(info,
+							 "Network is down");
+					break;
+				case -EEXIST:
+					GENL_SET_ERR_MSG(info,
+							 "Route already exists or the specified network is local");
+					break;
+				default:
+					GENL_SET_ERR_MSG(info,
+							 "failed to create route");
+					break;
+				}
+				GOTO(report_err, rc);
+			}
+		} else if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+			rc = lnet_del_route(net_id, &gw_nid);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to delete route");
+				GOTO(report_err, rc);
+			}
+		}
+	}
+report_err:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return rc;
+}
+
 static inline struct lnet_genl_ping_list *
 lnet_ping_dump_ctx(struct netlink_callback *cb)
 {
@@ -7594,6 +7808,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 	},
 	{
 		.cmd		= LNET_CMD_ROUTES,
+		.flags		= GENL_ADMIN_PERM,
 #ifdef HAVE_NETLINK_CALLBACK_START
 		.start		= lnet_route_show_start,
 		.dumpit		= lnet_route_show_dump,
@@ -7601,6 +7816,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_route_show_dump,
 #endif
 		.done		= lnet_route_show_done,
+		.doit		= lnet_route_cmd,
 	},
 	{
 		.cmd		= LNET_CMD_PING,

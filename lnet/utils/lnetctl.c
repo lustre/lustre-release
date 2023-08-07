@@ -1134,15 +1134,148 @@ static int jt_unconfig_lnet(int argc, char **argv)
 	return rc;
 }
 
+static int yaml_lnet_router_gateways(yaml_emitter_t *output, const char *nw,
+				     const char *gw, int hops, int prio,
+				     int sen)
+{
+	char num[INT_STRING_LEN];
+	yaml_event_t event;
+	int rc;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG, 1,
+					    YAML_BLOCK_MAPPING_STYLE);
+	rc = yaml_emitter_emit(output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (nw) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"net",
+					     strlen("net"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)nw,
+					     strlen(nw), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	if (gw) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"gateway",
+					     strlen("gateway"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)gw,
+					     strlen(gw), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	if (hops != -1) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"hop",
+					     strlen("hop"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		snprintf(num, sizeof(num), "%d", hops);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)num,
+					     strlen(num), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	if (prio != -1) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"priority",
+					     strlen("priority"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		snprintf(num, sizeof(num), "%d", prio);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)num,
+					     strlen(num), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	if (sen != -1) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"health_sensitivity",
+					     strlen("health_sensitivity"),
+					     1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		snprintf(num, sizeof(num), "%d", sen);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)num,
+					     strlen(num), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(output, &event);
+emitter_error:
+	return rc;
+}
+
 static int yaml_lnet_route(char *nw, char *gw, int hops, int prio, int sen,
 			   int version, int flags)
 {
+	struct nid_node head, *entry;
 	struct nl_sock *sk = NULL;
 	const char *msg = NULL;
 	yaml_emitter_t output;
 	yaml_parser_t reply;
 	yaml_event_t event;
 	int rc;
+
+	if (!(flags & NLM_F_DUMP) && (!nw || !gw)) {
+		fprintf(stdout, "missing mandatory parameters:'%s'\n",
+			(!nw && !gw) ? "net , gateway" :
+			!nw ? "net" : "gateway");
+		return -EINVAL;
+	}
 
 	/* Create Netlink emitter to send request to kernel */
 	sk = nl_socket_alloc();
@@ -1196,8 +1329,20 @@ static int yaml_lnet_route(char *nw, char *gw, int hops, int prio, int sen,
 	if (rc == 0)
 		goto emitter_error;
 
-	if (nw || gw || hops != -1 || prio != -1) {
-		char num[INT_STRING_LEN];
+	/* NLM_F_DUMP can have no arguments */
+	if (nw || gw) {
+		NL_INIT_LIST_HEAD(&head.children);
+		nl_init_list_head(&head.list);
+		if (gw) {
+			rc = lustre_lnet_parse_nid_range(&head, gw, &msg);
+			if (rc < 0) {
+				lustre_lnet_free_list(&head);
+				yaml_emitter_delete(&output);
+				errno = rc;
+				rc = 0;
+				goto free_reply;
+			}
+		}
 
 		yaml_sequence_start_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_SEQ_TAG,
@@ -1207,171 +1352,18 @@ static int yaml_lnet_route(char *nw, char *gw, int hops, int prio, int sen,
 		if (rc == 0)
 			goto emitter_error;
 
-		if (nw) {
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1,
-							    YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
+		if (!nl_list_empty(&head.children)) {
+			nl_list_for_each_entry(entry, &head.children, list) {
+				const char *nid = entry->nidstr;
 
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"net",
-						     strlen("net"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)nw,
-						     strlen(nw), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (gw) {
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1,
-							    YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"gateway",
-						     strlen("gateway"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)gw,
-						     strlen(gw), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (hops != -1) {
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1,
-							    YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"hop",
-						     strlen("hop"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			snprintf(num, sizeof(num), "%d", hops);
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_INT_TAG,
-						     (yaml_char_t *)num,
-						     strlen(num), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (prio != -1) {
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1,
-							    YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"priority",
-						     strlen("priority"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			snprintf(num, sizeof(num), "%d", prio);
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_INT_TAG,
-						     (yaml_char_t *)num,
-						     strlen(num), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (sen != -1) {
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1,
-							    YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"health_sensitivity",
-						     strlen("health_sensitivity"),
-						     1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			snprintf(num, sizeof(num), "%d", sen);
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_INT_TAG,
-						     (yaml_char_t *)num,
-						     strlen(num), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
+				rc = yaml_lnet_router_gateways(&output, nw, nid,
+							       hops, prio, sen);
+				if (rc == 0)
+					goto emitter_error;
+			}
+		} else {
+			rc = yaml_lnet_router_gateways(&output, nw, NULL, hops,
+						       prio, sen);
 			if (rc == 0)
 				goto emitter_error;
 		}
@@ -1410,12 +1402,13 @@ emitter_error:
 		yaml_document_t errmsg;
 
 		rc = yaml_parser_load(&reply, &errmsg);
-		if (rc == 1 && flags == NLM_F_DUMP) {
+		if (rc == 1 && (flags & NLM_F_DUMP)) {
 			yaml_emitter_t debug;
 
 			rc = yaml_emitter_initialize(&debug);
 			if (rc == 1) {
-				yaml_emitter_set_indent(&debug, 6);
+				yaml_emitter_set_indent(&debug,
+							LNET_DEFAULT_INDENT);
 				yaml_emitter_set_output_file(&debug,
 							     stdout);
 				rc = yaml_emitter_dump(&debug, &errmsg);
@@ -1450,13 +1443,14 @@ static int jt_add_route(int argc, char **argv)
 
 	const char *const short_options = "n:g:c:p:";
 	static const struct option long_options[] = {
-	{ .name = "net",       .has_arg = required_argument, .val = 'n' },
-	{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
-	{ .name = "hop",       .has_arg = required_argument, .val = 'c' },
-	{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
-	{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
-	{ .name = "health_sensitivity",  .has_arg = required_argument, .val = 's' },
-	{ .name = NULL } };
+		{ .name = "net",       .has_arg = required_argument, .val = 'n' },
+		{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
+		{ .name = "hop",       .has_arg = required_argument, .val = 'c' },
+		{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
+		{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
+		{ .name = "health_sensitivity",  .has_arg = required_argument, .val = 's' },
+		{ .name = NULL }
+	};
 
 	rc = check_cmd(route_cmds, "route", "add", 0, argc, argv);
 	if (rc)
@@ -1503,6 +1497,14 @@ static int jt_add_route(int argc, char **argv)
 		}
 	}
 
+	rc = yaml_lnet_route(network, gateway, hop, prio, sen,
+			     LNET_GENL_VERSION, NLM_F_CREATE);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	rc = lustre_lnet_config_route(network, gateway, hop, prio, sen, -1,
 				      &err_rc);
 
@@ -2267,12 +2269,12 @@ static int jt_del_route(int argc, char **argv)
 	char *network = NULL, *gateway = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
-
 	const char *const short_options = "n:g:";
 	static const struct option long_options[] = {
 		{ .name = "net",     .has_arg = required_argument, .val = 'n' },
 		{ .name = "gateway", .has_arg = required_argument, .val = 'g' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
 
 	rc = check_cmd(route_cmds, "route", "del", 0, argc, argv);
 	if (rc)
@@ -2294,6 +2296,14 @@ static int jt_del_route(int argc, char **argv)
 		}
 	}
 
+	rc = yaml_lnet_route(network, gateway, -1, -1, -1, LNET_GENL_VERSION,
+			     0);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	rc = lustre_lnet_del_route(network, gateway, -1, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
