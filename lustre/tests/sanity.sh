@@ -19306,7 +19306,7 @@ test_185() { # LU-2441
 	$CHECKSTAT -t file $MOUNT/.lustre/fid/$fid 2>/dev/null &&
 		error "FID is still valid after close"
 
-	multiop_bg_pause $DIR/$tdir vVw4096_c
+	multiop_bg_pause $DIR/$tdir Vw4096_c
 	local multi_pid=$!
 
 	local OLD_IFS=$IFS
