@@ -49,7 +49,7 @@ void request_out_callback(struct lnet_event *ev)
 {
 	struct ptlrpc_cb_id   *cbid = ev->md_user_ptr;
 	struct ptlrpc_request *req = cbid->cbid_arg;
-	bool		       wakeup = false;
+	bool wakeup = false;
 	ENTRY;
 
 	LASSERT(ev->type == LNET_EVENT_SEND || ev->type == LNET_EVENT_UNLINK);
@@ -113,24 +113,24 @@ void reply_in_callback(struct lnet_event *ev)
 	if (ev->unlinked)
 		req->rq_reply_unlinked = 1;
 
-        if (ev->status)
-                goto out_wake;
+	if (ev->status)
+		goto out_wake;
 
-        if (ev->type == LNET_EVENT_UNLINK) {
-                LASSERT(ev->unlinked);
-                DEBUG_REQ(D_NET, req, "unlink");
-                goto out_wake;
-        }
+	if (ev->type == LNET_EVENT_UNLINK) {
+		LASSERT(ev->unlinked);
+		DEBUG_REQ(D_NET, req, "unlink");
+		goto out_wake;
+	}
 
-        if (ev->mlength < ev->rlength ) {
-                CDEBUG(D_RPCTRACE, "truncate req %p rpc %d - %d+%d\n", req,
-                       req->rq_replen, ev->rlength, ev->offset);
+	if (ev->mlength < ev->rlength) {
+		CDEBUG(D_RPCTRACE, "truncate req %p rpc %d - %d+%d\n", req,
+		       req->rq_replen, ev->rlength, ev->offset);
 		req->rq_reply_truncated = 1;
-                req->rq_replied = 1;
-                req->rq_status = -EOVERFLOW;
-                req->rq_nob_received = ev->rlength + ev->offset;
-                goto out_wake;
-        }
+		req->rq_replied = 1;
+		req->rq_status = -EOVERFLOW;
+		req->rq_nob_received = ev->rlength + ev->offset;
+		goto out_wake;
+	}
 
 	if ((ev->offset == 0) &&
 	    ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))) {
@@ -147,26 +147,26 @@ void reply_in_callback(struct lnet_event *ev)
 		    req->rq_reply_unlinked == 1)
 			goto out_wake;
 
-                req->rq_early = 1;
-                req->rq_reply_off = ev->offset;
-                req->rq_nob_received = ev->mlength;
-                /* And we're still receiving */
-                req->rq_receiving_reply = 1;
-        } else {
-                /* Real reply */
-                req->rq_rep_swab_mask = 0;
-                req->rq_replied = 1;
+		req->rq_early = 1;
+		req->rq_reply_off = ev->offset;
+		req->rq_nob_received = ev->mlength;
+		/* And we're still receiving */
+		req->rq_receiving_reply = 1;
+	} else {
+		/* Real reply */
+		req->rq_rep_swab_mask = 0;
+		req->rq_replied = 1;
 		/* Got reply, no resend required */
 		req->rq_resend = 0;
-                req->rq_reply_off = ev->offset;
-                req->rq_nob_received = ev->mlength;
-                /* LNetMDUnlink can't be called under the LNET_LOCK,
-                   so we must unlink in ptlrpc_unregister_reply */
-                DEBUG_REQ(D_INFO, req,
-                          "reply in flags=%x mlen=%u offset=%d replen=%d",
-                          lustre_msg_get_flags(req->rq_reqmsg),
-                          ev->mlength, ev->offset, req->rq_replen);
-        }
+		req->rq_reply_off = ev->offset;
+		req->rq_nob_received = ev->mlength;
+		/* LNetMDUnlink can't be called under the LNET_LOCK,
+		 * so we must unlink in ptlrpc_unregister_reply */
+		DEBUG_REQ(D_INFO, req,
+			  "reply in flags=%x mlen=%u offset=%d replen=%d",
+			  lustre_msg_get_flags(req->rq_reqmsg), ev->mlength,
+			  ev->offset, req->rq_replen);
+	}
 
 	if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
 		req->rq_import->imp_last_reply_time = ktime_get_real_seconds();
@@ -202,7 +202,8 @@ void client_bulk_callback(struct lnet_event *ev)
 	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB, CFS_FAIL_ONCE))
 		ev->status = -EIO;
 
-	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,CFS_FAIL_ONCE))
+	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,
+	    CFS_FAIL_ONCE))
 		ev->status = -EIO;
 
 	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
@@ -371,14 +372,14 @@ void request_in_callback(struct lnet_event *ev)
 		if (test_req_buffer_pressure &&
 		    ev->type != LNET_EVENT_UNLINK &&
 		    svcpt->scp_nrqbds_posted == 0)
-                        CWARN("All %s request buffers busy\n",
-                              service->srv_name);
+			CWARN("All %s request buffers busy\n",
+			      service->srv_name);
 
-                /* req takes over the network's ref on rqbd */
-        } else {
-                /* req takes a ref on rqbd */
-                rqbd->rqbd_refcount++;
-        }
+		/* req takes over the network's ref on rqbd */
+	} else {
+		/* req takes a ref on rqbd */
+		rqbd->rqbd_refcount++;
+	}
 
 	list_add_tail(&req->rq_list, &svcpt->scp_req_incoming);
 	svcpt->scp_nreqs_incoming++;
@@ -633,23 +634,23 @@ static int ptlrpc_ni_init(void)
 
 int ptlrpc_init_portals(void)
 {
-        int   rc = ptlrpc_ni_init();
+	int rc = ptlrpc_ni_init();
 
-        if (rc != 0) {
-                CERROR("network initialisation failed\n");
+	if (rc != 0) {
+		CERROR("network initialisation failed: rc = %d\n", rc);
 		return rc;
-        }
-        rc = ptlrpcd_addref();
-        if (rc == 0)
-                return 0;
+	}
+	rc = ptlrpcd_addref();
+	if (rc == 0)
+		return 0;
 
-        CERROR("rpcd initialisation failed\n");
-        ptlrpc_ni_fini();
-        return rc;
+	CERROR("rpcd initialisation failed: rc = %d\n", rc);
+	ptlrpc_ni_fini();
+	return rc;
 }
 
 void ptlrpc_exit_portals(void)
 {
-        ptlrpcd_decref();
-        ptlrpc_ni_fini();
+	ptlrpcd_decref();
+	ptlrpc_ni_fini();
 }
