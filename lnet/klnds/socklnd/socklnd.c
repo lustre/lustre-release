@@ -619,13 +619,13 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_processid *id,
 	if (peer_ni->ksnp_conn_cb) {
 		ksocknal_conn_cb_decref(conn_cb);
 	} else {
-		ksocknal_add_conn_cb_locked(peer_ni, conn_cb);
 		/* Remember conns_per_peer setting at the time
 		 * of connection initiation. It will define the
 		 * max number of conns per type for this conn_cb
 		 * while it's in use.
 		 */
 		conn_cb->ksnr_max_conns = ksocknal_get_conns_per_peer(peer_ni);
+		ksocknal_add_conn_cb_locked(peer_ni, conn_cb);
 	}
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
