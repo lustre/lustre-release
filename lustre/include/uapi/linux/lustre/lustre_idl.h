@@ -851,6 +851,9 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_REPLAY_CREATE	 0x80000000ULL /* replay OST_CREATE */
 #define OBD_CONNECT2_LARGE_NID		0x100000000ULL /* understands large/IPv6 NIDs */
 #define OBD_CONNECT2_COMPRESS		0x200000000ULL /* compressed file */
+/* only ZFS servers require a change to support unaligned DIO, so this flag is
+ * ignored for ldiskfs servers */
+#define OBD_CONNECT2_UNALIGNED_DIO	0x400000000ULL /* unaligned DIO */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com

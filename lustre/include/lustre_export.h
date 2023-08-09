@@ -524,6 +524,11 @@ static inline bool imp_connect_replay_create(struct obd_import *imp)
 #define imp_connect_replay_create(exp) true
 #endif
 
+static inline bool exp_connect_unaligned_dio(struct obd_export *exp)
+{
+	return (exp_connect_flags2(exp) & OBD_CONNECT2_UNALIGNED_DIO);
+}
+
 enum {
 	/* archive_ids in array format */
 	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,

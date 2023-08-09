@@ -654,6 +654,7 @@ static const char *const obd_connect_names[] = {
 	"replay_create",		/* 0x80000000 */
 	"large_nid",			/* 0x100000000 */
 	"compressed_file",		/* 0x200000000 */
+	"unaligned_dio",		/* 0x400000000 */
 	NULL
 };
 
