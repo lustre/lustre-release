@@ -366,7 +366,7 @@ struct osd_device {
 	char			 od_svname[128];
 	guid_t			 od_uuid;
 
-	int			 od_connects;
+	atomic_t		 od_connects;
 	int			 od_index;
 	struct lu_site		 od_site;
 

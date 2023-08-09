@@ -1497,7 +1497,7 @@ static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	int                   rc;
 	ENTRY;
 
-	CDEBUG(D_CONFIG, "connect #%d\n", osd->od_connects);
+	CDEBUG(D_CONFIG, "connect #%d\n", atomic_read(&osd->od_connects));
 
 	rc = class_connect(&conn, obd, cluuid);
 	if (rc)
@@ -1505,9 +1505,7 @@ static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	*exp = class_conn2export(&conn);
 
-	spin_lock(&obd->obd_dev_lock);
-	osd->od_connects++;
-	spin_unlock(&obd->obd_dev_lock);
+	atomic_inc(&osd->od_connects);
 
 	RETURN(0);
 }
@@ -1524,11 +1522,7 @@ static int osd_obd_disconnect(struct obd_export *exp)
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
-	spin_lock(&obd->obd_dev_lock);
-	osd->od_connects--;
-	if (osd->od_connects == 0)
-		release = 1;
-	spin_unlock(&obd->obd_dev_lock);
+	release = atomic_dec_and_test(&osd->od_connects);
 
 	rc = class_disconnect(exp); /* bz 9811 */
 

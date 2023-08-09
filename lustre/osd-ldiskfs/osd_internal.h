@@ -300,7 +300,7 @@ struct osd_device {
 	spinlock_t		  od_osfs_lock;
 
 	int			  od_fallocate_zero_blocks;
-	int			  od_connects;
+	atomic_t		  od_connects;
 	struct lu_site		  od_site;
 
 	struct osd_obj_map	*od_ost_map;
