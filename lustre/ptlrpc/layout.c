@@ -63,12 +63,12 @@
  */
 /* empty set of fields... for suitable definition of emptiness. */
 static const struct req_msg_field *empty[] = {
-        &RMF_PTLRPC_BODY
+	&RMF_PTLRPC_BODY
 };
 
 static const struct req_msg_field *mgs_target_info_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MGS_TARGET_INFO
+	&RMF_PTLRPC_BODY,
+	&RMF_MGS_TARGET_INFO
 };
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
@@ -79,24 +79,24 @@ static const struct req_msg_field *mgs_set_info[] = {
 #endif
 
 static const struct req_msg_field *mgs_config_read_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MGS_CONFIG_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_MGS_CONFIG_BODY
 };
 
 static const struct req_msg_field *mgs_config_read_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MGS_CONFIG_RES
+	&RMF_PTLRPC_BODY,
+	&RMF_MGS_CONFIG_RES
 };
 
 static const struct req_msg_field *mdt_body_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY
 };
 
 static const struct req_msg_field *mdt_body_capa[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_CAPA1
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_CAPA1
 };
 
 static const struct req_msg_field *quotactl_only[] = {
@@ -124,10 +124,10 @@ static const struct req_msg_field *ldlm_intent_quota_server[] = {
 };
 
 static const struct req_msg_field *mdt_close_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_EPOCH,
-        &RMF_REC_REINT,
-        &RMF_CAPA1
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_EPOCH,
+	&RMF_REC_REINT,
+	&RMF_CAPA1
 };
 
 static const struct req_msg_field *mdt_close_intent_client[] = {
@@ -140,30 +140,30 @@ static const struct req_msg_field *mdt_close_intent_client[] = {
 };
 
 static const struct req_msg_field *obd_statfs_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OBD_STATFS
+	&RMF_PTLRPC_BODY,
+	&RMF_OBD_STATFS
 };
 
 static const struct req_msg_field *seq_query_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_SEQ_OPC,
-        &RMF_SEQ_RANGE
+	&RMF_PTLRPC_BODY,
+	&RMF_SEQ_OPC,
+	&RMF_SEQ_RANGE
 };
 
 static const struct req_msg_field *seq_query_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_SEQ_RANGE
+	&RMF_PTLRPC_BODY,
+	&RMF_SEQ_RANGE
 };
 
 static const struct req_msg_field *fld_query_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_FLD_OPC,
-        &RMF_FLD_MDFLD
+	&RMF_PTLRPC_BODY,
+	&RMF_FLD_OPC,
+	&RMF_FLD_MDFLD
 };
 
 static const struct req_msg_field *fld_query_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_FLD_MDFLD
+	&RMF_PTLRPC_BODY,
+	&RMF_FLD_MDFLD
 };
 
 static const struct req_msg_field *fld_read_client[] = {
@@ -177,31 +177,31 @@ static const struct req_msg_field *fld_read_server[] = {
 };
 
 static const struct req_msg_field *mds_getattr_name_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_CAPA1,
-        &RMF_NAME
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_CAPA1,
+	&RMF_NAME
 };
 
 static const struct req_msg_field *mds_reint_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_REC_REINT
+	&RMF_PTLRPC_BODY,
+	&RMF_REC_REINT
 };
 
 static const struct req_msg_field *mds_reint_create_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_REC_REINT,
-        &RMF_CAPA1,
-        &RMF_NAME
+	&RMF_PTLRPC_BODY,
+	&RMF_REC_REINT,
+	&RMF_CAPA1,
+	&RMF_NAME
 };
 
 static const struct req_msg_field *mds_reint_create_slave_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_REC_REINT,
-        &RMF_CAPA1,
-        &RMF_NAME,
-        &RMF_EADATA,
-        &RMF_DLM_REQ
+	&RMF_PTLRPC_BODY,
+	&RMF_REC_REINT,
+	&RMF_CAPA1,
+	&RMF_NAME,
+	&RMF_EADATA,
+	&RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_create_acl_client[] = {
@@ -244,12 +244,12 @@ static const struct req_msg_field *mds_reint_open_client[] = {
 };
 
 static const struct req_msg_field *mds_reint_open_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_ACL,
-        &RMF_CAPA1,
-        &RMF_CAPA2
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_MDT_MD,
+	&RMF_ACL,
+	&RMF_CAPA1,
+	&RMF_CAPA2
 };
 
 static const struct req_msg_field *mds_reint_unlink_client[] = {
@@ -297,30 +297,30 @@ static const struct req_msg_field *mds_reint_migrate_client[] = {
 };
 
 static const struct req_msg_field *mds_last_unlink_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_LOGCOOKIES,
-        &RMF_CAPA1,
-        &RMF_CAPA2
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_MDT_MD,
+	&RMF_LOGCOOKIES,
+	&RMF_CAPA1,
+	&RMF_CAPA2
 };
 
 static const struct req_msg_field *mds_reint_setattr_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_REC_REINT,
-        &RMF_CAPA1,
-        &RMF_MDT_EPOCH,
-        &RMF_EADATA,
-        &RMF_LOGCOOKIES,
-        &RMF_DLM_REQ
+	&RMF_PTLRPC_BODY,
+	&RMF_REC_REINT,
+	&RMF_CAPA1,
+	&RMF_MDT_EPOCH,
+	&RMF_EADATA,
+	&RMF_LOGCOOKIES,
+	&RMF_DLM_REQ
 };
 
 static const struct req_msg_field *mds_reint_setxattr_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_REC_REINT,
-        &RMF_CAPA1,
-        &RMF_NAME,
-        &RMF_EADATA,
+	&RMF_PTLRPC_BODY,
+	&RMF_REC_REINT,
+	&RMF_CAPA1,
+	&RMF_NAME,
+	&RMF_EADATA,
 	&RMF_DLM_REQ,
 	&RMF_SELINUX_POL
 };
@@ -365,14 +365,14 @@ static const struct req_msg_field *obd_connect_client[] = {
 };
 
 static const struct req_msg_field *obd_connect_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_CONNECT_DATA
+	&RMF_PTLRPC_BODY,
+	&RMF_CONNECT_DATA
 };
 
 static const struct req_msg_field *obd_set_info_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_SETINFO_KEY,
-        &RMF_SETINFO_VAL
+	&RMF_PTLRPC_BODY,
+	&RMF_SETINFO_KEY,
+	&RMF_SETINFO_VAL
 };
 
 static const struct req_msg_field *mdt_set_info_client[] = {
@@ -383,42 +383,42 @@ static const struct req_msg_field *mdt_set_info_client[] = {
 };
 
 static const struct req_msg_field *ost_grant_shrink_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_SETINFO_KEY,
-        &RMF_OST_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_SETINFO_KEY,
+	&RMF_OST_BODY
 };
 
 static const struct req_msg_field *mds_getinfo_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_GETINFO_KEY,
-        &RMF_GETINFO_VALLEN
+	&RMF_PTLRPC_BODY,
+	&RMF_GETINFO_KEY,
+	&RMF_GETINFO_VALLEN
 };
 
 static const struct req_msg_field *mds_getinfo_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_GETINFO_VAL,
+	&RMF_PTLRPC_BODY,
+	&RMF_GETINFO_VAL,
 };
 
 static const struct req_msg_field *ldlm_enqueue_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REQ
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ
 };
 
 static const struct req_msg_field *ldlm_enqueue_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REP
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REP
 };
 
 static const struct req_msg_field *ldlm_enqueue_lvb_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REP,
-        &RMF_DLM_LVB
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REP,
+	&RMF_DLM_LVB
 };
 
 static const struct req_msg_field *ldlm_cp_callback_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REQ,
-        &RMF_DLM_LVB
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_DLM_LVB
 };
 
 static const struct req_msg_field *ldlm_gl_callback_desc_client[] = {
@@ -428,8 +428,8 @@ static const struct req_msg_field *ldlm_gl_callback_desc_client[] = {
 };
 
 static const struct req_msg_field *ldlm_gl_callback_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_LVB
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_LVB
 };
 
 static const struct req_msg_field *ldlm_intent_basic_client[] = {
@@ -439,18 +439,18 @@ static const struct req_msg_field *ldlm_intent_basic_client[] = {
 };
 
 static const struct req_msg_field *ldlm_intent_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REQ,
-        &RMF_LDLM_INTENT,
-        &RMF_REC_REINT
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_LDLM_INTENT,
+	&RMF_REC_REINT
 };
 
 static const struct req_msg_field *ldlm_intent_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_DLM_REP,
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_ACL
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REP,
+	&RMF_MDT_BODY,
+	&RMF_MDT_MD,
+	&RMF_ACL
 };
 
 static const struct req_msg_field *ldlm_intent_layout_client[] = {
@@ -562,9 +562,9 @@ static const struct req_msg_field *mds_getxattr_client[] = {
 };
 
 static const struct req_msg_field *mds_getxattr_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_EADATA
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_EADATA
 };
 
 static const struct req_msg_field *mds_getattr_server[] = {
@@ -578,12 +578,12 @@ static const struct req_msg_field *mds_getattr_server[] = {
 };
 
 static const struct req_msg_field *mds_setattr_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_ACL,
-        &RMF_CAPA1,
-        &RMF_CAPA2
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_MDT_MD,
+	&RMF_ACL,
+	&RMF_CAPA1,
+	&RMF_CAPA2
 };
 
 static const struct req_msg_field *mds_batch_client[] = {
@@ -605,19 +605,19 @@ static const struct req_msg_field *llog_origin_handle_create_client[] = {
 };
 
 static const struct req_msg_field *llogd_body_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_LLOGD_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_LLOGD_BODY
 };
 
 static const struct req_msg_field *llog_log_hdr_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_LLOG_LOG_HDR
+	&RMF_PTLRPC_BODY,
+	&RMF_LLOG_LOG_HDR
 };
 
 static const struct req_msg_field *llog_origin_handle_next_block_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_LLOGD_BODY,
-        &RMF_EADATA
+	&RMF_PTLRPC_BODY,
+	&RMF_LLOGD_BODY,
+	&RMF_EADATA
 };
 
 static const struct req_msg_field *obd_idx_read_client[] = {
@@ -631,21 +631,21 @@ static const struct req_msg_field *obd_idx_read_server[] = {
 };
 
 static const struct req_msg_field *ost_body_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY
 };
 
 static const struct req_msg_field *ost_body_capa[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY,
-        &RMF_CAPA1
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_CAPA1
 };
 
 static const struct req_msg_field *ost_destroy_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY,
-        &RMF_DLM_REQ,
-        &RMF_CAPA1
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_DLM_REQ,
+	&RMF_CAPA1
 };
 
 
@@ -665,24 +665,24 @@ static const struct req_msg_field *ost_brw_read_server[] = {
 };
 
 static const struct req_msg_field *ost_brw_write_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY,
-        &RMF_RCS
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_RCS
 };
 
 static const struct req_msg_field *ost_get_info_generic_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_GENERIC_DATA,
+	&RMF_PTLRPC_BODY,
+	&RMF_GENERIC_DATA,
 };
 
 static const struct req_msg_field *ost_get_info_generic_client[] = {
-        &RMF_PTLRPC_BODY,
+	&RMF_PTLRPC_BODY,
 	&RMF_GETINFO_KEY
 };
 
 static const struct req_msg_field *ost_get_last_id_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OBD_ID
+	&RMF_PTLRPC_BODY,
+	&RMF_OBD_ID
 };
 
 static const struct req_msg_field *ost_get_last_fid_client[] = {
@@ -697,9 +697,9 @@ static const struct req_msg_field *ost_get_last_fid_server[] = {
 };
 
 static const struct req_msg_field *ost_get_fiemap_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_FIEMAP_KEY,
-        &RMF_FIEMAP_VAL
+	&RMF_PTLRPC_BODY,
+	&RMF_FIEMAP_KEY,
+	&RMF_FIEMAP_VAL
 };
 
 static const struct req_msg_field *ost_ladvise[] = {
@@ -710,8 +710,8 @@ static const struct req_msg_field *ost_ladvise[] = {
 };
 
 static const struct req_msg_field *ost_get_fiemap_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_FIEMAP_VAL
+	&RMF_PTLRPC_BODY,
+	&RMF_FIEMAP_VAL
 };
 
 static const struct req_msg_field *mdt_hsm_progress[] = {
@@ -933,12 +933,12 @@ struct req_capsule;
 /*
  * Request fields.
  */
-#define DEFINE_MSGF(name, flags, size, swabber, dumper) {       \
-        .rmf_name    = (name),                                  \
-        .rmf_flags   = (flags),                                 \
-        .rmf_size    = (size),                                  \
-        .rmf_swabber = (void (*)(void*))(swabber),              \
-        .rmf_dumper  = (void (*)(void*))(dumper)                \
+#define DEFINE_MSGF(name, flags, size, swabber, dumper) {	\
+	.rmf_name    = (name),					\
+	.rmf_flags   = (flags),					\
+	.rmf_size    = (size),					\
+	.rmf_swabber = (void (*)(void *))(swabber),		\
+	.rmf_dumper  = (void (*)(void *))(dumper)		\
 }
 
 #define DEFINE_MSGFL(name, flags, size, swab_len, dumper) {	\
@@ -950,14 +950,12 @@ struct req_capsule;
 }
 
 struct req_msg_field RMF_GENERIC_DATA =
-        DEFINE_MSGF("generic_data", 0,
-                    -1, NULL, NULL);
+	DEFINE_MSGF("generic_data", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GENERIC_DATA);
 
 struct req_msg_field RMF_MGS_TARGET_INFO =
-        DEFINE_MSGF("mgs_target_info", 0,
-                    sizeof(struct mgs_target_info),
-                    lustre_swab_mgs_target_info, NULL);
+	DEFINE_MSGF("mgs_target_info", 0, sizeof(struct mgs_target_info),
+		    lustre_swab_mgs_target_info, NULL);
 EXPORT_SYMBOL(RMF_MGS_TARGET_INFO);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
@@ -969,15 +967,14 @@ EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
 #endif
 
 struct req_msg_field RMF_MGS_CONFIG_BODY =
-        DEFINE_MSGF("mgs_config_read request", 0,
-                    sizeof(struct mgs_config_body),
-                    lustre_swab_mgs_config_body, NULL);
+	DEFINE_MSGF("mgs_config_read request", 0,
+		    sizeof(struct mgs_config_body),
+		    lustre_swab_mgs_config_body, NULL);
 EXPORT_SYMBOL(RMF_MGS_CONFIG_BODY);
 
 struct req_msg_field RMF_MGS_CONFIG_RES =
-        DEFINE_MSGF("mgs_config_read reply ", 0,
-                    sizeof(struct mgs_config_res),
-                    lustre_swab_mgs_config_res, NULL);
+	DEFINE_MSGF("mgs_config_read reply ", 0, sizeof(struct mgs_config_res),
+		    lustre_swab_mgs_config_res, NULL);
 EXPORT_SYMBOL(RMF_MGS_CONFIG_RES);
 
 struct req_msg_field RMF_U32 =
@@ -986,53 +983,49 @@ struct req_msg_field RMF_U32 =
 EXPORT_SYMBOL(RMF_U32);
 
 struct req_msg_field RMF_SETINFO_VAL =
-        DEFINE_MSGF("setinfo_val", 0, -1, NULL, NULL);
+	DEFINE_MSGF("setinfo_val", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_VAL);
 
 struct req_msg_field RMF_GETINFO_KEY =
-        DEFINE_MSGF("getinfo_key", 0, -1, NULL, NULL);
+	DEFINE_MSGF("getinfo_key", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_KEY);
 
 struct req_msg_field RMF_GETINFO_VALLEN =
-        DEFINE_MSGF("getinfo_vallen", 0,
-                    sizeof(__u32), lustre_swab_generic_32s, NULL);
+	DEFINE_MSGF("getinfo_vallen", 0, sizeof(__u32),
+		    lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_VALLEN);
 
 struct req_msg_field RMF_GETINFO_VAL =
-        DEFINE_MSGF("getinfo_val", 0, -1, NULL, NULL);
+	DEFINE_MSGF("getinfo_val", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_VAL);
 
 struct req_msg_field RMF_SEQ_OPC =
-        DEFINE_MSGF("seq_query_opc", 0,
-                    sizeof(__u32), lustre_swab_generic_32s, NULL);
+	DEFINE_MSGF("seq_query_opc", 0, sizeof(__u32),
+		    lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_SEQ_OPC);
 
 struct req_msg_field RMF_SEQ_RANGE =
-        DEFINE_MSGF("seq_query_range", 0,
-                    sizeof(struct lu_seq_range),
-                    lustre_swab_lu_seq_range, NULL);
+	DEFINE_MSGF("seq_query_range", 0, sizeof(struct lu_seq_range),
+		    lustre_swab_lu_seq_range, NULL);
 EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
 struct req_msg_field RMF_FLD_OPC =
-        DEFINE_MSGF("fld_query_opc", 0,
-                    sizeof(__u32), lustre_swab_generic_32s, NULL);
+	DEFINE_MSGF("fld_query_opc", 0, sizeof(__u32),
+		    lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_FLD_OPC);
 
 struct req_msg_field RMF_FLD_MDFLD =
-        DEFINE_MSGF("fld_query_mdfld", 0,
-                    sizeof(struct lu_seq_range),
-                    lustre_swab_lu_seq_range, NULL);
+	DEFINE_MSGF("fld_query_mdfld", 0, sizeof(struct lu_seq_range),
+		    lustre_swab_lu_seq_range, NULL);
 EXPORT_SYMBOL(RMF_FLD_MDFLD);
 
 struct req_msg_field RMF_MDT_BODY =
-        DEFINE_MSGF("mdt_body", 0,
-                    sizeof(struct mdt_body), lustre_swab_mdt_body, NULL);
+	DEFINE_MSGF("mdt_body", 0, sizeof(struct mdt_body),
+		    lustre_swab_mdt_body, NULL);
 EXPORT_SYMBOL(RMF_MDT_BODY);
 
 struct req_msg_field RMF_OBD_QUOTACTL =
-	DEFINE_MSGFL("obd_quotactl",
-		     0,
-		     sizeof(struct obd_quotactl),
+	DEFINE_MSGFL("obd_quotactl", 0, sizeof(struct obd_quotactl),
 		     lustre_swab_obd_quotactl, NULL);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
 
@@ -1042,13 +1035,13 @@ struct req_msg_field RMF_QUOTA_BODY =
 EXPORT_SYMBOL(RMF_QUOTA_BODY);
 
 struct req_msg_field RMF_MDT_EPOCH =
-        DEFINE_MSGF("mdt_ioepoch", 0,
-                    sizeof(struct mdt_ioepoch), lustre_swab_mdt_ioepoch, NULL);
+	DEFINE_MSGF("mdt_ioepoch", 0, sizeof(struct mdt_ioepoch),
+		    lustre_swab_mdt_ioepoch, NULL);
 EXPORT_SYMBOL(RMF_MDT_EPOCH);
 
 struct req_msg_field RMF_PTLRPC_BODY =
-        DEFINE_MSGF("ptlrpc_body", 0,
-                    sizeof(struct ptlrpc_body), lustre_swab_ptlrpc_body, NULL);
+	DEFINE_MSGF("ptlrpc_body", 0,
+		    sizeof(struct ptlrpc_body), lustre_swab_ptlrpc_body, NULL);
 EXPORT_SYMBOL(RMF_PTLRPC_BODY);
 
 struct req_msg_field RMF_CLOSE_DATA =
@@ -1057,16 +1050,16 @@ struct req_msg_field RMF_CLOSE_DATA =
 EXPORT_SYMBOL(RMF_CLOSE_DATA);
 
 struct req_msg_field RMF_OBD_STATFS =
-        DEFINE_MSGF("obd_statfs", 0,
-                    sizeof(struct obd_statfs), lustre_swab_obd_statfs, NULL);
+	DEFINE_MSGF("obd_statfs", 0,
+		    sizeof(struct obd_statfs), lustre_swab_obd_statfs, NULL);
 EXPORT_SYMBOL(RMF_OBD_STATFS);
 
 struct req_msg_field RMF_SETINFO_KEY =
-        DEFINE_MSGF("setinfo_key", 0, -1, NULL, NULL);
+	DEFINE_MSGF("setinfo_key", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_KEY);
 
 struct req_msg_field RMF_NAME =
-        DEFINE_MSGF("name", RMF_F_STRING, -1, NULL, NULL);
+	DEFINE_MSGF("name", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_NAME);
 
 struct req_msg_field RMF_FID_ARRAY =
@@ -1078,17 +1071,17 @@ struct req_msg_field RMF_SYMTGT =
 EXPORT_SYMBOL(RMF_SYMTGT);
 
 struct req_msg_field RMF_TGTUUID =
-        DEFINE_MSGF("tgtuuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
-        NULL);
+	DEFINE_MSGF("tgtuuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
+		    NULL);
 EXPORT_SYMBOL(RMF_TGTUUID);
 
 struct req_msg_field RMF_CLUUID =
-        DEFINE_MSGF("cluuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
-        NULL);
+	DEFINE_MSGF("cluuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
+		    NULL);
 EXPORT_SYMBOL(RMF_CLUUID);
 
 struct req_msg_field RMF_STRING =
-        DEFINE_MSGF("string", RMF_F_STRING, -1, NULL, NULL);
+	DEFINE_MSGF("string", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_STRING);
 
 struct req_msg_field RMF_FILE_SECCTX_NAME =
@@ -1104,19 +1097,18 @@ struct req_msg_field RMF_FILE_ENCCTX =
 EXPORT_SYMBOL(RMF_FILE_ENCCTX);
 
 struct req_msg_field RMF_LLOGD_BODY =
-        DEFINE_MSGF("llogd_body", 0,
-                    sizeof(struct llogd_body), lustre_swab_llogd_body, NULL);
+	DEFINE_MSGF("llogd_body", 0, sizeof(struct llogd_body),
+		    lustre_swab_llogd_body, NULL);
 EXPORT_SYMBOL(RMF_LLOGD_BODY);
 
 struct req_msg_field RMF_LLOG_LOG_HDR =
-        DEFINE_MSGF("llog_log_hdr", 0,
-                    sizeof(struct llog_log_hdr), lustre_swab_llog_hdr, NULL);
+	DEFINE_MSGF("llog_log_hdr", 0, sizeof(struct llog_log_hdr),
+		    lustre_swab_llog_hdr, NULL);
 EXPORT_SYMBOL(RMF_LLOG_LOG_HDR);
 
 struct req_msg_field RMF_LLOGD_CONN_BODY =
-        DEFINE_MSGF("llogd_conn_body", 0,
-                    sizeof(struct llogd_conn_body),
-                    lustre_swab_llogd_conn_body, NULL);
+	DEFINE_MSGF("llogd_conn_body", 0, sizeof(struct llogd_conn_body),
+		    lustre_swab_llogd_conn_body, NULL);
 EXPORT_SYMBOL(RMF_LLOGD_CONN_BODY);
 
 /*
@@ -1126,7 +1118,7 @@ EXPORT_SYMBOL(RMF_LLOGD_CONN_BODY);
  * that the client does not interpret at all.
  */
 struct req_msg_field RMF_CONN =
-        DEFINE_MSGF("conn", 0, sizeof(struct lustre_handle), NULL, NULL);
+	DEFINE_MSGF("conn", 0, sizeof(struct lustre_handle), NULL, NULL);
 EXPORT_SYMBOL(RMF_CONN);
 
 struct req_msg_field RMF_CONNECT_DATA =
@@ -1137,19 +1129,19 @@ struct req_msg_field RMF_CONNECT_DATA =
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
 struct req_msg_field RMF_DLM_REQ =
-        DEFINE_MSGF("dlm_req", RMF_F_NO_SIZE_CHECK /* ldlm_request_bufsize */,
-                    sizeof(struct ldlm_request),
-                    lustre_swab_ldlm_request, NULL);
+	DEFINE_MSGF("dlm_req", RMF_F_NO_SIZE_CHECK /* ldlm_request_bufsize */,
+		    sizeof(struct ldlm_request),
+		    lustre_swab_ldlm_request, NULL);
 EXPORT_SYMBOL(RMF_DLM_REQ);
 
 struct req_msg_field RMF_DLM_REP =
-        DEFINE_MSGF("dlm_rep", 0,
-                    sizeof(struct ldlm_reply), lustre_swab_ldlm_reply, NULL);
+	DEFINE_MSGF("dlm_rep", 0,
+		    sizeof(struct ldlm_reply), lustre_swab_ldlm_reply, NULL);
 EXPORT_SYMBOL(RMF_DLM_REP);
 
 struct req_msg_field RMF_LDLM_INTENT =
-        DEFINE_MSGF("ldlm_intent", 0,
-                    sizeof(struct ldlm_intent), lustre_swab_ldlm_intent, NULL);
+	DEFINE_MSGF("ldlm_intent", 0,
+		    sizeof(struct ldlm_intent), lustre_swab_ldlm_intent, NULL);
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
 struct req_msg_field RMF_DLM_LVB =
@@ -1161,7 +1153,7 @@ struct req_msg_field RMF_DLM_GL_DESC =
 EXPORT_SYMBOL(RMF_DLM_GL_DESC);
 
 struct req_msg_field RMF_MDT_MD =
-        DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL, NULL);
+	DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL, NULL);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
 struct req_msg_field RMF_DEFAULT_MDT_MD =
@@ -1170,13 +1162,12 @@ struct req_msg_field RMF_DEFAULT_MDT_MD =
 EXPORT_SYMBOL(RMF_DEFAULT_MDT_MD);
 
 struct req_msg_field RMF_REC_REINT =
-        DEFINE_MSGF("rec_reint", 0, sizeof(struct mdt_rec_reint),
-                    lustre_swab_mdt_rec_reint, NULL);
+	DEFINE_MSGF("rec_reint", 0, sizeof(struct mdt_rec_reint),
+		    lustre_swab_mdt_rec_reint, NULL);
 EXPORT_SYMBOL(RMF_REC_REINT);
 
 /* FIXME: this length should be defined as a macro */
-struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1,
-                                                    NULL, NULL);
+struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 struct req_msg_field RMF_EAVALS = DEFINE_MSGF("eavals", 0, -1, NULL, NULL);
@@ -1187,16 +1178,14 @@ EXPORT_SYMBOL(RMF_ACL);
 
 /* FIXME: this should be made to use RMF_F_STRUCT_ARRAY */
 struct req_msg_field RMF_LOGCOOKIES =
-        DEFINE_MSGF("logcookies", RMF_F_NO_SIZE_CHECK /* multiple cookies */,
-                    sizeof(struct llog_cookie), NULL, NULL);
+	DEFINE_MSGF("logcookies", RMF_F_NO_SIZE_CHECK /* multiple cookies */,
+		    sizeof(struct llog_cookie), NULL, NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
-struct req_msg_field RMF_CAPA1 =
-	DEFINE_MSGF("capa", 0, 0, NULL, NULL);
+struct req_msg_field RMF_CAPA1 = DEFINE_MSGF("capa", 0, 0, NULL, NULL);
 EXPORT_SYMBOL(RMF_CAPA1);
 
-struct req_msg_field RMF_CAPA2 =
-	DEFINE_MSGF("capa", 0, 0, NULL, NULL);
+struct req_msg_field RMF_CAPA2 = DEFINE_MSGF("capa", 0, 0, NULL, NULL);
 EXPORT_SYMBOL(RMF_CAPA2);
 
 struct req_msg_field RMF_LAYOUT_INTENT =
@@ -1219,14 +1208,14 @@ struct req_msg_field RMF_OST_BODY =
 EXPORT_SYMBOL(RMF_OST_BODY);
 
 struct req_msg_field RMF_OBD_IOOBJ =
-        DEFINE_MSGF("obd_ioobj", RMF_F_STRUCT_ARRAY,
-                    sizeof(struct obd_ioobj), lustre_swab_obd_ioobj, dump_ioo);
+	DEFINE_MSGF("obd_ioobj", RMF_F_STRUCT_ARRAY,
+		    sizeof(struct obd_ioobj), lustre_swab_obd_ioobj, dump_ioo);
 EXPORT_SYMBOL(RMF_OBD_IOOBJ);
 
 struct req_msg_field RMF_NIOBUF_REMOTE =
-        DEFINE_MSGF("niobuf_remote", RMF_F_STRUCT_ARRAY,
-                    sizeof(struct niobuf_remote), lustre_swab_niobuf_remote,
-                    dump_rniobuf);
+	DEFINE_MSGF("niobuf_remote", RMF_F_STRUCT_ARRAY,
+		    sizeof(struct niobuf_remote), lustre_swab_niobuf_remote,
+		    dump_rniobuf);
 EXPORT_SYMBOL(RMF_NIOBUF_REMOTE);
 
 struct req_msg_field RMF_NIOBUF_INLINE =
@@ -1242,7 +1231,7 @@ EXPORT_SYMBOL(RMF_RCS);
 
 struct req_msg_field RMF_EAVALS_LENS =
 	DEFINE_MSGF("eavals_lens", RMF_F_STRUCT_ARRAY, sizeof(__u32),
-		lustre_swab_generic_32s, NULL);
+		    lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_EAVALS_LENS);
 
 struct req_msg_field RMF_OBD_ID =
@@ -1359,36 +1348,36 @@ EXPORT_SYMBOL(RMF_BUT_BUF);
 
 struct req_format {
 	const char *rf_name;
-	size_t	    rf_idx;
+	size_t      rf_idx;
 	struct {
-		size_t			     nr;
+		size_t                       nr;
 		const struct req_msg_field **d;
 	} rf_fields[RCL_NR];
 };
 
-#define DEFINE_REQ_FMT(name, client, client_nr, server, server_nr) {    \
-        .rf_name   = name,                                              \
-        .rf_fields = {                                                  \
-                [RCL_CLIENT] = {                                        \
-                        .nr = client_nr,                                \
-                        .d  = client                                    \
-                },                                                      \
-                [RCL_SERVER] = {                                        \
-                        .nr = server_nr,                                \
-                        .d  = server                                    \
-                }                                                       \
-        }                                                               \
+#define DEFINE_REQ_FMT(name, client, client_nr, server, server_nr) {	\
+	.rf_name   = name,						\
+	.rf_fields = {							\
+		[RCL_CLIENT] = {					\
+			.nr = client_nr,				\
+			.d  = client					\
+		},							\
+		[RCL_SERVER] = {					\
+			.nr = server_nr,				\
+			.d  = server					\
+		}							\
+	}								\
 }
 
 #define DEFINE_REQ_FMT0(name, client, server)                                  \
 DEFINE_REQ_FMT(name, client, ARRAY_SIZE(client), server, ARRAY_SIZE(server))
 
 struct req_format RQF_OBD_PING =
-        DEFINE_REQ_FMT0("OBD_PING", empty, empty);
+	DEFINE_REQ_FMT0("OBD_PING", empty, empty);
 EXPORT_SYMBOL(RQF_OBD_PING);
 
 struct req_format RQF_OBD_SET_INFO =
-        DEFINE_REQ_FMT0("OBD_SET_INFO", obd_set_info_client, empty);
+	DEFINE_REQ_FMT0("OBD_SET_INFO", obd_set_info_client, empty);
 EXPORT_SYMBOL(RQF_OBD_SET_INFO);
 
 struct req_format RQF_MDT_SET_INFO =
@@ -1402,12 +1391,12 @@ struct req_format RQF_OBD_IDX_READ =
 EXPORT_SYMBOL(RQF_OBD_IDX_READ);
 
 struct req_format RQF_SEC_CTX =
-        DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
+	DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
 EXPORT_SYMBOL(RQF_SEC_CTX);
 
 struct req_format RQF_MGS_TARGET_REG =
-        DEFINE_REQ_FMT0("MGS_TARGET_REG", mgs_target_info_only,
-                         mgs_target_info_only);
+	DEFINE_REQ_FMT0("MGS_TARGET_REG", mgs_target_info_only,
+			mgs_target_info_only);
 EXPORT_SYMBOL(RQF_MGS_TARGET_REG);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
@@ -1418,16 +1407,16 @@ EXPORT_SYMBOL(RQF_MGS_SET_INFO);
 #endif
 
 struct req_format RQF_MGS_CONFIG_READ =
-        DEFINE_REQ_FMT0("MGS_CONFIG_READ", mgs_config_read_client,
-                         mgs_config_read_server);
+	DEFINE_REQ_FMT0("MGS_CONFIG_READ", mgs_config_read_client,
+			mgs_config_read_server);
 EXPORT_SYMBOL(RQF_MGS_CONFIG_READ);
 
 struct req_format RQF_SEQ_QUERY =
-        DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
+	DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
 EXPORT_SYMBOL(RQF_SEQ_QUERY);
 
 struct req_format RQF_FLD_QUERY =
-        DEFINE_REQ_FMT0("FLD_QUERY", fld_query_client, fld_query_server);
+	DEFINE_REQ_FMT0("FLD_QUERY", fld_query_client, fld_query_server);
 EXPORT_SYMBOL(RQF_FLD_QUERY);
 
 /* The 'fld_read_server' uses 'RMF_GENERIC_DATA' to hold the 'FLD_QUERY'
@@ -1450,11 +1439,11 @@ struct req_format RQF_FLD_READ =
 EXPORT_SYMBOL(RQF_FLD_READ);
 
 struct req_format RQF_MDS_QUOTACTL =
-        DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
+	DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
 
 struct req_format RQF_OST_QUOTACTL =
-        DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
+	DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
 
 struct req_format RQF_QUOTA_DQACQ =
@@ -1480,30 +1469,30 @@ struct req_format RQF_MDS_STATFS_NEW =
 EXPORT_SYMBOL(RQF_MDS_STATFS_NEW);
 
 struct req_format RQF_MDS_SYNC =
-        DEFINE_REQ_FMT0("MDS_SYNC", mdt_body_capa, mdt_body_only);
+	DEFINE_REQ_FMT0("MDS_SYNC", mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_SYNC);
 
 struct req_format RQF_MDS_GETATTR =
-        DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_capa, mds_getattr_server);
+	DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_capa, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
 struct req_format RQF_MDS_GETXATTR =
-        DEFINE_REQ_FMT0("MDS_GETXATTR",
-                        mds_getxattr_client, mds_getxattr_server);
+	DEFINE_REQ_FMT0("MDS_GETXATTR",
+			mds_getxattr_client, mds_getxattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETXATTR);
 
 struct req_format RQF_MDS_GETATTR_NAME =
-        DEFINE_REQ_FMT0("MDS_GETATTR_NAME",
-                        mds_getattr_name_client, mds_getattr_server);
+	DEFINE_REQ_FMT0("MDS_GETATTR_NAME",
+			mds_getattr_name_client, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR_NAME);
 
 struct req_format RQF_MDS_REINT =
-        DEFINE_REQ_FMT0("MDS_REINT", mds_reint_client, mdt_body_only);
+	DEFINE_REQ_FMT0("MDS_REINT", mds_reint_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT);
 
 struct req_format RQF_MDS_REINT_CREATE =
-        DEFINE_REQ_FMT0("MDS_REINT_CREATE",
-                        mds_reint_create_client, mdt_body_capa);
+	DEFINE_REQ_FMT0("MDS_REINT_CREATE",
+			mds_reint_create_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
 
 struct req_format RQF_MDS_REINT_CREATE_ACL =
@@ -1512,33 +1501,33 @@ struct req_format RQF_MDS_REINT_CREATE_ACL =
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_ACL);
 
 struct req_format RQF_MDS_REINT_CREATE_SLAVE =
-        DEFINE_REQ_FMT0("MDS_REINT_CREATE_EA",
-                        mds_reint_create_slave_client, mdt_body_capa);
+	DEFINE_REQ_FMT0("MDS_REINT_CREATE_EA",
+			mds_reint_create_slave_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SLAVE);
 
 struct req_format RQF_MDS_REINT_CREATE_SYM =
-        DEFINE_REQ_FMT0("MDS_REINT_CREATE_SYM",
-                        mds_reint_create_sym_client, mdt_body_capa);
+	DEFINE_REQ_FMT0("MDS_REINT_CREATE_SYM",
+			mds_reint_create_sym_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SYM);
 
 struct req_format RQF_MDS_REINT_OPEN =
-        DEFINE_REQ_FMT0("MDS_REINT_OPEN",
-                        mds_reint_open_client, mds_reint_open_server);
+	DEFINE_REQ_FMT0("MDS_REINT_OPEN",
+			mds_reint_open_client, mds_reint_open_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_OPEN);
 
 struct req_format RQF_MDS_REINT_UNLINK =
-        DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client,
-                        mds_last_unlink_server);
+	DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client,
+			mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK);
 
 struct req_format RQF_MDS_REINT_LINK =
-        DEFINE_REQ_FMT0("MDS_REINT_LINK",
-                        mds_reint_link_client, mdt_body_only);
+	DEFINE_REQ_FMT0("MDS_REINT_LINK",
+			mds_reint_link_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_LINK);
 
 struct req_format RQF_MDS_REINT_RENAME =
-        DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
-                        mds_last_unlink_server);
+	DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
+			mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_RENAME);
 
 struct req_format RQF_MDS_REINT_MIGRATE =
@@ -1547,12 +1536,12 @@ struct req_format RQF_MDS_REINT_MIGRATE =
 EXPORT_SYMBOL(RQF_MDS_REINT_MIGRATE);
 
 struct req_format RQF_MDS_REINT_SETATTR =
-        DEFINE_REQ_FMT0("MDS_REINT_SETATTR",
-                        mds_reint_setattr_client, mds_setattr_server);
+	DEFINE_REQ_FMT0("MDS_REINT_SETATTR",
+			mds_reint_setattr_client, mds_setattr_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_SETATTR);
 
 struct req_format RQF_MDS_REINT_SETXATTR =
-        DEFINE_REQ_FMT0("MDS_REINT_SETXATTR",
+	DEFINE_REQ_FMT0("MDS_REINT_SETXATTR",
 			mds_reint_setxattr_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_SETXATTR);
 
@@ -1561,17 +1550,17 @@ struct req_format RQF_MDS_REINT_RESYNC =
 EXPORT_SYMBOL(RQF_MDS_REINT_RESYNC);
 
 struct req_format RQF_MDS_CONNECT =
-        DEFINE_REQ_FMT0("MDS_CONNECT",
-                        obd_connect_client, obd_connect_server);
+	DEFINE_REQ_FMT0("MDS_CONNECT",
+			obd_connect_client, obd_connect_server);
 EXPORT_SYMBOL(RQF_MDS_CONNECT);
 
 struct req_format RQF_MDS_DISCONNECT =
-        DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
+	DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
 
 struct req_format RQF_MDS_GET_INFO =
-        DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
-                        mds_getinfo_server);
+	DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
+			mds_getinfo_server);
 EXPORT_SYMBOL(RQF_MDS_GET_INFO);
 
 struct req_format RQF_MDS_BATCH =
@@ -1580,39 +1569,39 @@ struct req_format RQF_MDS_BATCH =
 EXPORT_SYMBOL(RQF_MDS_BATCH);
 
 struct req_format RQF_LDLM_ENQUEUE =
-        DEFINE_REQ_FMT0("LDLM_ENQUEUE",
-                        ldlm_enqueue_client, ldlm_enqueue_lvb_server);
+	DEFINE_REQ_FMT0("LDLM_ENQUEUE",
+			ldlm_enqueue_client, ldlm_enqueue_lvb_server);
 EXPORT_SYMBOL(RQF_LDLM_ENQUEUE);
 
 struct req_format RQF_LDLM_ENQUEUE_LVB =
-        DEFINE_REQ_FMT0("LDLM_ENQUEUE_LVB",
-                        ldlm_enqueue_client, ldlm_enqueue_lvb_server);
+	DEFINE_REQ_FMT0("LDLM_ENQUEUE_LVB",
+			ldlm_enqueue_client, ldlm_enqueue_lvb_server);
 EXPORT_SYMBOL(RQF_LDLM_ENQUEUE_LVB);
 
 struct req_format RQF_LDLM_CONVERT =
-        DEFINE_REQ_FMT0("LDLM_CONVERT",
-                        ldlm_enqueue_client, ldlm_enqueue_server);
+	DEFINE_REQ_FMT0("LDLM_CONVERT",
+			ldlm_enqueue_client, ldlm_enqueue_server);
 EXPORT_SYMBOL(RQF_LDLM_CONVERT);
 
 struct req_format RQF_LDLM_CANCEL =
-        DEFINE_REQ_FMT0("LDLM_CANCEL", ldlm_enqueue_client, empty);
+	DEFINE_REQ_FMT0("LDLM_CANCEL", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CANCEL);
 
 struct req_format RQF_LDLM_CALLBACK =
-        DEFINE_REQ_FMT0("LDLM_CALLBACK", ldlm_enqueue_client, empty);
+	DEFINE_REQ_FMT0("LDLM_CALLBACK", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CALLBACK);
 
 struct req_format RQF_LDLM_CP_CALLBACK =
-        DEFINE_REQ_FMT0("LDLM_CP_CALLBACK", ldlm_cp_callback_client, empty);
+	DEFINE_REQ_FMT0("LDLM_CP_CALLBACK", ldlm_cp_callback_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CP_CALLBACK);
 
 struct req_format RQF_LDLM_BL_CALLBACK =
-        DEFINE_REQ_FMT0("LDLM_BL_CALLBACK", ldlm_enqueue_client, empty);
+	DEFINE_REQ_FMT0("LDLM_BL_CALLBACK", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_BL_CALLBACK);
 
 struct req_format RQF_LDLM_GL_CALLBACK =
-        DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_enqueue_client,
-                        ldlm_gl_callback_server);
+	DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_enqueue_client,
+			ldlm_gl_callback_server);
 EXPORT_SYMBOL(RQF_LDLM_GL_CALLBACK);
 
 struct req_format RQF_LDLM_GL_CALLBACK_DESC =
@@ -1626,8 +1615,8 @@ struct req_format RQF_LDLM_INTENT_BASIC =
 EXPORT_SYMBOL(RQF_LDLM_INTENT_BASIC);
 
 struct req_format RQF_LDLM_INTENT =
-        DEFINE_REQ_FMT0("LDLM_INTENT",
-                        ldlm_intent_client, ldlm_intent_server);
+	DEFINE_REQ_FMT0("LDLM_INTENT",
+			ldlm_intent_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
 struct req_format RQF_LDLM_INTENT_LAYOUT =
@@ -1636,18 +1625,18 @@ struct req_format RQF_LDLM_INTENT_LAYOUT =
 EXPORT_SYMBOL(RQF_LDLM_INTENT_LAYOUT);
 
 struct req_format RQF_LDLM_INTENT_GETATTR =
-        DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
-                        ldlm_intent_getattr_client, ldlm_intent_getattr_server);
+	DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
+			ldlm_intent_getattr_client, ldlm_intent_getattr_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
 
 struct req_format RQF_LDLM_INTENT_OPEN =
-        DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
-                        ldlm_intent_open_client, ldlm_intent_open_server);
+	DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
+			ldlm_intent_open_client, ldlm_intent_open_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_OPEN);
 
 struct req_format RQF_LDLM_INTENT_CREATE =
-        DEFINE_REQ_FMT0("LDLM_INTENT_CREATE",
-                        ldlm_intent_create_client, ldlm_intent_getattr_server);
+	DEFINE_REQ_FMT0("LDLM_INTENT_CREATE",
+			ldlm_intent_create_client, ldlm_intent_getattr_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_CREATE);
 
 struct req_format RQF_LDLM_INTENT_GETXATTR =
@@ -1657,8 +1646,8 @@ struct req_format RQF_LDLM_INTENT_GETXATTR =
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETXATTR);
 
 struct req_format RQF_MDS_CLOSE =
-        DEFINE_REQ_FMT0("MDS_CLOSE",
-                        mdt_close_client, mds_last_unlink_server);
+	DEFINE_REQ_FMT0("MDS_CLOSE",
+			mdt_close_client, mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
 struct req_format RQF_MDS_CLOSE_INTENT =
@@ -1667,8 +1656,8 @@ struct req_format RQF_MDS_CLOSE_INTENT =
 EXPORT_SYMBOL(RQF_MDS_CLOSE_INTENT);
 
 struct req_format RQF_MDS_READPAGE =
-        DEFINE_REQ_FMT0("MDS_READPAGE",
-                        mdt_body_capa, mdt_body_only);
+	DEFINE_REQ_FMT0("MDS_READPAGE",
+			mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
 
 struct req_format RQF_MDS_HSM_ACTION =
@@ -1711,23 +1700,23 @@ struct req_format RQF_MDS_RMFID =
 EXPORT_SYMBOL(RQF_MDS_RMFID);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",
-                        llog_origin_handle_create_client, llogd_body_only);
+	DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",
+			llog_origin_handle_create_client, llogd_body_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_CREATE);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_NEXT_BLOCK",
-                        llogd_body_only, llog_origin_handle_next_block_server);
+	DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_NEXT_BLOCK",
+			llogd_body_only, llog_origin_handle_next_block_server);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_PREV_BLOCK",
-                        llogd_body_only, llog_origin_handle_next_block_server);
+	DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_PREV_BLOCK",
+			llogd_body_only, llog_origin_handle_next_block_server);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_READ_HEADER",
-                        llogd_body_only, llog_log_hdr_only);
+	DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_READ_HEADER",
+			llogd_body_only, llog_log_hdr_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
 
 struct req_format RQF_CONNECT =
@@ -1735,28 +1724,28 @@ struct req_format RQF_CONNECT =
 EXPORT_SYMBOL(RQF_CONNECT);
 
 struct req_format RQF_OST_CONNECT =
-        DEFINE_REQ_FMT0("OST_CONNECT",
-                        obd_connect_client, obd_connect_server);
+	DEFINE_REQ_FMT0("OST_CONNECT",
+			obd_connect_client, obd_connect_server);
 EXPORT_SYMBOL(RQF_OST_CONNECT);
 
 struct req_format RQF_OST_DISCONNECT =
-        DEFINE_REQ_FMT0("OST_DISCONNECT", empty, empty);
+	DEFINE_REQ_FMT0("OST_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_OST_DISCONNECT);
 
 struct req_format RQF_OST_GETATTR =
-        DEFINE_REQ_FMT0("OST_GETATTR", ost_body_capa, ost_body_only);
+	DEFINE_REQ_FMT0("OST_GETATTR", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_GETATTR);
 
 struct req_format RQF_OST_SETATTR =
-        DEFINE_REQ_FMT0("OST_SETATTR", ost_body_capa, ost_body_only);
+	DEFINE_REQ_FMT0("OST_SETATTR", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SETATTR);
 
 struct req_format RQF_OST_CREATE =
-        DEFINE_REQ_FMT0("OST_CREATE", ost_body_only, ost_body_only);
+	DEFINE_REQ_FMT0("OST_CREATE", ost_body_only, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_CREATE);
 
 struct req_format RQF_OST_PUNCH =
-        DEFINE_REQ_FMT0("OST_PUNCH", ost_body_capa, ost_body_only);
+	DEFINE_REQ_FMT0("OST_PUNCH", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_PUNCH);
 
 struct req_format RQF_OST_FALLOCATE =
@@ -1768,38 +1757,38 @@ struct req_format RQF_OST_SEEK =
 EXPORT_SYMBOL(RQF_OST_SEEK);
 
 struct req_format RQF_OST_SYNC =
-        DEFINE_REQ_FMT0("OST_SYNC", ost_body_capa, ost_body_only);
+	DEFINE_REQ_FMT0("OST_SYNC", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SYNC);
 
 struct req_format RQF_OST_DESTROY =
-        DEFINE_REQ_FMT0("OST_DESTROY", ost_destroy_client, ost_body_only);
+	DEFINE_REQ_FMT0("OST_DESTROY", ost_destroy_client, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_DESTROY);
 
 struct req_format RQF_OST_BRW_READ =
-        DEFINE_REQ_FMT0("OST_BRW_READ", ost_brw_client, ost_brw_read_server);
+	DEFINE_REQ_FMT0("OST_BRW_READ", ost_brw_client, ost_brw_read_server);
 EXPORT_SYMBOL(RQF_OST_BRW_READ);
 
 struct req_format RQF_OST_BRW_WRITE =
-        DEFINE_REQ_FMT0("OST_BRW_WRITE", ost_brw_client, ost_brw_write_server);
+	DEFINE_REQ_FMT0("OST_BRW_WRITE", ost_brw_client, ost_brw_write_server);
 EXPORT_SYMBOL(RQF_OST_BRW_WRITE);
 
 struct req_format RQF_OST_STATFS =
-        DEFINE_REQ_FMT0("OST_STATFS", empty, obd_statfs_server);
+	DEFINE_REQ_FMT0("OST_STATFS", empty, obd_statfs_server);
 EXPORT_SYMBOL(RQF_OST_STATFS);
 
 struct req_format RQF_OST_SET_GRANT_INFO =
-        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_grant_shrink_client,
-                         ost_body_only);
+	DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_grant_shrink_client,
+			ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SET_GRANT_INFO);
 
 struct req_format RQF_OST_GET_INFO =
-        DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_generic_client,
-                                        ost_get_info_generic_server);
+	DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_generic_client,
+					ost_get_info_generic_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO);
 
 struct req_format RQF_OST_GET_INFO_LAST_ID =
-        DEFINE_REQ_FMT0("OST_GET_INFO_LAST_ID", ost_get_info_generic_client,
-                                                ost_get_last_id_server);
+	DEFINE_REQ_FMT0("OST_GET_INFO_LAST_ID", ost_get_info_generic_client,
+						ost_get_last_id_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_LAST_ID);
 
 struct req_format RQF_OST_GET_INFO_LAST_FID =
@@ -1809,12 +1798,12 @@ EXPORT_SYMBOL(RQF_OST_GET_INFO_LAST_FID);
 
 struct req_format RQF_OST_SET_INFO_LAST_FID =
 	DEFINE_REQ_FMT0("OST_SET_INFO_LAST_FID", obd_set_info_client,
-						 empty);
+			empty);
 EXPORT_SYMBOL(RQF_OST_SET_INFO_LAST_FID);
 
 struct req_format RQF_OST_GET_INFO_FIEMAP =
-        DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
-                                               ost_get_fiemap_server);
+	DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
+			ost_get_fiemap_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
 
 struct req_format RQF_LFSCK_NOTIFY =
@@ -1846,29 +1835,29 @@ int req_layout_init(void)
 	size_t i;
 	size_t j;
 	size_t k;
-        struct req_format *rf = NULL;
+	struct req_format *rf = NULL;
 
-        for (i = 0; i < ARRAY_SIZE(req_formats); ++i) {
-                rf = req_formats[i];
-                rf->rf_idx = i;
-                for (j = 0; j < RCL_NR; ++j) {
-                        LASSERT(rf->rf_fields[j].nr <= REQ_MAX_FIELD_NR);
-                        for (k = 0; k < rf->rf_fields[j].nr; ++k) {
-                                struct req_msg_field *field;
+	for (i = 0; i < ARRAY_SIZE(req_formats); ++i) {
+		rf = req_formats[i];
+		rf->rf_idx = i;
+		for (j = 0; j < RCL_NR; ++j) {
+			LASSERT(rf->rf_fields[j].nr <= REQ_MAX_FIELD_NR);
+			for (k = 0; k < rf->rf_fields[j].nr; ++k) {
+				struct req_msg_field *field;
 
-                                field = (typeof(field))rf->rf_fields[j].d[k];
-                                LASSERT(!(field->rmf_flags & RMF_F_STRUCT_ARRAY)
-                                        || field->rmf_size > 0);
-                                LASSERT(field->rmf_offset[i][j] == 0);
-                                /*
-                                 * k + 1 to detect unused format/field
-                                 * combinations.
-                                 */
-                                field->rmf_offset[i][j] = k + 1;
-                        }
-                }
-        }
-        return 0;
+				field = (typeof(field))rf->rf_fields[j].d[k];
+				LASSERT(!(field->rmf_flags & RMF_F_STRUCT_ARRAY)
+					|| field->rmf_size > 0);
+				LASSERT(field->rmf_offset[i][j] == 0);
+				/*
+				 * k + 1 to detect unused format/field
+				 * combinations.
+				 */
+				field->rmf_offset[i][j] = k + 1;
+			}
+		}
+	}
+	return 0;
 }
 EXPORT_SYMBOL(req_layout_init);
 
@@ -1889,10 +1878,10 @@ void req_capsule_init_area(struct req_capsule *pill)
 {
 	size_t i;
 
-        for (i = 0; i < ARRAY_SIZE(pill->rc_area[RCL_CLIENT]); i++) {
-                pill->rc_area[RCL_CLIENT][i] = -1;
-                pill->rc_area[RCL_SERVER][i] = -1;
-        }
+	for (i = 0; i < ARRAY_SIZE(pill->rc_area[RCL_CLIENT]); i++) {
+		pill->rc_area[RCL_CLIENT][i] = -1;
+		pill->rc_area[RCL_SERVER][i] = -1;
+	}
 }
 EXPORT_SYMBOL(req_capsule_init_area);
 
@@ -1902,29 +1891,28 @@ EXPORT_SYMBOL(req_capsule_init_area);
  * The \a location indicates whether the caller is executing on the client side
  * (RCL_CLIENT) or server side (RCL_SERVER)..
  */
-void req_capsule_init(struct req_capsule *pill,
-                      struct ptlrpc_request *req,
-                      enum req_location location)
+void req_capsule_init(struct req_capsule *pill, struct ptlrpc_request *req,
+		      enum req_location location)
 {
-        LASSERT(location == RCL_SERVER || location == RCL_CLIENT);
+	LASSERT(location == RCL_SERVER || location == RCL_CLIENT);
 
-        /*
-         * Today all capsules are embedded in ptlrpc_request structs,
-         * but just in case that ever isn't the case, we don't reach
-         * into req unless req != NULL and pill is the one embedded in
-         * the req.
-         *
-         * The req->rq_pill_init flag makes it safe to initialize a pill
-         * twice, which might happen in the OST paths as a result of the
-         * high-priority RPC queue getting peeked at before ost_handle()
-         * handles an OST RPC.
-         */
-        if (req != NULL && pill == &req->rq_pill && req->rq_pill_init)
-                return;
+	/*
+	 * Today all capsules are embedded in ptlrpc_request structs,
+	 * but just in case that ever isn't the case, we don't reach
+	 * into req unless req != NULL and pill is the one embedded in
+	 * the req.
+	 *
+	 * The req->rq_pill_init flag makes it safe to initialize a pill
+	 * twice, which might happen in the OST paths as a result of the
+	 * high-priority RPC queue getting peeked at before ost_handle()
+	 * handles an OST RPC.
+	 */
+	if (req != NULL && pill == &req->rq_pill && req->rq_pill_init)
+		return;
 
 	pill->rc_fmt = NULL;
-        pill->rc_req = req;
-        pill->rc_loc = location;
+	pill->rc_req = req;
+	pill->rc_loc = location;
 	req_capsule_init_area(pill);
 
 	if (req != NULL && pill == &req->rq_pill)
@@ -1944,7 +1932,7 @@ static int __req_format_is_sane(const struct req_format *fmt)
 }
 
 static struct lustre_msg *__req_msg(const struct req_capsule *pill,
-                                    enum req_location loc)
+				    enum req_location loc)
 {
 	return loc == RCL_CLIENT ? pill->rc_reqmsg : pill->rc_repmsg;
 }
@@ -1955,10 +1943,10 @@ static struct lustre_msg *__req_msg(const struct req_capsule *pill,
  */
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt)
 {
-        LASSERT(pill->rc_fmt == NULL || pill->rc_fmt == fmt);
-        LASSERT(__req_format_is_sane(fmt));
+	LASSERT(pill->rc_fmt == NULL || pill->rc_fmt == fmt);
+	LASSERT(__req_format_is_sane(fmt));
 
-        pill->rc_fmt = fmt;
+	pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_set);
 
@@ -1974,27 +1962,27 @@ size_t req_capsule_filled_sizes(struct req_capsule *pill,
 				enum req_location loc)
 {
 	const struct req_format *fmt = pill->rc_fmt;
-	size_t			 i;
+	size_t i;
 
-        LASSERT(fmt != NULL);
+	LASSERT(fmt != NULL);
 
-        for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
-                if (pill->rc_area[loc][i] == -1) {
-                        pill->rc_area[loc][i] =
-                                            fmt->rf_fields[loc].d[i]->rmf_size;
-                        if (pill->rc_area[loc][i] == -1) {
-                                /*
-                                 * Skip the following fields.
-                                 *
-                                 * If this LASSERT() trips then you're missing a
-                                 * call to req_capsule_set_size().
-                                 */
-                                LASSERT(loc != RCL_SERVER);
-                                break;
-                        }
-                }
-        }
-        return i;
+	for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
+		if (pill->rc_area[loc][i] == -1) {
+			pill->rc_area[loc][i] =
+					fmt->rf_fields[loc].d[i]->rmf_size;
+			if (pill->rc_area[loc][i] == -1) {
+				/*
+				 * Skip the following fields.
+				 *
+				 * If this LASSERT() trips then you're missing a
+				 * call to req_capsule_set_size().
+				 */
+				LASSERT(loc != RCL_SERVER);
+				break;
+			}
+		}
+	}
+	return i;
 }
 EXPORT_SYMBOL(req_capsule_filled_sizes);
 
@@ -2074,8 +2062,7 @@ int req_capsule_server_pack(struct req_capsule *pill)
 		if (msg_len > pill->rc_reqmsg->lm_repsize)
 			/* TODO: Check whether there is enough buffer size */
 			CDEBUG(D_INFO,
-			       "Overflow pack %d fields in format '%s' for "
-			       "the SUB request with message len %u:%u\n",
+			       "Overflow pack %d fields in format '%s' for the SUB request with message len %u:%u\n",
 			       count, fmt->rf_name, msg_len,
 			       pill->rc_reqmsg->lm_repsize);
 
@@ -2131,7 +2118,7 @@ __u32 __req_capsule_offset(const struct req_capsule *pill,
 	offset--;
 
 	LASSERT(offset < REQ_MAX_FIELD_NR);
-        return offset;
+	return offset;
 }
 
 void req_capsule_set_swabbed(struct req_capsule *pill, enum req_location loc,
@@ -2230,12 +2217,13 @@ swabber_dumper_helper(struct req_capsule *pill,
 			}
 		}
 		if (dump) {
-			CDEBUG(D_RPCTRACE, "Dump of swabbed %sfield %s, element %d follows\n",
+			CDEBUG(D_RPCTRACE,
+			       "Dump of swabbed %sfield %s, element %d follows\n",
 			       array ? "array " : "", field->rmf_name, i);
 			field->rmf_dumper(value);
 		}
-        }
-        if (do_swab)
+	}
+	if (do_swab)
 		req_capsule_set_swabbed(pill, loc, offset);
 
 	return rc;
@@ -2265,25 +2253,25 @@ static void *__req_capsule_get(struct req_capsule *pill,
 
 	void *(*getter)(struct lustre_msg *m, __u32 n, __u32 minlen);
 
-        static const char *rcl_names[RCL_NR] = {
-                [RCL_CLIENT] = "client",
-                [RCL_SERVER] = "server"
-        };
+	static const char *rcl_names[RCL_NR] = {
+		[RCL_CLIENT] = "client",
+		[RCL_SERVER] = "server"
+	};
 
-        LASSERT(pill != NULL);
-        LASSERT(pill != LP_POISON);
-        fmt = pill->rc_fmt;
-        LASSERT(fmt != NULL);
-        LASSERT(fmt != LP_POISON);
-        LASSERT(__req_format_is_sane(fmt));
+	LASSERT(pill != NULL);
+	LASSERT(pill != LP_POISON);
+	fmt = pill->rc_fmt;
+	LASSERT(fmt != NULL);
+	LASSERT(fmt != LP_POISON);
+	LASSERT(__req_format_is_sane(fmt));
 
-        offset = __req_capsule_offset(pill, field, loc);
+	offset = __req_capsule_offset(pill, field, loc);
 
-        msg = __req_msg(pill, loc);
-        LASSERT(msg != NULL);
+	msg = __req_msg(pill, loc);
+	LASSERT(msg != NULL);
 
-        getter = (field->rmf_flags & RMF_F_STRING) ?
-                (typeof(getter))lustre_msg_string : lustre_msg_buf;
+	getter = (field->rmf_flags & RMF_F_STRING) ?
+		(typeof(getter))lustre_msg_string : lustre_msg_buf;
 
 	if (field->rmf_flags & (RMF_F_STRUCT_ARRAY|RMF_F_NO_SIZE_CHECK)) {
 		/*
@@ -2293,31 +2281,30 @@ static void *__req_capsule_get(struct req_capsule *pill,
 		len = lustre_msg_buflen(msg, offset);
 		if (!(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
 		    (len % field->rmf_size) != 0) {
-			CERROR("%s: array field size mismatch "
-				"%d modulo %u != 0 (%d)\n",
+			CERROR("%s: array field size mismatch %d modulo %u != 0 (%d)\n",
 				field->rmf_name, len, field->rmf_size, loc);
 			return NULL;
 		}
-        } else if (pill->rc_area[loc][offset] != -1) {
-                len = pill->rc_area[loc][offset];
-        } else {
+	} else if (pill->rc_area[loc][offset] != -1) {
+		len = pill->rc_area[loc][offset];
+	} else {
 		len = max_t(typeof(field->rmf_size), field->rmf_size, 0);
-        }
-        value = getter(msg, offset, len);
+	}
+	value = getter(msg, offset, len);
 
-        if (value == NULL) {
+	if (value == NULL) {
 		LASSERT(pill->rc_req != NULL);
-                DEBUG_REQ(D_ERROR, pill->rc_req,
+		DEBUG_REQ(D_ERROR, pill->rc_req,
 			   "Wrong buffer for field '%s' (%u of %u) in format '%s', %u vs. %u (%s)",
 			   field->rmf_name, offset, lustre_msg_bufcount(msg),
 			   fmt->rf_name, lustre_msg_buflen(msg, offset), len,
 			   rcl_names[loc]);
-        } else {
-                swabber_dumper_helper(pill, field, loc, offset, value, len,
-                                      dump, swabber);
-        }
+	} else {
+		swabber_dumper_helper(pill, field, loc, offset, value, len,
+				      dump, swabber);
+	}
 
-        return value;
+	return value;
 }
 
 /**
@@ -2357,7 +2344,7 @@ static void __req_capsule_dump(struct req_capsule *pill, enum req_location loc)
  */
 void req_capsule_client_dump(struct req_capsule *pill)
 {
-        __req_capsule_dump(pill, RCL_CLIENT);
+	__req_capsule_dump(pill, RCL_CLIENT);
 }
 EXPORT_SYMBOL(req_capsule_client_dump);
 
@@ -2366,7 +2353,7 @@ EXPORT_SYMBOL(req_capsule_client_dump);
  */
 void req_capsule_server_dump(struct req_capsule *pill)
 {
-        __req_capsule_dump(pill, RCL_SERVER);
+	__req_capsule_dump(pill, RCL_SERVER);
 }
 EXPORT_SYMBOL(req_capsule_server_dump);
 
@@ -2416,7 +2403,7 @@ EXPORT_SYMBOL(req_capsule_client_sized_get);
  * buffer corresponding to the given RMF (\a field) of a \a pill.
  */
 void *req_capsule_server_get(struct req_capsule *pill,
-                             const struct req_msg_field *field)
+			     const struct req_msg_field *field)
 {
 	return __req_capsule_get(pill, field, RCL_SERVER, NULL, false);
 }
@@ -2494,10 +2481,10 @@ void req_capsule_set_size(struct req_capsule *pill,
 	    !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
 	    (size > 0)) {
 		__u32 rmf_size = (__u32)field->rmf_size;
+
 		if ((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
 		    (size % rmf_size != 0)) {
-			CERROR("%s: array field size mismatch "
-				"%u %% %u != 0 (%d)\n",
+			CERROR("%s: array field size mismatch %u %% %u != 0 (%d)\n",
 				field->rmf_name, size, rmf_size, loc);
 			LBUG();
 		} else if (!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
@@ -2521,13 +2508,13 @@ EXPORT_SYMBOL(req_capsule_set_size);
  * returns the message buflen[offset], maybe we should use another name.
  */
 __u32 req_capsule_get_size(const struct req_capsule *pill,
-                         const struct req_msg_field *field,
-                         enum req_location loc)
+			   const struct req_msg_field *field,
+			   enum req_location loc)
 {
-        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+	LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
 
-        return lustre_msg_buflen(__req_msg(pill, loc),
-                                 __req_capsule_offset(pill, field, loc));
+	return lustre_msg_buflen(__req_msg(pill, loc),
+				 __req_capsule_offset(pill, field, loc));
 }
 EXPORT_SYMBOL(req_capsule_get_size);
 
@@ -2562,19 +2549,19 @@ EXPORT_SYMBOL(req_capsule_msg_size);
  * fields.
  */
 __u32 req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
-                         enum req_location loc)
+			   enum req_location loc)
 {
 	__u32 size;
 	size_t i = 0;
 
-        /*
-         * This function should probably LASSERT() that fmt has no fields with
-         * RMF_F_STRUCT_ARRAY in rmf_flags, since we can't know here how many
-         * elements in the array there will ultimately be, but then, we could
-         * assume that there will be at least one element, and that's just what
-         * we do.
-         */
-        size = lustre_msg_hdr_size(magic, fmt->rf_fields[loc].nr);
+	/*
+	 * This function should probably LASSERT() that fmt has no fields with
+	 * RMF_F_STRUCT_ARRAY in rmf_flags, since we can't know here how many
+	 * elements in the array there will ultimately be, but then, we could
+	 * assume that there will be at least one element, and that's just what
+	 * we do.
+	 */
+	size = lustre_msg_hdr_size(magic, fmt->rf_fields[loc].nr);
 	if (size == 0)
 		return size;
 
@@ -2610,37 +2597,37 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 {
 	int i;
 	size_t j;
+	const struct req_format *old;
 
-        const struct req_format *old;
+	LASSERT(pill->rc_fmt != NULL);
+	LASSERT(__req_format_is_sane(fmt));
 
-        LASSERT(pill->rc_fmt != NULL);
-        LASSERT(__req_format_is_sane(fmt));
+	old = pill->rc_fmt;
+	/*
+	 * Sanity checking...
+	 */
+	for (i = 0; i < RCL_NR; ++i) {
+		LASSERT(fmt->rf_fields[i].nr >= old->rf_fields[i].nr);
+		for (j = 0; j < old->rf_fields[i].nr - 1; ++j) {
+			const struct req_msg_field *ofield = FMT_FIELD(old, i,
+								       j);
 
-        old = pill->rc_fmt;
-        /*
-         * Sanity checking...
-         */
-        for (i = 0; i < RCL_NR; ++i) {
-                LASSERT(fmt->rf_fields[i].nr >= old->rf_fields[i].nr);
-                for (j = 0; j < old->rf_fields[i].nr - 1; ++j) {
-                        const struct req_msg_field *ofield = FMT_FIELD(old, i, j);
+			/* "opaque" fields can be transmogrified */
+			if (ofield->rmf_swabber == NULL &&
+			    (ofield->rmf_flags & ~RMF_F_NO_SIZE_CHECK) == 0 &&
+			    (ofield->rmf_size == -1 ||
+			     ofield->rmf_flags == RMF_F_NO_SIZE_CHECK))
+				continue;
+			LASSERT(FMT_FIELD(fmt, i, j) == FMT_FIELD(old, i, j));
+		}
+		/*
+		 * Last field in old format can be shorter than in new.
+		 */
+		LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
+			FMT_FIELD(old, i, j)->rmf_size);
+	}
 
-                        /* "opaque" fields can be transmogrified */
-                        if (ofield->rmf_swabber == NULL &&
-                            (ofield->rmf_flags & ~RMF_F_NO_SIZE_CHECK) == 0 &&
-                            (ofield->rmf_size == -1 ||
-                            ofield->rmf_flags == RMF_F_NO_SIZE_CHECK))
-                                continue;
-                        LASSERT(FMT_FIELD(fmt, i, j) == FMT_FIELD(old, i, j));
-                }
-                /*
-                 * Last field in old format can be shorter than in new.
-                 */
-                LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
-                        FMT_FIELD(old, i, j)->rmf_size);
-        }
-
-        pill->rc_fmt = fmt;
+	pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_extend);
 
@@ -2650,12 +2637,12 @@ EXPORT_SYMBOL(req_capsule_extend);
  * returns 0.
  */
 int req_capsule_has_field(const struct req_capsule *pill,
-                          const struct req_msg_field *field,
-                          enum req_location loc)
+			  const struct req_msg_field *field,
+			  enum req_location loc)
 {
-        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+	LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
 
-        return field->rmf_offset[pill->rc_fmt->rf_idx][loc];
+	return field->rmf_offset[pill->rc_fmt->rf_idx][loc];
 }
 EXPORT_SYMBOL(req_capsule_has_field);
 
@@ -2664,16 +2651,16 @@ EXPORT_SYMBOL(req_capsule_has_field);
  * pill's PTLRPC request or reply (\a loc), else it returns 0.
  */
 int req_capsule_field_present(const struct req_capsule *pill,
-                              const struct req_msg_field *field,
-                              enum req_location loc)
+			      const struct req_msg_field *field,
+			      enum req_location loc)
 {
 	__u32 offset;
 
-        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
-        LASSERT(req_capsule_has_field(pill, field, loc));
+	LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+	LASSERT(req_capsule_has_field(pill, field, loc));
 
-        offset = __req_capsule_offset(pill, field, loc);
-        return lustre_msg_bufcount(__req_msg(pill, loc)) > offset;
+	offset = __req_capsule_offset(pill, field, loc);
+	return lustre_msg_bufcount(__req_msg(pill, loc)) > offset;
 }
 EXPORT_SYMBOL(req_capsule_field_present);
 
@@ -2684,22 +2671,21 @@ EXPORT_SYMBOL(req_capsule_field_present);
  * This is not the opposite of req_capsule_extend().
  */
 void req_capsule_shrink(struct req_capsule *pill,
-			const struct req_msg_field *field,
-			__u32 newlen,
+			const struct req_msg_field *field, __u32 newlen,
 			enum req_location loc)
 {
-        const struct req_format *fmt;
-        struct lustre_msg       *msg;
-	__u32			 len;
-        int                      offset;
+	const struct req_format *fmt;
+	struct lustre_msg *msg;
+	__u32 len;
+	int offset;
 
-        fmt = pill->rc_fmt;
-        LASSERT(fmt != NULL);
-        LASSERT(__req_format_is_sane(fmt));
-        LASSERT(req_capsule_has_field(pill, field, loc));
-        LASSERT(req_capsule_field_present(pill, field, loc));
+	fmt = pill->rc_fmt;
+	LASSERT(fmt != NULL);
+	LASSERT(__req_format_is_sane(fmt));
+	LASSERT(req_capsule_has_field(pill, field, loc));
+	LASSERT(req_capsule_field_present(pill, field, loc));
 
-        offset = __req_capsule_offset(pill, field, loc);
+	offset = __req_capsule_offset(pill, field, loc);
 
 	msg = __req_msg(pill, loc);
 	len = lustre_msg_buflen(msg, offset);
@@ -2843,23 +2829,23 @@ int req_capsule_server_grow(struct req_capsule *pill,
 		lustre_grow_msg(pill->rc_repmsg, offset, snewlen);
 	}
 
-        if (rs->rs_difficult) {
-                /* copy rs data */
-                int i;
+	if (rs->rs_difficult) {
+		/* copy rs data */
+		int i;
 
-                nrs->rs_difficult = 1;
-                nrs->rs_no_ack = rs->rs_no_ack;
-                for (i = 0; i < rs->rs_nlocks; i++) {
-                        nrs->rs_locks[i] = rs->rs_locks[i];
-                        nrs->rs_modes[i] = rs->rs_modes[i];
-                        nrs->rs_nlocks++;
-                }
-                rs->rs_nlocks = 0;
-                rs->rs_difficult = 0;
-                rs->rs_no_ack = 0;
-        }
-        ptlrpc_rs_decref(rs);
-        return 0;
+		nrs->rs_difficult = 1;
+		nrs->rs_no_ack = rs->rs_no_ack;
+		for (i = 0; i < rs->rs_nlocks; i++) {
+			nrs->rs_locks[i] = rs->rs_locks[i];
+			nrs->rs_modes[i] = rs->rs_modes[i];
+			nrs->rs_nlocks++;
+		}
+		rs->rs_nlocks = 0;
+		rs->rs_difficult = 0;
+		rs->rs_no_ack = 0;
+	}
+	ptlrpc_rs_decref(rs);
+	return 0;
 }
 EXPORT_SYMBOL(req_capsule_server_grow);
 
