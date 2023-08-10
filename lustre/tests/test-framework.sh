@@ -1000,10 +1000,11 @@ send_sigint() {
 start_gss_daemons() {
 	local nodes=$1
 	local daemon=$2
+	local options=$3
 
 	if [ "$nodes" ] && [ "$daemon" ] ; then
 		echo "Starting gss daemon on nodes: $nodes"
-		do_nodes $nodes "$daemon" || return 8
+		do_nodes $nodes "$daemon" "$options" || return 8
 		return 0
 	fi
 
@@ -1011,18 +1012,20 @@ start_gss_daemons() {
 	echo "Starting gss daemon on mds: $nodes"
 	if $GSS_SK; then
 		# Start all versions, in case of switching
-		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z" || return 1
+		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z $options" ||
+			return 1
 	else
-		do_nodes $nodes "$LSVCGSSD -vvv" || return 1
+		do_nodes $nodes "$LSVCGSSD -vvv $options" || return 1
 	fi
 
 	nodes=$(comma_list $(osts_nodes))
 	echo "Starting gss daemon on ost: $nodes"
 	if $GSS_SK; then
 		# Start all versions, in case of switching
-		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z" || return 3
+		do_nodes $nodes "$LSVCGSSD -vvv -s -m -o -z $options" ||
+			return 3
 	else
-		do_nodes $nodes "$LSVCGSSD -vvv" || return 3
+		do_nodes $nodes "$LSVCGSSD -vvv $options" || return 3
 	fi
 	# starting on clients
 

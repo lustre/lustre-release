@@ -195,7 +195,7 @@ run_test 0 "start multiple gss daemons"
 
 set_flavor_all krb5p
 
-test_1() {
+test_1a() {
 	local file=$DIR/$tdir/$tfile
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -211,7 +211,41 @@ test_1() {
 	$RUNAS touch $file || error "should not fail"
 	[ -f $file ] || error "$file not found"
 }
-run_test 1 "access with or without krb5 credential"
+run_test 1a "access with or without krb5 credential"
+
+test_1b() {
+	local file=$DIR/$tdir/$tfile
+	local lgssconf=/etc/request-key.d/lgssc.conf
+	local clients=$CLIENTS
+	local realm
+
+	[ -z $clients ] && clients=$HOSTNAME
+	zconf_umount_clients $clients $MOUNT || error "umount clients failed"
+
+	echo "stop gss daemons..."
+	stop_gss_daemons
+
+	# get local realm from krb5.conf, assume the same for all nodes
+	realm=$(grep default_realm /etc/krb5.conf | awk '{print $3}')
+
+	# add -R option to lgss_keyring on local client
+	cp $lgssconf $TMP/lgssc.conf
+	stack_trap "yes | cp $TMP/lgssc.conf $lgssconf" EXIT
+	sed -i s+lgss_keyring+\&\ \-R\ $realm+ $lgssconf
+
+	# add -R option to lsvcgssd
+	echo "bring up gss daemons..."
+	start_gss_daemons '' '' "-R $realm"
+	stack_trap "stop_gss_daemons ; start_gss_daemons" EXIT
+
+	zconf_mount_clients $clients $MOUNT || error "mount clients failed"
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS touch $file || error "touch $file failed"
+	[ -f $file ] || error "$file not found"
+}
+run_test 1b "Use specified realm"
 
 test_2() {
 	local file1=$DIR/$tdir/$tfile-1

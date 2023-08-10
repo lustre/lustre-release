@@ -59,7 +59,7 @@ l_idmap_SOURCES = \
 	\
 	lsupport.h
 
-l_idmap_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la
+l_idmap_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(KRBLIBS)
 
 lgss_keyring_SOURCES = \
 	lgss_keyring.c \

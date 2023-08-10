@@ -44,6 +44,8 @@
 #include <linux/lnet/lnet-types.h>
 #include <linux/lnet/nidstr.h>
 
+#include <krb5.h>
+
 #define GSSD_CLI        (0)
 #define GSSD_SVC        (1)
 
@@ -63,6 +65,7 @@ void gssd_exit_unique(int type);
 #define LUSTRE_GSS_MECH_SHIFT	16
 
 extern const char * lustre_svc_name[];
+extern char *krb5_this_realm;
 
 enum lgss_mech {
 	LGSS_MECH_KRB5  = 0,
@@ -104,5 +107,6 @@ uid_t parse_uid(char *uidstr);
 void load_mapping(void);
 int mapping_empty(void);
 int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid);
+int gss_get_realm(char *realm);
 
 #endif /* __LSUPPORT_H__ */

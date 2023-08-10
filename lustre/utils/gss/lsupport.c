@@ -555,3 +555,53 @@ int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid)
 	printerr(LL_INFO, "no mapping for %s/%#Lx\n", princ, nid);
 	return -1;
 }
+
+/* realm of this node */
+char *krb5_this_realm;
+
+static int gss_get_provided_realm(char *realm)
+{
+	if (krb5_this_realm)
+		return 0;
+
+	if (!realm)
+		return -1;
+
+	krb5_this_realm = strdup(realm);
+	return 0;
+}
+
+static int gss_get_local_realm(void)
+{
+	krb5_context context = NULL;
+	krb5_error_code code;
+
+	if (krb5_this_realm != NULL)
+		return 0;
+
+	code = krb5_init_context(&context);
+	if (code)
+		return code;
+
+	code = krb5_get_default_realm(context, &krb5_this_realm);
+	krb5_free_context(context);
+
+	if (code)
+		return code;
+
+	return 0;
+}
+
+int gss_get_realm(char *realm)
+{
+	int rc;
+
+	/* Try to use provided realm first.
+	 * If no provided realm, get default local realm.
+	 */
+	rc = gss_get_provided_realm(realm);
+	if (rc)
+		rc = gss_get_local_realm();
+
+	return rc;
+}

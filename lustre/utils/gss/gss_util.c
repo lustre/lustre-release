@@ -207,8 +207,9 @@ int extract_realm_name(gss_buffer_desc *name, char **realm)
 
         c = strchr(sname, '@');
         if (!c) {
-        	printerr(2, "no realm found in principal, use default\n");
-		*realm = strdup(this_realm);
+		printerr(2, "no realm in principal, using '%s' instead\n",
+			 krb5_this_realm);
+		*realm = strdup(krb5_this_realm);
                 if (!*realm) {
                         printerr(0, "failed to duplicate default realm\n");
                         rc = -ENOMEM;
@@ -381,36 +382,26 @@ out:
  * FIXME should be in krb5_util.c
  *********************************/
 
-/* realm of this node */
-char *this_realm = NULL;
-
-int gssd_get_local_realm(void)
+void gssd_cleanup_realms(void)
 {
 	krb5_context context = NULL;
 	krb5_error_code code;
-	int retval = -1;
 
-	if (this_realm != NULL)
-		return 0;
-
-	code = krb5_init_context(&context);
-	if (code) {
-		printerr(0, "ERROR: get default realm: init ctx: %s\n",
-			 error_message(code));
-		goto out;
+	if (krb5_this_realm) {
+		code = krb5_init_context(&context);
+		if (code) {
+			printerr(0, "ERROR: cleanup realms: init ctx: %s\n",
+				 error_message(code));
+		} else {
+			krb5_free_string(context, krb5_this_realm);
+			krb5_this_realm = NULL;
+			krb5_free_context(context);
+		}
 	}
-
-	code = krb5_get_default_realm(context, &this_realm);
-	if (code) {
-		printerr(0, "ERROR: get default realm: %s\n",
-			 error_message(code));
-		goto out;
-	}
-	retval = 0;
-
-	printerr(1, "Local realm: %s\n", this_realm);
-out:
-	krb5_free_context(context);
-	return retval;
+	if (mgs_local_realm)
+		free(mgs_local_realm);
+	if (mds_local_realm)
+		free(mds_local_realm);
+	if (oss_local_realm)
+		free(oss_local_realm);
 }
-

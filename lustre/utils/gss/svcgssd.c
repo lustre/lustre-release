@@ -168,6 +168,8 @@ sig_die(int signal)
 {
 	/* destroy krb5 machine creds */
 	cleanup_mapping();
+	/* cleanup allocated strings for realms */
+	gssd_cleanup_realms();
 	printerr(LL_WARN, "exiting on signal %d\n", signal);
 	exit(1);
 }
@@ -182,19 +184,20 @@ sig_hup(int signal)
 static void
 usage(FILE *fp, char *progname)
 {
-	fprintf(fp, "usage: %s [ -fnvmogk ]\n",
+	fprintf(fp, "usage: %s [ -fnvmogkRsz ]\n",
 		progname);
-	fprintf(stderr, "-f      - Run in foreground\n");
-	fprintf(stderr, "-n      - Don't establish kerberos credentials\n");
-	fprintf(stderr, "-v      - Verbosity\n");
-	fprintf(stderr, "-m      - Service MDS\n");
-	fprintf(stderr, "-o      - Service OSS\n");
-	fprintf(stderr, "-g      - Service MGS\n");
-	fprintf(stderr, "-k      - Enable kerberos support\n");
+	fprintf(stderr, "-f		- Run in foreground\n");
+	fprintf(stderr, "-n		- Don't establish kerberos credentials\n");
+	fprintf(stderr, "-v		- Verbosity\n");
+	fprintf(stderr, "-m		- Service MDS\n");
+	fprintf(stderr, "-o		- Service OSS\n");
+	fprintf(stderr, "-g		- Service MGS\n");
+	fprintf(stderr, "-k		- Enable kerberos support\n");
+	fprintf(stderr, "-R REALM	- Kerberos Realm to use, instead of default\n");
 #ifdef HAVE_OPENSSL_SSK
-	fprintf(stderr, "-s      - Enable shared secret key support\n");
+	fprintf(stderr, "-s		- Enable shared secret key support\n");
 #endif
-	fprintf(stderr, "-z      - Enable gssnull support\n");
+	fprintf(stderr, "-z		- Enable gssnull support\n");
 
 	exit(fp == stderr);
 }
@@ -207,36 +210,37 @@ main(int argc, char *argv[])
 	int verbosity = 0;
 	int opt;
 	int must_srv_mds = 0, must_srv_oss = 0, must_srv_mgs = 0;
+	char *realm = NULL;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fnvmogksz")) != -1) {
+	while ((opt = getopt(argc, argv, "fgkmnoR:svz")) != -1) {
 		switch (opt) {
 		case 'f':
 			fg = 1;
-			break;
-		case 'n':
-			get_creds = 0;
-			break;
-		case 'v':
-			verbosity++;
-			break;
-		case 'm':
-			get_creds = 1;
-			must_srv_mds = 1;
-			break;
-		case 'o':
-			get_creds = 1;
-			must_srv_oss = 1;
 			break;
 		case 'g':
 			get_creds = 1;
 			must_srv_mgs = 1;
 			break;
+		case 'h':
+			usage(stdout, argv[0]);
+			break;
 		case 'k':
 			krb_enabled = 1;
 			break;
-		case 'h':
-			usage(stdout, argv[0]);
+		case 'm':
+			get_creds = 1;
+			must_srv_mds = 1;
+			break;
+		case 'n':
+			get_creds = 0;
+			break;
+		case 'o':
+			get_creds = 1;
+			must_srv_oss = 1;
+			break;
+		case 'R':
+			realm = optarg;
 			break;
 		case 's':
 #ifdef HAVE_OPENSSL_SSK
@@ -246,6 +250,9 @@ main(int argc, char *argv[])
 				"support not enabled\n");
 			usage(stderr, argv[0]);
 #endif
+			break;
+		case 'v':
+			verbosity++;
 			break;
 		case 'z':
 			null_enabled = 1;
@@ -272,21 +279,30 @@ main(int argc, char *argv[])
 
 #endif
 	}
+
+	if (realm && !krb_enabled) {
+		fprintf(stderr, "error: need -k option if -R is used\n");
+		usage(stderr, argv[0]);
+	}
+
 	initerr(progname, verbosity, fg);
 
 	/* For kerberos use gss mechanisms but ignore for sk and null */
 	if (krb_enabled) {
+		int ret;
+
 		if (gssd_check_mechs()) {
 			printerr(LL_ERR,
 				 "ERROR: problem with gssapi library\n");
 			exit(1);
 		}
-		if (gssd_get_local_realm()) {
-			printerr(LL_ERR,
-				 "ERROR: Can't get Local Kerberos realm\n");
+		ret = gss_get_realm(realm);
+		if (ret) {
+			printerr(LL_ERR, "ERROR: no Kerberos realm: %s\n",
+				 error_message(ret));
 			exit(1);
 		}
-
+		printerr(LL_WARN, "Kerberos realm: %s\n", krb5_this_realm);
 		if (get_creds &&
 		    gssd_prepare_creds(must_srv_mgs, must_srv_mds,
 				       must_srv_oss)) {
@@ -316,6 +332,7 @@ main(int argc, char *argv[])
 
 	svcgssd_run();
 	cleanup_mapping();
+	gssd_cleanup_realms();
 	printerr(LL_ERR, "svcgssd_run returned!\n");
 	abort();
 }

@@ -49,12 +49,14 @@
 #include <keyutils.h>
 #include <gssapi/gssapi.h>
 #include <sys/wait.h>
+#include <getopt.h>
 
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
 #include <uapi/linux/lustre/lgss.h>
 #include "lsupport.h"
 #include "lgss_utils.h"
+#include "lgss_krb5_utils.h"
 #include "write_bytes.h"
 #include "context.h"
 
@@ -953,23 +955,47 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 
 int main(int argc, char *argv[])
 {
-	struct keyring_upcall_param   uparam;
-	key_serial_t                  keyid;
-	key_serial_t                  sring;
-	pid_t                         child;
-	int			      req_fd[2] = { -1, -1 };
-	int			      reply_fd[2] = { -1, -1 };
-	struct lgss_mech_type        *mech;
-	struct lgss_cred             *cred;
-	char			      path[PATH_MAX] = "";
-	int			      other_ns = 0;
-	int			      rc = 0;
-	struct stat		      parent_ns = { .st_ino = 0 };
-	struct stat		      caller_ns = { .st_ino = 0 };
+	struct keyring_upcall_param uparam;
+	key_serial_t keyid;
+	key_serial_t sring;
+	pid_t child;
+	int req_fd[2] = { -1, -1 };
+	int reply_fd[2] = { -1, -1 };
+	struct lgss_mech_type *mech;
+	struct lgss_cred *cred;
+	char path[PATH_MAX] = "";
+	int other_ns = 0;
+	int rc = 0, opt;
+	struct stat parent_ns = { .st_ino = 0 };
+	struct stat caller_ns = { .st_ino = 0 };
+
+	static struct option long_opts[] = {
+		{ .name = "realm", .has_arg = required_argument, .val = 'R'},
+		{ .name = NULL, } };
 
 	set_log_level();
 
 	logmsg(LL_TRACE, "start parsing parameters\n");
+
+	/* one possible option before upcall parameters: -R REALM */
+	while ((opt = getopt_long(argc, argv, "R:", long_opts, NULL)) != EOF) {
+		switch (opt) {
+		case 'R':
+			lgss_client_realm = optarg;
+			break;
+		default:
+			logmsg(LL_ERR, "invalid parameter %s\n",
+			       argv[optind - 1]);
+			return 1;
+		}
+	}
+
+	if (lgss_client_realm) {
+		/* shift args to meet expected upcall parameters */
+		argc -= optind - 1;
+		argv += optind - 1;
+	}
+
 	/*
 	 * parse & sanity check upcall parameters
 	 * expected to be called with:
@@ -1234,6 +1260,7 @@ out_pipe:
 		close(req_fd[1]);
 		close(reply_fd[0]);
 		close(reply_fd[1]);
+		lgss_fini(cred);
 		return rc;
 	} else {
 		if (uparam.kup_pid)
@@ -1243,7 +1270,7 @@ out_pipe:
 
 		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
 		if (rc != 0)
-			return rc;
+			goto out_reg;
 
 		/*
 		 * fork a child to do the real gss negotiation
@@ -1252,13 +1279,19 @@ out_pipe:
 		if (child == -1) {
 			logmsg(LL_ERR, "key %08x: can't create child: %s\n",
 			       keyid, strerror(errno));
-			return 1;
+			rc = 1;
+			goto out_reg;
 		} else if (child == 0) {
-			return lgssc_kr_negotiate(keyid, cred, &uparam,
-						  req_fd, reply_fd);
+			rc = lgssc_kr_negotiate(keyid, cred, &uparam,
+						req_fd, reply_fd);
+			goto out_reg;
+		} else {
+			logmsg(LL_TRACE, "forked child %d\n", child);
+			return rc;
 		}
 
-		logmsg(LL_TRACE, "forked child %d\n", child);
-		return 0;
+out_reg:
+		lgss_fini(cred);
+		return rc;
 	}
 }

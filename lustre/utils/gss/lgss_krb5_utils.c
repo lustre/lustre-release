@@ -133,6 +133,8 @@
 #include "lgss_utils.h"
 #include "lgss_krb5_utils.h"
 
+char *lgss_client_realm;
+
 static void lgss_krb5_mutex_lock(void)
 {
         if (lgss_mutex_lock(LGSS_MUTEX_KRB5)) {
@@ -155,7 +157,6 @@ const char *krb5_cred_root_suffix  = "lustre_root";
 const char *krb5_cred_mds_suffix   = "lustre_mds";
 const char *krb5_cred_oss_suffix   = "lustre_oss";
 
-char    *krb5_this_realm        = NULL;
 char    *krb5_keytab_file       = "/etc/krb5.keytab";
 
 static int lgss_krb5_set_ccache_name(const char *ccname)
@@ -170,35 +171,6 @@ static int lgss_krb5_set_ccache_name(const char *ccname)
 
 	logmsg(LL_DEBUG, "set cc: %s\n", ccname);
 	return 0;
-}
-
-static
-int lgss_krb5_get_local_realm(void)
-{
-        krb5_context    context = NULL;
-        krb5_error_code code;
-        int             retval = -1;
-
-        if (krb5_this_realm != NULL)
-                return 0;
-
-        code = krb5_init_context(&context);
-        if (code) {
-                logmsg(LL_ERR, "init ctx: %s\n", krb5_err_msg(code));
-                return -1;
-        }
-
-        code = krb5_get_default_realm(context, &krb5_this_realm);
-        if (code) {
-                logmsg(LL_ERR, "get default realm: %s\n", krb5_err_msg(code));
-                goto out;
-        }
-
-        logmsg(LL_DEBUG, "Local realm: %s\n", krb5_this_realm);
-        retval = 0;
-out:
-        krb5_free_context(context);
-        return retval;
 }
 
 static
@@ -985,8 +957,13 @@ static int lgss_krb5_prepare_cred(struct lgss_cred *cred)
 	cred->lc_mech_cred = NULL;
 
 	if (cred->lc_root_flags != 0) {
-		if (lgss_krb5_get_local_realm())
+		rc = gss_get_realm(lgss_client_realm);
+		if (rc) {
+			logmsg(LL_ERR, "ERROR: no Kerberos realm: %s\n",
+			       error_message(rc));
 			return -1;
+		}
+		logmsg(LL_DEBUG, "Kerberos realm: %s\n", krb5_this_realm);
 
 		rc = lkrb5_prepare_root_cred(cred);
 	} else {
@@ -1002,10 +979,29 @@ void lgss_krb5_release_cred(struct lgss_cred *cred)
         cred->lc_mech_cred = NULL;
 }
 
-struct lgss_mech_type lgss_mech_krb5 = 
+static void lgss_krb5_fini(void)
 {
-        .lmt_name               = "krb5",
-        .lmt_mech_n             = LGSS_MECH_KRB5,
-        .lmt_prepare_cred       = lgss_krb5_prepare_cred,
-        .lmt_release_cred       = lgss_krb5_release_cred,
+	krb5_context context = NULL;
+	krb5_error_code code;
+
+	if (krb5_this_realm) {
+		code = krb5_init_context(&context);
+		if (code) {
+			logmsg(LL_ERR, "ERROR: krb5 fini: init ctx: %s\n",
+				 error_message(code));
+		} else {
+			krb5_free_string(context, krb5_this_realm);
+			krb5_this_realm = NULL;
+			krb5_free_context(context);
+		}
+	}
+}
+
+struct lgss_mech_type lgss_mech_krb5 =
+{
+	.lmt_name		= "krb5",
+	.lmt_mech_n		= LGSS_MECH_KRB5,
+	.lmt_prepare_cred	= lgss_krb5_prepare_cred,
+	.lmt_release_cred	= lgss_krb5_release_cred,
+	.lmt_fini		= lgss_krb5_fini,
 };

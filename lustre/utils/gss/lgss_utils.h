@@ -173,6 +173,7 @@ void lgss_release_cred(struct lgss_cred *cred);
 int lgss_using_cred(struct lgss_cred *cred);
 int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 		       gss_buffer_desc *ctx_token);
+void lgss_fini(struct lgss_cred *cred);
 
 int lgss_get_service_str(char **string, uint32_t lsvc, uint64_t tgt_nid);
 

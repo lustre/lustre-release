@@ -449,6 +449,16 @@ int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 	return 0;
 }
 
+void lgss_fini(struct lgss_cred *cred)
+{
+	struct lgss_mech_type *mech = cred->lc_mech;
+
+	logmsg(LL_TRACE, "finishing %s\n", mech->lmt_name);
+
+	if (mech && mech->lmt_fini)
+		mech->lmt_fini();
+}
+
 /****************************************
  * helper functions                     *
  ****************************************/
