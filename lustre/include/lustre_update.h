@@ -299,7 +299,7 @@ struct thandle_update_records {
 #define TOP_THANDLE_MAGIC	0x20140917
 struct top_multiple_thandle {
 	struct dt_device	*tmt_master_sub_dt;
-	atomic_t		tmt_refcount;
+	struct kref		tmt_refcount;
 	/* Other sub transactions will be listed here. */
 	struct list_head	tmt_sub_thandle_list;
 	spinlock_t		tmt_sub_lock;
@@ -481,17 +481,16 @@ int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 		    struct thandle *th);
 int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 		   struct thandle *th);
-void top_multiple_thandle_destroy(struct top_multiple_thandle *tmt);
+void top_multiple_thandle_destroy(struct kref *kref);
 
 static inline void top_multiple_thandle_get(struct top_multiple_thandle *tmt)
 {
-	atomic_inc(&tmt->tmt_refcount);
+	kref_get(&tmt->tmt_refcount);
 }
 
 static inline void top_multiple_thandle_put(struct top_multiple_thandle *tmt)
 {
-	if (atomic_dec_and_test(&tmt->tmt_refcount))
-		top_multiple_thandle_destroy(tmt);
+	kref_put(&tmt->tmt_refcount, top_multiple_thandle_destroy);
 }
 
 struct sub_thandle *lookup_sub_thandle(struct top_multiple_thandle *tmt,

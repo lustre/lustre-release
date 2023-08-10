@@ -76,7 +76,7 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	       tmt->tmt_master_sub_dt ?
 	       tmt->tmt_master_sub_dt->dd_lu_dev.ld_obd->obd_name :
 	       "NULL",
-	       tmt, atomic_read(&tmt->tmt_refcount), tmt->tmt_committed,
+	       tmt, kref_read(&tmt->tmt_refcount), tmt->tmt_committed,
 	       tmt->tmt_result, tmt->tmt_batchid);
 
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
@@ -397,7 +397,7 @@ static void top_trans_committed_cb(struct top_multiple_thandle *tmt)
 	struct lu_target *lut;
 	ENTRY;
 
-	LASSERT(atomic_read(&tmt->tmt_refcount) > 0);
+	LASSERT(kref_read(&tmt->tmt_refcount) > 0);
 
 	top_multiple_thandle_dump(tmt, D_HA);
 	tmt->tmt_committed = 1;
@@ -1122,7 +1122,7 @@ int top_trans_create_tmt(const struct lu_env *env,
 	tmt->tmt_magic = TOP_THANDLE_MAGIC;
 	INIT_LIST_HEAD(&tmt->tmt_sub_thandle_list);
 	INIT_LIST_HEAD(&tmt->tmt_commit_list);
-	atomic_set(&tmt->tmt_refcount, 1);
+	kref_init(&tmt->tmt_refcount);
 	spin_lock_init(&tmt->tmt_sub_lock);
 	init_waitqueue_head(&tmt->tmt_stop_waitq);
 
@@ -1238,12 +1238,15 @@ EXPORT_SYMBOL(thandle_get_sub_by_dt);
  *
  * Destroy multiple thandle and all its sub thandle.
  *
- * \param[in] tmt	top_multiple_thandle to be destroyed.
+ * \param[in] kref	Pointer to struct kref
  */
-void top_multiple_thandle_destroy(struct top_multiple_thandle *tmt)
+void top_multiple_thandle_destroy(struct kref *kref)
 {
+	struct top_multiple_thandle *tmt;
 	struct sub_thandle *st;
 	struct sub_thandle *tmp;
+
+	tmt = container_of(kref, struct top_multiple_thandle, tmt_refcount);
 
 	LASSERT(tmt->tmt_magic == TOP_THANDLE_MAGIC);
 	list_for_each_entry_safe(st, tmp, &tmt->tmt_sub_thandle_list,
