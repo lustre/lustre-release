@@ -37,8 +37,10 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include "llite_internal.h"
 #include <linux/exportfs.h>
+
+#include <lustre_fid.h>
+#include "llite_internal.h"
 
 u32 get_uuid2int(const char *name, int len)
 {
@@ -114,15 +116,18 @@ struct inode *search_inode_for_lustre(struct super_block *sb,
 static struct dentry *
 ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *parent)
 {
-	struct inode  *inode;
+	bool is_dot_lustre = fid_is_dot_lustre(fid);
 	struct dentry *result;
+	struct inode *inode;
 
 	ENTRY;
-
 	if (!fid_is_sane(fid))
 		RETURN(ERR_PTR(-ESTALE));
 
 	CDEBUG(D_INFO, "Get dentry for fid: "DFID"\n", PFID(fid));
+
+	if (fid_is_root(fid))
+		RETURN(dget(sb->s_root));
 
 	inode = search_inode_for_lustre(sb, fid);
 	if (IS_ERR(inode))
@@ -132,6 +137,86 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 		/* we didn't find the right inode.. */
 		iput(inode);
 		RETURN(ERR_PTR(-ESTALE));
+	}
+
+	/* Both LU_DOT_LUSTRE_FID and LU_OBF_FID are special fids that
+	 * don't match to a real searchable file, so they need special
+	 * handling.
+	 */
+	if (is_dot_lustre || fid_is_obf(fid)) {
+		struct qstr dot_name = QSTR_INIT(".lustre",
+						 strlen(".lustre"));
+		struct dentry *dot, *obf;
+
+		inode_lock(d_inode(sb->s_root));
+		dot = d_lookup(sb->s_root, &dot_name);
+		if (!dot) {
+			struct inode *tmp = inode;
+
+			dot = d_alloc(sb->s_root, &dot_name);
+			if (!dot) {
+				inode_unlock(d_inode(sb->s_root));
+				iput(inode);
+				RETURN(ERR_PTR(-ENOMEM));
+			}
+
+			if (!ll_d_setup(dot, true)) {
+				inode_unlock(d_inode(sb->s_root));
+				obf = ERR_PTR(-ENOMEM);
+				goto free_dot;
+			}
+
+			/* We are requesting OBF fid then locate inode of
+			 * .lustre FID
+			 */
+			if (!is_dot_lustre) {
+				tmp = search_inode_for_lustre(sb,
+							      &LU_DOT_LUSTRE_FID);
+				if (IS_ERR(tmp)) {
+					inode_unlock(d_inode(sb->s_root));
+					obf = ERR_CAST(tmp);
+					goto free_dot;
+				}
+			}
+			/* Successfully add .lustre dentry to dcache. For future
+			 * failures for the obf case we don't need to iput the
+			 * .lustre inode.
+			 */
+			d_add(dot, tmp);
+		}
+		inode_unlock(d_inode(sb->s_root));
+
+		if (!is_dot_lustre) {
+			struct qstr obf_name = QSTR_INIT("fid", strlen("fid"));
+
+			inode_lock(d_inode(dot));
+			obf = d_lookup(dot, &obf_name);
+			if (!obf) {
+				obf = d_alloc(dot, &obf_name);
+				if (!obf) {
+					inode_unlock(d_inode(dot));
+					obf = ERR_PTR(-ENOMEM);
+					goto free_dot;
+				}
+
+				if (!ll_d_setup(obf, true)) {
+					dput(obf);
+					inode_unlock(d_inode(dot));
+					obf = ERR_PTR(-ENOMEM);
+					goto free_dot;
+				}
+				d_add(obf, inode);
+			}
+			inode_unlock(d_inode(dot));
+free_dot:
+			if (IS_ERR(obf))
+				iput(inode);
+			dput(dot);
+			result = obf;
+		} else {
+			result = dot;
+		}
+		RETURN(result);
 	}
 
 	/* N.B. d_obtain_alias() drops inode ref on error */

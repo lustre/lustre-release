@@ -40,6 +40,27 @@
 #include <linux/types.h>
 #include <linux/lustre/lustre_idl.h>
 
+/** Special fid for root directory */
+static const struct lu_fid LU_ROOT_FID = {
+	.f_seq = FID_SEQ_ROOT,
+	.f_oid = FID_OID_ROOT,
+	.f_ver = 0x0000000000000000
+};
+
+/** Special fid for ".lustre" directory */
+static const struct lu_fid LU_DOT_LUSTRE_FID = {
+	.f_seq = FID_SEQ_DOT_LUSTRE,
+	.f_oid = FID_OID_DOT_LUSTRE,
+	.f_ver = 0x0000000000000000
+};
+
+/** Special fid for "fid" special object in .lustre */
+static const struct lu_fid LU_OBF_FID = {
+	.f_seq = FID_SEQ_DOT_LUSTRE,
+	.f_oid = FID_OID_DOT_LUSTRE_OBF,
+	.f_ver = 0x0000000000000000
+};
+
 /** returns fid object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)
 {

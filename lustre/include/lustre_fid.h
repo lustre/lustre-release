@@ -167,9 +167,7 @@ struct obd_export;
 extern const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_seq_range LUSTRE_SEQ_ZERO_RANGE;
 extern const struct lu_fid LUSTRE_BFL_FID;
-extern const struct lu_fid LU_OBF_FID;
 extern const struct lu_fid LU_LPF_FID;
-extern const struct lu_fid LU_DOT_LUSTRE_FID;
 extern const struct lu_fid LU_BACKEND_LPF_FID;
 
 enum {
@@ -255,20 +253,17 @@ static inline void lu_local_name_obj_fid(struct lu_fid *fid, __u32 oid)
  * the root FID will still be IGIF */
 static inline int fid_is_root(const struct lu_fid *fid)
 {
-	return unlikely((fid_seq(fid) == FID_SEQ_ROOT &&
-			 fid_oid(fid) == FID_OID_ROOT));
+	return unlikely(lu_fid_eq(fid, &LU_ROOT_FID));
 }
 
 static inline int fid_is_dot_lustre(const struct lu_fid *fid)
 {
-	return unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE &&
-			fid_oid(fid) == FID_OID_DOT_LUSTRE);
+	return unlikely(lu_fid_eq(fid, &LU_DOT_LUSTRE_FID));
 }
 
 static inline int fid_is_obf(const struct lu_fid *fid)
 {
-	return unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE &&
-			fid_oid(fid) == FID_OID_DOT_LUSTRE_OBF);
+	return unlikely(lu_fid_eq(fid, &LU_OBF_FID));
 }
 
 static inline int fid_is_otable_it(const struct lu_fid *fid)

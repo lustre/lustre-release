@@ -45,7 +45,7 @@
 #include <time.h>
 
 #include <lustre/lustreapi.h>
-#include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_fid.h>
 
 #define ERROR(fmt, ...)							\
 	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",                     \
@@ -490,6 +490,24 @@ static void test30(void)
 	}
 }
 
+/* Test special FIDs for lustre */
+static void test31(void)
+{
+	int fd;
+
+	fd = llapi_open_by_fid(mainpath, &LU_ROOT_FID, O_RDONLY);
+	ASSERTF(fd >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
+		PFID(&LU_ROOT_FID), strerror(errno));
+
+	fd = llapi_open_by_fid(mainpath, &LU_DOT_LUSTRE_FID, O_RDONLY);
+	ASSERTF(fd >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
+		PFID(&LU_DOT_LUSTRE_FID), strerror(errno));
+
+	fd = llapi_open_by_fid(mainpath, &LU_OBF_FID, O_RDONLY);
+	ASSERTF(fd >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
+		PFID(&LU_OBF_FID), strerror(errno));
+}
+
 /* Test llapi_fd2parent/llapi_path2parent on mainpath (whatever its
  * type). mainpath must exist. */
 static void help_test40(void)
@@ -749,6 +767,7 @@ int main(int argc, char *argv[])
 	PERFORM(test12);
 	PERFORM(test20);
 	PERFORM(test30);
+	PERFORM(test31);
 	PERFORM(test40);
 	PERFORM(test41);
 	PERFORM(test42);
