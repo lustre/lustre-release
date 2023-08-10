@@ -4263,7 +4263,6 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 	struct lnet_ioctl_lnet_stats data;
 	struct lnet_counters *cntrs;
 	int rc;
-	int l_errno;
 	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	struct cYAML *root = NULL, *stats = NULL;
 
@@ -4271,12 +4270,10 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_LNET_STATS, &data);
 	if (rc) {
-		l_errno = errno;
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"cannot get lnet statistics: %s\"",
-			 strerror(l_errno));
-		rc = -l_errno;
+			 strerror(-rc));
 		goto out;
 	}
 
