@@ -1,0 +1,245 @@
+From: Wang Shilong <wshilong@ddn.com>
+
+Currently the WAS_TRIMMED flag indicating block group has been
+trimmed is not persistent, and fstrim status will be lost at
+unmount.  As a result, fstrim cannot skip the already trimmed
+groups on remount, which could be slow on very large devices.
+
+To avoid this kind of problem, introduce a new block group flag
+EXT4_BG_TRIMMED to be stored persistently in the block group
+descriptor after trimming each block group.  This adds one extra
+group descriptor write after trimming a block group. When the
+flag is cleared the block group descriptor is journaled  already
+so it does not introduce any overhead.
+
+Add a new super block flag EXT2_FLAGS_TRACK_TRIM, to indicate if
+we should honour persistent EXT4_BG_TRIMMED when doing fstrim.
+The new super block flag can be turned on/off via tune2fs.
+
+Cc: Shuichi Ihara <sihara@ddn.com>
+Cc: Wang Shilong <wangshilong1991@gmail.com>
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+Signed-off-by: Dongyang Li <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I7faaca4754b1726ad05d0aafe3e90e0e9f591617
+Reviewed-on: https://review.whamcloud.com/51923
+
+Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
+===================================================================
+--- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/ext4.h
++++ linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
+@@ -334,6 +334,7 @@ struct flex_groups {
+ #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
+ #define EXT4_BG_BLOCK_UNINIT	0x0002 /* Block bitmap not in use */
+ #define EXT4_BG_INODE_ZEROED	0x0004 /* On-disk itable initialized to zero */
++#define EXT4_BG_TRIMMED		0x0008 /* block group was trimmed */
+ 
+ /*
+  * Macro-instructions used to manage group descriptors
+@@ -1086,6 +1087,7 @@ struct ext4_inode_info {
+ #define EXT2_FLAGS_SIGNED_HASH		0x0001  /* Signed dirhash in use */
+ #define EXT2_FLAGS_UNSIGNED_HASH	0x0002  /* Unsigned dirhash in use */
+ #define EXT2_FLAGS_TEST_FILESYS		0x0004	/* to test development code */
++#define EXT2_FLAGS_TRACK_TRIM		0x0008  /* Track trim status in each bg */
+ 
+ /*
+  * Mount flags set via mount options or defaults
+@@ -1189,6 +1191,9 @@ extern void ext4_set_bits(void *bm, int
+ /* Number of quota types we support */
+ #define EXT4_MAXQUOTAS 3
+ 
++/* Default min freed blocks which we could clear BG_TRIMMED flag */
++#define EXT4_DEF_TRIM_MIN_BLOCKS	128
++
+ /*
+  * Structure of the super block
+  */
+@@ -2805,6 +2810,7 @@ struct ext4_group_info {
+ 	struct rb_root  bb_free_root;
+ 	ext4_grpblk_t	bb_first_free;	/* first free block */
+ 	ext4_grpblk_t	bb_free;	/* total free blocks */
++	ext4_grpblk_t	bb_freed_since_trim; /* blocks freed since last trim */
+ 	ext4_grpblk_t	bb_fragments;	/* nr of freespace fragments */
+ 	ext4_grpblk_t	bb_largest_free_order;/* order of largest frag in BG */
+ 	struct          list_head bb_prealloc_list;
+@@ -2820,7 +2826,6 @@ struct ext4_group_info {
+ };
+ 
+ #define EXT4_GROUP_INFO_NEED_INIT_BIT		0
+-#define EXT4_GROUP_INFO_WAS_TRIMMED_BIT		1
+ #define EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT	2
+ #define EXT4_GROUP_INFO_BBITMAP_CORRUPT		\
+ 	(1 << EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT)
+@@ -2836,12 +2841,6 @@ struct ext4_group_info {
+ #define EXT4_MB_GRP_IBITMAP_CORRUPT(grp)	\
+ 	(test_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &((grp)->bb_state)))
+ 
+-#define EXT4_MB_GRP_WAS_TRIMMED(grp)	\
+-	(test_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+-#define EXT4_MB_GRP_SET_TRIMMED(grp)	\
+-	(set_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+-#define EXT4_MB_GRP_CLEAR_TRIMMED(grp)	\
+-	(clear_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_TEST(grp)	\
+ 	(test_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
+Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/ext4_jbd2.h
++++ linux-3.10.0-1160.88.1.el7/fs/ext4/ext4_jbd2.h
+@@ -135,7 +135,8 @@ static inline int ext4_jbd2_credits_xatt
+ #define EXT4_HT_MOVE_EXTENTS     9
+ #define EXT4_HT_XATTR           10
+ #define EXT4_HT_EXT_CONVERT     11
+-#define EXT4_HT_MAX             12
++#define EXT4_HT_FS_TRIM		12
++#define EXT4_HT_MAX             13
+ 
+ /**
+  *   struct ext4_journal_cb_entry - Base structure for callback information.
+Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
+===================================================================
+--- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/mballoc.c
++++ linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
+@@ -2859,6 +2859,7 @@ int ext4_mb_add_groupinfo(struct super_b
+ 	init_rwsem(&meta_group_info[i]->alloc_sem);
+ 	meta_group_info[i]->bb_free_root = RB_ROOT;
+ 	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
++	meta_group_info[i]->bb_freed_since_trim = 0;
+ 
+ #ifdef DOUBLE_CHECK
+ 	{
+@@ -3310,15 +3311,6 @@ static void ext4_free_data_callback(stru
+ 	rb_erase(&entry->efd_node, &(db->bb_free_root));
+ 	mb_free_blocks(NULL, &e4b, entry->efd_start_cluster, entry->efd_count);
+ 
+-	/*
+-	 * Clear the trimmed flag for the group so that the next
+-	 * ext4_trim_fs can trim it.
+-	 * If the volume is mounted with -o discard, online discard
+-	 * is supported and the free blocks will be trimmed online.
+-	 */
+-	if (!test_opt(sb, DISCARD))
+-		EXT4_MB_GRP_CLEAR_TRIMMED(db);
+-
+ 	if (!db->bb_free_root.rb_node) {
+ 		/* No more items in the per group rb tree
+ 		 * balance refcounts from ext4_mb_free_metadata()
+@@ -5421,8 +5413,7 @@ do_more:
+ 					 " group:%d block:%d count:%lu failed"
+ 					 " with %d", block_group, bit, count,
+ 					 err);
+-		} else
+-			EXT4_MB_GRP_CLEAR_TRIMMED(e4b.bd_info);
++		}
+ 
+ 		ext4_lock_group(sb, block_group);
+ 		mb_clear_bits(bitmap_bh->b_data, bit, count_clusters);
+@@ -5432,6 +5423,24 @@ do_more:
+ 	ret = ext4_free_group_clusters(sb, gdp) + count_clusters;
+ 	ext4_free_group_clusters_set(sb, gdp, ret);
+ 	ext4_block_bitmap_csum_set(sb, block_group, gdp, bitmap_bh);
++	/*
++	 * Clear the trimmed flag for the group so that the next
++	 * ext4_trim_fs can trim it.
++	 * If the volume is mounted with -o discard, online discard
++	 * is supported and the free blocks will be trimmed online.
++	 */
++	if (!test_opt(sb, DISCARD)) {
++		struct ext4_super_block *es = sbi->s_es;
++		unsigned long minblks;
++
++		minblks = atomic_read(&EXT4_SB(sb)->s_last_trim_minblks);
++		e4b.bd_info->bb_freed_since_trim += count;
++
++		if (e4b.bd_info->bb_freed_since_trim >=
++		    (minblks ? minblks : EXT4_DEF_TRIM_MIN_BLOCKS) ||
++		    !(es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)))
++			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
++	}
+ 	ext4_group_desc_csum_set(sb, block_group, gdp);
+ 	ext4_unlock_group(sb, block_group);
+ 
+@@ -5671,9 +5680,18 @@ ext4_trim_all_free(struct super_block *s
+ 	void *bitmap;
+ 	ext4_grpblk_t next, count = 0, free_count = 0;
+ 	struct ext4_buddy e4b;
++	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
++	struct ext4_group_desc *gdp;
++	struct buffer_head *gd_bh;
++	ext4_grpblk_t freed_last_trimmed_orig;
+ 	int ret = 0;
+ 
+ 	trace_ext4_trim_all_free(sb, group, start, max);
++	gdp = ext4_get_group_desc(sb, group, &gd_bh);
++	if (!gdp) {
++		ret = -EIO;
++		return ret;
++	}
+ 
+ 	ret = ext4_mb_load_buddy(sb, group, &e4b);
+ 	if (ret)
+@@ -5682,10 +5700,12 @@ ext4_trim_all_free(struct super_block *s
+ 	bitmap = e4b.bd_bitmap;
+ 
+ 	ext4_lock_group(sb, group);
+-	if (EXT4_MB_GRP_WAS_TRIMMED(e4b.bd_info) &&
++	if (es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM) &&
++	    gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED) &&
+ 	    minblocks >= atomic_read(&EXT4_SB(sb)->s_last_trim_minblks))
+ 		goto out;
+ 
++	freed_last_trimmed_orig = e4b.bd_info->bb_freed_since_trim;
+ 	start = (e4b.bd_info->bb_first_free > start) ?
+ 		e4b.bd_info->bb_first_free : start;
+ 
+@@ -5721,14 +5741,46 @@ ext4_trim_all_free(struct super_block *s
+ 			break;
+ 	}
+ 
+-	if (!ret) {
++	if (!ret)
+ 		ret = count;
+-		EXT4_MB_GRP_SET_TRIMMED(e4b.bd_info);
+-	}
+ out:
+ 	ext4_unlock_group(sb, group);
+ 	ext4_mb_unload_buddy(&e4b);
++	if (ret > 0 && es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) {
++		int err;
++		handle_t *handle;
++
++		handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
++		if (IS_ERR(handle)) {
++			ret = PTR_ERR(handle);
++			goto out_return;
++		}
++		err = ext4_journal_get_write_access(handle, gd_bh);
++		if (err) {
++			ret = err;
++			goto out_journal;
++		}
++		ext4_lock_group(sb, group);
++		/* someone freed blocks while we were working on the group */
++		if (freed_last_trimmed_orig !=
++			e4b.bd_info->bb_freed_since_trim) {
++			ext4_unlock_group(sb, group);
++			goto out_journal;
++		}
++		gdp->bg_flags |= cpu_to_le16(EXT4_BG_TRIMMED);
++		e4b.bd_info->bb_freed_since_trim = 0;
++		ext4_group_desc_csum_set(sb, group, gdp);
++		ext4_unlock_group(sb, group);
++		err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
++		if (err)
++			ret = err;
++out_journal:
++		err = ext4_journal_stop(handle);
++		if (err)
++			ret = err;
++	}
+ 
++out_return:
+ 	ext4_debug("trimmed %d blocks in the group %d\n",
+ 		count, group);
+ 
