@@ -195,6 +195,9 @@ test_0d() {
 run_test 0d "Verify comp end and stripe size"
 
 test_0e() {
+	(( $MDS1_VERSION >= $(version_code 2.15.56.112) )) ||
+		skip "Need MDS version at least 2.15.56.112"
+
 	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local td=$DIR/$tdir
