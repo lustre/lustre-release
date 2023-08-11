@@ -1071,7 +1071,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
 	strlcpy(hs->hs_name, name, len);
 	hs->hs_flags = flags;
 
-	atomic_set(&hs->hs_refcount, 1);
+	kref_init(&hs->hs_refcount);
 	atomic_set(&hs->hs_count, 0);
 
 	cfs_hash_lock_setup(hs);
@@ -1105,11 +1105,12 @@ EXPORT_SYMBOL(cfs_hash_create);
  * Cleanup libcfs hash @hs.
  */
 static void
-cfs_hash_destroy(struct cfs_hash *hs)
+cfs_hash_destroy(struct kref *kref)
 {
+	struct cfs_hash *hs = container_of(kref, struct cfs_hash, hs_refcount);
 	struct hlist_node     *hnode;
 	struct hlist_node     *pos;
-	struct cfs_hash_bd         bd;
+	struct cfs_hash_bd    bd;
 	int                   i;
 	ENTRY;
 
@@ -1168,7 +1169,7 @@ cfs_hash_destroy(struct cfs_hash *hs)
 
 struct cfs_hash *cfs_hash_getref(struct cfs_hash *hs)
 {
-	if (atomic_inc_not_zero(&hs->hs_refcount))
+	if (kref_get_unless_zero(&hs->hs_refcount))
 		return hs;
 	return NULL;
 }
@@ -1176,8 +1177,7 @@ EXPORT_SYMBOL(cfs_hash_getref);
 
 void cfs_hash_putref(struct cfs_hash *hs)
 {
-	if (atomic_dec_and_test(&hs->hs_refcount))
-		cfs_hash_destroy(hs);
+	kref_put(&hs->hs_refcount, cfs_hash_destroy);
 }
 EXPORT_SYMBOL(cfs_hash_putref);
 

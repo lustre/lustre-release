@@ -233,7 +233,7 @@ struct cfs_hash {
 	/** rehash workitem */
 	struct work_struct		hs_rehash_work;
 	/** refcount on this hash table */
-	atomic_t			hs_refcount;
+	struct kref			hs_refcount;
 	/** rehash buckets-table */
 	struct cfs_hash_bucket		**hs_rehash_buckets;
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1
