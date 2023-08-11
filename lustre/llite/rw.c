@@ -812,23 +812,25 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	}
 	spin_unlock(&ras->ras_lock);
 
-	if (end_idx == 0) {
-		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
-		RETURN(0);
-	}
 	pages = ria_page_count(ria);
-	if (pages == 0) {
-		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
-		RETURN(0);
-	}
 
 	RAS_CDEBUG(ras);
-	CDEBUG(D_READA, DFID": ria: %lu/%lu, bead: %lu/%lu, hit: %d\n",
+	CDEBUG(D_READA,
+	       DFID": ria: %lu/%lu, bead: %lu/%lu, pages %lu, hit: %d\n",
 	       PFID(lu_object_fid(&clob->co_lu)),
 	       ria->ria_start_idx, ria->ria_end_idx,
 	       vio->vui_ra_valid ? vio->vui_ra_start_idx : 0,
 	       vio->vui_ra_valid ? vio->vui_ra_pages : 0,
-	       hit);
+	       pages, hit);
+
+	if (end_idx == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
+		RETURN(0);
+	}
+	if (pages == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
+		RETURN(0);
+	}
 
 	/* at least to extend the readahead window to cover current read */
 	if (!hit && vio->vui_ra_valid &&
@@ -1845,6 +1847,8 @@ static bool ll_use_fast_io(struct file *file,
 		max(RA_REMAIN_WINDOW_MIN, ras->ras_rpc_pages);
 	loff_t skip_pages;
 	loff_t stride_bytes = ras->ras_stride_bytes;
+
+	RAS_CDEBUG(ras);
 
 	if (stride_io_mode(ras) && stride_bytes) {
 		skip_pages = (ras->ras_stride_length +
