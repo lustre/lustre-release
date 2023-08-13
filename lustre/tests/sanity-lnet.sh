@@ -1065,6 +1065,14 @@ add_net() {
 		error "Failed to add net ${net} on if ${if}"
 }
 
+del_net() {
+	local net="$1"
+	local if="$2"
+
+	do_lnetctl net del --net ${net} --if ${if} ||
+		error "Failed to del net ${net} on if ${if}"
+}
+
 compare_route_add() {
 	local rnet="$1"
 	local gw="$2"
@@ -1313,6 +1321,62 @@ test_106() {
 	return 0
 }
 run_test 106 "Deleting GW peer should fail"
+
+test_107() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	reinit_dlc || return $?
+
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp" "$FAKE_IF" || return $?
+
+	del_net "tcp" "$FAKE_IF" || return $?
+
+	cleanup_fakeif
+	cleanup_lnet
+	setup_netns
+}
+run_test 107 "Deleting extra interface doesn't crash node"
+
+test_108() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	reinit_dlc || return $?
+
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	$LNETCTL net show > $TMP/sanity-lnet-$testnum-expected.yaml
+	add_net "tcp" "$FAKE_IF" || return $?
+
+	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+        - nid: ${FAKE_IP}@tcp
+          status: up
+          interfaces:
+              0: ${FAKE_IF}
+EOF
+	$LNETCTL net show > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files || error "not all interfaces were setup"
+
+	cleanup_fakeif
+	cleanup_lnet
+	setup_netns
+
+	return 0
+}
+run_test 108 "Check Multi-Rail setup"
 
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||

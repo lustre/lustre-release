@@ -327,8 +327,11 @@ lnet_net_free(struct lnet_net *net)
 		lnet_ni_free(ni);
 	}
 
-	if (net->net_cpts != NULL)
+	if (net->net_cpts != NULL) {
 		CFS_FREE_PTR_ARRAY(net->net_cpts, net->net_ncpts);
+		net->net_ncpts = LNET_CPT_NUMBER;
+		net->net_cpts = NULL;
+	}
 
 	LIBCFS_FREE(net, sizeof(*net));
 }
