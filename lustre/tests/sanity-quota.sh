@@ -495,8 +495,7 @@ check_system_is_clean() {
 
 # enable quota debug
 quota_init() {
-	do_nodes $(comma_list $(nodes_list)) \
-		"$LCTL set_param -n debug=+quota+trace"
+	do_nodes $(nodes_list) "$LCTL set_param -n debug=+quota+trace"
 }
 quota_init
 reset_quota_settings
@@ -8483,8 +8482,7 @@ run_test 300 "inode quota with MDT directory migration at 80% limit"
 
 quota_fini()
 {
-	do_nodes $(comma_list $(nodes_list)) \
-		"lctl set_param -n debug=-quota-trace"
+	do_nodes $(nodes_list) "$LCTL set_param -n debug=-quota-trace"
 	if $PQ_CLEANUP; then
 		disable_project_quota
 	fi

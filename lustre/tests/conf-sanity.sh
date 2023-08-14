@@ -6729,7 +6729,7 @@ test_73e() {
 	start_mgsmds
 	start_ost
 
-	for rnode in $(remote_nodes_list); do
+	for rnode in $(remote_nodes_list | tr ',' ' '); do
 		rinf=$(do_rpc_nodes --quiet $rnode lnet_if_list)
 		echo "Node: $rnode, rinf=$rinf"
 		[[ -z $rinf ]] &&

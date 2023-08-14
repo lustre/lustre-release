@@ -328,13 +328,11 @@ full_scrub_threshold_rate() {
 }
 
 scrub_enable_index_backup() {
-	do_nodes $(comma_list $(all_server_nodes)) \
-		$LCTL set_param -n osd-*.*.index_backup=1
+	do_nodes $(all_server_nodes) $LCTL set_param -n osd-*.*.index_backup=1
 }
 
 scrub_disable_index_backup() {
-	do_nodes $(comma_list $(all_server_nodes)) \
-		$LCTL set_param -n osd-*.*.index_backup=0
+	do_nodes $(all_server_nodes) $LCTL set_param -n osd-*.*.index_backup=0
 }
 
 test_0() {

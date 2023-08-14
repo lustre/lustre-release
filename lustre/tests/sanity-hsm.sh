@@ -2112,7 +2112,7 @@ test_24d() {
 	stack_trap "mount -o remount,rw \"$MOUNT2\"" EXIT
 	mount -o remount,ro $MOUNT2
 
-	do_nodes $(comma_list $(nodes_list)) $LCTL clear
+	do_nodes $(nodes_list) $LCTL clear
 
 	fid2=$(path2fid $file2)
 	[ "$fid1" == "$fid2" ] ||
@@ -4169,7 +4169,7 @@ test_113() {
 
 	copytool setup -m  "$MOUNT3"
 
-	do_nodes $(comma_list $(nodes_list)) $LCTL clear
+	do_nodes $(nodes_list) $LCTL clear
 
 	$LFS hsm_archive $file1 || error "Fail to archive $file1"
 	wait_request_state $fid ARCHIVE SUCCEED

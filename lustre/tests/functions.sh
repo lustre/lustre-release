@@ -221,7 +221,8 @@ lst_end_session () {
 }
 
 lst_session_cleanup_all () {
-	local list=$(comma_list $(nodes_list))
+	local list=$(nodes_list)
+
 	do_rpc_nodes $list lst_end_session
 }
 
@@ -231,7 +232,7 @@ lst_cleanup () {
 }
 
 lst_cleanup_all () {
-	local list=$(comma_list $(nodes_list))
+	local list=$(nodes_list)
 
 	# lst end_session needs to be executed only locally
 	# i.e. on node where lst new_session was called
@@ -244,7 +245,8 @@ lst_setup () {
 }
 
 lst_setup_all () {
-	local list=$(comma_list $(nodes_list))
+	local list=$(nodes_list)
+
 	do_rpc_nodes $list lst_setup
 }
 
@@ -990,7 +992,7 @@ run_parallel_grouplock() {
 		fi
 		let status=$((status + rc))
 		# clear debug to collect one log per one test
-		do_nodes $(comma_list $(nodes_list)) lctl clear
+		do_nodes $(nodes_list) $LCTL clear
 	done
 	[ $status -eq 0 ] || error "parallel_grouplock status: $status"
 	rm -rf $testdir

@@ -1322,7 +1322,7 @@ load_modules () {
 	# load modules on remote nodes optionally
 	# lustre-tests have to be installed on these nodes
 	if $LOAD_MODULES_REMOTE; then
-		local list=$(comma_list $(remote_nodes_list))
+		local list=$(remote_nodes_list)
 
 		# include failover nodes in case they are not in the list yet
 		facets=$(get_facets)
@@ -1392,7 +1392,7 @@ unload_modules() {
 	unload_modules_local || rc=$?
 
 	if $LOAD_MODULES_REMOTE; then
-		local list=$(comma_list $(remote_nodes_list))
+		local list=$(remote_nodes_list)
 
 		if (( MDS1_VERSION >= $(version_code 2.15.51) )); then
 			# unload_module_local is only available after 2.15.51
@@ -6573,7 +6573,7 @@ init_param_vars () {
 
 	# tune down to speed up testing on (usually) small setups
 	local mgc_timeout=/sys/module/mgc/parameters/mgc_requeue_timeout_min
-	do_nodes $(comma_list $(nodes_list)) \
+	do_nodes $(nodes_list) \
 		"[ -f $mgc_timeout ] && echo 1 > $mgc_timeout; exit 0"
 
 	osc_ensure_active $SINGLEMDS $TIMEOUT
@@ -6861,7 +6861,7 @@ do_check_and_setup_lustre() {
 		init_facets_vars
 		init_param_vars
 
-		set_default_debug_nodes $(comma_list $(nodes_list))
+		set_default_debug_nodes $(nodes_list)
 		set_params_clients
 	fi
 
@@ -7029,16 +7029,16 @@ run_resize2fs() {
 # verify a directory is shared among nodes.
 check_shared_dir() {
 	local dir=$1
-	local list=${2:-$(comma_list $(nodes_list))}
+	local nodes=${2:-$(nodes_list)}
 
 	[ -z "$dir" ] && return 1
-	do_rpc_nodes "$list" check_logdir $dir
-	check_write_access $dir "$list" || return 1
+	do_rpc_nodes "$nodes" check_logdir $dir
+	check_write_access $dir "$nodes" || return 1
 	return 0
 }
 
 run_lfsck() {
-	do_nodes $(tgts_nodes) $LCTL set_param printk=+lfsck
+	do_nodes $(tgts_nodes) "$LCTL set_param printk=+lfsck"
 	do_facet $SINGLEMDS "$LCTL lfsck_start -M $FSNAME-MDT0000 -r -A -t all"
 
 	for k in $(seq $MDSCOUNT); do
@@ -7302,9 +7302,8 @@ absolute_path() {
 	(cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
-get_facets () {
+get_facets() {
 	local types=${*:-"OST MDS MGS"}
-
 	local list=""
 
 	for entry in $types; do
@@ -7321,7 +7320,7 @@ get_facets () {
 				exit 1;;
 		esac
 	done
-	echo $(comma_list $list)
+	comma_list $list
 }
 
 ##################################
@@ -7632,7 +7631,8 @@ debug_size_save() {
 
 debug_size_restore() {
 	[ -n "$DEBUG_SIZE_SAVED" ] &&
-		do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE_SAVED"
+		do_nodes $(nodes_list) \
+			"$LCTL set_param debug_mb=$DEBUG_SIZE_SAVED"
 	DEBUG_SIZE_SAVED=""
 }
 
@@ -7642,9 +7642,9 @@ start_full_debug_logging() {
 
 	local fulldebug=-1
 	local debug_size=150
-	local nodes=$(comma_list $(nodes_list))
 
-	do_nodes $nodes "$LCTL set_param debug=$fulldebug debug_mb=$debug_size"
+	do_nodes $(nodes_list) \
+		"$LCTL set_param debug=$fulldebug debug_mb=$debug_size"
 }
 
 stop_full_debug_logging() {
@@ -7682,7 +7682,7 @@ report_error() {
 	mkdir -p $LOGDIR
 	# We need to dump the logs on all nodes
 	if $dump; then
-		gather_logs $(comma_list $(nodes_list))
+		gather_logs $(nodes_list)
 	fi
 
 	debugrestore
@@ -7877,7 +7877,7 @@ build_test_filter() {
 		fi
 	done
 
-	local nodes=$(comma_list $(facets_nodes mds1,ost1))
+	local nodes=$(facets_nodes mds1,ost1)
 	local exceptions="$LUSTRE/tests/except/$TESTSUITE.*ex"
 	local tgt_except=""
 
@@ -8068,7 +8068,7 @@ log() {
 	MSG=${MSG//\</\\\<}
 	MSG=${MSG//\//\\\/}
 	# --quiet, since with VERBOSE do_nodes() would first mark this command
-	do_nodes --quiet $(comma_list $(nodes_list)) $LCTL mark "$MSG" \
+	do_nodes --quiet $(nodes_list) $LCTL mark "$MSG" \
 		2> /dev/null || true
 }
 
@@ -8110,10 +8110,8 @@ check_mds() {
 }
 
 reset_fail_loc () {
-	#echo -n "Resetting fail_loc on all nodes..."
-	do_nodes --quiet $(comma_list $(nodes_list)) \
-		"lctl set_param -n fail_loc=0 fail_val=0 2>/dev/null" || true
-	#echo done.
+	do_nodes --quiet $(nodes_list) \
+		"$LCTL set_param -n fail_loc=0 fail_val=0 2>/dev/null" || true
 }
 
 
@@ -8158,8 +8156,7 @@ dmesg_errors_cmd() {
 check_dmesg_for_errors() {
 	local res
 
-	res=$(do_nodes -q $(comma_list $(nodes_list)) \
-	      "$(dmesg_errors_cmd); true")
+	res=$(do_nodes -q $(nodes_list) "$(dmesg_errors_cmd); true")
 	[[ -n "$res" ]] || return 0
 	echo "Kernel error detected: $res"
 	return 1
@@ -8283,7 +8280,7 @@ run_one_logged() {
 
 		pass "$testnum" "(${duration_sub}s)"
 		if [ -n "${DUMP_OK}" ]; then
-			gather_logs $(comma_list $(nodes_list))
+			gather_logs $(nodes_list)
 		fi
 
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
@@ -8589,18 +8586,19 @@ require_dsh_ost()
 	return 0
 }
 
+# return true if MGT is on a remote node and no remote shell is configured
 remote_mgs_nodsh()
 {
 	[ -n "$CLIENTONLY" ] && return 0 || true
-	local MGS
-	MGS=$(facet_host mgs)
-	remote_node $MGS && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
+	local mgs=$(facet_host mgs)
+
+	remote_node $mgs && [[ "$PDSH" == "no_dsh" || -z "$PDSH" ]]
 }
 
 local_mode ()
 {
 	remote_mds_nodsh || remote_ost_nodsh ||
-		$(single_local_node $(comma_list $(nodes_list)))
+		$(single_local_node $(nodes_list))
 }
 
 # Check if power management is available for HARD failover
@@ -8631,78 +8629,79 @@ remote_servers () {
 	remote_ost && remote_mds
 }
 
-# Get the active nodes for facets.
-facets_nodes () {
+# Get the active nodes for facets in a comma-separated list.
+facets_nodes() {
 	local facets=$1
 	local facet
 	local nodes
-	local nodes_sort
-	local i
 
 	for facet in ${facets//,/ }; do
 		nodes="$nodes $(facet_active_host $facet)"
 	done
 
-	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
 # Get name of the active MGS node.
-mgs_node () {
-	echo -n $(facets_nodes $(get_facets MGS))
+mgs_node() {
+	facets_nodes $(get_facets MGS)
 }
 
-# Get all of the active MDS nodes.
+# Get all of the active MDS nodes in a comma-separated list.
 mdts_nodes() {
-	comma_list $(facets_nodes $(get_facets MDS))
+	facets_nodes $(get_facets MDS)
 }
 
 # Get all of the active OSS nodes in a comma-separated list.
 osts_nodes() {
-	comma_list $(facets_nodes $(get_facets OST))
+	facets_nodes $(get_facets OST)
 }
 
 # Get all of the active server nodes in a comma-separated list.
 tgts_nodes() {
-	comma_list $(facets_nodes $(get_facets MDS OST))
+	facets_nodes $(get_facets MDS OST)
 }
 
-# Get all of the client nodes and active server nodes.
-nodes_list () {
+# Get all of the client nodes and active server nodes in a
+# comma-separated list.
+nodes_list() {
 	local nodes=$HOSTNAME
-	local nodes_sort
-	local i
 
 	# CLIENTS (if specified) contains the local client
-	[ -n "$CLIENTS" ] && nodes=${CLIENTS//,/ }
+	[ -n "$CLIENTS" ] && nodes=$CLIENTS
 
 	if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
 		nodes="$nodes $(facets_nodes $(get_facets))"
 	fi
 
-	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
-# Get all of the remote client nodes and remote active server nodes.
-remote_nodes_list () {
-	echo -n $(nodes_list) | sed -re "s/\<$HOSTNAME\>//g"
+# Get all of the remote client nodes and remote active server nodes
+# in a comma-separated list.
+remote_nodes_list() {
+	comma_list $(nodes_list | sed -re "s/\<$HOSTNAME\>//g")
 }
 
 # Get all of the MDS nodes, including active and passive nodes.
-all_mdts_nodes () {
+all_mdts_nodes() {
 	local host
 	local failover_host
 	local nodes
 	local i
 
-	for ((i=1; i <= $MDSCOUNT; i++)); do
+	for ((i = 1; i <= $MDSCOUNT; i++)); do
 		host=mds${i}_HOST
 		failover_host=mds${i}failover_HOST
 		nodes="$nodes ${!host} ${!failover_host}"
 	done
 
-	comma_list $nodes
+	# collapse before testing: the loop leaves whitespace when no
+	# mds${i}_HOST is set, as it is not until facet_host() has run
+	nodes=$(comma_list $nodes)
+	[[ -n "$nodes" ]] || nodes=$(comma_list $mds_HOST $mdsfailover_HOST)
+
+	echo $nodes
 }
 
 # Get all of the OSS nodes, including active and passive nodes.
@@ -8755,13 +8754,7 @@ init_clients_lists () {
 	export CLIENT1=${CLIENT1:-$HOSTNAME}
 	export SINGLECLIENT=$CLIENT1
 
-	clients="$SINGLECLIENT $HOSTNAME $RCLIENTS"
-
-	# Sanity check: exclude the dup entries from CLIENTS
-	# for those configs which has SINGLCLIENT set to local client
-	clients=$(for i in $clients; do echo $i; done | sort -u)
-
-	export CLIENTS=$(comma_list $clients)
+	export CLIENTS=$(comma_list $SINGLECLIENT $HOSTNAME $RCLIENTS)
 	local -a remoteclients=($RCLIENTS)
 	for ((i=0; $i<${#remoteclients[@]}; i++)); do
 		varname=CLIENT$((i + 2))
@@ -9144,7 +9137,7 @@ check_node_health_output() {
 }
 
 check_node_health() {
-	local nodes=${1:-$(comma_list $(nodes_list))}
+	local nodes=${1:-$(nodes_list)}
 	local health=$TMP/node_health.$$
 
 	do_nodes -q $nodes "$LCTL get_param catastrophe 2>&1" > $health
@@ -9155,7 +9148,7 @@ check_node_health() {
 # Reset fail_loc and check every node for an LBUG or dmesg errors after a
 # subtest, with one remote command per node instead of three
 check_nodes_after_test() {
-	local nodes=$(comma_list $(nodes_list))
+	local nodes=$(nodes_list)
 	local out=$TMP/node_check.$$
 	local res
 
@@ -10429,10 +10422,10 @@ wait_flavor()
 	done
 
 	echo "Error checking $flavor of $dir: expect $expect, actual $res"
-	do_nodes $(comma_list $(all_server_nodes)) "keyctl show"
+	do_nodes $(all_server_nodes) "keyctl show"
 	do_dump_flavor $dir
 	if $dump; then
-		gather_logs $(comma_list $(nodes_list))
+		gather_logs $(nodes_list)
 	fi
 	return 1
 }
@@ -10551,7 +10544,7 @@ check_logdir() {
 
 check_write_access() {
 	local dir=$1
-	local list=${2:-$(comma_list $(nodes_list))}
+	local list=${2:-$(nodes_list)}
 	local node
 	local file
 
