@@ -1663,6 +1663,9 @@ test_204() {
 run_test 204 "Check no health or resends for single-rail local failures"
 
 test_205() {
+	(( $MDS1_VERSION >= $(version_code 2.14.58) )) ||
+		skip "need at least 2.14.58"
+
 	setup_health_test true || return $?
 
 	local hstatus
@@ -1706,6 +1709,9 @@ test_206() {
 run_test 206 "Check no health or resends for single-rail remote failures"
 
 test_207() {
+	(( $MDS1_VERSION >= $(version_code 2.14.58) )) ||
+		skip "need at least 2.14.58"
+
 	setup_health_test true || return $?
 
 	local hstatus
@@ -1819,6 +1825,9 @@ test_208() {
 run_test 208 "Test various kernel ip2nets configurations"
 
 test_209() {
+	(( $MDS1_VERSION >= $(version_code 2.14.58) )) ||
+		skip "need at least 2.14.58"
+
 	setup_health_test false || return $?
 
 	echo "Simulate network_timeout w/SR config"
