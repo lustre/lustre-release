@@ -11470,10 +11470,12 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %s.\n",
 			progname, fname, strerror(-rc));
 
-	rc = migrate_set_timestamps(fd, &stbuf);
-	if (rc < 0) {
+	rc2 = migrate_set_timestamps(fd, &stbuf);
+	if (rc2 < 0) {
 		fprintf(stderr, "%s: '%s' cannot set timestamps: %s\n",
-			progname, fname, strerror(-rc));
+			progname, fname, strerror(-rc2));
+		if (!rc)
+			rc = rc2;
 		goto free_layout;
 	}
 

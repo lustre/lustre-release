@@ -4211,6 +4211,105 @@ test_57() {
 }
 run_test 57 "lfs project could tolerate errors"
 
+# LU-16988
+test_mirror()
+{
+	local projid=$1
+	local testfile=$2
+	local mirrorfile=$3
+
+	# create mirror
+	$LFS mirror extend -N2 $mirrorfile || error "failed to create mirror"
+
+	local mirrors=$($LFS getstripe -N $testfile)
+	[[ $mirrors == 3 ]] || error "mirror count $mirrors is wrong"
+
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+
+	local prev_usage=$(getquota -p $projid global curspace)
+
+	$RUNAS $DD of=$testfile count=50 conv=nocreat oflag=direct ||
+			quota_error p $projid "write failed, expect succeed"
+
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+
+	$RUNAS $LFS mirror resync $testfile || error "failed to resync mirror"
+
+	local usage=$(getquota -p $projid global curspace)
+	(( usage >= prev_usage + 150*1024 )) ||
+				error "project quota $usage is wrong"
+
+	$RUNAS $DD of=$testfile count=30 conv=nocreat seek=50 oflag=direct ||
+			quota_error p $projid "write failed, expect succeed"
+
+	$RUNAS $LFS mirror resync $testfile &&
+			error "resync mirror succeed, expect EDQUOT"
+
+	$LFS mirror delete --mirror-id 2 $testfile ||
+			error "failed to delete the second mirror"
+	$LFS mirror delete --mirror-id 3 $testfile ||
+			error "failed to delete the third mirror"
+}
+
+test_58() {
+	(( $MDS1_VERSION >= $(version_code 2.15.56) )) ||
+		skip "need MDS 2.15.56 or later"
+
+	is_project_quota_supported || skip "Project quota is not supported"
+
+	local testdir="$DIR/$tdir"
+	local testfile="$DIR/$tdir/$tfile"
+	local projid=1000
+	local projid2=1001
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	USED=$(getquota -p $projid global curspace)
+	[ $USED -ne 0 ] && error "Used space ($USED) for proj $projid isn't 0"
+
+	USED=$(getquota -p $projid2 global curspace)
+	[ $USED -ne 0 ] && error "Used space ($USED) for proj $projid2 isn't 0"
+
+	chown $TSTUSR.$TSTUSR $testdir || error "chown $testdir failed"
+	quota_init
+	set_ost_qtype ugp || error "enable ost quota failed"
+
+	$LFS project -sp $projid $testdir || error "failed to set project ID"
+	$LFS setquota -p $projid -B 200M $DIR ||
+				error "failed to to set prj $projid quota"
+
+	$RUNAS touch $testfile
+
+	local id=$(lfs project -d $testfile | awk '{print $1}')
+	[ "$id" != "$projid" ] && error "projid $projid is not inherited $id"
+
+	echo "test by mirror created with normal file"
+	test_mirror $projid $testfile $testfile
+
+	$TRUNCATE $testfile 0
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$LFS project -sp $projid2 $testdir ||
+				error "failed to set directory project ID"
+	$LFS project -p $projid2 $testfile ||
+				error "failed to set file project ID"
+	$LFS setquota -p $projid -b 0 -B 0 $DIR ||
+				error "failed to to reset prj quota"
+	$LFS setquota -p $projid2 -B 200M $DIR ||
+				error "failed to to set prj $projid2 quota"
+
+	local fid=$($LFS path2fid $testfile)
+
+	echo "test by mirror created with FID"
+	test_mirror $projid2 $testfile $MOUNT/.lustre/fid/$fid
+}
+run_test 58 "project ID should be kept for new mirrors created by FID"
+
 test_59() {
 	[ "$mds1_FSTYPE" != ldiskfs ] &&
 		skip "ldiskfs only test"

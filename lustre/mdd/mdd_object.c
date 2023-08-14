@@ -1618,8 +1618,21 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[1];
 	struct lov_mds_md *lmm;
 	struct thandle *handle;
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
+	bool is_same_projid;
 	int rc, lock_order;
 	ENTRY;
+
+	rc = mdd_la_get(env, obj, cattr);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_la_get(env, vic, tattr);
+	if (rc)
+		RETURN(rc);
+
+	is_same_projid = cattr->la_projid == tattr->la_projid;
 
 	lock_order = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
 	if (lock_order == 0) /* same fid */
@@ -1628,6 +1641,12 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
+
+	if (!is_same_projid) {
+		rc = mdd_declare_attr_set(env, mdd, vic, cattr, handle);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
 	/* get EA of victim file */
 	memset(buf_vic, 0, sizeof(*buf_vic));
@@ -1669,6 +1688,13 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	} else {
 		mdd_write_lock(env, vic, DT_TGT_CHILD);
 		mdd_write_lock(env, obj, DT_TGT_CHILD);
+	}
+
+	if (!is_same_projid) {
+		cattr->la_valid = LA_PROJID;
+		rc = mdd_attr_set_internal(env, vic, cattr, handle, 0);
+		if (rc)
+			GOTO(out, rc);
 	}
 
 	rc = mdo_xattr_set(env, obj, buf_vic, XATTR_NAME_LOV, LU_XATTR_MERGE,
