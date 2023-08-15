@@ -281,7 +281,7 @@ static inline struct gss_sec_keyring *sec2gsec_keyring(struct ptlrpc_sec *sec)
 # define cache_read_unlock(cdetail) read_unlock(&((cdetail)->hash_lock))
 #endif
 
-#define GSS_CTX_INIT_MAX_LEN            (1024)
+#define GSS_CTX_INIT_MAX_LEN            (4096)
 
 /*
  * This only guaranteed be enough for current krb5 des-cbc-crc . We might

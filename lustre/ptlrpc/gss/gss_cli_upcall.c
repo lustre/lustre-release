@@ -65,12 +65,13 @@ int ctx_init_pack_request(struct obd_import *imp,
 			  long token_size,
 			  char __user *token)
 {
-	struct lustre_msg       *msg = req->rq_reqbuf;
-	struct gss_sec          *gsec;
-	struct gss_header       *ghdr;
+	struct lustre_msg *msg = req->rq_reqbuf;
+	struct gss_sec *gsec;
+	struct gss_header *ghdr;
 	struct ptlrpc_user_desc *pud;
-	__u32                   *p, size, offset = 2;
-	rawobj_t                 obj;
+	__u32 total_size;
+	__u32 *p, size, offset = 2;
+	rawobj_t obj;
 
 	LASSERT(msg->lm_bufcount <= 4);
 	LASSERT(req->rq_cli_ctx);
@@ -127,16 +128,23 @@ int ctx_init_pack_request(struct obd_import *imp,
 		LBUG();
 
 	/* 4. now the token */
-	LASSERT(size >= (sizeof(__u32) + token_size));
+	total_size = sizeof(__u32) + token_size;
+	if (size < total_size) {
+		CERROR("%s: security token is too large (%d > %d): rc = %d\n",
+		       imp->imp_obd->obd_name, total_size, size, -E2BIG);
+		return -E2BIG;
+	}
 	*p++ = cpu_to_le32(((__u32) token_size));
 	if (copy_from_user(p, token, token_size)) {
 		CERROR("can't copy token\n");
 		return -EFAULT;
 	}
-	size -= sizeof(__u32) + round_up(token_size, 4);
 
-	req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
+	if (size > sizeof(__u32) + round_up(token_size, 4)) {
+		size -= sizeof(__u32) + round_up(token_size, 4);
+		req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
 					     msg->lm_buflens[offset] - size, 0);
+	}
 	return 0;
 }
 
