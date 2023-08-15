@@ -2639,6 +2639,9 @@ run_test 13 "Cancel per-ID lock in the LRU list"
 
 test_14()
 {
+	(( MDS1_VERSION >= $(version_code 2.14.0.87) )) ||
+		skip "Need MDS version at least 2.14.0.87"
+
 	local qpool="qpool1"
 	local tfile1="$DIR/$tdir/$tfile-0"
 
