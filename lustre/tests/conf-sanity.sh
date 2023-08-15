@@ -10601,6 +10601,45 @@ test_140() {
 }
 run_test 140 "remove_updatelog script actions"
 
+test_150() {
+	setup
+
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+	stack_trap "$LCTL set_param -n llite.*.max_cached_mb=$max_cached_mb"
+
+	$LCTL set_param llite.*.max_cached_mb='100%'
+
+	local new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+				  awk '/^max_cached_mb/ { print $2 }')
+	local total_ram_mb=$(free -m | grep 'Mem:' | awk '{print $2}')
+
+	$LCTL get_param llite.*.max_cached_mb
+	echo "total ram mb: $total_ram_mb"
+	(( new_max_cached_mb == total_ram_mb )) ||
+		error "setting cache to 100% not equal to total RAM"
+
+	$LCTL set_param llite.*.max_cached_mb='50%'
+	new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			    awk '/^max_cached_mb/ { print $2 }')
+
+	$LCTL get_param llite.*.max_cached_mb
+	(( new_max_cached_mb == $((total_ram_mb / 2)) )) ||
+		error "setting cache to 50% not equal to 50% of RAM"
+
+	$LCTL set_param llite.*.max_cached_mb='105%' &&
+		error "should not be able to set insane value"
+
+	$LCTL set_param llite.*.max_cached_mb='0%'
+	new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			    awk '/^max_cached_mb/ { print $2 }')
+	# Minimum cache size is 64 MiB
+	$LCTL get_param llite.*.max_cached_mb
+	(( new_max_cached_mb == 64 )) ||
+		error "setting cache to 0% != minimum cache size"
+}
+run_test 150 "test setting max_cached_mb to a %"
+
 #
 # (This was sanity/802a)
 #

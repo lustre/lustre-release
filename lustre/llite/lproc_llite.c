@@ -496,9 +496,11 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	long diff = 0;
 	long nrpages = 0;
 	__u16 refcheck;
+	u64 value;
 	u64 pages_number;
 	int rc;
 	char kernbuf[128], *ptr;
+	bool percent = false;
 
 	ENTRY;
 	if (count >= sizeof(kernbuf))
@@ -506,14 +508,28 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 	if (copy_from_user(kernbuf, buffer, count))
 		RETURN(-EFAULT);
-	kernbuf[count] = '\0';
+
+	if (count > 0 && kernbuf[count - 1] == '%') {
+		percent = true;
+		/* strip off the % */
+		kernbuf[count - 1] = '\0';
+	} else {
+		kernbuf[count] = '\0';
+	}
 
 	ptr = lprocfs_find_named_value(kernbuf, "max_cached_mb:", &count);
-	rc = sysfs_memparse(ptr, count, &pages_number, "MiB");
+	if (percent)
+		rc = sysfs_memparse(ptr, count, &value, "B");
+	else
+		rc = sysfs_memparse(ptr, count, &value, "MiB");
 	if (rc)
 		RETURN(rc);
 
-	pages_number >>= PAGE_SHIFT;
+	if (percent) {
+		pages_number = cfs_totalram_pages() * value / 100;
+	} else {
+		pages_number = value >> PAGE_SHIFT;
+	}
 
 	if (pages_number < 0 || pages_number > cfs_totalram_pages()) {
 		CERROR("%s: can't set max cache more than %lu MB\n",

@@ -11160,14 +11160,6 @@ function get_named_value()
     grep -w "$tag" | sed "s/^$tag  *\([0-9]*\)  *.*/\1/"
 }
 
-export CACHE_MAX=$($LCTL get_param -n llite.*.max_cached_mb |
-		   awk '/^max_cached_mb/ { print $2 }')
-
-cleanup_101a() {
-	$LCTL set_param -n llite.*.max_cached_mb $CACHE_MAX
-	trap 0
-}
-
 test_101a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
@@ -11177,8 +11169,10 @@ test_101a() {
 	local cache_limit=32
 
 	$LCTL set_param -n osc.*-osc*.rpc_stats=0
-	trap cleanup_101a EXIT
 	$LCTL set_param -n llite.*.read_ahead_stats=0
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+	stack_trap "$LCTL set_param -n llite.*.max_cached_mb=$max_cached_mb"
 	$LCTL set_param -n llite.*.max_cached_mb=$cache_limit
 
 	#
@@ -11192,7 +11186,6 @@ test_101a() {
 		   get_named_value 'read.but.discarded'); do
 			discard=$(($discard + $s))
 	done
-	cleanup_101a
 
 	$LCTL get_param osc.*-osc*.rpc_stats
 	$LCTL get_param llite.*.read_ahead_stats
@@ -24962,12 +24955,12 @@ test_277() {
 	$LCTL set_param ldlm.namespaces.*.lru_size=0
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
 	local cached_mb=$($LCTL get_param llite.*.max_cached_mb |
-			grep ^used_mb | awk '{print $2}')
+			  awk '/^used_mb/ { print $2 }')
 	[ $cached_mb -eq 1 ] || error "expected mb 1 got $cached_mb"
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 \
 		oflag=direct conv=notrunc
 	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
-			grep ^used_mb | awk '{print $2}')
+		    awk '/^used_mb/ { print $2 }')
 	[ $cached_mb -eq 0 ] || error "expected mb 0 got $cached_mb"
 }
 run_test 277 "Direct IO shall drop page cache"
@@ -28863,9 +28856,10 @@ run_test 427 "Failed DNE2 update request shouldn't corrupt updatelog"
 
 test_428() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	local cache_limit=$CACHE_MAX
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+	stack_trap "$LCTL set_param -n llite.*.max_cached_mb=$max_cached_mb"
 
-	stack_trap "$LCTL set_param -n llite.*.max_cached_mb=$cache_limit"
 	$LCTL set_param -n llite.*.max_cached_mb=64
 
 	mkdir $DIR/$tdir
