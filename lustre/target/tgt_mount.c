@@ -45,6 +45,7 @@
 #include <linux/statfs.h>
 #include <linux/version.h>
 #include <linux/delay.h>
+#include <linux/file.h>
 
 #include <llog_swab.h>
 #include <lustre_disk.h>
