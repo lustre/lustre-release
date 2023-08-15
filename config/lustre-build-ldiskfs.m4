@@ -60,13 +60,17 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
 		case ${suse_vers}sp${suse_patchlevel} in # (
 		15sp2 ) LDISKFS_SERIES="5.4.21-ml.series"
-		        grep -A3 ext4_update_dx_flag $LINUX/fs/ext4/ext4.h \
+			grep -A3 ext4_update_dx_flag $LINUX/fs/ext4/ext4.h \
 			  | grep ext4_test_inode_flag
 			if test $? -eq 0; then
 				LDISKFS_SERIES="5.4.0-66-ubuntu20.series"
 			fi
 			;; # (
 		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp3.series"
+			update=$(echo $LINUXRELEASE | cut -d- -f2 | cut -d. -f2)
+			if test $update -ge 59; then
+				LDISKFS_SERIES="5.3.18-sles15sp3-59.series"
+			fi
 			;;
 		15sp4 ) LDISKFS_SERIES="5.14.21-sles15sp4.series"
 			;;
