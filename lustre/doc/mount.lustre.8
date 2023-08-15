@@ -135,11 +135,12 @@ options:
 .TP
 .BI flock
 Enable full distributed
-.BI flock (2)
+.BR flock (2)
 support, coherent across all client nodes also using this mount option.  This
 is useful if applications need coherent userspace file locking across multiple
-client nodes, but also imposes communications overhead in order to maintain
-locking consistency between client nodes.
+client nodes, has no measurable performance impact in modern (2.x) versions of
+Lustre, is therefore the recommended mode, and is enabled by default in Lustre
+2.12.3 and newer.
 .TP
 .BI localflock
 Enable local
@@ -148,21 +149,17 @@ support, using only client-local file locking.  This is faster than mounting
 with the
 .B flock
 option, and can be used for applications that depend on functioning
-.BI flock (2)
+.BR flock (2)
 but run only on a single node.
 .TP
 .BI noflock
 Disables
-.BR flock(2)
-support entirely, and is the default option.  Applications calling
-.BR flock(2)
+.BR flock (2)
+support entirely.  Applications calling
+.BR flock (2)
 will get an
 .B ENOSYS
-error.  It is up to the administrator to choose either the
-.B localflock
-or
-.B flock
-mount option based on their requirements.  It is possible to mount clients
+error.  It is possible to mount clients
 with different options, and only those mounted with
 .B flock
 will be coherent amongst each other.
