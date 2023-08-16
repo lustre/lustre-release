@@ -28,6 +28,7 @@ void __read_overflow2_field(size_t avail, size_t wanted) __compiletime_warning("
 void __write_overflow(void) __compiletime_error("detected write beyond size of object (1st parameter)");
 void __write_overflow_field(size_t avail, size_t wanted) __compiletime_warning("detected write beyond size of field (1st parameter); maybe use struct_group()?");
 
+#ifndef __compiletime_strlen
 #define __compiletime_strlen(p)					\
 ({								\
 	char *__p = (char *)(p);				\
@@ -42,6 +43,7 @@ void __write_overflow_field(size_t avail, size_t wanted) __compiletime_warning("
 	}							\
 	__ret;							\
 })
+#endif
 
 #if defined(CONFIG_KASAN_GENERIC) || defined(CONFIG_KASAN_SW_TAGS)
 extern void *__underlying_memchr(const void *p, int c, __kernel_size_t size) __RENAME(memchr);
