@@ -1401,6 +1401,9 @@ int ll_fill_super(struct super_block *sb)
 	sb->s_bdi->io_pages = 0;
 #endif
 	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
+#ifdef SB_I_CGROUPWB
+	sb->s_iflags |= SB_I_CGROUPWB;
+#endif
 
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.
@@ -1478,6 +1481,23 @@ out_free_cfg:
 	RETURN(err);
 } /* ll_fill_super */
 
+static void ll_bdi_device_unregister(struct backing_dev_info *bdi)
+{
+	if (bdi->dev == NULL)
+		return;
+
+#if defined(SB_I_CGROUPWB) && !defined(SB_I_PERSB_BDI)
+#ifdef HAVE_BDI_DEBUG_STATS
+	debugfs_remove(bdi->debug_stats);
+	debugfs_remove(bdi->debug_dir);
+#else
+	debugfs_remove_recursive(bdi->debug_dir);
+#endif
+	device_unregister(bdi->dev);
+	bdi->dev = NULL;
+#endif
+}
+
 void ll_put_super(struct super_block *sb)
 {
 	struct config_llog_instance cfg, params_cfg;
@@ -1539,6 +1559,8 @@ skip_cleanup:
 
 	if (profilenm)
 		class_del_profile(profilenm);
+
+	ll_bdi_device_unregister(sb->s_bdi);
 
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
 	if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {

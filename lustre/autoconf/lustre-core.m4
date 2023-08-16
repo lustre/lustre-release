@@ -3059,6 +3059,30 @@ AC_DEFUN([LC_HAVE_ITER_FILE_SPLICE_WRITE], [
 ]) # LC_HAVE_ITER_FILE_SPLICE_WRITE
 
 #
+# LC_HAVE_BDI_DEBUG_STATS
+#
+# Linux kernel v5.10 commit 2d146b924ec3c0873f06308d149684dc1105d9a3
+# backing-dev: no need to check return value of debugfs_create functions
+# backing_dev_info.debug_stats was remove.
+#
+AC_DEFUN([LC_SRC_HAVE_BDI_DEBUG_STATS], [
+	LB2_LINUX_TEST_SRC([bdi_has_debug_stats], [
+		#include <linux/backing-dev-defs.h>
+	],[
+		struct backing_dev_info info;
+
+		info.debug_stats = NULL;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_BDI_DEBUG_STATS], [
+	AC_MSG_CHECKING([if 'struct backing_dev_info' has 'debug_stats' field])
+	LB2_LINUX_TEST_RESULT([bdi_has_debug_stats], [
+		AC_DEFINE(HAVE_BDI_DEBUG_STATS, 1,
+			[backing_dev_info has debug_stats])
+	])
+]) # LC_HAVE_BDI_DEBUG_STATS
+
+#
 # LC_FSCRYPT_IS_NOKEY_NAME
 #
 # Kernel 5.10-rc4 159e1de201b6fca10bfec50405a3b53a561096a8
@@ -4160,6 +4184,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ITER_FILE_SPLICE_WRITE
 
 	# 5.10
+	LC_SRC_HAVE_BDI_DEBUG_STATS
 	LC_SRC_FSCRYPT_IS_NOKEY_NAME
 	LC_SRC_FSCRYPT_PREPARE_READDIR
 
@@ -4431,6 +4456,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_FSCRYPT_DUMMY_POLICY
 
 	# 5.10
+	LC_HAVE_BDI_DEBUG_STATS
 	LC_FSCRYPT_IS_NOKEY_NAME
 	LC_FSCRYPT_PREPARE_READDIR
 
