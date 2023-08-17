@@ -867,12 +867,15 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		unsigned int group_blocks = mop->mo_blocksize_kb * 8192;
 		unsigned int desc_per_block = mop->mo_blocksize_kb * 1024 / 32;
 		unsigned int resize_blks;
+		__u64 block_count = mop->mo_device_kb / mop->mo_blocksize_kb;
 
 		resize_blks = (1ULL<<32) - desc_per_block*group_blocks;
-		snprintf(buf, sizeof(buf), "%u", resize_blks);
-		append_unique(start, ext_opts ? "," : " -E ",
-			      "resize", buf, maxbuflen);
-		ext_opts = 1;
+		if (resize_blks > block_count) {
+			snprintf(buf, sizeof(buf), "%u", resize_blks);
+			append_unique(start, ext_opts ? "," : " -E ",
+				      "resize", buf, maxbuflen);
+			ext_opts = 1;
+		}
 	}
 
 	/* Avoid zeroing out the full journal - speeds up mkfs */
