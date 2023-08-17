@@ -1226,7 +1226,7 @@ static inline __u64 mdd_lmm_dom_size(void *buf)
 	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
 
 	/* DoM entry is the first entry always */
-	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) == LOV_PATTERN_MDT)
+	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) & LOV_PATTERN_MDT)
 		return le64_to_cpu(comp_v1->lcm_entries[0].lcme_extent.e_end);
 
 	return 0;

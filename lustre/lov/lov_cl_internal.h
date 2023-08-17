@@ -145,10 +145,10 @@ static inline char *llt2str(enum lov_layout_type llt)
 static inline __u32 lov_entry_type(struct lov_stripe_md_entry *lsme)
 {
 	if ((lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_RAID0) ||
-	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT) ||
+	    (lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_MDT) ||
 	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_FOREIGN))
 		return lov_pattern(lsme->lsme_pattern &
-				   ~LOV_PATTERN_OVERSTRIPING);
+			   ~(LOV_PATTERN_OVERSTRIPING | LOV_PATTERN_COMPRESS));
 	return 0;
 }
 

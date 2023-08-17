@@ -381,7 +381,7 @@ static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 	}
 
 	count = param->lsp_stripe_count;
-	if (param->lsp_stripe_pattern == LOV_PATTERN_MDT) {
+	if (param->lsp_stripe_pattern & LOV_PATTERN_MDT) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "Invalid pattern: '-L mdt', must be specified "
@@ -2702,7 +2702,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     space, prefix);
 		if (is_dir) {
 			if (!is_raw && lum->lmm_stripe_count == 0 &&
-			    lov_pattern(lum->lmm_pattern) != LOV_PATTERN_MDT) {
+			    !(lov_pattern(lum->lmm_pattern) & LOV_PATTERN_MDT)){
 				unsigned int scount;
 
 				rc = sattr_cache_get_defaults(NULL, path,
@@ -2797,7 +2797,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			else
 				llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
 					     lum->lmm_stripe_offset);
-		else if (lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)
+		else if (lov_pattern(lum->lmm_pattern) & LOV_PATTERN_MDT)
 			llapi_printf(LLAPI_MSG_NORMAL, "0");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
@@ -2856,7 +2856,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 
 	if (!skip_objs && (verbose & VERBOSE_OBJID) &&
 	    ((!is_dir && !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED ||
-			   lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)) ||
+			   lov_pattern(lum->lmm_pattern) & LOV_PATTERN_MDT)) ||
 	     (is_dir && (lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC)))) {
 		char *space = "      - ";
 

@@ -2587,7 +2587,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
 		struct lov_comp_md_v1 *comp_v1 = NULL;
 		struct lov_comp_md_entry_v1 *ent;
-		struct lov_user_md_v1 *v1;
+		struct lov_user_md_v1 *v1 = NULL;
 		__u32 off;
 		int i = 0;
 
@@ -2602,6 +2602,11 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 			       i, v1->lmm_stripe_count, v1->lmm_stripe_size);
 		}
 
+		if (v1 == NULL)
+			GOTO(out, rc = -EINVAL);
+
+		lmm->lmm_stripe_count = v1->lmm_stripe_count;
+		lmm->lmm_stripe_size = v1->lmm_stripe_size;
 		/**
 		 * Return valid stripe_count and stripe_size instead of 0 for
 		 * DoM files to avoid divide-by-zero for older userspace that
@@ -2615,7 +2620,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 			 * second one is always that applications which are
 			 * doing large IOs.
 			 */
-			if (lmm->lmm_pattern == LOV_PATTERN_MDT)
+			if (lmm->lmm_pattern & LOV_PATTERN_MDT)
 				i = comp_v1->lcm_entry_count > 1 ? 1 : 0;
 			else
 				i = comp_v1->lcm_entry_count > 1 ?

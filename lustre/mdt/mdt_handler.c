@@ -620,7 +620,7 @@ __u32 mdt_lmm_dom_entry_check(struct lov_mds_md *lmm, int *is_dom_only)
 
 	/* Fast check for DoM entry with no mirroring, should be the first */
 	if (le16_to_cpu(comp_v1->lcm_mirror_count) == 0 &&
-	    lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT)
+	    !(lov_pattern(le32_to_cpu(v1->lmm_pattern)) & LOV_PATTERN_MDT))
 		RETURN(0);
 
 	/* check all entries otherwise */
@@ -634,7 +634,7 @@ __u32 mdt_lmm_dom_entry_check(struct lov_mds_md *lmm, int *is_dom_only)
 		off = le32_to_cpu(lcme->lcme_offset);
 		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
 
-		if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) ==
+		if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) &
 		    LOV_PATTERN_MDT)
 			dom_stripesize = le32_to_cpu(v1->lmm_stripe_size);
 		else

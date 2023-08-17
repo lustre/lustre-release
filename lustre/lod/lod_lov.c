@@ -1656,7 +1656,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 
 	stripe_offset = le16_to_cpu(lum->lmm_stripe_offset);
 	if (!is_from_disk && stripe_offset != LOV_OFFSET_DEFAULT &&
-	    lov_pattern(le32_to_cpu(lum->lmm_pattern)) != LOV_PATTERN_MDT) {
+	    !(lov_pattern(le32_to_cpu(lum->lmm_pattern)) & LOV_PATTERN_MDT)) {
 		/* if offset is not within valid range [0, osts_size) */
 		if (stripe_offset >= d->lod_ost_descs.ltd_tgts_size) {
 			CDEBUG(D_LAYOUT, "stripe offset %u >= bitmap size %u\n",
@@ -2012,7 +2012,7 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 	case LOV_USER_MAGIC_V1:
 	case LOV_USER_MAGIC_V3:
 	case LOV_USER_MAGIC_SPECIFIC:
-		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
+		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) &
 		    LOV_PATTERN_MDT) {
 			/* DoM must use composite layout */
 			CDEBUG(D_LAYOUT, "DoM without composite layout\n");
@@ -2111,7 +2111,7 @@ recheck:
 
 		/* Check DoM entry is always the first one */
 		lum = tmp.lb_buf;
-		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
+		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) &
 		    LOV_PATTERN_MDT) {
 			/* DoM component must be the first in a mirror */
 			if (le64_to_cpu(ext->e_start) > 0) {

@@ -457,7 +457,7 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 
 	if (magic != LOV_MAGIC_FOREIGN &&
 	    le16_to_cpu(lmm->lmm_stripe_count) == 0 &&
-	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT)
+	    !(lov_pattern(le32_to_cpu(lmm->lmm_pattern)) & LOV_PATTERN_MDT))
 		RETURN(ERR_PTR(-EINVAL));
 
 	if (magic == LOV_MAGIC_V1) {

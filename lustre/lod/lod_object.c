@@ -1159,7 +1159,7 @@ static inline void lod_adjust_stripe_info(struct lod_layout_component *comp,
 					  struct lov_desc *desc,
 					  int append_stripes)
 {
-	if (comp->llc_pattern != LOV_PATTERN_MDT) {
+	if (!(comp->llc_pattern & LOV_PATTERN_MDT)) {
 		if (append_stripes) {
 			comp->llc_stripe_count = append_stripes;
 		} else if (!comp->llc_stripe_count) {
@@ -3411,7 +3411,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	/* check if first entry in new layout is DOM */
 	lmm = (struct lov_mds_md_v1 *)((char *)merge_lcm +
 					merge_lcm->lcm_entries[0].lcme_offset);
-	merge_has_dom = lov_pattern(le32_to_cpu(lmm->lmm_pattern)) ==
+	merge_has_dom = lov_pattern(le32_to_cpu(lmm->lmm_pattern)) &
 			LOV_PATTERN_MDT;
 
 	for (i = 0; i < merge_entry_count; i++) {
@@ -4013,7 +4013,7 @@ static void embed_pool_to_comp_v1(const struct lov_comp_md_v1 *src,
 		lum = (struct lov_user_md_v1 *)((char *)src + offset);
 		lum3 = (struct lov_user_md_v3 *)((char *)tgt + offset + shift);
 		*(struct lov_user_md_v1 *)lum3 = *lum;
-		if (lum->lmm_pattern == cpu_to_le32(LOV_PATTERN_MDT)) {
+		if (lum->lmm_pattern & cpu_to_le32(LOV_PATTERN_MDT)) {
 			lum3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V1);
 		} else {
 			lum3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
@@ -4122,7 +4122,7 @@ static int lod_xattr_set_default_lov_on_dir(const struct lu_env *env,
 			if (le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V1)
 				/* the i-th component includes pool info */
 				break;
-			if (lum->lmm_pattern == cpu_to_le32(LOV_PATTERN_MDT))
+			if (lum->lmm_pattern & cpu_to_le32(LOV_PATTERN_MDT))
 				size += sizeof(struct lov_user_md_v1);
 			else
 				size += sizeof(struct lov_user_md_v3);
@@ -6366,7 +6366,7 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 		if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
 			lod_comp_set_init(lod_comp);
 
-		if (lov_pattern(lod_comp->llc_pattern) == LOV_PATTERN_MDT)
+		if (lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_MDT)
 			lod_comp_set_init(lod_comp);
 
 		if (lod_comp->llc_stripe == NULL)
@@ -6417,7 +6417,7 @@ static inline bool lod_obj_is_dom(struct dt_object *dt)
 	if (!lo->ldo_comp_cnt)
 		return false;
 
-	return (lov_pattern(lo->ldo_comp_entries[0].llc_pattern) ==
+	return (lov_pattern(lo->ldo_comp_entries[0].llc_pattern) &
 		LOV_PATTERN_MDT);
 }
 
@@ -7438,7 +7438,7 @@ out:
 /* If striping is already instantiated or INIT'ed DOM? */
 static bool lod_is_instantiation_needed(struct lod_layout_component *comp)
 {
-	return !(((lov_pattern(comp->llc_pattern) == LOV_PATTERN_MDT) &&
+	return !(((lov_pattern(comp->llc_pattern) & LOV_PATTERN_MDT) &&
 		  lod_comp_inited(comp)) || comp->llc_stripe);
 }
 

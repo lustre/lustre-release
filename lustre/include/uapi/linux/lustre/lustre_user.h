@@ -731,10 +731,11 @@ struct fsxattr {
 
 static inline bool lov_pattern_supported(__u32 pattern)
 {
-	return (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_RAID0 ||
-	       (pattern & ~LOV_PATTERN_F_RELEASED) ==
-			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
-	       (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_MDT;
+	__u32 pattern_base = pattern & ~LOV_PATTERN_F_RELEASED;
+
+	return pattern_base == LOV_PATTERN_RAID0 ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
+	       pattern_base == LOV_PATTERN_MDT;
 }
 
 /* RELEASED and MDT patterns are not valid in many places, so rather than

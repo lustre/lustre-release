@@ -56,7 +56,7 @@ struct lov_stripe_md_entry {
 
 static inline bool lsme_is_dom(struct lov_stripe_md_entry *lsme)
 {
-	return (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT);
+	return (lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_MDT);
 }
 
 static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,

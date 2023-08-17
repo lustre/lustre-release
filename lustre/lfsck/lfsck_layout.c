@@ -357,10 +357,10 @@ static int lfsck_layout_verify_header_v1v3(struct dt_object *obj,
 	}
 
 	pattern = le32_to_cpu(lmm->lmm_pattern);
-	*dom = !!(lov_pattern(pattern) == LOV_PATTERN_MDT);
+	*dom = !!(lov_pattern(pattern) & LOV_PATTERN_MDT);
 
 	/* XXX: DoM file verification will be supportted via LU-11081. */
-	if (lov_pattern(pattern) == LOV_PATTERN_MDT) {
+	if (lov_pattern(pattern) & LOV_PATTERN_MDT) {
 #if 0
 		if (start != 0) {
 			CDEBUG(D_LFSCK, "The DoM entry for "DFID" is not "
