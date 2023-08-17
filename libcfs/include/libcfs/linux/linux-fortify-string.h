@@ -1,7 +1,9 @@
 #ifndef _LIBCFS_FORTIFY_STRING_H
 #define _LIBCFS_FORTIFY_STRING_H
 
-#ifdef HAVE_LINUX_FORTIFY_STRING_HEADER
+#if defined(HAVE_LINUX_FORTIFY_STRING_HEADER) && \
+	!defined(__NO_FORTIFY) && defined(__OPTIMIZE__) && \
+	defined(CONFIG_FORTIFY_SOURCE)
 #include <linux/fortify-string.h>
 
 /*
