@@ -19,7 +19,6 @@ LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 READS=${READS:-"reads"}
-MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 MEMHOG=${MEMHOG:-memhog}
@@ -3797,7 +3796,7 @@ link_one() {
 	local tempfile=$(mktemp $1_XXXXXX)
 	mlink $tempfile $1 2> /dev/null &&
 		echo "$BASHPID: link $tempfile to $1 succeeded"
-	munlink $tempfile
+	unlink $tempfile
 }
 
 test_31o() { # LU-2901
@@ -5441,7 +5440,7 @@ test_42b() {
 	sync
 	dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
 	BEFOREWRITES=$(count_ost_writes)
-	$MUNLINK $DIR/f42b || error "$MUNLINK $DIR/f42b: $?"
+	unlink $DIR/f42b || error "unlink $DIR/f42b: $?"
 	AFTERWRITES=$(count_ost_writes)
 	if [[ $BEFOREWRITES -lt $AFTERWRITES ]]; then
 		error "$BEFOREWRITES < $AFTERWRITES on unlink"
@@ -6256,7 +6255,7 @@ test_54a() {
 		error "$SOCKETSERVER $DIR/socket failed: $?"
 	LANG=C $SOCKETCLIENT $DIR/socket ||
 		error "$SOCKETCLIENT $DIR/socket failed: $?"
-	$MUNLINK $DIR/socket || error "$MUNLINK $DIR/socket failed: $?"
+	unlink $DIR/socket || error "unlink $DIR/socket failed: $?"
 }
 run_test 54a "unix domain socket test =========================="
 

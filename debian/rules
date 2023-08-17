@@ -262,7 +262,6 @@ binary-$(UTILS_PKG): build-stamp
 	rm -rf debian/$(UTILS_PKG)/usr/bin/iokit-* \
 	       debian/$(UTILS_PKG)/usr/bin/*-survey \
 	       debian/$(UTILS_PKG)/usr/bin/mcreate \
-	       debian/$(UTILS_PKG)/usr/bin/munlink \
 	       debian/$(UTILS_PKG)/usr/bin/statx \
 	       debian/$(UTILS_PKG)/usr/sbin/wirecheck \
 	       debian/$(UTILS_PKG)/usr/sbin/wiretest

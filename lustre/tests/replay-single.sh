@@ -398,12 +398,12 @@ run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 test_16() {
 	replay_barrier $SINGLEMDS
 	mcreate $DIR/$tfile
-	munlink $DIR/$tfile
+	unlink $DIR/$tfile
 	mcreate $DIR/$tfile-2
 	fail $SINGLEMDS
 	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
 	[ -e $DIR/$tfile-2 ] || error "file $DIR/$tfile-2 does not exist"
-	munlink $DIR/$tfile-2 || error "munlink $DIR/$tfile-2 failed"
+	unlink $DIR/$tfile-2 || error "unlink $DIR/$tfile-2 failed"
 }
 run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
@@ -437,8 +437,8 @@ test_18() {
 	[ -e $DIR/$tfile-2 ] || error "file $DIR/$tfile-2 does not exist"
 	# this touch frequently fails
 	touch $DIR/$tfile-3 || error "touch $DIR/$tfile-3 failed"
-	munlink $DIR/$tfile-2 || error "munlink $DIR/$tfile-2 failed"
-	munlink $DIR/$tfile-3 || error "munlink $DIR/$tfile-3 failed"
+	unlink $DIR/$tfile-2 || error "unlink $DIR/$tfile-2 failed"
+	unlink $DIR/$tfile-3 || error "unlink $DIR/$tfile-3 failed"
 	return 0
 }
 run_test 18 "open(O_CREAT), unlink, touch new, close, touch, unlink"

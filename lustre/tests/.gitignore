@@ -59,7 +59,6 @@
 /mrename
 /multifstat
 /multiop
-/munlink
 /newfile
 /o_directory
 /open_delay

@@ -95,7 +95,7 @@ if BUILD_LUTF
 SUBDIRS += lutf
 endif # BUILD_LUTF
 
-bin_PROGRAMS = mcreate munlink statx
+bin_PROGRAMS = mcreate statx
 testdir = $(libdir)/lustre/tests
 test_SCRIPTS = $(noinst_SCRIPTS)
 test_PROGRAMS = $(THETESTS)

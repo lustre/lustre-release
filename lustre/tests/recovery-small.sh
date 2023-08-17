@@ -89,23 +89,12 @@ test_6() {
 	local LINK1=$DIR/$tfile.link1
 	local LINK2=$DIR/$tfile.link2
 
-	do_facet_create_file client $T 10K ||
-		error_noexit "Create file $T"
-
-	drop_request "mlink $T $LINK1" ||
-		error_noexit "mlink request for $T"
-
-	drop_reint_reply "mlink $T $LINK2" ||
-		error_noexit "mlink reply for $T"
-
-	drop_request "munlink $LINK1" ||
-		error_noexit "munlink request for $T"
-
-	drop_reint_reply "munlink $LINK2" ||
-		error_noexit "munlink reply for $T"
-
-	do_facet client "rm $T" ||
-		error_noexit "Can't remove file $T"
+	do_facet_create_file client $T 10K || error_noexit "Create file $T"
+	drop_request "mlink $T $LINK1" || error_noexit "mlink request for $T"
+	drop_reint_reply "mlink $T $LINK2" || error_noexit "mlink reply for $T"
+	drop_request "unlink $LINK1" || error_noexit "unlink request for $T"
+	drop_reint_reply "unlink $LINK2" || error_noexit "unlink reply for $T"
+	do_facet client "rm $T" || error_noexit "Can't remove file $T"
 }
 run_test 6 "link, unlink: drop req, drop rep"
 
@@ -331,8 +320,8 @@ test_11(){
 	drop_bl_callback_once $MULTIOP $DIR/$tfile Ow ||
 		echo "evicted as expected"
 
-	do_facet client munlink $DIR/$tfile ||
-		{ error "munlink failed: $?"; return 4; }
+	do_facet client unlink $DIR/$tfile ||
+		{ error "unlink failed: $?"; return 4; }
 	# allow recovery to complete
 	client_up || client_up || sleep $TIMEOUT
 }
@@ -350,8 +339,8 @@ test_12(){
 	kill -USR1 $PID
 	echo "waiting for multiop $PID"
 	wait $PID || { error "wait for multiop faile: $?"; return 2; }
-	do_facet client munlink $DIR/$tfile ||
-		{ error "client munlink failed: $?"; return 3; }
+	do_facet client unlink $DIR/$tfile ||
+		{ error "client unlink failed: $?"; return 3; }
 	# allow recovery to complete
 	client_up || client_up || sleep $TIMEOUT
 }
@@ -692,7 +681,7 @@ test_19b() {
 		error "failed to ldlm_cancel: $?"
 
 	umount_client $DIR2 || error "failed to unmount $DIR2: $?"
-	do_facet client munlink $DIR/$tfile ||
+	do_facet client unlink $DIR/$tfile ||
 		error "failed to unlink $DIR/$tfile: $?"
 
 	# let the client reconnect

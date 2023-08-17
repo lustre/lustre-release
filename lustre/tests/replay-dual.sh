@@ -233,7 +233,7 @@ run_test 9 "resending a replayed create"
 test_10() {
 	mcreate $MOUNT1/$tfile-1
 	replay_barrier $SINGLEMDS
-	munlink $MOUNT1/$tfile-1
+	unlink $MOUNT1/$tfile-1
 	mcreate $MOUNT2/$tfile-2
 	# drop first reint reply
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000119
