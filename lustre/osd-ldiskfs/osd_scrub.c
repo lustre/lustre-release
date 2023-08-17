@@ -138,23 +138,27 @@ static inline void osd_scrub_oi_mark_stale(struct lustre_scrub *scrub,
 /* OI of \a fid may be marked stale, and if its mapping is scrubbed, remove it
  * from os_stale_items list.
  */
-void osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
+bool osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
 			    const struct lu_fid *fid)
 {
 	struct osd_inconsistent_item *oii;
+	bool resurrected = false;
 
 	if (list_empty(&scrub->os_stale_items))
-		return;
+		return resurrected;
 
 	spin_lock(&scrub->os_lock);
 	list_for_each_entry(oii, &scrub->os_stale_items, oii_list) {
 		if (lu_fid_eq(fid, &oii->oii_cache.oic_fid)) {
 			list_del(&oii->oii_list);
 			OBD_FREE_PTR(oii);
+			resurrected = true;
 			break;
 		}
 	}
 	spin_unlock(&scrub->os_lock);
+
+	return resurrected;
 }
 
 static void osd_scrub_ois_fini(struct lustre_scrub *scrub,
@@ -317,7 +321,9 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	if (lid->oii_ino < sf->sf_pos_latest_start && !oii)
-		GOTO(out, rc = 0);
+		GOTO(skip, rc = 0);
+	if (lid->oii_ino < LDISKFS_FIRST_INO(osd_sb(dev)))
+		GOTO(out, rc = -ENOENT);
 
 	if (fid_is_igif(fid))
 		sf->sf_items_igif++;
@@ -355,7 +361,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 			GOTO(out, rc);
 
 		if (bad_inode)
-			GOTO(out, rc = 0);
+			GOTO(skip, rc = 0);
 
 		if (val == SCRUB_NEXT_OSTOBJ)
 			sf->sf_flags |= SF_INCONSISTENT;
@@ -385,7 +391,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 
 		/* if new inode is bad, keep existing mapping */
 		if (bad_inode)
-			GOTO(out, rc = 0);
+			GOTO(skip, rc = 0);
 
 		/* verify existing mapping */
 		inode2 = osd_iget(info, dev, lid2);
@@ -412,7 +418,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		      inode->i_mtime.tv_sec == inode2->i_mtime.tv_sec) ||
 		     inode->i_mtime.tv_sec < inode2->i_mtime.tv_sec)) {
 			iput(inode2);
-			GOTO(out, rc);
+			GOTO(skip, rc);
 		}
 		iput(inode2);
 delete:
@@ -451,37 +457,40 @@ delete:
 out:
 	if (rc < 0) {
 		sf->sf_items_failed++;
-		if (sf->sf_pos_first_inconsistent == 0 ||
-		    sf->sf_pos_first_inconsistent > lid->oii_ino)
+		if (lid->oii_ino >= LDISKFS_FIRST_INO(osd_sb(dev)) &&
+		    (sf->sf_pos_first_inconsistent == 0 ||
+		    sf->sf_pos_first_inconsistent > lid->oii_ino))
 			sf->sf_pos_first_inconsistent = lid->oii_ino;
-		if (oii) {
-			osd_scrub_oi_mark_stale(scrub, oii);
-			CDEBUG(D_LFSCK,
-			       "%s: fix inconsistent OI "DFID" -> %u/%u failed: %d\n",
-			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
-			       lid->oii_gen, rc);
-		}
 	} else {
 		if (!oii && !CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE)) {
-			osd_scrub_oi_resurrect(scrub, fid);
-			CDEBUG(D_LFSCK,
-			       "%s: resurrect OI "DFID" -> %u/%u\n",
-			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
-			       lid->oii_gen);
+			if (osd_scrub_oi_resurrect(scrub, fid))
+				CDEBUG(D_LFSCK,
+				       "%s: resurrect OI "DFID" -> %u/%u\n",
+				       osd_dev2name(dev), PFID(fid),
+				       lid->oii_ino, lid->oii_gen);
 		} else if (oii) {
 			/* release fixed inconsistent item */
 			CDEBUG(D_LFSCK,
 			       "%s: inconsistent OI "DFID" -> %u/%u %s\n",
 			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
-			       lid->oii_gen, ops == DTO_INDEX_DELETE ?
-			       "deleted" : "fixed");
+			       lid->oii_gen, bad_inode ? "deleted" : "fixed");
 			spin_lock(&scrub->os_lock);
 			list_del_init(&oii->oii_list);
 			spin_unlock(&scrub->os_lock);
 
 			OBD_FREE_PTR(oii);
+			oii = NULL;
 		}
 		rc = 0;
+	}
+skip:
+	if (oii) {
+		/* something strange with item, moving to stale */
+		osd_scrub_oi_mark_stale(scrub, oii);
+		CDEBUG(D_LFSCK,
+		       "%s: fix inconsistent OI "DFID" -> %u/%u failed: %d\n",
+		       osd_dev2name(dev), PFID(fid), lid->oii_ino,
+		       lid->oii_gen, rc);
 	}
 	up_write(&scrub->os_rwsem);
 

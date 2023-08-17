@@ -1113,9 +1113,16 @@ int out_handle(struct tgt_session_info *tsi)
 
 			dt_obj = dt_locate_at(env, dt, &update->ou_fid,
 				dt->dd_lu_dev.ld_site->ls_top_dev, &conf);
-			if (IS_ERR(dt_obj))
-				GOTO(out, rc = PTR_ERR(dt_obj));
-
+			if (IS_ERR(dt_obj)) {
+				rc = PTR_ERR(dt_obj);
+				CDEBUG(D_HA,
+				       "%s: opc: 0x%x locate error fid"\
+				       DFID": rc = %d\n",
+				       tgt_name(tsi->tsi_tgt),
+				       update->ou_type,
+				       PFID(&update->ou_fid), rc);
+				GOTO(out, rc);
+			}
 			if (dt->dd_record_fid_accessed) {
 				struct lfsck_req_local *lrl = &tti->tti_lrl;
 

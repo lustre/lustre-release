@@ -634,6 +634,13 @@ static int osp_update_interpret(const struct lu_env *env,
 	if (env == NULL)
 		env = oaua->oaua_update_env;
 
+	if (req->rq_intr && req->rq_nr_resend != 0) {
+		struct osp_update_request_sub	*ours;
+		DEBUG_REQ(D_HA, req, "dumping out request\n");
+		list_for_each_entry(ours, &our->our_req_list, ours_list) {
+			object_update_request_dump(ours->ours_req, D_HA);
+		}
+	}
 	oaua->oaua_update = NULL;
 	oth = our->our_th;
 	if (oaua->oaua_flow_control) {

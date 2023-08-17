@@ -891,7 +891,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_scrub_oi_insert(struct osd_device *dev, const struct lu_fid *fid,
 			 struct osd_inode_id *id, int insert);
-void osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
+bool osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
 			    const struct lu_fid *fid);
 void osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
