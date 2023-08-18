@@ -12,27 +12,28 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
 #endif
+#include <ctype.h>
+#include <dirent.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <limits.h>
 #include <malloc.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/vfs.h>
-#include <sys/ioctl.h>
-#include <sys/xattr.h>
-#include <sys/file.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <semaphore.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/file.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/vfs.h>
+#include <sys/xattr.h>
 #include <time.h>
-#include <err.h>
-#include <dirent.h>
-#include <ctype.h>
+#include <unistd.h>
 
 #include <lustre/lustreapi.h>
 
@@ -40,13 +41,15 @@
 #define T2 "write data after unlink\n"
 char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
 char *buf, *buf_align;
+char *command_buf;
 int bufsize;
 sem_t sem;
 #define ALIGN_LEN 65535
 #define XATTR "user.multiop"
 
 char usage[] =
-"Usage: %s filename command-sequence [path...]\n"
+"Usage: %s [-i command_file] target_file [command-sequence] [path...]\n"
+"    command_file replaces command-sequence if provided\n"
 "    command-sequence items:\n"
 "	 A  fsetxattr(\"user.multiop\")\n"
 "	 a[num] fgetxattr(\"user.multiop\") [optional buffer size, default 0]\n"
@@ -114,7 +117,15 @@ static void usr1_handler(int unused)
 static const char *
 pop_arg(int argc, char *argv[])
 {
-	static int cur_arg = 3;
+	static int cur_arg;
+
+	/* if we have an input file, that adds two args, but there's no
+	 * command sequence, so in total there's 1 more arg before the paths
+	 */
+	if (!command_buf)
+		cur_arg = 3;
+	else
+		cur_arg = 4;
 
 	if (cur_arg >= argc)
 		return NULL;
@@ -253,45 +264,106 @@ static int do_fiemap(int fd)
 
 #define POP_ARG() (pop_arg(argc, argv))
 
+/* 10 MiB is a lot of command text - seems a reasonable limit */
+#define CMD_FILE_MAXSIZE (10*1024*1024)
+
 int main(int argc, char **argv)
 {
-	char *fname, *commands;
+	unsigned char *mmap_ptr = NULL, junk = 1;
+	char *fname = NULL, *commands = NULL;
+	struct lov_user_md_v3 lum;
+	size_t xattr_buf_size = 0;
+	int msg_len = strlen(msg);
+	long int cmdfile_size = 0;
+	struct stat cmdfile_stat;
+	size_t mmap_len = 0, i;
+	char *xattr_buf = NULL;
+	struct stat st = { 0 };
 	const char *newfile;
 	const char *oldpath;
-	struct stat st;
 	struct statfs stfs;
-	size_t mmap_len = 0, i;
-	unsigned char *mmap_ptr = NULL, junk = 1;
-	int len, fd = -1;
-	int flags;
-	int save_errno;
-	int verbose = 0;
-	int gid = 0;
-	struct lu_fid fid;
 	struct timespec ts;
-	struct lov_user_md_v3 lum;
-	char *xattr_buf = NULL;
-	size_t xattr_buf_size = 0;
-	long long rc = 0;
-	long long last_rc;
-	bool unaligned;
-	int msg_len = strlen(msg);
 	size_t total_bytes;
+	struct lu_fid fid;
+	long long last_rc;
+	int len, fd = -1;
+	long long rc = 0;
+	int verbose = 0;
+	int save_errno;
+	bool unaligned;
+	int cmdfile_fd;
+	int gid = 0;
+	int flags;
+	char c;
+
+	sem_init(&sem, 0, 0);
+	/* use sigaction instead of signal to avoid SA_ONESHOT semantics */
+	sigaction(SIGUSR1,
+		  &(const struct sigaction) {.sa_handler = &usr1_handler}, NULL);
 
 	if (argc < 3) {
 		fprintf(stderr, usage, argv[0]);
 		exit(1);
 	}
 
-	memset(&st, 0, sizeof(st));
-	sem_init(&sem, 0, 0);
-	/* use sigaction instead of signal to avoid SA_ONESHOT semantics */
-	sigaction(SIGUSR1,
-		  &(const struct sigaction){.sa_handler = &usr1_handler}, NULL);
+	command_buf = NULL;
 
-	fname = argv[1];
+	while ((c = getopt(argc, argv, "i:")) != -1) {
 
-	for (commands = argv[2]; *commands; commands++) {
+		switch (c) {
+		case 'i':
+			if (*optarg == '-')
+				cmdfile_fd = fileno(stdin);
+			else
+				cmdfile_fd = open(optarg, O_RDONLY);
+			if (cmdfile_fd == -1) {
+				fprintf(stderr,
+				       "Error: open of command file %s failed",
+					optarg);
+				perror("");
+				exit(1);
+			}
+			if (fstat(cmdfile_fd, &cmdfile_stat) == -1) {
+				perror("Error: stat of command file failed");
+				exit(1);
+			}
+			cmdfile_size = cmdfile_stat.st_size;
+			if (cmdfile_size > CMD_FILE_MAXSIZE) {
+				errno = E2BIG;
+				fprintf(stderr,
+					"Error: The command file size (%ld) is greater than limit of %d\n",
+					cmdfile_size, CMD_FILE_MAXSIZE);
+				exit(1);
+			}
+
+			command_buf = calloc(1, cmdfile_size);
+			if (!command_buf) {
+				errno = ENOMEM;
+				fprintf(stderr,
+					"Error: Not enough memory to allocate command buffer\n");
+				exit(1);
+			}
+			if (read(cmdfile_fd, command_buf, CMD_FILE_MAXSIZE) <
+			    cmdfile_size) {
+				perror("Unable to read command file");
+				exit(1);
+			}
+			break;
+		default:
+			fprintf(stderr, usage, argv[0]);
+		}
+	}
+
+	/* command_buf is set when we have an input file */
+	if (command_buf) {
+		fname = argv[3];
+		commands = command_buf;
+	} else {
+		fname = argv[1];
+		commands = argv[2];
+	}
+
+	for (; *commands; commands++) {
 		/*
 		 * XXX Most commands return 0 or we exit so we only
 		 * update rc where really needed.
@@ -302,6 +374,9 @@ int main(int argc, char **argv)
 		unaligned = false;
 
 		switch (*commands) {
+		/* ignoring newlines makes it easier to pipe in commands */
+		case '\n':
+			break;
 		case '_':
 			if (verbose) {
 				printf("PAUSING\n");
