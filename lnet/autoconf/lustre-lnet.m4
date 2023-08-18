@@ -255,6 +255,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 				AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path O2IB])
 				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
 				AC_SUBST(EXTRA_SYMBOLS)
+				EXTRA_OFED_INCLUDE="${EXTRA_OFED_INCLUDE} -DMLNX_OFED_BUILD"
 			fi
 		else
 			AC_MSG_ERROR([an external source tree was, either specified or detected, for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
