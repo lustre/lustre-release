@@ -434,6 +434,8 @@ reprocess:
 				continue;
 
 			if (intention != LDLM_PROCESS_ENQUEUE) {
+				ldlm_flock_blocking_unlink(req);
+				ldlm_flock_blocking_link(req, lock);
 				if (ldlm_flock_deadlock(req, lock)) {
 					ldlm_flock_cancel_on_deadlock(
 						req, grant_work);
