@@ -2096,7 +2096,8 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE|D_IOTRACE, "file %s:"DFID", ppos: %lld, count: %zu\n",
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID", ppos: %lld, count: %zu\n",
 	       file_dentry(file)->d_name.name,
 	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
 	       iov_iter_count(to));
@@ -2248,7 +2249,8 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE|D_IOTRACE, "file %s:"DFID", ppos: %lld, count: %zu\n",
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID", ppos: %lld, count: %zu\n",
 	       file_dentry(file)->d_name.name,
 	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
 	       iov_iter_count(from));

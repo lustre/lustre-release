@@ -123,11 +123,6 @@ restart:
 		fio->ft_writable = 1;
 	}
 
-	CDEBUG(D_MMAP,
-	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
-	       PFID(&ll_i2info(inode)->lli_fid), vma, vma->vm_start,
-	       vma->vm_end, vma->vm_flags, fio->ft_index);
-
 	if (vma->vm_flags & VM_SEQ_READ)
 		io->ci_seq_read = 1;
 	else if (vma->vm_flags & VM_RAND_READ)
@@ -404,7 +399,8 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 		goto out;
 
 	CDEBUG(D_MMAP|D_IOTRACE,
-	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       file_dentry(vma->vm_file)->d_name.name,
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
 	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff);
 
@@ -488,10 +484,10 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	vm_fault_t result;
 
 	CDEBUG(D_MMAP|D_IOTRACE,
-	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       file_dentry(vma->vm_file)->d_name.name,
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
-	       vma, vma->vm_start, vma->vm_end, vma->vm_flags,
-	       vmf->page->index);
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->page->index);
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)
