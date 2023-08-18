@@ -2639,8 +2639,8 @@ run_test 13 "Cancel per-ID lock in the LRU list"
 
 test_14()
 {
-	(( MDS1_VERSION >= $(version_code 2.14.0.87) )) ||
-		skip "Need MDS version at least 2.14.0.87"
+	(( $MDS1_VERSION >= $(version_code 2.15.54.67) )) ||
+		skip "Need MDS >= v2_15_54-67-gdfe7d for qmt_site_recalc_cb fix"
 
 	local qpool="qpool1"
 	local tfile1="$DIR/$tdir/$tfile-0"
@@ -3226,6 +3226,9 @@ run_test 24 "lfs draws an asterix when limit is reached (b16646)"
 
 test_25()
 {
+	(( $MDS1_VERSION >= $(version_code 2.15.55.145) )) ||
+		skip "need MDS >= v2_15_55-145-g513b1cdbc for index version fix"
+
 	local limit=10  # 10M
 	local testfile="$DIR/$tdir/$tfile-0"
 	local qpool="qpool1"
@@ -3339,7 +3342,11 @@ test_27d() {
 }
 run_test 27d "lfs setquota should support fraction block limit"
 
-test_30() {
+test_30()
+{
+	(( $MDS1_VERSION >= $(version_code 2.15.51.29) )) ||
+		skip "need MDS >= v2_15_51-29-gd4978678b4 for grace time fix"
+
 	local LIMIT=4 # MB
 	local TESTFILE="$DIR/$tdir/$tfile"
 	local GRACE=10
@@ -5197,6 +5204,9 @@ run_test 72 "lfs quota --pool prints only pool's OSTs"
 
 test_73a()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.51.158) )) ||
+		skip "need MDS >= v2_14_51-158-g25a70a88 for default pool quota"
+
 	local qpool="qpool1"
 
 	mds_supports_qp
@@ -5211,6 +5221,9 @@ run_test 73a "default limits at OST Pool Quotas"
 
 test_73b()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.52.91) )) ||
+		skip "need MDS >= v2_14_52-91-g188112fc8 for nested lqe fix"
+
 	local TESTFILE1="$DIR/$tdir/$tfile-1"
 	local limit=20 #20M
 	local qpool="qpool1"
@@ -5247,6 +5260,9 @@ run_test 73b "default OST Pool Quotas limit for new user"
 
 test_74()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.52.6) )) ||
+		skip "need MDS >= v2_14_52-6-g8c19365416 for pool per-user fix"
+
 	local global_limit=200 # 200M
 	local limit=10 # 10M
 	local limit2=50 # 50M
@@ -5379,6 +5395,9 @@ test_dom_75() {
 
 test_75()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.52.68) )) ||
+		skip "need MDS >= v2_14_52-68-ga4fbe7341b for squash root fix"
+
 	local soft_limit=10 # MB
 	local hard_limit=20 # MB
 	local limit=$soft_limit
@@ -5478,6 +5497,8 @@ test_75()
 run_test 75 "nodemap squashed root respects quota enforcement"
 
 test_76() {
+	(( $MDS1_VERSION >= $(version_code 2.14.52.109) )) ||
+		skip "need MDS >= v2_14_52-109-g3ffa5d680f for bad PRJID fix"
 	! is_project_quota_supported &&
 		skip "skip project quota unsupported"
 
@@ -5495,6 +5516,9 @@ run_test 76 "project ID 4294967295 should be not allowed"
 
 test_77()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.54.33) )) ||
+		skip "need MDS >= v2_14_54-33-g29e00cecc6 for readonly fix"
+
 	mount_client $MOUNT2 "ro"
 	lfs setquota -u $TSTUSR -b 100M -B 100M -i 10K -I 10K $MOUNT2 &&
 		error "lfs setquota should fail in read-only Lustre mount"
@@ -5502,10 +5526,10 @@ test_77()
 }
 run_test 77 "lfs setquota should fail in Lustre mount with 'ro'"
 
-test_78()
+test_78A()
 {
-	(( $OST1_VERSION >= $(version_code 2.14.55) )) ||
-		skip "need OST at least 2.14.55"
+	(( $OST1_VERSION >= $(version_code 2.14.55.173) )) ||
+		skip "need OST >= v2_14_55-173-g789038c97a for fallocate fix"
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -5541,14 +5565,14 @@ test_78()
 	(( $kbytes >= $expect_lo && $kbytes <= $expect_hi )) ||
 		error "fallocate did not use quota correctly"
 }
-run_test 78 "Check fallocate increase quota usage"
+run_test 78A "Check fallocate increase quota usage"
 
 test_78a()
 {
-	(( $CLIENT_VERSION >= $(version_code 2.15.0) )) ||
-		skip "need client at least 2.15.0"
-	(( $OST1_VERSION >= $(version_code 2.15.0) )) ||
-		skip "need OST at least 2.15.0"
+	(( $CLIENT_VERSION >= $(version_code 2.15.0.37) )) ||
+		skip "need client >= v2_15_50-37-g5fc934eb for falloc proj fix"
+	(( $OST1_VERSION >= $(version_code 2.15.0.37) )) ||
+		skip "need OST >= v2_15_50-37-g5fc934ebbb for falloc proj fix"
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -5592,6 +5616,9 @@ run_test 78a "Check fallocate increase projectid usage"
 
 test_79()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.56.37) )) ||
+		skip "need MDS >= v2_14_56-37-gc9901b68b4 for pool panic fix"
+
 	local qpool="qpool1"
 	local cmd="$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$qpool.info"
 	local stopf=$TMP/$tfile
@@ -5608,6 +5635,9 @@ run_test 79 "access to non-existed dt-pool/info doesn't cause a panic"
 
 test_80()
 {
+	(( $MDS1_VERSION >= $(version_code 2.14.56.51) )) ||
+		skip "need MDS >= v2_14_56-51-g61ec1e0f2c for EDQUOT failover"
+
 	local dir1="$DIR/$tdir/dir1"
 	local dir2="$DIR/$tdir/dir2"
 	local TESTFILE0="$dir1/$tfile-0"
@@ -5678,7 +5708,11 @@ test_80()
 }
 run_test 80 "check for EDQUOT after OST failover"
 
-test_81() {
+test_81()
+{
+	(( $MDS1_VERSION >= $(version_code 2.14.56.52) )) ||
+		skip "need MDS >= v2_14_56-52-g862f0baa7c for qmt_pool_free fix"
+
 	local global_limit=20  # 100M
 	local testfile="$DIR/$tdir/$tfile-0"
 	local qpool="qpool1"
@@ -5708,10 +5742,10 @@ run_test 81 "Race qmt_start_pool_recalc with qmt_pool_free"
 
 test_82()
 {
-	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
-		skip "need MDS 2.14.55 or later"
-	is_project_quota_supported ||
-		skip "skip project quota unsupported"
+	(( $MDS1_VERSION >= $(version_code 2.15.50.72) )) ||
+		skip "need MDS >= v2_15_50-72-g61481796ac for over 8 QIDs fix"
+
+	is_project_quota_supported || skip "skip project quota unsupported"
 
 	setup_quota_test || error "setup quota failed with $?"
 	quota_init
@@ -5771,6 +5805,9 @@ test_grace_with_default_quota()
 
 test_83()
 {
+	(( $MDS1_VERSION >= $(version_code 2.15.51.29) )) ||
+		skip "need MDS >= v2_15_51-29-gd4978678b4 for grace time fix"
+
 	setup_quota_test || error "setup quota failed with $?"
 	test_grace_with_default_quota "-u" "-U"
 	test_grace_with_default_quota "-g" "-G"
@@ -5782,8 +5819,10 @@ run_test 83 "Setting default quota shouldn't affect grace time"
 
 test_84()
 {
-	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
-		skip "need MDS 2.15.53 or later"
+	(( $MDS1_VERSION >= $(version_code 2.15.53.115) )) ||
+		skip "need MDS >= v2_15_53-115-ga2fd4d3aee for insane quota fix"
+	(( $OST1_VERSION >= $(version_code 2.15.53.115) )) ||
+		skip "need OSS >= v2_15_53-115-ga2fd4d3aee for insane quota fix"
 
 	local dir1="$DIR/$tdir/dir1"
 	local TESTFILE1="$dir1/$tfile-1"
@@ -5917,6 +5956,11 @@ run_test 84 "Reset quota should fix the insane granted quota"
 
 test_85()
 {
+	(( $MDS1_VERSION >= $(version_code 2.15.55.5) )) ||
+		skip "need MDS >= v2_15_55-5-g6c0b4329d0 for least_qunit fix"
+	(( $OST1_VERSION >= $(version_code 2.15.55.5) )) ||
+		skip "need OSS >= v2_15_55-5-g6c0b4329d0 for least_qunit fix"
+
 	local limit=3 # 3M
 	local qpool="qpool1"
 	local qpool2="qpool2"
