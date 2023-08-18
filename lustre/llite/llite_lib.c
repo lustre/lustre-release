@@ -2258,11 +2258,15 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(inode);
 
-	CDEBUG(D_VFSTRACE, "%s: setattr inode "DFID"(%p) from %llu to %llu, "
-	       "valid %x, hsm_import %d\n",
-	       ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid),
-	       inode, i_size_read(inode), attr->ia_size, attr->ia_valid,
-	       hsm_import);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
+	       dentry->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       i_size_read(inode), attr->ia_valid, attr->ia_mode,
+	       attr->ia_uid.val, attr->ia_gid.val, attr->ia_size,
+	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,
+	       (long long) attr->ia_mtime.tv_sec, attr->ia_mtime.tv_nsec,
+	       (long long) attr->ia_ctime.tv_sec, attr->ia_ctime.tv_nsec);
+
 
 	if (attr->ia_valid & ATTR_SIZE) {
 		/* Check new size against VFS/VM file size limit and rlimit */
@@ -2505,6 +2509,15 @@ out:
 					LPROC_LL_TRUNC : LPROC_LL_SETATTR,
 				   ktime_us_delta(ktime_get(), kstart));
 clear:
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "COMPLETED file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
+	       dentry->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       i_size_read(inode), attr->ia_valid, attr->ia_mode,
+	       attr->ia_uid.val, attr->ia_gid.val, attr->ia_size,
+	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,
+	       (long long) attr->ia_mtime.tv_sec, attr->ia_mtime.tv_nsec,
+	       (long long) attr->ia_ctime.tv_sec, attr->ia_ctime.tv_nsec);
+
 	ll_clear_inode_lock_owner(inode);
 
 	RETURN(rc);
