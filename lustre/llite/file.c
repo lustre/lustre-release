@@ -406,8 +406,10 @@ int ll_file_release(struct inode *inode, struct file *file)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
-	       PFID(ll_inode2fid(inode)), inode);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID"(%p), flags %o\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
 
 	fd = file->private_data;
 	LASSERT(fd != NULL);
@@ -443,6 +445,11 @@ out:
 	if (!rc && !is_root_inode(inode))
 		ll_stats_ops_tally(sbi, LPROC_LL_RELEASE,
 				   ktime_us_delta(ktime_get(), kstart));
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file %s:"DFID"(%p), flags %o\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
+
 	RETURN(rc);
 }
 
@@ -838,8 +845,10 @@ int ll_file_open(struct inode *inode, struct file *file)
 	int rc = 0;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), flags %o\n",
-	       PFID(ll_inode2fid(inode)), inode, file->f_flags);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID"(%p), flags %o\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
 
 	it = file->private_data; /* XXX: compat macro */
 	file->private_data = NULL; /* prevent ll_local_open assertion */
@@ -1060,6 +1069,11 @@ out_nofiledata:
 		ptlrpc_req_finished(it->it_request);
 		it_clear_disposition(it, DISP_ENQ_OPEN_REF);
 	}
+
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file %s:"DFID"(%p), flags %o\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
 
 	return rc;
 }
@@ -5566,6 +5580,11 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	ktime_t kstart = ktime_get();
 	int rc;
 
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
+	       de->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       request_mask, flags, foreign);
+
 	/* The OST object(s) determine the file size, blocks and mtime. */
 	if (!(request_mask & STATX_SIZE || request_mask & STATX_BLOCKS ||
 	      request_mask & STATX_MTIME))
@@ -5718,6 +5737,11 @@ fill_attr:
 
 	ll_stats_ops_tally(sbi, LPROC_LL_GETATTR,
 			   ktime_us_delta(ktime_get(), kstart));
+
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file %s:"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
+	       de->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       request_mask, flags, foreign);
 
 	return 0;
 }
