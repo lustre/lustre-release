@@ -778,13 +778,16 @@ repeat_find:
 
 	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
-		if (likely(speed < 2) || i == 0)
-			idx = atomic_inc_return(&lqr->lqr_start_idx);
-		else
+		if (likely(speed < 2) || i == 0) {
+			idx = atomic_inc_return(&lqr->lqr_start_idx) +
+			      lqr->lqr_offset_idx;
+		} else {
+			/*
+			 * For last speed, use OSTs one by one
+			 */
 			idx++;
-
-		array_idx = (idx + lqr->lqr_offset_idx) %
-				osts->op_count;
+		}
+		array_idx = idx % osts->op_count;
 		ost_idx = lqr->lqr_pool.op_array[array_idx];
 
 		CDEBUG(D_OTHER, "#%d strt %d act %d strp %d ary %d idx %d\n",
