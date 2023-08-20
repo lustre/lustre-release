@@ -142,15 +142,6 @@ out:
 	return rc;
 }
 
-#define LOV_U64_MAX ((__u64)~0ULL)
-#define LOV_SUM_MAX(tot, add)                                           \
-	do {                                                            \
-		if ((tot) + (add) < (tot))                              \
-			(tot) = LOV_U64_MAX;                            \
-		else                                                    \
-			(tot) += (add);                                 \
-	} while (0)
-
 static int
 lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs, int success)
 {
@@ -159,9 +150,9 @@ lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs, int success)
 	if (success) {
 		__u32 expected_stripes = lov_get_stripe_count(&obd->u.lov,
 							      LOV_MAGIC, 0);
-		if (osfs->os_files != LOV_U64_MAX)
+		if (osfs->os_files != U64_MAX)
 			lov_do_div64(osfs->os_files, expected_stripes);
-		if (osfs->os_ffree != LOV_U64_MAX)
+		if (osfs->os_ffree != U64_MAX)
 			lov_do_div64(osfs->os_ffree, expected_stripes);
 
 		spin_lock(&obd->obd_osfs_lock);
@@ -256,12 +247,12 @@ lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 		 *   - could be sum if we stripe whole objects
 		 *   - could be average, just to give a nice number
 		 *
-		 * To give a "reasonable" (if not wholly accurate)
-		 * number, we divide the total number of free objects
-		 * by expected stripe count (watch out for overflow).
+		 * Currently using the sum capped at U64_MAX.
 		 */
-		LOV_SUM_MAX(osfs->os_files, lov_sfs->os_files);
-		LOV_SUM_MAX(osfs->os_ffree, lov_sfs->os_ffree);
+		osfs->os_files = osfs->os_files + lov_sfs->os_files < osfs->os_files ?
+			U64_MAX : osfs->os_files + lov_sfs->os_files;
+		osfs->os_ffree = osfs->os_ffree + lov_sfs->os_ffree < osfs->os_ffree ?
+			U64_MAX : osfs->os_ffree + lov_sfs->os_ffree;
 	}
 }
 
