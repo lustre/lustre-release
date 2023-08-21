@@ -7939,7 +7939,7 @@ void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
 	entry->lce_obj.lco_gen = obj->oo_inode->i_generation;
 	entry->lce_obj.lco_version = iversion;
 
-	LASSERT(ln->ln_namelen <= LDISKFS_NAME_LEN);
+	LASSERT(ln->ln_namelen <= LDISKFS_NAME_LEN + 1);
 	entry->lce_namelen = ln->ln_namelen;
 	memcpy(entry->lce_name, ln->ln_name, ln->ln_namelen);
 	memcpy(&entry->lce_fid, rec, sizeof(entry->lce_fid));

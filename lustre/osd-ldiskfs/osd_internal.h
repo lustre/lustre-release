@@ -651,7 +651,7 @@ struct osd_lookup_cache_entry {
 	struct lu_fid	lce_fid;
 	short		lce_rc;
 	short		lce_namelen;
-	char		lce_name[LDISKFS_NAME_LEN];
+	char		lce_name[LDISKFS_NAME_LEN + 1];
 };
 
 #define OSD_LOOKUP_CACHE_MAX	3
