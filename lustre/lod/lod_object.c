@@ -4270,8 +4270,8 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		RETURN(rc);
 
-	attr->la_valid = LA_ATIME | LA_MTIME | LA_CTIME | LA_FLAGS |
-			 LA_MODE | LA_UID | LA_GID | LA_TYPE | LA_PROJID;
+	attr->la_valid &= LA_ATIME | LA_MTIME | LA_CTIME | LA_FLAGS |
+			  LA_MODE | LA_UID | LA_GID | LA_TYPE | LA_PROJID;
 	dof->dof_type = DFT_DIR;
 
 	rc = lod_prep_lmv_md(env, dt, &lmv_buf);
