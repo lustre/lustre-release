@@ -47,20 +47,6 @@
 #include "ptlrpc_internal.h"
 
 /**
- * Start recovery on disconnected import.
- * This is done by just attempting a connect
- */
-void ptlrpc_initiate_recovery(struct obd_import *imp)
-{
-        ENTRY;
-
-        CDEBUG(D_HA, "%s: starting recovery\n", obd2cli_tgt(imp->imp_obd));
-        ptlrpc_connect_import(imp);
-
-        EXIT;
-}
-
-/**
  * Identify what request from replay list needs to be replayed next
  * (based on what we have already replayed) and send it to server.
  */
@@ -296,6 +282,23 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 }
 EXPORT_SYMBOL(ptlrpc_set_import_active);
 
+bool ptlrpc_import_in_recovery_disconnect(struct obd_import *imp,
+					  bool disconnect_is_recovery)
+{
+	bool in_recovery = true;
+
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state < LUSTRE_IMP_DISCON ||
+	    (!disconnect_is_recovery && imp->imp_state == LUSTRE_IMP_DISCON) ||
+	    imp->imp_state >= LUSTRE_IMP_FULL ||
+	    imp->imp_obd->obd_no_recov)
+		in_recovery = false;
+	spin_unlock(&imp->imp_lock);
+
+	return in_recovery;
+}
+
+
 /* Attempt to reconnect an import */
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 {
@@ -330,30 +333,28 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 		rc = -EALREADY;
 	}
 	spin_unlock(&imp->imp_lock);
-	if (rc)
-		GOTO(out, rc);
 
-	CFS_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
+	if (!rc) {
+		CFS_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
+		rc = ptlrpc_connect_import(imp);
+	}
 
-	rc = ptlrpc_connect_import(imp);
-	if (rc)
-		GOTO(out, rc);
-
-	if (!async) {
+	if (!async && (rc == -EALREADY || rc == 0)) {
 		long timeout = cfs_time_seconds(obd_timeout);
 
-		CDEBUG(D_HA, "%s: recovery started, waiting %u jiffies\n",
+		CDEBUG(D_HA, "%s: recovery started, waiting %u seconds\n",
 		       obd2cli_tgt(imp->imp_obd), obd_timeout);
 
 		rc = wait_event_idle_timeout(imp->imp_recovery_waitq,
-					     !ptlrpc_import_in_recovery(imp),
-					     timeout);
+			!ptlrpc_import_in_recovery_disconnect(imp, true),
+			timeout);
 		if (rc == 0)
 			rc = -ETIMEDOUT;
 		else
 			rc = 0;
-		CDEBUG(D_HA, "%s: recovery finished\n",
-		       obd2cli_tgt(imp->imp_obd));
+		CDEBUG(D_HA, "%s: recovery finished %s, rc = %d\n",
+		       obd2cli_tgt(imp->imp_obd),
+		       ptlrpc_import_state_name(imp->imp_state), rc);
 	}
 	EXIT;
 
@@ -362,16 +363,7 @@ out:
 }
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
-int ptlrpc_import_in_recovery(struct obd_import *imp)
+bool ptlrpc_import_in_recovery(struct obd_import *imp)
 {
-	int in_recovery = 1;
-
-	spin_lock(&imp->imp_lock);
-	if (imp->imp_state <= LUSTRE_IMP_DISCON ||
-	    imp->imp_state >= LUSTRE_IMP_FULL ||
-	    imp->imp_obd->obd_no_recov)
-		in_recovery = 0;
-	spin_unlock(&imp->imp_lock);
-
-	return in_recovery;
+	return ptlrpc_import_in_recovery_disconnect(imp, false);
 }

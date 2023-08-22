@@ -1047,6 +1047,13 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		 * 1. we previously got disconnected,
 		 * 2. value > 1 (at the same node with MGS)
 		 * */
+		if (value > 1) {
+			struct adaptive_timeout *at;
+
+			at = &imp->imp_at.iat_net_latency;
+			at_reset(at, INITIAL_CONNECT_TIMEOUT);
+		}
+
 		if (imp->imp_state == LUSTRE_IMP_DISCON || value > 1)
 			ptlrpc_reconnect_import(imp);
 

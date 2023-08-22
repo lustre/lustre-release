@@ -62,7 +62,7 @@ static int mgs_barrier_gl_interpret_reply(const struct lu_env *env,
 	ENTRY;
 
 	if (rc) {
-		if (rc == -ENODEV) {
+		if (rc == -ENODEV || rc == -EINVAL) {
 			/* The lock is useless, cancel it. */
 			ldlm_lock_cancel(ca->ca_lock);
 			rc = 0;
