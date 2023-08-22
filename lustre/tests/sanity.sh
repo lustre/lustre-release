@@ -9636,18 +9636,23 @@ test_64f() {
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
 
-	local cmd="oO_WRONLY:w${write_bytes}_yc"
+	# Testing that buffered IO consumes grant on the client
 
-	$MULTIOP $DIR/$tfile $cmd &
-	MULTIPID=$!
-	sleep 1
+	# Delay the RPC on the server so it's guaranteed to not complete even
+	# if the RPC is sent from the client
+	#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+	$LCTL set_param fail_loc=0x50a fail_val=3
+	dd if=/dev/zero of=$DIR/$tfile bs=$write_bytes count=1 conv=notrunc ||
+		error "error writing to $DIR/$tfile with buffered IO"
 
 	check_grants $osc_tgt $((init_grants - grants)) \
 		"buffered io, not write rpc"
 
-	kill -USR1 $MULTIPID
-	wait
+	# Clear the fail loc and do a sync on the client
+	$LCTL set_param fail_loc=0 fail_val=0
+	sync
 
+	# RPC is now known to have sent
 	check_grants $osc_tgt $((init_grants - grants + chunk)) \
 		"buffered io, one RPC"
 }
