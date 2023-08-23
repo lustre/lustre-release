@@ -2210,8 +2210,8 @@ int lod_use_defined_striping(const struct lu_env *env,
 		    (lod_comp_inited(lod_comp) ||
 		     lod_comp->llc_extent.e_start <
 		     lod_comp->llc_extent.e_end) &&
-		    lod_comp->llc_stripe_count != (__u16)-1 &&
-		    lod_comp->llc_extent.e_end != (__u64)-1 &&
+		    lod_comp->llc_stripe_count != LOV_ALL_STRIPES &&
+		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
 		    (__u64)lod_comp->llc_stripe_count *
 			   lod_comp->llc_stripe_size >
 		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
@@ -2511,11 +2511,11 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		 */
 		if (lo->ldo_is_composite &&
 		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
-		    lod_comp->llc_stripe_count != (__u16)-1 &&
+		    lod_comp->llc_stripe_count != LOV_ALL_STRIPES &&
 		    (lod_comp_inited(lod_comp) ||
 		     lod_comp->llc_extent.e_start <
 		     lod_comp->llc_extent.e_end) &&
-		    lod_comp->llc_extent.e_end != (__u64)-1 &&
+		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
 		    lod_comp->llc_stripe_count * lod_comp->llc_stripe_size >
 		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
 			lod_comp->llc_stripe_count =
