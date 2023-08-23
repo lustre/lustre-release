@@ -670,6 +670,9 @@ EXPORT_SYMBOL(cl_io_submit_rw);
 /**
  * Submit a sync_io and wait for the IO to be finished, or error happens.
  * If \a timeout is zero, it means to wait for the IO unconditionally.
+ *
+ * This is used for synchronous submission of an async IO, so the waiting is
+ * done here in this function and the IO is done when this function returns.
  */
 int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 		      enum cl_req_type iot, struct cl_2queue *queue,
@@ -682,6 +685,10 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 
 	cl_page_list_for_each(pg, &queue->c2_qin) {
 		LASSERT(pg->cp_sync_io == NULL);
+		/* this is for sync submission of async IO, IO that was always
+		 * sync (like DIO) is handled differently
+		 */
+		LASSERT(pg->cp_type != CPT_TRANSIENT);
 		pg->cp_sync_io = anchor;
 	}
 
