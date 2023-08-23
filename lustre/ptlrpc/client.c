@@ -77,11 +77,13 @@ static int ptlrpc_prep_bulk_frag_pages(struct ptlrpc_bulk_desc *desc,
 	while (len > 0) {
 		int page_len = min_t(unsigned int, PAGE_SIZE - offset,
 				     len);
-		unsigned long vaddr = (unsigned long)frag;
+		struct page *p;
 
-		ptlrpc_prep_bulk_page_nopin(desc,
-					    lnet_kvaddr_to_page(vaddr),
-					    offset, page_len);
+		if (!is_vmalloc_addr(frag))
+			p = virt_to_page((unsigned long)frag);
+		else
+			p = vmalloc_to_page(frag);
+		ptlrpc_prep_bulk_page_nopin(desc, p, offset, page_len);
 		offset = 0;
 		len -= page_len;
 		frag += page_len;

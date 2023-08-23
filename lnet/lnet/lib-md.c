@@ -74,37 +74,6 @@ lnet_md_unlink(struct lnet_libmd *md)
 }
 
 struct page *
-lnet_kvaddr_to_page(unsigned long vaddr)
-{
-	if (is_vmalloc_addr((void *)vaddr))
-		return vmalloc_to_page((void *)vaddr);
-
-#ifdef CONFIG_HIGHMEM
-
-#ifdef HAVE_KMAP_TO_PAGE
-	/*
-	 * This ifdef is added to handle the kernel versions
-	 * which have kmap_to_page() function exported. If so,
-	 * we should use it. Otherwise, remain with the legacy check.
-	 */
-	return kmap_to_page((void *)vaddr);
-#else
-
-	if (vaddr >= PKMAP_ADDR(0) && vaddr < PKMAP_ADDR(LAST_PKMAP)) {
-		/* No highmem pages only used for bulk (kiov) I/O */
-		CERROR("find page for address in highmem\n");
-		LBUG();
-	}
-	return virt_to_page(vaddr);
-#endif /* HAVE_KMAP_TO_PAGE */
-#else
-
-	return virt_to_page(vaddr);
-#endif /* CONFIG_HIGHMEM */
-}
-EXPORT_SYMBOL(lnet_kvaddr_to_page);
-
-struct page *
 lnet_get_first_page(struct lnet_libmd *md, unsigned int offset)
 {
 	unsigned int niov;
@@ -239,12 +208,16 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 		lmd->md_length = len;
 		i = 0;
 		while (len) {
+			struct page *p;
 			int plen;
 
+			if (is_vmalloc_addr(pa))
+				p = vmalloc_to_page(pa);
+			else
+				p = virt_to_page(pa);
 			plen = min_t(int, len, PAGE_SIZE - offset_in_page(pa));
 
-			lmd->md_kiov[i].bv_page =
-				lnet_kvaddr_to_page((unsigned long) pa);
+			lmd->md_kiov[i].bv_page = p;
 			lmd->md_kiov[i].bv_offset = offset_in_page(pa);
 			lmd->md_kiov[i].bv_len = plen;
 
@@ -252,6 +225,7 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 			pa += plen;
 			i += 1;
 		}
+
 		WARN(!(lmd->md_options  & LNET_MD_GNILND) && i > LNET_MAX_IOV,
 			"Max IOV exceeded: %d should be < %d\n",
 			i, LNET_MAX_IOV);
