@@ -3091,7 +3091,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 		nidstr = mti->mti_nidlist[0];
 	}
 
-	rc = name_create(&nodeuuid, mti->mti_nidlist[0], "");
+	rc = name_create(&nodeuuid, nidstr, "");
 	if (rc)
 		RETURN(rc);
 	rc = name_create(&svname, mti->mti_svname, "-osc");
@@ -3144,9 +3144,13 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	for (i = 0; i < mti->mti_nid_count; i++) {
 		struct lnet_nid nid;
 
-		rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
-		if (rc < 0)
-			GOTO(out_end, rc);
+		if (target_supports_large_nid(mti)) {
+			rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+			if (rc < 0)
+				GOTO(out_end, rc);
+		} else {
+			lnet_nid4_to_nid(mti->mti_nids[i], &nid);
+		}
 
 		CDEBUG(D_MGS, "add nid %s\n", libcfs_nidstr(&nid));
 		rc = record_add_uuid(env, llh, &nid, nodeuuid);
