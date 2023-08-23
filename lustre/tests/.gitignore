@@ -52,7 +52,6 @@
 /mcreate
 /memhog
 /mirror_io
-/mlink
 /mmap_cat
 /mmap_mknod_test
 /mmap_sanity

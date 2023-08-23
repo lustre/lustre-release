@@ -90,8 +90,8 @@ test_6() {
 	local LINK2=$DIR/$tfile.link2
 
 	do_facet_create_file client $T 10K || error_noexit "Create file $T"
-	drop_request "mlink $T $LINK1" || error_noexit "mlink request for $T"
-	drop_reint_reply "mlink $T $LINK2" || error_noexit "mlink reply for $T"
+	drop_request "link $T $LINK1" || error_noexit "link request for $T"
+	drop_reint_reply "link $T $LINK2" || error_noexit "link reply for $T"
 	drop_request "unlink $LINK1" || error_noexit "unlink request for $T"
 	drop_reint_reply "unlink $LINK2" || error_noexit "unlink reply for $T"
 	do_facet client "rm $T" || error_noexit "Can't remove file $T"

@@ -56,7 +56,7 @@ nobase_noinst_DATA += clientapi/simple_test.c
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
-THETESTS = openunlink truncate directio writeme mlink utime
+THETESTS = openunlink truncate directio writeme utime
 THETESTS += tchmod fsx test_brw sendfile
 THETESTS += createmany chownmany statmany multifstat createtest
 THETESTS += opendirunlink opendevunlink unlinkmany checkstat

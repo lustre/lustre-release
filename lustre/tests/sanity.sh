@@ -3725,26 +3725,25 @@ test_31j() {
 	test_mkdir -c1 -p $DIR/$tdir/dir1
 	ln $DIR/$tdir/dir1 $DIR/$tdir/dir2 && error "ln for dir"
 	link $DIR/$tdir/dir1 $DIR/$tdir/dir3 && error "link for dir"
-	mlink $DIR/$tdir/dir1 $DIR/$tdir/dir4 && error "mlink for dir"
-	mlink $DIR/$tdir/dir1 $DIR/$tdir/dir1 && error "mlink to the same dir"
+	link $DIR/$tdir/dir1 $DIR/$tdir/dir1 && error "link to the same dir"
 	return 0
 }
-run_test 31j "link for directory==============="
+run_test 31j "link for directory"
 
 test_31k() {
-        test_mkdir -c1 -p $DIR/$tdir
-        touch $DIR/$tdir/s
-        touch $DIR/$tdir/exist
-        mlink $DIR/$tdir/s $DIR/$tdir/t || error "mlink"
-        mlink $DIR/$tdir/s $DIR/$tdir/exist && error "mlink to exist file"
-        mlink $DIR/$tdir/s $DIR/$tdir/s && error "mlink to the same file"
-        mlink $DIR/$tdir/s $DIR/$tdir && error "mlink to parent dir"
-        mlink $DIR/$tdir $DIR/$tdir/s && error "mlink parent dir to target"
-        mlink $DIR/$tdir/not-exist $DIR/$tdir/foo && error "mlink non-existing to new"
-        mlink $DIR/$tdir/not-exist $DIR/$tdir/s && error "mlink non-existing to exist"
+	test_mkdir -c1 -p $DIR/$tdir
+	touch $DIR/$tdir/s
+	touch $DIR/$tdir/exist
+	link $DIR/$tdir/s $DIR/$tdir/t || error "link"
+	link $DIR/$tdir/s $DIR/$tdir/exist && error "link to exist file"
+	link $DIR/$tdir/s $DIR/$tdir/s && error "link to the same file"
+	link $DIR/$tdir/s $DIR/$tdir && error "link to parent dir"
+	link $DIR/$tdir $DIR/$tdir/s && error "link parent dir to target"
+	link $DIR/$tdir/not-exist $DIR/$tdir/foo && error "link non-existing to new"
+	link $DIR/$tdir/not-exist $DIR/$tdir/s && error "link non-existing to exist"
 	return 0
 }
-run_test 31k "link to file: the same, non-existing, dir==============="
+run_test 31k "link to file: the same, non-existing, dir"
 
 test_31l() {
 	local ln_ver=$(ln --version | awk '/coreutils/ { print $4 }')
@@ -3760,19 +3759,19 @@ test_31l() {
 run_test 31l "link to file: target dir has trailing slash"
 
 test_31m() {
-        mkdir $DIR/d31m
-        touch $DIR/d31m/s
-        mkdir $DIR/d31m2
-        touch $DIR/d31m2/exist
-        mlink $DIR/d31m/s $DIR/d31m2/t || error "mlink"
-        mlink $DIR/d31m/s $DIR/d31m2/exist && error "mlink to exist file"
-        mlink $DIR/d31m/s $DIR/d31m2 && error "mlink to parent dir"
-        mlink $DIR/d31m2 $DIR/d31m/s && error "mlink parent dir to target"
-        mlink $DIR/d31m/not-exist $DIR/d31m2/foo && error "mlink non-existing to new"
-        mlink $DIR/d31m/not-exist $DIR/d31m2/s && error "mlink non-existing to exist"
+	mkdir $DIR/d31m
+	touch $DIR/d31m/s
+	mkdir $DIR/d31m2
+	touch $DIR/d31m2/exist
+	link $DIR/d31m/s $DIR/d31m2/t || error "link"
+	link $DIR/d31m/s $DIR/d31m2/exist && error "link to exist file"
+	link $DIR/d31m/s $DIR/d31m2 && error "link to parent dir"
+	link $DIR/d31m2 $DIR/d31m/s && error "link parent dir to target"
+	link $DIR/d31m/not-exist $DIR/d31m2/foo && error "link non-existing to new"
+	link $DIR/d31m/not-exist $DIR/d31m2/s && error "link non-existing to exist"
 	return 0
 }
-run_test 31m "link to file: the same, non-existing, dir==============="
+run_test 31m "link to file: the same, non-existing, dir"
 
 test_31n() {
 	touch $DIR/$tfile || error "cannot create '$DIR/$tfile'"
@@ -3794,7 +3793,7 @@ run_test 31n "check link count of unlinked file"
 
 link_one() {
 	local tempfile=$(mktemp $1_XXXXXX)
-	mlink $tempfile $1 2> /dev/null &&
+	link $tempfile $1 2> /dev/null &&
 		echo "$BASHPID: link $tempfile to $1 succeeded"
 	unlink $tempfile
 }
