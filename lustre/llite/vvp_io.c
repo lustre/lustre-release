@@ -1510,6 +1510,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	if (result != 0)
 		RETURN(result);
 
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_FAULT_PAUSE, cfs_fail_val);
+
 	/* must return locked page */
 	if (fio->ft_mkwrite) {
 		LASSERT(cfio->ft_vmpage != NULL);

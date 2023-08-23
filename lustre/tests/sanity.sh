@@ -28003,6 +28003,38 @@ test_398q()
 }
 run_test 398q "race dio with buffered i/o"
 
+test_398r() {
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+	echo "hello, world" > $DIR/$tfile
+
+	cancel_lru_locks osc
+
+#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
+	do_facet ost1 $LCTL set_param fail_loc=0x20f
+	cat $DIR/$tfile > /dev/null && error "cat should fail"
+	return 0
+}
+run_test 398r "i/o error on file read"
+
+test_398s() {
+	[[ $OSTCOUNT -ge 2 && "$ost1_HOST" = "$ost2_HOST" ]] ||
+		skip "remote OST"
+
+	$LFS mirror create -N -i 0 -c 1 -N -i 1 -c 1 $DIR/$tfile ||
+		error "mirror create failed"
+
+	echo "hello, world" > $DIR/$tfile
+	$LFS mirror resync $DIR/$tfile || error "mirror resync failed"
+
+	cancel_lru_locks osc
+
+#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
+	do_facet ost1 $LCTL set_param fail_loc=0x20f
+	cat $DIR/$tfile > /dev/null && error "cat should fail"
+	return 0
+}
+run_test 398s "i/o error on mirror file read"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

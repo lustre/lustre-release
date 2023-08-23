@@ -783,8 +783,12 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 		result = rc;
 
 	if (result == -EAGAIN && io->ci_ndelay && !io->ci_iocb_nowait) {
-		io->ci_need_restart = 1;
-		result = 0;
+		if (!io->ci_tried_all_mirrors) {
+			io->ci_need_restart = 1;
+			result = 0;
+		} else {
+			result = -EIO;
+		}
 	}
 
 	if (result == 0)

@@ -85,11 +85,13 @@ static void vvp_page_delete(const struct lu_env *env,
 		 * kernel after it has been deleted from Lustre, which avoids
 		 * potential stale data reads.  The seqlock allows us to see
 		 * that a page was potentially deleted and catch the resulting
-		 * SIGBUS - see ll_filemap_fault() (LU-16160) */
-		write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
-		ClearPageUptodate(vmpage);
-		write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
-
+		 * SIGBUS - see ll_filemap_fault() (LU-16160)
+		 */
+		if (PageUptodate(vmpage)) {
+			write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
+			ClearPageUptodate(vmpage);
+			write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
+		}
 		/*
 		 * The reference from vmpage to cl_page is removed,
 		 * but the reference back is still here. It is removed
