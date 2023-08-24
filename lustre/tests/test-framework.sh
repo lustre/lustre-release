@@ -7261,6 +7261,8 @@ lnet_if_list() {
 	return 0
 }
 
+# return 1 if addr is remote
+# return 0 if addr is local
 is_local_addr() {
 	local addr=$1
 	# Cache address list to avoid mutiple execution of local_addr_list
@@ -7272,22 +7274,25 @@ is_local_addr() {
 	return 1
 }
 
+# return true(0) if host_name is local
+# return false(1) if host_name is remote
 local_node() {
 	local host_name=$1
 	local is_local="IS_LOCAL_$(host_id $host_name)"
+
 	if [ -z "${!is_local-}" ] ; then
-		eval $is_local=0
+		eval $is_local=false
 		local host_ip=$(getent ahostsv4 $host_name |
 					awk 'NR == 1 { print $1 }')
-		is_local_addr "$host_ip" && eval $is_local=1
+		is_local_addr "$host_ip" && eval $is_local=true
 	fi
-	[[ "${!is_local}" == "1" ]]
+	${!is_local}
 }
 
 remote_node () {
 	local node=$1
-	local_node $node && return 1
-	return 0
+
+	! local_node $node
 }
 
 remote_mds ()

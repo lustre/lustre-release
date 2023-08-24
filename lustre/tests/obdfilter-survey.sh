@@ -48,7 +48,7 @@ get_targets () {
 		#    $ nobjhi=2 thrhi=2 size=1024
 		#      targets="$nid:$FSNAME-OST0000 $nid:$FSNAME-OST0001 ..."
 		#                 ./obdfilter-survey
-		local_node && [ "$1" == "disk" ] || target=$nid:$target
+		! local_node && [ "$1" == "disk" ] || target=$nid:$target
 		targets="$targets $target"
 	done
 	echo $targets
