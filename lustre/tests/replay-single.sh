@@ -4946,6 +4946,9 @@ run_test 134 "replay creation of a file created in a pool"
 
 # LU-14027
 test_135() {
+	# make sure we are using the primary server
+	[[ $(facet_active ost1) == "ost1" ]] || fail ost1
+
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	# All files to ost1
