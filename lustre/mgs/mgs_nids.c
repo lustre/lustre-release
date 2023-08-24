@@ -73,8 +73,9 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
  * shouldn't cross unit boundaries.
  */
 static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
-			   struct mgs_config_res *res, struct page **pages,
-			   int nrpages, int units_total, int unit_size)
+			   struct mgs_config_res *res, u8 nid_size,
+			   struct page **pages, int nrpages,
+			   int units_total, int unit_size)
 {
 	struct mgs_nidtbl_target *tgt;
 	struct mgs_nidtbl_entry *entry;
@@ -118,9 +119,10 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
 		/* write target recover information */
 		mti  = &tgt->mnt_mti;
-		if (!target_supports_large_nid(mti))
-			LASSERT(mti->mti_nid_count < MTI_NIDS_MAX);
-		entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
+		if (!nid_size)
+			entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
+		else
+			entry_len += mti->mti_nid_count * nid_size;
 
 		if (entry_len > unit_size) {
 			CWARN("nidtbl: too large entry: entry length %d, unit size: %d\n",
@@ -172,20 +174,24 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
 		/* fill in entry. */
 		entry = (struct mgs_nidtbl_entry *)buf;
-		entry->mne_version   = tgt->mnt_version;
-		entry->mne_instance  = mti->mti_instance;
-		entry->mne_index     = mti->mti_stripe_index;
-		entry->mne_length    = entry_len;
-		entry->mne_type      = tgt->mnt_type;
-		entry->mne_nid_type  = 0;
-		entry->mne_nid_size  = sizeof(lnet_nid_t);
+		entry->mne_version = tgt->mnt_version;
+		entry->mne_instance = mti->mti_instance;
+		entry->mne_index = mti->mti_stripe_index;
+		entry->mne_length = entry_len;
+		entry->mne_type = tgt->mnt_type;
+		if (nid_size) {
+			entry->mne_nid_size = nid_size;
+			entry->mne_nid_type = 1;
+		} else {
+			entry->mne_nid_size = sizeof(lnet_nid_t);
+			entry->mne_nid_type = 0;
+		}
+		entry->mne_nid_count = 0;
 		/* We have been sent the newer larger NID format but the
 		 * current nidtbl doesn't support it. So filter the NIDs
 		 * sent to reject any real larger size NIDS.
 		 */
 		if (target_supports_large_nid(mti)) {
-			entry->mne_nid_count = 0;
-
 			for (i = 0; i < mti->mti_nid_count; i++) {
 				struct lnet_nid nid;
 				int err;
@@ -194,20 +200,37 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 				if (err < 0)
 					GOTO(out, rc = err);
 
-				/* if the large NID format represents a small
-				 * address space we can still pass it back to
-				 * the older clients.
-				 */
-				if (nid_is_nid4(&nid)) {
+				if (nid_size == 0) {
+					if (!nid_is_nid4(&nid))
+						continue;
+
 					entry->u.nids[entry->mne_nid_count] =
 						lnet_nid_to_nid4(&nid);
-					entry->mne_nid_count++;
+				} else {
+					/* If the mgs_target_info NIDs are
+					 * struct lnet_nid that have been
+					 * expanded in size we still can
+					 * use the nid if it fits in what
+					 * the client supports.
+					 */
+					if (NID_BYTES(&nid) > nid_size)
+						continue;
+
+					entry->u.nidlist[entry->mne_nid_count] =
+						nid;
 				}
+				entry->mne_nid_count++;
 			}
 		} else {
+			if (nid_size) {
+				for (i = 0; i < mti->mti_nid_count; i++)
+					lnet_nid4_to_nid(mti->mti_nids[i],
+							 &entry->u.nidlist[i]);
+			} else {
+				memcpy(entry->u.nids, mti->mti_nids,
+				       mti->mti_nid_count * sizeof(lnet_nid_t));
+			}
 			entry->mne_nid_count = mti->mti_nid_count;
-			memcpy(entry->u.nids, mti->mti_nids,
-			       mti->mti_nid_count * sizeof(lnet_nid_t));
 		}
 
 		version = tgt->mnt_version;
@@ -689,7 +712,8 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	res->mcr_offset = body->mcb_offset;
 	unit_size = min_t(int, 1 << body->mcb_bits, PAGE_SIZE);
 	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
-				pages, nrpages, bufsize / unit_size, unit_size);
+				body->mcb_rec_nid_size, pages, nrpages,
+				bufsize / unit_size, unit_size);
 	if (bytes < 0)
 		GOTO(out, rc = bytes);
 

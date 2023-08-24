@@ -4747,6 +4747,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mgs_nidtbl_entry, u.nids[0]));
 	LASSERTF((int)sizeof(((struct mgs_nidtbl_entry *)0)->u.nids[0]) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_nidtbl_entry *)0)->u.nids[0]));
+	LASSERTF((int)offsetof(struct mgs_nidtbl_entry, u.nidlist[0]) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_nidtbl_entry, u.nidlist[0]));
+	LASSERTF((int)sizeof(((struct mgs_nidtbl_entry *)0)->u.nidlist[0]) == 20, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_nidtbl_entry *)0)->u.nidlist[0]));
 
 	/* Checks for struct mgs_config_body */
 	LASSERTF((int)sizeof(struct mgs_config_body) == 80, "found %lld\n",
@@ -4767,6 +4771,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mgs_config_body, mcb_nm_cur_pass));
 	LASSERTF((int)sizeof(((struct mgs_config_body *)0)->mcb_nm_cur_pass) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_config_body *)0)->mcb_nm_cur_pass));
+	LASSERTF((int)offsetof(struct mgs_config_body, mcb_rec_nid_size) == 74, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_config_body, mcb_rec_nid_size));
+	LASSERTF((int)sizeof(((struct mgs_config_body *)0)->mcb_rec_nid_size) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_config_body *)0)->mcb_rec_nid_size));
 	LASSERTF((int)offsetof(struct mgs_config_body, mcb_bits) == 75, "found %lld\n",
 		 (long long)(int)offsetof(struct mgs_config_body, mcb_bits));
 	LASSERTF((int)sizeof(((struct mgs_config_body *)0)->mcb_bits) == 1, "found %lld\n",

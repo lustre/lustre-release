@@ -173,8 +173,8 @@ int class_del_uuid(const char *uuid)
 	return 0;
 }
 
-int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
-			   int nid_count)
+int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
+			   int nid_count, int nid_size)
 {
 	struct uuid_nid_data *entry;
 	int i, rc;
@@ -197,10 +197,18 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 			continue;
 
 		matched = true;
+		entry->un_nid_count = 0;
 		CDEBUG(D_NET, "Updating UUID '%s'\n", obd_uuid2str(uuid));
-		for (i = 0; i < nid_count; i++)
-			lnet_nid4_to_nid(nids[i], &entry->un_nids[i]);
-		entry->un_nid_count = nid_count;
+		for (i = 0; i < nid_count; i++) {
+			if (NID_BYTES(&nidlist[i]) > nid_size)
+				continue;
+
+			entry->un_nid_count++;
+			memset(&entry->un_nids[entry->un_nid_count], 0,
+			       sizeof(entry->un_nids[entry->un_nid_count]));
+			memcpy(&entry->un_nids[entry->un_nid_count],
+			       &nidlist[i], nid_size);
+		}
 		break;
 	}
 	spin_unlock(&g_uuid_lock);

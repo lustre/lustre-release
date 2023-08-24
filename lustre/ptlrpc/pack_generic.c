@@ -2087,28 +2087,34 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 		__swab64s(&mti->mti_nids[i]);
 }
 
-void lustre_swab_mgs_nidtbl_entry(struct mgs_nidtbl_entry *entry)
+void lustre_swab_mgs_nidtbl_entry_header(struct mgs_nidtbl_entry *entry)
 {
-	__u8 i;
-
 	__swab64s(&entry->mne_version);
 	__swab32s(&entry->mne_instance);
 	__swab32s(&entry->mne_index);
 	__swab32s(&entry->mne_length);
 
-	/* mne_nid_(count|type) must be one byte size because we're gonna
-	 * access it w/o swapping. */
-	BUILD_BUG_ON(sizeof(entry->mne_nid_count) != sizeof(__u8));
-	BUILD_BUG_ON(sizeof(entry->mne_nid_type) != sizeof(__u8));
+	/* mne_nid_(count|type) must be one byte size because we're going to
+	 * access it w/o swapping.
+	 */
+	BUILD_BUG_ON(sizeof(entry->mne_nid_count) != sizeof(u8));
+	BUILD_BUG_ON(sizeof(entry->mne_nid_type) != sizeof(u8));
 
-	/* remove this assertion if ipv6 is supported. */
-	LASSERT(entry->mne_nid_type == 0);
-	for (i = 0; i < entry->mne_nid_count; i++) {
-		BUILD_BUG_ON(sizeof(lnet_nid_t) != sizeof(__u64));
-		__swab64s(&entry->u.nids[i]);
-	}
 }
-EXPORT_SYMBOL(lustre_swab_mgs_nidtbl_entry);
+EXPORT_SYMBOL(lustre_swab_mgs_nidtbl_entry_header);
+
+void lustre_swab_mgs_nidtbl_entry_content(struct mgs_nidtbl_entry *entry)
+{
+	int i;
+
+	/* Large NIDs are always big endian so we don't need swapping */
+	if (entry->mne_nid_type)
+		return;
+
+	for (i = 0; i < entry->mne_nid_count; i++)
+		__swab64s(&entry->u.nids[i]);
+}
+EXPORT_SYMBOL(lustre_swab_mgs_nidtbl_entry_content);
 
 void lustre_swab_mgs_config_body(struct mgs_config_body *body)
 {

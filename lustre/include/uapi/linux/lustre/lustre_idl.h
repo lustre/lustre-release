@@ -2637,17 +2637,18 @@ struct mgs_target_info {
 } __attribute__((packed));
 
 struct mgs_nidtbl_entry {
-        __u64           mne_version;    /* table version of this entry */
-        __u32           mne_instance;   /* target instance # */
-        __u32           mne_index;      /* target index */
-        __u32           mne_length;     /* length of this entry - by bytes */
-        __u8            mne_type;       /* target type LDD_F_SV_TYPE_OST/MDT */
-        __u8            mne_nid_type;   /* type of nid(mbz). for ipv6. */
-        __u8            mne_nid_size;   /* size of each NID, by bytes */
-        __u8            mne_nid_count;  /* # of NIDs in buffer */
-        union {
-                lnet_nid_t nids[0];     /* variable size buffer for NIDs. */
-        } u;
+	__u64		mne_version;	/* table version of this entry */
+	__u32		mne_instance;	/* target instance # */
+	__u32		mne_index;	/* target index */
+	__u32		mne_length;	/* length of this entry - by bytes */
+	__u8		mne_type;	/* target type LDD_F_SV_TYPE_OST/MDT */
+	__u8		mne_nid_type;	/* type of NID. for IPv6. */
+	__u8		mne_nid_size;	/* size of each NID, by bytes */
+	__u8		mne_nid_count;	/* # of NIDs in buffer */
+	union {
+		lnet_nid_t nids[0];	/* variable size buffer for NIDs. */
+		struct lnet_nid nidlist[0];
+	} u;
 };
 
 enum mgs_cfg_type {
@@ -2664,7 +2665,10 @@ struct mgs_config_body {
 	char     mcb_name[MTI_NAME_MAXLEN]; /* logname */
 	__u64    mcb_offset;    /* next index of config log to request */
 	__u16    mcb_type;      /* type of log: MGS_CFG_T_[CONFIG|RECOVER] */
-	__u8     mcb_nm_cur_pass;
+	union {
+		__u8	mcb_nm_cur_pass;  /* mcb_type == MGS_CFG_T_NODEMAP */
+		__u8	mcb_rec_nid_size; /* mcb_type == MGS_CFG_T_RECOVER */
+	};
 	__u8     mcb_bits;      /* bits unit size of config log */
 	__u32    mcb_units;     /* # of units for bulk transfer */
 };

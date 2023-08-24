@@ -1169,7 +1169,6 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 				  void *data, int datalen, bool mne_swab)
 {
 	struct config_llog_instance *cfg = &cld->cld_cfg;
-	struct mgs_nidtbl_entry *entry;
 	struct lustre_cfg *lcfg;
 	struct lustre_cfg_bufs bufs;
 	u64 prev_version = 0;
@@ -1211,45 +1210,50 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	pos = 0;
 
 	while (datalen > 0) {
-		int   entry_len = sizeof(*entry);
-		int   is_ost;
+		struct mgs_nidtbl_entry *entry = (data + off);
+		struct lnet_nid *nidlist = NULL;
+		int entry_len = sizeof(*entry);
 		struct obd_device *obd;
 		struct obd_import *imp;
+		struct obd_uuid *uuid;
 		char *obdname;
 		char *cname;
 		char *params;
-		char *uuid;
+		bool is_ost;
 
 		rc = -EINVAL;
-		if (datalen < sizeof(*entry))
+		/* sanity checks */
+		if (datalen < entry_len) /* really short on data */
 			break;
 
-		entry = (typeof(entry))(data + off);
+		/* swab non nid data */
+		if (mne_swab)
+			lustre_swab_mgs_nidtbl_entry_header(entry);
 
-		/* sanity check */
-		if (entry->mne_nid_type != 0) /* only support type 0 for ipv4 */
-			break;
 		if (entry->mne_nid_count == 0) /* at least one nid entry */
-			break;
-		if (entry->mne_nid_size != sizeof(lnet_nid_t))
 			break;
 
 		entry_len += entry->mne_nid_count * entry->mne_nid_size;
 		if (datalen < entry_len) /* must have entry_len at least */
 			break;
 
-		/* Keep this swab for normal mixed endian handling. LU-1644 */
-		if (mne_swab)
-			lustre_swab_mgs_nidtbl_entry(entry);
 		if (entry->mne_length > PAGE_SIZE) {
 			CERROR("MNE too large (%u)\n", entry->mne_length);
 			break;
 		}
 
+		/* improper mne_lenth */
 		if (entry->mne_length < entry_len)
 			break;
 
-		off     += entry->mne_length;
+		/* entry length reports larger than all the data passed in */
+		if (datalen < entry->mne_length)
+			break;
+
+		/* Looks sane - see if we can process this entry.
+		 * If not, we continue to the next entry.
+		 */
+		off += entry->mne_length;
 		datalen -= entry->mne_length;
 		if (datalen < 0)
 			break;
@@ -1267,11 +1271,43 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		}
 		prev_version = entry->mne_version;
 
+		if (entry->mne_nid_type == 0) {
+			struct lnet_nid *nid;
+			int i;
+
+			OBD_ALLOC_PTR_ARRAY(nidlist, entry->mne_nid_count);
+			if (!nidlist) {
+				rc = -ENOMEM;
+				break;
+			}
+
+			/* Keep this nid data swab for normal mixed
+			 * endian handling. LU-1644
+			 */
+			if (mne_swab)
+				lustre_swab_mgs_nidtbl_entry_content(entry);
+
+			/* Turn old NID format to newer format. */
+			nid = nidlist;
+			for (i = 0; i < entry->mne_nid_count; i++) {
+				lnet_nid4_to_nid(entry->u.nids[i], nid);
+				nid += sizeof(struct lnet_nid);
+			}
+		} else {
+			/* Handle the case if struct lnet_nid is expanded in
+			 * the future. The MGS should prevent this but just
+			 * in case.
+			 */
+			if (entry->mne_nid_size > sizeof(struct lnet_nid))
+				continue;
+
+			nidlist = entry->u.nidlist;
+		}
+
 		/*
 		 * Write a string with format "nid::instance" to
 		 * lustre/<osc|mdc>/<target>-<osc|mdc>-<instance>/import.
 		 */
-
 		is_ost = entry->mne_type == LDD_F_SV_TYPE_OST;
 		memset(buf, 0, bufsz);
 		obdname = buf;
@@ -1309,66 +1345,73 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		++pos;
 		params = buf + pos;
 		pos += sprintf(params, "%s.import=%s", cname, "connection=");
-		uuid = buf + pos;
+		uuid = (struct obd_uuid *)(buf + pos);
 
 		with_imp_locked(obd, imp, rc) {
+			struct obd_uuid server_uuid;
+			char *primary_nid;
+			int prim_nid_len;
+
 			/* iterate all nids to find one */
 			/* find uuid by nid */
 			/* create import entries if they don't exist */
-			rc = client_import_add_nids_to_conn(
-				imp, entry->u.nids, entry->mne_nid_count,
-				(struct obd_uuid *)uuid);
+			rc = client_import_add_nids_to_conn(imp, nidlist,
+							    entry->mne_nid_count,
+							    entry->mne_nid_size,
+							    uuid);
+			if (rc != -ENOENT || !dynamic_nids)
+				continue;
 
-			if (rc == -ENOENT && dynamic_nids) {
-				/* create a new connection for this import */
-				char *primary_nid =
-					libcfs_nid2str(entry->u.nids[0]);
-				int prim_nid_len = strlen(primary_nid) + 1;
-				struct obd_uuid server_uuid;
+			/* create a new connection for this import */
+			primary_nid = libcfs_nidstr(&nidlist[0]);
+			prim_nid_len = strlen(primary_nid) + 1;
+			if (prim_nid_len > UUID_MAX)
+				goto fail;
 
-				if (prim_nid_len > UUID_MAX)
-					goto fail;
-				strncpy(server_uuid.uuid, primary_nid,
-					prim_nid_len);
+			strncpy(server_uuid.uuid, primary_nid,
+				prim_nid_len);
 
-				CDEBUG(D_INFO, "Adding a connection for %s\n",
-				       primary_nid);
+			CDEBUG(D_INFO, "Adding a connection for %s\n",
+			       primary_nid);
 
-				rc = client_import_dyn_add_conn(
-					imp, &server_uuid, entry->u.nids[0], 1);
-				if (rc < 0) {
-					CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
-					       obd->obd_name, primary_nid, rc);
-					goto fail;
-				}
-				rc = client_import_add_nids_to_conn(
-					imp, entry->u.nids,
-					entry->mne_nid_count,
-					(struct obd_uuid *)uuid);
-				if (rc < 0) {
-					CERROR("%s: failed to lookup UUID: rc = %d\n",
-					       obd->obd_name, rc);
-					goto fail;
-				}
+			rc = client_import_dyn_add_conn(imp, &server_uuid,
+							&nidlist[0], 1);
+			if (rc < 0) {
+				CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
+				       obd->obd_name, primary_nid, rc);
+				goto fail;
 			}
+
+			rc = client_import_add_nids_to_conn(imp, nidlist,
+							    entry->mne_nid_count,
+							    entry->mne_nid_size,
+							    uuid);
+			if (rc < 0)
+				CERROR("%s: failed to lookup UUID: rc = %d\n",
+				       obd->obd_name, rc);
 fail:;
 		}
+
 		if (rc == -ENODEV) {
 			/* client does not connect to the OST yet */
 			rc = 0;
-			continue;
+			goto free_nids;
 		}
 
 		if (rc < 0 && rc != -ENOSPC) {
 			CERROR("mgc: cannot find UUID by nid '%s': rc = %d\n",
-			       libcfs_nid2str(entry->u.nids[0]), rc);
+			       libcfs_nidstr(&nidlist[0]), rc);
+
+			/* For old NID format case the nidlist was allocated. */
+			if (entry->mne_nid_type == 0)
+				OBD_FREE_PTR_ARRAY(nidlist, entry->mne_nid_count);
 			break;
 		}
 
 		CDEBUG(D_INFO, "Found UUID '%s' by NID '%s'\n",
-		       uuid, libcfs_nid2str(entry->u.nids[0]));
+		       uuid->uuid, libcfs_nidstr(&nidlist[0]));
 
-		pos += strlen(uuid);
+		pos += strlen(uuid->uuid);
 		pos += sprintf(buf + pos, "::%u", entry->mne_instance);
 		LASSERT(pos < bufsz);
 
@@ -1393,6 +1436,10 @@ fail:;
 			       obdname, rc);
 
 		/* continue, even one with error */
+free_nids:
+		/* For old NID format case the nidlist was allocated. */
+		if (entry->mne_nid_type == 0)
+			OBD_FREE_PTR_ARRAY(nidlist, entry->mne_nid_count);
 	}
 
 	OBD_FREE(buf, PAGE_SIZE);
@@ -1463,9 +1510,10 @@ again:
 	    >= sizeof(body->mcb_name))
 		GOTO(out, rc = -E2BIG);
 	body->mcb_offset = cfg->cfg_last_idx + 1;
-	body->mcb_type   = cld->cld_type;
-	body->mcb_bits   = PAGE_SHIFT;
-	body->mcb_units  = nrpages;
+	body->mcb_type = cld->cld_type;
+	body->mcb_bits = PAGE_SHIFT;
+	body->mcb_units = nrpages;
+	body->mcb_rec_nid_size = sizeof(struct lnet_nid);
 
 	/* allocate bulk transfer descriptor */
 	desc = ptlrpc_prep_bulk_imp(req, nrpages, 1,

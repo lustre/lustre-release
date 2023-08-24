@@ -2177,6 +2177,7 @@ check_mgs_nidtbl_entry(void)
 	CHECK_MEMBER(mgs_nidtbl_entry, mne_nid_size);
 	CHECK_MEMBER(mgs_nidtbl_entry, mne_nid_count);
 	CHECK_MEMBER(mgs_nidtbl_entry, u.nids[0]);
+	CHECK_MEMBER(mgs_nidtbl_entry, u.nidlist[0]);
 }
 
 static void
@@ -2188,6 +2189,7 @@ check_mgs_config_body(void)
 	CHECK_MEMBER(mgs_config_body, mcb_offset);
 	CHECK_MEMBER(mgs_config_body, mcb_type);
 	CHECK_MEMBER(mgs_config_body, mcb_nm_cur_pass);
+	CHECK_MEMBER(mgs_config_body, mcb_rec_nid_size);
 	CHECK_MEMBER(mgs_config_body, mcb_bits);
 	CHECK_MEMBER(mgs_config_body, mcb_units);
 
