@@ -463,7 +463,7 @@ static void vvp_pgcache_page_show(const struct lu_env *env,
 	int has_flags;
 
 	vmpage = page->cp_vmpage;
-	seq_printf(seq, " %5i | %p %p %s %s | %p "DFID"(%p) %lu %u [",
+	seq_printf(seq, " %5i | %pK %pK %s %s | %pK "DFID"(%pK) %lu %u [",
 		   0 /* gen */,
 		   NULL, /* was vvp_page */
 		   page,

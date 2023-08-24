@@ -492,7 +492,7 @@ kgnilnd_mdd_seq_show(struct seq_file *s, void *iter)
 	hndl.qword1 = tx->tx_map_key.qword1;
 	hndl.qword2 = tx->tx_map_key.qword2;
 
-	seq_printf(s, "%p %x %16llu %8d %#8x %#llx.%#llxx\n",
+	seq_printf(s, "%pK %x %16llu %8d %#8x %#llx.%#llxx\n",
 		tx, id, nob, physnop, buftype,
 		hndl.qword1, hndl.qword2);
 
@@ -900,7 +900,7 @@ kgnilnd_conn_seq_show(struct seq_file *s, void *iter)
 
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	seq_printf(s, "%p->%s [%d] q %d/%d/%d "
+	seq_printf(s, "%pK->%s [%d] q %d/%d/%d "
 		"tx sq %u %dms/%dms "
 		"rx sq %u %dms/%dms "
 		"noop r/s %d/%d w/s/cq %lds/%lds/%lds "
@@ -1021,16 +1021,7 @@ kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
 
 	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
 		seq_printf(sf,
-			   "%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s "
-			   "mbox adr %p "
-			   "dg type %s "
-			   "%s "
-			   "purg %d "
-			   "close s/r %d/%d "
-			   "err %d peer err %d "
-			   "tx sq %u %dms/%dms "
-			   "rx sq %u %dms/%dms/%dms "
-			   "tx retran %lld\n",
+			   "%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s mbox adr %pK dg type %s %s purg %d close s/r %d/%d err %d peer err %d tx sq %u %dms/%dms rx sq %u %dms/%dms/%dms tx retran %lld\n",
 			   ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday,
 			   ctm.tm_hour, ctm.tm_min, ctm.tm_sec, now.tv_nsec,
 			   libcfs_nid2str(peer->gnp_nid),
@@ -1263,7 +1254,7 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d last %d@%lldms dgram %d@%dms reconn %dms to %lus \n",
+	seq_printf(s, "%pK->%s [%d] %s NIC 0x%x q %d conn %c purg %d last %d@%lldms dgram %d@%dms reconn %dms to %lus\n",
 		peer, libcfs_nid2str(peer->gnp_nid),
 		atomic_read(&peer->gnp_refcount),
 		(peer->gnp_state == GNILND_PEER_DOWN) ? "down" :

@@ -7042,7 +7042,14 @@ run_one_logged() {
 	local zfs_debug_log=$TESTLOG_PREFIX.$TESTNAME.zfs_log
 	local SAVE_UMASK=$(umask)
 	local rc=0
+	local node
+	declare -A kptr_restrict
 	umask 0022
+
+	for node in $(all_nodes); do
+		kptr_restrict[$node]=$(do_node $node "sysctl --values kernel/kptr_restrict")
+		do_node $node "sysctl -wq kernel/kptr_restrict=1"
+	done
 
 	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
 	echo
@@ -7088,6 +7095,10 @@ run_one_logged() {
 
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
 		[[ $rc != 0 || "$TEST_STATUS" != "PASS" ]] && break
+	done
+
+	for node in $(all_nodes); do
+		do_node $node "sysctl -wq kernel/kptr_restrict=${kptr_restrict[$node]}"
 	done
 
 	if [[ "$TEST_STATUS" != "SKIP" && -f $TF_SKIP ]]; then
