@@ -37,12 +37,18 @@ DBENCH_PID=0
 GSS=true
 GSS_KRB5=true
 
+check_krb_env() {
+	which klist || skip "Kerberos env not setup"
+	which kinit || skip "Kerberos env not setup"
+}
+
 prepare_krb5_creds() {
 	echo prepare krb5 cred
 	echo RUNAS=$RUNAS
 	$RUNAS krb5_login.sh || exit 1
 }
 
+check_krb_env
 prepare_krb5_creds
 
 # we want double mount
@@ -111,6 +117,24 @@ error_dbench()
 	sleep 1
 
 	error $err_str
+}
+
+# obtain and cache Kerberos ticket-granting ticket
+refresh_krb5_tgt() {
+	local myRUNAS_UID=$1
+	local myRUNAS_GID=$2
+	shift 2
+	local myRUNAS=$@
+	if [ -z "$myRUNAS" ]; then
+		error_exit "myRUNAS command must be specified for refresh_krb5_tgt"
+	fi
+
+	CLIENTS=${CLIENTS:-$HOSTNAME}
+	do_nodes $CLIENTS "set -x
+if ! $myRUNAS krb5_login.sh; then
+    echo "Failed to refresh Krb5 TGT for UID/GID $myRUNAS_UID/$myRUNAS_GID."
+    exit 1
+fi"
 }
 
 restore_krb5_cred() {
