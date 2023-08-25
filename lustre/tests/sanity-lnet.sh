@@ -4572,6 +4572,28 @@ test_260() {
 }
 run_test 260 "test that linux sysctl parameter are set correctly"
 
+test_270() {
+	[[ "$NETTYPE" =~ tcp ]] || skip "Need tcp NETTYPE"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	reinit_dlc || return $?
+
+	#define CFS_FAIL_TEST_PING_MD 0xe003  CFS_FAIL_SOME 0x10000000
+	"$LCTL" set_param fail_loc=0x1000e003 fail_val=100
+
+	"$LNETCTL" net add --net "tcp" --if "${INTERFACES[0]}"
+
+	local nid="$($LCTL list_nids | head -n 1)"
+
+	do_lnetctl ping "$nid" ||
+		error "$LNETCTL ping $nid with TEST_PING_MD failed"
+	dmesg | grep -q "found metadata reply" ||
+		error "Didn't find metadata reply message in log"
+
+	cleanup_lnet || error "Failed to unload modules after test execution"
+}
+run_test 270 "Test NID metadata"
+
 test_280() {
 	local rc=0
 

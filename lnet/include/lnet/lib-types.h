@@ -345,6 +345,10 @@ struct lnet_lnd {
 	int (*lnd_nl_get)(int cmd, struct sk_buff *msg, int type, void *data);
 	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
 
+		/* find cached metadata associated with nid */
+	int (*lnd_get_nid_metadata)(struct lnet_ni *ni,
+				    struct lnet_nid_md_entry *md_entry);
+
 	const struct ln_key_list *lnd_keys;
 };
 

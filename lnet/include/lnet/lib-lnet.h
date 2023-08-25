@@ -18,6 +18,7 @@
 #define CFS_FAIL_PTLRPC_OST_BULK_CB2	0xe000
 #define CFS_FAIL_MATCH_MD_NID		0xe001
 #define CFS_FAIL_DELAY_MSG_FORWARD	0xe002
+#define CFS_FAIL_TEST_PING_MD		0xe003
 
 #include <lustre_compat/linux/generic-radix-tree.h>
 #include <lustre_compat/linux/hash.h>
@@ -703,6 +704,9 @@ void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
 void lnet_drop_routed_msgs_locked(struct list_head *list, int cpt);
+int lnet_discover_nid_metadata(struct lnet_processid *id,
+			       signed long timeout,
+			       struct lnet_nid_metadata *data);
 
 struct list_head **lnet_create_array_of_queues(void);
 

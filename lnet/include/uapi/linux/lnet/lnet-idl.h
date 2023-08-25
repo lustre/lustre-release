@@ -249,6 +249,18 @@ struct lnet_ni_large_status {
 	struct lnet_nid	ns_nid;
 } __attribute__((packed));
 
+#define LNET_MD_BUFFER_SZ 32
+
+struct lnet_nid_md_entry {
+	lnet_nid_t			nid;
+	__u8				buffer[LNET_MD_BUFFER_SZ];
+} __attribute__((packed));
+
+struct lnet_nid_metadata {
+	__u32				num_nid_mappings;
+	struct lnet_nid_md_entry	nid_mappings[0];
+} __attribute__((packed));
+
 /* NB: value of these features equal to LNET_PROTO_PING_VERSION_x
  * of old LNet, so there shouldn't be any compatibility issue
  */
@@ -260,6 +272,7 @@ struct lnet_ni_large_status {
 #define LNET_PING_FEAT_DISCOVERY	(1 << 4)	/* Supports Discovery */
 #define LNET_PING_FEAT_LARGE_ADDR	(1 << 5)	/* Large addr nids present */
 #define LNET_PING_FEAT_PRIMARY_LARGE	(1 << 6)	/* Primary is first Large addr */
+#define LNET_PING_FEAT_METADATA		(1 << 7)	/* LND defined NID metadata */
 
 /*
  * All ping feature bits fit to hit the wire.
@@ -275,7 +288,8 @@ struct lnet_ni_large_status {
 					 LNET_PING_FEAT_MULTI_RAIL |	\
 					 LNET_PING_FEAT_DISCOVERY |	\
 					 LNET_PING_FEAT_LARGE_ADDR |	\
-					 LNET_PING_FEAT_PRIMARY_LARGE)
+					 LNET_PING_FEAT_PRIMARY_LARGE | \
+					 LNET_PING_FEAT_METADATA)
 
 /* NOTE:
  * The first address in pi_ni *must* be the loop-back nid: LNET_NID_LO_0
