@@ -431,8 +431,15 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 		qmt_pool_lookup(env, qmt, type, NULL, -1, false)
 #define qmt_pool_lookup_name(env, qmt, type, name) \
 		qmt_pool_lookup(env, qmt, type, name, -1, false)
-#define qmt_pool_lookup_arr(env, qmt, type, idx) \
-		qmt_pool_lookup(env, qmt, type, NULL, idx, true)
+
+/*
+ * Until MDT pools are not emplemented, all MDTs belong to
+ * global pool, thus lookup lqes only in global pool for the
+ * DOM case.
+ */
+#define qmt_pool_lookup_arr(env, qmt, type, idx, stype) \
+		qmt_pool_lookup(env, qmt, type, NULL, \
+		qmt_dom(type, stype) ? -1 : idx, true)
 struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 					     struct qmt_device *qmt,
 					     int rtype,
@@ -452,7 +459,10 @@ int qmt_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_rem(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_del(struct obd_device *obd, char *poolname);
 
-struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi);
+#define qmt_sarr_read_down(qpi) down_read(&qpi->qpi_sarr.osts.op_rw_sem)
+#define qmt_sarr_read_up(qpi) up_read(&qpi->qpi_sarr.osts.op_rw_sem)
+#define qmt_sarr_write_down(qpi) down_write(&qpi->qpi_sarr.osts.op_rw_sem)
+#define qmt_sarr_write_up(qpi) up_write(&qpi->qpi_sarr.osts.op_rw_sem)
 int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx);
 unsigned int qmt_sarr_count(struct qmt_pool_info *qpi);
 
@@ -500,6 +510,7 @@ void qti_lqes_restore_fini(const struct lu_env *env);
 void qti_lqes_write_lock(const struct lu_env *env);
 void qti_lqes_write_unlock(const struct lu_env *env);
 
+int qmt_map_lge_idx(struct lqe_glbl_data *lgd, int ostidx);
 struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *, int);
 void qmt_free_lqe_gd(struct lqe_glbl_data *);
 void qmt_setup_lqe_gd(const struct lu_env *,  struct qmt_device *,

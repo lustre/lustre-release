@@ -9637,6 +9637,7 @@ pool_add_targets() {
 
 	if [ -z $last ]; then
 		local list=$first
+		last=$first
 	else
 		local list=$(seq $first $step $last)
 	fi

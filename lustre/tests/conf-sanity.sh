@@ -3091,6 +3091,84 @@ test_33b() {	# was test_34
 }
 run_test 33b "Drop cancel during umount"
 
+test_33c() {
+	(( MDS1_VERSION >= $(version_code 2.15.57) )) ||
+		skip "Need MDS version at least 2.15.57"
+	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
+	local tstid=${TSTID:-"$(id -u $TSTUSR)"}
+	local mkfsoptions
+	local qpool="qpool1"
+
+	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
+
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+
+	if [ "$mds1_FSTYPE" == ldiskfs ]; then
+		mkfsoptions="--mkfsoptions=\\\"-J size=8\\\"" # See bug 17931.
+	fi
+
+	if combined_mgs_mds; then
+		local mgs_flag="--mgs"
+	fi
+
+	load_modules
+	stack_trap unload_modules_conf
+
+	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --fsname=${FSNAME} \
+		--reformat $mgs_flag $mkfsoptions $fs2mdsdev $fs2mdsvdev ||
+		exit 10
+	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --mgsnode=$MGSNID \
+		--fsname=${FSNAME} --index=0x7c6 --reformat $fs2ostdev \
+		$fs2ostvdev || exit 10
+
+
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+	stack_trap "stop fs2mds -f"
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+	stack_trap "stop fs2ost -f"
+
+	mount_client $MOUNT || error "client start failed"
+	stack_trap "umount_client $MOUNT"
+	mkdir_on_mdt0 $DIR/$tdir || error "cannot create $DIR/$tdir"
+	chmod 0777 $DIR/$tdir || error "chown failed"
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-OST*.quota_slave.enable=$QUOTA_TYPE
+	else
+		do_facet mgs $PERM_CMD $FSNAME.quota.ost=$QUOTA_TYPE ||
+			error "set ost quota type failed"
+	fi
+
+	local old_MDSCOUNT=$MDSCOUNT
+	MDSCOUNT=1
+	stack_trap "MDSCOUNT=$old_MDSCOUNT"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0x7c6
+
+	$LFS setquota -u $tstid -B20M -b 0 $MOUNT
+	$LFS setquota -g $tstid -B20M -b 0 $MOUNT
+	$LFS setquota -u $tstid -B20M -b 0 --pool $qpool $MOUNT
+	$LFS setquota -g $tstid -B20M -b 0 --pool $qpool $MOUNT
+
+	for i in {1..10}; do
+		runas -u $tstid -g $tstid dd if=/dev/zero of=$DIR/$tdir/f1 \
+			bs=1M count=30 oflag=direct
+		sleep 3
+		rm -f $DIR/$tdir/f1
+	done
+
+	destroy_pools
+	#umount_client $MOUNT || error "client start failed"
+	#stop fs2ost -f
+	#stop fs2mds -f
+	#cleanup_nocli || error "cleanup_nocli failed with $?"
+}
+run_test 33c "Mount ost with a large index number"
+
 test_34a() {
 	setup
 	do_facet client "bash runmultiop_bg_pause $DIR/file O_c"

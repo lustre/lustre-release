@@ -1587,7 +1587,12 @@ struct lu_tgt_pool {
 };
 
 int lu_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count);
-int lu_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
+#define lu_tgt_pool_add(op, idx, min_count) \
+		lu_tgt_pool_add_lock(op, idx, min_count, true)
+#define lu_tgt_pool_add_locked(op, idx, min_count) \
+		lu_tgt_pool_add_lock(op, idx, min_count, false)
+int lu_tgt_pool_add_lock(struct lu_tgt_pool *op, __u32 idx,
+			 unsigned int min_count, bool locked);
 int lu_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx);
 void lu_tgt_pool_free(struct lu_tgt_pool *op);
 int lu_tgt_check_index(int idx, struct lu_tgt_pool *osts);

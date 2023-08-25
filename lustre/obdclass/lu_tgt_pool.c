@@ -132,13 +132,15 @@ EXPORT_SYMBOL(lu_tgt_pool_extend);
  * \retval		0 if target could be added to the pool
  * \retval		negative error if target \a idx was not added
  */
-int lu_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
+int lu_tgt_pool_add_lock(struct lu_tgt_pool *op, __u32 idx,
+			 unsigned int min_count, bool lock)
 {
 	unsigned int i;
 	int rc = 0;
 	ENTRY;
 
-	down_write(&op->op_rw_sem);
+	if (lock)
+		down_write(&op->op_rw_sem);
 
 	/* search ost in pool array */
 	for (i = 0; i < op->op_count; i++) {
@@ -155,10 +157,11 @@ int lu_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 	op->op_count++;
 	EXIT;
 out:
-	up_write(&op->op_rw_sem);
+	if (lock)
+		up_write(&op->op_rw_sem);
 	return rc;
 }
-EXPORT_SYMBOL(lu_tgt_pool_add);
+EXPORT_SYMBOL(lu_tgt_pool_add_lock);
 
 /**
  * Remove an existing pool from the system.

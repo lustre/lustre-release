@@ -202,7 +202,9 @@ struct lquota_entry {
 
 struct lqe_glbl_entry {
 	__u64			 lge_qunit;
-	unsigned long		 lge_edquot:1,
+	unsigned long		 lge_idx:16,
+				 /* index of target */
+				 lge_edquot:1,
 				 /* true when minimum qunit is set */
 				 lge_qunit_set:1,
 				 /* qunit or edquot is changed - need

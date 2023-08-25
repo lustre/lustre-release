@@ -830,8 +830,8 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 				    int idx)
 {
 	struct lquota_entry *lqe_gl, *lqe;
-	bool need_reseed = false;
-	bool need_notify = false;
+	bool reseed = false;
+	bool notify = false;
 	int i;
 
 	lqe_gl = qti_lqes_glbl(env);
@@ -839,30 +839,31 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 	for (i = 0; i < qti_lqes_cnt(env); i++) {
 		lqe = qti_lqes(env)[i];
 		if (qunit)
-			need_reseed |= qmt_adjust_qunit(env, lqe);
+			reseed |= qmt_adjust_qunit(env, lqe);
 		if (edquot)
-			need_reseed |= qmt_adjust_edquot(lqe, now);
+			reseed |= qmt_adjust_edquot(lqe, now);
 	}
 
 	LASSERT(lqe_gl);
 	if (!lqe_gl->lqe_glbl_data &&
 	    (req_has_rep(qb_flags) || req_is_rel(qb_flags))) {
-		if (need_reseed)
+		if (reseed)
 			CDEBUG(D_QUOTA,
 			       "%s: can not notify - lge_glbl_data is not set\n",
 			       qmt->qmt_svname);
-		return need_reseed;
+		return reseed;
 	}
 
-	if (need_reseed || idx >= 0) {
+	if (reseed || idx >= 0) {
 		mutex_lock(&lqe_gl->lqe_glbl_data_lock);
 		if (lqe_gl->lqe_glbl_data) {
 			struct lqe_glbl_data *lgd = lqe_gl->lqe_glbl_data;
 
-			if (need_reseed) {
+			if (reseed) {
 				qmt_seed_glbe_all(env, lgd, qunit, edquot);
 			} else if (idx >= 0) {
-				LASSERT(idx <= lgd->lqeg_num_used);
+				int lge_idx = qmt_map_lge_idx(lgd, idx);
+
 				/* If there are no locks yet when
 				 * lge_qunit/edquot_nu is set, slaves
 				 * are still not notified with new
@@ -872,17 +873,17 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 				 * to the least qunit, but lqe_revoke_time is
 				 * still not set.
 				 */
-				need_notify = lgd->lqeg_arr[idx].lge_qunit_nu ||
-					      lgd->lqeg_arr[idx].lge_edquot_nu;
+				notify = lgd->lqeg_arr[lge_idx].lge_qunit_nu ||
+					 lgd->lqeg_arr[lge_idx].lge_edquot_nu;
 			}
 		}
 		mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
 	}
 
-	if (need_reseed || need_notify)
+	if (reseed || notify)
 		qmt_id_lock_notify(qmt, lqe_gl);
 
-	return need_reseed;
+	return reseed;
 }
 
 
@@ -1087,7 +1088,7 @@ void qti_lqes_write_unlock(const struct lu_env *env)
 		lqe_write_unlock(qti_lqes(env)[i]);
 }
 
-#define QMT_INIT_SLV_CNT	64
+#define QMT_INIT_SLV_CNT 64
 struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *pool, int qtype)
 {
 	struct lqe_glbl_data	*lgd;
@@ -1126,12 +1127,29 @@ void qmt_free_lqe_gd(struct lqe_glbl_data *lgd)
 	OBD_FREE(lgd, sizeof(struct lqe_glbl_data));
 }
 
+int qmt_map_lge_idx(struct lqe_glbl_data *lgd, int ostidx)
+{
+	int k;
+
+	/* check common case of sequential OST numbers first */
+	if (ostidx < lgd->lqeg_num_used &&
+	    lgd->lqeg_arr[ostidx].lge_idx == ostidx)
+		return ostidx;
+
+	for (k = 0; k < lgd->lqeg_num_used; k++)
+		if (lgd->lqeg_arr[k].lge_idx == ostidx)
+			break;
+
+	LASSERTF(k < lgd->lqeg_num_used, "Cannot map ostidx %d for %p\n",
+		 ostidx, lgd);
+	return k;
+}
+
 void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 		       bool qunit, bool edquot)
 {
-	struct rw_semaphore	*sem = NULL;
-	struct qmt_pool_info	*qpi;
-	int			 i, j, idx;
+	struct qmt_pool_info *qpi;
+	int i, j;
 	ENTRY;
 
 	if (!qti_lqes_cnt(env))
@@ -1164,18 +1182,15 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 
 		CDEBUG(D_QUOTA, "lqes_cnt %d, i %d\n", qti_lqes_cnt(env), i);
 		qpi = lqe2qpi(lqe);
-		if (qmt_pool_global(qpi)) {
-			slaves_cnt = qpi_slv_nr_by_rtype(lqe2qpi(lqe),
-							 lqe_qtype(lqe));
-		} else {
-			sem = qmt_sarr_rwsem(qpi);
-			down_read(sem);
-			slaves_cnt = qmt_sarr_count(qpi);
-		}
+		qmt_sarr_read_down(qpi);
+		slaves_cnt = qmt_sarr_count(qpi);
 
 		for (j = 0; j < slaves_cnt; j++) {
-			idx = qmt_sarr_get_idx(qpi, j);
-			LASSERT(idx >= 0);
+			int idx, tgt_idx;
+
+			tgt_idx = qmt_sarr_get_idx(qpi, j);
+			LASSERT(tgt_idx >= 0);
+			idx = qmt_map_lge_idx(lgd, tgt_idx);
 
 			if (edquot) {
 				int lge_edquot, new_edquot, edquot_nu;
@@ -1205,8 +1220,9 @@ qunit_lbl:
 				__u64 lge_qunit, new_qunit;
 
 				CDEBUG(D_QUOTA,
-				       "idx %d lge_qunit_set %d lge_qunit %llu new_qunit %llu\n",
-				       idx, lgd->lqeg_arr[idx].lge_qunit_set,
+				       "tgt_idx %d idx %d lge_qunit_set %d lge_qunit %llu new_qunit %llu\n",
+				       tgt_idx, idx,
+				       lgd->lqeg_arr[idx].lge_qunit_set,
 				       lgd->lqeg_arr[idx].lge_qunit,
 				       lqe->lqe_qunit);
 				/* lge for this idx is already set
@@ -1233,14 +1249,14 @@ qunit_lbl:
 			}
 		}
 
-		if (!qmt_pool_global(qpi))
-			up_read(sem);
+		qmt_sarr_read_up(qpi);
 	}
 	/* TODO: only for debug purposes - remove it later */
 	for (i = 0; i < lgd->lqeg_num_used; i++)
 		CDEBUG(D_QUOTA,
-			"lgd ost %d, qunit %lu nu %d;  edquot %d nu %d\n",
-			i, (long unsigned)lgd->lqeg_arr[i].lge_qunit,
+			"lgd i %d tgt_idx %d qunit %lu nu %d;  edquot %d nu %d\n",
+			i, lgd->lqeg_arr[i].lge_idx,
+			(unsigned long)lgd->lqeg_arr[i].lge_qunit,
 			lgd->lqeg_arr[i].lge_qunit_nu,
 			lgd->lqeg_arr[i].lge_edquot,
 			lgd->lqeg_arr[i].lge_edquot_nu);
@@ -1252,15 +1268,16 @@ void qmt_setup_lqe_gd(const struct lu_env *env, struct qmt_device *qmt,
 		      struct lquota_entry *lqe, struct lqe_glbl_data *lgd,
 		      int pool_type)
 {
-	__u64			 qunit;
-	bool			 edquot;
-	int			 i;
+	__u64 qunit;
+	bool edquot;
+	int i;
 
 	qunit = lqe->lqe_qunit;
 	edquot = lqe->lqe_edquot;
 
 	/* Firstly set all elements in array with
 	 * qunit and edquot of global pool */
+	qmt_sarr_read_down(lqe2qpi(lqe));
 	for (i = 0; i < lgd->lqeg_num_used; i++) {
 		lgd->lqeg_arr[i].lge_qunit = qunit;
 		lgd->lqeg_arr[i].lge_edquot = edquot;
@@ -1268,7 +1285,9 @@ void qmt_setup_lqe_gd(const struct lu_env *env, struct qmt_device *qmt,
 		 * will be sent to slaves during qmt_lvbo_fill. */
 		lgd->lqeg_arr[i].lge_qunit_nu = 0;
 		lgd->lqeg_arr[i].lge_edquot_nu = 0;
+		lgd->lqeg_arr[i].lge_idx = qmt_sarr_get_idx(lqe2qpi(lqe), i);
 	}
+	qmt_sarr_read_up(lqe2qpi(lqe));
 
 	qmt_pool_lqes_lookup_spec(env, qmt, pool_type,
 				  lqe_qtype(lqe), &lqe->lqe_id);

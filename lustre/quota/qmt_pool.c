@@ -55,8 +55,12 @@
 #include "qmt_internal.h"
 
 static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi);
-static inline int qmt_sarr_pool_add(struct qmt_pool_info *qpi,
-				    int idx, int min);
+#define qmt_sarr_pool_add(qpi, idx, stype) \
+		_qmt_sarr_pool_add(qpi, idx, stype, false)
+#define qmt_sarr_pool_add_locked(qpi, idx, stype) \
+		_qmt_sarr_pool_add(qpi, idx, stype, true)
+static inline int _qmt_sarr_pool_add(struct qmt_pool_info *qpi,
+				    int idx, int min, bool locked);
 static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx);
 static inline void qmt_sarr_pool_free(struct qmt_pool_info *qpi);
 static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx);
@@ -510,25 +514,34 @@ int qmt_pool_init(const struct lu_env *env, struct qmt_device *qmt)
 	RETURN(rc);
 }
 
-static int qmt_slv_cnt(const struct lu_env *env, struct lu_fid *glb_fid,
+static int qmt_slv_add(const struct lu_env *env, struct lu_fid *glb_fid,
 		       char *slv_name, struct lu_fid *slv_fid, void *arg)
 {
 	struct obd_uuid uuid;
-	int (*nr)[QMT_STYPE_CNT][LL_MAXQUOTAS] = arg;
-	int stype, qtype;
+	struct qmt_pool_info *qpi = arg;
+	int stype, qtype, idx;
 	int rc;
 
 	rc = lquota_extract_fid(glb_fid, NULL, &qtype);
 	LASSERT(!rc);
 
 	obd_str2uuid(&uuid, slv_name);
-	stype = qmt_uuid2idx(&uuid, NULL);
+	stype = qmt_uuid2idx(&uuid, &idx);
 	if (stype < 0)
 		return stype;
+
+	CDEBUG(D_QUOTA, "add new idx:%d in %s\n", idx, qpi->qpi_name);
+	rc = qmt_sarr_pool_add(qpi, idx, stype);
+	if (rc && rc != -EEXIST) {
+		CERROR("%s: can't add idx %d into dt-0x0: rc = %d\n",
+		       qpi->qpi_qmt->qmt_svname, idx, rc);
+		return rc;
+	}
+
 	/* one more slave */
-	(*nr)[stype][qtype]++;
+	qpi->qpi_slv_nr[stype][qtype]++;
 	CDEBUG(D_QUOTA, "slv_name %s stype %d qtype %d nr %d\n",
-			slv_name, stype, qtype, (*nr)[stype][qtype]);
+			slv_name, stype, qtype, qpi->qpi_slv_nr[stype][qtype]);
 
 	return 0;
 }
@@ -648,8 +661,8 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 
 			rc = lquota_disk_for_each_slv(env, pool->qpi_root,
 						      &qti->qti_fid,
-						      qmt_slv_cnt,
-						      &pool->qpi_slv_nr);
+						      qmt_slv_add,
+						      pool);
 			if (rc) {
 				CERROR("%s: failed to scan & count slave indexes for %s type: rc = %d\n",
 				       qmt->qmt_svname, qtype_name(qtype), rc);
@@ -687,6 +700,74 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 	RETURN(0);
 }
 
+static int qmt_lgd_extend_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			      struct hlist_node *hnode, void *data)
+{
+	struct lqe_glbl_entry *lqeg_arr, *old_lqeg_arr;
+	struct lquota_entry *lqe;
+	int old_num, rc;
+
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	rc = 0;
+
+	CDEBUG(D_QUOTA, "lgd %px\n", lqe->lqe_glbl_data);
+	if (lqe->lqe_glbl_data) {
+		struct lqe_glbl_data *lgd;
+
+		old_lqeg_arr = NULL;
+		mutex_lock(&lqe->lqe_glbl_data_lock);
+		if (lqe->lqe_glbl_data) {
+			struct qmt_pool_info *qpi = lqe2qpi(lqe);
+			int sarr_cnt = qmt_sarr_count(qpi);
+
+			lgd = lqe->lqe_glbl_data;
+			if (lgd->lqeg_num_alloc < sarr_cnt) {
+				LASSERT((lgd->lqeg_num_alloc + 1) == sarr_cnt);
+
+				OBD_ALLOC(lqeg_arr,
+					  sizeof(struct lqe_glbl_entry) *
+					  (lgd->lqeg_num_alloc + 16));
+				if (lqeg_arr) {
+					memcpy(lqeg_arr, lgd->lqeg_arr,
+					       sizeof(struct lqe_glbl_entry) *
+					       (lgd->lqeg_num_alloc));
+					old_lqeg_arr = lgd->lqeg_arr;
+					old_num = lgd->lqeg_num_alloc;
+					lgd->lqeg_arr = lqeg_arr;
+					lgd->lqeg_num_alloc += 16;
+					CDEBUG(D_QUOTA,
+					       "extend lqeg_arr:%px from %d to %d\n",
+					       lgd, old_num,
+					       lgd->lqeg_num_alloc);
+				} else {
+					CERROR("%s: cannot allocate new lqeg_arr: rc = %d\n",
+					       qpi->qpi_qmt->qmt_svname,
+					       -ENOMEM);
+					GOTO(out, rc = -ENOMEM);
+				}
+			}
+			lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx =
+				qmt_sarr_get_idx(qpi, sarr_cnt - 1);
+			lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot =
+				lqe->lqe_edquot;
+			lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit =
+				lqe->lqe_qunit;
+			lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot_nu = 0;
+			lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit_nu = 0;
+			LQUOTA_DEBUG(lqe, "add tgt idx:%d used %d alloc %d\n",
+				     lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx,
+				     lgd->lqeg_num_used, lgd->lqeg_num_alloc);
+			lgd->lqeg_num_used++;
+		}
+out:
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
+		OBD_FREE(old_lqeg_arr, old_num * sizeof(struct lqe_glbl_entry));
+	}
+
+	return rc;
+}
+
 /*
  * Handle new slave connection. Called when a slave enqueues the global quota
  * lock at the beginning of the reintegration procedure.
@@ -714,15 +795,14 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 	stype = qmt_uuid2idx(uuid, &idx);
 	if (stype < 0)
 		RETURN(stype);
+	CDEBUG(D_QUOTA, "FID "DFID"\n", PFID(glb_fid));
 
 	/* extract pool info from global index FID */
 	rc = lquota_extract_fid(glb_fid, &pool_type, &qtype);
 	if (rc)
 		RETURN(rc);
 
-	/* look-up pool in charge of this global index FID */
-	qti_pools_init(env);
-	pool = qmt_pool_lookup_arr(env, qmt, pool_type, idx);
+	pool = qmt_pool_lookup_glb(env, qmt, pool_type);
 	if (IS_ERR(pool))
 		RETURN(PTR_ERR(pool));
 
@@ -747,11 +827,51 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 	memcpy(slv_fid, lu_object_fid(&slv_obj->do_lu), sizeof(*slv_fid));
 	*slv_ver = dt_version_get(env, slv_obj);
 	dt_object_put(env, slv_obj);
-	if (created)
+	if (created) {
+		struct qmt_pool_info *ptr;
+
+		CDEBUG(D_QUOTA, "add tgt idx:%d pool_type:%d qtype:%d stype:%d\n",
+		       idx, pool_type, qtype, stype);
+
+		if (!qmt_dom(qtype, stype)) {
+			qmt_sarr_write_down(pool);
+			rc = qmt_sarr_pool_add_locked(pool, idx, stype);
+			if (!rc) {
+				for (i = 0; i < LL_MAXQUOTAS; i++)
+					cfs_hash_for_each(pool->qpi_site[i]->
+							  lqs_hash,
+							  qmt_lgd_extend_cb,
+							  &env);
+			} else if (rc == -EEXIST) {
+				/* This target has been already added
+				 * by another qtype
+				 */
+				rc = 0;
+			}
+			qmt_sarr_write_up(pool);
+
+			if (rc) {
+				CERROR("%s: cannot add idx:%d to pool %s: rc = %d\n",
+				       qmt->qmt_svname, idx,
+				       pool->qpi_name, rc);
+				GOTO(out, rc);
+			}
+		}
+
+		/* look-up pool in charge of this global index FID */
+		qti_pools_init(env);
+		ptr = qmt_pool_lookup_arr(env, qmt, pool_type, idx, stype);
+		if (IS_ERR(ptr))
+			GOTO(out, rc = PTR_ERR(ptr));
+
 		for (i = 0; i < qti_pools_cnt(env); i++)
 			qti_pools_env(env)[i]->qpi_slv_nr[stype][qtype]++;
+
+		qti_pools_fini(env);
+	}
+
 out:
-	qti_pools_fini(env);
+	qpi_putref(env, pool);
 	RETURN(rc);
 }
 
@@ -810,15 +930,10 @@ int qmt_pool_lqes_lookup(const struct lu_env *env,
 	int rc, i;
 	ENTRY;
 
-	/* Until MDT pools are not emplemented, all MDTs belong to
-	 * global pool, thus lookup lqes only from global pool. */
-	if (qmt_dom(rtype, stype))
-		idx = -1;
-
 	qti_pools_init(env);
 	rc = 0;
 	/* look-up pool responsible for this global index FID */
-	pool = qmt_pool_lookup_arr(env, qmt, rtype, idx);
+	pool = qmt_pool_lookup_arr(env, qmt, rtype, idx, stype);
 	if (IS_ERR(pool)) {
 		qti_pools_fini(env);
 		RETURN(PTR_ERR(pool));
@@ -1157,10 +1272,10 @@ static struct obd_device *qmt_get_mgc(struct qmt_device *qmt)
 static int qmt_pool_recalc(void *args)
 {
 	struct qmt_pool_info *pool, *glbl_pool;
-	struct rw_semaphore *sem = NULL;
 	struct obd_device *obd;
 	struct lu_env env;
 	int i, rc, qtype, slaves_cnt;
+	bool sem = false;
 	ENTRY;
 
 	pool = args;
@@ -1175,16 +1290,16 @@ static int qmt_pool_recalc(void *args)
 	obd = qmt_get_mgc(pool->qpi_qmt);
 	if (IS_ERR(obd))
 		GOTO(out, rc = PTR_ERR(obd));
-	else
-		/* Waiting for the end of processing mgs config.
-		 * It is needed to be sure all pools are configured. */
-		while (obd->obd_process_conf)
-			schedule_timeout_uninterruptible(cfs_time_seconds(1));
+
+	/* Waiting for the end of processing mgs config.
+	 * It is needed to be sure all pools are configured.
+	 */
+	while (obd->obd_process_conf)
+		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_QUOTA_RECALC, cfs_fail_val);
-	sem = qmt_sarr_rwsem(pool);
-	LASSERT(sem);
-	down_read(sem);
+	qmt_sarr_read_down(pool);
+	sem = true;
 	/* Hold this to be sure that OSTs from this pool
 	 * can't do acquire/release.
 	 *
@@ -1264,7 +1379,7 @@ out:
 	 * Thus until up_read, no one can restart recalc thread.
 	 */
 	if (sem) {
-		up_read(sem);
+		qmt_sarr_read_up(pool);
 		up_write(&pool->qpi_recalc_sem);
 	}
 
@@ -1394,7 +1509,7 @@ static int qmt_pool_add_rem(struct obd_device *obd, char *poolname,
 		GOTO(out, rc = PTR_ERR(qpi));
 	}
 
-	rc = add ? qmt_sarr_pool_add(qpi, idx, 32) :
+	rc = add ? qmt_sarr_pool_add(qpi, idx, QMT_STYPE_OST) :
 		   qmt_sarr_pool_rem(qpi, idx);
 	if (rc) {
 		/* message is checked in sanity-quota test_1b */
@@ -1515,57 +1630,31 @@ int qmt_pool_del(struct obd_device *obd, char *poolname)
 
 static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi)
 {
-
-	/* No need to initialize sarray for global pool
-	 * as it always includes all slaves */
-	if (qmt_pool_global(qpi))
-		return 0;
-
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		return lu_tgt_pool_init(&qpi->qpi_sarr.osts, 0);
-	case LQUOTA_RES_MD:
-	default:
-		return 0;
-	}
+	return lu_tgt_pool_init(&qpi->qpi_sarr.osts, 0);
 }
 
-static inline int qmt_sarr_pool_add(struct qmt_pool_info *qpi, int idx, int min)
+static inline int
+_qmt_sarr_pool_add(struct qmt_pool_info *qpi, int idx, int stype, bool locked)
 {
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		return lu_tgt_pool_add(&qpi->qpi_sarr.osts, idx, min);
-	case LQUOTA_RES_MD:
-	default:
+	/* We don't have an array for DOM */
+	if (qmt_dom(qpi->qpi_rtype, stype))
 		return 0;
-	}
+
+	if (locked)
+		return lu_tgt_pool_add_locked(&qpi->qpi_sarr.osts, idx, 32);
+	else
+		return lu_tgt_pool_add(&qpi->qpi_sarr.osts, idx, 32);
 }
 
 static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx)
 {
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		return lu_tgt_pool_remove(&qpi->qpi_sarr.osts, idx);
-	case LQUOTA_RES_MD:
-	default:
-		return 0;
-	}
+	return lu_tgt_pool_remove(&qpi->qpi_sarr.osts, idx);
 }
 
 static inline void qmt_sarr_pool_free(struct qmt_pool_info *qpi)
 {
-	if (qmt_pool_global(qpi))
-		return;
-
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		if (qpi->qpi_sarr.osts.op_array)
-			lu_tgt_pool_free(&qpi->qpi_sarr.osts);
-		return;
-	case LQUOTA_RES_MD:
-	default:
-		return;
-	}
+	if (qpi->qpi_sarr.osts.op_array)
+		lu_tgt_pool_free(&qpi->qpi_sarr.osts);
 }
 
 static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx)
@@ -1573,53 +1662,19 @@ static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx)
 	if (qmt_pool_global(qpi))
 		return 0;
 
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		return lu_tgt_check_index(idx, &qpi->qpi_sarr.osts);
-	case LQUOTA_RES_MD:
-	default:
-		return 0;
-	}
-}
-
-struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi)
-{
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		/* to protect ost_pool use */
-		return &qpi->qpi_sarr.osts.op_rw_sem;
-	case LQUOTA_RES_MD:
-	default:
-		return NULL;
-	}
+	return lu_tgt_check_index(idx, &qpi->qpi_sarr.osts);
 }
 
 int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx)
 {
-
-	if (qmt_pool_global(qpi))
-		return arr_idx;
-
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		LASSERTF(arr_idx < qpi->qpi_sarr.osts.op_count && arr_idx >= 0,
-			 "idx invalid %d op_count %d\n", arr_idx,
-			 qpi->qpi_sarr.osts.op_count);
-		return qpi->qpi_sarr.osts.op_array[arr_idx];
-	case LQUOTA_RES_MD:
-	default:
-		return -EINVAL;
-	}
+	LASSERTF(arr_idx < qpi->qpi_sarr.osts.op_count && arr_idx >= 0,
+		 "idx invalid %d op_count %d\n", arr_idx,
+		 qpi->qpi_sarr.osts.op_count);
+	return qpi->qpi_sarr.osts.op_array[arr_idx];
 }
 
 /* Number of slaves in a pool */
 unsigned int qmt_sarr_count(struct qmt_pool_info *qpi)
 {
-	switch (qpi->qpi_rtype) {
-	case LQUOTA_RES_DT:
-		return qpi->qpi_sarr.osts.op_count;
-	case LQUOTA_RES_MD:
-	default:
-		return -EINVAL;
-	}
+	return qpi->qpi_sarr.osts.op_count;
 }
