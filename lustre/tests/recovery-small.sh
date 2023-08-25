@@ -3203,6 +3203,9 @@ $(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_time_hard)
 run_test 145 "connect mdtlovs and process update logs after recovery expire"
 
 test_146() {
+	(( $MDS1_VERSION >= $(version_code 2.15.54.6) )) ||
+		skip "Need MDS >= v2_15_54-6-g3c69d46e17 for eviction_count"
+
 	local prev_count=$(do_facet $SINGLEMDS \
 		$LCTL get_param -n "mdt.${mds1_svc}.eviction_count")
 
