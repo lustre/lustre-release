@@ -12343,8 +12343,9 @@ test_103a() {
 	local mdts=$(comma_list $(mdts_nodes))
 	local saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
 
-	do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE
-	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$saved" EXIT
+	[[ -z "$saved" ]] || do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE
+	stack_trap "[[ -z \"$saved\" ]] || \
+		    do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$saved" EXIT
 
 	ACLBIN=${ACLBIN:-"bin"}
 	ACLDMN=${ACLDMN:-"daemon"}
@@ -20238,6 +20239,8 @@ test_205g() {
 run_test 205g "stress test for job_stats procfile"
 
 test_205h() {
+	(( $MDS1_VERSION >= $(version_code 2.15.57.7) )) ||
+		skip "Need MDS >= v2_15_57-7-g23a2db28dc for jobid xattr"
 	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
 
 	local dir=$DIR/$tdir
@@ -20290,6 +20293,9 @@ test_205h() {
 run_test 205h "check jobid xattr is stored correctly"
 
 test_205i() {
+	(( $MDS1_VERSION >= $(version_code 2.15.57.7) )) ||
+		skip "Need MDS >= v2_15_57-7-g23a2db28dc for jobid xattr"
+
 	local mdts=$(comma_list $(mdts_nodes))
 	local mds_saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
 
