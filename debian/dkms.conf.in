@@ -1,8 +1,20 @@
-# Lustre Linux kernel module (DKMS)
-# Created by Guy Coates
-# Updated by Michael Kuhn
+# SPDX-License-Identifier: NOASSERTION
+
+#
 # Copyright 2012 Genome Research Ltd.
 #           2017-2018 Universität Hamburg
+#
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# debian/dkms.conf.in
+#
+# Lustre Linux kernel module (DKMS)
+#
+# Created by Guy Coates
+# Updated by Michael Kuhn
+#
 
 PACKAGE_NAME="lustre-client-modules"
 PACKAGE_VERSION="@UPVERSION@"

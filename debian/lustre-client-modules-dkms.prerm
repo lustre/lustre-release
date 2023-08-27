@@ -1,4 +1,13 @@
 #!/bin/bash
+# SPDX-License-Identifier: NOASSERTION
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# debian/lustre-client-module-dkms.prerm
+#
+# Script run before Lustre DKMS modules are removed
+#
 
 set -e
 

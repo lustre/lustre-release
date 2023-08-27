@@ -1,12 +1,21 @@
 #!/usr/bin/make -f
+# SPDX-License-Identifier: NOASSERTION
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# debian/rules
+#
+# Debian rules file
+#
+# Copying and modification is unlimited, provided that the modified
+# version is marked as being modified.
+# (This version has been modified from the original)
 #
 # Created 2009 by Brian J. Murrell based on work by
 # Alastair McKinstry, <alastair.mckinstry@ichec.ie>, <mckinstry@debian.org>
 # Patrick Winnertz, and the pkg-lustre Debian maintainers
 #
-# Copying and modification is unlimited, provided that the modified
-# version is marked as being modified.
-# (This version has been modified from the original)
 
 # Uncomment this to turn on verbose mode.
 # export DH_VERBOSE=1
@@ -33,11 +42,6 @@ ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 else
         CFLAGS += -O2
 endif
-
-# We need the kernels to be built with gcc-3.3; suspect that gcc-4.1 uses too
-# much stack and crashes because of it.
-#CC?=gcc-3.3
-#export CC
 
 # This is the debhelper compatibility version to use.
 export DH_COMPAT=11

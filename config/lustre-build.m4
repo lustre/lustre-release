@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# config/lustre-build.m4
+#
+# Generic Lustre configuration options
+#
+
 #
 # LB_CANONICAL_SYSTEM
 #

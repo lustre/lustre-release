@@ -1,4 +1,13 @@
 #!/bin/bash
+# SPDX-License-Identifier: NOASSERTION
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# debian/postrm
+#
+# Script run before Lustre module/utils are removed
+#
 
 DEPMOD_DIR="/etc/depmod.d"
 LUSTRE_DEPMOD_FILE="${DEPMOD_DIR}/lustre.conf"

@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# config/lustre-build-ldiskfs.m4
+#
+# ldiskfs OSD related configuration
+#
+
 #
 # LDISKFS_LINUX_SERIES
 #
@@ -560,6 +570,7 @@ ext4_journal_get_write_access, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
 
+#
 # LB_HAVE_INODE_LOCK_SHARED
 #
 AC_DEFUN([LB_HAVE_INODE_LOCK_SHARED], [
@@ -576,6 +587,7 @@ inode_lock_shared, [
 ])
 ]) # LB_HAVE_INODE_LOCK_SHARED
 
+#
 # LB_HAVE_INODE_IVERSION
 #
 AC_DEFUN([LB_HAVE_INODE_IVERSION], [
