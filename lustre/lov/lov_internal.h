@@ -197,7 +197,7 @@ static inline bool lov_supported_comp_magic(unsigned int magic)
 struct lov_pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct lu_tgt_pool	 pool_obds;
-	atomic_t		 pool_refcount;
+	struct kref		 pool_refcount;
 	struct rhash_head	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;	/* serial access */
 	struct rcu_head		 pool_rcu;

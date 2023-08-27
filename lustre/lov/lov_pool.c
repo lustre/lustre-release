@@ -105,7 +105,19 @@ static const struct rhashtable_params pools_hash_params = {
 static void lov_pool_getref(struct lov_pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
-	atomic_inc(&pool->pool_refcount);
+	kref_get(&pool->pool_refcount);
+}
+
+static void lov_pool_putref_free(struct kref *kref)
+{
+	struct lov_pool_desc *pool = container_of(kref, struct lov_pool_desc,
+						  pool_refcount);
+
+	LASSERT(list_empty(&pool->pool_list));
+	LASSERT(pool->pool_proc_entry == NULL);
+	lu_tgt_pool_free(&(pool->pool_obds));
+	kfree_rcu(pool, pool_rcu);
+	EXIT;
 }
 
 /**
@@ -118,18 +130,13 @@ static void lov_pool_getref(struct lov_pool_desc *pool)
  * it is explicitly destroyed by the sysadmin.  The pool structure is freed
  * after the last reference on the structure is released.
  *
- * \param[in] pool	pool descriptor to drop reference on and possibly free
+ * \param[in] pool	lov pool descriptor to drop reference on and possibly
+ * 			free
  */
 void lov_pool_putref(struct lov_pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
-	if (atomic_dec_and_test(&pool->pool_refcount)) {
-		LASSERT(list_empty(&pool->pool_list));
-		LASSERT(pool->pool_proc_entry == NULL);
-		lu_tgt_pool_free(&(pool->pool_obds));
-		kfree_rcu(pool, pool_rcu);
-		EXIT;
-	}
+	kref_put(&pool->pool_refcount, lov_pool_putref_free);
 }
 
 #ifdef CONFIG_PROC_FS
@@ -388,7 +395,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	/* ref count init to 1 because when created a pool is always used
 	 * up to deletion
 	 */
-	atomic_set(&new_pool->pool_refcount, 1);
+	kref_init(&new_pool->pool_refcount);
 	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_free_pool, rc);
@@ -454,7 +461,7 @@ struct lov_pool_desc *lov_pool_find(struct obd_device *obd, char *poolname)
 	pool = rhashtable_lookup(&lov->lov_pools_hash_body,
 				 poolname,
 				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+	if (pool && !kref_get_unless_zero(&pool->pool_refcount))
 		pool = NULL;
 	rcu_read_unlock();
 
@@ -533,7 +540,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
 				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+	if (pool && !kref_get_unless_zero(&pool->pool_refcount))
 		pool = NULL;
 	rcu_read_unlock();
 	if (!pool)
@@ -598,7 +605,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
 				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+	if (pool && !kref_get_unless_zero(&pool->pool_refcount))
 		pool = NULL;
 	rcu_read_unlock();
 	if (!pool)

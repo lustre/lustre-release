@@ -58,7 +58,7 @@ enum lod_uses_hint {
 struct lod_pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct lu_tgt_pool	 pool_obds;	/* pool members */
-	atomic_t		 pool_refcount;
+	struct kref		 pool_refcount;
 	struct lu_qos_rr	 pool_rr;
 	struct rhash_head	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;
