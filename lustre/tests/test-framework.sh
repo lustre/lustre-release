@@ -9156,6 +9156,21 @@ flvr_cnt_cli2mdt()
 	echo $cnt
 }
 
+flvr_dump_cli2mdt()
+{
+	local clients=${CLIENTS:-$HOSTNAME}
+
+	for c in ${clients//,/ }; do
+		do_node $c lctl get_param \
+			 mdc.*-*-mdc-*.$PROC_CLI 2>/dev/null
+
+		if $GSS_SK; then
+			do_node $c lctl get_param \
+				 mdc.*-MDT*-mdc-*.$PROC_CON 2>/dev/null
+		fi
+	done
+}
+
 flvr_cnt_cli2ost()
 {
 	local flavor=$1
@@ -9183,6 +9198,21 @@ flvr_cnt_cli2ost()
 		cnt=$((cnt + tmpcnt))
 	done
 	echo $cnt
+}
+
+flvr_dump_cli2ost()
+{
+	local clients=${CLIENTS:-$HOSTNAME}
+
+	for c in ${clients//,/ }; do
+		do_node $c lctl get_param \
+			osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null
+
+		if $GSS_SK; then
+			do_node $c lctl get_param \
+			       osc.*OST*-osc-[^M][^D][^T]*.$PROC_CON 2>/dev/null
+		fi
+	done
 }
 
 flvr_cnt_mdt2mdt()
@@ -9215,6 +9245,19 @@ flvr_cnt_mdt2mdt()
 	echo $cnt;
 }
 
+flvr_dump_mdt2mdt()
+{
+	for num in `seq $MDSCOUNT`; do
+		do_facet mds$num lctl get_param \
+			osp.*-MDT*osp-MDT*.$PROC_CLI 2>/dev/null
+
+		if $GSS_SK; then
+			do_facet mds$num lctl get_param \
+				osp.*-MDT*osp-MDT*.$PROC_CON 2>/dev/null
+		fi
+	done
+}
+
 flvr_cnt_mdt2ost()
 {
 	local flavor=$1
@@ -9241,6 +9284,21 @@ flvr_cnt_mdt2ost()
 		cnt=$((cnt + tmpcnt))
 	done
 	echo $cnt;
+}
+
+flvr_dump_mdt2ost()
+{
+	for num in `seq $MDSCOUNT`; do
+		mdtosc=$(get_mdtosc_proc_path mds$num)
+		mdtosc=${mdtosc/-MDT*/-MDT\*}
+		do_facet mds$num lctl get_param \
+				os[cp].$mdtosc.$PROC_CLI 2>/dev/null
+
+		if $GSS_SK; then
+			do_facet mds$num lctl get_param \
+				os[cp].$mdtosc.$PROC_CON 2>/dev/null
+		fi
+	done
 }
 
 flvr_cnt_mgc2mgs()
@@ -9285,6 +9343,51 @@ do_check_flavor()
 	echo $res
 }
 
+do_dump_imp_state()
+{
+	local clients=${CLIENTS:-$HOSTNAME}
+	local type=$1
+
+	for c in ${clients//,/ }; do
+		[ "$type" == "osc" ] &&
+			do_node $c lctl get_param osc.*.idle_timeout
+		do_node $c lctl get_param $type.*.import |
+			grep -E "name:|state:"
+	done
+}
+
+do_dump_flavor()
+{
+	local dir=$1        # from to
+
+	if [ $dir == "cli2mdt" ]; then
+		do_dump_imp_state mdc
+		flvr_dump_cli2mdt
+	elif [ $dir == "cli2ost" ]; then
+		do_dump_imp_state osc
+		flvr_dump_cli2ost
+	elif [ $dir == "mdt2mdt" ]; then
+		flvr_dump_mdt2mdt
+	elif [ $dir == "mdt2ost" ]; then
+		flvr_dump_mdt2ost
+	elif [ $dir == "all2ost" ]; then
+		flvr_dump_mdt2ost
+		do_dump_imp_state osc
+		flvr_dump_cli2ost
+	elif [ $dir == "all2mdt" ]; then
+		flvr_dump_mdt2mdt
+		do_dump_imp_state mdc
+		flvr_dump_cli2mdt
+	elif [ $dir == "all2all" ]; then
+		flvr_dump_mdt2ost
+		do_dump_imp_state osc
+		flvr_dump_cli2ost
+		flvr_dump_mdt2mdt
+		do_dump_imp_state mdc
+		flvr_dump_cli2mdt
+	fi
+}
+
 wait_flavor()
 {
 	local dir=$1        # from to
@@ -9302,8 +9405,8 @@ wait_flavor()
 	done
 
 	echo "Error checking $flavor of $dir: expect $expect, actual $res"
-#	echo "Dumping additional logs for SK debug.."
 	do_nodes $(comma_list $(all_server_nodes)) "keyctl show"
+	do_dump_flavor $dir
 	if $dump; then
 		gather_logs $(comma_list $(nodes_list))
 	fi

@@ -2423,16 +2423,24 @@ run_test 30 "check for invalid shared key"
 basic_ios() {
 	local flvr=$1
 
-	mkdir -p $DIR/$tdir || error "mkdir $flvr"
-	touch $DIR/$tdir/f0 || error "touch $flvr"
-	ls $DIR/$tdir || error "ls $flvr"
-	dd if=/dev/zero of=$DIR/$tdir/f0 conv=fsync bs=1M count=10 \
+	mkdir -p $DIR/$tdir/dir0 || error "mkdir $flvr"
+	touch $DIR/$tdir/dir0/f0 || error "touch $flvr"
+	ls $DIR/$tdir/dir0 || error "ls $flvr"
+	dd if=/dev/zero of=$DIR/$tdir/dir0/f0 conv=fsync bs=1M count=10 \
 		>& /dev/null || error "dd $flvr"
-	rm -f $DIR/$tdir/f0 || error "rm $flvr"
-	rmdir $DIR/$tdir || error "rmdir $flvr"
+	rm -f $DIR/$tdir/dir0/f0 || error "rm $flvr"
+	rmdir $DIR/$tdir/dir0 || error "rmdir $flvr"
 
 	sync ; sync
 	echo 3 > /proc/sys/vm/drop_caches
+}
+
+cleanup_30b() {
+	# restore clients' idle_timeout
+	for c in ${clients//,/ }; do
+		param=IDLETIME_$(echo $c | cut -d'.' -f1 | sed s+-+_+g)
+		do_node $c "lctl set_param osc.*.idle_timeout=${!param}"
+	done
 }
 
 test_30b() {
@@ -2442,7 +2450,24 @@ test_30b() {
 		skip "need shared key feature for this test"
 	fi
 
+	# save clients' idle_timeout, and set all to 0 for this test,
+	# as we do not want connections to go idle
+	for c in ${clients//,/ }; do
+		param=IDLETIME_$(echo $c | cut -d'.' -f1 | sed s+-+_+g)
+		idle=$(do_node $c lctl get_param -n osc.*.idle_timeout |
+			head -n1)
+		eval export $param=\$idle
+		do_node $c lctl set_param osc.*.idle_timeout=0
+	done
+
+	stack_trap cleanup_30b EXIT
 	stack_trap restore_to_default_flavor EXIT
+
+	lfs mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	lfs setstripe -c -1 $DIR/$tdir/fileA ||
+		error "setstripe $DIR/$tdir/fileA failed"
+	echo 30b > $DIR/$tdir/fileA ||
+		error "wrtie to $DIR/$tdir/fileA failed"
 
 	for flvr in skn ska ski skpi; do
 		# set flavor
