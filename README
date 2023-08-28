@@ -54,6 +54,10 @@ To build Lustre:
     ./configure
     make
 
+To see all available make targets:
+
+    make help
+
 To play with a test Lustre filesystem:
 
     ./lustre/tests/llmount.sh
