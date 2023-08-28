@@ -37,7 +37,7 @@
 #include <linux/kobject.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
-#include <linux/xarray.h>
+#include <libcfs/linux/xarray.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
@@ -363,8 +363,8 @@ struct client_obd {
 	void			*cl_writeback_work;
 	void			*cl_lru_work;
 	struct mutex		  cl_quota_mutex;
-	/* hash tables for osc_quota_info */
-	struct cfs_hash		*cl_quota_hash[LL_MAXQUOTAS];
+	/* quota IDs/types that have exceeded quota */
+	struct xarray		 cl_quota_exceeded_ids;
 	/* the xid of the request updating the hash tables */
 	__u64			 cl_quota_last_xid;
 	/* Links to the global list of registered changelog devices */

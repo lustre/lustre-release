@@ -54,7 +54,6 @@ EXPORT_SYMBOL(osc_object_kmem);
 struct kmem_cache *osc_thread_kmem;
 struct kmem_cache *osc_session_kmem;
 struct kmem_cache *osc_extent_kmem;
-struct kmem_cache *osc_quota_kmem;
 struct kmem_cache *osc_obdo_kmem;
 
 struct lu_kmem_descr osc_caches[] = {
@@ -82,11 +81,6 @@ struct lu_kmem_descr osc_caches[] = {
 		.ckd_cache = &osc_extent_kmem,
 		.ckd_name  = "osc_extent_kmem",
 		.ckd_size  = sizeof (struct osc_extent)
-	},
-	{
-		.ckd_cache = &osc_quota_kmem,
-		.ckd_name  = "osc_quota_kmem",
-		.ckd_size  = sizeof(struct osc_quota_info)
 	},
 	{
 		.ckd_cache = &osc_obdo_kmem,

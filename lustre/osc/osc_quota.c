@@ -28,39 +28,26 @@
  * Code originally extracted from quota directory
  */
 
-#include <obd.h>
+#include <obd_class.h>
 #include <lustre_osc.h>
 
 #include "osc_internal.h"
 
-static inline struct osc_quota_info *osc_oqi_alloc(u32 id)
-{
-	struct osc_quota_info *oqi;
-
-	OBD_SLAB_ALLOC_PTR(oqi, osc_quota_kmem);
-	if (oqi != NULL)
-		oqi->oqi_id = id;
-
-	return oqi;
-}
-
 int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 {
 	int type;
+
 	ENTRY;
-
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
-		struct osc_quota_info *oqi;
+		u8 *qtype;
 
-		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
-		if (oqi) {
-			/* do not try to access oqi here, it could have been
-			 * freed by osc_quota_setdq() */
-
+		qtype = xa_load(&cli->cl_quota_exceeded_ids, qid[type]);
+		if (qtype && (xa_to_value(qtype) & BIT(type))) {
 			/* the slot is busy, the user is about to run out of
-			 * quota space on this OST */
+			 * quota space on this OST
+			 */
 			CDEBUG(D_QUOTA, "chkdq found noquota for %s %d\n",
-			       type == USRQUOTA ? "user" : "grout", qid[type]);
+			       qtype_name(type), qid[type]);
 			RETURN(-EDQUOT);
 		}
 	}
@@ -96,14 +83,13 @@ static inline u32 fl_quota_flag(int qtype)
 	}
 }
 
-int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
+int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 		    u64 valid, u32 flags)
 {
 	int type;
 	int rc = 0;
 
         ENTRY;
-
 	if ((valid & (OBD_MD_FLALLQUOTA)) == 0)
 		RETURN(0);
 
@@ -121,48 +107,57 @@ int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
 		cli->cl_quota_last_xid = xid;
 
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
-		struct osc_quota_info *oqi;
+		unsigned long bits = 0;
+		u8 *qtypes;
 
 		if ((valid & md_quota_flag(type)) == 0)
 			continue;
 
-		/* lookup the ID in the per-type hash table */
-		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
+		/* lookup the quota IDs in the ID xarray */
+		qtypes = xa_load(&cli->cl_quota_exceeded_ids, qid[type]);
 		if ((flags & fl_quota_flag(type)) != 0) {
 			/* This ID is getting close to its quota limit, let's
-			 * switch to sync I/O */
-			if (oqi != NULL)
-				continue;
+			 * switch to sync I/O
+			 */
+			if (qtypes) {
+				bits = xa_to_value(qtypes);
+				/* test if already set */
+				if (bits & BIT(type))
+					continue;
+			}
 
-			oqi = osc_oqi_alloc(qid[type]);
-			if (oqi == NULL) {
-				rc = -ENOMEM;
+			bits |= BIT(type);
+			rc = xa_insert(&cli->cl_quota_exceeded_ids, qid[type],
+				       xa_mk_value(bits), GFP_KERNEL);
+			if (rc)
 				break;
-			}
 
-			rc = cfs_hash_add_unique(cli->cl_quota_hash[type],
-						 &qid[type], &oqi->oqi_hash);
-			/* race with others? */
-			if (rc == -EALREADY) {
-				rc = 0;
-				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
-			}
-
-			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d (%d)\n",
+			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d: rc = %d\n",
 			       cli_name(cli), qtype_name(type), qid[type], rc);
 		} else {
 			/* This ID is now off the hook, let's remove it from
-			 * the hash table */
-			if (oqi == NULL)
+			 * the xarray
+			 */
+			if (!qtypes)
 				continue;
 
-			oqi = cfs_hash_del_key(cli->cl_quota_hash[type],
-					       &qid[type]);
-			if (oqi)
-				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+			bits = xa_to_value(qtypes);
+			if (!(bits & BIT(type)))
+				continue;
 
-			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d (%p)\n",
-			       cli_name(cli), qtype_name(type), qid[type], oqi);
+			bits &= ~BIT(type);
+			if (bits) {
+				if (xa_cmpxchg(&cli->cl_quota_exceeded_ids,
+					       qid[type], qtypes,
+					       xa_mk_value(bits),
+					       GFP_KERNEL) != qtypes)
+					GOTO(out_unlock, rc = -ENOENT);
+			} else {
+				xa_erase(&cli->cl_quota_exceeded_ids, qid[type]);
+			}
+
+			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d\n",
+			       cli_name(cli), qtype_name(type), qid[type]);
 		}
 	}
 
@@ -171,117 +166,22 @@ out_unlock:
 	RETURN(rc);
 }
 
-/*
- * Hash operations for uid/gid <-> osc_quota_info
- */
-static unsigned
-oqi_hashfn(struct cfs_hash *hs, const void *key, unsigned mask)
-{
-	return cfs_hash_32(*((__u32 *)key), 0) & mask;
-}
-
-static int
-oqi_keycmp(const void *key, struct hlist_node *hnode)
-{
-	struct osc_quota_info *oqi;
-	u32 uid;
-
-	LASSERT(key != NULL);
-	uid = *((u32 *)key);
-	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
-
-	return uid == oqi->oqi_id;
-}
-
-static void *
-oqi_key(struct hlist_node *hnode)
-{
-	struct osc_quota_info *oqi;
-	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
-	return &oqi->oqi_id;
-}
-
-static void *
-oqi_object(struct hlist_node *hnode)
-{
-	return hlist_entry(hnode, struct osc_quota_info, oqi_hash);
-}
-
-static void
-oqi_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-}
-
-static void
-oqi_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-}
-
-static void
-oqi_exit(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct osc_quota_info *oqi;
-
-	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
-
-        OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
-}
-
-#define HASH_QUOTA_BKT_BITS 5
-#define HASH_QUOTA_CUR_BITS 5
-#define HASH_QUOTA_MAX_BITS 15
-
-static struct cfs_hash_ops quota_hash_ops = {
-	.hs_hash	= oqi_hashfn,
-	.hs_keycmp	= oqi_keycmp,
-	.hs_key		= oqi_key,
-	.hs_object	= oqi_object,
-	.hs_get		= oqi_get,
-	.hs_put_locked	= oqi_put_locked,
-	.hs_exit	= oqi_exit,
-};
-
 int osc_quota_setup(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
-	int i, type;
-	ENTRY;
 
 	mutex_init(&cli->cl_quota_mutex);
 
-	for (type = 0; type < LL_MAXQUOTAS; type++) {
-		cli->cl_quota_hash[type] = cfs_hash_create("QUOTA_HASH",
-							   HASH_QUOTA_CUR_BITS,
-							   HASH_QUOTA_MAX_BITS,
-							   HASH_QUOTA_BKT_BITS,
-							   0,
-							   CFS_HASH_MIN_THETA,
-							   CFS_HASH_MAX_THETA,
-							   &quota_hash_ops,
-							   CFS_HASH_DEFAULT);
-		if (cli->cl_quota_hash[type] == NULL)
-			break;
-	}
+	xa_init(&cli->cl_quota_exceeded_ids);
 
-	if (type == LL_MAXQUOTAS)
-		RETURN(0);
-
-	for (i = 0; i < type; i++)
-		cfs_hash_putref(cli->cl_quota_hash[i]);
-
-	RETURN(-ENOMEM);
+	return 0;
 }
 
-int osc_quota_cleanup(struct obd_device *obd)
+void osc_quota_cleanup(struct obd_device *obd)
 {
-	struct client_obd     *cli = &obd->u.cli;
-	int type;
-	ENTRY;
+	struct client_obd *cli = &obd->u.cli;
 
-	for (type = 0; type < LL_MAXQUOTAS; type++)
-		cfs_hash_putref(cli->cl_quota_hash[type]);
-
-	RETURN(0);
+	xa_destroy(&cli->cl_quota_exceeded_ids);
 }
 
 int osc_quotactl(struct obd_device *unused, struct obd_export *exp,

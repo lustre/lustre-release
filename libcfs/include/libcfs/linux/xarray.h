@@ -1761,6 +1761,8 @@ static inline void *xas_next(struct xa_state *xas)
 	xas->xa_offset++;
 	return xa_entry(xas->xa, node, xas->xa_offset);
 }
+#else
+#include <linux/xarray.h>
 #endif /* !HAVE_XARRAY_SUPPORT */
 
 #endif /* _LINUX_XARRAY_LUSTRE_H */

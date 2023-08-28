@@ -54,12 +54,6 @@
  *  @{
  */
 
-struct osc_quota_info {
-	/** linkage for quota hash table */
-	struct hlist_node oqi_hash;
-	__u32             oqi_id;
-};
-
 enum oap_async_flags {
 	ASYNC_READY	   = 0x1, /* ap_make_ready will not be called before
 				   * this page is added to an rpc */
@@ -556,7 +550,6 @@ extern struct kmem_cache *osc_object_kmem;
 extern struct kmem_cache *osc_thread_kmem;
 extern struct kmem_cache *osc_session_kmem;
 extern struct kmem_cache *osc_extent_kmem;
-extern struct kmem_cache *osc_quota_kmem;
 extern struct kmem_cache *osc_obdo_kmem;
 
 extern struct lu_context_key osc_key;
