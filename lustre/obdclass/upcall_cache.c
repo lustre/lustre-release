@@ -154,7 +154,8 @@ struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 
 	LASSERT(cache);
 
-	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
+	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key,
+							cache->uc_hashsize)];
 find_again:
 	found = 0;
 	spin_lock(&cache->uc_lock);
@@ -304,7 +305,8 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
 
 	LASSERT(cache);
 
-	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
+	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key,
+							cache->uc_hashsize)];
 
 	spin_lock(&cache->uc_lock);
 	list_for_each_entry(entry, head, ue_hash) {
@@ -373,7 +375,7 @@ void upcall_cache_flush(struct upcall_cache *cache, int force)
 	ENTRY;
 
 	spin_lock(&cache->uc_lock);
-	for (i = 0; i < UC_CACHE_HASH_SIZE; i++) {
+	for (i = 0; i < cache->uc_hashsize; i++) {
 		list_for_each_entry_safe(entry, next,
 					 &cache->uc_hashtable[i], ue_hash) {
 			if (!force && atomic_read(&entry->ue_refcount)) {
@@ -396,7 +398,8 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 	int found = 0;
 	ENTRY;
 
-	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
+	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key,
+							cache->uc_hashsize)];
 
 	spin_lock(&cache->uc_lock);
 	list_for_each_entry(entry, head, ue_hash) {
@@ -422,7 +425,7 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 EXPORT_SYMBOL(upcall_cache_flush_one);
 
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
-				       struct upcall_cache_ops *ops)
+				       int hashsz, struct upcall_cache_ops *ops)
 {
 	struct upcall_cache *cache;
 	int i;
@@ -434,7 +437,12 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 
 	spin_lock_init(&cache->uc_lock);
 	init_rwsem(&cache->uc_upcall_rwsem);
-	for (i = 0; i < UC_CACHE_HASH_SIZE; i++)
+	cache->uc_hashsize = hashsz;
+	LIBCFS_ALLOC(cache->uc_hashtable,
+		     sizeof(*cache->uc_hashtable) * cache->uc_hashsize);
+	if (!cache->uc_hashtable)
+		RETURN(ERR_PTR(-ENOMEM));
+	for (i = 0; i < cache->uc_hashsize; i++)
 		INIT_LIST_HEAD(&cache->uc_hashtable[i]);
 	strlcpy(cache->uc_name, name, sizeof(cache->uc_name));
 	/* upcall pathname proc tunable */
@@ -452,6 +460,8 @@ void upcall_cache_cleanup(struct upcall_cache *cache)
 	if (!cache)
 		return;
 	upcall_cache_flush_all(cache);
+	LIBCFS_FREE(cache->uc_hashtable,
+		    sizeof(*cache->uc_hashtable) * cache->uc_hashsize);
 	LIBCFS_FREE(cache, sizeof(*cache));
 }
 EXPORT_SYMBOL(upcall_cache_cleanup);

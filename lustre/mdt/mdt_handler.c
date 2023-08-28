@@ -6335,6 +6335,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
 	m->mdt_identity_cache = upcall_cache_init(mdt_obd_name(m),
 						identity_upcall,
+						UC_IDCACHE_HASH_SIZE,
 						&mdt_identity_upcall_cache_ops);
 	if (IS_ERR(m->mdt_identity_cache)) {
 		rc = PTR_ERR(m->mdt_identity_cache);

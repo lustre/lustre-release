@@ -91,8 +91,7 @@ struct upcall_cache_entry {
 	} u;
 };
 
-#define UC_CACHE_HASH_SIZE        (128)
-#define UC_CACHE_HASH_INDEX(id)   ((id) & (UC_CACHE_HASH_SIZE - 1))
+#define UC_CACHE_HASH_INDEX(id, size)   ((id) & ((size) - 1))
 #define UC_CACHE_UPCALL_MAXPATH   (1024UL)
 
 struct upcall_cache;
@@ -114,7 +113,8 @@ struct upcall_cache_ops {
 };
 
 struct upcall_cache {
-	struct list_head	uc_hashtable[UC_CACHE_HASH_SIZE];
+	struct list_head	*uc_hashtable;
+	int			uc_hashsize;
 	spinlock_t		uc_lock;
 	struct rw_semaphore	uc_upcall_rwsem;
 
@@ -145,7 +145,7 @@ static inline void upcall_cache_flush_all(struct upcall_cache *cache)
 
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args);
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
-				       struct upcall_cache_ops *ops);
+				      int hashsz, struct upcall_cache_ops *ops);
 void upcall_cache_cleanup(struct upcall_cache *cache);
 
 /** @} ucache */

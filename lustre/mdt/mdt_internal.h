@@ -1044,7 +1044,7 @@ static inline bool agent_req_in_final_state(enum agent_req_status ars)
 
 /* mdt/mdt_identity.c */
 #define MDT_IDENTITY_UPCALL_PATH        "/usr/sbin/l_getidentity"
-
+#define UC_IDCACHE_HASH_SIZE 128
 extern struct upcall_cache_ops mdt_identity_upcall_cache_ops;
 
 struct md_identity *mdt_identity_get(struct upcall_cache *, __u32);
