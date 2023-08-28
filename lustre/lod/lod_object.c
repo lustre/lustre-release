@@ -3763,8 +3763,10 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 				 const char *name, int fl,
 				 struct thandle *th)
 {
+	struct lod_thread_info *info = lod_env_info(env);
 	struct dt_object *next = dt_object_child(dt);
-	struct lu_attr	 *attr = &lod_env_info(env)->lti_attr;
+	struct lu_attr	 *attr = &info->lti_attr;
+	struct lod_object *lo = lod_dt_obj(dt);
 	__u32		  mode;
 	int		  rc;
 	ENTRY;
@@ -3824,6 +3826,11 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	} else {
 		rc = lod_sub_declare_xattr_set(env, next, buf, name, fl, th);
 	}
+
+	if (rc == 0 &&
+	    (strcmp(name, XATTR_NAME_LOV) == 0 ||
+	     strcmp(name, XATTR_LUSTRE_LOV) == 0 || allowed_lustre_lov(name)))
+		rc = lod_save_layout_gen_intrans(info, lo);
 
 	RETURN(rc);
 }
@@ -5054,8 +5061,9 @@ static int lod_xattr_set(const struct lu_env *env,
 			 struct dt_object *dt, const struct lu_buf *buf,
 			 const char *name, int fl, struct thandle *th)
 {
+	struct lod_thread_info *info = lod_env_info(env);
 	struct dt_object *next = dt_object_child(dt);
-	struct lu_attr *layout_attr = &lod_env_info(env)->lti_layout_attr;
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lod_obj_stripe_cb_data data = { {0} };
 	int rc = 0;
@@ -5093,6 +5101,17 @@ static int lod_xattr_set(const struct lu_env *env,
 		   (strcmp(name, XATTR_NAME_LOV) == 0 ||
 		    strcmp(name, XATTR_LUSTRE_LOV) == 0 ||
 		    allowed_lustre_lov(name))) {
+		/* layout has been changed by others in the transaction */
+		rc = lod_check_layout_gen_intrans(info, lo);
+		if (rc > 0) {
+			CDEBUG(D_LAYOUT,
+			       "%s: obj "DFID" gen changed from %d to %d in transaction, retry the transaction\n",
+			       dt->do_lu.lo_dev->ld_obd->obd_name,
+			       PFID(lu_object_fid(&dt->do_lu)),
+			       info->lti_gen[rc - 1], lo->ldo_layout_gen);
+			RETURN(-EAGAIN);
+		}
+
 		/* in case of lov EA swap, just set it
 		 * if not, it is a replay so check striping match what we
 		 * already have during req replay, declare_xattr_set()
@@ -5142,7 +5161,7 @@ static int lod_xattr_set(const struct lu_env *env,
 		} else {
 			/*
 			 * When 'name' is XATTR_LUSTRE_LOV or XATTR_NAME_LOV,
-			 * it's going to create create file with specified
+			 * it's going to create file with specified
 			 * component(s), the striping must have not being
 			 * cached in this case;
 			 *
@@ -5150,9 +5169,10 @@ static int lod_xattr_set(const struct lu_env *env,
 			 * an existing file, the striping must have been cached
 			 * in this case.
 			 */
-			LASSERT(equi(!strcmp(name, XATTR_LUSTRE_LOV) ||
-				     !strcmp(name, XATTR_NAME_LOV),
-				!lod_dt_obj(dt)->ldo_comp_cached));
+			if (!(fl & LU_XATTR_MERGE))
+				LASSERT(equi(!strcmp(name, XATTR_LUSTRE_LOV) ||
+					     !strcmp(name, XATTR_NAME_LOV),
+					!lod_dt_obj(dt)->ldo_comp_cached));
 
 			rc = lod_striped_create(env, dt, NULL, NULL, th);
 			if (rc)
@@ -7455,8 +7475,13 @@ static int lod_declare_update_extents(const struct lu_env *env,
 	ENTRY;
 
 	/* This makes us work on the components of the chosen mirror */
-	start_index = lo->ldo_mirrors[pick].lme_start;
-	max_comp = lo->ldo_mirrors[pick].lme_end + 1;
+	if (lo->ldo_mirrors) {
+		start_index = lo->ldo_mirrors[pick].lme_start;
+		max_comp = lo->ldo_mirrors[pick].lme_end + 1;
+	} else {
+		start_index = 0;
+		max_comp = lo->ldo_comp_cnt;
+	}
 	if (lo->ldo_flr_state == LCM_FL_NONE)
 		LASSERT(start_index == 0 && max_comp == lo->ldo_comp_cnt);
 
@@ -7485,12 +7510,14 @@ static int lod_declare_update_extents(const struct lu_env *env,
 	/* We may have added or removed components.  If so, we must update the
 	 * start & ends of all the mirrors after the current one, and the end
 	 * of the current mirror. */
-	change = max_comp - 1 - lo->ldo_mirrors[pick].lme_end;
-	if (change) {
-		lo->ldo_mirrors[pick].lme_end += change;
-		for (i = pick + 1; i < lo->ldo_mirror_count; i++) {
-			lo->ldo_mirrors[i].lme_start += change;
-			lo->ldo_mirrors[i].lme_end += change;
+	if (lo->ldo_mirrors) {
+		change = max_comp - 1 - lo->ldo_mirrors[pick].lme_end;
+		if (change) {
+			lo->ldo_mirrors[pick].lme_end += change;
+			for (i = pick + 1; i < lo->ldo_mirror_count; i++) {
+				lo->ldo_mirrors[i].lme_start += change;
+				lo->ldo_mirrors[i].lme_end += change;
+			}
 		}
 	}
 
@@ -9252,6 +9279,9 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		rc = -ENOTSUPP;
 		break;
 	}
+	if (rc == 0)
+		rc = lod_save_layout_gen_intrans(info, lo);
+
 out:
 	RETURN(rc);
 }
@@ -9262,8 +9292,9 @@ out:
 static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
 			     struct md_layout_change *mlc, struct thandle *th)
 {
+	struct lod_thread_info *info = lod_env_info(env);
 	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
-	struct lu_attr *layout_attr = &lod_env_info(env)->lti_layout_attr;
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
 	struct lod_object *lo = lod_dt_obj(dt);
 	int rc;
 
@@ -9273,6 +9304,16 @@ static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(dir_mlc_ops[mlc->mlc_opc]);
 		rc = dir_mlc_ops[mlc->mlc_opc](env, dt, mlc, th);
 		RETURN(rc);
+	}
+
+	rc = lod_check_layout_gen_intrans(info, lo);
+	if (rc > 0) {
+		CDEBUG(D_LAYOUT,
+		       "%s: obj "DFID" gen changed from %d to %d in transaction, retry the transaction \n",
+		       dt->do_lu.lo_dev->ld_obd->obd_name,
+		       PFID(lu_object_fid(&dt->do_lu)),
+		       info->lti_gen[rc - 1], lo->ldo_layout_gen);
+		RETURN(-EAGAIN);
 	}
 
 	rc = lod_striped_create(env, dt, attr, NULL, th);

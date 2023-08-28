@@ -894,4 +894,45 @@ bool mdd_changelog_is_space_safe(const struct lu_env *env,
 				 struct llog_handle *lgh,
 				 bool estimate);
 
+#define MAX_TRANS_RETRIED 20
+
+static inline int
+mdd_write_lock_two_objects(const struct lu_env *env,
+			   struct mdd_object *obj1,
+			   struct mdd_object *obj2)
+{
+	int order;
+
+	/* there shouldn't be callers with obj1 == NULL */
+	LASSERT(obj1 != NULL);
+	if (!obj2)
+		goto out_lock1;
+
+	order = lu_fid_cmp(mdd_object_fid(obj1), mdd_object_fid(obj2));
+	if (unlikely(order == 0))
+		return -EPERM;
+
+	if (order > 0) {
+		mdd_write_lock(env, obj1, DT_TGT_CHILD);
+		mdd_write_lock(env, obj2, DT_TGT_CHILD);
+	} else {
+		mdd_write_lock(env, obj2, DT_TGT_CHILD);
+out_lock1:
+		mdd_write_lock(env, obj1, DT_TGT_CHILD);
+	}
+
+	return 0;
+}
+
+static inline void
+mdd_write_unlock_two_objects(const struct lu_env *env,
+			     struct mdd_object *obj1,
+			     struct mdd_object *obj2)
+{
+	mdd_write_unlock(env, obj1);
+	if (obj2)
+		mdd_write_unlock(env, obj2);
+}
+
+
 #endif

@@ -4499,6 +4499,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 	struct mdd_xattrs xattrs;
 	struct lmv_mds_md_v1 *lmv;
 	struct thandle *handle;
+	int retried = 0;
 	int rc;
 
 	ENTRY;
@@ -4508,6 +4509,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 	       PFID(mdd_object_fid(sobj)), PFID(mdd_object_fid(tpobj)),
 	       PFID(mdd_object_fid(tobj)));
 
+retry:
 	rc = mdd_la_get(env, sobj, attr);
 	if (rc)
 		RETURN(rc);
@@ -4635,9 +4637,6 @@ static int mdd_migrate_object(const struct lu_env *env,
 				    spobj, spattr, mdd_object_fid(sobj),
 				    tpobj, tpattr, tname, sname,
 				    handle);
-	if (rc)
-		GOTO(stop, rc);
-	EXIT;
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -4645,7 +4644,14 @@ out:
 	mdd_xattrs_fini(&xattrs);
 	lu_buf_free(&sbuf);
 
-	return rc;
+	/**
+	 * -EAGAIN means transaction execution phase detect the layout
+	 * has been changed by others.
+	 */
+	if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED)
+		GOTO(retry, retried);
+
+	RETURN(rc);
 }
 
 /**

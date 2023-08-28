@@ -1682,6 +1682,7 @@ out:
 static struct thandle *lod_trans_create(const struct lu_env *env,
 					struct dt_device *dt)
 {
+	struct lod_thread_info *info = lod_env_info(env);
 	struct thandle *th;
 
 	th = top_trans_create(env, dt2lod_dev(dt)->lod_child);
@@ -1689,6 +1690,9 @@ static struct thandle *lod_trans_create(const struct lu_env *env,
 		return th;
 
 	th->th_dev = dt;
+
+	/* initialize some lod_thread_info members */
+	info->lti_obj_count = 0;
 
 	return th;
 }

@@ -407,6 +407,7 @@ struct lod_it {
 	struct dt_it		*lit_it;  /* iterator from the layer below */
 };
 
+#define LOD_OBJS_INTRANS 4
 struct lod_thread_info {
 	/* per-thread buffer for LOV EA, may be vmalloc'd */
 	void			       *lti_ea_store;
@@ -440,7 +441,69 @@ struct lod_thread_info {
 	struct lod_avoid_guide		lti_avoid;
 	union lmv_mds_md		lti_lmv;
 	struct dt_allocation_hint	lti_ah;
+	int lti_obj_count;
+	struct lod_object *lti_obj[LOD_OBJS_INTRANS];
+	__u32 lti_gen[LOD_OBJS_INTRANS];
 };
+
+/**
+ * \retval	0 object's layout hasn't changed in the transaction
+ * \retval	> 0 object's layout has changed
+ * \retval	-ENOENT object's layout gen hasn't saved in transatoin
+ *		declaration
+ */
+static inline int
+lod_check_layout_gen_intrans(struct lod_thread_info *info,
+			     struct lod_object *lo)
+{
+	int i;
+	int rc = -ENOENT;
+
+	for (i = 0; i < info->lti_obj_count; i++) {
+		if (info->lti_obj[i] != lo)
+			continue;
+
+		if (info->lti_gen[i] == lo->ldo_layout_gen)
+			rc = 0;
+		else
+			rc = i + 1;
+		break;
+	}
+
+	return rc;
+}
+
+static inline int
+lod_save_layout_gen_intrans(struct lod_thread_info *info, struct lod_object *lo)
+{
+	struct lu_object *luo = &lo->ldo_obj.do_lu;
+	int rc;
+
+	rc = lod_check_layout_gen_intrans(info, lo);
+	if (rc == 0)
+		return 0;
+	if (rc > 0) {
+		CDEBUG(D_LAYOUT,
+		       "%s: obj %p gen changed from %d to %d in trans declaration\n",
+		       luo->lo_dev->ld_obd->obd_name, lo, info->lti_gen[rc - 1],
+		       lo->ldo_layout_gen);
+		return -EINVAL;
+	}
+
+	if (unlikely(info->lti_obj_count == LOD_OBJS_INTRANS)) {
+		CERROR("%s: "DFID
+		       " save too many lod_object (%d) in one transaction, use bigger LOD_OBJS_INTRANS: rc = %d\n",
+		       luo->lo_dev->ld_obd->obd_name,
+		       PFID(lu_object_fid(luo)), LOD_OBJS_INTRANS, -E2BIG);
+		return -E2BIG;
+	}
+
+	info->lti_obj[info->lti_obj_count] = lo;
+	info->lti_gen[info->lti_obj_count] = lo->ldo_layout_gen;
+	info->lti_obj_count++;
+
+	return 0;
+}
 
 extern const struct lu_device_operations lod_lu_ops;
 

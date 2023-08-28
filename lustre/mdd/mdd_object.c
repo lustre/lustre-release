@@ -1614,14 +1614,16 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_object *obj = md2mdd_obj(md_obj);
 	struct mdd_object *vic = md2mdd_obj(md_vic);
-	struct lu_buf *buf = &mdd_env_info(env)->mdi_buf[0];
-	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[1];
+	struct lu_buf *buf;
+	struct lu_buf *buf_vic;
 	struct lov_mds_md *lmm;
 	struct thandle *handle;
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
 	bool is_same_projid;
-	int rc, lock_order;
+	int rc;
+	int retried = 0;
+
 	ENTRY;
 
 	rc = mdd_la_get(env, obj, cattr);
@@ -1634,13 +1636,15 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 
 	is_same_projid = cattr->la_projid == tattr->la_projid;
 
-	lock_order = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
-	if (lock_order == 0) /* same fid */
+	if (lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic)) == 0)
 		RETURN(-EPERM);
-
+retry:
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
+
+	buf = &mdd_env_info(env)->mdi_buf[0];
+	buf_vic = &mdd_env_info(env)->mdi_buf[1];
 
 	if (!is_same_projid) {
 		rc = mdd_declare_attr_set(env, mdd, vic, cattr, handle);
@@ -1682,13 +1686,9 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (lock_order > 0) {
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-	} else {
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-	}
+	rc = mdd_write_lock_two_objects(env, obj, vic);
+	if (rc)
+		GOTO(stop, rc);
 
 	if (!is_same_projid) {
 		cattr->la_valid = LA_PROJID;
@@ -1710,7 +1710,6 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 				       NULL);
 	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic, handle,
 				       NULL);
-	EXIT;
 
 out_restore:
 	if (rc) {
@@ -1723,17 +1722,22 @@ out_restore:
 	}
 
 out:
-	mdd_write_unlock(env, obj);
-	mdd_write_unlock(env, vic);
+	mdd_write_unlock_two_objects(env, obj, vic);
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
 
+	/**
+	 * -EAGAIN means transaction execution phase detect the layout
+	 * has been changed by others.
+	 */
 	if (!rc)
 		(void) mdd_object_pfid_replace(env, obj);
+	else if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED)
+		GOTO(retry, retried);
 
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -1868,13 +1872,14 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_object *obj = md2mdd_obj(md_obj);
 	struct mdd_object *vic = NULL;
-	struct lu_buf *buf = &mdd_env_info(env)->mdi_buf[0];
-	struct lu_buf *buf_save = &mdd_env_info(env)->mdi_buf[1];
-	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[2];
+	struct lu_buf *buf;
+	struct lu_buf *buf_save;
+	struct lu_buf *buf_vic;
 	struct lov_comp_md_v1 *lcm;
 	struct thandle *handle;
 	int rc;
 	bool dom_stripe = false;
+	int retried = 0;
 
 	ENTRY;
 
@@ -1884,6 +1889,11 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	 */
 	if (mrd->mrd_obj)
 		vic = md2mdd_obj(mrd->mrd_obj);
+
+retry:
+	buf = &mdd_env_info(env)->mdi_buf[0];
+	buf_save = &mdd_env_info(env)->mdi_buf[1];
+	buf_vic = &mdd_env_info(env)->mdi_buf[2];
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
@@ -1956,22 +1966,9 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	if (vic) {
-		/* don't use the same file to save the splitted mirror */
-		rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
-		if (rc == 0)
-			GOTO(stop, rc = -EPERM);
-
-		if (rc > 0) {
-			mdd_write_lock(env, obj, DT_TGT_CHILD);
-			mdd_write_lock(env, vic, DT_TGT_CHILD);
-		} else {
-			mdd_write_lock(env, vic, DT_TGT_CHILD);
-			mdd_write_lock(env, obj, DT_TGT_CHILD);
-		}
-	} else {
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-	}
+	rc = mdd_write_lock_two_objects(env, obj, vic);
+	if (rc)
+		GOTO(stop, rc);
 
 	/* set obj's layout in @buf */
 	rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV, LU_XATTR_SPLIT,
@@ -2018,9 +2015,7 @@ out_restore:
 	}
 
 unlock:
-	mdd_write_unlock(env, obj);
-	if (vic)
-		mdd_write_unlock(env, vic);
+	mdd_write_unlock_two_objects(env, obj, vic);
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
@@ -2032,10 +2027,16 @@ stop:
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
 
+	/**
+	 * -EAGAIN means transaction execution phase detect the layout
+	 * has been changed by others.
+	 */
 	if (!rc)
 		(void) mdd_object_pfid_replace(env, obj);
+	else if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED)
+		GOTO(retry, retried);
 
-	return rc;
+	RETURN(rc);
 }
 
 static int mdd_layout_merge_allowed(const struct lu_env *env,
@@ -2068,9 +2069,12 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	struct thandle *handle;
 	enum changelog_rec_type	 cl_type;
 	enum changelog_rec_flags clf_flags = 0;
+	int retried = 0;
 	int rc;
+
 	ENTRY;
 
+retry:
 	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc)
 		RETURN(rc);
@@ -2138,27 +2142,33 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 
 	if (strcmp(XATTR_NAME_HSM, name) == 0) {
 		rc = mdd_hsm_update_locked(env, obj, buf, handle, &clf_flags);
-		if (rc) {
-			mdd_write_unlock(env, mdd_obj);
-			GOTO(stop, rc);
-		}
+		if (rc)
+			GOTO(out_unlock, rc);
 	}
 
 	rc = mdo_xattr_set(env, mdd_obj, buf, name, fl, handle);
+out_unlock:
 	mdd_write_unlock(env, mdd_obj);
 	if (rc)
 		GOTO(stop, rc);
 
 	cl_type = mdd_xattr_changelog_type(env, mdd, name);
-	if (cl_type < 0)
-		GOTO(stop, rc = 0);
+	if (cl_type != CL_NONE)
+		rc = mdd_changelog_data_store_xattr(env, mdd, cl_type,
+						    clf_flags, mdd_obj, name,
+						    handle);
 
-	rc = mdd_changelog_data_store_xattr(env, mdd, cl_type, clf_flags,
-					    mdd_obj, name, handle);
-
-	EXIT;
 stop:
-	return mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
+	/**
+	 * -EAGAIN means transaction execution phase detect the layout
+	 * has been changed by others.
+	 */
+	if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED)
+		GOTO(retry, retried);
+
+	RETURN(rc);
 }
 
 static int mdd_declare_xattr_del(const struct lu_env *env,
@@ -2530,10 +2540,10 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct lu_attr *snd_la = MDD_ENV_VAR(env, tattr);
 	struct mdd_device *mdd = mdo2mdd(obj1);
 	struct lov_mds_md *fst_lmm, *snd_lmm;
-	struct lu_buf *fst_buf = &info->mdi_buf[0];
-	struct lu_buf *snd_buf = &info->mdi_buf[1];
-	struct lu_buf *fst_hsm_buf = &info->mdi_buf[2];
-	struct lu_buf *snd_hsm_buf = &info->mdi_buf[3];
+	struct lu_buf *fst_buf;
+	struct lu_buf *snd_buf;
+	struct lu_buf *fst_hsm_buf;
+	struct lu_buf *snd_hsm_buf;
 	struct ost_id *saved_oi = NULL;
 	struct thandle *handle;
 	struct mdd_object *dom_o = NULL, *vlt_o = NULL;
@@ -2541,10 +2551,17 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	__u32 fst_gen, snd_gen, saved_gen;
 	int fst_fl;
 	int rc, rc2;
+	int retried = 0;
 
 	ENTRY;
 
 	BUILD_BUG_ON(ARRAY_SIZE(info->mdi_buf) < 4);
+retry:
+	fst_buf = &info->mdi_buf[0];
+	snd_buf = &info->mdi_buf[1];
+	fst_hsm_buf = &info->mdi_buf[2];
+	snd_hsm_buf = &info->mdi_buf[3];
+
 	memset(info->mdi_buf, 0, sizeof(info->mdi_buf));
 
 	/* we have to sort the 2 obj, so locking will always
@@ -2744,9 +2761,9 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* objects are already sorted */
-	mdd_write_lock(env, fst_o, DT_TGT_CHILD);
-	mdd_write_lock(env, snd_o, DT_TGT_CHILD);
+	rc = mdd_write_lock_two_objects(env, fst_o, snd_o);
+	if (rc < 0)
+		GOTO(stop, rc);
 
 	if (!mdd_object_exists(fst_o))
 		GOTO(unlock, rc = -ENOENT);
@@ -2844,8 +2861,7 @@ out_restore:
 	}
 
 unlock:
-	mdd_write_unlock(env, snd_o);
-	mdd_write_unlock(env, fst_o);
+	mdd_write_unlock_two_objects(env, fst_o, snd_o);
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -2865,8 +2881,15 @@ stop:
 	if (!rc) {
 		(void) mdd_object_pfid_replace(env, fst_o);
 		(void) mdd_object_pfid_replace(env, snd_o);
+	} else if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED) {
+		/**
+		 * -EAGAIN means transaction execution phase detect the layout
+		 * has been changed by others.
+		 */
+		GOTO(retry, retried);
 	}
-	return rc;
+
+	RETURN(rc);
 }
 
 static int mdd_declare_layout_change(const struct lu_env *env,
@@ -3009,13 +3032,9 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 		GOTO(out, rc);
 
 	rc = mdd_changelog_data_store(env, mdd, CL_FLRW, 0, obj, handle, NULL);
-	if (rc)
-		GOTO(out, rc);
-
-	EXIT;
 
 out:
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -3098,13 +3117,9 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 				   fl, handle);
 	}
 	mdd_write_unlock(env, obj);
-	if (rc)
-		GOTO(out, rc);
-
-	EXIT;
 
 out:
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -3180,7 +3195,9 @@ mdd_object_update_sync_pending(const struct lu_env *env, struct mdd_object *obj,
 	/* it needs a sync tx to make FLR to work properly */
 	handle->th_sync = 1;
 
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
 	if (rc)
 		GOTO(out, rc);
 
@@ -3193,11 +3210,8 @@ mdd_object_update_sync_pending(const struct lu_env *env, struct mdd_object *obj,
 
 	rc = mdd_changelog_data_store(env, mdd, CL_RESYNC, 0, obj, handle,
 				      NULL);
-	if (rc)
-		GOTO(out, rc);
-	EXIT;
 out:
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -3261,6 +3275,7 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	struct lov_comp_md_v1   *lcm;
 	struct thandle		*handle;
 	int flr_state;
+	int retried = 0;
 	int rc;
 
 	ENTRY;
@@ -3296,6 +3311,7 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 		RETURN(-ENOTSUPP);
 	}
 
+retry:
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
@@ -3337,6 +3353,14 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 out:
 	mdd_trans_stop(env, mdd, rc, handle);
 	lu_buf_free(buf);
+
+	/**
+	 * -EAGAIN means transaction execution phase detect the layout
+	 * has been changed by others.
+	 */
+	if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED)
+		GOTO(retry, retried);
+
 	return rc;
 }
 
