@@ -53,7 +53,7 @@ struct barrier_instance {
 	wait_queue_head_t	 bi_waitq;
 	rwlock_t		 bi_rwlock;
 	struct percpu_counter	 bi_writers;
-	atomic_t		 bi_ref;
+	struct kref		 bi_ref;
 	time64_t		 bi_deadline;
 	__u32			 bi_status;
 };
@@ -68,18 +68,19 @@ static inline __u32 barrier_dev_idx(struct barrier_instance *barrier)
 	return lu_site2seq(barrier->bi_bottom->dd_lu_dev.ld_site)->ss_node_id;
 }
 
-static void barrier_instance_cleanup(struct barrier_instance *barrier)
+static void barrier_instance_put_free(struct kref *kref)
 {
-	LASSERT(list_empty(&barrier->bi_link));
+	struct barrier_instance *barrier;
 
+	barrier = container_of(kref, struct barrier_instance, bi_ref);
+	LASSERT(list_empty(&barrier->bi_link));
 	percpu_counter_destroy(&barrier->bi_writers);
 	OBD_FREE_PTR(barrier);
 }
 
 static inline void barrier_instance_put(struct barrier_instance *barrier)
 {
-	if (atomic_dec_and_test(&barrier->bi_ref))
-		barrier_instance_cleanup(barrier);
+	kref_put(&barrier->bi_ref, barrier_instance_put_free);
 }
 
 static struct barrier_instance *
@@ -114,7 +115,7 @@ static struct barrier_instance *barrier_instance_find(struct dt_device *key)
 	spin_lock(&barrier_instance_lock);
 	barrier = barrier_instance_find_locked(key);
 	if (barrier)
-		atomic_inc(&barrier->bi_ref);
+		kref_get(&barrier->bi_ref);
 	spin_unlock(&barrier_instance_lock);
 
 	return barrier;
@@ -398,14 +399,14 @@ int barrier_register(struct dt_device *key, struct dt_device *next)
 	barrier->bi_next = next;
 	init_waitqueue_head(&barrier->bi_waitq);
 	rwlock_init(&barrier->bi_rwlock);
-	atomic_set(&barrier->bi_ref, 1);
+	kref_init(&barrier->bi_ref);
 #ifdef HAVE_PERCPU_COUNTER_INIT_GFP_FLAG
 	rc = percpu_counter_init(&barrier->bi_writers, 0, GFP_KERNEL);
 #else
 	rc = percpu_counter_init(&barrier->bi_writers, 0);
 #endif
 	if (rc)
-		barrier_instance_cleanup(barrier);
+		barrier_instance_put(barrier);
 	else
 		barrier_instance_add(barrier);
 
