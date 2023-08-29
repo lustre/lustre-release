@@ -47,7 +47,7 @@
 
 struct cdt_agent_record_loc {
 	struct hlist_node carl_hnode;
-	atomic_t carl_refcount;
+	struct kref carl_refcount;
 	u64 carl_cookie;
 	u32 carl_cat_idx;
 	u32 carl_rec_idx;
@@ -55,15 +55,21 @@ struct cdt_agent_record_loc {
 
 static inline void cdt_agent_record_loc_get(struct cdt_agent_record_loc *carl)
 {
-	LASSERT(atomic_read(&carl->carl_refcount) > 0);
-	atomic_inc(&carl->carl_refcount);
+	kref_get(&carl->carl_refcount);
+}
+
+static void cdt_agent_record_loc_put_free(struct kref *kref)
+{
+	struct cdt_agent_record_loc *carl;
+
+	carl = container_of(kref, struct cdt_agent_record_loc, carl_refcount);
+	OBD_FREE_PTR(carl);
+
 }
 
 static inline void cdt_agent_record_loc_put(struct cdt_agent_record_loc *carl)
 {
-	LASSERT(atomic_read(&carl->carl_refcount) > 0);
-	if (atomic_dec_and_test(&carl->carl_refcount))
-		OBD_FREE_PTR(carl);
+	kref_put(&carl->carl_refcount, cdt_agent_record_loc_put_free);
 }
 
 static unsigned int
@@ -125,7 +131,7 @@ void cdt_agent_record_hash_add(struct coordinator *cdt, u64 cookie, u32 cat_idx,
 		return;
 
 	INIT_HLIST_NODE(&carl1->carl_hnode);
-	atomic_set(&carl1->carl_refcount, 1);
+	kref_init(&carl1->carl_refcount);
 	carl1->carl_cookie = cookie;
 	carl1->carl_cat_idx = cat_idx;
 	carl1->carl_rec_idx = rec_idx;
