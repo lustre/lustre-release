@@ -116,7 +116,7 @@ void dump_requests(char *prefix, struct coordinator *cdt)
 		       car->car_hai->hai_extent.offset,
 		       car->car_hai->hai_extent.length,
 		       car->car_hai->hai_gid,
-		       atomic_read(&car->car_refcount),
+		       kref_read(&car->car_refcount),
 		       car->car_canceled);
 	}
 	up_read(&cdt->cdt_request_lock);
@@ -239,7 +239,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
 	if (car == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	atomic_set(&car->car_refcount, 1);
+	kref_init(&car->car_refcount);
 	car->car_archive_id = archive_id;
 	car->car_flags = flags;
 	car->car_canceled = 0;
@@ -275,7 +275,15 @@ void mdt_cdt_free_request(struct cdt_agent_req *car)
  */
 void mdt_cdt_get_request(struct cdt_agent_req *car)
 {
-	atomic_inc(&car->car_refcount);
+	kref_get(&car->car_refcount);
+}
+
+void mdt_cdt_put_request_free(struct kref *kref)
+{
+	struct cdt_agent_req *car;
+
+	car = container_of(kref, struct cdt_agent_req, car_refcount);
+	mdt_cdt_free_request(car);
 }
 
 /**
@@ -285,9 +293,7 @@ void mdt_cdt_get_request(struct cdt_agent_req *car)
  */
 void mdt_cdt_put_request(struct cdt_agent_req *car)
 {
-	LASSERT(atomic_read(&car->car_refcount) > 0);
-	if (atomic_dec_and_test(&car->car_refcount))
-		mdt_cdt_free_request(car);
+	kref_put(&car->car_refcount, mdt_cdt_put_request_free);
 }
 
 /**

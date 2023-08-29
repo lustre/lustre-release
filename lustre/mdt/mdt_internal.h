@@ -622,7 +622,7 @@ struct cdt_req_progress {
 struct cdt_agent_req {
 	struct hlist_node	 car_cookie_hash;  /**< find req by cookie */
 	struct list_head	 car_request_list; /**< to chain all the req. */
-	atomic_t		 car_refcount;     /**< reference counter */
+	struct kref		 car_refcount;     /**< reference counter */
 	__u64			 car_flags;        /**< request original flags */
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
 	__u32			 car_archive_id;   /**< archive id */
