@@ -59,6 +59,7 @@
  * @LNET_CMD_NETS:		command to manage the LNet networks
  * @LNET_CMD_ROUTES:		command to manage LNet routes
  * @LNET_CMD_PING:		command to send pings to LNet connections
+ * @LNET_CMD_CPT_OF_NID:	command to calculate the CPT of specified NIDs
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,
@@ -69,6 +70,7 @@ enum lnet_commands {
 	LNET_CMD_ROUTES		= 4,
 	LNET_CMD_CONNS		= 5,
 	LNET_CMD_PING		= 6,
+	LNET_CMD_CPT_OF_NID     = 7,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };

@@ -4785,6 +4785,244 @@ report_discover_err:
 }
 EXPORT_SYMBOL(LNetCtl);
 
+struct lnet_nid_cpt {
+	struct lnet_nid lnc_nid;
+	unsigned int lnc_cpt;
+};
+
+struct lnet_genl_nid_cpt_list {
+	unsigned int lgncl_index;
+	unsigned int lgncl_list_count;
+	GENRADIX(struct lnet_nid_cpt) lgncl_lnc_list;
+};
+
+static inline struct lnet_genl_nid_cpt_list *
+lnet_cpt_of_nid_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_nid_cpt_list *)cb->args[0];
+}
+
+static int lnet_cpt_of_nid_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_nid_cpt_list *lgncl;
+
+	lgncl = lnet_cpt_of_nid_dump_ctx(cb);
+
+	if (lgncl) {
+		genradix_free(&lgncl->lgncl_lnc_list);
+		LIBCFS_FREE(lgncl, sizeof(*lgncl));
+		cb->args[0] = 0;
+	}
+
+	return 0;
+}
+
+static int lnet_cpt_of_nid_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lnet_genl_nid_cpt_list *lgncl;
+	int msg_len = genlmsg_len(gnlh);
+	struct nlattr *params, *top;
+	int rem, rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENETDOWN;
+	}
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		NL_SET_ERR_MSG(extack, "Missing NID argument(s)");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOENT;
+	}
+
+	LIBCFS_ALLOC(lgncl, sizeof(*lgncl));
+	if (!lgncl) {
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOMEM;
+	}
+
+	genradix_init(&lgncl->lgncl_lnc_list);
+	lgncl->lgncl_list_count = 0;
+	cb->args[0] = (long)lgncl;
+
+	params = genlmsg_data(gnlh);
+	nla_for_each_attr(top, params, msg_len, rem) {
+		struct nlattr *nids;
+		int rem2;
+
+		switch (nla_type(top)) {
+		case LN_SCALAR_ATTR_LIST:
+			nla_for_each_nested(nids, top, rem2) {
+				char nidstr[LNET_NIDSTR_SIZE + 1];
+				struct lnet_nid_cpt *lnc;
+
+				if (nla_type(nids) != LN_SCALAR_ATTR_VALUE)
+					continue;
+
+				memset(nidstr, 0, sizeof(nidstr));
+				rc = nla_strscpy(nidstr, nids, sizeof(nidstr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to get NID");
+					GOTO(report_err, rc);
+				}
+
+				lnc = genradix_ptr_alloc(&lgncl->lgncl_lnc_list,
+							 lgncl->lgncl_list_count++,
+							 GFP_ATOMIC);
+				if (!lnc) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to allocate NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+
+				rc = libcfs_strnid(&lnc->lnc_nid, strim(nidstr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack, "invalid NID");
+					GOTO(report_err, rc);
+				}
+				rc = 0;
+				CDEBUG(D_NET, "nid: %s\n", libcfs_nidstr(&lnc->lnc_nid));
+			}
+			fallthrough;
+		default:
+			break;
+		}
+	}
+report_err:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	if (rc < 0)
+		lnet_cpt_of_nid_show_done(cb);
+
+	return rc;
+}
+
+static const struct ln_key_list cpt_of_nid_props_list = {
+	.lkl_maxattr			= LNET_CPT_OF_NID_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_CPT_OF_NID_ATTR_HDR]	= {
+			.lkp_value		= "cpt-of-nid",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_CPT_OF_NID_ATTR_NID]	= {
+			.lkp_value		= "nid",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_CPT_OF_NID_ATTR_CPT]	= {
+			.lkp_value		= "cpt",
+			.lkp_data_type		= NLA_U32,
+		},
+	},
+};
+
+static int lnet_cpt_of_nid_show_dump(struct sk_buff *msg,
+				     struct netlink_callback *cb)
+{
+	struct lnet_genl_nid_cpt_list *lgncl;
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx;
+	int rc = 0;
+	bool need_hdr = true;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		GOTO(send_error, rc = -ENETDOWN);
+	}
+
+	lgncl = lnet_cpt_of_nid_dump_ctx(cb);
+	idx = lgncl->lgncl_index;
+
+	if (!lgncl->lgncl_index) {
+		const struct ln_key_list *all[] = {
+			&cpt_of_nid_props_list, NULL, NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq, &lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_CPT_OF_NID, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+
+	while (idx < lgncl->lgncl_list_count) {
+		struct lnet_nid_cpt *lnc;
+		void *hdr;
+		int cpt;
+
+		lnc = genradix_ptr(&lgncl->lgncl_lnc_list, idx++);
+
+		cpt = lnet_nid_cpt_hash(&lnc->lnc_nid, LNET_CPT_NUMBER);
+
+		CDEBUG(D_NET, "nid: %s cpt: %d\n", libcfs_nidstr(&lnc->lnc_nid), cpt);
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_CPT_OF_NID);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(send_error, rc = -EMSGSIZE);
+		}
+
+		if (need_hdr) {
+			nla_put_string(msg, LNET_CPT_OF_NID_ATTR_HDR, "");
+			need_hdr = false;
+		}
+
+		nla_put_string(msg, LNET_CPT_OF_NID_ATTR_NID,
+			       libcfs_nidstr(&lnc->lnc_nid));
+		nla_put_u32(msg, LNET_CPT_OF_NID_ATTR_CPT, cpt);
+
+		genlmsg_end(msg, hdr);
+	}
+
+	genradix_free(&lgncl->lgncl_lnc_list);
+	rc = 0;
+	lgncl->lgncl_index = idx;
+
+send_error:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_cpt_of_nid_show_dump(struct sk_buff *msg,
+					 struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_cpt_of_nid_show_start(cb);
+
+		if (rc < 0)
+			return rc;
+	}
+
+	return lnet_cpt_of_nid_show_dump(msg, cb);
+}
+#endif
+
 /* This is the keys for the UDSP info which is used by many
  * Netlink commands.
  */
@@ -8159,6 +8397,7 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"route",	},
 	{ .name	=	"ping",		},
 	{ .name =	"discover",	},
+	{ .name =	"cpt-of-nid",	},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -8209,6 +8448,16 @@ static const struct genl_ops lnet_genl_ops[] = {
 #endif
 		.done		= lnet_ping_show_done,
 		.doit		= lnet_ping_cmd,
+	},
+	{
+		.cmd		= LNET_CMD_CPT_OF_NID,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_cpt_of_nid_show_start,
+		.dumpit		= lnet_cpt_of_nid_show_dump,
+#else
+		.dumpit		= lnet_old_cpt_of_nid_show_dump,
+#endif
+		.done		= lnet_cpt_of_nid_show_done,
 	},
 };
 

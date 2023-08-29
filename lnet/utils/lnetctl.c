@@ -117,9 +117,9 @@ command_t cmd_list[] = {
 	{"udsp", jt_udsp, 0, "udsp {add | del | help}"},
 	{"setup-mrrouting", jt_setup_mrrouting, 0,
 	 "setup linux routing tables\n"},
-	{"cpt-of-nid", jt_calc_cpt_of_nid, 0, "Calculate the CPT associated with NID\n"
-	 "\t--nid: NID to calculate the CPT of\n"
-	 "\t--ncpt: Number of CPTs to consider in the calculation\n"},
+	{"cpt-of-nid", jt_calc_cpt_of_nid, 0,
+	 "Calculate the CPTs associated with NIDs\n"
+	 " usage:\n\tlnetctl cpt-of-nid nid[ nid ...]\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -434,55 +434,6 @@ static int jt_calc_service_id(int argc, char **argv)
 	       (unsigned long long)(service_id));
 
 	return rc;
-}
-
-static int jt_calc_cpt_of_nid(int argc, char **argv)
-{
-	int rc, opt;
-	int cpt;
-	long int ncpts = -1;
-	char *nid = NULL;
-	struct cYAML *err_rc = NULL;
-	const char *const short_options = "n:c:h";
-	static const struct option long_options[] = {
-	{ .name = "nid",       .has_arg = required_argument, .val = 'n' },
-	{ .name = "ncpt",     .has_arg = required_argument, .val = 'c' },
-	{ .name = NULL } };
-
-	rc = check_cmd(cmd_list, "", "cpt-of-nid", 0, argc, argv);
-	if (rc)
-		return rc;
-
-	while ((opt = getopt_long(argc, argv, short_options,
-				   long_options, NULL)) != -1) {
-		switch (opt) {
-		case 'n':
-			nid = optarg;
-			break;
-		case 'c':
-			rc = parse_long(optarg, &ncpts);
-			if (rc != 0) {
-				cYAML_build_error(-1, -1, "cpt", "get",
-						"cannot parse input", &err_rc);
-				cYAML_print_tree2file(stderr, err_rc);
-				cYAML_free_tree(err_rc);
-				return -1;
-			}
-			break;
-		case '?':
-			print_help(cmd_list, "", "cpt-of-nid");
-		default:
-			return 0;
-		}
-	}
-
-	cpt = lustre_lnet_calc_cpt_of_nid(nid, ncpts);
-	if (cpt < 0)
-		return -1;
-
-	printf("cpt:\n    value: %d\n", cpt);
-
-	return 0;
 }
 
 static int jt_set_recovery_limit(int argc, char **argv)
@@ -1078,6 +1029,200 @@ emitter_error:
 	if (rc == 0)
 		yaml_emitter_log_error(&log, stdout);
 	yaml_emitter_delete(&log);
+}
+
+static int yaml_lnet_cpt_of_nid_display(yaml_parser_t *reply)
+{
+	yaml_document_t results;
+	yaml_emitter_t output;
+	int rc;
+
+	rc = yaml_parser_load(reply, &results);
+	if (rc == 0) {
+		yaml_lnet_print_error(NLM_F_DUMP, "cpt-of-nid",
+				      yaml_parser_get_reader_error(reply));
+		yaml_document_delete(&results);
+		return -EINVAL;
+	}
+
+	rc = yaml_emitter_initialize(&output);
+	if (rc == 1) {
+		yaml_emitter_set_output_file(&output, stdout);
+
+		rc = yaml_emitter_dump(&output, &results);
+	}
+
+	yaml_document_delete(&results);
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	}
+	yaml_emitter_delete(&output);
+
+	return 1;
+}
+
+static int yaml_lnet_cpt_of_nid(int start, int end, char **nids)
+{
+	struct nl_sock *sk = NULL;
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	int i, rc;
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto free_reply;
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&request);
+	if (rc == 0)
+		goto free_reply;
+
+	rc = yaml_emitter_set_output_netlink(&request, sk, LNET_GENL_NAME,
+					     LNET_GENL_VERSION,
+					     LNET_CMD_CPT_OF_NID, NLM_F_DUMP);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&request);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"cpt-of-nid",
+				     strlen("cpt-of-nid"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"nids",
+				     strlen("nids"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_sequence_start_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_SEQ_TAG,
+					     1, YAML_FLOW_SEQUENCE_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	for (i = start; i < end; i++) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)nids[i],
+					     strlen(nids[i]), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_sequence_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&request);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	} else {
+		rc = yaml_lnet_cpt_of_nid_display(&reply);
+	}
+	yaml_emitter_delete(&request);
+free_reply:
+	if (rc == 0) {
+		yaml_lnet_print_error(NLM_F_DUMP, "cpt-of-nid",
+				      yaml_parser_get_reader_error(&reply));
+		rc = -EINVAL;
+	}
+
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
+static int jt_calc_cpt_of_nid(int argc, char **argv)
+{
+	int rc, opt;
+	const char *const short_options = "h";
+	static const struct option long_options[] = {
+	{ .name = "help", .val = 'h' },
+	{ .name = NULL } };
+
+	rc = check_cmd(cmd_list, "", "cpt-of-nid", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+			print_help(cmd_list, "", "cpt-of-nid");
+		default:
+			return 0;
+		}
+	}
+
+	rc = yaml_lnet_cpt_of_nid(optind, argc, argv);
+	if (rc == -EOPNOTSUPP)
+		printf("Operation not supported\n");
+
+	return rc;
 }
 
 static int jt_config_lnet(int argc, char **argv)
