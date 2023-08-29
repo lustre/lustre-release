@@ -46,6 +46,9 @@
 #include <linux/version.h>
 #include <linux/delay.h>
 #include <linux/file.h>
+#ifdef HAVE_FSMAP_H
+#include <linux/fsmap.h>
+#endif
 
 #include <llog_swab.h>
 #include <lustre_disk.h>
@@ -2003,6 +2006,10 @@ static bool is_cmd_supported(unsigned int cmd)
 		return true;
 	case LL_IOC_RESIZE_FS:
 		return true;
+#ifdef HAVE_FSMAP_H
+	case FS_IOC_GETFSMAP:
+		return true;
+#endif
 	default:
 		return false;
 	}
