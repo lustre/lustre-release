@@ -252,8 +252,6 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	struct cl_io	  *top_io = cl_io_top(io);
 	struct client_obd *cli  = osc_cli(osc);
 	struct page	  *vmpage;
-	struct cl_page	  *page;
-	struct cl_page	  *tmp;
 	LIST_HEAD(list);
 	/* pages per chunk bits */
 	unsigned int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
@@ -263,6 +261,7 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	bool sync_queue = false;
 	int result = 0;
 	int brw_flags;
+	int i = 0;
 
 	LASSERT(qin->pl_nr > 0);
 
@@ -282,7 +281,8 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	 * NOTE: here @page is a top-level page. This is done to avoid
 	 *       creation of sub-page-list.
 	 */
-	cl_page_list_for_each_safe(page, tmp, qin) {
+	for (i = 0; i < cdp->cdp_page_count; i++) {
+		struct cl_page *page = cdp->cdp_cl_pages[i];
 		struct osc_async_page *oap;
 		struct osc_page	  *opg;
 
