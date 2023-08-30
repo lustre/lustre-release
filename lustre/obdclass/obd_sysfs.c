@@ -502,7 +502,7 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
 	seq_printf(p, "%3d %s %s %s %s %d\n",
 		   (int)index, status, obd->obd_type->typ_name,
 		   obd->obd_name, obd->obd_uuid.uuid,
-		   atomic_read(&obd->obd_refcount));
+		   kref_read(&obd->obd_refcount));
 	return 0;
 }
 

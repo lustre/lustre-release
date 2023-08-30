@@ -653,7 +653,7 @@ struct obd_device {
 	struct list_head	obd_unlinked_exports;
 	struct list_head	obd_delayed_exports;
 	struct list_head	obd_lwp_list;
-	atomic_t		obd_refcount;
+	struct kref		obd_refcount;
 	int                     obd_num_exports;
 	int			obd_grant_check_threshold;
 	spinlock_t		obd_nid_lock;

@@ -653,7 +653,7 @@ int class_attach(struct lustre_cfg *lcfg)
 
 	obd->obd_attached = 1;
 	CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
-	       obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
+	       obd->obd_minor, typename, kref_read(&obd->obd_refcount));
 
 	RETURN(0);
 }
@@ -882,7 +882,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d/%d\n",
 	       obd->obd_name, obd->obd_num_exports,
-	       atomic_read(&obd->obd_refcount) - 2);
+	       kref_read(&obd->obd_refcount) - 2);
 	dump_exports(obd, 0, D_HA);
 	class_disconnect_exports(obd);
 
@@ -922,40 +922,40 @@ struct obd_device *class_incref(struct obd_device *obd,
 				const void *source)
 {
 	lu_ref_add_atomic(&obd->obd_reference, scope, source);
-	atomic_inc(&obd->obd_refcount);
+	kref_get(&obd->obd_refcount);
 	CDEBUG(D_INFO, "incref %s (%p) now %d - %s\n", obd->obd_name, obd,
-	       atomic_read(&obd->obd_refcount), scope);
+	       kref_read(&obd->obd_refcount), scope);
 
 	return obd;
 }
 EXPORT_SYMBOL(class_incref);
 
+static void class_decref_free(struct kref *kref)
+{
+	struct obd_device *obd;
+	struct obd_export *exp;
+
+	obd = container_of(kref, struct obd_device, obd_refcount);
+	LASSERT(!obd->obd_attached);
+	/*
+	 * All exports have been destroyed; there should
+	 * be no more in-progress ops by this point.
+	 */
+	exp = obd->obd_self_export;
+
+	if (exp) {
+		exp->exp_flags |= exp_flags_from_obd(obd);
+		class_unlink_export(exp);
+	}
+}
+
 void class_decref(struct obd_device *obd, const char *scope, const void *source)
 {
-	int last;
-
 	CDEBUG(D_INFO, "Decref %s (%p) now %d - %s\n", obd->obd_name, obd,
-	       atomic_read(&obd->obd_refcount), scope);
-
+	       kref_read(&obd->obd_refcount), scope);
 	LASSERT(obd->obd_num_exports >= 0);
-	last = atomic_dec_and_test(&obd->obd_refcount);
+	kref_put(&obd->obd_refcount, class_decref_free);
 	lu_ref_del(&obd->obd_reference, scope, source);
-
-	if (last) {
-		struct obd_export *exp;
-
-		LASSERT(!obd->obd_attached);
-		/*
-		 * All exports have been destroyed; there should
-		 * be no more in-progress ops by this point.
-		 */
-		exp = obd->obd_self_export;
-
-		if (exp) {
-			exp->exp_flags |= exp_flags_from_obd(obd);
-			class_unlink_export(exp);
-		}
-	}
 }
 EXPORT_SYMBOL(class_decref);
 

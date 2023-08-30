@@ -355,7 +355,7 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
 	CDEBUG(D_CONFIG, "Connected to %s(%s) successfully (%d)\n",
 	       mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
-	       atomic_read(&obd->obd_refcount));
+	       kref_read(&obd->obd_refcount));
 
 	lmv_statfs_check_update(obd, tgt);
 

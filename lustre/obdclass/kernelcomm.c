@@ -251,7 +251,7 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 			       obd->obd_uuid.uuid);
 
 		nla_put_u32(msg, LUSTRE_DEVICE_ATTR_REFCOUNT,
-			    atomic_read(&obd->obd_refcount));
+			    kref_read(&obd->obd_refcount));
 
 		genlmsg_end(msg, hdr);
 	}

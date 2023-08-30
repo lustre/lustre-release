@@ -474,7 +474,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 		snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
 			 index, status, obd->obd_type->typ_name,
 			 obd->obd_name, obd->obd_uuid.uuid,
-			 atomic_read(&obd->obd_refcount));
+			 kref_read(&obd->obd_refcount));
 
 		if (copy_to_user(uarg, data, len))
 			rc = -EFAULT;

@@ -406,7 +406,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 
 	llog_group_init(&newdev->obd_olg);
 	/* Detach drops this */
-	atomic_set(&newdev->obd_refcount, 1);
+	kref_init(&newdev->obd_refcount);
 	lu_ref_init(&newdev->obd_reference);
 	lu_ref_add(&newdev->obd_reference, "newdev", newdev);
 
@@ -436,9 +436,9 @@ void class_free_dev(struct obd_device *obd)
 	LASSERTF(obd->obd_minor == -1 || obd_devs[obd->obd_minor] == obd,
 		 "obd %p != obd_devs[%d] %p\n",
 		 obd, obd->obd_minor, obd_devs[obd->obd_minor]);
-	LASSERTF(atomic_read(&obd->obd_refcount) == 0,
+	LASSERTF(kref_read(&obd->obd_refcount) == 0,
 		 "obd_refcount should be 0, not %d\n",
-		 atomic_read(&obd->obd_refcount));
+		 kref_read(&obd->obd_refcount));
 	LASSERT(obd_type != NULL);
 
 	CDEBUG(D_INFO, "Release obd device %s obd_type name = %s\n",
@@ -742,7 +742,7 @@ void class_obd_list(void)
                 LCONSOLE(D_CONFIG, "%3d %s %s %s %s %d\n",
                          i, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
-			 atomic_read(&obd->obd_refcount));
+			 kref_read(&obd->obd_refcount));
         }
 	read_unlock(&obd_dev_lock);
 }
@@ -1794,7 +1794,7 @@ void obd_exports_barrier(struct obd_device *obd)
 				      "more than %d seconds. "
 				      "The obd refcount = %d. Is it stuck?\n",
 				      obd->obd_name, waited,
-				      atomic_read(&obd->obd_refcount));
+				      kref_read(&obd->obd_refcount));
 			dump_exports(obd, 1, D_CONSOLE | D_WARNING);
 		}
 		waited *= 2;
