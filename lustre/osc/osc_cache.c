@@ -1359,11 +1359,11 @@ static void osc_consume_write_grant(struct client_obd *cli,
 				    struct brw_page *pga)
 {
 	assert_spin_locked(&cli->cl_loi_list_lock);
-	LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
+	LASSERT(!(pga->bp_flag & OBD_BRW_FROM_GRANT));
 	cli->cl_dirty_pages++;
-	pga->flag |= OBD_BRW_FROM_GRANT;
+	pga->bp_flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
-	       PAGE_SIZE, pga, pga->pg);
+	       PAGE_SIZE, pga, pga->bp_page);
 }
 
 /* the companion to osc_consume_write_grant, called when a brw has completed.
@@ -1374,12 +1374,12 @@ static void osc_release_write_grant(struct client_obd *cli,
 	ENTRY;
 
 	assert_spin_locked(&cli->cl_loi_list_lock);
-	if (!(pga->flag & OBD_BRW_FROM_GRANT)) {
+	if (!(pga->bp_flag & OBD_BRW_FROM_GRANT)) {
 		EXIT;
 		return;
 	}
 
-	pga->flag &= ~OBD_BRW_FROM_GRANT;
+	pga->bp_flag &= ~OBD_BRW_FROM_GRANT;
 	atomic_long_dec(&obd_dirty_pages);
 	cli->cl_dirty_pages--;
 	EXIT;

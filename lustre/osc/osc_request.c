@@ -1091,27 +1091,27 @@ static void handle_short_read(int nob_read, size_t page_count,
         while (nob_read > 0) {
                 LASSERT (page_count > 0);
 
-		if (pga[i]->count > nob_read) {
+		if (pga[i]->bp_count > nob_read) {
 			/* EOF inside this page */
-			ptr = kmap(pga[i]->pg) +
-				(pga[i]->off & ~PAGE_MASK);
-			memset(ptr + nob_read, 0, pga[i]->count - nob_read);
-			kunmap(pga[i]->pg);
+			ptr = kmap(pga[i]->bp_page) +
+				(pga[i]->bp_off & ~PAGE_MASK);
+			memset(ptr + nob_read, 0, pga[i]->bp_count - nob_read);
+			kunmap(pga[i]->bp_page);
 			page_count--;
 			i++;
 			break;
 		}
 
-                nob_read -= pga[i]->count;
+                nob_read -= pga[i]->bp_count;
                 page_count--;
                 i++;
         }
 
 	/* zero remaining pages */
 	while (page_count-- > 0) {
-		ptr = kmap(pga[i]->pg) + (pga[i]->off & ~PAGE_MASK);
-		memset(ptr, 0, pga[i]->count);
-		kunmap(pga[i]->pg);
+		ptr = kmap(pga[i]->bp_page) + (pga[i]->bp_off & ~PAGE_MASK);
+		memset(ptr, 0, pga[i]->bp_count);
+		kunmap(pga[i]->bp_page);
 		i++;
 	}
 }
@@ -1157,7 +1157,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
 
 static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 {
-        if (p1->flag != p2->flag) {
+        if (p1->bp_flag != p2->bp_flag) {
 		unsigned mask = ~(OBD_BRW_FROM_GRANT | OBD_BRW_NOCACHE |
 				  OBD_BRW_SYNC       | OBD_BRW_ASYNC   |
 				  OBD_BRW_NOQUOTA    | OBD_BRW_SOFT_SYNC |
@@ -1165,15 +1165,15 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 
                 /* warn if we try to combine flags that we don't know to be
                  * safe to combine */
-                if (unlikely((p1->flag & mask) != (p2->flag & mask))) {
+                if (unlikely((p1->bp_flag & mask) != (p2->bp_flag & mask))) {
                         CWARN("Saw flags 0x%x and 0x%x in the same brw, please "
                               "report this at https://jira.whamcloud.com/\n",
-                              p1->flag, p2->flag);
+                              p1->bp_flag, p2->bp_flag);
                 }
                 return 0;
         }
 
-        return (p1->off + p1->count == p2->off);
+        return (p1->bp_off + p1->bp_count == p2->bp_off);
 }
 
 #if IS_ENABLED(CONFIG_CRC_T10DIF)
@@ -1219,8 +1219,9 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	       guard_number, resend, nob, pg_count);
 
 	while (nob > 0 && pg_count > 0) {
-		int off = pga[i]->off & ~PAGE_MASK;
-		unsigned int count = pga[i]->count > nob ? nob : pga[i]->count;
+		int off = pga[i]->bp_off & ~PAGE_MASK;
+		unsigned int count =
+			pga[i]->bp_count > nob ? nob : pga[i]->bp_count;
 		int guards_needed = DIV_ROUND_UP(off + count, sector_size) -
 					(off / sector_size);
 
@@ -1234,18 +1235,18 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		 * simulate an OST->client data error */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))) {
-			unsigned char *ptr = kmap(pga[i]->pg);
+			unsigned char *ptr = kmap(pga[i]->bp_page);
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
-			kunmap(pga[i]->pg);
+			kunmap(pga[i]->bp_page);
 		}
 
 		/*
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->pg,
-						  pga[i]->off & ~PAGE_MASK,
+		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->bp_page,
+						  pga[i]->bp_off & ~PAGE_MASK,
 						  count,
 						  guard_start + used_number,
 						  guard_number - used_number,
@@ -1254,14 +1255,14 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		if (unlikely(resend))
 			CDEBUG(D_PAGE | D_HA,
 			       "pga[%u]: used %u off %llu+%u gen checksum: %*phN\n",
-			       i, used, pga[i]->off & ~PAGE_MASK, count,
+			       i, used, pga[i]->bp_off & ~PAGE_MASK, count,
 			       (int)(used * sizeof(*guard_start)),
 			       guard_start + used_number);
 		if (rc)
 			break;
 
 		used_number += used;
-		nob -= pga[i]->count;
+		nob -= pga[i]->bp_count;
 		pg_count--;
 		i++;
 	}
@@ -1317,25 +1318,26 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 	}
 
 	while (nob > 0 && pg_count > 0) {
-		unsigned int count = pga[i]->count > nob ? nob : pga[i]->count;
+		unsigned int count =
+			pga[i]->bp_count > nob ? nob : pga[i]->bp_count;
 
 		/* corrupt the data before we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (i == 0 && opc == OST_READ &&
 		    CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
-			unsigned char *ptr = kmap(pga[i]->pg);
-			int off = pga[i]->off & ~PAGE_MASK;
+			unsigned char *ptr = kmap(pga[i]->bp_page);
+			int off = pga[i]->bp_off & ~PAGE_MASK;
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
-			kunmap(pga[i]->pg);
+			kunmap(pga[i]->bp_page);
 		}
-		cfs_crypto_hash_update_page(req, pga[i]->pg,
-					    pga[i]->off & ~PAGE_MASK,
+		cfs_crypto_hash_update_page(req, pga[i]->bp_page,
+					    pga[i]->bp_off & ~PAGE_MASK,
 					    count);
-		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d\n",
-			       (int)(pga[i]->off & ~PAGE_MASK));
+		LL_CDEBUG_PAGE(D_PAGE, pga[i]->bp_page, "off %d\n",
+			       (int)(pga[i]->bp_off & ~PAGE_MASK));
 
-		nob -= pga[i]->count;
+		nob -= pga[i]->bp_count;
 		pg_count--;
 		i++;
 	}
@@ -1471,7 +1473,7 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 		return;
 
 #ifdef CONFIG_LL_ENCRYPTION
-	if (PageChecked(pga[0]->pg)) {
+	if (PageChecked(pga[0]->bp_page)) {
 		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
 		if (!pa)
 			return;
@@ -1483,13 +1485,13 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 		 * called from osc_brw_prep_request()
 		 * are identified thanks to the PageChecked flag.
 		 */
-		if (PageChecked(pga[i]->pg)) {
+		if (PageChecked(pga[i]->bp_page)) {
 			if (pa)
-				pa[j++] = pga[i]->pg;
-			osc_finalize_bounce_page(&pga[i]->pg);
+				pa[j++] = pga[i]->bp_page;
+			osc_finalize_bounce_page(&pga[i]->bp_page);
 		}
-		pga[i]->count -= pga[i]->bp_count_diff;
-		pga[i]->off += pga[i]->bp_off_diff;
+		pga[i]->bp_count -= pga[i]->bp_count_diff;
+		pga[i]->bp_off += pga[i]->bp_off_diff;
 	}
 
 	if (pa) {
@@ -1522,7 +1524,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	struct cl_page *clpage;
 
 	ENTRY;
-	if (pga[0]->pg) {
+	if (pga[0]->bp_page) {
 		clpage = oap2cl_page(brw_page2oap(pga[0]));
 		inode = clpage->cp_inode;
 		if (clpage->cp_type == CPT_TRANSIENT)
@@ -1570,7 +1572,8 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			struct page *data_page = NULL;
 			bool retried = false;
 			bool lockedbymyself;
-			u32 nunits = (brwpg->off & ~PAGE_MASK) + brwpg->count;
+			u32 nunits =
+				(brwpg->bp_off & ~PAGE_MASK) + brwpg->bp_count;
 			struct address_space *map_orig = NULL;
 			pgoff_t index_orig;
 
@@ -1585,25 +1588,25 @@ retry_encrypt:
 			 * end in vvp_page_completion_write/cl_page_completion,
 			 * which means only once the page is fully processed.
 			 */
-			lockedbymyself = trylock_page(brwpg->pg);
+			lockedbymyself = trylock_page(brwpg->bp_page);
 			if (directio) {
-				map_orig = brwpg->pg->mapping;
-				brwpg->pg->mapping = inode->i_mapping;
-				index_orig = brwpg->pg->index;
+				map_orig = brwpg->bp_page->mapping;
+				brwpg->bp_page->mapping = inode->i_mapping;
+				index_orig = brwpg->bp_page->index;
 				clpage = oap2cl_page(brw_page2oap(brwpg));
-				brwpg->pg->index = clpage->cp_page_index;
+				brwpg->bp_page->index = clpage->cp_page_index;
 			}
 			data_page =
-				osc_encrypt_pagecache_blocks(brwpg->pg,
+				osc_encrypt_pagecache_blocks(brwpg->bp_page,
 							    pa ? pa[i] : NULL,
 							    nunits, 0,
 							    GFP_NOFS);
 			if (directio) {
-				brwpg->pg->mapping = map_orig;
-				brwpg->pg->index = index_orig;
+				brwpg->bp_page->mapping = map_orig;
+				brwpg->bp_page->index = index_orig;
 			}
 			if (lockedbymyself)
-				unlock_page(brwpg->pg);
+				unlock_page(brwpg->bp_page);
 			if (IS_ERR(data_page)) {
 				rc = PTR_ERR(data_page);
 				if (rc == -ENOMEM && !retried) {
@@ -1624,7 +1627,7 @@ retry_encrypt:
 			 * disambiguation in osc_release_bounce_pages().
 			 */
 			SetPageChecked(data_page);
-			brwpg->pg = data_page;
+			brwpg->bp_page = data_page;
 			/* there should be no gap in the middle of page array */
 			if (i == page_count - 1) {
 				struct osc_async_page *oap =
@@ -1636,10 +1639,10 @@ retry_encrypt:
 			/* len is forced to nunits, and relative offset to 0
 			 * so store the old, clear text info
 			 */
-			brwpg->bp_count_diff = nunits - brwpg->count;
-			brwpg->count = nunits;
-			brwpg->bp_off_diff = brwpg->off & ~PAGE_MASK;
-			brwpg->off = brwpg->off & PAGE_MASK;
+			brwpg->bp_count_diff = nunits - brwpg->bp_count;
+			brwpg->bp_count = nunits;
+			brwpg->bp_off_diff = brwpg->bp_off & ~PAGE_MASK;
+			brwpg->bp_off = brwpg->bp_off & PAGE_MASK;
 		}
 
 		if (pa)
@@ -1673,7 +1676,7 @@ retry_encrypt:
 		   llcrypt_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
-			u32 nunits = (pg->off & ~PAGE_MASK) + pg->count;
+			u32 nunits = (pg->bp_off & ~PAGE_MASK) + pg->bp_count;
 
 			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
 			/* count/off are forced to cover the whole encryption
@@ -1681,10 +1684,10 @@ retry_encrypt:
 			 * OST, so adjust bp_{count,off}_diff for the size of
 			 * the clear text.
 			 */
-			pg->bp_count_diff = nunits - pg->count;
-			pg->count = nunits;
-			pg->bp_off_diff = pg->off & ~PAGE_MASK;
-			pg->off = pg->off & PAGE_MASK;
+			pg->bp_count_diff = nunits - pg->bp_count;
+			pg->bp_count = nunits;
+			pg->bp_off_diff = pg->bp_off & ~PAGE_MASK;
+			pg->bp_off = pg->bp_off & PAGE_MASK;
 		}
 	}
 
@@ -1700,7 +1703,7 @@ retry_encrypt:
                              niocount * sizeof(*niobuf));
 
 	for (i = 0; i < page_count; i++) {
-		short_io_size += pga[i]->count;
+		short_io_size += pga[i]->bp_count;
 		if (!inode || !IS_ENCRYPTED(inode) ||
 		    !llcrypt_has_encryption_key(inode)) {
 			pga[i]->bp_count_diff = 0;
@@ -1720,7 +1723,7 @@ retry_encrypt:
 		short_io_size = 0;
 
 	/* If this is an empty RPC to old server, just ignore it */
-	if (!short_io_size && !pga[0]->pg) {
+	if (!short_io_size && !pga[0]->bp_page) {
 		ptlrpc_request_free(req);
 		RETURN(-ENODATA);
 	}
@@ -1818,47 +1821,47 @@ no_bulk:
 	pg_prev = pga[0];
         for (requested_nob = i = 0; i < page_count; i++, niobuf++) {
                 struct brw_page *pg = pga[i];
-		int poff = pg->off & ~PAGE_MASK;
+		int poff = pg->bp_off & ~PAGE_MASK;
 
-                LASSERT(pg->count > 0);
+                LASSERT(pg->bp_count > 0);
                 /* make sure there is no gap in the middle of page array */
 		LASSERTF(page_count == 1 ||
-			 (ergo(i == 0, poff + pg->count == PAGE_SIZE) &&
+			 (ergo(i == 0, poff + pg->bp_count == PAGE_SIZE) &&
 			  ergo(i > 0 && i < page_count - 1,
-			       poff == 0 && pg->count == PAGE_SIZE)   &&
+			       poff == 0 && pg->bp_count == PAGE_SIZE)   &&
 			  ergo(i == page_count - 1, poff == 0)),
 			 "i: %d/%d pg: %p off: %llu, count: %u\n",
-			 i, page_count, pg, pg->off, pg->count);
-                LASSERTF(i == 0 || pg->off > pg_prev->off,
+			 i, page_count, pg, pg->bp_off, pg->bp_count);
+                LASSERTF(i == 0 || pg->bp_off > pg_prev->bp_off,
 			 "i %d p_c %u pg %p [pri %lu ind %lu] off %llu"
 			 " prev_pg %p [pri %lu ind %lu] off %llu\n",
                          i, page_count,
-                         pg->pg, page_private(pg->pg), pg->pg->index, pg->off,
-                         pg_prev->pg, page_private(pg_prev->pg),
-                         pg_prev->pg->index, pg_prev->off);
-                LASSERT((pga[0]->flag & OBD_BRW_SRVLOCK) ==
-                        (pg->flag & OBD_BRW_SRVLOCK));
+                         pg->bp_page, page_private(pg->bp_page), pg->bp_page->index, pg->bp_off,
+                         pg_prev->bp_page, page_private(pg_prev->bp_page),
+                         pg_prev->bp_page->index, pg_prev->bp_off);
+                LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
+                        (pg->bp_flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {
-			unsigned char *ptr = kmap_atomic(pg->pg);
+			unsigned char *ptr = kmap_atomic(pg->bp_page);
 
-			LASSERT(short_io_size >= requested_nob + pg->count);
+			LASSERT(short_io_size >= requested_nob + pg->bp_count);
 			memcpy(short_io_buf + requested_nob,
 			       ptr + poff,
-			       pg->count);
+			       pg->bp_count);
 			kunmap_atomic(ptr);
 		} else if (short_io_size == 0) {
-			desc->bd_frag_ops->add_kiov_frag(desc, pg->pg, poff,
-							 pg->count);
+			desc->bd_frag_ops->add_kiov_frag(desc, pg->bp_page, poff,
+							 pg->bp_count);
 		}
-		requested_nob += pg->count;
+		requested_nob += pg->bp_count;
 
                 if (i > 0 && can_merge_pages(pg_prev, pg)) {
                         niobuf--;
-			niobuf->rnb_len += pg->count;
+			niobuf->rnb_len += pg->bp_count;
 		} else {
-			niobuf->rnb_offset = pg->off;
-			niobuf->rnb_len    = pg->count;
-			niobuf->rnb_flags  = pg->flag;
+			niobuf->rnb_offset = pg->bp_off;
+			niobuf->rnb_len    = pg->bp_count;
+			niobuf->rnb_flags  = pg->bp_flag;
                 }
                 pg_prev = pg;
         }
@@ -1981,8 +1984,8 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : 0ULL,
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
-		 pga[0]->off,
-		 pga[page_count-1]->off + pga[page_count-1]->count - 1,
+		 pga[0]->bp_off,
+		 pga[page_count-1]->bp_off + pga[page_count-1]->bp_count - 1,
 		 client_cksum, server_cksum);
 	CWARN("dumping checksum data to %s\n", dbgcksum_file_name);
 	filp = filp_open(dbgcksum_file_name,
@@ -2000,8 +2003,8 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 	}
 
 	for (i = 0; i < page_count; i++) {
-		len = pga[i]->count;
-		buf = kmap(pga[i]->pg);
+		len = pga[i]->bp_count;
+		buf = kmap(pga[i]->bp_page);
 		while (len != 0) {
 			rc = cfs_kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
@@ -2012,7 +2015,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 			len -= rc;
 			buf += rc;
 		}
-		kunmap(pga[i]->pg);
+		kunmap(pga[i]->bp_page);
 	}
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
@@ -2101,9 +2104,9 @@ check_write_checksum(struct obdo *oa, const struct lnet_processid *peer,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
-			   POSTID(&oa->o_oi), aa->aa_ppga[0]->off,
-			   aa->aa_ppga[aa->aa_page_count - 1]->off +
-				aa->aa_ppga[aa->aa_page_count-1]->count - 1,
+			   POSTID(&oa->o_oi), aa->aa_ppga[0]->bp_off,
+			   aa->aa_ppga[aa->aa_page_count - 1]->bp_off +
+				aa->aa_ppga[aa->aa_page_count-1]->bp_count - 1,
 			   client_cksum,
 			   obd_cksum_type_unpack(aa->aa_oa->o_flags),
 			   server_cksum, cksum_type, new_cksum);
@@ -2219,13 +2222,13 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		nob = rc;
 		while (nob > 0 && pg_count > 0) {
 			unsigned char *ptr;
-			int count = aa->aa_ppga[i]->count > nob ?
-				    nob : aa->aa_ppga[i]->count;
+			int count = aa->aa_ppga[i]->bp_count > nob ?
+				    nob : aa->aa_ppga[i]->bp_count;
 
 			CDEBUG(D_CACHE, "page %p count %d\n",
-			       aa->aa_ppga[i]->pg, count);
-			ptr = kmap_atomic(aa->aa_ppga[i]->pg);
-			memcpy(ptr + (aa->aa_ppga[i]->off & ~PAGE_MASK), buf,
+			       aa->aa_ppga[i]->bp_page, count);
+			ptr = kmap_atomic(aa->aa_ppga[i]->bp_page);
+			memcpy(ptr + (aa->aa_ppga[i]->bp_off & ~PAGE_MASK), buf,
 			       count);
 			kunmap_atomic((void *) ptr);
 
@@ -2291,9 +2294,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					   clbody->oa.o_valid & OBD_MD_FLFID ?
 						clbody->oa.o_parent_ver : 0,
 					   POSTID(&body->oa.o_oi),
-					   aa->aa_ppga[0]->off,
-					   aa->aa_ppga[page_count-1]->off +
-					   aa->aa_ppga[page_count-1]->count - 1,
+					   aa->aa_ppga[0]->bp_off,
+					   aa->aa_ppga[page_count-1]->bp_off +
+					   aa->aa_ppga[page_count-1]->bp_count - 1,
 					   client_cksum, client_cksum2,
 					   server_cksum, cksum_type);
 			cksum_counter = 0;
@@ -2336,14 +2339,14 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 			while (offs < PAGE_SIZE) {
 				/* do not decrypt if page is all 0s */
-				if (memchr_inv(page_address(brwpg->pg) + offs,
+				if (memchr_inv(page_address(brwpg->bp_page) + offs,
 				      0, LUSTRE_ENCRYPTION_UNIT_SIZE) == NULL) {
 					/* if page is empty forward info to
 					 * upper layers (ll_io_zero_page) by
 					 * clearing PagePrivate2
 					 */
 					if (!offs)
-						ClearPagePrivate2(brwpg->pg);
+						ClearPagePrivate2(brwpg->bp_page);
 					break;
 				}
 
@@ -2368,7 +2371,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					     i += blocksize, lblk_num++) {
 						rc =
 						  llcrypt_decrypt_block_inplace(
-							  inode, brwpg->pg,
+							  inode, brwpg->bp_page,
 							  blocksize, i,
 							  lblk_num);
 						if (rc)
@@ -2376,7 +2379,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					}
 				} else {
 					rc = llcrypt_decrypt_pagecache_blocks(
-						brwpg->pg,
+						brwpg->bp_page,
 						LUSTRE_ENCRYPTION_UNIT_SIZE,
 						offs);
 				}
@@ -2486,7 +2489,7 @@ static void sort_brw_pages(struct brw_page **array, int num)
                 for (i = stride ; i < num ; i++) {
                         tmp = array[i];
                         j = i;
-                        while (j >= stride && array[j - stride]->off > tmp->off) {
+                        while (j >= stride && array[j - stride]->bp_off > tmp->bp_off) {
                                 array[j] = array[j - stride];
                                 j -= stride;
                         }
@@ -2714,7 +2717,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 			if (soft_sync)
 				oap->oap_brw_flags |= OBD_BRW_SOFT_SYNC;
 			pga[i] = &oap->oap_brw_page;
-			pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
+			pga[i]->bp_off = oap->oap_obj_off + oap->oap_page_off;
 			i++;
 
 			list_add_tail(&oap->oap_rpc_item, &rpc_list);
@@ -2866,7 +2869,7 @@ void osc_send_empty_rpc(struct osc_object *osc, pgoff_t start)
 {
 	struct ptlrpc_request *req;
 	struct obdo oa;
-	struct brw_page bpg = { .off = start, .count = 1};
+	struct brw_page bpg = { .bp_off = start, .bp_count = 1};
 	struct brw_page *pga = &bpg;
 	int rc;
 

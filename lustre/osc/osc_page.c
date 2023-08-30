@@ -912,7 +912,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		if (desc)
 			pz = page_zone(desc->bd_vec[i].bv_page);
 		else
-			pz = page_zone(aa->aa_ppga[i]->pg);
+			pz = page_zone(aa->aa_ppga[i]->bp_page);
 
 		if (likely(pz == zone)) {
 			++count;

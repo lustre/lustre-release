@@ -112,10 +112,10 @@ struct obd_type {
 #define OBD_LU_TYPE_SETUP ((void *)0x01UL)
 
 struct brw_page {
-	u64		 off;
-	struct page	*pg;
-	u32		 count;
-	u32		 flag;
+	u64		 bp_off;
+	struct page	*bp_page;
+	u32		 bp_count;
+	u32		 bp_flag;
 	/* used for encryption: difference with offset in clear text page */
 	u16		 bp_off_diff;
 	/* used for encryption: difference with count in clear text page */

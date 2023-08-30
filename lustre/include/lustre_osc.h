@@ -87,9 +87,9 @@ struct osc_async_page {
 	struct brw_page		oap_brw_page;
 } __attribute__((packed));
 
-#define oap_page	oap_brw_page.pg
-#define oap_count	oap_brw_page.count
-#define oap_brw_flags	oap_brw_page.flag
+#define oap_page	oap_brw_page.bp_page
+#define oap_count	oap_brw_page.bp_count
+#define oap_brw_flags	oap_brw_page.bp_flag
 
 static inline struct osc_async_page *brw_page2oap(struct brw_page *pga)
 {
