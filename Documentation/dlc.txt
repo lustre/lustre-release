@@ -9,8 +9,8 @@ Amir Shehata <amir.shehata@intel.com>
 Contents
 1. Introduction
 	1.1 Objectives
-	1.3 Motivation
-	1.2 Overview
+	1.2 Motivation
+	1.3 Overview
 2. YAML Interface
 3. DLC API
 4. LNet Backend Design

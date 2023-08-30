@@ -1,0 +1,147 @@
+		********************************************
+		* Clang/LLVM and Static Analysis on Lustre *
+		********************************************
+
+Original Authors:
+=================
+Timothy Day <timday@amazon.com>
+
+Contents
+1. Introduction
+2. Clang/LLVM
+	2.1 Background
+	2.2 Usage
+	2.3 References
+3. Compiler Plugins
+	3.1 History
+	3.2 Usage
+	3.3 References
+4. Coverity
+	4.1 Context
+	4.2 References
+5. Miscellaneous Tools
+
+===================
+= 1. Introduction =
+===================
+
+Static analysis is the analysis of a program performed without executing it. The
+most familiar form of static analysis is performed by the compiler while building
+a program. Potential mistakes and oversights appear as warnings to the developer.
+There also exist a number of independent tools and compiler plugins which add
+additional warnings, and can detect a wider array of issues.
+
+These automated checks counter some of the deficiencies of C while guarding
+against human programming mistakes. As such, Lustre has several mechanisms
+for making it easier to run static analysis over the entire tree.
+
+=================
+= 2. Clang/LLVM =
+=================
+
+2.1 Background
+==============
+
+LLVM is the second major open-source compiler toolchain supported by the Linux
+kernel. Clang is the C/C++ for the LLVM ecosystem. While Clang aims to be GCC
+compatible, its checks tend to be orthogonal and often stricter than those
+performed by GCC. Hence, a program that compiles under GCC may generate
+warnings under Clang.
+
+2.2 Usage
+=========
+
+To use Clang with Lustre, you must first compile the Linux kernel using Clang.
+Documentation for this is linked in the references. Afterwards, configure
+with:
+
+	./configure LLVM=1
+
+if your current kernel was compiled with Clang or:
+
+	./configure LLVM=1 --with-linux=path/to/clang/built/linux
+
+otherwise. The LLVM variable behaves identically for both Lustre and Linux.
+
+Additionally, there is a configuration option `--disable-strict-errors` which
+attempts to stop compilation errors from blocking the build. This is useful
+for seeing all errors and warnings generated across the entire tree.
+
+2.3 References
+==============
+
+Clang Project: https://clang.llvm.org/
+Clang/LLVM for Linux: https://docs.kernel.org/kbuild/llvm.html
+
+=======================
+= 3. Compiler Plugins =
+=======================
+
+3.1 History
+===========
+
+Work in the past was funded by openSFS to created Clang plugins to help cleanup
+cruft in the Lustre tree. This work currently lives in the 'lustre-static-analysis'
+repository on Gerrit. It consists of two plugins Endian and DeclUse. However, they
+haven't been updated in a number of years.
+
+A new plugin, FindStatic, has been developed to find functions that could be made
+static. As a side effect, it makes it easier for the compiler to detect dead code.
+It also serves as an example of what a simple, up-to-date Clang plugin looks like.
+
+3.2 Usage
+=========
+
+The '--enable-compiler-plugins' configure options automatically builds and sets up
+the in-tree compiler plugins. When 'make' is run, the plugin will also get run.
+New warnings will get output alongside normal compiler warnings. Currently,
+only Clang is supported (since only Clang plugins have been developed).
+
+3.3 References
+==============
+
+Old Plugins: https://wiki.whamcloud.com/pages/viewpage.action?pageId=18645101
+FindStatic: https://review.whamcloud.com/c/fs/lustre-release/+/51659
+
+===============
+= 4. Coverity =
+===============
+
+4.1 Context
+===========
+
+Coverity Scan is a free scanning service offered to open-source projects. It's used
+by Linux, openZFS, and a number of other major projects. An earlier version of Coverity
+has been used with Lustre in the past. However, that was many years ago.
+
+To see the bugs, request access at the Coverity Scan website. Any patch that addresses
+a Coverity bug should ideally have a line in the commit message like:
+
+	Addresses-Coverity-ID: 397434 ("Unused value")
+
+This makes it easier to track which bugs still need to be fixed. Currently, the Coverity
+Scan project is maintained in an adhoc manner. Hence, the build may be outdated. But it
+can be updated easily following the instructions on the site.
+
+4.2 References
+==============
+
+Early Coverity: https://wiki.lustre.org/images/8/8a/LUG2013-Lustre_Static_Code_Analysis-Bull.pdf
+Coverity Scan Page: https://scan.coverity.com/projects/lustre
+
+==========================
+= 5. Miscellaneous Tools =
+==========================
+
+Other tools that might be investigated, for those interested:
+
+Cppcheck: https://cppcheck.sourceforge.io/ (Static analysis tool)
+Sparse: https://www.kernel.org/doc/html/latest/dev-tools/sparse.html (Semantic parser)
+Frama-C: https://frama-c.com/ (Formal verification)
+ARM MTE: https://learn.arm.com/learning-paths/smartphones-and-mobile/mte/mte/ (Hardware support for memory safety; can be tested via QEMU)
+Rust: https://www.rust-lang.org/ (Memory safe by default, recently gained support in the Linux kernel 🦀)
+
+Static analysis is prone to false positives. It's easy to burn a lot of
+time on a non-issue. If you use any of these tools (or others), please
+consider updating this document with your experiences to help others
+in the future.

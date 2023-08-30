@@ -12,14 +12,22 @@ Lustre is purpose-built to provide a coherent, global POSIX-compliant
 namespace for very large scale computer clusters, including the world's
 largest supercomputer platforms.
 
-It can support hundreds of petabytes of data storage and hundreds of
-gigabytes per second in simultaneous, aggregate throughput.
+It can support hundreds of petabytes of data storage and terabytes per
+second in simultaneous, aggregate throughput.
 
++---------------+
+| Documentation |
++---------------+
 
 More information about Lustre:
     http://www.lustre.org/
 Many resources for using, configuring, and troubleshooting Lustre are at:
     http://wiki.lustre.org/
+
+For in-tree documentation, see the following directories:
+    Documentation/
+    lustre/doc/
+    lnet/doc/
 
 +-----------+
 | Community |
