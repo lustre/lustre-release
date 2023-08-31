@@ -1765,6 +1765,7 @@ out:
 	ptlrpc_req_finished(req);
 	return rc;
 }
+
 /**
  * Send hsm_ct_register to MDS
  *
@@ -1814,7 +1815,6 @@ static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archive_count,
 		*archive_array = archive_count;
 
 	ptlrpc_request_set_replen(req);
-	req->rq_no_resend = 1;
 
 	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
@@ -2496,15 +2496,43 @@ static int mdc_hsm_ct_reregister(void *data, void *cb_arg)
 	return (rc == -EEXIST) ? 0 : rc;
 }
 
+static int mdc_kuc_reregister_thread(void *data)
+{
+	struct obd_import *imp = data;
+	int rc;
+	ENTRY;
+
+	/* re-register HSM agents */
+	rc = libcfs_kkuc_group_foreach(&imp->imp_obd->obd_uuid, KUC_GRP_HSM,
+				       mdc_hsm_ct_reregister, imp);
+	if (rc < 0 && rc != -EEXIST)
+		CWARN("%s: Failed to re-register HSM agents (uuid: %s): rc = %d\n",
+		      imp->imp_obd->obd_name,
+		      obd_uuid2str(&imp->imp_obd->obd_uuid), rc);
+
+	class_import_put(imp);
+	RETURN(rc);
+}
+
 /**
  * Re-establish all kuc contexts with MDT
  * after MDT shutdown/recovery.
+ * This is done in background.
  */
 static int mdc_kuc_reregister(struct obd_import *imp)
 {
-	/* re-register HSM agents */
-	return libcfs_kkuc_group_foreach(&imp->imp_obd->obd_uuid, KUC_GRP_HSM,
-					 mdc_hsm_ct_reregister, imp);
+	struct task_struct *task;
+	int rc = 0;
+
+	class_import_get(imp);
+	task = kthread_run(mdc_kuc_reregister_thread, imp, "kuc_reregister");
+
+	if (IS_ERR(task)) {
+		class_import_put(imp);
+		rc = PTR_ERR(task);
+	}
+
+	return rc;
 }
 
 static int mdc_set_info_async(const struct lu_env *env,

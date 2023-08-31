@@ -5442,6 +5442,53 @@ test_408 () { #LU-17110
 }
 run_test 408 "Verify fiemap on release file"
 
+test_409a() {
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local restore_pid shutdown_pid
+	local mdt0_hsm_state
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_empty_file "$f")
+
+	copytool setup
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
+		error "could not archive file $f"
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "could not release file $f"
+
+#define OBD_FAIL_MDS_HSM_CDT_DELAY      0x164
+	do_facet $SINGLEMDS $LCTL set_param fail_val=5 fail_loc=0x164
+
+	# send a restore request
+	cat $f > /dev/null & restore_pid=$!
+
+	# stop the coordinator while it handle the request
+	cdt_shutdown & shutdown_pid=$!
+	stack_trap "cdt_enable" EXIT
+
+	sleep 1;
+	mdt0_hsm_state=$(do_facet mds1 "$LCTL get_param -n mdt.*MDT0000.hsm_control")
+	[[ "$mdt0_hsm_state" == "stopping" ]] ||
+		error "HSM state of MDT0000 is not 'stopping' (hsm_control=$mdt0_hsm_state)"
+
+	wait $shutdown_pid
+	cdt_check_state stopped
+	wait_request_state $fid RESTORE WAITING
+
+	cdt_enable
+
+	# copytool must re-register
+	kill_copytools
+	wait_copytools || error "copytool failed to stop"
+	copytool setup
+
+	wait $restore_pid || true
+	wait_request_state $fid RESTORE SUCCEED
+	cat $f > /dev/null || error "fail to read $f"
+}
+run_test 409a "Coordinator should not stop when in use"
+
 test_500()
 {
 	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&

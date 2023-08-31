@@ -127,6 +127,7 @@ static inline char *cdt_mdt_state2str(int state)
  * cdt_request_lock
  */
 struct coordinator {
+	refcount_t		 cdt_ref;	     /**< cdt refcount */
 	wait_queue_head_t	 cdt_waitq;	     /**< cdt wait queue */
 	bool			 cdt_event;	     /**< coordinator event */
 	struct task_struct	*cdt_task;	     /**< cdt thread handle */
@@ -1145,6 +1146,8 @@ struct cdt_restore_handle *cdt_restore_handle_find(struct coordinator *cdt,
 						   const struct lu_fid *fid);
 void cdt_restore_handle_del(struct mdt_thread_info *mti,
 			    struct coordinator *cdt, const struct lu_fid *fid);
+int cdt_getref_try(struct coordinator *cdt);
+void cdt_putref(struct coordinator *cdt);
 /* coordinator management */
 int mdt_hsm_cdt_init(struct mdt_device *mdt);
 int mdt_hsm_cdt_stop(struct mdt_device *mdt);

@@ -86,10 +86,11 @@ int mdt_hsm_agent_register(struct mdt_thread_info *mti,
 	ENTRY;
 
 	/* no coordinator started, so we cannot serve requests */
-	if (cdt->cdt_state == CDT_STOPPED) {
+	if (!cdt_getref_try(cdt)) {
 		LCONSOLE_WARN("HSM coordinator thread is not running - "
 			      "denying agent registration.\n");
-		RETURN(-ENXIO);
+		/* The client will resend the request if starting */
+		RETURN(cdt->cdt_state == CDT_RUNNING ? -EINPROGRESS : -ENXIO);
 	}
 
 	OBD_ALLOC_PTR(ha);
@@ -143,6 +144,7 @@ out:
 	if (rc == -EEXIST || rc == 0)
 		mdt_hsm_cdt_event(cdt);
 
+	cdt_putref(cdt);
 	return rc;
 }
 
@@ -201,7 +203,7 @@ int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 	ENTRY;
 
 	/* no coordinator started, so we cannot serve requests */
-	if (cdt->cdt_state == CDT_STOPPED)
+	if (!cdt_getref_try(cdt))
 		RETURN(-ENXIO);
 
 	down_write(&cdt->cdt_agent_lock);
@@ -223,6 +225,7 @@ int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 out:
 	CDEBUG(D_HSM, "agent %s unregistration: %d\n", obd_uuid2str(uuid), rc);
 
+	cdt_putref(cdt);
 	return rc;
 }
 

@@ -489,9 +489,6 @@ static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
 	mutex_lock(&cdt->cdt_restore_lock);
 	list_for_each_entry_safe(crh, tmp3, &cdt->cdt_restore_handle_list,
 				 crh_list) {
-		/* not locked yet, cleanup by cdt_restore_handle_add() */
-		if (crh->crh_lh.mlh_type == MDT_NUL_LOCK)
-			continue;
 		list_del(&crh->crh_list);
 		/* give back layout lock */
 		mdt_object_unlock(cdt_mti, NULL, &crh->crh_lh, 1);
@@ -553,10 +550,21 @@ static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state)
 	return rc;
 }
 
+int cdt_getref_try(struct coordinator *cdt)
+{
+	return refcount_inc_not_zero(&cdt->cdt_ref);
+}
+
+void cdt_putref(struct coordinator *cdt)
+{
+	if (refcount_dec_and_test(&cdt->cdt_ref))
+		wake_up(&cdt->cdt_waitq);
+}
+
 static int mdt_hsm_pending_restore(struct mdt_thread_info *mti);
 
-static void cdt_start_pending_restore(struct mdt_device *mdt,
-				      struct coordinator *cdt)
+static int cdt_start_pending_restore(struct mdt_device *mdt,
+				     struct coordinator *cdt)
 {
 	struct mdt_thread_info *cdt_mti;
 	unsigned int i = 0;
@@ -565,6 +573,8 @@ static void cdt_start_pending_restore(struct mdt_device *mdt,
 	/* wait until MDD initialize hsm actions llog */
 	while (!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state) && i < obd_timeout) {
 		schedule_timeout_interruptible(cfs_time_seconds(1));
+		if (kthread_should_stop())
+			return -ESHUTDOWN;
 		i++;
 	}
 	if (!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state))
@@ -577,6 +587,7 @@ static void cdt_start_pending_restore(struct mdt_device *mdt,
 		CERROR("%s: cannot take the layout locks needed for registered restore: %d\n",
 		       mdt_obd_name(mdt), rc);
 
+	return rc;
 }
 
 /**
@@ -603,8 +614,17 @@ static int mdt_coordinator(void *data)
 	obd_uuid2fsname(hsd.hsd_fsname, mdt_obd_name(mdt),
 			sizeof(hsd.hsd_fsname));
 
-	cdt_start_pending_restore(mdt, cdt);
 	set_cdt_state(cdt, CDT_RUNNING);
+
+	/* Inform mdt_hsm_cdt_start(). */
+	wake_up(&cdt->cdt_waitq);
+
+	/* this initilazes cdt_last_cookie too */
+	rc = cdt_start_pending_restore(mdt, cdt);
+	if (rc < 0 || kthread_should_stop())
+		GOTO(fail_to_start, rc);
+
+	refcount_set(&cdt->cdt_ref, 1);
 
 	while (1) {
 		int i;
@@ -630,6 +650,12 @@ static int mdt_coordinator(void *data)
 
 		if (kthread_should_stop()) {
 			CDEBUG(D_HSM, "Coordinator stops\n");
+
+			/* Drop the running ref */
+			cdt_putref(cdt);
+			/* Wait threads to finish */
+			wait_event(cdt->cdt_waitq,
+				   refcount_read(&cdt->cdt_ref) == 0);
 			rc = 0;
 			break;
 		}
@@ -789,6 +815,7 @@ clean_cb_alloc:
 	if (hsd.hsd_request != NULL)
 		OBD_FREE_LARGE(hsd.hsd_request, request_sz);
 
+fail_to_start:
 	mdt_hsm_cdt_cleanup(mdt);
 
 	if (rc != 0)
@@ -798,6 +825,11 @@ clean_cb_alloc:
 		CDEBUG(D_HSM, "%s: coordinator thread exiting, process=%d,"
 			      " no error\n",
 		       mdt_obd_name(mdt), current->pid);
+
+	set_cdt_state(cdt, CDT_STOPPED);
+
+	/* Inform mdt_hsm_cdt_stop(). */
+	wake_up(&cdt->cdt_waitq);
 
 	RETURN(rc);
 }
@@ -816,7 +848,6 @@ int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 			   const struct lu_fid *fid,
 			   const struct hsm_extent *he)
 {
-	struct mdt_lock_handle lh = { 0 };
 	struct cdt_restore_handle *crh;
 	struct mdt_object *obj;
 	int rc;
@@ -833,44 +864,28 @@ int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 	 */
 	crh->crh_extent.start = 0;
 	crh->crh_extent.end = he->length;
-	crh->crh_lh.mlh_type = MDT_NUL_LOCK;
 
 	mutex_lock(&cdt->cdt_restore_lock);
 	if (cdt_restore_handle_find(cdt, fid) != NULL)
 		GOTO(out_crl, rc = 1);
 
-	if (unlikely(cdt->cdt_state == CDT_STOPPED ||
-		     cdt->cdt_state == CDT_STOPPING))
-		GOTO(out_crl, rc = -EAGAIN);
-
 	list_add_tail(&crh->crh_list, &cdt->cdt_restore_handle_list);
 	mutex_unlock(&cdt->cdt_restore_lock);
 
 	/* get the layout lock */
-	obj = mdt_object_find_lock(mti, &crh->crh_fid, &lh,
+	obj = mdt_object_find_lock(mti, &crh->crh_fid, &crh->crh_lh,
 				   MDS_INODELOCK_LAYOUT, LCK_EX);
-	if (IS_ERR(obj)) {
-		mutex_lock(&cdt->cdt_restore_lock);
+	if (IS_ERR(obj))
 		GOTO(out_ldel, rc = PTR_ERR(obj));
-	}
 
 	/* We do not keep a reference on the object during the restore
 	 * which can be very long.
 	 */
 	mdt_object_put(mti->mti_env, obj);
 
-	mutex_lock(&cdt->cdt_restore_lock);
-	if (unlikely(cdt->cdt_state == CDT_STOPPED ||
-		     cdt->cdt_state == CDT_STOPPING))
-		GOTO(out_lh, rc = -EAGAIN);
-
-	crh->crh_lh = lh;
-	mutex_unlock(&cdt->cdt_restore_lock);
-
 	RETURN(0);
-out_lh:
-	mdt_object_unlock(mti, NULL, &crh->crh_lh, 1);
 out_ldel:
+	mutex_lock(&cdt->cdt_restore_lock);
 	list_del(&crh->crh_list);
 out_crl:
 	mutex_unlock(&cdt->cdt_restore_lock);
@@ -1211,6 +1226,10 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		       mdt_obd_name(mdt), rc);
 	} else {
 		cdt->cdt_task = task;
+		wait_event(cdt->cdt_waitq,
+			   cdt->cdt_state != CDT_INIT);
+		CDEBUG(D_HSM, "%s: coordinator thread started\n",
+		       mdt_obd_name(mdt));
 		rc = 0;
 	}
 
@@ -1227,15 +1246,20 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	int rc;
 
 	ENTRY;
+
 	/* stop coordinator thread */
 	rc = set_cdt_state(cdt, CDT_STOPPING);
-	if (rc == 0) {
-		kthread_stop(cdt->cdt_task);
-		cdt->cdt_task = NULL;
-		set_cdt_state(cdt, CDT_STOPPED);
-	}
+	if (rc)
+		RETURN(rc);
 
-	RETURN(rc);
+	kthread_stop(cdt->cdt_task);
+	rc = wait_event_interruptible(cdt->cdt_waitq,
+				      cdt->cdt_state == CDT_STOPPED);
+	if (rc)
+		RETURN(-EINTR);
+
+	cdt->cdt_task = NULL;
+	RETURN(0);
 }
 
 static int mdt_hsm_set_exists(struct mdt_thread_info *mti,
@@ -1643,7 +1667,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 	ENTRY;
 
 	/* no coordinator started, so we cannot serve requests */
-	if (cdt->cdt_state == CDT_STOPPED)
+	if (!cdt_getref_try(cdt))
 		RETURN(-EAGAIN);
 
 	/* first do sanity checks */
@@ -1654,7 +1678,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		       mdt_obd_name(mdt),
 		       pgs->hpk_cookie, PFID(&pgs->hpk_fid));
 
-		RETURN(PTR_ERR(car));
+		GOTO(putref, rc = PTR_ERR(car));
 	}
 
 	CDEBUG(D_HSM, "Progress received for fid="DFID" cookie=%#llx"
@@ -1748,6 +1772,8 @@ out:
 	/* remove ref got from mdt_cdt_update_request() */
 	mdt_cdt_put_request(car);
 
+putref:
+	cdt_putref(cdt);
 	return rc;
 }
 
