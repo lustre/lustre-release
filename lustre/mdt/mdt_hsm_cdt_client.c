@@ -370,11 +370,8 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 
 			rc = cdt_restore_handle_add(mti, cdt, &hai->hai_fid,
 						    &hai->hai_extent);
-			if (rc == 1) {
-				rc = 0;
+			if (rc == -EEXIST)
 				continue;
-			}
-
 			if (rc < 0)
 				GOTO(out, rc);
 		}
@@ -472,9 +469,7 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 	if (!cdt_getref_try(cdt))
 		return false;
 
-	mutex_lock(&cdt->cdt_restore_lock);
-	is_running = (cdt_restore_handle_find(cdt, fid) != NULL);
-	mutex_unlock(&cdt->cdt_restore_lock);
+	is_running = cdt_restore_handle_exists(cdt, fid);
 
 	cdt_putref(cdt);
 

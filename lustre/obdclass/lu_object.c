@@ -110,7 +110,7 @@ MODULE_PARM_DESC(lu_cache_nr, "Maximum number of objects in lu_object cache");
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx);
 
-static u32 lu_fid_hash(const void *data, u32 len, u32 seed)
+u32 lu_fid_hash(const void *data, u32 len, u32 seed)
 {
 	const struct lu_fid *fid = data;
 
@@ -118,6 +118,7 @@ static u32 lu_fid_hash(const void *data, u32 len, u32 seed)
 	seed ^= cfs_hash_64(fid->f_seq, 32);
 	return seed;
 }
+EXPORT_SYMBOL(lu_fid_hash);
 
 static const struct rhashtable_params obj_hash_params = {
 	.key_len	= sizeof(struct lu_fid),

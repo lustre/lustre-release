@@ -5495,6 +5495,37 @@ test_409a() {
 }
 run_test 409a "Coordinator should not stop when in use"
 
+test_409b()
+{
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_empty_file "$f")
+
+	copytool setup
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $f || error "cannot release $f"
+	check_hsm_flags $f "0x0000000d"
+
+	kill_copytools
+	wait_copytools || error "copytools failed to stop"
+
+	# Remount fs to clear cached file attributes and free restore hash
+	stack_trap "cdt_check_state enabled" EXIT
+	stack_trap "cdt_set_mount_state enabled" EXIT
+	cdt_set_mount_state shutdown
+	cdt_check_state stopped
+
+	fail mds1
+
+	# getattr should work even if CDT is stopped
+	stat $f || error "cannot stat file"
+}
+run_test 409b "getattr released file with CDT stopped after remount"
+
 test_500()
 {
 	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&

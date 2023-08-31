@@ -123,7 +123,6 @@ static inline char *cdt_mdt_state2str(int state)
  * cdt_llog_lock
  * cdt_agent_lock
  * cdt_counter_lock
- * cdt_restore_lock
  * cdt_request_lock
  */
 struct coordinator {
@@ -147,8 +146,6 @@ struct coordinator {
 	struct rw_semaphore	 cdt_agent_lock;      /**< protect agent list */
 	struct rw_semaphore	 cdt_request_lock;    /**< protect request
 						       * list */
-	struct mutex		 cdt_restore_lock;    /**< protect restore
-						       * list */
 	timeout_t		 cdt_loop_period;     /**< llog scan period */
 	timeout_t		 cdt_grace_delay;     /**< request grace
 						       * delay */
@@ -171,7 +168,9 @@ struct coordinator {
 	struct list_head	 cdt_request_list;
 	struct list_head	 cdt_agents;	      /**< list of register
 						       * agents */
-	struct list_head	 cdt_restore_handle_list;
+	struct rhashtable	 cdt_restore_hash;    /* rhashtable for
+						       * restore requests
+						       */
 
 	/* Hash of cookies to locations of record locations in agent
 	 * request log. */
@@ -652,10 +651,12 @@ struct hsm_agent {
 };
 
 struct cdt_restore_handle {
-	struct list_head	crh_list;	/**< to chain the handle */
+	struct rhash_head	crh_hash;	/**< link to cdt_restore_hash */
 	struct lu_fid		crh_fid;	/**< fid of the object */
 	struct ldlm_extent	crh_extent;	/**< extent of the restore */
 	struct mdt_lock_handle	crh_lh;		/**< lock handle */
+	atomic_t		crh_refc;	/**< crh ref counter */
+	struct rcu_head		crh_rcu;	/**< crh rcu head */
 };
 extern struct kmem_cache *mdt_hsm_cdt_kmem;	/** restore handle slab cache */
 
@@ -1145,7 +1146,7 @@ void mdt_hsm_dump_hal(int level, const char *prefix,
 int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 			   const struct lu_fid *fid,
 			   const struct hsm_extent *he);
-struct cdt_restore_handle *cdt_restore_handle_find(struct coordinator *cdt,
+bool cdt_restore_handle_exists(struct coordinator *cdt,
 						   const struct lu_fid *fid);
 void cdt_restore_handle_del(struct mdt_thread_info *mti,
 			    struct coordinator *cdt, const struct lu_fid *fid);

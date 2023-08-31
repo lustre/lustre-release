@@ -764,6 +764,8 @@ static inline __u32 fid_hash(const struct lu_fid *f, int bits)
 	return cfs_hash_long(fid_flatten64(f), bits);
 }
 
+u32 lu_fid_hash(const void *data, u32 len, u32 seed);
+
 static inline int
 lu_fid_diff(const struct lu_fid *fid1, const struct lu_fid *fid2)
 {
