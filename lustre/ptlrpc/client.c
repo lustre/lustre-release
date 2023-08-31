@@ -2799,7 +2799,7 @@ EXPORT_SYMBOL(ptlrpc_set_wait);
  * If \a locked is set, that means caller is already holding import imp_lock
  * and so we no longer need to reobtain it (for certain lists manipulations)
  */
-static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
+static void __ptlrpc_free_req(struct ptlrpc_request *request, bool locked)
 {
 	ENTRY;
 
@@ -2866,18 +2866,14 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
  * @locked: set indicates that caller holds import imp_lock.
  *
  * Frees the request whe reference count reaches zero.
- *
- * Return:
- * * %1 the request is freed
- * * %0 some others still hold references on the request
  */
-static int __ptlrpc_req_put(struct ptlrpc_request *request, int locked)
+void __ptlrpc_req_put(struct ptlrpc_request *request, bool locked)
 {
 	int count;
 
 	ENTRY;
 	if (!request)
-		RETURN(1);
+		RETURN_EXIT;
 
 	LASSERT(request != LP_POISON);
 	LASSERT(request->rq_reqmsg != LP_POISON);
@@ -2916,17 +2912,7 @@ static int __ptlrpc_req_put(struct ptlrpc_request *request, int locked)
 	if (!count)
 		__ptlrpc_free_req(request, locked);
 
-	RETURN(!count);
-}
-
-/*
- * Drop one request reference. Must be called with import imp_lock held.
- * When reference count drops to zero, request is freed.
- */
-void ptlrpc_req_put_with_imp_lock(struct ptlrpc_request *request)
-{
-	assert_spin_locked(&request->rq_import->imp_lock);
-	(void)__ptlrpc_req_put(request, 1);
+	EXIT;
 }
 
 /**
@@ -2935,7 +2921,7 @@ void ptlrpc_req_put_with_imp_lock(struct ptlrpc_request *request)
  */
 void ptlrpc_req_put(struct ptlrpc_request *request)
 {
-	__ptlrpc_req_put(request, 0);
+	__ptlrpc_req_put(request, false);
 }
 EXPORT_SYMBOL(ptlrpc_req_put);
 
@@ -3064,7 +3050,7 @@ static void ptlrpc_free_request(struct ptlrpc_request *req)
 		req->rq_commit_cb(req);
 	list_del_init(&req->rq_replay_list);
 
-	__ptlrpc_req_put(req, 1);
+	__ptlrpc_req_put(req, true);
 }
 
 /**

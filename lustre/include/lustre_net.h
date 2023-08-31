@@ -2102,7 +2102,7 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 			     struct ptlrpc_cli_ctx *ctx);
 void obd_mod_free(struct kref *kref);
 void ptlrpc_req_put(struct ptlrpc_request *request);
-void ptlrpc_req_put_with_imp_lock(struct ptlrpc_request *request);
+void __ptlrpc_req_put(struct ptlrpc_request *request, bool locked);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp(struct ptlrpc_request *req,
 				       unsigned int nfrags,
