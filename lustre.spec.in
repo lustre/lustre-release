@@ -16,7 +16,6 @@
 %bcond_without lustre_utils
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
-%bcond_without snmp
 %bcond_with gss
 %bcond_with gss_keyring
 %bcond_without manpages
@@ -583,7 +582,6 @@ fi
 	%{!?with_ldiskfs:--disable-ldiskfs} \
 	%{!?with_servers:--disable-server} \
 	%{!?with_zfs:--without-zfs} \
-	%{!?with_snmp:--disable-snmp} \
 	%{!?with_gss:--disable-gss} \
 	%{!?with_gss_keyring:--disable-gss-keyring} \
 	%{!?with_manpages:--disable-manpages} \
@@ -715,11 +713,6 @@ echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so.*' >>lustre.files
 
 %if %{with ldiskfs}
 echo '%{_libdir}/libiam.a' >>lustre.files
-%endif
-
-%if %{with snmp}
-mkdir -p $RPM_BUILD_ROOT/%{_libdir}/lustre/snmp
-echo '%{_libdir}/lustre/snmp' >>lustre.files
 %endif
 
 %if %{with lustre_utils}

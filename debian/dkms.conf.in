@@ -20,7 +20,7 @@ PACKAGE_NAME="lustre-client-modules"
 PACKAGE_VERSION="@UPVERSION@"
 
 # We need to run autogen.sh between builds, see Ubuntu bug #952817
-MAKE="bash autogen.sh && ./configure --with-linux=$kernel_source_dir --with-linux-obj=$kernel_source_dir --disable-server --disable-quilt --disable-dependency-tracking --disable-doc --disable-utils --disable-iokit --disable-snmp --disable-tests --enable-quota --with-kmp-moddir=updates && make"
+MAKE="bash autogen.sh && ./configure --with-linux=$kernel_source_dir --with-linux-obj=$kernel_source_dir --disable-server --disable-quilt --disable-dependency-tracking --disable-doc --disable-utils --disable-iokit --disable-tests --enable-quota --with-kmp-moddir=updates && make"
 CLEAN="make distclean || true"
 
 AUTOINSTALL="yes"

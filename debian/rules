@@ -219,7 +219,6 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 		$(SRCDIR)/configure --disable-dependency-tracking \
 			--with-linux=$${KERNEL_SRC} \
 			--with-linux-obj=$${KERNEL_OBJ} \
-			--disable-snmp \
 			--enable-quota \
 			$${EXTRAFLAGS} \
 			$(EXTRA_OPTIONS) \
@@ -522,7 +521,6 @@ kdist_config: prep-deb-files patch-stamp
 		--disable-dependency-tracking \
 		--disable-doc  \
 		--disable-iokit \
-		--disable-snmp \
 		--disable-tests \
 		--enable-quota \
 		--with-kmp-moddir=updates/kernel \

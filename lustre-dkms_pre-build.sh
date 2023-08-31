@@ -90,7 +90,7 @@ fi
 # run a configure pass to clean "--enable-dist" only effect and also to
 # ensure local/on-target environment to be taken into account for
 # dkms.mkconf script customizations and before next build/MAKE step
-./configure --prefix=/usr --enable-modules --disable-iokit --disable-snmp \
+./configure --prefix=/usr --enable-modules --disable-iokit \
 	--disable-doc --disable-utils --disable-tests --disable-maintainer-mode \
 	$KERNEL_STUFF $GSS $SERVER $DKMS_CONFIG_OPTS \
 	--disable-manpages --disable-mpitests
