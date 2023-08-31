@@ -79,12 +79,12 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
 		strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) == 0 ||
 		strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) == 0);
 
-        if (cli->cl_import)
-                sec = sptlrpc_import_sec_ref(cli->cl_import);
-        if (sec == NULL)
-                goto out;
+	if (cli->cl_import)
+		sec = sptlrpc_import_sec_ref(cli->cl_import);
+	if (sec == NULL)
+		goto out;
 
-        sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str));
+	sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str));
 
 	seq_printf(seq, "rpc flavor:	%s\n",
 		   sptlrpc_flavor2name_base(sec->ps_flvr.sf_rpc));
@@ -103,7 +103,7 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
 
 	sptlrpc_sec_put(sec);
 out:
-        return 0;
+	return 0;
 }
 
 LDEBUGFS_SEQ_FOPS_RO(sptlrpc_info_lprocfs);
@@ -120,45 +120,46 @@ static int sptlrpc_ctxs_lprocfs_seq_show(struct seq_file *seq, void *v)
 		strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) == 0 ||
 		strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) == 0);
 
-        if (cli->cl_import)
-                sec = sptlrpc_import_sec_ref(cli->cl_import);
-        if (sec == NULL)
-                goto out;
+	if (cli->cl_import)
+		sec = sptlrpc_import_sec_ref(cli->cl_import);
+	if (sec == NULL)
+		goto out;
 
-        if (sec->ps_policy->sp_cops->display)
-                sec->ps_policy->sp_cops->display(sec, seq);
+	if (sec->ps_policy->sp_cops->display)
+		sec->ps_policy->sp_cops->display(sec, seq);
 
-        sptlrpc_sec_put(sec);
+	sptlrpc_sec_put(sec);
 out:
-        return 0;
+	return 0;
 }
 
 LDEBUGFS_SEQ_FOPS_RO(sptlrpc_ctxs_lprocfs);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 static ssize_t sepol_seq_write_old(struct obd_device *obd,
-				   const char __user *buffer,
-				   size_t count)
+				   const char __user *buffer, size_t count)
 {
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp = cli->cl_import;
 	struct sepol_downcall_data_old *param;
-	int size = sizeof(*param);
-	__u16 len;
+	size_t maxlen = sizeof(imp->imp_sec->ps_sepol);
+	size_t size = sizeof(*param);
+	size_t maxparam = sizeof(*param) + maxlen;
+	int len;
 	int rc = 0;
 
-	if (count < size) {
+	if (count <= size) {
 		rc = -EINVAL;
-		CERROR("%s: invalid data count = %lu, size = %d: rc = %d\n",
-		       obd->obd_name, (unsigned long) count, size, rc);
+		CERROR("%s: invalid data count %zu <= size %zu: rc = %d\n",
+		       obd->obd_name, count, size, rc);
 		return rc;
 	}
 
-	OBD_ALLOC(param, size);
-	if (param == NULL)
+	OBD_ALLOC(param, maxparam);
+	if (!param)
 		return -ENOMEM;
 
-	if (copy_from_user(param, buffer, size)) {
+	if (copy_from_user(param, buffer, min(count, maxparam))) {
 		rc = -EFAULT;
 		CERROR("%s: bad sepol data: rc = %d\n", obd->obd_name, rc);
 		GOTO(out, rc);
@@ -166,53 +167,38 @@ static ssize_t sepol_seq_write_old(struct obd_device *obd,
 
 	if (param->sdd_magic != SEPOL_DOWNCALL_MAGIC_OLD) {
 		rc = -EINVAL;
-		CERROR("%s: sepol downcall bad params: rc = %d\n",
-		       obd->obd_name, rc);
+		CERROR("%s: sepol downcall bad magic %#08x != %#08x: rc = %d\n",
+		       obd->obd_name, param->sdd_magic,
+		       SEPOL_DOWNCALL_MAGIC_OLD, rc);
 		GOTO(out, rc);
 	}
 
-	if (param->sdd_sepol_len == 0 ||
-	    param->sdd_sepol_len >= sizeof(imp->imp_sec->ps_sepol)) {
+	len = param->sdd_sepol_len;
+	if (len == 0 || len >= maxlen) {
 		rc = -EINVAL;
-		CERROR("%s: invalid sepol data returned: rc = %d\n",
-		       obd->obd_name, rc);
+		CERROR("%s: bad sepol len %u >= maxlen %zu: rc = %d\n",
+		       obd->obd_name, len, maxlen, rc);
 		GOTO(out, rc);
 	}
-	len = param->sdd_sepol_len; /* save sdd_sepol_len */
-	OBD_FREE(param, size);
-	size = offsetof(struct sepol_downcall_data_old,
-			sdd_sepol[len]);
+	size = offsetof(typeof(*param), sdd_sepol[len]);
 
 	if (count < size) {
 		rc = -EINVAL;
-		CERROR("%s: invalid sepol count = %lu, size = %d: rc = %d\n",
-		       obd->obd_name, (unsigned long) count, size, rc);
-		return rc;
-	}
-
-	/* alloc again with real size */
-	OBD_ALLOC(param, size);
-	if (param == NULL)
-		return -ENOMEM;
-
-	if (copy_from_user(param, buffer, size)) {
-		rc = -EFAULT;
-		CERROR("%s: cannot copy sepol data: rc = %d\n",
-		       obd->obd_name, rc);
+		CERROR("%s: bad sepol count %zu < total size %zu: rc = %d\n",
+		       obd->obd_name, count, size, rc);
 		GOTO(out, rc);
 	}
 
 	spin_lock(&imp->imp_sec->ps_lock);
-	snprintf(imp->imp_sec->ps_sepol, param->sdd_sepol_len + 1, "%s",
-		 param->sdd_sepol);
+	memcpy(imp->imp_sec->ps_sepol, param->sdd_sepol, len);
+	imp->imp_sec->ps_sepol[len + 1] = '\0';
 	imp->imp_sec->ps_sepol_mtime = ktime_set(param->sdd_sepol_mtime, 0);
 	spin_unlock(&imp->imp_sec->ps_lock);
 
 out:
-	if (param != NULL)
-		OBD_FREE(param, size);
+	OBD_FREE(param, maxparam);
 
-	return rc ? rc : count;
+	return rc ?: count;
 }
 #endif
 
@@ -225,89 +211,79 @@ ldebugfs_sptlrpc_sepol_seq_write(struct file *file, const char __user *buffer,
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp = cli->cl_import;
 	struct sepol_downcall_data *param;
-	__u32 magic;
-	int size = sizeof(magic);
-	__u16 len;
+	size_t maxlen = sizeof(imp->imp_sec->ps_sepol);
+	size_t size = sizeof(*param);
+	size_t maxparam = size + maxlen;
+	int len;
 	int rc = 0;
 
-	if (count < size) {
+	if (count <= size) {
 		rc = -EINVAL;
-		CERROR("%s: invalid buffer count = %lu, size = %d: rc = %d\n",
-		       obd->obd_name, (unsigned long) count, size, rc);
+		CERROR("%s: invalid data count %zu <= size %zu: rc = %d\n",
+		       obd->obd_name, count, size, rc);
 		return rc;
 	}
 
-	if (copy_from_user(&magic, buffer, size)) {
-		rc = -EFAULT;
-		CERROR("%s: bad sepol magic: rc = %d\n", obd->obd_name, rc);
-		return rc;
-	}
-
-	if (magic != SEPOL_DOWNCALL_MAGIC) {
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
-		if (magic == SEPOL_DOWNCALL_MAGIC_OLD) {
-			return sepol_seq_write_old(obd, buffer, count);
+	{
+		__u32 magic;
+
+		if (copy_from_user(&magic, buffer, sizeof(magic))) {
+			rc = -EFAULT;
+			CERROR("%s: bad sepol magic data: rc = %d\n",
+			       obd->obd_name, rc);
+			return rc;
 		}
+
+		if (unlikely(magic == SEPOL_DOWNCALL_MAGIC_OLD))
+			return sepol_seq_write_old(obd, buffer, count);
+	}
 #endif
-		rc = -EINVAL;
-		CERROR("%s: sepol downcall bad magic '%#08x': rc = %d\n",
-		       obd->obd_name, magic, rc);
-		return rc;
-	}
 
-	size = sizeof(*param);
-	if (count < size) {
-		rc = -EINVAL;
-		CERROR("%s: invalid data count = %lu, size = %d: rc = %d\n",
-		       obd->obd_name, (unsigned long) count, size, rc);
-		return rc;
-	}
-
-	OBD_ALLOC(param, size);
-	if (param == NULL)
+	OBD_ALLOC(param, maxparam);
+	if (!param)
 		return -ENOMEM;
 
-	if (copy_from_user(param, buffer, size)) {
+	if (copy_from_user(param, buffer, min(count, maxparam))) {
 		rc = -EFAULT;
 		CERROR("%s: bad sepol data: rc = %d\n", obd->obd_name, rc);
 		GOTO(out, rc);
 	}
 
-	if (param->sdd_sepol_len == 0 ||
-	    param->sdd_sepol_len >= sizeof(imp->imp_sec->ps_sepol)) {
+	if (param->sdd_magic != SEPOL_DOWNCALL_MAGIC) {
 		rc = -EINVAL;
-		CERROR("%s: invalid sepol data returned: rc = %d\n",
-		       obd->obd_name, rc);
+		CERROR("%s: sepol downcall bad magic %#08x != %#08x: rc = %d\n",
+		       obd->obd_name, param->sdd_magic,
+		       SEPOL_DOWNCALL_MAGIC, rc);
 		GOTO(out, rc);
 	}
-	len = param->sdd_sepol_len; /* save sdd_sepol_len */
-	OBD_FREE(param, size);
-	size = offsetof(struct sepol_downcall_data,
-			sdd_sepol[len]);
 
-	/* alloc again with real size */
-	OBD_ALLOC(param, size);
-	if (param == NULL)
-		return -ENOMEM;
+	len = param->sdd_sepol_len;
+	if (len == 0 || len >= maxlen) {
+		rc = -EINVAL;
+		CERROR("%s: bad sepol len %u >= maxlen %zu: rc = %d\n",
+		       obd->obd_name, len, maxlen, rc);
+		GOTO(out, rc);
+	}
+	size = offsetof(typeof(*param), sdd_sepol[len]);
 
-	if (copy_from_user(param, buffer, size)) {
-		rc = -EFAULT;
-		CERROR("%s: cannot copy sepol data: rc = %d\n",
-		       obd->obd_name, rc);
+	if (count < size) {
+		rc = -EINVAL;
+		CERROR("%s: bad sepol count %zu < total size %zu: rc = %d\n",
+		       obd->obd_name, count, size, rc);
 		GOTO(out, rc);
 	}
 
 	spin_lock(&imp->imp_sec->ps_lock);
-	snprintf(imp->imp_sec->ps_sepol, param->sdd_sepol_len + 1, "%s",
-		 param->sdd_sepol);
+	memcpy(imp->imp_sec->ps_sepol, param->sdd_sepol, len);
+	imp->imp_sec->ps_sepol[len + 1] = '\0';
 	imp->imp_sec->ps_sepol_mtime = ktime_set(param->sdd_sepol_mtime, 0);
 	spin_unlock(&imp->imp_sec->ps_lock);
 
 out:
-	if (param != NULL)
-		OBD_FREE(param, size);
+	OBD_FREE(param, maxparam);
 
-	return rc ? rc : count;
+	return rc ?: count;
 }
 LDEBUGFS_FOPS_WR_ONLY(srpc, sptlrpc_sepol);
 

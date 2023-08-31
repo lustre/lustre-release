@@ -230,7 +230,9 @@ EXPORT_SYMBOL(sptlrpc_flavor2name_bulk);
 
 char *sptlrpc_flavor2name(struct sptlrpc_flavor *sf, char *buf, int bufsize)
 {
-	snprintf(buf, bufsize, "%s", sptlrpc_flavor2name_base(sf->sf_rpc));
+	size_t ln;
+
+	ln = snprintf(buf, bufsize, "%s", sptlrpc_flavor2name_base(sf->sf_rpc));
 
 	/*
 	 * currently we don't support customized bulk specification for
@@ -240,8 +242,8 @@ char *sptlrpc_flavor2name(struct sptlrpc_flavor *sf, char *buf, int bufsize)
 		char bspec[16];
 
 		bspec[0] = '-';
-		sptlrpc_flavor2name_bulk(sf, &bspec[1], sizeof(bspec) - 1);
-		strncat(buf, bspec, bufsize);
+		sptlrpc_flavor2name_bulk(sf, bspec + 1, sizeof(bspec) - 1);
+		strncat(buf, bspec, bufsize - ln);
 	}
 
 	buf[bufsize - 1] = '\0';
