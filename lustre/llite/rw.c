@@ -972,7 +972,7 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
  * If it is in the stride window, return true, otherwise return false.
  */
 static bool read_in_stride_window(struct ll_readahead_state *ras,
-				  loff_t pos, loff_t count)
+				  loff_t pos, loff_t bytes)
 {
 	loff_t stride_gap;
 
@@ -984,34 +984,34 @@ static bool read_in_stride_window(struct ll_readahead_state *ras,
 
 	/* If it is contiguous read */
 	if (stride_gap == 0)
-		return ras->ras_consecutive_bytes + count <=
+		return ras->ras_consecutive_bytes + bytes <=
 			ras->ras_stride_bytes;
 
 	/* Otherwise check the stride by itself */
 	return (ras->ras_stride_length - ras->ras_stride_bytes) == stride_gap &&
 		ras->ras_consecutive_bytes == ras->ras_stride_bytes &&
-		count <= ras->ras_stride_bytes;
+		bytes <= ras->ras_stride_bytes;
 }
 
 static void ras_init_stride_detector(struct ll_readahead_state *ras,
-				     loff_t pos, loff_t count)
+				     loff_t pos, loff_t bytes)
 {
 	loff_t stride_gap = pos - ras->ras_last_read_end_bytes - 1;
 
-        LASSERT(ras->ras_consecutive_stride_requests == 0);
+	LASSERT(ras->ras_consecutive_stride_requests == 0);
 
 	if (pos <= ras->ras_last_read_end_bytes) {
-                /*Reset stride window for forward read*/
-                ras_stride_reset(ras);
-                return;
-        }
+		/* Reset stride window for forward read */
+		ras_stride_reset(ras);
+		return;
+	}
 
 	ras->ras_stride_bytes = ras->ras_consecutive_bytes;
 	ras->ras_stride_length = stride_gap + ras->ras_consecutive_bytes;
 	ras->ras_consecutive_stride_requests++;
 	ras->ras_stride_offset = pos;
 
-        RAS_CDEBUG(ras);
+	RAS_CDEBUG(ras);
 }
 
 static unsigned long
@@ -1182,7 +1182,7 @@ out:
 
 static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 				    struct ll_sb_info *sbi,
-				    loff_t pos, size_t count, bool mmap)
+				    loff_t pos, size_t bytes, bool mmap)
 {
 	bool stride_detect = false;
 	pgoff_t index = pos >> PAGE_SHIFT;
@@ -1196,9 +1196,9 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 	 */
 	if (!is_loose_seq_read(ras, pos)) {
 		/* Check whether it is in stride I/O mode */
-		if (!read_in_stride_window(ras, pos, count)) {
+		if (!read_in_stride_window(ras, pos, bytes)) {
 			if (ras->ras_consecutive_stride_requests == 0)
-				ras_init_stride_detector(ras, pos, count);
+				ras_init_stride_detector(ras, pos, bytes);
 			else
 				ras_stride_reset(ras);
 			ras->ras_consecutive_bytes = 0;
@@ -1218,14 +1218,14 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 		 * if invalid, it will reset the stride ra window to
 		 * be zero.
 		 */
-		if (!read_in_stride_window(ras, pos, count)) {
+		if (!read_in_stride_window(ras, pos, bytes)) {
 			ras_stride_reset(ras);
 			ras->ras_window_pages = 0;
 			ras->ras_next_readahead_idx = index;
 		}
 	}
 
-	ras->ras_consecutive_bytes += count;
+	ras->ras_consecutive_bytes += bytes;
 	if (mmap) {
 		pgoff_t idx = ras->ras_consecutive_bytes >> PAGE_SHIFT;
 		unsigned long ra_range_pages =
@@ -1239,10 +1239,10 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 		ras->ras_need_increase_window = true;
 	}
 
-	ras->ras_last_read_end_bytes = pos + count - 1;
+	ras->ras_last_read_end_bytes = pos + bytes - 1;
 }
 
-void ll_ras_enter(struct file *f, loff_t pos, size_t count)
+void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 {
 	struct ll_file_data *fd = f->private_data;
 	struct ll_readahead_state *ras = &fd->fd_ras;
@@ -1283,7 +1283,7 @@ void ll_ras_enter(struct file *f, loff_t pos, size_t count)
 			GOTO(out_unlock, 0);
 		}
 	}
-	ras_detect_read_pattern(ras, sbi, pos, count, false);
+	ras_detect_read_pattern(ras, sbi, pos, bytes, false);
 out_unlock:
 	spin_unlock(&ras->ras_lock);
 }
@@ -1699,7 +1699,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	if (!mmap) {
 		io_start_index = io->u.ci_rw.crw_pos >> PAGE_SHIFT;
 		io_end_index = (io->u.ci_rw.crw_pos +
-				io->u.ci_rw.crw_count - 1) >> PAGE_SHIFT;
+				io->u.ci_rw.crw_bytes - 1) >> PAGE_SHIFT;
 	} else {
 		io_start_index = cl_page_index(page);
 		io_end_index = cl_page_index(page);

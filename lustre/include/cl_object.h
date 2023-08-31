@@ -1719,7 +1719,7 @@ enum cl_fsync_mode {
 
 struct cl_io_rw_common {
 	loff_t	crw_pos;
-	size_t	crw_count;
+	size_t	crw_bytes;
 	int	crw_nonblock;
 };
 enum cl_setattr_subtype {
@@ -1813,20 +1813,20 @@ struct cl_io {
 			u32 dv_layout_version;
 			int dv_flags;
 		} ci_data_version;
-                struct cl_fault_io {
-                        /** page index within file. */
-                        pgoff_t         ft_index;
-                        /** bytes valid byte on a faulted page. */
-			size_t		ft_nob;
-                        /** writable page? for nopage() only */
-                        int             ft_writable;
-                        /** page of an executable? */
-                        int             ft_executable;
-                        /** page_mkwrite() */
-                        int             ft_mkwrite;
-                        /** resulting page */
-                        struct cl_page *ft_page;
-                } ci_fault;
+		struct cl_fault_io {
+			/** page index within file. */
+			pgoff_t		ft_index;
+			/** bytes valid byte on a faulted page. */
+			size_t		ft_bytes;
+			/** writable page? for nopage() only */
+			int		ft_writable;
+			/** page of an executable? */
+			int		ft_executable;
+			/** page_mkwrite() */
+			int		ft_mkwrite;
+			/** resulting page */
+			struct cl_page *ft_page;
+		} ci_fault;
 		struct cl_fsync_io {
 			loff_t             fi_start;
 			loff_t             fi_end;
@@ -1852,11 +1852,11 @@ struct cl_io {
 		struct cl_misc_io {
 			time64_t		 lm_next_rpc_time;
 		} ci_misc;
-        } u;
-        struct cl_2queue     ci_queue;
-        size_t               ci_nob;
-        int                  ci_result;
-	unsigned int         ci_continue:1,
+	} u;
+	struct cl_2queue	ci_queue;
+	size_t			ci_bytes;
+	int			ci_result;
+	unsigned int		ci_continue:1,
 	/**
 	 * This io has held grouplock, to inform sublayers that
 	 * don't do lockless i/o.
@@ -2355,23 +2355,23 @@ void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock);
 /** \defgroup cl_io cl_io
  * @{ */
 
-int   cl_io_init         (const struct lu_env *env, struct cl_io *io,
-                          enum cl_io_type iot, struct cl_object *obj);
-int   cl_io_sub_init     (const struct lu_env *env, struct cl_io *io,
-                          enum cl_io_type iot, struct cl_object *obj);
-int   cl_io_rw_init      (const struct lu_env *env, struct cl_io *io,
-                          enum cl_io_type iot, loff_t pos, size_t count);
-int   cl_io_loop         (const struct lu_env *env, struct cl_io *io);
+int   cl_io_init(const struct lu_env *env, struct cl_io *io,
+		 enum cl_io_type iot, struct cl_object *obj);
+int   cl_io_sub_init(const struct lu_env *env, struct cl_io *io,
+		     enum cl_io_type iot, struct cl_object *obj);
+int   cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
+		    enum cl_io_type iot, loff_t pos, size_t bytes);
+int   cl_io_loop(const struct lu_env *env, struct cl_io *io);
 
-void  cl_io_fini         (const struct lu_env *env, struct cl_io *io);
-int   cl_io_iter_init    (const struct lu_env *env, struct cl_io *io);
-void  cl_io_iter_fini    (const struct lu_env *env, struct cl_io *io);
-int   cl_io_lock         (const struct lu_env *env, struct cl_io *io);
-void  cl_io_unlock       (const struct lu_env *env, struct cl_io *io);
-int   cl_io_start        (const struct lu_env *env, struct cl_io *io);
-void  cl_io_end          (const struct lu_env *env, struct cl_io *io);
-int   cl_io_lock_add     (const struct lu_env *env, struct cl_io *io,
-                          struct cl_io_lock_link *link);
+void  cl_io_fini(const struct lu_env *env, struct cl_io *io);
+int   cl_io_iter_init(const struct lu_env *env, struct cl_io *io);
+void  cl_io_iter_fini(const struct lu_env *env, struct cl_io *io);
+int   cl_io_lock(const struct lu_env *env, struct cl_io *io);
+void  cl_io_unlock(const struct lu_env *env, struct cl_io *io);
+int   cl_io_start(const struct lu_env *env, struct cl_io *io);
+void  cl_io_end(const struct lu_env *env, struct cl_io *io);
+int   cl_io_lock_add(const struct lu_env *env, struct cl_io *io,
+		     struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
                            struct cl_lock_descr *descr);
 int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
@@ -2387,8 +2387,8 @@ int cl_io_lru_reserve(const struct lu_env *env, struct cl_io *io,
 		      loff_t pos, size_t bytes);
 int   cl_io_read_ahead   (const struct lu_env *env, struct cl_io *io,
 			  pgoff_t start, struct cl_read_ahead *ra);
-void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
-                          size_t nob);
+void  cl_io_rw_advance(const struct lu_env *env, struct cl_io *io,
+		       size_t bytes);
 
 /**
  * True, iff \a io is an O_APPEND write(2).

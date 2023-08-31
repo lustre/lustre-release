@@ -59,7 +59,7 @@ struct vvp_io {
 	/**
 	 * Total size for the left IO.
 	 */
-	size_t vui_tot_count;
+	size_t vui_tot_bytes;
 
 	union {
 		struct vvp_fault_io {

@@ -486,7 +486,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 	case CIT_READ:
 	case CIT_WRITE:
 		lio->lis_pos = io->u.ci_rw.crw_pos;
-		lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
+		lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes;
 		lio->lis_io_endpos = lio->lis_endpos;
 		if (cl_io_is_append(io)) {
 			LASSERT(io->ci_type == CIT_WRITE);
@@ -732,7 +732,7 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 			io->u.ci_wr.wr_append = 1;
 		} else {
 			io->u.ci_rw.crw_pos = start;
-			io->u.ci_rw.crw_count = end - start;
+			io->u.ci_rw.crw_bytes = end - start;
 		}
 		break;
 	}
@@ -981,13 +981,13 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	next = min_t(loff_t, next, lio->lis_io_endpos);
 
 	io->ci_continue = next < lio->lis_io_endpos;
-	io->u.ci_rw.crw_count = next - io->u.ci_rw.crw_pos;
+	io->u.ci_rw.crw_bytes = next - io->u.ci_rw.crw_pos;
 	lio->lis_pos    = io->u.ci_rw.crw_pos;
-	lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
+	lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes;
 	CDEBUG(D_VFSTRACE,
 	       "stripe: %llu chunk: [%llu, %llu) %llu, %zd\n",
 	       (__u64)start, lio->lis_pos, lio->lis_endpos,
-	       (__u64)lio->lis_io_endpos, io->u.ci_rw.crw_count);
+	       (__u64)lio->lis_io_endpos, io->u.ci_rw.crw_bytes);
 
 	/*
 	 * XXX The following call should be optimized: we know, that
@@ -1503,7 +1503,7 @@ static int lov_io_fault_start(const struct lu_env *env,
 	}
 
 	sub = lov_sub_get(env, lio, fio->ft_page->cp_lov_index);
-	sub->sub_io.u.ci_fault.ft_nob = fio->ft_nob;
+	sub->sub_io.u.ci_fault.ft_bytes = fio->ft_bytes;
 
 	RETURN(lov_io_start(env, ios));
 }

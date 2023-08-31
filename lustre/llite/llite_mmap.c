@@ -43,11 +43,11 @@
 static const struct vm_operations_struct ll_file_vm_ops;
 
 void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
-		     unsigned long addr, size_t count)
+		     unsigned long addr, size_t bytes)
 {
 	policy->l_extent.start = ((addr - vma->vm_start) & PAGE_MASK) +
 				 (vma->vm_pgoff << PAGE_SHIFT);
-	policy->l_extent.end = (policy->l_extent.start + count - 1) |
+	policy->l_extent.end = (policy->l_extent.start + bytes - 1) |
 			       ~PAGE_MASK;
 }
 
@@ -63,7 +63,7 @@ void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
 #endif
 
 struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
-			       size_t count)
+			       size_t bytes)
 {
 	struct vm_area_struct *vma, *ret = NULL;
 	struct vma_iterator vmi;
@@ -75,7 +75,7 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
 
 	vma_iter_init(&vmi, mm, addr);
 	for_each_vma(vmi, vma) {
-		if (vma->vm_start < (addr + count))
+		if (vma->vm_start < (addr + bytes))
 			break;
 		if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
 		    vma->vm_flags & VM_SHARED) {

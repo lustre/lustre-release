@@ -32,7 +32,9 @@ cfs_time_before_64||ktime_before
 cfs_time_current||jiffies
 cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
+ci_nob||ci_bytes
 CLASSERT||BUILD_BUG_ON()
+crw_count||crw_bytes
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
 define OBD_CONNECT||see "XXX README XXX" below and contact adilger@whamcloud.com
@@ -47,6 +49,7 @@ DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 ENOTSUPP||EOPNOTSUPP
 ERR_PTR.PTR_ERR||ERR_CAST
 from_timer||cfs_from_timer
+ft_nob||ft_bytes
 f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
@@ -133,4 +136,5 @@ tempnam||mkstemp
 time_t||timeout_t
 timer_setup||cfs_timer_setup
 version_code.*2.1[7-9]||version 2.16.x should be used
+vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t

@@ -1123,7 +1123,7 @@ static inline bool ll_sbi_has_parallel_dio(struct ll_sb_info *sbi)
 	return test_bit(LL_SBI_PARALLEL_DIO, sbi->ll_flags);
 }
 
-void ll_ras_enter(struct file *f, loff_t pos, size_t count);
+void ll_ras_enter(struct file *f, loff_t pos, size_t bytes);
 
 /* llite/lcommon_misc.c */
 int cl_ocd_update(struct obd_device *host, struct obd_device *watched,

@@ -182,7 +182,7 @@ EXPORT_SYMBOL(cl_io_init);
  * \pre iot == CIT_READ || iot == CIT_WRITE
  */
 int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
-		  enum cl_io_type iot, loff_t pos, size_t count)
+		  enum cl_io_type iot, loff_t pos, size_t bytes)
 {
 	LINVRNT(iot == CIT_READ || iot == CIT_WRITE);
 	LINVRNT(io->ci_obj != NULL);
@@ -190,10 +190,10 @@ int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
 
 	LU_OBJECT_HEADER(D_VFSTRACE, env, &io->ci_obj->co_lu,
 			 "io range: %u [%llu, %llu) %u %u\n",
-			 iot, (__u64)pos, (__u64)pos + count,
+			 iot, (__u64)pos, (__u64)pos + bytes,
 			 io->u.ci_rw.crw_nonblock, io->u.ci_wr.wr_append);
 	io->u.ci_rw.crw_pos    = pos;
-	io->u.ci_rw.crw_count  = count;
+	io->u.ci_rw.crw_bytes  = bytes;
 	RETURN(cl_io_init(env, io, iot, io->ci_obj));
 }
 EXPORT_SYMBOL(cl_io_rw_init);
@@ -411,27 +411,27 @@ void cl_io_iter_fini(const struct lu_env *env, struct cl_io *io)
 EXPORT_SYMBOL(cl_io_iter_fini);
 
 /**
- * Records that read or write io progressed \a nob bytes forward.
+ * Records that read or write io progressed \a bytes forward.
  */
-void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t nob)
+void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t bytes)
 {
 	const struct cl_io_slice *scan;
 
 	ENTRY;
 
 	LINVRNT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE ||
-		nob == 0);
+		bytes == 0);
 	LINVRNT(cl_io_is_loopable(io));
 	LINVRNT(cl_io_invariant(io));
 
-	io->u.ci_rw.crw_pos   += nob;
-	io->u.ci_rw.crw_count -= nob;
+	io->u.ci_rw.crw_pos   += bytes;
+	io->u.ci_rw.crw_bytes -= bytes;
 
 	/* layers have to be notified. */
 	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_advance != NULL)
 			scan->cis_iop->op[io->ci_type].cio_advance(env, scan,
-								   nob);
+								   bytes);
 	}
 	EXIT;
 }
@@ -738,12 +738,12 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 	ENTRY;
 
 	do {
-		size_t nob;
+		size_t bytes;
 
 		io->ci_continue = 0;
 		result = cl_io_iter_init(env, io);
 		if (result == 0) {
-			nob    = io->ci_nob;
+			bytes = io->ci_bytes;
 			result = cl_io_lock(env, io);
 			if (result == 0) {
 				/*
@@ -762,7 +762,7 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 				 */
 				cl_io_end(env, io);
 				cl_io_unlock(env, io);
-				cl_io_rw_advance(env, io, io->ci_nob - nob);
+				cl_io_rw_advance(env, io, io->ci_bytes - bytes);
 			}
 		}
 		cl_io_iter_fini(env, io);

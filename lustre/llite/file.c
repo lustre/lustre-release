@@ -1707,7 +1707,7 @@ static void ll_heat_add(struct inode *inode, enum cl_io_type iot,
 static ssize_t
 ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   struct file *file, enum cl_io_type iot,
-		   loff_t *ppos, size_t count)
+		   loff_t *ppos, size_t bytes)
 {
 	struct vvp_io *vio = vvp_env_io(env);
 	struct inode *inode = file_inode(file);
@@ -1725,20 +1725,17 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	bool is_aio = false;
 	bool is_parallel_dio = false;
 	struct cl_dio_aio *ci_dio_aio = NULL;
-	size_t per_bytes;
-	bool partial_io = false;
-	size_t max_io_pages, max_cached_pages;
+	size_t per_bytes, max_io_bytes;
+	bool partial_io;
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "%s: %s ppos: %llu, count: %zu\n",
+	CDEBUG(D_VFSTRACE, "%s: %s ppos: %llu, bytes: %zu\n",
 		file_dentry(file)->d_name.name,
-		iot == CIT_READ ? "read" : "write", *ppos, count);
+		iot == CIT_READ ? "read" : "write", *ppos, bytes);
 
-	max_io_pages = PTLRPC_MAX_BRW_PAGES * OBD_MAX_RIF_DEFAULT;
-	max_cached_pages = sbi->ll_cache->ccc_lru_max;
-	if (max_io_pages > (max_cached_pages >> 2))
-		max_io_pages = max_cached_pages >> 2;
+	max_io_bytes = min_t(size_t, PTLRPC_MAX_BRW_PAGES * OBD_MAX_RIF_DEFAULT,
+			     sbi->ll_cache->ccc_lru_max >> 2) << PAGE_SHIFT;
 
 	io = vvp_env_thread_io(env);
 	if (file->f_flags & O_DIRECT) {
@@ -1769,11 +1766,13 @@ restart:
 	 * if we have small max_cached_mb but large block IO issued, io
 	 * could not be finished and blocked whole client.
 	 */
-	if (file->f_flags & O_DIRECT)
-		per_bytes = count;
-	else
-		per_bytes = min(max_io_pages << PAGE_SHIFT, count);
-	partial_io = per_bytes < count;
+	if (file->f_flags & O_DIRECT || bytes < max_io_bytes) {
+		per_bytes = bytes;
+		partial_io = false;
+	} else {
+		per_bytes = max_io_bytes;
+		partial_io = true;
+	}
 	io = vvp_env_thread_io(env);
 	ll_io_init(io, file, iot, args);
 	io->ci_dio_aio = ci_dio_aio;
@@ -1840,17 +1839,17 @@ restart:
 			range_locked = false;
 	}
 
-	if (io->ci_nob > 0) {
+	if (io->ci_bytes > 0) {
 		if (rc2 == 0) {
-			result += io->ci_nob;
+			result += io->ci_bytes;
 			*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
 		} else if (rc2) {
 			result = 0;
 		}
-		count -= io->ci_nob;
+		bytes -= io->ci_bytes;
 
 		/* prepare IO restart */
-		if (count > 0)
+		if (bytes > 0)
 			args->u.normal.via_iter = vio->vui_iter;
 
 		if (partial_io) {
@@ -1858,8 +1857,8 @@ restart:
 			 * Reexpand iov count because it was zero
 			 * after IO finish.
 			 */
-			iov_iter_reexpand(vio->vui_iter, count);
-			if (per_bytes == io->ci_nob)
+			iov_iter_reexpand(vio->vui_iter, bytes);
+			if (per_bytes == io->ci_bytes)
 				io->ci_need_restart = 1;
 		}
 	}
@@ -1872,12 +1871,12 @@ out:
 	       iot, rc, result, io->ci_need_restart);
 
 	if ((!rc || rc == -ENODATA || rc == -ENOLCK || rc == -EIOCBQUEUED) &&
-	    count > 0 && io->ci_need_restart && retries-- > 0) {
+	    bytes > 0 && io->ci_need_restart && retries-- > 0) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: restart %s from ppos=%lld count=%zu retries=%u ret=%zd: rc = %d\n",
+		       "%s: restart %s from ppos=%lld bytes=%zu retries=%u ret=%zd: rc = %d\n",
 		       file_dentry(file)->d_name.name,
 		       iot == CIT_READ ? "read" : "write",
-		       *ppos, count, retries, result, rc);
+		       *ppos, bytes, retries, result, rc);
 		/* preserve the tried count for FLR */
 		retried = io->ci_ndelay_tried;
 		dio_lock = io->ci_dio_lock;

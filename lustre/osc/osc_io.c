@@ -482,7 +482,7 @@ int osc_io_fault_start(const struct lu_env *env, const struct cl_io_slice *ios)
 	io  = ios->cis_io;
 	fio = &io->u.ci_fault;
 	CDEBUG(D_INFO, "%lu %d %zu\n",
-		fio->ft_index, fio->ft_writable, fio->ft_nob);
+		fio->ft_index, fio->ft_writable, fio->ft_bytes);
 	/*
 	 * If mapping is writeable, adjust kms to cover this page,
 	 * but do not extend kms beyond actual file size.
@@ -490,7 +490,7 @@ int osc_io_fault_start(const struct lu_env *env, const struct cl_io_slice *ios)
 	 */
 	if (fio->ft_writable)
 		osc_page_touch_at(env, ios->cis_obj,
-				  fio->ft_index, fio->ft_nob);
+				  fio->ft_index, fio->ft_bytes);
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_io_fault_start);

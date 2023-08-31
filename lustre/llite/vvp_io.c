@@ -118,12 +118,12 @@ static void vvp_object_size_unlock(struct cl_object *obj)
  * top-object and sub-objects.
  */
 static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
-			 struct cl_io *io, loff_t start, size_t count,
+			 struct cl_io *io, loff_t start, size_t bytes,
 			 int *exceed)
 {
 	struct cl_attr *attr  = vvp_env_thread_attr(env);
-	struct inode   *inode = vvp_object_inode(obj);
-	loff_t          pos   = start + count - 1;
+	struct inode *inode = vvp_object_inode(obj);
+	loff_t pos = start + bytes - 1;
 	loff_t kms;
 	int result;
 
@@ -445,7 +445,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 	struct iovec iov;
 	struct iov_iter i;
 	unsigned long addr;
-	ssize_t count;
+	ssize_t bytes;
 	int result = 0;
 	ENTRY;
 
@@ -467,16 +467,16 @@ static int vvp_mmap_locks(const struct lu_env *env,
 	     iov_iter_advance(&i, iov.iov_len)) {
 		iov = iov_iter_iovec(&i);
 		addr = (unsigned long)iov.iov_base;
-		count = iov.iov_len;
+		bytes = iov.iov_len;
 
-		if (count == 0)
+		if (bytes == 0)
 			continue;
 
-		count += addr & ~PAGE_MASK;
+		bytes += addr & ~PAGE_MASK;
 		addr &= PAGE_MASK;
 
 		mmap_read_lock(mm);
-		while ((vma = our_vma(mm, addr, count)) != NULL) {
+		while ((vma = our_vma(mm, addr, bytes)) != NULL) {
 			struct dentry *de = file_dentry(vma->vm_file);
 			struct inode *inode = de->d_inode;
 			int flags = CEF_MUST;
@@ -494,7 +494,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			 * io only ever reads user level buffer, and CIT_READ
 			 * only writes on it.
 			 */
-			policy_from_vma(&policy, vma, addr, count);
+			policy_from_vma(&policy, vma, addr, bytes);
 			descr->cld_mode = vvp_mode_from_vma(vma);
 			descr->cld_obj = ll_i2info(inode)->lli_clob;
 			descr->cld_start = policy.l_extent.start >> PAGE_SHIFT;
@@ -509,10 +509,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			if (result < 0)
 				break;
 
-			if (vma->vm_end - addr >= count)
+			if (vma->vm_end - addr >= bytes)
 				break;
 
-			count -= vma->vm_end - addr;
+			bytes -= vma->vm_end - addr;
 			addr = vma->vm_end;
 		}
 		mmap_read_unlock(mm);
@@ -523,8 +523,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 }
 
 static void vvp_io_advance(const struct lu_env *env,
-			   const struct cl_io_slice *ios,
-			   size_t nob)
+			   const struct cl_io_slice *ios, size_t bytes)
 {
 	struct cl_object *obj = ios->cis_io->ci_obj;
 	struct vvp_io *vio = cl2vvp_io(env, ios);
@@ -536,16 +535,16 @@ static void vvp_io_advance(const struct lu_env *env,
 	 * original position even io succeed, so instead
 	 * of relying on VFS, we move iov iter by ourselves.
 	 */
-	iov_iter_advance(vio->vui_iter, nob);
-	CDEBUG(D_VFSTRACE, "advancing %ld bytes\n", nob);
-	vio->vui_tot_count -= nob;
-	iov_iter_reexpand(vio->vui_iter, vio->vui_tot_count);
+	iov_iter_advance(vio->vui_iter, bytes);
+	CDEBUG(D_VFSTRACE, "advancing %ld bytes\n", bytes);
+	vio->vui_tot_bytes -= bytes;
+	iov_iter_reexpand(vio->vui_iter, vio->vui_tot_bytes);
 }
 
 static void vvp_io_update_iov(const struct lu_env *env,
 			      struct vvp_io *vio, struct cl_io *io)
 {
-	size_t size = io->u.ci_rw.crw_count;
+	size_t size = io->u.ci_rw.crw_bytes;
 
 	if (!vio->vui_iter)
 		return;
@@ -596,7 +595,7 @@ static int vvp_io_read_lock(const struct lu_env *env,
 
 	ENTRY;
 	result = vvp_io_rw_lock(env, io, CLM_READ, rd->crw_pos,
-				rd->crw_pos + rd->crw_count - 1);
+				rd->crw_pos + rd->crw_bytes - 1);
 	RETURN(result);
 }
 
@@ -627,7 +626,7 @@ static int vvp_io_write_lock(const struct lu_env *env,
 		end   = OBD_OBJECT_EOF;
 	} else {
 		start = io->u.ci_wr.wr.crw_pos;
-		end   = start + io->u.ci_wr.wr.crw_count - 1;
+		end   = start + io->u.ci_wr.wr.crw_bytes - 1;
 	}
 
 	RETURN(vvp_io_rw_lock(env, io, CLM_WRITE, start, end));
@@ -826,8 +825,8 @@ static int vvp_io_read_start(const struct lu_env *env,
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct file *file = vio->vui_fd->fd_file;
 	loff_t pos = io->u.ci_rd.rd.crw_pos;
-	size_t cnt = io->u.ci_rd.rd.crw_count;
-	size_t tot = vio->vui_tot_count;
+	size_t crw_bytes = io->u.ci_rd.rd.crw_bytes;
+	size_t tot_bytes = vio->vui_tot_bytes;
 	struct ll_cl_context *lcc;
 	unsigned int seq;
 	int exceed = 0;
@@ -842,7 +841,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	CDEBUG(D_VFSTRACE, "%s: read [%llu, %llu)\n",
 		file_dentry(file)->d_name.name,
-		pos, pos + cnt);
+		pos, pos + crw_bytes);
 
 	trunc_sem_down_read(&lli->lli_trunc_sem);
 
@@ -855,14 +854,14 @@ static int vvp_io_read_start(const struct lu_env *env,
 		RETURN(0);
 
 	if (!(file->f_flags & O_DIRECT)) {
-		result = cl_io_lru_reserve(env, io, pos, cnt);
+		result = cl_io_lru_reserve(env, io, pos, crw_bytes);
 		if (result)
 			RETURN(result);
 	}
 
 	/* Unless this is reading a sparse file, otherwise the lock has already
 	 * been acquired so vvp_prep_size() is an empty op. */
-	result = vvp_prep_size(env, obj, io, pos, cnt, &exceed);
+	result = vvp_prep_size(env, obj, io, pos, crw_bytes, &exceed);
 	if (result != 0)
 		RETURN(result);
 	else if (exceed != 0)
@@ -870,7 +869,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
 			 "Read ino %lu, %zu bytes, offset %lld, size %llu\n",
-			 inode->i_ino, cnt, pos, i_size_read(inode));
+			 inode->i_ino, crw_bytes, pos, i_size_read(inode));
 
 	/* initialize read-ahead window once per syscall */
 	if (!vio->vui_ra_valid) {
@@ -880,15 +879,15 @@ static int vvp_io_read_start(const struct lu_env *env,
 		page_offset = pos & ~PAGE_MASK;
 		if (page_offset) {
 			vio->vui_ra_pages++;
-			if (tot > PAGE_SIZE - page_offset)
-				tot -= (PAGE_SIZE - page_offset);
+			if (tot_bytes > PAGE_SIZE - page_offset)
+				tot_bytes -= (PAGE_SIZE - page_offset);
 			else
-				tot = 0;
+				tot_bytes = 0;
 		}
-		vio->vui_ra_pages += (tot + PAGE_SIZE - 1) >> PAGE_SHIFT;
+		vio->vui_ra_pages += (tot_bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 		CDEBUG(D_READA, "tot %zu, ra_start %lu, ra_count %lu\n",
-		       vio->vui_tot_count, vio->vui_ra_start_idx,
+		       vio->vui_tot_bytes, vio->vui_ra_start_idx,
 		       vio->vui_ra_pages);
 	}
 
@@ -910,7 +909,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 		seq = read_seqbegin(&ll_i2info(inode)->lli_page_inv_lock);
 		result = generic_file_read_iter(vio->vui_iocb, &iter);
 		if (result >= 0) {
-			io->ci_nob += result;
+			io->ci_bytes += result;
 			total_bytes_read += result;
 		}
 	/* if we got a short read or -EIO and we raced with page invalidation,
@@ -922,11 +921,11 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 out:
 	if (result >= 0) {
-		if (total_bytes_read < cnt)
+		if (total_bytes_read < crw_bytes)
 			io->ci_continue = 0;
 		result = 0;
 	} else if (result == -EIOCBQUEUED) {
-		io->ci_nob += vio->u.readwrite.vui_read;
+		io->ci_bytes += vio->u.readwrite.vui_read;
 		vio->vui_iocb->ki_pos = pos + vio->u.readwrite.vui_read;
 	}
 
@@ -1261,19 +1260,19 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 }
 
 static int vvp_io_write_start(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+			      const struct cl_io_slice *ios)
 {
-	struct vvp_io		*vio   = cl2vvp_io(env, ios);
-	struct cl_io		*io    = ios->cis_io;
-	struct cl_object	*obj   = io->ci_obj;
-	struct inode		*inode = vvp_object_inode(obj);
-	struct ll_inode_info	*lli   = ll_i2info(inode);
-	struct file		*file  = vio->vui_fd->fd_file;
-	ssize_t			 result = 0;
-	loff_t			 pos = io->u.ci_wr.wr.crw_pos;
-	size_t			 cnt = io->u.ci_wr.wr.crw_count;
-	bool			 lock_inode = !IS_NOSEC(inode);
-	size_t nob = io->ci_nob;
+	struct vvp_io *vio = cl2vvp_io(env, ios);
+	struct cl_io *io = ios->cis_io;
+	struct cl_object *obj = io->ci_obj;
+	struct inode *inode = vvp_object_inode(obj);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct file *file = vio->vui_fd->fd_file;
+	ssize_t result = 0;
+	loff_t pos = io->u.ci_wr.wr.crw_pos;
+	size_t crw_bytes = io->u.ci_wr.wr.crw_bytes;
+	bool lock_inode = !IS_NOSEC(inode);
+	size_t ci_bytes = io->ci_bytes;
 	struct iov_iter iter;
 	size_t written = 0;
 
@@ -1296,22 +1295,21 @@ static int vvp_io_write_start(const struct lu_env *env,
 		LASSERTF(vio->vui_iocb->ki_pos == pos,
 			 "ki_pos %lld [%lld, %lld)\n",
 			 vio->vui_iocb->ki_pos,
-			 pos, pos + cnt);
+			 pos, pos + crw_bytes);
 	}
 
 	CDEBUG(D_VFSTRACE, "%s: write [%llu, %llu)\n",
-		file_dentry(file)->d_name.name,
-		pos, pos + cnt);
+	       file_dentry(file)->d_name.name, pos, pos + crw_bytes);
 
 	/* The maximum Lustre file size is variable, based on the OST maximum
 	 * object size and number of stripes.  This needs another check in
 	 * addition to the VFS checks earlier. */
-	if (pos + cnt > ll_file_maxbytes(inode)) {
+	if (pos + crw_bytes > ll_file_maxbytes(inode)) {
 		CDEBUG(D_INODE,
 		       "%s: file %s ("DFID") offset %llu > maxbytes %llu\n",
 		       ll_i2sbi(inode)->ll_fsname,
 		       file_dentry(file)->d_name.name,
-		       PFID(ll_inode2fid(inode)), pos + cnt,
+		       PFID(ll_inode2fid(inode)), pos + crw_bytes,
 		       ll_file_maxbytes(inode));
 		RETURN(-EFBIG);
 	}
@@ -1324,7 +1322,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 		RETURN(-EINVAL);
 
 	if (!(file->f_flags & O_DIRECT)) {
-		result = cl_io_lru_reserve(env, io, pos, cnt);
+		result = cl_io_lru_reserve(env, io, pos, crw_bytes);
 		if (result)
 			RETURN(result);
 	}
@@ -1376,36 +1374,36 @@ static int vvp_io_write_start(const struct lu_env *env,
 		}
 		if (vio->u.readwrite.vui_written > 0) {
 			result = vio->u.readwrite.vui_written;
-			CDEBUG(D_VFSTRACE, "%s: write nob %zd, result: %zd\n",
+			CDEBUG(D_VFSTRACE, "%s: write bytes %zd, result: %zd\n",
 				file_dentry(file)->d_name.name,
-				io->ci_nob, result);
-			io->ci_nob += result;
+				io->ci_bytes, result);
+			io->ci_bytes += result;
 		} else {
 			io->ci_continue = 0;
 		}
 	}
-	if (vio->vui_iocb->ki_pos != (pos + io->ci_nob - nob)) {
+	if (vio->vui_iocb->ki_pos != (pos + io->ci_bytes - ci_bytes)) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: write position mismatch: ki_pos %lld vs. pos %lld, written %zd, commit %zd: rc = %zd\n",
+		       "%s: write position mismatch: ki_pos %lld vs. pos %lld, written %zd, commit %ld: rc = %zd\n",
 		       file_dentry(file)->d_name.name,
-		       vio->vui_iocb->ki_pos, pos + io->ci_nob - nob,
-		       written, io->ci_nob - nob, result);
+		       vio->vui_iocb->ki_pos, pos + io->ci_bytes - ci_bytes,
+		       written, io->ci_bytes - ci_bytes, result);
 		/*
 		 * Rewind ki_pos and vui_iter to where it has
 		 * successfully committed.
 		 */
-		vio->vui_iocb->ki_pos = pos + io->ci_nob - nob;
+		vio->vui_iocb->ki_pos = pos + io->ci_bytes - ci_bytes;
 	}
 	if (result > 0 || result == -EIOCBQUEUED) {
 		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 
-		if (result != -EIOCBQUEUED && result < cnt)
+		if (result != -EIOCBQUEUED && result < crw_bytes)
 			io->ci_continue = 0;
 		if (result > 0)
 			result = 0;
 		/* move forward */
 		if (result == -EIOCBQUEUED) {
-			io->ci_nob += vio->u.readwrite.vui_written;
+			io->ci_bytes += vio->u.readwrite.vui_written;
 			vio->vui_iocb->ki_pos = pos +
 					vio->u.readwrite.vui_written;
 		}
@@ -1635,23 +1633,22 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	}
 
 	/*
-	 * The ft_index is only used in the case of
-	 * a mkwrite action. We need to check
-	 * our assertions are correct, since
-	 * we should have caught this above
+	 * The ft_index is only used in the case of  mkwrite action. We need to
+	 * check our assertions are correct, since we should have caught this
+	 * above
 	 */
 	LASSERT(!fio->ft_mkwrite || fio->ft_index <= last_index);
 	if (fio->ft_index == last_index)
-                /*
-                 * Last page is mapped partially.
-                 */
-		fio->ft_nob = size - (fio->ft_index << PAGE_SHIFT);
-        else
-		fio->ft_nob = PAGE_SIZE;
+		/*
+		 * Last page is mapped partially.
+		 */
+		fio->ft_bytes = size - (fio->ft_index << PAGE_SHIFT);
+	else
+		fio->ft_bytes = PAGE_SIZE;
 
-        lu_ref_add(&page->cp_reference, "fault", io);
-        fio->ft_page = page;
-        EXIT;
+	lu_ref_add(&page->cp_reference, "fault", io);
+	fio->ft_page = page;
+	EXIT;
 
 out:
 	/* return unlocked vmpage to avoid deadlocking */
@@ -1837,16 +1834,16 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	vio->vui_ra_valid = false;
 	result = 0;
 	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
-		size_t count;
+		size_t bytes;
 		struct ll_inode_info *lli = ll_i2info(inode);
 
-		count = io->u.ci_rw.crw_count;
+		bytes = io->u.ci_rw.crw_bytes;
 		/* "If nbyte is 0, read() will return 0 and have no other
 		 *  results."  -- Single Unix Spec */
-		if (count == 0)
+		if (bytes == 0)
 			result = 1;
 		else
-			vio->vui_tot_count = count;
+			vio->vui_tot_bytes = bytes;
 
 		/* for read/write, we store the process jobid/gid/uid in the
 		 * inode, and it'll be fetched by osc when building RPC.
