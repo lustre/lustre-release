@@ -63,6 +63,9 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 	if (!IS_ERR(th) && uc)
 		th->th_ignore_quota = !!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE);
 
+	if (IS_ERR(th))
+		barrier_exit(mdd->mdd_bottom);
+
 	return th;
 }
 

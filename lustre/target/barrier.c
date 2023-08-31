@@ -191,30 +191,45 @@ static int barrier_freeze(const struct lu_env *env,
 	write_unlock(&barrier->bi_rwlock);
 
 	rc = dt_sync(env, barrier->bi_next);
-	if (rc)
+	if (rc) {
+		CDEBUG(D_SNAPSHOT, "failed with dt_sync: %d\n", rc);
 		RETURN(rc);
+	}
 
 	LASSERT(barrier->bi_deadline != 0);
 
 	left = barrier->bi_deadline - ktime_get_real_seconds();
-	if (left <= 0)
+	if (left <= 0) {
+		CDEBUG(D_SNAPSHOT, "timed out after dt_sync: %lld, %lld\n",
+		       left, barrier->bi_deadline);
 		RETURN(1);
+	}
 
 	if (phase1 && inflight != 0) {
 		rc = wait_event_idle_timeout(
 			barrier->bi_waitq,
 			percpu_counter_sum(&barrier->bi_writers) == 0,
 			cfs_time_seconds(left));
-		if (rc <= 0)
+
+		if (rc <= 0) {
+			CDEBUG(D_SNAPSHOT, "timed out waiting for bi_writers: %lld %d\n",
+			       percpu_counter_sum(&barrier->bi_writers),
+			       rc);
 			RETURN(1);
+		}
 
 		/* sync again after all inflight modifications done. */
 		rc = dt_sync(env, barrier->bi_next);
-		if (rc)
+		if (rc) {
+			CDEBUG(D_SNAPSHOT, "failed with dt_sync: %d\n", rc);
 			RETURN(rc);
+		}
 
-		if (ktime_get_real_seconds() > barrier->bi_deadline)
+		if (ktime_get_real_seconds() > barrier->bi_deadline) {
+			CDEBUG(D_SNAPSHOT, "timed out after dt_sync: %lld, %lld\n",
+			       left, barrier->bi_deadline);
 			RETURN(1);
+		}
 	}
 
 	CDEBUG(D_SNAPSHOT, "%s: barrier freezing %s done.\n",
