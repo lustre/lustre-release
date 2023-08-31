@@ -2575,9 +2575,8 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	} else {
 		if (ibdev->ibd_nnets == 0) {
 			rej.ibr_why = IBLND_REJECT_EARLY;
-			CNETERR("Can't accept conn from %s on %s (%s:%d:%pI4h): net for nid %s not added yet\n",
+			CNETERR("Can't accept conn from %s (%s:%d:%pI4h): net for nid %s not added yet\n",
 				libcfs_nid2str(nid),
-				libcfs_nidstr(&net->ibn_ni->ni_nid),
 				ibdev->ibd_ifname, ibdev->ibd_nnets,
 				&ibdev->ibd_ifip,
 				libcfs_nid2str(reqmsg->ibm_dstnid));
