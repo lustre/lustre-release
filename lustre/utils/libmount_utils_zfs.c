@@ -329,8 +329,13 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 
 	vprint("Writing %s properties\n", ds);
 
-	if (mop->mo_flags & MO_ERASE_ALL)
+	if (mop->mo_flags & MO_ERASE_ALL) {
 		ret = zfs_erase_allprops(zhp);
+		if (ret < 0) {
+			fprintf(stderr, "zfs_erase_allprops Failed: %d\n", ret);
+			goto out_close;
+		}
+	}
 	ret = zfs_set_prop_params(zhp, ldd->ldd_params);
 
 	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++) {

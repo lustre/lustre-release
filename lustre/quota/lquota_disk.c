@@ -819,7 +819,6 @@ int lquota_disk_write_glb(const struct lu_env *env, struct dt_object *obj,
 			if (rc)
 				GOTO(out_lock, rc);
 		}
-		rc = 0;
 	}
 
 	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th);
