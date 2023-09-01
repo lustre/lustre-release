@@ -967,7 +967,7 @@ char *convert_hostnames(char *s1, bool mount)
 		if (!end) {
 			fprintf(stderr, "%s: Invalid mount string: %s\n",
 				progname, s1);
-			return NULL;
+			goto out_bad_mnt_str;
 		}
 		end--;
 	} else {
@@ -1028,6 +1028,7 @@ char *convert_hostnames(char *s1, bool mount)
 	return converted;
 out_free:
 	fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
+out_bad_mnt_str:
 	free(converted);
 	return NULL;
 }
