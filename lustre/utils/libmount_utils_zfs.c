@@ -985,7 +985,9 @@ int zfs_init(void)
 	if (ret == 0)
 		osd_zfs_setup = 1;
 	else
-		fprintf(stderr, "Failed to initialize ZFS library: %d\n", ret);
+		fprintf(stderr,
+			"Failed to initialize ZFS library. Are the ZFS packages and modules correctly installed? (%d)\n",
+			ret);
 
 	return ret;
 }

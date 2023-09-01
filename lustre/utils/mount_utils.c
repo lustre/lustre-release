@@ -503,12 +503,14 @@ int loop_format(struct mkfs_opts *mop)
 #endif /* PLUGIN_DIR */
 
 /**
- * Load plugin for a given mount_type from ${pkglibdir}/mount_osd_FSTYPE.so and
- * return struct of function pointers (will be freed in unloack_backfs_module).
+ * load_backfs_module() - Load plugin for a given mount_type
+ * @mount_type: mount type to load module for
  *
- * \param[in] mount_type	Mount type to load module for.
- * \retval Value of backfs_ops struct
- * \retval NULL if no module exists
+ * Load plugin from ${pkglibdir}/mount_osd_FSTYPE.so and
+ * return struct of function pointers (will be freed in
+ * unloack_backfs_module).
+ *
+ * Return: Value of backfs_ops struct, NULL if no module exists
  */
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 {
@@ -528,7 +530,6 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	fsname[sizeof("osd-") - 2] = '_';
 
 	snprintf(filename, sizeof(filename), PLUGIN_DIR"/mount_%s.so", fsname);
-
 	handle = dlopen(filename, RTLD_LAZY);
 
 	/*
@@ -543,6 +544,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 			snprintf(filename, sizeof(filename),
 				 "%s/utils/mount_%s.so",
 				 dirname, fsname);
+
 			handle = dlopen(filename, RTLD_LAZY);
 		}
 	}
@@ -620,21 +622,28 @@ static void unload_backfs_module(struct module_backfs_ops *ops)
 #endif
 }
 
-/* Return true if backfs_ops has operations for the given mount_type. */
-static int backfs_mount_type_okay(enum ldd_mount_type mount_type)
+bool backfs_mount_type_loaded(enum ldd_mount_type mt)
 {
-	if (mount_type >= LDD_MT_LAST || mount_type < 0) {
+	if (mt >= LDD_MT_LAST || mt < 0)
+		return false;
+
+	if (!backfs_ops[mt])
+		return false;
+
+	return true;
+}
+
+/* Return true if backfs_ops has operations for the given mount_type. */
+static bool backfs_mount_type_okay(enum ldd_mount_type mt)
+{
+	if (!backfs_mount_type_loaded(mt)) {
 		fatal();
-		fprintf(stderr, "fs type out of range %d\n", mount_type);
-		return 0;
+		fprintf(stderr, "unhandled/unloaded OSD plugin %d '%s'\n",
+			mt, mt_str(mt) ? mt_str(mt) : "INVALID");
+		return false;
 	}
-	if (!backfs_ops[mount_type]) {
-		fatal();
-		fprintf(stderr, "unhandled/unloaded fs type %d '%s'\n",
-			mount_type, mt_str(mount_type));
-		return 0;
-	}
-	return 1;
+
+	return true;
 }
 
 /* Write the server config files */

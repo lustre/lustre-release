@@ -72,58 +72,39 @@ int verbose = 1;
 int version;
 static int print_only;
 
-#ifdef HAVE_LDISKFS_OSD
-#define FSLIST_LDISKFS "ldiskfs"
-#define HAVE_FSLIST
-#else
- #define FSLIST_LDISKFS ""
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
- #ifdef HAVE_FSLIST
-   #define FSLIST_ZFS "|zfs"
- #else
-  #define FSLIST_ZFS "zfs"
-  #define HAVE_FSLIST
- #endif
-#else
- #define FSLIST_ZFS ""
-#endif /* HAVE_ZFS_OSD */
-
-#ifndef HAVE_FSLIST
- #error "no backing OSD types (ldiskfs or ZFS) are configured"
-#endif
-
-#define FSLIST FSLIST_LDISKFS FSLIST_ZFS
-
 static void usage(FILE *out)
 {
-	fprintf(out, "usage: %s <target type> [--backfstype="FSLIST"] "
-		"--fsname=<filesystem name>\n"
-		"\t--index=<target index> [options] <device>\n", progname);
-#ifdef HAVE_ZFS_OSD
-	fprintf(out, "usage: %s <target type> --backfstype=zfs "
-		"--fsname=<filesystem name> [options]\n"
-		"\t<pool name>/<dataset name>\n"
-		"\t[[<vdev type>] <device> [<device> ...] [vdev type>] ...]\n",
-		progname);
-#endif
+	if (backfs_mount_type_loaded(LDD_MT_LDISKFS)) {
+		fprintf(out, "usage: %s <target type> --backfstype=ldiskfs "
+			"--fsname=<filesystem name>\n"
+			"\t--index=<target index> [options] <device>\n\n",
+			progname);
+	}
+
+	if (backfs_mount_type_loaded(LDD_MT_ZFS)) {
+		fprintf(out, "usage: %s <target type> --backfstype=zfs "
+			"--fsname=<filesystem name> [options]\n"
+			"\t<pool name>/<dataset name>\n"
+			"\t[[<vdev type>] <device> [<device> ...] [vdev type>] ...]\n",
+			progname);
+		fprintf(out,
+			"\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
+			"\t<pool name>: name of ZFS pool where target is created "
+				"(e.g. tank)\n"
+			"\t<dataset name>: name of new dataset, must be unique within "
+				"pool (e.g. ost1)\n"
+			"\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
+				"cache, log)\n");
+	}
+
 	fprintf(out,
-		"\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
-#ifdef HAVE_ZFS_OSD
-		"\t<pool name>: name of ZFS pool where target is created "
-			"(e.g. tank)\n"
-		"\t<dataset name>: name of new dataset, must be unique within "
-			"pool (e.g. ost1)\n"
-		"\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
-			"cache, log)\n"
-#endif
 		"\n"
 		"\ttarget types:\n"
 		"\t\t--mgs: configuration management service\n"
 		"\t\t--nomgs: turn off MGS service on this MDT\n"
 #ifndef TUNEFS
 		"\t\t--mdt: metadata storage, mutually exclusive with ost\n"
-		"\t\t--ost: object storage, mutually exclusive with mdt, mgs\n"
+		"\t\t--ost: object storage, mutually exclusive with mdt, mgs\n\n"
 #endif
 		"\toptions (in order of popularity):\n"
 		"\t\t--index=#N: numerical target index (0..N)\n"
@@ -170,8 +151,6 @@ static void usage(FILE *out)
 		"\t\t--quiet\n",
 		(int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
 }
-
-/* ==================== Lustre config functions =============*/
 
 static void print_ldd(char *str, struct mkfs_opts *mop)
 {
@@ -839,6 +818,13 @@ int main(int argc, char *const argv[])
 	else
 		progname = argv[0];
 
+	ret = osd_init();
+	if (ret != 0) {
+		fprintf(stderr, "%s: no OSD plugins found: %d (%s)\n",
+			progname, ret, strerror(ret));
+		return ret;
+	}
+
 	if (chk_args(argc, argv)) {
 		usage(stderr);
 		return EINVAL;
@@ -849,13 +835,6 @@ int main(int argc, char *const argv[])
 
 	/* device is last arg */
 	strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
-
-	ret = osd_init();
-	if (ret != 0) {
-		fprintf(stderr, "%s: osd_init() failed: %d (%s)\n",
-			progname, ret, strerror(ret));
-		return ret;
-	}
 
 #ifdef TUNEFS
 	/*

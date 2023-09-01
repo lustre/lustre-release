@@ -129,6 +129,9 @@ int get_mountdata(char *, struct lustre_disk_data *);
 
 static inline const char *mt_str(enum ldd_mount_type mt)
 {
+	if (mt >= LDD_MT_LAST || mt < 0)
+		return NULL;
+
 	static const char * const mount_type_string[] = {
 		"ext3",
 		"ldiskfs",
@@ -137,11 +140,15 @@ static inline const char *mt_str(enum ldd_mount_type mt)
 		"ldiskfs2",
 		"zfs",
 	};
+
 	return mount_type_string[mt];
 }
 
 static inline const char *mt_type(enum ldd_mount_type mt)
 {
+	if (mt >= LDD_MT_LAST || mt < 0)
+		return NULL;
+
 	static const char * const mount_type_string[] = {
 		"osd-ldiskfs",
 		"osd-ldiskfs",
@@ -150,6 +157,7 @@ static inline const char *mt_type(enum ldd_mount_type mt)
 		"osd-ldiskfs",
 		"osd-zfs",
 	};
+
 	return mount_type_string[mt];
 }
 #endif /* HAVE_SERVER_SUPPORT */
@@ -236,6 +244,7 @@ extern struct module_backfs_ops ldiskfs_ops;
 
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
 void unload_backfs_ops(struct module_backfs_ops *ops);
+bool backfs_mount_type_loaded(enum ldd_mount_type mt);
 #endif
 
 #ifdef HAVE_OPENSSL_SSK
