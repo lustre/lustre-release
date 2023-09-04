@@ -2110,33 +2110,39 @@ static int osd_declare_fallocate(const struct lu_env *env,
 	LASSERT(th);
 	LASSERT(inode);
 
-	if (mode & FALLOC_FL_PUNCH_HOLE) {
-		rc = osd_declare_inode_qid(env, i_uid_read(inode),
-					   i_gid_read(inode),
-					   i_projid_read(inode), 0, oh,
-					   osd_dt_obj(dt), NULL, OSD_QID_BLK);
-		if (rc == 0)
-			rc = osd_trunc_lock(osd_dt_obj(dt), oh, false);
-		RETURN(rc);
+	if ((mode & FALLOC_FL_PUNCH_HOLE) == 0) {
+		/* quota space for metadata blocks
+		 * approximate metadata estimate should be good enough.
+		 */
+		quota_space += PAGE_SIZE;
+		quota_space += depth * LDISKFS_BLOCK_SIZE(osd_sb(osd));
+
+		/* quota space should be reported in 1K blocks */
+		quota_space = toqb(quota_space) + toqb(end - start) +
+			LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
+
+		/*
+		 * We don't need to reserve credits for whole fallocate here.
+		 * We reserve space only for metadata. Fallocate credits are
+		 * extended as required
+		 */
 	}
-
-	/* quota space for metadata blocks
-	 * approximate metadata estimate should be good enough.
-	 */
-	quota_space += PAGE_SIZE;
-	quota_space += depth * LDISKFS_BLOCK_SIZE(osd_sb(osd));
-
-	/* quota space should be reported in 1K blocks */
-	quota_space = toqb(quota_space) + toqb(end - start) +
-		      LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
-
-	/* We don't need to reserve credits for whole fallocate here.
-	 * We reserve space only for metadata. Fallocate credits are
-	 * extended as required
-	 */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), quota_space, oh,
 				   osd_dt_obj(dt), NULL, OSD_QID_BLK);
+	if (rc)
+		RETURN(rc);
+
+	/*
+	 * The both hole punch and allocation may need few transactions
+	 * to complete, so we have to avoid concurrent writes/truncates
+	 * as we can't release object lock from within ldiskfs.
+	 * Notice locking order: transaction start, then lock object
+	 * (don't confuse object lock dt_{read|write}_lock() with the
+	 * trunc lock.
+	 */
+	rc = osd_trunc_lock(osd_dt_obj(dt), oh, false);
+
 	RETURN(rc);
 }
 
