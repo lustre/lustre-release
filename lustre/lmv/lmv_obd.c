@@ -1559,7 +1559,10 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 			tgt->ltd_qos.ltq_usable = 0;
 			continue;
 		}
-
+		/* update one hour overdue statfs */
+		if (ktime_get_seconds() - tgt->ltd_statfs_age >
+		    60 * lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage)
+			lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
 		tgt->ltd_qos.ltq_usable = 1;
 		lu_tgt_qos_weight_calc(tgt, true);
 		if (tgt->ltd_index == op_data->op_mds)
@@ -1969,18 +1972,12 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 			tgt = tmp;
 		else
 			tgt = lmv_locate_tgt_rr(lmv);
+		if (!IS_ERR(tgt))
+			lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
 	}
 
-	/*
-	 * only update statfs after QoS mkdir, this means the cached statfs may
-	 * be stale, and current mkdir may not follow QoS accurately, but it's
-	 * not serious, and avoids periodic statfs when client doesn't mkdir by
-	 * QoS.
-	 */
-	if (!IS_ERR(tgt)) {
+	if (!IS_ERR(tgt))
 		op_data->op_mds = tgt->ltd_index;
-		lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
-	}
 
 	return tgt;
 }
