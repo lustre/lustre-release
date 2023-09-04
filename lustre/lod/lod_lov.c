@@ -1629,7 +1629,8 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 			lo->ldo_comp_cached = 1;
 	} else if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lmv_ea(env, lo);
-		if (rc > sizeof(struct lmv_foreign_md)) {
+
+		if (rc > (int)sizeof(struct lmv_foreign_md)) {
 			struct lmv_foreign_md *lfm = info->lti_ea_store;
 
 			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN) {
