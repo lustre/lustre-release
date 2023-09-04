@@ -444,7 +444,10 @@ to be used by the Lustre testing framework.
 %if %{with lustre_iokit}
 %package -n lustre-iokit
 Summary: Collection of benchmark tools for a cluster with the Lustre file system
-Requires: perl, sg3_utils
+Requires: sg3_utils
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
+Recommends: perl
+%endif
 
 %description -n lustre-iokit
 This package includes five tools:
