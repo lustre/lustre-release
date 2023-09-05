@@ -58,12 +58,12 @@
         <literal>usrquota</literal> or
         <literal>grpquota</literal> options to mount. Space accounting is
         enabled by default and quota enforcement can be enabled/disabled on
-        a per-filesystem basis with <literal>lctl conf_param</literal>.</para>
+        a per-filesystem basis with <literal>lctl set_param -P</literal>.</para>
         <para condition="l28">It is worth noting that the
         <literal>lfs quotaon</literal>, <literal>lfs quotaoff</literal>,
-	<literal>lfs quotacheck</literal> and <literal>quota_type</literal>
-	sub-commands are deprecated as of Lustre 2.4.0, and removed completely
-	in Lustre 2.8.0.</para>
+        <literal>lfs quotacheck</literal> and <literal>quota_type</literal>
+        sub-commands are deprecated as of Lustre 2.4.0, and removed completely
+        in Lustre 2.8.0.</para>
       </listitem>
     </itemizedlist>
     <caution>
@@ -225,20 +225,20 @@
         accounting which is always enabled.  There is a single per-file
         system quota parameter controlling inode/block quota enforcement.
         Like all permanent parameters, this quota parameter can be set via
-        <literal>lctl conf_param</literal> on the MGS via the command:</para>
-      <screen>
-lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</replaceable>=<replaceable>u|g|p|ugp|none</replaceable>
-</screen>
+        <literal>lctl set_param -P</literal> on the MGS via the command:</para>
+        <screen>
+lctl set_param -P osd-*.<replaceable>fsname</replaceable>-*.quota_slave_<replaceable>md|dt</replaceable>.enabled=<replaceable>u|g|p|none</replaceable>
+        </screen>
       <itemizedlist>
         <listitem>
           <para>
-          <literal>ost</literal> -- to configure block quota managed by
-          OSTs</para>
+          <literal>dt</literal> -- to configure data/block quota managed
+          by OSTs (and MDTs for DoM files)</para>
         </listitem>
         <listitem>
           <para>
-          <literal>mdt</literal> -- to configure inode quota managed by
-          MDTs</para>
+          <literal>md</literal> -- to configure metadata/inode quota
+          managed by MDTs</para>
         </listitem>
         <listitem>
           <para>
@@ -257,28 +257,32 @@ lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</re
         </listitem>
         <listitem>
           <para>
-          <literal>ugp</literal> -- to enable quota enforcement for all users,
-          groups and projects</para>
+          <literal>ug</literal> -- to enable quota enforcement for all
+          users and groups</para>
         </listitem>
         <listitem>
           <para>
-          <literal>none</literal> -- to disable quota enforcement for all users,
-          groups and projects</para>
+          <literal>ugp</literal> -- to enable quota enforcement for all
+          users, groups, and projects</para>
+        </listitem>
+        <listitem>
+          <para>
+          <literal>none</literal> -- to disable quota enforcement for
+          all users, groups and projects</para>
         </listitem>
       </itemizedlist>
       <para>Examples:</para>
       <para>To turn on user, group, and project quotas for block only on
       file system
       <literal>testfs1</literal>, <emphasis>on the MGS</emphasis> run:</para>
-      <screen>mgs# lctl conf_param testfs1.quota.ost=ugp </screen>
-      <para>To turn on group quotas for inodes on file system
+      <screen>mgs# lctl set_param -P osd-*.testfs1*.quota_slave_dt.enabled=ugp</screen>
+      <para>To turn on only group quotas for inodes on file system
       <literal>testfs2</literal>, on the MGS run:</para>
-      <screen>mgs# lctl conf_param testfs2.quota.mdt=g </screen>
+      <screen>mgs# lctl set_param -P osd*.testfs2*.quota_slave_md.enabled=g</screen>
       <para>To turn off user, group, and project quotas for both inode and block
       on file system
       <literal>testfs3</literal>, on the MGS run:</para>
-      <screen>mgs# lctl conf_param testfs3.quota.ost=none</screen>
-      <screen>mgs# lctl conf_param testfs3.quota.mdt=none</screen>
+      <screen>mgs# lctl set_param -P osd*.testfs3*.quota*.enabled=none</screen>
       <section xml:id="quota_verification">
         <title>
         <indexterm>
@@ -289,18 +293,12 @@ lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</re
       which are part of the file system will be automatically notified of the
       new quota settings and enable/disable quota enforcement as needed. The
       per-target enforcement status can still be verified by running the
-      following <emphasis>command on the MDS(s)</emphasis>:</para>
+      following <emphasis>command on the servers</emphasis>:</para>
       <screen>
-$ lctl get_param osd-*.*.quota_slave.info
-osd-zfs.testfs-MDT0000.quota_slave.info=
-target name:    testfs-MDT0000
-pool ID:        0
-type:           md
-quota enabled:  ug
-conn to master: setup
-user uptodate:  glb[1],slv[1],reint[0]
-group uptodate: glb[1],slv[1],reint[0]
-</screen>
+$ lctl get_param osd-*.*.quota_slave_*.enabled
+osd-zfs.testfs1-MDT0000.quota_slave_dt.enabled=ugp
+osd-zfs.testfs1-OST0000.quota_slave_dt.enabled=ugp
+      </screen>
       </section>
   </section>
   <section xml:id="quota_administration">
