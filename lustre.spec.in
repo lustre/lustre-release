@@ -16,7 +16,7 @@
 %bcond_without lustre_utils
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
-%bcond_with snmp
+%bcond_without snmp
 %bcond_with gss
 %bcond_with gss_keyring
 %bcond_without manpages
