@@ -425,7 +425,9 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 EXPORT_SYMBOL(upcall_cache_flush_one);
 
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
-				       int hashsz, struct upcall_cache_ops *ops)
+				       int hashsz, time64_t entry_expire,
+				       time64_t acquire_expire,
+				       struct upcall_cache_ops *ops)
 {
 	struct upcall_cache *cache;
 	int i;
@@ -447,8 +449,8 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 	strlcpy(cache->uc_name, name, sizeof(cache->uc_name));
 	/* upcall pathname proc tunable */
 	strlcpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall));
-	cache->uc_entry_expire = 20 * 60;
-	cache->uc_acquire_expire = 30;
+	cache->uc_entry_expire = entry_expire;
+	cache->uc_acquire_expire = acquire_expire;
 	cache->uc_ops = ops;
 
 	RETURN(cache);

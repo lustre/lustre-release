@@ -145,7 +145,9 @@ static inline void upcall_cache_flush_all(struct upcall_cache *cache)
 
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args);
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
-				      int hashsz, struct upcall_cache_ops *ops);
+				       int hashsz, time64_t entry_expire,
+				       time64_t acquire_expire,
+				       struct upcall_cache_ops *ops);
 void upcall_cache_cleanup(struct upcall_cache *cache);
 
 /** @} ucache */
