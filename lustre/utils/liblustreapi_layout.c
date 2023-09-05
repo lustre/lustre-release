@@ -3031,8 +3031,10 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 			if (pos >= mirror_end || !src) {
 				rc = llapi_mirror_find(layout, pos, end,
 							&mirror_end);
-				if (rc < 0)
+				if (rc < 0) {
+					free(buf);
 					return rc;
+				}
 				src = rc;
 				/* restrict mirror end by resync end */
 				mirror_end = MIN(end, mirror_end);

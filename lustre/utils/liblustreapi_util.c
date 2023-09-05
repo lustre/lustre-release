@@ -362,9 +362,14 @@ int llapi_direntry_remove(char *dname)
 	int rc = 0;
 
 	dirpath = strdup(dname);
-	namepath = strdup(dname);
-	if (!dirpath || !namepath)
+	if (!dirpath)
 		return -ENOMEM;
+
+	namepath = strdup(dname);
+	if (!namepath) {
+		rc = -ENOMEM;
+		goto out_dirpath;
+	}
 
 	filename = basename(namepath);
 
@@ -383,10 +388,10 @@ int llapi_direntry_remove(char *dname)
 			    "error on ioctl %#lx for '%s' (%d)",
 			    (long)LL_IOC_LMV_SETSTRIPE, filename, fd);
 out:
-	free(dirpath);
+	close(fd);
 	free(namepath);
-	if (fd != -1)
-		close(fd);
+out_dirpath:
+	free(dirpath);
 	return rc;
 #else
 	return -EOPNOTSUPP;

@@ -559,7 +559,7 @@ static int snapshot_load_conf(struct snapshot_instance *si, int lock_mode)
 			"Can't fdopen the snapshot config file %s: %s\n",
 			conf_name, strerror(errno));
 		rc = -1;
-		goto out;
+		goto out_fd;
 	}
 
 	while (snapshot_fgets(fp, buf, MAX_BUF_SIZE) != NULL) {
@@ -608,14 +608,18 @@ static int snapshot_load_conf(struct snapshot_instance *si, int lock_mode)
 
 out:
 	if (fd >= 0) {
-		if (rc < 0) {
+		if (rc < 0)
 			flock(fd, LOCK_UN);
-			close(fd);
-		} else {
+		else
 			si->si_conf_fd = fd;
-		}
 	}
-
+	/* fclose() closes any associated underlying file descriptor.
+	 * explicit close(fd) not required
+	 */
+	fclose(fp);
+	return rc;
+out_fd:
+	close(fd);
 	return rc;
 }
 
@@ -1242,8 +1246,10 @@ again:
 
 		rc = scnprintf(cmd + len, size - len - 1,
 			       "-o %s=\"%s\" ", buf, ptr);
-		if (rc <= 0)
+		if (rc <= 0) {
+			pclose(fp);
 			return -EOVERFLOW;
+		}
 
 		len += rc;
 	}

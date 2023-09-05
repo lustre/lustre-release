@@ -3293,30 +3293,37 @@ static int llog_search_ost_cb(const char *record, void *data)
 	char *ostname = data;
 	char ost_filter[MAX_STRING_SIZE] = {'\0'};
 	char *add_osc, *del_osc, *setup, *cleanup;
+	int rc = 0;
 
 	add_osc = get_event_filter(LCFG_LOV_ADD_OBD);
 	del_osc = get_event_filter(LCFG_LOV_DEL_OBD);
 	setup = get_event_filter(LCFG_SETUP);
 	cleanup = get_event_filter(LCFG_CLEANUP);
-	if (!add_osc || !del_osc || !setup || !cleanup)
-		return -ENOMEM;
+	if (!add_osc || !del_osc || !setup || !cleanup) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
 	if (ostname && ostname[0])
 		snprintf(ost_filter, sizeof(ost_filter), " %s,", ostname);
 
 	if (strstr(record, ost_filter)) {
-		if (strstr(record, add_osc) || strstr(record, setup))
-			return 1;
-		if (strstr(record, del_osc) || strstr(record, cleanup))
-			return -ENOENT;
+		if (strstr(record, add_osc) || strstr(record, setup)) {
+			rc = 1;
+			goto out_setup;
+		}
+		if (strstr(record, del_osc) || strstr(record, cleanup)) {
+			rc = -ENOENT;
+			goto out_setup;
+		}
 	}
-
-	free(add_osc);
-	free(del_osc);
-	free(setup);
+out_setup:
 	free(cleanup);
-
-	return 0;
+	free(setup);
+	free(del_osc);
+	free(add_osc);
+out:
+	return rc;
 }
 
 /**
@@ -5034,8 +5041,10 @@ static int llog_poollist_cb(const char *record, void *data)
 			name = strstr(record, type);
 			/* 2 bytes for " }" */
 			name_len = strlen(name) - type_len - 2;
-			if (name_len <= 0 || name_len > sizeof(tmp->lpn_name))
-				return -EINVAL;
+			if (name_len <= 0 || name_len > sizeof(tmp->lpn_name)) {
+				rc = -EINVAL;
+				goto out;
+			}
 			tmp = malloc(sizeof(struct llog_pool_name));
 			if (!tmp) {
 				rc = -ENOMEM;

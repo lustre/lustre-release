@@ -861,6 +861,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 		rc = ftruncate(fd_dst, pos);
 		if (rc < 0) {
 			rc = -errno;
+			free(buf);
 			return rc;
 		}
 	}
