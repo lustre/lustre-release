@@ -615,7 +615,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	int result = 0;
 	unsigned int seq;
 	int i, j, preference;
-	bool dom_size = 0;
+	__u64 dom_size = 0;
 
 	ENTRY;
 

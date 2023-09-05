@@ -967,7 +967,7 @@ test_5() {
 }
 run_test 5 "Make sure init size work for mirrored layout"
 
-test_6() {
+test_6a() {
 	(( $MDS1_VERSION >= $(version_code 2.12.58) )) ||
 		skip "MDS version older than 2.12.58"
 
@@ -991,7 +991,22 @@ test_6() {
 	$LFS mirror extend -N -f $tf-1 $tf-2 ||
 		error "failure to extend mirrored file with DoM extent"
 }
-run_test 6 "DoM and FLR work together"
+run_test 6a "DoM and FLR work together"
+
+test_6b() {
+	(( $MDS1_VERSION >= $(version_code 2.15.58.1) )) ||
+		skip "MDS version older than 2.15.58.1"
+
+	local tf=$DIR/$tfile
+
+	$LFS setstripe -E64K -L mdt -Eeof $tf ||
+		error "failure to create PFL with DoM file"
+	$LFS mirror extend -N -E1M -L mdt -Eeof $tf &&
+		error "should not extend mirror with different DoM size"
+
+	return 0
+}
+run_test 6b "extend mirror with different DoM size"
 
 test_7() {
 	local tf=$DIR/$tfile

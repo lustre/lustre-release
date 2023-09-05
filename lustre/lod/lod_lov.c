@@ -1188,6 +1188,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	__u32 magic, pattern;
 	__u16 mirror_cnt = 0;
 	__u16 comp_cnt;
+	__u64 dom_size = 0;
 	int i, rc;
 	__u16 mirror_id = MIRROR_ID_NEG;
 	bool stale = false;
@@ -1333,6 +1334,22 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		pattern = le32_to_cpu(lmm->lmm_pattern);
 		if (!lov_pattern_supported(lov_pattern(pattern)))
 			GOTO(out, rc = -EINVAL);
+
+		if (pattern & LOV_PATTERN_MDT) {
+			if (lod_comp->llc_extent.e_start != 0) {
+				CERROR("%s: DOM entry must be the first stripe "
+				       "in a mirror\n", lod2obd(d)->obd_name);
+				GOTO(out, rc = -EINVAL);
+			}
+			if (!dom_size) {
+				dom_size = lod_comp->llc_extent.e_end;
+			} else if (dom_size != lod_comp->llc_extent.e_end) {
+				CERROR("%s: DOM entries with different sizes "
+				       "%#llx/%#llx\n", lod2obd(d)->obd_name,
+				       dom_size, lod_comp->llc_extent.e_end);
+				GOTO(out, rc = -EINVAL);
+			}
+		}
 
 		lod_comp->llc_pattern = pattern;
 		lod_comp->llc_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
