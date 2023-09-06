@@ -2321,7 +2321,7 @@ restore_quota() {
 # This will allow fixing the "lfs df" summary line in the future.
 lfs_df() {
 	$LFS df $* | sed -e 's/filesystem /filesystem_/'
-	check_lfs_df_ret_val $?
+	check_lfs_df_ret_val ${PIPESTATUS[0]}
 }
 
 # Get free inodes on the MDT specified by mdt index, free indoes on
