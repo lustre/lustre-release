@@ -726,7 +726,7 @@ static int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_resource **resp, bool moving_req)
 {
 	struct nrs_orr_data *orrd;
-	struct nrs_orr_object *orro, *orro2;
+	struct nrs_orr_object *orro, *new_orro;
 	struct nrs_orr_key key = { { { 0 } } };
 	u32 opc;
 	int rc = 0;
@@ -770,48 +770,53 @@ static int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
 	rcu_read_lock();
 	orro = rhashtable_lookup_fast(&orrd->od_obj_hash, &key,
 				      nrs_orr_hash_params);
-	if (orro && refcount_inc_not_zero(&orro->oo_ref)) {
-		rcu_read_unlock();
+	if (orro && refcount_inc_not_zero(&orro->oo_ref))
+		goto found_orro;
+
+	rcu_read_unlock();
+
+	OBD_SLAB_CPT_ALLOC_PTR_GFP(new_orro, orrd->od_cache,
+				   nrs_pol2cptab(policy), nrs_pol2cptid(policy),
+				   moving_req ? GFP_ATOMIC : GFP_NOFS);
+	if (new_orro == NULL)
+		RETURN(-ENOMEM);
+
+	new_orro->oo_key = key;
+	refcount_set(&new_orro->oo_ref, 1);
+try_again:
+	rcu_read_lock();
+	orro = rhashtable_lookup_get_insert_fast(&orrd->od_obj_hash,
+						  &new_orro->oo_rhead,
+						  nrs_orr_hash_params);
+	/* insertion sucessfull */
+	if (likely(orro == NULL)) {
+		orro = new_orro;
+		goto found_orro;
+	}
+
+	/* A returned non-error orro means it already exist */
+	rc = IS_ERR(orro) ? PTR_ERR(orro) : 0;
+	if (!rc && refcount_inc_not_zero(&orro->oo_ref)) {
+		OBD_SLAB_FREE_PTR(new_orro, orrd->od_cache);
 		goto found_orro;
 	}
 	rcu_read_unlock();
 
-	OBD_SLAB_CPT_ALLOC_PTR_GFP(orro, orrd->od_cache,
-				   nrs_pol2cptab(policy), nrs_pol2cptid(policy),
-				   moving_req ? GFP_ATOMIC : GFP_NOFS);
-	if (orro == NULL)
-		RETURN(-ENOMEM);
+	/* oo_ref == 0, orro will be freed */
+	if (!rc)
+		goto try_again;
 
-	orro->oo_key = key;
-	refcount_set(&orro->oo_ref, 1);
-try_again:
-	rcu_read_lock();
-	orro2 = rhashtable_lookup_get_insert_fast(&orrd->od_obj_hash,
-						  &orro->oo_rhead,
-						  nrs_orr_hash_params);
-	/* A returned non-error orro2 means it already exist */
-	if (!IS_ERR_OR_NULL(orro2)) {
-		OBD_SLAB_FREE_PTR(orro, orrd->od_cache);
-		orro = orro2;
+	/* hash table could be resizing. */
+	if (rc == -ENOMEM || rc == -EBUSY) {
+		mdelay(20);
+		goto try_again;
 	}
+	OBD_SLAB_FREE_PTR(new_orro, orrd->od_cache);
 
-	/* insertion failed */
-	if (IS_ERR(orro2)) {
-		rc = PTR_ERR(orro2);
+	RETURN(rc);
 
-		/* hash table could be resizing. */
-		if (rc == -ENOMEM || rc == -EBUSY) {
-			rcu_read_unlock();
-			mdelay(20);
-			goto try_again;
-		}
-		OBD_SLAB_FREE_PTR(orro, orrd->od_cache);
-		rcu_read_unlock();
-
-		RETURN(rc);
-	}
-	rcu_read_unlock();
 found_orro:
+	rcu_read_unlock();
 	/**
 	 * For debugging purposes
 	 */
