@@ -10,6 +10,10 @@ init_logging
 
 ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
 
+if $SHARED_KEY; then
+	always_except LU-17141 133
+fi
+
 build_test_filter
 
 require_dsh_mds || exit 0

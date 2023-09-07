@@ -1737,12 +1737,21 @@ nodemap_acl_test() {
 	sleep 5
 
 	do_node $set_client $RUNAS_USER touch $testfile
+	# remove from cache, otherwise ACLs will not be fetched from server
+	do_rpc_nodes $set_client cancel_lru_locks
+	do_node $set_client "sync ; echo 3 > /proc/sys/vm/drop_caches"
 
 	# ACL masks aren't filtered by nodemap code, so we ignore them
 	acl_count=$(do_node $get_client getfacl $testfile | grep -v mask |
 		wc -l)
+	# remove from cache, otherwise ACLs will not be fetched from server
+	do_rpc_nodes $get_client cancel_lru_locks
+	do_node $get_client "sync ; echo 3 > /proc/sys/vm/drop_caches"
 	do_node $set_client $RUNAS_USER setfacl -m $user:rwx $testfile ||
 		setfacl_error=1
+	# remove from cache, otherwise ACLs will not be fetched from server
+	do_rpc_nodes $set_client cancel_lru_locks
+	do_node $set_client "sync ; echo 3 > /proc/sys/vm/drop_caches"
 
 	# if check setfacl is set to 1, then it's supposed to error
 	if [ "$check_setfacl" == "1" ]; then
@@ -1753,6 +1762,9 @@ nodemap_acl_test() {
 
 	acl_count_post=$(do_node $get_client getfacl $testfile | grep -v mask |
 		wc -l)
+	# remove from cache, otherwise ACLs will not be fetched from server
+	do_rpc_nodes $get_client cancel_lru_locks
+	do_node $get_client "sync ; echo 3 > /proc/sys/vm/drop_caches"
 	[ $acl_count -eq $acl_count_post ] && return 0
 	return 1
 }

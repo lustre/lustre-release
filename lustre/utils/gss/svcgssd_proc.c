@@ -95,43 +95,87 @@ struct svc_nego_data {
 	gss_buffer_desc		ctx_token;
 };
 
-static int
-do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
-		gss_OID mechoid, gss_buffer_desc *context_token)
+static int do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
+			   gss_OID mechoid, gss_buffer_desc *ctx_token)
 {
-	FILE *f;
+	struct rsc_downcall_data *rsc_dd;
+	int blen, fd, size, rc = -1;
 	const char *mechname;
-	int err;
+	glob_t path;
+	char *bp;
 
 	printerr(LL_INFO, "doing downcall\n");
+
+	size = out_handle->length + sizeof(__u32) +
+		ctx_token->length + sizeof(__u32);
+	blen = size;
+
+	size += offsetof(struct rsc_downcall_data, scd_val[0]);
+	rsc_dd = calloc(1, size);
+	if (!rsc_dd) {
+		printerr(LL_ERR, "malloc downcall data (%d) failed\n", size);
+		return -ENOMEM;
+	}
+	rsc_dd->scd_magic = RSC_DOWNCALL_MAGIC;
+	rsc_dd->scd_err = 0;
+
+	rsc_dd->scd_flags =
+		(cred->cr_remote ? RSC_DATA_FLAG_REMOTE : 0) |
+		(cred->cr_usr_root ? RSC_DATA_FLAG_ROOT : 0) |
+		(cred->cr_usr_mds ? RSC_DATA_FLAG_MDS : 0) |
+		(cred->cr_usr_oss ? RSC_DATA_FLAG_OSS : 0);
+	rsc_dd->scd_mapped_uid = cred->cr_mapped_uid;
+	rsc_dd->scd_uid = cred->cr_uid;
+	rsc_dd->scd_gid = cred->cr_gid;
 	mechname = gss_OID_mech_name(mechoid);
 	if (mechname == NULL)
-		goto out_err;
-	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
-	if (f == NULL) {
-		printerr(LL_ERR, "ERROR: unable to open downcall channel "
-			     "%s: %s\n",
-			     SVCGSSD_CONTEXT_CHANNEL, strerror(errno));
-		goto out_err;
+		goto out;
+	if (snprintf(rsc_dd->scd_mechname, sizeof(rsc_dd->scd_mechname),
+		     "%s", mechname) >= sizeof(rsc_dd->scd_mechname))
+		goto out;
+
+	bp = rsc_dd->scd_val;
+	gss_buffer_write(&bp, &blen, out_handle->value, out_handle->length);
+	gss_buffer_write(&bp, &blen, ctx_token->value, ctx_token->length);
+	if (blen < 0) {
+		printerr(LL_ERR, "ERROR: %s: message too long > %d\n",
+			 __func__, size);
+		rc = -EMSGSIZE;
+		goto out;
 	}
-	qword_printhex(f, out_handle->value, out_handle->length);
-	/* XXX are types OK for the rest of this? */
-	qword_printint(f, time(NULL) + 3600);   /* 1 hour should be ok */
-	qword_printint(f, cred->cr_remote);
-	qword_printint(f, cred->cr_usr_root);
-	qword_printint(f, cred->cr_usr_mds);
-	qword_printint(f, cred->cr_usr_oss);
-	qword_printint(f, cred->cr_mapped_uid);
-	qword_printint(f, cred->cr_uid);
-	qword_printint(f, cred->cr_gid);
-	qword_print(f, mechname);
-	qword_printhex(f, context_token->value, context_token->length);
-	err = qword_eol(f);
-	fclose(f);
-	return err;
-out_err:
-	printerr(LL_ERR, "ERROR: downcall failed\n");
-	return -1;
+	rsc_dd->scd_len = bp - rsc_dd->scd_val;
+
+	rc = cfs_get_param_paths(&path, RSC_DOWNCALL_PATH);
+	if (rc != 0) {
+		rc = -errno;
+		goto out;
+	}
+
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd == -1) {
+		rc = -errno;
+		printerr(LL_ERR, "ERROR: %s: open %s failed: %s\n",
+			 __func__, RSC_DOWNCALL_PATH, strerror(-rc));
+		goto out_path;
+	}
+	size = offsetof(struct rsc_downcall_data,
+			scd_val[bp - rsc_dd->scd_val]);
+	printerr(LL_DEBUG, "writing downcall data, size %d\n", size);
+	if (write(fd, rsc_dd, size) == -1) {
+		rc = -errno;
+		printerr(LL_ERR, "ERROR: %s: failed to write message: %s\n",
+			 __func__, strerror(-rc));
+	}
+	printerr(LL_DEBUG, "downcall data written ok\n");
+
+	close(fd);
+out_path:
+	cfs_free_param_data(&path);
+out:
+	free(rsc_dd);
+	if (rc)
+		printerr(LL_ERR, "ERROR: downcall failed\n");
+	return rc;
 }
 
 struct gss_verifier {

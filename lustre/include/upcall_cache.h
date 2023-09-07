@@ -93,6 +93,13 @@ struct gss_rsi {
 	int			   si_minor_status;
 };
 
+struct gss_rsc {
+	struct upcall_cache_entry *sc_uc_entry;
+	struct obd_device	  *sc_target;
+	rawobj_t		   sc_handle;
+	struct gss_svc_ctx	   sc_ctx;
+};
+
 struct upcall_cache_entry {
 	struct list_head	ue_hash;
 	uint64_t		ue_key;
@@ -104,6 +111,7 @@ struct upcall_cache_entry {
 	union {
 		struct md_identity	identity;
 		struct gss_rsi		rsi;
+		struct gss_rsc		rsc;
 	} u;
 };
 

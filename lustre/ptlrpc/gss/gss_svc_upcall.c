@@ -785,12 +785,212 @@ static struct rsi *rsi_update(struct rsi *new, struct rsi *old)
 }
 
 /****************************************
- * rpc sec context (rsc) cache                            *
+ * rpc sec context (rsc) cache		*
  ****************************************/
 
 #define RSC_HASHBITS    (10)
 #define RSC_HASHMAX     (1 << RSC_HASHBITS)
 #define RSC_HASHMASK    (RSC_HASHMAX - 1)
+
+static void rsc_entry_init(struct upcall_cache_entry *entry,
+			   void *args)
+{
+	struct gss_rsc *rsc = &entry->u.rsc;
+	struct gss_rsc *tmp = args;
+
+	rsc->sc_uc_entry = entry;
+	rawobj_dup(&rsc->sc_handle, &tmp->sc_handle);
+
+	rsc->sc_target = NULL;
+	memset(&rsc->sc_ctx, 0, sizeof(rsc->sc_ctx));
+	rsc->sc_ctx.gsc_rvs_hdl = RAWOBJ_EMPTY;
+
+	memset(&rsc->sc_ctx.gsc_seqdata, 0, sizeof(rsc->sc_ctx.gsc_seqdata));
+	spin_lock_init(&rsc->sc_ctx.gsc_seqdata.ssd_lock);
+}
+
+void __rsc_free(struct gss_rsc *rsc)
+{
+	rawobj_free(&rsc->sc_handle);
+	rawobj_free(&rsc->sc_ctx.gsc_rvs_hdl);
+	lgss_delete_sec_context(&rsc->sc_ctx.gsc_mechctx);
+}
+
+static void rsc_entry_free(struct upcall_cache *cache,
+			   struct upcall_cache_entry *entry)
+{
+	struct gss_rsc *rsc = &entry->u.rsc;
+
+	__rsc_free(rsc);
+}
+
+static inline int rsc_entry_hash(struct gss_rsc *rsc)
+{
+#if BITS_PER_LONG == 64
+	return hash_mem_64((char *)rsc->sc_handle.data,
+			   rsc->sc_handle.len, RSC_HASHBITS);
+#else
+	return hash_mem((char *)rsc->sc_handle.data,
+			rsc->sc_handle.len, RSC_HASHBITS);
+#endif
+}
+
+static inline int __rsc_entry_match(rawobj_t *h1, rawobj_t *h2)
+{
+	return !(rawobj_equal(h1, h2));
+}
+
+static inline int rsc_entry_match(struct gss_rsc *rsc, struct gss_rsc *tmp)
+{
+	return __rsc_entry_match(&rsc->sc_handle, &tmp->sc_handle);
+}
+
+/* Returns 0 to tell this is a match */
+static inline int rsc_upcall_compare(struct upcall_cache *cache,
+				     struct upcall_cache_entry *entry,
+				     __u64 key, void *args)
+{
+	struct gss_rsc *rsc1 = &entry->u.rsc;
+	struct gss_rsc *rsc2 = args;
+
+	return rsc_entry_match(rsc1, rsc2);
+}
+
+/* rsc upcall is a no-op, we just need a valid entry */
+static inline int rsc_do_upcall(struct upcall_cache *cache,
+				struct upcall_cache_entry *entry)
+{
+	upcall_cache_update_entry(cache, entry,
+				  ktime_get_seconds() + cache->uc_entry_expire,
+				  0);
+	return 0;
+}
+
+static inline int rsc_downcall_compare(struct upcall_cache *cache,
+				       struct upcall_cache_entry *entry,
+				       __u64 key, void *args)
+{
+	struct gss_rsc *rsc = &entry->u.rsc;
+	struct rsc_downcall_data *scd = args;
+	char *mesg = scd->scd_val;
+	rawobj_t handle;
+	int len;
+
+	/* scd_val starts with handle */
+	len = gss_buffer_get(&mesg, &handle.len, &handle.data);
+	scd->scd_offset = mesg - scd->scd_val;
+
+	return __rsc_entry_match(&rsc->sc_handle, &handle);
+}
+
+static int rsc_parse_downcall(struct upcall_cache *cache,
+			      struct upcall_cache_entry *entry,
+			      void *args)
+{
+	struct gss_api_mech *gm = NULL;
+	struct gss_rsc *rsc = &entry->u.rsc;
+	struct rsc_downcall_data *scd = args;
+	int mlen = scd->scd_len;
+	char *mesg = scd->scd_val + scd->scd_offset;
+	char *buf = scd->scd_val;
+	int status = -EINVAL;
+	time64_t ctx_expiry;
+	rawobj_t tmp_buf;
+	int len;
+
+	ENTRY;
+
+	if (mlen <= 0)
+		goto out;
+
+	rsc->sc_ctx.gsc_remote = !!(scd->scd_flags & RSC_DATA_FLAG_REMOTE);
+	rsc->sc_ctx.gsc_usr_root = !!(scd->scd_flags & RSC_DATA_FLAG_ROOT);
+	rsc->sc_ctx.gsc_usr_mds = !!(scd->scd_flags & RSC_DATA_FLAG_MDS);
+	rsc->sc_ctx.gsc_usr_oss = !!(scd->scd_flags & RSC_DATA_FLAG_OSS);
+	rsc->sc_ctx.gsc_mapped_uid = scd->scd_mapped_uid;
+	rsc->sc_ctx.gsc_uid = scd->scd_uid;
+
+	rsc->sc_ctx.gsc_gid = scd->scd_gid;
+	gm = lgss_name_to_mech(scd->scd_mechname);
+	if (!gm) {
+		status = -EOPNOTSUPP;
+		goto out;
+	}
+
+	/* handle has already been consumed in rsc_downcall_compare().
+	 * scd_offset gives next field.
+	 */
+
+	/* context token */
+	len = gss_buffer_read(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	tmp_buf.len = len;
+	tmp_buf.data = (unsigned char *)buf;
+	if (lgss_import_sec_context(&tmp_buf, gm,
+				    &rsc->sc_ctx.gsc_mechctx))
+		goto out;
+
+	if (lgss_inquire_context(rsc->sc_ctx.gsc_mechctx, &ctx_expiry))
+		goto out;
+
+	/* ctx_expiry is the number of seconds since Jan 1 1970.
+	 * We just want the number of seconds into the future.
+	 */
+	entry->ue_expire = ktime_get_seconds() +
+		(ctx_expiry - ktime_get_real_seconds());
+	status = 0;
+
+out:
+	if (gm)
+		lgss_mech_put(gm);
+	CDEBUG(D_OTHER, "rsc parse %p: %d\n", rsc, status);
+	RETURN(status);
+}
+
+struct gss_rsc *rsc_entry_get(struct upcall_cache *cache, struct gss_rsc *rsc)
+{
+	struct upcall_cache_entry *entry;
+	int hash = rsc_entry_hash(rsc);
+
+	if (!cache)
+		return ERR_PTR(-ENOENT);
+
+	entry = upcall_cache_get_entry(cache, (__u64)hash, rsc);
+	if (unlikely(!entry))
+		return ERR_PTR(-ENOENT);
+	if (IS_ERR(entry))
+		return ERR_CAST(entry);
+
+	return &entry->u.rsc;
+}
+
+void rsc_entry_put(struct upcall_cache *cache, struct gss_rsc *rsc)
+{
+	if (!cache || !rsc)
+		return;
+
+	upcall_cache_put_entry(cache, rsc->sc_uc_entry);
+}
+
+void rsc_flush(struct upcall_cache *cache, int hash)
+{
+	if (hash < 0)
+		upcall_cache_flush_idle(cache);
+	else
+		upcall_cache_flush_one(cache, (__u64)hash, NULL);
+}
+
+struct upcall_cache_ops rsc_upcall_cache_ops = {
+	.init_entry	  = rsc_entry_init,
+	.free_entry	  = rsc_entry_free,
+	.upcall_compare	  = rsc_upcall_compare,
+	.downcall_compare = rsc_downcall_compare,
+	.do_upcall	  = rsc_do_upcall,
+	.parse_downcall	  = rsc_parse_downcall,
+};
+
+struct upcall_cache *rsccache;
 
 struct rsc {
         struct cache_head       h;
@@ -1105,132 +1305,138 @@ static struct rsc *rsc_update(struct rsc *new, struct rsc *old)
  * rsc cache flush                      *
  ****************************************/
 
-static struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
+static struct gss_rsc *gss_svc_searchbyctx(rawobj_t *handle)
 {
-        struct rsc  rsci;
-        struct rsc *found;
+	struct gss_rsc rsc;
+	struct gss_rsc *found;
 
-        memset(&rsci, 0, sizeof(rsci));
-        if (rawobj_dup(&rsci.handle, handle))
-                return NULL;
+	memset(&rsc, 0, sizeof(rsc));
+	if (rawobj_dup(&rsc.sc_handle, handle))
+		return NULL;
 
-        found = rsc_lookup(&rsci);
-        rsc_free(&rsci);
-        if (!found)
-                return NULL;
-        if (cache_check(&rsc_cache, &found->h, NULL))
-                return NULL;
-        return found;
+	found = rsc_entry_get(rsccache, &rsc);
+	__rsc_free(&rsc);
+	if (IS_ERR_OR_NULL(found))
+		return found;
+	if (!found->sc_ctx.gsc_mechctx) {
+		rsc_entry_put(rsccache, found);
+		return ERR_PTR(-ENOENT);
+	}
+	return found;
 }
 
 int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
-                                   struct gss_sec *gsec,
-                                   struct gss_cli_ctx *gctx)
+				   struct gss_sec *gsec,
+				   struct gss_cli_ctx *gctx)
 {
-        struct rsc      rsci, *rscp = NULL;
+	struct gss_rsc rsc, *rscp = NULL;
 	time64_t ctx_expiry;
-        __u32           major;
-        int             rc;
-        ENTRY;
+	__u32 major;
+	int rc;
 
-        memset(&rsci, 0, sizeof(rsci));
+	ENTRY;
+	memset(&rsc, 0, sizeof(rsc));
 
-        if (rawobj_alloc(&rsci.handle, (char *) &gsec->gs_rvs_hdl,
-                         sizeof(gsec->gs_rvs_hdl)))
-                GOTO(out, rc = -ENOMEM);
+	if (!imp || !imp->imp_obd) {
+		CERROR("invalid imp, drop\n");
+		RETURN(-EPROTO);
+	}
 
-        rscp = rsc_lookup(&rsci);
-        if (rscp == NULL)
-                GOTO(out, rc = -ENOMEM);
+	if (rawobj_alloc(&rsc.sc_handle, (char *)&gsec->gs_rvs_hdl,
+			 sizeof(gsec->gs_rvs_hdl)))
+		GOTO(out, rc = -ENOMEM);
 
-        major = lgss_copy_reverse_context(gctx->gc_mechctx,
-                                          &rsci.ctx.gsc_mechctx);
-        if (major != GSS_S_COMPLETE)
-                GOTO(out, rc = -ENOMEM);
+	rscp = rsc_entry_get(rsccache, &rsc);
+	__rsc_free(&rsc);
+	if (IS_ERR_OR_NULL(rscp))
+		GOTO(out, rc = -ENOMEM);
 
-        if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
-                CERROR("unable to get expire time, drop it\n");
-                GOTO(out, rc = -EINVAL);
-        }
-	rsci.h.expiry_time = ctx_expiry;
+	major = lgss_copy_reverse_context(gctx->gc_mechctx,
+					  &rscp->sc_ctx.gsc_mechctx);
+	if (major != GSS_S_COMPLETE)
+		GOTO(out, rc = -ENOMEM);
+
+	if (lgss_inquire_context(rscp->sc_ctx.gsc_mechctx, &ctx_expiry)) {
+		CERROR("%s: unable to get expire time, drop\n",
+		       imp->imp_obd->obd_name);
+		GOTO(out, rc = -EINVAL);
+	}
+	rscp->sc_uc_entry->ue_expire = ktime_get_seconds() +
+		(ctx_expiry - ktime_get_real_seconds());
 
 	switch (imp->imp_obd->u.cli.cl_sp_to) {
 	case LUSTRE_SP_MDT:
-		rsci.ctx.gsc_usr_mds = 1;
+		rscp->sc_ctx.gsc_usr_mds = 1;
 		break;
 	case LUSTRE_SP_OST:
-		rsci.ctx.gsc_usr_oss = 1;
+		rscp->sc_ctx.gsc_usr_oss = 1;
 		break;
 	case LUSTRE_SP_CLI:
-		rsci.ctx.gsc_usr_root = 1;
+		rscp->sc_ctx.gsc_usr_root = 1;
 		break;
 	case LUSTRE_SP_MGS:
 		/* by convention, all 3 set to 1 means MGS */
-		rsci.ctx.gsc_usr_mds = 1;
-		rsci.ctx.gsc_usr_oss = 1;
-		rsci.ctx.gsc_usr_root = 1;
+		rscp->sc_ctx.gsc_usr_mds = 1;
+		rscp->sc_ctx.gsc_usr_oss = 1;
+		rscp->sc_ctx.gsc_usr_root = 1;
 		break;
 	default:
 		break;
 	}
 
-        rscp = rsc_update(&rsci, rscp);
-        if (rscp == NULL)
-                GOTO(out, rc = -ENOMEM);
+	rscp->sc_target = imp->imp_obd;
+	rawobj_dup(&gctx->gc_svc_handle, &rscp->sc_handle);
 
-        rscp->target = imp->imp_obd;
-        rawobj_dup(&gctx->gc_svc_handle, &rscp->handle);
-
-	CDEBUG(D_SEC, "create reverse svc ctx %p to %s: idx %#llx\n",
-	       &rscp->ctx, obd2cli_tgt(imp->imp_obd), gsec->gs_rvs_hdl);
+	CDEBUG(D_SEC, "%s: create reverse svc ctx %p to %s: idx %#llx\n",
+	       imp->imp_obd->obd_name, &rscp->sc_ctx, obd2cli_tgt(imp->imp_obd),
+	       gsec->gs_rvs_hdl);
 	rc = 0;
 out:
-        if (rscp)
-                cache_put(&rscp->h, &rsc_cache);
-        rsc_free(&rsci);
-
-        if (rc)
-		CERROR("create reverse svc ctx: idx %#llx, rc %d\n",
-                       gsec->gs_rvs_hdl, rc);
-        RETURN(rc);
+	if (!IS_ERR_OR_NULL(rscp))
+		rsc_entry_put(rsccache, rscp);
+	if (rc)
+		CERROR("%s: can't create reverse svc ctx idx %#llx: rc = %d\n",
+		       imp->imp_obd->obd_name, gsec->gs_rvs_hdl, rc);
+	RETURN(rc);
 }
 
 int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle)
 {
 	const time64_t expire = 20;
-	struct rsc *rscp;
+	struct gss_rsc *rscp;
 
-        rscp = gss_svc_searchbyctx(handle);
-        if (rscp) {
-                CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) expire soon\n",
-                       &rscp->ctx, rscp);
+	rscp = gss_svc_searchbyctx(handle);
+	if (!IS_ERR_OR_NULL(rscp)) {
+		CDEBUG(D_SEC,
+		       "reverse svcctx %p (rsc %p) expire in %lld seconds\n",
+		       &rscp->sc_ctx, rscp, expire);
 
-		rscp->h.expiry_time = ktime_get_real_seconds() + expire;
-                COMPAT_RSC_PUT(&rscp->h, &rsc_cache);
-        }
-        return 0;
+		rscp->sc_uc_entry->ue_expire = ktime_get_seconds() + expire;
+		rsc_entry_put(rsccache, rscp);
+	}
+	return 0;
 }
 
 int gss_svc_upcall_dup_handle(rawobj_t *handle, struct gss_svc_ctx *ctx)
 {
-        struct rsc *rscp = container_of(ctx, struct rsc, ctx);
+	struct gss_rsc *rscp = container_of(ctx, struct gss_rsc, sc_ctx);
 
-        return rawobj_dup(handle, &rscp->handle);
+	return rawobj_dup(handle, &rscp->sc_handle);
 }
 
 int gss_svc_upcall_update_sequence(rawobj_t *handle, __u32 seq)
 {
-        struct rsc             *rscp;
+	struct gss_rsc *rscp;
 
-        rscp = gss_svc_searchbyctx(handle);
-        if (rscp) {
-                CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) update seq to %u\n",
-                       &rscp->ctx, rscp, seq + 1);
+	rscp = gss_svc_searchbyctx(handle);
+	if (!IS_ERR_OR_NULL(rscp)) {
+		CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) update seq to %u\n",
+		       &rscp->sc_ctx, rscp, seq + 1);
 
-                rscp->ctx.gsc_rvs_seq = seq + 1;
-                COMPAT_RSC_PUT(&rscp->h, &rsc_cache);
-        }
-        return 0;
+		rscp->sc_ctx.gsc_rvs_seq = seq + 1;
+		rsc_entry_put(rsccache, rscp);
+	}
+	return 0;
 }
 
 int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
@@ -1243,10 +1449,10 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 {
 	struct gss_rsi rsi = { 0 }, *rsip = NULL;
 	struct ptlrpc_reply_state *rs;
-	struct rsc *rsci = NULL;
+	struct gss_rsc *rscp = NULL;
 	int replen = sizeof(struct ptlrpc_body);
 	struct gss_rep_header *rephdr;
-	int rc = SECSVC_DROP, rc2;
+	int rc, rc2;
 
 	ENTRY;
 
@@ -1265,7 +1471,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	if (rc2) {
 		CERROR("%s: failed to duplicate context handle: rc = %d\n",
 		       target->obd_name, rc2);
-		GOTO(out, rc);
+		GOTO(out, rc = SECSVC_DROP);
 	}
 
 	rc2 = rawobj_dup(&rsi.si_in_token, in_token);
@@ -1273,38 +1479,49 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 		CERROR("%s: failed to duplicate token: rc = %d\n",
 		       target->obd_name, rc2);
 		rawobj_free(&rsi.si_in_handle);
-		GOTO(out, rc);
+		GOTO(out, rc = SECSVC_DROP);
 	}
 
 	rsip = rsi_entry_get(rsicache, &rsi);
 	__rsi_free(&rsi);
-	if (IS_ERR(rsip)) {
-		CERROR("%s: failed to get entry from rsi cache (nid %s): rc = %ld\n",
+	if (IS_ERR_OR_NULL(rsip)) {
+		if (IS_ERR(rsip))
+			rc2 = PTR_ERR(rsip);
+		else
+			rc2 = -EINVAL;
+		CERROR("%s: failed to get entry from rsi cache (nid %s): rc = %d\n",
 		       target->obd_name,
 		       libcfs_nid2str(lnet_nid_to_nid4(&req->rq_source.nid)),
-		       PTR_ERR(rsip));
+		       rc2);
 
 		if (!gss_pack_err_notify(req, GSS_S_FAILURE, 0))
 			rc = SECSVC_COMPLETE;
+		else
+			rc = SECSVC_DROP;
 
 		GOTO(out, rc);
 	}
 
-	rc = SECSVC_DROP;
-	rsci = gss_svc_searchbyctx(&rsip->si_out_handle);
-	if (!rsci) {
+	rscp = gss_svc_searchbyctx(&rsip->si_out_handle);
+	if (IS_ERR_OR_NULL(rscp)) {
 		/* gss mechanism returned major and minor code so we return
 		 * those in error message */
+
 		if (!gss_pack_err_notify(req, rsip->si_major_status,
 					 rsip->si_minor_status))
 			rc = SECSVC_COMPLETE;
+		else
+			rc = SECSVC_DROP;
 
 		CERROR("%s: authentication failed: rc = %d\n",
 		       target->obd_name, rc);
 		GOTO(out, rc);
 	} else {
-		cache_get(&rsci->h);
-		grctx->src_ctx = &rsci->ctx;
+		/* we need to take an extra ref on the cache entry,
+		 * as a pointer to sc_ctx is stored in grctx
+		 */
+		upcall_cache_get_entry_raw(rscp->sc_uc_entry);
+		grctx->src_ctx = &rscp->sc_ctx;
 	}
 
 	if (gw->gw_flags & LUSTRE_GSS_PACK_KCSUM) {
@@ -1321,16 +1538,16 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 			gss_digest_hash_compat;
 	}
 
-	if (rawobj_dup(&rsci->ctx.gsc_rvs_hdl, rvs_hdl)) {
+	if (rawobj_dup(&rscp->sc_ctx.gsc_rvs_hdl, rvs_hdl)) {
 		CERROR("%s: failed duplicate reverse handle\n",
 		       target->obd_name);
-		GOTO(out, rc);
+		GOTO(out, rc = SECSVC_DROP);
 	}
 
-	rsci->target = target;
+	rscp->sc_target = target;
 
 	CDEBUG(D_SEC, "%s: server create rsc %p(%u->%s)\n",
-	       target->obd_name, rsci, rsci->ctx.gsc_uid,
+	       target->obd_name, rscp, rscp->sc_ctx.gsc_uid,
 	       libcfs_nidstr(&req->rq_peer.nid));
 
 	if (rsip->si_out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
@@ -1377,16 +1594,16 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 out:
 	if (!IS_ERR_OR_NULL(rsip))
 		rsi_entry_put(rsicache, rsip);
-	if (rsci) {
+	if (!IS_ERR_OR_NULL(rscp)) {
 		/* if anything went wrong, we don't keep the context too */
 		if (rc != SECSVC_OK)
-			set_bit(CACHE_NEGATIVE, &rsci->h.flags);
+			UC_CACHE_SET_INVALID(rscp->sc_uc_entry);
 		else
 			CDEBUG(D_SEC, "%s: create rsc with idx %#llx\n",
 			       target->obd_name,
-			       gss_handle_to_u64(&rsci->handle));
+			       gss_handle_to_u64(&rscp->sc_handle));
 
-		COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
+		rsc_entry_put(rsccache, rscp);
 	}
 	RETURN(rc);
 }
@@ -1394,34 +1611,32 @@ out:
 struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 					   struct gss_wire_ctx *gw)
 {
-	struct rsc *rsc;
+	struct gss_rsc *rscp;
 
-	rsc = gss_svc_searchbyctx(&gw->gw_handle);
-	if (!rsc) {
+	rscp = gss_svc_searchbyctx(&gw->gw_handle);
+	if (IS_ERR_OR_NULL(rscp)) {
 		CWARN("Invalid gss ctx idx %#llx from %s\n",
 		      gss_handle_to_u64(&gw->gw_handle),
 		      libcfs_nidstr(&req->rq_peer.nid));
 		return NULL;
 	}
 
-	return &rsc->ctx;
+	return &rscp->sc_ctx;
 }
 
 void gss_svc_upcall_put_ctx(struct gss_svc_ctx *ctx)
 {
-        struct rsc *rsc = container_of(ctx, struct rsc, ctx);
+	struct gss_rsc *rscp = container_of(ctx, struct gss_rsc, sc_ctx);
 
-        COMPAT_RSC_PUT(&rsc->h, &rsc_cache);
+	rsc_entry_put(rsccache, rscp);
 }
 
 void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
 {
-        struct rsc *rsc = container_of(ctx, struct rsc, ctx);
+	struct gss_rsc *rscp = container_of(ctx, struct gss_rsc, sc_ctx);
 
-        /* can't be found */
-	set_bit(CACHE_NEGATIVE, &rsc->h.flags);
-        /* to be removed at next scan */
-        rsc->h.expiry_time = 1;
+	UC_CACHE_SET_INVALID(rscp->sc_uc_entry);
+	rscp->sc_uc_entry->ue_expire = 1;
 }
 
 /* Wait for userspace daemon to open socket, approx 1.5 s.
@@ -1512,6 +1727,18 @@ int __init gss_init_svc_upcall(void)
 		rsicache = NULL;
 		return rc;
 	}
+	rsccache = upcall_cache_init(RSC_CACHE_NAME, RSC_UPCALL_PATH,
+				     UC_RSCCACHE_HASH_SIZE,
+				     3600, /* replaced with one from mech */
+				     100, /* arbitrary, not used */
+				     &rsc_upcall_cache_ops);
+	if (IS_ERR(rsccache)) {
+		upcall_cache_cleanup(rsicache);
+		rsicache = NULL;
+		rc = PTR_ERR(rsccache);
+		rsccache = NULL;
+		return rc;
+	}
 
 	if (check_gssd_socket())
 		CDEBUG(D_SEC,
@@ -1529,4 +1756,5 @@ void gss_exit_svc_upcall(void)
 	cache_unregister_net(&rsc_cache, &init_net);
 
 	upcall_cache_cleanup(rsicache);
+	upcall_cache_cleanup(rsccache);
 }

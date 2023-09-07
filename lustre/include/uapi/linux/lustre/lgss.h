@@ -90,6 +90,33 @@ struct rsi_downcall_data {
 	char	  sid_val[0];
 };
 
+#define RSC_DOWNCALL_MAGIC	0x6d6dd62b
+#define RSC_DOWNCALL_PATH	"sptlrpc/gss/rsc_info"
+#define RSC_CACHE_NAME		"rsccache"
+
+/* rsc_downcall_data flags */
+enum scd_flag_bits {
+	RSC_DATA_FLAG_REMOTE	= 0x0001,
+	RSC_DATA_FLAG_ROOT	= 0x0002,
+	RSC_DATA_FLAG_MDS	= 0x0004,
+	RSC_DATA_FLAG_OSS	= 0x0008,
+};
+
+struct rsc_downcall_data {
+	__u32		scd_magic;
+	__u32		scd_err;
+	__u32		scd_flags;
+	__u32		scd_mapped_uid;
+	__u32		scd_uid;
+	__u32		scd_gid;
+	char		scd_mechname[8];
+	__s64		scd_offset;
+	__u32		scd_len;
+	__u32		scd_padding;
+	/* scd_val contains handle and context token */
+	char		scd_val[0];
+};
+
 /*
  * gss_string_write() - write some string
  *

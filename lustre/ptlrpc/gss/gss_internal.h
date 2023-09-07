@@ -445,11 +445,18 @@ static inline unsigned int ll_read_key_usage(struct key *key)
 
 #define RSI_UPCALL_PATH "/usr/sbin/l_getauth"
 #define UC_RSICACHE_HASH_SIZE 64
-
 extern struct upcall_cache_ops rsi_upcall_cache_ops;
 extern struct upcall_cache *rsicache;
 struct gss_rsi *rsi_entry_get(struct upcall_cache *cache, struct gss_rsi *rsi);
 void rsi_entry_put(struct upcall_cache *cache, struct gss_rsi *rsi);
 void rsi_flush(struct upcall_cache *cache, int hash);
+#define RSC_UPCALL_PATH "NONE"
+#define UC_RSCCACHE_HASH_SIZE 1024
+extern struct upcall_cache_ops rsc_upcall_cache_ops;
+extern struct upcall_cache *rsccache;
+struct gss_rsc *rsc_entry_get(struct upcall_cache *cache, struct gss_rsc *rsc);
+void rsc_entry_put(struct upcall_cache *cache, struct gss_rsc *rsc);
+void rsc_flush(struct upcall_cache *cache, int hash);
+void __rsc_free(struct gss_rsc *rsc);
 
 #endif /* __PTLRPC_GSS_GSS_INTERNAL_H_ */

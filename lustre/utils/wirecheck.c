@@ -2061,6 +2061,29 @@ check_rsi_downcall_data(void)
 }
 
 static void
+check_rsc_downcall_data(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(rsc_downcall_data);
+	CHECK_MEMBER(rsc_downcall_data, scd_magic);
+	CHECK_MEMBER(rsc_downcall_data, scd_err);
+	CHECK_MEMBER(rsc_downcall_data, scd_flags);
+	CHECK_MEMBER(rsc_downcall_data, scd_mapped_uid);
+	CHECK_MEMBER(rsc_downcall_data, scd_uid);
+	CHECK_MEMBER(rsc_downcall_data, scd_gid);
+	CHECK_MEMBER(rsc_downcall_data, scd_mechname);
+	CHECK_MEMBER(rsc_downcall_data, scd_offset);
+	CHECK_MEMBER(rsc_downcall_data, scd_len);
+	CHECK_MEMBER(rsc_downcall_data, scd_padding);
+	CHECK_MEMBER(rsc_downcall_data, scd_val);
+
+	CHECK_VALUE_X(RSC_DATA_FLAG_REMOTE);
+	CHECK_VALUE_X(RSC_DATA_FLAG_ROOT);
+	CHECK_VALUE_X(RSC_DATA_FLAG_MDS);
+	CHECK_VALUE_X(RSC_DATA_FLAG_OSS);
+}
+
+static void
 check_llog_gen(void)
 {
 	BLANK_LINE();
@@ -3592,6 +3615,7 @@ main(int argc, char **argv)
 	check_llog_changelog_user_rec();
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_rsi_downcall_data();
+	check_rsc_downcall_data();
 	check_llog_gen();
 	check_llog_gen_rec();
 	check_llog_log_hdr();

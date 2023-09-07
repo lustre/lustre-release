@@ -336,6 +336,116 @@ static ssize_t rsi_acquire_expire_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(rsi_acquire_expire);
 
+static ssize_t lprocfs_rsc_flush_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, void *data)
+{
+	int hash, rc;
+
+	rc = kstrtoint_from_user(buffer, count, 0, &hash);
+	if (rc)
+		return rc;
+
+	rsc_flush(rsccache, hash);
+	return count;
+}
+LPROC_SEQ_FOPS_WR_ONLY(gss, rsc_flush);
+
+static ssize_t lprocfs_rsc_info_seq_write(struct file *file,
+					  const char __user *buffer,
+					  size_t count, void *data)
+{
+	struct rsc_downcall_data *param;
+	int size = sizeof(*param), rc, checked = 0;
+	struct gss_rsc rsc = { 0 }, *rscp = NULL;
+	char *mesg, *handle_buf;
+
+again:
+	if (count < size) {
+		CERROR("%s: invalid data count = %lu, size = %d\n",
+		       rsccache->uc_name, (unsigned long)count, size);
+		return -EINVAL;
+	}
+
+	OBD_ALLOC_LARGE(param, size);
+	if (param == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(param, buffer, size)) {
+		CERROR("%s: bad rsc data\n", rsccache->uc_name);
+		GOTO(out, rc = -EFAULT);
+	}
+
+	if (checked == 0) {
+		checked = 1;
+		if (param->scd_magic != RSC_DOWNCALL_MAGIC) {
+			CERROR("%s: rsc downcall bad params\n",
+			       rsccache->uc_name);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		rc = param->scd_len; /* save scd_len */
+		OBD_FREE_LARGE(param, size);
+		size = offsetof(struct rsc_downcall_data, scd_val[rc]);
+		goto again;
+	}
+
+	/* scd_val starts with handle.
+	 * Use it to create cache entry.
+	 */
+	mesg = param->scd_val;
+	gss_u32_read(&mesg, &rsc.sc_handle.len);
+	if (!rsc.sc_handle.len) {
+		rc = -EINVAL;
+		goto out;
+	}
+	OBD_ALLOC_LARGE(handle_buf, rsc.sc_handle.len);
+	if (!handle_buf) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	memset(handle_buf, 0, rsc.sc_handle.len);
+	mesg = param->scd_val;
+	rc = gss_buffer_read(&mesg, handle_buf, rsc.sc_handle.len);
+	if (rc < 0) {
+		OBD_FREE_LARGE(handle_buf, rsc.sc_handle.len);
+		rc = -EINVAL;
+		goto out;
+	}
+	rsc.sc_handle.data = handle_buf;
+
+	/* create cache entry on-the-fly */
+	rscp = rsc_entry_get(rsccache, &rsc);
+	__rsc_free(&rsc);
+
+	if (IS_ERR_OR_NULL(rscp)) {
+		if (IS_ERR(rscp))
+			rc = PTR_ERR(rscp);
+		else
+			rc = -EINVAL;
+		CERROR("%s: error in rsc_entry_get: rc = %d\n",
+		       param->scd_mechname, rc);
+		goto out;
+	}
+
+	/* now that entry has been created, downcall can be done,
+	 * but we have to tell acquiring is in progress
+	 */
+	upcall_cache_update_entry(rsccache, rscp->sc_uc_entry,
+				  0, UC_CACHE_ACQUIRING);
+	rc = upcall_cache_downcall(rsccache, param->scd_err,
+				   rscp->sc_uc_entry->ue_key, param);
+
+out:
+	if (!IS_ERR_OR_NULL(rscp))
+		rsc_entry_put(rsccache, rscp);
+	if (param)
+		OBD_FREE_LARGE(param, size);
+
+	return rc ? rc : count;
+}
+LPROC_SEQ_FOPS_WR_ONLY(gss, rsc_info);
+
 static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
@@ -362,6 +472,10 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
 	  .fops	=	&rsi_entry_expire_fops },
 	{ .name	=	"rsi_acquire_expire",
 	  .fops	=	&rsi_acquire_expire_fops },
+	{ .name =	"rsc_flush",
+	  .fops =	&gss_rsc_flush_fops },
+	{ .name =	"rsc_info",
+	  .fops =	&gss_rsc_info_fops },
 	{ NULL }
 };
 

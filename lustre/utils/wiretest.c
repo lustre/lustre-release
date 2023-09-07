@@ -4488,6 +4488,62 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_val) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_val));
 
+	/* Checks for struct rsc_downcall_data */
+	LASSERTF((int)sizeof(struct rsc_downcall_data) == 48, "found %lld\n",
+		 (long long)(int)sizeof(struct rsc_downcall_data));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_magic));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_magic));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_err) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_err));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_err) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_err));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_flags) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_flags));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_flags));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_mapped_uid) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_mapped_uid));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_mapped_uid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_mapped_uid));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_uid) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_uid));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_uid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_uid));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_gid) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_gid));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_gid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_gid));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_mechname) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_mechname));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_mechname) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_mechname));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_offset) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_offset));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_offset) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_offset));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_len) == 40, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_len));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_len) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_len));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_padding) == 44, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_padding));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_padding) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_padding));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_val) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_val));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_val) == 0, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_val));
+	LASSERTF(RSC_DATA_FLAG_REMOTE == 0x00000001UL, "found 0x%.8xUL\n",
+		 (unsigned)RSC_DATA_FLAG_REMOTE);
+	LASSERTF(RSC_DATA_FLAG_ROOT == 0x00000002UL, "found 0x%.8xUL\n",
+		 (unsigned)RSC_DATA_FLAG_ROOT);
+	LASSERTF(RSC_DATA_FLAG_MDS == 0x00000004UL, "found 0x%.8xUL\n",
+		 (unsigned)RSC_DATA_FLAG_MDS);
+	LASSERTF(RSC_DATA_FLAG_OSS == 0x00000008UL, "found 0x%.8xUL\n",
+		 (unsigned)RSC_DATA_FLAG_OSS);
+
 	/* Checks for struct llog_gen */
 	LASSERTF((int)sizeof(struct llog_gen) == 16, "found %lld\n",
 		 (long long)(int)sizeof(struct llog_gen));

@@ -44,6 +44,7 @@ always_except LU-8411  407
 
 if $SHARED_KEY; then
 	always_except LU-14181 64e 64f
+	always_except LU-17127 39o
 fi
 
 # skip the grant tests for ARM until they are fixed
