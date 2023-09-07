@@ -1095,8 +1095,8 @@ test_rule_id() {
 
 test_13a() {
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	test_rule_id "u" "500" "runas -u 500"
-	test_rule_id "g" "500" "runas -u 500 -g 500"
+	test_rule_id "u" "$RUNAS_ID" "runas -u $RUNAS_ID"
+	test_rule_id "g" "$RUNAS_GID" "runas -u $RUNAS_ID -g $RUNAS_GID"
 }
 run_test 13a "Test auto RW-PCC create caching for UID/GID rule"
 
@@ -1160,7 +1160,7 @@ test_13c() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100\ 200}\&fname={*.h5},uid={500}\&gid={1000}\ rwid=$HSM_ARCHIVE_NUMBER"
+		"projid={100\ 200}\&fname={*.h5},uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rwid=$HSM_ARCHIVE_NUMBER"
 	$LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
@@ -1201,7 +1201,7 @@ test_13c() {
 	rm $file || error "rm $file failed"
 
 	file=$DIR/$tdir/ugidcache
-	myRUNAS="runas -u 500 -g 1000"
+	myRUNAS="runas -u $RUNAS_ID -g $RUNAS_GID"
 	do_facet $SINGLEAGT $myRUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
