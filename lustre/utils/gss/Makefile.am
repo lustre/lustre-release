@@ -7,7 +7,7 @@ AM_CFLAGS := -fPIC \
 sbin_PROGRAMS = l_idmap
 
 if GSS_KEYRING
-sbin_PROGRAMS += lsvcgssd lgss_keyring
+sbin_PROGRAMS += lsvcgssd lgss_keyring l_getauth
 if GSS_SSK
 sbin_PROGRAMS += lgss_sk
 endif
@@ -61,6 +61,21 @@ l_idmap_SOURCES = \
 
 l_idmap_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(KRBLIBS)
 
+l_getauth_SOURCES = \
+	l_getauth.c \
+	lsupport.c \
+	err_util.c \
+	lgss_utils.c \
+	lgss_krb5_utils.c \
+	lgss_null_utils.c \
+	lgss_utils.h \
+	lgss_krb5_utils.h \
+	lsupport.h
+
+l_getauth_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
+l_getauth_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lm -lkeyutils
+l_getauth_LDFLAGS = $(KRBLDFLAGS)
+
 lgss_keyring_SOURCES = \
 	lgss_keyring.c \
 	context.c \
@@ -82,6 +97,9 @@ lgss_keyring_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS)
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
 
 if GSS_SSK
+l_getauth_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c
+l_getauth_LDADD += -lcrypto -lssl
+
 lgss_keyring_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c
 lgss_keyring_LDADD += -lcrypto -lssl
 

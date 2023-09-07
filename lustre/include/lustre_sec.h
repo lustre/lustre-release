@@ -1154,12 +1154,49 @@ void sptlrpc_target_update_exp_flavor(struct obd_device *obd,
                                       struct sptlrpc_rule_set *rset);
 
 /*
- * reverse context
+ * context and reverse context
  */
+#define GSS_SEQ_WIN			(2048)
+#define GSS_SEQ_WIN_MAIN		GSS_SEQ_WIN
+#define GSS_SEQ_WIN_BACK		(128)
+#define GSS_SEQ_REPACK_THRESHOLD	(GSS_SEQ_WIN_MAIN / 2 + \
+					 GSS_SEQ_WIN_MAIN / 4)
+
+struct gss_svc_seq_data {
+	spinlock_t		ssd_lock;
+	/*
+	 * highest sequence number seen so far, for main and back window
+	 */
+	__u32			ssd_max_main;
+	__u32			ssd_max_back;
+	/*
+	 * main and back window
+	 * for i such that ssd_max - GSS_SEQ_WIN < i <= ssd_max, the i-th bit
+	 * of ssd_win is nonzero iff sequence number i has been seen already.
+	 */
+	unsigned long		ssd_win_main[GSS_SEQ_WIN_MAIN/BITS_PER_LONG];
+	unsigned long		ssd_win_back[GSS_SEQ_WIN_BACK/BITS_PER_LONG];
+};
+
+struct gss_svc_ctx {
+	struct gss_ctx	       *gsc_mechctx;
+	struct gss_svc_seq_data gsc_seqdata;
+	rawobj_t		gsc_rvs_hdl;
+	__u32			gsc_rvs_seq;
+	uid_t			gsc_uid;
+	gid_t			gsc_gid;
+	uid_t			gsc_mapped_uid;
+	unsigned int		gsc_usr_root:1,
+				gsc_usr_mds:1,
+				gsc_usr_oss:1,
+				gsc_remote:1,
+				gsc_reverse:1;
+};
+
 int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,
-                                struct ptlrpc_svc_ctx *ctx);
+				struct ptlrpc_svc_ctx *ctx);
 int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
-                                struct ptlrpc_cli_ctx *ctx);
+				struct ptlrpc_cli_ctx *ctx);
 
 /* bulk security api */
 int sptlrpc_enc_pool_add_user(void);

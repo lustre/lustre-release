@@ -255,8 +255,6 @@ enum nodemap_idx_type {
 	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
 };
 
-#define LUSTRE_NODEMAP_NAME_LENGTH	16
-
 /* lu_nodemap flags */
 enum nm_flag_bits {
 	NM_FL_ALLOW_ROOT_ACCESS = 0x1,

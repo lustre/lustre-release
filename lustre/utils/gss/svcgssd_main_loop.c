@@ -30,6 +30,7 @@
 
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/poll.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,7 +46,9 @@
 /* For nanosleep() */
 #include <time.h>
 
+#include "cacheio.h"
 #include "svcgssd.h"
+#include "lsupport.h"
 #include "err_util.h"
 #include "sk_utils.h"
 
@@ -54,24 +57,12 @@
 #define MAX_ALLOWED_TIME_FOR_PRIME 400000
 int sk_dh_checks;
 
-/*
- * nfs4 in-kernel cache implementation make upcall failed directly
- * if there's no listener detected. so here we should keep the init
- * channel file open as possible as we can.
- *
- * unfortunately the proc doesn't support dir change notification.
- * and when an entry get unlinked, we only got POLLIN event once,
- * it's the only oppotunity we can close the file and startover.
- */
-void
-svcgssd_run()
+void svcgssd_run(void)
 {
-	static const char gss_rpc_channel_path[] =
-		"/proc/net/rpc/auth.sptlrpc.init/channel";
-	int			ret;
-	FILE			*f = NULL;
-	struct pollfd		pollfd;
-	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
+	int local_socket, remote_socket;
+	struct sockaddr_un addr;
+	bool retried = false;
+	int ret = 0;
 
 	if (sk_enabled) {
 #if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x1010103fL
@@ -89,48 +80,52 @@ svcgssd_run()
 		load_mapping();
 	}
 
-	while (1) {
-		int save_err;
-
-		while (f == NULL) {
-			f = fopen(gss_rpc_channel_path, "r+");
-			if (f == NULL) {
-				printerr(LL_TRACE, "failed to open %s: %s\n",
-					 gss_rpc_channel_path, strerror(errno));
-				nanosleep(&halfsec, NULL);
-			} else {
-				printerr(LL_WARN, "successfully open %s\n",
-					 gss_rpc_channel_path);
-				break;
-			}
-		}
-		pollfd.fd = fileno(f);
-		pollfd.events = POLLIN;
-
-		pollfd.revents = 0;
-		ret = poll(&pollfd, 1, 1000);
-		save_err = errno;
-
-		if (ret < 0) {
-			printerr(LL_ERR, "error return from poll: %s\n",
-				 strerror(save_err));
-			fclose(f);
-			f = NULL;
-		} else if (ret == 0) {
-			printerr(LL_TRACE, "poll timeout\n");
-		} else {
-			if (ret != 1) {
-				printerr(LL_ERR,
-					 "bug: unexpected poll return %d\n",
-					 ret);
-				exit(1);
-			}
-			if (pollfd.revents & POLLIN) {
-				if (handle_channel_request(f) < 0) {
-					fclose(f);
-					f = NULL;
-				}
-			}
-		}
+again:
+	local_socket = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (local_socket == -1) {
+		printerr(LL_ERR, "unable to create socket: %d\n", -errno);
+		ret = 1;
+		goto out_close;
 	}
+
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, GSS_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+	if (bind(local_socket, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+		if (!retried) {
+			retried = true;
+			unlink(GSS_SOCKET_PATH);
+			close(local_socket);
+			goto again;
+		}
+		printerr(LL_ERR, "unable to bind socket: %d\n", -errno);
+		ret = 1;
+		goto out_close;
+	}
+
+	if (listen(local_socket, 10) == -1) {
+		printerr(LL_ERR, "unable to listen on socket: %d\n", -errno);
+		ret = 1;
+		goto out;
+	}
+
+	while (1) {
+		remote_socket = accept(local_socket, NULL, NULL);
+		if (remote_socket == -1) {
+			printerr(LL_TRACE, "accept on socket ret %d\n", -errno);
+			continue;
+		}
+
+		ret = handle_channel_request(remote_socket);
+		printerr(LL_DEBUG, "handle_channel_request ret %d\n", ret);
+		close(remote_socket);
+	}
+
+out:
+	unlink(GSS_SOCKET_PATH);
+out_close:
+	if (local_socket >= 0)
+		close(local_socket);
+	exit(ret);
 }

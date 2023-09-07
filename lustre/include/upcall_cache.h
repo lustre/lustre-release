@@ -34,6 +34,8 @@
 
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
+#include <obd.h>
+#include <lustre_sec.h>
 
 /** \defgroup ucache ucache
  *
@@ -78,6 +80,19 @@ struct md_identity {
 	struct md_perm            *mi_perms;
 };
 
+struct gss_rsi {
+	struct upcall_cache_entry *si_uc_entry;
+	lnet_nid_t		   si_nid4; /* FIXME Support larger NID */
+	char			   si_nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	__u32			   si_lustre_svc;
+	rawobj_t		   si_in_handle;
+	rawobj_t		   si_in_token;
+	rawobj_t		   si_out_handle;
+	rawobj_t		   si_out_token;
+	int			   si_major_status;
+	int			   si_minor_status;
+};
+
 struct upcall_cache_entry {
 	struct list_head	ue_hash;
 	uint64_t		ue_key;
@@ -88,6 +103,7 @@ struct upcall_cache_entry {
 	time64_t		ue_expire;
 	union {
 		struct md_identity	identity;
+		struct gss_rsi		rsi;
 	} u;
 };
 

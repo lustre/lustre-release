@@ -2365,6 +2365,10 @@ test_31() {
 	[ -z "$LNETCTL" ] && skip "without lnetctl support." && return
 	local_mode && skip "in local mode."
 
+	if $SHARED_KEY; then
+		skip "Conflicting test with SSK"
+	fi
+
 	# save mds failover nids for restore at cleanup
 	failover_mds1=$(do_facet mds1 $TUNEFS --dryrun $(mdsdevname 1))
 	if [ -n "$failover_mds1" ]; then
@@ -2487,8 +2491,11 @@ cleanup_32() {
 	set_rule _mgs any any null
 
 	# stop gss daemon on MGS
-	if ! combined_mgs_mds ; then
-		send_sigint $mgs_HOST lsvcgssd
+	send_sigint $mgs_HOST lsvcgssd
+
+	# re-start gss daemon on MDS if necessary
+	if combined_mgs_mds ; then
+		start_gss_daemons $mds_HOST "$LSVCGSSD -vvv -s -m -o -z"
 	fi
 
 	# re-mount client
@@ -2519,11 +2526,15 @@ test_32() {
 	umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
+	# kill daemon on MGS to start afresh
+	send_sigint $mgs_HOST lsvcgssd
+
 	# start gss daemon on MGS
 	if combined_mgs_mds ; then
-		send_sigint $mds_HOST lsvcgssd
+		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g -m -o -z"
+	else
+		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 	fi
-	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 
 	# add mgs key type and MGS NIDs in key on MGS
 	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \
@@ -2602,8 +2613,11 @@ cleanup_33() {
 	zconf_umount_clients ${clients_arr[0]} $MOUNT
 
 	# stop gss daemon on MGS
-	if ! combined_mgs_mds ; then
-		send_sigint $mgs_HOST lsvcgssd
+	send_sigint $mgs_HOST lsvcgssd
+
+	# re-start gss daemon on MDS if necessary
+	if combined_mgs_mds ; then
+		start_gss_daemons $mds_HOST "$LSVCGSSD -vvv -s -m -o -z"
 	fi
 
 	# re-mount client
@@ -2634,11 +2648,15 @@ test_33() {
 	umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
+	# kill daemon on MGS to start afresh
+	send_sigint $mgs_HOST lsvcgssd
+
 	# start gss daemon on MGS
 	if combined_mgs_mds ; then
-		send_sigint $mds_HOST lsvcgssd
+		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g -m -o -z"
+	else
+		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 	fi
-	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
 
 	# add mgs key type and MGS NIDs in key on MGS
 	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \

@@ -36,7 +36,7 @@
 #include <gssapi/gssapi.h>
 #include "lsupport.h"
 
-int handle_channel_request(FILE *f);
+int handle_channel_request(int fd);
 void svcgssd_run(void);
 int gssd_prepare_creds(int must_srv_mgs, int must_srv_mds, int must_srv_oss);
 gss_cred_id_t gssd_select_svc_cred(int lustre_svc);

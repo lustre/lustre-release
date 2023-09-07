@@ -48,6 +48,7 @@
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lgss.h>
 #include <lustre/lustreapi.h>
 
 #ifndef BUILD_BUG_ON
@@ -4450,6 +4451,42 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_tail) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_changelog_user_rec *)0)->cur_tail));
 #endif /* HAVE_SERVER_SUPPORT */
+
+	/* Checks for struct rsi_downcall_data */
+	LASSERTF((int)sizeof(struct rsi_downcall_data) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct rsi_downcall_data));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_magic));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_magic));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_err) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_err));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_err) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_err));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_hash) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_hash));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_hash) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_hash));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_maj_stat) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_maj_stat));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_maj_stat) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_maj_stat));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_min_stat) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_min_stat));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_min_stat) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_min_stat));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_len) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_len));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_len) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_len));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_offset) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_offset));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_offset) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_offset));
+	LASSERTF((int)offsetof(struct rsi_downcall_data, sid_val) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct rsi_downcall_data, sid_val));
+	LASSERTF((int)sizeof(((struct rsi_downcall_data *)0)->sid_val) == 0, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsi_downcall_data *)0)->sid_val));
 
 	/* Checks for struct llog_gen */
 	LASSERTF((int)sizeof(struct llog_gen) == 16, "found %lld\n",

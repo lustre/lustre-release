@@ -19,6 +19,8 @@
 #ifndef __PTLRPC_GSS_GSS_API_H_
 #define __PTLRPC_GSS_GSS_API_H_
 
+#include <uapi/linux/lustre/lgss.h>
+
 struct gss_api_mech;
 
 typedef int (*digest_hash)(

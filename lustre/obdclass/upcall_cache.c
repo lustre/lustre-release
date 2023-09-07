@@ -370,7 +370,8 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
 	if (rc)
 		GOTO(out, rc);
 
-	entry->ue_expire = ktime_get_seconds() + cache->uc_entry_expire;
+	if (!entry->ue_expire)
+		entry->ue_expire = ktime_get_seconds() + cache->uc_entry_expire;
 	UC_CACHE_SET_VALID(entry);
 	CDEBUG(D_OTHER, "%s: created upcall cache entry %p for key %llu\n",
 	       cache->uc_name, entry, entry->ue_key);

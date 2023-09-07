@@ -55,7 +55,9 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/sunrpc/cache.h>
+#include <linux/binfmts.h>
 #include <net/sock.h>
+#include <linux/un.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -113,13 +115,345 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 	return hash >> (BITS_PER_LONG - bits);
 }
 
+/* This is a little bit of a concern but we need to make our own hash64 function
+ * as the one from the kernel seems to be buggy by returning a u32:
+ * static __always_inline u32 hash_64_generic(u64 val, unsigned int bits)
+ */
+#if BITS_PER_LONG == 64
+static __always_inline __u64 gss_hash_64(__u64 val, unsigned int bits)
+{
+	__u64 hash = val;
+	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
+	__u64 n = hash;
+
+	n <<= 18;
+	hash -= n;
+	n <<= 33;
+	hash -= n;
+	n <<= 3;
+	hash += n;
+	n <<= 3;
+	hash -= n;
+	n <<= 4;
+	hash += n;
+	n <<= 2;
+	hash += n;
+
+	/* High bits are more random, so use them. */
+	return hash >> (64 - bits);
+}
+
+static inline unsigned long hash_mem_64(char *buf, int length, int bits)
+{
+	unsigned long hash = 0;
+	unsigned long l = 0;
+	int len = 0;
+	unsigned char c;
+
+	do {
+		if (len == length) {
+			c = (char) len;
+			len = -1;
+		} else
+			c = *buf++;
+
+		l = (l << 8) | c;
+		len++;
+
+		if ((len & (BITS_PER_LONG/8-1)) == 0)
+			hash = gss_hash_64(hash^l, BITS_PER_LONG);
+	} while (len);
+
+	return hash >> (BITS_PER_LONG - bits);
+}
+#endif /* BITS_PER_LONG == 64 */
+
 /****************************************
- * rpc sec init (rsi) cache *
+ * rpc sec init (rsi) cache		*
  ****************************************/
 
 #define RSI_HASHBITS    (6)
 #define RSI_HASHMAX     (1 << RSI_HASHBITS)
 #define RSI_HASHMASK    (RSI_HASHMAX - 1)
+
+static void rsi_entry_init(struct upcall_cache_entry *entry,
+			   void *args)
+{
+	struct gss_rsi *rsi = &entry->u.rsi;
+	struct gss_rsi *tmp = args;
+
+	rsi->si_uc_entry = entry;
+	rawobj_dup(&rsi->si_in_handle, &tmp->si_in_handle);
+	rawobj_dup(&rsi->si_in_token, &tmp->si_in_token);
+	rsi->si_out_handle = RAWOBJ_EMPTY;
+	rsi->si_out_token = RAWOBJ_EMPTY;
+
+	rsi->si_lustre_svc = tmp->si_lustre_svc;
+	rsi->si_nid4 = tmp->si_nid4;
+	memcpy(rsi->si_nm_name, tmp->si_nm_name, sizeof(tmp->si_nm_name));
+}
+
+static void __rsi_free(struct gss_rsi *rsi)
+{
+	rawobj_free(&rsi->si_in_handle);
+	rawobj_free(&rsi->si_in_token);
+	rawobj_free(&rsi->si_out_handle);
+	rawobj_free(&rsi->si_out_token);
+}
+
+static void rsi_entry_free(struct upcall_cache *cache,
+			   struct upcall_cache_entry *entry)
+{
+	struct gss_rsi *rsi = &entry->u.rsi;
+
+	__rsi_free(rsi);
+}
+
+static inline int rsi_entry_hash(struct gss_rsi *rsi)
+{
+#if BITS_PER_LONG == 64
+	return hash_mem_64((char *)rsi->si_in_handle.data,
+			   rsi->si_in_handle.len, RSI_HASHBITS) ^
+		hash_mem_64((char *)rsi->si_in_token.data,
+			    rsi->si_in_token.len, RSI_HASHBITS);
+#else
+	return hash_mem((char *)rsi->si_in_handle.data, rsi->si_in_handle.len,
+			RSI_HASHBITS) ^
+		hash_mem((char *)rsi->si_in_token.data, rsi->si_in_token.len,
+			 RSI_HASHBITS);
+#endif
+}
+
+static inline int __rsi_entry_match(rawobj_t *h1, rawobj_t *h2,
+				    rawobj_t *t1, rawobj_t *t2)
+{
+	return !(rawobj_equal(h1, h2) && rawobj_equal(t1, t2));
+}
+
+static inline int rsi_entry_match(struct gss_rsi *rsi, struct gss_rsi *tmp)
+{
+	return __rsi_entry_match(&rsi->si_in_handle, &tmp->si_in_handle,
+				 &rsi->si_in_token, &tmp->si_in_token);
+}
+
+/* Returns 0 to tell this is a match */
+static inline int rsi_upcall_compare(struct upcall_cache *cache,
+				     struct upcall_cache_entry *entry,
+				     __u64 key, void *args)
+{
+	struct gss_rsi *rsi1 = &entry->u.rsi;
+	struct gss_rsi *rsi2 = args;
+
+	return rsi_entry_match(rsi1, rsi2);
+}
+
+/* See handle_channel_request() userspace for where the upcall data is read */
+static int rsi_do_upcall(struct upcall_cache *cache,
+			 struct upcall_cache_entry *entry)
+{
+	int size, len, *blen;
+	char *buffer, *bp, **bpp;
+	char *argv[] = {
+		[0] = cache->uc_upcall,
+		[1] = "-c",
+		[2] = cache->uc_name,
+		[3] = "-r",
+		[4] = NULL,
+		[5] = NULL
+	};
+	char *envp[] = {
+		[0] = "HOME=/",
+		[1] = "PATH=/sbin:/usr/sbin",
+		[2] = NULL
+	};
+	ktime_t start, end;
+	struct gss_rsi *rsi = &entry->u.rsi;
+	__u64 index = 0;
+	int rc;
+
+	ENTRY;
+	CDEBUG(D_SEC, "rsi upcall '%s' on '%s'\n",
+	       cache->uc_upcall, cache->uc_name);
+
+	size = 24 + 1 + /* ue_key is uint64_t */
+		12 + 1 + /* si_lustre_svc is __u32*/
+		18 + 1 + /* si_nid4 is lnet_nid_t, hex with leading 0x */
+		18 + 1 + /* index is __u64, hex with leading 0x */
+		strlen(rsi->si_nm_name) + 1 +
+		BASE64URL_CHARS(rsi->si_in_handle.len) + 1 +
+		BASE64URL_CHARS(rsi->si_in_token.len) + 1 +
+		1 + 1; /* eol */
+	if (size > MAX_ARG_STRLEN)
+		RETURN(-E2BIG);
+	OBD_ALLOC_LARGE(buffer, size);
+	if (!buffer)
+		RETURN(-ENOMEM);
+
+	bp = buffer;
+	bpp = &bp;
+	len = size;
+	blen = &len;
+
+	/* if in_handle is null, provide kernel suggestion */
+	if (rsi->si_in_handle.len == 0)
+		index = gss_get_next_ctx_index();
+
+	/* entry->ue_key is put into args sent via upcall, so that it can be
+	 * returned by userspace. This will help find cache entry at downcall,
+	 * without unnecessary recomputation of the hash.
+	 */
+	gss_u64_write_string(bpp, blen, entry->ue_key);
+	gss_u64_write_string(bpp, blen, rsi->si_lustre_svc);
+	gss_u64_write_hex_string(bpp, blen, rsi->si_nid4);
+	gss_u64_write_hex_string(bpp, blen, index);
+	gss_string_write(bpp, blen, (char *) rsi->si_nm_name);
+	gss_base64url_encode(bpp, blen, rsi->si_in_handle.data,
+			     rsi->si_in_handle.len);
+	gss_base64url_encode(bpp, blen, rsi->si_in_token.data,
+			     rsi->si_in_token.len);
+	(*bpp)[-1] = '\n';
+	(*bpp)[0] = '\0';
+
+	argv[4] = buffer;
+	down_read(&cache->uc_upcall_rwsem);
+	start = ktime_get();
+	rc = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+	end = ktime_get();
+	up_read(&cache->uc_upcall_rwsem);
+	if (rc < 0) {
+		CERROR("%s: error invoking upcall %s %s (time %ldus): rc = %d\n",
+		       cache->uc_name, argv[0], argv[2],
+		       (long)ktime_us_delta(end, start), rc);
+	} else {
+		CDEBUG(D_SEC, "%s: invoked upcall %s %s (time %ldus)\n",
+		       cache->uc_name, argv[0], argv[2],
+		       (long)ktime_us_delta(end, start));
+		rc = 0;
+	}
+
+	OBD_FREE_LARGE(buffer, size);
+	RETURN(rc);
+}
+
+static inline int rsi_downcall_compare(struct upcall_cache *cache,
+				       struct upcall_cache_entry *entry,
+				       __u64 key, void *args)
+{
+	struct gss_rsi *rsi = &entry->u.rsi;
+	struct rsi_downcall_data *sid = args;
+	char *mesg = sid->sid_val;
+	rawobj_t handle, token;
+	char *p = mesg;
+	int len;
+
+	/* sid_val starts with handle and token */
+
+	/* First, handle */
+	len = gss_buffer_get(&mesg, &handle.len, &handle.data);
+	sid->sid_offset = mesg - p;
+	p = mesg;
+
+	/* Second, token */
+	len = gss_buffer_get(&mesg, &token.len, &token.data);
+	sid->sid_offset += mesg - p;
+
+	return __rsi_entry_match(&rsi->si_in_handle, &handle,
+				 &rsi->si_in_token, &token);
+}
+
+static int rsi_parse_downcall(struct upcall_cache *cache,
+			      struct upcall_cache_entry *entry,
+			      void *args)
+{
+	struct gss_rsi *rsi = &entry->u.rsi;
+	struct rsi_downcall_data *sid = args;
+	int mlen = sid->sid_len;
+	char *mesg = sid->sid_val + sid->sid_offset;
+	char *buf = sid->sid_val;
+	int status = -EINVAL;
+	int len;
+
+	ENTRY;
+
+	if (mlen <= 0)
+		goto out;
+
+	rsi->si_major_status = sid->sid_maj_stat;
+	rsi->si_minor_status = sid->sid_min_stat;
+
+	/* in_handle and in_token have already been consumed in
+	 * rsi_downcall_compare(). sid_offset gives next field.
+	 */
+
+	/* out_handle */
+	len = gss_buffer_read(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsi->si_out_handle, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
+
+	/* out_token */
+	len = gss_buffer_read(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsi->si_out_token, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
+
+	entry->ue_expire = 0;
+	status = 0;
+
+out:
+	CDEBUG(D_OTHER, "rsi parse %p: %d\n", rsi, status);
+	RETURN(status);
+}
+
+struct gss_rsi *rsi_entry_get(struct upcall_cache *cache, struct gss_rsi *rsi)
+{
+	struct upcall_cache_entry *entry;
+	int hash = rsi_entry_hash(rsi);
+
+	if (!cache)
+		return ERR_PTR(-ENOENT);
+
+	entry = upcall_cache_get_entry(cache, (__u64)hash, rsi);
+	if (unlikely(!entry))
+		return ERR_PTR(-ENOENT);
+	if (IS_ERR(entry))
+		return ERR_CAST(entry);
+
+	return &entry->u.rsi;
+}
+
+void rsi_entry_put(struct upcall_cache *cache, struct gss_rsi *rsi)
+{
+	if (!cache || !rsi)
+		return;
+
+	upcall_cache_put_entry(cache, rsi->si_uc_entry);
+}
+
+void rsi_flush(struct upcall_cache *cache, int hash)
+{
+	if (hash < 0)
+		upcall_cache_flush_idle(cache);
+	else
+		upcall_cache_flush_one(cache, (__u64)hash, NULL);
+}
+
+struct upcall_cache_ops rsi_upcall_cache_ops = {
+	.init_entry	  = rsi_entry_init,
+	.free_entry	  = rsi_entry_free,
+	.upcall_compare	  = rsi_upcall_compare,
+	.downcall_compare = rsi_downcall_compare,
+	.do_upcall	  = rsi_do_upcall,
+	.parse_downcall	  = rsi_parse_downcall,
+};
+
+struct upcall_cache *rsicache;
 
 struct rsi {
 	struct cache_head       h;
@@ -888,12 +1222,6 @@ int gss_svc_upcall_update_sequence(rawobj_t *handle, __u32 seq)
         return 0;
 }
 
-static struct cache_deferred_req* cache_upcall_defer(struct cache_req *req)
-{
-        return NULL;
-}
-static struct cache_req cache_upcall_chandle = { cache_upcall_defer };
-
 int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 			       struct gss_svc_reqctx *grctx,
 			       struct gss_wire_ctx *gw,
@@ -902,119 +1230,71 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 			       rawobj_t *rvs_hdl,
 			       rawobj_t *in_token)
 {
+	struct gss_rsi rsi = { 0 }, *rsip = NULL;
 	struct ptlrpc_reply_state *rs;
-	struct rsc                *rsci = NULL;
-	struct rsi                *rsip = NULL, rsikey;
-	wait_queue_entry_t wait;
-	int                        replen = sizeof(struct ptlrpc_body);
-	struct gss_rep_header     *rephdr;
-	int                        first_check = 1;
-	int                        rc = SECSVC_DROP;
+	struct rsc *rsci = NULL;
+	int replen = sizeof(struct ptlrpc_body);
+	struct gss_rep_header *rephdr;
+	int rc = SECSVC_DROP, rc2;
 
 	ENTRY;
-	memset(&rsikey, 0, sizeof(rsikey));
-	rsikey.lustre_svc = lustre_svc;
+
+	rsi.si_lustre_svc = lustre_svc;
 	/* In case of MR, rq_peer is not the NID from which request is received,
 	 * but primary NID of peer.
 	 * So we need LNetPrimaryNID(rq_source) to match what the clients uses.
 	 */
 	LNetPrimaryNID(&req->rq_source.nid);
-	rsikey.nid4 = lnet_nid_to_nid4(&req->rq_source.nid);
-	nodemap_test_nid(lnet_nid_to_nid4(&req->rq_peer.nid), rsikey.nm_name,
-			 sizeof(rsikey.nm_name));
+	rsi.si_nid4 = lnet_nid_to_nid4(&req->rq_source.nid);
+	nodemap_test_nid(lnet_nid_to_nid4(&req->rq_peer.nid), rsi.si_nm_name,
+			 sizeof(rsi.si_nm_name));
 
-        /* duplicate context handle. for INIT it always 0 */
-        if (rawobj_dup(&rsikey.in_handle, &gw->gw_handle)) {
-                CERROR("fail to dup context handle\n");
-                GOTO(out, rc);
-        }
-
-        if (rawobj_dup(&rsikey.in_token, in_token)) {
-                CERROR("can't duplicate token\n");
-                rawobj_free(&rsikey.in_handle);
-                GOTO(out, rc);
-        }
-
-        rsip = rsi_lookup(&rsikey);
-        rsi_free(&rsikey);
-        if (!rsip) {
-                CERROR("error in rsi_lookup.\n");
-
-                if (!gss_pack_err_notify(req, GSS_S_FAILURE, 0))
-                        rc = SECSVC_COMPLETE;
-
-                GOTO(out, rc);
-        }
-
-	cache_get(&rsip->h); /* take an extra ref */
-	init_wait(&wait);
-	add_wait_queue(&rsip->waitq, &wait);
-
-cache_check:
-	/* Note each time cache_check() will drop a reference if return
-	 * non-zero. We hold an extra reference on initial rsip, but must
-	 * take care of following calls. */
-	rc = cache_check(&rsi_cache, &rsip->h, &cache_upcall_chandle);
-	switch (rc) {
-	case -ETIMEDOUT:
-	case -EAGAIN: {
-		int valid;
-
-		if (first_check) {
-			first_check = 0;
-
-			cache_read_lock(&rsi_cache);
-			valid = test_bit(CACHE_VALID, &rsip->h.flags);
-			if (valid == 0)
-				set_current_state(TASK_INTERRUPTIBLE);
-			cache_read_unlock(&rsi_cache);
-
-			if (valid == 0) {
-				unsigned long timeout;
-
-				timeout = cfs_time_seconds(GSS_SVC_UPCALL_TIMEOUT);
-				schedule_timeout(timeout);
-			}
-			cache_get(&rsip->h);
-			goto cache_check;
-		}
-		CWARN("waited %ds timeout, drop\n", GSS_SVC_UPCALL_TIMEOUT);
-		break;
-	}
-	case -ENOENT:
-		CDEBUG(D_SEC, "cache_check return ENOENT, drop\n");
-		break;
-	case 0:
-		/* if not the first check, we have to release the extra
-		 * reference we just added on it. */
-		if (!first_check)
-			cache_put(&rsip->h, &rsi_cache);
-		CDEBUG(D_SEC, "cache_check is good\n");
-		break;
+	/* Note that context handle is always 0 for for INIT. */
+	rc2 = rawobj_dup(&rsi.si_in_handle, &gw->gw_handle);
+	if (rc2) {
+		CERROR("%s: failed to duplicate context handle: rc = %d\n",
+		       target->obd_name, rc2);
+		GOTO(out, rc);
 	}
 
-	remove_wait_queue(&rsip->waitq, &wait);
-	cache_put(&rsip->h, &rsi_cache);
+	rc2 = rawobj_dup(&rsi.si_in_token, in_token);
+	if (rc2) {
+		CERROR("%s: failed to duplicate token: rc = %d\n",
+		       target->obd_name, rc2);
+		rawobj_free(&rsi.si_in_handle);
+		GOTO(out, rc);
+	}
 
-	if (rc)
-		GOTO(out, rc = SECSVC_DROP);
+	rsip = rsi_entry_get(rsicache, &rsi);
+	__rsi_free(&rsi);
+	if (IS_ERR(rsip)) {
+		CERROR("%s: failed to get entry from rsi cache (nid %s): rc = %ld\n",
+		       target->obd_name,
+		       libcfs_nid2str(lnet_nid_to_nid4(&req->rq_source.nid)),
+		       PTR_ERR(rsip));
 
-        rc = SECSVC_DROP;
-        rsci = gss_svc_searchbyctx(&rsip->out_handle);
-        if (!rsci) {
-                CERROR("authentication failed\n");
-
-		/* gss mechanism returned major and minor code so we return
-		 * those in error message */
-		if (!gss_pack_err_notify(req, rsip->major_status,
-					 rsip->minor_status))
+		if (!gss_pack_err_notify(req, GSS_S_FAILURE, 0))
 			rc = SECSVC_COMPLETE;
 
-                GOTO(out, rc);
-        } else {
-                cache_get(&rsci->h);
-                grctx->src_ctx = &rsci->ctx;
-        }
+		GOTO(out, rc);
+	}
+
+	rc = SECSVC_DROP;
+	rsci = gss_svc_searchbyctx(&rsip->si_out_handle);
+	if (!rsci) {
+		/* gss mechanism returned major and minor code so we return
+		 * those in error message */
+		if (!gss_pack_err_notify(req, rsip->si_major_status,
+					 rsip->si_minor_status))
+			rc = SECSVC_COMPLETE;
+
+		CERROR("%s: authentication failed: rc = %d\n",
+		       target->obd_name, rc);
+		GOTO(out, rc);
+	} else {
+		cache_get(&rsci->h);
+		grctx->src_ctx = &rsci->ctx;
+	}
 
 	if (gw->gw_flags & LUSTRE_GSS_PACK_KCSUM) {
 		grctx->src_ctx->gsc_mechctx->hash_func = gss_digest_hash;
@@ -1030,68 +1310,69 @@ cache_check:
 			gss_digest_hash_compat;
 	}
 
-        if (rawobj_dup(&rsci->ctx.gsc_rvs_hdl, rvs_hdl)) {
-                CERROR("failed duplicate reverse handle\n");
-                GOTO(out, rc);
-        }
+	if (rawobj_dup(&rsci->ctx.gsc_rvs_hdl, rvs_hdl)) {
+		CERROR("%s: failed duplicate reverse handle\n",
+		       target->obd_name);
+		GOTO(out, rc);
+	}
 
-        rsci->target = target;
+	rsci->target = target;
 
-	CDEBUG(D_SEC, "server create rsc %p(%u->%s)\n",
-	       rsci, rsci->ctx.gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
+	CDEBUG(D_SEC, "%s: server create rsc %p(%u->%s)\n",
+	       target->obd_name, rsci, rsci->ctx.gsc_uid,
+	       libcfs_nidstr(&req->rq_peer.nid));
 
-        if (rsip->out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
-                CERROR("handle size %u too large\n", rsip->out_handle.len);
-                GOTO(out, rc = SECSVC_DROP);
-        }
+	if (rsip->si_out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
+		CERROR("%s: handle size %u too large\n",
+		       target->obd_name, rsip->si_out_handle.len);
+		GOTO(out, rc = SECSVC_DROP);
+	}
 
-        grctx->src_init = 1;
-	grctx->src_reserve_len = round_up(rsip->out_token.len, 4);
+	grctx->src_init = 1;
+	grctx->src_reserve_len = round_up(rsip->si_out_token.len, 4);
 
-        rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
-        if (rc) {
-                CERROR("failed to pack reply: %d\n", rc);
-                GOTO(out, rc = SECSVC_DROP);
-        }
+	rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
+	if (rc) {
+		CERROR("%s: failed to pack reply: rc = %d\n",
+		       target->obd_name, rc);
+		GOTO(out, rc = SECSVC_DROP);
+	}
 
-        rs = req->rq_reply_state;
-        LASSERT(rs->rs_repbuf->lm_bufcount == 3);
-        LASSERT(rs->rs_repbuf->lm_buflens[0] >=
-                sizeof(*rephdr) + rsip->out_handle.len);
-        LASSERT(rs->rs_repbuf->lm_buflens[2] >= rsip->out_token.len);
+	rs = req->rq_reply_state;
+	LASSERT(rs->rs_repbuf->lm_bufcount == 3);
+	LASSERT(rs->rs_repbuf->lm_buflens[0] >=
+		sizeof(*rephdr) + rsip->si_out_handle.len);
+	LASSERT(rs->rs_repbuf->lm_buflens[2] >= rsip->si_out_token.len);
 
-        rephdr = lustre_msg_buf(rs->rs_repbuf, 0, 0);
-        rephdr->gh_version = PTLRPC_GSS_VERSION;
-        rephdr->gh_flags = 0;
-        rephdr->gh_proc = PTLRPC_GSS_PROC_ERR;
-        rephdr->gh_major = rsip->major_status;
-        rephdr->gh_minor = rsip->minor_status;
-        rephdr->gh_seqwin = GSS_SEQ_WIN;
-        rephdr->gh_handle.len = rsip->out_handle.len;
-        memcpy(rephdr->gh_handle.data, rsip->out_handle.data,
-               rsip->out_handle.len);
+	rephdr = lustre_msg_buf(rs->rs_repbuf, 0, 0);
+	rephdr->gh_version = PTLRPC_GSS_VERSION;
+	rephdr->gh_flags = 0;
+	rephdr->gh_proc = PTLRPC_GSS_PROC_ERR;
+	rephdr->gh_major = rsip->si_major_status;
+	rephdr->gh_minor = rsip->si_minor_status;
+	rephdr->gh_seqwin = GSS_SEQ_WIN;
+	rephdr->gh_handle.len = rsip->si_out_handle.len;
+	memcpy(rephdr->gh_handle.data, rsip->si_out_handle.data,
+	       rsip->si_out_handle.len);
 
-        memcpy(lustre_msg_buf(rs->rs_repbuf, 2, 0), rsip->out_token.data,
-               rsip->out_token.len);
+	memcpy(lustre_msg_buf(rs->rs_repbuf, 2, 0), rsip->si_out_token.data,
+	       rsip->si_out_token.len);
 
-        rs->rs_repdata_len = lustre_shrink_msg(rs->rs_repbuf, 2,
-                                               rsip->out_token.len, 0);
+	rs->rs_repdata_len = lustre_shrink_msg(rs->rs_repbuf, 2,
+					       rsip->si_out_token.len, 0);
 
-        rc = SECSVC_OK;
+	rc = SECSVC_OK;
 
 out:
-	/* it looks like here we should put rsip also, but this mess up
-	 * with NFS cache mgmt code... FIXME
-	 * something like:
-	 * if (rsip)
-	 *     rsi_put(&rsip->h, &rsi_cache); */
-
+	if (!IS_ERR_OR_NULL(rsip))
+		rsi_entry_put(rsicache, rsip);
 	if (rsci) {
 		/* if anything went wrong, we don't keep the context too */
 		if (rc != SECSVC_OK)
 			set_bit(CACHE_NEGATIVE, &rsci->h.flags);
 		else
-			CDEBUG(D_SEC, "create rsc with idx %#llx\n",
+			CDEBUG(D_SEC, "%s: create rsc with idx %#llx\n",
+			       target->obd_name,
 			       gss_handle_to_u64(&rsci->handle));
 
 		COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
@@ -1132,9 +1413,57 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
         rsc->h.expiry_time = 1;
 }
 
+/* Wait for userspace daemon to open socket, approx 1.5 s.
+ * If socket is not open, upcall requests might fail.
+ */
+static int check_gssd_socket(void)
+{
+	struct sockaddr_un *sun;
+	struct socket *sock;
+	int tries = 0;
+	int err;
+
+#ifdef HAVE_SOCK_CREATE_KERN_USE_NET
+	err = sock_create_kern(current->nsproxy->net_ns,
+			       AF_UNIX, SOCK_STREAM, 0, &sock);
+#else
+	err = sock_create_kern(AF_UNIX, SOCK_STREAM, 0, &sock);
+#endif
+	if (err < 0) {
+		CDEBUG(D_SEC, "Failed to create socket: %d\n", err);
+		return err;
+	}
+
+	OBD_ALLOC(sun, sizeof(*sun));
+	if (!sun) {
+		sock_release(sock);
+		return -ENOMEM;
+	}
+	memset(sun, 0, sizeof(*sun));
+	sun->sun_family = AF_UNIX;
+	strncpy(sun->sun_path, GSS_SOCKET_PATH, sizeof(sun->sun_path));
+
+	/* Try to connect to the socket */
+	while (tries++ < 6) {
+		err = kernel_connect(sock, (struct sockaddr *)sun,
+				     sizeof(*sun), 0);
+		if (!err)
+			break;
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 4);
+	}
+	if (err < 0)
+		CDEBUG(D_SEC, "Failed to connect to socket: %d\n", err);
+	else
+		kernel_sock_shutdown(sock, SHUT_RDWR);
+
+	sock_release(sock);
+	OBD_FREE(sun, sizeof(*sun));
+	return err;
+}
+
 int __init gss_init_svc_upcall(void)
 {
-	int	i, rc;
+	int rc;
 
 	/*
 	 * this helps reducing context index confliction. after server reboot,
@@ -1145,16 +1474,16 @@ int __init gss_init_svc_upcall(void)
 	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
 #ifdef HAVE_CACHE_HEAD_HLIST
-	for (i = 0; i < rsi_cache.hash_size; i++)
-		INIT_HLIST_HEAD(&rsi_cache.hash_table[i]);
+	for (rc = 0; rc < rsi_cache.hash_size; rc++)
+		INIT_HLIST_HEAD(&rsi_cache.hash_table[rc]);
 #endif
 	rc = cache_register_net(&rsi_cache, &init_net);
 	if (rc != 0)
 		return rc;
 
 #ifdef HAVE_CACHE_HEAD_HLIST
-	for (i = 0; i < rsc_cache.hash_size; i++)
-		INIT_HLIST_HEAD(&rsc_cache.hash_table[i]);
+	for (rc = 0; rc < rsc_cache.hash_size; rc++)
+		INIT_HLIST_HEAD(&rsc_cache.hash_table[rc]);
 #endif
 	rc = cache_register_net(&rsc_cache, &init_net);
 	if (rc != 0) {
@@ -1162,21 +1491,20 @@ int __init gss_init_svc_upcall(void)
 		return rc;
 	}
 
-	/* FIXME this looks stupid. we intend to give lsvcgssd a chance to open
-	 * the init upcall channel, otherwise there's big chance that the first
-	 * upcall issued before the channel be opened thus nfsv4 cache code will
-	 * drop the request directly, thus lead to unnecessary recovery time.
-	 * Here we wait at minimum 1.5 seconds.
-	 */
-	for (i = 0; i < 6; i++) {
-		if (channel_users(&rsi_cache) > 0)
-			break;
-		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 4);
+	rsicache = upcall_cache_init(RSI_CACHE_NAME, RSI_UPCALL_PATH,
+				     UC_RSICACHE_HASH_SIZE,
+				     3600, /* entry expire: 1 h */
+				     20, /* acquire expire: 20 s */
+				     &rsi_upcall_cache_ops);
+	if (IS_ERR(rsicache)) {
+		rc = PTR_ERR(rsicache);
+		rsicache = NULL;
+		return rc;
 	}
 
-	if (channel_users(&rsi_cache) == 0)
+	if (check_gssd_socket())
 		CDEBUG(D_SEC,
-		       "Init channel is not opened by lsvcgssd, following request might be dropped until lsvcgssd is active\n");
+		       "Init channel not opened by lsvcgssd, GSS might not work on server side until daemon is active\n");
 
 	return 0;
 }
@@ -1188,4 +1516,6 @@ void gss_exit_svc_upcall(void)
 
 	cache_purge(&rsc_cache);
 	cache_unregister_net(&rsc_cache, &init_net);
+
+	upcall_cache_cleanup(rsicache);
 }

@@ -39,10 +39,13 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <errno.h>
+#include <stdio.h>
 
 #include <libcfs/util/list.h>
 #include <linux/lnet/lnet-types.h>
 #include <linux/lnet/nidstr.h>
+#include <uapi/linux/lustre/lgss.h>
 
 #include <krb5.h>
 
@@ -108,5 +111,31 @@ void load_mapping(void);
 int mapping_empty(void);
 int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid);
 int gss_get_realm(char *realm);
+
+/*
+ * gss_buffer_write() - write some buffer to stream
+ */
+static inline int gss_buffer_write_file(FILE *f, void *value, size_t length)
+{
+	int rc = 0;
+
+	/* write size of data */
+	if (fwrite(&length, sizeof(__u32), 1, f) != 1) {
+		rc = -errno;
+		goto out;
+	}
+
+	if (!length || !value)
+		goto out;
+
+	/* write data itself */
+	if (fwrite(value, length, 1, f) != 1) {
+		rc = -errno;
+		goto out;
+	}
+
+out:
+	return rc;
+}
 
 #endif /* __LSUPPORT_H__ */

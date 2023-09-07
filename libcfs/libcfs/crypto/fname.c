@@ -207,9 +207,6 @@ static inline int llcrypt_base64_decode(const char *src, int len, u8 *dst)
  * This base64 encoding is RFC 4648 compliant base64-url encoding.
  */
 
-static const char base64url_table[] =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
 #define LLCRYPT_BASE64URL_CHARS(nbytes)	DIV_ROUND_UP((nbytes) * 4, 3)
 
 /**

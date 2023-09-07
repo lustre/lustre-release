@@ -170,6 +170,8 @@ sig_die(int signal)
 	cleanup_mapping();
 	/* cleanup allocated strings for realms */
 	gssd_cleanup_realms();
+	/* remove socket */
+	unlink(GSS_SOCKET_PATH);
 	printerr(LL_WARN, "exiting on signal %d\n", signal);
 	exit(1);
 }
@@ -187,16 +189,16 @@ usage(FILE *fp, char *progname)
 	fprintf(fp, "usage: %s [ -fnvmogkRsz ]\n",
 		progname);
 	fprintf(stderr, "-f		- Run in foreground\n");
-	fprintf(stderr, "-n		- Don't establish kerberos credentials\n");
-	fprintf(stderr, "-v		- Verbosity\n");
-	fprintf(stderr, "-m		- Service MDS\n");
-	fprintf(stderr, "-o		- Service OSS\n");
 	fprintf(stderr, "-g		- Service MGS\n");
 	fprintf(stderr, "-k		- Enable kerberos support\n");
+	fprintf(stderr, "-m		- Service MDS\n");
+	fprintf(stderr, "-n		- Don't establish kerberos credentials\n");
+	fprintf(stderr, "-o		- Service OSS\n");
 	fprintf(stderr, "-R REALM	- Kerberos Realm to use, instead of default\n");
 #ifdef HAVE_OPENSSL_SSK
 	fprintf(stderr, "-s		- Enable shared secret key support\n");
 #endif
+	fprintf(stderr, "-v		- Verbosity\n");
 	fprintf(stderr, "-z		- Enable gssnull support\n");
 
 	exit(fp == stderr);

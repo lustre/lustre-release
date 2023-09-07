@@ -352,6 +352,8 @@ init_test_env() {
 	[ ! -f "$LSOM_SYNC" ] &&
 		export LSOM_SYNC=$(which llsom_sync 2> /dev/null)
 	[ -z "$LSOM_SYNC" ] && export LSOM_SYNC="/usr/sbin/llsom_sync"
+	export L_GETAUTH=${L_GETAUTH:-"$LUSTRE/utils/gss/l_getauth"}
+	[ ! -f "$L_GETAUTH" ] && export L_GETAUTH=$(which l_getauth 2> /dev/null)
 	export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
 	[ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd 2> /dev/null)
 	export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
@@ -960,12 +962,31 @@ fs_inode_ksize() {
 check_gss_daemon_nodes() {
 	local list=$1
 	local dname=$2
+	local loopmax=10
+	local loop
+	local node
+	local ret
 
 	do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
 if [ \\\"\\\$num\\\" -ne 1 ]; then
     echo \\\$num instance of $dname;
     exit 1;
 fi; "
+	ret=$?
+	(( $ret == 0 )) || return $ret
+
+	for node in ${list//,/ }; do
+		loop=0
+		while (( $loop < $loopmax )); do
+			do_nodesv $node "$L_GETAUTH -d"
+			ret=$?
+			(( $ret == 0 )) && break
+			loop=$((loop + 1))
+			sleep 5
+		done
+		(( $loop < $loopmax )) || return 1
+	done
+	return 0
 }
 
 check_gss_daemon_facet() {
@@ -997,6 +1018,7 @@ start_gss_daemons() {
 	if [ "$nodes" ] && [ "$daemon" ] ; then
 		echo "Starting gss daemon on nodes: $nodes"
 		do_nodes $nodes "$daemon" "$options" || return 8
+		check_gss_daemon_nodes $nodes lsvcgssd || return 9
 		return 0
 	fi
 
@@ -1022,9 +1044,6 @@ start_gss_daemons() {
 	# starting on clients
 
 	local clients=${CLIENTS:-$HOSTNAME}
-
-	# wait daemons entering "stable" status
-	sleep 5
 
 	#
 	# check daemons are running
@@ -1236,6 +1255,9 @@ init_gss() {
 		lctl set_param -n \
 		   sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG"
 	fi
+
+	do_nodesv $(comma_list $(all_server_nodes)) \
+		"$LCTL set_param sptlrpc.gss.rsi_upcall=$L_GETAUTH"
 }
 
 cleanup_gss() {

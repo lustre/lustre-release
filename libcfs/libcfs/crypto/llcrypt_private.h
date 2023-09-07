@@ -18,6 +18,7 @@
 #include <libcfs/crypto/llcrypt.h>
 #include <crypto/hash.h>
 #include <lustre_disk.h>
+#include <uapi/linux/lustre/lgss.h>
 
 #ifndef CRYPTO_TFM_REQ_FORBID_WEAK_KEYS
 #define CRYPTO_TFM_REQ_FORBID_WEAK_KEYS CRYPTO_TFM_REQ_WEAK_KEY

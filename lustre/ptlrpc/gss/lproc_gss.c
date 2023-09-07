@@ -181,6 +181,161 @@ static ssize_t sptlrpc_gss_check_upcall_ns_seq_write(struct file *file,
 LPROC_SEQ_FOPS(sptlrpc_gss_check_upcall_ns);
 #endif /* HAVE_GSS_KEYRING */
 
+static int rsi_upcall_seq_show(struct seq_file *m,
+			       void *data)
+{
+	down_read(&rsicache->uc_upcall_rwsem);
+	seq_printf(m, "%s\n", rsicache->uc_upcall);
+	up_read(&rsicache->uc_upcall_rwsem);
+
+	return 0;
+}
+
+static ssize_t rsi_upcall_seq_write(struct file *file,
+				    const char __user *buffer,
+				    size_t count, loff_t *off)
+{
+	int rc;
+
+	if (count >= UC_CACHE_UPCALL_MAXPATH) {
+		CERROR("%s: rsi upcall too long\n", rsicache->uc_name);
+		return -EINVAL;
+	}
+
+	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
+	down_write(&rsicache->uc_upcall_rwsem);
+	rc = sscanf(buffer, "%s", rsicache->uc_upcall);
+	up_write(&rsicache->uc_upcall_rwsem);
+
+	if (rc != 1) {
+		CERROR("%s: invalid rsi upcall provided\n", rsicache->uc_name);
+		return -EINVAL;
+	}
+
+	CDEBUG(D_CONFIG, "%s: rsi upcall set to %s\n", rsicache->uc_name,
+	       rsicache->uc_upcall);
+
+	return count;
+}
+LPROC_SEQ_FOPS(rsi_upcall);
+
+static ssize_t lprocfs_rsi_flush_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, void *data)
+{
+	int hash, rc;
+
+	rc = kstrtoint_from_user(buffer, count, 0, &hash);
+	if (rc)
+		return rc;
+
+	rsi_flush(rsicache, hash);
+	return count;
+}
+LPROC_SEQ_FOPS_WR_ONLY(gss, rsi_flush);
+
+static ssize_t lprocfs_rsi_info_seq_write(struct file *file,
+					  const char __user *buffer,
+					  size_t count, void *data)
+{
+	struct rsi_downcall_data *param;
+	int size = sizeof(*param), rc, checked = 0;
+
+again:
+	if (count < size) {
+		CERROR("%s: invalid data count = %lu, size = %d\n",
+		       rsicache->uc_name, (unsigned long)count, size);
+		return -EINVAL;
+	}
+
+	OBD_ALLOC_LARGE(param, size);
+	if (param == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(param, buffer, size)) {
+		CERROR("%s: bad rsi data\n", rsicache->uc_name);
+		GOTO(out, rc = -EFAULT);
+	}
+
+	if (checked == 0) {
+		checked = 1;
+		if (param->sid_magic != RSI_DOWNCALL_MAGIC) {
+			CERROR("%s: rsi downcall bad params\n",
+			       rsicache->uc_name);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		rc = param->sid_len; /* save sid_len */
+		OBD_FREE_LARGE(param, size);
+		size = offsetof(struct rsi_downcall_data, sid_val[rc]);
+		goto again;
+	}
+
+	rc = upcall_cache_downcall(rsicache, param->sid_err,
+				   param->sid_hash, param);
+
+out:
+	if (param != NULL)
+		OBD_FREE_LARGE(param, size);
+
+	return rc ? rc : count;
+}
+LPROC_SEQ_FOPS_WR_ONLY(gss, rsi_info);
+
+static int rsi_entry_expire_seq_show(struct seq_file *m,
+				     void *data)
+{
+	seq_printf(m, "%lld\n", rsicache->uc_entry_expire);
+	return 0;
+}
+
+static ssize_t rsi_entry_expire_seq_write(struct file *file,
+					  const char __user *buffer,
+					  size_t count, loff_t *off)
+{
+	time64_t val;
+	int rc;
+
+	rc = kstrtoll_from_user(buffer, count, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0)
+		return -ERANGE;
+
+	rsicache->uc_entry_expire = val;
+
+	return count;
+}
+LPROC_SEQ_FOPS(rsi_entry_expire);
+
+static int rsi_acquire_expire_seq_show(struct seq_file *m,
+				       void *data)
+{
+	seq_printf(m, "%lld\n", rsicache->uc_acquire_expire);
+	return 0;
+}
+
+static ssize_t rsi_acquire_expire_seq_write(struct file *file,
+					    const char __user *buffer,
+					    size_t count, loff_t *off)
+{
+	time64_t val;
+	int rc;
+
+	rc = kstrtoll_from_user(buffer, count, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0 || val > INT_MAX)
+		return -ERANGE;
+
+	rsicache->uc_acquire_expire = val;
+
+	return count;
+}
+LPROC_SEQ_FOPS(rsi_acquire_expire);
+
 static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
@@ -197,6 +352,16 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
 	{ .name	=	"gss_check_upcall_ns",
 	  .fops	=	&sptlrpc_gss_check_upcall_ns_fops },
 #endif
+	{ .name	=	"rsi_upcall",
+	  .fops	=	&rsi_upcall_fops },
+	{ .name =	"rsi_flush",
+	  .fops =	&gss_rsi_flush_fops },
+	{ .name =	"rsi_info",
+	  .fops =	&gss_rsi_info_fops },
+	{ .name	=	"rsi_entry_expire",
+	  .fops	=	&rsi_entry_expire_fops },
+	{ .name	=	"rsi_acquire_expire",
+	  .fops	=	&rsi_acquire_expire_fops },
 	{ NULL }
 };
 

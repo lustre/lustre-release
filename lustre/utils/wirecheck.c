@@ -2046,6 +2046,21 @@ check_llog_changelog_user_rec(void)
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
+check_rsi_downcall_data(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(rsi_downcall_data);
+	CHECK_MEMBER(rsi_downcall_data, sid_magic);
+	CHECK_MEMBER(rsi_downcall_data, sid_err);
+	CHECK_MEMBER(rsi_downcall_data, sid_hash);
+	CHECK_MEMBER(rsi_downcall_data, sid_maj_stat);
+	CHECK_MEMBER(rsi_downcall_data, sid_min_stat);
+	CHECK_MEMBER(rsi_downcall_data, sid_len);
+	CHECK_MEMBER(rsi_downcall_data, sid_offset);
+	CHECK_MEMBER(rsi_downcall_data, sid_val);
+}
+
+static void
 check_llog_gen(void)
 {
 	BLANK_LINE();
@@ -3576,6 +3591,7 @@ main(int argc, char **argv)
 #ifndef HAVE_NATIVE_LINUX_CLIENT
 	check_llog_changelog_user_rec();
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
+	check_rsi_downcall_data();
 	check_llog_gen();
 	check_llog_gen_rec();
 	check_llog_log_hdr();

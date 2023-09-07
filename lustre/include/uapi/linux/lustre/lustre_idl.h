@@ -3725,6 +3725,8 @@ struct llog_update_record {
 				     SELINUX_POLICY_VER_LEN + \
 				     SELINUX_POLICY_HASH_LEN + 3)
 
+#define LUSTRE_NODEMAP_NAME_LENGTH	16
+
 /** enums containing the types of ids contained in a nodemap
  * kept so other modules (mgs, mdt, etc) can define the type
  * of search easily
