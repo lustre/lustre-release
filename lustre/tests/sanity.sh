@@ -14331,7 +14331,8 @@ test_batch_statahead() {
 	cancel_lru_locks osc
 	time ls -l $DIR/$tdir | wc -l
 	unbatch_rpcs=$(calc_stats mdc.*.stats ldlm_ibits_enqueue)
-	sleep 2
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
 	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/hit.total:/ { print $NF }')
 	# hit ratio should be larger than 75% (7500).
@@ -14348,7 +14349,8 @@ test_batch_statahead() {
 	time ls -l $DIR/$tdir | wc -l
 	batch_rpcs=$(calc_stats mdc.*.stats mds_batch)
 	# wait for statahead thread to quit and update statahead stats
-	sleep 2
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
 	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/hit.total:/ { print $NF }')
 	# hit ratio should be larger than 75% (7500).
