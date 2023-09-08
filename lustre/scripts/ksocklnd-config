@@ -166,12 +166,12 @@ do
 	fi
 	ruledelcmd=(/sbin/ip rule del from ${addr[0]} table ${i} '&>/dev/null')
 	ruleaddcmd=(/sbin/ip rule add from ${addr[0]} table ${i})
-	eval ${routecmd[@]}
-	eval ${ruledelcmd[@]}
-	eval ${ruleaddcmd[@]}
-	logcmd1=(logger "${me}: ${routecmd[@]}")
-	logcmd2=(logger "${me}: ${ruledelcmd[@]}")
-	logcmd3=(logger "${me}: ${ruleaddcmd[@]}")
+	routeerr=$(eval ${routecmd[@]} 2>&1 >/dev/null)
+	ruledelerr=$(eval ${ruledelcmd[@]} 2>&1 >/dev/null)
+	ruleaddcmd=$(eval ${ruleaddcmd[@]} 2>&1 >/dev/null)
+	logcmd1=(logger "${me}: ${routecmd[@]} ${routeerr}")
+	logcmd2=(logger "${me}: ${ruledelcmd[@]} ${ruledelerr}")
+	logcmd3=(logger "${me}: ${ruleaddcmd[@]} ${ruleaddcmd}")
 	eval "${logcmd1[@]}"
 	eval "${logcmd2[@]}"
 	eval "${logcmd3[@]}"
