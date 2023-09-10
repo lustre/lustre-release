@@ -11441,6 +11441,13 @@ test_103a() {
 		skip_env "could not find setfacl"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
+	local mdts=$(comma_list $(mdts_nodes))
+	local saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
+
+	[[ -z "$saved" ]] || do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE
+	stack_trap "[[ -z \"$saved\" ]] || \
+		    do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$saved" EXIT
+
 	gpasswd -a daemon bin				# LU-5641
 	do_facet $SINGLEMDS gpasswd -a daemon bin	# LU-5641
 
