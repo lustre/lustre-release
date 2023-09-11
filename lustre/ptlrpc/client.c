@@ -1563,6 +1563,10 @@ static int after_reply(struct ptlrpc_request *req)
 		lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
 	}
 
+	if (lustre_msg_get_transno(req->rq_repmsg) ||
+	    lustre_msg_get_opc(req->rq_reqmsg) == LDLM_ENQUEUE)
+		imp->imp_no_cached_data = 0;
+
 	if (imp->imp_replayable) {
 		/* if other threads are waiting for ptlrpc_free_committed()
 		 * they could continue the work of freeing RPCs. That reduces

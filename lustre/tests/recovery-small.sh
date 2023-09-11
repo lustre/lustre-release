@@ -3466,6 +3466,27 @@ test_154() {
 }
 run_test 154 "corruption update llog can be skipped"
 
+test_155() {
+	local lsoutput1
+	local lsoutput2
+
+	touch $DIR/$tfile
+	lsoutput1=$(ls -l $DIR)
+
+	zconf_umount $HOSTNAME $MOUNT || error "umount failed"
+	# make sure that last_rcvd update is committed
+	do_facet mds1 sync
+	zconf_mount $HOSTNAME $MOUNT || error "mount failed"
+
+	replay_barrier_nosync mds1
+
+	fail_nodf mds1
+
+	lsoutput2=$(ls -l $DIR) || error "ls failed"
+	[[ $lsoutput1 == $lsoutput2 ]] || error "$lsoutput1 != $lsoutput2"
+}
+run_test 155 "failover after client remount"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
