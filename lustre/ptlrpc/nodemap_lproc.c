@@ -819,25 +819,38 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 };
 
 static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
-	{
-		.name		= "id",
-		.fops		= &nodemap_id_fops,
-	},
-	{
-		.name		= "trusted_nodemap",
-		.fops		= &nodemap_trusted_fops,
-	},
+	/* in alphabetical order */
 	{
 		.name		= "admin_nodemap",
 		.fops		= &nodemap_admin_fops,
+	},
+	{
+		.name		= "audit_mode",
+		.fops		= &nodemap_audit_mode_fops,
 	},
 	{
 		.name		= "deny_unknown",
 		.fops		= &nodemap_deny_unknown_fops,
 	},
 	{
-		.name		= "squash_uid",
-		.fops		= &nodemap_squash_uid_fops,
+		.name		= "exports",
+		.fops		= &nodemap_exports_fops,
+	},
+	{
+		.name		= "fileset",
+		.fops		= &nodemap_fileset_fops,
+	},
+	{
+		.name		= "forbid_encryption",
+		.fops		= &nodemap_forbid_encryption_fops,
+	},
+	{
+		.name		= "id",
+		.fops		= &nodemap_id_fops,
+	},
+	{
+		.name		= "map_mode",
+		.fops		= &nodemap_map_mode_fops,
 	},
 	{
 		.name		= "squash_gid",
@@ -848,20 +861,12 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 		.fops		= &nodemap_squash_projid_fops,
 	},
 	{
-		.name		= "fileset",
-		.fops		= &nodemap_fileset_fops,
+		.name		= "squash_uid",
+		.fops		= &nodemap_squash_uid_fops,
 	},
 	{
-		.name		= "exports",
-		.fops		= &nodemap_exports_fops,
-	},
-	{
-		.name		= "audit_mode",
-		.fops		= &nodemap_audit_mode_fops,
-	},
-	{
-		.name		= "forbid_encryption",
-		.fops		= &nodemap_forbid_encryption_fops,
+		.name		= "trusted_nodemap",
+		.fops		= &nodemap_trusted_fops,
 	},
 	{
 		NULL
