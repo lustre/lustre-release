@@ -2398,6 +2398,16 @@ static void lustre_print_v1v3(unsigned int lvl, struct lov_user_md *lum,
 	}
 }
 
+static void lustre_print_foreign(unsigned int lvl, struct lov_foreign_md *lfm,
+				 const char *msg)
+{
+	CDEBUG(lvl, "%s lov_foreign_md %p:\n", msg, lfm);
+	CDEBUG(lvl, "\tlfm_magic: %#X\n", lfm->lfm_magic);
+	CDEBUG(lvl, "\tlfm_length: %u\n", lfm->lfm_length);
+	CDEBUG(lvl, "\tlfm_type: %#X\n", lfm->lfm_type);
+	CDEBUG(lvl, "\tlfm_flags: %#X\n", lfm->lfm_flags);
+}
+
 void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 			  const char *msg)
 {
@@ -2446,7 +2456,11 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 
 		v1 = (struct lov_user_md *)((char *)comp_v1 +
 				comp_v1->lcm_entries[i].lcme_offset);
-		lustre_print_v1v3(lvl, v1, msg);
+		if (v1->lmm_magic == LOV_MAGIC_FOREIGN)
+			lustre_print_foreign(lvl, (struct lov_foreign_md *)v1,
+					     msg);
+		else
+			lustre_print_v1v3(lvl, v1, msg);
 	}
 }
 EXPORT_SYMBOL(lustre_print_user_md);
@@ -2487,6 +2501,22 @@ void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
 	EXIT;
 }
 EXPORT_SYMBOL(lustre_swab_lov_user_md_v3);
+
+static void lustre_swab_lov_hsm_md(struct lov_hsm_md *lhm)
+{
+	ENTRY;
+	CDEBUG(D_IOCTL, "swabbing lov_hsm_md\n");
+	__swab32s(&lhm->lhm_magic);
+	__swab32s(&lhm->lhm_length);
+	__swab32s(&lhm->lhm_type);
+	__swab32s(&lhm->lhm_flags);
+
+	if (lov_hsm_type_supported(lhm->lhm_type)) {
+		__swab64s(&lhm->lhm_archive_id);
+		__swab64s(&lhm->lhm_archive_ver);
+	}
+	EXIT;
+}
 
 void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 {
@@ -2537,6 +2567,12 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		/* no need to swab lcme_cstripe_count */
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
+		if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_FOREIGN) ||
+		    v1->lmm_magic == LOV_USER_MAGIC_FOREIGN) {
+			lustre_swab_lov_hsm_md((struct lov_hsm_md *)v1);
+			return;
+		}
+
 		stripe_count = v1->lmm_stripe_count;
 		if (!cpu_endian)
 			__swab16s(&stripe_count);

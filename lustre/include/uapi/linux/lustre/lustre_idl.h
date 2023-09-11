@@ -179,6 +179,26 @@ struct hsm_attrs {
 };
 extern void lustre_hsm_swab(struct hsm_attrs *attrs);
 
+static inline void lov_foreign_hsm_to_cpu(struct lov_hsm_base *dst,
+					  const struct lov_foreign_md *lfm)
+{
+	struct lov_hsm_base *src = (struct lov_hsm_base *)lfm->lfm_value;
+
+	dst->lhb_archive_id = __le64_to_cpu(src->lhb_archive_id);
+	dst->lhb_archive_ver = __le64_to_cpu(src->lhb_archive_ver);
+	memcpy(dst->lhb_uuid, src->lhb_uuid, sizeof(dst->lhb_uuid));
+}
+
+static inline void lov_foreign_hsm_to_le(struct lov_foreign_md *lfm,
+					 struct lov_hsm_base *src)
+{
+	struct lov_hsm_base *dst = (struct lov_hsm_base *)lfm->lfm_value;
+
+	dst->lhb_archive_id = __cpu_to_le64(dst->lhb_archive_id);
+	dst->lhb_archive_ver = __cpu_to_le64(dst->lhb_archive_ver);
+	memcpy(dst->lhb_uuid, src->lhb_uuid, sizeof(dst->lhb_uuid));
+}
+
 /**
  * fid constants
  */

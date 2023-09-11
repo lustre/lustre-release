@@ -177,18 +177,34 @@ struct lod_layout_component {
 	struct lu_extent	  llc_extent;
 	__u32			  llc_id;
 	__u32			  llc_flags;
-	__u32			  llc_stripe_size;
-	__u32			  llc_pattern;
-	__u16			  llc_layout_gen;
-	__u16			  llc_stripe_offset;
-	__u16			  llc_stripe_count;
-	__u16			  llc_stripes_allocated;
+	__u32			  llc_magic;
 	__u64			  llc_timestamp; /* snapshot time */
-	char			 *llc_pool;
-	/* ost list specified with LOV_USER_MAGIC_SPECIFIC lum */
-	struct lu_tgt_pool	  llc_ostlist;
-	struct dt_object	**llc_stripe;
-	__u32			 *llc_ost_indices;
+	union {
+		struct { /* plain layout V1/V3. */
+			__u32			  llc_pattern;
+			__u32			  llc_stripe_size;
+			__u16			  llc_layout_gen;
+			__u16			  llc_stripe_offset;
+			__u16			  llc_stripe_count;
+			__u16			  llc_stripes_allocated;
+			char			 *llc_pool;
+			/* ost list specified by LOV_USER_MAGIC_SPECIFIC lum */
+			struct lu_tgt_pool	  llc_ostlist;
+			struct dt_object	**llc_stripe;
+			__u32			 *llc_ost_indices;
+		};
+		struct { /* Foreign mirror layout component */
+			__u32			  llc_length;
+			__u32			  llc_type;
+			__u32			  llc_foreign_flags;
+			union {
+				/* Basic HSM layout information */
+				struct lov_hsm_base	 llc_hsm;
+				/* Other kinds of foreign types (i.e. DAOS) */
+				char			*llc_value;
+			};
+		};
+	};
 };
 
 struct lod_default_striping {
@@ -218,7 +234,8 @@ enum layout_verify_flags {
 
 struct lod_mirror_entry {
 	__u16	lme_stale:1,
-		lme_prefer:1;
+		lme_prefer:1,
+		lme_hsm:1;
 	/* mirror id */
 	__u16	lme_id;
 	/* preference */
@@ -308,6 +325,12 @@ static inline bool lod_is_flr(const struct lod_object *lo)
 		return false;
 
 	return (lo->ldo_flr_state & LCM_FL_FLR_MASK) != LCM_FL_NONE;
+}
+
+static inline bool lod_is_hsm(const struct lod_layout_component *lod_comp)
+{
+	return lod_comp->llc_magic == LOV_MAGIC_FOREIGN &&
+	       lov_hsm_type_supported(lod_comp->llc_type);
 }
 
 static inline bool lod_is_splitting(const struct lod_object *lo)
@@ -498,6 +521,9 @@ static inline bool lod_obj_is_striped(struct dt_object *dt)
 		rc = false;
 	} else {
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			if (lo->ldo_comp_entries[i].llc_magic ==
+			    LOV_MAGIC_FOREIGN)
+				continue;
 			if (lo->ldo_comp_entries[i].llc_stripe == NULL)
 				continue;
 			LASSERT(lo->ldo_comp_entries[i].llc_stripe_count > 0);
@@ -547,6 +573,8 @@ static inline void lod_layout_get_pool(struct lod_layout_component *entries,
 	int i;
 
 	for (i = 0; i < count; i++) {
+		if (entries[i].llc_magic == LOV_MAGIC_FOREIGN)
+			continue;
 		if (entries[i].llc_pool != NULL) {
 			strlcpy(pool, entries[i].llc_pool, len);
 			break;
@@ -668,6 +696,7 @@ void lod_free_def_comp_entries(struct lod_default_striping *lds);
 void lod_free_comp_entries(struct lod_object *lo);
 int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
 int lod_fill_mirrors(struct lod_object *lo);
+int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm);
 
 /* lod_pool.c */
 struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);

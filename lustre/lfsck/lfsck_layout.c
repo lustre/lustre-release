@@ -440,6 +440,7 @@ static int lfsck_layout_verify_header(struct dt_object *obj,
 			__u64 start = le64_to_cpu(lcme->lcme_extent.e_start);
 			__u64 end = le64_to_cpu(lcme->lcme_extent.e_end);
 			__u32 comp_id = le32_to_cpu(lcme->lcme_id);
+			struct lov_mds_md_v1 *v1;
 			bool ext, inited, zero;
 			__u32 flags;
 
@@ -492,10 +493,15 @@ static int lfsck_layout_verify_header(struct dt_object *obj,
 				return -EINVAL;
 			}
 
-			rc = lfsck_layout_verify_header_v1v3(obj,
-					(struct lov_mds_md_v1 *)((char *)lmm +
-					le32_to_cpu(lcme->lcme_offset)), start,
-					end, comp_id, ext, &p_dom);
+			v1 = (struct lov_mds_md_v1 *)((char *)lmm +
+						le32_to_cpu(lcme->lcme_offset));
+			if (le32_to_cpu(v1->lmm_magic) == LOV_MAGIC_FOREIGN)
+				rc = lfsck_layout_verify_header_foreign(
+					obj, (struct lov_foreign_md *)v1,
+					le32_to_cpu(lcme->lcme_size));
+			else
+				rc = lfsck_layout_verify_header_v1v3(obj, v1,
+					start, end, comp_id, ext, &p_dom);
 
 			p_zero = zero;
 		}

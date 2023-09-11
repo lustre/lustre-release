@@ -4807,6 +4807,8 @@ static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 	switch (intent->li_opc) {
 	case LAYOUT_INTENT_TRUNC:
 	case LAYOUT_INTENT_WRITE:
+	case LAYOUT_INTENT_PCCRO_SET:
+	case LAYOUT_INTENT_PCCRO_CLEAR:
 		layout.mlc_opc = MD_LAYOUT_WRITE;
 		layout.mlc_intent = intent;
 		break;

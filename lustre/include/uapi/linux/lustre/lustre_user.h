@@ -744,7 +744,7 @@ static inline bool lov_pattern_supported(__u32 pattern)
 
 /* RELEASED and MDT patterns are not valid in many places, so rather than
  * having many extra checks on lov_pattern_supported, we have this separate
- * check for non-released, non-DOM components
+ * check for non-released, non-readonly, non-DOM components
  */
 static inline bool lov_pattern_supported_normal_comp(__u32 pattern)
 {
@@ -852,10 +852,10 @@ struct lov_foreign_md {
 	char lfm_value[];
 } __attribute__((packed));
 
-#define foreign_size(lfm) (((struct lov_foreign_md *)lfm)->lfm_length + \
+#define lov_foreign_size(lfm) (((struct lov_foreign_md *)lfm)->lfm_length + \
 			   offsetof(struct lov_foreign_md, lfm_value))
 
-#define foreign_size_le(lfm) \
+#define lov_foreign_size_le(lfm) \
 	(le32_to_cpu(((struct lov_foreign_md *)lfm)->lfm_length) + \
 	offsetof(struct lov_foreign_md, lfm_value))
 
@@ -1037,6 +1037,11 @@ static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 				stripes * sizeof(struct lov_user_ost_data_v1);
 }
 
+static inline __u32 lov_foreign_md_size(__u32 length)
+{
+	return length + offsetof(struct lov_foreign_md, lfm_value);
+}
+
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
@@ -1163,7 +1168,7 @@ struct lustre_foreign_type {
  * LOV/LMV foreign types
  **/
 enum lustre_foreign_types {
-	LU_FOREIGN_TYPE_NONE = 0,
+	LU_FOREIGN_TYPE_NONE	= 0,
 	/* HSM copytool lhsm_posix */
 	LU_FOREIGN_TYPE_POSIX	= 1,
 	/* Used for PCC-RW. PCCRW components are local to a single archive. */
@@ -2286,7 +2291,56 @@ enum ioc_data_version_flags {
 
 /********* HSM **********/
 
-/** HSM per-file state
+#define UUID_MAX	40
+
+struct lov_hsm_base {
+	/* HSM archive ID */
+	__u64	lhb_archive_id;
+	/* Data version associated with the last archiving, if any. */
+	__u64	lhb_archive_ver;
+	/* Identifier within HSM backend */
+	char	lhb_uuid[UUID_MAX];
+};
+
+/**
+ * HSM layout is a kind of FOREIGN layout.
+ */
+struct lov_hsm_md {
+	/* LOV_MAGIC_FOREIGN */
+	__u32			lhm_magic;
+	/* To make HSM layout compatible with lov_foreign_md, this @length
+	 * includes everything after @lhm_flags: sizeof(lhm_archive_id) +
+	 * sizeof(lhm_archive_ver) + lenght of lhm_archive_uuid.
+	 */
+	__u32			lhm_length;
+	/* HSM type, see LU_FOREIGN_TYPE_(POSIX, S3, PCCRW, PCCRO}. */
+	__u32			lhm_type;
+	/* HSM flags, see enum hsm_states */
+	__u32			lhm_flags;
+	/*
+	 * Data structure members above are compatible with @lov_foreign_md.
+	 * The following members are private to HSM layout.
+	 */
+	struct lov_hsm_base	lhm_hsm;
+} __attribute__((packed));
+
+#define lhm_archive_id		lhm_hsm.lhb_archive_id
+#define lhm_archive_ver		lhm_hsm.lhb_archive_ver
+#define lhm_archive_uuid	lhm_hsm.lhb_uuid
+
+static inline bool lov_hsm_type_supported(__u32 type)
+{
+	return type == LU_FOREIGN_TYPE_POSIX || type == LU_FOREIGN_TYPE_PCCRW ||
+	       type == LU_FOREIGN_TYPE_PCCRO || type == LU_FOREIGN_TYPE_S3;
+}
+
+static inline bool lov_foreign_type_supported(__u32 type)
+{
+	return lov_hsm_type_supported(type) || type == LU_FOREIGN_TYPE_SYMLINK;
+}
+
+/**
+ * HSM per-file state
  * See HSM_FLAGS below.
  */
 enum hsm_states {
@@ -2306,7 +2360,8 @@ enum hsm_states {
 #define HSM_USER_MASK   (HS_NORELEASE | HS_NOARCHIVE | HS_DIRTY)
 
 /* Other HSM flags. */
-#define HSM_STATUS_MASK (HS_EXISTS | HS_LOST | HS_RELEASED | HS_ARCHIVED)
+#define HSM_STATUS_MASK (HS_EXISTS | HS_LOST | HS_RELEASED | HS_ARCHIVED | \
+			 HS_PCCRW | HS_PCCRO)
 
 /*
  * All HSM-related possible flags that could be applied to a file.
@@ -2829,7 +2884,7 @@ static inline const char *pcc_type2string(enum lu_pcc_type type)
 
 struct lu_pcc_attach {
 	__u32 pcca_type; /* PCC type */
-	__u32 pcca_id; /* archive ID for readwrite, group ID for readonly */
+	__u32 pcca_id; /* Attach ID */
 };
 
 enum lu_pcc_detach_opts {

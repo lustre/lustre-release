@@ -1835,6 +1835,9 @@ static inline int mdt_hsm_set_released(struct lov_mds_md *lmm)
 		for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
 			off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 			v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+			if (v1->lmm_magic == cpu_to_le32(LOV_MAGIC_FOREIGN))
+				continue;
+
 			v1->lmm_pattern |= cpu_to_le32(LOV_PATTERN_F_RELEASED);
 		}
 	} else {

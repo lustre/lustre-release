@@ -482,6 +482,8 @@ static void lod_free_comp_buffer(struct lod_layout_component *entries,
 
 	for (i = 0; i < count; i++) {
 		entry = &entries[i];
+		if (entry->llc_magic == LOV_MAGIC_FOREIGN)
+			continue;
 		if (entry->llc_pool != NULL)
 			lod_set_pool(&entry->llc_pool, NULL);
 		if (entry->llc_ostlist.op_array)
@@ -612,6 +614,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
 		bool stale = lod_comp->llc_flags & LCME_FL_STALE;
 		bool preferred = lod_comp->llc_flags & LCME_FL_PREF_WR;
+		bool mirror_hsm = lod_is_hsm(lod_comp);
 		bool init = (lod_comp->llc_stripe != NULL) &&
 			    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
 			    !(lod_comp->llc_pattern & LOV_PATTERN_MDT);
@@ -647,6 +650,9 @@ int lod_fill_mirrors(struct lod_object *lo)
 		}
 
 		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
+			/* Currently HSM mirror does not support PFL. */
+			if (lo->ldo_mirrors[mirror_idx].lme_hsm)
+				RETURN(-EINVAL);
 			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
 			lo->ldo_mirrors[mirror_idx].lme_prefer |= preferred;
 			lo->ldo_mirrors[mirror_idx].lme_preference += pref;
@@ -663,11 +669,16 @@ int lod_fill_mirrors(struct lod_object *lo)
 		if (mirror_idx >= lo->ldo_mirror_count)
 			RETURN(-EINVAL);
 
+		if (mirror_hsm && (lod_comp->llc_extent.e_start != 0 ||
+				   lod_comp->llc_extent.e_end != LUSTRE_EOF))
+			RETURN(-EINVAL);
+
 		mirror_id = mirror_id_of(lod_comp->llc_id);
 
 		lo->ldo_mirrors[mirror_idx].lme_id = mirror_id;
 		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
 		lo->ldo_mirrors[mirror_idx].lme_prefer = preferred;
+		lo->ldo_mirrors[mirror_idx].lme_hsm = mirror_hsm;
 		lo->ldo_mirrors[mirror_idx].lme_preference = pref;
 		lo->ldo_mirrors[mirror_idx].lme_start = i;
 		lo->ldo_mirrors[mirror_idx].lme_end = i;
@@ -844,6 +855,37 @@ done:
 }
 
 /**
+ * Generate on-disk lov_hsm_md structure based on the information in
+ * the lod_object->ldo_comp_entries.
+ */
+static int lod_gen_component_ea_foreign(const struct lu_env *env,
+					struct lod_object *lo,
+					struct lod_layout_component *lod_comp,
+					void *lmm, int *lmm_size)
+{
+	struct lov_foreign_md *lfm = (struct lov_foreign_md *)lmm;
+
+	ENTRY;
+
+	lfm->lfm_magic = cpu_to_le32(LOV_MAGIC_FOREIGN);
+	lfm->lfm_length = cpu_to_le32(lod_comp->llc_length);
+	lfm->lfm_type = cpu_to_le32(lod_comp->llc_type);
+	lfm->lfm_flags = cpu_to_le32(lod_comp->llc_foreign_flags);
+
+	if (lov_hsm_type_supported(lod_comp->llc_type)) {
+		if (lod_comp->llc_length != sizeof(struct lov_hsm_base))
+			return -EINVAL;
+
+		lov_foreign_hsm_to_le(lfm, &lod_comp->llc_hsm);
+	}
+
+	if (lmm_size)
+		*lmm_size = lov_foreign_md_size(lod_comp->llc_length);
+
+	RETURN(0);
+}
+
+/**
  * Generate on-disk lov_mds_md structure based on the information in
  * the lod_object->ldo_comp_entries.
  *
@@ -950,7 +992,18 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		lcme->lcme_offset = cpu_to_le32(offset);
 
 		sub_md = (struct lov_mds_md *)((char *)lcm + offset);
-		rc = lod_gen_component_ea(env, lo, i, sub_md, &size, is_dir);
+		if (lod_comp->llc_magic == LOV_MAGIC_FOREIGN) {
+			if (!lov_hsm_type_supported(lod_comp->llc_type)) {
+				CDEBUG(D_LAYOUT, "Unknown HSM type: %u\n",
+				       lod_comp->llc_type);
+				GOTO(out, rc = -EINVAL);
+			}
+			rc = lod_gen_component_ea_foreign(env, lo, lod_comp,
+							  sub_md, &size);
+		} else {
+			rc = lod_gen_component_ea(env, lo, i, sub_md,
+						  &size, is_dir);
+		}
 		if (rc)
 			GOTO(out, rc);
 		lcme->lcme_size = cpu_to_le32(size);
@@ -1163,6 +1216,43 @@ out:
 	RETURN(rc);
 }
 
+int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm)
+{
+	struct lov_foreign_md *lfm;
+
+	lfm = (struct lov_foreign_md *)lmm;
+	lod_comp->llc_length = le32_to_cpu(lfm->lfm_length);
+	lod_comp->llc_type = le32_to_cpu(lfm->lfm_type);
+
+	if (!lov_hsm_type_supported(lod_comp->llc_type)) {
+		CDEBUG(D_LAYOUT,
+		       "Unsupport HSM type: %u length: %u flags: %08X\n",
+		       lod_comp->llc_type, lod_comp->llc_length,
+		       le32_to_cpu(lfm->lfm_flags));
+		return -EINVAL;
+	}
+
+	/*
+	 * Currently it only stores the file FID as the field @lhm_archive_uuid
+	 * which is used to be the identifier within HSM backend for the archive
+	 * copy.
+	 * Thus the length of foreign layout value (HSM is a kind of foreign
+	 * layout type) is: sizeof(lhm_archive_id) + sizeof(lhm_archive_ver) +
+	 *		    UUID_MAX
+	 * It should fix to support other kinds of identifier for different HSM
+	 * solutions such as S3.
+	 */
+	if (lod_comp->llc_length != sizeof(struct lov_hsm_base)) {
+		CDEBUG(D_LAYOUT, "Invalid HSM len: %u, should be %zu\n",
+		       lod_comp->llc_length, sizeof(struct lov_hsm_base));
+		return -EINVAL;
+	}
+
+	lod_comp->llc_foreign_flags = le32_to_cpu(lfm->lfm_flags);
+	lov_foreign_hsm_to_cpu(&lod_comp->llc_hsm, lfm);
+	return 0;
+}
+
 /**
  * Instantiate objects for striping.
  *
@@ -1327,7 +1417,16 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				      PFID(lod_object_fid(lo)),
 				      le32_to_cpu(comp_v1->lcm_magic));
 			}
+
+			lod_comp->llc_magic = le32_to_cpu(lmm->lmm_magic);
+			if (lod_comp->llc_magic == LOV_MAGIC_FOREIGN) {
+				rc = lod_init_comp_foreign(lod_comp, lmm);
+				if (rc)
+					GOTO(out, rc);
+				continue;
+			}
 		} else {
+			lod_comp->llc_magic = le32_to_cpu(lmm->lmm_magic);
 			lod_comp_set_init(lod_comp);
 		}
 
@@ -2005,10 +2104,10 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 			RETURN(-EINVAL);
 		}
 
-		if (foreign_size_le(lfm) > buf->lb_len) {
+		if (lov_foreign_size_le(lfm) > buf->lb_len) {
 			CDEBUG(D_LAYOUT,
 			       "buf len %zu < this lov_foreign_md size (%zu)\n",
-			       buf->lb_len, foreign_size_le(lfm));
+			       buf->lb_len, lov_foreign_size_le(lfm));
 			RETURN(-EINVAL);
 		}
 		/* Don't do anything with foreign layouts */
@@ -2126,8 +2225,65 @@ recheck:
 		tmp.lb_buf = (char *)comp_v1 + le32_to_cpu(ent->lcme_offset);
 		tmp.lb_len = le32_to_cpu(ent->lcme_size);
 
-		/* Check DoM entry is always the first one */
 		lum = tmp.lb_buf;
+		if (le32_to_cpu(lum->lmm_magic) == LOV_MAGIC_FOREIGN) {
+			struct lov_foreign_md *lfm;
+			struct lov_hsm_md *lhm;
+			u32 hsmsize;
+			u32 ftype;
+
+			/*
+			 * Currently when the foreign layout is used as a basic
+			 * layout component, it only supports HSM foreign types:
+			 * LU_FOREIGN_TYPE_{POSIX, S3, PCCRW, PCCRO}.
+			 */
+			lfm = (struct lov_foreign_md *)lum;
+			ftype = le32_to_cpu(lfm->lfm_type);
+			if (!lov_hsm_type_supported(ftype)) {
+				CDEBUG(D_LAYOUT,
+				       "Foreign type %#x is not HSM\n", ftype);
+				RETURN(-EINVAL);
+			}
+
+			/* Current HSM component must cover [0, EOF]. */
+			if (le64_to_cpu(ext->e_start) > 0) {
+				CDEBUG(D_LAYOUT, "Invalid HSM component with %llu extent start\n",
+				       le64_to_cpu(ext->e_start));
+				RETURN(-EINVAL);
+			}
+			if (le64_to_cpu(ext->e_end) != LUSTRE_EOF) {
+				CDEBUG(D_LAYOUT, "Invalid HSM component with %llu extent end\n",
+				       le64_to_cpu(ext->e_end));
+				RETURN(-EINVAL);
+			}
+
+			lhm = (struct lov_hsm_md *)lfm;
+			if (le32_to_cpu(lhm->lhm_length) !=
+			    sizeof(struct lov_hsm_base)) {
+				CDEBUG(D_LAYOUT,
+				       "Invalid HSM component size %u != %u\n",
+				       le32_to_cpu(ent->lcme_size), hsmsize);
+				RETURN(-EINVAL);
+			}
+
+			hsmsize = lov_foreign_size_le(lhm);
+			if (le32_to_cpu(ent->lcme_size) < hsmsize) {
+				CDEBUG(D_LAYOUT,
+				       "Invalid HSM component size %u != %u\n",
+				       le32_to_cpu(ent->lcme_size), hsmsize);
+				RETURN(-EINVAL);
+			}
+			if (le32_to_cpu(lhm->lhm_flags) & ~HSM_FLAGS_MASK ||
+			    !(le32_to_cpu(lhm->lhm_flags) & HSM_FLAGS_MASK)) {
+				CDEBUG(D_LAYOUT,
+				       "Invalid HSM component flags %#x\n",
+				       le32_to_cpu(lhm->lhm_flags));
+				RETURN(-EINVAL);
+			}
+			continue;
+		}
+
+		/* Check DoM entry is always the first one */
 		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) &
 		    LOV_PATTERN_MDT) {
 			/* DoM component must be the first in a mirror */

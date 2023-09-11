@@ -620,7 +620,7 @@ lov_stripe_md *lsm_unpackmd_foreign(struct lov_obd *lov, void *buf,
 	atomic_set(&lsm->lsm_refc, 1);
 	spin_lock_init(&lsm->lsm_lock);
 	lsm->lsm_magic = le32_to_cpu(lfm->lfm_magic);
-	lsm->lsm_foreign_size = foreign_size_le(lfm);
+	lsm->lsm_foreign_size = lov_foreign_size_le(lfm);
 
 	/* alloc for full foreign EA including format fields */
 	OBD_ALLOC_LARGE(lsme, lsm->lsm_foreign_size);

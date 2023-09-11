@@ -2128,7 +2128,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 			GOTO(out, rc = -EINVAL);
 		}
 		foreign = (struct lov_foreign_md *)buf->lb_buf;
-		length = foreign_size_le(foreign);
+		length = lov_foreign_size_le(foreign);
 		if (buf->lb_len < length) {
 			CDEBUG(D_LAYOUT,
 			       "buf len %zu < this lov_foreign_md size (%zu)\n",
@@ -2179,6 +2179,16 @@ int lod_use_defined_striping(const struct lu_env *env,
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
+
+			lod_comp->llc_magic = magic;
+			if (magic == LOV_MAGIC_FOREIGN) {
+				rc = lod_init_comp_foreign(lod_comp, v1);
+				if (rc)
+					GOTO(out, rc);
+				continue;
+			}
+		} else {
+			lod_comp->llc_magic = magic;
 		}
 
 		pool_name = NULL;
@@ -2406,10 +2416,11 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	case LOV_USER_MAGIC_FOREIGN:
 		if (!lfm)
 			lfm = buf->lb_buf;
-		rc = lod_alloc_foreign_lov(lo, foreign_size(lfm));
+		rc = lod_alloc_foreign_lov(lo, lov_foreign_size(lfm));
 		if (rc)
 			RETURN(rc);
-		memcpy(lo->ldo_foreign_lov, buf->lb_buf, foreign_size(lfm));
+		memcpy(lo->ldo_foreign_lov, buf->lb_buf,
+		       lov_foreign_size(lfm));
 		RETURN(0);
 	default:
 		CERROR("%s: unrecognized magic %X\n",
@@ -2709,6 +2720,10 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	LASSERT(!(lod_comp->llc_flags & LCME_FL_EXTENSION));
+
+	/* A foreign/HSM component is being created */
+	if (lod_comp->llc_magic == LOV_MAGIC_FOREIGN)
+		RETURN(0);
 
 	/* A released component is being created */
 	if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)

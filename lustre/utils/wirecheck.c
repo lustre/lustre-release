@@ -886,6 +886,30 @@ check_lov_foreign_md(void)
 }
 
 static void
+check_lov_hsm_base(void)
+{
+	BLANK_LINKE();
+	CHECK_STRUCT(lov_hsm_base);
+	CHECK_MEMBER(lov_hsm_base, lhb_archive_id);
+	CHECK_MEMBER(lov_hsm_base, lhb_archive_ver);
+	CHECK_MEMBER(lov_hsm_base, lhb_uuid[0]);
+}
+
+static void
+check_lov_hsm_md(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_hsm_md);
+	CHECK_MEMBER(lov_hsm_md, lhm_magic);
+	CHECK_MEMBER(lov_hsm_md, lhm_length);
+	CHECK_MEMBER(lov_hsm_md, lhm_type);
+	CHECK_MEMBER(lov_hsm_md, lhm_flags);
+	CHECK_MEMBER(lov_hsm_md, lhm_archive_id);
+	CHECK_MEMBER(lov_hsm_md, lhm_archive_ver);
+	CHECK_MEMBER(lov_hsm_md, lhm_archive_uuid[0]);
+}
+
+static void
 check_lov_comp_md_entry_v1(void)
 {
 	BLANK_LINE();
@@ -3478,6 +3502,8 @@ main(int argc, char **argv)
 	check_lov_mds_md_v1();
 	check_lov_mds_md_v3();
 	check_lov_foreign_md();
+	check_lov_hsm_base();
+	check_lov_hsm_md();
 	check_lov_comp_md_entry_v1();
 	check_lov_comp_md_v1();
 	check_lmv_mds_md_v1();

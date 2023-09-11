@@ -2354,7 +2354,8 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 }
 
 /* XXX To set the proper lmm_oi & lmm_layout_gen when swap layouts, we have to
- *     look into the layout in MDD layer. */
+ *     look into the layout in MDD layer.
+ */
 static int mdd_lmm_oi(struct lov_mds_md *lmm, struct ost_id *oi, bool get)
 {
 	struct lov_comp_md_v1	*comp_v1;
@@ -2370,16 +2371,36 @@ static int mdd_lmm_oi(struct lov_mds_md *lmm, struct ost_id *oi, bool get)
 			return -EINVAL;
 
 		if (get) {
-			off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+			int i = 0;
+
+			off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 			v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
-			*oi = v1->lmm_oi;
+			if (le32_to_cpu(v1->lmm_magic) != LOV_MAGIC_FOREIGN) {
+				*oi = v1->lmm_oi;
+			} else {
+				if (ent_count == 1)
+					return -EINVAL;
+
+				i = 1;
+				off = le32_to_cpu(
+					comp_v1->lcm_entries[i].lcme_offset);
+				v1 = (struct lov_mds_md *)((char *)comp_v1 +
+							   off);
+				if (le32_to_cpu(v1->lmm_magic) ==
+							LOV_MAGIC_FOREIGN)
+					return -EINVAL;
+
+				*oi = v1->lmm_oi;
+			}
 		} else {
 			for (i = 0; i < le32_to_cpu(ent_count); i++) {
 				off = le32_to_cpu(comp_v1->lcm_entries[i].
 						lcme_offset);
 				v1 = (struct lov_mds_md *)((char *)comp_v1 +
 						off);
-				v1->lmm_oi = *oi;
+				if (le32_to_cpu(v1->lmm_magic) !=
+							LOV_MAGIC_FOREIGN)
+					v1->lmm_oi = *oi;
 			}
 		}
 	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
@@ -3180,10 +3201,55 @@ out:
 }
 
 /**
+ *  Update the layout for PCC-RO.
+ */
+static int
+mdd_layout_update_pccro(const struct lu_env *env, struct md_object *o,
+			struct md_layout_change *mlc)
+{
+	struct mdd_object *obj = md2mdd_obj(o);
+	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
+	struct thandle *handle;
+	int rc;
+
+	ENTRY;
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	/* TODO: Set SOM strict correct when the file is PCC-RO cached. */
+	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
+	/**
+	 * It is possible that another layout write intent has already
+	 * set/cleared read-only flag on the object, so as to return
+	 * -EALREADY, and we need to do nothing in this case.
+	 */
+	if (rc)
+		GOTO(out, rc == -EALREADY ? rc = 0 : rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle,
+				      NULL);
+out:
+	mdd_trans_stop(env, mdd, rc, handle);
+
+	RETURN(rc);
+}
+/**
  * Layout change callback for object.
  *
- * This is only used by FLR for now. In the future, it can be exteneded to
- * handle all layout change.
+ * This is only used by FLR and PCC-RO for now. In the future, it can be
+ * exteneded to handle all layout change.
  */
 static int
 mdd_layout_change(const struct lu_env *env, struct md_object *o,
@@ -3216,7 +3282,13 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 
 	/* Verify acceptable operations */
 	switch (mlc->mlc_opc) {
-	case MD_LAYOUT_WRITE:
+	case MD_LAYOUT_WRITE: {
+		struct layout_intent *intent = mlc->mlc_intent;
+
+		if (intent->li_opc == LAYOUT_INTENT_PCCRO_SET ||
+		    intent->li_opc == LAYOUT_INTENT_PCCRO_CLEAR)
+			RETURN(mdd_layout_update_pccro(env, o, mlc));
+	}
 	case MD_LAYOUT_RESYNC:
 	case MD_LAYOUT_RESYNC_DONE:
 		break;
