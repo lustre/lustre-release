@@ -1057,7 +1057,7 @@ int qti_lqes_restore_init(const struct lu_env *env)
 	if (qti_lqes_inited(env) && qti_lqes_cnt(env) > QMT_MAX_POOL_NUM) {
 		OBD_ALLOC(qmt_info(env)->qti_lqes_rstr,
 			  qti_lqes_cnt(env) * sizeof(struct qmt_lqe_restore));
-		if (!qti_lqes_rstr(env))
+		if (!qmt_info(env)->qti_lqes_rstr)
 			rc = -ENOMEM;
 	}
 
