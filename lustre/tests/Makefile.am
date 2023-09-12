@@ -133,6 +133,7 @@ lov_getstripe_old_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
+checkfiemap_LDADD = -lpthread
 if LIBAIO
 aiocp_LDADD= -laio
 endif

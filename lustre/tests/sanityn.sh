@@ -3648,6 +3648,27 @@ test_71c() {
 }
 run_test 71c "check FIEMAP_EXTENT_LAST flag with different extents number"
 
+test_71d() { #LU-17110
+	checkfiemap --test ||
+		skip "error $?: checkfiemap failed"
+
+	local f=$DIR/$tfile
+
+	# write data this way: hole - data - hole - data
+	dd if=/dev/urandom of=$f bs=64K count=1
+	[[ "$(facet_fstype ost$(($($LFS getstripe -i $f) + 1)))" != "zfs" ]] ||
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
+	dd if=/dev/urandom of=$f bs=64K seek=2 count=1
+	dd if=/dev/urandom of=$f bs=64K seek=4 count=1
+	dd if=/dev/urandom of=$f bs=64K seek=6 count=1 conv=fsync
+	echo "disk usage: $(du -B1 $f)"
+	echo "file size: $(du -b $f)"
+
+	checkfiemap --corruption_test $f $((4 * 64 *1024)) ||
+		error "checkfiemap failed"
+}
+run_test 71d "fiemap corruption test with fm_extent_count=0"
+
 test_72() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
 	local tlink1

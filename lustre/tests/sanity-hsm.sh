@@ -5325,6 +5325,40 @@ test_407() {
 }
 run_test 407 "Check for double RESTORE records in llog"
 
+test_408 () { #LU-17110
+	checkfiemap --test ||
+		skip "checkfiemap not runnable: $?"
+
+	local f=$DIR/$tfile
+	local fid
+	local out;
+
+	copytool setup
+
+	# write data this way: hole - data - hole - data
+	dd if=/dev/urandom of=$f bs=64K count=1 conv=fsync
+	[[ "$(facet_fstype ost$(($($LFS getstripe -i $f) + 1)))" != "zfs" ]] ||
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
+	dd if=/dev/urandom of=$f bs=64K seek=3 count=1 conv=fsync
+	stat $DIR/$tfile
+	echo "disk usage: $(du -B1 $f)"
+	echo "file size: $(du -b $f)"
+
+	fid=$(path2fid $f)
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f
+
+	out=$(checkfiemap --corruption_test $f $((4 * 64 * 1024))) ||
+		error "checkfiemap failed"
+
+	echo "$out"
+	grep -q "flags (0x3):" <<< "$out" ||
+		error "the extent flags of a relase file should be: LAST UNKNOWN"
+
+}
+run_test 408 "Verify fiemap on release file"
+
 test_500()
 {
 	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&
