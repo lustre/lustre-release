@@ -5785,7 +5785,7 @@ static int ll_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 
 	rc = ll_do_fiemap(inode, fiemap, num_bytes);
 
-	if (IS_ENCRYPTED(inode)) {
+	if (IS_ENCRYPTED(inode) && extent_count > 0) {
 		int i;
 
 		for (i = 0; i < fiemap->fm_mapped_extents; i++)

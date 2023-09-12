@@ -131,6 +131,7 @@ createmany_LDADD=$(LIBLUSTREAPI)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
 fsx_LDADD = $(LIBLUSTREAPI)
+checkfiemap_LDADD = -lpthread
 if LIBAIO
 aiocp_LDADD= -laio
 endif

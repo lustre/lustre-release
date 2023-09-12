@@ -1739,7 +1739,7 @@ static u64 fiemap_calc_fm_end_offset(struct fiemap *fiemap,
 				     int *start_stripe)
 {
 	struct lov_stripe_md_entry *lsme = lsm->lsm_entries[index];
-	u64 local_end = fiemap->fm_extents[0].fe_logical;
+	u64 local_end;
 	u64 lun_end;
 	u64 fm_end_offset;
 	int stripe_no = -1;
@@ -1748,6 +1748,7 @@ static u64 fiemap_calc_fm_end_offset(struct fiemap *fiemap,
 	    fiemap->fm_extents[0].fe_logical == 0)
 		return 0;
 
+	local_end = fiemap->fm_extents[0].fe_logical;
 	stripe_no = *start_stripe;
 
 	if (stripe_no == -1)
@@ -1899,12 +1900,15 @@ static int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 			GOTO(obj_put, rc = -EINVAL);
 		/* If OST is inactive, return extent with UNKNOWN flag. */
 		if (!lov->lov_tgts[ost_index]->ltd_active) {
-			fs->fs_fm->fm_flags |= FIEMAP_EXTENT_LAST;
+
 			fs->fs_fm->fm_mapped_extents = 1;
+			if (fs->fs_fm->fm_extent_count == 0)
+				goto inactive_tgt;
 
 			fm_ext[0].fe_logical = obd_start;
 			fm_ext[0].fe_length = obd_end - obd_start + 1;
-			fm_ext[0].fe_flags |= FIEMAP_EXTENT_UNKNOWN;
+			fm_ext[0].fe_flags |=
+				FIEMAP_EXTENT_UNKNOWN | FIEMAP_EXTENT_LAST;
 
 			goto inactive_tgt;
 		}
@@ -2053,6 +2057,9 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			 * request fits in file-size.
 			 */
 			fiemap->fm_mapped_extents = 1;
+			if (fiemap->fm_extent_count == 0)
+				GOTO(out_lsm, rc = 0);
+
 			fiemap->fm_extents[0].fe_logical = fiemap->fm_start;
 			if (fiemap->fm_start + fiemap->fm_length <
 			    fmkey->lfik_oa.o_size)
@@ -2223,11 +2230,6 @@ finish:
 	else
 		cur_ext = 0;
 
-	/* done all the processing */
-	if (entry > end_entry ||
-	    (fs.fs_enough && fs.fs_finish_stripe && entry == end_entry))
-		fiemap->fm_extents[cur_ext].fe_flags |= FIEMAP_EXTENT_LAST;
-
 	/* Indicate that we are returning device offsets unless file just has
 	 * single stripe */
 	if (lsm->lsm_entry_count > 1 ||
@@ -2237,6 +2239,11 @@ finish:
 
 	if (fiemap->fm_extent_count == 0)
 		goto skip_last_device_calc;
+
+	/* done all the processing */
+	if (entry > end_entry ||
+	    (fs.fs_enough && fs.fs_finish_stripe && entry == end_entry))
+		fiemap->fm_extents[cur_ext].fe_flags |= FIEMAP_EXTENT_LAST;
 
 skip_last_device_calc:
 	fiemap->fm_mapped_extents = fs.fs_cur_extent;
