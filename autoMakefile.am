@@ -148,6 +148,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	LUSTRE-VERSION-FILE		\
 	undef.h				\
 	autogen.sh			\
+	modules.order			\
 	config/lustre-version.m4
 
 # contrib is a directory.  Putting a directory in EXTRA_DIST
