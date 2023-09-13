@@ -271,20 +271,6 @@ static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,
 		else
 			rc = -ENOLCK;
 		break;
-	case COIO_LAYOUT_LOCK:
-		if (lli->lli_layout_lock_owner != current) {
-			mutex_lock(&lli->lli_layout_mutex);
-			lli->lli_layout_lock_owner = current;
-		}
-		break;
-	case COIO_LAYOUT_UNLOCK:
-		if (lli->lli_layout_lock_owner == current) {
-			lli->lli_layout_lock_owner = NULL;
-			mutex_unlock(&lli->lli_layout_mutex);
-		} else {
-			rc = -ENOLCK;
-		}
-		break;
 	default:
 		rc = -EINVAL;
 		break;

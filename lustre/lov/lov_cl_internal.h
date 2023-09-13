@@ -242,6 +242,7 @@ struct lov_mirror_entry {
 enum lov_object_flags {
 	/* Layout is invalid, set when layout lock is lost */
 	LO_LAYOUT_INVALID	= 0x1,
+	LO_NEED_INODE_LOCK	= 0x2,
 };
 
 /**

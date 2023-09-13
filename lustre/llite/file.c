@@ -6323,10 +6323,6 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	LASSERT(fid_is_sane(ll_inode2fid(inode)));
 	LASSERT(S_ISREG(inode->i_mode));
 
-	/* take layout lock mutex to enqueue layout lock exclusively. */
-	mutex_lock(&lli->lli_layout_mutex);
-	lli->lli_layout_lock_owner = current;
-
 	while (1) {
 		/* mostly layout lock is caching on the local side, so try to
 		 * match it before grabbing layout lock mutex. */
@@ -6341,15 +6337,16 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 			break;
 		}
 
+		/* take layout lock mutex to enqueue layout lock exclusively. */
+		mutex_lock(&lli->lli_layout_mutex);
 		rc = ll_layout_intent(inode, &intent);
+		mutex_unlock(&lli->lli_layout_mutex);
 		if (rc != 0)
 			break;
 	}
 
 	if (rc == 0)
 		*gen = ll_layout_version_get(lli);
-	lli->lli_layout_lock_owner = NULL;
-	mutex_unlock(&lli->lli_layout_mutex);
 
 	RETURN(rc);
 }
