@@ -190,40 +190,6 @@ static inline bool lov_supported_comp_magic(unsigned int magic)
 	       magic == LOV_MAGIC_FOREIGN;
 }
 
-/* lov_do_div64(a, b) returns a % b, and a = a / b.
- * The 32-bit code is LOV-specific due to knowing about stripe limits in
- * order to reduce the divisor to a 32-bit number.  If the divisor is
- * already a 32-bit value the compiler handles this directly. */
-#if BITS_PER_LONG == 64
-# define lov_do_div64(n, base) ({					\
-	uint64_t __base = (base);					\
-	uint64_t __rem;							\
-	__rem = ((uint64_t)(n)) % __base;				\
-	(n) = ((uint64_t)(n)) / __base;					\
-	__rem;								\
-})
-#elif BITS_PER_LONG == 32
-# define lov_do_div64(n, base) ({					\
-	uint64_t __num = (n);						\
-	uint64_t __rem;							\
-	if ((sizeof(base) > 4) && (((base) & 0xffffffff00000000ULL) != 0)) {  \
-		int __remainder;					\
-		LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)),		\
-			 "64 bit lov division %llu / %llu\n",		\
-			 __num, (uint64_t)(base));			\
-		__remainder = __num & (LOV_MIN_STRIPE_SIZE - 1);	\
-		__num >>= LOV_MIN_STRIPE_BITS;				\
-		__rem = do_div(__num, (base) >> LOV_MIN_STRIPE_BITS);	\
-		__rem <<= LOV_MIN_STRIPE_BITS;				\
-		__rem += __remainder;					\
-	} else {							\
-		__rem = do_div(__num, base);				\
-	}								\
-	(n) = __num;							\
-	__rem;								\
-})
-#endif
-
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p) ((p)->pool_obds.op_array)
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
@@ -270,7 +236,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
 		      struct cl_attr *attr);
 
 /* lov_offset.c */
-loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index);
+u64 stripe_width(struct lov_stripe_md *lsm, unsigned int index);
 u64 lov_stripe_size(struct lov_stripe_md *lsm, int index,
 		    u64 ost_size, int stripeno);
 int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
@@ -279,7 +245,7 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 			  int stripeno);
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 			  struct lu_extent *ext, u64 *obd_start, u64 *obd_end);
-int lov_stripe_number(struct lov_stripe_md *lsm, int index, loff_t lov_off);
+int lov_stripe_number(struct lov_stripe_md *lsm, int index, u64 lov_off);
 pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
 			 pgoff_t stripe_index, int stripe);
 

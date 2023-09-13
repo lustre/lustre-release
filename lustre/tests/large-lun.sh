@@ -330,6 +330,22 @@ test_4 () {
 }
 run_test 4 "run llverfs on lustre filesystem"
 
+test_5() {
+	# Setup the Lustre filesystem.
+	log "setup the lustre filesystem"
+	REFORMAT="yes" check_and_setup_lustre
+
+	$LFS setstripe -C 1024 $MOUNT/$tfile || error "creating $MOUNT/$tfile"
+	stack_trap "rm -f $MOUNT/$tfile"
+
+	# Create a 32TB size file and write 4K every GB offset
+	log "run_llverdev $MOUNT/$tfile -p -c 4096 -s 32T"
+	run_llverdev $MOUNT/$tfile -o 18T -s 33554432 ||
+		error "llverdev failed with rc=$?"
+	stopall
+}
+run_test 5 "run llverdev on lustre filesystem"
+
 complete_test $SECONDS
 $LARGE_LUN_RESTORE_MOUNT && setupall
 check_and_cleanup_lustre

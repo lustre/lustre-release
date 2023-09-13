@@ -878,9 +878,9 @@ static int lov_io_iter_init(const struct lu_env *env,
 					/* need previous stripe involvement */
 					lio->lis_trunc_stripe_index[index] = prev;
 				} else {
-					tr_start = ext.e_start;
-					tr_start = lov_do_div64(tr_start,
-						      stripe_width(lsm, index));
+					div64_u64_rem(ext.e_start,
+						      stripe_width(lsm, index),
+						      &tr_start);
 					/* tr_start %= stripe_swidth */
 					if (tr_start == stripe * lsm->
 							lsm_entries[index]->
@@ -981,7 +981,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	if (lse->lsme_stripe_count > 1) {
 		unsigned long ssize = lse->lsme_stripe_size;
 
-		lov_do_div64(start, ssize);
+		start = div64_u64(start, ssize);
 		next = (start + 1) * ssize;
 		if (next <= start * ssize)
 			next = MAX_LFS_FILESIZE;

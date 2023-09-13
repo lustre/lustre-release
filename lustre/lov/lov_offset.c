@@ -37,26 +37,26 @@
 
 #include "lov_internal.h"
 
-loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index)
+u64 stripe_width(struct lov_stripe_md *lsm, unsigned int index)
 {
 	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
 
 	LASSERT(index < lsm->lsm_entry_count);
 
 	if (lsme_is_dom(entry))
-		return (loff_t)entry->lsme_stripe_size;
+		return entry->lsme_stripe_size;
 
-	return (loff_t)entry->lsme_stripe_size * entry->lsme_stripe_count;
+	return (u64)entry->lsme_stripe_size * entry->lsme_stripe_count;
 }
 
 /* compute object size given "stripeno" and the ost size */
 u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 		    int stripeno)
 {
-	unsigned long ssize = lsm->lsm_entries[index]->lsme_stripe_size;
-	unsigned long stripe_size;
-	loff_t swidth;
-	loff_t lov_size;
+	u32 ssize = lsm->lsm_entries[index]->lsme_stripe_size;
+	u32 stripe_size;
+	u64 swidth;
+	u64 lov_size;
 
 	ENTRY;
 
@@ -65,8 +65,7 @@ u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 
 	swidth = stripe_width(lsm, index);
 
-	/* lov_do_div64(a, b) returns a % b, and a = a / b */
-	stripe_size = lov_do_div64(ost_size, ssize);
+	ost_size = div_u64_rem(ost_size, ssize, &stripe_size);
 	if (stripe_size)
 		lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
 	else
@@ -143,9 +142,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 		      int stripeno, loff_t *obdoff)
 {
 	unsigned long ssize  = lsm->lsm_entries[index]->lsme_stripe_size;
-	loff_t stripe_off;
-	loff_t this_stripe;
-	loff_t swidth;
+	u64 stripe_off, this_stripe, swidth;
 	int ret = 0;
 
 	if (lov_off == OBD_OBJECT_EOF) {
@@ -155,10 +152,9 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 
 	swidth = stripe_width(lsm, index);
 
-	/* lov_do_div64(a, b) returns a % b, and a = a / b */
-	stripe_off = lov_do_div64(lov_off, swidth);
+	lov_off = div64_u64_rem(lov_off, swidth, &stripe_off);
 
-	this_stripe = (loff_t)stripeno * ssize;
+	this_stripe = (u64)stripeno * ssize;
 	if (stripe_off < this_stripe) {
 		stripe_off = 0;
 		ret = -1;
@@ -199,19 +195,18 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 			  int stripeno)
 {
 	unsigned long ssize = lsm->lsm_entries[index]->lsme_stripe_size;
-	loff_t stripe_off;
-	loff_t this_stripe;
-	loff_t swidth;
+	u64 stripe_off;
+	u64 this_stripe;
+	u64 swidth;
 
 	if (file_size == OBD_OBJECT_EOF)
 		return OBD_OBJECT_EOF;
 
 	swidth = stripe_width(lsm, index);
 
-	/* lov_do_div64(a, b) returns a % b, and a = a / b */
-	stripe_off = lov_do_div64(file_size, swidth);
+	file_size = div64_u64_rem(file_size, swidth, &stripe_off);
 
-	this_stripe = (loff_t)stripeno * ssize;
+	this_stripe = (u64)stripeno * ssize;
 	if (stripe_off < this_stripe) {
 		/* Move to end of previous stripe, or zero */
 		if (file_size > 0) {
@@ -291,18 +286,18 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 }
 
 /* compute which stripe number "lov_off" will be written into */
-int lov_stripe_number(struct lov_stripe_md *lsm, int index, loff_t lov_off)
+int lov_stripe_number(struct lov_stripe_md *lsm, int index, u64 lov_off)
 {
 	unsigned long ssize = lsm->lsm_entries[index]->lsme_stripe_size;
-	loff_t stripe_off;
-	loff_t swidth;
+	u64 stripe_off;
+	u64 swidth;
 
 	swidth = stripe_width(lsm, index);
 
-	stripe_off = lov_do_div64(lov_off, swidth);
+	lov_off = div64_u64_rem(lov_off, swidth, &stripe_off);
 
 	/* Puts stripe_off/ssize result into stripe_off */
-	lov_do_div64(stripe_off, ssize);
+	stripe_off = div_u64(stripe_off, ssize);
 
-	return stripe_off;
+	return (int) stripe_off;
 }
