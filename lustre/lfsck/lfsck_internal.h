@@ -1551,10 +1551,13 @@ lfsck_trans_create(const struct lu_env *env, struct dt_device *dev,
 		   struct lfsck_instance *lfsck)
 {
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN) {
+		static int count;
+
 		CERROR("%s: transaction is being created in DRYRUN mode!\n",
 		       lfsck_lfsck2name(lfsck));
 
-		dump_stack();
+		if (count++ < 3)
+			dump_stack();
 		return ERR_PTR(-EINVAL);
 	}
 
