@@ -22,7 +22,8 @@ export SK_S2S=${SK_S2S:-false}
 export SK_S2SNM=${SK_S2SNM:-TestFrameNM}
 export SK_S2SNMCLI=${SK_S2SNMCLI:-TestFrameNMCli}
 export SK_SKIPFIRST=${SK_SKIPFIRST:-true}
-export IDENTITY_UPCALL=default
+# whether identity upcall is enabled (true), disabled (false), or default
+export IDENTITY_UPCALL=${IDENTITY_UPCALL:-default}
 export QUOTA_AUTO=1
 export FLAKEY=${FLAKEY:-true}
 # specify environment variable containing batch job name for server statistics
@@ -317,7 +318,7 @@ init_test_env() {
 
 	export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
 	if [ ! -f "$L_GETIDENTITY" ]; then
-		if `which l_getidentity > /dev/null 2>&1`; then
+		if $(which l_getidentity > /dev/null 2>&1); then
 			export L_GETIDENTITY=$(which l_getidentity)
 		else
 			export L_GETIDENTITY=NONE
@@ -389,15 +390,6 @@ init_test_env() {
 		GSS=true
 		GSS_KRB5=true
 		;;
-	esac
-
-	case "x$IDUP" in
-		xtrue)
-			IDENTITY_UPCALL=true
-			;;
-		xfalse)
-			IDENTITY_UPCALL=false
-			;;
 	esac
 
 	export LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
@@ -5112,35 +5104,30 @@ umount_client() {
 	grep " $1 " /proc/mounts && zconf_umount $HOSTNAME $*
 }
 
-# return value:
-# 0: success, the old identity set already.
-# 1: success, the old identity does not set.
+# usage: switch_identity MDSNUM ENABLE_UPCALL
+#
+# return values:
+# 0: success, the identity upcall was previously enabled already.
+# 1: success, the identity upcall was previously disabled.
 # 2: fail.
 switch_identity() {
-    local num=$1
-    local switch=$2
-    local j=`expr $num - 1`
-    local MDT="`(do_facet mds$num lctl get_param -N mdt.*MDT*$j 2>/dev/null | cut -d"." -f2 2>/dev/null) || true`"
+	local num=$1
+	local enable=$2
+	local facet=mds$num
+	local MDT="$(mdtname_from_index $((num - 1)) $MOUNT)"
+	local upcall="$L_GETIDENTITY"
 
-    if [ -z "$MDT" ]; then
-        return 2
-    fi
+	[[ -n "$MDT" ]] || return 2
 
-    local old="`do_facet mds$num "lctl get_param -n mdt.$MDT.identity_upcall"`"
+	local param="mdt.$MDT.identity_upcall"
+	local old="$(do_facet $facet "lctl get_param -n $param")"
 
-    if $switch; then
-        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"$L_GETIDENTITY\""
-    else
-        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"NONE\""
-    fi
+	[[ "$enable" == "true" ]] || upcall="NONE"
 
-    do_facet mds$num "lctl set_param -n mdt/$MDT/identity_flush=-1"
+	do_facet $facet "lctl set_param -n $param='$upcall'" || return 2
+	do_facet $facet "lctl set_param -n mdt.$MDT.identity_flush=-1"
 
-    if [ $old = "NONE" ]; then
-        return 1
-    else
-        return 0
-    fi
+	[[ "$old" != "NONE" ]] # implicit "&& return 0 || return 1"
 }
 
 remount_client()
@@ -5200,7 +5187,7 @@ mountmds() {
 				eval $varname=$host
 			fi
 		done
-		if [ $IDENTITY_UPCALL != "default" ]; then
+		if [[ "$IDENTITY_UPCALL" != "default" ]]; then
 			switch_identity $num $IDENTITY_UPCALL
 		fi
 	done
