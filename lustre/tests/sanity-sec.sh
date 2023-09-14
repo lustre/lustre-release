@@ -96,12 +96,10 @@ else
 	echo "without GSS support"
 fi
 
-MDT=$(do_facet $SINGLEMDS lctl get_param -N "mdt.\*MDT0000" |
-	cut -d. -f2 || true)
-[ -z "$MDT" ] && error "fail to get MDT device" && exit 1
+MDT=$(mdtname_from_index 0 $MOUNT)
+[[ -z "$MDT" ]] && error "fail to get MDT0000 device name" && exit 1
 do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 IDENTITY_FLUSH=mdt.$MDT.identity_flush
-IDENTITY_UPCALL=mdt.$MDT.identity_upcall
 
 SAVE_PWD=$PWD
 
@@ -128,7 +126,7 @@ sec_login() {
 declare -a identity_old
 
 sec_setup() {
-	for num in $(seq $MDSCOUNT); do
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		switch_identity $num true || identity_old[$num]=$?
 	done
 
@@ -203,7 +201,7 @@ run_test 1 "setuid/gid ============================="
 # bug 3285 - supplementary group should always succeed.
 # NB: the supplementary groups are set for local client only,
 # as for remote client, the groups of the specified uid on MDT
-# will be obtained by upcall /sbin/l_getidentity and used.
+# will be obtained by upcall /usr/sbin/l_getidentity and used.
 test_4() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.6.93) ]] ||
 	[[ "$MDS1_VERSION" -ge $(version_code 2.5.35) &&
@@ -211,7 +209,7 @@ test_4() {
 		skip "Need MDS version at least 2.6.93 or 2.5.35"
 
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 -p $DIR/$tdir
 	chmod 0771 $DIR/$tdir
 	chgrp $ID0 $DIR/$tdir
 	$RUNAS_CMD -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
@@ -5122,8 +5120,8 @@ run_test 62 "e2fsck with encrypted files"
 log "cleanup: ======================================================"
 
 sec_unsetup() {
-	for num in $(seq $MDSCOUNT); do
-		if [ "${identity_old[$num]}" = 1 ]; then
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		if [[ "${identity_old[$num]}" == 1 ]]; then
 			switch_identity $num false || identity_old[$num]=$?
 		fi
 	done

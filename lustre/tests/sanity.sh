@@ -11543,7 +11543,7 @@ test_103a() {
 
 	declare -a identity_old
 
-	for num in $(seq $MDSCOUNT); do
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		switch_identity $num true || identity_old[$num]=$?
 	done
 
@@ -11606,8 +11606,8 @@ test_103a() {
 	cd $SAVE_PWD
 	umask $SAVE_UMASK
 
-	for num in $(seq $MDSCOUNT); do
-		if [ "${identity_old[$num]}" = 1 ]; then
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		if [[ "${identity_old[$num]}" == 1 ]]; then
 			switch_identity $num false || identity_old[$num]=$?
 		fi
 	done
