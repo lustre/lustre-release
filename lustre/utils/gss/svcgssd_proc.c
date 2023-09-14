@@ -63,9 +63,6 @@
 #include <gssapi/gssapi_krb5.h>
 #include <libcfs/util/param.h>
 
-#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
-#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
-
 struct svc_cred {
 	uint32_t cr_remote;
 	uint32_t cr_usr_root;
@@ -177,11 +174,6 @@ out:
 		printerr(LL_ERR, "ERROR: downcall failed\n");
 	return rc;
 }
-
-struct gss_verifier {
-	u_int32_t	flav;
-	gss_buffer_desc	body;
-};
 
 #define RPCSEC_GSS_SEQ_WIN	5
 

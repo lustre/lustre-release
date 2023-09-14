@@ -4051,29 +4051,6 @@ AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
 ]) # LC_HAVE_CLASS_CREATE_MODULE_ARG
 
 #
-# LC_HAVE_GET_EXPIRY_TIME64_T
-#
-# linux kernel v6.3-rc7-2433-gcf64b9bce950
-#   SUNRPC: return proper error from get_expiry()
-#
-AC_DEFUN([LC_SRC_HAVE_GET_EXPIRY_TIME64_T], [
-	LB2_LINUX_TEST_SRC([get_expiry_with_time64_t], [
-		#include <linux/sunrpc/cache.h>
-	],[
-		int err __attribute__ ((unused));
-
-		err = get_expiry((char **)NULL, (time64_t *)NULL);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_GET_EXPIRY_TIME64_T], [
-	AC_MSG_CHECKING([if 'get_expiry' needs a time64_t arg])
-	LB2_LINUX_TEST_RESULT([get_expiry_with_time64_t], [
-		AC_DEFINE(HAVE_GET_EXPIRY_2ARGS, 1,
-			['get_expiry' takes time64_t])
-	])
-]) # LC_HAVE_GET_EXPIRY_TIME64_T
-
-#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4336,7 +4313,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_IOV_ITER_IOVEC
 	LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG
-	LC_SRC_HAVE_GET_EXPIRY_TIME64_T
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4621,7 +4597,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_IOV_ITER_IOVEC
 	LC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_HAVE_CLASS_CREATE_MODULE_ARG
-	LC_HAVE_GET_EXPIRY_TIME64_T
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

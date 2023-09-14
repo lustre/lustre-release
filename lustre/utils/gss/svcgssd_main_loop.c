@@ -52,7 +52,6 @@
 #include "err_util.h"
 #include "sk_utils.h"
 
-#define GSS_RPC_FILE "/proc/net/rpc/auth.sptlrpc.init/channel"
 /* max allowed time for prime testing: 400 ms */
 #define MAX_ALLOWED_TIME_FOR_PRIME 400000
 int sk_dh_checks;
