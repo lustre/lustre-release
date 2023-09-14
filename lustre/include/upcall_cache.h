@@ -140,7 +140,7 @@ struct upcall_cache_ops {
 struct upcall_cache {
 	struct list_head	*uc_hashtable;
 	int			uc_hashsize;
-	spinlock_t		uc_lock;
+	rwlock_t		uc_lock;
 	struct rw_semaphore	uc_upcall_rwsem;
 
 	char			uc_name[40];		/* for upcall */
