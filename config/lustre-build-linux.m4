@@ -934,19 +934,20 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 ])
 
 #
-# LB2_LINUX_TEST_RESULT
+# LB2_MSG_LINUX_TEST_RESULT
 #
-# $1 - *unique* name matching the LB2_LINUX_TEST_SRC macro
-# $2 - run on success (valid .ko generated)
-# $3 - run on failure (unable to compile)
-# $4 - compile only
+# $1 - Message
+# $2 - *unique* name matching the LB2_LINUX_TEST_SRC macro
+# $3 - run on success (valid .ko generated)
+# $4 - run on failure (unable to compile)
+# $5 - compile only
 #
-AC_DEFUN([LB2_LINUX_TEST_RESULT],[
+AC_DEFUN([LB2_MSG_LINUX_TEST_RESULT],[
 	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
-	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_$1])
+	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_$2])
 	D="$(realpath ${TEST_DIR})"
-	T=${D}/$1_pc
-	O=${T}/$1_pc
+	T=${D}/$2_pc
+	O=${T}/$2_pc
 	AS_IF([test -d ${T}], [
 		# test source exists, was the compile test run?
 		AS_IF(AS_VAR_TEST_SET(lb_test), [], [
@@ -973,7 +974,7 @@ AC_DEFUN([LB2_LINUX_TEST_RESULT],[
 	],[
 		# test source does not exist:
 		AC_MSG_ERROR([
-*** No matching source for the "$1" test, check that
+*** No matching source for the "$2" test, check that
 *** both the test source and result macros refer to the same name.
 		])
 	])
@@ -981,23 +982,35 @@ AC_DEFUN([LB2_LINUX_TEST_RESULT],[
 	AS_IF(AS_VAR_TEST_SET(lb_test), [], [
 		# Fail if the compile was not done.
 		AS_IF([test -f ${O}.tested], [],
-			[AC_MSG_ERROR([*** Compile test for $1 was not run.])])
+			[AC_MSG_ERROR([*** Compile test for $2 was not run.])])
 		# Default is to expect only the <module>.o be generated.
 		NEED_KO=0
 		# Require the <module>.ko file when "module" is passed
-		AS_IF([test "X'$4'" == "X'module'"], [NEED_KO=1])
+		AS_IF([test "X'$5'" == "X'module'"], [NEED_KO=1])
 		# If test was compiled and if we got an object ...
 		AS_IF([test ${NEED_KO} -eq 0], [AS_IF([test ! -f ${O}.ko], [
 			AS_IF([test -f ${O}.o], [touch ${O}.ko])])])
 	])
 	# key is valid. Cache should be valid, set the variable
-	AC_CACHE_CHECK([for $1], lb_test,
+	AC_CACHE_CHECK([$1], lb_test,
 		AS_IF([test -f ${O}.ko],
 			AS_VAR_SET([lb_test], [yes]),
 			AS_VAR_SET([lb_test], [no])))
 	# Read the variable and run the caller's actions for yes (arg2) or no (arg3)
-	AS_VAR_IF([lb_test], [yes], $2, $3)
+	AS_VAR_IF([lb_test], [yes], $3, $4)
 	AS_VAR_POPDEF([lb_test])
+]) # LB3_LINUX_TEST_RESULT
+
+#
+# LB2_LINUX_TEST_RESULT
+#
+# $1 - *unique* name matching the LB2_LINUX_TEST_SRC macro
+# $2 - run on success (valid .ko generated)
+# $3 - run on failure (unable to compile)
+# $4 - compile only
+#
+AC_DEFUN([LB2_LINUX_TEST_RESULT],[
+	LB2_MSG_LINUX_TEST_RESULT([for $1], [$1], [$2], [$3], [$4])
 ]) # LB2_LINUX_TEST_RESULT
 
 #
@@ -1027,8 +1040,8 @@ AC_DEFUN([LB2_SRC_CHECK_CONFIG], [
 #   $3 - do 'no'
 #
 AC_DEFUN([LB2_TEST_CHECK_CONFIG], [
-	AC_MSG_CHECKING([if Linux kernel was built with CONFIG_$1])
-	LB2_LINUX_TEST_RESULT([config_$1], [
+	LB2_MSG_LINUX_TEST_RESULT([if Linux kernel was built with CONFIG_$1],
+	[config_$1], [
 		$2
 	],[
 		$3
@@ -1064,8 +1077,8 @@ AC_DEFUN([LB2_SRC_CHECK_CONFIG_IM], [
 #   $3 - do 'no'
 #
 AC_DEFUN([LB2_TEST_CHECK_CONFIG_IM], [
-	AC_MSG_CHECKING([if Linux kernel enabled CONFIG_$1 as built-in or module])
-	LB2_LINUX_TEST_RESULT([config_im_$1], [
+	LB2_MSG_LINUX_TEST_RESULT([if Linux kernel enabled CONFIG_$1 as built-in or module],
+	[config_im_$1], [
 		$2
 	],[
 		$3
@@ -1096,7 +1109,7 @@ AC_DEFUN([LB2_CHECK_LINUX_HEADER_SRC], [
 #   $3 - On Failure
 #
 AC_DEFUN([LB2_CHECK_LINUX_HEADER_RESULT], [
-	AC_MSG_CHECKING([for linux header $1])
 	UNIQUE_ID=$(echo $1 | tr /. __)
-	LB2_LINUX_TEST_RESULT([${UNIQUE_ID}], [$2], [$3])
+	LB2_MSG_LINUX_TEST_RESULT([for linux header $1], [${UNIQUE_ID}],
+				  [$2], [$3])
 ])

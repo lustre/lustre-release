@@ -205,8 +205,8 @@ AC_DEFUN([LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
 	],[],[],[ext4_free_blocks])
 ])
 AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
-AC_MSG_CHECKING([if 'ext4_free_blocks' needs 'struct buffer_head'])
-LB2_LINUX_TEST_RESULT([ext4_free_blocks_with_buffer_head], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'ext4_free_blocks' needs 'struct buffer_head'],
+	[ext4_free_blocks_with_buffer_head], [
 	AC_DEFINE(HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD, 1,
 		[ext4_free_blocks do not require struct buffer_head])
 	])
@@ -226,8 +226,8 @@ AC_DEFUN([LB_SRC_EXT4_JOURNAL_START_3ARGS], [
 	],[],[],[__ext4_journal_start_sb])
 ])
 AC_DEFUN([LB_EXT4_JOURNAL_START_3ARGS], [
-	AC_MSG_CHECKING([if ext4_journal_start takes 3 arguments])
-	LB2_LINUX_TEST_RESULT([ext4_journal_start], [
+	LB2_MSG_LINUX_TEST_RESULT([if ext4_journal_start takes 3 arguments],
+	[ext4_journal_start], [
 		AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1,
 			[ext4_journal_start takes 3 arguments])
 	])
@@ -260,8 +260,8 @@ AC_DEFUN([LB_SRC_EXT4_BREAD_4ARGS], [
 	],[],[],[ext4_bread])
 ])
 AC_DEFUN([LB_EXT4_BREAD_4ARGS], [
-	AC_MSG_CHECKING([if ext4_bread takes 4 arguments])
-	LB2_LINUX_TEST_RESULT([ext4_bread], [
+	LB2_MSG_LINUX_TEST_RESULT([if ext4_bread takes 4 arguments],
+	[ext4_bread], [
 		AC_DEFINE(HAVE_EXT4_BREAD_4ARGS, 1,
 			[ext4_bread takes 4 arguments])
 	])
@@ -285,8 +285,8 @@ AC_DEFUN([LB_SRC_EXT4_HAVE_INFO_DQUOT], [
 	])
 ])
 AC_DEFUN([LB_EXT4_HAVE_INFO_DQUOT], [
-	AC_MSG_CHECKING([if i_dquot is in ext4_inode_info])
-	LB2_LINUX_TEST_RESULT([ext4_info_dquot], [
+	LB2_MSG_LINUX_TEST_RESULT([if i_dquot is in ext4_inode_info],
+	[ext4_info_dquot], [
 		AC_DEFINE(HAVE_EXT4_INFO_DQUOT, 1,
 			[i_dquot is in ext4_inode_info])
 	])
@@ -316,8 +316,8 @@ AC_DEFUN([LB_SRC_EXT4_HAVE_I_CRYPT_INFO], [
 	])
 ])
 AC_DEFUN([LB_EXT4_HAVE_I_CRYPT_INFO], [
-	AC_MSG_CHECKING([if i_crypt_info is in ext4_inode_info])
-	LB2_LINUX_TEST_RESULT([ext4_i_crypt_info], [
+	LB2_MSG_LINUX_TEST_RESULT([if i_crypt_info is in ext4_inode_info],
+	[ext4_i_crypt_info], [
 		AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1,
 			[enable encryption for ldiskfs])
 		test_have_i_crypt_info=yes
@@ -352,8 +352,8 @@ AC_DEFUN([LB_SRC_LDISKFS_JOURNAL_ENSURE_CREDITS], [
 	],[-Werror],[],[__ext4_journal_ensure_credits])
 ])
 AC_DEFUN([LB_LDISKFS_JOURNAL_ENSURE_CREDITS], [
-	AC_MSG_CHECKING([if 'ext4_journal_ensure_credits' exists])
-	LB2_LINUX_TEST_RESULT([ext4_journal_ensure_credits], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'ext4_journal_ensure_credits' exists],
+	[ext4_journal_ensure_credits], [
 		AC_DEFINE(HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS, 1,
 			['ext4_journal_ensure_credits' exists])
 	])
@@ -375,8 +375,8 @@ AC_DEFUN([LB_SRC_LDISKFS_IGET_HAS_FLAGS_ARG], [
 	],[-Werror])
 ])
 AC_DEFUN([LB_LDISKFS_IGET_HAS_FLAGS_ARG], [
-	AC_MSG_CHECKING([if ldiskfs_iget takes a flags argument])
-	LB2_LINUX_TEST_RESULT([ext4_iget_3args], [
+	LB2_MSG_LINUX_TEST_RESULT([if ldiskfs_iget takes a flags argument],
+	[ext4_iget_3args], [
 		AC_DEFINE(HAVE_LDISKFS_IGET_WITH_FLAGS, 1,
 			[if ldiskfs_iget takes a flags argument])
 	])
@@ -441,8 +441,8 @@ AC_DEFUN([LB_SRC_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
 	],[-Werror])
 ])
 AC_DEFUN([LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
-	AC_MSG_CHECKING([if __ldiskfs_find_entry is available])
-	LB2_LINUX_TEST_RESULT([ldiskfs_find_entry_locked], [
+	LB2_MSG_LINUX_TEST_RESULT([if __ldiskfs_find_entry is available],
+	[ldiskfs_find_entry_locked], [
 		AC_DEFINE(HAVE___LDISKFS_FIND_ENTRY, 1,
 			[if __ldiskfs_find_entry is available])
 	])
@@ -464,8 +464,8 @@ AC_DEFUN([LB_SRC_LDISKFSFS_DIRHASH_WANTS_DIR], [
 	],[-Werror],[],[ext4fs_dirhash])
 ])
 AC_DEFUN([LB_LDISKFSFS_DIRHASH_WANTS_DIR], [
-	AC_MSG_CHECKING([if ldiskfsfs_dirhash takes an inode argument])
-	LB2_LINUX_TEST_RESULT([ext4fs_dirhash], [
+	LB2_MSG_LINUX_TEST_RESULT([if ldiskfsfs_dirhash takes an inode argument],
+	[ext4fs_dirhash], [
 		AC_DEFINE(HAVE_LDISKFSFS_DIRHASH_WITH_DIR, 1,
 			[if ldiskfsfs_dirhash takes an inode argument])
 	])
@@ -486,8 +486,8 @@ AC_DEFUN([LB_SRC_JBD2_H_TOTAL_CREDITS], [
 	],[-Werror])
 ])
 AC_DEFUN([LB_JBD2_H_TOTAL_CREDITS], [
-	AC_MSG_CHECKING([if struct jbd2_journal_handle has h_total_credits member])
-	LB2_LINUX_TEST_RESULT([handle_t_h_revoke_credits], [
+	LB2_MSG_LINUX_TEST_RESULT([if struct jbd2_journal_handle has h_total_credits member],
+	[handle_t_h_revoke_credits], [
 		AC_DEFINE(HAVE_JOURNAL_TOTAL_CREDITS, 1,
 			[struct jbd2_journal_handle has h_total_credits member])
 	])
@@ -525,8 +525,8 @@ AC_DEFUN([LB_SRC_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
 	],[-Werror],[],[])
 ])
 AC_DEFUN([LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS], [
-	AC_MSG_CHECKING([if jbd2_journal_get_max_txn_bufs is available])
-	LB2_LINUX_TEST_RESULT([jbd2_journal_get_max_txn_bufs], [
+	LB2_MSG_LINUX_TEST_RESULT([if jbd2_journal_get_max_txn_bufs is available],
+	[jbd2_journal_get_max_txn_bufs], [
 		AC_DEFINE(HAVE_JBD2_JOURNAL_GET_MAX_TXN_BUFS, 1,
 			[if jbd2_journal_get_max_txn_bufs is available])
 	])

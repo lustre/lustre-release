@@ -315,8 +315,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CREATE_ID_4A], [
-		AC_MSG_CHECKING([if 'rdma_create_id' wants four args])
-		LB2_LINUX_TEST_RESULT([rdma_create_id_4args], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_create_id' wants four args],
+		[rdma_create_id_4args], [
 			AC_DEFINE(HAVE_RDMA_CREATE_ID_4ARG, 1,
 				[rdma_create_id wants 4 args])
 		])
@@ -340,8 +340,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CREATE_ID_5A], [
-		AC_MSG_CHECKING([if 'rdma_create_id' wants five args])
-		LB2_LINUX_TEST_RESULT([rdma_create_id_5args], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_create_id' wants five args],
+		[rdma_create_id_5args], [
 			AC_DEFINE(HAVE_RDMA_CREATE_ID_5ARG, 1,
 				[rdma_create_id wants 5 args])
 		])
@@ -371,8 +371,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_CQ_INIT_ATTR], [
-		AC_MSG_CHECKING([if 'struct ib_cq_init_attr' is used])
-		LB2_LINUX_TEST_RESULT([ib_cq_init_attr], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_cq_init_attr' is used],
+		[ib_cq_init_attr], [
 			AC_DEFINE(HAVE_IB_CQ_INIT_ATTR, 1,
 				[struct ib_cq_init_attr is used by ib_create_cq])
 		])
@@ -396,8 +396,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_ALLOC_FAST_REG_MR], [
-		AC_MSG_CHECKING([if 'ib_alloc_fast_reg_mr' exists])
-		LB2_LINUX_TEST_RESULT([ib_alloc_fast_reg_mr], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'ib_alloc_fast_reg_mr' exists],
+		[ib_alloc_fast_reg_mr], [
 			AC_DEFINE(HAVE_IB_ALLOC_FAST_REG_MR, 1,
 				[ib_alloc_fast_reg_mr is defined])
 		])
@@ -422,8 +422,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_GET_DMA_MR], [
-		AC_MSG_CHECKING([if 'ib_get_dma_mr' exists])
-		LB2_LINUX_TEST_RESULT([ib_get_dma_mr], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'ib_get_dma_mr' exists],
+		[ib_get_dma_mr], [
 			AC_DEFINE(HAVE_IB_GET_DMA_MR, 1,
 				[ib_get_dma_mr is defined])
 		])
@@ -452,8 +452,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_RDMA_WR], [
-		AC_MSG_CHECKING([if 'struct ib_rdma_wr' is defined])
-		LB2_LINUX_TEST_RESULT([ib_rdma_wr], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_rdma_wr' is defined],
+		[ib_rdma_wr], [
 			AC_DEFINE(HAVE_IB_RDMA_WR, 1,
 				[struct ib_rdma_wr is defined])
 		])
@@ -478,8 +478,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	])
 	# new fast registration API introduced in 4.4
 	AC_DEFUN([LN_O2IB_IB_MAP_MR_SG_4A], [
-		AC_MSG_CHECKING([if 4arg 'ib_map_mr_sg' exists])
-		LB2_LINUX_TEST_RESULT([ib_map_mr_sg_4args], [
+		LB2_MSG_LINUX_TEST_RESULT([if 4arg 'ib_map_mr_sg' exists],
+		[ib_map_mr_sg_4args], [
 			AC_DEFINE(HAVE_IB_MAP_MR_SG, 1,
 				[ib_map_mr_sg exists])
 		])
@@ -504,8 +504,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_MAP_MR_SG_5A], [
-		AC_MSG_CHECKING([if 5arg 'ib_map_mr_sg' exists])
-		LB2_LINUX_TEST_RESULT([ib_map_mr_sg_5args], [
+		LB2_MSG_LINUX_TEST_RESULT([if 5arg 'ib_map_mr_sg' exists],
+		[ib_map_mr_sg_5args], [
 			AC_DEFINE(HAVE_IB_MAP_MR_SG, 1,
 				[ib_map_mr_sg exists])
 			AC_DEFINE(HAVE_IB_MAP_MR_SG_5ARGS, 1,
@@ -533,8 +533,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_DEVICE_ATTRS], [
-		AC_MSG_CHECKING([if 'struct ib_device' has member 'attrs'])
-		LB2_LINUX_TEST_RESULT([ib_device_attrs], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_device' has member 'attrs'],
+		[ib_device_attrs], [
 			AC_DEFINE(HAVE_IB_DEVICE_ATTRS, 1,
 				[struct ib_device.attrs is defined])
 		])
@@ -559,8 +559,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_ALLOC_PD], [
-		AC_MSG_CHECKING([if 2arg 'ib_alloc_pd' exists])
-		LB2_LINUX_TEST_RESULT([ib_alloc_pd], [
+		LB2_MSG_LINUX_TEST_RESULT([if 2arg 'ib_alloc_pd' exists],
+		[ib_alloc_pd], [
 			AC_DEFINE(HAVE_IB_ALLOC_PD_2ARGS, 1,
 				[ib_alloc_pd has 2 arguments])
 		])
@@ -583,8 +583,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_INC_RKEY], [
-		AC_MSG_CHECKING([if function 'ib_inc_rkey' is defined])
-		LB2_LINUX_TEST_RESULT([ib_inc_rkey], [
+		LB2_MSG_LINUX_TEST_RESULT([if function 'ib_inc_rkey' is defined],
+		[ib_inc_rkey], [
 			AC_DEFINE(HAVE_IB_INC_RKEY, 1,
 				  [function ib_inc_rkey exist])
 		])
@@ -611,8 +611,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_POST_SEND_CONST], [
-		AC_MSG_CHECKING([if 'ib_post_send() and ib_post_recv()' have const parameters])
-		LB2_LINUX_TEST_RESULT([ib_post_send_recv_const], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'ib_post_send() and ib_post_recv()' have const parameters],
+		[ib_post_send_recv_const], [
 			AC_DEFINE(HAVE_IB_POST_SEND_RECV_CONST, 1,
 				[ib_post_send and ib_post_recv have const parameters])
 		])
@@ -639,8 +639,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_SANE_IB_DMA_MAP_SG], [
-		AC_MSG_CHECKING([if ib_dma_map_sg() is sane])
-		LB2_LINUX_TEST_RESULT([sane_ib_dma_map_sg], [
+		LB2_MSG_LINUX_TEST_RESULT([if ib_dma_map_sg() is sane],
+		[sane_ib_dma_map_sg], [
 			AC_DEFINE(HAVE_SANE_IB_DMA_MAP_SG, 1,
 				[ib_dma_map_sg is sane])
 		],[],[module])
@@ -664,8 +664,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_DEVICE_OPS_EXISTS], [
-		AC_MSG_CHECKING([if struct ib_device_ops is defined])
-		LB2_LINUX_TEST_RESULT([ib_device_ops_test], [
+		LB2_MSG_LINUX_TEST_RESULT([if struct ib_device_ops is defined],
+		[ib_device_ops_test], [
 			AC_DEFINE(HAVE_IB_DEVICE_OPS, 1,
 				[if struct ib_device_ops is defined])
 		])
@@ -688,8 +688,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_SG_DMA_ADDRESS_EXISTS], [
-		AC_MSG_CHECKING([if ib_sg_dma_address wrapper exists])
-		LB2_LINUX_TEST_RESULT([ib_sg_dma_address_test], [
+		LB2_MSG_LINUX_TEST_RESULT([if ib_sg_dma_address wrapper exists],
+		[ib_sg_dma_address_test], [
 			AC_DEFINE(HAVE_IB_SG_DMA_ADDRESS, 1,
 				[if ib_sg_dma_address wrapper exists])
 		])
@@ -719,8 +719,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_REJECT], [
-		AC_MSG_CHECKING([if 4arg 'rdma_reject' exists])
-		LB2_LINUX_TEST_RESULT([rdma_reject], [
+		LB2_MSG_LINUX_TEST_RESULT([if 4arg 'rdma_reject' exists],
+		[rdma_reject], [
 			AC_DEFINE(HAVE_RDMA_REJECT_4ARGS, 1,
 				[rdma_reject has 4 arguments])
 		])
@@ -739,8 +739,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_FMR], [
-		AC_MSG_CHECKING([if FMR pools API available])
-		LB2_LINUX_TEST_RESULT([ib_fmr], [
+		LB2_MSG_LINUX_TEST_RESULT([if FMR pools API available],
+		[ib_fmr], [
 			AC_DEFINE(HAVE_FMR_POOL_API, 1,
 				[FMR pool API is available])
 		])
@@ -762,8 +762,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CONNECT_LOCKED], [
-		AC_MSG_CHECKING([if 'rdma_connect_locked' exists])
-		LB2_LINUX_TEST_RESULT([rdma_connect_locked], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_connect_locked' exists],
+		[rdma_connect_locked], [
 			AC_DEFINE(HAVE_RDMA_CONNECT_LOCKED, 1,
 				[rdma_connect_locked is defined])
 		])
@@ -782,8 +782,8 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_ETHTOOL_LINK_SETTINGS], [
-		AC_MSG_CHECKING([if 'ethtool_link_settings' exists])
-		LB2_LINUX_TEST_RESULT([ethtool_link_settings], [
+		LB2_MSG_LINUX_TEST_RESULT([if 'ethtool_link_settings' exists],
+		[ethtool_link_settings], [
 			AC_DEFINE(HAVE_ETHTOOL_LINK_SETTINGS, 1,
 				[ethtool_link_settings is defined])
 		])
@@ -954,8 +954,8 @@ AC_DEFUN([LN_SRC_CONFIG_SOCK_CREATE_KERN], [
 	],[-Werror])
 ])
 AC_DEFUN([LN_CONFIG_SOCK_CREATE_KERN], [
-	AC_MSG_CHECKING([if 'sock_create_kern' first parameter is net])
-	LB2_LINUX_TEST_RESULT([sock_create_kern_net], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'sock_create_kern' first parameter is net],
+	[sock_create_kern_net], [
 		AC_DEFINE(HAVE_SOCK_CREATE_KERN_USE_NET, 1,
 			[sock_create_kern use net as first parameter])
 	])
@@ -975,8 +975,8 @@ AC_DEFUN([LN_SRC_CONFIG_SK_DATA_READY], [
 	],[-Werror])
 ])
 AC_DEFUN([LN_CONFIG_SK_DATA_READY], [
-	AC_MSG_CHECKING([if 'sk_data_ready' takes only one argument])
-	LB2_LINUX_TEST_RESULT([sk_data_ready], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'sk_data_ready' takes only one argument],
+	[sk_data_ready], [
 	AC_DEFINE(HAVE_SK_DATA_READY_ONE_ARG, 1,
 		[sk_data_ready uses only one argument])
 	])
@@ -996,8 +996,8 @@ AC_DEFUN([LN_SRC_HAVE_HYPERVISOR_IS_TYPE], [
 	],[-Werror])
 ])
 AC_DEFUN([LN_HAVE_HYPERVISOR_IS_TYPE], [
-	AC_MSG_CHECKING([if hypervisor_is_type function is available])
-	LB2_LINUX_TEST_RESULT([hypervisor_is_type_exists], [
+	LB2_MSG_LINUX_TEST_RESULT([if hypervisor_is_type function is available],
+	[hypervisor_is_type_exists], [
 		AC_DEFINE(HAVE_HYPERVISOR_IS_TYPE, 1,
 			[hypervisor_is_type function exists])
 	])
@@ -1022,8 +1022,8 @@ AC_DEFUN([LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS], [
 	])
 ])
 AC_DEFUN([LN_HAVE_ORACLE_OFED_EXTENSIONS], [
-	AC_MSG_CHECKING([if Oracle OFED Extensions are enabled])
-	LB2_LINUX_TEST_RESULT([oracle_ofed_ext], [
+	LB2_MSG_LINUX_TEST_RESULT([if Oracle OFED Extensions are enabled],
+	[oracle_ofed_ext], [
 		AC_DEFINE(HAVE_ORACLE_OFED_EXTENSIONS, 1,
 			[if Oracle OFED Extensions are enabled])
 	])
@@ -1043,8 +1043,8 @@ AC_DEFUN([LN_SRC_CONFIG_SOCK_GETNAME], [
 	],[-Werror])
 ])
 AC_DEFUN([LN_CONFIG_SOCK_GETNAME], [
-	AC_MSG_CHECKING([if 'getname' has two args])
-	LB2_LINUX_TEST_RESULT([kern_sock_getname_2args], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'getname' has two args],
+	[kern_sock_getname_2args], [
 		AC_DEFINE(HAVE_KERN_SOCK_GETNAME_2ARGS, 1,
 			['getname' has two args])
 	])
@@ -1070,8 +1070,8 @@ AC_DEFUN([LN_SRC_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
 	],[-Werror])
 ])
 AC_DEFUN([LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
-	AC_MSG_CHECKING([if 'in_dev_for_each_ifa_rtnl' is defined])
-	LB2_LINUX_TEST_RESULT([in_dev_for_each_ifa_rtnl_test], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'in_dev_for_each_ifa_rtnl' is defined],
+	[in_dev_for_each_ifa_rtnl_test], [
 		AC_DEFINE(HAVE_IN_DEV_FOR_EACH_IFA_RTNL, 1,
 			['in_dev_for_each_ifa_rtnl' is defined])
 	])
