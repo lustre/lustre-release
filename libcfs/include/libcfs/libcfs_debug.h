@@ -306,8 +306,6 @@ do {									\
 	return;								\
 } while (0)
 
-void cfs_debug_init(void);
-
 static inline void cfs_tty_write_msg(const char *msg)
 {
 	struct tty_struct *tty;

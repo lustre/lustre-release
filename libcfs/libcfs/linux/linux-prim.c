@@ -46,9 +46,11 @@
 #include <asm/kgdb.h>
 #endif
 
+#include <lustre_compat.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
+#include <libcfs/linux/linux-mem.h>
 #ifndef HAVE_XARRAY_SUPPORT
 #include <libcfs/linux/xarray.h>
 #endif
@@ -119,6 +121,25 @@ int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 }
 EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
 
+/* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")
+ * CONFIG_ARCH_STACKWALK indicates that save_stack_trace_tsk symbol is not
+ * exported. Use symbol_get() to find if save_stack_trace_tsk is available.
+ */
+#ifdef CONFIG_ARCH_STACKWALK
+static unsigned int (*task_dump_stack_t)(struct task_struct *task,
+					 unsigned long *store,
+					 unsigned int size,
+					 unsigned int skipnr);
+
+int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
+			     unsigned int size, unsigned int skipnr)
+{
+	if (task_dump_stack_t)
+		return task_dump_stack_t(task, store, size, skipnr);
+	return 0;
+}
+#endif
+
 #ifndef HAVE_XARRAY_SUPPORT
 struct kmem_cache *xarray_cachep;
 
@@ -131,10 +152,66 @@ static void xarray_node_ctor(void *arg)
 }
 #endif
 
+/*
+ * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
+ * minimum changes needed to work on older kernels too.
+ */
+
+#ifndef llist_for_each_safe
+#define llist_for_each_safe(pos, n, node)                       \
+	for ((pos) = (node); (pos) && ((n) = (pos)->next, true); (pos) = (n))
+#endif
+
+struct vfree_deferred {
+	struct llist_head list;
+	struct work_struct wq;
+};
+static DEFINE_PER_CPU(struct vfree_deferred, vfree_deferred);
+
+static void free_work(struct work_struct *w)
+{
+	struct vfree_deferred *p = container_of(w, struct vfree_deferred, wq);
+	struct llist_node *t, *llnode;
+
+	llist_for_each_safe(llnode, t, llist_del_all(&p->list))
+		vfree((void *)llnode);
+}
+
+void libcfs_vfree_atomic(const void *addr)
+{
+	struct vfree_deferred *p = raw_cpu_ptr(&vfree_deferred);
+
+	if (!addr)
+		return;
+
+	if (llist_add((struct llist_node *)addr, &p->list))
+		schedule_work(&p->wq);
+}
+EXPORT_SYMBOL(libcfs_vfree_atomic);
+
+void __init init_libcfs_vfree_atomic(void)
+{
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct vfree_deferred *p;
+
+		p = &per_cpu(vfree_deferred, i);
+		init_llist_head(&p->list);
+		INIT_WORK(&p->wq, free_work);
+	}
+}
+
 void __init cfs_arch_init(void)
 {
+	init_libcfs_vfree_atomic();
+
 #ifndef HAVE_WAIT_VAR_EVENT
 	wait_bit_init();
+#endif
+#ifdef CONFIG_ARCH_STACKWALK
+	task_dump_stack_t =
+		(void *)cfs_kallsyms_lookup_name("stack_trace_save_tsk");
 #endif
 	cfs_apply_workqueue_attrs_t =
 		(void *)cfs_kallsyms_lookup_name("apply_workqueue_attrs");
@@ -144,6 +221,12 @@ void __init cfs_arch_init(void)
 					  SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
 					  xarray_node_ctor);
 #endif
+}
+
+void __exit cfs_arch_exit(void)
+{
+	/* exit_libcfs_vfree_atomic */
+	flush_scheduled_work();
 }
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,

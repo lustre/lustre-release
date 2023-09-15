@@ -502,27 +502,6 @@ static void cfs_print_stack_trace(unsigned long *entries, unsigned int nr)
 #define MAX_ST_ENTRIES	100
 static DEFINE_SPINLOCK(st_lock);
 
-/* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")
- * CONFIG_ARCH_STACKWALK indicates that save_stack_trace_tsk symbol is not
- * exported. Use symbol_get() to find if save_stack_trace_tsk is available.
- */
-#ifdef CONFIG_ARCH_STACKWALK
-typedef unsigned int (stack_trace_save_tsk_t)(struct task_struct *task,
-					      unsigned long *store,
-					      unsigned int size,
-					      unsigned int skipnr);
-static stack_trace_save_tsk_t *task_dump_stack;
-#endif
-
-void __init cfs_debug_init(void)
-{
-#ifdef CONFIG_ARCH_STACKWALK
-	task_dump_stack = (void *)
-			cfs_kallsyms_lookup_name("stack_trace_save_tsk");
-
-#endif
-}
-
 static void libcfs_call_trace(struct task_struct *tsk)
 {
 	static unsigned long entries[MAX_ST_ENTRIES];
@@ -533,10 +512,8 @@ static void libcfs_call_trace(struct task_struct *tsk)
 	pr_info("Pid: %d, comm: %.20s %s %s\n", tsk->pid, tsk->comm,
 		init_utsname()->release, init_utsname()->version);
 	pr_info("Call Trace TBD:\n");
-	if (task_dump_stack) {
-		nr_entries = task_dump_stack(tsk, entries, MAX_ST_ENTRIES, 0);
-		cfs_print_stack_trace(entries, nr_entries);
-	}
+	nr_entries = cfs_stack_trace_save_tsk(tsk, entries, MAX_ST_ENTRIES, 0);
+	cfs_print_stack_trace(entries, nr_entries);
 	spin_unlock(&st_lock);
 #else
 	struct stack_trace trace;
