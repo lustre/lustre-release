@@ -277,6 +277,26 @@ out:
 }
 EXPORT_SYMBOL(upcall_cache_get_entry);
 
+void upcall_cache_get_entry_raw(struct upcall_cache_entry *entry)
+{
+	get_entry(entry);
+}
+EXPORT_SYMBOL(upcall_cache_get_entry_raw);
+
+void upcall_cache_update_entry(struct upcall_cache *cache,
+			       struct upcall_cache_entry *entry,
+			       time64_t expire, int state)
+{
+	spin_lock(&cache->uc_lock);
+	entry->ue_expire = expire;
+	if (!state)
+		UC_CACHE_SET_VALID(entry);
+	else
+		entry->ue_flags |= state;
+	spin_unlock(&cache->uc_lock);
+}
+EXPORT_SYMBOL(upcall_cache_update_entry);
+
 void upcall_cache_put_entry(struct upcall_cache *cache,
 			    struct upcall_cache_entry *entry)
 {

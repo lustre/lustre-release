@@ -127,6 +127,10 @@ struct upcall_cache {
 
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 						  __u64 key, void *args);
+void upcall_cache_get_entry_raw(struct upcall_cache_entry *entry);
+void upcall_cache_update_entry(struct upcall_cache *cache,
+			       struct upcall_cache_entry *entry,
+			       time64_t expire, int state);
 void upcall_cache_put_entry(struct upcall_cache *cache,
 			    struct upcall_cache_entry *entry);
 int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
