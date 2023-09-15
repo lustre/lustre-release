@@ -310,8 +310,10 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 				continue;
 			}
 		}
-		if (!nr)
+		if (!nr) {
+			free(buf);
 			return result;
+		}
 	}
 
 	while (!eof) {

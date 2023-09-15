@@ -1728,10 +1728,12 @@ int lr_replicate(void)
 	rc = 0;
 
 out:
-	if (info)
-		free(info);
+	if (changelog_priv)
+		free(changelog_priv);
 	if (ext)
 		free(ext);
+	if (info)
+		free(info);
 
 	return rc;
 }
