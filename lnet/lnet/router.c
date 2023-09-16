@@ -874,12 +874,13 @@ lnet_del_route(__u32 net, struct lnet_nid *gw)
 		LASSERT(lp);
 		gw_nid = lp->lp_primary_nid;
 		gw = &gw_nid;
-		lnet_peer_ni_decref_locked(lpni);
 	}
 
 	if (net != LNET_NET_ANY) {
 		rnet = lnet_find_rnet_locked(net);
 		if (!rnet) {
+			if (lpni)
+				lnet_peer_ni_decref_locked(lpni);
 			lnet_net_unlock(LNET_LOCK_EX);
 			return -ENOENT;
 		}
@@ -912,6 +913,7 @@ delete_zombies:
 	if (lpni) {
 		if (list_empty(&lp->lp_routes))
 			lp->lp_disc_net_id = 0;
+		lnet_peer_ni_decref_locked(lpni);
 	}
 
 	lnet_net_unlock(LNET_LOCK_EX);
