@@ -2425,7 +2425,7 @@ static inline struct cl_page *cl_page_list_first(struct cl_page_list *plist)
 
 void cl_page_list_init(struct cl_page_list *plist);
 void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page,
-		      bool get_ref);
+		      bool getref);
 void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
 		       struct cl_page *page);
 void cl_page_list_move_head(struct cl_page_list *dst, struct cl_page_list *src,
@@ -2433,7 +2433,8 @@ void cl_page_list_move_head(struct cl_page_list *dst, struct cl_page_list *src,
 void cl_page_list_splice(struct cl_page_list *list,
 			 struct cl_page_list *head);
 void cl_page_list_del(const struct lu_env *env,
-		      struct cl_page_list *plist, struct cl_page *page);
+		      struct cl_page_list *plist, struct cl_page *page,
+		      bool putref);
 void cl_page_list_disown(const struct lu_env *env,
 			 struct cl_page_list *plist);
 void cl_page_list_assume(const struct lu_env *env,

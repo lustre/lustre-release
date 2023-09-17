@@ -830,7 +830,7 @@ EXPORT_SYMBOL(cl_page_list_init);
  * Adds a page to a page list.
  */
 void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page,
-		      bool get_ref)
+		      bool getref)
 {
 	ENTRY;
 	/* it would be better to check that page is owned by "current" io, but
@@ -841,7 +841,7 @@ void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page,
 	list_add_tail(&page->cp_batch, &plist->pl_pages);
 	++plist->pl_nr;
 	lu_ref_add_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
-	if (get_ref)
+	if (getref)
 		cl_page_get(page);
 	EXIT;
 }
@@ -851,7 +851,8 @@ EXPORT_SYMBOL(cl_page_list_add);
  * Removes a page from a page list.
  */
 void cl_page_list_del(const struct lu_env *env,
-		      struct cl_page_list *plist, struct cl_page *page)
+		      struct cl_page_list *plist, struct cl_page *page,
+		      bool putref)
 {
 	LASSERT(plist->pl_nr > 0);
 
@@ -859,7 +860,8 @@ void cl_page_list_del(const struct lu_env *env,
 	list_del_init(&page->cp_batch);
 	--plist->pl_nr;
 	lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
-	cl_page_put(env, page);
+	if (putref)
+		cl_page_put(env, page);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_del);
@@ -965,7 +967,7 @@ void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist)
 
 	ENTRY;
 	cl_page_list_for_each_safe(page, temp, plist)
-		cl_page_list_del(env, plist, page);
+		cl_page_list_del(env, plist, page, true);
 	LASSERT(plist->pl_nr == 0);
 	EXIT;
 }
@@ -1204,7 +1206,8 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		struct cl_page *page = cl_page_list_first(&sdio->csd_pages);
 
 		cl_page_delete(env, page);
-		cl_page_list_del(env, &sdio->csd_pages, page);
+		cl_page_list_del(env, &sdio->csd_pages, page, false);
+		cl_page_put(env, page);
 	}
 
 	if (sdio->csd_unaligned) {

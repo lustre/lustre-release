@@ -1774,7 +1774,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		rc = cl_sync_io_wait(env, anchor, 0);
 
 		cl_page_assume(env, io, page);
-		cl_page_list_del(env, &queue->c2_qout, page);
+		cl_page_list_del(env, &queue->c2_qout, page, true);
 
 		if (!PageUptodate(cl_page_vmpage(page))) {
 			/* Failed to read a mirror, discard this page so that

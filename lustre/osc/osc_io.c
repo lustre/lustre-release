@@ -208,7 +208,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 		if (page->cp_sync_io != NULL)
 			cl_page_list_move(qout, qin, page);
 		else /* async IO */
-			cl_page_list_del(env, qin, page);
+			cl_page_list_del(env, qin, page, true);
 
 		queued++;
 		if (queued == max_pages) {
@@ -356,7 +356,7 @@ int osc_io_commit_async(const struct lu_env *env,
 		osc_page_touch_at(env, osc2cl(osc), osc_index(opg),
 				  page == last_page ? to : PAGE_SIZE);
 
-		cl_page_list_del(env, qin, page);
+		cl_page_list_del(env, qin, page, true);
 
 		/* if there are no more slots, do the callback & reinit */
 		if (pagevec_add(pvec, page->cp_vmpage) == 0) {

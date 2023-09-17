@@ -980,7 +980,7 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 
 		while (plist->pl_nr > 0) {
 			page = cl_page_list_first(plist);
-			cl_page_list_del(env, plist, page);
+			cl_page_list_del(env, plist, page, true);
 
 			cl_page_clip(env, page, 0, PAGE_SIZE);
 
@@ -1249,7 +1249,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	 * unless they were dirtied before. */
 	while (queue->pl_nr > 0) {
 		page = cl_page_list_first(queue);
-		cl_page_list_del(env, queue, page);
+		cl_page_list_del(env, queue, page, true);
 
 		if (!PageDirty(cl_page_vmpage(page)))
 			cl_page_discard(env, io, page);
