@@ -139,7 +139,8 @@ MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment suppor
  *  4. Look at the comments in kiblnd_fmr_map_tx() for an explanation of
  *     the behavior when transmit with GAPS verses contiguous.
  */
-#ifdef HAVE_IB_GET_DMA_MR
+
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 #define MOD_STR "map on demand"
 #else
 #define MOD_STR "map on demand (obsolete)"
@@ -269,7 +270,7 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	if (tunables->lnd_map_on_demand == UINT_MAX)
 		tunables->lnd_map_on_demand = map_on_demand;
 
-#ifndef HAVE_IB_GET_DMA_MR
+#ifndef HAVE_OFED_IB_GET_DMA_MR
 	/*
 	 * For kernels which do not support global memory regions, always
 	 * enable map_on_demand

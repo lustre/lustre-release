@@ -166,7 +166,7 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 	struct kib_conn *conn = rx->rx_conn;
 	struct kib_net *net = conn->ibc_peer->ibp_ni->ni_data;
 	struct ib_recv_wr *bad_wrq = NULL;
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 	struct ib_mr *mr = conn->ibc_hdev->ibh_mrs;
 #endif
 	int rc;
@@ -176,7 +176,7 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 	LASSERT (credit == IBLND_POSTRX_NO_CREDIT ||
 		 credit == IBLND_POSTRX_PEER_CREDIT ||
 		 credit == IBLND_POSTRX_RSRVD_CREDIT);
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 	LASSERT(mr != NULL);
 
 	rx->rx_sge.lkey   = mr->lkey;
@@ -205,7 +205,7 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 	 * own this rx (and rx::rx_conn) anymore, LU-5678.
 	 */
 	kiblnd_conn_addref(conn);
-#ifdef HAVE_IB_POST_SEND_RECV_CONST
+#ifdef HAVE_OFED_IB_POST_SEND_RECV_CONST
 	rc = ib_post_recv(conn->ibc_cmid->qp, &rx->rx_wrq,
 			  (const struct ib_recv_wr **)&bad_wrq);
 #else
@@ -603,7 +603,7 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 		return -EPROTONOSUPPORT;
 	}
 
-#ifdef HAVE_FMR_POOL_API
+#ifdef HAVE_OFED_FMR_POOL_API
 	/*
 	 * FMR does not support gaps but the tx has gaps then
 	 * we should make sure that the number of fragments we'll be sending
@@ -642,13 +642,13 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 	 * the fragments in one FastReg or FMR fragment.
 	 */
 	if (
-#ifdef HAVE_FMR_POOL_API
+#ifdef HAVE_OFED_FMR_POOL_API
 	    ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
 	     && !tx->tx_gaps) ||
 #endif
 	    IS_FAST_REG_DEV(dev)) {
 		/* FMR requires zero based address */
-#ifdef HAVE_FMR_POOL_API
+#ifdef HAVE_OFED_FMR_POOL_API
 		if (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
 			rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
 #endif
@@ -673,7 +673,7 @@ static void
 kiblnd_unmap_tx(struct kib_tx *tx)
 {
 	if (
-#ifdef HAVE_FMR_POOL_API
+#ifdef HAVE_OFED_FMR_POOL_API
 		tx->tx_fmr.fmr_pfmr ||
 #endif
 		tx->tx_fmr.fmr_frd)
@@ -685,7 +685,7 @@ kiblnd_unmap_tx(struct kib_tx *tx)
 	}
 }
 
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 static struct ib_mr *
 kiblnd_find_rd_dma_mr(struct lnet_ni *ni, struct kib_rdma_desc *rd)
 {
@@ -702,7 +702,7 @@ kiblnd_find_rd_dma_mr(struct lnet_ni *ni, struct kib_rdma_desc *rd)
 	 * dead in the water and fail the operation.
 	 */
 	if (tunables->lnd_map_on_demand && (IS_FAST_REG_DEV(net->ibn_dev)
-#ifdef HAVE_FMR_POOL_API
+#ifdef HAVE_OFED_FMR_POOL_API
 	     || net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED
 #endif
 	))
@@ -722,7 +722,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 {
 	struct kib_net *net = ni->ni_data;
 	struct kib_hca_dev *hdev = net->ibn_dev->ibd_hdev;
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 	struct ib_mr *mr = NULL;
 #endif
 	__u32 nob;
@@ -742,7 +742,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
                 nob += rd->rd_frags[i].rf_nob;
         }
 
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 	mr = kiblnd_find_rd_dma_mr(ni, rd);
 	if (mr != NULL) {
 		/* found pre-mapping MR */
@@ -946,7 +946,7 @@ __must_hold(&conn->ibc_lock)
 		if (lnet_send_error_simulation(tx->tx_lntmsg[0], &tx->tx_hstatus))
 			rc = -EINVAL;
 		else
-#ifdef HAVE_IB_POST_SEND_RECV_CONST
+#ifdef HAVE_OFED_IB_POST_SEND_RECV_CONST
 			rc = ib_post_send(conn->ibc_cmid->qp, wr,
 					  (const struct ib_send_wr **)&bad);
 #else
@@ -1131,12 +1131,12 @@ kiblnd_init_tx_sge(struct kib_tx *tx, u64 addr, unsigned int len)
 {
 	struct ib_sge *sge = &tx->tx_sge[tx->tx_nsge];
 	struct kib_hca_dev *hdev = tx->tx_pool->tpo_hdev;
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 	struct ib_mr *mr = hdev->ibh_mrs;
 #endif
 
 	*sge = (struct ib_sge) {
-#ifdef HAVE_IB_GET_DMA_MR
+#ifdef HAVE_OFED_IB_GET_DMA_MR
 		.lkey   = mr->lkey,
 #else
 		.lkey   = hdev->ibh_pd->local_dma_lkey,
@@ -1243,7 +1243,7 @@ kiblnd_init_rdma(struct kib_conn *conn, struct kib_tx *tx, int type,
 			wrq->wr.opcode	= IB_WR_RDMA_WRITE;
 			wrq->wr.send_flags = 0;
 
-#ifdef HAVE_IB_RDMA_WR
+#ifdef HAVE_OFED_IB_RDMA_WR
 			wrq->remote_addr	= kiblnd_rd_frag_addr(dstrd,
 								      dstidx);
 			wrq->rkey		= kiblnd_rd_frag_key(dstrd,
@@ -2486,7 +2486,7 @@ kiblnd_reject(struct rdma_cm_id *cmid, struct kib_rej *rej)
 {
         int          rc;
 
-#ifdef HAVE_RDMA_REJECT_4ARGS
+#ifdef HAVE_OFED_RDMA_REJECT_4ARGS
 	rc = rdma_reject(cmid, rej, sizeof(*rej), IB_CM_REJ_CONSUMER_DEFINED);
 #else
         rc = rdma_reject(cmid, rej, sizeof(*rej));
