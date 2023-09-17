@@ -452,6 +452,8 @@ debs: undef.h debs_common
 			export IB_OPTIONS="--with-o2ib=yes"; \
 		fi; \
 	fi; \
+	sed "s/_KVERS_/$(LINUXRELEASE)/g" debian/lustre-tests.install.in \
+		> debian/lustre-tests.install; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		cp $$debiantmp/control.bkp debian/control || true && \

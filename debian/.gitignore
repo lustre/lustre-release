@@ -1,6 +1,7 @@
 /*.log
 /*.substvars
 /.debhelper
+/changelog
 /files
 /lustre-dev
 /lustre-source
@@ -11,4 +12,5 @@
 /lustre-*-utils
 /lustre-server-utils.install
 /lustre-client-utils.install
+/lustre-tests.install
 /tmp
