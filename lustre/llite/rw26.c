@@ -366,12 +366,13 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		   int rw, struct inode *inode, struct cl_sub_dio *sdio)
 {
 	struct ll_dio_pages *pv = &sdio->csd_dio_pages;
-	struct cl_page    *page;
-	struct cl_2queue  *queue = &io->ci_queue;
-	struct cl_object  *obj = io->ci_obj;
 	struct cl_sync_io *anchor = &sdio->csd_sync;
-	loff_t offset   = pv->ldp_file_offset;
-	int io_pages    = 0;
+	struct cl_2queue *queue = &io->ci_queue;
+	struct cl_object *obj = io->ci_obj;
+	struct cl_page *page;
+	int iot = rw == READ ? CRT_READ : CRT_WRITE;
+	loff_t offset = pv->ldp_file_offset;
+	int io_pages = 0;
 	ssize_t rc = 0;
 	int i = 0;
 
@@ -384,10 +385,8 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 
 		page = cl_page_find(env, obj, offset >> PAGE_SHIFT,
 				    pv->ldp_pages[i], CPT_TRANSIENT);
-		if (IS_ERR(page)) {
-			rc = PTR_ERR(page);
-			break;
-		}
+		if (IS_ERR(page))
+			GOTO(out, rc = PTR_ERR(page));
 
 		LASSERT(page->cp_type == CPT_TRANSIENT);
 		rc = cl_page_own(env, io, page);
@@ -427,37 +426,34 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	/* on success, we should hit every page in the pvec and have no bytes
 	 * left in 'size'
 	 */
-	LASSERT(ergo(rc == 0, i == pv->ldp_count));
-	LASSERT(ergo(rc == 0, size == 0));
+	LASSERT(i == pv->ldp_count);
+	LASSERT(size == 0);
 
-	if (rc == 0 && io_pages > 0) {
-		int iot = rw == READ ? CRT_READ : CRT_WRITE;
-
-		atomic_add(io_pages, &anchor->csi_sync_nr);
-		/*
-		 * Avoid out-of-order execution of adding inflight
-		 * modifications count and io submit.
-		 */
-		smp_mb();
-		rc = cl_io_submit_rw(env, io, iot, queue);
-		if (rc == 0) {
-			cl_page_list_splice(&queue->c2_qout, &sdio->csd_pages);
-		} else {
-			atomic_add(-queue->c2_qin.pl_nr,
-				   &anchor->csi_sync_nr);
-			cl_page_list_for_each(page, &queue->c2_qin)
-				page->cp_sync_io = NULL;
-		}
-		/* handle partially submitted reqs */
-		if (queue->c2_qin.pl_nr > 0) {
-			CERROR(DFID " failed to submit %d dio pages: %zd\n",
-			       PFID(lu_object_fid(&obj->co_lu)),
-			       queue->c2_qin.pl_nr, rc);
-			if (rc == 0)
-				rc = -EIO;
-		}
+	atomic_add(io_pages, &anchor->csi_sync_nr);
+	/*
+	 * Avoid out-of-order execution of adding inflight
+	 * modifications count and io submit.
+	 */
+	smp_mb();
+	rc = cl_io_submit_rw(env, io, iot, queue);
+	if (rc == 0) {
+		cl_page_list_splice(&queue->c2_qout, &sdio->csd_pages);
+	} else {
+		atomic_add(-queue->c2_qin.pl_nr,
+			   &anchor->csi_sync_nr);
+		cl_page_list_for_each(page, &queue->c2_qin)
+			page->cp_sync_io = NULL;
+	}
+	/* handle partially submitted reqs */
+	if (queue->c2_qin.pl_nr > 0) {
+		CERROR(DFID " failed to submit %d dio pages: %zd\n",
+		       PFID(lu_object_fid(&obj->co_lu)),
+		       queue->c2_qin.pl_nr, rc);
+		if (rc == 0)
+			rc = -EIO;
 	}
 
+out:
 	cl_2queue_discard(env, io, queue);
 	cl_2queue_disown(env, queue);
 	cl_2queue_fini(env, queue);
