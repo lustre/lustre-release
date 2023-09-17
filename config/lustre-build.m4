@@ -530,6 +530,31 @@ elif test x$enable_crypto = xno ; then
 	RPMBINARGS="$RPMBINARGS --without crypto"
 	AC_SUBST(ENABLE_CRYPTO, no)
 fi
+if test x$enable_multiple_lnds = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with multiple_lnds"
+else
+	RPMBINARGS="$RPMBINARGS --without multiple_lnds"
+fi
+if test x$EXTERNAL_KO2IBLND = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with mofed"
+else
+	RPMBINARGS="$RPMBINARGS --without mofed"
+fi
+if test x$BUILT_IN_KO2IBLND = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with o2ib"
+else
+	RPMBINARGS="$RPMBINARGS --without o2ib"
+fi
+if test x$KFILND = xkfilnd ; then
+	RPMBINARGS="$RPMBINARGS --with kfi"
+else
+	RPMBINARGS="$RPMBINARGS --without kfi"
+fi
+if test x$ENABLE_GNI = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with gni"
+else
+	RPMBINARGS="$RPMBINARGS --without gni"
+fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
 fi

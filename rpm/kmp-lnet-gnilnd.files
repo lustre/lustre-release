@@ -1,0 +1,3 @@
+%defattr(-,root,root)
+%dir %{modules_fs_path}/%{lustre_name}/net
+%{modules_fs_path}/%{lustre_name}/net/kgnilnd.ko

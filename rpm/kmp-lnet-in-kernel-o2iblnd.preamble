@@ -1,0 +1,10 @@
+Summary:        Lustre LNet o2iblnd for in-kernel OFED
+License:        GPL-2.0-only
+%if 0%{?suse_version} > 1
+Requires:       kernel-%1
+%endif
+Provides:       %{name}-lnet-in-kernel-o2iblnd = %{version}
+Obsoletes:      %{name}-lnet-in-kernel-o2iblnd < %{version}
+# Common package name
+Provides:       %{name}-lnet-o2iblnd = %{version}
+Obsoletes:      %{name}-lnet-o2iblnd < %{version}

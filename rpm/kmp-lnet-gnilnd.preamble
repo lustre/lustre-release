@@ -1,0 +1,7 @@
+Summary:        Lustre LNet gnilnd
+License:        GPL-2.0-only
+%if 0%{?suse_version} > 1
+Requires:       kernel-%1
+%endif
+Provides:       %{name}-lnet-gnilnd = %{version}
+Obsoletes:      %{name}-lnet-gnilnd < %{version}
