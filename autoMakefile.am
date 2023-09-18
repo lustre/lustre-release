@@ -455,7 +455,8 @@ debs: undef.h debs_common
 	fi; \
 	sed "s/_KVERS_/$(LINUXRELEASE)/g" debian/lustre-tests.install.in \
 		> debian/lustre-tests.install; \
-	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
+	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`; \
+	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || { \
 		rc=$${PIPESTATUS[0]}; \
 		cp $$debiantmp/control.bkp debian/control || true && \
 		cp $$debiantmp/control.main.bkp debian/control.main || true && \
@@ -511,10 +512,11 @@ dkms-debs: undef.h debs_common
 	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
+	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`; \
 	echo "Kernel Source: $${KERNEL_SRC}"; \
 	echo "Kernel Object: $${KERNEL_OBJ}"; \
 	export BUILD_DKMS="true" && \
-	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
+	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
 		exit 0; \
