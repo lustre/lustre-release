@@ -2936,7 +2936,7 @@ static int ll_do_fiemap(struct inode *inode, struct fiemap *fiemap,
 
 	/* Check for FIEMAP_FLAG_SYNC */
 	if (fiemap->fm_flags & FIEMAP_FLAG_SYNC) {
-		rc = filemap_fdatawrite(inode->i_mapping);
+		rc = filemap_write_and_wait(inode->i_mapping);
 		if (rc)
 			return rc;
 	}
