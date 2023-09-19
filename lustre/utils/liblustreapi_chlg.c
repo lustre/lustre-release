@@ -153,7 +153,9 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 
 	if (flags & CHANGELOG_FLAG_FOLLOW) {
 		int rc;
-		rc = ioctl(cp->clp_fd, OBD_IOC_CHLG_POLL, 1);
+
+		rc = ioctl(cp->clp_fd, OBD_IOC_CHLG_SET_FLAGS,
+			   CHANGELOG_FLAG_FOLLOW);
 		if (rc < 0)
 			llapi_err_noerrno(LLAPI_MSG_ERROR, "can't enable "
 					  "CHANGELOG_FLAG_FOLLOW");
