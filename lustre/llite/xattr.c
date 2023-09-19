@@ -77,7 +77,7 @@ static int xattr_type_filter(struct ll_sb_info *sbi,
 	if ((handler->flags == XATTR_ACL_ACCESS_T ||
 	     handler->flags == XATTR_ACL_DEFAULT_T) &&
 	    !test_bit(LL_SBI_ACL, sbi->ll_flags))
-                return -EOPNOTSUPP;
+		return -EOPNOTSUPP;
 
 	if (handler->flags == XATTR_USER_T &&
 	    !test_bit(LL_SBI_USER_XATTR, sbi->ll_flags))
@@ -108,8 +108,8 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	ktime_t kstart = ktime_get();
 	u64 valid;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(inode);
 
@@ -222,7 +222,8 @@ static int get_hsm_state(struct inode *inode, u32 *hus_states)
 	return rc;
 }
 
-static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump, size_t size)
+static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump,
+			 size_t size)
 {
 	struct lov_comp_md_v1 *comp_v1 = (struct lov_comp_md_v1 *)lump;
 	struct lov_user_md *v1 = lump;
@@ -396,12 +397,12 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 		  size_t size, u64 valid)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *req = NULL;
-        void *xdata;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ptlrpc_request *req = NULL;
+	void *xdata;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* This check is required for compatibility with 2.14, in which
 	 * encryption context is stored in security.c xattr. Accessing the
 	 * encryption context should only be possible by llcrypt.
@@ -457,8 +458,7 @@ getxattr_nocache:
 
 out_xattr:
 	if (rc == -EOPNOTSUPP && type == XATTR_USER_T) {
-		LCONSOLE_INFO("%s: disabling user_xattr feature because "
-			      "it is not supported on the server: rc = %d\n",
+		LCONSOLE_INFO("%s: disabling user_xattr feature because it is not supported on the server: rc = %d\n",
 			      sbi->ll_fsname, rc);
 		clear_bit(LL_SBI_USER_XATTR, sbi->ll_flags);
 	}
@@ -579,9 +579,12 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		case LOV_MAGIC_FOREIGN:
 			goto out_env;
 		default:
-			CERROR("Invalid LOV magic %08x\n",
-			       ((struct lov_mds_md *)buf)->lmm_magic);
-			GOTO(out_env, rc = -EINVAL);
+			rc = -EINVAL;
+			CERROR("%s: bad LOV magic %08x on "DFID": rc = %zd\n",
+			       ll_i2sbi(inode)->ll_fsname,
+			       ((struct lov_mds_md *)buf)->lmm_magic,
+			       PFID(ll_inode2fid(inode)), rc);
+			GOTO(out_env, rc);
 		}
 
 out_env:
