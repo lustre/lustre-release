@@ -2055,6 +2055,8 @@ nodemap_exercise_fileset() {
 	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=clear ||
 		error "unable to reset fileset info on $nm nodemap"
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
+	do_facet mgs $LCTL set_param -P -d nodemap.${nm}.fileset ||
+		error "unable to remove fileset rule on $nm nodemap"
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
@@ -2099,6 +2101,13 @@ test_27a() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS >= 2.11.50"
 
+	# if servers run on the same node, it is impossible to tell if they get
+	# synced with the mgs, so this test needs to be skipped
+	if [ $(facet_active_host mgs) == $(facet_active_host mds) ] &&
+	   [ $(facet_active_host mgs) == $(facet_active_host ost1) ]; then
+		skip "local mode not supported"
+	fi
+
 	for nm in "default" "c0"; do
 		local subdir="subdir_${nm}"
 		local subsubdir="subsubdir_${nm}"
@@ -2118,6 +2127,13 @@ test_27b() { #LU-10703
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS >= 2.11.50"
 	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs"
+
+	# if servers run on the same node, it is impossible to tell if they get
+	# synced with the mgs, so this test needs to be skipped
+	if [ $(facet_active_host mgs) == $(facet_active_host mds) ] &&
+	   [ $(facet_active_host mgs) == $(facet_active_host ost1) ]; then
+		skip "local mode not supported"
+	fi
 
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT
@@ -2145,6 +2161,8 @@ test_27b() { #LU-10703
 			  $LCTL get_param -n nodemap.nm$i.fileset)
 		[ "$fileset" = "/dir$i" ] ||
 			error "nm$i.fileset $fileset != /dir$i on mds$i"
+		do_facet mgs $LCTL set_param -P -d nodemap.nm$i.fileset ||
+			error "unable to remove fileset rule for nm$i nodemap"
 		do_facet mgs $LCTL nodemap_del nm$i ||
 			error "delete nodemap nm$i failed"
 	done
