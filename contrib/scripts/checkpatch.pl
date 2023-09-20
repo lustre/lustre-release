@@ -5186,10 +5186,12 @@ sub process {
 				     "Console messages should start with '%s:' to print device name\n" . $herecurr)
 			}
 
-			# Check for "rc = %d" or "rc = %ld" at the end of errors
-			if ($line !~ /LCONSOLE/ && $rawline !~ /: rc = \%l?d\\n\",/) {
+			# Check for "rc = %d" or "rc = %ld" or "rc = %zd"
+			# at the end of errors
+			if ($line !~ /LCONSOLE/ &&
+			    $rawline !~ /: rc = \%l|z?d\\n\",/) {
 				WARN("CERROR_RET",
-				     "Console messages should end with ': rc = %d' or 'rc = %ld'\n" . $herecurr);
+				     "Console messages should end with ': rc = %[lz]d'\n" . $herecurr);
 			}
 
 			# This is fine as we are only matching the first part.
