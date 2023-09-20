@@ -12,31 +12,53 @@ SUSE_MACROS=/usr/lib/rpm/macros.d/macros.kernel-source
 
 source ${LBUILD_DIR}/lbuild-sles
 
+get_distro_kdir() {
+	local distro
+	local kdir
+
+	case $lnxmaj in
+	4.12)
+		distro=sles15.1
+		kdir=updates-sles15.1-src
+		;;
+	5.3)
+		case ${lnxrel%%.*} in
+		24)
+			distro=sles15.2
+			kdir=updates-sles15.2-src
+			;;
+		59|150300)
+			distro=sles15.3
+			kdir=updates-sles15.3-src
+			;;
+		esac
+		;;
+	5.14)
+		case ${lnxrel%%.*} in
+		150400)
+			distro=sles15.4
+			kdir=updates-sles15.4-src
+			;;
+		150500)
+			distro=sles15.5
+			kdir=updates-sles15.5-src
+			;;
+		esac
+		;;
+	esac
+
+	case $1 in
+	distro) echo -n $distro;;
+	kdir)   echo -n $kdir;;
+	esac
+}
+
 kernel_srpm_location() {
-    local site
-    local kdir
+	local site
+	local kdir=$(get_distro_kdir kdir)
 
-    case $lnxmaj in
-    4.12)
-        kdir=updates-sles15.1-src
-        ;;
-    5.3)
-        case ${lnxrel%%.*} in
-        24)
-            kdir=updates-sles15.2-src
-            ;;
-        59)
-            kdir=updates-sles15.3-src
-            ;;
-        esac
-        ;;
-    5.14)
-        kdir=updates-sles15.4-src
-        ;;
-    esac
-
-    site="http://mgmt/cobbler/repo_mirror/$kdir"
-    echo "$site/src/"
+	site="http://mgmt/cobbler/repo_mirror/$kdir"
+	echo "$site/src/"
 }
 
 edit_specs() {
@@ -133,7 +155,7 @@ find_linux_rpm-sles15() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
     local wanted_kernel_org="$wanted_kernel"
-    local distro
+    local distro=$(get_distro_kdir distro)
     local base_site
     local base_dir
     local dev_site
@@ -142,25 +164,6 @@ find_linux_rpm-sles15() {
     if [ "x$rpmfix_diff" != "x" ] && [ $wanted_kernel != "${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}" ]; then
         wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}"
     fi
-
-    case $lnxmaj in
-    4.12)
-        distro=sles15.1
-        ;;
-    5.3)
-        case ${lnxrel%%.*} in
-        24)
-            distro=sles15.2
-            ;;
-        59)
-            distro=sles15.3
-            ;;
-        esac
-        ;;
-    5.14)
-        distro=sles15.4
-        ;;
-    esac
 
     base_dir=updates-basesystem-$distro-x86_64
     dev_dir=updates-devtools-$distro-x86_64
