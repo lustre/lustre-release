@@ -334,6 +334,60 @@ check_options() {
 			;;
 	esac
 
+    echo "### GIT COMMIT BUILD-PARAMETERS CHECK: git log -1 ###"
+    git log -1
+    echo "### GIT COMMIT BUILD-PARAMETERS CHECK: parsing ###"
+    local build_params="Build-Parameters:"
+    local build_distro=""
+
+    case $DISTRO in
+    rhel*)  build_distro=${DISTRO#rh} ;;
+    sles*)  build_distro=${DISTRO/\./sp} ;;
+    *)      build_distro=$DISTRO ;;
+    esac
+
+    echo "### GIT COMMIT BUILD-PARAMETERS CHECK: environment ###"
+    echo "TARGET_ARCH='$TARGET_ARCH'"
+    echo "DISTRO='$DISTRO'"
+    echo "PATCHLESS='$PATCHLESS'"
+    echo "build_distro='$build_distro'"
+
+    echo "### GIT COMMIT BUILD-PARAMETERS CHECK: eval ###"
+    # Default should be to build everything, unless Build-Parameters are set,
+    # in which case only the specified builds will be done, all others skipped.
+    # Expect lines with one directive per line, possibly comma-separated:
+    #    Build-Parameters: clientdistro=el8.7,el9.2 [clientarch=aarch64]
+    #    Build-Parameters: serverdistro=el8.8 [serverarch=x86_64]
+    #    Build-Parameters: ignore
+    # Having both clientdistro and serverdistro on the same line will not work.
+    local skip=false
+
+    while read build_parameters param1 param2 ignored_params; do
+        local arch=""
+        local distro=""
+
+        skip=true
+        [[ "$param1" =~ "ignore" ]] && break # skip all builds, only for review
+        [[ "$param1" =~ "client" && "$PATCHLESS" == "false" ]] && continue
+        [[ "$param1" =~ "server" && "$PATCHLESS" == "true" ]] && continue
+        [[ "$param1" =~ "distro" ]] && distro="$param1" || distro="$param2"
+        [[ "$param1" =~ "arch" ]] && arch="$param1" || arch="$param2"
+        [[ -z "$arch" || "$arch" =~ "$TARGET_ARCH" ]] &&
+            [[ -z "$distro" || "$distro" =~ "$build_distro" ]] &&
+            skip=false && break
+    done < <(git log -1 | grep -i "^    $build_params" || echo "")
+
+    if $skip; then
+        local msg="SKIP: $build_distro:$TARGET_ARCH not found in $build_params"
+        # create some empty directories to keep createrepo in caller happy
+        mkdir -p RPMS SRPMS
+        echo "$msg" >> SRPMS/README
+        echo "$msg" >> README
+
+        fatal 0 "$msg"
+    fi
+    echo "### GIT COMMIT BUILD-PARAMETERS CHECK: fini ###"
+
     local timestampnodig=$(echo $TIMESTAMP | sed -e s/[0-9]*//g)
     [ "$timestampnodig" = "" ] || TIMESTAMP=$(date -d "$DATE" "+%Y%m%d%H%M%S")
     local timestamplength="${#TIMESTAMP}"

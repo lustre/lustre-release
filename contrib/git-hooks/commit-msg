@@ -20,6 +20,7 @@ init() {
 	readonly SIGNOFF="Signed-off-by:"
 	readonly CHANGEID="Change-Id:"
 	readonly FIXES="Fixes:"
+	readonly BUILD_PARAMS="Build-Parameters:"
 	readonly TEST_PARAMS="Test-Parameters:"
 	readonly TEST_PARAMS2="Test-parameters:"
 	readonly LUSTRE_CHANGE="Lustre-change:"
@@ -116,6 +117,13 @@ function do_changeid() {
 		error "has invalid $CHANGEID line for Gerrit tracking"
 
 	HAS_CHANGEID=true
+}
+
+function do_buildparams() {
+	ck_wrapup
+
+	grep -Eq "\<client|\<server|arch=|distro=" <<< $LINE ||
+		error "only {client,server}{distro,arch}= supported"
 }
 
 function do_testparams() {
@@ -271,6 +279,7 @@ for full details.  A good example of a valid commit comment is:
     commit/submission.  Keep the same $CHANGEID for ported patches. It
     will automatically be added by the Git commit-msg hook if missing.
 
+    $BUILD_PARAMS extra build options, see https://build.whamcloud.com/
     $TEST_PARAMS extra test options, see https://wiki.whamcloud.com/x/dICC
     $FIXES 12-char-hash ("commit summary line of original broken patch")
     $SIGNOFF Your Real Name <your_email@domain.name>
@@ -295,6 +304,7 @@ while IFS= read -u3 LINE; do
 	$SIGNOFF* )		do_signoff ;;
 	$CHANGEID* )		do_changeid ;;
 	$FIXES* )		do_fixes ;;
+	$BUILD_PARAMS* )	do_buildparams ;;
 	$TEST_PARAMS* )		do_testparams ;;
 	$TEST_PARAMS2* )	do_testparams ;;
 	$LUSTRE_CHANGE* )	do_change ;;
