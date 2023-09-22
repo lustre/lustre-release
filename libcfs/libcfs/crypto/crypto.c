@@ -51,6 +51,12 @@ module_param(num_prealloc_crypto_ctxs, uint, 0444);
 MODULE_PARM_DESC(num_prealloc_crypto_ctxs,
 		"Number of crypto contexts to preallocate");
 
+static char *client_encryption_engine = "aes-ni";
+module_param(client_encryption_engine, charp, 0444);
+MODULE_PARM_DESC(client_encryption_engine, "Client encryption engine");
+
+enum llcrypt_crypto_engine_type llcrypt_crypto_engine = LLCRYPT_ENGINE_AES_NI;
+
 static mempool_t *llcrypt_bounce_page_pool = NULL;
 
 static LIST_HEAD(llcrypt_free_ctxs);
@@ -494,6 +500,21 @@ void llcrypt_msg(const struct inode *inode, int mask,
 	va_end(args);
 }
 
+static inline int set_llcrypt_crypto_engine_type(void)
+{
+	if (strcmp(client_encryption_engine, "system-default") == 0)
+		llcrypt_crypto_engine = LLCRYPT_ENGINE_SYSTEM_DEFAULT;
+	else if (strcmp(client_encryption_engine, "aes-ni") == 0)
+		llcrypt_crypto_engine = LLCRYPT_ENGINE_AES_NI;
+	else
+		llcrypt_crypto_engine = LLCRYPT_ENGINE_INVALID;
+
+	if (llcrypt_crypto_engine == LLCRYPT_ENGINE_INVALID)
+		return -EINVAL;
+
+	return 0;
+}
+
 /**
  * llcrypt_init() - Set up for fs encryption.
  */
@@ -522,6 +543,13 @@ int __init llcrypt_init(void)
 	llcrypt_info_cachep = KMEM_CACHE(llcrypt_info, SLAB_RECLAIM_ACCOUNT);
 	if (!llcrypt_info_cachep)
 		goto fail_free_ctx;
+
+	err = set_llcrypt_crypto_engine_type();
+	if (err) {
+		CERROR("libcfs: bad crypto engine provided via 'client_encryption_engine': rc = %d\n",
+		       err);
+		goto fail_free_info;
+	}
 
 	err = llcrypt_init_keyring();
 	if (err)

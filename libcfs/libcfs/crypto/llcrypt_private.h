@@ -246,6 +246,12 @@ static inline bool llcrypt_valid_enc_modes(u32 contents_mode,
 }
 
 /* crypto.c */
+enum llcrypt_crypto_engine_type {
+	LLCRYPT_ENGINE_INVALID		= 0,
+	LLCRYPT_ENGINE_SYSTEM_DEFAULT	= 1,
+	LLCRYPT_ENGINE_AES_NI		= 2,
+};
+extern enum llcrypt_crypto_engine_type llcrypt_crypto_engine;
 extern struct kmem_cache *llcrypt_info_cachep;
 extern int llcrypt_initialize(unsigned int cop_flags);
 extern int llcrypt_crypt_block(const struct inode *inode,
@@ -459,6 +465,7 @@ extern void __exit llcrypt_exit_keyring(void);
 struct llcrypt_mode {
 	const char *friendly_name;
 	const char *cipher_str;
+	const char *engine_aesni_str;
 	int keysize;
 	int ivsize;
 	bool logged_impl_name;

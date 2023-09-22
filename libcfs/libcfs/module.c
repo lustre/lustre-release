@@ -688,7 +688,7 @@ static int __init libcfs_init(void)
 	rc = cfs_crypto_register();
 	if (rc) {
 		CERROR("cfs_crypto_regster: error %d\n", rc);
-		goto cleanup_cpu;
+		goto cleanup_wq;
 	}
 
 	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
@@ -698,13 +698,22 @@ static int __init libcfs_init(void)
 	rc = llcrypt_init();
 	if (rc) {
 		CERROR("llcrypt_init: error %d\n", rc);
-		goto cleanup_crypto;
+		goto cleanup_lnet;
 	}
 
 	CDEBUG(D_OTHER, "portals setup OK\n");
 	return 0;
-cleanup_crypto:
+
+cleanup_lnet:
+	if (!IS_ERR_OR_NULL(lnet_debugfs_root)) {
+		debugfs_remove_recursive(lnet_debugfs_root);
+		lnet_debugfs_root = NULL;
+		lnet_debugfs_fini(&debugfs_state);
+	}
 	cfs_crypto_unregister();
+cleanup_wq:
+	destroy_workqueue(cfs_rehash_wq);
+	cfs_rehash_wq = NULL;
 cleanup_cpu:
 	cfs_cpu_fini();
 cleanup_debug:

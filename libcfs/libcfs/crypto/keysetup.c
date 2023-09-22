@@ -41,18 +41,21 @@ static struct llcrypt_mode available_modes[] = {
 	[LLCRYPT_MODE_AES_256_XTS] = {
 		.friendly_name = "AES-256-XTS",
 		.cipher_str = "xts(aes)",
+		.engine_aesni_str = "xts-aes-aesni",
 		.keysize = 64,
 		.ivsize = 16,
 	},
 	[LLCRYPT_MODE_AES_256_CTS] = {
 		.friendly_name = "AES-256-CTS-CBC",
 		.cipher_str = "cts(cbc(aes))",
+		.engine_aesni_str = "cts-cbc-aes-aesni",
 		.keysize = 32,
 		.ivsize = 16,
 	},
 	[LLCRYPT_MODE_AES_128_CBC] = {
 		.friendly_name = "AES-128-CBC",
 		.cipher_str = "cbc(aes)",
+		.engine_aesni_str = "cbc-aes-aesni",
 		.keysize = 16,
 		.ivsize = 16,
 		.needs_essiv = true,
@@ -60,6 +63,7 @@ static struct llcrypt_mode available_modes[] = {
 	[LLCRYPT_MODE_AES_128_CTS] = {
 		.friendly_name = "AES-128-CTS-CBC",
 		.cipher_str = "cts(cbc(aes))",
+		.engine_aesni_str = "cts-cbc-aes-aesni",
 		.keysize = 16,
 		.ivsize = 16,
 	},
@@ -86,20 +90,42 @@ select_encryption_mode(const union llcrypt_policy *policy,
 	return ERR_PTR(-EINVAL);
 }
 
+static inline char *crypto_engine_to_use(struct llcrypt_mode *mode)
+{
+	switch (llcrypt_crypto_engine) {
+	case LLCRYPT_ENGINE_SYSTEM_DEFAULT:
+		return (char *)mode->cipher_str;
+	case LLCRYPT_ENGINE_AES_NI:
+		return (char *)mode->engine_aesni_str;
+	default:
+		return NULL;
+	}
+}
+
 /* Create a symmetric cipher object for the given encryption mode and key */
 struct crypto_skcipher *llcrypt_allocate_skcipher(struct llcrypt_mode *mode,
 						  const u8 *raw_key,
 						  const struct inode *inode)
 {
 	struct crypto_skcipher *tfm;
+	char *cipher;
 	int err;
 
 	if (!strcmp(mode->cipher_str, "null"))
 		return NULL;
 
-	tfm = crypto_alloc_skcipher(mode->cipher_str, 0, 0);
+	cipher = crypto_engine_to_use(mode);
+	if (!cipher)
+		return ERR_PTR(-EINVAL);
+
+alloc:
+	tfm = crypto_alloc_skcipher(cipher, 0, 0);
 	if (IS_ERR(tfm)) {
 		if (PTR_ERR(tfm) == -ENOENT) {
+			if (cipher != mode->cipher_str) {
+				cipher = (char *)mode->cipher_str;
+				goto alloc;
+			}
 			llcrypt_warn(inode,
 				     "Missing crypto API support for %s (API name: \"%s\")",
 				     mode->friendly_name, mode->cipher_str);
