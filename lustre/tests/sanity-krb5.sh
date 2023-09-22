@@ -426,7 +426,7 @@ test_8()
 	$RUNAS touch $DIR/$tdir/$tfile &
 	TOUCHPID=$!
 	echo "waiting for touch (pid $TOUCHPID) to finish..."
-	sleep 2 # give it a chance to really trigger context init rpc
+	sleep 30 # give it a chance to really trigger context init rpc
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 	wait $TOUCHPID || error "touch should have succeeded"
 
