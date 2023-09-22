@@ -1,0 +1,12 @@
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/ext4_extents.h
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/ext4_extents.h
+@@ -655,6 +655,6 @@ enum {
+ };
+
+ #define EXT4_EXT_MAGIC		cpu_to_le16(0xf30a)
+-#define EXT4_MAX_EXTENT_DEPTH 5
++#define EXT4_MAX_EXTENT_DEPTH 6
+
+ #define EXT4_EXTENT_TAIL_OFFSET(hdr) \
