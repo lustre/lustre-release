@@ -113,14 +113,21 @@ static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 	struct gss_cli_ctx_keyring *gctx_kr = cfs_from_timer(gctx_kr,
 							     data, gck_timer);
 	struct ptlrpc_cli_ctx *ctx = &(gctx_kr->gck_base.gc_base);
+	struct obd_import *imp = ctx->cc_sec->ps_import;
 	struct key *key	= gctx_kr->gck_key;
 
-        CWARN("ctx %p, key %p\n", ctx, key);
+	if (key)
+		CDEBUG(D_SEC,
+		       "%s: GSS context (%p) negotiation timeout, revoking key (%p)\n",
+		       imp->imp_obd->obd_name, ctx, key);
+	else
+		CDEBUG(D_SEC,
+		       "%s: GSS context (%p) negotiation timeout, ignoring already unlinked key\n",
+		       imp->imp_obd->obd_name, ctx);
 
-        LASSERT(key);
-
-        cli_ctx_expire(ctx);
-        key_revoke_locked(key);
+	cli_ctx_expire(ctx);
+	if (key)
+		key_revoke_locked(key);
 }
 
 static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
