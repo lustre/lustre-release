@@ -1,29 +1,68 @@
-#! /usr/bin/perl -w
-use strict;
-use Socket;
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
-BEGIN { $ENV{PATH} = '/usr/ucb:/bin' }
-sub logmsg { print "$0 $$: @_ at ", scalar localtime, "\n" }
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/tests/socketserver
+#
+# Domain socket server, used to test that domain sockets
+# work on lustre.
+#
+# Rewrite in Python: Timothy Day <timday@amazon.com>
+#
 
-my $NAME = <@ARGV>;
-my $uaddr = sockaddr_un($NAME);
+import os
+import socket
+import sys
 
-socket(Server,AF_UNIX,SOCK_STREAM,0) 	|| die "socket: $!";
-unlink($NAME);
-bind  (Server, $uaddr) 			|| die "bind: $!";
-listen(Server,SOMAXCONN)			|| die "listen: $!";
 
-logmsg "server started on $NAME";
+# Define a function for logging messages
+def logmsg(msg):
+	print(f"{sys.argv[0]} {os.getpid()}: {msg} at {os.popen('date').read().strip()}")
 
-my $rc = fork();
-if ($rc > 0) { #parent
-    exit();
-} elsif ($rc < 0) { # error
-    logmsg "fork failed: $rc";
-    exit();
-}
 
-accept(Client,Server);
-logmsg "connection on $NAME";
-print Client "from server\n";
-close Client;
+# Get the socket path from the command-line argument,
+# or ask the user to input one
+if len(sys.argv) > 1:
+	socket_path = sys.argv[1]
+else:
+	socket_path = input("Enter socket path: ")
+
+try:
+	# Create a Unix domain socket with a specified file path
+	sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+	# Bind the socket to the Unix domain socket file
+	sock.bind(socket_path)
+
+	# Listen for incoming connections on the socket
+	sock.listen(socket.SOMAXCONN)
+
+	# Fork a child process to handle the connection
+	pid = os.fork()
+
+	if pid > 0:
+		# Parent process
+		logmsg(f"server started on {socket_path}")
+		sys.exit(0)
+	elif pid < 0:
+		# Fork failed
+		logmsg(f"fork failed: {pid}")
+		sys.exit(1)
+
+	# Accept an incoming connection
+	client_sock, _ = sock.accept()
+
+	logmsg(f"connection on {socket_path}")
+
+	# Send a message to the client and close
+	# the client socket
+	client_sock.send(b"This is a message from the server!\n")
+	client_sock.close()
+
+except socket.error as e:
+	logmsg(f"Socket error: {e}")
+
+finally:
+	sock.close()

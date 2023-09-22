@@ -6339,15 +6339,13 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-	LANG=C perl -MSocket -e ';' || skip "no Socket perl module installed"
-
-	LANG=C $SOCKETSERVER $DIR/socket ||
+	$SOCKETSERVER $DIR/socket ||
 		error "$SOCKETSERVER $DIR/socket failed: $?"
-	LANG=C $SOCKETCLIENT $DIR/socket ||
+	$SOCKETCLIENT $DIR/socket ||
 		error "$SOCKETCLIENT $DIR/socket failed: $?"
 	unlink $DIR/socket || error "unlink $DIR/socket failed: $?"
 }
-run_test 54a "unix domain socket test =========================="
+run_test 54a "unix domain socket test"
 
 test_54b() {
 	f="$DIR/f54b"

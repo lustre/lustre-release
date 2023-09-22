@@ -1,12 +1,56 @@
-#!/usr/bin/perl -w
-use Socket;
-use strict;
-my ($rendezvous, $line);
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
-$rendezvous = shift || <@ARGV>;
-socket(SOCK, AF_UNIX, SOCK_STREAM, 0)	|| die "socket: $!";
-connect(SOCK, sockaddr_un($rendezvous))	|| die "connect: $!";
-while (defined($line = <SOCK>)) {
-	print $line;
-}
-exit;  
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/tests/socketclient
+#
+# Domain socket client, used to test that domain sockets
+# work on lustre.
+#
+# Rewrite in Python: Timothy Day <timday@amazon.com>
+#
+
+import os
+import socket
+import sys
+
+
+# Define a function for logging messages
+def logmsg(msg):
+	print(f"{sys.argv[0]} {os.getpid()}: {msg} at {os.popen('date').read().strip()}")
+
+
+# Get the socket path from the command-line argument,
+# or ask the user to input one
+if len(sys.argv) > 1:
+	socket_path = sys.argv[1]
+else:
+	socket_path = input("Enter socket path: ")
+
+try:
+	# Create a Unix domain socket
+	sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+	# Connect to the specified rendezvous point
+	sock.connect(socket_path)
+
+	logmsg(f"connection on {socket_path}")
+
+	while True:
+		# Receive data from the socket in chunks of 1024 bytes
+		data = sock.recv(1024)
+
+		# If there's no more data to read, exit the loop
+		if not data:
+			break
+
+		# Decode the data as UTF-8 and print it to the standard output
+		print("Message:", data.decode('utf-8'), end='')
+
+except socket.error as e:
+	logmsg(f"Socket error: {e}")
+
+finally:
+	sock.close()
