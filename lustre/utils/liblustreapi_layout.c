@@ -3086,7 +3086,7 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 					 */
 					rc = llapi_mirror_truncate(fd, mid,
 								   cur_pos);
-				else if (data_size)
+				else if (to_punch)
 					rc = llapi_mirror_punch(fd, mid,
 							cur_pos, to_punch);
 				/**
