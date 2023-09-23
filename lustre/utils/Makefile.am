@@ -245,8 +245,9 @@ l_foreign_symlink_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la
 l_foreign_symlink_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 
 l_getidentity_SOURCES = l_getidentity.c
-l_getidentity_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la
-l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
+l_getidentity_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la liblustreapi.la $(LIBPTLCTL)
+l_getidentity_LDFLAGS = -ldl
+l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la liblustreapi.la $(LIBPTLCTL)
 
 lhsmtool_posix_SOURCES = lhsmtool_posix.c pid_file.c pid_file.h
 lhsmtool_posix_LDADD := liblustreapi.la $(PTHREAD_LIBS) \
