@@ -36,7 +36,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
 #include <stdarg.h>
@@ -44,6 +43,9 @@
 #include <libgen.h>
 #include <syslog.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <ctype.h>
 #include <nss.h>
@@ -745,6 +747,59 @@ static void check_new_nss_module(struct nss_module *mod)
 	}
 }
 
+#define ONE_DAY (24 * 60 * 60)
+
+static void do_warn_interval(struct timeval *now)
+{
+	bool write_warning = false;
+	bool show_warning = false;
+	const char *perm_warning = PERM_PATHNAME "-warning";
+	struct stat sbuf;
+	const char msg[] =
+		"Use 'lookup lustre'. The 'files' alias is deprecated.\n";
+
+	if (stat(perm_warning, &sbuf)) {
+		if (errno == ENOENT)
+			write_warning = true;
+	} else {
+		show_warning = (now->tv_sec - sbuf.st_mtim.tv_sec) > ONE_DAY;
+	}
+
+	if (write_warning || show_warning) {
+		const struct timespec times[] = {
+			{.tv_sec = UTIME_NOW},
+			{.tv_sec = UTIME_NOW},
+		};
+		mode_t mode = 0640;
+		int oflags = O_RDWR | O_CREAT;
+		int fd = open(perm_warning, oflags, mode);
+
+		/* if we cannot rate-limit ... better to be quiet */
+		if (fd == -1)
+			return;
+		if (write_warning) {
+			ssize_t written = write(fd, msg, sizeof(msg));
+
+			/* unlikely, but rate-limiting may be broken */
+			if (written <= 0)
+				return;
+		}
+		errlog("WARNING: %s", msg);
+
+		/* rate limiting is working */
+		if (show_warning)
+			futimens(fd, times);
+	}
+}
+
+/** initialize module to access local /etc/lustre/passwd,group files */
+static int init_lustre_files_module(struct nss_module *mod,
+				    struct timeval *start)
+{
+	do_warn_interval(start);
+	return init_lustre_module(mod);
+}
+
 /**
  * Check and parse lookup db config line.
  * File should start with 'lookup' followed by the modules
@@ -763,7 +818,7 @@ static void check_new_nss_module(struct nss_module *mod)
  *  via libnss_files users must select 'nss_files' to explicitly
  *  enable libnss_files, which is an uncommon configuration.
  */
-static int lookup_db_line_nss(char *line)
+static int lookup_db_line_nss(char *line, struct timeval *start)
 {
 	char *p, *tok;
 	int ret = 0;
@@ -785,7 +840,9 @@ static int lookup_db_line_nss(char *line)
 		else
 			return -ERANGE;
 
-		if (!strcmp(tok, "files") || !strcmp(tok, "lustre"))
+		if (!strcmp(tok, "files"))
+			ret = init_lustre_files_module(newmod, start);
+		else if (!strcmp(tok, "lustre"))
 			ret = init_lustre_module(newmod);
 		else if (!strcmp(tok, "nss_files"))
 			ret = init_nss_lib_module(newmod, "files");
@@ -801,7 +858,7 @@ static int lookup_db_line_nss(char *line)
 	return ret;
 }
 
-int get_perms(struct identity_downcall_data *data)
+int get_perms(struct identity_downcall_data *data, struct timeval *start)
 {
 	FILE *fp;
 	char line[PATH_MAX];
@@ -820,7 +877,7 @@ int get_perms(struct identity_downcall_data *data)
 	while (fgets(line, sizeof(line), fp)) {
 		if (comment_line(line))
 			continue;
-		ret = lookup_db_line_nss(line); /* lookup parsed */
+		ret = lookup_db_line_nss(line, start); /* lookup parsed */
 		if (ret == 0)
 			continue;
 		if (parse_perm_line(data, line, sizeof(line))) {
@@ -921,7 +978,7 @@ retry:
 	 * rc is -1 only when file exists and is not readable or
 	 * content has format / syntax errors
 	 */
-	rc = get_perms(data);
+	rc = get_perms(data, &start);
 	if (rc)
 		goto downcall;
 
