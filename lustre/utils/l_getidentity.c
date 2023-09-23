@@ -756,7 +756,7 @@ static void do_warn_interval(struct timeval *now)
 	const char *perm_warning = PERM_PATHNAME "-warning";
 	struct stat sbuf;
 	const char msg[] =
-		"Use 'lookup lustre'. The 'files' alias is deprecated.\n";
+		"Use 'lookup files'. The 'nss_files' alias is deprecated.\n";
 
 	if (stat(perm_warning, &sbuf)) {
 		if (errno == ENOENT)
@@ -795,14 +795,6 @@ static void do_warn_interval(struct timeval *now)
 out_close:
 		close(fd);
 	}
-}
-
-/** initialize module to access local /etc/lustre/passwd,group files */
-static int init_lustre_files_module(struct nss_module *mod,
-				    struct timeval *start)
-{
-	do_warn_interval(start);
-	return init_lustre_module(mod);
 }
 
 /**
@@ -845,13 +837,12 @@ static int lookup_db_line_nss(char *line, struct timeval *start)
 		else
 			return -ERANGE;
 
-		if (!strcmp(tok, "files"))
-			ret = init_lustre_files_module(newmod, start);
-		else if (!strcmp(tok, "lustre"))
+		if (!strcmp(tok, "lustre"))
 			ret = init_lustre_module(newmod);
-		else if (!strcmp(tok, "nss_files"))
+		else if (!strcmp(tok, "nss_files")) {
+			do_warn_interval(start);
 			ret = init_nss_lib_module(newmod, "files");
-		else
+		} else
 			ret = init_nss_lib_module(newmod, tok);
 
 		if (ret)

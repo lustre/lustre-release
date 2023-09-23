@@ -69,22 +69,12 @@ and
  
 .br
 For historical reasons
-.B files
-was originally used instead in place of
-.B lustre
-to enable auth by lustre files. At the time of writing
-.B files
-is still widely used where
-.B lustre
-is intended.
-This alias is now officially deprecated and using it will generate periodic
-warnings. The alias will be removed in a future release.
-As an alternative
 .B nss_files
-can be specified for the
+was needed to use the
 .BR nss (5)
 .B files
 module.
+This alias is now deprecated and will be removed in a future release.
 .SH OPTIONS
 .TP
 .B -d
