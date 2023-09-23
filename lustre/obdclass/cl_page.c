@@ -1189,7 +1189,6 @@ struct cl_client_cache *cl_cache_init(unsigned long lru_page_max)
 
 	cache->ccc_unstable_check = 1;
 	atomic_long_set(&cache->ccc_unstable_nr, 0);
-	init_waitqueue_head(&cache->ccc_unstable_waitq);
 	mutex_init(&cache->ccc_max_cache_mb_lock);
 
 	RETURN(cache);

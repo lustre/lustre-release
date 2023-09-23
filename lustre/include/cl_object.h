@@ -2328,11 +2328,6 @@ struct cl_client_cache {
 	 */
 	atomic_long_t		ccc_unstable_nr;
 	/**
-	 * Waitq for awaiting unstable pages to reach zero.
-	 * Used at umounting time and signaled on BRW commit
-	 */
-	wait_queue_head_t	ccc_unstable_waitq;
-	/**
 	 * Serialize max_cache_mb write operation
 	 */
 	struct mutex		ccc_max_cache_mb_lock;

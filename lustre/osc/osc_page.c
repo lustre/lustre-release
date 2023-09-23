@@ -978,8 +978,6 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 	unstable_count = atomic_long_sub_return(page_count,
 					   &cli->cl_cache->ccc_unstable_nr);
 	LASSERT(unstable_count >= 0);
-	if (unstable_count == 0)
-		wake_up(&cli->cl_cache->ccc_unstable_waitq);
 
 	if (waitqueue_active(&osc_lru_waitq))
 		(void)ptlrpcd_queue_work(cli->cl_lru_work);
