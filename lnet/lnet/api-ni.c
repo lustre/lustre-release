@@ -2102,6 +2102,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 static void
 lnet_ping_target_update(struct lnet_ping_buffer *pbuf,
 			struct lnet_handle_md ping_mdh)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ping_buffer *old_pbuf = NULL;
 	struct lnet_handle_md old_ping_md;
@@ -2130,8 +2131,15 @@ lnet_ping_target_update(struct lnet_ping_buffer *pbuf,
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	if (old_pbuf) {
-		/* unlink and free the old ping info */
+		/* unlink and free the old ping info.
+		 * There may be outstanding traffic on this MD, and
+		 * ln_api_mutex may be required to finalize that
+		 * traffic. Release ln_api_mutex while we wait for
+		 * refs on this ping buffer to drop
+		 */
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		lnet_ping_md_unlink(old_pbuf, &old_ping_md);
+		mutex_lock(&the_lnet.ln_api_mutex);
 		lnet_ping_buffer_decref(old_pbuf);
 	}
 
