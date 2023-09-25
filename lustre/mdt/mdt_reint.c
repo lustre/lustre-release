@@ -2345,7 +2345,7 @@ lock_parent:
 	}
 
 	/* if migration HSM is allowed */
-	if (!mdt->mdt_opts.mo_migrate_hsm_allowed) {
+	if (!mdt->mdt_migrate_hsm_allowed) {
 		ma->ma_need = MA_HSM;
 		ma->ma_valid = 0;
 		rc = mdt_attr_get_complex(info, sobj, ma);

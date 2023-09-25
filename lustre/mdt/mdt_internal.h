@@ -270,11 +270,7 @@ struct mdt_device {
 	struct {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
-				   mo_cos:1,
-				   mo_evict_tgt_nids:1,
-				   mo_dom_read_open:1,
-				   mo_migrate_hsm_allowed:1,
-				   mo_enable_strict_som:1;
+				   mo_cos:1;
 		unsigned int	   mo_dom_lock;
 	} mdt_opts;
 	/* mdt state flags */
@@ -297,7 +293,10 @@ struct mdt_device {
 
 	struct upcall_cache	  *mdt_identity_cache;
 
-	unsigned int		   mdt_capa_conf:1,
+	unsigned int		   mdt_evict_tgt_nids:1,
+				   mdt_dom_read_open:1,
+				   mdt_migrate_hsm_allowed:1,
+				   mdt_enable_strict_som:1,
 				   /* Enable remote dir on non-MDT0 */
 				   mdt_enable_dir_migration:1,
 				   mdt_enable_dir_restripe:1,
@@ -315,7 +314,9 @@ struct mdt_device {
 				    * old client joins, disable this to handle
 				    * inherited default LMV on server.
 				    */
-				   mdt_enable_dmv_implicit_inherit:1;
+				   mdt_enable_dmv_implicit_inherit:1,
+				   /* set dmv by setxattr, off by default */
+				   mdt_enable_dmv_xattr:1;
 
 				   /* user with gid can create remote/striped
 				    * dir, and set default dir stripe */

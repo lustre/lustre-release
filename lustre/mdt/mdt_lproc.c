@@ -448,7 +448,7 @@ lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	if (mdt->mdt_opts.mo_evict_tgt_nids) {
+	if (mdt->mdt_evict_tgt_nids) {
 		rc = obd_set_info_async(NULL, mdt->mdt_child_exp,
 					sizeof(KEY_EVICT_BY_NID),
 					KEY_EVICT_BY_NID,
@@ -472,36 +472,6 @@ out:
 }
 
 #undef BUFLEN
-
-static ssize_t evict_tgt_nids_show(struct kobject *kobj,
-				   struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_opts.mo_evict_tgt_nids);
-}
-
-static ssize_t evict_tgt_nids_store(struct kobject *kobj,
-				    struct attribute *attr, const char *buffer,
-				    size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_opts.mo_evict_tgt_nids = val;
-	return count;
-}
-LUSTRE_RW_ATTR(evict_tgt_nids);
 
 static ssize_t commit_on_sharing_show(struct kobject *kobj,
 				      struct attribute *attr, char *buf)
@@ -619,35 +589,6 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
-static ssize_t enable_remote_dir_show(struct kobject *kobj,
-				      struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_remote_dir);
-}
-
-static ssize_t enable_remote_dir_store(struct kobject *kobj,
-				       struct attribute *attr,
-				       const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_remote_dir = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_remote_dir);
-
 static ssize_t enable_remote_dir_gid_show(struct kobject *kobj,
 					  struct attribute *attr, char *buf)
 {
@@ -708,188 +649,47 @@ static ssize_t enable_chprojid_gid_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_chprojid_gid);
 
-static ssize_t enable_parallel_rename_dir_show(struct kobject *kobj,
-					       struct attribute *attr,
-					       char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+#define MDT_BOOL_RW_ATTR(name)						\
+static ssize_t name##_show(struct kobject *kobj, struct attribute *attr,\
+			   char *buf)					\
+{									\
+	struct obd_device *obd = container_of(kobj, struct obd_device,	\
+					      obd_kset.kobj);		\
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_##name);	\
+}									\
+static ssize_t name##_store(struct kobject *kobj, struct attribute *attr,\
+			    const char *buffer, size_t count)		\
+{									\
+	struct obd_device *obd = container_of(kobj, struct obd_device,	\
+					      obd_kset.kobj);		\
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
+	bool val;							\
+	int rc;								\
+	rc = kstrtobool(buffer, &val);					\
+	if (rc)								\
+		return rc;						\
+	mdt->mdt_##name = val;						\
+	return count;							\
+}									\
+LUSTRE_RW_ATTR(name)
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_parallel_rename_dir);
-}
-
-static ssize_t enable_parallel_rename_dir_store(struct kobject *kobj,
-						struct attribute *attr,
-						const char *buffer,
-						size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_parallel_rename_dir = val;
-
-	return count;
-}
-LUSTRE_RW_ATTR(enable_parallel_rename_dir);
-
-static ssize_t enable_parallel_rename_file_show(struct kobject *kobj,
-						struct attribute *attr,
-						char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_parallel_rename_file);
-}
-
-static ssize_t enable_parallel_rename_file_store(struct kobject *kobj,
-						 struct attribute *attr,
-						 const char *buffer,
-						 size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_parallel_rename_file = val;
-
-	return count;
-}
-LUSTRE_RW_ATTR(enable_parallel_rename_file);
-
-static ssize_t enable_striped_dir_show(struct kobject *kobj,
-				       struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_striped_dir);
-}
-
-static ssize_t enable_striped_dir_store(struct kobject *kobj,
-					struct attribute *attr,
-					const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_striped_dir = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_striped_dir);
-
-static ssize_t enable_dir_migration_show(struct kobject *kobj,
-					 struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_dir_migration);
-}
-
-static ssize_t enable_dir_migration_store(struct kobject *kobj,
-					  struct attribute *attr,
-					  const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_dir_migration = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_dir_migration);
-
-static ssize_t enable_dir_restripe_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_dir_restripe);
-}
-
-static ssize_t enable_dir_restripe_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_dir_restripe = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_dir_restripe);
-
-static ssize_t enable_dir_auto_split_show(struct kobject *kobj,
-					  struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_dir_auto_split);
-}
-
-static ssize_t enable_dir_auto_split_store(struct kobject *kobj,
-					   struct attribute *attr,
-					   const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_dir_auto_split = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_dir_auto_split);
+MDT_BOOL_RW_ATTR(readonly);
+MDT_BOOL_RW_ATTR(evict_tgt_nids);
+MDT_BOOL_RW_ATTR(dom_read_open);
+MDT_BOOL_RW_ATTR(enable_remote_dir);
+MDT_BOOL_RW_ATTR(enable_remote_rename);
+MDT_BOOL_RW_ATTR(enable_parallel_rename_dir);
+MDT_BOOL_RW_ATTR(enable_parallel_rename_file);
+MDT_BOOL_RW_ATTR(enable_striped_dir);
+MDT_BOOL_RW_ATTR(enable_dir_migration);
+MDT_BOOL_RW_ATTR(enable_dir_restripe);
+MDT_BOOL_RW_ATTR(enable_dir_auto_split);
+MDT_BOOL_RW_ATTR(dir_restripe_nsonly);
+MDT_BOOL_RW_ATTR(migrate_hsm_allowed);
+MDT_BOOL_RW_ATTR(enable_strict_som);
+MDT_BOOL_RW_ATTR(enable_dmv_implicit_inherit);
+MDT_BOOL_RW_ATTR(enable_dmv_xattr);
 
 /**
  * Show if the MDT is in no create mode.
@@ -1108,200 +908,6 @@ static ssize_t dom_lock_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(dom_lock);
 
-/**
- * Show MDT policy for data prefetch on open for DoM files..
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static ssize_t dom_read_open_show(struct kobject *kobj,
-				  struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 !!mdt->mdt_opts.mo_dom_read_open);
-}
-
-/**
- * Modify MDT policy for data prefetch on open for DoM files.
- *
- * If enabled then Data-on-MDT file data may be read during open and
- * returned back in reply. It works only with mo_dom_lock enabled.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents policy
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t dom_read_open_store(struct kobject *kobj,
-				   struct attribute *attr, const char *buffer,
-				   size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_opts.mo_dom_read_open = !!val;
-	return count;
-}
-LUSTRE_RW_ATTR(dom_read_open);
-
-/**
- * Show policy for using strict SOM information for real size (stat size).
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static ssize_t enable_strict_som_show(struct kobject *kobj,
-				      struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 !!mdt->mdt_opts.mo_enable_strict_som);
-}
-
-/**
- * Modify policy for using strict SOM information for real size (stat size).
- *
- * If disabled, SOM is never used for stat.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents policy
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t enable_strict_som_store(struct kobject *kobj,
-				       struct attribute *attr,
-				       const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_opts.mo_enable_strict_som = !!val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_strict_som);
-
-static ssize_t migrate_hsm_allowed_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_opts.mo_migrate_hsm_allowed);
-}
-
-static ssize_t migrate_hsm_allowed_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_opts.mo_migrate_hsm_allowed = val;
-	return count;
-}
-LUSTRE_RW_ATTR(migrate_hsm_allowed);
-
-static ssize_t readonly_show(struct kobject *kobj, struct attribute *attr,
-			     char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_readonly);
-}
-
-static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
-			      const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_readonly = val;
-	return count;
-}
-LUSTRE_RW_ATTR(readonly);
-
-static ssize_t enable_remote_rename_show(struct kobject *kobj,
-					 struct attribute *attr,
-					 char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_remote_rename);
-}
-
-static ssize_t enable_remote_rename_store(struct kobject *kobj,
-					  struct attribute *attr,
-					  const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_remote_rename = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_remote_rename);
-
 static ssize_t dir_split_count_show(struct kobject *kobj,
 				     struct attribute *attr,
 				     char *buf)
@@ -1369,35 +975,6 @@ static ssize_t dir_split_delta_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(dir_split_delta);
 
-static ssize_t dir_restripe_nsonly_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_dir_restripe_nsonly);
-}
-
-static ssize_t dir_restripe_nsonly_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_dir_restripe_nsonly = val;
-	return count;
-}
-LUSTRE_RW_ATTR(dir_restripe_nsonly);
-
 static ssize_t enable_remote_subdir_mount_show(struct kobject *kobj,
 					       struct attribute *attr,
 					       char *buf)
@@ -1414,38 +991,6 @@ static ssize_t enable_remote_subdir_mount_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(enable_remote_subdir_mount);
-
-static ssize_t enable_dmv_implicit_inherit_show(struct kobject *kobj,
-						struct attribute *attr,
-						char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 mdt->mdt_enable_dmv_implicit_inherit);
-}
-
-static ssize_t enable_dmv_implicit_inherit_store(struct kobject *kobj,
-						 struct attribute *attr,
-						 const char *buffer,
-						 size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_dmv_implicit_inherit = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_dmv_implicit_inherit);
 
 /**
  * Show if the OFD enforces T10PI checksum.
@@ -1755,6 +1300,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_history.attr,
+	&lustre_attr_enable_dmv_xattr.attr,
 	NULL,
 };
 

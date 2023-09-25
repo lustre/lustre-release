@@ -2520,7 +2520,10 @@ static int lod_dir_declare_xattr_set(const struct lu_env *env,
 	if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
 		struct lmv_user_md_v1 *lum;
 
-		LASSERT(buf != NULL && buf->lb_buf != NULL);
+		LASSERT(buf != NULL);
+		if (!buf->lb_buf || buf->lb_len < sizeof(*lum))
+			RETURN(-EFAULT);
+
 		lum = buf->lb_buf;
 		rc = lod_verify_md_striping(d, lum);
 		if (rc != 0)

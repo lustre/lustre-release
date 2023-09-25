@@ -164,6 +164,37 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	if (handler->flags == XATTR_SECURITY_T && strcmp(name, "c") == 0)
 		GOTO(out, rc = -EPERM);
 
+	if (handler->flags == XATTR_TRUSTED_T && !strcmp(name, "dmv") &&
+	    (valid & OBD_MD_FLXATTR)) {
+		const struct lmv_user_md *clum;
+		struct lmv_user_md *lum;
+
+		if (!value)
+			GOTO(out, rc = -EINVAL);
+
+		clum = (const struct lmv_user_md *)value;
+		if (size != sizeof(*clum))
+			GOTO(out, rc = -EINVAL);
+
+		if (clum->lum_magic != LMV_USER_MAGIC)
+			GOTO(out, rc = -EINVAL);
+
+		/* skip default dmv */
+		if (clum->lum_stripe_offset == LMV_OFFSET_DEFAULT &&
+		    clum->lum_stripe_count == 1 &&
+		    clum->lum_hash_type == LMV_HASH_TYPE_UNKNOWN)
+			GOTO(out, rc = 0);
+
+		OBD_ALLOC_PTR(lum);
+		if (!lum)
+			GOTO(out, rc = -ENOMEM);
+
+		*lum = *clum;
+		rc = ll_dir_setstripe(inode, (struct lov_user_md *)lum, 1);
+		OBD_FREE_PTR(lum);
+		GOTO(out, rc);
+	}
+
 	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);
 	if (!fullname)
 		GOTO(out, rc = -ENOMEM);

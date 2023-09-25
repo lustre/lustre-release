@@ -1744,7 +1744,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	}
 
 	/* return data along with open only along with DoM lock */
-	if (!dom_lock || !mdt->mdt_opts.mo_dom_read_open)
+	if (!dom_lock || !mdt->mdt_dom_read_open)
 		RETURN(0);
 
 	/* if DoM object holds encrypted content, we need to make sure we

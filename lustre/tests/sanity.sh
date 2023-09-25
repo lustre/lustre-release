@@ -28612,6 +28612,44 @@ test_413i() {
 }
 run_test 413i "check default layout inheritance"
 
+test_413j()
+{
+	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"
+
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setdirstripe -D -c2 --max-inherit=2 $DIR/$tdir ||
+		error "setdirstripe $tdir failed"
+
+	local value=$(getfattr -n trusted.dmv $DIR/$tdir | \
+		      grep "trusted.dmv" |sed -e 's/[^=]\+=//')
+
+	mkdir -p $DIR/$tdir/sub || error "mkdir sub failed"
+	# setfattr dmv calls setdirstripe -D
+	setfattr -n trusted.dmv -v $value $DIR/$tdir/sub ||
+		error "setfattr sub failed"
+	local value2=$(getfattr -n trusted.dmv $DIR/$tdir/sub | \
+		       grep "trusted.dmv" |sed -e 's/[^=]\+=//')
+
+	[ $value == $value2 ] || error "dmv mismatch"
+
+	(( MDS1_VERSION >= $(version_code 2.15.58) )) || return 0
+
+	# do not allow remove dmv by setfattr -x
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_dmv_xattr=0"
+	setfattr -x trusted.dmv $DIR/$tdir/sub || error "setfattr sub failed"
+	getfattr -n trusted.dmv $DIR/$tdir/sub || error "default LMV deleted"
+
+	# allow remove dmv by setfattr -x
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_dmv_xattr=1"
+	setfattr -x trusted.dmv $DIR/$tdir/sub || error "setfattr sub failed"
+	getfattr -n trusted.dmv $DIR/$tdir/sub && error "default LMV exists"
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_dmv_xattr=0"
+}
+run_test 413j "set default LMV by setxattr"
+
 test_413z() {
 	local pids=""
 	local subdir

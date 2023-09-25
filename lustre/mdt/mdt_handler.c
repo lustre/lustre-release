@@ -921,8 +921,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			else
 				b->mbo_blocks = 1;
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-		} else if (info->mti_som_strict &&
-			   mdt->mdt_opts.mo_enable_strict_som) {
+		} else if (info->mti_som_strict && mdt->mdt_enable_strict_som) {
 			/* use SOM for size*/
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		} else if (ma->ma_valid & MA_SOM) { /* lsom is valid */
@@ -6169,7 +6168,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	LASSERT(obd != NULL);
 
 	m->mdt_max_mdsize = MAX_MD_SIZE_OLD;
-	m->mdt_opts.mo_evict_tgt_nids = 1;
+	m->mdt_evict_tgt_nids = 1;
 	m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
 
 	lmi = server_get_mount(dev);
@@ -6196,7 +6195,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 * lock granted, it may get blocked for a long time. */
 	m->mdt_opts.mo_dom_lock = TRYLOCK_DOM_ON_OPEN;
 	/* DoM files are read at open and data is packed in the reply */
-	m->mdt_opts.mo_dom_read_open = 1;
+	m->mdt_dom_read_open = 1;
 
 	m->mdt_squash.rsi_uid = 0;
 	m->mdt_squash.rsi_gid = 0;
@@ -6340,7 +6339,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	else
 		m->mdt_opts.mo_acl = 0;
 
-	m->mdt_opts.mo_enable_strict_som = 1;
+	m->mdt_enable_strict_som = 1;
 
 	/* XXX: to support suppgid for ACL, we enable identity_upcall
 	 * by default, otherwise, maybe got unexpected -EACCESS. */
