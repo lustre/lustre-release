@@ -762,7 +762,8 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(th != NULL);
-	LASSERT(dt_object_exists(dt));
+	if (unlikely(obj->oo_dn == NULL))
+		RETURN(-ENOENT);
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
