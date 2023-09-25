@@ -127,8 +127,12 @@ cat <<EOF
     architecture: $(uname -m)
     networks:
 EOF
-    for nw in $(lctl list_nids | grep -v @lo | cut -f 2 -d '@' | uniq); do
-        printf "        - $nw\n"
+    for nid in $(lctl list_nids | grep -v @lo ); do
+        printf "        - ${nid##*@}\n"
+    done | sort -u
+    echo "    nids:"
+    for nid in $(lctl list_nids | grep -v @lo ); do
+        printf "        - $nid\n"
     done
 }
 
