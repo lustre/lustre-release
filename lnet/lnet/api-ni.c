@@ -3937,23 +3937,39 @@ void lnet_mark_ping_buffer_for_update(void)
 }
 EXPORT_SYMBOL(lnet_mark_ping_buffer_for_update);
 
-void lnet_update_ping_buffer(void)
+void lnet_update_ping_buffer(struct work_struct *work)
 {
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_handle_md ping_mdh;
 
-	if (atomic_dec_if_positive(&the_lnet.ln_update_ping_buf) < 0)
-		return;
-
 	mutex_lock(&the_lnet.ln_api_mutex);
 
-	if (!lnet_ping_target_setup(&pbuf, &ping_mdh,
+	atomic_set(&the_lnet.ln_pb_update_ready, 1);
+
+	if ((the_lnet.ln_state == LNET_STATE_RUNNING) &&
+	    !lnet_ping_target_setup(&pbuf, &ping_mdh,
 				    LNET_PING_INFO_HDR_SIZE +
 				    lnet_get_ni_bytes(),
 				    false))
 		lnet_ping_target_update(pbuf, ping_mdh);
 
+
 	mutex_unlock(&the_lnet.ln_api_mutex);
+}
+
+
+void lnet_queue_ping_buffer_update(void)
+{
+	/* don't queue pb update if it is not needed */
+	if (atomic_dec_if_positive(&the_lnet.ln_update_ping_buf) < 0)
+		return;
+
+	/* don't queue pb update if already queued and not processed */
+	if (atomic_dec_if_positive(&the_lnet.ln_pb_update_ready) < 0)
+		return;
+
+	INIT_WORK(&the_lnet.ln_pb_update_work, lnet_update_ping_buffer);
+	queue_work(the_lnet.ln_pb_update_wq, &the_lnet.ln_pb_update_work);
 }
 
 void lnet_incr_dlc_seq(void)

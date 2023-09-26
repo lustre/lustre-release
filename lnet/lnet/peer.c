@@ -935,6 +935,9 @@ lnet_push_update_to_peers(int force)
 	int lncpt;
 	int cpt;
 
+	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
+		return;
+
 	lnet_net_lock(LNET_LOCK_EX);
 	if (lnet_peer_discovery_disabled)
 		force = 0;
@@ -3574,6 +3577,7 @@ __must_hold(&lp->lp_lock)
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		lnet_ping_buffer_decref(pbuf);
 		rc = -ESHUTDOWN;
 		goto out;
 	}

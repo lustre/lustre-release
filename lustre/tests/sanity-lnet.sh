@@ -3742,6 +3742,35 @@ test_402() {
 }
 run_test 402 "Destination net rule should not panic"
 
+test_500() {
+	reinit_dlc || return $?
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	add_net "tcp" "${INTERFACES[0]}"
+	add_net "tcp" "${FAKE_IF}"
+
+	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+		error "Failed to discover self"
+
+	$LCTL net_delay_add -s *@tcp -d *@tcp -r 1 -l 1 -m PUT ||
+		error "Failed to add delay rule"
+
+	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | head -n 1) -m PUT -e local_timeout -r 1
+	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | tail -n 1) -m PUT -e local_timeout -r 1
+
+	ip link set $FAKE_IF down ||
+		error "Failed to set link down"
+	ip link set $FAKE_IF up ||
+		error "Failed to set link up"
+
+	unload_modules
+}
+run_test 500 "Check deadlock on ping target update"
+
 complete_test $SECONDS
 cleanup_testsuite
 exit_status

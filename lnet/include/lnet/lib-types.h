@@ -1910,6 +1910,12 @@ struct lnet {
 
 	/* for LNDs to signal that ping buffer needs updating */
 	atomic_t                        ln_update_ping_buf;
+
+	/* workqueue for serving lnd ping buffer update requests */
+	struct workqueue_struct		*ln_pb_update_wq;
+	struct work_struct		ln_pb_update_work;
+
+	atomic_t                        ln_pb_update_ready;
 };
 
 struct genl_filter_list {

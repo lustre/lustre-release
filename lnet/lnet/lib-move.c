@@ -4065,7 +4065,8 @@ lnet_monitor_thread(void *arg)
 		nlpnis = lnet_recover_peer_nis(peer_nids, LNET_MAX_NNIDS);
 		lnet_health_update_console(local_nids, nnis, peer_nids, nlpnis,
 					   now);
-		lnet_update_ping_buffer();
+
+		lnet_queue_ping_buffer_update();
 
 		/*
 		 * TODO do we need to check if we should sleep without
@@ -4302,6 +4303,16 @@ int lnet_monitor_thr_start(void)
 	if (rc)
 		goto clean_queues;
 
+	the_lnet.ln_pb_update_wq = alloc_workqueue("lnetpb_wq",
+						   WQ_UNBOUND,
+						   1);
+	if (!the_lnet.ln_pb_update_wq) {
+		rc = -ENOMEM;
+		CERROR("Failed to allocate LNet ping buffer workqueue\n");
+		goto clean_queues;
+	}
+	atomic_set(&the_lnet.ln_pb_update_ready, 1);
+
 	sema_init(&the_lnet.ln_mt_signal, 0);
 
 	lnet_net_lock(LNET_LOCK_EX);
@@ -4346,6 +4357,18 @@ void lnet_monitor_thr_stop(void)
 		return;
 
 	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING);
+
+	/* clean up the ping buffer update workqueue before telling
+	 * the monitor thread to shut down to avoid getting stuck
+	 * on pending messages
+	 */
+	mutex_unlock(&the_lnet.ln_api_mutex);
+	flush_workqueue(the_lnet.ln_pb_update_wq);
+	destroy_workqueue(the_lnet.ln_pb_update_wq);
+	atomic_set(&the_lnet.ln_pb_update_ready, 0);
+	the_lnet.ln_pb_update_wq = NULL;
+	mutex_lock(&the_lnet.ln_api_mutex);
+
 	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_STOPPING;
 	lnet_net_unlock(LNET_LOCK_EX);

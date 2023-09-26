@@ -1304,7 +1304,6 @@ lnet_set_route_aliveness(struct lnet_route *route, bool alive)
 		       old ? "up" : "down",
 		       alive ? "up" : "down");
 }
-void lnet_update_ping_buffer(void);
 
 extern struct blocking_notifier_head lnet_ioctl_list;
 static inline int notifier_from_ioctl_errno(int err)
@@ -1315,4 +1314,5 @@ static inline int notifier_from_ioctl_errno(int err)
 }
 
 void lnet_mark_ping_buffer_for_update(void);
+void lnet_queue_ping_buffer_update(void);
 #endif
