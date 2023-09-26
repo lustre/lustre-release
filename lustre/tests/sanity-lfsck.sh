@@ -5813,6 +5813,12 @@ test_38()
 	[[ "$MDS1_VERSION" -le $(version_code 2.12.51) ]] &&
 		skip "Need MDS version newer than 2.12.51"
 
+	# skip basic ops on file with foreign LOV tests on 5.12-6.2 kernels
+	# until the filemap_read() issue is fixed by v6.2-rc4-61-g5956592ce337
+	(( $LINUX_VERSION_CODE < $(version_code 5.12.0) ||
+	   $LINUX_VERSION_CODE >= $(version_code 6.2.0) )) ||
+		skip "Need kernel < 5.12.0 or >= 6.2.0 for filemap_read() fix"
+
 	test_mkdir $DIR/$tdir
 	local uuid1=$(cat /proc/sys/kernel/random/uuid)
 	local uuid2=$(cat /proc/sys/kernel/random/uuid)
