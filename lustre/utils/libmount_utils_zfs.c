@@ -57,16 +57,26 @@ struct zfs_ldd_prop_bridge {
 	int   zlpb_ldd_offset;
 	/* Function pointer responsible for reading in the @prop
 	 * property from @zhp and storing it in @ldd_field */
+#ifdef HAVE_ZFS_NVLIST_CONST_INTERFACES
+	int (*zlpb_get_prop_fn)(zfs_handle_t *zhp, const char *prop,
+	     void *ldd_field);
+#else
 	int (*zlpb_get_prop_fn)(zfs_handle_t *zhp, char *prop, void *ldd_field);
+#endif
 	/* Function pointer responsible for writing the value of @ldd_field
 	 * into the @prop dataset property in @zhp */
 	int (*zlpb_set_prop_fn)(zfs_handle_t *zhp, char *prop, void *ldd_field);
 };
 
 /* Forward declarations needed to initialize the ldd prop bridge list */
+#ifdef HAVE_ZFS_NVLIST_CONST_INTERFACES
+static int zfs_get_prop_int(zfs_handle_t *, const char *, void *);
+static int zfs_get_prop_str(zfs_handle_t *, const char *, void *);
+#else
 static int zfs_get_prop_int(zfs_handle_t *, char *, void *);
-static int zfs_set_prop_int(zfs_handle_t *, char *, void *);
 static int zfs_get_prop_str(zfs_handle_t *, char *, void *);
+#endif
+static int zfs_set_prop_int(zfs_handle_t *, char *, void *);
 static int zfs_set_prop_str(zfs_handle_t *, char *, void *);
 
 /* Helper for initializing the entries in the special_ldd_prop_params list.
@@ -168,7 +178,11 @@ static int zfs_erase_prop(zfs_handle_t *zhp, char *param)
 	return zfs_remove_prop(zhp, nvl, propname);
 }
 
+#ifdef HAVE_ZFS_NVLIST_CONST_INTERFACES
+static int zfs_is_special_ldd_prop_param(const char *name)
+#else
 static int zfs_is_special_ldd_prop_param(char *name)
+#endif
 {
 	int i;
 
@@ -366,10 +380,16 @@ int zfs_erase_ldd(struct mkfs_opts *mop, char *param)
 	return add_param(mop->mo_ldd.ldd_params, key, "");
 }
 
+#ifdef HAVE_ZFS_NVLIST_CONST_INTERFACES
+static int zfs_get_prop_int(zfs_handle_t *zhp, const char *prop, void *val)
+{
+	const char *propstr;
+#else
 static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, void *val)
 {
-	nvlist_t *propval;
 	char *propstr;
+#endif
+	nvlist_t *propval;
 	int ret;
 
 	ret = nvlist_lookup_nvlist(zfs_get_user_props(zhp), prop, &propval);
@@ -388,10 +408,16 @@ static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, void *val)
 	return ret;
 }
 
+#ifdef HAVE_ZFS_NVLIST_CONST_INTERFACES
+static int zfs_get_prop_str(zfs_handle_t *zhp, const char *prop, void *val)
+{
+	const char *propstr;
+#else
 static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, void *val)
 {
-	nvlist_t *propval;
 	char *propstr;
+#endif
+	nvlist_t *propval;
 	int ret;
 
 	ret = nvlist_lookup_nvlist(zfs_get_user_props(zhp), prop, &propval);

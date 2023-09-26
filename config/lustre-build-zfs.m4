@@ -818,6 +818,25 @@ your distribution.
 			AC_DEFINE(HAVE_ZFS_REFCOUNT_HEADER, 1,
 				[Have zfs_refcount.h])
 		])
+		dnl #
+		dnl # ZFS 2.2 nvpair now returns and expects constant args
+		dnl #
+		old_EXTRA_KCFLAGS=$EXTRA_KCFLAGS
+		EXTRA_KCFLAGS+=" -Werror"
+		LB_CHECK_COMPILE([if ZFS nvlist interfaces require const],
+		zfs_nvpair_const, [
+			#include <sys/nvpair.h>
+		], [
+			nvpair_t *nvp = NULL;
+			nvlist_t *nvl = NULL;
+			const char *name = nvpair_name(nvp);
+			nvlist_lookup_string(nvl, name, &name);
+			nvlist_lookup_nvlist(nvl, name, &nvl);
+		], [
+			AC_DEFINE(HAVE_ZFS_NVLIST_CONST_INTERFACES, 1,
+			    [ZFS nvlist interfaces require const])
+		])
+		EXTRA_KCFLAGS=$old_EXTRA_KCFLAGS
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [
