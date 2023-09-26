@@ -623,6 +623,7 @@ static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
 		rhashtable_free_and_destroy(&orrd->od_obj_hash,
 					    nrs_orr_hash_exit, NULL);
 	}
+	synchronize_rcu();
 	kmem_cache_destroy(orrd->od_cache);
 
 	OBD_FREE_PTR(orrd);
