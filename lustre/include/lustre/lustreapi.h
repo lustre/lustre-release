@@ -1133,6 +1133,8 @@ static const struct comp_flag_name {
 	{ LCME_FL_INIT,		"init" },
 	{ LCME_FL_STALE,	"stale" },
 	{ LCME_FL_PREF_RW,	"prefer" },
+	{ LCME_FL_PREF_RD,	"prefrd" },
+	{ LCME_FL_PREF_WR,	"prefwr" },
 	{ LCME_FL_OFFLINE,	"offline" },
 	{ LCME_FL_NOSYNC,	"nosync" },
 	{ LCME_FL_EXTENSION,	"extension" },

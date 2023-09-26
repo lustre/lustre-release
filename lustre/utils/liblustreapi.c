@@ -3163,11 +3163,13 @@ static void lcme_flags2str(__u32 comp_flags)
 		return;
 	}
 	for (i = 0; i < ARRAY_SIZE(comp_flags_table); i++) {
-		if (comp_flags & comp_flags_table[i].cfn_flag) {
+		const char *cfn_name = comp_flags_table[i].cfn_name;
+		__u32 cfn_flag = comp_flags_table[i].cfn_flag;
+
+		if ((comp_flags & cfn_flag) == cfn_flag) {
 			if (found)
 				llapi_printf(LLAPI_MSG_NORMAL, ",");
-			llapi_printf(LLAPI_MSG_NORMAL, "%s",
-				     comp_flags_table[i].cfn_name);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s", cfn_name);
 			comp_flags &= ~comp_flags_table[i].cfn_flag;
 			found = true;
 		}

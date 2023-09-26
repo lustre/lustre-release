@@ -727,6 +727,7 @@ test_0h() {
 
 	local td=$DIR/$tdir
 	local tf=$td/$tfile
+	local flag
 	local ids
 	local i
 
@@ -762,13 +763,15 @@ test_0h() {
 	cp /etc/hosts $tf || error "error writing file '$tf'"
 	$LFS mirror resync $tf || error "error resync-ing file '$tf'"
 
-	$LFS setstripe --comp-set -I 0x20003 --comp-flags=prefer $tf ||
-		error "error setting flag prefer"
+	for flag in prefer prefrd prefwr; do
+		$LFS setstripe --comp-set -I 0x20003 --comp-flags=$flag $tf ||
+			error "error setting flag $flag"
 
-	verify_comp_attr lcme_flags $tf 0x20003 prefer
+		verify_comp_attr lcme_flags $tf 0x20003 $flag
 
-	$LFS setstripe --comp-set -I 0x20003 --comp-flags=^prefer $tf ||
-		error "error clearing prefer flag from component 0x20003"
+		$LFS setstripe --comp-set -I 0x20003 --comp-flags=^$flag $tf ||
+			error "error clearing $flag flag from component 0x20003"
+	done
 
 	# MDS disallows setting stale flag on the last non-stale mirror
 	[[ "$MDS1_VERSION" -ge $(version_code 2.12.57) ]] || return 0

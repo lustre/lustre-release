@@ -409,7 +409,7 @@ command_t cmdlist[] = {
 	 "     [[!] --blocks|-b N] [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
-	 "     [[!] --component-flags {init,stale,prefer,offline,nosync,extension}]\n"
+	 "     [[!] --component-flags {init,stale,prefer,prefrd,prefwr,offline,nosync,extension}]\n"
 	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>] [--help|-h]\n"
