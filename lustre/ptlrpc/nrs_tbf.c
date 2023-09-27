@@ -1589,9 +1589,9 @@ static int ldlm_tbf_id_cli_set(struct ptlrpc_request *req,
 static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 			      enum nrs_tbf_flag ti_type)
 {
-	u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
-	struct req_format *fmt = req_fmt(opc);
-	bool fmt_unset = false;
+	u32 opc;
+	struct req_format *fmt;
+	const struct req_format *old_fmt;
 	int rc;
 
 	memset(id, 0, sizeof(struct tbf_id));
@@ -1604,13 +1604,15 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 	/* client req doesn't have uid/gid pack in ptlrpc_body
 	 * --> fallback to the old method
 	 */
+	opc = lustre_msg_get_opc(req->rq_reqmsg);
+	fmt = req_fmt(opc);
 	if (fmt == NULL)
 		return -EINVAL;
+
 	req_capsule_init(&req->rq_pill, req, RCL_SERVER);
-	if (req->rq_pill.rc_fmt == NULL) {
+	old_fmt = req->rq_pill.rc_fmt;
+	if (old_fmt == NULL)
 		req_capsule_set(&req->rq_pill, fmt);
-		fmt_unset = true;
-	}
 
 	if (opc < OST_LAST_OPC)
 		rc = ost_tbf_id_cli_set(req, id);
@@ -1621,9 +1623,9 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 	else
 		rc = -EINVAL;
 
-	/* restore it to the initialized state */
-	if (fmt_unset)
-		req->rq_pill.rc_fmt = NULL;
+	/* restore it to the original state */
+	if (req->rq_pill.rc_fmt != old_fmt)
+		req->rq_pill.rc_fmt = old_fmt;
 	return rc;
 }
 
