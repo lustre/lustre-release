@@ -569,6 +569,18 @@ static int pool_add_objects(int nobjects, struct obd_page_pool *page_pool)
 			else {
 				OBD_ALLOC_LARGE(ptr_pages[i][j],
 					object_size(page_pool));
+				/*
+				 * It is possible that at some moment kmalloc
+				 * will start to return non-page aligned memory,
+				 * so leave this assort for quicker problem
+				 * detection
+				 */
+				LASSERTF(IS_ALIGNED((unsigned long)
+						    (ptr_pages[i][j]),
+						    PAGE_SIZE),
+				    "Page %p (order %i) is not aligned to PAGE_SIZE",
+				    ptr_pages[i][j], page_pool->opp_order);
+
 			}
 			if (ptr_pages[i][j] == NULL)
 				goto out_ptr_pages;
