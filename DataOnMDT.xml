@@ -428,19 +428,25 @@ error: setstripe: create composite file '/mnt/lustre/dom' failed:
 Invalid argument</screen></para>
           </section>
           <section><title>Persistent Set Command</title>
-              <para>To persistently set the value of the parameter, the
-                  <literal>lctl conf_param</literal> command is used:
-                  <screen>lctl conf_param &lt;fsname&gt;-MDT&lt;index&gt;.lod.dom_stripesize=&lt;value&gt;
-                  </screen></para>
+              <para>To persistently set the value of the parameter on a
+              specific MDT, the
+                  <literal>lctl set_param -P</literal> command is used:
+<screen>
+lctl set_param -P lod.<replaceable>fsname</replaceable>-MDT<replaceable>index</replaceable>.dom_stripesize=<replaceable>value</replaceable>
+</screen>
+              This can also use a wildcard '<literal>*</literal>' for the
+              <replaceable>index</replaceable> to apply to all MDTs.
+              </para>
           </section>
           <section><title>Persistent Set Examples</title>
-              <para>The new value of the parameter is saved in config log
-              permanently:
-                  <screen>mgs# lctl conf_param lustre-MDT0000.lod.dom_stripesize=512K
+              <para>The new value of the parameter is saved in the MGS
+              parameters log permanently:
+<screen>
+mgs# lctl set_param -P lod.lustre-MDT0000.dom_stripesize=512K
 mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
-524288</screen>
-              New settings are applied in few seconds and saved persistently in
-              server config.
+524288
+</screen>
+              and are applied on the matching MDTs within a few seconds.
               </para>
           </section>
       </section>
@@ -453,10 +459,10 @@ mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
                   <primary>dom</primary>
                   <secondary>disabledom</secondary>
               </indexterm>Disable DoM</title>
-          <para>When <literal>lctl set_param</literal> or
-            <literal>lctl conf_param</literal> sets
+          <para>When <literal>lctl set_param</literal> (whether with
+            <literal>-P</literal> or not) sets
             <literal>dom_stripesize</literal> to <literal>0</literal>, DoM
-            component creation will be disabled on the selected server, and
+            component creation will be disabled on the specified server(s), and
             any <emphasis>new</emphasis> layouts with a specified DoM component
             will have that component removed from the file layout. Existing
             files and layouts with DoM components on that MDT are not changed.

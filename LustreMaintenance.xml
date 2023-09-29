@@ -161,9 +161,10 @@ Regenerating Lustre Configuration Logs</title>
       </caution>
       <note>
         <para>If the MGS still holds any configuration logs, it may be
-	possible to dump these logs to save any parameters stored with
-	<literal>lctl conf_param</literal> by dumping the config logs on
-	the MGS and saving the output:</para>
+	  possible to dump these logs to save any parameters stored with
+	  <literal>lctl conf_param</literal> by dumping the config logs on
+	  the MGS and saving the output (once for each MDT and OST device):
+        </para>
 <screen>
 mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-client
 mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-MDT0000
@@ -401,7 +402,7 @@ mds# mount –t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt
 <screen>
 client# lfs mkdir -i 3 /mnt/testfs/new_dir_on_mdt3
 client# lfs mkdir -i 4 /mnt/testfs/new_dir_on_mdt4
-client# lfs mkdir -c 4 /mnt/testfs/new_directory_striped_across_4_mdts
+client# lfs mkdir -c 4 /mnt/testfs/project/new_large_dir_striped_over_4_mdts
 </screen>
         </listitem>
       </orderedlist>
@@ -572,7 +573,8 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
                 located there, and migrating files on the OST would fail.</para>
               </note>
               <caution>
-                <para>Do not use <literal>lctl conf_param</literal> to
+                <para>Do not use <literal>lctl set_param -P</literal> or
+                <literal>lctl conf_param</literal> to
                 deactivate the OST if it is still working, as this immediately
                 and permanently deactivates it in the file system configuration
                 on both the MDS and all clients.</para>
