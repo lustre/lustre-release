@@ -317,11 +317,19 @@ client# lfs mkdir -c 2 <replaceable>/testfs/new_striped_dir</replaceable>
 </screen>
         </para>
         <para condition='l2D'>In Lustre 2.13 and later, it is possible to set
-          the default striping on <emphasis>existing</emphasis> directories
-          so that new remote subdirectories are created on less-full MDTs:
+          the default directory layout on <emphasis>existing</emphasis>
+          directories so new remote subdirectories are created on less-full
+          MDTs:
 <screen>
-client# lfs setdirstripe -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
+client# lfs setdirstripe -D -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
 </screen>
+          See <xref linkend="lfsmkdirbyspace"/> for details.
+        </para>
+        <para condition='l2F'>In Lustre 2.15 and later, if no default
+          directory layout is set on the root directory, the MDS will
+          <emphasis>automatically</emphasis> set the default directory
+          layout the root directory to distribute the top-level directories
+          round-robin across all MDTs, see <xref linkend="fsdefaultlmv"/>.
         </para>
       </listitem>
     </orderedlist>

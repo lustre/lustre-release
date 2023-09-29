@@ -125,11 +125,11 @@
       at creation time using the
       <literal>lfs mkdir -c <replaceable>stripe_count</replaceable></literal>
       command, where <replaceable>stripe_count</replaceable> is often the
-      number of MDTs in the filesystem.  Striped directories should typically
-      not be used for all directories in the filesystem, since this incurs
-      extra overhead compared to non-striped directories, but is useful for
-      larger directories (over 50k entries) where many output files are being
-      created at one time.
+      number of MDTs in the filesystem.  Striped directories <emphasis>should
+      not be used for all directories in the filesystem</emphasis>, since this
+      incurs extra overhead compared to unstriped directories. This is indended
+      for specific applications where many output files are being created in
+      one large directory (over 50k entries).
       </para></note>
     </section>
     <section remap="h3">
@@ -782,11 +782,14 @@
               over multiple MDTs with the <literal>lfs mkdir -c</literal>
               command, which increases the single directory limit by a
               factor of the number of directory stripes used.</para></note>
+              <note condition='l2C'><para>In the 2.12 release, the
+              <literal>large_dir</literal> feature of ldiskfs was added to
+              allow the use of directories over 10M entries, but not enabled
+              by default.
+              </para></note>
               <note condition='l2E'><para>Starting in the 2.14 release, the
-              <literal>large_dir</literal> feature of ldiskfs is enabled by
-              default to allow directories with more than 10M entries.  In
-              the 2.12 release, the <literal>large_dir</literal> feature was
-              present but not enabled by default.</para></note>
+              <literal>large_dir</literal> feature is enabled by default.
+              </para></note>
             </entry>
           </row>
           <row>

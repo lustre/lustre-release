@@ -440,17 +440,14 @@ client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar
       files and sub-directories, to be stored on specific MDTs. To create
       a sub-directory on a given MDT use the command:
     </para>
-    <screen>
-client# lfs mkdir –i
-<replaceable>mdt_index</replaceable>
-<replaceable>/mount_point/remote_dir</replaceable>
+<screen>
+client# lfs mkdir -i <replaceable>mdt_index</replaceable> <replaceable>/mount_point/remote_dir</replaceable>
 </screen>
     <para>This command will allocate the sub-directory
-    <literal>remote_dir</literal> onto the MDT of index
-    <literal>mdt_index</literal>. For more information on adding additional MDTs
-    and 
-    <literal>mdt_index</literal> see
-    <xref linkend='addmdtindex' />.</para>
+    <literal>remote_dir</literal> onto the MDT with index
+    <literal>mdt_index</literal>. For more information on adding additional
+    MDTs and <literal>mdt_index</literal> see <xref linkend='addmdtindex' />.
+    </para>
     <warning>
       <para>An administrator can allocate remote sub-directories to separate
       MDTs. Creating remote sub-directories in parent directories not hosted on
@@ -500,39 +497,41 @@ client# lfs mkdir –i
       <primary>striping</primary>
       <secondary>metadata</secondary>
     </indexterm>Creating a directory striped across multiple MDTs</title>
-    <para>The Lustre 2.8 DNE feature enables individual files in a given
-    directory to store their metadata on separate MDTs (a <emphasis>striped
-    directory</emphasis>) once additional MDTs have been added to the
+    <para>The Lustre 2.8 DNE feature enables files in a single large
+    directory to be distributed across multiple MDTs (a <emphasis>striped
+    directory</emphasis>), if there are mutliple MDTs added to the
     filesystem, see <xref linkend="lustremaint.adding_new_mdt"/>.
-    The result of this is that metadata requests for
-    files in a striped directory are serviced by multiple MDTs and metadata
+    The result is that metadata requests for files in a single large
+    striped directory are serviced by multiple MDTs and metadata
     service load is distributed over all the MDTs that service a given
     directory. By distributing metadata service load over multiple MDTs,
-    performance can be improved beyond the limit of single MDT
-    performance. Prior to the development of this feature all files in a
-    directory must record their metadata on a single MDT.</para>
+    performance of very large directories can be improved beyond the limit
+    of one MDT.  Normally, all files in a directory must be created
+    on a single MDT.</para>
     <para>This command to stripe a directory over
     <replaceable>mdt_count</replaceable> MDTs is:
-    </para>
-    <screen>
-client# lfs mkdir -c
-<replaceable>mdt_count</replaceable>
-<replaceable>/mount_point/new_directory</replaceable>
+<screen>
+client# lfs mkdir -c <replaceable>mdt_count</replaceable> <replaceable>/mount_point/new_directory</replaceable>
 </screen>
+    </para>
     <para>The striped directory feature is most useful for distributing
-    single large directories (50k entries or more) across multiple MDTs,
-    since it incurs more overhead than non-striped directories.</para>
+    a single large directory (50k entries or more) across multiple MDTs.
+    This should be used with discretion since creating and removing striped
+    directories incurs more overhead than non-striped directories.</para>
     <section xml:id="lfsmkdirbyspace" condition='l2D'>
       <title>Directory creation by space/inode usage</title>
       <para>If the starting MDT is not specified when creating a new directory,
       this directory and its stripes will be distributed on MDTs by space usage.
-      For example the following will create a directory and its stripes on MDTs
-      with balanced space usage:</para>
-      <screen>lfs mkdir -c 2 &lt;dir1&gt;</screen>
+      For example the following will create a new directory on an MDT
+      preferring one that has less space usage:</para>
+      <screen>lfs mkdir -c 1 -i -1 <replaceable>dir1</replaceable></screen>
       <para>Alternatively, if a default directory stripe is set on a directory,
-      the subsequent syscall <literal>mkdir</literal> under
-      <literal>&lt;dir1&gt;</literal> will have the same effect:
-      <screen>lfs setdirstripe -D -c 2 &lt;dir1&gt;</screen></para>
+      the subsequent use of <literal>mkdir</literal> for subdirectories in
+      <replaceable>dir1</replaceable> will have the same effect:
+<screen>
+client# lfs setdirstripe -D -c 1 -i -1 <replaceable>dir1</replaceable>
+</screen>
+      </para>
       <para>The policy is:</para>
       <itemizedlist>
         <listitem><para>If free inodes/blocks on all MDT are almost the same,
