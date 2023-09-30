@@ -3882,14 +3882,21 @@ test_41() {
 	df -kP $dir; df -iP $dir
 	local bused=$(getquota -p $projid global curspace)
 	local iused=$(getquota -p $projid global curinodes)
-	# note trailing space to match double printf from awk
-	local expected="$blimit $bused $ilimit $iused "
+	local expected="$ilimit$iused"
 
 	wait_update $HOSTNAME \
-		"{ df -kP $dir; df -iP $dir; } |
-		 awk '/$FSNAME/ { printf \\\"%d %d \\\", \\\$2,\\\$3 }'" \
+		"df -iP $dir | awk \\\"/$FSNAME/\\\"'{print \\\$2 \\\$3}'" \
 		"$expected" ||
 		error "failed to get correct statfs for project quota"
+
+	expected=$(df -kP $dir | awk "/$FSNAME/"' {print $2}')
+	(( expected == blimit )) ||
+		error "blimit mismatch: $expected != $blimit"
+
+	# zfs block size is 4K, while quota is printed in 1K, df result may be
+	# larger than quota result, but it's no more than 3K
+	expected=$(df -kP $dir | awk "/$FSNAME/"' {print $3}')
+	(( expected - bused < 4)) || error "bused mismatch: $expected != $bused"
 }
 run_test 41 "df should return projid-specific values"
 
