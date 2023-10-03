@@ -2267,6 +2267,8 @@ recheck:
 			}
 
 			lhm = (struct lov_hsm_md *)lfm;
+			hsmsize = lov_foreign_size_le(lhm);
+
 			if (le32_to_cpu(lhm->lhm_length) !=
 			    sizeof(struct lov_hsm_base)) {
 				CDEBUG(D_LAYOUT,
@@ -2275,7 +2277,6 @@ recheck:
 				RETURN(-EINVAL);
 			}
 
-			hsmsize = lov_foreign_size_le(lhm);
 			if (le32_to_cpu(ent->lcme_size) < hsmsize) {
 				CDEBUG(D_LAYOUT,
 				       "Invalid HSM component size %u != %u\n",
