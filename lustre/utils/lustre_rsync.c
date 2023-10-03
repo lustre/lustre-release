@@ -1544,7 +1544,7 @@ void lr_print_failure(struct lr_info *info, int rc)
 /* Replicate filesystem operations from src_path to target_path */
 int lr_replicate(void)
 {
-	void *changelog_priv;
+	void *changelog_priv = NULL;
 	struct lr_info *info;
 	struct lr_info *ext = NULL;
 	time_t start;
