@@ -8535,9 +8535,9 @@ run_test 56aa "lfs find --size under striped dir"
 
 test_56ab() { # LU-10705
 	test_mkdir $DIR/$tdir
-	dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=8k count=1 seek=2k
-	dd if=/dev/zero of=$DIR/$tdir/$tfile.2 bs=4k count=1 seek=4k
-	dd if=/dev/zero of=$DIR/$tdir/$tfile.3 bs=1M count=2 seek=16
+	dd if=/dev/urandom of=$DIR/$tdir/$tfile.1 bs=8k count=1 seek=2k
+	dd if=/dev/urandom of=$DIR/$tdir/$tfile.2 bs=4k count=1 seek=4k
+	dd if=/dev/urandom of=$DIR/$tdir/$tfile.3 bs=1M count=2 seek=16
 	# Flush writes to ensure valid blocks.  Need to be more thorough for
 	# ZFS, since blocks are not allocated/returned to client immediately.
 	sync_all_data
