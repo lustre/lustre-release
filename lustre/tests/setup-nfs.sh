@@ -38,7 +38,7 @@ cleanup_nfs() {
 	local EXPORTS_FILE=$DEFAULT_EXPORTS_FILE
 
 	echo "Unmounting NFS clients"
-	do_nodes "$NFS_CLIENTS" "umount -v -f $NFS_MOUNT_POINT" || return 1
+	zconf_umount_clients "$NFS_CLIENTS" $NFS_MOUNT_POINT -f || return 1
 	do_nodes "$NFS_CLIENTS" "systemctl stop nfs-idmapd" || return 1
 
 	echo "Unexporting Lustre filesystem"
