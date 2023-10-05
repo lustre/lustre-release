@@ -940,7 +940,7 @@ static void yaml_lnet_print_error(int op, char *cmd, const char *errstr)
 	snprintf(errcode, sizeof(errcode), "%d", errno);
 
 	yaml_emitter_initialize(&log);
-	yaml_emitter_set_indent(&log, 6);
+	yaml_emitter_set_indent(&log, LNET_DEFAULT_INDENT);
 	yaml_emitter_set_output_file(&log, stderr);
 
 	yaml_emitter_open(&log);
@@ -1518,8 +1518,8 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 				struct lnet_ioctl_config_lnd_tunables *tunables,
 				struct lnet_dlc_network_descr *nw_descr)
 {
+	char num[INT_STRING_LEN];
 	yaml_event_t event;
-	char num[23];
 	int rc;
 
 	if (tunables->lt_cmn.lct_peer_timeout < 0 &&
@@ -1746,23 +1746,24 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			       struct lnet_dlc_network_descr *nw_descr,
 			       struct lnet_ioctl_config_lnd_tunables *tunables,
 			       struct cfs_expr_list *global_cpts,
-			       int flags)
+			       int version, int flags)
 {
 	struct lnet_dlc_intf_descr *intf;
 	struct nl_sock *sk = NULL;
+	const char *msg = NULL;
 	yaml_emitter_t output;
 	yaml_parser_t reply;
 	yaml_event_t event;
 	int rc;
 
-	if (!ip2net && (!nw_descr || nw_descr->nw_id == 0)) {
+	if (!(flags & NLM_F_DUMP) && !ip2net && (!nw_descr || nw_descr->nw_id == 0)) {
 		fprintf(stdout, "missing mandatory parameters in NI config: '%s'",
 			(!nw_descr) ? "network , interface" :
 			(nw_descr->nw_id == 0) ? "network" : "interface");
 		return -EINVAL;
 	}
 
-	if ((flags == NLM_F_CREATE) && list_empty(&nw_descr->nw_intflist)) {
+	if ((flags == NLM_F_CREATE) && !ip2net && list_empty(&nw_descr->nw_intflist)) {
 		fprintf(stdout, "creating a local NI needs at least one interface");
 		return -EINVAL;
 	}
@@ -1780,17 +1781,20 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 	}
 
 	rc = yaml_parser_set_input_netlink(&reply, sk, false);
-	if (rc == 0)
+	if (rc == 0) {
+		msg = yaml_parser_get_reader_error(&reply);
 		goto free_reply;
+	}
 
 	/* Create Netlink emitter to send request to kernel */
 	rc = yaml_emitter_initialize(&output);
-	if (rc == 0)
+	if (rc == 0) {
+		msg = "failed to initialize emitter";
 		goto free_reply;
+	}
 
 	rc = yaml_emitter_set_output_netlink(&output, sk, LNET_GENL_NAME,
-					     LNET_GENL_VERSION, LNET_CMD_NETS,
-					     flags);
+					     version, LNET_CMD_NETS, flags);
 	if (rc == 0)
 		goto emitter_error;
 
@@ -1864,7 +1868,7 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 		goto no_net_id;
 	}
 
-	if (list_empty(&nw_descr->nw_intflist))
+	if (!nw_descr || list_empty(&nw_descr->nw_intflist))
 		goto skip_intf;
 
 	yaml_scalar_event_initialize(&event, NULL,
@@ -1962,7 +1966,7 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 						     LNET_MAX_SHOW_NUM_CPT,
 						     &cpt_array);
 			for (i = 0; i < count; i++) {
-				char core[23];
+				char core[INT_STRING_LEN];
 
 				snprintf(core, sizeof(core), "%u", cpt_array[i]);
 				yaml_scalar_event_initialize(&event, NULL,
@@ -2024,12 +2028,26 @@ emitter_error:
 		yaml_document_t errmsg;
 
 		rc = yaml_parser_load(&reply, &errmsg);
+		if (rc == 1 && (flags & NLM_F_DUMP)) {
+			yaml_emitter_t debug;
+
+			rc = yaml_emitter_initialize(&debug);
+			if (rc == 1) {
+				yaml_emitter_set_indent(&debug,
+							LNET_DEFAULT_INDENT);
+				yaml_emitter_set_output_file(&debug, stdout);
+				rc = yaml_emitter_dump(&debug, &errmsg);
+			}
+			yaml_emitter_delete(&debug);
+		} else {
+			msg = yaml_parser_get_reader_error(&reply);
+		}
+		yaml_document_delete(&errmsg);
 	}
 	yaml_emitter_delete(&output);
 free_reply:
 	if (rc == 0) {
-		yaml_lnet_print_error(flags, "net",
-				      yaml_parser_get_reader_error(&reply));
+		yaml_lnet_print_error(flags, "net", msg);
 		rc = -EINVAL;
 	}
 	yaml_parser_delete(&reply);
@@ -2206,7 +2224,7 @@ static int jt_add_ni(int argc, char **argv)
 	rc = yaml_lnet_config_ni(net_id, ip2net, &nw_descr,
 				 found ? &tunables : NULL,
 				 (cpt_rc == 0) ? global_cpts : NULL,
-				 NLM_F_CREATE);
+				 LNET_GENL_VERSION, NLM_F_CREATE);
 	if (rc <= 0) {
 		if (rc == -EOPNOTSUPP)
 			goto old_api;
@@ -2327,7 +2345,8 @@ static int jt_del_ni(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, NULL, 0);
+	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, NULL,
+				 LNET_GENL_VERSION, 0);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
 			return rc;
@@ -2629,7 +2648,6 @@ static int jt_show_net(int argc, char **argv)
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	long int detail = 0;
-
 	const char *const short_options = "n:v";
 	static const struct option long_options[] = {
 		{ .name = "net",     .has_arg = required_argument, .val = 'n' },
@@ -2660,6 +2678,13 @@ static int jt_show_net(int argc, char **argv)
 		default:
 			return 0;
 		}
+	}
+
+	rc = yaml_lnet_config_ni(network, NULL, NULL, NULL, NULL,
+				 detail, NLM_F_DUMP);
+	if (rc <= 0) {
+		if (rc != -EOPNOTSUPP)
+			return rc;
 	}
 
 	rc = lustre_lnet_show_net(network, (int) detail, -1, &show_rc, &err_rc,

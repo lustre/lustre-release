@@ -326,6 +326,7 @@ struct lnet_lnd {
 					 unsigned int dev_idx);
 
 	/* Handle LND specific Netlink handling */
+	int (*lnd_nl_get)(int cmd, struct sk_buff *msg, int type, void *data);
 	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
 
 	const struct ln_key_list *lnd_keys;
@@ -463,7 +464,7 @@ struct lnet_net {
  *
  * @LNET_NET_ATTR_UNSPEC:		unspecified attribute to catch errors
  *
- * @LNET_NET_ATTR_HDR:			grouping for LNet net data (NLA_NESTED)
+ * @LNET_NET_ATTR_HDR:			grouping for LNet net data (NLA_NUL_STRING)
  * @LNET_NET_ATTR_TYPE:			LNet net this NI belongs to (NLA_STRING)
  * @LNET_NET_ATTR_LOCAL:		Local NI information (NLA_NESTED)
  */
@@ -479,15 +480,32 @@ enum lnet_net_attrs {
 
 #define LNET_NET_ATTR_MAX (__LNET_NET_ATTR_MAX_PLUS_ONE - 1)
 
-/** enum lnet_net_local_ni_attrs      - LNet local NI netlink properties
- *					attributes that describe local NI
+/** enum lnet_net_local_ni_attrs	      - LNet local NI netlink properties
+ *						attributes that describe local
+ *						NI
  *
- * @LNET_NET_LOCAL_NI_ATTR_UNSPEC:	unspecified attribute to catch errors
+ * @LNET_NET_LOCAL_NI_ATTR_UNSPEC:		unspecified attribute to catch
+ *						errors
  *
- * @LNET_NET_LOCAL_NI_ATTR_NID:		NID that represents this NI (NLA_STRING)
- * @LNET_NET_LOCAL_NI_ATTR_STATUS:	State of this NI (NLA_STRING)
- * @LNET_NET_LOCAL_NI_ATTR_INTERFACE:	Defines physical devices (NLA_NESTED)
- *					Used to be many devices but no longer.
+ * @LNET_NET_LOCAL_NI_ATTR_NID:			NID that represents this NI
+ *						(NLA_STRING)
+ * @LNET_NET_LOCAL_NI_ATTR_STATUS:		State of this NI (NLA_STRING)
+ * @LNET_NET_LOCAL_NI_ATTR_INTERFACE:		Defines physical devices. used
+ *						to be many devices but no longer
+ *						(NLA_NESTED)
+ *
+ * @LNET_NET_LOCAL_NI_ATTR_STATS:		NI general msg stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_UDSP_INFO:		NI UDSP state (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_SEND_STATS:		NI send stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_RECV_STATS:		NI recieved stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS:	NI dropped stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_HEALTH_STATS:	NI health stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_TUNABLES:		NI tunables (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES:	NI LND tunables (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_DEV_CPT:		NI CPT interface bound to
+ *						(NLA_S32)
+ * @LNET_NET_LOCAL_NI_ATTR_CPTS:		CPT core used by this NI
+ *						(NLA_STRING)
  */
 enum lnet_net_local_ni_attrs {
 	LNET_NET_LOCAL_NI_ATTR_UNSPEC = 0,
@@ -495,6 +513,17 @@ enum lnet_net_local_ni_attrs {
 	LNET_NET_LOCAL_NI_ATTR_NID,
 	LNET_NET_LOCAL_NI_ATTR_STATUS,
 	LNET_NET_LOCAL_NI_ATTR_INTERFACE,
+
+	LNET_NET_LOCAL_NI_ATTR_STATS,
+	LNET_NET_LOCAL_NI_ATTR_UDSP_INFO,
+	LNET_NET_LOCAL_NI_ATTR_SEND_STATS,
+	LNET_NET_LOCAL_NI_ATTR_RECV_STATS,
+	LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS,
+	LNET_NET_LOCAL_NI_ATTR_HEALTH_STATS,
+	LNET_NET_LOCAL_NI_ATTR_TUNABLES,
+	LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES,
+	LNET_NET_LOCAL_NI_DEV_CPT,
+	LNET_NET_LOCAL_NI_CPTS,
 
 	__LNET_NET_LOCAL_NI_ATTR_MAX_PLUS_ONE,
 };
@@ -518,6 +547,110 @@ enum lnet_net_local_ni_intf_attrs {
 };
 
 #define LNET_NET_LOCAL_NI_INTF_ATTR_MAX (__LNET_NET_LOCAL_NI_INTF_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_stats_attrs	      - LNet NI netlink properties
+ *						attributes that reports the
+ *						network traffic stats
+ *
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_UNSPEC:	unspecified attribute to catch
+ *						errors
+ *
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT:	Number of sent messages
+ *						(NLA_U32)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT:	Number of recieved messages
+ *						(NLA_U32)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT:	Number of dropped messages
+ *						(NLA_U32)
+ */
+enum lnet_net_local_ni_stats_attrs {
+	LNET_NET_LOCAL_NI_STATS_ATTR_UNSPEC = 0,
+
+	LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT,
+	LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT,
+	LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT,
+	__LNET_NET_LOCAL_NI_STATS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_LOCAL_NI_STATS_ATTR_MAX (__LNET_NET_LOCAL_NI_STATS_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_msg_stats_attrs	      - LNet NI netlink
+ *							properties attributes
+ *							that reports the message
+ *							type traffic stats
+ *
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_UNSPEC:		unspecified attribute
+ *							to catch errors
+ *
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT:		Number of PUT messages
+ *							(NLA_U32)
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT:		Number of GET messages
+ *							(NLA_U32)
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT:	Number of REPLY messages
+ *							(NLA_U32)
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT:		Number of ACK messages
+ *							(NLA_U32)
+ * @LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT:	Number of HELLO messages
+ *							(NLA_U32)
+ */
+enum lnet_net_local_ni_msg_stats_attrs {
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_UNSPEC = 0,
+
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT,
+	LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT,
+	__LNET_NET_LOCAL_NI_MSG_STATS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_LOCAL_NI_MSG_STATS_ATTR_MAX (__LNET_NET_LOCAL_NI_MSG_STATS_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_net_local_ni_health_stats_attrs	      - LNet NI netlink
+ *							properties attributes
+ *							that reports how
+ *							healthly it is.
+ *
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_UNSPEC:		unspecified attribute
+ *							to catch errors
+ *
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_FATAL_ERRORS:	How many fatal errors
+ *							(NLA_S32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_LEVEL:		How healthly is NI
+ *							(NLA_S32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_INTERRUPTS:	How many interrupts
+ *							happened (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_DROPPED:	How much traffic has
+ *							been dropped (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ABORTED:	How many aborts
+ *							happened (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NO_ROUTE:	How often routing broke
+ *							(NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_TIMEOUTS:	How often timeouts
+ *							occurred (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ERROR:		The number of errors
+ *							reported (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PING_COUNT:	Number of successful
+ *							ping (NLA_U32)
+ * @LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NEXT_PING:	Number of next pings
+ *							(NLA_U64)
+ */
+enum lnet_net_local_ni_health_stats_attrs {
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_UNSPEC = 0,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PAD = LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_UNSPEC,
+
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_FATAL_ERRORS,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_LEVEL,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_INTERRUPTS,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_DROPPED,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ABORTED,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NO_ROUTE,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_TIMEOUTS,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ERROR,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PING_COUNT,
+	LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NEXT_PING,
+	__LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_MAX_PLUS_ONE,
+};
+#define LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_MAX (__LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_MAX_PLUS_ONE - 1)
 
 /** enum lnet_net_local_ni_tunables_attrs	      - LNet NI tunables
  *							netlink properties.
@@ -632,6 +765,51 @@ enum lnet_ping_peer_ni_attr {
 };
 
 #define LNET_PING_PEER_NI_ATTR_MAX (__LNET_PING_PEER_NI_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_udsp_info_attr			      - LNet UDSP information reported for
+ *							some subsystem that tracks it.
+ *
+ * @LNET_UDSP_INFO_ATTR_UNSPEC:				unspecified attribute to catch errors
+ *
+ * @LNET_UDSP_INFO_ATTR_NET_PRIORITY,			LNet net priority in selection.
+ *							(NLA_S32)
+ * @LNET_UDSP_INFO_ATTR_NID_PRIORITY,			NID's priority in selection.
+ *							(NLA_S32)
+ * @LNET_UDSP_INFO_ATTR_PREF_RTR_NIDS_LIST:		Which gateway's are preferred.
+ *							(NLA_NESTED)
+ * @LNET_UDSP_INFO_ATTR_PREF_NIDS_LIST:			Which NIDs are preferred.
+ *							(NLA_NESTED)
+ */
+enum lnet_udsp_info_attr {
+	LNET_UDSP_INFO_ATTR_UNSPEC = 0,
+
+	LNET_UDSP_INFO_ATTR_NET_PRIORITY,
+	LNET_UDSP_INFO_ATTR_NID_PRIORITY,
+	LNET_UDSP_INFO_ATTR_PREF_RTR_NIDS_LIST,
+	LNET_UDSP_INFO_ATTR_PREF_NIDS_LIST,
+	__LNET_UDSP_INFO_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_UDSP_INFO_ATTR_MAX (__LNET_UDSP_INFO_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_udsp_info_pref_nids_attr		      - LNet UDSP information reported for
+ *							some subsystem that tracks it.
+ *
+ * @LNET_UDSP_INFO_PREF_NIDS_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LNET_UDSP_INFO_PREF_NIDS_ATTR_INDEX,		UDSP prority NIDs label
+ *							(NLA_NUL_STRING)
+ * @LNET_UDSP_INFO_PREF_NIDS_ATTR_NID,			UDSP prority NID (NLA_STRING)
+ */
+enum lnet_udsp_info_pref_nids_attr {
+	LNET_UDSP_INFO_PREF_NIDS_ATTR_UNSPEC = 0,
+
+	LNET_UDSP_INFO_PREF_NIDS_ATTR_INDEX,
+	LNET_UDSP_INFO_PREF_NIDS_ATTR_NID,
+	__LNET_UDSP_INFO_PREF_NIDS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_UDSP_INFO_PREF_NIDS_ATTR_MAX (__LNET_UDSP_INFO_PREF_NIDS_ATTR_MAX_PLUS_ONE - 1)
 
 struct lnet_ni {
 	/* chain on the lnet_net structure */

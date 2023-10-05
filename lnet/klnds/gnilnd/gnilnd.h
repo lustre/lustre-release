@@ -1776,6 +1776,15 @@ kgnilnd_find_net(lnet_nid_t nid, kgn_net_t **netp)
 #define KGNILND_POISON(ptr, c, s) memset(ptr, c, s)
 #endif
 
+enum kgnilnd_ni_lnd_tunables_attr {
+	LNET_NET_GNILND_TUNABLES_ATTR_UNSPEC = 0,
+
+	LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
+	__LNET_NET_GNILND_TUNABLES_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_NET_GNILND_TUNABLES_ATTR_MAX (__LNET_NET_GNILND_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
+
 int kgnilnd_dev_init(kgn_device_t *dev);
 void kgnilnd_dev_fini(kgn_device_t *dev);
 int kgnilnd_startup(struct lnet_ni *ni);

@@ -3480,13 +3480,10 @@ lnet_get_ni_config(struct lnet_ioctl_config_ni *cfg_ni,
 static int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
 {
 	struct lnet_ni *ni;
-	int cpt;
 	int rc = -ENOENT;
 
 	if (!msg_stats)
 		return -EINVAL;
-
-	cpt = lnet_net_lock_current();
 
 	ni = lnet_get_ni_idx_locked(msg_stats->im_idx);
 
@@ -3494,8 +3491,6 @@ static int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
 		lnet_usr_translate_stats(msg_stats, &ni->ni_stats);
 		rc = 0;
 	}
-
-	lnet_net_unlock(cpt);
 
 	return rc;
 }
@@ -4200,12 +4195,17 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_LOCAL_NI_MSG_STATS: {
 		struct lnet_ioctl_element_msg_stats *msg_stats = arg;
+		int cpt;
 
 		if (msg_stats->im_hdr.ioc_len != sizeof(*msg_stats))
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
+
+		cpt = lnet_net_lock_current();
 		rc = lnet_get_ni_stats(msg_stats);
+		lnet_net_unlock(cpt);
+
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
 		return rc;
@@ -4699,8 +4699,11 @@ report_ping_err:
 		CDEBUG(D_NET, "GET_UDSP_INFO for %s\n",
 		       libcfs_nid2str(info->cud_nid));
 
+		lnet_nid4_to_nid(info->cud_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_udsp_get_construct_info(info);
+		lnet_net_lock(0);
+		lnet_udsp_get_construct_info(info, &nid);
+		lnet_net_unlock(0);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
 		return 0;
@@ -4723,6 +4726,99 @@ report_ping_err:
 }
 EXPORT_SYMBOL(LNetCtl);
 
+/* This is the keys for the UDSP info which is used by many
+ * Netlink commands.
+ */
+static const struct ln_key_list udsp_info_list = {
+	.lkl_maxattr			= LNET_UDSP_INFO_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_UDSP_INFO_ATTR_NET_PRIORITY]		= {
+			.lkp_value	= "net priority",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_UDSP_INFO_ATTR_NID_PRIORITY]		= {
+			.lkp_value	= "nid priority",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_UDSP_INFO_ATTR_PREF_RTR_NIDS_LIST]	= {
+			.lkp_value	= "Preferred gateway NIDs",
+			.lkp_key_format	= LNKF_MAPPING,
+			.lkp_data_type	= NLA_NESTED,
+		},
+		[LNET_UDSP_INFO_ATTR_PREF_NIDS_LIST]		= {
+			.lkp_value	= "Preferred source NIDs",
+			.lkp_key_format	= LNKF_MAPPING,
+			.lkp_data_type	= NLA_NESTED,
+		},
+	},
+};
+
+static const struct ln_key_list udsp_info_pref_nids_list = {
+	.lkl_maxattr			= LNET_UDSP_INFO_PREF_NIDS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_UDSP_INFO_PREF_NIDS_ATTR_INDEX]		= {
+			.lkp_value	= "NID-0",
+			.lkp_data_type	= NLA_NUL_STRING,
+		},
+		[LNET_UDSP_INFO_PREF_NIDS_ATTR_NID]		= {
+			.lkp_value	= "0@lo",
+			.lkp_data_type  = NLA_STRING,
+		},
+	},
+};
+
+static int lnet_udsp_info_send(struct sk_buff *msg, int attr,
+			       struct lnet_nid *nid, bool remote)
+{
+	struct lnet_ioctl_construct_udsp_info *udsp;
+	struct nlattr *udsp_attr, *udsp_info;
+	struct nlattr *udsp_list_attr;
+	struct nlattr *udsp_list_info;
+	int i;
+
+	CFS_ALLOC_PTR(udsp);
+	if (!udsp)
+		return -ENOMEM;
+
+	udsp->cud_peer = remote;
+	lnet_udsp_get_construct_info(udsp, nid);
+
+	udsp_info = nla_nest_start(msg, attr);
+	udsp_attr = nla_nest_start(msg, 0);
+	nla_put_s32(msg, LNET_UDSP_INFO_ATTR_NET_PRIORITY,
+		    udsp->cud_net_priority);
+	nla_put_s32(msg, LNET_UDSP_INFO_ATTR_NID_PRIORITY,
+		    udsp->cud_nid_priority);
+
+	if (udsp->cud_pref_rtr_nid[0] == 0)
+		goto skip_list;
+
+	udsp_list_info = nla_nest_start(msg,
+					LNET_UDSP_INFO_ATTR_PREF_RTR_NIDS_LIST);
+	for (i = 0; i < LNET_MAX_SHOW_NUM_NID; i++) {
+		char tmp[8]; /* NID-"3 number"\0 */
+
+		if (udsp->cud_pref_rtr_nid[i] == 0)
+			break;
+
+		udsp_list_attr = nla_nest_start(msg, i);
+		snprintf(tmp, sizeof(tmp), "NID-%d", i);
+		nla_put_string(msg, LNET_UDSP_INFO_PREF_NIDS_ATTR_INDEX,
+			       tmp);
+		nla_put_string(msg, LNET_UDSP_INFO_PREF_NIDS_ATTR_NID,
+			       libcfs_nid2str(udsp->cud_pref_rtr_nid[i]));
+		nla_nest_end(msg, udsp_list_attr);
+	}
+	nla_nest_end(msg, udsp_list_info);
+skip_list:
+	nla_nest_end(msg, udsp_attr);
+	nla_nest_end(msg, udsp_info);
+	LIBCFS_FREE(udsp, sizeof(*udsp));
+
+	return 0;
+}
+
+/* LNet NI handling */
 static const struct ln_key_list net_props_list = {
 	.lkl_maxattr			= LNET_NET_ATTR_MAX,
 	.lkl_list			= {
@@ -4746,18 +4842,67 @@ static const struct ln_key_list net_props_list = {
 static struct ln_key_list local_ni_list = {
 	.lkl_maxattr			= LNET_NET_LOCAL_NI_ATTR_MAX,
 	.lkl_list			= {
-		[LNET_NET_LOCAL_NI_ATTR_NID]	= {
+		[LNET_NET_LOCAL_NI_ATTR_NID]		= {
 			.lkp_value		= "nid",
 			.lkp_data_type		= NLA_STRING
 		},
-		[LNET_NET_LOCAL_NI_ATTR_STATUS] = {
+		[LNET_NET_LOCAL_NI_ATTR_STATUS]		= {
 			.lkp_value		= "status",
 			.lkp_data_type		= NLA_STRING
 		},
-		[LNET_NET_LOCAL_NI_ATTR_INTERFACE] = {
+		[LNET_NET_LOCAL_NI_ATTR_INTERFACE]	= {
 			.lkp_value		= "interfaces",
 			.lkp_key_format		= LNKF_MAPPING,
 			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_STATS]		= {
+			.lkp_value		= "statistics",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_UDSP_INFO]	= {
+			.lkp_value		= "udsp info",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_SEND_STATS]	= {
+			.lkp_value		= "sent_stats",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_RECV_STATS]	= {
+			.lkp_value		= "received_stats",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS]	= {
+			.lkp_value		= "dropped_stats",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+
+		},
+		[LNET_NET_LOCAL_NI_ATTR_HEALTH_STATS]	= {
+			.lkp_value		= "health stats",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_TUNABLES]	= {
+			.lkp_value		= "tunables",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES]	= {
+			.lkp_value		= "lnd tunables",
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+		[LNET_NET_LOCAL_NI_DEV_CPT]		= {
+			.lkp_value		= "dev cpt",
+			.lkp_data_type		= NLA_S32,
+		},
+		[LNET_NET_LOCAL_NI_CPTS]		= {
+			.lkp_value		= "CPT",
+			.lkp_data_type		= NLA_STRING,
 		},
 	},
 };
@@ -4768,6 +4913,118 @@ static const struct ln_key_list local_ni_interfaces_list = {
 		[LNET_NET_LOCAL_NI_INTF_ATTR_TYPE] = {
 			.lkp_value	= "0",
 			.lkp_data_type	= NLA_STRING
+		},
+	},
+};
+
+static const struct ln_key_list local_ni_stats_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT]	= {
+			.lkp_value	= "send_count",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT]	= {
+			.lkp_value	= "recv_count",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT]	= {
+			.lkp_value	= "drop_count",
+			.lkp_data_type	= NLA_U32
+		},
+	},
+};
+
+static const struct ln_key_list local_ni_msg_stats_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_MSG_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT]	= {
+			.lkp_value	= "put",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT]	= {
+			.lkp_value	= "get",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT]	= {
+			.lkp_value	= "reply",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT]	= {
+			.lkp_value	= "ack",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT]	= {
+			.lkp_value	= "hello",
+			.lkp_data_type	= NLA_U32
+		},
+	},
+};
+
+static const struct ln_key_list local_ni_health_stats_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_FATAL_ERRORS] = {
+			.lkp_value	= "fatal_error",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_LEVEL] = {
+			.lkp_value	= "health value",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_INTERRUPTS] = {
+			.lkp_value	= "interrupts",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_DROPPED] = {
+			.lkp_value	= "dropped",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ABORTED] = {
+			.lkp_value	= "aborted",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NO_ROUTE] = {
+			.lkp_value	= "no route",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_TIMEOUTS] = {
+			.lkp_value	= "timeouts",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ERROR] = {
+			.lkp_value	= "error",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PING_COUNT] = {
+			.lkp_value	= "ping_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NEXT_PING] = {
+			.lkp_value	= "next_ping",
+			.lkp_data_type	= NLA_U64
+		},
+	},
+};
+
+static const struct ln_key_list local_ni_tunables_list = {
+	.lkl_maxattr			= LNET_NET_LOCAL_NI_TUNABLES_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT]	= {
+			.lkp_value	= "peer_timeout",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS]	= {
+			.lkp_value	= "peer_credits",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS] = {
+			.lkp_value	= "peer_buffer_credits",
+			.lkp_data_type	= NLA_S32
+		},
+		[LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS] = {
+			.lkp_value	= "credits",
+			.lkp_data_type	= NLA_S32
 		},
 	},
 };
@@ -4878,73 +5135,110 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK
 	struct netlink_ext_ack *extack = NULL;
 #endif
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 	int portid = NETLINK_CB(cb->skb).portid;
+	bool found = false, started = true;
+	const struct lnet_lnd *lnd = NULL;
+	int idx = nlist->lngl_idx, rc = 0;
 	int seq = cb->nlh->nlmsg_seq;
 	struct lnet_net *net;
-	int idx = 0, rc = 0;
-	bool found = false;
 	void *hdr = NULL;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
 	extack = cb->extack;
 #endif
-	if (!nlist->lngl_idx) {
-		const struct ln_key_list *all[] = {
-			&net_props_list, &local_ni_list,
-			&local_ni_interfaces_list,
-			NULL
-		};
-
-		rc = lnet_genl_send_scalar_list(msg, portid, seq,
-						&lnet_family,
-						NLM_F_CREATE | NLM_F_MULTI,
-						LNET_CMD_NETS, all);
-		if (rc < 0) {
-			NL_SET_ERR_MSG(extack, "failed to send key table");
-			GOTO(send_error, rc);
-		}
-	}
-
 	lnet_net_lock(LNET_LOCK_EX);
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		struct nlattr *local_ni, *ni_attr;
 		struct lnet_ni *ni;
+		int dev = 0;
 
 		if (nlist->lngl_net_id != LNET_NET_ANY &&
 		    nlist->lngl_net_id != net->net_id)
 			continue;
 
+		if (gnlh->version && LNET_NETTYP(net->net_id) != LOLND) {
+			if (!net->net_lnd) {
+				NL_SET_ERR_MSG(extack,
+					       "LND not setup for NI");
+				GOTO(net_unlock, rc = -ENODEV);
+			}
+			if (net->net_lnd != lnd)
+				lnd = net->net_lnd;
+			else
+				lnd = NULL;
+		}
+
+		/* We need to resend the key table every time the base LND
+		 * changed.
+		 */
+		if (!idx || lnd) {
+			const struct ln_key_list *all[] = {
+				&net_props_list, &local_ni_list,
+				&local_ni_interfaces_list,
+				&local_ni_stats_list,
+				&udsp_info_list,
+				&udsp_info_pref_nids_list,
+				&udsp_info_pref_nids_list,
+				&local_ni_msg_stats_list,
+				&local_ni_msg_stats_list,
+				&local_ni_msg_stats_list,
+				&local_ni_health_stats_list,
+				&local_ni_tunables_list,
+				NULL, /* lnd tunables */
+				NULL
+			};
+			int flags = NLM_F_CREATE | NLM_F_MULTI;
+
+			if (lnd) {
+				all[ARRAY_SIZE(all) - 2] = lnd->lnd_keys;
+				if (idx)
+					flags |= NLM_F_REPLACE;
+				started = true;
+			}
+
+			rc = lnet_genl_send_scalar_list(msg, portid, seq,
+							&lnet_family, flags,
+							LNET_CMD_NETS, all);
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack, "failed to send key table");
+				GOTO(net_unlock, rc);
+			}
+		}
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_NETS);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			GOTO(net_unlock, rc = -EMSGSIZE);
+		}
+
+		if (started) {
+			nla_put_string(msg, LNET_NET_ATTR_HDR, "");
+			started = false;
+		}
+
+		nla_put_string(msg, LNET_NET_ATTR_TYPE,
+			       libcfs_net2str(net->net_id));
+
+		local_ni = nla_nest_start(msg, LNET_NET_ATTR_LOCAL);
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			struct nlattr *local_ni, *ni_attr;
 			char *status = "up";
 
 			if (idx++ < nlist->lngl_idx)
 				continue;
 
-			hdr = genlmsg_put(msg, portid, seq, &lnet_family,
-					  NLM_F_MULTI, LNET_CMD_NETS);
-			if (!hdr) {
-				NL_SET_ERR_MSG(extack, "failed to send values");
-				GOTO(net_unlock, rc = -EMSGSIZE);
-			}
-
-			if (idx == 1)
-				nla_put_string(msg, LNET_NET_ATTR_HDR, "");
-
-			nla_put_string(msg, LNET_NET_ATTR_TYPE,
-				       libcfs_net2str(net->net_id));
+			ni_attr = nla_nest_start(msg, dev++);
 			found = true;
-
-			local_ni = nla_nest_start(msg, LNET_NET_ATTR_LOCAL);
-			ni_attr = nla_nest_start(msg, idx - 1);
-
 			lnet_ni_lock(ni);
 			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
 				       libcfs_nidstr(&ni->ni_nid));
-			if (nid_is_lo0(&ni->ni_nid) &&
+			if (!nid_is_lo0(&ni->ni_nid) &&
 			    *ni->ni_status != LNET_NI_STATUS_UP)
 				status = "down";
-			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS, "up");
+			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS,
+				       status);
 
 			if (!nid_is_lo0(&ni->ni_nid) && ni->ni_interface) {
 				struct nlattr *intf_nest, *intf_attr;
@@ -4959,12 +5253,210 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 				nla_nest_end(msg, intf_nest);
 			}
 
-			lnet_ni_unlock(ni);
-			nla_nest_end(msg, ni_attr);
-			nla_nest_end(msg, local_ni);
+			if (gnlh->version) {
+				char cpts[LNET_MAX_SHOW_NUM_CPT * 4 + 4], *cpt;
+				struct lnet_ioctl_element_msg_stats msg_stats;
+				struct lnet_ioctl_element_stats stats;
+				size_t buf_len = sizeof(cpts), len;
+				struct nlattr *health_attr, *health_stats;
+				struct nlattr *send_attr, *send_stats;
+				struct nlattr *recv_attr, *recv_stats;
+				struct nlattr *drop_attr, *drop_stats;
+				struct nlattr *stats_attr, *ni_stats;
+				struct nlattr *tun_attr, *ni_tun;
+				int j;
 
-			genlmsg_end(msg, hdr);
+				stats.iel_send_count = lnet_sum_stats(&ni->ni_stats,
+								      LNET_STATS_TYPE_SEND);
+				stats.iel_recv_count = lnet_sum_stats(&ni->ni_stats,
+								      LNET_STATS_TYPE_RECV);
+				stats.iel_drop_count = lnet_sum_stats(&ni->ni_stats,
+								      LNET_STATS_TYPE_DROP);
+				lnet_ni_unlock(ni);
+
+				stats_attr = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_STATS);
+				ni_stats = nla_nest_start(msg, 0);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT,
+					    stats.iel_send_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT,
+					    stats.iel_recv_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT,
+					    stats.iel_drop_count);
+				nla_nest_end(msg, ni_stats);
+				nla_nest_end(msg, stats_attr);
+
+				if (gnlh->version < 4)
+					goto skip_udsp;
+
+				/* UDSP info */
+				rc = lnet_udsp_info_send(msg, LNET_NET_LOCAL_NI_ATTR_UDSP_INFO,
+							 &ni->ni_nid, false);
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "Failed to get udsp info");
+					genlmsg_cancel(msg, hdr);
+					GOTO(net_unlock, rc = -ENOMEM);
+				}
+skip_udsp:
+				if (gnlh->version < 2)
+					goto skip_msg_stats;
+
+				msg_stats.im_idx = idx - 1;
+				rc = lnet_get_ni_stats(&msg_stats);
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to get msg stats");
+					genlmsg_cancel(msg, hdr);
+					GOTO(net_unlock, rc = -ENOMEM);
+				}
+
+				send_stats = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_SEND_STATS);
+				send_attr = nla_nest_start(msg, 0);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
+					    msg_stats.im_send_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_send_stats.ico_put_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
+					    msg_stats.im_send_stats.ico_reply_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT,
+					    msg_stats.im_send_stats.ico_ack_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT,
+					    msg_stats.im_send_stats.ico_hello_count);
+				nla_nest_end(msg, send_attr);
+				nla_nest_end(msg, send_stats);
+
+				recv_stats = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_RECV_STATS);
+				recv_attr = nla_nest_start(msg, 0);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
+					    msg_stats.im_recv_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_recv_stats.ico_put_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
+					    msg_stats.im_recv_stats.ico_reply_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT,
+					    msg_stats.im_recv_stats.ico_ack_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT,
+					    msg_stats.im_recv_stats.ico_hello_count);
+				nla_nest_end(msg, recv_attr);
+				nla_nest_end(msg, recv_stats);
+
+				drop_stats = nla_nest_start(msg,
+							    LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS);
+				drop_attr = nla_nest_start(msg, 0);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
+					    msg_stats.im_drop_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_drop_stats.ico_put_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
+					    msg_stats.im_drop_stats.ico_reply_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_ACK_COUNT,
+					    msg_stats.im_drop_stats.ico_ack_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_HELLO_COUNT,
+					    msg_stats.im_drop_stats.ico_hello_count);
+				nla_nest_end(msg, drop_attr);
+				nla_nest_end(msg, drop_stats);
+
+				/* health stats */
+				health_stats = nla_nest_start(msg,
+							      LNET_NET_LOCAL_NI_ATTR_HEALTH_STATS);
+				health_attr = nla_nest_start(msg, 0);
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_FATAL_ERRORS,
+					    atomic_read(&ni->ni_fatal_error_on));
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_LEVEL,
+					    atomic_read(&ni->ni_healthv));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_INTERRUPTS,
+					    atomic_read(&ni->ni_hstats.hlt_local_interrupt));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_DROPPED,
+					    atomic_read(&ni->ni_hstats.hlt_local_dropped));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ABORTED,
+					    atomic_read(&ni->ni_hstats.hlt_local_aborted));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NO_ROUTE,
+					    atomic_read(&ni->ni_hstats.hlt_local_no_route));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_TIMEOUTS,
+					    atomic_read(&ni->ni_hstats.hlt_local_timeout));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_ERROR,
+					    atomic_read(&ni->ni_hstats.hlt_local_error));
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PING_COUNT,
+					    ni->ni_ping_count);
+				nla_put_u64_64bit(msg, LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_NEXT_PING,
+						  ni->ni_next_ping,
+						  LNET_NET_LOCAL_NI_HEALTH_STATS_ATTR_PAD);
+				nla_nest_end(msg, health_attr);
+				nla_nest_end(msg, health_stats);
+skip_msg_stats:
+				/* Report net tunables */
+				tun_attr = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_TUNABLES);
+				ni_tun = nla_nest_start(msg, 0);
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_TIMEOUT,
+					    ni->ni_net->net_tunables.lct_peer_timeout);
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_CREDITS,
+					    ni->ni_net->net_tunables.lct_peer_tx_credits);
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_TUNABLES_ATTR_PEER_BUFFER_CREDITS,
+					    ni->ni_net->net_tunables.lct_peer_rtr_credits);
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_TUNABLES_ATTR_CREDITS,
+					    ni->ni_net->net_tunables.lct_max_tx_credits);
+				nla_nest_end(msg, ni_tun);
+
+				nla_nest_end(msg, tun_attr);
+
+				if (lnd && lnd->lnd_nl_get && lnd->lnd_keys) {
+					struct nlattr *lnd_tun_attr, *lnd_ni_tun;
+
+					lnd_tun_attr = nla_nest_start(msg,
+								      LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES);
+					lnd_ni_tun = nla_nest_start(msg, 0);
+					rc = lnd->lnd_nl_get(LNET_CMD_NETS, msg,
+							     LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES,
+							     ni);
+					if (rc < 0) {
+						NL_SET_ERR_MSG(extack,
+							       "failed to get lnd tunables");
+						genlmsg_cancel(msg, hdr);
+						GOTO(net_unlock, rc);
+					}
+					nla_nest_end(msg, lnd_ni_tun);
+					nla_nest_end(msg, lnd_tun_attr);
+				}
+
+				nla_put_s32(msg, LNET_NET_LOCAL_NI_DEV_CPT, ni->ni_dev_cpt);
+
+				/* Report cpts. We could send this as a nested list
+				 * of integers but older versions of the tools
+				 * except a string. The new versions can handle
+				 * both formats so in the future we can change
+				 * this to a nested list.
+				 */
+				len = snprintf(cpts, buf_len, "\"[");
+				cpt = cpts + len;
+				buf_len -= len;
+
+				if (ni->ni_ncpts == LNET_CPT_NUMBER && !ni->ni_cpts)  {
+					for (j = 0; j < ni->ni_ncpts; j++) {
+						len = snprintf(cpt, buf_len, "%d,", j);
+						buf_len -= len;
+						cpt += len;
+					}
+				} else {
+					for (j = 0;
+					     ni->ni_cpts && j < ni->ni_ncpts &&
+					     j < LNET_MAX_SHOW_NUM_CPT; j++) {
+						len = snprintf(cpt, buf_len, "%d,",
+							       ni->ni_cpts[j]);
+						buf_len -= len;
+						cpt += len;
+					}
+				}
+				snprintf(cpt - 1, sizeof(cpts), "]\"");
+
+				nla_put_string(msg, LNET_NET_LOCAL_NI_CPTS, cpts);
+			} else {
+				lnet_ni_unlock(ni);
+			}
+			nla_nest_end(msg, ni_attr);
 		}
+		nla_nest_end(msg, local_ni);
+
+		genlmsg_end(msg, hdr);
 	}
 
 	if (!found) {
@@ -4974,10 +5466,9 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 		NL_SET_ERR_MSG(extack, "Network is down");
 		rc = -ESRCH;
 	}
+	nlist->lngl_idx = idx;
 net_unlock:
 	lnet_net_unlock(LNET_LOCK_EX);
-send_error:
-	nlist->lngl_idx = idx;
 
 	return lnet_nl_send_error(cb->skb, portid, seq, rc);
 }
@@ -5127,7 +5618,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				if (nla_type(intf) !=
 				    LN_SCALAR_ATTR_VALUE) {
 					GENL_SET_ERR_MSG(info,
-							 "0 key is invalid");
+							 "cannot parse interface");
 					GOTO(out, rc = -EINVAL);
 				}
 
@@ -5307,10 +5798,10 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	nla_for_each_nested(attr, params, rem) {
+		bool ni_list = false, ipnets = false;
 		struct lnet_ioctl_config_ni conf;
 		u32 net_id = LNET_NET_ANY;
 		struct nlattr *entry;
-		bool ni_list = false;
 		int rem2;
 
 		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
@@ -5340,6 +5831,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 						GOTO(out, rc = len);
 					}
 					ni_list = true;
+					ipnets = true;
 				} else if (nla_strcmp(entry, "net type") == 0) {
 					char tmp[LNET_NIDSTR_SIZE];
 
@@ -5382,6 +5874,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 				struct nlattr *interface;
 				int rem3;
 
+				ipnets = false;
 				nla_for_each_nested(interface, entry, rem3) {
 					rc = lnet_genl_parse_local_ni(interface, info,
 								      net_id, &conf,
@@ -5407,6 +5900,13 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 				GENL_SET_ERR_MSG(info,
 						 "cannot del network");
 			}
+		} else if ((info->nlhdr->nlmsg_flags & NLM_F_CREATE) &&
+			   ipnets && ni_list) {
+			rc = lnet_handle_legacy_ip2nets(conf.lic_legacy_ip2nets,
+							NULL);
+			if (rc < 0)
+				GENL_SET_ERR_MSG(info,
+						 "cannot setup ip2nets");
 		}
 	}
 out:

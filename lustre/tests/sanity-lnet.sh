@@ -1362,10 +1362,10 @@ test_108() {
 	add_net "tcp" "$FAKE_IF" || return $?
 
 	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-        - nid: ${FAKE_IP}@tcp
-          status: up
-          interfaces:
-              0: ${FAKE_IF}
+      -     nid: ${FAKE_IP}@tcp
+            status: up
+            interfaces:
+                  0: ${FAKE_IF}
 EOF
 	$LNETCTL net show > $TMP/sanity-lnet-$testnum-actual.yaml
 	compare_yaml_files || error "not all interfaces were setup"

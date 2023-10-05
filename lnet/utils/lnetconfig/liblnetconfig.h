@@ -63,6 +63,7 @@
 
 #define MAX_NUM_IPS		128
 #define INT_STRING_LEN		23
+#define LNET_DEFAULT_INDENT	6
 
 #define modparam_path "/sys/module/lnet/parameters/"
 #define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"

@@ -1251,8 +1251,48 @@ static const struct ln_key_list kiblnd_tunables_keys = {
 			.lkp_value	= "conns_per_peer",
 			.lkp_data_type	= NLA_U16
 		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TIMEOUT] = {
+			.lkp_value	= "timeout",
+			.lkp_data_type	= NLA_U32,
+		},
 	},
 };
+
+static int
+kiblnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
+{
+	struct lnet_ioctl_config_o2iblnd_tunables *tuns;
+	struct lnet_ni *ni = data;
+
+	if (!ni || !msg)
+		return -EINVAL;
+
+	if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
+		return -EOPNOTSUPP;
+
+	tuns = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS,
+		    tuns->lnd_peercredits_hiw);
+	if (tuns->lnd_map_on_demand) {
+		nla_put_flag(msg,
+			     LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND);
+	}
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS,
+		    tuns->lnd_concurrent_sends);
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_POOL_SIZE,
+		    tuns->lnd_fmr_pool_size);
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_FLUSH_TRIGGER,
+		    tuns->lnd_fmr_flush_trigger);
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_CACHE,
+		    tuns->lnd_fmr_cache);
+	nla_put_u16(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_NTX, tuns->lnd_ntx);
+	nla_put_u16(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER,
+		    tuns->lnd_conns_per_peer);
+	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TIMEOUT,
+		    kiblnd_timeout());
+
+	return 0;
+}
 
 static int
 kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
@@ -3713,6 +3753,7 @@ static const struct lnet_lnd the_o2iblnd = {
 	.lnd_send	= kiblnd_send,
 	.lnd_recv	= kiblnd_recv,
 	.lnd_get_dev_prio = kiblnd_get_dev_prio,
+	.lnd_nl_get	= kiblnd_nl_get,
 	.lnd_nl_set	= kiblnd_nl_set,
 	.lnd_keys	= &kiblnd_tunables_keys,
 };

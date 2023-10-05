@@ -24,6 +24,23 @@
  */
 #include "gnilnd.h"
 
+static int
+kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
+{
+	struct lnet_ioctl_config_gnilnd_tunables *tuns;
+	struct lnet_ni *ni = data;
+
+	if (!ni || !msg)
+		return -EINVAL;
+
+	if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
+		return -EOPNOTSUPP;
+
+	tuns = &ni->ni_lnd_tunables.lnd_tun_u.lnd_gni;
+	nla_put_u32(msg, LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
+		    kgnilnd_timeout());
+}
+
 /* Primary entry points from LNET.  There are no guarantees against reentrance. */
 const struct lnet_lnd the_kgnilnd = {
 	.lnd_type       = GNILND,
@@ -33,6 +50,7 @@ const struct lnet_lnd the_kgnilnd = {
 	.lnd_send       = kgnilnd_send,
 	.lnd_recv       = kgnilnd_recv,
 	.lnd_eager_recv = kgnilnd_eager_recv,
+	.lnd_nl_get	= kgnilnd_nl_get,
 };
 
 kgn_data_t      kgnilnd_data;

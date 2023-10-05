@@ -806,10 +806,35 @@ static const struct ln_key_list ksocknal_tunables_keys = {
 	.lkl_list			= {
 		[LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER]  = {
 			.lkp_value	= "conns_per_peer",
-			.lkp_data_type	= NLA_S32
+			.lkp_data_type	= NLA_U16
+		},
+		[LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT]	= {
+			.lkp_value	= "timeout",
+			.lkp_data_type	= NLA_U32
 		},
 	},
 };
+
+static int
+ksocknal_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
+{
+	struct lnet_lnd_tunables *tun;
+	struct lnet_ni *ni = data;
+
+	if (!ni || !msg)
+		return -EINVAL;
+
+	 if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
+		return -EOPNOTSUPP;
+
+	tun = &ni->ni_lnd_tunables;
+	nla_put_u16(msg, LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER,
+		    tun->lnd_tun_u.lnd_sock.lnd_conns_per_peer);
+	nla_put_u32(msg, LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT,
+		    ksocknal_timeout());
+
+	return 0;
+}
 
 static int
 ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
@@ -2590,6 +2615,7 @@ static const struct lnet_lnd the_ksocklnd = {
 	.lnd_recv		= ksocknal_recv,
 	.lnd_notify_peer_down	= ksocknal_notify_gw_down,
 	.lnd_accept		= ksocknal_accept,
+	.lnd_nl_get		= ksocknal_nl_get,
 	.lnd_nl_set		= ksocknal_nl_set,
 	.lnd_keys		= &ksocknal_tunables_keys,
 };
