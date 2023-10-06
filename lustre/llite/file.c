@@ -1708,25 +1708,27 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   struct file *file, enum cl_io_type iot,
 		   loff_t *ppos, size_t bytes)
 {
-	struct vvp_io *vio = vvp_env_io(env);
 	struct inode *inode = file_inode(file);
+	struct ll_file_data *fd  = file->private_data;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct ll_file_data *fd  = file->private_data;
+	struct vvp_io *vio = vvp_env_io(env);
+	struct cl_dio_aio *ci_dio_aio = NULL;
 	struct range_lock range;
 	struct cl_io *io;
-	bool range_locked = false;
-	ssize_t result = 0;
 	int flags = vvp_io_args_flags(file, args);
-	int rc = 0;
-	int rc2 = 0;
-	int retries = 1000;
-	unsigned int retried = 0, dio_lock = 0;
-	bool is_aio = false;
 	bool is_parallel_dio = false;
-	struct cl_dio_aio *ci_dio_aio = NULL;
-	size_t per_bytes, max_io_bytes;
+	bool range_locked = false;
+	unsigned int retried = 0;
+	bool dio_lock = false;
+	bool is_aio = false;
+	size_t max_io_bytes;
+	ssize_t result = 0;
+	int retries = 1000;
+	size_t per_bytes;
 	bool partial_io;
+	int rc2 = 0;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1740,7 +1742,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	io = vvp_env_thread_io(env);
 	if (iocb_ki_flags_check(flags, DIRECT)) {
 		if (iocb_ki_flags_check(flags, APPEND))
-			dio_lock = 1;
+			dio_lock = true;
 		if (!is_sync_kiocb(args->u.normal.via_iocb))
 			is_aio = true;
 
