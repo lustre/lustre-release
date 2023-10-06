@@ -1703,6 +1703,31 @@ static void ll_heat_add(struct inode *inode, enum cl_io_type iot,
 	spin_unlock(&lli->lli_heat_lock);
 }
 
+static bool
+ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
+			       enum cl_io_type iot, size_t count)
+{
+	/* we can only do this with IOCB_FLAGS, since we can't modify f_flags
+	 * because they're visible in userspace.  so we check for IOCB_DIRECT
+	 */
+#ifdef IOCB_DIRECT
+	ENTRY;
+
+	/* it doesn't make sense to switch unless it's READ or WRITE */
+	if (iot != CIT_WRITE && iot != CIT_READ)
+		RETURN(false);
+
+	if (!iocb)
+		RETURN(false);
+
+	/* Already using direct I/O, no need to switch. */
+	if (iocb->ki_flags & IOCB_DIRECT)
+		RETURN(false);
+
+#endif
+	RETURN(false);
+}
+
 static ssize_t
 ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   struct file *file, enum cl_io_type iot,
@@ -2150,13 +2175,21 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	ll_ras_enter(file, iocb->ki_pos, iov_iter_count(to));
 
-	result = ll_do_fast_read(iocb, to);
-	if (result < 0 || iov_iter_count(to) == 0)
-		GOTO(out, result);
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_READ,
+					   iov_iter_count(to))) {
+#ifdef IOCB_DIRECT
+		iocb->ki_flags |= IOCB_DIRECT;
+		CDEBUG(D_VFSTRACE, "switching to DIO\n");
+#endif
+	}
 
 	args = ll_env_args(env);
 	args->u.normal.via_iter = to;
 	args->u.normal.via_iocb = iocb;
+
+	result = ll_do_fast_read(iocb, to);
+	if (result < 0 || iov_iter_count(to) == 0)
+		GOTO(out, result);
 
 	rc2 = ll_file_io_generic(env, args, file, CIT_READ,
 				 &iocb->ki_pos, iov_iter_count(to));
@@ -2290,6 +2323,14 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	result = pcc_file_write_iter(iocb, from, &cached);
 	if (cached && result != -ENOSPC && result != -EDQUOT)
 		GOTO(out, rc_normal = result);
+
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_WRITE,
+					   iov_iter_count(from))) {
+#ifdef IOCB_DIRECT
+		iocb->ki_flags |= IOCB_DIRECT;
+		CDEBUG(D_VFSTRACE, "switching to DIO\n");
+#endif
+	}
 
 	/* NB: we can't do direct IO for tiny writes because they use the page
 	 * cache, we can't do sync writes because tiny writes can't flush
