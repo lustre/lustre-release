@@ -4,5 +4,9 @@ License:        GPL-2.0-only
 Requires:       kernel-%1
 %endif
 Requires:       %{name}-osd-zfs-mount = %{version}
+%if 0%{confzfsdobjpath} != 0
+BuildRequires:  kmod-zfs-devel
+%endif
 Provides:       %{name}-osd = %{version}
+Provides:       %{name}-osd-zfs = %{version}
 Obsoletes:      %{name}-osd-zfs < %{version}

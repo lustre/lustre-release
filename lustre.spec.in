@@ -373,6 +373,7 @@ lustre tools (mount/mkfs) to provide support for ldisfs
 %endif
 
 %if %{with zfs}
+%global confzfsdobjpath %(echo '%configure_args' | grep -q -- --with-zfs-obj= ; echo $?)
 %kernel_module_package -n %{name}-osd-zfs -p %SOURCE5 -f %SOURCE6 %{_flavor}
 %if %{with lustre_utils}
 %package osd-zfs-mount
@@ -380,9 +381,16 @@ Summary: Lustre mount's zfs-specific helper library
 BuildRequires: pkgconfig(mount)
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
+%if 0%{confzfsdobjpath} != 0
+BuildRequires: (libzfs-devel or libzfs4-devel or libzfs5-devel)
+%endif
+# end confzfsdobjpath
 # Tests also require zpool from zfs package:
 Requires: zfs
 Requires: %{requires_kmod_osd_zfs_name}
+Provides: %{name}-osd-mount = %{version}
+Provides: %{name}-osd-zfs-mount = %{version}
+Requires: %{name}-osd-zfs = %{version}
 
 %description osd-zfs-mount
 Provide a shared library (dso) that can be loaded into various
