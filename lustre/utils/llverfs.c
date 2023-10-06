@@ -702,6 +702,8 @@ int main(int argc, char **argv)
 	progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
 	while ((c = getopt_long(argc, argv, "c:hln:o:pqrs:t:vw",
 				      long_opts, NULL)) != -1) {
+		unsigned long val;    /* Staging value for num_dirs */
+
 		switch (c) {
 		case 'c':
 			chunksize = strtoul(optarg, NULL, 0) * ONE_MB;
@@ -715,8 +717,19 @@ int main(int argc, char **argv)
 			full = 1;
 			break;
 		case 'n':
-			num_dirs = strtoul(optarg, NULL, 0);
+			/* num_dirs cannot be negative */
+			if (optarg[0] == '-')
+				goto out_num_dirs;
+			val = strtoul(optarg, NULL, 0);
+			if (val == 0 || val > INT_MAX || errno == ERANGE)
+				goto out_num_dirs;
+			num_dirs = val;
 			break;
+out_num_dirs:
+			fprintf(stderr, "%s: bad directory count '%s'", optarg,
+				progname);
+			usage(1);
+			return -1;
 		case 'o': /* offset */
 			dir_num = strtoul(optarg, NULL, 0);
 			break;
