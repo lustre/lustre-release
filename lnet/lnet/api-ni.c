@@ -6319,6 +6319,622 @@ static int lnet_old_route_show_dump(struct sk_buff *msg,
 }
 #endif /* !HAVE_NETLINK_CALLBACK_START */
 
+/** LNet peer handling */
+struct lnet_genl_processid_list {
+	unsigned int			lgpl_index;
+	unsigned int			lgpl_count;
+	GENRADIX(struct lnet_processid)	lgpl_list;
+};
+
+static inline struct lnet_genl_processid_list *
+lnet_peer_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_processid_list *)cb->args[0];
+}
+
+static int lnet_peer_ni_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_processid_list *plist = lnet_peer_dump_ctx(cb);
+
+	if (plist) {
+		genradix_free(&plist->lgpl_list);
+		CFS_FREE_PTR(plist);
+	}
+	cb->args[0] = 0;
+
+	return 0;
+}
+
+/* LNet peer ->start() handler for GET requests */
+static int lnet_peer_ni_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lnet_genl_processid_list *plist;
+	int msg_len = genlmsg_len(gnlh);
+	int rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENETDOWN;
+	}
+
+	CFS_ALLOC_PTR(plist);
+	if (!plist) {
+		NL_SET_ERR_MSG(extack, "No memory for peer list");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOMEM;
+	}
+
+	genradix_init(&plist->lgpl_list);
+	plist->lgpl_count = 0;
+	plist->lgpl_index = 0;
+	cb->args[0] = (long)plist;
+
+	if (!msg_len) {
+		struct lnet_peer_table *ptable;
+		int cpt;
+
+		cfs_percpt_for_each(ptable, cpt, the_lnet.ln_peer_tables) {
+			struct lnet_peer *lp;
+
+			list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+				struct lnet_processid *lpi;
+
+				lpi = genradix_ptr_alloc(&plist->lgpl_list,
+							 plist->lgpl_count++,
+							 GFP_KERNEL);
+				if (!lpi) {
+					NL_SET_ERR_MSG(extack, "failed to allocate NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+
+				lpi->pid = LNET_PID_LUSTRE;
+				lpi->nid = lp->lp_primary_nid;
+			}
+		}
+	} else {
+		struct nlattr *params = genlmsg_data(gnlh);
+		struct nlattr *attr;
+		int rem;
+
+		nla_for_each_nested(attr, params, rem) {
+			struct nlattr *nid;
+			int rem2;
+
+			if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+				continue;
+
+			nla_for_each_nested(nid, attr, rem2) {
+				char addr[LNET_NIDSTR_SIZE];
+				struct lnet_processid *id;
+
+				if (nla_type(nid) != LN_SCALAR_ATTR_VALUE ||
+				    nla_strcmp(nid, "primary nid") != 0)
+					continue;
+
+				nid = nla_next(nid, &rem2);
+				if (nla_type(nid) != LN_SCALAR_ATTR_VALUE) {
+					NL_SET_ERR_MSG(extack,
+						       "invalid primary nid param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				rc = nla_strscpy(addr, nid, sizeof(addr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "failed to get primary nid param");
+					GOTO(report_err, rc);
+				}
+
+				id = genradix_ptr_alloc(&plist->lgpl_list,
+							plist->lgpl_count++,
+							GFP_KERNEL);
+				if (!id) {
+					NL_SET_ERR_MSG(extack, "failed to allocate NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+
+				rc = libcfs_strid(id, strim(addr));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack, "invalid NID");
+					GOTO(report_err, rc);
+				}
+				rc = 0;
+			}
+		}
+	}
+report_err:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	if (rc < 0)
+		lnet_peer_ni_show_done(cb);
+
+	return rc;
+}
+
+static const struct ln_key_list lnet_peer_ni_keys = {
+	.lkl_maxattr			= LNET_PEER_NI_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_NI_ATTR_HDR]  = {
+			.lkp_value		= "peer",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_PEER_NI_ATTR_PRIMARY_NID] = {
+			.lkp_value		= "primary nid",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_PEER_NI_ATTR_MULTIRAIL]	= {
+			.lkp_value              = "Multi-Rail",
+			.lkp_data_type          = NLA_FLAG
+		},
+		[LNET_PEER_NI_ATTR_STATE]	= {
+			.lkp_value		= "peer state",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_PEER_NI_ATTR_PEER_NI_LIST] = {
+			.lkp_value              = "peer ni",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type          = NLA_NESTED,
+		},
+	},
+};
+
+static const struct ln_key_list lnet_peer_ni_list = {
+	.lkl_maxattr			= LNET_PEER_NI_LIST_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_NI_LIST_ATTR_NID]		= {
+			.lkp_value			= "nid",
+			.lkp_data_type			= NLA_STRING,
+		},
+		[LNET_PEER_NI_LIST_ATTR_UDSP_INFO]	= {
+			.lkp_value			= "udsp info",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED,
+		},
+		[LNET_PEER_NI_LIST_ATTR_STATE]		= {
+			.lkp_value			= "state",
+			.lkp_data_type			= NLA_STRING,
+		},
+		[LNET_PEER_NI_LIST_ATTR_MAX_TX_CREDITS]	= {
+			.lkp_value			= "max_ni_tx_credits",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_CUR_TX_CREDITS]	= {
+			.lkp_value			= "available_tx_credits",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_MIN_TX_CREDITS]	= {
+			.lkp_value			= "min_tx_credits",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_QUEUE_BUF_COUNT] = {
+			.lkp_value			= "tx_q_num_of_buf",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_CUR_RTR_CREDITS] = {
+			.lkp_value			= "available_rtr_credits",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_MIN_RTR_CREDITS] = {
+			.lkp_value			= "min_rtr_credits",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_REFCOUNT]	= {
+			.lkp_value			= "refcount",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_ATTR_STATS_COUNT]	= {
+			.lkp_value			= "statistics",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED
+		},
+		[LNET_PEER_NI_LIST_ATTR_SENT_STATS]	= {
+			.lkp_value			= "sent_stats",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED
+		},
+		[LNET_PEER_NI_LIST_ATTR_RECV_STATS]	= {
+			.lkp_value			= "received_stats",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED
+		},
+		[LNET_PEER_NI_LIST_ATTR_DROP_STATS]	= {
+			.lkp_value			= "dropped_stats",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED
+		},
+		[LNET_PEER_NI_LIST_ATTR_HEALTH_STATS]	= {
+			.lkp_value			= "health stats",
+			.lkp_key_format			= LNKF_MAPPING,
+			.lkp_data_type			= NLA_NESTED
+		},
+	},
+};
+
+static const struct ln_key_list lnet_peer_ni_list_stats_count = {
+	.lkl_maxattr			= LNET_PEER_NI_LIST_STATS_COUNT_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT]	= {
+			.lkp_value				= "send_count",
+			.lkp_data_type				= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT]	= {
+			.lkp_value				= "recv_count",
+			.lkp_data_type				= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT]	= {
+			.lkp_value				= "drop_count",
+			.lkp_data_type				= NLA_U32,
+		},
+	},
+};
+
+static const struct ln_key_list lnet_peer_ni_list_stats = {
+	.lkl_maxattr			= LNET_PEER_NI_LIST_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_NI_LIST_STATS_ATTR_PUT]	= {
+			.lkp_value			= "put",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_ATTR_GET]	= {
+			.lkp_value			= "get",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_ATTR_REPLY]	= {
+			.lkp_value			= "reply",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_ATTR_ACK]	= {
+			.lkp_value			= "ack",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_ATTR_HELLO]	= {
+			.lkp_value			= "hello",
+			.lkp_data_type			= NLA_U32,
+		},
+	},
+};
+
+static const struct ln_key_list lnet_peer_ni_list_health = {
+	.lkl_maxattr			= LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_VALUE]	= {
+			.lkp_value			= "health value",
+			.lkp_data_type			= NLA_S32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_DROPPED]	= {
+			.lkp_value			= "dropped",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_TIMEOUT]	= {
+			.lkp_value			= "timeout",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_ERROR]	= {
+			.lkp_value			= "error",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NETWORK_TIMEOUT] = {
+			.lkp_value			= "network timeout",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PING_COUNT] = {
+			.lkp_value			= "ping_count",
+			.lkp_data_type			= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NEXT_PING]	= {
+			.lkp_value			= "next_ping",
+			.lkp_data_type			= NLA_S64,
+		},
+	},
+};
+
+static int lnet_peer_ni_show_dump(struct sk_buff *msg,
+				  struct netlink_callback *cb)
+{
+	struct lnet_genl_processid_list *plist = lnet_peer_dump_ctx(cb);
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx = plist->lgpl_index;
+	int rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (!plist->lgpl_count) {
+		NL_SET_ERR_MSG(extack, "No peers found");
+		GOTO(send_error, rc = -ENOENT);
+	}
+
+	if (!idx) {
+		const struct ln_key_list *all[] = {
+			&lnet_peer_ni_keys, &lnet_peer_ni_list,
+			&udsp_info_list, &udsp_info_pref_nids_list,
+			&udsp_info_pref_nids_list,
+			&lnet_peer_ni_list_stats_count,
+			&lnet_peer_ni_list_stats, /* send_stats */
+			&lnet_peer_ni_list_stats, /* recv_stats */
+			&lnet_peer_ni_list_stats, /* drop stats */
+			&lnet_peer_ni_list_health,
+			NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_PEERS, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		GOTO(unlock_api_mutex, rc = -ENETDOWN);
+	}
+
+	while (idx < plist->lgpl_count) {
+		struct lnet_processid *id;
+		struct lnet_peer_ni *lpni;
+		struct nlattr *nid_list;
+		struct lnet_peer *lp;
+		int count = 1;
+		void *hdr;
+
+		id = genradix_ptr(&plist->lgpl_list, idx++);
+		if (nid_is_lo0(&id->nid))
+			continue;
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_PEERS);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(unlock_api_mutex, rc = -EMSGSIZE);
+		}
+
+		lp = lnet_find_peer(&id->nid);
+		if (!lp) {
+			NL_SET_ERR_MSG(extack, "cannot find peer");
+			GOTO(unlock_api_mutex, rc = -ENOENT);
+		}
+
+		if (idx == 1)
+			nla_put_string(msg, LNET_PEER_NI_ATTR_HDR, "");
+
+		nla_put_string(msg, LNET_PEER_NI_ATTR_PRIMARY_NID,
+			       libcfs_nidstr(&lp->lp_primary_nid));
+		if (lnet_peer_is_multi_rail(lp))
+			nla_put_flag(msg, LNET_PEER_NI_ATTR_MULTIRAIL);
+
+		if (gnlh->version >= 3)
+			nla_put_u32(msg, LNET_PEER_NI_ATTR_STATE, lp->lp_state);
+
+		nid_list = nla_nest_start(msg, LNET_PEER_NI_ATTR_PEER_NI_LIST);
+		while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
+			struct nlattr *peer_nid = nla_nest_start(msg, count++);
+
+			nla_put_string(msg, LNET_PEER_NI_LIST_ATTR_NID,
+				       libcfs_nidstr(&lpni->lpni_nid));
+
+			if (gnlh->version >= 4) {
+				rc = lnet_udsp_info_send(msg,
+							 LNET_PEER_NI_LIST_ATTR_UDSP_INFO,
+							 &lpni->lpni_nid, true);
+				if (rc < 0) {
+					lnet_peer_decref_locked(lp);
+					NL_SET_ERR_MSG(extack,
+						       "failed to get UDSP info");
+					GOTO(unlock_api_mutex, rc);
+				}
+			}
+
+			if (lnet_isrouter(lpni) ||
+			    lnet_peer_aliveness_enabled(lpni)) {
+				nla_put_string(msg, LNET_PEER_NI_LIST_ATTR_STATE,
+					       lnet_is_peer_ni_alive(lpni) ?
+					       "up" : "down");
+			} else {
+				nla_put_string(msg, LNET_PEER_NI_LIST_ATTR_STATE,
+					       "NA");
+			}
+
+			if (gnlh->version) {
+				struct lnet_ioctl_element_msg_stats lpni_msg_stats;
+				struct nlattr *send_stats_list, *send_stats;
+				struct nlattr *recv_stats_list, *recv_stats;
+				struct nlattr *drop_stats_list, *drop_stats;
+				struct nlattr *health_list, *health_stats;
+				struct lnet_ioctl_element_stats stats;
+				struct nlattr *stats_attr, *ni_stats;
+
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_MAX_TX_CREDITS,
+					    lpni->lpni_net ?
+						lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_CUR_TX_CREDITS,
+					    lpni->lpni_txcredits);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_MIN_TX_CREDITS,
+					    lpni->lpni_mintxcredits);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_QUEUE_BUF_COUNT,
+					    lpni->lpni_txqnob);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_CUR_RTR_CREDITS,
+					    lpni->lpni_rtrcredits);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_MIN_RTR_CREDITS,
+					    lpni->lpni_minrtrcredits);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_ATTR_REFCOUNT,
+					    kref_read(&lpni->lpni_kref));
+
+				memset(&stats, 0, sizeof(stats));
+				stats.iel_send_count = lnet_sum_stats(&lpni->lpni_stats,
+								      LNET_STATS_TYPE_SEND);
+				stats.iel_recv_count = lnet_sum_stats(&lpni->lpni_stats,
+								      LNET_STATS_TYPE_RECV);
+				stats.iel_drop_count = lnet_sum_stats(&lpni->lpni_stats,
+								      LNET_STATS_TYPE_DROP);
+
+				stats_attr = nla_nest_start(msg,
+							    LNET_PEER_NI_LIST_ATTR_STATS_COUNT);
+				ni_stats = nla_nest_start(msg, 0);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT,
+					    stats.iel_send_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT,
+					    stats.iel_recv_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT,
+					    stats.iel_drop_count);
+				nla_nest_end(msg, ni_stats);
+				nla_nest_end(msg, stats_attr);
+
+				if (gnlh->version < 2)
+					goto skip_msg_stats;
+
+				lnet_usr_translate_stats(&lpni_msg_stats, &lpni->lpni_stats);
+
+				send_stats_list = nla_nest_start(msg,
+								 LNET_PEER_NI_LIST_ATTR_SENT_STATS);
+				send_stats = nla_nest_start(msg, 0);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_PUT,
+					    lpni_msg_stats.im_send_stats.ico_put_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_GET,
+					    lpni_msg_stats.im_send_stats.ico_get_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_REPLY,
+					    lpni_msg_stats.im_send_stats.ico_reply_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_ACK,
+					    lpni_msg_stats.im_send_stats.ico_ack_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_HELLO,
+					    lpni_msg_stats.im_send_stats.ico_hello_count);
+				nla_nest_end(msg, send_stats);
+				nla_nest_end(msg, send_stats_list);
+
+				recv_stats_list = nla_nest_start(msg,
+								 LNET_PEER_NI_LIST_ATTR_RECV_STATS);
+				recv_stats = nla_nest_start(msg, 0);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_PUT,
+					    lpni_msg_stats.im_recv_stats.ico_put_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_GET,
+					    lpni_msg_stats.im_recv_stats.ico_get_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_REPLY,
+					    lpni_msg_stats.im_recv_stats.ico_reply_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_ACK,
+					    lpni_msg_stats.im_recv_stats.ico_ack_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_HELLO,
+					    lpni_msg_stats.im_recv_stats.ico_hello_count);
+				nla_nest_end(msg, recv_stats);
+				nla_nest_end(msg, recv_stats_list);
+
+				drop_stats_list = nla_nest_start(msg,
+								 LNET_PEER_NI_LIST_ATTR_DROP_STATS);
+				drop_stats = nla_nest_start(msg, 0);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_PUT,
+					    lpni_msg_stats.im_drop_stats.ico_put_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_GET,
+					    lpni_msg_stats.im_drop_stats.ico_get_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_REPLY,
+					    lpni_msg_stats.im_drop_stats.ico_reply_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_ACK,
+					    lpni_msg_stats.im_drop_stats.ico_ack_count);
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_STATS_ATTR_HELLO,
+					    lpni_msg_stats.im_drop_stats.ico_hello_count);
+				nla_nest_end(msg, drop_stats);
+				nla_nest_end(msg, drop_stats_list);
+
+				health_list = nla_nest_start(msg,
+							     LNET_PEER_NI_LIST_ATTR_HEALTH_STATS);
+				health_stats = nla_nest_start(msg, 0);
+				nla_put_s32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_VALUE,
+					    atomic_read(&lpni->lpni_healthv));
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_DROPPED,
+					    atomic_read(&lpni->lpni_hstats.hlt_remote_dropped));
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_TIMEOUT,
+					    atomic_read(&lpni->lpni_hstats.hlt_remote_timeout));
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_ERROR,
+					    atomic_read(&lpni->lpni_hstats.hlt_remote_error));
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NETWORK_TIMEOUT,
+					    atomic_read(&lpni->lpni_hstats.hlt_network_timeout));
+				nla_put_u32(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PING_COUNT,
+					    lpni->lpni_ping_count);
+				nla_put_s64(msg,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NEXT_PING,
+					    lpni->lpni_next_ping,
+					    LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PAD);
+				nla_nest_end(msg, health_stats);
+				nla_nest_end(msg, health_list);
+			}
+skip_msg_stats:
+			nla_nest_end(msg, peer_nid);
+		}
+		nla_nest_end(msg, nid_list);
+
+		genlmsg_end(msg, hdr);
+		lnet_peer_decref_locked(lp);
+	}
+	plist->lgpl_index = idx;
+unlock_api_mutex:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+send_error:
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+};
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_peer_ni_show_dump(struct sk_buff *msg,
+				      struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_peer_ni_show_start(cb);
+
+		if (rc < 0)
+			return rc;
+	}
+
+	return lnet_peer_ni_show_dump(msg, cb);
+}
+#endif
+
 static inline struct lnet_genl_ping_list *
 lnet_ping_dump_ctx(struct netlink_callback *cb)
 {
@@ -6671,6 +7287,7 @@ static int lnet_old_ping_show_dump(struct sk_buff *msg,
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
+	{ .name =	"peer",		},
 	{ .name	=	"route",	},
 	{ .name	=	"ping",		},
 };
@@ -6687,6 +7304,16 @@ static const struct genl_ops lnet_genl_ops[] = {
 #endif
 		.done		= lnet_net_show_done,
 		.doit		= lnet_net_cmd,
+	},
+	{
+		.cmd		= LNET_CMD_PEERS,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_peer_ni_show_start,
+		.dumpit		= lnet_peer_ni_show_dump,
+#else
+		.dumpit		= lnet_old_peer_ni_show_dump,
+#endif
+		.done		= lnet_peer_ni_show_done,
 	},
 	{
 		.cmd		= LNET_CMD_ROUTES,

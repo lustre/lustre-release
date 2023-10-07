@@ -721,9 +721,219 @@ enum lnet_route_attrs {
 
 #define LNET_ROUTE_ATTR_MAX (__LNET_ROUTE_ATTR_MAX_PLUS_ONE - 1)
 
+/** enum lnet_peer_ni_attrs	      - LNet peer NI netlink properties
+ *					attributes that describe LNet peer 'NI'.
+ *					These values are used to piece together
+ *					messages for sending and receiving.
+ *
+ * @LNET_PEER_NI_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LNET_PEER_NI_ATTR_HDR:		grouping for LNet peer data
+ *					(NLA_NUL_STRING)
+ * @LNET_PEER_NI_ATTR_PRIMARY_NID:	primary NID of this peer (NLA_STRING)
+ * @LNET_PEER_NI_ATTR_MULTIRAIL:	Do we support MultiRail ? (NLA_FLAG)
+ * @LNET_PEER_NI_ATTR_STATE:		Bitfields of the peer state (NLA_U32)
+ * @LNET_PEER_NI_ATTR_PEER_NI_LIST:	List of remote peers we can reach
+ *					(NLA_NESTED)
+ */
+enum lnet_peer_ni_attrs {
+	LNET_PEER_NI_ATTR_UNSPEC = 0,
+
+	LNET_PEER_NI_ATTR_HDR,
+	LNET_PEER_NI_ATTR_PRIMARY_NID,
+	LNET_PEER_NI_ATTR_MULTIRAIL,
+	LNET_PEER_NI_ATTR_STATE,
+	LNET_PEER_NI_ATTR_PEER_NI_LIST,
+	__LNET_PEER_NI_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_NI_ATTR_MAX (__LNET_PEER_NI_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_peer_ni_list_attrs	      - LNet remote peer netlink
+ *						properties attributes that
+ *						describe remote LNet peer 'NI'.
+ *						These values are used to piece
+ *						together messages for sending
+ *						and receiving.
+ *
+ * @LNET_PEER_NI_LIST_ATTR_UNSPEC:		unspecified attribute to catch
+ *						errors
+ *
+ * @LNET_PEER_NI_LIST_ATTR_NID:			remote peer's NID (NLA_STRING)
+ * @LNET_PEER_NI_LIST_ATTR_UDSP_INFO:		remote peer's UDSP info
+ *						(NLA_NESTED)
+ * @LNET_PEER_NI_LIST_ATTR_STATE:		state of remote peer
+ *						(NLA_STRING)
+ *
+ * @LNET_PEER_NI_LIST_ATTR_MAX_TX_CREDITS:	Maximum TX credits for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_CUR_TX_CREDITS:	Current TX credits for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_MIN_TX_CREDITS:	Minimum TX credits for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_QUEUE_BUF_COUNT:	Size of TX queue buffer
+ *						(NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_CUR_RTR_CREDITS:	Current router credits for
+ *						remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_MIN_RTR_CREDITS:	Minimum router credits for
+ *						remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_REFCOUNT:		Remote peer reference count
+ *						(NLA_U32)
+ * @LNET_PEER_NI_LIST_ATTR_STATS_COUNT:		Remote peer general stats,
+ *						reports sent, recieved, and
+ *						dropped packets. (NLA_NESTED)
+ *
+ * @LNET_PEER_NI_LIST_ATTR_SENT_STATS:		Remote peer sent stats,
+ *						reports gets, puts, acks, and
+ *						hello packets. (NLA_NESTED)
+ * @LNET_PEER_NI_LIST_ATTR_RECV_STATS:		Remote peer recieved stats,
+ *						reports gets, puts, acks, and
+ *						hello packets. (NLA_NESTED)
+ * @LNET_PEER_NI_LIST_ATTR_DROP_STATS:		Remote peer dropped stats,
+ *						reports gets, puts, acks, and
+ *						hello packets. (NLA_NESTED)
+ * @LNET_PEER_NI_LIST_ATTR_HEALTH_STATS:	Report the stats about the
+ *						health of the remote peer.
+ *						(NLA_NESTED)
+ */
+enum lnet_peer_ni_list_attr {
+	LNET_PEER_NI_LIST_ATTR_UNSPEC = 0,
+
+	LNET_PEER_NI_LIST_ATTR_NID,
+	LNET_PEER_NI_LIST_ATTR_UDSP_INFO,
+	LNET_PEER_NI_LIST_ATTR_STATE,
+
+	LNET_PEER_NI_LIST_ATTR_MAX_TX_CREDITS,
+	LNET_PEER_NI_LIST_ATTR_CUR_TX_CREDITS,
+	LNET_PEER_NI_LIST_ATTR_MIN_TX_CREDITS,
+	LNET_PEER_NI_LIST_ATTR_QUEUE_BUF_COUNT,
+	LNET_PEER_NI_LIST_ATTR_CUR_RTR_CREDITS,
+	LNET_PEER_NI_LIST_ATTR_MIN_RTR_CREDITS,
+	LNET_PEER_NI_LIST_ATTR_REFCOUNT,
+	LNET_PEER_NI_LIST_ATTR_STATS_COUNT,
+
+	LNET_PEER_NI_LIST_ATTR_SENT_STATS,
+	LNET_PEER_NI_LIST_ATTR_RECV_STATS,
+	LNET_PEER_NI_LIST_ATTR_DROP_STATS,
+	LNET_PEER_NI_LIST_ATTR_HEALTH_STATS,
+
+	__LNET_PEER_NI_LIST_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_NI_LIST_ATTR_MAX (__LNET_PEER_NI_LIST_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_peer_ni_list_stats_count		      - LNet remote peer traffic
+ *							stats netlink properties
+ *							attributes that provide
+ *							traffic stats on the
+ *							remote LNet peer 'NI'.
+ *							These values are used to
+ *							piece together messages
+ *							for sending and receiving.
+ *
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_UNSPEC:		unspecified attribute to
+ *							catch errors
+ *
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT:	Number of sent packets for
+ *							remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT:	Numebr of recieved packets
+ *							for remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT:	Number of dropped packets
+ *							for remote peer (NLA_U32)
+ */
+enum lnet_peer_ni_list_stats_count {
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_UNSPEC = 0,
+
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT,
+	__LNET_PEER_NI_LIST_STATS_COUNT_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_NI_LIST_STATS_COUNT_ATTR_MAX (__LNET_PEER_NI_LIST_STATS_COUNT_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_peer_ni_list_stats	      - LNet remote peer stats netlink
+ *						properties attributes that
+ *						provide stats on the remote
+ *						LNet peer 'NI'. These values are
+ *						used to piece together messages
+ *						for sending and receiving.
+ *
+ * @LNET_PEER_NI_LIST_STATS_ATTR_UNSPEC:	unspecified attribute to catch
+ *						errors
+ *
+ * @LNET_PEER_NI_LIST_STATS_ATTR_PUT:		PUT message count for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_ATTR_GET:		GET message count for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_ATTR_REPLY:		REPLY message count for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_ATTR_ACK:		ACK message count for remote
+ *						peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_ATTR_HEALTH:	HELLO message count for remote
+ *						peer (NLA_U32)
+ */
+enum lnet_peer_ni_list_stats {
+	LNET_PEER_NI_LIST_STATS_ATTR_UNSPEC = 0,
+
+	LNET_PEER_NI_LIST_STATS_ATTR_PUT,
+	LNET_PEER_NI_LIST_STATS_ATTR_GET,
+	LNET_PEER_NI_LIST_STATS_ATTR_REPLY,
+	LNET_PEER_NI_LIST_STATS_ATTR_ACK,
+	LNET_PEER_NI_LIST_STATS_ATTR_HELLO,
+	__LNET_PEER_NI_LIST_STATS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_NI_LIST_STATS_ATTR_MAX (__LNET_PEER_NI_LIST_STATS_ATTR_MAX_PLUS_ONE - 1)
+
+/** enum lnet_peer_ni_list_health_stats		      - LNet remote peer health
+ *							stats netlink properties
+ *							attributes that provide
+ *							stats on the health of a
+ *							remote LNet peer 'NI'.
+ *							These values are used to
+ *							piece together messages
+ *							for sending and receiving.
+ *
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_UNSPEC:		unspecified attribute to
+ *							catch errors
+ *
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_VALUE:		Health level of remote
+ *							peer (NLA_S32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_DROP:		drop message state for
+ *							remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_TIMEOUT:	timeout set for remote
+ *							peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_ERROR:		total errors for remote
+ *							peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NETWORK_TIMEOUT: network timeout for
+ *							 remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PING_COUNT:	number of pings for
+ *							remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NEXT_PING:	timestamp for next ping
+ *							sent by remote peer
+ *							(NLA_S64)
+ */
+enum lnet_peer_ni_list_health_stats {
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_UNSPEC = 0,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PAD = LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_UNSPEC,
+
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_VALUE,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_DROPPED,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_TIMEOUT,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_ERROR,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NETWORK_TIMEOUT,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_PING_COUNT,
+	LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_NEXT_PING,
+
+	__LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_MAX (__LNET_PEER_NI_LIST_HEALTH_STATS_ATTR_MAX_PLUS_ONE - 1)
+
 /** LNet netlink ping API */
 
-/** enum lnet_ping_atts				      - LNet ping netlink properties
+/** enum lnet_ping_attr				      - LNet ping netlink properties
  *							attributes to describe ping format
  *							These values are used to piece together
  *							messages for sending and receiving.
@@ -749,7 +959,7 @@ enum lnet_ping_attr {
 
 #define LNET_PING_ATTR_MAX (__LNET_PING_ATTR_MAX_PLUS_ONE - 1)
 
-/** enium lnet_ping_peer_ni_attr		      - LNet peer ni information reported by
+/** enum lnet_ping_peer_ni_attr		      - LNet peer ni information reported by
  *							ping command. A list of these are
  *							returned with a ping request.
  *

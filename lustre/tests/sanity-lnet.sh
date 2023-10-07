@@ -3445,7 +3445,7 @@ test_303() {
 
 	local prim=$($LCTL list_nids | head -n 1)
 
-	if ! grep -q -- "- primary nid: $prim"<<<"${found}"; then
+	if ! grep -q -- " primary nid: $prim"<<<"${found}"; then
 		echo "$found"
 		error "Wrong primary nid"
 	fi
@@ -3652,7 +3652,7 @@ check_udsp_prio() {
 	declare -a net_prios
 	declare -a nid_prios
 
-	nids=( $($LNETCTL ${type} show -v 5 | awk '/- nid:/{print $NF}' |
+	nids=( $($LNETCTL ${type} show -v 5 | awk '/-\s+nid:/{print $NF}' |
 		 xargs echo) )
 
 	net_prios=( $($LNETCTL ${type} show -v 5 |

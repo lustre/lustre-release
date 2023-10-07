@@ -2562,6 +2562,266 @@ static int jt_set_ni_value(int argc, char **argv)
 	return rc;
 }
 
+static int yaml_lnet_peer_display(yaml_parser_t *reply, bool list_only)
+{
+	yaml_emitter_t debug;
+	int rc;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 0)
+		goto out_err;
+
+	yaml_emitter_set_indent(&debug, 6);
+	yaml_emitter_set_output_file(&debug, stdout);
+
+	if (list_only) {
+		bool done = false;
+
+		while (!done) {
+			yaml_event_t event;
+			char *value;
+
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto report_reply_error;
+
+			if (event.type != YAML_SCALAR_EVENT)
+				goto merge_event;
+
+			value = (char *)event.data.scalar.value;
+			if (strcmp(value, "peer") == 0) {
+				yaml_event_delete(&event);
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)"peer list",
+							     strlen("peer list"),
+							     1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+			} else if (strcmp(value, "primary nid") == 0) {
+				yaml_event_delete(&event);
+
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)"nid",
+							     strlen("nid"),
+							     1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+				rc = yaml_emitter_emit(&debug, &event);
+				if (rc == 0)
+					break;
+
+				/* Now print NID address */
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					goto report_reply_error;
+
+				rc = yaml_emitter_emit(&debug, &event);
+				if (rc == 0)
+					break;
+
+				/* skip reset */
+				while (event.type != YAML_MAPPING_END_EVENT) {
+					rc = yaml_parser_parse(reply, &event);
+					if (rc == 0)
+						goto report_reply_error;
+				}
+
+				/* we can have map end, seq end, map end or
+				 * just map end event. If we see seq end event
+				 * then skip to next mapping end event
+				 */
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					goto report_reply_error;
+
+				if (event.type == YAML_SEQUENCE_END_EVENT) {
+					yaml_event_delete(&event);
+
+					rc = yaml_parser_parse(reply, &event);
+					if (rc == 0)
+						goto report_reply_error;
+				}
+			}
+merge_event:
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				break;
+
+			done = (event.type == YAML_DOCUMENT_END_EVENT);
+		}
+	} else {
+		yaml_document_t errmsg;
+
+		rc = yaml_parser_load(reply, &errmsg);
+		if (rc == 1)
+			rc = yaml_emitter_dump(&debug, &errmsg);
+		yaml_document_delete(&errmsg);
+	}
+out_err:
+	if (rc == 0)
+		yaml_emitter_log_error(&debug, stderr);
+report_reply_error:
+	yaml_emitter_delete(&debug);
+
+	return rc;
+}
+
+static int yaml_lnet_peer(char *prim_nid, char *nidstr, bool disable_mr,
+			  int health_value, int state, bool list_only,
+			  int version, int flags)
+{
+	struct nl_sock *sk = NULL;
+	const char *msg = NULL;
+	yaml_emitter_t output;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	int rc;
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		msg = yaml_parser_get_reader_error(&reply);
+		goto free_reply;
+	}
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&output);
+	if (rc == 0) {
+		msg = "failed to initialize emitter";
+		goto free_reply;
+	}
+
+	rc = yaml_emitter_set_output_netlink(&output, sk, LNET_GENL_NAME,
+					     version, LNET_CMD_PEERS, flags);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&output);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"peer",
+				     strlen("peer"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (prim_nid) {
+		yaml_sequence_start_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_SEQ_TAG,
+						     1,
+						     YAML_BLOCK_SEQUENCE_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1,
+						    YAML_BLOCK_MAPPING_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"primary nid",
+					     strlen("primary nid"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)prim_nid,
+					     strlen(prim_nid), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_sequence_end_event_initialize(&event);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	} else {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"",
+					     strlen(""), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&output);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	} else {
+		rc = yaml_lnet_peer_display(&reply, list_only);
+		if (rc == 0) {
+			msg = yaml_parser_get_reader_error(&reply);
+			/* If we didn't find any peers just be silent */
+			if (msg && strcmp(msg, "No peers found") == 0)
+				rc = 1;
+		}
+
+	}
+	yaml_emitter_delete(&output);
+free_reply:
+	if (rc == 0) {
+		yaml_lnet_print_error(flags, "peer", msg);
+		rc = -EINVAL;
+	}
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
 static int jt_set_peer_ni_value(int argc, char **argv)
 {
 	return set_value_helper(argc, argv, lustre_lnet_config_peer_ni_healthv);
@@ -3356,13 +3616,13 @@ static int jt_show_peer(int argc, char **argv)
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	long int detail = 0;
-
 	const char *const short_opts = "hn:v::";
 	const struct option long_opts[] = {
-	{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
-	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
-	{ .name = "verbose",	.has_arg = optional_argument,	.val = 'v' },
-	{ .name = NULL } };
+		{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
+		{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
+		{ .name = "verbose",	.has_arg = optional_argument,	.val = 'v' },
+		{ .name = NULL }
+	};
 
 	rc = check_cmd(peer_cmds, "peer", "show", 1, argc, argv);
 	if (rc)
@@ -3390,6 +3650,14 @@ static int jt_show_peer(int argc, char **argv)
 		}
 	}
 
+	rc = yaml_lnet_peer(nid, NULL, false, -1, -1, false, detail,
+			    NLM_F_DUMP);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	rc = lustre_lnet_show_peer(nid, (int) detail, -1, &show_rc, &err_rc,
 				   false);
 
@@ -3413,8 +3681,13 @@ static int jt_list_peer(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	rc = lustre_lnet_list_peer(-1, &list_rc, &err_rc);
-
+	rc = yaml_lnet_peer(NULL, NULL, false, -1, -1, true, 0, NLM_F_DUMP);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 	else if (list_rc)

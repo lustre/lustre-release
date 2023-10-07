@@ -4322,7 +4322,6 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 
 	lnet_nid4_to_nid(cfg->prcfg_prim_nid, &nid);
 	lp = lnet_find_peer(&nid);
-
 	if (!lp) {
 		rc = -ENOENT;
 		goto out;
