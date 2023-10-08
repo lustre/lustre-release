@@ -3545,7 +3545,7 @@ check_parameter() {
 
 	return $(( $(do_lnetctl net show -v | \
 		     tee /dev/stderr | \
-		     grep -c "^ \+${para}: ${value}$") != 1 ))
+		     grep -c "^ \+${para}: ${value}$") != ${#INTERFACES[@]} ))
 }
 
 static_config() {
