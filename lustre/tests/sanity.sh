@@ -6441,7 +6441,7 @@ run_test 54e "console/tty device works in lustre ======================"
 test_55a() {
 	local dev_path="/sys/kernel/debug/lustre/devices"
 
-	load_module obdclass/obd_test verbose=2 || error "load_module failed"
+	load_module kunit/obd_test verbose=2 || error "load_module failed"
 
 	# This must be run in iteractive mode, since attach and setup
 	# are stateful
@@ -6473,7 +6473,7 @@ test_55b() {
 	# testing). We don't want to run this test forever.
 	local num_dev_to_create="$(( 24000 - $dev_count))"
 
-	load_module obdclass/obd_test || error "load_module failed"
+	load_module kunit/obd_test || error "load_module failed"
 
 	local start=$SECONDS
 

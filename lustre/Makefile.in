@@ -5,7 +5,7 @@ obj-m += ldlm/
 obj-m += obdecho/
 obj-m += mgc/
 obj-m += ec/
-obj-m += tests/kernel/
+obj-m += kunit/
 
 @SERVER_TRUE@obj-m += ost/ mgs/ mdt/ mdd/ ofd/ quota/ osp/ lod/ lfsck/ target/
 @CLIENT_TRUE@obj-m += lov/ osc/ mdc/ lmv/ llite/ fld/

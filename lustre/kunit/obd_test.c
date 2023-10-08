@@ -9,7 +9,7 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/obdclass/obd_test.c
+ * lustre/kunit/obd_test.c
  *
  * Simple OBD device for:
  *   1) testing OBD device lifecycle management

@@ -1,35 +1,24 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
 
 /*
  * Copyright 2017 Cray Inc. All rights reserved.
- * Author: Frank Zago.
+ *
  */
 
-/* Check that the inode number is the same whether the call to
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustre/kunit/kinode.c
+ *
+ * Check that the inode number is the same whether the call to
  * vfs_getattr is coming from a system call or from a kthread. When
  * CONFIG_X86_X32 was set, the result used to be different for
  * Lustre. In addition, a user can also check that the same inode
- * number is also seen from the kernel and userspace.  */
+ * number is also seen from the kernel and userspace.
+ *
+ * Author: Frank Zago
+ *
+ */
 
 #include <linux/module.h>
 #include <linux/kernel.h>

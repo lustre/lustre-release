@@ -8,7 +8,7 @@
 # Makefile template for obdclass
 #
 
-MODULES := obdclass llog_test obd_test
+MODULES := obdclass
 
 default: all
 
@@ -37,7 +37,7 @@ obdclass-objs := $(obdclass-all-objs)
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
-EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c obd_test.c llog_internal.h
+EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
 EXTRA_DIST += range_lock.c interval_tree.c
 

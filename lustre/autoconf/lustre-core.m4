@@ -5100,8 +5100,8 @@ lustre/tests/mpi/Makefile
 lustre/tests/iabf/Makefile
 lustre/tests/lutf/Makefile
 lustre/tests/lutf/src/Makefile
-lustre/tests/kernel/Makefile
-lustre/tests/kernel/autoMakefile
+lustre/kunit/Makefile
+lustre/kunit/autoMakefile
 lustre/utils/Makefile
 lustre/utils/gss/Makefile
 lustre/osp/Makefile

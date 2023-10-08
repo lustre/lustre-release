@@ -3,15 +3,15 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# lustre/obdclass/autoMakefile.am
+# lustre/kunit/autoMakefile.am
 #
-# autoMakefile for obdclass
+# autoMakefile for kunit
 #
 
 if MODULES
-if LINUX
-modulefs_DATA = obdclass$(KMODEXT)
-endif # LINUX
+modulefs_DATA = llog_test$(KMODEXT)
+modulefs_DATA += obd_test$(KMODEXT)
+modulefs_DATA += kinode$(KMODEXT)
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
