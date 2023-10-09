@@ -552,6 +552,38 @@ wait_quota_synced() {
 	done
 }
 
+# make sure the system is clean
+check_system_is_clean() {
+	local used
+
+	lfs quota -uv quota_usr /mnt/lustre
+	for cur in "curspace" "curinodes";
+	do
+		used=$(getquota -u $TSTUSR global $cur)
+		[ $used -ne 0 ] && quota_error u $TSTUSR \
+			"Used ${cur:3}($used) for user $TSTUSR isn't 0."
+
+		used=$(getquota -u $TSTUSR2 global $cur)
+		[ $used -ne 0 ] && quota_error u $TSTUSR2 \
+			"Used ${cur:3}($used) for user $TSTUSR2 isn't 0."
+
+		used=$(getquota -g $TSTUSR global $cur)
+		[ $used -ne 0 ] && quota_error g $TSTUSR \
+			"Used ${cur:3}($used) for group $TSTUSR isn't 0."
+
+		used=$(getquota -g $TSTUSR2 global $cur)
+		[ $used -ne 0 ] && quota_error g $TSTUSR2 \
+			"Used ${cur:3}($used) for group $TSTUSR2 isn't 0."
+
+		if is_project_quota_supported; then
+			used=$(getquota -p $TSTPRJID global $cur)
+			[ $used -ne 0 ] && quota_error p $TSTPRJID \
+				"Used ${cur:3}($used) for project $TSTPRJID isn't 0"
+		fi
+	done
+	return 0
+}
+
 # enable quota debug
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) \
@@ -564,6 +596,7 @@ check_runas_id_ret $TSTUSR $TSTUSR $RUNAS ||
 	error "Please create user $TSTUSR($TSTID) and group $TSTUSR($TSTID)"
 check_runas_id_ret $TSTUSR2 $TSTUSR2 $RUNAS2 ||
 	error "Please create user $TSTUSR2($TSTID2) and group $TSTUSR2($TSTID2)"
+check_system_is_clean
 
 test_quota_performance() {
 	local TESTFILE="$DIR/$tdir/$tfile-0"
