@@ -2373,10 +2373,10 @@ EXPORT_SYMBOL(class_manual_cleanup);
 /*
  * nid<->nidstats hash operations
  */
-static unsigned
-nidstats_hash(struct cfs_hash *hs, const void *key, unsigned int mask)
+static unsigned int
+nidstats_hash(struct cfs_hash *hs, const void *key, const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(struct lnet_nid), mask);
+	return cfs_hash_djb2_hash(key, sizeof(struct lnet_nid), bits);
 }
 
 static void *
@@ -2433,10 +2433,11 @@ static struct cfs_hash_ops nid_stat_hash_ops = {
  * client_generation<->export hash operations
  */
 
-static unsigned
-gen_hash(struct cfs_hash *hs, const void *key, unsigned mask)
+static unsigned int
+gen_hash(struct cfs_hash *hs, const void *key, const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(__u32), mask);
+	/* XXX did hash needs ? */
+	return cfs_hash_djb2_hash(key, sizeof(__u32), bits);
 }
 
 static void *

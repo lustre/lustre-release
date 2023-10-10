@@ -519,12 +519,12 @@ static void
 cfs_hash_bd_from_key(struct cfs_hash *hs, struct cfs_hash_bucket **bkts,
 		     unsigned int bits, const void *key, struct cfs_hash_bd *bd)
 {
-        unsigned int index = cfs_hash_id(hs, key, (1U << bits) - 1);
+	unsigned int index = cfs_hash_id(hs, key, bits);
 
-        LASSERT(bits == hs->hs_cur_bits || bits == hs->hs_rehash_bits);
+	LASSERT(bits == hs->hs_cur_bits || bits == hs->hs_rehash_bits);
 
-        bd->bd_bucket = bkts[index & ((1U << (bits - hs->hs_bkt_bits)) - 1)];
-        bd->bd_offset = index >> (bits - hs->hs_bkt_bits);
+	bd->bd_bucket = bkts[index & ((1U << (bits - hs->hs_bkt_bits)) - 1)];
+	bd->bd_offset = index >> (bits - hs->hs_bkt_bits);
 }
 
 void

@@ -807,10 +807,10 @@ EXPORT_SYMBOL(jobid_cache_fini);
 /*
  * Hash operations for pid<->jobid
  */
-static unsigned jobid_hashfn(struct cfs_hash *hs, const void *key,
-			     unsigned mask)
+static unsigned int
+jobid_hashfn(struct cfs_hash *hs, const void *key, const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(pid_t), mask);
+	return cfs_hash_djb2_hash(key, sizeof(pid_t), bits);
 }
 
 static void *jobid_key(struct hlist_node *hnode)

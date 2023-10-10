@@ -280,7 +280,8 @@ struct cfs_hash_hlist_ops {
 
 struct cfs_hash_ops {
 	/** return hashed value from @key */
-	unsigned (*hs_hash)(struct cfs_hash *hs, const void *key, unsigned mask);
+	unsigned int (*hs_hash)(struct cfs_hash *hs, const void *key,
+				const unsigned int bits);
 	/** return key address of @hnode */
 	void *   (*hs_key)(struct hlist_node *hnode);
 	/** copy key from @hnode to @key */
@@ -443,10 +444,10 @@ cfs_hash_bkt_size(struct cfs_hash *hs)
                hs->hs_extra_bytes;
 }
 
-static inline unsigned
-cfs_hash_id(struct cfs_hash *hs, const void *key, unsigned mask)
+static inline unsigned int
+cfs_hash_id(struct cfs_hash *hs, const void *key, const unsigned int bits)
 {
-	return hs->hs_ops->hs_hash(hs, key, mask);
+	return hs->hs_ops->hs_hash(hs, key, bits);
 }
 
 static inline void *
@@ -803,16 +804,16 @@ void cfs_hash_debug_str(struct cfs_hash *hs, struct seq_file *m);
  * Generic djb2 hash algorithm for character arrays.
  */
 static inline unsigned
-cfs_hash_djb2_hash(const void *key, size_t size, unsigned mask)
+cfs_hash_djb2_hash(const void *key, size_t size, const unsigned int bits)
 {
-        unsigned i, hash = 5381;
+	unsigned int i, hash = 5381;
 
-        LASSERT(key != NULL);
+	LASSERT(key != NULL);
 
-        for (i = 0; i < size; i++)
-                hash = hash * 33 + ((char *)key)[i];
+	for (i = 0; i < size; i++)
+		hash = hash * 33 + ((char *)key)[i];
 
-        return (hash & mask);
+	return (hash & ((1U << bits) - 1));
 }
 
 /** iterate over all buckets in @bds (array of struct cfs_hash_bd) */

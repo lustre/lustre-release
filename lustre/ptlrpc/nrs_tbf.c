@@ -544,10 +544,11 @@ static struct binheap_ops nrs_tbf_heap_ops = {
 	.hop_compare	= tbf_cli_compare,
 };
 
-static unsigned nrs_tbf_jobid_hop_hash(struct cfs_hash *hs, const void *key,
-				  unsigned mask)
+static unsigned int
+nrs_tbf_jobid_hop_hash(struct cfs_hash *hs, const void *key,
+		       const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), mask);
+	return cfs_hash_djb2_hash(key, strlen(key), bits);
 }
 
 static int nrs_tbf_jobid_hop_keycmp(const void *key, struct hlist_node *hnode)
@@ -1043,10 +1044,11 @@ static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
 #define NRS_TBF_NID_BKT_BITS	8
 #define NRS_TBF_NID_BITS	16
 
-static unsigned nrs_tbf_nid_hop_hash(struct cfs_hash *hs, const void *key,
-				  unsigned mask)
+static unsigned int
+nrs_tbf_nid_hop_hash(struct cfs_hash *hs, const void *key,
+		     const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
+	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), bits);
 }
 
 static int nrs_tbf_nid_hop_keycmp(const void *key, struct hlist_node *hnode)
@@ -1273,10 +1275,11 @@ static struct nrs_tbf_ops nrs_tbf_nid_ops = {
 	.o_rule_fini = nrs_tbf_nid_rule_fini,
 };
 
-static unsigned nrs_tbf_hop_hash(struct cfs_hash *hs, const void *key,
-				 unsigned mask)
+static unsigned int
+nrs_tbf_hop_hash(struct cfs_hash *hs, const void *key,
+		 const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), mask);
+	return cfs_hash_djb2_hash(key, strlen(key), bits);
 }
 
 static int nrs_tbf_hop_keycmp(const void *key, struct hlist_node *hnode)
@@ -2079,10 +2082,12 @@ static void nrs_tbf_opcode_rule_fini(struct nrs_tbf_rule *rule)
 	OBD_FREE(rule->tr_opcodes_str, strlen(rule->tr_opcodes_str) + 1);
 }
 
-static unsigned nrs_tbf_opcode_hop_hash(struct cfs_hash *hs, const void *key,
-					unsigned mask)
+static unsigned int
+nrs_tbf_opcode_hop_hash(struct cfs_hash *hs, const void *key,
+			const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(__u32), mask);
+	/* XXX did hash needs ? */
+	return cfs_hash_djb2_hash(key, sizeof(__u32), bits);
 }
 
 static int nrs_tbf_opcode_hop_keycmp(const void *key, struct hlist_node *hnode)
@@ -2345,10 +2350,11 @@ struct nrs_tbf_ops nrs_tbf_opcode_ops = {
 	.o_rule_fini = nrs_tbf_opcode_rule_fini,
 };
 
-static unsigned nrs_tbf_id_hop_hash(struct cfs_hash *hs, const void *key,
-				    unsigned mask)
+static unsigned int
+nrs_tbf_id_hop_hash(struct cfs_hash *hs, const void *key,
+		    const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(struct tbf_id), mask);
+	return cfs_hash_djb2_hash(key, sizeof(struct tbf_id), bits);
 }
 
 static int nrs_tbf_id_hop_keycmp(const void *key, struct hlist_node *hnode)

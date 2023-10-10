@@ -73,10 +73,10 @@ struct job_stat {
 	struct rcu_head		js_rcu;		/* RCU head for job_reclaim_rcu*/
 };
 
-static unsigned
-job_stat_hash(struct cfs_hash *hs, const void *key, unsigned mask)
+static unsigned int
+job_stat_hash(struct cfs_hash *hs, const void *key, const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), mask);
+	return cfs_hash_djb2_hash(key, strlen(key), bits);
 }
 
 static void *job_stat_key(struct hlist_node *hnode)

@@ -3120,9 +3120,10 @@ void ldlm_put_ref(void)
  * Export handle<->lock hash operations.
  */
 static unsigned
-ldlm_export_lock_hash(struct cfs_hash *hs, const void *key, unsigned int mask)
+ldlm_export_lock_hash(struct cfs_hash *hs, const void *key,
+		      const unsigned int bits)
 {
-	return cfs_hash_64(((struct lustre_handle *)key)->cookie, 0) & mask;
+	return cfs_hash_64(((struct lustre_handle *)key)->cookie, bits);
 }
 
 static void *

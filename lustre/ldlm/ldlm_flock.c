@@ -853,10 +853,11 @@ void ldlm_flock_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 /*
  * Export handle<->flock hash operations.
  */
-static unsigned
-ldlm_export_flock_hash(struct cfs_hash *hs, const void *key, unsigned mask)
+static unsigned int
+ldlm_export_flock_hash(struct cfs_hash *hs, const void *key,
+		       const unsigned int bits)
 {
-	return cfs_hash_64(*(__u64 *)key, 0) & mask;
+	return cfs_hash_64(*(__u64 *)key, bits);
 }
 
 static void *

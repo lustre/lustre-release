@@ -118,10 +118,11 @@ void nodemap_putref(struct lu_nodemap *nodemap)
 }
 EXPORT_SYMBOL(nodemap_putref);
 
-static __u32 nodemap_hashfn(struct cfs_hash *hash_body,
-			    const void *key, unsigned mask)
+static unsigned int
+nodemap_hashfn(struct cfs_hash *hash_body,
+	       const void *key, const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), mask);
+	return cfs_hash_djb2_hash(key, strlen(key), bits);
 }
 
 static void *nodemap_hs_key(struct hlist_node *hnode)

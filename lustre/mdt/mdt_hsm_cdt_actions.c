@@ -73,9 +73,10 @@ static inline void cdt_agent_record_loc_put(struct cdt_agent_record_loc *carl)
 }
 
 static unsigned int
-cdt_agent_record_hash(struct cfs_hash *hs, const void *key, unsigned int mask)
+cdt_agent_record_hash(struct cfs_hash *hs, const void *key,
+		      const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(u64), mask);
+	return cfs_hash_djb2_hash(key, sizeof(u64), bits);
 }
 
 static void *cdt_agent_record_object(struct hlist_node *hnode)
