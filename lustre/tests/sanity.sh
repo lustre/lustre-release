@@ -27639,9 +27639,14 @@ test_411b() {
 	[ -e "$cg_basedir/memory.kmem.limit_in_bytes" ] ||
 		skip "no setup for cgroup"
 	$LFS setstripe -c 2 $DIR/$tfile || error "unable to setstripe"
-	# testing suggests we can't reliably avoid OOM with a 64M limit, but it
-	# seems reasonable to ask that we have at least 128M in the cgroup
-	local memlimit_mb=256
+	# (x86) testing suggests we can't reliably avoid OOM with a 64M-256M
+	# limit, so we have 384M in cgroup
+	# (arm) this seems to hit OOM more often than x86, so 1024M
+	if [[ $(uname -m) = aarch64 ]]; then
+		local memlimit_mb=1024
+	else
+		local memlimit_mb=384
+	fi
 
 	# Create a cgroup and set memory limit
 	# (tfile is used as an easy way to get a recognizable cgroup name)
@@ -27694,16 +27699,16 @@ test_411b() {
 	wait $pid4
 	local rc4=$?
 	if (( rc1 != 0)); then
-		error "error writing to file from $pid1"
+		error "error $rc1 writing to file from $pid1"
 	fi
 	if (( rc2 != 0)); then
-		error "error writing to file from $pid2"
+		error "error $rc2 writing to file from $pid2"
 	fi
 	if (( rc3 != 0)); then
-		error "error writing to file from $pid3"
+		error "error $rc3 writing to file from $pid3"
 	fi
 	if (( rc4 != 0)); then
-		error "error writing to file from $pid4"
+		error "error $rc4 writing to file from $pid4"
 	fi
 
 	sync
