@@ -33,7 +33,7 @@ Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/extents.c
 +{
 +	unsigned int depth = ext_depth(inode);
 +	int used, nused, free, i, k, err;
-+	ext4_lblk_t next;
++	ext4_fsblk_t next;
 +
 +	if (path[depth].p_hdr == npath[depth].p_hdr)
 +		return 0;
