@@ -390,11 +390,15 @@ int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd)
 }
 EXPORT_SYMBOL(sptlrpc_lprocfs_cliobd_attach);
 
-LDEBUGFS_SEQ_FOPS_RO(sptlrpc_proc_enc_pool);
+LDEBUGFS_SEQ_FOPS_RO(encrypt_page_pools);
+LDEBUGFS_SEQ_FOPS_RO(page_pools);
 
 static struct ldebugfs_vars sptlrpc_lprocfs_vars[] = {
 	{ .name	=	"encrypt_page_pools",
-	  .fops	=	&sptlrpc_proc_enc_pool_fops	},
+	  .fops	=	&encrypt_page_pools_fops	},
+	{ .name	=	"page_pools",
+	  .fops	=	&page_pools_fops	},
+
 	{ NULL }
 };
 

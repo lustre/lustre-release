@@ -1190,12 +1190,15 @@ int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
 				struct ptlrpc_cli_ctx *ctx);
 
 /* bulk security api */
+#define PAGES_POOL 0
 int sptlrpc_enc_pool_add_user(void);
-int  sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc);
+int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc);
 int sptlrpc_enc_pool_get_pages_array(struct page **pa, unsigned int count);
+int sptlrpc_enc_pool_get_buf(void **buf, unsigned int size_bits);
 void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc);
 void sptlrpc_enc_pool_put_pages_array(struct page **pa, unsigned int count);
-int get_free_pages_in_pool(void);
+void sptlrpc_enc_pool_put_buf(void *buf, unsigned int size_bits);
+int sptlrpc_enc_pool_get_free_pages(unsigned int pool);
 int pool_is_at_full_capacity(void);
 
 int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,

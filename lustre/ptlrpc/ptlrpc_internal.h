@@ -293,7 +293,8 @@ void sptlrpc_plain_fini(void);
 /* sec_bulk.c */
 int  sptlrpc_enc_pool_init(void);
 void sptlrpc_enc_pool_fini(void);
-int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v);
+int encrypt_page_pools_seq_show(struct seq_file *m, void *v);
+int page_pools_seq_show(struct seq_file *m, void *v);
 
 /* sec_lproc.c */
 int  sptlrpc_lproc_init(void);

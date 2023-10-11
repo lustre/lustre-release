@@ -30429,6 +30429,14 @@ test_442() {
 }
 run_test 442 "truncate vs read/write should not panic"
 
+test_460d() {
+	verify_yaml_available || skip_env "YAML verification not installed"
+	$LCTL get_param -n sptlrpc.page_pools
+	$LCTL get_param -n sptlrpc.page_pools | verify_yaml ||
+		error "The output of encrypt_page_pools is not an valid YAML"
+}
+run_test 460d "Check encrypt pools output"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
