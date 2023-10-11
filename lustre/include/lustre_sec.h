@@ -538,8 +538,7 @@ struct ptlrpc_ctx_ops {
 #define PTLRPC_CTX_CACHED              BIT(PTLRPC_CTX_CACHED_BIT)
 #define PTLRPC_CTX_ETERNAL             BIT(PTLRPC_CTX_ETERNAL_BIT)
 
-#define PTLRPC_CTX_STATUS_MASK         (PTLRPC_CTX_NEW_BIT    |       \
-                                        PTLRPC_CTX_UPTODATE   |       \
+#define PTLRPC_CTX_STATUS_MASK         (PTLRPC_CTX_UPTODATE   |       \
                                         PTLRPC_CTX_DEAD       |       \
                                         PTLRPC_CTX_ERROR)
 
