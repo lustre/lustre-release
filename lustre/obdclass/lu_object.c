@@ -2148,7 +2148,8 @@ static unsigned long lu_cache_shrink_count(struct shrinker *sk,
 	if (!(sc->gfp_mask & __GFP_FS))
 		return 0;
 
-	down_read(&lu_sites_guard);
+	if (!down_read_trylock(&lu_sites_guard))
+		return 0;
 	list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage)
 		cached += percpu_counter_read_positive(&s->ls_lru_len_counter);
 	up_read(&lu_sites_guard);
@@ -2182,7 +2183,9 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
 		 */
 		return SHRINK_STOP;
 
-	down_write(&lu_sites_guard);
+	if (!down_write_trylock(&lu_sites_guard))
+		return SHRINK_STOP;
+
 	list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
 		remain = lu_site_purge(&lu_shrink_env, s, remain);
 		/*
