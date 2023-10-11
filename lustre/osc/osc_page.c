@@ -384,10 +384,21 @@ static int osc_cache_too_much(struct client_obd *cli)
 	return 0;
 }
 
-int lru_queue_work(const struct lu_env *env, void *data)
+void lru_queue_work(struct work_struct *work)
 {
-	struct client_obd *cli = data;
+	struct client_obd *cli;
 	int count;
+	struct lu_env *env;
+	__u16 refcheck;
+	bool queue = false;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env)) {
+		queue = true;
+		goto exit;
+	}
+
+	cli = container_of(work, struct client_obd, cl_lru_work);
 
 	CDEBUG(D_CACHE, "%s: run LRU work for client obd\n", cli_name(cli));
 	count = osc_cache_too_much(cli);
@@ -396,13 +407,13 @@ int lru_queue_work(const struct lu_env *env, void *data)
 
 		CDEBUG(D_CACHE, "%s: shrank %d/%d pages from client obd\n",
 		       cli_name(cli), rc, count);
-		if (rc >= count) {
-			CDEBUG(D_CACHE, "%s: queue again\n", cli_name(cli));
-			ptlrpcd_queue_work(cli->cl_lru_work);
-		}
+		if (rc >= count)
+			queue = true;
 	}
-
-	RETURN(0);
+	cl_env_put(env, &refcheck);
+exit:
+	if (queue)
+		schedule_work(work);
 }
 
 void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
@@ -431,7 +442,7 @@ void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
 		spin_unlock(&cli->cl_lru_list_lock);
 
 		if (waitqueue_active(&osc_lru_waitq)) {
-			(void)ptlrpcd_queue_work(cli->cl_lru_work);
+			schedule_work(&cli->cl_lru_work);
 			CDEBUG(D_CACHE,
 			       "%s: cli %pK add LRU: i%ld/b%ld/u%ld/l%ld/m%ld %ld\n",
 			       cli_name(cli), cli,
@@ -485,7 +496,7 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 		 * stealing one of them. */
 		if (osc_cache_too_much(cli)) {
 			CDEBUG(D_CACHE, "%s: queue LRU work\n", cli_name(cli));
-			(void)ptlrpcd_queue_work(cli->cl_lru_work);
+			schedule_work(&cli->cl_lru_work);
 		}
 		wake_up(&osc_lru_waitq);
 	} else {
@@ -950,7 +961,7 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 		CDEBUG(D_CACHE, "%s: reclaimed %ld/%ld pages from LRU\n",
 		       cli_name(cli), rc, npages);
 		if (osc_cache_too_much(cli) > 0)
-			ptlrpcd_queue_work(cli->cl_lru_work);
+			schedule_work(&cli->cl_lru_work);
 		shrank = rc;
 		GOTO(out, rc);
 	} else if (rc > 0) {
@@ -1095,9 +1106,7 @@ again:
 		 * Trigger writeback in the hope some LRU slot could
 		 * be freed.
 		 */
-		rc = ptlrpcd_queue_work(cli->cl_writeback_work);
-		if (rc)
-			return 0;
+		schedule_work(&cli->cl_writeback_work);
 	}
 
 	while (c >= npages) {
@@ -1124,7 +1133,7 @@ again:
 		CDEBUG(D_CACHE, "%s: queue LRU, left: %lu/%ld.\n",
 		       cli_name(cli), atomic_long_read(cli->cl_lru_left),
 		       max_pages);
-		(void)ptlrpcd_queue_work(cli->cl_lru_work);
+		schedule_work(&cli->cl_lru_work);
 	}
 
 	return reserved;
@@ -1300,7 +1309,7 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 	LASSERT(unstable_count >= 0);
 
 	if (waitqueue_active(&osc_lru_waitq))
-		(void)ptlrpcd_queue_work(cli->cl_lru_work);
+		schedule_work(&cli->cl_lru_work);
 }
 
 /**

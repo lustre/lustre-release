@@ -88,7 +88,6 @@ const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops = {
 EXPORT_SYMBOL(ptlrpc_bulk_kiov_nopin_ops);
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req);
-static int ptlrpcd_check_work(struct ptlrpc_request *req);
 static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async);
 
 /**
@@ -2365,11 +2364,6 @@ interpret:
 		LASSERT(!req->rq_receiving_reply);
 
 		ptlrpc_req_interpret(env, req, req->rq_status);
-
-		if (ptlrpcd_check_work(req)) {
-			atomic_dec(&set->set_remaining);
-			continue;
-		}
 		ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
 
 		if (req->rq_reqmsg)
@@ -2795,10 +2789,8 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 		sptlrpc_cli_free_repbuf(request);
 
 	if (request->rq_import) {
-		if (!ptlrpcd_check_work(request)) {
-			LASSERT(atomic_read(&request->rq_import->imp_reqs) > 0);
-			atomic_dec(&request->rq_import->imp_reqs);
-		}
+		LASSERT(atomic_read(&request->rq_import->imp_reqs) > 0);
+		atomic_dec(&request->rq_import->imp_reqs);
 		class_import_put(request->rq_import);
 		request->rq_import = NULL;
 	}
@@ -3748,142 +3740,6 @@ __u64 ptlrpc_sample_next_xid(void)
 	return atomic64_read(&ptlrpc_last_xid) + PTLRPC_BULK_OPS_COUNT;
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);
-
-/**
- * struct ptlrpc_work_async_args - Functions for operating ptlrpc workers.
- * @cb: callback function
- * @cbdata: additional data
- *
- * A ptlrpc work is a function which will be running inside ptlrpc context.
- * The callback shouldn't sleep otherwise it will block that ptlrpcd thread.
- *
- * 1. after a work is created, it can be used many times, that is:
- *         handler = ptlrpcd_alloc_work();
- *         ptlrpcd_queue_work();
- *
- *    queue it again when necessary:
- *         ptlrpcd_queue_work();
- *         ptlrpcd_destroy_work();
- * 2. ptlrpcd_queue_work() can be called by multiple processes meanwhile, but
- *    it will only be queued once in any time. Also as its name implies, it may
- *    have delay before it really runs by ptlrpcd thread.
- */
-struct ptlrpc_work_async_args {
-	int (*cb)(const struct lu_env *, void *);
-	void *cbdata;
-};
-
-static void ptlrpcd_add_work_req(struct ptlrpc_request *req)
-{
-	/* re-initialize the req */
-	req->rq_timeout		= obd_timeout;
-	req->rq_sent		= ktime_get_real_seconds();
-	req->rq_deadline	= req->rq_sent + req->rq_timeout;
-	req->rq_phase		= RQ_PHASE_INTERPRET;
-	req->rq_next_phase	= RQ_PHASE_COMPLETE;
-	req->rq_xid		= ptlrpc_next_xid();
-	req->rq_import_generation = req->rq_import->imp_generation;
-
-	ptlrpcd_add_req(req);
-}
-
-static int work_interpreter(const struct lu_env *env,
-			    struct ptlrpc_request *req, void *args, int rc)
-{
-	struct ptlrpc_work_async_args *arg = args;
-
-	LASSERT(ptlrpcd_check_work(req));
-	LASSERT(arg->cb != NULL);
-
-	rc = arg->cb(env, arg->cbdata);
-
-	list_del_init(&req->rq_set_chain);
-	req->rq_set = NULL;
-
-	if (atomic_dec_return(&req->rq_refcount) > 1) {
-		atomic_set(&req->rq_refcount, 2);
-		ptlrpcd_add_work_req(req);
-	}
-	return rc;
-}
-
-static int worker_format;
-
-static int ptlrpcd_check_work(struct ptlrpc_request *req)
-{
-	return req->rq_pill.rc_fmt == (void *)&worker_format;
-}
-
-/**
- * ptlrpcd_alloc_work() - Create a work for ptlrpc.
- * @imp: pointer to obd_import struct
- * @cb: callback function
- * @cbdata: additional data
- */
-void *ptlrpcd_alloc_work(struct obd_import *imp,
-			 int (*cb)(const struct lu_env *, void *), void *cbdata)
-{
-	struct ptlrpc_request *req = NULL;
-	struct ptlrpc_work_async_args *args;
-
-	ENTRY;
-	might_sleep();
-
-	if (!cb)
-		RETURN(ERR_PTR(-EINVAL));
-
-	/* copy some code from deprecated fakereq. */
-	req = ptlrpc_request_cache_alloc(GFP_NOFS);
-	if (!req) {
-		CERROR("ptlrpc: run out of memory!\n");
-		RETURN(ERR_PTR(-ENOMEM));
-	}
-
-	ptlrpc_cli_req_init(req);
-
-	req->rq_send_state = LUSTRE_IMP_FULL;
-	req->rq_type = PTL_RPC_MSG_REQUEST;
-	req->rq_import = class_import_get(imp);
-	req->rq_interpret_reply = work_interpreter;
-	/* don't want reply */
-	req->rq_no_delay = req->rq_no_resend = 1;
-	req->rq_pill.rc_fmt = (void *)&worker_format;
-
-	args = ptlrpc_req_async_args(args, req);
-	args->cb     = cb;
-	args->cbdata = cbdata;
-
-	RETURN(req);
-}
-EXPORT_SYMBOL(ptlrpcd_alloc_work);
-
-void ptlrpcd_destroy_work(void *handler)
-{
-	struct ptlrpc_request *req = handler;
-
-	if (req)
-		ptlrpc_req_put(req);
-}
-EXPORT_SYMBOL(ptlrpcd_destroy_work);
-
-int ptlrpcd_queue_work(void *handler)
-{
-	struct ptlrpc_request *req = handler;
-
-	/*
-	 * Check if the req is already being queued.
-	 *
-	 * Here comes a trick: it lacks a way of checking if a req is being
-	 * processed reliably in ptlrpc. Here I have to use refcount of req
-	 * for this purpose. This is okay because the caller should use this
-	 * req as opaque data. - Jinshan
-	 */
-	LASSERT(atomic_read(&req->rq_refcount) > 0);
-	if (atomic_inc_return(&req->rq_refcount) == 2)
-		ptlrpcd_add_work_req(req);
-	return 0;
-}
-EXPORT_SYMBOL(ptlrpcd_queue_work);
 
 /**
  * ptlrpc_reqset_free() - Release memory allocated for ptlrpc_request_set

@@ -2140,12 +2140,6 @@ __u64 ptlrpc_req_xid(struct ptlrpc_request *request);
 void ptlrpc_get_mod_rpc_slot(struct ptlrpc_request *req);
 void ptlrpc_put_mod_rpc_slot(struct ptlrpc_request *req);
 
-/* Set of routines to run a function in ptlrpcd context */
-void *ptlrpcd_alloc_work(struct obd_import *imp,
-			 int (*cb)(const struct lu_env *, void *), void *data);
-void ptlrpcd_destroy_work(void *handler);
-int ptlrpcd_queue_work(void *handler);
-
 /** @} */
 struct ptlrpc_service_buf_conf {
 	/* nbufs is buffers # to allocate when growing the pool */

@@ -2731,7 +2731,7 @@ static int brw_interpret(const struct lu_env *env,
 	osc_wake_cache_waiters(cli);
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	osc_io_unplug(env, cli, NULL);
+	osc_io_unplug_async(env, cli, NULL);
 	RETURN(rc);
 }
 
@@ -4000,20 +4000,28 @@ out:
 	RETURN(rc);
 }
 
-static int brw_queue_work(const struct lu_env *env, void *data)
+static void brw_queue_work(struct work_struct *work)
 {
-	struct client_obd *cli = data;
+	struct client_obd *cli;
+	__u16 refcheck;
+	struct lu_env *env;
 
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env)) {
+		schedule_work(work);
+		return;
+	}
+
+	cli = container_of(work, struct client_obd, cl_writeback_work);
 	CDEBUG(D_CACHE, "Run writeback work for client obd %p.\n", cli);
 
 	osc_io_unplug(env, cli, NULL);
-	RETURN(0);
+	cl_env_put(env, &refcheck);
 }
 
 int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct client_obd *cli = &obd->u.cli;
-	void *handler;
 	int rc;
 
 	ENTRY;
@@ -4027,15 +4035,8 @@ int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out_ptlrpcd, rc);
 
 
-	handler = ptlrpcd_alloc_work(cli->cl_import, brw_queue_work, cli);
-	if (IS_ERR(handler))
-		GOTO(out_ptlrpcd_work, rc = PTR_ERR(handler));
-	cli->cl_writeback_work = handler;
-
-	handler = ptlrpcd_alloc_work(cli->cl_import, lru_queue_work, cli);
-	if (IS_ERR(handler))
-		GOTO(out_ptlrpcd_work, rc = PTR_ERR(handler));
-	cli->cl_lru_work = handler;
+	INIT_WORK(&cli->cl_writeback_work, brw_queue_work);
+	INIT_WORK(&cli->cl_lru_work, lru_queue_work);
 
 	rc = osc_quota_setup(obd);
 	if (rc)
@@ -4048,14 +4049,8 @@ int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg)
 	RETURN(rc);
 
 out_ptlrpcd_work:
-	if (cli->cl_writeback_work != NULL) {
-		ptlrpcd_destroy_work(cli->cl_writeback_work);
-		cli->cl_writeback_work = NULL;
-	}
-	if (cli->cl_lru_work != NULL) {
-		ptlrpcd_destroy_work(cli->cl_lru_work);
-		cli->cl_lru_work = NULL;
-	}
+	cancel_work_sync(&cli->cl_writeback_work);
+	cancel_work_sync(&cli->cl_lru_work);
 	client_obd_cleanup(obd);
 out_ptlrpcd:
 	ptlrpcd_decref();
@@ -4123,15 +4118,8 @@ int osc_precleanup_common(struct obd_device *obd)
 	 *   client_disconnect_export()
 	 */
 	obd_zombie_barrier();
-	if (cli->cl_writeback_work) {
-		ptlrpcd_destroy_work(cli->cl_writeback_work);
-		cli->cl_writeback_work = NULL;
-	}
-
-	if (cli->cl_lru_work) {
-		ptlrpcd_destroy_work(cli->cl_lru_work);
-		cli->cl_lru_work = NULL;
-	}
+	cancel_work_sync(&cli->cl_writeback_work);
+	cancel_work_sync(&cli->cl_lru_work);
 
 	obd_cleanup_client_import(obd);
 	RETURN(0);

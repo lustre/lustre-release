@@ -2240,8 +2240,8 @@ int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		spin_unlock(&cli->cl_loi_list_lock);
 	} else {
 		CDEBUG(D_CACHE, "Queue writeback work for client %p.\n", cli);
-		LASSERT(cli->cl_writeback_work != NULL);
-		rc = ptlrpcd_queue_work(cli->cl_writeback_work);
+		schedule_work(&cli->cl_writeback_work);
+		rc = 0;
 	}
 	return rc;
 }

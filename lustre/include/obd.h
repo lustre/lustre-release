@@ -357,8 +357,8 @@ struct client_obd {
 	atomic_t		cl_resends; /* resend count */
 
 	/* ptlrpc work for writeback in ptlrpcd context */
-	void			*cl_writeback_work;
-	void			*cl_lru_work;
+	struct work_struct	cl_writeback_work;
+	struct work_struct	cl_lru_work;
 	struct mutex		cl_quota_mutex;
 	/* quota IDs/types that have exceeded quota */
 	struct xarray		cl_quota_exceeded_ids;
