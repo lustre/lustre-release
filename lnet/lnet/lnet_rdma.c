@@ -208,23 +208,16 @@ EXPORT_SYMBOL(lnet_rdma_unmap_sg);
 bool
 lnet_is_rdma_only_page(struct page *page)
 {
-	bool found = false;
+	bool is_gpu_page = false;
 	struct nvfs_dma_rw_ops *nvfs_ops;
 
-	if (!page)
-		return found;
+	LASSERT(page != NULL);
 
 	nvfs_ops = nvfs_get_ops();
-	if (!nvfs_ops)
-		return found;
-
-	if (!nvfs_ops->nvfs_is_gpu_page(page))
-		goto out;
-
-	found = true;
-
-out:
-	nvfs_put_ops();
-	return found;
+	if (nvfs_ops != NULL) {
+		is_gpu_page = nvfs_ops->nvfs_is_gpu_page(page);
+		nvfs_put_ops();
+	}
+	return is_gpu_page;
 }
 EXPORT_SYMBOL(lnet_is_rdma_only_page);

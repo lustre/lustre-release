@@ -238,6 +238,11 @@ struct lnet_libmd {
 #define LNET_MD_FLAG_DISCARD	 BIT(4)
 #define LNET_MD_FLAG_GPU	 BIT(5) /**< Special mapping needs */
 
+static inline bool lnet_md_is_gpu(struct lnet_libmd *md)
+{
+    return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_GPU);
+}
+
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */
 	struct list_head	tp_list;	/* ln_test_peers */
