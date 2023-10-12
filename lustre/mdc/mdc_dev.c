@@ -998,7 +998,7 @@ static int mdc_lock_init(const struct lu_env *env, struct cl_object *obj,
 		 (io->ci_type == CIT_FAULT && !io->u.ci_fault.ft_mkwrite))
 		osc_lock_set_reader(env, io, obj, ols);
 
-	LDLM_DEBUG_NOLOCK("lock %p, mdc lock %p, flags %llx\n",
+	LDLM_DEBUG_NOLOCK("lock %p, mdc lock %p, flags %llx",
 			  lock, ols, ols->ols_flags);
 	RETURN(0);
 }

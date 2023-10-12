@@ -4170,7 +4170,7 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			 * from mdt_export_cleanup()->mdt_add_dirty_flag() */
 			if (likely(req != NULL)) {
 				LDLM_DEBUG(lock, "save lock request %p reply "
-					"state %p transno %lld\n", req,
+					"state %p transno %lld", req,
 					req->rq_reply_state, req->rq_transno);
 				if (mdt_cos_is_enabled(mdt)) {
 					mode = LCK_COS;

@@ -302,7 +302,7 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 		ldlm_extent_internal_policy_granted(lock, &new_ex);
 		ldlm_extent_internal_policy_waiting(lock, &new_ex);
 	} else {
-		LDLM_DEBUG(lock, "Not expanding manually requested lock.\n");
+		LDLM_DEBUG(lock, "Not expanding manually requested lock");
 		new_ex.start = lock->l_policy_data.l_extent.start;
 		new_ex.end = lock->l_policy_data.l_extent.end;
 		/* In case the request is not on correct boundaries, we call
@@ -689,7 +689,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	 * let's refresh eviction timer for it.
 	 */
 	timeout = ldlm_bl_timeout_by_rpc(arg->lpa_req);
-	LDLM_DEBUG(lock, "refreshed to %ds.\n", timeout);
+	LDLM_DEBUG(lock, "refreshed to %ds", timeout);
 	ldlm_refresh_waiting_lock(lock, timeout);
 }
 EXPORT_SYMBOL(ldlm_lock_prolong_one);
