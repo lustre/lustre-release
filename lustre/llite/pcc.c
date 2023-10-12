@@ -2282,8 +2282,8 @@ int pcc_inode_create(struct super_block *sb, struct pcc_dataset *dataset,
 int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 {
 	struct dentry *pcc_dentry = pca->pca_dentry;
-	struct pcc_super *super = ll_i2pccs(inode);
 	const struct cred *old_cred;
+	struct pcc_super *super;
 	struct pcc_inode *pcci;
 	int rc;
 
@@ -2294,6 +2294,8 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 
 	if (!inode)
 		GOTO(out_dataset_put, rc = 0);
+
+	super = ll_i2pccs(inode);
 
 	LASSERT(pcc_dentry);
 
