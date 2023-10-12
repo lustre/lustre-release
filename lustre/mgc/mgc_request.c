@@ -1319,6 +1319,9 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		if (cname == NULL) {
 			CERROR("mgc %s: invalid logname %s\n",
 			       mgc->obd_name, obdname);
+			if (entry->mne_nid_type == 0)
+				OBD_FREE_PTR_ARRAY(nidlist,
+						   entry->mne_nid_count);
 			break;
 		}
 
