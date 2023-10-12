@@ -2101,7 +2101,7 @@ old_api:
                                 break;
                         }
 
-                        lst_print_error("group", "Failed to list group\n",
+                        lst_print_error("group", "Failed to list group: %s\n",
                                         strerror(errno));
                         break;
                 }
