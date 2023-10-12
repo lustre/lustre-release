@@ -3828,7 +3828,8 @@ static int check_and_complete_ostname(char *fsname, char *ostname)
 	/* if not check if the fsname is the right one */
 	ptr = strchr(ostname, '-');
 	if (!ptr) {
-		sprintf(real_ostname, "%s-%s", fsname, ostname);
+		snprintf(real_ostname, MAX_OBD_NAME + 1, "%s-%s", fsname,
+			 ostname);
 	} else if (strncmp(ostname, fsname, strlen(fsname)) != 0) {
 		fprintf(stderr, "%s does not start with fsname %s\n",
 			ostname, fsname);
@@ -5146,32 +5147,37 @@ static bool get_pools_path(char *fsname)
 	return (rc == 0);
 }
 
-static int extract_fsname_poolname(char **argv, char *fsname,
-				   char *poolname)
+static int extract_fsname_poolname(char **argv, char *fsname, char *poolname)
 {
 	char *cmd = argv[0], *param = argv[1];
 	char *ptr;
-	int rc;
+	int rc, fsname_len;
 
-	snprintf(fsname, PATH_MAX + 1, "%s", param);
-	ptr = strchr(fsname, '.');
+	ptr = strchr(param, '.');
 	if (!ptr) {
 		if (strcmp(cmd, "pool_list") == 0) {
-			poolname = NULL;
+			snprintf(fsname, LUSTRE_MAXFSNAME + 1, "%s", param);
+			poolname[0] = '\0';
 			goto out;
 		}
-		fprintf(stderr, ". is missing in %s\n", fsname);
+		fprintf(stderr, ". is missing in %s\n", param);
 		rc = -EINVAL;
 		goto err;
 	}
 
-	if ((ptr - fsname) == 0) {
+	fsname_len = ptr - param;
+	if (fsname_len == 0) {
 		fprintf(stderr, "fsname is empty\n");
 		rc = -EINVAL;
 		goto err;
+	} else if (fsname_len > LUSTRE_MAXFSNAME) {
+		fprintf(stderr, "fsname is too long\n");
+		rc = -EINVAL;
+		goto err;
 	}
 
-	*ptr = '\0';
+	strncpy(fsname, param, fsname_len);
+	fsname[fsname_len] = '\0';
 	++ptr;
 
 	if (ptr[0] == '\0') {
@@ -5180,9 +5186,7 @@ static int extract_fsname_poolname(char **argv, char *fsname,
 		goto err;
 	}
 
-	strncpy(poolname, ptr, LOV_MAXPOOLNAME);
-	poolname[LOV_MAXPOOLNAME] = '\0';
-
+	snprintf(poolname, LOV_MAXPOOLNAME + 1, "%s", ptr);
 	if (lov_pool_is_reserved(poolname)) {
 		fprintf(stderr, "poolname cannot be '%s'\n", poolname);
 		return -EINVAL;
@@ -5198,15 +5202,15 @@ err:
 int jt_pool_cmd(int argc, char **argv)
 {
 	enum lcfg_command_type cmd;
-	char fsname[PATH_MAX + 1];
+	char fsname[LUSTRE_MAXFSNAME + 1];
 	char poolname[LOV_MAXPOOLNAME + 1];
-	char *ostnames_buf = NULL;
 	int i, rc;
 	int *array = NULL, array_sz;
 	struct {
 		int     rc;
-		char   *ostname;
+		char    ostname[MAX_OBD_NAME + 1];
 	} *cmds = NULL;
+	int cmds_nr = 0, cmd_start = 0;
 
 	switch (argc) {
 	case 0:
@@ -5253,6 +5257,7 @@ int jt_pool_cmd(int argc, char **argv)
 		if (rc)
 			break;
 
+		/* generate full list of OSTs */
 		for (i = 2; i < argc; i++) {
 			int j;
 
@@ -5260,18 +5265,16 @@ int jt_pool_cmd(int argc, char **argv)
 			if (array_sz == 0)
 				return CMD_HELP;
 
-			cmds = malloc(array_sz * sizeof(cmds[0]));
-			if (cmds) {
-				ostnames_buf = malloc(array_sz *
-						      (MAX_OBD_NAME + 1));
-			} else {
-				free(array);
+			cmd_start = cmds_nr;
+			cmds_nr += array_sz;
+			cmds = realloc(cmds, cmds_nr * sizeof(cmds[0]));
+			if (cmds == NULL) {
 				rc = -ENOMEM;
 				goto out;
 			}
 
 			for (j = 0; j < array_sz; j++) {
-				char ostname[MAX_OBD_NAME + 1];
+				char *ostname = cmds[cmd_start + j].ostname;
 				int rc2;
 
 				snprintf(ostname, MAX_OBD_NAME, format,
@@ -5281,58 +5284,36 @@ int jt_pool_cmd(int argc, char **argv)
 				rc2 = check_and_complete_ostname(fsname,
 								ostname);
 				if (rc2) {
-					free(array);
-					free(cmds);
-					if (ostnames_buf)
-						free(ostnames_buf);
 					rc = rc ? rc : rc2;
 					goto out;
 				}
-				if (ostnames_buf) {
-					cmds[j].ostname =
-					&ostnames_buf[(MAX_OBD_NAME + 1) * j];
-					strcpy(cmds[j].ostname, ostname);
-				} else {
-					cmds[j].ostname = NULL;
-				}
-				cmds[j].rc = pool_cmd(cmd, argv[0], argv[1],
-						      fsname, poolname,
-						      ostname);
-				/* Return an err if any of the add/dels fail */
-				if (!rc)
-					rc = cmds[j].rc;
+			} /* for(j) */
+		} /* for(i) */
+		/* submit all commands */
+		for (i = 0; i < cmds_nr; i++) {
+			cmds[i].rc = pool_cmd(cmd, argv[0], argv[1], fsname,
+					      poolname, cmds[i].ostname);
+			/* Return an err if any of the add/dels fail */
+			if (!rc)
+				rc = cmds[i].rc;
+		}
+		/* check results */
+		for (i = 0; i < cmds_nr; i++) {
+			if (!cmds[i].rc) {
+				check_pool_cmd_result(cmd, fsname, poolname,
+						      cmds[i].ostname);
 			}
-			for (j = 0; j < array_sz; j++) {
-				if (!cmds[j].rc) {
-					char ostname[MAX_OBD_NAME + 1];
-
-					if (!cmds[j].ostname) {
-						snprintf(ostname, MAX_OBD_NAME,
-							 format, array[j]);
-						ostname[MAX_OBD_NAME] = '\0';
-						check_and_complete_ostname(
-							fsname, ostname);
-					} else {
-						strcpy(ostname,
-						       cmds[j].ostname);
-					}
-					check_pool_cmd_result(cmd, fsname,
-							      poolname,
-							      ostname);
-				}
-			}
-			if (array_sz > 0)
-				free(array);
-			if (cmds)
-				free(cmds);
-			if (ostnames_buf)
-				free(ostnames_buf);
 		}
 		fallthrough;
 	}
 	} /* switch */
 
 out:
+	if (array)
+		free(array);
+	if (cmds)
+		free(cmds);
+
 	if (rc != 0) {
 		errno = -rc;
 		perror(argv[0]);
