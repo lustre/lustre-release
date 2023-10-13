@@ -10780,6 +10780,34 @@ test_150() {
 }
 run_test 150 "test setting max_cached_mb to a %"
 
+test_151() {
+	(( MDS1_VERSION >= $(version_code 2.15.58) )) ||
+		skip "need MDS version at least 2.15.58"
+	[[ "$ost1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	cleanup
+	if ! combined_mgs_mds ; then
+		stop mgs
+	fi
+
+	echo "Damage ost1 local config log"
+	do_facet ost1 "$DEBUGFS -w -R 'punch CONFIGS/$FSNAME-OST0000 0 1' \
+		      $(ostdevname 1) || return \$?" ||
+		error "do_facet ost1 failed with $?"
+
+	# expect OST to fail mount with no MGS and bad local config
+	start_ost && error "OST start should fail"
+
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	start_mds || error "MDS start failed"
+	# now it should start with MGS config
+	start_ost || error "OST start failed"
+	reformat_and_config
+}
+run_test 151 "damaged local config doesn't prevent mounting"
+
 #
 # (This was sanity/802a)
 #

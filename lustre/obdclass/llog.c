@@ -1288,8 +1288,8 @@ EXPORT_SYMBOL(llog_open_create);
 int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	       struct llog_logid *logid, char *name)
 {
-	struct llog_handle	*handle;
-	int			 rc = 0, rc2;
+	struct llog_handle *handle;
+	int rc;
 
 	ENTRY;
 
@@ -1301,13 +1301,9 @@ int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	if (rc < 0)
 		RETURN(rc);
 
-	rc = llog_init_handle(env, handle, LLOG_F_IS_PLAIN, NULL);
-	if (rc == 0)
-		rc = llog_destroy(env, handle);
+	rc = llog_destroy(env, handle);
+	llog_close(env, handle);
 
-	rc2 = llog_close(env, handle);
-	if (rc == 0)
-		rc = rc2;
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_erase);

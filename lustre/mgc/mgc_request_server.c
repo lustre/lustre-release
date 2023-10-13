@@ -528,32 +528,38 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 
 	ENTRY;
 	/*
-	 * - copy it to backup using llog_backup()
+	 * NB: mgc_process_server_cfg_log() always needs valid local copy
+	 * and works only on it, so that defines the process:
+	 * - copy current local copy to temp_log using llog_backup()
 	 * - copy remote llog to logname using llog_backup()
-	 * - if failed then move bakup to logname again
+	 * - if failed then restore logname from backup
 	 */
+
 	OBD_ALLOC(temp_log, strlen(logname) + 2);
 	if (!temp_log)
 		RETURN(-ENOMEM);
 	sprintf(temp_log, "%sT", logname);
 
-	/* make a copy of local llog at first */
+	/* copy current local llog to temp_log */
 	rc = llog_backup(env, obd, lctxt, lctxt, logname, temp_log);
 	if (rc < 0 && rc != -ENOENT)
-		GOTO(out, rc);
-	/* copy remote llog to the local copy */
+		CWARN("%s: failed to backup local config %s: rc = %d\n",
+		      obd->obd_name, logname, rc);
+
+	/* build new local llog */
 	rc = llog_backup(env, obd, rctxt, lctxt, logname, logname);
 	if (rc == -ENOENT) {
-		/* no remote llog, delete local one too */
+		CWARN("%s: no remote llog for %s, check MGS config\n",
+		      obd->obd_name, logname);
 		llog_erase(env, lctxt, NULL, logname);
 	} else if (rc < 0) {
 		/* error during backup, get local one back from the copy */
-		llog_backup(env, obd, lctxt, lctxt, temp_log, logname);
-out:
-		CERROR("%s: failed to copy remote log %s: rc = %d\n",
+		CWARN("%s: failed to copy new config %s: rc = %d\n",
 		       obd->obd_name, logname, rc);
+		llog_backup(env, obd, lctxt, lctxt, temp_log, logname);
 	}
 	llog_erase(env, lctxt, NULL, temp_log);
+
 	OBD_FREE(temp_log, strlen(logname) + 2);
 	return rc;
 }
