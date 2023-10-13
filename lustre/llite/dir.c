@@ -1387,10 +1387,11 @@ static int ll_rmfid(struct file *file, void __user *arg)
 	const struct fid_array __user *ufa = arg;
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct fid_array *lfa = NULL;
-	size_t size;
-	unsigned int nr;
+	struct fid_array *lfa = NULL, *lfa_new = NULL;
 	int i, rc, *rcs = NULL;
+	unsigned int nr;
+	bool lfa_flag = false; /* lfa already free'ed */
+	size_t size;
 	ENTRY;
 
 	if (!capable(CAP_DAC_READ_SEARCH) &&
@@ -1418,10 +1419,11 @@ static int ll_rmfid(struct file *file, void __user *arg)
 	 * for which we want to remove FID are visible in the namespace.
 	 */
 	if (!fid_is_root(&sbi->ll_root_fid)) {
-		struct fid_array *lfa_new = NULL;
 		int path_len = PATH_MAX, linkno;
 		struct getinfo_fid2path *gf;
 		int idx, last_idx = nr - 1;
+
+		lfa_new = NULL;
 
 		OBD_ALLOC(lfa_new, size);
 		if (!lfa_new)
@@ -1430,7 +1432,7 @@ static int ll_rmfid(struct file *file, void __user *arg)
 
 		gf = kmalloc(sizeof(*gf) + path_len + 1, GFP_NOFS);
 		if (!gf)
-			GOTO(free_rcs, rc = -ENOMEM);
+			GOTO(free_lfa_new, rc = -ENOMEM);
 
 		for (idx = 0; idx < nr; idx++) {
 			linkno = 0;
@@ -1451,8 +1453,7 @@ static int ll_rmfid(struct file *file, void __user *arg)
 						     GFP_NOFS);
 					if (!tmpgf) {
 						kfree(gf);
-						OBD_FREE(lfa_new, size);
-						GOTO(free_rcs, rc = -ENOMEM);
+						GOTO(free_lfa_new, rc = -ENOMEM);
 					}
 					gf = tmpgf;
 					continue;
@@ -1483,9 +1484,9 @@ static int ll_rmfid(struct file *file, void __user *arg)
 		}
 		kfree(gf);
 		OBD_FREE(lfa, size);
+		lfa_flag = true;
 		lfa = lfa_new;
 	}
-
 	if (lfa->fa_nr == 0)
 		GOTO(free_rcs, rc = rcs[nr - 1]);
 
@@ -1500,10 +1501,13 @@ static int ll_rmfid(struct file *file, void __user *arg)
 			rc = -EFAULT;
 	}
 
+free_lfa_new:
+	OBD_FREE(lfa_new, size);
 free_rcs:
 	OBD_FREE_PTR_ARRAY(rcs, nr);
 free_lfa:
-	OBD_FREE(lfa, size);
+	if (!lfa_flag)
+		OBD_FREE(lfa, size);
 
 	RETURN(rc);
 }

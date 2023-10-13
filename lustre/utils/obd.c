@@ -3287,26 +3287,35 @@ static char *get_event_filter(__u32 cmd)
  * \retval		1 if ostname is found
  *			0 if ostname is not found
  *			-ENOENT if ostname is deleted
+ *			-ENOMEM if Error allocating memory
  */
 static int llog_search_ost_cb(const char *record, void *data)
 {
 	char *ostname = data;
 	char ost_filter[MAX_STRING_SIZE] = {'\0'};
 	char *add_osc, *del_osc, *setup, *cleanup;
-	int rc = 0;
+	int rc = -ENOMEM;
 
 	add_osc = get_event_filter(LCFG_LOV_ADD_OBD);
-	del_osc = get_event_filter(LCFG_LOV_DEL_OBD);
-	setup = get_event_filter(LCFG_SETUP);
-	cleanup = get_event_filter(LCFG_CLEANUP);
-	if (!add_osc || !del_osc || !setup || !cleanup) {
-		rc = -ENOMEM;
+	if (!add_osc)
 		goto out;
-	}
+
+	del_osc = get_event_filter(LCFG_LOV_DEL_OBD);
+	if (!del_osc)
+		goto out;
+
+	setup = get_event_filter(LCFG_SETUP);
+	if (!setup)
+		goto out;
+
+	cleanup = get_event_filter(LCFG_CLEANUP);
+	if (!cleanup)
+		goto out;
 
 	if (ostname && ostname[0])
 		snprintf(ost_filter, sizeof(ost_filter), " %s,", ostname);
 
+	rc = 0;
 	if (strstr(record, ost_filter)) {
 		if (strstr(record, add_osc) || strstr(record, setup)) {
 			rc = 1;
@@ -5824,8 +5833,10 @@ int jt_changelog_deregister(int argc, char **argv)
 		optind++;
 	}
 
-	if (optind < argc || argc == 1)
+	if (optind < argc || argc == 1) {
+		free(username);
 		return CMD_HELP;
+	}
 
 	data.ioc_dev = cur_device;
 	data.ioc_u32_1 = id;

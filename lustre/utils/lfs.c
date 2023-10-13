@@ -10570,8 +10570,10 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	char *mntpath = NULL;
 	int rc;
 
-	if (argc < 2)
-		return CMD_HELP;
+	if (argc < 2) {
+		rc = CMD_HELP;
+		goto out_cmd_help;
+	}
 
 	while ((c = getopt_long(argc, argv, "a:D:hl:m:",
 				long_opts, NULL)) != -1) {
@@ -10587,7 +10589,8 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 			    action != HUA_REMOVE) {
 				fprintf(stderr,
 					"error: -a is supported only when archiving or removing\n");
-				return CMD_HELP;
+				rc = CMD_HELP;
+				goto out_cmd_help;
 			}
 			archive_id = atoi(optarg);
 			break;
@@ -10602,15 +10605,18 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				progname, argv[optind - 1]);
 			fallthrough;
 		case 'h':
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out_cmd_help;
 		}
 	}
 
 	/* All remaining args are files, so we have at least nbfile */
 	nbfile = argc - optind;
 
-	if ((nbfile == 0) && (!filelist))
-		return CMD_HELP;
+	if ((nbfile == 0) && (!filelist)) {
+		rc = errno;
+		goto out_errno;
+	}
 
 	if (opaque)
 		opaque_len = strlen(opaque);
@@ -10623,7 +10629,8 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	if (!hur) {
 		fprintf(stderr, "Cannot create the request: %s\n",
 			strerror(errno));
-		return errno;
+		rc = errno;
+		goto out_errno;
 	}
 	nbfile_alloc = nbfile;
 
@@ -10639,7 +10646,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 		rc = fill_hur_item(hur, i, mntpath, argv[optind + i],
 				   &last_dev);
 		if (rc)
-			goto out_free;
+			goto out_hur;
 	}
 
 	/* from here stop using nb_file, use hur->hur_request.hr_itemcount */
@@ -10651,7 +10658,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 			fprintf(stderr, "Cannot read the file list %s: %s\n",
 				filelist, strerror(errno));
 			rc = -errno;
-			goto out_free;
+			goto out_hur;
 		}
 
 		while ((rc = getline(&line, &len, fp)) != -1) {
@@ -10673,7 +10680,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 					hur = oldhur;
 					rc = -errno;
 					fclose(fp);
-					goto out_free;
+					goto out_hur;
 				}
 				size = hur_len(oldhur);
 				if (size < 0) {
@@ -10685,7 +10692,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 					hur = oldhur;
 					rc = -E2BIG;
 					fclose(fp);
-					goto out_free;
+					goto out_hur;
 				}
 				memcpy(hur, oldhur, size);
 				free(oldhur);
@@ -10699,7 +10706,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 					   mntpath, line, &last_dev);
 			if (rc) {
 				fclose(fp);
-				goto out_free;
+				goto out_hur;
 			}
 
 			if (!some_file) {
@@ -10723,15 +10730,15 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 			some_file, strerror(errno));
 	}
 	rc = llapi_hsm_request(fullpath, hur);
-	if (rc) {
+	if (rc)
 		fprintf(stderr, "Cannot send HSM request (use of %s): %s\n",
 			some_file, strerror(-rc));
-		goto out_free;
-	}
 
-out_free:
-	free(some_file);
+out_hur:
 	free(hur);
+out_errno:
+	free(some_file);
+out_cmd_help:
 	return rc;
 }
 
