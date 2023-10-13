@@ -778,9 +778,6 @@ AC_DEFUN([LC_SRC_VFS_RENAME_5ARGS], [
 		#include <linux/fs.h>
 	],[
 		vfs_rename(NULL, NULL, NULL, NULL, NULL);
-	], [
-		AC_DEFINE(HAVE_VFS_RENAME_5ARGS, 1,
-			[kernel has vfs_rename with 5 args])
 	])
 ])
 AC_DEFUN([LC_VFS_RENAME_5ARGS], [
@@ -3167,8 +3164,10 @@ AC_DEFUN([LC_SRC_HAVE_USER_NAMESPACE_ARG], [
 	LB2_LINUX_TEST_SRC([inode_ops_has_user_namespace_argument], [
 		#include <linux/fs.h>
 	],[
-		((struct inode_operations *)1)->getattr((struct user_namespace *)NULL,
-							NULL, NULL, 0, 0);
+		struct inode_operations *iops = NULL;
+		struct user_namespace *user_ns = NULL;
+
+		iops->getattr(user_ns, NULL, NULL, 0, 0);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_USER_NAMESPACE_ARG], [
@@ -3189,19 +3188,21 @@ AC_DEFUN([LC_HAVE_USER_NAMESPACE_ARG], [
 # first few iterations, so don't commit to a particular signature
 # here.  Hopefully we will only want to support the final version.
 #
-AC_DEFUN([LC_HAVE_FILEATTR_GET], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if 'inode_operations' has fileattr_get (and fileattr_set)],
-fileattr_set, [
-	#include <linux/fs.h>
-],[
-	((struct inode_operations *)1)->fileattr_get(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_FILEATTR_GET, 1,
-		['inode_operations' has fileattr_get and fileattr_set])
+AC_DEFUN([LC_SRC_HAVE_FILEATTR_GET], [
+	LB2_LINUX_TEST_SRC([fileattr_set], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations *iops = NULL;
+		iops->fileattr_get(NULL, NULL);
+	],[-Werror])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LC_HAVE_FILEATTR_GET], [
+	AC_MSG_CHECKING([if 'inode_operations' has fileattr_get (and fileattr_set)])
+	LB2_LINUX_TEST_RESULT([fileattr_set], [
+		AC_DEFINE(HAVE_FILEATTR_GET, 1,
+			['inode_operations' has fileattr_get and fileattr_set])
+	])
+
 ]) # LC_HAVE_FILEATTR_GET
 
 # LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
@@ -4194,6 +4195,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 5.13
 	LC_SRC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
+	LC_SRC_HAVE_FILEATTR_GET
 
 	# 5.15
 	LC_SRC_HAVE_GET_ACL_RCU_ARG

@@ -2283,7 +2283,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		QCTL_COPY(oqctl, qctl);
 		rc = obd_quotactl(exp, oqctl);
 		if (rc == 0) {
-			QCTL_COPY(qctl, oqctl);
+			QCTL_COPY_NO_PNAME(qctl, oqctl);
 			qctl->qc_valid = QC_MDTIDX;
 			qctl->obd_uuid = obd->u.cli.cl_target_uuid;
 		}

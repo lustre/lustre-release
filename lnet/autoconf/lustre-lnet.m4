@@ -1014,9 +1014,6 @@ AC_DEFUN([LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS], [
 			.relaxed           = 0
 		};
 		(void)param;
-	],[
-		AC_DEFINE(HAVE_ORACLE_OFED_EXTENSIONS, 1,
-			[if Oracle OFED Extensions are enabled])
 	])
 ])
 AC_DEFUN([LN_HAVE_ORACLE_OFED_EXTENSIONS], [
