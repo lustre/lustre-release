@@ -336,6 +336,9 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 		param.status = rc;
 		if (rc != -EACCES)
 			param.status = -ETIMEDOUT;
+		CDEBUG(D_SEC,
+		       "%s: ctx init req got %d, returning to userspace status %llu\n",
+		       obd->obd_name, rc, param.status);
 		goto out_copy;
 	}
 

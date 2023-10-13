@@ -6345,6 +6345,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 						UC_IDCACHE_HASH_SIZE,
 						1200, /* entry expire: 20 mn */
 						30, /* acquire expire: 30 s */
+						true, /* acquire can replay */
 						&mdt_identity_upcall_cache_ops);
 	if (IS_ERR(m->mdt_identity_cache)) {
 		rc = PTR_ERR(m->mdt_identity_cache);

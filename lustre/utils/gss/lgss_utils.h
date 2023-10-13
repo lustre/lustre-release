@@ -89,6 +89,9 @@ void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
 		  uint32_t major, uint32_t minor, const char *format, ...)
 	__attribute__((format(printf, 6, 7)));
 
+void log_hexl(int pri, unsigned char *cp, int length);
+void log_hex(int pri, unsigned char *cp, int length);
+
 #define logmsg(loglevel, format, args...)                               \
 do {                                                                    \
 	if (loglevel <= g_log_level)					\

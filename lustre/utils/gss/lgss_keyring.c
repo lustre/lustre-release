@@ -393,6 +393,12 @@ static int lgssc_negotiation(struct lgss_nego_data *lnd, int req_fd[2],
 						&ret_flags,
 						NULL);        /* time rec */
 
+		logmsg_gss(LL_TRACE, lnd->lnd_mech, maj_stat, min_stat,
+			   "gss_init_sec_context");
+
+		logmsg(LL_TRACE, "send_token:\n");
+		log_hexl(LL_TRACE, send_token.value, send_token.length);
+
 		if (recv_tokenp != GSS_C_NO_BUFFER) {
 			gss_release_buffer(&min_stat, &gr.gr_token);
 			recv_tokenp = GSS_C_NO_BUFFER;

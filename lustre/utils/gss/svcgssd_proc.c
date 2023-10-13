@@ -163,7 +163,7 @@ static int do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	printerr(LL_DEBUG, "writing downcall data, size %d\n", size);
 	if (write(fd, rsc_dd, size) == -1) {
 		rc = -errno;
-		printerr(LL_ERR, "ERROR: %s: failed to write message: %s\n",
+		printerr(LL_ERR, "ERROR: %s failed: %s\n",
 			 __func__, strerror(-rc));
 	}
 	printerr(LL_DEBUG, "downcall data written ok\n");
@@ -256,7 +256,7 @@ static int send_response(int auth_res, uint64_t hash,
 	printerr(LL_DEBUG, "writing response, size %d\n", size);
 	if (write(fd, rsi_dd, size) == -1) {
 		rc = -errno;
-		printerr(LL_ERR, "ERROR: %s: failed to write message: %s\n",
+		printerr(LL_ERR, "ERROR: %s failed: %s\n",
 			 __func__, strerror(-rc));
 	}
 	printerr(LL_DEBUG, "response written ok\n");

@@ -1720,7 +1720,8 @@ int __init gss_init_svc_upcall(void)
 	rsicache = upcall_cache_init(RSI_CACHE_NAME, RSI_UPCALL_PATH,
 				     UC_RSICACHE_HASH_SIZE,
 				     3600, /* entry expire: 1 h */
-				     20, /* acquire expire: 20 s */
+				     30, /* acquire expire: 30 s */
+				     false, /* can't replay acquire */
 				     &rsi_upcall_cache_ops);
 	if (IS_ERR(rsicache)) {
 		rc = PTR_ERR(rsicache);
@@ -1731,6 +1732,7 @@ int __init gss_init_svc_upcall(void)
 				     UC_RSCCACHE_HASH_SIZE,
 				     3600, /* replaced with one from mech */
 				     100, /* arbitrary, not used */
+				     false, /* can't replay acquire */
 				     &rsc_upcall_cache_ops);
 	if (IS_ERR(rsccache)) {
 		upcall_cache_cleanup(rsicache);

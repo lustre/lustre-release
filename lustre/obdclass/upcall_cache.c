@@ -52,6 +52,8 @@ static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
 	entry->ue_key = key;
 	atomic_set(&entry->ue_refcount, 0);
 	init_waitqueue_head(&entry->ue_waitq);
+	entry->ue_acquire_expire = 0;
+	entry->ue_expire = 0;
 	if (cache->uc_ops->init_entry)
 		cache->uc_ops->init_entry(entry, args);
 	return entry;
@@ -230,6 +232,11 @@ find_again:
 		if (UC_CACHE_IS_ACQUIRING(entry)) {
 			/* we're interrupted or upcall failed in the middle */
 			rc = left > 0 ? -EINTR : -ETIMEDOUT;
+			/* if we waited uc_acquire_expire, we can try again
+			 * with same data, but only if acquire is replayable
+			 */
+			if (left <= 0 && !cache->uc_acquire_replay)
+				failedacquiring = true;
 			put_entry(cache, entry);
 			if (!failedacquiring) {
 				spin_unlock(&cache->uc_lock);
@@ -348,7 +355,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
 	if (err) {
 		CDEBUG(D_OTHER, "%s: upcall for key %llu returned %d\n",
 		       cache->uc_name, entry->ue_key, err);
-		GOTO(out, rc = -EINVAL);
+		GOTO(out, rc = err);
 	}
 
 	if (!UC_CACHE_IS_ACQUIRING(entry)) {
@@ -447,7 +454,7 @@ EXPORT_SYMBOL(upcall_cache_flush_one);
 
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 				       int hashsz, time64_t entry_expire,
-				       time64_t acquire_expire,
+				       time64_t acquire_expire, bool replayable,
 				       struct upcall_cache_ops *ops)
 {
 	struct upcall_cache *cache;
@@ -472,6 +479,7 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 	strlcpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall));
 	cache->uc_entry_expire = entry_expire;
 	cache->uc_acquire_expire = acquire_expire;
+	cache->uc_acquire_replay = replayable;
 	cache->uc_ops = ops;
 
 	RETURN(cache);
