@@ -288,22 +288,16 @@ LUSTRE_RW_ATTR(fallocate_zero_blocks);
 ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 			 const char *buffer, size_t count)
 {
-	struct dt_device *dt = container_of(kobj, struct dt_device,
-					    dd_kobj);
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct osd_device *osd = osd_dt_dev(dt);
-	struct lu_env env;
 	int rc;
 
 	LASSERT(osd);
 	if (unlikely(!osd->od_mnt))
 		return -EINPROGRESS;
 
-	rc = lu_env_init(&env, LCT_LOCAL);
-	if (rc)
-		return rc;
-
-	rc = dt_sync(&env, dt);
-	lu_env_fini(&env);
+	flush_workqueue(LDISKFS_SB(osd_sb(osd_dt_dev(dt)))->s_misc_wq);
+	rc = dt_sync(NULL, dt);
 
 	return rc == 0 ? count : rc;
 }

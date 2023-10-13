@@ -26564,6 +26564,42 @@ test_319() {
 }
 run_test 319 "lost lease lock on migrate error"
 
+test_360() {
+	(( $OST1_VERSION >= $(version_code 2.15.58.96) )) ||
+		skip "Need OST version at least 2.15.58.96"
+	[[ "$ost1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	check_set_fallocate_or_skip
+	do_facet ost1 "$LCTL set_param osd-ldiskfs.delayed_unlink_mb=1MiB"
+
+	mkdir $DIR/$tdir/
+	do_facet ost1 $LCTL set_param debug=+inode
+	do_facet ost1 $LCTL clear
+	local files=100
+
+	for ((i = 0; i < $files; i++)); do
+		fallocate -l 1280k $DIR/$tdir/$tfile.$i ||
+			error "fallocate 1280k $DIR/$tdir/$tfile.$i failed"
+	done
+	local min=$(($($LFS find $DIR/$tdir --ost 0 | wc -l) / 2))
+
+	for ((i = 0; i < $files; i++)); do
+		unlink $DIR/$tdir/$tfile.$i ||
+			error "unlink $DIR/$tdir/$tfile.$i failed"
+	done
+
+	local count=0
+	local loop
+
+	for (( loop = 0; loop < 30 && count < min; loop++)); do
+		sleep 1
+		(( count += $(do_facet ost1 $LCTL dk | grep -c "delayed iput")))
+		echo "Count[$loop]: $count"
+	done
+	(( count >= min )) || error "$count < $min delayed iput after $loop s"
+}
+run_test 360 "ldiskfs unlink in a separate thread"
+
 test_398a() { # LU-4198
 	local ost1_imp=$(get_osc_import_name client ost1)
 	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
