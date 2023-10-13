@@ -3843,6 +3843,48 @@ static int osc_cancel_weight(struct ldlm_lock *lock)
 	RETURN(0);
 }
 
+static int osc_hp_handler(struct ldlm_lock *lock)
+{
+	struct cl_object *clob = NULL;
+	struct lu_env *env;
+	__u16 refcheck;
+	int rc = 0;
+
+	ENTRY;
+
+	if (lock->l_resource->lr_type != LDLM_EXTENT)
+		RETURN(0);
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	lock_res_and_lock(lock);
+	if (!ldlm_is_granted(lock)) {
+		unlock_res_and_lock(lock);
+		GOTO(out, rc = 0);
+	}
+
+	if (lock->l_ast_data != NULL) {
+		clob = osc2cl(lock->l_ast_data);
+		cl_object_get(clob);
+	}
+	unlock_res_and_lock(lock);
+
+	if (clob != NULL) {
+		struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
+
+		/* HP handling for extents covered by the DLM lock. */
+		rc = osc_ldlm_hp_handle(env, cl2osc(clob),
+					extent->start >> PAGE_SHIFT,
+					extent->end >> PAGE_SHIFT, false);
+		cl_object_put(env, clob);
+	}
+out:
+	cl_env_put(env, &refcheck);
+	RETURN(rc);
+}
+
 static int brw_queue_work(const struct lu_env *env, void *data)
 {
 	struct client_obd *cli = data;
@@ -3940,6 +3982,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	ns_register_cancel(obd->obd_namespace, osc_cancel_weight);
+	ns_register_hp_handler(obd->obd_namespace, osc_hp_handler);
 
 	spin_lock(&osc_shrink_lock);
 	list_add_tail(&cli->cl_shrink_list, &osc_shrink_list);

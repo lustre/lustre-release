@@ -58,6 +58,7 @@ int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
 	osc->oo_root.rb_node = NULL;
 	INIT_LIST_HEAD(&osc->oo_hp_exts);
+	INIT_LIST_HEAD(&osc->oo_hp_read_exts);
 	INIT_LIST_HEAD(&osc->oo_urgent_exts);
 	INIT_LIST_HEAD(&osc->oo_full_exts);
 	INIT_LIST_HEAD(&osc->oo_reading_exts);
@@ -90,6 +91,7 @@ void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 
 	LASSERT(osc->oo_root.rb_node == NULL);
 	LASSERT(list_empty(&osc->oo_hp_exts));
+	LASSERT(list_empty(&osc->oo_hp_read_exts));
 	LASSERT(list_empty(&osc->oo_urgent_exts));
 	LASSERT(list_empty(&osc->oo_full_exts));
 	LASSERT(list_empty(&osc->oo_reading_exts));

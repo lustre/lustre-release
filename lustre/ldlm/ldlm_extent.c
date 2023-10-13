@@ -771,7 +771,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	 * let's refresh eviction timer for it.
 	 */
 	timeout = ldlm_bl_timeout_by_rpc(arg->lpa_req);
-	LDLM_DEBUG(lock, "refreshed to %ds", timeout);
+	LDLM_DEBUG(lock, "refreshed to %ds. ", timeout);
 	ldlm_refresh_waiting_lock(lock, timeout);
 }
 EXPORT_SYMBOL(ldlm_lock_prolong_one);

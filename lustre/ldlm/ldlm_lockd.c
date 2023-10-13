@@ -1961,6 +1961,8 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 		CDEBUG(D_DLMTRACE,
 		       "Lock %p is referenced, will be cancelled later\n",
 		       lock);
+		if (ns->ns_hp_handler != NULL)
+			ns->ns_hp_handler(lock);
 	}
 
 	LDLM_DEBUG(lock, "client blocking callback handler END");
@@ -2528,7 +2530,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
 	case LDLM_BL_CALLBACK:
-		LDLM_DEBUG(lock, "blocking ast");
+		LDLM_DEBUG(lock, "blocking ast ");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_BL_CALLBACK);
 		if (!ldlm_is_cancel_on_block(lock)) {
 			rc = ldlm_callback_reply(req, 0);
@@ -2540,14 +2542,14 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 			ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
 		break;
 	case LDLM_CP_CALLBACK:
-		LDLM_DEBUG(lock, "completion ast");
+		LDLM_DEBUG(lock, "completion ast ");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_CP_CALLBACK);
 		rc = ldlm_handle_cp_callback(req, ns, dlm_req, lock);
 		if (!CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE))
 			ldlm_callback_reply(req, rc);
 		break;
 	case LDLM_GL_CALLBACK:
-		LDLM_DEBUG(lock, "glimpse ast");
+		LDLM_DEBUG(lock, "glimpse ast ");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK);
 		ldlm_handle_gl_callback(req, ns, dlm_req, lock);
 		break;

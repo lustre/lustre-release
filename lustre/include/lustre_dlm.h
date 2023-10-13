@@ -287,6 +287,8 @@ typedef int (*ldlm_res_policy)(const struct lu_env *env,
 
 typedef int (*ldlm_cancel_cbt)(struct ldlm_lock *lock);
 
+typedef int (*ldlm_hp_handler_t)(struct ldlm_lock *lock);
+
 /**
  * LVB operations.
  * LVB is Lock Value Block. This is a special opaque (to LDLM) value that could
@@ -547,6 +549,12 @@ struct ldlm_namespace {
 	 */
 	ldlm_cancel_cbt		ns_cancel;
 
+	/**
+	 * Callback to check whether an object protected by a lock needs to
+	 * be handled with high priority (i.e. in case of lock blocking AST).
+	 */
+	ldlm_hp_handler_t	ns_hp_handler;
+
 	/** LDLM lock stats */
 	struct lprocfs_stats	*ns_stats;
 
@@ -630,6 +638,13 @@ static inline void ns_register_cancel(struct ldlm_namespace *ns,
 {
 	LASSERT(ns != NULL);
 	ns->ns_cancel = arg;
+}
+
+static inline void ns_register_hp_handler(struct ldlm_namespace *ns,
+					  ldlm_hp_handler_t arg)
+{
+	LASSERT(ns != NULL);
+	ns->ns_hp_handler = arg;
 }
 
 struct ldlm_lock;

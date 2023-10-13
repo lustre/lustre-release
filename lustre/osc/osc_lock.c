@@ -340,6 +340,12 @@ static int osc_lock_flush(struct osc_object *obj, pgoff_t start, pgoff_t end,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
+	/* For blocking AST, it only needs to check conflict read extents. */
+	rc = osc_ldlm_hp_handle(env, obj, start, end, true);
+	if (rc < 0)
+		CERROR("%s: HP read check failed: rc = %d\n",
+		       cli_name(osc_cli(obj)), rc);
+
 	if (mode == CLM_WRITE) {
 		rc = osc_cache_writeback_range(env, obj, start, end, 1,
 					       discard);

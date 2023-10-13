@@ -32,6 +32,8 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 void osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard);
+int osc_ldlm_hp_handle(const struct lu_env *env, struct osc_object *obj,
+		       pgoff_t start, pgoff_t end, bool need_rpc_check);
 
 void osc_lock_lvb_update(const struct lu_env *env,
 			 struct osc_object *osc,

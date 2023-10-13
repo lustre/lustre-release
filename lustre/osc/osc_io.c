@@ -72,6 +72,7 @@ static int osc_io_read_ahead(const struct lu_env *env,
 		LASSERT(dlmlock->l_ast_data == osc);
 		if (dlmlock->l_req_mode != LCK_PR) {
 			struct lustre_handle lockh;
+
 			ldlm_lock2handle(dlmlock, &lockh);
 			ldlm_lock_addref(&lockh, LCK_PR);
 			ldlm_lock_decref(&lockh, dlmlock->l_req_mode);

@@ -4120,6 +4120,7 @@ test_99() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
+	local cnt=50
 
 	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
 		skip "Server does not support PCC-RO"
@@ -4130,7 +4131,7 @@ test_99() {
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 
-	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=$cnt ||
 		error "Write $file failed"
 
 	local rpid
@@ -4140,27 +4141,33 @@ test_99() {
 	local dpid
 	local lpcc_path
 
+	local lckf=$DIR/$tfile.lck
+
+	rm -f $lckf
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	(
-		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
-			do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 conv=notrunc ||
+		while [ ! -e $lckf ]; do
+			do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=$cnt conv=notrunc || {
+				touch $lckf
 				error "failed to write $file"
+			}
 			sleep 0.$((RANDOM % 4 + 1))
 		done
 	)&
 	wpid=$!
 
 	(
-		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
-			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
-				error "failed to write $file"
+		while [ ! -e $lckf ]; do
+			echo "Read $file ..."
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=$cnt ||
+				error "failed to read $file"
 			sleep 0.$((RANDOM % 4 + 1))
 		done
 	)&
 	rpid=$!
 
 	(
-		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+		while [ ! -e $lckf ]; do
 			do_facet $SINGLEAGT $MMAP_CAT $file > /dev/null ||
 				error "failed to mmap_cat $file"
 			sleep 0.$((RANDOM % 4 + 1))
@@ -4169,7 +4176,7 @@ test_99() {
 	rpid2=$!
 
 	(
-		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+		while [ ! -e $lckf ]; do
 			echo "Unlink $lpcc_path"
 			do_facet $SINGLEAGT unlink $lpcc_path
 			sleep 1
@@ -4179,7 +4186,7 @@ test_99() {
 	upid=$!
 
 	(
-		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+		while [ ! -e $lckf ]; do
 			echo "Detach $file ..."
 			do_facet $SINGLEAGT $LFS pcc detach $file
 			sleep 0.$((RANDOM % 8 + 1))
@@ -4188,18 +4195,113 @@ test_99() {
 	dpid=$!
 
 	sleep 60
-	stack_trap "rm -f $DIR/sanity-pcc.99.lck"
-	touch $DIR/sanity-pcc.99.lck
+	echo "==== DONE ===="
+	stack_trap "rm -f $lckf"
+	touch $lckf
+	wait $wpid || error "$?: write failed"
+	wait $rpid || error "$?: read failed"
+	wait $rpid2 || error "$?: mmap read2 failed"
+	wait $upid || error "$?: unlink failed"
+	wait $dpid || error "$?: detach failed"
+
+	echo "==== DONE WIAT ===="
+	lctl get_param osc.*.rpc_stats
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $lckf
+}
+run_test 99 "race among unlink | mmap read | write | detach for PCC-RO file"
+
+test_99b() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local cnt=50
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 200
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=$cnt ||
+		error "Write $file failed"
+
+	local rpid
+	local rpid2
+	local wpid
+	local upid
+	local dpid
+	local lpcc_path
+
+	local lckf=$DIR/$tfile.lck
+
+	rm -f $lckf
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	(
+		while [ ! -e $lckf ]; do
+			do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=$cnt conv=notrunc || {
+				touch $lckf
+				error "failed to write $file"
+			}
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	wpid=$!
+
+	(
+		while [ ! -e $lckf ]; do
+			echo "Read $file ..."
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=$cnt ||
+				error "failed to read $file (1)"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid=$!
+
+	(
+		while [ ! -e $lckf ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=$cnt ||
+				error "failed to read $file (2)"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid2=$!
+
+	(
+		while [ ! -e $lckf ]; do
+			echo "Unlink $lpcc_path"
+			do_facet $SINGLEAGT unlink $lpcc_path
+			sleep 1
+		done
+		true
+	)&
+	upid=$!
+
+	(
+		while [ ! -e $lckf ]; do
+			echo "Detach $file ..."
+			do_facet $SINGLEAGT $LFS pcc detach $file
+			sleep 0.$((RANDOM % 8 + 1))
+		done
+	)&
+	dpid=$!
+
+	sleep 60
+	echo "==== DONE ===="
+	touch $lckf
 	wait $wpid || error "$?: write failed"
 	wait $rpid || error "$?: read failed"
 	wait $rpid2 || error "$?: read2 failed"
 	wait $upid || error "$?: unlink failed"
 	wait $dpid || error "$?: detach failed"
 
+	echo "==== DONE WIAT ===="
+	lctl get_param osc.*.rpc_stats
 	do_facet $SINGLEAGT $LFS pcc detach $file
-	rm -f $DIR/sanity-pcc.99.lck
+	rm -f $lckf
 }
-run_test 99 "race among unlink | mmap read | write | detach for PCC-RO file"
+run_test 99b "race among unlink | two readers | write | detach for PCC-RO file"
 
 test_100() {
 	local loopfile="$TMP/$tfile"
