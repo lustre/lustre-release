@@ -18,7 +18,6 @@ libcfs-crypto-objs := $(addprefix crypto/,$(libcfs-crypto-objs))
 libcfs-objs-$(CONFIG_SMP) = libcfs_cpu.o
 libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   libcfs_string.o hash.o \
-		   libcfs_mem.o \
 		   linux-crypto.o linux-crypto-adler.o \
 		   $(libcfs-objs-y)
 

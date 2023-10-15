@@ -13,27 +13,24 @@
  * General Public License version 2 for more details (a copy is included
  * in the LICENSE file that accompanied this code).
  *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 021110-1307, USA
- *
  * GPL HEADER END
  */
-/*
- * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012, Intel Corporation.
  */
-/*
- * This file is part of Lustre, http://www.lustre.org/
+/* This file is part of Lustre, http://www.lustre.org/
  *
  * Author: liang@whamcloud.com
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <linux/workqueue.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_cpu.h>
+#include <linux/slab.h>
+#include <linux/mm.h>
 
 struct cfs_var_array {
 	unsigned int		va_count;	/* # of buffers */
@@ -42,14 +39,13 @@ struct cfs_var_array {
 	void			*va_ptrs[0];	/* buffer addresses */
 };
 
-/*
- * free per-cpu data, see more detail in cfs_percpt_free
+/* free per-cpu data, see more detail in cfs_percpt_free
  */
 void
 cfs_percpt_free(void *vars)
 {
-	struct	cfs_var_array *arr;
-	int	i;
+	struct cfs_var_array *arr;
+	int i;
 
 	arr = container_of(vars, struct cfs_var_array, va_ptrs[0]);
 
@@ -63,8 +59,7 @@ cfs_percpt_free(void *vars)
 }
 EXPORT_SYMBOL(cfs_percpt_free);
 
-/*
- * allocate per cpu-partition variables, returned value is an array of pointers,
+/* allocate per cpu-partition variables, returned value is an array of pointers,
  * variable can be indexed by CPU partition ID, i.e:
  *
  *	arr = cfs_percpt_alloc(cfs_cpu_pt, size);
@@ -77,23 +72,24 @@ EXPORT_SYMBOL(cfs_percpt_free);
 void *
 cfs_percpt_alloc(struct cfs_cpt_table *cptab, unsigned int size)
 {
-	struct cfs_var_array	*arr;
-	int			count;
-	int			i;
+	struct cfs_var_array *arr;
+	int count;
+	int i;
 
 	count = cfs_cpt_number(cptab);
 
 	LIBCFS_ALLOC(arr, offsetof(struct cfs_var_array, va_ptrs[count]));
-	if (arr == NULL)
+	if (!arr)
 		return NULL;
 
-	arr->va_size	= size = L1_CACHE_ALIGN(size);
-	arr->va_count	= count;
-	arr->va_cptab	= cptab;
+	size = L1_CACHE_ALIGN(size);
+	arr->va_size = size;
+	arr->va_count = count;
+	arr->va_cptab = cptab;
 
 	for (i = 0; i < count; i++) {
 		LIBCFS_CPT_ALLOC(arr->va_ptrs[i], cptab, i, size);
-		if (arr->va_ptrs[i] == NULL) {
+		if (!arr->va_ptrs[i]) {
 			cfs_percpt_free((void *)&arr->va_ptrs[0]);
 			return NULL;
 		}
@@ -103,8 +99,7 @@ cfs_percpt_alloc(struct cfs_cpt_table *cptab, unsigned int size)
 }
 EXPORT_SYMBOL(cfs_percpt_alloc);
 
-/*
- * return number of CPUs (or number of elements in per-cpu data)
+/* return number of CPUs (or number of elements in per-cpu data)
  * according to cptab of @vars
  */
 int
