@@ -1454,7 +1454,15 @@ running_in_vm() {
 
 	case $virt in
 		VMware|KVM|VirtualBox|Parallels|Bochs)
-			echo $virt | tr '[A-Z]' '[a-z]' ;;
+			echo $virt | tr '[A-Z]' '[a-z]' && return;;
+
+		*) ;;
+	esac
+
+	virt=$(dmidecode -s system-manufacturer | awk '{print $1}')
+	case $virt in
+		QEMU)
+			echo $virt | tr '[A-Z]' '[a-z]' && return;;
 		*) ;;
 	esac
 }
