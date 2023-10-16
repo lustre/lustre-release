@@ -252,9 +252,7 @@
     <para>The <literal>pool_name</literal> specifies the OST pool to which the
       file will be written.  This allows limiting the OSTs used to a subset of
       all OSTs in the file system. For more details about using OST pools, see
-      <link xl:href="managingfilesystemio.managing_ost_pools">
-        Creating and Managing OST Pools
-      </link>.</para>
+      <xref linkend="managingfilesystemio.managing_ost_pools" />.</para>
     <section remap="h3">
       <title>Specifying a File Layout (Striping Pattern) for a Single File</title>
       <para>It is possible to specify the file layout when a new file is created using the command <literal>lfs setstripe</literal>. This allows users to override the file system default parameters to tune the file layout more optimally for their application. Execution of an <literal>lfs setstripe</literal> command fails if the file already exists.</para>

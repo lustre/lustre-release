@@ -435,6 +435,27 @@ client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
           other modifiers. For example, you can set striping on a directory to
           use an explicit starting index.</para>
         </note>
+        <note condition='l2G'>
+          <para>There are several reserved pool keywords:</para>
+          <itemizedlist>
+            <listitem>
+              <para>Use
+                <emphasis role="bold">
+                  <literal>--pool '' or --pool inherit</literal></emphasis>
+                to  force a component to inherit the pool from the parent or
+                root directory instead of the previous PFL's component (see
+                <xref linkend="pfl" />).</para>
+            </listitem>
+            <listitem>
+              <para>Use
+                <emphasis role="bold">
+                  <literal>--pool ignore</literal></emphasis>
+                to force creation of a file or a PFL's component without a pool
+                set (no inheritance from last component, root or parent).
+              </para>
+            </listitem>
+          </itemizedlist>
+        </note>
       </section>
     </section>
     <section remap="h3">
