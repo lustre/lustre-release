@@ -2465,8 +2465,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			ldlm_set_ast_sent(lock);
 		}
 
-		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
-		    !mdt_object_remote(child) && child != parent) {
+		/*
+		 * check whether the object is remote as we can't
+		 * really check attributes w/o explicit check for
+		 * object's existence first.
+		 */
+		if (!mdt_object_remote(child) && child != parent &&
+		    S_ISREG(lu_object_attr(&child->mot_obj))) {
 			mdt_object_put(info->mti_env, child);
 			rc = mdt_pack_size2body(info, child_fid,
 						&lhc->mlh_reg_lh);
