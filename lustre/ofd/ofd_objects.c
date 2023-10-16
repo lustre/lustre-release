@@ -144,6 +144,20 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 	buf->lb_buf = ff;
 	buf->lb_len = sizeof(*ff);
 	rc = dt_xattr_get(env, ofd_object_child(fo), buf, XATTR_NAME_FID);
+	if (rc == -ERANGE) {
+		struct filter_fid *ff_new;
+
+		OBD_ALLOC(ff_new, sizeof(*ff) + FILTER_FID_EXTRA_SIZE);
+		if (!ff_new)
+			return -ENOMEM;
+		buf->lb_buf = ff_new;
+		buf->lb_len = sizeof(*ff) + FILTER_FID_EXTRA_SIZE;
+		rc = dt_xattr_get(env, ofd_object_child(fo), buf,
+				  XATTR_NAME_FID);
+		if (rc > 0)
+			memcpy(ff, ff_new, sizeof(*ff));
+		OBD_FREE(ff_new, sizeof(*ff) + FILTER_FID_EXTRA_SIZE);
+	}
 	if (rc < 0)
 		return rc;
 
