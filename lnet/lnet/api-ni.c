@@ -3105,13 +3105,13 @@ LNetNIInit(lnet_pid_t requested_pid)
 	if (rc != 0)
 		goto err_stop_ping;
 
-	rc = lnet_peer_discovery_start();
+	rc = lnet_monitor_thr_start();
 	if (rc != 0)
 		goto err_destroy_push_target;
 
-	rc = lnet_monitor_thr_start();
+	rc = lnet_peer_discovery_start();
 	if (rc != 0)
-		goto err_stop_discovery_thr;
+		goto err_stop_monitor_thr;
 
 	lnet_fault_init();
 	lnet_router_debugfs_init();
@@ -3125,8 +3125,8 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	return 0;
 
-err_stop_discovery_thr:
-	lnet_peer_discovery_stop();
+err_stop_monitor_thr:
+	lnet_monitor_thr_stop();
 err_destroy_push_target:
 	lnet_push_target_fini();
 err_stop_ping:
@@ -3181,8 +3181,8 @@ LNetNIFini(void)
 		lnet_fault_fini();
 
 		lnet_router_debugfs_fini();
-		lnet_monitor_thr_stop();
 		lnet_peer_discovery_stop();
+		lnet_monitor_thr_stop();
 		lnet_push_target_fini();
 		lnet_ping_target_fini();
 
