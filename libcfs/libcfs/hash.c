@@ -1748,7 +1748,6 @@ cfs_hash_for_each_empty(struct cfs_hash *hs,
 		       hs->hs_name, i++);
 	}
 	cfs_hash_for_each_exit(hs);
-	LASSERT(atomic_read(&hs->hs_count) == 0);
 	RETURN(0);
 }
 EXPORT_SYMBOL(cfs_hash_for_each_empty);
