@@ -40,6 +40,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
       [[\fB!\fR] \fB--type\fR|\fB-t\fR {\fBbcdflps\fR}]
 [[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U  \fIUNAME\fR|\fIUID\fR]
+      [[\fB!\fR] \fB--xattr\fR \fINAME\fR[\fB=\fIVALUE\fR]]
 .SH DESCRIPTION
 .B lfs find
 is similar to the standard
@@ -459,6 +460,15 @@ File has specified numeric user ID.
 .TP
 .BR --user | -U
 File owned by specified user, numeric user ID also allowed.
+.TP
+\fB--xattr \fINAME\fR[\fB=\fIVALUE\fR]
+File has an extended attribute with name matching the regular expression
+.RB ( regex (7))
+\fINAME\fR, and optionally value matching the regular expression \fIVALUE\fR.
+The regular expressions must match the complete attribute names and values,
+and not just a substring.
+This option may be specified multiple times, and the file must match all
+provided arguments.
 .SH NOTES
 Specifying \fB!\fR before an option negates its meaning (\fIfiles
 NOT matching the parameter\fR). Using \fB+\fR before a numeric
@@ -515,6 +525,14 @@ Recursively list all out-of-sync mirrored files.
 Recursively list all but foreign files/dirs of
 .B symlink
 type.
+.TP
+.B $ lfs find -xattr user.job=202310.* /mnt/lustre
+Recursively list all files with the specified "user.job" extended attribute.
+.TP
+.B $ lfs find -xattr security.selinux ! -xattr security.selinux=.*httpd.* /var/www
+Recursively list all files in /var/www that have any SELinux extended attribute,
+but that do NOT have an SELinux extended attribute with a value containing
+"httpd".
 .SH BUGS
 The
 .B lfs find
@@ -535,4 +553,5 @@ command is part of the Lustre filesystem.
 .BR lfs-migrate (1),
 .BR lfs_migrate (1),
 .BR lustre (7),
+.BR regex (7),
 .BR xargs (1)

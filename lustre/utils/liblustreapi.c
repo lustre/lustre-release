@@ -4600,6 +4600,151 @@ static int find_check_attr_options(struct find_param *param)
 	return 1;
 }
 
+/**
+ * xattr_reg_match() - return true if the supplied string matches the pattern.
+ *
+ * This requires the regex to match the entire supplied string, not just a
+ *     substring.
+ *
+ * str must be null-terminated. len should be passed in anyways to avoid an
+ *     extra call to strlen(str) when the length is already known.
+ */
+static bool xattr_reg_match(regex_t *pattern, const char *str, int len)
+{
+	regmatch_t pmatch;
+	int ret;
+
+	ret = regexec(pattern, str, 1, &pmatch, 0);
+	if (ret == 0 && pmatch.rm_so == 0 && pmatch.rm_eo == len)
+		return true;
+
+	return false;
+}
+
+/**
+ * xattr_done_matching() - return true if all supplied patterns have been
+ *     matched, allowing to skip checking any remaining xattrs on a file.
+ *
+ *     This is only allowed if there are no "exclude" patterns.
+ */
+static int xattr_done_matching(struct xattr_match_info *xmi)
+{
+	int i;
+
+	for (i = 0; i < xmi->xattr_regex_count; i++) {
+		/* if any pattern still undecided, need to keep going */
+		if (!xmi->xattr_regex_matched[i])
+			return false;
+	}
+
+	return true;
+}
+
+static int find_check_xattrs(char *path, struct xattr_match_info *xmi)
+{
+	ssize_t list_len = 0;
+	ssize_t val_len = 0;
+	bool fetched_val;
+	char *p;
+	int i;
+
+	for (i = 0; i < xmi->xattr_regex_count; i++)
+		xmi->xattr_regex_matched[i] = false;
+
+	list_len = llistxattr(path, xmi->xattr_name_buf, XATTR_LIST_MAX);
+	if (list_len < 0) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "error: listxattr: %s", path);
+		return -1;
+	}
+
+	/* loop over all xattr names on the file */
+	for (p = xmi->xattr_name_buf;
+	     p - xmi->xattr_name_buf < list_len;
+	     p = strchr(p, '\0'), p++) {
+		fetched_val = false;
+		/* loop over all regex patterns specified and check them */
+		for (i = 0; i < xmi->xattr_regex_count; i++) {
+			if (xmi->xattr_regex_matched[i])
+				continue;
+
+			if (!xattr_reg_match(xmi->xattr_regex_name[i],
+					     p, strlen(p)))
+				continue;
+
+			if (xmi->xattr_regex_value[i] == NULL)
+				goto matched;
+
+			/*
+			 * even if multiple patterns match the same xattr name,
+			 * don't call getxattr() more than once
+			 */
+			if (!fetched_val) {
+				val_len = lgetxattr(path, p,
+						    xmi->xattr_value_buf,
+						    XATTR_SIZE_MAX);
+				fetched_val = true;
+				if (val_len < 0) {
+					llapi_error(LLAPI_MSG_ERROR, errno,
+						    "error: getxattr: %s",
+						    path);
+					continue;
+				}
+
+				/*
+				 * the value returned by getxattr might or
+				 * might not be null terminated.
+				 * if it is, then decrement val_len so it
+				 * matches what strlen() would return.
+				 * if it is not, then add a null terminator
+				 * since regexec() expects that.
+				 */
+				if (val_len > 0 &&
+				    xmi->xattr_value_buf[val_len - 1] == '\0') {
+					val_len--;
+				} else {
+					xmi->xattr_value_buf[val_len] = '\0';
+				}
+			}
+
+			if (!xattr_reg_match(xmi->xattr_regex_value[i],
+					     xmi->xattr_value_buf, val_len))
+				continue;
+
+matched:
+			/*
+			 * if exclude this xattr, we can exit early
+			 * with NO match
+			 */
+			if (xmi->xattr_regex_exclude[i])
+				return -1;
+
+			xmi->xattr_regex_matched[i] = true;
+
+			/*
+			 * if all "include" patterns have matched, and there are
+			 * no "exclude" patterns, we can exit early with match
+			 */
+			if (xattr_done_matching(xmi) == 1)
+				return 1;
+		}
+	}
+
+	/*
+	 * finally, check that all supplied patterns either matched, or were
+	 * "exclude" patterns if they did not match.
+	 */
+	for (i = 0; i < xmi->xattr_regex_count; i++) {
+		if (!xmi->xattr_regex_matched[i]) {
+			if (!xmi->xattr_regex_exclude[i]) {
+				return -1;
+			}
+		}
+	}
+
+	return 1;
+}
+
 static bool find_check_lmm_info(struct find_param *param)
 {
 	return param->fp_check_pool || param->fp_check_stripe_count ||
@@ -5724,6 +5869,12 @@ obd_matches:
 	    !(flags & OBD_MD_FLBLOCKS ||
 	      (param->fp_lazy && flags & OBD_MD_FLLAZYBLOCKS)))
 		decision = 0;
+
+	if (param->fp_xattr_match_info) {
+		decision = find_check_xattrs(path, param->fp_xattr_match_info);
+		if (decision == -1)
+			goto decided;
+	}
 
 	/*
 	 * When checking nlink, stat(2) is needed for multi-striped directories

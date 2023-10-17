@@ -3486,7 +3486,8 @@ enum {
 	LFS_STATS_OPT,
 	LFS_STATS_INTERVAL_OPT,
 	LFS_LINKS_OPT,
-	LFS_ATTRS_OPT
+	LFS_ATTRS_OPT,
+	LFS_XATTRS_MATCH_OPT
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -4836,6 +4837,201 @@ static int name2attrs(char *name, __u64 *attrs, __u64 *neg_attrs)
 	return 0;
 }
 
+/**
+ * xattr_match_info_append() - add the supplied name and value regex patterns
+ *     to the supplied xattr_match_info struct.
+ *
+ * Return: 0 for success, nonzero if any errors encountered.
+ */
+int xattr_match_info_append(struct xattr_match_info *xmi, bool exclude,
+			    char *name_pattern, char *value_pattern)
+{
+	int flags = REG_EXTENDED;
+	char *err_buf;
+	int err_len;
+	void *nptr;
+	int ret;
+	int n;
+
+	if (xmi->xattr_name_buf == NULL) {
+		xmi->xattr_name_buf = malloc(XATTR_LIST_MAX);
+		if (xmi->xattr_name_buf == NULL)
+			goto err_out;
+	}
+
+	if (xmi->xattr_value_buf == NULL) {
+		/*
+		 * an xattr value need not be null-terminated, so allocate an
+		 * extra byte to append a '\0', since regexec() expects a null-
+		 * terminated string.
+		 */
+		xmi->xattr_value_buf = malloc(XATTR_SIZE_MAX + 1);
+		if (xmi->xattr_value_buf == NULL)
+			goto err_out;
+	}
+
+	n = ++xmi->xattr_regex_count;
+
+	nptr = realloc(xmi->xattr_regex_matched, n * sizeof(bool));
+	if (nptr == NULL)
+		goto err_out;
+	xmi->xattr_regex_matched = nptr;
+
+	nptr = realloc(xmi->xattr_regex_exclude, n * sizeof(bool));
+	if (nptr == NULL)
+		goto err_out;
+	xmi->xattr_regex_exclude = nptr;
+
+	nptr = realloc(xmi->xattr_regex_name, n * sizeof(regex_t *));
+	if (nptr == NULL)
+		goto err_out;
+	xmi->xattr_regex_name = nptr;
+
+	nptr = realloc(xmi->xattr_regex_value, n * sizeof(regex_t *));
+	if (nptr == NULL)
+		goto err_out;
+	xmi->xattr_regex_value = nptr;
+
+	n--;
+
+	xmi->xattr_regex_exclude[n] = exclude;
+
+	xmi->xattr_regex_name[n] = malloc(sizeof(regex_t));
+	if (xmi->xattr_regex_name[n] == NULL)
+		goto err_out;
+
+	ret = regcomp(xmi->xattr_regex_name[n], name_pattern, flags);
+	if (ret) {
+		err_len = regerror(ret, xmi->xattr_regex_name[n], NULL, 0);
+		err_buf = malloc(err_len);
+		if (err_buf == NULL)
+			goto err_out;
+
+		regerror(ret, xmi->xattr_regex_name[n], err_buf, err_len);
+		fprintf(stderr, "%s: %s: %s\n",
+			progname, name_pattern, err_buf);
+		free(err_buf);
+		return ret;
+	}
+
+	if (value_pattern && value_pattern[0] != '\0') {
+		xmi->xattr_regex_value[n] = malloc(sizeof(regex_t));
+		ret = regcomp(xmi->xattr_regex_value[n], value_pattern, flags);
+		if (ret) {
+			err_len = regerror(ret, xmi->xattr_regex_value[n],
+					   NULL, 0);
+			err_buf = malloc(err_len);
+			if (err_buf == NULL)
+				goto err_out;
+
+			regerror(ret, xmi->xattr_regex_value[n], err_buf,
+				 err_len);
+			fprintf(stderr, "%s: %s: %s\n",
+				progname, value_pattern, err_buf);
+			free(err_buf);
+			return ret;
+		}
+	} else {
+		xmi->xattr_regex_value[n] = NULL;
+	}
+
+	return 0;
+
+err_out:
+	fprintf(stderr, "%s: %s\n", progname, strerror(ENOMEM));
+	return -ENOMEM;
+}
+
+void xattr_match_info_free(struct xattr_match_info *xmi)
+{
+	int i;
+
+	free(xmi->xattr_regex_exclude);
+	xmi->xattr_regex_exclude = NULL;
+
+	free(xmi->xattr_regex_matched);
+	xmi->xattr_regex_matched = NULL;
+
+	for (i = 0; i < xmi->xattr_regex_count; i++) {
+		if (xmi->xattr_regex_name[i]) {
+			regfree(xmi->xattr_regex_name[i]);
+			free(xmi->xattr_regex_name[i]);
+		}
+
+		if (xmi->xattr_regex_value[i]) {
+			regfree(xmi->xattr_regex_value[i]);
+			free(xmi->xattr_regex_value[i]);
+		}
+	}
+
+	xmi->xattr_regex_count = 0;
+
+	free(xmi->xattr_regex_name);
+	xmi->xattr_regex_name = NULL;
+
+	free(xmi->xattr_regex_value);
+	xmi->xattr_regex_value = NULL;
+
+	free(xmi->xattr_name_buf);
+	xmi->xattr_name_buf = NULL;
+
+	free(xmi->xattr_value_buf);
+	xmi->xattr_value_buf = NULL;
+}
+
+/**
+ * compile_xattr_match_regex() - Compile regexes for matching xattr names and
+ * values, returning an error if either fails to compile.
+ *
+ * The argument should be in the form "NAME=VALUE". The first '=' found
+ * is assumed to be the separator between the name regex and the value regex.
+ *
+ * VALUE may be empty. If it is empty, it is not compiled and left NULL.
+ * NAME must not be empty.
+ *
+ * Return: 0 if argument string is succesfully processed, nonzero if any
+ *         errors encountered.
+ */
+static int compile_xattr_match_regex(char *optarg, bool exclude,
+				     struct find_param *param)
+{
+	char *sep;
+
+	sep = strchr(optarg, '=');
+	if (sep)
+		*sep = '\0';
+
+	/* error if no NAME pattern specified */
+	if (*optarg == '\0') {
+		fprintf(stderr, "%s: must specify xattr pattern\n", progname);
+		return CMD_HELP;
+	}
+
+	/* if first -xattr option seen */
+	if (param->fp_xattr_match_info == NULL) {
+		param->fp_xattr_match_info = calloc(1,
+					sizeof(struct xattr_match_info));
+		if (param->fp_xattr_match_info == NULL) {
+			fprintf(stderr, "%s: %s\n", progname, strerror(ENOMEM));
+			return -ENOMEM;
+		}
+	}
+
+	/*
+	 * if '=' was not provided, or if there is no value after the '=',
+	 * then pass NULL to xattr_match_info_append() so that no VALUE regex
+	 * is compiled.
+	 */
+	if (sep) {
+		sep++;
+		if (*sep == '\0')
+			sep = NULL;
+	}
+
+	return xattr_match_info_append(param->fp_xattr_match_info, exclude,
+				       optarg, sep);
+}
+
 static int parse_symbolic(const char *input, mode_t *outmode, const char **end)
 {
 	int loop;
@@ -5204,6 +5400,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
 /* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }, */
+	{ .val = LFS_XATTRS_MATCH_OPT,
+			.name = "xattr",	.has_arg = required_argument },
 	{ .val = 'z',	.name = "extension-size",
 						.has_arg = required_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = required_argument },
@@ -5969,6 +6167,12 @@ err_free:
 			param.fp_check_mdt_count = 1;
 			param.fp_exclude_mdt_count = !!neg_opt;
 			break;
+		case LFS_XATTRS_MATCH_OPT:
+			ret = compile_xattr_match_regex(optarg, neg_opt,
+							&param);
+			if (ret)
+				goto err;
+			break;
 		case 'z':
 			if (optarg[0] == '+') {
 				param.fp_ext_size_sign = -1;
@@ -6031,6 +6235,12 @@ err:
 
 	if (param.fp_format_printf_str)
 		free(param.fp_format_printf_str);
+
+	if (param.fp_xattr_match_info) {
+		xattr_match_info_free(param.fp_xattr_match_info);
+		free(param.fp_xattr_match_info);
+		param.fp_xattr_match_info = NULL;
+	}
 
 	return ret;
 }

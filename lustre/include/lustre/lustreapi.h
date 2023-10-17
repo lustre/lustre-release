@@ -38,6 +38,7 @@
  */
 
 #include <glob.h>
+#include <regex.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <time.h>
@@ -247,6 +248,20 @@ enum lfs_find_perm {
 	LFS_FIND_PERM_ALL   =  1,
 };
 
+/* struct for buffers and matching info for -xattr arguments to lfs find */
+struct xattr_match_info {
+	/* number of -xattr args specified (and size of xattr_regex_ arrays) */
+	int			xattr_regex_count;
+	/* negation (!) can be specified separately for each -xattr arg */
+	bool			*xattr_regex_exclude;
+	/* which regexes have already matched, when multiple specified */
+	bool			*xattr_regex_matched;
+	regex_t			**xattr_regex_name;
+	regex_t			**xattr_regex_value;
+	char			*xattr_name_buf;       /* [XATTR_LIST_MAX] */
+	char			*xattr_value_buf;      /* [XATTR_SIZE_MAX] */
+};
+
 /*
  * new fields should be added to the end of this struct (unless filling a hole
  * such as in a bitfield), to preserve the ABI
@@ -428,6 +443,7 @@ struct find_param {
 	nlink_t			 fp_nlink;
 	__u64			 fp_attrs;
 	__u64			 fp_neg_attrs;
+	struct xattr_match_info	*fp_xattr_match_info;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

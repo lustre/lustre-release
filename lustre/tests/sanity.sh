@@ -9064,6 +9064,77 @@ test_56ef() {
 }
 run_test 56ef "lfs find with multiple paths"
 
+test_56eg() {
+	local dir=$DIR/$tdir
+	local found
+
+	which setfattr > /dev/null 2>&1 || skip_env "no setfattr command"
+
+	test_mkdir -p $dir
+
+	touch $dir/$tfile
+	ln -s $dir/$tfile $dir/$tfile.symlink
+	setfattr -n "trusted.test" -v "test_target" $dir/$tfile
+	setfattr --no-dereference -n "trusted.test" -v "test_link" \
+		$dir/$tfile.symlink
+	setfattr --no-dereference -n "trusted.common" \
+		$dir/{$tfile,$tfile.symlink}
+
+	found=$($LFS find -xattr "trusted.*=test_target" \
+		-xattr "trusted.common" $dir)
+	[[ "$found" == "$dir/$tfile" ]] || {
+		getfattr -d -m trusted.* $dir/$tfile
+		error "should have found '$tfile' with xattr 'trusted.test=test_target', got '$found'"
+	}
+
+	found=$($LFS find -xattr "trusted.*=test_link" \
+		-xattr "trusted.common" $dir)
+	[[ "$found" == "$dir/$tfile.symlink" ]] || {
+		getfattr --no-dereference -d -m trusted.* $dir/$tfile.symlink
+		error "should have found '$tfile.symlink' with xattr 'trusted.test=test_link', got '$found'"
+	}
+
+	rm -f $dir/*
+
+	touch $dir/$tfile.1
+	touch $dir/$tfile.2
+	setfattr -n "user.test" -v "1" $dir/$tfile.1
+	setfattr -n "user.test" -v "2" $dir/$tfile.2
+	setfattr -n "user.test2" -v "common" $dir/$tfile.{1,2}
+
+	found=$($LFS find -xattr "user.*=common" -xattr "user.test=1" $dir)
+	[[ "$found" == "$dir/$tfile.1" ]] || {
+		getfattr -d $dir/$tfile.1
+		error "should have found '$tfile.1' with xattr user.test=1', got '$found'"
+	}
+
+	found=$($LFS find -xattr "user.*=common" ! -xattr "user.test=1" $dir)
+	[[ "$found" == "$dir/$tfile.2" ]] || {
+		getfattr -d $dir/$tfile.2
+		error "should have found '$tfile.2' without xattr 'user.test=1', got '$found'"
+	}
+
+	setfattr -n "user.empty" $dir/$tfile.1
+	found=$($LFS find -xattr "user.empty" $dir)
+	[[ "$found" == "$dir/$tfile.1" ]] || {
+		getfattr -d $dir/$tfile.1
+		error "should have found '$tfile.1' with xattr 'user.empty=', got '$found'"
+	}
+
+	# setfattr command normally does not store terminating null byte
+	# when writing a string as an xattr value.
+	#
+	# In order to test matching a value string that includes a terminating
+	# null, explicitly encode the string "test\0" with the null terminator.
+	setfattr -n "user.test" -v "0x7465737400" $dir/$tfile.1
+	found=$($LFS find -xattr "user.test=test" $dir)
+	[[ "$found" == "$dir/$tfile.1" ]] || {
+		getfattr -d --encoding=hex $dir/$tfile.1
+		error "should have found '$tfile.1' with xattr 'user.test=0x7465737400', got '$found'"
+	}
+}
+run_test 56eg "lfs find -xattr"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local
