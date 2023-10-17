@@ -816,17 +816,35 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 		goto free_buf;
 	}
 	/* don't print anything for empty files */
-	if (buf[0] == '\0')
+	if (buf[0] == '\0') {
+		if (popt->po_header)
+			printf("%s=\n", param_name);
 		goto free_buf;
-
-	if (popt->po_show_path) {
-		bool longbuf;
-
-		longbuf = memchr(buf, '\n', buflen - 1) ||
-			  buflen + strlen(param_name) >= 80;
-		printf("%s=%s", param_name, longbuf ? "\n" : "");
 	}
-	printf("%s", buf);
+
+	if (popt->po_header) {
+		char *oldbuf = buf;
+		char *next;
+
+		do {
+			/* Split at first \n, if any */
+			next = strchrnul(oldbuf, '\n');
+
+			printf("%s=%.*s\n", param_name, (int)(next - oldbuf),
+			       oldbuf);
+
+			buflen -= next - oldbuf + 1;
+			oldbuf = next + 1;
+
+		} while (buflen > 0);
+
+	} else if (popt->po_show_path) {
+		bool multilines = memchr(buf, '\n', buflen - 1);
+
+		printf("%s=%s%s", param_name, multilines ? "\n" : "", buf);
+	} else {
+		printf("%s", buf);
+	}
 
 free_buf:
 	free(buf);
@@ -1367,10 +1385,13 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	popt->po_show_path = 1;
 
-	while ((ch = getopt(argc, argv, "FnNRy")) != -1) {
+	while ((ch = getopt(argc, argv, "FHnNRy")) != -1) {
 		switch (ch) {
 		case 'F':
 			popt->po_show_type = 1;
+			break;
+		case 'H':
+			popt->po_header = 1;
 			break;
 		case 'n':
 			popt->po_show_path = 0;

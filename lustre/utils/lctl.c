@@ -190,6 +190,7 @@ command_t cmdlist[] = {
 	 "The path can contain shell-style filename patterns.\n"
 	 "  -F  When -N specified, add '/', '@' or '=' for directories,\n"
 	 "      symlinks and writeable files, respectively.\n"
+	 "  -H  Prefix each output line with the parameter name.\n"
 	 "  -n  Print only the value and not parameter name.\n"
 	 "  -N  Print only matched parameter names and not the values.\n"
 	 "      (Especially useful when using patterns.)\n"

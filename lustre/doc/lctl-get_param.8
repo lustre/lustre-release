@@ -3,7 +3,7 @@
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
 .br
-.IR "\fBlctl get_param " [ -F "] [" -n | -N "] [" -R "] <" parameter ...>
+.IR "\fBlctl get_param " [ -F "] [" -H "] [" -n | -N "] [" -R "] <" parameter ...>
 .br
 .SH DESCRIPTION
 Get the value of the named Lustre or LNet
@@ -35,6 +35,11 @@ parameters, respectively.
 .B "lctl get_param -NF"
 is equivalent to
 .BR "lctl list_param -F" .
+.TP
+.B -H
+Prefix each parameter value line with the parameter name, as a header. It
+also print a line for empty values. It could be useful when wildcards are
+used and filtering the output.
 .TP
 .B -n
 Print only the parameter value and not parameter name.  This may be confusing
