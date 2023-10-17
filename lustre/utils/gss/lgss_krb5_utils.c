@@ -187,10 +187,8 @@ int svc_princ_verify_host(krb5_context ctx,
 			  loglevel_t loglevel)
 {
 	struct utsname utsbuf;
-	struct hostent *host;
 	const int max_namelen = 512;
 	char namebuf[max_namelen];
-	char *h_name;
 
 	if (krb5_princ_component(ctx, princ, 1) == NULL) {
 		logmsg(loglevel, "service principal has no host part\n");
@@ -204,28 +202,27 @@ int svc_princ_verify_host(krb5_context ctx,
 			       self_nid);
 			return -1;
 		}
-		h_name = namebuf;
 	} else {
 		if (uname(&utsbuf)) {
 			logmsg(loglevel, "get UTS name: %s\n", strerror(errno));
 			return -1;
 		}
 
-		host = gethostbyname(utsbuf.nodename);
-		if (host == NULL) {
-			logmsg(loglevel, "failed to get local hostname\n");
+		if (getcanonname(utsbuf.nodename, namebuf, max_namelen) != 0) {
+			logmsg(loglevel,
+				"failed to get canonical name of %s\n",
+				utsbuf.nodename);
 			return -1;
 		}
-		h_name = host->h_name;
 	}
 
 	if (lgss_krb5_strcasecmp(krb5_princ_component(ctx, princ, 1),
-				 h_name)) {
+				 namebuf)) {
 		logmsg(loglevel, "service principal: hostname %.*s "
 		       "doesn't match localhost %s\n",
 		       krb5_princ_component(ctx, princ, 1)->length,
 		       krb5_princ_component(ctx, princ, 1)->data,
-		       h_name);
+		       namebuf);
 		return -1;
 	}
 

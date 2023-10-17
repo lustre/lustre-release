@@ -32,6 +32,9 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <time.h>
 #include <linux/types.h>
 
@@ -97,31 +100,6 @@ lnet_parse_port(int *port, char *str)
 	return -1;
 }
 
-#ifdef HAVE_GETHOSTBYNAME
-static struct hostent *
-ptl_gethostbyname(char *hname)
-{
-	struct hostent *he;
-
-	he = gethostbyname(hname);
-	if (!he) {
-		switch (h_errno) {
-		case HOST_NOT_FOUND:
-		case NO_ADDRESS:
-			fprintf(stderr, "Unable to resolve hostname: %s\n",
-				hname);
-			break;
-		default:
-			fprintf(stderr, "gethostbyname error for %s: %s\n",
-				hname, strerror(h_errno));
-			break;
-		}
-		return NULL;
-	}
-	return he;
-}
-#endif
-
 int
 lnet_parse_ipquad(__u32 *ipaddrp, char *str)
 {
@@ -141,9 +119,11 @@ lnet_parse_ipquad(__u32 *ipaddrp, char *str)
 int
 lnet_parse_ipaddr(__u32 *ipaddrp, char *str)
 {
-#ifdef HAVE_GETHOSTBYNAME
-	struct hostent *he;
-#endif
+	struct addrinfo *ai = NULL;
+	struct addrinfo *aip = NULL;
+	struct addrinfo hints;
+	int err = 0;
+	int rc = -1;
 
 	if (!strcmp(str, "_all_")) {
 		*ipaddrp = 0;
@@ -153,40 +133,67 @@ lnet_parse_ipaddr(__u32 *ipaddrp, char *str)
 	if (lnet_parse_ipquad(ipaddrp, str) == 0)
 		return 0;
 
-#ifdef HAVE_GETHOSTBYNAME
-	if ((('a' <= str[0] && str[0] <= 'z') ||
-	     ('A' <= str[0] && str[0] <= 'Z')) &&
-	      (he = ptl_gethostbyname(str)) != NULL) {
-		__u32 addr = *(__u32 *)he->h_addr;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET;
 
-		*ipaddrp = ntohl(addr);         /* HOST byte order */
-		return 0;
+	if (('a' <= str[0] && str[0] <= 'z') ||
+	    ('A' <= str[0] && str[0] <= 'Z')) {
+		err = getaddrinfo(str, NULL, &hints, &ai);
+		if (err != 0) {
+			fprintf(stderr,
+				"failed to get addrinfo for %s: %s\n",
+				str, gai_strerror(err));
+			return -1;
+		}
+
+		for (aip = ai; aip; aip = aip->ai_next) {
+			if (aip->ai_family == AF_INET && aip->ai_addr) {
+				struct sockaddr_in *sin =
+					(void *)ai->ai_addr;
+
+				__u32 addr = (__u32)sin->sin_addr.s_addr;
+				*ipaddrp = ntohl(addr);
+				break;
+			}
+		}
+		/* FIXME: handle AF_INET6 */
+
+		if (!aip) {
+			fprintf(stderr, "failed to get IP address for %s\n",
+				str);
+			rc = -1;
+			goto out;
+		}
+
+		rc = 0;
+		goto out;
 	}
-#endif
 
-	return -1;
+out:
+	if (ai != NULL)
+		freeaddrinfo(ai);
+	return rc;
 }
 
 char *
 ptl_ipaddr_2_str(__u32 ipaddr, char *str, size_t strsize, int lookup)
 {
-#ifdef HAVE_GETHOSTBYNAME
-	__u32 net_ip;
-	struct hostent *he;
+	struct sockaddr_in srcaddr;
 
 	if (lookup) {
-		net_ip = htonl(ipaddr);
-		he = gethostbyaddr(&net_ip, sizeof(net_ip), AF_INET);
-		if (he) {
-			snprintf(str, strsize, "%s", he->h_name);
-			return str;
-		}
-	}
-#endif
+		memset(&srcaddr, 0, sizeof(srcaddr));
+		srcaddr.sin_family = AF_INET;
+		srcaddr.sin_addr.s_addr = (in_addr_t)htonl(ipaddr);
 
-	sprintf(str, "%d.%d.%d.%d",
-		(ipaddr >> 24) & 0xff, (ipaddr >> 16) & 0xff,
-		(ipaddr >> 8) & 0xff, ipaddr & 0xff);
+		if (getnameinfo((struct sockaddr *)&srcaddr, sizeof(srcaddr),
+				  str, strsize, NULL, 0, 0) == 0)
+			goto out;
+	}
+
+	snprintf(str, strsize, "%d.%d.%d.%d",
+		 (ipaddr >> 24) & 0xff, (ipaddr >> 16) & 0xff,
+		 (ipaddr >> 8) & 0xff, ipaddr & 0xff);
+out:
 	return str;
 }
 

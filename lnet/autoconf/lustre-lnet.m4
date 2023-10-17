@@ -1309,7 +1309,6 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 
 # lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h])
-AC_CHECK_FUNCS([gethostbyname])
 
 # lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])

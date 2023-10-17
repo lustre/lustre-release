@@ -4824,7 +4824,6 @@ LC_MDS_MAX_THREADS
 # lustre/utils/create_iam.c
 # lustre/utils/libiam.c
 AC_CHECK_HEADERS([netdb.h endian.h])
-AC_CHECK_FUNCS([gethostbyname])
 
 # lustre/utils/llverfs.c lustre/utils/libmount_utils_ldiskfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h], [], [

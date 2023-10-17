@@ -198,6 +198,7 @@ static char *nl_nid_lookup_ipaddr(char *nid)
 	struct addrinfo *ai, *aip;
 	char name[NI_MAXHOST] = "";
 	char *p, *addr, *lnet = NULL, *res = NULL;
+	struct addrinfo hints;
 	int len, x;
 
 	addr = nl_nid_addr(nid);
@@ -205,7 +206,9 @@ static char *nl_nid_lookup_ipaddr(char *nid)
 		p = strchr(nid, '@');
 		if (p)
 			lnet = p + 1;
-		if (getaddrinfo(addr, NULL, NULL, &ai) == 0) {
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_family = AF_INET;
+		if (getaddrinfo(addr, NULL, &hints, &ai) == 0) {
 			for (aip = ai; aip != NULL; aip = aip->ai_next) {
 				if (getnameinfo(aip->ai_addr, aip->ai_addrlen,
 				    name, sizeof(name), NULL, 0,

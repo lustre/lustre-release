@@ -119,52 +119,60 @@ libcfs_ip_addr2str_size(const __be32 *addr, size_t asize,
  * sscanf may return immediately if it sees the terminating '0' in a string, so
  * I initialise the %n variable to the expected length.  If sscanf sets it;
  * fine, if it doesn't, then the scan ended at the end of the string, which is
- * fine too :) */
+ * fine too :)
+ */
 static int
 libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 {
-	unsigned int	a;
-	unsigned int	b;
-	unsigned int	c;
-	unsigned int	d;
-	int		n = nob; /* XscanfX */
+	unsigned int a, b, c, d;
+	int n = nob;
+	int rc = 0;
 
 	/* numeric IP? */
 	if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) >= 4 &&
 	    n == nob &&
 	    (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
 	    (c & ~0xff) == 0 && (d & ~0xff) == 0) {
-		*addr = ((a<<24)|(b<<16)|(c<<8)|d);
+		*addr = ((a << 24) | (b << 16) | (c << 8) | d);
 		return 1;
 	}
 
-#ifdef HAVE_GETHOSTBYNAME
 	/* known hostname? */
 	if (('a' <= str[0] && str[0] <= 'z') ||
 	    ('A' <= str[0] && str[0] <= 'Z')) {
-		char *tmp;
+		char *tmp = NULL;
+		struct addrinfo hints;
+		struct addrinfo *ai = NULL;
+		struct addrinfo *aip = NULL;
 
-		tmp = calloc(1, nob + 1);
-		if (tmp != NULL) {
-			struct hostent *he;
+		tmp = (char *)alloca(nob + 1);
+		memcpy(tmp, str, nob);
+		tmp[nob] = 0;
 
-			memcpy(tmp, str, nob);
-			tmp[nob] = 0;
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_family = AF_INET;
 
-			he = gethostbyname(tmp);
+		if (getaddrinfo(tmp, NULL, &hints, &ai) != 0) {
+			rc = 0;
+			goto out;
+		}
 
-			free(tmp);
+		for (aip = ai; aip; aip = aip->ai_next) {
+			if (aip->ai_addr) {
+				struct sockaddr_in *sin = (void *)ai->ai_addr;
 
-			if (he != NULL) {
-				__u32 ip = *(__u32 *)he->h_addr;
-
+				__u32 ip = (__u32)sin->sin_addr.s_addr;
 				*addr = ntohl(ip);
-				return 1;
+
+				rc = 1;
+				break;
 			}
 		}
+
+		freeaddrinfo(ai);
 	}
-#endif
-	return 0;
+out:
+	return rc;
 }
 
 static int
@@ -201,13 +209,17 @@ libcfs_ip_str2addr_size(const char *str, int nob,
 			*alen = 16;
 		goto out;
 	}
-#ifdef HAVE_GETADDRINFO
+
 	/* known hostname? */
 	if (('a' <= str[0] && str[0] <= 'z') ||
 	    ('A' <= str[0] && str[0] <= 'Z')) {
 		struct addrinfo *ai = NULL;
+		struct addrinfo hints;
 
-		if (getaddrinfo(tmp, NULL, NULL, &ai) == 0) {
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_family = AF_INET;
+
+		if (getaddrinfo(tmp, NULL, &hints, &ai) == 0) {
 			struct addrinfo *a;
 			/* First look for an AF_INET address */
 			for (a = ai; a; a = a->ai_next) {
@@ -236,7 +248,6 @@ libcfs_ip_str2addr_size(const char *str, int nob,
 		}
 		freeaddrinfo(ai);
 	}
-#endif
 out:
 	free(tmp);
 	return *alen != 0;

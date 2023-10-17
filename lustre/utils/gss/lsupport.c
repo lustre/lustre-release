@@ -163,24 +163,118 @@ char gethostname_ex[PATH_MAX] = GSSD_DEFAULT_GETHOSTNAME_EX;
 typedef int lnd_nid2hostname_t(char *lnd, uint32_t net, uint32_t addr,
                                char *buf, int buflen);
 
+int getcanonname(const char *host, char *buf, int buflen)
+{
+	struct addrinfo hints;
+	struct addrinfo *ai = NULL;
+	struct addrinfo *aip = NULL;
+	int err = 0;
+	int rc = 0;
+
+	if (!host || host[0] == '\0') {
+		printerr(LL_ERR,
+			 "network address or hostname was not specified\n");
+		return -1;
+	}
+
+	if (!buf) {
+		printerr(LL_ERR,
+			 "canonical name buffer was not defined\n");
+		return -1;
+	}
+
+	if (buflen <= 0) {
+		printerr(LL_ERR,
+			 "invalid canonical name buffer length: %d\n", buflen);
+		return -1;
+	}
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET;
+	hints.ai_flags = AI_CANONNAME;
+
+	err = getaddrinfo(host, NULL, &hints, &ai);
+	if (err != 0) {
+		printerr(LL_ERR,
+			 "failed to get addrinfo for %s: %s\n",
+			 host, gai_strerror(err));
+		return -1;
+	}
+
+	for (aip = ai; aip; aip = aip->ai_next) {
+		if (aip->ai_canonname && aip->ai_canonname[0] != '\0')
+			break;
+	}
+
+	if (!aip) {
+		printerr(LL_ERR, "failed to get canonical name of %s\n", host);
+		rc = -1;
+		goto out;
+	}
+
+	if (strlen(aip->ai_canonname) >= buflen) {
+		printerr(LL_ERR, "canonical name is too long: %s\n",
+			 aip->ai_canonname);
+		rc = -1;
+		goto out;
+	}
+
+	strncpy(buf, aip->ai_canonname, buflen);
+
+out:
+	if (ai != NULL)
+		freeaddrinfo(ai);
+	return rc;
+}
+
+static int getaddrcanonname(const uint32_t addr, char *buf, int buflen)
+{
+	struct sockaddr_in srcaddr;
+	int err = 0;
+	int rc = -1;
+
+	if (!buf) {
+		printerr(LL_ERR,
+			 "canonical name buffer was not defined\n");
+		goto out;
+	}
+
+	if (buflen <= 0) {
+		printerr(LL_ERR,
+			 "invalid canonical name buffer length: %d\n", buflen);
+		goto out;
+	}
+
+	memset(&srcaddr, 0, sizeof(srcaddr));
+	srcaddr.sin_family = AF_INET;
+	srcaddr.sin_addr.s_addr = (in_addr_t)addr;
+
+	err = getnameinfo((struct sockaddr *)&srcaddr, sizeof(srcaddr),
+			  buf, buflen, NULL, 0, 0);
+	if (err != 0) {
+		printerr(LL_ERR,
+			 "failed to get nameinfo for 0x%x: %s\n",
+			 addr, gai_strerror(err));
+		goto out;
+	}
+	rc = 0;
+
+out:
+	return rc;
+}
+
 /* FIXME what about IPv6? */
 static
 int ipv4_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
 		      char *buf, int buflen)
 {
-	struct hostent *ent;
-
 	addr = htonl(addr);
-	ent = gethostbyaddr(&addr, sizeof(addr), AF_INET);
-	if (!ent) {
-		printerr(LL_ERR, "%s: can't resolve 0x%x\n", lnd, addr);
+
+	if (getaddrcanonname(addr, buf, buflen) != 0) {
+		printerr(LL_ERR, "%s: failed to get canonical name of 0x%x\n",
+			 lnd, addr);
 		return -1;
 	}
-	if (strlen(ent->h_name) >= buflen) {
-		printerr(LL_ERR, "%s: name too long: %s\n", lnd, ent->h_name);
-		return -1;
-	}
-	strcpy(buf, ent->h_name);
 
 	printerr(LL_INFO, "%s: net 0x%x, addr 0x%x => %s\n",
 		 lnd, net, addr, buf);
@@ -192,7 +286,6 @@ int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
 		       char *buf, int buflen)
 {
 	struct utsname uts;
-	struct hostent *ent;
 
 	if (addr) {
 		printerr(LL_ERR, "%s: addr is 0x%x, we expect 0\n", lnd, addr);
@@ -204,18 +297,11 @@ int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
 		return -1;
 	}
 
-	ent = gethostbyname(uts.nodename);
-	if (!ent) {
-		printerr(LL_ERR, "%s: failed obtain canonical name of %s\n",
+	if (getcanonname(uts.nodename, buf, buflen) != 0) {
+		printerr(LL_ERR, "%s: failed to obtain canonical name of %s\n",
 			 lnd, uts.nodename);
 		return -1;
 	}
-
-	if (strlen(ent->h_name) >= buflen) {
-		printerr(LL_ERR, "%s: name too long: %s\n", lnd, ent->h_name);
-		return -1;
-	}
-	strcpy(buf, ent->h_name);
 
 	printerr(LL_DEBUG, "%s: addr 0x%x => %s\n", lnd, addr, buf);
 	return 0;
