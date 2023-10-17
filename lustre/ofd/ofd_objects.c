@@ -193,7 +193,7 @@ static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
 		return -ENOMEM;
 
 	precreate = atomic_read(&oseq->os_precreate_in_progress);
-	atomic_inc(&oseq->os_refc);
+	refcount_inc(&oseq->os_refc);
 	opc->opc_oseq = oseq;
 	opc->opc_objects = objects;
 	CDEBUG(D_OTHER, "Add %d to %d for "DFID", th_sync %d\n",

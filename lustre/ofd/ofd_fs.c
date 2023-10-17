@@ -87,7 +87,7 @@ struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, u64 seq)
 	read_lock(&ofd->ofd_seq_list_lock);
 	list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
 		if (ostid_seq(&oseq->os_oi) == seq) {
-			atomic_inc(&oseq->os_refc);
+			refcount_inc(&oseq->os_refc);
 			read_unlock(&ofd->ofd_seq_list_lock);
 			return oseq;
 		}
@@ -107,7 +107,7 @@ struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, u64 seq)
  */
 void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq)
 {
-	if (atomic_dec_and_test(&oseq->os_refc)) {
+	if (refcount_dec_and_test(&oseq->os_refc)) {
 		LASSERT(list_empty(&oseq->os_list));
 		LASSERT(oseq->os_lastid_obj != NULL);
 		dt_object_put(env, oseq->os_lastid_obj);
@@ -139,14 +139,14 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 	write_lock(&ofd->ofd_seq_list_lock);
 	list_for_each_entry(os, &ofd->ofd_seq_list, os_list) {
 		if (ostid_seq(&os->os_oi) == ostid_seq(&new_seq->os_oi)) {
-			atomic_inc(&os->os_refc);
+			refcount_inc(&os->os_refc);
 			write_unlock(&ofd->ofd_seq_list_lock);
 			/* The seq has not been added to the list */
 			ofd_seq_put(env, new_seq);
 			return os;
 		}
 	}
-	atomic_inc(&new_seq->os_refc);
+	refcount_inc(&new_seq->os_refc);
 	list_add_tail(&new_seq->os_list, &ofd->ofd_seq_list);
 	ofd->ofd_seq_count++;
 	write_unlock(&ofd->ofd_seq_list_lock);
@@ -409,8 +409,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	spin_lock_init(&oseq->os_last_oid_lock);
 	ostid_set_seq(&oseq->os_oi, seq);
 	oseq->os_last_id_synced = 0;
-
-	atomic_set(&oseq->os_refc, 1);
+	refcount_set(&oseq->os_refc, 1);
 	atomic_set(&oseq->os_precreate_in_progress, 0);
 
 	rc = dt_attr_get(env, dob, &info->fti_attr);
