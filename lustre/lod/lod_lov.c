@@ -458,7 +458,6 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 
 	if (info->lti_ea_store) {
 		LASSERT(info->lti_ea_store_size);
-		LASSERT(info->lti_ea_store_size < round);
 		CDEBUG(D_INFO, "EA store size %d is not enough, need %d\n",
 		       info->lti_ea_store_size, round);
 		OBD_FREE_LARGE(info->lti_ea_store, info->lti_ea_store_size);
@@ -1042,7 +1041,7 @@ int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
-	int			rc;
+	int rc, count = 0;
 	ENTRY;
 
 	LASSERT(info);
@@ -1070,6 +1069,11 @@ repeat:
 			RETURN(rc);
 
 		LASSERT(rc > 0);
+		if (rc <= info->lti_ea_store_size) {
+			/* sometimes LOVEA can shrink in parallel */
+			LASSERT(count++ < 10);
+			goto repeat;
+		}
 		rc = lod_ea_store_resize(info, rc);
 		if (rc)
 			RETURN(rc);
