@@ -1232,9 +1232,13 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_connect_data, ocd_maxmodrpcs));
 	LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_maxmodrpcs) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_maxmodrpcs));
-	LASSERTF((int)offsetof(struct obd_connect_data, padding0) == 74, "found %lld\n",
+	LASSERTF((int)offsetof(struct obd_connect_data, ocd_conn_policy) == 74, "found %lld\n",
+		 (long long)(int)offsetof(struct obd_connect_data, ocd_conn_policy));
+	LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_conn_policy) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_conn_policy));
+	LASSERTF((int)offsetof(struct obd_connect_data, padding0) == 75, "found %lld\n",
 		 (long long)(int)offsetof(struct obd_connect_data, padding0));
-	LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding0) == 2, "found %lld\n",
+	LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding0) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding0));
 	LASSERTF((int)offsetof(struct obd_connect_data, padding1) == 76, "found %lld\n",
 		 (long long)(int)offsetof(struct obd_connect_data, padding1));
@@ -1484,6 +1488,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_COMPRESS);
 	LASSERTF(OBD_CONNECT2_UNALIGNED_DIO == 0x400000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_UNALIGNED_DIO);
+	LASSERTF(OBD_CONNECT2_CONN_POLICY == 0x800000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_CONN_POLICY);
 
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);

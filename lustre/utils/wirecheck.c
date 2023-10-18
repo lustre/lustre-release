@@ -572,6 +572,7 @@ check_obd_connect_data(void)
 	CHECK_MEMBER(obd_connect_data, ocd_instance);
 	CHECK_MEMBER(obd_connect_data, ocd_maxbytes);
 	CHECK_MEMBER(obd_connect_data, ocd_maxmodrpcs);
+	CHECK_MEMBER(obd_connect_data, ocd_conn_policy);
 	CHECK_MEMBER(obd_connect_data, padding0);
 	CHECK_MEMBER(obd_connect_data, padding1);
 	CHECK_MEMBER(obd_connect_data, ocd_connect_flags2);
@@ -684,6 +685,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT2_LARGE_NID);
 	CHECK_DEFINE_64X(OBD_CONNECT2_COMPRESS);
 	CHECK_DEFINE_64X(OBD_CONNECT2_UNALIGNED_DIO);
+	CHECK_DEFINE_64X(OBD_CONNECT2_CONN_POLICY);
 
 	BLANK_LINE();
 	CHECK_VALUE_X(OBD_CKSUM_CRC32);

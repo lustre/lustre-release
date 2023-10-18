@@ -865,6 +865,7 @@ struct ptlrpc_body_v2 {
  * ignored for ldiskfs servers
  */
 #define OBD_CONNECT2_UNALIGNED_DIO	0x400000000ULL /* unaligned DIO */
+#define OBD_CONNECT2_CONN_POLICY	0x800000000ULL /* server-side connection policy */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -1006,7 +1007,8 @@ struct obd_connect_data {
 	 * may result in out-of-bound memory access and kernel oops.
 	 */
 	__u16 ocd_maxmodrpcs;	 /* Maximum modify RPCs in parallel */
-	__u16 padding0;		 /* READ BELOW! also fix lustre_swab_connect */
+	__u8  ocd_conn_policy;	 /* bitmask for client/server to communicate about policy */
+	__u8  padding0;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u32 padding1;		 /* READ BELOW! also fix lustre_swab_connect */
 	__u64 ocd_connect_flags2;/* OBD_CONNECT2_* per above */
 	__u64 ocd_compr_type;	 /* bitmask of supported compression types */
@@ -1066,6 +1068,15 @@ enum cksum_types {
  * affect overall system performance noticeably.
  */
 #define OBD_CKSUM_T10_TOP OBD_CKSUM_ADLER
+
+/*
+ * Explicitly define the meaning of the bits in ocd_conn_policy,
+ * for server-side connection policy.
+ */
+enum conn_policy_flags {
+	BYPASS_SOFT_BLOCK = 0,
+	CONN_POLICY_FLAGS_NUM = 8,
+};
 
 /*
  *   OST requests: OBDO & OBD request records

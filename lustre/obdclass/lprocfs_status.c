@@ -658,6 +658,7 @@ static const char *const obd_connect_names[] = {
 	"large_nid",			/* 0x100000000 */
 	"compressed_file",		/* 0x200000000 */
 	"unaligned_dio",		/* 0x400000000 */
+	"conn_policy",			/* 0x800000000 */
 	NULL
 };
 
