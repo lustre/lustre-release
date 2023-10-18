@@ -423,6 +423,41 @@ static ssize_t timeout_store(struct kobject *kobj,
 	return count;
 }
 
+static ssize_t debug_raw_pointers_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", get_debug_raw_pointers());
+}
+
+static ssize_t debug_raw_pointers_store(struct kobject *kobj,
+			     struct attribute *attr,
+			     const char *buffer,
+			     size_t count)
+{
+	bool initial = get_debug_raw_pointers();
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	if ((initial && val) || (!initial && !val))
+		return count;
+
+	if (val) {
+		rc = debug_format_buffer_alloc_buffers();
+		if (rc)
+			return rc;
+	} else {
+		debug_format_buffer_free_buffers();
+	}
+	set_debug_raw_pointers(val);
+
+	return count;
+}
+
 /* Root for /sys/kernel/debug/lustre */
 struct dentry *debugfs_lustre_root;
 EXPORT_SYMBOL_GPL(debugfs_lustre_root);
@@ -442,6 +477,7 @@ LUSTRE_RW_ATTR(jobid_var);
 LUSTRE_RW_ATTR(jobid_name);
 LUSTRE_RW_ATTR(jobid_this_session);
 LUSTRE_RW_ATTR(timeout);
+LUSTRE_RW_ATTR(debug_raw_pointers);
 
 static struct attribute *lustre_attrs[] = {
 	&lustre_attr_version.attr,
@@ -452,6 +488,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_jobid_var.attr,
 	&lustre_attr_jobid_this_session.attr,
 	&lustre_attr_timeout.attr,
+	&lustre_attr_debug_raw_pointers.attr,
 	&lustre_attr_max_dirty_mb.attr,
 	&lustre_sattr_debug_peer_on_timeout.u.attr,
 	&lustre_sattr_dump_on_timeout.u.attr,
@@ -702,7 +739,6 @@ ssize_t class_set_global(const char *param)
 int class_procfs_init(void)
 {
 	struct proc_dir_entry *entry;
-	struct dentry *file;
 	int rc = -ENOMEM;
 
 	ENTRY;
@@ -726,14 +762,14 @@ int class_procfs_init(void)
 
 	debugfs_lustre_root = debugfs_create_dir("lustre", NULL);
 
-	file = debugfs_create_file("devices", 0444, debugfs_lustre_root, NULL,
-				   &obd_device_list_fops);
+	debugfs_create_file("devices", 0444, debugfs_lustre_root, NULL,
+			    &obd_device_list_fops);
 
-	file = debugfs_create_file("health_check", 0444, debugfs_lustre_root,
-				   NULL, &health_check_fops);
+	debugfs_create_file("health_check", 0444, debugfs_lustre_root,
+			    NULL, &health_check_fops);
 
-	file = debugfs_create_file("checksum_speed", 0444, debugfs_lustre_root,
-				   NULL, &checksum_speed_fops);
+	debugfs_create_file("checksum_speed", 0444, debugfs_lustre_root,
+			    NULL, &checksum_speed_fops);
 
 	entry = lprocfs_register("fs/lustre", NULL, NULL, NULL);
 	if (IS_ERR(entry)) {

@@ -374,8 +374,185 @@ static void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 	cfs_vprint_to_console(hdr, mask, &vaf, file, fn);
 }
 
-int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
-		     const char *format, ...)
+#define DEBUG_FORMAT_BUFFER_SIZE	(256 - sizeof(unsigned long))
+
+struct debug_format_buffer {
+	unsigned long dfb_flags;
+	char dfb_buf[DEBUG_FORMAT_BUFFER_SIZE];
+};
+struct pcpu_format_pool {
+	struct debug_format_buffer pf_dfb[4096 / DEBUG_FORMAT_BUFFER_SIZE];
+};
+
+enum pool_flags {
+	PF_INUSE,
+};
+
+static struct pcpu_format_pool __percpu *debug_format_pool;
+
+int debug_format_buffer_alloc_buffers(void)
+{
+	struct pcpu_format_pool __percpu *obj;
+	struct pcpu_format_pool *pbuf;
+	int cpu;
+
+	obj = alloc_percpu(struct pcpu_format_pool);
+	if (!obj)
+		return -ENOMEM;
+	for_each_possible_cpu(cpu) {
+		pbuf = per_cpu_ptr(obj, cpu);
+		memset(pbuf, 0, sizeof(*pbuf));
+	}
+	debug_format_pool = obj;
+
+	return 0;
+}
+EXPORT_SYMBOL(debug_format_buffer_alloc_buffers);
+
+void debug_format_buffer_free_buffers(void)
+{
+	struct pcpu_format_pool __percpu *tmp = debug_format_pool;
+	struct pcpu_format_pool *pbuf;
+	int cpu;
+	int i;
+
+	if (!debug_format_pool)
+		return;
+
+	debug_format_pool = NULL;
+	synchronize_rcu();
+
+	for_each_possible_cpu(cpu) {
+		pbuf = per_cpu_ptr(tmp, cpu);
+		for (i = 0; i < ARRAY_SIZE(pbuf->pf_dfb); i++)
+			set_bit(PF_INUSE, &pbuf->pf_dfb[i].dfb_flags);
+	}
+	free_percpu(tmp);
+}
+EXPORT_SYMBOL(debug_format_buffer_free_buffers);
+
+bool libcfs_debug_raw_pointers;
+
+bool get_debug_raw_pointers(void)
+{
+	return libcfs_debug_raw_pointers;
+}
+EXPORT_SYMBOL(get_debug_raw_pointers);
+
+void set_debug_raw_pointers(bool value)
+{
+	libcfs_debug_raw_pointers = value;
+}
+EXPORT_SYMBOL(set_debug_raw_pointers);
+
+#ifndef raw_cpu_ptr
+#define raw_cpu_ptr(p)	this_cpu_ptr(p)
+#endif
+
+static struct debug_format_buffer *debug_format_buffer_get_locked(void)
+{
+	struct debug_format_buffer *dfb = NULL;
+	struct pcpu_format_pool *pbuf;
+	int i;
+
+	if (!debug_format_pool)
+		return NULL;
+
+	pbuf = raw_cpu_ptr(debug_format_pool);
+	for (i = 0; i < ARRAY_SIZE(pbuf->pf_dfb); i++) {
+		if (!test_and_set_bit(PF_INUSE, &pbuf->pf_dfb[i].dfb_flags)) {
+			dfb = &pbuf->pf_dfb[i];
+			break;
+		}
+	}
+	return dfb;
+}
+
+static void debug_format_buffer_put_locked(struct debug_format_buffer *dfb)
+{
+	if (!debug_format_pool || !dfb)
+		return;
+	clear_bit(PF_INUSE, &dfb->dfb_flags);
+}
+
+/* return number of %p to %px replacements or < 0 on error */
+static bool rewrite_format(const char *fmt, size_t nfsz, char *new_fmt)
+{
+	const char *p = fmt;
+	char *q = new_fmt;
+	int written = 0;
+	int unhashed = 0;
+
+	if (WARN_ON_ONCE(!fmt))
+		return 0;
+
+	p = fmt;
+	q = new_fmt;
+	while (*p) {
+		if (written + 2 >= nfsz)
+			return false;
+
+		*q++ = *p++;
+		written++;
+
+		/* Replace %p with %px */
+		if (p[-1] == '%') {
+			if (p[0] == '%') {
+				if (written + 2 >= nfsz)
+					return false;
+				*q++ = *p++;
+				written++;
+			} else if (p[0] == 'p' && !isalnum(p[1])) {
+				if (written + 3 >= nfsz)
+					return false;
+				*q++ = *p++;
+				*q++ = 'x';
+				written += 2;
+				unhashed++;
+			}
+		}
+	}
+	*q = '\0';
+
+	return unhashed > 0;
+}
+
+/*
+ * @fmt: caller provided format string
+ * @m: if non-null points to per-cpu object
+ *
+ * return result is format string to use, it will be either:
+ *   fmt: when no changes need to be made to original format
+ *   *m->dfb_buf: when percpu pre-allocated is sufficient to hold updated format
+ */
+static inline const char *debug_format(const char *fmt,
+				       struct debug_format_buffer **m)
+{
+	struct debug_format_buffer *dfb_fmt;
+
+	*m = NULL;
+	if (likely(!libcfs_debug_raw_pointers))
+		return fmt;
+	if (!strstr(fmt, "%p"))
+		return fmt;
+
+	/* try to rewrite format into buf */
+	dfb_fmt = debug_format_buffer_get_locked();
+	if (dfb_fmt) {
+		size_t len = sizeof(dfb_fmt->dfb_buf) - 1;
+
+		if (rewrite_format(fmt, len, dfb_fmt->dfb_buf)) {
+			*m = dfb_fmt;
+			return dfb_fmt->dfb_buf;
+		}
+		debug_format_buffer_put_locked(dfb_fmt);
+	}
+
+	return fmt;
+}
+
+void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
+		      const char *format, ...)
 {
 	struct cfs_trace_cpu_data *tcd = NULL;
 	struct ptldebug_header header = {0};
@@ -391,6 +568,9 @@ int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	int mask = msgdata->msg_mask;
 	char *file = (char *)msgdata->msg_file;
 	struct cfs_debug_limit_state *cdls = msgdata->msg_cdls;
+	struct debug_format_buffer *dfb = NULL;
+
+	format = debug_format(format, &dfb);
 
 	if (strchr(file, '/'))
 		file = strrchr(file, '/') + 1;
@@ -500,7 +680,7 @@ console:
 		/* no console output requested */
 		if (tcd != NULL)
 			cfs_trace_put_tcd(tcd);
-		return 1;
+		goto out;
 	}
 
 	if (cdls != NULL) {
@@ -511,7 +691,7 @@ console:
 			cdls->cdls_count++;
 			if (tcd != NULL)
 				cfs_trace_put_tcd(tcd);
-			return 1;
+			goto out;
 		}
 
 		if (time_after(jiffies, cdls->cdls_next +
@@ -556,8 +736,8 @@ console:
 
 		cdls->cdls_count = 0;
 	}
-
-	return 0;
+out:
+	debug_format_buffer_put_locked(dfb);
 }
 EXPORT_SYMBOL(libcfs_debug_msg);
 

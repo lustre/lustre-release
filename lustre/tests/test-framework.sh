@@ -7332,11 +7332,15 @@ run_one_logged() {
 	local rc=0
 	local node
 	declare -A kptr_restrict
+	declare -A debug_raw
 	umask 0022
 
 	for node in $(all_nodes); do
 		kptr_restrict[$node]=$(do_node $node "sysctl --values kernel/kptr_restrict")
 		do_node $node "sysctl -wq kernel/kptr_restrict=1"
+		# Enable %p to be unhashed (if supported)
+		debug_raw[$node]=$(do_node $node "$LCTL get_param -n debug_raw_pointers" || echo 0)
+		do_node $node "$LCTL set_param debug_raw_pointers=Y || true"
 	done
 
 	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
@@ -7385,8 +7389,13 @@ run_one_logged() {
 		[[ $rc != 0 || "$TEST_STATUS" != "PASS" ]] && break
 	done
 
+	local param
 	for node in $(all_nodes); do
-		do_node $node "sysctl -wq kernel/kptr_restrict=${kptr_restrict[$node]}"
+		param="kernel/kptr_restrict=${kptr_restrict[$node]}"
+		do_node $node "sysctl -wq ${param} || true"
+		# Restore %p to initial state
+		param="debug_raw_pointers=${debug_raw[$node]}"
+		do_node $node "$LCTL set_param ${param} || true"
 	done
 
 	if [[ "$TEST_STATUS" != "SKIP" && -f $TF_SKIP ]]; then

@@ -64,6 +64,12 @@ void libcfs_debug_dumpstack(struct task_struct *tsk);
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;
 extern unsigned int libcfs_panic_on_lbug;
+extern bool libcfs_debug_raw_pointers;
+
+int debug_format_buffer_alloc_buffers(void);
+void debug_format_buffer_free_buffers(void);
+bool get_debug_raw_pointers(void);
+void set_debug_raw_pointers(bool value);
 
 #ifndef DEBUG_SUBSYSTEM
 # define DEBUG_SUBSYSTEM S_UNDEFINED
@@ -176,8 +182,8 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #define LCONSOLE_EMERG(format, ...) \
 	CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
-int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
-		     const char *format1, ...)
+void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
+		      const char *format1, ...)
 	__printf(2, 3);
 
 /* other external symbols that tracefile provides: */
