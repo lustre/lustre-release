@@ -1,0 +1,441 @@
+diff --git a/fs/ext4/encdata.h b/fs/ext4/encdata.h
+new file mode 100644
+index 00000000..aa83832f
+--- /dev/null
++++ b/fs/ext4/encdata.h
+@@ -0,0 +1,128 @@
++/*
++ *  encdata.h
++ *
++ *  Copyright (c) 2022 Whamcloud
++ */
++
++#ifndef _ENCDATA_H
++#define _ENCDATA_H
++
++/* Define a fixed 4096-byte encryption unit size */
++/* Must be identical to LUSTRE_ENCRYPTION_UNIT_SIZE */
++#define EXT4_ENCRYPTION_BLOCKBITS 12
++#define EXT4_ENCRYPTION_UNIT_SIZE ((size_t)1 << EXT4_ENCRYPTION_BLOCKBITS)
++#define EXT4_ENCRYPTION_MASK      (~(EXT4_ENCRYPTION_UNIT_SIZE - 1))
++#define LLCRYPT_SET_CONTEXT_MAX_SIZE	40
++#define ENCDATA_XATTR_FMT_1 "{ encoding: "
++#define ENCDATA_XATTR_FMT_2 ", size: "
++#define ENCDATA_XATTR_FMT_3 ", enc_ctx: "
++#define ENCDATA_XATTR_FMT_4 ", enc_name: "
++#define ENCDATA_XATTR_FMT_END " }"
++#define ENCDATA_XATTR_FMT_COMP  ENCDATA_XATTR_FMT_1 ENCDATA_XATTR_FMT_2 \
++				ENCDATA_XATTR_FMT_3 ENCDATA_XATTR_FMT_4	\
++				ENCDATA_XATTR_FMT_END
++
++extern char encdata_xattr_fmt[NAME_MAX];
++
++/*
++ * base64url encoding, lifted from fs/crypto/fname.c.
++ */
++
++static const char base64url_table[] =
++	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
++
++#define BASE64URL_CHARS(nbytes)	DIV_ROUND_UP((nbytes) * 4, 3)
++
++/**
++ * base64url_encode() - base64url-encode some binary data
++ * @src: the binary data to encode
++ * @srclen: the length of @src in bytes
++ * @dst: (output) the base64url-encoded string.  Not NUL-terminated.
++ *
++ * Encodes data using base64url encoding, i.e. the "Base 64 Encoding with URL
++ * and Filename Safe Alphabet" specified by RFC 4648.  '='-padding isn't used,
++ * as it's unneeded and not required by the RFC.  base64url is used instead of
++ * base64 to avoid the '/' character, which isn't allowed in filenames.
++ *
++ * Return: the length of the resulting base64url-encoded string in bytes.
++ *	   This will be equal to LLCRYPT_BASE64URL_CHARS(srclen).
++ */
++static inline int base64url_encode(const u8 *src, int srclen, char *dst)
++{
++	u32 ac = 0;
++	int bits = 0;
++	int i;
++	char *cp = dst;
++
++	for (i = 0; i < srclen; i++) {
++		ac = (ac << 8) | src[i];
++		bits += 8;
++		do {
++			bits -= 6;
++			*cp++ = base64url_table[(ac >> bits) & 0x3f];
++		} while (bits >= 6);
++	}
++	if (bits)
++		*cp++ = base64url_table[(ac << (6 - bits)) & 0x3f];
++	return cp - dst;
++}
++
++/**
++ * base64url_decode() - base64url-decode a string
++ * @src: the string to decode.  Doesn't need to be NUL-terminated.
++ * @srclen: the length of @src in bytes
++ * @dst: (output) the decoded binary data
++ *
++ * Decodes a string using base64url encoding, i.e. the "Base 64 Encoding with
++ * URL and Filename Safe Alphabet" specified by RFC 4648.  '='-padding isn't
++ * accepted, nor are non-encoding characters such as whitespace.
++ *
++ * This implementation hasn't been optimized for performance.
++ *
++ * Return: the length of the resulting decoded binary data in bytes,
++ *	   or -1 if the string isn't a valid base64url string.
++ */
++static inline int base64url_decode(const char *src, int srclen, u8 *dst)
++{
++	u32 ac = 0;
++	int bits = 0;
++	int i;
++	u8 *bp = dst;
++
++	for (i = 0; i < srclen; i++) {
++		const char *p = strchr(base64url_table, src[i]);
++
++		if (p == NULL || src[i] == 0)
++			return -1;
++		ac = (ac << 6) | (p - base64url_table);
++		bits += 6;
++		if (bits >= 8) {
++			bits -= 8;
++			*bp++ = (u8)(ac >> bits);
++		}
++	}
++	if (ac & ((1 << bits) - 1))
++		return -1;
++	return bp - dst;
++}
++
++/* This version of the code uses base64url encoding for binary data. */
++#define ENCDATA_ENCODING	"base64url"
++
++/* Wrappers to support various encodings. Add new methods in there.
++ */
++static inline int encode(const u8 *src, int srclen, char *dst, char *encoding)
++{
++	if (!strcmp(encoding, "base64url"))
++		return base64url_encode(src, srclen, dst);
++	return -EINVAL;
++}
++
++static inline int decode(const char *src, int srclen, u8 *dst, char *encoding)
++{
++	if (!strcmp(encoding, "base64url"))
++		return base64url_decode(src, srclen, dst);
++	return -EINVAL;
++}
++
++#endif /* _ENCDATA_H */
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index fb500d12..769eabce 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -46,6 +46,7 @@
+ #include "xattr.h"
+ #include "acl.h"
+ #include "truncate.h"
++#include "encdata.h"
+ 
+ #include <trace/events/ext4.h>
+ 
+@@ -5620,6 +5621,12 @@ int ext4_getattr(struct user_namespace *mnt_userns, const struct path *path,
+ 				  STATX_ATTR_VERITY);
+ 
+ 	generic_fillattr(mnt_userns, inode, stat);
++
++	if (flags & EXT4_ENCRYPT_FL &&
++	    unlikely(!IS_LUSTRE_MOUNT(inode->i_sb)))
++		stat->size = round_up(stat->size,
++				      EXT4_ENCRYPTION_UNIT_SIZE);
++
+ 	return 0;
+ }
+ 
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 89d609c9..fd066751 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -55,6 +55,7 @@
+ #include "acl.h"
+ #include "mballoc.h"
+ #include "fsmap.h"
++#include "encdata.h"
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/ext4.h>
+@@ -7260,6 +7261,7 @@ MODULE_ALIAS_FS("ext4");
+ 
+ /* Shared across all ext4 file systems */
+ wait_queue_head_t ext4__ioend_wq[EXT4_WQ_HASH_SZ];
++char encdata_xattr_fmt[NAME_MAX];
+ 
+ static int __init ext4_init_fs(void)
+ {
+@@ -7313,6 +7315,12 @@ static int __init ext4_init_fs(void)
+ 	if (err)
+ 		goto out;
+ 
++	snprintf(encdata_xattr_fmt, sizeof(encdata_xattr_fmt),
++		 ENCDATA_XATTR_FMT_1"%%%u[^,]"ENCDATA_XATTR_FMT_2"%%llu"
++		 ENCDATA_XATTR_FMT_3"%%%us"ENCDATA_XATTR_FMT_4"%%%us",
++		 NAME_MAX, BASE64URL_CHARS(LLCRYPT_SET_CONTEXT_MAX_SIZE),
++		 BASE64URL_CHARS(NAME_MAX));
++
+ 	return 0;
+ out:
+ 	ext4_fc_destroy_dentry_cache();
+diff --git a/fs/ext4/xattr.h b/fs/ext4/xattr.h
+index 824faf0b..1e8aa6f2 100644
+--- a/fs/ext4/xattr.h
++++ b/fs/ext4/xattr.h
+@@ -140,6 +140,8 @@ extern const struct xattr_handler ext4_xattr_security_handler;
+ extern const struct xattr_handler ext4_xattr_hurd_handler;
+ 
+ #define EXT4_XATTR_NAME_ENCRYPTION_CONTEXT "c"
++#define EXT4_XATTR_NAME_ENCDATA	      "encdata"
++#define EXT4_XATTR_NAME_RAWENCNAME	      "rawencname"
+ 
+ /*
+  * The EXT4_STATE_NO_EXPAND is overloaded and used for two purposes.
+diff --git a/fs/ext4/xattr_security.c b/fs/ext4/xattr_security.c
+index 8213f66f..6fb465a8 100644
+--- a/fs/ext4/xattr_security.c
++++ b/fs/ext4/xattr_security.c
+@@ -10,13 +10,217 @@
+ #include <linux/slab.h>
+ #include "ext4_jbd2.h"
+ #include "ext4.h"
++#include "critical_encode.h"
++#include "encdata.h"
+ #include "xattr.h"
+ 
++/* security.encdata is a virtual xattr containing information related
++ * to encrypted files. It is expressed as ASCII text with a "key: value"
++ * format, and space as field separator. For instance:
++ *
++ *    { encoding: base64url, size: 3012, enc_ctx: YWJjZGVmZ2hpamtsbW
++ *    5vcHFyc3R1dnd4eXphYmNkZWZnaGlqa2xtbg, enc_name: ZmlsZXdpdGh2ZX
++ *    J5bG9uZ25hbWVmaWxld2l0aHZlcnlsb25nbmFtZWZpbGV3aXRodmVyeWxvbmdu
++ *    YW1lZmlsZXdpdGg }
++ *
++ * 'encoding' is the encoding method used for binary data, assume name
++ * can be up to 255 chars.
++ * 'size' is the clear text file data length in bytes.
++ * 'enc_ctx' is encoded encryption context, 40 bytes for v2.
++ * 'enc_name' is encoded encrypted name, 256 bytes max.
++ * So on overall, this xattr is at most 727 chars plus terminating '\0'.
++ */
++static int ext4_build_xattr_encdata(struct dentry *dentry,
++				     struct inode *inode,
++				     void *buffer, size_t size)
++{
++	char encoded_enc_ctx[BASE64URL_CHARS(LLCRYPT_SET_CONTEXT_MAX_SIZE) + 1];
++	unsigned char enc_ctx[LLCRYPT_SET_CONTEXT_MAX_SIZE];
++	char encoded_name[BASE64URL_CHARS(NAME_MAX) + 1];
++	struct ext4_filename fname = { 0 };
++	struct inode *parent = NULL;
++	int encoded_enc_ctx_len = 0;
++	int encoded_name_len = 0;
++	char size_str[32];
++	int retval;
++
++	if (!IS_ENCRYPTED(inode)) {
++		retval = -ENODATA;
++		goto out;
++	}
++
++	/* get size */
++	retval = snprintf(size_str, sizeof(size_str), "%llu",
++			  S_ISDIR(inode->i_mode) ? 0 : inode->i_size);
++	if (retval >= sizeof(size_str)) {
++		retval = -ERANGE;
++		goto out;
++	}
++
++	/* get raw name */
++	if (dentry && dentry->d_parent)
++		parent = dentry->d_parent->d_inode;
++
++	retval = ext4_setup_filename(parent, &dentry->d_name, 1, &fname);
++	if (retval)
++		goto out;
++
++	/* base64url-encode raw name */
++	encoded_name_len = encode(fname.disk_name.name, fname.disk_name.len,
++				  encoded_name, ENCDATA_ENCODING);
++	if (encoded_name_len == -EINVAL) {
++		retval = -EINVAL;
++		goto out;
++	}
++	encoded_name[encoded_name_len] = '\0';
++
++	if (!buffer) {
++		/* Return exact xattr length we would return if called with
++		 * non-NULL buffer.
++		 */
++		retval = sizeof(ENCDATA_XATTR_FMT_COMP) - 1 +
++			sizeof(ENCDATA_ENCODING) - 1 + strlen(size_str) +
++			BASE64URL_CHARS(LLCRYPT_SET_CONTEXT_MAX_SIZE) +
++			encoded_name_len;
++		goto out;
++	}
++
++	/* get encryption context */
++	retval = ext4_xattr_get(inode, EXT4_XATTR_INDEX_ENCRYPTION,
++				EXT4_XATTR_NAME_ENCRYPTION_CONTEXT,
++				enc_ctx, sizeof(enc_ctx));
++
++	if (retval < 0)
++		goto out;
++
++	/* base64url-encode encryption context */
++	encoded_enc_ctx_len = encode(enc_ctx, retval, encoded_enc_ctx,
++				     ENCDATA_ENCODING);
++	if (encoded_enc_ctx_len == -EINVAL) {
++		retval = -EINVAL;
++		goto out;
++	}
++	encoded_enc_ctx[encoded_enc_ctx_len] = '\0';
++
++	/* write EXT4_XATTR_ENCDATA info into buffer */
++	retval = snprintf(buffer, size,
++			  ENCDATA_XATTR_FMT_1 ENCDATA_ENCODING
++			  ENCDATA_XATTR_FMT_2"%s"ENCDATA_XATTR_FMT_3"%s"
++			  ENCDATA_XATTR_FMT_4"%s"ENCDATA_XATTR_FMT_END,
++			  size_str, encoded_enc_ctx,
++			  encoded_name_len ? encoded_name : "");
++	if (retval >= size)
++		retval = -ERANGE;
++
++out:
++	if (fname.disk_name.name != dentry->d_name.name)
++		kfree(fname.disk_name.name);
++
++	return retval;
++}
++
++static int ext4_process_xattr_encdata(struct inode *inode,
++				       const void *value, size_t size,
++				       int flags)
++{
++	char encoded_enc_ctx[BASE64URL_CHARS(LLCRYPT_SET_CONTEXT_MAX_SIZE) + 1];
++	unsigned char enc_ctx[LLCRYPT_SET_CONTEXT_MAX_SIZE];
++	char encoded_name[BASE64URL_CHARS(NAME_MAX) + 1];
++	char encoding[NAME_MAX + 1];
++	char name[NAME_MAX + 1];
++	loff_t disk_size = 0;
++	char *buffer = NULL;
++	int enc_ctx_len = 0;
++	int name_len = 0;
++	int retval = 0;
++
++	if (IS_ENCRYPTED(inode) || !value || flags & XATTR_REPLACE) {
++		retval = -EINVAL;
++		goto out;
++	}
++
++	buffer = kmalloc(size + 1, GFP_NOFS);
++	if (!buffer) {
++		retval = -ENOMEM;
++		goto out;
++	}
++	memcpy(buffer, value, size);
++	buffer[size] = '\0';
++
++	retval = sscanf(buffer, encdata_xattr_fmt,
++			encoding, &disk_size, encoded_enc_ctx, encoded_name);
++	if (retval < 4) {
++		retval = -EINVAL;
++		goto out;
++	}
++
++	/* get former encryption context: should not exist */
++	retval = ext4_xattr_get(inode, EXT4_XATTR_INDEX_ENCRYPTION,
++				EXT4_XATTR_NAME_ENCRYPTION_CONTEXT, NULL, 0);
++	if (retval != -ENODATA) {
++		retval = -EINVAL;
++		goto out;
++	}
++
++	if (strlen(encoded_enc_ctx) >
++	    BASE64URL_CHARS(LLCRYPT_SET_CONTEXT_MAX_SIZE)) {
++		retval = -EINVAL;
++		goto out;
++	}
++
++	/* base64url-decode encryption context */
++	retval = decode(encoded_enc_ctx, strlen(encoded_enc_ctx),
++			enc_ctx, encoding);
++	if (retval < 0) {
++		retval = -EINVAL;
++		goto out;
++	}
++	enc_ctx_len = retval;
++
++	/* set encryption context, this will set encryption flag */
++	retval = ext4_xattr_set(inode, EXT4_XATTR_INDEX_ENCRYPTION,
++				EXT4_XATTR_NAME_ENCRYPTION_CONTEXT,
++				enc_ctx, enc_ctx_len, XATTR_CREATE);
++	if (retval < 0)
++		goto out;
++
++	if (disk_size) {
++		/* set size on inode */
++		spin_lock(&inode->i_lock);
++		i_size_write(inode, disk_size);
++		EXT4_I(inode)->i_disksize = disk_size;
++		spin_unlock(&inode->i_lock);
++		mark_inode_dirty(inode);
++	}
++
++	/* put raw encrypted name in EXT4_XATTR_NAME_RAWENCNAME xattr,
++	 * for later use, but base64url-decode first
++	 */
++	retval = decode(encoded_name, strlen(encoded_name), name, encoding);
++	if (retval < 0) {
++		retval = -EINVAL;
++		goto out;
++	}
++	name_len = retval;
++
++	retval = ext4_xattr_set(inode, EXT4_XATTR_INDEX_LUSTRE,
++				EXT4_XATTR_NAME_RAWENCNAME,
++				name, name_len, XATTR_CREATE);
++
++out:
++	kfree(buffer);
++
++	return retval;
++}
++
+ static int
+ ext4_xattr_security_get(const struct xattr_handler *handler,
+-			struct dentry *unused, struct inode *inode,
++			   struct dentry *dentry, struct inode *inode,
+ 			const char *name, void *buffer, size_t size)
+ {
++	if (!strncmp(name, EXT4_XATTR_NAME_ENCDATA, strlen(name)))
++		return ext4_build_xattr_encdata(dentry, inode, buffer, size);
++
+ 	return ext4_xattr_get(inode, EXT4_XATTR_INDEX_SECURITY,
+ 			      name, buffer, size);
+ }
+@@ -28,6 +232,9 @@ ext4_xattr_security_set(const struct xattr_handler *handler,
+ 			const char *name, const void *value,
+ 			size_t size, int flags)
+ {
++	if (!strncmp(name, EXT4_XATTR_NAME_ENCDATA, strlen(name)))
++		return ext4_process_xattr_encdata(inode, value, size, flags);
++
+ 	return ext4_xattr_set(inode, EXT4_XATTR_INDEX_SECURITY,
+ 			      name, value, size, flags);
+ }
+-- 
+2.25.1
+
