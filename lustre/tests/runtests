@@ -16,6 +16,7 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$RMDIRMANY" ] || RMDIRMANY="unlinkmany -d"
 
 check_and_setup_lustre
+force_new_seq_all
 
 test_1() {
 	sleep 5 # let MDS refresh aggregated statfs
