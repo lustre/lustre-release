@@ -16,6 +16,10 @@
 #define wait_queue_entry_t wait_queue_t
 #endif
 
+#ifndef HAVE_PREPARE_TO_WAIT_EVENT
+#define __add_wait_queue_entry_tail __add_wait_queue_tail
+#endif
+
 #ifndef HAVE_WAIT_BIT_HEADER_H
 struct wait_bit_queue_entry {
 	struct wait_bit_key	key;

@@ -10,8 +10,6 @@
 
 #ifndef HAVE_PREPARE_TO_WAIT_EVENT
 
-#define __add_wait_queue_entry_tail __add_wait_queue_tail
-
 long prepare_to_wait_event(wait_queue_head_t *wq_head,
 			   wait_queue_entry_t *wq_entry, int state)
 {

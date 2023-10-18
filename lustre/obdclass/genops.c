@@ -2304,9 +2304,9 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 	wait.wqe.func = claim_mod_rpc_function;
 
 	spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
-	__add_wait_queue(&cli->cl_mod_rpcs_waitq, &wait.wqe);
+	__add_wait_queue_entry_tail(&cli->cl_mod_rpcs_waitq, &wait.wqe);
 	/* This wakeup will only succeed if the maximums haven't
-	 * been reached.  If that happens, WQ_FLAG_WOKEN will be cleared
+	 * been reached.  If that happens, wait.woken will be set
 	 * and there will be no need to wait.
 	 * If a close_req was enqueue, ensure we search all the way to the
 	 * end of the waitqueue for a close request.
@@ -2314,7 +2314,6 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 	__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
 			     (void*)wait.close_req);
 
-	/* XXX: handle spurious wakeups (from unknown yet source */
 	while (wait.woken == false) {
 		spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
 		wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
