@@ -918,7 +918,11 @@ do {									      \
 #define POISON(ptr, c, s) do {} while (0)
 #define POISON_PTR(ptr)  ((void)0)
 #else
+#ifdef __underlying_memset
+#define POISON(ptr, c, s) __underlying_memset(ptr, c, s)
+#else
 #define POISON(ptr, c, s) memset(ptr, c, s)
+#endif
 #define POISON_PTR(ptr)  (ptr) = (void *)0xdeadbeef
 #endif
 
