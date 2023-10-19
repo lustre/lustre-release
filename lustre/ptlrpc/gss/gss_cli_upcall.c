@@ -222,7 +222,7 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
 
 int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 {
-	struct obd_import *imp, *imp0;
+	struct obd_import *imp = NULL, *imp0;
 	struct ptlrpc_request *req;
 	struct lgssd_ioctl_param param;
 	struct obd_device *obd;
@@ -255,20 +255,30 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 
 	obd = class_name2obd(obdname);
 	if (!obd) {
-		CERROR("no such obd %s\n", obdname);
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CERROR("%s: no such obd: rc = %d\n", obdname, rc);
+		RETURN(rc);
 	}
 
 	if (unlikely(!obd->obd_set_up)) {
-		CERROR("obd %s not setup\n", obdname);
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CERROR("%s: obd not setup: rc = %d\n", obdname, rc);
+		RETURN(rc);
 	}
 
 	spin_lock(&obd->obd_dev_lock);
 	if (obd->obd_stopping) {
-		CERROR("obd %s has stopped\n", obdname);
+		rc = -EINVAL;
+		CERROR("%s: obd has stopped: rc = %d\n", obdname, rc);
 		spin_unlock(&obd->obd_dev_lock);
-		RETURN(-EINVAL);
+		RETURN(rc);
+	}
+
+	if (!obd->obd_type || obd->obd_magic != OBD_DEVICE_MAGIC) {
+		rc = -EINVAL;
+		CERROR("%s: obd not valid: rc = %d\n", obdname, rc);
+		spin_unlock(&obd->obd_dev_lock);
+		RETURN(rc);
 	}
 
 	if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
@@ -276,36 +286,47 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 	    strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME) &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME)) {
-		CERROR("obd %s is not a client device\n", obdname);
+		rc = -EINVAL;
+		CERROR("%s: obd is not a client device: rc = %d\n",
+		       obdname, rc);
 		spin_unlock(&obd->obd_dev_lock);
-		RETURN(-EINVAL);
+		RETURN(rc);
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
-	with_imp_locked(obd, imp0, rc)
-		imp = class_import_get(imp0);
+	with_imp_locked(obd, imp0, rc) {
+		if (!imp0->imp_obd || !imp0->imp_sec)
+			rc = -ENODEV;
+		else
+			imp = class_import_get(imp0);
+	}
 	if (rc) {
-		CERROR("obd %s: import has gone\n", obd->obd_name);
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CERROR("%s: import has gone: rc = %d\n", obd->obd_name, rc);
+		RETURN(rc);
 	}
 
 	if (imp->imp_deactive) {
-		CERROR("import has been deactivated\n");
+		rc = -EINVAL;
+		CERROR("%s: import has been deactivated: rc = %d\n",
+		       obd->obd_name, rc);
 		class_import_put(imp);
-		RETURN(-EINVAL);
+		RETURN(rc);
 	}
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
 					SEC_CTX_INIT);
-	if (req == NULL) {
+	if (!req || !req->rq_cli_ctx || !req->rq_cli_ctx->cc_sec) {
 		param.status = -ENOMEM;
 		goto out_copy;
 	}
 
 	if (req->rq_cli_ctx->cc_sec->ps_id != param.secid) {
-		CWARN("original secid %d, now has changed to %d, cancel this negotiation\n",
-		      param.secid, req->rq_cli_ctx->cc_sec->ps_id);
-		param.status = -EINVAL;
+		rc = -EINVAL;
+		CWARN("%s: original secid %d, now has changed to %d, cancel this negotiation: rc = %d\n",
+		      obd->obd_name, param.secid,
+		      req->rq_cli_ctx->cc_sec->ps_id, rc);
+		param.status = rc;
 		goto out_copy;
 	}
 
