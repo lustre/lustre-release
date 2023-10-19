@@ -177,14 +177,15 @@ static void qsd_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qsd_qtype_info	*qqi = (struct qsd_qtype_info *)arg;
 
 	libcfs_debug_msg(msgdata,
-			 "%pV qsd:%s qtype:%s id:%llu enforced:%d granted: %llu pending:%llu waiting:%llu req:%d usage: %llu qunit:%llu qtune:%llu edquot:%d default:%s\n",
+			 "%pV qsd:%s qtype:%s id:%llu enforced:%d granted: %llu pending:%llu waiting:%llu req:%d usage: %llu qunit:%llu qtune:%llu edquot:%d default:%s revoke:%d\n",
 			 vaf,
 			 qqi->qqi_qsd->qsd_svname, qtype_name(qqi->qqi_qtype),
 			 lqe->lqe_id.qid_uid, lqe->lqe_enforced,
 			 lqe->lqe_granted, lqe->lqe_pending_write,
 			 lqe->lqe_waiting_write, lqe->lqe_pending_req,
 			 lqe->lqe_usage, lqe->lqe_qunit, lqe->lqe_qtune,
-			 lqe->lqe_edquot, lqe->lqe_is_default ? "yes" : "no");
+			 lqe->lqe_edquot, lqe->lqe_is_default ? "yes" : "no",
+			 lqe->lqe_revoke);
 }
 
 /*

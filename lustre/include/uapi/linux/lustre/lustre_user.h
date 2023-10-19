@@ -1415,6 +1415,7 @@ static inline __u64 toqb(__kernel_size_t space)
 #define LQUOTA_FLAG_DEFAULT	0x0001
 #define LQUOTA_FLAG_DELETED	0x0002
 #define LQUOTA_FLAG_RESET	0x0004
+#define LQUOTA_FLAG_REVOKE	0x0008
 
 #define LUSTRE_Q_CMD_IS_POOL(cmd)		\
 	(cmd == LUSTRE_Q_GETQUOTAPOOL ||	\

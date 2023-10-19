@@ -233,7 +233,19 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 	/* valid per-ID lock
 	 * Apply good old quota qunit adjustment logic which has been around
 	 * since lustre 1.4:
-	 * 1. release spare quota space? */
+	 * 1. revoke all extra grant
+	 */
+	if (lqe->lqe_revoke) {
+		lqe->lqe_revoke = 0;
+
+		LQUOTA_DEBUG(lqe, "revoke pre-acquired quota: %llu - %llu\n",
+			     granted, usage);
+		qbody->qb_count = granted - usage;
+		qbody->qb_flags = QUOTA_DQACQ_FL_REL;
+		RETURN(true);
+	}
+
+	/* 2. release spare quota space? */
 	if (granted > usage + lqe->lqe_qunit) {
 		/* pre-release quota space */
 		if (qbody == NULL)
@@ -252,7 +264,7 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 		RETURN(true);
 	}
 
-	/* 2. Any quota overrun? */
+	/* 3. Any quota overrun? */
 	if (lqe->lqe_usage > lqe->lqe_granted) {
 		/* we overconsumed quota space, we report usage in request so
 		 * that master can adjust it unconditionally */
@@ -263,7 +275,7 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 		qbody->qb_flags = QUOTA_DQACQ_FL_REPORT;
 	}
 
-	/* 3. Time to pre-acquire? */
+	/* 4. Time to pre-acquire? */
 	if (!lqe->lqe_edquot && !lqe->lqe_nopreacq && usage > 0 &&
 	    lqe->lqe_qunit != 0 && granted < usage + lqe->lqe_qtune) {
 		/* To pre-acquire quota space, we report how much spare quota

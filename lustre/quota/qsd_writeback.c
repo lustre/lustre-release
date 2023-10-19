@@ -348,8 +348,13 @@ out_del:
 		lqe->lqe_adjust_time = 0;
 		spin_unlock(&qsd->qsd_adjust_lock);
 
+		if (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
+							LQUOTA_FLAG_REVOKE)
+			lqe->lqe_revoke = 1;
+
 		/* Report usage asynchronously */
 		rc = qsd_adjust(env, lqe);
+		lqe->lqe_revoke = 0;
 		if (rc)
 			LQUOTA_ERROR(lqe, "failed to report usage, rc:%d", rc);
 	}

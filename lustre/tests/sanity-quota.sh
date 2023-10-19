@@ -499,50 +499,56 @@ reset_quota_settings() {
 
 get_quota_on_qsd() {
 	local facet
+	local device
 	local spec
 	local qid
 	local qtype
 	local output
 
 	facet=$1
-	case "$2" in
+	device=$2
+	case "$3" in
 		usr) qtype="limit_user";;
 		grp) qtype="limit_group";;
-		*)	   error "unknown quota parameter $2";;
+		prj) qtype="limit_project";;
+		*)	   error "unknown quota parameter $3";;
 	esac
 
-	qid=$3
-	case "$4" in
+	qid=$4
+	case "$5" in
 		hardlimit) spec=4;;
 		softlimit) spec=6;;
-		*)	   error "unknown quota parameter $4";;
+		*)	   error "unknown quota parameter $5";;
 	esac
 
-	do_facet $facet $LCTL get_param osd-*.*-OST0000.quota_slave.$qtype |
+	do_facet $facet $LCTL get_param osd-*.*-${device}.quota_slave.$qtype |
 		awk '($3 == '$qid') {getline; print $'$spec'; exit;}' | tr -d ,
 }
 
-wait_quota_setting_synced() {
+wait_quota_synced() {
 	local value
-	local qtype=$1
-	local qid=$2
-	local limit_type=$3
-	local limit_val=$4
+	local facet=$1
+	local device=$2
+	local qtype=$3
+	local qid=$4
+	local limit_type=$5
+	local limit_val=$6
 	local interval=0
 
-	value=$(get_quota_on_qsd ost1 $qtype $qid $limit_type)
+	value=$(get_quota_on_qsd $facet $device $qtype $qid $limit_type)
 	while [[ $value != $limit_val ]]; do
 		(( interval != 0 )) ||
-			do_facet ost1 $LCTL set_param \
-				osd-*.*-OST0000.quota_slave.force_reint=1
+			do_facet $facet $LCTL set_param \
+				osd-*.*-${device}.quota_slave.force_reint=1
 
+		echo $value
 		(( interval <= 20 )) ||
 			error "quota ($value) don't update on QSD, $limit_val"
 
 		interval=$((interval + 1))
 		sleep 1
 
-		value=$(get_quota_on_qsd ost1 $qtype $qid $limit_type)
+		value=$(get_quota_on_qsd $facet $device $qtype $qid $limit_type)
 	done
 }
 
@@ -5953,7 +5959,7 @@ test_84()
                 error "set user quota failed"
 	$LFS quota -gv $TSTUSR $DIR
 
-	wait_quota_setting_synced "grp" $TSTID "hardlimit" $((10*1024*1024))
+	wait_quota_synced "ost1" "OST0000" "grp" $TSTID "hardlimit" "10485760"
 
 	mkdir -p $dir1 || error "failed to mkdir"
 	chown $TSTUSR.$TSTUSR $dir1 || error "chown $dir1 failed"
@@ -6101,6 +6107,60 @@ test_85()
 	return 0
 }
 run_test 85 "do not hung at write with the least_qunit"
+
+test_preacquired_quota()
+{
+	local test_dir=$1
+	local qtype=$2
+	local qtype_name=$3
+	local qid=$4
+
+	[[ "$qtype" == "-p" ]] && change_project -sp $qid $DIR/$tdir
+
+	$LFS setquota $qtype $qid -i 100K -I 100K $DIR ||
+		error "failed to set file [$qtype] quota"
+
+	$RUNAS createmany -m $test_dir/tfile- 5000 ||
+		error "failed to create files, expect succeed"
+
+	wait_zfs_commit $SINGLEMDS
+	$LFS setquota $qtype $qid -i 2K -I 2K $DIR ||
+		error "failed to decrease file [$qtype] quota"
+
+	wait_quota_synced "mds1" "MDT0000" $qtype_name $qid "hardlimit" "2048"
+
+	# make sure the lqe->lqe_edquot is set
+	$RUNAS createmany -m $test_dir/tfile2- 10
+	sleep 5
+
+	$RUNAS createmany -m $test_dir/tfile3- 30 &&
+		error "succeed to create files, expect failed"
+
+	rm -f $test_dir/tfile*
+	$LFS setquota $qtype $qid -i 0 -I 0 $DIR ||
+		error "failed to reset file user quota"
+}
+
+test_86()
+{
+	(( $MDS1_VERSION >= $(version_code 2.15.57.41) )) ||
+		skip "need MDS >= 2.15.57.41 for quota over limit release fix"
+
+	local test_dir="$DIR/$tdir/test_dir"
+
+	setup_quota_test || error "setup quota failed with %?"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+
+	$LFS setdirstripe -c 1 -i 0 $test_dir || error "setdirstripe failed"
+	chmod 777 $test_dir
+
+	test_preacquired_quota "$test_dir" "-u" "usr" "$TSTID"
+	test_preacquired_quota "$test_dir" "-g" "grp" "$TSTID"
+
+	is_project_quota_supported || return 0
+	test_preacquired_quota "$test_dir" "-p" "prj" "1000"
+}
+run_test 86 "Pre-acquired quota should be released if quota is over limit"
 
 quota_fini()
 {

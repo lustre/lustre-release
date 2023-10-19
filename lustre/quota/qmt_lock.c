@@ -824,6 +824,11 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 		qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;
 		qti->qti_gl_desc.lquota_desc.gl_time = LQUOTA_GRACE_FLAG(0,
 							LQUOTA_FLAG_RESET);
+	} else if (lqe->lqe_granted > lqe->lqe_hardlimit) {
+		qti->qti_gl_desc.lquota_desc.gl_hardlimit = lqe->lqe_hardlimit;
+		qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;
+		qti->qti_gl_desc.lquota_desc.gl_time = LQUOTA_GRACE_FLAG(0,
+							LQUOTA_FLAG_REVOKE);
 	} else {
 		qti->qti_gl_desc.lquota_desc.gl_hardlimit = lqe->lqe_hardlimit;
 		qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;

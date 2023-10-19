@@ -513,6 +513,9 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 	qsd_set_edquot(lqe, !!(desc->gl_flags & LQUOTA_FL_EDQUOT));
 	lqe_write_unlock(lqe);
 
+	if (!!(desc->gl_flags & LQUOTA_FL_EDQUOT))
+		qsd_adjust_schedule(lqe, false, false);
+
 	if (wakeup)
 		wake_up(&lqe->lqe_waiters);
 	lqe_putref(lqe);
