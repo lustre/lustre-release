@@ -620,8 +620,8 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			if (unlikely(result <= 0)) {
 				cl_sync_io_note(env, &sdio->csd_sync, result);
 				if (sync_submit) {
-					cl_sub_dio_free(sdio);
 					LASSERT(sdio->csd_creator_free);
+					cl_sub_dio_free(sdio);
 				}
 				GOTO(out, result);
 			}
