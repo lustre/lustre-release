@@ -27298,7 +27298,7 @@ test_398q()
 		$((stripe_size * 4)); do
 
 		echo "bs: $bs, file_size $file_size"
-		dd if=$DIR/$tfile.1 bs=$((bs *2 )) of=$DIR/tfile.2 \
+		dd if=$DIR/$tfile.1 bs=$((bs *2 )) of=$DIR/$tfile.2 \
 			conv=notrunc oflag=direct iflag=direct &
 		pid_dio1=$!
 		# Buffered I/O with similar but not the same block size
