@@ -135,6 +135,9 @@ struct kfilnd_dev *kfilnd_dev_alloc(struct lnet_ni *ni,
 	int cpt;
 	int lnet_ncpts;
 	struct kfilnd_dev *dev;
+#ifdef HAVE_KFI_CXI_DOM_OPS
+	struct kfi_cxi_domain_ops *dom_ops;
+#endif
 
 	if (!ni) {
 		rc = -EINVAL;
@@ -176,6 +179,19 @@ struct kfilnd_dev *kfilnd_dev_alloc(struct lnet_ni *ni,
 	}
 
 	dev->nic_addr = ((struct kcxi_addr *)dev_info->src_addr)->nic;
+
+	/* Get the device struct */
+	dev->device = NULL;
+#ifdef HAVE_KFI_CXI_DOM_OPS
+	rc = kfi_open_ops(&dev->dom->domain->fid, KFI_CXI_DOM_OPS_1, 0,
+				(void **)&dom_ops, NULL);
+	if (!rc) {
+		rc = dom_ops->get_device(&dev->dom->domain->fid,
+					   &dev->device);
+		if (!rc)
+			CDEBUG(D_NET, "get_device failed\n");
+	}
+#endif
 
 	/* Create an AV for this device */
 	av_attr.type = KFI_AV_UNSPEC;

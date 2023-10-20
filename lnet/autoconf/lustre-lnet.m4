@@ -992,6 +992,21 @@ AC_ARG_WITH([kfi],
 		],[
 			AC_MSG_ERROR(["$with_kfi/Module.symvers does not exist"])
 		])
+		# at this point, we have kfilnd basic support,
+		# now check for extra features
+		LB_CHECK_COMPILE([if kfi_cxi domain ops are available],
+		KFI_CXI_dom_ops, [
+			#include <kfi_endpoint.h>
+			#include <kfi_cxi_ext.h>
+		],[
+			struct kfid *fid;
+			struct kfi_cxi_domain_ops *dom_ops;
+			kfi_open_ops(fid, KFI_CXI_DOM_OPS_1, 0,
+				(void **)&dom_ops, NULL);
+		],[
+			AC_DEFINE(HAVE_KFI_CXI_DOM_OPS, 1,
+				[kfi_cxi domain ops are available])
+		])
 	],[])
 AC_DEFINE(HAVE_KFILND, 1, [support kfabric LND])
 AC_SUBST(KFICPPFLAGS)

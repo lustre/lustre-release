@@ -445,6 +445,8 @@ static int kfilnd_startup(struct lnet_ni *ni)
 	const char *node;
 	int rc;
 	struct kfilnd_dev *kfdev;
+	int node_id;
+	int cpt = CFS_CPT_ANY;
 
 	if (!ni)
 		return -EINVAL;
@@ -476,6 +478,13 @@ static int kfilnd_startup(struct lnet_ni *ni)
 		       rc);
 		goto err;
 	}
+
+	if (kfdev->device) {
+		node_id = dev_to_node(kfdev->device);
+		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+	}
+
+	ni->ni_dev_cpt = cpt;
 
 	/* Post a series of immediate receive buffers */
 	rc = kfilnd_dev_post_imm_buffers(kfdev);

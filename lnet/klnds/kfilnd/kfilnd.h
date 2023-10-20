@@ -449,6 +449,9 @@ struct kfilnd_dev {
 	/* Physical NIC address. */
 	unsigned int nic_addr;
 	atomic_t session_keys;
+
+	/* Physical device. */
+	struct device *device;
 };
 
 /* Invalid checksum value is treated as no checksum. */
