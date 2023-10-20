@@ -74,9 +74,10 @@ init_src() {
 }
 
 cleanup_src_tgt() {
-	rm -rf $TGT/$tdir
-	rm -rf $DIR/$tdir
-	rm -rf $DIR/tgt
+	[ ! -d $TGT2/$tdir ] || rm -rf $TGT2/$tdir # /tmp/target2/...
+	[ ! -d $TGT/$tdir ] || rm -rf $TGT/$tdir # /tmp/target/...
+	rm -rf $DIR/$tdir  # /mnt/lustre/...
+	rm -rf $DIR/tgt    # /mnt/lustre/tgt
 }
 
 # Check whether the filesystem supports xattr or not.
@@ -316,20 +317,20 @@ test_2b() {
 		-D $LRSYNC_LOG
 	check_diff $DIR/$tdir $TGT/$tdir
 
-    echo Resuming dbench
-    $KILL -SIGCONT $child_pid
-    sleep 10
+	echo Resuming dbench
+	$KILL -SIGCONT $child_pid
+	sleep 10
 
-    echo Stopping dbench
+	echo Stopping dbench
 	stop_procs $child_pid
 
 	echo Starting replication
 	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
 	check_diff $DIR/$tdir $TGT/$tdir
 
-    echo "Wait for dbench to finish"
-    $KILL -SIGCONT $child_pid
-    wait
+	echo "Wait for dbench to finish"
+	$KILL -SIGCONT $child_pid
+	wait
 
 	# Replicate the changes to $TGT
 	echo Starting replication
@@ -338,9 +339,9 @@ test_2b() {
 	check_diff $DIR/$tdir $TGT/$tdir
 	check_diff $DIR/$tdir $TGT2/$tdir
 
-    fini_changelog
-    cleanup_src_tgt
-    return 0
+	fini_changelog
+	cleanup_src_tgt
+	return 0
 }
 run_test 2b "Replicate files changed by dbench."
 
@@ -466,30 +467,30 @@ test_4() {
 	check_diff $DIR/$tdir $TGT/$tdir
 	check_diff $DIR/$tdir $TGT2/$tdir
 
-    $KILL -SIGCONT $child_pid
-    sleep 60
-    $KILL -SIGKILL $(pgrep run_iozone.sh)
-    $KILL -SIGKILL $(pgrep iozone)
+	$KILL -SIGCONT $child_pid
+	sleep 60
+	$KILL -SIGKILL $(pgrep run_iozone.sh)
+	$KILL -SIGKILL $(pgrep iozone)
 
-    # After killing 'run_iozone.sh', process 'iozone' becomes the
-    # child of PID 1. Hence 'wait' does not wait for it. Killing
-    # iozone first, means more iozone processes are spawned off which
-    # is not desirable. So, after sending a sigkill, the test goes
-    # into a wait loop for iozone to cleanup and exit.
-    wait
-    while [ "$(pgrep "iozone")" != "" ];
-    do
-      ps -ef | grep iozone | grep -v grep
-      sleep 1;
-    done
+	# After killing 'run_iozone.sh', process 'iozone' becomes the
+	# child of PID 1. Hence 'wait' does not wait for it. Killing
+	# iozone first, means more iozone processes are spawned off which
+	# is not desirable. So, after sending a sigkill, the test goes
+	# into a wait loop for iozone to cleanup and exit.
+	wait
+	while [ "$(pgrep "iozone")" != "" ];
+	do
+		ps -ef | grep iozone | grep -v grep
+		sleep 1;
+	done
 
 	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
 	check_diff $DIR/$tdir $TGT/$tdir
 	check_diff $DIR/$tdir $TGT2/$tdir
 
-    fini_changelog
-    cleanup_src_tgt
-    return 0
+	fini_changelog
+	cleanup_src_tgt
+	return 0
 }
 run_test 4 "Replicate files created by iozone"
 
@@ -622,22 +623,22 @@ run_test 7 "lustre_rsync stripesize"
 
 # Test 8 - Replicate multiple file/directory moves
 test_8() {
-    init_src
-    init_changelog
+	init_src
+	init_changelog
 
-    for i in 1 2 3 4 5 6 7 8 9; do
-	mkdir $DIR/$tdir/d$i
-	    for j in 1 2 3 4 5 6 7 8 9; do
-		mkdir $DIR/$tdir/d$i/d$i$j
-		createmany -o $DIR/$tdir/d$i/d$i$j/a 10 \
-		    > /dev/null
-		mv $DIR/$tdir/d$i/d$i$j $DIR/$tdir/d$i/d0$i$j
-		createmany -o $DIR/$tdir/d$i/d0$i$j/b 10 \
-	            > /dev/null
-		mv $DIR/$tdir/d$i/d0$i$j/a0 $DIR/$tdir/d$i/d0$i$j/c0
-	    done
-	    mv $DIR/$tdir/d$i $DIR/$tdir/d0$i
-    done
+	for i in 1 2 3 4 5 6 7 8 9; do
+		mkdir $DIR/$tdir/d$i
+		for j in 1 2 3 4 5 6 7 8 9; do
+			mkdir $DIR/$tdir/d$i/d$i$j
+			createmany -o $DIR/$tdir/d$i/d$i$j/a 10 \
+			    > /dev/null
+			mv $DIR/$tdir/d$i/d$i$j $DIR/$tdir/d$i/d0$i$j
+			createmany -o $DIR/$tdir/d$i/d0$i$j/b 10 \
+			    > /dev/null
+			mv $DIR/$tdir/d$i/d0$i$j/a0 $DIR/$tdir/d$i/d0$i$j/c0
+		done
+		mv $DIR/$tdir/d$i $DIR/$tdir/d0$i
+	done
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	$LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG \
@@ -645,18 +646,18 @@ test_8() {
 
 	check_diff ${DIR}/$tdir $TGT/$tdir
 
-    fini_changelog
-    cleanup_src_tgt
-    return 0
+	fini_changelog
+	cleanup_src_tgt
+	return 0
 }
 run_test 8 "Replicate multiple file/directory moves"
 
 test_9() {
-    init_src
-    init_changelog
+	init_src
+	init_changelog
 
-    mkdir $DIR/$tdir/foo
-    touch $DIR/$tdir/foo/a1
+	mkdir $DIR/$tdir/foo
+	touch $DIR/$tdir/foo/a1
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	$LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG \
@@ -671,9 +672,9 @@ test_9() {
 
 	check_diff ${DIR}/$tdir $TGT/$tdir
 
-    fini_changelog
-    cleanup_src_tgt
-    return 0
+	fini_changelog
+	cleanup_src_tgt
+	return 0
 }
 run_test 9 "Replicate recursive directory removal"
 
