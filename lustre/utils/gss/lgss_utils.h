@@ -179,6 +179,7 @@ int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 void lgss_fini(struct lgss_cred *cred);
 
 int lgss_get_service_str(char **string, uint32_t lsvc, uint64_t tgt_nid);
+int switch_identity(uid_t uid);
 
 static inline
 int gss_OID_equal(gss_OID_desc *oid1, gss_OID_desc *oid2)

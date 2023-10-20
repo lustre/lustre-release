@@ -322,15 +322,15 @@ test_5() {
 	$RUNAS touch $file1 || error "can't touch $file1"
 	[ -f $file1 ] || error "$file1 not found"
 
+	# flush context
+	$RUNAS $LFS flushctx $MOUNT || error "can't flush context"
+
 	# stop lsvcgssd
 	send_sigint $(comma_list $(mdts_nodes)) $LSVCGSSD
 	sleep 5
 	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD &&
 		error "$LSVCGSSD still running"
 
-	# flush context, and touch
-	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (1)"
-	restore_krb5_cred
 	$RUNAS touch $file2 && error "should fail without $LSVCGSSD"
 
 	# restart lsvcgssd, expect touch succeed
@@ -338,8 +338,6 @@ test_5() {
 	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -vvv"
 	sleep 5
 	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD
-	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (2)"
-	restore_krb5_cred
 	$RUNAS touch $file2 || error "should not fail now"
 	[ -f $file2 ] || error "$file2 not found"
 }

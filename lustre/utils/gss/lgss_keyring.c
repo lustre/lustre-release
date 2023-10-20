@@ -554,91 +554,154 @@ void lgssc_fini_nego_data(struct lgss_nego_data *lnd)
         }
 }
 
-static
-int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error)
+static int fork_and_switch_id(int uid, pid_t *child)
 {
-        int      seqwin = 0;
-        char     buf[32];
-        char    *p, *end;
+	int status, rc = 0;
 
-        logmsg(LL_TRACE, "revoking kernel key %08x\n", keyid);
-
-        p = buf;
-        end = buf + sizeof(buf);
-
-        WRITE_BYTES(&p, end, seqwin);
-        WRITE_BYTES(&p, end, rpc_error);
-        WRITE_BYTES(&p, end, gss_error);
-
-again:
-        if (keyctl_update(keyid, buf, p - buf)) {
-                if (errno != EAGAIN) {
-                        logmsg(LL_ERR, "revoke key %08x: %s\n",
-                               keyid, strerror(errno));
-                        return -1;
-                }
-
-                logmsg(LL_WARN, "key %08x: revoking too soon, try again\n",
-                       keyid);
-                sleep(2);
-                goto again;
-        }
-
-        logmsg(LL_INFO, "key %08x: revoked\n", keyid);
-        return 0;
+	*child = fork();
+	if (*child == -1) {
+		logmsg(LL_ERR, "cannot fork child for user %u: %s\n",
+		       uid, strerror(errno));
+		rc = errno;
+	} else if (*child == 0) {
+		/* switch identity */
+		rc = switch_identity(uid);
+		if (rc)
+			rc = errno;
+	} else {
+		if (wait(&status) < 0) {
+			rc = errno;
+			logmsg(LL_ERR, "child %d failed: %s\n",
+			       *child, strerror(rc));
+		} else {
+			rc = WEXITSTATUS(status);
+			if (rc)
+				logmsg(LL_ERR, "child %d terminated with %d\n",
+				       *child, rc);
+		}
+	}
+	return rc;
 }
 
-static
-int update_kernel_key(key_serial_t keyid,
-                      struct lgss_nego_data *lnd,
-                      gss_buffer_desc *ctx_token)
+static int do_keyctl_update(char *reason, key_serial_t keyid,
+			    const void *payload, size_t plen)
 {
-        char        *buf = NULL, *p = NULL, *end = NULL;
-        unsigned int buf_size = 0;
-        int          rc;
+	while (keyctl_update(keyid, payload, plen)) {
+		if (errno != EAGAIN) {
+			logmsg(LL_ERR, "%se key %08x: %s\n",
+			       reason, keyid, strerror(errno));
+			return -1;
+		}
 
-        logmsg(LL_TRACE, "updating kernel key %08x\n", keyid);
+		logmsg(LL_WARN, "key %08x: %sing too soon, try again\n",
+		       keyid, reason);
+		sleep(2);
+	}
 
-        buf_size = sizeof(lnd->lnd_seq_win) +
-                   sizeof(lnd->lnd_rmt_ctx.length) + lnd->lnd_rmt_ctx.length +
-                   sizeof(ctx_token->length) + ctx_token->length;
-        buf = malloc(buf_size);
-        if (buf == NULL) {
-                logmsg(LL_ERR, "key %08x: can't alloc update buf: size %d\n",
-                       keyid, buf_size);
-                return 1;
-        }
+	logmsg(LL_INFO, "key %08x: %sed\n", keyid, reason);
+	return 0;
+}
 
-        p = buf;
-        end = buf + buf_size;
-        rc = -1;
+static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
+			    uid_t uid)
+{
+	key_serial_t inst_keyring = KEY_SPEC_SESSION_KEYRING;
+	pid_t child = 1;
+	int seqwin = 0;
+	char *p, *end;
+	char buf[32];
+	int rc;
 
-        if (WRITE_BYTES(&p, end, lnd->lnd_seq_win))
-                goto out;
-        if (write_buffer(&p, end, &lnd->lnd_rmt_ctx))
-                goto out;
-        if (write_buffer(&p, end, ctx_token))
-                goto out;
+	logmsg(LL_TRACE, "revoking kernel key %08x\n", keyid);
 
-again:
-        if (keyctl_update(keyid, buf, p - buf)) {
-                if (errno != EAGAIN) {
-                        logmsg(LL_ERR, "update key %08x: %s\n",
-                               keyid, strerror(errno));
-                        goto out;
-                }
+	/* Only possessor and uid can update the key. So for a user key that is
+	 * linked to the user keyring, switch uid/gid in a subprocess to not
+	 * change identity in main process.
+	 */
+	if (uid) {
+		rc = fork_and_switch_id(uid, &child);
+		if (rc || child)
+			goto out;
+		inst_keyring = KEY_SPEC_USER_KEYRING;
+	}
 
-                logmsg(LL_DEBUG, "key %08x: updating too soon, try again\n",
-                       keyid);
-                sleep(2);
-                goto again;
-        }
+	p = buf;
+	end = buf + sizeof(buf);
 
-        rc = 0;
-        logmsg(LL_DEBUG, "key %08x: updated\n", keyid);
+	WRITE_BYTES(&p, end, seqwin);
+	WRITE_BYTES(&p, end, rpc_error);
+	WRITE_BYTES(&p, end, gss_error);
+
+	rc = do_keyctl_update("revok", keyid, buf, p - buf);
+	if (rc)
+		goto out;
+	rc = keyctl_unlink(keyid, inst_keyring);
+	if (rc)
+		logmsg(LL_ERR, "unlink key %08x from %d: %s\n",
+		       keyid, inst_keyring, strerror(errno));
+	else
+		logmsg(LL_INFO, "key %08x: unlinked from %d\n",
+		       keyid, inst_keyring);
+
 out:
-        free(buf);
-        return rc;
+	if (child == 0)
+		/* job done for child */
+		exit(rc);
+	return rc;
+}
+
+static int update_kernel_key(key_serial_t keyid,
+			     struct lgss_nego_data *lnd,
+			     gss_buffer_desc *ctx_token)
+{
+	char *buf = NULL, *p = NULL, *end = NULL;
+	unsigned int buf_size = 0;
+	pid_t child = 1;
+	int uid, rc = 0;
+
+	logmsg(LL_TRACE, "updating kernel key %08x\n", keyid);
+
+	/* Only possessor and uid can update the key. So for a user key that is
+	 * linked to the user keyring, switch uid/gid in a subprocess to not
+	 * change identity in main process.
+	 */
+	uid = lnd->lnd_uid;
+	if (uid) {
+		rc = fork_and_switch_id(uid, &child);
+		if (rc || child)
+			goto out;
+	}
+
+	buf_size = sizeof(lnd->lnd_seq_win) +
+		sizeof(lnd->lnd_rmt_ctx.length) + lnd->lnd_rmt_ctx.length +
+		sizeof(ctx_token->length) + ctx_token->length;
+	buf = malloc(buf_size);
+	if (buf == NULL) {
+		logmsg(LL_ERR, "key %08x: can't alloc update buf: size %d\n",
+		       keyid, buf_size);
+		rc = ENOMEM;
+		goto out;
+	}
+
+	p = buf;
+	end = buf + buf_size;
+	rc = -1;
+
+	if (WRITE_BYTES(&p, end, lnd->lnd_seq_win))
+		goto out;
+	if (write_buffer(&p, end, &lnd->lnd_rmt_ctx))
+		goto out;
+	if (write_buffer(&p, end, ctx_token))
+		goto out;
+
+	rc = do_keyctl_update("updat", keyid, buf, p - buf);
+
+out:
+	free(buf);
+	if (child == 0)
+		/* job done for child */
+		exit(rc);
+	return rc;
 }
 
 static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
@@ -653,13 +716,13 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 	if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
 		logmsg(LL_ERR, "key %08x: failed to construct service "
 		       "string\n", keyid);
-		error_kernel_key(keyid, -EACCES, 0);
+		error_kernel_key(keyid, -EACCES, 0, cred->lc_uid);
 		goto out_cred;
 	}
 
 	if (lgss_using_cred(cred)) {
 		logmsg(LL_ERR, "key %08x: can't using cred\n", keyid);
-		error_kernel_key(keyid, -EACCES, 0);
+		error_kernel_key(keyid, -EACCES, 0, cred->lc_uid);
 		goto out_cred;
 	}
 
@@ -668,7 +731,8 @@ retry_nego:
 	if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
 		logmsg(LL_ERR, "key %08x: failed to initialize "
 		       "negotiation data\n", keyid);
-		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err,
+				 cred->lc_uid);
 		goto out_cred;
 	}
 
@@ -679,7 +743,8 @@ retry_nego:
 		goto retry_nego;
 	} else if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to negotiation\n", keyid);
-		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err,
+				 cred->lc_uid);
 		goto out;
 	}
 
@@ -687,7 +752,7 @@ retry_nego:
 					  lnd.lnd_mech);
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to export context\n", keyid);
-		error_kernel_key(keyid, rc, lnd.lnd_gss_err);
+		error_kernel_key(keyid, rc, lnd.lnd_gss_err, cred->lc_uid);
 		goto out;
 	}
 
@@ -722,14 +787,14 @@ static int lgssc_kr_negotiate_manual(key_serial_t keyid, struct lgss_cred *cred,
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to construct service "
 		       "string\n", keyid);
-		error_kernel_key(keyid, -EACCES, 0);
+		error_kernel_key(keyid, -EACCES, 0, 0);
 		goto out_cred;
 	}
 
 	rc = lgss_using_cred(cred);
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: can't use cred\n", keyid);
-		error_kernel_key(keyid, -EACCES, 0);
+		error_kernel_key(keyid, -EACCES, 0, 0);
 		goto out_cred;
 	}
 
@@ -739,7 +804,7 @@ retry:
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to initialize "
 		       "negotiation data\n", keyid);
-		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err, 0);
 		goto out_cred;
 	}
 
@@ -755,7 +820,7 @@ retry:
 		goto retry;
 	} else if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to negotiate\n", keyid);
-		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err, 0);
 		goto out;
 	}
 
@@ -925,34 +990,69 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 				   uint32_t uid)
 {
 	key_serial_t inst_keyring;
+	bool prepared = true;
+	pid_t child = 1;
+	int rc = 0;
 
 	if (lgss_prepare_cred(cred)) {
 		logmsg(LL_ERR, "key %08x: failed to prepare credentials "
 		       "for user %d\n", keyid, uid);
-		return 1;
+		/* prepare failed, but still instantiate the key for regular
+		 * user, so that it can be used to report the error later
+		 * in the process
+		 */
+		if (cred->lc_root_flags)
+			return 1;
+		prepared = false;
 	}
 
-	/* pre initialize the key. note the keyring linked to is actually of the
-	 * original requesting process, not _this_ upcall process. if it's for
+	/* Pre initialize the key. Note the keyring linked to is actually of the
+	 * original requesting process, not _this_ upcall process. If it's for
 	 * root user, don't link to any keyrings because we want fully control
-	 * on it, and share it among all root sessions; otherswise link to
-	 * session keyring.
+	 * on it, and share it among all root sessions.
+	 * Otherswise link to user keyring, which requires switching uid/gid.
+	 * Do this in a subprocess because other operations need privileges.
 	 */
-	if (cred->lc_root_flags != 0)
+	if (cred->lc_root_flags) {
 		inst_keyring = 0;
-	else
-		inst_keyring = KEY_SPEC_SESSION_KEYRING;
-
-	if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
-		logmsg(LL_ERR, "instantiate key %08x in keyring id %d: %s\n",
-		       keyid, inst_keyring, strerror(errno));
-		return 1;
+	} else {
+		inst_keyring = KEY_SPEC_USER_KEYRING;
+		/* fork to not change identity in main process */
+		rc = fork_and_switch_id(uid, &child);
+		if (rc || child)
+			goto out;
 	}
 
-	logmsg(LL_TRACE, "instantiated kernel key %08x in keyring id %d\n",
-	       keyid, inst_keyring);
+	/* if dealing with a user key, grant user write permission,
+	 * it will be required for key update
+	 */
+	if (child == 0) {
+		key_perm_t perm;
 
-	return 0;
+		perm = KEY_POS_VIEW | KEY_POS_WRITE | KEY_POS_SEARCH |
+			KEY_POS_LINK | KEY_POS_SETATTR |
+			KEY_USR_VIEW | KEY_USR_WRITE;
+		if (keyctl_setperm(keyid, perm))
+			logmsg(LL_ERR, "setperm %08x on key %08x: %s\n",
+			       perm, keyid, strerror(errno));
+	}
+
+	rc = keyctl_instantiate(keyid, NULL, 0, inst_keyring);
+	if (rc) {
+		rc = errno;
+		logmsg(LL_ERR, "instantiate key %08x in keyring id %d: %s\n",
+		       keyid, inst_keyring, strerror(rc));
+	} else {
+		logmsg(LL_TRACE,
+		       "instantiated kernel key %08x in keyring id %d\n",
+		       keyid, inst_keyring);
+	}
+
+out:
+	if (child == 0)
+		/* job done for child */
+		exit(rc);
+	return prepared ? rc : 1;
 }
 
 /****************************************
@@ -1274,9 +1374,11 @@ out_pipe:
 		else
 			logmsg(LL_TRACE, "stick with current namespace\n");
 
+		/* In case of prepare error, a key will be instantiated
+		 * all the same. But then we will have to error this key
+		 * instead of doing normal gss negotiation.
+		 */
 		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
-		if (rc != 0)
-			goto out_reg;
 
 		/*
 		 * fork a child to do the real gss negotiation
@@ -1288,12 +1390,16 @@ out_pipe:
 			rc = 1;
 			goto out_reg;
 		} else if (child == 0) {
-			rc = lgssc_kr_negotiate(keyid, cred, &uparam,
-						req_fd, reply_fd);
+			if (rc)
+				rc = error_kernel_key(keyid, -ENOKEY, 0,
+						      cred->lc_uid);
+			else
+				rc = lgssc_kr_negotiate(keyid, cred, &uparam,
+							req_fd, reply_fd);
 			goto out_reg;
 		} else {
 			logmsg(LL_TRACE, "forked child %d\n", child);
-			return rc;
+			return 0;
 		}
 
 out_reg:

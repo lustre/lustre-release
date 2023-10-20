@@ -106,8 +106,6 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <grp.h>
-#include <pwd.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/utsname.h>
@@ -320,48 +318,6 @@ static inline int lgss_krb5_get_default_ccache_name(krb5_context ctx,
 static int get_root_tgt_ccname(krb5_context ctx, char *ccname, int size)
 {
 	return lgss_krb5_get_default_ccache_name(ctx, ccname, size);
-}
-
-static int switch_identity(uid_t uid)
-{
-	struct passwd *pw;
-	int rc;
-
-	/* drop list of supp groups */
-	rc = setgroups(0, NULL);
-	if (rc == -1) {
-		logmsg(LL_ERR, "cannot drop list of supp groups: %s\n",
-		       strerror(errno));
-		rc = -errno;
-		goto end_switch;
-	}
-
-	pw = getpwuid(uid);
-	if (!pw) {
-		logmsg(LL_ERR, "cannot get pw entry for %u: %s\n",
-		       uid, strerror(errno));
-		rc = -errno;
-		goto end_switch;
-	}
-
-	rc = setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid);
-	if (rc == -1) {
-		logmsg(LL_ERR, "cannot set real gid to %u: %s\n",
-		       pw->pw_gid, strerror(errno));
-		rc = -errno;
-		goto end_switch;
-	}
-
-	rc = setresuid(uid, uid, uid);
-	if (rc == -1) {
-		logmsg(LL_ERR, "cannot set real uid to %u: %s\n",
-		       uid, strerror(errno));
-		rc = -errno;
-		goto end_switch;
-	}
-
-end_switch:
-	return rc;
 }
 
 static int acquire_user_cred_and_check(char *ccname)

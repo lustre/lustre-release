@@ -84,6 +84,8 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <syslog.h>
+#include <grp.h>
+#include <pwd.h>
 #include <gssapi/gssapi.h>
 #if defined(HAVE_KRB5) && !defined(GSS_C_NT_HOSTBASED_SERVICE)
 #include <gssapi/gssapi_generic.h>
@@ -534,4 +536,46 @@ int lgss_get_service_str(char **string, uint32_t lsvc, uint64_t tgt_nid)
 
 	logmsg(LL_DEBUG, "constructed service string: %s\n", *string);
 	return 0;
+}
+
+int switch_identity(uid_t uid)
+{
+	struct passwd *pw;
+	int rc;
+
+	/* drop list of supp groups */
+	rc = setgroups(0, NULL);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot drop list of supp groups: %s\n",
+		       strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	pw = getpwuid(uid);
+	if (!pw) {
+		logmsg(LL_ERR, "cannot get pw entry for %u: %s\n",
+		       uid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	rc = setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot set real gid to %u: %s\n",
+		       pw->pw_gid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+	rc = setresuid(uid, uid, uid);
+	if (rc == -1) {
+		logmsg(LL_ERR, "cannot set real uid to %u: %s\n",
+		       uid, strerror(errno));
+		rc = -errno;
+		goto end_switch;
+	}
+
+end_switch:
+	return rc;
 }

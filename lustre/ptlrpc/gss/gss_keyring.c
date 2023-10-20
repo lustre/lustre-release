@@ -367,17 +367,18 @@ static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 	LASSERT(key_get_payload(key, 0) == ctx);
 	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
 
-        /* must revoke the key, or others may treat it as newly created */
-        key_revoke_locked(key);
+	/* must revoke the key, or others may treat it as newly created */
+	key_revoke_locked(key);
+	request_key_unlink(key);
 
 	key_set_payload(key, 0, NULL);
-        ctx2gctx_keyring(ctx)->gck_key = NULL;
+	ctx2gctx_keyring(ctx)->gck_key = NULL;
 
-        /* once ctx get split from key, the timer is meaningless */
-        ctx_clear_timer_kr(ctx);
+	/* once ctx get split from key, the timer is meaningless */
+	ctx_clear_timer_kr(ctx);
 
-        ctx_put_kr(ctx, 1);
-        key_put(key);
+	ctx_put_kr(ctx, 1);
+	key_put(key);
 }
 
 /*
@@ -397,7 +398,6 @@ static void unbind_ctx_kr(struct ptlrpc_cli_ctx *ctx)
 		unbind_key_ctx(key, ctx);
 		up_write(&key->sem);
 		key_put(key);
-		request_key_unlink(key);
 	}
 }
 
@@ -684,14 +684,45 @@ static inline struct key *get_user_keyring(const struct cred *cred)
 /*
  * unlink request key from it's ring, which is linked during request_key().
  * sadly, we have to 'guess' which keyring it's linked to.
- *
- * FIXME this code is fragile, it depends on how request_key() is implemented.
  */
 static void request_key_unlink(struct key *key)
 {
-	const struct cred *cred = current_cred();
+	struct cred *cred = (struct cred *)current_cred(), *new_cred = NULL;
+#ifdef HAVE_USER_UID_KEYRING
+	struct key *root_uid_keyring = NULL;
+#endif
+	const struct cred *old_cred = NULL;
+	kuid_t uid = current_uid();
 	struct key *ring = NULL;
+	int res;
 
+	/* unlink key with user's creds if it's a user key */
+	if (!uid_eq(key->uid, current_uid())) {
+		new_cred = prepare_creds();
+		if (new_cred == NULL)
+			goto search;
+
+		new_cred->uid = key->uid;
+		new_cred->user->uid = key->uid;
+#ifdef HAVE_USER_UID_KEYRING
+		root_uid_keyring = current_cred()->user->uid_keyring;
+		new_cred->user->uid_keyring = NULL;
+#endif
+		old_cred = override_creds(new_cred);
+		cred = new_cred;
+	}
+
+	/* User keys are linked to the user keyring. So get it now. */
+	if (from_kuid(&init_user_ns, key->uid)) {
+		/* Getting a key(ring) normally increases its refcount by 1.
+		 * But if we overrode creds above, calling get_user_keyring()
+		 * will add one more ref, because of the user switch.
+		 */
+		ring = get_user_keyring(cred);
+		goto do_unlink;
+	}
+
+search:
 	switch (cred->jit_keyring) {
 	case KEY_REQKEY_DEFL_DEFAULT:
 	case KEY_REQKEY_DEFL_REQUESTOR_KEYRING:
@@ -738,16 +769,39 @@ static void request_key_unlink(struct key *key)
 		LBUG();
 	}
 
+do_unlink:
 	if (ring) {
-		int res = key_unlink(ring, key);
+		res = key_unlink(ring, key);
 		CDEBUG(D_SEC,
 		       "Unlink key %08x (%p) from keyring %08x: %d\n",
 		       key->serial, key, ring->serial, res);
+		/* matches key_get()/get_user_keyring() above */
 		key_put(ring);
+		/* If this is a user key, it added an extra ref on the user
+		 * keyring at link/instantiate stage. This ref needs to be
+		 * removed now that the key has been unlinked.
+		 */
+		if (from_kuid(&init_user_ns, key->uid))
+			key_put(ring);
 	} else {
 		CDEBUG(D_SEC,
 		       "Missing keyring, key %08x (%p) could not be unlinked, ignored\n",
 		       key->serial, key);
+	}
+
+	if (old_cred) {
+		revert_creds(old_cred);
+		put_cred(new_cred);
+		current_cred()->user->uid = uid;
+#ifdef HAVE_USER_UID_KEYRING
+		/* We are switching creds back, so need to drop ref on keyring
+		 * for kernel implementation based on user keyring pinned from
+		 * the user_struct struct.
+		 */
+		key_put(ring);
+		if (root_uid_keyring)
+			current_cred()->user->uid_keyring = root_uid_keyring;
+#endif
 	}
 }
 
@@ -912,6 +966,18 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	}
 	CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
 
+	/* We want user keys to be linked to the user keyring (see call to
+	 * keyctl_instantiate() from prepare_and_instantiate() in userspace).
+	 * But internally request_key() tends to also link the key to the
+	 * session keyring. So do our best to avoid that by trying to unlink
+	 * the key from the session keyring right now. It will spare us pain
+	 * when we need to remove the key later on.
+	 */
+	if (!is_root && current_cred()->session_keyring) {
+		key_get(current_cred()->session_keyring);
+		(void)key_unlink(current_cred()->session_keyring, key);
+		key_put(current_cred()->session_keyring);
+	}
 	/* once payload.data was pointed to a ctx, it never changes until
 	 * we de-associate them; but parallel request_key() may return
 	 * a key with payload.data == NULL at the same time. so we still
@@ -1017,9 +1083,6 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
 		key_revoke_locked(key);
 
 		up_write(&key->sem);
-
-		request_key_unlink(key);
-
 		key_put(key);
 	}
 }
@@ -1373,7 +1436,9 @@ int gss_kt_instantiate(struct key *key, struct key_preparsed_payload *prep)
 int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 {
 #endif
-	int rc;
+	struct key *keyring;
+	int uid, rc;
+
 	ENTRY;
 
 	CDEBUG(D_SEC, "instantiating key %08x (%p)\n", key->serial, key);
@@ -1397,23 +1462,29 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 	 *
 	 * the session keyring is created upon upcall, and don't change all
 	 * the way until upcall finished, so rcu lock is not needed here.
+	 *
+	 * But for end users, link to the user keyring. This simplifies key
+	 * management, makes them shared accross all user sessions, and avoids
+	 * unfortunate key leak if lfs flushctx is not called at user logout.
 	 */
-	LASSERT(current_cred()->session_keyring);
+	uid = from_kuid(&init_user_ns, current_uid());
+	if (uid == 0)
+		keyring = current_cred()->session_keyring;
+	else
+		keyring = get_user_keyring(current_cred());
 
 	lockdep_off();
-	rc = key_link(current_cred()->session_keyring, key);
+	rc = key_link(keyring, key);
 	lockdep_on();
 	if (unlikely(rc)) {
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
-		       key->serial,
-		       current_cred()->session_keyring->serial, rc);
+		       key->serial, keyring->serial, rc);
 		RETURN(rc);
 	}
 
 	CDEBUG(D_SEC,
 	      "key %08x (%p) linked to keyring %08x and instantiated, ctx %p\n",
-	       key->serial, key, current_cred()->session_keyring->serial,
-	       key_get_payload(key, 0));
+	       key->serial, key, keyring->serial, key_get_payload(key, 0));
 	RETURN(0);
 }
 
@@ -1580,10 +1651,10 @@ static int gss_kt_match_preparse(struct key_match_data *match_data)
 static
 void gss_kt_destroy(struct key *key)
 {
-        ENTRY;
+	ENTRY;
 	LASSERT(!key_get_payload(key, 0));
-        CDEBUG(D_SEC, "destroy key %p\n", key);
-        EXIT;
+	CDEBUG(D_SEC, "destroy key %08x %p\n", key->serial, key);
+	EXIT;
 }
 
 static
