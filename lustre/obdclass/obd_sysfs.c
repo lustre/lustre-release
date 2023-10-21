@@ -70,6 +70,9 @@
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <uapi/linux/lustre/lustre_ver.h>
 
+bool obd_enable_health_write;
+EXPORT_SYMBOL(obd_enable_health_write);
+
 struct static_lustre_uintvalue_attr {
 	struct {
 		struct attribute attr;
@@ -269,6 +272,30 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 	return len;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
+static ssize_t enable_health_write_show(struct kobject *kobj,
+					struct attribute *attr,
+					char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 obd_enable_health_write);
+}
+
+static ssize_t enable_health_write_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buf, size_t count)
+{
+	int rc = 0;
+
+	rc = kstrtobool(buf, &obd_enable_health_write);
+	if (rc)
+		return rc;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_health_write);
+#endif /* HAVE_SERVER_SUPPORT */
+
 static ssize_t jobid_var_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
@@ -437,6 +464,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_memused_max.attr,
 	&lustre_attr_memused.attr,
 #ifdef HAVE_SERVER_SUPPORT
+	&lustre_attr_enable_health_write.attr,
 	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_sattr_bulk_timeout.u.attr,
 	&lustre_attr_no_transno.attr,

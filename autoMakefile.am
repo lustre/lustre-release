@@ -356,11 +356,6 @@ debs: undef.h debs_common
 	elif test "x@ENABLE_FLOCK@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noflock"; \
 	fi; \
-	if test "x@ENABLE_HEALTH_WRITE@" = "xyes"; then \
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} health_write"; \
-	elif test "x@ENABLE_HEALTH_WRITE@" = "xno"; then \
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nohealth_write"; \
-	fi; \
 	if test "x@ENABLE_LRU_RESIZE@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} lru-resize"; \
 	elif test "x@ENABLE_LRU_RESIZE@" = "xno"; then \

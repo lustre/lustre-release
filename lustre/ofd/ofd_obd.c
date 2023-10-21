@@ -48,6 +48,7 @@
 #include <lustre_quota.h>
 #include <lustre_lfsck.h>
 #include <lustre_nodemap.h>
+#include <obd_support.h>
 
 /**
  * Initialize OFD per-export statistics.
@@ -1347,9 +1348,8 @@ static int ofd_precleanup(struct obd_device *obd)
  * - get statfs from the OSD. It checks just responsiveness of
  *   bottom device
  * - do write attempt on bottom device to check it is fully operational and
- *   is not stuck. This is expensive method and requires special configuration
- *   option --enable-health-write while building Lustre, it is turned off
- *   by default.
+ *   is not stuck. This is expensive method and must be manually enabled
+ *   by setting the enable_health_write sysfs parameter.
  *
  * \param[in] nul	not used
  * \param[in] obd	OBD device of OFD
@@ -1362,9 +1362,8 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	struct ofd_thread_info *info;
 	struct lu_env env;
-#ifdef USE_HEALTH_CHECK_WRITE
 	struct thandle *th;
-#endif
+	int rc1 = 0;
 	int rc = 0;
 
 	/* obd_proc_read_health pass NULL env, we need real one */
@@ -1380,7 +1379,9 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 	if (info->fti_u.osfs.os_state & OS_STATFS_READONLY)
 		GOTO(out, rc = -EROFS);
 
-#ifdef USE_HEALTH_CHECK_WRITE
+	if (!obd_enable_health_write)
+		goto out;
+
 	OBD_ALLOC(info->fti_buf.lb_buf, PAGE_SIZE);
 	if (!info->fti_buf.lb_buf)
 		GOTO(out, rc = -ENOMEM);
@@ -1394,21 +1395,28 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 
 	rc = dt_declare_record_write(&env, ofd->ofd_health_check_file,
 				     &info->fti_buf, info->fti_off, th);
-	if (rc == 0) {
-		th->th_sync = 1; /* sync IO is needed */
-		rc = dt_trans_start_local(&env, ofd->ofd_osd, th);
-		if (rc == 0)
-			rc = dt_record_write(&env, ofd->ofd_health_check_file,
-					     &info->fti_buf, &info->fti_off,
-					     th);
-	}
-	dt_trans_stop(&env, ofd->ofd_osd, th);
+	if (rc)
+		goto out_stop;
+
+	th->th_sync = 1; /* sync IO is needed */
+	rc = dt_trans_start_local(&env, ofd->ofd_osd, th);
+
+	if (rc)
+		goto out_stop;
+
+	rc = dt_record_write(&env, ofd->ofd_health_check_file,
+			     &info->fti_buf, &info->fti_off,
+			     th);
+
+out_stop:
+	rc1 = dt_trans_stop(&env, ofd->ofd_osd, th);
+	rc = rc ? rc : rc1;
 
 	OBD_FREE(info->fti_buf.lb_buf, PAGE_SIZE);
 
 	CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",
 	       rc);
-#endif
+
 out:
 	lu_env_fini(&env);
 	return !!rc;

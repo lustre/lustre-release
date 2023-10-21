@@ -10424,6 +10424,34 @@ test_69() {
 }
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
+test_70a() {
+	# Perform a really simple test of health write
+	# and health check
+
+	local orig_value="$(do_facet ost1 $LCTL get_param -n enable_health_write)"
+
+	stack_trap "do_facet ost1 $LCTL set_param enable_health_write $orig_value"
+
+	# Test with health write off
+	do_facet ost1 $LCTL set_param enable_health_write off ||
+		error "can't set enable_health_write off"
+	do_facet ost1 $LCTL get_param enable_health_write ||
+		error "can't get enable_health_write"
+
+	[[ "$(do_facet ost1 $LCTL get_param health_check)" =~ "healthy" ]] ||
+		error "not healthy (1)"
+
+	# Test with health write on
+	do_facet ost1 $LCTL set_param enable_health_write on ||
+		error "can't set enable_health_write on"
+	do_facet ost1 $LCTL get_param enable_health_write ||
+		error "can't get enable_health_write"
+
+	[[ "$(do_facet ost1 $LCTL get_param health_check)" =~ "healthy" ]] ||
+		error "not healthy (2)"
+}
+run_test 70a "verify health_check, health_write don't explode (on OST)"
+
 test_71() {
 	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir

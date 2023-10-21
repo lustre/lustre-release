@@ -189,26 +189,6 @@ AS_IF([test "x$enable_flock" != xno], [
 ]) # LC_CONFIG_FLOCK
 
 #
-# LC_CONFIG_HEALTH_CHECK_WRITE
-#
-# Turn off the actual write to the disk
-#
-AC_DEFUN([LC_CONFIG_HEALTH_CHECK_WRITE], [
-AC_MSG_CHECKING([whether to enable a write with the health check])
-AC_ARG_ENABLE([health_write],
-	AS_HELP_STRING([--enable-health_write],
-		[enable disk writes when doing health check]),
-	[], [enable_health_write="no"])
-AC_MSG_RESULT([$enable_health_write])
-AS_IF([test "x$enable_health_write" != xno], [
-	AC_DEFINE(USE_HEALTH_CHECK_WRITE, 1, [Write when Checking Health])
-	AC_SUBST(ENABLE_HEALTH_WRITE, yes)
-], [
-	AC_SUBST(ENABLE_HEALTH_WRITE, no)
-])
-]) # LC_CONFIG_HEALTH_CHECK_WRITE
-
-#
 # LC_CONFIG_LRU_RESIZE
 #
 AC_DEFUN([LC_CONFIG_LRU_RESIZE], [

@@ -70,6 +70,7 @@ extern int at_extra;
 extern unsigned long obd_max_dirty_pages;
 extern atomic_long_t obd_dirty_pages;
 extern char obd_jobid_var[];
+extern bool obd_enable_health_write;
 
 /* Some hash init argument constants */
 #define HASH_NID_STATS_BKT_BITS 5
