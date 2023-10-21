@@ -10557,7 +10557,7 @@ test_134() {
 		   $DEBUGFS -c -R 'dump $f $tmp_dir/$f' $mdt_dev 2>&1; \
 		   $CHECK_IAM -v $tmp_dir/$f 2>&1; \
 		   echo $cmd; eval $cmd 2>/dev/null;
-		   $CHECK_IAM -v $tmp_dir/$f 2>&1; echo \\\$?" >> $out
+		   $CHECK_IAM -v $tmp_dir/$f 2>&1; echo \\\$?" >> $out 2>&1
 	done
 
 	tail -n50 $out

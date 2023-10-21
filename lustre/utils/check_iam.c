@@ -36,10 +36,12 @@
 
 #include <sys/types.h>
 #include <linux/lustre/lustre_user.h>
+#include <linux/lustre/lustre_fid.h>
 #include <asm/byteorder.h>
 #include <lustre/libiam.h>
 
 static int verbose;
+static bool print_records;
 
 enum {
 	ROOT_NODE,
@@ -56,7 +58,7 @@ struct node_info {
 
 void usage(char *str)
 {
-	printf("usage: %s [-h] [-v] iam_file\n", str);
+	printf("Usage: %s [-hrv] iam_file\n", str);
 }
 
 struct iam_params {
@@ -119,7 +121,7 @@ int check_idle_blocks(char *buf, struct iam_params *params)
 }
 
 static int check_entries(unsigned char *entries, size_t size, int count,
-			 struct iam_params *params)
+			 struct iam_params *params, int block_type)
 {
 	unsigned int ptr;
 	int i, j, rc;
@@ -135,32 +137,85 @@ static int check_entries(unsigned char *entries, size_t size, int count,
 			return -1;
 		}
 
-		if (verbose)
-			printf("key:");
+		if (block_type == INDEX_NODE) {
 
-		for (j = 0; j < params->keysize; j++, entries++)
 			if (verbose)
-				printf("%02x", *entries);
+				printf("key:");
 
-		ptr = __le32_to_cpu(*((__le32 *)entries));
+			for (j = 0; j < params->keysize; j++, entries++)
+				if (verbose)
+					printf("%02x", *entries);
 
-		if (ptr >= params->blocks_count) {
-			params->rc = -1;
-			rc = -1;
+			ptr = __le32_to_cpu(*((__le32 *)entries));
+
+			if (ptr >= params->blocks_count) {
+				params->rc = -1;
+				rc = -1;
+			}
+			if (verbose)
+				printf(", ptr: %u%s\n", ptr,
+				       rc ? " wrong" : "");
+
+			entries += params->ptrsize;
+
+			if (rc)
+				continue;
+
+			if (params->node_info[ptr].recycled && verbose) {
+				printf("Reference to recycled node (%u) from node %lu\n",
+					ptr, params->current_block);
+			}
+			params->node_info[ptr].referenced = 1;
+		} else if (block_type == LEAF_NODE) {
+			struct lu_fid fid;
+			struct osd_inode_id *inode;
+
+			fid_be_to_cpu(&fid, (struct lu_fid *)entries);
+			inode = (struct osd_inode_id *)(entries + sizeof(fid));
+			entries += params->keysize + params->recsize;
+
+			if (print_records)
+				printf(DFID" %u/%u\n", PFID(&fid),
+				       __be32_to_cpu(inode->oii_ino),
+				       __be32_to_cpu(inode->oii_gen));
 		}
-		if (verbose)
-			printf(", ptr: %u%s\n", ptr, rc ? " wrong" : "");
 
-		entries += params->ptrsize;
+	}
 
-		if (rc)
-			continue;
+	return 0;
+}
 
-		if (params->node_info[ptr].recycled && verbose) {
-			printf("Reference to recycled node (%u) from node %lu\n",
-				ptr, params->current_block);
-		}
-		params->node_info[ptr].referenced = 1;
+static int check_leaf(char *buf, struct iam_params *params)
+{
+	struct iam_leaf_head *leaf;
+	int counted_limit;
+	int leaf_count;
+
+	leaf = (struct iam_leaf_head *)buf;
+
+	params->node_info[params->current_block].node_type = LEAF_NODE;
+
+	counted_limit = node_limit(sizeof(struct iam_leaf_head),
+				   params->blocksize,
+				   params->keysize + params->recsize);
+	leaf_count = __le16_to_cpu(leaf->ill_count);
+
+	if (verbose)
+		printf("Leaf block, count %i, limit %i\n", leaf_count,
+		       counted_limit);
+
+	if (leaf_count > counted_limit) {
+		printf("More elements (%i) then limit (%i)\n", leaf_count,
+			counted_limit);
+		return -1;
+	}
+
+	if (check_entries((unsigned char *)(buf + sizeof(struct iam_leaf_head)),
+			  params->blocksize - sizeof(struct iam_leaf_head),
+			  counted_limit < leaf_count ?
+			  counted_limit : leaf_count, params, LEAF_NODE)) {
+		printf("Broken entries\n");
+		return -1;
 	}
 
 	return 0;
@@ -171,15 +226,16 @@ static int check_index(char *buf, struct iam_params *params)
 	struct iam_index_head *index;
 	int counted_limit;
 	struct dx_countlimit *limit;
+	int limit_count;
 
 	index = (struct iam_index_head *)buf;
 	limit = &index->limit;
 
 	params->node_info[params->current_block].node_type = INDEX_NODE;
 
+	limit_count = __le16_to_cpu(limit->count);
 	if (verbose)
-		printf("Index block, count %i, limit %i\n",
-		       __le16_to_cpu(limit->count),
+		printf("Index block, count %i, limit %i\n", limit_count,
 		       __le16_to_cpu(limit->limit));
 
 	counted_limit = node_limit(params->node_gap, params->blocksize,
@@ -192,9 +248,8 @@ static int check_index(char *buf, struct iam_params *params)
 	}
 
 
-	if (__le16_to_cpu(limit->count) > __le16_to_cpu(limit->limit)) {
-		printf("More elements (%i) then limit (%i)\n",
-			__le16_to_cpu(limit->count),
+	if (limit_count > __le16_to_cpu(limit->limit)) {
+		printf("More elements (%i) then limit (%i)\n", limit_count,
 			__le16_to_cpu(limit->limit));
 		return -1;
 	}
@@ -203,7 +258,7 @@ static int check_index(char *buf, struct iam_params *params)
 	if (check_entries(index->entries,
 			  params->blocksize - offsetof(struct iam_index_head,
 						       entries),
-			  __le16_to_cpu(limit->count) - 1, params)) {
+			  limit_count - 1, params, INDEX_NODE)) {
 		printf("Broken entries\n");
 		return -1;
 	}
@@ -232,7 +287,7 @@ static int check_root(char *buf, size_t size, struct iam_params *params)
 			printf("LVAR,");
 	} else {
 		printf("Bad magic %llu\n", __le64_to_cpu(root->ilr_magic));
-		return -1;
+		params->rc = -1;
 	}
 
 	limit = &root->limit;
@@ -316,7 +371,7 @@ static int check_root(char *buf, size_t size, struct iam_params *params)
 	/* cound - 1, because limit is entry itself */
 	if (check_entries(root->entries,
 			  size - offsetof(struct iam_lfix_root, entries),
-			  min - 1, params)) {
+			  min - 1, params, INDEX_NODE)) {
 		printf("Broken entries\n");
 		return -1;
 	}
@@ -337,8 +392,10 @@ static int check_block(char *buf, struct iam_params *params)
 	case __cpu_to_le16(IAM_LEAF_HEADER_MAGIC):
 			if (verbose)
 				printf("FIX leaf,");
-			params->node_info[params->current_block].node_type =
-				LEAF_NODE;
+			if (check_leaf(buf, params)) {
+				printf("Broken leaf block\n");
+				params->rc = -1;
+			}
 			break;
 	case __cpu_to_le16(IAM_LVAR_ROOT_MAGIC):
 			if (verbose)
@@ -419,17 +476,20 @@ int main(int argc, char **argv)
 	struct stat sb;
 
 	params.rc = 0;
+	print_records = false;
 	do {
-		opt = getopt(argc, argv, "hv");
+		opt = getopt(argc, argv, "hvr");
 		switch (opt) {
 		case 'v':
 				verbose++;
+				break;
+		case 'r':
+				print_records = true;
 		case -1:
 				break;
 		default:
 				fprintf(stderr, "Unable to parse options.");
 		case 'h':
-				printf("HERE\n");
 				usage(argv[0]);
 				return 0;
 		}
@@ -486,7 +546,7 @@ int main(int argc, char **argv)
 	rc = check_root(buf, params.blocksize, &params);
 	if (rc) {
 		printf("Root node is insane\n");
-		params.rc = rc;
+		goto err;
 	}
 
 	params.current_block++;

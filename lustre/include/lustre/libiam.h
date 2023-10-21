@@ -124,6 +124,12 @@ struct lvar_leaf_entry {
 	u_int8_t  vle_key[0];
 } __attribute__((packed));
 
+struct osd_inode_id {
+	__u32 oii_ino;
+	__u32 oii_gen;
+} __attribute__ ((packed));
+
+
 enum {
 	LVAR_PAD   = 4,
 	LVAR_ROUND = LVAR_PAD - 1
