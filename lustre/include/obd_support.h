@@ -749,7 +749,6 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
 #define OBD_FAIL_OSP_INVALID_LOGID		0x2106
 #define OBD_FAIL_OSP_CON_EVENT_DELAY		0x2107
-#define OBD_FAIL_OSP_FORCE_NEW_SEQ		0x210a
 
 /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200

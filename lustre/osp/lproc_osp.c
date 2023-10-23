@@ -732,6 +732,44 @@ static ssize_t prealloc_status_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(prealloc_status);
 
+static ssize_t prealloc_force_new_seq_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+
+	if (!osp->opd_pre)
+		return -EINVAL;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", osp->opd_pre_force_new_seq);
+}
+
+static ssize_t prealloc_force_new_seq_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	bool val;
+	int rc;
+
+	if (!osp->opd_pre)
+		return -EINVAL;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	osp->opd_pre_force_new_seq = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(prealloc_force_new_seq);
+
 /**
  * Show the number of RPCs in processing (including uncommitted by OST) plus
  * changes to sync, i.e. this is the total number of changes OST needs to apply
@@ -1147,6 +1185,7 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_prealloc_next_seq.attr,
 	&lustre_attr_prealloc_last_seq.attr,
 	&lustre_attr_prealloc_reserved.attr,
+	&lustre_attr_prealloc_force_new_seq.attr,
 	&lustre_attr_sync_in_flight.attr,
 	&lustre_attr_sync_in_progress.attr,
 	&lustre_attr_sync_changes.attr,

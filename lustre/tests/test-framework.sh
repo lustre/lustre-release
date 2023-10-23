@@ -11477,20 +11477,32 @@ exhaust_all_precreations() {
 	sleep_maxage
 }
 
+force_new_seq_ost() {
+	local dir=$1
+	local mfacet=$2
+	local OSTIDX=$3
+	local OST=$(ostname_from_index $OSTIDX)
+	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet $OST)
+
+	do_facet $mfacet $LCTL set_param \
+		osp.$mdtosc_proc.prealloc_force_new_seq=1
+	# consume preallocated objects, to wake up precreate thread
+	consume_precreations $dir $mfacet $OSTIDX
+	do_facet $mfacet $LCTL set_param \
+		osp.$mdtosc_proc.prealloc_force_new_seq=0
+}
+
 force_new_seq() {
 	local mfacet=$1
 	local MDTIDX=$(facet_index $mfacet)
 	local MDT=$(mdtname_from_index $MDTIDX $DIR)
 	local i
 
-#define OBD_FAIL_OSP_FORCE_NEW_SEQ		0x210a
-	do_facet $mfacet $LCTL set_param fail_loc=0x210a
 	mkdir_on_mdt -i $MDTIDX $DIR/${MDT}
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		# consume preallocated objects, to wake up precreate thread
-		consume_precreations $DIR/${MDT} $mfacet $i
+		force_new_seq_ost $DIR/${MDT} $mfacet $i &
 	done
-	do_facet $mfacet $LCTL set_param fail_loc=0
+	wait
 	rm -rf $DIR/${MDT}
 }
 

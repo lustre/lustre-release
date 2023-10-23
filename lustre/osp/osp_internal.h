@@ -83,9 +83,11 @@ struct osp_precreate {
 	int				 osp_pre_min_create_count;
 	int				 osp_pre_max_create_count;
 	/* whether to increase precreation window next time or not */
-	int				 osp_pre_create_slow;
+	unsigned int			 osp_pre_create_slow:1,
 	/* cleaning up orphans or recreating missing objects */
-	int				 osp_pre_recovering;
+					 osp_pre_recovering:1,
+	/* force new seq rollover */
+					 osp_pre_force_new_seq:1;
 };
 
 struct osp_update_request_sub {
@@ -288,6 +290,7 @@ struct osp_device {
 #define opd_pre_max_create_count	opd_pre->osp_pre_max_create_count
 #define opd_pre_create_slow		opd_pre->osp_pre_create_slow
 #define opd_pre_recovering		opd_pre->osp_pre_recovering
+#define opd_pre_force_new_seq		opd_pre->osp_pre_force_new_seq
 
 extern struct kmem_cache *osp_object_kmem;
 
@@ -589,7 +592,7 @@ static bool osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid,
 	/* Skip IDIF sequence for MDT0000 */
 	if (fid_is_idif(fid))
 		return true;
-	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_FORCE_NEW_SEQ))
+	if (osp->opd_pre_force_new_seq)
 		return true;
 	return fid_oid(fid) >= min(OBIF_MAX_OID, seq_width);
 }
