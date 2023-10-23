@@ -64,7 +64,7 @@
 struct job_stat {
 	struct hlist_node	js_hash;	/* hash struct for this jobid */
 	struct list_head	js_list;	/* on ojs_list, with ojs_lock */
-	atomic_t		js_refcount;	/* num users of this struct */
+	struct kref		js_refcount;	/* num users of this struct */
 	char			js_jobid[LUSTRE_JOBID_SIZE]; /* job name + NUL*/
 	ktime_t			js_time_init;	/* time of initial stat*/
 	ktime_t			js_time_latest;	/* time of most recent stat*/
@@ -101,14 +101,14 @@ static void *job_stat_object(struct hlist_node *hnode)
 
 static bool job_getref_try(struct job_stat *job)
 {
-	return atomic_inc_not_zero(&job->js_refcount);
+	return kref_get_unless_zero(&job->js_refcount);
 }
 
 static void job_stat_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
 	job = hlist_entry(hnode, struct job_stat, js_hash);
-	atomic_inc(&job->js_refcount);
+	kref_get(&job->js_refcount);
 }
 
 static void job_reclaim_rcu(struct rcu_head *head)
@@ -119,11 +119,12 @@ static void job_reclaim_rcu(struct rcu_head *head)
 	OBD_FREE_PTR(job);
 }
 
-static void job_free(struct job_stat *job)
+static void job_free(struct kref *kref)
 {
-	LASSERT(atomic_read(&job->js_refcount) == 0);
-	LASSERT(job->js_jobstats != NULL);
+	struct job_stat *job = container_of(kref, struct job_stat,
+					    js_refcount);
 
+	LASSERT(job->js_jobstats != NULL);
 	spin_lock(&job->js_jobstats->ojs_lock);
 	list_del_rcu(&job->js_list);
 	spin_unlock(&job->js_jobstats->ojs_lock);
@@ -133,9 +134,8 @@ static void job_free(struct job_stat *job)
 
 static void job_putref(struct job_stat *job)
 {
-	LASSERT(atomic_read(&job->js_refcount) > 0);
-	if (atomic_dec_and_test(&job->js_refcount))
-		job_free(job);
+	LASSERT(kref_read(&job->js_refcount) > 0);
+	kref_put(&job->js_refcount, job_free);
 }
 
 static void job_stat_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -286,7 +286,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	job->js_jobstats = jobs;
 	INIT_HLIST_NODE(&job->js_hash);
 	INIT_LIST_HEAD(&job->js_list);
-	atomic_set(&job->js_refcount, 1);
+	kref_init(&job->js_refcount);
 
 	return job;
 }
