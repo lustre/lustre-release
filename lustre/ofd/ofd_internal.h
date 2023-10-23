@@ -179,6 +179,13 @@ static inline char *ofd_name(struct ofd_device *ofd)
 	return ofd->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name;
 }
 
+/**
+ * for compatibility, filter_fid could occupy more space in newer version and
+ * downgraded Lustre would fail reading it with -ERANGE, so it can read it
+ * again with more space to hold it.
+ */
+#define FILTER_FID_EXTRA_SIZE  32
+
 struct ofd_object {
 	struct lu_object_header	ofo_header;
 	struct dt_object	ofo_obj;
