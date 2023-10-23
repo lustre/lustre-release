@@ -294,6 +294,7 @@ static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 struct lnet_fail_ping {
 	struct lnet_processid		lfp_id;
 	int				lfp_errno;
+	char				lfp_msg[256];
 };
 
 struct lnet_genl_ping_list {
@@ -310,8 +311,8 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_genl_ping_list *plist,
 		     int n_ids);
 
-static int lnet_discover(struct lnet_process_id id, __u32 force,
-			 struct lnet_process_id __user *ids, int n_ids);
+static int lnet_discover(struct lnet_processid *id, u32 force,
+			 struct lnet_genl_ping_list *dlists);
 
 static int
 sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
@@ -4612,17 +4613,50 @@ report_ping_err:
 
 	case IOC_LIBCFS_DISCOVER: {
 		struct lnet_ioctl_ping_data *discover = arg;
+		struct lnet_process_id __user *ids;
+		struct lnet_genl_ping_list dlists;
+		struct lnet_processid id;
 		struct lnet_peer *lp;
+		int count, i;
 
-		rc = lnet_discover(discover->ping_id, discover->op_param,
-				   discover->ping_buf,
-				   discover->ping_count);
+		if (discover->ping_count <= 0)
+			return -EINVAL;
+
+		genradix_init(&dlists.lgpl_list);
+		/* If the user buffer has more space than the lnet_interfaces_max,
+		 * then only fill it up to lnet_interfaces_max.
+		 */
+		if (discover->ping_count > lnet_interfaces_max)
+			discover->ping_count = lnet_interfaces_max;
+
+		id.pid = discover->ping_id.pid;
+		lnet_nid4_to_nid(discover->ping_id.nid, &id.nid);
+		rc = lnet_discover(&id, discover->op_param, &dlists);
 		if (rc < 0)
-			return rc;
+			goto report_discover_err;
+		count = rc;
+
+		ids = discover->ping_buf;
+		for (i = 0; i < count; i++) {
+			struct lnet_processid *result;
+			struct lnet_process_id tmpid;
+
+			result = genradix_ptr(&dlists.lgpl_list, i);
+			memset(&tmpid, 0, sizeof(tmpid));
+			tmpid.pid = result->pid;
+			tmpid.nid = lnet_nid_to_nid4(&result->nid);
+			if (copy_to_user(&ids[i], &tmpid, sizeof(tmpid))) {
+				rc = -EFAULT;
+				goto report_discover_err;
+			}
+
+			if (i >= discover->ping_count)
+				break;
+		}
+		rc = 0;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_nid4_to_nid(discover->ping_id.nid, &nid);
-		lp = lnet_find_peer(&nid);
+		lp = lnet_find_peer(&id.nid);
 		if (lp) {
 			discover->ping_id.nid =
 				lnet_nid_to_nid4(&lp->lp_primary_nid);
@@ -4631,8 +4665,10 @@ report_ping_err:
 		}
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
-		discover->ping_count = rc;
-		return 0;
+		discover->ping_count = count;
+report_discover_err:
+		genradix_free(&dlists.lgpl_list);
+		return rc;
 	}
 
 	case IOC_LIBCFS_ADD_UDSP: {
@@ -7836,12 +7872,293 @@ static int lnet_old_ping_show_dump(struct sk_buff *msg,
 }
 #endif
 
+static const struct ln_key_list discover_err_props_list = {
+	.lkl_maxattr			= LNET_ERR_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_ERR_ATTR_HDR]		= {
+			.lkp_value		= "manage",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_ERR_ATTR_TYPE]		= {
+			.lkp_value		= "discover",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_ERR_ATTR_ERRNO]		= {
+			.lkp_value		= "errno",
+			.lkp_data_type		= NLA_S16,
+		},
+		[LNET_ERR_ATTR_DESCR]		= {
+			.lkp_value		= "descr",
+			.lkp_data_type		= NLA_STRING,
+		},
+	},
+};
+
+static const struct ln_key_list discover_props_list = {
+	.lkl_maxattr			= LNET_PING_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PING_ATTR_HDR]            = {
+			.lkp_value              = "discover",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_PING_ATTR_PRIMARY_NID]	= {
+			.lkp_value		= "primary nid",
+			.lkp_data_type          = NLA_STRING
+		},
+		[LNET_PING_ATTR_ERRNO]		= {
+			.lkp_value		= "errno",
+			.lkp_data_type		= NLA_S16
+		},
+		[LNET_PING_ATTR_MULTIRAIL]	= {
+			.lkp_value              = "Multi-Rail",
+			.lkp_data_type          = NLA_FLAG
+		},
+		[LNET_PING_ATTR_PEER_NI_LIST]	= {
+			.lkp_value		= "peer_ni",
+			.lkp_key_format         = LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type          = NLA_NESTED
+		},
+	},
+};
+
+static int lnet_ping_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	const struct ln_key_list *all[] = {
+		&discover_props_list, &ping_peer_ni_list, NULL
+	};
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	struct lnet_genl_ping_list dlists;
+	int msg_len, rem, rc = 0, i;
+	bool clear_hdr = false;
+	struct sk_buff *reply;
+	struct nlattr *attr;
+	void *hdr = NULL;
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		return -ENOMSG;
+	}
+
+	if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+		GENL_SET_ERR_MSG(info, "only NLM_F_CREATE setting is allowed");
+		return -EINVAL;
+	}
+
+	reply = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
+	if (!reply) {
+		GENL_SET_ERR_MSG(info,
+				 "fail to allocate reply");
+		return -ENOMEM;
+	}
+
+	genradix_init(&dlists.lgpl_failed);
+	dlists.lgpl_failed_count = 0;
+	genradix_init(&dlists.lgpl_list);
+	dlists.lgpl_list_count = 0;
+
+	rc = lnet_genl_send_scalar_list(reply, info->snd_portid,
+					info->snd_seq, &lnet_family,
+					NLM_F_CREATE | NLM_F_MULTI,
+					LNET_CMD_PING, all);
+	if (rc < 0) {
+		GENL_SET_ERR_MSG(info,
+				 "failed to send key table");
+		GOTO(report_err, rc);
+	}
+
+	nla_for_each_attr(attr, params, msg_len, rem) {
+		struct nlattr *nids;
+		int rem2;
+
+		/* We only care about the NID list to discover with */
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(nids, attr, rem2) {
+			char nid[LNET_NIDSTR_SIZE + 1];
+			struct lnet_processid id;
+			struct nlattr *nid_list;
+			struct lnet_peer *lp;
+			ssize_t len;
+
+			if (nla_type(nids) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			memset(nid, 0, sizeof(nid));
+			rc = nla_strscpy(nid, nids, sizeof(nid));
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to get NID");
+				GOTO(report_err, rc);
+			}
+
+			len = libcfs_strid(&id, strim(nid));
+			if (len < 0) {
+				struct lnet_fail_ping *fail;
+
+				fail = genradix_ptr_alloc(&dlists.lgpl_failed,
+							  dlists.lgpl_failed_count++,
+							  GFP_KERNEL);
+				if (!fail) {
+					GENL_SET_ERR_MSG(info,
+							 "failed to allocate improper NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+				memset(fail->lfp_msg, '\0', sizeof(fail->lfp_msg));
+				snprintf(fail->lfp_msg, sizeof(fail->lfp_msg),
+					 "cannot parse NID '%s'", strim(nid));
+				fail->lfp_id = id;
+				fail->lfp_errno = len;
+				continue;
+			}
+
+			if (LNET_NID_IS_ANY(&id.nid))
+				continue;
+
+			rc = lnet_discover(&id,
+					   info->nlhdr->nlmsg_flags & NLM_F_EXCL,
+					   &dlists);
+			if (rc < 0) {
+				struct lnet_fail_ping *fail;
+
+				fail = genradix_ptr_alloc(&dlists.lgpl_failed,
+							  dlists.lgpl_failed_count++,
+							  GFP_KERNEL);
+				if (!fail) {
+					GENL_SET_ERR_MSG(info,
+							 "failed to allocate failed NID");
+					GOTO(report_err, rc = -ENOMEM);
+				}
+				memset(fail->lfp_msg, '\0', sizeof(fail->lfp_msg));
+				snprintf(fail->lfp_msg, sizeof(fail->lfp_msg),
+					 "failed to discover %s",
+					 libcfs_nidstr(&id.nid));
+				fail->lfp_id = id;
+				fail->lfp_errno = rc;
+				continue;
+			}
+
+			/* create the genetlink message header */
+			hdr = genlmsg_put(reply, info->snd_portid, info->snd_seq,
+					  &lnet_family, NLM_F_MULTI, LNET_CMD_PING);
+			if (!hdr) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to allocate hdr");
+				GOTO(report_err, rc = -ENOMEM);
+			}
+
+			if (!clear_hdr) {
+				nla_put_string(reply, LNET_PING_ATTR_HDR, "");
+				clear_hdr = true;
+			}
+
+			lp = lnet_find_peer(&id.nid);
+			if (lp) {
+				nla_put_string(reply, LNET_PING_ATTR_PRIMARY_NID,
+					       libcfs_nidstr(&lp->lp_primary_nid));
+				if (lnet_peer_is_multi_rail(lp))
+					nla_put_flag(reply, LNET_PING_ATTR_MULTIRAIL);
+				lnet_peer_decref_locked(lp);
+			}
+
+			nid_list = nla_nest_start(reply, LNET_PING_ATTR_PEER_NI_LIST);
+			for (i = 0; i < dlists.lgpl_list_count; i++) {
+				struct lnet_processid *found;
+				struct nlattr *nid_attr;
+				char *idstr;
+
+				found = genradix_ptr(&dlists.lgpl_list, i);
+				if (nid_is_lo0(&found->nid))
+					continue;
+
+				nid_attr = nla_nest_start(reply, i + 1);
+				if (id.pid == LNET_PID_LUSTRE)
+					idstr = libcfs_nidstr(&found->nid);
+				else
+					idstr = libcfs_idstr(found);
+				nla_put_string(reply, LNET_PING_PEER_NI_ATTR_NID, idstr);
+				nla_nest_end(reply, nid_attr);
+			}
+			nla_nest_end(reply, nid_list);
+
+			genlmsg_end(reply, hdr);
+		}
+	}
+
+	if (dlists.lgpl_failed_count) {
+		int flags = NLM_F_CREATE | NLM_F_REPLACE | NLM_F_MULTI;
+		const struct ln_key_list *fail[] = {
+			&discover_err_props_list, NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(reply, info->snd_portid,
+						info->snd_seq, &lnet_family,
+						flags, LNET_CMD_PING, fail);
+		if (rc < 0) {
+			GENL_SET_ERR_MSG(info,
+					 "failed to send new key table");
+			GOTO(report_err, rc);
+		}
+
+		for (i = 0; i < dlists.lgpl_failed_count; i++) {
+			struct lnet_fail_ping *fail;
+
+			hdr = genlmsg_put(reply, info->snd_portid, info->snd_seq,
+					  &lnet_family, NLM_F_MULTI, LNET_CMD_PING);
+			if (!hdr) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to send failed values");
+				GOTO(report_err, rc = -ENOMSG);
+			}
+
+			fail = genradix_ptr(&dlists.lgpl_failed, i);
+			if (i == 0)
+				nla_put_string(reply, LNET_ERR_ATTR_HDR, "");
+
+			nla_put_string(reply, LNET_ERR_ATTR_TYPE, "\n");
+			nla_put_s16(reply, LNET_ERR_ATTR_ERRNO,
+				    fail->lfp_errno);
+			nla_put_string(reply, LNET_ERR_ATTR_DESCR,
+				       fail->lfp_msg);
+			genlmsg_end(reply, hdr);
+		}
+	}
+
+	nlh = nlmsg_put(reply, info->snd_portid, info->snd_seq, NLMSG_DONE, 0,
+			NLM_F_MULTI);
+	if (!nlh) {
+		genlmsg_cancel(reply, hdr);
+		GENL_SET_ERR_MSG(info,
+				 "failed to finish message");
+		GOTO(report_err, rc = -EMSGSIZE);
+	}
+
+report_err:
+	genradix_free(&dlists.lgpl_failed);
+	genradix_free(&dlists.lgpl_list);
+
+	if (rc < 0) {
+		genlmsg_cancel(reply, hdr);
+		nlmsg_free(reply);
+	} else {
+		rc = genlmsg_reply(reply, info);
+	}
+
+	return rc;
+}
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
 	{ .name =	"peer",		},
 	{ .name	=	"route",	},
 	{ .name	=	"ping",		},
+	{ .name =	"discover",	},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -7883,6 +8200,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 	},
 	{
 		.cmd		= LNET_CMD_PING,
+		.flags		= GENL_ADMIN_PERM,
 #ifdef HAVE_NETLINK_CALLBACK_START
 		.start		= lnet_ping_show_start,
 		.dumpit		= lnet_ping_show_dump,
@@ -7890,6 +8208,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_ping_show_dump,
 #endif
 		.done		= lnet_ping_show_done,
+		.doit		= lnet_ping_cmd,
 	},
 };
 
@@ -8159,39 +8478,23 @@ fail_ping_buffer_decref:
 }
 
 static int
-lnet_discover(struct lnet_process_id id4, __u32 force,
-	      struct lnet_process_id __user *ids, int n_ids)
+lnet_discover(struct lnet_processid *pid, u32 force,
+	      struct lnet_genl_ping_list *dlist)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer_ni *p;
 	struct lnet_peer *lp;
-	struct lnet_process_id *buf;
-	struct lnet_processid id;
 	int cpt;
-	int i;
 	int rc;
 
-	if (n_ids <= 0 ||
-	    id4.nid == LNET_NID_ANY)
+	if (LNET_NID_IS_ANY(&pid->nid))
 		return -EINVAL;
 
-	lnet_pid4_to_pid(id4, &id);
-	if (id.pid == LNET_PID_ANY)
-		id.pid = LNET_PID_LUSTRE;
-
-	/*
-	 * If the user buffer has more space than the lnet_interfaces_max,
-	 * then only fill it up to lnet_interfaces_max.
-	 */
-	if (n_ids > lnet_interfaces_max)
-		n_ids = lnet_interfaces_max;
-
-	CFS_ALLOC_PTR_ARRAY(buf, n_ids);
-	if (!buf)
-		return -ENOMEM;
+	if (pid->pid == LNET_PID_ANY)
+		pid->pid = LNET_PID_LUSTRE;
 
 	cpt = lnet_net_lock_current();
-	lpni = lnet_peerni_by_nid_locked(&id.nid, NULL, cpt);
+	lpni = lnet_peerni_by_nid_locked(&pid->nid, NULL, cpt);
 	if (IS_ERR(lpni)) {
 		rc = PTR_ERR(lpni);
 		goto out;
@@ -8217,32 +8520,33 @@ lnet_discover(struct lnet_process_id id4, __u32 force,
 	 * and lookup the lpni again
 	 */
 	lnet_peer_ni_decref_locked(lpni);
-	lpni = lnet_peer_ni_find_locked(&id.nid);
+	lpni = lnet_peer_ni_find_locked(&pid->nid);
 	if (!lpni) {
 		rc = -ENOENT;
 		goto out;
 	}
 	lp = lpni->lpni_peer_net->lpn_peer;
 
-	i = 0;
+	dlist->lgpl_list_count = 0;
 	p = NULL;
 	while ((p = lnet_get_next_peer_ni_locked(lp, NULL, p)) != NULL) {
-		buf[i].pid = id.pid;
-		buf[i].nid = lnet_nid_to_nid4(&p->lpni_nid);
-		if (++i >= n_ids)
-			break;
+		struct lnet_processid *id;
+
+		id = genradix_ptr_alloc(&dlist->lgpl_list,
+					dlist->lgpl_list_count++, GFP_KERNEL);
+		if (!id) {
+			rc = -ENOMEM;
+			goto out_decref;
+		}
+		id->pid = pid->pid;
+		id->nid = p->lpni_nid;
 	}
-	rc = i;
+	rc = dlist->lgpl_list_count;
 
 out_decref:
 	lnet_peer_ni_decref_locked(lpni);
 out:
 	lnet_net_unlock(cpt);
-
-	if (rc >= 0)
-		if (copy_to_user(ids, buf, rc * sizeof(*buf)))
-			rc = -EFAULT;
-	CFS_FREE_PTR_ARRAY(buf, n_ids);
 
 	return rc;
 }

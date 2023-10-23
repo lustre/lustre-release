@@ -966,6 +966,9 @@ static void yaml_lnet_print_error(int op, char *cmd, const char *errstr)
 	case 0:
 		flag = "del";
 		break;
+	case -1:
+		flag = "manage";
+		break;
 	case NLM_F_DUMP:
 	default:
 		flag = "show";
@@ -3979,6 +3982,283 @@ old_api:
 	return rc;
 }
 
+static int yaml_lnet_ping_display(yaml_parser_t *reply)
+{
+	yaml_emitter_t debug;
+	bool done = false;
+	int rc, rc2 = 0;
+	long error = 0;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 1)
+		yaml_emitter_set_output_file(&debug, stdout);
+	if (rc == 0)
+		goto emitter_error;
+
+	while (!done) {
+		yaml_event_t event;
+
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			goto report_reply_error;
+
+		if (event.type != YAML_SCALAR_EVENT) {
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			done = (event.type == YAML_DOCUMENT_END_EVENT);
+			continue;
+		}
+
+		if (strcmp((char *)event.data.scalar.value, "errno") == 0) {
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto report_reply_error;
+
+			rc = parse_long((char *)event.data.scalar.value,
+					&error);
+			if (rc != 0)
+				goto report_reply_error;
+
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			rc2 = -1;
+		} else if (error != 0 &&
+			   strcmp((char *)event.data.scalar.value,
+				  "descr") == 0) {
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			rc = yaml_parser_parse(reply, &event);
+			if (rc == 0)
+				goto report_reply_error;
+
+			if (strncmp((char *)event.data.scalar.value,
+				    "failed to ", strlen("failed to ")) == 0) {
+				char err[256];
+
+				snprintf(err, sizeof(err), "%s: %s",
+					(char *)event.data.scalar.value,
+					strerror(-error));
+				yaml_scalar_event_initialize(&event, NULL,
+							     (yaml_char_t *)YAML_STR_TAG,
+							     (yaml_char_t *)err,
+							     strlen(err), 1, 0,
+							     YAML_PLAIN_SCALAR_STYLE);
+			}
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			errno = 0;
+		} else {
+			rc = yaml_emitter_emit(&debug, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+	}
+emitter_error:
+	if (rc == 0)
+		yaml_emitter_log_error(&debug, stderr);
+report_reply_error:
+	yaml_emitter_delete(&debug);
+
+	return rc2 ? rc2 : rc;
+}
+
+static int yaml_lnet_ping(char *group, int timeout, char *src_nidstr,
+			  int start, int end, char **nids, int flags)
+{
+	struct nl_sock *sk = NULL;
+	const char *msg = NULL;
+	yaml_emitter_t output;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	int rc, i;
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		msg = yaml_parser_get_reader_error(&reply);
+		goto free_reply;
+	}
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&output);
+	if (rc == 0) {
+		msg = "failed to initialize emitter";
+		goto free_reply;
+	}
+
+	rc = yaml_emitter_set_output_netlink(&output, sk, LNET_GENL_NAME,
+					     LNET_GENL_VERSION, LNET_CMD_PING,
+					     flags);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&output);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)group,
+				     strlen(group), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	if (timeout != 1000 || src_nidstr) {
+		if (src_nidstr) {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"source",
+						     strlen("source"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)src_nidstr,
+						     strlen(src_nidstr), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (timeout != 1000) {
+			char time[23];
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"timeout",
+						     strlen("timeout"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			snprintf(time, sizeof(time), "%u", timeout);
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)time,
+						     strlen(time), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
+	}
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"nids",
+				     strlen("nids"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_sequence_start_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_SEQ_TAG,
+					     1, YAML_FLOW_SEQUENCE_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	for (i = start; i < end; i++) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)nids[i],
+					     strlen(nids[i]), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_sequence_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&output);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	} else {
+		rc = yaml_lnet_ping_display(&reply);
+		if (rc == 0)
+			msg = yaml_parser_get_reader_error(&reply);
+	}
+	yaml_emitter_delete(&output);
+free_reply:
+	if (rc == 0) {
+		yaml_lnet_print_error(-1, group, msg);
+		rc = -EINVAL;
+	}
+
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
 static int jt_ping(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
@@ -4034,19 +4314,22 @@ static int jt_discover(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
+	int flags = NLM_F_CREATE;
 	int force = 0;
 	int rc = 0, opt;
-
 	const char *const short_options = "fh";
 	const struct option long_options[] = {
 		{ .name = "force",	.has_arg = no_argument,	.val = 'f' },
 		{ .name = "help",	.has_arg = no_argument,	.val = 'h' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'f':
+			/* BSD treats NLM_F_CREATE | NLM_F_EXCL as an add */
+			flags |= NLM_F_EXCL;
 			force = 1;
 			break;
 		case 'h':
@@ -4062,6 +4345,13 @@ static int jt_discover(int argc, char **argv)
 	if (optind == argc) {
 		printf("Missing nid argument\n");
 		return -1;
+	}
+
+	rc = yaml_lnet_ping("discover", 1000, NULL, optind, argc, argv,
+			    flags);
+	if (rc <= 0) {
+		if (rc != -EOPNOTSUPP)
+			return rc;
 	}
 
 	for (; optind < argc; optind++)

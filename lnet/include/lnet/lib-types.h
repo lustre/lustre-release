@@ -457,6 +457,34 @@ struct lnet_net {
  * the differences.
  */
 
+/** enum lnet_err_atrrs		      - LNet error netlink properties
+ *					For LNet request of multiple items
+ *					sometimes those items exist and
+ *					others don't. In the case the item
+ *					item doesn't exist we return the
+ *					error state.
+ *
+ * @LNET_ERR_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LNET_ERR_ATTR_HDR:			Name of the error header
+ *					(NLA_NUL_STRING)
+ * @LNET_ERR_ATTR_TYPE:			Which LNet function since error is for
+ *					(NLA_STRING)
+ * @LNET_ERR_TYPE_ERRNO:		Error code for failure (NLA_S16)
+ * @LNET_ERR_DESCR:			Complete error message (NLA_STRING)
+ */
+enum lnet_err_attrs {
+	LNET_ERR_ATTR_UNSPEC = 0,
+
+	LNET_ERR_ATTR_HDR,
+	LNET_ERR_ATTR_TYPE,
+	LNET_ERR_ATTR_ERRNO,
+	LNET_ERR_ATTR_DESCR,
+	__LNET_ERR_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_ERR_ATTR_MAX (__LNET_ERR_ATTR_MAX_PLUS_ONE - 1)
+
 /** enum lnet_net_attrs		      - LNet NI netlink properties
  *					attributes that describe LNet 'NI'
  *					These values are used to piece together
