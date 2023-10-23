@@ -764,22 +764,6 @@ extern char obd_jobid_var[];
 
 /* PLEASE, KEEP NUMBERS UP TO 0x3000 RESERVED FOR OBD_FAIL_MDS_* */
 
-/* LNet is allocated failure locations 0xe000 to 0xffff */
-/* Assign references to moved code to reduce code changes */
-#define OBD_FAIL_PRECHECK(id)                   (unlikely(CFS_FAIL_PRECHECK(id)))
-#define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)
-#define OBD_FAIL_CHECK_QUIET(id)                CFS_FAIL_CHECK_QUIET(id)
-#define OBD_FAIL_CHECK_VALUE(id, value)         CFS_FAIL_CHECK_VALUE(id, value)
-#define OBD_FAIL_CHECK_ORSET(id, value)         CFS_FAIL_CHECK_ORSET(id, value)
-#define OBD_FAIL_CHECK_RESET(id, value)         CFS_FAIL_CHECK_RESET(id, value)
-#define OBD_FAIL_RETURN(id, ret)                CFS_FAIL_RETURN(id, ret)
-#define OBD_FAIL_TIMEOUT(id, secs)              CFS_FAIL_TIMEOUT(id, secs)
-#define OBD_FAIL_TIMEOUT_MS(id, ms)             CFS_FAIL_TIMEOUT_MS(id, ms)
-#define OBD_FAIL_TIMEOUT_ORSET(id, value, secs) CFS_FAIL_TIMEOUT_ORSET(id, value, secs)
-#define OBD_RACE(id)                            CFS_RACE(id)
-#define OBD_FAIL_ONCE                           CFS_FAIL_ONCE
-#define OBD_FAILED                              CFS_FAILED
-
 #define LUT_FAIL_CLASS(fail_id)			(((fail_id) >> 8) << 16)
 #define LUT_FAIL_MGT				LUT_FAIL_CLASS(OBD_FAIL_MGS)
 #define LUT_FAIL_MDT				LUT_FAIL_CLASS(OBD_FAIL_MDS)

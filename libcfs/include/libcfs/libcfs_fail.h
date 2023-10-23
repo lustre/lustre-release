@@ -79,9 +79,9 @@ enum {
 
 static inline bool CFS_FAIL_PRECHECK(__u32 id)
 {
-	return cfs_fail_loc != 0 &&
+	return unlikely(cfs_fail_loc != 0 &&
 	      ((cfs_fail_loc & CFS_FAIL_MASK_LOC) == (id & CFS_FAIL_MASK_LOC) ||
-	       (cfs_fail_loc & id & CFS_FAULT));
+	       (cfs_fail_loc & id & CFS_FAULT)));
 }
 
 #define UNLIKELY_CHECK_SET(id, value, set, quiet) \
@@ -92,8 +92,8 @@ static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
 	unsigned long failed_once = cfs_fail_loc & CFS_FAILED; /* ok if racy */
 	int ret = 0;
 
-	if (unlikely(CFS_FAIL_PRECHECK(id) &&
-		     (ret = __cfs_fail_check_set(id, value, set)))) {
+	if (CFS_FAIL_PRECHECK(id) &&
+	    (ret = __cfs_fail_check_set(id, value, set))) {
 		if (quiet && failed_once) {
 			CDEBUG(D_INFO, "*** cfs_fail_loc=%x, val=%u***\n",
 			       id, value);
@@ -146,7 +146,7 @@ static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
 
 static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 {
-	if (unlikely(CFS_FAIL_PRECHECK(id)))
+	if (CFS_FAIL_PRECHECK(id))
 		return __cfs_fail_timeout_set(id, value, ms, set);
 	else
 		return 0;
