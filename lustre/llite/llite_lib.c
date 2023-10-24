@@ -356,7 +356,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_REP_MBITS |
 				   OBD_CONNECT2_ATOMIC_OPEN_LOCK |
 				   OBD_CONNECT2_BATCH_RPC |
-				   OBD_CONNECT2_DMV_IMP_INHERIT;
+				   OBD_CONNECT2_DMV_IMP_INHERIT |
+				   OBD_CONNECT2_UNALIGNED_DIO;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))
@@ -581,7 +582,8 @@ retry_connect:
 				  OBD_CONNECT_FLAGS2 | OBD_CONNECT_GRANT_SHRINK;
 	data->ocd_connect_flags2 = OBD_CONNECT2_LOCKAHEAD |
 				   OBD_CONNECT2_INC_XID | OBD_CONNECT2_LSEEK |
-				   OBD_CONNECT2_REP_MBITS;
+				   OBD_CONNECT2_REP_MBITS |
+				   OBD_CONNECT2_UNALIGNED_DIO;
 
 	if (!CFS_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_GRANT_PARAM))
 		data->ocd_connect_flags |= OBD_CONNECT_GRANT_PARAM;

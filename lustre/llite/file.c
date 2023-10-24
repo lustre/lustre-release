@@ -1669,6 +1669,11 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	/* FLR: only use non-delay I/O for read as there is only one
 	 * avaliable mirror for write. */
 	io->ci_ndelay = !(iot == CIT_WRITE);
+	/* unaligned DIO has compat issues with some older servers, but we find
+	 * out if there are such servers while setting up the IO, so it starts
+	 * out allowed
+	 */
+	io->ci_allow_unaligned_dio = true;
 
 	ll_io_set_mirror(io, file);
 }

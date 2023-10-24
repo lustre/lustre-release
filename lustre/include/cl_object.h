@@ -1945,11 +1945,18 @@ struct cl_io {
 	 * this DIO is at least partly unaligned, and so the unaligned DIO
 	 * path is being used for this entire IO
 	 */
-			     ci_unaligned_dio:1;
+			     ci_unaligned_dio:1,
+	/**
+	 * there is a compat issue with unupgraded ZFS targets which means we
+	 * must refuse to do unaligned DIO to these targets, so this is used
+	 * to annotate that in the IO (since we learn if there is a problematic
+	 * OST/MDT target as we build the IO)
+	 */
+			     ci_allow_unaligned_dio:1,
 	/**
 	 * Bypass quota check
 	 */
-	unsigned	     ci_noquota:1,
+			     ci_noquota:1,
 	/**
 	 * io_uring direct IO with flags IOCB_NOWAIT.
 	 */

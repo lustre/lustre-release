@@ -540,6 +540,12 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	io = lcc->lcc_io;
 	LASSERT(io != NULL);
 
+	/* this means we encountered an old server which can't safely support
+	 * unaligned DIO, so we have to disable it
+	 */
+	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio)
+		RETURN(-EINVAL);
+
 	/* if one part of an I/O is unaligned, just handle all of it that way -
 	 * otherwise we create significant complexities with managing the iovec
 	 * in different ways, etc, all for very marginal benefits
