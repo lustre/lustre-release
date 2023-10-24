@@ -376,7 +376,7 @@ struct lfsck_assistant_object {
 	struct lu_fid		lso_fid;
 	__u64			lso_oit_cookie;
 	struct lu_attr		lso_attr;
-	atomic_t		lso_ref;
+	struct kref		lso_ref;
 	unsigned int		lso_dead:1,
 				lso_is_dir:1;
 };
@@ -1533,17 +1533,18 @@ static inline void lfsck_lmv_header_cpu_to_le(struct lmv_mds_md_v1 *dst,
 static inline struct lfsck_assistant_object *
 lfsck_assistant_object_get(struct lfsck_assistant_object *lso)
 {
-	atomic_inc(&lso->lso_ref);
+	kref_get(&lso->lso_ref);
 
 	return lso;
 }
 
 static inline void
-lfsck_assistant_object_put(const struct lu_env *env,
-			   struct lfsck_assistant_object *lso)
+lfsck_assistant_object_put(struct kref *kref)
 {
-	if (atomic_dec_and_test(&lso->lso_ref))
-		OBD_FREE_PTR(lso);
+	struct lfsck_assistant_object *lso;
+
+	lso = container_of(kref, struct lfsck_assistant_object, lso_ref);
+	OBD_FREE_PTR(lso);
 }
 
 static inline struct thandle*

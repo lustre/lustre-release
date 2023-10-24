@@ -93,7 +93,7 @@ static void lfsck_namespace_assistant_req_fini(const struct lu_env *env,
 	if (lnr->lnr_lmv != NULL)
 		lfsck_lmv_put(env, lnr->lnr_lmv);
 
-	lfsck_assistant_object_put(env, lar->lar_parent);
+	kref_put(&lar->lar_parent->lso_ref, lfsck_assistant_object_put);
 	OBD_FREE(lnr, lnr->lnr_size);
 }
 
@@ -6525,7 +6525,7 @@ next:
 
 out:
 	if (lso != NULL && !IS_ERR(lso))
-		lfsck_assistant_object_put(env, lso);
+		kref_put(&lso->lso_ref, lfsck_assistant_object_put);
 
 	lfsck_close_dir(env, lfsck, rc);
 	if (rc <= 0)

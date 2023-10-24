@@ -2004,7 +2004,7 @@ lfsck_assistant_object_init(const struct lu_env *env, const struct lu_fid *fid,
 	if (attr != NULL)
 		lso->lso_attr = *attr;
 
-	atomic_set(&lso->lso_ref, 1);
+	kref_init(&lso->lso_ref);
 	lso->lso_oit_cookie = cookie;
 	if (is_dir)
 		lso->lso_is_dir = 1;

@@ -788,7 +788,7 @@ checkpoint:
 
 out:
 	if (lso != NULL)
-		lfsck_assistant_object_put(env, lso);
+		kref_put(&lso->lso_ref, lfsck_assistant_object_put);
 
 	return rc;
 }

@@ -212,7 +212,7 @@ static void lfsck_layout_assistant_req_fini(const struct lu_env *env,
 		container_of(lar, struct lfsck_layout_req, llr_lar);
 
 	lfsck_object_put(env, llr->llr_child);
-	lfsck_assistant_object_put(env, lar->lar_parent);
+	kref_put(&lar->lar_parent->lso_ref, lfsck_assistant_object_put);
 	OBD_FREE_PTR(llr);
 }
 
@@ -5767,7 +5767,7 @@ next:
 
 out:
 	if (lso != NULL)
-		lfsck_assistant_object_put(env, lso);
+		kref_put(&lso->lso_ref, lfsck_assistant_object_put);
 
 	return rc;
 }
