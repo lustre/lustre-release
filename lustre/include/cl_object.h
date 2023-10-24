@@ -1946,7 +1946,9 @@ struct cl_io {
 	 * to block races between page cache invalidation and page cache
 	 * filling functions (fault, read, ...)
 	 */
-			     ci_invalidate_page_cache:1;
+			     ci_invalidate_page_cache:1,
+	/* was this IO switched from BIO to DIO for hybrid IO? */
+			     ci_hybrid_switched:1;
 
 	/**
 	 * How many times the read has retried before this one.

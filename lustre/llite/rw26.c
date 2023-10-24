@@ -504,12 +504,26 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
 		unaligned = true;
 
+	lcc = ll_cl_find(inode);
+	if (lcc == NULL)
+		RETURN(-EIO);
+
+	env = lcc->lcc_env;
+	LASSERT(!IS_ERR(env));
+	vio = vvp_env_io(env);
+	io = lcc->lcc_io;
+	LASSERT(io != NULL);
+
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%llx, pages %zd (max %lu)%s\n",
+	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%llx, pages %zd (max %lu)%s%s%s%s\n",
 	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
 	       file_offset, file_offset,
 	       (count >> PAGE_SHIFT) + !!(count & ~PAGE_MASK),
-	       MAX_DIO_SIZE >> PAGE_SHIFT, unaligned ? ", unaligned" : "");
+	       MAX_DIO_SIZE >> PAGE_SHIFT,
+	       io->ci_dio_lock ? ", locked" : ", lockless",
+	       io->ci_parallel_dio ? ", parallel" : "",
+	       unaligned ? ", unaligned" : "",
+	       io->ci_hybrid_switched ? ", hybrid" : "");
 
 	/* Check EOF by ourselves */
 	if (rw == READ && file_offset >= i_size_read(inode))
@@ -525,16 +539,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	 */
 	if (unaligned && iov_iter_is_pipe(iter))
 		RETURN(0);
-
-	lcc = ll_cl_find(inode);
-	if (lcc == NULL)
-		RETURN(-EIO);
-
-	env = lcc->lcc_env;
-	LASSERT(!IS_ERR(env));
-	vio = vvp_env_io(env);
-	io = lcc->lcc_io;
-	LASSERT(io != NULL);
 
 	/* this means we encountered an old server which can't safely support
 	 * unaligned DIO, so we have to disable it

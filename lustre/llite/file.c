@@ -1668,6 +1668,8 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	 * out allowed
 	 */
 	io->ci_allow_unaligned_dio = true;
+	if (args)
+		io->ci_hybrid_switched = args->via_hybrid_switched;
 
 	ll_io_set_mirror(io, file);
 }
@@ -1768,7 +1770,9 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	if (iocb_ki_flags_check(flags, DIRECT)) {
 		if (iocb_ki_flags_check(flags, APPEND))
 			dio_lock = true;
-		if (!is_sync_kiocb(args->u.normal.via_iocb))
+		if (!is_sync_kiocb(args->u.normal.via_iocb) &&
+		/* hybrid IO is also potentially async */
+		    !args->via_hybrid_switched)
 			is_aio = true;
 
 		/* the kernel does not support AIO on pipes, and parallel DIO
@@ -2175,17 +2179,18 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	ll_ras_enter(file, iocb->ki_pos, iov_iter_count(to));
 
+	args = ll_env_args(env);
+	args->u.normal.via_iter = to;
+	args->u.normal.via_iocb = iocb;
+
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_READ,
 					   iov_iter_count(to))) {
 #ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
+		args->via_hybrid_switched = 1;
 #endif
 	}
-
-	args = ll_env_args(env);
-	args->u.normal.via_iter = to;
-	args->u.normal.via_iocb = iocb;
 
 	result = ll_do_fast_read(iocb, to);
 	if (result < 0 || iov_iter_count(to) == 0)
@@ -2289,14 +2294,16 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
  */
 static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
+	struct file *file = iocb->ki_filp;
 	struct vvp_io_args *args;
 	struct lu_env *env;
-	ssize_t rc_tiny = 0, rc_normal;
-	struct file *file = iocb->ki_filp;
 	int flags = iocb_ki_flags_get(file, iocb);
+	ktime_t kstart = ktime_get();
+	bool hybrid_switched = false;
+	ssize_t rc_tiny = 0;
+	ssize_t rc_normal;
 	__u16 refcheck;
 	bool cached;
-	ktime_t kstart = ktime_get();
 	int result;
 
 	ENTRY;
@@ -2329,6 +2336,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 #ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
+		hybrid_switched = true;
 #endif
 	}
 
@@ -2355,6 +2363,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	args = ll_env_args(env);
 	args->u.normal.via_iter = from;
 	args->u.normal.via_iocb = iocb;
+	args->via_hybrid_switched = hybrid_switched;
 
 	rc_normal = ll_file_io_generic(env, args, file, CIT_WRITE,
 				       &iocb->ki_pos, iov_iter_count(from));
