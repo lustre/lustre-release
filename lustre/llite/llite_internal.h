@@ -575,6 +575,12 @@ __u32 ll_secctx_name_get(struct ll_sb_info *sbi, const char **secctx_name);
 int ll_security_secctx_name_filter(struct ll_sb_info *sbi, int xattr_type,
 				   const char *suffix);
 
+static inline bool obd_connect_has_unaligned_dio(struct obd_connect_data *data)
+{
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		data->ocd_connect_flags2 & OBD_CONNECT2_UNALIGNED_DIO;
+}
+
 static inline bool obd_connect_has_enc(struct obd_connect_data *data)
 {
 #ifdef HAVE_LUSTRE_CRYPTO
@@ -825,6 +831,7 @@ enum ll_sbi_flags {
 	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
 	LL_SBI_ENCRYPT_NAME,		/* name encryption */
 	LL_SBI_UNALIGNED_DIO,		/* unaligned DIO */
+	LL_SBI_HYBRID_IO,		/* allow BIO as DIO */
 	LL_SBI_NUM_FLAGS
 };
 

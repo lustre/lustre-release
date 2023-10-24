@@ -202,6 +202,7 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	set_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags);
 	ll_sbi_set_encrypt(sbi, true);
 	ll_sbi_set_name_encrypt(sbi, true);
+	set_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
 
 	/* root squash */
 	sbi->ll_squash.rsi_uid = 0;
@@ -648,6 +649,14 @@ retry_connect:
 		LCONSOLE_WARN("Test dummy encryption mode enabled\n");
 	}
 
+	/* If unaligned DIO is not supported, hybrid IO will result in EINVAL,
+	 * so turn hybrid IO off by default.  If the user turns it back on, they
+	 * will get EINVAL, but should be able to figure out the cause.
+	 */
+	if (test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags) &&
+	    !obd_connect_has_unaligned_dio(&sbi->ll_dt_obd->u.lov.lov_ocd))
+		clear_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
+
 	sbi->ll_dt_exp->exp_connect_data = *data;
 
 	/* Don't change value if it was specified in the config log */
@@ -1019,6 +1028,7 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_TINY_WRITE,		"tiny_write"},
 	{LL_SBI_FILE_HEAT,		"file_heat"},
 	{LL_SBI_PARALLEL_DIO,		"parallel_dio"},
+	{LL_SBI_HYBRID_IO,		"hybrid_io"},
 	{LL_SBI_ENCRYPT_NAME,		"name_encrypt"},
 	{LL_SBI_UNALIGNED_DIO,		"unaligned_dio"},
 };

@@ -1713,6 +1713,9 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 	 * because they're visible in userspace.  so we check for IOCB_DIRECT
 	 */
 #ifdef IOCB_DIRECT
+	struct inode *inode = file_inode(file);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+
 	ENTRY;
 
 	/* it doesn't make sense to switch unless it's READ or WRITE */
@@ -1726,6 +1729,8 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 	if (iocb->ki_flags & IOCB_DIRECT)
 		RETURN(false);
 
+	if (!test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags))
+		RETURN(false);
 #endif
 	RETURN(false);
 }
