@@ -267,7 +267,7 @@ struct config_llog_data {
 	struct lustre_handle	    cld_lockh;
 	struct config_llog_instance cld_cfg;
 	struct list_head	    cld_list_chain;/* on config_llog_list */
-	atomic_t		    cld_refcount;
+	refcount_t		    cld_refcount;
 	struct config_llog_data	   *cld_sptlrpc;/* depended sptlrpc log */
 	struct config_llog_data	   *cld_params;	/* common parameters log */
 	struct config_llog_data	   *cld_recover;/* imperative recover log */

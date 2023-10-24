@@ -124,9 +124,9 @@ static DEFINE_SPINLOCK(config_list_lock);	/* protects config_llog_list */
 static int config_log_get(struct config_llog_data *cld)
 {
 	ENTRY;
-	atomic_inc(&cld->cld_refcount);
+	refcount_inc(&cld->cld_refcount);
 	CDEBUG(D_INFO, "log %s (%p) refs %d\n", cld->cld_logname, cld,
-		atomic_read(&cld->cld_refcount));
+		refcount_read(&cld->cld_refcount));
 	RETURN(0);
 }
 
@@ -140,11 +140,10 @@ static void config_log_put(struct config_llog_data *cld)
 		RETURN_EXIT;
 
 	CDEBUG(D_INFO, "log %s(%p) refs %d\n", cld->cld_logname, cld,
-		atomic_read(&cld->cld_refcount));
-	LASSERT(atomic_read(&cld->cld_refcount) > 0);
+		refcount_read(&cld->cld_refcount));
 
 	/* spinlock to make sure no item with 0 refcount in the list */
-	if (atomic_dec_and_lock(&cld->cld_refcount, &config_list_lock)) {
+	if (refcount_dec_and_lock(&cld->cld_refcount, &config_list_lock)) {
 		list_del(&cld->cld_list_chain);
 		spin_unlock(&config_list_lock);
 
@@ -233,7 +232,7 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 	cld->cld_cfg.cfg_flags = 0;
 	cld->cld_cfg.cfg_sb = sb;
 	cld->cld_type = type;
-	atomic_set(&cld->cld_refcount, 1);
+	refcount_set(&cld->cld_refcount, 1);
 
 	/* Keep the mgc around until we are done */
 	cld->cld_mgcexp = class_export_get(obd->obd_self_export);
@@ -606,8 +605,6 @@ static void do_requeue(struct config_llog_data *cld)
 	int rc = 0;
 	ENTRY;
 
-	LASSERT(atomic_read(&cld->cld_refcount) > 0);
-
 	/*
 	 * Do not run mgc_process_log on a disconnected export or an
 	 * export which is being disconnected. Take the client
@@ -723,9 +720,8 @@ static void mgc_requeue_add(struct config_llog_data *cld)
 	ENTRY;
 
 	CDEBUG(D_INFO, "log %s: requeue (r=%d sp=%d st=%x)\n",
-		cld->cld_logname, atomic_read(&cld->cld_refcount),
+		cld->cld_logname, refcount_read(&cld->cld_refcount),
 		cld->cld_stopping, rq_state);
-	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
 	/* lets cancel an existent lock to mark cld as "lostlock" */
 	CDEBUG(D_INFO, "lockh %#llx\n", cld->cld_lockh.cookie);
@@ -916,9 +912,6 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			CDEBUG(D_INFO, "missing data, won't requeue\n");
 			break;
 		}
-
-		/* held at mgc_process_log(). */
-		LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
 		lock->l_ast_data = NULL;
 		cld->cld_lockh.cookie = 0;
