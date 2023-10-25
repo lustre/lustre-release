@@ -890,12 +890,16 @@ static int lov_delete_composite(const struct lu_env *env,
 
 	lov_layout_wait(env, lov);
 	lov_foreach_layout_entry(lov, entry) {
-		if (entry->lle_lsme && lsme_is_foreign(entry->lle_lsme))
-			continue;
-		if (!lov_pattern_supported(
-				lov_pattern(entry->lle_lsme->lsme_pattern)) ||
-		    !lov_supported_comp_magic(entry->lle_lsme->lsme_magic))
-			continue;
+		struct lov_stripe_md_entry *lsme = entry->lle_lsme;
+
+		if (lsme) {
+			if (lsme_is_foreign(lsme))
+				continue;
+			if (!lov_pattern_supported(lov_pattern(
+							lsme->lsme_pattern)) ||
+			    !lov_supported_comp_magic(lsme->lsme_magic))
+				continue;
+		}
 
 		rc = lov_delete_raid0(env, lov, entry);
 		if (rc)
