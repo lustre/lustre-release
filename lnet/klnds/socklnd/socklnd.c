@@ -111,7 +111,8 @@ static int ksocknal_ip2index(struct sockaddr *addr, struct lnet_ni *ni,
 
 	if ((ret == -1) ||
 	    ((dev->reg_state == NETREG_UNREGISTERING) ||
-	     (dev->operstate != IF_OPER_UP)) ||
+	     ((dev->operstate != IF_OPER_UP) &&
+	      (dev->operstate != IF_OPER_UNKNOWN))) ||
 	    (lnet_get_link_status(dev) == 0))
 		*dev_status = 0;
 
@@ -1961,7 +1962,7 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 	struct ksock_net *net;
 	struct ksock_net *cnxt;
 	int ifindex;
-	unsigned char link_down = !(operstate == IF_OPER_UP);
+	unsigned char link_down;
 	struct in_device *in_dev;
 	bool found_ip = false;
 	struct ksock_interface *ksi = NULL;
@@ -1971,6 +1972,7 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 	int state;
 	DECLARE_CONST_IN_IFADDR(ifa);
 
+	link_down = !((operstate == IF_OPER_UP) || (operstate == IF_OPER_UNKNOWN));
 	ifindex = dev->ifindex;
 
 	if (!ksocknal_data.ksnd_nnets)
