@@ -75,7 +75,7 @@
  *
  * \param[in] pool	pool descriptor on which to gain reference
  */
-static void pool_getref(struct pool_desc *pool)
+static void pool_getref(struct lod_pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
 	atomic_inc(&pool->pool_refcount);
@@ -93,7 +93,7 @@ static void pool_getref(struct pool_desc *pool)
  *
  * \param[in] pool	pool descriptor to drop reference on and possibly free
  */
-void lod_pool_putref(struct pool_desc *pool)
+void lod_pool_putref(struct lod_pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
@@ -116,7 +116,7 @@ static u32 pool_hashfh(const void *data, u32 len, u32 seed)
 
 static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 {
-	const struct pool_desc *pool = obj;
+	const struct lod_pool_desc *pool = obj;
 	const char *pool_name = arg->key;
 
 	return strcmp(pool_name, pool->pool_name);
@@ -124,8 +124,8 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 
 static const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
-	.key_offset	= offsetof(struct pool_desc, pool_name),
-	.head_offset	= offsetof(struct pool_desc, pool_hash),
+	.key_offset	= offsetof(struct lod_pool_desc, pool_name),
+	.head_offset	= offsetof(struct lod_pool_desc, pool_hash),
 	.hashfn		= pool_hashfh,
 	.obj_cmpfn	= pool_cmpfn,
 	.automatic_shrinking = true,
@@ -139,7 +139,7 @@ static const struct rhashtable_params pools_hash_params = {
 struct lod_pool_iterator {
 	unsigned int	  lpi_magic;	/* POOL_IT_MAGIC */
 	unsigned int	  lpi_idx;	/* from 0 to pool_tgt_size - 1 */
-	struct pool_desc *lpi_pool;
+	struct lod_pool_desc *lpi_pool;
 };
 
 /**
@@ -201,7 +201,7 @@ static void *pool_proc_next(struct seq_file *seq, void *v, loff_t *pos)
  */
 static void *pool_proc_start(struct seq_file *seq, loff_t *pos)
 {
-	struct pool_desc *pool = seq->private;
+	struct lod_pool_desc *pool = seq->private;
 	struct lod_pool_iterator *iter;
 
 	pool_getref(pool);
@@ -337,7 +337,7 @@ const static struct proc_ops pool_proc_operations = {
  * \param[in] level	Lustre debug level (D_INFO, D_WARN, D_ERROR, etc)
  * \param[in] pool	pool descriptor to be dumped
  */
-void lod_dump_pool(int level, struct pool_desc *pool)
+void lod_dump_pool(int level, struct lod_pool_desc *pool)
 {
 	unsigned int i;
 
@@ -361,7 +361,7 @@ void lod_dump_pool(int level, struct pool_desc *pool)
 
 static void pools_hash_exit(void *vpool, void *data)
 {
-	struct pool_desc *pool = vpool;
+	struct lod_pool_desc *pool = vpool;
 
 	lod_pool_putref(pool);
 }
@@ -378,7 +378,7 @@ void lod_pool_hash_destroy(struct rhashtable *tbl)
 
 bool lod_pool_exists(struct lod_device *lod, char *poolname)
 {
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lod->lod_pools_hash_body,
@@ -388,9 +388,9 @@ bool lod_pool_exists(struct lod_device *lod, char *poolname)
 	return pool != NULL;
 }
 
-struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
+struct lod_pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
 {
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lod->lod_pools_hash_body,
@@ -404,7 +404,7 @@ struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
 
 static int lod_ost_pool_weights_seq_show(struct seq_file *m, void *data)
 {
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	struct lod_device *lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
 
 	return lod_tgt_weights_seq_show(m, lod,	&pool->pool_obds, false);
@@ -415,7 +415,7 @@ lod_ost_pool_weights_seq_write(struct file *file, const char __user *buf,
 			       size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	struct lod_device *lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
 
 	return lod_tgt_weights_seq_write(m, buf, count, lod, &pool->pool_obds,
@@ -447,7 +447,7 @@ static struct ldebugfs_vars ldebugfs_lod_pool_vars[] = {
 int lod_pool_new(struct obd_device *obd, char *poolname)
 {
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
-	struct pool_desc  *new_pool;
+	struct lod_pool_desc  *new_pool;
 	int rc;
 	ENTRY;
 
@@ -558,7 +558,7 @@ out_free_pool:
 int lod_pool_del(struct obd_device *obd, char *poolname)
 {
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
-	struct pool_desc  *pool;
+	struct lod_pool_desc  *pool;
 	ENTRY;
 
 	/* lookup and kill hash reference */
@@ -613,7 +613,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 {
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
 	struct obd_uuid ost_uuid;
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 	struct lu_tgt_desc *tgt;
 	int rc = -EINVAL;
 	ENTRY;
@@ -672,7 +672,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
 	struct lu_tgt_desc *ost;
 	struct obd_uuid	ost_uuid;
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 	int rc = -EINVAL;
 	ENTRY;
 
@@ -720,7 +720,7 @@ out:
  * \retval		0 successfully found index in \a pool
  * \retval		negative error if device not found in \a pool
  */
-int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool)
+int lod_check_index_in_pool(__u32 idx, struct lod_pool_desc *pool)
 {
 	int rc;
 
@@ -740,9 +740,9 @@ int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool)
  * \retval	pointer to pool descriptor on success
  * \retval	NULL if \a poolname could not be found or poolname is empty
  */
-struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
+struct lod_pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 {
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 
 	if (poolname[0] == '\0' || lov_pool_is_reserved(poolname))
 		return NULL;
@@ -765,7 +765,7 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 }
 
 void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
-			      struct pool_desc *pool)
+			      struct lod_pool_desc *pool)
 {
 	__u64 avail_bytes = 0, total_bytes = 0;
 	struct lu_tgt_pool *osts;
@@ -817,7 +817,7 @@ out_sem:
 void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 			      char **poolname)
 {
-	struct pool_desc *pool;
+	struct lod_pool_desc *pool;
 
 	if (!poolname || !*poolname || (*poolname)[0] == '\0')
 		return;

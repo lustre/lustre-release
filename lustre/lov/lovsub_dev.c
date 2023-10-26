@@ -41,12 +41,9 @@
  *  @{
  */
 
-/*****************************************************************************
- *
+/**
  * Lov-sub device and device type functions.
- *
  */
-
 static int lovsub_device_init(const struct lu_env *env, struct lu_device *d,
 			      const char *name, struct lu_device *next)
 {

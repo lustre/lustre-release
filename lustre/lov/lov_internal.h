@@ -194,7 +194,7 @@ static inline bool lov_supported_comp_magic(unsigned int magic)
 #define pool_tgt_array(p) ((p)->pool_obds.op_array)
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
 
-struct pool_desc {
+struct lov_pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct lu_tgt_pool	 pool_obds;
 	atomic_t		 pool_refcount;
@@ -342,6 +342,6 @@ static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
 	}
 }
 
-struct pool_desc *lov_pool_find(struct obd_device *obd, char *poolname);
-void lov_pool_putref(struct pool_desc *pool);
+struct lov_pool_desc *lov_pool_find(struct obd_device *obd, char *poolname);
+void lov_pool_putref(struct lov_pool_desc *pool);
 #endif

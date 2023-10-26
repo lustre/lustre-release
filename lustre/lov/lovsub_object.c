@@ -41,10 +41,8 @@
  *  @{
  */
 
-/*****************************************************************************
- *
+/**
  * Lovsub object operations.
- *
  */
 
 static int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,

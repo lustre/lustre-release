@@ -95,9 +95,10 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
 
 		CDEBUG(D_INODE, "MDT ID "DOSTID" on OST[%u]: s=%llu (%d) m=%llu"
 		       " a=%llu c=%llu b=%llu\n", POSTID(&lsm->lsm_oi),
-		       loi->loi_ost_idx, loi->loi_lvb.lvb_size, loi->loi_kms_valid,
-		       loi->loi_lvb.lvb_mtime, loi->loi_lvb.lvb_atime,
-		       loi->loi_lvb.lvb_ctime, loi->loi_lvb.lvb_blocks);
+		       loi->loi_ost_idx, loi->loi_lvb.lvb_size,
+		       loi->loi_kms_valid, loi->loi_lvb.lvb_mtime,
+		       loi->loi_lvb.lvb_atime, loi->loi_lvb.lvb_ctime,
+		       loi->loi_lvb.lvb_blocks);
 	}
 
 	if (!rc) {

@@ -49,32 +49,29 @@ static inline struct lov_device *lov_object_dev(struct lov_object *obj)
  *  @{
  */
 
-/*****************************************************************************
- *
+/**
  * Layout operations.
- *
  */
-
 struct lov_layout_operations {
 	int (*llo_init)(const struct lu_env *env, struct lov_device *dev,
 			struct lov_object *lov, struct lov_stripe_md *lsm,
 			const struct cl_object_conf *conf,
 			union lov_layout_state *state);
 	int (*llo_delete)(const struct lu_env *env, struct lov_object *lov,
-                           union lov_layout_state *state);
-        void (*llo_fini)(const struct lu_env *env, struct lov_object *lov,
-                         union lov_layout_state *state);
-        int  (*llo_print)(const struct lu_env *env, void *cookie,
-                          lu_printer_t p, const struct lu_object *o);
-        int  (*llo_page_init)(const struct lu_env *env, struct cl_object *obj,
+			  union lov_layout_state *state);
+	void (*llo_fini)(const struct lu_env *env, struct lov_object *lov,
+			 union lov_layout_state *state);
+	int  (*llo_print)(const struct lu_env *env, void *cookie,
+			  lu_printer_t p, const struct lu_object *o);
+	int  (*llo_page_init)(const struct lu_env *env, struct cl_object *obj,
 			      struct cl_page *page, pgoff_t index);
-        int  (*llo_lock_init)(const struct lu_env *env,
-                              struct cl_object *obj, struct cl_lock *lock,
-                              const struct cl_io *io);
-        int  (*llo_io_init)(const struct lu_env *env,
-                            struct cl_object *obj, struct cl_io *io);
-        int  (*llo_getattr)(const struct lu_env *env, struct cl_object *obj,
-                            struct cl_attr *attr);
+	int  (*llo_lock_init)(const struct lu_env *env,
+			      struct cl_object *obj, struct cl_lock *lock,
+			      const struct cl_io *io);
+	int  (*llo_io_init)(const struct lu_env *env,
+			    struct cl_object *obj, struct cl_io *io);
+	int  (*llo_getattr)(const struct lu_env *env, struct cl_object *obj,
+			    struct cl_attr *attr);
 	int  (*llo_flush)(const struct lu_env *env, struct cl_object *obj,
 			  struct ldlm_lock *lock);
 };
@@ -88,12 +85,9 @@ static void lov_lsm_put(struct lov_stripe_md *lsm)
 		lov_free_memmd(&lsm);
 }
 
-/*****************************************************************************
- *
+/**
  * Lov object layout operations.
- *
  */
-
 static struct cl_object *lov_sub_find(const struct lu_env *env,
 				      struct cl_device *dev,
 				      const struct lu_fid *fid,
@@ -291,16 +285,16 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 	struct lu_site          *site;
 	wait_queue_head_t *wq;
 
-        LASSERT(r0->lo_sub[idx] == los);
+	LASSERT(r0->lo_sub[idx] == los);
 
 	sub = lovsub2cl(los);
 	site = sub->co_lu.lo_dev->ld_site;
 	wq = lu_site_wq_from_fid(site, &sub->co_lu.lo_header->loh_fid);
 
-        cl_object_kill(env, sub);
-        /* release a reference to the sub-object and ... */
-        lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
-        cl_object_put(env, sub);
+	cl_object_kill(env, sub);
+	/* release a reference to the sub-object and ... */
+	lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
+	cl_object_put(env, sub);
 
 	/* ... wait until it is actually destroyed---sub-object clears its
 	 * ->lo_sub[] slot in lovsub_object_free() */
@@ -316,7 +310,7 @@ static int lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
 
 	ENTRY;
 
-        if (r0->lo_sub != NULL) {
+	if (r0->lo_sub != NULL) {
 		int i;
 
 		for (i = 0; i < r0->lo_nr; ++i) {
@@ -956,11 +950,11 @@ static void lov_fini_released(const struct lu_env *env, struct lov_object *lov,
 }
 
 static int lov_print_empty(const struct lu_env *env, void *cookie,
-                           lu_printer_t p, const struct lu_object *o)
+			   lu_printer_t p, const struct lu_object *o)
 {
-        (*p)(env, cookie, "empty %d\n",
+	(*p)(env, cookie, "empty %d\n",
 	     test_bit(LO_LAYOUT_INVALID, &lu2lov(o)->lo_obj_flags));
-        return 0;
+	return 0;
 }
 
 static int lov_print_composite(const struct lu_env *env, void *cookie,
@@ -995,7 +989,7 @@ static int lov_print_composite(const struct lu_env *env, void *cookie,
 }
 
 static int lov_print_released(const struct lu_env *env, void *cookie,
-				lu_printer_t p, const struct lu_object *o)
+			      lu_printer_t p, const struct lu_object *o)
 {
 	struct lov_object	*lov = lu2lov(o);
 	struct lov_stripe_md	*lsm = lov->lo_lsm;
@@ -1034,10 +1028,10 @@ static int lov_print_foreign(const struct lu_env *env, void *cookie,
  * cl_attr::cat_blocks---it's 0.
  */
 static int lov_attr_get_empty(const struct lu_env *env, struct cl_object *obj,
-                              struct cl_attr *attr)
+			      struct cl_attr *attr)
 {
-        attr->cat_blocks = 0;
-        return 0;
+	attr->cat_blocks = 0;
+	return 0;
 }
 
 static int lov_attr_get_composite(const struct lu_env *env,
@@ -1223,16 +1217,16 @@ static inline void lov_conf_thaw(struct lov_object *lov)
 
 #define LOV_2DISPATCH_MAYLOCK(obj, op, lock, ...)                       \
 ({                                                                      \
-        struct lov_object                      *__obj = (obj);          \
-        int                                     __lock = !!(lock);      \
-        typeof(lov_dispatch[0].op(__VA_ARGS__)) __result;               \
+	struct lov_object                      *__obj = (obj);          \
+	int                                     __lock = !!(lock);      \
+	typeof(lov_dispatch[0].op(__VA_ARGS__)) __result;               \
                                                                         \
-        if (__lock)                                                     \
-                lov_conf_freeze(__obj);					\
-        __result = LOV_2DISPATCH_NOLOCK(obj, op, __VA_ARGS__);          \
-        if (__lock)                                                     \
-                lov_conf_thaw(__obj);					\
-        __result;                                                       \
+	if (__lock)                                                     \
+		lov_conf_freeze(__obj);					\
+	__result = LOV_2DISPATCH_NOLOCK(obj, op, __VA_ARGS__);          \
+	if (__lock)                                                     \
+		lov_conf_thaw(__obj);					\
+	__result;                                                       \
 })
 
 /**
@@ -1243,13 +1237,13 @@ static inline void lov_conf_thaw(struct lov_object *lov)
 
 #define LOV_2DISPATCH_VOID(obj, op, ...)                                \
 do {                                                                    \
-        struct lov_object                      *__obj = (obj);          \
-        enum lov_layout_type                    __llt;                  \
+	struct lov_object                      *__obj = (obj);          \
+	enum lov_layout_type                    __llt;                  \
                                                                         \
 	lov_conf_freeze(__obj);						\
-        __llt = __obj->lo_type;                                         \
+	__llt = __obj->lo_type;                                         \
 	LASSERT(__llt < ARRAY_SIZE(lov_dispatch));			\
-        lov_dispatch[__llt].op(__VA_ARGS__);                            \
+	lov_dispatch[__llt].op(__VA_ARGS__);                            \
 	lov_conf_thaw(__obj);						\
 } while (0)
 
@@ -1353,10 +1347,8 @@ out:
 	RETURN(rc);
 }
 
-/*****************************************************************************
- *
+/**
  * Lov object operations.
- *
  */
 static int lov_object_init(const struct lu_env *env, struct lu_object *obj,
 			   const struct lu_object_conf *conf)
@@ -1400,7 +1392,7 @@ out_lsm:
 }
 
 static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
-                        const struct cl_object_conf *conf)
+			const struct cl_object_conf *conf)
 {
 	struct lov_stripe_md	*lsm = NULL;
 	struct lov_object	*lov = cl2lov(obj);
@@ -1547,28 +1539,28 @@ out_lsm:
 
 static void lov_object_delete(const struct lu_env *env, struct lu_object *obj)
 {
-        struct lov_object *lov = lu2lov(obj);
+	struct lov_object *lov = lu2lov(obj);
 
-        ENTRY;
-        LOV_2DISPATCH_VOID(lov, llo_delete, env, lov, &lov->u);
-        EXIT;
+	ENTRY;
+	LOV_2DISPATCH_VOID(lov, llo_delete, env, lov, &lov->u);
+	EXIT;
 }
 
 static void lov_object_free(const struct lu_env *env, struct lu_object *obj)
 {
-        struct lov_object *lov = lu2lov(obj);
+	struct lov_object *lov = lu2lov(obj);
 
-        ENTRY;
-        LOV_2DISPATCH_VOID(lov, llo_fini, env, lov, &lov->u);
-        lu_object_fini(obj);
-        OBD_SLAB_FREE_PTR(lov, lov_object_kmem);
-        EXIT;
+	ENTRY;
+	LOV_2DISPATCH_VOID(lov, llo_fini, env, lov, &lov->u);
+	lu_object_fini(obj);
+	OBD_SLAB_FREE_PTR(lov, lov_object_kmem);
+	EXIT;
 }
 
 static int lov_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
+			    lu_printer_t p, const struct lu_object *o)
 {
-        return LOV_2DISPATCH_NOLOCK(lu2lov(o), llo_print, env, cookie, p, o);
+	return LOV_2DISPATCH_NOLOCK(lu2lov(o), llo_print, env, cookie, p, o);
 }
 
 static int lov_page_init(const struct lu_env *env, struct cl_object *obj,
@@ -1606,11 +1598,11 @@ static int lov_io_init(const struct lu_env *env, struct cl_object *obj,
  * sub-objects.
  */
 static int lov_attr_get(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_attr *attr)
+			struct cl_attr *attr)
 {
-        /* do not take lock, as this function is called under a
-         * spin-lock. Layout is protected from changing by ongoing IO. */
-        return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_getattr, env, obj, attr);
+	/* do not take lock, as this function is called under a
+	 * spin-lock. Layout is protected from changing by ongoing IO. */
+	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_getattr, env, obj, attr);
 }
 
 static int lov_attr_update(const struct lu_env *env, struct cl_object *obj,
@@ -1623,7 +1615,7 @@ static int lov_attr_update(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int lov_lock_init(const struct lu_env *env, struct cl_object *obj,
-		  struct cl_lock *lock, const struct cl_io *io)
+			 struct cl_lock *lock, const struct cl_io *io)
 {
 	/* No need to lock because we've taken one refcount of layout.  */
 	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_lock_init, env, obj, lock,

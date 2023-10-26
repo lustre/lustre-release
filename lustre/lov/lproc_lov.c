@@ -227,7 +227,7 @@ static void *lov_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int lov_tgt_seq_show(struct seq_file *p, void *v)
 {
-        struct lov_tgt_desc *tgt = v;
+	struct lov_tgt_desc *tgt = v;
 
 	seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_index,
 		   obd_uuid2str(&tgt->ltd_uuid),
@@ -236,10 +236,10 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
 }
 
 static const struct seq_operations lov_tgt_sops = {
-        .start = lov_tgt_seq_start,
-        .stop = lov_tgt_seq_stop,
-        .next = lov_tgt_seq_next,
-        .show = lov_tgt_seq_show,
+	.start = lov_tgt_seq_start,
+	.stop = lov_tgt_seq_stop,
+	.next = lov_tgt_seq_next,
+	.show = lov_tgt_seq_show,
 };
 
 static int lov_target_seq_open(struct inode *inode, struct file *file)

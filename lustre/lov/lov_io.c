@@ -42,6 +42,15 @@
  *  @{
  */
 
+/**
+ * Allocate a new sub IO
+ *
+ * \param[in] lio	top level lov IO structure
+ * \param[in] index	index into lov (stripe)
+ *
+ * \retval		Pointer to allocated lov_io_sub
+ * 			structure
+ */
 static inline struct lov_io_sub *lov_sub_alloc(struct lov_io *lio, int index)
 {
 	struct lov_io_sub *sub;
@@ -64,6 +73,13 @@ static inline struct lov_io_sub *lov_sub_alloc(struct lov_io *lio, int index)
 	return sub;
 }
 
+/**
+ * Release a sub IO
+ *
+ * \param[in] lio	top level lov IO structure
+ * \param[in] sub	sub io to individual stripe
+ *
+ */
 static inline void lov_sub_free(struct lov_io *lio, struct lov_io_sub *sub)
 {
 	if (sub->sub_subio_index == lio->lis_single_subio_index) {
@@ -190,13 +206,11 @@ out:
 	RETURN(sub);
 }
 
-/*****************************************************************************
- *
+/**
  * Lov io operations.
- *
  */
 static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
-                             struct cl_io *io)
+			     struct cl_io *io)
 {
 	ENTRY;
 
@@ -311,7 +325,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 }
 
 static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
-			       struct cl_io *io)
+			      struct cl_io *io)
 {
 	struct lov_layout_composite *comp = &obj->u.composite;
 	int index;
@@ -890,7 +904,8 @@ static int lov_io_iter_init(const struct lu_env *env,
 			}
 
 			/* if the last stripe is the trunc stripeno */
-			if (is_trunc && lio->lis_trunc_stripe_index[index] == stripe)
+			if (is_trunc &&
+			    lio->lis_trunc_stripe_index[index] == stripe)
 				lio->lis_trunc_stripe_index[index] = -1;
 
 			sub = lov_sub_get(env, lio,
@@ -1132,7 +1147,7 @@ lov_io_data_version_end(const struct lu_env *env, const struct cl_io_slice *ios)
 }
 
 static void lov_io_iter_fini(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+			     const struct cl_io_slice *ios)
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	int rc;
@@ -1152,7 +1167,7 @@ static void lov_io_iter_fini(const struct lu_env *env,
 }
 
 static void lov_io_unlock(const struct lu_env *env,
-                          const struct cl_io_slice *ios)
+			  const struct cl_io_slice *ios)
 {
 	int rc;
 
@@ -1749,14 +1764,11 @@ static const struct cl_io_operations lov_io_ops = {
 	.cio_commit_async              = lov_io_commit_async,
 };
 
-/*****************************************************************************
- *
+/**
  * Empty lov io operations.
- *
  */
-
 static void lov_empty_io_fini(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+			      const struct cl_io_slice *ios)
 {
 	struct lov_object *lov = cl2lov(ios->cis_obj);
 	ENTRY;
@@ -1774,7 +1786,7 @@ static int lov_empty_io_submit(const struct lu_env *env,
 }
 
 static void lov_empty_impossible(const struct lu_env *env,
-                                 struct cl_io_slice *ios)
+				 struct cl_io_slice *ios)
 {
 	LBUG();
 }
@@ -1859,7 +1871,7 @@ out:
 }
 
 int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
-                      struct cl_io *io)
+		      struct cl_io *io)
 {
 	struct lov_object *lov = cl2lov(obj);
 	struct lov_io *lio = lov_env_io(env);
@@ -1901,7 +1913,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 }
 
 int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
-			struct cl_io *io)
+			 struct cl_io *io)
 {
 	struct lov_object *lov = cl2lov(obj);
 	struct lov_io *lio = lov_env_io(env);

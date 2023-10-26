@@ -44,10 +44,8 @@
  *  @{
  */
 
-/*****************************************************************************
- *
+/**
  * Lov page operations.
- *
  */
 int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 			    struct cl_page *page, pgoff_t index)

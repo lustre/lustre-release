@@ -258,8 +258,8 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
  * otherwise may cause severe OST imbalance.
  */
 static ssize_t stripeoffset_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buffer, size_t count)
+				  struct attribute *attr,
+				  const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -314,7 +314,7 @@ static ssize_t max_stripecount_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(max_stripecount);
 
 static ssize_t max_mdt_stripecount_show(struct kobject *kobj,
-				    struct attribute *attr, char *buf)
+					struct attribute *attr, char *buf)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
@@ -323,8 +323,8 @@ static ssize_t max_mdt_stripecount_show(struct kobject *kobj,
 }
 
 static ssize_t max_mdt_stripecount_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count)
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
@@ -409,8 +409,8 @@ static ssize_t mdt_stripetype_store(struct kobject *kobj,
 }
 
 static ssize_t stripetype_store(struct kobject *kobj,
-				    struct attribute *attr, const char *buffer,
-				    size_t count)
+				struct attribute *attr, const char *buffer,
+				size_t count)
 {
 	return __stripetype_store(kobj, attr, buffer, count, false);
 }
@@ -1139,7 +1139,7 @@ static const struct proc_ops lod_proc_mdt_fops = {
 
 static int lod_spill_threshold_pct_seq_show(struct seq_file *m, void *v)
 {
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 
 	LASSERT(pool != NULL);
 	seq_printf(m, "%d\n", pool->pool_spill_threshold_pct);
@@ -1152,7 +1152,7 @@ lod_spill_threshold_pct_seq_write(struct file *file, const char __user *buffer,
 				  size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	int rc;
 	int val;
 
@@ -1178,7 +1178,7 @@ LPROC_SEQ_FOPS(lod_spill_threshold_pct);
 
 static int lod_spill_target_seq_show(struct seq_file *m, void *v)
 {
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 
 	LASSERT(pool != NULL);
 	seq_printf(m, "%s\n", pool->pool_spill_target);
@@ -1193,7 +1193,7 @@ static int lod_spill_check_loop(struct lod_device *lod,
 				const char *destarg)
 {
 	char dest[LOV_MAXPOOLNAME + 1];
-	struct pool_desc *tgt;
+	struct lod_pool_desc *tgt;
 	int rc = 0;
 
 	strncpy(dest, destarg, sizeof(dest));
@@ -1225,7 +1225,7 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	struct lod_device *lod;
 	char tgt_name[LOV_MAXPOOLNAME + 1];
 	int rc;
@@ -1272,7 +1272,7 @@ LPROC_SEQ_FOPS(lod_spill_target);
 
 static int lod_spill_is_active_seq_show(struct seq_file *m, void *v)
 {
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	struct lod_device *lod;
 	struct lu_env env;
 	int rc;
@@ -1296,7 +1296,7 @@ LPROC_SEQ_FOPS_RO(lod_spill_is_active);
 
 static int lod_spill_hit_seq_show(struct seq_file *m, void *v)
 {
-	struct pool_desc  *pool = m->private;
+	struct lod_pool_desc  *pool = m->private;
 
 	LASSERT(pool != NULL);
 	seq_printf(m, "%d\n", atomic_read(&pool->pool_spill_hit));
@@ -1306,7 +1306,7 @@ LPROC_SEQ_FOPS_RO(lod_spill_hit);
 
 static int lod_spill_status_seq_show(struct seq_file *m, void *v)
 {
-	struct pool_desc *pool = m->private;
+	struct lod_pool_desc *pool = m->private;
 	__u64 avail_bytes = 0, total_bytes = 0;
 	struct lu_tgt_pool *osts;
 	struct lod_device *lod;

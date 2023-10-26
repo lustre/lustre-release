@@ -711,7 +711,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct pool_desc  *pool = NULL;
+	struct lod_pool_desc  *pool = NULL;
 	struct lu_tgt_pool *osts;
 	struct lu_qos_rr *lqr;
 	unsigned int i, array_idx;
@@ -1200,7 +1200,7 @@ static int lod_ost_alloc_specific(const struct lu_env *env,
 	unsigned int i, array_idx, ost_count;
 	int rc, stripe_num = 0;
 	int speed = 0;
-	struct pool_desc *pool = NULL;
+	struct lod_pool_desc *pool = NULL;
 	struct lu_tgt_pool *osts;
 	int stripes_per_ost = 1;
 	bool overstriped = false;
@@ -1380,7 +1380,7 @@ static void process_semaphore_timer(struct timer_list *t)
  *			almost the same
  */
 static int lod_pool_qos_penalties_calc(struct lod_device *lod,
-				       struct pool_desc *pool)
+				       struct lod_pool_desc *pool)
 {
 	struct lu_tgt_descs *ltd = &lod->lod_ost_descs;
 	struct lu_qos *qos = &ltd->ltd_qos;
@@ -1506,7 +1506,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct lod_tgt_desc *ost;
 	struct dt_object *o;
 	__u64 total_weight = 0;
-	struct pool_desc *pool = NULL;
+	struct lod_pool_desc *pool = NULL;
 	struct lu_tgt_pool *osts;
 	unsigned int i;
 	__u32 nfound, good_osts, stripe_count, stripe_count_min;
@@ -2268,7 +2268,7 @@ static void lod_qos_set_pool(struct lod_object *lo, int pos, char *pool_name,
 {
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_layout_component *lod_comp;
-	struct pool_desc *pool = NULL;
+	struct lod_pool_desc *pool = NULL;
 	__u32 idx;
 	int j, rc = 0;
 

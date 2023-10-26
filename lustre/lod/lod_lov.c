@@ -1721,7 +1721,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 {
 	struct lov_user_md_v1	*lum;
 	struct lov_user_md_v3	*lum3;
-	struct pool_desc	*pool = NULL;
+	struct lod_pool_desc	*pool = NULL;
 	__u32			 magic;
 	__u32			 stripe_size;
 	__u16			 stripe_count;
@@ -2562,7 +2562,7 @@ out_hash:
 int lod_pools_fini(struct lod_device *lod)
 {
 	struct obd_device   *obd = lod2obd(lod);
-	struct pool_desc    *pool, *tmp;
+	struct lod_pool_desc *pool, *tmp;
 	ENTRY;
 
 	list_for_each_entry_safe(pool, tmp, &lod->lod_pool_list, pool_list) {

@@ -55,7 +55,7 @@ enum lod_uses_hint {
 #define LMVEA_DELETE_VALUES(count, offset)				\
 	((count) == 0 && (offset) == (typeof(offset))(-1))
 
-struct pool_desc {
+struct lod_pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct lu_tgt_pool	 pool_obds;	/* pool members */
 	atomic_t		 pool_refcount;
@@ -699,10 +699,10 @@ int lod_fill_mirrors(struct lod_object *lo);
 int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm);
 
 /* lod_pool.c */
-struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
-void lod_pool_putref(struct pool_desc *pool);
+struct lod_pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
+void lod_pool_putref(struct lod_pool_desc *pool);
 int lod_pool_del(struct obd_device *obd, char *poolname);
-int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+int lod_check_index_in_pool(__u32 idx, struct lod_pool_desc *pool);
 int lod_pool_new(struct obd_device *obd, char *poolname);
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
@@ -852,8 +852,8 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 			      char **poolname);
 void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
-			      struct pool_desc *pool);
-struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname);
+			      struct lod_pool_desc *pool);
+struct lod_pool_desc *lod_pool_find(struct lod_device *lod, char *poolname);
 int lod_tgt_weights_seq_show(struct seq_file *m, struct lod_device *lod,
 			     struct lu_tgt_pool *tgts, bool mdt);
 int lod_tgt_weights_seq_write(struct seq_file *m, const char __user *buf,

@@ -41,12 +41,9 @@
  *  @{
  */
 
-/*****************************************************************************
- *
+/**
  * Lov lock operations.
- *
  */
-
 static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 						   const struct cl_lock *parent,
 						   struct lov_lock_sub *lls)
@@ -220,7 +217,7 @@ init_sublock:
 }
 
 static void lov_lock_fini(const struct lu_env *env,
-                          struct cl_lock_slice *slice)
+			  struct cl_lock_slice *slice)
 {
 	struct lov_lock *lovlck;
 	int i;
