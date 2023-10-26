@@ -384,8 +384,6 @@ static int qmt_delete_qid(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));
 
-	lqe_write_lock(lqe);
-
 	qpi = qmt_pool_lookup_glb(env, qmt, restype);
 	if (IS_ERR(qpi))
 		GOTO(out, rc = -ENOMEM);
@@ -394,9 +392,11 @@ static int qmt_delete_qid(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
+	lqe_write_lock(lqe);
 	rc = lquota_disk_delete(env, th,
 				qpi->qpi_glb_obj[qtype], qid, &ver);
 
+	lqe_write_unlock(lqe);
 	dt_trans_stop(env, qmt->qmt_child, th);
 
 	if (rc == 0) {
@@ -410,7 +410,6 @@ out:
 	if (!IS_ERR_OR_NULL(qpi))
 		qpi_putref(env, qpi);
 
-	lqe_write_unlock(lqe);
 	lqe_putref(lqe);
 
 	RETURN(rc);
@@ -491,15 +490,15 @@ static int qmt_reset_qid(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));
 
-	lqe_write_lock(lqe);
-
-	qpi = qmt_pool_lookup_glb(env, qmt, restype);
+	qpi = lqe2qpi(lqe);
 	if (IS_ERR(qpi))
 		GOTO(out, rc = -ENOMEM);
 
 	th = qmt_trans_start(env, lqe);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
+
+	lqe_write_lock(lqe);
 
 	softlimit = lqe->lqe_softlimit;
 	hardlimit = lqe->lqe_hardlimit;
@@ -513,8 +512,17 @@ static int qmt_reset_qid(const struct lu_env *env, struct qmt_device *qmt,
 	lqe->lqe_is_deleted = 0;
 	lqe->lqe_is_reset = 1;
 	rc = qmt_glb_write(env, th, lqe, LQUOTA_BUMP_VER, &ver);
-	if (rc)
+	if (rc) {
 		LQUOTA_ERROR(lqe, "failed to write quota global rec\n");
+
+		if (softlimit != 0)
+			lqe->lqe_softlimit = softlimit;
+		if (hardlimit != 0)
+			lqe->lqe_hardlimit = hardlimit;
+		lqe->lqe_is_reset = 0;
+	}
+
+	lqe_write_unlock(lqe);
 	dt_trans_stop(env, qmt->qmt_child, th);
 	if (rc)
 		GOTO(out, rc);
@@ -527,18 +535,6 @@ static int qmt_reset_qid(const struct lu_env *env, struct qmt_device *qmt,
 	qmt_glb_lock_notify(env, lqe, ver);
 
 out:
-	if (rc) {
-		if (softlimit != 0)
-			lqe->lqe_softlimit = softlimit;
-		if (hardlimit != 0)
-			lqe->lqe_hardlimit = hardlimit;
-		lqe->lqe_is_reset = 0;
-	}
-
-	if (!IS_ERR_OR_NULL(qpi))
-		qpi_putref(env, qpi);
-
-	lqe_write_unlock(lqe);
 	lqe_putref(lqe);
 
 	RETURN(rc);
