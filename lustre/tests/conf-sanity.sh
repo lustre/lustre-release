@@ -1634,6 +1634,8 @@ test_32newtarball() {
 t32_check() {
 	[ "$CLIENTONLY" ] && skip "Client-only testing"
 
+	check_versions || skip "do not upgrade with mismatched client/server"
+
 	local node=$(facet_active_host $SINGLEMDS)
 	local r="do_node $node"
 
@@ -2045,21 +2047,25 @@ t32_test() {
 		fi
 		$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
 		$r $LCTL replace_nids $fsname-OST0000 $ostnid || {
+			$r $LCTL dl
 			error_noexit "replace_nids $fsname-OST0000 $ostnid failed"
 			return 1
 		}
 		if $ost2_is_available; then
 			$r $LCTL replace_nids $fsname-OST0001 $ostnid || {
+				$r $LCTL dl
 				error_noexit "replace_nids $fsname-OST0001 $ostnid failed"
 				return 1
 			}
 		fi
 		$r $LCTL replace_nids $fsname-MDT0000 $nid || {
+			$r $LCTL dl
 			error_noexit "replace_nids $fsname-MDT0000 $nid failed"
 			return 1
 		}
 		if $mdt2_is_available; then
 			$r $LCTL replace_nids $fsname-MDT0001 $nid || {
+				$r $LCTL dl
 				error_noexit "replace_nids $fsname-MDT0001 $nid failed"
 				return 1
 			}

@@ -7606,8 +7606,17 @@ client_only () {
 }
 
 check_versions () {
-    [ "$(lustre_version_code client)" = "$(lustre_version_code $SINGLEMDS)" -a \
-      "$(lustre_version_code client)" = "$(lustre_version_code ost1)" ]
+	# this should already have been called, but just in case
+	[[ -n "$CLIENT_VERSION" && -n "$MDS1_VERSION" && -n "$OST1_VERSION" ]]||
+		get_lustre_env
+
+	echo "client=$CLIENT_VERSION MDS=$MDS1_VERSION OSS=$OST1_VERSION"
+
+	[[ -n "$CLIENT_VERSION" && -n "$MDS1_VERSION" && -n "$OST1_VERSION" ]]||
+		error "unable to determine node versions"
+
+	(( "$CLIENT_VERSION" == "$MDS1_VERSION" &&
+	   "$CLIENT_VERSION" == "$OST1_VERSION"))
 }
 
 get_node_count() {
