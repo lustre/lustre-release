@@ -115,9 +115,13 @@ struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
 
 	/*
 	 * general layer has take a module reference for us, because we never
-	 * really destroy the sec, simply release the reference here.
+	 * really destroy the sec, take only 1 module reference for all the
+	 * imports. This reference will be released by sec_cop_destroy_sec().
+	 * The additional ps_refcount will be released in null_kill_sec().
 	 */
-	sptlrpc_policy_put(&null_policy);
+	if (atomic_inc_return(&null_sec.ps_refcount) != 1)
+		sptlrpc_policy_put(&null_policy);
+
 	return &null_sec;
 }
 
@@ -125,6 +129,13 @@ static
 void null_destroy_sec(struct ptlrpc_sec *sec)
 {
 	LASSERT(sec == &null_sec);
+}
+
+static
+void null_kill_sec(struct ptlrpc_sec *sec)
+{
+	/* release the ref taken by null_create_sec() */
+	sptlrpc_sec_put(sec);
 }
 
 static
@@ -372,6 +383,7 @@ static struct ptlrpc_ctx_ops null_ctx_ops = {
 static struct ptlrpc_sec_cops null_sec_cops = {
 	.create_sec             = null_create_sec,
 	.destroy_sec            = null_destroy_sec,
+	.kill_sec               = null_kill_sec,
 	.lookup_ctx             = null_lookup_ctx,
 	.flush_ctx_cache        = null_flush_ctx_cache,
 	.alloc_reqbuf           = null_alloc_reqbuf,
@@ -401,7 +413,7 @@ static void null_init_internal(void)
 	static HLIST_HEAD(__list);
 
 	null_sec.ps_policy = &null_policy;
-	atomic_set(&null_sec.ps_refcount, 1);	/* always busy */
+	atomic_set(&null_sec.ps_refcount, 0);
 	null_sec.ps_id = -1;
 	null_sec.ps_import = NULL;
 	null_sec.ps_flvr.sf_rpc = SPTLRPC_FLVR_NULL;

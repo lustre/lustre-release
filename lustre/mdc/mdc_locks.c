@@ -258,6 +258,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	int count = 0;
 	enum ldlm_mode mode;
 	int repsize, repsize_estimate;
+	struct sptlrpc_sepol *sepol;
 	int rc;
 
 	ENTRY;
@@ -327,20 +328,16 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 			     op_data->op_file_encctx_size);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(ERR_PTR(rc));
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(ERR_PTR(rc));
-	}
+	if (rc < 0)
+		GOTO(err_put_sepol, rc);
 
 	spin_lock(&req->rq_lock);
 	req->rq_replay = req->rq_import->imp_replayable;
@@ -352,7 +349,9 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	/* pack the intended request */
 	mdc_open_pack(&req->rq_pill, op_data, it->it_create_mode, 0,
-		      it->it_flags, lmm, lmmsize);
+		      it->it_flags, lmm, lmmsize, sepol);
+
+	sptlrpc_sepol_put(sepol);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     mdt_md_capsule_size);
@@ -432,6 +431,12 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	 */
 	req->rq_reqmsg->lm_repsize = repsize;
 	RETURN(req);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+	return ERR_PTR(rc);
 }
 
 #define GA_DEFAULT_EA_NAME_LEN	 20
@@ -444,6 +449,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 {
 	struct ptlrpc_request *req;
 	struct ldlm_intent *lit;
+	struct sptlrpc_sepol *sepol;
 	int rc, count = 0;
 	LIST_HEAD(cancels);
 	u32 ea_vals_buf_size = GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM;
@@ -455,20 +461,16 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(ERR_PTR(rc));
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(ERR_PTR(rc));
-	}
+	if (rc)
+		GOTO(err_put_sepol, rc);
 
 	/* pack the intent */
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
@@ -498,7 +500,8 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		      ea_vals_buf_size, -1, 0);
 
 	/* get SELinux policy info if any */
-	mdc_file_sepol_pack(&req->rq_pill);
+	mdc_file_sepol_pack(&req->rq_pill, sepol);
+	sptlrpc_sepol_put(sepol);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
 			     GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM);
@@ -514,6 +517,12 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	ptlrpc_request_set_replen(req);
 
 	RETURN(req);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+	RETURN(ERR_PTR(rc));
 }
 
 static struct ptlrpc_request *

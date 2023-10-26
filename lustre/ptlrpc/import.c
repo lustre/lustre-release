@@ -656,6 +656,7 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 	int set_transno = 0;
 	__u64 committed_before_reconnect = 0;
 	struct ptlrpc_request *request;
+	struct sptlrpc_sepol *sepol;
 	struct obd_connect_data ocd;
 	char *bufs[] = { NULL,
 			 obd2cli_tgt(imp->imp_obd),
@@ -727,20 +728,21 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 		GOTO(out, rc = -ENOMEM);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(request);
-	if (rc < 0) {
+	sepol = sptlrpc_sepol_get(request);
+	if (IS_ERR(sepol)) {
 		ptlrpc_request_free(request);
-		GOTO(out, rc);
+		GOTO(out, rc = PTR_ERR(sepol));
 	}
 
-	bufs[5] = request->rq_sepol;
+	bufs[5] = sepol->ssp_sepol;
 
 	req_capsule_set_size(&request->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(request->rq_sepol) ?
-			     strlen(request->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
 				      imp->imp_connect_op, bufs, NULL);
+
+	sptlrpc_sepol_put(sepol);
 	if (rc) {
 		ptlrpc_request_free(request);
 		GOTO(out, rc);

@@ -352,16 +352,17 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 			    int input_size, int output_size, int flags,
 			    __u32 suppgid, struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *req;
-        int   xattr_namelen = 0;
-        char *tmp;
-        int   rc;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct sptlrpc_sepol *sepol;
+	int   xattr_namelen = 0;
+	char *tmp;
+	int   rc;
+	ENTRY;
 
-        *request = NULL;
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), fmt);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	*request = NULL;
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), fmt);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
 	if (xattr_name) {
 		xattr_namelen = strlen(xattr_name) + 1;
@@ -374,14 +375,12 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 			     input_size);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	/* Flush local XATTR locks to get rid of a possible cancel RPC */
 	if (opcode == MDS_REINT && fid_is_sane(fid) &&
@@ -399,16 +398,12 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 						MDS_INODELOCK_XATTR);
 
 		rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
-		if (rc) {
-			ptlrpc_request_free(req);
-			RETURN(rc);
-		}
+		if (rc)
+			GOTO(err_put_sepol, rc);
 	} else {
 		rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, opcode);
-		if (rc) {
-			ptlrpc_request_free(req);
-			RETURN(rc);
-		}
+		if (rc)
+			GOTO(err_put_sepol, rc);
 	}
 
 	if (opcode == MDS_REINT) {
@@ -437,36 +432,44 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 		req->rq_request_portal = MDS_READPAGE_PORTAL;
 	}
 
-        if (xattr_name) {
-                tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-                memcpy(tmp, xattr_name, xattr_namelen);
-        }
-        if (input_size) {
-                tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
-                memcpy(tmp, input, input_size);
-        }
+	if (xattr_name) {
+		tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
+		memcpy(tmp, xattr_name, xattr_namelen);
+	}
+	if (input_size) {
+		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
+		memcpy(tmp, input, input_size);
+	}
 
-	mdc_file_sepol_pack(&req->rq_pill);
+	mdc_file_sepol_pack(&req->rq_pill, sepol);
+	sptlrpc_sepol_put(sepol);
 
-        if (req_capsule_has_field(&req->rq_pill, &RMF_EADATA, RCL_SERVER))
-                req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
-                                     RCL_SERVER, output_size);
-        ptlrpc_request_set_replen(req);
+	if (req_capsule_has_field(&req->rq_pill, &RMF_EADATA, RCL_SERVER))
+		req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
+				     RCL_SERVER, output_size);
+	ptlrpc_request_set_replen(req);
 
-        /* make rpc */
-        if (opcode == MDS_REINT)
+	/* make rpc */
+	if (opcode == MDS_REINT)
 		ptlrpc_get_mod_rpc_slot(req);
 
-        rc = ptlrpc_queue_wait(req);
+	rc = ptlrpc_queue_wait(req);
 
 	if (opcode == MDS_REINT)
 		ptlrpc_put_mod_rpc_slot(req);
 
-        if (rc)
-                ptlrpc_req_finished(req);
-        else
-                *request = req;
-        RETURN(rc);
+	if (rc)
+		ptlrpc_req_finished(req);
+	else
+		*request = req;
+	RETURN(rc);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+	RETURN(rc);
+
 }
 
 static int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,

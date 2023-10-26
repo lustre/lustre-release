@@ -164,6 +164,7 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 		struct ptlrpc_request **request)
 {
 	struct ptlrpc_request *req;
+	struct sptlrpc_sepol *sepol;
 	int level, rc;
 	int count, resends = 0;
 	struct obd_import *import = exp->exp_obd->u.cli.cl_import;
@@ -214,27 +215,25 @@ rebuild:
 			     op_data->op_file_encctx_size);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(err_put_sepol, rc);
 
 	/*
 	 * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
 	 * tgt, for symlinks or lov MD data.
 	 */
 	mdc_create_pack(&req->rq_pill, op_data, data, datalen, mode, uid,
-			gid, cap_effective, rdev);
+			gid, cap_effective, rdev, sepol);
+
+	sptlrpc_sepol_put(sepol);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     exp->exp_obd->u.cli.cl_default_mds_easize);
@@ -312,19 +311,28 @@ rebuild:
 	}
 
 	*request = req;
+
+	RETURN(rc);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+
 	RETURN(rc);
 }
 
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
-               struct ptlrpc_request **request)
+	       struct ptlrpc_request **request)
 {
 	LIST_HEAD(cancels);
-        struct obd_device *obd = class_exp2obd(exp);
-        struct ptlrpc_request *req = *request;
-        int count = 0, rc;
-        ENTRY;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct ptlrpc_request *req = *request;
+	struct sptlrpc_sepol *sepol;
+	int count = 0, rc;
+	ENTRY;
 
-        LASSERT(req == NULL);
+	LASSERT(req == NULL);
 
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
 	    (fid_is_sane(&op_data->op_fid1)))
@@ -340,99 +348,110 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 						 CLI_DIRTY_DATA ?
 						 MDS_INODELOCK_ELC :
 						 MDS_INODELOCK_FULL);
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-                                   &RQF_MDS_REINT_UNLINK);
-        if (req == NULL) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
-                RETURN(-ENOMEM);
-        }
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_MDS_REINT_UNLINK);
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(-ENOMEM);
+	}
 
-        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-                             op_data->op_namelen + 1);
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+			     op_data->op_namelen + 1);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(err_put_sepol, rc);
 
-	mdc_unlink_pack(&req->rq_pill, op_data);
+	mdc_unlink_pack(&req->rq_pill, op_data, sepol);
+	sptlrpc_sepol_put(sepol);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
 	ptlrpc_request_set_replen(req);
 
-        *request = req;
+	*request = req;
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
-        if (rc == -ERESTARTSYS)
-                rc = 0;
-        RETURN(rc);
+	if (rc == -ERESTARTSYS)
+		rc = 0;
+
+	RETURN(rc);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+
+	RETURN(rc);
 }
 
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
-             struct ptlrpc_request **request)
+	     struct ptlrpc_request **request)
 {
 	LIST_HEAD(cancels);
-        struct ptlrpc_request *req;
-        int count = 0, rc;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct sptlrpc_sepol *sepol;
+	int count = 0, rc;
+	ENTRY;
 
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
-            (fid_is_sane(&op_data->op_fid2)))
-                count = mdc_resource_get_unused(exp, &op_data->op_fid2,
-                                                &cancels, LCK_EX,
-                                                MDS_INODELOCK_UPDATE);
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
-            (fid_is_sane(&op_data->op_fid1)))
-                count += mdc_resource_get_unused(exp, &op_data->op_fid1,
-                                                 &cancels, LCK_EX,
-                                                 MDS_INODELOCK_UPDATE);
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
+	    (fid_is_sane(&op_data->op_fid2)))
+		count = mdc_resource_get_unused(exp, &op_data->op_fid2,
+						&cancels, LCK_EX,
+						MDS_INODELOCK_UPDATE);
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
+	    (fid_is_sane(&op_data->op_fid1)))
+		count += mdc_resource_get_unused(exp, &op_data->op_fid1,
+						 &cancels, LCK_EX,
+						 MDS_INODELOCK_UPDATE);
 
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_REINT_LINK);
-        if (req == NULL) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
-                RETURN(-ENOMEM);
-        }
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_REINT_LINK);
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(-ENOMEM);
+	}
 
-        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-                             op_data->op_namelen + 1);
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+			     op_data->op_namelen + 1);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(err_put_sepol, rc);
 
-	mdc_link_pack(&req->rq_pill, op_data);
+	mdc_link_pack(&req->rq_pill, op_data, sepol);
+	sptlrpc_sepol_put(sepol);
+
 	ptlrpc_request_set_replen(req);
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
-        *request = req;
-        if (rc == -ERESTARTSYS)
-                rc = 0;
+	*request = req;
+	if (rc == -ERESTARTSYS)
+		rc = 0;
 
-        RETURN(rc);
+	RETURN(rc);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+
+	RETURN(rc);
 }
 
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
@@ -442,6 +461,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	LIST_HEAD(cancels);
 	struct obd_device *obd = exp->exp_obd;
 	struct ptlrpc_request *req;
+	struct sptlrpc_sepol *sepol;
 	int count = 0, rc;
 
 	ENTRY;
@@ -482,20 +502,16 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 				     op_data->op_data_size);
 
 	/* get SELinux policy info if any */
-	rc = sptlrpc_get_sepol(req);
-	if (rc < 0) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol))
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
-			     strlen(req->rq_sepol) ?
-			     strlen(req->rq_sepol) + 1 : 0);
+			     sptlrpc_sepol_size(sepol));
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(err_put_sepol, rc);
 
 	if (exp_connect_cancelset(exp) && req)
 		ldlm_cli_cancel_list(&cancels, count, req, 0);
@@ -504,7 +520,9 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		mdc_migrate_pack(&req->rq_pill, op_data, old, oldlen);
 	else
 		mdc_rename_pack(&req->rq_pill, op_data, old, oldlen,
-				new, newlen);
+				new, newlen, sepol);
+
+	sptlrpc_sepol_put(sepol);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
@@ -514,6 +532,13 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	*request = req;
 	if (rc == -ERESTARTSYS)
 		rc = 0;
+
+	RETURN(rc);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
 
 	RETURN(rc);
 }

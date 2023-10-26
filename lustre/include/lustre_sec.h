@@ -846,6 +846,20 @@ struct ptlrpc_sec_policy {
 #define PTLRPC_SEC_FL_BULK              0x0008 /* intensive bulk i/o expected */
 #define PTLRPC_SEC_FL_PAG               0x0010 /* PAG mode */
 
+struct sptlrpc_sepol {
+	struct rcu_head	ssp_rcu;
+	struct kref	ssp_ref;
+	/** mtime of SELinux policy file */
+	ktime_t		ssp_mtime;
+	/**
+	 * SELinux policy info
+	 * sepol string format is:
+	 * <mode>:<policy name>:<policy version>:<policy hash>
+	 */
+	__u32		ssp_sepol_size;
+	char		ssp_sepol[0];
+};
+
 /**
  * The ptlrpc_sec represents the client side ptlrpc security facilities,
  * each obd_import (both regular and reverse import) must associate with
@@ -867,17 +881,10 @@ struct ptlrpc_sec {
         /** owning import */
         struct obd_import              *ps_import;
 	spinlock_t			ps_lock;
-	/** mtime of SELinux policy file */
-	ktime_t				ps_sepol_mtime;
 	/** next check time of SELinux policy file */
 	ktime_t				ps_sepol_checknext;
-	/**
-	 * SELinux policy info
-	 * sepol string format is:
-	 * <mode>:<policy name>:<policy version>:<policy hash>
-	 */
-	char				ps_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH
-						 + 1];
+	/** SELinux policy file information */
+	struct sptlrpc_sepol		*ps_sepol;
 
 	/*
 	 * garbage collection
@@ -1095,9 +1102,16 @@ int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
 int  sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
                                     struct ptlrpc_request **req_ret);
 void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req);
-
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
-int sptlrpc_get_sepol(struct ptlrpc_request *req);
+
+static inline size_t sptlrpc_sepol_size(struct sptlrpc_sepol *sepol)
+{
+	return sepol ? sepol->ssp_sepol_size : 0;
+}
+
+void sptlrpc_sepol_put(struct sptlrpc_sepol *pol);
+struct sptlrpc_sepol *sptlrpc_sepol_get_cached(struct ptlrpc_sec *imp_sec);
+struct sptlrpc_sepol *sptlrpc_sepol_get(struct ptlrpc_request *req);
 
 /*
  * exported higher interface of import & request

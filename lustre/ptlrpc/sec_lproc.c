@@ -135,6 +135,62 @@ out:
 
 LDEBUGFS_SEQ_FOPS_RO(sptlrpc_ctxs_lprocfs);
 
+static inline
+bool sptlrpc_sepol_update_needed(struct ptlrpc_sec *imp_sec,
+				 ktime_t mtime, char *pol, size_t pol_len)
+{
+	struct sptlrpc_sepol *old;
+	bool rc;
+
+	rcu_read_lock();
+	old = rcu_dereference(imp_sec->ps_sepol);
+	if (!old)
+		rc = true;
+	else if (!kref_read(&old->ssp_ref))
+		rc = false;
+	else if (ktime_compare(old->ssp_mtime, mtime) != 0)
+		rc = true;
+	else
+		rc = false;
+	rcu_read_unlock();
+
+	return rc;
+}
+static int sptlrpc_sepol_update(struct obd_import *imp,
+				ktime_t mtime, char *pol, size_t pol_len)
+{
+	struct sptlrpc_sepol *old;
+	struct sptlrpc_sepol *new;
+	struct ptlrpc_sec *imp_sec;
+	int rc = 0;
+
+	imp_sec = sptlrpc_import_sec_ref(imp);
+	if (!imp_sec)
+		RETURN(-ENODEV);
+
+	if (!sptlrpc_sepol_update_needed(imp_sec, mtime, pol, pol_len))
+		GOTO(out, rc);
+
+	new = kmalloc(sizeof(typeof(*new)) + pol_len + 1, GFP_KERNEL);
+	if (!new)
+		GOTO(out, rc = -ENOMEM);
+
+	kref_init(&new->ssp_ref);
+	new->ssp_sepol_size = pol_len + 1;
+	new->ssp_mtime = mtime;
+	strlcpy(new->ssp_sepol, pol, new->ssp_sepol_size);
+
+	spin_lock(&imp_sec->ps_lock);
+	old = rcu_dereference_protected(imp_sec->ps_sepol, 1);
+	rcu_assign_pointer(imp_sec->ps_sepol, new);
+	spin_unlock(&imp_sec->ps_lock);
+	sptlrpc_sepol_put(old);
+out:
+	sptlrpc_sec_put(imp_sec);
+
+	return rc;
+}
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 static ssize_t sepol_seq_write_old(struct obd_device *obd,
 				   const char __user *buffer, size_t count)
@@ -142,7 +198,7 @@ static ssize_t sepol_seq_write_old(struct obd_device *obd,
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp = cli->cl_import;
 	struct sepol_downcall_data_old *param;
-	size_t maxlen = sizeof(imp->imp_sec->ps_sepol);
+	size_t maxlen = LUSTRE_NODEMAP_SEPOL_LENGTH + 1;
 	size_t size = sizeof(*param);
 	size_t maxparam = sizeof(*param) + maxlen;
 	int len;
@@ -189,12 +245,8 @@ static ssize_t sepol_seq_write_old(struct obd_device *obd,
 		GOTO(out, rc);
 	}
 
-	spin_lock(&imp->imp_sec->ps_lock);
-	memcpy(imp->imp_sec->ps_sepol, param->sdd_sepol, len);
-	imp->imp_sec->ps_sepol[len + 1] = '\0';
-	imp->imp_sec->ps_sepol_mtime = ktime_set(param->sdd_sepol_mtime, 0);
-	spin_unlock(&imp->imp_sec->ps_lock);
-
+	rc = sptlrpc_sepol_update(imp, ktime_set(param->sdd_sepol_mtime, 0),
+				  param->sdd_sepol, len);
 out:
 	OBD_FREE(param, maxparam);
 
@@ -211,7 +263,7 @@ ldebugfs_sptlrpc_sepol_seq_write(struct file *file, const char __user *buffer,
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp = cli->cl_import;
 	struct sepol_downcall_data *param;
-	size_t maxlen = sizeof(imp->imp_sec->ps_sepol);
+	size_t maxlen = LUSTRE_NODEMAP_SEPOL_LENGTH + 1;
 	size_t size = sizeof(*param);
 	size_t maxparam = size + maxlen;
 	int len;
@@ -274,18 +326,44 @@ ldebugfs_sptlrpc_sepol_seq_write(struct file *file, const char __user *buffer,
 		GOTO(out, rc);
 	}
 
-	spin_lock(&imp->imp_sec->ps_lock);
-	memcpy(imp->imp_sec->ps_sepol, param->sdd_sepol, len);
-	imp->imp_sec->ps_sepol[len + 1] = '\0';
-	imp->imp_sec->ps_sepol_mtime = ktime_set(param->sdd_sepol_mtime, 0);
-	spin_unlock(&imp->imp_sec->ps_lock);
-
+	rc = sptlrpc_sepol_update(imp, ktime_set(param->sdd_sepol_mtime, 0),
+				  param->sdd_sepol, len);
 out:
 	OBD_FREE(param, maxparam);
 
 	return rc ?: count;
 }
-LDEBUGFS_FOPS_WR_ONLY(srpc, sptlrpc_sepol);
+
+static int lprocfs_sptlrpc_sepol_seq_show(struct seq_file *seq, void *v)
+{
+	struct obd_device *obd = seq->private;
+	struct client_obd *cli = &obd->u.cli;
+	struct obd_import *imp = cli->cl_import;
+	struct ptlrpc_sec *imp_sec;
+	struct sptlrpc_sepol *sepol;
+	struct timespec64 ts;
+	int rc = 0;
+
+	imp_sec = sptlrpc_import_sec_ref(imp);
+	if (!imp_sec)
+		RETURN(-ENODEV);
+
+	rcu_read_lock();
+	sepol = rcu_dereference(imp->imp_sec->ps_sepol);
+	if (sepol) {
+		ts = ktime_to_timespec64(sepol->ssp_mtime);
+		seq_printf(seq, "mtime: %lld\n", (long long int) ts.tv_sec);
+		seq_printf(seq, "sepol: %.*s\n",
+			   sepol->ssp_sepol_size, sepol->ssp_sepol);
+	} else {
+		seq_puts(seq, "uninitialized\n");
+	}
+	rcu_read_unlock();
+	sptlrpc_sec_put(imp_sec);
+
+	return rc;
+}
+LDEBUGFS_SEQ_FOPS_RW_TYPE(srpc, sptlrpc_sepol);
 
 int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd)
 {

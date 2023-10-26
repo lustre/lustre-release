@@ -162,21 +162,20 @@ void mdc_file_encctx_pack(struct req_capsule *pill,
 	memcpy(buf, encctx, buf_size);
 }
 
-void mdc_file_sepol_pack(struct req_capsule *pill)
+void mdc_file_sepol_pack(struct req_capsule *pill, struct sptlrpc_sepol *p)
 {
 	void *buf;
 	size_t buf_size;
-	struct ptlrpc_request *req = pill->rc_req;
 
-	if (strlen(req->rq_sepol) == 0)
+	if (!p || !p->ssp_sepol_size)
 		return;
 
 	buf = req_capsule_client_get(pill, &RMF_SELINUX_POL);
 	buf_size = req_capsule_get_size(pill, &RMF_SELINUX_POL,
 					RCL_CLIENT);
 
-	LASSERT(buf_size == strlen(req->rq_sepol) + 1);
-	snprintf(buf, strlen(req->rq_sepol) + 1, "%s", req->rq_sepol);
+	LASSERT(buf_size == p->ssp_sepol_size);
+	strlcpy(buf, p->ssp_sepol, p->ssp_sepol_size);
 }
 
 void mdc_readdir_pack(struct req_capsule *pill, __u64 pgoff, size_t size,
@@ -195,7 +194,8 @@ void mdc_readdir_pack(struct req_capsule *pill, __u64 pgoff, size_t size,
 /* packing of MDS records */
 void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		     const void *data, size_t datalen, umode_t mode,
-		     uid_t uid, gid_t gid, kernel_cap_t cap_effective, u64 rdev)
+		     uid_t uid, gid_t gid, kernel_cap_t cap_effective, u64 rdev,
+		     struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_create *rec;
 	char *tmp;
@@ -252,7 +252,7 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 			     op_data->op_file_encctx_size);
 
 	/* pack SELinux policy info if any */
-	mdc_file_sepol_pack(pill);
+	mdc_file_sepol_pack(pill, sepol);
 }
 
 static inline __u64 mds_pack_open_flags(__u64 flags)
@@ -291,7 +291,7 @@ static inline __u64 mds_pack_open_flags(__u64 flags)
 /* packing of MDS records */
 void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		   umode_t mode, __u64 rdev, __u64 flags, const void *lmm,
-		   size_t lmmlen)
+		   size_t lmmlen, struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_create *rec;
 	char *tmp;
@@ -335,7 +335,7 @@ void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 				     op_data->op_file_encctx_size);
 
 		/* pack SELinux policy info if any */
-		mdc_file_sepol_pack(pill);
+		mdc_file_sepol_pack(pill, sepol);
 	}
 
 	if (lmm) {
@@ -468,7 +468,8 @@ void mdc_setattr_pack(struct req_capsule *pill, struct md_op_data *op_data,
 	}
 }
 
-void mdc_unlink_pack(struct req_capsule *pill, struct md_op_data *op_data)
+void mdc_unlink_pack(struct req_capsule *pill, struct md_op_data *op_data,
+		     struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_unlink *rec;
 
@@ -493,10 +494,11 @@ void mdc_unlink_pack(struct req_capsule *pill, struct md_op_data *op_data)
 	mdc_pack_name(pill, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 
 	/* pack SELinux policy info if any */
-	mdc_file_sepol_pack(pill);
+	mdc_file_sepol_pack(pill, sepol);
 }
 
-void mdc_link_pack(struct req_capsule *pill, struct md_op_data *op_data)
+void mdc_link_pack(struct req_capsule *pill, struct md_op_data *op_data,
+		   struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_link *rec;
 
@@ -519,7 +521,7 @@ void mdc_link_pack(struct req_capsule *pill, struct md_op_data *op_data)
 	mdc_pack_name(pill, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 
 	/* pack SELinux policy info if any */
-	mdc_file_sepol_pack(pill);
+	mdc_file_sepol_pack(pill, sepol);
 }
 
 static void mdc_close_intent_pack(struct req_capsule *pill,
@@ -569,7 +571,8 @@ static void mdc_close_intent_pack(struct req_capsule *pill,
 
 void mdc_rename_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		     const char *old, size_t oldlen,
-		     const char *new, size_t newlen)
+		     const char *new, size_t newlen,
+		     struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_rename *rec;
 
@@ -596,7 +599,7 @@ void mdc_rename_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		mdc_pack_name(pill, &RMF_SYMTGT, new, newlen);
 
 	/* pack SELinux policy info if any */
-	mdc_file_sepol_pack(pill);
+	mdc_file_sepol_pack(pill, sepol);
 }
 
 void mdc_migrate_pack(struct req_capsule *pill, struct md_op_data *op_data,

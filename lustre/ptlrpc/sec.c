@@ -1290,12 +1290,20 @@ static int sec_cop_flush_ctx_cache(struct ptlrpc_sec *sec, uid_t uid,
 static void sec_cop_destroy_sec(struct ptlrpc_sec *sec)
 {
 	struct ptlrpc_sec_policy *policy = sec->ps_policy;
+	struct sptlrpc_sepol *sepol;
 
 	LASSERT(atomic_read(&sec->ps_refcount) == 0);
-	LASSERT(atomic_read(&sec->ps_nctx) == 0);
 	LASSERT(policy->sp_cops->destroy_sec);
 
 	CDEBUG(D_SEC, "%s@%p: being destroyed\n", sec->ps_policy->sp_name, sec);
+
+	spin_lock(&sec->ps_lock);
+	sec->ps_sepol_checknext = ktime_set(0, 0);
+	sepol = rcu_dereference_protected(sec->ps_sepol, 1);
+	rcu_assign_pointer(sec->ps_sepol, NULL);
+	spin_unlock(&sec->ps_lock);
+
+	sptlrpc_sepol_put(sepol);
 
 	policy->sp_cops->destroy_sec(sec);
 	sptlrpc_policy_put(policy);
@@ -1775,6 +1783,7 @@ int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,
 	return policy->sp_sops->install_rctx(imp, ctx);
 }
 
+
 /* Get SELinux policy info from userspace */
 static int sepol_helper(struct obd_import *imp)
 {
@@ -1791,6 +1800,7 @@ static int sepol_helper(struct obd_import *imp)
 		[8] = mode_str,	    /* enforcing mode */
 		[9] = NULL
 	};
+	struct sptlrpc_sepol *sepol;
 	char *envp[] = {
 		[0] = "HOME=/",
 		[1] = "PATH=/sbin:/usr/sbin",
@@ -1800,29 +1810,31 @@ static int sepol_helper(struct obd_import *imp)
 	int rc = 0;
 
 	if (imp == NULL || imp->imp_obd == NULL ||
-	    imp->imp_obd->obd_type == NULL) {
-		rc = -EINVAL;
-	} else {
-		argv[2] = (char *)imp->imp_obd->obd_type->typ_name;
-		argv[4] = imp->imp_obd->obd_name;
-		spin_lock(&imp->imp_sec->ps_lock);
-		if (ktime_to_ns(imp->imp_sec->ps_sepol_mtime) == 0 &&
-		    imp->imp_sec->ps_sepol[0] == '\0') {
-			/* ps_sepol has not been initialized */
-			argv[5] = NULL;
-			argv[7] = NULL;
-		} else {
-			time64_t mtime_ms;
+	    imp->imp_obd->obd_type == NULL)
+		RETURN(-EINVAL);
 
-			mtime_ms = ktime_to_ms(imp->imp_sec->ps_sepol_mtime);
-			snprintf(mtime_str, sizeof(mtime_str), "%lld",
-				 mtime_ms / MSEC_PER_SEC);
-			mode_str[0] = imp->imp_sec->ps_sepol[0];
-		}
-		spin_unlock(&imp->imp_sec->ps_lock);
-		ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
-		rc = ret>>8;
+	argv[2] = (char *)imp->imp_obd->obd_type->typ_name;
+	argv[4] = imp->imp_obd->obd_name;
+
+	rcu_read_lock();
+	sepol = rcu_dereference(imp->imp_sec->ps_sepol);
+	if (!sepol) {
+		/* ps_sepol has not been initialized */
+		argv[5] = NULL;
+		argv[7] = NULL;
+	} else {
+		time64_t mtime_ms;
+
+		mtime_ms = ktime_to_ms(sepol->ssp_mtime);
+		snprintf(mtime_str, sizeof(mtime_str), "%lld",
+			 mtime_ms / MSEC_PER_SEC);
+		if (sepol->ssp_sepol_size > 1)
+			mode_str[0] = sepol->ssp_sepol[0];
 	}
+	rcu_read_unlock();
+
+	ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+	rc = ret>>8;
 
 	return rc;
 }
@@ -1861,45 +1873,78 @@ setnext:
 	return 1;
 }
 
-int sptlrpc_get_sepol(struct ptlrpc_request *req)
+static void sptlrpc_sepol_release(struct kref *ref)
+{
+	struct sptlrpc_sepol *p = container_of(ref, struct sptlrpc_sepol,
+					      ssp_ref);
+	kfree_rcu(p, ssp_rcu);
+}
+
+void sptlrpc_sepol_put(struct sptlrpc_sepol *pol)
+{
+	if (!pol)
+		return;
+	kref_put(&pol->ssp_ref, sptlrpc_sepol_release);
+}
+EXPORT_SYMBOL(sptlrpc_sepol_put);
+
+struct sptlrpc_sepol *sptlrpc_sepol_get_cached(struct ptlrpc_sec *imp_sec)
+{
+	struct sptlrpc_sepol *p;
+
+retry:
+	rcu_read_lock();
+	p = rcu_dereference(imp_sec->ps_sepol);
+	if (p && !kref_get_unless_zero(&p->ssp_ref)) {
+		rcu_read_unlock();
+		goto retry;
+	}
+	rcu_read_unlock();
+
+	return p;
+}
+EXPORT_SYMBOL(sptlrpc_sepol_get_cached);
+
+struct sptlrpc_sepol *sptlrpc_sepol_get(struct ptlrpc_request *req)
 {
 	struct ptlrpc_sec *imp_sec = req->rq_import->imp_sec;
+	struct sptlrpc_sepol *out;
 	int rc = 0;
 
 	ENTRY;
-
-	(req->rq_sepol)[0] = '\0';
 
 #ifndef HAVE_SELINUX
 	if (unlikely(send_sepol != 0))
 		CDEBUG(D_SEC,
 		       "Client cannot report SELinux status, it was not built against libselinux.\n");
-	RETURN(0);
+	RETURN(NULL);
 #endif
 
 	if (send_sepol == 0)
-		RETURN(0);
+		RETURN(NULL);
 
 	if (imp_sec == NULL)
-		RETURN(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 
 	/* Retrieve SELinux status info */
 	if (sptlrpc_sepol_needs_check(imp_sec))
 		rc = sepol_helper(req->rq_import);
-	if (likely(rc == 0)) {
-		spin_lock(&imp_sec->ps_lock);
-		memcpy(req->rq_sepol, imp_sec->ps_sepol,
-		       sizeof(req->rq_sepol));
-		spin_unlock(&imp_sec->ps_lock);
-	} else if (rc == -ENODEV) {
+
+	if (unlikely(rc == -ENODEV)) {
 		CDEBUG(D_SEC,
 		       "Client cannot report SELinux status, SELinux is disabled.\n");
-		rc = 0;
+		RETURN(NULL);
 	}
+	if (unlikely(rc))
+		RETURN(ERR_PTR(rc));
 
-	RETURN(rc);
+	out = sptlrpc_sepol_get_cached(imp_sec);
+	if (!out)
+		RETURN(ERR_PTR(-ENODATA));
+
+	RETURN(out);
 }
-EXPORT_SYMBOL(sptlrpc_get_sepol);
+EXPORT_SYMBOL(sptlrpc_sepol_get);
 
 /*
  * server side security

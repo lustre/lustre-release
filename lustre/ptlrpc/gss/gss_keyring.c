@@ -611,6 +611,7 @@ void gss_sec_destroy_kr(struct ptlrpc_sec *sec)
 
         CDEBUG(D_SEC, "destroy %s@%p\n", sec->ps_policy->sp_name, sec);
 
+	LASSERT(atomic_read(&sec->ps_nctx) == 0);
 	LASSERT(hlist_empty(&gsec_kr->gsk_clist));
         LASSERT(gsec_kr->gsk_root_ctx == NULL);
 
