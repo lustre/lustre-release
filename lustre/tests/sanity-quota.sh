@@ -5754,7 +5754,8 @@ test_79()
 	local cmd="$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$qpool.info"
 	local stopf=$TMP/$tfile
 
-	do_facet mds1 "touch $stopf"
+	do_facet mds1 "touch $stopf" || error "can't create $stopf"
+	do_facet mds1 "ls $stopf" || error "can't find $stopf"
 	stack_trap "do_facet mds1 'rm -f $stopf'"
 	do_facet mds1 "while [ -e $stopf ]; do $cmd &>/dev/null; done"&
 	local pid=$!
