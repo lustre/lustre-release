@@ -602,7 +602,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			count = result;
 		} else {
 			/* same calculation used in ll_get_user_pages */
-			count = min_t(size_t, count, iter->iov->iov_len);
+			count = min_t(size_t, count, iter_iov(iter)->iov_len);
 			result = ll_allocate_dio_buffer(pvec, count);
 			/* allocate_dio_buffer returns number of pages or
 			 * error, so do not set count = result

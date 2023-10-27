@@ -681,7 +681,7 @@ int ofd_access_log_module_init(void)
 
 	oal_log_major = MAJOR(dev);
 
-	oal_log_class = class_create(THIS_MODULE, LUSTRE_ACCESS_LOG_DIR_NAME);
+	oal_log_class = ll_class_create(LUSTRE_ACCESS_LOG_DIR_NAME);
 	if (IS_ERR(oal_log_class)) {
 		rc = PTR_ERR(oal_log_class);
 		goto out_dev;

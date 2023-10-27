@@ -3984,6 +3984,116 @@ AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
 ]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 
 #
+# LC_HAVE_IOV_ITER_IOVEC
+#
+# linux kernel v6.3-rc4-32-g6eb203e1a868
+#   iov_iter: remove iov_iter_iovec()
+#
+AC_DEFUN([LC_SRC_HAVE_IOV_ITER_IOVEC], [
+	LB2_LINUX_TEST_SRC([iov_iter_iovec_exists], [
+		#include <linux/uio.h>
+	],[
+		struct iovec iov __attribute__ ((unused));
+		struct iov_iter i = { };
+
+		iov = iov_iter_iovec(&i);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOV_ITER_IOVEC], [
+	AC_MSG_CHECKING([if 'iov_iter_iovec' is available])
+	LB2_LINUX_TEST_RESULT([iov_iter_iovec_exists], [
+		AC_DEFINE(HAVE_IOV_ITER_IOVEC, 1,
+			['iov_iter_iovec' is available])
+	])
+]) # LC_HAVE_IOV_ITER_IOVEC
+
+#
+# LC_HAVE_IOVEC_WITH_IOV_MEMBER
+#
+# linux kernel v6.3-rc4-34-g747b1f65d39a
+#   iov_iter: overlay struct iovec and ubuf/len
+# This renames iov_iter member iov to __iov and now __iov == __ubuf_iovec
+# And provides the iov_iter() accessor to return __iov or __ubuf_iovec
+#
+AC_DEFUN([LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER], [
+	LB2_LINUX_TEST_SRC([iov_iter_has___iov_member], [
+		#include <linux/uio.h>
+	],[
+		struct iov_iter iter = { };
+		size_t len __attribute__ ((unused));
+
+		len = iter.__iov->iov_len;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOVEC_WITH_IOV_MEMBER], [
+	AC_MSG_CHECKING([if 'iov_iter_iovec' is available])
+	LB2_LINUX_TEST_RESULT([iov_iter_has___iov_member], [
+		AC_DEFINE(HAVE___IOV_MEMBER, __iov,
+			['struct iov_iter' has '__iov' member])
+		AC_DEFINE(HAVE_ITER_IOV, 1,
+			[iter_iov() is available])
+	],[
+		AC_DEFINE(iter_iov(iter), (iter)->__iov,
+			['iov_iter()' provides iov])
+		AC_DEFINE(__iov, iov,
+			['struct iov_iter' has 'iov' member])
+	])
+]) # LC_HAVE_IOVEC_WITH_IOV_MEMBER
+
+#
+# LC_HAVE_CLASS_CREATE_MODULE_ARG
+#
+# linux kernel v6.3-rc1-13-g1aaba11da9aa
+#   driver core: class: remove module * from class_create()
+#
+AC_DEFUN([LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG], [
+	LB2_LINUX_TEST_SRC([class_create_without_module_arg], [
+		#include <linux/device/class.h>
+	],[
+		struct class *class __attribute__ ((unused));
+
+		class = class_create("empty");
+		if (IS_ERR(class))
+			/* checked */;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
+	AC_MSG_CHECKING([if 'class_create' does not have module arg])
+	LB2_LINUX_TEST_RESULT([class_create_without_module_arg], [
+		AC_DEFINE([ll_class_create(name)],
+			  [class_create((name))],
+			  ['class_create' does not have module arg])
+	],[
+		AC_DEFINE([ll_class_create(name)],
+			  [class_create(THIS_MODULE, (name))],
+			  ['class_create' expects module arg])
+	])
+]) # LC_HAVE_CLASS_CREATE_MODULE_ARG
+
+#
+# LC_HAVE_GET_EXPIRY_TIME64_T
+#
+# linux kernel v6.3-rc7-2433-gcf64b9bce950
+#   SUNRPC: return proper error from get_expiry()
+#
+AC_DEFUN([LC_SRC_HAVE_GET_EXPIRY_TIME64_T], [
+	LB2_LINUX_TEST_SRC([get_expiry_with_time64_t], [
+		#include <linux/sunrpc/cache.h>
+	],[
+		int err __attribute__ ((unused));
+
+		err = get_expiry((char **)NULL, (time64_t *)NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GET_EXPIRY_TIME64_T], [
+	AC_MSG_CHECKING([if 'get_expiry' needs a time64_t arg])
+	LB2_LINUX_TEST_RESULT([get_expiry_with_time64_t], [
+		AC_DEFINE(HAVE_GET_EXPIRY_2ARGS, 1,
+			['get_expiry' takes time64_t])
+	])
+]) # LC_HAVE_GET_EXPIRY_TIME64_T
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4241,6 +4351,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_MNT_IDMAP_ARG
 	LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_SRC_HAVE_U64_CAPABILITY
+
+	# 6.4
+	LC_SRC_HAVE_IOV_ITER_IOVEC
+	LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER
+	LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG
+	LC_SRC_HAVE_GET_EXPIRY_TIME64_T
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4520,6 +4636,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_MNT_IDMAP_ARG
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_HAVE_U64_CAPABILITY
+
+	# 6.4
+	LC_HAVE_IOV_ITER_IOVEC
+	LC_HAVE_IOVEC_WITH_IOV_MEMBER
+	LC_HAVE_CLASS_CREATE_MODULE_ARG
+	LC_HAVE_GET_EXPIRY_TIME64_T
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

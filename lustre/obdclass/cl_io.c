@@ -1211,7 +1211,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		/* save the iovec pointer before it's modified by
 		 * ll_dio_user_copy
 		 */
-		struct iovec *tmp = (struct iovec *) sdio->csd_iter.iov;
+		struct iovec *tmp = (struct iovec *) sdio->csd_iter.__iov;
 
 		CDEBUG(D_VFSTRACE,
 		       "finishing unaligned dio %s aio->cda_bytes %ld\n",
@@ -1227,7 +1227,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		 * because we have the unmodified iovec pointer
 		 */
 		OBD_FREE_PTR(tmp);
-		sdio->csd_iter.iov = NULL;
+		sdio->csd_iter.__iov = NULL;
 	} else {
 		/* unaligned DIO does not get user pages, so it doesn't have to
 		 * release them, but aligned I/O must
@@ -1306,13 +1306,13 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 			 * separate thread requires a local copy of the iovec
 			 */
 			memcpy(&sdio->csd_iter, iter, sizeof(struct iov_iter));
-			OBD_ALLOC_PTR(sdio->csd_iter.iov);
-			if (sdio->csd_iter.iov == NULL) {
+			OBD_ALLOC_PTR(sdio->csd_iter.__iov);
+			if (sdio->csd_iter.__iov == NULL) {
 				cl_sub_dio_free(sdio);
 				sdio = NULL;
 				goto out;
 			}
-			memcpy((void *) sdio->csd_iter.iov, iter->iov,
+			memcpy((void *) sdio->csd_iter.__iov, iter->__iov,
 			       sizeof(struct iovec));
 		}
 	}
@@ -1335,7 +1335,7 @@ EXPORT_SYMBOL(cl_dio_aio_free);
 void cl_sub_dio_free(struct cl_sub_dio *sdio)
 {
 	if (sdio) {
-		void *tmp = (void *)sdio->csd_iter.iov;
+		void *tmp = (void *)sdio->csd_iter.__iov;
 
 		if (tmp) {
 			LASSERT(sdio->csd_unaligned);

@@ -336,19 +336,21 @@ static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 # define SB_KERNMOUNT MS_KERNMOUNT
 #endif
 
+#ifndef HAVE_IOV_ITER_IOVEC
+static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
+{
+	return (struct iovec) {
+		.iov_base = iter->__iov->iov_base + iter->iov_offset,
+		.iov_len = min(iter->count,
+			       iter->__iov->iov_len - iter->iov_offset),
+	};
+}
+#endif
+
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 static inline void iov_iter_reexpand(struct iov_iter *i, size_t count)
 {
 	i->count = count;
-}
-
-static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
-{
-	return (struct iovec) {
-		.iov_base = iter->iov->iov_base + iter->iov_offset,
-		.iov_len = min(iter->count,
-			       iter->iov->iov_len - iter->iov_offset),
-	};
 }
 
 #define iov_for_each(iov, iter, start)					\
