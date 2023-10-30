@@ -45,7 +45,6 @@
  *  Debugging
  */
 extern unsigned int libcfs_subsystem_debug;
-extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_watchdog_ratelimit;
@@ -113,40 +112,6 @@ do {									\
 
 #ifdef CDEBUG_ENABLED
 
-#if !defined(__x86_64__)
-# ifdef __ia64__
-#  define CDEBUG_STACK() (THREAD_SIZE -					\
-			  ((unsigned long)__builtin_dwarf_cfa() &	\
-			   (THREAD_SIZE - 1)))
-# else
-#  define CDEBUG_STACK() (THREAD_SIZE -					\
-			  ((unsigned long)__builtin_frame_address(0) &	\
-			   (THREAD_SIZE - 1)))
-# endif /* __ia64__ */
-
-#define __CHECK_STACK_WITH_LOC(file, func, line, msgdata, mask, cdls)	\
-do {									\
-	if (unlikely(CDEBUG_STACK() > libcfs_stack)) {			\
-		LIBCFS_DEBUG_MSG_DATA_INIT(file, func, line, msgdata,	\
-					   D_WARNING, NULL);		\
-		libcfs_stack = CDEBUG_STACK();				\
-		libcfs_debug_msg(msgdata, "maximum lustre stack %u\n",	\
-				 libcfs_stack);				\
-		(msgdata)->msg_mask = mask;				\
-		(msgdata)->msg_cdls = cdls;				\
-		dump_stack();						\
-		/*panic("LBUG");*/					\
-	}								\
-} while (0)
-#else /* __x86_64__ */
-#define CDEBUG_STACK() (0L)
-#define __CHECK_STACK_WITH_LOC(file, func, line, msgdata, mask, cdls)	\
-	do {} while (0)
-#endif /* __x86_64__ */
-
-#define CFS_CHECK_STACK(msgdata, mask, cdls)				\
-	__CHECK_STACK_WITH_LOC(__FILE__, __func__, __LINE__,		\
-			       msgdata, mask, cdls)
 /**
  * Filters out logging messages based on mask and subsystem.
  */
@@ -159,8 +124,6 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #  define __CDEBUG_WITH_LOC(file, func, line, mask, cdls, format, ...)	\
 do {									\
 	static struct libcfs_debug_msg_data msgdata;			\
-									\
-	__CHECK_STACK_WITH_LOC(file, func, line, &msgdata, mask, cdls);	\
 									\
 	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {			\
 		LIBCFS_DEBUG_MSG_DATA_INIT(file, func, line,		\

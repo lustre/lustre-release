@@ -305,8 +305,7 @@ static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
 }
 
 static void cfs_set_ptldebug_header(struct ptldebug_header *header,
-				    struct libcfs_debug_msg_data *msgdata,
-				    unsigned long stack)
+				    struct libcfs_debug_msg_data *msgdata)
 {
 	struct timespec64 ts;
 
@@ -321,7 +320,6 @@ static void cfs_set_ptldebug_header(struct ptldebug_header *header,
 	 */
 	header->ph_sec = (u32)ts.tv_sec;
 	header->ph_usec = ts.tv_nsec / NSEC_PER_USEC;
-	header->ph_stack = stack;
 	header->ph_pid = current->pid;
 	header->ph_line_num = msgdata->msg_line;
 	header->ph_extern_pid = 0;
@@ -403,7 +401,7 @@ int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	 * pins us to a particular CPU.  This avoids an smp_processor_id()
 	 * warning on Linux when debugging is enabled.
 	 */
-	cfs_set_ptldebug_header(&header, msgdata, CDEBUG_STACK());
+	cfs_set_ptldebug_header(&header, msgdata);
 
 	if (!tcd)                /* arch may not log in IRQ context */
 		goto console;
@@ -573,7 +571,7 @@ cfs_trace_assertion_failed(const char *str,
 	libcfs_catastrophe = 1;
 	smp_mb();
 
-	cfs_set_ptldebug_header(&hdr, msgdata, CDEBUG_STACK());
+	cfs_set_ptldebug_header(&hdr, msgdata);
 
 	cfs_print_to_console(&hdr, D_EMERG, msgdata->msg_file, msgdata->msg_fn,
 			     "%s", str);

@@ -235,9 +235,6 @@ MODULE_PARM_DESC(libcfs_console_backoff, "Lustre kernel debug console backoff fa
 
 unsigned int libcfs_debug_binary = 1;
 
-unsigned int libcfs_stack = 3 * THREAD_SIZE / 4;
-EXPORT_SYMBOL(libcfs_stack);
-
 unsigned int libcfs_catastrophe;
 EXPORT_SYMBOL(libcfs_catastrophe);
 

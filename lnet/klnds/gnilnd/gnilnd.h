@@ -1034,8 +1034,6 @@ _kgnilnd_debug_msg(kgn_msg_t *msg,
 
 #define kgnilnd_debug_msg(msgdata, mask, cdls, msg, fmt, a...)                \
 do {                                                                          \
-	CFS_CHECK_STACK(msgdata, mask, cdls);                                 \
-									      \
 	if (((mask) & D_CANTMASK) != 0 ||                                     \
 	    ((libcfs_debug & (mask)) != 0 &&                                  \
 	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
@@ -1080,8 +1078,6 @@ _kgnilnd_debug_conn(kgn_conn_t *conn,
 
 #define kgnilnd_debug_conn(msgdata, mask, cdls, conn, fmt, a...)               \
 do {                                                                           \
-	CFS_CHECK_STACK(msgdata, mask, cdls);                                  \
-									       \
 	if (((mask) & D_CANTMASK) != 0 ||                                      \
 	    ((libcfs_debug & (mask)) != 0 &&                                   \
 	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                 \
@@ -1109,8 +1105,6 @@ _kgnilnd_debug_tx(kgn_tx_t *tx,
 
 #define kgnilnd_debug_tx(msgdata, mask, cdls, tx, fmt, a...)                   \
 do {                                                                           \
-	CFS_CHECK_STACK(msgdata, mask, cdls);                                  \
-									       \
 	if (((mask) & D_CANTMASK) != 0 ||                                      \
 	    ((libcfs_debug & (mask)) != 0 &&                                   \
 	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                 \

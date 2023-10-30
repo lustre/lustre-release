@@ -1298,8 +1298,6 @@ extern const char *ldlm_it2str(enum ldlm_intent_flags it);
  */
 #ifdef LIBCFS_DEBUG
 #define ldlm_lock_debug(msgdata, mask, cdls, lock, fmt, a...) do {      \
-        CFS_CHECK_STACK(msgdata, mask, cdls);                           \
-                                                                        \
         if (((mask) & D_CANTMASK) != 0 ||                               \
             ((libcfs_debug & (mask)) != 0 &&                            \
              (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \

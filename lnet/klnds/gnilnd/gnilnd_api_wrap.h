@@ -112,7 +112,6 @@ _kgnilnd_api_rc_lbug(const char *rcstr, int rc, struct libcfs_debug_msg_data *da
 
 #define kgnilnd_api_rc_lbug(msgdata, rc, fmt, a...)				\
 do {										\
-	CFS_CHECK_STACK(msgdata, D_ERROR, NULL);				\
 	/* we don't mask this - it is always at D_ERROR */			\
 	_kgnilnd_api_rc_lbug(kgnilnd_api_rc2str(rc), (rc), msgdata, fmt, ##a);	\
 } while (0)
