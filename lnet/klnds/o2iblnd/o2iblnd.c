@@ -3719,9 +3719,10 @@ kiblnd_startup(struct lnet_ni *ni)
 
 	rcu_read_lock();
 	netdev = dev_get_by_name_rcu(ni->ni_net_ns, net->ibn_dev->ibd_ifname);
-	if (((netdev->reg_state == NETREG_UNREGISTERING) ||
-	     (netdev->operstate != IF_OPER_UP)) ||
-	    (lnet_get_link_status(netdev) == 0)) {
+	if (netdev &&
+	    ((netdev->reg_state == NETREG_UNREGISTERING) ||
+	     (netdev->operstate != IF_OPER_UP) ||
+	    (lnet_get_link_status(netdev) == 0))) {
 		kiblnd_set_ni_fatal_on(ibdev->ibd_hdev, 1);
 	}
 	rcu_read_unlock();
