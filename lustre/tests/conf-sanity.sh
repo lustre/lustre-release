@@ -5460,6 +5460,8 @@ test_66() {
 	[[ "$MGS_VERSION" -ge $(version_code 2.3.59) ]] ||
 		skip "Need MGS version at least 2.3.59"
 
+	check_versions || skip "do not replace_nids with mismatched versions"
+
 	setup
 	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
 	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -1)
