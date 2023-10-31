@@ -115,7 +115,9 @@ lnet_ni_unique_net(struct list_head *nilist, char *iface)
 		ni = list_entry(tmp, struct lnet_ni, ni_netlist);
 
 		if (ni->ni_interface != NULL &&
-		    strncmp(ni->ni_interface, iface, strlen(iface)) == 0)
+		    strncmp(ni->ni_interface,
+			    iface,
+			    LNET_MAX_STR_LEN) == 0)
 			return false;
 	}
 

@@ -65,6 +65,7 @@ cleanup_testsuite() {
 TESTNS='test_ns'
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
+FAKE_IP_ALIAS="10.1.2.31"
 do_ns() {
 	echo "ip netns exec $TESTNS $*"
 	ip netns exec $TESTNS "$@"
@@ -1386,6 +1387,44 @@ EOF
 	return 0
 }
 run_test 108 "Check Multi-Rail setup"
+
+test_109() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	FAKE_IF_ALIAS="${FAKE_IF}"
+	FAKE_IF_ALIAS+=":0"
+
+	ifconfig "$FAKE_IF_ALIAS" "$FAKE_IP_ALIAS" up ||
+		error "Failed to add fake IF alias"
+
+	reinit_dlc || return $?
+
+	# add interface with longer name first
+	add_net "tcp" "$FAKE_IF_ALIAS" || return $?
+	add_net "tcp" "$FAKE_IF" || return $?
+
+	del_net "tcp" "$FAKE_IF" || return $?
+	del_net "tcp" "$FAKE_IF_ALIAS" || return $?
+
+	# add interface with shorter name first
+	add_net "tcp" "$FAKE_IF" || return $?
+	add_net "tcp" "$FAKE_IF_ALIAS" || return $?
+
+	ifconfig "$FAKE_IF_ALIAS" "$FAKE_IP_ALIAS" down ||
+		error "Failed to clean up fake IF alias"
+
+	cleanup_fakeif
+	cleanup_lnet
+	setup_netns
+}
+run_test 109 "Add NI using a network interface alias (LU-16859)"
 
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||
