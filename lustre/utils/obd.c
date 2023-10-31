@@ -5223,7 +5223,7 @@ int jt_pool_cmd(int argc, char **argv)
 
 	switch (argc) {
 	case 0:
-	case 1: return CMD_HELP;
+	case 1: { rc = CMD_HELP; goto out_cmd; }
 	case 2: {
 		rc = extract_fsname_poolname(argv, fsname, poolname);
 		if (rc)
@@ -5240,9 +5240,11 @@ int jt_pool_cmd(int argc, char **argv)
 				return llog_poollist(fsname, poolname);
 			fprintf(stderr,
 				"Cannot run pool_list command since there is no local MGS/MDT or client\n");
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out_cmd;
 		} else {
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out_cmd;
 		}
 
 		rc = pool_cmd(cmd, argv[0], argv[1], fsname, poolname, NULL);
@@ -5255,12 +5257,14 @@ int jt_pool_cmd(int argc, char **argv)
 	default: {
 		char format[2 * MAX_OBD_NAME];
 
-		if (strcmp("pool_remove", argv[0]) == 0)
+		if (strcmp("pool_remove", argv[0]) == 0) {
 			cmd = LCFG_POOL_REM;
-		else if (strcmp("pool_add", argv[0]) == 0)
+		} else if (strcmp("pool_add", argv[0]) == 0) {
 			cmd = LCFG_POOL_ADD;
-		else
-			return CMD_HELP;
+		} else {
+			rc = CMD_HELP;
+			goto out_cmd;
+		}
 
 		rc = extract_fsname_poolname(argv, fsname, poolname);
 		if (rc)
@@ -5272,7 +5276,7 @@ int jt_pool_cmd(int argc, char **argv)
 
 			array_sz = get_array_idx(argv[i], format, &array);
 			if (array_sz == 0)
-				return CMD_HELP;
+				goto out;
 
 			cmd_start = cmds_nr;
 			cmds_nr += array_sz;
@@ -5327,7 +5331,7 @@ out:
 		errno = -rc;
 		perror(argv[0]);
 	}
-
+out_cmd:
 	return rc;
 }
 
