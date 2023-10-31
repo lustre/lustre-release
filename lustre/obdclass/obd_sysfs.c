@@ -506,13 +506,14 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
 	struct obd_device *obd = v;
-	int dev_no = obd->obd_minor;
 	char *status;
+	int dev_no;
 
 	if (!obd)
 		return 0;
 
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+	dev_no = obd->obd_minor;
 
 	if (obd->obd_stopping)
 		status = "ST";
