@@ -387,13 +387,17 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
 	}
 }
 
-/* Expected network latency per remote node (secs) */
+/**
+ * Returns Expected network latency per remote node (secs).
+ *
+ * \param[in] req	ptlrpc request
+ *
+ * \retval	0 if AT(Adaptive Timeout) is off
+ * \retval	>0 (iat_net_latency) latency per node
+ */
 int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
 {
-	struct obd_device *obd = NULL;
-
-	if (req->rq_import)
-		obd = req->rq_import->imp_obd;
+	struct obd_device *obd = req->rq_import->imp_obd;
 
 	return obd_at_off(obd) ?
 	       0 : obd_at_get(obd, &req->rq_import->imp_at.iat_net_latency);
