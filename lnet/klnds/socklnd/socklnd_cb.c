@@ -1807,21 +1807,29 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	proto = ksocknal_parse_proto_version(hello);
 	if (proto == NULL) {
 		if (!active) {
+			struct sockaddr_in *psa = (void *)&conn->ksnc_peeraddr;
+
 			/* unknown protocol from peer_ni,
 			 * tell peer_ni my protocol.
 			 */
-			conn->ksnc_proto = &ksocknal_protocol_v3x;
+			if (psa->sin_family == AF_INET6)
+				conn->ksnc_proto = &ksocknal_protocol_v4x;
+			else if (psa->sin_family == AF_INET)
+				conn->ksnc_proto = &ksocknal_protocol_v3x;
 #if SOCKNAL_VERSION_DEBUG
 			if (*ksocknal_tunables.ksnd_protocol == 2)
 				conn->ksnc_proto = &ksocknal_protocol_v2x;
 			else if (*ksocknal_tunables.ksnd_protocol == 1)
 				conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
+			if (!conn->ksnc_proto)
+				goto unknown;
+
 			hello->kshm_nips = 0;
 			ksocknal_send_hello(ni, conn, &ni->ni_nid,
 					    hello);
 		}
-
+unknown:
 		CERROR("Unknown protocol version (%d.x expected) from %pISc\n",
 		       conn->ksnc_proto->pro_version, &conn->ksnc_peeraddr);
 

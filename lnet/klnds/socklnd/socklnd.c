@@ -934,8 +934,9 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	 * Passive connections use the listener timeout since the peer_ni sends
 	 * eagerly
 	 */
-
 	if (active) {
+		struct sockaddr_in *psa = (void *)&conn->ksnc_peeraddr;
+
 		peer_ni = conn_cb->ksnr_peer;
 		LASSERT(ni == peer_ni->ksnp_ni);
 
@@ -948,13 +949,20 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 		write_unlock_bh(global_lock);
 
 		if (conn->ksnc_proto == NULL) {
-			conn->ksnc_proto = &ksocknal_protocol_v3x;
+			if (psa->sin_family == AF_INET6)
+				conn->ksnc_proto = &ksocknal_protocol_v4x;
+			else if (psa->sin_family == AF_INET)
+				conn->ksnc_proto = &ksocknal_protocol_v3x;
 #if SOCKNAL_VERSION_DEBUG
 			if (*ksocknal_tunables.ksnd_protocol == 2)
 				conn->ksnc_proto = &ksocknal_protocol_v2x;
 			else if (*ksocknal_tunables.ksnd_protocol == 1)
 				conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
+		}
+		if (!conn->ksnc_proto) {
+			rc = -EPROTO;
+			goto failed_1;
 		}
 
 		rc = ksocknal_send_hello(ni, conn, &peerid.nid, hello);
