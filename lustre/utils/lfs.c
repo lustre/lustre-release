@@ -5225,7 +5225,6 @@ static int lfs_find(int argc, char **argv)
 	int optidx = 0;
 	int pathstart = -1;
 	int pathend = -1;
-	int pathbad = -1;
 	int neg_opt = 0;
 	time_t *xtime;
 	int *xsign;
@@ -6027,15 +6026,14 @@ err_free:
 
 	do {
 		rc = llapi_find(argv[pathstart], &param);
-		if (rc && !ret) {
-			ret = rc;
-			pathbad = pathstart;
+		if (rc) {
+			if (!ret)
+				ret = rc;
+
+			fprintf(stderr, "%s: failed for '%s': %s\n",
+				progname, argv[pathstart], strerror(-rc));
 		}
 	} while (++pathstart < pathend);
-
-	if (ret)
-		fprintf(stderr, "%s: failed for '%s': %s\n",
-			progname, argv[pathbad], strerror(-rc));
 
 err:
 	if (param.fp_obd_uuid && param.fp_num_alloc_obds)
@@ -6454,7 +6452,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		rc2 = llapi_getstripe(argv[pathstart], param);
 		if (rc2) {
 			fprintf(stderr, "%s: %s for '%s' failed: %s\n",
-				progname, argv[0], argv[optind - 1],
+				progname, argv[0], argv[pathstart],
 				strerror(-rc2));
 			if (!rc)
 				rc = rc2;
@@ -7383,7 +7381,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			fprintf(stderr,
 				"%s setdirstripe: cannot create dir '%s': %s\n",
 				progname, dname, strerror(-result));
-	} while (!result && (dname = argv[++optind]));
+	} while ((dname = argv[++optind]));
 
 	if (mode_opt)
 		umask(previous_mode);

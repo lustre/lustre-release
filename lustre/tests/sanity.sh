@@ -1799,6 +1799,11 @@ test_27ga() {
 	$LFS getstripe -m $DIR/$tdir/$tfile $DIR/$tdir/$tfile.2
 	local rc=$?
 	(( rc == 2 )) || error "getstripe did not return ENOENT"
+
+	local err_msg=$($LFS getstripe $DIR/$tdir/typo $DIR/$tdir/$tfile \
+			2>&1 > /dev/null)
+	[[ $err_msg =~ "typo" ]] ||
+		error "expected message with correct filename, got '$err_msg'"
 }
 run_test 27ga "$LFS getstripe with missing file (should return error)"
 
@@ -8979,6 +8984,7 @@ test_56ef() {
 	local dir1=$dir/d1
 	local dir2=$dir/d2
 	local nfiles
+	local err_msg
 
 	test_mkdir -p $dir
 
@@ -8999,6 +9005,10 @@ test_56ef() {
 	nfiles=$($LFS find -type f $dir1 $dir2 | wc -l)
 	(( $nfiles == 2 )) ||
 		error "(3) lfs find expected 2 files, got $nfiles"
+
+	err_msg=$($LFS find $dir1/typo $dir1/f 2>&1 > /dev/null)
+	[[ $err_msg =~ "No such file or directory" ]] ||
+		error "expected standard error message, got: '$err_msg'"
 }
 run_test 56ef "lfs find with multiple paths"
 
