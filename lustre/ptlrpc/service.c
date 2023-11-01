@@ -108,11 +108,6 @@ static void ptlrpc_free_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 	LASSERT(rqbd->rqbd_refcount == 0);
 	LASSERT(list_empty(&rqbd->rqbd_reqs));
 
-	spin_lock(&svcpt->scp_lock);
-	list_del(&rqbd->rqbd_list);
-	svcpt->scp_nrqbds_total--;
-	spin_unlock(&svcpt->scp_lock);
-
 	OBD_FREE_LARGE(rqbd->rqbd_buffer, svcpt->scp_service->srv_buf_size);
 	OBD_FREE_PTR(rqbd);
 }
@@ -3544,10 +3539,18 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 		 * Now free all the request buffers since nothing
 		 * references them any more...
 		 */
+		spin_lock(&svcpt->scp_lock);
 		while ((rqbd = list_first_entry_or_null(&svcpt->scp_rqbd_idle,
 							struct ptlrpc_request_buffer_desc,
-							rqbd_list)) != NULL)
+							rqbd_list)) != NULL) {
+			list_del(&rqbd->rqbd_list);
+			svcpt->scp_nrqbds_total--;
+			spin_unlock(&svcpt->scp_lock);
+
 			ptlrpc_free_rqbd(rqbd);
+			spin_lock(&svcpt->scp_lock);
+		}
+		spin_unlock(&svcpt->scp_lock);
 
 		ptlrpc_wait_replies(svcpt);
 
