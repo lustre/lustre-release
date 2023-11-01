@@ -2,3 +2,4 @@ block-bio-integrity-Advance-seed-correctly-for-large.patch
 block-integrity-allow-optional-integrity-functions-rhel8.3.patch
 block-pass-bio-into-integrity_processing_fn-rhel8.patch
 jbd2-revoke-rhashtable-rhel8.4.patch
+mm-wait_for_stable_page-should-check-for-bdev-rhel8.6.patch

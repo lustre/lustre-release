@@ -1,0 +1,18 @@
+Index: linux-4.18.0-372.32.1.el8_6/mm/page-writeback.c
+===================================================================
+--- linux-4.18.0-372.32.1.el8_6.orig/mm/page-writeback.c
++++ linux-4.18.0-372.32.1.el8_6/mm/page-writeback.c
+@@ -2894,7 +2894,12 @@ EXPORT_SYMBOL_GPL(wait_on_page_writeback
+  */
+ void wait_for_stable_page(struct page *page)
+ {
+-	if (page->mapping->host->i_sb->s_iflags & SB_I_STABLE_WRITES)
++	struct inode *inode = page->mapping->host;
++	struct super_block *sb = inode->i_sb;
++
++	if ((sb->s_iflags & SB_I_STABLE_WRITES) ||
++	    (sb_is_blkdev_sb(sb) &&
++	     blk_queue_stable_writes(I_BDEV(inode)->bd_disk->queue)))
+ 		wait_on_page_writeback(page);
+ }
+ EXPORT_SYMBOL_GPL(wait_for_stable_page);

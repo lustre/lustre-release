@@ -1,3 +1,4 @@
 block-integrity-allow-optional-integrity-functions-rhel9.3.patch
 block-pass-bio-into-integrity_processing_fn-rhel9.patch
 jbd2-revoke-rhashtable-rhel8.4.patch
+add-and-use-a-per-mapping-stable-writes-flag-rhel9.patch

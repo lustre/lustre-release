@@ -1,0 +1,74 @@
+Index: linux-5.14.0-162.23.1.el9_1/block/bdev.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/block/bdev.c
++++ linux-5.14.0-162.23.1.el9_1/block/bdev.c
+@@ -506,6 +506,8 @@ struct block_device *bdev_alloc(struct g
+ 
+ void bdev_add(struct block_device *bdev, dev_t dev)
+ {
++	if (bdev_stable_writes(bdev))
++		mapping_set_stable_writes(bdev->bd_inode->i_mapping);
+ 	bdev->bd_dev = dev;
+ 	bdev->bd_inode->i_rdev = dev;
+ 	bdev->bd_inode->i_ino = dev;
+Index: linux-5.14.0-162.23.1.el9_1/fs/inode.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/fs/inode.c
++++ linux-5.14.0-162.23.1.el9_1/fs/inode.c
+@@ -192,6 +192,8 @@ int inode_init_always(struct super_block
+ 	lockdep_set_class_and_name(&mapping->invalidate_lock,
+ 				   &sb->s_type->invalidate_lock_key,
+ 				   "mapping.invalidate_lock");
++	if (sb->s_iflags & SB_I_STABLE_WRITES)
++		mapping_set_stable_writes(mapping);
+ 	inode->i_private = NULL;
+ 	inode->i_mapping = mapping;
+ 	INIT_HLIST_HEAD(&inode->i_dentry);	/* buggered by rcu freeing */
+Index: linux-5.14.0-162.23.1.el9_1/include/linux/pagemap.h
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/include/linux/pagemap.h
++++ linux-5.14.0-162.23.1.el9_1/include/linux/pagemap.h
+@@ -147,6 +147,8 @@ enum mapping_flags {
+ 	/* writeback related tags are not used */
+ 	AS_NO_WRITEBACK_TAGS = 5,
+ 	AS_LARGE_FOLIO_SUPPORT = 6,
++	AS_STABLE_WRITES,	/* must wait for writeback before modifying
++				   folio contents */
+ };
+ 
+ /**
+@@ -217,6 +219,21 @@ static inline int mapping_use_writeback_
+ 	return !test_bit(AS_NO_WRITEBACK_TAGS, &mapping->flags);
+ }
+ 
++static inline bool mapping_stable_writes(const struct address_space *mapping)
++{
++	return test_bit(AS_STABLE_WRITES, &mapping->flags);
++}
++
++static inline void mapping_set_stable_writes(struct address_space *mapping)
++{
++	set_bit(AS_STABLE_WRITES, &mapping->flags);
++}
++
++static inline void mapping_clear_stable_writes(struct address_space *mapping)
++{
++	clear_bit(AS_STABLE_WRITES, &mapping->flags);
++}
++
+ static inline gfp_t mapping_gfp_mask(struct address_space * mapping)
+ {
+ 	return mapping->gfp_mask;
+Index: linux-5.14.0-162.23.1.el9_1/mm/page-writeback.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/mm/page-writeback.c
++++ linux-5.14.0-162.23.1.el9_1/mm/page-writeback.c
+@@ -2965,7 +2965,7 @@ EXPORT_SYMBOL_GPL(folio_wait_writeback_k
+  */
+ void folio_wait_stable(struct folio *folio)
+ {
+-	if (folio_inode(folio)->i_sb->s_iflags & SB_I_STABLE_WRITES)
++	if (mapping_stable_writes(folio_mapping(folio)))
+ 		folio_wait_writeback(folio);
+ }
+ EXPORT_SYMBOL_GPL(folio_wait_stable);
