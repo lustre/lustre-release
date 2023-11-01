@@ -193,6 +193,11 @@ int osc_quota_setup(struct obd_device *obd)
 void osc_quota_cleanup(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
+	unsigned long qid;
+	u8 *qtypes;
+
+	xa_for_each(&cli->cl_quota_exceeded_ids, qid, qtypes)
+		xa_erase(&cli->cl_quota_exceeded_ids, qid);
 
 	xa_destroy(&cli->cl_quota_exceeded_ids);
 }
