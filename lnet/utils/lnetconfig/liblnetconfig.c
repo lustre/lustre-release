@@ -1740,11 +1740,6 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 	while ((nid = strsep(&nidstr, "@")) != NULL) {
 		char *tmp = NULL, *tmp2 = NULL, *end = NULL;
 
-		if (!nid) {
-			*errmsg = "Unable to parse nidlist: no proper NID string";
-			return -ENOENT;
-		}
-
 		tmp = strchr(nid, '[');
 		tmp2 = strchr(nid, ']');
 
