@@ -4102,8 +4102,8 @@ old_api:
 
 static int jt_list_peer(int argc, char **argv)
 {
-	int rc;
 	struct cYAML *err_rc = NULL, *list_rc = NULL;
+	int rc;
 
 	rc = check_cmd(peer_cmds, "peer", "list", 0, argc, argv);
 	if (rc)
@@ -4115,7 +4115,9 @@ static int jt_list_peer(int argc, char **argv)
 			goto old_api;
 		return rc;
 	}
+
 old_api:
+	rc = lustre_lnet_list_peer(-1, &list_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 	else if (list_rc)
