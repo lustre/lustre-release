@@ -76,6 +76,10 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			update=$(echo $LINUXRELEASE | cut -d- -f2 | cut -d. -f2)
 			if test $update -ge 59; then
 				LDISKFS_SERIES="5.3.18-sles15sp3-59.series"
+				up_patch=$(echo $LINUXRELEASE | cut -d- -f2 | cut -d. -f3 | cut -d_ -f1)
+				if test $update -eq 59 -a $up_patch -le 60; then
+					LDISKFS_SERIES="5.3.18-sles15sp3.series"
+				fi
 			fi
 			;;
 		15sp4 ) LDISKFS_SERIES="5.14.21-sles15sp4.series"
