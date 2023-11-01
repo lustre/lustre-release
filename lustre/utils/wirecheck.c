@@ -2052,11 +2052,12 @@ check_rsi_downcall_data(void)
 	CHECK_STRUCT(rsi_downcall_data);
 	CHECK_MEMBER(rsi_downcall_data, sid_magic);
 	CHECK_MEMBER(rsi_downcall_data, sid_err);
-	CHECK_MEMBER(rsi_downcall_data, sid_hash);
+	CHECK_MEMBER(rsi_downcall_data, sid_unused);
 	CHECK_MEMBER(rsi_downcall_data, sid_maj_stat);
 	CHECK_MEMBER(rsi_downcall_data, sid_min_stat);
 	CHECK_MEMBER(rsi_downcall_data, sid_len);
 	CHECK_MEMBER(rsi_downcall_data, sid_offset);
+	CHECK_MEMBER(rsi_downcall_data, sid_hash);
 	CHECK_MEMBER(rsi_downcall_data, sid_val);
 }
 

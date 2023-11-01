@@ -177,7 +177,7 @@ out:
 
 #define RPCSEC_GSS_SEQ_WIN	5
 
-static int send_response(int auth_res, uint64_t hash,
+static int send_response(int auth_res, __u64 hash,
 			gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 			u_int32_t maj_stat, u_int32_t min_stat,
 			gss_buffer_desc *out_handle, gss_buffer_desc *out_token)
@@ -912,7 +912,8 @@ int handle_channel_request(int fd)
 		.maj_stat		= GSS_S_FAILURE,
 		.ctx			= GSS_C_NO_CONTEXT,
 	};
-	uint64_t hash = 0;
+	__u64 hash = 0;
+	__u64 tmp_lustre_svc = 0;
 
 	printerr(LL_INFO, "handling request\n");
 	if (readline(fd, &lbuf, &lbuflen) != 1) {
@@ -923,16 +924,17 @@ int handle_channel_request(int fd)
 	cp = lbuf;
 
 	/* see rsi_do_upcall() for the format of data being input here */
-	rc = gss_u64_read_string(&cp, (__u64 *)&hash);
+	rc = gss_u64_read_string(&cp, &hash);
 	if (rc < 0) {
 		printerr(LL_ERR, "ERROR: failed parsing request: hash\n");
 		goto out_err;
 	}
-	rc = gss_u64_read_string(&cp, (__u64 *)&snd.lustre_svc);
+	rc = gss_u64_read_string(&cp, &tmp_lustre_svc);
 	if (rc < 0) {
 		printerr(LL_ERR, "ERROR: failed parsing request: lustre svc\n");
 		goto out_err;
 	}
+	snd.lustre_svc = tmp_lustre_svc;
 	/* lustre_svc is the svc and gss subflavor */
 	lustre_mech = (snd.lustre_svc & LUSTRE_GSS_MECH_MASK) >>
 		LUSTRE_GSS_MECH_SHIFT;

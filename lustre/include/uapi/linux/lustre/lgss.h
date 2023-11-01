@@ -72,18 +72,27 @@ struct lgssd_ioctl_param {
 };
 
 #define GSS_SOCKET_PATH	"/tmp/svcgssd.socket"
-#define RSI_DOWNCALL_MAGIC	0x6d6dd62a
+/*
+ * Old RSI_DOWNCALL_MAGIC was:
+ * #define RSI_DOWNCALL_MAGIC	0x6d6dd62a
+ *
+ * This is an uapi and to catch cases like kernel modules
+ * being updated separately from user tools new
+ * RSI_DOWNCALL_MAGIC(0x6d6dd63a) was introduced
+ */
+#define RSI_DOWNCALL_MAGIC	0x6d6dd63a
 #define RSI_DOWNCALL_PATH	"sptlrpc/gss/rsi_info"
 #define RSI_CACHE_NAME		"rsicache"
 
 struct rsi_downcall_data {
 	__u32	  sid_magic;
 	__u32	  sid_err;
-	__u32	  sid_hash;
+	__u32	  sid_unused;
 	__u32	  sid_maj_stat;
 	__u32	  sid_min_stat;
 	__u32	  sid_len;
 	__s64	  sid_offset;
+	__u64	  sid_hash;
 	/* sid_val contains in_handle, in_token,
 	 * out_handle, out_token
 	 */
