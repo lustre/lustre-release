@@ -254,16 +254,28 @@ mgs# lctl set_param -P -d mdt.testfs-MDT0000.identity_upcall</screen></para>
       <screen>mgs# lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
 $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
       <caution>
-        <para>The <literal>lctl conf_param</literal> command <emphasis>permanently</emphasis> sets parameters in the file system configuration for all nodes of the specified type.</para>
+        <para>The <literal>lctl conf_param</literal> command
+          <emphasis>permanently</emphasis> sets parameters in the file system
+          configuration for all nodes of the specified type.</para>
       </caution>
-      <para>To get current Lustre parameter settings, use the <literal>lctl get_param</literal> command on the desired node with the same parameter name as <literal>lctl set_param</literal>:</para>
-      <screen>lctl get_param [-n] <replaceable>obdtype.obdname.parameter</replaceable></screen>
+      <para>To get current Lustre parameter settings, use the
+        <literal>lctl get_param</literal> command on the desired node with the
+        same parameter name as <literal>lctl set_param</literal>:</para>
+<screen>
+# lctl get_param [-n] <replaceable>obdtype.obdname.parameter</replaceable>
+</screen>
       <para>For example:</para>
-      <screen>mds# lctl get_param mdt.testfs-MDT0000.identity_upcall</screen>
+<screen>
+mds# lctl get_param mdt.testfs-MDT0000.identity_upcall
+</screen>
       <para>To list Lustre parameters that are available to set, use the <literal>lctl list_param</literal> command, with this syntax:</para>
-      <screen>lctl list_param [-R] [-F] <replaceable>obdtype.obdname.*</replaceable></screen>
+<screen>
+# lctl list_param [-R] [-F] <replaceable>obdtype.obdname.*</replaceable>
+</screen>
       <para>For example, to list all of the parameters on the MDT:</para>
-      <screen>oss# lctl list_param -RF mdt</screen>
+<screen>
+oss# lctl list_param -RF mdt
+</screen>
       <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="setting_param_with_lctl"/>.</para>
       <para><emphasis role="bold">Network Configuration</emphasis></para>
       <informaltable frame="all">
@@ -514,9 +526,20 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para><literal>conf_param [-d] <replaceable>device|fsname</replaceable> <replaceable>parameter</replaceable>=<replaceable>value</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets a permanent configuration parameter for any device via the MGS. This command must be run on the MGS node.</para>
-                <para>All writeable parameters under <literal>lctl list_param</literal> (e.g. <literal>lctl list_param -F osc.*.* | grep</literal> =) can be permanently set using <literal>lctl conf_param</literal>, but the format is slightly different. For <literal>conf_param</literal>, the device is specified first, then the obdtype. Wildcards are not supported. Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout). For system-wide parameters, <replaceable>device</replaceable> is ignored.</para>
-                <para>For more information on setting permanent parameters and <literal>lctl conf_param</literal> command examples, see <xref linkend="setting_permanent_params"/> (Setting Permanent Parameters).</para>
+                <para>Sets a permanent configuration parameter for any device
+                  via the MGS. This command must be run on the MGS node.
+                </para>
+                <para>All writeable parameters under
+                  <literal>lctl list_param</literal> (e.g.
+                  <literal>lctl list_param -F osc.*.* | grep =</literal>) can
+                  be permanently set using <literal>lctl conf_param</literal>,
+                  but the conversion of <literal>list_param</literal> names to
+                  <literal>conf_param</literal> names is not obvious, so it is
+                  preferred to use the <literal>set_param -P</literal> command.
+                </para>
+                <para>For more information on setting permanent parameters, see
+                <xref linkend="setting_permanent_params"/>
+                (Setting Permanent Parameters).</para>
               </entry>
             </row>
             <row>

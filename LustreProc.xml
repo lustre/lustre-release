@@ -1853,15 +1853,32 @@ rpcs in flight        rpcs   % cum %
           <primary>proc</primary>
           <secondary>adaptive timeouts</secondary>
         </indexterm>Configuring Adaptive Timeouts</title>
-      <para>The adaptive timeout parameters in the table below can be set persistently system-wide
-        using <literal>lctl conf_param</literal> on the MGS. For example, the following command sets
-        the <literal>at_max</literal> value  for all servers and clients associated with the file
-        system
-        <literal>testfs</literal>:<screen>lctl conf_param testfs.sys.at_max=1500</screen></para>
+      <para>The adaptive timeout parameters in the table below can be set
+        persistently system-wide using <literal>lctl set_param -P</literal>
+        on the MGS. For example, the following command sets the
+        <literal>at_max</literal> value for all servers and clients
+        associated with the file systems connected to this MGS: 
+      </para>
+<screen>
+mgs# lctl set_param -P at_max=1500
+</screen>
       <note>
-        <para>Clients that access multiple Lustre file systems must use the same parameter values
+        <para>Clients that access multiple Lustre file systems
+        <emphasis>must</emphasis> use the same adaptive timeout values
           for all file systems.</para>
       </note>
+      <para condition="l2G">
+        Since Lustre 2.16 it is preferred to set
+        <literal>at_min</literal> as a per-target tunable using the
+        <literal>*.<replaceable>fsname</replaceable>*.at_min</literal>
+        parameter instead of the global <literal>at_min</literal>
+        parameter.  This avoids issues if a single client mounts two
+        separate filesystems with different <literal>at_min</literal>
+        tunable settings.
+      </para>
+<screen>
+mgs# lctl set_param -P *.testfs-*.at_max=1500
+</screen>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="30*"/>
@@ -1883,14 +1900,28 @@ rpcs in flight        rpcs   % cum %
                   <literal> at_min </literal></para>
               </entry>
               <entry>
-                <para>Minimum adaptive timeout (in seconds). The default value is 0. The
-                    <literal>at_min</literal> parameter is the minimum processing time that a server
-                  will report. Ideally, <literal>at_min</literal> should be set to its default
-                  value. Clients base their timeouts on this value, but they do not use this value
-                  directly. </para>
-                <para>If, for unknown reasons (usually due to temporary network outages), the
-                  adaptive timeout value is too short and clients time out their RPCs, you can
-                  increase the <literal>at_min</literal> value to compensate for this.</para>
+                <para>Minimum adaptive timeout (in seconds). The default value
+                  is 5 (since 2.16). The <literal>at_min</literal> parameter is
+                  the minimum processing time that a server will report.
+                  Ideally, <literal>at_min</literal> should be left at its
+                  default value.  Clients base their timeouts on this value,
+                  but they do not use this value directly.
+                </para>
+                <para>If, for some reason (usually due to temporary network
+                  outages or sudden spikes in load immediately after mount),
+                  the adaptive timeout value is too short and clients time
+                  out their RPCs, you can increase the <literal>at_min</literal>
+                  value to compensate for this.
+                </para>
+                <para condition="l2G">
+                Since Lustre 2.16 it is preferred to set
+                <literal>at_min</literal> as a per-target tunable using the
+                <literal>*.<replaceable>fsname</replaceable>*.at_min</literal>
+                parameter instead of the global <literal>at_min</literal>
+                parameter.  This avoids issues if a single client mounts two
+                separate filesystems with different <literal>at_min</literal>
+                tunable settings.
+                </para>
               </entry>
             </row>
             <row>
@@ -1899,16 +1930,28 @@ rpcs in flight        rpcs   % cum %
                   <literal> at_max </literal></para>
               </entry>
               <entry>
-                <para>Maximum adaptive timeout (in seconds). The <literal>at_max</literal> parameter
-                  is an upper-limit on the service time estimate. If <literal>at_max</literal> is
+                <para>Maximum adaptive timeout (in seconds). The
+                  <literal>at_max</literal> parameter is an upper-limit on the
+                  service time estimate. If <literal>at_max</literal> is
                   reached, an RPC request times out.</para>
-                <para>Setting <literal>at_max</literal> to 0 causes adaptive timeouts to be disabled
+                <para>Setting <literal>at_max</literal> to 0 causes adaptive
+                  timeouts to be disabled
                   and a fixed timeout method to be used instead (see <xref
                     xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_c24_nt5_dl"/></para>
+                <para condition="l2G">
+                Since Lustre 2.16 it is preferred to set
+                <literal>at_max</literal> as a per-target tunable using the
+                <literal>*.<replaceable>fsname</replaceable>*.at_max</literal>
+                parameter instead of the global <literal>at_max</literal>
+                parameter.  This avoids issues if a single client mounts two
+                separate filesystems with different <literal>at_max</literal>
+                settings.
+                </para>
                 <note>
-                  <para>If slow hardware causes the service estimate to increase beyond the default
-                    value of <literal>at_max</literal>, increase <literal>at_max</literal> to the
-                    maximum time you are willing to wait for an RPC completion.</para>
+                  <para>If slow hardware causes the service estimate to
+                    increase beyond the default <literal>at_max</literal> value,
+                    increase <literal>at_max</literal> to the maximum time you
+                    are willing to wait for an RPC completion.</para>
                 </note>
               </entry>
             </row>
@@ -1918,8 +1961,18 @@ rpcs in flight        rpcs   % cum %
                   <literal> at_history </literal></para>
               </entry>
               <entry>
-                <para>Time period (in seconds) within which adaptive timeouts remember the slowest
+                <para>Time period (in seconds) within which adaptive timeouts
+                  remember the slowest
                   event that occurred. The default is 600.</para>
+                <para condition="l2G">
+                Since Lustre 2.16 it is preferred to set
+                <literal>at_history</literal> as a per-target tunable using the
+                <literal>*.<replaceable>fsname</replaceable>*.at_history</literal>
+                parameter instead of the global <literal>at_history</literal>
+                parameter.  This avoids issues if a single client mounts two
+                filesystems with different <literal>at_history</literal>
+                values.
+                </para>
               </entry>
             </row>
             <row>
@@ -1928,8 +1981,8 @@ rpcs in flight        rpcs   % cum %
                   <literal> at_early_margin </literal></para>
               </entry>
               <entry>
-                <para>Amount of time before the Lustre server sends an early reply (in seconds).
-                  Default is 5.</para>
+                <para>Amount of time before the Lustre server sends an early
+                  reply (in seconds).  Default is 5.</para>
               </entry>
             </row>
             <row>
@@ -1938,18 +1991,22 @@ rpcs in flight        rpcs   % cum %
                   <literal> at_extra </literal></para>
               </entry>
               <entry>
-                <para>Incremental amount of time that a server requests with each early reply (in
-                  seconds). The server does not know how much time the RPC will take, so it asks for
-                  a fixed value. The default is 30, which provides a balance between sending too
-                  many early replies for the same RPC and overestimating the actual completion
-                  time.</para>
-                <para>When a server finds a queued request about to time out and needs to send an
-                  early reply out, the server adds the <literal>at_extra</literal> value. If the
-                  time expires, the Lustre server drops the request, and the client enters recovery
-                  status and reconnects to restore the connection to normal status.</para>
-                <para>If you see multiple early replies for the same RPC asking for 30-second
-                  increases, change the <literal>at_extra</literal> value to a larger number to cut
-                  down on early replies sent and, therefore, network load.</para>
+                <para>Incremental amount of time that a server requests with
+                  each early reply (in seconds). The server does not know how
+                  much time the RPC will take, so it asks for a fixed value.
+                  The default is 30, which provides a balance between sending
+                  too many early replies for the same RPC and overestimating
+                  the actual completion time.</para>
+                <para>When a server finds a queued request about to time out
+                  and needs to send an early reply out, the server adds the
+                  <literal>at_extra</literal> value. If the time expires, the
+                  Lustre server drops the request, and the client enters
+                  recovery status and reconnects to restore the connection to
+                  normal status.</para>
+                <para>If you see multiple early replies for the same RPC asking
+                  for 30-second increases, change <literal>at_extra</literal>
+                  to a larger number to cut down on early replies sent and,
+                  therefore, network load.</para>
               </entry>
             </row>
             <row>
@@ -1958,14 +2015,26 @@ rpcs in flight        rpcs   % cum %
                   <literal> ldlm_enqueue_min </literal></para>
               </entry>
               <entry>
-                <para>Minimum lock enqueue time (in seconds). The default is 100. The time it takes
-                  to enqueue a lock, <literal>ldlm_enqueue</literal>, is the maximum of the measured
-                  enqueue estimate (influenced by <literal>at_min</literal> and
-                    <literal>at_max</literal> parameters), multiplied by a weighting factor and the
-                  value of <literal>ldlm_enqueue_min</literal>. </para>
-                <para>Lustre Distributed Lock Manager (LDLM) lock enqueues have a dedicated minimum
-                  value for <literal>ldlm_enqueue_min</literal>. Lock enqueue timeouts increase as
-                  the measured enqueue times increase (similar to adaptive timeouts).</para>
+                <para>Minimum lock enqueue time (in seconds). The default is
+                  100. The it takes to enqueue a lock, shown as the
+                  <literal>ldlm_enqueue</literal> operation in the stats files,
+                  is the maximum of the measured enqueue estimate (influenced
+                  by <literal>at_min</literal> and <literal>at_max</literal>
+                  parameters), multiplied by a weighting factor and the value
+                  of <literal>ldlm_enqueue_min</literal>. </para>
+                <para>Lustre Distributed Lock Manager (LDLM) lock enqueues
+                  have a dedicated minimum <literal>ldlm_enqueue_min</literal>.
+                  Lock enqueue timeouts increase as the measured enqueue times
+                  increase (similar to adaptive timeouts).</para>
+                <para condition="l2G">
+                Since Lustre 2.16 it is preferred to set
+                <literal>ldlm_enqueue_min</literal> as a per-target tunable with
+                <literal>*.<replaceable>fsname</replaceable>*.ldlm_enqueue_min</literal>
+                instead of the global <literal>ldlm_enqueue_min</literal>
+                parameter.  This avoids issues if a client mounts multiple
+                filesystems with different <literal>ldlm_enqueue_min</literal>
+                tunable settings.
+                </para>
               </entry>
             </row>
           </tbody>
@@ -2039,20 +2108,30 @@ req_timeout               6 samples [sec] 1 10 15 105
           </listitem>
           <listitem>
             <para><emphasis role="italic"><emphasis role="bold">Lustre timeouts
-                </emphasis></emphasis>- Lustre timeouts ensure that Lustre RPCs complete in a finite
-              time in the presence of failures when adaptive timeouts are not enabled. Adaptive
-              timeouts are enabled by default. To disable adaptive timeouts at run time, set
-                <literal>at_max</literal> to 0 by running on the
-              MGS:<screen># lctl conf_param <replaceable>fsname</replaceable>.sys.at_max=0</screen></para>
+              </emphasis></emphasis>- Lustre timeouts ensure that Lustre RPCs
+              complete in a finite time in the presence of failures when
+              adaptive timeouts are not enabled. Adaptive timeouts are enabled
+              by default. To disable adaptive timeouts at run time, set
+              <literal>at_max</literal> to 0 by running on the MGS:
+<screen>
+# lctl conf_param <replaceable>fsname</replaceable>.sys.at_max=0
+</screen>
+            </para>
             <note>
-              <para>Changing the status of adaptive timeouts at runtime may cause a transient client
-                timeout, recovery, and reconnection.</para>
+              <para>Changing the state of adaptive timeouts at runtime may
+                cause transient client timeouts, recovery, and reconnection.</para>
             </note>
-            <para>Lustre timeouts are always printed as console messages. </para>
-            <para>If Lustre timeouts are not accompanied by LND timeouts, increase the Lustre
-              timeout on both servers and clients. Lustre timeouts are set using a command such as
-              the following:<screen># lctl set_param timeout=30</screen></para>
-            <para>Lustre timeout parameters are described in the table below.</para>
+            <para>Lustre timeouts are always printed as console messages.
+            </para>
+            <para>If Lustre timeouts are not accompanied by LND timeouts,
+              increase the Lustre timeout on both servers and clients. Lustre
+              timeouts are set across the whole filesystem using a command
+              such as the following:
+<screen>
+mgs# lctl set_param -P timeout=30
+</screen>
+            </para>
+            <para>Timeout parameters are described in the table below.</para>
           </listitem>
         </itemizedlist>
         <informaltable frame="all">
@@ -2069,48 +2148,55 @@ req_timeout               6 samples [sec] 1 10 15 105
               <row>
                 <entry><literal>timeout</literal></entry>
                 <entry>
-                  <para>The time that a client waits for a server to complete an RPC (default 100s).
-                    Servers wait half this time for a normal client RPC to complete and a quarter of
-                    this time for a single bulk request (read or write of up to 4 MB) to complete.
-                    The client pings recoverable targets (MDS and OSTs) at one quarter of the
-                    timeout, and the server waits one and a half times the timeout before evicting a
+                  <para>The time that a client waits for a server to complete
+                    an RPC (default 100s).  Servers wait half this time for a
+                    normal client RPC to complete and a quarter of this time
+                    for a single bulk request (read or write of up to 4 MB)
+                    to complete.  The client pings recoverable targets (MDS
+                    and OSTs) at one quarter of the timeout, and the server
+                    waits one and a half times the timeout before evicting a
                     client for being &quot;stale.&quot;</para>
-                  <para>Lustre client sends periodic &apos;ping&apos; messages to servers with which
-                    it has had no communication for the specified period of time. Any network
-                    activity between a client and a server in the file system also serves as a
+                  <para>Lustre client sends periodic &apos;ping&apos; messages
+                    to servers with which it has had no communication for the
+                    specified period of time. Any network activity between a
+                    client and a server in the file system also serves as a
                     ping.</para>
                 </entry>
               </row>
               <row>
                 <entry><literal>ldlm_timeout</literal></entry>
                 <entry>
-                  <para>The time that a server waits for a client to reply to an initial AST (lock
-                    cancellation request). The default is 20s for an OST and 6s for an MDS. If the
-                    client replies to the AST, the server will give it a normal timeout (half the
-                    client timeout) to flush any dirty data and release the lock.</para>
+                  <para>The time that a server waits for a client to reply to
+                    an initial AST (lock cancellation request). The default
+                    is 20s for an OST and 6s for an MDS. If the client replies
+                    to the AST, the server will give it a normal timeout (half
+                    the client timeout) to flush any dirty data and release
+                    the lock.</para>
                 </entry>
               </row>
               <row>
                 <entry><literal>fail_loc</literal></entry>
                 <entry>
                   <para>An internal debugging failure hook. The default value of
-                      <literal>0</literal> means that no failure will be triggered or
+                    <literal>0</literal> means that no failure will be triggered or
                     injected.</para>
                 </entry>
               </row>
               <row>
                 <entry><literal>dump_on_timeout</literal></entry>
                 <entry>
-                  <para>Triggers a dump of the Lustre debug log when a timeout occurs. The default
-                    value of <literal>0</literal> (zero) means a dump of the Lustre debug log will
-                    not be triggered.</para>
+                  <para>Triggers a dump of the Lustre debug log when a timeout
+                    occurs. The default value of <literal>0</literal> (zero)
+                    means a dump of the Lustre debug log will not be triggered.
+                  </para>
                 </entry>
               </row>
               <row>
                 <entry><literal>dump_on_eviction</literal></entry>
                 <entry>
-                  <para>Triggers a dump of the Lustre debug log when an eviction occurs. The default
-                    value of <literal>0</literal> (zero) means a dump of the Lustre debug log will
+                  <para>Triggers a dump of the Lustre debug log when an
+                    eviction occurs. The default value of <literal>0</literal>
+                    (zero) means a dump of the Lustre debug log will
                     not be triggered. </para>
                 </entry>
               </row>
