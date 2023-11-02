@@ -2001,7 +2001,8 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 			goto failed;
 		}
 
-		if (rc == EALREADY && conn_cb->ksnr_conn_count > 0)
+		if (rc == EALREADY &&
+		    ksocknal_get_conn_count_by_type(conn_cb, type) > 0)
 			conn_cb->ksnr_busy_retry_count += 1;
 		else
 			conn_cb->ksnr_busy_retry_count = 0;

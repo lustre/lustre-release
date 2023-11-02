@@ -380,33 +380,6 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 }
 
 static unsigned int
-ksocknal_get_conn_count_by_type(struct ksock_conn_cb *conn_cb,
-				int type)
-{
-	unsigned int count = 0;
-
-	switch (type) {
-	case SOCKLND_CONN_CONTROL:
-		count = conn_cb->ksnr_ctrl_conn_count;
-		break;
-	case SOCKLND_CONN_BULK_IN:
-		count = conn_cb->ksnr_blki_conn_count;
-		break;
-	case SOCKLND_CONN_BULK_OUT:
-		count = conn_cb->ksnr_blko_conn_count;
-		break;
-	case SOCKLND_CONN_ANY:
-		count = conn_cb->ksnr_conn_count;
-		break;
-	default:
-		LBUG();
-		break;
-	}
-
-	return count;
-}
-
-static unsigned int
 ksocknal_get_conns_per_peer(struct ksock_peer_ni *peer_ni)
 {
 	struct lnet_ni *ni = peer_ni->ksnp_ni;
@@ -575,6 +548,33 @@ ksocknal_del_conn_cb_locked(struct ksock_conn_cb *conn_cb)
 		 */
 		ksocknal_unlink_peer_locked(peer_ni);
 	}
+}
+
+unsigned int
+ksocknal_get_conn_count_by_type(struct ksock_conn_cb *conn_cb,
+				int type)
+{
+	unsigned int count = 0;
+
+	switch (type) {
+	case SOCKLND_CONN_CONTROL:
+		count = conn_cb->ksnr_ctrl_conn_count;
+		break;
+	case SOCKLND_CONN_BULK_IN:
+		count = conn_cb->ksnr_blki_conn_count;
+		break;
+	case SOCKLND_CONN_BULK_OUT:
+		count = conn_cb->ksnr_blko_conn_count;
+		break;
+	case SOCKLND_CONN_ANY:
+		count = conn_cb->ksnr_conn_count;
+		break;
+	default:
+		LBUG();
+		break;
+	}
+
+	return count;
 }
 
 int

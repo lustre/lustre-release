@@ -607,6 +607,8 @@ int ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
 int ksocknal_accept(struct lnet_ni *ni, struct socket *sock);
 
+unsigned int ksocknal_get_conn_count_by_type(struct ksock_conn_cb *conn_cb,
+					     int type);
 int ksocknal_add_peer(struct lnet_ni *ni, struct lnet_processid *id,
 		      struct sockaddr *addr);
 struct ksock_peer_ni *ksocknal_find_peer_locked(struct lnet_ni *ni,
