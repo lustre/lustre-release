@@ -1603,7 +1603,7 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 	 * the new sequence soon, all the creation should be synchronized,
 	 * otherwise during replay, the replay fid will be inconsistent with
 	 * last_used/create fid */
-	if (osp_precreate_end_seq(env, d) && osp_is_fid_client(d))
+	if (osp_precreate_end_seq(d) && osp_is_fid_client(d))
 		th->th_sync = 1;
 
 	local_th = osp_get_storage_thandle(env, th, d);

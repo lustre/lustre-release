@@ -201,6 +201,7 @@ out:
  * statfs data before expiration. The function doesn't block, instead
  * an interpretation callback osp_statfs_interpret() is used.
  *
+ * \param[in] env	LU environment provided by the caller
  * \param[in] d		OSP device
  */
 static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
@@ -302,23 +303,6 @@ void osp_statfs_need_now(struct osp_device *d)
 }
 
 /**
- * Return number of precreated objects
- *
- * A simple helper to calculate the number of precreated objects on the device.
- *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- *
- * \retval		the number of the precreated objects
- */
-static inline int osp_objs_precreated(const struct lu_env *env,
-				      struct osp_device *osp)
-{
-	return osp_fid_diff(&osp->opd_pre_last_created_fid,
-			    &osp->opd_pre_used_fid);
-}
-
-/**
  * Check pool of precreated objects is nearly empty
  *
  * We should not wait till the pool of the precreated objects is exhausted,
@@ -327,15 +311,13 @@ static inline int osp_objs_precreated(const struct lu_env *env,
  * precreation ahead and hopefully have it ready before the current pool is
  * empty. Notice this function relies on an external locking.
  *
- * \param[in] env	LU environment provided by the caller
  * \param[in] d		OSP device
  *
  * \retval		0 - current pool is good enough, 1 - time to precreate
  */
-static inline int osp_precreate_near_empty_nolock(const struct lu_env *env,
-						  struct osp_device *d)
+static inline int osp_precreate_near_empty_nolock(struct osp_device *d)
 {
-	int window = osp_objs_precreated(env, d);
+	int window = osp_objs_precreated(d);
 
 	/* don't consider new precreation till OST is healty and
 	 * has free space */
@@ -349,13 +331,11 @@ static inline int osp_precreate_near_empty_nolock(const struct lu_env *env,
  * This is protected version of osp_precreate_near_empty_nolock(), check that
  * for the details.
  *
- * \param[in] env	LU environment provided by the caller
  * \param[in] d		OSP device
  *
  * \retval		0 - current pool is good enough, 1 - time to precreate
  */
-static inline int osp_precreate_near_empty(const struct lu_env *env,
-					   struct osp_device *d)
+static inline int osp_precreate_near_empty(struct osp_device *d)
 {
 	int rc;
 
@@ -364,7 +344,7 @@ static inline int osp_precreate_near_empty(const struct lu_env *env,
 
 	/* XXX: do we really need locking here? */
 	spin_lock(&d->opd_pre_lock);
-	rc = osp_precreate_near_empty_nolock(env, d);
+	rc = osp_precreate_near_empty_nolock(d);
 	spin_unlock(&d->opd_pre_lock);
 	return rc;
 }
@@ -651,9 +631,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	}
 
 	spin_lock(&d->opd_pre_lock);
-	if (d->opd_force_creation)
-		d->opd_pre_create_count = OST_MIN_PRECREATE;
-	else if (d->opd_pre_create_count > d->opd_pre_max_create_count / 2)
+	if (d->opd_pre_create_count > d->opd_pre_max_create_count / 2)
 		d->opd_pre_create_count = d->opd_pre_max_create_count / 2;
 	grow = d->opd_pre_create_count;
 	spin_unlock(&d->opd_pre_lock);
@@ -832,6 +810,7 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 			 */
 			spin_lock(&d->opd_pre_lock);
 			d->opd_force_creation = true;
+			d->opd_pre_create_count = OST_MIN_PRECREATE;
 			spin_unlock(&d->opd_pre_lock);
 		}
 	}
@@ -1338,9 +1317,9 @@ static int osp_precreate_thread(void *_args)
 		while (!kthread_should_stop()) {
 			wait_event_idle(d->opd_pre_waitq,
 					kthread_should_stop() ||
-					(osp_precreate_near_empty(env, d) &&
-					 !(osp_precreate_end_seq(env, d) &&
-					   osp_objs_precreated(env, d) != 0)) ||
+					(osp_precreate_near_empty(d) &&
+					 !(osp_precreate_end_seq(d) &&
+					   osp_objs_precreated(d) != 0)) ||
 					osp_statfs_need_update(d) ||
 					d->opd_got_disconnected);
 
@@ -1362,8 +1341,8 @@ static int osp_precreate_thread(void *_args)
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is
 			 * used up. */
-			if (unlikely(osp_precreate_end_seq(env, d))) {
-				if (osp_objs_precreated(env, d) == 0) {
+			if (unlikely(osp_precreate_end_seq(d))) {
+				if (osp_objs_precreated(d) == 0) {
 					rc = osp_precreate_rollover_new_seq(env, d);
 					if (rc)
 						continue;
@@ -1372,7 +1351,7 @@ static int osp_precreate_thread(void *_args)
 				}
 			}
 
-			if (osp_precreate_near_empty(env, d)) {
+			if (osp_precreate_near_empty(d)) {
 				rc = osp_precreate_send(env, d);
 				/* osp_precreate_send() sets opd_pre_status
 				 * in case of error, that prevent the using of
@@ -1427,7 +1406,7 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 
 	/* ready if got enough precreated objects */
 	/* we need to wait for others (opd_pre_reserved) and our object (+1) */
-	if (d->opd_pre_reserved + 1 < osp_objs_precreated(env, d))
+	if (d->opd_pre_reserved + 1 < osp_objs_precreated(d))
 		return 1;
 
 	/* ready if OST reported no space and no destroys in progress */
@@ -1471,7 +1450,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 
 	ENTRY;
 
-	LASSERTF(osp_objs_precreated(env, d) >= 0, "Last created FID "DFID
+	LASSERTF(osp_objs_precreated(d) >= 0, "Last created FID "DFID
 		 "Next FID "DFID"\n", PFID(&d->opd_pre_last_created_fid),
 		 PFID(&d->opd_pre_used_fid));
 
@@ -1492,7 +1471,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 		/*
 		 * increase number of precreations
 		 */
-		precreated = osp_objs_precreated(env, d);
+		precreated = osp_objs_precreated(d);
 		if (d->opd_pre_create_count < d->opd_pre_max_create_count &&
 		    d->opd_pre_create_slow == 0 &&
 		    precreated <= (d->opd_pre_create_count / 4 + 1)) {
@@ -1503,7 +1482,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 		}
 
 		spin_lock(&d->opd_pre_lock);
-		precreated = osp_objs_precreated(env, d);
+		precreated = osp_objs_precreated(d);
 		if (!d->opd_pre_recovering && !d->opd_force_creation) {
 			if (precreated > d->opd_pre_reserved) {
 				d->opd_pre_reserved++;
@@ -1514,13 +1493,13 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 				 * XXX: don't wake up if precreation
 				 * is in progress
 				 */
-				if (osp_precreate_near_empty_nolock(env, d) &&
-				   !osp_precreate_end_seq_nolock(env, d))
+				if (osp_precreate_near_empty_nolock(d) &&
+				   !osp_precreate_end_seq_nolock(d))
 					wake_up(&d->opd_pre_waitq);
 
 				break;
 			} else if (unlikely(precreated &&
-				   osp_precreate_end_seq_nolock(env, d))) {
+					    osp_precreate_end_seq_nolock(d))) {
 				/*
 				 * precreate pool is reaching the end of the
 				 * current seq, and doesn't have enough objects

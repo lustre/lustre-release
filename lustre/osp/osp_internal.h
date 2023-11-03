@@ -584,8 +584,7 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 	}
 }
 
-static bool osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid,
-			   struct osp_device *osp)
+static bool osp_fid_end_seq(struct lu_fid *fid, struct osp_device *osp)
 {
 	__u64 seq_width = osp->opd_pre_seq_width;
 
@@ -597,23 +596,27 @@ static bool osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid,
 	return fid_oid(fid) >= min(OBIF_MAX_OID, seq_width);
 }
 
-static inline bool osp_precreate_end_seq_nolock(const struct lu_env *env,
-					       struct osp_device *osp)
+static inline bool osp_precreate_end_seq_nolock(struct osp_device *osp)
 {
 	struct lu_fid *fid = &osp->opd_pre_last_created_fid;
 
-	return osp_fid_end_seq(env, fid, osp);
+	return osp_fid_end_seq(fid, osp);
 }
 
-static inline bool osp_precreate_end_seq(const struct lu_env *env,
-					struct osp_device *osp)
+static inline bool osp_precreate_end_seq(struct osp_device *osp)
 {
 	bool rc;
 
 	spin_lock(&osp->opd_pre_lock);
-	rc = osp_precreate_end_seq_nolock(env, osp);
+	rc = osp_precreate_end_seq_nolock(osp);
 	spin_unlock(&osp->opd_pre_lock);
 	return rc;
+}
+
+static inline int osp_objs_precreated(struct osp_device *osp)
+{
+	return osp_fid_diff(&osp->opd_pre_last_created_fid,
+			    &osp->opd_pre_used_fid);
 }
 
 static inline int osp_is_fid_client(struct osp_device *osp)
