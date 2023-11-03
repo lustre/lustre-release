@@ -760,7 +760,7 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 				cache = false;
 				break;
 			}
-			if (iosize > osd->od_writethrough_max_iosize) {
+			if (iosize >= osd->od_writethrough_max_iosize) {
 				cache = false;
 				break;
 			}
@@ -769,7 +769,7 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 				cache = false;
 				break;
 			}
-			if (iosize > osd->od_readcache_max_iosize) {
+			if (iosize >= osd->od_readcache_max_iosize) {
 				cache = false;
 				break;
 			}

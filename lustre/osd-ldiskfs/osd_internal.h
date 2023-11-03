@@ -311,11 +311,11 @@ struct osd_device {
 	 * served bypassing pagecache unless already cached */
 	unsigned long long	od_readcache_max_filesize;
 
-	/* reads > od_readcache_max_iosize will be
+	/* reads >= od_readcache_max_iosize will be
 	 * served bypassing pagecache unless already cached */
 	unsigned long		od_readcache_max_iosize;
 
-	/* writes > od_writethough_max_iosize will be
+	/* writes >= od_writethough_max_iosize will be
 	 * served bypassing pagecache unless already cached */
 	unsigned long		od_writethrough_max_iosize;
 
