@@ -7258,19 +7258,17 @@ check_grant() {
 ########################
 # helper functions
 
-osc_to_ost()
-{
-	osc=$1
-	ost=`echo $1 | awk -F_ '{print $3}'`
-	if [ -z $ost ]; then
-		ost=`echo $1 | sed 's/-osc.*//'`
-	fi
-	echo $ost
+osc_to_ost() {
+	local osc=$1
+
+	echo ${osc/-osc*/}
 }
 
-ostuuid_from_index()
-{
-	$LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
+ostuuid_from_index() {
+	# only print the first UUID, if 'lfs osts' shows multiple mountpoints
+	local uuid=($($LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"))
+
+	echo ${uuid}
 }
 
 ostname_from_index() {
@@ -7279,24 +7277,31 @@ ostname_from_index() {
 	echo ${uuid/_UUID/}
 }
 
+mdtuuid_from_index() {
+	# only print the first UUID, if 'lfs osts' shows multiple mountpoints
+	local uuid=($($LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"))
+
+	echo ${uuid}
+}
+
 mdtname_from_index() {
 	local uuid=$(mdtuuid_from_index $1 $2)
+
 	echo ${uuid/_UUID/}
 }
 
-mdssize_from_index () {
+mdssize_from_index() {
 	local mdt=$(mdtname_from_index $2)
-	$LFS df $1 | grep $mdt | awk '{ print $2 }'
+
+	$LFS df $1 | awk "/$mdt/ { print \$2 }"
 }
 
 index_from_ostuuid()
 {
-	$LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"
-}
+	# only print the first index, if 'lfs osts' shows multiple mountpoints
+	local ostidx=($($LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"))
 
-mdtuuid_from_index()
-{
-	$LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
+	echo ${ostidx}
 }
 
 # Description:
@@ -11562,10 +11567,20 @@ verify_compare_yaml() {
 
 zfs_or_rotational() {
 	local ost_idx=0
-	local ost_name=$(ostname_from_index $ost_idx)
-	local nonrotat=$(do_facet ost1 $LCTL get_param -n osd-*.$ost_name.nonrotational)
+	local ost_name=$(ostname_from_index $ost_idx $MOUNT)
+	local param="get_param -n osd-*.${ost_name}.nonrotational"
+	local nonrotat=$(do_facet ost1 $LCTL $param)
 
-	if [ "$ost1_FSTYPE" == "zfs" ] || [ "$nonrotat" -eq 0 ]; then
+	if [[ -z "$nonrotat" ]]; then
+		# At this point there is no point moving ahead.
+		# Will stop here and dump all the info
+		set -x
+		local ost_name=$(ostname_from_index $ost_idx)
+		set +x
+		error "$LCTL $input_str"
+	fi
+
+	if [[ "$ost1_FSTYPE" == "zfs" ]] || (( "$nonrotat" == 0 )); then
 		return 0
 	else
 		return 1
