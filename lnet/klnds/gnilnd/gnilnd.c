@@ -39,6 +39,7 @@ kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	tuns = &ni->ni_lnd_tunables.lnd_tun_u.lnd_gni;
 	nla_put_u32(msg, LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
 		    kgnilnd_timeout());
+	return 0;
 }
 
 /* Primary entry points from LNET.  There are no guarantees against reentrance. */
