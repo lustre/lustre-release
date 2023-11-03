@@ -119,17 +119,29 @@ int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 			/* This ID is getting close to its quota limit, let's
 			 * switch to sync I/O
 			 */
-			if (qtypes) {
+			if (qtypes) { /* ID already cached */
 				bits = xa_to_value(qtypes);
-				/* test if already set */
-				if (bits & BIT(type))
-					continue;
+				/* test if ID type already set */
+				if (!(bits & BIT(type))) {
+					bits |= BIT(type);
+					rc = xa_err(xa_store(&cli->cl_quota_exceeded_ids,
+							     qid[type],
+							     xa_mk_value(bits),
+							     GFP_KERNEL));
+					if (rc < 0)
+						GOTO(out_unlock, rc);
+				}
+				continue;
 			}
 
+			/* Only insert if we see the this ID for the
+			 * very first time.
+			 */
 			bits |= BIT(type);
-			rc = xa_insert(&cli->cl_quota_exceeded_ids, qid[type],
-				       xa_mk_value(bits), GFP_KERNEL);
-			if (rc)
+			rc = ll_xa_insert(&cli->cl_quota_exceeded_ids,
+					  qid[type], xa_mk_value(bits),
+					  GFP_KERNEL);
+			if (rc == -ENOMEM)
 				break;
 
 			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d: rc = %d\n",
@@ -147,11 +159,12 @@ int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 
 			bits &= ~BIT(type);
 			if (bits) {
-				if (xa_cmpxchg(&cli->cl_quota_exceeded_ids,
-					       qid[type], qtypes,
-					       xa_mk_value(bits),
-					       GFP_KERNEL) != qtypes)
-					GOTO(out_unlock, rc = -ENOENT);
+				rc = xa_err(xa_store(&cli->cl_quota_exceeded_ids,
+						     qid[type],
+						     xa_mk_value(bits),
+						     GFP_KERNEL));
+				if (rc < 0)
+					GOTO(out_unlock, rc);
 			} else {
 				xa_erase(&cli->cl_quota_exceeded_ids, qid[type]);
 			}

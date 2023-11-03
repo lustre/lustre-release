@@ -138,3 +138,4 @@ timer_setup||cfs_timer_setup
 version_code.*2.1[7-9]||version 2.16.x should be used
 vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t
+xa_insert||ll_xa_insert
