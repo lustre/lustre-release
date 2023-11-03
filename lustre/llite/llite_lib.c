@@ -199,6 +199,7 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	set_bit(LL_SBI_TINY_WRITE, sbi->ll_flags);
 	set_bit(LL_SBI_PARALLEL_DIO, sbi->ll_flags);
 	set_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags);
+	set_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags);
 	ll_sbi_set_encrypt(sbi, true);
 	ll_sbi_set_name_encrypt(sbi, true);
 
@@ -1003,6 +1004,8 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_ENCRYPT,		"encrypt"},
 	{LL_SBI_ENCRYPT,		"noencrypt"},
 	{LL_SBI_FOREIGN_SYMLINK,	"foreign_symlink=%s"},
+	{LL_SBI_STATFS_PROJECT,		"statfs_project"},
+	{LL_SBI_STATFS_PROJECT,		"nostatfs_project"},
 	{LL_SBI_NUM_MOUNT_OPT,		NULL},
 
 	{LL_SBI_ACL,			"acl"},
@@ -1126,6 +1129,7 @@ static int ll_options(char *options, struct super_block *sb)
 		case LL_SBI_LRU_RESIZE:
 		case LL_SBI_LAZYSTATFS:
 		case LL_SBI_VERBOSE:
+		case LL_SBI_STATFS_PROJECT:
 			if (turn_off)
 				clear_bit(token, sbi->ll_flags);
 			else
@@ -2638,6 +2642,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_statfs osfs;
 	__u64 fsid = huge_encode_dev(sb->s_dev);
 	ktime_t kstart = ktime_get();
@@ -2646,7 +2651,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p)\n", sb->s_id, sb);
 
 	/* Some amount of caching on the client is allowed */
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_SUM);
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_SUM);
 	if (rc)
 		return rc;
 
@@ -2672,10 +2677,11 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
 	if (ll_i2info(de->d_inode)->lli_projid &&
+		test_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags) &&
 	    test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(de->d_inode)->lli_flags))
 		return ll_statfs_project(de->d_inode, sfs);
 
-	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS,
+	ll_stats_ops_tally(sbi, LPROC_LL_STATFS,
 			   ktime_us_delta(ktime_get(), kstart));
 
 	return 0;

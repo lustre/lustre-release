@@ -3875,6 +3875,11 @@ test_41() {
 	set_mdt_qtype ugp || error "enable mdt quota failed"
 	set_ost_qtype ugp || error "enable ost quota failed"
 
+	local statfs_prj_orig=$($LCTL get_param -n llite.*.statfs_project)
+	(( statfs_prj_orig == 1 )) ||
+		$LCTL set_param llite.*.statfs_project=1
+	stack_trap "$LCTL set_param llite.*.statfs_project=$statfs_prj_orig"
+
 	test_mkdir -p $dir && change_project -sp $projid $dir
 	$LFS setquota -p $projid -b 0 -B ${blimit}K -i 0 -I $ilimit $dir ||
 		error "set project quota failed"
@@ -3905,6 +3910,18 @@ test_41() {
 	# larger than quota result, but it's no more than 3K
 	expected=$(df -kP $dir | awk "/$FSNAME/"' {print $3}')
 	(( expected - bused < 4)) || error "bused mismatch: $expected != $bused"
+
+	# disable statfs_project and check again
+	$LCTL set_param llite.*.statfs_project=0
+
+	expected=$({ df -kP $MOUNT; df -iP $MOUNT; } | \
+		awk '/'$FSNAME'/ { printf "%d %d ", $2,$3 }')
+
+	wait_update $HOSTNAME \
+		"{ df -kP $dir; df -iP $dir; } |
+		 awk '/$FSNAME/ { printf \\\"%d %d \\\", \\\$2,\\\$3 }'" \
+		"$expected" ||
+		error "failed to get correct statfs when statfs_project=0"
 }
 run_test 41 "df should return projid-specific values"
 

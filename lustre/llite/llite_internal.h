@@ -809,6 +809,7 @@ enum ll_sbi_flags {
 	LL_SBI_ENCRYPT,			/* client side encryption */
 	LL_SBI_FOREIGN_SYMLINK,		/* foreign fake-symlink support */
 	LL_SBI_FOREIGN_SYMLINK_UPCALL,	/* foreign fake-symlink upcall set */
+	LL_SBI_STATFS_PROJECT,		/* statfs returns project quota */
 	LL_SBI_NUM_MOUNT_OPT,
 
 	LL_SBI_ACL,			/* support ACL */
