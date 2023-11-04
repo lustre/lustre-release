@@ -1275,6 +1275,10 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 
 	if (need & MA_INODE) {
 		ma->ma_need = MA_INODE;
+		if (need & MA_DIRENT_CNT)
+			ma->ma_attr.la_valid |= LA_DIRENT_CNT;
+		else
+			ma->ma_attr.la_valid &= ~LA_DIRENT_CNT;
 		rc = mo_attr_get(env, next, ma);
 		if (rc)
 			GOTO(out, rc);
@@ -2081,6 +2085,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (parent == NULL)
 		RETURN(-ENOENT);
 
+	if (info->mti_mdt->mdt_enable_dir_auto_split)
+		ma_need |= MA_DIRENT_CNT;
+
 	if (info->mti_cross_ref) {
 		/* Only getattr on the child. Parent is on another node. */
 		mdt_set_disposition(info, ldlm_rep,
@@ -2119,7 +2126,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			RETURN(-ENOENT);
 		}
 
-		rc = mdt_getattr_internal(info, child, 0);
+		rc = mdt_getattr_internal(info, child, ma_need);
 		if (unlikely(rc != 0)) {
 			mdt_object_unlock(info, child, lhc, 1);
 			RETURN(rc);

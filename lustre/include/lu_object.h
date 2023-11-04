@@ -458,7 +458,7 @@ struct lu_attr {
 	__u64		la_dirent_count;
 };
 
-#define LU_DIRENT_COUNT_UNSET	~0ULL
+#define LU_DIRENT_COUNT_UNSET	-1
 
 /**
  * Layer in the layered object.

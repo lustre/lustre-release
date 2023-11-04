@@ -1596,6 +1596,7 @@ enum la_valid {
 	LA_LSIZE	= 1 << 17,	/* 0x20000 */
 	LA_LBLOCKS	= 1 << 18,	/* 0x40000 */
 	LA_BTIME	= 1 << 19,	/* 0x80000 */
+	LA_DIRENT_CNT	= 1 << 20,     /* 0x100000 */
 	/**
 	 * Attributes must be transmitted to OST objects
 	 */

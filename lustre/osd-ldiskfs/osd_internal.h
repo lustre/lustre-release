@@ -158,12 +158,12 @@ struct osd_object {
 
 	/* the i_flags in LMA */
 	__u32                   oo_lma_flags;
+	atomic_t		oo_dirent_count;
 
         const struct lu_env    *oo_owner;
 
 	struct list_head	oo_xattr_list;
 	struct lu_object_header *oo_header;
-	__u64			oo_dirent_count;
 };
 
 struct osd_obj_seq {

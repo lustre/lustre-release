@@ -75,6 +75,7 @@ enum ma_valid {
 	MA_LMV_DEF	= BIT(8),
 	MA_SOM		= BIT(9),
 	MA_FORCE_LOG	= BIT(10), /* forced close logged in mdt_mfd_close */
+	MA_DIRENT_CNT	= BIT(11),
 };
 
 typedef enum {

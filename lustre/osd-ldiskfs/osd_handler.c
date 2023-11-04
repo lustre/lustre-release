@@ -1545,7 +1545,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			result = 0;
 		}
 	}
-	obj->oo_dirent_count = LU_DIRENT_COUNT_UNSET;
+	atomic_set(&obj->oo_dirent_count, LU_DIRENT_COUNT_UNSET);
 
 	LINVRNT(osd_invariant(obj));
 	return result;
@@ -2892,34 +2892,36 @@ static int osd_dirent_count(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(S_ISDIR(obj->oo_inode->i_mode));
 	LASSERT(fid_is_namespace_visible(lu_object_fid(&obj->oo_dt.do_lu)));
 
-	if (obj->oo_dirent_count != LU_DIRENT_COUNT_UNSET) {
-		*count = obj->oo_dirent_count;
-		RETURN(0);
-	}
-
 	/* directory not initialized yet */
 	if (!dt->do_index_ops) {
 		*count = 0;
 		RETURN(0);
 	}
 
+	spin_lock(&obj->oo_guard);
+	*count = atomic_read(&obj->oo_dirent_count);
+	if (*count == LU_DIRENT_COUNT_UNSET)
+		atomic_set(&obj->oo_dirent_count, 0);
+	spin_unlock(&obj->oo_guard);
+	if (*count != LU_DIRENT_COUNT_UNSET)
+		RETURN(0);
+
+	*count = 0;
 	iops = &dt->do_index_ops->dio_it;
 	it = iops->init(env, dt, LUDA_64BITHASH);
 	if (IS_ERR(it))
-		RETURN(PTR_ERR(it));
+		GOTO(out, rc = PTR_ERR(it));
 
 	rc = iops->load(env, it, 0);
 	if (rc < 0) {
-		if (rc == -ENODATA) {
+		if (rc == -ENODATA)
 			rc = 0;
-			*count = 0;
-		}
-		GOTO(out, rc);
+		GOTO(put, rc);
 	}
 	if (rc > 0)
 		rc = iops->next(env, it);
 
-	for (*count = 0; rc == 0 || rc == -ESTALE; rc = iops->next(env, it)) {
+	for (; rc == 0 || rc == -ESTALE; rc = iops->next(env, it)) {
 		if (rc == -ESTALE)
 			continue;
 
@@ -2928,14 +2930,22 @@ static int osd_dirent_count(const struct lu_env *env, struct dt_object *dt,
 
 		(*count)++;
 	}
-	if (rc == 1) {
-		obj->oo_dirent_count = *count;
+	if (rc == 1 || rc == -ESTALE)
 		rc = 0;
-	}
-out:
+put:
 	iops->put(env, it);
 	iops->fini(env, it);
-
+out:
+	/* If counting dirents failed, use the current count (if any).
+	 *
+	 * At worst this means the directory will not be split until the
+	 * count can be completed successfully (remount or oo_dirent_count
+	 * incremented by adding new entries).  This avoids re-walking
+	 * the whole directory on each access and hitting the same error.
+	 */
+	if (rc && *count == 0)
+		*count = LU_DIRENT_COUNT_UNSET;
+	atomic_set(&obj->oo_dirent_count, *count);
 	RETURN(rc);
 }
 
@@ -2966,8 +2976,11 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	spin_unlock(&obj->oo_guard);
 
 	if (S_ISDIR(obj->oo_inode->i_mode) &&
+	    (attr->la_valid & LA_DIRENT_CNT) &&
 	    fid_is_namespace_visible(lu_object_fid(&dt->do_lu)))
 		rc = osd_dirent_count(env, dt, &attr->la_dirent_count);
+	else
+		attr->la_valid &= ~LA_DIRENT_CNT;
 
 	return rc;
 }
@@ -3533,7 +3546,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 	oth = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oth->ot_handle->h_transaction != NULL);
 	if (fid_is_namespace_visible(lu_object_fid(&obj->oo_dt.do_lu)))
-		obj->oo_dirent_count = 0;
+		atomic_set(&obj->oo_dirent_count, 0);
 	result = osd_mkfile(info, obj, mode, hint, th, attr);
 
 	return result;
@@ -5765,16 +5778,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		rc = PTR_ERR(bh);
 	}
 
-	if (!rc && fid_is_namespace_visible(lu_object_fid(&dt->do_lu)) &&
-	    obj->oo_dirent_count != LU_DIRENT_COUNT_UNSET) {
-		/* NB, dirent count may not be accurate, because it's counted
-		 * without lock.
-		 */
-		if (obj->oo_dirent_count)
-			obj->oo_dirent_count--;
-		else
-			obj->oo_dirent_count = LU_DIRENT_COUNT_UNSET;
-	}
+	if (!rc && fid_is_namespace_visible(lu_object_fid(&dt->do_lu)))
+		atomic_dec_if_positive(&obj->oo_dirent_count);
 	if (hlock != NULL)
 		ldiskfs_htree_unlock(hlock);
 	else
@@ -6123,9 +6128,14 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 					      hlock, th);
 		}
 	}
-	if (!rc && fid_is_namespace_visible(lu_object_fid(&pobj->oo_dt.do_lu))
-	    && pobj->oo_dirent_count != LU_DIRENT_COUNT_UNSET)
-		pobj->oo_dirent_count++;
+	if (!rc && fid_is_namespace_visible(lu_object_fid(&pobj->oo_dt.do_lu))){
+		int dirent_count = atomic_read(&pobj->oo_dirent_count);
+
+		/* avoid extremely unlikely 2B-entry directory overflow case */
+		if (dirent_count != LU_DIRENT_COUNT_UNSET &&
+		    likely(dirent_count < INT_MAX - NR_CPUS))
+			atomic_inc(&pobj->oo_dirent_count);
+	}
 
 	if (hlock != NULL)
 		ldiskfs_htree_unlock(hlock);
