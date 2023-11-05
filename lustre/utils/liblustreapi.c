@@ -285,41 +285,56 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 	}
 
 	if (*end != '\0') {
-		if ((*end == 'b') && *(end + 1) == '\0' &&
-		    (*size & (~0ULL << (64 - 9))) == 0 &&
-		    !bytes_spec) {
-			*size_units = 1 << 9;
-		} else if ((*end == 'b') &&
-			   *(end + 1) == '\0' &&
-			   bytes_spec) {
+		char next = tolower(*(end + 1));
+
+		switch (tolower(*end)) {
+		case 'b':
+			if (bytes_spec) {
+				*size_units = 1;
+			} else {
+				if (*size & (~0ULL << (64 - 9)))
+					return -EINVAL;
+				*size_units = 1 << 9;
+			}
+			break;
+		case 'c':
 			*size_units = 1;
-		} else if ((*end == 'k' || *end == 'K') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 10))) == 0) {
+			break;
+		case 'k':
+			if (*size & (~0ULL << (64 - 10)))
+				return -EINVAL;
 			*size_units = 1 << 10;
-		} else if ((*end == 'm' || *end == 'M') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 20))) == 0) {
+			break;
+		case 'm':
+			if (*size & (~0ULL << (64 - 20)))
+				return -EINVAL;
 			*size_units = 1 << 20;
-		} else if ((*end == 'g' || *end == 'G') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 30))) == 0) {
+			break;
+		case 'g':
+			if (*size & (~0ULL << (64 - 30)))
+				return -EINVAL;
 			*size_units = 1 << 30;
-		} else if ((*end == 't' || *end == 'T') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 40))) == 0) {
+			break;
+		case 't':
+			if (*size & (~0ULL << (64 - 40)))
+				return -EINVAL;
 			*size_units = 1ULL << 40;
-		} else if ((*end == 'p' || *end == 'P') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 50))) == 0) {
+			break;
+		case 'p':
+			if (*size & (~0ULL << (64 - 50)))
+				return -EINVAL;
 			*size_units = 1ULL << 50;
-		} else if ((*end == 'e' || *end == 'E') &&
-			   *(end + 1) == '\0' &&
-			   (*size & (~0ULL << (64 - 60))) == 0) {
+			break;
+		case 'e':
+			if (*size & (~0ULL << (64 - 60)))
+				return -EINVAL;
 			*size_units = 1ULL << 60;
-		} else {
+			break;
+		default:
 			return -EINVAL;
 		}
+		if (next != '\0' && next != 'i' && next != 'b')
+			return -EINVAL;
 	}
 	*size = *size * *size_units + frac * *size_units / frac_d;
 

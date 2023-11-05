@@ -5339,7 +5339,7 @@ static int lfs_find(int argc, char **argv)
 				optarg++;
 			}
 
-			param.fp_blocks_units = 1024;
+			param.fp_blocks_units = 512;
 			ret = llapi_parse_size(optarg, &param.fp_blocks,
 					       &param.fp_blocks_units, 0);
 			if (ret) {
