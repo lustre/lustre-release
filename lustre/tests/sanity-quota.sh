@@ -1131,7 +1131,7 @@ test_1g() {
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 	sleep 5
-	$RUNAS $DD of=$testfile count=$OSTCOUNT seek=$limit &&
+	$RUNAS $DD of=$testfile count=$((OSTCOUNT*3)) seek=$limit &&
 		quota_error u $TSTUSR \
 			"user write success, but expect EDQUOT"
 
