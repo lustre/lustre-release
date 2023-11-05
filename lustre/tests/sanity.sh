@@ -7112,21 +7112,21 @@ test_56r() {
 	echo "test" > $dir/$tfile
 	echo "test2" > $dir/$tfile.2 && sync
 	expected=1
-	cmd="$LFS find -size 5 -type f -lazy $dir"
+	cmd="$LFS find -size 5c -type f -lazy $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-	cmd="$LFS find -size 5 -type f $dir"
+	cmd="$LFS find -size 5c -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
 
 	expected=1
-	cmd="$LFS find -size +5 -type f -lazy $dir"
+	cmd="$LFS find -size +5c -type f -lazy $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-	cmd="$LFS find -size +5 -type f $dir"
+	cmd="$LFS find -size +5c -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
@@ -7142,21 +7142,21 @@ test_56r() {
 		error "'$cmd' wrong: found $nums, expected $expected"
 
 	expected=2
-	cmd="$LFS find ! -size -5 -type f -lazy $dir"
+	cmd="$LFS find ! -size -5c -type f -lazy $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-	cmd="$LFS find ! -size -5 -type f $dir"
+	cmd="$LFS find ! -size -5c -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
 
 	expected=12
-	cmd="$LFS find -size -5 -type f -lazy $dir"
+	cmd="$LFS find -size -5c -type f -lazy $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-	cmd="$LFS find -size -5 -type f $dir"
+	cmd="$LFS find -size -5c -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
@@ -7218,17 +7218,17 @@ test_56ra() {
 	cancel_lru_locks $OSC
 	cat $dir/$tfile $dir/$tfile.2 > /dev/null
 
-	test_56ra_sub  1  0 "$LFS find -size 5 -type f -lazy $dir"
-	test_56ra_sub  1 14 "$LFS find -size 5 -type f $dir"
-	test_56ra_sub  1  0 "$LFS find -size +5 -type f -lazy $dir"
-	test_56ra_sub  1 14 "$LFS find -size +5 -type f $dir"
+	test_56ra_sub  1  0 "$LFS find -size 5c -type f -lazy $dir"
+	test_56ra_sub  1 14 "$LFS find -size 5c -type f $dir"
+	test_56ra_sub  1  0 "$LFS find -size +5c -type f -lazy $dir"
+	test_56ra_sub  1 14 "$LFS find -size +5c -type f $dir"
 
 	test_56ra_sub  2  0 "$LFS find -size +0 -type f -lazy $dir"
 	test_56ra_sub  2 14 "$LFS find -size +0 -type f $dir"
-	test_56ra_sub  2  0 "$LFS find ! -size -5 -type f -lazy $dir"
-	test_56ra_sub  2 14 "$LFS find ! -size -5 -type f $dir"
-	test_56ra_sub 12  0 "$LFS find -size -5 -type f -lazy $dir"
-	test_56ra_sub 12 14 "$LFS find -size -5 -type f $dir"
+	test_56ra_sub  2  0 "$LFS find ! -size -5c -type f -lazy $dir"
+	test_56ra_sub  2 14 "$LFS find ! -size -5c -type f $dir"
+	test_56ra_sub 12  0 "$LFS find -size -5c -type f -lazy $dir"
+	test_56ra_sub 12 14 "$LFS find -size -5c -type f $dir"
 }
 run_test 56ra "check lfs find -size -lazy works for data on OSTs"
 

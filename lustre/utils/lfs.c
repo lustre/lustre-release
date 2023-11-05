@@ -5880,6 +5880,7 @@ err_free:
 				optarg++;
 			}
 
+			param.fp_size_units = 512;
 			ret = llapi_parse_size(optarg, &param.fp_size,
 					       &param.fp_size_units, 0);
 			if (ret) {
