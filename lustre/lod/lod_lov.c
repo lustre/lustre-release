@@ -846,6 +846,13 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		 * component, its l_ost_idx does not matter.
 		 */
 		objs[i].l_ost_idx = cpu_to_le32(ost_idx);
+
+		/* simulation of broken LOVEA */
+		if (CFS_FAIL_CHECK(OBD_FAIL_LOV_INVALID_OSTIDX) &&
+		    comp_idx == 0 && i == 0 && lo->ldo_mirror_count > 1) {
+			objs[i].l_ost_idx = cpu_to_le32(0xffffffff);
+		}
+
 	}
 done:
 	if (lmm_size != NULL)

@@ -4435,6 +4435,19 @@ test_209b() {
 }
 run_test 209b "pagecache can be used after LL cancellation"
 
+test_210a() {
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+	dd if=/dev/zero of=$tf bs=1M count=1 || error "can't dd"
+#define OBD_FAIL_LOV_INVALID_OSTIDX		    0x1428
+	do_facet mds1 "$LCTL set_param fail_loc=0x1428"
+	$LFS mirror extend -N $tf || error "can't mirror"
+	$LFS getstripe -v $tf
+	stat $tf || error "can't stat"
+}
+run_test 210a "handle broken mirrored lovea"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

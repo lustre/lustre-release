@@ -554,8 +554,15 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 					LCME_FL_INIT,
 					(i == entry_count - 1) ? &maxbytes :
 								 NULL);
-		if (IS_ERR(lsme))
-			GOTO(out_lsm, rc = PTR_ERR(lsme));
+		if (IS_ERR(lsme)) {
+			OBD_ALLOC_LARGE(lsme, sizeof(*lsme));
+			if (!lsme)
+				GOTO(out_lsm, rc = -ENOMEM);
+
+			lsme->lsme_magic = LOV_MAGIC_FOREIGN;
+			lsme->lsme_pattern = LOV_PATTERN_FOREIGN;
+			lsme->lsme_flags = LCME_FL_OFFLINE;
+		}
 
 		/**
 		 * pressume that unrecognized magic component also has valid
