@@ -1222,7 +1222,8 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 
 	if (strncmp(line + new_indent, "- ", 2) == 0) {
 		memset(line + new_indent, ' ', 2);
-		new_indent += 2;
+		/* Eat white spaces physical YAML config files have */
+		new_indent += strspn(line + new_indent, " ");
 		fmt |= LNKF_SEQUENCE;
 	}
 
