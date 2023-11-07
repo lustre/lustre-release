@@ -34,12 +34,10 @@ AC_DEFUN([AC_KERBEROS_V5],[
       KRBLIBS=`$K5CONFIG --libs gssapi`
       K5VERS=`$K5CONFIG --version | head -n 1 | awk '{split($(4),v,"."); if (v@<:@"3"@:>@ == "") v@<:@"3"@:>@ = "0"; print v@<:@"1"@:>@v@<:@"2"@:>@v@<:@"3"@:>@ }'`
       AC_DEFINE_UNQUOTED(KRB5_VERSION, $K5VERS, [Define this as the Kerberos version number])
+      sub_dir=`pkg-config --variable=libdir krb5 | sed "s#^$dir/##"`
       if test -f $dir/include/gssapi/gssapi_krb5.h -a \
-                \( -f $dir/lib/libgssapi_krb5.a -o \
-                   -f $dir/lib64/libgssapi_krb5.a -o \
-                   -f $dir/lib64/libgssapi_krb5.so -o \
-                   -f $dir/lib/x86_64-linux-gnu/libgssapi_krb5.so -o \
-                   -f $dir/lib/libgssapi_krb5.so \) ; then
+                \( -f $dir/$sub_dir/libgssapi_krb5.a -o \
+                   -f $dir/$sub_dir/libgssapi_krb5.so \) ; then
          KRBDIR="$dir"
   dnl If we are using MIT K5 1.3.1 and before, we *MUST* use the
   dnl private function (gss_krb5_ccache_name) to get correct
