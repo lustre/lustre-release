@@ -1105,6 +1105,9 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 		break;
 
 	case TN_EVENT_TAG_RX_OK:
+		if (status)
+			kfilnd_tn_status_update(tn, status, LNET_MSG_STATUS_OK);
+
 		kfilnd_tn_state_change(tn, TN_STATE_WAIT_SEND_COMP);
 		if (unlikely(tn->msg_type == KFILND_MSG_BULK_PUT_REQ) &&
 		    CFS_FAIL_CHECK(CFS_KFI_FAIL_WAIT_SEND_COMP2)) {
