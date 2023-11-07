@@ -919,7 +919,10 @@ static int kfilnd_tn_state_imm_send(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* RKEY is not involved in immediate sends, so no need to
+		 * delete peer
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		if (tn->msg_type == KFILND_MSG_HELLO_REQ)
 			kfilnd_peer_clear_hello_pending(tn->tn_kp);
 		break;
@@ -1095,7 +1098,8 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 		    CFS_FAIL_CHECK(CFS_KFI_FAIL_WAIT_SEND_COMP3)) {
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 			kfilnd_tn_status_update(tn, -EIO, hstatus);
-			kfilnd_peer_tn_failed(tn->tn_kp, -EIO);
+			/* Don't delete peer on debug/test path */
+			kfilnd_peer_tn_failed(tn->tn_kp, -EIO, false);
 			kfilnd_tn_state_change(tn, TN_STATE_FAIL);
 			break;
 		}
@@ -1128,7 +1132,15 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* The bulk request message failed, however, there is an edge
+		 * case where the last request packet of a message is received
+		 * at the target successfully, but the corresponding response
+		 * packet is repeatedly dropped. This results in the target
+		 * generating a success completion event but the initiator
+		 * generating an error completion event. Due to this, we have to
+		 * delete the peer here to protect the RKEY.
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, true);
 
 		/* Need to cancel the tagged receive to prevent resources from
 		 * being leaked.
@@ -1162,6 +1174,10 @@ static int kfilnd_tn_state_wait_comp(struct kfilnd_transaction *tn,
 	case TN_EVENT_TAG_RX_FAIL:
 		kfilnd_tn_status_update(tn, status,
 					LNET_MSG_STATUS_LOCAL_ERROR);
+		/* The target may hold a reference to the RKEY, so we need to
+		 * delete the peer to protect it
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, true);
 		kfilnd_tn_state_change(tn, TN_STATE_FAIL);
 		break;
 
@@ -1187,7 +1203,10 @@ static int kfilnd_tn_state_wait_send_comp(struct kfilnd_transaction *tn,
 	case TN_EVENT_TX_FAIL:
 		kfilnd_tn_status_update(tn, status,
 					LNET_MSG_STATUS_NETWORK_TIMEOUT);
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* The bulk request message was never queued so we do not need
+		 * to delete the peer
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		break;
 	default:
 		KFILND_TN_ERROR(tn, "Invalid %s event", tn_event_to_str(event));
@@ -1220,7 +1239,11 @@ static int kfilnd_tn_state_wait_tag_rma_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* This event occurrs at the target of a bulk LNetPut/Get.
+		 * Since the target did not generate the RKEY, we needn't
+		 * delete the peer.
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		break;
 
 	default:
@@ -1301,7 +1324,11 @@ static int kfilnd_tn_state_wait_tag_comp(struct kfilnd_transaction *tn,
 			hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 
 		kfilnd_tn_status_update(tn, status, hstatus);
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* This event occurrs at the target of a bulk LNetPut/Get.
+		 * Since the target did not generate the RKEY, we needn't
+		 * delete the peer.
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		break;
 
 	case TN_EVENT_TAG_TX_OK:
@@ -1327,7 +1354,8 @@ static int kfilnd_tn_state_fail(struct kfilnd_transaction *tn,
 
 	switch (event) {
 	case TN_EVENT_TX_FAIL:
-		kfilnd_peer_tn_failed(tn->tn_kp, status);
+		/* Prior TN states will have deleted the peer if necessary */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		break;
 
 	case TN_EVENT_TX_OK:
@@ -1373,12 +1401,22 @@ static int kfilnd_tn_state_wait_timeout_tag_comp(struct kfilnd_transaction *tn,
 	case TN_EVENT_TAG_RX_CANCEL:
 		kfilnd_tn_status_update(tn, -ETIMEDOUT,
 					LNET_MSG_STATUS_NETWORK_TIMEOUT);
-		kfilnd_peer_tn_failed(tn->tn_kp, -ETIMEDOUT);
+		/* We've cancelled locally, but the target may still have a ref
+		 * on the RKEY. Delete the peer to protect it.
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, -ETIMEDOUT, true);
 		break;
 
 	case TN_EVENT_TAG_RX_FAIL:
 		kfilnd_tn_status_update(tn, status,
 					LNET_MSG_STATUS_LOCAL_ERROR);
+		/* The initiator of a bulk LNetPut/Get eagerly sends the bulk
+		 * request message to the target without ensuring the tagged
+		 * receive buffer is posted. Thus, the target could be issuing
+		 * kfi_write/read operations using the tagged receive buffer
+		 * RKEY, and we need to delete this peer to protect the it.
+		 */
+		kfilnd_peer_tn_failed(tn->tn_kp, status, true);
 		break;
 
 	case TN_EVENT_TAG_RX_OK:

@@ -56,6 +56,24 @@ static void kfilnd_peer_free(void *ptr, void *arg)
 }
 
 /**
+ * kfilnd_peer_del() - Mark a peer for deletion
+ * @kp: Peer to be deleted
+ */
+static void kfilnd_peer_del(struct kfilnd_peer *kp)
+{
+	if (atomic_cmpxchg(&kp->kp_remove_peer, 0, 1) == 0) {
+		struct lnet_nid peer_nid;
+
+		lnet_nid4_to_nid(kp->kp_nid, &peer_nid);
+		CDEBUG(D_NET, "%s(%p):0x%llx marked for removal from peer cache\n",
+		       libcfs_nidstr(&peer_nid), kp, kp->kp_addr);
+
+		lnet_notify(kp->kp_dev->kfd_ni, &peer_nid, false, false,
+			    kp->kp_last_alive);
+	}
+}
+
+/**
  * kfilnd_peer_purge_old_peer() - Delete the specified peer from the cache
  * if we haven't heard from it within 5x LND timeouts.
  * @kp: The peer to be checked or purged
@@ -115,36 +133,23 @@ static void kfilnd_peer_down(struct kfilnd_peer *kp)
 
 /**
  * kfilnd_peer_tn_failed() - A transaction with this peer has failed. Mark the
- * peer as either stale or down depending on the provided error value.
- * @kp: The peer to be marked down or stale
+ * peer as either stale or down depending on the provided error value. If
+ * @delete is true we also delete the peer from the cache.
+ * @kp: The peer to be marked down, stale, or deleted.
  * @error: An errno indicating why the transaction failed.
+ * @delete: Whether to delete the peer
  * Note: We currently only consider EHOSTUNREACH which corresponds to
  * C_RC_UNDELIVERABLE, and ENOTCONN which corresponds to C_RC_VNI_NOT_FOUND.
  */
-void kfilnd_peer_tn_failed(struct kfilnd_peer *kp, int error)
+void kfilnd_peer_tn_failed(struct kfilnd_peer *kp, int error, bool delete)
 {
 	if (error == -EHOSTUNREACH || error == -ENOTCONN)
 		kfilnd_peer_down(kp);
 	else
 		kfilnd_peer_stale(kp);
-}
 
-/**
- * kfilnd_peer_del() - Mark a peer for deletion
- * @kp: Peer to be deleted
- */
-void kfilnd_peer_del(struct kfilnd_peer *kp)
-{
-	if (atomic_cmpxchg(&kp->kp_remove_peer, 0, 1) == 0) {
-		struct lnet_nid peer_nid;
-
-		lnet_nid4_to_nid(kp->kp_nid, &peer_nid);
-		CDEBUG(D_NET, "%s(%p):0x%llx marked for removal from peer cache\n",
-		       libcfs_nidstr(&peer_nid), kp, kp->kp_addr);
-
-		lnet_notify(kp->kp_dev->kfd_ni, &peer_nid, false, false,
-			    kp->kp_last_alive);
-	}
+	if (delete)
+		kfilnd_peer_del(kp);
 }
 
 /**
