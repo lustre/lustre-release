@@ -5294,7 +5294,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
 				       libcfs_nidstr(&ni->ni_nid));
 			if (!nid_is_lo0(&ni->ni_nid) &&
-			    *ni->ni_status != LNET_NI_STATUS_UP)
+			    lnet_ni_get_status_locked(ni) != LNET_NI_STATUS_UP)
 				status = "down";
 			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS,
 				       status);
