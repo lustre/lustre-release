@@ -7413,7 +7413,7 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 				}
 
 				hops = nla_get_s64(route_prop);
-				if (hops < 1 || hops > 255) {
+				if ((hops < 1 || hops > 255) && hops != -1) {
 					GENL_SET_ERR_MSG(info,
 							 "invalid hop count must be between 1 and 255");
 					GOTO(report_err, rc = -EINVAL);
