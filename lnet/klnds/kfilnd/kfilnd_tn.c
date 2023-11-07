@@ -1523,87 +1523,24 @@ void kfilnd_tn_free(struct kfilnd_transaction *tn)
 	kmem_cache_free(tn_cache, tn);
 }
 
-/**
- * kfilnd_tn_alloc() - Allocate a new KFI LND transaction.
- * @dev: KFI LND device used to look the KFI LND endpoint to associate with the
- * transaction.
- * @cpt: CPT of the transaction.
- * @target_nid: Target NID of the transaction.
- * @alloc_msg: Allocate an immediate message for the transaction.
- * @is_initiator: Is initiator of LNet transaction.
- * @key: Is transaction memory region key need.
- *
- * During transaction allocation, each transaction is associated with a KFI LND
- * endpoint use to post data transfer operations. The CPT argument is used to
- * lookup the KFI LND endpoint within the KFI LND device.
- *
- * Return: On success, valid pointer. Else, negative errno pointer.
- */
-struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
-					   lnet_nid_t target_nid,
-					   bool alloc_msg, bool is_initiator,
-					   bool key)
-{
-	struct kfilnd_transaction *tn;
-	struct kfilnd_peer *kp;
-	int rc;
-
-	if (!dev) {
-		rc = -EINVAL;
-		goto err;
-	}
-
-	kp = kfilnd_peer_get(dev, target_nid);
-	if (IS_ERR(kp)) {
-		rc = PTR_ERR(kp);
-		goto err;
-	}
-
-	tn = kfilnd_tn_alloc_for_peer(dev, cpt, kp, alloc_msg, is_initiator,
-				      key);
-	if (IS_ERR(tn)) {
-		rc = PTR_ERR(tn);
-		kfilnd_peer_put(kp);
-		goto err;
-	}
-
-	return tn;
-
-err:
-	return ERR_PTR(rc);
-}
-
-/* See kfilnd_tn_alloc()
+/*
+ * Allocation logic common to kfilnd_tn_alloc() and kfilnd_tn_alloc_for_hello().
+ * @ep: The KFI LND endpoint to associate with the transaction.
+ * @kp: The kfilnd peer to associate with the transaction.
+ * See kfilnd_tn_alloc() for a description of the other fields
  * Note: Caller must have a reference on @kp
  */
-struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
-						    int cpt,
-						    struct kfilnd_peer *kp,
-						    bool alloc_msg,
-						    bool is_initiator,
-						    bool key)
+static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
+							 struct kfilnd_peer *kp,
+							 bool alloc_msg,
+							 bool is_initiator,
+							 u16 key)
 {
 	struct kfilnd_transaction *tn;
-	struct kfilnd_ep *ep;
 	int rc;
 	ktime_t tn_alloc_ts;
 
-	if (!dev) {
-		rc = -EINVAL;
-		goto err;
-	}
-
 	tn_alloc_ts = ktime_get();
-
-	/* If the CPT does not fall into the LNet NI CPT range, force the CPT
-	 * into the LNet NI CPT range. This should never happen.
-	 */
-	ep = dev->cpt_to_endpoint[cpt];
-	if (!ep) {
-		CWARN("%s used invalid cpt=%d\n",
-		      libcfs_nidstr(&dev->kfd_ni->ni_nid), cpt);
-		ep = dev->kfd_endpoints[0];
-	}
 
 	tn = kmem_cache_zalloc(tn_cache, GFP_KERNEL);
 	if (!tn) {
@@ -1619,12 +1556,7 @@ struct kfilnd_transaction *kfilnd_tn_alloc_for_peer(struct kfilnd_dev *dev,
 		}
 	}
 
-	if (key) {
-		rc = kfilnd_ep_get_key(ep);
-		if (rc < 0)
-			goto err_free_tn;
-		tn->tn_mr_key = rc;
-	}
+	tn->tn_mr_key = key;
 
 	tn->tn_kp = kp;
 
@@ -1657,6 +1589,125 @@ err_free_tn:
 	if (tn->tn_tx_msg.msg)
 		kmem_cache_free(imm_buf_cache, tn->tn_tx_msg.msg);
 	kmem_cache_free(tn_cache, tn);
+err:
+	return ERR_PTR(rc);
+}
+
+static struct kfilnd_ep *kfilnd_dev_to_ep(struct kfilnd_dev *dev, int cpt)
+{
+	struct kfilnd_ep *ep;
+
+	if (!dev)
+		return ERR_PTR(-EINVAL);
+
+	ep = dev->cpt_to_endpoint[cpt];
+	if (!ep) {
+		CWARN("%s used invalid cpt=%d\n",
+		      libcfs_nidstr(&dev->kfd_ni->ni_nid), cpt);
+		ep = dev->kfd_endpoints[0];
+	}
+
+	return ep;
+}
+
+/**
+ * kfilnd_tn_alloc() - Allocate a new KFI LND transaction.
+ * @dev: KFI LND device used to look the KFI LND endpoint to associate with the
+ * transaction.
+ * @cpt: CPT of the transaction.
+ * @target_nid: Target NID of the transaction.
+ * @alloc_msg: Allocate an immediate message for the transaction.
+ * @is_initiator: Is initiator of LNet transaction.
+ * @need_key: Is transaction memory region key needed.
+ *
+ * During transaction allocation, each transaction is associated with a KFI LND
+ * endpoint use to post data transfer operations. The CPT argument is used to
+ * lookup the KFI LND endpoint within the KFI LND device.
+ *
+ * Return: On success, valid pointer. Else, negative errno pointer.
+ */
+struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
+					   lnet_nid_t target_nid,
+					   bool alloc_msg, bool is_initiator,
+					   bool need_key)
+{
+	struct kfilnd_transaction *tn;
+	struct kfilnd_ep *ep;
+	struct kfilnd_peer *kp;
+	int rc;
+	u16 key = 0;
+
+	ep = kfilnd_dev_to_ep(dev, cpt);
+	if (IS_ERR(ep)) {
+		rc = PTR_ERR(ep);
+		goto err;
+	}
+
+	/* Consider the following:
+	 * Thread 1: Posts tagged receive with RKEY based on
+	 *           peerA::kp_local_session_key X and tn_mr_key Y
+	 * Thread 2: Fetches peerA with kp_local_session_key X
+	 * Thread 1: Cancels tagged receive, marks peerA for removal, and
+	 *	     releases tn_mr_key Y
+	 * Thread 2: allocates tn_mr_key Y
+	 * At this point, thread 2 has the same RKEY used by thread 1.
+	 * Thus, we always allocate the tn_mr_key before looking up the peer,
+	 * and we always mark peers for removal before releasing tn_mr_key.
+	 */
+	if (need_key) {
+		rc = kfilnd_ep_get_key(ep);
+		if (rc < 0)
+			goto err;
+		key = rc;
+	}
+
+	kp = kfilnd_peer_get(dev, target_nid);
+	if (IS_ERR(kp)) {
+		rc = PTR_ERR(kp);
+		goto err_put_key;
+	}
+
+	tn = kfilnd_tn_alloc_common(ep, kp, alloc_msg, is_initiator, key);
+	if (IS_ERR(tn)) {
+		rc = PTR_ERR(tn);
+		kfilnd_peer_put(kp);
+		goto err_put_key;
+	}
+
+	return tn;
+
+err_put_key:
+	kfilnd_ep_put_key(ep, key);
+err:
+	return ERR_PTR(rc);
+}
+
+/* Like kfilnd_tn_alloc(), but caller already looked up the kfilnd_peer.
+ * Used only to allocate a TN for a hello request.
+ * See kfilnd_tn_alloc()/kfilnd_tn_alloc_comm()
+ * Note: Caller must have a reference on @kp
+ */
+struct kfilnd_transaction *kfilnd_tn_alloc_for_hello(struct kfilnd_dev *dev, int cpt,
+						     struct kfilnd_peer *kp)
+{
+	struct kfilnd_transaction *tn;
+	struct kfilnd_ep *ep;
+	int rc;
+
+	ep = kfilnd_dev_to_ep(dev, cpt);
+	if (IS_ERR(ep)) {
+		rc = PTR_ERR(ep);
+		goto err;
+	}
+
+	tn = kfilnd_tn_alloc_common(ep, kp, true, true, 0);
+	if (IS_ERR(tn)) {
+		rc = PTR_ERR(tn);
+		goto err;
+	}
+
+	return tn;
+
 err:
 	return ERR_PTR(rc);
 }

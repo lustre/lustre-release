@@ -69,7 +69,7 @@ int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
 		return 0;
 	}
 
-	tn = kfilnd_tn_alloc_for_peer(dev, cpt, kp, true, true, false);
+	tn = kfilnd_tn_alloc_for_hello(dev, cpt, kp);
 	if (IS_ERR(tn)) {
 		rc = PTR_ERR(tn);
 		CERROR("Failed to allocate transaction struct: rc=%d\n", rc);
