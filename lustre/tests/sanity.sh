@@ -5263,6 +5263,7 @@ test_39r() {
 	fi
 
 	local saved_adiff
+	local ahost=$(facet_active_host ost1)
 	saved_adiff=$(do_facet ost1 \
 		lctl get_param -n obdfilter.*OST0000.atime_diff)
 	stack_trap "do_facet ost1 \
@@ -5280,11 +5281,9 @@ test_39r() {
 	dd if=$DIR/$tfile of=/dev/null bs=4k count=1 ||
 		error "can't udpate atime"
 
+	# atime_cli value is in decimal
 	local atime_cli=$(stat -c %X $DIR/$tfile)
 	echo "client atime: $atime_cli"
-	# allow atime update to be written to device
-	do_facet ost1 "$LCTL set_param -n osd*.*OST*.force_sync 1"
-	sleep 5
 
 	local ostdev=$(ostdevname 1)
 	local fid=($($LFS getstripe $DIR/$tfile | grep 0x))
@@ -5300,11 +5299,30 @@ test_39r() {
 	local objpath="O/$seq/d$(($oid % 32))/$oid_hex"
 	local cmd="debugfs -c -R \\\"stat $objpath\\\" $ostdev"
 
+	# allow atime update to be written to device
+	do_facet ost1 "$LCTL set_param -n osd*.*OST*.force_sync=1"
 	echo "OST atime: $(do_facet ost1 "$cmd" |& grep atime)"
+
+	# Give enough time for server to get updated. Until then
+	# the value read is defaulted to "0x00000000:00000000"
+	# Wait until atime read via debugfs is not equal to zero.
+	# Max limit to wait is 30 seconds.
+	wait_update_cond $ahost						\
+		"$cmd |& awk -F'[: ]' '/atime:/ { print \\\$4 }'"	\
+		"-gt" "0" 30 || error "atime on ost is still 0 after 30 seconds"
+	# atime_ost value is in hex
 	local atime_ost=$(do_facet ost1 "$cmd" |&
 			  awk -F'[: ]' '/atime:/ { print $4 }')
-	(( atime_cli == atime_ost )) ||
-		error "atime on client $atime_cli != ost $atime_ost"
+	# debugfs returns atime in 0xNNNNNNNN:00000000 format
+	# convert Hex to decimal before comparing
+	local atime_ost_dec=$((atime_ost))
+
+	# The test pass criteria is that the client time and server should
+	# be same (2s gap accepted). This gap could arise due to VFS updating
+	# the atime after the read(dd), stat and the updated time from the
+	# inode
+	(( $((atime_cli - atime_ost_dec)) <= 2 )) ||
+		error "atime on client $atime_cli != ost $atime_ost_dec"
 }
 run_test 39r "lazy atime update on OST"
 
