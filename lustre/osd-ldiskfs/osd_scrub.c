@@ -208,10 +208,10 @@ int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 				osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 	if (IS_ERR(th)) {
 		rc = PTR_ERR(th);
-		CDEBUG(D_LFSCK, "%s: fail to start trans for scrub op %d "
-		       DFID" => %u/%u: rc = %d\n", osd_name(dev), ops,
-		       PFID(fid), id ? id->oii_ino : -1, id ? id->oii_gen : -1,
-		       rc);
+		CWARN("%s: fail to start trans for scrub op %d "
+		      DFID" => %u/%u: rc = %d\n", osd_name(dev), ops,
+		      PFID(fid), id ? id->oii_ino : -1, id ? id->oii_gen : -1,
+		      rc);
 		RETURN(rc);
 	}
 
@@ -1235,9 +1235,10 @@ static int osd_scrub_main(void *args)
 		scrub->os_pos_current = ooc->ooc_pos_preload;
 	}
 
-	CDEBUG(D_LFSCK, "%s: OI scrub start, flags = 0x%x, pos = %llu\n",
+	CDEBUG(D_LFSCK, "%s: OI scrub start, flags = 0x%x, pos = %llu%s\n",
 	       osd_scrub2name(scrub), scrub->os_start_flags,
-	       scrub->os_pos_current);
+	       scrub->os_pos_current,
+	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
 
 	rc = osd_inode_iteration(osd_oti_get(&env), dev, ~0U, false);
 	if (unlikely(rc == SCRUB_IT_CRASH)) {
@@ -1261,8 +1262,10 @@ post:
 		dev->od_check_ff = 0;
 	}
 	rc = scrub_thread_post(&env, &dev->od_scrub.os_scrub, rc);
-	CDEBUG(D_LFSCK, "%s: OI scrub: stop, pos = %llu: rc = %d\n",
-	       osd_scrub2name(scrub), scrub->os_pos_current, rc);
+	CDEBUG(D_LFSCK, "%s: OI scrub: stop, pos = %llu: rc = %d%s\n",
+	       osd_scrub2name(scrub), scrub->os_pos_current, rc,
+	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
+
 
 out:
 	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);

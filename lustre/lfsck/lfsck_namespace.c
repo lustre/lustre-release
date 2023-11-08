@@ -577,7 +577,8 @@ log:
 	if (th != NULL && !IS_ERR(th))
 		dt_trans_stop(env, dev, th);
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK %s flags for "DFID" in the "
+	CDEBUG(rc ? D_LFSCK : D_INFO,
+	       "%s: namespace LFSCK %s flags for "DFID" in the "
 	       "trace file, flags %x, old %x, new %x: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), add ? "add" : "del", PFID(fid),
 	       (__u32)flags, (__u32)old, (__u32)new, rc);

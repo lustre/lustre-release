@@ -495,7 +495,7 @@ static int lfsck_record_lmv(const struct lu_env *env,
 	int			    rc    = 0;
 	ENTRY;
 
-	CDEBUG(D_LFSCK, "%s: record slave LMV EA for the striped directory "
+	CDEBUG(D_INFO, "%s: record slave LMV EA for the striped directory "
 	       DFID": shard = "DFID", index = %u, flags = %u, flags2 = %u, "
 	       "depth = %d\n", lfsck_lfsck2name(lfsck),
 	       PFID(lfsck_dto2fid(dir)), PFID(fid),

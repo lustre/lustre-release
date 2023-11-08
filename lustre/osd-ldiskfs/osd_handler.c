@@ -951,6 +951,7 @@ static int osd_stripe_dir_filldir(void *buf,
 	struct osd_thread_info *oti = oclb->oclb_info;
 	struct lu_fid *fid = &oti->oti_fid3;
 	struct osd_inode_id *id = &oti->oti_id3;
+	struct osd_inode_id id2;
 	struct osd_device *dev = oclb->oclb_dev;
 	struct inode *inode;
 
@@ -974,7 +975,9 @@ static int osd_stripe_dir_filldir(void *buf,
 
 	iput(inode);
 	osd_add_oi_cache(oti, dev, id, fid);
-	osd_scrub_oi_insert(dev, fid, id, true);
+	/* Check shard by scrub only if it has a problem with OI */
+	if (osd_oi_lookup(oti, dev, fid, &id2, 0) || !osd_id_eq(id, &id2))
+		osd_scrub_oi_insert(dev, fid, id, true);
 	oclb->oclb_found = true;
 
 	return 1;
