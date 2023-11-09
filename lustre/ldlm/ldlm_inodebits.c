@@ -571,6 +571,14 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 	if (rc)
 		GOTO(full_cancel, rc);
 
+	/*
+	 * check that the lock is still actual as it could get
+	 * invalidated by an eviction being unproteced few
+	 * lines above.
+	 */
+	if (ldlm_is_failed(lock))
+		GOTO(full_cancel, rc = -EINVAL);
+
 	/* Finally clear these bits in lock ibits */
 	ldlm_inodebits_drop(lock, drop_bits);
 
