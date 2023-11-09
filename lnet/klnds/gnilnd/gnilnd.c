@@ -27,7 +27,6 @@
 static int
 kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 {
-	struct lnet_ioctl_config_gnilnd_tunables *tuns;
 	struct lnet_ni *ni = data;
 
 	if (!ni || !msg)
@@ -36,9 +35,28 @@ kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
 		return -EOPNOTSUPP;
 
-	tuns = &ni->ni_lnd_tunables.lnd_tun_u.lnd_gni;
 	nla_put_u32(msg, LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
 		    kgnilnd_timeout());
+	return 0;
+}
+
+static int
+kgnilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
+{
+	struct lnet_ni *ni = data;
+
+	if (cmd != LNET_CMD_NETS)
+		return -EOPNOTSUPP;
+
+	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
+		return -EINVAL;
+
+	if (type == LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT) {
+		s64 timeout = nla_get_s64(attr);
+
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_gni.lnd_timeout = timeout;
+	}
+
 	return 0;
 }
 
@@ -52,6 +70,7 @@ const struct lnet_lnd the_kgnilnd = {
 	.lnd_recv       = kgnilnd_recv,
 	.lnd_eager_recv = kgnilnd_eager_recv,
 	.lnd_nl_get	= kgnilnd_nl_get,
+	.lnd_nl_set	= kgnilnd_nl_set,
 };
 
 kgn_data_t      kgnilnd_data;

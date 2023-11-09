@@ -1328,6 +1328,9 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_NTX:
 		tunables->lnd_tun_u.lnd_o2ib.lnd_ntx = nla_get_s64(attr);
 		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TIMEOUT:
+		tunables->lnd_tun_u.lnd_o2ib.lnd_timeout = nla_get_s64(attr);
+		break;
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER:
 		num = nla_get_s64(attr);
 		clamp_t(s64, num, 1, 127);
