@@ -7999,6 +7999,11 @@ static int __init mdt_init(void)
 		     FID_NOBRACE_LEN + 1);
 	BUILD_BUG_ON(sizeof("[0x0123456789ABCDEF:0x01234567:0x01234567]") !=
 		     FID_LEN + 1);
+
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	rc = lu_kmem_init(mdt_caches);
 	if (rc)
 		return rc;

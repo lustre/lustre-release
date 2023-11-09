@@ -3935,6 +3935,10 @@ static int __init ko2iblnd_init(void)
 	if (rc != 0)
 		return rc;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	lnet_register_lnd(&the_o2iblnd);
 
 	return 0;

@@ -660,17 +660,23 @@ void lnet_remove_debugfs(struct ctl_table *table)
 }
 EXPORT_SYMBOL_GPL(lnet_remove_debugfs);
 
-static void *debugfs_state;
-static int __init libcfs_init(void)
-{
-	int rc;
+static DEFINE_MUTEX(libcfs_startup);
+static int libcfs_active;
 
-	cfs_arch_init();
+static void *debugfs_state;
+
+int libcfs_setup(void)
+{
+	int rc = -EINVAL;
+
+	mutex_lock(&libcfs_startup);
+	if (libcfs_active)
+		goto out;
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
 		pr_err("LustreError: libcfs_debug_init: rc = %d\n", rc);
-		return (rc);
+		goto cleanup_lock;
 	}
 
 	rc = cfs_cpu_init();
@@ -687,30 +693,16 @@ static int __init libcfs_init(void)
 
 	rc = cfs_crypto_register();
 	if (rc) {
-		CERROR("cfs_crypto_regster: error %d\n", rc);
+		CERROR("cfs_crypto_register: error %d\n", rc);
 		goto cleanup_wq;
 	}
 
-	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
-	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
-		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
-
-	rc = llcrypt_init();
-	if (rc) {
-		CERROR("llcrypt_init: error %d\n", rc);
-		goto cleanup_lnet;
-	}
-
-	CDEBUG(D_OTHER, "portals setup OK\n");
+	CDEBUG(D_OTHER, "libcfs setup OK\n");
+out:
+	libcfs_active = 1;
+	mutex_unlock(&libcfs_startup);
 	return 0;
 
-cleanup_lnet:
-	if (!IS_ERR_OR_NULL(lnet_debugfs_root)) {
-		debugfs_remove_recursive(lnet_debugfs_root);
-		lnet_debugfs_root = NULL;
-		lnet_debugfs_fini(&debugfs_state);
-	}
-	cfs_crypto_unregister();
 cleanup_wq:
 	destroy_workqueue(cfs_rehash_wq);
 	cfs_rehash_wq = NULL;
@@ -718,6 +710,26 @@ cleanup_cpu:
 	cfs_cpu_fini();
 cleanup_debug:
 	libcfs_debug_cleanup();
+cleanup_lock:
+	mutex_unlock(&libcfs_startup);
+	return rc;
+}
+EXPORT_SYMBOL(libcfs_setup);
+
+static int __init libcfs_init(void)
+{
+	int rc;
+
+	rc = cfs_arch_init();
+	if (rc < 0) {
+		CERROR("cfs_arch_init: error %d\n", rc);
+		return rc;
+	}
+
+	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
+	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
+		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
+
 	return rc;
 }
 
@@ -734,12 +746,8 @@ static void __exit libcfs_exit(void)
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %lld\n",
 	       libcfs_kmem_read());
 
-	llcrypt_exit();
-
-	if (cfs_rehash_wq) {
+	if (cfs_rehash_wq)
 		destroy_workqueue(cfs_rehash_wq);
-		cfs_rehash_wq = NULL;
-	}
 
 	cfs_crypto_unregister();
 
@@ -753,6 +761,8 @@ static void __exit libcfs_exit(void)
 	rc = libcfs_debug_cleanup();
 	if (rc)
 		pr_err("LustreError: libcfs_debug_cleanup: rc = %d\n", rc);
+
+	cfs_arch_exit();
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

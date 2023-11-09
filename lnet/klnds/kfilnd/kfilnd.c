@@ -511,6 +511,10 @@ static int __init kfilnd_init(void)
 	if (rc)
 		goto err;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	/* Do any initialization of the transaction system */
 	rc = kfilnd_tn_init();
 	if (rc) {

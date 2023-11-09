@@ -515,9 +515,13 @@ void fld_client_flush(struct lu_client_fld *fld)
 
 static int __init fld_init(void)
 {
-#ifdef HAVE_SERVER_SUPPORT
 	int rc;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
+#ifdef HAVE_SERVER_SUPPORT
 	rc = fld_server_mod_init();
 	if (rc)
 		return rc;

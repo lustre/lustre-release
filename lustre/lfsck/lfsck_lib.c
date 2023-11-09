@@ -3964,6 +3964,10 @@ static int __init lfsck_init(void)
 {
 	int rc;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	lfsck_key_init_generic(&lfsck_thread_key, NULL);
 	rc = lu_context_key_register(&lfsck_thread_key);
 	if (!rc) {

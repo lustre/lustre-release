@@ -55,6 +55,10 @@ static __init int ptlrpc_init(void)
 	ptlrpc_init_xid();
 	lustre_msg_early_size_init();
 
+	rc = libcfs_setup();
+	if (rc)
+		RETURN(rc);
+
 	rc = req_layout_init();
 	if (rc)
 		RETURN(rc);

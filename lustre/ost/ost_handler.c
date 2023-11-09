@@ -424,6 +424,9 @@ static int __init ost_init(void)
 	int rc;
 
 	ENTRY;
+	rc = libcfs_setup();
+	if (rc)
+		RETURN(rc);
 
 	rc = class_register_type(&ost_obd_ops, NULL, false,
 				 LUSTRE_OSS_NAME, NULL);

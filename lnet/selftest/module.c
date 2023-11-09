@@ -92,6 +92,10 @@ lnet_selftest_init(void)
 	int rc = -ENOMEM;
 	int i;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	lst_serial_wq = alloc_ordered_workqueue("lst_s", 0);
 	if (!lst_serial_wq) {
 		CERROR("Failed to create serial WI scheduler for LST\n");

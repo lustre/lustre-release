@@ -429,7 +429,11 @@ static struct miscdevice lnet_dev = {
 static int __init lnet_init(void)
 {
 	int rc;
+
 	ENTRY;
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
 
 	rc = lnet_lib_init();
 	if (rc != 0) {

@@ -1977,6 +1977,12 @@ MODULE_PARM_DESC(mgc_requeue_timeout_min, "Minimal requeue time to refresh logs"
 
 static int __init mgc_init(void)
 {
+	int rc;
+
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	return class_register_type(&mgc_obd_ops, NULL, false,
 				   LUSTRE_MGC_NAME, NULL);
 }

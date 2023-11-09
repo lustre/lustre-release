@@ -9000,6 +9000,10 @@ static int __init osd_init(void)
 	BUILD_BUG_ON(sizeof(struct osd_thread_info) > PAGE_SIZE);
 #endif
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	osd_oi_mod_init();
 
 	rc = lu_kmem_init(ldiskfs_caches);

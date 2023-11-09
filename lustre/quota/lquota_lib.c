@@ -356,6 +356,10 @@ static int __init lquota_init(void)
 	int	rc;
 	ENTRY;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	lquota_key_init_generic(&lquota_thread_key, NULL);
 	lu_context_key_register(&lquota_thread_key);
 

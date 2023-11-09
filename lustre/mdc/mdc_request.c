@@ -3065,6 +3065,11 @@ struct class *mdc_changelog_class;
 static int __init mdc_init(void)
 {
 	int rc = 0;
+
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	rc = alloc_chrdev_region(&mdc_changelog_dev, 0,
 				 MDC_CHANGELOG_DEV_COUNT,
 				 MDC_CHANGELOG_DEV_NAME);

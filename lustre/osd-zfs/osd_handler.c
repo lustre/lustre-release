@@ -1655,6 +1655,10 @@ static int __init osd_init(void)
 {
 	int rc;
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	rc = osd_options_init();
 	if (rc)
 		return rc;

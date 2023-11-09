@@ -2840,6 +2840,10 @@ static int __init kgnilnd_init(void)
 	kgnilnd_insert_sysctl();
 	kgnilnd_proc_init();
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	lnet_register_lnd(&the_kgnilnd);
 
 	return 0;

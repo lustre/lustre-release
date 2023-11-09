@@ -707,6 +707,10 @@ static int __init obdclass_init(void)
 
 	register_oom_notifier(&obdclass_oom);
 
+	err = libcfs_setup();
+	if (err)
+		return err;
+
 	err = obd_init_checks();
 	if (err)
 		return err;

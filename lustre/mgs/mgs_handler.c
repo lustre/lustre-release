@@ -1756,6 +1756,12 @@ static const struct obd_ops mgs_obd_device_ops = {
 
 static int __init mgs_init(void)
 {
+	int rc;
+
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 	return class_register_type(&mgs_obd_device_ops, NULL, true,
 				   LUSTRE_MGS_NAME, &mgs_device_type);
 }

@@ -67,6 +67,7 @@
 
 typedef s32 timeout_t;
 
+int libcfs_setup(void);
 int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data);
 
 extern struct workqueue_struct *cfs_rehash_wq;

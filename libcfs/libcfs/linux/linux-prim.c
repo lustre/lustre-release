@@ -47,6 +47,7 @@
 #endif
 
 #include <lustre_compat.h>
+#include <libcfs/crypto/llcrypt.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
@@ -202,7 +203,7 @@ void __init init_libcfs_vfree_atomic(void)
 	}
 }
 
-void __init cfs_arch_init(void)
+int __init cfs_arch_init(void)
 {
 	init_libcfs_vfree_atomic();
 
@@ -221,12 +222,15 @@ void __init cfs_arch_init(void)
 					  SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
 					  xarray_node_ctor);
 #endif
+	return llcrypt_init();
 }
 
 void __exit cfs_arch_exit(void)
 {
 	/* exit_libcfs_vfree_atomic */
 	flush_scheduled_work();
+
+	llcrypt_exit();
 }
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,

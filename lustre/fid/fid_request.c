@@ -493,8 +493,13 @@ EXPORT_SYMBOL(client_fid_fini);
 static int __init fid_init(void)
 {
 	struct dentry *de;
+	int rc;
+
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
 #ifdef HAVE_SERVER_SUPPORT
-	int rc = fid_server_mod_init();
+	rc = fid_server_mod_init();
 
 	if (rc)
 		return rc;

@@ -2585,6 +2585,10 @@ static int __init obdecho_init(void)
 
 	LASSERT(PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
+	rc = libcfs_setup();
+	if (rc)
+		return rc;
+
 # ifdef HAVE_SERVER_SUPPORT
 	rc = echo_persistent_pages_init();
 	if (rc != 0)
