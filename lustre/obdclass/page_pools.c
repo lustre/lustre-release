@@ -680,15 +680,12 @@ static inline int __obd_pool_get_objects(void *array, unsigned int count,
 				       unsigned int order,
 				       void **(*object_from)(void *, int))
 {
-	struct obd_page_pool *page_pool = page_pools[order];
+	struct obd_page_pool *page_pool;
 	wait_queue_entry_t waitlink;
 	unsigned long this_idle = -1;
 	u64 tick_ns = 0;
 	int p_idx, g_idx;
 	int i, rc = 0;
-
-	if (!array || count <= 0 || count > page_pool->opp_max_objects)
-		return -EINVAL;
 
 	if (order >= pools_count) {
 		CDEBUG(D_SEC,
@@ -698,6 +695,10 @@ static inline int __obd_pool_get_objects(void *array, unsigned int count,
 		return -EINVAL;
 	}
 
+	if (!array || count <= 0 || count > page_pools[order]->opp_max_objects)
+		return -EINVAL;
+
+	page_pool = page_pools[order];
 	spin_lock(&page_pool->opp_lock);
 
 	page_pool->opp_st_access++;
