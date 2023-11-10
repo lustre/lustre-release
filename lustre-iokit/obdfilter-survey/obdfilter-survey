@@ -338,7 +338,7 @@ if [ "$lustre_root" == " " ]; then
 fi
 
 if [ -z "$lustre_root" ]; then
-	lctl=$LCTL
+	lctl=${LCTL:-lctl}
 else
 	lctl=${lustre_root}/utils/lctl
 fi
