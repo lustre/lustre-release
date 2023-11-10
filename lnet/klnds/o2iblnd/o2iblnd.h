@@ -36,7 +36,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
-#if defined(MLNX_OFED_BUILD) && !defined(HAVE_OFED_IB_DMA_MAP_SG_SANE)
+#if defined(EXTERNAL_OFED_BUILD) && !defined(HAVE_OFED_IB_DMA_MAP_SG_SANE)
 #undef CONFIG_INFINIBAND_VIRT_DMA
 #endif
 

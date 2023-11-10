@@ -754,12 +754,26 @@ AC_DEFUN([LB_CHECK_LINUX_HEADER], [
 # without serious confusion or complication.
 # ------------------------------------------------------------------------------
 
+#
+## LB2_LINUX_CONFTEST_C
+# $1 - *unique* test case name
+# $2 - mlnx: if MLNXPATH should be included and mlnx rewrites
+#      ofed: ofed rewrites are needed
+# $3 - Program source
+#
 AC_DEFUN([LB2_LINUX_CONFTEST_C], [
 TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 test -d ${TEST_DIR}/$1_pc || mkdir -p ${TEST_DIR}/$1_pc
 cat confdefs.h - <<_EOF >${TEST_DIR}/$1_pc/$1_pc.c
-$2
+$3
 _EOF
+# for in-kernel test case #defines:
+if test x$2 = "xin_kernel" ; then
+	sed -i --regexp-extended \
+	    -e 's:#define HAVE_OFED_COMPAT_RDMA :// External build only: #define HAVE_OFED_COMPAT_RDMA :g' \
+	    -e 's/([^a-zA-Z0-9_])HAVE_OFED_/\1IN_KERNEL_HAVE_OFED_/g' \
+		${TEST_DIR}/$1_pc/$1_pc.c
+fi
 ])
 
 #
@@ -769,6 +783,7 @@ _EOF
 # $2 - additional build flags (ccflags)
 # $3 - external kernel includes for lnet o2ib|gni
 # $4 - extra symbol in Psuedo.symvers (optional)
+# $5 - optional: external|in_kernel
 #
 AC_DEFUN([LB2_LINUX_CONFTEST_MAKEFILE], [
 	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
@@ -784,11 +799,18 @@ AC_DEFUN([LB2_LINUX_CONFTEST_MAKEFILE], [
 		echo -e "0x12345678\t${EXT_SYMBOL}\tvmlinux\tEXPORT_SYMBOL\t" > ${PSYM_FILE}
 	fi
 	XTRA_SYM=
-	if test "x$O2IBPATH" != "x"; then
-		if test "x$O2IBPATH" != "x$LINUX_OBJ"; then
-			XTRA_SYM="$O2IBPATH/Module.symvers"
+	NEED_MODULE_TESTED="yes"
+	if test "x$5" = "xexternal"; then
+		XTRA_SYM="$EXT_O2IB_SYMBOLS"
+		if test "x$EXTERNAL_KO2IBLND" = "xno" ; then
+			NEED_MODULE_TESTED="no"
 		fi
 	fi
+	if test "x$5" = "xin_kernel"; then
+		XTRA_SYM="$INT_O2IB_SYMBOLS"
+		if test "x$BUILT_IN_KO2IBLND" = "xno" ; then
+			NEED_MODULE_TESTED="no"
+	fi	fi
 
 	cat - <<_EOF >$file
 # Example command line to manually build source
@@ -847,9 +869,15 @@ _EOF
 
 	# Include the test case in the build, only if the result is not cached
 	AS_VAR_PUSHDEF([lb2_cache_name], [lb_cv_test_$1])
-	AS_IF(AS_VAR_TEST_SET(lb2_cache_name), [], [
-		echo "obj-m += $1_pc/" >>${TEST_DIR}/Makefile
-		LB2_MODULES_COUNT=$((LB2_MODULES_COUNT + 1))
+	AS_IF(AS_VAR_TEST_SET(lb2_cache_name), [
+		# cached - result is known
+	], [
+		if test "x$NEED_MODULE_TESTED" != "xno" ; then
+			echo "obj-m += $1_pc/" >>${TEST_DIR}/Makefile
+			LB2_MODULES_COUNT=$((LB2_MODULES_COUNT + 1))
+		else
+			AS_VAR_SET([lb2_cache_name], [unused])
+		fi
 	])
 	AS_VAR_POPDEF([lb2_cache_name])
 ])
@@ -918,6 +946,8 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
 # $4 - extra cflags
 # $5 - external include paths
 # $6 - fake symvers entry
+# $7 - external: for extra ofed path/symvers
+#      in_kernel: for in-kernel-ofed defines
 #
 # NOTICE as all of the test cases are compiled in parallel tests may not
 # depend on the results other tests.
@@ -928,8 +958,8 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
 	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_$1])
 	# Skip test write and build steps if the result is already known.
-	LB2_LINUX_CONFTEST_C([$1], [LB_LANG_PROGRAM([[$2]], [[$3]])])
-	LB2_LINUX_CONFTEST_MAKEFILE([$1], [$4], [$5], [$6])
+	LB2_LINUX_CONFTEST_C([$1], [$7], [LB_LANG_PROGRAM([[$2]], [[$3]])])
+	LB2_LINUX_CONFTEST_MAKEFILE([$1], [$4], [$5], [$6], [$7])
 	AS_VAR_POPDEF([lb_test])
 ])
 
@@ -940,7 +970,7 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 # $2 - *unique* name matching the LB2_LINUX_TEST_SRC macro
 # $3 - run on success (valid .ko generated)
 # $4 - run on failure (unable to compile)
-# $5 - compile only
+# $5 - optional: module to enforce linking of .ko
 #
 AC_DEFUN([LB2_MSG_LINUX_TEST_RESULT],[
 	TEST_DIR=${TEST_DIR:-${ac_pwd}/_lpb}
@@ -1096,7 +1126,7 @@ AC_DEFUN([LB2_CHECK_LINUX_HEADER_SRC], [
 	UNIQUE_ID=$(echo $1 | tr /. __)
 	AS_VAR_PUSHDEF([lb_test], [lb_cv_test_${UNIQUE_ID}])
 	# Skip test write and build steps if the result is already known.
-	LB2_LINUX_CONFTEST_C([${UNIQUE_ID}], [LB_LANG_PROGRAM([@%:@include <$1>])])
+	LB2_LINUX_CONFTEST_C([${UNIQUE_ID}], [], [LB_LANG_PROGRAM([@%:@include <$1>])])
 	LB2_LINUX_CONFTEST_MAKEFILE([${UNIQUE_ID}], [$2])
 	AS_VAR_POPDEF([lb_test])
 ])
@@ -1112,4 +1142,47 @@ AC_DEFUN([LB2_CHECK_LINUX_HEADER_RESULT], [
 	UNIQUE_ID=$(echo $1 | tr /. __)
 	LB2_MSG_LINUX_TEST_RESULT([for linux header $1], [${UNIQUE_ID}],
 				  [$2], [$3])
+])
+
+#
+# LB2_OFED_TEST_SRC() Used for o2ib in-kernel|external configure tests
+#
+# $1 - *unique* name
+# $2 - global
+# $3 - source
+# $4 - extra cflags
+# $5 - external include paths
+# $6 - fake symvers entry
+# $7 - external: for extra ofed path/symvers
+#      in_kernel: for in-kernel-ofed defines
+#
+AC_DEFUN([LB2_OFED_TEST_SRC], [
+	LB2_LINUX_TEST_SRC([external_$1], [$2], [$3], [$4], [$5], [$6], [external])
+	LB2_LINUX_TEST_SRC([in_kernel_$1], [$2], [$3], [$4], [], [$6], [in_kernel])
+])
+
+#
+# LB2_OFED_TEST_RESULTS() Used for o2ib in-kernel|external configure tests
+#
+# $1 - Message
+# $2 - *unique* name matching the LB2_LINUX_TEST_SRC macro
+# $3 - run on success (compile success, optional .ko generated)
+# $4 - optional: 'module' to enforce .ko successfully built.
+#
+# checking if 'rdma_create_id' wants four args mlnx... no
+#
+AC_DEFUN([LB2_OFED_TEST_RESULTS], [
+	LB2_MSG_LINUX_TEST_RESULT(
+		[(external) if $1],
+		[external_$2],
+		[AC_DEFINE_UNQUOTED([$3], 1, [(external) $1])],
+		[], # else statement not available
+		[$4])
+
+	# in-kernel tests ... NOTE: IN_KERNEL_ here matches sed in Makefile.in
+	LB2_MSG_LINUX_TEST_RESULT(
+		[(in-kernel) if $1], [in_kernel_$2],
+		[AC_DEFINE_UNQUOTED([IN_KERNEL_$3], 1, [(in kernel) $1])],
+		[], # else statement not available
+		[$4])
 ])

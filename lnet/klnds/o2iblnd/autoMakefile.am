@@ -30,7 +30,7 @@
 #
 
 if MODULES
-if BUILD_O2IBLND
+if EXTERNAL_KO2IBLND
 modulenet_DATA = ko2iblnd$(KMODEXT)
 endif
 endif

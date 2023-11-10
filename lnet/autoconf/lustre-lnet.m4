@@ -56,14 +56,25 @@ AC_DEFUN([LN_CONFIG_DLC], [
 # for both source and DKMS builds.
 #
 AC_DEFUN([LN_CONFIG_O2IB], [
-AC_MSG_CHECKING([whether to use Compat RDMA])
+AC_ARG_ENABLE([multiple-lnds],
+	[AS_HELP_STRING([--enable-multiple-lnds],
+		[enable multiple lnds to build in-kernel and external o2iblnd])],
+	[AS_IF([test x$enable_multiple_lnds != xyes -a x$enable_multiple_lnds != xno],
+		[AC_MSG_ERROR([multiple-lnds valid options are "yes" or "no"])])],
+	[enable_multiple_lnds="no"])
+	ENABLE_MULTIPLE_LNDS="$enable_multiple_lnds"
+
+AC_MSG_CHECKING([if external o2iblnd needs to use Compat RDMA])
 AC_ARG_WITH([o2ib],
 	AS_HELP_STRING([--with-o2ib=[yes|no|<path>]],
 		[build o2iblnd against path]),
 	[], [with_o2ib="yes"])
 
 case $with_o2ib in
-	yes)    AS_IF([which ofed_info 2>/dev/null], [
+	yes)	INT_O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+		BUILT_IN_KO2IBLND="yes"
+		# Use ofed_info to find external driver
+		AS_IF([which ofed_info 2>/dev/null], [
 			AS_IF([test x$uses_dpkg = xyes], [
 				LIST_ALL_PKG="dpkg -l | awk '{print \[$]2}'"
 				LSPKG="dpkg --listfiles"
@@ -88,41 +99,56 @@ case $with_o2ib in
 				       egrep "${O2IBDIR}$" | head -n1)
 
 			if test -n "$O2IBDIR_PATH"; then
-				O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
-					grep -F -e "`uname -r`" -e default |
+				EXT_O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
+					grep -F -e "$(uname -r)" -e default |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
 			fi
 
-			AS_IF([test -z "$O2IBPATHS"], [
-				AC_MSG_ERROR([
-You seem to have an OFED installed but have not installed it's devel package.
-If you still want to build Lustre for your OFED I/B stack, you need to install its devel headers RPM.
-Instead, if you want to build Lustre for your kernel's built-in I/B stack rather than your installed OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
+			# When ofed-scripts are installed and either the devel
+			# package is missing or multiple devel packages are
+			# installed. Give the user a warning
+			# The in-kernel ofed stack can be built .. so we can
+			# proceed.
+
+			EXTERNAL_KO2IBLND="yes"
+			AS_IF([test -z "$EXT_O2IBPATHS"], [
+				EXTERNAL_KO2IBLND="no"
+				AC_MSG_WARN([
+* You seem to have an OFED installed but have not installed the associated
+* devel package.
+* If you still want to build Lustre for your External OFED I/B stack,
+* you need to install its devel headers RPM.
+* Only the kernel built-in I/B stack support will be built.
 					     ])
 			])
-			AS_IF([test $(echo $O2IBPATHS | wc -w) -ge 2], [
-				AC_MSG_ERROR([
-It appears that you have multiple OFED versions installed.
-If you still want to build Lustre for your OFED I/B stack, you need to install a single version with its devel headers RPM.
-Instead, if you want to build Lustre for your in-kernel I/B stack rather than your installed external OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
-					     ])
+			AS_IF([test $(echo $EXT_O2IBPATHS | wc -w) -ge 2], [
+				BUILT_IN_KO2IBLND="no"
+				AC_MSG_WARN([
+* It appears that you have multiple OFED versions installed.
+* If you still want to build Lustre for your External OFED I/B stack, you
+* need to install a single version with the associated devel package.
+* Only the kernel built-in I/B stack support will be built.
+				     ])
 			])
-			if test -e $O2IBPATHS/${LINUXRELEASE}; then
-			    O2IBPATHS=$O2IBPATHS/${LINUXRELEASE}
-			elif test -e $O2IBPATHS/default; then
-			    O2IBPATHS=$O2IBPATHS/default
+			if test x$EXTERNAL_KO2IBLND != "xno" ; then
+				if test -e $EXT_O2IBPATHS/${LINUXRELEASE}; then
+				    EXT_O2IBPATHS=$EXT_O2IBPATHS/${LINUXRELEASE}
+				elif test -e $EXT_O2IBPATHS/default; then
+				    EXT_O2IBPATHS=$EXT_O2IBPATHS/default
+				fi
 			fi
-			OFED="yes"
-		], [
-			O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
 		])
 		ENABLEO2IB="yes"
 		;;
-	no)     ENABLEO2IB="no"
+	no)	ENABLEO2IB="no"
+		EXTERNAL_KO2IBLND="no"
+		BUILT_IN_KO2IBLND="no"
 		;;
-	*)      O2IBPATHS=$with_o2ib
-		ENABLEO2IB="withpath"
-		OFED="yes"
+	*)	ENABLEO2IB="withpath"
+		EXT_O2IBPATHS=$with_o2ib
+		EXTERNAL_KO2IBLND="yes"
+		INT_O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+		BUILT_IN_KO2IBLND="yes"
 		;;
 esac
 
@@ -130,42 +156,64 @@ AS_IF([test $ENABLEO2IB = "no"], [
 	AC_MSG_RESULT([no])
 	AC_DEFUN([LN_CONFIG_O2IB_SRC], [])
 	AC_DEFUN([LN_CONFIG_O2IB_RESULTS], [])
+	EXT_O2IB_SYMBOLS=""
+	INT_O2IB_SYMBOLS=""
 ], [
-	o2ib_found=false
-	for O2IBPATH in $O2IBPATHS; do
-		AS_IF([test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_verbs.h \)], [
-			o2ib_found=true
+	# Verify in-kernel O2IB can be built (headers exist) ... or disable it.
+	int_o2ib_found=false
+	for INT_O2IBPATH in $INT_O2IBPATHS; do
+		AS_IF([test \( -f ${INT_O2IBPATH}/include/rdma/rdma_cm.h -a \
+			   -f ${INT_O2IBPATH}/include/rdma/ib_cm.h -a \
+			   -f ${INT_O2IBPATH}/include/rdma/ib_verbs.h \)], [
+			int_o2ib_found=true
 			break
 		])
 	done
-	if ! $o2ib_found; then
-		AC_MSG_RESULT([no])
-		case $ENABLEO2IB in
-			"yes") AC_MSG_ERROR([no OFED nor kernel OpenIB gen2 headers present]) ;;
+	if ! $int_o2ib_found; then
+		AC_MSG_WARN([kernel does not support in-kernel o2ib, it will not be built])
+		BUILT_IN_KO2IBLND="no"
+	fi
+
+	# Verify external O2IB can be built (headers exist), or abort
+	ext_o2ib_found=false
+	for EXT_O2IBPATH in $EXT_O2IBPATHS; do
+		AS_IF([test \( -f ${EXT_O2IBPATH}/include/rdma/rdma_cm.h -a \
+			   -f ${EXT_O2IBPATH}/include/rdma/ib_cm.h -a \
+			   -f ${EXT_O2IBPATH}/include/rdma/ib_verbs.h \)], [
+			ext_o2ib_found=true
+			break
+		])
+	done
+	if ! $ext_o2ib_found; then
+		case $EXT_ENABLEO2IB in
 			"withpath") AC_MSG_ERROR([bad --with-o2ib path]) ;;
-			*) AC_MSG_ERROR([internal error]) ;;
+			*) 	AC_MSG_WARN([
+Auto detection of external O2IB failed. Build of external o2ib disabled.])
+				EXTERNAL_KO2IBLND="no"
+				;;
 		esac
-	else
+	fi
+
+	if test "x$EXTERNAL_KO2IBLND" != no ; then
+		# Additional checks for external O2IB
 		COMPAT_AUTOCONF=""
 		compatrdma_found=false
-		if test -f ${O2IBPATH}/include/linux/compat-2.6.h; then
+		if test -f ${EXT_O2IBPATH}/include/linux/compat-2.6.h; then
 			AC_MSG_RESULT([yes])
 			compatrdma_found=true
 			AC_DEFINE(HAVE_OFED_COMPAT_RDMA, 1, [compat rdma found])
-			EXTRA_OFED_CONFIG="$EXTRA_OFED_CONFIG -include ${O2IBPATH}/include/linux/compat-2.6.h"
-			if test -f "$O2IBPATH/include/linux/compat_autoconf.h"; then
-				COMPAT_AUTOCONF="$O2IBPATH/include/linux/compat_autoconf.h"
+			EXTRA_OFED_CONFIG="$EXTRA_OFED_CONFIG -include ${EXT_O2IBPATH}/include/linux/compat-2.6.h"
+			if test -f "$EXT_O2IBPATH/include/linux/compat_autoconf.h"; then
+				COMPAT_AUTOCONF="$EXT_O2IBPATH/include/linux/compat_autoconf.h"
 			fi
 		else
 			AC_MSG_RESULT([no])
 		fi
 		if ! $compatrdma_found; then
-			if test -f "$O2IBPATH/config.mk"; then
-				. "$O2IBPATH/config.mk"
-			elif test -f "$O2IBPATH/ofed_patch.mk"; then
-				. "$O2IBPATH/ofed_patch.mk"
+			if test -f "$EXT_O2IBPATH/config.mk"; then
+				. "$EXT_O2IBPATH/config.mk"
+			elif test -f "$EXT_O2IBPATH/ofed_patch.mk"; then
+				. "$EXT_O2IBPATH/ofed_patch.mk"
 			fi
 		elif test -z "$COMPAT_AUTOCONF"; then
 			# Depreciated checks
@@ -185,15 +233,16 @@ AS_IF([test $ENABLEO2IB = "no"], [
 		AC_MSG_CHECKING([whether to use any OFED backport headers])
 		if test -n "$BACKPORT_INCLUDES"; then
 			AC_MSG_RESULT([yes])
-			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
+			OFED_BACKPORT_PATH="$EXT_O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
 			EXTRA_OFED_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_OFED_INCLUDE"
 		else
 			AC_MSG_RESULT([no])
 		fi
 
-		O2IBLND=""
-		O2IBPATH=$(readlink --canonicalize $O2IBPATH)
-		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$O2IBPATH/include -I$O2IBPATH/include/uapi"
+		EXT_O2IBLND=""
+		EXT_O2IBPATH=$(readlink --canonicalize $EXT_O2IBPATH)
+		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$EXT_O2IBPATH/include"
+		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$EXT_O2IBPATH/include/uapi"
 		EXTRA_CHECK_INCLUDE="$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE"
 		LB_CHECK_COMPILE([whether to enable OpenIB gen2 support],
 		openib_gen2_support, [
@@ -213,93 +262,135 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			#include <rdma/ib_cm.h>
 			#include <rdma/ib_verbs.h>
 		],[
-			struct rdma_cm_id      *cm_idi __attribute__ ((unused));
-			struct rdma_conn_param  conn_param __attribute__ ((unused));
-			struct ib_device_attr   device_attr __attribute__ ((unused));
-			struct ib_qp_attr       qp_attr __attribute__ ((unused));
-			enum   ib_cm_rej_reason rej_reason __attribute__ ((unused));
+			struct rdma_cm_id *cm_idi __attribute__ ((unused));
+			struct rdma_conn_param conn_param __attribute__ ((unused));
+			struct ib_device_attr device_attr __attribute__ ((unused));
+			struct ib_qp_attr qp_attr __attribute__ ((unused));
+			enum ib_cm_rej_reason rej_reason __attribute__ ((unused));
+
 			rdma_destroy_id(NULL);
 		],[
-			O2IBLND="o2iblnd"
+			EXT_O2IBLND="o2iblnd"
 		],[
 			case $ENABLEO2IB in
-			"yes") AC_MSG_ERROR([can't compile with OpenIB gen2 headers]) ;;
-			"withpath") AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]) ;;
+			"yes") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers]) ;;
+			"withpath") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers under $EXT_O2IBPATH]) ;;
 			*) AC_MSG_ERROR([internal error]) ;;
 			esac
 		])
-		# we know at this point that the found OFED source is good
-		O2IB_SYMVER=""
-		if test -f $O2IBPATH/Module.symvers; then
-			O2IB_SYMVER=$O2IBPATH/Module.symvers
-		elif test "x$SUSE_KERNEL" = "xyes"; then
-			O2IB_SYMVER=$(find ${O2IBPATH}* -name Module.symvers)
-			# Select only the current 'flavor' if there is more than 1
-			NUM_AVAIL=$(find ${O2IBPATH}* -name Module.symvers | wc -l)
-			if test ${NUM_AVAIL} -gt 1; then
-				PREFER=$(basename ${LINUX_OBJ})
-				for F in $(find ${O2IBPATH}-obj -name Module.symvers)
-				do
-					maybe=$(echo $F | grep "/${PREFER}")
-					if test "x$maybe" != "x"; then
-						O2IB_SYMVER=$F
-					fi
-				done
-			fi
-		elif test -f $LINUX_OBJ/Module.symvers; then
-			# Debian symvers is in the arch tree
-			O2IB_SYMVER=$LINUX_OBJ/Module.symvers
+		# we know that the found external OFED source+headers are good
+		EXT_O2IB_SYMBOLS=""
+		CHECK_SYMBOLS=""
+		if test -f $EXT_O2IBPATH/Module.symvers ; then
+			CHECK_SYMBOLS=$EXT_O2IBPATH/Module.symvers
 		fi
-		if test -n "$O2IB_SYMVER"; then
-			if test ! "$O2IB_SYMVER" -ef "$LINUX_OBJ/Module.symvers"; then
-				AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path O2IB])
-				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
-				AC_SUBST(EXTRA_SYMBOLS)
-				EXTRA_OFED_INCLUDE="${EXTRA_OFED_INCLUDE} -DMLNX_OFED_BUILD"
+		if test -n "$CHECK_SYMBOLS"; then
+			if test ! "$CHECK_SYMBOLS" -ef "$LINUX_OBJ/Module.symvers"; then
+				AC_MSG_NOTICE([adding $CHECK_SYMBOLS to external o2ib symbols])
+				EXT_O2IB_SYMBOLS="${CHECK_SYMBOLS}"
+			else
+				EXTERNAL_KO2IBLND="no"
 			fi
-		else
-			AC_MSG_ERROR([an external source tree was, either specified or detected, for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
+		elif test "x$EXTERNAL_KO2IBLND" != "xno" ; then
+			AC_MSG_WARN([
+	* Module.symvers for external o2iblnd was not found.
+	* Expected: $EXT_O2IBPATH/Module.symvers
+	* ko2iblnd.ko for external OFED will not be built.
+				    ])
+			EXTERNAL_KO2IBLND="no"
 		fi
-
-		LB_CHECK_COMPILE([if Linux kernel has kthread_worker],
-		linux_kthread_worker, [
-			#ifdef HAVE_OFED_COMPAT_RDMA
-			#undef PACKAGE_NAME
-			#undef PACKAGE_TARNAME
-			#undef PACKAGE_VERSION
-			#undef PACKAGE_STRING
-			#undef PACKAGE_BUGREPORT
-			#undef PACKAGE_URL
-			#include <linux/compat-2.6.h>
-			#endif
-			#include <linux/kthread.h>
-		],[
-			struct kthread_work *kth_wrk = NULL;
-			flush_kthread_work(kth_wrk);
-		],[
-			AC_DEFINE(HAVE_KTHREAD_WORK, 1, [kthread_worker found])
-			if test -z "$COMPAT_AUTOCONF"; then
-				EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_IS_KTHREAD"
-			fi
-		])
-		EXTRA_CHECK_INCLUDE=""
 	fi
+
+	# we suspect that the found in-kernel OFED source+headers are good
+	# the above compile test *could* be repeated with in-kernel paths ... 
+	INT_O2IB_SYMBOLS=""
+	CHECK_SYMBOLS=""
+	if test -f $INT_O2IBPATH/Module.symvers; then
+		CHECK_SYMBOLS=$INT_O2IBPATH/Module.symvers
+	elif test "x$SUSE_KERNEL" = "xyes"; then
+		CHECK_SYMBOLS=$(find ${INT_O2IBPATH}* -name Module.symvers)
+		# Select only the current 'flavor' if there is more than 1
+		NUM_AVAIL=$(find ${INT_O2IBPATH}* -name Module.symvers | wc -l)
+		if test ${NUM_AVAIL} -gt 1; then
+			PREFER=$(basename ${LINUX_OBJ})
+			for F in $(find ${O2IBPATH}-obj -name Module.symvers)
+			do
+				maybe=$(echo $F | grep "/${PREFER}")
+				if test "x$maybe" != "x"; then
+					CHECK_SYMBOLS=$F
+				fi
+			done
+		fi
+	elif test -f $LINUX_OBJ/Module.symvers; then
+		# Debian symvers is in the arch tree
+		CHECK_SYMBOLS=$LINUX_OBJ/Module.symvers
+	fi
+
+	if test -n "$CHECK_SYMBOLS"; then
+		if test ! "$CHECK_SYMBOLS" -ef "$LINUX_OBJ/Module.symvers"; then
+			AC_MSG_NOTICE([adding $CHECK_SYMBOLS to o2ib in-kernel symbols])
+			INT_O2IB_SYMBOLS="${CHECK_SYMBOLS}"
+		fi
+	else
+		AC_MSG_WARN([Module.symvers for in-kernel o2iblnd was not found, in-kernel ofed will not be built])
+		BUILT_IN_KO2IBLND="no"
+	fi
+
+	if test "x$EXTERNAL_KO2IBLND" = "xno" -a "x$BUILT_IN_KO2IBLND" = "xno" ; then
+		AC_MSG_ERROR([No o2iblnd can be built])
+	elif test "x$ENABLE_MULTIPLE_LNDS" = "xno" -a \
+		  "x$EXTERNAL_KO2IBLND" != "xno" -a "x$BUILT_IN_KO2IBLND" != "xno"; then
+		AC_MSG_WARN([
+NOTE: --enable-multiple-lnds is needed to enable both o2iblnd drivers.
+* Disabling in-kernel o2iblnd in favor of external o2iblnd driver.
+* There can be only one in this configuration
+			    ])
+		BUILT_IN_KO2IBLND="no"
+	fi
+
+	LB_CHECK_COMPILE([if Linux kernel has kthread_worker],
+	linux_kthread_worker, [
+		#ifdef HAVE_OFED_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <linux/kthread.h>
+	],[
+		struct kthread_work *kth_wrk = NULL;
+		flush_kthread_work(kth_wrk);
+	],[
+		AC_DEFINE(HAVE_KTHREAD_WORK, 1, [kthread_worker found])
+		if test -z "$COMPAT_AUTOCONF"; then
+			EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_IS_KTHREAD"
+		fi
+	])
+	EXTRA_CHECK_INCLUDE=""
 ])
 AC_SUBST(EXTRA_OFED_CONFIG)
 AC_SUBST(EXTRA_OFED_INCLUDE)
-AC_SUBST(O2IBLND)
-AC_SUBST(O2IBPATH)
+AC_SUBST(EXT_O2IBLND)
+AC_SUBST(EXT_O2IB_SYMBOLS)
+AC_SUBST(INT_O2IB_SYMBOLS)
+
+# Passed down to deb packaging via autoMakefile.am
+AC_SUBST(EXT_O2IBPATH)
 AC_SUBST(ENABLEO2IB)
+AC_SUBST(ENABLE_MULTIPLE_LNDS)
 
 AS_IF([test $ENABLEO2IB != "no"], [
 	EXTRA_CHECK_INCLUDE="$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE"
-	if test ! $O2IBPATH -ef $LINUX_OBJ; then
-		KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $O2IBPATH/Module.symvers"
+	if test ! $EXT_O2IBPATH -ef $LINUX_OBJ; then
+		EXTERNAL_KO2IBLND="yes"
 	fi
 
 	# In RHEL 6.2, rdma_create_id() takes the queue-pair type as a fourth argument
 	AC_DEFUN([LN_SRC_O2IB_RDMA_CREATE_ID_4A], [
-		LB2_LINUX_TEST_SRC([rdma_create_id_4args], [
+		LB2_OFED_TEST_SRC([rdma_create_id_4args], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -315,16 +406,15 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CREATE_ID_4A], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_create_id' wants four args],
-		[rdma_create_id_4args], [
-			AC_DEFINE(HAVE_OFED_RDMA_CREATE_ID_4ARG, 1,
-				[rdma_create_id wants 4 args])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['rdma_create_id' wants four args],
+			[rdma_create_id_4args],
+			[HAVE_OFED_RDMA_CREATE_ID_4ARG])
 	])
 
 	# 4.4 added network namespace parameter for rdma_create_id()
 	AC_DEFUN([LN_SRC_O2IB_RDMA_CREATE_ID_5A], [
-		LB2_LINUX_TEST_SRC([rdma_create_id_5args], [
+		LB2_OFED_TEST_SRC([rdma_create_id_5args], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -340,11 +430,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CREATE_ID_5A], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_create_id' wants five args],
-		[rdma_create_id_5args], [
-			AC_DEFINE(HAVE_OFED_RDMA_CREATE_ID_5ARG, 1,
-				[rdma_create_id wants 5 args])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['rdma_create_id' wants five args],
+			[rdma_create_id_5args],
+			[HAVE_OFED_RDMA_CREATE_ID_5ARG])
 	])
 
 	# 4.2 introduced struct ib_cq_init_attr which is used
@@ -353,7 +442,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# the functionality which means for infiniband testing
 	# we need to always test functionality testings.
 	AC_DEFUN([LN_SRC_O2IB_IB_CQ_INIT_ATTR], [
-		LB2_LINUX_TEST_SRC([ib_cq_init_attr], [
+		LB2_OFED_TEST_SRC([ib_cq_init_attr], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -371,16 +460,15 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_CQ_INIT_ATTR], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_cq_init_attr' is used],
-		[ib_cq_init_attr], [
-			AC_DEFINE(HAVE_OFED_IB_CQ_INIT_ATTR, 1,
-				[struct ib_cq_init_attr is used by ib_create_cq])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['struct ib_cq_init_attr' is used by ib_create_cq],
+			[ib_cq_init_attr],
+			[HAVE_OFED_IB_CQ_INIT_ATTR])
 	])
 
 	# 4.3 removed ib_alloc_fast_reg_mr()
 	AC_DEFUN([LN_SRC_O2IB_IB_ALLOC_FAST_REG_MR], [
-		LB2_LINUX_TEST_SRC([ib_alloc_fast_reg_mr], [
+		LB2_OFED_TEST_SRC([ib_alloc_fast_reg_mr], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -396,17 +484,16 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_ALLOC_FAST_REG_MR], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'ib_alloc_fast_reg_mr' exists],
-		[ib_alloc_fast_reg_mr], [
-			AC_DEFINE(HAVE_OFED_IB_ALLOC_FAST_REG_MR, 1,
-				[ib_alloc_fast_reg_mr is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['ib_alloc_fast_reg_mr' exists],
+			[ib_alloc_fast_reg_mr],
+			[HAVE_OFED_IB_ALLOC_FAST_REG_MR])
 	])
 
 	# 4.9 must stop using ib_get_dma_mr and the global MR
 	# We then have to use FMR/Fastreg for all RDMA.
 	AC_DEFUN([LN_SRC_O2IB_IB_GET_DMA_MR], [
-		LB2_LINUX_TEST_SRC([ib_get_dma_mr], [
+		LB2_OFED_TEST_SRC([ib_get_dma_mr], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -422,11 +509,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_GET_DMA_MR], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'ib_get_dma_mr' exists],
-		[ib_get_dma_mr], [
-			AC_DEFINE(HAVE_OFED_IB_GET_DMA_MR, 1,
-				[ib_get_dma_mr is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['ib_get_dma_mr' exists],
+			[ib_get_dma_mr],
+			[HAVE_OFED_IB_GET_DMA_MR])
 	])
 
 	# In v4.4 Linux kernel,
@@ -434,7 +520,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# split up struct ib_send_wr so that all non-trivial verbs
 	# use their own structure which embedds struct ib_send_wr.
 	AC_DEFUN([LN_SRC_O2IB_IB_RDMA_WR], [
-		LB2_LINUX_TEST_SRC([ib_rdma_wr], [
+		LB2_OFED_TEST_SRC([ib_rdma_wr], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -452,16 +538,15 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_RDMA_WR], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_rdma_wr' is defined],
-		[ib_rdma_wr], [
-			AC_DEFINE(HAVE_OFED_IB_RDMA_WR, 1,
-				[struct ib_rdma_wr is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['struct ib_rdma_wr' is defined],
+			[ib_rdma_wr],
+			[HAVE_OFED_IB_RDMA_WR])
 	])
 
 	# new fast registration API introduced in 4.4
 	AC_DEFUN([LN_SRC_O2IB_IB_MAP_MR_SG_4A], [
-		LB2_LINUX_TEST_SRC([ib_map_mr_sg_4args], [
+		LB2_OFED_TEST_SRC([ib_map_mr_sg_4args], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -478,17 +563,16 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	])
 	# new fast registration API introduced in 4.4
 	AC_DEFUN([LN_O2IB_IB_MAP_MR_SG_4A], [
-		LB2_MSG_LINUX_TEST_RESULT([if 4arg 'ib_map_mr_sg' exists],
-		[ib_map_mr_sg_4args], [
-			AC_DEFINE(HAVE_OFED_IB_MAP_MR_SG, 1,
-				[ib_map_mr_sg exists])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['ib_map_mr_sg' with 4 args exists],
+			[ib_map_mr_sg_4args],
+			[HAVE_OFED_IB_MAP_MR_SG])
 	])
 
 	# ib_map_mr_sg changes from 4 to 5 args (adding sg_offset_p)
 	# in kernel 4.7 (and RHEL 7.3)
 	AC_DEFUN([LN_SRC_O2IB_IB_MAP_MR_SG_5A], [
-		LB2_LINUX_TEST_SRC([ib_map_mr_sg_5args], [
+		LB2_OFED_TEST_SRC([ib_map_mr_sg_5args], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -504,18 +588,19 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_MAP_MR_SG_5A], [
-		LB2_MSG_LINUX_TEST_RESULT([if 5arg 'ib_map_mr_sg' exists],
-		[ib_map_mr_sg_5args], [
-			AC_DEFINE(HAVE_OFED_IB_MAP_MR_SG, 1,
-				[ib_map_mr_sg exists])
-			AC_DEFINE(HAVE_OFED_IB_MAP_MR_SG_5ARGS, 1,
-				[ib_map_mr_sg has 5 arguments])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[struct ib_reg_wr exists],
+			[ib_map_mr_sg_5args],
+			[HAVE_OFED_IB_MAP_MR_SG])
+		LB2_OFED_TEST_RESULTS(
+			['ib_map_mr_sg()' with 5 args exists],
+			[ib_map_mr_sg_5args],
+			[HAVE_OFED_IB_MAP_MR_SG_5ARGS])
 	])
 
 	# ib_query_device() removed in 4.5
 	AC_DEFUN([LN_SRC_O2IB_IB_DEVICE_ATTRS], [
-		LB2_LINUX_TEST_SRC([ib_device_attrs], [
+		LB2_OFED_TEST_SRC([ib_device_attrs], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -533,17 +618,16 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_DEVICE_ATTRS], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'struct ib_device' has member 'attrs'],
-		[ib_device_attrs], [
-			AC_DEFINE(HAVE_OFED_IB_DEVICE_ATTRS, 1,
-				[struct ib_device.attrs is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['struct ib_device' has member 'attrs'],
+			[ib_device_attrs],
+			[HAVE_OFED_IB_DEVICE_ATTRS])
 	])
 
 	# A flags argument was added to ib_alloc_pd() in Linux 4.9,
 	# commit ed082d36a7b2c27d1cda55fdfb28af18040c4a89
 	AC_DEFUN([LN_SRC_O2IB_IB_ALLOC_PD], [
-		LB2_LINUX_TEST_SRC([ib_alloc_pd], [
+		LB2_OFED_TEST_SRC([ib_alloc_pd], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -559,15 +643,14 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_ALLOC_PD], [
-		LB2_MSG_LINUX_TEST_RESULT([if 2arg 'ib_alloc_pd' exists],
-		[ib_alloc_pd], [
-			AC_DEFINE(HAVE_OFED_IB_ALLOC_PD_2ARGS, 1,
-				[ib_alloc_pd has 2 arguments])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[2arg 'ib_alloc_pd' exists],
+			[ib_alloc_pd],
+			[HAVE_OFED_IB_ALLOC_PD_2ARGS])
 	])
 
 	AC_DEFUN([LN_SRC_O2IB_IB_INC_RKEY], [
-		LB2_LINUX_TEST_SRC([ib_inc_rkey], [
+		LB2_OFED_TEST_SRC([ib_inc_rkey], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -583,18 +666,17 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_INC_RKEY], [
-		LB2_MSG_LINUX_TEST_RESULT([if function 'ib_inc_rkey' is defined],
-		[ib_inc_rkey], [
-			AC_DEFINE(HAVE_OFED_IB_INC_RKEY, 1,
-				  [function ib_inc_rkey exist])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[function 'ib_inc_rkey' is defined],
+			[ib_inc_rkey],
+			[HAVE_OFED_IB_INC_RKEY])
 	])
 
 	# In MOFED 4.6, the second and third parameters for
 	# ib_post_send() and ib_post_recv() are declared with
 	# 'const'.
 	AC_DEFUN([LN_SRC_O2IB_IB_POST_SEND_CONST], [
-		LB2_LINUX_TEST_SRC([ib_post_send_recv_const], [
+		LB2_OFED_TEST_SRC([ib_post_send_recv_const], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -611,18 +693,17 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_POST_SEND_CONST], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'ib_post_send() and ib_post_recv()' have const parameters],
-		[ib_post_send_recv_const], [
-			AC_DEFINE(HAVE_OFED_IB_POST_SEND_RECV_CONST, 1,
-				[ib_post_send and ib_post_recv have const parameters])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['ib_post_send() and ib_post_recv()' have const parameters],
+			[ib_post_send_recv_const],
+			[HAVE_OFED_IB_POST_SEND_RECV_CONST])
 	])
 
 	# MOFED 5.5 fails with:
 	#   ERROR: "ib_dma_virt_map_sg" [.../ko2iblnd.ko] undefined!
 	# See if we have a broken ib_dma_map_sg()
 	AC_DEFUN([LN_SRC_SANE_IB_DMA_MAP_SG], [
-		LB2_LINUX_TEST_SRC([sane_ib_dma_map_sg], [
+		LB2_OFED_TEST_SRC([sane_ib_dma_map_sg], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -639,11 +720,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_SANE_IB_DMA_MAP_SG], [
-		LB2_MSG_LINUX_TEST_RESULT([if ib_dma_map_sg() is sane],
-		[sane_ib_dma_map_sg], [
-			AC_DEFINE(HAVE_OFED_IB_DMA_MAP_SG_SANE, 1,
-				[ib_dma_map_sg is sane])
-		],[],[module])
+		LB2_OFED_TEST_RESULTS(
+			[if ib_dma_map_sg() is sane],
+			[sane_ib_dma_map_sg],
+			[HAVE_OFED_IB_DMA_MAP_SG_SANE],[module])
 	])
 
 	#
@@ -655,7 +735,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# InfiniBand device operations in one place ...
 	#
 	AC_DEFUN([LN_SRC_O2IB_IB_DEVICE_OPS_EXISTS], [
-		LB2_LINUX_TEST_SRC([ib_device_ops_test], [
+		LB2_OFED_TEST_SRC([ib_device_ops_test], [
 			#include <rdma/ib_verbs.h>
 		],[
 			int x = offsetof(struct ib_device_ops, unmap_fmr);
@@ -664,11 +744,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_DEVICE_OPS_EXISTS], [
-		LB2_MSG_LINUX_TEST_RESULT([if struct ib_device_ops is defined],
-		[ib_device_ops_test], [
-			AC_DEFINE(HAVE_IB_DEVICE_OPS, 1,
-				[if struct ib_device_ops is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[struct ib_device_ops is defined],
+			[ib_device_ops_test],
+			[HAVE_OFED_IB_DEVICE_OPS])
 	]) # LN_IB_DEVICE_OPS_EXISTS
 
 	#
@@ -679,7 +758,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# ... when dma_ops existed (3.6) ib_sg_dma_address() was not trivial ...
 	#
 	AC_DEFUN([LN_SRC_O2IB_IB_SG_DMA_ADDRESS_EXISTS], [
-		LB2_LINUX_TEST_SRC([ib_sg_dma_address_test], [
+		LB2_OFED_TEST_SRC([ib_sg_dma_address_test], [
 			#include <rdma/ib_verbs.h>
 		],[
 			u64 x = ib_sg_dma_address(NULL, NULL);
@@ -688,11 +767,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[-Werror],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_SG_DMA_ADDRESS_EXISTS], [
-		LB2_MSG_LINUX_TEST_RESULT([if ib_sg_dma_address wrapper exists],
-		[ib_sg_dma_address_test], [
-			AC_DEFINE(HAVE_OFED_IB_SG_DMA_ADDRESS, 1,
-				[if ib_sg_dma_address wrapper exists])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[ib_sg_dma_address wrapper exists],
+			[ib_sg_dma_address_test],
+			[HAVE_OFED_IB_SG_DMA_ADDRESS])
 	]) # LN_O2IB_IB_SG_DMA_ADDRESS_EXISTS
 
 	#
@@ -701,7 +779,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# A reason argument was added to rdma_reject() in Linux 5.8,
 	# commit 8094ba0ace7f6cd1e31ea8b151fba3594cadfa9a
 	AC_DEFUN([LN_SRC_O2IB_RDMA_REJECT], [
-		LB2_LINUX_TEST_SRC([rdma_reject], [
+		LB2_OFED_TEST_SRC([rdma_reject], [
 			#ifdef HAVE_OFED_COMPAT_RDMA
 			#undef PACKAGE_NAME
 			#undef PACKAGE_TARNAME
@@ -719,11 +797,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_REJECT], [
-		LB2_MSG_LINUX_TEST_RESULT([if 4arg 'rdma_reject' exists],
-		[rdma_reject], [
-			AC_DEFINE(HAVE_OFED_RDMA_REJECT_4ARGS, 1,
-				[rdma_reject has 4 arguments])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[4arg 'rdma_reject' exists],
+			[rdma_reject],
+			[HAVE_OFED_RDMA_REJECT_4ARGS])
 	]) # LN_O2IB_RDMA_REJECT
 
 	#
@@ -732,18 +809,17 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# The FMR pool API was removed in Linux 5.8,
 	# commit 4e373d5417ecbb4f438a8500f0379a2fc29c2643
 	AC_DEFUN([LN_SRC_O2IB_IB_FMR], [
-		LB2_LINUX_TEST_SRC([ib_fmr], [
+		LB2_OFED_TEST_SRC([ib_fmr], [
 			#include <rdma/ib_verbs.h>
 		],[
 			struct ib_fmr fmr = {};
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_IB_FMR], [
-		LB2_MSG_LINUX_TEST_RESULT([if FMR pools API available],
-		[ib_fmr], [
-			AC_DEFINE(HAVE_FMR_POOL_API, 1,
-				[FMR pool API is available])
-		])
+		LB2_OFED_TEST_RESULTS(
+			[FMR pools API available],
+			[ib_fmr],
+			[HAVE_OFED_FMR_POOL_API])
 	]) # LN_O2IB_IB_FMR
 
 	#
@@ -755,18 +831,17 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# be called instead of rdma_connect() in
 	# RDMA_CM_EVENT_ROUTE_RESOLVED handler.
 	AC_DEFUN([LN_SRC_O2IB_RDMA_CONNECT_LOCKED], [
-		LB2_LINUX_TEST_SRC([rdma_connect_locked], [
+		LB2_OFED_TEST_SRC([rdma_connect_locked], [
 			#include <rdma/rdma_cm.h>
 		],[
 			rdma_connect_locked(NULL, NULL);
 		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
 	])
 	AC_DEFUN([LN_O2IB_RDMA_CONNECT_LOCKED], [
-		LB2_MSG_LINUX_TEST_RESULT([if 'rdma_connect_locked' exists],
-		[rdma_connect_locked], [
-			AC_DEFINE(HAVE_OFED_RDMA_CONNECT_LOCKED, 1,
-				[rdma_connect_locked is defined])
-		])
+		LB2_OFED_TEST_RESULTS(
+			['rdma_connect_locked' exists],
+			[rdma_connect_locked],
+			[HAVE_OFED_RDMA_CONNECT_LOCKED])
 	]) # LN_O2IB_RDMA_CONNECT_LOCKED
 
 	EXTRA_CHECK_INCLUDE=""
@@ -905,7 +980,7 @@ AC_ARG_WITH([kfi],
 				AC_MSG_NOTICE([adding $with_kfi/Module.symvers to Symbol Path])
 				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $with_kfi/Module.symvers"
 			],[
-				AC_MSG_ERROR([can't compile kfilnd with given KFICPPFLAGS: $KFICPPFLAGS])
+				AC_MSG_ERROR([cannot compile kfilnd with given KFICPPFLAGS: $KFICPPFLAGS])
 			])
 		],[
 			AC_MSG_ERROR(["$with_kfi/Module.symvers does not exist"])
@@ -1091,7 +1166,6 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 ])
 ]) # LN_USR_RDMA
 
-
 AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_CONFIG_O2IB_SRC
 	# 3.15
@@ -1271,9 +1345,10 @@ LN_USR_NLMSGERR
 # AM_CONDITIONAL defines for lnet
 #
 AC_DEFUN([LN_CONDITIONALS], [
-AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
-AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND  = "xgnilnd")
-AM_CONDITIONAL(BUILD_KFILND,     test x$KFILND  = "xkfilnd")
+AM_CONDITIONAL(EXTERNAL_KO2IBLND,  test x$EXTERNAL_KO2IBLND = "xyes")
+AM_CONDITIONAL(BUILT_IN_KO2IBLND,  test x$BUILT_IN_KO2IBLND = "xyes")
+AM_CONDITIONAL(BUILD_GNILND,       test x$GNILND  = "xgnilnd")
+AM_CONDITIONAL(BUILD_KFILND,       test x$KFILND  = "xkfilnd")
 ]) # LN_CONDITIONALS
 
 #
@@ -1294,6 +1369,8 @@ lnet/klnds/Makefile
 lnet/klnds/autoMakefile
 lnet/klnds/o2iblnd/Makefile
 lnet/klnds/o2iblnd/autoMakefile
+lnet/klnds/in-kernel-o2iblnd/Makefile
+lnet/klnds/in-kernel-o2iblnd/autoMakefile
 lnet/klnds/gnilnd/Makefile
 lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile

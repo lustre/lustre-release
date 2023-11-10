@@ -21,7 +21,7 @@
 #
 
 #
-# Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 # Use is subject to license terms.
 #
 
@@ -29,4 +29,27 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = socklnd gnilnd o2iblnd kfilnd in-kernel-o2iblnd
+if MODULES
+if BUILT_IN_KO2IBLND
+modulenet_DATA = in-kernel-ko2iblnd$(KMODEXT)
+in-kernel-ko2iblnd$(KMODEXT): sources
+if EXTERNAL_KO2IBLND
+else
+install-exec-hook:
+	(cd "$(DESTDIR)$(modulenetdir)"; \
+	 $(LN_S) in-kernel-ko2iblnd$(KMODEXT) ko2iblnd$(KMODEXT))
+uninstall-hook:
+	(cd "$(DESTDIR)$(modulenetdir)"; rm -f ko2iblnd$(KMODEXT))
+endif
+endif
+endif
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+EXTRA_DIST = $(in-kernel-ko2iblnd-objs:%.o=%.c) o2iblnd-idl.h o2iblnd.h
+
+all-local: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
+
+CLEANFILES = $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
+
+clean-local:
+	rm -rf $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)

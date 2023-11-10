@@ -1,0 +1,28 @@
+MODULES := in-kernel-ko2iblnd
+in-kernel-ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
+
+in-kernel-ko2iblnd_headers := o2iblnd.h o2iblnd-idl.h
+in-kernel-ko2iblnd_sources := o2iblnd.c o2iblnd_cb.c o2iblnd_modparams.c
+
+sources: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
+
+o2ib_sed_flags = --regexp-extended \
+	-e 's/([^a-zA-Z0-9_])HAVE_OFED_/\1IN_KERNEL_HAVE_OFED_/g'
+
+o2iblnd-idl.h: ../o2iblnd/o2iblnd-idl.h
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+o2iblnd.c: ../o2iblnd/o2iblnd.c
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+o2iblnd.h: ../o2iblnd/o2iblnd.h
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+o2iblnd_cb.c: ../o2iblnd/o2iblnd_cb.c
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+o2iblnd_modparams.c: ../o2iblnd/o2iblnd_modparams.c
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+@INCLUDE_RULES@
+
