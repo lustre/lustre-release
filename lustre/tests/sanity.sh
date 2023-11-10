@@ -16435,20 +16435,14 @@ test_129() {
 run_test 129 "test directory size limit ========================"
 
 OLDIFS="$IFS"
-cleanup_130() {
-	trap 0
-	IFS="$OLDIFS"
-	rm -f $DIR/$tfile
-}
-
 test_130a() {
 	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
 	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 
-	trap cleanup_130 EXIT RETURN
-
 	local fm_file=$DIR/$tfile
+
 	$LFS setstripe -S 65536 -c 1 $fm_file || error "setstripe on $fm_file"
+	stack_trap "rm -f $fm_file"
 	dd if=/dev/zero of=$fm_file bs=65536 count=1 ||
 		error "dd failed for $fm_file"
 
@@ -16462,25 +16456,22 @@ test_130a() {
 	filefrag_op=$(filefrag -ve -k $fm_file |
 		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 	local lun=$($LFS getstripe -i $fm_file)
-
 	local start_blk=$(echo $filefrag_op | cut -d: -f2 | cut -d. -f1)
-	IFS=$'\n'
 	local tot_len=0
-	for line in $filefrag_op; do
+
+	while read line; do
 		local frag_lun=$(echo $line | cut -d: -f5)
 		local ext_len=$(echo $line | cut -d: -f4)
 
-		if (( $frag_lun != $lun )); then
-			error "FIEMAP on 1-stripe file($fm_file) failed"
-			return
-		fi
+		(( $frag_lun == $lun )) ||
+			error "OST$lun was reported on OST$frag_lun"
 		(( tot_len += ext_len ))
-	done
+	done <<< "$filefrag_op"
 
-	if (( lun != frag_lun || start_blk != 0 || tot_len != 64 )); then
-		error "FIEMAP on 1-stripe file($fm_file) failed"
-		return
-	fi
+	(( start_blk == 0 )) ||
+		error "OST$last_lun start_blk $start_blk != 0"
+	(( tot_len == 64 )) ||
+		error "OST$last_lun $tot_len != 64"
 
 	echo "FIEMAP on single striped file succeeded"
 }
@@ -16494,13 +16485,13 @@ test_130b() {
 	[[ "$ost1_FSTYPE" != "zfs" ]] ||
 		skip "LU-1941: FIEMAP unimplemented on ZFS"
 
-	trap cleanup_130 EXIT RETURN
-
 	local fm_file=$DIR/$tfile
 	$LFS setstripe -S 65536 -c $OSTCOUNT $fm_file ||
 		error "setstripe on $fm_file"
+	stack_trap "rm -f $fm_file"
 
-	dd if=/dev/zero of=$fm_file bs=1M count=$OSTCOUNT ||
+	local actual_stripe_count=$($LFS getstripe -c $fm_file)
+	dd if=/dev/zero of=$fm_file bs=1M count=$actual_stripe_count ||
 		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
@@ -16509,31 +16500,27 @@ test_130b() {
 
 	local last_lun=$(echo $filefrag_op | cut -d: -f5 |
 			 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
-
-	IFS=$'\n'
 	local tot_len=0
 	local num_luns=1
 
-	for line in $filefrag_op; do
+	while read line; do
 		local frag_lun=$(echo $line | cut -d: -f5 |
 				 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
 		local ext_len=$(echo $line | cut -d: -f4)
 		if (( $frag_lun != $last_lun )); then
-			if (( tot_len != 1024 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
-				return
-			else
-				(( num_luns += 1 ))
-				tot_len=0
-			fi
+			(( tot_len == 1024 )) ||
+				error "OST$last_lun $tot_len != 1024"
+			(( num_luns += 1 ))
+			tot_len=0
 		fi
 		(( tot_len += ext_len ))
 		last_lun=$frag_lun
-	done
-	if (( num_luns != $OSTCOUNT || tot_len != 1024 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
-		return
-	fi
+	done <<< "$filefrag_op"
+
+	(( num_luns == $actual_stripe_count )) ||
+		error "OST$last_lun $num_luns != $actual_stripe_count"
+	(( tot_len == 1024 )) ||
+		error "OST$last_lun $tot_len != 1024"
 
 	echo "FIEMAP on $OSTCOUNT-stripe file succeeded"
 }
@@ -16547,10 +16534,9 @@ test_130c() {
 	[[ "$ost1_FSTYPE" != "zfs" ]] ||
 		skip "LU-1941: FIEMAP unimplemented on ZFS"
 
-	trap cleanup_130 EXIT RETURN
-
 	local fm_file=$DIR/$tfile
 	$LFS setstripe -S 65536 -c 2 $fm_file || error "setstripe on $fm_file"
+	stack_trap "rm -f $fm_file"
 
 	dd if=/dev/zero of=$fm_file seek=1 bs=1M count=1 ||
 		error "dd failed on $fm_file"
@@ -16561,35 +16547,29 @@ test_130c() {
 
 	local last_lun=$(echo $filefrag_op | cut -d: -f5 |
 			 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
-
-	IFS=$'\n'
 	local tot_len=0
 	local num_luns=1
-	for line in $filefrag_op; do
+
+	while read line; do
 		local frag_lun=$(echo $line | cut -d: -f5 |
 				 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
 		local ext_len=$(echo $line | cut -d: -f4)
 		if (( $frag_lun != $last_lun )); then
 			local logical=$(echo $line | cut -d: -f2 | cut -d. -f1)
-			if (( logical != 512 )); then
-				error "FIEMAP on $fm_file failed; returned logical start for lun $logical instead of 512"
-				return
-			fi
-			if (( tot_len != 512 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
-				return
-			else
-				(( num_luns += 1 ))
-				tot_len=0
-			fi
+			(( logical == 512 )) ||
+				error "OST$last_lun logical start $logical != 512"
+			(( tot_len == 512 )) ||
+				error "OST$last_lun $tot_len != 512"
+			(( num_luns += 1 ))
+			tot_len=0
 		fi
 		(( tot_len += ext_len ))
 		last_lun=$frag_lun
-	done
-	if (( num_luns != 2 || tot_len != 512 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
-		return
-	fi
+	done <<< "$filefrag_op"
+	(( num_luns == 2 )) ||
+		error "OST$last_lun $num_luns != 2"
+	(( tot_len == 512 )) ||
+		error "OST$last_lun $tot_len != 512"
 
 	echo "FIEMAP on 2-stripe file with hole succeeded"
 }
@@ -16603,11 +16583,10 @@ test_130d() {
 	[[ "$ost1_FSTYPE" != "zfs" ]] ||
 		skip "LU-1941: FIEMAP unimplemented on ZFS"
 
-	trap cleanup_130 EXIT RETURN
-
 	local fm_file=$DIR/$tfile
 	$LFS setstripe -S 65536 -c $OSTCOUNT $fm_file ||
 			error "setstripe on $fm_file"
+	stack_trap "rm -f $fm_file"
 
 	local actual_stripe_count=$($LFS getstripe -c $fm_file)
 	dd if=/dev/zero of=$fm_file bs=1M count=$actual_stripe_count ||
@@ -16619,30 +16598,27 @@ test_130d() {
 
 	local last_lun=$(echo $filefrag_op | cut -d: -f5 |
 			 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
-
-	IFS=$'\n'
 	local tot_len=0
 	local num_luns=1
-	for line in $filefrag_op; do
+
+	while read line; do
 		local frag_lun=$(echo $line | cut -d: -f5 |
 				 sed -e 's/^[ \t]*/0x/' | sed -e 's/0x0x/0x/')
 		local ext_len=$(echo $line | cut -d: -f4)
 		if (( $frag_lun != $last_lun )); then
-			if (( tot_len != 1024 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
-				return
-			else
-				(( num_luns += 1 ))
-				local tot_len=0
-			fi
+			(( tot_len == 1024 )) ||
+				error "OST$last_lun $tot_len != 1024"
+			(( num_luns += 1 ))
+			tot_len=0
 		fi
 		(( tot_len += ext_len ))
 		last_lun=$frag_lun
-	done
-	if (( num_luns != actual_stripe_count || tot_len != 1024 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
-		return
-	fi
+	done <<< "$filefrag_op"
+
+	(( num_luns == actual_stripe_count )) ||
+		error "OST$last_lun $num_luns != $actual_stripe_count"
+	(( tot_len == 1024 )) ||
+		error "OST$last_lun $tot_len != 1024"
 
 	echo "FIEMAP on N-stripe file succeeded"
 }
@@ -16655,8 +16631,6 @@ test_130e() {
 	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 	[[ "$ost1_FSTYPE" != "zfs" ]] ||
 		skip "LU-1941: FIEMAP unimplemented on ZFS"
-
-	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$LFS setstripe -S 131072 -c 2 $fm_file || error "setstripe on $fm_file"
@@ -16674,27 +16648,25 @@ test_130e() {
 		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
 	local last_lun=$(echo $filefrag_op | cut -d: -f5)
-
-	IFS=$'\n'
 	local tot_len=0
 	local num_luns=1
-	for line in $filefrag_op; do
+
+	while read line; do
 		local frag_lun=$(echo $line | cut -d: -f5)
 		local ext_len=$(echo $line | cut -d: -f4)
 		if (( $frag_lun != $last_lun )); then
-			if (( tot_len != $expected_len )); then
+			(( tot_len == $expected_len )) ||
 				error "OST$last_lun $tot_len != $expected_len"
-			else
-				(( num_luns += 1 ))
-				tot_len=0
-			fi
+			(( num_luns += 1 ))
+			tot_len=0
 		fi
 		(( tot_len += ext_len ))
 		last_lun=$frag_lun
-	done
-	if (( num_luns != 2 || tot_len != $expected_len )); then
-		error "OST$last_lun $num_luns != 2, $tot_len != $expected_len"
-	fi
+	done <<< "$filefrag_op"
+	(( num_luns == 2 )) ||
+		error "OST$last_lun $num_luns != 2"
+	(( tot_len == $expected_len )) ||
+		error "OST$last_lun $tot_len != $expected_len"
 
 	echo "FIEMAP with continuation calls succeeded"
 }
