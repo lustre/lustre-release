@@ -451,6 +451,12 @@ test_7() {
 		--nid [8-12]@gni,7.7.7.[1-4]@tcp,7.7.7.[5-9]@o2ib,[1-5]@kfi ||
 		error "Peer add failed $?"
 	compare_peer_del "7@gni"
+
+	echo "Delete peer that contains nid equal to primary nid"
+	do_lnetctl peer add --prim 1.1.1.1@tcp \
+		--nid 1.1.1.1@tcp,2.2.2.2@tcp,3.3.3.3@tcp,4.4.4.4@tcp ||
+		error "Peer add failed $?"
+	compare_peer_del "1.1.1.1@tcp" "1.1.1.1@tcp,2.2.2.2@tcp,3.3.3.3@tcp,4.4.4.4@tcp"
 }
 run_test 7 "Various peer delete tests"
 

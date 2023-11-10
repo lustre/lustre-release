@@ -6211,12 +6211,12 @@ out:
 }
 
 /* Called with ln_api_mutex */
-static int lnet_parse_peer_nis(struct nlattr *rlist, struct lnet_nid *pnid,
-			       bool mr, struct genl_info *info)
+static int lnet_parse_peer_nis(struct nlattr *rlist, struct genl_info *info,
+			       struct lnet_nid *pnid, bool mr,
+			       bool *create_some)
 {
 	struct lnet_nid snid = LNET_ANY_NID;
 	struct nlattr *props;
-	bool all = false;
 	int rem, rc = 0;
 	s64 num = -1;
 
@@ -6247,8 +6247,8 @@ static int lnet_parse_peer_nis(struct nlattr *rlist, struct lnet_nid *pnid,
 				GOTO(report_err, rc);
 			}
 
-			if (LNET_NID_IS_ANY(&snid))
-				all = true;
+			if (LNET_NID_IS_ANY(&snid) || nid_same(&snid, pnid))
+				*create_some = false;
 		} else if (nla_strcmp(props, "health stats") == 0) {
 			struct nlattr *health;
 			int rem2;
@@ -6284,7 +6284,7 @@ static int lnet_parse_peer_nis(struct nlattr *rlist, struct lnet_nid *pnid,
 	}
 
 	if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && num != -1) {
-		lnet_peer_ni_set_healthv(pnid, num, all);
+		lnet_peer_ni_set_healthv(pnid, num, !*create_some);
 	} else if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
 		bool lock_prim = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
 
@@ -6292,7 +6292,7 @@ static int lnet_parse_peer_nis(struct nlattr *rlist, struct lnet_nid *pnid,
 		if (rc < 0)
 			GENL_SET_ERR_MSG(info,
 					 "failed to add peer");
-	} else if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+	} else if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE) && *create_some) {
 		bool force = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
 
 		rc = lnet_del_peer_ni(pnid, &snid, force);
@@ -6310,6 +6310,7 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 	struct genlmsghdr *gnlh = nlmsg_data(nlh);
 	struct nlattr *params = genlmsg_data(gnlh);
 	int msg_len, rem, rc = 0;
+	struct lnet_nid pnid;
 	struct nlattr *attr;
 
 	mutex_lock(&the_lnet.ln_api_mutex);
@@ -6333,7 +6334,6 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	nla_for_each_nested(attr, params, rem) {
-		struct lnet_nid pnid = LNET_ANY_NID;
 		bool parse_peer_nis = false;
 		struct nlattr *pnid_prop;
 		int rem2;
@@ -6341,6 +6341,7 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
 			continue;
 
+		pnid = LNET_ANY_NID;
 		nla_for_each_nested(pnid_prop, attr, rem2) {
 			bool mr = true;
 
@@ -6439,13 +6440,14 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 					GOTO(report_err, rc = -EINVAL);
 				}
 
+				parse_peer_nis = true;
 				nla_for_each_nested(rlist, pnid_prop, rem3) {
-					rc = lnet_parse_peer_nis(rlist, &pnid,
-								 mr, info);
+					rc = lnet_parse_peer_nis(rlist, info,
+								 &pnid, mr,
+								 &parse_peer_nis);
 					if (rc < 0)
 						GOTO(report_err, rc);
 				}
-				parse_peer_nis = true;
 			}
 		}
 
@@ -6465,12 +6467,19 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 					      force);
 			if (rc < 0) {
 				GENL_SET_ERR_MSG(info,
-						 "failed to del peer");
+						 "failed to del primary peer");
 				GOTO(report_err, rc);
 			}
 		}
 	}
 report_err:
+	/* If we failed on creation and encounter a latter error then
+	 * delete the primary nid.
+	 */
+	if (rc < 0 && info->nlhdr->nlmsg_flags & NLM_F_CREATE &&
+	    !LNET_NID_IS_ANY(&pnid))
+		lnet_del_peer_ni(&pnid, &LNET_ANY_NID,
+				 info->nlhdr->nlmsg_flags & NLM_F_EXCL);
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return rc;
