@@ -206,11 +206,26 @@ python_shutdown:
  */
 lutf_rc_t python_init(void)
 {
+	lutf_rc_t rc = EN_LUTF_RC_FAIL;
 	wchar_t program[5];
-	lutf_rc_t rc;
 
 	swprintf(program, 3, L"%hs", "lutf");
 
+#if (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 11) || PY_MAJOR_VERSION > 3
+	PyStatus status;
+	PyConfig config;
+
+	PyConfig_InitPythonConfig(&config);
+
+	status = PyConfig_SetString(&config, &config.program_name, program);
+	if (!PyStatus_Exception(status))
+		status = Py_InitializeFromConfig(&config);
+	if (!PyStatus_Exception(status))
+		rc = python_run_interactive_shell();
+	PyConfig_Clear(&config);
+	if (PyStatus_Exception(status))
+		Py_ExitStatusException(status);
+#else
 	//char *path;
 	//char new_path[MAX_STR_LEN];
 	Py_SetProgramName(program);
@@ -230,6 +245,7 @@ lutf_rc_t python_init(void)
 	Py_Finalize();
 
 	PDEBUG("Python finalized");
+#endif
 
 	return rc;
 }
