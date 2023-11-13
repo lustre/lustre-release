@@ -78,6 +78,7 @@
 #include <lnetconfig/cyaml.h>
 #include "lstddef.h"
 #include <uapi/linux/lustre/lustre_idl.h>
+#include "callvpe.h"
 
 #ifndef NSEC_PER_SEC
 # define NSEC_PER_SEC 1000000000UL
@@ -9382,10 +9383,10 @@ static int flushctx_ioctl(char *mp)
 
 static int lfs_flushctx(int argc, char **argv)
 {
-	int     kdestroy = 0, reap = 0, c;
-	char    mntdir[PATH_MAX] = {'\0'};
-	int     index = 0;
-	int     rc = 0;
+	int kdestroy = 0, reap = 0, c;
+	char **mnts = NULL, **mnt_ptr;
+	int mnt_num = 1, index = 0, rc = 0, rc2;
+	extern char **environ;
 
 	while ((c = getopt(argc, argv, "kr")) != -1) {
 		switch (c) {
@@ -9403,44 +9404,84 @@ static int lfs_flushctx(int argc, char **argv)
 		}
 	}
 
-	if (kdestroy) {
-		rc = system("kdestroy > /dev/null");
-		if (rc) {
-			rc = WEXITSTATUS(rc);
-			fprintf(stderr,
-				"error destroying tickets: %d, continuing\n",
-				rc);
-		}
-	}
-
 	if (optind >= argc) {
-		/* flush for all mounted lustre fs. */
-		while (!llapi_search_mounts(NULL, index++, mntdir, NULL)) {
-			/* Check if we have a mount point */
-			if (mntdir[0] == '\0')
-				continue;
-
-			if (flushctx_ioctl(mntdir))
-				rc = -1;
-
-			mntdir[0] = '\0'; /* avoid matching in next loop */
+		/* flush for all lustre mount points */
+again:
+		mnt_ptr = realloc(mnts, mnt_num * sizeof(char *));
+		if (!mnt_ptr) {
+			mnt_num--;
+			rc = -ENOMEM;
+			goto reap;
 		}
+		mnts = mnt_ptr;
+		mnts[mnt_num - 1] = (char *)calloc(PATH_MAX + 1, sizeof(char));
+		if (!mnts[mnt_num - 1]) {
+			rc = -ENOMEM;
+			goto reap;
+		}
+next:
+		if (!llapi_search_mounts(NULL, index++,
+					 mnts[mnt_num - 1], NULL)) {
+
+			if (*mnts[mnt_num - 1] == '\0')
+				goto next;
+			mnt_num++;
+			goto again;
+		} else {
+			*mnts[mnt_num - 1] = '\0';
+		}
+
+		mnt_ptr = mnts;
+		index = 0;
 	} else {
-		/* flush fs as specified */
-		while (optind < argc) {
-			if (flushctx_ioctl(argv[optind++]))
-				rc = -1;
+		/* flush for mounts as specified on command line */
+		mnt_ptr = argv + optind;
+		mnt_num = argc - optind;
+	}
+
+	for (index = 0; index < mnt_num; index++) {
+		/* Check if we have a mount point */
+		if (*mnt_ptr[index] == '\0')
+			continue;
+
+		rc2 = flushctx_ioctl(mnt_ptr[index]);
+		if (rc2) {
+			rc2 = -errno;
+			fprintf(stderr,
+				"error flushing contexts on mount point %s: %s\n",
+				mnt_ptr[index], strerror(errno));
+			rc = rc ? rc : rc2;
 		}
 	}
 
+reap:
 	if (reap) {
-		rc = system("keyctl reap > /dev/null");
-		if (rc != 0) {
-			rc = WEXITSTATUS(rc);
-			fprintf(stderr, "error reaping keyring: %d\n", rc);
+		static char *args[] = { "keyctl", "reap", NULL };
+
+		/* use callvpe to bypass the shell */
+		rc2 = callvpe("keyctl", args, environ);
+		if (rc2) {
+			rc2 = WEXITSTATUS(rc2);
+			fprintf(stderr, "error reaping keyring: %d\n", rc2);
 		}
 	}
 
+	if (kdestroy) {
+		static char *args[] = { "kdestroy", NULL };
+
+		/* use callvpe to bypass the shell */
+		rc2 = callvpe("kdestroy", args, environ);
+		if (rc2) {
+			rc2 = WEXITSTATUS(rc2);
+			fprintf(stderr, "error destroying tickets: %d\n", rc2);
+		}
+	}
+
+	if (mnts) {
+		for (index = 0; index < mnt_num; index++)
+			free(mnts[index]);
+		free(mnts);
+	}
 	return rc;
 }
 
