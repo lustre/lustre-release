@@ -649,7 +649,7 @@ delayed_msg_check(struct lnet_delay_rule *rule, bool all,
 	}
 
 	if (list_empty(&rule->dl_msg_list)) {
-		del_timer(&rule->dl_timer);
+		timer_delete(&rule->dl_timer);
 		rule->dl_msg_send = -1;
 
 	} else if (!list_empty(msg_list)) {
@@ -936,7 +936,7 @@ lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown)
 	list_for_each_entry_safe(rule, tmp, &rule_list, dl_link) {
 		list_del_init(&rule->dl_link);
 
-		del_timer_sync(&rule->dl_timer);
+		timer_delete_sync(&rule->dl_timer);
 		delayed_msg_check(rule, true, &msg_list);
 		delay_rule_decref(rule); /* -1 for the_lnet.ln_delay_rules */
 		n++;

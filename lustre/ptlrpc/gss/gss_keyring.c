@@ -149,7 +149,7 @@ void ctx_clear_timer_kr(struct ptlrpc_cli_ctx *ctx)
 
         CDEBUG(D_SEC, "ctx %p, key %p\n", ctx, gctx_kr->gck_key);
 
-        del_singleshot_timer_sync(timer);
+        timer_delete_sync(timer);
 }
 
 static

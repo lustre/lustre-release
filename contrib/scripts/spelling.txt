@@ -100,6 +100,9 @@ cfs_time_current_sec||ktime_get_real_seconds
 CLASSERT||BUILD_BUG_ON()
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
+del_timer||timer_delete
+del_timer_sync||timer_delete_sync
+del_singleshot_timer_sync||timer_delete_sync
 EWOULDBLOCK||EAGAIN
 container_of0||container_of_safe
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
