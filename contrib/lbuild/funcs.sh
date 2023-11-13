@@ -209,6 +209,7 @@ autodetect_target() {
 	rhel-9.0) target="5.14-rhel9.0";;
 	rhel-9.1) target="5.14-rhel9.1";;
 	rhel-9.2) target="5.14-rhel9.2";;
+	rhel-9.3) target="5.14-rhel9.3";;
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
