@@ -758,27 +758,19 @@ struct obd_device {
 
 #define obd_get_at_min(obd) ({ \
 	struct obd_device *_obd = obd; \
-	if (_obd == NULL) \
-		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
 	_obd && _obd->obd_at_min ? _obd->obd_at_min : at_min; \
 })
 #define obd_get_at_max(obd) ({\
 	struct obd_device *_obd = obd; \
-	if (_obd == NULL) \
-		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
 	_obd && _obd->obd_at_max ? _obd->obd_at_max : at_max; \
 })
 #define obd_get_at_history(obd) ({ \
 	struct obd_device *_obd = obd; \
-	if (_obd == NULL) \
-		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
 	_obd && _obd->obd_at_history ? _obd->obd_at_history : at_history; \
 })
 extern unsigned int ldlm_enqueue_min;
 #define obd_get_ldlm_enqueue_min(obd) ({ \
 	struct obd_device *_obd = obd; \
-	if (_obd == NULL) \
-		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
 	_obd && _obd->obd_ldlm_enqueue_min ? _obd->obd_ldlm_enqueue_min : \
 					     ldlm_enqueue_min; \
 })
