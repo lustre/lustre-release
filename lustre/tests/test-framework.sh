@@ -1171,6 +1171,19 @@ fs_inode_ksize() {
 	echo -n $size
 }
 
+runas_su() {
+	local user=$1
+	local cmd=$2
+	shift 2
+	local opts="$*"
+
+	if $VERBOSE; then
+		echo Running as $user: $cmd $opts
+	fi
+	cmd=$(which $cmd)
+	su - $user -c "$cmd $opts"
+}
+
 check_gss_daemon_nodes() {
 	local list=$1
 	local dname=$2
@@ -1179,6 +1192,7 @@ check_gss_daemon_nodes() {
 	local node
 	local ret
 
+	dname=$(basename "$dname" | awk '{print $1}')
 	do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
 if [ \\\"\\\$num\\\" -ne 1 ]; then
     echo \\\$num instance of $dname;
@@ -1205,7 +1219,8 @@ check_gss_daemon_facet() {
 	local facet=$1
 	local dname=$2
 
-	num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
+	dname=$(basename "$dname" | awk '{print $1}')
+	num=$(do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l)
 	if [ $num -ne 1 ]; then
 		echo "$num instance of $dname on $facet"
 		return 1
@@ -1230,7 +1245,7 @@ start_gss_daemons() {
 	if [ "$nodes" ] && [ "$daemon" ] ; then
 		echo "Starting gss daemon on nodes: $nodes"
 		do_nodes $nodes "$daemon" "$options" || return 8
-		check_gss_daemon_nodes $nodes lsvcgssd || return 9
+		check_gss_daemon_nodes $nodes "$daemon" || return 9
 		return 0
 	fi
 
@@ -1261,7 +1276,7 @@ start_gss_daemons() {
 	# check daemons are running
 	#
 	nodes=$(comma_list $(mdts_nodes) $(osts_nodes))
-	check_gss_daemon_nodes $nodes lsvcgssd || return 5
+	check_gss_daemon_nodes $nodes "$LSVCGSSD" || return 5
 }
 
 stop_gss_daemons() {
@@ -7955,8 +7970,7 @@ check_runas_id_ret() {
 	mkdir $DIR/d0_runas_test
 	chmod 0755 $DIR
 	chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
-	$myRUNAS -u $myRUNAS_UID -g $myRUNAS_GID touch $DIR/d0_runas_test/f$$ ||
-		myRC=$?
+	$myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=$?
 	rm -rf $DIR/d0_runas_test
 	return $myRC
 }

@@ -2222,7 +2222,7 @@ test_28() {
 		error "read before rotation failed"
 	fi
 	# store top key identity to ensure rotation has occurred
-	SK_IDENTITY_OLD=$(lctl get_param *.*.*srpc* | grep "expire" |
+	SK_IDENTITY_OLD=$(lctl get_param *.*.*srpc* 2>/dev/null | grep "expire"|
 		head -1 | awk '{print $15}' | cut -c1-8)
 	do_facet $SINGLEMDS lfs flushctx ||
 		 error "could not run flushctx on $SINGLEMDS"
@@ -2230,7 +2230,7 @@ test_28() {
 	lfs flushctx || error "could not run flushctx on client"
 	sleep 5
 	# verify new key is in place
-	SK_IDENTITY_NEW=$(lctl get_param *.*.*srpc* | grep "expire" |
+	SK_IDENTITY_NEW=$(lctl get_param *.*.*srpc* 2>/dev/null | grep "expire"|
 		head -1 | awk '{print $15}' | cut -c1-8)
 	if [ $SK_IDENTITY_OLD == $SK_IDENTITY_NEW ]; then
 		error "key did not rotate correctly"
@@ -2536,7 +2536,7 @@ cleanup_32() {
 
 	# re-start gss daemon on MDS if necessary
 	if combined_mgs_mds ; then
-		start_gss_daemons $mds_HOST "$LSVCGSSD -vvv -s -m -o -z"
+		start_gss_daemons $mds_HOST $LSVCGSSD "-vvv -s -m -o -z"
 	fi
 
 	# re-mount client
@@ -2572,9 +2572,9 @@ test_32() {
 
 	# start gss daemon on MGS
 	if combined_mgs_mds ; then
-		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g -m -o -z"
+		start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv -s -g -m -o -z"
 	else
-		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
+		start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv -s -g"
 	fi
 
 	# add mgs key type and MGS NIDs in key on MGS
@@ -2658,7 +2658,7 @@ cleanup_33() {
 
 	# re-start gss daemon on MDS if necessary
 	if combined_mgs_mds ; then
-		start_gss_daemons $mds_HOST "$LSVCGSSD -vvv -s -m -o -z"
+		start_gss_daemons $mds_HOST $LSVCGSSD "-vvv -s -m -o -z"
 	fi
 
 	# re-mount client
@@ -2694,9 +2694,9 @@ test_33() {
 
 	# start gss daemon on MGS
 	if combined_mgs_mds ; then
-		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g -m -o -z"
+		start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv -s -g -m -o -z"
 	else
-		start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
+		start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv -s -g"
 	fi
 
 	# add mgs key type and MGS NIDs in key on MGS

@@ -37,6 +37,11 @@ DBENCH_PID=0
 GSS=true
 GSS_KRB5=true
 
+# Overwrite RUNAS command to use su - instead,
+# to initialize the process more completely.
+# This is required to get proper access to keyrings.
+RUNAS="runas_su $(id -n -u $RUNAS_ID)"
+
 check_krb_env() {
 	which klist || skip "Kerberos env not setup"
 	which kinit || skip "Kerberos env not setup"
@@ -294,7 +299,7 @@ test_3() {
 	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context"
 	echo "destroyed credentials/contexs for $RUNAS_ID"
 	$RUNAS $CHECKSTAT -p 0666 $file && error "checkstat succeed"
-	kill -s 10 $OPPID
+	kill -s 10 $(pgrep -u $USER0 $MULTIOP)
 	wait $OPPID || error "read file data failed"
 	echo "read file data OK"
 
@@ -335,7 +340,7 @@ test_5() {
 
 	# restart lsvcgssd, expect touch succeed
 	echo "restart $LSVCGSSD and recovering"
-	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -vvv"
+	start_gss_daemons $(comma_list $(mdts_nodes)) $LSVCGSSD "-vvv"
 	sleep 5
 	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD
 	$RUNAS touch $file2 || error "should not fail now"
@@ -396,6 +401,12 @@ test_8()
 	mkdir -p $DIR/$tdir
 	chmod a+w $DIR/$tdir
 
+	$RUNAS ls $DIR/$tdir
+	$RUNAS keyctl show @u
+	echo Flushing gss ctxs
+	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS keyctl show @u
+
 	$LCTL dk > /dev/null
 	debugsave
 	stack_trap debugrestore EXIT
@@ -414,19 +425,15 @@ test_8()
 
 	# sleep sometime in ctx handle
 	do_facet $SINGLEMDS $LCTL set_param fail_val=$req_delay
-	#define OBD_FAIL_SEC_CTX_HDL_PAUSE	 0x1204
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1204
-
-	$RUNAS $LFS flushctx -k -r $MOUNT ||
-		error "can't flush context on $MOUNT"
-	restore_krb5_cred
+	#define OBD_FAIL_SEC_CTX_HDL_PAUSE	 0x00001204
+	#define CFS_FAIL_ONCE			 0x80000000
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001204
 
 	$RUNAS touch $DIR/$tdir/$tfile &
 	TOUCHPID=$!
 	echo "waiting for touch (pid $TOUCHPID) to finish..."
-	sleep 30 # give it a chance to really trigger context init rpc
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 	wait $TOUCHPID || error "touch should have succeeded"
+	$RUNAS keyctl show @u
 
 	$LCTL dk | grep -i "Early reply #" || error "No early reply"
 }
@@ -755,7 +762,7 @@ test_151() {
 	stopall
 
 	# start gss daemon on mgs node
-	combined_mgs_mds || start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv"
+	combined_mgs_mds || start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv"
 
 	# start mgs
 	start mgs $(mgsdevname 1) $MDS_MOUNT_OPTS
