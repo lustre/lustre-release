@@ -590,4 +590,19 @@ static inline void cfs_delete_from_page_cache(struct page *page)
 }
 #endif
 
+static inline struct page *ll_read_cache_page(struct address_space *mapping,
+					      pgoff_t index, filler_t *filler,
+					      void *data)
+{
+#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
+	struct file dummy_file;
+
+	dummy_file.f_ra.ra_pages = 32; /* unused, modified on ra error */
+	dummy_file.private_data = data;
+	return read_cache_page(mapping, index, filler, &dummy_file);
+#else
+	return read_cache_page(mapping, index, filler, data);
+#endif /* HAVE_READ_CACHE_PAGE_WANTS_FILE */
+}
+
 #endif /* _LUSTRE_COMPAT_H */

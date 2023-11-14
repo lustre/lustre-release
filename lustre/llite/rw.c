@@ -1986,7 +1986,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	} else {
 		unlock_page(vmpage);
 		result = PTR_ERR(page);
-        }
+	}
 
 out:
 	if (ra.cra_release != NULL)
@@ -2002,3 +2002,10 @@ out:
 
 	RETURN(result);
 }
+
+#ifdef HAVE_AOPS_READ_FOLIO
+int ll_read_folio(struct file *file, struct folio *folio)
+{
+	return ll_readpage(file, folio_page(folio, 0));
+}
+#endif
