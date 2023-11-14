@@ -71,6 +71,15 @@
 #include "gss_api.h"
 #include "gss_crypto.h"
 
+#ifndef HAVE_GET_EXPIRY_2ARGS
+static inline int __get_expiry2(char **bpp, time64_t *rvp)
+{
+	*rvp = get_expiry(bpp);
+	return *rvp ? 0 : -EINVAL;
+}
+#define get_expiry(ps, pt)	__get_expiry2((ps), (pt))
+#endif
+
 #define GSS_SVC_UPCALL_TIMEOUT  (20)
 
 static DEFINE_SPINLOCK(__ctx_index_lock);
@@ -339,13 +348,13 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 		 * Directly return -EINVAL in this case.
 		 */
 		status = -EINVAL;
-                goto out;
+		goto out;
 	}
 
 	rsii.h.flags = 0;
 	/* expiry */
-	expiry = get_expiry(&mesg);
-	if (expiry == 0)
+	status = get_expiry(&mesg, &expiry);
+	if (status)
 		goto out;
 
 	len = qword_get(&mesg, buf, mlen);
@@ -582,36 +591,38 @@ static struct cache_head * rsc_alloc(void)
 
 static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 {
-        char                *buf = mesg;
-        int                  len, rv, tmp_int;
-        struct rsc           rsci, *rscp = NULL;
+	char *buf = mesg;
+	int len, rv, tmp_int;
+	struct rsc rsci, *rscp = NULL;
 	time64_t expiry;
-        int                  status = -EINVAL;
-        struct gss_api_mech *gm = NULL;
+	int status = -EINVAL;
+	struct gss_api_mech *gm = NULL;
 
-        memset(&rsci, 0, sizeof(rsci));
+	memset(&rsci, 0, sizeof(rsci));
 
-        /* context handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0) goto out;
-        status = -ENOMEM;
-        if (rawobj_alloc(&rsci.handle, buf, len))
-                goto out;
+	/* context handle */
+	len = qword_get(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
 
-        rsci.h.flags = 0;
-        /* expiry */
-        expiry = get_expiry(&mesg);
-        status = -EINVAL;
-        if (expiry == 0)
-                goto out;
+	status = -ENOMEM;
+	if (rawobj_alloc(&rsci.handle, buf, len))
+		goto out;
 
-        /* remote flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get remote flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_remote = (tmp_int != 0);
+	rsci.h.flags = 0;
+	/* expiry */
+	status = get_expiry(&mesg, &expiry);
+	if (status)
+		goto out;
+
+	status = -EINVAL;
+	/* remote flag */
+	rv = get_int(&mesg, &tmp_int);
+	if (rv) {
+		CERROR("fail to get remote flag\n");
+		goto out;
+	}
+	rsci.ctx.gsc_remote = (tmp_int != 0);
 
 	/* root user flag */
 	rv = get_int(&mesg, &tmp_int);
@@ -621,41 +632,41 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 	}
 	rsci.ctx.gsc_usr_root = (tmp_int != 0);
 
-        /* mds user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get mds user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_mds = (tmp_int != 0);
+	/* mds user flag */
+	rv = get_int(&mesg, &tmp_int);
+	if (rv) {
+		CERROR("fail to get mds user flag\n");
+		goto out;
+	}
+	rsci.ctx.gsc_usr_mds = (tmp_int != 0);
 
-        /* oss user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get oss user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_oss = (tmp_int != 0);
+	/* oss user flag */
+	rv = get_int(&mesg, &tmp_int);
+	if (rv) {
+		CERROR("fail to get oss user flag\n");
+		goto out;
+	}
+	rsci.ctx.gsc_usr_oss = (tmp_int != 0);
 
-        /* mapped uid */
-        rv = get_int(&mesg, (int *) &rsci.ctx.gsc_mapped_uid);
-        if (rv) {
-                CERROR("fail to get mapped uid\n");
-                goto out;
-        }
+	/* mapped uid */
+	rv = get_int(&mesg, (int *) &rsci.ctx.gsc_mapped_uid);
+	if (rv) {
+		CERROR("fail to get mapped uid\n");
+		goto out;
+	}
 
-        rscp = rsc_lookup(&rsci);
-        if (!rscp)
-                goto out;
+	rscp = rsc_lookup(&rsci);
+	if (!rscp)
+		goto out;
 
-        /* uid, or NEGATIVE */
-        rv = get_int(&mesg, (int *) &rsci.ctx.gsc_uid);
-        if (rv == -EINVAL)
-                goto out;
-        if (rv == -ENOENT) {
-                CERROR("NOENT? set rsc entry negative\n");
+	/* uid, or NEGATIVE */
+	rv = get_int(&mesg, (int *) &rsci.ctx.gsc_uid);
+	if (rv == -EINVAL)
+		goto out;
+	if (rv == -ENOENT) {
+		CERROR("NOENT? set rsc entry negative\n");
 		set_bit(CACHE_NEGATIVE, &rsci.h.flags);
-        } else {
+	} else {
 		rawobj_t tmp_buf;
 		time64_t ctx_expiry;
 
@@ -699,23 +710,23 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 		 * We want just the  number of seconds into the future.
 		 */
 		expiry += ctx_expiry - ktime_get_real_seconds();
-        }
+	}
 
-        rsci.h.expiry_time = expiry;
-        rscp = rsc_update(&rsci, rscp);
-        status = 0;
+	rsci.h.expiry_time = expiry;
+	rscp = rsc_update(&rsci, rscp);
+	status = 0;
 out:
-        if (gm)
-                lgss_mech_put(gm);
-        rsc_free(&rsci);
-        if (rscp)
-                cache_put(&rscp->h, &rsc_cache);
-        else
-                status = -ENOMEM;
+	if (gm)
+		lgss_mech_put(gm);
+	rsc_free(&rsci);
+	if (rscp)
+		cache_put(&rscp->h, &rsc_cache);
+	else
+		status = -ENOMEM;
 
-        if (status)
-                CERROR("parse rsc error %d\n", status);
-        return status;
+	if (status)
+		CERROR("parse rsc error %d\n", status);
+	return status;
 }
 
 static struct cache_detail rsc_cache = {

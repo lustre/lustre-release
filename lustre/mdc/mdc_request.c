@@ -3009,7 +3009,7 @@ static int __init mdc_init(void)
 	if (rc)
 		return rc;
 
-	mdc_changelog_class = class_create(THIS_MODULE, MDC_CHANGELOG_DEV_NAME);
+	mdc_changelog_class = ll_class_create(MDC_CHANGELOG_DEV_NAME);
 	if (IS_ERR(mdc_changelog_class)) {
 		rc = PTR_ERR(mdc_changelog_class);
 		goto out_dev;
