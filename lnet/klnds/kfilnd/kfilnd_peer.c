@@ -251,7 +251,7 @@ again:
 	kp->kp_nid = nid;
 	atomic_set(&kp->kp_rx_base, 0);
 	atomic_set(&kp->kp_remove_peer, 0);
-	atomic_set(&kp->kp_hello_pending, 0);
+	atomic_set(&kp->kp_hello_state, KP_HELLO_NONE);
 	atomic_set(&kp->kp_state, KP_STATE_NEW);
 	kp->kp_local_session_key = kfilnd_dev_get_session_key(dev);
 	kp->kp_hello_ts = ktime_get_seconds();
@@ -375,10 +375,10 @@ void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
 	CDEBUG(D_NET, "kp %s(%p):0x%llx is up-to-date\n",
 	       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
 
-	/* Clear kp_hello_pending if we've received the hello response,
+	/* Clear kp_hello_state if we've received the hello response,
 	 * otherwise this is an incoming hello request and we may have our
 	 * own hello request to this peer still outstanding
 	 */
 	if (msg->type == KFILND_MSG_HELLO_RSP)
-		kfilnd_peer_clear_hello_pending(kp);
+		kfilnd_peer_clear_hello_state(kp);
 }

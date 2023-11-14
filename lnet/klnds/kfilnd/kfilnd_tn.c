@@ -700,6 +700,9 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 		goto out;
 	}
 
+	if (CFS_FAIL_CHECK_VALUE(CFS_KFI_REPLAY_IDLE_EVENT, event))
+		return -EAGAIN;
+
 	switch (event) {
 	case TN_EVENT_INIT_IMMEDIATE:
 	case TN_EVENT_TX_HELLO:
@@ -736,7 +739,7 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 					libcfs_nid2str(tn->tn_kp->kp_nid),
 					tn->tn_target_addr, rc);
 			if (event == TN_EVENT_TX_HELLO)
-				kfilnd_peer_clear_hello_pending(tn->tn_kp);
+				kfilnd_peer_clear_hello_state(tn->tn_kp);
 			kfilnd_tn_status_update(tn, rc,
 						LNET_MSG_STATUS_LOCAL_ERROR);
 		}
@@ -924,7 +927,7 @@ static int kfilnd_tn_state_imm_send(struct kfilnd_transaction *tn,
 		 */
 		kfilnd_peer_tn_failed(tn->tn_kp, status, false);
 		if (tn->msg_type == KFILND_MSG_HELLO_REQ)
-			kfilnd_peer_clear_hello_pending(tn->tn_kp);
+			kfilnd_peer_clear_hello_state(tn->tn_kp);
 		break;
 
 	case TN_EVENT_TX_OK:

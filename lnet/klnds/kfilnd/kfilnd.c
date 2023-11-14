@@ -63,7 +63,9 @@ int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
 	struct kfilnd_transaction *tn;
 	int rc;
 
-	if (kfilnd_peer_set_check_hello_pending(kp)) {
+	/* Only one thread may progress state from NONE -> INIT */
+	if (atomic_cmpxchg(&kp->kp_hello_state, KP_HELLO_NONE, KP_HELLO_INIT) !=
+	    KP_HELLO_NONE) {
 		CDEBUG(D_NET, "Hello already pending to peer %s(%px)\n",
 		       libcfs_nid2str(kp->kp_nid), kp);
 		return 0;
@@ -73,7 +75,7 @@ int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
 	if (IS_ERR(tn)) {
 		rc = PTR_ERR(tn);
 		CERROR("Failed to allocate transaction struct: rc=%d\n", rc);
-		kfilnd_peer_clear_hello_pending(kp);
+		atomic_set(&kp->kp_hello_state, KP_HELLO_NONE);
 		return rc;
 	}
 
@@ -85,6 +87,8 @@ int kfilnd_send_hello_request(struct kfilnd_dev *dev, int cpt,
 	tn->msg_type = KFILND_MSG_HELLO_REQ;
 
 	kp->kp_hello_ts = ktime_get_seconds();
+
+	atomic_set(&kp->kp_hello_state, KP_HELLO_SENDING);
 
 	kfilnd_tn_event_handler(tn, TN_EVENT_TX_HELLO, 0);
 

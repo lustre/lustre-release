@@ -104,6 +104,7 @@
 #define CFS_KFI_FAIL_WAIT_SEND_COMP1 0xF115
 #define CFS_KFI_FAIL_WAIT_SEND_COMP2 0xF116
 #define CFS_KFI_FAIL_WAIT_SEND_COMP3 0xF117
+#define CFS_KFI_REPLAY_IDLE_EVENT 0xF118
 
 /* Maximum number of transaction keys supported. */
 #define KFILND_EP_KEY_BITS 16U
@@ -254,7 +255,7 @@ struct kfilnd_peer {
 	u16 kp_version;
 	u32 kp_local_session_key;
 	u32 kp_remote_session_key;
-	atomic_t kp_hello_pending;
+	atomic_t kp_hello_state;
 	time64_t kp_hello_ts;
 	atomic_t kp_state;
 };
@@ -264,18 +265,20 @@ static inline bool kfilnd_peer_deleted(struct kfilnd_peer *kp)
 	return atomic_read(&kp->kp_remove_peer) > 0;
 }
 
-/* Sets kp_hello_sending
- * Returns true if it was already set
- * Returns false otherwise
+/* Values for kp_hello_state. Valid transitions:
+ * NONE -> INIT
+ * INIT -> NONE (only when fail to allocate kfilnd_tn for hello req)
+ * INIT -> SENDING
+ * SENDING -> NONE
  */
-static inline bool kfilnd_peer_set_check_hello_pending(struct kfilnd_peer *kp)
-{
-	return (atomic_cmpxchg(&kp->kp_hello_pending, 0, 1) == 1);
-}
+#define KP_HELLO_NONE 0 /* There is no hello request being sent */
+#define KP_HELLO_INIT 1 /* Hello request is initializing */
+#define KP_HELLO_SENDING 2 /* Hello request TN is in the state machine */
 
-static inline void kfilnd_peer_clear_hello_pending(struct kfilnd_peer *kp)
+/* If kp_hello_state is SENDING then set to NONE */
+static inline void kfilnd_peer_clear_hello_state(struct kfilnd_peer *kp)
 {
-	atomic_set(&kp->kp_hello_pending, 0);
+	atomic_cmpxchg(&kp->kp_hello_state, KP_HELLO_SENDING, KP_HELLO_NONE);
 }
 
 static inline bool kfilnd_peer_is_new_peer(struct kfilnd_peer *kp)
@@ -303,7 +306,9 @@ static inline bool kfilnd_peer_needs_throttle(struct kfilnd_peer *kp)
 static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp,
 					   bool proactive_handshake)
 {
-	if (atomic_read(&kp->kp_hello_pending) == 0) {
+	int hello_state = atomic_read(&kp->kp_hello_state);
+
+	if (hello_state == KP_HELLO_NONE) {
 		if (atomic_read(&kp->kp_state) != KP_STATE_UPTODATE)
 			return true;
 		else if (proactive_handshake &&
@@ -311,7 +316,8 @@ static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp,
 				      lnet_get_lnd_timeout() * 2,
 				      ktime_get_seconds()))
 			return true;
-	} else if (ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
+	} else if (hello_state == KP_HELLO_SENDING &&
+		   ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
 				ktime_get_seconds())) {
 		/* Sent hello but never received reply */
 		CDEBUG(D_NET,
@@ -319,7 +325,7 @@ static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp,
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       ktime_sub(ktime_get_seconds(), kp->kp_hello_ts));
 
-		kfilnd_peer_clear_hello_pending(kp);
+		kfilnd_peer_clear_hello_state(kp);
 		return true;
 	}
 
