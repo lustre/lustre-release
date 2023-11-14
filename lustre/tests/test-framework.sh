@@ -8844,7 +8844,6 @@ destroy_pools () {
 }
 
 destroy_test_pools () {
-	trap 0
 	local fsname=${1:-$FSNAME}
 	destroy_pools $fsname || true
 }
