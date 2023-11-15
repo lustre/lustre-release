@@ -5842,22 +5842,33 @@ test_45() {
 	echo blah > ${f}_grant
 	stop_writeback
 	sync
+
+	# cur_dirty_bytes is related and modified by the OSC cache granting
+	# code. It is possible for the grants to be freed during async IO
+	# completion resulting in 0 vs 0 comparisons for truncates and sync.
+	# Since it can't be reliably proven that the operation did lower the
+	# count, the comparisons are changed to >= (ge) rather than > (gt).
+	#
+	# N.B. This whole test seems flawed as the process doesn't hold file
+	# descriptors, syscalls are not explicit, and dirty data is subject to
+	# async changes outside of the MM subsystem. Some consideration should
+	# be given to removing/rewriting this test.
 	do_dirty_record "echo blah > $f"
-	[[ $before -eq $after ]] && error "write wasn't cached"
+	(( before == after )) && error "write wasn't cached"
 	do_dirty_record "> $f"
-	[[ $before -gt $after ]] || error "truncate didn't lower dirty count"
+	(( before >= after )) || error "truncate didn't lower dirty count"
 	do_dirty_record "echo blah > $f"
-	[[ $before -eq $after ]] && error "write wasn't cached"
+	(( before == after )) && error "write wasn't cached"
 	do_dirty_record "sync"
-	[[ $before -gt $after ]] || error "writeback didn't lower dirty count"
+	(( after == 0 )) || error "writeback didn't zero dirty count"
 	do_dirty_record "echo blah > $f"
-	[[ $before -eq $after ]] && error "write wasn't cached"
+	(( before == after )) && error "write wasn't cached"
 	do_dirty_record "cancel_lru_locks osc"
-	[[ $before -gt $after ]] ||
+	(( before >= after )) ||
 		error "lock cancellation didn't lower dirty count"
 	start_writeback
 }
-run_test 45 "osc io page accounting ============================"
+run_test 45 "osc io page accounting"
 
 # in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
