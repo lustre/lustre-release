@@ -406,7 +406,9 @@ int kfilnd_ep_post_send(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 			return 0;
 	} else if (CFS_FAIL_CHECK(CFS_KFI_FAIL_SEND)) {
 		return -EIO;
-	} else if (CFS_FAIL_CHECK(CFS_KFI_FAIL_SEND_EAGAIN)) {
+	} else if (CFS_FAIL_CHECK_VALUE(CFS_KFI_FAIL_MSG_TYPE_EAGAIN,
+					 tn->tn_tx_msg.msg->type) ||
+		   CFS_FAIL_CHECK(CFS_KFI_FAIL_SEND_EAGAIN)) {
 		return -EAGAIN;
 	}
 

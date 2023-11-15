@@ -364,21 +364,17 @@ void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       msg->proto.hello.version, KFILND_MSG_VERSION,
 		       kp->kp_version);
-	} else {
+		if (atomic_cmpxchg(&kp->kp_state, KP_STATE_NEW,
+				   KP_STATE_WAIT_RSP) == KP_STATE_NEW)
+			CDEBUG(D_NET, "Peer %s(%p):0x%llx new -> wait response\n",
+			       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
+	} else if (msg->type == KFILND_MSG_HELLO_RSP) {
 		kp->kp_version = msg->proto.hello.version;
-		CDEBUG(D_NET,"Peer %s(%p):0x%llx negotiated version: %u\n",
+		atomic_set(&kp->kp_state, KP_STATE_UPTODATE);
+		CDEBUG(D_NET,
+		       "Peer %s(%p):0x%llx is up-to-date negotiated version: %u\n",
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       msg->proto.hello.version);
-	}
-
-	atomic_set(&kp->kp_state, KP_STATE_UPTODATE);
-	CDEBUG(D_NET, "kp %s(%p):0x%llx is up-to-date\n",
-	       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
-
-	/* Clear kp_hello_state if we've received the hello response,
-	 * otherwise this is an incoming hello request and we may have our
-	 * own hello request to this peer still outstanding
-	 */
-	if (msg->type == KFILND_MSG_HELLO_RSP)
 		kfilnd_peer_clear_hello_state(kp);
+	}
 }
