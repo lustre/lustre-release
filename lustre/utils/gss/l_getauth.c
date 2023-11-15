@@ -13,6 +13,23 @@
 #include "lsupport.h"
 #include "err_util.h"
 
+static int start_daemon(char *auth_req)
+{
+	int rc;
+
+	rc = system("/usr/bin/systemctl restart lsvcgss");
+	if (rc < 0 || (errno = WEXITSTATUS(rc))) {
+		printerr(LL_ERR, "systemctl restart lsvcgss service failed: %s\n",
+			 strerror(errno));
+		rc = -errno;
+	} else {
+		printerr(LL_INFO, "lsvcgss service automatically restarted\n");
+		rc = 0;
+	}
+
+	return rc;
+}
+
 int main(int argc, char **argv)
 {
 	int local_socket;
@@ -20,7 +37,7 @@ int main(int argc, char **argv)
 	ssize_t bytes_sent;
 	char *auth_req = NULL, *cachename = NULL;
 	ssize_t req_len;
-	int opt, debug = 0, rc = 0;
+	int opt, debug = 0, tried_daemon = 0, rc = 0;
 
 	/* Parameters received from kernel (see rsi_do_upcall()):
 	 * -c <cache name> -r <auth request> -d
@@ -44,7 +61,7 @@ int main(int argc, char **argv)
 			break;
 		case 'd':
 			debug = 1;
-			goto connect;
+			goto socket;
 		case 'r':
 			auth_req = optarg;
 			break;
@@ -72,24 +89,35 @@ int main(int argc, char **argv)
 
 	req_len = strlen(auth_req);
 
-connect:
+socket:
 	/* Send auth request to lsvcgssd via a socket. */
 	local_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (local_socket == -1) {
-		rc = -errno;
-		printerr(LL_ERR, "cannot create socket: %d\n", rc);
-		return rc;
+		printerr(LL_ERR, "cannot create socket: %d\n", -errno);
+		return EXIT_FAILURE;
 	}
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, GSS_SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
+connect:
 	if (connect(local_socket, (struct sockaddr *)&addr,
 		    sizeof(addr)) == -1) {
 		rc = -errno;
 		printerr(LL_ERR, "cannot connect to socket: %d\n", rc);
-		goto out;
+		if (debug || tried_daemon == 5)
+			goto out;
+		if (!tried_daemon) {
+			rc = start_daemon(auth_req);
+			if (rc) {
+				rc = -1;
+				goto out;
+			}
+			sleep(2);
+		}
+		tried_daemon++;
+		goto connect;
 	}
 
 	if (debug)
@@ -107,5 +135,5 @@ connect:
 
 out:
 	close(local_socket);
-	return rc;
+	return rc < 0 ? EXIT_FAILURE : 0;
 }
