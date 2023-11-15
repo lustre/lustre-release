@@ -1087,8 +1087,9 @@ ksocknal_new_packet(struct ksock_conn *conn, int nob_to_skip)
 		smp_mb();                       /* racing with timeout thread */
 
 		switch (conn->ksnc_proto->pro_version) {
-		case  KSOCK_PROTO_V2:
-		case  KSOCK_PROTO_V3:
+		case KSOCK_PROTO_V2:
+		case KSOCK_PROTO_V3:
+		case KSOCK_PROTO_V4:
 			conn->ksnc_rx_state = SOCKNAL_RX_KSM_HEADER;
 			conn->ksnc_rx_iov = (struct kvec *)&conn->ksnc_rx_iov_space;
 			conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg;
@@ -1156,7 +1157,6 @@ ksocknal_process_receive(struct ksock_conn *conn,
 			 struct page **rx_scratch_pgs,
 			 struct kvec *scratch_iov)
 {
-	struct _lnet_hdr_nid4 *lhdr;
 	struct lnet_processid *id;
 	struct lnet_hdr hdr;
 	int rc;
@@ -1248,24 +1248,31 @@ ksocknal_process_receive(struct ksock_conn *conn,
 			ksocknal_new_packet(conn, 0);
 			return 0;	/* NOOP is done and just return */
 
-		case KSOCK_MSG_LNET:
+		case KSOCK_MSG_LNET: {
+			int msg_len = sizeof(struct lnet_hdr_nid4);
+
+			if (conn->ksnc_proto->pro_version == KSOCK_PROTO_V4)
+				msg_len = sizeof(struct lnet_hdr_nid16);
 
 			conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
-			conn->ksnc_rx_nob_wanted = sizeof(struct lnet_hdr_nid4);
-			conn->ksnc_rx_nob_left = sizeof(struct lnet_hdr_nid4);
+			conn->ksnc_rx_nob_wanted = msg_len;
+			conn->ksnc_rx_nob_left = msg_len;
 
 			conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
-			conn->ksnc_rx_iov[0].iov_base =
-				(void *)&conn->ksnc_msg.ksm_u.lnetmsg_nid4;
-			conn->ksnc_rx_iov[0].iov_len =
-				sizeof(struct lnet_hdr_nid4);
+			if (conn->ksnc_proto->pro_version == KSOCK_PROTO_V4)
+				conn->ksnc_rx_iov[0].iov_base =
+					(void *)&conn->ksnc_msg.ksm_u.lnetmsg_nid16;
+			else
+				conn->ksnc_rx_iov[0].iov_base =
+					(void *)&conn->ksnc_msg.ksm_u.lnetmsg_nid4;
+			conn->ksnc_rx_iov[0].iov_len = msg_len;
 
 			conn->ksnc_rx_niov = 1;
 			conn->ksnc_rx_kiov = NULL;
 			conn->ksnc_rx_nkiov = 0;
 
 			goto again;     /* read lnet header now */
-
+		}
 		default:
 			CERROR("%s: Unknown message type: %x\n",
 			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
@@ -1329,16 +1336,18 @@ ksocknal_process_receive(struct ksock_conn *conn,
 
 		if (rc == 0 && conn->ksnc_msg.ksm_zc_cookies[0] != 0) {
 			LASSERT(conn->ksnc_proto != &ksocknal_protocol_v1x);
-
-			lhdr = (void *)&conn->ksnc_msg.ksm_u.lnetmsg_nid4;
+			if (conn->ksnc_proto->pro_version == KSOCK_PROTO_V4)
+				lnet_hdr_from_nid16(&hdr,
+						    &conn->ksnc_msg.ksm_u.lnetmsg_nid16);
+			else
+				lnet_hdr_from_nid4(&hdr,
+						   &conn->ksnc_msg.ksm_u.lnetmsg_nid4);
 			id = &conn->ksnc_peer->ksnp_id;
-
 			rc = conn->ksnc_proto->pro_handle_zcreq(
 				conn,
 				conn->ksnc_msg.ksm_zc_cookies[0],
 				*ksocknal_tunables.ksnd_nonblk_zcack ||
-				le64_to_cpu(lhdr->src_nid) !=
-				lnet_nid_to_nid4(&id->nid));
+				!nid_same(&hdr.src_nid, &id->nid));
 		}
 
 		if (rc && conn->ksnc_lnet_msg)
@@ -1693,6 +1702,9 @@ ksocknal_parse_proto_version(struct ksock_hello_msg *hello)
 
 		if (version == KSOCK_PROTO_V3)
 			return &ksocknal_protocol_v3x;
+
+		if (version == KSOCK_PROTO_V4)
+			return &ksocknal_protocol_v4x;
 
 		return NULL;
 	}
