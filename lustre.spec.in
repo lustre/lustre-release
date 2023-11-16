@@ -29,6 +29,7 @@
 %bcond_without o2ib
 %bcond_with kfi
 %bcond_with gni
+%bcond_without l_getsepol
 
 %if %{with multiple_lnds}
 %global enable_multi_lnds 1
@@ -288,6 +289,9 @@ Provides: lustre-client = %{version}-%{release}
 %if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || 0%{?openEuler}
 #suse don't support selinux
 BuildRequires: pkgconfig(libselinux)
+%endif
+%if %{with l_getsepol}
+BuildRequires: pkgconfig(libselinux) openssl-devel
 %endif
 %if %{with lustre_modules}
 %if %{with mofed}
@@ -666,6 +670,7 @@ WITH_O2IB=""
 	%{?with_kfi:--with-kfi=/usr/src/cray-kfabric/default} \
 	%{?with_gni:--enable-gni} \
 	${WITH_O2IB} \
+	%{!?with_l_getsepol:--disable-l_getsepol} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}
