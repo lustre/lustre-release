@@ -18,6 +18,7 @@
 %bcond_with mofed
 %bcond_without mpi
 %bcond_with kabi
+%bcond_without l_getsepol
 
 # LUTF Turn off brp-python-precompile script as we don't want the python files
 # to be compiled on installation
@@ -223,6 +224,9 @@ Provides: lustre-client = %{version}-%{release}
 %if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
+%endif
+%if %{with l_getsepol}
+BuildRequires: pkgconfig(libselinux) openssl-devel
 %endif
 %if %{with lustre_modules}
 %if %{with mofed}
@@ -537,6 +541,7 @@ fi
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
 	%{?with_mofed:--with-o2ib=$o2ib_path} \
+	%{!?with_l_getsepol:--disable-l_getsepol} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}

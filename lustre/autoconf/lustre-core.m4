@@ -499,6 +499,15 @@ AC_MSG_RESULT([$enable_getsepol])
 CFLAGS="$saved_flags"
 ]) # LC_OPENSSL_GETSEPOL
 
+# LC_GCONFIG_GETSEPOL
+AC_DEFUN([LC_CONFIG_GETSEPOL], [
+AC_ARG_ENABLE([l_getsepol], [AS_HELP_STRING([--disable-l_getsepol],
+    [build the l_getsepol utility])], [config_getsepol="no"],
+    [config_getsepol="yes"])
+AC_MSG_CHECKING([whether to build l_getsepol])
+AC_MSG_RESULT([$config_getsepol])
+]) # LC_GETSEPOL
+
 # LC_HAVE_LIBAIO
 AC_DEFUN([LC_HAVE_LIBAIO], [
 	AC_CHECK_HEADER([libaio.h],
@@ -4312,7 +4321,8 @@ AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")
 AM_CONDITIONAL(ENABLE_BASH_COMPLETION, test "x$with_bash_completion_dir" != "xno")
 AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 AM_CONDITIONAL(SELINUX, test "$SELINUX" = "-lselinux")
-AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes)
+AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes &&
+                         test x$config_getsepol = xyes)
 AM_CONDITIONAL(LLCRYPT, test x$enable_llcrypt = xyes)
 AM_CONDITIONAL(LIBAIO, test x$enable_libaio = xyes)
 ]) # LC_CONDITIONALS
