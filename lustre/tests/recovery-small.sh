@@ -3166,6 +3166,51 @@ test_144b() {
 }
 run_test 144b "orphan cleanup shouldn't be blocked for no objects+failover situation"
 
+test_144c() {
+	[ "$PARALLEL" == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	 (( OST1_VERSION >= $(version_code 2.15.59.53) )) ||
+		skip "need OSS >= v2_15_59.53 for reconnect fix"
+	local rc
+
+	#increase a precreation window
+	mkdir_on_mdt0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile 9000
+
+	stop mds1
+#define OBD_FAIL_OST_DELORPHAN_DELAY     0x254
+	#delay delorphan request to reconnection 5seconds
+	do_facet ost1 $LCTL set_param fail_loc=0x0000254 fail_val=5
+
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "mds1 start fail"
+
+	wait_recovery_complete mds1 || error "MDS recovery not done"
+
+	sleep 1
+	#reconnect
+	do_facet mds1 $LCTL --device $FSNAME-OST0000-osc-MDT0000 recover
+
+	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0
+
+	#first and second orphan request delayed for 5seconds
+	sleep 12
+
+	local testid=${TESTNAME//_/ }
+
+	do_facet ost1 "dmesg | tac | sed '/$testid/,$ d'" |
+		grep "trust the OST"
+	rc=$?
+	if (( rc == 0 )); then
+		remount_facet mds1
+		error "LAST_ID synchronization failed"
+	else
+		return 0
+	fi
+}
+run_test 144c "reconnection during orphan cleanup shouldn't lose LAST_ID synchronization"
+
 test_145() {
 	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs"
 	[ $(facet_active_host mds2) = $(facet_active_host mds3) ] &&

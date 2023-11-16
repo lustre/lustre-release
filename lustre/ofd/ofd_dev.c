@@ -1516,12 +1516,13 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	    (oa->o_flags & OBD_FL_DELORPHAN)) {
 		exp->exp_filter_data.fed_lastid_gen = ofd->ofd_lastid_gen;
 
+		CFS_FAIL_TIMEOUT(OBD_FAIL_OST_DELORPHAN_DELAY, cfs_fail_val);
 		/* destroy orphans */
 		if (lustre_msg_get_conn_cnt(tgt_ses_req(tsi)->rq_reqmsg) <
 		    exp->exp_conn_cnt) {
 			CERROR("%s: dropping old orphan cleanup request\n",
 			       ofd_name(ofd));
-			GOTO(out_nolock, rc = 0);
+			GOTO(out_nolock, rc = -ESTALE);
 		}
 		/* This causes inflight precreates to abort and drop lock */
 		oseq->os_destroys_in_progress = 1;
@@ -1569,7 +1570,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		    exp->exp_conn_cnt) {
 			CERROR("%s: dropping old precreate request\n",
 			       ofd_name(ofd));
-			GOTO(out, rc = 0);
+			GOTO(out, rc = -ESTALE);
 		}
 		/* only precreate if seq is 0, IDIF or normal and also o_id
 		 * must be specfied */

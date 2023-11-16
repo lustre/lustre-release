@@ -365,6 +365,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
 #define OBD_FAIL_OST_RESTART_IO		 0x251
 #define OBD_FAIL_OST_OPCODE		 0x253
+#define OBD_FAIL_OST_DELORPHAN_DELAY	 0x254
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
