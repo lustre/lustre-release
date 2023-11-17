@@ -2385,28 +2385,44 @@ M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
     </section>
     <section remap="h5">
       <title>Files</title>
-      <para>The routerstat utility extracts statistics data from:</para>
-      <screen>/proc/sys/lnet/stats</screen>
+      <para>The <literal>routerstat</literal> utility extracts statistics data
+      from the LNet <literal>stats</literal> parameter.</para>
     </section>
   </section>
   <section xml:id="tunefs.lustre">
     <title><indexterm><primary>tunefs.lustre</primary></indexterm>
 tunefs.lustre</title>
-    <para>The tunefs.lustre utility modifies configuration information on a Lustre target disk.</para>
+    <para>The <literal>tunefs.lustre</literal> utility modifies configuration
+    information on a Lustre target disk.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>tunefs.lustre [options] <replaceable>/dev/device</replaceable></screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>tunefs.lustre is used to modify configuration information on a Lustre target disk. This does not reformat the disk or erase the target information, but modifying the configuration information can result in an unusable file system.</para>
+      <para><literal>tunefs.lustre</literal> is used to modify configuration
+      information on a Lustre target disk. This does not reformat the disk or
+      erase the target information, but incorrectly modifying the configuration
+      information may result in an unusable file system.</para>
       <caution>
         <para>Changes made here affect a file system only when the target is mounted the next time.</para>
       </caution>
-      <para>With tunefs.lustre, parameters are &quot;additive&quot; -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old tunefs.lustre parameters and just use newly-specified parameters, run:</para>
-      <screen>$ tunefs.lustre --erase-params --param=<replaceable>new_parameters</replaceable> </screen>
-      <para>The tunefs.lustre command can be used to set any parameter settable in a /proc/fs/lustre file and that has its own OBD device, so it can be specified as <replaceable>{obd|fsname}.obdtype.proc_file_name=value</replaceable>. For example:</para>
-      <screen>$ tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1</screen>
+      <para>With <literal>tunefs.lustre</literal>, parameters are
+      &quot;additive&quot; -- new parameters are specified in addition to old
+      parameters, they do not replace them. To erase all previously-specified
+      <literal>tunefs.lustre</literal> parameters and use only newly-specified
+      parameters, run:</para>
+<screen>
+$ tunefs.lustre --erase-params --param=<replaceable>new_parameters</replaceable>
+</screen>
+      <para>The <literal>tunefs.lustre</literal> command can be used to set any
+      parameter settable in a /proc/fs/lustre file and that has its own OBD
+      device. The parameter names generally take the form
+      <replaceable>{obd|fsname}.obdtype.parameter=value</replaceable>.
+      For example:</para>
+<screen>
+$ tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
+</screen>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -2623,27 +2639,7 @@ tunefs.lustre</title>
 Additional System Configuration Utilities</title>
     <para>This section describes additional system configuration utilities for Lustre.</para>
     <section remap="h3">
-      <title><indexterm><primary>utilities</primary><secondary>application profiling</secondary></indexterm>
-Application Profiling Utilities</title>
-      <para>The following utilities are located in /usr/bin.</para>
-      <para><literal>lustre_req_history.sh</literal></para>
-      <para>The lustre_req_history.sh utility (run from a client), assembles as much Lustre RPC request history as possible from the local node and from the servers that were contacted, providing a better picture of the coordinated network activity.</para>
-    </section>
-    <section remap="h3">
       <title>More Statistics for Application Profiling</title>
-      <para>The following utilities provide additional statistics.</para>
-      <para><literal>vfs_ops_stats</literal></para>
-      <para>The client vfs_ops_stats utility tracks Linux VFS operation calls
-      into Lustre for a single PID, PPID, GID or everything.</para>
-      <screen>llite.*.vfs_ops_stats llite.*.vfs_track_[pid|ppid|gid]</screen>
-      <para><literal>extents_stats</literal></para>
-      <para>The client extents_stats utility shows the size distribution of
-      I/O calls from the client (cumulative and by process).</para>
-      <screen>llite.*.{extents_stats,extents_stats_per_process}</screen>
-      <para><literal>offset_stats</literal></para>
-      <para>The client offset_stats utility shows the read/write seek activity
-      of a client by offsets and ranges.</para>
-      <screen>llite.*.offset_stats</screen>
       <para>Lustre includes per-client and improved MDT statistics:</para>
       <itemizedlist>
         <listitem>
