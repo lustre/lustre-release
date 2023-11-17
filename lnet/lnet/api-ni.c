@@ -7268,7 +7268,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 
 	while (idx < plist->lgpl_count) {
 		struct lnet_processid *id;
-		struct lnet_peer_ni *lpni;
+		struct lnet_peer_ni *lpni = NULL;
 		struct nlattr *nid_list;
 		struct lnet_peer *lp;
 		int count = 1;
