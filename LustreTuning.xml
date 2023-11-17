@@ -167,7 +167,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
       <primary>tuning</primary>
       <secondary>MDS binding</secondary>
     </indexterm>Binding MDS Service Thread to CPU Partitions</title>
-    <para>With the Node Affinity (<xref linkend="nodeaffdef" />) feature,
+    <para>With the Node Affinity (<xref linkend="nodeaffinity" />) feature,
     MDS threads can be bound to particular CPU partitions (CPTs) to improve CPU
     cache usage and memory locality.  Default values for CPT counts and CPU core
     bindings are selected automatically to provide good overall performance for
