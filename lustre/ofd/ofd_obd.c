@@ -426,12 +426,12 @@ int ofd_obd_disconnect(struct obd_export *exp)
 	LASSERT(exp);
 	class_export_get(exp);
 
-	if (!(exp->exp_flags & OBD_OPT_FORCE))
-		tgt_grant_sanity_check(ofd_obd(ofd), __func__);
-
 	rc = server_disconnect_export(exp);
 
 	tgt_grant_discard(exp);
+
+	if (!(exp->exp_flags & OBD_OPT_FORCE))
+		tgt_grant_sanity_check(ofd_obd(ofd), __func__);
 
 	/* Do not erase record for recoverable client. */
 	if (exp->exp_obd->obd_replayable &&

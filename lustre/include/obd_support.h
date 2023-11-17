@@ -478,6 +478,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_PTLRPC_IDLE_RACE	 0x533
 #define OBD_FAIL_PTLRPC_ENQ_RESEND	 0x534
 #define OBD_FAIL_PTLRPC_DELAY_SEND_FAIL	 0x535
+#define OBD_FAIL_PTLRPC_REPLAY_PAUSE	 0x536
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 /*	OBD_FAIL_OBD_LOG_CANCEL_NET      0x601 obsolete since 1.5 */

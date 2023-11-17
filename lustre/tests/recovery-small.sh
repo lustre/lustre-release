@@ -3559,6 +3559,50 @@ test_155() {
 }
 run_test 155 "failover after client remount"
 
+test_156()
+{
+	# on failover recovery time hard will be 9 * 5
+	local saved_timeout=$(do_facet ost1 $LCTL get_param -n timeout)
+
+	do_facet mgs $LCTL set_param -P timeout=5 ||
+		error "failed to set obd_timeout"
+	stack_trap "do_facet mgs $LCTL set_param -P timeout=$saved_timeout" \
+	    EXIT
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "setstripe failed"
+
+	# this is to sync last_rcvd, so that the client will have to
+	# send replay on recovery
+	$LFS df $MOUNT
+	do_facet ost1 sync
+
+	replay_barrier ost1
+
+	$MULTIOP $DIR/$tfile oO_RDWR:O_SYNC:w1048576c || error "multiop failed"
+
+	# delay write replay for 45 sec (OBD_RECOVERY_TIME_HARD) to
+	# get the client evicted as not sending replays
+
+#define OBD_FAIL_PTLRPC_REPLAY_PAUSE	 0x536
+	$LCTL set_param fail_loc=0x80000536 fail_val=45
+
+	fail ost1
+
+	# check that ost1 evicted the client in recovery
+	local clients
+	clients=($(do_facet ost1 \
+		$LCTL get_param -n obdfilter.$FSNAME-OST0000.recovery_status |
+		awk '/completed_clients/ { print $2 }' | tr '/' '\n'))
+	[[ $((${clients[0]} + 1)) == ${clients[1]} ]] ||
+		error "client not evicted by ost1"
+
+	local testid=$(echo $TESTNAME | tr '_' ' ')
+	do_facet ost1 dmesg | tac | sed "/$testid/,$ d" |
+		grep "ofd_obd_disconnect: tot_granted" &&
+		error "grant miscount" || true
+}
+run_test 156 "tot_granted miscount after client eviction"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

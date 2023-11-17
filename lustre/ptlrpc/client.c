@@ -3367,6 +3367,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 
 	LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
 
+	CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_REPLAY_PAUSE, cfs_fail_val);
+
 	aa = ptlrpc_req_async_args(aa, req);
 	memset(aa, 0, sizeof(*aa));
 
