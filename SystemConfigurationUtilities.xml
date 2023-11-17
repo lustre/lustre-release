@@ -6,9 +6,6 @@
   <para>This chapter includes system configuration utilities and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="config_e2scan"/></para>
-    </listitem>
-    <listitem>
       <para><xref linkend="l_getidentity"/></para>
     </listitem>
     <listitem>
@@ -16,9 +13,6 @@
     </listitem>
     <listitem>
       <para><xref linkend="config_ll_decode_filter_fid"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="config_recover_lostfound_objs"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="config_llog_reader"/></para>
@@ -30,13 +24,13 @@
       <para><xref linkend="config_llverdev"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="config_llshowmount"/></para>
+      <para><xref linkend="config_lshowmount"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="config_lst"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="config_lustre_rmmod_sh"/></para>
+      <para><xref linkend="config_lustre_rmmod"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="lustre_rsync"/></para>
@@ -48,9 +42,6 @@
       <para><xref linkend="mount.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="plot_llstat"/></para>
-    </listitem>
-    <listitem>
       <para><xref linkend="config_routerstat"/></para>
     </listitem>
     <listitem>
@@ -60,76 +51,6 @@
       <para><xref linkend="config_additional_utility"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="config_e2scan">
-      <title><indexterm><primary>e2scan</primary></indexterm>e2scan</title>
-    <para>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
-    <para>
-    <link xl:href="https://downloads.whamcloud.com/public/e2fsprogs/latest/">
-      https://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
-    <section remap="h5">
-      <title>Synopsis</title>
-      <screen>e2scan [options] [-f file] block_device</screen>
-    </section>
-    <section remap="h5">
-      <title>Description</title>
-      <para>When invoked, the e2scan utility iterates all inodes on the block device, finds modified inodes, and prints their inode numbers. A similar iterator, using libext2fs(5), builds a table (called parent database) which lists the parent node for each inode. With a lookup function, you can reconstruct modified pathnames from root.</para>
-    </section>
-    <section remap="h5">
-      <title>Options</title>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal>-b <replaceable>inode buffer blocks</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para> Sets the readahead inode blocks to get excellent performance when scanning the block device.</para>
-                <para>&#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-o <replaceable>output file</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para> If an output file is specified, modified pathnames are written to this file. Otherwise, modified parameters are written to stdout.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-t <replaceable>inode</replaceable>| <replaceable>pathname</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para> Sets the e2scan type if type is inode. The e2scan utility prints modified inode numbers to stdout. By default, the type is set as pathname.</para>
-                <para>The e2scan utility lists modified pathnames based on modified inode numbers.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-u</literal></para>
-              </entry>
-              <entry>
-                <para> Rebuilds the parent database from scratch. Otherwise, the current parent database is used.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-    </section>
-  </section>
   <section xml:id="l_getidentity">
     <title><indexterm><primary>l_getidentity</primary></indexterm>
 l_getidentity</title>
@@ -866,7 +787,7 @@ ll_decode_filter_fid</title>
     <section remap="h5">
       <title>Examples</title>
       <screen>root@oss1# cd /mnt/ost/lost+found
-root@oss1# ll_decode_filter_fid #12345[4,5,8]
+root@oss1# ll_decode_filter_fid #123454 #123455 #123458
 #123454: objid=690670 seq=0 parent=[0x751c5:0xfce6e605:0x0]
 #123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
 #123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]</screen>
@@ -874,25 +795,12 @@ root@oss1# ll_decode_filter_fid #12345[4,5,8]
       <para>The MDT parent inode FIDs are hexadecimal numbers of the form sequence:oid:idx. Since the sequence number is below 0x100000000 in all these cases, the FIDs are in the legacy Inode and Generation In FID (IGIF) namespace and are mapped directly to the MDT inode = seq and generation = oid values; the MDT inodes are 0x751c5, 0x18d11, and 0x21417 respectively. For objects with MDT parent sequence numbers above 0x200000000, this indicates that the FID needs to be mapped via the MDT Object Index (OI) file on the MDT to determine the internal inode number.</para>
       <para>The idx field shows the stripe number of this OST object in the Lustre RAID-0 striped file.</para>
     </section>
-    <section remap="h5">
-      <title>See Also</title>
-      <para><xref linkend="config_recover_lostfound_objs"/></para>
-    </section>
   </section>
-  <section xml:id="config_recover_lostfound_objs" condition='l28'>
-    <title><indexterm><primary>ll_recover_lost_found_objs</primary></indexterm>
-ll_recover_lost_found_objs</title>
-    <para>The <literal>ll_recover_lost_found_objs</literal> utility was
-      used to help recover Lustre OST objects (file data) from the
-      <literal>lost+found</literal> directory of an OST and return them to
-      their correct locations based on information stored in the
-      <literal>trusted.fid</literal> extended attribute stored on every
-      OST object containing data.</para>
-    <note condition="l26"><para>This utility is not needed with Lustre 2.6
-      and later, and is removed in Lustre 2.8 since <literal>LFSCK</literal>
-      online scanning will automatically move objects from
-      <literal>lost+found</literal> to the proper place in the OST.</para>
-    </note>
+  <section xml:id="config_llobdstat">
+    <title><indexterm><primary>llobdstat</primary></indexterm>
+llobdstat</title>
+    <para>The <literal>llobdstat</literal> utility displays the
+    Lustre object ID and MDT parent FID.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>llobdstat ost_name [interval]</screen>
@@ -953,7 +861,6 @@ llog_reader /tmp/tfs-client</screen>
   <section xml:id="config_llstat">
     <title><indexterm><primary>llstat</primary></indexterm>
 llstat</title>
-    <para>The llstat utility displays Lustre statistics.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>llstat [-c] [-g] [-i <replaceable>interval</replaceable>] <replaceable>stats_file
@@ -961,7 +868,10 @@ llstat</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The llstat utility displays statistics from any of the Lustre statistics files that share a common format and are updated at <literal>interval</literal> seconds. To stop statistics printing, use <literal>ctrl</literal>-<literal>c.</literal></para>
+      <para>The llstat utility displays statistics from any of the Lustre
+        statistics parameter files on the local node that share a common format
+        and are updated at <literal>interval</literal> seconds.  To stop stats
+        printing, use <literal>CTRL</literal>-<literal>C.</literal></para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -1184,7 +1094,7 @@ write complete
 read complete </screen>
     </section>
   </section>
-  <section xml:id="config_llshowmount">
+  <section xml:id="config_lshowmount">
     <title><indexterm><primary>lshowmount</primary></indexterm>
 lshowmount</title>
     <para>The lshowmount utility shows Lustre exports.</para>
@@ -1306,8 +1216,8 @@ lst stat servers &amp; sleep 30; kill $!
 lst end_session </screen>
     </section>
   </section>
-  <section xml:id="config_lustre_rmmod_sh">
-    <title><indexterm><primary>lustre_rmmod.sh</primary></indexterm>
+  <section xml:id="config_lustre_rmmod">
+    <title><indexterm><primary>lustre_rmmod</primary></indexterm>
 lustre_rmmod.sh</title>
     <para>The lustre_rmmod.sh utility removes all Lustre and LNet modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
     <note>
@@ -2307,68 +2217,6 @@ mount.lustre</title>
           <para>  <xref linkend="userutilities.lfs"/></para>
         </listitem>
       </itemizedlist>
-    </section>
-  </section>
-  <section xml:id="plot_llstat">
-    <title><indexterm><primary>plot-llstat</primary></indexterm>
-plot-llstat</title>
-    <para>The plot-llstat utility plots Lustre statistics.</para>
-    <section remap="h5">
-      <title>Synopsis</title>
-      <screen>plot-llstat results_filename [parameter_index]
-</screen>
-    </section>
-    <section remap="h5">
-      <title>Description</title>
-      <para>The plot-llstat utility generates a CSV file and instruction files for gnuplot from the output of llstat. Since llstat is generic in nature, plot-llstat is also a generic script. The value of parameter_index can be 1 for count per interval, 2 for count per second (default setting) or 3 for total count.</para>
-      <para>The plot-llstat utility creates a .dat (CSV) file using the number of operations specified by the user. The number of operations equals the number of columns in the CSV file. The values in those columns are equal to the corresponding value of parameter_index in the output file.</para>
-      <para>The plot-llstat utility also creates a .scr file that contains instructions for gnuplot to plot the graph. After generating the .dat and .scr files, the plot-llstat tool invokes gnuplot to display the graph.</para>
-    </section>
-    <section remap="h5">
-      <title>Options</title>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal>results_filename</literal></para>
-              </entry>
-              <entry>
-                <para> Output generated by plot-llstat</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>parameter_index</literal></para>
-                <para>&#160;</para>
-              </entry>
-              <entry>
-                <para> Value of parameter_index can be:</para>
-                <para> 1 - count per interval</para>
-                <para> 2 - count per second (default setting)</para>
-                <para> 3 - total count</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-    </section>
-    <section remap="h5">
-      <title>Example</title>
-      <screen>llstat -i2 -g -c lustre-OST0000 &gt; log
-plot-llstat log 3</screen>
     </section>
   </section>
   <section xml:id="config_routerstat">
