@@ -171,7 +171,7 @@ mdt.lustre-MDT0000.hsm_control=enabled</screen>
       <screen>client# lhsmtool_posix --daemon --hsm-root <replaceable>$PCCPATH</replaceable> --archive=<replaceable>$ARCHIVE_ID</replaceable> <replaceable>$LUSTREPATH</replaceable></screen>
       <para><emphasis role="strong">Examples:</emphasis></para>
       <para>The following command adds a PCC backend on a client:</para>
-      <screen>client# lctl pcc add /mnt/lustre /mnt/pcc  --param "projid={500,1000}&amp;fname={*.h5},uid=1001 rwid=2"</screen>
+      <screen>client# lctl pcc add /mnt/lustre /mnt/pcc  --param "projid={500,1000}&amp;fname={*.h5},uid={1001} rwid=2"</screen>
       <para>The first substring of the config parameter is the auto-cache rule,
         where "&amp;" represents the logical AND operator while "," represents
         the logical OR operator. The example rule means that new files are only
