@@ -2371,11 +2371,11 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 			 enum tgt_type type)
 {
 	int ret, obdcount, maxidx, obd_valid = 0, obdnum;
-	long i;
-	struct obd_uuid *uuids = NULL;
 	int *indices = NULL;
-	char buf[16];
+	struct obd_uuid *uuids = NULL;
 	int *indexes;
+	char buf[16];
+	long i;
 
 	if (type == LOV_TYPE)
 		ret = get_param_lov(path, "numobd", buf, sizeof(buf));
@@ -2390,8 +2390,8 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 		return -ENOMEM;
 	indices = malloc(obdcount * sizeof(int));
 	if (indices == NULL) {
-		free(uuids);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out_uuids;
 	}
 	maxidx = obdcount;
 
@@ -2400,20 +2400,22 @@ retry_get_uuids:
 	if (ret) {
 		if (ret == -EOVERFLOW) {
 			struct obd_uuid *uuids_temp;
-			int *indices_temp;
+			int *indices_temp = NULL;
 
 			uuids_temp = realloc(uuids, obdcount *
 					     sizeof(struct obd_uuid));
-			indices_temp = realloc(indices, obdcount * sizeof(int));
-			if (uuids_temp != NULL && indices_temp != NULL) {
+			if (uuids_temp)
 				uuids = uuids_temp;
+			indices_temp = realloc(indices, obdcount * sizeof(int));
+			if (indices_temp)
 				indices = indices_temp;
+			if (uuids_temp && indices_temp)
 				goto retry_get_uuids;
-			}
 			ret = -ENOMEM;
 		}
 
-		llapi_error(LLAPI_MSG_ERROR, ret, "cannot get ost uuid");
+		llapi_error(LLAPI_MSG_ERROR, ret, "cannot fetch %u OST UUIDs",
+			    obdcount);
 		goto out_free;
 	}
 
@@ -2458,10 +2460,11 @@ retry_get_uuids:
 
 	*obdindexes = indexes;
 out_free:
-	if (uuids)
-		free(uuids);
 	if (indices)
 		free(indices);
+out_uuids:
+	if (uuids)
+		free(uuids);
 
 	return ret;
 }
