@@ -11498,8 +11498,9 @@ test_101d() {
 	local sz_KB=$((sz_MB * 1024 / 4))
 	# 10485760 bytes transferred in 0.000938 secs (11179579337 bytes/sec)
 	# 104857600 bytes (105 MB) copied, 0.00876352 s, 12.0 GB/s
+	# 83886080 bytes (84 MB, 80 MiB) copied, 16 s, 5.2 MB/s
 	local raOFF=$(LANG=C dd if=$file of=/dev/null bs=4k count=$sz_KB |&
-		      sed -e '/records/d' -e 's/.* \([0-9]*\.[0-9]*\) *s.*/\1/')
+		      sed -e '/records/d' -e 's/.* \([0-9][0-9\.]*\) *s.*/\1/')
 
 	echo "Cancel LRU locks on lustre client to flush the client cache"
 	cancel_lru_locks osc
@@ -11508,17 +11509,17 @@ test_101d() {
 
 	echo "Reading the test file $file with read-ahead enabled"
 	local raON=$(LANG=C dd if=$file of=/dev/null bs=4k count=$sz_KB |&
-		     sed -e '/records/d' -e 's/.* \([0-9]*\.[0-9]*\) *s.*/\1/')
+		      sed -e '/records/d' -e 's/.* \([0-9][0-9\.]*\) *s.*/\1/')
 
-	echo "read-ahead disabled time read $raOFF"
-	echo "read-ahead enabled time read $raON"
+	echo "read-ahead disabled time read '$raOFF'"
+	echo "read-ahead enabled time read '$raON'"
 
 	rm -f $file
 	wait_delete_completed
 
 	# use awk for this check instead of bash because it handles decimals
-	awk "{ exit !($raOFF < 1.0 || $raOFF > $raON) }" <<<"ignore_me" ||
-		error "readahead ${raON}s > no-readahead ${raOFF}s ${sz_MB}M"
+	awk "{ exit !($raOFF < 0.5 || $raOFF > $raON) }" <<<"ignore_me" ||
+		error "readahead ${raON}s > no-readahead ${raOFF}s (${sz_MB}M)"
 }
 run_test 101d "file read with and without read-ahead enabled"
 
