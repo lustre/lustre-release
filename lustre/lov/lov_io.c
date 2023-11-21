@@ -664,6 +664,7 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_object *lov = cl2lov(ios->cis_obj);
 	struct lov_io_sub *sub;
+	struct cl_io *io = lio->lis_cl.cis_io;
 
 	ENTRY;
 	LASSERT(list_empty(&lio->lis_active));
@@ -679,9 +680,11 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	}
 	LASSERT(lio->lis_nr_subios == 0);
 
-	LASSERT(atomic_read(&lov->lo_active_ios) > 0);
-	if (atomic_dec_and_test(&lov->lo_active_ios))
-		wake_up(&lov->lo_waitq);
+	if (!(io->ci_ignore_layout && io->ci_type == CIT_MISC)) {
+		LASSERT(atomic_read(&lov->lo_active_ios) > 0);
+		if (atomic_dec_and_test(&lov->lo_active_ios))
+			wake_up(&lov->lo_waitq);
+	}
 	EXIT;
 }
 
@@ -1771,9 +1774,12 @@ static void lov_empty_io_fini(const struct lu_env *env,
 			      const struct cl_io_slice *ios)
 {
 	struct lov_object *lov = cl2lov(ios->cis_obj);
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct cl_io *io = lio->lis_cl.cis_io;
 	ENTRY;
 
-	if (atomic_dec_and_test(&lov->lo_active_ios))
+	if (!(io->ci_type == CIT_MISC && io->ci_ignore_layout) &&
+		atomic_dec_and_test(&lov->lo_active_ios))
 		wake_up(&lov->lo_waitq);
 	EXIT;
 }
@@ -1862,7 +1868,8 @@ int lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
 	result = lov_io_subio_init(env, lio, io);
 	if (!result) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_io_ops);
-		atomic_inc(&lov->lo_active_ios);
+		if (!(io->ci_ignore_layout && io->ci_type == CIT_MISC))
+			atomic_inc(&lov->lo_active_ios);
 	}
 	EXIT;
 out:
@@ -1905,7 +1912,8 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 	}
 	if (result == 0) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
-		atomic_inc(&lov->lo_active_ios);
+		if (!(io->ci_ignore_layout && io->ci_type == CIT_MISC))
+			atomic_inc(&lov->lo_active_ios);
 	}
 
 	io->ci_result = result < 0 ? result : 0;
@@ -1962,7 +1970,8 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 
 	if (result == 0) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
-		atomic_inc(&lov->lo_active_ios);
+		if (!(io->ci_ignore_layout && io->ci_type == CIT_MISC))
+			atomic_inc(&lov->lo_active_ios);
 	}
 
 	io->ci_result = result < 0 ? result : 0;

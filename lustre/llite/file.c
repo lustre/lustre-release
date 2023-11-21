@@ -562,7 +562,6 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 		RETURN_EXIT;
 	io = vvp_env_thread_io(env);
 	io->ci_obj = obj;
-	io->ci_ignore_layout = 1;
 	rc = cl_io_init(env, io, CIT_MISC, obj);
 	if (rc)
 		GOTO(out_io, rc);
