@@ -2,9 +2,11 @@
 .SH NAME
 lctl-pool_add \- add OSTs to a named pool
 .SH SYNOPSIS
-.B lctl pool_add \fI<fsname>.<poolname>\fR \fI<ost_index> ...\fR
+.BR "lctl pool_add" " [" --nowait | -n "] "
+.IR <fsname> . <pool> " "  <ost_index> " " ...
 .br
-.B lctl pool_add \fI<fsname>.<poolname>\fR \fI<ost_range> ...\fR
+.BR "lctl pool_add" " [" --nowait | -n "] "
+.IR <fsname> . <pool> " " <ost_range> " "...
 
 .SH DESCRIPTION
 Add one or more OSTs to the pool named
@@ -26,13 +28,16 @@ to
 .I end
 (inclusive), optionally skipping every
 .I step
-index values.  The
-.B lctl pool_add
-command must be run on the MGS node and can only be used by the
-root user.  If the MGS is on a separate node from the MDS, a
-Lustre client must be mounted while the
+index values.
+
+.BR NOTE:
+After updating the MGS configuration, this command tries to wait and
+check if pools are updated on a client.
+If the MGS is on a separate node from the MDS, a Lustre client must
+be mounted on the MGS node while the
 .B lctl
-commands are being run.
+commands are being run for this. Otherwise, the client check is
+skipped.
 
 The OST pool can be used by
 .BR lfs-setstripe (1)
@@ -47,6 +52,16 @@ used at creation time that is stored on each file, not necessarily
 OSTs that are in the current pool.  As well,
 .BR lfs-df (1)
 can show only the free space or inodes in a named pool.
+
+.SH OPTIONS
+.TP
+.BR -n ", " --nowait
+Do not wait and check if pool is updated on a client. This is useful
+when calling a lot of "
+.B lctl
+pool_*" in a row. This avoids revoking the clients "CONFIG" lock for each
+command (by default clients retake their lock and update their configurations
+in a delay between 5-10s).
 
 .SH EXAMPLES
 .TP

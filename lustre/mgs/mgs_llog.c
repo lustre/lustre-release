@@ -748,14 +748,31 @@ struct mgs_modify_lookup {
 	int		mml_modified;
 };
 
-static int mgs_check_record_match(const struct lu_env *env,
-				struct llog_handle *llh,
-				struct llog_rec_hdr *rec, void *data)
+enum mgs_search_pool_status {
+	POOL_STATUS_NONE = 0,
+	POOL_STATUS_EXIST,
+	POOL_STATUS_OST_EXIST,
+};
+
+struct mgs_search_pool_data {
+	char				*msp_tgt;
+	char				*msp_fs;
+	char				*msp_pool;
+	char				*msp_ost;
+	enum mgs_search_pool_status	msp_status;
+	bool				msp_skip;
+};
+
+static int mgs_search_pool_cb(const struct lu_env *env,
+			      struct llog_handle *llh,
+			      struct llog_rec_hdr *rec, void *data)
 {
-	struct cfg_marker *mc_marker = data;
-	struct cfg_marker *marker;
+	struct mgs_search_pool_data *d = data;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
 	int cfg_len = REC_DATA_LEN(rec);
+	char *fsname;
+	char *poolname;
+	char *ostname = NULL;
 	int rc;
 	ENTRY;
 
@@ -770,48 +787,97 @@ static int mgs_check_record_match(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	/* We only care about markers */
-	if (lcfg->lcfg_command != LCFG_MARKER)
+	/* check if section is skipped */
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
+		if (!(marker->cm_flags & CM_END))
+			RETURN(0);
+
+		d->msp_skip = (marker->cm_flags & CM_SKIP) ||
+			strcmp(d->msp_tgt, marker->cm_tgtname) != 0;
+
 		RETURN(0);
-
-	marker = lustre_cfg_buf(lcfg, 1);
-
-	if (marker->cm_flags & CM_SKIP)
-		RETURN(0);
-
-	if ((strcmp(mc_marker->cm_comment, marker->cm_comment) == 0) &&
-		(strcmp(mc_marker->cm_tgtname, marker->cm_tgtname) == 0)) {
-		/* Found a non-skipped marker match */
-		CDEBUG(D_MGS, "Matched rec %u marker %d flag %x %s %s\n",
-			rec->lrh_index, marker->cm_step,
-			marker->cm_flags, marker->cm_tgtname,
-			marker->cm_comment);
-		rc = LLOG_PROC_BREAK;
 	}
 
-	RETURN(rc);
+	if (d->msp_skip)
+		RETURN(0);
+
+	switch (lcfg->lcfg_command) {
+	case LCFG_POOL_ADD:
+	case LCFG_POOL_REM:
+		ostname = lustre_cfg_string(lcfg, 3);
+		fallthrough;
+	case LCFG_POOL_NEW:
+	case LCFG_POOL_DEL:
+		fsname = lustre_cfg_string(lcfg, 1);
+		poolname = lustre_cfg_string(lcfg, 2);
+		break;
+	default:
+		RETURN(0);
+	}
+
+	if (strcmp(d->msp_fs, fsname) != 0)
+		RETURN(0);
+	if (strcmp(d->msp_pool, poolname) != 0)
+		RETURN(0);
+	if (ostname && d->msp_ost && (strcmp(d->msp_ost, ostname) != 0))
+		RETURN(0);
+
+	/* Found a non-skipped marker match */
+	CDEBUG(D_MGS, "Matched pool rec %u cmd:0x%x %s.%s %s\n",
+	       rec->lrh_index, lcfg->lcfg_command, fsname, poolname,
+	       ostname ? ostname : "");
+
+	switch (lcfg->lcfg_command) {
+	case LCFG_POOL_ADD:
+		d->msp_status = POOL_STATUS_OST_EXIST;
+		RETURN(LLOG_PROC_BREAK);
+	case LCFG_POOL_REM:
+		d->msp_status = POOL_STATUS_EXIST;
+		RETURN(LLOG_PROC_BREAK);
+	case LCFG_POOL_NEW:
+		d->msp_status = POOL_STATUS_EXIST;
+		RETURN(LLOG_PROC_BREAK);
+	case LCFG_POOL_DEL:
+		d->msp_status = POOL_STATUS_NONE;
+		RETURN(LLOG_PROC_BREAK);
+	default:
+		break;
+	}
+
+	RETURN(0);
 }
 
 /**
- * Check an existing config log record with matching comment and device
+ * Search a pool in a MGS configuration.
  * Return code:
- * 0 - checked successfully,
- * LLOG_PROC_BREAK - record matches
+ * positive - return the status of the pool,
  * negative - error
  */
-static int mgs_check_marker(const struct lu_env *env, struct mgs_device *mgs,
-		struct fs_db *fsdb, struct mgs_target_info *mti,
-		char *logname, char *devname, char *comment)
+static
+int mgs_search_pool(const struct lu_env *env, struct mgs_device *mgs,
+		    struct fs_db *fsdb, struct mgs_target_info *mti,
+		    char *logname, char *devname, char *fsname, char *poolname,
+		    char *ostname)
 {
 	struct llog_handle *loghandle;
 	struct llog_ctxt *ctxt;
-	struct cfg_marker *mc_marker;
+	struct mgs_search_pool_data d;
+	int status = POOL_STATUS_NONE;
 	int rc;
 
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&fsdb->fsdb_mutex));
-	CDEBUG(D_MGS, "mgs check %s/%s/%s\n", logname, devname, comment);
+
+
+	d.msp_tgt = devname;
+	d.msp_fs = fsname;
+	d.msp_pool = poolname;
+	d.msp_ost = ostname;
+	d.msp_status = POOL_STATUS_NONE;
+	d.msp_skip = false;
 
 	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
 	LASSERT(ctxt != NULL);
@@ -829,32 +895,16 @@ static int mgs_check_marker(const struct lu_env *env, struct mgs_device *mgs,
 	if (llog_get_size(loghandle) <= 1)
 		GOTO(out_close, rc = 0);
 
-	OBD_ALLOC_PTR(mc_marker);
-	if (!mc_marker)
-		GOTO(out_close, rc = -ENOMEM);
-	if (strlcpy(mc_marker->cm_comment, comment,
-		sizeof(mc_marker->cm_comment)) >=
-		sizeof(mc_marker->cm_comment))
-		GOTO(out_free, rc = -E2BIG);
-	if (strlcpy(mc_marker->cm_tgtname, devname,
-		sizeof(mc_marker->cm_tgtname)) >=
-		sizeof(mc_marker->cm_tgtname))
-		GOTO(out_free, rc = -E2BIG);
-
-	rc = llog_process(env, loghandle, mgs_check_record_match,
-			(void *)mc_marker, NULL);
-
-out_free:
-	OBD_FREE_PTR(mc_marker);
+	rc = llog_reverse_process(env, loghandle, mgs_search_pool_cb, &d, NULL);
+	if (rc == LLOG_PROC_BREAK)
+		status = d.msp_status;
 
 out_close:
 	llog_close(env, loghandle);
 out_pop:
-	if (rc && rc != LLOG_PROC_BREAK)
-		CDEBUG(D_ERROR, "%s: mgs check %s/%s failed: rc = %d\n",
-			mgs->mgs_obd->obd_name, mti->mti_svname, comment, rc);
 	llog_ctxt_put(ctxt);
-	RETURN(rc);
+
+	RETURN(rc < 0 ? rc : status);
 }
 
 static int mgs_modify_handler(const struct lu_env *env,
@@ -5814,6 +5864,75 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	RETURN(rc);
 }
 
+static inline
+int mgs_pool_check_ostname(struct fs_db *fsdb, char *fsname, char *ostname)
+{
+	char *ptr;
+	unsigned int index;
+
+	/* check if ostname match fsname */
+	ptr = strrchr(ostname, '-');
+	if (!ptr || (strncmp(fsname, ostname, ptr - ostname) != 0))
+		RETURN(-EINVAL);
+
+	ptr++;
+	if (sscanf(ptr, "OST%04x_UUID", &index) != 1)
+		return -EINVAL;
+	if (index > INDEX_MAP_MAX_VALUE)
+		return -ERANGE;
+	if (!test_bit(index, fsdb->fsdb_ost_index_map))
+		return -ENODEV;
+
+	return 0;
+}
+
+static
+int mgs_pool_sanity(const struct lu_env *env, struct mgs_device *mgs,
+		    struct fs_db *fsdb, struct mgs_target_info *mti,
+		    char *logname, char *devname, enum lcfg_command_type cmd,
+		    char *fsname, char *poolname, char *ostname)
+{
+	char *lov = fsdb->fsdb_clilov;
+	int status;
+	int rc = 0;
+
+	status = mgs_search_pool(env, mgs, fsdb, mti, logname, lov,
+				 fsname, poolname, ostname);
+	if (status < 0)
+		return status;
+
+	switch (cmd) {
+	case LCFG_POOL_NEW:
+		if (status >= POOL_STATUS_EXIST)
+			rc = -EEXIST;
+		break;
+	case LCFG_POOL_ADD:
+		if (status == POOL_STATUS_NONE)
+			rc = -ENOMEDIUM;
+		else if (status == POOL_STATUS_OST_EXIST)
+			rc = -EEXIST;
+		break;
+	case LCFG_POOL_REM:
+		if (status == POOL_STATUS_NONE)
+			rc = -ENOMEDIUM;
+		if (status != POOL_STATUS_OST_EXIST)
+			rc = -ENOENT;
+		break;
+	case LCFG_POOL_DEL:
+		if (status == POOL_STATUS_NONE)
+			rc = -ENOENT;
+		if (status == POOL_STATUS_OST_EXIST)
+			rc = -ENOTEMPTY;
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+	return rc;
+}
+
+
 int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		 enum lcfg_command_type cmd, char *fsname,
 		 char *poolname, char *ostname)
@@ -5821,14 +5940,17 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	struct fs_db *fsdb;
 	char *lovname;
 	char *logname;
-	char *label = NULL, *canceled_label = NULL;
+	char *label = NULL;
+	char *canceled_label = NULL;
 	int label_sz;
 	struct mgs_target_info *mti = NULL;
-	bool checked = false;
-	bool locked = false;
-	bool free = false;
 	int rc, i;
 	ENTRY;
+
+	if ((cmd == LCFG_POOL_REM || cmd == LCFG_POOL_ADD) && !ostname)
+		RETURN(-EINVAL);
+	if ((cmd == LCFG_POOL_DEL || cmd == LCFG_POOL_NEW) && ostname)
+		ostname = NULL;
 
 	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
 	if (rc) {
@@ -5837,20 +5959,15 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	}
 	if (test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
 		CERROR("%s is not defined\n", fsname);
-		free = true;
+		mgs_unlink_fsdb(mgs, fsdb);
 		GOTO(out_fsdb, rc = -EINVAL);
 	}
 
 	label_sz = 10 + strlen(fsname) + strlen(poolname);
-
-	/* check if ostname match fsname */
-	if (ostname != NULL) {
-		char *ptr;
-
-		ptr = strrchr(ostname, '-');
-		if ((ptr == NULL) ||
-		    (strncmp(fsname, ostname, ptr-ostname) != 0))
-			RETURN(-EINVAL);
+	if (ostname) {
+		rc =  mgs_pool_check_ostname(fsdb, fsname, ostname);
+		if (rc)
+			GOTO(out_fsdb, rc);
 		label_sz += strlen(ostname);
 	}
 
@@ -5877,6 +5994,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		OBD_ALLOC(canceled_label, label_sz);
 		if (canceled_label == NULL)
 			GOTO(out_label, rc = -ENOMEM);
+
 		sprintf(label, "del %s.%s", fsname, poolname);
 		sprintf(canceled_label, "new %s.%s", fsname, poolname);
 		break;
@@ -5885,94 +6003,77 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	}
 
 	OBD_ALLOC_PTR(mti);
-	if (mti == NULL)
+	if (!mti)
 		GOTO(out_cancel, rc = -ENOMEM);
-	strncpy(mti->mti_svname, "lov pool", sizeof(mti->mti_svname));
+	strscpy(mti->mti_svname, "lov pool", sizeof(mti->mti_svname));
 
 	mutex_lock(&fsdb->fsdb_mutex);
-	locked = true;
-	/* write pool def to all MDT logs */
-	for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-		if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
-			rc = name_create_mdt_and_lov(&logname, &lovname,
-						     fsdb, i);
-			if (rc)
-				GOTO(out_mti, rc);
-
-			if (!checked && (canceled_label == NULL)) {
-				rc = mgs_check_marker(env, mgs, fsdb, mti,
-						      logname, lovname, label);
-				if (rc) {
-					name_destroy(&logname);
-					name_destroy(&lovname);
-					GOTO(out_mti,
-					     rc = (rc == LLOG_PROC_BREAK ?
-						   -EEXIST : rc));
-				}
-				checked = true;
-			}
-			if (canceled_label != NULL)
-				rc = mgs_modify(env, mgs, fsdb, mti, logname,
-						lovname, canceled_label,
-						CM_SKIP);
-
-			if (rc >= 0)
-				rc = mgs_write_log_pool(env, mgs, logname,
-							fsdb, lovname, cmd,
-							fsname, poolname,
-							ostname, label);
-			name_destroy(&logname);
-			name_destroy(&lovname);
-			if (rc)
-				GOTO(out_mti, rc);
-		}
-	}
 
 	rc = name_create(&logname, fsname, "-client");
 	if (rc)
-		GOTO(out_mti, rc);
+		GOTO(out_unlock, rc);
 
-	if (!checked && (canceled_label == NULL)) {
-		rc = mgs_check_marker(env, mgs, fsdb, mti, logname,
-				      fsdb->fsdb_clilov, label);
-		if (rc) {
-			name_destroy(&logname);
-			GOTO(out_mti, rc = (rc == LLOG_PROC_BREAK ?
-					    -EEXIST : rc));
-		}
-	}
-	if (canceled_label != NULL) {
+	rc = mgs_pool_sanity(env, mgs, fsdb, mti, logname, fsdb->fsdb_clilov,
+			     cmd, fsname, poolname, ostname);
+	if (rc < 0)
+		GOTO(out_logname, rc);
+
+	if (canceled_label)
 		rc = mgs_modify(env, mgs, fsdb, mti, logname,
 				fsdb->fsdb_clilov, canceled_label, CM_SKIP);
-		if (rc < 0) {
-			name_destroy(&logname);
-			GOTO(out_mti, rc);
-		}
-	}
+
+	if (rc < 0)
+		GOTO(out_logname, rc);
 
 	rc = mgs_write_log_pool(env, mgs, logname, fsdb, fsdb->fsdb_clilov,
 				cmd, fsname, poolname, ostname, label);
-	mutex_unlock(&fsdb->fsdb_mutex);
-	locked = false;
+	if (rc < 0)
+		GOTO(out_logname, rc);
+
 	name_destroy(&logname);
+
+	/* write pool def to all MDT logs */
+	for_each_set_bit(i, fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE) {
+		rc = name_create_mdt_and_lov(&logname, &lovname, fsdb, i);
+		if (rc)
+			GOTO(out_unlock, rc);
+
+		if (canceled_label)
+			rc = mgs_modify(env, mgs, fsdb, mti, logname, lovname,
+					canceled_label, CM_SKIP);
+
+		if (rc < 0)
+			GOTO(out_names, rc);
+
+		rc = mgs_write_log_pool(env, mgs, logname, fsdb, lovname, cmd,
+					fsname, poolname, ostname, label);
+		if (rc)
+			GOTO(out_names, rc);
+
+		name_destroy(&logname);
+		name_destroy(&lovname);
+	}
+	mutex_unlock(&fsdb->fsdb_mutex);
+
 	/* request for update */
 	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_CONFIG);
 
 	GOTO(out_mti, rc);
 
+out_names:
+	name_destroy(&lovname);
+out_logname:
+	name_destroy(&logname);
+out_unlock:
+	mutex_unlock(&fsdb->fsdb_mutex);
 out_mti:
-	if (locked)
-		mutex_unlock(&fsdb->fsdb_mutex);
-	if (mti != NULL)
-		OBD_FREE_PTR(mti);
+	OBD_FREE_PTR(mti);
 out_cancel:
-	if (canceled_label != NULL)
+	if (canceled_label)
 		OBD_FREE(canceled_label, label_sz);
 out_label:
 	OBD_FREE(label, label_sz);
 out_fsdb:
-	if (free)
-		mgs_unlink_fsdb(mgs, fsdb);
 	mgs_put_fsdb(mgs, fsdb);
 
 	return rc;

@@ -3272,94 +3272,6 @@ static char *get_event_filter(__u32 cmd)
 	return NULL;
 }
 
-/**
- * Callback to search ostname in llog
- * - { index: 23, event: attach, device: lustre-OST0000-osc, type: osc,
- *     UUID: lustre-clilov_UUID }
- * - { index: 24, event: setup, device: lustre-OST0000-osc,
- *     UUID: lustre-OST0000_UUID, node: 192.168.0.120@tcp }
- * - { index: 25, event: add_osc, device: lustre-clilov,
- *     ost: lustre-OST0000_UUID, index: 0, gen: 1 }
- *
- * \param record[in]	pointer to llog record
- * \param data[in]	pointer to ostname
- *
- * \retval		1 if ostname is found
- *			0 if ostname is not found
- *			-ENOENT if ostname is deleted
- *			-ENOMEM if Error allocating memory
- */
-static int llog_search_ost_cb(const char *record, void *data)
-{
-	char *ostname = data;
-	char ost_filter[MAX_STRING_SIZE] = {'\0'};
-	char *add_osc, *del_osc, *setup, *cleanup;
-	int rc = -ENOMEM;
-
-	add_osc = get_event_filter(LCFG_LOV_ADD_OBD);
-	if (!add_osc)
-		goto out;
-
-	del_osc = get_event_filter(LCFG_LOV_DEL_OBD);
-	if (!del_osc)
-		goto out;
-
-	setup = get_event_filter(LCFG_SETUP);
-	if (!setup)
-		goto out;
-
-	cleanup = get_event_filter(LCFG_CLEANUP);
-	if (!cleanup)
-		goto out;
-
-	if (ostname && ostname[0])
-		snprintf(ost_filter, sizeof(ost_filter), " %s,", ostname);
-
-	rc = 0;
-	if (strstr(record, ost_filter)) {
-		if (strstr(record, add_osc) || strstr(record, setup)) {
-			rc = 1;
-			goto out_setup;
-		}
-		if (strstr(record, del_osc) || strstr(record, cleanup)) {
-			rc = -ENOENT;
-			goto out_setup;
-		}
-	}
-out_setup:
-	free(cleanup);
-	free(setup);
-	free(del_osc);
-	free(add_osc);
-out:
-	return rc;
-}
-
-/**
- * Search ost in llog
- *
- * \param logname[in]		pointer to config log name
- * \param last_index[in]	the index of the last llog record
- * \param ostname[in]		pointer to ost name
- *
- * \retval			1 if ostname is found
- *				0 if ostname is not found
- */
-static int llog_search_ost(char *logname, long last_index, char *ostname)
-{
-	long start, end, inc = MAX_IOC_BUFLEN / 128;
-	int rc = 0;
-
-	for (end = last_index; end > 1; end -= inc) {
-		start = end - inc > 0 ? end - inc : 1;
-		rc = jt_llog_print_iter(logname, start, end, llog_search_ost_cb,
-					ostname, true, false);
-		if (rc)
-			break;
-	}
-
-	return (rc == 1 ? 1 : 0);
-}
 
 struct llog_del_ost_priv {
 	char *logname;
@@ -3468,158 +3380,6 @@ static int llog_del_ost(char *logname, long last_index, char *ostname,
 	return rc;
 }
 
-struct llog_pool_data {
-	char lpd_fsname[LUSTRE_MAXFSNAME + 1];
-	char lpd_poolname[LOV_MAXPOOLNAME + 1];
-	char lpd_ostname[MAX_OBD_NAME + 1];
-	enum lcfg_command_type lpd_cmd_type;
-	bool lpd_pool_exists;
-	int lpd_ost_num;
-};
-
-/**
- * Called for each formatted line in the config log (within range).
- *
- * - { index: 74, event: new_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
- * - { index: 77, event: add_pool, device: tfs-clilov, fsname: tfs, pool: tmp,
- *     ost: tfs-OST0000_UUID }
- * - { index: 224, event: remove_pool, device: tfs-clilov, fsname: tfs,
- *     pool: tmp, ost: tfs-OST0003_UUID }
- * - { index: 227, event: del_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
- *
- * \param record[in]	pointer to llog record
- * \param data[in]	pointer to llog_pool_data
- *
- * \retval		1 if pool or OST is found
- *			0 if pool or OST is not found
- *			-ENOENT if pool or OST is removed
- */
-static int llog_search_pool_cb(const char *record, void *data)
-{
-	struct llog_pool_data *lpd = data;
-	char pool_filter[MAX_STRING_SIZE] = "";
-	char *new_pool, *del_pool, *add_pool, *rem_pool;
-	char *found = NULL;
-	int fs_pool_len = 0, rc = 0;
-
-	new_pool = get_event_filter(LCFG_POOL_NEW);
-	del_pool = get_event_filter(LCFG_POOL_DEL);
-	add_pool = get_event_filter(LCFG_POOL_ADD);
-	rem_pool = get_event_filter(LCFG_POOL_REM);
-	if (!new_pool || !del_pool || !add_pool || !rem_pool) {
-		rc = -ENOMEM;
-		goto out;
-	}
-
-	fs_pool_len = 16 + strlen(lpd->lpd_fsname) + strlen(lpd->lpd_poolname);
-	snprintf(pool_filter, fs_pool_len + 1, "fsname: %s, pool: %s",
-		 lpd->lpd_fsname, lpd->lpd_poolname);
-
-	/* search poolname */
-	found = strstr(record, pool_filter);
-	if (found &&
-	    (found[fs_pool_len] == ' ' || found[fs_pool_len] == ',')) {
-		if (strstr(record, new_pool)) {
-			lpd->lpd_pool_exists = true;
-			rc = 1;
-			goto out;
-		}
-		if (strstr(record, del_pool)) {
-			lpd->lpd_pool_exists = false;
-			rc = -ENOENT;
-			goto out;
-		}
-
-		if (lpd->lpd_cmd_type == LCFG_POOL_NEW ||
-		    lpd->lpd_cmd_type == LCFG_POOL_DEL) {
-			/* In function mgs_pool_cmd(), a pool's pool_new/add
-			 * record will be marked as "SKIP" if its pool_destroy/
-			 * remove record is logged later. That means the "SKIP"
-			 * record won't be printed here and thus lpd_ost_num
-			 * doesn't need to be decreased as well.
-			 */
-			if (strstr(record, add_pool))
-				lpd->lpd_ost_num++;
-		} else if (lpd->lpd_ostname[0] != '\0') {
-			if (strstr(record, lpd->lpd_ostname)) {
-				lpd->lpd_pool_exists = true;
-				if (strstr(record, add_pool)) {
-					lpd->lpd_ost_num = 1;
-					rc = 1;
-					goto out;
-				}
-				if (strstr(record, rem_pool)) {
-					lpd->lpd_ost_num = 0;
-					rc = -ENOENT;
-					goto out;
-				}
-			}
-		}
-	}
-out:
-	if (new_pool)
-		free(new_pool);
-	if (del_pool)
-		free(del_pool);
-	if (add_pool)
-		free(add_pool);
-	if (rem_pool)
-		free(rem_pool);
-
-	return rc;
-}
-
-/* Search pool and its ost in llog
- *
- * \param logname[in]		pointer to config log name
- * \param last_index[in]	the index of the last llog record
- * \param fsname[in]		pointer to filesystem name
- * \param poolname[in]		pointer pool name
- * \param ostname[in]		pointer to OST name(OSTnnnn-UUID)
- * \param cmd[in]		pool command type
- *
- * \retval			< 0 on error
- *				0 if pool is empty or OST is not found
- *				1 if pool is not empty or OST is found
- */
-static int llog_search_pool(char *logname, long last_index, char *fsname,
-			    char *poolname, char *ostname,
-			    enum lcfg_command_type cmd)
-{
-	struct llog_pool_data lpd;
-	long start, end, inc = MAX_IOC_BUFLEN / 128;
-	int rc = 0;
-
-	memset(&lpd, 0, sizeof(lpd));
-	lpd.lpd_cmd_type = cmd;
-	lpd.lpd_pool_exists = false;
-	lpd.lpd_ost_num = 0;
-	strncpy(lpd.lpd_fsname, fsname, sizeof(lpd.lpd_fsname) - 1);
-	if (poolname && poolname[0])
-		strncpy(lpd.lpd_poolname, poolname,
-			sizeof(lpd.lpd_poolname) - 1);
-	if (ostname && ostname[0])
-		strncpy(lpd.lpd_ostname, ostname, sizeof(lpd.lpd_ostname) - 1);
-
-	for (end = last_index; end > 1; end -= inc) {
-		start = end - inc > 0 ? end - inc : 1;
-		rc = jt_llog_print_iter(logname, start, end,
-					llog_search_pool_cb, &lpd, true, false);
-		if (rc) {
-			if (rc == 1 && lpd.lpd_pool_exists)
-				rc = lpd.lpd_ost_num ? 1 : 0;
-			else if (rc == -ENOENT && lpd.lpd_pool_exists &&
-				 !lpd.lpd_ost_num)
-				rc = 0;
-			goto out;
-		}
-	}
-
-	rc = -ENOENT;
-out:
-	return rc;
-}
-
 static bool combined_mgs_mds(char *fsname)
 {
 	glob_t path;
@@ -3635,103 +3395,85 @@ static bool combined_mgs_mds(char *fsname)
 	return false;
 }
 
-/*
- * if pool is NULL, search ostname in target_obd
- * if pool is not NULL:
- *  - if pool not found returns errno < 0
- *  - if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
- *  - if ostname is not NULL, returns 1 if OST is in pool and 0 if not
- */
-int lctl_search_ost(char *fsname, char *poolname, char *ostname,
-		    enum lcfg_command_type cmd)
+static
+void pool_cmd_interpret_err(enum lcfg_command_type cmd, char *cmdname,
+			    char *fullpool, char *fsname, char *ostname, int rc)
 {
-	char logname[MAX_OBD_NAME] = {'\0'};
-	long last_index;
-
-	if (fsname && fsname[0] == '\0')
-		fsname = NULL;
-	if (!fsname)
-		return -EINVAL;
-
-	if (combined_mgs_mds(fsname))
-		return llapi_search_ost(fsname, poolname, ostname);
-
-	/* fetch the last_index of llog record */
-	snprintf(logname, sizeof(logname), "%s-client", fsname);
-	last_index = llog_last_index(logname);
-	if (last_index < 0)
-		return last_index;
-
-	/* if pool is NULL, search ostname in target_obd */
-	if (!poolname && ostname)
-		return llog_search_ost(logname, last_index, ostname);
-
-	return llog_search_pool(logname, last_index, fsname, poolname,
-				ostname, cmd);
-}
-
-static int check_pool_cmd(enum lcfg_command_type cmd, char *fsname,
-			  char *poolname, char *ostname)
-{
-	int rc;
-
-	rc = lctl_search_ost(fsname, poolname, ostname, cmd);
-	if (rc < 0 && (cmd != LCFG_POOL_NEW)) {
-		fprintf(stderr, "Pool %s.%s not found\n",
-			fsname, poolname);
-		return rc;
+	switch (rc) {
+	case -ENAMETOOLONG:
+		fprintf(stderr,
+			"%s: either the pool or file system name is too long (max pool name len is %d and file system name is %d)\n",
+			jt_cmdname(cmdname), LOV_MAXPOOLNAME, LUSTRE_MAXFSNAME);
+		return;
+	case -EINVAL:
+		fprintf(stderr,
+			"%s: can contain only alphanumeric characters, underscores, and dashes besides the required '.'\n",
+			jt_cmdname(cmdname));
+		return;
+	default:
+		break;
 	}
 
 	switch (cmd) {
-	case LCFG_POOL_NEW: {
-		if (ostname)
-			return -EINVAL;
-
-		if (rc >= 0) {
-			fprintf(stderr, "Pool %s.%s already exists\n",
-				fsname, poolname);
-			return -EEXIST;
-		}
-		return 0;
-	}
-	case LCFG_POOL_DEL: {
-		if (ostname)
-			return -EINVAL;
-
-		if (rc == 1) {
+	case LCFG_POOL_NEW:
+	case LCFG_POOL_DEL:
+		if (rc == -EEXIST)
+			fprintf(stderr, "%s: pool %s already exists\n",
+				jt_cmdname(cmdname), fullpool);
+		else if (rc == -ENOENT)
+			fprintf(stderr, "%s: pool %s not found\n",
+				jt_cmdname(cmdname), fullpool);
+		else if (rc == -ENOTEMPTY)
 			fprintf(stderr,
-				"Pool %s.%s not empty, please remove all members\n",
-				fsname, poolname);
-			return -ENOTEMPTY;
-		}
-		return 0;
-	}
-	case LCFG_POOL_ADD: {
-		if (rc == 1) {
-			fprintf(stderr, "OST %s is already in pool %s.%s\n",
-				ostname, fsname, poolname);
-			return -EEXIST;
-		}
-		rc = lctl_search_ost(fsname, NULL, ostname, cmd);
-		if (rc == 0) {
-			fprintf(stderr, "OST %s is not part of the '%s' fs.\n",
-				ostname, fsname);
-			return -ENOENT;
-		}
-		return 0;
-	}
-	case LCFG_POOL_REM: {
-		if (rc == 0) {
-			fprintf(stderr, "OST %s not found in pool %s.%s\n",
-				ostname, fsname, poolname);
-			return -ENOENT;
-		}
-		return 0;
-	}
+				"%s: pool %s not empty, please remove all members\n",
+				jt_cmdname(cmdname), fullpool);
+		else if (rc)
+			fprintf(stderr, "%s %s: %s\n",
+				jt_cmdname(cmdname), fullpool, strerror(-rc));
+		break;
+	case LCFG_POOL_ADD:
+	case LCFG_POOL_REM:
+		if (rc == -ENOMEDIUM)
+			fprintf(stderr, "%s: pool %s not found\n",
+				jt_cmdname(cmdname), fullpool);
+		else if (rc == -EEXIST)
+			fprintf(stderr, "%s: %s is already in pool %s\n",
+				jt_cmdname(cmdname), ostname, fullpool);
+		else if (rc == -ENODEV)
+			fprintf(stderr, "%s: %s is not part of the '%s' fs.\n",
+				jt_cmdname(cmdname), ostname, fsname);
+		else if (rc == -ENOENT)
+			fprintf(stderr, "%s: %s not found in pool %s\n",
+				jt_cmdname(cmdname), ostname, fullpool);
+		else if (rc)
+			fprintf(stderr, "%s %s %s: %s\n",
+				jt_cmdname(cmdname), fullpool, ostname,
+				strerror(-rc));
+		break;
 	default:
 		break;
-	} /* switch */
-	return -EINVAL;
+	}
+}
+
+static int get_mgc_requeue_timeout_min(void)
+{
+	const char *path = "/sys/module/mgc/parameters/mgc_requeue_timeout_min";
+	FILE *fp;
+	char buf[PATH_MAX] = { 0 };
+	int val = 5;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return val;
+
+	if (!fgets(buf, sizeof(buf), fp))
+		goto out;
+
+	val = atoi(buf);
+out:
+	fclose(fp);
+
+	return val;
 }
 
 /*
@@ -3743,13 +3485,20 @@ static int check_pool_cmd(enum lcfg_command_type cmd, char *fsname,
 static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 				 char *poolname, char *ostname)
 {
-	int cpt = 10;
+	int cpt;
 	int rc = 0;
+
+	/* mgs is standalone -> no client to wait */
+	if (!combined_mgs_mds(fsname))
+		return 0;
+
+	/* max time to wait a client */
+	cpt = 2 * get_mgc_requeue_timeout_min() + 2;
 
 	switch (cmd) {
 	case LCFG_POOL_NEW: {
 		do {
-			rc = lctl_search_ost(fsname, poolname, NULL, cmd);
+			rc = llapi_search_ost(fsname, poolname, NULL);
 			if (rc == -ENODEV)
 				return rc;
 			if (rc < 0)
@@ -3768,7 +3517,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 	}
 	case LCFG_POOL_DEL: {
 		do {
-			rc = lctl_search_ost(fsname, poolname, NULL, cmd);
+			rc = llapi_search_ost(fsname, poolname, NULL);
 			if (rc == -ENODEV)
 				return rc;
 			if (rc >= 0)
@@ -3787,7 +3536,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 	}
 	case LCFG_POOL_ADD: {
 		do {
-			rc = lctl_search_ost(fsname, poolname, ostname, cmd);
+			rc = llapi_search_ost(fsname, poolname, ostname);
 			if (rc == -ENODEV)
 				return rc;
 			if (rc != 1)
@@ -3805,7 +3554,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 	}
 	case LCFG_POOL_REM: {
 		do {
-			rc = lctl_search_ost(fsname, poolname, ostname, cmd);
+			rc = llapi_search_ost(fsname, poolname, ostname);
 			if (rc == -ENODEV)
 				return rc;
 			if (rc == 1)
@@ -3829,24 +3578,27 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 
 static int check_and_complete_ostname(char *fsname, char *ostname)
 {
+	char real_ostname[UUID_MAX];
 	char *ptr;
-	char real_ostname[MAX_OBD_NAME + 1];
+	int len;
 	char i;
+
+	if (strlen(ostname) >= sizeof(real_ostname))
+		return -ENAMETOOLONG;
 
 	/* if OST name does not start with fsname, we add it */
 	/* if not check if the fsname is the right one */
 	ptr = strchr(ostname, '-');
 	if (!ptr) {
-		snprintf(real_ostname, MAX_OBD_NAME + 1, "%s-%s", fsname,
-			 ostname);
+		len = snprintf(real_ostname, sizeof(real_ostname), "%s-%s",
+			       fsname, ostname);
+		if (len < 0 || len >= sizeof(real_ostname))
+			return -ENAMETOOLONG;
 	} else if (strncmp(ostname, fsname, strlen(fsname)) != 0) {
 		fprintf(stderr, "%s does not start with fsname %s\n",
 			ostname, fsname);
 		return -EINVAL;
 	} else {
-		if (strlen(ostname) > sizeof(real_ostname) - 1)
-			return -E2BIG;
-
 		strncpy(real_ostname, ostname, sizeof(real_ostname));
 	}
 
@@ -3871,7 +3623,11 @@ static int check_and_complete_ostname(char *fsname, char *ostname)
 	/* real_ostname is fsname-OSTXXXX????? */
 	/* if OST name does not end with _UUID, we add it */
 	if (*ptr == '\0') {
-		strcat(real_ostname, "_UUID");
+		len = sizeof(real_ostname) - strlen(real_ostname) - 1;
+		if (sizeof("_UUID") - 1 > len)
+			return -ENAMETOOLONG;
+
+		strncat(real_ostname, "_UUID", len);
 	} else if (strcmp(ptr, "_UUID") != 0) {
 		fprintf(stderr,
 			"ostname %s does not end with _UUID\n", ostname);
@@ -3884,21 +3640,13 @@ static int check_and_complete_ostname(char *fsname, char *ostname)
 
 /* returns 0 or -errno */
 static int pool_cmd(enum lcfg_command_type cmd, char *cmdname,
-		    char *fullpoolname, char *fsname, char *poolname,
-		    char *ostname)
+		    char *fullpoolname, char *fsname, char *ostname)
 {
 	int rc = 0;
 	struct obd_ioctl_data data;
 	struct lustre_cfg_bufs bufs;
 	struct lustre_cfg *lcfg;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-
-	rc = check_pool_cmd(cmd, fsname, poolname, ostname);
-	if (rc == -ENODEV)
-		fprintf(stderr,
-			"Can't verify pool command since there is no local MDT or client, proceeding anyhow...\n");
-	else if (rc)
-		return rc;
 
 	lustre_cfg_bufs_reset(&bufs, NULL);
 	lustre_cfg_bufs_set_string(&bufs, 0, cmdname);
@@ -3931,22 +3679,9 @@ static int pool_cmd(enum lcfg_command_type cmd, char *cmdname,
 	}
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_POOL, buf);
 out:
-	if (rc)
-		rc = -errno;
-	switch (rc) {
-	case -ENAMETOOLONG:
-		fprintf(stderr,
-			"error: %s: either the pool or file system name is too long (max pool name len is %d and file system name is %d)\n",
-			jt_cmdname(cmdname), LOV_MAXPOOLNAME, LUSTRE_MAXFSNAME);
-		break;
-	case -EINVAL:
-		fprintf(stderr,
-			"error: %s can contain only alphanumeric characters, underscores, and dashes besides the required '.'\n",
-			jt_cmdname(cmdname));
-	default:
-		break;
-	}
 	free(lcfg);
+	pool_cmd_interpret_err(cmd, cmdname, fullpoolname, fsname, ostname, rc);
+
 	return rc;
 }
 
@@ -5175,182 +4910,256 @@ static bool get_pools_path(char *fsname)
 	return (rc == 0);
 }
 
-static int extract_fsname_poolname(char **argv, char *fsname, char *poolname)
+#define POOL_LIST 0
+static
+int parse_pool_cmd_args(int argc, char **argv, bool *wait,
+			enum lcfg_command_type *cmd, char **fullpool,
+			char *fsname, char *poolname,
+			char ***ostargv, int *ostargc)
 {
-	char *cmd = argv[0], *param = argv[1];
-	char *ptr;
-	int rc, fsname_len;
+	char *cmdname, *param, *ptr;
+	int fsname_len;
 
-	ptr = strchr(param, '.');
-	if (!ptr) {
-		if (strcmp(cmd, "pool_list") == 0) {
-			snprintf(fsname, LUSTRE_MAXFSNAME + 1, "%s", param);
-			poolname[0] = '\0';
-			goto out;
-		}
-		fprintf(stderr, ". is missing in %s\n", param);
-		rc = -EINVAL;
-		goto err;
+	*wait = true;
+	*cmd = POOL_LIST;
+	*fullpool = NULL;
+	fsname[0] = '\0';
+	poolname[0] = '\0';
+	*ostargv = NULL;
+	*ostargc = 0;
+
+	if (argc < 1)
+		return CMD_NONE;
+
+	cmdname = *argv;
+	if (argc < 2)
+		return CMD_HELP;
+
+	argc--;
+	argv++;
+	if (strcmp(*argv, "--help") == 0 || strcmp(*argv, "-h") == 0)
+		return CMD_HELP;
+
+	if (strcmp(*argv, "--nowait") == 0 || strcmp(*argv, "-n") == 0) {
+		*wait = false;
+		argc--;
+		argv++;
 	}
 
-	fsname_len = ptr - param;
-	if (fsname_len == 0) {
-		fprintf(stderr, "fsname is empty\n");
-		rc = -EINVAL;
-		goto err;
-	} else if (fsname_len > LUSTRE_MAXFSNAME) {
-		fprintf(stderr, "fsname is too long\n");
-		rc = -EINVAL;
-		goto err;
+	if (!argc)
+		return CMD_HELP;
+
+	param = *argv;
+	*fullpool = param;
+	argc--;
+	argv++;
+	if (argc) {
+		*ostargv = argv;
+		*ostargc = argc;
+	}
+
+	if (strcmp("pool_new", cmdname) == 0)
+		*cmd = LCFG_POOL_NEW;
+	else if (strcmp("pool_destroy", cmdname) == 0)
+		*cmd = LCFG_POOL_DEL;
+	else if (strcmp("pool_remove", cmdname) == 0)
+		*cmd = LCFG_POOL_REM;
+	else if (strcmp("pool_add", cmdname) == 0)
+		*cmd = LCFG_POOL_ADD;
+	else if (strcmp("pool_list", cmdname) == 0)
+		*cmd = POOL_LIST;
+	else
+		return -EINVAL;
+
+	if ((*cmd == LCFG_POOL_REM || *cmd == LCFG_POOL_ADD) && !*ostargc)
+		return CMD_HELP;
+
+	ptr = strchr(param, '.');
+	if (!ptr && *cmd == POOL_LIST)
+		fsname_len = strlen(param);
+	else if (ptr)
+		fsname_len = ptr - param;
+	else
+		return -EINVAL;
+
+	if (fsname_len == 0)
+		return -EINVAL;
+	if (fsname_len > LUSTRE_MAXFSNAME) {
+		fprintf(stderr, "%s: fsname is too long\n", cmdname);
+		return -ENAMETOOLONG;
 	}
 
 	strncpy(fsname, param, fsname_len);
 	fsname[fsname_len] = '\0';
-	++ptr;
+	if (!ptr)
+		return 0;
 
-	if (ptr[0] == '\0') {
-		fprintf(stderr, "poolname is empty\n");
-		rc = -EINVAL;
-		goto err;
+	++ptr;
+	if (ptr[0] == '\0')
+		return -EINVAL;
+
+	if (strlen(ptr) > LOV_MAXPOOLNAME) {
+		fprintf(stderr, "%s: poolname is too long\n", cmdname);
+		return -ENAMETOOLONG;
 	}
 
-	snprintf(poolname, LOV_MAXPOOLNAME + 1, "%s", ptr);
+	strncpy(poolname, ptr, LOV_MAXPOOLNAME + 1);
 	if (lov_pool_is_reserved(poolname)) {
-		fprintf(stderr, "poolname cannot be '%s'\n", poolname);
+		fprintf(stderr, "%s: poolname cannot be '%s'\n",
+			cmdname, poolname);
 		return -EINVAL;
 	}
-out:
-	return 0;
 
-err:
-	fprintf(stderr, "argument %s must be <fsname>.<poolname>\n", param);
+	if (*wait && (*cmd != POOL_LIST) && !combined_mgs_mds(fsname)) {
+		int min_wait = get_mgc_requeue_timeout_min();
+
+		*wait = false;
+		fprintf(stderr,
+			"Warning, standalone MGS for \"%s\", unable to check pool updates on clients.\n"
+			"Verify if pools are updated on a client (client sync delay: %d-%ds).\n\n",
+			fsname, min_wait, 2 * min_wait);
+	}
+
+	return 0;
+}
+
+struct pool_ost_cmd {
+	int     rc;
+	char    ostname[UUID_MAX];
+};
+
+static
+int extract_ost_list(int argc, char **argv, char *fsname,
+		     struct pool_ost_cmd **out_osts)
+{
+	char format[2 * UUID_MAX];
+	int i;
+	int *array = NULL, array_sz;
+	struct pool_ost_cmd *ostlist = NULL;
+	int ostcnt = 0;
+	int rc;
+
+	if (argc < 1)
+		return -EINVAL;
+
+	/* generate full list of OSTs */
+	for (i = 0; i < argc; i++) {
+		int j, start;
+		struct pool_ost_cmd *tmp;
+
+		if (strlen(argv[i]) >= sizeof(format)) {
+			rc = -EINVAL;
+			goto err_freelist;
+		}
+
+		array_sz = get_array_idx(argv[i], format, &array);
+		if (array_sz == 0) {
+			rc = -EINVAL;
+			goto err_freelist;
+		}
+
+		start = ostcnt;
+		ostcnt += array_sz;
+		tmp = realloc(ostlist, ostcnt * sizeof(*ostlist));
+		if (!tmp) {
+			rc = -ENOMEM;
+			goto err_freearr;
+		}
+
+		ostlist = tmp;
+		for (j = 0; j < array_sz; j++) {
+			char tmp[UUID_MAX];
+
+			rc = snprintf(tmp, sizeof(tmp), format, array[j]);
+			if (rc < 0 || rc >= sizeof(tmp)) {
+				rc = -ENAMETOOLONG;
+				goto err_freearr;
+			}
+
+			rc = check_and_complete_ostname(fsname, tmp);
+			if (rc)
+				goto err_freearr;
+
+			strncpy(ostlist[start + j].ostname, tmp, UUID_MAX);
+		}
+
+		free(array);
+	}
+	*out_osts = ostlist;
+
+	return ostcnt;
+
+err_freearr:
+	free(array);
+err_freelist:
+	free(ostlist);
+	*out_osts = NULL;
+	fprintf(stderr, "Wrong format for OST list\n");
+
 	return rc;
 }
 
 int jt_pool_cmd(int argc, char **argv)
 {
 	enum lcfg_command_type cmd;
+	bool wait_client;
+	char *fullpool;
 	char fsname[LUSTRE_MAXFSNAME + 1];
 	char poolname[LOV_MAXPOOLNAME + 1];
 	int i, rc;
-	int *array = NULL, array_sz;
-	struct {
-		int     rc;
-		char    ostname[MAX_OBD_NAME + 1];
-	} *cmds = NULL;
-	int cmds_nr = 0, cmd_start = 0;
+	int ostargc = 0;
+	char **ostargv = NULL;
+	struct pool_ost_cmd *cmds = NULL;
+	int cmds_nr = 0;
 
-	switch (argc) {
-	case 0:
-	case 1: { rc = CMD_HELP; goto out_cmd; }
-	case 2: {
-		rc = extract_fsname_poolname(argv, fsname, poolname);
-		if (rc)
-			break;
+	rc = parse_pool_cmd_args(argc, argv, &wait_client, &cmd, &fullpool,
+				 fsname, poolname, &ostargv, &ostargc);
+	if (rc)
+		goto out;
 
-		if (strcmp("pool_new", argv[0]) == 0) {
-			cmd = LCFG_POOL_NEW;
-		} else if (strcmp("pool_destroy", argv[0]) == 0) {
-			cmd = LCFG_POOL_DEL;
-		} else if (strcmp("pool_list", argv[0]) == 0) {
-			if (get_pools_path(fsname))
-				return llapi_poollist(argv[1]);
-			if (get_mgs_device() > 0)
-				return llog_poollist(fsname, poolname);
-			fprintf(stderr,
-				"Cannot run pool_list command since there is no local MGS/MDT or client\n");
-			rc = CMD_HELP;
-			goto out_cmd;
-		} else {
-			rc = CMD_HELP;
-			goto out_cmd;
-		}
-
-		rc = pool_cmd(cmd, argv[0], argv[1], fsname, poolname, NULL);
-		if (rc)
-			break;
-
-		check_pool_cmd_result(cmd, fsname, poolname, NULL);
+	switch (cmd) {
+	case LCFG_POOL_NEW:
+	case LCFG_POOL_DEL:
+		rc = pool_cmd(cmd, argv[0], fullpool, fsname, NULL);
+		if (!rc && wait_client)
+			check_pool_cmd_result(cmd, fsname, poolname, NULL);
 		break;
-	}
-	default: {
-		char format[2 * MAX_OBD_NAME];
+	case LCFG_POOL_ADD:
+	case LCFG_POOL_REM:
+		rc = extract_ost_list(ostargc, ostargv, fsname, &cmds);
+		if (rc < 0)
+			goto out;
 
-		if (strcmp("pool_remove", argv[0]) == 0) {
-			cmd = LCFG_POOL_REM;
-		} else if (strcmp("pool_add", argv[0]) == 0) {
-			cmd = LCFG_POOL_ADD;
-		} else {
-			rc = CMD_HELP;
-			goto out_cmd;
+		cmds_nr = rc;
+		rc = 0;
+		for (i = 0; i < cmds_nr && rc != -EFAULT; i++) {
+			cmds[i].rc = pool_cmd(cmd, argv[0], fullpool, fsname,
+					      cmds[i].ostname);
+			rc = cmds[i].rc ? cmds[i].rc : rc;
 		}
 
-		rc = extract_fsname_poolname(argv, fsname, poolname);
-		if (rc)
-			break;
-
-		/* generate full list of OSTs */
-		for (i = 2; i < argc; i++) {
-			int j;
-
-			array_sz = get_array_idx(argv[i], format, &array);
-			if (array_sz == 0)
-				goto out;
-
-			cmd_start = cmds_nr;
-			cmds_nr += array_sz;
-			cmds = realloc(cmds, cmds_nr * sizeof(cmds[0]));
-			if (cmds == NULL) {
-				rc = -ENOMEM;
-				goto out;
-			}
-
-			for (j = 0; j < array_sz; j++) {
-				char *ostname = cmds[cmd_start + j].ostname;
-				int rc2;
-
-				snprintf(ostname, MAX_OBD_NAME, format,
-					 array[j]);
-				ostname[MAX_OBD_NAME] = '\0';
-
-				rc2 = check_and_complete_ostname(fsname,
-								ostname);
-				if (rc2) {
-					rc = rc ? rc : rc2;
-					goto out;
-				}
-			} /* for(j) */
-		} /* for(i) */
-		/* submit all commands */
-		for (i = 0; i < cmds_nr; i++) {
-			cmds[i].rc = pool_cmd(cmd, argv[0], argv[1], fsname,
-					      poolname, cmds[i].ostname);
-			/* Return an err if any of the add/dels fail */
-			if (!rc)
-				rc = cmds[i].rc;
-		}
 		/* check results */
-		for (i = 0; i < cmds_nr; i++) {
-			if (!cmds[i].rc) {
+		for (i = 0; i < cmds_nr && rc != -EFAULT; i++) {
+			if (!rc && wait_client)
 				check_pool_cmd_result(cmd, fsname, poolname,
 						      cmds[i].ostname);
-			}
 		}
-		fallthrough;
+
+		free(cmds);
+		break;
+	default:
+		if (get_pools_path(fsname))
+			rc = llapi_poollist(fullpool);
+		else if (get_mgs_device() > 0)
+			rc = llog_poollist(fsname, poolname);
 	}
-	} /* switch */
+
+	return rc;
 
 out:
-	if (array)
-		free(array);
-	if (cmds)
-		free(cmds);
+	if (rc < 0)
+		fprintf(stderr, "%s: %s\n", argv[0], strerror(-rc));
 
-	if (rc != 0) {
-		errno = -rc;
-		perror(argv[0]);
-	}
-out_cmd:
 	return rc;
 }
 

@@ -262,16 +262,16 @@ command_t cmdlist[] = {
 	{"===  Pools ==", NULL, 0, "pool management"},
 	{"pool_new", jt_pool_cmd, 0,
 	 "add a new pool\n"
-	 "usage: pool_new <fsname>.<poolname>"},
+	 "usage: pool_new [-n|--nowait] <fsname>.<poolname>"},
 	{"pool_add", jt_pool_cmd, 0,
 	 "add the named OSTs to the pool\n"
-	 "usage: pool_add <fsname>.<poolname> <ostname indexed list>"},
+	 "usage: pool_add [-n|--nowait] <fsname>.<poolname> <ostname indexed list>"},
 	{"pool_remove", jt_pool_cmd, 0,
 	 "remove the named OST from the pool\n"
-	 "usage: pool_remove <fsname>.<poolname> <ostname indexed list>"},
+	 "usage: pool_remove [-n|--nowait] <fsname>.<poolname> <ostname indexed list>"},
 	{"pool_destroy", jt_pool_cmd, 0,
 	 "destroy a pool\n"
-	 "usage: pool_destroy <fsname>.<poolname>"},
+	 "usage: pool_destroy [-n|--nowait] <fsname>.<poolname>"},
 	{"pool_list", jt_pool_cmd, 0,
 	 "list pools and pools members\n"
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},

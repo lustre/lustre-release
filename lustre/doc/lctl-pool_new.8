@@ -2,7 +2,8 @@
 .SH NAME
 lctl-pool_new \- create a new OST pool
 .SH SYNOPSIS
-.B lctl pool_new \fI<fsname>.<poolname>\fR
+.BR "lctl pool_new" " [" --nowait | -n "] "
+.IR <fsname> . <pool>
 
 .SH DESCRIPTION
 Create a list of OSTs with the name
@@ -12,10 +13,16 @@ in the filesystem named
 The
 .B lctl pool_new
 command must be run on the MGS node and can only be used by the
-root user.  If the MGS is on a separate node from the MDS, a
-Lustre client must be mounted while the
+root user.
+
+.BR NOTE:
+After updating the MGS configuration, this command tries to wait and
+check if pools are updated on a client.
+If the MGS is on a separate node from the MDS, a Lustre client must
+be mounted on the MGS node while the
 .B lctl
-commands are being run.
+commands are being run for this. Otherwise, the client check is
+skipped.
 
 This named list of OSTs can be used by
 .BR lfs-setstripe (1)
@@ -24,6 +31,16 @@ to specify the OSTs on which new files can be created, and
 to locate files that were created on the specified pool.  As well,
 .BR lfs-df (1)
 can show only the free space or inodes in a named pool.
+
+.SH OPTIONS
+.TP
+.BR -n ", " --nowait
+Do not wait and check if pool is updated on a client. This is useful
+when calling a lot of "
+.B lctl
+pool_*" in a row. This avoids revoking the clients "CONFIG" lock for each
+command (by default clients retake their lock and update their configurations
+in a delay between 5-10s).
 
 .SH EXAMPLES
 .TP

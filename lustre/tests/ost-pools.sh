@@ -432,6 +432,45 @@ test_2e() {
 }
 run_test 2e "pool_add: OST already in a pool should be rejected"
 
+test_2f() {
+	local mgc_timeout_path=/sys/module/mgc/parameters/mgc_requeue_timeout_min
+	local mgc_timeout
+	local tgt="$FSNAME-OST0000_UUID"
+	local rc
+
+	(( MGS_VERSION >= $(version_code 2.15.60) )) ||
+		skip "Need MGS version at least 2.15.60"
+
+	mgc_timeout=$(cat $mgc_timeout_path)
+	echo 5 > $mgc_timeout_path
+	stack_trap "echo $mgc_timeout > $mgc_timeout_path"
+
+	do_facet mgs timeout 4 $LCTL pool_new -n $FSNAME.$POOL || rc=$?
+	((rc != 124)) || error "lctl pool_new -n $FSNAME.$POOL timeout"
+	((rc == 0)) || error "lctl pool_new -n $FSNAME.$POOL failed"
+
+	do_facet mgs timeout 4 $LCTL pool_add -n $FSNAME.$POOL $tgt || rc=$?
+	((rc != 124)) || error "lctl pool_new -n $FSNAME.$POOL timeout"
+	((rc == 0)) || error "lctl pool_new -n $FSNAME.$POOL failed"
+
+	wait_update_facet mds1 \
+		"lctl pool_list $FSNAME.$POOL 2> /dev/null | sed '1d'" "$tgt" ||
+		error "Add $tgt to $FSNAME.$POOL failed"
+
+	do_facet mgs timeout 4 $LCTL pool_remove -n $FSNAME.$POOL $tgt || rc=$?
+	((rc != 124)) || error "lctl pool_remove -n $FSNAME.$POOL timeout"
+	((rc == 0)) || error "lctl pool_remove -n $FSNAME.$POOL failed"
+
+	do_facet mgs timeout 4 $LCTL pool_destroy -n $FSNAME.$POOL || rc=$?
+	((rc != 124)) || error "lctl pool_destroy -n $FSNAME.$POOL timeout"
+	((rc == 0)) || error "lctl pool_destroy -n $FSNAME.$POOL failed"
+
+	wait_update_facet mds1 \
+		"lctl pool_list $FSNAME.$POOL &> /dev/null || echo destroy" "destroy" ||
+		error "destroy $FSNAME.$POOL failed"
+}
+run_test 2f "check -n|--nowait option"
+
 test_3a() {
 	lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
 	[[ $? -ne 0 ]] || destroy_pool $POOL
