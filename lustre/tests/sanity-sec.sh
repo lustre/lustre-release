@@ -144,23 +144,48 @@ sec_setup
 test_0() {
 	umask 0022
 
-	chmod 0755 $DIR || error "chmod (1)"
-	rm -rf $DIR/$tdir || error "rm (1)"
-	mkdir -p $DIR/$tdir || error "mkdir (1)"
-	chown $USER0 $DIR/$tdir || error "chown (2)"
-	$RUNAS_CMD -u $ID0 ls $DIR || error "ls (1)"
-	rm -f $DIR/f0 || error "rm (2)"
-	$RUNAS_CMD -u $ID0 touch $DIR/f0 && error "touch (1)"
-	$RUNAS_CMD -u $ID0 touch $DIR/$tdir/f1 || error "touch (2)"
-	$RUNAS_CMD -u $ID1 touch $DIR/$tdir/f2 && error "touch (3)"
-	touch $DIR/$tdir/f3 || error "touch (4)"
-	chown root $DIR/$tdir || error "chown (3)"
-	chgrp $USER0 $DIR/$tdir || error "chgrp (1)"
-	chmod 0775 $DIR/$tdir || error "chmod (2)"
-	$RUNAS_CMD -u $ID0 touch $DIR/$tdir/f4 || error "touch (5)"
-	$RUNAS_CMD -u $ID1 touch $DIR/$tdir/f5 && error "touch (6)"
-	touch $DIR/$tdir/f6 || error "touch (7)"
-	rm -rf $DIR/$tdir || error "rm (3)"
+	chmod 0755 $DIR || error "chmod (1) Failed"
+	rm -rf $DIR/$tdir || error "rm (1) Failed"
+	mkdir -p $DIR/$tdir || error "mkdir (1) Failed"
+
+	# $DIR/$tdir owner changed to USER0(sanityusr)
+	chown $USER0 $DIR/$tdir || error "chown (2) Failed"
+	chmod 0755 $DIR/$tdir || error "chmod (2) Failed"
+
+	# Run as ID0 cmd must pass
+	$RUNAS_CMD -u $ID0 ls -ali $DIR || error "ls (1) Failed"
+	# Remove non-existing file f0
+	rm -f $DIR/f0 || error "rm (2) Failed"
+
+	# It is expected that this cmd should fail
+	# $DIR has only r-x rights for group and other
+	$RUNAS_CMD -u $ID0 touch $DIR/f0
+	(( $? == 0 )) && error "touch (1) should not pass"
+
+	# This must pass. $DIR/$tdir/ is owned by ID0/USER0
+	$RUNAS_CMD -u $ID0 touch $DIR/$tdir/f1 || error "touch (2) Failed"
+
+	# It is expected that this cmd should fail
+	# $tdir has rwxr-xr-x rights for $ID0
+	$RUNAS_CMD -u $ID1 touch $DIR/$tdir/f2
+	(( $? == 0 )) && error "touch (3) should not pass"
+
+	touch $DIR/$tdir/f3 || error "touch (4) Failed"
+	chown root $DIR/$tdir || error "chown (3) Failed"
+	chgrp $USER0 $DIR/$tdir || error "chgrp (1) Failed"
+	chmod 0775 $DIR/$tdir || error "chmod (3) Failed"
+
+	# Owner is root and group is USER0
+	$RUNAS_CMD -u $USER0 -g $USER0 touch $DIR/$tdir/f4 ||
+		error "touch (5) Failed"
+
+	# It is expected that this cmd should fail
+	# $tdir has rwxrwxr-x rights for group sanityusr/ID0, ID1 will fail
+	$RUNAS_CMD -u $ID1 -g $ID1 touch $DIR/$tdir/f5
+	(( $? == 0 )) && error "touch (6) should not pass"
+
+	touch $DIR/$tdir/f6 || error "touch (7) Failed"
+	rm -rf $DIR/$tdir || error "rm (3) Failed"
 }
 run_test 0 "uid permission ============================="
 
