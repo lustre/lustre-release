@@ -222,20 +222,11 @@ AC_MSG_RESULT([$enable_utils])
 ]) # LB_CONFIG_UTILS
 
 #
-# LB_CONFIG_TESTS
+# LB_CONFIG_LUTF
 #
-# Build tests?
+# Build LNet Unit Test Framework?
 #
-AC_DEFUN([LB_CONFIG_TESTS], [
-AC_MSG_CHECKING([whether to build Lustre tests])
-AC_ARG_ENABLE([tests],
-	AS_HELP_STRING([--disable-tests],
-		[disable building of Lustre tests]),
-	[], [enable_tests="yes"])
-
-#
-# Check to see if we can build the lutf
-#
+AC_DEFUN([LB_CONFIG_LUTF], [
 AX_PYTHON_DEVEL()
 AS_IF([test "x$enable_dist" != xno], [
 	enable_lutf="yes"
@@ -247,7 +238,25 @@ AS_IF([test "x$enable_dist" != xno], [
 			 [ enable_lutf="no" ])
   ])
 ])
+AC_ARG_ENABLE([lutf],
+	AS_HELP_STRING([--disable-lutf],
+		[disable building of LUTF]),
+	[], [enable_lutf="yes"])
+AC_MSG_CHECKING([whether to build LUTF (LNet Unit Test Framework)])
+AC_MSG_RESULT([$enable_lutf])
+]) # LB_CONFIG_LUTF
 
+#
+# LB_CONFIG_TESTS
+#
+# Build Lustre/LNet regression tests?
+#
+AC_DEFUN([LB_CONFIG_TESTS], [
+AC_MSG_CHECKING([whether to build Lustre tests])
+AC_ARG_ENABLE([tests],
+	AS_HELP_STRING([--disable-tests],
+		[disable building of Lustre tests]),
+	[], [enable_tests="yes"])
 AC_MSG_RESULT([$enable_tests])
 ]) # LB_CONFIG_TESTS
 
@@ -614,6 +623,7 @@ LB_CONFIG_DOCS
 LB_CONFIG_MANPAGES
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
+LB_CONFIG_LUTF
 LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS

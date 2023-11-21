@@ -547,7 +547,7 @@ out:
 lutf_rc_t lutf_send_rpc(char *agent, char *yaml, int timeout, char **rsp)
 {
 	lutf_rc_t rc = EN_LUTF_RC_RPC_FAIL;
-	lutf_agent_blk_t *agent_blk;
+	lutf_agent_blk_t *agent_blk = NULL;
 	char *default_rsp;
 	lutf_message_hdr_t hdr;
 	char *recvBuf = NULL;

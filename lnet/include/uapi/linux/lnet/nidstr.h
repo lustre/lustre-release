@@ -96,7 +96,9 @@ static inline char *libcfs_nidstr(const struct lnet_nid *nid)
 }
 
 int libcfs_strnid(struct lnet_nid *nid, const char *str);
+#ifdef __KERNEL__
 char *libcfs_idstr(struct lnet_processid *id);
+#endif
 __u32 libcfs_str2net(const char *str);
 lnet_nid_t libcfs_str2nid(const char *str);
 int libcfs_str2anynid(lnet_nid_t *nid, const char *str);
