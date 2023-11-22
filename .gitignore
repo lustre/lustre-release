@@ -98,6 +98,10 @@ TAGS
 /stamp-h1
 /LUSTRE-VERSION-FILE
 
+# common python venv names
+/.venv
+/venv
+
 #
 # Top level generic files
 #

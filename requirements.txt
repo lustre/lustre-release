@@ -1,0 +1,13 @@
+# Packages required to use various Lustre and LNet scripts
+bcrypt
+cffi
+cryptography
+netifaces
+paramiko
+psutil
+pycparser
+PyNaCl
+PyYAML
+Requests
+six
+crash

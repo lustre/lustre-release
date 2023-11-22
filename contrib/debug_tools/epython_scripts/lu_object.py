@@ -40,12 +40,12 @@ def lov_print_raid0(obj, depth=0, ruler=RULER):
         magic = lsm.lsm_magic
         stripes = lsm.lsm_stripe_count
         layout_gen = lsm.lsm_layout_gen
-	pattern = lsm.lsm_pattern
+        pattern = lsm.lsm_pattern
     except Exception as e:
         magic = lsm.lsm_wire.lw_magic
         stripes = lsm.lsm_wire.lw_stripe_count
         layout_gen = lsm.lsm_wire.lw_layout_gen
-	pattern = lsm.lsm_wire.lw_pattern
+        pattern = lsm.lsm_wire.lw_pattern
     if magic==LOV_MAGIC or magic==LOV_MAGIC_V3:
         r0 = obj.u.raid0
     lli = readU32(Addr(obj) + member_offset('struct lov_object', 'lo_layout_invalid'))

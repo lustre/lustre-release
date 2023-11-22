@@ -46,9 +46,9 @@ To report bugs, please visit:
 The official repository is hosted at:
     https://git.whamcloud.com/
 
-+----------------------+
-| Building and Testing |
-+----------------------+
++----------+
+| Building |
++----------+
 
 Detailed instructions for building, configuring and running Lustre:
     http://wiki.lustre.org/Compiling_Lustre
@@ -66,13 +66,34 @@ To see all available make targets:
 
     make help
 
++---------+
+| Testing |
++---------+
+
+Explanation of Lustre test suites:
+    https://wiki.lustre.org/Test_Descriptions
+and Lustre test environment variables:
+    https://wiki.whamcloud.com/display/PUB/Lustre+Test+Tools+Environment+Variables
+
+
 To play with a test Lustre filesystem:
 
     ./lustre/tests/llmount.sh
 
+To run a test on the filesystem:
+
+    ./lustre/tests/auster -v sanity --only 1
+
 To clean up:
 
     ./lustre/tests/llmountcleanup.sh
+
+To run LUTF (LNet Unit Test Framework) in a Python virtual environment:
+
+    python3 -m venv venv
+    source venv/bin/activate
+    pip3 install -r requirements.txt
+    ./lustre/tests/lutf.sh
 
 +--------------+
 | Contributing |
