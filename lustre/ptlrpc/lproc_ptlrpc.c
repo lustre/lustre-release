@@ -1378,8 +1378,6 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 	struct obd_device *obd	= m->private;
 	struct obd_import *imp;
 	char *kbuf = NULL;
-	char *uuid;
-	char *ptr;
 	int do_reconn = 1;
 	const char prefix[] = "connection=";
 	const int prefix_len = sizeof(prefix) - 1;
@@ -1402,8 +1400,14 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 		GOTO(out, rc = -EINVAL);
 
 	with_imp_locked(obd, imp, rc) {
-		uuid = kbuf + prefix_len;
-		ptr = strstr(uuid, "::");
+		char *uuid = kbuf + prefix_len;
+		char *ptr, *tmp;
+
+		tmp = strchr(uuid, '@');
+		if (!tmp)
+			GOTO(out, rc = -EINVAL);
+
+		ptr = strstr(tmp, "::");
 		if (ptr) {
 			u32 inst;
 			int rc;
