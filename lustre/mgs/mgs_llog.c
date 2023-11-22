@@ -2221,10 +2221,11 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 		lnet_nid_t nodenid = lcfg->lcfg_nid;
 		char *nidstr = NULL;
 
+		BUILD_BUG_ON(sizeof(tmti->mti_nidlist[0]) != LNET_NIDSTR_SIZE);
 		if (!nodenid) {
 			nidstr = lustre_cfg_buf(lcfg, 2);
 
-			if (!nidstr)
+			if (!nidstr || !strlen(nidstr))
 				RETURN(-ENODEV);
 		}
 
@@ -2240,7 +2241,7 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 			if (nidstr) {
 				if (dst) {
 					rc = strscpy(dst, nidstr,
-						     sizeof(nidstr));
+						     LNET_NIDSTR_SIZE);
 					if (rc < 0)
 						RETURN(rc);
 				} else {
