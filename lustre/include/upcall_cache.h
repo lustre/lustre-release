@@ -34,6 +34,7 @@
 
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 #include <obd.h>
 #include <lustre_sec.h>
 

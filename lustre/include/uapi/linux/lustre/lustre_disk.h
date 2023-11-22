@@ -255,6 +255,11 @@ enum nodemap_idx_type {
 	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
 };
 
+/* This is needed for struct nodemap_clustre_rec. Please don't move
+ * to lustre_idl.h which will break user land builds.
+ */
+#define LUSTRE_NODEMAP_NAME_LENGTH     16
+
 /* lu_nodemap flags */
 enum nm_flag_bits {
 	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
