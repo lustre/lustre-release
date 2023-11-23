@@ -26617,7 +26617,11 @@ test_360() {
 	[[ "$ost1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
 
 	check_set_fallocate_or_skip
-	do_facet ost1 "$LCTL set_param osd-ldiskfs.delayed_unlink_mb=1MiB"
+	local param="osd-ldiskfs.delayed_unlink_mb"
+	local old=($(do_facet ost1 "$LCTL get_param -n $param"))
+
+	do_facet ost1 "$LCTL set_param $param=1MiB"
+	stack_trap "do_facet ost1 $LCTL set_param $param=${old[0]}"
 
 	mkdir $DIR/$tdir/
 	do_facet ost1 $LCTL set_param debug=+inode
