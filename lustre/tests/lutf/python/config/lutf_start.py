@@ -1,28 +1,31 @@
-"""
-lutf_start.py is a script intended to be run from the lutf.sh
-It relies on a set of environment variables to be set. If they
-are not set the script will exit:
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
-*_HOST: nodes to run the LUTF on. They must be unique (optional)
-ONLY: A script to run (optional)
-SUITE: A suite to run (optional)
-LUTF_SHELL: If specified it'll run the python interpreter (optional)
-MASTER_PORT: The port on which the master will listen
-TELNET_PORT: The port on which a telnet session can be established to the agent
-LUSTRE: The path to the lustre tests directory
-PYTHONPATH: The path where the python scripts and libraries are located
-LUTFPATH: Path to the lutf directory
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/tests/lutf/python/config/lutf_start.py
+#
+# Start an instance of the LUTF on the master and the agents.
+# lutf_start.py is a script intended to be run from the lutf.sh
+# It relies on a set of environment variables to be set. If they
+# are not set the script will exit:
+#
+# *_HOST: nodes to run the LUTF on. They must be unique (optional)
+# ONLY: A script to run (optional)
+# SUITE: A suite to run (optional)
+# LUTF_SHELL: If specified it'll run the python interpreter (optional)
+# MASTER_PORT: The port on which the master will listen
+# TELNET_PORT: The port on which a telnet session can be established to the agent
+# LUSTRE: The path to the lustre tests directory
+# LUTFPATH: Path to the lutf directory
+#
+# Author: Amir Shehata <ashehata@whamcloud.com>
+#
 
-Purpose:
---------
-start an instance of the LUTF on the master and the agents
-"""
-
-import os, re, yaml, paramiko, copy
+import os, re, yaml, paramiko, copy, sys
 import shlex, subprocess, time
 from pathlib import Path
-from lutf_exception import LutfDumper
-from lutf_paramiko import lutf_exec_remote_cmd, lutf_put_file, lutf_get_file
 
 cfg_yaml = {'lutf': {'shell': True, 'agent': False, 'telnet-port': -1,
 		'master-address': None, 'master-port': -1, 'node-name': None,
@@ -100,7 +103,7 @@ class LUTF:
 		self.__cfg_yaml['lutf']['node-name'] = key
 		self.__cfg_yaml['lutf']['master-name'] = mname
 		self.__cfg_yaml['lutf']['lutf-path'] = os.environ['LUTFPATH']
-		self.__cfg_yaml['lutf']['py-path'] = os.environ['PYTHONPATH']
+		self.__cfg_yaml['lutf']['py-path'] = ':'.join(sys.path)
 
 		try:
 			sl = re.split(',| ', os.environ['SUITE'])
@@ -212,7 +215,7 @@ class LUTF:
 			lutf_get_file(host, rfpath, os.path.join(tmp_dir, rfname))
 
 	def check_environment(self):
-		needed_vars = ['LUTFPATH','PYTHONPATH','TELNET_PORT', 'MASTER_PORT',
+		needed_vars = ['LUTFPATH', 'TELNET_PORT', 'MASTER_PORT',
 				'HOSTNAME', 'LD_LIBRARY_PATH', 'PATH', 'LUSTRE']
 
 		for var in needed_vars:
@@ -263,7 +266,65 @@ class LUTF:
 
 		return rc
 
+def configure_lutf_environment():
+	# Grab old LD_LIBRARY_PATH
+	restart = 0
+	old = os.environ.get("LD_LIBRARY_PATH")
+
+	# Find or set LUSTRE location
+	lustre = os.environ.get("LUSTRE")
+
+	if not lustre:
+		lustre = "./lustre/"
+
+	# Set LUTFPATH, used internally by LUTF
+	lutf = lustre + "/tests/lutf/"
+	os.environ["LUTFPATH"] = lutf
+
+	# Set new LD_LIBRARY_PATH
+	new_path = lutf + ":" + lutf + "src"
+
+	# Resolve LD_LIBRARY_PATH and possibly restart
+	if old:
+		if not new_path in os.environ['LD_LIBRARY_PATH']:
+			os.environ["LD_LIBRARY_PATH"] = old + ":" + new_path
+			restart = 1
+	else:
+		os.environ["LD_LIBRARY_PATH"] = new_path
+		restart = 1
+
+	if restart:
+		try:
+			os.execv(sys.argv[0], sys.argv)
+		except Exception as e:
+			sys.exit('EXCEPTION: Failed to Execute under modified environment, '+e)
+
+	# Set PYTHONPATH
+	sys.path.append(lutf)
+	sys.path.append(lutf + "src/")
+	sys.path.append(lutf + "python/")
+	sys.path.append(lutf + "python/tests/")
+	sys.path.append(lutf + "python/config/")
+	sys.path.append(lutf + "python/deploy/")
+	sys.path.append(lutf + "python/infra/")
+
+	# Update PATH
+	os.environ["PATH"] = os.environ.get("PATH") + ":" + lutf + "src/" + ":" + lutf
+
+	# Set remaining variables
+	if os.environ.get("TELNET_PORT") is None:
+		os.environ["TELNET_PORT"] = "8181"
+	if os.environ.get("MASTER_PORT") is None:
+		os.environ["MASTER_PORT"] = "8282"
+	if os.environ.get("LUTF_SHELL") is None:
+		os.environ["LUTF_SHELL"] = "batch"
+
 if __name__ == '__main__':
+	configure_lutf_environment()
+
+	from lutf_exception import LutfDumper
+	from lutf_paramiko import lutf_exec_remote_cmd, lutf_put_file, lutf_get_file
+
 	lutf = LUTF()
 
 	rc = lutf.check_environment()

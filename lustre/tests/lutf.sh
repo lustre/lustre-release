@@ -75,7 +75,8 @@ rm -f /tmp/tf.skip
 set +e
 
 echo "+++++++++++STARTING LUTF"
-. "$LUSTRE/tests/lutf/python/config/lutf_start.sh" "$CONFIG"
+export LUTF_ENV_VARS="$CONFIG"
+"$LUSTRE/tests/lutf/python/config/lutf_start.py"
 rc=$?
 echo "-----------STOPPING LUTF: $rc"
 
