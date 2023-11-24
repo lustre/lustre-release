@@ -1166,8 +1166,10 @@ test_1h() {
 	local used=$(getquota -u $TSTUSR global curspace)
 	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit $((limit*1024))
 
 	check_write_fallocate $testfile "user" $limit
 
