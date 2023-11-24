@@ -4830,6 +4830,11 @@ thread_sanity() {
 	# Restore previous setting of MODOPTS_*
 	setmodopts $modname "$oldvalue"
 
+	(( $MDS1_VERSION > $(version_code 2.12.52.91) )) || {
+		echo "skip interop for MDS < v2_12_52-91-g183cb1e3cdd2"
+		return 0
+	}
+
 	# Check that $opts took
 	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
 		echo 0)
@@ -4839,9 +4844,6 @@ thread_sanity() {
 		   "$LCTL get_param -n ${paramp}.threads_started" || echo 0)
 	lassert 28 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' ||
 		return $?
-	cleanup
-
-	setup
 }
 
 test_53a() {
@@ -4853,14 +4855,7 @@ run_test 53a "check OSS thread count params"
 
 test_53b() {
 	setup
-	local mds=$(do_facet $SINGLEMDS "$LCTL get_param \
-					 -N mds.*.*.threads_max 2>/dev/null")
-	if [ -z "$mds" ]; then
-		#running this on an old MDT
-		thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads' 16
-	else
-		thread_sanity MDT $SINGLEMDS 'mds.*.*.' 'mds_num_threads' 16
-	fi
+	thread_sanity MDT $SINGLEMDS 'mds.*.*.' 'mds_num_threads' 16
 	cleanup || error "cleanup failed with $?"
 }
 run_test 53b "check MDS thread count params"
