@@ -443,10 +443,8 @@ static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
 		osp->opd_pre_create_count = rounddown_pow_of_two(val);
 
 	if (osp->opd_pre_create_count + osp->opd_pre_reserved >
-	    osp_objs_precreated(osp)) {
-		osp->opd_force_creation = true;
+	    osp_objs_precreated(osp))
 		wake_up(&osp->opd_pre_waitq);
-	}
 
 	return count;
 }

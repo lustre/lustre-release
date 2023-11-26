@@ -303,39 +303,43 @@ void osp_statfs_need_now(struct osp_device *d)
 }
 
 /**
- * Check pool of precreated objects is nearly empty
+ * Check pool of precreated objects is getting low.
  *
- * We should not wait till the pool of the precreated objects is exhausted,
+ * We should not wait till the pool of the precreated objects is too low,
  * because then there will be a long period of OSP being unavailable for the
- * new creations due to lenghty precreate RPC. Instead we ask for another
+ * new creations due to lengthy precreate RPC. Instead we ask for another
  * precreation ahead and hopefully have it ready before the current pool is
- * empty. Notice this function relies on an external locking.
+ * empty. Notice this function relies on external locking by opd_pre_lock.
  *
  * \param[in] d		OSP device
  *
  * \retval		0 - current pool is good enough, 1 - time to precreate
  */
-static inline int osp_precreate_near_empty_nolock(struct osp_device *d)
+static inline int osp_precreate_is_low_nolock(struct osp_device *d)
 {
-	int window = osp_objs_precreated(d);
+	int available = osp_objs_precreated(d) - d->opd_pre_reserved;
+	int precreate_needed = d->opd_pre_create_count > 1024 ?
+		d->opd_pre_create_count / 4 : d->opd_pre_create_count / 2;
 
-	/* don't consider new precreation till OST is healty and
-	 * has free space */
-	return ((window - d->opd_pre_reserved < d->opd_pre_create_count / 2 ||
+	if (precreate_needed > 1024)
+		precreate_needed = 1024;
+
+	/* no new precreation until OST is healthy and has free space */
+	return ((d->opd_pre_create_count - available > precreate_needed ||
 		 d->opd_force_creation) && (d->opd_pre_status == 0));
 }
 
 /**
  * Check pool of precreated objects
  *
- * This is protected version of osp_precreate_near_empty_nolock(), check that
+ * This is protected version of osp_precreate_is_low_nolock(), check that
  * for the details.
  *
  * \param[in] d		OSP device
  *
  * \retval		0 - current pool is good enough, 1 - time to precreate
  */
-static inline int osp_precreate_near_empty(struct osp_device *d)
+static inline int osp_precreate_is_low(struct osp_device *d)
 {
 	int rc;
 
@@ -344,7 +348,7 @@ static inline int osp_precreate_near_empty(struct osp_device *d)
 
 	/* XXX: do we really need locking here? */
 	spin_lock(&d->opd_pre_lock);
-	rc = osp_precreate_near_empty_nolock(d);
+	rc = osp_precreate_is_low_nolock(d);
 	spin_unlock(&d->opd_pre_lock);
 	return rc;
 }
@@ -1317,7 +1321,7 @@ static int osp_precreate_thread(void *_args)
 		while (!kthread_should_stop()) {
 			wait_event_idle(d->opd_pre_waitq,
 					kthread_should_stop() ||
-					(osp_precreate_near_empty(d) &&
+					(osp_precreate_is_low(d) &&
 					 !(osp_precreate_end_seq(d) &&
 					   osp_objs_precreated(d) != 0)) ||
 					osp_statfs_need_update(d) ||
@@ -1351,7 +1355,7 @@ static int osp_precreate_thread(void *_args)
 				}
 			}
 
-			if (osp_precreate_near_empty(d)) {
+			if (osp_precreate_is_low(d)) {
 				rc = osp_precreate_send(env, d);
 				/* osp_precreate_send() sets opd_pre_status
 				 * in case of error, that prevent the using of
@@ -1493,7 +1497,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 				 * XXX: don't wake up if precreation
 				 * is in progress
 				 */
-				if (osp_precreate_near_empty_nolock(d) &&
+				if (osp_precreate_is_low_nolock(d) &&
 				   !osp_precreate_end_seq_nolock(d))
 					wake_up(&d->opd_pre_waitq);
 
