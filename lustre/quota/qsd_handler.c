@@ -236,6 +236,9 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 	 * 1. revoke all extra grant
 	 */
 	if (lqe->lqe_revoke) {
+		if (qbody == NULL)
+			RETURN(true);
+
 		lqe->lqe_revoke = 0;
 
 		LQUOTA_DEBUG(lqe, "revoke pre-acquired quota: %llu - %llu\n",
