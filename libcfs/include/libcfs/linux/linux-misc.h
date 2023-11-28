@@ -183,4 +183,16 @@ static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)
 
 int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
 #endif
+
+#ifndef memset_startat
+/** from linux 5.19 include/linux/string.h: */
+#define memset_startat(obj, v, member)					\
+({									\
+	u8 *__ptr = (u8 *)(obj);					\
+	typeof(v) __val = (v);						\
+	memset(__ptr + offsetof(typeof(*(obj)), member), __val,		\
+	       sizeof(*(obj)) - offsetof(typeof(*(obj)), member));	\
+})
+#endif /* memset_startat() */
+
 #endif

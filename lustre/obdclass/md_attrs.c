@@ -73,8 +73,7 @@ void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
 {
 	CLASSERT(sizeof(*loa) == LMA_OLD_SIZE);
 
-	memset(&loa->loa_parent_fid, 0,
-	       sizeof(*loa) - offsetof(typeof(*loa), loa_parent_fid));
+	memset_startat(loa, 0, loa_parent_fid);
 	lustre_lma_init(&loa->loa_lma, fid, compat, incompat);
 }
 EXPORT_SYMBOL(lustre_loa_init);

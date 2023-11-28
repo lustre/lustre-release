@@ -99,6 +99,7 @@
 #include <linux/spinlock.h>
 #include <linux/wait.h>
 #include <linux/pagevec.h>
+#include <libcfs/linux/linux-misc.h>
 #include <lustre_dlm.h>
 
 struct obd_info;
@@ -2396,13 +2397,7 @@ struct cl_io *cl_io_top(struct cl_io *io);
 void cl_io_print(const struct lu_env *env, void *cookie,
                  lu_printer_t printer, const struct cl_io *io);
 
-#define CL_IO_SLICE_CLEAN(foo_io, base)					\
-do {									\
-	typeof(foo_io) __foo_io = (foo_io);				\
-									\
-	memset(&__foo_io->base, 0,					\
-	       sizeof(*__foo_io) - offsetof(typeof(*__foo_io), base));	\
-} while (0)
+#define CL_IO_SLICE_CLEAN(obj, base) memset_startat(obj, 0, base)
 
 /** @} cl_io */
 
