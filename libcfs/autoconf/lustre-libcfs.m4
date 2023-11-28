@@ -1277,6 +1277,58 @@ param_set_uint_minmax, [
 ]) # LIBCFS_PARAM_SET_UINT_MINMAX
 
 #
+# LIBCFS_HAVE_TIMER_DELETE_SYNC
+#
+# Linux commit v6.1-rc1-7-g9a5a30568697
+#   timers: Get rid of del_singleshot_timer_sync()
+# Linux commit v6.1-rc1-11-g9b13df3fb64e
+#   timers: Rename del_timer_sync() to timer_delete_sync()
+#
+AC_DEFUN([LIBCFS_HAVE_TIMER_DELETE_SYNC], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([is timer_delete_sync() available],
+timer_delete_sync, [
+	#include <linux/timer.h>
+],[
+	struct timer_list *timer = NULL;
+	(void)timer_delete_sync(timer);
+],[
+	AC_DEFINE(HAVE_TIMER_DELETE_SYNC, 1,
+		[timer_delete_sync() is available])
+],[
+	AC_DEFINE(timer_delete_sync(t), del_timer_sync(t),
+		[timer_delete_sync() is not available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_TIMER_DELETE_SYNC
+
+#
+# LIBCFS_HAVE_TIMER_DELETE
+#
+# Linux commit v6.1-rc1-12-gbb663f0f3c39
+#   timers: Rename del_timer() to timer_delete()
+#
+AC_DEFUN([LIBCFS_HAVE_TIMER_DELETE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([is timer_delete() available],
+timer_delete, [
+	#include <linux/timer.h>
+],[
+	struct timer_list *timer = NULL;
+	(void)timer_delete(timer);
+],[
+	AC_DEFINE(HAVE_TIMER_DELETE, 1,
+		[timer_delete() is available])
+],[
+	AC_DEFINE(timer_delete(t), del_timer(t),
+		[timer_delete() not is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_TIMER_DELETE
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1392,6 +1444,9 @@ LIBCFS_CACHE_DETAIL_WRITERS
 LIBCFS_HAVE_NR_UNSTABLE_NFS
 # 5.15
 LIBCFS_PARAM_SET_UINT_MINMAX
+# 6.1
+LIBCFS_HAVE_TIMER_DELETE_SYNC
+LIBCFS_HAVE_TIMER_DELETE
 ]) # LIBCFS_PROG_LINUX
 
 #

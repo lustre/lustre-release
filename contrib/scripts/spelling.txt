@@ -93,6 +93,9 @@ cfs_time_current||jiffies
 cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
+del_timer||timer_delete
+del_timer_sync||timer_delete_sync
+del_singleshot_timer_sync||timer_delete_sync
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 from_timer||cfs_from_timer

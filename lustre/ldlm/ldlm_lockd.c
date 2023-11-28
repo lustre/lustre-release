@@ -487,7 +487,7 @@ static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
                 /* Removing the head of the list, adjust timer. */
                 if (list_next == &waiting_locks_list) {
                         /* No more, just cancel. */
-			del_timer(&waiting_locks_timer);
+			timer_delete(&waiting_locks_timer);
                 } else {
                         struct ldlm_lock *next;
 
