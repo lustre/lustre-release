@@ -1283,6 +1283,7 @@ test_33() { # LU-15935
 		skip "Need MDS version at least 2.15.52.86 or 2.15.2"
 
 	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	local at_min_old
 	at_min_old=$(at_min_get ost1)
@@ -1293,38 +1294,32 @@ test_33() { # LU-15935
 	cancel_lru_locks mdc
 
 	clients_up
-	stop mds1
-
-	# No IR -> force the update of mdc state
-	! combined_mgs_mds || $LCTL get_param mdc.*.ping || true
+	stop mds2
 
 	# check for OBD_INCOMPAT_MULTI_RPCS (0x400) in last_rcvd
-	last_rcvd_check_incompat_flag mds1 0x400 ||
+	last_rcvd_check_incompat_flag mds2 0x400 ||
 		error "1st failover: OBD_INCOMPAT_MULTI_RPCS is not set on MDT0000 last_rcvd"
 
 	# lose 1 client while the MDT failover
 	umount -f $MOUNT2
 
-	mount_facet mds1
-	wait_clients_import_state "$HOSTNAME" mds1 "REPLAY_WAIT"
+	mount_facet mds2
+	wait_clients_import_state "$HOSTNAME" mds2 "REPLAY_WAIT"
 
-	do_facet mds1 $LCTL --device $(convert_facet2label mds1) abort_recovery
-	wait_clients_import_state "$HOSTNAME" mds1 "FULL"
-	wait_recovery_complete mds1
+	do_facet mds2 $LCTL --device $(convert_facet2label mds2) abort_recovery
+	wait_clients_import_state "$HOSTNAME" mds2 "FULL"
+	wait_recovery_complete mds2
 	sleep 5
-	stop mds1
+	stop mds2
 
-	last_rcvd_check_incompat_flag mds1 0x400 ||
+	last_rcvd_check_incompat_flag mds2 0x400 ||
 		error "2sd failover: OBD_INCOMPAT_MULTI_RPCS is not set on MDT0000 last_rcvd"
 
-	mount_facet mds1
-
-	# No IR -> force the update of mgc state
-	! combined_mgs_mds || $LCTL get_param mgc.*.ping || true
+	mount_facet mds2
 
 	zconf_mount $HOSTNAME $MOUNT2 || error "Fail to mount $MOUNT2"
-	wait_clients_import_state "$HOSTNAME" mds1 "FULL"
-	wait_recovery_complete mds1
+	wait_clients_import_state "$HOSTNAME" mds2 "FULL"
+	wait_recovery_complete mds2
 }
 run_test 33 "Check for OBD_INCOMPAT_MULTI_RPCS in last_rcvd after abort_recovery"
 
