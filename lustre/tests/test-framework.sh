@@ -155,6 +155,218 @@ print_summary () {
 	fi
 }
 
+reset_lustre() {
+	if $do_reset; then
+		stopall
+		setupall
+	fi
+}
+
+setup_if_needed() {
+	! ${do_setup} && return
+	nfs_client_mode && return
+	AUSTER_CLEANUP=false
+
+	local MOUNTED=$(mounted_lustre_filesystems)
+
+	if $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
+		check_config_clients $MOUNT
+		# init_facets_vars
+		# init_param_vars
+		return
+	fi
+
+	echo "Lustre is not mounted, trying to do setup ... "
+	$reformat && CLEANUP_DM_DEV=true formatall
+	setupall
+
+	MOUNTED=$(mounted_lustre_filesystems)
+	if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
+		echo "Lustre is not mounted after setup! "
+		exit 1
+	fi
+	AUSTER_CLEANUP=true
+}
+
+cleanup_if_needed() {
+	if $AUSTER_CLEANUP; then
+		cleanupall
+	fi
+}
+
+find_script_in_path() {
+	target=$1
+	path=$2
+	for dir in $(tr : " " <<< $path); do
+		if [ -f $dir/$target ]; then
+			echo $dir/$target
+			return 0
+		fi
+		if [ -f $dir/$target.sh ]; then
+			echo $dir/$target.sh
+			return 0
+		fi
+	done
+	return 1
+}
+
+title() {
+	log "-----============= acceptance-small: "$*" ============----- `date`"
+}
+
+doit() {
+	if $dry_run; then
+		printf "Would have run: %s\n" "$*"
+		return 0
+	fi
+	if $verbose; then
+		printf "Running: %s\n" "$*"
+	fi
+	"$@"
+}
+
+
+run_suite() {
+	local suite_name=$1
+	local suite_script=$2
+
+	title $suite_name
+	log_test $suite_name
+
+	rm -f $TF_FAIL
+	touch $TF_SKIP
+
+	local start_ts=$(date +%s)
+
+	doit $script_lang $suite_script
+
+	local rc=$?
+	local duration=$(($(date +%s) - $start_ts))
+	local status="PASS"
+
+	if [[ $rc -ne 0 || -f $TF_FAIL ]]; then
+		status="FAIL"
+	elif [[ -f $TF_SKIP ]]; then
+		status="SKIP"
+	fi
+	log_test_status $duration $status
+	[[ ! -f $TF_SKIP ]] || rm -f $TF_SKIP
+
+	reset_lustre
+
+	return $rc
+}
+
+run_suite_logged() {
+	local suite_name=${1%.sh}
+	local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
+
+	suite_script=$(find_script_in_path $suite_name $LUSTRE/tests)
+
+	if [[ -z $suite_script ]]; then
+		echo "Can't find test script for $suite_name"
+		return 1
+	fi
+
+	echo "run_suite $suite_name $suite_script"
+
+	local log_name=${suite_name}.suite_log.$(hostname -s).log
+
+	if $verbose; then
+		run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
+	else
+		run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
+	fi
+
+	return ${PIPESTATUS[0]}
+}
+
+reset_logging() {
+	export LOGDIR=$1
+
+	unset YAML_LOG
+	init_logging
+}
+
+split_commas() {
+	echo "${*//,/ }"
+}
+
+run_suites() {
+	local n=0
+	local argv=("$@")
+
+	while ((n < repeat_count)); do
+		local RC=0
+		local logdir=${test_logs_dir}
+		local first_suite=$FIRST_SUITE
+
+		((repeat_count > 1)) && logdir="$logdir/$n"
+		reset_logging $logdir
+		set -- "${argv[@]}"
+		while [[ -n $1 ]]; do
+			unset ONLY EXCEPT START_AT STOP_AT
+			local opts=""
+			local time_limit=""
+
+			suite=$1
+			shift;
+			while [[ -n $1 ]]; do
+			case "$1" in
+				--only)
+					shift;
+					export ONLY=$(split_commas $1)
+
+					opts+="ONLY=$ONLY ";;
+				--suite)
+					shift;
+					export SUITE=$(split_commas $1)
+
+					opts+="SUITE=$SUITE ";;
+				--pattern)
+					shift;
+					export PATTERN=$(split_commas $1)
+
+					opts+="PATTERN=$PATTERN ";;
+				--except)
+					shift;
+					export EXCEPT=$(split_commas $1)
+
+					opts+="EXCEPT=$EXCEPT ";;
+				--start-at)
+					shift;
+					export START_AT=$1
+
+					opts+="START_AT=$START_AT ";;
+				--stop-at)
+					shift;
+					export STOP_AT=$1
+
+					opts+="STOP_AT=$STOP_AT ";;
+				--time-limit)
+					shift;
+					time_limit=$1;;
+				*)
+					break;;
+			esac
+			shift
+			done
+
+		# If first_suite not set or this is the first suite
+		if [ "x"$first_suite == "x" ] || [ $first_suite == $suite ]; then
+			echo "running: $suite $opts"
+			run_suite_logged $suite || RC=$?
+			unset first_suite
+			echo $suite returned $RC
+		fi
+		done
+	if $upload_logs; then
+		$upload_script $LOGDIR
+	fi
+	n=$((n + 1))
+	done
+}
+
 # Get information about the Lustre environment. The information collected
 # will be used in Lustre tests.
 # usage: get_lustre_env
