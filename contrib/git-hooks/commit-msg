@@ -71,7 +71,7 @@ die() {
 # Called when doing the final "wrap up" clause because we've found
 # one of the tagged lines that belongs in the final section.
 #
-function ck_wrapup() {
+function ck_wrapup_started() {
 	$IS_WRAPPING_UP && return
 
 	$HAS_LAST_BLANK	|| error "blank line must preceed signoff section"
@@ -82,8 +82,19 @@ function ck_wrapup() {
 	IS_WRAPPING_UP=true
 }
 
+function ck_is_ascii() {
+	LANG=C
+	[[ "${LINE//[![:alnum:][:blank:][:punct:]]/}" == "$LINE" ]] ||
+		error "non-printable characters in '$LINE'"
+}
+
+function ck_wrapup() {
+	ck_wrapup_started
+	ck_is_ascii
+}
+
 function do_signoff() {
-	ck_wrapup
+	ck_wrapup_started
 	# Signed-off-by: First Last <email@host.domain>
 	local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
 	if (( ${#txt} == 0 )); then
@@ -125,7 +136,7 @@ function do_fixes() {
 # All "emails" lines specify a person and email address
 #
 function do_emails() {
-	ck_wrapup
+	ck_wrapup_started
 	local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
 	(( ${#txt} == 0 )) && error "${LINE%: *} invalid name and email"
 }
@@ -134,6 +145,8 @@ function do_emails() {
 #
 function do_change() {
 	local url="${LINE#*change: }"
+
+	ck_is_ascii
 	[[ $url =~ $GERRIT_URL/[0-9][0-9][0-9] ]] ||
 		error "bad Gerrit URL, use '$GERRIT_URL/nnnnn' format"
 }
@@ -143,6 +156,8 @@ function do_change() {
 #
 function do_commit() {
 	local val=${LINE#*commit: }
+
+	ck_is_ascii
 	if [[ $val =~ TBD ]]; then
 		val=${val#TBD (from }
 		val=${val%)}
@@ -183,6 +198,7 @@ function do_default_line() {
 		HAS_BODY=true
 	fi
 	HAS_LAST_BLANK=false
+	ck_is_ascii
 }
 
 # Add a new unique Change-Id
@@ -240,7 +256,7 @@ for full details.  A good example of a valid commit comment is:
     changed (including important functions that were changed, if this
     is useful to understand the patch, and for easier searching).
     Performance patches should quanify the improvements being seen.
-    Wrap lines at/under $WIDTH_REG columns.
+    Wrap lines at/under $WIDTH_REG columns.  Only ASCII text allowed.
 
     Optionally, if the patch is backported from master, include links
     to the original patch to simplify tracking it across branches/repos:

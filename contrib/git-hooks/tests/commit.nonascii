@@ -1,0 +1,29 @@
+commit a3a51806ef361f55421a1bc07f64c78730ae50d5
+Author:     Shaun Tancheff <shaun.tancheff@hpe.com>
+AuthorDate: Sun Jan 22 11:43:29 2023 -0600
+Commit:     Oleg Drokin <green@whamcloud.com>
+CommitDate: Wed Feb 8 06:26:57 2023 +0000
+
+LU-16118 build: Workaround __write_overflow_field errors
+
+Linux commit v5.17-rc3-1-gf68f2ff91512
+   fortify: Detect struct member overflows in memcpy() at compile-time
+
+memcpy and memset of collections of struct members
+will trigger:
+
+error: call to ‘__write_overflow_field’ declared with attribute
+   warning: detected write beyond size of field (1st parameter);
+   maybe use struct_group()?
+   [-Werror] __write_overflow_field(p_size_field, size);
+
+Test-Parameters: trivial
+HPE-bug-id: LUS-11194
+Signed-off-by: Shaun Tancheff <shaun.tancheff@hpe.com>
+Change-Id: Iacd1ab03d1b90ce62b5d7b65e1cd518a5f7981f2
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/48364
+Reviewed-by: Petros Koutoupis <petros.koutoupis@hpe.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Reviewed-by: jsimmons <jsimmons@infradead.org>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Neil Brown <neilb@suse.de>
