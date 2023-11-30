@@ -421,6 +421,13 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 			nblocks = 1;
 
 			if (blocks[block_idx + i] == 0) {  /* hole */
+				struct niobuf_local *lnb =
+					iobuf->dr_lnbs[page_idx];
+				CDEBUG(D_INODE,
+				       "hole at page_idx %d, block_idx %d, at offset %llu\n",
+				       page_idx, block_idx,
+				       lnb->lnb_file_offset);
+				lnb->lnb_hole = 1;
 				LASSERTF(iobuf->dr_rw == 0,
 					 "page_idx %u, block_idx %u, i %u,"
 					 "start_blocks: %llu, count: %llu, npages: %d\n",
@@ -537,6 +544,7 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 		lnb->lnb_guard_rpc = 0;
 		lnb->lnb_guard_disk = 0;
 		lnb->lnb_locked = 0;
+		lnb->lnb_hole = 0;
 
 		LASSERTF(plen <= len, "plen %u, len %lld\n", plen,
 			 (long long) len);

@@ -467,6 +467,8 @@ struct niobuf_local {
 	__u16		lnb_guard_disk:1;
 	/* separate unlock for read path to allow shared access */
 	__u16		lnb_locked:1;
+	/* this lnb corresponds to a hole in the file */
+	__u16		lnb_hole:1;
 };
 
 struct tgt_thread_big_cache {

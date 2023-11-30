@@ -2420,6 +2420,10 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		nob += page_rc;
 		if (page_rc != 0 && desc != NULL) { /* some data! */
 			LASSERT(local_nb[i].lnb_page != NULL);
+			CDEBUG(D_INODE,
+			       "lnb %d, at offset %llu, hole %d\n", i,
+			       local_nb[i].lnb_file_offset,
+			       local_nb[i].lnb_hole);
 			desc->bd_frag_ops->add_kiov_frag
 			  (desc, local_nb[i].lnb_page,
 			   local_nb[i].lnb_page_offset & ~PAGE_MASK,
