@@ -4,3 +4,5 @@ KERNEL=="obd", MODE="0666"
 SUBSYSTEM=="lustre", ACTION=="change", ENV{PARAM}=="?*", RUN+="/usr/sbin/lctl set_param '$env{PARAM}=$env{SETTING}'"
 # setup linux routes for mr on lustre load
 SUBSYSTEM=="module", ACTION=="add", DEVPATH=="/module/lustre", RUN+="/usr/sbin/lnetctl setup-mrrouting"
+# setup linux sysctl setting on lustre load
+SUBSYSTEM=="module", ACTION=="add", DEVPATH=="/module/lustre", RUN+="/usr/sbin/lnetctl setup-sysctl"

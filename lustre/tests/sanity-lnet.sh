@@ -3984,6 +3984,81 @@ test_256() {
 }
 run_test 256 "Router should not drop messages that are past the deadline"
 
+check_sysctl() {
+	while IFS= read -r line; do
+		# Couldn't find a way to break this line
+		if [[ "$line" =~ \
+		      ^[[:space:]]*([a-zA-Z0-9_.-]+)[[:space:]]*=[[:space:]]*([a-zA-Z0-9_.-]+)[[:space:]]*$ \
+		   ]]; then
+			value=$(sysctl -n "${BASH_REMATCH[1]}" 2>/dev/null)
+			if [ -z "${value}" ]; then
+				error "Parameter ${BASH_REMATCH[1]} not set"
+			fi
+			echo "found: ${BASH_REMATCH[1]} ${value}"
+			if [ "${value}" != "${BASH_REMATCH[2]}" ]; then
+				error "Parameter ${BASH_REMATCH[1]} \
+					wrong value: ${value} \
+					expected: ${BASH_REMATCH[2]}"
+			fi
+		fi
+	done < "$1"
+}
+
+### Test that linux route is added for each ni
+
+test_260() {
+	local sysctl_file="/etc/lnet-sysctl.conf"
+	local sysctl_conf_bak="/etc/lnet-sysctl.bak"
+	local sysctl_bak=$TMP/lnet-sysctl.bak
+
+	echo "Setting default values and create backup for check"
+
+	sysctl -w net.ipv4.neigh.default.gc_thresh1=128 > "$sysctl_bak"
+	sysctl -w net.ipv4.neigh.default.gc_thresh2=512 >> "$sysctl_bak"
+	sysctl -w net.ipv4.neigh.default.gc_thresh3=1024 >> "$sysctl_bak"
+	sysctl -w net.ipv6.neigh.default.gc_thresh1=128 >> "$sysctl_bak"
+	sysctl -w net.ipv6.neigh.default.gc_thresh2=512 >> "$sysctl_bak"
+	sysctl -w net.ipv6.neigh.default.gc_thresh3=1024 >> "$sysctl_bak"
+
+	echo "Check default configuration"
+	check_sysctl "${sysctl_bak}"
+
+	load_modules || error "Failed to load Modules"
+
+	sysctlstat=$(cat /sys/module/lnet/parameters/enable_sysctl_setup 2>&-)
+	echo "enable_sysctl_setup set to ${sysctlstat}"
+
+	echo "New configuration"
+
+	echo 1 > /sys/module/lnet/parameters/enable_sysctl_setup 2>&1
+
+	sysctlstat=$(cat /sys/module/lnet/parameters/enable_sysctl_setup 2>&-)
+	echo "enable_sysctl_setup set to ${sysctlstat}"
+
+	$LNETCTL setup-sysctl ||
+		error "setup-sysctl failed"
+
+	echo "Check new configuration"
+	check_sysctl "${sysctl_file}"
+
+	echo "Reset to original values"
+	echo 0 > /sys/module/lnet/parameters/enable_sysctl_setup 2>&1
+
+	sysctlstat=$(cat /sys/module/lnet/parameters/enable_sysctl_setup 2>&-)
+	echo "enable_sysctl_setup set to ${sysctlstat}"
+
+	$LNETCTL setup-sysctl ||
+		error "setup-sysctl failed"
+
+	echo "Check original configuration"
+	check_sysctl "${sysctl_bak}"
+
+	rm -f "${sysctl_bak}"
+
+	unload_modules || error "Failed to cleanup Modules"
+}
+run_test 260 "test that linux sysctl parameter are set correctly"
+
 test_300() {
 	# LU-13274
 	local header

@@ -927,6 +927,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with zfs}
 %config(noreplace) %{_sysconfdir}/ldev.conf
 %endif
+%config(noreplace) %{_sysconfdir}/lnet-sysctl.conf
 %config(noreplace) %{_sysconfdir}/lnet.conf
 %config(noreplace) %{_sysconfdir}/modprobe.d/ko2iblnd.conf
 %if %{with lustre_utils}

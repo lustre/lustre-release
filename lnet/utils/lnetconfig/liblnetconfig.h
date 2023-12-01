@@ -531,6 +531,15 @@ int lustre_lnet_calc_service_id(__u64 *service_id);
 int lustre_lnet_setup_mrrouting(struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_setup_sysctl
+ *    enable  linux sysctl settings configured in /etc/lnet-sysctl.conf
+ *
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_setup_sysctl(struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_discovery
  *   Enable or disable peer discovery. Peer discovery is enabled by default.
  *

@@ -36,7 +36,7 @@ DIST_SUBDIRS = resource
 
 EXTRA_DIST = lustre.xml 99-lustre.rules lustre ldev.conf ko2iblnd.conf \
              lsvcgss lnet_routes.conf lnet.conf lgssc.conf \
-             99-lustre-server.rules
+             lnet-sysctl.conf 99-lustre-server.rules
 
 sysconf_DATA = lnet.conf
 
@@ -69,3 +69,6 @@ endif
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf
+
+sysctldir = $(sysconfdir)
+sysctl_DATA = lnet-sysctl.conf

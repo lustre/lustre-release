@@ -1,0 +1,32 @@
+#!/bin/bash
+
+sysctl_conf_file="/etc/lnet-sysctl.conf"
+sysctl_conf_bak="/etc/lnet-sysctl.bak"
+
+# Check if the user wants to enable sysctl settings
+sysctlstat=$(cat /sys/module/lnet/parameters/enable_sysctl_setup 2>&-)
+
+if [[ "${sysctlstat}" != "1" ]]; then
+	if [ -f "${sysctl_conf_bak}" ]; then
+		/usr/sbin/sysctl -p "${sysctl_conf_bak}" 2>&-
+		rm -f "${sysctl_conf_bak}"
+	fi
+	exit 0
+fi
+
+# create backup file for reset
+echo "# Generated backup for original lnet-sysctl.conf parameters" \
+     > "${sysctl_conf_bak}" 2>&-
+while IFS= read -r line; do
+	# Couldn't break this line
+	if [[ "$line" =~ \
+	      ^[[:space:]]*([a-zA-Z0-9_.-]+)[[:space:]]*=[[:space:]]*([a-zA-Z0-9_.-]+)[[:space:]]*$ \
+	   ]]; then
+		value=$(/usr/sbin/sysctl -n "${BASH_REMATCH[1]}")
+		echo "${BASH_REMATCH[1]}=${value}" >> "${sysctl_conf_bak}" 2>&-
+	fi
+done < "${sysctl_conf_file}"
+
+# set configuration values
+/usr/sbin/sysctl -p "${sysctl_conf_file}" 2>&-
+exit $?

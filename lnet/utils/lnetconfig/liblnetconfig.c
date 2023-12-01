@@ -4610,6 +4610,35 @@ out:
 	return rc;
 }
 
+int lustre_lnet_setup_sysctl(struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+	char *env_ptr, *tmp_ptr, *syscmd = "/usr/sbin/lnet-sysctl-config";
+
+	env_ptr = getenv("LNET_SYSCTL_CONFIG");
+	if (env_ptr) {
+		tmp_ptr = strrchr(env_ptr, '/');
+		if (tmp_ptr && !strcmp(tmp_ptr, "/lnet-sysctl-config"))
+			syscmd = env_ptr;
+	}
+
+	rc = system(syscmd);
+
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"failed to execute lnet-sysctl-config : %s\"",
+			 strerror(errno));
+	}
+
+	cYAML_build_error(rc, -1, MANAGE_CMD, "setup-sysctl", err_str,
+			  err_rc);
+
+	return rc;
+}
+
 static int show_recovery_queue(enum lnet_health_type type, char *name,
 			       int seq_no, struct cYAML **show_rc,
 			       struct cYAML **err_rc)

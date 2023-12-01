@@ -20,6 +20,11 @@ static int config_on_load = 0;
 module_param(config_on_load, int, 0444);
 MODULE_PARM_DESC(config_on_load, "configure network at module load");
 
+/* enable sysctl configuration (especially for large systems) */
+static unsigned int enable_sysctl_setup;
+module_param(enable_sysctl_setup, int, 0644);
+MODULE_PARM_DESC(enable_sysctl_setup, "enable sysctl parameters for large systems");
+
 static DEFINE_MUTEX(lnet_config_mutex);
 
 int lnet_configure(void *arg)

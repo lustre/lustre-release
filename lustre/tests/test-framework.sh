@@ -552,6 +552,9 @@ init_test_env() {
 	export KSOCKLND_CONFIG=${KSOCKLND_CONFIG:-"$LUSTRE/scripts/ksocklnd-config"}
 	[ ! -f "$KSOCKLND_CONFIG" ] &&
 		export KSOCKLND_CONFIG=$(which ksocklnd-config 2> /dev/null)
+	export LNET_SYSCTL_CONFIG=${LNET_SYSCTL_CONFIG:-"$LUSTRE/scripts/lnet-sysctl-config"}
+	[ ! -f "$LNET_SYSCTL_CONFIG" ] &&
+		export LNET_SYSCTL_CONFIG=$(which lnet-sysctl-config 2> /dev/null)
 
 	export PERM_CMD=$(echo ${PERM_CMD:-"$LCTL conf_param"})
 

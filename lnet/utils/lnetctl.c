@@ -87,6 +87,7 @@ static int jt_set_recovery_limit(int argc, char **argv);
 static int jt_udsp(int argc, char **argv);
 static int jt_fault(int argc, char **argv);
 static int jt_setup_mrrouting(int argc, char **argv);
+static int jt_setup_sysctl(int argc, char **argv);
 static int jt_calc_cpt_of_nid(int argc, char **argv);
 static int jt_show_peer_debug_info(int argc, char **argv);
 
@@ -114,6 +115,8 @@ command_t cmd_list[] = {
 	{"fault", jt_fault, 0, "udsp {show | help}"},
 	{"setup-mrrouting", jt_setup_mrrouting, 0,
 	 "setup linux routing tables\n"},
+	{"setup-sysctl", jt_setup_sysctl, 0,
+	 "setup linux sysctl parameter for large systems\n"},
 	{"cpt-of-nid", jt_calc_cpt_of_nid, 0,
 	 "Calculate the CPTs associated with NIDs\n"
 	 " usage:\n\tlnetctl cpt-of-nid nid[ nid ...]\n"},
@@ -343,6 +346,21 @@ static int jt_setup_mrrouting(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 
 	rc = lustre_lnet_setup_mrrouting(&err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_setup_sysctl(int argc, char **argv)
+{
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = lustre_lnet_setup_sysctl(&err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

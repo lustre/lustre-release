@@ -36,7 +36,7 @@ genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start lnet
 
 SUBDIRS = systemd
 
-sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe ksocklnd-config
+sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe ksocklnd-config lnet-sysctl-config
 
 if RHEL
 initdir = $(sysconfdir)/init.d
@@ -96,7 +96,7 @@ EXTRA_DIST = lustre_rmmod ldev lc_mon lhbadm \
 	     zfsobj2fid ko2iblnd-probe ksocklnd-config statechange-lustre.sh \
 	     vdev_attach-lustre.sh vdev_remove-lustre.sh vdev_clear-lustre.sh \
 	     bash-completion/lustre bash-completion/lctl bash-completion/lfs \
-	     remove_changelog remove_updatelog lsvcgss_sysd
+	     remove_changelog remove_updatelog lsvcgss_sysd lnet-sysctl-config
 
 CLEANFILES = $(genscripts)
 
