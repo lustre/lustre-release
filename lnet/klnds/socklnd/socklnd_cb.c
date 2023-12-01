@@ -1794,7 +1794,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		CERROR("Error %d reading HELLO from %pISc\n",
 		       rc, &conn->ksnc_peeraddr);
 		LASSERT(rc < 0);
-		return rc;
+		goto out_fatal;
 	}
 
 	if (hello->kshm_magic != LNET_PROTO_MAGIC &&
@@ -1804,7 +1804,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		CERROR("Bad magic(1) %#08x (%#08x expected) from %pISc\n",
 		       __cpu_to_le32 (hello->kshm_magic),
 		       LNET_PROTO_TCP_MAGIC, &conn->ksnc_peeraddr);
-		return -EPROTO;
+		goto out_unknown;
 	}
 
 	rc = lnet_sock_read(sock, &hello->kshm_version,
@@ -1813,7 +1813,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		CERROR("Error %d reading HELLO from %pISc\n",
 		       rc, &conn->ksnc_peeraddr);
 		LASSERT(rc < 0);
-		return rc;
+		goto out_fatal;
 	}
 
 	proto = ksocknal_parse_proto_version(hello);
@@ -1834,18 +1834,22 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 			else if (*ksocknal_tunables.ksnd_protocol == 1)
 				conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
-			if (!conn->ksnc_proto)
-				goto unknown;
+			if (!conn->ksnc_proto) {
+				CERROR("Unknown protocol.Error reading HELLO from %pISc\n",
+				       &conn->ksnc_peeraddr);
+				goto out_unknown;
+			}
 
 			hello->kshm_nips = 0;
 			ksocknal_send_hello(ni, conn, &ni->ni_nid,
 					    hello);
 		}
-unknown:
 		CERROR("Unknown protocol version (%d.x expected) from %pISc\n",
 		       conn->ksnc_proto->pro_version, &conn->ksnc_peeraddr);
-
-		return -EPROTO;
+out_unknown:
+		rc = -EPROTO;
+out_fatal:
+		return rc;
 	}
 
 	proto_match = (conn->ksnc_proto == proto);
