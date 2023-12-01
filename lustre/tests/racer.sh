@@ -1,4 +1,14 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/tests/racer.sh
+#
+# Launcher racer script which runs individual racer tests under
+# lustre/tests/racer/
+#
 set -e
 
 ONLY=${ONLY:-"$*"}
@@ -64,6 +74,10 @@ fi
 (( $MDS1_VERSION < $(version_code 2.12.0) )) &&
 	RACER_ENABLE_SEL=false
 
+[[ $OST1_VERSION -lt $(version_code 2.15.59) || $ost1_FSTYPE != ldiskfs ]] &&
+	RACER_ENABLE_FALLOCATE=false
+check_set_fallocate || RACER_ENABLE_FALLOCATE=false
+
 RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-false}
 RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-false}
 RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-false}
@@ -78,6 +92,7 @@ RACER_ENABLE_OVERSTRIPE=${RACER_ENABLE_OVERSTRIPE:-false}
 RACER_LOV_MAX_STRIPECOUNT=${RACER_LOV_MAX_STRIPECOUNT:-$LOV_MAX_STRIPE_COUNT}
 RACER_EXTRA_LAYOUT=${RACER_EXTRA_LAYOUT:-""}
 RACER_MIGRATE_STRIPE_MAX=${RACER_MIGRATE_STRIPE_MAX:-1}
+RACER_ENABLE_FALLOCATE=${RACER_ENABLE_FALLOCATE:-true}
 
 fail_random_facet () {
 	local facets=${victims[@]}

@@ -25,6 +25,10 @@ if [[ -z "$RACER_PROGS" ]]; then
 	if $RACER_ENABLE_MIGRATION; then
 		RACER_PROGS+=" dir_migrate"
 	fi
+
+	if $RACER_ENABLE_FALLOCATE; then
+		RACER_PROGS+=' file_fallocate'
+	fi
 fi
 RACER_PROGS=${RACER_PROGS//[,+]/ }
 
