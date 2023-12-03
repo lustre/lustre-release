@@ -5843,7 +5843,7 @@ test_81()
 
 	pool_add $qpool || error "pool_add failed"
 	#define OBD_FAIL_QUOTA_RECALC	0xA07
-	do_facet mds1 $LCTL set_param fail_loc=0x80000A07 fail_val=30
+	do_facet mds1 $LCTL set_param fail_loc=0x80000A07 fail_val=10
 	# added OST casues to start pool recalculation
 	pool_add_targets $qpool 0 0 1
 	stop mds1 -f || error "MDS umount failed"
