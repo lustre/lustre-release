@@ -2073,7 +2073,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 			lns->ns_nid = ni->ni_nid;
 
 			lnet_ni_lock(ni);
-			ns->ns_status = lnet_ni_get_status_locked(ni);
+			lns->ns_status = lnet_ni_get_status_locked(ni);
 			ni->ni_status = &lns->ns_status;
 			lnet_ni_unlock(ni);
 
