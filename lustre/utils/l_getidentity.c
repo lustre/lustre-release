@@ -778,9 +778,11 @@ static int lookup_db_line_nss(char *line)
 		return -EIO;
 
 	while ((tok = strtok(NULL, " \t\n")) != NULL) {
-		struct nss_module *newmod = g_nss_modules + g_n_nss_modules;
+		struct nss_module *newmod = NULL;
 
-		if (g_n_nss_modules >= NSS_MODULES_MAX_NR)
+		if (g_n_nss_modules < NSS_MODULES_MAX_NR)
+			newmod = &g_nss_modules[g_n_nss_modules];
+		else
 			return -ERANGE;
 
 		if (!strcmp(tok, "files") || !strcmp(tok, "lustre"))
