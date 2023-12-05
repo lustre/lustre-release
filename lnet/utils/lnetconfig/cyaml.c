@@ -1400,12 +1400,13 @@ struct cYAML *cYAML_build_tree(char *path,
 			       bool debug)
 {
 	yaml_parser_t parser;
-	struct cYAML *yaml;
+	struct cYAML *yaml = NULL;
 	char err_str[256];
 	FILE *input = NULL;
 
 	/* Create the Parser object. */
-	yaml_parser_initialize(&parser);
+	if (yaml_parser_initialize(&parser) == 0)
+		goto out_init;
 
 	/* file always takes precedence */
 	if (path != NULL) {
@@ -1437,6 +1438,6 @@ struct cYAML *cYAML_build_tree(char *path,
 
 	if (input != NULL)
 		fclose(input);
-
+out_init:
 	return yaml;
 }

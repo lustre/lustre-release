@@ -1857,7 +1857,16 @@ int lcfg_apply_param_yaml(char *func, char *filename)
 
 	convert = !strncmp(func, "set_param", 9);
 	file = fopen(filename, "rb");
-	yaml_parser_initialize(&parser);
+	if (!file) {
+		rc1 = -errno;
+		goto out_open;
+	}
+
+	rc = yaml_parser_initialize(&parser);
+	if (rc == 0) {
+		rc1 = -EOPNOTSUPP;
+		goto out_init;
+	}
 	yaml_parser_set_input_file(&parser, file);
 
 	/*
@@ -1974,8 +1983,9 @@ int lcfg_apply_param_yaml(char *func, char *filename)
 	}
 
 	yaml_parser_delete(&parser);
+out_init:
 	fclose(file);
-
+out_open:
 	return rc1;
 }
 
