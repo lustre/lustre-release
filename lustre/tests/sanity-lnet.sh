@@ -23,8 +23,6 @@ init_test_env "$@"
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-build_test_filter
-
 [[ -z $LNETCTL ]] && skip "Need lnetctl"
 
 restore_mounts=false
@@ -226,6 +224,31 @@ validate_gateway_nids() {
 	validate_nids
 }
 
+# TODO: Switch to ipcalc if/when we need more sophisticated validation
+ip_is_v4() {
+	local ipv4_re='^([0-9]{1,3}\.){3,3}[0-9]{1,3}$'
+
+	if ! [[ $1 =~ $ipv4_re ]]; then
+		return 1
+	fi
+
+	local quads=(${1//\./ })
+
+	(( ${#quads[@]} == 4)) || return 1
+
+	(( quads[0] < 256 && quads[1] < 256 &&
+	   quads[2] < 256 && quads[3] < 256 )) || return 1
+
+	return 0
+}
+
+intf_has_ipv4() {
+	local addr=$(ip -o -4 a s "$1" | awk '{print $4}' | head -n 1 |
+		     sed 's,/[0-9]\+$,,')
+
+	ip_is_v4 "${addr}"
+}
+
 cleanupall -f
 setup_netns || error "setup_netns failed with $?"
 
@@ -236,6 +259,43 @@ do_lnetctl net show
 ip a
 
 INTERFACES=( $(lnet_if_list) )
+
+if [[ -z ${INTERFACES[@]} ]]; then
+	error "Did not identify any LNet interfaces"
+fi
+
+if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
+	if ! intf_has_ipv4 "${INTERFACES[0]}"; then
+		always_except LU-5960 230
+		always_except LU-9680 204
+		always_except LU-9680 205
+		always_except LU-9680 206
+		always_except LU-9680 207
+		always_except LU-9680 209
+		always_except LU-9680 210
+		always_except LU-9680 211
+		always_except LU-9680 212
+		always_except LU-9680 213
+		always_except LU-9680 216
+		always_except LU-9680 218
+		always_except LU-9680 231
+		always_except LU-9680 302
+		always_except LU-9680 500
+		always_except LU-14288 101
+		always_except LU-14288 103
+		always_except LU-16822 100
+		always_except LU-16822 102
+		always_except LU-16822 105
+		always_except LU-16822 106
+		always_except LU-17458 220
+		always_except LU-17455 250
+		always_except LU-17457 208
+		always_except LU-17457 255
+		always_except LU-17460 214
+	fi
+fi
+
+build_test_filter
 
 cleanup_lnet || error "Failed to cleanup LNet"
 
@@ -1115,8 +1175,8 @@ else
 fi
 GW_NID="${IF0_NET}.${GW_HOSTNUM}@${NETTYPE}"
 test_100() {
-	[[ ${NETTYPE} == tcp* ]] ||
-		skip "Need tcp NETTYPE"
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
@@ -1146,8 +1206,8 @@ EOF
 run_test 100 "Add route with single gw (tcp)"
 
 test_101() {
-	[[ ${NETTYPE} == tcp* ]] ||
-		skip "Need tcp NETTYPE"
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
@@ -1881,8 +1941,7 @@ test_208_load_and_check_lnet() {
 }
 
 test_208() {
-	[[ ${NETTYPE} == tcp* ]] ||
-		skip "Need tcp NETTYPE"
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
 
 	cleanup_netns || error "Failed to cleanup netns before test execution"
 	cleanup_lnet || error "Failed to unload modules before test execution"
@@ -2079,10 +2138,16 @@ test_210() {
 		error "failed to set recovery_limit"
 
 	$LCTL set_param debug=+net
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e local_error
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e local_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e local_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
+		error "Failed to add drop rule"
 	do_lnetctl net set --health 0 --nid $prim_nid
 
 	check_ping_count "ni" "$prim_nid" "2" "10"
@@ -2111,10 +2176,16 @@ test_210() {
 		error "failed to set max_recovery_ping_interval"
 
 	$LCTL set_param debug=+net
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e local_error
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e local_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e local_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
+		error "Failed to add drop rule"
 	do_lnetctl net set --health 0 --nid $prim_nid
 
 	check_ping_count "ni" "$prim_nid" "2" "10"
@@ -2150,10 +2221,16 @@ test_211() {
 	do_lnetctl set recovery_limit 10 ||
 		error "failed to set recovery_limit"
 
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e remote_error
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e remote_error
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e remote_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e remote_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
+		error "Failed to add drop rule"
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
@@ -2197,10 +2274,16 @@ test_211() {
 	do_lnetctl set max_recovery_ping_interval 4 ||
 		error "failed to set max_recovery_ping_interval"
 
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e remote_error
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 -e remote_error
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e remote_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e remote_error ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
+		error "Failed to add drop rule"
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
@@ -2262,7 +2345,9 @@ test_212() {
 		error "$rnode failed to discover $my_nid"
 
 	log "Fail local discover ping to set LNET_PEER_REDISCOVER flag"
-	$LCTL net_drop_add -s "*@$NETTYPE" -d "*@$NETTYPE" -r 1 -e local_error
+	$LCTL net_drop_add -s "*@$NETTYPE" -d "*@$NETTYPE" -r 1 \
+		-e local_error ||
+		error "Failed to add drop rule"
 	do_lnetctl discover --force $rnodepnid &&
 		error "Discovery should have failed"
 	$LCTL net_drop_del -a
@@ -2271,11 +2356,15 @@ test_212() {
 	for nid in $rnodenids; do
 		# We need GET (PING) delay just long enough so we can trigger
 		# discovery on the remote peer
-		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -l 3
-		$LCTL net_drop_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -e local_error
+		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -l 3 ||
+			error "Failed to add delay rule"
+		$LCTL net_drop_add -s "*@$NETTYPE" -d $nid -r 1 -m GET \
+			-e local_error ||
+			error "Failed to add drop rule"
 		# We need PUT (PUSH) delay just long enough so we can process
 		# the PING failure
-		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m PUT -l 6
+		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m PUT -l 6 ||
+			error "Failed to add delay rule"
 	done
 
 	log "Force $HOSTNAME to discover $rnodepnid (in background)"
@@ -2553,7 +2642,9 @@ test_216() {
 	local src dst
 	for src in "${nids[@]}"; do
 		for dst in "${nids[@]}"; do
-			$LCTL net_drop_add -r 1 -s $src -d $dst -e network_timeout
+			$LCTL net_drop_add -r 1 -s $src -d $dst \
+				-e network_timeout ||
+				error "Failed to add drop rule"
 		done
 	done
 
@@ -2606,7 +2697,8 @@ test_218() {
 	do_lnetctl ping $nid2 ||
 		error "ping failed"
 
-	$LCTL net_drop_add -s $nid1 -d $nid1 -e local_error -r 1
+	$LCTL net_drop_add -s $nid1 -d $nid1 -e local_error -r 1 ||
+		error "Failed to add drop rule"
 
 	do_lnetctl ping --source $nid1 $nid1 &&
 		error "ping should have failed"
@@ -3087,8 +3179,8 @@ test_225() {
 run_test 225 "Check avoid_asym_router_failure=0 w/DD disabled"
 
 test_230() {
-	[[ ${NETTYPE} == tcp* ]] ||
-		skip "Need tcp NETTYPE"
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
 	# LU-12815
 	echo "Check valid values; Should succeed"
 	local i
@@ -3194,8 +3286,8 @@ run_test 231 "Check DLC handling of peer_timeout parameter"
 test_250() {
 	local skip_param
 
-	[[ ${NETTYPE} == tcp* ]] ||
-		skip "Need tcp NETTYPE"
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
 	reinit_dlc || return $?
 	add_net "tcp" "${INTERFACES[0]}" || return $?
 
@@ -3273,7 +3365,8 @@ do_expired_message_drop_test() {
 	for lnid in "${LNIDS[@]}"; do
 		for rnid in "${RNIDS[@]}"; do
 			$LCTL net_delay_add -s "${lnid}" -d "${rnid}" \
-				-l "${delay}" -r 1 -m GET
+				-l "${delay}" -r 1 -m GET ||
+				error "Failed to add delay rule"
 		done
 	done
 
@@ -3459,6 +3552,7 @@ run_test 301 "Check for dynamic adds of same/wrong interface (memory leak)"
 
 test_302() {
 	! [[ $NETTYPE =~ (tcp|o2ib) ]] && skip "Need tcp or o2ib NETTYPE"
+
 	reinit_dlc || return $?
 
 	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
@@ -3804,8 +3898,12 @@ test_500() {
 	$LCTL net_delay_add -s *@tcp -d *@tcp -r 1 -l 1 -m PUT ||
 		error "Failed to add delay rule"
 
-	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | head -n 1) -m PUT -e local_timeout -r 1
-	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | tail -n 1) -m PUT -e local_timeout -r 1
+	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | head -n 1) -m PUT \
+		-e local_timeout -r 1 ||
+		error "Failed to add drop rule"
+	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | tail -n 1) -m PUT \
+		-e local_timeout -r 1 ||
+		error "Failed to add drop rule"
 
 	ip link set $FAKE_IF down ||
 		error "Failed to set link down"
