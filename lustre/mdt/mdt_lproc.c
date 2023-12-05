@@ -1389,6 +1389,14 @@ static struct ldebugfs_vars ldebugfs_mdt_obd_vars[] = {
 	{ NULL }
 };
 
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, srpc_serverctx);
+
+static struct ldebugfs_vars ldebugfs_mdt_gss_vars[] = {
+	{ .name =	"srpc_serverctx",
+	  .fops =	&mdt_srpc_serverctx_fops	},
+	{ NULL }
+};
+
 static int
 lprocfs_mdt_print_open_files(struct obd_export *exp, void *v)
 {
@@ -1533,6 +1541,12 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 		       mdt_obd_name(mdt), rc);
 		return rc;
 	}
+
+	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
+						      obd->obd_debugfs_entry);
+	if (obd->obd_debugfs_gss_dir)
+		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+				  ldebugfs_mdt_gss_vars, obd);
 
 	obd->obd_proc_exports_entry = proc_mkdir("exports",
 						 obd->obd_proc_entry);

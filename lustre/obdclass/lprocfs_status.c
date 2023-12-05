@@ -1142,6 +1142,9 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 	if (!obd)
 		return -EINVAL;
 
+	debugfs_remove_recursive(obd->obd_debugfs_gss_dir);
+	obd->obd_debugfs_gss_dir = NULL;
+
 	if (obd->obd_proc_exports_entry) {
 		/* Should be no exports left */
 		lprocfs_remove(&obd->obd_proc_exports_entry);

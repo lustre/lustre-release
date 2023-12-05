@@ -1199,38 +1199,45 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 	struct hlist_node *next;
 	struct ptlrpc_cli_ctx *ctx;
 	struct gss_cli_ctx *gctx;
+	struct ptlrpc_connection *conn;
 	time64_t now = ktime_get_real_seconds();
 
 	ENTRY;
 	spin_lock(&sec->ps_lock);
 	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,
 				  cc_cache) {
-                struct key             *key;
-                char                    flags_str[40];
-                char                    mech[40];
+		struct key *key;
+		char flags_str[40];
+		char mech[40];
 
-                gctx = ctx2gctx(ctx);
-                key = ctx2gctx_keyring(ctx)->gck_key;
+		gctx = ctx2gctx(ctx);
+		key = ctx2gctx_keyring(ctx)->gck_key;
+		if (sec_is_reverse(sec) &&
+		    ctx->cc_sec && ctx->cc_sec->ps_import &&
+		    ctx->cc_sec->ps_import->imp_connection)
+			conn = ctx->cc_sec->ps_import->imp_connection;
+		else
+			conn = NULL;
 
-                gss_cli_ctx_flags2str(ctx->cc_flags,
-                                      flags_str, sizeof(flags_str));
+		gss_cli_ctx_flags2str(ctx->cc_flags,
+				      flags_str, sizeof(flags_str));
 
-                if (gctx->gc_mechctx)
-                        lgss_display(gctx->gc_mechctx, mech, sizeof(mech));
-                else
-                        snprintf(mech, sizeof(mech), "N/A");
-                mech[sizeof(mech) - 1] = '\0';
+		if (gctx->gc_mechctx)
+			lgss_display(gctx->gc_mechctx, mech, sizeof(mech));
+		else
+			snprintf(mech, sizeof(mech), "N/A");
+		mech[sizeof(mech) - 1] = '\0';
 
 		seq_printf(seq,
-			   "%p: uid %u, ref %d, expire %lld(%+lld), fl %s, seq %d, win %u, key %08x(ref %d), hdl %#llx:%#llx, mech: %s\n",
-			   ctx, ctx->cc_vcred.vc_uid,
-			   atomic_read(&ctx->cc_refcount),
+			   "- %p: { %s%s%suid: %u, ctxref: %d, expire: %lld, delta: %lld, flags: [%s], seq: %d, win: %u, key: %08x, keyref: %d, hdl: \"%#llx:%#llx\", mech: \"%s\" }\n",
+			   ctx, conn ? "peer_nid: " : "",
+			   conn ? libcfs_nidstr(&conn->c_peer.nid) : "",
+			   conn ? ", " : "",
+			   ctx->cc_vcred.vc_uid, atomic_read(&ctx->cc_refcount),
 			   ctx->cc_expire,
 			   ctx->cc_expire ?  ctx->cc_expire - now : 0,
-			   flags_str,
-			   atomic_read(&gctx->gc_seq),
-			   gctx->gc_win,
-			   key ? key->serial : 0,
+			   flags_str, atomic_read(&gctx->gc_seq),
+			   gctx->gc_win, key ? key->serial : 0,
 			   key ? ll_read_key_usage(key) : 0,
 			   gss_handle_to_u64(&gctx->gc_handle),
 			   gss_handle_to_u64(&gctx->gc_svc_handle),

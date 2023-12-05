@@ -1403,6 +1403,40 @@ struct ptlrpc_sec * sptlrpc_sec_create(struct obd_import *imp,
 	RETURN(sec);
 }
 
+static int print_srpc_serverctx_seq(struct obd_export *exp, void *cb_data)
+{
+	struct seq_file *m = cb_data;
+	struct obd_import *imp = exp->exp_imp_reverse;
+	struct ptlrpc_sec *sec = NULL;
+
+	if (imp)
+		sec = sptlrpc_import_sec_ref(imp);
+	if (sec == NULL)
+		goto out;
+
+	if (sec->ps_policy->sp_cops->display)
+		sec->ps_policy->sp_cops->display(sec, m);
+
+	sptlrpc_sec_put(sec);
+out:
+	return 0;
+}
+
+int lprocfs_srpc_serverctx_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct obd_export *exp, *n;
+
+	spin_lock(&obd->obd_dev_lock);
+	list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
+		print_srpc_serverctx_seq(exp, m);
+	}
+	spin_unlock(&obd->obd_dev_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_srpc_serverctx_seq_show);
+
 struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp)
 {
 	struct ptlrpc_sec *sec;

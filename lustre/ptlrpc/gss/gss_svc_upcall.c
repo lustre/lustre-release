@@ -142,8 +142,8 @@ static __always_inline __u64 gss_hash_64(__u64 val, unsigned int bits)
 
 static inline unsigned long hash_mem_64(char *buf, int length, int bits)
 {
-	unsigned long hash = 0;
-	unsigned long l = 0;
+	__u64 hash = 0;
+	__u64 l = 0;
 	int len = 0;
 	unsigned char c;
 
@@ -157,8 +157,8 @@ static inline unsigned long hash_mem_64(char *buf, int length, int bits)
 		l = (l << 8) | c;
 		len++;
 
-		if ((len & (BITS_PER_LONG/8-1)) == 0)
-			hash = gss_hash_64(hash^l, BITS_PER_LONG);
+		if ((len & (BITS_PER_LONG / 8 - 1)) == 0)
+			hash = gss_hash_64(hash ^ l, BITS_PER_LONG);
 	} while (len);
 
 	return hash >> (BITS_PER_LONG - bits);

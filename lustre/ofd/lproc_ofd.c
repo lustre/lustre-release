@@ -949,6 +949,14 @@ struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
 	{ NULL }
 };
 
+LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, srpc_serverctx);
+
+static struct ldebugfs_vars ldebugfs_ofd_gss_vars[] = {
+	{ .name =	"srpc_serverctx",
+	  .fops =	&ofd_srpc_serverctx_fops	},
+	{ NULL }
+};
+
 /**
  * Initialize OFD statistics counters
  *
@@ -1080,6 +1088,12 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		       obd->obd_name, rc);
 		GOTO(tgt_cleanup, rc);
 	}
+
+	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
+						      obd->obd_debugfs_entry);
+	if (obd->obd_debugfs_gss_dir)
+		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+				  ldebugfs_ofd_gss_vars, obd);
 
 	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
 	if (IS_ERR(entry)) {

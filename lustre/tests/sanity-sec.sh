@@ -2222,16 +2222,16 @@ test_28() {
 		error "read before rotation failed"
 	fi
 	# store top key identity to ensure rotation has occurred
-	SK_IDENTITY_OLD=$(lctl get_param *.*.*srpc* 2>/dev/null | grep "expire"|
-		head -1 | awk '{print $15}' | cut -c1-8)
+	SK_IDENTITY_OLD=$($LCTL get_param -n *.*.*srpc_contexts 2>/dev/null |
+		       head -n 1 | awk 'BEGIN{RS=", "} $1=="expire:"{print $2}')
 	do_facet $SINGLEMDS lfs flushctx ||
 		 error "could not run flushctx on $SINGLEMDS"
 	sleep 5
 	lfs flushctx || error "could not run flushctx on client"
 	sleep 5
 	# verify new key is in place
-	SK_IDENTITY_NEW=$(lctl get_param *.*.*srpc* 2>/dev/null | grep "expire"|
-		head -1 | awk '{print $15}' | cut -c1-8)
+	SK_IDENTITY_NEW=$($LCTL get_param -n *.*.*srpc_contexts 2>/dev/null |
+		       head -n 1 | awk 'BEGIN{RS=", "} $1=="expire:"{print $2}')
 	if [ $SK_IDENTITY_OLD == $SK_IDENTITY_NEW ]; then
 		error "key did not rotate correctly"
 	fi

@@ -1099,6 +1099,7 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 			     struct sptlrpc_flavor *flvr);
 struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp);
 void sptlrpc_import_sec_put(struct obd_import *imp);
+int lprocfs_srpc_serverctx_seq_show(struct seq_file *m, void *data);
 
 int  sptlrpc_import_check_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp);

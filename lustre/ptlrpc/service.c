@@ -2093,6 +2093,7 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	spin_unlock(&svcpt->scp_lock);
 
 	/* go through security check/transform */
+	CDEBUG(D_RPCTRACE, "unwrap req x%llu\n", req->rq_xid);
 	rc = sptlrpc_svc_unwrap_request(req);
 	switch (rc) {
 	case SECSVC_OK:
@@ -2238,6 +2239,7 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	RETURN(1);
 
 err_req:
+	CDEBUG(D_RPCTRACE, "finish req x%llu\n", req->rq_xid);
 	ptlrpc_server_finish_request(svcpt, req);
 
 	RETURN(1);

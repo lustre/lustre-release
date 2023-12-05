@@ -588,19 +588,19 @@ void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
 	buf[0] = '\0';
 
 	if (flags & PTLRPC_CTX_NEW)
-		strlcat(buf, "new,", bufsize);
+		strlcat(buf, "new, ", bufsize);
 	if (flags & PTLRPC_CTX_UPTODATE)
-		strlcat(buf, "uptodate,", bufsize);
+		strlcat(buf, "uptodate, ", bufsize);
 	if (flags & PTLRPC_CTX_DEAD)
-		strlcat(buf, "dead,", bufsize);
+		strlcat(buf, "dead, ", bufsize);
 	if (flags & PTLRPC_CTX_ERROR)
-		strlcat(buf, "error,", bufsize);
+		strlcat(buf, "error, ", bufsize);
 	if (flags & PTLRPC_CTX_CACHED)
-		strlcat(buf, "cached,", bufsize);
+		strlcat(buf, "cached, ", bufsize);
 	if (flags & PTLRPC_CTX_ETERNAL)
-		strlcat(buf, "eternal,", bufsize);
-	if (buf[0] == '\0')
-		strlcat(buf, "-,", bufsize);
+		strlcat(buf, "eternal, ", bufsize);
+	if (buf[strlen(buf) - 2] == ',')
+		buf[strlen(buf) - 2] = '\0';
 }
 
 int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)

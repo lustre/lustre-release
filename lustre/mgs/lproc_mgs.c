@@ -218,6 +218,14 @@ static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 LUSTRE_RO_ATTR(num_exports);
 LUSTRE_RO_ATTR(eviction_count);
 
+LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, srpc_serverctx);
+
+static struct ldebugfs_vars ldebugfs_ofd_gss_vars[] = {
+	{ .name =	"srpc_serverctx",
+	  .fops =	&ofd_srpc_serverctx_fops	},
+	{ NULL }
+};
+
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
 {
@@ -295,6 +303,12 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
                 mgs->mgs_proc_live = NULL;
 		GOTO(out, rc);
         }
+
+	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
+						      obd->obd_debugfs_entry);
+	if (obd->obd_debugfs_gss_dir)
+		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+				  ldebugfs_ofd_gss_vars, obd);
 
 	obd->obd_proc_exports_entry = lprocfs_register("exports",
 						       obd->obd_proc_entry,
