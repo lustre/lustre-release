@@ -196,6 +196,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	loff_t lov_bytes;
 	u32 magic;
 	u32 pattern;
+	time64_t retry_limit = 0;
 	unsigned int stripe_count;
 	unsigned int i;
 	int rc;
@@ -258,7 +259,9 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	for (i = 0; i < stripe_count; i++) {
 		struct lov_oinfo *loi;
-		struct lov_tgt_desc *ltd;
+		struct lov_tgt_desc *ltd = NULL;
+		static time64_t next_print;
+		unsigned int level;
 
 		OBD_SLAB_ALLOC_PTR_GFP(loi, lov_oinfo_slab, GFP_NOFS);
 		if (!loi)
@@ -272,21 +275,41 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 		if (lov_oinfo_is_dummy(loi))
 			continue;
 
-		if (loi->loi_ost_idx >= lov->desc.ld_tgt_count &&
-		    !lov2obd(lov)->obd_process_conf) {
-			CERROR("%s: OST index %d more than OST count %d\n",
-			       (char*)lov->desc.ld_uuid.uuid,
-			       loi->loi_ost_idx, lov->desc.ld_tgt_count);
+retry_new_ost:
+		if (unlikely(loi->loi_ost_idx >= lov->desc.ld_tgt_count ||
+			     !(ltd = lov->lov_tgts[loi->loi_ost_idx]))) {
+			time64_t now = ktime_get_seconds();
+
+			/* print message on the first hit, error if giving up */
+			if (retry_limit == 0) {
+				level = now > next_print ? D_WARNING : D_INFO;
+				retry_limit = now + RECONNECT_DELAY_MAX;
+			} else if (now > retry_limit) {
+				level = D_ERROR;
+			} else {
+				level = D_INFO;
+			}
+
+			/* log debug every loop, just to see it is trying */
+			CDEBUG_LIMIT(level,
+				loi->loi_ost_idx < lov->desc.ld_tgt_count ?
+				"%s: FID "DOSTID" OST index %d/%u missing\n" :
+				"%s: FID "DOSTID" OST index %d more than OST count %u\n",
+				lov->desc.ld_uuid.uuid, POSTID(&loi->loi_oi),
+				loi->loi_ost_idx, lov->desc.ld_tgt_count);
+			if (now > next_print) {
+				LCONSOLE_INFO("%s: wait %ds while client connects to new OST\n",
+					      lov->desc.ld_uuid.uuid,
+					      (int)(retry_limit - now));
+				next_print = retry_limit + 600;
+			}
+			if (now < retry_limit) {
+				rc = schedule_timeout_interruptible(cfs_time_seconds(1));
+				if (rc == 0)
+					goto retry_new_ost;
+			}
 			lov_dump_lmm_v1(D_WARNING, lmm);
 			GOTO(out_lsme, rc = -EINVAL);
-		}
-
-		ltd = lov->lov_tgts[loi->loi_ost_idx];
-		if (!ltd) {
-			CERROR("%s: OST index %d missing\n",
-			       (char*)lov->desc.ld_uuid.uuid, loi->loi_ost_idx);
-			lov_dump_lmm_v1(D_WARNING, lmm);
-			continue;
 		}
 
 		lov_bytes = lov_tgt_maxbytes(ltd);
