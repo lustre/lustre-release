@@ -2003,6 +2003,31 @@ void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th)
 	      oti->oti_declare_ops_used[OSD_OT_REF_DEL]);
 }
 
+#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
+void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
+				    struct osd_thandle *oh,
+				    int *credits, int *revoke)
+{
+	int blocks = LDISKFS_MAX_EXTENT_DEPTH * oh->oh_declared_ext;
+	*revoke += ldiskfs_trans_default_revoke_credits(osd_sb(osd)) + blocks;
+}
+#else
+void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
+				    struct osd_thandle *oh,
+				    int *credits, int *revoke)
+{
+	struct journal_s *journal = LDISKFS_SB(osd_sb(osd))->s_journal;
+	int blocks, jbsize, records_per_block;
+
+	blocks = LDISKFS_MAX_EXTENT_DEPTH * oh->oh_declared_ext;
+	jbsize = journal->j_blocksize;
+	jbsize -= sizeof(struct jbd2_journal_block_tail) +
+		  sizeof(jbd2_journal_revoke_header_t);
+	records_per_block = jbsize / 8;
+	*credits += (blocks + records_per_block - 1) / records_per_block;
+}
+#endif
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -2013,7 +2038,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	struct osd_device *dev = osd_dt_dev(d);
 	handle_t *jh;
 	struct osd_thandle *oh;
-	int rc;
+	int rc, revoke = 0;
 
 	ENTRY;
 
@@ -2087,7 +2112,9 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	 * XXX temporary stuff. Some abstraction layer should
 	 * be used.
 	 */
-	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC, oh->ot_credits);
+	osd_ldiskfs_credits_for_revoke(dev, oh, &oh->ot_credits, &revoke);
+	jh = osd_journal_start_with_revoke(osd_sb(dev), LDISKFS_HT_MISC,
+					   oh->ot_credits, revoke);
 	osd_th_started(oh);
 	if (!IS_ERR(jh)) {
 		oh->ot_handle = jh;

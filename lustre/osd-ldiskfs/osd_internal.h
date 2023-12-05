@@ -992,6 +992,14 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 #ifdef LDISKFS_HT_MISC
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, type, nblock)
+#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
+# define osd_journal_start_with_revoke(sb, type, nblock, revoke) \
+		ldiskfs_journal_start_with_revoke((sb)->s_root->d_inode, type, \
+						  nblock, revoke)
+#else
+# define osd_journal_start_with_revoke(sb, type, nblock, revoke) \
+		ldiskfs_journal_start_sb(sb, type, nblock)
+#endif
 static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 						     struct inode *inode,
 						     ldiskfs_lblk_t *nblock)
