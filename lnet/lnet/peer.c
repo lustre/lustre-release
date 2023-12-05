@@ -4143,6 +4143,14 @@ static int lnet_peer_discovery(void *arg)
 	while (!list_empty(&the_lnet.ln_dc_request)) {
 		lp = list_first_entry(&the_lnet.ln_dc_request,
 				      struct lnet_peer, lp_dc_list);
+		lnet_net_unlock(LNET_LOCK_EX);
+		spin_lock(&lp->lp_lock);
+		if (lp->lp_state & LNET_PEER_PING_FAILED)
+			rc = lnet_peer_ping_failed(lp);
+		if (lp->lp_state & LNET_PEER_PUSH_FAILED)
+			rc = lnet_peer_push_failed(lp);
+		spin_unlock(&lp->lp_lock);
+		lnet_net_lock(LNET_LOCK_EX);
 		lnet_peer_discovery_complete(lp, -ESHUTDOWN);
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
