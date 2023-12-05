@@ -1355,7 +1355,10 @@ static int lst_old_groups_show_dump(struct sk_buff *msg,
 		int rc = lst_groups_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lst_groups_show_dump(msg, cb);

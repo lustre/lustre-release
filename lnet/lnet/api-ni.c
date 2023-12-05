@@ -5016,7 +5016,10 @@ static int lnet_old_cpt_of_nid_show_dump(struct sk_buff *msg,
 		int rc = lnet_cpt_of_nid_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lnet_cpt_of_nid_show_dump(msg, cb);
@@ -5778,7 +5781,10 @@ static int lnet_old_net_show_dump(struct sk_buff *msg,
 		int rc = lnet_net_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lnet_net_show_dump(msg, cb);
@@ -6800,6 +6806,7 @@ static int lnet_route_show_dump(struct sk_buff *msg,
 	int portid = NETLINK_CB(cb->skb).portid;
 	int seq = cb->nlh->nlmsg_seq;
 	int idx = rlist->lgrl_index;
+	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
@@ -6807,7 +6814,7 @@ static int lnet_route_show_dump(struct sk_buff *msg,
 #endif
 	if (!rlist->lgrl_count) {
 		NL_SET_ERR_MSG(extack, "No routes found");
-		GOTO(send_error, rc = -ENOENT);
+		GOTO(send_error, rc = msg_len ? -ENOENT : 0);
 	}
 
 	if (!idx) {
@@ -6823,22 +6830,6 @@ static int lnet_route_show_dump(struct sk_buff *msg,
 			NL_SET_ERR_MSG(extack, "failed to send key table");
 			GOTO(send_error, rc);
 		}
-	}
-
-	/* If not routes found send an empty message and not an error */
-	if (!rlist->lgrl_count) {
-		void *hdr;
-
-		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
-				  NLM_F_MULTI, LNET_CMD_ROUTES);
-		if (!hdr) {
-			NL_SET_ERR_MSG(extack, "failed to send values");
-			genlmsg_cancel(msg, hdr);
-			GOTO(send_error, rc = -EMSGSIZE);
-		}
-		genlmsg_end(msg, hdr);
-
-		goto send_error;
 	}
 
 	while (idx < rlist->lgrl_count) {
@@ -6890,7 +6881,10 @@ static int lnet_old_route_show_dump(struct sk_buff *msg,
 		int rc = lnet_route_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lnet_route_show_dump(msg, cb);
@@ -7227,6 +7221,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 	int portid = NETLINK_CB(cb->skb).portid;
 	int seq = cb->nlh->nlmsg_seq;
 	int idx = plist->lgpl_index;
+	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
@@ -7234,7 +7229,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 #endif
 	if (!plist->lgpl_count) {
 		NL_SET_ERR_MSG(extack, "No peers found");
-		GOTO(send_error, rc = -ENOENT);
+		GOTO(send_error, rc = msg_len ? -ENOENT : 0);
 	}
 
 	if (!idx) {
@@ -7506,7 +7501,10 @@ static int lnet_old_peer_ni_show_dump(struct sk_buff *msg,
 		int rc = lnet_peer_ni_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lnet_peer_ni_show_dump(msg, cb);
@@ -8155,7 +8153,10 @@ static int lnet_old_ping_show_dump(struct sk_buff *msg,
 		int rc = lnet_ping_show_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lnet_ping_show_dump(msg, cb);
