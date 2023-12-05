@@ -231,21 +231,6 @@ out:
 }
 LPROC_SEQ_FOPS(rsi_upcall);
 
-static ssize_t lprocfs_rsi_flush_seq_write(struct file *file,
-					   const char __user *buffer,
-					   size_t count, void *data)
-{
-	int hash, rc;
-
-	rc = kstrtoint_from_user(buffer, count, 0, &hash);
-	if (rc)
-		return rc;
-
-	rsi_flush(rsicache, hash);
-	return count;
-}
-LPROC_SEQ_FOPS_WR_ONLY(gss, rsi_flush);
-
 static ssize_t lprocfs_rsi_info_seq_write(struct file *file,
 					  const char __user *buffer,
 					  size_t count, void *data)
@@ -347,21 +332,6 @@ static ssize_t rsi_acquire_expire_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(rsi_acquire_expire);
-
-static ssize_t lprocfs_rsc_flush_seq_write(struct file *file,
-					   const char __user *buffer,
-					   size_t count, void *data)
-{
-	int hash, rc;
-
-	rc = kstrtoint_from_user(buffer, count, 0, &hash);
-	if (rc)
-		return rc;
-
-	rsc_flush(rsccache, hash);
-	return count;
-}
-LPROC_SEQ_FOPS_WR_ONLY(gss, rsc_flush);
 
 static ssize_t lprocfs_rsc_info_seq_write(struct file *file,
 					  const char __user *buffer,
@@ -476,16 +446,12 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
 #endif
 	{ .name	=	"rsi_upcall",
 	  .fops	=	&rsi_upcall_fops },
-	{ .name =	"rsi_flush",
-	  .fops =	&gss_rsi_flush_fops },
 	{ .name =	"rsi_info",
 	  .fops =	&gss_rsi_info_fops },
 	{ .name	=	"rsi_entry_expire",
 	  .fops	=	&rsi_entry_expire_fops },
 	{ .name	=	"rsi_acquire_expire",
 	  .fops	=	&rsi_acquire_expire_fops },
-	{ .name =	"rsc_flush",
-	  .fops =	&gss_rsc_flush_fops },
 	{ .name =	"rsc_info",
 	  .fops =	&gss_rsc_info_fops },
 	{ NULL }

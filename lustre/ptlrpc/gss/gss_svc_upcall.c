@@ -431,14 +431,6 @@ void rsi_entry_put(struct upcall_cache *cache, struct gss_rsi *rsi)
 	upcall_cache_put_entry(cache, rsi->si_uc_entry);
 }
 
-void rsi_flush(struct upcall_cache *cache, int hash)
-{
-	if (hash < 0)
-		upcall_cache_flush_idle(cache);
-	else
-		upcall_cache_flush_one(cache, (__u64)hash, NULL);
-}
-
 struct upcall_cache_ops rsi_upcall_cache_ops = {
 	.init_entry	  = rsi_entry_init,
 	.free_entry	  = rsi_entry_free,
@@ -635,14 +627,6 @@ void rsc_entry_put(struct upcall_cache *cache, struct gss_rsc *rsc)
 		return;
 
 	upcall_cache_put_entry(cache, rsc->sc_uc_entry);
-}
-
-void rsc_flush(struct upcall_cache *cache, int hash)
-{
-	if (hash < 0)
-		upcall_cache_flush_idle(cache);
-	else
-		upcall_cache_flush_one(cache, (__u64)hash, NULL);
 }
 
 struct upcall_cache_ops rsc_upcall_cache_ops = {
