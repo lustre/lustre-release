@@ -195,6 +195,7 @@ static ssize_t rsi_upcall_seq_write(struct file *file,
 				    const char __user *buffer,
 				    size_t count, loff_t *off)
 {
+	char *kbuf = NULL;
 	int rc;
 
 	if (count >= UC_CACHE_UPCALL_MAXPATH) {
@@ -202,19 +203,30 @@ static ssize_t rsi_upcall_seq_write(struct file *file,
 		return -EINVAL;
 	}
 
+	OBD_ALLOC(kbuf, count + 1);
+	if (kbuf == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(kbuf, buffer, count))
+		GOTO(out, rc = -EFAULT);
+
+	kbuf[count] = '\0';
+
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
 	down_write(&rsicache->uc_upcall_rwsem);
-	rc = sscanf(buffer, "%s", rsicache->uc_upcall);
+	rc = sscanf(kbuf, "%s", rsicache->uc_upcall);
 	up_write(&rsicache->uc_upcall_rwsem);
 
 	if (rc != 1) {
 		CERROR("%s: invalid rsi upcall provided\n", rsicache->uc_name);
-		return -EINVAL;
+		GOTO(out, rc = -EINVAL);
 	}
 
 	CDEBUG(D_CONFIG, "%s: rsi upcall set to %s\n", rsicache->uc_name,
 	       rsicache->uc_upcall);
 
+out:
+	OBD_FREE(kbuf, count + 1);
 	return count;
 }
 LPROC_SEQ_FOPS(rsi_upcall);
