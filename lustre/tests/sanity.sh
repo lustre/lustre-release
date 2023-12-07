@@ -99,11 +99,19 @@ sles_version_code()
 # what tests to run
 if [ -r /etc/SuSE-release ] || [ -r /etc/SUSE-brand ]; then
 	sles_version=$(sles_version_code)
-	[ $sles_version -lt $(version_code 11.4.0) ] &&
+	(( $sles_version >= $(version_code 11.4.0) )) ||
 		always_except LU-4341 170
 
-	[ $sles_version -lt $(version_code 12.0.0) ] &&
+	(( $sles_version >= $(version_code 12.0.0) )) ||
 		always_except LU-3703 234
+elif [ -r /etc/redhat-release ]; then
+	rhel_version=$(cat /etc/redhat-release |
+		sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
+	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
+		# disable test_906 temporarily until rhel9.3 solves the
+		# failure on fio io_uring I/O engine.
+		always_except LU-17289 906
+	fi
 elif [ -r /etc/os-release ]; then
 	if grep -qi ubuntu /etc/os-release; then
 		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
