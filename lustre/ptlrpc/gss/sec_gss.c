@@ -665,69 +665,75 @@ redo:
 	RETURN(0);
 }
 
-static
-int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
-                                  struct ptlrpc_request *req,
-                                  struct gss_header *ghdr)
+static int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
+					 struct ptlrpc_request *req,
+					 struct gss_header *ghdr)
 {
-        struct gss_err_header *errhdr;
-        int rc;
+	struct gss_err_header *errhdr;
+	int rc;
 
-        LASSERT(ghdr->gh_proc == PTLRPC_GSS_PROC_ERR);
+	LASSERT(ghdr->gh_proc == PTLRPC_GSS_PROC_ERR);
 
-        errhdr = (struct gss_err_header *) ghdr;
+	errhdr = (struct gss_err_header *) ghdr;
 
-	CWARN("req x%llu/t%llu, ctx %p idx %#llx(%u->%s): "
-              "%sserver respond (%08x/%08x)\n",
-              req->rq_xid, req->rq_transno, ctx,
-              gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
-              ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
-              sec_is_reverse(ctx->cc_sec) ? "reverse" : "",
-              errhdr->gh_major, errhdr->gh_minor);
+	CWARN("%s: req x%llu/t%llu, ctx %p idx %#llx(%u->%s): %sserver respond (%08x/%08x)\n",
+	      ctx->cc_sec->ps_import->imp_obd->obd_name,
+	      req->rq_xid, req->rq_transno, ctx,
+	      gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
+	      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+	      sec_is_reverse(ctx->cc_sec) ? "reverse " : "",
+	      errhdr->gh_major, errhdr->gh_minor);
 
-        /* context fini rpc, let it failed */
-        if (req->rq_ctx_fini) {
-                CWARN("context fini rpc failed\n");
-                return -EINVAL;
-        }
+	/* context fini rpc, let it failed */
+	if (req->rq_ctx_fini) {
+		CWARN("%s: context fini rpc failed: rc = %d\n",
+		      ctx->cc_sec->ps_import->imp_obd->obd_name, -EINVAL);
+		return -EINVAL;
+	}
 
-        /* reverse sec, just return error, don't expire this ctx because it's
-         * crucial to callback rpcs. note if the callback rpc failed because
-         * of bit flip during network transfer, the client will be evicted
-         * directly. so more gracefully we probably want let it retry for
-         * number of times. */
-        if (sec_is_reverse(ctx->cc_sec))
-                return -EINVAL;
+	/* reverse sec, just return error, don't expire this ctx because it's
+	 * crucial to callback rpcs. note if the callback rpc failed because
+	 * of bit flip during network transfer, the client will be evicted
+	 * directly. so more gracefully we probably want let it retry for
+	 * number of times.
+	 */
+	if (sec_is_reverse(ctx->cc_sec) &&
+	    errhdr->gh_major != GSS_S_NO_CONTEXT)
+		return -EINVAL;
 
-        if (errhdr->gh_major != GSS_S_NO_CONTEXT &&
-            errhdr->gh_major != GSS_S_BAD_SIG)
-                return -EACCES;
+	if (errhdr->gh_major != GSS_S_NO_CONTEXT &&
+	    errhdr->gh_major != GSS_S_BAD_SIG)
+		return -EACCES;
 
-        /* server return NO_CONTEXT might be caused by context expire
-         * or server reboot/failover. we try to refresh a new ctx which
-         * be transparent to upper layer.
-         *
-         * In some cases, our gss handle is possible to be incidentally
-         * identical to another handle since the handle itself is not
-         * fully random. In krb5 case, the GSS_S_BAD_SIG will be
-         * returned, maybe other gss error for other mechanism.
-         *
-         * if we add new mechanism, make sure the correct error are
-         * returned in this case. */
-        CWARN("%s: server might lost the context, retrying\n",
-              errhdr->gh_major == GSS_S_NO_CONTEXT ?  "NO_CONTEXT" : "BAD_SIG");
+	/* server return NO_CONTEXT might be caused by context expire
+	 * or server reboot/failover. we try to refresh a new ctx which
+	 * be transparent to upper layer.
+	 *
+	 * In some cases, our gss handle is possible to be incidentally
+	 * identical to another handle since the handle itself is not
+	 * fully random. In krb5 case, the GSS_S_BAD_SIG will be
+	 * returned, maybe other gss error for other mechanism.
+	 *
+	 * if we add new mechanism, make sure the correct error are
+	 * returned in this case.
+	 */
+	CWARN("%s: %s might have lost the context (%s), retrying\n",
+	      ctx->cc_sec->ps_import->imp_obd->obd_name,
+	      sec_is_reverse(ctx->cc_sec) ? "client" : "server",
+	      errhdr->gh_major == GSS_S_NO_CONTEXT ?  "NO_CONTEXT" : "BAD_SIG");
 
-        sptlrpc_cli_ctx_expire(ctx);
+	sptlrpc_cli_ctx_expire(ctx);
 
-        /* we need replace the ctx right here, otherwise during
-         * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
-         * which keep the ctx with RESEND flag, thus we'll never
-         * get rid of this ctx. */
-        rc = sptlrpc_req_replace_dead_ctx(req);
-        if (rc == 0)
-                req->rq_resend = 1;
+	/* we need replace the ctx right here, otherwise during
+	 * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
+	 * which keep the ctx with RESEND flag, thus we'll never
+	 * get rid of this ctx.
+	 */
+	rc = sptlrpc_req_replace_dead_ctx(req);
+	if (rc == 0)
+		req->rq_resend = 1;
 
-        return rc;
+	return rc;
 }
 
 int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,

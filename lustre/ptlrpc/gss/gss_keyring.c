@@ -480,26 +480,32 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
 {
 	struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx   *ctx = NULL;
+	time64_t now = ktime_get_real_seconds();
 
 	spin_lock(&sec->ps_lock);
 
-        ctx = gsec_kr->gsk_root_ctx;
+	ctx = gsec_kr->gsk_root_ctx;
 
-        if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
+	if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
 		struct ptlrpc_cli_ctx	*tmp;
 
-                /* reverse ctx, search root ctx in list, choose the one
-                 * with shortest expire time, which is most possibly have
-                 * an established peer ctx at client side. */
+		/* For reverse context, browse list and pick the one with
+		 * shortest expire time and that has not expired yet.
+		 * This one is most likely to have an established peer context
+		 * on client side.
+		 */
 		hlist_for_each_entry(tmp, &gsec_kr->gsk_clist, cc_cache) {
-                        if (ctx == NULL || ctx->cc_expire == 0 ||
-                            ctx->cc_expire > tmp->cc_expire) {
-                                ctx = tmp;
-                                /* promote to be root_ctx */
-                                gsec_kr->gsk_root_ctx = ctx;
-                        }
-                }
-        }
+			if (ctx == NULL || ctx->cc_expire == 0 ||
+			    (tmp->cc_expire > now &&
+			     tmp->cc_expire < ctx->cc_expire) ||
+			    (ctx->cc_expire < now &&
+			     tmp->cc_expire > ctx->cc_expire)) {
+				ctx = tmp;
+				/* promote to be root_ctx */
+				gsec_kr->gsk_root_ctx = ctx;
+			}
+		}
+	}
 
 	if (ctx) {
 		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
