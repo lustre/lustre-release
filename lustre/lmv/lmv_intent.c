@@ -208,7 +208,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		op_data->op_bias = MDS_CROSS_REF;
 		op_data->op_cli_flags = CLI_NO_SLOT;
 
-		tgt = lmv_tgt(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
+		tgt = lmv_tgt_retry(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
 		if (!tgt)
 			GOTO(cleanup, rc = -ENODEV);
 

@@ -80,15 +80,14 @@ static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 	return container_of_safe(lmv, struct obd_device, u.lmv);
 }
 
-static inline struct lu_tgt_desc *
-lmv_tgt(struct lmv_obd *lmv, __u32 index)
+static inline struct lu_tgt_desc *lmv_tgt(struct lmv_obd *lmv, __u32 index)
 {
 	return index < lmv->lmv_mdt_descs.ltd_tgts_size ?
 		LTD_TGT(&lmv->lmv_mdt_descs, index) : NULL;
 }
+struct lu_tgt_desc *lmv_tgt_retry(struct lmv_obd *lmv, __u32 index);
 
-static inline bool
-lmv_mdt0_inited(struct lmv_obd *lmv)
+static inline bool lmv_mdt0_inited(struct lmv_obd *lmv)
 {
 	return lmv->lmv_mdt_descs.ltd_tgts_size > 0 &&
 	       test_bit(0, lmv->lmv_mdt_descs.ltd_tgt_bitmap);
@@ -148,11 +147,14 @@ lmv_fid2tgt(struct lmv_obd *lmv, const struct lu_fid *fid)
 	struct lu_tgt_desc *tgt;
 	int index;
 
+	if (!fid_is_sane(fid))
+		return ERR_PTR(-EINVAL);
+
 	index = lmv_fid2tgt_index(lmv, fid);
 	if (index < 0)
 		return ERR_PTR(index);
 
-	tgt = lmv_tgt(lmv, index);
+	tgt = lmv_tgt_retry(lmv, index);
 
 	return tgt ? tgt : ERR_PTR(-ENODEV);
 }

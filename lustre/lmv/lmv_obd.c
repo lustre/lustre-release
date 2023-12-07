@@ -130,6 +130,49 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv,
 	return rc;
 }
 
+struct lu_tgt_desc *lmv_tgt_retry(struct lmv_obd *lmv, __u32 index)
+{
+	struct obd_device *obd = lmv2obd_dev(lmv);
+	struct lu_tgt_desc *tgt;
+	static time64_t next_print;
+	time64_t retry_limit = 0;
+	time64_t now;
+	unsigned int level;
+	int rc;
+
+	might_sleep();
+retry:
+	tgt = lmv_tgt(lmv, index);
+	if (likely(tgt && tgt->ltd_exp))
+		return tgt;
+
+	now = ktime_get_seconds();
+	if (retry_limit == 0) {
+		level = now > next_print ? D_WARNING : D_INFO;
+		retry_limit = now + RECONNECT_DELAY_MAX;
+	} else if (now > retry_limit) {
+		level = D_ERROR;
+	} else {
+		level = D_INFO;
+	}
+	CDEBUG_LIMIT(level, index < lmv->lmv_mdt_count ?
+		     "%s: MDT index %u/%u not configured\n" :
+		     "%s: MDT index %u more than MDT count %u\n",
+		     obd->obd_name, index, lmv->lmv_mdt_count);
+	if (now > next_print) {
+		LCONSOLE_INFO("%s: wait %ds while client connects to new MDT\n",
+			      obd->obd_name, (int)(retry_limit - now));
+		next_print = retry_limit + 600;
+	}
+	if (now < retry_limit) {
+		rc = schedule_timeout_interruptible(cfs_time_seconds(1));
+		if (rc == 0)
+			goto retry;
+	}
+
+	return NULL;
+}
+
 static struct obd_uuid *lmv_get_uuid(struct obd_export *exp)
 {
 	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
@@ -1747,7 +1790,7 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_object *lso,
 
 	*fid = oinfo->lmo_fid;
 	*mds = oinfo->lmo_mds;
-	tgt = lmv_tgt(lmv, oinfo->lmo_mds);
+	tgt = lmv_tgt_retry(lmv, oinfo->lmo_mds);
 
 	CDEBUG(D_INODE, "locate MDT %u parent "DFID"\n", *mds, PFID(fid));
 
@@ -2367,7 +2410,7 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 
 		/* save source stripe FID in fid4 temporarily for ELC */
 		op_data->op_fid4 = oinfo->lmo_fid;
-		sp_tgt = lmv_tgt(lmv, oinfo->lmo_mds);
+		sp_tgt = lmv_tgt_retry(lmv, oinfo->lmo_mds);
 		if (!sp_tgt)
 			RETURN(-ENODEV);
 
@@ -2382,7 +2425,7 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 				RETURN(PTR_ERR(oinfo));
 
 			op_data->op_fid2 = oinfo->lmo_fid;
-			tp_tgt = lmv_tgt(lmv, oinfo->lmo_mds);
+			tp_tgt = lmv_tgt_retry(lmv, oinfo->lmo_mds);
 			if (!tp_tgt)
 				RETURN(-ENODEV);
 
@@ -2819,7 +2862,7 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 			break;
 		}
 
-		tgt = lmv_tgt(ctxt->ldc_lmv, oinfo->lmo_mds);
+		tgt = lmv_tgt_retry(ctxt->ldc_lmv, oinfo->lmo_mds);
 		if (!tgt) {
 			rc = -ENODEV;
 			break;
