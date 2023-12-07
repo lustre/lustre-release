@@ -340,12 +340,11 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 			INT_O2IB_SYMBOLS="${CHECK_SYMBOLS}"
 		fi
 	else
-		AC_MSG_WARN([Module.symvers for in-kernel o2iblnd was not found, in-kernel ofed will not be built])
-		BUILT_IN_KO2IBLND="no"
+		AC_MSG_WARN([Module.symvers for in-kernel o2iblnd was not found])
 	fi
 
 	if test "x$EXTERNAL_KO2IBLND" = "xno" -a "x$BUILT_IN_KO2IBLND" = "xno" ; then
-		AC_MSG_ERROR([No o2iblnd can be built])
+		AC_MSG_WARN([No o2iblnd can be built])
 	elif test "x$ENABLE_MULTIPLE_LNDS" = "xno" -a \
 		  "x$EXTERNAL_KO2IBLND" != "xno" -a "x$BUILT_IN_KO2IBLND" != "xno"; then
 		AC_MSG_WARN([
