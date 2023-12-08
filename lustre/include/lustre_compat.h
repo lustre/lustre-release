@@ -561,9 +561,8 @@ static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  void *value, size_t size)
 {
-#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
-	return vfs_getxattr(&nop_mnt_idmap, dentry, name, value, size);
-#elif defined(HAVE_VFS_SETXATTR)
+#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG) || \
+	defined(HAVE_VFS_SETXATTR)
 	return __vfs_getxattr(dentry, inode, name, value, size);
 #else
 	if (unlikely(!inode->i_op->getxattr))
