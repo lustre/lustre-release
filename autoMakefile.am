@@ -503,6 +503,7 @@ debs: undef.h debs_common
 	   ../lustre-*-utils_$${VER}_*.deb $${DEB_SERVER_PKG} \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
+	   ../lustre-*-dbgsym_$${VER}_*.ddeb ../lustre_$${VER}_*.buildinfo \
 	   debs/
 
 dkms-debs: undef.h debs_common
@@ -534,6 +535,7 @@ dkms-debs: undef.h debs_common
 	   ../lustre-*-utils_$${VER}_*.deb \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-dkms_$${VER}_*.deb \
+	   ../lustre-*-dbgsym_$${VER}_*.ddeb ../lustre_$${VER}_*.buildinfo \
 	   debs/
 
 EXTRA_DIST += debian/*
