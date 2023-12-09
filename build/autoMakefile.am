@@ -1,5 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# build/autoMakefile.am
+#
+# Override the default distclean, which removes Makefile
+#
+
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 
-# Override the default distclean, which removes Makefile
 distclean: distclean-recursive
 	@true

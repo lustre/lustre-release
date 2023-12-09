@@ -1,19 +1,12 @@
-# Directories building kernel modules should have two files:
+# SPDX-License-Identifier: GPL-2.0
+
 #
-# Makefile.in:
+# This file is part of Lustre, http://www.lustre.org/
 #
-# MODULES := <module-name>
-# <module-name>-objs := file1.o file2.o file3.o
-# @INCLUDE_RULES@
+# build/Rules.in
 #
-# and autoMakefile.am:
+# Rules file for the kernel-related autoconf tests.
 #
-# if MODULES
-# modulefs_DATA = <module-name>$(KMODEXT)
-# endif
-#
-# DIST_SOURCES = $(<module-name>-objs:.o=.c) <other sources>
-# MOSTLYCLEANFILES = *.o *.ko *.mod.c
 
 ifeq ($(PATCHLEVEL),)
 

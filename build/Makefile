@@ -1,12 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# build/Makefile
 #
 # There are four ways this Makefile can be called:
 #
-#
 # 1.  As a subdirectory from the toplevel, for automake
-#
 # 2.  A wrapper around the kernel's makefile when building modules, to
 #     possibly override the .config file
-#
 # 3.  At configure time, as the toplevel module dir for building
 #     kernel tests
 #
