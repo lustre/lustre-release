@@ -1,0 +1,6 @@
+# Vagrant artifacts
+.vagrant/
+vagrant-ssh.config
+
+# Coverity results
+*.tgz

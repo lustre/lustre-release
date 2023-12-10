@@ -102,6 +102,12 @@ TAGS
 /.venv
 /venv
 
+# Vagrant artifacts
+.vagrant/
+
+# Coverity results
+*.tgz
+
 #
 # Top level generic files
 #

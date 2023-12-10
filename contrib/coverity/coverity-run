@@ -1,0 +1,184 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# contrib/coverity/coverity-run
+#
+# Setup a simple VM for running Coverity builds
+# to upload to https://scan.coverity.com/projects/lustre
+#
+# Author: Timothy Day <timday@amazon.com>
+#
+
+#
+# Output list of all commands
+#
+function cr_list() {
+	less -F <<EOF
+Usage: ${0##*/} [options]
+Helper for running Coverity builds for Lustre
+	setup         Create Vagrant VM.
+	build         Build Lustre and dependencies. The users should
+		      validate the everything builds correctly.
+	run           Run Coverity scan. You must provide the path
+		      to the Coverity tool tarball using the COV_PATH
+		      env variable. This can be downloaded from the
+		      Coverity website.
+	clean         Remove Vagrant artifacts.
+	all           Run all of the above steps in order.
+	list          List all possible commands.
+
+The commands should be run in the following order:
+
+	setup -> build -> run -> clean
+
+The tool currently has a dependency on Vagrant and the 'libvirt'
+provider. After the scan is run, there will be a tar file in the
+'contrib/coverity' directory. This should be uploaded to Coverity
+via the web portal using the Lustre version output during the
+'run' step as the software version.
+EOF
+	exit
+}
+
+#
+# Create VM using Vagrant.
+#
+function cr_setup() {
+	vagrant up
+
+	# Save/test ssh config
+	vagrant ssh-config > vagrant-ssh.config
+	ssh -F vagrant-ssh.config default "uname -r"
+
+	# Restart VM
+	vagrant reload
+}
+
+#
+# Perform a test build of ZFS and Lustre. User must
+# validate that correct modules get built.
+#
+function cr_build() {
+	# Build ZFS
+	ssh -F vagrant-ssh.config default <<EOF
+# Grab repo
+rm -rf ~/zfs
+git clone https://github.com/openzfs/zfs.git
+
+# Build
+cd ~/zfs
+git checkout -b coverity-run zfs-2.1.11
+sh autogen.sh
+./configure
+make -s -j\$(nproc)
+
+# Install
+sudo make install
+EOF
+
+	# Build Lustre
+	ssh -F vagrant-ssh.config default <<EOF
+# Grab repo
+rm -rf ~/lustre-release
+git clone git://git.whamcloud.com/fs/lustre-release.git
+
+# Build
+cd ~/lustre-release
+./autogen.sh
+./configure
+make -s -j\$(nproc)
+
+# Report
+echo "KERNEL MODULES BUILT:"
+find . -name *.ko
+EOF
+}
+
+#
+# Run coverity scan. 'setup' and 'build' must have been
+# run beforehand. Automatically copies the tar file that
+# should be uploaded to Coverity along with the Lustre
+# version.
+#
+# The build is run sequentially, due to limitations with
+# cov-build.
+#
+function cr_run() {
+	# Check if COV_PATH is defined
+	if [[ -z ${COV_PATH+x} ]]; then
+		echo "Provide the path to the Coverity tool tarball using COV_PATH."
+		exit
+	fi
+
+	# Copy build tool to VM
+	scp -F vagrant-ssh.config "$COV_PATH" default:~
+
+	# Run scan
+	ssh -F vagrant-ssh.config default <<EOF
+# Get coverity tool
+cd ~
+tar xf *.tar.gz
+
+# Clean and run
+cd ~/lustre-release
+make clean
+"\$(find ~ -name cov-build)" --dir cov-int make
+tar czvf "lustre-coverity-\$(date +"%m-%d-%Y").tgz" cov-int
+
+# Report
+echo "KERNEL MODULES BUILT:"
+find . -name *.ko
+echo "LUSTRE VERSION:"
+cat LUSTRE-VERSION-FILE
+EOF
+
+	# Grab scan results
+	scp -F vagrant-ssh.config default:~/lustre-release/*.tgz .
+}
+
+#
+# Destroy Vagrant VM.
+#
+function cr_clean() {
+	vagrant destroy
+	rm -f vagrant-ssh.config
+}
+
+#
+# Run all steps in the correct order.
+#
+function cr_all() {
+	# Check if COV_PATH is defined
+	if [[ -z ${COV_PATH+x} ]]; then
+		echo "Provide the path to the Coverity tool tarball using COV_PATH."
+		exit
+	fi
+
+	cr_setup
+	cr_build
+	cr_run
+	cr_clean
+}
+
+# Run as root or with sudo
+if [[ "$EUID" -ne 0 ]]; then
+	echo "Please run as root or with sudo."
+	exit
+fi
+
+# Process options
+for arg in "$@"; do
+	shift
+	case "$arg" in
+		setup) cr_setup;;
+		build) cr_build;;
+		run) cr_run;;
+		clean) cr_clean;;
+		all) cr_all;;
+		list) cr_list;;
+		*) cr_list;;
+	esac
+done

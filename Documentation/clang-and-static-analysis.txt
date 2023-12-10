@@ -121,7 +121,9 @@ a Coverity bug should ideally have a line in the commit message like:
 
 This makes it easier to track which bugs still need to be fixed. Currently, the Coverity
 Scan project is maintained in an adhoc manner. Hence, the build may be outdated. But it
-can be updated easily following the instructions on the site.
+can be updated easily following the instructions on the site or using the script in
+'contrib/coverity' in the Lustre tree. Running 'coverity-run list' will provide more
+details.
 
 4.2 References
 ==============
