@@ -102,10 +102,9 @@ static struct binheap_ops nrs_crrn_heap_ops = {
  */
 static u32 nrs_crrn_hashfn(const void *data, u32 len, u32 seed)
 {
-	const lnet_nid_t *nid = data;
+	const struct lnet_nid *nid = data;
 
-	seed ^= cfs_hash_64((u64)nid, 32);
-	return seed;
+	return cfs_hash_32(nidhash(nid) ^ seed, 32);
 }
 
 static int nrs_crrn_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
