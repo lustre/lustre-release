@@ -1196,9 +1196,9 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * initialize rr_index to lower 32bit of netid, so that client
 	 * can distribute subdirs evenly from the beginning.
 	 */
-	while (LNetGetId(i++, &lnet_id, false) != -ENOENT) {
+	while (LNetGetId(i++, &lnet_id, true) != -ENOENT) {
 		if (!nid_is_lo0(&lnet_id.nid)) {
-			lmv->lmv_qos_rr_index = ntohl(lnet_id.nid.nid_addr[0]);
+			lmv->lmv_qos_rr_index = nidhash(&lnet_id.nid);
 			break;
 		}
 	}
@@ -1274,8 +1274,10 @@ out:
 	RETURN(rc);
 }
 
-static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
+static int lmv_select_statfs_mdt(struct obd_export *exp, struct lmv_obd *lmv,
+				 u32 flags)
 {
+	bool large_nid = exp_connect_flags2(exp) & OBD_CONNECT2_LARGE_NID;
 	int i;
 
 	if (flags & OBD_STATFS_FOR_MDT0)
@@ -1287,7 +1289,8 @@ static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
 	/* choose initial MDT for this client */
 	for (i = 0;; i++) {
 		struct lnet_processid lnet_id;
-		if (LNetGetId(i, &lnet_id, false) == -ENOENT)
+
+		if (LNetGetId(i, &lnet_id, large_nid) == -ENOENT)
 			break;
 
 		if (!nid_is_lo0(&lnet_id.nid)) {
@@ -1322,7 +1325,7 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 		RETURN(-ENOMEM);
 
 	/* distribute statfs among MDTs */
-	idx = lmv_select_statfs_mdt(lmv, flags);
+	idx = lmv_select_statfs_mdt(exp, lmv, flags);
 
 	for (i = 0; i < lmv->lmv_mdt_descs.ltd_tgts_size; i++, idx++) {
 		idx = idx % lmv->lmv_mdt_descs.ltd_tgts_size;

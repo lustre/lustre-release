@@ -4074,10 +4074,18 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 		clear_bit(LL_SBI_NOROOTSQUASH, sbi->ll_flags);
 	else {
 		/* Do not apply root squash as soon as one of our NIDs is
-		 * in the nosquash_nids list */
+		 * in the nosquash_nids list
+		 */
+		struct lustre_sb_info *lsi = sbi->lsi;
+		bool large_nid = false;
+
+		if (exp_connect_flags2(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp) &
+		      OBD_CONNECT2_LARGE_NID)
+			large_nid = true;
+
 		matched = false;
 		i = 0;
-		while (LNetGetId(i++, &id, false) != -ENOENT) {
+		while (LNetGetId(i++, &id, large_nid) != -ENOENT) {
 			if (nid_is_lo0(&id.nid))
 				continue;
 			if (cfs_match_nid(&id.nid,
