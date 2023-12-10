@@ -7,11 +7,18 @@ job, show top jobs
 
 import argparse
 import errno
+import signal
 import subprocess
 import sys
 import time
 import yaml
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
 
+def exit_silently(signal, frame):
+    sys.exit(0)
 
 class ArgParser: # pylint: disable=too-few-public-methods
     '''
@@ -26,7 +33,8 @@ class ArgParser: # pylint: disable=too-few-public-methods
         define and parse arguments
         '''
         parser = argparse.ArgumentParser(prog='lljobstat',
-                                         description='List top jobs.')
+                                         description='List top jobs.',
+                                         formatter_class=argparse.RawTextHelpFormatter)
         parser.add_argument('-c', '--count', type=int, default=5,
                             help='the number of top jobs to be listed (default 5).')
         parser.add_argument('-i', '--interval', type=int, default=10,
@@ -46,6 +54,15 @@ class ArgParser: # pylint: disable=too-few-public-methods
         parser.add_argument('--no-fullname', dest='fullname',
                             action='store_false',
                             help='show abbreviated operations name.')
+        parser.add_argument('--statsfile', type=str, action='append',
+                            help="Parse specified file instead of job_stats files in system.\n"
+                                 "Usually the file is generate by command:\n"
+                                 "# lctl get_param *.*.job_stats > job_stats.txt\n"
+                                 "Multiple files can be specified by specify --statsfile for\n"
+                                 "multiple times. For example:\n"
+                                 "# lljobstats --statsfile=1.txt --statsfile=2.txt\n"
+                                 "The stats data of jobs from multiple statsfiles will be\n"
+                                 "added up and sorted. Then top jobs are listed.\n")
 
         self.args = parser.parse_args()
 
@@ -98,17 +115,25 @@ class JobStatsParser:
             if err.returncode == errno.ENOENT:
                 return []
 
-    def parse_single_job_stats(self, param): # pylint: disable=no-self-use
+    def parse_single_job_stats(self, param=None, string=None): # pylint: disable=no-self-use
         '''
-        read single job_stats file, parse it and return an object
+        read single job_stats file or a string, parse it and return an object
         '''
-        cmd = ['lctl', 'get_param', '-n', param]
-        output = subprocess.check_output(cmd).decode()
+        output = ""
+        if string is not None:
+            output = string
+        else:
+            cmd = ['lctl', 'get_param', '-n', param]
+            output = subprocess.check_output(cmd).decode()
+
         try:
-            yaml_obj = yaml.safe_load(output)  # need several seconds...
+            yaml_obj = yaml.load(output, Loader=Loader)  # need several seconds...
         except yaml.scanner.ScannerError:
             # only print the file name here
-            print("failed to parse the content of %s" % param, file=sys.stdout)
+            if param != None:
+                print("failed to parse the content of %s" % param, file=sys.stdout)
+            if string != None:
+                print("failed to parse the string", file=sys.stdout)
             raise
 
         return yaml_obj
@@ -163,7 +188,7 @@ class JobStatsParser:
         '''
         print single job
         '''
-        print('- %-16s {' % (job['job_id'] + ':'), end='')
+        print('- %-16s {' % (str(job['job_id']) + ':'), end='')
         first = True
         for key, val in self.op_keys.items():
             if not val in job.keys():
@@ -191,18 +216,58 @@ class JobStatsParser:
             self.print_job(job)
         print('...') # mark the end of YAML doc in stream
 
+    def parse_file(self, file, jobs):
+        '''
+        parse a single file. the file may be a combination of several job_stats
+        '''
+        job_stats_str = ""
+        started = False
+        with open(file) as file_handler:
+            for line in file_handler:
+                # start from "job_stats:"
+                if not started:
+                    if line[0:10] == "job_stats:":
+                        started = True
+                        job_stats_str += line
+                    continue
+
+                if line == "\n" or line[0:2] == "  " or line[0:2] == "- ":
+                    # for empty line, "  ", or "- ", append current line
+                    job_stats_str += line
+                else:
+                    # end current segment
+                    obj = self.parse_single_job_stats(string=job_stats_str)
+                    if obj != None and obj['job_stats'] != None:
+                        for job in obj['job_stats']:
+                            self.merge_job(jobs, job)
+
+                    if line[0:10] == "job_stats:":
+                        # start of next segment
+                        job_stats_str = line
+                    else:
+                        job_stats_str = ""
+                        started = False
+            else:
+                obj = self.parse_single_job_stats(string=job_stats_str)
+                if obj != None and obj['job_stats'] != None:
+                    for job in obj['job_stats']:
+                        self.merge_job(jobs, job)
+
     def run_once(self):
         '''
         scan/parse/aggregate/print top jobs in given job_stats pattern/path(s)
         '''
         jobs = {}
-        for param in self.list_param(self.args.param):
-            obj = self.parse_single_job_stats(param)
-            if obj['job_stats'] is None:
-                continue
 
-            for job in obj['job_stats']:
-                self.merge_job(jobs, job)
+        if self.args.statsfile:
+            for file in self.args.statsfile:
+                self.parse_file(file, jobs)
+        else:
+            for param in self.list_param(self.args.param):
+                obj = self.parse_single_job_stats(param=param)
+                if obj is not None and obj['job_stats'] is not None:
+                    for job in obj['job_stats']:
+                        self.merge_job(jobs, job)
 
         top_jobs = self.pick_top_jobs(jobs, self.args.count)
         self.print_top_jobs(top_jobs)
@@ -226,6 +291,13 @@ class JobStatsParser:
         argparser = ArgParser()
         argparser.run()
         self.args = argparser.args
+
+        if self.args.statsfile:
+            self.run_once()
+            return
+
+        # exit silently if Ctrl+C is pressed in the loop below
+        signal.signal(signal.SIGINT, exit_silently)
 
         i = 0
         while True:

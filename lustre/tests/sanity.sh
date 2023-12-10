@@ -31213,6 +31213,24 @@ test_833() {
 }
 run_test 833 "Mixed buffered/direct read and write should not return -EIO"
 
+test_850() {
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local statsfile=$dir/all_job_stats.txt
+
+	test_mkdir -p $dir || error "failed to create dir $dir"
+	echo "abcdefg" > $file || error "failed to create file $file"
+
+	# read job_stats in the living system
+	lljobstat -n 1 ||
+		error "failed to run lljobstat on living system"
+
+	$LCTL get_param *.*.job_stats > $statsfile
+	lljobstat --statsfile=$statsfile ||
+		error "failed to run lljobstat on file $statsfile"
+}
+run_test 850 "lljobstat can parse living and aggregated job_stats"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
@@ -31440,6 +31458,7 @@ test_907() {
 	rm $DIR/$tfile || error "rm failed"
 }
 run_test 907 "write rpc error during unlink"
+
 
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
