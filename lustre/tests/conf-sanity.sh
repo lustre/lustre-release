@@ -10945,6 +10945,55 @@ test_151() {
 }
 run_test 151 "damaged local config doesn't prevent mounting"
 
+test_152() {
+	(( MDS1_VERSION >= $(version_code 2.15.59.53) )) ||
+		skip "need MDS >= 2.15.59.53 for sequence allocation retry"
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	local tf=$DIR/$tdir/$tfile
+	local nost=$((OSTCOUNT+1))
+	local nostdevname=$(ostdevname $nost)
+
+	setupall
+	test_mkdir -i 1 -c1 $DIR/$tdir || error "can't mkdir"
+
+	log "ADD OST$nost"
+	add ost$nost $(mkfs_opts ost1 $nostdevname) --index=$nost \
+		--reformat $nostdevname $(ostvdevname $nost)
+	[[ -d "$nostdevname" ]] || stack_trap "do_facet mds1 rm -f $nostdevname"
+
+#define OBD_FAIL_OPS_FAIL_SEQ_ALLOC		0x2109
+	do_facet mds1 $LCTL set_param fail_loc=0x80002109 fail_val=2
+	echo "START OST$nost"
+	stack_trap "stop ost$nost"
+	start ost$nost $nostdevname $OST_MOUNT_OPTS &
+	local PID=$!
+	sleep 2
+
+	$LFS setstripe -c -1 $tf &
+	local PID2=$!
+	sleep 2
+
+	log "STOP OST$nost"
+	# probably mount hasn't completed yet, so stop races with it
+	while true; do
+		stop ost$nost
+		jobs -pr | grep -E "^$PID\$" && sleep 0.5 && continue
+		break
+	done
+	wait $PID
+	wait $PID2
+	do_facet mds1 $LCTL set_param fail_loc=0
+	log "START OST$nost again"
+	start ost$nost $nostdevname $OST_MOUNT_OPTS ||
+		error "can't start ost$nost"
+	sleep 10
+	$LFS setstripe -c -1 $tf-2 || error "can't touch  $tf-2"
+	$LFS getstripe -v $tf-2
+	local stripes=$($LFS getstripe -c $tf-2)
+	(( stripes == $nost )) || error "$tf-2 $stripes != $nost"
+}
+run_test 152 "seq allocation error in OSP"
+
 #
 # (This was sanity/802a)
 #

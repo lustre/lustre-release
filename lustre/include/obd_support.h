@@ -753,6 +753,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
 #define OBD_FAIL_OSP_INVALID_LOGID		0x2106
 #define OBD_FAIL_OSP_CON_EVENT_DELAY		0x2107
+#define OBD_FAIL_OSP_FAIL_SEQ_ALLOC		0x2109
 
 /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200

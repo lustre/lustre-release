@@ -1151,13 +1151,20 @@ update:
  */
 static int osp_init_pre_fid(struct lu_env *env, struct osp_device *osp)
 {
-	struct osp_thread_info	*osi;
-	struct lu_client_seq	*cli_seq;
-	struct lu_fid		*last_fid;
-	int			rc;
-	ENTRY;
+	struct osp_thread_info *osi;
+	struct lu_client_seq *cli_seq;
+	struct lu_fid *last_fid;
+	int rc;
 
+	ENTRY;
 	LASSERT(osp->opd_pre != NULL);
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSP_FAIL_SEQ_ALLOC)) {
+		unsigned int timeout = cfs_fail_val ?: 1;
+
+		schedule_timeout_uninterruptible(cfs_time_seconds(timeout));
+		RETURN(-EIO);
+	}
 
 	/* Let's check if the current last_seq/fid is valid,
 	 * otherwise request new sequence from the controller */
@@ -1286,8 +1293,6 @@ static int osp_precreate_thread(void *_args)
 			/* Init fid for osp_precreate if necessary */
 			rc = osp_init_pre_fid(env, d);
 			if (rc != 0) {
-				class_export_put(d->opd_exp);
-				d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
 				CERROR("%s: init pre fid error: rc = %d\n",
 						d->opd_obd->obd_name, rc);
 				continue;
