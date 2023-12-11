@@ -2683,6 +2683,17 @@ static int lfsck_layout_slave_conditional_destroy(const struct lu_env *env,
 	memset(policy, 0, sizeof(*policy));
 	policy->l_extent.end = OBD_OBJECT_EOF;
 	ost_fid_build_resid(fid, resid);
+
+	/* LU-17344: check the validity of the ldlm_res_id */
+	if (unlikely(resid->name[0] == 0)) {
+		CERROR("%s: the res_id "DLDLMRES" built by the FID "DFID" (the obj %p) is invalid\n",
+		       lfsck_lfsck2name(lfsck), resid->name[0], resid->name[1],
+		       resid->name[2], resid->name[3], PFID(fid), obj);
+
+		dump_stack();
+		return -EIO;
+	}
+
 	rc = ldlm_cli_enqueue_local(env, lfsck->li_namespace, resid,
 				    LDLM_EXTENT, policy, LCK_EX, &flags,
 				    ldlm_blocking_ast, ldlm_completion_ast,
