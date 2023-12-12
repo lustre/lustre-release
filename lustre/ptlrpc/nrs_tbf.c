@@ -260,7 +260,7 @@ nrs_tbf_cli_init(struct nrs_tbf_head *head,
 	INIT_LIST_HEAD(&cli->tc_list);
 	INIT_LIST_HEAD(&cli->tc_linkage);
 	spin_lock_init(&cli->tc_rule_lock);
-	atomic_set(&cli->tc_ref, 1);
+	refcount_set(&cli->tc_ref, 1);
 	rule = nrs_tbf_rule_match(head, cli);
 	nrs_tbf_cli_reset(head, rule, cli);
 }
@@ -270,7 +270,6 @@ nrs_tbf_cli_fini(struct nrs_tbf_client *cli)
 {
 	LASSERT(list_empty(&cli->tc_list));
 	LASSERT(!cli->tc_in_heap);
-	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	spin_lock(&cli->tc_rule_lock);
 	nrs_tbf_cli_rule_put(cli);
 	spin_unlock(&cli->tc_rule_lock);
@@ -580,7 +579,7 @@ static void nrs_tbf_jobid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	atomic_inc(&cli->tc_ref);
+	refcount_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_jobid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -589,7 +588,7 @@ static void nrs_tbf_jobid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	atomic_dec(&cli->tc_ref);
+	refcount_dec(&cli->tc_ref);
 }
 
 static void
@@ -600,7 +599,6 @@ nrs_tbf_jobid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_fini(cli);
 }
 
@@ -707,7 +705,6 @@ nrs_tbf_jobid_cli_put(struct nrs_tbf_head *head,
 		cli = list_first_entry(&bkt->ntb_lru,
 				       struct nrs_tbf_client,
 				       tc_lru);
-		LASSERT(atomic_read(&cli->tc_ref) == 0);
 		cfs_hash_bd_del_locked(hs, &bd, &cli->tc_hnode);
 		list_move(&cli->tc_lru, &zombies);
 	}
@@ -1076,7 +1073,7 @@ static void nrs_tbf_nid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_inc(&cli->tc_ref);
+	refcount_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_nid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -1085,7 +1082,7 @@ static void nrs_tbf_nid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_dec(&cli->tc_ref);
+	refcount_dec(&cli->tc_ref);
 }
 
 static void nrs_tbf_nid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -1094,9 +1091,9 @@ static void nrs_tbf_nid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	LASSERTF(atomic_read(&cli->tc_ref) == 0,
-		 "Busy TBF object from client with NID %s, with %d refs\n",
-		 libcfs_nidstr(&cli->tc_nid), atomic_read(&cli->tc_ref));
+	CDEBUG(D_RPCTRACE,
+	       "Busy TBF object from client with NID %s, with %d refs\n",
+	       libcfs_nidstr(&cli->tc_nid), refcount_read(&cli->tc_ref));
 
 	nrs_tbf_cli_fini(cli);
 }
@@ -1305,7 +1302,7 @@ static void nrs_tbf_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_inc(&cli->tc_ref);
+	refcount_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -1314,7 +1311,7 @@ static void nrs_tbf_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_dec(&cli->tc_ref);
+	refcount_dec(&cli->tc_ref);
 }
 
 static void nrs_tbf_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -1324,7 +1321,6 @@ static void nrs_tbf_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_fini(cli);
 }
 
@@ -1722,7 +1718,6 @@ nrs_tbf_cli_put(struct nrs_tbf_head *head, struct nrs_tbf_client *cli)
 		cli = list_first_entry(&bkt->ntb_lru,
 				       struct nrs_tbf_client,
 				       tc_lru);
-		LASSERT(atomic_read(&cli->tc_ref) == 0);
 		cfs_hash_bd_del_locked(hs, &bd, &cli->tc_hnode);
 		list_move(&cli->tc_lru, &zombies);
 	}
@@ -2116,7 +2111,7 @@ static void nrs_tbf_opcode_hop_get(struct cfs_hash *hs,
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_inc(&cli->tc_ref);
+	refcount_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_opcode_hop_put(struct cfs_hash *hs,
@@ -2126,7 +2121,7 @@ static void nrs_tbf_opcode_hop_put(struct cfs_hash *hs,
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_dec(&cli->tc_ref);
+	refcount_dec(&cli->tc_ref);
 }
 
 static void nrs_tbf_opcode_hop_exit(struct cfs_hash *hs,
@@ -2136,10 +2131,9 @@ static void nrs_tbf_opcode_hop_exit(struct cfs_hash *hs,
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	LASSERTF(atomic_read(&cli->tc_ref) == 0,
-		 "Busy TBF object from client with opcode %s, with %d refs\n",
-		 ll_opcode2str(cli->tc_opcode),
-		 atomic_read(&cli->tc_ref));
+	CDEBUG(D_RPCTRACE,
+	       "Busy TBF object from client with opcode %s, with %d refs\n",
+	       ll_opcode2str(cli->tc_opcode), refcount_read(&cli->tc_ref));
 
 	nrs_tbf_cli_fini(cli);
 }
@@ -2387,7 +2381,7 @@ static void nrs_tbf_id_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_inc(&cli->tc_ref);
+	refcount_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_id_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -2396,7 +2390,7 @@ static void nrs_tbf_id_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	atomic_dec(&cli->tc_ref);
+	refcount_dec(&cli->tc_ref);
 }
 
 static void
@@ -2407,7 +2401,6 @@ nrs_tbf_id_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_fini(cli);
 }
 
@@ -2970,7 +2963,7 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 	nrs_tbf_cli_init(head, cli, req);
 	tmp = head->th_ops->o_cli_findadd(head, cli);
 	if (tmp != cli) {
-		atomic_dec(&cli->tc_ref);
+		refcount_dec(&cli->tc_ref);
 		nrs_tbf_cli_fini(cli);
 		cli = tmp;
 	}

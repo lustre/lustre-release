@@ -2804,33 +2804,34 @@ EXPORT_SYMBOL(ldlm_lock_dump_handle);
  * Helper function.
  */
 void _ldlm_lock_debug(struct ldlm_lock *lock,
-                      struct libcfs_debug_msg_data *msgdata,
-                      const char *fmt, ...)
+		      struct libcfs_debug_msg_data *msgdata,
+		      const char *fmt, ...)
 {
-        va_list args;
-        struct obd_export *exp = lock->l_export;
+	va_list args;
+	struct obd_export *exp = lock->l_export;
 	struct ldlm_resource *resource = NULL;
 	struct va_format vaf;
-        char *nid = "local";
+	char *nid = "local";
 
 	rcu_read_lock();
 	resource = rcu_dereference(lock->l_resource);
-	if (resource && !atomic_inc_not_zero(&resource->lr_refcount))
+	if (resource && !refcount_inc_not_zero(&resource->lr_refcount))
 		resource = NULL;
 	rcu_read_unlock();
 
-        va_start(args, fmt);
+	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
 
-        if (exp && exp->exp_connection) {
+	if (exp && exp->exp_connection) {
 		nid = obd_export_nid2str(exp);
-        } else if (exp && exp->exp_obd != NULL) {
-                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
-		nid = obd_import_nid2str(imp);
-        }
+	} else if (exp && exp->exp_obd != NULL) {
+		struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
 
-        if (resource == NULL) {
+		nid = obd_import_nid2str(imp);
+	}
+
+	if (resource == NULL) {
 		libcfs_debug_msg(msgdata,
 				 "%pV ns: \?\? lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: \?\? rrc=\?\? type: \?\?\? flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d\n",
 				 &vaf,
@@ -2845,9 +2846,9 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type);
-                va_end(args);
-                return;
-        }
+		va_end(args);
+		return;
+	}
 
 	switch (resource->lr_type) {
 	case LDLM_EXTENT:
@@ -2861,7 +2862,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
 				 PLDLMRES(resource),
-				 atomic_read(&resource->lr_refcount),
+				 refcount_read(&resource->lr_refcount),
 				 ldlm_typename[resource->lr_type],
 				 lock->l_policy_data.l_extent.start,
 				 lock->l_policy_data.l_extent.end,
@@ -2885,7 +2886,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
 				 PLDLMRES(resource),
-				 atomic_read(&resource->lr_refcount),
+				 refcount_read(&resource->lr_refcount),
 				 ldlm_typename[resource->lr_type],
 				 lock->l_policy_data.l_flock.pid,
 				 lock->l_policy_data.l_flock.start,
@@ -2910,7 +2911,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 PLDLMRES(resource),
 				 lock->l_policy_data.l_inodebits.bits,
 				 lock->l_policy_data.l_inodebits.try_bits,
-				 atomic_read(&resource->lr_refcount),
+				 refcount_read(&resource->lr_refcount),
 				 ldlm_typename[resource->lr_type],
 				 lock->l_flags, lock->l_pid,
 				 lock->l_policy_data.l_inodebits.li_initiator_id);
@@ -2927,7 +2928,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 PLDLMRES(resource),
 				 lock->l_policy_data.l_inodebits.bits,
 				 lock->l_policy_data.l_inodebits.try_bits,
-				 atomic_read(&resource->lr_refcount),
+				 refcount_read(&resource->lr_refcount),
 				 ldlm_typename[resource->lr_type],
 				 lock->l_policy_data.l_inodebits.li_gid,
 				 lock->l_flags, nid,
@@ -2948,7 +2949,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
 				 PLDLMRES(resource),
-				 atomic_read(&resource->lr_refcount),
+				 refcount_read(&resource->lr_refcount),
 				 ldlm_typename[resource->lr_type],
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,

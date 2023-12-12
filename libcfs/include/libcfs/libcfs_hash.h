@@ -39,6 +39,7 @@
 
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
+#include <linux/refcount.h>
 #include <libcfs/linux/linux-hash.h>
 
 /** disable debug */
@@ -610,10 +611,10 @@ void cfs_hash_bd_move_locked(struct cfs_hash *hs, struct cfs_hash_bd *bd_old,
 
 static inline int
 cfs_hash_bd_dec_and_lock(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			 atomic_t *condition)
+			 refcount_t *condition)
 {
 	LASSERT(cfs_hash_with_spin_bktlock(hs));
-	return atomic_dec_and_lock(condition, &bd->bd_bucket->hsb_lock.spin);
+	return refcount_dec_and_lock(condition, &bd->bd_bucket->hsb_lock.spin);
 }
 
 static inline struct hlist_head *

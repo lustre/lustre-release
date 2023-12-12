@@ -1083,7 +1083,7 @@ struct ldlm_resource {
 	};
 
 	/** Reference count for this resource */
-	atomic_t		lr_refcount;
+	refcount_t		lr_refcount;
 
 	/** Spinlock to protect locks under this resource. */
 	spinlock_t		lr_lock;

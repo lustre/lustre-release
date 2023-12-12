@@ -1122,7 +1122,7 @@ static int ldlm_resource_complain(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	CERROR("%s: namespace resource "DLDLMRES" (%p) refcount nonzero "
 	       "(%d) after lock cleanup; forcing cleanup.\n",
 	       ldlm_ns_name(ldlm_res_to_ns(res)), PLDLMRES(res), res,
-	       atomic_read(&res->lr_refcount) - 1);
+	       refcount_read(&res->lr_refcount) - 1);
 
 	/* Use D_NETERROR since it is in the default mask */
 	ldlm_resource_dump(D_NETERROR, res);
@@ -1452,7 +1452,7 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	INIT_LIST_HEAD(&res->lr_granted);
 	INIT_LIST_HEAD(&res->lr_waiting);
 
-	atomic_set(&res->lr_refcount, 1);
+	refcount_set(&res->lr_refcount, 1);
 	spin_lock_init(&res->lr_lock);
 	lu_ref_init(&res->lr_reference);
 
@@ -1572,14 +1572,14 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
 	LASSERT(res != NULL);
 	LASSERT(res != LP_POISON);
-	atomic_inc(&res->lr_refcount);
+	refcount_inc(&res->lr_refcount);
 	CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
-	       atomic_read(&res->lr_refcount));
+	       refcount_read(&res->lr_refcount));
 	return res;
 }
 
 static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
-                                         struct ldlm_resource *res)
+					 struct ldlm_resource *res)
 {
 	struct ldlm_ns_bucket *nsb = res->lr_ns_bucket;
 
@@ -1607,11 +1607,11 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 	struct cfs_hash_bd bd;
 	int refcount;
 
-	refcount = atomic_read(&res->lr_refcount);
-	LASSERT(refcount > 0 && refcount < LI_POISON);
+	refcount = refcount_read(&res->lr_refcount);
+	LASSERT(refcount < LI_POISON);
 
 	CDEBUG(D_INFO, "putref res: %p count: %d\n",
-	       res, atomic_read(&res->lr_refcount) - 1);
+	       res, refcount_read(&res->lr_refcount) - 1);
 
 	cfs_hash_bd_get(ns->ns_rs_hash, &res->lr_name, &bd);
 	if (cfs_hash_bd_dec_and_lock(ns->ns_rs_hash, &bd, &res->lr_refcount)) {
@@ -1790,7 +1790,7 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
 		return;
 
 	CDEBUG(level, "--- Resource: "DLDLMRES" (%p) refcount = %d\n",
-	       PLDLMRES(res), res, atomic_read(&res->lr_refcount));
+	       PLDLMRES(res), res, refcount_read(&res->lr_refcount));
 
 	if (!list_empty(&res->lr_granted)) {
 		CDEBUG(level, "Granted locks (in reverse order):\n");

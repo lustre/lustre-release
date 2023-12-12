@@ -92,7 +92,7 @@ struct nrs_tbf_client {
 	/** Hash key of the client. */
 	char				 tc_key[NRS_TBF_KEY_LEN];
 	/** Reference number of the client. */
-	atomic_t			 tc_ref;
+	refcount_t			 tc_ref;
 	/** Lock to protect rule and linkage. */
 	spinlock_t			 tc_rule_lock;
 	/** Linkage to rule. */
