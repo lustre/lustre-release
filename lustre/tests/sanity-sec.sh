@@ -2539,6 +2539,20 @@ cleanup_32() {
 		start_gss_daemons $mds_HOST $LSVCGSSD "-vvv -s -m -o -z"
 	fi
 
+	# restore MGS NIDs in key on MGS
+	do_nodes $mgs_HOST "$LGSS_SK -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS (3)"
+
+	# load modified key file on MGS
+	do_nodes $mgs_HOST "$LGSS_SK -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not load keyfile on MGS (3)"
+
+	# restore MGS NIDs in key on client
+	do_nodes ${clients_arr[0]} "$LGSS_SK -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on client (3)"
+
 	# re-mount client
 	MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
 	mountcli
@@ -2547,6 +2561,9 @@ cleanup_32() {
 }
 
 test_32() {
+	local mgsnid2=$(host_nids_address $ost1_HOST $NETTYPE)@${MGSNID#*@}
+	local mgsorig=$MGSNID
+
 	if ! $SHARED_KEY; then
 		skip "need shared key feature for this test"
 	fi
@@ -2564,7 +2581,7 @@ test_32() {
 		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
 	fi
 	if $(grep -q $MOUNT' ' /proc/mounts); then
-	umount_client $MOUNT || error "umount $MOUNT failed"
+		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
 	# kill daemon on MGS to start afresh
@@ -2580,16 +2597,16 @@ test_32() {
 	# add mgs key type and MGS NIDs in key on MGS
 	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
-		error "could not modify keyfile on MGS"
+		error "could not modify keyfile on MGS (1)"
 
 	# load modified key file on MGS
 	do_nodes $mgs_HOST "$LGSS_SK -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
-		error "could not load keyfile on MGS"
+		error "could not load keyfile on MGS (1)"
 
 	# add MGS NIDs in key on client
 	do_nodes ${clients_arr[0]} "$LGSS_SK -g $MGSNID -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
-		error "could not modify keyfile on MGS"
+		error "could not modify keyfile on client (1)"
 
 	# set perms for per-nodemap keys else permission denied
 	do_nodes $(comma_list $(all_nodes)) \
@@ -2599,6 +2616,7 @@ test_32() {
 
 	# re-mount client with mgssec=skn
 	save_opts=$MOUNT_OPTS
+	stack_trap "MOUNT_OPTS=$save_opts" EXIT
 	if [ -z "$MOUNT_OPTS" ]; then
 		MOUNT_OPTS="-o mgssec=skn"
 	else
@@ -2639,9 +2657,30 @@ test_32() {
 	fi
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "mount ${clients_arr[0]} with mgssec=ska failed"
-	MOUNT_OPTS=$save_opts
 
-	exit 0
+	MGSNID=$mgsnid2:$mgsorig
+	stack_trap "MGSNID=$mgsorig" EXIT
+
+	# umount client
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "umount ${clients_arr[0]} failed"
+
+	# add MGS NIDs in key on MGS
+	do_nodes $mgs_HOST "$LGSS_SK -g ${MGSNID//:/,} -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS (2)"
+
+	# load modified key file on MGS
+	do_nodes $mgs_HOST "$LGSS_SK -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not load keyfile on MGS (2)"
+
+	# add MGS NIDs in key on client
+	do_nodes ${clients_arr[0]} "$LGSS_SK -g ${MGSNID//:/,} -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on client (2)"
+
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "mount ${clients_arr[0]} with alternate mgsnid failed"
 }
 run_test 32 "check for mgssec"
 
@@ -6022,6 +6061,34 @@ test_65() {
 	look_for_files "^E^i" 0 "$DIR/${tdir}*" 1
 }
 run_test 65 "lfs find -printf %La and --attrs support"
+
+cleanup_68() {
+	lctl set_param fail_loc=0 fail_val=0
+	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "re-mount $MOUNT2 failed"
+	fi
+}
+
+test_68() {
+	stack_trap cleanup_68 EXIT
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_PTLRPC_DROP_MGS    0x51d
+	lctl set_param fail_loc=0x8000051d fail_val=20
+
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "mount failed"
+
+	umount_client $MOUNT || error "re-umount $MOUNT failed"
+}
+run_test 68 "all config logs are processed"
 
 log "cleanup: ======================================================"
 

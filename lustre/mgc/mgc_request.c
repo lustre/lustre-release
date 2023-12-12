@@ -1640,7 +1640,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	if (rc && rc != -ENOENT)
 #else
 	if (local_only)
-		GOTO(out_pop, rc);
+		GOTO(out_pop, rc = -EIO);
 #endif
 		rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
@@ -1804,6 +1804,10 @@ restart:
 
 	CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
 	       mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
+	if (rc != -ETIMEDOUT && rc != -EIO && rc != -EAGAIN) {
+		cld->cld_processed = 1;
+		wake_up(&rq_waitq);
+	}
 
 	/* Now drop the lock so MGS can revoke it */
 	if (!rcl) {
@@ -1866,6 +1870,22 @@ static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
 		if (IS_ERR(cld)) {
 			rc = PTR_ERR(cld);
 			break;
+		}
+
+		/* if it exists, the sptlrpc config log really needs to be
+		 * correctly processed before processing other logs,
+		 * otherwise client might use incorrect sec flavor
+		 */
+		if (cld->cld_sptlrpc && !cld->cld_sptlrpc->cld_processed) {
+			unsigned int timeout = 120;
+
+			/* we do not want to wait forever,
+			 * we prefer a (excessively) long timeout
+			 */
+			timeout = max(20 * mgc_requeue_timeout_min, timeout);
+			wait_event_idle_timeout(rq_waitq,
+						cld->cld_sptlrpc->cld_processed,
+						cfs_time_seconds(timeout));
 		}
 
 		rc = mgc_process_log(obd, cld);

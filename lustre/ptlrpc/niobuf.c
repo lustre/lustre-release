@@ -737,6 +737,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		RETURN(0);
 	}
 
+	if (unlikely(CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DROP_MGS, cfs_fail_val) &&
+		     lustre_msg_get_opc(request->rq_reqmsg) == MGS_CONNECT)) {
+		DEBUG_REQ(D_INFO, request, "Simulate MGS connect failure");
+		RETURN(0);
+	}
+
+
 	LASSERT(request->rq_type == PTL_RPC_MSG_REQUEST);
 	LASSERT(request->rq_wait_ctx == 0);
 
