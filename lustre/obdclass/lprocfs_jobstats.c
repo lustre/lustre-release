@@ -519,6 +519,9 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 				quote = "\"";
 		}
 	}
+	/* '@' is reserved in YAML, so it cannot start a bare string. */
+	if (escaped[0] == '@')
+		quote = "\"";
 
 	seq_printf(p, "- %-16s %s%*s%s\n",
 		   "job_id:", quote, joblen, escaped, quote);
