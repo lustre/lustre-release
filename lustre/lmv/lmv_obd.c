@@ -2131,6 +2131,17 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	return tgt;
 }
 
+static bool lmv_tgt_nocreate(struct lmv_obd *lmv, struct lmv_tgt_desc *tgt)
+{
+	if (likely(!(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)))
+		return false;
+
+	obd_statfs(NULL, tgt->ltd_exp, &tgt->ltd_statfs,
+		   ktime_get_seconds() -
+			lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage, 0);
+	return tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE;
+}
+
 static bool lmv_qos_exclude(struct lmv_obd *lmv, struct md_op_data *op_data)
 {
 	const char *name = op_data->op_name;
@@ -2190,7 +2201,7 @@ struct lmv_tgt_desc *lmv_locate_tgt_create(struct obd_device *obd,
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			RETURN(ERR_PTR(-ENODEV));
-		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+		if (unlikely(lmv_tgt_nocreate(lmv, tgt)))
 			GOTO(new_tgt, -EAGAIN);
 	} else if (lmv_op_user_qos_mkdir(op_data)) {
 		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
@@ -2203,11 +2214,11 @@ struct lmv_tgt_desc *lmv_locate_tgt_create(struct obd_device *obd,
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			RETURN(ERR_PTR(-ENODEV));
-		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+		if (unlikely(lmv_tgt_nocreate(lmv, tgt)))
 			GOTO(new_tgt, -EAGAIN);
 	} else if ((lmv_op_default_qos_mkdir(op_data) &&
 		    !lmv_qos_exclude(lmv, op_data)) ||
-		   tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) {
+		   unlikely(lmv_tgt_nocreate(lmv, tgt))) {
 new_tgt:
 		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
 		if (IS_ERR(tgt))

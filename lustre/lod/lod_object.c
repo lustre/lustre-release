@@ -6326,47 +6326,42 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 		struct lu_buf buf = { NULL };
 
 		ss = lu_site2seq(dt->do_lu.lo_dev->ld_site);
-
-		/* If the parent has default stripeEA, and client
-		 * did not find it before sending create request,
-		 * then MDT will return -EREMOTE, and client will
-		 * retrieve the default stripeEA and re-create the
-		 * sub directory.
-		 *
-		 * Note: if dah_eadata != NULL, it means creating the
-		 * striped directory with specified stripeEA, then it
-		 * should ignore the default stripeEA */
-		if (hint != NULL && hint->dah_eadata == NULL) {
+		if (hint && (!hint->dah_eadata || hint->dah_eadata_is_dmv)) {
 			if (CFS_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
 				GOTO(out, rc = -EREMOTE);
-
-			if (lo->ldo_dir_stripe_offset != LMV_OFFSET_DEFAULT &&
-			    lo->ldo_dir_stripe_offset != ss->ss_node_id) {
-				struct lod_device *lod;
-				struct lu_tgt_desc *mdt = NULL;
-				bool found_mdt = false;
-
-				lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-				lod_foreach_mdt(lod, mdt) {
-					if (mdt->ltd_index ==
-						lo->ldo_dir_stripe_offset) {
-						found_mdt = true;
-						break;
-					}
-				}
-
-				/* If the MDT indicated by stripe_offset can be
-				 * found, then tell client to resend the create
-				 * request to the correct MDT, otherwise return
-				 * error to client */
-				if (found_mdt)
-					GOTO(out, rc = -EREMOTE);
-				else
-					GOTO(out, rc = -EINVAL);
-			}
-		} else if (hint && hint->dah_eadata) {
+		} else if (hint) {
+			LASSERT(hint->dah_eadata && !hint->dah_eadata_is_dmv);
 			buf.lb_buf = (void *)hint->dah_eadata;
 			buf.lb_len = hint->dah_eadata_len;
+		}
+
+
+		/* if dir target MDT is not current MDT, it's possible that
+		 * directory creation is disabled on the target MDT.
+		 */
+		if (lo->ldo_dir_stripe_offset != LMV_OFFSET_DEFAULT &&
+		    lo->ldo_dir_stripe_offset != ss->ss_node_id) {
+			struct lod_device *lod;
+			struct lu_tgt_desc *mdt = NULL;
+			bool no_create = false;
+
+			lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+			rc = -EINVAL;
+			lod_foreach_mdt(lod, mdt) {
+				if (mdt->ltd_index ==
+				    lo->ldo_dir_stripe_offset) {
+					rc = -EPROTO;
+					/* refresh statfs */
+					dt_statfs(env, mdt->ltd_tgt,
+						  &mdt->ltd_statfs);
+					no_create = (mdt->ltd_statfs.os_state &
+						     OS_STATFS_NOCREATE);
+					break;
+				}
+			}
+
+			if (!no_create)
+				GOTO(out, rc);
 		}
 
 		rc = lod_declare_dir_striping_create(env, dt, attr, &buf, dof,
