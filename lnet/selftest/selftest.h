@@ -42,6 +42,7 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-types.h>
 #include <uapi/linux/lnet/lnetst.h>
+#include <linux/refcount.h>
 
 #include "rpc.h"
 #include "timer.h"
@@ -169,63 +170,63 @@ struct sfw_test_instance;
 #define SRPC_RDMA_PORTAL                52
 
 static inline enum srpc_msg_type
-srpc_service2request (int service)
+srpc_service2request(int service)
 {
-        switch (service) {
-        default:
-                LBUG ();
-        case SRPC_SERVICE_DEBUG:
-                return SRPC_MSG_DEBUG_REQST;
+	switch (service) {
+	default:
+		LBUG();
+	case SRPC_SERVICE_DEBUG:
+		return SRPC_MSG_DEBUG_REQST;
 
-        case SRPC_SERVICE_MAKE_SESSION:
-                return SRPC_MSG_MKSN_REQST;
+	case SRPC_SERVICE_MAKE_SESSION:
+		return SRPC_MSG_MKSN_REQST;
 
-        case SRPC_SERVICE_REMOVE_SESSION:
-                return SRPC_MSG_RMSN_REQST;
+	case SRPC_SERVICE_REMOVE_SESSION:
+		return SRPC_MSG_RMSN_REQST;
 
-        case SRPC_SERVICE_BATCH:
-                return SRPC_MSG_BATCH_REQST;
+	case SRPC_SERVICE_BATCH:
+		return SRPC_MSG_BATCH_REQST;
 
-        case SRPC_SERVICE_TEST:
-                return SRPC_MSG_TEST_REQST;
+	case SRPC_SERVICE_TEST:
+		return SRPC_MSG_TEST_REQST;
 
-        case SRPC_SERVICE_QUERY_STAT:
-                return SRPC_MSG_STAT_REQST;
+	case SRPC_SERVICE_QUERY_STAT:
+		return SRPC_MSG_STAT_REQST;
 
-        case SRPC_SERVICE_BRW:
-                return SRPC_MSG_BRW_REQST;
+	case SRPC_SERVICE_BRW:
+		return SRPC_MSG_BRW_REQST;
 
-        case SRPC_SERVICE_PING:
-                return SRPC_MSG_PING_REQST;
+	case SRPC_SERVICE_PING:
+		return SRPC_MSG_PING_REQST;
 
-        case SRPC_SERVICE_JOIN:
-                return SRPC_MSG_JOIN_REQST;
-        }
+	case SRPC_SERVICE_JOIN:
+		return SRPC_MSG_JOIN_REQST;
+	}
 }
 
 static inline enum srpc_msg_type
-srpc_service2reply (int service)
+srpc_service2reply(int service)
 {
-        return srpc_service2request(service) + 1;
+	return srpc_service2request(service) + 1;
 }
 
 enum srpc_event_type {
-        SRPC_BULK_REQ_RCVD   = 1, /* passive bulk request(PUT sink/GET source) received */
-        SRPC_BULK_PUT_SENT   = 2, /* active bulk PUT sent (source) */
-        SRPC_BULK_GET_RPLD   = 3, /* active bulk GET replied (sink) */
-        SRPC_REPLY_RCVD      = 4, /* incoming reply received */
-        SRPC_REPLY_SENT      = 5, /* outgoing reply sent */
-        SRPC_REQUEST_RCVD    = 6, /* incoming request received */
-        SRPC_REQUEST_SENT    = 7, /* outgoing request sent */
+	SRPC_BULK_REQ_RCVD   = 1, /* passive bulk request(PUT sink/GET source) received */
+	SRPC_BULK_PUT_SENT   = 2, /* active bulk PUT sent (source) */
+	SRPC_BULK_GET_RPLD   = 3, /* active bulk GET replied (sink) */
+	SRPC_REPLY_RCVD      = 4, /* incoming reply received */
+	SRPC_REPLY_SENT      = 5, /* outgoing reply sent */
+	SRPC_REQUEST_RCVD    = 6, /* incoming request received */
+	SRPC_REQUEST_SENT    = 7, /* outgoing request sent */
 };
 
 /* RPC event */
 struct srpc_event {
 	enum srpc_event_type	ev_type;   /* what's up */
 	enum lnet_event_kind	ev_lnet;   /* LNet event type */
-        int               ev_fired;  /* LNet event fired? */
-        int               ev_status; /* LNet event status */
-        void             *ev_data;   /* owning server/client RPC */
+	int               ev_fired;  /* LNet event fired? */
+	int               ev_status; /* LNet event status */
+	void             *ev_data;   /* owning server/client RPC */
 };
 
 /* bulk descriptor */
@@ -287,14 +288,14 @@ struct srpc_client_rpc {
 	struct swi_workitem	crpc_wi;
 	struct lnet_process_id	crpc_dest;
 
-        void               (*crpc_done)(struct srpc_client_rpc *);
-        void               (*crpc_fini)(struct srpc_client_rpc *);
-        int                  crpc_status;    /* completion status */
-        void                *crpc_priv;      /* caller data */
+	void               (*crpc_done)(struct srpc_client_rpc *);
+	void               (*crpc_fini)(struct srpc_client_rpc *);
+	int                  crpc_status;    /* completion status */
+	void                *crpc_priv;      /* caller data */
 
-        /* state flags */
-        unsigned int         crpc_aborted:1; /* being given up */
-        unsigned int         crpc_closed:1;  /* completed */
+	/* state flags */
+	unsigned int         crpc_aborted:1; /* being given up */
+	unsigned int         crpc_closed:1;  /* completed */
 
 	/* RPC events */
 	struct srpc_event	crpc_bulkev;	/* bulk event */
@@ -314,26 +315,26 @@ offsetof(struct srpc_client_rpc, crpc_bulk.bk_iovs[(rpc)->crpc_bulk.bk_niov])
 
 #define srpc_client_rpc_addref(rpc)                                     \
 do {                                                                    \
-        CDEBUG(D_NET, "RPC[%p] -> %s (%d)++\n",                         \
-               (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-	       atomic_read(&(rpc)->crpc_refcount));                 \
-	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);            \
-	atomic_inc(&(rpc)->crpc_refcount);                          \
+	CDEBUG(D_NET, "RPC[%p] -> %s (%d)++\n",                         \
+	       (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
+	       atomic_read(&(rpc)->crpc_refcount));                     \
+	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);                \
+	atomic_inc(&(rpc)->crpc_refcount);                              \
 } while (0)
 
 #define srpc_client_rpc_decref(rpc)                                     \
 do {                                                                    \
-        CDEBUG(D_NET, "RPC[%p] -> %s (%d)--\n",                         \
-               (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-	       atomic_read(&(rpc)->crpc_refcount));                 \
-	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);            \
-	if (atomic_dec_and_test(&(rpc)->crpc_refcount))             \
-                srpc_destroy_client_rpc(rpc);                           \
+	CDEBUG(D_NET, "RPC[%p] -> %s (%d)--\n",                         \
+	       (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
+	       atomic_read(&(rpc)->crpc_refcount));                     \
+	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);                \
+	if (atomic_dec_and_test(&(rpc)->crpc_refcount))                 \
+		srpc_destroy_client_rpc(rpc);                           \
 } while (0)
 
 #define srpc_event_pending(rpc)   ((rpc)->crpc_bulkev.ev_fired == 0 ||  \
-                                   (rpc)->crpc_reqstev.ev_fired == 0 || \
-                                   (rpc)->crpc_replyev.ev_fired == 0)
+				   (rpc)->crpc_reqstev.ev_fired == 0 || \
+				   (rpc)->crpc_replyev.ev_fired == 0)
 
 /* CPU partition data of srpc service */
 struct srpc_service_cd {
@@ -390,10 +391,10 @@ struct srpc_service {
 	int			sv_ncpts;
 	/* percpt data for srpc_service */
 	struct srpc_service_cd	**sv_cpt_data;
-        /* Service callbacks:
-         * - sv_handler: process incoming RPC request
-         * - sv_bulk_ready: notify bulk data
-         */
+	/* Service callbacks:
+	 * - sv_handler: process incoming RPC request
+	 * - sv_bulk_ready: notify bulk data
+	 */
 	int              (*sv_handler)(struct srpc_server_rpc *);
 	int              (*sv_bulk_ready)(struct srpc_server_rpc *, int);
 };
@@ -416,7 +417,7 @@ struct sfw_session {
 	struct stt_timer	sn_timer;
 	struct list_head	sn_batches;	/* list of batches */
 	char			sn_name[LST_NAME_SIZE];
-	atomic_t		sn_refcount;
+	refcount_t		sn_refcount;
 	atomic_t		sn_brw_errors;
 	atomic_t		sn_ping_errors;
 	ktime_t			sn_started;
@@ -448,21 +449,21 @@ struct sfw_test_client_ops {
 	int  (*tso_prep_rpc)(struct sfw_test_unit *tsu,
 			     struct lnet_process_id dest,
 			     struct srpc_client_rpc **rpc); /* prep a tests rpc */
-        void (*tso_done_rpc)(struct sfw_test_unit *tsu,
+	void (*tso_done_rpc)(struct sfw_test_unit *tsu,
 			     struct srpc_client_rpc *rpc);  /* done a test rpc */
 };
 
 struct sfw_test_instance {
-	struct list_head	tsi_list;	/* chain on batch */
-	int			tsi_service;	/* test type */
-	struct sfw_batch	*tsi_batch;	/* batch */
-	struct sfw_test_client_ops	*tsi_ops;	/* test client operations */
+	struct list_head	tsi_list; /* chain on batch */
+	int			tsi_service; /* test type */
+	struct sfw_batch	*tsi_batch; /* batch */
+	struct sfw_test_client_ops	*tsi_ops; /* test client operations */
 
 	/* public parameter for all test units */
 	unsigned int		tsi_is_client:1;     /* is test client */
 	unsigned int		tsi_stoptsu_onerr:1; /* stop tsu on error */
-        int                     tsi_concur;          /* concurrency */
-        int                     tsi_loop;            /* loop count */
+	int                     tsi_concur;          /* concurrency */
+	int                     tsi_loop;            /* loop count */
 
 	/* status of test instance */
 	spinlock_t		tsi_lock;	/* serialize */
@@ -496,14 +497,14 @@ struct sfw_test_unit {
 };
 
 struct sfw_test_case {
-	struct list_head		tsc_list;		/* chain on fw_tests */
-	struct srpc_service		*tsc_srv_service;	/* test service */
-	struct sfw_test_client_ops	*tsc_cli_ops;		/* ops of test client */
+	struct list_head		tsc_list; /* chain on fw_tests */
+	struct srpc_service		*tsc_srv_service; /* test service */
+	struct sfw_test_client_ops	*tsc_cli_ops; /* ops of test client */
 };
 
 struct srpc_client_rpc *
 sfw_create_rpc(struct lnet_process_id peer, int service,
-	       unsigned features, int nbulkiov, int bulklen,
+	       unsigned int features, int nbulkiov, int bulklen,
 	       void (*done)(struct srpc_client_rpc *), void *priv);
 int sfw_create_test_rpc(struct sfw_test_unit *tsu,
 			struct lnet_process_id peer, unsigned int features,
@@ -521,7 +522,7 @@ int sfw_make_session(struct srpc_mksn_reqst *request,
 
 struct srpc_client_rpc *
 srpc_create_client_rpc(struct lnet_process_id peer, int service,
-                       int nbulkiov, int bulklen,
+		       int nbulkiov, int bulklen,
 		       void (*rpc_done)(struct srpc_client_rpc *),
 		       void (*rpc_fini)(struct srpc_client_rpc *), void *priv);
 void srpc_post_rpc(struct srpc_client_rpc *rpc);
@@ -590,15 +591,14 @@ void srpc_shutdown(void);
 static inline void
 srpc_destroy_client_rpc(struct srpc_client_rpc *rpc)
 {
-	LASSERT (rpc != NULL);
-	LASSERT (!srpc_event_pending(rpc));
-	LASSERT (atomic_read(&rpc->crpc_refcount) == 0);
+	LASSERT(rpc != NULL);
+	LASSERT(!srpc_event_pending(rpc));
+	LASSERT(atomic_read(&rpc->crpc_refcount) == 0);
 
-	if (rpc->crpc_fini == NULL) {
+	if (rpc->crpc_fini == NULL)
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
-	} else {
+	else
 		(*rpc->crpc_fini) (rpc);
-	}
 }
 
 static inline void
@@ -620,41 +620,41 @@ srpc_init_client_rpc(struct srpc_client_rpc *rpc, struct lnet_process_id peer,
 
 	rpc->crpc_dest         = peer;
 	rpc->crpc_priv         = priv;
-        rpc->crpc_service      = service;
-        rpc->crpc_bulk.bk_len  = bulklen;
-        rpc->crpc_bulk.bk_niov = nbulkiov;
-        rpc->crpc_done         = rpc_done;
-        rpc->crpc_fini         = rpc_fini;
+	rpc->crpc_service      = service;
+	rpc->crpc_bulk.bk_len  = bulklen;
+	rpc->crpc_bulk.bk_niov = nbulkiov;
+	rpc->crpc_done         = rpc_done;
+	rpc->crpc_fini         = rpc_fini;
 	LNetInvalidateMDHandle(&rpc->crpc_reqstmdh);
 	LNetInvalidateMDHandle(&rpc->crpc_replymdh);
 	LNetInvalidateMDHandle(&rpc->crpc_bulk.bk_mdh);
 
-        /* no event is expected at this point */
-        rpc->crpc_bulkev.ev_fired  =
-        rpc->crpc_reqstev.ev_fired =
-        rpc->crpc_replyev.ev_fired = 1;
+	/* no event is expected at this point */
+	rpc->crpc_bulkev.ev_fired  =
+	rpc->crpc_reqstev.ev_fired =
+	rpc->crpc_replyev.ev_fired = 1;
 
-        rpc->crpc_reqstmsg.msg_magic   = SRPC_MSG_MAGIC;
-        rpc->crpc_reqstmsg.msg_version = SRPC_MSG_VERSION;
-        rpc->crpc_reqstmsg.msg_type    = srpc_service2request(service);
+	rpc->crpc_reqstmsg.msg_magic   = SRPC_MSG_MAGIC;
+	rpc->crpc_reqstmsg.msg_version = SRPC_MSG_VERSION;
+	rpc->crpc_reqstmsg.msg_type    = srpc_service2request(service);
 }
 
 static inline const char *
-swi_state2str (int state)
+swi_state2str(int state)
 {
 #define STATE2STR(x) case x: return #x
-        switch(state) {
-                default:
-                        LBUG();
-                STATE2STR(SWI_STATE_NEWBORN);
-                STATE2STR(SWI_STATE_REPLY_SUBMITTED);
-                STATE2STR(SWI_STATE_REPLY_SENT);
-                STATE2STR(SWI_STATE_REQUEST_SUBMITTED);
-                STATE2STR(SWI_STATE_REQUEST_SENT);
-                STATE2STR(SWI_STATE_REPLY_RECEIVED);
-                STATE2STR(SWI_STATE_BULK_STARTED);
-                STATE2STR(SWI_STATE_DONE);
-        }
+	switch (state) {
+	default:
+		LBUG();
+	STATE2STR(SWI_STATE_NEWBORN);
+	STATE2STR(SWI_STATE_REPLY_SUBMITTED);
+	STATE2STR(SWI_STATE_REPLY_SENT);
+	STATE2STR(SWI_STATE_REQUEST_SUBMITTED);
+	STATE2STR(SWI_STATE_REQUEST_SENT);
+	STATE2STR(SWI_STATE_REPLY_RECEIVED);
+	STATE2STR(SWI_STATE_BULK_STARTED);
+	STATE2STR(SWI_STATE_DONE);
+	}
 #undef STATE2STR
 }
 
