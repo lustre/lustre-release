@@ -233,7 +233,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 if (lock->l_lvb_data != NULL)
                         OBD_FREE_LARGE(lock->l_lvb_data, lock->l_lvb_len);
 
-		if (res->lr_type == LDLM_EXTENT) {
+		if (res->lr_type == LDLM_EXTENT || res->lr_type == LDLM_FLOCK) {
 			ldlm_interval_free(ldlm_interval_detach(lock));
 		} else if (res->lr_type == LDLM_IBITS) {
 			if (lock->l_ibits_node != NULL)
@@ -1707,6 +1707,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
 	switch (type) {
 	case LDLM_EXTENT:
+	case LDLM_FLOCK:
 		rc = ldlm_extent_alloc_lock(lock);
 		break;
 	case LDLM_IBITS:

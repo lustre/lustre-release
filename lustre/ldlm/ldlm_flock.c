@@ -116,6 +116,24 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 			     &req->l_exp_flock_hash);
 }
 
+/** Remove cancelled lock from resource interval tree. */
+void ldlm_flock_unlink_lock(struct ldlm_lock *lock)
+{
+	struct ldlm_resource *res = lock->l_resource;
+	struct ldlm_interval *node = lock->l_tree_node;
+
+	if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
+		return;
+
+	node = ldlm_interval_detach(lock);
+	if (node) {
+		struct interval_node **root = &res->lr_flock_node.lfn_root;
+
+		interval_erase(&node->li_node, root);
+		ldlm_interval_free(node);
+	}
+}
+
 static inline void
 ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 {
@@ -137,6 +155,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 		 */
 		ldlm_lock_decref_internal_nolock(lock, mode);
 	}
+	ldlm_flock_unlink_lock(lock);
 
 	ldlm_lock_destroy_nolock(lock);
 	EXIT;
@@ -263,6 +282,64 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
 	}
 }
 #endif /* HAVE_SERVER_SUPPORT */
+
+/** Add newly granted lock into interval tree for the resource. */
+static void ldlm_flock_add_lock(struct ldlm_resource *res,
+				struct list_head *head,
+				struct ldlm_lock *lock)
+{
+	struct interval_node *found, **root;
+	struct ldlm_interval *node = lock->l_tree_node;
+	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
+	int rc;
+
+	LASSERT(ldlm_is_granted(lock));
+
+	LASSERT(node != NULL);
+	LASSERT(!interval_is_intree(&node->li_node));
+
+	rc = interval_set(&node->li_node, extent->start, extent->end);
+	LASSERT(!rc);
+
+	root = &res->lr_flock_node.lfn_root;
+	found = interval_insert(&node->li_node, root);
+	if (found) { /* The same extent found. */
+		struct ldlm_interval *tmp = ldlm_interval_detach(lock);
+
+		LASSERT(tmp != NULL);
+		ldlm_interval_free(tmp);
+		ldlm_interval_attach(to_ldlm_interval(found), lock);
+	}
+
+	/* Add the locks into list */
+	ldlm_resource_add_lock(res, head, lock);
+}
+
+static void
+ldlm_flock_range_update(struct ldlm_lock *lock, struct ldlm_lock *req)
+{
+	struct ldlm_resource *res = lock->l_resource;
+	struct interval_node *found, **root = &res->lr_flock_node.lfn_root;
+	struct ldlm_interval *node;
+	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
+
+	node = ldlm_interval_detach(lock);
+	if (!node) {
+		node = ldlm_interval_detach(req);
+		LASSERT(node);
+	} else {
+		interval_erase(&node->li_node, root);
+	}
+	interval_set(&node->li_node, extent->start, extent->end);
+
+	found = interval_insert(&node->li_node, root);
+	if (found) { /* The policy group found. */
+		ldlm_interval_free(node);
+		node = to_ldlm_interval(found);
+	}
+	ldlm_interval_attach(node, lock);
+	EXIT;
+}
 
 /**
  * Process a granting attempt for flock lock.
@@ -501,6 +578,7 @@ reprocess:
 		    lock->l_policy_data.l_flock.end) {
 			lock->l_policy_data.l_flock.end =
 				new->l_policy_data.l_flock.start - 1;
+			ldlm_flock_range_update(lock, req);
 			continue;
 		}
 
@@ -561,7 +639,7 @@ reprocess:
 							 lock->l_granted_mode);
 
 		/* insert new2 at lock */
-		ldlm_resource_add_lock(res, &lock->l_res_link, new2);
+		ldlm_flock_add_lock(res, &lock->l_res_link, new2);
 		LDLM_LOCK_RELEASE(new2);
 		break;
 	}
@@ -581,7 +659,7 @@ reprocess:
 		 * lock for the next owner, or might not be a lock at
 		 * all, but instead points at the head of the list
 		 */
-		ldlm_resource_add_lock(res, &lock->l_res_link, req);
+		ldlm_flock_add_lock(res, &lock->l_res_link, req);
 	}
 
 	if (*flags != LDLM_FL_WAIT_NOREPROC) {

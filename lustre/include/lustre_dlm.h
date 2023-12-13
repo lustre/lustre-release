@@ -730,6 +730,7 @@ struct ldlm_ibits_node {
 struct ldlm_flock_node {
 	atomic_t		lfn_unlock_pending;
 	bool			lfn_needs_reprocess;
+	struct interval_node   *lfn_root;
 };
 
 /** Whether to track references to exports by LDLM locks. */

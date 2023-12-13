@@ -958,7 +958,8 @@ static struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock)
 
 	ENTRY;
 
-	LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
+	LASSERT(lock->l_resource->lr_type == LDLM_EXTENT ||
+		lock->l_resource->lr_type == LDLM_FLOCK);
 	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
 	if (node == NULL)
 		RETURN(NULL);
@@ -982,7 +983,8 @@ void ldlm_interval_attach(struct ldlm_interval *n,
 			  struct ldlm_lock *l)
 {
 	LASSERT(l->l_tree_node == NULL);
-	LASSERT(l->l_resource->lr_type == LDLM_EXTENT);
+	LASSERT(l->l_resource->lr_type == LDLM_EXTENT ||
+		l->l_resource->lr_type == LDLM_FLOCK);
 
 	list_add_tail(&l->l_sl_policy, &n->li_group);
 	l->l_tree_node = n;
