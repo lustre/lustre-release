@@ -424,9 +424,9 @@ static int lod_sub_cancel_llog(const struct lu_env *env,
 		/* set retention on logs to simplify reclamation */
 		llog_process_or_fork(env, ctxt->loc_handle, llog_cat_retain_cb,
 				     NULL, NULL, false);
-		/* retain old catalog and create a new one */
-		lod_sub_recreate_llog(env, lod, dt, index);
 	}
+	/* retain old catalog and create a new one */
+	lod_sub_recreate_llog(env, lod, dt, index);
 	llog_ctxt_put(ctxt);
 	return rc;
 }
@@ -1244,9 +1244,7 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 		RETURN(rc);
 
 	lod_foreach_mdt(lod, mdt) {
-		rc = lod_sub_init_llog(env, lod, mdt->ltd_tgt);
-		if (rc != 0)
-			break;
+		lod_sub_init_llog(env, lod, mdt->ltd_tgt);
 	}
 
 	RETURN(rc);

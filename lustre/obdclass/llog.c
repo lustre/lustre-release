@@ -394,10 +394,11 @@ EXPORT_SYMBOL(llog_read_header);
 int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		     int flags, struct obd_uuid *uuid)
 {
-	struct llog_log_hdr	*llh;
-	enum llog_flag		 fmt = flags & LLOG_F_EXT_MASK;
-	int			 rc;
-	int			chunk_size = handle->lgh_ctxt->loc_chunk_size;
+	struct llog_log_hdr *llh;
+	enum llog_flag fmt = flags & LLOG_F_EXT_MASK;
+	int rc;
+	int chunk_size = handle->lgh_ctxt->loc_chunk_size;
+
 	ENTRY;
 
 	LASSERT(handle->lgh_hdr == NULL);
@@ -441,7 +442,7 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 			       loghandle2name(handle),
 			       (char *)uuid->uuid,
 			       (char *)llh->llh_tgtuuid.uuid);
-			GOTO(out, rc = -EEXIST);
+			GOTO(out, rc = -EINVAL);
 		}
 	}
 	if (flags & LLOG_F_IS_CAT) {

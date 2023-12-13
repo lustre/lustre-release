@@ -947,19 +947,25 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 	if (likely(logid_id(&cid->lci_logid) != 0)) {
 		rc = llog_open(env, ctxt, &lgh, &cid->lci_logid, NULL,
 			       LLOG_OPEN_EXISTS);
-
 		/* re-create llog if it is missing */
-		if (rc == -ENOENT)
+		if (rc == -ENOENT || rc == -EREMCHG) {
 			logid_set_id(&cid->lci_logid, 0);
-		else if (rc < 0)
+		} else if (rc < 0) {
+			CWARN("%s: can't open llog "DFID": rc = %d\n",
+			      lod2obd(lod)->obd_name,
+			      PLOGID(&cid->lci_logid), rc);
 			GOTO(out_put, rc);
+		}
 	}
 
 	if (unlikely(logid_id(&cid->lci_logid) == 0)) {
 renew:
 		rc = llog_open_create(env, ctxt, &lgh, NULL, NULL);
-		if (rc < 0)
+		if (rc < 0) {
+			CWARN("%s: can't create new llog: rc = %d\n",
+			      lod2obd(lod)->obd_name, rc);
 			GOTO(out_put, rc);
+		}
 		cid->lci_logid = lgh->lgh_id;
 		need_put = true;
 	}
@@ -968,8 +974,11 @@ renew:
 
 	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
 	if (rc) {
-		/* Update llog is corruption, renew it */
-		if (rc == -EIO && need_put == false) {
+		/* Update llog is incorrect, renew it */
+		if (rc == -EINVAL && need_put == false) {
+			CWARN("%s: renew invalid update log "DFID": rc = %d\n",
+			      lod2obd(lod)->obd_name, PLOGID(&cid->lci_logid),
+			      rc);
 			llog_cat_close(env, lgh);
 			GOTO(renew, 0);
 		}
@@ -978,10 +987,14 @@ renew:
 
 	if (need_put) {
 		rc = llog_osd_put_cat_list(env, dt, index, 1, cid, fid);
-		if (rc != 0)
+		if (rc) {
+			CERROR("%s: can't update id in catalogs: rc = %d\n",
+			       lod2obd(lod)->obd_name, rc);
 			GOTO(out_close, rc);
+		}
 	}
 
+	LASSERT(!ctxt->loc_handle);
 	ctxt->loc_handle = lgh;
 
 	CDEBUG(D_INFO, "%s: init llog for index %d - catid "DFID"\n",

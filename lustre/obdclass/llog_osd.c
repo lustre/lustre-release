@@ -208,11 +208,11 @@ static int llog_osd_pad(const struct lu_env *env, struct dt_object *o,
 static int llog_osd_read_header(const struct lu_env *env,
 				struct llog_handle *handle)
 {
-	struct llog_rec_hdr	*llh_hdr;
-	struct dt_object	*o;
-	struct llog_thread_info	*lgi;
-	enum llog_flag		 flags;
-	int			 rc;
+	struct llog_rec_hdr *llh_hdr;
+	struct dt_object *o;
+	struct llog_thread_info *lgi;
+	enum llog_flag flags;
+	int rc;
 
 	ENTRY;
 
@@ -225,7 +225,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 
 	rc = dt_attr_get(env, o, &lgi->lgi_attr);
 	if (rc)
-		GOTO(unlock, rc);
+		GOTO(unlock, rc = -EIO);
 
 	LASSERT(lgi->lgi_attr.la_valid & LA_SIZE);
 
@@ -241,16 +241,20 @@ static int llog_osd_read_header(const struct lu_env *env,
 	lgi->lgi_buf.lb_len = handle->lgh_hdr_size;
 	rc = dt_read(env, o, &lgi->lgi_buf, &lgi->lgi_off);
 	llh_hdr = &handle->lgh_hdr->llh_hdr;
-	if (rc < sizeof(*llh_hdr) || rc < llh_hdr->lrh_len) {
-		CERROR("%s: error reading "DFID" log header size %d: rc = %d\n",
+	if (rc < 0) {
+		CERROR("%s: can't read llog "DFID" header: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,
-		       PFID(lu_object_fid(&o->do_lu)), rc < 0 ? 0 : rc,
-		       -EIO);
-
-		if (rc >= 0)
-			rc = -EIO;
-
-		GOTO(unlock, rc);
+		       PFID(lu_object_fid(&o->do_lu)), rc);
+		GOTO(unlock, rc = -EIO);
+	}
+	if (rc < sizeof(*llh_hdr) || rc < LLOG_MIN_CHUNK_SIZE) {
+		/* consider short header as non-initialized llog */
+		CERROR("%s: llog "DFID" header too small: rc = %d\n",
+		       o->do_lu.lo_dev->ld_obd->obd_name,
+		       PFID(lu_object_fid(&o->do_lu)), rc);
+		/* caller flags to be initialized */
+		handle->lgh_hdr->llh_flags = flags;
+		GOTO(unlock, rc = LLOG_EEMPTY);
 	}
 
 	if (LLOG_REC_HDR_NEEDS_SWABBING(llh_hdr))
@@ -262,7 +266,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_type, LLOG_HDR_MAGIC);
-		GOTO(unlock, rc = -EIO);
+		GOTO(unlock, rc = -EINVAL);
 	} else if (llh_hdr->lrh_len < LLOG_MIN_CHUNK_SIZE ||
 		   llh_hdr->lrh_len > handle->lgh_hdr_size) {
 		CERROR("%s: incorrectly sized log %s "DFID" header: "
@@ -272,7 +276,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_len, LLOG_MIN_CHUNK_SIZE);
-		GOTO(unlock, rc = -EIO);
+		GOTO(unlock, rc = -EINVAL);
 	} else if (LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_index >
 		   LLOG_HDR_BITMAP_SIZE(handle->lgh_hdr) ||
 		   LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len !=
@@ -283,7 +287,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len, -EIO);
-		GOTO(unlock, rc = -EIO);
+		GOTO(unlock, rc = -EINVAL);
 	}
 
 	handle->lgh_hdr->llh_flags |= (flags & LLOG_F_EXT_MASK);
