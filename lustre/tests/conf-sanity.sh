@@ -1270,7 +1270,7 @@ test_30a() {
 
 	local orig=$($LCTL get_param -n $test)
 	local list=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
-	for i in ${list[@]}; do
+	for i in ${list[*]}; do
 		set_persistent_param_and_check client $test $conf $i
 	done
 	# make sure client restart still works
@@ -7026,8 +7026,7 @@ test_84() {
 	local wrap_up=5
 
 	echo "start mds service on $(facet_active_host $facet)"
-	start_mds \
-	"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
+	start_mds "-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" ||
 		error "start MDS failed"
 
 	start_ost || error "start OST0000 failed"
@@ -8285,8 +8284,8 @@ run_test 101b "Race events DISCONNECT and ACTIVE in osp"
 test_102() {
 	[[ "$MDS1_VERSION" -gt $(version_code 2.9.53) ]] ||
 		skip "Need server version greater than 2.9.53"
-	[[ “$(mdsdevname 1)” != “$(mgsdevname)” ]] &&
-		[[ “$(facet_host mds1)” = “$(facet_host mgs)” ]] &&
+	[[ "$(mdsdevname 1)" != "$(mgsdevname)" ]] &&
+		[[ "$(facet_host mds1)" == "$(facet_host mgs)" ]] &&
 		skip "MGS must be on different node or combined"
 
 	cleanup || error "cleanup failed with $?"
@@ -8305,19 +8304,22 @@ test_102() {
 
 	# unload all and only load libcfs to allow fail_loc setting
 	do_facet mds1 $LUSTRE_RMMOD || error "unable to unload modules"
-	do_facet mds1 modprobe libcfs || error "libcfs not loaded"
-	do_facet mds1 lsmod \| grep libcfs || error "libcfs not loaded"
+	do_rpc_nodes $(facet_active_host mds1) load_module ../libcfs/libcfs/libcfs
+	do_facet mds1 lsmod | grep libcfs || error "libcfs not loaded"
 
 	#define OBD_FAIL_OBDCLASS_MODULE_LOAD    0x60a
 	do_facet mds1 "$LCTL set_param fail_loc=0x8000060a"
 
 	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts &&
-		error "mdt start must fail"
-	do_facet mds1 lsmod \| grep  obdclass && error "obdclass must not load"
+		error "mdt start must fail" || log "mount failed as expected"
+	do_facet mds1 lsmod | grep obdclass && error "obdclass must not load" ||
+		log "obdclass not loaded as expected"
 
 	do_facet mds1 "$LCTL set_param fail_loc=0x0"
 
-	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts ||
+	do_rpc_nodes $(facet_active_host mds1) load_modules
+	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts &&
+		log "mds1 mounted properly" ||
 		error "mdt start must not fail"
 
 	cleanup || error "cleanup failed with $?"
@@ -10651,7 +10653,7 @@ test_133() {
 	filecount=$((OSTCOUNT * filenum))
 	for ((i = 1; i < filecount; i++)); do
 		$LFS setstripe $testfile-$i.2 ||
-			error "failed to setstripe $testilfe-$i.2"
+			error "failed to setstripe $testfile-$i.2"
 	done
 	$LFS getstripe -i $testfile-*.2 > /tmp/$tfile.log
 	local qos_used=""
