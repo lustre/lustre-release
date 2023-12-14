@@ -525,7 +525,7 @@ struct lnet_delay_rule {
 	/** lock to protect \a below members */
 	spinlock_t			dl_lock;
 	/** refcount of delay rule */
-	atomic_t			dl_refcount;
+	struct kref		dl_refcount;
 	/**
 	 * the message sequence to delay, which means message is delayed when
 	 * dl_stat.fs_count == dl_delay_at
@@ -567,15 +567,16 @@ struct delay_daemon_data {
 static struct delay_daemon_data	delay_dd;
 
 static void
-delay_rule_decref(struct lnet_delay_rule *rule)
+delay_rule_free(struct kref *kref)
 {
-	if (atomic_dec_and_test(&rule->dl_refcount)) {
-		LASSERT(list_empty(&rule->dl_sched_link));
-		LASSERT(list_empty(&rule->dl_msg_list));
-		LASSERT(list_empty(&rule->dl_link));
+	struct lnet_delay_rule *rule = container_of(kref,
+						    struct lnet_delay_rule,
+						    dl_refcount);
 
-		CFS_FREE_PTR(rule);
-	}
+	LASSERT(list_empty(&rule->dl_sched_link));
+	LASSERT(list_empty(&rule->dl_msg_list));
+	LASSERT(list_empty(&rule->dl_link));
+	CFS_FREE_PTR(rule);
 }
 
 /**
@@ -805,7 +806,8 @@ lnet_delay_rule_check(void)
 		spin_unlock_bh(&delay_dd.dd_lock);
 
 		delayed_msg_check(rule, false, &msgs);
-		delay_rule_decref(rule); /* -1 for delay_dd.dd_sched_rules */
+		/* -1 for delay_dd.dd_sched_rules */
+		kref_put(&rule->dl_refcount, delay_rule_free);
 	}
 
 	if (!list_empty(&msgs))
@@ -841,7 +843,7 @@ delay_timer_cb(cfs_timer_cb_arg_t data)
 
 	spin_lock_bh(&delay_dd.dd_lock);
 	if (list_empty(&rule->dl_sched_link) && delay_dd.dd_running) {
-		atomic_inc(&rule->dl_refcount);
+		kref_get(&rule->dl_refcount);
 		list_add_tail(&rule->dl_sched_link, &delay_dd.dd_sched_rules);
 		wake_up(&delay_dd.dd_waitq);
 	}
@@ -920,7 +922,7 @@ lnet_delay_rule_add(struct lnet_fault_large_attr *attr)
 	rule->dl_msg_send = -1;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	atomic_set(&rule->dl_refcount, 1);
+	kref_init(&rule->dl_refcount);
 	list_add(&rule->dl_link, &the_lnet.ln_delay_rules);
 	lnet_net_unlock(LNET_LOCK_EX);
 
@@ -990,7 +992,8 @@ lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst, bool shutdown)
 
 		timer_delete_sync(&rule->dl_timer);
 		delayed_msg_check(rule, true, &msg_list);
-		delay_rule_decref(rule); /* -1 for the_lnet.ln_delay_rules */
+		/* -1 for the_lnet.ln_delay_rules */
+		kref_put(&rule->dl_refcount, delay_rule_free);
 		n++;
 	}
 
