@@ -26979,7 +26979,10 @@ test_398c() { # LU-4198
 	pct=$($LCTL get_param osc.${imp_name}.rpc_stats |
 		grep -A 1 'pages per rpc' | grep -v 'pages per rpc' |
 		awk '{print $7}')
-	[ $pct -le 50 ] || error "$pct% of I/O are 1-page"
+	(( $pct <= 50 )) || {
+		$LCTL get_param osc.${imp_name}.rpc_stats
+		error "$pct% of I/O are 1-page"
+	}
 
 	echo "mix rw ${size}M to OST0 by fio with $njobs jobs..."
 	fio --name=rand-rw --rw=randrw --bs=$PAGE_SIZE --direct=1 \
