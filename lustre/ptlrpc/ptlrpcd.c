@@ -236,12 +236,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ptlrpcd_add_req);
 
-static inline void ptlrpc_reqset_get(struct ptlrpc_request_set *set)
-{
-	atomic_inc(&set->set_refcount);
-}
-
-/**
+/*
  * Check if there is more work to do on ptlrpcd set.
  * Returns 1 if yes.
  */
@@ -335,7 +330,7 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 					continue;
 				}
 
-				ptlrpc_reqset_get(ps);
+				kref_get(&ps->set_refcount);
 				spin_unlock(&partner->pc_lock);
 
 				if (atomic_read(&ps->set_new_count)) {
@@ -346,7 +341,7 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 						       rc, partner->pc_index,
 						       pc->pc_index);
 				}
-				ptlrpc_reqset_put(ps);
+				kref_put(&ps->set_refcount, ptlrpc_reqset_free);
 			} while (rc == 0 && pc->pc_cursor != first);
 		}
 	}

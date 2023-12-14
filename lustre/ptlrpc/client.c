@@ -1077,7 +1077,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 	OBD_CPT_ALLOC(set, cfs_cpt_tab, cpt, sizeof(*set));
 	if (!set)
 		RETURN(NULL);
-	atomic_set(&set->set_refcount, 1);
+	kref_init(&set->set_refcount);
 	INIT_LIST_HEAD(&set->set_requests);
 	init_waitqueue_head(&set->set_waitq);
 	atomic_set(&set->set_new_count, 0);
@@ -1168,7 +1168,7 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
 
 	LASSERT(atomic_read(&set->set_remaining) == 0);
 
-	ptlrpc_reqset_put(set);
+	kref_put(&set->set_refcount, ptlrpc_reqset_free);
 	EXIT;
 }
 EXPORT_SYMBOL(ptlrpc_set_destroy);
@@ -3721,3 +3721,18 @@ int ptlrpcd_queue_work(void *handler)
 	return 0;
 }
 EXPORT_SYMBOL(ptlrpcd_queue_work);
+
+/**
+ * ptlrpc_reqset_free() - Release memory allocated for ptlrpc_request_set
+ * @kref: kref when dropped below 1
+ *
+ * Used as a kref release callback, when the last user of ptlrpc_request_set
+ * is released.
+ */
+void ptlrpc_reqset_free(struct kref *kref)
+{
+	struct ptlrpc_request_set *set = container_of(kref,
+						      struct ptlrpc_request_set,
+						      set_refcount);
+	OBD_FREE_PTR(set);
+}

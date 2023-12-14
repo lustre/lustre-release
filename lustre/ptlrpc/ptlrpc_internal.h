@@ -73,6 +73,7 @@ void ptlrpc_set_mbits(struct ptlrpc_request *req);
 void ptlrpc_assign_next_xid_nolock(struct ptlrpc_request *req);
 __u64 ptlrpc_known_replied_xid(struct obd_import *imp);
 void ptlrpc_add_unreplied(struct ptlrpc_request *req);
+void ptlrpc_reqset_free(struct kref *kerf);
 
 /* events.c */
 int ptlrpc_init_portals(void);
@@ -312,12 +313,6 @@ void tgt_mod_exit(void);
 int nodemap_mod_init(void);
 void nodemap_mod_exit(void);
 #endif /* HAVE_SERVER_SUPPORT */
-
-static inline void ptlrpc_reqset_put(struct ptlrpc_request_set *set)
-{
-	if (atomic_dec_and_test(&set->set_refcount))
-		OBD_FREE_PTR(set);
-}
 
 /** initialise ptlrpc common fields */
 static inline void ptlrpc_req_comm_init(struct ptlrpc_request *req)

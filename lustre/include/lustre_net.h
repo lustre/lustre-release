@@ -609,7 +609,7 @@ union ptlrpc_async_args {
 struct ptlrpc_request_set;
 typedef int (*set_producer_func)(struct ptlrpc_request_set *, void *);
 
-/**
+/*
  * Definition of request set structure.
  * Request set is a list of requests (not necessary to the same target) that
  * once populated with RPCs could be sent in parallel.
@@ -621,32 +621,32 @@ typedef int (*set_producer_func)(struct ptlrpc_request_set *, void *);
  * returned.
  */
 struct ptlrpc_request_set {
-	atomic_t		set_refcount;
-	/** number of in queue requests */
+	struct kref		set_refcount;
+	/* number of in queue requests */
 	atomic_t		set_new_count;
-	/** number of uncompleted requests */
+	/* number of uncompleted requests. */
 	atomic_t		set_remaining;
-	/** wait queue to wait on for request events */
+	/* wait queue to wait on for request events */
 	wait_queue_head_t	set_waitq;
-	/** List of requests in the set */
+	/* List of requests in the set */
 	struct list_head	set_requests;
-	/**
+	/*
 	 * Lock for \a set_new_requests manipulations
 	 * locked so that any old caller can communicate requests to
 	 * the set holder who can then fold them into the lock-free set
 	 */
 	spinlock_t		set_new_req_lock;
-	/** List of new yet unsent requests. Only used with ptlrpcd now. */
+	/* List of new yet unsent requests. Only used with ptlrpcd now. */
 	struct list_head	set_new_requests;
 
-	/** rq_status of requests that have been freed already */
+	/* rq_status of requests that have been freed already */
 	int			set_rc;
-	/** Additional fields used by the flow control extension */
-	/** Maximum number of RPCs in flight */
+	/* Additional fields used by the flow control extension */
+	/* Maximum number of RPCs in flight */
 	int			set_max_inflight;
-	/** Callback function used to generate RPCs */
+	/* Callback function used to generate RPCs */
 	set_producer_func	set_producer;
-	/** opaq argument passed to the producer callback */
+	/* opaq argument passed to the producer callback */
 	void			*set_producer_arg;
 	unsigned int		 set_allow_intr:1;
 };
