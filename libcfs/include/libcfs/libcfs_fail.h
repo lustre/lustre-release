@@ -40,7 +40,8 @@ extern wait_queue_head_t cfs_race_waitq;
 extern int cfs_race_state;
 
 int __cfs_fail_check_set(__u32 id, __u32 value, int set);
-int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set);
+int __cfs_fail_timeout_set(const char *file, const char *func, int line,
+			   __u32 id, __u32 value, int ms, int set);
 
 enum {
 	CFS_FAIL_LOC_NOSET = 0,
@@ -84,23 +85,27 @@ static inline bool CFS_FAIL_PRECHECK(__u32 id)
 	       (cfs_fail_loc & id & CFS_FAULT)));
 }
 
-#define UNLIKELY_CHECK_SET(id, value, set, quiet) \
-	(unlikely(cfs_fail_check_set(id, value, set, quiet)))
+#define UNLIKELY_CHECK_SET(id, value, set, quiet)			\
+	(unlikely(cfs_fail_check_set_loc(__FILE__, __func__, __LINE__,	\
+					 id, value, set, quiet)))
 
-static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
+static inline int cfs_fail_check_set_loc(const char *file, const char *func,
+					 int line, __u32 id, __u32 value,
+					 int set, int quiet)
 {
-	unsigned long failed_once = cfs_fail_loc & CFS_FAILED; /* ok if racy */
 	int ret = 0;
 
-	if (CFS_FAIL_PRECHECK(id) &&
-	    (ret = __cfs_fail_check_set(id, value, set))) {
-		if (quiet && failed_once) {
-			CDEBUG(D_INFO, "*** cfs_fail_loc=%x, val=%u***\n",
-			       id, value);
-		} else {
-			LCONSOLE_INFO("*** cfs_fail_loc=%x, val=%u***\n",
-				      id, value);
-		}
+	if (CFS_FAIL_PRECHECK(id)) {
+		/* set failed_once before the CFS_FAILED flag is set below */
+		unsigned long failed_once = cfs_fail_loc & CFS_FAILED;
+
+		ret = __cfs_fail_check_set(id, value, set);
+		if (ret)
+			CDEBUG_LIMIT_LOC(file, func, line,
+					 (quiet && failed_once) ?
+						D_INFO : D_CONSOLE,
+					 "*** cfs_fail_loc=%x, val=%u***\n",
+					 id, value);
 	}
 
 	return ret;
@@ -142,14 +147,17 @@ static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
 	UNLIKELY_CHECK_SET(id, value, CFS_FAIL_LOC_RESET, 1)
 
 #define UNLIKELY_TIMEOUT_SET(id, value, ms, set) \
-	(unlikely(cfs_fail_timeout_set(id, value, ms, set)))
+	(unlikely(cfs_fail_timeout_set_loc(__FILE__, __func__, __LINE__, \
+					   id, value, ms, set)))
 
-static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
+static inline int cfs_fail_timeout_set_loc(const char *file, const char *func,
+					   int line, __u32 id, __u32 value,
+					   int ms, int set)
 {
 	if (CFS_FAIL_PRECHECK(id))
-		return __cfs_fail_timeout_set(id, value, ms, set);
-	else
-		return 0;
+		return __cfs_fail_timeout_set(file, func, line, id, value, ms,
+					      set);
+	return 0;
 }
 
 /* If id hit cfs_fail_loc, sleep for seconds or milliseconds */
@@ -179,13 +187,15 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
  * sleep. The next thread that calls with the same fail_loc wakes up
  * the first and continues.
  */
-static inline void cfs_race(__u32 id)
+static inline void cfs_race_loc(const char *file, const char *func, int line,
+				__u32 id)
 {
 	if (CFS_FAIL_PRECHECK(id)) {
 		if (unlikely(__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
 			int rc;
 			cfs_race_state = 0;
-			CERROR("cfs_race id %x sleeping\n", id);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_race id %x sleeping\n", id);
 			/*
 			 * XXX: don't wait forever as there is no guarantee
 			 * that this branch is executed first. for testing
@@ -194,15 +204,18 @@ static inline void cfs_race(__u32 id)
 			rc = wait_event_interruptible_timeout(cfs_race_waitq,
 						      cfs_race_state != 0,
 						      cfs_time_seconds(5));
-			CERROR("cfs_fail_race id %x awake: rc=%d\n", id, rc);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_fail_race id %x awake: rc=%d\n",
+					 id, rc);
 		} else {
-			CERROR("cfs_fail_race id %x waking\n", id);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_fail_race id %x waking\n", id);
 			cfs_race_state = 1;
 			wake_up(&cfs_race_waitq);
 		}
 	}
 }
-#define CFS_RACE(id) cfs_race(id)
+#define CFS_RACE(id) cfs_race_loc(__FILE__, __func__, __LINE__, id)
 
 /**
  * Wait on race.
@@ -211,35 +224,41 @@ static inline void cfs_race(__u32 id)
  * but subseqent callers of this won't sleep. Until another thread that calls
  * cfs_race_wakeup(), the first thread will be woken up and continue.
  */
-static inline void cfs_race_wait(__u32 id)
+static inline void cfs_race_wait_loc(const char *file, const char *func,
+				     int line, __u32 id)
 {
 	if (CFS_FAIL_PRECHECK(id)) {
 		if (unlikely(__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
 			int rc;
 
 			cfs_race_state = 0;
-			CERROR("cfs_race id %x sleeping\n", id);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_race id %x sleeping\n", id);
 			rc = wait_event_interruptible(cfs_race_waitq,
 						      cfs_race_state != 0);
-			CERROR("cfs_fail_race id %x awake: rc=%d\n", id, rc);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_fail_race id %x awake: rc=%d\n",
+					 id, rc);
 		}
 	}
 }
-#define CFS_RACE_WAIT(id) cfs_race_wait(id)
+#define CFS_RACE_WAIT(id) cfs_race_wait_loc(__FILE__, __func__, __LINE__, id)
 
 /**
  * Wake up the thread that is waiting on the matching fail_loc.
  */
-static inline void cfs_race_wakeup(__u32 id)
+static inline void cfs_race_wakeup_loc(const char *file, const char *func,
+				       int line, __u32 id)
 {
 	if (CFS_FAIL_PRECHECK(id)) {
 		if (likely(!__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
-			CERROR("cfs_fail_race id %x waking\n", id);
+			CDEBUG_LIMIT_LOC(file, func, line, D_ERROR,
+					 "cfs_fail_race id %x waking\n", id);
 			cfs_race_state = 1;
 			wake_up(&cfs_race_waitq);
 		}
 	}
 }
-#define CFS_RACE_WAKEUP(id) cfs_race_wakeup(id)
+#define CFS_RACE_WAKEUP(id) cfs_race_wakeup_loc(__FILE__, __func__, __LINE__,id)
 
 #endif /* _LIBCFS_FAIL_H */

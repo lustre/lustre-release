@@ -150,6 +150,14 @@ do {									\
 			  mask, &cdls, format, ## __VA_ARGS__);		\
 } while (0)
 
+#  define CDEBUG_LIMIT_LOC(file, func, line, mask, format, ...)		\
+do {									\
+	static struct cfs_debug_limit_state cdls;			\
+									\
+	__CDEBUG_WITH_LOC(file, func, line,				\
+			  mask, &cdls, format, ## __VA_ARGS__);		\
+} while (0)
+
 # else /* !CDEBUG_ENABLED */
 static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
@@ -157,6 +165,7 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 }
 #  define CDEBUG(mask, format, ...) (void)(0)
 #  define CDEBUG_LIMIT(mask, format, ...) (void)(0)
+#  define CDEBUG_LIMIT_LOC(file, func, line, mask, format, ...) (void)(0)
 #  warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 # endif /* CDEBUG_ENABLED */
 
