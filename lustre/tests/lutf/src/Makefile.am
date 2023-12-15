@@ -1,4 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# lustre/tests/lutf/src/Makefile.am
+#
 # Administration utilities Makefile
+#
 
 SWIG_COMPFLAGS=-g -Wall -fPIC -c
 SWIG_FLAGS=-D__x86_64__

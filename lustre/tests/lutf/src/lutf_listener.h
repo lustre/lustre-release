@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustre/tests/lutf/lutf_listener.h
+ *
+ * Author: Amir Shehata <ashehata@whamcloud.com>
+ *
+ */
+
 #ifndef LUTF_LISTENER_H
 #define LUTF_LISTENER_H
 

@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustre/tests/lutf/liblutf_global.c
+ *
+ * Friendly wrapper functions to get configuration
+ * values from LUTF configuration.
+ *
+ * Author: Amir Shehata <ashehata@whamcloud.com>
+ *
+ */
+
 #include <pthread.h>
 #include <time.h>
 #include <sys/socket.h>

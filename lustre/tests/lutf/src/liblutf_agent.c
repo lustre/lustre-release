@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustre/tests/lutf/liblutf_agent.c
+ *
+ * LUTF agent setup (and some RPC code)
+ *
+ * Author: Amir Shehata <ashehata@whamcloud.com>
+ *
+ */
+
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>

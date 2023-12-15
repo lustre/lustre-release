@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustre/tests/lutf/lutf_python.c
+ *
+ * Functions used by LUTF to interact with cPython. LUTF
+ * test suites are run from python_run_interactive_shell()
+ * on the master LUTF node.
+ *
+ * Author: Amir Shehata <ashehata@whamcloud.com>
+ *
+ */
+
 #include <Python.h>
 #include <netinet/in.h>
 #include "lutf.h"
@@ -200,10 +215,6 @@ python_shutdown:
 	return rc;
 }
 
-/*
- * gcc py.c -o py -I/usr/local/include/python2.7
- * -L/usr/local/lib/python2.7/config -lm -ldl -lpthread -lutil -lpython2.7
- */
 lutf_rc_t python_init(void)
 {
 	lutf_rc_t rc = EN_LUTF_RC_FAIL;
@@ -226,18 +237,9 @@ lutf_rc_t python_init(void)
 	if (PyStatus_Exception(status))
 		Py_ExitStatusException(status);
 #else
-	//char *path;
-	//char new_path[MAX_STR_LEN];
 	Py_SetProgramName(program);
-	//char *py_args[1];
-
-	//py_args[0] = argv[0];
 
 	Py_Initialize();
-
-	//sprintf(new_path, "%s:%s", path, script_path);
-	//PySys_SetPath(new_path);
-	//path = Py_GetPath();
 
 	rc = python_run_interactive_shell();
 	PDEBUG("Python finalizing");
