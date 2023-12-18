@@ -2498,6 +2498,10 @@ int ll_setattr(struct mnt_idmap *map, struct dentry *de, struct iattr *attr)
 	enum op_xvalid xvalid = 0;
 	int rc;
 
+	rc = setattr_prepare(map, de, attr);
+	if (rc)
+		return rc;
+
 	rc = llcrypt_prepare_setattr(de, attr);
 	if (rc)
 		return rc;
