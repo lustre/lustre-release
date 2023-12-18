@@ -2435,6 +2435,10 @@ int ll_setattr(struct user_namespace *mnt_userns, struct dentry *de,
 	enum op_xvalid xvalid = 0;
 	int rc;
 
+	rc = setattr_prepare(mnt_userns, de, attr);
+	if (rc)
+		return rc;
+
 	rc = llcrypt_prepare_setattr(de, attr);
 	if (rc)
 		return rc;

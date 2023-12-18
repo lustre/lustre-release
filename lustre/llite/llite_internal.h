@@ -279,11 +279,16 @@ struct ll_inode_info {
 #define inode_permission(ns, inode, mask)	inode_permission(inode, mask)
 #define generic_permission(ns, inode, mask)	generic_permission(inode, mask)
 #define simple_setattr(ns, de, iattr)		simple_setattr(de, iattr)
+#define ll_setattr(ns, de, attr)		ll_setattr(de, attr)
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+#define setattr_prepare(ns, de, at)		setattr_prepare(de, at)
+#else
+#define setattr_prepare(ns, de, at)		inode_change_ok(de->d_inode, at)
+#endif
 #define ll_inode_permission(ns, inode, mask)	ll_inode_permission(inode, mask)
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 #define ll_getattr(ns, path, stat, mask, fl)	ll_getattr(path, stat, mask, fl)
 #endif /* HAVE_INODEOPS_ENHANCED_GETATTR */
-#define ll_setattr(ns, de, attr)		ll_setattr(de, attr)
 #endif
 
 static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
