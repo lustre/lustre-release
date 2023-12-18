@@ -931,8 +931,14 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	rc = SECSVC_OK;
 
 out:
-	if (!IS_ERR_OR_NULL(rsip))
+	if (!IS_ERR_OR_NULL(rsip)) {
+		/* After rpcsec init request has been handled,
+		 * no need to keep rsi entry in cache, no matter the result.
+		 * So mark it invalid now.
+		 */
+		UC_CACHE_SET_INVALID(rsip->si_uc_entry);
 		rsi_entry_put(rsicache, rsip);
+	}
 	if (!IS_ERR_OR_NULL(rscp)) {
 		/* if anything went wrong, we don't keep the context too */
 		if (rc != SECSVC_OK)
@@ -1040,7 +1046,7 @@ int __init gss_init_svc_upcall(void)
 
 	rsicache = upcall_cache_init(RSI_CACHE_NAME, RSI_UPCALL_PATH,
 				     UC_RSICACHE_HASH_SIZE,
-				     3600, /* entry expire: 1 h */
+				     600, /* entry expire: 10 mn */
 				     30, /* acquire expire: 30 s */
 				     false, /* can't replay acquire */
 				     &rsi_upcall_cache_ops);
