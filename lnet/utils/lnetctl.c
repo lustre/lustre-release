@@ -4413,13 +4413,13 @@ static int jt_ping(int argc, char **argv)
 	int timeout = 1000;
 	int rc = 0, opt;
 	char *src_nidstr = NULL;
-
 	const char *const short_options = "hs:t:";
 	const struct option long_options[] = {
-	{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
-	{ .name = "timeout",	.has_arg = required_argument,	.val = 't' },
-	{ .name = "source",	.has_arg = required_argument,	.val = 's' },
-	{ .name = NULL } };
+		{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
+		{ .name = "timeout",	.has_arg = required_argument,	.val = 't' },
+		{ .name = "source",	.has_arg = required_argument,	.val = 's' },
+		{ .name = NULL }
+	};
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
@@ -4439,6 +4439,13 @@ static int jt_ping(int argc, char **argv)
 		default:
 			return 0;
 		}
+	}
+
+	rc = yaml_lnet_ping("ping", timeout, src_nidstr, optind, argc,
+			    argv, NLM_F_DUMP);
+	if (rc <= 0) {
+		if (rc != -EOPNOTSUPP)
+			return rc;
 	}
 
 	for (; optind < argc; optind++)

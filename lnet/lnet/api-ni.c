@@ -7897,7 +7897,7 @@ static int lnet_ping_show_start(struct netlink_callback *cb)
 
 				id = genradix_ptr_alloc(&plist->lgpl_list,
 							plist->lgpl_list_count++,
-							GFP_ATOMIC);
+							GFP_KERNEL);
 				if (!id) {
 					NL_SET_ERR_MSG(extack,
 						       "failed to allocate NID");
@@ -7906,7 +7906,7 @@ static int lnet_ping_show_start(struct netlink_callback *cb)
 
 				rc = libcfs_strid(id, strim(nid));
 				if (rc < 0) {
-					NL_SET_ERR_MSG(extack, "invalid NID");
+					NL_SET_ERR_MSG(extack, "cannot parse NID");
 					GOTO(report_err, rc);
 				}
 				rc = 0;
@@ -7922,6 +7922,29 @@ report_err:
 
 	return rc;
 }
+
+static const struct ln_key_list ping_err_props_list = {
+	.lkl_maxattr			= LNET_ERR_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_ERR_ATTR_HDR]		= {
+			.lkp_value		= "manage",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_ERR_ATTR_TYPE]		= {
+			.lkp_value		= "ping",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LNET_ERR_ATTR_ERRNO]		= {
+			.lkp_value		= "errno",
+			.lkp_data_type		= NLA_S16,
+		},
+		[LNET_ERR_ATTR_DESCR]		= {
+			.lkp_value		= "descr",
+			.lkp_data_type		= NLA_STRING,
+		},
+	},
+};
 
 static const struct ln_key_list ping_props_list = {
 	.lkl_maxattr			= LNET_PING_ATTR_MAX,
@@ -7951,7 +7974,7 @@ static const struct ln_key_list ping_props_list = {
 	},
 };
 
-static struct ln_key_list ping_peer_ni_list = {
+static const struct ln_key_list ping_peer_ni_list = {
 	.lkl_maxattr			= LNET_PING_PEER_NI_ATTR_MAX,
 	.lkl_list                       = {
 		[LNET_PING_PEER_NI_ATTR_NID]	= {
@@ -7965,7 +7988,6 @@ static int lnet_ping_show_dump(struct sk_buff *msg,
 			       struct netlink_callback *cb)
 {
 	struct lnet_genl_ping_list *plist = lnet_ping_dump_ctx(cb);
-	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK
 	struct netlink_ext_ack *extack = NULL;
 #endif
@@ -8005,8 +8027,6 @@ static int lnet_ping_show_dump(struct sk_buff *msg,
 		void *hdr = NULL;
 
 		id = genradix_ptr(&plist->lgpl_list, idx++);
-		if (nid_is_lo0(&id->nid))
-			continue;
 
 		rc = lnet_ping(id, &plist->lgpl_src_nid, plist->lgpl_timeout,
 			       &peers, lnet_interfaces_max);
@@ -8015,12 +8035,16 @@ static int lnet_ping_show_dump(struct sk_buff *msg,
 
 			fail = genradix_ptr_alloc(&plist->lgpl_failed,
 						  plist->lgpl_failed_count++,
-						  GFP_ATOMIC);
+						  GFP_KERNEL);
 			if (!fail) {
 				NL_SET_ERR_MSG(extack,
 					       "failed to allocate failed NID");
 				GOTO(send_error, rc);
 			}
+			memset(fail->lfp_msg, '\0', sizeof(fail->lfp_msg));
+			snprintf(fail->lfp_msg, sizeof(fail->lfp_msg),
+				 "failed to ping %s",
+				 libcfs_nidstr(&id->nid));
 			fail->lfp_id = *id;
 			fail->lfp_errno = rc;
 			goto cant_reach;
@@ -8062,7 +8086,7 @@ static int lnet_ping_show_dump(struct sk_buff *msg,
 				continue;
 
 			nid_attr = nla_nest_start(msg, count + 1);
-			if (gnlh->version == 1)
+			if (id->pid == LNET_PID_LUSTRE)
 				idstr = libcfs_nidstr(&result->nid);
 			else
 				idstr = libcfs_idstr(result);
@@ -8075,28 +8099,47 @@ cant_reach:
 		genradix_free(&peers.lgpl_list);
 	}
 
-	for (i = 0; i < plist->lgpl_failed_count; i++) {
-		struct lnet_fail_ping *fail;
-		void *hdr;
+	if (plist->lgpl_failed_count) {
+		int flags = NLM_F_CREATE | NLM_F_REPLACE | NLM_F_MULTI;
+		const struct ln_key_list *fail[] = {
+			&ping_err_props_list, NULL
+		};
 
-		fail = genradix_ptr(&plist->lgpl_failed, i);
-
-		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
-				  NLM_F_MULTI, LNET_CMD_PING);
-		if (!hdr) {
-			NL_SET_ERR_MSG(extack, "failed to send failed values");
-			genlmsg_cancel(msg, hdr);
-			GOTO(send_error, rc = -EMSGSIZE);
+		rc = lnet_genl_send_scalar_list(msg, portid, seq, &lnet_family,
+						flags, LNET_CMD_PING, fail);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack,
+				       "failed to send new key table");
+			GOTO(send_error, rc);
 		}
 
-		if (i == 0)
-			nla_put_string(msg, LNET_PING_ATTR_HDR, "");
+		for (i = 0; i < plist->lgpl_failed_count; i++) {
+			struct lnet_fail_ping *fail;
+			void *hdr;
 
-		nla_put_string(msg, LNET_PING_ATTR_PRIMARY_NID,
-			       libcfs_nidstr(&fail->lfp_id.nid));
-		nla_put_s16(msg, LNET_PING_ATTR_ERRNO, fail->lfp_errno);
-		genlmsg_end(msg, hdr);
+			fail = genradix_ptr(&plist->lgpl_failed, i);
+
+			hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+					  NLM_F_MULTI, LNET_CMD_PING);
+			if (!hdr) {
+				NL_SET_ERR_MSG(extack,
+					       "failed to send failed values");
+				genlmsg_cancel(msg, hdr);
+				GOTO(send_error, rc = -EMSGSIZE);
+			}
+
+			if (i == 0)
+				nla_put_string(msg, LNET_ERR_ATTR_HDR, "");
+
+			nla_put_string(msg, LNET_ERR_ATTR_TYPE, "\n");
+			nla_put_s16(msg, LNET_ERR_ATTR_ERRNO,
+				    fail->lfp_errno);
+			nla_put_string(msg, LNET_ERR_ATTR_DESCR,
+				       fail->lfp_msg);
+			genlmsg_end(msg, hdr);
+		}
 	}
+	genradix_free(&plist->lgpl_list);
 	rc = 0; /* don't treat it as an error */
 
 	plist->lgpl_index = idx;
@@ -8474,6 +8517,7 @@ static struct genl_family lnet_family = {
 	.name		= LNET_GENL_NAME,
 	.version	= LNET_GENL_VERSION,
 	.module		= THIS_MODULE,
+	.parallel_ops	= true,
 	.netnsok	= true,
 	.ops		= lnet_genl_ops,
 	.n_ops		= ARRAY_SIZE(lnet_genl_ops),
@@ -8627,7 +8671,7 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	if (id->pid == LNET_PID_ANY)
 		id->pid = LNET_PID_LUSTRE;
 
-	id_bytes += lnet_ping_sts_size(&id->nid) * n_ids;
+	id_bytes += n_ids * sizeof(struct lnet_nid);
 	pbuf = lnet_ping_buffer_alloc(id_bytes, GFP_NOFS);
 	if (!pbuf)
 		return -ENOMEM;
@@ -8720,7 +8764,7 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	for (st = ping_iter_first(&pi, pbuf, &pid.nid);
 	     st;
 	     st = ping_iter_next(&pi, &pid.nid)) {
-		id = genradix_ptr_alloc(&plist->lgpl_list, i++, GFP_ATOMIC);
+		id = genradix_ptr_alloc(&plist->lgpl_list, i++, GFP_KERNEL);
 		if (!id) {
 			rc = -ENOMEM;
 			goto fail_ping_buffer_decref;
