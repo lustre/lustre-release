@@ -24,7 +24,7 @@ diff --git a/fs/ext4/super.c b/fs/ext4/super.c
 index dfa09a277b56..0d2bf85cee34 100644
 --- a/fs/ext4/super.c
 +++ b/fs/ext4/super.c
-@@ -439,6 +439,55 @@ static int block_device_ejected(struct super_block *sb)
+@@ -439,6 +439,57 @@ static int block_device_ejected(struct super_block *sb)
  	return bdi->dev == NULL;
  }
 
@@ -47,12 +47,14 @@ index dfa09a277b56..0d2bf85cee34 100644
 +{
 +	struct ext4_sb_info *sbi = EXT4_SB(sb);
 +	struct ext4_super_block *es = sbi->s_es;
++	journal_t *journal = sbi->s_journal;
 +	time64_t now;
 +	__u64 last_update;
 +	__u64 lifetime_write_kbytes;
 +	__u64 diff_size;
 +
-+	if (sb_rdonly(sb))
++	if (sb_rdonly(sb) || !(sb->s_flags & SB_ACTIVE) ||
++	    !journal || (journal->j_flags & JBD2_UNMOUNT))
 +		return;
 +
 +	now = ktime_get_real_seconds();
@@ -88,6 +90,16 @@ index dfa09a277b56..0d2bf85cee34 100644
 
  	spin_lock(&sbi->s_md_lock);
  	while (!list_empty(&txn->t_private_list)) {
+@@ -714,7 +766,8 @@ static void flush_stashed_error_work(str
+ 	 * We use directly jbd2 functions here to avoid recursing back into
+ 	 * ext4 error handling code during handling of previous errors.
+ 	 */
+-	if (!sb_rdonly(sbi->s_sb) && journal) {
++	if (!sb_rdonly(sbi->s_sb) && journal &&
++	    !(journal->j_flags & JBD2_UNMOUNT)) {
+ 		struct buffer_head *sbh = sbi->s_sbh;
+ 		handle = jbd2_journal_start(journal, 1);
+ 		if (IS_ERR(handle))
 diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
 index 2314f7446592..a7219cc2fdc5 100644
 --- a/fs/ext4/sysfs.c
