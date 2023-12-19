@@ -23776,6 +23776,7 @@ test_253() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	check_set_fallocate_or_skip
 
 	local ostidx=0
 	local rc=0
@@ -23801,9 +23802,17 @@ test_253() {
 
 	dd if=/dev/zero of=$DIR/$tdir/$tfile.0 bs=1M count=10
 
-	local wms=$(ost_watermarks_set_enospc $tfile $ostidx |
-		    grep "watermarks")
-	stack_trap "ost_watermarks_clear_enospc $tfile $ostidx $wms" EXIT
+	local wms=$(ost_watermarks_get $ostidx)
+
+	ost_watermarks_set $ostidx 60 50
+	stack_trap "ost_watermarks_set $ostidx $wms"
+
+	local free_kb=$($LFS df $MOUNT | awk "/$ost_name/ { print \$4 }")
+	local size=$((free_kb * 1024))
+
+	fallocate -l $size $DIR/$tdir/fill_ost$ostidx ||
+		error "fallocate failed"
+	sleep_maxage
 
 	local oa_status=$(do_facet $SINGLEMDS $LCTL get_param -n \
 			osp.$mdtosc_proc1.prealloc_status)
@@ -23817,13 +23826,9 @@ test_253() {
 		oflag=append || error "Append failed"
 
 	rm -f $DIR/$tdir/$tfile.0
-
-	# For this test, we want to delete the files we created to go out of
-	# space but leave the watermark, so we remain nearly out of space
-	ost_watermarks_enospc_delete_files $tfile $ostidx
+	rm -f $DIR/$tdir/fill_ost$ostidx
 
 	wait_delete_completed
-
 	sleep_maxage
 
 	for i in $(seq 10 12); do
