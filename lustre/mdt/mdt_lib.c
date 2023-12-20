@@ -349,6 +349,21 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	/* process root_squash here. */
 	mdt_root_squash(info, &peernid);
 
+	if (ucred->uc_fsuid) {
+		if (!cap_issubset(ucred->uc_cap, mdt->mdt_enable_cap_mask))
+			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
+			       mdt_obd_name(mdt),
+#ifdef CAP_FOR_EACH_U32
+			       ucred->uc_cap.cap[0] |
+			       ((u64)ucred->uc_cap.cap[1] << 32),
+#else
+			       ucred->uc_cap.val,
+#endif
+			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
+		ucred->uc_cap = cap_intersect(ucred->uc_cap,
+					      mdt->mdt_enable_cap_mask);
+	}
+
 	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
@@ -522,6 +537,18 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	mdt_root_squash(info,
 			&mdt_info_req(info)->rq_peer.nid);
 
+	if (uc->uc_fsuid) {
+		if (!cap_issubset(uc->uc_cap, mdt->mdt_enable_cap_mask))
+			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
+			       mdt_obd_name(mdt),
+#ifdef CAP_FOR_EACH_U32
+			       uc->uc_cap.cap[0] | ((u64)uc->uc_cap.cap[1]<<32),
+#else
+			       uc->uc_cap.val,
+#endif
+			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
+		uc->uc_cap = cap_intersect(uc->uc_cap,mdt->mdt_enable_cap_mask);
+	}
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
