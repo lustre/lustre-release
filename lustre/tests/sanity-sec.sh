@@ -4063,6 +4063,14 @@ test_51() {
 		skip "Need MDS version at least 2.13.53"
 
 	mkdir $DIR/$tdir || error "mkdir $tdir"
+	local mdts=$(comma_list $(mdts_nodes))
+	local cap_param=mdt.*.enable_cap_mask
+
+	old_cap=($(do_nodes $mdts $LCTL get_param -n $cap_param 2>/dev/null))
+	if [[ -n "$old_cap" ]]; then
+		do_nodes $mdts $LCTL set_param $cap_param=0xf
+		stack_trap "do_nodes $mdts $LCTL set_param $cap_param=$old_cap"
+	fi
 
 	touch $DIR/$tdir/$tfile || error "touch $tfile"
 	cp $(which chown) $DIR/$tdir || error "cp chown"

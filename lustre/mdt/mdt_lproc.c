@@ -615,6 +615,55 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
+static ssize_t enable_cap_mask_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	u64 cap;
+
+	BUILD_BUG_ON(_KERNEL_CAP_T_SIZE != sizeof(u64));
+
+#ifdef CAP_FOR_EACH_U32 /* kernels before v6.2-13111-gf122a08b197d */
+	cap = ((u64)mdt->mdt_enable_cap_mask.cap[1] << 32) |
+	       mdt->mdt_enable_cap_mask.cap[0];
+#else
+	cap = mdt->mdt_enable_cap_mask.val;
+#endif
+	return scnprintf(buf, PAGE_SIZE, "%#0llx\n", cap);
+}
+
+static ssize_t enable_cap_mask_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	unsigned long long val;
+	int rc;
+
+	rc = kstrtoull(buffer, 0, &val);
+	if (rc)
+		/* should also accept symbolic names via cfs_str2mask() */
+		return rc;
+
+#ifdef CAP_FOR_EACH_U32
+	mdt->mdt_enable_cap_mask.cap[0] = val &
+		(CAP_FS_MASK_B0 | CAP_TO_MASK(CAP_SYS_RESOURCE) |
+		 CAP_TO_MASK(CAP_LINUX_IMMUTABLE));
+	mdt->mdt_enable_cap_mask.cap[1] = (val >> 32) & CAP_FS_MASK_B1;
+#else
+	mdt->mdt_enable_cap_mask.val = val &
+		(CAP_FS_MASK | BIT_ULL(CAP_SYS_RESOURCE) |
+		 BIT_ULL(CAP_LINUX_IMMUTABLE));
+#endif
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_cap_mask);
+
 static ssize_t enable_remote_dir_show(struct kobject *kobj,
 				      struct attribute *attr, char *buf)
 {
@@ -1396,6 +1445,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_identity_upcall.attr,
 	&lustre_attr_identity_flush.attr,
 	&lustre_attr_evict_tgt_nids.attr,
+	&lustre_attr_enable_cap_mask.attr,
 	&lustre_attr_enable_remote_dir.attr,
 	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_chprojid_gid.attr,

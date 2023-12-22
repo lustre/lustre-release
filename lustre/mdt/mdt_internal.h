@@ -300,6 +300,7 @@ struct mdt_device {
 	gid_t			   mdt_enable_remote_dir_gid;
 				   /* user with this gid can change projid */
 	gid_t			   mdt_enable_chprojid_gid;
+	kernel_cap_t		   mdt_enable_cap_mask;
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;
