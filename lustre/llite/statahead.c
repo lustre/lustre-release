@@ -1164,8 +1164,10 @@ static int ll_statahead_by_list(struct dentry *parent)
 	if (!op_data)
 		RETURN(-ENOMEM);
 
-	/* matches smp_store_release() in ll_deauthorize_statahead() */
-	while (pos != MDS_DIR_END_OFF && smp_load_acquire(&sai->sai_task)) {
+	while (pos != MDS_DIR_END_OFF &&
+	       /* matches smp_store_release() in ll_deauthorize_statahead() */
+	       smp_load_acquire(&sai->sai_task) &&
+	       lli->lli_sa_enabled) {
 		struct lu_dirpage *dp;
 		struct lu_dirent  *ent;
 
@@ -1191,7 +1193,7 @@ static int ll_statahead_by_list(struct dentry *parent)
 		for (ent = lu_dirent_start(dp);
 		     /* matches smp_store_release() in ll_deauthorize_statahead() */
 		     ent != NULL && smp_load_acquire(&sai->sai_task) &&
-		     !sa_low_hit(sai);
+		     !sa_low_hit(sai) && lli->lli_sa_enabled;
 		     ent = lu_dirent_next(ent)) {
 			__u64 hash;
 			int namelen;
@@ -1246,6 +1248,8 @@ static int ll_statahead_by_list(struct dentry *parent)
 				 /* matches smp_store_release() in
 				  * ll_deauthorize_statahead() */
 				 smp_load_acquire(&sai->sai_task); })) {
+				long timeout;
+
 				spin_lock(&lli->lli_agl_lock);
 				while (sa_sent_full(sai) &&
 				       !agl_list_empty(sai)) {
@@ -1265,7 +1269,20 @@ static int ll_statahead_by_list(struct dentry *parent)
 
 				if (!sa_sent_full(sai))
 					break;
-				schedule();
+
+				/*
+				 * If the thread is not doing stat in
+				 * @sbi->ll_sa_timeout (30s) then it probably
+				 * does not care too much about performance,
+				 * or is no longer using this directory.
+				 * Stop the statahead thread in this case.
+				 */
+				timeout = schedule_timeout(
+					cfs_time_seconds(sbi->ll_sa_timeout));
+				if (timeout == 0) {
+					lli->lli_sa_enabled = 0;
+					break;
+				}
 			}
 			__set_current_state(TASK_RUNNING);
 
@@ -2020,7 +2037,9 @@ sa_pattern_fname_detect(struct inode *dir, struct dentry *dchild)
 			lli->lli_sa_fname_index = num;
 
 			if (lli->lli_sa_match_count > LSA_FN_MATCH_HIT) {
+				spin_lock(&lli->lli_sa_lock);
 				lli->lli_sa_pattern |= LSA_PATTERN_FN_UNIQUE;
+				spin_unlock(&lli->lli_sa_lock);
 				GOTO(out, rc = true);
 			}
 
@@ -2342,6 +2361,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 				__ll_sax_get(ctx);
 				fd->fd_sai = __ll_sai_get(sai);
 				rc = 0;
+			} else {
 				rc = -EINVAL;
 				CWARN("%s: pattern %X is not ADVISE: rc = %d\n",
 				      sbi->ll_fsname, lli->lli_sa_pattern, rc);
@@ -2448,7 +2468,9 @@ void ll_statahead_enter(struct inode *dir, struct dentry *dchild)
 
 	lli->lli_sa_match_count++;
 	if (lli->lli_sa_match_count > LSA_FN_PREDICT_HIT) {
+		spin_lock(&lli->lli_sa_lock);
 		lli->lli_sa_pattern |= LSA_PATTERN_FN_PREDICT;
+		spin_unlock(&lli->lli_sa_lock);
 		lli->lli_sa_enabled = 1;
 		lli->lli_sa_match_count = 0;
 	}
