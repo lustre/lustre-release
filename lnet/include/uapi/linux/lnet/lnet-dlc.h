@@ -71,6 +71,7 @@ enum lnet_commands {
 	LNET_CMD_CONNS		= 5,
 	LNET_CMD_PING		= 6,
 	LNET_CMD_CPT_OF_NID     = 7,
+	LNET_CMD_PEER_DIST	= 8,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };

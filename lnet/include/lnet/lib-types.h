@@ -1072,6 +1072,32 @@ enum lnet_cpt_of_nid_attr {
 
 #define LNET_CPT_OF_NID_ATTR_MAX (__LNET_CPT_OF_NID_ATTR_MAX_PLUS_ONE - 1)
 
+/** enum lnet_peer_dist_attr		      - Attributes to support
+ *						reporting distance for peers
+ *
+ * @LNET_PEER_DIST_ATTR_UNSPEC			unspecified attribute to catch
+ *						errors
+ * @LNET_PEER_DIST_ATTR_HDR			Grouping which we just use peer
+ *						(NLA_NUL_STRING)
+ * @LNET_PEER_DIST_ATTR_NID			The NID we collect data for
+ *						(NLA_STRING)
+ * @LNET_PEER_DIST_ATTR_DIST			The distance for the specified
+ *						NID (NLA_U32)
+ * @LNET_PEER_DIST_ATTR_ORDER			The order for the specified NID
+ *						(NLA_U32)
+ */
+enum lnet_peer_dist_attr {
+	LNET_PEER_DIST_ATTR_UNSPEC = 0,
+
+	LNET_PEER_DIST_ATTR_HDR,
+	LNET_PEER_DIST_ATTR_NID,
+	LNET_PEER_DIST_ATTR_DIST,
+	LNET_PEER_DIST_ATTR_ORDER,
+	__LNET_PEER_DIST_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_PEER_DIST_ATTR_MAX (__LNET_PEER_DIST_ATTR_MAX_PLUS_ONE - 1)
+
 struct lnet_ni {
 	/* chain on the lnet_net structure */
 	struct list_head	ni_netlist;

@@ -584,13 +584,16 @@ old_api: {
 int
 jt_ptl_which_nid(int argc, char **argv)
 {
-	struct libcfs_ioctl_data data;
+	struct lnet_nid best_nid = LNET_ANY_NID;
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	struct nl_sock *sk;
 	int best_dist = 0;
 	int best_order = 0;
-	lnet_nid_t   best_nid = LNET_NID_ANY;
-	int dist;
-	int order;
-	lnet_nid_t nid;
+	bool done = false;
+	int dist = 0;
+	int order = 0;
 	char *nidstr;
 	int rc;
 	int i;
@@ -600,16 +603,188 @@ jt_ptl_which_nid(int argc, char **argv)
 		return 0;
 	}
 
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		goto old_api;
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0)
+		goto old_api;
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto free_reply;
+
+	/* Create Netlink emitter to send request to kernel */
+	rc = yaml_emitter_initialize(&request);
+	if (rc == 0)
+		goto free_reply;
+
+	rc = yaml_emitter_set_output_netlink(&request, sk, LNET_GENL_NAME,
+					     LNET_GENL_VERSION,
+					     LNET_CMD_PEER_DIST, NLM_F_DUMP);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(&request);
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"peer",
+				     strlen("peer"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_sequence_start_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_SEQ_TAG,
+					     1, YAML_BLOCK_SEQUENCE_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
 	for (i = 1; i < argc; i++) {
+		struct lnet_nid nid;
+
 		nidstr = argv[i];
-		nid = libcfs_str2nid(nidstr);
-		if (nid == LNET_NID_ANY) {
+		if (strcmp(nidstr, "*") == 0)
+			nidstr = "<?>";
+
+		rc = libcfs_strnid(&nid, nidstr);
+		if (rc < 0 || nid_same(&nid, &LNET_ANY_NID)) {
+			fprintf(stderr, "Can't parse NID %s\n", nidstr);
+			return -1;
+		}
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)nidstr,
+					     strlen(nidstr), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&request, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+	yaml_sequence_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(&request);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	}
+	yaml_emitter_delete(&request);
+
+	while (!done) {
+		rc = yaml_parser_parse(&reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type != YAML_SCALAR_EVENT)
+			goto not_scalar;
+
+
+		if (strcmp((char *)event.data.scalar.value, "nid") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				break;
+			}
+
+			nidstr = (char *)event.data.scalar.value;
+
+			if (nid_same(&best_nid, &LNET_ANY_NID) ||
+			    dist < best_dist ||
+			    (dist == best_dist && order < best_order)) {
+				best_dist = dist;
+				best_order = order;
+				libcfs_strnid(&best_nid, nidstr);
+			}
+		} else if (strcmp((char *)event.data.scalar.value,
+				  "distance") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				break;
+			}
+
+			dist = strtol((char *)event.data.scalar.value, NULL, 10);
+		} else if (strcmp((char *)event.data.scalar.value,
+				  "order") == 0) {
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0) {
+				yaml_event_delete(&event);
+				break;
+			}
+
+			order = strtol((char *)event.data.scalar.value, NULL, 10);
+		}
+not_scalar:
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+
+free_reply:
+	if (rc == 0) {
+		/* yaml_* functions return 0 for error */
+		const char *msg = yaml_parser_get_reader_error(&reply);
+
+		fprintf(stderr, "Unexpected distance: %s\n", msg);
+		rc = -1;
+	} else if (rc == 1) {
+		/* yaml_* functions return 1 for success */
+		rc = 0;
+	}
+
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+	goto finished;
+
+old_api:
+	for (i = 1; i < argc; i++) {
+		struct libcfs_ioctl_data data;
+		lnet_nid_t nid4;
+
+		nidstr = argv[i];
+		nid4 = libcfs_str2nid(nidstr);
+		if (nid4 == LNET_NID_ANY) {
 			fprintf(stderr, "Can't parse NID %s\n", nidstr);
 			return -1;
 		}
 
 		LIBCFS_IOC_INIT(data);
-		data.ioc_nid = nid;
+		data.ioc_nid = nid4;
 
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_DIST, &data);
 		if (rc != 0) {
@@ -630,21 +805,21 @@ jt_ptl_which_nid(int argc, char **argv)
 			return -1;
 		}
 
-		if (best_nid == LNET_NID_ANY ||
+		if (nid_same(&best_nid, &LNET_ANY_NID) ||
 		    dist < best_dist ||
 		    (dist == best_dist && order < best_order)) {
 			best_dist = dist;
 			best_order = order;
-			best_nid = nid;
+			lnet_nid4_to_nid(nid4, &best_nid);
 		}
 	}
-
-	if (best_nid == LNET_NID_ANY) {
+finished:
+	if (nid_same(&best_nid, &LNET_ANY_NID)) {
 		fprintf(stderr, "No reachable NID\n");
 		return -1;
 	}
 
-	printf("%s\n", libcfs_nid2str(best_nid));
+	printf("%s\n", libcfs_nidstr(&best_nid));
 	return 0;
 }
 

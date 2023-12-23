@@ -8443,6 +8443,210 @@ report_err:
 	return rc;
 }
 
+#define lnet_peer_dist_show_done	lnet_peer_ni_show_done
+
+static int lnet_peer_dist_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lnet_genl_processid_list *plist;
+	int msg_len = genlmsg_len(gnlh);
+	struct nlattr *params, *top;
+	int rem, rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		NL_SET_ERR_MSG(extack, "Network is down");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENETDOWN;
+	}
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		NL_SET_ERR_MSG(extack, "Missing NID argument(s)");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOENT;
+	}
+
+	CFS_ALLOC_PTR(plist);
+	if (!plist) {
+		NL_SET_ERR_MSG(extack, "No memory for peer NID list");
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return -ENOMEM;
+	}
+
+	genradix_init(&plist->lgpl_list);
+	plist->lgpl_count = 0;
+	plist->lgpl_index = 0;
+	cb->args[0] = (long)plist;
+
+	params = genlmsg_data(gnlh);
+	nla_for_each_attr(top, params, msg_len, rem) {
+		struct nlattr *nids;
+		int rem2;
+
+		if (nla_type(top) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(nids, top, rem2) {
+			char nidstr[LNET_NIDSTR_SIZE + 1];
+			struct lnet_processid *id;
+
+			if (nla_type(nids) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			memset(nidstr, 0, sizeof(nidstr));
+			rc = nla_strscpy(nidstr, nids, sizeof(nidstr));
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack,
+					       "failed to get NID");
+				GOTO(report_err, rc);
+			}
+
+			id = genradix_ptr_alloc(&plist->lgpl_list,
+						plist->lgpl_count++,
+						GFP_KERNEL);
+			if (!id) {
+				NL_SET_ERR_MSG(extack, "failed to allocate NID");
+				GOTO(report_err, rc = -ENOMEM);
+			}
+
+			rc = libcfs_strid(id, strim(nidstr));
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack, "invalid NID");
+				GOTO(report_err, rc);
+			}
+			rc = 0;
+		}
+	}
+report_err:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	if (rc < 0)
+		lnet_peer_dist_show_done(cb);
+
+	return rc;
+}
+
+static const struct ln_key_list peer_dist_props_list = {
+	.lkl_maxattr			= LNET_PEER_DIST_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_PEER_DIST_ATTR_HDR]	= {
+			.lkp_value		= "peer",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_PEER_DIST_ATTR_NID]	= {
+			.lkp_value		= "nid",
+			.lkp_data_type          = NLA_STRING
+		},
+		[LNET_PEER_DIST_ATTR_DIST]	= {
+			.lkp_value		= "distance",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_PEER_DIST_ATTR_ORDER]	= {
+			.lkp_value		= "order",
+			.lkp_data_type		= NLA_U32
+		},
+	},
+};
+
+static int lnet_peer_dist_show_dump(struct sk_buff *msg,
+				    struct netlink_callback *cb)
+{
+	struct lnet_genl_processid_list *plist = lnet_peer_dump_ctx(cb);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx = plist->lgpl_index;
+	int rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (!idx) {
+		const struct ln_key_list *all[] = {
+			&peer_dist_props_list, NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_PEER_DIST, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+
+	while (idx < plist->lgpl_count) {
+		struct lnet_processid *id;
+		void *hdr;
+		u32 order;
+		int dist;
+
+		id = genradix_ptr(&plist->lgpl_list, idx++);
+		if (nid_is_lo0(&id->nid))
+			continue;
+
+		dist = LNetDist(&id->nid, &id->nid, &order);
+		if (dist < 0) {
+			if (dist == -EHOSTUNREACH)
+				continue;
+
+			rc = dist;
+			return rc;
+		}
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_PEER_DIST);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(send_error, rc = -EMSGSIZE);
+		}
+
+		if (idx == 1)
+			nla_put_string(msg, LNET_PEER_DIST_ATTR_HDR, "");
+
+		nla_put_string(msg, LNET_PEER_DIST_ATTR_NID,
+			       libcfs_nidstr(&id->nid));
+		nla_put_u32(msg, LNET_PEER_DIST_ATTR_DIST, dist);
+		nla_put_u32(msg, LNET_PEER_DIST_ATTR_ORDER, order);
+
+		genlmsg_end(msg, hdr);
+	}
+
+	plist->lgpl_index = idx;
+send_error:
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_peer_dist_show_dump(struct sk_buff *msg,
+					struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_peer_dist_show_start(cb);
+
+		if (rc < 0)
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
+	}
+
+	return lnet_peer_dist_show_dump(msg, cb);
+}
+#endif
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -8511,6 +8715,16 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_cpt_of_nid_show_dump,
 #endif
 		.done		= lnet_cpt_of_nid_show_done,
+	},
+	{
+		.cmd		= LNET_CMD_PEER_DIST,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_peer_dist_show_start,
+		.dumpit		= lnet_peer_dist_show_dump,
+#else
+		.dumpit		= lnet_old_peer_dist_show_dump,
+#endif
+		.done		= lnet_peer_dist_show_done,
 	},
 };
 
