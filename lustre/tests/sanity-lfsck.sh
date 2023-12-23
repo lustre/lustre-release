@@ -15,6 +15,7 @@ init_logging
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
+always_except LU-17385 23d
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -134,12 +135,30 @@ wait_all_targets_blocked() {
 	local com=$1
 	local status=$2
 	local err=$3
+	# wait to simulate blocked wait, so that we can know the status
+	local timeout=${4:-600}
+	local lfsck_query="$LCTL lfsck_query -t $com -M $FSNAME-MDT0000"
 
-	local count=$(do_facet mds1 \
-		     "$LCTL lfsck_query -t $com -M ${FSNAME}-MDT0000 -w |
-		      awk '/^${com}_mdts_${status}/ { print \\\$2 }'")
-	[[ $count -eq $MDSCOUNT ]] || {
-		do_facet mds1 "$LCTL lfsck_query -t $com -M ${FSNAME}-MDT0000"
+	wait_update_facet --quiet mds1 \
+		"$lfsck_query | awk '/^${com}_mdts_$status/ { print \\\$2 }'" \
+		"$MDSCOUNT" $timeout || {
+		local mdts=$(comma_list $(mdts_nodes))
+		local count=$(do_facet mds1 "$lfsck_query" |
+			      awk '/^${com}_mdts_$status/ { print $2 }')
+
+		do_facet mds1 "$lfsck_query"
+		echo "==== MDT LOGS ===="
+		do_nodes $mdts "$LCTL get_param mdd.*.lfsck_$com"
+		do_nodes $mdts "$LCTL get_param osd*.*.oi_scrub"
+		if [[ "$com" == "layout" ]]; then
+			local osts=$(comma_list $(osts_nodes))
+			echo "==== OST LOGS ===="
+
+			do_nodes $osts "$LCTL get_param obdfilter.*.lfsck_$com"
+			do_nodes $osts "$LCTL get_param osd*.*.oi_scrub"
+		fi
+
+
 		error "($err) only $count of $MDSCOUNT MDTs are in ${status}"
 	}
 }
@@ -4096,6 +4115,7 @@ test_23c() {
 	echo "#####"
 
 	start_full_debug_logging
+	stack_trap stop_full_debug_logging
 
 	check_mount_and_prep
 
