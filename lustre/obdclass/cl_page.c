@@ -1000,6 +1000,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 		GOTO(out, rc = 0);
 
 	lock_page(vmpage);
+	PASSERT(env, cp, PageUptodate(vmpage));
 	unlock = true;
 
 	if (clear_page_dirty_for_io(vmpage)) {

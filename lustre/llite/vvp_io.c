@@ -1518,7 +1518,17 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	/* must return locked page */
 	if (fio->ft_mkwrite) {
 		LASSERT(cfio->ft_vmpage != NULL);
-		lock_page(cfio->ft_vmpage);
+		vmpage = cfio->ft_vmpage;
+		lock_page(vmpage);
+		/**
+		 * page was turncated and lock was cancelled, return ENODATA
+		 * so that VM_FAULT_NOPAGE will be returned to handle_mm_fault()
+		 * XXX: cannot return VM_FAULT_RETRY to vfs since we cannot
+		 * release mmap_lock and VM_FAULT_RETRY implies that the
+		 * mmap_lock is released.
+		 */
+		if (!PageUptodate(vmpage))
+			GOTO(out, result = -ENODATA);
 	} else {
 		result = vvp_io_kernel_fault(cfio);
 		if (result != 0)

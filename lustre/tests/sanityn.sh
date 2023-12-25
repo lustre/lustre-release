@@ -827,6 +827,38 @@ test_16j()
 }
 run_test 16j "race dio with buffered i/o"
 
+test_16k() {
+	local fsxN=${FSX_NP:-5}
+	local fsxNops=${FSX_NOPS:-10000}
+	local fsxNparams=${FSXPARAMS_16k:-""}
+	local dropsleep=${DROP_SLEEP:-3}
+	local dpipd
+	local -a fsxpids
+	local cmd
+
+	[ "$SLOW" = "no" ] && fsxNops=1000
+
+	while true; do
+		echo 3 > /proc/sys/vm/drop_caches
+		sleep $dropsleep
+	done &
+	dpipd=$!
+	stack_trap "kill -9 $dpipd"
+
+	for ((i = 1; i <= fsxN; i++)); do
+		cmd="$FSX $fsxNparams -N $fsxNops $DIR/fsxfile.${i} -l $((64 * 1024 * 1024))"
+		echo "+ $cmd"
+		eval $cmd &
+		fsxpids[$i]=$!
+	done
+	for ((i = 1; i <= fsxN; i++)); do
+		wait ${fsxpids[$i]} && echo "+ fsx $i done: rc=$?" ||
+			error "- fsx $i FAILURE! rc=$?"
+		date
+	done
+}
+run_test 16k "Parallel FSX and drop caches should not panic"
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
