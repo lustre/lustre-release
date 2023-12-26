@@ -10742,12 +10742,17 @@ static int lfs_hsm_cancel(int argc, char **argv)
 
 static int lfs_swap_layouts(int argc, char **argv)
 {
-	if (argc != 3)
+	int noxtime = 0;
+
+	if (argc == 4 && !strcmp(argv[1], "-n"))
+		noxtime = 1;
+	else if (argc != 3)
 		return CMD_HELP;
 
-	return llapi_swap_layouts(argv[1], argv[2], 0, 0,
-				  SWAP_LAYOUTS_KEEP_MTIME |
-				  SWAP_LAYOUTS_KEEP_ATIME);
+	return llapi_swap_layouts(argv[1+noxtime], argv[2+noxtime],
+				  0, 0, noxtime ? 0 :
+				  (SWAP_LAYOUTS_KEEP_MTIME |
+				  SWAP_LAYOUTS_KEEP_ATIME));
 }
 
 static const char *const ladvise_names[] = LU_LADVISE_NAMES;

@@ -820,7 +820,8 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 
 	lcc = ll_cl_find(inode);
 	if (lcc == NULL) {
-		vmpage = grab_cache_page_nowait(mapping, index);
+		/* do not allocate a page, only find & lock */
+		vmpage = find_lock_page(mapping, index);
 		result = ll_tiny_write_begin(vmpage, mapping);
 		GOTO(out, result);
 	}
