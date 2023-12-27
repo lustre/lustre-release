@@ -38,9 +38,21 @@
 #include <pthread.h>
 #include <sys/file.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 #define MAX_PATH_LENGTH 4096
+
+
+static double now(void)
+{
+	struct timeval tv;
+
+	gettimeofday(&tv, NULL);
+	return (double)tv.tv_sec + (double)tv.tv_usec / 1000000;
+}
+
 /**
  * helper functions
  */
@@ -586,6 +598,100 @@ static int t5(int argc, char *argv[])
 
 }
 
+#define	T6BUF_SIZE	200
+
+int set_lock(struct flock *lock, char *buf)
+{
+	int i, v;
+	struct tag_node {
+		char    tag;
+		int     mode;
+	} tags[] = {
+		{ 'W', F_WRLCK },
+		{ 'R', F_RDLCK },
+		{ 'U', F_UNLCK },
+		{ 0, 0 }
+	};
+
+	for (i = 0; isspace(buf[i]) && i < T6BUF_SIZE;)
+		i++;
+	for (v = 0; tags[v].tag && i < T6BUF_SIZE; v++) {
+		if (buf[i] == tags[v].tag) {
+			char *head;
+
+			head = buf + i + 1;
+			for (; buf[i] != ','; i++)
+				if (i >= T6BUF_SIZE)
+					break;
+			buf[i] = '\0';
+			lock->l_start = atol(head);
+			if (lock->l_start < 0)
+				break;
+			for (; !isdigit(buf[i]); i++)
+				if (i >= T6BUF_SIZE)
+					break;
+			lock->l_len = atol(buf + i);
+			if (lock->l_len <= 0)
+				break;
+			lock->l_type = tags[v].mode;
+			return 1;
+		}
+	}
+	fprintf(stderr, "Invalid line: %s\n", buf);
+	return 0;
+}
+
+/*
+ *	Read command from stdin then enqueue a lock
+ *
+ *	[W|R|U]sss,lll
+ *	W: write R: read U: unlock
+ *	sss: start of range
+ *	lll: length of range
+ *
+ *	for example:
+ *		W1,100		# add a write lock from 1 to 100
+ *		R100,100	# add a read lock from 100 to 199
+ */
+static int t6(int argc, char *argv[])
+{
+	struct flock lock = {
+		.l_whence = SEEK_SET,
+	};
+
+	int fd, rc = 0;
+	char buf[T6BUF_SIZE+1];
+	double stime;
+
+	if (argc < 3) {
+		fprintf(stderr, "usage: flocks_test 6 file\n");
+		return EXIT_FAILURE;
+	}
+
+	fd = open(argv[2], O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
+		return EXIT_FAILURE;
+	}
+
+	memset(buf, '\0', T6BUF_SIZE + 1);
+	stime = now();
+	while (fgets(buf, T6BUF_SIZE, stdin)) {
+		if (set_lock(&lock, buf)) {
+			rc = t_fcntl(fd, F_SETLKW, &lock);
+			if (rc != 0) {
+				fprintf(stderr, "%d: cannot set lock: %s\n",
+					getpid(), strerror(errno));
+				rc = EXIT_FAILURE;
+				break;
+			}
+		}
+	}
+	close(fd);
+	printf("Time for processing %.03lfs\n", now() - stime);
+	return rc;
+}
+
 /** ==============================================================
  * program entry
  */
@@ -619,6 +725,9 @@ int main(int argc, char *argv[])
 		break;
 	case 5:
 		rc = t5(argc, argv);
+		break;
+	case 6:
+		rc = t6(argc, argv);
 		break;
 	default:
 		fprintf(stderr, "unknown test number '%s'\n", argv[1]);
