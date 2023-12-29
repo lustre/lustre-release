@@ -209,15 +209,29 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
 	"                 [--yaml|-y YAML_TEMPLATE_FILE]\n"
 
+/* XXX: A temporary solution for transition to help text update */
+#define SSM_CMD_COMMON_1(cmd) \
+	"usage: "cmd" [--component-add|--component-del|--delete|-d]\n"	\
+	"                 [--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"	\
+	"                 [--component-end|-E END_OFFSET]\n"		\
+	"                 [--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"	\
+	"                 [--extension-size|--ext-size|-z EXT_SIZE]\n"	\
+	"                 [--help|-h]\n"				\
+	"                 [--foreign=FOREIGN_TYPE --xattr|-x LAYOUT]\n"	\
+	"                 [--layout|-L PATTERN] [--mode FILE_MODE]\n"	\
+	"                 [--mirror-count|-N[MIRROR_COUNT]]\n"		\
+	"                 [--ost|-o OST_INDEX[,OST_INDEX,...]]\n"	\
+	"                 [--overstripe-count|-C STRIPE_COUNT]\n"	\
+	"                 [--pool|-p POOL_NAME]\n"			\
+	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
+	"                 [--stripe-index|-i START_OST_IDX]\n"		\
+	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
+	"                 FILENAME|DIRECTORY\n"
+
 #define MIRROR_EXTEND_USAGE						\
 	"                 {--mirror-count|-N[MIRROR_COUNT]}\n"		\
 	"                 [SETSTRIPE_OPTIONS|-f|--file VICTIM_FILE]\n"	\
 	"                 [--no-verify]\n"
-
-#define SETSTRIPE_USAGE							\
-	SSM_CMD_COMMON("setstripe")					\
-	MIRROR_EXTEND_USAGE						\
-	"                 DIRECTORY|FILENAME\n"
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
@@ -315,43 +329,13 @@ command_t pcc_cmdlist[] = {
 /* all available commands */
 command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
-	 "To create a file with specified striping/composite layout, or\n"
-	 "create/replace the default layout on an existing directory:\n"
-	 SSM_CMD_COMMON("setstripe")
-	 "                 [--mode MODE]\n"
-	 "                 <directory|filename>\n"
-	 " or\n"
-	 "To add component(s) to an existing composite file:\n"
-	 SSM_CMD_COMMON("setstripe --component-add")
-	 "To totally delete the default striping from an existing directory:\n"
-	 "usage: setstripe [--delete|-d] <directory>\n"
-	 " or\n"
-	 "To create a mirrored file or set s default mirror layout on a directory:\n"
-	 "usage: setstripe {--mirror-count|-N}[MIRROR_COUNT] [SETSTRIPE_OPTIONS] <directory|filename>\n"
-	 " or\n"
-	 "To delete the last component(s) from an existing composite file\n"
-	 "(note that this will also delete any data in those components):\n"
-	 "usage: setstripe --component-del [--component-id|-I COMP_ID]\n"
-	 "                               [--component-flags|-F COMP_FLAGS]\n"
-	 "                               <filename>\n"
-	 "\tCOMP_ID:     Unique component ID to delete\n"
-	 "\tCOMP_FLAGS:  'init' indicating all instantiated components\n"
-	 "\t             '^init' indicating all uninstantiated components\n"
-	 "\t-I and -F cannot be specified at the same time\n"
-	 " or\n"
-	 "To set or clear flags on a specific component\n"
-	 "(note that this command can only be applied to mirrored files:\n"
-	 "usage: setstripe --comp-set {-I COMP_ID|--comp-flags=COMP_FLAGS}\n"
-	 "                            <filename>\n"
-	 " or\n"
-	 "To create a file with a foreign (free format) layout:\n"
-	 "usage: setstripe --foreign[=FOREIGN_TYPE]\n"
-	 "                 --xattr|-x LAYOUT_STRING [--flags HEX]\n"
-	 "                 [--mode MODE] <filename>\n"},
+	 "Create a file with specified striping/composite layout, or\n"
+	 "set the default layout on an existing directory.\n"
+	  SSM_CMD_COMMON_1("setstripe")},
 	{"getstripe", lfs_getstripe, 0,
-	 "To list the layout pattern for a given file or files in a\n"
+	 "List the layout pattern for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
-	 "usage: getstripe [--ost|-O UUID] [--quiet|-q] [--verbose|-v]\n"
+	 "Usage: getstripe [--ost|-O OST_NAME] [--quiet|-q] [--verbose|-v]\n"
 	 "		   [--stripe-count|-c] [--stripe-index|-i] [--fid|-F]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
 	 "		   [--mdt-index|-m] [--recursive|-r] [--raw|-R]\n"
@@ -361,12 +345,12 @@ command_t cmdlist[] = {
 	 "		   [--component-flags[=COMP_FLAGS]]\n"
 	 "		   [--component-count]\n"
 	 "		   [--extension-size|--ext-size|-z]\n"
-	 "		   [--component-start[=[+-]COMP_START]]\n"
-	 "		   [--component-end[=[+-]COMP_END]|-E[[+-]comp_end]]\n"
-	 "		   [[!] --mirror-index=[+-]INDEX |\n"
+	 "		   [--component-start[=[+-]START_OFFSET]]\n"
+	 "		   [--component-end|-E[[+-]END_OFFSET]]\n"
+	 "		   [[!] --mirror-index=[+-]MIRROR_INDEX |\n"
 	 "		   [!] --mirror-id=[+-]MIRROR_ID] [--mirror-count|-N]\n"
 	 "		   [--no-follow]\n"
-	 "		   <directory|filename> ..."},
+	 "		   FILENAME|DIRECTORY"},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "Create striped directory on specified MDT, same as mkdir.\n"
 	 "May be restricted to root or group users, depending on settings.\n"
