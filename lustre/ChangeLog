@@ -38,11 +38,11 @@ TBD Whamcloud
          4.18.0-305.19.1.el8  (RHEL8.4)
          4.18.0-348.2.1.el8   (RHEL8.5)
          4.18.0-372.9.1.el8   (RHEL8.6)
-         4.18.0-423.el8       (RHEL8.7)
+         4.18.0-425.10.1.el8  (RHEL8.7)
          4.4.120-92.70        (SLES12 SP2)
          4.4.0-142            (Ubuntu 16.04)
          vanilla linux 4.15.0 (ZFS only)
-       * Recommended e2fsprogs version: 1.46.5.wc1 or newer
+       * Recommended e2fsprogs version: 1.47.0-wc6 or newer
        * Recommended ZFS / SPL version: 0.7.13
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
