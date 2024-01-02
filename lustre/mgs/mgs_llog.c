@@ -2244,6 +2244,7 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 						     LNET_NIDSTR_SIZE);
 					if (rc < 0)
 						RETURN(rc);
+					rc = 0;
 				} else {
 					tmti->mti_nids[tmti->mti_nid_count] =
 						libcfs_str2nid(nidstr);
