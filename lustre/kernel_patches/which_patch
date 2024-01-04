@@ -29,5 +29,6 @@ PATCH SERIES FOR SERVER KERNELS:
 4.18-rhel8.9.series     4.18.0-513.9.1.el8   (RHEL 8.9)
 5.14-rhel9.1.series     5.14.0-162.23.1.el9  (RHEL 9.1)
 5.14-rhel9.2.series     5.14.0-284.30.1.el9  (RHEL 9.2)
+5.14-rhel9.3.series     5.14.0-362.13.1.el9  (RHEL 9.3)
 
 See lustre/ChangeLog for supported client kernel versions.
