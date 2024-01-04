@@ -4879,21 +4879,23 @@ static int lnet_cpt_of_nid_show_start(struct netlink_callback *cb)
 				}
 
 				lnc = genradix_ptr_alloc(&lgncl->lgncl_lnc_list,
-							 lgncl->lgncl_list_count++,
-							 GFP_ATOMIC);
+						      lgncl->lgncl_list_count++,
+						      GFP_KERNEL);
 				if (!lnc) {
 					NL_SET_ERR_MSG(extack,
-						       "failed to allocate NID");
+						      "failed to allocate NID");
 					GOTO(report_err, rc = -ENOMEM);
 				}
 
-				rc = libcfs_strnid(&lnc->lnc_nid, strim(nidstr));
+				rc = libcfs_strnid(&lnc->lnc_nid,
+						   strim(nidstr));
 				if (rc < 0) {
 					NL_SET_ERR_MSG(extack, "invalid NID");
 					GOTO(report_err, rc);
 				}
 				rc = 0;
-				CDEBUG(D_NET, "nid: %s\n", libcfs_nidstr(&lnc->lnc_nid));
+				CDEBUG(D_NET, "nid: %s\n",
+				       libcfs_nidstr(&lnc->lnc_nid));
 			}
 			fallthrough;
 		default:
@@ -6957,14 +6959,16 @@ static int lnet_peer_ni_show_start(struct netlink_callback *cb)
 		cfs_percpt_for_each(ptable, cpt, the_lnet.ln_peer_tables) {
 			struct lnet_peer *lp;
 
-			list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+			list_for_each_entry(lp, &ptable->pt_peer_list,
+					    lp_peer_list) {
 				struct lnet_processid *lpi;
 
 				lpi = genradix_ptr_alloc(&plist->lgpl_list,
 							 plist->lgpl_count++,
 							 GFP_KERNEL);
 				if (!lpi) {
-					NL_SET_ERR_MSG(extack, "failed to allocate NID");
+					NL_SET_ERR_MSG(extack,
+						      "failed to allocate NID");
 					GOTO(report_err, rc = -ENOMEM);
 				}
 
