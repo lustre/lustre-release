@@ -2,41 +2,42 @@
 .SH NAME
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
+.nh
+.ad l
 .B lfs mirror extend
 [\fB\-\-no\-verify\fR]
-<\fB\-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]>
-<\fB\-\-bandwidth\-limit=\fR|\fB\-W\fR[\fIbandwidth_limit\fR]>
-[\fB\-\-stats\fR]
-<\fB\-\-stats\-interval\fR=\fIinterval_in_sec\fR>
-[\fIsetstripe_options\fR|\fB\-f\fR <\fIvictim_file\fR>] ...
-<\fIfilename\fR>
+\fB\-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]
+[\fB\-\-bandwidth\-limit\fR|\fB\-W\fR \fIBANDWIDTH\fR]
+[\fB\-\-stats\fR|\fB\-\-stats\-interval\fR=\fISTATS_INTERVAL\fR]
+[\fISETSTRIPE_OPTIONS\fR|\fB\-f\fR \fIVICTIM_FILE\fR]
+\fIFILENAME\fR ...
 .SH DESCRIPTION
 This command adds mirror(s) to an existing file specified by the path name
-\fIfilename\fR.
+\fIFILENAME\fR.
 .br
-The file \fIfilename\fR can already be a mirrored file, or just a regular
+The file \fIFILENAME\fR can already be a mirrored file, or just a regular
 non-mirrored file. If it's a non-mirrored file, then the command will convert it
 to a mirrored file.
 .br
 The \fB\-\-mirror\-count\fR|\fB\-N\fR option is required and indicates how many
 mirrors that have the same layout will be added. It can be repeated multiple
-times to separate mirrors that have different layouts. The \fImirror_count\fR
+times to separate mirrors that have different layouts. The \fIMIRROR_COUNT\fR
 argument is optional and defaults to 1 if it's not specified; if specified, it
 must follow the option without a space.
 .br
-The \fIsetstripe_options\fR specify the specific layout for the mirror. It can
+The \fISETSTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
 be a plain layout with specific striping pattern or a composite layout like
 Progressive File Layout (PFL) (see \fBlfs-setstripe\fR(1)).
-If \fIsetstripe_options\fR are not specified,
+If \fISETSTRIPE_OPTIONS\fR are not specified,
 then the stripe options inherited from the previous component will be used.
-If \fIvictim_file\fR exists, then the
+If \fIVICTIM_FILE\fR exists, then the
 command will merge the layout from that file as a mirror added to the
 mirrored file. After the command is finished, the victim file will be
-removed.  The \fIsetstripe_options\fR cannot be specified with
-\fB\-f\fR <\fIvictim_file\fR> option in one command line.
+removed.  The \fISETSTRIPE_OPTIONS\fR cannot be specified with
+\fB\-f\fR \fIVICTIM_FILE\fR option in one command line.
 .br
-If \fIvictim_file\fR is specified, the utility will verify that the file contents
-from \fIvictim_file\fR are the same as \fIfilename\fR. Otherwise the command
+If \fIVICTIM_FILE\fR is specified, the utility will verify that the file contents
+from \fIVICTIM_FILE\fR are the same as \fIFILENAME\fR. Otherwise the command
 will return failure. However, option \fB\-\-no\-verify\fR can be used to
 override this verification. The option can save siginificant time on file
 comparison if the file size is large, but use it only when the file contents
@@ -45,22 +46,22 @@ are known to be the same.
 If no option is specified, then the command will return an error.
 .SH OPTIONS
 .TP
-.BR \-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]
+.BR \-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]
 The number of mirrors that have the same layout to be added. The option can be
 repeated multiple times to separate mirrors that have different layouts. The
-\fImirror_count\fR argument is optional and defaults to 1 if it's not specified;
+\fIMIRROR_COUNT\fR argument is optional and defaults to 1 if it's not specified;
 if specified, it must follow the option without a space.
 .TP
-.I setstripe_options
+.I SETSTRIPE_OPTIONS
 The layout of one mirror. The options are the same as those for
 \fBlfs-setstripe\fR(1) command.
-If \fIsetstripe_options\fR are not specified, then the stripe options inherited
+If \fISETSTRIPE_OPTIONS\fR are not specified, then the stripe options inherited
 from the previous component will be used. This option cannot be specified with
-\fB\-f\fR <\fIvictim_file\fR> option.
+\fB\-f\fR \fIVICTIM_FILE\fR option.
 .TP
-.BR \-f\fR\ <\fIvictim_file\fR>
-The layout of \fIvictim_file\fR will be merged as a mirror added to the
-mirrored file. This option cannot be specified with \fIsetstripe_options\fR
+.BR \-f\fR\ \fIVICTIM_FILE\fR
+The layout of \fIVICTIM_FILE\fR will be merged as a mirror added to the
+mirrored file. This option cannot be specified with \fISETSTRIPE_OPTIONS\fR
 option.
 .TP
 .BR \-\-no\-verify
@@ -70,12 +71,12 @@ the victim file(s) contains the same data as the original mirrored file.
 .BR \-\-stats
 This option enables progress updates every 5 seconds, in YAML format.
 .TP
-.BR \-\-stats-interval=\fIstats_interval
-This option enables progress updates every \fIstats_interval\fR seconds, in YAML format.
+.BR \-\-stats-interval=\fISTATS_INTERVAL
+This option enables progress updates every \fISTATS_INTERVAL\fR seconds, in YAML format.
 .TP
-.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIbandwidth_limit\fR
+.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIBANDWIDTH\fR
 This option enables throttling so that mirror extending writes no more than
-\fIbandwidth_limit\fR bytes a second.  An optional suffix can be used to
+\fIBANDWIDTH\fR bytes a second.  An optional suffix can be used to
 specify the units in
 .BR K ilobytes,
 .BR M egabytes

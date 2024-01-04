@@ -194,51 +194,36 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_DELETE);
 }
 
+#define SSM_SETSTRIPE_OPT \
+	"[--component-add|--component-del|--delete|-d]\n"	\
+	"\t\t[--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"	\
+	"\t\t[--component-end|-E END_OFFSET]\n"			\
+	"\t\t[--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"	\
+	"\t\t[--extension-size|--ext-size|-z EXT_SIZE]\n"	\
+	"\t\t[--help|-h]\n"					\
+	"\t\t[--foreign=FOREIGN_TYPE --xattr|-x LAYOUT]\n"	\
+	"\t\t[--layout|-L PATTERN] [--mode FILE_MODE]\n"	\
+	"\t\t[--mirror-count|-N[MIRROR_COUNT]]\n"		\
+	"\t\t[--ost|-o OST_INDEX[,OST_INDEX,...]]\n"		\
+	"\t\t[--overstripe-count|-C STRIPE_COUNT]\n"		\
+	"\t\t[--pool|-p POOL_NAME]\n"				\
+	"\t\t[--stripe-count|-c STRIPE_COUNT]\n"		\
+	"\t\t[--stripe-index|-i START_OST_IDX]\n"		\
+	"\t\t[--stripe-size|-S STRIPE_SIZE]"
+
 /* Setstripe and migrate share mostly the same parameters */
-#define SSM_CMD_COMMON(cmd) \
-	"usage: "cmd" [--component-end|-E COMP_END]\n"			\
-	"                 [--copy=LUSTRE_SRC]\n"			\
-	"                 [--extension-size|--ext-size|-z SIZE]\n"	\
-	"                 [--help|-h] [--layout|-L PATTERN]\n"		\
-	"                 [--layout|-L PATTERN]\n"			\
-	"                 [--mirror-count|-N[MIRROR_COUNT]]\n"		\
-	"                 [--ost|-o OST_INDICES]\n"			\
-	"                 [--overstripe-count|-C STRIPE_COUNT]\n"	\
-	"                 [--pool|-p POOL_NAME]\n"			\
-	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
-	"                 [--stripe-index|-i START_OST_IDX]\n"		\
-	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
-	"                 [--yaml|-y YAML_TEMPLATE_FILE]\n"
+#define SSM_CMD_COMMON(cmd)		\
+	"Usage: " cmd			\
+	" " SSM_SETSTRIPE_OPT "\n"
 
-/* XXX: A temporary solution for transition to help text update */
-#define SSM_CMD_COMMON_1(cmd) \
-	"usage: "cmd" [--component-add|--component-del|--delete|-d]\n"	\
-	"                 [--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"	\
-	"                 [--component-end|-E END_OFFSET]\n"		\
-	"                 [--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"	\
-	"                 [--extension-size|--ext-size|-z EXT_SIZE]\n"	\
-	"                 [--help|-h]\n"				\
-	"                 [--foreign=FOREIGN_TYPE --xattr|-x LAYOUT]\n"	\
-	"                 [--layout|-L PATTERN] [--mode FILE_MODE]\n"	\
-	"                 [--mirror-count|-N[MIRROR_COUNT]]\n"		\
-	"                 [--ost|-o OST_INDEX[,OST_INDEX,...]]\n"	\
-	"                 [--overstripe-count|-C STRIPE_COUNT]\n"	\
-	"                 [--pool|-p POOL_NAME]\n"			\
-	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
-	"                 [--stripe-index|-i START_OST_IDX]\n"		\
-	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
-	"                 FILENAME|DIRECTORY\n"
-
-#define MIRROR_EXTEND_USAGE						\
-	"                 {--mirror-count|-N[MIRROR_COUNT]}\n"		\
-	"                 [SETSTRIPE_OPTIONS|-f|--file VICTIM_FILE]\n"	\
-	"                 [--no-verify]\n"
+#define SETSTRIPE_USAGE							\
+	SSM_CMD_COMMON("setstripe  ")					\
+	"\t\tFILENAME|DIRECTORY\n"
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
-	"                 [--block|-b] [--non-block|-n]\n"		\
-	"                 [--non-direct|-D] [--verbose|-v]\n"		\
-	"                 FILENAME\n"
+	"\t\t[--block|-b] [--non-block|-n]\n"				\
+	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
@@ -267,11 +252,13 @@ command_t mirror_cmdlist[] = {
 	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
-		"usage: lfs mirror extend "
-		"{--mirror-count|-N[MIRROR_COUNT]} [--no-verify]|\n"
-	"\t\t--stats|--stats-interval=<sec>|\n"
-	"\t\t--W <bandwidth>|--bandwidth-limit=<bandwidth>\n"
-	"\t\t[SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... FILENAME ...\n" },
+		"Usage: lfs mirror extend "
+		"--mirror-count|-N[MIRROR_COUNT] [--no-verify]|\n"
+		"\t\t[--stats|--stats-interval=STATS_INTERVAL]|\n"
+		"\t\t[--bandwidth-limit|--W BANDWIDTH]\n"
+		"\t\t[[-f VICTIM_FILE] |\n"
+		"\t\t" SSM_SETSTRIPE_OPT "]"
+		" FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
 	"usage: lfs mirror split {--mirror-id MIRROR_ID |\n"
@@ -332,7 +319,7 @@ command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
 	 "Create a file with specified striping/composite layout, or\n"
 	 "set the default layout on an existing directory.\n"
-	  SSM_CMD_COMMON_1("setstripe")},
+	 SETSTRIPE_USAGE},
 	{"getstripe", lfs_getstripe, 0,
 	 "List the layout pattern for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
