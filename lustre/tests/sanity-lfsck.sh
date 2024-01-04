@@ -15,7 +15,7 @@ init_logging
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
-always_except LU-17385 23d
+# always_except
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -4239,10 +4239,13 @@ test_23d() {
 
 	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -o ||
 		error "lfsck namespace failed to start"
-	wait_update_facet mds1 "$LCTL get_param -n \
-		mdd.${FSNAME}-MDT0000.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
-			error " unexpected lfsck status"
+
+	# lfsck -t layout -o broadcasts all MDTs to perform lfsck layout,
+	# wait them all
+	local count=$(do_facet mds1 $LCTL lfsck_query -t layout -w |
+		awk '/layout_mdts_completed:/ { print $2 }')
+	(( count != MDSCOUNT )) &&
+		error "Only $count/$MDSCOUNT lfsck completed"
 
 	cmp $DIR/$tdir/mdt1dir/foo <(echo "b-a-r") || error "file body has changed"
 }
