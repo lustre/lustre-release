@@ -107,12 +107,12 @@ static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
 }
 
 /*
- *If id hit cfs_fail_loc, return 1, otherwise return 0
+ * If id hit cfs_fail_loc, return 1, otherwise return 0
  */
 #define CFS_FAIL_CHECK(id) \
-	UNLIKELY_CHECK_SET(id, 0, CFS_FAIL_LOC_NOSET, 0)
+	UNLIKELY_CHECK_SET(id, cfs_fail_val, CFS_FAIL_LOC_NOSET, 0)
 #define CFS_FAIL_CHECK_QUIET(id) \
-	UNLIKELY_CHECK_SET(id, 0, CFS_FAIL_LOC_NOSET, 1)
+	UNLIKELY_CHECK_SET(id, cfs_fail_val, CFS_FAIL_LOC_NOSET, 1)
 
 /*
  * If id hit cfs_fail_loc and cfs_fail_val == (-1 or value) return 1,
@@ -154,10 +154,9 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 
 /* If id hit cfs_fail_loc, sleep for seconds or milliseconds */
 #define CFS_FAIL_TIMEOUT(id, secs) \
-	UNLIKELY_TIMEOUT_SET(id, 0, (secs) * 1000, CFS_FAIL_LOC_NOSET)
-
+	UNLIKELY_TIMEOUT_SET(id, cfs_fail_val, (secs)*1000, CFS_FAIL_LOC_NOSET)
 #define CFS_FAIL_TIMEOUT_MS(id, ms) \
-	UNLIKELY_TIMEOUT_SET(id, 0, ms, CFS_FAIL_LOC_NOSET)
+	UNLIKELY_TIMEOUT_SET(id, cfs_fail_val, ms, CFS_FAIL_LOC_NOSET)
 
 /*
  * If id hit cfs_fail_loc, cfs_fail_loc |= value and
@@ -167,11 +166,10 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 	UNLIKELY_TIMEOUT_SET(id, value, (secs) * 1000, CFS_FAIL_LOC_ORSET)
 
 #define CFS_FAIL_TIMEOUT_RESET(id, value, secs) \
-	UNLIKELY_TIMEOUT_SET(id, value, secs * 1000, CFS_FAIL_LOC_RESET)
+	UNLIKELY_TIMEOUT_SET(id, value, (secs) * 1000, CFS_FAIL_LOC_RESET)
 
 #define CFS_FAIL_TIMEOUT_MS_ORSET(id, value, ms) \
 	UNLIKELY_TIMEOUT_SET(id, value, ms, CFS_FAIL_LOC_ORSET)
-
 #define CFS_FAULT_CHECK(id)			\
 	CFS_FAIL_CHECK(CFS_FAULT | (id))
 
