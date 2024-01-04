@@ -6572,7 +6572,7 @@ static int lnet_scan_route(struct lnet_genl_route_list *rlist,
 
 				prop = genradix_ptr_alloc(&rlist->lgrl_list,
 							  rlist->lgrl_count++,
-							  GFP_KERNEL);
+							  GFP_ATOMIC);
 				if (!prop)
 					GOTO(failed_alloc, rc = -ENOMEM);
 
@@ -9050,7 +9050,7 @@ lnet_discover(struct lnet_processid *pid, u32 force,
 		struct lnet_processid *id;
 
 		id = genradix_ptr_alloc(&dlist->lgpl_list,
-					dlist->lgpl_list_count++, GFP_KERNEL);
+					dlist->lgpl_list_count++, GFP_ATOMIC);
 		if (!id) {
 			rc = -ENOMEM;
 			goto out_decref;
