@@ -64,6 +64,7 @@ TESTNS='test_ns'
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
 FAKE_IP_ALIAS="10.1.2.31"
+FAKE_IPV6="2001:0db8:0:f101::1"
 do_ns() {
 	echo "ip netns exec $TESTNS $*"
 	ip netns exec $TESTNS "$@"
@@ -80,9 +81,11 @@ setup_fakeif() {
 	ip link set 'test1pl' up
 	if [[ -n $netns ]]; then
 		do_ns ip addr add "${FAKE_IP}/31" dev $FAKE_IF
+		do_ns ip -6 addr add "${FAKE_IPV6}/64" dev $FAKE_IF
 		do_ns ip link set $FAKE_IF up
 	else
 		ip addr add "${FAKE_IP}/31" dev $FAKE_IF
+		ip -6 addr add "${FAKE_IPV6}/64" dev $FAKE_IF
 		ip link set $FAKE_IF up
 	fi
 }
