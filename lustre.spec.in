@@ -256,12 +256,12 @@ BuildRequires: pkg-config
 BuildRequires: krb5-devel openssl-devel
 %endif
 %if %{with lustre_modules}
-# abuild (auto-build) used by SUSE Open Build Service
-# need kernel-source as a build requirement, but the code
-# which extracts these requirements don't understand %()
-# and treats all such as failures.  So the following dance
-# Allows the requirements to be seen by abuild, but ignored
-# by lbuild.
+# abuild (auto-build) used by SUSE Open Build Service needs kernel-source as
+# a build requirement, but the code which extracts these requirements does not
+# understand the percent-open-close-paren construct aka %%()
+#  [NOTE: a percent abovie is doubled to avoid yet another rpmbuild warning]
+# such occurances as failures.  So the following dance allows the requirements
+# to be seen by abuild, but ignored by lbuild.
 %if "%(echo $USER)" != "abuild"
 %else
 BuildRequires: kernel-source
