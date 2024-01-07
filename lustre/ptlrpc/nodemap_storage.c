@@ -140,19 +140,38 @@ static void nodemap_idmap_rec_init(union nodemap_rec *nr, u32 id_fs)
 	nr->nir.nir_id_fs = cpu_to_le32(id_fs);
 }
 
-static void nodemap_range_key_init(struct nodemap_key *nk, unsigned int nm_id,
-				   unsigned int rn_id)
+static void nodemap_range_key_init(struct nodemap_key *nk,
+				   enum nodemap_idx_type type,
+				   unsigned int nm_id, unsigned int rn_id)
 {
-	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id,
-							NODEMAP_RANGE_IDX));
+	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id, type));
 	nk->nk_range_id = cpu_to_le32(rn_id);
 }
 
-static void nodemap_range_rec_init(union nodemap_rec *nr,
-				   const lnet_nid_t nid[2])
+static int nodemap_range_rec_init(union nodemap_rec *nr,
+				  const struct lu_nid_range *range)
 {
-	nr->nrr.nrr_start_nid = cpu_to_le64(nid[0]);
-	nr->nrr.nrr_end_nid = cpu_to_le64(nid[1]);
+	if (range->rn_netmask) {
+		nr->nrr2.nrr_nid_prefix = range->rn_start;
+		nr->nrr2.nrr_netmask = range->rn_netmask;
+
+		if (NID_BYTES(&nr->nrr2.nrr_nid_prefix) >
+		    sizeof(struct lnet_nid))
+			return -E2BIG;
+	} else {
+		lnet_nid_t nid4[2];
+
+		if (!nid_is_nid4(&range->rn_start) ||
+		    !nid_is_nid4(&range->rn_end))
+			return -EINVAL;
+
+		nid4[0] = lnet_nid_to_nid4(&range->rn_start);
+		nid4[1] = lnet_nid_to_nid4(&range->rn_end);
+		nr->nrr.nrr_start_nid = cpu_to_le64(nid4[0]);
+		nr->nrr.nrr_end_nid = cpu_to_le64(nid4[1]);
+	}
+
+	return 0;
 }
 
 static void nodemap_global_key_init(struct nodemap_key *nk)
@@ -463,7 +482,6 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	int			 rc2 = 0;
 
 	ENTRY;
-
 	if (nodemap_mgs_ncf == NULL) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
@@ -513,7 +531,11 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 
 	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 				 rn_list) {
-		nodemap_range_key_init(&nk, nodemap->nm_id, range->rn_id);
+		enum nodemap_idx_type type;
+
+		type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+					   NODEMAP_RANGE_IDX;
+		nodemap_range_key_init(&nk, type, nodemap->nm_id, range->rn_id);
 		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
 					 &nk, NULL);
 		if (rc2 < 0)
@@ -566,15 +588,14 @@ int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap)
 	RETURN(rc);
 }
 
-int nodemap_idx_range_add(const struct lu_nid_range *range,
-			  const lnet_nid_t nid[2])
+int nodemap_idx_range_add(const struct lu_nid_range *range)
 {
-	struct nodemap_key	 nk;
-	union nodemap_rec	 nr;
-	struct lu_env		 env;
-	int			 rc = 0;
-	ENTRY;
+	struct nodemap_key nk;
+	union nodemap_rec nr;
+	struct lu_env env;
+	int rc = 0;
 
+	ENTRY;
 	if (nodemap_mgs_ncf == NULL) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
@@ -584,10 +605,15 @@ int nodemap_idx_range_add(const struct lu_nid_range *range,
 	if (rc != 0)
 		RETURN(rc);
 
-	nodemap_range_key_init(&nk, range->rn_nodemap->nm_id, range->rn_id);
-	nodemap_range_rec_init(&nr, nid);
+	nodemap_range_key_init(&nk, range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+							NODEMAP_RANGE_IDX,
+			       range->rn_nodemap->nm_id, range->rn_id);
+	rc = nodemap_range_rec_init(&nr, range);
+	if (rc < 0)
+		goto free_env;
 
 	rc = nodemap_idx_insert(&env, nodemap_mgs_ncf->ncf_obj, &nk, &nr);
+free_env:
 	lu_env_fini(&env);
 
 	RETURN(rc);
@@ -609,8 +635,9 @@ int nodemap_idx_range_del(const struct lu_nid_range *range)
 	if (rc != 0)
 		RETURN(rc);
 
-	nodemap_range_key_init(&nk, range->rn_nodemap->nm_id, range->rn_id);
-
+	nodemap_range_key_init(&nk, range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+							NODEMAP_RANGE_IDX,
+			       range->rn_nodemap->nm_id, range->rn_id);
 	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	lu_env_fini(&env);
 
@@ -824,9 +851,9 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	struct lu_nodemap *nodemap = NULL;
 	enum nodemap_idx_type type;
 	enum nodemap_id_type id_type;
+	struct lnet_nid nid[2];
 	int subtype;
 	u32 nodemap_id;
-	lnet_nid_t nid[2];
 	u32 map[2];
 	int rc;
 
@@ -843,8 +870,9 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	       nodemap_id, type, subtype);
 
 	/* find the correct nodemap in the load list */
-	if (type == NODEMAP_RANGE_IDX || type == NODEMAP_UIDMAP_IDX ||
-	    type == NODEMAP_GIDMAP_IDX || type == NODEMAP_PROJIDMAP_IDX ||
+	if (type == NODEMAP_RANGE_IDX || type == NODEMAP_NID_MASK_IDX ||
+	    type == NODEMAP_UIDMAP_IDX || type == NODEMAP_GIDMAP_IDX ||
+	    type == NODEMAP_PROJIDMAP_IDX ||
 	    (type == NODEMAP_CLUSTER_IDX && subtype != NODEMAP_CLUSTER_REC)) {
 		struct lu_nodemap *tmp = NULL;
 
@@ -897,11 +925,19 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		}
 		break;
 	case NODEMAP_RANGE_IDX:
-		nid[0] = le64_to_cpu(rec->nrr.nrr_start_nid);
-		nid[1] = le64_to_cpu(rec->nrr.nrr_end_nid);
-
+		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_start_nid), &nid[0]);
+		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_end_nid), &nid[1]);
+		rc = nodemap_add_range_helper(config, nodemap, nid, 0,
+					      le32_to_cpu(key->nk_range_id));
+		if (rc != 0)
+			GOTO(out, rc);
+		break;
+	case NODEMAP_NID_MASK_IDX:
+		nid[0] = rec->nrr2.nrr_nid_prefix;
+		nid[1] = rec->nrr2.nrr_nid_prefix;
 		rc = nodemap_add_range_helper(config, nodemap, nid,
-					le32_to_cpu(key->nk_range_id));
+					      rec->nrr2.nrr_netmask,
+					      le32_to_cpu(key->nk_range_id));
 		if (rc != 0)
 			GOTO(out, rc);
 		break;
@@ -1165,13 +1201,17 @@ nodemap_save_config_cache(const struct lu_env *env,
 		down_read(&active_config->nmc_range_tree_lock);
 		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 					 rn_list) {
-			lnet_nid_t nid[2] = {
-				range->rn_start,
-				range->rn_end
-			};
-			nodemap_range_key_init(&nk, nodemap->nm_id,
+			enum nodemap_idx_type type;
+
+			type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+						   NODEMAP_RANGE_IDX;
+			nodemap_range_key_init(&nk, type, nodemap->nm_id,
 					       range->rn_id);
-			nodemap_range_rec_init(&nr, nid);
+			rc2 = nodemap_range_rec_init(&nr, range);
+			if (rc2 < 0) {
+				rc = rc2;
+				continue;
+			}
 			rc2 = nodemap_idx_insert(env, o, &nk, &nr);
 			if (rc2 < 0)
 				rc = rc2;

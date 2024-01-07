@@ -252,6 +252,7 @@ enum nodemap_idx_type {
 	NODEMAP_UIDMAP_IDX = 3,		/* uid map assigned to a nm cluster */
 	NODEMAP_GIDMAP_IDX = 4,		/* gid map assigned to a nm cluster */
 	NODEMAP_PROJIDMAP_IDX = 5,	/* projid map assigned to nm cluster */
+	NODEMAP_NID_MASK_IDX = 6,	/* large NID setup for a nm cluster */
 	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
 };
 
@@ -302,6 +303,15 @@ struct nodemap_range_rec {
 	__u64		nrr_padding2;
 };
 
+struct nodemap_range2_rec {
+	struct lnet_nid	nrr_nid_prefix;
+	__u32		nrr_padding1; /* these fields may be used if */
+	__u32		nrr_padding2; /* nrr_nid_prefix.nid_size > 12 */
+	__u16		nrr_padding3;
+	__u8		nrr_padding4;
+	__u8		nrr_netmask;
+};
+
 struct nodemap_id_rec {
 	__u32	nir_id_fs;
 	__u32	nir_padding1;
@@ -330,6 +340,7 @@ struct nodemap_cluster_roles_rec {
 union nodemap_rec {
 	struct nodemap_cluster_rec ncr;
 	struct nodemap_range_rec nrr;
+	struct nodemap_range2_rec nrr2;
 	struct nodemap_id_rec nir;
 	struct nodemap_global_rec ngr;
 	struct nodemap_cluster_roles_rec ncrr;

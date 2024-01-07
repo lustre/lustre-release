@@ -309,11 +309,9 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 	if (!exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
-	if (nid_is_nid4(client_nid)) {
-		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
-		if (rc != 0 && rc != -EEXIST)
-			RETURN(rc);
-	}
+	rc = nodemap_add_member(client_nid, exp);
+	if (rc != 0 && rc != -EEXIST)
+		RETURN(rc);
 
 	ofd = ofd_dev(obd->obd_lu_dev);
 
@@ -367,8 +365,8 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	exp = class_conn2export(&conn);
 	LASSERT(exp != NULL);
 
-	if (client_nid && nid_is_nid4(client_nid)) {
-		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
+	if (client_nid) {
+		rc = nodemap_add_member(client_nid, exp);
 		if (rc != 0 && rc != -EEXIST)
 			GOTO(out, rc);
 	} else {

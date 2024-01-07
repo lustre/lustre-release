@@ -58,10 +58,14 @@ struct lu_nid_range {
 	struct lu_nodemap	*rn_nodemap;
 	/* list for nodemap */
 	struct list_head	 rn_list;
+	/* list for nodemap config */
+	struct list_head	 rn_collect;
 	/* nid interval tree */
-	lnet_nid_t		 rn_start,
-				 rn_end,
-				 rn_subtree_last;
+	struct lnet_nid		 rn_start,
+				 rn_end;
+	lnet_nid_t		 rn_subtree_last;
+	/* Large NID netmask */
+	u8			 rn_netmask;
 	struct rb_node		 rn_rb;
 };
 
@@ -98,23 +102,20 @@ void nodemap_procfs_exit(void);
 int lprocfs_nodemap_register(struct lu_nodemap *nodemap,
 			     bool is_default_nodemap);
 void lprocfs_nodemap_remove(struct nodemap_pde *nodemap_pde);
-struct lu_nid_range *nodemap_range_find(lnet_nid_t start_nid,
-					lnet_nid_t end_nid);
-struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
-				  lnet_nid_t start_nid, lnet_nid_t end_nid,
-				  struct lu_nodemap *nodemap,
+struct lu_nid_range *range_create(struct nodemap_config *config,
+				  const struct lnet_nid *start_nid,
+				  const struct lnet_nid *end_nid,
+				  u8 netmask, struct lu_nodemap *nodemap,
 				  unsigned int range_id);
 void range_destroy(struct lu_nid_range *range);
-int range_insert(struct nodemap_range_tree *nm_range_tree,
-		 struct lu_nid_range *data);
-void range_delete(struct nodemap_range_tree *nm_range_tree,
-		  struct lu_nid_range *data);
-struct lu_nid_range *range_search(struct nodemap_range_tree *nm_range_tree,
-				  lnet_nid_t nid);
-struct lu_nid_range *range_find(struct nodemap_range_tree *nm_range_tree,
-				lnet_nid_t start_nid, lnet_nid_t end_nid);
-int range_parse_nidstring(char *range_string, lnet_nid_t *start_nid,
-			  lnet_nid_t *end_nid);
+int range_insert(struct nodemap_config *config, struct lu_nid_range *data);
+void range_delete(struct nodemap_config *config, struct lu_nid_range *data);
+struct lu_nid_range *range_search(struct nodemap_config *config,
+				  struct lnet_nid *nid);
+struct lu_nid_range *range_find(struct nodemap_config *config,
+				const struct lnet_nid *start_nid,
+				const struct lnet_nid *end_nid,
+				u8 netmask);
 void range_init_tree(void);
 struct lu_idmap *idmap_create(__u32 client_id, __u32 fs_id);
 struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
@@ -130,7 +131,7 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_delete_list(struct lu_nodemap *nodemap);
-struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid);
+struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid);
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks_always(struct lu_nodemap *nodemap);
@@ -141,8 +142,8 @@ int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 			     const __u32 map[2]);
 int nodemap_add_range_helper(struct nodemap_config *config,
 			     struct lu_nodemap *nodemap,
-			     const lnet_nid_t nid[2],
-			     unsigned int range_id);
+			     const struct lnet_nid nid[2],
+			     u8 netmask, unsigned int range_id);
 
 struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
@@ -178,8 +179,7 @@ int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);
-int nodemap_idx_range_add(const struct lu_nid_range *range,
-			  const lnet_nid_t nid[2]);
+int nodemap_idx_range_add(const struct lu_nid_range *range);
 int nodemap_idx_range_del(const struct lu_nid_range *range);
 int nodemap_idx_nodemap_activate(bool value);
 #endif  /* _NODEMAP_INTERNAL_H */

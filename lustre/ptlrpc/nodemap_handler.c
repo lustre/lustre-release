@@ -257,30 +257,29 @@ struct lu_nodemap *nodemap_lookup(const char *name)
  * \retval	default_nodemap		default nodemap
  * \retval	-EINVAL			LO nid given without other local nid
  */
-struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
+struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid)
 {
 	struct lu_nid_range *range;
 	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
-
 	/* don't use 0@lo, use the first non-lo local NID instead */
-	if (nid == LNET_NID_LO_0) {
+	if (nid_is_lo0(nid)) {
 		struct lnet_processid id;
 		int i = 0;
 
 		do {
-			rc = LNetGetId(i++, &id, false);
+			rc = LNetGetId(i++, &id, true);
 			if (rc < 0)
 				RETURN(ERR_PTR(-EINVAL));
 		} while (nid_is_lo0(&id.nid));
 
-		nid = lnet_nid_to_nid4(&id.nid);
-		CDEBUG(D_INFO, "found nid %s\n", libcfs_nid2str(nid));
+		nid = &id.nid;
+		CDEBUG(D_INFO, "found nid %s\n", libcfs_nidstr(nid));
 	}
 
-	range = range_search(&active_config->nmc_range_tree, nid);
+	range = range_search(active_config, nid);
 	if (range != NULL)
 		nodemap = range->rn_nodemap;
 	else
@@ -307,7 +306,8 @@ static bool is_default_nodemap(const struct lu_nodemap *nodemap)
  * \param	range[2]		array of two nids
  * \reyval	0 on success
  */
-int nodemap_parse_range(const char *range_str, lnet_nid_t range[2])
+int nodemap_parse_range(const char *range_str, struct lnet_nid range[2],
+			u8 *netmask)
 {
 	char	buf[LNET_NIDSTR_SIZE * 2 + 2];
 	char	*ptr = NULL;
@@ -317,15 +317,32 @@ int nodemap_parse_range(const char *range_str, lnet_nid_t range[2])
 
 	snprintf(buf, sizeof(buf), "%s", range_str);
 	ptr = buf;
-	start_nidstr = strsep(&ptr, ":");
-	end_nidstr = strsep(&ptr, ":");
+
+	/* For large NID we use netmasks. Currently we only
+	 * support /128 which is a single NID.
+	 */
+	if (strchr(ptr, '/')) {
+		start_nidstr = strsep(&ptr, "/");
+
+		rc = kstrtou8(ptr, 10, netmask);
+		if (rc < 0)
+			GOTO(out, rc);
+		if (*netmask != 128)
+			GOTO(out, rc = -ERANGE);
+		end_nidstr = start_nidstr;
+	} else {
+		start_nidstr = strsep(&ptr, ":");
+		end_nidstr = strsep(&ptr, ":");
+	}
 
 	if (start_nidstr == NULL || end_nidstr == NULL)
 		GOTO(out, rc = -EINVAL);
 
-	range[0] = libcfs_str2nid(start_nidstr);
-	range[1] = libcfs_str2nid(end_nidstr);
+	rc = libcfs_strnid(&range[0], start_nidstr);
+	if (rc < 0)
+		GOTO(out, rc);
 
+	rc = libcfs_strnid(&range[1], end_nidstr);
 out:
 	return rc;
 
@@ -380,20 +397,19 @@ EXPORT_SYMBOL(nodemap_parse_idmap);
  * \retval	-EINVAL		export is NULL, or has invalid NID
  * \retval	-EEXIST		export is already member of a nodemap
  */
-int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
+int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
 
 	nodemap = nodemap_classify_nid(nid);
-
 	if (IS_ERR(nodemap)) {
 		CWARN("%s: error adding to nodemap, no valid NIDs found\n",
-			  exp->exp_obd->obd_name);
+		      exp->exp_obd->obd_name);
 		rc = -EINVAL;
 	} else {
 		rc = nm_member_add(nodemap, exp);
@@ -802,21 +818,21 @@ EXPORT_SYMBOL(nodemap_map_acl);
  */
 int nodemap_add_range_helper(struct nodemap_config *config,
 			     struct lu_nodemap *nodemap,
-			     const lnet_nid_t nid[2],
-			     unsigned int range_id)
+			     const struct lnet_nid nid[2],
+			     u8 netmask, unsigned int range_id)
 {
-	struct lu_nid_range	*range;
+	struct lu_nid_range *range;
 	int rc;
 
 	down_write(&config->nmc_range_tree_lock);
-	range = range_create(&config->nmc_range_tree, nid[0], nid[1],
-			     nodemap, range_id);
+	range = range_create(config, &nid[0], &nid[1], netmask, nodemap,
+			     range_id);
 	if (range == NULL) {
 		up_write(&config->nmc_range_tree_lock);
 		GOTO(out, rc = -ENOMEM);
 	}
 
-	rc = range_insert(&config->nmc_range_tree, range);
+	rc = range_insert(config, range);
 	if (rc) {
 		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
 			     "cannot insert nodemap range into '%s': rc = %d\n",
@@ -837,7 +853,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 
 	/* if range_id is non-zero, we are loading from disk */
 	if (range_id == 0)
-		rc = nodemap_idx_range_add(range, nid);
+		rc = nodemap_idx_range_add(range);
 
 	if (config == active_config) {
 		nm_member_revoke_locks(config->nmc_default_nodemap);
@@ -848,7 +864,8 @@ out:
 	return rc;
 }
 
-int nodemap_add_range(const char *name, const lnet_nid_t nid[2])
+int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask)
 {
 	struct lu_nodemap	*nodemap = NULL;
 	int			 rc;
@@ -863,7 +880,8 @@ int nodemap_add_range(const char *name, const lnet_nid_t nid[2])
 	if (is_default_nodemap(nodemap))
 		rc = -EINVAL;
 	else
-		rc = nodemap_add_range_helper(active_config, nodemap, nid, 0);
+		rc = nodemap_add_range_helper(active_config, nodemap, nid,
+					      netmask, 0);
 	mutex_unlock(&active_config_lock);
 	nodemap_putref(nodemap);
 out:
@@ -880,7 +898,8 @@ EXPORT_SYMBOL(nodemap_add_range);
  * Delete range from global range tree, and remove it
  * from the list in the associated nodemap.
  */
-int nodemap_del_range(const char *name, const lnet_nid_t nid[2])
+int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask)
 {
 	struct lu_nodemap	*nodemap;
 	struct lu_nid_range	*range;
@@ -897,7 +916,7 @@ int nodemap_del_range(const char *name, const lnet_nid_t nid[2])
 		GOTO(out_putref, rc = -EINVAL);
 
 	down_write(&active_config->nmc_range_tree_lock);
-	range = range_find(&active_config->nmc_range_tree, nid[0], nid[1]);
+	range = range_find(active_config, &nid[0], &nid[1], netmask);
 	if (range == NULL) {
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);
@@ -907,7 +926,7 @@ int nodemap_del_range(const char *name, const lnet_nid_t nid[2])
 		GOTO(out_putref, rc = -EINVAL);
 	}
 	rc = nodemap_idx_range_del(range);
-	range_delete(&active_config->nmc_range_tree, range);
+	range_delete(active_config, range);
 	nm_member_reclassify_nodemap(nodemap);
 	up_write(&active_config->nmc_range_tree_lock);
 
@@ -1660,7 +1679,7 @@ int nodemap_del(const char *nodemap_name)
 		if (rc2 < 0)
 			rc = rc2;
 
-		range_delete(&active_config->nmc_range_tree, range);
+		range_delete(active_config, range);
 	}
 	up_write(&active_config->nmc_range_tree_lock);
 
@@ -1749,6 +1768,7 @@ struct nodemap_config *nodemap_config_alloc(void)
 
 	init_rwsem(&config->nmc_range_tree_lock);
 
+	INIT_LIST_HEAD(&config->nmc_netmask_setup);
 	config->nmc_range_tree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
 
 	return config;
@@ -1782,7 +1802,7 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 		nm_member_reclassify_nodemap(nodemap);
 		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 					 rn_list)
-			range_delete(&config->nmc_range_tree, range);
+			range_delete(config, range);
 		up_write(&config->nmc_range_tree_lock);
 		mutex_unlock(&active_config_lock);
 
@@ -1940,9 +1960,9 @@ void nm_member_revoke_all(void)
  * \param[out]	name_buf	buffer to write the nodemap name to
  * \param	name_len	length of buffer
  */
-void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len)
+void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 {
-	struct lu_nodemap	*nodemap;
+	struct lu_nodemap *nodemap;
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
@@ -1973,10 +1993,10 @@ EXPORT_SYMBOL(nodemap_test_nid);
  * \retval	0	success
  * \retval	-EINVAL	invalid NID
  */
-int nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
-		    __u32 client_id, __u32 *fs_id)
+int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
+		    u32 client_id, u32 *fs_id)
 {
-	struct lu_nodemap	*nodemap;
+	struct lu_nodemap *nodemap;
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);

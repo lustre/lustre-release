@@ -150,8 +150,8 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 		if (cont)
 			seq_printf(m, ",\n");
 		cont = 1;
-		libcfs_nid2str_r(range->rn_start, start_nidstr, sizeof(start_nidstr));
-		libcfs_nid2str_r(range->rn_end, end_nidstr, sizeof(end_nidstr));
+		libcfs_nidstr_r(&range->rn_start, start_nidstr, sizeof(start_nidstr));
+		libcfs_nidstr_r(&range->rn_end, end_nidstr, sizeof(end_nidstr));
 		seq_printf(m, " { id: %u, start_nid: %s, end_nid: %s }",
 			   range->rn_id, start_nidstr, end_nidstr);
 	}

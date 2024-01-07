@@ -1118,9 +1118,13 @@ create_fops_nodemaps() {
 	for client in $clients; do
 		local client_ip=$(host_nids_address $client $NETTYPE)
 		local client_nid=$(h2nettype $client_ip)
+		 [[ "$client_nid" =~ ":" ]] && client_nid+="/128"
 		do_facet mgs $LCTL nodemap_add c${i} || return 1
 		do_facet mgs $LCTL nodemap_add_range 	\
-			--name c${i} --range $client_nid || return 1
+			--name c${i} --range $client_nid || {
+			do_facet mgs $LCTL nodemap_del c${i}
+			return 1
+		}
 		for map in ${FOPS_IDMAPS[i]}; do
 			do_facet mgs $LCTL nodemap_add_idmap --name c${i} \
 				--idtype uid --idmap ${map} || return 1
@@ -5226,9 +5230,13 @@ setup_61() {
 
 	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	client_nid=$(h2nettype $client_ip)
+	[[ "$client_nid" =~ ":" ]] && client_nid+="/128"
 	do_facet mgs $LCTL nodemap_add c0
 	do_facet mgs $LCTL nodemap_add_range \
-		 --name c0 --range $client_nid
+		 --name c0 --range $client_nid || {
+		do_facet mgs $LCTL nodemap_del c0
+		return 1
+	}
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name c0 \

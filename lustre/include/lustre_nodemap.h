@@ -127,12 +127,15 @@ struct nm_config_file {
 void nodemap_activate(const bool value);
 int nodemap_add(const char *nodemap_name);
 int nodemap_del(const char *nodemap_name);
-int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp);
+int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
-int nodemap_parse_range(const char *range_string, lnet_nid_t range[2]);
+int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
+			u8 *netmask);
 int nodemap_parse_idmap(char *idmap_string, __u32 idmap[2]);
-int nodemap_add_range(const char *name, const lnet_nid_t nid[2]);
-int nodemap_del_range(const char *name, const lnet_nid_t nid[2]);
+int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask);
+int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask);
 int nodemap_set_allow_root(const char *name, bool allow_root);
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
@@ -160,12 +163,12 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 			enum nodemap_tree_type tree_type);
 #ifdef HAVE_SERVER_SUPPORT
-void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len);
+void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #else
 #define nodemap_test_nid(nid, name_buf, name_len) do {} while(0)
 #endif
-int nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
-		    __u32 client_id, __u32 *fs_id);
+int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
+		    u32 client_id, u32 *fs_id);
 
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,
@@ -197,6 +200,9 @@ struct nodemap_config {
 
 	/* Pointer to default nodemap as it is needed more often */
 	struct lu_nodemap *nmc_default_nodemap;
+
+	/* list of netmask + address prefix */
+	struct list_head nmc_netmask_setup;
 
 	/**
 	 * Lock required to access the range tree.

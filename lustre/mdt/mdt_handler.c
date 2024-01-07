@@ -7087,11 +7087,9 @@ static int mdt_obd_connect(const struct lu_env *env,
 	lexp = class_conn2export(&conn);
 	LASSERT(lexp != NULL);
 
-	if (nid_is_nid4(client_nid)) {
-		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), lexp);
-		if (rc != 0 && rc != -EEXIST)
-			GOTO(out, rc);
-	}
+	rc = nodemap_add_member(client_nid, lexp);
+	if (rc != 0 && rc != -EEXIST)
+		GOTO(out, rc);
 
 	rc = mdt_connect_internal(env, lexp, mdt, data, false);
 	if (rc == 0) {
@@ -7135,11 +7133,9 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 	if (exp == NULL || obd == NULL || cluuid == NULL)
 		RETURN(-EINVAL);
 
-	if (nid_is_nid4(client_nid)) {
-		rc = nodemap_add_member(lnet_nid_to_nid4(client_nid), exp);
-		if (rc != 0 && rc != -EEXIST)
-			RETURN(rc);
-	}
+	rc = nodemap_add_member(client_nid, exp);
+	if (rc != 0 && rc != -EEXIST)
+		RETURN(rc);
 
 	rc = mdt_connect_internal(env, exp, mdt_dev(obd->obd_lu_dev), data,
 				  true);

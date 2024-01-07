@@ -2909,6 +2909,18 @@ static void check_nodemap_range_rec(void)
 	CHECK_MEMBER(nodemap_range_rec, nrr_padding2);
 }
 
+static void check_nodemap_range2_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_range2_rec);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_nid_prefix);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_padding1);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_padding2);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_padding3);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_padding4);
+	CHECK_MEMBER(nodemap_range2_rec, nrr_netmask);
+}
+
 static void check_nodemap_id_rec(void)
 {
 	BLANK_LINE();

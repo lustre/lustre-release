@@ -6131,6 +6131,34 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding2));
 
+	/* Checks for struct nodemap_range2_rec */
+	LASSERTF((int)sizeof(struct nodemap_range2_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_range2_rec));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_nid_prefix) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_nid_prefix));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_nid_prefix) == 20, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_nid_prefix));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_padding1) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_padding2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_padding3) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding3) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding3));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_padding4) == 30, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_padding4));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding4) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_padding4));
+	LASSERTF((int)offsetof(struct nodemap_range2_rec, nrr_netmask) == 31, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range2_rec, nrr_netmask));
+	LASSERTF((int)sizeof(((struct nodemap_range2_rec *)0)->nrr_netmask) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range2_rec *)0)->nrr_netmask));
+
 	/* Checks for struct nodemap_id_rec */
 	LASSERTF((int)sizeof(struct nodemap_id_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct nodemap_id_rec));

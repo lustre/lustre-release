@@ -176,12 +176,12 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 
 	list_for_each_entry_safe(exp, tmp, &nodemap->nm_member_list,
 				 exp_target_data.ted_nodemap_member) {
-		lnet_nid_t nid;
+		struct lnet_nid *nid;
 
 		/* if no conn assigned to this exp, reconnect will reclassify */
 		spin_lock(&exp->exp_lock);
 		if (exp->exp_connection) {
-			nid = lnet_nid_to_nid4(&exp->exp_connection->c_peer.nid);
+			nid = &exp->exp_connection->c_peer.nid;
 		} else {
 			spin_unlock(&exp->exp_lock);
 			continue;

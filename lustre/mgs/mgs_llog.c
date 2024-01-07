@@ -5605,9 +5605,10 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		    enum lcfg_command_type cmd, const char *nodemap_name,
 		    char *param)
 {
-	lnet_nid_t nid[2];
+	struct lnet_nid nid[2];
 	u32 idmap[2];
 	bool bool_switch;
+	u8 netmask = 0;
 	u32 int_id;
 	int rc = 0;
 
@@ -5620,16 +5621,16 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		rc = nodemap_del(nodemap_name);
 		break;
 	case LCFG_NODEMAP_ADD_RANGE:
-		rc = nodemap_parse_range(param, nid);
+		rc = nodemap_parse_range(param, nid, &netmask);
 		if (rc != 0)
 			break;
-		rc = nodemap_add_range(nodemap_name, nid);
+		rc = nodemap_add_range(nodemap_name, nid, netmask);
 		break;
 	case LCFG_NODEMAP_DEL_RANGE:
-		rc = nodemap_parse_range(param, nid);
+		rc = nodemap_parse_range(param, nid, &netmask);
 		if (rc != 0)
 			break;
-		rc = nodemap_del_range(nodemap_name, nid);
+		rc = nodemap_del_range(nodemap_name, nid, netmask);
 		break;
 	case LCFG_NODEMAP_ADMIN:
 		rc = kstrtobool(param, &bool_switch);

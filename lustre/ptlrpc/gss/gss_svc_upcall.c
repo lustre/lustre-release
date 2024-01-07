@@ -802,7 +802,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	 */
 	LNetPrimaryNID(&req->rq_source.nid);
 	rsi.si_nid4 = lnet_nid_to_nid4(&req->rq_source.nid);
-	nodemap_test_nid(lnet_nid_to_nid4(&req->rq_peer.nid), rsi.si_nm_name,
+	nodemap_test_nid(&req->rq_peer.nid, rsi.si_nm_name,
 			 sizeof(rsi.si_nm_name));
 
 	/* Note that context handle is always 0 for for INIT. */
