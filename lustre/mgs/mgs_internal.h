@@ -295,18 +295,10 @@ enum {
 void mgs_counter_incr(struct obd_export *exp, int opcode);
 void mgs_stats_counter_init(struct lprocfs_stats *stats);
 
-struct temp_comp {
-	struct mgs_target_info	*comp_tmti;
-	struct mgs_target_info	*comp_mti;
-	struct fs_db		*comp_fsdb;
-	struct obd_device	*comp_obd;
-};
-
 struct mgs_thread_info {
 	struct lustre_cfg_bufs	mgi_bufs;
 	char			mgi_fsname[MTI_NAME_MAXLEN];
 	struct cfg_marker	mgi_marker;
-	struct temp_comp	mgi_comp;
 	union ldlm_gl_desc	mgi_gl_desc;
 };
 

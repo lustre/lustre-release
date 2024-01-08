@@ -8711,11 +8711,12 @@ wait_osp_active() {
 	local tgt_idx=$3
 	local expected=$4
 	local num
+	local max=30
+	local wait=0
 
 	# wait until all MDTs are in the expected state
 	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		local mdtosp=$(get_mdtosc_proc_path mds${num} ${tgt_name})
-		local wait=0
 		local mproc
 
 		if [ $facet = "mds" ]; then
@@ -8725,23 +8726,24 @@ wait_osp_active() {
 			mproc="osc.$mdtosp.active"
 		fi
 
-		echo "check $mproc"
 		while true; do
-			sleep 5
-			local result=$(do_facet mds${num} "$LCTL get_param -n $mproc")
-			local max=30
+			local val rc=0
 
-			[ ${PIPESTATUS[0]} = 0 ] || error "Can't read $mproc"
-			if [ $result -eq $expected ]; then
-				echo -n "target updated after "
-				echo "$wait sec (got $result)"
+			val=$(do_facet mds${num} "$LCTL get_param -n $mproc")
+			rc=$?
+			if (( rc != 0 )); then
+				echo "Can't read $mproc (rc = $rc)"
+			elif [[ "$val" == "$expected" ]]; then
+				echo "$mproc updated after $wait sec (got $val)"
 				break
 			fi
-			wait=$((wait + 5))
-			if [ $wait -eq $max ]; then
-				error "$tgt_name: wanted $expected got $result"
-			fi
-			echo "Waiting $((max - wait)) secs for $tgt_name"
+
+			(( wait < max )) ||
+				error "$tgt_name: wanted $expected got $val"
+
+			echo "Waiting $((max - wait)) secs for $mproc"
+			sleep 5
+			(( wait += 5 ))
 		done
 	done
 }

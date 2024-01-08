@@ -265,6 +265,9 @@ static inline void *lustre_cfg_buf(struct lustre_cfg *lcfg, __u32 index)
 	if (index >= bufcount)
 		return NULL;
 
+	if (!lcfg->lcfg_buflens[index])
+		return NULL;
+
 	offset = LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
 	for (i = 0; i < index; i++)
 		offset += __ALIGN_KERNEL(lcfg->lcfg_buflens[i], 8);

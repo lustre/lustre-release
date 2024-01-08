@@ -10856,6 +10856,116 @@ test_136() {
 }
 run_test 136 "don't panic with bad obdecho setup"
 
+wait_osp_import() {
+	local facet=$1
+	local remtgt=$(facet_svc $2)
+	local expected=$3
+	local loctgt=$(facet_svc $facet)
+	local param="osp.$remtgt-os[pc]-${loctgt#*-}.*_server_uuid"
+
+	do_rpc_nodes "$(facet_active_host $facet)" \
+			wait_import_state $expected $param ||
+		error "$param: import is not in expected state"
+}
+
+test_137() {
+	(( MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "need MDS version at least 2.15.61"
+
+	(( $MDSCOUNT >= 3 )) || skip "needs >= 3 MDTs"
+
+	local failnode=1.2.3.4@$NETTYPE
+	local keep_zpool=$KEEP_ZPOOL
+
+	reformat
+	#start mgs or mgs/mdt0
+	if ! combined_mgs_mds ; then
+		start_mgs || error "Fail to register mgs"
+		start_mdt 1 || error "Fail to register mds1"
+	else
+		start_mdt 1 || error "Fail to register mds1"
+	fi
+
+	start_ost || error "OST0 start fail"
+
+	mount_client $MOUNT || error "mount client fails"
+	wait_osc_import_ready client ost
+	check_mount || error "check_mount failed"
+
+	# Add failover node on OST0000
+	stop_ost
+	[ "$ost1_FSTYPE" == zfs ] && import_zpool ost1
+	do_facet ost1 "$TUNEFS --failnode=$failnode $(ostdevname 1)" ||
+		error "ost1 tunefs failed"
+	start_ost || error "OST0 start fail"
+
+	# Add pool and parameters on MDT0000 to check the inheritance
+	do_facet mgs $LCTL pool_new $FSNAME.pool1 || error "pool_new failed"
+	do_facet mgs $LCTL pool_add $FSNAME.pool1 OST0000 ||
+		error "pool_add failed"
+
+	set_conf_param_and_check mds1					\
+	    "$LCTL get_param -n lod.$FSNAME-MDT0000*.dom_stripesize"	\
+	    "$FSNAME-MDT0000.lod.dom_stripesize"			\
+	    "$((2<<20))"
+
+	start_mdt 2 || error "Fail to register mds2"
+
+	wait_osp_import mds1 mds2 FULL
+	wait_osp_import mds2 mds1 FULL
+	wait_osp_import mds2 ost1 FULL
+
+	# Add failover node on MDT0001
+	stop_mdt 2 || error "Fail to umount  mds2"
+	[ "$mds1_FSTYPE" == zfs ] && import_zpool mds2
+	do_facet mds2 "$TUNEFS --failnode=$failnode $(mdsdevname 2)" ||
+		error "mds2 tunefs failed"
+	start_mdt 2 || error "Fail to mount mds2"
+
+	wait_osp_import mds1 mds2 FULL
+	wait_osp_import mds2 mds1 FULL
+	wait_osp_import mds2 ost1 FULL
+
+	local i
+	for ((i=3; i <= MDSCOUNT; i++)); do
+		start_mdt $i || error "Fail to register mds$i"
+	done
+
+	wait_osc_import_state mds ost FULL
+
+	for ((i=2; i <= MDSCOUNT; i++)); do
+		local import
+		local facet=mds$i
+		local tgt=$(facet_svc $facet)
+		local lod="lod.$tgt*"
+
+		wait_osp_active mds $tgt $(( i - 1 )) 1
+
+		do_facet $facet $LCTL get_param -n $lod.pools.pool1 |
+			grep -q "OST0000" || error "pool1 should be inherited"
+
+		val=$(do_facet $facet $LCTL get_param -n $lod.dom_stripesize)
+		(( val == (2<<20) )) ||
+			error "dom_stripesize should be inherited"
+
+		import="osc.$FSNAME-OST0000-osc-${tgt#*-}.import"
+		do_facet $facet $LCTL get_param -n $import |
+			grep -q "failover_nids:.*$failnode" ||
+			error "$failnode not found in $import"
+
+		[[ "${tgt#*-}" != MDT0001 ]] || continue
+
+		import="osp.$FSNAME-MDT0001-osp-${tgt#*-}.import"
+		do_facet $facet $LCTL get_param -n $import |
+			grep -q "failover_nids:.*$failnode" ||
+			error "$failnode not found in $import"
+	done
+
+	cleanup || error "cleanup failed with rc $?"
+	reformat_and_config
+}
+run_test 137 "a new MDT should inherit pools, parameters and failnode"
+
 test_140() {
 	(( MDS1_VERSION >= $(version_code 2.15.55) )) ||
 		skip "need MDS version at least 2.15.55"
