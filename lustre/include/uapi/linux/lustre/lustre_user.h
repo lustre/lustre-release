@@ -2091,15 +2091,17 @@ static inline char *changelog_rec_name(const struct changelog_rec *rec)
 static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 {
 	char *str = changelog_rec_name(rec);
+	char *end = str + NAME_MAX; /* NB: NAME_MAX use in CR_MAXSIZE */
 
-	while (*str != '\0')
+	while (*str != '\0' && str <= end)
 		str++;
 	return str + 1;
 }
 
 static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
-	return strlen(changelog_rec_sname(rec));
+	return rec->cr_namelen -
+	       (changelog_rec_sname(rec) - changelog_rec_name(rec));
 }
 
 /**

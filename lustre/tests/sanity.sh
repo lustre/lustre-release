@@ -18738,6 +18738,42 @@ test_160t() {
 }
 run_test 160t "changelog garbage collect on lack of space"
 
+test_160u() { # LU-17400
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] ||
+		skip "Need MDS version at least 2.2.0"
+
+	cd $DIR || error "cd $DIR failed"
+
+	# ensure changelog has a clean view if tests are run multiple times
+	[ -d rename ] && rm -rf rename
+
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User '$cl_user' not found in changelog_users"
+
+	local longname1=$(str_repeat a 255)
+
+	echo "creating simple directory tree"
+	mkdir -p rename/a || error "create of simple directory tree failed"
+	echo "creating rename/hw file"
+	echo "hello world" > rename/hw || error "create of rename/hw failed"
+	echo "creating very long named file"
+	touch rename/$longname1 || error "create of 'rename/$longname1' failed"
+	echo "move rename/hw to rename/a/a.hw"
+	mv rename/hw rename/a/a.hw || error "mv failed"
+
+	RENME=($(changelog_dump | grep "RENME"))
+	#declare -p RENME # for debugging captured value with indexes
+
+	[[ "${RENME[11]}" == "a.hw" && "${RENME[14]}" == "hw" ]] ||
+		error "changelog rename record type name/sname error"
+}
+run_test 160u "changelog rename record type name and sname strings are correct"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
