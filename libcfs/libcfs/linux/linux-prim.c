@@ -137,6 +137,9 @@ int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
 {
 	if (task_dump_stack_t)
 		return task_dump_stack_t(task, store, size, skipnr);
+
+	pr_info("No stack, save_stack_trace_tsk() could not be found\n");
+
 	return 0;
 }
 #endif

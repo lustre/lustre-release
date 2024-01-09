@@ -469,7 +469,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 		LDLM_ERROR(lock, "not waiting on destroyed lock (b=5653)");
 		if (ktime_get_seconds() > next) {
 			next = ktime_get_seconds() + 14400;
-			libcfs_debug_dumpstack(NULL);
+			dump_stack();
 		}
 		return 0;
 	}

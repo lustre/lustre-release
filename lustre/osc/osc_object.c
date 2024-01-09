@@ -409,7 +409,6 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 			else
 				ldlm_resource_dump(D_ERROR, res);
 
-			libcfs_debug_dumpstack(NULL);
 			LBUG();
 		}
 

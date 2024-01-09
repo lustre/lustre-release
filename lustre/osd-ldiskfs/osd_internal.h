@@ -1287,7 +1287,7 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 		} else {
 			CWARN("%s: Invalid operation index %d\n",
 			      osd_name(osd_dt_dev(oh->ot_super.th_dev)), op);
-			libcfs_debug_dumpstack(NULL);
+			dump_stack();
 		}
 	} else {
 		oti->oti_declare_ops[op]++;
@@ -1318,7 +1318,7 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 			CWARN("%s: opcode %u: invalid value >= %u\n",
 			      osd_name(osd_dt_dev(oh->ot_super.th_dev)),
 			      op, OSD_OT_MAX);
-			libcfs_debug_dumpstack(NULL);
+			dump_stack();
 			return;
 		}
 	}

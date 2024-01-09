@@ -1769,7 +1769,7 @@ static void __osd_th_check_slow(void *oth, struct osd_device *dev,
 	if (ktime_before(ktime_add_ns(alloced, 30 * NSEC_PER_SEC), now)) {
 		CWARN("transaction handle %p was open for too long: now %lld, alloced %lld, started %lld, closed %lld\n",
 				oth, now, alloced, started, closed);
-		libcfs_debug_dumpstack(NULL);
+		dump_stack();
 	}
 }
 
@@ -2049,7 +2049,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			CWARN("%s: credits %u > trans_max %u\n", osd_name(dev),
 			      oh->ot_credits, osd_transaction_size(dev));
 			osd_trans_dump_creds(env, th);
-			libcfs_debug_dumpstack(NULL);
+			dump_stack();
 			last_credits = oh->ot_credits;
 			last_printed = jiffies;
 		}

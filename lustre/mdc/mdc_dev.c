@@ -1041,7 +1041,7 @@ static int mdc_get_lock_handle(const struct lu_env *env, struct osc_object *osc,
 				PFID(lu_object_fid(osc2lu(osc))));
 		else
 			ldlm_resource_dump(D_ERROR, res);
-		libcfs_debug_dumpstack(NULL);
+		dump_stack();
 		return -ENOENT;
 	} else {
 		*lh = lock->l_remote_handle;

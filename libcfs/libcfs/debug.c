@@ -461,7 +461,7 @@ void __noreturn lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 		/* not reached */
 	}
 
-	libcfs_debug_dumpstack(NULL);
+	dump_stack();
 	if (libcfs_panic_on_lbug)
 		panic("LBUG");
 	else
