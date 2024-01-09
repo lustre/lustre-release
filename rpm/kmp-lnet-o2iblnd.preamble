@@ -3,6 +3,14 @@ License:        GPL-2.0-only
 %if 0%{?suse_version} > 1
 Requires:       kernel-%1
 %endif
+%if 0%{?mofed_source} > 0
+BuildRequires:  mlnx-ofa_kernel-devel
+%endif
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "openEuler"
+Requires:       kmod-mlnx-ofa_kernel
+%else
+Requires:       mlnx-ofa_kernel-kmp
+%endif
 Provides:       %{name}-lnet-o2iblnd = %{version}
 Obsoletes:      %{name}-lnet-o2iblnd < %{version}
 Conflicts:      %{name}-lnet-in-kernel-o2iblnd
