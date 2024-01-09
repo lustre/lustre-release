@@ -88,21 +88,21 @@ stop_lst() {
 	local rc=0
 
 	if ${LST_BATCH_STARTED}; then
-		lctl mark "lst stop ${BATCH_NAME}"
+		$LCTL mark "lst stop ${BATCH_NAME}"
 
 		[[ -n ${ALL_HOSTS} ]] &&
-			$PDSH "${ALL_HOSTS}" "lctl mark \"lst stop ${BATCH_NAME}\""
+			$PDSH "${ALL_HOSTS}" "$LCTL mark 'lst stop ${BATCH_NAME}'"
 
 		lst stop "${BATCH_NAME}" || rc=$?
 		LST_BATCH_STARTED=false
 	fi
 
 	if ${LST_SESSION_CREATED}; then
-		lctl mark "Stop LST $MODE"
+		$LCTL mark "Stop LST $MODE"
 		echo "Stop LST $MODE - $(date)"
 
 		[[ -n ${ALL_HOSTS} ]] &&
-			$PDSH "${ALL_HOSTS}" "lctl mark \"Stop LST $MODE\""
+			$PDSH "${ALL_HOSTS}" "$LCTL mark 'Stop LST $MODE'"
 
 		lst end_session || rc=$((rc + $?))
 		LST_SESSION_CREATED=false
@@ -185,6 +185,17 @@ while getopts "b:C:c:d:D:ef:g:hHl:Lm:Mn:o:s:S:t:" flag ; do
 		   exit 1;;
 	esac
 done
+
+# find where 'lctl' binary is installed on this system
+if [[ -x "$LCTL" ]]; then	# full pathname specified
+	: # echo "LCTL=$LCTL"
+elif [[ -n "$LUSTRE" && -x "$LUSTRE/utils/lctl" ]]; then
+	LCTL=$LUSTRE/utils/lctl
+else				# hope that it is in the PATH
+	LCTL=${LCTL:-lctl}
+fi
+#echo "using LCTL='$LCTL' lustre_root='$lustre_root' LUSTRE='$LUSTRE'"
+[[ -n "$(which $LCTL)" ]] || { echo "error: lctl not found"; exit 99; }
 
 if [[ -z $CLIENTS ]]; then
 	echo "Must specify \"clients\" group (-f)"
@@ -272,7 +283,7 @@ if ${HOST_MODE}; then
 	idx=0
 	opts=( -o NumberOfPasswordPrompts=0 -o ConnectTimeout=5 )
 	for host in ${SERVERS//,/ }; do
-		s_nids[idx]=$(ssh "${opts[@]}" "$host" 'lctl list_nids | head -n 1')
+		s_nids[idx]=$(ssh "${opts[@]}" "$host" '$LCTL list_nids | head -n 1')
 		if [[ -z ${s_nids[idx]} ]]; then
 			echo "Failed to determine primary NID of $host"
 			exit
@@ -282,7 +293,7 @@ if ${HOST_MODE}; then
 
 	idx=0
 	for host in ${CLIENTS//,/ }; do
-		c_nids[idx]=$(ssh "${opts[@]}" "${host}" 'lctl list_nids | head -n 1')
+		c_nids[idx]=$(ssh "${opts[@]}" "${host}" '$LCTL list_nids | head -n 1')
 		if [[ -z ${c_nids[idx]} ]]; then
 			echo "Failed to determine primary NID of $host"
 			exit
@@ -318,9 +329,9 @@ if ! grep -q '\[' <<<"${CLIENT_NIDS[@]}" && which lnetctl &>/dev/null; then
 fi
 
 [[ -n $ALL_HOSTS ]] &&
-	$PDSH "$ALL_HOSTS" "lctl mark \"Start LST $MODE\""
+	$PDSH "$ALL_HOSTS" "$LCTL mark 'Start LST $MODE'"
 
-lctl mark "Start LST $MODE"
+$LCTL mark "Start LST $MODE"
 echo "Start LST $MODE - $(date)"
 
 trap 'exit_handler' EXIT

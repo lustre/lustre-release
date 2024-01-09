@@ -83,7 +83,7 @@ create_objects () {
 	local nobj=$3
 	local rfile=$4
 
-	remote_shell $host $lctl --device $devno create $nobj > $rfile 2>&1
+	remote_shell $host $LCTL --device $devno create $nobj > $rfile 2>&1
 	first=0
 	prev=0
 	count=0
@@ -130,7 +130,7 @@ destroy_objects () {
 	local nobj=$4
 	local rfile=$5
 
-	remote_shell $host $lctl --device $devno destroy $obj0 $nobj > $rfile 2>&1
+	remote_shell $host $LCTL --device $devno destroy $obj0 $nobj > $rfile 2>&1
 }
 
 get_stats () {
@@ -231,37 +231,11 @@ print_summary () {
 	echo $minusn "$*"
 }
 
-# Return a numeric version code based on a version string.  The version
-# code is useful for comparison two version strings to see which is newer.
-version_code() {
-	# split arguments like "2.3.61" into "2", "3", "61"
-	eval set -- $(tr "[:punct:]" " " <<< $*)
-	echo -n "$((($1 << 16) | ($2 << 8) | $3))"
-}
-
-# inspired from the lustre_build_version routine in test-framework.sh
-get_lustre_version() {
-	local host=${1:-${unique_hosts[0]}}
-	local ver
-
-	ver=$(remote_shell $host "$lctl get_param -n version 2>/dev/null ||
-				$lctl lustre_build_version 2>/dev/null ||
-				$lctl --version 2>/dev/null | cut -d' ' -f2")
-	local lver=$(egrep -i "lustre: |version: " <<<$ver | head -n 1)
-	[ -n "$lver" ] && ver="$lver"
-
-	sed -e 's/.*: //' -e 's/^v//' -e 's/-.*//' -e 's/_/./g' <<<$ver |
-		cut -d. -f1-4
-}
-
 # Check whether the record size (KBytes) exceeds the maximum bulk I/O RPC size
 # or not.
 check_record_size() {
-	[ $(version_code $(get_lustre_version)) -lt $(version_code 2.3.61) ] &&
-		rszmax=1024
-
 	if [ "$rszhi" -gt "$rszmax" ]; then
-		echo "Test disk case support maximum ${rszmax}KB IO data" \
+		echo "Test disk case support maximum ${rszmax}KB IO data " \
 		     "(rszhi=$rszhi is too big), please use a smaller value."
 		return 1
 	fi
@@ -337,11 +311,21 @@ if [ "$lustre_root" == " " ]; then
 	unset lustre_root
 fi
 
-if [ -z "$lustre_root" ]; then
-	lctl=${LCTL:-lctl}
-else
-	lctl=${lustre_root}/utils/lctl
+# find where 'lctl' binary is installed on this system
+if [[ -x "$LCTL" ]]; then	# full pathname specified
+	: # echo "LCTL=$LCTL"
+elif [[ -n "$lustre_root" && -x "$lustre_root/utils/lctl" ]]; then
+	# echo "lustre_root=$lustre_root"
+	LCTL=${lustre_root}/utils/lctl
+elif [[ -n "$LUSTRE" && -x "$LUSTRE/utils/lctl" ]]; then
+	# echo "LUSTRE=$LUSTRE"
+	LCTL=$LUSTRE/utils/lctl
+else				# hope that it is in the PATH
+	# echo "PATH=$PATH"
+	LCTL=${LCTL:-lctl}
 fi
+echo "using LCTL='$LCTL' lustre_root='$lustre_root' LUSTRE='$LUSTRE'"
+[[ -n "$(which $LCTL)" ]] || { echo "error: lctl not found"; exit 99; }
 
 # split out hostnames from client/ost names
 ndevs=0
@@ -368,22 +352,21 @@ if [ $case == "network" ]; then
 	fi
 	# Now do the server setup
 	setup_srv_obd $server_nid "echo_srv"
-	oss_on_srv=$(dsh $server_nid root "$lctl dl | grep OSS" |
-		     awk '{ print $4 }')
+	oss_on_srv=$(dsh $server_nid root "$LCTL dl" | awk '/OSS/ { print $4 }')
 	if [ -z $oss_on_srv ]; then
 		setup_OSS $server_nid
 		clean_srv_OSS=1
 	fi
-	if ! dsh $server_nid root "$lctl dl | grep obdecho > /dev/null 2>&1"; then
+	if ! dsh $server_nid root "$LCTL dl | grep obdecho > /dev/null 2>&1"; then
 		echo "obdecho not setup on server"
 		exit 1
 	fi
-	if ! dsh $server_nid root "$lctl dl | grep ost > /dev/null 2>&1"; then
+	if ! dsh $server_nid root "$LCTL dl | grep ost > /dev/null 2>&1"; then
 		echo "ost not setup on server"
 		exit 1
 	fi
 	# Now start client setup
-	osc_names_str=$($lctl dl| grep osc | grep -v mdt | grep UP || true)
+	osc_names_str=$($LCTL dl| grep osc | grep -v mdt | grep UP || true)
 	if [ -n "$osc_names_str" ]; then
 		echo "The existing setup must be cleaned";
 		exit 0;
@@ -488,7 +471,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 				declare -a pidarray
 				for host in ${unique_hosts[@]}; do
 					remote_shell $host \
-					    "lctl set_param -n osd*.*.force_sync 1 &>/dev/null || true"
+					    "$LCTL set_param -n osd*.*.force_sync 1 &>/dev/null || true"
 					echo "starting run for test: $test rsz: $rsz " \
 					"threads: $thr objects: $nobj" >> ${vmstatf}_${host}
 				done
@@ -505,7 +488,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 					first_obj=${first_objs[$idx]}
 					thr_per_obj=$((${thr}/${nobj}))
 					echo >> ${cmdsf}_${host} \
-					"$lctl > $tmpfi 2>&1 \\
+					"$LCTL > $tmpfi 2>&1 \\
 					--threads $thr -$snap $devno \\
 					test_brw $count $(testname2type $test) q $pages \\
 					${thr_per_obj}t${first_obj} $(testcase2mode)$pages &"

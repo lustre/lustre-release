@@ -153,7 +153,7 @@ get_devno () {
     local type=$2
     local name=$3
 
-    remote_shell $host $lctl device_list |
+    remote_shell $host $LCTL device_list |
 		awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
 	          print \$1; exit}}"
 }
@@ -178,18 +178,18 @@ get_devnos () {
 cleanup_network () {
 	local clean_srv_OSS=$1
 
-	$lctl <<-EOF
+	$LCTL <<-EOF
 		--device echotmp cleanup
 		--device echotmp detach
 	EOF
 	remote_shell "root@$server_nid" \
-	"$lctl <<-EOF
+	"$LCTL <<-EOF
 		--device echo_srv cleanup
 		--device echo_srv detach
 	EOF"
 	if [ $clean_srv_OSS ]; then
 		remote_shell "root@$server_nid" \
-		"$lctl <<-EOF
+		"$LCTL <<-EOF
 			--device OSS cleanup
 			--device OSS detach
 		EOF"
@@ -279,9 +279,9 @@ get_ec_devno () {
 	fi
 	client_name=${ost_name}_ecc
 	# Only 'attach' if '{client_name}_uuid' not already present
-	if ! [[ $(lctl dl) =~ $client_name ]]; then
+	if ! [[ $($LCTL dl) =~ $client_name ]]; then
 		remote_shell $host \
-			"$lctl <<-EOF
+			"$LCTL <<-EOF
 				attach echo_client $client_name \
 					${client_name}_UUID
 				setup $ost_name $stack_type
@@ -302,12 +302,12 @@ ec_using_srv_nid () {
 	local oscname=$2
 	local oscuuid=$3
 
-	$lctl add_uuid echo_UUID $server_nid@$NETTYPE >/dev/null 2>&1
-	$lctl <<-EOF
+	$LCTL add_uuid echo_UUID $server_nid@$NETTYPE >/dev/null 2>&1
+	$LCTL <<-EOF
 		attach osc $oscname $oscuuid
 		--device $oscname setup echo_srv_UUID echo_UUID
 	EOF
-	$lctl <<-EOF
+	$LCTL <<-EOF
 		attach echo_client ${oscname}_ecc $oscuuid
 		--device ${oscname}_ecc setup $oscname
 	EOF
@@ -319,7 +319,7 @@ setup_srv_obd () {
 	local test_ostfsnm=$2
 
 	remote_shell "root@$server_nid" \
-	"$lctl <<-EOF
+	"$LCTL <<-EOF
 		attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
 		--device $test_ostfsnm setup
 	EOF"
@@ -330,7 +330,7 @@ setup_OSS () {
 	local server_nid=$1
 
 	remote_shell "root@$server_nid" \
-	"$lctl <<-EOF
+	"$LCTL <<-EOF
 		attach ost OSS OSS_UUID
 		--device OSS setup
 	EOF"
@@ -344,7 +344,7 @@ teardown_ec_devno () {
 	local client_name=$2
 
 	remote_shell $host \
-	"$lctl <<-EOF
+	"$LCTL <<-EOF
 		--device $client_name cleanup
 		--device $client_name detach
 	EOF"
@@ -369,7 +369,7 @@ split_hostname () {
 
 check_cleanup () {
 	local type_obj="$1"
-	local osc_names_str=$($lctl dl | grep $type_obj)
+	local osc_names_str=$($LCTL dl | grep $type_obj)
 	local count=0;
 
 	for name in $osc_names_str; do
@@ -385,7 +385,7 @@ check_cleanup () {
 
 check_setup () {
 	local type_obj="$1"
-	local osc_names_str=$($lctl dl | grep $type_obj)
+	local osc_names_str=$($LCTL dl | grep $type_obj)
 	local count=0;
 
 	for name in $osc_names_str; do
@@ -402,7 +402,7 @@ check_setup () {
 # added from bugzill req.
 get_targets () {
 	if [ -z "$ost_names" ]; then
-		targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
+		targets=$($LCTL device_list | awk "{if (\$2 == \"UP\" && \
 			  \$3 == \"obdfilter\") {print \$4} }")
 	fi
 	if [ -z "$targets" ]; then

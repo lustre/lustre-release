@@ -70,7 +70,7 @@ create_directories () {
 		else
 			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
 		fi
-		remote_shell $host $lctl --device $devno test_mkdir /$dirname \
+		remote_shell $host $LCTL --device $devno test_mkdir /$dirname \
 			-c $dir_stripes --stripe_index $mdtidx > $rfile 2>&1
 		while read line; do
 			echo "$line" | grep -q 'error: test_mkdir'
@@ -99,7 +99,7 @@ destroy_directories () {
 		else
 			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
 		fi
-		remote_shell $host $lctl --device $devno test_rmdir /$dirname > $rfile 2>&1
+		remote_shell $host $LCTL --device $devno test_rmdir /$dirname > $rfile 2>&1
 	done
 }
 
@@ -193,17 +193,23 @@ if [ "$lustre_root" == " " ]; then
 	unset lustre_root
 fi
 
-if [ -z "$lustre_root" ]; then
-	lctl=lctl
-else
-	lctl=${lustre_root}/utils/lctl
+# find where 'lctl' binary is installed on this system
+if [[ -x "$LCTL" ]]; then	# full pathname specified
+	: # echo "LCTL=$LCTL"
+elif [[ -n "$lustre_root" && -x "$lustre_root/utils/lctl" ]]; then
+	LCTL=${lustre_root}/utils/lctl
+elif [[ -n "$LUSTRE" && -x "$LUSTRE/utils/lctl" ]]; then
+	LCTL=$LUSTRE/utils/lctl
+else				# hope that it is in the PATH
+	LCTL=${LCTL:-lctl}
 fi
+[[ -n "$(which $LCTL)" ]] || { echo "error: lctl not found"; exit 99; }
 
 declare -a client_names
 declare -a host_names
 declare -a client_indexes
 if [ -z "$targets" ]; then
-	targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
+	targets=$($LCTL device_list | awk "{if (\$2 == \"UP\" && \
 					       \$3 == \"mdt\") {print \$4} }")
 	if [ -z "$targets" ]; then
 		echo "Can't find any MDT to test.  Please set targets=..."
@@ -226,7 +232,7 @@ done
 if (( $stripe_count > 0 )); then
 	for ((i=0; i < $ndevs; i++)); do
 		host=${host_names[$i]}
-		obd=$(remote_shell $host $lctl device_list |
+		obd=$(remote_shell $host $LCTL device_list |
 		      awk "{ if (\$2 == \"UP\" &&
 				 (\$3 == \"osc\" || \$3 == \"osp\"))
 				{ print \$4 } }")
@@ -335,7 +341,7 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
 			tmpfi="${tmpf}_$idx"
 			[ "$test" = "create" ] && test="create -c $stripe_count"
 			echo >> ${cmdsf}_${host}			\
-				"$lctl > $tmpfi 2>&1			\
+				"$LCTL > $tmpfi 2>&1			\
 				--threads $thr -$snap $devno test_$test \
 				-d /$dirname -D $dir_count		\
 				-b $start_number -n $file_count_per_thread"

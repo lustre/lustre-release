@@ -18,7 +18,15 @@ thrhi=${thrhi:-16}
 size=${size:-1024}
 thrlo=${thrlo:-$(( thrhi / 2))}
 
-OBDSURVEY=${OBDSURVEY:-$(which obdfilter-survey)}
+if [[ -x "$OBDSURVEY" ]]; then
+	echo "OBDSURVEY=$OBDSURVEY"
+elif [[ -x $LUSTRE/../lustre-iokit/obdfilter-survey/obdfilter-survey ]]; then
+	echo "LUSTRE=$LUSTRE"
+	OBDSURVEY="$LUSTRE/../lustre-iokit/obdfilter-survey/obdfilter-survey"
+else
+	OBDSURVEY=${OBDSURVEY:-$(which obdfilter-survey)}
+	echo "OBDSURVEY==$OBDSURVEY"
+fi
 
 check_and_setup_lustre
 
@@ -38,7 +46,8 @@ get_targets () {
 
 	for osc in $($LCTL get_param -N osc.${FSNAME}-*osc-*); do
 		nid=$($LCTL get_param $osc.import |
-			awk '/current_connection:/ {sub(/@.*/,""); print $2}')
+			awk '/current_connection:/ {sub(/@.*/,""); \
+			sub(/"/,""); print $2}')
 		dev=$(echo $osc | sed -e 's/^osc\.//' -e 's/-osc.*//')
 		target=$dev
 
@@ -72,7 +81,7 @@ obdflter_survey_run () {
 	rm -f ${TMP}/obdfilter_survey*
 
 	local targets=$(obdflter_survey_targets $case)
-	local cmd="NETTYPE=$NETTYPE thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" $OBDSURVEY"
+	local cmd="NETTYPE=$NETTYPE LCTL=$LCTL thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
 	local rc=$?
