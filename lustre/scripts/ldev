@@ -46,6 +46,8 @@ my %eparse = (
 
 my %conf = ();
 
+my $global_mgs = "";
+
 #
 # Main
 #
@@ -159,6 +161,7 @@ sub parse_config
             $type = $1;
             $dev = $2;
         }
+
         eparse_line ($line, "efieldcount") if (!defined $dev);
         eparse_line ($line, "epairwise") if (exists $l2f{$local}
                                          && $l2f{$local} ne $foreign);
@@ -166,23 +169,36 @@ sub parse_config
 
         eparse_line ($line, "elabel_uniq") if (exists $label2dev{$label}
                                          || exists $label2local{$label});
-        /(\w+)-(OST|MDT|MGS)([0-9a-fA-F]{4})/, $label;
-        my $filesys = $1;
-        my $nodetype = $2;
+
         $label2dev{$label} = $dev;
         $label2local{$label} = $local;
         $label2journal{$label} = $j if defined $j;
         $label2raidtab{$label} = $raidtab if defined $raidtab;
+        $label2hostname{$label}=$local;
         if (defined $type) {
             $label2type{$label} = $type;
             if ($type eq "zfs" && $dev =~ m{^([^/]+)/[^/]+$}) {
                 $label2zpool{$label} = $1;
             }
         }
-        $label2hostname{$label}=$local;
 
-        if ($nodetype eq "MGS") {
+        my $filesys;
+        my $nodetype;
+        if ($label eq "MGS") {
+            $filesys = "";
+            $nodetype = $label;
+        } else {
+            /(\w+)-(OST|MDT|MGS)([0-9a-fA-F]{4})/, $label;
+            $filesys = $1;
+            $nodetype = $2;
+        }
+
+        if ($nodetype eq "MGS" or $label eq "MGS") {
             $filesys2mgs{$filesys} = $label;
+        }
+
+        if ($label eq "MGS") {
+            $global_mgs = $label;
         }
 
         next if $conf{role} and lc $conf{role} ne lc $nodetype;
@@ -456,6 +472,7 @@ sub exec_cmd
         @labels = (@{$conf{local_labels}}, @{$conf{foreign_labels}});
     } elsif ($conf{fsname}) {
         @labels = (@labels, @{$conf{fs_labels}});
+        push(@labels, $global_mgs) if ($global_mgs);
     } else {
         @labels = @{$conf{local_labels}};
     }
@@ -481,21 +498,28 @@ sub exec_cmd
         my $hostname = $label2hostname{$_};
         my $mgsnid;
         if ($cmd =~ /%m/) {
-            if (!exists $filesys2mgs{$fsname}) {
+            my $mgs;
+            my $mgs_host;
+
+            if (exists $filesys2mgs{$fsname}) {
+                $mgs = $filesys2mgs{$fsname};
+            } elsif ($global_mgs) {
+                $mgs = $global_mgs;
+            } else {
                  log_fatal ("$fsname has no MGS defined\n");
             }
 
-            my $mgs = $filesys2mgs{$fsname};
-            if (!exists $label2hostname{$mgs}) {
+            if (exists $label2hostname{$mgs}) {
+                $mgs_host = $label2hostname{$mgs};
+            } else {
                  log_fatal ("$mgs has no hostname defined\n");
             }
 
             my %host2nid = %{$conf{host2nid}};
-            $mgs = $label2hostname{$mgs};
-            if (!exists $host2nid{$mgs}) {
-                 log_fatal ("$mgs has no NID defined\n");
+            if (!exists $host2nid{$mgs_host}) {
+                 log_fatal ("$mgs and $mgs_host have no NID defined\n");
             }
-            $mgsnid = $host2nid{$mgs};
+            $mgsnid = $host2nid{$mgs_host};
         }
 
         $cmd =~ s/%f/$fsname/g;  # %f = fsname
