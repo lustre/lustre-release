@@ -110,17 +110,18 @@ static void qmt_set_id_notify(const struct lu_env *env, struct qmt_device *qmt,
 	struct lquota_entry *lqe_gl;
 	int rc;
 
-	lqe_gl = lqe->lqe_is_global ? lqe : NULL;
+	if (lqe->lqe_is_global && !lqe->lqe_enforced)
+		RETURN_EXIT;
+
 	rc = qmt_pool_lqes_lookup_spec(env, qmt, lqe_rtype(lqe),
 				       lqe_qtype(lqe), &lqe->lqe_id);
 	if (rc)
 		GOTO(lqes_fini, rc);
 
-	if (!lqe_gl && qti_lqes_glbl(env)->lqe_is_global)
-		lqe_gl = qti_lqes_glbl(env);
-
-	if (!lqe_gl)
-		GOTO(lqes_fini, rc);
+	lqe_gl = qti_lqes_glbl(env);
+	/* If global lqe is not enforced, it is not added to qti_lqes array */
+	if (!lqe_gl->lqe_is_global)
+		GOTO(lqes_fini, 0);
 
 	mutex_lock(&lqe_gl->lqe_glbl_data_lock);
 	if (lqe_gl->lqe_glbl_data)
