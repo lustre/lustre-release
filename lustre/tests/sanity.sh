@@ -14605,11 +14605,16 @@ test_123h() {
 }
 run_test 123h "Verify statahead work with the fname pattern via du"
 
-test_123i() {
+test_123i_base() {
+	local fmt=$1
+	local iocmd=$2
 	local dir=$DIR/$tdir
-	local cmd="createmany -m $dir/$tfile.%06d 1000"
+	local cmd="createmany -m $fmt"
 
-	stack_trap "unlinkmany $dir/$tfile.%06d 1000"
+	echo "Command:"
+	echo "- $cmd"
+	echo "- $iocmd"
+	stack_trap "unlinkmany $fmt"
 	mkdir -p $dir || error "failed to mkdir $dir"
 	eval $cmd
 
@@ -14617,23 +14622,9 @@ test_123i() {
 	$LCTL set_param llite.*.statahead_stats=clear
 	$LCTL set_param mdc.*.batch_stats=0
 
-	local max
-	local batch_max
-	local enabled
-
-	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
-	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
-	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
-	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
-	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
-	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
-
-	$LCTL set_param llite.*.statahead_max=1024
-	$LCTL set_param llite.*.statahead_batch_max=32
-	$LCTL set_param llite.*.enable_statahead_fname=1
 	echo "statahead_stats (Pre):"
 	lctl get_param -n llite.*.statahead_stats
-	ls $dir/* > /dev/null
+	eval $iocmd || error "$iocmd failed"
 	echo "statahead_stats (Post):"
 	$LCTL get_param -n llite.*.statahead_stats
 	$LCTL get_param -n mdc.*.batch_stats
@@ -14651,9 +14642,35 @@ test_123i() {
 	count=$($LCTL get_param -n llite.*.statahead_stats |
 		awk '/hit.total:/ {print $2}')
 	# Hit ratio should be >= 75%
-	(( $count > 75 )) || error "hit total is too low: $count"
+	(( $count > 750 )) || error "hit total is too low: $count"
 }
-run_test 123i "Verify statahead work with the fname pattern via ls dir/*"
+
+test_123i() {
+	local dir=$DIR/$tdir
+	local cnt=1000
+	local max
+	local batch_max
+	local enabled
+	local min
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	min=$($LCTL get_param -n llite.*.statahead_min | head -n 1)
+	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	stack_trap "$LCTL set_param llite.*.statahead_min=$min"
+	stack_trap "$LCTL set_param llite.*.enable_statahead_fname=$enabled"
+	$LCTL set_param llite.*.statahead_max=1024
+	$LCTL set_param llite.*.statahead_batch_max=32
+	$LCTL set_param llite.*.statahead_min=64
+	$LCTL set_param llite.*.enable_statahead_fname=1
+
+	test_123i_base "$dir/$tfile.%06d $cnt" "ls $dir/* > /dev/null"
+	test_123i_base "$dir/$tfile $cnt" \
+		"aheadmany -c stat -N -s 0 -e $cnt -b $tfile -d $dir"
+}
+run_test 123i "Verify statahead work with the fname indexing pattern"
 
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

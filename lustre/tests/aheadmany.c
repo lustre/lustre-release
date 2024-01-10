@@ -59,6 +59,7 @@ static void usage(void)
 	       "\t--start|-s:	Start index of file names\n"
 	       "\t--end|-e:	End index of file names\n"
 	       "\t--basename|-b:Base name for file naming format\n"
+	       "\t--noadvise|-N:No ahead advise hint IOCTL\n"
 	       "\t--batch_max|-B: max batch count for ahead operations\n"
 	       "\t--directory|-d: under this directory do ahead operations\n",
 	       progname);
@@ -80,15 +81,40 @@ static char *get_file_name(const char *dirpath, const char *basename, long n)
 	return filename;
 }
 
+static int ll_batch_io_by_name(const char *dirpath, const char *fname,
+			       enum lu_access_flags flags, __u64 start,
+			       __u64 end)
+{
+	int rc = 0;
+	int i;
+
+	for (i = start; i < end; i++) {
+		char *filename;
+		struct stat st;
+
+		filename = get_file_name(dirpath, fname, i);
+		if (flags & ACCESS_FL_STAT) {
+			rc = stat(filename, &st);
+			if (rc < 0) {
+				rc = -errno;
+				fprintf(stderr,
+					"%s: stat(%s) failed: rc = %d\n",
+					progname, filename, errno);
+				break;
+			}
+		}
+	}
+
+	return rc;
+}
+
 static int ll_ahead_by_name_index(const char *dirpath, const char *fname,
 				  enum lu_access_flags flags, __u64 start,
 				  __u64 end, __u32 batch_max)
 {
 	struct llapi_lu_ladvise2 ladvise;
-	struct stat st;
 	int dir_fd;
 	int rc;
-	int i;
 
 	dir_fd = open(dirpath, O_DIRECTORY | O_RDONLY);
 	if (dir_fd < 0) {
@@ -113,19 +139,7 @@ static int ll_ahead_by_name_index(const char *dirpath, const char *fname,
 		return rc;
 	}
 
-	for (i = start; i < end; i++) {
-		char *filename;
-
-		filename = get_file_name(dirpath, fname, i);
-		rc = stat(filename, &st);
-		if (rc < 0) {
-			rc = -errno;
-			fprintf(stderr, "%s: stat(%s) failed: rc = %d\n",
-				progname, filename, errno);
-			break;
-		}
-	}
-
+	rc = ll_batch_io_by_name(dirpath, fname, flags, start, end);
 	close(dir_fd);
 	return rc;
 }
@@ -139,6 +153,7 @@ int main(int argc, char **argv)
 	{ .val = 'b',	.name = "basename",	.has_arg = required_argument },
 	{ .val = 'd',	.name = "directory",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "batch_max",	.has_arg = required_argument },
+	{ .val = 'N',	.name = "noadvise",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .name = NULL } };
 	enum lu_access_flags flags = ACCESS_FL_NONE;
@@ -148,12 +163,13 @@ int main(int argc, char **argv)
 	char *fname = NULL;
 	__u64 start_index = 0;
 	__u64 end_index = 0;
+	bool has_advise = true;
 	char *end;
 	int rc = 0;
 	int c;
 
 	progname = basename(argv[0]);
-	while ((c = getopt_long(argc, argv, "c:s:e:b:d:B:h",
+	while ((c = getopt_long(argc, argv, "c:s:e:b:d:B:Nh",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
@@ -197,6 +213,9 @@ int main(int argc, char **argv)
 					progname, argv[0], optarg);
 				return -EINVAL;
 			}
+			break;
+		case 'N':
+			has_advise = false;
 			break;
 		case 'b':
 			fname = optarg;
@@ -242,8 +261,13 @@ int main(int argc, char **argv)
 			return -EINVAL;
 		}
 
-		rc = ll_ahead_by_name_index(dirpath, fname, flags, start_index,
-					    end_index, batch_max);
+		if (has_advise)
+			rc = ll_ahead_by_name_index(dirpath, fname, flags,
+						    start_index, end_index,
+						    batch_max);
+		else
+			rc = ll_batch_io_by_name(dirpath, fname, flags,
+						 start_index, end_index);
 	} else {
 		rc = -EOPNOTSUPP;
 		fprintf(stderr, "%s: unsupported ahead type %d\n",
