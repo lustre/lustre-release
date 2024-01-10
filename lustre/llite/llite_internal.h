@@ -1638,7 +1638,7 @@ static inline struct lu_fid *ll_inode2fid(struct inode *inode)
         return fid;
 }
 
-static inline bool ll_dir_striped(struct inode *inode)
+static inline bool ll_dir_striped_locked(struct inode *inode)
 {
 	bool rc;
 	LASSERT(inode);
@@ -1646,9 +1646,21 @@ static inline bool ll_dir_striped(struct inode *inode)
 	if (!S_ISDIR(inode->i_mode))
 		return false;
 
-	down_read(&ll_i2info(inode)->lli_lsm_sem);
 	rc = !!(ll_i2info(inode)->lli_lsm_obj &&
 		lmv_dir_striped(ll_i2info(inode)->lli_lsm_obj));
+
+	return rc;
+}
+
+static inline bool ll_dir_striped(struct inode *inode)
+{
+	bool rc;
+
+	if (!S_ISDIR(inode->i_mode))
+		return false;
+
+	down_read(&ll_i2info(inode)->lli_lsm_sem);
+	rc = ll_dir_striped_locked(inode);
 	up_read(&ll_i2info(inode)->lli_lsm_sem);
 
 	return rc;

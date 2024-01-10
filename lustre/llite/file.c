@@ -5468,6 +5468,10 @@ static int ll_merge_md_attr(struct inode *inode)
 		RETURN(0);
 
 	down_read(&lli->lli_lsm_sem);
+	if (!ll_dir_striped_locked(inode)) {
+		up_read(&lli->lli_lsm_sem);
+		RETURN(0);
+	}
 	LASSERT(lli->lli_lsm_obj != NULL);
 
 	lsm_obj = lmv_stripe_object_get(lli->lli_lsm_obj);
