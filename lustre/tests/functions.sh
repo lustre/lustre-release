@@ -295,10 +295,11 @@ setstripe_getstripe () {
 	is_lustre $file || return 0
 
 	if [ -n "$params" ]; then
+		echo "setstripe option: $params"
 		$LFS setstripe $params $file ||
 			error "setstripe $params failed"
 	fi
-	$LFS getstripe $file ||
+	$LFS getstripe -d $file ||
 		error "getstripe $file failed"
 }
 

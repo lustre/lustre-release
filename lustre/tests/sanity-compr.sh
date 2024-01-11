@@ -29,9 +29,11 @@ fi
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 save_layout_restore_at_exit $MOUNT
+# allow COMPR_EXTRA_LAYOUT for backward compatibility
+compr_STRIPEPARAMS=${compr_STRIPEPARAMS:-$COMPR_EXTRA_LAYOUT}
+compr_STRIPEPARAMS=${compr_STRIPEPARAMS:-${fs_STRIPEPARAMS:-"-E 1M -c1 -E eof"}}
 # Set file system with different layout
-COMPR_EXTRA_LAYOUT=${COMPR_EXTRA_LAYOUT:-"-E EOF -c 1"}
-$LFS setstripe $COMPR_EXTRA_LAYOUT $MOUNT
+setstripe_getstripe $MOUNT $compr_STRIPEPARAMS
 
 test_sanity()
 {
