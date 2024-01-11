@@ -1740,7 +1740,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_FULL) {
-		ptlrpc_req_finished_with_imp_lock(req);
+		ptlrpc_req_put_with_imp_lock(req);
 		GOTO(out, rc);
 	}
 	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
@@ -1875,7 +1875,7 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_FULL || !ptlrpc_can_idle(imp)) {
-		ptlrpc_req_finished_with_imp_lock(req);
+		ptlrpc_req_put_with_imp_lock(req);
 		spin_unlock(&imp->imp_lock);
 		RETURN(0);
 	}

@@ -2707,17 +2707,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 	EXIT;
 }
 
-static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
-/**
- * Drop one request reference. Must be called with import imp_lock held.
- * When reference count drops to zero, request is freed.
- */
-void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
-{
-	assert_spin_locked(&request->rq_import->imp_lock);
-	(void)__ptlrpc_req_finished(request, 1);
-}
-
 /**
  * Helper function
  * Drops one reference count for request \a request.
@@ -2727,7 +2716,7 @@ void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
  * \retval 1	the request is freed
  * \retval 0	some others still hold references on the request
  */
-static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
+static int __ptlrpc_req_put(struct ptlrpc_request *request, int locked)
 {
 	int count;
 
@@ -2776,13 +2765,24 @@ static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
 }
 
 /**
+ * Drop one request reference. Must be called with import imp_lock held.
+ * When reference count drops to zero, request is freed.
+ */
+void ptlrpc_req_put_with_imp_lock(struct ptlrpc_request *request)
+{
+	assert_spin_locked(&request->rq_import->imp_lock);
+	(void)__ptlrpc_req_put(request, 1);
+}
+
+/**
  * Drops one reference count for a request.
  */
-void ptlrpc_req_finished(struct ptlrpc_request *request)
+void ptlrpc_req_put(struct ptlrpc_request *request)
 {
-	__ptlrpc_req_finished(request, 0);
+	__ptlrpc_req_put(request, 0);
 }
-EXPORT_SYMBOL(ptlrpc_req_finished);
+EXPORT_SYMBOL(ptlrpc_req_put);
+
 
 /**
  * Returns xid of a \a request
@@ -2888,7 +2888,7 @@ static void ptlrpc_free_request(struct ptlrpc_request *req)
 		req->rq_commit_cb(req);
 	list_del_init(&req->rq_replay_list);
 
-	__ptlrpc_req_finished(req, 1);
+	__ptlrpc_req_put(req, 1);
 }
 
 /**
