@@ -364,7 +364,7 @@ static int check_cmd(const command_t *cmd_list, const char *cmd,
 
 	if (argc < min_args) {
 		print_help(cmd_list, cmd, sub_cmd);
-		rc = -1;
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	} else if (argc > 2) {
 		return 0;

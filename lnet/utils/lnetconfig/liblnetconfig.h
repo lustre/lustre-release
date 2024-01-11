@@ -41,17 +41,17 @@
 #include <linux/lnet/lnet-dlc.h>
 #include <linux/lnet/nidstr.h>
 
-#define LUSTRE_CFG_RC_NO_ERR			 0
-#define LUSTRE_CFG_RC_BAD_PARAM			-1
-#define LUSTRE_CFG_RC_MISSING_PARAM		-2
-#define LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM	-3
-#define LUSTRE_CFG_RC_OUT_OF_MEM		-4
-#define LUSTRE_CFG_RC_GENERIC_ERR		-5
-#define LUSTRE_CFG_RC_NO_MATCH			-6
-#define LUSTRE_CFG_RC_MATCH			-7
-#define LUSTRE_CFG_RC_SKIP			-8
-#define LUSTRE_CFG_RC_LAST_ELEM			-9
-#define LUSTRE_CFG_RC_MARSHAL_FAIL		-10
+#define LUSTRE_CFG_RC_NO_ERR			 0 /* success */
+#define LUSTRE_CFG_RC_BAD_PARAM			-EINVAL /* 22 */
+#define LUSTRE_CFG_RC_MISSING_PARAM		-EFAULT /* 14 */
+#define LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM	-ERANGE /* 34 */
+#define LUSTRE_CFG_RC_OUT_OF_MEM		-ENOMEM /* 12 */
+#define LUSTRE_CFG_RC_GENERIC_ERR		-ENODATA /* 61 */
+#define LUSTRE_CFG_RC_NO_MATCH			-ENOMSG /* 42 */
+#define LUSTRE_CFG_RC_MATCH			-EXFULL /* 54 */
+#define LUSTRE_CFG_RC_SKIP			-EBADSLT /* 57 */
+#define LUSTRE_CFG_RC_LAST_ELEM			-ECHRNG /* 48 */
+#define LUSTRE_CFG_RC_MARSHAL_FAIL		-ENOSTR /* 60 */
 
 #define CONFIG_CMD		"configure"
 #define UNCONFIG_CMD		"unconfigure"
