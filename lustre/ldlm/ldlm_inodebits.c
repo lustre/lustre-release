@@ -584,14 +584,14 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 	if (ldlm_is_failed(lock))
 		GOTO(full_cancel, rc = -EINVAL);
 
-	/* Finally clear these bits in lock ibits */
-	ldlm_inodebits_drop(lock, drop_bits);
-
 	/* Being locked again check if lock was canceled, it is important
 	 * to do and don't drop cbpending below
 	 */
 	if (ldlm_is_canceling(lock))
 		GOTO(full_cancel, rc = -EINVAL);
+
+	/* Finally clear these bits in lock ibits */
+	ldlm_inodebits_drop(lock, drop_bits);
 
 	/* also check again if more bits to be cancelled appeared */
 	if (drop_bits != lock->l_policy_data.l_inodebits.cancel_bits)
