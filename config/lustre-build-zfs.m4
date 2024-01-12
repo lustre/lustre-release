@@ -782,11 +782,11 @@ your distribution.
 			AC_DEFINE(HAVE_ZFS_REFCOUNT_HEADER, 1,
 				[Have zfs_refcount.h])
 		])
-		dnl #
-		dnl # ZFS 2.2 nvpair now returns and expects constant args
-		dnl #
 		old_EXTRA_KCFLAGS=$EXTRA_KCFLAGS
 		EXTRA_KCFLAGS+=" -Werror"
+		dnl #
+		dnl # ZFS 2.2.0 nvpair now returns and expects constant args
+		dnl #
 		LB_CHECK_COMPILE([if ZFS nvlist interfaces require const],
 		zfs_nvpair_const, [
 			#include <sys/nvpair.h>
@@ -799,6 +799,21 @@ your distribution.
 		], [
 			AC_DEFINE(HAVE_ZFS_NVLIST_CONST_INTERFACES, 1,
 			    [ZFS nvlist interfaces require const])
+		])
+		dnl #
+		dnl # ZFS 2.2.1 arc_prune_func_t now uses uint64_t for the
+		dnl # first parameter
+		dnl #
+		LB_CHECK_COMPILE([if ZFS arc_prune_func_t uses uint64_t],
+		zfs_arc_prune_func_uint64, [
+			#include <sys/arc.h>
+		], [
+			void arc_prune_func(uint64_t bytes, void *priv) {}
+			arc_prune_t *arc_p __attribute__ ((unused)) =
+				arc_add_prune_callback(arc_prune_func, NULL);
+		], [
+			AC_DEFINE(HAVE_ZFS_ARC_PRUNE_FUNC_UINT64, 1,
+				[ZFS arc_prune_func_t uses uint64_t])
 		])
 		EXTRA_KCFLAGS=$old_EXTRA_KCFLAGS
 	])
