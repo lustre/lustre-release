@@ -89,7 +89,11 @@ static struct lu_kmem_descr osd_caches[] = {
 	}
 };
 
+#ifdef HAVE_ZFS_ARC_PRUNE_FUNC_UINT64
+static void arc_prune_func(uint64_t bytes, void *private)
+#else
 static void arc_prune_func(int64_t bytes, void *private)
+#endif
 {
 	struct osd_device *od = private;
 	struct lu_site    *site = &od->od_site;
