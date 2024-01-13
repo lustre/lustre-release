@@ -21163,13 +21163,17 @@ test_217() { # bug 22430
 		# if hostname matches any NID, use hostname for better testing
 		if [[ -z "$nid" || "$nid" =~ "$node_ip" ]]; then
 			echo "lctl ping node $node@$NETTYPE"
-			lctl ping $node@$NETTYPE
+			lctl ping $node@$NETTYPE ||
+				error "ping $node@$NETTYPE failed rc=$?"
 		else # otherwise, at least test 'lctl ping' is working
 			echo "lctl ping nid $(h2nettype $nid)"
-			lctl ping $(h2nettype $nid)
+			lctl ping $(h2nettype $nid) ||
+				error "ping $(h2nettype $nid) failed rc=$?"
 			echo "skipping $node (no hyphen detected)"
 		fi
 	done
+
+	return 0
 }
 run_test 217 "check lctl ping for hostnames with embedded hyphen ('-')"
 

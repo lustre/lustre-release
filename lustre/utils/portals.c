@@ -227,12 +227,12 @@ lnet_parse_time(time_t *t, char *str)
 }
 
 int
-lnet_parse_nid(char *nid_str, struct lnet_process_id *id_ptr)
+lnet_parse_nid(char *nid_str, struct lnet_processid *id_ptr)
 {
 	id_ptr->pid = LNET_PID_ANY;
-	id_ptr->nid = libcfs_str2nid(nid_str);
-	if (id_ptr->nid == LNET_NID_ANY) {
-		fprintf(stderr, "Can't parse nid \"%s\"\n", nid_str);
+	if (libcfs_strnid(&id_ptr->nid, nid_str) < 0 ||
+	    LNET_NID_IS_ANY(&id_ptr->nid)) {
+		fprintf(stderr, "Invalid NID argument \"%s\"\n", nid_str);
 		return -1;
 	}
 
@@ -1273,7 +1273,7 @@ int jt_ptl_ping(int argc, char **argv)
 	bool done = false, print = true;
 	int rc;
 	int timeout;
-	struct lnet_process_id id;
+	struct lnet_processid id;
 	yaml_emitter_t request;
 	yaml_parser_t reply;
 	yaml_event_t event;
@@ -1304,11 +1304,10 @@ int jt_ptl_ping(int argc, char **argv)
 			if (rc != 0)
 				return -EINVAL;
 		} else {
-			id.nid = libcfs_str2nid(sep + 1);
-
-			if (id.nid == LNET_NID_ANY) {
+			if (libcfs_strnid(&id.nid, (sep + 1)) < 0 ||
+			    LNET_NID_IS_ANY(&id.nid)) {
 				fprintf(stderr,
-					"Can't parse process id \"%s\"\n",
+					"Invalid PID argument \"%s\"\n",
 					argv[1]);
 				return -EINVAL;
 			}
@@ -1419,8 +1418,8 @@ int jt_ptl_ping(int argc, char **argv)
 	/* convert NID to string, in case libcfs_str2nid() did name lookup */
 	yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)libcfs_nid2str(id.nid),
-				     strlen(libcfs_nid2str(id.nid)), 1, 0,
+				     (yaml_char_t *)libcfs_nidstr(&id.nid),
+				     strlen(libcfs_nidstr(&id.nid)), 1, 0,
 				     YAML_PLAIN_SCALAR_STYLE);
 	rc = yaml_emitter_emit(&request, &event);
 	if (rc == 0)
@@ -1527,7 +1526,7 @@ old_api:
 
 	LIBCFS_IOC_INIT_V2(ping, ping_hdr);
 	ping.ping_hdr.ioc_len = sizeof(ping);
-	ping.ping_id = id;
+	ping.ping_id = lnet_pid_to_pid4(&id);
 	ping.ping_src = LNET_NID_ANY;
 	ping.op_param = timeout;
 	ping.ping_count = maxids;
