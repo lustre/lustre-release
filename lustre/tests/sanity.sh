@@ -21046,9 +21046,11 @@ test_215() { # for bugs 18102, 21079, 21517
 	local N='(0|[1-9][0-9]*)'       # non-negative numeric
 	local P='[1-9][0-9]*'           # positive numeric
 	local I='(0|-?[1-9][0-9]*|NA)'  # any numeric (0 | >0 | <0) or NA if no value
-	local NET='[a-z][a-z0-9]*'      # LNET net like o2ib2
-	local ADDR='[0-9.]+'            # LNET addr like 10.0.0.1
-	local NID="$ADDR@$NET"          # LNET nid like 10.0.0.1@o2ib2
+	local NET='[a-z][a-z0-9]*'      # LNet net like o2ib2
+	local ADDR='[0-9.]+'            # LNet addr like 10.0.0.1
+	local ADDR6='([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}' # IPv6 LNet addr
+	local NID="$ADDR@$NET"          # LNet nid like 10.0.0.1@o2ib2
+	local NID6="$ADDR6@$NET"        # LNet nid like 2601:8c1:c180::cbdd@tcp
 
 	local L1 # regexp for 1st line
 	local L2 # regexp for 2nd line (optional)
@@ -21068,7 +21070,7 @@ test_215() { # for bugs 18102, 21079, 21517
 	# router is a string like 192.168.1.1@tcp2
 	L1="^Routing (disabled|enabled)$"
 	L2="^net +hops +priority +state +router$"
-	BR="^$NET +$N +(0|1) +(up|down) +$NID$"
+	BR="^$NET +$N +(0|1) +(up|down) +($NID|$NID6)$"
 	create_lnet_proc_files "routes"
 	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"
 	remove_lnet_proc_files "routes"
@@ -21079,7 +21081,7 @@ test_215() { # for bugs 18102, 21079, 21517
 	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
 	# numeric (0 or >0 or <0), router is a string like 192.168.1.1@tcp2
 	L1="^ref +rtr_ref +alive +router$"
-	BR="^$P +$P +(up|down) +$NID$"
+	BR="^$P +$P +(up|down) +($NID|$NID6)$"
 	create_lnet_proc_files "routers"
 	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
 	remove_lnet_proc_files "routers"
@@ -21090,7 +21092,7 @@ test_215() { # for bugs 18102, 21079, 21517
 	# state is up/down/NA, max >= 0. last, rtr, min, tx, min are
 	# numeric (0 or >0 or <0), queue >= 0.
 	L1="^nid +refs +state +last +max +rtr +min +tx +min +queue$"
-	BR="^$NID +$P +(up|down|NA) +$I +$N +$I +$I +$I +$I +$N$"
+	BR="^($NID|$NID6) +$P +(up|down|NA) +$I +$N +$I +$I +$I +$I +$N$"
 	create_lnet_proc_files "peers"
 	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"
 	remove_lnet_proc_files "peers"
@@ -21110,7 +21112,7 @@ test_215() { # for bugs 18102, 21079, 21517
 	# alive is numeric (0 or >0 or <0), refs >= 0, peer >= 0,
 	# rtr >= 0, max >=0, tx and min are numeric (0 or >0 or <0).
 	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
-	BR="^$NID +(up|down) +$I +$N +$N +$N +$N +$I +$I$"
+	BR="^($NID|$NID6) +(up|down) +$I +$N +$N +$N +$N +$I +$I$"
 	create_lnet_proc_files "nis"
 	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"
 	remove_lnet_proc_files "nis"
