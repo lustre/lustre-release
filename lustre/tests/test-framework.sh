@@ -11667,7 +11667,7 @@ wait_nm_sync() {
 				[ $node_ip == $mgs_ip ] && continue
 			fi
 
-			out2=$(do_node $node_ip $LCTL get_param $opt \
+			out2=$(do_node $node $LCTL get_param $opt \
 			       nodemap.$proc_param 2>/dev/null)
 			echo "On $node ${node_ip}, ${proc_param} = $out2"
 			[ "$out1" != "$out2" ] && is_sync=false && break
