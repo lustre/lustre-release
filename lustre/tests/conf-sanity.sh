@@ -24,8 +24,8 @@ if $SHARED_KEY; then
 fi
 
 if ! combined_mgs_mds; then
-	# bug number for skipped test: LU-11991		LU-11990
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e	66"
+	# bug number for skipped test: LU-11991
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e"
 	# bug number for skipped test: LU-9897	LU-12032
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  84	123F"
 fi
