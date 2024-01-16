@@ -198,6 +198,151 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(qos_threshold_rr);
 
 #ifdef CONFIG_PROC_FS
+/* directories with exclude prefixes will be created on the same MDT as its
+ * parent directory, the prefixes are set with the rule as shell environment
+ * PATH: ':' is used as separator for prefixes. And for convenience, '+/-' is
+ * used to add/remove prefixes.
+ */
+static int qos_exclude_prefixes_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *obd = m->private;
+	struct lmv_obd *lmv = &obd->u.lmv;
+	struct qos_exclude_prefix *prefix;
+
+restart:
+	spin_lock(&lmv->lmv_lock);
+	list_for_each_entry(prefix, &lmv->lmv_qos_exclude_list, qep_list) {
+		seq_printf(m, "%s\n", prefix->qep_name);
+		if (seq_has_overflowed(m)) {
+			spin_unlock(&lmv->lmv_lock);
+			kvfree(m->buf);
+			m->count = 0;
+			m->buf = kvmalloc(m->size <<= 1, GFP_KERNEL_ACCOUNT);
+			if (!m->buf)
+				return -ENOMEM;
+			goto restart;
+		}
+	}
+	spin_unlock(&lmv->lmv_lock);
+
+	return 0;
+}
+
+static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
+					      const char __user *buffer,
+					      size_t count, loff_t *off)
+{
+	struct obd_device *obd;
+	struct lmv_obd *lmv;
+	char *buf;
+	char op = 0;
+	char *p;
+	char *name;
+	char namebuf[NAME_MAX + 1];
+	struct qos_exclude_prefix *prefix;
+	struct qos_exclude_prefix *tmp;
+	int len;
+	bool pruned = false;
+	int rc;
+
+	/* one extra char to ensure buf ends with '\0' */
+	OBD_ALLOC(buf, count + 1);
+	if (!buf)
+		return -ENOMEM;
+	if (copy_from_user(buf, buffer, count)) {
+		OBD_FREE(buf, count + 1);
+		return -EFAULT;
+	}
+
+	obd = ((struct seq_file *)file->private_data)->private;
+	lmv = &obd->u.lmv;
+	p = buf;
+	while (p) {
+		while (*p == ':')
+			p++;
+		if (*p == '\0')
+			break;
+		if (*p == '+' || *p == '-')
+			op = *p++;
+
+		name = p;
+		p = strchr(name, ':');
+		if (p)
+			len = p - name;
+		else
+			len = strlen(name);
+		if (!len)
+			break;
+		if (len > NAME_MAX) {
+			CERROR("%s: %s length exceeds NAME_MAX\n",
+			       obd->obd_name, name);
+			OBD_FREE(buf, count + 1);
+			return -ERANGE;
+		}
+
+		switch (op) {
+		default:
+			if (!pruned) {
+				spin_lock(&lmv->lmv_lock);
+				list_for_each_entry_safe(prefix, tmp,
+						&lmv->lmv_qos_exclude_list,
+						qep_list) {
+					list_del(&prefix->qep_list);
+					rhashtable_remove_fast(
+						&lmv->lmv_qos_exclude_hash,
+						&prefix->qep_hash,
+						qos_exclude_hash_params);
+					kfree(prefix);
+				}
+				spin_unlock(&lmv->lmv_lock);
+				pruned = true;
+			}
+			fallthrough;
+		case '+':
+			prefix = kmalloc(sizeof(*prefix), __GFP_ZERO);
+			if (!prefix) {
+				OBD_FREE(buf, count + 1);
+				return -ENOMEM;
+			}
+			strncpy(prefix->qep_name, name, len);
+			rc = rhashtable_lookup_insert_fast(
+						&lmv->lmv_qos_exclude_hash,
+						&prefix->qep_hash,
+						qos_exclude_hash_params);
+			if (!rc) {
+				spin_lock(&lmv->lmv_lock);
+				list_add_tail(&prefix->qep_list,
+					      &lmv->lmv_qos_exclude_list);
+				spin_unlock(&lmv->lmv_lock);
+			} else {
+				kfree(prefix);
+			}
+			break;
+		case '-':
+			strncpy(namebuf, name, len);
+			namebuf[len] = '\0';
+			prefix = rhashtable_lookup(&lmv->lmv_qos_exclude_hash,
+						   namebuf,
+						   qos_exclude_hash_params);
+			if (prefix) {
+				spin_lock(&lmv->lmv_lock);
+				list_del(&prefix->qep_list);
+				spin_unlock(&lmv->lmv_lock);
+				rhashtable_remove_fast(
+						&lmv->lmv_qos_exclude_hash,
+						&prefix->qep_hash,
+						qos_exclude_hash_params);
+				kfree(prefix);
+			}
+			break;
+		}
+	}
+
+	OBD_FREE(buf, count + 1);
+	return count;
+}
+LPROC_SEQ_FOPS(qos_exclude_prefixes);
+
 static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
 	struct obd_device *obd = p->private;
@@ -278,6 +423,14 @@ static const struct proc_ops lmv_proc_target_fops = {
 	.proc_lseek	= seq_lseek,
 	.proc_release	= seq_release,
 };
+
+struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
+	{ .name =	"qos_exclude_prefixes",
+	  .fops =	&qos_exclude_prefixes_fops },
+	{ .name =	"target_obd",
+	  .fops =	&lmv_proc_target_fops },
+	{ NULL }
+};
 #endif /* CONFIG_PROC_FS */
 
 static struct attribute *lmv_attrs[] = {
@@ -297,6 +450,9 @@ int lmv_tunables_init(struct obd_device *obd)
 	int rc;
 
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(lmv);
+#ifdef CONFIG_PROC_FS
+	obd->obd_vars = lprocfs_lmv_obd_vars;
+#endif
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc)
 		goto out_failed;
@@ -305,16 +461,6 @@ int lmv_tunables_init(struct obd_device *obd)
 	if (rc) {
 		lprocfs_obd_cleanup(obd);
 		goto out_failed;
-	}
-
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
-				0444, &lmv_proc_target_fops, obd);
-	if (rc) {
-		lprocfs_free_md_stats(obd);
-		lprocfs_obd_cleanup(obd);
-		CWARN("%s: error adding LMV target_obd file: rc = %d\n",
-		      obd->obd_name, rc);
-		rc = 0;
 	}
 #endif /* CONFIG_PROC_FS */
 out_failed:

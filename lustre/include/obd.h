@@ -424,6 +424,12 @@ struct lov_obd {
 
 #define lmv_tgt_desc lu_tgt_desc
 
+struct qos_exclude_prefix {
+	struct list_head	qep_list;
+	struct rhash_head	qep_hash;
+	char			qep_name[NAME_MAX + 1];
+};
+
 struct lmv_obd {
 	struct lu_client_fld	lmv_fld;
 	spinlock_t		lmv_lock;
@@ -440,6 +446,8 @@ struct lmv_obd {
 	void			*lmv_cache;
 
 	__u32			lmv_qos_rr_index; /* next round-robin MDT idx */
+	struct rhashtable	lmv_qos_exclude_hash;
+	struct list_head	lmv_qos_exclude_list;
 };
 
 #define lmv_mdt_count	lmv_mdt_descs.ltd_lmv_desc.ld_tgt_count

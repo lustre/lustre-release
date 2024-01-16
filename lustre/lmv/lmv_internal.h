@@ -213,6 +213,9 @@ struct lmv_tgt_desc *lmv_locate_tgt(struct lmv_obd *lmv,
 				    struct md_op_data *op_data);
 int lmv_old_layout_lookup(struct lmv_obd *lmv, struct md_op_data *op_data);
 
+extern const struct rhashtable_params qos_exclude_hash_params;
+void qos_exclude_prefix_free(void *vprefix, void *data);
+
 /* lproc_lmv.c */
 int lmv_tunables_init(struct obd_device *obd);
 #endif

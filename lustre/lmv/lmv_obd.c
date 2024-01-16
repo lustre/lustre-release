@@ -1201,11 +1201,46 @@ int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
+static u32 qos_exclude_hashfh(const void *data, u32 len, u32 seed)
+{
+	const char *name = data;
+
+	return hashlen_hash(cfs_hashlen_string((void *)(unsigned long)seed,
+					       name));
+}
+
+static int qos_exclude_cmpfn(struct rhashtable_compare_arg *arg,
+			     const void *obj)
+{
+	const struct qos_exclude_prefix *prefix = obj;
+	const char *name = arg->key;
+
+	return strcmp(name, prefix->qep_name);
+}
+
+const struct rhashtable_params qos_exclude_hash_params = {
+	.key_len	= 1, /* actually variable */
+	.key_offset	= offsetof(struct qos_exclude_prefix, qep_name),
+	.head_offset	= offsetof(struct qos_exclude_prefix, qep_hash),
+	.hashfn		= qos_exclude_hashfh,
+	.obj_cmpfn	= qos_exclude_cmpfn,
+	.automatic_shrinking = true,
+};
+
+void qos_exclude_prefix_free(void *vprefix, void *data)
+{
+	struct qos_exclude_prefix *prefix = vprefix;
+
+	list_del(&prefix->qep_list);
+	kfree(prefix);
+}
+
 static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct lmv_obd *lmv = &obd->u.lmv;
-	struct lmv_desc	*desc;
+	struct lmv_desc *desc;
 	struct lnet_processid lnet_id;
+	struct qos_exclude_prefix *prefix;
 	int i = 0;
 	int rc;
 
@@ -1233,6 +1268,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	lmv->max_easize = 0;
 
 	spin_lock_init(&lmv->lmv_lock);
+	INIT_LIST_HEAD(&lmv->lmv_qos_exclude_list);
 
 	/*
 	 * initialize rr_index to lower 32bit of netid, so that client
@@ -1260,7 +1296,32 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		CWARN("%s: error initialize target table: rc = %d\n",
 		      obd->obd_name, rc);
 
-	RETURN(rc);
+	rc = rhashtable_init(&lmv->lmv_qos_exclude_hash,
+			     &qos_exclude_hash_params);
+	if (rc) {
+		CERROR("%s: qos exclude hash initalize failed: %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	prefix = kmalloc(sizeof(*prefix), __GFP_ZERO);
+	if (!prefix)
+		GOTO(out, rc = -ENOMEM);
+	/* Apache Spark creates a _temporary directory for staging files */
+	strcpy(prefix->qep_name, "_temporary");
+	rc = rhashtable_insert_fast(&lmv->lmv_qos_exclude_hash,
+				    &prefix->qep_hash, qos_exclude_hash_params);
+	if (rc) {
+		kfree(prefix);
+		GOTO(out, rc);
+	}
+
+	list_add_tail(&prefix->qep_list, &lmv->lmv_qos_exclude_list);
+	GOTO(out, rc);
+out:
+	if (rc)
+		rhashtable_destroy(&lmv->lmv_qos_exclude_hash);
+	return rc;
 }
 
 static int lmv_cleanup(struct obd_device *obd)
@@ -1271,6 +1332,8 @@ static int lmv_cleanup(struct obd_device *obd)
 
 	ENTRY;
 
+	rhashtable_free_and_destroy(&lmv->lmv_qos_exclude_hash,
+				    qos_exclude_prefix_free, NULL);
 	fld_client_fini(&lmv->lmv_fld);
 	fld_client_debugfs_fini(&lmv->lmv_fld);
 
@@ -2046,6 +2109,37 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	return tgt;
 }
 
+static bool lmv_qos_exclude(struct lmv_obd *lmv, struct md_op_data *op_data)
+{
+	const char *name = op_data->op_name;
+	size_t namelen = op_data->op_namelen;
+	char buf[NAME_MAX + 1];
+	struct qos_exclude_prefix *prefix;
+	char *p;
+
+	/* skip encrypted files */
+	if (op_data->op_file_encctx)
+		return false;
+
+	/* name length may not be validated yet */
+	if (namelen > NAME_MAX)
+		return false;
+
+	p = strrchr(name, '.');
+	if (p) {
+		namelen = p - name;
+		if (!namelen)
+			return false;
+		strncpy(buf, name, namelen);
+		buf[namelen] = '\0';
+		name = buf;
+	}
+
+	prefix = rhashtable_lookup_fast(&lmv->lmv_qos_exclude_hash, name,
+					qos_exclude_hash_params);
+	return prefix != NULL;
+}
+
 static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		      const void *data, size_t datalen, umode_t mode, uid_t uid,
 		      gid_t gid, kernel_cap_t cap_effective, __u64 rdev,
@@ -2112,7 +2206,8 @@ static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 			RETURN(-ENODEV);
 		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
 			GOTO(new_tgt, -EAGAIN);
-	} else if (lmv_op_default_qos_mkdir(op_data) ||
+	} else if ((lmv_op_default_qos_mkdir(op_data) &&
+		    !lmv_qos_exclude(lmv, op_data)) ||
 		   tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) {
 new_tgt:
 		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);

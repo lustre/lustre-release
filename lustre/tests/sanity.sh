@@ -29447,6 +29447,43 @@ test_413j()
 }
 run_test 413j "set default LMV by setxattr"
 
+test_413k() {
+	(( $MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "Need server version at least 2.15.60"
+
+	local index1
+	local index2
+	local old=$($LCTL get_param -n lmv.*.qos_exclude_prefixes)
+	local count=$($LCTL get_param -n lmv.*.qos_exclude_prefixes | wc -l)
+	local prefixes="abc:123:foo bar"
+
+	# add prefixes
+	stack_trap "$LCTL set_param lmv.*.qos_exclude_prefixes=\"$old\""
+	$LCTL set_param lmv.*.qos_exclude_prefixes="+$prefixes"
+
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	index1=$($LFS getstripe -m $DIR/$tdir)
+	for dname in _temporary _temporary.XXXXXX abc 123 "foo bar"; do
+		mkdir "$DIR/$tdir/$dname" || error "mkdir $dname failed"
+		index2=$($LFS getstripe -m "$DIR/$tdir/$dname")
+		((index1 == index2)) ||
+			error "$tdir on MDT$index1, $dname on MDT$index2"
+	done
+
+	# remove prefixes
+	$LCTL set_param lmv.*.qos_exclude_prefixes="-$prefixes"
+
+	# total prefixes length > PAGE_SIZE can be printed correctly
+	for c in {a..z}; do
+		prefixes=$(str_repeat $c 255)
+		$LCTL set_param lmv.*.qos_exclude_prefixes="+$prefixes" >/dev/null
+	done
+	local count2=$($LCTL get_param -n lmv.*.qos_exclude_prefixes | wc -l)
+	((count2 == count + 26)) ||
+		error "prefixes count $count2 != $((count + 26))"
+}
+run_test 413k "QoS mkdir exclude prefixes"
+
 test_413z() {
 	local pids=""
 	local subdir
