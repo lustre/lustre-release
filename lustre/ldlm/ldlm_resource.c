@@ -980,26 +980,26 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	atomic_set(&ns->ns_bref, 0);
 	init_waitqueue_head(&ns->ns_waitq);
 
-	ns->ns_max_nolock_size		= NS_DEFAULT_MAX_NOLOCK_BYTES;
-	ns->ns_contention_time		= NS_DEFAULT_CONTENTION_SECONDS;
-	ns->ns_contended_locks		= NS_DEFAULT_CONTENDED_LOCKS;
-
-	ns->ns_max_parallel_ast		= LDLM_DEFAULT_PARALLEL_AST_LIMIT;
-	ns->ns_nr_unused		= 0;
-	ns->ns_max_unused		= LDLM_DEFAULT_LRU_SIZE;
-	ns->ns_cancel_batch		= LDLM_DEFAULT_LRU_SHRINK_BATCH;
-	ns->ns_recalc_pct		= LDLM_DEFAULT_SLV_RECALC_PCT;
-	ns->ns_max_age			= ktime_set(LDLM_DEFAULT_MAX_ALIVE, 0);
-	ns->ns_ctime_age_limit		= LDLM_CTIME_AGE_LIMIT;
-	ns->ns_dirty_age_limit		= ktime_set(LDLM_DIRTY_AGE_LIMIT, 0);
-	ns->ns_timeouts			= 0;
-	ns->ns_orig_connect_flags	= 0;
-	ns->ns_connect_flags		= 0;
-	ns->ns_stopping			= 0;
-	ns->ns_dump_stack_on_error	= 0;
-	ns->ns_reclaim_start		= 0;
-	ns->ns_last_pos			= &ns->ns_unused_list;
-	ns->ns_flags			= 0;
+	ns->ns_connect_flags	    = 0;
+	ns->ns_orig_connect_flags   = 0;
+	ns->ns_nr_unused	    = 0;
+	ns->ns_last_pos		    = &ns->ns_unused_list;
+	ns->ns_max_unused	    = LDLM_DEFAULT_LRU_SIZE;
+	ns->ns_cancel_batch	    = LDLM_DEFAULT_LRU_SHRINK_BATCH;
+	ns->ns_recalc_pct	    = LDLM_DEFAULT_SLV_RECALC_PCT;
+	ns->ns_max_age		    = ktime_set(LDLM_DEFAULT_LRU_MAX_AGE, 0);
+	ns->ns_timeouts		    = 0;
+	ns->ns_ctime_age_limit	    = LDLM_CTIME_AGE_LIMIT;
+	ns->ns_dirty_age_limit	    = ktime_set(LDLM_DIRTY_AGE_LIMIT, 0);
+	ns->ns_contended_locks	    = NS_DEFAULT_CONTENDED_LOCKS;
+	ns->ns_contention_time	    = NS_DEFAULT_CONTENTION_SECONDS;
+	ns->ns_max_nolock_size	    = NS_DEFAULT_MAX_NOLOCK_BYTES;
+	ns->ns_max_parallel_ast	    = LDLM_DEFAULT_PARALLEL_AST_LIMIT;
+	ns->ns_stopping		    = 0;
+	ns->ns_rpc_recalc	    = 0;
+	ns->ns_dump_stack_on_error  = 0;
+	ns->ns_reclaim_start	    = 0;
+	ns->ns_flags		    = 0;
 
 	rc = ldlm_namespace_sysfs_register(ns);
 	if (rc) {

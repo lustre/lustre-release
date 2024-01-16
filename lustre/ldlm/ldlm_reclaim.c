@@ -212,7 +212,7 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 
 #define LDLM_RECLAIM_BATCH	512
 #define LDLM_RECLAIM_AGE_MIN	(300 * NSEC_PER_SEC)
-#define LDLM_RECLAIM_AGE_MAX	(LDLM_DEFAULT_MAX_ALIVE * NSEC_PER_SEC * 3 / 4)
+#define LDLM_RECLAIM_AGE_MAX	(LDLM_DEFAULT_LRU_MAX_AGE * NSEC_PER_SEC * 3/4)
 
 static inline s64 ldlm_reclaim_age(void)
 {
