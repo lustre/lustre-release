@@ -2563,8 +2563,7 @@ nid                    refs   peer    max   tx    min
       holding locks for an excessive time, which reduces memory usage on both
       the client and server, as well as reducing work during server recovery.
     </para>
-    <para>The <literal>lru_max_age</literal> is set and printed in milliseconds,
-      and by default is 3900000 ms (65 minutes).</para>
+    <para>The <literal>lru_max_age</literal> is printed in milliseconds.</para>
     <para condition='l2B'>Since Lustre 2.11, in addition to setting the
       maximum lock age in milliseconds, it can also be set using a suffix of
       <literal>s</literal> or <literal>ms</literal> to indicate seconds or
