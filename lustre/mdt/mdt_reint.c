@@ -2609,6 +2609,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	bool reverse = false, discard = false;
 	ktime_t kstart = ktime_get();
 	enum mdt_stat_idx msi = 0;
+	bool remote;
+	bool bfl = false;
 	int rc;
 
 	ENTRY;
@@ -2632,6 +2634,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	if (rc)
 		GOTO(out_put_srcdir, rc);
 
+	remote = mdt_object_remote(msrcdir);
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
 	if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
@@ -2658,8 +2661,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	 * get rename lock, which will cause deadlock.
 	 */
 	if (!req_is_replay(req)) {
-		bool remote = mdt_object_remote(msrcdir);
-
 		/*
 		 * Normally rename RPC is handled on the MDT with the target
 		 * directory (if target exists, it's on the MDT with the
@@ -2671,24 +2672,21 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 		if (!mdt->mdt_enable_remote_rename && remote)
 			GOTO(out_put_tgtdir, rc = -EXDEV);
 
-		/* This might be further relaxed in the future for regular file
-		 * renames in different source and target parents. Start with
-		 * only same-directory renames for simplicity and because this
-		 * is by far the most the common use case.
-		 *
-		 * Striped directories should be considered "remote".
-		 */
-		if (msrcdir != mtgtdir || remote ||
+		if (remote ||
 		    (S_ISDIR(ma->ma_attr.la_mode) &&
-		     !mdt->mdt_enable_parallel_rename_dir) ||
+		     (msrcdir != mtgtdir ||
+		      !mdt->mdt_enable_parallel_rename_dir)) ||
 		    (!S_ISDIR(ma->ma_attr.la_mode) &&
-		     !mdt->mdt_enable_parallel_rename_file)) {
+		     (!mdt->mdt_enable_parallel_rename_file ||
+		      (msrcdir != mtgtdir &&
+		       !mdt->mdt_enable_parallel_rename_crossdir)))) {
 			rc = mdt_rename_lock(info, rename_lh);
 			if (rc != 0) {
 				CERROR("%s: cannot lock for rename: rc = %d\n",
 				       mdt_obd_name(mdt), rc);
 				GOTO(out_put_tgtdir, rc);
 			}
+			bfl = true;
 		} else {
 			if (S_ISDIR(ma->ma_attr.la_mode))
 				msi = LPROC_MDT_RENAME_PAR_DIR;
@@ -2696,12 +2694,15 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 				msi = LPROC_MDT_RENAME_PAR_FILE;
 
 			CDEBUG(D_INFO,
-			       "%s: samedir parallel rename "DFID"/"DNAME"\n",
-			       mdt_obd_name(mdt), PFID(rr->rr_fid1),
-			       PNAME(&rr->rr_name));
+			       "%s: %s %s parallel rename "DFID"/"DNAME"\n",
+			       mdt_obd_name(mdt),
+			       msrcdir == mtgtdir ? "samedir" : "crossdir",
+			       S_ISDIR(ma->ma_attr.la_mode) ? "dir" : "file",
+			       PFID(rr->rr_fid1), PNAME(&rr->rr_name));
 		}
 	}
 
+lock_parents:
 	rc = mdt_rename_determine_lock_order(info, msrcdir, mtgtdir);
 	if (rc < 0)
 		GOTO(out_unlock_rename, rc);
@@ -2765,6 +2766,26 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
 	if (mdt_object_remote(mold) && !mdt->mdt_enable_remote_rename)
 		GOTO(out_put_old, rc = -EXDEV);
+
+	/* we used msrcdir as a hint to take BFL, but it may be wrong */
+	if (unlikely(!bfl && !req_is_replay(req) &&
+		     !S_ISDIR(ma->ma_attr.la_mode) &&
+		     mdt_object_remote(mold))) {
+		LASSERT(!remote);
+		mdt_object_put(info->mti_env, mold);
+		mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
+		mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
+
+		rc = mdt_rename_lock(info, rename_lh);
+		if (rc != 0) {
+			CERROR("%s: cannot re-lock for rename: rc = %d\n",
+			       mdt_obd_name(mdt), rc);
+			GOTO(out_put_tgtdir, rc);
+		}
+		bfl = true;
+		msi = 0;
+		goto lock_parents;
+	}
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking.

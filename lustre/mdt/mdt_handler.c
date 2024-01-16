@@ -6208,6 +6208,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_dir_auto_split = 0;
 	m->mdt_enable_parallel_rename_dir = 1;
 	m->mdt_enable_parallel_rename_file = 1;
+	m->mdt_enable_parallel_rename_crossdir = 1;
 	m->mdt_enable_remote_dir = 1;
 	m->mdt_enable_remote_dir_gid = 0;
 	m->mdt_enable_remote_rename = 1;

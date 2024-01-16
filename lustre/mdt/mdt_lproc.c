@@ -178,10 +178,11 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 		return;
 	}
 
+	if (msi) /* parallel rename type */
+		mdt_counter_incr(req, msi, ktime_delta);
+
 	if (src == tgt) {
 		mdt_counter_incr(req, LPROC_MDT_RENAME_SAMEDIR, ktime_delta);
-		if (msi) /* parallel rename type */
-			mdt_counter_incr(req, msi, ktime_delta);
 		lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_SAMEDIR_SIZE],
 				      (unsigned int)ma->ma_attr.la_size);
 		return;
@@ -730,6 +731,7 @@ MDT_BOOL_RW_ATTR(enable_remote_dir);
 MDT_BOOL_RW_ATTR(enable_remote_rename);
 MDT_BOOL_RW_ATTR(enable_parallel_rename_dir);
 MDT_BOOL_RW_ATTR(enable_parallel_rename_file);
+MDT_BOOL_RW_ATTR(enable_parallel_rename_crossdir);
 MDT_BOOL_RW_ATTR(enable_striped_dir);
 MDT_BOOL_RW_ATTR(enable_dir_migration);
 MDT_BOOL_RW_ATTR(enable_dir_restripe);
@@ -1323,6 +1325,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_dir_auto_split.attr,
 	&lustre_attr_enable_parallel_rename_dir.attr,
 	&lustre_attr_enable_parallel_rename_file.attr,
+	&lustre_attr_enable_parallel_rename_crossdir.attr,
 	&lustre_attr_enable_remote_dir.attr,
 	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_remote_rename.attr,

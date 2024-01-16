@@ -303,6 +303,7 @@ struct mdt_device {
 				   mdt_enable_dir_auto_split:1,
 				   mdt_enable_parallel_rename_dir:1,
 				   mdt_enable_parallel_rename_file:1,
+				   mdt_enable_parallel_rename_crossdir:1,
 				   mdt_enable_remote_dir:1,
 				   mdt_enable_remote_rename:1,
 				   mdt_enable_striped_dir:1,
