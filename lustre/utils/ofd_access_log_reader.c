@@ -792,8 +792,8 @@ int main(int argc, char *argv[])
 				trace_file = stdout;
 			} else {
 				trace_file = fopen(optarg, "a");
-				if (debug_file == NULL)
-					FATAL("cannot open debug file '%s': %s\n",
+				if (trace_file == NULL)
+					FATAL("cannot open trace file '%s': %s\n",
 						optarg, strerror(errno));
 			}
 
