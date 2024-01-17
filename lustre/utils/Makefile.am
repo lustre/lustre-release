@@ -4,10 +4,6 @@ AM_CFLAGS  := -fPIC -D_GNU_SOURCE \
 	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 $(UTILS_CFLAGS)
 AM_LDFLAGS := $(UTILS_LDFLAGS)
 
-if TESTS
-EXTRA_PROGRAMS = wirecheck
-endif
-
 if UTILS
 
 if GSS
@@ -38,7 +34,7 @@ sbin_PROGRAMS = lctl l_getidentity llverdev llverfs lustre_rsync \
 		ll_decode_linkea llsom_sync l_foreign_symlink
 
 if TESTS
-sbin_PROGRAMS += wiretest
+sbin_PROGRAMS += wirecheck wiretest
 endif # TESTS
 
 if SERVER

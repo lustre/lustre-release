@@ -48,6 +48,7 @@
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lgss.h>
 #include <lustre/lustreapi.h>
 
 #ifndef BUILD_BUG_ON

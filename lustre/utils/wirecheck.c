@@ -38,6 +38,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lgss.h>
 #ifndef HAVE_NATIVE_LINUX_CLIENT
 #include <linux/lustre/lustre_access_log.h>
 #include <linux/lustre/lustre_lfsck_user.h>
@@ -878,7 +879,7 @@ check_lov_foreign_md(void)
 	CHECK_VALUE_X(LU_FOREIGN_TYPE_PCCRW);
 	CHECK_VALUE_X(LU_FOREIGN_TYPE_PCCRO);
 	CHECK_VALUE_X(LU_FOREIGN_TYPE_S3);
-	CHECK_VALUE_X(LU_FOREIGN_TYPE_DAOS);
+	CHECK_VALUE_X(LU_FOREIGN_TYPE_SYMLINK);
 	CHECK_VALUE_X(LU_FOREIGN_TYPE_UNKNOWN);
 
 	CHECK_CDEFINE(LOV_MAGIC_FOREIGN);
@@ -888,7 +889,7 @@ check_lov_foreign_md(void)
 static void
 check_lov_hsm_base(void)
 {
-	BLANK_LINKE();
+	BLANK_LINE();
 	CHECK_STRUCT(lov_hsm_base);
 	CHECK_MEMBER(lov_hsm_base, lhb_archive_id);
 	CHECK_MEMBER(lov_hsm_base, lhb_archive_ver);
@@ -3688,6 +3689,7 @@ main(int argc, char **argv)
 
 	check_nodemap_cluster_rec();
 	check_nodemap_range_rec();
+	check_nodemap_range2_rec();
 	check_nodemap_id_rec();
 	check_nodemap_global_rec();
 	check_nodemap_cluster_roles_rec();

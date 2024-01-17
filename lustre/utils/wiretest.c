@@ -1296,6 +1296,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_connect_data, paddingF));
 	LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingF) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingF));
+
 	LASSERTF(OBD_CONNECT_RDONLY == 0x1ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_RDONLY);
 	LASSERTF(OBD_CONNECT_INDEX == 0x2ULL, "found 0x%.16llxULL\n",
@@ -1848,7 +1849,7 @@ void lustre_assert_wire_constants(void)
 
 	/* Checks for struct lov_foreign_md */
 	LASSERTF((int)sizeof(struct lov_foreign_md) == 16, "found %lld\n",
-		(long long)(int)sizeof(struct lov_foreign_md));
+		 (long long)(int)sizeof(struct lov_foreign_md));
 	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_magic) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_foreign_md, lfm_magic));
 	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_magic) == 4, "found %lld\n",
@@ -1865,23 +1866,75 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_foreign_md, lfm_flags));
 	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_flags) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_flags));
-	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_value) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_foreign_md, lfm_value));
-	LASSERTF(LU_FOREIGN_TYPE_NONE == 0, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_NONE);
-	LASSERTF(LU_FOREIGN_TYPE_POSIX == 1, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_POSIX);
-	LASSERTF(LU_FOREIGN_TYPE_PCCRW == 2, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_PCCRW);
-	LASSERTF(LU_FOREIGN_TYPE_PCCRO == 3, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_PCCRO);
-	LASSERTF(LU_FOREIGN_TYPE_S3 == 4, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_S3);
-	LASSERTF(LU_FOREIGN_TYPE_SYMLINK == 0x0000da05, "found 0x%.8xUL\n",
-		 (unsigned)LU_FOREIGN_TYPE_SYMLINK);
+	LASSERTF((int)offsetof(struct lov_foreign_md, lfm_value[0]) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_foreign_md, lfm_value[0]));
+	LASSERTF((int)sizeof(((struct lov_foreign_md *)0)->lfm_value[0]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_foreign_md *)0)->lfm_value[0]));
+	LASSERTF(LU_FOREIGN_TYPE_NONE == 0x00000000UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_NONE);
+	LASSERTF(LU_FOREIGN_TYPE_POSIX == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_POSIX);
+	LASSERTF(LU_FOREIGN_TYPE_PCCRW == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_PCCRW);
+	LASSERTF(LU_FOREIGN_TYPE_PCCRO == 0x00000003UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_PCCRO);
+	LASSERTF(LU_FOREIGN_TYPE_S3 == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_S3);
+	LASSERTF(LU_FOREIGN_TYPE_SYMLINK == 0x0000da05UL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_SYMLINK);
+	LASSERTF(LU_FOREIGN_TYPE_UNKNOWN == 0xffffffffUL, "found 0x%.8xUL\n",
+		(unsigned)LU_FOREIGN_TYPE_UNKNOWN);
 	BUILD_BUG_ON(LOV_MAGIC_FOREIGN != (0x0BD70000 | 0x0BD0));
-	LASSERTF(LOV_PATTERN_FOREIGN == 0x00000400, "found 0x%.8xUL\n",
-		 (unsigned)LOV_PATTERN_FOREIGN);
+	LASSERTF(LOV_PATTERN_FOREIGN == 0x00000400UL, "found 0x%.8xUL\n",
+		(unsigned)LOV_PATTERN_FOREIGN);
+
+	/* Checks for struct lov_hsm_base */
+	LASSERTF((int)sizeof(struct lov_hsm_base) == 56, "found %lld\n",
+		 (long long)(int)sizeof(struct lov_hsm_base));
+	LASSERTF((int)offsetof(struct lov_hsm_base, lhb_archive_id) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_base, lhb_archive_id));
+	LASSERTF((int)sizeof(((struct lov_hsm_base *)0)->lhb_archive_id) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_base *)0)->lhb_archive_id));
+	LASSERTF((int)offsetof(struct lov_hsm_base, lhb_archive_ver) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_base, lhb_archive_ver));
+	LASSERTF((int)sizeof(((struct lov_hsm_base *)0)->lhb_archive_ver) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_base *)0)->lhb_archive_ver));
+	LASSERTF((int)offsetof(struct lov_hsm_base, lhb_uuid[0]) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_base, lhb_uuid[0]));
+	LASSERTF((int)sizeof(((struct lov_hsm_base *)0)->lhb_uuid[0]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_base *)0)->lhb_uuid[0]));
+
+	/* Checks for struct lov_hsm_md */
+	LASSERTF((int)sizeof(struct lov_hsm_md) == 72, "found %lld\n",
+		 (long long)(int)sizeof(struct lov_hsm_md));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_magic));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_magic));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_length) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_length));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_length) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_length));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_type) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_type));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_type));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_flags) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_flags));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_flags));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_archive_id) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_archive_id));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_archive_id) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_archive_id));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_archive_ver) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_archive_ver));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_archive_ver) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_archive_ver));
+	LASSERTF((int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_uuid[0]) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_hsm_md, lhm_hsm.lhb_uuid[0]));
+	LASSERTF((int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_uuid[0]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_hsm_md *)0)->lhm_hsm.lhb_uuid[0]));
 
 	/* Checks for struct lov_comp_md_entry_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_entry_v1) == 48, "found %lld\n",
@@ -1926,6 +1979,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_compr_type));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type));
+	/* lov_comp_md_entry_v1.lcme_compr_lvl is a bitfield and cannot be checked */
+	/* lov_comp_md_entry_v1.lcme_compr_chunk_log_bits is a bitfield and cannot be checked */
 	BUILD_BUG_ON(LCME_FL_STALE != 0x00000001);
 	BUILD_BUG_ON(LCME_FL_PREF_RD != 0x00000002);
 	BUILD_BUG_ON(LCME_FL_PREF_WR != 0x00000004);
@@ -4540,13 +4595,13 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_val) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_val));
 	LASSERTF(RSC_DATA_FLAG_REMOTE == 0x00000001UL, "found 0x%.8xUL\n",
-		 (unsigned)RSC_DATA_FLAG_REMOTE);
+		(unsigned)RSC_DATA_FLAG_REMOTE);
 	LASSERTF(RSC_DATA_FLAG_ROOT == 0x00000002UL, "found 0x%.8xUL\n",
-		 (unsigned)RSC_DATA_FLAG_ROOT);
+		(unsigned)RSC_DATA_FLAG_ROOT);
 	LASSERTF(RSC_DATA_FLAG_MDS == 0x00000004UL, "found 0x%.8xUL\n",
-		 (unsigned)RSC_DATA_FLAG_MDS);
+		(unsigned)RSC_DATA_FLAG_MDS);
 	LASSERTF(RSC_DATA_FLAG_OSS == 0x00000008UL, "found 0x%.8xUL\n",
-		 (unsigned)RSC_DATA_FLAG_OSS);
+		(unsigned)RSC_DATA_FLAG_OSS);
 
 	/* Checks for struct llog_gen */
 	LASSERTF((int)sizeof(struct llog_gen) == 16, "found %lld\n",
