@@ -202,10 +202,14 @@ int llapi_param_get_paths(const char *pattern, glob_t *paths)
  */
 static int bytes_remaining(int fd, size_t *file_size)
 {
-	int rc = 0;
 	size_t bytes_read = 0;
-	long page_size = sysconf(_SC_PAGESIZE);
+	long page_size;
 	char *temp_buf;
+	int rc = 0;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0)
+		return -EINVAL;
 
 	temp_buf = malloc(page_size);
 	if (temp_buf == NULL)
@@ -252,11 +256,16 @@ static int required_size(const char *path, size_t *file_size)
 static
 int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 {
-	long page_size = sysconf(_SC_PAGESIZE);
-	int rc = 0;
+	long page_size;
 	char *temp_buf;
-	int fd;
+	int rc = 0, fd;
 	FILE *fp;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		goto out;
+	}
 
 	fp = open_memstream(buf, file_size);
 	if (fp == NULL) {

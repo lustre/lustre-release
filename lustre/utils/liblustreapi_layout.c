@@ -3008,8 +3008,8 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 				    unsigned long stats_interval_sec,
 				    unsigned long bandwidth_bytes_sec)
 {
-	size_t page_size = sysconf(_SC_PAGESIZE);
 	size_t buflen = 64 << 20; /* 64M */
+	size_t page_size;
 	void *buf;
 	uint64_t pos = start;
 	uint64_t data_off = pos, data_end = pos;
@@ -3037,6 +3037,13 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 	/* limit transfer size to what can be sent in one second */
 	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buflen)
 		buflen = (bandwidth_bytes_sec + ONE_MB - 1) & ~(ONE_MB - 1);
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		return rc;
+	}
+
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc)
 		return -rc;

@@ -113,9 +113,15 @@ int llapi_mirror_clear(int fd)
 ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
 			  off_t pos)
 {
-	size_t page_size = sysconf(_SC_PAGESIZE);
 	ssize_t result = 0;
+	size_t page_size;
 	int rc;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		return rc;
+	}
 
 	rc = llapi_mirror_set(fd, id);
 	if (rc < 0)
@@ -150,9 +156,13 @@ ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
 ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
 			   size_t count, off_t pos)
 {
-	size_t page_size = sysconf(_SC_PAGESIZE);
 	ssize_t result = 0;
+	size_t page_size;
 	int rc;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0)
+		return -EINVAL;
 
 	if (((unsigned long)buf & (page_size - 1)) || pos & (page_size - 1))
 		return -EINVAL;
@@ -278,7 +288,7 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 	void *buf;
 	off_t pos = 0;
 	off_t data_end = 0;
-	size_t page_size = sysconf(_SC_PAGESIZE);
+	size_t page_size;
 	ssize_t result = 0;
 	bool eof = false;
 	bool sparse;
@@ -288,6 +298,12 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 
 	if (!count)
 		return 0;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		return rc;
+	}
 
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
@@ -417,13 +433,17 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 		      size_t count)
 {
 	const size_t buflen = 4 * 1024 * 1024; /* 4M */
-	void *buf;
-	size_t page_size = sysconf(_SC_PAGESIZE);
 	ssize_t result = 0;
+	size_t page_size;
+	void *buf;
 	int rc;
 
 	if (!count)
 		return 0;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0)
+		return -EINVAL;
 
 	if (pos & (page_size - 1) || !dst)
 		return -EINVAL;

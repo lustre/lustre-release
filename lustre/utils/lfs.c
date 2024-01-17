@@ -807,7 +807,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	void *buf = NULL;
 	off_t pos = 0;
 	off_t data_end = 0;
-	size_t page_size = sysconf(_SC_PAGESIZE);
+	size_t page_size;
 	bool sparse;
 	int rc;
 	size_t write_bytes = 0;
@@ -835,6 +835,12 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buf_size)
 		buf_size = (bandwidth_bytes_sec + stripe_size - 1) &
 			~(stripe_size - 1);
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		return rc;
+	}
 
 	/* Use a page-aligned buffer for direct I/O */
 	rc = posix_memalign(&buf, page_size, buf_size);
@@ -11715,6 +11721,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	int c;
 	void *buf;
 	const size_t buflen = 4 << 20;
+	size_t page_size;
 	off_t pos;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -11800,8 +11807,14 @@ static inline int lfs_mirror_read(int argc, char **argv)
 		outfd = STDOUT_FILENO;
 	}
 
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		goto close_fd;
+	}
+
 	/* allocate buffer */
-	rc = posix_memalign(&buf, sysconf(_SC_PAGESIZE), buflen);
+	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) {
 		fprintf(stderr, "%s %s: posix_memalign returns %d\n",
 				progname, argv[0], rc);
@@ -12610,7 +12623,7 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 {
 	const size_t buflen = 4 * 1024 * 1024; /* 4M */
 	void *buf;
-	size_t page_size = sysconf(_SC_PAGESIZE);
+	size_t page_size;
 	ssize_t bytes_read;
 	ssize_t bytes_done;
 	size_t count;
@@ -12622,6 +12635,12 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 
 	if (file_size == 0)
 		return 0;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		return rc;
+	}
 
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
