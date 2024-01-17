@@ -3935,6 +3935,9 @@ test_113() {
 run_test 113 "wrong stat after restore"
 
 test_114() {
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "need MDS version at least 2.15.54"
+
 	mkdir_on_mdt0 $DIR/$tdir
 
 	local f1=$DIR/$tdir/${tfile}1
@@ -5443,6 +5446,9 @@ test_408 () { #LU-17110
 run_test 408 "Verify fiemap on release file"
 
 test_409a() {
+	(( MDS1_VERSION >= $(version_code 2.15.59) )) ||
+		skip "need MDS version at least 2.15.59"
+
 	mkdir_on_mdt0 $DIR/$tdir
 
 	local restore_pid shutdown_pid
