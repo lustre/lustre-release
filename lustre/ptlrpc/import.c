@@ -1059,6 +1059,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	imp->imp_pingable = 1;
 	imp->imp_force_reconnect = 0;
 	imp->imp_force_verify = 0;
+	imp->imp_setup_time = ktime_get_seconds();
 
 	imp->imp_connect_data = *ocd;
 

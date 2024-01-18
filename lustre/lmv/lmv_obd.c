@@ -1535,6 +1535,8 @@ static int lmv_get_root(struct obd_export *exp, const char *fileset,
 		RETURN(-ENODEV);
 
 	rc = md_get_root(tgt->ltd_exp, fileset, fid);
+	if (!rc)
+		lmv->lmv_setup_time = ktime_get_seconds();
 	RETURN(rc);
 }
 
@@ -1645,10 +1647,23 @@ static int lmv_close(struct obd_export *exp, struct md_op_data *op_data,
 	RETURN(rc);
 }
 
+static inline bool tgt_qos_is_usable(struct lmv_obd *lmv,
+				     struct lu_tgt_desc *tgt, time64_t now)
+{
+	struct obd_import *imp = class_exp2cliimp(tgt->ltd_exp);
+	u32 maxage = lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage;
+
+	return tgt->ltd_exp && tgt->ltd_active &&
+	       !(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) &&
+	       (now - imp->imp_setup_time > (maxage >> 1) ||
+		now - lmv->lmv_setup_time < (maxage << 1));
+}
+
 static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 					      struct md_op_data *op_data)
 {
 	struct lu_tgt_desc *tgt, *cur = NULL;
+	time64_t now = ktime_get_seconds();
 	__u64 total_avail = 0;
 	__u64 total_weight = 0;
 	__u64 cur_weight = 0;
@@ -1671,13 +1686,12 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 		GOTO(unlock, tgt = ERR_PTR(rc));
 
 	lmv_foreach_tgt(lmv, tgt) {
-		if (!tgt->ltd_exp || !tgt->ltd_active ||
-		    (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)) {
+		if (!tgt_qos_is_usable(lmv, tgt, now)) {
 			tgt->ltd_qos.ltq_usable = 0;
 			continue;
 		}
 		/* update one hour overdue statfs */
-		if (ktime_get_seconds() - tgt->ltd_statfs_age >
+		if (now - tgt->ltd_statfs_age >
 		    60 * lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage)
 			lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
 		tgt->ltd_qos.ltq_usable = 1;
@@ -1733,6 +1747,7 @@ unlock:
 
 static struct lu_tgt_desc *lmv_locate_tgt_rr(struct lmv_obd *lmv)
 {
+	time64_t now = ktime_get_seconds();
 	struct lu_tgt_desc *tgt;
 	int i;
 	int index;
@@ -1744,8 +1759,7 @@ static struct lu_tgt_desc *lmv_locate_tgt_rr(struct lmv_obd *lmv)
 		index = (i + lmv->lmv_qos_rr_index) %
 			lmv->lmv_mdt_descs.ltd_tgts_size;
 		tgt = lmv_tgt(lmv, index);
-		if (!tgt || !tgt->ltd_exp || !tgt->ltd_active ||
-		    (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+		if (!tgt || !tgt_qos_is_usable(lmv, tgt, now))
 			continue;
 
 		lmv->lmv_qos_rr_index = (tgt->ltd_index + 1) %
@@ -2088,11 +2102,15 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 		if (ltd_qos_is_balanced(&lmv->lmv_mdt_descs) &&
 		    !lmv_op_default_rr_mkdir(op_data) &&
 		    !lmv_op_user_qos_mkdir(op_data) &&
-		    !(tmp->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+		    !(tmp->ltd_statfs.os_state & OS_STATFS_NOCREATE)) {
 			/* if not necessary, don't create remote directory. */
 			tgt = tmp;
-		else
+		} else {
 			tgt = lmv_locate_tgt_rr(lmv);
+			/* if no MDT chosen, use parent MDT */
+			if (IS_ERR(tgt))
+				tgt = tmp;
+		}
 		if (!IS_ERR(tgt))
 			lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
 	}

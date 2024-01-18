@@ -445,6 +445,7 @@ struct lmv_obd {
 	struct kobject		*lmv_tgts_kobj;
 	void			*lmv_cache;
 
+	time64_t		lmv_setup_time;
 	__u32			lmv_qos_rr_index; /* next round-robin MDT idx */
 	struct rhashtable	lmv_qos_exclude_hash;
 	struct list_head	lmv_qos_exclude_list;

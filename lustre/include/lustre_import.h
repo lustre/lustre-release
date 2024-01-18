@@ -345,6 +345,7 @@ struct obd_import {
 				/* adaptive timeout data */
 	struct imp_at		imp_at;
 	time64_t		imp_last_reply_time;	/* for health check */
+	time64_t		imp_setup_time;
 	__u32			imp_conn_restricted_net;
 };
 
