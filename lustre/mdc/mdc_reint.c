@@ -524,6 +524,14 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 
 	sptlrpc_sepol_put(sepol);
 
+	/* LU-17441: avoid blocking MDS_REQUEST_PORTAL for renames with BFL */
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
+	/* MDS_IO_PORTAL available since v2_10_53_0-33-g2bcc5ad0ed */
+	if ((exp_connect_flags(exp) &
+	     (OBD_CONNECT_GRANT | OBD_CONNECT_SRVLOCK)) ==
+	    (OBD_CONNECT_GRANT | OBD_CONNECT_SRVLOCK))
+#endif
+		req->rq_request_portal = MDS_IO_PORTAL;
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
 	ptlrpc_request_set_replen(req);
