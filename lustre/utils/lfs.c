@@ -10102,10 +10102,11 @@ static int lfs_rmfid(int argc, char **argv)
 
 	fa = malloc(offsetof(struct fid_array, fa_fids[nr + 1]));
 	if (!fa) {
+		rc = -errno ?: -ENOMEM;
 		fprintf(stderr, "%s rmfid: error allocating %zd bytes: %s\n",
 			progname, offsetof(struct fid_array, fa_fids[nr + 1]),
-			strerror(errno));
-		return -ENOMEM;
+			strerror(-rc));
+		goto out_close;
 	}
 
 	fa->fa_nr = 0;
@@ -10149,6 +10150,7 @@ static int lfs_rmfid(int argc, char **argv)
 		fa = NULL;
 	}
 
+out_close:
 	close(rootfd);
 	return rc;
 }

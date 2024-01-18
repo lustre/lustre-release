@@ -342,6 +342,7 @@ int llapi_rmfid(const char *path, struct fid_array *fa)
 	}
 
 	rc = llapi_rmfid_at(rootfd, fa);
+	close(rootfd);
 	if (rc < 0) {
 		fprintf(stderr, "lfs rmfid: cannot remove FIDs: %s\n",
 			strerror(-rc));

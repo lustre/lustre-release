@@ -472,15 +472,12 @@ int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 {
 	int mnt_fd, rc;
 
-	/* this will return a cached FD if available, so only one open needed.
-	 * WANT_FD doesn't modify lustre_dir so casting away "const" is OK */
-
 	rc = llapi_root_path_open(lustre_dir, &mnt_fd);
 	if (rc)
 		goto out;
 
-	/* "mnt_fd" is cached internally for reuse, no need to close it */
 	rc = llapi_open_by_fid_at(mnt_fd, fid, flags);
+	close(mnt_fd);
 out:
 	return rc;
 }
