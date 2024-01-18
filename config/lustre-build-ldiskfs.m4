@@ -92,6 +92,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
         BASEVER=$(echo $LINUXRELEASE | cut -d'-' -f1)
+	AS_VERSION_COMPARE([$BASEVER],[5.15.0],[
 	AS_VERSION_COMPARE([$BASEVER],[5.11.0],[
 	AS_VERSION_COMPARE([$BASEVER],[5.8.0],[
 	AS_VERSION_COMPARE([$BASEVER],[5.4.0],[
@@ -154,7 +155,9 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	],
 	[LDISKFS_SERIES="5.8.0-ml.series"])],
 	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"],
-	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"])
+	[LDISKFS_SERIES="5.11.0-40-ubuntu20.series"])],
+	[LDISKFS_SERIES="5.15.0-83-ubuntu20.series"],
+	[LDISKFS_SERIES="5.15.0-83-ubuntu20.series"])
 ], [test x$OPENEULER_KERNEL = xyes], [
 	case $OPENEULER_VERSION_NO in
 	2203.0) LDISKFS_SERIES="5.10.0-oe2203.series" ;;
