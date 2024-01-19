@@ -1082,10 +1082,7 @@ int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 		if (errno == ENOENT)
 			goto config;
 
-		if (errno != 0)
-			ret = errno;
-		else
-			ret = fd;
+		ret = errno;
 		fprintf(stderr, "Unable to open %s: %s\n",
 			filepnm, strerror(ret));
 		return ret;
@@ -1093,8 +1090,11 @@ int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 
 	ret = read(fd, &lsd, sizeof(lsd));
 	if (ret != sizeof(lsd)) {
-		if (errno != 0)
+		if (ret < 0)
 			ret = errno;
+		else
+			/* short read */
+			ret = EINTR;
 		fprintf(stderr, "Unable to read %s: %s\n",
 			filepnm, strerror(ret));
 		close(fd);
@@ -1102,9 +1102,8 @@ int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 	}
 
 	ret = lseek(fd, 0, SEEK_SET);
-	if (ret) {
-		if (errno != 0)
-			ret = errno;
+	if (ret < 0) {
+		ret = errno;
 		fprintf(stderr, "Unable to lseek %s: %s\n",
 			filepnm, strerror(ret));
 		close(fd);
@@ -1123,8 +1122,11 @@ int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 	memcpy(lsd.lsd_uuid, ldd->ldd_fsname, new_namelen);
 	ret = write(fd, &lsd, sizeof(lsd));
 	if (ret != sizeof(lsd)) {
-		if (errno != 0)
+		if (ret < 0)
 			ret = errno;
+		else
+			 /* short writes */
+			ret = EINTR;
 		fprintf(stderr, "Unable to write %s: %s\n",
 			filepnm, strerror(ret));
 		close(fd);
@@ -1137,10 +1139,7 @@ config:
 	snprintf(cfg_dir, sizeof(cfg_dir), "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
 	dir = opendir(cfg_dir);
 	if (!dir) {
-		if (errno != 0)
-			ret = errno;
-		else
-			ret = EINVAL;
+		ret = errno;
 		fprintf(stderr, "Unable to opendir %s: %s\n",
 			cfg_dir, strerror(ret));
 		return ret;
@@ -1199,9 +1198,8 @@ config:
 		else
 			ret = unlink(filepnm);
 
-		if (ret) {
-			if (errno != 0)
-				ret = errno;
+		if (ret < 0) {
+			ret = errno;
 
 			fprintf(stderr, "Fail to %s %s: %s\n",
 				IS_MGS(ldd) ? "setxattr" : "unlink",
