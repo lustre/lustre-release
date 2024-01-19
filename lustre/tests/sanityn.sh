@@ -1797,7 +1797,7 @@ test_39a() {
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
-run_test 39a "test from 11063 =================================="
+run_test 39a "file mtime does not change after rename"
 
 test_39b() {
 	local client1=${CLIENT1:-`hostname`}
@@ -1824,7 +1824,7 @@ test_39b() {
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
-run_test 39b "11063 problem 1 =================================="
+run_test 39b "file mtime the same on clients with/out lock"
 
 test_39c() {
 	local client1=${CLIENT1:-`hostname`}
@@ -5285,13 +5285,10 @@ test_81b() {
 	[ $MDSCOUNT -lt 2 ] &&
 		skip "We need at least 2 MDTs for this test"
 
-	local total
 	local setattr_pid
 
-	total=1000
-
 	$LFS mkdir -c $MDSCOUNT $DIR1/$tdir || error "$LFS mkdir"
-	createmany -o $DIR1/$tdir/$tfile. $total || error "createmany"
+	createmany -o $DIR1/$tdir/$tfile. $COUNT || error "createmany"
 
 	(
 		while true; do
@@ -5300,7 +5297,7 @@ test_81b() {
 	) &
 	setattr_pid=$!
 
-	for i in $(seq $total); do
+	for ((i = 0; i < COUNT; i++)); do
 		mrename $DIR2/$tdir/$tfile.$i $DIR2/$tdir/$tfile-new.$i \
 			> /dev/null
 	done
@@ -5354,6 +5351,66 @@ test_81c() {
 	[ -f $DIR2/${tdir}_src/sub ] && error "sub should be gone" || true
 }
 run_test 81c "rename revoke LOOKUP lock for remote object"
+
+cleanup_81d() {
+	for ((mds = 0; mds < $MDSCOUNT; mds++)); do
+		local d2=$DIR2/$tdir-$mds
+
+		rm -rf $d2 &
+	done
+	wait || error "rm failed"
+}
+
+test_81d() {
+	local setattr_pid
+	local mdts=$(comma_list $(mdts_nodes))
+
+	do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+
+	stack_trap cleanup_81d
+	for ((mds = 0; mds < $MDSCOUNT; mds++)); do
+		local d1=$DIR1/$tdir-$mds
+
+		$LFS mkdir -i $mds $d1 $d1/_temporary || error "mkdir failed"
+		createmany -o $d1/_temporary/$tfile. $COUNT ||
+			error "createmany failed for $d1/_temporary"
+	done
+
+	for ((mds = 0; mds < $MDSCOUNT; mds++)); do
+		local d1=$DIR1/$tdir-$mds
+		local d2=$DIR2/$tdir-$mds
+
+		for ((i = 0; i < COUNT; i++)); do
+			mrename $d1/_temporary/$tfile.$i $d1/$tfile.$i &
+			((i++))
+			mrename $d2/_temporary/$tfile.$i $d2/$tfile.$i &
+		done
+	done
+	wait || error "rename failed"
+
+	cleanup_81d
+	local stats=$DIR1/md_stats
+	local total=$((MDSCOUNT * COUNT))
+
+	do_nodes $mdts "$LCTL get_param -n mdt.*.md_stats" > $stats
+	cat $stats
+	crossdir=$(awk '/crossdir_rename/ {sum+=$2} END {print sum}' $stats)
+	(( crossdir == total )) ||
+		error "not crossdir: $crossdir != $total"
+	samedir=$(awk '/samedir_rename/ {sum+=$2} END {print sum}' $stats)
+	(( samedir == 0 )) || error "considered samedir: $samedir"
+	pardir=$(awk '/parallel_rename_dir/ {sum+=$2} END {print sum}' $stats)
+	(( pardir == 0 )) || error "considered directory: $pardir"
+
+
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		{ echo "need MDS >= 2.15.60 for parallel cross-dir"; return 0; }
+
+	parfile=$(awk '/parallel_rename_file/ {sum+=$2} END {print sum}' $stats)
+	(( parfile == total )) ||
+		error "not considered file: $parfile != $total"
+}
+run_test 81d "parallel rename file cross-dir on same MDT"
 
 test_82() {
 	[[ "$MDS1_VERSION" -gt $(version_code 2.6.91) ]] ||

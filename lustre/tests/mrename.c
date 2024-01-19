@@ -42,7 +42,9 @@ int main(int argc, char *argv[])
 	}
 
 	rc = rename(argv[1], argv[2]);
-	printf("rename returned %d: %s\n", rc, strerror(errno));
+	if (rc)
+		fprintf(stderr, "rename '%s' returned %d: %s\n",
+			argv[1], rc, strerror(errno));
 
 	return rc;
 }
