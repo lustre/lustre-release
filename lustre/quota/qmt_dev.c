@@ -97,6 +97,11 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "%s: initiating QMT shutdown\n", qmt->qmt_svname);
 	qmt->qmt_stopping = true;
 
+	if (qmt_lvbo_free_wq) {
+		destroy_workqueue(qmt_lvbo_free_wq);
+		qmt_lvbo_free_wq = NULL;
+	}
+
 	/* kill pool instances, if any */
 	qmt_pool_fini(env, qmt);
 
@@ -279,6 +284,14 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	rc = qmt_pool_init(env, qmt);
 	if (rc)
 		GOTO(out, rc);
+
+	qmt_lvbo_free_wq = alloc_workqueue("qmt_lvbo_free", WQ_UNBOUND, 0);
+	if (!qmt_lvbo_free_wq) {
+		rc = -ENOMEM;
+		CERROR("%s: failed to start qmt_lvbo_free workqueue: rc = %d\n",
+		       qmt->qmt_svname, rc);
+		goto out;
+	}
 
 	EXIT;
 out:

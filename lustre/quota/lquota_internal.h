@@ -195,6 +195,7 @@ struct lquota_entry {
 	/* the lock to protect lqe_glbl_data */
 	struct mutex		 lqe_glbl_data_lock;
 	struct lqe_glbl_data	*lqe_glbl_data;
+	struct work_struct	 lqe_work; /* workitem to free lvbo */
 };
 
 #define lqe_qtype(lqe)		(lqe->lqe_site->lqs_qtype)

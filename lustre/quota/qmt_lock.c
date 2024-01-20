@@ -31,12 +31,15 @@
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/kthread.h>
+#include <linux/workqueue.h>
 
 #include <lustre_dlm.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 
 #include "qmt_internal.h"
+
+struct workqueue_struct *qmt_lvbo_free_wq;
 
 /* intent policy function called from mdt_intent_opc() when the intent is of
  * quota type */
@@ -550,16 +553,8 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 
 	if (res->lr_name.name[LUSTRE_RES_ID_QUOTA_SEQ_OFF] != 0) {
 		struct lquota_entry *lqe = res->lr_lvb_data;
-		struct lqe_glbl_data *lgd;
 
-		mutex_lock(&lqe->lqe_glbl_data_lock);
-		lgd = lqe->lqe_glbl_data;
-		lqe->lqe_glbl_data = NULL;
-		mutex_unlock(&lqe->lqe_glbl_data_lock);
-		qmt_free_lqe_gd(lgd);
-
-		/* release lqe reference */
-		lqe_putref(lqe);
+		queue_work(qmt_lvbo_free_wq, &lqe->lqe_work);
 	} else {
 		struct dt_object *obj = res->lr_lvb_data;
 		/* release object reference */

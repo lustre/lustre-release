@@ -32,6 +32,31 @@
 
 #include "qmt_internal.h"
 
+static void qmt_work_lvbo_free(struct work_struct *work)
+{
+	struct lqe_glbl_data *lgd;
+	struct lquota_entry *lqe;
+
+	lqe = container_of(work, struct lquota_entry, lqe_work);
+	mutex_lock(&lqe->lqe_glbl_data_lock);
+	lgd = lqe->lqe_glbl_data;
+	lqe->lqe_glbl_data = NULL;
+	mutex_unlock(&lqe->lqe_glbl_data_lock);
+	qmt_free_lqe_gd(lgd);
+
+	if (unlikely(lgd == NULL)) {
+		struct qmt_pool_info *pool;
+
+		pool = (struct qmt_pool_info *)lqe->lqe_site->lqs_parent;
+		CWARN("%s: lvbo for (id=%llx) not fully inited\n",
+		      pool->qpi_qmt->qmt_svname,
+		      lqe->lqe_id.qid_uid);
+	}
+
+	/* release lqe reference */
+	lqe_putref(lqe);
+}
+
 /*
  * Initialize qmt-specific fields of quota entry.
  *
@@ -45,6 +70,7 @@ static void qmt_lqe_init(struct lquota_entry *lqe, void *arg)
 	lqe->lqe_revoke_time = 0;
 	init_rwsem(&lqe->lqe_sem);
 	mutex_init(&lqe->lqe_glbl_data_lock);
+	INIT_WORK(&lqe->lqe_work, qmt_work_lvbo_free);
 }
 
 /* Apply the default quota setting to the specified quota entry

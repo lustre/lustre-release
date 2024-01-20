@@ -30,6 +30,8 @@
 
 #include "lquota_internal.h"
 
+extern struct workqueue_struct *qmt_lvbo_free_wq;
+
 /*
  * The Quota Master Target Device.
  * The qmt is responsible for:
