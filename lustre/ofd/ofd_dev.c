@@ -2363,20 +2363,37 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	struct obd_quotactl *oqctl, *repoqc;
 	struct lu_nodemap *nodemap;
 	ktime_t kstart = ktime_get();
+	char *buffer = NULL;
 	int id;
 	int rc;
-
 	ENTRY;
 
 	oqctl = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
 	if (oqctl == NULL)
 		RETURN(err_serious(-EPROTO));
 
+	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
+		req_capsule_set_size(tsi->tsi_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, LQUOTA_ITER_BUFLEN);
+	else
+		req_capsule_set_size(tsi->tsi_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, 0);
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc)
+		RETURN(err_serious(rc));
+
 	repoqc = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
 	if (repoqc == NULL)
 		RETURN(err_serious(-ENOMEM));
-
 	*repoqc = *oqctl;
+
+	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+		buffer = req_capsule_server_get(tsi->tsi_pill,
+						&RMF_OBD_QUOTA_ITER);
+		if (buffer == NULL)
+			RETURN(err_serious(-ENOMEM));
+	}
 
 	nodemap = nodemap_get_from_exp(tsi->tsi_exp);
 	if (IS_ERR(nodemap))
@@ -2401,7 +2418,8 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	if (repoqc->qc_id != id)
 		swap(repoqc->qc_id, id);
 
-	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc);
+	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc,
+			   buffer, buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
 			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
@@ -2837,7 +2855,7 @@ TGT_OST_HDL_HP(HAS_BODY | HAS_REPLY | IS_MUTABLE,
 					OST_PUNCH,	ofd_punch_hdl,
 							ofd_hp_punch),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY,	OST_SYNC,	ofd_sync_hdl),
-TGT_OST_HDL(HAS_REPLY,	OST_QUOTACTL,	ofd_quotactl),
+TGT_OST_HDL(0,	OST_QUOTACTL,	ofd_quotactl),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_LADVISE,	ofd_ladvise_hdl),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, OST_FALLOCATE, ofd_fallocate_hdl),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SEEK, tgt_lseek),

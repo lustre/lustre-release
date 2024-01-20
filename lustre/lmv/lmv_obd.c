@@ -4087,6 +4087,30 @@ static int lmv_quotactl(struct obd_device *unused, struct obd_export *exp,
 		RETURN(-EIO);
 	}
 
+	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
+	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
+		int err;
+
+		if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA)
+			RETURN(obd_quota_iter(tgt->ltd_exp, oqctl, lst));
+
+		lmv_foreach_connected_tgt(lmv, tgt) {
+			if (!tgt->ltd_active)
+				continue;
+
+			err = obd_quota_iter(tgt->ltd_exp, oqctl, lst);
+			if (err) {
+				CERROR("%s: getquota failed mdt %d: rc = %d\n",
+				       obd->obd_name, tgt->ltd_index, err);
+				if (!rc)
+					rc = err;
+			}
+		}
+
+		RETURN(rc);
+	}
+
 	if (oqctl->qc_cmd != Q_GETOQUOTA) {
 		rc = obd_quotactl(tgt->ltd_exp, oqctl);
 		RETURN(rc);

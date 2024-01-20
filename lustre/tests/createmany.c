@@ -39,8 +39,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
+#include <lustre/lustreapi.h>
 
 #include <linux/lustre/lustre_user.h>
 #include <lustre/lustreapi.h>
@@ -58,6 +60,10 @@ static void usage(const char *prog)
 	       "\t-u\tunlink file/dir (with optional <unlinkfmt>)\n");
 	printf("\t-d\tuse directories instead of regular files\n"
 	       "\t-t\tstop creating files after <seconds> have elapsed\n");
+	printf("\t-S\tthe file size\n"
+	       "\t-U\tthe start User ID of the file\n"
+	       "\t-G\tthe start Group ID of the file\n"
+	       "\t-P\tthe start Project ID of the file\n");
 
 	exit(EXIT_FAILURE);
 }
@@ -88,6 +94,8 @@ int main(int argc, char **argv)
 {
 	bool do_open = false, do_keep = false, do_link = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
+	bool do_setsize = false, do_chuid = false, do_chgid = false;
+	bool do_chprj = false;
 	bool do_rmdir = false;
 	int stripe_pattern = LMV_HASH_TYPE_FNV_1A_64;
 	int stripe_offset = -1, stripe_count = 1;
@@ -99,6 +107,8 @@ int main(int argc, char **argv)
 	int has_fmt_spec = 0, unlink_has_fmt_spec = 0;
 	long i, total, last_i = 0;
 	int c, last_fd = -1, stderr_fd;
+	unsigned int uid = 0, gid = 0, pid = 0;
+	int size = 0;
 	int rc = 0;
 
 	/* Handle the deprecated positional last argument "-seconds" */
@@ -117,10 +127,14 @@ int main(int argc, char **argv)
 	else
 		progname = argv[0];
 
-	while ((c = getopt(argc, argv, "i:dl:kmor::t:u::")) != -1) {
+	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:")) != -1) {
 		switch (c) {
 		case 'd':
 			do_mkdir = true;
+			break;
+		case 'G':
+			do_chgid = true;
+			gid = strtoul(optarg, NULL, 0);
 			break;
 		case 'i':
 			stripe_offset = strtoul(optarg, &endp, 0);
@@ -143,6 +157,14 @@ int main(int argc, char **argv)
 		case 'o':
 			do_open = true;
 			break;
+		case 'P':
+			do_chprj = true;
+			pid = strtoul(optarg, NULL, 0);
+			break;
+		case 'S':
+			do_setsize = true;
+			size = atoi(optarg);
+			break;
 		case 't':
 			end = strtol(optarg, &endp, 0);
 			if (end <= 0.0 || *endp != '\0')
@@ -153,10 +175,19 @@ int main(int argc, char **argv)
 			do_unlink = true;
 			fmt_unlink = optarg;
 			break;
+		case 'U':
+			do_chuid = true;
+			uid = strtoul(optarg, NULL, 0);
+			break;
 		case '?':
 			fprintf(stderr, "Unknown option '%c'\n", optopt);
 			usage(progname);
 		}
+	}
+
+	if (!do_open && (do_setsize || do_chuid || do_chgid || do_chprj)) {
+		fprintf(stderr, "error: -S, -U, -G, -P works only with -o\n");
+		usage(progname);
 	}
 
 	if (do_open + do_mkdir + do_link + do_mknod > 1 ||
@@ -203,6 +234,55 @@ int main(int argc, char **argv)
 				rc = errno;
 				break;
 			}
+			if (do_setsize) {
+				rc = lseek(fd, (size - 6) < 0 ? 0 : size - 6,
+					   SEEK_SET);
+				if (rc < 0) {
+					printf("lseek(%s, %d) error: %s\n",
+					       filename, size, strerror(errno));
+					break;
+				}
+				rc = write(fd, "Lustre", 6);
+				if (rc < 0) {
+					printf("write(%s, %d) error: %s\n",
+					       filename, 6, strerror(errno));
+					break;
+				}
+			}
+
+			if (do_chuid || do_chgid) {
+				rc = fchown(fd, do_chuid ? uid + i : -1,
+					    do_chgid ? gid + i : -1);
+				if (rc < 0) {
+					printf("fchown(%s, %u, %u) error: %s\n",
+					       filename, do_chuid ? uid : -1,
+					       do_chgid ? gid : -1,
+					       strerror(errno));
+					break;
+				}
+			}
+
+			if (do_chprj) {
+				struct fsxattr fsx;
+
+				rc = ioctl(fd, FS_IOC_FSGETXATTR, &fsx);
+				if (rc < 0) {
+					printf("ioctl(%s) error: %s\n",
+					       "FS_IOC_GETXATTR",
+					       strerror(errno));
+					break;
+				}
+
+				fsx.fsx_projid = pid + i;
+				rc = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
+				if (rc < 0) {
+					printf("ioctl(%s, %d) error: %s\n",
+					       "FS_IOC_SETXATTR", pid,
+					       strerror(errno));
+					break;
+				}
+			}
+
 			if (!do_keep)
 				close(fd);
 			else if (fd > last_fd)

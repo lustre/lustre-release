@@ -168,6 +168,162 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 }
 
 /*
+ * Iterate quota settings managed by \a obj.
+ *
+ * \param env	  - is the environment passed by the caller
+ * \param dev	  - is the backend device holding the quota object
+ * \param obj	  - is the quota object to be iterated
+ * \param oqctl	  - is the quota ioctl object passed in by caller
+ * \param buf	  - is the buffer to save the retrieved quota settings
+ * \param size	  - is the size of the buffer
+ * \param is_glb  - true to iterate the global quota settings
+ * \param is_md	  - true to iterate LQUOTA_MD quota settings
+ */
+int lquota_obj_iter(const struct lu_env *env, struct dt_device *dev,
+		    struct dt_object *obj, struct obd_quotactl *oqctl,
+		    char *buf, int size, bool is_glb, bool is_md)
+{
+	struct lquota_thread_info *qti = lquota_info(env);
+	const struct dt_it_ops *iops;
+	struct dt_it *it;
+	struct dt_key *key;
+	struct dt_rec *rec = (struct dt_rec *)&qti->qti_rec;
+	__u64 offset;
+	bool skip = true;
+	int cur = 0, rc;
+	int rec_size;
+
+	ENTRY;
+
+	iops = &obj->do_index_ops->dio_it;
+	it = iops->init(env, obj, 0);
+	if (IS_ERR(it)) {
+		rc = PTR_ERR(it);
+		CERROR("%s: failed to initialize iterator: rc = %ld\n",
+		       obj->do_lu.lo_dev->ld_obd->obd_name, PTR_ERR(it));
+		RETURN(rc);
+	}
+
+	rc = iops->load(env, it, 0);
+	if (rc <= 0) {
+		if (is_md)
+			oqctl->qc_iter_md_offset = 0;
+		else
+			oqctl->qc_iter_dt_offset = 0;
+
+		GOTO(out_fini, rc);
+	}
+
+	if ((is_md && oqctl->qc_iter_md_offset == 0) ||
+	    (!is_md && oqctl->qc_iter_dt_offset == 0))
+		skip = false;
+
+	if (is_glb)
+		rec_size = sizeof(struct lquota_glb_rec);
+	else
+		rec_size = sizeof(struct lquota_acct_rec);
+
+	if (is_md)
+		offset = oqctl->qc_iter_md_offset;
+	else
+		offset = oqctl->qc_iter_dt_offset;
+
+	while ((size - cur) > (sizeof(__u64) + rec_size)) {
+		if (!skip)
+			goto get_setting;
+
+		if (offset == iops->store(env, it))
+			skip = false;
+		else {
+			rc = iops->next(env, it);
+			if (rc < 0) {
+				CERROR("%s: next failed: rc = %d\n",
+				       obj->do_lu.lo_dev->ld_obd->obd_name, rc);
+				break;
+			}
+
+			/* reach the end */
+			if (rc > 0) {
+				if (is_md)
+					oqctl->qc_iter_md_offset = 0;
+				else
+					oqctl->qc_iter_dt_offset = 0;
+
+				break;
+			}
+
+			continue;
+		}
+
+get_setting:
+		key = iops->key(env, it);
+		if (IS_ERR(key)) {
+			CERROR("%s: failed to get key: rc = %ld\n",
+			       obj->do_lu.lo_dev->ld_obd->obd_name,
+			PTR_ERR(key));
+
+			GOTO(out_fini, rc = PTR_ERR(key));
+		}
+
+		rc = iops->rec(env, it, rec, 0);
+		if (rc) {
+			CERROR("%s: failed to get rec: rc = %d\n",
+			       obj->do_lu.lo_dev->ld_obd->obd_name, rc);
+			GOTO(out_fini, rc);
+		}
+
+		if (oqctl->qc_iter_qid_end != 0 &&
+		    (*((__u64 *)key) < oqctl->qc_iter_qid_start ||
+		     *((__u64 *)key) > oqctl->qc_iter_qid_end))
+			goto next;
+
+		memcpy(buf + cur, key, sizeof(__u64));
+		cur += sizeof(__u64);
+
+		memcpy(buf + cur, rec, rec_size);
+		cur += rec_size;
+
+next:
+		rc = iops->next(env, it);
+		if (rc < 0) {
+			CERROR("%s: next failed: rc = %d\n",
+			       obj->do_lu.lo_dev->ld_obd->obd_name, rc);
+
+			GOTO(out_fini, rc);
+		}
+
+		/* reach the end */
+		if (rc > 0) {
+			if (is_md)
+				oqctl->qc_iter_md_offset = 0;
+			else
+				oqctl->qc_iter_dt_offset = 0;
+
+			break;
+		}
+
+		if (is_md)
+			oqctl->qc_iter_md_offset = iops->store(env, it);
+		else
+			oqctl->qc_iter_dt_offset = iops->store(env, it);
+	}
+
+out_fini:
+	if (rc >= 0) {
+		if (is_md)
+			oqctl->qc_iter_md_buflen = cur;
+		else
+			oqctl->qc_iter_dt_buflen = cur;
+
+		rc = 0;
+	}
+
+	iops->put(env, it);
+	iops->fini(env, it);
+	return rc < 0 ? rc : 0;
+}
+
+/*
  * Helper routine to retrieve slave information.
  * This function converts a quotactl request into quota/accounting object
  * operations. It is independant of the slave stack which is only accessible
@@ -178,16 +334,17 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
  * \param oqctl - is the quotactl request
  */
 int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
-		  struct obd_quotactl *oqctl)
+		  struct obd_quotactl *oqctl, char *buffer, int size)
 {
-	struct lquota_thread_info	*qti = lquota_info(env);
+	struct lquota_thread_info *qti = lquota_info(env);
 	__u64				 key;
 	struct dt_object		*obj, *obj_aux = NULL;
 	struct obd_dqblk		*dqblk = &oqctl->qc_dqblk;
 	int				 rc;
 	ENTRY;
 
-	if (oqctl->qc_cmd != Q_GETOQUOTA) {
+	if (oqctl->qc_cmd != Q_GETOQUOTA &&
+	    oqctl->qc_cmd != LUSTRE_Q_ITEROQUOTA) {
 		/* as in many other places, dev->dd_lu_dev.ld_obd->obd_name
 		 * point to an invalid obd_name, to be fixed in LU-1574 */
 		CERROR("%s: Unsupported quotactl command: %x\n",
@@ -208,6 +365,17 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 		RETURN(-EOPNOTSUPP);
 	if (obj->do_index_ops == NULL)
 		GOTO(out, rc = -EINVAL);
+
+	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+		if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev))
+			rc = lquota_obj_iter(env, dev, obj, oqctl, buffer, size,
+					 false, true);
+		else
+			rc = lquota_obj_iter(env, dev, obj, oqctl, buffer, size,
+					 false, false);
+
+		GOTO(out, rc);
+	}
 
 	/* lookup record storing space accounting information for this ID */
 	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_acct_rec,

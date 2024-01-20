@@ -448,6 +448,9 @@ struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 void lquota_generate_fid(struct lu_fid *, int, int);
 int lquota_extract_fid(const struct lu_fid *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
+int lquota_obj_iter(const struct lu_env *env, struct dt_device *dev,
+		    struct dt_object *obj, struct obd_quotactl *oqctl,
+		    char *buffer, int size, bool is_glb, bool is_md);
 
 /* lquota_entry.c */
 /* site create/destroy */

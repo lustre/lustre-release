@@ -30,6 +30,7 @@
 
 #include <obd_class.h>
 #include <lustre_osc.h>
+#include <lustre_quota.h>
 
 #include "osc_internal.h"
 
@@ -205,16 +206,24 @@ void osc_quota_cleanup(struct obd_device *obd)
 int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
                  struct obd_quotactl *oqctl)
 {
-        struct ptlrpc_request *req;
-        struct obd_quotactl   *oqc;
-        int                    rc;
-        ENTRY;
+	struct ptlrpc_request	*req;
+	struct obd_quotactl	*oqc;
+	int			 rc;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_OST_QUOTACTL, LUSTRE_OST_VERSION,
-                                        OST_QUOTACTL);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
+
+	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+					&RQF_OST_QUOTACTL, LUSTRE_OST_VERSION,
+					OST_QUOTACTL);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
+		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, LQUOTA_ITER_BUFLEN);
+	else
+		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, 0);
 
         oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
         *oqc = *oqctl;
@@ -227,14 +236,52 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
         if (rc)
                 CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
 
-        if (req->rq_repmsg &&
-            (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
-                *oqctl = *oqc;
-        } else if (!rc) {
-                CERROR ("Can't unpack obd_quotactl\n");
-                rc = -EPROTO;
-        }
-        ptlrpc_req_finished(req);
+	if (req->rq_repmsg) {
+		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
 
-        RETURN(rc);
+		oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+		if (!oqc)
+			GOTO(out, rc = -EPROTO);
+
+		*oqctl = *oqc;
+
+		if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+			void *buffer;
+			struct lquota_iter *iter;
+
+			buffer = req_capsule_server_get(&req->rq_pill,
+							&RMF_OBD_QUOTA_ITER);
+
+			if (buffer == NULL) {
+				CDEBUG(D_QUOTA, "%s: no buffer in iter req\n",
+				       exp->exp_obd->obd_name);
+
+				rc = -EPROTO;
+				GOTO(out, rc);
+			}
+
+			OBD_ALLOC_LARGE(iter,
+			       sizeof(struct lquota_iter) + LQUOTA_ITER_BUFLEN);
+			if (iter == NULL)
+				GOTO(out, rc = -ENOMEM);
+
+			INIT_LIST_HEAD(&iter->li_link);
+			list_add(&iter->li_link, lst);
+
+			memcpy(iter->li_buffer, buffer, LQUOTA_ITER_BUFLEN);
+			iter->li_dt_size = oqctl->qc_iter_dt_buflen;
+			oqctl->qc_iter_md_buflen = 0;
+			oqctl->qc_iter_dt_buflen = 0;
+		}
+	} else if (!rc) {
+		CERROR("%s: cannot unpack obd_quotactl: rc = %d\n",
+		       exp->exp_obd->obd_name, rc);
+
+		rc = -EPROTO;
+	}
+
+out:
+	ptlrpc_req_finished(req);
+
+	RETURN(rc);
 }

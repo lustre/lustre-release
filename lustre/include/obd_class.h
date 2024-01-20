@@ -1323,6 +1323,23 @@ static inline int obd_quotactl(struct obd_export *exp,
 	RETURN(rc);
 }
 
+static inline int obd_quota_iter(struct obd_export *exp,
+				 struct obd_quotactl *oqctl,
+				 struct list_head *list)
+{
+	int rc = 0;
+
+	do {
+		oqctl->qc_iter_list = (__u64)list;
+		rc = obd_quotactl(exp, oqctl);
+		if (rc)
+			break;
+
+	} while (oqctl->qc_iter_md_offset || oqctl->qc_iter_dt_offset);
+
+	return rc;
+}
+
 static inline int obd_health_check(const struct lu_env *env,
 				   struct obd_device *obd)
 {

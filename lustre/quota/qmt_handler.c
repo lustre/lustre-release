@@ -125,7 +125,7 @@ static void qmt_set_id_notify(const struct lu_env *env, struct qmt_device *qmt,
 
 	mutex_lock(&lqe_gl->lqe_glbl_data_lock);
 	if (lqe_gl->lqe_glbl_data)
-		qmt_seed_glbe(env, lqe_gl->lqe_glbl_data);
+		qmt_seed_glbe(env, lqe_gl->lqe_glbl_data, false);
 	mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
 
 	/* Even if slaves haven't enqueued quota lock yet,
@@ -174,6 +174,9 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 		th = qmt_trans_start(env, lqe);
 		if (IS_ERR(th))
 			GOTO(out_nolock, rc = PTR_ERR(th));
+
+		if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_NOSYNC))
+			th->th_sync = 0;
 	}
 
 	now = ktime_get_real_seconds();
@@ -389,6 +392,9 @@ static int qmt_delete_qid(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_NOSYNC))
+		th->th_sync = 0;
+
 	lqe_write_lock(lqe);
 	rc = lquota_disk_delete(env, th,
 				qpi->qpi_glb_obj[qtype], qid, &ver);
@@ -544,15 +550,18 @@ out:
  * \param oqctl - is the quotactl request
  */
 static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
-			struct obd_quotactl *oqctl)
+			struct obd_quotactl *oqctl, char *buffer, int size)
 {
 	struct qmt_thread_info *qti = qmt_info(env);
 	union lquota_id	*id  = &qti->qti_id;
 	struct qmt_device *qmt = lu2qmt_dev(ld);
+	struct dt_object *glb_obj;
 	struct obd_dqblk *dqb = &oqctl->qc_dqblk;
+	struct qmt_pool_info *pool;
 	char *poolname;
 	int rc = 0;
 	bool is_default = false;
+	bool is_first_iter = false;
 	ENTRY;
 
 	LASSERT(qmt != NULL);
@@ -610,6 +619,52 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 				     id, 0, 0, oqctl->qc_dqinfo.dqi_bgrace,
 				     QIF_TIMES, false, false,
 				     poolname);
+		break;
+
+	case LUSTRE_Q_ITERQUOTA:
+		if (oqctl->qc_iter_md_offset == 0 &&
+		    oqctl->qc_iter_dt_offset == 0)
+			is_first_iter = true;
+
+		if (is_first_iter || oqctl->qc_iter_md_offset != 0) {
+			pool = qmt_pool_lookup_name(env, qmt, LQUOTA_RES_MD,
+						    NULL);
+			if (IS_ERR(pool))
+				RETURN(PTR_ERR(pool));
+
+			glb_obj = pool->qpi_glb_obj[oqctl->qc_type];
+			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
+					 oqctl, buffer, size / 2, true, true);
+
+			qpi_putref(env, pool);
+
+			if (rc < 0 && rc != -ENOENT)
+				break;
+
+			rc = 0;
+		} else {
+			oqctl->qc_iter_md_buflen = 0;
+		}
+
+		if (is_first_iter || oqctl->qc_iter_dt_offset != 0) {
+			pool = qmt_pool_lookup_name(env, qmt, LQUOTA_RES_DT,
+						    NULL);
+			if (IS_ERR(pool))
+				RETURN(PTR_ERR(pool));
+
+			glb_obj = pool->qpi_glb_obj[oqctl->qc_type];
+			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
+					 oqctl, buffer + size / 2, size / 2,
+					 true, false);
+			qpi_putref(env, pool);
+
+			if (rc < 0 && rc != -ENOENT)
+				break;
+
+			rc = 0;
+		} else {
+			oqctl->qc_iter_dt_buflen = 0;
+		}
 		break;
 
 	case LUSTRE_Q_GETDEFAULT:

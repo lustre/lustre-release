@@ -17,6 +17,10 @@ lfs-quota \- display quota limits and status for users, groups, or projects.
 .B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
 .br
 
+.br
+.B lfs quota -a \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.br
+
 .TP
 .SH DESCRIPTION
 .PP
@@ -105,6 +109,10 @@ Display default project grace times for <\fIfilesystem\fR>.
 .TP
 .B --pool <\fIpname\fR>
 Display user, group or project grace times per OST pool \fIpname\fR.
+.TP
+.B lfs quota -a \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.TP
+Display all quota setting for all users, groups, or projects.
 .TP
 .SH EXAMPLES
 .TP

@@ -460,7 +460,8 @@ our $logFunctions = qr{(?x:
 	CDEBUG|CERROR|CNETERR|CEMERG|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
 	panic|
 	MODULE_[A-Z_]+|
-	seq_vprintf|seq_printf|seq_puts
+	seq_vprintf|seq_printf|seq_puts|
+	printf|fprintf
 )};
 
 our $signature_tags = qr{(?xi:

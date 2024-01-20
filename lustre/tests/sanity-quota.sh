@@ -4018,6 +4018,192 @@ test_48()
 }
 run_test 48 "lfs quota --delete should delete quota project ID"
 
+test_get_allquota() {
+	local file_cnt=$1
+	local start_qid=$2
+	local end_qid=$3
+	local u_blimit=$4
+	local u_ilimit=$5
+	local g_blimit=$6
+	local g_ilimit=$7
+	local TFILE="$DIR/$tdir/$tfile-0"
+
+	local u_blimits
+	local u_ilimits
+	local g_blimits
+	local g_ilimits
+	local u_busage
+	local u_busage2
+	local g_busage
+	local g_busage2
+	local u_iusage
+	local u_iusage2
+	local g_iusage
+	local g_iusage2
+	local start
+	local total
+
+	local qid_cnt=$file_cnt
+
+	[ $end_qid -ne 0 ] && qid_cnt=$((end_qid - start_qid + 1))
+	[ $end_qid -ge $file_cnt ] &&
+		qid_cnt=$((qid_cnt - end_qid + file_cnt))
+	[ $qid_cnt -le 0 ] && error "quota ID count is wrong"
+
+	cnt=$($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | wc -l)
+	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all usr quota"
+	cnt=$($LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | wc -l)
+	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all grp quota"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	eval $($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT |
+	    awk 'NR > 2 {printf("u_blimits[%d]=%d;u_ilimits[%d]=%d; \
+		 u_busage[%d]=%d;u_iusage[%d]=%d;", \
+		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+	eval $($LFS quota -a -s $start_qid -e $end_qid -g $MOUNT |
+	    awk 'NR > 2 {printf("g_blimits[%d]=%d;g_ilimits[%d]=%d; \
+		 g_busage[%d]=%d;g_iusage[%d]=%d;", \
+		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+
+	for i in $(seq $qid_cnt); do
+		[ $i -le 2 ] && continue
+
+		[ ${u_ilimits[$i]} -eq $u_ilimit ] ||
+		error "file limit for user ID $((start_qid + i - 3)) is wrong"
+		[ ${u_blimits[$i]} -eq $u_blimit ] ||
+		error "block limit for user ID $((start_qid + i - 3)) is wrong"
+		[ ${g_ilimits[$i]} -eq $g_ilimit ] ||
+		error "file limit for group ID $((start_qid + i - 3)) is wrong"
+		[ ${g_blimits[$i]} -eq $g_blimit ] ||
+		error "block limit for group ID $((start_qid + i - 3)) is wrong"
+	done
+
+	echo "Create $qid_cnt files..."
+	createmany -S 4k -U $start_qid -G $start_qid -o ${TFILE} $qid_cnt ||
+			error "failed to create many files"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	start=$SECONDS
+	$LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | tail -n 50
+	total=$((SECONDS - start))
+	(( end - start > 0 )) &&
+		echo "time=$total, rate=$((qid_cnt / total))/s" ||
+		echo "time=0, rate=$qid_cnt/0"
+
+	start=$SECONDS
+	$LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | tail -n 50
+	total=$((SECONDS - start))
+	(( end - start > 0 )) &&
+		echo "time=$total, rate=$((qid_cnt / total))/s" ||
+		echo "time=0, rate=$qid_cnt/0"
+
+	cnt=$($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | wc -l)
+	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all usr quota"
+	cnt=$($LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | wc -l)
+	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all grp quota"
+
+	eval $($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT |
+	    awk 'NR > 2 {printf("u_blimits[%d]=%d;u_ilimits[%d]=%d; \
+		 u_busage2[%d]=%d;u_iusage2[%d]=%d;", \
+		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+	eval $($LFS quota -a -s $start_qid -e $end_qid  -g $MOUNT |
+	    awk 'NR > 2 {printf("g_blimits[%d]=%d;g_ilimits[%d]=%d; \
+		 g_busage2[%d]=%d;g_iusage2[%d]=%d;", \
+		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+
+	sz=$((sz / 1024))
+	for i in $(seq $qid_cnt); do
+		[ $i -le 2 ] && continue
+
+		[ ${u_ilimits[$i]} -eq $u_ilimit ] ||
+		error "file limit for user ID $((start_qid + i - 3)) is wrong"
+		[ ${u_blimits[$i]} -eq $u_blimit ] ||
+		error "block limit for user ID $((start_qid + i - 3)) is wrong"
+		[ ${g_ilimits[$i]} -eq $g_ilimit ] ||
+		error "file limit for group ID $((start_qid + i - 3)) is wrong"
+		[ ${g_blimits[$i]} -eq $g_blimit ] ||
+		error "block limit for group ID $((start_qid + i - 3)) is wrong"
+		[ ${u_iusage2[$i]} -eq $((u_iusage[$i] + 1)) ] ||
+		error "file usage for user ID $((start_qid + i - 3)) is wrong ${u_iusage[$i]}, ${u_iusage2[$i]}"
+		[ ${u_busage2[$i]} -ge $((u_busage[$i] + 4)) ] ||
+		error "block usage for user ID $((start_qid + i - 3)) is wrong ${u_busage[$i]}, ${u_busage2[$i]}"
+		[ ${g_iusage2[$i]} -eq $((g_iusage[$i] + 1)) ] ||
+		error "file usage for group ID $((start_qid + i - 3)) is wrong ${g_iusage[$i]}, ${g_iusage2[$i]}"
+		[ ${g_busage2[$i]} -ge $((g_busage[$i] + 4)) ] ||
+		error "block usage for group ID $((start_qid + i - 3)) is wrong ${g_busage[$i]}, ${g_busage2[$i]}"
+	done
+
+	unlinkmany ${TFILE} $qid_cnt
+}
+
+test_49()
+{
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "Need MDS version at least 2.15.60"
+
+	local u_blimit=102400
+	local u_ilimit=10240
+	local g_blimit=204800
+	local g_ilimit=20480
+	local count=10
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	[ "$SLOW" = "yes" ] && total_file_cnt=20000 || total_file_cnt=1000
+	total_file_cnt=${NUM_QIDS:-$total_file_cnt}
+
+	local start=$SECONDS
+
+	echo "setquota for users and groups"
+	#define OBD_FAIL_QUOTA_NOSYNC		0xA09
+	do_facet mds1 $LCTL set_param fail_loc=0xa09
+	for i in $(seq $total_file_cnt); do
+		$LFS setquota -u $i -B ${u_blimit} -I ${u_ilimit} $MOUNT ||
+				error "failed to setquota for usr $i"
+		$LFS setquota -g $i -B ${g_blimit} -I ${g_ilimit} $MOUNT ||
+				error "failed to setquota for grp $i"
+		(( i % 1000 == 0)) &&
+			echo "lfs setquota: $i / $((SECONDS - start)) seconds"
+	done
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	start=$SECONDS
+	$LFS quota -a -u $MOUNT | tail -n 100
+	echo "get all usr quota: $total_file_cnt / $((SECONDS - start)) seconds"
+
+	start=$SECONDS
+	$LFS quota -a -g $MOUNT | tail -n 100
+	echo "get all grp quota: $total_file_cnt / $((SECONDS - start)) seconds"
+
+	while true; do
+		test_get_allquota $total_file_cnt $count $((count + 5000)) \
+			$u_blimit $u_ilimit $g_blimit $g_ilimit
+		test_get_allquota $total_file_cnt $count $((count + 5000)) \
+			$u_blimit $u_ilimit $g_blimit $g_ilimit
+
+		count=$((count + 5000))
+		[ $count -gt $total_file_cnt ] && break
+	done;
+
+	do_facet mds1 $LCTL set_param fail_loc=0xa08
+	for i in $(seq $total_file_cnt); do
+		$LFS setquota -u $i --delete $MOUNT
+		$LFS setquota -g $i --delete $MOUNT
+	done
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	formatall
+	setupall
+}
+run_test 49 "lfs quota -a prints the quota usage for all quota IDs"
+
 test_50() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
@@ -5000,7 +5186,7 @@ get_slave_nr() {
 	wait_update_facet "--quiet" mds1 \
 		"$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info \
 			>/dev/null 2>&1 || echo foo" "">/dev/null ||
-	error "mds1: failed to create quota pool $pool"
+		error "mds1: failed to create quota pool $pool"
 
 	do_facet mds1 $LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info |
 		awk '/usr/ {getline; print $2}'

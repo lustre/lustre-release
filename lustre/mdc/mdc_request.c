@@ -57,6 +57,7 @@
 #include <lustre_log.h>
 #include <lustre_osc.h>
 #include <lustre_swab.h>
+#include <lustre_quota.h>
 #include <obd_class.h>
 
 #include "mdc_internal.h"
@@ -2067,7 +2068,6 @@ out:
 
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk);
-
 static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
                         struct obd_quotactl *oqctl)
 {
@@ -2086,6 +2086,14 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 				     &RMF_OBD_QUOTACTL,
 				     RCL_CLIENT,
 				     sizeof(*oqc) + LOV_MAXPOOLNAME + 1);
+
+	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
+	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
+		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, LQUOTA_ITER_BUFLEN);
+	else
+		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTA_ITER,
+				     RCL_SERVER, 0);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION,
 				 MDS_QUOTACTL);
@@ -2109,7 +2117,42 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 
 	if (req->rq_repmsg &&
 	    (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
+		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
+
 		QCTL_COPY(oqctl, oqc);
+
+		if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
+		    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+			void *buffer;
+			struct lquota_iter *iter;
+
+			buffer = req_capsule_server_get(&req->rq_pill,
+							&RMF_OBD_QUOTA_ITER);
+
+			if (buffer == NULL) {
+				CDEBUG(D_QUOTA, "%s: no buffer in iter req\n",
+				       exp->exp_obd->obd_name);
+
+				rc = -EPROTO;
+				GOTO(out, rc);
+			}
+
+			OBD_ALLOC_LARGE(iter,
+			       sizeof(struct lquota_iter) + LQUOTA_ITER_BUFLEN);
+			if (iter == NULL)
+				GOTO(out, rc = -ENOMEM);
+
+			INIT_LIST_HEAD(&iter->li_link);
+			list_add(&iter->li_link, lst);
+
+			memcpy(iter->li_buffer, buffer, LQUOTA_ITER_BUFLEN);
+			iter->li_md_size = oqctl->qc_iter_md_buflen;
+			if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA)
+				iter->li_dt_size = oqctl->qc_iter_dt_buflen;
+
+			oqctl->qc_iter_md_buflen = 0;
+			oqctl->qc_iter_dt_buflen = 0;
+		}
 	} else if (!rc) {
 		rc = -EPROTO;
 		CERROR("%s: cannot unpack obd_quotactl: rc = %d\n",

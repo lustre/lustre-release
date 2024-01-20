@@ -429,7 +429,8 @@ command_t cmdlist[] = {
 	 "	       [{-u|-g|-p} UNAME|UID|GNAME|GID|PROJID]\n"
 	 "	       [--pool <OST pool name>] <filesystem>\n"
 	 "	 quota -t <-u|-g|-p> [--pool <OST pool name>] <filesystem>\n"
-	 "	 quota [-q] [-v] [h] {-U|-G|-P} [--pool <OST pool name>] <filesystem>"},
+	 "	 quota [-q] [-v] [h] {-U|-G|-P} [--pool <OST pool name>] <filesystem>\n"
+	 "	 quota -a {-u|-g|-p} [-s start_qid] [-e end_qid] <filesystem>"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|-r] <file|directory...>\n"
@@ -8844,8 +8845,9 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 
 #define STRBUF_LEN	24
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
-			int rc, bool h, bool show_default)
+			int rc, bool h, bool show_default, bool show_qid)
 {
+	char *name;
 	time_t now;
 
 	time(&now);
@@ -8883,10 +8885,26 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 				iover = 3;
 		}
 
-		if (strlen(mnt) > 15)
-			printf("%s\n%15s", mnt, "");
-		else
-			printf("%15s", mnt);
+		if (show_qid) {
+			if (qctl->qc_type == USRQUOTA) {
+				if (uid2name(&name, qctl->qc_id))
+					printf("%10u", qctl->qc_id);
+				else
+					printf("%10s", name);
+			} else if (qctl->qc_type == GRPQUOTA) {
+				if (gid2name(&name, qctl->qc_id))
+					printf("%10u", qctl->qc_id);
+				else
+					printf("%10s", name);
+			} else {
+				printf("%10u", qctl->qc_id);
+			}
+		} else {
+			if (strlen(mnt) > 15)
+				printf("%s\n%15s", mnt, "");
+			else
+				printf("%15s", mnt);
+		}
 
 		if (show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
@@ -9068,7 +9086,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 				memset(&qctl->qc_dqblk, 0,
 				       sizeof(qctl->qc_dqblk));
 				print_quota(name, qctl, qctl->qc_valid, 0, h,
-					    false);
+					    false, false);
 				rc = 0;
 				continue;
 			}
@@ -9081,7 +9099,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 		}
 
 		print_quota(obd_uuid2str(&qctl->obd_uuid), qctl,
-			    qctl->qc_valid, 0, h, false);
+			    qctl->qc_valid, 0, h, false, false);
 		*total += is_mdt ? qctl->qc_dqblk.dqb_ihardlimit :
 				   qctl->qc_dqblk.dqb_bhardlimit;
 	}
@@ -9092,36 +9110,17 @@ out:
 	return rc ? : rc1;
 }
 
-static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
+static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 			   int verbose, int quiet, bool human_readable,
-			   bool show_default)
+			   bool show_default, bool show_qid, int rc)
 {
-	int rc1 = 0, rc2 = 0, rc3 = 0;
+	int rc1 = 0, rc2 = 0;
 	char *obd_type = (char *)qctl->obd_type;
 	char *obd_uuid = (char *)qctl->obd_uuid.uuid;
 	__u64 total_ialloc = 0, total_balloc = 0;
 	bool use_default_for_blk = false;
 	bool use_default_for_file = false;
 	int inacc;
-
-	rc1 = llapi_quotactl(mnt, qctl);
-	if (rc1 < 0) {
-		switch (rc1) {
-		case -ESRCH:
-			fprintf(stderr, "%s quotas are not enabled.\n",
-				qtype_name(qctl->qc_type));
-			goto out;
-		case -EPERM:
-			fprintf(stderr, "Permission denied.\n");
-		case -ENODEV:
-		case -ENOENT:
-			/* We already got error message. */
-			goto out;
-		default:
-			fprintf(stderr, "Unexpected quotactl error: %s\n",
-				strerror(-rc1));
-		}
-	}
 
 	if (!show_default && qctl->qc_id == 0) {
 		qctl->qc_dqblk.dqb_bhardlimit = 0;
@@ -9145,13 +9144,13 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		qctl->qc_dqblk.dqb_itime &= LQUOTA_GRACE_MASK;
 	}
 
-	if ((qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
+	if (!show_qid && (qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
 	     qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ||
 	     qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL ||
 	     qctl->qc_cmd == LUSTRE_Q_GETDEFAULT) && !quiet)
 		print_quota_title(name, qctl, human_readable, show_default);
 
-	if (rc1 && *obd_type)
+	if (rc && *obd_type)
 		fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
 	if (qctl->qc_valid != QC_GENERAL)
@@ -9162,16 +9161,17 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		((qctl->qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
 		 (QIF_LIMITS|QIF_USAGE));
 
-	print_quota(mnt, qctl, QC_GENERAL, rc1, human_readable, show_default);
+	print_quota(mnt, qctl, QC_GENERAL, rc, human_readable, show_default,
+		    show_qid);
 
-	if (!show_default && verbose &&
+	if (!show_qid && !show_default && verbose &&
 	    qctl->qc_valid == QC_GENERAL && qctl->qc_cmd != LUSTRE_Q_GETINFO &&
 	    qctl->qc_cmd != LUSTRE_Q_GETINFOPOOL) {
 		char strbuf[STRBUF_LEN];
 
-		rc2 = print_obd_quota(mnt, qctl, 1, human_readable,
+		rc1 = print_obd_quota(mnt, qctl, 1, human_readable,
 				      &total_ialloc);
-		rc3 = print_obd_quota(mnt, qctl, 0, human_readable,
+		rc2 = print_obd_quota(mnt, qctl, 0, human_readable,
 				      &total_balloc);
 		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
 			   human_readable);
@@ -9187,19 +9187,117 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		printf("%cid %u is using default file quota setting\n",
 		       *qtype_name(qctl->qc_type), qctl->qc_id);
 
-	if (rc1 || rc2 || rc3 || inacc)
-		printf("Some errors happened when getting quota info. Some devices may be not working or deactivated. The data in \"[]\" is inaccurate.\n");
-out:
+	if (!show_qid && (rc || rc1 || rc2 || inacc))
+		printf("%d Some errors happened when getting quota info. Some devices may be not working or deactivated. The data in \"[]\" is inaccurate.\n", inacc);
+
+	if (rc)
+		return rc;
 	if (rc1)
 		return rc1;
 	if (rc2)
 		return rc2;
-	if (rc3)
-		return rc3;
 	if (inacc)
 		return -EIO;
 
 	return 0;
+}
+
+static int iter_all_quota(char *mnt, struct if_quotactl *qctl, int quiet,
+			  bool human_readable)
+{
+	struct if_quotactl qctl_tmp, *qctl_iter;
+	void *buffer = NULL;
+	__u64 mark;
+	__u64 cur, buflen = 0;
+	int rc = 0;
+
+	memcpy(&qctl_tmp, qctl, sizeof(struct if_quotactl));
+	qctl_tmp.qc_cmd = LUSTRE_Q_ITERQUOTA;
+	rc = llapi_quotactl(mnt, &qctl_tmp);
+	if (rc)
+		goto out;
+
+	buflen = qctl_tmp.qc_allquota_count * sizeof(struct if_quotactl);
+	buffer = malloc(buflen);
+	if (buffer == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	mark = qctl_tmp.qc_allquota_mark;
+	memcpy(&qctl_tmp, qctl, sizeof(struct if_quotactl));
+	qctl_tmp.qc_cmd = LUSTRE_Q_GETALLQUOTA;
+	qctl_tmp.qc_allquota_buffer = (__u64)buffer;
+	qctl_tmp.qc_allquota_buflen = buflen;
+	qctl_tmp.qc_allquota_mark = mark;
+	rc = llapi_quotactl(mnt, &qctl_tmp);
+	if (rc)
+		goto out;
+
+	printf("Filesystem %s, Disk %s quotas\n", mnt,
+	       qtype_name(qctl->qc_type));
+	printf("%10s%8s %7s%8s%8s%8s %7s%8s%8s\n", "quota_id",
+	       human_readable ? "used" : "kbytes", "quota", "limit", "grace",
+	       "files", "quota", "limit", "grace");
+
+	cur = 0;
+	while (cur < buflen) {
+		if ((buflen - cur) < sizeof(struct if_quotactl)) {
+			rc = -EFAULT;
+			break;
+		}
+
+		qctl_iter = buffer + cur;
+		qctl_iter->qc_cmd = LUSTRE_Q_GETQUOTA;
+		cur += sizeof(struct if_quotactl);
+
+		/* Is no file created for this quota ID yet? */
+		if ((qctl_iter->qc_dqblk.dqb_valid & QIF_USAGE) != QIF_USAGE)
+			qctl_iter->qc_dqblk.dqb_valid |= QIF_USAGE;
+
+		print_one_quota(mnt, NULL, qctl_iter, 0, quiet,
+				human_readable, false, true, 0);
+	}
+
+out:
+	if (buffer != NULL)
+		free(buffer);
+
+	if (rc)
+		fprintf(stderr, "get all quota failed %d\n", rc);
+
+	return rc;
+}
+
+static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
+			   int verbose, int quiet, bool human_readable,
+			   bool show_default)
+{
+	int rc;
+
+	rc = llapi_quotactl(mnt, qctl);
+	if (rc < 0) {
+		switch (rc) {
+		case -ESRCH:
+			fprintf(stderr, "%s quotas are not enabled.\n",
+				qtype_name(qctl->qc_type));
+			break;
+		case -EPERM:
+			fprintf(stderr, "Permission denied.\n");
+		case -ENODEV:
+		case -ENOENT:
+			/* We already got error message. */
+			break;
+		default:
+			fprintf(stderr, "Unexpected quotactl error: %s\n",
+				strerror(-rc));
+		}
+
+		return rc;
+	}
+
+	return print_one_quota(mnt, name, qctl, verbose, quiet, human_readable,
+			       show_default, false, rc);
 }
 
 static int lfs_project(int argc, char **argv)
@@ -9370,6 +9468,7 @@ static int lfs_quota(int argc, char **argv)
 	char *obd_uuid;
 	int rc = 0, rc1 = 0, verbose = 0, quiet = 0;
 	__u32 valid = QC_GENERAL, idx = 0;
+	__u32 start_qid = 0, end_qid = 0;
 	bool human_readable = false;
 	bool show_default = false;
 	int qtype;
@@ -9389,7 +9488,7 @@ static int lfs_quota(int argc, char **argv)
 	qctl->qc_type = ALLQUOTA;
 	obd_uuid = (char *)qctl->obd_uuid.uuid;
 
-	while ((c = getopt_long(argc, argv, "gGi:I:o:pPqtuUvh",
+	while ((c = getopt_long(argc, argv, "ae:gGi:I:o:pPqs:tuUvh",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'U':
@@ -9415,6 +9514,9 @@ quota_type:
 				goto out;
 			}
 			qctl->qc_type = qtype;
+			break;
+		case 'a':
+			qctl->qc_cmd = LUSTRE_Q_ITERQUOTA;
 			break;
 		case 't':
 			qctl->qc_cmd = LUSTRE_Q_GETINFO;
@@ -9444,6 +9546,12 @@ quota_type:
 				rc = CMD_HELP;
 				goto out;
 			}
+			break;
+		case 's':
+			start_qid = strtoul(optarg, NULL, 0);
+			break;
+		case 'e':
+			end_qid = strtoul(optarg, NULL, 0);
 			break;
 		case 'v':
 			verbose = 1;
@@ -9558,6 +9666,34 @@ quota_type:
 				goto out;
 			}
 		}
+	} else if (qctl->qc_cmd == LUSTRE_Q_ITERQUOTA) {
+		if (optind + 1 != argc) {
+			fprintf(stderr,
+				"%s quota: mount point must be specified\n",
+				progname);
+			rc = CMD_HELP;
+			goto out;
+		}
+
+		if (qctl->qc_type == ALLQUOTA) {
+			fprintf(stderr, "%s quota: no quota type to iterate\n",
+				progname);
+			rc = CMD_HELP;
+			goto out;
+		}
+
+		if (end_qid != 0 && start_qid > end_qid) {
+			fprintf(stderr,
+				"%s quota: end qid is smaller than start qid\n",
+				progname);
+			rc = CMD_HELP;
+			goto out;
+		}
+
+		qctl->qc_allquota_qid_start = start_qid;
+		qctl->qc_allquota_qid_end = end_qid;
+		rc = iter_all_quota(argv[optind], qctl, quiet, human_readable);
+		goto out;
 	} else if (optind + 1 != argc || qctl->qc_type == ALLQUOTA) {
 		fprintf(stderr, "%s quota: missing quota info argument(s)\n",
 			progname);

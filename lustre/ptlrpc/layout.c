@@ -104,6 +104,12 @@ static const struct req_msg_field *quotactl_only[] = {
 	&RMF_OBD_QUOTACTL
 };
 
+static const struct req_msg_field *quotactl_server_only[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_OBD_QUOTACTL,
+	&RMF_OBD_QUOTA_ITER
+};
+
 static const struct req_msg_field *quota_body_only[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_QUOTA_BODY
@@ -1036,6 +1042,10 @@ struct req_msg_field RMF_OBD_QUOTACTL =
 		     lustre_swab_obd_quotactl, NULL);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
 
+struct req_msg_field RMF_OBD_QUOTA_ITER =
+	DEFINE_MSGFL("quota_iter_key", 0, -1, NULL, NULL);
+EXPORT_SYMBOL(RMF_OBD_QUOTA_ITER);
+
 struct req_msg_field RMF_QUOTA_BODY =
 	DEFINE_MSGF("quota_body", 0,
 		    sizeof(struct quota_body), lustre_swab_quota_body, NULL);
@@ -1446,11 +1456,11 @@ struct req_format RQF_FLD_READ =
 EXPORT_SYMBOL(RQF_FLD_READ);
 
 struct req_format RQF_MDS_QUOTACTL =
-	DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
+	DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_server_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
 
 struct req_format RQF_OST_QUOTACTL =
-	DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
+	DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_server_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
 
 struct req_format RQF_QUOTA_DQACQ =

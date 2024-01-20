@@ -1557,6 +1557,14 @@ struct obd_quotactl {
 	char			qc_poolname[];
 };
 
+#define qc_iter_md_offset	qc_dqblk.dqb_bhardlimit
+#define qc_iter_dt_offset	qc_dqblk.dqb_ihardlimit
+#define qc_iter_md_buflen	qc_dqblk.dqb_bsoftlimit
+#define qc_iter_dt_buflen	qc_dqblk.dqb_isoftlimit
+#define qc_iter_list		qc_dqblk.dqb_curspace
+#define qc_iter_qid_start	qc_dqblk.dqb_curinodes
+#define qc_iter_qid_end		qc_dqblk.dqb_btime
+
 #define Q_COPY(out, in, member) (out)->member = (in)->member
 
 #define QCTL_COPY_NO_PNAME(out, in)					\

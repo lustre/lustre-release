@@ -3313,16 +3313,24 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	struct obd_export *exp  = tsi->tsi_exp;
 	struct req_capsule *pill = tsi->tsi_pill;
 	struct obd_quotactl *oqctl, *repoqc;
-	int id, rc;
 	struct mdt_device *mdt = mdt_exp2dev(exp);
 	struct lu_device *qmt = mdt->mdt_qmt_dev;
 	struct lu_nodemap *nodemap;
+	char *buffer = NULL;
+	int id, rc;
 
 	ENTRY;
 
 	oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
 	if (!oqctl)
 		RETURN(err_serious(-EPROTO));
+
+	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
+	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
+		req_capsule_set_size(pill, &RMF_OBD_QUOTA_ITER, RCL_SERVER,
+				     LQUOTA_ITER_BUFLEN);
+	else
+		req_capsule_set_size(pill, &RMF_OBD_QUOTA_ITER, RCL_SERVER, 0);
 
 	rc = req_capsule_server_pack(pill);
 	if (rc)
@@ -3352,12 +3360,14 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_GETQUOTAPOOL:
 	case LUSTRE_Q_GETINFOPOOL:
 	case LUSTRE_Q_GETDEFAULT_POOL:
+	case LUSTRE_Q_ITERQUOTA:
 		if (qmt == NULL)
 			GOTO(out_nodemap, rc = -EOPNOTSUPP);
 		/* slave quotactl */
 		fallthrough;
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
+	case LUSTRE_Q_ITEROQUOTA:
 		break;
 	default:
 		rc = -EFAULT;
@@ -3387,6 +3397,13 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	if (repoqc == NULL)
 		GOTO(out_nodemap, rc = err_serious(-EFAULT));
 
+	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
+	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
+		buffer = req_capsule_server_get(pill, &RMF_OBD_QUOTA_ITER);
+		if (buffer == NULL)
+			GOTO(out_nodemap, rc = err_serious(-EFAULT));
+	}
+
 	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA)
 		barrier_exit(tsi->tsi_tgt->lut_bottom);
 
@@ -3414,15 +3431,20 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_GETDEFAULT_POOL:
 	case LUSTRE_Q_DELETEQID:
 	case LUSTRE_Q_RESETQID:
+	case LUSTRE_Q_ITERQUOTA:
 		/* forward quotactl request to QMT */
-		rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, oqctl);
+		rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, oqctl, buffer,
+					    buffer == NULL ? 0 :
+							LQUOTA_ITER_BUFLEN);
 		break;
 
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
+	case LUSTRE_Q_ITEROQUOTA:
 		/* slave quotactl */
 		rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom,
-				   oqctl);
+				   oqctl, buffer,
+				   buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN);
 		break;
 
 	default:

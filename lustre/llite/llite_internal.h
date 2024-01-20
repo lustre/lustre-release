@@ -992,6 +992,9 @@ struct ll_sb_info {
 	/* cached file security context xattr name. e.g: security.selinux */
 	char *ll_secctx_name;
 	__u32 ll_secctx_name_size;
+
+	/* LU-14535: the list of "lfs quota -a" */
+	struct list_head	 ll_all_quota_list;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
@@ -1265,6 +1268,7 @@ enum get_default_layout_type {
 
 extern const struct file_operations ll_dir_operations;
 extern const struct inode_operations ll_dir_inode_operations;
+extern struct kmem_cache *quota_iter_slab;
 #ifdef HAVE_DIR_CONTEXT
 int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 		struct dir_context *ctx, int *partial_readdir_rc);
@@ -1278,6 +1282,7 @@ struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
 			      __u64 offset, int *partial_readdir_rc);
 void ll_release_page(struct inode *inode, struct page *page, bool remove);
 int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl);
+void ll_quota_iter_check_and_cleanup(struct ll_sb_info *sbi, bool check);
 
 /* llite/namei.c */
 extern const struct inode_operations ll_special_inode_operations;

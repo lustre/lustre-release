@@ -516,13 +516,13 @@ void qmt_free_lqe_gd(struct lqe_glbl_data *);
 void qmt_setup_lqe_gd(const struct lu_env *,  struct qmt_device *,
 		    struct lquota_entry *, struct lqe_glbl_data *, int);
 #define qmt_seed_glbe_edquot(env, lqeg) \
-		qmt_seed_glbe_all(env, lqeg, false, true)
+		qmt_seed_glbe_all(env, lqeg, false, true, false)
 #define qmt_seed_glbe_qunit(env, lqeg) \
-		qmt_seed_glbe_all(env, lqeg, true, false)
-#define qmt_seed_glbe(env, lqeg) \
-		qmt_seed_glbe_all(env, lqeg, true, true)
+		qmt_seed_glbe_all(env, lqeg, true, false, false)
+#define qmt_seed_glbe(env, lqeg, pool_locked) \
+		qmt_seed_glbe_all(env, lqeg, true, true, pool_locked)
 void qmt_seed_glbe_all(const struct lu_env *, struct lqe_glbl_data *,
-		       bool , bool);
+		       bool, bool, bool);
 
 /* qmt_handler.c */
 int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,

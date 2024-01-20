@@ -1207,8 +1207,10 @@ static int qmt_site_recalc_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				struct lquota_entry *lqeg = qti_lqes_glbl(env);
 
 				mutex_lock(&lqeg->lqe_glbl_data_lock);
-				if (lqeg->lqe_glbl_data)
-					qmt_seed_glbe(env, lqeg->lqe_glbl_data);
+				if (lqeg->lqe_glbl_data &&
+				    qti_lqes_cnt(env) > 0)
+					qmt_seed_glbe(env, lqeg->lqe_glbl_data,
+						      true);
 				mutex_unlock(&lqeg->lqe_glbl_data_lock);
 				qmt_id_lock_notify(qmt, lqeg);
 			}
