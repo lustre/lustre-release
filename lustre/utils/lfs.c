@@ -749,7 +749,8 @@ out:
 	return rc;
 }
 
-struct timespec timespec_sub(struct timespec *before, struct timespec *after)
+static struct timespec timespec_sub(struct timespec *before,
+				    struct timespec *after)
 {
 	struct timespec ret;
 
@@ -8130,7 +8131,7 @@ static inline __u64 lustre_stoqb(size_t space)
 #define lustre_stoqb   toqb
 #endif
 
-int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
+static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 {
 	int c, rc;
 	char *mnt, *obd_type = (char *)qctl->obd_type;
@@ -11040,7 +11041,7 @@ static const char *const ladvise_names[] = LU_LADVISE_NAMES;
 
 static const char *const lock_mode_names[] = LOCK_MODE_NAMES;
 
-int lfs_get_mode(const char *string)
+static int lfs_get_mode(const char *string)
 {
 	enum lock_mode_user mode;
 

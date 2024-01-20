@@ -445,7 +445,7 @@ int jt_lcfg_param(int argc, char **argv)
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_PARAM);
 }
 
-int lcfg_setparam_perm(char *func, char *buf)
+static int lcfg_setparam_perm(char *func, char *buf)
 {
 	int rc = 0;
 	struct lustre_cfg_bufs bufs;
@@ -535,7 +535,7 @@ static int jt_lcfg_setparam_perm(int argc, char **argv,
 	return rc;
 }
 
-int lcfg_conf_param(char *func, char *buf)
+static int lcfg_conf_param(char *func, char *buf)
 {
 	int rc;
 	struct lustre_cfg_bufs bufs;
@@ -901,7 +901,7 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 	return rc;
 }
 
-void print_obd_line(char *s)
+static void print_obd_line(char *s)
 {
 	const char *param = "osc/%s/ost_conn_uuid";
 	char obd_name[MAX_OBD_NAME];
@@ -951,7 +951,7 @@ fail_print:
 	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
 }
 
-int yaml_get_device_index(char *source)
+static int yaml_get_device_index(char *source)
 {
 	yaml_emitter_t request;
 	yaml_parser_t reply;
@@ -1840,7 +1840,7 @@ static enum paramtype construct_param(enum paramtype confset, const char *param,
 	return PT_NONE;
 }
 
-int lcfg_apply_param_yaml(char *func, char *filename)
+static int lcfg_apply_param_yaml(char *func, char *filename)
 {
 	FILE *file;
 	yaml_parser_t parser;

@@ -600,7 +600,7 @@ static int jt_pcc(int argc, char **argv)
 	return rc < 0 ? -rc : rc;
 }
 
-int lctl_main(int argc, char **argv)
+static int lctl_main(int argc, char **argv)
 {
 	int rc;
 

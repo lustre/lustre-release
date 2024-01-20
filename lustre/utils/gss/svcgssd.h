@@ -31,6 +31,7 @@
 #ifndef _RPC_SVCGSSD_H_
 #define _RPC_SVCGSSD_H_
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 #include <gssapi/gssapi.h>

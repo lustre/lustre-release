@@ -634,7 +634,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
  * Unload plugin and free backfs_ops structure. Must be called the same number
  * of times as load_backfs_module is.
  */
-void unload_backfs_module(struct module_backfs_ops *ops)
+static void unload_backfs_module(struct module_backfs_ops *ops)
 {
 #ifdef PLUGIN_DIR
 	if (!ops)
@@ -646,7 +646,7 @@ void unload_backfs_module(struct module_backfs_ops *ops)
 }
 
 /* Return true if backfs_ops has operations for the given mount_type. */
-int backfs_mount_type_okay(enum ldd_mount_type mount_type)
+static int backfs_mount_type_okay(enum ldd_mount_type mount_type)
 {
 	if (mount_type >= LDD_MT_LAST || mount_type < 0) {
 		fatal();

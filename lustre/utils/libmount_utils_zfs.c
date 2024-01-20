@@ -320,7 +320,7 @@ static int osd_check_zfs_setup(void)
 }
 
 /* Write the server config as properties associated with the dataset */
-int zfs_write_ldd(struct mkfs_opts *mop)
+static int zfs_write_ldd(struct mkfs_opts *mop)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char *ds = mop->mo_device;
@@ -367,7 +367,7 @@ out:
 }
 
 /* Mark a property to be removed by the form of "key=" */
-int zfs_erase_ldd(struct mkfs_opts *mop, char *param)
+static int zfs_erase_ldd(struct mkfs_opts *mop, char *param)
 {
 	char key[ZFS_MAXPROPLEN] = "";
 
@@ -470,7 +470,7 @@ static int zfs_get_prop_params(zfs_handle_t *zhp, char *param)
  * Read the server config as properties associated with the dataset.
  * Missing entries as not treated error and are simply skipped.
  */
-int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
+static int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 {
 	zfs_handle_t *zhp;
 	struct zfs_ldd_prop_bridge *bridge;
@@ -519,7 +519,7 @@ out:
 }
 
 /* Print ldd params */
-void zfs_print_ldd_params(struct mkfs_opts *mop)
+static void zfs_print_ldd_params(struct mkfs_opts *mop)
 {
 	char *from = mop->mo_ldd.ldd_params;
 	char *to;
@@ -554,7 +554,7 @@ void zfs_print_ldd_params(struct mkfs_opts *mop)
 	}
 }
 
-int zfs_is_lustre(char *ds, unsigned *mount_type)
+static int zfs_is_lustre(char *ds, unsigned int *mount_type)
 {
 	struct lustre_disk_data tmp_ldd;
 	int ret;
@@ -637,7 +637,7 @@ static int zfs_create_vdev(struct mkfs_opts *mop, char *vdev)
 	return ret;
 }
 
-int zfs_make_lustre(struct mkfs_opts *mop)
+static int zfs_make_lustre(struct mkfs_opts *mop)
 {
 	zfs_handle_t *zhp;
 	zpool_handle_t *php;
@@ -818,14 +818,14 @@ out:
 	return ret;
 }
 
-int zfs_enable_quota(struct mkfs_opts *mop)
+static int zfs_enable_quota(struct mkfs_opts *mop)
 {
 	fprintf(stderr, "this option is not only valid for zfs\n");
 	return ENOSYS;
 }
 
-int zfs_prepare_lustre(struct mkfs_opts *mop,
-		       char *wanted_mountopts, size_t len)
+static int zfs_prepare_lustre(struct mkfs_opts *mop,
+			      char *wanted_mountopts, size_t len)
 {
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
@@ -846,7 +846,7 @@ int zfs_prepare_lustre(struct mkfs_opts *mop,
 	return 0;
 }
 
-int zfs_tune_lustre(char *dev, struct mount_opts *mop)
+static int zfs_tune_lustre(char *dev, struct mount_opts *mop)
 {
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
@@ -854,7 +854,7 @@ int zfs_tune_lustre(char *dev, struct mount_opts *mop)
 	return 0;
 }
 
-int zfs_label_lustre(struct mount_opts *mop)
+static int zfs_label_lustre(struct mount_opts *mop)
 {
 	zfs_handle_t *zhp;
 	int ret;
@@ -872,7 +872,7 @@ int zfs_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
-int zfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
+static int zfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 {
 	struct mount_opts opts;
 	char mntpt[] = "/tmp/mntXXXXXX";
@@ -936,7 +936,7 @@ out_rmdir:
 	return ret;
 }
 
-int zfs_init(void)
+static int zfs_init(void)
 {
 	int ret = 0;
 

@@ -56,7 +56,7 @@ static void print_name(const char *cp, int len)
 	}
 }
 
-int decode_linkea(const char *fname)
+static int decode_linkea(const char *fname)
 {
 	char buf[BUFFER_SIZE];
 	struct link_ea_header *leh;

@@ -56,7 +56,7 @@ struct node_info {
 	int node_type;
 };
 
-void usage(char *str)
+static void usage(char *str)
 {
 	printf("Usage: %s [-hrv] iam_file\n", str);
 }
@@ -79,7 +79,7 @@ struct iam_params {
 	int rc;
 };
 
-int check_idle_blocks(char *buf, struct iam_params *params)
+static int check_idle_blocks(char *buf, struct iam_params *params)
 {
 	struct iam_idle_head *idle;
 	int i;

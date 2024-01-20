@@ -95,7 +95,7 @@ static int print_only;
 
 #define FSLIST FSLIST_LDISKFS FSLIST_ZFS
 
-void usage(FILE *out)
+static void usage(FILE *out)
 {
 	fprintf(out, "usage: %s <target type> [--backfstype="FSLIST"] "
 		"--fsname=<filesystem name>\n"
@@ -173,7 +173,7 @@ void usage(FILE *out)
 
 /* ==================== Lustre config functions =============*/
 
-void print_ldd(char *str, struct mkfs_opts *mop)
+static void print_ldd(char *str, struct mkfs_opts *mop)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 
@@ -205,7 +205,7 @@ void print_ldd(char *str, struct mkfs_opts *mop)
 	printf("\n");
 }
 
-void set_defaults(struct mkfs_opts *mop)
+static void set_defaults(struct mkfs_opts *mop)
 {
 	mop->mo_ldd.ldd_magic = LDD_MAGIC;
 	mop->mo_ldd.ldd_config_ver = 1;
@@ -323,8 +323,8 @@ static int erase_param(const char *const buf, const char *const param,
 }
 #endif
 
-int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
-	       char **mountopts, char *old_fsname)
+static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
+		      char **mountopts, char *old_fsname)
 {
 	static struct option long_opts[] = {
 	{ .val = 'B',	.name =  "backfs-mount-opts",
@@ -793,7 +793,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
  * Returns 0 if all is found good.
  * Returns 1 if invalid args is detected
  */
-int chk_args(int argc, char *const argv[])
+static int chk_args(int argc, char *const argv[])
 {
 	/* If no argument is given to mkfs.lustre, bail out */
 	if (argc < 2)

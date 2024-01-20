@@ -48,6 +48,8 @@
 #include <lustre/lustreapi.h>
 #include <lustre_ioctl_old.h>
 
+#include "obdctl.h"
+
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;
 
@@ -60,7 +62,7 @@ static char local_buf[IOC_BUF_SIZE];
 static char *ioc_buf = local_buf;
 
 /* Convert a string boolean to an int; "enable" -> 1 */
-int
+static int
 lnet_parse_bool (int *b, char *str)
 {
 	if (!strcasecmp(str, "no") ||
@@ -86,7 +88,7 @@ lnet_parse_bool (int *b, char *str)
 	return -1;
 }
 
-int
+static int
 lnet_parse_port(int *port, char *str)
 {
 	char *end;
@@ -100,7 +102,7 @@ lnet_parse_port(int *port, char *str)
 	return -1;
 }
 
-int
+static int
 lnet_parse_ipquad(__u32 *ipaddrp, char *str)
 {
 	int a, b, c, d;
@@ -116,7 +118,7 @@ lnet_parse_ipquad(__u32 *ipaddrp, char *str)
 	return -1;
 }
 
-int
+static int
 lnet_parse_ipaddr(__u32 *ipaddrp, char *str)
 {
 	struct addrinfo *ai = NULL;
@@ -175,7 +177,7 @@ out:
 	return rc;
 }
 
-char *
+static char *
 ptl_ipaddr_2_str(__u32 ipaddr, char *str, size_t strsize, int lookup)
 {
 	struct sockaddr_in srcaddr;
@@ -197,7 +199,7 @@ out:
 	return str;
 }
 
-int
+static int
 lnet_parse_time(time_t *t, char *str)
 {
 	char *end;
@@ -226,7 +228,7 @@ lnet_parse_time(time_t *t, char *str)
 	return 0;
 }
 
-int
+static int
 lnet_parse_nid(char *nid_str, struct lnet_processid *id_ptr)
 {
 	id_ptr->pid = LNET_PID_ANY;
@@ -2679,26 +2681,6 @@ int
 jt_ptl_delay_list(int argc, char **argv)
 {
 	return fault_simul_rule_list(LNET_CTL_DELAY_LIST, "delay", argc, argv);
-}
-
-double
-get_cycles_per_usec()
-{
-	FILE *f = fopen("/proc/cpuinfo", "r");
-	double mhz;
-	char line[64];
-
-	if (f) {
-		while (fgets(line, sizeof(line), f))
-			if (sscanf(line, "cpu MHz : %lf", &mhz) == 1) {
-				fclose(f);
-				return mhz;
-			}
-		fclose(f);
-	}
-
-	fprintf(stderr, "Can't read/parse /proc/cpuinfo\n");
-	return 1000.0;
 }
 
 int jt_ptl_testprotocompat(int argc, char **argv)

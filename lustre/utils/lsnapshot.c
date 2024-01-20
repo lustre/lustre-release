@@ -149,7 +149,7 @@ do {									\
 #define PIMPORT(st) snapshot_path, \
 		(st)->st_dir ? (st)->st_dir : "/dev -d /tmp", (st)->st_pool
 
-char *snapshot_fgets(FILE *fp, char *buf, int buflen)
+static char *snapshot_fgets(FILE *fp, char *buf, int buflen)
 {
 	char *ptr;
 

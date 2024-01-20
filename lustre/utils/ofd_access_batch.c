@@ -80,32 +80,15 @@ static inline void fhn_replace_init(struct fid_hash_node *old_fhn,
 	list_del_init(&old_fhn->fhn_node);
 }
 
-void fid_hash_add(struct list_head *head, unsigned int shift,
-		struct fid_hash_node *fhn)
+static void fid_hash_add(struct list_head *head, unsigned int shift,
+			 struct fid_hash_node *fhn)
 {
 	assert(!fhn_is_hashed(fhn));
 
 	list_add(&fhn->fhn_node, &head[llapi_fid_hash(&fhn->fhn_fid, shift)]);
 }
 
-struct fid_hash_node *
-fid_hash_find(struct list_head *head, unsigned int shift, const struct lu_fid *fid)
-{
-	struct list_head *hash_list;
-	struct fid_hash_node *fhn, *next;
-
-	hash_list = &head[llapi_fid_hash(fid, shift)];
-	list_for_each_entry_safe(fhn, next, hash_list, fhn_node) {
-		assert(fhn_is_hashed(fhn));
-
-		if (fid_eq(fid, &fhn->fhn_fid))
-			return fhn;
-	}
-
-	return NULL;
-}
-
-struct fid_hash_node *
+static struct fid_hash_node *
 fid_hash_insert(struct list_head *head, unsigned int shift, struct fid_hash_node *new_fhn)
 {
 	struct list_head *list;
@@ -124,7 +107,8 @@ fid_hash_insert(struct list_head *head, unsigned int shift, struct fid_hash_node
 	return new_fhn;
 }
 
-int fid_hash_init(struct list_head **phead, unsigned int *pshift, unsigned int shift)
+static int fid_hash_init(struct list_head **phead, unsigned int *pshift,
+			 unsigned int shift)
 {
 	struct list_head *new_head;
 	unsigned int i;
@@ -142,7 +126,8 @@ int fid_hash_init(struct list_head **phead, unsigned int *pshift, unsigned int s
 	return 0;
 }
 
-int fid_hash_resize(struct list_head **phead, unsigned int *pshift, unsigned int new_shift)
+static int fid_hash_resize(struct list_head **phead, unsigned int *pshift,
+			   unsigned int new_shift)
 {
 	struct list_head *new_head;
 	unsigned int i;
@@ -261,7 +246,7 @@ out:
 	return rc;
 }
 
-int sort_compare(const void *a1, const void *a2)
+static int sort_compare(const void *a1, const void *a2)
 {
 	int l = *(const int*)a1;
 	int r = *(const int *)a2;

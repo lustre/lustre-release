@@ -491,7 +491,7 @@ out_free:
 	return res;
 }
 
-int handle_sk(struct svc_nego_data *snd)
+static int handle_sk(struct svc_nego_data *snd)
 {
 #ifdef HAVE_OPENSSL_SSK
 	struct sk_cred *skc = NULL;
@@ -752,7 +752,7 @@ out_err:
 	return -1;
 }
 
-int handle_null(struct svc_nego_data *snd)
+static int handle_null(struct svc_nego_data *snd)
 {
 	struct svc_cred cred;
 	uint64_t tmp;

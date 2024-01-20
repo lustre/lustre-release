@@ -65,7 +65,7 @@ int null_enabled;
 int krb_enabled;
 int sk_enabled;
 
-void
+static void
 closeall(int min)
 {
 	DIR *dir = opendir("/proc/self/fd");
@@ -168,7 +168,7 @@ release_parent()
 	}
 }
 
-void
+static void
 sig_die(int signal)
 {
 	/* destroy krb5 machine creds */
@@ -181,7 +181,7 @@ sig_die(int signal)
 	exit(1);
 }
 
-void
+static void
 sig_hup(int signal)
 {
 	/* don't exit on SIGHUP */

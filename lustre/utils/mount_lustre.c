@@ -66,7 +66,7 @@ int	verbose;
 int	version;
 char	*progname;
 
-void usage(FILE *out)
+static void usage(FILE *out)
 {
 	fprintf(out,
 		"\nThis mount helper should only be invoked via the mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
@@ -250,8 +250,8 @@ out_err:
  * Replace options with subset of Lustre-specific options, and
  * fill in mount flags
  */
-int parse_options(struct mount_opts *mop, char *orig_options,
-		  int *flagp, size_t options_len)
+static int parse_options(struct mount_opts *mop, char *orig_options,
+			 int *flagp, size_t options_len)
 {
 	char *options, *opt, *nextopt, *arg, *val;
 	int rc = 0;

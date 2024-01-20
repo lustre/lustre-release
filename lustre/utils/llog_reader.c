@@ -106,7 +106,7 @@ char *portals_command[17] = {
 	""
 };
 
-int is_fstype_ext(int fd)
+static int is_fstype_ext(int fd)
 {
 	struct statfs st;
 	int rc;
@@ -523,7 +523,7 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
 	}
 }
 
-void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
+static void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 {
 	enum lcfg_command_type cmd = __le32_to_cpu(lcfg->lcfg_command);
 
@@ -738,7 +738,7 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 	       hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
 }
 
-void print_changelog_rec(struct llog_changelog_rec *rec)
+static void print_changelog_rec(struct llog_changelog_rec *rec)
 {
 	time_t secs;
 	struct tm ts;
@@ -906,7 +906,7 @@ static const char *update_op_str(__u16 opc)
 		return "unknown";
 }
 
-char *buf2str(void *buf, unsigned int size)
+static char *buf2str(void *buf, unsigned int size)
 {
 	const char *hex = "0123456789ABCDEF";
 	char *buf_c = buf;
@@ -944,7 +944,7 @@ object_update_param_size(const struct object_update_param *param)
 	return roundup(sizeof(*param) + param->oup_len, sizeof(__u64));
 }
 
-void print_update_rec(struct llog_update_record *lur)
+static void print_update_rec(struct llog_update_record *lur)
 {
 	struct update_records *rec = &lur->lur_update_rec;
 	unsigned int i, j, up_count, pm_count;

@@ -194,10 +194,10 @@ out_params:
 	return rc;
 }
 
-int do_nego_rpc(struct lgss_nego_data *lnd,
-		gss_buffer_desc *gss_token,
-		struct lgss_init_res *gr,
-		int req_fd[2], int reply_fd[2])
+static int do_nego_rpc(struct lgss_nego_data *lnd,
+		       gss_buffer_desc *gss_token,
+		       struct lgss_init_res *gr,
+		       int req_fd[2], int reply_fd[2])
 {
 	struct lgssd_ioctl_param param;
 	struct passwd *pw;
@@ -535,7 +535,7 @@ static int lgssc_init_nego_data(struct lgss_nego_data *lnd,
         return 0;
 }
 
-void lgssc_fini_nego_data(struct lgss_nego_data *lnd)
+static void lgssc_fini_nego_data(struct lgss_nego_data *lnd)
 {
         OM_uint32       maj_stat, min_stat;
 

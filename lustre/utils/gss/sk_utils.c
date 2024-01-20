@@ -1297,9 +1297,9 @@ void sk_free_cred(struct sk_cred *skc)
  *
  * If the size is smaller it will take copy the first N bytes necessary to
  * fill the derived key. */
-int sk_kdf(gss_buffer_desc *derived_key , gss_buffer_desc *origin_key,
-	   gss_buffer_desc *key_binding_bufs, int numbufs,
-	   enum cfs_crypto_hash_alg hmac_alg)
+static int sk_kdf(gss_buffer_desc *derived_key, gss_buffer_desc *origin_key,
+		  gss_buffer_desc *key_binding_bufs, int numbufs,
+		  enum cfs_crypto_hash_alg hmac_alg)
 {
 	size_t remain;
 	size_t bytes;
@@ -1458,9 +1458,9 @@ int sk_compute_keys(struct sk_cred *skc)
 	return 0;
 }
 
-uint32_t __sk_compute_dh_key(struct sk_cred *skc,
-			     const gss_buffer_desc *pub_key,
-			     size_t *expected_len)
+static uint32_t __sk_compute_dh_key(struct sk_cred *skc,
+				    const gss_buffer_desc *pub_key,
+				    size_t *expected_len)
 {
 	gss_buffer_desc *dh_shared = &skc->sc_dh_shared_key;
 	uint32_t rc = GSS_S_FAILURE;

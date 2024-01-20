@@ -80,6 +80,7 @@
 # include <com_err.h>
 #endif
 #include "lsupport.h"
+#include "svcgssd.h"
 
 #define GSSD_SERVICE_MGS			"lustre_mgs"
 #define GSSD_SERVICE_MDS			"lustre_mds"

@@ -72,7 +72,7 @@ static struct option const long_opts[] = {
 	{ .val = 'C',	.name = "last_rcvd",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-void dump_log(int fd)
+static void dump_log(int fd)
 {
 	char buf[128];
 	int n;
@@ -85,7 +85,7 @@ void dump_log(int fd)
 	fprintf(stderr, "\n");
 }
 
-FILE *open_debugfs_file(char *filename, char *tmpdir, char *dev)
+static FILE *open_debugfs_file(char *filename, char *tmpdir, char *dev)
 {
 	char log[] = "/tmp/run_command_logXXXXXX";
 	char filepnm[128];
@@ -142,7 +142,7 @@ out:
 	return fp;
 }
 
-int print_last_rcvd(FILE *fp, int opt_client)
+static int print_last_rcvd(FILE *fp, int opt_client)
 {
 	struct lr_server_data lsd = {};
 	int rc = 0;
@@ -252,7 +252,7 @@ int print_last_rcvd(FILE *fp, int opt_client)
 	return 0;
 }
 
-int print_reply_data(FILE *fp)
+static int print_reply_data(FILE *fp)
 {
 	struct lsd_reply_header lrh = {};
 	unsigned long long slot;
@@ -358,7 +358,7 @@ int print_reply_data(FILE *fp)
 	return 0;
 }
 
-void display_usage(void)
+static void display_usage(void)
 {
 	printf("Usage: %s [OPTIONS] devicename\n", progname);
 	printf("Usage: %s [OPTIONS] -C <last_rcvd_file> -R <reply_data_file>\n",

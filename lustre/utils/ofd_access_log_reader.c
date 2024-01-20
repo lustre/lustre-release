@@ -681,7 +681,7 @@ static struct alr_dev *alr_dev_create(int epoll_fd, int fd, const char *name,
 	return alr;
 }
 
-void usage(void)
+static void usage(void)
 {
 	printf("Usage: %s: [OPTION]...\n"
 "Discover, read, batch, and write Lustre access logs\n"

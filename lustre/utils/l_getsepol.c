@@ -152,7 +152,7 @@ out:
 	return rc;
 }
 
-int get_opts(int argc, char *const argv[])
+static int get_opts(int argc, char *const argv[])
 {
 	static struct option long_opts[] = {
 		{ .val = 'o', .name =  "obd_type",

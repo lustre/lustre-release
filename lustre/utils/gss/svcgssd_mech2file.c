@@ -34,11 +34,11 @@
 
 */
 
-#include "config.h"
-
 #include <gssapi/gssapi.h>
 #include <string.h>
 
+#include "svcgssd.h"
+#include "config.h"
 
 #define g_OID_equal(o1,o2) \
    (((o1)->length == (o2)->length) && \

@@ -59,6 +59,8 @@
 #include <linux/lnet/lnetctl.h>
 #include <libcfs/util/string.h>
 
+#include "obdctl.h"
+
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
