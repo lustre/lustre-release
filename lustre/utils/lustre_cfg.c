@@ -1640,10 +1640,9 @@ static int do_name2dev(char *func, char *name, int dev_id)
 int parse_devname(char *func, char *name, int dev_id)
 {
 	int rc = 0;
-	int ret = -1;
 
 	if (!name)
-		return ret;
+		return -EINVAL;
 
 	/* Test if its a pure number string */
 	if (strspn(name, "0123456789") != strlen(name)) {
@@ -1651,19 +1650,17 @@ int parse_devname(char *func, char *name, int dev_id)
 			name++;
 
 		rc = do_name2dev(func, name, dev_id);
-		if (rc >= 0)
-			ret = rc;
 	} else {
 		errno = 0;
-		ret = strtoul(name, NULL, 10);
+		rc = strtoul(name, NULL, 10);
 		if (errno)
-			rc = errno;
+			rc = -errno;
 	}
 
 	if (rc < 0)
 		fprintf(stderr, "No device found for name %s: %s\n",
-			name, strerror(rc));
-	return ret;
+			name, strerror(-rc));
+	return rc;
 }
 
 #ifdef HAVE_SERVER_SUPPORT

@@ -79,6 +79,12 @@ static void dump_log(int fd)
 
 	do {
 		n = read(fd, buf, sizeof(buf));
+		if (n < 0) {
+			fprintf(stderr,
+				"%s: dump_log() Failed to read: %s\n",
+				progname, strerror(errno));
+			exit(errno);
+		}
 		n = write(2, buf, n);
 	} while (n == sizeof(buf));
 

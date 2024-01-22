@@ -463,10 +463,9 @@ out:
  */
 int llapi_pccdev_get(const char *mntpath)
 {
-	long page_size = sysconf(_SC_PAGESIZE);
 	char pathbuf[sizeof(struct obd_uuid)];
+	char buf[65536]; /* large engough to hold PPC dev list */
 	glob_t path;
-	char *buf;
 	int fd;
 	int rc;
 
@@ -491,17 +490,8 @@ int llapi_pccdev_get(const char *mntpath)
 		goto out_free_param;
 	}
 
-	buf = calloc(1, page_size);
-	if (buf == NULL) {
-		rc = -ENOMEM;
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "error: pccdev_get: allocating '%s' buffer",
-			    path.gl_pathv[0]);
-		goto out_close;
-	}
-
 	while (1) {
-		ssize_t count = read(fd, buf, page_size);
+		ssize_t count = read(fd, buf, sizeof(buf));
 
 		if (count == 0)
 			break;
@@ -521,9 +511,10 @@ int llapi_pccdev_get(const char *mntpath)
 			break;
 		}
 	}
-out_close:
+
 	close(fd);
-	free(buf);
+	cfs_free_param_data(&path);
+	return rc;
 out_free_param:
 	cfs_free_param_data(&path);
 	return rc;

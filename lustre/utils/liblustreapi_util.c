@@ -388,8 +388,8 @@ int llapi_direntry_remove(char *dname)
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "error on ioctl %#lx for '%s' (%d)",
 			    (long)LL_IOC_LMV_SETSTRIPE, filename, fd);
-out:
 	close(fd);
+out:
 	free(namepath);
 out_dirpath:
 	free(dirpath);

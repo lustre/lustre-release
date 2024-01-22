@@ -13751,7 +13751,7 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 			fprintf(stderr,
 				"%s: cannot attach '%s' on '%s' to PCC with attach ID '%u': %s\n",
 				argv[0], fidstr, mntpath, attach_id,
-				strerror(rc2));
+				strerror(-rc2));
 		}
 		if (rc == 0 && rc2 < 0)
 			rc = rc2;
