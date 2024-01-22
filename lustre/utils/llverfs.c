@@ -129,7 +129,7 @@ static struct option const long_opts[] = {
  * Usages: displays help information, whenever user supply --help option in
  * command or enters incorrect command line.
  */
-void usage(int status)
+static void usage(int status)
 {
 	if (status != 0) {
 		printf("\nUsage: %s [OPTION]... <filesystem path> ...\n",
@@ -169,9 +169,11 @@ static int open_file(const char *file, int flag)
  * Verify_chunk: Verifies test pattern in each 4kB (BLOCKSIZE) is correct.
  * Returns 0 if test offset and timestamp is correct otherwise 1.
  */
-int verify_chunk(char *chunk_buf, const size_t chunksize,
-		 unsigned long long chunk_off, const unsigned long long time_st,
-		 const unsigned long long inode_st, const char *file)
+static int verify_chunk(char *chunk_buf, const size_t chunksize,
+			unsigned long long chunk_off,
+			const unsigned long long time_st,
+			const unsigned long long inode_st,
+			const char *file)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -197,8 +199,8 @@ int verify_chunk(char *chunk_buf, const size_t chunksize,
  * and offset. The test pattern is filled at the beginning of
  * each 4kB(BLOCKSIZE) blocks in chunk_buf.
  */
-void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
-		const time_t time_st, const ino_t inode_st)
+static void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
+		       const time_t time_st, const ino_t inode_st)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -227,8 +229,8 @@ void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
  *
  * Returns 0 on success, or -ve errno on failure.
  */
-int write_retry(int fd, const char *chunk_buf, size_t nrequested,
-		unsigned long long offset, const char *file)
+static int write_retry(int fd, const char *chunk_buf, size_t nrequested,
+		       unsigned long long offset, const char *file)
 {
 	long nwritten;
 
@@ -262,9 +264,10 @@ retry:
  *
  * Returns 0 on success, or -ve error number on failure.
  */
-int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
-		 char *chunk_buf, size_t chunksize, const time_t time_st,
-		 const ino_t inode_st, const char *file)
+static int write_chunks(int fd, unsigned long long offset,
+			unsigned long long write_end, char *chunk_buf,
+			size_t chunksize, const time_t time_st,
+			const ino_t inode_st, const char *file)
 {
 	unsigned long long stride;
 
@@ -302,9 +305,10 @@ int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
  * read_chunk: reads the chunk_buf from the device. The number of read
  * operations are based on the parameters read_end, offset, and chunksize.
  */
-int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
-		char *chunk_buf, size_t chunksize, const time_t time_st,
-		const ino_t inode_st, const char *file)
+static int read_chunks(int fd, unsigned long long offset,
+		       unsigned long long read_end, char *chunk_buf,
+		       size_t chunksize, const time_t time_st,
+		       const ino_t inode_st, const char *file)
 {
 	unsigned long long stride;
 
@@ -379,18 +383,28 @@ int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
 /*
  * new_file: prepares new filename using file counter and current dir.
  */
-char *new_file(char *tempfile, char *cur_dir, int file_num)
+static char *new_file(char *tempfile, char *cur_dir, int file_num)
 {
-	snprintf(tempfile, PATH_MAX, "%s/file%03d", cur_dir, file_num);
+	int rc = 0;
+
+	rc = snprintf(tempfile, PATH_MAX, "%s/file%03d", cur_dir, file_num);
+	if (rc >= PATH_MAX || rc < 0)
+		return NULL;
+
 	return tempfile;
 }
 
 /*
  * new_dir: prepares new dir name using dir counters.
  */
-char *new_dir(char *tempdir, int dir_num)
+static char *new_dir(char *tempdir, int dir_num)
 {
-	snprintf(tempdir, PATH_MAX, "%s/llverfs_dir%05d", testdir, dir_num);
+	int rc = 0;
+
+	rc = snprintf(tempdir, PATH_MAX, "%s/llverfs_dir%05d", testdir, dir_num);
+	if (rc >= PATH_MAX || rc < 0)
+		return NULL;
+
 	return tempdir;
 }
 
@@ -433,9 +447,10 @@ static unsigned long long calc_total_bytes(const char *op)
  * along with an estimate of how long the whole read/write operation
  * will continue.
  */
-void show_rate(char *op, char *filename, const struct timeval *start_time,
-	       const unsigned long long total_bytes,
-	       const unsigned long long curr_bytes)
+static void show_rate(char *op, char *filename,
+		      const struct timeval *start_time,
+		      const unsigned long long total_bytes,
+		      const unsigned long long curr_bytes)
 {
 	static struct timeval last_time;
 	static unsigned long long last_bytes;
