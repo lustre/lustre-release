@@ -490,10 +490,11 @@ EXPORT_SYMBOL(ptlrpc_reconnect_import);
  */
 static int import_select_connection(struct obd_import *imp)
 {
-	struct obd_import_conn *imp_conn = NULL, *conn;
+	struct obd_import_conn *imp_conn = NULL, *conn, *lru_conn = NULL;
 	struct obd_export *dlmexp;
 	char *target_start;
-	int target_len, tried_all = 1;
+	int target_len;
+	bool tried_all = true;
 	int rc = 0;
 
 	ENTRY;
@@ -507,50 +508,66 @@ static int import_select_connection(struct obd_import *imp)
 		GOTO(out_unlock, rc);
 	}
 
+	/* if forced, simply choose the current one */
+	if (imp->imp_force_reconnect) {
+		LASSERT(imp->imp_conn_current);
+		imp_conn = imp->imp_conn_current;
+		tried_all = false;
+		goto connect;
+	}
+
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
 		CDEBUG(D_HA, "%s: connect to NID %s last attempt %lld\n",
 		       imp->imp_obd->obd_name,
 		       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
 		       conn->oic_last_attempt);
 
+		conn->oic_uptodate =
+			LNetPeerDiscovered(&conn->oic_conn->c_peer.nid);
+		/* track least recently used conn for fallback */
+		if (!lru_conn ||
+		    lru_conn->oic_last_attempt > conn->oic_last_attempt)
+			lru_conn = conn;
+
 		/* If we have not tried this connection since
-		 * the last successful attempt, go with this one
+		 * the last successful attempt or ever (0 value)
 		 */
-		if ((conn->oic_last_attempt == 0) ||
-		    conn->oic_last_attempt <= imp->imp_last_success_conn) {
-			imp_conn = conn;
-			tried_all = 0;
-			break;
+		if (conn->oic_last_attempt <= imp->imp_last_success_conn) {
+			tried_all = false;
+			if (conn->oic_uptodate) {
+				imp_conn = conn;
+				break;
+			}
+			CDEBUG(D_HA, "%s: skip NID %s as not ready\n",
+			       imp->imp_obd->obd_name,
+			       libcfs_nidstr(&conn->oic_conn->c_peer.nid));
 		}
-
-		/* If all of the connections have already been tried
-		 * since the last successful connection; just choose the
-		 * least recently used
-		 */
-		if (!imp_conn)
-			imp_conn = conn;
-		else if (imp_conn->oic_last_attempt > conn->oic_last_attempt)
-			imp_conn = conn;
 	}
 
-	/* if not found, simply choose the current one */
-	if (!imp_conn || imp->imp_force_reconnect) {
-		LASSERT(imp->imp_conn_current);
-		imp_conn = imp->imp_conn_current;
-		tried_all = 0;
-	}
+	/* no ready connections or all are tried in this round */
+	if (!imp_conn)
+		imp_conn = lru_conn;
+
 	LASSERT(imp_conn->oic_conn);
 
-	/* If we've tried everything, and we're back to the beginning of the
-	 * list, increase our timeout and try again. It will be reset when
-	 * we do finally connect. (FIXME: really we should wait for all network
-	 * state associated with the last connection attempt to drain before
-	 * trying to reconnect on it.)
-	 */
-	if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
+	if (!tried_all) {
 		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
 		timeout_t timeout = obd_at_get(imp->imp_obd, at);
 
+		/* make it quick at first round */
+		if (timeout > CONNECTION_SWITCH_MIN)
+			at_reset(at, CONNECTION_SWITCH_MAX);
+	} else if (imp->imp_conn_list.next == &imp_conn->oic_item) {
+		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
+		timeout_t timeout = obd_at_get(imp->imp_obd, at);
+
+		/* If we've tried everything, and we're back to the beginning
+		 * of the list, increase timeout and try again. It will be
+		 * reset when we do finally connect.
+		 * FIXME: really we should wait for all network state
+		 * associated with the last connection attempt to drain before
+		 * trying to reconnect on it.
+		 */
 		if (timeout < CONNECTION_SWITCH_MAX) {
 			obd_at_measure(imp->imp_obd, at,
 				       timeout + CONNECTION_SWITCH_INC);
@@ -563,7 +580,9 @@ static int import_select_connection(struct obd_import *imp)
 		       imp->imp_obd->obd_name, timeout);
 	}
 
+connect:
 	imp_conn->oic_last_attempt = ktime_get_seconds();
+	imp_conn->oic_attempts++;
 
 	/* switch connection, don't mind if it's same as the current one */
 	ptlrpc_connection_put(imp->imp_connection);
@@ -1037,6 +1056,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	spin_unlock(&imp->imp_lock);
 
 	LASSERT(imp->imp_conn_current);
+	imp->imp_conn_current->oic_replied++;
 
 	msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 

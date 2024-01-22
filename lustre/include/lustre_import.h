@@ -154,6 +154,9 @@ struct obd_import_conn {
 	 * Time (64 bit seconds) of last connection attempt on this connection
          */
 	time64_t		  oic_last_attempt;
+	unsigned int		  oic_attempts;
+	unsigned int		  oic_replied;
+	bool			  oic_uptodate;
 };
 
 /* state history */

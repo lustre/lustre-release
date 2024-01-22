@@ -843,6 +843,26 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 	else
 		strncpy(nidstr, "<none>", sizeof(nidstr));
 	seq_printf(m, " ]\n"
+		   "       nids_stats:");
+	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+		libcfs_nidstr_r(&conn->oic_conn->c_peer.nid,
+				  nidstr, sizeof(nidstr));
+		seq_printf(m, "\n          \"%s\": { connects: %u, replied: %u,"
+			   " uptodate: %s, sec_ago: ",
+			   nidstr, conn->oic_attempts, conn->oic_replied,
+			   conn->oic_uptodate ? "true" : "false");
+		if (conn->oic_last_attempt)
+			seq_printf(m, "%lld }", ktime_get_seconds() -
+				   conn->oic_last_attempt);
+		else
+			seq_puts(m, "never }");
+	}
+	if (imp->imp_connection)
+		libcfs_nidstr_r(&imp->imp_connection->c_peer.nid,
+				  nidstr, sizeof(nidstr));
+	else
+		strncpy(nidstr, "<none>", sizeof(nidstr));
+	seq_printf(m, "\n"
 		   "       current_connection: \"%s\"\n"
 		   "       connection_attempts: %u\n"
 		   "       generation: %u\n"

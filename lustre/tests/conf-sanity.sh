@@ -11034,6 +11034,39 @@ test_152() {
 }
 run_test 152 "seq allocation error in OSP"
 
+test_153a() {
+	reformat_and_config
+
+	start_mds || error "MDS start failed"
+	start_ost || error "OST start failed"
+
+	local nid=$($LCTL list_nids | grep ${NETTYPE} | head -n1)
+	local net=${nid#*@}
+	local MGS_NID=$(do_facet mgs $LCTL list_nids | head -1)
+	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
+	local FAKE_PNID="192.168.252.112@${net}"
+	local FAKE_NIDS="${FAKE_PNID},${FAKE_PNID}2"
+	local FAKE_FAILOVER="10.252.252.113@${net},10.252.252.113@${net}2"
+	local NIDS_AND_FAILOVER="$FAKE_NIDS:$FAKE_FAILOVER:$OST1_NID:$MGS_NID"
+	local period=0
+	local pid
+	local rc
+
+	mount -t lustre $NIDS_AND_FAILOVER:/lustre $MOUNT &
+	pid=$!
+	while (( period < 30 )); do
+		[[ -n "$(ps -p $pid -o pid=)" ]] || break
+		echo "waiting for mount ..."
+		sleep 5
+		period=$((period + 5))
+	done
+	$LCTL get_param mgc.MGC${FAKE_PNID}.import | grep "uptodate:"
+	check_mount || error "check_mount failed"
+	umount $MOUNT
+	cleanup || error "cleanup failed with rc $?"
+}
+run_test 153a "bypass invalid NIDs quickly"
+
 #
 # (This was sanity/802a)
 #
