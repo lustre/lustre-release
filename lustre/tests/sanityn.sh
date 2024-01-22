@@ -4907,6 +4907,8 @@ run_test 77o "Changing rank should not panic"
 
 test_77q() {
 	local i
+	local gidlist="500 10 33   100 "
+	local uidlist=" 500  11 3"
 
 	(( $MDS1_VERSION > $(version_code 2.14.54) )) ||
 		skip "need MDS >= 2.14.54"
@@ -4914,10 +4916,14 @@ test_77q() {
 	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="tbf"
 	stack_trap "do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies=fifo"
 
+	# require 44cc782/LU-9859 to support list with unexpected spaces
+	(( MDS1_VERSION >= $(version_code 2.15.57) )) ||
+		gidlist=$(echo $gidlist) uidlist=$(echo $uidlist)
+
 	for i in {1..50}; do
 		local pid1 pid2
 
-		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_1 uid={ 500  11 3}&gid={500 10 33   100 } rate=100'" &
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_1 uid={$uidlist}&gid={$gidlist} rate=100'" &
 		pid1=$!
 		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_2 uid={1000}&gid={1000} rate=100'" &
 		pid2=$!
@@ -5017,6 +5023,10 @@ wait_policy_state() {
 }
 
 test_77r() { #LU-14976
+
+	(( MDS1_VERSION > $(version_code 2.15.56) )) ||
+		skip "need MDS >= 2.15.56 c098c095 change nrs policies at run time"
+
 	local pid
 	local -A rules
 	local -a policies
