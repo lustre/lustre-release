@@ -143,6 +143,11 @@ mydaemon(int nochdir, int noclose)
 
 	if (noclose == 0) {
 		tempfd = open("/dev/null", O_RDWR);
+		if (tempfd < 0) {
+			printerr(LL_ERR, "%s: open() failed: errno %d (%s)\n",
+				 __func__, errno, strerror(errno));
+			exit(1);
+		}
 		dup2(tempfd, 0);
 		dup2(tempfd, 1);
 		dup2(tempfd, 2);
