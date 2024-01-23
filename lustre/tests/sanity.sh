@@ -10497,10 +10497,11 @@ test_65p () { # LU-16152
 }
 run_test 65p "setstripe with yaml file and huge number"
 
-test_65p () { # LU-16194
+test_65q () { # LU-16194
 	local src_dir=$DIR/$tdir/src_dir
 
-	(( $CLIENT_VERSION >= $(version_code 2.15.51) )) ||
+	(( $CLIENT_VERSION >= $(version_code 2.15.51) )) &&
+	(( $MDS1_VERSION >= $(version_code 2.15.51) )) ||
 		skip "Need at least version 2.15.51"
 
 	test_mkdir -p $src_dir
@@ -10512,7 +10513,7 @@ test_65p () { # LU-16194
 	$LFS setstripe -E 8M -c 4 -E EOF -c 8 $src_dir ||
 		error "failed to setstripe normally"
 }
-run_test 65p "setstripe with >=8E offset should fail"
+run_test 65q "setstripe with >=8E offset should fail"
 
 # bug 2543 - update blocks count on client
 test_66() {
