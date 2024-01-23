@@ -10461,8 +10461,9 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_70a() {
-	# Perform a really simple test of health write
-	# and health check
+	# Perform a really simple test of health write and health check
+	(( $OST1_VERSION >= $(version_code 2.15.59) )) ||
+		skip "OSTs < 2.15.59 doesn't have enable_health_write"
 
 	local orig_value="$(do_facet ost1 $LCTL get_param -n enable_health_write)"
 
