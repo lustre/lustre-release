@@ -4366,6 +4366,10 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (get_user(flags, (int __user *)arg))
 			RETURN(-EFAULT);
 
+		/* LL_FILE_GROUP_LOCKED is managed via its own ioctls */
+		if (flags & LL_FILE_GROUP_LOCKED)
+			RETURN(-EINVAL);
+
 		if (cmd == LL_IOC_SETFLAGS) {
 			if ((flags & LL_FILE_IGNORE_LOCK) &&
 			    !(file->f_flags & O_DIRECT)) {
