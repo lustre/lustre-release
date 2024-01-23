@@ -37,9 +37,9 @@
 #define DEFAULT_NODEMAP "default"
 
 /* Default nobody uid, gid and projid values */
-#define NODEMAP_NOBODY_UID 99
-#define NODEMAP_NOBODY_GID 99
-#define NODEMAP_NOBODY_PROJID 99
+#define NODEMAP_NOBODY_UID 65534
+#define NODEMAP_NOBODY_GID 65534
+#define NODEMAP_NOBODY_PROJID 65534
 
 struct lprocfs_static_vars;
 

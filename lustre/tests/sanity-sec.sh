@@ -254,9 +254,9 @@ create_nodemaps() {
 	local i
 	local rc
 
-	squash_id default 99 0
+	squash_id default ${NOBODY_UID:-65534} 0
 	wait_nm_sync default squash_uid '' inactive
-	squash_id default 99 1
+	squash_id default ${NOBODY_UID:-65534} 1
 	wait_nm_sync default squash_gid '' inactive
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
@@ -521,12 +521,12 @@ squash_id() {
 }
 
 # ensure that the squash defaults are the expected defaults
-squash_id default 99 0
+squash_id default ${NOBODY_UID:-65534} 0
 wait_nm_sync default squash_uid '' inactive
-squash_id default 99 1
+squash_id default ${NOBODY_UID:-65534} 1
 wait_nm_sync default squash_gid '' inactive
 if [ "$MDS1_VERSION" -ge $(version_code 2.14.50) ]; then
-	squash_id default 99 2
+	squash_id default ${NOBODY_UID:-65534} 2
 	wait_nm_sync default squash_projid '' inactive
 fi
 
@@ -648,12 +648,12 @@ test_idmap() {
 		fi
 	done
 
-	## check that root is mapped to 99
+	## check that root is mapped to NOBODY_UID
 	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 		nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
 		fs_id=$(do_facet mgs $cmd --nid $nid --idtype uid --id 0)
-		if [ $fs_id != 99 ]; then
-			error "root squash expected 99, got $fs_id"
+		if [ $fs_id != $NOBODY_UID ]; then
+			error "root squash expected $NOBODY_UID, got $fs_id"
 			rc=$((rc + 1))
 		fi
 	done

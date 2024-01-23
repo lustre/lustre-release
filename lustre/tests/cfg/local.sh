@@ -114,6 +114,7 @@ TSTUSR=${TSTUSR:-"quota_usr"}
 TSTUSR2=${TSTUSR2:-"quota_2usr"}
 USER0=${USER0:-"sanityusr"}
 USER1=${USER1:-"sanityusr1"}
+NOBODY_UID=${NOBODY_UID:-65534}
 
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}
 QUOTA_TYPE=${QUOTA_TYPE:-"ug3"}
