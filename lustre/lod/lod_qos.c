@@ -131,10 +131,10 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	} else if (rc == 0 && !tgt->ltd_active) {
 		/* turned active? */
 		spin_lock(&d->lod_lock);
-		LASSERTF(desc->ld_active_tgt_count < desc->ld_tgt_count,
-			 "active tgt count %d, tgt nr %d\n",
-			 desc->ld_active_tgt_count, desc->ld_tgt_count);
 		if (!tgt->ltd_active) {
+			LASSERTF(desc->ld_active_tgt_count < desc->ld_tgt_count,
+				 "active tgt count %d, tgt nr %d\n",
+				 desc->ld_active_tgt_count, desc->ld_tgt_count);
 			tgt->ltd_active = 1;
 			tgt->ltd_discon = 0;
 			desc->ld_active_tgt_count++;
