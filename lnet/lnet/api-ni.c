@@ -6434,7 +6434,8 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 				struct nlattr *rlist;
 				int rem3;
 
-				if (LNET_NID_IS_ANY(&pnid)) {
+				if (!(info->nlhdr->nlmsg_flags & NLM_F_REPLACE) &&
+				    LNET_NID_IS_ANY(&pnid)) {
 					GENL_SET_ERR_MSG(info,
 							 "missing required primary NID");
 					GOTO(report_err, rc);

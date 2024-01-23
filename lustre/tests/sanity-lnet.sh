@@ -3816,6 +3816,95 @@ test_500() {
 }
 run_test 500 "Check deadlock on ping target update"
 
+do_peer_set_health_test() {
+	local test_val="$1"
+	shift
+	local nid_arg="$@"
+
+	local max_hval
+
+	if [[ ${nid_arg} == --all ]]; then
+		max_hval=$($LNETCTL peer show -v 2 2>/dev/null |
+			   awk '/health value/{print $NF}' | xargs echo |
+			   sed 's/ /+/g' | bc -l)
+	else
+		max_hval=$($LNETCTL peer show ${nid_arg} -v 2 2>/dev/null |
+			   awk '/health value/{print $NF}' | xargs echo |
+			   sed 's/ /+/g' | bc -l)
+	fi
+
+	(( max_hval >= 1000 )) && (( max_hval % 1000 == 0)) ||
+		error "Unexpected max health value $max_hval"
+
+	lnet_health_pre || return $?
+
+	do_lnetctl peer set --health $test_val ${nid_arg} ||
+		error "failed to set health value"
+
+	lnet_health_post || return $?
+
+	local hval
+
+	if [[ ${nid_arg} == --all ]]; then
+		hval=$($LNETCTL peer show -v 2 2>/dev/null |
+		       awk '/health value/{print $NF}' | xargs echo |
+		       sed 's/ /+/g' | bc -l)
+	else
+		hval=$($LNETCTL peer show ${nid_arg} -v 2 2>/dev/null |
+		       awk '/health value/{print $NF}' | xargs echo |
+		       sed 's/ /+/g' | bc -l)
+	fi
+
+	check_remote_health || return $?
+
+	echo "hval: $hval max_hval: $max_hval"
+	(( hval == max_hval )) || error "Failed to reset health to max"
+
+	return 0
+}
+
+test_501() {
+	reinit_dlc || return $?
+
+	setup_health_test false || return $?
+
+	$LCTL set_param debug=-1
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -r 1 ||
+		error "Failed to add drop rule"
+
+	local test_val
+
+	for test_val in 0 500; do
+		do_peer_set_health_test $test_val --nid ${RNIDS[0]} || return $?
+		do_peer_set_health_test $test_val --all || return $?
+	done
+
+	cleanup_health_test
+}
+run_test 501 "Verify lnetctl peer set --health (SR)"
+
+test_502() {
+	reinit_dlc || return $?
+
+	setup_health_test true || return $?
+
+	$LCTL set_param debug=-1
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -r 1 ||
+		error "Failed to add drop rule"
+
+	local test_val
+
+	for test_val in 0 500; do
+		do_peer_set_health_test $test_val --nid ${RNIDS[0]} || return $?
+		do_peer_set_health_test $test_val --all || return $?
+	done
+
+	cleanup_health_test
+}
+run_test 502 "Verify lnetctl peer set --health (MR)"
+
 complete_test $SECONDS
 cleanup_testsuite
 exit_status
