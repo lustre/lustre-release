@@ -2445,16 +2445,13 @@ cleanup_31() {
 	# unmount client
 	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
 
-	# remove ${NETTYPE}999 network on all nodes
-	do_nodes $(comma_list $(all_nodes)) \
-		 "$LNETCTL net del --net ${NETTYPE}999 && \
-		  $LNETCTL lnet unconfigure 2>/dev/null || true"
-
 	# necessary to do writeconf in order to de-register
 	# @${NETTYPE}999 nid for targets
 	KZPOOL=$KEEP_ZPOOL
 	export KEEP_ZPOOL="true"
 	stopall
+	LOAD_MODULES_REMOTE=true unload_modules
+	LOAD_MODULES_REMOTE=true load_modules
 
 	do_facet mds1 $TUNEFS --erase-param failover.node $(mdsdevname 1)
 	if [ -n "$failover_mds1" ]; then
@@ -2484,8 +2481,7 @@ test_31() {
 	local net2=${NETTYPE}999
 	local mdsnid=$(do_facet mds1 $LCTL list_nids | head -1)
 	local addr1=${mdsnid%@*}
-	local addr2=${addr1%.*}.$(((${addr1##*.} + 11) % 256))
-	local failover_mds1
+	local addr2 failover_mds1
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
@@ -2495,6 +2491,30 @@ test_31() {
 	if $SHARED_KEY; then
 		skip "Conflicting test with SSK"
 	fi
+
+	if [[ $addr1 =~ ^([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}$ ]]; then
+		local tmp=$(printf "%x" $(((0x${addr1##*:} + 11) % 65536)))
+
+		addr2=${addr1%:*}:${tmp}
+	elif [[ $addr1 =~ ^([0-9]{1,3}\.){3,3}[0-9]{1,3}$ ]]; then
+		addr2=${addr1%.*}.$(((${addr1##*.} + 11) % 256))
+	elif [[ $addr1 =~ ^[0-9]+$ ]]; then
+		addr2=$((addr1 + 11))
+	fi
+
+	# build list of interface on nodes
+	for node in $(all_nodes); do
+		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
+		itf=$(do_node $node $LNETCTL net show --net $net |
+		      awk 'BEGIN{inf=0} \
+		      {if (inf==1) { print $2; exit; } fi} /interfaces/{inf=1}')
+		eval $infname=\$itf
+	done
+
+	# backup MGSNID
+	local mgsnid_orig=$MGSNID
+	# compute new MGSNID
+	local mgsnid_new=${MGSNID%@*}@$net2
 
 	# save mds failover nids for restore at cleanup
 	failover_mds1=$(do_facet mds1 $TUNEFS --dryrun $(mdsdevname 1))
@@ -2515,6 +2535,7 @@ test_31() {
 	fi
 
 	# check exports on servers are empty for client
+	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
 	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
 		      grep -q -" && error "export on MGS should be empty"
 	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
@@ -2522,62 +2543,55 @@ test_31() {
 		  2>/dev/null | grep -q -" &&
 		error "export on servers should be empty"
 
+	KZPOOL=$KEEP_ZPOOL
+	export KEEP_ZPOOL="true"
+	stopall || error "stopall failed"
+	LOAD_MODULES_REMOTE=true unload_modules ||
+		error "Failed to unload modules"
+
 	# add network $net2 on all nodes
-	do_nodes $(comma_list $(all_nodes)) \
-		 "$LNETCTL lnet configure && $LNETCTL net add --if \
-		  \$($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
-		  {if (inf==1) print \$2; fi; inf=0} /interfaces/{inf=1}') \
-		  --net $net2" ||
-		error "unable to configure NID $net2"
+	do_rpc_nodes $(comma_list $(all_nodes)) load_modules ||
+		error "unable to load modules on $(all_nodes)"
+	for node in $(all_nodes); do
+		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
+		do_node $node "$LNETCTL net add --if ${!infname} --net $net2" ||
+			error "unable to configure NID on $net2 for node $node"
+	done
+
+	LOAD_MODULES_REMOTE=true load_modules || error "failed to load modules"
 
 	# necessary to do writeconf in order to register
 	# new @$net2 nid for targets
-	KZPOOL=$KEEP_ZPOOL
-	export KEEP_ZPOOL="true"
-	stopall
 	export SK_MOUNTED=false
-	writeconf_all
+	writeconf_all || error "writeconf failed"
 
 	nids="${addr1}@$net,${addr1}@$net2:${addr2}@$net,${addr2}@$net2"
 	do_facet mds1 "$TUNEFS --servicenode="$nids" $(mdsdevname 1)" ||
 		error "tunefs failed"
 
-	setupall server_only || echo 1
+	setupall server_only || error "setupall failed"
 	export KEEP_ZPOOL="$KZPOOL"
 
-	# backup MGSNID
-	local mgsnid_orig=$MGSNID
-	# compute new MGSNID
-	MGSNID=$(do_facet mgs "$LCTL list_nids | grep $net2")
-
-	# on client, turn LNet Dynamic Discovery on
-	lnetctl set discovery 1
-
-	# mount client with -o network=$net2 option:
-	# should fail because of LNet Dynamic Discovery
-	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 &&
-		error "client mount with '-o network' option should be refused"
+	# update MGSNID
+	MGSNID=$mgsnid_new
+	stack_trap "MGSNID=$mgsnid_orig" EXIT
 
 	# on client, reconfigure LNet and turn LNet Dynamic Discovery off
-	$LNETCTL net del --net $net2 && lnetctl lnet unconfigure
-	lustre_rmmod
-	modprobe lnet
-	lnetctl set discovery 0
-	modprobe ptlrpc
-	$LNETCTL lnet configure && $LNETCTL net add --if \
-	  $($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
-	  {if (inf==1) print $2; fi; inf=0} /interfaces/{inf=1}') \
-	  --net $net2 ||
-		error "unable to configure NID $net2 on client"
+	$LUSTRE_RMMOD || error "$LUSTRE_RMMOD failed (1)"
+	load_modules || error "Failed to load modules"
+	$LNETCTL set discovery 0 || error "Failed to disable discovery"
+	$LNETCTL lnet configure ||
+		error "unable to configure lnet on client"
+	infname=inf_$(echo $(hostname -s) | sed s+-+_+g)
+	$LNETCTL net add --if ${!infname} --net $net2 ||
+		error "unable to configure NID on $net2 on client (1)"
 
 	# mount client with -o network=$net2 option
 	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 ||
 		error "unable to remount client"
 
-	# restore MGSNID
-	MGSNID=$mgsnid_orig
-
 	# check export on MGS
+	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
 	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
 		      grep -"
 	[ $? -ne 0 ] ||	error "export for $nid on MGS should not exist"
@@ -2607,6 +2621,25 @@ test_31() {
 	lctl get_param mdc.${FSNAME}-*.import | grep failover_nids |
 	    grep ${addr2}@$net2 ||
 		error "MDC import should have failnid ${addr2}@$net2"
+
+	# unmount client
+	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
+
+	# on client, configure LNet and turn LNet Dynamic Discovery on (default)
+	$LUSTRE_RMMOD || error "$LUSTRE_RMMOD failed (2)"
+	load_modules || error "Failed to load modules"
+	$LNETCTL lnet configure ||
+		error "unable to configure lnet on client"
+	infname=inf_$(echo $(hostname -s) | sed s+-+_+g)
+	$LNETCTL net add --if ${!infname} --net $net2 ||
+		error "unable to configure NID on $net2 on client (2)"
+
+	# mount client with -o network=$net2 option:
+	# should fail because of LNet Dynamic Discovery
+	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 &&
+		error "client mount with '-o network' option should be refused"
+
+	echo
 }
 run_test 31 "client mount option '-o network'"
 
