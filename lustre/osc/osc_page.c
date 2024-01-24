@@ -1067,6 +1067,9 @@ unsigned long osc_cache_shrink_count(struct shrinker *sk,
 	struct client_obd *cli;
 	unsigned long cached = 0;
 
+	if (!osc_page_cache_shrink_enabled)
+		return 0;
+
 	spin_lock(&osc_shrink_lock);
 	list_for_each_entry(cli, &osc_shrink_list, cl_shrink_list)
 		cached += atomic_long_read(&cli->cl_lru_in_list);

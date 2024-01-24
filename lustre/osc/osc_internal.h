@@ -174,6 +174,9 @@ int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);
 extern struct list_head osc_shrink_list;
 /** spin lock to protect osc_shrink_list */
 extern spinlock_t osc_shrink_lock;
+/** Whether enable page cache shrinker */
+extern bool osc_page_cache_shrink_enabled;
+
 extern unsigned long osc_cache_shrink_count(struct shrinker *sk,
 					    struct shrink_control *sc);
 extern unsigned long osc_cache_shrink_scan(struct shrinker *sk,

@@ -363,6 +363,30 @@ static ssize_t grant_shrink_interval_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(grant_shrink_interval);
 
+static ssize_t enable_page_cache_shrink_show(struct kobject *kobj,
+					     struct attribute *attr,
+					     char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", osc_page_cache_shrink_enabled);
+}
+
+static ssize_t enable_page_cache_shrink_store(struct kobject *kobj,
+					      struct attribute *attr,
+					      const char *buffer,
+					      size_t count)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	osc_page_cache_shrink_enabled = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_page_cache_shrink);
+
 static ssize_t checksums_show(struct kobject *kobj,
 			      struct attribute *attr,
 			      char *buf)
@@ -869,6 +893,7 @@ LUSTRE_OBD_UINT_PARAM_ATTR(ldlm_enqueue_min);
 
 static struct attribute *osc_attrs[] = {
 	&lustre_attr_active.attr,
+	&lustre_attr_enable_page_cache_shrink.attr,
 	&lustre_attr_checksums.attr,
 	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_cur_dirty_bytes.attr,

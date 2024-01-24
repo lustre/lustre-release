@@ -3947,6 +3947,7 @@ static const struct obd_ops osc_obd_ops = {
 
 LIST_HEAD(osc_shrink_list);
 DEFINE_SPINLOCK(osc_shrink_lock);
+bool osc_page_cache_shrink_enabled = true;
 
 #ifdef HAVE_SHRINKER_COUNT
 static struct shrinker osc_cache_shrinker = {
