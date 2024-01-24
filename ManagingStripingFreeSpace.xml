@@ -1403,6 +1403,11 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
         a repeating attempt detected low on space condition as well - spillover
         is impossible and there is no sense in the repeating.</para>
       </listitem>
+      <listitem>
+        <para>Each spill event increments the <literal>spill_hit</literal>
+        counter, which can be accessed with:
+        <literal>lctl lod.*.<replaceable>POOLNAME</replaceable>.spill_hit</literal></para>
+      </listitem>
     </orderedlist>
     <note><para>The SEL feature does not require clients to understand the SEL
     format of already created files, only the MDS support is needed which is
@@ -1417,7 +1422,7 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
         <title>Create a SEL file</title>
         <para><emphasis role="bold">Command</emphasis></para>
 	<screen>lfs setstripe
-[--component-end|-E end1] [STRIPE_OPTIONS] ... <replaceable>filename</replaceable>
+[--component-end|-E end1] [STRIPE_OPTIONS] ... <replaceable>FILENAME</replaceable>
 
 STRIPE OPTIONS:
 --extension-size, --ext-size, -z &lt;ext_size&gt;</screen>
