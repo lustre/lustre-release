@@ -485,9 +485,12 @@ static void lod_free_comp_buffer(struct lod_layout_component *entries,
 			continue;
 		if (entry->llc_pool != NULL)
 			lod_set_pool(&entry->llc_pool, NULL);
-		if (entry->llc_ostlist.op_array)
+		if (entry->llc_ostlist.op_array) {
 			OBD_FREE(entry->llc_ostlist.op_array,
 				 entry->llc_ostlist.op_size);
+			entry->llc_ostlist.op_array = NULL;
+			entry->llc_ostlist.op_size = 0;
+		}
 		LASSERT(entry->llc_stripe == NULL);
 		LASSERT(entry->llc_stripes_allocated == 0);
 	}
