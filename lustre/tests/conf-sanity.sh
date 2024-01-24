@@ -4143,6 +4143,11 @@ test_48() { # bz-17636 LU-7473
 	setup_noconfig
 	check_mount || error "check_mount failed"
 
+	debugsave
+	stack_trap "debugrestore"
+	$LCTL set_param debug=0
+	do_facet $SINGLEMDS $LCTL set_param debug=0
+
 	$LFS setstripe -c -1 $MOUNT ||
 		error "$LFS setstripe -c -1 $MOUNT failed"
 	$LFS getstripe $MOUNT || error "$LFS getstripe $MOUNT failed"
@@ -4155,7 +4160,7 @@ test_48() { # bz-17636 LU-7473
 	# LOV EA, and so on. These EA will use some EA space that is shared by
 	# ACL entries. So here we only check some reasonable ACL entries count,
 	# instead of the max number that is calculated from the max_ea_size.
-	if [ "$MDS1_VERSION" -lt $(version_code 2.8.57) ]; then
+	if (( $MDS1_VERSION < $(version_code 2.8.57) )); then
 		count=28	# hard coded of RPC protocol
 	elif large_xattr_enabled; then
 		count=4500	# max_num 8187 max_ea_size = 65452
@@ -4177,7 +4182,7 @@ test_48() { # bz-17636 LU-7473
 
 	count=$((count + 1)) # for the entry "user::rw-"
 
-	[ $count -eq $r_count ] ||
+	(( $count == $r_count )) ||
 		error "Expected ACL entries $count, but got $r_count"
 
 	cleanup_48
