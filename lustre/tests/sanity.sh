@@ -2628,6 +2628,36 @@ test_27Cg() {
 }
 run_test 27Cg "test setstripe with wrong OST idx"
 
+test_27Ci() {
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $DIR/$tfile"
+
+	$LFS setstripe -E1M $tf || error "create $tf failed"
+	$LFS setstripe -Eeof --component-add -C 100 $tf ||
+		error "add component failed"
+
+	$LFS getstripe -I2 $tf | awk '/lmm_pattern/ { print $2 }' |
+		grep "overstriped" || {
+		$LFS getstripe $tf
+		echo "lose overstriping setting"
+	}
+	sc=$($LFS getstripe -I2 --stripe-count $tf)
+	(( $sc == 100 )) || {
+		$LFS getstripe $tf
+		echo "lose overstriping setting"
+	}
+
+	stack_trap "rm -f $tf"
+	dd if=/dev/zero of=$tf bs=1M count=10 || error "write $tf"
+	sc=$($LFS getstripe -I2 --stripe-count $tf)
+	(( $sc == 100 )) || {
+		$LFS getstripe $tf
+		echo "lose overstriping setting after instantiation"
+	}
+}
+run_test 27Ci "add an overstriping component"
+
 test_27D() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"

@@ -2830,6 +2830,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
+		lod_comp->llc_pattern = v1->lmm_pattern;
 		/**
 		 * limit stripe count so that it's less than/equal to
 		 * extent_size / stripe_size.
