@@ -4895,6 +4895,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 
 	io = vvp_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
+	cl_object_get(io->ci_obj);
 	io->ci_ignore_layout = ignore_layout;
 
 	/* initialize parameters for sync */
@@ -4912,6 +4913,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	if (result == 0)
 		result = fio->fi_nr_written;
 	cl_io_fini(env, io);
+	cl_object_put(env, io->ci_obj);
 	cl_env_put(env, &refcheck);
 
 	RETURN(result);
