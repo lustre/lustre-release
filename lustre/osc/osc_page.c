@@ -423,16 +423,33 @@ void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
 		cli->cl_lru_last_used = ktime_get_real_seconds();
 		spin_unlock(&cli->cl_lru_list_lock);
 
-		if (waitqueue_active(&osc_lru_waitq))
+		if (waitqueue_active(&osc_lru_waitq)) {
 			(void)ptlrpcd_queue_work(cli->cl_lru_work);
+			CDEBUG(D_CACHE,
+			       "%s: cli %pK add LRU: i%ld/b%ld/u%ld/l%ld/m%ld %ld\n",
+			       cli_name(cli), cli,
+			       atomic_long_read(&cli->cl_lru_in_list),
+			       atomic_long_read(&cli->cl_lru_busy),
+			       atomic_long_read(&cli->cl_unevict_lru_in_list),
+			       atomic_long_read(cli->cl_lru_left),
+			       cli->cl_cache->ccc_lru_max, npages);
+		}
+
 	}
 }
 
 static void __osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 {
-	LASSERT(atomic_long_read(&cli->cl_lru_in_list) > 0);
+	LASSERT(atomic_long_read(&cli->cl_lru_in_list) >= 0);
+
 	list_del_init(&opg->ops_lru);
-	atomic_long_dec(&cli->cl_lru_in_list);
+	if (opg->ops_vm_locked) {
+		atomic_long_dec(&cli->cl_unevict_lru_in_list);
+		atomic_long_dec(&cli->cl_cache->ccc_unevict_lru_used);
+		opg->ops_vm_locked = 0;
+	} else {
+		atomic_long_dec(&cli->cl_lru_in_list);
+	}
 }
 
 /**
@@ -442,8 +459,11 @@ static void __osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 {
 	if (opg->ops_in_lru) {
+		bool mlocked = false;
+
 		spin_lock(&cli->cl_lru_list_lock);
 		if (!list_empty(&opg->ops_lru)) {
+			mlocked = opg->ops_vm_locked;
 			__osc_lru_del(cli, opg);
 		} else {
 			LASSERT(atomic_long_read(&cli->cl_lru_busy) > 0);
@@ -451,7 +471,8 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 		}
 		spin_unlock(&cli->cl_lru_list_lock);
 
-		atomic_long_inc(cli->cl_lru_left);
+		if (!mlocked)
+			atomic_long_inc(cli->cl_lru_left);
 		/* this is a great place to release more LRU pages if
 		 * this osc occupies too many LRU pages and kernel is
 		 * stealing one of them. */
@@ -528,49 +549,169 @@ static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
 }
 
 /**
- * Drop @target of pages from LRU at most.
+ * Check whether a page is mlocked and unevictable.
  */
-long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
-		   long target, bool force)
+static inline bool lru_page_unevictable(struct cl_page *clpage)
 {
-	struct cl_io *io;
+	return PageMlocked(cl_page_vmpage(clpage));
+}
+
+enum shrink_action {
+	SK_ACTION_WILL_FREE	= 0,
+	SK_ACTION_OWN_FAIL	= 1,
+	SK_ACTION_UNEVICT_ADD	= 2,
+	SK_ACTION_UNEVICT_DEL	= 3,
+	SK_ACTION_BUSY_SKIP	= 4,
+	SK_ACTION_INVAL		= 6,
+	SK_ACTION_MAX,
+};
+
+static inline bool
+cache_unevict_check_enabled(struct client_obd *cli)
+{
+	return cli->cl_cache->ccc_mlock_pages_enable;
+}
+
+static inline enum shrink_action
+osc_normal_lru_check(const struct lu_env *env, struct client_obd *cli,
+		     struct cl_io *io, struct osc_page *opg)
+{
+	struct cl_page *clpage = opg->ops_cl.cpl_page;
+	enum shrink_action action = SK_ACTION_OWN_FAIL;
+
+	if (cl_page_own_try(env, io, clpage) == 0) {
+		if (cache_unevict_check_enabled(cli) &&
+		    lru_page_unevictable(clpage)) {
+			opg->ops_vm_locked = 1;
+			cl_page_disown(env, io, clpage);
+			list_move_tail(&opg->ops_lru,
+				       &cli->cl_unevict_lru_list);
+			return SK_ACTION_UNEVICT_ADD;
+		}
+		if (!lru_page_busy(cli, clpage)) {
+			/*
+			 * remove it from lru list earlier to avoid
+			 * lock contention.
+			 */
+			__osc_lru_del(cli, opg);
+			opg->ops_in_lru = 0; /* will be discarded */
+
+			cl_page_get(clpage);
+			return SK_ACTION_WILL_FREE;
+		}
+
+		cl_page_disown(env, io, clpage);
+		action = SK_ACTION_BUSY_SKIP;
+	}
+
+	list_move_tail(&opg->ops_lru, &cli->cl_lru_list);
+
+	return action;
+}
+
+static inline enum shrink_action
+osc_unevict_lru_check(const struct lu_env *env, struct client_obd *cli,
+		      struct cl_io *io, struct osc_page *opg)
+{
+	struct cl_page *clpage = opg->ops_cl.cpl_page;
+	enum shrink_action action = SK_ACTION_OWN_FAIL;
+
+	if (cl_page_own_try(env, io, clpage) == 0) {
+		if (!lru_page_busy(cli, clpage) &&
+		    !lru_page_unevictable(clpage)) {
+			LASSERT(opg->ops_vm_locked == 1);
+			__osc_lru_del(cli, opg);
+			opg->ops_in_lru = 0; /* will be discarded */
+
+			cl_page_get(clpage);
+			return SK_ACTION_UNEVICT_DEL;
+		}
+
+		cl_page_disown(env, io, clpage);
+		action = SK_ACTION_BUSY_SKIP;
+	}
+
+	list_move_tail(&opg->ops_lru, &cli->cl_unevict_lru_list);
+
+	return action;
+}
+
+/*
+ * Where some shrinker work was initiated.
+ */
+enum sk_reason {
+	SK_REASON_NORMAL_LRU,
+	SK_REASON_UNEVICT_LRU,
+};
+
+static inline enum shrink_action
+osc_lru_page_check(const struct lu_env *env, struct client_obd *cli,
+		   enum sk_reason reason, struct cl_io *io,
+		   struct osc_page *opg)
+{
+	switch (reason) {
+	case SK_REASON_NORMAL_LRU:
+		return osc_normal_lru_check(env, cli, io, opg);
+	case SK_REASON_UNEVICT_LRU:
+		return osc_unevict_lru_check(env, cli, io, opg);
+	default:
+		CERROR("%s: unsupport shrink type: %d\n",
+		       cli_name(cli), reason);
+		LBUG();
+		return SK_ACTION_INVAL;
+	}
+}
+
+static inline int osc_lru_maxscan(enum sk_reason reason, long *target,
+				  bool force, atomic_long_t *lru_in_list)
+{
+	int maxscan;
+
+	if (force && reason == SK_REASON_UNEVICT_LRU) {
+		maxscan = atomic_long_read(lru_in_list);
+		if (*target == 0)
+			*target = maxscan;
+	} else {
+		maxscan = min((*target) << 1, atomic_long_read(lru_in_list));
+	}
+
+	return maxscan;
+}
+
+static long osc_lru_list_shrink(const struct lu_env *env,
+				struct client_obd *cli,
+				enum sk_reason reason,
+				struct list_head *lru_list,
+				atomic_long_t *lru_in_list,
+				long target, bool force,
+				long *unevict_delta)
+{
 	struct cl_object *clobj = NULL;
 	struct cl_page **pvec;
 	struct osc_page *opg;
+	struct cl_io *io;
 	long count = 0;
-	int maxscan = 0;
 	int index = 0;
+	int maxscan;
 	int rc = 0;
+	enum shrink_action action;
+	int actnum[SK_ACTION_MAX] = { 0 };
+
 	ENTRY;
 
-	LASSERT(atomic_long_read(&cli->cl_lru_in_list) >= 0);
-	if (atomic_long_read(&cli->cl_lru_in_list) == 0 || target <= 0)
+	LASSERT(atomic_long_read(lru_in_list) >= 0);
+	if (atomic_long_read(lru_in_list) == 0 || target < 0)
 		RETURN(0);
-
-	CDEBUG(D_CACHE, "%s: shrinkers: %d, force: %d\n",
-	       cli_name(cli), atomic_read(&cli->cl_lru_shrinkers), force);
-	if (!force) {
-		if (atomic_read(&cli->cl_lru_shrinkers) > 0)
-			RETURN(-EBUSY);
-
-		if (atomic_inc_return(&cli->cl_lru_shrinkers) > 1) {
-			atomic_dec(&cli->cl_lru_shrinkers);
-			RETURN(-EBUSY);
-		}
-	} else {
-		atomic_inc(&cli->cl_lru_shrinkers);
-	}
 
 	pvec = (struct cl_page **)osc_env_info(env)->oti_pvec;
 	io = osc_env_thread_io(env);
 
 	spin_lock(&cli->cl_lru_list_lock);
-	if (force)
+	if (force && reason == SK_REASON_NORMAL_LRU)
 		cli->cl_lru_reclaim++;
-	maxscan = min(target << 1, atomic_long_read(&cli->cl_lru_in_list));
-	while (!list_empty(&cli->cl_lru_list)) {
+	maxscan = osc_lru_maxscan(reason, &target, force, lru_in_list);
+	while (!list_empty(lru_list)) {
 		struct cl_page *page;
-		bool will_free = false;
 
 		if (!force && atomic_read(&cli->cl_lru_shrinkers) > 1)
 			break;
@@ -578,11 +719,13 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		if (--maxscan < 0)
 			break;
 
-		opg = list_first_entry(&cli->cl_lru_list, struct osc_page,
-				       ops_lru);
+		opg = list_first_entry(lru_list, struct osc_page, ops_lru);
 		page = opg->ops_cl.cpl_page;
-		if (lru_page_busy(cli, page)) {
-			list_move_tail(&opg->ops_lru, &cli->cl_lru_list);
+		if (lru_page_busy(cli, page) &&
+		    !(reason == SK_REASON_NORMAL_LRU &&
+		      lru_page_unevictable(page))) {
+			list_move_tail(&opg->ops_lru, lru_list);
+			actnum[SK_ACTION_BUSY_SKIP]++;
 			continue;
 		}
 
@@ -617,24 +760,22 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 			continue;
 		}
 
-		if (cl_page_own_try(env, io, page) == 0) {
-			if (!lru_page_busy(cli, page)) {
-				/* remove it from lru list earlier to avoid
-				 * lock contention */
-				__osc_lru_del(cli, opg);
-				opg->ops_in_lru = 0; /* will be discarded */
-
-				cl_page_get(page);
-				will_free = true;
-			} else {
-				cl_page_disown(env, io, page);
-			}
-		}
-
-		if (!will_free) {
-			list_move_tail(&opg->ops_lru, &cli->cl_lru_list);
+		action = osc_lru_page_check(env, cli, reason, io, opg);
+		actnum[action]++;
+		if (action == SK_ACTION_UNEVICT_ADD) {
+			if (unevict_delta)
+				(*unevict_delta)++;
+			/*
+			 * The page is moved from the normal LRU list into
+			 * the unevict list.
+			 */
+			if (++count >= target)
+				break;
 			continue;
 		}
+		if (action != SK_ACTION_WILL_FREE &&
+		    action != SK_ACTION_UNEVICT_DEL)
+			continue;
 
 		/* Don't discard and free the page with cl_lru_list held */
 		pvec[index++] = page;
@@ -649,6 +790,20 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		if (++count >= target)
 			break;
 	}
+
+	CDEBUG(D_CACHE, "%s: LRU %s empty %d maxscan %d i%ld/u%ld/b%ld/l%ld actcnt %d/%d/%d/%d/%d count %ld\n",
+	       cli_name(cli),
+	       reason == SK_REASON_NORMAL_LRU ? "normal" : "unevict",
+	       list_empty(lru_list), maxscan,
+	       atomic_long_read(&cli->cl_lru_in_list),
+	       atomic_long_read(&cli->cl_unevict_lru_in_list),
+	       atomic_long_read(&cli->cl_lru_busy),
+	       atomic_long_read(cli->cl_lru_left),
+	       actnum[SK_ACTION_WILL_FREE],
+	       actnum[SK_ACTION_OWN_FAIL],
+	       actnum[SK_ACTION_UNEVICT_ADD],
+	       actnum[SK_ACTION_UNEVICT_DEL],
+	       actnum[SK_ACTION_BUSY_SKIP], count);
 	spin_unlock(&cli->cl_lru_list_lock);
 
 	if (clobj != NULL) {
@@ -659,12 +814,78 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		cond_resched();
 	}
 
+	RETURN(count > 0 ? count : rc);
+}
+
+/**
+ * Drop @target of pages from LRU at most.
+ */
+long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
+		   long target, bool force)
+{
+	struct cl_client_cache *cache = cli->cl_cache;
+	long unevict_delta = 0;
+	long shrank = 0;
+	long count = 0;
+
+	ENTRY;
+
+	LASSERT(atomic_long_read(&cli->cl_lru_in_list) >= 0);
+	if (atomic_long_read(&cli->cl_lru_in_list) == 0 || target <= 0)
+		RETURN(0);
+
+	CDEBUG(D_CACHE,
+	       "%s: shrinkers: %d force: %d target: %ld LRU: i%ld/u%ld/b%ld/l%ld\n",
+	       cli_name(cli), atomic_read(&cli->cl_lru_shrinkers), force,
+	       target, atomic_long_read(&cli->cl_lru_in_list),
+	       atomic_long_read(&cli->cl_unevict_lru_in_list),
+	       atomic_long_read(&cli->cl_lru_busy),
+	       atomic_long_read(cli->cl_lru_left));
+	if (!force) {
+		if (atomic_read(&cli->cl_lru_shrinkers) > 0)
+			RETURN(-EBUSY);
+
+		if (atomic_inc_return(&cli->cl_lru_shrinkers) > 1) {
+			atomic_dec(&cli->cl_lru_shrinkers);
+			RETURN(-EBUSY);
+		}
+	} else {
+		atomic_inc(&cli->cl_lru_shrinkers);
+	}
+
+	count = osc_lru_list_shrink(env, cli, SK_REASON_NORMAL_LRU,
+				    &cli->cl_lru_list, &cli->cl_lru_in_list,
+				    target, force, &unevict_delta);
+	if (count < 0)
+		GOTO(out, count);
+
+	shrank = count;
+	if (force)
+		GOTO(out, count);
+
+	/*
+	 * TODO: In non force mode, should we also scan unevictable list and try
+	 * to free some pages that are no longer marked as PG_mlocked here?
+	 */
+out:
 	atomic_dec(&cli->cl_lru_shrinkers);
-	if (count > 0) {
-		atomic_long_add(count, cli->cl_lru_left);
+	if (unevict_delta > 0) {
+		atomic_long_sub(unevict_delta, &cli->cl_lru_in_list);
+		atomic_long_add(unevict_delta, &cli->cl_unevict_lru_in_list);
+		atomic_long_add(unevict_delta, &cache->ccc_unevict_lru_used);
+	}
+	if (shrank > 0) {
+		atomic_long_add(shrank, cli->cl_lru_left);
+		CDEBUG(D_CACHE,
+		       "%s: LRU shrink %ld i%ld/u%ld/b%ld/l%ld\n",
+		       cli_name(cli), shrank,
+		       atomic_long_read(&cli->cl_lru_in_list),
+		       atomic_long_read(&cli->cl_unevict_lru_in_list),
+		       atomic_long_read(&cli->cl_lru_busy),
+		       atomic_long_read(cli->cl_lru_left));
 		wake_up(&osc_lru_waitq);
 	}
-	RETURN(count > 0 ? count : rc);
+	RETURN(shrank > 0 ? shrank : count);
 }
 EXPORT_SYMBOL(osc_lru_shrink);
 
@@ -681,7 +902,9 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 	struct client_obd *scan;
 	int max_scans;
 	__u16 refcheck;
+	long shrank = 0;
 	long rc = 0;
+
 	ENTRY;
 
 	LASSERT(cache != NULL);
@@ -699,14 +922,20 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 		       cli_name(cli), rc, npages);
 		if (osc_cache_too_much(cli) > 0)
 			ptlrpcd_queue_work(cli->cl_lru_work);
+		shrank = rc;
 		GOTO(out, rc);
 	} else if (rc > 0) {
+		shrank = rc;
 		npages -= rc;
 	}
 
-	CDEBUG(D_CACHE, "%s: cli %p no free slots, pages: %ld/%ld, want: %ld\n",
-		cli_name(cli), cli, atomic_long_read(&cli->cl_lru_in_list),
-		atomic_long_read(&cli->cl_lru_busy), npages);
+	CDEBUG(D_CACHE,
+	       "%s: cli %p no free slots, pages: i%ld/u%ld/b%ld/l%ld/m%ld, want: %ld\n",
+	       cli_name(cli), cli, atomic_long_read(&cli->cl_lru_in_list),
+	       atomic_long_read(&cli->cl_unevict_lru_in_list),
+	       atomic_long_read(&cli->cl_lru_busy),
+	       atomic_long_read(cli->cl_lru_left),
+	       cli->cl_cache->ccc_lru_max, npages);
 
 	/* Reclaim LRU slots from other client_obd as it can't free enough
 	 * from its own. This should rarely happen. */
@@ -721,10 +950,12 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 	       (scan = list_first_entry_or_null(&cache->ccc_lru,
 						  struct client_obd,
 						  cl_lru_osc)) != NULL) {
-		CDEBUG(D_CACHE, "%s: cli %p LRU pages: %ld, busy: %ld.\n",
+		CDEBUG(D_CACHE,
+		       "%s: cli %p LRU pages: %ld, busy: %ld, unevict: %ld.\n",
 		       cli_name(scan), scan,
 		       atomic_long_read(&scan->cl_lru_in_list),
-		       atomic_long_read(&scan->cl_lru_busy));
+		       atomic_long_read(&scan->cl_lru_busy),
+		       atomic_long_read(&scan->cl_unevict_lru_in_list));
 
 		list_move_tail(&scan->cl_lru_osc, &cache->ccc_lru);
 		if (osc_cache_too_much(scan) > 0) {
@@ -732,19 +963,25 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 
 			rc = osc_lru_shrink(env, scan, npages, true);
 			spin_lock(&cache->ccc_lru_lock);
-			if (rc >= npages)
+			if (rc >= npages) {
+				shrank += rc;
 				break;
-			if (rc > 0)
+			}
+			if (rc > 0) {
+				shrank += rc;
 				npages -= rc;
+			}
 		}
 	}
 	spin_unlock(&cache->ccc_lru_lock);
 
+	if (shrank > 0)
+		GOTO(out, rc);
 out:
 	cl_env_put(env, &refcheck);
-	CDEBUG(D_CACHE, "%s: cli %p freed %ld pages.\n",
-	       cli_name(cli), cli, rc);
-	return rc;
+	CDEBUG(D_CACHE, "%s: cli %p freed %ld/%ld pages.\n",
+	       cli_name(cli), cli, rc, shrank);
+	return shrank > 0 ? shrank : rc;
 }
 
 /**
@@ -875,6 +1112,20 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
 {
 	atomic_long_add(npages, cli->cl_lru_left);
 	wake_up(&osc_lru_waitq);
+}
+
+long osc_unevict_cache_shrink(const struct lu_env *env, struct client_obd *cli)
+{
+	long rc;
+
+	ENTRY;
+
+	rc = osc_lru_list_shrink(env, cli, SK_REASON_UNEVICT_LRU,
+				 &cli->cl_unevict_lru_list,
+				 &cli->cl_unevict_lru_in_list,
+				 0, true, NULL);
+
+	RETURN(rc);
 }
 
 /**

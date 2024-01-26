@@ -529,7 +529,11 @@ struct osc_page {
 	/**
 	 * If the page is in osc_object::oo_tree.
 	 */
-				ops_intree:1;
+				ops_intree:1,
+	/**
+	 * If the page is marked with PG_mlocked.
+	 */
+				ops_vm_locked:1;
 	/**
 	 * lru page list. See osc_lru_{del|use}() in osc_page.c for usage.
 	 */

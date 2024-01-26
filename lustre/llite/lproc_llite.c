@@ -463,16 +463,20 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	long max_cached_mb;
 	long unused_mb;
+	long unevict_mb;
 
 	mutex_lock(&cache->ccc_max_cache_mb_lock);
 	max_cached_mb = PAGES_TO_MiB(cache->ccc_lru_max);
 	unused_mb = PAGES_TO_MiB(atomic_long_read(&cache->ccc_lru_left));
+	unevict_mb = PAGES_TO_MiB(
+			atomic_long_read(&cache->ccc_unevict_lru_used));
 	mutex_unlock(&cache->ccc_max_cache_mb_lock);
 
 	seq_printf(m, "users: %d\n"
 		      "max_cached_mb: %ld\n"
 		      "used_mb: %ld\n"
 		      "unused_mb: %ld\n"
+		      "unevict_mb: %ld\n"
 		      "reclaim_count: %u\n"
 		      "max_read_ahead_mb: %lu\n"
 		      "used_read_ahead_mb: %d\n",
@@ -480,6 +484,7 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 		   max_cached_mb,
 		   max_cached_mb - unused_mb,
 		   unused_mb,
+		   unevict_mb,
 		   cache->ccc_lru_shrinkers,
 		   PAGES_TO_MiB(ra->ra_max_pages),
 		   PAGES_TO_MiB(atomic_read(&ra->ra_cur_pages)));
@@ -613,6 +618,97 @@ out_unlock:
 	return rc;
 }
 LDEBUGFS_SEQ_FOPS(ll_max_cached_mb);
+
+static int ll_unevict_cached_mb_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct cl_client_cache *cache = sbi->ll_cache;
+	long unevict_mb;
+
+	mutex_lock(&cache->ccc_max_cache_mb_lock);
+	unevict_mb = PAGES_TO_MiB(
+			atomic_long_read(&cache->ccc_unevict_lru_used));
+	mutex_unlock(&cache->ccc_max_cache_mb_lock);
+
+	seq_printf(m, "%ld\n", unevict_mb);
+	return 0;
+}
+
+static ssize_t ll_unevict_cached_mb_seq_write(struct file *file,
+					      const char __user *buffer,
+					      size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct lu_env *env;
+	__u16 refcheck;
+	char kernbuf[128];
+	int rc;
+
+	ENTRY;
+
+	if (count >= sizeof(kernbuf))
+		RETURN(-EINVAL);
+
+	if (copy_from_user(kernbuf, buffer, count))
+		RETURN(-EFAULT);
+
+	kernbuf[count] = 0;
+	if (count != 5 || strncmp(kernbuf, "clear", 5) != 0)
+		RETURN(-EINVAL);
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	/* being initialized */
+	if (sbi->ll_dt_exp == NULL)
+		GOTO(out, rc = -ENODEV);
+
+	rc = obd_set_info_async(env, sbi->ll_dt_exp,
+				sizeof(KEY_UNEVICT_CACHE_SHRINK),
+				KEY_UNEVICT_CACHE_SHRINK,
+				0, NULL, NULL);
+out:
+	cl_env_put(env, &refcheck);
+	if (rc >= 0)
+		rc = count;
+
+	RETURN(rc);
+}
+LDEBUGFS_SEQ_FOPS(ll_unevict_cached_mb);
+
+static int ll_enable_mlock_pages_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct cl_client_cache *cache = sbi->ll_cache;
+
+	seq_printf(m, "%d\n", cache->ccc_mlock_pages_enable);
+	return 0;
+}
+
+static ssize_t ll_enable_mlock_pages_seq_write(struct file *file,
+					       const char __user *buffer,
+					       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct cl_client_cache *cache = sbi->ll_cache;
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	cache->ccc_mlock_pages_enable = val;
+	return count;
+}
+LDEBUGFS_SEQ_FOPS(ll_enable_mlock_pages);
 
 static ssize_t pcc_async_threshold_show(struct kobject *kobj,
 					struct attribute *attr, char *buffer)
@@ -2261,6 +2357,10 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"max_cached_mb",
 	  .fops	=	&ll_max_cached_mb_fops			},
+	{ .name	=	"unevict_cached_mb",
+	  .fops	=	&ll_unevict_cached_mb_fops		},
+	{ .name	=	"enable_mlock_pages",
+	  .fops	=	&ll_enable_mlock_pages_fops		},
 	{ .name	=	"statahead_stats",
 	  .fops	=	&ll_statahead_stats_fops		},
 	{ .name	=	"unstable_stats",

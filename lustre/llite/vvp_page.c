@@ -75,6 +75,8 @@ static void vvp_page_delete(const struct lu_env *env,
 		LASSERT(PageLocked(vmpage));
 		LASSERT((struct cl_page *)vmpage->private == cp);
 
+		CDEBUG(D_CACHE, "delete page %pK index %ld\n",
+		       vmpage, vmpage->index);
 		/* Drop the reference count held in vvp_page_init */
 		refcount_dec(&cp->cp_ref);
 

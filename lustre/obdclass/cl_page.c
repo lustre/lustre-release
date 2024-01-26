@@ -1159,6 +1159,7 @@ struct cl_client_cache *cl_cache_init(unsigned long lru_page_max)
 	refcount_set(&cache->ccc_users, 1);
 	cache->ccc_lru_max = lru_page_max;
 	atomic_long_set(&cache->ccc_lru_left, lru_page_max);
+	atomic_long_set(&cache->ccc_unevict_lru_used, 0);
 	spin_lock_init(&cache->ccc_lru_lock);
 	INIT_LIST_HEAD(&cache->ccc_lru);
 

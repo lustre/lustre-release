@@ -2149,6 +2149,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	} else {
 		unlock_page(vmpage);
 		result = PTR_ERR(page);
+		CDEBUG(D_CACHE, "failed to alloc page@%pK index%ld: rc = %d\n",
+		       vmpage, vmpage->index, result);
 	}
 
 out:

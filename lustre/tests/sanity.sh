@@ -31909,6 +31909,262 @@ test_460d() {
 }
 run_test 460d "Check encrypt pools output"
 
+resident_pages() {
+	local file=$1
+
+	vmtouch $file | awk '/Resident Pages:/ {print $3}' |
+		awk -F/ '{ print $1 }'
+}
+
+# The command "echo 2 > /proc/sys/vm/drop_caches" may revoke the DLM locks
+# due to slab cache reclaim. Thus we should avoid to reclaim slab cache for
+# DLM locks during testing since it may evict mlock()ed pages due to the
+# release of the DLM extent lock.
+# After the page cache shrinker is disabled, "echo 3 > /proc/sys/vm/drop_caches"
+# and "echo 2 > /proc/sys/vm/drop_caches" will not scan and clear unused pages
+# from the LRU list.
+disable_page_cache_shrink() {
+	local enabled=$($LCTL get_param -n osc.*.enable_page_cache_shrink |
+			head -n 1)
+
+	stack_trap "$LCTL set_param osc.*.enable_page_cache_shrink=$enabled"
+	$LCTL set_param osc.*.enable_page_cache_shrink=0
+}
+
+enable_mlock_pages_check() {
+	local enabled=$($LCTL get_param -n llite.*.enable_mlock_pages)
+
+	stack_trap "$LCTL set_param llite.*.enable_mlock_pages=$enabled"
+	$LCTL set_param llite.*.enable_mlock_pages=1
+}
+
+test_600a() {
+	local file=$DIR/$tfile
+	local size_mb=100
+	local pcnt=$((size_mb * 1024 * 1024 / PAGE_SIZE))
+
+	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_set_fallocate_or_skip
+	disable_page_cache_shrink
+	enable_mlock_pages_check
+
+	fallocate -l ${size_mb}M $file || error "failed to fallocate $file"
+	stack_trap "pkill -9 vmtouch || true"
+	vmtouch -vltdw -m 1g $file || error "failed to vmtouch $file"
+
+	local rcnt=$(resident_pages $file)
+
+	echo "before drop_caches (0):"
+	grep Mlocked: /proc/meminfo
+	$LCTL get_param llite.*.max_cached_mb
+	echo "drop page caches (1):"
+	echo 1 > /proc/sys/vm/drop_caches
+	grep Mlocked: /proc/meminfo
+	$LCTL get_param llite.*.max_cached_mb
+	vmtouch $file
+	(( $pcnt == $rcnt )) || error "resident pages are $rcnt, expected $pcnt"
+
+	local unevict_mb
+
+	$LCTL set_param llite.*.unevict_cached_mb=clear
+	$LCTL get_param llite.*.unevict_cached_mb
+	unevict_mb=$($LCTL get_param -n llite.*.unevict_cached_mb)
+	(( $unevict_mb == $size_mb )) ||
+		error "unevict_cached_mb is $unevict_mb, expected $size_mb"
+
+	$LCTL set_param $OSC.*$OSC*.osc_unevict_cached_mb=clear
+	$LCTL get_param $OSC.*$OSC*.osc_unevict_cached_mb
+	unevict_mb=$($LCTL get_param -n $OSC.*$OSC*.osc_unevict_cached_mb |
+		     awk '{sum += $1 } END { print sum }')
+	(( $unevict_mb == $size_mb )) ||
+		error "osc_unevict_cached_mb is $unevict_mb, expected $size_mb"
+
+	# The lock revocation will evict the cached pages protected by it.
+	# This is desired behavior for conflict access from the remote client.
+	# But how to deal with the lock revocation triggered by LRU lock
+	# shrinking on client side, should this kind of locks that protected
+	# the mlocked pages be canceled in this case? Or the lock protecting
+	# mlock()ed pages should not put into lock LRU list?
+	cancel_lru_locks $OSC
+	echo "drop lru DLM lock:"
+	grep Mlocked: /proc/meminfo
+	$LCTL get_param llite.*.max_cached_mb
+	$LCTL get_param osc.*.osc_cached_mb
+	rcnt=$(resident_pages $file)
+	(( $rcnt == 0 )) || error "resident pages are $rcnt, expected zero"
+	unevict_mb=$($LCTL get_param -n llite.*.unevict_cached_mb)
+	(( $unevict_mb == 0 )) ||
+		error "unevict_cached_mb is $unevict_mb, expected 0"
+	unevict_mb=$($LCTL get_param -n $OSC.*$OSC*.osc_unevict_cached_mb |
+		     awk '{sum += $1 } END { print sum }')
+	(( $unevict_mb == 0 )) ||
+		error "osc_unevict_cached_mb is $unevict_mb, expected $size_mb"
+
+}
+run_test 600a "basic test for mlock()ed file"
+
+test_600b() {
+	local file=$DIR/$tfile
+	local size_mb=100
+	local cache_limit=64
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+
+	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_set_fallocate_or_skip
+	disable_page_cache_shrink
+	enable_mlock_pages_check
+
+	fallocate -l ${size_mb}M $file || error "failed to fallocate $file"
+	stack_trap "pkill -9 vmtouch || true"
+
+	cancel_lru_locks $OSC
+	$LCTL get_param llite.*.max_cached_mb
+	stack_trap "$LCTL set_param llite.*.max_cached_mb=$max_cached_mb"
+	$LCTL set_param llite.*.max_cached_mb=$cache_limit
+
+	# The required mlock()ed pages (100M) are larger than @max_cached_mb.
+	vmtouch -vltdw -m 1g $file || error "failed to mlock $file"
+	vmtouch $file
+	grep Mlocked: /proc/meminfo
+
+	local used_mb
+	local unevict_mb
+
+	echo 1 > /proc/sys/vm/drop_caches
+	$LCTL get_param llite.*.max_cached_mb
+	$LCTL set_param llite.*.unevict_cached_mb=clear
+	used_mb=$($LCTL get_param llite.*.max_cached_mb |
+		  awk '/^used_mb/ { print $2 }')
+	unevict_mb=$($LCTL get_param -n llite.*.unevict_cached_mb)
+	(( $used_mb == 0 )) || error "used_mb is $used_mb, expected 0"
+	(( $unevict_mb == $size_mb )) ||
+		error "unevict_mb is $unevict_mb, expected $size_mb"
+}
+run_test 600b "mlock a file (via vmtouch) larger than max_cached_mb"
+
+test_600c() {
+	local dir=$DIR/$tdir
+	local cache_limit=64
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+
+	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_set_fallocate_or_skip
+	disable_page_cache_shrink
+	enable_mlock_pages_check
+
+	stack_trap "rm -rf $dir"
+	stack_trap "$LCTL set_param llite.*.max_cached_mb=$max_cached_mb"
+	$LCTL set_param llite.*.max_cached_mb=$cache_limit
+	stack_trap "pkill -9 vmtouch || true"
+
+	local size=$((64 * 1048576))
+	local file1=$dir/$tfile.1
+	local file2=$dir/$tfile.2
+
+	mkdir $dir || error "failed to mkdir $dir"
+	fallocate -l $size $file1 || error "failed to fallocate $file1"
+	fallocate -l $size $file2 || error "failed to fallocate $file2"
+	cancel_lru_locks $OSC
+
+	vmtouch -vltdw -m 1g $file1 || error "failed to vmtouch $file1"
+	$LCTL get_param llite.*.max_cached_mb
+	$LCTL set_param llite.*.unevict_cached_mb=clear
+	$LCTL get_param llite.*.max_cached_mb
+
+	local cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			  awk '/^used_mb/ { print $2 }')
+
+	[ $cached_mb -eq 0 ] || error "expected used_mb 0 got $cached_mb"
+	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+		    awk '/^unevict_mb/ { print $2 }')
+	[ $cached_mb -eq 64 ] || error "expected unevict_mb 64 got $cached_mb"
+
+	vmtouch -vt $file2 || error "failed to vmtouch $file2"
+	echo 3 > /proc/sys/vm/drop_caches
+	dd if=$file2 of=/dev/null bs=1M count=64 ||
+		error "failed to reading $file2 into cache"
+
+	pkill -9 vmtouch || error "failed to kill vmtouch"
+	vmtouch -vt $file2 || error "failed to load $files into cache"
+	$LCTL get_param llite.*.max_cached_mb
+	echo 1 > /proc/sys/vm/drop_caches
+	$LCTL set_param llite.*.unevict_cached_mb=clear
+	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+		    awk '/^used_mb/ { print $2 }')
+	[ $cached_mb -eq 0 ] || error "expected used_mb 0 got $cached_mb"
+	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+		    awk '/^unevict_mb/ { print $2 }')
+	[ $cached_mb -eq 0 ] || error "expected unevict_mb 0 got $cached_mb"
+}
+run_test 600c "Test I/O when mlocked page count > @max_cached_mb"
+
+test_600d_base() {
+	local mlcksz=$1
+	local fsz=$2
+	local n=$3
+	local dir=$DIR/$tdir
+	local mlckf=$dir/mlockfile
+
+	echo "mlock size: $mlcksz file size: $fsz, n: $n"
+	mkdir -p $dir || error "mkdir $dir failed"
+
+	fallocate -l $mlcksz $mlckf || error "failed to fallocate $mlckf"
+	for ((i = 0; i < $n; i++)); do
+		fallocate -l $fsz $dir/$tfile.$i ||
+			error "failed to fallocate $dir/$tfile.$i"
+	done
+
+	cancel_lru_locks $OSC
+
+	declare -a pids
+
+	vmtouch -vltdw -m 1G $mlckf || error "failed to mlock $mlckf"
+	for ((i = 0; i < $n; i++)); do
+		vmtouch -t -m 1g $dir/$tfile.$i &
+		pids[i]=$!
+	done
+
+	cat /proc/meminfo | grep 'Mlocked'
+	$LCTL get_param llite.*.max_cached_mb
+	echo "drop caches:"
+	echo 1 > /proc/sys/vm/drop_caches
+	$LCTL set_param llite.*.unevict_cached_mb=clear
+	$LCTL get_param llite.*.max_cached_mb
+
+	for ((i = 0; i < $n; i++)); do
+		wait ${pids[i]} || error "touch $dir/$tfile.$i failed: rc = $?"
+	done
+
+	cat /proc/meminfo | grep 'Mlocked:'
+	pkill -9 vmtouch || true
+	rm -rvf $dir || error "failed to rm $dir"
+}
+
+test_600d() {
+	local dir=$DIR/$tdir
+	local cache_limit=64
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			      awk '/^max_cached_mb/ { print $2 }')
+
+	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_set_fallocate_or_skip
+	disable_page_cache_shrink
+	enable_mlock_pages_check
+
+	stack_trap "rm -rf $dir"
+	stack_trap "$LCTL set_param llite.*.max_cached_mb=$max_cached_mb"
+	$LCTL set_param llite.*.max_cached_mb=$cache_limit
+	stack_trap "pkill -9 vmtouch || true"
+
+	local size=$((cache_limit * 1048576))
+
+	test_600d_base $((size - PAGE_SIZE)) 4096 16
+	test_600d_base $((size - 2 * PAGE_SIZE)) 16384 16
+}
+run_test 600d "Test I/O with limited LRU page slots (some was mlocked)"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

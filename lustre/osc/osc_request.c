@@ -3531,6 +3531,27 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		RETURN(0);
 	}
 
+	if (KEY_IS(KEY_UNEVICT_CACHE_SHRINK)) {
+		struct client_obd *cli = &obd->u.cli;
+		long ret;
+
+		ret = osc_unevict_cache_shrink(env, cli);
+		if (ret > 0)
+			ret = 0;
+
+		/*
+		 * Clear unused cache pages and move mlock()ed pages from
+		 * the normal LRU list into unevictable LRU list.
+		 */
+		ret = osc_lru_shrink(env, cli,
+				     atomic_long_read(&cli->cl_lru_in_list),
+				     true);
+		if (ret > 0)
+			ret = 0;
+
+		RETURN(ret);
+	}
+
 	if (!set && !KEY_IS(KEY_GRANT_SHRINK))
 		RETURN(-EINVAL);
 
@@ -4002,6 +4023,9 @@ static struct ll_shrinker_ops osc_cache_sh_ops = {
 static int osc_cache_shrink(struct shrinker *shrinker,
 			    struct shrink_control *sc)
 {
+	if (!osc_page_cache_shrink_enabled)
+		return 0;
+
 	(void)osc_cache_shrink_scan(shrinker, sc);
 
 	return osc_cache_shrink_count(shrinker, sc);

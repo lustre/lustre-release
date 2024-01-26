@@ -191,10 +191,12 @@ static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
 
 	seq_printf(m, "used_mb: %ld\n"
 		   "busy_cnt: %ld\n"
+		   "unevict_cnt: %ld\n"
 		   "reclaim: %llu\n",
 		   (atomic_long_read(&cli->cl_lru_in_list) +
 		    atomic_long_read(&cli->cl_lru_busy)) >> shift,
-		    atomic_long_read(&cli->cl_lru_busy),
+		   atomic_long_read(&cli->cl_lru_busy),
+		   atomic_long_read(&cli->cl_unevict_lru_in_list),
 		   cli->cl_lru_reclaim);
 
 	return 0;
@@ -243,6 +245,56 @@ static ssize_t osc_cached_mb_seq_write(struct file *file,
 }
 
 LPROC_SEQ_FOPS(osc_cached_mb);
+
+static int osc_unevict_cached_mb_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *obd = m->private;
+	struct client_obd *cli = &obd->u.cli;
+	int shift = 20 - PAGE_SHIFT;
+
+	seq_printf(m, "%ld\n",
+		   atomic_long_read(&cli->cl_unevict_lru_in_list) >> shift);
+	return 0;
+}
+
+static ssize_t osc_unevict_cached_mb_seq_write(struct file *file,
+					       const char __user *buffer,
+					       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct client_obd *cli = &obd->u.cli;
+	char kernbuf[128];
+
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	kernbuf[count] = 0;
+	if (count == 5 && strncmp(kernbuf, "clear", 5) == 0) {
+		struct lu_env *env;
+		__u16 refcheck;
+
+		env = cl_env_get(&refcheck);
+		if (!IS_ERR(env)) {
+			(void)osc_unevict_cache_shrink(env, cli);
+			/*
+			 * Scan the LRU list, discard the LRU pages or move
+			 * the unevictable/mlock()ed pages into the unevictable
+			 * list.
+			 */
+			(void)osc_lru_shrink(env, cli,
+				atomic_long_read(&cli->cl_lru_in_list), true);
+			cl_env_put(env, &refcheck);
+		}
+		return count;
+	}
+
+	return -EINVAL;
+}
+LPROC_SEQ_FOPS(osc_unevict_cached_mb);
 
 static ssize_t cur_dirty_bytes_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -711,6 +763,8 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops =	&osc_obd_max_pages_per_rpc_fops	},
 	{ .name	=	"osc_cached_mb",
 	  .fops	=	&osc_cached_mb_fops		},
+	{ .name	=	"osc_unevict_cached_mb",
+	  .fops	=	&osc_unevict_cached_mb_fops	},
 	{ .name =	"cur_grant_bytes",
 	  .fops =	&osc_cur_grant_bytes_fops	},
 	{ .name	=	"checksum_type",

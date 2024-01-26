@@ -295,6 +295,10 @@ struct client_obd {
 	atomic_long_t            cl_lru_busy;
 	/** # of LRU pages in the cache for this client_obd */
 	atomic_long_t            cl_lru_in_list;
+	/**
+	 * # of LRU pages marked with PG_mlocked in the cache on the client.
+	 */
+	atomic_long_t		 cl_unevict_lru_in_list;
 	/** # of threads are shrinking LRU cache. To avoid contention, it's not
 	 * allowed to have multiple threads shrinking LRU cache. */
 	atomic_t                 cl_lru_shrinkers;
@@ -305,6 +309,8 @@ struct client_obd {
 	 * reclaim is sync, initiated by IO thread when the LRU slots are
 	 * in shortage. */
 	__u64                    cl_lru_reclaim;
+	/** List of unevictable LRU pages for this client_obd */
+	struct list_head	 cl_unevict_lru_list;
 	/** List of LRU pages for this client_obd */
 	struct list_head         cl_lru_list;
 	/** Lock for LRU page list */
@@ -841,6 +847,8 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_OSP_CONNECTED	"osp_connected"
+
+#define KEY_UNEVICT_CACHE_SHRINK	"unevict_cache_shrink"
 
 /* Flags for op_xvalid */
 enum op_xvalid {

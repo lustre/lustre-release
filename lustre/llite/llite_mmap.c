@@ -401,10 +401,11 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 		return result;
 
 	CDEBUG(D_MMAP|D_IOTRACE,
-	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu vmf_flags=%#x\n",
 	       file_dentry(vma->vm_file)->d_name.name,
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
-	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff);
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff,
+	       vmf->flags);
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
@@ -461,10 +462,10 @@ restart:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu, rc %d\n",
+	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu vmf_flags=%#x: rc=%d\n",
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
 	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff,
-	       result);
+	       vmf->flags, result);
 
 	return result;
 }

@@ -478,7 +478,7 @@ Requires: attr, rsync, lsof, /usr/bin/getconf
 Requires: /usr/sbin/getenforce, acl, /usr/bin/killall, /usr/bin/ping, bc
 # Of the supported targets, only rhel7 doesn't support Recommends.
 %if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
-Recommends: perl, dbench, iozone
+Recommends: perl, dbench, iozone, vmtouch
 # Either of these is sufficient
 Suggests: pdsh, clush
 %endif

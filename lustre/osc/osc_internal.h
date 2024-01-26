@@ -181,6 +181,8 @@ extern unsigned long osc_cache_shrink_count(struct shrinker *sk,
 					    struct shrink_control *sc);
 extern unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 					   struct shrink_control *sc);
+extern long osc_unevict_cache_shrink(const struct lu_env *env,
+				     struct client_obd *cli);
 static inline unsigned int osc_max_write_chunks(const struct client_obd *cli)
 {
 	/*
