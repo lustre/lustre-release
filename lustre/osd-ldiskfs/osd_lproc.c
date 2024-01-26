@@ -56,6 +56,46 @@ void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 			      iobuf->dr_pextents);
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
+static void osd_symlink_brw_stats(struct osd_device *osd)
+{
+	size_t len_root;
+	size_t len_path;
+	char *root;
+	char *s;
+	char *p;
+	char *path;
+
+	OBD_ALLOC(path, PATH_MAX);
+	if (path == NULL)
+		return;
+
+	p = dentry_path_raw(osd->od_dt_dev.dd_debugfs_entry, path, PATH_MAX);
+	if (IS_ERR(p))
+		goto out;
+
+	root = osd->od_dt_dev.dd_debugfs_entry->d_sb->s_fs_info;
+	len_root = strlen(root);
+	len_path = strlen(p);
+	if (len_root > (p - path) || len_root + len_path + 16 > PATH_MAX)
+		goto out;
+
+	strlcpy(path, root, len_root);
+	if (p > path + len_root) {
+		s = path + len_root;
+		while ((*s++ = *p++) != '\0');
+	}
+
+	*(path + len_root + len_path) = '\0';
+	strcat(path, "/brw_stats");
+	lprocfs_add_symlink("brw_stats", osd->od_proc_entry,
+			    "/sys/kernel/debug/%s", path);
+
+out:
+	OBD_FREE(path, PATH_MAX);
+}
+#endif
+
 static int osd_stats_init(struct osd_device *osd)
 {
 	int result = -ENOMEM;
@@ -96,6 +136,10 @@ static int osd_stats_init(struct osd_device *osd)
 
 	ldebugfs_register_osd_stats(osd->od_dt_dev.dd_debugfs_entry,
 				    &osd->od_brw_stats, osd->od_stats);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
+	osd_symlink_brw_stats(osd);
+#endif
 
 	RETURN(result);
 }

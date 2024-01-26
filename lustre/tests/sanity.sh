@@ -279,6 +279,20 @@ test_0e() { # LU-13417
 }
 run_test 0e "Enable DNE MDT balancing for mkdir in the ROOT"
 
+test_0f() { # LU-17471
+	(( $MDS1_VERSION < $(version_code 2.17.53) )) ||
+		skip "MDS >= 2.17.53 removes /proc/.../brw_stats symlink"
+	(( $MDS1_VERSION < $(version_code 2.14.55-100-g8a84c7f9c7) ||
+	   $MDS1_VERSION > $(version_code 2.15.60-25) )) ||
+		skip "MDS was missing /proc/.../brw_stats value"
+
+	local path="lustre/osd-$FSTYPE/$FSNAME-MDT0000/brw_stats"
+	local out_proc=$(do_facet mds1 grep snapshot_time /proc/fs/$path)
+
+	[[ -n "$out_proc" ]] || error "brw_stats /proc/fs/$path not found"
+}
+run_test 0f "Symlink to /sys/kernel/debug/*/*/brw_stats should work properly"
+
 test_1() {
 	test_mkdir $DIR/$tdir
 	test_mkdir $DIR/$tdir/d2
