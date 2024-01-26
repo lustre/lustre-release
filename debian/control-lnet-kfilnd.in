@@ -1,0 +1,11 @@
+Package: lustre-lnet-module-kfilnd-_KVERS_
+Source: lustre
+Version: _VERS_
+Architecture: _ARCH_
+Maintainer: Lustre Developers <lustre-devel@lists.lustre.org>
+Recommends: linux-image, lustre-client-modules|lustre-server-modules
+Provides: lustre-lnet-module-kfilnd
+Description: Linux kernel lnet module for kfi (kernel _KVERS_)
+ This package contains the loadable kernel modules for LNet on slingshot.
+ These modules are compiled for the _KVERS_ linux kernel.
+

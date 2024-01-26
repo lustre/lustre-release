@@ -191,8 +191,21 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	else \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-ldiskfs"; \
 	fi; \
-	if echo "$${DEB_BUILD_PROFILES}" | grep -q "o2ib"; then \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "multiple-lnds"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-multiple-lnds"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "ext_o2ib"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=$${O2IB_SRC}"; \
+	elif echo "$${DEB_BUILD_PROFILES}" | grep -q "int_o2ib"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=yes"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=no"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "gnilnd"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-gni"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "kfilnd"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-kfi=/usr/src/kfabric"; \
 	fi; \
 	options="gss crypto pinger checksum flock lru-resize"; \
 	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \
@@ -492,8 +505,21 @@ kdist_config: prep-deb-files patch-stamp
 		export EXTRAFLAGS="$${EXTRAFLAGS} \
 			--disable-ldiskfs --disable-quilt"; \
 	fi; \
-	if echo "$${DEB_BUILD_PROFILES}" | grep -q "o2ib"; then \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "multiple-lnds"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-multiple-lnds"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "ext_o2ib"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=$${O2IB_SRC}"; \
+	elif echo "$${DEB_BUILD_PROFILES}" | grep -q "int_o2ib"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=yes"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=no"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "gnilnd"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-gni"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "kfilnd"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-kfi=/usr/src/kfabric"; \
 	fi; \
 	options="gss crypto pinger checksum flock lru-resize"; \
 	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \

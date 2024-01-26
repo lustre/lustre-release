@@ -1,0 +1,13 @@
+Package: lustre-lnet-module-in-kernel-o2iblnd-_KVERS_
+Source: lustre
+Version: _VERS_
+Architecture: _ARCH_
+Maintainer: Lustre Developers <lustre-devel@lists.lustre.org>
+Recommends: linux-image, lustre-client-modules|lustre-server-modules
+Provides: lustre-lnet-module-in-kernel-o2iblnd
+Conflicts: lustre-lnet-module-o2iblnd-_KVERS_
+Replaces: lustre-lnet-module-o2iblnd-_KVERS_
+Description: Linux kernel lnet module for o2ib (kernel _KVERS_)
+ This package contains the loadable kernel module for LNet on infiniband
+ using the in-kernel provided driver.
+ These modules are compiled for the _KVERS_ linux kernel.

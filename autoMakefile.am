@@ -327,9 +327,21 @@ debs: undef.h debs_common
 		echo "SPL: $${SPL_SRC}"; \
 		echo "ZFS: $${ZFS_SRC}"; \
 	fi; \
-	if test "x@ENABLEO2IB@" != "xno"; then \
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} o2ib"; \
-		export O2IB_SRC="@O2IBPATH@"; \
+	if test "x@ENABLE_MULTIPLE_LNDS@" != "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} multiple-lnds"; \
+	fi; \
+	if test "x@ENABLE_GNI@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gnilnd"; \
+	fi; \
+	if test "x@KFILND@" = "xkfilnd"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} kfilnd"; \
+	fi; \
+	if test "x@DPKG_EXT_O2IB@" != "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} ext_o2ib"; \
+		export O2IB_SRC="@EXT_O2IBPATH@"; \
+	fi ; \
+	if test "x@DPKG_INT_O2IB@" != "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} int_o2ib"; \
 	fi; \
 	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
 		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
@@ -337,7 +349,6 @@ debs: undef.h debs_common
 	if test "x@ENABLE_GSS@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gss"; \
 		debiantmp=$$(mktemp -t -d debbuild-$$USER-XXXXXXXX) ; \
-		cp debian/control $$debiantmp/control.bkp ; \
 		cp debian/control.main $$debiantmp/control.main.bkp ; \
 		cp debian/control.modules.in $$debiantmp/control.modules.in.bkp ; \
 		sed -i "s+^\(Build-Depends: .*\)$$+\1, libkrb5-dev, libssl-dev+" debian/control.main ; \
@@ -434,11 +445,6 @@ debs: undef.h debs_common
 	elif test "x@ENABLE_BACKOFF@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nobackoff"; \
 	fi; \
-	if test "x@ENABLE_GNI@" = "xyes"; then \
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gni"; \
-	elif test "x@ENABLE_GNI@" = "xno"; then \
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogni"; \
-	fi; \
 	if test "x@ENABLE_EFENCE@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} efence"; \
 	elif test "x@ENABLE_EFENCE@" = "xno"; then \
@@ -459,20 +465,20 @@ debs: undef.h debs_common
 			export IB_OPTIONS="--with-o2ib=yes"; \
 		fi; \
 	fi; \
+	cp -v debian/control.main debian/control ; \
 	sed "s/_KVERS_/$(LINUXRELEASE)/g" debian/lustre-tests.install.in \
 		> debian/lustre-tests.install; \
 	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || { \
 		rc=$${PIPESTATUS[0]}; \
-		cp $$debiantmp/control.bkp debian/control || true && \
 		cp $$debiantmp/control.main.bkp debian/control.main || true && \
 		cp $$debiantmp/control.modules.in.bkp debian/control.modules.in || true && \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
 		exit 0; \
 	}; \
-	cp $$debiantmp/control.bkp debian/control || true && \
 	cp $$debiantmp/control.main.bkp debian/control.main || true && \
 	cp $$debiantmp/control.modules.in.bkp debian/control.modules.in || true && \
+	cp -v debian/control.main debian/control || true ; \
 	export KPKG_DEST_DIR="$$(pwd)/.." && \
 	version=$$(sed -ne '1s/^lustre (\(.*\)).*$$/\1/p' debian/changelog) && \
 	rm -rf debian/tmp/modules-deb && \
@@ -497,10 +503,15 @@ debs: undef.h debs_common
 	if test "x@ENABLE_SERVER@" = "xyes"; then \
 		DEB_SERVER_PKG="../lustre-resource-agents_$${VER}_*.deb"; \
 	fi; \
+	MULTILNDPKGS= ; \
+	if test "x@ENABLE_MULTIPLE_LNDS@" != "xno"; then \
+		debian/repackage-multiple-lnds.sh $${KVERS} $${VER} ../lustre-*-modules-$${KVERS}_$${VER}_*.deb ; \
+		MULTILNDPKGS="../lustre-lnet-module-*-$${KVERS}_$${VER}_*.deb"; \
+	fi; \
 	mkdir -p debs && \
 	mv ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb \
 	   ../lustre-iokit_$${VER}_*.deb ../lustre-tests_$${VER}_*.deb \
-	   ../lustre-*-utils_$${VER}_*.deb $${DEB_SERVER_PKG} \
+	   ../lustre-*-utils_$${VER}_*.deb $${DEB_SERVER_PKG} $${MULTILNDPKGS} \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   ../lustre-*-dbgsym_$${VER}_*.ddeb ../lustre_$${VER}_*.buildinfo \
@@ -523,6 +534,7 @@ dkms-debs: undef.h debs_common
 	echo "Kernel Source: $${KERNEL_SRC}"; \
 	echo "Kernel Object: $${KERNEL_OBJ}"; \
 	export BUILD_DKMS="true" && \
+	cp -v debian/control.main debian/control ; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \

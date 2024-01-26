@@ -19,7 +19,7 @@ Description: source for Lustre filesystem client kernel modules
  https://wiki.whamcloud.com/
  .
  This package contains the module source. The client kernel modules
- can be built for kernels 2.6.32+ with the use of module-assistant
+ can be built for kernels 3.10+ with the use of module-assistant
  or make-kpkg.
 
 Package: lustre-client-utils
@@ -70,7 +70,7 @@ Description: HA Resuable Cluster Resource Scripts for Lustre
  .
  This package provides a set of scripts to operate Lustre
  resources in a High Availablity environment for both Pacemaker
- and rgmanager.
+ and rgmanager on a server.
 
 Package: lustre-iokit
 Section: utils
@@ -82,7 +82,7 @@ Description: Collection of benchmark tools for the Lustre filesystem
  This release is maintained by Whamcloud and available from
  https://wiki.whamcloud.com/
  .
- This package provides a collection of benchmark tools
+ This package provides a collection of benchmark tools for Lustre clients.
 
 Package: lustre-tests
 Section: utils
@@ -94,7 +94,7 @@ Description: Test suite for the Lustre filesystem
  This release is maintained by Whamcloud and available from
  https://wiki.whamcloud.com/
  .
- This package provides a number of test utilities for the Lustre filesystem.
+ This package provides regression test scripts for the Lustre filesystem.
 
 Package: lustre-dev
 Section: libdevel

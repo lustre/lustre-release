@@ -127,3 +127,5 @@ doxygen.*
 /lnet/klnds/in-kernel-o2iblnd/o2iblnd*.c
 /lnet/klnds/in-kernel-o2iblnd/o2iblnd*.h
 /lnet/klnds/o2iblnd/Module.symvers
+/debian/changelog
+/debian/control

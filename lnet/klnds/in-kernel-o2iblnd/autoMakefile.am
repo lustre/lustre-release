@@ -33,11 +33,16 @@ if MODULES
 if BUILT_IN_KO2IBLND
 modulenet_DATA = in-kernel-ko2iblnd$(KMODEXT)
 in-kernel-ko2iblnd$(KMODEXT): sources
+
 if EXTERNAL_KO2IBLND
 else
+ko2iblnd$(KMODEXT): in-kernel-ko2iblnd$(KMODEXT)
+	cp -vf in-kernel-ko2iblnd$(KMODEXT) ko2iblnd$(KMODEXT)
+
 install-exec-hook:
 	(cd "$(DESTDIR)$(modulenetdir)"; \
-	 $(LN_S) in-kernel-ko2iblnd$(KMODEXT) ko2iblnd$(KMODEXT))
+	 $(LN_S) -f in-kernel-ko2iblnd$(KMODEXT) ko2iblnd$(KMODEXT))
+
 uninstall-hook:
 	(cd "$(DESTDIR)$(modulenetdir)"; rm -f ko2iblnd$(KMODEXT))
 endif
@@ -47,9 +52,19 @@ endif
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 EXTRA_DIST = $(in-kernel-ko2iblnd-objs:%.o=%.c) o2iblnd-idl.h o2iblnd.h
 
+if MODULES
+if BUILT_IN_KO2IBLND
+if EXTERNAL_KO2IBLND
+# in-kernel and mofed
 all-local: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
+else
+# in-kernel-only
+all-local: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) ko2iblnd$(KMODEXT)
+endif
+endif
+endif
 
 CLEANFILES = $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
 
 clean-local:
-	rm -rf $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
+	rm -rf $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) ko2iblnd$(KMODEXT)
