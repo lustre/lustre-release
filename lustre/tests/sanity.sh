@@ -24543,6 +24543,23 @@ test_319() {
 }
 run_test 319 "lost lease lock on migrate error"
 
+test_350() {
+	local mdts=$(comma_list $(mdts_nodes))
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	stack_trap "rm -r $DIR/$tdir"
+
+	#force 1/100 of replies to take "NID mismatch" codepath
+	#define CFS_FAIL_MATCH_MD_NID 0xe001  CFS_FAIL_SOME 0x10000000
+	do_nodes $mdts $LCTL set_param fail_loc=0x1000e001 fail_val=100
+
+	while ls -lR $DIR/$tdir > /dev/null; do :; done &
+	stack_trap "killall -9 ls || killall -9 ls"
+
+	cp -a /etc $DIR/$tdir || error "cp failed"
+}
+run_test 350 "force NID mismatch path to be exercised"
+
 test_398a() { # LU-4198
 	local ost1_imp=$(get_osc_import_name client ost1)
 	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |

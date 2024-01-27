@@ -38,6 +38,7 @@
 
 /* LNET has 0xeXXX */
 #define CFS_FAIL_PTLRPC_OST_BULK_CB2	0xe000
+#define CFS_FAIL_MATCH_MD_NID		0xe001
 
 #include <linux/netdevice.h>
 
