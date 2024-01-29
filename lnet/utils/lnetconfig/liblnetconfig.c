@@ -5798,7 +5798,8 @@ static cmd_handler_t lookup_fn(char *key,
 	return NULL;
 }
 
-static int lustre_yaml_cb_helper(char *f, struct lookup_cmd_hdlr_tbl *table,
+static int lustre_yaml_cb_helper(char *f, int len,
+				 struct lookup_cmd_hdlr_tbl *table,
 				 struct cYAML **show_rc, struct cYAML **err_rc)
 {
 	struct cYAML *tree, *item = NULL, *head, *child;
@@ -5806,7 +5807,7 @@ static int lustre_yaml_cb_helper(char *f, struct lookup_cmd_hdlr_tbl *table,
 	char err_str[LNET_MAX_STR_LEN];
 	int rc = LUSTRE_CFG_RC_NO_ERR, return_rc = LUSTRE_CFG_RC_NO_ERR;
 
-	tree = cYAML_build_tree(f, NULL, 0, err_rc, false);
+	tree = cYAML_build_tree(NULL, f, len, err_rc, false);
 	if (tree == NULL)
 		return LUSTRE_CFG_RC_BAD_PARAM;
 
@@ -5844,26 +5845,28 @@ out:
 	return return_rc;
 }
 
-int lustre_yaml_config(char *f, struct cYAML **err_rc)
+int lustre_yaml_config(char *f, int len, struct cYAML **err_rc)
 {
-	return lustre_yaml_cb_helper(f, lookup_config_tbl,
+	return lustre_yaml_cb_helper(f, len, lookup_config_tbl,
 				     NULL, err_rc);
 }
 
-int lustre_yaml_del(char *f, struct cYAML **err_rc)
+int lustre_yaml_del(char *f, int len, struct cYAML **err_rc)
 {
-	return lustre_yaml_cb_helper(f, lookup_del_tbl,
+	return lustre_yaml_cb_helper(f, len, lookup_del_tbl,
 				     NULL, err_rc);
 }
 
-int lustre_yaml_show(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
+int lustre_yaml_show(char *f, int len, struct cYAML **show_rc,
+		     struct cYAML **err_rc)
 {
-	return lustre_yaml_cb_helper(f, lookup_show_tbl,
+	return lustre_yaml_cb_helper(f, len, lookup_show_tbl,
 				     show_rc, err_rc);
 }
 
-int lustre_yaml_exec(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
+int lustre_yaml_exec(char *f, int len, struct cYAML **show_rc,
+		     struct cYAML **err_rc)
 {
-	return lustre_yaml_cb_helper(f, lookup_exec_tbl,
+	return lustre_yaml_cb_helper(f, len, lookup_exec_tbl,
 				     show_rc, err_rc);
 }

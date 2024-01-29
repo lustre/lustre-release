@@ -746,7 +746,7 @@ int lustre_lnet_discover_nid(char *pnid, int force, int seq_no,
  *   f - YAML file
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
-int lustre_yaml_config(char *f, struct cYAML **err_rc);
+int lustre_yaml_config(char *f, int len, struct cYAML **err_rc);
 
 /*
  * lustre_yaml_del
@@ -756,7 +756,7 @@ int lustre_yaml_config(char *f, struct cYAML **err_rc);
  *   f - YAML file
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
-int lustre_yaml_del(char *f, struct cYAML **err_rc);
+int lustre_yaml_del(char *f, int len, struct cYAML **err_rc);
 
 /*
  * lustre_yaml_show
@@ -767,7 +767,7 @@ int lustre_yaml_del(char *f, struct cYAML **err_rc);
  *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
-int lustre_yaml_show(char *f, struct cYAML **show_rc,
+int lustre_yaml_show(char *f, int len, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
 
 /*
@@ -779,7 +779,7 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc,
  *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
-int lustre_yaml_exec(char *f, struct cYAML **show_rc,
+int lustre_yaml_exec(char *f, int len, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
 
 struct nid_node {

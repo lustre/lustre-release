@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <limits.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
@@ -3681,8 +3682,12 @@ static int jt_import(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
 	int rc = 0, return_rc = 0, opt, opt_found = 0;
-	char cmd = 'a';
-
+	char *yaml_blk = NULL, *buf, cmd = 'a';
+	bool release = true;
+	char err_str[256];
+	struct stat st;
+	FILE *input;
+	size_t len;
 	const char *const short_options = "adseh";
 	static const struct option long_options[] = {
 		{ .name = "add",  .has_arg = no_argument, .val = 'a' },
@@ -3690,7 +3695,8 @@ static int jt_import(int argc, char **argv)
 		{ .name = "show", .has_arg = no_argument, .val = 's' },
 		{ .name = "exec", .has_arg = no_argument, .val = 'e' },
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -3728,28 +3734,97 @@ static int jt_import(int argc, char **argv)
 	else if (!opt_found && argc == 2)
 		file = argv[1];
 
+	/* file always takes precedence */
+	if (file != NULL) {
+		/* Set a file input. */
+		input = fopen(file, "rb");
+		if (!input) {
+			rc = -errno;
+			snprintf(err_str, sizeof(err_str),
+				 "cannot open '%s': %s", file,
+				 strerror(errno));
+			cYAML_build_error(-1, -1, "yaml", "builder",
+					  err_str,
+					  &err_rc);
+			goto err;
+		}
+	} else {
+		input = stdin;
+	}
+
+	/* assume that we're getting our input from stdin */
+	rc = fstat(fileno(input), &st);
+	if (rc < 0) {
+		snprintf(err_str, sizeof(err_str),
+			 "cannot get file stats '%s': %s", file,
+			 strerror(-rc));
+		cYAML_build_error(-1, -1, "yaml", "builder",
+				  err_str,
+				  &err_rc);
+		goto err;
+	}
+
+	yaml_blk = buf = malloc(st.st_size);
+	if (!yaml_blk) {
+		rc = -ENOMEM;
+		snprintf(err_str, sizeof(err_str),
+			 "failed to allocate buffer: %s",
+			 strerror(-rc));
+		cYAML_build_error(-1, -1, "yaml", "builder",
+				  err_str,
+				  &err_rc);
+		goto err;
+	}
+	len = st.st_size;
+
+	while (fgets(buf, len, input) != NULL) {
+		char *seq = strstr(buf, "-     ");
+
+		if (seq) {
+			int skip;
+
+			seq[0] = ' ';
+			skip = strspn(seq, " ");
+			if (skip) {
+				seq += skip - 2;
+				seq[0] = '-';
+			}
+			/* PyYAML format has libyaml free the
+			 * buffer for us.
+			 */
+			release = false;
+		}
+		buf += strlen(buf);
+		len -= strlen(buf);
+	}
+
 	switch (cmd) {
 	case 'a':
-		rc = lustre_yaml_config(file, &err_rc);
-		return_rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		rc = lustre_yaml_config(yaml_blk, st.st_size, &err_rc);
+		return_rc = lustre_yaml_exec(yaml_blk, st.st_size, &show_rc,
+					     &err_rc);
 		cYAML_print_tree(show_rc);
 		cYAML_free_tree(show_rc);
 		break;
 	case 'd':
-		rc = lustre_yaml_del(file, &err_rc);
+		rc = lustre_yaml_del(yaml_blk, st.st_size, &err_rc);
 		break;
 	case 's':
-		rc = lustre_yaml_show(file, &show_rc, &err_rc);
+		rc = lustre_yaml_show(yaml_blk, st.st_size, &show_rc,
+				      &err_rc);
 		cYAML_print_tree(show_rc);
 		cYAML_free_tree(show_rc);
 		break;
 	case 'e':
-		rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		rc = lustre_yaml_exec(yaml_blk, st.st_size, &show_rc,
+				      &err_rc);
 		cYAML_print_tree(show_rc);
 		cYAML_free_tree(show_rc);
 		break;
 	}
-
+err:
+	if (yaml_blk && release)
+		free(yaml_blk);
 	if (rc || return_rc) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
