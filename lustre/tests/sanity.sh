@@ -13031,6 +13031,37 @@ test_105e() { # bug 22660 && 22040
 }
 run_test 105e "Two conflicting flocks from same process"
 
+wait_end() {
+	echo $*
+	while :; do
+		[ -f $TMP/${tfile}_sTOP ] && return
+		sleep 1
+	done
+}
+
+test_105f() {
+	flock_is_enabled || skip_env "mount w/o flock enabled"
+
+	local pmax=$(ulimit -u)
+	local i=0
+	touch $DIR/$tfile
+	[ $pmax -gt 20 ] && pmax=20
+	for((i=0; i <= $pmax; i++)) {
+		wait_end "R4000, 5000" | flocks_test 6 $DIR/$tfile &
+	}
+	for((i=0; i <= 10; i++)) {
+		local locks=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			ldlm.namespaces.mdt-${FSNAME}-MDT0000*.lock_count)
+		[ $locks -ge $pmax ] && break
+		[ $i -eq 10 ] && error "The locks cannot be added after 10 secs"
+		sleep 1
+	}
+	touch $TMP/${tfile}_sTOP
+	wait
+	rm -r $DIR/$tfile $TMP/${tfile}_sTOP
+}
+run_test 105f "Enqueue same range flocks"
+
 test_106() { #bug 10921
 	test_mkdir $DIR/$tdir
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"
