@@ -543,6 +543,8 @@ struct ptlrpc_cli_ctx {
 	unsigned long		cc_flags;
 	struct vfs_cred		cc_vcred;
 	spinlock_t		cc_lock;
+	int			cc_impgen;      /* import gen at ctx create */
+	__u32			cc_impconncnt;  /* import conn cnt at create */
 	struct list_head	cc_req_list;	/* waiting reqs linked here */
 	struct list_head	cc_gc_chain;	/* linked to gc chain */
 };
@@ -1109,7 +1111,8 @@ int  sptlrpc_req_get_ctx(struct ptlrpc_request *req);
 void sptlrpc_req_put_ctx(struct ptlrpc_request *req, int sync);
 int  sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout);
 int  sptlrpc_export_update_ctx(struct obd_export *exp);
-int  sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req);
+int  sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req,
+				  struct ptlrpc_sec *sec);
 void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode);
 
 int sptlrpc_parse_rule(char *param, struct sptlrpc_rule *rule);

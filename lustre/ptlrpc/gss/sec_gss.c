@@ -720,7 +720,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 	 * which keep the ctx with RESEND flag, thus we'll never
 	 * get rid of this ctx.
 	 */
-	rc = sptlrpc_req_replace_dead_ctx(req);
+	rc = sptlrpc_req_replace_dead_ctx(req, NULL);
 	if (rc == 0)
 		req->rq_resend = 1;
 
@@ -1151,6 +1151,8 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx,
 	ctx->cc_flags = PTLRPC_CTX_NEW;
 	ctx->cc_vcred = *vcred;
 	spin_lock_init(&ctx->cc_lock);
+	ctx->cc_impgen = sec->ps_import->imp_generation;
+	ctx->cc_impconncnt = sec->ps_import->imp_conn_cnt;
 	INIT_LIST_HEAD(&ctx->cc_req_list);
 	INIT_LIST_HEAD(&ctx->cc_gc_chain);
 

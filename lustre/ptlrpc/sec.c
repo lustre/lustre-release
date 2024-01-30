@@ -275,8 +275,9 @@ EXPORT_SYMBOL(sptlrpc_secflags2str);
  * client context APIs
  */
 
+/* existingroot to tell we only want to fetch an already existing root ctx */
 static
-struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
+struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec, bool existingroot)
 {
 	struct vfs_cred vcred;
 	int create = 1, remove_dead = 1;
@@ -284,8 +285,17 @@ struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
 	LASSERT(sec);
 	LASSERT(sec->ps_policy->sp_cops->lookup_ctx);
 
-	if (sec->ps_flvr.sf_flags & (PTLRPC_SEC_FL_REVERSE |
-				     PTLRPC_SEC_FL_ROOTONLY)) {
+	if (existingroot) {
+		vcred.vc_uid = from_kuid(&init_user_ns, current_uid());
+		vcred.vc_gid = from_kgid(&init_user_ns, current_gid());
+		create = 0;
+		remove_dead = 0;
+
+		if (!(sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_ROOTONLY) &&
+		    vcred.vc_uid != 0)
+			return ERR_PTR(-EINVAL);
+	} else if (sec->ps_flvr.sf_flags & (PTLRPC_SEC_FL_REVERSE |
+					    PTLRPC_SEC_FL_ROOTONLY)) {
 		vcred.vc_uid = 0;
 		vcred.vc_gid = 0;
 		if (sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_REVERSE) {
@@ -446,7 +456,7 @@ int sptlrpc_req_get_ctx(struct ptlrpc_request *req)
 	if (rc)
 		RETURN(rc);
 
-	req->rq_cli_ctx = get_my_ctx(sec);
+	req->rq_cli_ctx = get_my_ctx(sec, false);
 
 	sptlrpc_sec_put(sec);
 
@@ -563,7 +573,8 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
  * \note a request must have a context, to keep other parts of code happy.
  * In any case of failure during the switching, we must restore the old one.
  */
-int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
+int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req,
+				 struct ptlrpc_sec *sec)
 {
 	struct ptlrpc_cli_ctx *oldctx = req->rq_cli_ctx;
 	struct ptlrpc_cli_ctx *newctx;
@@ -576,16 +587,43 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 	sptlrpc_cli_ctx_get(oldctx);
 	sptlrpc_req_put_ctx(req, 0);
 
-	rc = sptlrpc_req_get_ctx(req);
-	if (unlikely(rc)) {
-		LASSERT(!req->rq_cli_ctx);
+	/* If sec is provided, we must use the existing context for root that
+	 * it references. If not root, or no existing context, or same context,
+	 * just fail replacing the dead context.
+	 */
+	if (sec) {
+		newctx = get_my_ctx(sec, true);
+		if (!newctx)
+			GOTO(restore, rc = -EINVAL);
+		if (IS_ERR(newctx))
+			GOTO(restore, rc = PTR_ERR(newctx));
+		if (newctx == oldctx) {
+			sptlrpc_cli_ctx_put(newctx, 0);
+			GOTO(restore, rc = -ENODATA);
+		}
+		/* Because we are replacing an erroneous ctx, new sec ctx is
+		 * expected to have higher imp generation or same imp generation
+		 * but higher imp connection count.
+		 */
+		if (newctx->cc_impgen < oldctx->cc_impgen ||
+		    (newctx->cc_impgen == oldctx->cc_impgen &&
+		     newctx->cc_impconncnt <= oldctx->cc_impconncnt))
+			CERROR("ctx (%p, fl %lx) will switch, but does not look more recent than old ctx: imp gen %d vs %d, imp conn cnt %d vs %d\n",
+			       newctx, newctx->cc_flags,
+			       newctx->cc_impgen, oldctx->cc_impgen,
+			       newctx->cc_impconncnt, oldctx->cc_impconncnt);
+		req->rq_cli_ctx = newctx;
+	} else {
+		rc = sptlrpc_req_get_ctx(req);
+		if (unlikely(rc)) {
+			LASSERT(!req->rq_cli_ctx);
 
-		/* restore old ctx */
-		req->rq_cli_ctx = oldctx;
-		RETURN(rc);
+			/* restore old ctx */
+			GOTO(restore, rc);
+		}
+		newctx = req->rq_cli_ctx;
 	}
 
-	newctx = req->rq_cli_ctx;
 	LASSERT(newctx);
 
 	if (unlikely(newctx == oldctx &&
@@ -615,8 +653,7 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 		if (rc) {
 			/* restore old ctx */
 			sptlrpc_req_put_ctx(req, 0);
-			req->rq_cli_ctx = oldctx;
-			RETURN(rc);
+			GOTO(restore, rc);
 		}
 
 		LASSERT(req->rq_cli_ctx == newctx);
@@ -624,6 +661,10 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 
 	sptlrpc_cli_ctx_put(oldctx, 1);
 	RETURN(0);
+
+restore:
+	req->rq_cli_ctx = oldctx;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(sptlrpc_req_replace_dead_ctx);
 
@@ -699,13 +740,12 @@ again:
 		CDEBUG(D_SEC, "req %p: flavor has changed %x -> %x\n",
 		       req, req->rq_flvr.sf_rpc, sec->ps_flvr.sf_rpc);
 		req_off_ctx_list(req, ctx);
-		sptlrpc_req_replace_dead_ctx(req);
+		sptlrpc_req_replace_dead_ctx(req, NULL);
 		ctx = req->rq_cli_ctx;
 	}
-	sptlrpc_sec_put(sec);
 
 	if (cli_ctx_is_eternal(ctx))
-		RETURN(0);
+		GOTO(out_sec_put, rc = 0);
 
 	if (unlikely(test_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags))) {
 		if (ctx->cc_ops->refresh)
@@ -716,16 +756,26 @@ again:
 	LASSERT(ctx->cc_ops->validate);
 	if (ctx->cc_ops->validate(ctx) == 0) {
 		req_off_ctx_list(req, ctx);
-		RETURN(0);
+		GOTO(out_sec_put, rc = 0);
 	}
 
 	if (unlikely(test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags))) {
+		if (unlikely(test_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) &&
+		    sptlrpc_req_replace_dead_ctx(req, sec) == 0) {
+			ctx = req->rq_cli_ctx;
+			sptlrpc_sec_put(sec);
+			goto again;
+		}
 		spin_lock(&req->rq_lock);
 		req->rq_err = 1;
 		spin_unlock(&req->rq_lock);
 		req_off_ctx_list(req, ctx);
-		RETURN(-EPERM);
+		GOTO(out_sec_put, rc = -EPERM);
+out_sec_put:
+		sptlrpc_sec_put(sec);
+		RETURN(rc);
 	}
+	sptlrpc_sec_put(sec);
 
 	/*
 	 * There's a subtle issue for resending RPCs, suppose following
@@ -773,7 +823,7 @@ again:
 			RETURN(-EINTR);
 		}
 
-		rc = sptlrpc_req_replace_dead_ctx(req);
+		rc = sptlrpc_req_replace_dead_ctx(req, NULL);
 		if (rc) {
 			LASSERT(ctx == req->rq_cli_ctx);
 			CERROR("req %p: failed to replace dead ctx %p: %d\n",
@@ -850,7 +900,7 @@ int sptlrpc_export_update_ctx(struct obd_export *exp)
 	if (imp)
 		sec = sptlrpc_import_sec_ref(imp);
 	if (sec) {
-		ctx = get_my_ctx(sec);
+		ctx = get_my_ctx(sec, false);
 		if (IS_ERR(ctx))
 			ctx = NULL;
 		sptlrpc_sec_put(sec);
@@ -966,7 +1016,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	might_sleep();
 
 	sec = sptlrpc_import_sec_ref(imp);
-	ctx = get_my_ctx(sec);
+	ctx = get_my_ctx(sec, false);
 	sptlrpc_sec_put(sec);
 
 	if (IS_ERR(ctx))

@@ -844,7 +844,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 			RETURN(ctx);
 	}
 
-	LASSERT(create != 0);
+	if (!create)
+		RETURN(ERR_PTR(-ENODATA));
 
 	/* for root context, obtain lock and check again, this time hold
 	 * the root upcall lock, make sure nobody else populated new root
