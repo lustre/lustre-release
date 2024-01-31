@@ -1,0 +1,20 @@
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/super.c
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/super.c
+@@ -1186,13 +1186,14 @@ static void ext4_destroy_inode(struct in
+ 				true);
+ 		dump_stack();
+ 	}
+-	call_rcu(&inode->i_rcu, ext4_i_callback);
+ 
+ 	if (EXT4_I(inode)->i_reserved_data_blocks)
+ 		ext4_msg(inode->i_sb, KERN_ERR,
+ 			 "Inode %lu (%p): i_reserved_data_blocks (%u) not cleared!",
+ 			 inode->i_ino, EXT4_I(inode),
+ 			 EXT4_I(inode)->i_reserved_data_blocks);
++
++	call_rcu(&inode->i_rcu, ext4_i_callback);
+ }
+ 
+ static void init_once(void *foo)
