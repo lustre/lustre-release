@@ -31971,6 +31971,49 @@ test_850() {
 }
 run_test 850 "lljobstat can parse living and aggregated job_stats"
 
+test_851() {
+	local dir=$DIR/$tdir
+	local file=$dir/f_test_851_$$
+	local report=/tmp/report_test_851_$$
+	local fanotify_prog=monitor_lustrefs
+	local pid
+
+	test_mkdir $dir || error "failed to create dir $dir"
+
+	$fanotify_prog $DIR > $report &
+	pid=$!
+
+	sleep 1
+	if ! kill -0 $pid; then
+		error "failed to start $fanoify_prog"
+	fi
+
+	stack_trap "kill $pid"
+	stack_trap "rm -f $report"
+
+	echo "1234567890" > $file
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+		error "fanotify did not report anything after 30 seconds"
+	grep -a -E "open.*:$file:" $report ||
+		error "no open event for writing $file"
+	grep -a -E "write.*:$file:" $report ||
+		error "no write event for writing $file"
+	grep -a -E "close.*:$file:" $report ||
+		error "no close event for writing $file"
+
+	> $report
+	cat $file
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+		error "fanotify did not report anything after 30 seconds"
+	grep -a -E "open.*:$file:" $report ||
+		error "no open event for reading $file"
+	grep -a -E "read.*:$file:" $report ||
+		error "no write event for reading $file"
+	grep -a -E "close.*:$file:" $report ||
+		error "no close event for reading $file"
+}
+run_test 851 "fanotify can monitor open/read/write/close events for lustre fs"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
