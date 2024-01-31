@@ -443,25 +443,41 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 			     int quiet)
 {
 	char *endp;
-	char  tmp;
-	int   rc = 0;
+	char tmp;
+	int rc = 0;
+	int ncolons = 0;
 
 	if (!buf)
 		return 1;
 
-	while (*buf == ',' || *buf == ':')
+	while (*buf == ',' || *buf == ':') {
+		if (*buf == ':')
+			ncolons++;
+		else
+			ncolons = 0;
 		buf++;
+	}
+
+	/* IPv6 addresses can start with '::' */
+	if (opc == CLASS_PARSE_NID && ncolons >= 2)
+		buf = buf - 2;
+
 	if (*buf == ' ' || *buf == '/' || *buf == '\0')
 		return 1;
 
 	/* NID separators or end of NIDs. Large NIDs can contain ':' so
 	 * skip ahead to @ and then look for one of the delimiters.
 	 */
-	endp = strchr(buf, '@');
-	if (!endp)
-		return 1;
+	if (opc == CLASS_PARSE_NID) {
+		endp = strchr(buf, '@');
+		if (!endp)
+			return 1;
 
-	endp = strpbrk(endp, ",: /");
+		endp = strpbrk(endp, ",: /");
+	} else {
+		endp = strpbrk(buf, ",: /");
+	}
+
 	if (!endp)
 		endp = buf + strlen(buf);
 

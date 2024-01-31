@@ -8397,6 +8397,7 @@ static int osd_mount(const struct lu_env *env,
 			"resetoi",
 			NULL
 		};
+
 		strncat(options, opts, PAGE_SIZE);
 		for (rc = 0, str = options; sout[rc]; ) {
 			char *op = strstr(str, sout[rc]);

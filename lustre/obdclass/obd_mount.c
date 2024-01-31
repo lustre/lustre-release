@@ -40,6 +40,7 @@
 #define D_MOUNT (D_SUPER|D_CONFIG/*|D_WARNING */)
 #define PRINT_CMD CDEBUG
 
+#include <linux/inet.h>
 #include <linux/random.h>
 #include <linux/uuid.h>
 #include <linux/version.h>
@@ -1226,8 +1227,9 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
 
 /**
  * Find the first delimiter (comma or colon) from the specified \a buf and
- * make \a *endh point to the string starting with the delimiter. The commas
- * in expression list [...] will be skipped.
+ * make \a *endh point to the string starting with the delimiter. The commas and
+ * colons in expression list [...] will be skipped. Colons that are part of a
+ * NID address are not considered delimiters.
  *
  * @buf		a delimiter-separated string
  * @endh	a pointer to a pointer that will point to the string
@@ -1237,44 +1239,103 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
  */
 static bool lmd_find_delimiter(char *buf, char **endh)
 {
-	char *c = buf;
-	size_t pos;
-	bool found;
+	char *c;
+	char *at = NULL;
+	char *colon = NULL;
+	char *delim = NULL;
+	int brackets = 0;
+	int ncolons = 0;
 
-	if (!buf)
-		return false;
-try_again:
-	if (*c == ',' || *c == ':')
-		return true;
-
-	pos = strcspn(c, "[:,]");
-	if (!pos)
+	if (!buf || *buf == '\0')
 		return false;
 
-	/* Not a valid mount string */
-	if (*c == ']') {
-		CWARN("invalid mount string format\n");
-		return false;
-	}
-
-	c += pos;
-	if (*c == '[') {
-		c = strchr(c, ']');
-
-		/* invalid mount string */
-		if (!c) {
-			CWARN("invalid mount string format\n");
-			return false;
+	c = buf;
+	do {
+		if (*c == '[') {
+			brackets++;
+			continue;
 		}
-		c++;
-		goto try_again;
+
+		if (*c == ']') {
+			brackets--;
+			if (brackets < 0) {
+				CWARN("imbalanced brackets detected in \"%s\"",
+				      buf);
+				return false;
+			}
+			continue;
+		}
+
+		/* Ignore all characters inside brackets */
+		if (brackets > 0)
+			continue;
+
+		if (*c == ':') {
+			if (at) {
+				/* We previously saw an '@', so this ':' is a
+				 * delimiter separating NIDs
+				 */
+				delim = c;
+				break;
+			}
+
+			/* Record the first ':' that we find, as this may be a
+			 * delimiter
+			 */
+			if (!colon)
+				colon = c;
+
+			ncolons++;
+			if (ncolons > 2) {
+				/* Something like :::<foo>. The first ':' is a
+				 * delimiter
+				 */
+				delim = colon;
+				break;
+			}
+			continue;
+		}
+
+		ncolons = 0;
+		if (*c == '@') {
+			at = c;
+		} else if (*c == ',') {
+			/* When we find a ',', we can determine whether a ':'
+			 * seen earlier was a delimiter or part of a NID
+			 */
+			if (colon && !at) {
+				/* We previously saw a ':', but never
+				 * encountered an '@'. Thus, the ':' was a
+				 * delimiter
+				 */
+				delim = colon;
+			} else {
+				/* We either never saw a ':', or we saw both a
+				 * ':' and an '@' (so the ':' was part of a
+				 * NID). In both cases this ',' is our delimiter
+				 */
+				delim = c;
+			}
+			break;
+		}
+	} while (c++ && *c != '\0');
+
+
+	if (brackets != 0) {
+		CWARN("imbalanced brackets detected in \"%s\"", buf);
+		return false;
 	}
 
-	found = *c != '\0';
-	if (found && endh)
-		*endh = c;
+	if (!delim && colon && !at)
+		/* We saw a ':' but reached end of string without finding an '@'
+		 * or ','. Thus, the ':' is considered a delimiter
+		 */
+		delim = colon;
 
-	return found;
+	if (delim && endh)
+		*endh = delim;
+
+	return delim != NULL;
 }
 
 /**
@@ -1295,11 +1356,23 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 	char *endp = buf;
 	char tmp;
 	int rc = 0;
+	int ncolons = 0;
 
-	if (buf == NULL)
+	if (!buf)
 		return 1;
-	while (*buf == ',' || *buf == ':')
+
+	while (*buf == ',' || *buf == ':') {
+		if (*buf == ':')
+			ncolons++;
+		else
+			ncolons = 0;
 		buf++;
+	}
+
+	/* IPv6 addresses can start with '::' */
+	if (ncolons >= 2)
+		buf = buf - 2;
+
 	if (*buf == ' ' || *buf == '/' || *buf == '\0')
 		return 1;
 
@@ -1309,15 +1382,38 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 	tmp = *endp;
 	*endp = '\0';
 
-	if (cfs_parse_nidlist(buf, &nidlist) < 0)
+	/* FIXME: cfs_parse_nidlist does not support IPv6 addresses, so if
+	 * buf contains a ':' and an '@' then we assume this is supposed to be
+	 * an IPv6 address.
+	 */
+	if (strchr(buf, ':')) {
+		struct in6_addr addr;
+		char *at;
+
 		rc = 1;
+		at = strchr(buf, '@');
+		if (at) {
+			*at = '\0';
+			rc = in6_pton(buf, -1, (u8 *)&addr.s6_addr, -1, NULL);
+			if (rc == 1)
+				rc = 0;
+			*at = '@';
+		}
+	} else if (cfs_parse_nidlist(buf, &nidlist) < 0) {
+		rc = 1;
+	}
+
 	cfs_free_nidlist(&nidlist);
 
+	/* Restore the delimiter */
 	*endp = tmp;
-	if (rc != 0)
+
+	if (rc)
 		return rc;
-	if (endh != NULL)
+
+	if (endh)
 		*endh = endp;
+
 	return 0;
 }
 
