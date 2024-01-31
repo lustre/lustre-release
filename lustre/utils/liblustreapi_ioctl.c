@@ -40,8 +40,8 @@
 #include <lustre/lustreapi.h>
 #include <libcfs/util/ioctl.h>
 #include <linux/lustre/lustre_ioctl.h>
-#include <lustre_ioctl_old.h>
 #include <linux/lustre/lustre_ver.h>
+#include <lustre_ioctl_old.h>
 
 #include "lustreapi_internal.h"
 
@@ -167,7 +167,7 @@ int llapi_ioctl(int fd, unsigned int cmd, void *buf)
 	 * Version in comment is to allow finding this code for later removal.
 	 */
 #ifdef OBD_IOC_GETNAME_OLD	/* < OBD_OCD_VERSION(2, 18, 53, 0) */
-	case OBD_IOC_GETMDNAME:
+	case OBD_IOC_GETDTNAME:
 		oldcmd = OBD_IOC_GETNAME_OLD;
 		break;
 #endif
