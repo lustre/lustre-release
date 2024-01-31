@@ -662,7 +662,8 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  * if the nodemap_active is false, just return the passed id without mapping
  *
  * if the id to be looked up is 0, check that root access is allowed and if it
- * is, return 0. Otherwise, return the squash uid or gid.
+ * is, return 0. Otherwise, return the mapped uid or gid if any.
+ * Otherwise, return the squash uid or gid.
  *
  * if the nodemap is configured to trusted the ids from the client system, just
  * return the passed id without mapping.
@@ -691,7 +692,7 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (id == 0) {
 		if (nodemap->nmf_allow_root_access)
 			goto out;
-		goto squash;
+		goto map;
 	}
 
 	if (id_type == NODEMAP_UID &&
@@ -709,6 +710,7 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (nodemap->nmf_trust_client_ids)
 		goto out;
 
+map:
 	if (is_default_nodemap(nodemap))
 		goto squash;
 

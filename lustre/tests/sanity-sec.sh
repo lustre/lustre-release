@@ -374,6 +374,28 @@ add_idmaps() {
 	return $rc
 }
 
+add_root_idmaps() {
+	local i
+	local cmd="$LCTL nodemap_add_idmap"
+	local rc=0
+
+	echo "Start to add root idmaps ..."
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $cmd --name $csum --idtype uid \
+		     --idmap 0:1; then
+			rc=$((rc + 1))
+		fi
+		if ! do_facet mgs $cmd --name $csum --idtype gid \
+		     --idmap 0:1; then
+			rc=$((rc + 1))
+		fi
+	done
+
+	return $rc
+}
+
 update_idmaps() { #LU-10040
 	[ "$MGS_VERSION" -lt $(version_code 2.10.55) ] &&
 		skip "Need MGS >= 2.10.55"
@@ -478,6 +500,28 @@ delete_idmaps() {
 	return $rc
 }
 
+delete_root_idmaps() {
+	local i
+	local cmd="$LCTL nodemap_del_idmap"
+	local rc=0
+
+	echo "Start to delete root idmaps ..."
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $cmd --name $csum --idtype uid \
+		     --idmap 0:1; then
+			rc=$((rc + 1))
+		fi
+		if ! do_facet mgs $cmd --name $csum --idtype gid \
+		     --idmap 0:1; then
+			rc=$((rc + 1))
+		fi
+	done
+
+	return $rc
+}
+
 modify_flags() {
 	local i
 	local proc
@@ -553,7 +597,10 @@ cleanup_active() {
 test_idmap() {
 	local i
 	local cmd="$LCTL nodemap_test_id"
+	local do_root_idmap=true
 	local rc=0
+
+	(( $MDS1_VERSION >= $(version_code 2.15.60) )) || do_root_idmap=false
 
 	echo "Start to test idmaps ..."
 	## nodemap deactivated
@@ -636,6 +683,25 @@ test_idmap() {
 		fi
 	done
 
+	if $do_root_idmap; then
+		## add mapping for root
+		add_root_idmaps
+
+		## check that root allowed
+		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+			nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
+			fs_id=$(do_facet mgs $cmd --nid $nid \
+				--idtype uid --id 0)
+			if [ $fs_id != 0 ]; then
+				echo "root allowed expected 0, got $fs_id"
+				rc=$((rc + 1))
+			fi
+		done
+
+		## delete mapping for root
+		delete_root_idmaps
+	fi
+
 	## ensure allow_root_access is disabled
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
@@ -652,11 +718,31 @@ test_idmap() {
 	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 		nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
 		fs_id=$(do_facet mgs $cmd --nid $nid --idtype uid --id 0)
-		if [ $fs_id != $NOBODY_UID ]; then
-			error "root squash expected $NOBODY_UID, got $fs_id"
-			rc=$((rc + 1))
+		if [ $fs_id != ${NOBODY_UID:-65534} ]; then
+		      error "root squash expect ${NOBODY_UID:-65534} got $fs_id"
+		      rc=$((rc + 1))
 		fi
 	done
+
+	if $do_root_idmap; then
+		## add mapping for root
+		add_root_idmaps
+
+		## check root is mapped
+		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+			nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
+			fs_id=$(do_facet mgs $cmd --nid $nid	\
+				--idtype uid --id 0)
+			expected_id=1
+			if [ $fs_id != $expected_id ]; then
+				echo "expected $expected_id, got $fs_id"
+				rc=$((rc + 1))
+			fi
+		done
+
+		## delete mapping for root
+		delete_root_idmaps
+	fi
 
 	## reset client trust to 0
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
