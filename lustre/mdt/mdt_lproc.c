@@ -296,16 +296,15 @@ static ssize_t identity_upcall_store(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	struct upcall_cache *hash = mdt->mdt_identity_cache;
+	int rc;
 
-	if (count >= UC_CACHE_UPCALL_MAXPATH) {
-		CERROR("%s: identity upcall too long\n", mdt_obd_name(mdt));
-		return -EINVAL;
+	rc = upcall_cache_set_upcall(hash, buffer, count, false);
+	if (rc) {
+		CERROR("%s: incorrect identity upcall %.*s. Valid values for mdt.%s.identity_upcall are NONE, or an executable pathname: rc = %d\n",
+		       mdt_obd_name(mdt), (int)count, buffer,
+		       mdt_obd_name(mdt), rc);
+		return rc;
 	}
-
-	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-	down_write(&hash->uc_upcall_rwsem);
-	sscanf(buffer, "%s", hash->uc_upcall);
-	up_write(&hash->uc_upcall_rwsem);
 
 	if (strcmp(hash->uc_name, mdt_obd_name(mdt)) != 0)
 		CWARN("%s: write to upcall name %s\n",
@@ -317,7 +316,7 @@ static ssize_t identity_upcall_store(struct kobject *kobj,
 
 	CDEBUG(D_CONFIG, "%s: identity upcall set to %s\n", mdt_obd_name(mdt),
 	       hash->uc_upcall);
-	RETURN(count);
+	return count;
 }
 LUSTRE_RW_ATTR(identity_upcall);
 

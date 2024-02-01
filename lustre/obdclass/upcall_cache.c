@@ -151,6 +151,47 @@ static int check_unlink_entry(struct upcall_cache *cache,
 	return 1;
 }
 
+int upcall_cache_set_upcall(struct upcall_cache *cache, const char *buffer,
+			    size_t count, bool path_only)
+{
+	char *upcall;
+
+	if (count >= UC_CACHE_UPCALL_MAXPATH)
+		return -E2BIG;
+
+	OBD_ALLOC(upcall, count + 1);
+	if (upcall == NULL)
+		return -ENOMEM;
+
+	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
+	if (sscanf(buffer, "%s", upcall) != 1)
+		goto invalid;
+
+	if (upcall[0] == '/')
+		goto valid;
+
+	if (path_only)
+		goto invalid;
+
+	if (strcasecmp(upcall, "NONE") == 0) {
+		snprintf(upcall, count + 1, "NONE");
+		goto valid;
+	}
+
+invalid:
+	OBD_FREE(upcall, count + 1);
+	return -EINVAL;
+
+valid:
+	down_write(&cache->uc_upcall_rwsem);
+	strcpy(cache->uc_upcall, upcall);
+	up_write(&cache->uc_upcall_rwsem);
+
+	OBD_FREE(upcall, count + 1);
+	return 0;
+}
+EXPORT_SYMBOL(upcall_cache_set_upcall);
+
 static inline int refresh_entry(struct upcall_cache *cache,
 			 struct upcall_cache_entry *entry)
 {

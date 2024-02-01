@@ -198,11 +198,6 @@ static ssize_t rsi_upcall_seq_write(struct file *file,
 	char *kbuf = NULL;
 	int rc;
 
-	if (count >= UC_CACHE_UPCALL_MAXPATH) {
-		CERROR("%s: rsi upcall too long\n", rsicache->uc_name);
-		return -EINVAL;
-	}
-
 	OBD_ALLOC(kbuf, count + 1);
 	if (kbuf == NULL)
 		return -ENOMEM;
@@ -212,22 +207,20 @@ static ssize_t rsi_upcall_seq_write(struct file *file,
 
 	kbuf[count] = '\0';
 
-	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-	down_write(&rsicache->uc_upcall_rwsem);
-	rc = sscanf(kbuf, "%s", rsicache->uc_upcall);
-	up_write(&rsicache->uc_upcall_rwsem);
-
-	if (rc != 1) {
-		CERROR("%s: invalid rsi upcall provided\n", rsicache->uc_name);
-		GOTO(out, rc = -EINVAL);
+	rc = upcall_cache_set_upcall(rsicache, kbuf, count, true);
+	if (rc) {
+		CERROR("%s: incorrect rsi upcall %.*s. Valid value for sptlrpc.gss.rsi_upcall is an executable pathname: rc = %d\n",
+		       rsicache->uc_name, (int)count, buffer, rc);
+		GOTO(out, rc);
 	}
 
 	CDEBUG(D_CONFIG, "%s: rsi upcall set to %s\n", rsicache->uc_name,
 	       rsicache->uc_upcall);
+	rc = count;
 
 out:
 	OBD_FREE(kbuf, count + 1);
-	return count;
+	return rc;
 }
 LPROC_SEQ_FOPS(rsi_upcall);
 

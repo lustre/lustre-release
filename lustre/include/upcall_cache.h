@@ -151,6 +151,8 @@ struct upcall_cache {
 	struct upcall_cache_ops	*uc_ops;
 };
 
+int upcall_cache_set_upcall(struct upcall_cache *cache, const char *buffer,
+			    size_t count, bool path_only);
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 						  __u64 key, void *args);
 void upcall_cache_get_entry_raw(struct upcall_cache_entry *entry);

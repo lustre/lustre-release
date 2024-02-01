@@ -6229,6 +6229,42 @@ test_68() {
 }
 run_test 68 "all config logs are processed"
 
+test_69() {
+	local mdt="$(mdtname_from_index 0 $MOUNT)"
+	local param
+	local orig
+
+	param="mdt.$mdt.identity_upcall"
+	orig="$(do_facet mds1 "$LCTL get_param -n $param")"
+	stack_trap "do_facet mds1 $LCTL set_param $param=$orig" EXIT
+
+	# identity_upcall accepts a path to an executable,
+	# or NONE (case insensitive)
+	do_facet mds1 $LCTL set_param $param=/path/to/prog ||
+		error "set_param $param=/path/to/prog failed"
+	do_facet mds1 $LCTL set_param $param=prog &&
+		error "set_param $param=prog should failed"
+	do_facet mds1 $LCTL set_param $param=NONE ||
+		error "set_param $param=NONE failed"
+	do_facet mds1 $LCTL set_param $param=none ||
+		error "set_param $param=none failed"
+
+	if $GSS; then
+		param="sptlrpc.gss.rsi_upcall"
+		orig="$(do_facet mds1 "$LCTL get_param -n $param")"
+		stack_trap "do_facet mds1 $LCTL set_param $param=$orig" EXIT
+
+		# rsi_upcall only accepts a path to an executable
+		do_facet mds1 $LCTL set_param $param=prog &&
+			error "set_param $param=prog should failed"
+		do_facet mds1 $LCTL set_param $param=NONE &&
+			error "set_param $param=NONE should fail"
+		do_facet mds1 $LCTL set_param $param=/path/to/prog ||
+			error "set_param $param=/path/to/prog failed"
+	fi
+}
+run_test 69 "check upcall incorrect values"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
