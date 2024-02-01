@@ -591,7 +591,7 @@ static void ptlrpc_ni_fini(void)
 	percpu_ref_kill(&ptlrpc_pending);
 	wait_for_completion(&ptlrpc_done);
 
-	lnet_assert_handler_unused(ptlrpc_handler);
+	lnet_assert_handler_unused(ptlrpc_handler, true);
 	LNetNIFini();
 }
 

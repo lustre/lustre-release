@@ -1458,7 +1458,7 @@ lnet_unprepare(void)
 		the_lnet.ln_mt_zombie_rstqs = NULL;
 	}
 
-	lnet_assert_handler_unused(the_lnet.ln_mt_handler);
+	lnet_assert_handler_unused(the_lnet.ln_mt_handler, true);
 	the_lnet.ln_mt_handler = NULL;
 
 	lnet_portals_destroy();
@@ -2153,7 +2153,7 @@ lnet_ping_target_fini(void)
 	lnet_ping_md_unlink(the_lnet.ln_ping_target,
 			    &the_lnet.ln_ping_target_md);
 
-	lnet_assert_handler_unused(the_lnet.ln_ping_target_handler);
+	lnet_assert_handler_unused(the_lnet.ln_ping_target_handler, true);
 	lnet_ping_target_destroy();
 }
 
@@ -2325,7 +2325,7 @@ static void lnet_push_target_fini(void)
 	the_lnet.ln_push_target_nbytes = 0;
 
 	LNetClearLazyPortal(LNET_RESERVED_PORTAL);
-	lnet_assert_handler_unused(the_lnet.ln_push_target_handler);
+	lnet_assert_handler_unused(the_lnet.ln_push_target_handler, true);
 	the_lnet.ln_push_target_handler = NULL;
 }
 

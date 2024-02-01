@@ -4034,6 +4034,7 @@ static void lnet_resend_msgs(void)
 static int lnet_peer_discovery(void *arg)
 {
 	struct lnet_peer *lp;
+	int retry = 3;
 	int rc;
 
 	wait_for_completion(&the_lnet.ln_started);
@@ -4144,6 +4145,7 @@ static int lnet_peer_discovery(void *arg)
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
 
+cleanup:
 	CDEBUG(D_NET, "stopping\n");
 	/*
 	 * Clean up before telling lnet_peer_discovery_stop() that
@@ -4185,7 +4187,9 @@ static int lnet_peer_discovery(void *arg)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	lnet_assert_handler_unused(the_lnet.ln_dc_handler);
+	if (lnet_assert_handler_unused(the_lnet.ln_dc_handler, --retry <= 0))
+		goto cleanup;
+
 	the_lnet.ln_dc_handler = NULL;
 
 	the_lnet.ln_dc_state = LNET_DC_STATE_SHUTDOWN;
