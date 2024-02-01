@@ -870,8 +870,8 @@ AC_DEFUN([LIBCFS_SRC_HAVE_NR_ZONE_WRITE_PENDING], [
 	],[-Werror])
 ])
 AC_DEFUN([LIBCFS_HAVE_NR_ZONE_WRITE_PENDING], [
-	AC_MSG_CHECKING([if NR_ZONE_WRITE_PENDING is available])
-	LB2_LINUX_TEST_RESULT([nr_zone_write_pending_exists], [
+	LB2_MSG_LINUX_TEST_RESULT([if NR_ZONE_WRITE_PENDING is available],
+	[nr_zone_write_pending_exists], [
 		AC_DEFINE(HAVE_NR_ZONE_WRITE_PENDING, 1,
 			[NR_ZONE_WRITE_PENDING is still in use.])
 	])

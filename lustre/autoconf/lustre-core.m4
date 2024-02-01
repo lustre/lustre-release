@@ -501,9 +501,9 @@ AC_DEFUN([LC_SRC_INVALIDATE_RANGE], [
 	])
 ])
 AC_DEFUN([LC_INVALIDATE_RANGE], [
-	AC_MSG_CHECKING(
-		[if 'address_space_operations.invalidatepage' requires 3 arguments])
-	LB2_LINUX_TEST_RESULT([address_space_ops_invalidatepage_3args], [
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if 'address_space_operations.invalidatepage' requires 3 arguments],
+	[address_space_ops_invalidatepage_3args], [
 		AC_DEFINE(HAVE_INVALIDATE_RANGE, 1,
 			[address_space_operations.invalidatepage needs 3 arguments])
 	])
@@ -2881,8 +2881,7 @@ AC_DEFUN([LC_SRC_HAVE_KTHREAD_USE_MM], [
 	])
 ])
 AC_DEFUN([LC_HAVE_KTHREAD_USE_MM], [
-	AC_MSG_CHECKING([if have kthread_use_mm])
-	LB2_LINUX_TEST_RESULT([kthread_use_mm], [
+	LB2_MSG_LINUX_TEST_RESULT([if have kthread_use_mm], [kthread_use_mm], [
 		AC_DEFINE(HAVE_KTHREAD_USE_MM, 1, ['kthread_use_mm' exists])
 	])
 ]) # LC_HAVE_KTHREAD_USE_MM
@@ -3050,8 +3049,9 @@ AC_DEFUN([LC_SRC_HAVE_BDI_DEBUG_STATS], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_BDI_DEBUG_STATS], [
-	AC_MSG_CHECKING([if 'struct backing_dev_info' has 'debug_stats' field])
-	LB2_LINUX_TEST_RESULT([bdi_has_debug_stats], [
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if 'struct backing_dev_info' has 'debug_stats' field],
+	[bdi_has_debug_stats], [
 		AC_DEFINE(HAVE_BDI_DEBUG_STATS, 1,
 			[backing_dev_info has debug_stats])
 	])
@@ -3177,8 +3177,9 @@ AC_DEFUN([LC_SRC_HAVE_FILEATTR_GET], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_FILEATTR_GET], [
-	AC_MSG_CHECKING([if 'inode_operations' has fileattr_get (and fileattr_set)])
-	LB2_LINUX_TEST_RESULT([fileattr_set], [
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if 'inode_operations' has fileattr_get (and fileattr_set)],
+	[fileattr_set], [
 		AC_DEFINE(HAVE_FILEATTR_GET, 1,
 			['inode_operations' has fileattr_get and fileattr_set])
 	])
@@ -3198,8 +3199,8 @@ AC_DEFUN([LC_SRC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC], [
 	])
 ])
 AC_DEFUN([LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC], [
-	AC_MSG_CHECKING([if have copy_page_from_iter_atomic])
-	LB2_LINUX_TEST_RESULT([copy_page_from_iter_atomic], [
+	LB2_MSG_LINUX_TEST_RESULT([if have copy_page_from_iter_atomic],
+	[copy_page_from_iter_atomic], [
 		AC_DEFINE(HAVE_COPY_PAGE_FROM_ITER_ATOMIC, 1,
 			['copy_page_from_iter_atomic' exists])
 	])
@@ -3241,8 +3242,8 @@ AC_DEFUN([LC_SRC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
 	])
 ])
 AC_DEFUN([LC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
-	AC_MSG_CHECKING([if have fault_in_iov_iter_readable])
-	LB2_LINUX_TEST_RESULT([fault_in_iov_iter_readable], [
+	LB2_MSG_LINUX_TEST_RESULT([if have fault_in_iov_iter_readable],
+	[fault_in_iov_iter_readable], [
 		AC_DEFINE(HAVE_FAULT_IN_IOV_ITER_READABLE, 1,
 			['fault_in_iov_iter_readable' exists])
 	])
@@ -3980,8 +3981,8 @@ AC_DEFUN([LC_SRC_HAVE_IOV_ITER_IOVEC], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_IOV_ITER_IOVEC], [
-	AC_MSG_CHECKING([if 'iov_iter_iovec' is available])
-	LB2_LINUX_TEST_RESULT([iov_iter_iovec_exists], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'iov_iter_iovec' is available],
+	[iov_iter_iovec_exists], [
 		AC_DEFINE(HAVE_IOV_ITER_IOVEC, 1,
 			['iov_iter_iovec' is available])
 	])
@@ -4006,8 +4007,8 @@ AC_DEFUN([LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_IOVEC_WITH_IOV_MEMBER], [
-	AC_MSG_CHECKING([if 'iov_iter_iovec' is available])
-	LB2_LINUX_TEST_RESULT([iov_iter_has___iov_member], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'iov_iter_iovec' is available],
+	[iov_iter_has___iov_member], [
 		AC_DEFINE(HAVE___IOV_MEMBER, __iov,
 			['struct iov_iter' has '__iov' member])
 		AC_DEFINE(HAVE_ITER_IOV, 1,
@@ -4038,8 +4039,8 @@ AC_DEFUN([LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
-	AC_MSG_CHECKING([if 'class_create' does not have module arg])
-	LB2_LINUX_TEST_RESULT([class_create_without_module_arg], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'class_create' does not have module arg],
+	[class_create_without_module_arg], [
 		AC_DEFINE([ll_class_create(name)],
 			  [class_create((name))],
 			  ['class_create' does not have module arg])
@@ -4614,7 +4615,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_CONFIG_PINGER
 	LC_CONFIG_CHECKSUM
 	LC_CONFIG_FLOCK
-	LC_CONFIG_HEALTH_CHECK_WRITE
 	LC_CONFIG_LRU_RESIZE
 	LC_CONFIG_GSS
 
