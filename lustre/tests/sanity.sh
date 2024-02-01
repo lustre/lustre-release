@@ -15784,7 +15784,7 @@ test_133a() {
 
 	local testdir=$DIR/${tdir}/stats_testdir
 
-	mkdir -p $DIR/${tdir}
+	mkdir_on_mdt0 $DIR/${tdir}
 
 	# clear stats.
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
@@ -15799,6 +15799,10 @@ test_133a() {
 	touch ${testdir}/${tfile} || error "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
+	# open should match close
+	ls -lR ${testdir}
+	check_stats $SINGLEMDS "open" 2
+	check_stats $SINGLEMDS "close" 2
 	[ $MDS1_VERSION -ge $(version_code 2.8.54) ] && {
 		mknod ${testdir}/${tfile}-pipe p || error "mknod failed"
 		check_stats $SINGLEMDS "mknod" 2
@@ -15813,8 +15817,8 @@ test_133a() {
 	check_stats $SINGLEMDS "rmdir" 1
 
 	local testdir1=$DIR/${tdir}/stats_testdir1
-	mkdir_on_mdt0 -p ${testdir}
-	mkdir_on_mdt0 -p ${testdir1}
+	mkdir_on_mdt0 ${testdir}
+	mkdir_on_mdt0 ${testdir1}
 	touch ${testdir1}/test1
 	mv ${testdir1}/test1 ${testdir} || error "file crossdir rename"
 	check_stats $SINGLEMDS "crossdir_rename" 1

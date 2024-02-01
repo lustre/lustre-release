@@ -1719,9 +1719,6 @@ again_pw:
 	 */
 	result = mdt_refetch_lovea(info, child, ma, ibits);
 
-	mdt_counter_incr(req, LPROC_MDT_OPEN,
-			 ktime_us_delta(ktime_get(), kstart));
-
 	GOTO(out_child_unlock, result);
 
 out_child_unlock:
@@ -1740,6 +1737,10 @@ out_parent:
 out:
 	if (result)
 		lustre_msg_set_transno(req->rq_repmsg, 0);
+	else
+		mdt_counter_incr(req, LPROC_MDT_OPEN,
+				 ktime_us_delta(ktime_get(), kstart));
+
 	return result;
 }
 
