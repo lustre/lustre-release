@@ -53,7 +53,7 @@ static int
 fld_debugfs_targets_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_client_fld *fld = (struct lu_client_fld *)m->private;
-        struct lu_fld_target *target;
+	struct lu_fld_target *target;
 
 	ENTRY;
 	spin_lock(&fld->lcf_lock);
@@ -123,11 +123,11 @@ static ssize_t ldebugfs_cache_flush_seq_write(struct file *file,
 	struct lu_client_fld *fld = m->private;
 
 	ENTRY;
-        fld_cache_flush(fld->lcf_cache);
+	fld_cache_flush(fld->lcf_cache);
 
-        CDEBUG(D_INFO, "%s: Lookup cache is flushed\n", fld->lcf_name);
+	CDEBUG(D_INFO, "%s: Lookup cache is flushed\n", fld->lcf_name);
 
-        RETURN(count);
+	RETURN(count);
 }
 
 LDEBUGFS_SEQ_FOPS_RO(fld_debugfs_targets);
