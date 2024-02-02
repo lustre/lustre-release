@@ -147,7 +147,7 @@ ldebugfs_server_fid_server_seq_show(struct seq_file *m, void *unused)
 			seq_printf(m, "%s\n", cli->cl_target_uuid.uuid);
 		} else {
 			seq_printf(m, "%s\n", seq->lss_cli->lcs_srv->lss_name);
-                }
+		}
 	} else {
 		seq_puts(m, "<none>\n");
 	}
@@ -517,8 +517,8 @@ ldebugfs_client_fid_space_seq_write(struct file *file,
 	mutex_lock(&seq->lcs_mutex);
 	rc = ldebugfs_fid_write_common(buffer, count, &seq->lcs_space);
 	if (rc == 0) {
-		CDEBUG(D_INFO, "%s: Space: " DRANGE "\n",
-                       seq->lcs_name, PRANGE(&seq->lcs_space));
+		CDEBUG(D_INFO, "%s: Space: " DRANGE "\n", seq->lcs_name,
+		       PRANGE(&seq->lcs_space));
 	}
 
 	mutex_unlock(&seq->lcs_mutex);

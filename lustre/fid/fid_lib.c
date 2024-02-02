@@ -69,8 +69,8 @@ const struct lu_seq_range LUSTRE_SEQ_ZERO_RANGE = {
 
 /* Lustre Big Fs Lock fid. */
 const struct lu_fid LUSTRE_BFL_FID = { .f_seq = FID_SEQ_SPECIAL,
-                                       .f_oid = FID_OID_SPECIAL_BFL,
-                                       .f_ver = 0x0000000000000000 };
+				       .f_oid = FID_OID_SPECIAL_BFL,
+				       .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
 
 /** Special fid for "lost+found" special object in .lustre */
