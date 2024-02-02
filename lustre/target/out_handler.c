@@ -906,9 +906,9 @@ static int out_tx_end(const struct lu_env *env, struct thandle_exec_args *ta,
 		rc = ta->ta_args[i]->exec_fn(env, ta->ta_handle,
 					     ta->ta_args[i]);
 		if (unlikely(rc != 0)) {
-			CDEBUG(D_INFO, "error during execution of #%u from"
-			       " %s:%d: rc = %d\n", i, ta->ta_args[i]->file,
-			       ta->ta_args[i]->line, rc);
+			CWARN("%s: error during execution of #%u from %s:%d: rc = %d\n",
+			      dt_obd_name(ta->ta_handle->th_dev), i,
+			      ta->ta_args[i]->file, ta->ta_args[i]->line, rc);
 			while (--i >= 0) {
 				if (ta->ta_args[i]->undo_fn != NULL)
 					ta->ta_args[i]->undo_fn(env,

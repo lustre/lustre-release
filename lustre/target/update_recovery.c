@@ -1380,9 +1380,9 @@ int distribute_txn_replay_handle(struct lu_env *env,
 						   st->st_sub_th, dtrq, ta_arg);
 
 		if (unlikely(rc < 0)) {
-			CDEBUG(D_HA, "error during execution of #%u from"
-			       " %s:%d: rc = %d\n", i, ta->ta_args[i]->file,
-			       ta->ta_args[i]->line, rc);
+			CWARN("%s: error during execution of #%u from %s:%d: rc = %d\n",
+			      dt_obd_name(ta->ta_handle->th_dev), i,
+			      ta->ta_args[i]->file, ta->ta_args[i]->line, rc);
 			while (--i > 0) {
 				if (ta->ta_args[i]->undo_fn != NULL) {
 					dt_obj = ta->ta_args[i]->object;
