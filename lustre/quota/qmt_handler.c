@@ -212,10 +212,6 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 		}
 
 quota_set:
-		/* recompute qunit in case it was never initialized */
-		if (qmt_revalidate(env, lqe))
-			need_id_notify = true;
-
 		/* clear grace time */
 		if (lqe->lqe_softlimit == 0 ||
 		    lqe->lqe_granted <= lqe->lqe_softlimit)
