@@ -94,6 +94,7 @@ static inline unsigned int fiemap_size_to_count(__kernel_size_t array_size)
 #endif
 
 #define FIEMAP_EXTENT_NET       0x80000000 /* Data stored remotely.
-					    * Sets NO_DIRECT flag */
+					    * Sets NO_DIRECT flag
+					    */
 
 #endif /* _LUSTRE_FIEMAP_H */

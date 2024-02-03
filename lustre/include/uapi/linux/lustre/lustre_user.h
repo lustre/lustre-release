@@ -169,7 +169,7 @@ struct statx {
 	/* 0x00 */
 	__u32	stx_mask;	/* What results were written [uncond] */
 	__u32	stx_blksize;	/* Preferred general I/O size [uncond] */
-	__u64	stx_attributes;	/* Flags conveying information about the file [uncond] */
+	__u64	stx_attributes;	/* Flags information about the file [uncond] */
 	/* 0x10 */
 	__u32	stx_nlink;	/* Number of hard links */
 	__u32	stx_uid;	/* User ID of owner */
@@ -180,7 +180,9 @@ struct statx {
 	__u64	stx_ino;	/* Inode number */
 	__u64	stx_size;	/* File size */
 	__u64	stx_blocks;	/* Number of 512-byte blocks allocated */
-	__u64	stx_attributes_mask; /* Mask to show what's supported in stx_attributes */
+	__u64	stx_attributes_mask; /* Mask for what's supported in
+				      * stx_attributes
+				      */
 	/* 0x40 */
 	struct statx_timestamp	stx_atime;	/* Last access time */
 	struct statx_timestamp	stx_btime;	/* File creation time */
@@ -291,7 +293,8 @@ struct obd_statfs {
 	__u32		os_state;       /**< obd_statfs_state OS_STATFS_* */
 	__u32		os_fprecreated;	/* objs available now to the caller */
 					/* used in QoS code to find preferred
-					 * OSTs */
+					 * OSTs
+					 */
 	__u32           os_granted;	/* space granted for MDS */
 	__u32           os_spare3;	/* Unused padding fields.  Remember */
 	__u32           os_spare4;	/* to fix lustre_swab_obd_statfs() */
@@ -346,7 +349,8 @@ struct lustre_file_handle {
 
 /* Currently, the filter_fid::ff_parent::f_ver is not the real parent
  * MDT-object's FID::f_ver, instead it is the OST-object index in its
- * parent MDT-object's layout EA. */
+ * parent MDT-object's layout EA.
+ */
 #define f_stripe_idx f_ver
 
 struct ost_layout {
@@ -401,12 +405,14 @@ struct filter_fid {
 	struct ost_layout	ff_layout;
 	__u32			ff_layout_version;
 	__u32			ff_range; /* range of layout version that
-					   * write are allowed */
+					   * write are allowed
+					   */
 } __attribute__((packed));
 
 /* Userspace should treat lu_fid as opaque, and only use the following methods
  * to print or parse them.  Other functions (e.g. compare, swab) could be moved
- * here from lustre_idl.h if needed. */
+ * here from lustre_idl.h if needed.
+ */
 struct lu_fid;
 
 enum lma_compat {
@@ -414,7 +420,8 @@ enum lma_compat {
 /*	LMAC_SOM	 = 0x00000002, obsolete since 2.8.0 */
 	LMAC_NOT_IN_OI	 = 0x00000004, /* the object does NOT need OI mapping */
 	LMAC_FID_ON_OST  = 0x00000008, /* For OST-object, its OI mapping is
-				       * under /O/<seq>/d<x>. */
+					* under /O/<seq>/d<x>.
+					*/
 	LMAC_STRIPE_INFO = 0x00000010, /* stripe info in the LMA EA. */
 	LMAC_COMP_INFO	 = 0x00000020, /* Component info in the LMA EA. */
 	LMAC_IDX_BACKUP  = 0x00000040, /* Has index backup. */
@@ -429,7 +436,8 @@ enum lma_incompat {
 	LMAI_RELEASED		= 0x00000001, /* file is released */
 	LMAI_AGENT		= 0x00000002, /* agent inode */
 	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
-						 is on the remote MDT */
+					       * is on the remote T
+					       */
 	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
 	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
 	LMAI_ENCRYPT		= 0x00000020, /* inode is encrypted */
@@ -464,7 +472,8 @@ struct lustre_mdt_attrs {
 
 struct lustre_ost_attrs {
 	/* Use lustre_mdt_attrs directly for now, need a common header
-	 * structure if want to change lustre_mdt_attrs in future. */
+	 * structure if want to change lustre_mdt_attrs in future.
+	 */
 	struct lustre_mdt_attrs loa_lma;
 
 	/* Below five elements are for OST-object's PFID EA, the
@@ -473,7 +482,8 @@ struct lustre_ost_attrs {
 	 * 5 * sizeof(__u64)) to be accessable by old Lustre. If the flag
 	 * LMAC_STRIPE_INFO is set, then loa_parent_fid and loa_stripe_size
 	 * are valid; if the flag LMAC_COMP_INFO is set, then the next three
-	 * loa_comp_* elements are valid. */
+	 * loa_comp_* elements are valid.
+	 */
 	struct lu_fid	loa_parent_fid;
 	__u32		loa_stripe_size;
 	__u32		loa_comp_id;
@@ -494,10 +504,12 @@ enum lustre_som_flags {
 	/* Known strictly correct, FLR or DoM file (SoM guaranteed). */
 	SOM_FL_STRICT	= 0x0001,
 	/* Known stale - was right at some point in the past, but it is
-	 * known (or likely) to be incorrect now (e.g. opened for write). */
+	 * known (or likely) to be incorrect now (e.g. opened for write).
+	 */
 	SOM_FL_STALE	= 0x0002,
 	/* Approximate, may never have been strictly correct,
-	 * need to sync SOM data to achieve eventual consistency. */
+	 * need to sync SOM data to achieve eventual consistency.
+	 */
 	SOM_FL_LAZY	= 0x0004,
 };
 
@@ -646,7 +658,7 @@ struct ll_ioc_lease_id {
 #ifndef	FS_IOC_FSGETXATTR
 /*
  * Structure for FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR.
-*/
+ */
 struct fsxattr {
 	__u32           fsx_xflags;     /* xflags field value (get/set) */
 	__u32           fsx_extsize;    /* extsize field value (get/set)*/
@@ -681,9 +693,11 @@ struct fsxattr {
 /* Define O_LOV_DELAY_CREATE to be a mask that is not useful for regular
  * files, but are unlikely to be used in practice and are not harmful if
  * used incorrectly.  O_NOCTTY and FASYNC are only meaningful for character
- * devices and are safe for use on new files. See LU-4209. */
+ * devices and are safe for use on new files. See LU-4209.
+ */
 /* To be compatible with old statically linked binary we keep the check for
- * the older 0100000000 flag.  This is already removed upstream.  LU-812. */
+ * the older 0100000000 flag.  This is already removed upstream.  LU-812.
+ */
 #define O_LOV_DELAY_CREATE_1_8	0100000000 /* FMODE_NONOTIFY masked in 2.6.36 */
 #ifndef FASYNC
 #define FASYNC			00020000   /* fcntl, for BSD compatibility */
@@ -794,7 +808,8 @@ static inline bool lov_pool_is_reserved(const char *pool)
  * The limit of 12 pages is somewhat arbitrary, but is a reasonably large
  * allocation that is sufficient for the current generation of systems.
  *
- * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1) */
+ * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1)
+ */
 #define LOV_MAX_STRIPE_COUNT 2000  /* ~((12 * 4096 - 256) / 24) */
 #define LOV_ALL_STRIPES       0xffff /* only valid for directories */
 #define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
@@ -824,9 +839,11 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
 		__u16 lmm_stripe_offset;  /* starting stripe offset in
-					   * lmm_objects, use when writing */
+					   * lmm_objects, use when writing
+					   */
 		__u16 lmm_layout_gen;     /* layout generation number
-					   * used when reading */
+					   * used when reading
+					   */
 	};
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed, __may_alias__));
@@ -839,9 +856,11 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
 		__u16 lmm_stripe_offset;  /* starting stripe offset in
-					   * lmm_objects, use when writing */
+					   * lmm_objects, use when writing
+					   */
 		__u16 lmm_layout_gen;     /* layout generation number
-					   * used when reading */
+					   * used when reading
+					   */
 	};
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
@@ -935,7 +954,8 @@ enum lov_comp_md_entry_flags {
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
  * certain LCME_FL_* but not a real ID. Which implies we can have
- * at most 31 flags (see LCME_FL_XXX). */
+ * at most 31 flags (see LCME_FL_XXX).
+ */
 enum lcme_id {
 	LCME_ID_INVAL	= 0x0,
 	LCME_ID_MAX	= 0x7FFFFFFF,
@@ -964,7 +984,8 @@ struct lov_comp_md_entry_v1 {
 	 */
 	struct lu_extent	lcme_extent;
 	__u32			lcme_offset;    /* offset of component blob,
-						   start from lov_comp_md_v1 */
+						 * start from v_comp_md_v1
+						 */
 	__u32			lcme_size;      /* size of component blob */
 	__u32			lcme_layout_gen;
 	__u64			lcme_timestamp;	/* snapshot time if applicable*/
@@ -978,7 +999,8 @@ struct lov_comp_md_entry_v1 {
 	__u8			lcme_compr_lvl:4;	/* compress level */
 	__u8			lcme_compr_chunk_log_bits:4;
 				     /* chunk_size = 2^(16+chunk_log_bits)
-				      * i.e. power-of-two multiple of 64KiB */
+				      * i.e. power-of-two multiple of 64KiB
+				      */
 } __attribute__((packed));
 
 #define SEQ_ID_MAX		0x0000FFFF
@@ -1018,7 +1040,8 @@ struct lov_comp_md_v1 {
 	__u16	lcm_flags;
 	__u16	lcm_entry_count;
 	/* lcm_mirror_count stores the number of actual mirrors minus 1,
-	 * so that non-flr files will have value 0 meaning 1 mirror. */
+	 * so that non-flr files will have value 0 meaning 1 mirror.
+	 */
 	__u16	lcm_mirror_count;
 	/* code components count, non-EC file contains 0 ec_count */
 	__u8	lcm_ec_count;
@@ -1047,7 +1070,8 @@ static inline __u32 lov_foreign_md_size(__u32 length)
 
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
- * is possible the application has already #included <sys/stat.h>. */
+ * is possible the application has already #included <sys/stat.h>.
+ */
 #define lov_user_mds_data lov_user_mds_data_v2
 struct lov_user_mds_data_v1 {
 	lstat_t lmd_st;                 /* MDS stat struct */
@@ -1091,7 +1115,8 @@ static __attribute__((unused)) const char *mdt_hash_name[] = {
 /* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
  * and the higher part will be the flag to indicate the status of object,
  * for example the object is being migrated. And the hash function
- * might be interpreted differently with different flags. */
+ * might be interpreted differently with different flags.
+ */
 #define LMV_HASH_TYPE_MASK 0x0000ffff
 
 static inline bool lmv_is_known_hash_type(__u32 type)
@@ -1110,7 +1135,8 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 
 /* The striped directory has ever lost its master LMV EA, then LFSCK
  * re-generated it. This flag is used to indicate such case. It is an
- * on-disk flag. */
+ * on-disk flag.
+ */
 #define LMV_HASH_FLAG_LOST_LMV		0x10000000
 
 #define LMV_HASH_FLAG_BAD_TYPE		0x20000000
@@ -1189,7 +1215,8 @@ enum lustre_foreign_types {
 extern struct lustre_foreign_type lu_foreign_types[];
 
 /* Got this according to how get LOV_MAX_STRIPE_COUNT, see above,
- * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data) */
+ * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data)
+ */
 #define LMV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
 #define lmv_user_md lmv_user_md_v1
 struct lmv_user_md_v1 {
@@ -1199,7 +1226,9 @@ struct lmv_user_md_v1 {
 	__u32	lum_hash_type;     /* Dir stripe policy */
 	__u32	lum_type;	   /* LMV type: default */
 	__u8	lum_max_inherit;   /* inherit depth of default LMV */
-	__u8	lum_max_inherit_rr;	/* inherit depth of default LMV to round-robin mkdir */
+	__u8	lum_max_inherit_rr;	/* inherit depth of default LMV to
+					 * round-robin mkdir
+					 */
 	__u16	lum_padding1;
 	__u32	lum_padding2;
 	__u32	lum_padding3;
@@ -1282,7 +1311,8 @@ struct ll_fid {
 	__u64 id;         /* holds object id */
 	__u32 generation; /* holds object generation */
 	__u32 f_type;     /* holds object type or stripe idx when passing it to
-			   * OST for saving into EA. */
+			   * OST for saving into EA.
+			   */
 };
 
 #define UUID_MAX        40
@@ -1315,7 +1345,8 @@ static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 
 	if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
 		/* Obviously not safe, but for printfs, no real harm done...
-		   we're always null-terminated, even in a race. */
+		 * we're always null-terminated, even in a ce.
+		 */
 		static char temp[sizeof(*uuid->uuid)];
 
 		memcpy(temp, uuid->uuid, sizeof(*uuid->uuid) - 1);
@@ -1330,8 +1361,9 @@ static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 #define LUSTRE_MAXINSTANCE 16
 
 /* Extract fsname from uuid (or target name) of a target
-   e.g. (myfs-OST0007_UUID -> myfs)
-   see also deuuidify. */
+ * e.g. (myfs-OST0007_UUID -> myfs)
+ * see also deuuidify.
+ */
 static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 {
 	char *p;
@@ -1344,7 +1376,8 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 }
 
 /* printf display format for Lustre FIDs
- * usage: printf("file FID is "DFID"\n", PFID(fid)); */
+ * usage: printf("file FID is "DFID"\n", PFID(fid));
+ */
 #define FID_NOBRACE_LEN 40
 #define FID_LEN (FID_NOBRACE_LEN + 2)
 #define DFID_NOBRACE "%#llx:0x%x:0x%x"
@@ -1353,7 +1386,8 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 
 /* scanf input parse format for fids in DFID_NOBRACE format
  * Need to strip '[' from DFID format first or use "["SFID"]" at caller.
- * usage: sscanf(fidstr, SFID, RFID(&fid)); */
+ * usage: sscanf(fidstr, SFID, RFID(&fid));
+ */
 #define SFID "0x%llx:0x%x:0x%x"
 #define RFID(fid) (unsigned long long *)&((fid)->f_seq), &((fid)->f_oid), &((fid)->f_ver)
 #define PLOGID(logid) (unsigned long long)(logid)->lgl_oi.oi.oi_seq, (__u32)(logid)->lgl_oi.oi.oi_id, 0
@@ -1395,7 +1429,7 @@ static inline __u64 toqb(__kernel_size_t space)
 /* In the current Lustre implementation, the grace time is either the time
  * or the timestamp to be used after some quota ID exceeds the soft limt,
  * 48 bits should be enough, its high 16 bits can be used as quota flags.
- * */
+ */
 #define LQUOTA_GRACE_BITS	48
 #define LQUOTA_GRACE_MASK	((1ULL << LQUOTA_GRACE_BITS) - 1)
 #define LQUOTA_GRACE_MAX	LQUOTA_GRACE_MASK
@@ -1404,7 +1438,8 @@ static inline __u64 toqb(__kernel_size_t space)
 #define LQUOTA_GRACE_FLAG(t, f)	((__u64)t | (__u64)f << LQUOTA_GRACE_BITS)
 
 /* special grace time, only notify the user when its quota is over soft limit
- * but doesn't block new writes until the hard limit is reached. */
+ * but doesn't block new writes until the hard limit is reached.
+ */
 #define NOTIFY_GRACE		"notify"
 #define NOTIFY_GRACE_TIME	LQUOTA_GRACE_MASK
 
@@ -1414,7 +1449,7 @@ static inline __u64 toqb(__kernel_size_t space)
  * quota setting, the hardlimit and softlimit of its quota record in the global
  * quota file will be set to 0, the low 48 bits of the grace will be set to 0
  * and high 16 bits will contain this flag (see above comment).
- * */
+ */
 #define LQUOTA_FLAG_DEFAULT	0x0001
 #define LQUOTA_FLAG_DELETED	0x0002
 #define LQUOTA_FLAG_RESET	0x0004
@@ -1629,16 +1664,19 @@ enum la_valid {
 					   * We do not support JOIN FILE
 					   * anymore, reserve this flags
 					   * just for preventing such bit
-					   * to be reused. */
+					   * to be reused.
+					   */
 
 #define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 #define MDS_OPEN_NORESTORE  0100000000000ULL /* Do not restore file at open */
 #define MDS_OPEN_NEWSTRIPE  0200000000000ULL /* New stripe needed (restripe or
-					      * hsm restore) */
+					      * hsm restore)
+					      */
 #define MDS_OPEN_VOLATILE   0400000000000ULL /* File is volatile = created
-						unlinked */
+					      * linked
+					      */
 #define MDS_OPEN_LEASE	   01000000000000ULL /* Open the file and grant lease
 					      * delegation, succeed if it's not
 					      * being opened with conflict mode.
@@ -1647,7 +1685,8 @@ enum la_valid {
 
 #define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
 #define MDS_OPEN_PCC      010000000000000ULL /* PCC: auto RW-PCC cache attach
-					      * for newly created file */
+					      * for newly created file
+					      */
 #define MDS_OP_WITH_FID   020000000000000ULL /* operation carried out by FID */
 #define MDS_OPEN_DEFAULT_LMV  040000000000000ULL /* open fetches default LMV,
 						  * or mkdir with default LMV
@@ -1697,12 +1736,13 @@ enum changelog_rec_type {
 	CL_LAST,
 };
 
-static inline const char *changelog_type2str(int type) {
+static inline const char *changelog_type2str(int type)
+{
 	static const char *const changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
 		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",
-		"FLRW",  "RESYNC","GXATR", "NOPEN",
+		"FLRW",  "RESYNC", "GXATR", "NOPEN",
 	};
 
 	if (type >= 0 && type < CL_LAST)
@@ -1731,9 +1771,11 @@ enum changelog_rec_flags {
 				     /* HSM cleaning needed */
 /* Flags for rename */
 #define CLF_RENAME_LAST		0x0001 /* rename unlink last hardlink
-					* of target */
+					* of target
+					*/
 #define CLF_RENAME_LAST_EXISTS	0x0002 /* rename unlink last hardlink of target
-					* has an archive in backend */
+					* has an archive in backend
+					*/
 
 /* Flags for HSM */
 /* 12b used (from high weight to low weight):
@@ -1752,7 +1794,8 @@ enum changelog_rec_flags {
 #define CLF_HSM_LAST        15
 
 /* Remove bits higher than _h, then extract the value
- * between _h and _l by shifting lower weigth to bit 0. */
+ * between _h and _l by shifting lower weigth to bit 0.
+ */
 #define CLF_GET_BITS(_b, _h, _l) (((_b << (CLF_HSM_LAST - _h)) & 0xFFFF) \
 				   >> (CLF_HSM_LAST - _h + _l))
 
@@ -1924,8 +1967,9 @@ struct changelog_ext_xattr {
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 
-static inline __kernel_size_t changelog_rec_offset(enum changelog_rec_flags crf,
-					  enum changelog_rec_extra_flags cref)
+static
+inline __kernel_size_t changelog_rec_offset(enum changelog_rec_flags crf,
+					    enum changelog_rec_extra_flags cref)
 {
 	__kernel_size_t size = sizeof(struct changelog_rec);
 
@@ -1950,7 +1994,8 @@ static inline __kernel_size_t changelog_rec_offset(enum changelog_rec_flags crf,
 	return size;
 }
 
-static inline __kernel_size_t changelog_rec_size(const struct changelog_rec *rec)
+static
+inline __kernel_size_t changelog_rec_size(const struct changelog_rec *rec)
 {
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
@@ -1962,7 +2007,8 @@ static inline __kernel_size_t changelog_rec_size(const struct changelog_rec *rec
 		(enum changelog_rec_flags)rec->cr_flags, cref);
 }
 
-static inline __kernel_size_t changelog_rec_varsize(const struct changelog_rec *rec)
+static
+inline __kernel_size_t changelog_rec_varsize(const struct changelog_rec *rec)
 {
 	return changelog_rec_size(rec) - sizeof(*rec) + rec->cr_namelen;
 }
@@ -2098,7 +2144,8 @@ static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 	return str + 1;
 }
 
-static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
+static
+inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
 	return rec->cr_namelen -
 	       (changelog_rec_sname(rec) - changelog_rec_name(rec));
@@ -2472,7 +2519,6 @@ static inline const char *hsm_user_action2name(enum hsm_user_action  a)
 
 /**
  * Contains all the fixed part of struct hsm_user_request.
- *
  */
 struct hsm_request {
 	__u32 hr_action;	/* enum hsm_user_action */
@@ -2483,8 +2529,8 @@ struct hsm_request {
 };
 
 struct hsm_user_item {
-       struct lu_fid        hui_fid;
-       struct hsm_extent hui_extent;
+	struct lu_fid hui_fid;
+	struct hsm_extent hui_extent;
 } __attribute__((packed));
 
 struct hsm_user_request {
@@ -2604,7 +2650,8 @@ struct hsm_action_list {
 	__u32 padding1;
 	char  hal_fsname[0];   /* null-terminated */
 	/* struct hsm_action_item[hal_count] follows, aligned on 8-byte
-	   boundaries. See hai_zero */
+	 * boundaries. See i_zero
+	 */
 } __attribute__((packed));
 
 /* Return pointer to first hai in action list */
@@ -2616,7 +2663,7 @@ static inline struct hsm_action_item *hai_first(struct hsm_action_list *hal)
 }
 
 /* Return pointer to next hai */
-static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
+static inline struct hsm_action_item *hai_next(struct hsm_action_item *hai)
 {
 	__kernel_size_t offset = __ALIGN_KERNEL(hai->hai_len, 8);
 
@@ -2695,7 +2742,8 @@ enum lu_ladvise_type {
 
 /* This is the userspace argument for ladvise.  It is currently the same as
  * what goes on the wire (struct lu_ladvise), but is defined separately as we
- * may need info which is only used locally. */
+ * may need info which is only used locally.
+ */
 struct llapi_lu_ladvise {
 	__u16 lla_advice;	/* advice type */
 	__u16 lla_value1;	/* values for different advice types */
@@ -2777,7 +2825,8 @@ enum ladvise_flag {
 
 /* This is the userspace argument for ladvise, corresponds to ladvise_hdr which
  * is used on the wire.  It is defined separately as we may need info which is
- * only used locally. */
+ * only used locally.
+ */
 struct llapi_ladvise_hdr {
 	__u32			lah_magic;	/* LADVISE_MAGIC */
 	__u32			lah_count;	/* number of advices */

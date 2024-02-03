@@ -32,7 +32,8 @@ struct ofd_access_entry_v1 {
 };
 
 /* The name of the subdirectory of devtmpfs (/dev) containing the
- * control and access log char devices. */
+ * control and access log char devices.
+ */
 #define LUSTRE_ACCESS_LOG_DIR_NAME "lustre-access-log"
 
 enum {
@@ -47,8 +48,7 @@ struct lustre_access_log_info_v1 {
 	char	lali_name[LUSTRE_ACCESS_LOG_NAME_SIZE]; /* obd_name */
 	__u32	lali_log_size;
 	__u32	lali_entry_size;
-	/* Underscore prefixed members are intended for test and debug
-	 * purposes only. */
+	 /* underscore prefix members are for test and debug only */
 	__u32	_lali_head;
 	__u32	_lali_tail;
 	__u32	_lali_entry_space;
@@ -57,28 +57,32 @@ struct lustre_access_log_info_v1 {
 	__u32	_lali_is_closed;
 };
 
+/* /dev/lustre-access-log/control ioctl: return lustre access log */
 enum {
-	/* /dev/lustre-access-log/control ioctl: return lustre access log
-	 * interface version. */
+	/* return lustre access log interface version. */
 	LUSTRE_ACCESS_LOG_IOCTL_VERSION = _IO('O', 0x81),
 
-	/* /dev/lustre-access-log/control ioctl: return device major
-	 * used for access log devices. (The major is dynamically
-	 * allocated during ofd module initialization. */
+	/* return device major used for access log devices.
+	 * (Which is dynamically allocated during ofd module initialization.)
+	 */
 	LUSTRE_ACCESS_LOG_IOCTL_MAJOR = _IO('O', 0x82),
 
-	/* /dev/lustre-access-log/control ioctl: get global control event
-	 * count and store it into file private_data. */
+	/* og/control ioctl: get global control event
+	 * count and store it into file private_data.
+	 */
 	LUSTRE_ACCESS_LOG_IOCTL_PRESCAN = _IO('O', 0x83),
 
 	/* /dev/lustre-access-log/OBDNAME ioctl: populate struct
-	 * lustre_access_log_info_v1 for the current device. */
-	LUSTRE_ACCESS_LOG_IOCTL_INFO = _IOR('O', 0x84, struct lustre_access_log_info_v1),
+	 * lustre_access_log_info_v1 for the current device.
+	 */
+	LUSTRE_ACCESS_LOG_IOCTL_INFO = _IOR('O', 0x84,
+					    struct lustre_access_log_info_v1),
 
 	/* /dev/lustre-access-log/OBDNAME ioctl: only entries whose
 	 * PFID MDT index is equal to arg will be added to the log. A
 	 * value of 0xfffffffff ((__u32)-1) will disable filtering
-	 * which is the default.  Added in V2. */
+	 * which is the default.  Added in V2.
+	 */
 	LUSTRE_ACCESS_LOG_IOCTL_FILTER = _IOW('O', 0x85, __u32),
 };
 

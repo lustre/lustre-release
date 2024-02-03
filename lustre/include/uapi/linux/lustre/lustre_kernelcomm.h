@@ -63,7 +63,8 @@ enum lustre_commands {
 struct kuc_hdr {
 	__u16 kuc_magic;
 	__u8  kuc_transport;  /* Each new Lustre feature should use a different
-				 transport */
+			       * transport
+			       */
 	__u8  kuc_flags;
 	__u16 kuc_msgtype;    /* Message type or opcode, transport-specific */
 	__u16 kuc_msglen;     /* Including header */

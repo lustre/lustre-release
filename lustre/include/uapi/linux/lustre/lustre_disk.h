@@ -390,7 +390,8 @@ enum scrub_flags {
 
 enum scrub_status {
 	/* The scrub file is new created, for new MDT, upgrading from old disk,
-	 * or re-creating the scrub file manually. */
+	 * or re-creating the scrub file manually.
+	 */
 	SS_INIT		= 0,
 
 	/* The scrub is checking/repairing the OI files. */
@@ -442,13 +443,15 @@ struct scrub_file {
 	__u64	sf_items_failed;	    /* number objects unrepairable */
 	__u64	sf_items_updated_prior;     /* num objects fixed before scan */
 	__u64	sf_items_noscrub;	    /* number of objects skipped due to
-					     * LDISKFS_STATE_LUSTRE_NOSCRUB */
+					     * LDISKFS_STATE_LUSTRE_NOSCRUB
+					     */
 	__u64   sf_items_igif;		    /* number of IGIF(no FID) objects */
 	__u32	sf_run_time;		    /* scrub runtime in seconds */
 	__u32	sf_success_count;	    /* number of completed runs */
 	__u16	sf_oi_count;		    /* number of OI files */
 	__u16	sf_internal_flags;	    /* flags to keep after reset, see
-					     * 'enum scrub_internal_flags' */
+					     * 'enum scrub_internal_flags'
+					     */
 	__u32	sf_reserved_1;
 	__u64	sf_reserved_2[16];
 	__u8    sf_oi_bitmap[SCRUB_OI_BITMAP_SIZE]; /* OI files recreated */

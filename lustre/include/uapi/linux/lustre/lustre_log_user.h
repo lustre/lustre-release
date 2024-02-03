@@ -50,7 +50,8 @@ static inline void logid_to_fid(struct llog_logid *id, struct lu_fid *fid)
 {
 	/* For compatibility purposes we identify pre-OSD (~< 2.3.51 MDS)
 	 * logid's by non-zero ogen (inode generation) and convert them
-	 * into IGIF */
+	 * into IGIF
+	 */
 	if (id->lgl_ogen == 0) {
 		fid->f_seq = id->lgl_oi.oi.oi_seq;
 		fid->f_oid = id->lgl_oi.oi.oi_id;

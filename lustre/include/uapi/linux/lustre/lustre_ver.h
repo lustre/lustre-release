@@ -25,7 +25,8 @@
 
 /* If lustre version of client and servers it connects to differs by more
  * than this amount, client would issue a warning.
- * (set in lustre/autoconf/lustre-version.ac) */
+ * (set in lustre/autoconf/lustre-version.ac)
+ */
 #define LUSTRE_VERSION_OFFSET_WARN OBD_OCD_VERSION(0, 4, 50, 0)
 
 #endif

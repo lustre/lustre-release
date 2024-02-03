@@ -67,15 +67,18 @@
  */
 enum lfsck_status {
 	/* The lfsck file is new created, for new MDT, upgrading from old disk,
-	 * or re-creating the lfsck file manually. */
+	 * or re-creating the lfsck file manually.
+	 */
 	LS_INIT			= 0,
 
 	/* The first-step system scanning. The checked items during the phase1
-	 * scanning depends on the LFSCK type. */
+	 * scanning depends on the LFSCK type.
+	 */
 	LS_SCANNING_PHASE1	= 1,
 
 	/* The second-step system scanning. The checked items during the phase2
-	 * scanning depends on the LFSCK type. */
+	 * scanning depends on the LFSCK type.
+	 */
 	LS_SCANNING_PHASE2	= 2,
 
 	/* The LFSCK processing has completed for all objects. */
@@ -88,11 +91,13 @@ enum lfsck_status {
 	LS_STOPPED		= 5,
 
 	/* LFSCK is paused automatically when umount,
-	 * will be restarted automatically when remount. */
+	 * will be restarted automatically when remount.
+	 */
 	LS_PAUSED		= 6,
 
 	/* System crashed during the LFSCK,
-	 * will be restarted automatically after recovery. */
+	 * will be restarted automatically after recovery.
+	 */
 	LS_CRASHED		= 7,
 
 	/* Some OST/MDT failed during the LFSCK, or not join the LFSCK. */
