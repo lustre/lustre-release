@@ -81,7 +81,6 @@
  * See comments below for the description of i/o, page, and dlm-locking
  * design.
  *
- * @{
  */
 
 /*
@@ -127,48 +126,47 @@ struct cl_req_attr;
  * \see vvp_device, lov_device, lovsub_device, osc_device
  */
 struct cl_device {
-        /** Super-class. */
-        struct lu_device                   cd_lu_dev;
+	/** Super-class. */
+	struct lu_device                   cd_lu_dev;
 };
 
-/** \addtogroup cl_object cl_object
- * @{ */
+/* cl_object */
 /**
  * "Data attributes" of cl_object. Data attributes can be updated
  * independently for a sub-object, and top-object's attributes are calculated
  * from sub-objects' ones.
  */
 struct cl_attr {
-        /** Object size, in bytes */
-        loff_t cat_size;
+	/** Object size, in bytes */
+	loff_t cat_size;
 
 	unsigned int cat_kms_valid:1;
-        /**
-         * Known minimal size, in bytes.
-         *
-         * This is only valid when at least one DLM lock is held.
-         */
-        loff_t cat_kms;
-        /** Modification time. Measured in seconds since epoch. */
-        time64_t cat_mtime;
-        /** Access time. Measured in seconds since epoch. */
-        time64_t cat_atime;
-        /** Change time. Measured in seconds since epoch. */
-        time64_t cat_ctime;
-        /**
-         * Blocks allocated to this cl_object on the server file system.
-         *
-         * \todo XXX An interface for block size is needed.
-         */
-        __u64  cat_blocks;
-        /**
-         * User identifier for quota purposes.
-         */
-        uid_t  cat_uid;
-        /**
-         * Group identifier for quota purposes.
-         */
-        gid_t  cat_gid;
+	/**
+	 * Known minimal size, in bytes.
+	 *
+	 * This is only valid when at least one DLM lock is held.
+	 */
+	loff_t cat_kms;
+	/** Modification time. Measured in seconds since epoch. */
+	time64_t cat_mtime;
+	/** Access time. Measured in seconds since epoch. */
+	time64_t cat_atime;
+	/** Change time. Measured in seconds since epoch. */
+	time64_t cat_ctime;
+	/**
+	 * Blocks allocated to this cl_object on the server file system.
+	 *
+	 * \todo XXX An interface for block size is needed.
+	 */
+	__u64  cat_blocks;
+	/**
+	 * User identifier for quota purposes.
+	 */
+	uid_t  cat_uid;
+	/**
+	 * Group identifier for quota purposes.
+	 */
+	gid_t  cat_gid;
 
 	/* nlink of the directory */
 	__u64  cat_nlink;
@@ -229,10 +227,10 @@ enum cl_attr_valid {
  * \see vvp_object, lov_object, lovsub_object, osc_object
  */
 struct cl_object {
-        /** super class */
-        struct lu_object                   co_lu;
-        /** per-object-layer operations */
-        const struct cl_object_operations *co_ops;
+	/** super class */
+	struct lu_object                   co_lu;
+	/** per-object-layer operations */
+	const struct cl_object_operations *co_ops;
 	/** offset of page slice in cl_page buffer */
 	int				   co_slice_off;
 };
@@ -243,23 +241,23 @@ struct cl_object {
  * fid.
  */
 struct cl_object_conf {
-        /** Super-class. */
+	/** Super-class. */
 	struct lu_object_conf     coc_lu;
 	union {
 		/**
 		 * Object layout. This is consumed by lov.
 		 */
 		struct lu_buf	 coc_layout;
-                /**
-                 * Description of particular stripe location in the
-                 * cluster. This is consumed by osc.
-                 */
-                struct lov_oinfo *coc_oinfo;
-        } u;
-        /**
-         * VFS inode. This is consumed by vvp.
-         */
-        struct inode             *coc_inode;
+		/**
+		 * Description of particular stripe location in the
+		 * cluster. This is consumed by osc.
+		 */
+		struct lov_oinfo *coc_oinfo;
+	} u;
+	/**
+	 * VFS inode. This is consumed by vvp.
+	 */
+	struct inode             *coc_inode;
 	/**
 	 * Layout lock handle.
 	 */
@@ -272,14 +270,11 @@ struct cl_object_conf {
 };
 
 enum {
-	/** configure layout, set up a new stripe, must be called while
-	 * holding layout lock. */
+	/** configure layout, new stripe, must must be holding layout lock. */
 	OBJECT_CONF_SET = 0,
-	/** invalidate the current stripe configuration due to losing
-	 * layout lock. */
+	/** invalidate the current stripe config when losing layout lock. */
 	OBJECT_CONF_INVALIDATE = 1,
-	/** wait for old layout to go away so that new layout can be
-	 * set up. */
+	/** wait for old layout to go away so that new layout can be set up. */
 	OBJECT_CONF_WAIT = 2
 };
 
@@ -314,44 +309,44 @@ enum coo_inode_opc {
  * \see vvp_ops, lov_ops, lovsub_ops, osc_ops
  */
 struct cl_object_operations {
-        /**
-         * Initialize page slice for this layer. Called top-to-bottom through
-         * every object layer when a new cl_page is instantiated. Layer
-         * keeping private per-page data, or requiring its own page operations
-         * vector should allocate these data here, and attach then to the page
-         * by calling cl_page_slice_add(). \a vmpage is locked (in the VM
-         * sense). Optional.
-         *
-         * \retval NULL success.
-         *
-         * \retval ERR_PTR(errno) failure code.
-         *
-         * \retval valid-pointer pointer to already existing referenced page
-         *         to be used instead of newly created.
-         */
+	/**
+	 * Initialize page slice for this layer. Called top-to-bottom through
+	 * every object layer when a new cl_page is instantiated. Layer
+	 * keeping private per-page data, or requiring its own page operations
+	 * vector should allocate these data here, and attach then to the page
+	 * by calling cl_page_slice_add(). \a vmpage is locked (in the VM
+	 * sense). Optional.
+	 *
+	 * \retval NULL success.
+	 *
+	 * \retval ERR_PTR(errno) failure code.
+	 *
+	 * \retval valid-pointer pointer to already existing referenced page
+	 *         to be used instead of newly created.
+	 */
 	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
-				struct cl_page *page, pgoff_t index);
-        /**
-         * Initialize lock slice for this layer. Called top-to-bottom through
-         * every object layer when a new cl_lock is instantiated. Layer
-         * keeping private per-lock data, or requiring its own lock operations
-         * vector should allocate these data here, and attach then to the lock
-         * by calling cl_lock_slice_add(). Mandatory.
-         */
-        int  (*coo_lock_init)(const struct lu_env *env,
-                              struct cl_object *obj, struct cl_lock *lock,
-                              const struct cl_io *io);
-        /**
-         * Initialize io state for a given layer.
-         *
-         * called top-to-bottom once per io existence to initialize io
-         * state. If layer wants to keep some state for this type of io, it
-         * has to embed struct cl_io_slice in lu_env::le_ses, and register
-         * slice with cl_io_slice_add(). It is guaranteed that all threads
-         * participating in this io share the same session.
-         */
-        int  (*coo_io_init)(const struct lu_env *env,
-                            struct cl_object *obj, struct cl_io *io);
+			      struct cl_page *page, pgoff_t index);
+	/**
+	 * Initialize lock slice for this layer. Called top-to-bottom through
+	 * every object layer when a new cl_lock is instantiated. Layer
+	 * keeping private per-lock data, or requiring its own lock operations
+	 * vector should allocate these data here, and attach then to the lock
+	 * by calling cl_lock_slice_add(). Mandatory.
+	 */
+	int  (*coo_lock_init)(const struct lu_env *env,
+			      struct cl_object *obj, struct cl_lock *lock,
+			      const struct cl_io *io);
+	/**
+	 * Initialize io state for a given layer.
+	 *
+	 * called top-to-bottom once per io existence to initialize io
+	 * state. If layer wants to keep some state for this type of io, it
+	 * has to embed struct cl_io_slice in lu_env::le_ses, and register
+	 * slice with cl_io_slice_add(). It is guaranteed that all threads
+	 * participating in this io share the same session.
+	 */
+	int  (*coo_io_init)(const struct lu_env *env,
+			    struct cl_object *obj, struct cl_io *io);
 	/**
 	 * Fill portion of \a attr that this layer controls. This method is
 	 * called top-to-bottom through all object layers.
@@ -365,19 +360,19 @@ struct cl_object_operations {
 	 */
 	int (*coo_attr_get)(const struct lu_env *env, struct cl_object *obj,
 			    struct cl_attr *attr);
-        /**
-         * Update attributes.
-         *
-         * \a valid is a bitmask composed from enum #cl_attr_valid, and
-         * indicating what attributes are to be set.
-         *
-         * \pre cl_object_header::coh_attr_guard of the top-object is locked.
-         *
-         * \return the same convention as for
-         * cl_object_operations::coo_attr_get() is used.
-         */
+	/**
+	 * Update attributes.
+	 *
+	 * \a valid is a bitmask composed from enum #cl_attr_valid, and
+	 * indicating what attributes are to be set.
+	 *
+	 * \pre cl_object_header::coh_attr_guard of the top-object is locked.
+	 *
+	 * \return the same convention as for
+	 * cl_object_operations::coo_attr_get() is used.
+	 */
 	int (*coo_attr_update)(const struct lu_env *env, struct cl_object *obj,
-			       const struct cl_attr *attr, unsigned valid);
+			       const struct cl_attr *attr, unsigned int valid);
 	/**
 	 * Mark the inode dirty. By this way, the inode will add into the
 	 * writeback list of the corresponding @bdi_writeback, and then it will
@@ -386,14 +381,14 @@ struct cl_object_operations {
 	 */
 	void (*coo_dirty_for_sync)(const struct lu_env *env,
 				   struct cl_object *obj);
-        /**
-         * Update object configuration. Called top-to-bottom to modify object
-         * configuration.
-         *
-         * XXX error conditions and handling.
-         */
-        int (*coo_conf_set)(const struct lu_env *env, struct cl_object *obj,
-                            const struct cl_object_conf *conf);
+	/**
+	 * Update object configuration. Called top-to-bottom to modify object
+	 * configuration.
+	 *
+	 * XXX error conditions and handling.
+	 */
+	int (*coo_conf_set)(const struct lu_env *env, struct cl_object *obj,
+			    const struct cl_object_conf *conf);
 	/**
 	 * Glimpse ast. Executed when glimpse ast arrives for a lock on this
 	 * object. Layers are supposed to fill parts of \a lvb that will be
@@ -402,8 +397,8 @@ struct cl_object_operations {
 	 * \see vvp_object_glimpse(), lovsub_object_glimpse(),
 	 * \see osc_object_glimpse()
 	 */
-        int (*coo_glimpse)(const struct lu_env *env,
-                           const struct cl_object *obj, struct ost_lvb *lvb);
+	int (*coo_glimpse)(const struct lu_env *env,
+			   const struct cl_object *obj, struct ost_lvb *lvb);
 	/**
 	 * Object prune method. Called when the layout is going to change on
 	 * this object, therefore each layer has to clean up their cache,
@@ -454,25 +449,24 @@ struct cl_object_operations {
  * Extended header for client object.
  */
 struct cl_object_header {
-        /** Standard lu_object_header. cl_object::co_lu::lo_header points
-         * here. */
+	/* Standard lu_object_header. cl_object::co_lu::lo_header points here.*/
 	struct lu_object_header	coh_lu;
 
-        /**
-         * Parent object. It is assumed that an object has a well-defined
-         * parent, but not a well-defined child (there may be multiple
-         * sub-objects, for the same top-object). cl_object_header::coh_parent
-         * field allows certain code to be written generically, without
-         * limiting possible cl_object layouts unduly.
-         */
-        struct cl_object_header *coh_parent;
-        /**
-         * Protects consistency between cl_attr of parent object and
-         * attributes of sub-objects, that the former is calculated ("merged")
-         * from.
-         *
-         * \todo XXX this can be read/write lock if needed.
-         */
+	/**
+	 * Parent object. It is assumed that an object has a well-defined
+	 * parent, but not a well-defined child (there may be multiple
+	 * sub-objects, for the same top-object). cl_object_header::coh_parent
+	 * field allows certain code to be written generically, without
+	 * limiting possible cl_object layouts unduly.
+	 */
+	struct cl_object_header *coh_parent;
+	/**
+	 * Protects consistency between cl_attr of parent object and
+	 * attributes of sub-objects, that the former is calculated ("merged")
+	 * from.
+	 *
+	 * \todo XXX this can be read/write lock if needed.
+	 */
 	spinlock_t		 coh_attr_guard;
 	/**
 	 * Size of cl_page + page slices
@@ -503,12 +497,7 @@ struct cl_object_header {
 				    &(obj)->co_lu.lo_header->loh_layers,\
 				    co_lu.lo_linkage)
 
-/** @} cl_object */
-
 #define CL_PAGE_EOF ((pgoff_t)~0ull)
-
-/** \addtogroup cl_page cl_page
- * @{ */
 
 /** \struct cl_page
  * Layered client page.
@@ -630,114 +619,116 @@ struct cl_object_header {
  * are interested in them.
  */
 enum cl_page_state {
-        /**
-         * Page is in the cache, un-owned. Page leaves cached state in the
-         * following cases:
-         *
-         *     - [cl_page_state::CPS_OWNED] io comes across the page and
-         *     owns it;
-         *
-         *     - [cl_page_state::CPS_PAGEOUT] page is dirty, the
-         *     req-formation engine decides that it wants to include this page
-         *     into an RPC being constructed, and yanks it from the cache;
-         *
-         *     - [cl_page_state::CPS_FREEING] VM callback is executed to
-         *     evict the page form the memory;
-         *
-         * \invariant cl_page::cp_owner == NULL && cl_page::cp_req == NULL
-         */
+	/**
+	 * Page is in the cache, un-owned. Page leaves cached state in the
+	 * following cases:
+	 *
+	 *     - [cl_page_state::CPS_OWNED] io comes across the page and
+	 *     owns it;
+	 *
+	 *     - [cl_page_state::CPS_PAGEOUT] page is dirty, the
+	 *     req-formation engine decides that it wants to include this page
+	 *     into an RPC being constructed, and yanks it from the cache;
+	 *
+	 *     - [cl_page_state::CPS_FREEING] VM callback is executed to
+	 *     evict the page form the memory;
+	 *
+	 * \invariant cl_page::cp_owner == NULL && cl_page::cp_req == NULL
+	 */
 	CPS_CACHED = 1,
-        /**
-         * Page is exclusively owned by some cl_io. Page may end up in this
-         * state as a result of
-         *
-         *     - io creating new page and immediately owning it;
-         *
-         *     - [cl_page_state::CPS_CACHED] io finding existing cached page
-         *     and owning it;
-         *
-         *     - [cl_page_state::CPS_OWNED] io finding existing owned page
-         *     and waiting for owner to release the page;
-         *
-         * Page leaves owned state in the following cases:
-         *
-         *     - [cl_page_state::CPS_CACHED] io decides to leave the page in
-         *     the cache, doing nothing;
-         *
-         *     - [cl_page_state::CPS_PAGEIN] io starts read transfer for
-         *     this page;
-         *
-         *     - [cl_page_state::CPS_PAGEOUT] io starts immediate write
-         *     transfer for this page;
-         *
-         *     - [cl_page_state::CPS_FREEING] io decides to destroy this
-         *     page (e.g., as part of truncate or extent lock cancellation).
-         *
-         * \invariant cl_page::cp_owner != NULL && cl_page::cp_req == NULL
-         */
-        CPS_OWNED,
-        /**
-         * Page is being written out, as a part of a transfer. This state is
-         * entered when req-formation logic decided that it wants this page to
-         * be sent through the wire _now_. Specifically, it means that once
-         * this state is achieved, transfer completion handler (with either
-         * success or failure indication) is guaranteed to be executed against
-         * this page independently of any locks and any scheduling decisions
-         * made by the hosting environment (that effectively means that the
-         * page is never put into cl_page_state::CPS_PAGEOUT state "in
-         * advance". This property is mentioned, because it is important when
-         * reasoning about possible dead-locks in the system). The page can
-         * enter this state as a result of
-         *
-         *     - [cl_page_state::CPS_OWNED] an io requesting an immediate
-         *     write-out of this page, or
-         *
-         *     - [cl_page_state::CPS_CACHED] req-forming engine deciding
-         *     that it has enough dirty pages cached to issue a "good"
-         *     transfer.
-         *
-         * The page leaves cl_page_state::CPS_PAGEOUT state when the transfer
-         * is completed---it is moved into cl_page_state::CPS_CACHED state.
-         *
-         * Underlying VM page is locked for the duration of transfer.
-         *
-         * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req != NULL
-         */
-        CPS_PAGEOUT,
-        /**
-         * Page is being read in, as a part of a transfer. This is quite
-         * similar to the cl_page_state::CPS_PAGEOUT state, except that
-         * read-in is always "immediate"---there is no such thing a sudden
-         * construction of read request from cached, presumably not up to date,
-         * pages.
-         *
-         * Underlying VM page is locked for the duration of transfer.
-         *
-         * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req != NULL
-         */
-        CPS_PAGEIN,
-        /**
-         * Page is being destroyed. This state is entered when client decides
-         * that page has to be deleted from its host object, as, e.g., a part
-         * of truncate.
-         *
-         * Once this state is reached, there is no way to escape it.
-         *
-         * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req == NULL
-         */
-        CPS_FREEING,
-        CPS_NR
+	/**
+	 * Page is exclusively owned by some cl_io. Page may end up in this
+	 * state as a result of
+	 *
+	 *     - io creating new page and immediately owning it;
+	 *
+	 *     - [cl_page_state::CPS_CACHED] io finding existing cached page
+	 *     and owning it;
+	 *
+	 *     - [cl_page_state::CPS_OWNED] io finding existing owned page
+	 *     and waiting for owner to release the page;
+	 *
+	 * Page leaves owned state in the following cases:
+	 *
+	 *     - [cl_page_state::CPS_CACHED] io decides to leave the page in
+	 *     the cache, doing nothing;
+	 *
+	 *     - [cl_page_state::CPS_PAGEIN] io starts read transfer for
+	 *     this page;
+	 *
+	 *     - [cl_page_state::CPS_PAGEOUT] io starts immediate write
+	 *     transfer for this page;
+	 *
+	 *     - [cl_page_state::CPS_FREEING] io decides to destroy this
+	 *     page (e.g., as part of truncate or extent lock cancellation).
+	 *
+	 * \invariant cl_page::cp_owner != NULL && cl_page::cp_req == NULL
+	 */
+	CPS_OWNED,
+	/**
+	 * Page is being written out, as a part of a transfer. This state is
+	 * entered when req-formation logic decided that it wants this page to
+	 * be sent through the wire _now_. Specifically, it means that once
+	 * this state is achieved, transfer completion handler (with either
+	 * success or failure indication) is guaranteed to be executed against
+	 * this page independently of any locks and any scheduling decisions
+	 * made by the hosting environment (that effectively means that the
+	 * page is never put into cl_page_state::CPS_PAGEOUT state "in
+	 * advance". This property is mentioned, because it is important when
+	 * reasoning about possible dead-locks in the system). The page can
+	 * enter this state as a result of
+	 *
+	 *     - [cl_page_state::CPS_OWNED] an io requesting an immediate
+	 *     write-out of this page, or
+	 *
+	 *     - [cl_page_state::CPS_CACHED] req-forming engine deciding
+	 *     that it has enough dirty pages cached to issue a "good"
+	 *     transfer.
+	 *
+	 * The page leaves cl_page_state::CPS_PAGEOUT state when the transfer
+	 * is completed---it is moved into cl_page_state::CPS_CACHED state.
+	 *
+	 * Underlying VM page is locked for the duration of transfer.
+	 *
+	 * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req != NULL
+	 */
+	CPS_PAGEOUT,
+	/**
+	 * Page is being read in, as a part of a transfer. This is quite
+	 * similar to the cl_page_state::CPS_PAGEOUT state, except that
+	 * read-in is always "immediate"---there is no such thing a sudden
+	 * construction of read request from cached, presumably not up to date,
+	 * pages.
+	 *
+	 * Underlying VM page is locked for the duration of transfer.
+	 *
+	 * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req != NULL
+	 */
+	CPS_PAGEIN,
+	/**
+	 * Page is being destroyed. This state is entered when client decides
+	 * that page has to be deleted from its host object, as, e.g., a part
+	 * of truncate.
+	 *
+	 * Once this state is reached, there is no way to escape it.
+	 *
+	 * \invariant: cl_page::cp_owner == NULL && cl_page::cp_req == NULL
+	 */
+	CPS_FREEING,
+	CPS_NR
 };
 
 enum cl_page_type {
-        /** Host page, the page is from the host inode which the cl_page
-         * belongs to. */
-        CPT_CACHEABLE = 1,
+	/** Host page, the page is from the host inode which the cl_page
+	 * belongs to.
+	 */
+	CPT_CACHEABLE = 1,
 
-        /** Transient page, the transient cl_page is used to bind a cl_page
-         *  to vmpage which is not belonging to the same object of cl_page.
-         *  it is used in DirectIO and lockless IO. */
-        CPT_TRANSIENT,
+	/** Transient page, the transient cl_page is used to bind a cl_page
+	 *  to vmpage which is not belonging to the same object of cl_page.
+	 *  it is used in DirectIO and lockless IO.
+	 */
+	CPT_TRANSIENT,
 	CPT_NR
 };
 
@@ -782,10 +773,10 @@ struct cl_page {
 	 * modified only internally within cl_page.c. Protected by a VM lock.
 	 */
 	enum cl_page_state	 cp_state:CP_STATE_BITS;
-        /**
-         * Page type. Only CPT_TRANSIENT is used so far. Immutable after
-         * creation.
-         */
+	/**
+	 * Page type. Only CPT_TRANSIENT is used so far. Immutable after
+	 * creation.
+	 */
 	enum cl_page_type	cp_type:CP_TYPE_BITS;
 	unsigned		cp_defer_uptodate:1,
 				cp_ra_updated:1,
@@ -797,9 +788,9 @@ struct cl_page {
 	 * Owning IO in cl_page_state::CPS_OWNED state. Sub-page can be owned
 	 * by sub-io. Protected by a VM lock.
 	 */
-        struct cl_io            *cp_owner;
+	struct cl_io            *cp_owner;
 	/** List of references to this page, for debugging. */
-        struct lu_ref		cp_reference;
+	struct lu_ref		cp_reference;
 	/** Link to an object, for debugging. */
 	struct lu_ref_link	cp_obj_ref;
 	/** Link to a queue, for debugging. */
@@ -814,8 +805,8 @@ struct cl_page {
  * \see vvp_page, lov_page, osc_page
  */
 struct cl_page_slice {
-        struct cl_page                  *cpl_page;
-        const struct cl_page_operations *cpl_ops;
+	struct cl_page                  *cpl_page;
+	const struct cl_page_operations *cpl_ops;
 };
 
 /**
@@ -834,9 +825,9 @@ enum cl_lock_mode {
  * Requested transfer type.
  */
 enum cl_req_type {
-        CRT_READ,
-        CRT_WRITE,
-        CRT_NR
+	CRT_READ,
+	CRT_WRITE,
+	CRT_NR
 };
 
 /**
@@ -849,11 +840,11 @@ enum cl_req_type {
  * \see vvp_page_ops, lov_page_ops, osc_page_ops
  */
 struct cl_page_operations {
-        /**
+	/**
 	 * cl_page<->struct page methods. Only one layer in the stack has to
-         * implement these. Current code assumes that this functionality is
+	 * implement these. Current code assumes that this functionality is
 	 * provided by the topmost layer, see __cl_page_disown() as an example.
-         */
+	 */
 
 	/**
 	 * Update file attributes when all we have is this page.  Used for tiny
@@ -861,86 +852,84 @@ struct cl_page_operations {
 	 */
 	void (*cpo_page_touch)(const struct lu_env *env,
 			       const struct cl_page_slice *slice, size_t to);
-        /**
-         * Page destruction.
-         */
+	/**
+	 * Page destruction.
+	 */
 
-        /**
-         * Called when page is truncated from the object. Optional.
-         *
-         * \see cl_page_discard()
-         * \see vvp_page_discard(), osc_page_discard()
-         */
-        void (*cpo_discard)(const struct lu_env *env,
-                            const struct cl_page_slice *slice,
-                            struct cl_io *io);
-        /**
-         * Called when page is removed from the cache, and is about to being
-         * destroyed. Optional.
-         *
-         * \see cl_page_delete()
-         * \see vvp_page_delete(), osc_page_delete()
-         */
-        void (*cpo_delete)(const struct lu_env *env,
-                           const struct cl_page_slice *slice);
-        /**
-         * Optional debugging helper. Prints given page slice.
-         *
-         * \see cl_page_print()
-         */
-        int (*cpo_print)(const struct lu_env *env,
-                         const struct cl_page_slice *slice,
-                         void *cookie, lu_printer_t p);
-        /**
-         * \name transfer
-         *
-         * Transfer methods.
-         *
-         * @{
-         */
-        /**
-         * Request type dependent vector of operations.
-         *
-         * Transfer operations depend on transfer mode (cl_req_type). To avoid
-         * passing transfer mode to each and every of these methods, and to
-         * avoid branching on request type inside of the methods, separate
-         * methods for cl_req_type:CRT_READ and cl_req_type:CRT_WRITE are
-         * provided. That is, method invocation usually looks like
-         *
-         *         slice->cp_ops.io[req->crq_type].cpo_method(env, slice, ...);
-         */
-        struct {
-                /**
-                 * Completion handler. This is guaranteed to be eventually
+	/**
+	 * Called when page is truncated from the object. Optional.
+	 *
+	 * \see cl_page_discard()
+	 * \see vvp_page_discard(), osc_page_discard()
+	 */
+	void (*cpo_discard)(const struct lu_env *env,
+			    const struct cl_page_slice *slice,
+			    struct cl_io *io);
+	/**
+	 * Called when page is removed from the cache, and is about to being
+	 * destroyed. Optional.
+	 *
+	 * \see cl_page_delete()
+	 * \see vvp_page_delete(), osc_page_delete()
+	 */
+	void (*cpo_delete)(const struct lu_env *env,
+			   const struct cl_page_slice *slice);
+	/**
+	 * Optional debugging helper. Prints given page slice.
+	 *
+	 * \see cl_page_print()
+	 */
+	int (*cpo_print)(const struct lu_env *env,
+			 const struct cl_page_slice *slice,
+			 void *cookie, lu_printer_t p);
+	/**
+	 * \name transfer
+	 *
+	 * Transfer methods.
+	 *
+	 */
+	/**
+	 * Request type dependent vector of operations.
+	 *
+	 * Transfer operations depend on transfer mode (cl_req_type). To avoid
+	 * passing transfer mode to each and every of these methods, and to
+	 * avoid branching on request type inside of the methods, separate
+	 * methods for cl_req_type:CRT_READ and cl_req_type:CRT_WRITE are
+	 * provided. That is, method invocation usually looks like
+	 *
+	 *         slice->cp_ops.io[req->crq_type].cpo_method(env, slice, ...);
+	 */
+	struct {
+		/**
+		 * Completion handler. This is guaranteed to be eventually
 		 * fired after cl_page_prep() or cl_page_make_ready() call.
-                 *
-                 * This method can be called in a non-blocking context. It is
-                 * guaranteed however, that the page involved and its object
-                 * are pinned in memory (and, hence, calling cl_page_put() is
-                 * safe).
-                 *
-                 * \see cl_page_completion()
-                 */
-                void (*cpo_completion)(const struct lu_env *env,
-                                       const struct cl_page_slice *slice,
-                                       int ioret);
-        } io[CRT_NR];
-        /**
-         * Tell transfer engine that only [to, from] part of a page should be
-         * transmitted.
-         *
-         * This is used for immediate transfers.
-         *
-         * \todo XXX this is not very good interface. It would be much better
-         * if all transfer parameters were supplied as arguments to
-         * cl_io_operations::cio_submit() call, but it is not clear how to do
-         * this for page queues.
-         *
-         * \see cl_page_clip()
-         */
-        void (*cpo_clip)(const struct lu_env *env,
-                         const struct cl_page_slice *slice,
-                         int from, int to);
+		 *
+		 * This method can be called in a non-blocking context. It is
+		 * guaranteed however, that the page involved and its object
+		 * are pinned in memory (and, hence, calling cl_page_put() is
+		 * safe).
+		 *
+		 * \see cl_page_completion()
+		 */
+		void (*cpo_completion)(const struct lu_env *env,
+				       const struct cl_page_slice *slice,
+				       int ioret);
+	} io[CRT_NR];
+	/**
+	 * Tell transfer engine that only [to, from] part of a page should be
+	 * transmitted.
+	 *
+	 * This is used for immediate transfers.
+	 *
+	 * \todo XXX this is not very good interface. It would be much better
+	 * if all transfer parameters were supplied as arguments to
+	 * cl_io_operations::cio_submit() call, but it is not clear how to do
+	 * this for page queues.
+	 *
+	 * \see cl_page_clip()
+	 */
+	void (*cpo_clip)(const struct lu_env *env,
+			 const struct cl_page_slice *slice, int from, int to);
 	/**
 	 * Write out a page by kernel. This is only called by ll_writepage
 	 * right now.
@@ -950,7 +939,6 @@ struct cl_page_operations {
 	int (*cpo_flush)(const struct lu_env *env,
 			 const struct cl_page_slice *slice,
 			 struct cl_io *io);
-        /** @} transfer */
 };
 
 /**
@@ -958,11 +946,11 @@ struct cl_page_operations {
  */
 #define CL_PAGE_DEBUG(mask, env, page, format, ...)                     \
 do {                                                                    \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
-                cl_page_print(env, &msgdata, lu_cdebug_printer, page);  \
-                CDEBUG(mask, format , ## __VA_ARGS__);                  \
-        }                                                               \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
+		cl_page_print(env, &msgdata, lu_cdebug_printer, page);  \
+		CDEBUG(mask, format, ## __VA_ARGS__);                   \
+	}                                                               \
 } while (0)
 
 /**
@@ -970,11 +958,11 @@ do {                                                                    \
  */
 #define CL_PAGE_HEADER(mask, env, page, format, ...)                          \
 do {                                                                          \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                         \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);              \
-                cl_page_header_print(env, &msgdata, lu_cdebug_printer, page); \
-                CDEBUG(mask, format , ## __VA_ARGS__);                        \
-        }                                                                     \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                         \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);              \
+		cl_page_header_print(env, &msgdata, lu_cdebug_printer, page); \
+		CDEBUG(mask, format, ## __VA_ARGS__);                         \
+	}                                                                     \
 } while (0)
 
 static inline struct page *cl_page_vmpage(const struct cl_page *page)
@@ -1008,10 +996,6 @@ static inline bool __page_in_use(const struct cl_page *page, int refc)
  */
 #define cl_page_in_use_noref(pg) __page_in_use(pg, 0)
 
-/** @} cl_page */
-
-/** \addtogroup cl_lock cl_lock
- * @{ */
 /** \struct cl_lock
  *
  * Extent locking on the client.
@@ -1116,21 +1100,21 @@ static inline bool __page_in_use(const struct cl_page *page, int refc)
  * Lock description.
  */
 struct cl_lock_descr {
-        /** Object this lock is granted for. */
-        struct cl_object *cld_obj;
-        /** Index of the first page protected by this lock. */
-        pgoff_t           cld_start;
-        /** Index of the last page (inclusive) protected by this lock. */
-        pgoff_t           cld_end;
-        /** Group ID, for group lock */
-        __u64             cld_gid;
-        /** Lock mode. */
-        enum cl_lock_mode cld_mode;
-        /**
-         * flags to enqueue lock. A combination of bit-flags from
-         * enum cl_enq_flags.
-         */
-        __u32             cld_enq_flags;
+	/** Object this lock is granted for. */
+	struct cl_object *cld_obj;
+	/** Index of the first page protected by this lock. */
+	pgoff_t           cld_start;
+	/** Index of the last page (inclusive) protected by this lock. */
+	pgoff_t           cld_end;
+	/** Group ID, for group lock */
+	__u64             cld_gid;
+	/** Lock mode. */
+	enum cl_lock_mode cld_mode;
+	/**
+	 * flags to enqueue lock. A combination of bit-flags from
+	 * enum cl_enq_flags.
+	 */
+	__u32             cld_enq_flags;
 };
 
 #define DDESCR "%s(%d):[%lu, %lu]:%x"
@@ -1156,12 +1140,13 @@ struct cl_lock {
  * \see lov_lock, osc_lock
  */
 struct cl_lock_slice {
-        struct cl_lock                  *cls_lock;
-        /** Object slice corresponding to this lock slice. Immutable after
-         * creation. */
-        struct cl_object                *cls_obj;
-        const struct cl_lock_operations *cls_ops;
-        /** Linkage into cl_lock::cll_layers. Immutable after creation. */
+	struct cl_lock                  *cls_lock;
+	/** Object slice corresponding to this lock slice. Immutable after
+	 * creation.
+	 */
+	struct cl_object                *cls_obj;
+	const struct cl_lock_operations *cls_ops;
+	/** Linkage into cl_lock::cll_layers. Immutable after creation. */
 	struct list_head		 cls_linkage;
 };
 
@@ -1170,7 +1155,6 @@ struct cl_lock_slice {
  * \see lov_lock_ops, osc_lock_ops
  */
 struct cl_lock_operations {
-	/** @{ */
 	/**
 	 * Attempts to enqueue the lock. Called top-to-bottom.
 	 *
@@ -1190,28 +1174,26 @@ struct cl_lock_operations {
 	 */
 	void (*clo_cancel)(const struct lu_env *env,
 			   const struct cl_lock_slice *slice);
-	/** @} */
 	/**
 	 * Destructor. Frees resources and the slice.
 	 *
 	 * \see lov_lock_fini(), osc_lock_fini()
 	 */
-        void (*clo_fini)(const struct lu_env *env, struct cl_lock_slice *slice);
-        /**
-         * Optional debugging helper. Prints given lock slice.
-         */
-        int (*clo_print)(const struct lu_env *env,
-                         void *cookie, lu_printer_t p,
-                         const struct cl_lock_slice *slice);
+	void (*clo_fini)(const struct lu_env *env, struct cl_lock_slice *slice);
+	/**
+	 * Optional debugging helper. Prints given lock slice.
+	 */
+	int (*clo_print)(const struct lu_env *env, void *cookie,
+			 lu_printer_t p, const struct cl_lock_slice *slice);
 };
 
 #define CL_LOCK_DEBUG(mask, env, lock, format, ...)                     \
 do {                                                                    \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
-                cl_lock_print(env, &msgdata, lu_cdebug_printer, lock);  \
-                CDEBUG(mask, format , ## __VA_ARGS__);                  \
-        }                                                               \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
+		cl_lock_print(env, &msgdata, lu_cdebug_printer, lock);  \
+		CDEBUG(mask, format, ## __VA_ARGS__);                   \
+	}                                                               \
 } while (0)
 
 #define CL_LOCK_ASSERT(expr, env, lock) do {                            \
@@ -1222,7 +1204,6 @@ do {                                                                    \
 	LBUG();                                                         \
 } while (0)
 
-/** @} cl_lock */
 
 /** \addtogroup cl_page_list cl_page_list
  * Page list used to perform collective operations on a group of pages.
@@ -1241,10 +1222,9 @@ do {                                                                    \
  *
  * \todo XXX concurrency control.
  *
- * @{
  */
 struct cl_page_list {
-	unsigned		 pl_nr;
+	unsigned int		 pl_nr;
 	struct list_head	 pl_pages;
 };
 
@@ -1253,14 +1233,10 @@ struct cl_page_list {
  * contains an incoming page list and an outgoing page list.
  */
 struct cl_2queue {
-        struct cl_page_list c2_qin;
-        struct cl_page_list c2_qout;
+	struct cl_page_list c2_qin;
+	struct cl_page_list c2_qout;
 };
 
-/** @} cl_page_list */
-
-/** \addtogroup cl_io cl_io
- * @{ */
 /** \struct cl_io
  * I/O
  *
@@ -1312,19 +1288,19 @@ struct cl_2queue {
 
 /** IO types */
 enum cl_io_type {
-        /** read system call */
+	/** read system call */
 	CIT_READ = 1,
-        /** write system call */
-        CIT_WRITE,
-        /** truncate, utime system calls */
-        CIT_SETATTR,
+	/** write system call */
+	CIT_WRITE,
+	/** truncate, utime system calls */
+	CIT_SETATTR,
 	/** get data version */
 	CIT_DATA_VERSION,
-        /**
-         * page fault handling
-         */
-        CIT_FAULT,
-        /**
+	/**
+	 * page fault handling
+	 */
+	CIT_FAULT,
+	/**
 	 * fsync system call handling
 	 * To write out a range of file
 	 */
@@ -1334,23 +1310,23 @@ enum cl_io_type {
 	 */
 	CIT_GLIMPSE,
 	/**
-         * Miscellaneous io. This is used for occasional io activity that
-         * doesn't fit into other types. Currently this is used for:
-         *
-         *     - cancellation of an extent lock. This io exists as a context
-         *     to write dirty pages from under the lock being canceled back
-         *     to the server;
-         *
-         *     - VM induced page write-out. An io context for writing page out
-         *     for memory cleansing;
-         *
-         *     - grouplock. An io context to acquire group lock.
-         *
-         * CIT_MISC io is used simply as a context in which locks and pages
-         * are manipulated. Such io has no internal "process", that is,
-         * cl_io_loop() is never called for it.
-         */
-        CIT_MISC,
+	 * Miscellaneous io. This is used for occasional io activity that
+	 * doesn't fit into other types. Currently this is used for:
+	 *
+	 *     - cancellation of an extent lock. This io exists as a context
+	 *     to write dirty pages from under the lock being canceled back
+	 *     to the server;
+	 *
+	 *     - VM induced page write-out. An io context for writing page out
+	 *     for memory cleansing;
+	 *
+	 *     - grouplock. An io context to acquire group lock.
+	 *
+	 * CIT_MISC io is used simply as a context in which locks and pages
+	 * are manipulated. Such io has no internal "process", that is,
+	 * cl_io_loop() is never called for it.
+	 */
+	CIT_MISC,
 	/**
 	 * ladvise handling
 	 * To give advice about access of a file
@@ -1361,31 +1337,31 @@ enum cl_io_type {
 	 * across all file objects
 	 */
 	CIT_LSEEK,
-        CIT_OP_NR
+	CIT_OP_NR
 };
 
 /**
  * States of cl_io state machine
  */
 enum cl_io_state {
-        /** Not initialized. */
-        CIS_ZERO,
-        /** Initialized. */
-        CIS_INIT,
-        /** IO iteration started. */
-        CIS_IT_STARTED,
-        /** Locks taken. */
-        CIS_LOCKED,
-        /** Actual IO is in progress. */
-        CIS_IO_GOING,
-        /** IO for the current iteration finished. */
-        CIS_IO_FINISHED,
-        /** Locks released. */
-        CIS_UNLOCKED,
-        /** Iteration completed. */
-        CIS_IT_ENDED,
-        /** cl_io finalized. */
-        CIS_FINI
+	/** Not initialized. */
+	CIS_ZERO,
+	/** Initialized. */
+	CIS_INIT,
+	/** IO iteration started. */
+	CIS_IT_STARTED,
+	/** Locks taken. */
+	CIS_LOCKED,
+	/** Actual IO is in progress. */
+	CIS_IO_GOING,
+	/** IO for the current iteration finished. */
+	CIS_IO_FINISHED,
+	/** Locks released. */
+	CIS_UNLOCKED,
+	/** Iteration completed. */
+	CIS_IT_ENDED,
+	/** cl_io finalized. */
+	CIS_FINI
 };
 
 /**
@@ -1415,12 +1391,14 @@ typedef void (*cl_commit_cbt)(const struct lu_env *, struct cl_io *,
 struct cl_read_ahead {
 	/* Maximum page index the readahead window will end.
 	 * This is determined DLM lock coverage, RPC and stripe boundary.
-	 * cra_end is included. */
+	 * cra_end is included.
+	 */
 	pgoff_t		cra_end_idx;
 	/* optimal RPC size for this read, by pages */
 	unsigned long	cra_rpc_pages;
 	/* Release callback. If readahead holds resources underneath, this
-	 * function should be called to release it. */
+	 * function should be called to release it.
+	 */
 	void		(*cra_release)(const struct lu_env *env,
 				       struct cl_read_ahead *ra);
 
@@ -1446,84 +1424,84 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
  * \see vvp_io_ops, lov_io_ops, lovsub_io_ops, osc_io_ops
  */
 struct cl_io_operations {
-        /**
-         * Vector of io state transition methods for every io type.
-         *
-         * \see cl_page_operations::io
-         */
-        struct {
-                /**
-                 * Prepare io iteration at a given layer.
-                 *
-                 * Called top-to-bottom at the beginning of each iteration of
-                 * "io loop" (if it makes sense for this type of io). Here
-                 * layer selects what work it will do during this iteration.
-                 *
-                 * \see cl_io_operations::cio_iter_fini()
-                 */
-                int (*cio_iter_init) (const struct lu_env *env,
-                                      const struct cl_io_slice *slice);
-                /**
-                 * Finalize io iteration.
-                 *
-                 * Called bottom-to-top at the end of each iteration of "io
-                 * loop". Here layers can decide whether IO has to be
-                 * continued.
-                 *
-                 * \see cl_io_operations::cio_iter_init()
-                 */
-                void (*cio_iter_fini) (const struct lu_env *env,
-                                       const struct cl_io_slice *slice);
-                /**
-                 * Collect locks for the current iteration of io.
-                 *
-                 * Called top-to-bottom to collect all locks necessary for
-                 * this iteration. This methods shouldn't actually enqueue
-                 * anything, instead it should post a lock through
-                 * cl_io_lock_add(). Once all locks are collected, they are
-                 * sorted and enqueued in the proper order.
-                 */
-                int  (*cio_lock) (const struct lu_env *env,
-                                  const struct cl_io_slice *slice);
-                /**
-                 * Finalize unlocking.
-                 *
-                 * Called bottom-to-top to finish layer specific unlocking
-                 * functionality, after generic code released all locks
-                 * acquired by cl_io_operations::cio_lock().
-                 */
-                void  (*cio_unlock)(const struct lu_env *env,
-                                    const struct cl_io_slice *slice);
-                /**
-                 * Start io iteration.
-                 *
-                 * Once all locks are acquired, called top-to-bottom to
-                 * commence actual IO. In the current implementation,
-                 * top-level vvp_io_{read,write}_start() does all the work
-                 * synchronously by calling generic_file_*(), so other layers
-                 * are called when everything is done.
-                 */
-                int  (*cio_start)(const struct lu_env *env,
-                                  const struct cl_io_slice *slice);
-                /**
-                 * Called top-to-bottom at the end of io loop. Here layer
-                 * might wait for an unfinished asynchronous io.
-                 */
-                void (*cio_end)  (const struct lu_env *env,
-                                  const struct cl_io_slice *slice);
-                /**
-                 * Called bottom-to-top to notify layers that read/write IO
-                 * iteration finished, with \a nob bytes transferred.
-                 */
-                void (*cio_advance)(const struct lu_env *env,
-                                    const struct cl_io_slice *slice,
-                                    size_t nob);
-                /**
-                 * Called once per io, bottom-to-top to release io resources.
-                 */
-                void (*cio_fini) (const struct lu_env *env,
-                                  const struct cl_io_slice *slice);
-        } op[CIT_OP_NR];
+	/**
+	 * Vector of io state transition methods for every io type.
+	 *
+	 * \see cl_page_operations::io
+	 */
+	struct {
+		/**
+		 * Prepare io iteration at a given layer.
+		 *
+		 * Called top-to-bottom at the beginning of each iteration of
+		 * "io loop" (if it makes sense for this type of io). Here
+		 * layer selects what work it will do during this iteration.
+		 *
+		 * \see cl_io_operations::cio_iter_fini()
+		 */
+		int (*cio_iter_init)(const struct lu_env *env,
+				     const struct cl_io_slice *slice);
+		/**
+		 * Finalize io iteration.
+		 *
+		 * Called bottom-to-top at the end of each iteration of "io
+		 * loop". Here layers can decide whether IO has to be
+		 * continued.
+		 *
+		 * \see cl_io_operations::cio_iter_init()
+		 */
+		void (*cio_iter_fini)(const struct lu_env *env,
+				      const struct cl_io_slice *slice);
+		/**
+		 * Collect locks for the current iteration of io.
+		 *
+		 * Called top-to-bottom to collect all locks necessary for
+		 * this iteration. This methods shouldn't actually enqueue
+		 * anything, instead it should post a lock through
+		 * cl_io_lock_add(). Once all locks are collected, they are
+		 * sorted and enqueued in the proper order.
+		 */
+		int  (*cio_lock)(const struct lu_env *env,
+				 const struct cl_io_slice *slice);
+		/**
+		 * Finalize unlocking.
+		 *
+		 * Called bottom-to-top to finish layer specific unlocking
+		 * functionality, after generic code released all locks
+		 * acquired by cl_io_operations::cio_lock().
+		 */
+		void  (*cio_unlock)(const struct lu_env *env,
+				    const struct cl_io_slice *slice);
+		/**
+		 * Start io iteration.
+		 *
+		 * Once all locks are acquired, called top-to-bottom to
+		 * commence actual IO. In the current implementation,
+		 * top-level vvp_io_{read,write}_start() does all the work
+		 * synchronously by calling generic_file_*(), so other layers
+		 * are called when everything is done.
+		 */
+		int  (*cio_start)(const struct lu_env *env,
+				  const struct cl_io_slice *slice);
+		/**
+		 * Called top-to-bottom at the end of io loop. Here layer
+		 * might wait for an unfinished asynchronous io.
+		 */
+		void (*cio_end)(const struct lu_env *env,
+				const struct cl_io_slice *slice);
+		/**
+		 * Called bottom-to-top to notify layers that read/write IO
+		 * iteration finished, with \a nob bytes transferred.
+		 */
+		void (*cio_advance)(const struct lu_env *env,
+				    const struct cl_io_slice *slice,
+				    size_t nob);
+		/**
+		 * Called once per io, bottom-to-top to release io resources.
+		 */
+		void (*cio_fini)(const struct lu_env *env,
+				  const struct cl_io_slice *slice);
+	} op[CIT_OP_NR];
 
 	/**
 	 * Submit pages from \a queue->c2_qin for IO, and move
@@ -1534,18 +1512,17 @@ struct cl_io_operations {
 	 * executed on them.
 	 */
 	int  (*cio_submit)(const struct lu_env *env,
-			const struct cl_io_slice *slice,
-			enum cl_req_type crt,
-			struct cl_2queue *queue);
+			   const struct cl_io_slice *slice,
+			   enum cl_req_type crt, struct cl_2queue *queue);
 	/**
 	 * Queue async page for write.
 	 * The difference between cio_submit and cio_queue is that
 	 * cio_submit is for urgent request.
 	 */
 	int  (*cio_commit_async)(const struct lu_env *env,
-			const struct cl_io_slice *slice,
-			struct cl_page_list *queue, int from, int to,
-			cl_commit_cbt cb);
+				 const struct cl_io_slice *slice,
+				 struct cl_page_list *queue, int from, int to,
+				 cl_commit_cbt cb);
 	/**
 	 * Release active extent.
 	 */
@@ -1563,14 +1540,14 @@ struct cl_io_operations {
 	 *
 	 * Reserve LRU slots before IO.
 	 */
-	int (*cio_lru_reserve) (const struct lu_env *env,
-				const struct cl_io_slice *slice,
-				loff_t pos, size_t bytes);
-        /**
-         * Optional debugging helper. Print given io slice.
-         */
-        int (*cio_print)(const struct lu_env *env, void *cookie,
-                         lu_printer_t p, const struct cl_io_slice *slice);
+	int (*cio_lru_reserve)(const struct lu_env *env,
+			       const struct cl_io_slice *slice,
+			       loff_t pos, size_t bytes);
+	/**
+	 * Optional debugging helper. Print given io slice.
+	 */
+	int (*cio_print)(const struct lu_env *env, void *cookie,
+			 lu_printer_t p, const struct cl_io_slice *slice);
 };
 
 /**
@@ -1592,12 +1569,12 @@ enum cl_enq_flags {
 	 * (see osc_lock_compatible)
 	 */
 	CEF_GLIMPSE        = 0x00000002,
-        /**
-         * tell the server to instruct (though a flag in the blocking ast) an
-         * owner of the conflicting lock, that it can drop dirty pages
-         * protected by this lock, without sending them to the server.
-         */
-        CEF_DISCARD_DATA = 0x00000004,
+	/**
+	 * tell the server to instruct (though a flag in the blocking ast) an
+	 * owner of the conflicting lock, that it can drop dirty pages
+	 * protected by this lock, without sending them to the server.
+	 */
+	CEF_DISCARD_DATA = 0x00000004,
 	/**
 	 * tell the sub layers that it must be a `real' lock. This is used for
 	 * mmapped-buffer locks, glimpse locks, manually requested locks
@@ -1607,18 +1584,18 @@ enum cl_enq_flags {
 	 * \see vvp_mmap_locks(), cl_glimpse_lock, cl_request_lock().
 	 */
 	CEF_MUST         = 0x00000008,
-        /**
-         * tell the sub layers that never request a `real' lock. This flag is
-         * not used currently.
-         *
-         * cl_io::ci_lockreq and CEF_{MUST,NEVER} flags specify lockless
-         * conversion policy: ci_lockreq describes generic information of lock
-         * requirement for this IO, especially for locks which belong to the
-         * object doing IO; however, lock itself may have precise requirements
-         * that are described by the enqueue flags.
-         */
-        CEF_NEVER        = 0x00000010,
-        /**
+	/**
+	 * tell the sub layers that never request a `real' lock. This flag is
+	 * not used currently.
+	 *
+	 * cl_io::ci_lockreq and CEF_{MUST,NEVER} flags specify lockless
+	 * conversion policy: ci_lockreq describes generic information of lock
+	 * requirement for this IO, especially for locks which belong to the
+	 * object doing IO; however, lock itself may have precise requirements
+	 * that are described by the enqueue flags.
+	 */
+	CEF_NEVER        = 0x00000010,
+	/**
 	 * tell the dlm layer this is a speculative lock request
 	 * speculative lock requests are locks which are not requested as part
 	 * of an I/O operation.  Instead, they are requested because we expect
@@ -1627,7 +1604,7 @@ enum cl_enq_flags {
 	 *
 	 * Currently used for asynchronous glimpse locks and manually requested
 	 * locks (LU_LADVISE_LOCKAHEAD).
-         */
+	 */
 	CEF_SPECULATIVE          = 0x00000020,
 	/**
 	 * enqueue a lock to test DLM lock existence.
@@ -1703,12 +1680,12 @@ struct cl_lockset {
  * but 'req' is always to be thought as 'request' :-)
  */
 enum cl_io_lock_dmd {
-        /** Always lock data (e.g., O_APPEND). */
-        CILR_MANDATORY = 0,
-        /** Layers are free to decide between local and global locking. */
-        CILR_MAYBE,
-        /** Never lock: there is no cache (e.g., liblustre). */
-        CILR_NEVER
+	/** Always lock data (e.g., O_APPEND). */
+	CILR_MANDATORY = 0,
+	/** Layers are free to decide between local and global locking. */
+	CILR_MAYBE,
+	/** Never lock: there is no cache (e.g., liblustre). */
+	CILR_NEVER
 };
 
 enum cl_fsync_mode {
@@ -1719,7 +1696,8 @@ enum cl_fsync_mode {
 	/** discard all of dirty pages in a specific file range */
 	CL_FSYNC_DISCARD	= 2,
 	/** start writeback and make sure they have reached storage before
-	 * return. OST_SYNC RPC must be issued and finished */
+	 * return. OST_SYNC RPC must be issued and finished
+	 */
 	CL_FSYNC_ALL		= 3,
 	/** start writeback, thus the kernel can reclaim some memory */
 	CL_FSYNC_RECLAIM	= 4,
@@ -1766,25 +1744,25 @@ struct cl_io_pt {
  * mutable cl_io fields.
  */
 struct cl_io {
-        /** type of this IO. Immutable after creation. */
-        enum cl_io_type                ci_type;
-        /** current state of cl_io state machine. */
-        enum cl_io_state               ci_state;
-        /** main object this io is against. Immutable after creation. */
-        struct cl_object              *ci_obj;
+	/** type of this IO. Immutable after creation. */
+	enum cl_io_type                ci_type;
+	/** current state of cl_io state machine. */
+	enum cl_io_state               ci_state;
+	/** main object this io is against. Immutable after creation. */
+	struct cl_object              *ci_obj;
 	/** top level dio_aio */
 	struct cl_dio_aio	      *ci_dio_aio;
-        /**
-         * Upper layer io, of which this io is a part of. Immutable after
-         * creation.
-         */
-        struct cl_io                  *ci_parent;
-        /** List of slices. Immutable after creation. */
+	/**
+	 * Upper layer io, of which this io is a part of. Immutable after
+	 * creation.
+	 */
+	struct cl_io                  *ci_parent;
+	/** List of slices. Immutable after creation. */
 	struct list_head		ci_layers;
-        /** list of locks (to be) acquired by this io. */
-        struct cl_lockset              ci_lockset;
-        /** lock requirements, this is just a help info for sublayers. */
-        enum cl_io_lock_dmd            ci_lockreq;
+	/** list of locks (to be) acquired by this io. */
+	struct cl_lockset              ci_lockset;
+	/** lock requirements, this is just a help info for sublayers. */
+	enum cl_io_lock_dmd            ci_lockreq;
 	/** layout version when this IO occurs */
 	__u32				ci_layout_version;
 	union {
@@ -1974,22 +1952,20 @@ struct cl_io {
 	 * How many times the read has retried before this one.
 	 * Set by the top level and consumed by the LOV.
 	 */
-	unsigned             ci_ndelay_tried;
+	unsigned int	     ci_ndelay_tried;
 	/**
 	 * Designated mirror index for this I/O.
 	 */
-	unsigned	     ci_designated_mirror;
+	unsigned int	     ci_designated_mirror;
 	/**
 	 * Number of pages owned by this IO. For invariant checking.
 	 */
-	unsigned	     ci_owned_nr;
+	unsigned int	     ci_owned_nr;
 	/**
 	 * Range of write intent. Valid if ci_need_write_intent is set.
 	 */
-	struct lu_extent	ci_write_intent;
+	struct lu_extent     ci_write_intent;
 };
-
-/** @} cl_io */
 
 /**
  * Per-transfer attributes.
@@ -2015,7 +1991,8 @@ enum cache_stats_item {
 	/** how many entities are in the cache right now */
 	CS_total,
 	/** how many entities in the cache are actively used (and cannot be
-	 * evicted) right now */
+	 * evicted) right now
+	 */
 	CS_busy,
 	/** how many entities were created at all */
 	CS_create,
@@ -2033,7 +2010,7 @@ struct cache_stats {
 };
 
 /** These are not exported so far */
-void cache_stats_init (struct cache_stats *cs, const char *name);
+void cache_stats_init(struct cache_stats *cs, const char *name);
 
 /**
  * Client-side site. This represents particular client stack. "Global"
@@ -2070,11 +2047,10 @@ int cl_site_stats_print(const struct cl_site *site, struct seq_file *m);
  *
  * Type conversion and accessory functions.
  */
-/** @{ */
 
 static inline struct cl_site *lu2cl_site(const struct lu_site *site)
 {
-        return container_of(site, struct cl_site, cs_lu);
+	return container_of(site, struct cl_site, cs_lu);
 }
 
 static inline struct cl_device *lu2cl_dev(const struct lu_device *d)
@@ -2085,7 +2061,7 @@ static inline struct cl_device *lu2cl_dev(const struct lu_device *d)
 
 static inline struct lu_device *cl2lu_dev(struct cl_device *d)
 {
-        return &d->cd_lu_dev;
+	return &d->cd_lu_dev;
 }
 
 static inline struct cl_object *lu2cl(const struct lu_object *o)
@@ -2135,36 +2111,33 @@ void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
 		       struct cl_object *obj,
 		       const struct cl_page_operations *ops);
 void cl_lock_slice_add(struct cl_lock *lock, struct cl_lock_slice *slice,
-                       struct cl_object *obj,
-                       const struct cl_lock_operations *ops);
+		       struct cl_object *obj,
+		       const struct cl_lock_operations *ops);
 void cl_io_slice_add(struct cl_io *io, struct cl_io_slice *slice,
-                     struct cl_object *obj, const struct cl_io_operations *ops);
-/** @} helpers */
+		     struct cl_object *obj, const struct cl_io_operations *ops);
 
-/** \defgroup cl_object cl_object
- * @{ */
-struct cl_object *cl_object_top (struct cl_object *o);
+struct cl_object *cl_object_top(struct cl_object *o);
 struct cl_object *cl_object_find(const struct lu_env *env, struct cl_device *cd,
-                                 const struct lu_fid *fid,
-                                 const struct cl_object_conf *c);
+				 const struct lu_fid *fid,
+				 const struct cl_object_conf *c);
 
 int  cl_object_header_init(struct cl_object_header *h);
 void cl_object_header_fini(struct cl_object_header *h);
-void cl_object_put        (const struct lu_env *env, struct cl_object *o);
-void cl_object_get        (struct cl_object *o);
-void cl_object_attr_lock  (struct cl_object *o);
+void cl_object_put(const struct lu_env *env, struct cl_object *o);
+void cl_object_get(struct cl_object *o);
+void cl_object_attr_lock(struct cl_object *o);
 void cl_object_attr_unlock(struct cl_object *o);
 int  cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 			struct cl_attr *attr);
 int  cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
-                           const struct cl_attr *attr, unsigned valid);
+			   const struct cl_attr *attr, unsigned int valid);
 void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *obj);
-int  cl_object_glimpse    (const struct lu_env *env, struct cl_object *obj,
-                           struct ost_lvb *lvb);
-int  cl_conf_set          (const struct lu_env *env, struct cl_object *obj,
-                           const struct cl_object_conf *conf);
-int  cl_object_prune      (const struct lu_env *env, struct cl_object *obj);
-void cl_object_kill       (const struct lu_env *env, struct cl_object *obj);
+int  cl_object_glimpse(const struct lu_env *env, struct cl_object *obj,
+		       struct ost_lvb *lvb);
+int  cl_conf_set(const struct lu_env *env, struct cl_object *obj,
+		 const struct cl_object_conf *conf);
+int  cl_object_prune(const struct lu_env *env, struct cl_object *obj);
+void cl_object_kill(const struct lu_env *env, struct cl_object *obj);
 int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 			struct lov_user_md __user *lum, size_t size);
 int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
@@ -2184,7 +2157,7 @@ int cl_object_inode_ops(const struct lu_env *env, struct cl_object *obj,
  */
 static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
 {
-        return cl_object_header(o0) == cl_object_header(o1);
+	return cl_object_header(o0) == cl_object_header(o1);
 }
 
 static inline void cl_object_page_init(struct cl_object *clob, int size)
@@ -2206,55 +2179,47 @@ static inline void *cl_object_page_slice(struct cl_object *clob,
 static inline int cl_object_refc(struct cl_object *clob)
 {
 	struct lu_object_header *header = clob->co_lu.lo_header;
+
 	return atomic_read(&header->loh_ref);
 }
 
-/** @} cl_object */
-
-/** \defgroup cl_page cl_page
- * @{ */
-struct cl_page *cl_page_find        (const struct lu_env *env,
-                                     struct cl_object *obj,
-                                     pgoff_t idx, struct page *vmpage,
-                                     enum cl_page_type type);
-struct cl_page *cl_page_alloc       (const struct lu_env *env,
-				     struct cl_object *o, pgoff_t ind,
-				     struct page *vmpage,
-				     enum cl_page_type type);
-void            cl_page_get         (struct cl_page *page);
-void            cl_page_put         (const struct lu_env *env,
-                                     struct cl_page *page);
-void		cl_pagevec_put      (const struct lu_env *env,
-				     struct cl_page *page,
-				     struct pagevec *pvec);
-void            cl_page_print       (const struct lu_env *env, void *cookie,
-                                     lu_printer_t printer,
-                                     const struct cl_page *pg);
-void            cl_page_header_print(const struct lu_env *env, void *cookie,
-                                     lu_printer_t printer,
-                                     const struct cl_page *pg);
-struct cl_page *cl_vmpage_page      (struct page *vmpage, struct cl_object *obj);
+/* cl_page */
+struct cl_page *cl_page_find(const struct lu_env *env,
+			     struct cl_object *obj,
+			     pgoff_t idx, struct page *vmpage,
+			     enum cl_page_type type);
+struct cl_page *cl_page_alloc(const struct lu_env *env,
+			      struct cl_object *o, pgoff_t ind,
+			      struct page *vmpage,
+			      enum cl_page_type type);
+void cl_page_get(struct cl_page *page);
+void cl_page_put(const struct lu_env *env,
+			    struct cl_page *page);
+void		cl_pagevec_put(const struct lu_env *env,
+			       struct cl_page *page, struct pagevec *pvec);
+void cl_page_print(const struct lu_env *env, void *cookie,
+		   lu_printer_t printer, const struct cl_page *pg);
+void cl_page_header_print(const struct lu_env *env, void *cookie,
+			  lu_printer_t printer, const struct cl_page *pg);
+struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj);
 
 /**
  * \name ownership
  *
  * Functions dealing with the ownership of page by io.
  */
-/** @{ */
 
-int  cl_page_own        (const struct lu_env *env,
-                         struct cl_io *io, struct cl_page *page);
-int  cl_page_own_try    (const struct lu_env *env,
-                         struct cl_io *io, struct cl_page *page);
-void cl_page_assume     (const struct lu_env *env,
-                         struct cl_io *io, struct cl_page *page);
-void cl_page_unassume   (const struct lu_env *env,
-                         struct cl_io *io, struct cl_page *pg);
-void cl_page_disown     (const struct lu_env *env,
-                         struct cl_io *io, struct cl_page *page);
-int  cl_page_is_owned   (const struct cl_page *pg, const struct cl_io *io);
-
-/** @} ownership */
+int cl_page_own(const struct lu_env *env, struct cl_io *io,
+		struct cl_page *page);
+int cl_page_own_try(const struct lu_env *env,
+		    struct cl_io *io, struct cl_page *page);
+void cl_page_assume(const struct lu_env *env,
+		    struct cl_io *io, struct cl_page *page);
+void cl_page_unassume(const struct lu_env *env,
+		      struct cl_io *io, struct cl_page *pg);
+void cl_page_disown(const struct lu_env *env, struct cl_io *io,
+		    struct cl_page *page);
+int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io);
 
 /**
  * \name transfer
@@ -2262,40 +2227,33 @@ int  cl_page_is_owned   (const struct cl_page *pg, const struct cl_io *io);
  * Functions dealing with the preparation of a page for a transfer, and
  * tracking transfer state.
  */
-/** @{ */
-int  cl_page_prep       (const struct lu_env *env, struct cl_io *io,
-                         struct cl_page *pg, enum cl_req_type crt);
-void cl_page_completion (const struct lu_env *env,
-                         struct cl_page *pg, enum cl_req_type crt, int ioret);
-int  cl_page_make_ready (const struct lu_env *env, struct cl_page *pg,
-                         enum cl_req_type crt);
-int  cl_page_cache_add  (const struct lu_env *env, struct cl_io *io,
-                         struct cl_page *pg, enum cl_req_type crt);
-void cl_page_clip       (const struct lu_env *env, struct cl_page *pg,
-                         int from, int to);
-int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
-			 struct cl_page *pg);
-
-/** @} transfer */
-
+int cl_page_prep(const struct lu_env *env, struct cl_io *io,
+		 struct cl_page *pg, enum cl_req_type crt);
+void cl_page_completion(const struct lu_env *env, struct cl_page *pg,
+			 enum cl_req_type crt, int ioret);
+int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
+		       enum cl_req_type crt);
+int cl_page_cache_add(const struct lu_env *env, struct cl_io *io,
+		      struct cl_page *pg, enum cl_req_type crt);
+void cl_page_clip(const struct lu_env *env, struct cl_page *pg,
+		  int from, int to);
+int cl_page_flush(const struct lu_env *env, struct cl_io *io,
+		  struct cl_page *pg);
 
 /**
  * \name helper routines
  * Functions to discard, delete and export a cl_page.
  */
-/** @{ */
-void    cl_page_discard(const struct lu_env *env, struct cl_io *io,
-			struct cl_page *pg);
-void    cl_page_delete(const struct lu_env *env, struct cl_page *pg);
-void	cl_page_touch(const struct lu_env *env, const struct cl_page *pg,
-		      size_t to);
-
+void cl_page_discard(const struct lu_env *env, struct cl_io *io,
+		     struct cl_page *pg);
+void cl_page_delete(const struct lu_env *env, struct cl_page *pg);
+void cl_page_touch(const struct lu_env *env, const struct cl_page *pg,
+		   size_t to);
 void cl_lock_print(const struct lu_env *env, void *cookie,
 		   lu_printer_t printer, const struct cl_lock *lock);
 void cl_lock_descr_print(const struct lu_env *env, void *cookie,
 			 lu_printer_t printer,
 			 const struct cl_lock_descr *descr);
-/* @} helper */
 
 /**
  * Data structure managing a client's cached pages. A count of
@@ -2349,10 +2307,7 @@ struct cl_client_cache *cl_cache_init(unsigned long lru_page_max);
 void cl_cache_incref(struct cl_client_cache *cache);
 void cl_cache_decref(struct cl_client_cache *cache);
 
-/** @} cl_page */
-
-/** \defgroup cl_lock cl_lock
- * @{ */
+/* cl_lock */
 int cl_lock_request(const struct lu_env *env, struct cl_io *io,
 		    struct cl_lock *lock);
 int cl_lock_init(const struct lu_env *env, struct cl_lock *lock,
@@ -2366,11 +2321,7 @@ int cl_lock_enqueue(const struct lu_env *env, struct cl_io *io,
 		    struct cl_lock *lock, struct cl_sync_io *anchor);
 void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock);
 
-/** @} cl_lock */
-
-/** \defgroup cl_io cl_io
- * @{ */
-
+/* cl_io */
 int   cl_io_init(const struct lu_env *env, struct cl_io *io,
 		 enum cl_io_type iot, struct cl_object *obj);
 int   cl_io_sub_init(const struct lu_env *env, struct cl_io *io,
@@ -2389,20 +2340,20 @@ void  cl_io_end(const struct lu_env *env, struct cl_io *io);
 int   cl_io_lock_add(const struct lu_env *env, struct cl_io *io,
 		     struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                           struct cl_lock_descr *descr);
-int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
-			  enum cl_req_type iot, struct cl_2queue *queue);
-int   cl_io_submit_sync  (const struct lu_env *env, struct cl_io *io,
-			  enum cl_req_type iot, struct cl_2queue *queue,
-			  long timeout);
-int   cl_io_commit_async (const struct lu_env *env, struct cl_io *io,
+			   struct cl_lock_descr *descr);
+int   cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
+		      enum cl_req_type iot, struct cl_2queue *queue);
+int   cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
+			enum cl_req_type iot, struct cl_2queue *queue,
+			long timeout);
+int   cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 			  struct cl_page_list *queue, int from, int to,
 			  cl_commit_cbt cb);
-void  cl_io_extent_release (const struct lu_env *env, struct cl_io *io);
+void  cl_io_extent_release(const struct lu_env *env, struct cl_io *io);
 int cl_io_lru_reserve(const struct lu_env *env, struct cl_io *io,
 		      loff_t pos, size_t bytes);
-int   cl_io_read_ahead   (const struct lu_env *env, struct cl_io *io,
-			  pgoff_t start, struct cl_read_ahead *ra);
+int   cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
+		       pgoff_t start, struct cl_read_ahead *ra);
 void  cl_io_rw_advance(const struct lu_env *env, struct cl_io *io,
 		       size_t bytes);
 
@@ -2444,11 +2395,7 @@ struct cl_io *cl_io_top(struct cl_io *io);
 
 #define CL_IO_SLICE_CLEAN(obj, base) memset_startat(obj, 0, base)
 
-/** @} cl_io */
-
-/** \defgroup cl_page_list cl_page_list
- * @{ */
-
+/* cl_page_list */
 /**
  * Last page in the page list.
  */
@@ -2504,14 +2451,10 @@ void cl_2queue_discard(const struct lu_env *env, struct cl_io *io,
 void cl_2queue_fini(const struct lu_env *env, struct cl_2queue *queue);
 void cl_2queue_init_page(struct cl_2queue *queue, struct cl_page *page);
 
-/** @} cl_page_list */
-
 void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 		     struct cl_req_attr *attr);
 
-/** \defgroup cl_sync_io cl_sync_io
- * @{ */
-
+/* cl_sync_io */
 struct cl_sync_io;
 struct cl_dio_aio;
 struct cl_sub_dio;
@@ -2613,8 +2556,6 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov);
 #define kthread_unuse_mm(mm) unuse_mm(mm)
 #endif
 
-/** @} cl_sync_io */
-
 /** \defgroup cl_env cl_env
  *
  * lu_env handling for a client.
@@ -2639,16 +2580,16 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov);
  *     longer used environments instead of destroying them;
  *
  * \see lu_env, lu_context, lu_context_key
- * @{ */
+ */
 
+/* cl_env */
 struct lu_env *cl_env_get(__u16 *refcheck);
 struct lu_env *cl_env_alloc(__u16 *refcheck, __u32 tags);
 void cl_env_put(struct lu_env *env, __u16 *refcheck);
-unsigned cl_env_cache_purge(unsigned nr);
+unsigned int cl_env_cache_purge(unsigned int nr);
 struct lu_env *cl_env_percpu_get(void);
 void cl_env_percpu_put(struct lu_env *env);
 
-/** @} cl_env */
 
 /*
  * Misc
@@ -2657,9 +2598,8 @@ void cl_attr2lvb(struct ost_lvb *lvb, const struct cl_attr *attr);
 void cl_lvb2attr(struct cl_attr *attr, const struct ost_lvb *lvb);
 
 struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,
-                                struct lu_device_type *ldt,
-                                struct lu_device *next);
-/** @} clio */
+				struct lu_device_type *ldt,
+				struct lu_device *next);
 
 int cl_global_init(void);
 void cl_global_fini(void);
