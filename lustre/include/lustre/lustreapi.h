@@ -78,7 +78,6 @@ typedef struct statx lstatx_t;
  * BUILD_BUG_ON() is Compile-time check which verifies correctness at
  * compile-time rather than runtime. If "cond" is true, (1 - 2*!!(cond))
  * will be a negative value, which will cause the compiler to complain.
- *
  */
 #ifndef BUILD_BUG_ON
 #define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))
@@ -87,7 +86,8 @@ typedef struct statx lstatx_t;
 /* Currently external applications can access this but in the
  * future this will no longer be exposed for the user. Instead
  * if you want to know if the library is initialized just call
- * llapi_liblustreapi_initialized() which is now available. */
+ * llapi_liblustreapi_initialized() which is now available.
+ */
 extern bool liblustreapi_initialized;
 
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid,
@@ -95,14 +95,14 @@ typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid,
 
 /* lustreapi message severity level */
 enum llapi_message_level {
-        LLAPI_MSG_OFF    = 0,
-        LLAPI_MSG_FATAL  = 1,
-        LLAPI_MSG_ERROR  = 2,
-        LLAPI_MSG_WARN   = 3,
-        LLAPI_MSG_NORMAL = 4,
-        LLAPI_MSG_INFO   = 5,
-        LLAPI_MSG_DEBUG  = 6,
-        LLAPI_MSG_MAX
+	LLAPI_MSG_OFF    = 0,
+	LLAPI_MSG_FATAL  = 1,
+	LLAPI_MSG_ERROR  = 2,
+	LLAPI_MSG_WARN   = 3,
+	LLAPI_MSG_NORMAL = 4,
+	LLAPI_MSG_INFO   = 5,
+	LLAPI_MSG_DEBUG  = 6,
+	LLAPI_MSG_MAX
 };
 
 typedef void (*llapi_log_callback_t)(enum llapi_message_level level, int err,
@@ -262,7 +262,8 @@ struct find_param {
 	time_t			 fp_mtime;
 	time_t			 fp_ctime;
 	/* {a,m,c,b}sign cannot be bitfields due to using pointers to
-	 * access them during argument parsing. */
+	 * access them during argument parsing.
+	 */
 	int			 fp_asign;
 	int			 fp_msign;
 	int			 fp_csign;
@@ -346,7 +347,7 @@ struct find_param {
 				 fp_newerxy:1,
 				 fp_exclude_btime:1,
 				 fp_exclude_perm:1,
-				 fp_stop_on_error:1, /* stop iteration on error */
+				 fp_stop_on_error:1, /* stop iteration on err */
 				 fp_exclude_nlink:1, /* Once used, we must add*/
 				 fp_exclude_attrs:1, /* a separate flag field */
 				 fp_unused_bit7:1;   /* at end of struct.  */
@@ -573,8 +574,7 @@ int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags);
 int llapi_swap_layouts(const char *path1, const char *path2, __u64 dv1,
 		       __u64 dv2, __u64 flags);
 
-/* Changelog interface.  priv is private state, managed internally by these
- * functions */
+/* Changelog interface. priv is private connection state, managed internally */
 
 /* Records received are in extended format now, though most of them are still
  * written in disk in changelog_rec format (to save space and time), it's

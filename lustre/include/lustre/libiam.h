@@ -35,18 +35,9 @@
  * Author: Fan Yong <fanyong@clusterfs.com>
  */
 
-/*
- *  lustre/libiam.h
- */
-
+/* lustre/libiam.h */
 #ifndef __IAM_ULIB_H__
 #define __IAM_ULIB_H__
-
-/** \defgroup libiam libiam
- *
- * @{
- */
-
 
 #define DX_FMT_NAME_LEN 16
 
@@ -60,8 +51,8 @@ enum {
 };
 
 enum iam_fmt_t {
-        FMT_LFIX = 0,
-        FMT_LVAR = 1
+	FMT_LFIX = 0,
+	FMT_LVAR = 1,
 };
 
 struct dx_countlimit {
@@ -156,11 +147,11 @@ static inline unsigned int root_limit(unsigned int root_gap,
 }
 
 struct iam_uapi_info {
-        __u16 iui_keysize;
-        __u16 iui_recsize;
-        __u16 iui_ptrsize;
-        __u16 iui_height;
-        char  iui_fmt_name[DX_FMT_NAME_LEN];
+	__u16 iui_keysize;
+	__u16 iui_recsize;
+	__u16 iui_ptrsize;
+	__u16 iui_height;
+	char  iui_fmt_name[DX_FMT_NAME_LEN];
 };
 
 /*
@@ -168,7 +159,7 @@ struct iam_uapi_info {
  * Return 0 if success, else -1.
  */
 int iam_creat(char *filename, enum iam_fmt_t fmt,
-              int blocksize, int keysize, int recsize, int ptrsize);
+	      int blocksize, int keysize, int recsize, int ptrsize);
 
 /*
  * Open an iam file, but do NOT creat it if the file doesn't exist.
@@ -178,63 +169,55 @@ int iam_creat(char *filename, enum iam_fmt_t fmt,
 int iam_open(char *filename, struct iam_uapi_info *ua);
 
 /*
- * Close file opened by iam_open. 
+ * Close file opened by iam_open.
  */
 int iam_close(int fd);
 
 /*
  * Please use iam_open before use this function.
  */
-int iam_insert(int fd, struct iam_uapi_info *ua,
-               int key_need_convert, char *keybuf,
-               int rec_need_convert, char *recbuf);
+int iam_insert(int fd, struct iam_uapi_info *ua, int key_need_convert,
+	       char *keybuf, int rec_need_convert, char *recbuf);
 
 /*
  * Please use iam_open before use this function.
  */
 int iam_lookup(int fd, struct iam_uapi_info *ua,
-               int key_need_convert, char *key_buf,
-               int *keysize, char *save_key,
-               int rec_need_convert, char *rec_buf,
-               int *recsize, char *save_rec);
+	       int key_need_convert, char *key_buf, int *keysize,
+	       char *save_key, int rec_need_convert, char *rec_buf,
+	       int *recsize, char *save_rec);
 
 /*
  * Please use iam_open before use this function.
  */
-int iam_delete(int fd, struct iam_uapi_info *ua,
-               int key_need_convert, char *keybuf,
-               int rec_need_convert, char *recbuf);
+int iam_delete(int fd, struct iam_uapi_info *ua, int key_need_convert,
+	       char *keybuf, int rec_need_convert, char *recbuf);
 
 /*
  * Please use iam_open before use this function.
  */
-int iam_it_start(int fd, struct iam_uapi_info *ua,
-                 int key_need_convert, char *key_buf,
-                 int *keysize, char *save_key,
-                 int rec_need_convert, char *rec_buf,
-                 int *recsize, char *save_rec);
+int iam_it_start(int fd, struct iam_uapi_info *ua, int key_need_convert,
+		 char *key_buf, int *keysize, char *save_key,
+		 int rec_need_convert, char *rec_buf, int *recsize,
+		 char *save_rec);
 
 /*
  * Please use iam_open before use this function.
  */
-int iam_it_next(int fd, struct iam_uapi_info *ua,
-                int key_need_convert, char *key_buf,
-                int *keysize, char *save_key,
-                int rec_need_convert, char *rec_buf,
-                int *recsize, char *save_rec);
+int iam_it_next(int fd, struct iam_uapi_info *ua, int key_need_convert,
+		char *key_buf, int *keysize, char *save_key,
+		int rec_need_convert, char *rec_buf, int *recsize,
+		char *save_rec);
 
 /*
  * Please use iam_open before use this function.
  */
-int iam_it_stop(int fd, struct iam_uapi_info *ua,
-                int key_need_convert, char *keybuf,
-                int rec_need_convert, char *recbuf);
+int iam_it_stop(int fd, struct iam_uapi_info *ua, int key_need_convert,
+		char *keybuf, int rec_need_convert, char *recbuf);
 
 /*
  * Change iam file mode.
  */
 int iam_polymorph(char *filename, unsigned long mode);
-
-/** @} libiam */
 
 #endif
