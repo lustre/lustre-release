@@ -80,21 +80,47 @@ ifneq ($(SYSTEMD_OPTIONS),)
 endif
 
 # Packages provided for both client and server builds
-IOKIT_PKG=lustre-iokit
-TESTS_PKG=lustre-tests
 DEV_PKG=lustre-dev
 SOURCE_PKG=lustre-source
+
+ifneq (,$(findstring notests,$(DEB_BUILD_PROFILES)))
+	TESTS_PKG=
+	BINARY_TESTS_PKG=
+else
+	TESTS_PKG=lustre-tests
+	BINARY_TESTS_PKG=binary-$(TESTS_PKG)
+endif
+
+ifneq (,$(findstring noiokit,$(DEB_BUILD_PROFILES)))
+	IOKIT_PKG=
+	BINARY_IOKIT_PKG=
+else
+	IOKIT_PKG=lustre-iokit
+	BINARY_IOKIT_PKG=binary-$(IOKIT_PKG)
+endif
 
 # Packages that are only built for server OR client builds
 # The difference is that server build contain more modules & utils
 ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
+ifneq (,$(findstring noutils,$(DEB_BUILD_PROFILES)))
+	UTILS_PKG=
+	BINARY_UTILS_PKG=
+else
 	UTILS_PKG=lustre-server-utils
+	BINARY_UTILS_PKG=binary-$(UTILS_PKG)
+endif
 	MODS_PKG=lustre-server-modules
 	RESOURCE_PKG=lustre-resource-agents
 	RESOURCE_TARGET=binary-$(RESOURCE_PKG)
 	DKMS_PKG=
 else
+ifneq (,$(findstring noutils,$(DEB_BUILD_PROFILES)))
+	UTILS_PKG=
+	BINARY_UTILS_PKG=
+else
 	UTILS_PKG=lustre-client-utils
+	BINARY_UTILS_PKG=binary-$(UTILS_PKG)
+endif
 	MODS_PKG=lustre-client-modules
 	RESOURCE_TARGET=
 	RESOURCE_PKG=
@@ -192,6 +218,18 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 				> debian/lustre-client-utils.install; \
 		fi; \
 	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "nompi"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-mpitests" ; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "notests"; then \
+		export EXTRAFLAGS="--disable-tests"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noutils"; then \
+		export EXTRAFLAGS="--disable-utils"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noiokit"; then \
+		export EXTRAFLAGS="--disable-iokit"; \
+	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
 	else \
@@ -272,8 +310,8 @@ build-stamp: patch-stamp configure-stamp
 # instead we will build the modules with m-a in the "make debs" target
 # binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) \
 # binary-$(MODS_PKG) binary-kern-mods
-binary-arch: binary-$(UTILS_PKG) binary-$(DEV_PKG) \
-	     binary-$(IOKIT_PKG) binary-$(TESTS_PKG) \
+binary-arch: binary-$(DEV_PKG) \
+	     $(BINARY_UTILS_PKG) $(BINARY_IOKIT_PKG) $(BINARY_TESTS_PKG) \
 	     $(RESOURCE_TARGET)
 
 binary-indep: binary-$(SOURCE_PKG) $(DKMS_TARGET)
@@ -504,6 +542,18 @@ kdist_config: prep-deb-files patch-stamp
 		export EXTRAFLAGS="--enable-server"; \
 	else \
 		export EXTRAFLAGS="--disable-server"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "nompi"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-mpitests" ; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "notests"; then \
+		export EXTRAFLAGS="--disable-tests"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noutils"; then \
+		export EXTRAFLAGS="--disable-utils"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noiokit"; then \
+		export EXTRAFLAGS="--disable-iokit"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \

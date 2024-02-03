@@ -31,6 +31,30 @@ if DEQUOTE_CC_VERSION_TEXT
 DEQUOTE = yes
 endif
 
+if MPITESTS
+ENABLE_MPITESTS = yes
+else
+ENABLE_MPITESTS = no
+endif
+
+if TESTS
+ENABLE_TESTS = yes
+else
+ENABLE_TESTS = no
+endif
+
+if UTILS
+ENABLE_UTILS = yes
+else
+ENABLE_UTILS = no
+endif
+
+if BUILD_LUSTREIOKIT
+ENABLE_IOKIT = yes
+else
+ENABLE_IOKIT = no
+endif
+
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
 		     -path $(top_srcdir)/ldiskfs/linux-stage \
 		     -prune -false -o -type f -name '*.[hc]'
@@ -353,16 +377,38 @@ debs: undef.h debs_common
 	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
 		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
 	fi; \
+	debiantmp=$$(mktemp -t -d debbuild-$$USER-XXXXXXXX) ; \
+	cp debian/control.main $$debiantmp/control.main.bkp ; \
+	cp debian/control.modules.in $$debiantmp/control.modules.in.bkp ; \
 	if test "x@ENABLE_GSS@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gss"; \
-		debiantmp=$$(mktemp -t -d debbuild-$$USER-XXXXXXXX) ; \
-		cp debian/control.main $$debiantmp/control.main.bkp ; \
-		cp debian/control.modules.in $$debiantmp/control.modules.in.bkp ; \
 		sed -i "s+^\(Build-Depends: .*\)$$+\1, libkrb5-dev, libssl-dev+" debian/control.main ; \
 		awk 'BEGIN{change=0} $$1 == "Package:" {if (($$2 == "lustre-client-utils") || ($$2 == "lustre-server-utils")) change=1; else change=0; fi } {if (($$1 == "Depends:") && change) print $$0 ", libgssapi-krb5-2, libkrb5-3, libssl1.1|libssl3"; else print; fi}' debian/control.main > $$debiantmp/control.main && mv $$debiantmp/control.main debian/control.main ; \
 		sed -i "s+^\(Build-Depends: .*\)$$+\1, libkrb5-dev, libssl-dev+" debian/control.modules.in ; \
 	elif test "x@ENABLE_GSS@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
+	fi; \
+	if test "x$(ENABLE_MPITESTS)" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} mpitests"; \
+	elif test "x$(ENABLE_MPITESTS)" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nompitests"; \
+		sed -i -e 's/mpi-default-dev,//' -e 's/mpi-default-bin,//' debian/control.main ; \
+	fi; \
+	if test "x$(ENABLE_TESTS)" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} tests"; \
+	elif test "x$(ENABLE_TESTS)" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} notests"; \
+		sed -i -e 's/mpi-default-dev,//' -e 's/mpi-default-bin,//' debian/control.main ; \
+	fi; \
+	if test "x$(ENABLE_IOKIT)" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} iokit"; \
+	elif test "x$(ENABLE_IOKIT)" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noiokit"; \
+	fi; \
+	if test "x$(ENABLE_UTILS)" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} utils"; \
+	elif test "x$(ENABLE_UTILS)" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noutils"; \
 	fi; \
 	if test "x@ENABLE_CRYPTO@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} crypto"; \
@@ -489,7 +535,6 @@ debs: undef.h debs_common
 	}; \
 	cp $$debiantmp/control.main.bkp debian/control.main || true && \
 	cp $$debiantmp/control.modules.in.bkp debian/control.modules.in || true && \
-	cp -v debian/control.main debian/control || true ; \
 	export KPKG_DEST_DIR="$$(pwd)/.." && \
 	version=$$(sed -ne '1s/^lustre (\(.*\)).*$$/\1/p' debian/changelog) && \
 	rm -rf debian/tmp/modules-deb && \
@@ -526,7 +571,7 @@ debs: undef.h debs_common
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   ../lustre-*-dbgsym_$${VER}_*.ddeb ../lustre_$${VER}_*.buildinfo \
-	   debs/
+	   debs/ 2> /dev/null || true
 
 dkms-debs: undef.h debs_common
 	cp -v debian/changelog.in debian/changelog ; \
