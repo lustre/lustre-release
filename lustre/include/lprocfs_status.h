@@ -192,8 +192,7 @@ enum lprocfs_stats_lock_ops {
 
 enum lprocfs_stats_flags {
 	LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
-	LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
-					       * area and need locking */
+	LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* need locking(no percpu area) */
 	LPROCFS_STATS_FLAG_IRQ_SAFE = 0x0002, /* alloc need irq safe */
 };
 
@@ -215,7 +214,8 @@ struct lprocfs_stats {
 	enum lprocfs_stats_flags	ls_flags;
 	ktime_t				ls_init;
 	/* Lock used when there are no percpu stats areas; For percpu stats,
-	 * it is used to protect ls_biggest_alloc_num change */
+	 * it is used to protect ls_biggest_alloc_num change
+	 */
 	spinlock_t			ls_lock;
 
 	/* has ls_num of counter headers */
@@ -226,82 +226,83 @@ struct lprocfs_stats {
 #define OPC_RANGE(seg) (seg ## _LAST_OPC - seg ## _FIRST_OPC)
 
 /* Pack all opcodes down into a single monotonically increasing index */
-static inline int opcode_offset(__u32 opc) {
-        if (opc < OST_LAST_OPC) {
-                 /* OST opcode */
-                return (opc - OST_FIRST_OPC);
-        } else if (opc < MDS_LAST_OPC) {
-                /* MDS opcode */
-                return (opc - MDS_FIRST_OPC +
-                        OPC_RANGE(OST));
-        } else if (opc < LDLM_LAST_OPC) {
-                /* LDLM Opcode */
-                return (opc - LDLM_FIRST_OPC +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < MGS_LAST_OPC) {
-                /* MGS Opcode */
-                return (opc - MGS_FIRST_OPC +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < OBD_LAST_OPC) {
-                /* OBD Ping */
-                return (opc - OBD_FIRST_OPC +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < LLOG_LAST_OPC) {
-                /* LLOG Opcode */
-                return (opc - LLOG_FIRST_OPC +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < QUOTA_LAST_OPC) {
-                /* LQUOTA Opcode */
-                return (opc - QUOTA_FIRST_OPC +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < SEQ_LAST_OPC) {
-                /* SEQ opcode */
-                return (opc - SEQ_FIRST_OPC +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < SEC_LAST_OPC) {
-                /* SEC opcode */
-                return (opc - SEC_FIRST_OPC +
-                        OPC_RANGE(SEQ) +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < FLD_LAST_OPC) {
-                /* FLD opcode */
-                 return (opc - FLD_FIRST_OPC +
-                        OPC_RANGE(SEC) +
-                        OPC_RANGE(SEQ) +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+static inline int opcode_offset(__u32 opc)
+{
+	if (opc < OST_LAST_OPC) {
+		/* OST opcode */
+		return (opc - OST_FIRST_OPC);
+	} else if (opc < MDS_LAST_OPC) {
+		/* MDS opcode */
+		return (opc - MDS_FIRST_OPC +
+			OPC_RANGE(OST));
+	} else if (opc < LDLM_LAST_OPC) {
+		/* LDLM Opcode */
+		return (opc - LDLM_FIRST_OPC +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < MGS_LAST_OPC) {
+		/* MGS Opcode */
+		return (opc - MGS_FIRST_OPC +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < OBD_LAST_OPC) {
+		/* OBD Ping */
+		return (opc - OBD_FIRST_OPC +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < LLOG_LAST_OPC) {
+		/* LLOG Opcode */
+		return (opc - LLOG_FIRST_OPC +
+			OPC_RANGE(OBD) +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < QUOTA_LAST_OPC) {
+		/* LQUOTA Opcode */
+		return (opc - QUOTA_FIRST_OPC +
+			OPC_RANGE(LLOG) +
+			OPC_RANGE(OBD) +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < SEQ_LAST_OPC) {
+		/* SEQ opcode */
+		return (opc - SEQ_FIRST_OPC +
+			OPC_RANGE(QUOTA) +
+			OPC_RANGE(LLOG) +
+			OPC_RANGE(OBD) +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < SEC_LAST_OPC) {
+		/* SEC opcode */
+		return (opc - SEC_FIRST_OPC +
+			OPC_RANGE(SEQ) +
+			OPC_RANGE(QUOTA) +
+			OPC_RANGE(LLOG) +
+			OPC_RANGE(OBD) +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
+	} else if (opc < FLD_LAST_OPC) {
+		/* FLD opcode */
+		return (opc - FLD_FIRST_OPC +
+			OPC_RANGE(SEC) +
+			OPC_RANGE(SEQ) +
+			OPC_RANGE(QUOTA) +
+			OPC_RANGE(LLOG) +
+			OPC_RANGE(OBD) +
+			OPC_RANGE(MGS) +
+			OPC_RANGE(LDLM) +
+			OPC_RANGE(MDS) +
+			OPC_RANGE(OST));
 #ifdef HAVE_SERVER_SUPPORT
 	} else if (opc < OUT_UPDATE_LAST_OPC) {
 		/* update opcode */
@@ -357,15 +358,15 @@ static inline int opcode_offset(__u32 opc) {
 #endif
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
-                            OPC_RANGE(EXTRA))
+			    OPC_RANGE(EXTRA))
 
 enum {
-        PTLRPC_REQWAIT_CNTR = 0,
-        PTLRPC_REQQDEPTH_CNTR,
-        PTLRPC_REQACTIVE_CNTR,
-        PTLRPC_TIMEOUT,
-        PTLRPC_REQBUF_AVAIL_CNTR,
-        PTLRPC_LAST_CNTR
+	PTLRPC_REQWAIT_CNTR = 0,
+	PTLRPC_REQQDEPTH_CNTR,
+	PTLRPC_REQACTIVE_CNTR,
+	PTLRPC_TIMEOUT,
+	PTLRPC_REQBUF_AVAIL_CNTR,
+	PTLRPC_LAST_CNTR
 };
 
 #define PTLRPC_FIRST_CNTR PTLRPC_REQWAIT_CNTR
@@ -508,14 +509,14 @@ lprocfs_stats_counter_get(struct lprocfs_stats *stats, unsigned int cpuid,
  */
 
 extern void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
-                                long amount);
+				long amount);
 extern void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
-                                long amount);
+				long amount);
 
 #define lprocfs_counter_incr(stats, idx) \
-        lprocfs_counter_add(stats, idx, 1)
+	lprocfs_counter_add(stats, idx, 1)
 #define lprocfs_counter_decr(stats, idx) \
-        lprocfs_counter_sub(stats, idx, 1)
+	lprocfs_counter_sub(stats, idx, 1)
 
 extern __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 				 struct lprocfs_counter_header *header,
@@ -559,7 +560,7 @@ lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct proc_ops *ops);
 extern struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
-                    const char *format, ...);
+		    const char *format, ...);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern ssize_t
@@ -587,7 +588,7 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 
 extern void lprocfs_remove(struct proc_dir_entry **root);
 extern void lprocfs_remove_proc_entry(const char *name,
-                                      struct proc_dir_entry *parent);
+				      struct proc_dir_entry *parent);
 extern int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 
@@ -673,7 +674,7 @@ unsigned long lprocfs_oh_counter_pcpu(struct obd_hist_pcpu *oh,
 		      unsigned int value);
 
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
-                           struct lprocfs_counter *cnt);
+			   struct lprocfs_counter *cnt);
 
 #ifdef HAVE_SERVER_SUPPORT
 /* lprocfs_status.c: recovery status */
@@ -698,8 +699,8 @@ ssize_t
 lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off);
 
-extern int lprocfs_single_release(struct inode *, struct file *);
-extern int lprocfs_seq_release(struct inode *, struct file *);
+extern int lprocfs_single_release(struct inode *i, struct file *f);
+extern int lprocfs_seq_release(struct inode *i, struct file *f);
 
 /* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry
@@ -954,185 +955,329 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
 				       int index, long amount)
-{ return; }
+{
+}
+
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int index)
-{ return; }
+{
+}
+
 static inline void lprocfs_counter_sub(struct lprocfs_stats *stats,
 				       int index, long amount)
-{ return; }
+{
+}
+
 static inline void lprocfs_counter_decr(struct lprocfs_stats *stats, int index)
-{ return; }
+{
+}
+
 static inline void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 					enum lprocfs_counter_config config,
 					const char *name)
-{ return; }
+{
+}
+
 static inline void lprocfs_counter_init_units(struct lprocfs_stats *stats,
 				int index, enum lprocfs_counter_config config,
 				const char *name, const char *units)
-{ return; }
+{
+}
 
 static inline __u64 lc_read_helper(struct lprocfs_counter *lc,
 				   enum lprocfs_fields_flags field)
-{ return 0; }
+{
+	return 0;
+}
 
 /* NB: we return !NULL to satisfy error checker */
 static inline struct lprocfs_stats *
 lprocfs_stats_alloc(unsigned int num, enum lprocfs_stats_flags flags)
-{ return (struct lprocfs_stats *)1; }
+{
+	return (struct lprocfs_stats *)1;
+}
+
 static inline void lprocfs_stats_clear(struct lprocfs_stats *stats)
-{ return; }
+{
+}
+
 static inline void lprocfs_stats_free(struct lprocfs_stats **stats)
-{ return; }
+{
+}
+
 static inline int lprocfs_stats_register(struct proc_dir_entry *root,
 					 const char *name,
 					 struct lprocfs_stats *stats)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
-{ return; }
+{
+}
+
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obd,
 					  unsigned int num_stats)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_alloc_md_stats(struct obd_device *obd,
-                                         unsigned int num_private_stats)
-{ return 0; }
+					 unsigned int num_private_stats)
+{
+	return 0;
+}
+
 static inline void lprocfs_free_obd_stats(struct obd_device *obd)
-{ return; }
+{
+}
+
 static inline void lprocfs_free_md_stats(struct obd_device *obd)
-{ return; }
+{
+}
 
 struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
-{ return; }
+{
+}
+
 #ifdef HAVE_SERVER_SUPPORT
 static inline
 ssize_t lprocfs_nid_stats_seq_write(struct file *file,
 				    const char __user *buffer,
 				    size_t count, loff_t *off)
-{return 0;}
-static inline
-int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
-{return 0;}
+{
+	return 0;
+}
+
+static inline int lprocfs_nid_stats_clear_seq_show(struct seq_file *m,
+						   void *data)
+{
+	return 0;
+}
+
 static inline int lprocfs_exp_setup(struct obd_export *exp,
 				    struct lnet_nid *peer_nid)
-{ return 0; }
+{
+	return 0;
+}
 #endif
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct file_operations *fops)
-{return 0; }
+{
+	return 0;
+}
+
 static inline struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
-                    const char *format, ...)
-{return NULL; }
+		    const char *format, ...)
+{
+	return NULL;
+}
+
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
 				   struct lprocfs_vars *var, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
 		 struct lprocfs_vars *list, void *data)
-{ return NULL; }
+{
+	return NULL;
+}
+
 static inline void lprocfs_remove(struct proc_dir_entry **root)
-{ return; }
+{
+}
+
 static inline void lprocfs_remove_proc_entry(const char *name,
-                                             struct proc_dir_entry *parent)
-{ return; }
+					     struct proc_dir_entry *parent)
+{
+}
+
 static inline int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_obd_cleanup(struct obd_device *obd)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_server_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_import_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_state_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
 #ifdef HAVE_SERVER_SUPPORT
 static inline int lprocfs_num_exports_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
 #endif
 struct adaptive_timeout;
 static inline int lprocfs_at_hist_helper(struct seq_file *m,
 					 struct adaptive_timeout *at)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline ssize_t
 lprocfs_timeouts_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
 #ifdef HAVE_SERVER_SUPPORT
 static inline ssize_t
 lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
 #endif
+
 static inline ssize_t
 lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline ssize_t
 ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline int
 lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
-{ return 0; }
+{
+	return 0;
+}
 
 /* Statfs helpers */
 static inline
 int lprocfs_blksize_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 int lprocfs_filestotal_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 int lprocfs_filesfree_seq_show(struct seq_file *m, void *data)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value)
-{ return; }
+{
+}
+
 static inline
 void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value)
-{ return; }
+{
+}
+
 static inline
 void lprocfs_oh_clear(struct obd_histogram *oh)
-{ return; }
+{
+}
+
 static inline
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
-                           struct lprocfs_counter *cnt)
-{ return; }
+			   struct lprocfs_counter *cnt)
+{
+}
+
 static inline
 u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 			    enum lprocfs_fields_flags field)
-{ return (__u64)0; }
+{
+	return (__u64)0;
+}
 
 #define LPROC_SEQ_FOPS_RO(name)
 #define LPROC_SEQ_FOPS(name)
@@ -1144,14 +1289,21 @@ u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 static inline
 int lprocfs_job_stats_log(struct obd_device *obd, char *jobid, int event,
 			  long amount)
-{ return 0; }
+{
+	return 0;
+}
+
 static inline
 void lprocfs_job_stats_fini(struct obd_device *obd)
-{ return; }
+{
+}
+
 static inline
 int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 			   cntr_init_callback fn)
-{ return 0; }
+{
+	return 0;
+}
 
 
 /* lproc_ptlrpc.c */
