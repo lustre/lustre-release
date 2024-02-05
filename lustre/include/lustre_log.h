@@ -56,8 +56,8 @@
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <uapi/linux/lustre/lustre_log_user.h>
 
-#define LOG_NAME_LIMIT(logname, name)                   \
-        snprintf(logname, sizeof(logname), "LOGS/%s", name)
+#define LOG_NAME_LIMIT(logname, name) \
+	snprintf(logname, sizeof(logname), "LOGS/%s", name)
 #define LLOG_EEMPTY 4711
 
 enum llog_open_param {
@@ -123,32 +123,32 @@ enum llog_read_mode {
 
 /* llog_cat.c - catalog api */
 struct llog_process_data {
-        /**
-         * Any useful data needed while processing catalog. This is
-         * passed later to process callback.
-         */
-        void                *lpd_data;
-        /**
-         * Catalog process callback function, called for each record
-         * in catalog.
-         */
-        llog_cb_t            lpd_cb;
-        /**
-         * Start processing the catalog from startcat/startidx
-         */
-        int                  lpd_startcat;
-        int                  lpd_startidx;
+	/**
+	 * Any useful data needed while processing catalog. This is
+	 * passed later to process callback.
+	 */
+	void                *lpd_data;
+	/**
+	 * Catalog process callback function, called for each record
+	 * in catalog.
+	 */
+	llog_cb_t            lpd_cb;
+	/**
+	 * Start processing the catalog from startcat/startidx
+	 */
+	int                  lpd_startcat;
+	int                  lpd_startidx;
 };
 
 struct llog_process_cat_data {
-        /**
-         * Temporary stored first_idx while scanning log.
-         */
-        int                  lpcd_first_idx;
-        /**
-         * Temporary stored last_idx while scanning log.
-         */
-        int                  lpcd_last_idx;
+	/**
+	 * Temporary stored first_idx while scanning log.
+	 */
+	int                  lpcd_first_idx;
+	/**
+	 * Temporary stored last_idx while scanning log.
+	 */
+	int                  lpcd_last_idx;
 	/**
 	 * llog read mode
 	 */
@@ -188,7 +188,7 @@ int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,
 	       struct obd_device *disk_obd, const struct llog_operations *op);
 int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt);
-int llog_cleanup(const struct lu_env *env, struct llog_ctxt *);
+int llog_cleanup(const struct lu_env *env, struct llog_ctxt *ctx);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
 
 /* llog_ioctl.c */
@@ -293,7 +293,8 @@ struct llog_handle {
 	/* For a Catalog, is the last/newest used index for a plain slot.
 	 * Used in conjunction with llh_cat_idx to handle Catalog wrap-around
 	 * case, after it will have reached LLOG_HDR_BITMAP_SIZE, llh_cat_idx
-	 * will become its upper limit */
+	 * will become its upper limit
+	 */
 	int			 lgh_last_idx;
 	struct rw_semaphore	 lgh_last_sem;
 	__u64			 lgh_cur_offset; /* used for test only */
@@ -325,7 +326,8 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 #define LLOG_CTXT_FLAG_STOP		 0x00000002
 
 /* Indicate the llog objects under this context are normal FID objects,
- * instead of objects with local FID. */
+ * instead of objects with local FID.
+ */
 #define LLOG_CTXT_FLAG_NORMAL_FID	 0x00000004
 
 struct llog_ctxt {
@@ -333,8 +335,8 @@ struct llog_ctxt {
 	struct obd_device	*loc_obd; /* points back to the containing obd*/
 	struct obd_llog_group	*loc_olg; /* group containing that ctxt */
 	struct obd_export	*loc_exp; /* parent "disk" export (e.g. MDS) */
-	struct obd_import	*loc_imp; /* to use in RPC's: can be backward
-					   * pointing import */
+	/* to use in RPC's: can be backward pointing import */
+	struct obd_import	*loc_imp;
 	const struct llog_operations  *loc_logops;
 	struct llog_handle	*loc_handle;
 	struct mutex		 loc_mutex; /* protect loc_imp */
@@ -343,8 +345,7 @@ struct llog_ctxt {
 	struct dt_object	*loc_dir;
 	struct local_oid_storage *loc_los_nameless;
 	struct local_oid_storage *loc_los_named;
-	/* llog chunk size, and llog record size can not be bigger than
-	 * loc_chunk_size */
+	/* llog chunk/llog record size, can not be bigger than loc_chunk_size */
 	__u32			 loc_chunk_size;
 };
 
@@ -418,7 +419,7 @@ static inline void llog_group_init(struct obd_llog_group *olg)
 }
 
 static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
-                                      struct llog_ctxt *ctxt, int index)
+				      struct llog_ctxt *ctxt, int index)
 {
 	LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
@@ -433,7 +434,7 @@ static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
 }
 
 static inline struct llog_ctxt *llog_group_get_ctxt(struct obd_llog_group *olg,
-                                                    int index)
+						    int index)
 {
 	struct llog_ctxt *ctxt;
 
@@ -457,19 +458,19 @@ static inline void llog_group_clear_ctxt(struct obd_llog_group *olg, int index)
 }
 
 static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
-                                                 int index)
+						 int index)
 {
-        return llog_group_get_ctxt(&obd->obd_olg, index);
+	return llog_group_get_ctxt(&obd->obd_olg, index);
 }
 
 static inline int llog_group_ctxt_null(struct obd_llog_group *olg, int index)
 {
-        return (olg->olg_ctxts[index] == NULL);
+	return (olg->olg_ctxts[index] == NULL);
 }
 
 static inline int llog_ctxt_null(struct obd_device *obd, int index)
 {
-        return (llog_group_ctxt_null(&obd->obd_olg, index));
+	return llog_group_ctxt_null(&obd->obd_olg, index);
 }
 
 static inline int llog_next_block(const struct lu_env *env,
