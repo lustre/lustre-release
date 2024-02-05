@@ -324,6 +324,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 
 	INIT_HLIST_NODE(&peer_ni->ibp_list);
 	INIT_LIST_HEAD(&peer_ni->ibp_conns);
+	INIT_LIST_HEAD(&peer_ni->ibp_connreqs);
 	INIT_LIST_HEAD(&peer_ni->ibp_tx_queue);
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
@@ -795,6 +796,8 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	conn->ibc_rxs = NULL;
 	conn->ibc_rx_pages = NULL;
 
+	INIT_LIST_HEAD(&conn->ibc_list);
+	INIT_LIST_HEAD(&conn->ibc_connd_list);
 	INIT_LIST_HEAD(&conn->ibc_early_rxs);
 	INIT_LIST_HEAD(&conn->ibc_tx_noops);
 	INIT_LIST_HEAD(&conn->ibc_tx_queue);

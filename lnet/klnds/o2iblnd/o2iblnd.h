@@ -653,6 +653,8 @@ struct kib_peer_ni {
 	struct lnet_ni		*ibp_ni;
 	/* all active connections */
 	struct list_head	ibp_conns;
+	/* connections with an inflight active connect request */
+	struct list_head	ibp_connreqs;
 	/* next connection to send on for round robin */
 	struct kib_conn		*ibp_next_conn;
 	/* msgs waiting for a conn */
@@ -706,10 +708,18 @@ extern void kiblnd_hdev_destroy(struct kib_hca_dev *hdev);
 
 int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
 
+#define RDMA_RESOLVE_TIMEOUT	(5 * MSEC_PER_SEC)	/* 5 seconds */
+
 static inline int kiblnd_timeout(void)
 {
 	return *kiblnd_tunables.kib_timeout ? *kiblnd_tunables.kib_timeout :
 		lnet_get_lnd_timeout();
+}
+
+/* lnd_connreq_timeout = lnd_timeout / 4 */
+static inline int kiblnd_connreq_timeout_ms(void)
+{
+	return max(RDMA_RESOLVE_TIMEOUT, kiblnd_timeout() * MSEC_PER_SEC / 4);
 }
 
 static inline int
