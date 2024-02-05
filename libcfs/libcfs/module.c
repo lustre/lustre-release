@@ -667,7 +667,7 @@ static void *debugfs_state;
 
 int libcfs_setup(void)
 {
-	int rc = -EINVAL;
+	int rc = 0;
 
 	mutex_lock(&libcfs_startup);
 	if (libcfs_active)
@@ -720,9 +720,18 @@ static int __init libcfs_init(void)
 {
 	int rc;
 
+	mutex_lock(&libcfs_startup);
+	rc = libcfs_debug_init(5 * 1024 * 1024);
+	mutex_unlock(&libcfs_startup);
+	if (rc < 0) {
+		pr_err("LustreError: libcfs_debug_init: rc = %d\n", rc);
+		return rc;
+	}
+
 	rc = cfs_arch_init();
 	if (rc < 0) {
 		CERROR("cfs_arch_init: error %d\n", rc);
+		libcfs_debug_cleanup();
 		return rc;
 	}
 

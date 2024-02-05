@@ -642,11 +642,17 @@ static void libcfs_unregister_panic_notifier(void)
 					 &libcfs_panic_notifier);
 }
 
+static bool debug_started;
+
 int libcfs_debug_init(unsigned long bufsize)
 {
 	unsigned int max = libcfs_debug_mb;
 	int rc = 0;
 
+	if (debug_started)
+		return 0;
+
+	debug_started = true;
 	if (libcfs_console_max_delay <= 0 || /* not set by user or */
 	    libcfs_console_min_delay <= 0 || /* set to invalid values */
 	    libcfs_console_min_delay >= libcfs_console_max_delay) {
@@ -679,6 +685,7 @@ int libcfs_debug_cleanup(void)
 	kernel_param_lock(THIS_MODULE);
 	cfs_tracefile_exit();
 	kernel_param_unlock(THIS_MODULE);
+	debug_started = false;
 	return 0;
 }
 

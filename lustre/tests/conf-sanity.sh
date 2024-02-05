@@ -548,6 +548,15 @@ test_5i() {
 }
 run_test 5i "start mdt failure at mdt_quota_init()"
 
+test_5j() {
+	unload_modules
+	load_module ../libcfs/libcfs/libcfs ||
+		error "Failed to load modules libcfs rc = $?"
+	$LCTL set_param debug=all
+	rmmod -v libcfs
+}
+run_test 5j "verify libcfs doesn't crash when setting debug flags"
+
 test_6() {
 	setup
 	manual_umount_client
