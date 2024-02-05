@@ -51,12 +51,10 @@ struct thandle;
 struct dt_device;
 struct dt_object;
 
-/*
- * FLD (Fid Location Database) interface.
- */
+/* FLD (Fid Location Database) interface. */
 enum {
-        LUSTRE_CLI_FLD_HASH_DHT = 0,
-        LUSTRE_CLI_FLD_HASH_RRB
+	LUSTRE_CLI_FLD_HASH_DHT = 0,
+	LUSTRE_CLI_FLD_HASH_RRB
 };
 
 struct lu_fld_target {
@@ -67,31 +65,22 @@ struct lu_fld_target {
 };
 
 struct lu_server_fld {
-	/**
-	 * Fld dir debugfs entry.
-	 */
+	/* Fld dir debugfs entry. */
 	struct dentry		*lsf_debugfs_entry;
 
-        /**
-         * /fld file object device */
-        struct dt_object        *lsf_obj;
+	/* /fld file object device */
+	struct dt_object        *lsf_obj;
 
-        /**
-         * super sequence controller export, needed to forward fld
-         * lookup  request. */
-        struct obd_export       *lsf_control_exp;
+	/* super seq controller export, needed for forward fld lookup */
+	struct obd_export       *lsf_control_exp;
 
-        /**
-         * Client FLD cache. */
-        struct fld_cache        *lsf_cache;
+	/* Client FLD cache. */
+	struct fld_cache        *lsf_cache;
 
-        /**
-         * Protect index modifications */
+	/* Protect index modifications */
 	struct mutex		lsf_lock;
 
-	/**
-	 * Fld service name in form "fld-srv-lustre-MDTXXX"
-	 */
+	/* Fld service name in form "fld-srv-lustre-MDTXXX" */
 	char			lsf_name[LUSTRE_MDT_MAXNAMELEN];
 
 	int (*lsf_seq_lookup)(const struct lu_env *env,
@@ -103,40 +92,32 @@ struct lu_server_fld {
 	 * used to check whether the local FLDB is needs to be
 	 * synced with global FLDB(in MDT0), and it is only needed
 	 * if the MDT is upgraded from < 2.6 to 2.6, i.e. when the
-	 * local FLDB is being invited */
+	 * local FLDB is being invited
+	 */
 	unsigned int		 lsf_new:1;
 
 };
 
 struct lu_client_fld {
-	/**
-	 * Client side debugfs entry.
-	 */
+	/* Client side debugfs entry. */
 	struct dentry		*lcf_debugfs_entry;
 
-	/**
-	 * List of exports client FLD knows about. */
+	/* List of exports client FLD knows about. */
 	struct list_head	lcf_targets;
 
-        /**
-         * Current hash to be used to chose an export. */
-        struct lu_fld_hash      *lcf_hash;
+	/* Current hash to be used to chose an export. */
+	struct lu_fld_hash      *lcf_hash;
 
-        /**
-         * Exports count. */
-        int                      lcf_count;
+	/* Exports count. */
+	int                      lcf_count;
 
-        /**
-         * Lock protecting exports list and fld_hash. */
+	/* Lock protecting exports list and fld_hash. */
 	spinlock_t		 lcf_lock;
 
-        /**
-         * Client FLD cache. */
-        struct fld_cache        *lcf_cache;
+	/* Client FLD cache. */
+	struct fld_cache        *lcf_cache;
 
-	/**
-	 * Client fld debugfs entry name.
-	 */
+	/* Client fld debugfs entry name. */
 	char			lcf_name[LUSTRE_MDT_MAXNAMELEN];
 };
 
@@ -170,28 +151,26 @@ int fld_update_from_controller(const struct lu_env *env,
 			       struct lu_server_fld *fld);
 
 /* Client methods */
-int fld_client_init(struct lu_client_fld *fld,
-                    const char *prefix, int hash);
+int fld_client_init(struct lu_client_fld *fld, const char *prefix,
+		    int hash);
 
 void fld_client_fini(struct lu_client_fld *fld);
 
 void fld_client_flush(struct lu_client_fld *fld);
 
 int fld_client_lookup(struct lu_client_fld *fld, u64 seq, u32 *mds,
-                      __u32 flags, const struct lu_env *env);
+		      __u32 flags, const struct lu_env *env);
 
-int fld_client_create(struct lu_client_fld *fld,
-                      struct lu_seq_range *range,
-                      const struct lu_env *env);
+int fld_client_create(struct lu_client_fld *fld, struct lu_seq_range *range,
+		      const struct lu_env *env);
 
 int fld_client_delete(struct lu_client_fld *fld, u64 seq,
-                      const struct lu_env *env);
+		      const struct lu_env *env);
 
 int fld_client_add_target(struct lu_client_fld *fld,
-                          struct lu_fld_target *tar);
+			  struct lu_fld_target *tar);
 
-int fld_client_del_target(struct lu_client_fld *fld,
-                          __u64 idx);
+int fld_client_del_target(struct lu_client_fld *fld, __u64 idx);
 
 void fld_client_debugfs_fini(struct lu_client_fld *fld);
 
