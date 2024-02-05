@@ -120,8 +120,7 @@ struct lustre_mount_data {
 	char   *lmd_profile;	/* client only */
 	char   *lmd_fileset;	/* mount fileset */
 	char   *lmd_mgssec;	/* sptlrpc flavor to mgs */
-	char   *lmd_opts;	/* lustre mount options (as opposed to
-				 * device_ mount options) */
+	char   *lmd_opts;	/* lustre mnt option (not device_ mnt option) */
 	char   *lmd_params;	/* lustre params */
 	u32    *lmd_exclude;	/* array of OSTs to ignore */
 	char   *lmd_mgs;	/* MGS nid */
@@ -151,8 +150,8 @@ struct lustre_sb_info {
 	struct obd_export	 *lsi_osd_exp;
 	char			  lsi_osd_type[16];
 	char			  lsi_fstype[16];
-	struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
-						  own backing_dev_info */
+	/* each client mountpoint needs own backing_dev_info */
+	struct backing_dev_info   lsi_bdi;
 	/* protect lsi_lwp_list */
 	struct mutex		  lsi_lwp_mutex;
 	struct list_head	  lsi_lwp_list;
@@ -161,7 +160,8 @@ struct lustre_sb_info {
 #ifdef CONFIG_LL_ENCRYPTION
 	const struct llcrypt_operations	*lsi_cop;
 	struct key		 *lsi_master_keys; /* master crypto keys used */
-#elif defined(HAVE_LUSTRE_CRYPTO) && !defined(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED)
+#elif defined(HAVE_LUSTRE_CRYPTO) && \
+	!defined(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED)
 	/* Dummy Encryption policy for '-o test_dummy_encryption' */
 	struct llcrypt_dummy_policy	lsi_dummy_enc_policy;
 #endif
@@ -250,7 +250,8 @@ static inline bool target_supports_large_nid(struct mgs_target_info *mti)
  * bits are now used to store a generation. Once we start changing the layout
  * and bumping the generation, old versions expecting a 32-bit lmm_stripe_count
  * will be confused by interpreting stripe_count | gen << 16 as the actual
- * stripe count */
+ * stripe count
+ */
 #define OBD_INCOMPAT_LMM_VER    0x00000100
 /** multiple OI files for MDT */
 #define OBD_INCOMPAT_MULTI_OI   0x00000200
@@ -259,7 +260,7 @@ static inline bool target_supports_large_nid(struct mgs_target_info *mti)
 
 /* last_rcvd handling */
 static inline void lsd_le_to_cpu(struct lr_server_data *buf,
-                                 struct lr_server_data *lsd)
+				 struct lr_server_data *lsd)
 {
 	int i;
 
@@ -287,7 +288,7 @@ static inline void lsd_le_to_cpu(struct lr_server_data *buf,
 }
 
 static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
-                                 struct lr_server_data *buf)
+				 struct lr_server_data *buf)
 {
 	int i;
 
@@ -315,9 +316,9 @@ static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
 }
 
 static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
-                                 struct lsd_client_data *lcd)
+				 struct lsd_client_data *lcd)
 {
-        memcpy(lcd->lcd_uuid, buf->lcd_uuid, sizeof (lcd->lcd_uuid));
+	memcpy(lcd->lcd_uuid, buf->lcd_uuid, sizeof(lcd->lcd_uuid));
 	lcd->lcd_last_transno = le64_to_cpu(buf->lcd_last_transno);
 	lcd->lcd_last_xid = le64_to_cpu(buf->lcd_last_xid);
 	lcd->lcd_last_result = le32_to_cpu(buf->lcd_last_result);
@@ -335,9 +336,9 @@ static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
 }
 
 static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
-                                 struct lsd_client_data *buf)
+				 struct lsd_client_data *buf)
 {
-        memcpy(buf->lcd_uuid, lcd->lcd_uuid, sizeof (lcd->lcd_uuid));
+	memcpy(buf->lcd_uuid, lcd->lcd_uuid, sizeof(lcd->lcd_uuid));
 	buf->lcd_last_transno = cpu_to_le64(lcd->lcd_last_transno);
 	buf->lcd_last_xid = cpu_to_le64(lcd->lcd_last_xid);
 	buf->lcd_last_result = cpu_to_le32(lcd->lcd_last_result);
@@ -356,14 +357,14 @@ static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
 
 static inline u64 lcd_last_transno(struct lsd_client_data *lcd)
 {
-        return (lcd->lcd_last_transno > lcd->lcd_last_close_transno ?
-                lcd->lcd_last_transno : lcd->lcd_last_close_transno);
+	return (lcd->lcd_last_transno > lcd->lcd_last_close_transno ?
+		lcd->lcd_last_transno : lcd->lcd_last_close_transno);
 }
 
 static inline u64 lcd_last_xid(struct lsd_client_data *lcd)
 {
-        return (lcd->lcd_last_xid > lcd->lcd_last_close_xid ?
-                lcd->lcd_last_xid : lcd->lcd_last_close_xid);
+	return (lcd->lcd_last_xid > lcd->lcd_last_close_xid ?
+		lcd->lcd_last_xid : lcd->lcd_last_close_xid);
 }
 
 /****************** mount lookup info *********************/
