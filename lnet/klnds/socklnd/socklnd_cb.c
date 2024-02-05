@@ -437,7 +437,7 @@ ksocknal_txlist_done(struct lnet_ni *ni, struct list_head *txlist, int error)
 		if (tx->tx_hstatus == LNET_MSG_STATUS_OK) {
 			if (error == -ETIMEDOUT)
 				tx->tx_hstatus =
-				  LNET_MSG_STATUS_LOCAL_TIMEOUT;
+					LNET_MSG_STATUS_NETWORK_TIMEOUT;
 			else if (error == -ENETDOWN ||
 				 error == -EHOSTUNREACH ||
 				 error == -ENETUNREACH ||
@@ -2418,7 +2418,7 @@ ksocknal_find_timed_out_conn(struct ksock_peer_ni *peer_ni)
 			list_for_each_entry(tx, &conn->ksnc_tx_queue,
 					    tx_list)
 				tx->tx_hstatus =
-					LNET_MSG_STATUS_LOCAL_TIMEOUT;
+					LNET_MSG_STATUS_NETWORK_TIMEOUT;
 			CNETERR("Timeout sending data to %s (%pIScp) the network or that node may be down.\n",
 				libcfs_idstr(&peer_ni->ksnp_id),
 				&conn->ksnc_peeraddr);
@@ -2445,7 +2445,7 @@ ksocknal_flush_stale_txs(struct ksock_peer_ni *peer_ni)
 		if (ktime_get_seconds() < tx->tx_deadline)
 			break;
 
-		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_TIMEOUT;
+		tx->tx_hstatus = LNET_MSG_STATUS_NETWORK_TIMEOUT;
 
 		list_move_tail(&tx->tx_list, &stale_txs);
 	}
