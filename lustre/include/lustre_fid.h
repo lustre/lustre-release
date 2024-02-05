@@ -171,30 +171,19 @@ extern const struct lu_fid LU_LPF_FID;
 extern const struct lu_fid LU_BACKEND_LPF_FID;
 
 enum {
-	/*
-	 * This is how may metadata FIDs may be allocated in one sequence(128k)
-	 */
+	/* Max Number metadata FIDs allocated in one sequence(128k) */
 	LUSTRE_METADATA_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
 
-	/*
-	 * This is how many data FIDs could be allocated in one sequence(32M - 1)
-	 */
+	/* Max Number data FIDs allocated in one sequence(32M - 1) */
 	LUSTRE_DATA_SEQ_MAX_WIDTH = 0x0000000001FFFFFFULL,
 
-	/*
-	 * How many sequences to allocate to a client at once.
-	 */
+	/* How many sequences to allocate to a client at once */
 	LUSTRE_SEQ_META_WIDTH = 0x0000000000000001ULL,
 
-	/*
-	 * seq allocation pool size.
-	 */
+	/* seq allocation pool size. */
 	LUSTRE_SEQ_BATCH_WIDTH = LUSTRE_SEQ_META_WIDTH * 1000,
 
-	/*
-	 * This is how many sequences may be in one super-sequence allocated to
-	 * MDTs.
-	 */
+	/* Max number sequences in one super-sequence allocated to MDTs */
 	LUSTRE_SEQ_SUPER_WIDTH = ((1ULL << 30ULL) * LUSTRE_SEQ_META_WIDTH)
 };
 
@@ -236,21 +225,22 @@ enum local_oid {
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
 {
-        fid->f_seq = FID_SEQ_LOCAL_FILE;
-        fid->f_oid = oid;
-        fid->f_ver = 0;
+	fid->f_seq = FID_SEQ_LOCAL_FILE;
+	fid->f_oid = oid;
+	fid->f_ver = 0;
 }
 
 static inline void lu_local_name_obj_fid(struct lu_fid *fid, __u32 oid)
 {
-        fid->f_seq = FID_SEQ_LOCAL_NAME;
-        fid->f_oid = oid;
-        fid->f_ver = 0;
+	fid->f_seq = FID_SEQ_LOCAL_NAME;
+	fid->f_oid = oid;
+	fid->f_ver = 0;
 }
 
 /* For new FS (>= 2.4), the root FID will be changed to
  * [FID_SEQ_ROOT:1:0], for existing FS, (upgraded to 2.4),
- * the root FID will still be IGIF */
+ * the root FID will still be IGIF
+ */
 static inline int fid_is_root(const struct lu_fid *fid)
 {
 	return unlikely(lu_fid_eq(fid, &LU_ROOT_FID));
@@ -286,7 +276,7 @@ static inline int fid_oid_is_quota(const struct lu_fid *fid)
 
 static inline int fid_is_acct(const struct lu_fid *fid)
 {
-        return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+	return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
 	       fid_oid_is_quota(fid);
 }
 
@@ -313,7 +303,8 @@ static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 	const __u64 seq = fid_seq(fid);
 
 	/* Here, we cannot distinguish whether the normal FID is for OST
-	 * object or not. It is caller's duty to check more if needed. */
+	 * object or not. It is caller's duty to check more if needed.
+	 */
 	return (!fid_is_last_id(fid) &&
 		(fid_seq_is_norm(seq) || fid_seq_is_igif(seq))) ||
 	       fid_is_root(fid) || fid_seq_is_dot(seq);
@@ -398,8 +389,8 @@ enum lu_cli_type {
 };
 
 enum lu_mgr_type {
-        LUSTRE_SEQ_SERVER,
-        LUSTRE_SEQ_CONTROLLER
+	LUSTRE_SEQ_SERVER,
+	LUSTRE_SEQ_CONTROLLER
 };
 
 struct lu_server_seq;
@@ -444,32 +435,29 @@ struct lu_client_seq {
 
 /* server sequence manager interface */
 struct lu_server_seq {
-        /* Available sequences space */
-        struct lu_seq_range         lss_space;
+	/* Available sequences space */
+	struct lu_seq_range         lss_space;
 
-        /* keeps highwater in lsr_end for seq allocation algorithm */
-        struct lu_seq_range         lss_lowater_set;
-        struct lu_seq_range         lss_hiwater_set;
+	/* keeps highwater in lsr_end for seq allocation algorithm */
+	struct lu_seq_range         lss_lowater_set;
+	struct lu_seq_range         lss_hiwater_set;
 
-        /*
-         * Device for server side seq manager needs (saving sequences to backing
-         * store).
-         */
-        struct dt_device       *lss_dev;
+	/* Device for server side seq manager need saving seq to backingstore */
+	struct dt_device       *lss_dev;
 
-        /* /seq file object device */
-        struct dt_object       *lss_obj;
+	/* /seq file object device */
+	struct dt_object       *lss_obj;
 
 	/* Seq related debugfs */
 	struct dentry		*lss_debugfs_entry;
 
-        /* LUSTRE_SEQ_SERVER or LUSTRE_SEQ_CONTROLLER */
-        enum lu_mgr_type       lss_type;
+	/* LUSTRE_SEQ_SERVER or LUSTRE_SEQ_CONTROLLER */
+	enum lu_mgr_type       lss_type;
 
 	/* Client interface to request controller */
-        struct lu_client_seq   *lss_cli;
+	struct lu_client_seq   *lss_cli;
 
-        /* Mutex for protecting allocation */
+	/* Mutex for protecting allocation */
 	struct mutex		lss_mutex;
 
 	/*
@@ -478,53 +466,38 @@ struct lu_server_seq {
 	 */
 	char			lss_name[LUSTRE_MDT_MAXNAMELEN];
 
-        /*
-         * Allocation chunks for super and meta sequences. Default values are
-         * LUSTRE_SEQ_SUPER_WIDTH and LUSTRE_SEQ_META_WIDTH.
-         */
-        __u64                   lss_width;
-
-        /*
-         * minimum lss_alloc_set size that should be allocated from
-         * lss_space
-         */
-        __u64                   lss_set_width;
-
-        /* sync is needed for update operation */
-        __u32                   lss_need_sync;
-
-	/**
-	 * Pointer to site object, required to access site fld.
+	/*
+	 * Allocation chunks for super and meta sequences. Default values are
+	 * LUSTRE_SEQ_SUPER_WIDTH and LUSTRE_SEQ_META_WIDTH.
 	 */
+	__u64                   lss_width;
+
+	/* minimum lss_alloc_set size that should be allocated from lss_space */
+	__u64                   lss_set_width;
+
+	/* sync is needed for update operation */
+	__u32                   lss_need_sync;
+
+	 /* Pointer to site object, required to access site fld */
 	struct seq_server_site  *lss_site;
 };
 
 struct seq_server_site {
 	struct lu_site	     *ss_lu;
-	/**
-	 * mds number of this site.
-	 */
+	/* mds number of this site */
 	u32		      ss_node_id;
-	/**
-	 * Fid location database
-	 */
+	/* Fid location database */
 	struct lu_server_fld *ss_server_fld;
 	struct lu_client_fld *ss_client_fld;
 
-	/**
-	 * Server Seq Manager
-	 */
+	/* Server Seq Manager */
 	struct lu_server_seq *ss_server_seq;
 
-	/**
-	 * Controller Seq Manager
-	 */
+	/* Controller Seq Manager */
 	struct lu_server_seq *ss_control_seq;
 	struct obd_export    *ss_control_exp;
 
-	/**
-	 * Client Seq Manager
-	 */
+	/* Client Seq Manager */
 	struct lu_client_seq *ss_client_seq;
 };
 
@@ -538,15 +511,14 @@ int seq_server_init(const struct lu_env *env,
 		    struct seq_server_site *ss);
 
 void seq_server_fini(struct lu_server_seq *seq,
-                     const struct lu_env *env);
+		     const struct lu_env *env);
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
-                           struct lu_seq_range *out,
-                           const struct lu_env *env);
+			   struct lu_seq_range *out,
+			   const struct lu_env *env);
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
-                          struct lu_seq_range *out,
-                          const struct lu_env *env);
+			  struct lu_seq_range *out, const struct lu_env *env);
 
 int seq_server_set_cli(const struct lu_env *env,
 		       struct lu_server_seq *seq,
@@ -566,13 +538,13 @@ void seq_client_fini(struct lu_client_seq *seq);
 void seq_client_flush(struct lu_client_seq *seq);
 
 int seq_client_alloc_fid(const struct lu_env *env, struct lu_client_seq *seq,
-                         struct lu_fid *fid);
+			 struct lu_fid *fid);
 int seq_client_get_seq(const struct lu_env *env, struct lu_client_seq *seq,
 		       u64 *seqnr);
 int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss);
 /* Fids common stuff */
-int fid_is_local(const struct lu_env *env,
-                 struct lu_site *site, const struct lu_fid *fid);
+int fid_is_local(const struct lu_env *env, struct lu_site *site,
+		 const struct lu_fid *fid);
 
 enum lu_cli_type;
 int client_fid_init(struct obd_device *obd, struct obd_export *exp,
@@ -675,7 +647,7 @@ fid_build_pdo_res_name(const struct lu_fid *fid, unsigned int hash,
 static inline void ostid_build_res_name(const struct ost_id *oi,
 					struct ldlm_res_id *name)
 {
-	memset(name, 0, sizeof *name);
+	memset(name, 0, sizeof(*name));
 	if (fid_seq_is_mdt0(ostid_seq(oi))) {
 		name->name[LUSTRE_RES_ID_SEQ_OFF] = ostid_id(oi);
 		name->name[LUSTRE_RES_ID_VER_OID_OFF] = ostid_seq(oi);
@@ -691,7 +663,8 @@ static inline bool ostid_res_name_eq(const struct ost_id *oi,
 				     const struct ldlm_res_id *name)
 {
 	/* Note: it is just a trick here to save some effort, probably the
-	 * correct way would be turn them into the FID and compare */
+	 * correct way would be turn them into the FID and compare
+	 */
 	if (fid_seq_is_mdt0(ostid_seq(oi))) {
 		return name->name[LUSTRE_RES_ID_SEQ_OFF] == ostid_id(oi) &&
 		       name->name[LUSTRE_RES_ID_VER_OID_OFF] == ostid_seq(oi);
@@ -751,6 +724,7 @@ static inline void ost_fid_build_resid(const struct lu_fid *fid,
 {
 	if (fid_is_mdt0(fid) || fid_is_idif(fid)) {
 		struct ost_id oi;
+
 		oi.oi.oi_id = 0; /* gcc 4.7.2 complains otherwise */
 		if (fid_to_ostid(fid, &oi) != 0)
 			return;
@@ -837,37 +811,37 @@ static inline int fid_set_id(struct lu_fid *fid, u64 oid)
 static inline void
 range_cpu_to_le(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
-        dst->lsr_start = cpu_to_le64(src->lsr_start);
-        dst->lsr_end = cpu_to_le64(src->lsr_end);
-        dst->lsr_index = cpu_to_le32(src->lsr_index);
-        dst->lsr_flags = cpu_to_le32(src->lsr_flags);
+	dst->lsr_start = cpu_to_le64(src->lsr_start);
+	dst->lsr_end = cpu_to_le64(src->lsr_end);
+	dst->lsr_index = cpu_to_le32(src->lsr_index);
+	dst->lsr_flags = cpu_to_le32(src->lsr_flags);
 }
 
 static inline void
 range_le_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
-        dst->lsr_start = le64_to_cpu(src->lsr_start);
-        dst->lsr_end = le64_to_cpu(src->lsr_end);
-        dst->lsr_index = le32_to_cpu(src->lsr_index);
-        dst->lsr_flags = le32_to_cpu(src->lsr_flags);
+	dst->lsr_start = le64_to_cpu(src->lsr_start);
+	dst->lsr_end = le64_to_cpu(src->lsr_end);
+	dst->lsr_index = le32_to_cpu(src->lsr_index);
+	dst->lsr_flags = le32_to_cpu(src->lsr_flags);
 }
 
 static inline void
 range_cpu_to_be(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
-        dst->lsr_start = cpu_to_be64(src->lsr_start);
-        dst->lsr_end = cpu_to_be64(src->lsr_end);
-        dst->lsr_index = cpu_to_be32(src->lsr_index);
-        dst->lsr_flags = cpu_to_be32(src->lsr_flags);
+	dst->lsr_start = cpu_to_be64(src->lsr_start);
+	dst->lsr_end = cpu_to_be64(src->lsr_end);
+	dst->lsr_index = cpu_to_be32(src->lsr_index);
+	dst->lsr_flags = cpu_to_be32(src->lsr_flags);
 }
 
 static inline void
 range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
-        dst->lsr_start = be64_to_cpu(src->lsr_start);
-        dst->lsr_end = be64_to_cpu(src->lsr_end);
-        dst->lsr_index = be32_to_cpu(src->lsr_index);
-        dst->lsr_flags = be32_to_cpu(src->lsr_flags);
+	dst->lsr_start = be64_to_cpu(src->lsr_start);
+	dst->lsr_end = be64_to_cpu(src->lsr_end);
+	dst->lsr_index = be32_to_cpu(src->lsr_index);
+	dst->lsr_flags = be32_to_cpu(src->lsr_flags);
 }
 
 static inline void range_array_cpu_to_le(struct lu_seq_range_array *dst,
