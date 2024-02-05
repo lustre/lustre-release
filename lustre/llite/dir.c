@@ -349,17 +349,18 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		GOTO(out, rc = 0);
 
 	if (unlikely(ll_dir_striped(inode))) {
-		/* Only needed for striped dir to fill ..see lmv_read_page() */
-		if (file_dentry(filp)->d_parent != NULL &&
-		    file_dentry(filp)->d_parent->d_inode != NULL) {
-			__u64 ibits = MDS_INODELOCK_LOOKUP;
-			struct inode *parent =
-				file_dentry(filp)->d_parent->d_inode;
+		struct dentry *parent = dget_parent(file_dentry(filp));
+		struct inode *i_dir = d_inode(parent);
 
-			if (ll_have_md_lock(ll_i2mdexp(parent), parent, &ibits,
-					    LCK_MINMODE))
-				pfid = *ll_inode2fid(parent);
+		/* Only needed for striped dir to fill ..see lmv_read_page() */
+		if (i_dir) {
+			struct obd_export *exp = ll_i2mdexp(i_dir);
+			__u64 ibits = MDS_INODELOCK_LOOKUP;
+
+			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MINMODE))
+				pfid = *ll_inode2fid(i_dir);
 		}
+		dput(parent);
 
 		/* If it can not find in cache, do lookup .. on the master
 		 * object */

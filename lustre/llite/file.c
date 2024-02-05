@@ -636,7 +636,7 @@ static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
 				struct lookup_intent *itp)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
-	struct dentry *parent = de->d_parent;
+	struct dentry *parent = dget_parent(de);
 	char *name = NULL;
 	int len = 0;
 	struct md_op_data *op_data;
@@ -655,7 +655,7 @@ retry:
 		len = de->d_name.len;
 		name = kmalloc(len + 1, GFP_NOFS);
 		if (!name)
-			RETURN(-ENOMEM);
+			GOTO(out_put, rc = -ENOMEM);
 
 		/* race here */
 		spin_lock(&de->d_lock);
@@ -670,7 +670,7 @@ retry:
 
 		if (!lu_name_is_valid_2(name, len)) {
 			kfree(name);
-			RETURN(-ESTALE);
+			GOTO(out_put, rc = -ESTALE);
 		}
 	}
 
@@ -678,7 +678,7 @@ retry:
 				     name, len, 0, LUSTRE_OPC_OPEN, NULL);
 	if (IS_ERR(op_data)) {
 		kfree(name);
-		RETURN(PTR_ERR(op_data));
+		GOTO(out_put, rc = PTR_ERR(op_data));
 	}
 	op_data->op_data = lmm;
 	op_data->op_data_size = lmmsize;
@@ -754,7 +754,8 @@ out:
 	 */
 	if (rc == -ENOENT)
 		rc = -ESTALE;
-
+out_put:
+	dput(parent);
 	RETURN(rc);
 }
 
@@ -5471,7 +5472,8 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 
 static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 {
-	struct inode *parent;
+	struct dentry *parent = NULL;
+	struct inode *dir;
 	struct inode *inode = dentry->d_inode;
 	struct obd_export *exp = ll_i2mdexp(inode);
 	struct lookup_intent oit = {
@@ -5488,15 +5490,18 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
 
 	if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID) {
-		parent = dentry->d_parent->d_inode;
+		parent = dget_parent(dentry);
+		dir = d_inode(parent);
 		name = dentry->d_name.name;
 		namelen = dentry->d_name.len;
 	} else {
-		parent = inode;
+		dir = inode;
 	}
 
-	op_data = ll_prep_md_op_data(NULL, parent, inode, name, namelen, 0,
+	op_data = ll_prep_md_op_data(NULL, dir, inode, name, namelen, 0,
 				     LUSTRE_OPC_ANY, NULL);
+	if (parent)
+		dput(parent);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
@@ -5576,7 +5581,8 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	struct inode *inode = de->d_inode;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct inode *dir = de->d_parent->d_inode;
+	struct dentry *parent;
+	struct inode *dir;
 	bool need_glimpse = true;
 	ktime_t kstart = ktime_get();
 	int rc;
@@ -5591,10 +5597,13 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	      request_mask & STATX_MTIME))
 		need_glimpse = false;
 
+	parent = dget_parent(de);
+	dir = d_inode(parent);
 	ll_statahead_enter(dir, de);
 	if (dentry_may_statahead(dir, de))
 		ll_start_statahead(dir, de, need_glimpse &&
 				   !(flags & AT_STATX_DONT_SYNC));
+	dput(parent);
 
 	if (flags & AT_STATX_DONT_SYNC)
 		GOTO(fill_attr, rc = 0);

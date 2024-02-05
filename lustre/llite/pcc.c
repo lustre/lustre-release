@@ -2112,14 +2112,15 @@ void pcc_layout_invalidate(struct inode *inode)
 
 static int pcc_inode_remove(struct inode *inode, struct dentry *pcc_dentry)
 {
+	struct dentry *parent = dget_parent(pcc_dentry);
 	int rc;
 
-	rc = vfs_unlink(&nop_mnt_idmap,
-			pcc_dentry->d_parent->d_inode, pcc_dentry);
+	rc = vfs_unlink(&nop_mnt_idmap, d_inode(parent), pcc_dentry);
 	if (rc)
 		CWARN("%s: failed to unlink PCC file %pd, rc = %d\n",
 		      ll_i2sbi(inode)->ll_fsname, pcc_dentry, rc);
 
+	dput(parent);
 	return rc;
 }
 
@@ -2347,13 +2348,16 @@ void pcc_create_attach_cleanup(struct super_block *sb,
 		return;
 
 	if (pca->pca_dentry) {
+		struct dentry *parent;
+		struct inode *i_dir;
 		const struct cred *old_cred;
 		int rc;
 
 		old_cred = override_creds(pcc_super_cred(sb));
-		rc = vfs_unlink(&nop_mnt_idmap,
-				pca->pca_dentry->d_parent->d_inode,
-				pca->pca_dentry);
+		parent = dget_parent(pca->pca_dentry);
+		i_dir = d_inode(parent);
+		rc = vfs_unlink(&nop_mnt_idmap, i_dir, pca->pca_dentry);
+		dput(parent);
 		if (rc)
 			CWARN("%s: failed to unlink PCC file %pd: rc = %d\n",
 			      ll_s2sbi(sb)->ll_fsname, pca->pca_dentry, rc);

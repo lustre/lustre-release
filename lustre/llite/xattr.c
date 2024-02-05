@@ -714,13 +714,15 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 		 */
 		if (xh && xh->flags == XATTR_TRUSTED_T &&
 		    strcmp(xattr_name, XATTR_NAME_PROJID) == 0) {
-			struct inode *dir = d_inode(dentry->d_parent);
+			struct dentry *parent = dget_parent(dentry);
+			struct inode *dir = d_inode(parent);
 
 			if ((ll_i2info(inode)->lli_projid ==
 			     ll_i2info(dir)->lli_projid) &&
 			    test_bit(LLIF_PROJECT_INHERIT,
 				     &ll_i2info(dir)->lli_flags))
 				hide_xattr = true;
+			dput(parent);
 		} else if (xh && xh->flags == XATTR_SECURITY_T &&
 			   strcmp(xattr_name, "security.c") == 0) {
 			/* Listing xattrs should not expose encryption
