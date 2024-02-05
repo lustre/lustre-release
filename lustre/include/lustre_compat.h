@@ -54,10 +54,10 @@
 
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, path, mode)
+		       vfs_symlink(dir, dentry, path, mode)
 #else
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                       vfs_symlink(dir, dentry, path)
+		       vfs_symlink(dir, dentry, path)
 #endif
 
 #ifdef HAVE_BVEC_ITER
@@ -276,14 +276,14 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 #endif /* HAVE_IOP_XATTR */
 
 #ifndef HAVE_POSIX_ACL_VALID_USER_NS
-#define posix_acl_valid(a,b)		posix_acl_valid(b)
+#define posix_acl_valid(a, b)		posix_acl_valid(b)
 #endif
 
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-#if !defined(HAVE_USER_NAMESPACE_ARG) \
- && !defined(HAVE_POSIX_ACL_UPDATE_MODE) \
- && !defined(HAVE_MNT_IDMAP_ARG)
+#if !defined(HAVE_USER_NAMESPACE_ARG) && \
+	!defined(HAVE_POSIX_ACL_UPDATE_MODE) && \
+	!defined(HAVE_MNT_IDMAP_ARG)
 static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 			  struct posix_acl **acl)
 {
@@ -395,7 +395,8 @@ __generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	/* Since LLITE updates file size at the end of I/O in
 	 * vvp_io_commit_write(), append write has to be done in atomic when
 	 * there are multiple segments because otherwise each iteration to
-	 * __generic_file_aio_write() will see original file size */
+	 * __generic_file_aio_write() will see original file size
+	 */
 	if (unlikely(iocb->ki_filp->f_flags & O_APPEND && iter->nr_segs > 1)) {
 		struct iovec *iov_copy;
 		int count = 0;
@@ -480,8 +481,9 @@ static inline struct timespec current_time(struct inode *inode)
 
 #endif
 
+/* kernel version less than 4.2, smp_store_mb is not defined, use set_mb */
 #ifndef smp_store_mb
-#define smp_store_mb(var, value)	set_mb(var, value)
+#define smp_store_mb(var, value) set_mb(var, value) /* set full mem barrier */
 #endif
 
 #ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
@@ -507,7 +509,8 @@ static inline struct timespec current_time(struct inode *inode)
 #else
 #define i_pages tree_lock
 #define ll_xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
-#define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
+#define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, \
+								     flags)
 #endif
 
 /* Linux commit v5.15-12273-gab2f9d2d3626
