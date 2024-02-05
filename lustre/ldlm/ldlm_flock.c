@@ -122,10 +122,10 @@ void ldlm_flock_unlink_lock(struct ldlm_lock *lock)
 	struct ldlm_resource *res = lock->l_resource;
 	struct interval_node **root = &res->lr_flock_node.lfn_root;
 
-	if (!interval_is_intree(&lock->l_tree_node)) /* duplicate unlink */
+	if (!interval_is_intree(&lock->l_tree_node_flock)) /* duplicate unlink */
 		return;
 
-	interval_erase(&lock->l_tree_node, root);
+	interval_erase(&lock->l_tree_node_flock, root);
 }
 
 static inline void
@@ -286,13 +286,13 @@ static void ldlm_flock_add_lock(struct ldlm_resource *res,
 
 	LASSERT(ldlm_is_granted(lock));
 
-	LASSERT(!interval_is_intree(&lock->l_tree_node));
+	LASSERT(!interval_is_intree(&lock->l_tree_node_flock));
 
-	rc = interval_set(&lock->l_tree_node, extent->start, extent->end);
+	rc = interval_set(&lock->l_tree_node_flock, extent->start, extent->end);
 	LASSERT(!rc);
 
 	root = &res->lr_flock_node.lfn_root;
-	interval_insert(&lock->l_tree_node, root);
+	interval_insert(&lock->l_tree_node_flock, root);
 
 	/* Add the locks into list */
 	ldlm_resource_add_lock(res, head, lock);
@@ -305,9 +305,9 @@ ldlm_flock_range_update(struct ldlm_lock *lock, struct ldlm_lock *req)
 	struct interval_node **root = &res->lr_flock_node.lfn_root;
 	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
 
-	interval_erase(&lock->l_tree_node, root);
-	interval_set(&lock->l_tree_node, extent->start, extent->end);
-	interval_insert(&lock->l_tree_node, root);
+	interval_erase(&lock->l_tree_node_flock, root);
+	interval_set(&lock->l_tree_node_flock, extent->start, extent->end);
+	interval_insert(&lock->l_tree_node_flock, root);
 
 	EXIT;
 }

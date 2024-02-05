@@ -812,19 +812,38 @@ struct ldlm_lock {
 	 * Internal structures per lock type..
 	 */
 	union {
-		struct interval_node	l_tree_node;
-		struct ldlm_ibits_node  *l_ibits_node;
+		/* LDLM_EXTENT locks only */
+		struct {
+			/* Originally requested extent for the extent lock. */
+			struct ldlm_extent	l_req_extent;
+			struct interval_node	l_tree_node;
+		};
+		/* LDLM_PLAIN and LDLM_IBITS locks */
+		struct {
+			/**
+			 * Protected by lr_lock, linkages to "skip lists".
+			 * For more explanations of skip lists see ldlm/ldlm_inodebits.c
+			 */
+			struct list_head	l_sl_mode;
+			struct list_head	l_sl_policy;
+
+			struct ldlm_ibits_node  *l_ibits_node;
+		};
+		/* LDLM_FLOCK locks */
+		struct {
+			struct interval_node	l_tree_node_flock;
+			/**
+			 * Per export hash of flock locks.
+			 * Protected by per-bucket exp->exp_flock_hash locks.
+			 */
+			struct hlist_node	l_exp_flock_hash;
+		};
 	};
 	/**
 	 * Per export hash of locks.
 	 * Protected by per-bucket exp->exp_lock_hash locks.
 	 */
 	struct hlist_node	l_exp_hash;
-	/**
-	 * Per export hash of flock locks.
-	 * Protected by per-bucket exp->exp_flock_hash locks.
-	 */
-	struct hlist_node	l_exp_flock_hash;
 	/**
 	 * Requested mode.
 	 * Protected by lr_lock.
@@ -902,9 +921,6 @@ struct ldlm_lock {
 	 * Time, in nanoseconds, last used by e.g. being matched by lock match.
 	 */
 	ktime_t			l_last_used;
-
-	/** Originally requested extent for the extent lock. */
-	struct ldlm_extent	l_req_extent;
 
 	/*
 	 * Client-side-only members.
@@ -987,13 +1003,6 @@ struct ldlm_lock {
 	 * for this lock
 	 */
 	struct ldlm_lock	*l_blocking_lock;
-
-	/**
-	 * Protected by lr_lock, linkages to "skip lists".
-	 * For more explanations of skip lists see ldlm/ldlm_inodebits.c
-	 */
-	struct list_head	l_sl_mode;
-	struct list_head	l_sl_policy;
 
 	/** Reference tracking structure to debug leaked locks. */
 	struct lu_ref		l_reference;

@@ -473,10 +473,20 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 	INIT_LIST_HEAD(&lock->l_rk_ast);
 	init_waitqueue_head(&lock->l_waitq);
 	lock->l_blocking_lock = NULL;
-	INIT_LIST_HEAD(&lock->l_sl_mode);
-	INIT_LIST_HEAD(&lock->l_sl_policy);
+	switch (resource->lr_type) {
+	case LDLM_IBITS:
+	case LDLM_PLAIN:
+		INIT_LIST_HEAD(&lock->l_sl_mode);
+		INIT_LIST_HEAD(&lock->l_sl_policy);
+		break;
+	case LDLM_FLOCK:
+		INIT_HLIST_NODE(&lock->l_exp_flock_hash);
+		break;
+	case LDLM_EXTENT:
+	case LDLM_MAX_TYPE:
+		break;
+	}
 	INIT_HLIST_NODE(&lock->l_exp_hash);
-	INIT_HLIST_NODE(&lock->l_exp_flock_hash);
 
 	lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
 			     LDLM_NSS_LOCKS);
