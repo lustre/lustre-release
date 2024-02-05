@@ -58,8 +58,7 @@ struct mdt_idmap_table;
  * Target-specific export data
  */
 struct tg_export_data {
-	/** Protects ted_lcd, ted_reply_* and
-	 * ted_release_* fields below */
+	/** Protects ted_lcd, ted_reply_* and ted_release_* fields below */
 	struct mutex		ted_lcd_lock;
 	/** Per-client data for each export */
 	struct lsd_client_data	*ted_lcd;
@@ -86,8 +85,7 @@ struct tg_export_data {
 	/** last version of nodemap config sent to client */
 	__u64			ted_nodemap_version;
 
-	/* Every reply data fields below are
-	 * protected by ted_lcd_lock */
+	/* Every reply data fields below are protected by ted_lcd_lock */
 	/** List of reply data */
 	struct list_head	ted_reply_list;
 	int			ted_reply_cnt;
@@ -131,7 +129,8 @@ struct filter_export_data {
 	struct tg_export_data	fed_ted;
 	__u64			fed_lastid_gen;
 	/* count of SOFT_SYNC RPCs, which will be reset after
-	 * ofd_soft_sync_limit number of RPCs, and trigger a sync. */
+	 * ofd_soft_sync_limit number of RPCs, and trigger a sync.
+	 */
 	atomic_t		fed_soft_sync_count;
 	__u32			fed_group;
 };
@@ -153,8 +152,8 @@ struct nid_stat {
 	struct proc_dir_entry   *nid_proc;
 	struct lprocfs_stats    *nid_stats;
 	struct lprocfs_stats    *nid_ldlm_stats;
-	atomic_t		 nid_exp_ref_count; /* for obd_nid_stats_hash
-						       exp_nid_stats */
+	/* for obd_nid_stats_hash exp_nid_stats */
+	atomic_t		 nid_exp_ref_count;
 };
 
 #define nidstat_getref(nidstat)	\
@@ -168,9 +167,9 @@ do {									\
 } while(0)
 
 enum obd_option {
-        OBD_OPT_FORCE =         0x0001,
-        OBD_OPT_FAILOVER =      0x0002,
-        OBD_OPT_ABORT_RECOV =   0x0004,
+	OBD_OPT_FORCE =         0x0001,
+	OBD_OPT_FAILOVER =      0x0002,
+	OBD_OPT_ABORT_RECOV =   0x0004,
 };
 
 /**
@@ -202,9 +201,9 @@ struct obd_export {
 	struct list_head	exp_locks_list;
 	spinlock_t		exp_locks_list_guard;
 #endif
-        /** UUID of client connected to this export */
+	/** UUID of client connected to this export */
 	struct obd_uuid		exp_client_uuid;
-        /** To link all exports on an obd device */
+	/** To link all exports on an obd device */
 	struct list_head	exp_obd_chain;
 	/** work_struct for destruction of export */
 	struct work_struct	exp_zombie_work;
@@ -213,12 +212,12 @@ struct obd_export {
 	struct rhash_head	exp_uuid_hash;	/** uuid-export hash */
 	struct rhlist_head	exp_nid_hash;	/** nid-export hash */
 	struct hlist_node	exp_gen_hash;   /** last_rcvd clt gen hash */
-        /**
-         * All exports eligible for ping evictor are linked into a list
-         * through this field in "most time since last request on this export"
-         * order
-         * protected by obd_dev_lock
-         */
+	/**
+	 * All exports eligible for ping evictor are linked into a list
+	 * through this field in "most time since last request on this export"
+	 * order
+	 * protected by obd_dev_lock
+	 */
 	struct list_head	exp_obd_chain_timed;
 	/** Obd device of this export */
 	struct obd_device      *exp_obd;
@@ -226,10 +225,10 @@ struct obd_export {
 	 * "reverse" import to send requests (e.g. from ldlm) back to client
 	 * exp_lock protect its change
 	 */
-        struct obd_import        *exp_imp_reverse;
-        struct nid_stat          *exp_nid_stats;
-        /** Active connetion */
-        struct ptlrpc_connection *exp_connection;
+	struct obd_import        *exp_imp_reverse;
+	struct nid_stat          *exp_nid_stats;
+	/** Active connetion */
+	struct ptlrpc_connection *exp_connection;
 	/** Connection count value from last successful reconnect rpc */
 	__u32			  exp_conn_cnt;
 	/** Hash list of all ldlm locks granted on this export */
@@ -238,7 +237,7 @@ struct obd_export {
 	 * Hash list for Posix lock deadlock detection, added with
 	 * ldlm_lock::l_exp_flock_hash.
 	 */
-	struct cfs_hash	       *exp_flock_hash;
+	struct cfs_hash		*exp_flock_hash;
 	struct list_head	exp_outstanding_replies;
 	struct list_head	exp_uncommitted_replies;
 	spinlock_t		exp_uncommitted_replies_lock;
@@ -253,8 +252,7 @@ struct obd_export {
 	 * of exp_imp_reverse
 	 */
 	spinlock_t		exp_lock;
-	/** Compatibility flags for this export are embedded into
-	 *  exp_connect_data */
+	/* Compatibility flags for this export embedded into exp_connect_data */
 	struct obd_connect_data exp_connect_data;
 	enum obd_option		exp_flags;
 	unsigned long		exp_failed:1,
@@ -271,10 +269,10 @@ struct obd_export {
 				exp_flvr_changed:1,
 				exp_flvr_adapt:1,
 				/* if to swap nidtbl entries for 2.2 clients.
-				 * Only used by the MGS to fix LU-1644. */
+				 * Only used by the MGS to fix LU-1644.
+				 */
 				exp_need_mne_swab:1,
-				/* The export already got final replay ping
-				 * request. */
+				/* export got final replay ping request */
 				exp_replay_done:1,
 				/* local client with recovery disabled */
 				exp_no_recovery:1,
@@ -299,14 +297,14 @@ struct obd_export {
 	struct list_head	exp_bl_list;
 	spinlock_t		exp_bl_list_lock;
 
-        /** Target specific data */
-        union {
-                struct tg_export_data     eu_target_data;
-                struct mdt_export_data    eu_mdt_data;
-                struct filter_export_data eu_filter_data;
-                struct ec_export_data     eu_ec_data;
-                struct mgs_export_data    eu_mgs_data;
-        } u;
+	/** Target specific data */
+	union {
+		struct tg_export_data     eu_target_data;
+		struct mdt_export_data    eu_mdt_data;
+		struct filter_export_data eu_filter_data;
+		struct ec_export_data     eu_ec_data;
+		struct mgs_export_data    eu_mgs_data;
+	} u;
 
 	struct adaptive_timeout    exp_bl_lock_at;
 
@@ -385,11 +383,11 @@ static inline int exp_connect_umask(struct obd_export *exp)
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)
 {
-        struct obd_connect_data *ocd;
+	struct obd_connect_data *ocd;
 
-        LASSERT(imp != NULL);
-        ocd = &imp->imp_connect_data;
-        return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
+	LASSERT(imp != NULL);
+	ocd = &imp->imp_connect_data;
+	return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
 static inline int exp_connect_layout(struct obd_export *exp)
