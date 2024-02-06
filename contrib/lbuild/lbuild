@@ -1734,7 +1734,7 @@ build_ofed() {
 		fatal 1 "could not unpack the $rpm."
 	fi
 	# find the path (this might not work for ofa and ifs)
-	o2ib_location=$(find $(pwd)/usr/src/${kib_prefix} -type d -name ofed_scripts)
+	o2ib_location=$(find -H $(pwd)/usr/src/${kib_prefix} -type d -name ofed_scripts)
 	CONFIGURE_FLAGS="--with-o2ib=$(dirname ${o2ib_location}) ${CONFIGURE_FLAGS}"
 	popd >/dev/null
 

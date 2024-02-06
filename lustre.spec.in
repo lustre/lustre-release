@@ -635,7 +635,7 @@ fi
 
 WITH_O2IB=""
 %if %{with mofed}
-	o2ib_path=$(find %{mofed_default_path} -type d -name ofed_scripts | xargs dirname)
+	o2ib_path=$(find -H %{mofed_default_path} -type d -name ofed_scripts | xargs dirname)
 	if [ -z "$o2ib_path" ]; then
 		echo "ERROR: could not find OFED devel headers"
 		exit 1
