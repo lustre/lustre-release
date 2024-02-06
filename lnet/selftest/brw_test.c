@@ -71,8 +71,7 @@ brw_client_init(struct sfw_test_instance *tsi)
 	struct sfw_session *sn = tsi->tsi_batch->bat_session;
 	int		  flags;
 	int		  off;
-	int		  npg;
-	int		  len;
+	unsigned int	  len;
 	int		  opc;
 	struct srpc_bulk *bulk;
 	struct sfw_test_unit *tsu;
@@ -85,10 +84,9 @@ brw_client_init(struct sfw_test_instance *tsi)
 
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
-		npg   = breq->blk_npg;
 		/* NB: this is not going to work for variable page size,
 		 * but we have to keep it for compatibility */
-		len   = npg * PAGE_SIZE;
+		len   = breq->blk_npg * PAGE_SIZE;
 		off   = 0;
 
 	} else {
@@ -102,13 +100,12 @@ brw_client_init(struct sfw_test_instance *tsi)
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
 		off   = breq->blk_offset & ~PAGE_MASK;
-		npg   = (off + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	}
 
 	if (off % BRW_MSIZE != 0)
 		return -EINVAL;
 
-	if (npg > LNET_MAX_IOV || npg <= 0)
+	if (len > LNET_MTU)
 		return -EINVAL;
 
 	if (opc != LST_BRW_READ && opc != LST_BRW_WRITE)
@@ -120,11 +117,12 @@ brw_client_init(struct sfw_test_instance *tsi)
 
 	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
 		bulk = srpc_alloc_bulk(lnet_cpt_of_nid(tsu->tsu_dest.nid, NULL),
-				       off, npg, len, opc == LST_BRW_READ);
+				       len);
 		if (bulk == NULL) {
 			brw_client_fini(tsi);
 			return -ENOMEM;
 		}
+		srpc_init_bulk(bulk, off, len, opc == LST_BRW_READ);
 
 		tsu->tsu_private = bulk;
 	}
@@ -278,6 +276,7 @@ brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
 	int flags;
 	int npg;
 	int len;
+	int off;
 	int opc;
 	int rc;
 
@@ -289,8 +288,8 @@ brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
 
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
-		npg   = breq->blk_npg;
-		len   = npg * PAGE_SIZE;
+		len   = breq->blk_npg * PAGE_SIZE;
+		off   = 0;
 
 	} else {
 		struct test_bulk_req_v1 *breq = &tsi->tsi_u.bulk_v1;
@@ -304,8 +303,8 @@ brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
 		off   = breq->blk_offset;
-		npg   = (off + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	}
+	npg   = (off + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 	rc = sfw_create_test_rpc(tsu, dest, sn->sn_features, npg, len, &rpc);
 	if (rc != 0)
@@ -390,8 +389,6 @@ brw_server_rpc_done(struct srpc_server_rpc *rpc)
 		CDEBUG(D_NET, "Transferred %d pages bulk data %s %s\n",
 		       blk->bk_niov, blk->bk_sink ? "from" : "to",
 		       libcfs_id2str(rpc->srpc_peer));
-
-	sfw_free_pages(rpc);
 }
 
 static int
@@ -438,8 +435,6 @@ brw_server_handle(struct srpc_server_rpc *rpc)
 	struct srpc_msg *reqstmsg = &rpc->srpc_reqstbuf->buf_msg;
 	struct srpc_brw_reply *reply = &replymsg->msg_body.brw_reply;
 	struct srpc_brw_reqst *reqst = &reqstmsg->msg_body.brw_reqst;
-	int npg;
-	int rc;
 
         LASSERT (sv->sv_id == SRPC_SERVICE_BRW);
 
@@ -477,50 +472,72 @@ brw_server_handle(struct srpc_server_rpc *rpc)
 			reply->brw_status = EINVAL;
 			return 0;
 		}
-		npg = reqst->brw_len >> PAGE_SHIFT;
-
-	} else {
-		npg = (reqst->brw_len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	}
 
 	replymsg->msg_ses_feats = reqstmsg->msg_ses_feats;
 
-	if (reqst->brw_len == 0 || npg > LNET_MAX_IOV) {
+	if (reqst->brw_len == 0 || reqst->brw_len > LNET_MTU) {
 		reply->brw_status = EINVAL;
 		return 0;
 	}
 
-	rc = sfw_alloc_pages(rpc, rpc->srpc_scd->scd_cpt, npg,
-			     reqst->brw_len,
-			     reqst->brw_rw == LST_BRW_WRITE);
-	if (rc != 0)
-		return rc;
+	srpc_init_bulk(rpc->srpc_bulk, 0, reqst->brw_len,
+		       reqst->brw_rw == LST_BRW_WRITE);
 
-        if (reqst->brw_rw == LST_BRW_READ)
-                brw_fill_bulk(rpc->srpc_bulk, reqst->brw_flags, BRW_MAGIC);
-        else
-                brw_fill_bulk(rpc->srpc_bulk, reqst->brw_flags, BRW_POISON);
+	if (reqst->brw_rw == LST_BRW_READ)
+		brw_fill_bulk(rpc->srpc_bulk, reqst->brw_flags, BRW_MAGIC);
+	else
+		brw_fill_bulk(rpc->srpc_bulk, reqst->brw_flags, BRW_POISON);
 
-        return 0;
+	return 0;
 }
 
-struct sfw_test_client_ops brw_test_client;
-
-void brw_init_test_client(void)
+static int
+brw_srpc_init(struct srpc_server_rpc *rpc, int cpt)
 {
-        brw_test_client.tso_init       = brw_client_init;
-        brw_test_client.tso_fini       = brw_client_fini;
-        brw_test_client.tso_prep_rpc   = brw_client_prep_rpc;
-        brw_test_client.tso_done_rpc   = brw_client_done_rpc;
+	/* just alloc a maximal size - actual values will be adjusted later */
+	rpc->srpc_bulk = srpc_alloc_bulk(cpt, LNET_MTU);
+	if (rpc->srpc_bulk == NULL)
+		return -ENOMEM;
+
+	srpc_init_bulk(rpc->srpc_bulk, 0, 0, 0);
+
+	return 0;
+}
+
+static void
+brw_srpc_fini(struct srpc_server_rpc *rpc)
+{
+	srpc_free_bulk(rpc->srpc_bulk);
+	rpc->srpc_bulk = NULL;
+}
+
+struct sfw_test_client_ops brw_test_client = {
+	.tso_init       = brw_client_init,
+	.tso_fini       = brw_client_fini,
+	.tso_prep_rpc   = brw_client_prep_rpc,
+	.tso_done_rpc   = brw_client_done_rpc,
 };
 
-struct srpc_service brw_test_service;
+struct srpc_service brw_test_service = {
+	.sv_id         = SRPC_SERVICE_BRW,
+	.sv_name       = "brw_test",
+	.sv_handler    = brw_server_handle,
+	.sv_bulk_ready = brw_bulk_ready,
+
+	.sv_srpc_init  = brw_srpc_init,
+	.sv_srpc_fini  = brw_srpc_fini,
+};
 
 void brw_init_test_service(void)
 {
-        brw_test_service.sv_id         = SRPC_SERVICE_BRW;
-        brw_test_service.sv_name       = "brw_test";
-        brw_test_service.sv_handler    = brw_server_handle;
-        brw_test_service.sv_bulk_ready = brw_bulk_ready;
+	unsigned long cache_size = cfs_totalram_pages() >> 4;
+
+	/* brw prealloc cache should don't eat more than half memory */
+	cache_size /= ((LNET_MTU >> PAGE_SHIFT) + 1) ;
+
 	brw_test_service.sv_wi_total   = brw_srv_workitems;
+
+	if (brw_test_service.sv_wi_total > cache_size)
+		brw_test_service.sv_wi_total = cache_size;
 }
