@@ -3009,7 +3009,7 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 				    unsigned long bandwidth_bytes_sec)
 {
 	size_t buflen = 64 << 20; /* 64M */
-	size_t page_size;
+	ssize_t page_size;
 	void *buf;
 	uint64_t pos = start;
 	uint64_t data_off = pos, data_end = pos;

@@ -796,7 +796,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	void *buf = NULL;
 	off_t pos = 0;
 	off_t data_end = 0;
-	size_t page_size;
+	ssize_t page_size;
 	bool sparse;
 	int rc;
 	size_t write_bytes = 0;
@@ -11941,7 +11941,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	int c;
 	void *buf;
 	const size_t buflen = 4 << 20;
-	size_t page_size;
+	ssize_t page_size;
 	off_t pos;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -12112,7 +12112,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 	void *buf;
 	const size_t buflen = 4 << 20;
 	off_t pos;
-	size_t page_size = sysconf(_SC_PAGESIZE);
+	ssize_t page_size = sysconf(_SC_PAGESIZE);
 	struct ll_ioc_lease_id ioc;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
