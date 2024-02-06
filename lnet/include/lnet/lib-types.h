@@ -1433,6 +1433,9 @@ struct lnet_peer {
 
 	/* timestamp of primary nid lock */
 	__u64			lp_prim_lock_ts;
+
+	/* merge and assign this NID as primary when discovery completes */
+	struct lnet_nid         lp_merge_primary_nid;
 };
 
 /*

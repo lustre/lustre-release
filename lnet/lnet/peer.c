@@ -243,6 +243,7 @@ lnet_peer_alloc(struct lnet_nid *nid)
 	lp->lp_primary_nid = *nid;
 	lp->lp_disc_src_nid = LNET_ANY_NID;
 	lp->lp_disc_dst_nid = LNET_ANY_NID;
+	lp->lp_merge_primary_nid = LNET_ANY_NID;
 	if (lnet_peers_start_down())
 		lp->lp_alive = false;
 	else
@@ -1331,6 +1332,19 @@ lnet_is_discovery_disabled(struct lnet_peer *lp)
 	return rc;
 }
 
+static void
+lnet_discover_peer_nid(struct lnet_nid *nid)
+{
+	int cpt = lnet_net_lock_current();
+	struct lnet_peer_ni *lpni = lnet_peer_ni_find_locked(nid);
+
+	if (lpni) {
+		lnet_discover_peer_locked(lpni, cpt, false);
+		lnet_peer_ni_decref_locked(lpni);
+	}
+	lnet_net_unlock(cpt);
+}
+
 int
 LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 {
@@ -1351,6 +1365,8 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 	mr = lnet_peer_discovery_disabled == 0;
 
 	rc = 0;
+	CDEBUG(D_NET, "num_nids %d\n", num_nids);
+
 	for (i = 0; i < num_nids; i++) {
 		if (nid_is_lo0(&nids[i]))
 			continue;
@@ -1370,13 +1386,26 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 				pnid = lp->lp_primary_nid;
 				/* Drop refcount from lookup */
 				lnet_peer_decref_locked(lp);
+			} else if (mr && !rc) {
+				lnet_discover_peer_nid(&pnid);
 			}
 		} else if (lnet_peer_discovery_disabled) {
 			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, mr,
 					      flags);
-		} else {
-			rc = lnet_add_peer_ni(&pnid, &nids[i], mr,
-					      flags);
+		} else if (!nid_same(&pnid, &nids[i])) {
+			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID,
+					      mr, 0);
+			if (!rc) {
+				if (lock_prim_nid) {
+					struct lnet_peer *lp;
+					lp = lnet_find_peer(&nids[i]);
+					if (lp) {
+						lp->lp_merge_primary_nid = pnid;
+						lnet_peer_decref_locked(lp);
+					}
+				}
+				lnet_discover_peer_nid(&nids[i]);
+			}
 		}
 
 		if (rc && rc != -EEXIST)
@@ -3597,7 +3626,6 @@ __must_hold(&lp->lp_lock)
 	flags = LNET_PEER_DISCOVERED;
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL)
 		flags |= LNET_PEER_MULTI_RAIL;
-
 	/*
 	 * Check whether the primary NID in the message matches the
 	 * primary NID of the peer. If it does, update the peer, if
@@ -3616,6 +3644,16 @@ __must_hold(&lp->lp_lock)
 		lnet_ping_buffer_decref(pbuf);
 		goto out;
 	}
+	/* If lp_merge_primary_nid is set, assign it as primary,
+	 * which causes the peers to merge.
+	 */
+	if (!LNET_NID_IS_ANY(&lp->lp_merge_primary_nid)) {
+
+		rc = lnet_peer_set_primary_nid(lp, &lp->lp_merge_primary_nid,
+					       flags);
+		lp->lp_merge_primary_nid = LNET_ANY_NID;
+	}
+
 	if (nid_is_lo0(&lp->lp_primary_nid)) {
 		rc = lnet_peer_set_primary_nid(lp, &nid, flags);
 		if (rc)
