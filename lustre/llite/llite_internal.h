@@ -236,6 +236,14 @@ struct ll_inode_info {
 	struct list_head		lli_xattrs; /* ll_xattr_entry->xe_list */
 };
 
+#ifndef HAVE_USER_NAMESPACE_ARG
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+#define setattr_prepare(ns, de, at)             setattr_prepare(de, at)
+#else
+#define setattr_prepare(ns, de, at)             inode_change_ok(de->d_inode, at)
+#endif
+#endif
+
 static inline __u32 ll_layout_version_get(struct ll_inode_info *lli)
 {
 	__u32 gen;

@@ -1784,6 +1784,11 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 {
 	int mode = de->d_inode->i_mode;
 	enum op_xvalid xvalid = 0;
+	int rc;
+
+	rc = setattr_prepare(map, de, attr);
+	if (rc)
+		return rc;
 
 	if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
 			      (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
