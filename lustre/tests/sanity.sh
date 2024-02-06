@@ -112,17 +112,6 @@ elif [ -r /etc/redhat-release ]; then
 		# failure on fio io_uring I/O engine.
 		always_except LU-17289 906
 	fi
-elif [ -r /etc/os-release ]; then
-	if grep -qi ubuntu /etc/os-release; then
-		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
-						-e 's/^VERSION=//p' \
-						/etc/os-release |
-						awk '{ print $1 }'))
-
-		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
-			always_except LU-10366 410
-		fi
-	fi
 fi
 
 build_test_filter
@@ -28389,8 +28378,6 @@ test_410()
 {
 	[[ $CLIENT_VERSION -lt $(version_code 2.9.59) ]] &&
 		skip "Need client version at least 2.9.59"
-	[ -f $LUSTRE/tests/kernel/kinode.ko ] ||
-		skip "Need MODULES build"
 
 	# Create a file, and stat it from the kernel
 	local testfile=$DIR/$tfile
@@ -28399,15 +28386,18 @@ test_410()
 	local run_id=$RANDOM
 	local my_ino=$(stat --format "%i" $testfile)
 
-	# Try to insert the module. This will always fail as the
-	# module is designed to not be inserted.
-	insmod $LUSTRE/tests/kernel/kinode.ko run_id=$run_id fname=$testfile \
-	    &> /dev/null
+	# Try to insert the module.
+	load_module kunit/kinode run_id=$run_id fname=$testfile ||
+		error "load_module failed"
 
 	# Anything but success is a test failure
 	dmesg | grep -q \
 	    "lustre_kinode_$run_id: inode numbers are identical: $my_ino" ||
 	    error "no inode match"
+
+	# Remove the test module
+	rmmod -v kinode ||
+		error "rmmod failed (may trigger a failure in a later test)"
 }
 run_test 410 "Test inode number returned from kernel thread"
 

@@ -731,8 +731,7 @@ mv $basemodpath/fs/osd_zfs.ko $basemodpath-osd-zfs/fs/osd_zfs.ko
 mkdir -p $basemodpath-tests/fs
 mv $basemodpath/fs/llog_test.ko $basemodpath-tests/fs/llog_test.ko
 mv $basemodpath/fs/obd_test.ko $basemodpath-tests/fs/obd_test.ko
-mkdir -p $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
-mv $basemodpath/fs/kinode.ko $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
+mv $basemodpath/fs/kinode.ko $basemodpath-tests/fs/kinode.ko
 %endif
 %endif
 

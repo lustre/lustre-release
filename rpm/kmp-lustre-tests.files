@@ -2,3 +2,4 @@
 %dir %{modules_fs_path}/%{lustre_name}-tests/fs
 %{modules_fs_path}/%{lustre_name}-tests/fs/llog_test.ko
 %{modules_fs_path}/%{lustre_name}-tests/fs/obd_test.ko
+%{modules_fs_path}/%{lustre_name}-tests/fs/kinode.ko

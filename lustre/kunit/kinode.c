@@ -110,20 +110,20 @@ static int __init kinode_init(void)
 
 	if (strlen(fname) < 1) {
 		pr_err(PREFIX " invalid file name '%s'\n", run_id, fname);
-		goto out;
+		return -EINVAL;
 	}
 
 	rc = stat_file(&stbuf1);
 	if (rc) {
 		pr_err(PREFIX " direct stat failed: %d\n", run_id, rc);
-		goto out;
+		return -EINVAL;
 	}
 
 	/* Run the same from a kthread. */
 	thr = kthread_run(stat_thread, &stbuf2, "kinode_%u", run_id);
 	if (IS_ERR(thr)) {
 		pr_err(PREFIX " Cannot create kthread\n", run_id);
-		goto out;
+		return -EINVAL;
 	}
 
 	/* Wait for the thread to start, then wait for it to
@@ -132,7 +132,7 @@ static int __init kinode_init(void)
 	rc = kthread_stop(thr);
 	if (rc) {
 		pr_err(PREFIX " indirect stat failed: %d\n", run_id, rc);
-		goto out;
+		return -EINVAL;
 	}
 
 	if (stbuf1.ino != stbuf2.ino)
@@ -143,9 +143,7 @@ static int __init kinode_init(void)
 		pr_err(PREFIX " inode numbers are identical: %llu\n",
 		       run_id, stbuf1.ino);
 
-out:
-	/* Don't load. */
-	return -EINVAL;
+	return 0;
 }
 
 static void __exit kinode_exit(void)
