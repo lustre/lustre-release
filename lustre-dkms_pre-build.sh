@@ -65,26 +65,51 @@ DKMS_CONFIG_OPTS=$(
     && shopt -q -s extglob \
     && \
     {
-      if [[ ${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]]
-      then
-	echo --disable-libcfs-cdebug
-      fi
-      if [[ ${LUSTRE_DKMS_DISABLE_TRACE,,} == @(y|yes) ]]
-      then
-	echo --disable-libcfs-trace
-      fi
-      if [[ ${LUSTRE_DKMS_DISABLE_ASSERT,,} == @(y|yes) ]]
-      then
-	echo --disable-libcfs-assert
-      fi
+	if [[ -n ${LUSTRE_DKMS_DISABLE_CDEBUG} ]] ; then
+		[[ ${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]] &&
+			echo --disable-libcfs-cdebug ||
+			echo --enable-libcfs-cdebug
+	fi
+	if [[ -n ${LUSTRE_DKMS_DISABLE_TRACE} ]] ; then
+		[[ ${LUSTRE_DKMS_DISABLE_TRACE,,} == @(y|yes) ]] &&
+			echo --disable-libcfs-trace ||
+			echo --enable-libcfs-trace
+	fi
+	if [[ -n ${LUSTRE_DKMS_DISABLE_ASSERT} ]] ; then
+		[[ ${LUSTRE_DKMS_DISABLE_ASSERT,,} == @(y|yes) ]] &&
+			echo --disable-libcfs-assert ||
+			echo --enable-libcfs-assert
+	fi
+	if [[ -n ${LUSTRE_DKMS_ENABLE_GSS} ]] ; then
+		[[ ${LUSTRE_DKMS_ENABLE_GSS,,} == @(y|yes) ]] &&
+			echo --enable-gss ||
+			echo --disable-gss
+	fi
+	if [[ -n ${LUSTRE_DKMS_ENABLE_GSS_KEYRING} ]] ; then
+		[[ ${LUSTRE_DKMS_ENABLE_GSS_KEYRING,,} == @(y|yes) ]] &&
+			echo --enable-gss-keyring ||
+			echo --disable-gss-keyring
+	fi
+	if [[ -n ${LUSTRE_DKMS_ENABLE_CRYPTO} ]] ; then
+		[[ ${LUSTRE_DKMS_ENABLE_CRYPTO,,} == @(y|yes) ]] &&
+			echo --enable-crypto ||
+			echo --disable-crypto
+	fi
+	if [[ -n ${LUSTRE_DKMS_ENABLE_IOKIT} ]] ; then
+		[[ ${LUSTRE_DKMS_ENABLE_IOKIT,,} == @(y|yes) ]] &&
+			echo --enable-iokit ||
+			echo --disable-iokit
+	fi
+	[[ -n ${LUSTRE_DKMS_CONFIGURE_EXTRA} ]] &&
+		echo ${LUSTRE_DKMS_CONFIGURE_EXTRA}
     }
-  )
+)
 
-rpm -qa | grep krb5-devel >/dev/null
-if [ $? == 0 ] ; then
-	GSS="--enable-gss"
-else
-	GSS="--disable-gss"
+echo "${DKMS_CONFIG_OPTS} " | grep -E -q -- '--disable-gss[^-]|--enable-gss[^-]'
+if [ $? != 0 ] ; then
+	# User did not force, guess for rpm distros
+	rpm -qa | grep krb5-devel >/dev/null
+	[[ $? == 0 ]] && GSS="--enable-gss" || GSS="--disable-gss"
 fi
 
 # run a configure pass to clean "--enable-dist" only effect and also to

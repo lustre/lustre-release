@@ -102,7 +102,8 @@ case $with_o2ib in
 
 			O2IBDIR_PATH=$(eval $LIST_ALL_PKG |
 				       egrep -w "$O2IBPKG" | xargs $LSPKG |
-				       egrep "${O2IBDIR}$" | head -n1)
+				       egrep "${O2IBDIR}$" |
+				       grep -v /ofed_scripts/ | head -n1)
 
 			if test -n "$O2IBDIR_PATH"; then
 				if test -d $O2IBDIR_PATH/${LINUXRELEASE}; then

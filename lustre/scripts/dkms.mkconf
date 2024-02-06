@@ -36,128 +36,145 @@ BUILD_DEPENDS[0]="zfs"
 EOF
 fi
 cat >>${filename} <<EOF
+NO_WEAK_MODULES="yes"
 AUTOINSTALL="yes"
 NO_WEAK_MODULES="yes"
 MAKE[0]="make"
-# just have to set STRIP[0], it will become the new default.
-STRIP[0]="\$(
-  [[ -r \${PACKAGE_CONFIG} ]] \\
-  && source \${PACKAGE_CONFIG} \\
-  && shopt -q -s extglob \\
-  && [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] \\
-  && echo -n no
-)"
 
+OPTS=""
+strip_default=no
+if [[ -r \${PACKAGE_CONFIG} ]] ; then
+   source \${PACKAGE_CONFIG}
+   shopt -q -s extglob
+   if [[ -n \${LUSTRE_DKMS_DISABLE_STRIP} ]] ; then
+	[[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] && strip_default=no
+   fi
+   if [[ -n \${LUSTRE_DKMS_ENABLE_STRIP} ]] ; then
+	[[ \${LUSTRE_DKMS_ENABLE_STRIP,,} == @(y|yes) ]] && strip_default=yes
+   fi
+   if [[ -n \${LUSTRE_DKMS_ENABLE_GSS} ]] ; then
+      [[ \${LUSTRE_DKMS_ENABLE_GSS,,} == @(y|yes) ]] &&
+         OPTS="\${OPTS} --enable-gss" ||
+         OPTS="\${OPTS} --disable-gss"
+   fi
+   [[ -n \${LUSTRE_DKMS_CONFIGURE_EXTRA} ]] &&
+      OPTS="\${OPTS} \${LUSTRE_DKMS_CONFIGURE_EXTRA}"
+fi
+echo "\${OPTS} " | grep -E -q -- '--disable-gss[^-]|--enable-gss[^-]'
+if [[ \$? != 0 ]] ; then
+    # User did not force, guess for rpm distros
+    rpm -qa | grep krb5-devel >/dev/null
+    [[ \$? == 0 ]] &&
+         OPTS="\${OPTS} --enable-gss" ||
+         OPTS="\${OPTS} --disable-gss"
+fi
+
+# Determine which, if any, o2ib to install:
+can_o2ib_mofed=no
+can_o2ib_in_kernel=no
+ext_mofed=no
+int_mofed=no
+[[ -f \${kernel_source_dir}/include/rdma/rdma_cm.h ]] &&
+[[ -f \${kernel_source_dir}/include/rdma/ib_cm.h ]] &&
+[[ -f \${kernel_source_dir}/include/rdma/ib_verbs.h ]] &&
+   can_o2ib_in_kernel=yes
+# Now check if ext_o2ib is explicit, or will be auto-detected:
+o2ib=\$(echo \${OPTS} | tr ' ' '\\n' | grep -- '--with-o2ib=' | cut -c 13-)
+if [[ "x\$o2ib" = "xno" ]] ; then
+   can_o2ib_in_kernel=no
+elif [[ -f \$o2ib ]] ; then
+   # User specified path, if the build completes it will be ext_ofed
+   can_o2ib_mofed=yes
+   ext_mofed=yes
+else
+   # could be either, ext_ofed will be preferred by default
+   if which ofed_info >/dev/null ; then
+      pkgs="mlnx-ofed-kernel-dkms|mlnx-ofed-kernel-modules|mlnx-ofa_kernel-devel"
+      pkgs="\${pkgs}|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel"
+      paths=\$(rpm -qa |
+              grep -E -w "\${pkgs}" | xargs rpm -ql 2>/dev/null |
+              grep -E '/ofa_kernel|/ofa_kernel/default|/openib' |
+              grep -v /ofed_scripts/ | head -n1)
+      if [[ -n "\$paths" ]]; then
+          epaths=\$(find \$paths -name rdma_cm.h |
+                   grep -F -e "\$(uname -r)" -e default |
+                   sed -e 's:/include/rdma/rdma_cm.h::')
+          if [[ \$(echo \$epaths | wc -w) -eq 1 ]]; then
+             can_o2ib_mofed=yes
+             ext_mofed=yes
+          fi
+      fi
+   fi
+fi
+[[ "x\${ext_mofed}" = "xno" ]] && [[ x\${can_o2ib_in_kernel} = "xyes" ]] &&
+   int_mofed=yes
+
+module() {
+  local built_name=\$1
+  local built_loc=\$2
+  local dest=\$3
+  local do_strip=\$4
+
+  [[ -z \$do_strip ]] && do_strip=\${strip_default}
+  BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="\${built_name}"
+  BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="\${built_loc}/"
+  DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/\${dest}/"
+  STRIP[\${#STRIP[@]}]=\${strip_default}
+}
 # Common modules for both Client & Server
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lnet_selftest"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/selftest/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lnet/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lnet"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/lnet/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lnet/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ksocklnd"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/klnds/socklnd/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lnet/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ko2iblnd"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/klnds/o2iblnd/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lnet/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="libcfs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="libcfs/libcfs/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ptlrpc"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lov"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lov/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="fld"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/fld/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="obdecho"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdecho/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osc"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osc/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mgc"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mgc/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="fid"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/fid/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdc"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdc/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="obdclass"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lmv"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lmv/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lustre"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-if \$( rpm -qa | grep -q krb5-devel ) ; then
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ptlrpc_gss"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/gss/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+module lnet_selftest lnet/selftest      lnet
+module lnet          lnet/lnet          lnet
+module ksocklnd      lnet/klnds/socklnd lnet
+# in-kernel-o2ib or mofed
+if [ "x\${ext_mofed}" = "xyes" ] ; then
+    module ko2iblnd lnet/klnds/o2iblnd lnet
+elif [ "x\${int_mofed}" = "xyes" ] ; then
+    module ko2iblnd lnet/klnds/in-kernel-o2iblnd lnet
+fi
+module libcfs        libcfs/libcfs      lnet
+module ptlrpc    lustre/ptlrpc   lustre
+module lov       lustre/lov      lustre
+module fld       lustre/fld      lustre
+module obdecho   lustre/obdecho  lustre
+module osc       lustre/osc      lustre
+module mgc       lustre/mgc      lustre
+module fid       lustre/fid      lustre
+module mdc       lustre/mdc      lustre
+module obdclass  lustre/obdclass lustre
+module lmv       lustre/lmv      lustre
+module lustre    lustre/llite    lustre
+echo "\${OPTS} " | grep -E -q -- '--enable-gss[^-]'
+if [[ \$? -eq 0 ]] ; then
+    module ptlrpc_gss lustre/ptlrpc/gss fs/lustre
 fi
 EOF
 if [ $pkgname != "lustre-client" ] ; then
 	cat >>${filename} <<EOF
 # Server Modules
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ofd"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ofd/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ost"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ost/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lfsck"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lfsck/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mgs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mgs/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lquota"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/quota/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdt"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdt/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osp"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osp/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdd"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdd/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="llog_test"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="obd_test"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lod"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lod/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+module ofd       lustre/ofd      lustre
+module ost       lustre/ost      lustre
+module lfsck     lustre/lfsck    lustre
+module mgs       lustre/mgs      lustre
+module lquota    lustre/lquota   lustre
+module mdt       lustre/mdt      lustre
+module osp       lustre/osp      lustre
+module mdd       lustre/mdd      lustre
+module llog_test lustre/obdclass lustre
+module obd_test  lustre/obdclass lustre
+module lod       lustre/lod      lustre
 EOF
 fi
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
 # Module for ZFS backing
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_zfs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-zfs/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+module osd_zfs   lustre/osd-zfs  lustre
 EOF
 fi
 if [ $pkgname = "lustre-ldiskfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
 # Module for ldiskfs backing
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_ldiskfs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-ldiskfs/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+module osd_ldiskfs   lustre/osd_ldiskfs  lustre
 # ldiskfs module
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ldiskfs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="ldiskfs/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+module ldiskfs       ldiskfs             lustre
 EOF
 fi
