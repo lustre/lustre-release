@@ -450,16 +450,16 @@ ksocknal_decr_conn_count(struct ksock_conn_cb *conn_cb,
 		break;
 	case SOCKLND_CONN_BULK_IN:
 		conn_cb->ksnr_blki_conn_count--;
-		if (conn_cb->ksnr_blki_conn_count < conn_cb->ksnr_max_conns)
+		if (conn_cb->ksnr_blki_conn_count == 0)
 			conn_cb->ksnr_connected &= ~BIT(type);
 		break;
 	case SOCKLND_CONN_BULK_OUT:
 		conn_cb->ksnr_blko_conn_count--;
-		if (conn_cb->ksnr_blko_conn_count < conn_cb->ksnr_max_conns)
+		if (conn_cb->ksnr_blko_conn_count == 0)
 			conn_cb->ksnr_connected &= ~BIT(type);
 		break;
 	case SOCKLND_CONN_ANY:
-		if (conn_cb->ksnr_conn_count < conn_cb->ksnr_max_conns)
+		if (conn_cb->ksnr_conn_count == 0)
 			conn_cb->ksnr_connected &= ~BIT(type);
 		break;
 	default:

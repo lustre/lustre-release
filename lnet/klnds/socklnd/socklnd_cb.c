@@ -2043,7 +2043,20 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 		/* After so many retries due to EALREADY assume that
 		 * the peer doesn't support as many connections as we want
 		 */
-		conn_cb->ksnr_connected |= BIT(type);
+		if (conn_cb->ksnr_blki_conn_count &&
+		    conn_cb->ksnr_blko_conn_count &&
+		    conn_cb->ksnr_ctrl_conn_count) {
+			/* Don't create any more connections of any type */
+			conn_cb->ksnr_connected |= (BIT(SOCKLND_CONN_CONTROL) |
+						    BIT(SOCKLND_CONN_BULK_IN) |
+						    BIT(SOCKLND_CONN_BULK_OUT));
+		} else {
+			/* If don't have at least one connection of each
+			 * type, fail
+			 */
+			write_unlock_bh(&ksocknal_data.ksnd_global_lock);
+			goto failed;
+		}
 		retry_later = false;
 	}
 
