@@ -640,24 +640,49 @@ Lustre Jobstats</title>
       How Jobstats Works</title>
       <para>The Lustre jobstats code on the client extracts the unique JobID
       from an environment variable within the user process, and sends this
-      JobID to the server with the I/O operation.  The server tracks
-      statistics for operations whose JobID is given, indexed by that
-      ID.</para>
+      JobID to the server with all RPCs.  This allows the server to tracks
+      statistics for operations specific to each application/command running
+      on the client, and can be useful to identify the source high I/O load.
+      </para>
 
       <para>A Lustre setting on the client, <literal>jobid_var</literal>,
-      specifies which environment variable to holds the JobID for that process
+      specifies an environment variable or other client-local source that
+      to holds a (relatively) unique the JobID for the running application.
       Any environment variable can be specified.  For example, SLURM sets the
       <literal>SLURM_JOB_ID</literal> environment variable with the unique
-      job ID on each client when the job is first launched on a node, and
+      JobID for all clients running a particular job launched on one or
+      more nodes, and
       the <literal>SLURM_JOB_ID</literal> will be inherited by all child
       processes started below that process.</para>
 
-      <para>Lustre can be configured to generate a synthetic JobID from
+      <para>There are several reserved values for <literal>jobid_var</literal>:
+      <itemizedlist>
+        <listitem>
+          <para><literal>disable</literal> - disables sending a JobID from
+            this client</para>
+        </listitem>
+        <listitem>
+          <para><literal>procname_uid</literal> - uses the process name and UID,
+            equivalent to setting <literal>jobid_name=%e.%u</literal></para>
+        </listitem>
+        <listitem>
+          <para><literal>nodelocal</literal> - use only the JobID format from
+            <literal>jobid_name</literal></para>
+        </listitem>
+        <listitem>
+          <para><literal>session</literal> - extract the JobID from 
+            <literal>jobid_this_session</literal></para>
+        </listitem>
+      </itemizedlist>
+      </para>
+
+      <para>Lustre can also be configured to generate a synthetic JobID from
       the client's process name and numeric UID, by setting
       <literal>jobid_var=procname_uid</literal>.  This will generate a
       uniform JobID when running the same binary across multiple client
       nodes, but cannot distinguish whether the binary is part of a single
-      distributed process or multiple independent processes.
+      distributed process or multiple independent processes.  This can be
+      useful on login nodes where interactive commands are run.
       </para>
 
       <para condition="l28">In Lustre 2.8 and later it is possible to set
@@ -665,8 +690,8 @@ Lustre Jobstats</title>
       <literal>jobid_name=</literal><replaceable>name</replaceable>, which
       <emphasis>all</emphasis> processes on that client node will use.  This
       is useful if only a single job is run on a client at one time, but if
-      multiple jobs are run on a client concurrently, the per-session JobID
-      should be used.
+      multiple jobs are run on a client concurrently, the
+      <literal>session</literal> JobID should be used.
       </para>
 
       <para condition="l2C">In Lustre 2.12 and later, it is possible to
@@ -688,8 +713,8 @@ Lustre Jobstats</title>
           <para><emphasis>%H</emphasis> print short hostname</para>
         </listitem>
         <listitem>
-          <para><emphasis>%j</emphasis> print JobID from process environment
-          variable named by the <emphasis>jobid_var</emphasis> parameter
+          <para><emphasis>%j</emphasis> print JobID from the source named
+            by the <emphasis>jobid_var</emphasis> parameter
           </para>
         </listitem>
         <listitem>
@@ -701,10 +726,14 @@ Lustre Jobstats</title>
       </itemizedlist>
 
       <para condition="l2D">In Lustre 2.13 and later, it is possible to
-      set a per-session JobID by setting the
-      <literal>jobid_this_session</literal> parameter.  This will be
+      set a per-session JobID via the <literal>jobid_this_session</literal>
+      parameter <emphasis>instead</emphasis> of getting the JobID from an
+      environment variable.  This session ID will be
       inherited by all processes that are started in this login session,
-      but there can be a different JobID for each login session.
+      though there can be a different JobID for each login session.  This
+      is enabled by setting <literal>jobid_var=session</literal> instead
+      of setting it to an environment variable.  The session ID will be
+      substituted for <literal>%j</literal> in <literal>jobid_name</literal>.
       </para>
 
       <para>The setting of <literal>jobid_var</literal> need not be the same
@@ -732,7 +761,7 @@ clieht# lctl get_param jobid_var
 jobid_var=disable
 </screen>
       <para>
-      To enable jobstats on the <literal>testfs</literal> file system with SLURM:</para>
+      To enable jobstats on all clients for SLURM:</para>
 <screen>
 mgs# lctl set_param -P jobid_var=SLURM_JOB_ID
 </screen>
@@ -822,9 +851,6 @@ client# lctl set_param jobid_var=procname_uid
         </tbody>
       </tgroup>
     </informaltable>
-    <para>There are two special values for <literal>jobid_var</literal>:
-    <literal>disable</literal> and <literal>procname_uid</literal>. To disable
-    jobstats, specify <literal>jobid_var</literal> as <literal>disable</literal>:</para>
 <screen>
 mgs# lctl set_param -P jobid_var=disable
 </screen>
@@ -838,10 +864,11 @@ client# lctl set_param jobid_var=procname_uid
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 Check Job Stats</title>
-    <para>Metadata operation statistics are collected on MDTs. These statistics can be accessed for
-        all file systems and all jobs on the MDT via the <literal>lctl get_param
-          mdt.*.job_stats</literal>. For example, clients running with
-          <literal>jobid_var=procname_uid</literal>:</para>
+    <para>Metadata operation statistics are collected on MDTs. These statistics
+      can be accessed for all file systems and all jobs on the MDT via the
+      <literal>lctl get_param mdt.*.job_stats</literal>. For example, clients
+      running with <literal>jobid_var=procname_uid</literal>:
+    </para>
 <screen>
 mds# lctl get_param mdt.*.job_stats
 job_stats:
@@ -849,38 +876,16 @@ job_stats:
   snapshot_time:   1352084992
   open:            { samples:     2, unit:  reqs }
   close:           { samples:     2, unit:  reqs }
-  mknod:           { samples:     0, unit:  reqs }
-  link:            { samples:     0, unit:  reqs }
-  unlink:          { samples:     0, unit:  reqs }
-  mkdir:           { samples:     0, unit:  reqs }
-  rmdir:           { samples:     0, unit:  reqs }
-  rename:          { samples:     0, unit:  reqs }
   getattr:         { samples:     3, unit:  reqs }
-  setattr:         { samples:     0, unit:  reqs }
-  getxattr:        { samples:     0, unit:  reqs }
-  setxattr:        { samples:     0, unit:  reqs }
-  statfs:          { samples:     0, unit:  reqs }
-  sync:            { samples:     0, unit:  reqs }
-  samedir_rename:  { samples:     0, unit:  reqs }
-  crossdir_rename: { samples:     0, unit:  reqs }
 - job_id:          mythbackend.0
   snapshot_time:   1352084996
   open:            { samples:    72, unit:  reqs }
   close:           { samples:    73, unit:  reqs }
-  mknod:           { samples:     0, unit:  reqs }
-  link:            { samples:     0, unit:  reqs }
   unlink:          { samples:    22, unit:  reqs }
-  mkdir:           { samples:     0, unit:  reqs }
-  rmdir:           { samples:     0, unit:  reqs }
-  rename:          { samples:     0, unit:  reqs }
   getattr:         { samples:   778, unit:  reqs }
   setattr:         { samples:    22, unit:  reqs }
-  getxattr:        { samples:     0, unit:  reqs }
-  setxattr:        { samples:     0, unit:  reqs }
   statfs:          { samples: 19840, unit:  reqs }
   sync:            { samples: 33190, unit:  reqs }
-  samedir_rename:  { samples:     0, unit:  reqs }
-  crossdir_rename: { samples:     0, unit:  reqs }
 </screen>
     <para>Data operation statistics are collected on OSTs. Data operations
     statistics can be accessed via
@@ -893,18 +898,13 @@ job_stats:
   snapshot_time:   1429714922
   read:    { samples: 974, unit: bytes, min: 4096, max: 1048576, sum: 91530035 }
   write:   { samples:   0, unit: bytes, min:    0, max:       0, sum:        0 }
-  setattr: { samples:   0, unit:  reqs }
-  punch:   { samples:   0, unit:  reqs }
-  sync:    { samples:   0, unit:  reqs }
 obdfilter.myth-OST0001.job_stats=
 job_stats:
 - job_id:          mythbackend.0
   snapshot_time:   1429715270
   read:    { samples:   0, unit: bytes, min:     0, max:      0, sum:        0 }
   write:   { samples:   1, unit: bytes, min: 96899, max:  96899, sum:    96899 }
-  setattr: { samples:   0, unit:  reqs }
   punch:   { samples:   1, unit:  reqs }
-  sync:    { samples:   0, unit:  reqs }
 obdfilter.myth-OST0002.job_stats=job_stats:
 obdfilter.myth-OST0003.job_stats=job_stats:
 obdfilter.myth-OST0004.job_stats=
@@ -913,22 +913,18 @@ job_stats:
   snapshot_time:   1429692083
   read:    { samples:   9, unit: bytes, min: 16384, max: 1048576, sum: 4444160 }
   write:   { samples:   0, unit: bytes, min:     0, max:       0, sum:       0 }
-  setattr: { samples:   0, unit:  reqs }
-  punch:   { samples:   0, unit:  reqs }
-  sync:    { samples:   0, unit:  reqs }
 - job_id:          mythbackend.500
   snapshot_time:   1429692129
   read:    { samples:   0, unit: bytes, min:     0, max:       0, sum:       0 }
   write:   { samples:   1, unit: bytes, min: 56231, max:   56231, sum:   56231 }
-  setattr: { samples:   0, unit:  reqs }
   punch:   { samples:   1, unit:  reqs }
-  sync:    { samples:   0, unit:  reqs }
 </screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 Clear Job Stats</title>
-    <para>Accumulated job statistics can be reset by writing proc file <literal>job_stats</literal>.</para>
+    <para>Accumulated job statistics can be reset by writing proc file
+      <literal>job_stats</literal>.</para>
     <para>Clear statistics for all jobs on the local node:</para>
 <screen>
 oss# lctl set_param obdfilter.*.job_stats=clear
@@ -941,15 +937,48 @@ mds# lctl set_param mdt.lustre-MDT0000.job_stats=bash.0
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 Configure Auto-cleanup Interval</title>
-    <para>By default, if a job is inactive for 600 seconds (10 minutes) statistics for this job will be dropped. This expiration value can be changed temporarily via:</para>
+    <para>By default, if a job is inactive for 600 seconds (10 minutes)
+      statistics for this job will be dropped. This expiration value
+      can be changed temporarily via:
+    </para>
 <screen>
 mds# lctl set_param *.*.job_cleanup_interval={max_age}
 </screen>
-    <para>It can also be changed permanently, for example to 700 seconds via:</para>
+    <para>It can also be changed permanently, for example to 700 seconds via:
+    </para>
 <screen>
 mgs# lctl set_param -P mdt.testfs-*.job_cleanup_interval=700
 </screen>
-    <para>The <literal>job_cleanup_interval</literal> can be set as 0 to disable the auto-cleanup. Note that if auto-cleanup of Jobstats is disabled, then all statistics will be kept in memory forever, which may eventually consume all memory on the servers. In this case, any monitoring tool should explicitly clear individual job statistics as they are processed, as shown above.</para>
+    <para>The <literal>job_cleanup_interval</literal> can be set
+      as 0 to disable the auto-cleanup. Note that if auto-cleanup of
+      Jobstats is disabled, then all statistics will be kept in memory
+      forever, which may eventually consume all memory on the servers.
+      In this case, any monitoring tool should explicitly clear
+      individual job statistics as they are processed, as shown above.
+    </para>
+    </section>
+    <section remap="h3" condition='l2E'>
+      <title><indexterm><primary>monitoring</primary><secondary>lljobstat</secondary></indexterm>
+Identifying Top Jobs</title>
+      <para>Since Lustre 2.15 the <literal>lljobstat</literal>
+        utility can be used to monitor and identify the top JobIDs generating
+        load on a particular server.  This allows the administrator to quickly
+        see which applications/users/clients (depending on how the JobID is
+        conigured) are generating the most filesystem RPCs and take appropriate
+        action if needed.
+      </para>
+<screen>
+mds# lljobstat -c 10
+---
+    timestamp: 1665984678
+    top_jobs:
+    - ls.500:          {ops: 64, ga: 64}
+    - touch.500:       {ops: 6, op: 1, cl: 1, mn: 1, ga: 1, sa: 2}
+    - bash.0:          {ops: 3, ga: 3}
+    ...
+</screen>
+      <para>It is possible to specify the number of top jobs to monitor as
+        well as the refresh interval, among other options.</para>
     </section>
   </section>
   <section xml:id="lmt">
