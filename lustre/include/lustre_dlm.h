@@ -721,7 +721,7 @@ struct ldlm_ibits_node {
 struct ldlm_flock_node {
 	atomic_t		lfn_unlock_pending;
 	bool			lfn_needs_reprocess;
-	struct interval_node   *lfn_root;
+	struct interval_tree_root lfn_root;
 };
 
 /** Whether to track references to exports by LDLM locks. */
@@ -834,12 +834,15 @@ struct ldlm_lock {
 		};
 		/* LDLM_FLOCK locks */
 		struct {
-			struct interval_node	l_tree_node_flock;
 			/**
 			 * Per export hash of flock locks.
 			 * Protected by per-bucket exp->exp_flock_hash locks.
 			 */
 			struct hlist_node	l_exp_flock_hash;
+			struct ldlm_lock	*l_same_owner;
+			/* interval tree */
+			struct rb_node		l_fl_rb;
+			u64			l_fl_subtree_last;
 		};
 	};
 	/**

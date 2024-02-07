@@ -220,6 +220,8 @@ int ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 			    enum ldlm_error *err, struct list_head *work_list);
 int ldlm_init_flock_export(struct obd_export *exp);
 void ldlm_destroy_flock_export(struct obd_export *exp);
+void ldlm_flock_add_lock(struct ldlm_resource *req, struct list_head *head,
+			 struct ldlm_lock *lock);
 void ldlm_flock_unlink_lock(struct ldlm_lock *lock);
 
 /* l_lock.c */

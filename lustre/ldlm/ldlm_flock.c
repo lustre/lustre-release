@@ -61,6 +61,12 @@
 #include <lustre_lib.h>
 
 #include "ldlm_internal.h"
+#include <linux/interval_tree_generic.h>
+
+#define START(node) ((node)->l_policy_data.l_flock.start)
+#define LAST(node) ((node)->l_policy_data.l_flock.end)
+INTERVAL_TREE_DEFINE(struct ldlm_lock, l_fl_rb, u64, l_fl_subtree_last,
+		     START, LAST, static inline, flock);
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			    void *data, int flag);
@@ -116,16 +122,16 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 			     &req->l_exp_flock_hash);
 }
 
-/** Remove cancelled lock from resource interval tree. */
+/* Remove cancelled lock from resource interval tree. */
 void ldlm_flock_unlink_lock(struct ldlm_lock *lock)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct interval_node **root = &res->lr_flock_node.lfn_root;
 
-	if (!interval_is_intree(&lock->l_tree_node_flock)) /* duplicate unlink */
+	if (RB_EMPTY_NODE(&lock->l_fl_rb)) /* duplicate unlink */
 		return;
 
-	interval_erase(&lock->l_tree_node_flock, root);
+	flock_remove(lock, &res->lr_flock_node.lfn_root);
+	RB_CLEAR_NODE(&lock->l_fl_rb);
 }
 
 static inline void
@@ -275,41 +281,31 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
-/** Add newly granted lock into interval tree for the resource. */
-static void ldlm_flock_add_lock(struct ldlm_resource *res,
-				struct list_head *head,
-				struct ldlm_lock *lock)
+/* Add newly granted lock into interval tree for the resource */
+void ldlm_flock_add_lock(struct ldlm_resource *res,
+			 struct list_head *head,
+			 struct ldlm_lock *lock)
 {
-	struct interval_node **root;
-	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
-	int rc;
 
 	LASSERT(ldlm_is_granted(lock));
+	LASSERT(RB_EMPTY_NODE(&lock->l_fl_rb));
 
-	LASSERT(!interval_is_intree(&lock->l_tree_node_flock));
+	flock_insert(lock, &res->lr_flock_node.lfn_root);
 
-	rc = interval_set(&lock->l_tree_node_flock, extent->start, extent->end);
-	LASSERT(!rc);
-
-	root = &res->lr_flock_node.lfn_root;
-	interval_insert(&lock->l_tree_node_flock, root);
-
-	/* Add the locks into list */
 	ldlm_resource_add_lock(res, head, lock);
 }
 
 static void
-ldlm_flock_range_update(struct ldlm_lock *lock, struct ldlm_lock *req)
+ldlm_flock_range_update(struct ldlm_lock *lock, u64 start, u64 end)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct interval_node **root = &res->lr_flock_node.lfn_root;
-	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
 
-	interval_erase(&lock->l_tree_node_flock, root);
-	interval_set(&lock->l_tree_node_flock, extent->start, extent->end);
-	interval_insert(&lock->l_tree_node_flock, root);
-
-	EXIT;
+	if (!RB_EMPTY_NODE(&lock->l_fl_rb))
+		flock_remove(lock, &res->lr_flock_node.lfn_root);
+	START(lock) = start;
+	LAST(lock) = end;
+	if (!RB_EMPTY_NODE(&lock->l_fl_rb))
+		flock_insert(lock, &res->lr_flock_node.lfn_root);
 }
 
 /**
@@ -363,6 +359,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	}
 
 reprocess:
+
 	if ((*flags == LDLM_FL_WAIT_NOREPROC) || (mode == LCK_NL)) {
 		/* This loop determines where this processes locks start
 		 * in the resource lr_granted list.
@@ -508,22 +505,16 @@ reprocess:
 				break;
 
 			if (new->l_policy_data.l_flock.start <
-			    lock->l_policy_data.l_flock.start) {
-				lock->l_policy_data.l_flock.start =
-					new->l_policy_data.l_flock.start;
-			} else {
-				new->l_policy_data.l_flock.start =
-					lock->l_policy_data.l_flock.start;
-			}
+			    lock->l_policy_data.l_flock.start)
+				ldlm_flock_range_update(lock, START(new), LAST(lock));
+			else
+				ldlm_flock_range_update(new, START(lock), LAST(new));
 
 			if (new->l_policy_data.l_flock.end >
-			    lock->l_policy_data.l_flock.end) {
-				lock->l_policy_data.l_flock.end =
-					new->l_policy_data.l_flock.end;
-			} else {
-				new->l_policy_data.l_flock.end =
-					lock->l_policy_data.l_flock.end;
-			}
+			    lock->l_policy_data.l_flock.end)
+				ldlm_flock_range_update(lock, START(lock), LAST(new));
+			else
+				ldlm_flock_range_update(new, START(new), LAST(lock));
 
 			if (added) {
 				ldlm_flock_destroy(lock, mode, *flags);
@@ -548,8 +539,7 @@ reprocess:
 		    lock->l_policy_data.l_flock.start) {
 			if (new->l_policy_data.l_flock.end <
 			    lock->l_policy_data.l_flock.end) {
-				lock->l_policy_data.l_flock.start =
-					new->l_policy_data.l_flock.end + 1;
+				ldlm_flock_range_update(lock, LAST(new)+1, LAST(lock));
 				break;
 			}
 			ldlm_flock_destroy(lock, lock->l_req_mode, *flags);
@@ -557,9 +547,7 @@ reprocess:
 		}
 		if (new->l_policy_data.l_flock.end >=
 		    lock->l_policy_data.l_flock.end) {
-			lock->l_policy_data.l_flock.end =
-				new->l_policy_data.l_flock.start - 1;
-			ldlm_flock_range_update(lock, req);
+			ldlm_flock_range_update(lock, START(lock), LAST(new) - 1);
 			continue;
 		}
 
@@ -603,8 +591,7 @@ reprocess:
 			lock->l_policy_data.l_flock.start;
 		new2->l_policy_data.l_flock.end =
 			new->l_policy_data.l_flock.start - 1;
-		lock->l_policy_data.l_flock.start =
-			new->l_policy_data.l_flock.end + 1;
+		ldlm_flock_range_update(lock, LAST(new) + 1, LAST(lock));
 		new2->l_conn_export = lock->l_conn_export;
 		if (lock->l_export != NULL) {
 			new2->l_export = class_export_lock_get(lock->l_export,

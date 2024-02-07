@@ -1419,7 +1419,7 @@ static bool ldlm_resource_inodebits_new(struct ldlm_resource *res)
 static bool ldlm_resource_flock_new(struct ldlm_resource *res)
 {
 	res->lr_flock_node.lfn_needs_reprocess = false;
-	res->lr_flock_node.lfn_root = NULL;
+	res->lr_flock_node.lfn_root = INTERVAL_TREE_ROOT;
 	atomic_set(&res->lr_flock_node.lfn_unlock_pending, 0);
 
 	return true;

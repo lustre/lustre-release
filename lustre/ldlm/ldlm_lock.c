@@ -481,6 +481,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 		break;
 	case LDLM_FLOCK:
 		INIT_HLIST_NODE(&lock->l_exp_flock_hash);
+		RB_CLEAR_NODE(&lock->l_fl_rb);
 		break;
 	case LDLM_EXTENT:
 		RB_CLEAR_NODE(&lock->l_rb);
@@ -1172,7 +1173,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
 		    ldlm_is_test_lock(lock) ||
 		    ldlm_is_flock_deadlock(lock))
 			RETURN_EXIT;
-		ldlm_resource_add_lock(res, &res->lr_granted, lock);
+		ldlm_flock_add_lock(res, &res->lr_granted, lock);
 	} else {
 		LBUG();
 	}
