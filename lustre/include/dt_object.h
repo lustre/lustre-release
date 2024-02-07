@@ -65,29 +65,28 @@ struct niobuf_remote;
 struct ldlm_enqueue_info;
 
 typedef enum {
-        MNTOPT_USERXATTR        = 0x00000001,
-        MNTOPT_ACL              = 0x00000002,
+	MNTOPT_USERXATTR        = 0x00000001,
+	MNTOPT_ACL              = 0x00000002,
 } mntopt_t;
 
 struct dt_device_param {
-	unsigned	   ddp_max_name_len;
-	unsigned	   ddp_max_nlink;
-	unsigned	   ddp_symlink_max;
-	mntopt_t	   ddp_mntopts;
-	unsigned	   ddp_max_ea_size;
-	unsigned	   ddp_mount_type;
+	unsigned int	 ddp_max_name_len;
+	unsigned int	 ddp_max_nlink;
+	unsigned int	 ddp_symlink_max;
+	mntopt_t	 ddp_mntopts;
+	unsigned int	 ddp_max_ea_size;
+	unsigned int	 ddp_mount_type;
 	unsigned long long ddp_maxbytes;
 	/* per-inode space consumption */
-	short		   ddp_inodespace;
+	short		 ddp_inodespace;
 	/* maximum number of blocks in an extent */
-	unsigned	   ddp_max_extent_blks;
-	/* per-extent insertion overhead to be used by client for grant
-	 * calculation */
-	unsigned int	   ddp_extent_tax;
-	unsigned int	   ddp_brw_size;	/* optimal RPC size */
+	unsigned int	 ddp_max_extent_blks;
+	/* per-extent insertion overhead used by client for grant calculation */
+	unsigned int	 ddp_extent_tax;
+	unsigned int	 ddp_brw_size; /* optimal RPC size */
 	/* T10PI checksum type, zero if not supported */
-	enum cksum_types   ddp_t10_cksum_type;
-	bool		   ddp_has_lseek_data_hole;
+	enum cksum_types ddp_t10_cksum_type;
+	bool		 ddp_has_lseek_data_hole;
 };
 
 /**
@@ -95,7 +94,7 @@ struct dt_device_param {
  */
 struct dt_txn_commit_cb;
 typedef void (*dt_cb_t)(struct lu_env *env, struct thandle *th,
-                        struct dt_txn_commit_cb *cb, int err);
+			struct dt_txn_commit_cb *cb, int err);
 /**
  * Special per-transaction callback for cases when just commit callback
  * is needed and per-device callback are not convenient to use
@@ -335,18 +334,18 @@ struct dt_device_operations {
 };
 
 struct dt_index_features {
-        /** required feature flags from enum dt_index_flags */
-        __u32 dif_flags;
-        /** minimal required key size */
-        size_t dif_keysize_min;
-        /** maximal required key size, 0 if no limit */
-        size_t dif_keysize_max;
-        /** minimal required record size */
-        size_t dif_recsize_min;
-        /** maximal required record size, 0 if no limit */
-        size_t dif_recsize_max;
-        /** pointer size for record */
-        size_t dif_ptrsize;
+	/** required feature flags from enum dt_index_flags */
+	__u32 dif_flags;
+	/** minimal required key size */
+	size_t dif_keysize_min;
+	/** maximal required key size, 0 if no limit */
+	size_t dif_keysize_max;
+	/** minimal required record size */
+	size_t dif_recsize_min;
+	/** maximal required record size, 0 if no limit */
+	size_t dif_recsize_max;
+	/** pointer size for record */
+	size_t dif_ptrsize;
 };
 
 enum dt_index_flags {
@@ -421,38 +420,38 @@ struct dt_allocation_hint {
  */
 
 enum dt_format_type {
-        DFT_REGULAR,
-        DFT_DIR,
-        /** for mknod */
-        DFT_NODE,
-        /** for special index */
-        DFT_INDEX,
-        /** for symbolic link */
-        DFT_SYM,
+	DFT_REGULAR,
+	DFT_DIR,
+	/** for mknod */
+	DFT_NODE,
+	/** for special index */
+	DFT_INDEX,
+	/** for symbolic link */
+	DFT_SYM,
 };
 
 /**
  * object format specifier.
  */
 struct dt_object_format {
-        /** type for dt object */
-        enum dt_format_type dof_type;
-        union {
-                struct dof_regular {
+	/** type for dt object */
+	enum dt_format_type dof_type;
+	union {
+		struct dof_regular {
 			int striped;
-                } dof_reg;
-                struct dof_dir {
-                } dof_dir;
-                struct dof_node {
-                } dof_node;
-                /**
-                 * special index need feature as parameter to create
-                 * special idx
-                 */
-                struct dof_index {
-                        const struct dt_index_features *di_feat;
-                } dof_idx;
-        } u;
+		} dof_reg;
+		struct dof_dir {
+		} dof_dir;
+		struct dof_node {
+		} dof_node;
+		/**
+		 * special index need feature as parameter to create
+		 * special idx
+		 */
+		struct dof_index {
+			const struct dt_index_features *di_feat;
+		} dof_idx;
+	} u;
 };
 
 enum dt_format_type dt_mode_to_dft(__u32 mode);
@@ -481,7 +480,7 @@ struct dt_object_operations {
 	 */
 	void  (*do_read_lock)(const struct lu_env *env,
 			      struct dt_object *dt,
-			      unsigned role);
+			      unsigned int role);
 
 	/*
 	 * Get write lock on object.
@@ -496,7 +495,7 @@ struct dt_object_operations {
 	 */
 	void  (*do_write_lock)(const struct lu_env *env,
 			       struct dt_object *dt,
-			       unsigned role);
+			       unsigned int role);
 
 	/**
 	 * Release read lock.
@@ -504,8 +503,8 @@ struct dt_object_operations {
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
 	 */
-        void  (*do_read_unlock)(const struct lu_env *env,
-                                struct dt_object *dt);
+	void  (*do_read_unlock)(const struct lu_env *env,
+				struct dt_object *dt);
 
 	/**
 	 * Release write lock.
@@ -513,8 +512,8 @@ struct dt_object_operations {
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
 	 */
-        void  (*do_write_unlock)(const struct lu_env *env,
-                                 struct dt_object *dt);
+	void  (*do_write_unlock)(const struct lu_env *env,
+				 struct dt_object *dt);
 
 	/**
 	 * Check whether write lock is held.
@@ -527,8 +526,8 @@ struct dt_object_operations {
 	 * \retval 0		no write lock
 	 * \retval 1		write lock is held
 	 */
-        int  (*do_write_locked)(const struct lu_env *env,
-                                struct dt_object *dt);
+	int  (*do_write_locked)(const struct lu_env *env,
+				struct dt_object *dt);
 
 	/**
 	 * Declare intention to request reqular attributes.
@@ -586,10 +585,10 @@ struct dt_object_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
-        int   (*do_declare_attr_set)(const struct lu_env *env,
-                                     struct dt_object *dt,
-                                     const struct lu_attr *attr,
+	 */
+	int   (*do_declare_attr_set)(const struct lu_env *env,
+				     struct dt_object *dt,
+				     const struct lu_attr *attr,
 				     struct thandle *th);
 
 	/**
@@ -609,9 +608,9 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int   (*do_attr_set)(const struct lu_env *env,
-                             struct dt_object *dt,
-                             const struct lu_attr *attr,
+	int   (*do_attr_set)(const struct lu_env *env,
+			     struct dt_object *dt,
+			     const struct lu_attr *attr,
 			     struct thandle *th);
 
 	/**
@@ -677,7 +676,7 @@ struct dt_object_operations {
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
-         */
+	 */
 	int   (*do_declare_xattr_set)(const struct lu_env *env,
 				      struct dt_object *dt,
 				      const struct lu_buf *buf,
@@ -766,7 +765,7 @@ struct dt_object_operations {
 	 *
 	 * \retval positive	bytes used/required in the buffer
 	 * \retval negative	negated errno on error
-         */
+	 */
 	int   (*do_xattr_list)(const struct lu_env *env,
 			       struct dt_object *dt,
 			       const struct lu_buf *buf);
@@ -815,12 +814,12 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int   (*do_declare_create)(const struct lu_env *env,
-                                   struct dt_object *dt,
-                                   struct lu_attr *attr,
-                                   struct dt_allocation_hint *hint,
-                                   struct dt_object_format *dof,
-                                   struct thandle *th);
+	int   (*do_declare_create)(const struct lu_env *env,
+				   struct dt_object *dt,
+				   struct lu_attr *attr,
+				   struct dt_allocation_hint *hint,
+				   struct dt_object_format *dof,
+				   struct thandle *th);
 
 	/**
 	 * Create new object.
@@ -848,10 +847,10 @@ struct dt_object_operations {
 	 */
 	int   (*do_create)(const struct lu_env *env,
 			   struct dt_object *dt,
-                           struct lu_attr *attr,
-                           struct dt_allocation_hint *hint,
-                           struct dt_object_format *dof,
-                           struct thandle *th);
+			   struct lu_attr *attr,
+			   struct dt_allocation_hint *hint,
+			   struct dt_object_format *dof,
+			   struct thandle *th);
 
 	/**
 	 * Declare intention to destroy an object.
@@ -869,9 +868,9 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int   (*do_declare_destroy)(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    struct thandle *th);
+	int   (*do_declare_destroy)(const struct lu_env *env,
+				    struct dt_object *dt,
+				    struct thandle *th);
 
 	/**
 	 * Destroy an object.
@@ -901,10 +900,10 @@ struct dt_object_operations {
 	/**
 	 * Try object as an index.
 	 *
-         * Announce that this object is going to be used as an index. This
+	 * Announce that this object is going to be used as an index. This
 	 * operation checks that object supports indexing operations and
-         * installs appropriate dt_index_operations vector on success.
-         * Also probes for features. Operation is successful if all required
+	 * installs appropriate dt_index_operations vector on success.
+	 * Also probes for features. Operation is successful if all required
 	 * features are supported. It's not possible to access the object
 	 * with index methods before ->do_index_try() returns success.
 	 *
@@ -915,9 +914,9 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int   (*do_index_try)(const struct lu_env *env,
-                              struct dt_object *dt,
-                              const struct dt_index_features *feat);
+	int   (*do_index_try)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      const struct dt_index_features *feat);
 
 	/**
 	 * Declare intention to increment nlink count.
@@ -953,8 +952,8 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int   (*do_ref_add)(const struct lu_env *env,
-                            struct dt_object *dt, struct thandle *th);
+	int   (*do_ref_add)(const struct lu_env *env,
+			    struct dt_object *dt, struct thandle *th);
 
 	/**
 	 * Declare intention to decrement nlink count.
@@ -1573,7 +1572,7 @@ struct dt_index_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int (*dio_declare_insert)(const struct lu_env *env,
+	int (*dio_declare_insert)(const struct lu_env *env,
 				  struct dt_object *dt,
 				  const struct dt_rec *rec,
 				  const struct dt_key *key,
@@ -1621,7 +1620,7 @@ struct dt_index_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-        int (*dio_declare_delete)(const struct lu_env *env,
+	int (*dio_declare_delete)(const struct lu_env *env,
 				  struct dt_object *dt,
 				  const struct dt_key *key,
 				  struct thandle *th);
@@ -1648,13 +1647,13 @@ struct dt_index_operations {
 			  const struct dt_key *key,
 			  struct thandle *th);
 
-        /**
+	/**
 	 * Iterator interface.
 	 *
 	 * Methods to iterate over an existing index, list the keys stored and
 	 * associated values, get key/value size, etc.
-         */
-        struct dt_it_ops {
+	 */
+	struct dt_it_ops {
 		/**
 		 * Allocate and initialize new iterator.
 		 *
@@ -1670,8 +1669,8 @@ struct dt_index_operations {
 		 *
 		 * \retval pointer	iterator pointer on success
 		 * \retval ERR_PTR(errno)	on error
-                 */
-                struct dt_it *(*init)(const struct lu_env *env,
+		 */
+		struct dt_it *(*init)(const struct lu_env *env,
 				      struct dt_object *dt,
 				      __u32 attr);
 
@@ -1684,8 +1683,8 @@ struct dt_index_operations {
 		 * \param[in] env	execution environment for this thread
 		 * \param[in] di	iterator to release
 		 */
-                void          (*fini)(const struct lu_env *env,
-                                      struct dt_it *di);
+		void          (*fini)(const struct lu_env *env,
+				      struct dt_it *di);
 
 		/**
 		 * Move position of iterator.
@@ -1702,9 +1701,9 @@ struct dt_index_operations {
 		 *			not larger than the key
 		 * \retval negative	negated errno on error
 		 */
-                int            (*get)(const struct lu_env *env,
-                                      struct dt_it *di,
-                                      const struct dt_key *key);
+		int            (*get)(const struct lu_env *env,
+				      struct dt_it *di,
+				      const struct dt_key *key);
 
 		/**
 		 * Release position
@@ -1717,8 +1716,8 @@ struct dt_index_operations {
 		 * \param[in] env	execution environment for this thread
 		 * \param[in] di	iterator
 		 */
-                void           (*put)(const struct lu_env *env,
-                                      struct dt_it *di);
+		void           (*put)(const struct lu_env *env,
+				      struct dt_it *di);
 
 		/**
 		 * Move to next record.
@@ -1732,8 +1731,8 @@ struct dt_index_operations {
 		 * \retval 0		on success, the next record is found
 		 * \retval negative	negated errno on error
 		 */
-                int           (*next)(const struct lu_env *env,
-                                      struct dt_it *di);
+		int           (*next)(const struct lu_env *env,
+				      struct dt_it *di);
 
 		/**
 		 * Return key.
@@ -1749,8 +1748,8 @@ struct dt_index_operations {
 		 * \retval pointer to key	on success
 		 * \retval ERR_PTR(errno)	on error
 		 */
-                struct dt_key *(*key)(const struct lu_env *env,
-                                      const struct dt_it *di);
+		struct dt_key *(*key)(const struct lu_env *env,
+				      const struct dt_it *di);
 
 		/**
 		 * Return key size.
@@ -1763,8 +1762,8 @@ struct dt_index_operations {
 		 * \retval key's size	on success
 		 * \retval negative	negated errno on error
 		 */
-                int       (*key_size)(const struct lu_env *env,
-                                      const struct dt_it *di);
+		int       (*key_size)(const struct lu_env *env,
+				      const struct dt_it *di);
 
 		/**
 		 * Return record.
@@ -1783,10 +1782,10 @@ struct dt_index_operations {
 		 * \retval 0		on success
 		 * \retval negative	negated errno on error
 		 */
-                int            (*rec)(const struct lu_env *env,
-                                      const struct dt_it *di,
-                                      struct dt_rec *rec,
-                                      __u32 attr);
+		int            (*rec)(const struct lu_env *env,
+				      const struct dt_it *di,
+				      struct dt_rec *rec,
+				      __u32 attr);
 
 		/**
 		 * Return record size.
@@ -1820,8 +1819,8 @@ struct dt_index_operations {
 		 *
 		 * \retval cookie/hash of the key
 		 */
-                __u64        (*store)(const struct lu_env *env,
-                                      const struct dt_it *di);
+		__u64        (*store)(const struct lu_env *env,
+				      const struct dt_it *di);
 
 		/**
 		 * Initialize position using cookie/hash.
@@ -1840,17 +1839,17 @@ struct dt_index_operations {
 		 * \retval 0		if current position matches cookie
 		 * \retval negative	negated errno on error
 		 */
-                int           (*load)(const struct lu_env *env,
+		int           (*load)(const struct lu_env *env,
 				      const struct dt_it *di,
 				      __u64 hash);
 
 		/**
 		 * Not used
 		 */
-                int        (*key_rec)(const struct lu_env *env,
+		int        (*key_rec)(const struct lu_env *env,
 				      const struct dt_it *di,
 				      void *key_rec);
-        } dio_it;
+	} dio_it;
 };
 
 enum dt_otable_it_valid {
@@ -1879,19 +1878,20 @@ enum dt_otable_it_flags {
  *
  * For otable based iteration, the 32-bits 'attr' for dt_it_ops::init()
  * is composed of two parts:
- * low 16-bits is for valid bits, high 16-bits is for flags bits. */
+ * low 16-bits is for valid bits, high 16-bits is for flags bits.
+ */
 #define DT_OTABLE_IT_FLAGS_SHIFT	16
-#define DT_OTABLE_IT_FLAGS_MASK 	0xffff0000
+#define DT_OTABLE_IT_FLAGS_MASK	0xffff0000
 
 struct dt_device {
-        struct lu_device                   dd_lu_dev;
-        const struct dt_device_operations *dd_ops;
+	struct lu_device                   dd_lu_dev;
+	const struct dt_device_operations *dd_ops;
 
-        /**
-         * List of dt_txn_callback (see below). This is not protected in any
-         * way, because callbacks are supposed to be added/deleted only during
-         * single-threaded start-up shut-down procedures.
-         */
+	/**
+	 * List of dt_txn_callback (see below). This is not protected in any
+	 * way, because callbacks are supposed to be added/deleted only during
+	 * single-threaded start-up shut-down procedures.
+	 */
 	struct list_head		   dd_txn_callbacks;
 	unsigned int			   dd_record_fid_accessed:1,
 					   dd_rdonly:1;
@@ -1910,20 +1910,20 @@ void dt_device_fini(struct dt_device *dev);
 
 static inline int lu_device_is_dt(const struct lu_device *d)
 {
-        return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_DT);
+	return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_DT);
 }
 
-static inline struct dt_device * lu2dt_dev(struct lu_device *l)
+static inline struct dt_device *lu2dt_dev(struct lu_device *l)
 {
 	LASSERT(lu_device_is_dt(l));
 	return container_of_safe(l, struct dt_device, dd_lu_dev);
 }
 
 struct dt_object {
-        struct lu_object                   do_lu;
-        const struct dt_object_operations *do_ops;
-        const struct dt_body_operations   *do_body_ops;
-        const struct dt_index_operations  *do_index_ops;
+	struct lu_object                   do_lu;
+	const struct dt_object_operations *do_ops;
+	const struct dt_body_operations   *do_body_ops;
+	const struct dt_index_operations  *do_index_ops;
 };
 
 /*
@@ -1946,7 +1946,7 @@ struct local_oid_storage {
 
 static inline struct lu_device *dt2lu_dev(struct dt_device *d)
 {
-        return &d->dd_lu_dev;
+	return &d->dd_lu_dev;
 }
 
 static inline struct dt_object *lu2dt(struct lu_object *l)
@@ -1956,13 +1956,13 @@ static inline struct dt_object *lu2dt(struct lu_object *l)
 }
 
 int  dt_object_init(struct dt_object *obj,
-                    struct lu_object_header *h, struct lu_device *d);
+		    struct lu_object_header *h, struct lu_device *d);
 
 void dt_object_fini(struct dt_object *obj);
 
 static inline int dt_object_exists(const struct dt_object *dt)
 {
-        return lu_object_exists(&dt->do_lu);
+	return lu_object_exists(&dt->do_lu);
 }
 
 static inline int dt_object_remote(const struct dt_object *dt)
@@ -2005,25 +2005,23 @@ struct thandle {
 	 * device (OSP/OSD == sub thandle layer) needs to get the
 	 * top_thandle (see dt_txn_hook_start/stop()), so we put the
 	 * top thandle here for now, will fix it when we have better
-	 * callback mechanism */
+	 * callback mechanism
+	 */
 	struct thandle	*th_top;
 
 	/* reserved quota for this handle */
 	struct lquota_id_info	th_reserved_quota;
 
-	/** the last operation result in this transaction.
-	 * this value is used in recovery */
+	/* last operation result in this transaction. value used in recovery */
 	__s32             th_result;
 
 	/** whether we need sync commit */
 	unsigned int		th_sync:1,
 	/* local transation, no need to inform other layers */
 				th_local:1,
-	/* Whether we need wait the transaction to be submitted
-	 * (send to remote target) */
+	/* Do we wait the transaction to be submitted (send to remote target) */
 				th_wait_submit:1,
-	/* complex transaction which will track updates on all targets,
-	 * including OSTs */
+	/* complex transaction to track updates on all targets including OSTs */
 				th_complex:1,
 	/* whether ignore quota */
 				th_ignore_quota:1,
@@ -2043,10 +2041,10 @@ struct thandle {
  * before each transaction commit.
  */
 struct dt_txn_callback {
-        int (*dtc_txn_start)(const struct lu_env *env,
-                             struct thandle *txn, void *cookie);
-        int (*dtc_txn_stop)(const struct lu_env *env,
-                            struct thandle *txn, void *cookie);
+	int (*dtc_txn_start)(const struct lu_env *env,
+			     struct thandle *txn, void *cookie);
+	int (*dtc_txn_stop)(const struct lu_env *env,
+			    struct thandle *txn, void *cookie);
 	void			*dtc_cookie;
 	__u32			dtc_tag;
 	struct list_head	dtc_linkage;
@@ -2056,7 +2054,7 @@ void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb);
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct thandle *txn);
+		      struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check);
@@ -2066,30 +2064,30 @@ int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check);
  * \see llo_store_resolve
  */
 typedef int (*dt_entry_func_t)(const struct lu_env *env,
-                            const char *name,
-                            void *pvt);
+			    const char *name,
+			    void *pvt);
 
 #define DT_MAX_PATH 1024
 
 int dt_path_parser(const struct lu_env *env,
-                   char *local, dt_entry_func_t entry_func,
-                   void *data);
+		   char *local, dt_entry_func_t entry_func,
+		   void *data);
 
 struct dt_object *
 dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
 		 const char *path, struct lu_fid *fid);
 
 struct dt_object *dt_store_open(const struct lu_env *env,
-                                struct dt_device *dt,
-                                const char *dirname,
-                                const char *filename,
-                                struct lu_fid *fid);
+				struct dt_device *dt,
+				const char *dirname,
+				const char *filename,
+				struct lu_fid *fid);
 
 struct dt_object *dt_find_or_create(const struct lu_env *env,
-                                    struct dt_device *dt,
-                                    const struct lu_fid *fid,
-                                    struct dt_object_format *dof,
-                                    struct lu_attr *attr);
+				    struct dt_device *dt,
+				    const struct lu_fid *fid,
+				    struct dt_object_format *dof,
+				    struct lu_attr *attr);
 
 struct dt_object *dt_locate_at(const struct lu_env *env,
 			       struct dt_device *dev,
@@ -2242,11 +2240,11 @@ dt_obj_version_t dt_data_version_init(const struct lu_env *env,
 				      struct dt_object *o);
 
 int dt_read(const struct lu_env *env, struct dt_object *dt,
-            struct lu_buf *buf, loff_t *pos);
+	    struct lu_buf *buf, loff_t *pos);
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
-                   struct lu_buf *buf, loff_t *pos);
+		   struct lu_buf *buf, loff_t *pos);
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
-                    const struct lu_buf *buf, loff_t *pos, struct thandle *th);
+		    const struct lu_buf *buf, loff_t *pos, struct thandle *th);
 typedef int (*dt_index_page_build_t)(const struct lu_env *env,
 				     struct dt_object *obj, union lu_page *lp,
 				     size_t bytes, const struct dt_it_ops *iops,
@@ -2260,30 +2258,30 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 			  const size_t nlupgs);
 
 static inline struct thandle *dt_trans_create(const struct lu_env *env,
-                                              struct dt_device *d)
+					      struct dt_device *d)
 {
-        LASSERT(d->dd_ops->dt_trans_create);
-        return d->dd_ops->dt_trans_create(env, d);
+	LASSERT(d->dd_ops->dt_trans_create);
+	return d->dd_ops->dt_trans_create(env, d);
 }
 
 static inline int dt_trans_start(const struct lu_env *env,
-                                 struct dt_device *d, struct thandle *th)
+				 struct dt_device *d, struct thandle *th)
 {
-        LASSERT(d->dd_ops->dt_trans_start);
-        return d->dd_ops->dt_trans_start(env, d, th);
+	LASSERT(d->dd_ops->dt_trans_start);
+	return d->dd_ops->dt_trans_start(env, d, th);
 }
 
 /* for this transaction hooks shouldn't be called */
 static inline int dt_trans_start_local(const struct lu_env *env,
-                                       struct dt_device *d, struct thandle *th)
+				       struct dt_device *d, struct thandle *th)
 {
-        LASSERT(d->dd_ops->dt_trans_start);
-        th->th_local = 1;
-        return d->dd_ops->dt_trans_start(env, d, th);
+	LASSERT(d->dd_ops->dt_trans_start);
+	th->th_local = 1;
+	return d->dd_ops->dt_trans_start(env, d, th);
 }
 
 static inline int dt_trans_stop(const struct lu_env *env,
-                                struct dt_device *d, struct thandle *th)
+				struct dt_device *d, struct thandle *th)
 {
 	LASSERT(d->dd_ops->dt_trans_stop);
 	return d->dd_ops->dt_trans_stop(env, d, th);
@@ -2317,112 +2315,112 @@ static inline int dt_declare_record_write(const struct lu_env *env,
 }
 
 static inline int dt_declare_create(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    struct lu_attr *attr,
-                                    struct dt_allocation_hint *hint,
-                                    struct dt_object_format *dof,
-                                    struct thandle *th)
+				    struct dt_object *dt,
+				    struct lu_attr *attr,
+				    struct dt_allocation_hint *hint,
+				    struct dt_object_format *dof,
+				    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_create);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_create);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_CREATE))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_create(env, dt, attr, hint, dof, th);
+	return dt->do_ops->do_declare_create(env, dt, attr, hint, dof, th);
 }
 
 static inline int dt_create(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    struct lu_attr *attr,
-                                    struct dt_allocation_hint *hint,
-                                    struct dt_object_format *dof,
-                                    struct thandle *th)
+				    struct dt_object *dt,
+				    struct lu_attr *attr,
+				    struct dt_allocation_hint *hint,
+				    struct dt_object_format *dof,
+				    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_create);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_create);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_CREATE))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_create(env, dt, attr, hint, dof, th);
+	return dt->do_ops->do_create(env, dt, attr, hint, dof, th);
 }
 
 static inline int dt_declare_destroy(const struct lu_env *env,
-                                     struct dt_object *dt,
-                                     struct thandle *th)
+				     struct dt_object *dt,
+				     struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_destroy);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_destroy);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DESTROY))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_destroy(env, dt, th);
+	return dt->do_ops->do_declare_destroy(env, dt, th);
 }
 
 static inline int dt_destroy(const struct lu_env *env,
-                             struct dt_object *dt,
-                             struct thandle *th)
+			     struct dt_object *dt,
+			     struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_destroy);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_destroy);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DESTROY))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_destroy(env, dt, th);
+	return dt->do_ops->do_destroy(env, dt, th);
 }
 
 static inline void dt_read_lock(const struct lu_env *env,
-                                struct dt_object *dt,
-                                unsigned role)
+				struct dt_object *dt,
+				unsigned int role)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_read_lock);
-        dt->do_ops->do_read_lock(env, dt, role);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_read_lock);
+	dt->do_ops->do_read_lock(env, dt, role);
 }
 
 static inline void dt_write_lock(const struct lu_env *env,
-                                struct dt_object *dt,
-                                unsigned role)
+				struct dt_object *dt,
+				unsigned int role)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_write_lock);
-        dt->do_ops->do_write_lock(env, dt, role);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_write_lock);
+	dt->do_ops->do_write_lock(env, dt, role);
 }
 
 static inline void dt_read_unlock(const struct lu_env *env,
-                                struct dt_object *dt)
+				struct dt_object *dt)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_read_unlock);
-        dt->do_ops->do_read_unlock(env, dt);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_read_unlock);
+	dt->do_ops->do_read_unlock(env, dt);
 }
 
 static inline void dt_write_unlock(const struct lu_env *env,
-                                struct dt_object *dt)
+				struct dt_object *dt)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_write_unlock);
-        dt->do_ops->do_write_unlock(env, dt);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_write_unlock);
+	dt->do_ops->do_write_unlock(env, dt);
 }
 
 static inline int dt_write_locked(const struct lu_env *env,
-                                  struct dt_object *dt)
+				  struct dt_object *dt)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_write_locked);
-        return dt->do_ops->do_write_locked(env, dt);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_write_locked);
+	return dt->do_ops->do_write_locked(env, dt);
 }
 
 static inline bool dt_object_stale(struct dt_object *dt)
@@ -2450,9 +2448,9 @@ static inline int dt_declare_attr_get(const struct lu_env *env,
 static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
 			      struct lu_attr *la)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_attr_get);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_attr_get);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_GET))
 		return cfs_fail_err;
@@ -2461,26 +2459,26 @@ static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
 }
 
 static inline int dt_declare_attr_set(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      const struct lu_attr *la,
-                                      struct thandle *th)
+				      struct dt_object *dt,
+				      const struct lu_attr *la,
+				      struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_attr_set);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_attr_set);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_ATTR_SET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_attr_set(env, dt, la, th);
+	return dt->do_ops->do_declare_attr_set(env, dt, la, th);
 }
 
 static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
 			      const struct lu_attr *la, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_attr_set);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_attr_set);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_SET))
 		return cfs_fail_err;
@@ -2489,55 +2487,55 @@ static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 static inline int dt_declare_ref_add(const struct lu_env *env,
-                                     struct dt_object *dt, struct thandle *th)
+				     struct dt_object *dt, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_ref_add);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_ref_add);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_ADD))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_ref_add(env, dt, th);
+	return dt->do_ops->do_declare_ref_add(env, dt, th);
 }
 
 static inline int dt_ref_add(const struct lu_env *env,
-                             struct dt_object *dt, struct thandle *th)
+			     struct dt_object *dt, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_ref_add);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_ref_add);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_ADD))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_ref_add(env, dt, th);
+	return dt->do_ops->do_ref_add(env, dt, th);
 }
 
 static inline int dt_declare_ref_del(const struct lu_env *env,
-                                     struct dt_object *dt, struct thandle *th)
+				     struct dt_object *dt, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_ref_del);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_ref_del);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_DEL))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_ref_del(env, dt, th);
+	return dt->do_ops->do_declare_ref_del(env, dt, th);
 }
 
 static inline int dt_ref_del(const struct lu_env *env,
-                             struct dt_object *dt, struct thandle *th)
+			     struct dt_object *dt, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_ref_del);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_ref_del);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_DEL))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_ref_del(env, dt, th);
+	return dt->do_ops->do_ref_del(env, dt, th);
 }
 
 static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
@@ -2553,31 +2551,31 @@ static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
 }
 
 static inline int dt_bufs_put(const struct lu_env *env, struct dt_object *d,
-                              struct niobuf_local *lnb, int n)
+			      struct niobuf_local *lnb, int n)
 {
-        LASSERT(d);
-        LASSERT(d->do_body_ops);
-        LASSERT(d->do_body_ops->dbo_bufs_put);
-        return d->do_body_ops->dbo_bufs_put(env, d, lnb, n);
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_bufs_put);
+	return d->do_body_ops->dbo_bufs_put(env, d, lnb, n);
 }
 
 static inline int dt_write_prep(const struct lu_env *env, struct dt_object *d,
-                                struct niobuf_local *lnb, int n)
+				struct niobuf_local *lnb, int n)
 {
-        LASSERT(d);
-        LASSERT(d->do_body_ops);
-        LASSERT(d->do_body_ops->dbo_write_prep);
-        return d->do_body_ops->dbo_write_prep(env, d, lnb, n);
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_write_prep);
+	return d->do_body_ops->dbo_write_prep(env, d, lnb, n);
 }
 
 static inline int dt_declare_write_commit(const struct lu_env *env,
-                                          struct dt_object *d,
-                                          struct niobuf_local *lnb,
-                                          int n, struct thandle *th)
+					  struct dt_object *d,
+					  struct niobuf_local *lnb,
+					  int n, struct thandle *th)
 {
-        LASSERTF(d != NULL, "dt is NULL when we want to declare write\n");
-        LASSERT(th != NULL);
-        return d->do_body_ops->dbo_declare_write_commit(env, d, lnb, n, th);
+	LASSERTF(d != NULL, "dt is NULL when we want to declare write\n");
+	LASSERT(th != NULL);
+	return d->do_body_ops->dbo_declare_write_commit(env, d, lnb, n, th);
 }
 
 
@@ -2592,12 +2590,12 @@ static inline int dt_write_commit(const struct lu_env *env,
 }
 
 static inline int dt_read_prep(const struct lu_env *env, struct dt_object *d,
-                               struct niobuf_local *lnb, int n)
+			       struct niobuf_local *lnb, int n)
 {
-        LASSERT(d);
-        LASSERT(d->do_body_ops);
-        LASSERT(d->do_body_ops->dbo_read_prep);
-        return d->do_body_ops->dbo_read_prep(env, d, lnb, n);
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_read_prep);
+	return d->do_body_ops->dbo_read_prep(env, d, lnb, n);
 }
 
 static inline int dt_declare_write(const struct lu_env *env,
@@ -2622,21 +2620,21 @@ static inline ssize_t dt_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 static inline int dt_declare_punch(const struct lu_env *env,
-                                   struct dt_object *dt, __u64 start,
-                                   __u64 end, struct thandle *th)
+				   struct dt_object *dt, __u64 start,
+				   __u64 end, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->dbo_declare_punch);
-        return dt->do_body_ops->dbo_declare_punch(env, dt, start, end, th);
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_declare_punch);
+	return dt->do_body_ops->dbo_declare_punch(env, dt, start, end, th);
 }
 
 static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
 			   __u64 start, __u64 end, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->dbo_punch);
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_punch);
 	return dt->do_body_ops->dbo_punch(env, dt, start, end, th);
 }
 
@@ -2677,12 +2675,12 @@ static inline int dt_falloc(const struct lu_env *env, struct dt_object *dt,
 static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
 				struct fiemap *fm)
 {
-        LASSERT(d);
-        if (d->do_body_ops == NULL)
-                return -EPROTO;
+	LASSERT(d);
+	if (d->do_body_ops == NULL)
+		return -EPROTO;
 	if (d->do_body_ops->dbo_fiemap_get == NULL)
 		return -EOPNOTSUPP;
-        return d->do_body_ops->dbo_fiemap_get(env, d, fm);
+	return d->do_body_ops->dbo_fiemap_get(env, d, fm);
 }
 
 static inline loff_t dt_lseek(const struct lu_env *env, struct dt_object *d,
@@ -2714,12 +2712,12 @@ static inline int dt_statfs(const struct lu_env *env, struct dt_device *dev,
 }
 
 static inline int dt_root_get(const struct lu_env *env, struct dt_device *dev,
-                              struct lu_fid *f)
+			      struct lu_fid *f)
 {
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_root_get);
-        return dev->dd_ops->dt_root_get(env, dev, f);
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_root_get);
+	return dev->dd_ops->dt_root_get(env, dev, f);
 }
 
 static inline void dt_conf_get(const struct lu_env *env,
@@ -2744,29 +2742,29 @@ static inline struct vfsmount *dt_mnt_get(const struct dt_device *dev)
 
 static inline int dt_sync(const struct lu_env *env, struct dt_device *dev)
 {
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_sync);
-        return dev->dd_ops->dt_sync(env, dev);
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_sync);
+	return dev->dd_ops->dt_sync(env, dev);
 }
 
 static inline int dt_ro(const struct lu_env *env, struct dt_device *dev)
 {
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_ro);
-        return dev->dd_ops->dt_ro(env, dev);
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_ro);
+	return dev->dd_ops->dt_ro(env, dev);
 }
 
 static inline int dt_declare_insert(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    const struct dt_rec *rec,
-                                    const struct dt_key *key,
-                                    struct thandle *th)
+				    struct dt_object *dt,
+				    const struct dt_rec *rec,
+				    const struct dt_key *key,
+				    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_index_ops);
-        LASSERT(dt->do_index_ops->dio_declare_insert);
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+	LASSERT(dt->do_index_ops->dio_declare_insert);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_INSERT))
 		return cfs_fail_err;
@@ -2780,9 +2778,9 @@ static inline int dt_insert(const struct lu_env *env,
 			    const struct dt_key *key,
 			    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_index_ops);
-        LASSERT(dt->do_index_ops->dio_insert);
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+	LASSERT(dt->do_index_ops->dio_insert);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
 		return cfs_fail_err;
@@ -2791,27 +2789,27 @@ static inline int dt_insert(const struct lu_env *env,
 }
 
 static inline int dt_declare_xattr_del(const struct lu_env *env,
-                                       struct dt_object *dt,
-                                       const char *name,
-                                       struct thandle *th)
+				       struct dt_object *dt,
+				       const char *name,
+				       struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_xattr_del);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_xattr_del);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_DEL))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_xattr_del(env, dt, name, th);
+	return dt->do_ops->do_declare_xattr_del(env, dt, name, th);
 }
 
 static inline int dt_xattr_del(const struct lu_env *env,
 			       struct dt_object *dt, const char *name,
 			       struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_xattr_del);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_del);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_DEL))
 		return cfs_fail_err;
@@ -2820,28 +2818,28 @@ static inline int dt_xattr_del(const struct lu_env *env,
 }
 
 static inline int dt_declare_xattr_set(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      const struct lu_buf *buf,
-                                      const char *name, int fl,
-                                      struct thandle *th)
+				      struct dt_object *dt,
+				      const struct lu_buf *buf,
+				      const char *name, int fl,
+				      struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_declare_xattr_set);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_xattr_set);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_SET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_declare_xattr_set(env, dt, buf, name, fl, th);
+	return dt->do_ops->do_declare_xattr_set(env, dt, buf, name, fl, th);
 }
 
 static inline int dt_xattr_set(const struct lu_env *env,
 			       struct dt_object *dt, const struct lu_buf *buf,
 			       const char *name, int fl, struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_xattr_set);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_set);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_SET))
 		return cfs_fail_err;
@@ -2868,9 +2866,9 @@ static inline int dt_xattr_get(const struct lu_env *env,
 			       struct dt_object *dt, struct lu_buf *buf,
 			       const char *name)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_xattr_get);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_get);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_GET))
 		return cfs_fail_err;
@@ -2881,9 +2879,9 @@ static inline int dt_xattr_get(const struct lu_env *env,
 static inline int dt_xattr_list(const struct lu_env *env, struct dt_object *dt,
 				const struct lu_buf *buf)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_xattr_list);
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_list);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_LIST))
 		return cfs_fail_err;
@@ -2901,18 +2899,18 @@ static inline int dt_invalidate(const struct lu_env *env, struct dt_object *dt)
 }
 
 static inline int dt_declare_delete(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    const struct dt_key *key,
-                                    struct thandle *th)
+				    struct dt_object *dt,
+				    const struct dt_key *key,
+				    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_index_ops);
-        LASSERT(dt->do_index_ops->dio_declare_delete);
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+	LASSERT(dt->do_index_ops->dio_declare_delete);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DELETE))
 		return cfs_fail_err;
 
-        return dt->do_index_ops->dio_declare_delete(env, dt, key, th);
+	return dt->do_index_ops->dio_declare_delete(env, dt, key, th);
 }
 
 static inline int dt_delete(const struct lu_env *env,
@@ -2920,9 +2918,9 @@ static inline int dt_delete(const struct lu_env *env,
 			    const struct dt_key *key,
 			    struct thandle *th)
 {
-        LASSERT(dt);
-        LASSERT(dt->do_index_ops);
-        LASSERT(dt->do_index_ops->dio_delete);
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+	LASSERT(dt->do_index_ops->dio_delete);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DELETE))
 		return cfs_fail_err;
@@ -2931,12 +2929,12 @@ static inline int dt_delete(const struct lu_env *env,
 }
 
 static inline int dt_commit_async(const struct lu_env *env,
-                                  struct dt_device *dev)
+				  struct dt_device *dev)
 {
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_commit_async);
-        return dev->dd_ops->dt_commit_async(env, dev);
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_commit_async);
+	return dev->dd_ops->dt_commit_async(env, dev);
 }
 
 static inline int dt_reserve_or_free_quota(const struct lu_env *env,
@@ -2954,21 +2952,21 @@ static inline int dt_lookup(const struct lu_env *env,
 			    struct dt_rec *rec,
 			    const struct dt_key *key)
 {
-        int ret;
+	int ret;
 
-        LASSERT(dt);
-        LASSERT(dt->do_index_ops);
-        LASSERT(dt->do_index_ops->dio_lookup);
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+	LASSERT(dt->do_index_ops->dio_lookup);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_LOOKUP))
 		return cfs_fail_err;
 
 	ret = dt->do_index_ops->dio_lookup(env, dt, rec, key);
-        if (ret > 0)
-                ret = 0;
-        else if (ret == 0)
-                ret = -ENOENT;
-        return ret;
+	if (ret > 0)
+		ret = 0;
+	else if (ret == 0)
+		ret = -ENOENT;
+	return ret;
 }
 
 static inline int dt_declare_layout_change(const struct lu_env *env,
