@@ -67,10 +67,8 @@
 #include "osd_scrub.h"
 #include "osd_quota_fmt.h"
 
-#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
- #ifdef HAVE_LINUX_BLK_INTEGRITY_HEADER
-  #include <linux/blk-integrity.h>
- #endif
+#ifdef HAVE_LINUX_BLK_INTEGRITY_HEADER
+ #include <linux/blk-integrity.h>
 #endif
 
 struct inode;

@@ -222,7 +222,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 	/* Just copied from kernel for the kernels which doesn't
 	 * have access_process_vm() exported
 	 */
-	struct vm_area_struct *vma;
+	struct vm_area_struct *vma = NULL;
 	struct page *page;
 	void *old_buf = buf;
 
@@ -239,7 +239,11 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 		int bytes, rc, offset;
 		void *maddr;
 
-#if defined(HAVE_GET_USER_PAGES_GUP_FLAGS)
+#if defined(HAVE_GET_USER_PAGES_WITHOUT_VMA)
+		rc = get_user_pages(addr, 1, write ? FOLL_WRITE : 0, &page);
+		if (rc > 0)
+			vma = vma_lookup(mm, addr);
+#elif defined(HAVE_GET_USER_PAGES_GUP_FLAGS)
 		rc = get_user_pages(addr, 1, write ? FOLL_WRITE : 0, &page,
 				    &vma);
 #elif defined(HAVE_GET_USER_PAGES_6ARG)
@@ -247,7 +251,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 #else
 		rc = get_user_pages(tsk, mm, addr, 1, write, 1, &page, &vma);
 #endif
-		if (rc <= 0)
+		if (rc <= 0 || !vma)
 			break;
 
 		bytes = len;

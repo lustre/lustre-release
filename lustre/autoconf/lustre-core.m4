@@ -4068,6 +4068,78 @@ AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
 ]) # LC_HAVE_CLASS_CREATE_MODULE_ARG
 
 #
+# LC_HAVE_FILEMAP_SPLICE_READ
+#
+# linux kernel v6.4-rc2-29-gc6585011bc1d
+#   splice: Remove generic_file_splice_read()
+#
+AC_DEFUN([LC_SRC_HAVE_FILEMAP_SPLICE_READ], [
+	LB2_LINUX_TEST_SRC([filemap_splice_read], [
+		#include <linux/fs.h>
+	],[
+		struct file *in = NULL;
+		loff_t pos = 0;
+		struct pipe_inode_info *pipe = NULL;
+		ssize_t count __attribute__ ((unused));
+
+		count = filemap_splice_read(in, &pos, pipe, 0, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FILEMAP_SPLICE_READ], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'filemap_splice_read' is available],
+	[filemap_splice_read], [
+		AC_DEFINE(HAVE_FILEMAP_SPLICE_READ, 1,
+			['filemap_splice_read' is available])
+	])
+]) # LC_HAVE_FILEMAP_SPLICE_READ
+
+#
+# LC_HAVE_ENUM_ITER_PIPE
+#
+# linux kernel v6.4-rc2-30-g3fc40265ae2b
+#   iov_iter: Kill ITER_PIPE
+#
+AC_DEFUN([LC_SRC_HAVE_ENUM_ITER_PIPE], [
+	LB2_LINUX_TEST_SRC([enum_iter_type_iter_pipe], [
+		#include <linux/uio.h>
+	],[
+		enum iter_type iter_type = ITER_PIPE;
+
+		(void)iter_type;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ENUM_ITER_PIPE], [
+	LB2_MSG_LINUX_TEST_RESULT([if enum iter_type has member 'iter_pipe'],
+	[enum_iter_type_iter_pipe], [
+		AC_DEFINE(HAVE_ENUM_ITER_PIPE, 1,
+			[enum iter_type has member 'iter_pipe'])
+	])
+]) # LC_HAVE_ENUM_ITER_PIPE
+
+#
+# LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
+#
+# linux kernel v6.4-rc2-30-g3fc40265ae2b
+#   iov_iter: Kill ITER_PIPE
+#
+AC_DEFUN([LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA], [
+	LB2_LINUX_TEST_SRC([get_user_pages_without_vma], [
+		#include <linux/mm.h>
+	],[
+		struct page *pages __attribute__ ((unused));
+
+		(void)get_user_pages(0, 0, 0, &pages);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GET_USER_PAGES_WITHOUT_VMA], [
+	LB2_MSG_LINUX_TEST_RESULT([if get_user_pages removed 'vma' parameter],
+	[get_user_pages_without_vma], [
+		AC_DEFINE(HAVE_GET_USER_PAGES_WITHOUT_VMA, 1,
+			[get_user_pages removed 'vma' parameter])
+	])
+]) # LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4331,6 +4403,11 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_IOV_ITER_IOVEC
 	LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG
+
+	# 6.5
+	LC_SRC_HAVE_FILEMAP_SPLICE_READ
+	LC_SRC_HAVE_ENUM_ITER_PIPE
+	LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4616,6 +4693,11 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_IOV_ITER_IOVEC
 	LC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_HAVE_CLASS_CREATE_MODULE_ARG
+
+	# 6.5
+	LC_HAVE_FILEMAP_SPLICE_READ
+	LC_HAVE_ENUM_ITER_PIPE
+	LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
