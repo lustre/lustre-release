@@ -111,58 +111,57 @@ struct lu_name;
  * Operations common for data and meta-data devices.
  */
 struct lu_device_operations {
-        /**
-         * Allocate object for the given device (without lower-layer
-         * parts). This is called by lu_object_operations::loo_object_init()
-         * from the parent layer, and should setup at least lu_object::lo_dev
-         * and lu_object::lo_ops fields of resulting lu_object.
-         *
-         * Object creation protocol.
-         *
-         * Due to design goal of avoiding recursion, object creation (see
-         * lu_object_alloc()) is somewhat involved:
-         *
-         *  - first, lu_device_operations::ldo_object_alloc() method of the
-         *  top-level device in the stack is called. It should allocate top
-         *  level object (including lu_object_header), but without any
-         *  lower-layer sub-object(s).
-         *
-         *  - then lu_object_alloc() sets fid in the header of newly created
-         *  object.
-         *
-         *  - then lu_object_operations::loo_object_init() is called. It has
-         *  to allocate lower-layer object(s). To do this,
-         *  lu_object_operations::loo_object_init() calls ldo_object_alloc()
-         *  of the lower-layer device(s).
-         *
-         *  - for all new objects allocated by
-         *  lu_object_operations::loo_object_init() (and inserted into object
-         *  stack), lu_object_operations::loo_object_init() is called again
-         *  repeatedly, until no new objects are created.
-         *
-         * \post ergo(!IS_ERR(result), result->lo_dev == d &&
-         *                             result->lo_ops != NULL);
-         */
-        struct lu_object *(*ldo_object_alloc)(const struct lu_env *env,
-                                              const struct lu_object_header *h,
-                                              struct lu_device *d);
-        /**
-         * process config specific for device.
-         */
-        int (*ldo_process_config)(const struct lu_env *env,
-                                  struct lu_device *, struct lustre_cfg *);
-        int (*ldo_recovery_complete)(const struct lu_env *,
-                                     struct lu_device *);
+	/**
+	 * Allocate object for the given device (without lower-layer
+	 * parts). This is called by lu_object_operations::loo_object_init()
+	 * from the parent layer, and should setup at least lu_object::lo_dev
+	 * and lu_object::lo_ops fields of resulting lu_object.
+	 *
+	 * Object creation protocol.
+	 *
+	 * Due to design goal of avoiding recursion, object creation (see
+	 * lu_object_alloc()) is somewhat involved:
+	 *
+	 *  - first, lu_device_operations::ldo_object_alloc() method of the
+	 *  top-level device in the stack is called. It should allocate top
+	 *  level object (including lu_object_header), but without any
+	 *  lower-layer sub-object(s).
+	 *
+	 *  - then lu_object_alloc() sets fid in the header of newly created
+	 *  object.
+	 *
+	 *  - then lu_object_operations::loo_object_init() is called. It has
+	 *  to allocate lower-layer object(s). To do this,
+	 *  lu_object_operations::loo_object_init() calls ldo_object_alloc()
+	 *  of the lower-layer device(s).
+	 *
+	 *  - for all new objects allocated by
+	 *  lu_object_operations::loo_object_init() (and inserted into object
+	 *  stack), lu_object_operations::loo_object_init() is called again
+	 *  repeatedly, until no new objects are created.
+	 *
+	 * \post ergo(!IS_ERR(result), result->lo_dev == d &&
+	 *                             result->lo_ops != NULL);
+	 */
+	struct lu_object *(*ldo_object_alloc)(const struct lu_env *env,
+					      const struct lu_object_header *h,
+					      struct lu_device *d);
+	/**
+	 * process config specific for device.
+	 */
+	int (*ldo_process_config)(const struct lu_env *env,
+				  struct lu_device *, struct lustre_cfg *);
+	int (*ldo_recovery_complete)(const struct lu_env *,
+				     struct lu_device *);
 
-        /**
-         * initialize local objects for device. this method called after layer has
-         * been initialized (after LCFG_SETUP stage) and before it starts serving
-         * user requests.
-         */
-
-        int (*ldo_prepare)(const struct lu_env *,
-                           struct lu_device *parent,
-                           struct lu_device *dev);
+	/**
+	 * initialize local objects for device. this method called after layer
+	 * has been initialized (after LCFG_SETUP stage) and before it starts
+	 * serving user requests.
+	 */
+	int (*ldo_prepare)(const struct lu_env *,
+			   struct lu_device *parent,
+			   struct lu_device *dev);
 
 
 	/**
@@ -191,7 +190,8 @@ struct lu_device_operations {
  */
 typedef enum {
 	/* This is a new object to be allocated, or the file
-	 * corresponding to the object does not exists. */
+	 * corresponding to the object does not exists.
+	 */
 	LOC_F_NEW	= 0x00000001,
 } loc_flags_t;
 
@@ -201,10 +201,10 @@ typedef enum {
  * client configuration contains struct lustre_md.
  */
 struct lu_object_conf {
-        /**
-         * Some hints for obj find and alloc.
-         */
-        loc_flags_t     loc_flags;
+	/**
+	 * Some hints for obj find and alloc.
+	 */
+	loc_flags_t     loc_flags;
 };
 
 /**
@@ -215,40 +215,40 @@ struct lu_object_conf {
  * output: possible implementations: printk, CDEBUG, sysfs/seq_file
  */
 typedef int (*lu_printer_t)(const struct lu_env *env,
-                            void *cookie, const char *format, ...)
-        __attribute__ ((format (printf, 3, 4)));
+			    void *cookie, const char *format, ...)
+	__printf(3, 4);
 
 /**
  * Operations specific for particular lu_object.
  */
 struct lu_object_operations {
 
-        /**
-         * Allocate lower-layer parts of the object by calling
-         * lu_device_operations::ldo_object_alloc() of the corresponding
-         * underlying device.
-         *
-         * This method is called once for each object inserted into object
-         * stack. It's responsibility of this method to insert lower-layer
-         * object(s) it create into appropriate places of object stack.
-         */
-        int (*loo_object_init)(const struct lu_env *env,
-                               struct lu_object *o,
-                               const struct lu_object_conf *conf);
-        /**
-         * Called (in top-to-bottom order) during object allocation after all
-         * layers were allocated and initialized. Can be used to perform
-         * initialization depending on lower layers.
-         */
-        int (*loo_object_start)(const struct lu_env *env,
-                                struct lu_object *o);
-        /**
-         * Called before lu_object_operations::loo_object_free() to signal
-         * that object is being destroyed. Dual to
-         * lu_object_operations::loo_object_init().
-         */
-        void (*loo_object_delete)(const struct lu_env *env,
-                                  struct lu_object *o);
+	/**
+	 * Allocate lower-layer parts of the object by calling
+	 * lu_device_operations::ldo_object_alloc() of the corresponding
+	 * underlying device.
+	 *
+	 * This method is called once for each object inserted into object
+	 * stack. It's responsibility of this method to insert lower-layer
+	 * object(s) it create into appropriate places of object stack.
+	 */
+	int (*loo_object_init)(const struct lu_env *env,
+			       struct lu_object *o,
+			       const struct lu_object_conf *conf);
+	/**
+	 * Called (in top-to-bottom order) during object allocation after all
+	 * layers were allocated and initialized. Can be used to perform
+	 * initialization depending on lower layers.
+	 */
+	int (*loo_object_start)(const struct lu_env *env,
+				struct lu_object *o);
+	/**
+	 * Called before lu_object_operations::loo_object_free() to signal
+	 * that object is being destroyed. Dual to
+	 * lu_object_operations::loo_object_init().
+	 */
+	void (*loo_object_delete)(const struct lu_env *env,
+				  struct lu_object *o);
 	/**
 	 * Dual to lu_device_operations::ldo_object_alloc(). Called when
 	 * object is removed from memory.  Must use call_rcu or kfree_rcu
@@ -256,22 +256,22 @@ struct lu_object_operations {
 	 */
 	void (*loo_object_free)(const struct lu_env *env,
 				struct lu_object *o);
-        /**
-         * Called when last active reference to the object is released (and
-         * object returns to the cache). This method is optional.
-         */
-        void (*loo_object_release)(const struct lu_env *env,
-                                   struct lu_object *o);
-        /**
-         * Optional debugging helper. Print given object.
-         */
-        int (*loo_object_print)(const struct lu_env *env, void *cookie,
-                                lu_printer_t p, const struct lu_object *o);
-        /**
-         * Optional debugging method. Returns true iff method is internally
-         * consistent.
-         */
-        int (*loo_object_invariant)(const struct lu_object *o);
+	/**
+	 * Called when last active reference to the object is released (and
+	 * object returns to the cache). This method is optional.
+	 */
+	void (*loo_object_release)(const struct lu_env *env,
+				   struct lu_object *o);
+	/**
+	 * Optional debugging helper. Print given object.
+	 */
+	int (*loo_object_print)(const struct lu_env *env, void *cookie,
+				lu_printer_t p, const struct lu_object *o);
+	/**
+	 * Optional debugging method. Returns true iff method is internally
+	 * consistent.
+	 */
+	int (*loo_object_invariant)(const struct lu_object *o);
 };
 
 /**
@@ -294,25 +294,25 @@ struct lu_device {
 	 * Pointer to device type. Never modified once set.
 	 */
 	struct lu_device_type		  *ld_type;
-        /**
-         * Operation vector for this device.
-         */
-        const struct lu_device_operations *ld_ops;
-        /**
-         * Stack this device belongs to.
-         */
-        struct lu_site                    *ld_site;
-        struct proc_dir_entry             *ld_proc_entry;
+	/**
+	 * Operation vector for this device.
+	 */
+	const struct lu_device_operations *ld_ops;
+	/**
+	 * Stack this device belongs to.
+	 */
+	struct lu_site                    *ld_site;
+	struct proc_dir_entry             *ld_proc_entry;
 
-        /** \todo XXX: temporary back pointer into obd. */
-        struct obd_device                 *ld_obd;
-        /**
-         * A list of references to this object, for debugging.
-         */
-        struct lu_ref                      ld_reference;
-        /**
-         * Link the device to the site.
-         **/
+	/** \todo XXX: temporary back pointer into obd. */
+	struct obd_device                 *ld_obd;
+	/**
+	 * A list of references to this object, for debugging.
+	 */
+	struct lu_ref                      ld_reference;
+	/**
+	 * Link the device to the site.
+	 **/
 	struct list_head		   ld_linkage;
 };
 
@@ -335,25 +335,25 @@ enum lu_device_tag {
  * Type of device.
  */
 struct lu_device_type {
-        /**
-         * Tag bits. Taken from enum lu_device_tag. Never modified once set.
-         */
-        __u32                                   ldt_tags;
-        /**
-         * Name of this class. Unique system-wide. Never modified once set.
-         */
-        char                                   *ldt_name;
-        /**
-         * Operations for this type.
-         */
-        const struct lu_device_type_operations *ldt_ops;
-        /**
-         * \todo XXX: temporary: context tags used by obd_*() calls.
-         */
-        __u32                                   ldt_ctx_tags;
-        /**
-         * Number of existing device type instances.
-         */
+	/**
+	 * Tag bits. Taken from enum lu_device_tag. Never modified once set.
+	 */
+	__u32                                   ldt_tags;
+	/**
+	 * Name of this class. Unique system-wide. Never modified once set.
+	 */
+	char                                   *ldt_name;
+	/**
+	 * Operations for this type.
+	 */
+	const struct lu_device_type_operations *ldt_ops;
+	/**
+	 * \todo XXX: temporary: context tags used by obd_*() calls.
+	 */
+	__u32                                   ldt_ctx_tags;
+	/**
+	 * Number of existing device type instances.
+	 */
 	atomic_t				ldt_device_nr;
 };
 
@@ -361,50 +361,50 @@ struct lu_device_type {
  * Operations on a device type.
  */
 struct lu_device_type_operations {
-        /**
-         * Allocate new device.
-         */
-        struct lu_device *(*ldto_device_alloc)(const struct lu_env *env,
-                                               struct lu_device_type *t,
-                                               struct lustre_cfg *lcfg);
-        /**
-         * Free device. Dual to
-         * lu_device_type_operations::ldto_device_alloc(). Returns pointer to
-         * the next device in the stack.
-         */
-        struct lu_device *(*ldto_device_free)(const struct lu_env *,
-                                              struct lu_device *);
+	/**
+	 * Allocate new device.
+	 */
+	struct lu_device *(*ldto_device_alloc)(const struct lu_env *env,
+					       struct lu_device_type *t,
+					       struct lustre_cfg *lcfg);
+	/**
+	 * Free device. Dual to
+	 * lu_device_type_operations::ldto_device_alloc(). Returns pointer to
+	 * the next device in the stack.
+	 */
+	struct lu_device *(*ldto_device_free)(const struct lu_env *,
+					      struct lu_device *);
 
-        /**
-         * Initialize the devices after allocation
-         */
-        int  (*ldto_device_init)(const struct lu_env *env,
-                                 struct lu_device *, const char *,
-                                 struct lu_device *);
-        /**
-         * Finalize device. Dual to
-         * lu_device_type_operations::ldto_device_init(). Returns pointer to
-         * the next device in the stack.
-         */
-        struct lu_device *(*ldto_device_fini)(const struct lu_env *env,
-                                              struct lu_device *);
-        /**
-         * Initialize device type. This is called on module load.
-         */
-        int  (*ldto_init)(struct lu_device_type *t);
-        /**
-         * Finalize device type. Dual to
-         * lu_device_type_operations::ldto_init(). Called on module unload.
-         */
-        void (*ldto_fini)(struct lu_device_type *t);
-        /**
-         * Called when the first device is created.
-         */
-        void (*ldto_start)(struct lu_device_type *t);
-        /**
-         * Called when number of devices drops to 0.
-         */
-        void (*ldto_stop)(struct lu_device_type *t);
+	/**
+	 * Initialize the devices after allocation
+	 */
+	int  (*ldto_device_init)(const struct lu_env *env,
+				 struct lu_device *, const char *,
+				 struct lu_device *);
+	/**
+	 * Finalize device. Dual to
+	 * lu_device_type_operations::ldto_device_init(). Returns pointer to
+	 * the next device in the stack.
+	 */
+	struct lu_device *(*ldto_device_fini)(const struct lu_env *env,
+					      struct lu_device *);
+	/**
+	 * Initialize device type. This is called on module load.
+	 */
+	int  (*ldto_init)(struct lu_device_type *t);
+	/**
+	 * Finalize device type. Dual to
+	 * lu_device_type_operations::ldto_init(). Called on module unload.
+	 */
+	void (*ldto_fini)(struct lu_device_type *t);
+	/**
+	 * Called when the first device is created.
+	 */
+	void (*ldto_start)(struct lu_device_type *t);
+	/**
+	 * Called when number of devices drops to 0.
+	 */
+	void (*ldto_stop)(struct lu_device_type *t);
 };
 
 static inline int lu_device_is_md(const struct lu_device *d)
@@ -422,7 +422,7 @@ struct lu_attr {
 	 * \see enum la_valid
 	 */
 	__u64		la_valid;
-        /** size in bytes */
+	/** size in bytes */
 	__u64		la_size;
 	/** modification time in seconds since Epoch */
 	s64		la_mtime;
@@ -432,23 +432,23 @@ struct lu_attr {
 	s64		la_ctime;
 	/** create time in seconds since Epoch */
 	s64		la_btime;
-        /** 512-byte blocks allocated to object */
+	/** 512-byte blocks allocated to object */
 	__u64		la_blocks;
-        /** permission bits and file type */
+	/** permission bits and file type */
 	__u32		la_mode;
-        /** owner id */
+	/** owner id */
 	__u32		la_uid;
-        /** group id */
+	/** group id */
 	__u32		la_gid;
-        /** object flags */
+	/** object flags */
 	__u32		la_flags;
-        /** number of persistent references to this object */
+	/** number of persistent references to this object */
 	__u32		la_nlink;
-        /** blk bits of the object*/
+	/** blk bits of the object*/
 	__u32		la_blkbits;
-        /** blk size of the object*/
+	/** blk size of the object*/
 	__u32		la_blksize;
-        /** real device */
+	/** real device */
 	__u32		la_rdev;
 	/** project id */
 	__u32		la_projid;
@@ -464,21 +464,21 @@ struct lu_attr {
  * Layer in the layered object.
  */
 struct lu_object {
-        /**
-         * Header for this object.
-         */
-        struct lu_object_header           *lo_header;
-        /**
-         * Device for this layer.
-         */
-        struct lu_device                  *lo_dev;
-        /**
-         * Operations for this object.
-         */
-        const struct lu_object_operations *lo_ops;
-        /**
-         * Linkage into list of all layers.
-         */
+	/**
+	 * Header for this object.
+	 */
+	struct lu_object_header           *lo_header;
+	/**
+	 * Device for this layer.
+	 */
+	struct lu_device                  *lo_dev;
+	/**
+	 * Operations for this object.
+	 */
+	const struct lu_object_operations *lo_ops;
+	/**
+	 * Linkage into list of all layers.
+	 */
 	struct list_head		   lo_linkage;
 	/**
 	 * Link to the device, for debugging.
@@ -594,9 +594,9 @@ enum {
  * lu_object.
  */
 struct lu_site {
-        /**
-         * objects hash table
-         */
+	/**
+	 * objects hash table
+	 */
 	struct rhashtable	ls_obj_hash;
 	/*
 	 * buckets for summary data
@@ -604,9 +604,9 @@ struct lu_site {
 	struct lu_site_bkt_data	*ls_bkts;
 	int			ls_bkt_cnt;
 	u32			ls_bkt_seed;
-        /**
-         * index of bucket on hash table while purging
-         */
+	/**
+	 * index of bucket on hash table while purging
+	 */
 	unsigned int		ls_purge_start;
 	/**
 	 * Top-level device for this stack.
@@ -662,22 +662,22 @@ static inline struct seq_server_site *lu_site2seq(const struct lu_site *s)
  * @{
  */
 
-int  lu_site_init         (struct lu_site *s, struct lu_device *d);
-void lu_site_fini         (struct lu_site *s);
-int  lu_site_init_finish  (struct lu_site *s);
-void lu_stack_fini        (const struct lu_env *env, struct lu_device *top);
-void lu_device_get        (struct lu_device *d);
-void lu_device_put        (struct lu_device *d);
-int  lu_device_init       (struct lu_device *d, struct lu_device_type *t);
-void lu_device_fini       (struct lu_device *d);
+int  lu_site_init(struct lu_site *s, struct lu_device *d);
+void lu_site_fini(struct lu_site *s);
+int  lu_site_init_finish(struct lu_site *s);
+void lu_stack_fini(const struct lu_env *env, struct lu_device *top);
+void lu_device_get(struct lu_device *d);
+void lu_device_put(struct lu_device *d);
+int  lu_device_init(struct lu_device *d, struct lu_device_type *t);
+void lu_device_fini(struct lu_device *d);
 int  lu_object_header_init(struct lu_object_header *h);
 void lu_object_header_fini(struct lu_object_header *h);
 void lu_object_header_free(struct lu_object_header *h);
-int  lu_object_init       (struct lu_object *o,
-                           struct lu_object_header *h, struct lu_device *d);
-void lu_object_fini       (struct lu_object *o);
-void lu_object_add_top    (struct lu_object_header *h, struct lu_object *o);
-void lu_object_add        (struct lu_object *before, struct lu_object *o);
+int  lu_object_init(struct lu_object *o,
+			   struct lu_object_header *h, struct lu_device *d);
+void lu_object_fini(struct lu_object *o);
+void lu_object_add_top(struct lu_object_header *h, struct lu_object *o);
+void lu_object_add(struct lu_object *before, struct lu_object *o);
 struct lu_object *lu_object_get_first(struct lu_object_header *h,
 				      struct lu_device *dev);
 void lu_dev_add_linkage(struct lu_site *s, struct lu_device *d);
@@ -740,16 +740,16 @@ static inline int lu_site_purge(const struct lu_env *env, struct lu_site *s,
 void lu_site_print(const struct lu_env *env, struct lu_site *s, atomic_t *ref,
 		   int msg_flags, lu_printer_t printer);
 struct lu_object *lu_object_find(const struct lu_env *env,
-                                 struct lu_device *dev, const struct lu_fid *f,
-                                 const struct lu_object_conf *conf);
+				 struct lu_device *dev, const struct lu_fid *f,
+				 const struct lu_object_conf *conf);
 struct lu_object *lu_object_find_at(const struct lu_env *env,
-                                    struct lu_device *dev,
-                                    const struct lu_fid *f,
-                                    const struct lu_object_conf *conf);
+				    struct lu_device *dev,
+				    const struct lu_fid *f,
+				    const struct lu_object_conf *conf);
 struct lu_object *lu_object_find_slice(const struct lu_env *env,
-                                       struct lu_device *dev,
-                                       const struct lu_fid *f,
-                                       const struct lu_object_conf *conf);
+				       struct lu_device *dev,
+				       const struct lu_fid *f,
+				       const struct lu_object_conf *conf);
 /** @} caching */
 
 /** \name helpers
@@ -779,7 +779,7 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
  */
 static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
-        return &o->lo_header->loh_fid;
+	return &o->lo_header->loh_fid;
 }
 
 /**
@@ -788,7 +788,7 @@ static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 static const inline struct lu_device_operations *
 lu_object_ops(const struct lu_object *o)
 {
-        return o->lo_dev->ld_ops;
+	return o->lo_dev->ld_ops;
 }
 
 /**
@@ -796,24 +796,24 @@ lu_object_ops(const struct lu_object *o)
  * \a dtype.
  */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
-                                   const struct lu_device_type *dtype);
+				   const struct lu_device_type *dtype);
 
 /**
  * Printer function emitting messages through libcfs_debug_msg().
  */
 int lu_cdebug_printer(const struct lu_env *env,
-                      void *cookie, const char *format, ...);
+		      void *cookie, const char *format, ...);
 
 /**
  * Print object description followed by a user-supplied message.
  */
 #define LU_OBJECT_DEBUG(mask, env, object, format, ...)                   \
 do {                                                                      \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                     \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);          \
-                lu_object_print(env, &msgdata, lu_cdebug_printer, object);\
-                CDEBUG(mask, format "\n", ## __VA_ARGS__);                \
-        }                                                                 \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                     \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);          \
+		lu_object_print(env, &msgdata, lu_cdebug_printer, object);\
+		CDEBUG(mask, format "\n", ## __VA_ARGS__);                \
+	}                                                                 \
 } while (0)
 
 /**
@@ -821,20 +821,20 @@ do {                                                                      \
  */
 #define LU_OBJECT_HEADER(mask, env, object, format, ...)                \
 do {                                                                    \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
-                lu_object_header_print(env, &msgdata, lu_cdebug_printer,\
-                                       (object)->lo_header);            \
-                lu_cdebug_printer(env, &msgdata, "\n");                 \
-                CDEBUG(mask, format , ## __VA_ARGS__);                  \
-        }                                                               \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);        \
+		lu_object_header_print(env, &msgdata, lu_cdebug_printer,\
+				       (object)->lo_header);            \
+		lu_cdebug_printer(env, &msgdata, "\n");                 \
+		CDEBUG(mask, format, ## __VA_ARGS__);                   \
+	}                                                               \
 } while (0)
 
 void lu_object_print       (const struct lu_env *env, void *cookie,
-                            lu_printer_t printer, const struct lu_object *o);
+			    lu_printer_t printer, const struct lu_object *o);
 void lu_object_header_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t printer,
-                            const struct lu_object_header *hdr);
+			    lu_printer_t printer,
+			    const struct lu_object_header *hdr);
 
 /**
  * Check object consistency.
@@ -913,30 +913,30 @@ static inline void lu_object_ref_add_at(struct lu_object *o,
 }
 
 static inline void lu_object_ref_del(struct lu_object *o,
-                                     const char *scope, const void *source)
+				     const char *scope, const void *source)
 {
-        lu_ref_del(&o->lo_header->loh_reference, scope, source);
+	lu_ref_del(&o->lo_header->loh_reference, scope, source);
 }
 
 static inline void lu_object_ref_del_at(struct lu_object *o,
-                                        struct lu_ref_link *link,
-                                        const char *scope, const void *source)
+					struct lu_ref_link *link,
+					const char *scope, const void *source)
 {
-        lu_ref_del_at(&o->lo_header->loh_reference, link, scope, source);
+	lu_ref_del_at(&o->lo_header->loh_reference, link, scope, source);
 }
 
 /** input params, should be filled out by mdt */
 struct lu_rdpg {
-        /** hash */
-        __u64                   rp_hash;
-        /** count in bytes */
-        unsigned int            rp_count;
-        /** number of pages */
-        unsigned int            rp_npages;
-        /** requested attr */
-        __u32                   rp_attrs;
-        /** pointers to pages */
-        struct page           **rp_pages;
+	/** hash */
+	__u64                   rp_hash;
+	/** count in bytes */
+	unsigned int            rp_count;
+	/** number of pages */
+	unsigned int            rp_npages;
+	/** requested attr */
+	__u32                   rp_attrs;
+	/** pointers to pages */
+	struct page           **rp_pages;
 };
 
 enum lu_xattr_flags {
@@ -949,16 +949,15 @@ enum lu_xattr_flags {
 
 /** @} helpers */
 
-/** \name lu_context
- * @{ */
+/* \name lu_context @{ */
 
 /** For lu_context health-checks */
 enum lu_context_state {
-        LCS_INITIALIZED = 1,
-        LCS_ENTERED,
+	LCS_INITIALIZED = 1,
+	LCS_ENTERED,
 	LCS_LEAVING,
-        LCS_LEFT,
-        LCS_FINALIZED
+	LCS_LEFT,
+	LCS_FINALIZED
 };
 
 /**
@@ -983,27 +982,27 @@ enum lu_context_state {
  * \see lu_context_key
  */
 struct lu_context {
-        /**
-         * lu_context is used on the client side too. Yet we don't want to
-         * allocate values of server-side keys for the client contexts and
-         * vice versa.
-         *
-         * To achieve this, set of tags in introduced. Contexts and keys are
-         * marked with tags. Key value are created only for context whose set
-         * of tags has non-empty intersection with one for key. Tags are taken
-         * from enum lu_context_tag.
-         */
-        __u32                  lc_tags;
+	/**
+	 * lu_context is used on the client side too. Yet we don't want to
+	 * allocate values of server-side keys for the client contexts and
+	 * vice versa.
+	 *
+	 * To achieve this, set of tags in introduced. Contexts and keys are
+	 * marked with tags. Key value are created only for context whose set
+	 * of tags has non-empty intersection with one for key. Tags are taken
+	 * from enum lu_context_tag.
+	 */
+	__u32                  lc_tags;
 	enum lu_context_state  lc_state;
-        /**
-         * Pointer to the home service thread. NULL for other execution
-         * contexts.
-         */
-        struct ptlrpc_thread  *lc_thread;
-        /**
-         * Pointer to an array with key values. Internal implementation
-         * detail.
-         */
+	/**
+	 * Pointer to the home service thread. NULL for other execution
+	 * contexts.
+	 */
+	struct ptlrpc_thread  *lc_thread;
+	/**
+	 * Pointer to an array with key values. Internal implementation
+	 * detail.
+	 */
 	void		      **lc_value;
 	/**
 	 * Linkage into a list of all remembered contexts. Only
@@ -1015,11 +1014,11 @@ struct lu_context {
 	 * Version counter used to skip calls to lu_context_refill() when no
 	 * keys were registered.
 	 */
-	unsigned		lc_version;
-        /**
-         * Debugging cookie.
-         */
-	unsigned		lc_cookie;
+	unsigned int lc_version;
+	/**
+	 * Debugging cookie.
+	 */
+	unsigned int lc_cookie;
 };
 
 /**
@@ -1122,30 +1121,30 @@ enum lu_context_tag {
  * \see lu_context
  */
 struct lu_context_key {
-        /**
-         * Set of tags for which values of this key are to be instantiated.
-         */
-        __u32 lct_tags;
-        /**
-         * Value constructor. This is called when new value is created for a
-         * context. Returns pointer to new value of error pointer.
-         */
-        void  *(*lct_init)(const struct lu_context *ctx,
-                           struct lu_context_key *key);
-        /**
-         * Value destructor. Called when context with previously allocated
-         * value of this slot is destroyed. \a data is a value that was returned
-         * by a matching call to lu_context_key::lct_init().
-         */
-        void   (*lct_fini)(const struct lu_context *ctx,
-                           struct lu_context_key *key, void *data);
-        /**
-         * Optional method called on lu_context_exit() for all allocated
-         * keys. Can be used by debugging code checking that locks are
-         * released, etc.
-         */
-        void   (*lct_exit)(const struct lu_context *ctx,
-                           struct lu_context_key *key, void *data);
+	/**
+	 * Set of tags for which values of this key are to be instantiated.
+	 */
+	__u32 lct_tags;
+	/**
+	 * Value constructor. This is called when new value is created for a
+	 * context. Returns pointer to new value of error pointer.
+	 */
+	void  *(*lct_init)(const struct lu_context *ctx,
+			   struct lu_context_key *key);
+	/**
+	 * Value destructor. Called when context with previously allocated
+	 * value of this slot is destroyed. \a data is a value that was returned
+	 * by a matching call to lu_context_key::lct_init().
+	 */
+	void   (*lct_fini)(const struct lu_context *ctx,
+			   struct lu_context_key *key, void *data);
+	/**
+	 * Optional method called on lu_context_exit() for all allocated
+	 * keys. Can be used by debugging code checking that locks are
+	 * released, etc.
+	 */
+	void   (*lct_exit)(const struct lu_context *ctx,
+			   struct lu_context_key *key, void *data);
 	/**
 	 * Internal implementation detail: index within lu_context::lc_value[]
 	 * reserved for this key.
@@ -1171,9 +1170,9 @@ struct lu_context_key {
 				    struct lu_context_key *key)   \
 	{                                                         \
 		type *value;                                      \
-                                                                  \
-		BUILD_BUG_ON(PAGE_SIZE < sizeof(*value));	  \
-                                                                  \
+								  \
+		BUILD_BUG_ON(sizeof(*value) > PAGE_SIZE);	  \
+								  \
 		OBD_ALLOC_PTR(value);                             \
 		if (value == NULL)                                \
 			value = ERR_PTR(-ENOMEM);                 \
@@ -1183,35 +1182,32 @@ struct lu_context_key {
 	struct __##mod##__dummy_init { ; } /* semicolon catcher */
 
 #define LU_KEY_FINI(mod, type)                                              \
-        static void mod##_key_fini(const struct lu_context *ctx,            \
-                                    struct lu_context_key *key, void* data) \
-        {                                                                   \
-                type *info = data;                                          \
-                                                                            \
-                OBD_FREE_PTR(info);                                         \
-        }                                                                   \
-        struct __##mod##__dummy_fini {;} /* semicolon catcher */
+	static void mod##_key_fini(const struct lu_context *ctx,            \
+				    struct lu_context_key *key, void *data) \
+	{                                                                   \
+		type *info = data;                                          \
+									    \
+		OBD_FREE_PTR(info);                                         \
+	}                                                                   \
+	struct __##mod##__dummy_fini {; } /* semicolon catcher */
 
-#define LU_KEY_INIT_FINI(mod, type)   \
-        LU_KEY_INIT(mod,type);        \
-        LU_KEY_FINI(mod,type)
+#define LU_KEY_INIT_FINI(mod, type)			\
+	LU_KEY_INIT(mod, type);				\
+	LU_KEY_FINI(mod, type)				\
 
 #define LU_CONTEXT_KEY_DEFINE(mod, tags)                \
-        struct lu_context_key mod##_thread_key = {      \
-                .lct_tags = tags,                       \
-                .lct_init = mod##_key_init,             \
-                .lct_fini = mod##_key_fini              \
-        }
+	struct lu_context_key mod##_thread_key = {      \
+		.lct_tags = tags,                       \
+		.lct_init = mod##_key_init,             \
+		.lct_fini = mod##_key_fini              \
+	}
 
-#define LU_CONTEXT_KEY_INIT(key)                        \
-do {                                                    \
-        (key)->lct_owner = THIS_MODULE;                 \
-} while (0)
+#define LU_CONTEXT_KEY_INIT(key) ((key)->lct_owner = THIS_MODULE)
 
 int   lu_context_key_register(struct lu_context_key *key);
 void  lu_context_key_degister(struct lu_context_key *key);
-void *lu_context_key_get     (const struct lu_context *ctx,
-                               const struct lu_context_key *key);
+void *lu_context_key_get(const struct lu_context *ctx,
+			       const struct lu_context_key *key);
 void  lu_context_key_quiesce(struct lu_device_type *t,
 			     struct lu_context_key *key);
 void  lu_context_key_revive(struct lu_context_key *key);
@@ -1223,41 +1219,41 @@ void  lu_context_key_revive(struct lu_context_key *key);
  */
 
 #define LU_KEY_INIT_GENERIC(mod)                                        \
-        static void mod##_key_init_generic(struct lu_context_key *k, ...) \
-        {                                                               \
-                struct lu_context_key *key = k;                         \
-                va_list args;                                           \
-                                                                        \
-                va_start(args, k);                                      \
-                do {                                                    \
-                        LU_CONTEXT_KEY_INIT(key);                       \
-                        key = va_arg(args, struct lu_context_key *);    \
-                } while (key != NULL);                                  \
-                va_end(args);                                           \
-        }
+	static void mod##_key_init_generic(struct lu_context_key *k, ...) \
+	{                                                               \
+		struct lu_context_key *key = k;                         \
+		va_list args;                                           \
+									\
+		va_start(args, k);                                      \
+		do {                                                    \
+			LU_CONTEXT_KEY_INIT(key);                       \
+			key = va_arg(args, struct lu_context_key *);    \
+		} while (key != NULL);                                  \
+		va_end(args);                                           \
+	}
 
 #define LU_TYPE_INIT(mod, ...)                                          \
-        LU_KEY_INIT_GENERIC(mod)                                        \
-        static int mod##_type_init(struct lu_device_type *t)            \
-        {                                                               \
-                mod##_key_init_generic(__VA_ARGS__, NULL);              \
-                return lu_context_key_register_many(__VA_ARGS__, NULL); \
-        }                                                               \
-        struct __##mod##_dummy_type_init {;}
+	LU_KEY_INIT_GENERIC(mod)                                        \
+	static int mod##_type_init(struct lu_device_type *t)            \
+	{                                                               \
+		mod##_key_init_generic(__VA_ARGS__, NULL);              \
+		return lu_context_key_register_many(__VA_ARGS__, NULL); \
+	}                                                               \
+	struct __##mod##_dummy_type_init {; }
 
 #define LU_TYPE_FINI(mod, ...)                                          \
-        static void mod##_type_fini(struct lu_device_type *t)           \
-        {                                                               \
-                lu_context_key_degister_many(__VA_ARGS__, NULL);        \
-        }                                                               \
-        struct __##mod##_dummy_type_fini {;}
+	static void mod##_type_fini(struct lu_device_type *t)           \
+	{                                                               \
+		lu_context_key_degister_many(__VA_ARGS__, NULL);        \
+	}                                                               \
+	struct __##mod##_dummy_type_fini {; }
 
 #define LU_TYPE_START(mod, ...)                                 \
-        static void mod##_type_start(struct lu_device_type *t)  \
-        {                                                       \
-                lu_context_key_revive_many(__VA_ARGS__, NULL);  \
-        }                                                       \
-        struct __##mod##_dummy_type_start {;}
+	static void mod##_type_start(struct lu_device_type *t)  \
+	{                                                       \
+		lu_context_key_revive_many(__VA_ARGS__, NULL);  \
+	}                                                       \
+	struct __##mod##_dummy_type_start {; }
 
 #define LU_TYPE_STOP(mod, ...)                                     \
 	static void mod##_type_stop(struct lu_device_type *t)      \
@@ -1268,16 +1264,16 @@ void  lu_context_key_revive(struct lu_context_key *key);
 
 
 
-#define LU_TYPE_INIT_FINI(mod, ...)             \
-        LU_TYPE_INIT(mod, __VA_ARGS__);         \
-        LU_TYPE_FINI(mod, __VA_ARGS__);         \
-        LU_TYPE_START(mod, __VA_ARGS__);        \
-        LU_TYPE_STOP(mod, __VA_ARGS__)
+#define LU_TYPE_INIT_FINI(mod, ...)		\
+	LU_TYPE_INIT(mod, __VA_ARGS__);		\
+	LU_TYPE_FINI(mod, __VA_ARGS__);		\
+	LU_TYPE_START(mod, __VA_ARGS__);	\
+	LU_TYPE_STOP(mod, __VA_ARGS__)
 
-int   lu_context_init  (struct lu_context *ctx, __u32 tags);
-void  lu_context_fini  (struct lu_context *ctx);
-void  lu_context_enter (struct lu_context *ctx);
-void  lu_context_exit  (struct lu_context *ctx);
+int   lu_context_init(struct lu_context *ctx, __u32 tags);
+void  lu_context_fini(struct lu_context *ctx);
+void  lu_context_enter(struct lu_context *ctx);
+void  lu_context_exit(struct lu_context *ctx);
 int   lu_context_refill(struct lu_context *ctx);
 
 /*
@@ -1287,7 +1283,7 @@ int   lu_context_refill(struct lu_context *ctx);
 
 int  lu_context_key_register_many(struct lu_context_key *k, ...);
 void lu_context_key_degister_many(struct lu_context_key *k, ...);
-void lu_context_key_revive_many  (struct lu_context_key *k, ...);
+void lu_context_key_revive_many(struct lu_context_key *k, ...);
 void lu_context_key_quiesce_many(struct lu_device_type *t,
 				 struct lu_context_key *k, ...);
 
@@ -1303,25 +1299,26 @@ void lu_session_tags_clear(__u32 tags);
  * Environment.
  */
 struct lu_env {
-        /**
-         * "Local" context, used to store data instead of stack.
-         */
-        struct lu_context  le_ctx;
-        /**
-         * "Session" context for per-request data.
-         */
-        struct lu_context *le_ses;
+	/**
+	 * "Local" context, used to store data instead of stack.
+	 */
+	struct lu_context  le_ctx;
+	/**
+	 * "Session" context for per-request data.
+	 */
+	struct lu_context *le_ses;
 };
 
-int  lu_env_init  (struct lu_env *env, __u32 tags);
-void lu_env_fini  (struct lu_env *env);
+int  lu_env_init(struct lu_env *env, __u32 tags);
+void lu_env_fini(struct lu_env *env);
 int  lu_env_refill(struct lu_env *env);
 int  lu_env_refill_by_tags(struct lu_env *env, __u32 ctags, __u32 stags);
 
-static inline void* lu_env_info(const struct lu_env *env,
+static inline void *lu_env_info(const struct lu_env *env,
 				const struct lu_context_key *key)
 {
 	void *info;
+
 	info = lu_context_key_get(&env->le_ctx, key);
 	if (!info) {
 		if (!lu_env_refill((struct lu_env *)env))
@@ -1348,8 +1345,8 @@ int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m);
  * Common name structure to be passed around for various name related methods.
  */
 struct lu_name {
-        const char    *ln_name;
-        int            ln_namelen;
+	const char    *ln_name;
+	int            ln_namelen;
 };
 
 static inline bool name_is_dot_or_dotdot(const char *name, int namelen)
@@ -1513,7 +1510,7 @@ struct lu_buf {
 };
 
 #define DLUBUF "(%p %zu)"
-#define PLUBUF(buf) (buf)->lb_buf, (buf)->lb_len
+#define PLUBUF(buf) ((buf)->lb_buf, (buf)->lb_len)
 
 /* read buffer params, should be filled out by out */
 struct lu_rdbuf {
@@ -1540,8 +1537,8 @@ void lu_global_fini(void);
 
 struct lu_kmem_descr {
 	struct kmem_cache **ckd_cache;
-        const char       *ckd_name;
-        const size_t      ckd_size;
+	const char       *ckd_name;
+	const size_t      ckd_size;
 };
 
 int  lu_kmem_init(struct lu_kmem_descr *caches);
@@ -1601,8 +1598,7 @@ int lu_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 /* bitflags used in rr / qos allocation */
 enum lq_flag {
 	LQ_DIRTY	= 0, /* recalc qos data */
-	LQ_SAME_SPACE,	     /* the OSTs all have approx.
-			      * the same space avail */
+	LQ_SAME_SPACE,	     /* OSTs all have approx the same space avail */
 	LQ_RESET,	     /* zero current penalties */
 	LQ_SF_PROGRESS,      /* statfs op in progress */
 };
@@ -1633,8 +1629,7 @@ struct lu_svr_qos {
 	__u64			 lsq_bavail;	/* total bytes avail on svr */
 	__u64			 lsq_iavail;	/* total inode avail on svr */
 	__u64			 lsq_penalty;	/* current penalty */
-	__u64			 lsq_penalty_per_obj; /* penalty decrease
-						       * every obj*/
+	__u64			 lsq_penalty_per_obj; /* penalty dec per obj*/
 	time64_t		 lsq_used;	/* last used time, seconds */
 	__u32			 lsq_tgt_count;	/* number of tgts on this svr */
 	__u32			 lsq_id;	/* unique svr id */
@@ -1644,8 +1639,7 @@ struct lu_svr_qos {
 struct lu_tgt_qos {
 	struct lu_svr_qos	*ltq_svr;	/* svr info */
 	__u64			 ltq_penalty;	/* current penalty */
-	__u64			 ltq_penalty_per_obj; /* penalty decrease
-						       * every obj*/
+	__u64			 ltq_penalty_per_obj; /* penalty dec per obj */
 	__u64			 ltq_avail;	/* bytes/inode avail */
 	__u64			 ltq_weight;	/* net weighting */
 	time64_t		 ltq_used;	/* last used time, seconds */
@@ -1715,12 +1709,6 @@ struct lu_qos {
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
 #endif
 	unsigned long		 lq_flags;
-#if 0
-	unsigned long		 lq_dirty:1,     /* recalc qos data */
-				 lq_same_space:1,/* the servers all have approx.
-						  * the same space avail */
-				 lq_reset:1;     /* zero current penalties */
-#endif
 };
 
 struct lu_tgt_descs {
@@ -1751,8 +1739,8 @@ struct lu_tgt_descs {
 };
 
 #define LTD_TGT(ltd, index)						\
-	 (ltd)->ltd_tgt_idx[(index) / TGT_PTRS_PER_BLOCK]->		\
-		ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
+	((ltd)->ltd_tgt_idx[(index) / TGT_PTRS_PER_BLOCK]->		\
+		ldi_tgt[(index) % TGT_PTRS_PER_BLOCK])
 
 u64 lu_prandom_u64_max(u64 ep_ro);
 int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
