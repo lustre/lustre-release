@@ -52,7 +52,8 @@ struct lquota_trans;
 
 /* Gather all quota record type in an union that can be used to read any records
  * from disk. All fields of these records must be 64-bit aligned, otherwise the
- * OSD layer may swab them incorrectly. */
+ * OSD layer may swab them incorrectly.
+ */
 union lquota_rec {
 	struct lquota_glb_rec	lqr_glb_rec;
 	struct lquota_slv_rec	lqr_slv_rec;
@@ -68,7 +69,8 @@ enum osd_qid_declare_flags {
 
 /* Index features supported by the global index objects
  * Only used for migration purpose and should be removed once on-disk migration
- * is no longer needed */
+ * is no longer needed
+ */
 extern struct dt_index_features dt_quota_iusr_features;
 extern struct dt_index_features dt_quota_busr_features;
 extern struct dt_index_features dt_quota_igrp_features;
@@ -76,7 +78,8 @@ extern struct dt_index_features dt_quota_bgrp_features;
 
 /* Name used in the configuration logs to identify the default metadata pool
  * (composed of all the MDTs, with pool ID 0) and the default data pool (all
- * the OSTs, with pool ID 0 too). */
+ * the OSTs, with pool ID 0 too).
+ */
 #define QUOTA_METAPOOL_NAME   "mdt="
 #define QUOTA_DATAPOOL_NAME   "ost="
 
@@ -87,37 +90,38 @@ extern struct dt_index_features dt_quota_bgrp_features;
 /* Request handlers for quota master operations.
  * This is used by the MDT to pass quota/lock requests to the quota master
  * target. This won't be needed any more once the QMT is a real target and
- * does not rely any more on the MDT service threads and namespace. */
+ * does not rely any more on the MDT service threads and namespace.
+ */
 struct qmt_handlers {
 	/* Handle quotactl request from client. */
-	int (*qmth_quotactl)(const struct lu_env *, struct lu_device *,
+	int (*qmth_quotactl)(const struct lu_env *env, struct lu_device *d,
 			     struct obd_quotactl *);
 
 	/* Handle dqacq/dqrel request from slave. */
-	int (*qmth_dqacq)(const struct lu_env *, struct lu_device *,
-			  struct ptlrpc_request *);
+	int (*qmth_dqacq)(const struct lu_env *env, struct lu_device *d,
+			  struct ptlrpc_request *req);
 
 	/* LDLM intent policy associated with quota locks */
-	int (*qmth_intent_policy)(const struct lu_env *, struct lu_device *,
-				  struct ptlrpc_request *, struct ldlm_lock **,
-				  int);
+	int (*qmth_intent_policy)(const struct lu_env *env, struct lu_device *d,
+				  struct ptlrpc_request *req,
+				  struct ldlm_lock **lock, int i);
 
 	/* Initialize LVB of ldlm resource associated with quota objects */
-	int (*qmth_lvbo_init)(struct lu_device *, struct ldlm_resource *);
+	int (*qmth_lvbo_init)(struct lu_device *d, struct ldlm_resource *res);
 
 	/* Update LVB of ldlm resource associated with quota objects */
-	int (*qmth_lvbo_update)(struct lu_device *, struct ldlm_resource *,
-				struct ptlrpc_request *, int);
+	int (*qmth_lvbo_update)(struct lu_device *d, struct ldlm_resource *res,
+				struct ptlrpc_request *req, int i);
 
 	/* Return size of LVB to be packed in ldlm message */
-	int (*qmth_lvbo_size)(struct lu_device *, struct ldlm_lock *);
+	int (*qmth_lvbo_size)(struct lu_device *d, struct ldlm_lock *lock);
 
 	/* Fill request buffer with lvb */
-	int (*qmth_lvbo_fill)(struct lu_device *, struct ldlm_lock *, void *,
-			      int);
+	int (*qmth_lvbo_fill)(struct lu_device *d, struct ldlm_lock *lock,
+			      void *lvb, int lvblen);
 
 	/* Free lvb associated with ldlm resource */
-	int (*qmth_lvbo_free)(struct lu_device *, struct ldlm_resource *);
+	int (*qmth_lvbo_free)(struct lu_device *d, struct ldlm_resource *res);
 };
 
 /* actual handlers are defined in lustre/quota/qmt_handler.c */
@@ -173,7 +177,8 @@ struct qsd_instance;
  * - qsd_op_adjust(): triggers pre-acquire/release if necessary.
  *
  * Below are the function prototypes to be used by OSD layer to manage quota
- * enforcement. Arguments are documented where each function is defined.  */
+ * enforcement. Arguments are documented where each function is defined.
+ */
 
 /* flags for quota local enforcement */
 enum osd_quota_local_flags {
@@ -184,18 +189,19 @@ enum osd_quota_local_flags {
 	QUOTA_FL_ROOT_PRJQUOTA	= BIT(4),
 };
 
-struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
-			      struct proc_dir_entry *, bool is_md, bool excl);
-int qsd_prepare(const struct lu_env *, struct qsd_instance *);
-int qsd_start(const struct lu_env *, struct qsd_instance *);
-void qsd_fini(const struct lu_env *, struct qsd_instance *);
-int qsd_op_begin(const struct lu_env *, struct qsd_instance *,
-		 struct lquota_trans *, struct lquota_id_info *,
-		 enum osd_quota_local_flags *);
-void qsd_op_end(const struct lu_env *, struct qsd_instance *,
-		struct lquota_trans *);
-void qsd_op_adjust(const struct lu_env *, struct qsd_instance *,
-		   union lquota_id *, int);
+struct qsd_instance *qsd_init(const struct lu_env *env, char *svnname,
+			      struct dt_device *d, struct proc_dir_entry *proc,
+			      bool is_md, bool excl);
+int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd);
+int qsd_start(const struct lu_env *env, struct qsd_instance *qsd);
+void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd);
+int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
+		 struct lquota_trans *trans, struct lquota_id_info *lqi,
+		 enum osd_quota_local_flags *flags);
+void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
+		struct lquota_trans *trans);
+void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
+		   union lquota_id *id, int i);
 int qsd_transfer(const struct lu_env *env, struct qsd_instance *qsd,
 		 struct lquota_trans *trans, unsigned int qtype,
 		 u64 orig_id, u64 new_id, u64 bspace,
@@ -215,11 +221,13 @@ struct lquota_id_info {
 	union lquota_id		 lqi_id;
 
 	/* USRQUOTA or GRPQUOTA for now, could be expanded for
-	 * directory quota or other types later.  */
+	 * directory quota or other types later.
+	 */
 	int			 lqi_type;
 
 	/* inodes or kbytes to be consumed or released, it could
-	 * be negative when releasing space.  */
+	 * be negative when releasing space.
+	 */
 	long long		 lqi_space;
 
 	/* quota slave entry structure associated with this ID */
@@ -235,7 +243,8 @@ struct lquota_id_info {
  * original uid and gid, new uid and gid.
  *
  * Given a parent dir and a sub dir, with different uid, gid and project id,
- * need <parent,child> x <user,group,project> x <block,inode> = 12 ids */
+ * need <parent,child> x <user,group,project> x <block,inode> = 12 ids
+ */
 #define QUOTA_MAX_TRANSIDS    12
 
 /* all qids involved in a single transaction */
@@ -249,8 +258,10 @@ struct lquota_trans {
 	 res->lr_name.name[LUSTRE_RES_ID_SEQ_OFF] == FID_SEQ_QUOTA_GLB)
 
 /* helper function used by MDT & OFD to retrieve quota accounting information
- * on slave */
-int lquotactl_slv(const struct lu_env *, struct dt_device *,
-		  struct obd_quotactl *);
+ * on slave
+ */
+int lquotactl_slv(const struct lu_env *env, struct dt_device *dt,
+		  struct obd_quotactl *obdq);
+
 /** @} quota */
 #endif /* _LUSTRE_QUOTA_H */

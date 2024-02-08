@@ -318,7 +318,8 @@ struct top_multiple_thandle {
 
 /* {top,sub}_thandle are used to manage distributed transactions which
  * include updates on several nodes. A top_handle represents the
- * whole operation, and sub_thandle represents updates on each node. */
+ * whole operation, and sub_thandle represents updates on each node.
+ */
 struct top_thandle {
 	struct thandle		tt_super;
 	/* The master sub transaction. */
@@ -332,8 +333,7 @@ struct sub_thandle_cookie {
 	struct list_head	stc_list;
 };
 
-/* Sub thandle is used to track multiple sub thandles under one parent
- * thandle */
+/* Sub thandle used to track multiple sub thandles under one parent thandle */
 struct sub_thandle {
 	struct thandle		*st_sub_th;
 	struct dt_device	*st_dt;

@@ -118,17 +118,20 @@ enum osd_lf_flags {
  * OI inconsistency especailly when OI scrub just done recently.
  *
  * The 'auto_scrub' defines the time (united as second) interval to
- * enable auto detect OI inconsistency since last OI scurb done. */
+ * enable auto detect OI inconsistency since last OI scurb done.
+ */
 enum auto_scrub {
 	/* Disable auto scrub. */
 	AS_NEVER	= 0,
 
 	/* 1 second is too short interval, it is almost equal to always auto
-	 * detect inconsistent OI, usually used for test. */
+	 * detect inconsistent OI, usually used for test.
+	 */
 	AS_ALWAYS	= 1,
 
 	/* Enable auto detect OI inconsistency one month (60 * 60 * 24 * 30)
-	 * after last OI scrub. */
+	 * after last OI scrub.
+	 */
 	AS_DEFAULT	= 2592000LL,
 };
 
@@ -142,7 +145,8 @@ struct lustre_scrub {
 	struct list_head	os_stale_items;
 
 	/* write lock for scrub prep/update/post/checkpoint,
-	 * read lock for scrub dump. */
+	 * read lock for scrub dump.
+	 */
 	struct rw_semaphore	os_rwsem;
 	spinlock_t		os_lock;
 
@@ -171,8 +175,8 @@ struct lustre_scrub {
 	 * all updates must be protected by ->os_lock to avoid
 	 * racing read-modify-write cycles causing corruption.
 	 */
-	unsigned int		os_in_prior:1, /* process inconsistent item
-						* found by RPC prior */
+	/* process inconsistent item found by RPC prior */
+	unsigned int		os_in_prior:1,
 				os_waiting:1, /* Waiting for scan window. */
 				os_full_speed:1, /* run w/o speed limit */
 				os_paused:1, /* The scrub is paused. */

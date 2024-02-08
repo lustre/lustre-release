@@ -165,18 +165,18 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 #ifdef HAVE_SERVER_SUPPORT
 void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #else
-#define nodemap_test_nid(nid, name_buf, name_len) do {} while(0)
+#define nodemap_test_nid(nid, name_buf, name_len) do {} while (0)
 #endif
 int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 		    u32 client_id, u32 *fs_id);
 
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,
-						   struct local_oid_storage *los);
+						   struct local_oid_storage *l);
 struct dt_device;
 struct nm_config_file *nm_config_file_register_tgt(const struct lu_env *env,
 						   struct dt_device *dev,
-						   struct local_oid_storage *los);
+						   struct local_oid_storage *l);
 void nm_config_file_deregister_mgs(const struct lu_env *env,
 				   struct nm_config_file *ncf);
 void nm_config_file_deregister_tgt(const struct lu_env *env,

@@ -37,7 +37,8 @@
  *    EA enabled, the ldiskfs will make all EAs to share one (4K) EA block.
  *
  * 3. Too many entries in linkEA will seriously affect linkEA performance
- *    because we only support to locate linkEA entry consecutively. */
+ *    because we only support to locate linkEA entry consecutively.
+ */
 #define MAX_LINKEA_SIZE	4096
 
 struct linkea_data {
