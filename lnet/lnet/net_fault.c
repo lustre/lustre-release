@@ -44,53 +44,97 @@
 
 struct lnet_drop_rule {
 	/** link chain on the_lnet.ln_drop_rules */
-	struct list_head	dr_link;
+	struct list_head		dr_link;
 	/** attributes of this rule */
-	struct lnet_fault_attr	dr_attr;
+	struct lnet_fault_large_attr	dr_attr;
 	/** lock to protect \a dr_drop_at and \a dr_stat */
-	spinlock_t		dr_lock;
+	spinlock_t			dr_lock;
 	/**
 	 * the message sequence to drop, which means message is dropped when
 	 * dr_stat.drs_count == dr_drop_at
 	 */
-	unsigned long		dr_drop_at;
+	unsigned long			dr_drop_at;
 	/**
 	 * seconds to drop the next message, it's exclusive with dr_drop_at
 	 */
-	time64_t		dr_drop_time;
+	time64_t			dr_drop_time;
 	/** baseline to caculate dr_drop_time */
-	time64_t		dr_time_base;
+	time64_t			dr_time_base;
 	/** statistic of dropped messages */
-	struct lnet_fault_stat	dr_stat;
+	struct lnet_fault_stat		dr_stat;
 };
 
-static bool
-lnet_fault_nid_match(lnet_nid_t nid, struct lnet_nid *msg_nid)
+static void
+lnet_fault_attr_to_attr4(struct lnet_fault_large_attr *attr,
+			 struct lnet_fault_attr *attr4)
 {
-	if (nid == LNET_NID_ANY)
-		return true;
-	if (!msg_nid)
-		return false;
-	if (lnet_nid_to_nid4(msg_nid) == nid)
-		return true;
+	if (!attr)
+		return;
 
-	if (LNET_NIDNET(nid) != LNET_NID_NET(msg_nid))
-		return false;
+	attr4->fa_src = lnet_nid_to_nid4(&attr->fa_src);
+	attr4->fa_dst = lnet_nid_to_nid4(&attr->fa_dst);
+	attr4->fa_local_nid = lnet_nid_to_nid4(&attr->fa_local_nid);
+	attr4->fa_ptl_mask = attr->fa_ptl_mask;
+	attr4->fa_msg_mask = attr->fa_msg_mask;
 
-	/* 255.255.255.255@net is wildcard for all addresses in a network */
-	return LNET_NIDADDR(nid) == LNET_NIDADDR(LNET_NID_ANY);
+	memcpy(&attr4->u, &attr->u, sizeof(attr4->u));
+}
+
+static void
+lnet_fault_attr4_to_attr(struct lnet_fault_attr *attr4,
+			 struct lnet_fault_large_attr *attr)
+{
+	if (!attr4)
+		return;
+
+	if (attr4->fa_src)
+		lnet_nid4_to_nid(attr4->fa_src, &attr->fa_src);
+	else
+		attr->fa_src = LNET_ANY_NID;
+
+	if (attr4->fa_dst)
+		lnet_nid4_to_nid(attr4->fa_dst, &attr->fa_dst);
+	else
+		attr->fa_dst = LNET_ANY_NID;
+
+	if (attr4->fa_local_nid)
+		lnet_nid4_to_nid(attr4->fa_local_nid, &attr->fa_local_nid);
+	else
+		attr->fa_local_nid = LNET_ANY_NID;
+
+	attr->fa_ptl_mask = attr4->fa_ptl_mask;
+	attr->fa_msg_mask = attr4->fa_msg_mask;
+
+	memcpy(&attr->u, &attr4->u, sizeof(attr->u));
 }
 
 static bool
-lnet_fault_attr_match(struct lnet_fault_attr *attr,
+lnet_fault_nid_match(struct lnet_nid *nid, struct lnet_nid *msg_nid)
+{
+	if (LNET_NID_IS_ANY(nid))
+		return true;
+	if (!msg_nid)
+		return false;
+	if (nid_same(msg_nid, nid))
+		return true;
+
+	if (LNET_NID_NET(nid) != LNET_NID_NET(msg_nid))
+		return false;
+
+	/* 255.255.255.255@net is wildcard for all addresses in a network */
+	return __be32_to_cpu(nid->nid_addr[0]) == LNET_NIDADDR(LNET_NID_ANY);
+}
+
+static bool
+lnet_fault_attr_match(struct lnet_fault_large_attr *attr,
 		      struct lnet_nid *src,
 		      struct lnet_nid *local_nid,
 		      struct lnet_nid *dst,
 		      unsigned int type, unsigned int portal)
 {
-	if (!lnet_fault_nid_match(attr->fa_src, src) ||
-	    !lnet_fault_nid_match(attr->fa_dst, dst) ||
-	    !lnet_fault_nid_match(attr->fa_local_nid, local_nid))
+	if (!lnet_fault_nid_match(&attr->fa_src, src) ||
+	    !lnet_fault_nid_match(&attr->fa_dst, dst) ||
+	    !lnet_fault_nid_match(&attr->fa_local_nid, local_nid))
 		return false;
 
 	if (!(attr->fa_msg_mask & BIT(type)))
@@ -106,7 +150,7 @@ lnet_fault_attr_match(struct lnet_fault_attr *attr,
 }
 
 static int
-lnet_fault_attr_validate(struct lnet_fault_attr *attr)
+lnet_fault_attr_validate(struct lnet_fault_large_attr *attr)
 {
 	if (attr->fa_msg_mask == 0)
 		attr->fa_msg_mask = LNET_MSG_MASK; /* all message types */
@@ -154,7 +198,7 @@ lnet_fault_stat_inc(struct lnet_fault_stat *stat, unsigned int type)
  * incoming message.
  */
 static int
-lnet_drop_rule_add(struct lnet_fault_attr *attr)
+lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
 {
 	struct lnet_drop_rule *rule;
 	ENTRY;
@@ -190,7 +234,7 @@ lnet_drop_rule_add(struct lnet_fault_attr *attr)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	CDEBUG(D_NET, "Added drop rule: src %s, dst %s, rate %d, interval %d\n",
-	       libcfs_nid2str(attr->fa_src), libcfs_nid2str(attr->fa_src),
+	       libcfs_nidstr(&attr->fa_src), libcfs_nidstr(&attr->fa_dst),
 	       attr->u.drop.da_rate, attr->u.drop.da_interval);
 	RETURN(0);
 }
@@ -203,7 +247,7 @@ lnet_drop_rule_add(struct lnet_fault_attr *attr)
  * If both of them are zero, all rules will be removed
  */
 static int
-lnet_drop_rule_del(lnet_nid_t src, lnet_nid_t dst)
+lnet_drop_rule_del(struct lnet_nid *src, struct lnet_nid *dst)
 {
 	struct lnet_drop_rule *rule;
 	struct lnet_drop_rule *tmp;
@@ -213,10 +257,10 @@ lnet_drop_rule_del(lnet_nid_t src, lnet_nid_t dst)
 
 	lnet_net_lock(LNET_LOCK_EX);
 	list_for_each_entry_safe(rule, tmp, &the_lnet.ln_drop_rules, dr_link) {
-		if (rule->dr_attr.fa_src != src && src != 0)
+		if (!(LNET_NID_IS_ANY(src) || nid_same(&rule->dr_attr.fa_src, src)))
 			continue;
 
-		if (rule->dr_attr.fa_dst != dst && dst != 0)
+		if (!(LNET_NID_IS_ANY(dst) || nid_same(&rule->dr_attr.fa_dst, dst)))
 			continue;
 
 		list_move(&rule->dr_link, &zombies);
@@ -225,8 +269,8 @@ lnet_drop_rule_del(lnet_nid_t src, lnet_nid_t dst)
 
 	list_for_each_entry_safe(rule, tmp, &zombies, dr_link) {
 		CDEBUG(D_NET, "Remove drop rule: src %s->dst: %s (1/%d, %d)\n",
-		       libcfs_nid2str(rule->dr_attr.fa_src),
-		       libcfs_nid2str(rule->dr_attr.fa_dst),
+		       libcfs_nidstr(&rule->dr_attr.fa_src),
+		       libcfs_nidstr(&rule->dr_attr.fa_dst),
 		       rule->dr_attr.u.drop.da_rate,
 		       rule->dr_attr.u.drop.da_interval);
 
@@ -242,7 +286,7 @@ lnet_drop_rule_del(lnet_nid_t src, lnet_nid_t dst)
  * List drop rule at position of \a pos
  */
 static int
-lnet_drop_rule_list(int pos, struct lnet_fault_attr *attr,
+lnet_drop_rule_list(int pos, struct lnet_fault_large_attr *attr,
 		    struct lnet_fault_stat *stat)
 {
 	struct lnet_drop_rule *rule;
@@ -281,7 +325,7 @@ lnet_drop_rule_reset(void)
 	cpt = lnet_net_lock_current();
 
 	list_for_each_entry(rule, &the_lnet.ln_drop_rules, dr_link) {
-		struct lnet_fault_attr *attr = &rule->dr_attr;
+		struct lnet_fault_large_attr *attr = &rule->dr_attr;
 
 		spin_lock(&rule->dr_lock);
 
@@ -354,8 +398,8 @@ drop_rule_match(struct lnet_drop_rule *rule,
 		unsigned int type, unsigned int portal,
 		enum lnet_msg_hstatus *hstatus)
 {
-	struct lnet_fault_attr	*attr = &rule->dr_attr;
-	bool			 drop;
+	struct lnet_fault_large_attr *attr = &rule->dr_attr;
+	bool drop;
 
 	if (!lnet_fault_attr_match(attr, src, local_nid, dst, type, portal))
 		return false;
@@ -396,8 +440,8 @@ drop_rule_match(struct lnet_drop_rule *rule,
 			rule->dr_time_base += attr->u.drop.da_interval;
 
 			CDEBUG(D_NET, "Drop Rule %s->%s: next drop : %lld\n",
-			       libcfs_nid2str(attr->fa_src),
-			       libcfs_nid2str(attr->fa_dst),
+			       libcfs_nidstr(&attr->fa_src),
+			       libcfs_nidstr(&attr->fa_dst),
 			       rule->dr_drop_time);
 		}
 
@@ -410,8 +454,8 @@ drop_rule_match(struct lnet_drop_rule *rule,
 			rule->dr_drop_at = rule->dr_stat.fs_count +
 					   get_random_u32_below(attr->u.drop.da_rate);
 			CDEBUG(D_NET, "Drop Rule %s->%s: next drop: %lu\n",
-			       libcfs_nid2str(attr->fa_src),
-			       libcfs_nid2str(attr->fa_dst), rule->dr_drop_at);
+			       libcfs_nidstr(&attr->fa_src),
+			       libcfs_nidstr(&attr->fa_dst), rule->dr_drop_at);
 		}
 	}
 
@@ -471,34 +515,34 @@ lnet_drop_rule_match(struct lnet_hdr *hdr,
 
 struct lnet_delay_rule {
 	/** link chain on the_lnet.ln_delay_rules */
-	struct list_head	dl_link;
+	struct list_head		dl_link;
 	/** link chain on delay_dd.dd_sched_rules */
-	struct list_head	dl_sched_link;
+	struct list_head		dl_sched_link;
 	/** attributes of this rule */
-	struct lnet_fault_attr	dl_attr;
+	struct lnet_fault_large_attr	dl_attr;
 	/** lock to protect \a below members */
-	spinlock_t		dl_lock;
+	spinlock_t			dl_lock;
 	/** refcount of delay rule */
-	atomic_t		dl_refcount;
+	atomic_t			dl_refcount;
 	/**
 	 * the message sequence to delay, which means message is delayed when
 	 * dl_stat.fs_count == dl_delay_at
 	 */
-	unsigned long		dl_delay_at;
+	unsigned long			dl_delay_at;
 	/**
 	 * seconds to delay the next message, it's exclusive with dl_delay_at
 	 */
-	time64_t		dl_delay_time;
+	time64_t			dl_delay_time;
 	/** baseline to caculate dl_delay_time */
-	time64_t		dl_time_base;
+	time64_t			dl_time_base;
 	/** seconds until we send the next delayed message */
-	time64_t		dl_msg_send;
+	time64_t			dl_msg_send;
 	/** delayed message list */
-	struct list_head	dl_msg_list;
+	struct list_head		dl_msg_list;
 	/** statistic of delayed messages */
-	struct lnet_fault_stat	dl_stat;
+	struct lnet_fault_stat		dl_stat;
 	/** timer to wakeup delay_daemon */
-	struct timer_list	dl_timer;
+	struct timer_list		dl_timer;
 };
 
 struct delay_daemon_data {
@@ -541,7 +585,7 @@ delay_rule_match(struct lnet_delay_rule *rule, struct lnet_nid *src,
 		 struct lnet_nid *dst, unsigned int type, unsigned int portal,
 		 struct lnet_msg *msg)
 {
-	struct lnet_fault_attr *attr = &rule->dl_attr;
+	struct lnet_fault_large_attr *attr = &rule->dl_attr;
 	bool delay;
 	time64_t now = ktime_get_seconds();
 
@@ -563,8 +607,8 @@ delay_rule_match(struct lnet_delay_rule *rule, struct lnet_nid *src,
 			rule->dl_time_base += attr->u.delay.la_interval;
 
 			CDEBUG(D_NET, "Delay Rule %s->%s: next delay : %lld\n",
-			       libcfs_nid2str(attr->fa_src),
-			       libcfs_nid2str(attr->fa_dst),
+			       libcfs_nidstr(&attr->fa_src),
+			       libcfs_nidstr(&attr->fa_dst),
 			       rule->dl_delay_time);
 		}
 
@@ -578,8 +622,8 @@ delay_rule_match(struct lnet_delay_rule *rule, struct lnet_nid *src,
 			rule->dl_delay_at = rule->dl_stat.fs_count +
 					    get_random_u32_below(attr->u.delay.la_rate);
 			CDEBUG(D_NET, "Delay Rule %s->%s: next delay: %lu\n",
-			       libcfs_nid2str(attr->fa_src),
-			       libcfs_nid2str(attr->fa_dst), rule->dl_delay_at);
+			       libcfs_nidstr(&attr->fa_src),
+			       libcfs_nidstr(&attr->fa_dst), rule->dl_delay_at);
 		}
 	}
 
@@ -808,10 +852,10 @@ delay_timer_cb(cfs_timer_cb_arg_t data)
  * incoming message.
  */
 int
-lnet_delay_rule_add(struct lnet_fault_attr *attr)
+lnet_delay_rule_add(struct lnet_fault_large_attr *attr)
 {
 	struct lnet_delay_rule *rule;
-	int			rc = 0;
+	int rc = 0;
 	ENTRY;
 
 	if (!((attr->u.delay.la_rate == 0) ^
@@ -879,7 +923,7 @@ lnet_delay_rule_add(struct lnet_fault_attr *attr)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	CDEBUG(D_NET, "Added delay rule: src %s, dst %s, rate %d\n",
-	       libcfs_nid2str(attr->fa_src), libcfs_nid2str(attr->fa_src),
+	       libcfs_nidstr(&attr->fa_src), libcfs_nidstr(&attr->fa_dst),
 	       attr->u.delay.la_rate);
 
 	mutex_unlock(&delay_dd.dd_mutex);
@@ -901,7 +945,7 @@ lnet_delay_rule_add(struct lnet_fault_attr *attr)
  * processed immediately.
  */
 int
-lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown)
+lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst, bool shutdown)
 {
 	struct lnet_delay_rule *rule;
 	struct lnet_delay_rule *tmp;
@@ -918,15 +962,15 @@ lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown)
 	lnet_net_lock(LNET_LOCK_EX);
 
 	list_for_each_entry_safe(rule, tmp, &the_lnet.ln_delay_rules, dl_link) {
-		if (rule->dl_attr.fa_src != src && src != 0)
+		if (!(LNET_NID_IS_ANY(src) || nid_same(&rule->dl_attr.fa_src, src)))
 			continue;
 
-		if (rule->dl_attr.fa_dst != dst && dst != 0)
+		if (!(LNET_NID_IS_ANY(dst) || nid_same(&rule->dl_attr.fa_dst, dst)))
 			continue;
 
 		CDEBUG(D_NET, "Remove delay rule: src %s->dst: %s (1/%d, %d)\n",
-		       libcfs_nid2str(rule->dl_attr.fa_src),
-		       libcfs_nid2str(rule->dl_attr.fa_dst),
+		       libcfs_nidstr(&rule->dl_attr.fa_src),
+		       libcfs_nidstr(&rule->dl_attr.fa_dst),
 		       rule->dl_attr.u.delay.la_rate,
 		       rule->dl_attr.u.delay.la_interval);
 		/* refcount is taken over by rule_list */
@@ -967,7 +1011,7 @@ lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown)
  * List Delay Rule at position of \a pos
  */
 int
-lnet_delay_rule_list(int pos, struct lnet_fault_attr *attr,
+lnet_delay_rule_list(int pos, struct lnet_fault_large_attr *attr,
 		    struct lnet_fault_stat *stat)
 {
 	struct lnet_delay_rule *rule;
@@ -1006,7 +1050,7 @@ lnet_delay_rule_reset(void)
 	cpt = lnet_net_lock_current();
 
 	list_for_each_entry(rule, &the_lnet.ln_delay_rules, dl_link) {
-		struct lnet_fault_attr *attr = &rule->dl_attr;
+		struct lnet_fault_large_attr *attr = &rule->dl_attr;
 
 		spin_lock(&rule->dl_lock);
 
@@ -1029,27 +1073,31 @@ lnet_delay_rule_reset(void)
 int
 lnet_fault_ctl(int opc, struct libcfs_ioctl_data *data)
 {
-	struct lnet_fault_attr *attr;
+	struct lnet_fault_attr *attr4;
 	struct lnet_fault_stat *stat;
+	struct lnet_fault_large_attr attr = { { 0 } };
+	int rc;
 
-	attr = (struct lnet_fault_attr *)data->ioc_inlbuf1;
+	attr4 = (struct lnet_fault_attr *)data->ioc_inlbuf1;
+
+	lnet_fault_attr4_to_attr(attr4, &attr);
 
 	switch (opc) {
 	default:
 		return -EINVAL;
 
 	case LNET_CTL_DROP_ADD:
-		if (attr == NULL)
+		if (!attr4)
 			return -EINVAL;
 
-		return lnet_drop_rule_add(attr);
+		return lnet_drop_rule_add(&attr);
 
 	case LNET_CTL_DROP_DEL:
-		if (attr == NULL)
+		if (!attr4)
 			return -EINVAL;
 
-		data->ioc_count = lnet_drop_rule_del(attr->fa_src,
-						     attr->fa_dst);
+		data->ioc_count = lnet_drop_rule_del(&attr.fa_src,
+						     &attr.fa_dst);
 		return 0;
 
 	case LNET_CTL_DROP_RESET:
@@ -1058,23 +1106,25 @@ lnet_fault_ctl(int opc, struct libcfs_ioctl_data *data)
 
 	case LNET_CTL_DROP_LIST:
 		stat = (struct lnet_fault_stat *)data->ioc_inlbuf2;
-		if (attr == NULL || stat == NULL)
+		if (!attr4 || !stat)
 			return -EINVAL;
 
-		return lnet_drop_rule_list(data->ioc_count, attr, stat);
+		rc = lnet_drop_rule_list(data->ioc_count, &attr, stat);
+		lnet_fault_attr_to_attr4(&attr, attr4);
+		return rc;
 
 	case LNET_CTL_DELAY_ADD:
-		if (attr == NULL)
+		if (!attr4)
 			return -EINVAL;
 
-		return lnet_delay_rule_add(attr);
+		return lnet_delay_rule_add(&attr);
 
 	case LNET_CTL_DELAY_DEL:
-		if (attr == NULL)
+		if (!attr4)
 			return -EINVAL;
 
-		data->ioc_count = lnet_delay_rule_del(attr->fa_src,
-						      attr->fa_dst, false);
+		data->ioc_count = lnet_delay_rule_del(&attr.fa_src,
+						      &attr.fa_dst, false);
 		return 0;
 
 	case LNET_CTL_DELAY_RESET:
@@ -1083,10 +1133,12 @@ lnet_fault_ctl(int opc, struct libcfs_ioctl_data *data)
 
 	case LNET_CTL_DELAY_LIST:
 		stat = (struct lnet_fault_stat *)data->ioc_inlbuf2;
-		if (attr == NULL || stat == NULL)
+		if (!attr4 || !stat)
 			return -EINVAL;
 
-		return lnet_delay_rule_list(data->ioc_count, attr, stat);
+		rc = lnet_delay_rule_list(data->ioc_count, &attr, stat);
+		lnet_fault_attr_to_attr4(&attr, attr4);
+		return rc;
 	}
 }
 
@@ -1110,8 +1162,8 @@ lnet_fault_init(void)
 void
 lnet_fault_fini(void)
 {
-	lnet_drop_rule_del(0, 0);
-	lnet_delay_rule_del(0, 0, true);
+	lnet_drop_rule_del(NULL, NULL);
+	lnet_delay_rule_del(NULL, NULL, true);
 
 	LASSERT(list_empty(&the_lnet.ln_drop_rules));
 	LASSERT(list_empty(&the_lnet.ln_delay_rules));

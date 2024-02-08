@@ -808,6 +808,29 @@ int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
 
 /** \addtogroup lnet_fault_simulation @{ */
 
+/* See struct lnet_fault_attr4 for a description of these fields */
+struct lnet_fault_large_attr {
+	struct lnet_nid			fa_src;
+	struct lnet_nid			fa_dst;
+	struct lnet_nid			fa_local_nid;
+	u64				fa_ptl_mask;
+	u32				fa_msg_mask;
+	union {
+		struct {
+			u32		da_rate;
+			u32		da_interval;
+			u32		da_health_error_mask;
+			u32		da_random:1,
+					da_drop_all:1;
+		} drop;
+		struct {
+			u32		la_rate;
+			u32		la_interval;
+			u32		la_latency;
+		} delay;
+	} u;
+};
+
 int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
@@ -815,9 +838,10 @@ void lnet_fault_fini(void);
 bool lnet_drop_rule_match(struct lnet_hdr *hdr, struct lnet_nid *local_nid,
 			  enum lnet_msg_hstatus *hstatus);
 
-int lnet_delay_rule_add(struct lnet_fault_attr *attr);
-int lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown);
-int lnet_delay_rule_list(int pos, struct lnet_fault_attr *attr,
+int lnet_delay_rule_add(struct lnet_fault_large_attr *attr);
+int lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst,
+			bool shutdown);
+int lnet_delay_rule_list(int pos, struct lnet_fault_large_attr *attr,
 			 struct lnet_fault_stat *stat);
 void lnet_delay_rule_reset(void);
 void lnet_delay_rule_check(void);
