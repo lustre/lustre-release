@@ -148,6 +148,7 @@ void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
 		    UUID_STR, strlen(UUID_STR)))
 		*uuid_len -= strlen(UUID_STR);
 }
+EXPORT_SYMBOL(deuuidify);
 
 /* Must be called with imp_lock held! */
 static void ptlrpc_deactivate_import_nolock(struct obd_import *imp)

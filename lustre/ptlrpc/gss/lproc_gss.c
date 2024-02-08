@@ -271,6 +271,13 @@ again:
 	rc = upcall_cache_downcall(rsicache, param->sid_err,
 				   param->sid_hash, param);
 
+	/* The caller, i.e. the userspace process writing to rsi_info, only
+	 * needs to know about invalid values. Other errors are processed
+	 * directly in the kernel.
+	 */
+	if (rc != -EINVAL)
+		rc = 0;
+
 out:
 	if (param != NULL)
 		OBD_FREE_LARGE(param, size);

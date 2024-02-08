@@ -250,8 +250,9 @@ static int send_response(int auth_res, __u64 hash,
 		rc = -errno;
 		printerr(LL_ERR, "ERROR: %s failed: %s\n",
 			 __func__, strerror(-rc));
+	} else {
+		printerr(LL_DEBUG, "response written ok\n");
 	}
-	printerr(LL_DEBUG, "response written ok\n");
 
 	close(fd);
 out_path:
@@ -1069,6 +1070,7 @@ int handle_channel_request(int fd)
 			 lustre_mech);
 
 out_err:
+	printerr(LL_INFO, "to send response with rc=%d\n", rc ? -EACCES : 0);
 	/* Failures send a null token */
 	rc = send_response(rc, hash, &snd.in_handle, &snd.in_tok,
 			   snd.maj_stat, snd.min_stat,

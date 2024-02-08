@@ -1938,35 +1938,39 @@ int gss_pack_err_notify(struct ptlrpc_request *req, __u32 major, __u32 minor)
 static
 int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 {
-	struct gss_svc_reqctx     *grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
-	struct lustre_msg         *reqbuf = req->rq_reqbuf;
-	struct obd_uuid           *uuid;
-	struct obd_device         *target;
-	rawobj_t                   uuid_obj, rvs_hdl, in_token;
-	__u32                      lustre_svc;
-	__u32                     *secdata, seclen;
-	int                        swabbed, rc;
-	ENTRY;
+	struct gss_svc_reqctx *grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
+	struct lustre_msg *reqbuf = req->rq_reqbuf;
+	struct obd_uuid *uuid;
+	struct obd_device *target;
+	rawobj_t uuid_obj, rvs_hdl, in_token;
+	__u32 lustre_svc;
+	__u32 *secdata, seclen;
+	int swabbed, rc;
 
+	ENTRY;
 	CDEBUG(D_SEC, "processing gss init(%d) request from %s\n", gw->gw_proc,
 	       libcfs_nidstr(&req->rq_peer.nid));
 
 	req->rq_ctx_init = 1;
 
 	if (gw->gw_flags & LUSTRE_GSS_PACK_BULK) {
-		CERROR("unexpected bulk flag\n");
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "unexpected bulk flag: rc = %d\n", rc);
+		RETURN(rc);
 	}
 
 	if (gw->gw_proc == PTLRPC_GSS_PROC_INIT && gw->gw_handle.len != 0) {
-		CERROR("proc %u: invalid handle length %u\n",
-		       gw->gw_proc, gw->gw_handle.len);
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "proc %u: invalid handle length %u: rc = %d\n",
+		       gw->gw_proc, gw->gw_handle.len, rc);
+		RETURN(rc);
 	}
 
 	if (reqbuf->lm_bufcount < 3 || reqbuf->lm_bufcount > 4) {
-		CERROR("Invalid bufcount %d\n", reqbuf->lm_bufcount);
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "Invalid bufcount %d: rc = %d\n",
+		       reqbuf->lm_bufcount, rc);
+		RETURN(rc);
 	}
 
 	swabbed = req_capsule_req_need_swab(&req->rq_pill);
@@ -1976,8 +1980,9 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 	seclen = reqbuf->lm_buflens[reqbuf->lm_bufcount - 1];
 
 	if (seclen < 4 + 4) {
-		CERROR("sec size %d too small\n", seclen);
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "sec size %d too small: rc = %d\n", seclen, rc);
+		RETURN(rc);
 	}
 
 	/* lustre svc type */
@@ -1988,30 +1993,48 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 	 * because touched internal structure of obd_uuid
 	 */
 	if (rawobj_extract(&uuid_obj, &secdata, &seclen)) {
-		CERROR("failed to extract target uuid\n");
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "failed to extract target uuid: rc = %d\n", rc);
+		RETURN(rc);
 	}
 	uuid_obj.data[uuid_obj.len - 1] = '\0';
 
 	uuid = (struct obd_uuid *) uuid_obj.data;
 	target = class_uuid2obd(uuid);
 	if (!target || target->obd_stopping || !target->obd_set_up) {
-		CERROR("target '%s' is not available for context init (%s)\n",
-		       uuid->uuid, target == NULL ? "no target" :
-		       (target->obd_stopping ? "stopping" : "not set up"));
-		RETURN(SECSVC_DROP);
+		char *target_start;
+		int target_len;
+
+		if (gss_pack_err_notify(req, GSS_S_NO_CONTEXT, 0) == 0)
+			rc = SECSVC_COMPLETE;
+		else
+			rc = SECSVC_DROP;
+
+		deuuidify(uuid->uuid, NULL, &target_start, &target_len);
+		LCONSOLE_ERROR("%.*s: not available for GSS context init from %s (%s).\n",
+			       target_len, target_start,
+			       libcfs_nidstr(&req->rq_peer.nid),
+			       target ?
+			       (target->obd_stopping ?
+				"stopping" : "not set up") :
+			       "no target");
+		RETURN(rc);
 	}
 
 	/* extract reverse handle */
 	if (rawobj_extract(&rvs_hdl, &secdata, &seclen)) {
-		CERROR("failed extract reverse handle\n");
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "%s: failed extract reverse handle: rc = %d\n",
+		       target->obd_name, rc);
+		RETURN(rc);
 	}
 
 	/* extract token */
 	if (rawobj_extract(&in_token, &secdata, &seclen)) {
-		CERROR("can't extract token\n");
-		RETURN(SECSVC_DROP);
+		rc = SECSVC_DROP;
+		CDEBUG(D_SEC, "%s: can't extract token: rc = %d\n",
+		       target->obd_name, rc);
+		RETURN(rc);
 	}
 
 	rc = gss_svc_upcall_handle_init(req, grctx, gw, target, lustre_svc,
@@ -2021,24 +2044,32 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 
 	if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_oss ||
 	    grctx->src_ctx->gsc_usr_root)
-		CDEBUG(D_SEC, "create svc ctx %p: user from %s authenticated as %s\n",
+		CDEBUG(D_SEC,
+		       "%s: create svc ctx %p: user from %s authenticated as %s\n",
+		       target->obd_name,
 		       grctx->src_ctx, libcfs_nidstr(&req->rq_peer.nid),
 		       grctx->src_ctx->gsc_usr_root ? "root" :
 		       (grctx->src_ctx->gsc_usr_mds ? "mds" :
 			(grctx->src_ctx->gsc_usr_oss ? "oss" : "null")));
 	else
-		CDEBUG(D_SEC, "create svc ctx %p: accept user %u from %s\n",
+		CDEBUG(D_SEC, "%s: create svc ctx %p: accept user %u from %s\n",
+		       target->obd_name,
 		       grctx->src_ctx, grctx->src_ctx->gsc_uid,
 		       libcfs_nidstr(&req->rq_peer.nid));
 
 	if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
 		if (reqbuf->lm_bufcount < 4) {
-			CERROR("missing user descriptor\n");
-			RETURN(SECSVC_DROP);
+			rc = SECSVC_DROP;
+			CDEBUG(D_SEC, "%s: missing user descriptor: rc = %d\n",
+			       target->obd_name, rc);
+			RETURN(rc);
 		}
 		if (sptlrpc_unpack_user_desc(reqbuf, 2, swabbed)) {
-			CERROR("Mal-formed user descriptor\n");
-			RETURN(SECSVC_DROP);
+			rc = SECSVC_DROP;
+			CDEBUG(D_SEC,
+			       "%s: Mal-formed user descriptor: rc = %d\n",
+			       target->obd_name, rc);
+			RETURN(rc);
 		}
 
 		req->rq_pack_udesc = 1;
