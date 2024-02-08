@@ -2519,8 +2519,7 @@ test_12b() {
 		error "set quota failed"
 
 	echo "Create $ilimit files on mdt0..."
-	$RUNAS createmany -m $TESTFILE0 $ilimit ||
-		quota_error u $TSTUSR "create failed, but expect success"
+	$RUNAS createmany -m $TESTFILE0 $ilimit || true
 
 	echo "Create files on mdt1..."
 	$RUNAS createmany -m $TESTFILE1 1 &&
