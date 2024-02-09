@@ -1885,23 +1885,6 @@ set_osd_param() {
 	do_nodes $nodes "$LCTL set_param -n osd-*.$device.$name=$value"
 }
 
-set_debug_size () {
-	local dz=${1:-$DEBUG_SIZE}
-
-	if [ -f /sys/devices/system/cpu/possible ]; then
-		local cpus=$(($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1))
-	else
-		local cpus=$(getconf _NPROCESSORS_CONF 2>/dev/null)
-	fi
-
-	# bug 19944, adjust size to be -gt num_possible_cpus()
-	# promise 2MB for every cpu at least
-	if [ -n "$cpus" ] && [ $((cpus * 2)) -gt $dz ]; then
-		dz=$((cpus * 2))
-	fi
-	lctl set_param debug_mb=$dz
-}
-
 set_default_debug () {
 	local debug=${1:-"$PTLDEBUG"}
 	local subsys=${2:-"$SUBSYSTEM"}
@@ -1910,8 +1893,10 @@ set_default_debug () {
 	[ -n "$debug" ] && lctl set_param debug="$debug" >/dev/null
 	[ -n "$subsys" ] &&
 		lctl set_param subsystem_debug="${subsys# }" >/dev/null
+	[ -n "$debug_size" ] &&
+		lctl set_param debug_mb="$debug_size" >/dev/null
 
-	[ -n "$debug_size" ] && set_debug_size $debug_size > /dev/null
+	return 0
 }
 
 set_default_debug_nodes () {

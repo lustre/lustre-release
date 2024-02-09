@@ -99,16 +99,8 @@ DEF_STRIPE_COUNT=${DEF_STRIPE_COUNT:-} # filesystem default stripe count
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config \
 		      ioctl super lfsck"}
+DEBUG_SIZE=${DEBUG_SIZE:-}
 SUBSYSTEM=${SUBSYSTEM:-"all"}
-
-# promise 2MB for every cpu
-if [ -f /sys/devices/system/cpu/possible ]; then
-    _debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
-else
-    _debug_mb=$(($(getconf _NPROCESSORS_CONF)*2))
-fi
-
-DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
 
 TSTUSR=${TSTUSR:-"quota_usr"}
 TSTUSR2=${TSTUSR2:-"quota_2usr"}
