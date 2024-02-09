@@ -459,6 +459,57 @@ test_8()
 }
 run_test 8 "Early reply sent for slow gss context negotiation"
 
+test_9() {
+	local test9user=$(getent passwd $RUNAS_ID | cut -d: -f1)
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS ls -ld $DIR/$tdir
+
+	# Add group, and client to new group, on client only.
+	# Server is not aware.
+	groupadd -g 5000 grptest9
+	stack_trap "groupdel grptest9" EXIT
+
+	usermod -g grptest9 $test9user
+	stack_trap "usermod -g $test9user $test9user" EXIT
+	id $RUNAS_ID
+	# Thanks to Kerberos, client should not be able to create file
+	# with primary group not known on server side
+	$RUNAS touch $DIR/$tdir/fileA &&
+		error "server should not trust client's primary gid"
+	do_facet mds1 "lctl set_param mdt.*.identity_flush=-1"
+
+	do_facet mds1 groupadd -g 5000 grptest9
+	stack_trap "do_facet mds1 groupdel grptest9 || true" EXIT
+	do_facet mds1 usermod -a -G grptest9 $test9user
+	stack_trap "do_facet mds1 gpasswd -d $test9user grptest9 || true" EXIT
+	id $RUNAS_ID
+	do_facet mds1 "id $RUNAS_ID"
+	# Thanks to Kerberos, client should be able to create file
+	# with primary group taken as one of supp groups, as long as
+	# server side knows the supp groups.
+	$RUNAS touch $DIR/$tdir/fileA ||
+		error "server should know client's supp gid"
+	ls -l $DIR/$tdir
+	do_facet mds1 "lctl set_param mdt.*.identity_flush=-1"
+	do_facet mds1 gpasswd -d $test9user grptest9
+	do_facet mds1 groupdel grptest9
+	usermod -g $test9user $test9user
+
+	usermod -a -G grptest9 $test9user
+	stack_trap "gpasswd -d $test9user grptest9" EXIT
+	id $RUNAS_ID
+	$RUNAS touch $DIR/$tdir/fileB
+	ls -l $DIR/$tdir
+	# Thanks to Kerberos, client should not be able to chgrp
+	$RUNAS chgrp grptest9 $DIR/$tdir/fileB &&
+		error "server should not trust client's supp gid"
+	ls -l $DIR/$tdir
+	do_facet mds1 "lctl set_param mdt.*.identity_flush=-1"
+}
+run_test 9 "Do not trust primary and supp gids from client"
+
 #
 # following tests will manipulate flavors and may end with any flavor set,
 # so each test should not assume any start flavor.

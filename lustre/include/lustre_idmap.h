@@ -64,7 +64,9 @@ struct lu_ucred;
 
 extern void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist);
 extern void lustre_groups_sort(struct group_info *group_info);
+extern int lustre_groups_search(struct group_info *group_info, gid_t grp);
 extern int lustre_in_group_p(struct lu_ucred *mu, gid_t grp);
+extern int has_proper_groups(struct lu_ucred *ucred);
 
 /** @} idmap */
 

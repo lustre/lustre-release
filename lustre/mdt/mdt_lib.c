@@ -296,10 +296,12 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 	/* check permission of setgid */
 	if (setgid && !(perm & CFS_SETGID_PERM)) {
-		CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-		       "from %s\n", pud->pud_uid, pud->pud_gid,
+		CDEBUG(D_SEC,
+		       "mdt blocked setgid attempt (%u:%u/%u:%u -> %d) from %s\n",
+		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid,
-		       ucred->uc_identity->mi_gid, libcfs_nidstr(&peernid));
+		       ucred->uc_identity ? ucred->uc_identity->mi_gid : -1,
+		       libcfs_nidstr(&peernid));
 		GOTO(out, rc = -EACCES);
 	}
 
@@ -357,6 +359,26 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
 		ucred->uc_cap = cap_intersect(ucred->uc_cap,
 					      mdt->mdt_enable_cap_mask);
+	}
+
+	/* Thanks to Kerberos, Lustre does not have to trust clients anymore,
+	 * but relies on keytabs and tickets, cryptographically validated, to
+	 * recognize clients and users.
+	 * RPC provided primary group should match the one got from the
+	 * identity upcall.
+	 * And RPC provided supplementary groups should not be trusted,
+	 * but checked thanks to identity upcall and the trusted UID
+	 * from the ticket.
+	 */
+	if (SPTLRPC_FLVR_MECH(req->rq_flvr.sf_rpc) == SPTLRPC_MECH_GSS_KRB5) {
+		if (!has_proper_groups(ucred))
+			GOTO(out, rc = -EACCES);
+		ucred->uc_suppgids[0] = -1;
+		ucred->uc_suppgids[1] = -1;
+		if (ucred->uc_ginfo) {
+			put_group_info(ucred->uc_ginfo);
+			ucred->uc_ginfo = NULL;
+		}
 	}
 
 	ucred->uc_valid = UCRED_NEW;
@@ -499,9 +521,10 @@ out:
 static int old_init_ucred_common(struct mdt_thread_info *info,
 				 struct lu_nodemap *nodemap)
 {
-	struct lu_ucred		*uc = mdt_ucred(info);
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct md_identity	*identity = NULL;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_device *mdt = info->mti_mdt;
+	struct md_identity *identity = NULL;
 
 	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid
 	    && nodemap->nmf_deny_unknown)
@@ -550,6 +573,27 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
 		uc->uc_cap = cap_intersect(uc->uc_cap,mdt->mdt_enable_cap_mask);
 	}
+
+	/* Thanks to Kerberos, Lustre does not have to trust clients anymore,
+	 * but relies on keytabs and tickets, cryptographically validated, to
+	 * recognize clients and users.
+	 * RPC provided primary group should match the one got from the
+	 * identity upcall.
+	 * And RPC provided supplementary groups should not be trusted,
+	 * but checked thanks to identity upcall and the trusted UID
+	 * from the ticket.
+	 */
+	if (SPTLRPC_FLVR_MECH(req->rq_flvr.sf_rpc) == SPTLRPC_MECH_GSS_KRB5) {
+		if (!has_proper_groups(uc)) {
+			mdt_identity_put(mdt->mdt_identity_cache,
+					 uc->uc_identity);
+			uc->uc_identity = NULL;
+			RETURN(-EACCES);
+		}
+		uc->uc_suppgids[0] = -1;
+		uc->uc_suppgids[1] = -1;
+	}
+
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
@@ -557,7 +601,6 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	ucred_set_rbac_roles(info, uc);
 
 	EXIT;
-
 	return 0;
 }
 

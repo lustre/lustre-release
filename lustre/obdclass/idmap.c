@@ -49,8 +49,7 @@
  * groups_search() is copied from linux kernel!
  * A simple bsearch.
  */
-static int lustre_groups_search(struct group_info *group_info,
-				gid_t grp)
+int lustre_groups_search(struct group_info *group_info, gid_t grp)
 {
 	int left, right;
 
@@ -73,6 +72,7 @@ static int lustre_groups_search(struct group_info *group_info,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(lustre_groups_search);
 
 void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
 {
@@ -158,3 +158,29 @@ int lustre_in_group_p(struct lu_ucred *mu, gid_t grp)
 	return rc;
 }
 EXPORT_SYMBOL(lustre_in_group_p);
+
+/* make sure fsgid is one of primary or supplementary groups
+ * fetched from identity upcall
+ */
+int has_proper_groups(struct lu_ucred *ucred)
+{
+	struct group_info *group_info = NULL;
+	int rc;
+
+	if (!ucred->uc_identity)
+		return 1;
+
+	if (ucred->uc_fsgid == ucred->uc_identity->mi_gid)
+		return 1;
+
+	group_info = ucred->uc_identity->mi_ginfo;
+	if (!group_info)
+		return 0;
+
+	get_group_info(group_info);
+	rc = lustre_groups_search(group_info, ucred->uc_fsgid);
+	put_group_info(group_info);
+
+	return rc;
+}
+EXPORT_SYMBOL(has_proper_groups);
