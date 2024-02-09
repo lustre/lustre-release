@@ -129,7 +129,8 @@ static inline bool llapi_stripe_size_is_too_big(uint64_t size)
 
 static inline bool llapi_stripe_count_is_valid(int64_t count)
 {
-	return count >= -1 && count <= LOV_MAX_STRIPE_COUNT;
+	return (count >= LOV_ALL_STRIPES_MIN && count <= LOV_ALL_STRIPES_MAX) ||
+		   count <= LOV_MAX_STRIPE_COUNT;
 }
 
 static inline bool llapi_stripe_index_is_valid(int64_t index)

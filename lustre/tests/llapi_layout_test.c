@@ -68,6 +68,8 @@ do {									\
 		DIE("assertion '%s' failed: "fmt, #cond, ## __VA_ARGS__);\
 } while (0)								\
 
+#define IN_RANGE(value, low, high) ((value >= low) && (value <= high))
+
 static char *lustre_dir;
 static char *poolname;
 static bool run_list_provided;
@@ -722,7 +724,7 @@ static void test16(void)
 	rc = llapi_layout_stripe_count_get(filelayout, &fcount);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
-		dcount == LLAPI_LAYOUT_WIDE,
+		IN_RANGE(dcount, LLAPI_LAYOUT_WIDE_MIN, LLAPI_LAYOUT_WIDE_MAX),
 		"%"PRIu64" != %"PRIu64, fcount, dcount);
 
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
@@ -745,7 +747,7 @@ static void test16(void)
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
-		dcount == LLAPI_LAYOUT_WIDE,
+		IN_RANGE(dcount, LLAPI_LAYOUT_WIDE_MIN, LLAPI_LAYOUT_WIDE_MAX),
 		"%"PRIu64" != %"PRIu64, fcount, dcount);
 	ASSERTF(fsize == dsize, "%"PRIu64" != %"PRIu64, fsize, dsize);
 
@@ -771,7 +773,7 @@ static void test17(void)
 	ASSERTF(rc == 0 || errno == ENOENT, "errno = %d", errno);
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d", errno);
-	rc = llapi_layout_stripe_count_set(layout, LLAPI_LAYOUT_WIDE);
+	rc = llapi_layout_stripe_count_set(layout, LLAPI_LAYOUT_WIDE_MIN);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	fd = llapi_layout_file_create(path, 0, 0640, layout);
 	ASSERTF(fd >= 0, "errno = %d", errno);
@@ -905,7 +907,7 @@ static void test20(void)
 	rc = llapi_layout_stripe_count_get(deflayout, &dcount);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
-		dcount == LLAPI_LAYOUT_WIDE,
+		IN_RANGE(dcount, LLAPI_LAYOUT_WIDE_MIN, LLAPI_LAYOUT_WIDE_MAX),
 		"%"PRIu64" != %"PRIu64, fcount, dcount);
 
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
@@ -1214,7 +1216,9 @@ static void test28(void)
 
 	rc = llapi_layout_stripe_count_get(layout, &count);
 	ASSERTF(rc == 0, "errno = %d\n", errno);
-	ASSERTF(count == LLAPI_LAYOUT_WIDE, "count = %"PRIu64"\n", count);
+	ASSERTF((count >= LLAPI_LAYOUT_WIDE_MIN &&
+		 count <= LLAPI_LAYOUT_WIDE_MAX),
+		 "count = %"PRIu64"\n", count);
 
 	llapi_layout_free(layout);
 }

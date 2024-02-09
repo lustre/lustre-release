@@ -811,7 +811,12 @@ static inline bool lov_pool_is_reserved(const char *pool)
  * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1)
  */
 #define LOV_MAX_STRIPE_COUNT 2000  /* ~((12 * 4096 - 256) / 24) */
-#define LOV_ALL_STRIPES       0xffff /* only valid for directories */
+
+/* Below given max and min values are used to check range of stripe count */
+/* LOV_ALL_STRIPES_MAX  LLAPI_MIN_STRIPE_COUNT */
+/* LOV_ALL_STRIPES_MIN  LLAPI_MIN_STRIPE_COUNT+ LLAPI_MAX_STRIPE_COUNT */
+#define LOV_ALL_STRIPES_MAX 0xffff
+#define LOV_ALL_STRIPES_MIN 0xffdf
 #define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
 
 #define XATTR_LUSTRE_PREFIX	"lustre."
@@ -1053,7 +1058,7 @@ struct lov_comp_md_v1 {
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {
-	if (stripes == LOV_ALL_STRIPES)
+	if (stripes >= LOV_ALL_STRIPES_MIN && stripes <= LOV_ALL_STRIPES_MAX)
 		stripes = 0;
 
 	if (lmm_magic == LOV_USER_MAGIC_V1)

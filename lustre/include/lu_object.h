@@ -1690,7 +1690,7 @@ static inline __u64 tgt_statfs_iavail(struct lu_tgt_desc *tgt)
 /* number of pointers at 2nd level */
 #define TGT_PTRS_PER_BLOCK	(PAGE_SIZE / sizeof(void *))
 /* number of pointers at 1st level - only need as many as max OST/MDT count */
-#define TGT_PTRS		((LOV_ALL_STRIPES + 1) / TGT_PTRS_PER_BLOCK)
+#define TGT_PTRS		((LOV_ALL_STRIPES_MAX + 1) / TGT_PTRS_PER_BLOCK)
 
 struct lu_tgt_desc_idx {
 	struct lu_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];

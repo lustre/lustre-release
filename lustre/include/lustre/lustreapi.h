@@ -866,7 +866,10 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
  * When specified or returned as the value for stripe count, all
  * available OSTs will be used.
  */
-#define LLAPI_LAYOUT_WIDE	(LLAPI_LAYOUT_INVALID + 2)
+#define LLAPI_MIN_STRIPE_COUNT    (-1)
+#define LLAPI_MAX_STRIPE_COUNT    (-32)
+#define LLAPI_LAYOUT_WIDE_MIN	(LLAPI_LAYOUT_INVALID + 2)
+#define LLAPI_LAYOUT_WIDE_MAX	(LLAPI_LAYOUT_WIDE_MIN + 32)
 
 /**
  * When specified as the value for layout pattern, file objects will be

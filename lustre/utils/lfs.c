@@ -2748,7 +2748,8 @@ static int lsa_args_stripe_count_check(struct lfs_setstripe_args *lsa)
 
 		if (lsa->lsa_stripe_count > 0 &&
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
-		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
+		    !(lsa->lsa_stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
+		     lsa->lsa_stripe_count <= LLAPI_LAYOUT_WIDE_MAX) &&
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
 				lsa->lsa_stripe_count,
@@ -3848,7 +3849,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			if (errno != 0 || *end != '\0'|| optarg == end ||
-			    lsa.lsa_stripe_count < -1 ||
+			    lsa.lsa_stripe_count < LLAPI_MAX_STRIPE_COUNT ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s %s: invalid stripe count '%s'\n",
@@ -3856,8 +3857,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 
-			if (lsa.lsa_stripe_count == -1)
-				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE;
+			if (lsa.lsa_stripe_count <= LLAPI_MIN_STRIPE_COUNT &&
+			    lsa.lsa_stripe_count >= LLAPI_MAX_STRIPE_COUNT) {
+				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE_MIN +
+				    abs(lsa.lsa_stripe_count + 1);
+			}
 			break;
 		case 'd':
 			if (migrate_mode) {
@@ -4444,8 +4448,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		if (lsa.lsa_stripe_size != LLAPI_LAYOUT_DEFAULT)
 			param->lsp_stripe_size = lsa.lsa_stripe_size;
 		if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
-			if (lsa.lsa_stripe_count == LLAPI_LAYOUT_WIDE)
-				param->lsp_stripe_count = -1;
+			if (lsa.lsa_stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
+				lsa.lsa_stripe_count < LLAPI_LAYOUT_WIDE_MAX)
+				param->lsp_stripe_count = LOV_ALL_STRIPES_MIN +
+				(lsa.lsa_stripe_count - LLAPI_LAYOUT_WIDE_MIN);
 			else
 				param->lsp_stripe_count = lsa.lsa_stripe_count;
 		}
@@ -7073,7 +7079,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		if (!(tp->st_op & ops))
 			continue;
 
-		for (index = 0; index < LOV_ALL_STRIPES &&
+		for (index = 0; index < LOV_ALL_STRIPES_MAX &&
 		     (!lsb || lsb->sb_count < LL_STATFS_MAX); index++) {
 			memset(&stat_buf, 0, sizeof(struct obd_statfs));
 			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
@@ -7252,7 +7258,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			if (errno != 0 || *end != '\0' ||
-			    lsa.lsa_stripe_count < -1 ||
+			    lsa.lsa_stripe_count < LLAPI_MAX_STRIPE_COUNT ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s: invalid stripe count '%s'\n",
