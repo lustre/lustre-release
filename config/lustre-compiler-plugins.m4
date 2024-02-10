@@ -38,9 +38,7 @@ LPLUG_ENABLE
 # files that should be generated with AC_OUTPUT
 #
 AC_DEFUN([LPLUG_CONFIG_FILES], [
-AS_IF([test "x$enable_compiler_plugins" == "xyes"], [
-AC_CONFIG_FILES([
-cc-plugins/Makefile
-])
-], [])
+	AC_CONFIG_FILES([
+		cc-plugins/Makefile
+	])
 ]) # LPLUG_CONFIG_FILES
