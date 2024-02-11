@@ -43,13 +43,13 @@
 struct req_capsule;
 
 struct seq_thread_info {
-        struct req_capsule     *sti_pill;
-        struct lu_seq_range     sti_space;
-        struct lu_buf           sti_buf;
+	struct req_capsule	*sti_pill;
+	struct lu_seq_range	sti_space;
+	struct lu_buf		sti_buf;
 };
 
 enum {
-        SEQ_TXN_STORE_CREDITS = 20
+	SEQ_TXN_STORE_CREDITS = 20
 };
 
 extern struct lu_context_key seq_thread_key;
