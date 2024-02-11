@@ -59,8 +59,8 @@
 #include <lustre_fld.h>
 
 struct fld_stats {
-        __u64   fst_count;
-        __u64   fst_cache;
+	__u64	fst_count;
+	__u64	fst_cache;
 };
 
 struct lu_fld_hash {
@@ -74,63 +74,50 @@ struct lu_fld_hash {
 struct fld_cache_entry {
 	struct list_head	fce_lru;
 	struct list_head	fce_list;
-	/**
-	 * fld cache entries are sorted on range->lsr_start field. */
+	/* fld cache entries are sorted on range->lsr_start field. */
 	struct lu_seq_range	fce_range;
 };
 
 struct fld_cache {
-	/**
-	 * Cache guard, protects fci_hash mostly because others immutable after
-	 * init is finished.
-	 */
-	rwlock_t		 fci_lock;
+	/* Cache guard, protects fci_hash as immutable after init is finished */
+	rwlock_t		fci_lock;
 
-        /**
-         * Cache shrink threshold */
-        int                      fci_threshold;
+	/* Cache shrink threshold */
+	int			fci_threshold;
 
-        /**
-         * Prefered number of cached entries */
-        int                      fci_cache_size;
+	/* Prefered number of cached entries */
+	int			fci_cache_size;
 
-        /**
-         * Current number of cached entries. Protected by \a fci_lock */
-        int                      fci_cache_count;
+	/* Current number of cached entries. Protected by \a fci_lock */
+	int			fci_cache_count;
 
-        /**
-         * LRU list fld entries. */
+	/* LRU list fld entries. */
 	struct list_head	fci_lru;
 
-        /**
-         * sorted fld entries. */
+	/* sorted fld entries. */
 	struct list_head	fci_entries_head;
 
-	/**
-	 * Cache statistics.
-	 */
+	/* Cache statistics. */
 	struct fld_stats	fci_stat;
 
-	/**
-	 * Cache name used for debug and messages.
-	 */
+	/* Cache name used for debug and messages. */
 	char			fci_name[LUSTRE_MDT_MAXNAMELEN];
 };
 
 enum {
-        /* 4M of FLD cache will not hurt client a lot. */
-        FLD_SERVER_CACHE_SIZE      = (4 * 0x100000),
+	/* 4M of FLD cache will not hurt client a lot. */
+	FLD_SERVER_CACHE_SIZE      = (4 * 0x100000),
 
-        /* 1M of FLD cache will not hurt client a lot. */
-        FLD_CLIENT_CACHE_SIZE      = (1 * 0x100000)
+	/* 1M of FLD cache will not hurt client a lot. */
+	FLD_CLIENT_CACHE_SIZE      = (1 * 0x100000)
 };
 
 enum {
-        /* Cache threshold is 10 percent of size. */
-        FLD_SERVER_CACHE_THRESHOLD = 10,
+	/* Cache threshold is 10 percent of size. */
+	FLD_SERVER_CACHE_THRESHOLD = 10,
 
-        /* Cache threshold is 10 percent of size. */
-        FLD_CLIENT_CACHE_THRESHOLD = 10
+	/* Cache threshold is 10 percent of size. */
+	FLD_CLIENT_CACHE_THRESHOLD = 10
 };
 
 extern struct lu_fld_hash fld_hash[];
@@ -174,14 +161,13 @@ extern struct dentry *fld_debugfs_dir;
 
 # endif /* HAVE_SERVER_SUPPORT */
 
-int fld_client_rpc(struct obd_export *exp,
-                   struct lu_seq_range *range, __u32 fld_op,
-		   struct ptlrpc_request **reqp);
+int fld_client_rpc(struct obd_export *exp, struct lu_seq_range *range,
+		   __u32 fld_op, struct ptlrpc_request **reqp);
 
 extern struct ldebugfs_vars fld_client_debugfs_list[];
 
-struct fld_cache *fld_cache_init(const char *name,
-                                 int cache_size, int cache_threshold);
+struct fld_cache *fld_cache_init(const char *name, int cache_size,
+				 int cache_threshold);
 
 void fld_cache_fini(struct fld_cache *cache);
 
