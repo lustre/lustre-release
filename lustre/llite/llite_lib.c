@@ -158,6 +158,14 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 
 	sbi->ll_ra_info.ra_max_pages =
 		min(pages / 32, SBI_DEFAULT_READ_AHEAD_MAX);
+	/* on very small nodes (ie, testing VMs), we need a minimum readahead
+	 * size to get sane testing behavior, so we try to enforce this
+	 * minimum.  This only kicks in at small RAM sizes, so generally won't
+	 * affect real clients
+	 */
+	if (sbi->ll_ra_info.ra_max_pages < SBI_DEFAULT_READ_AHEAD_MIN)
+		sbi->ll_ra_info.ra_max_pages =
+			min(pages / 2, SBI_DEFAULT_READ_AHEAD_MIN);
 	sbi->ll_ra_info.ra_max_pages_per_file =
 		min(sbi->ll_ra_info.ra_max_pages / 4,
 		    SBI_DEFAULT_READ_AHEAD_PER_FILE_MAX);

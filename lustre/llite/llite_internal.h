@@ -690,6 +690,10 @@ static inline void ll_inode_unlock(struct inode *inode)
 
 /* default read-ahead on a given client mountpoint. */
 #define SBI_DEFAULT_READ_AHEAD_MAX		MiB_TO_PAGES(1024UL)
+/* on small nodes (ie, testing VMs), we need at least this much to make
+ * readahead easily testable
+ */
+#define SBI_DEFAULT_READ_AHEAD_MIN		MiB_TO_PAGES(256UL)
 
 /* default read-ahead for a single file descriptor */
 #define SBI_DEFAULT_READ_AHEAD_PER_FILE_MAX	MiB_TO_PAGES(256UL)
