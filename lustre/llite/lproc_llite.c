@@ -525,11 +525,10 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	if (rc)
 		RETURN(rc);
 
-	if (percent) {
+	if (percent)
 		pages_number = cfs_totalram_pages() * value / 100;
-	} else {
+	else
 		pages_number = value >> PAGE_SHIFT;
-	}
 
 	if (pages_number < 0 || pages_number > cfs_totalram_pages()) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
@@ -1468,7 +1467,7 @@ read_ahead_async_file_threshold_mb_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(read_ahead_async_file_threshold_mb);
 
 static ssize_t read_ahead_range_kb_show(struct kobject *kobj,
-					struct attribute *attr,char *buf)
+					struct attribute *attr, char *buf)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
@@ -2155,7 +2154,7 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_READDIR,	LPROCFS_TYPE_LATENCY,	"readdir" },
 	{ LPROC_LL_INODE_OCOUNT, LPROCFS_TYPE_REQS | LPROCFS_CNTR_AVGMINMAX |
 				LPROCFS_CNTR_STDDEV,	"opencount" },
-	{ LPROC_LL_INODE_OPCLTM,LPROCFS_TYPE_LATENCY,	"openclosetime" },
+	{ LPROC_LL_INODE_OPCLTM, LPROCFS_TYPE_LATENCY,	"openclosetime" },
 	/* inode operation */
 	{ LPROC_LL_SETATTR,	LPROCFS_TYPE_LATENCY,	"setattr" },
 	{ LPROC_LL_TRUNC,	LPROCFS_TYPE_LATENCY,	"truncate" },
@@ -2623,7 +2622,8 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 	if (cur == -1) {
 		/* new process */
 		sbi->ll_extent_process_count =
-			(sbi->ll_extent_process_count + 1) % LL_PROCESS_HIST_MAX;
+			(sbi->ll_extent_process_count + 1) %
+			 LL_PROCESS_HIST_MAX;
 		cur = sbi->ll_extent_process_count;
 		rw_extents->pp_extents[cur].pid = pid;
 		lprocfs_oh_clear(&rw_extents->pp_extents[cur].pp_r_hist);
@@ -2659,28 +2659,28 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 				process[i].rw_last_file = file;
 				goto out_unlock;
 			}
-                        if (process[i].rw_last_file_pos != pos) {
-                                *off_count =
-                                    (*off_count + 1) % LL_OFFSET_HIST_MAX;
-                                offset[*off_count].rw_op = process[i].rw_op;
-                                offset[*off_count].rw_pid = pid;
-                                offset[*off_count].rw_range_start =
-                                        process[i].rw_range_start;
-                                offset[*off_count].rw_range_end =
-                                        process[i].rw_last_file_pos;
-                                offset[*off_count].rw_smallest_extent =
-                                        process[i].rw_smallest_extent;
-                                offset[*off_count].rw_largest_extent =
-                                        process[i].rw_largest_extent;
-                                offset[*off_count].rw_offset =
-                                        process[i].rw_offset;
-                                process[i].rw_op = rw;
-                                process[i].rw_range_start = pos;
-                                process[i].rw_smallest_extent = count;
-                                process[i].rw_largest_extent = count;
-                                process[i].rw_offset = pos -
-                                        process[i].rw_last_file_pos;
-                        }
+			if (process[i].rw_last_file_pos != pos) {
+				*off_count =
+					(*off_count + 1) % LL_OFFSET_HIST_MAX;
+				offset[*off_count].rw_op = process[i].rw_op;
+				offset[*off_count].rw_pid = pid;
+				offset[*off_count].rw_range_start =
+					process[i].rw_range_start;
+				offset[*off_count].rw_range_end =
+					process[i].rw_last_file_pos;
+				offset[*off_count].rw_smallest_extent =
+					process[i].rw_smallest_extent;
+				offset[*off_count].rw_largest_extent =
+					process[i].rw_largest_extent;
+				offset[*off_count].rw_offset =
+					process[i].rw_offset;
+				process[i].rw_op = rw;
+				process[i].rw_range_start = pos;
+				process[i].rw_smallest_extent = count;
+				process[i].rw_largest_extent = count;
+				process[i].rw_offset = pos -
+					process[i].rw_last_file_pos;
+			}
 			if (process[i].rw_smallest_extent > count)
 				process[i].rw_smallest_extent = count;
 			if (process[i].rw_largest_extent < count)
@@ -2711,7 +2711,8 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 	int i;
 
 	if (!sbi->ll_rw_stats_on) {
-		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
+		seq_puts(seq,
+			 "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
 
