@@ -44,12 +44,7 @@
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
-/*****************************************************************************
- *
- * Object operations.
- *
- */
-
+/* Object operations.*/
 int vvp_object_invariant(const struct cl_object *obj)
 {
 	struct inode		*inode	= vvp_object_inode(obj);
@@ -80,7 +75,7 @@ static int vvp_object_print(const struct lu_env *env, void *cookie,
 }
 
 static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_attr *attr)
+			struct cl_attr *attr)
 {
 	struct inode *inode = vvp_object_inode(obj);
 
@@ -103,7 +98,7 @@ static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned valid)
+			   const struct cl_attr *attr, unsigned int valid)
 {
 	struct inode *inode = vvp_object_inode(obj);
 
@@ -152,7 +147,8 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 		 * page may be stale due to layout change, and the process
 		 * will never be notified.
 		 * This operation is expensive but mmap processes have to pay
-		 * a price themselves. */
+		 * a price themselves.
+		 */
 		unmap_mapping_range(conf->coc_inode->i_mapping,
 				    0, OBD_OBJECT_EOF, 0);
 		pcc_layout_invalidate(conf->coc_inode);
@@ -164,6 +160,7 @@ static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 {
 	struct inode *inode = vvp_object_inode(obj);
 	int rc;
+
 	ENTRY;
 
 	rc = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, CL_FSYNC_LOCAL, 1);
@@ -351,12 +348,12 @@ static const struct lu_object_operations vvp_lu_obj_ops = {
 struct vvp_object *cl_inode2vvp(struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
-        struct cl_object     *obj = lli->lli_clob;
-        struct lu_object     *lu;
+	struct cl_object     *obj = lli->lli_clob;
+	struct lu_object     *lu;
 
-        LASSERT(obj != NULL);
-        lu = lu_object_locate(obj->co_lu.lo_header, &vvp_device_type);
-        LASSERT(lu != NULL);
+	LASSERT(obj != NULL);
+	lu = lu_object_locate(obj->co_lu.lo_header, &vvp_device_type);
+	LASSERT(lu != NULL);
 
 	return lu2vvp(lu);
 }

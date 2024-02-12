@@ -43,12 +43,11 @@
  * using a hash or a tree structure instead of list for faster lookups.
  */
 struct ll_xattr_entry {
-	struct list_head	xe_list;    /* protected with
-					     * lli_xattrs_list_rwsem */
+	struct list_head	xe_list;    /* protect by lli_xattrs_list_rwsem */
 	char			*xe_name;   /* xattr name, \0-terminated */
 	char			*xe_value;  /* xattr value */
-	unsigned		xe_namelen; /* strlen(xe_name) + 1 */
-	unsigned		xe_vallen;  /* xattr value length */
+	unsigned int		xe_namelen; /* strlen(xe_name) + 1 */
+	unsigned int		xe_vallen;  /* xattr value length */
 };
 
 static struct kmem_cache *xattr_kmem;
@@ -132,7 +131,7 @@ static int ll_xattr_cache_find(struct list_head *cache,
 static int ll_xattr_cache_add(struct list_head *cache,
 			      const char *xattr_name,
 			      const char *xattr_val,
-			      unsigned xattr_val_len)
+			      unsigned int xattr_val_len)
 {
 	struct ll_xattr_entry *xattr;
 
@@ -293,7 +292,7 @@ static int ll_xattr_cache_destroy_locked(struct ll_inode_info *lli)
 		RETURN(0);
 
 	while (ll_xattr_cache_del(&lli->lli_xattrs, NULL) == 0)
-		/* empty loop */ ;
+		/* empty loop */;
 
 	clear_bit(LLIF_XATTR_CACHE_FILLED, &lli->lli_flags);
 	clear_bit(LLIF_XATTR_CACHE, &lli->lli_flags);
@@ -378,7 +377,8 @@ static int ll_xattr_find_get_lock(struct inode *inode,
 
 	mutex_lock(&lli->lli_xattrs_enq_lock);
 	/* inode may have been shrunk and recreated, so data is gone, match lock
-	 * only when data exists. */
+	 * only when data exists.
+	 */
 	if (ll_xattr_cache_filled(lli)) {
 		/* Try matching first. */
 		mode = ll_take_md_lock(inode, MDS_INODELOCK_XATTR, &lockh, 0,
@@ -406,8 +406,9 @@ static int ll_xattr_find_get_lock(struct inode *inode,
 	*req = oit->it_request;
 
 	if (rc < 0) {
-		CDEBUG(D_CACHE, "md_intent_lock failed with %d for fid "DFID"\n",
-		       rc, PFID(ll_inode2fid(inode)));
+		CDEBUG(D_CACHE,
+		       "md_intent_lock failed with %d for fid "DFID"\n", rc,
+		       PFID(ll_inode2fid(inode)));
 		mutex_unlock(&lli->lli_xattrs_enq_lock);
 		RETURN(rc);
 	}

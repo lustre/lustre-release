@@ -133,16 +133,16 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 {
 	struct lu_env        *env;
 	struct ll_inode_info *lli;
-        struct cl_object     *clob;
-        struct lu_site       *site;
-        struct lu_fid        *fid;
+	struct cl_object     *clob;
+	struct lu_site       *site;
+	struct lu_fid        *fid;
 	struct cl_object_conf conf = {
 		.coc_inode = inode,
 		.u = {
 			.coc_layout = md->layout,
 		}
 	};
-        int result = 0;
+	int result = 0;
 	__u16 refcheck;
 
 	LASSERT(md->body->mbo_valid & OBD_MD_FLID);
@@ -248,15 +248,15 @@ void cl_inode_fini(struct inode *inode)
 			env = cl_inode_fini_env;
 		}
 
-                /*
-                 * cl_object cache is a slave to inode cache (which, in turn
-                 * is a slave to dentry cache), don't keep cl_object in memory
-                 * when its master is evicted.
-                 */
-                cl_object_kill(env, clob);
-                lu_object_ref_del(&clob->co_lu, "inode", inode);
-                cl_object_put_last(env, clob);
-                lli->lli_clob = NULL;
+		/*
+		 * cl_object cache is a slave to inode cache (which, in turn
+		 * is a slave to dentry cache), don't keep cl_object in memory
+		 * when its master is evicted.
+		 */
+		cl_object_kill(env, clob);
+		lu_object_ref_del(&clob->co_lu, "inode", inode);
+		cl_object_put_last(env, clob);
+		lli->lli_clob = NULL;
 		if (emergency)
 			mutex_unlock(&cl_inode_fini_guard);
 		else

@@ -115,7 +115,8 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 
 	/* When setxattr() is called with a size of 0 the value is
 	 * unconditionally replaced by "". When removexattr() is
-	 * called we get a NULL value and XATTR_REPLACE for flags. */
+	 * called we get a NULL value and XATTR_REPLACE for flags.
+	 */
 	if (!value && flags == XATTR_REPLACE)
 		valid = OBD_MD_FLXATTRRM;
 	else
@@ -494,7 +495,7 @@ out_xattr:
 		clear_bit(LL_SBI_USER_XATTR, sbi->ll_flags);
 	}
 out:
-        ptlrpc_req_finished(req);
+	ptlrpc_req_finished(req);
 	RETURN(rc);
 }
 
