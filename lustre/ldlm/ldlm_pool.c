@@ -753,9 +753,8 @@ static ssize_t lock_volume_factor_store(struct kobject *kobj,
 	int rc;
 
 	rc = kstrtoul(buffer, 10, &tmp);
-	if (rc < 0) {
+	if (rc < 0)
 		return rc;
-	}
 
 	tmp = (tmp << 8) / 100;
 	atomic_set(&pl->pl_lock_volume_factor, tmp);
@@ -1517,17 +1516,14 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 
 void ldlm_pool_fini(struct ldlm_pool *pl)
 {
-	return;
 }
 
 void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 {
-	return;
 }
 
 void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 {
-	return;
 }
 
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl)
@@ -1537,7 +1533,6 @@ __u64 ldlm_pool_get_slv(struct ldlm_pool *pl)
 
 void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv)
 {
-	return;
 }
 
 __u64 ldlm_pool_get_clv(struct ldlm_pool *pl)
@@ -1547,7 +1542,6 @@ __u64 ldlm_pool_get_clv(struct ldlm_pool *pl)
 
 void ldlm_pool_set_clv(struct ldlm_pool *pl, __u64 clv)
 {
-	return;
 }
 
 __u32 ldlm_pool_get_limit(struct ldlm_pool *pl)
@@ -1557,7 +1551,6 @@ __u32 ldlm_pool_get_limit(struct ldlm_pool *pl)
 
 void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit)
 {
-	return;
 }
 
 __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
@@ -1572,7 +1565,6 @@ int ldlm_pools_init(void)
 
 void ldlm_pools_fini(void)
 {
-	return;
 }
 
 #endif /* HAVE_LRU_RESIZE_SUPPORT */

@@ -242,7 +242,7 @@ static int expired_lock_main(void *arg)
 
 			/* Check if we need to prolong timeout */
 			if (!CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
-			    lock->l_callback_timestamp != 0 && /* not AST error */
+			    lock->l_callback_timestamp != 0 && /* not AST err */
 			    ldlm_lock_busy(lock)) {
 				LDLM_DEBUG(lock, "prolong the busy lock");
 				lock_res_and_lock(lock);
@@ -699,7 +699,8 @@ timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req)
 	timeout = at_timeout + INITIAL_CONNECT_TIMEOUT + netl + req_timeout;
 
 	/* Client's timeout is calculated as at_est2timeout(), let's be a bit
-	 * more conservative than client */
+	 * more conservative than client
+	 */
 	return max(timeout + (timeout >> 4),
 		   (timeout_t)obd_get_ldlm_enqueue_min(obd));
 }
@@ -1009,7 +1010,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	body->lock_handle[0] = lock->l_remote_handle;
 	body->lock_handle[1].cookie = lock->l_handle.h_cookie;
 	body->lock_desc = *desc;
-	body->lock_flags |= ldlm_flags_to_wire(lock->l_flags & LDLM_FL_AST_MASK);
+	body->lock_flags |= ldlm_flags_to_wire(lock->l_flags &
+					       LDLM_FL_AST_MASK);
 
 	LDLM_DEBUG(lock, "server preparing blocking AST");
 
@@ -1110,6 +1112,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	ldlm_lock2desc(lock, &body->lock_desc);
 	if (lvb_len > 0) {
 		void *lvb = req_capsule_client_get(&req->rq_pill, &RMF_DLM_LVB);
+
 		lvb_len = ldlm_lvbo_fill(lock, lvb, &lvb_len);
 		if (lvb_len < 0) {
 			/*
@@ -1445,7 +1448,8 @@ existing_lock:
 	if (!(flags & LDLM_FL_HAS_INTENT)) {
 		/* based on the assumption that lvb size never changes during
 		 * resource life time otherwise it need resource->lr_lock's
-		 * protection */
+		 * protection
+		 */
 		req_capsule_set_size(pill, &RMF_DLM_LVB,
 				     RCL_SERVER, ldlm_lvbo_size(lock));
 
@@ -1539,6 +1543,7 @@ out:
 		req->rq_status = rc ?: err; /* return either error - b=11190 */
 		if (!req->rq_packed_final) {
 			int rc1 = lustre_pack_reply(req, 1, NULL, NULL);
+
 			if (rc == 0)
 				rc = rc1;
 		}
@@ -1616,7 +1621,8 @@ retry:
 				ldlm_lock_destroy_nolock(lock);
 				unlock_res_and_lock(lock);
 			}
-			ldlm_reprocess_all(lock->l_resource, lock->l_policy_data.l_inodebits.bits);
+			ldlm_reprocess_all(lock->l_resource,
+					   lock->l_policy_data.l_inodebits.bits);
 		}
 
 		if (!err && !ldlm_is_cbpending(lock) &&
@@ -1660,9 +1666,7 @@ void ldlm_clear_blocking_data(struct ldlm_lock *lock)
 	ldlm_clear_blocking_lock(lock);
 }
 
-/**
- * Main LDLM entry point for server code to process lock conversion requests.
- */
+/* Main LDLM entry point for server code to process lock conversion requests */
 int ldlm_handle_convert0(struct ptlrpc_request *req,
 			 const struct ldlm_request *dlm_req)
 {
@@ -1731,7 +1735,7 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 
 		/* All old bits should be reprocessed to send new BL AST if
 		 * it wasn't sent earlier due to LDLM_FL_AST_SENT bit set.
-		 * */
+		 */
 		ldlm_reprocess_all(lock->l_resource, bits);
 	}
 
@@ -1989,9 +1993,9 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
  * This only can happen on client side.
  */
 static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
-                                    struct ldlm_namespace *ns,
-                                    struct ldlm_request *dlm_req,
-                                    struct ldlm_lock *lock)
+				   struct ldlm_namespace *ns,
+				   struct ldlm_request *dlm_req,
+				   struct ldlm_lock *lock)
 {
 	LIST_HEAD(ast_list);
 	int lvb_len;
@@ -2788,6 +2792,7 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
 {
 	int rc;
 	LIST_HEAD(rpc_list);
+
 	ENTRY;
 
 	cfs_hash_for_each_nolock(exp->exp_lock_hash,
@@ -3116,9 +3121,7 @@ void ldlm_put_ref(void)
 	EXIT;
 }
 
-/*
- * Export handle<->lock hash operations.
- */
+/* Export handle<->lock hash operations. */
 static unsigned
 ldlm_export_lock_hash(struct cfs_hash *hs, const void *key,
 		      const unsigned int bits)
@@ -3329,9 +3332,9 @@ static int ldlm_setup(void)
 			.so_req_handler		= ldlm_callback_handler,
 		},
 	};
-	ldlm_state->ldlm_cb_service = \
-			ptlrpc_register_service(&conf, ldlm_svc_kset,
-						ldlm_svc_debugfs_dir);
+	ldlm_state->ldlm_cb_service = ptlrpc_register_service(&conf,
+							      ldlm_svc_kset,
+							      ldlm_svc_debugfs_dir);
 	if (IS_ERR(ldlm_state->ldlm_cb_service)) {
 		CERROR("failed to start service\n");
 		rc = PTR_ERR(ldlm_state->ldlm_cb_service);
@@ -3361,8 +3364,8 @@ static int ldlm_setup(void)
 			.tc_nthrs_max		= LDLM_NTHRS_MAX,
 			.tc_nthrs_user		= ldlm_num_threads,
 			.tc_cpu_bind		= ldlm_cpu_bind,
-			.tc_ctx_tags		= LCT_MD_THREAD | \
-						  LCT_DT_THREAD | \
+			.tc_ctx_tags		= LCT_MD_THREAD |
+						  LCT_DT_THREAD |
 						  LCT_CL_THREAD,
 		},
 		.psc_cpt		= {
@@ -3374,7 +3377,7 @@ static int ldlm_setup(void)
 			.so_hpreq_handler	= ldlm_hpreq_handler,
 		},
 	};
-	ldlm_state->ldlm_cancel_service = \
+	ldlm_state->ldlm_cancel_service =
 			ptlrpc_register_service(&conf, ldlm_svc_kset,
 						ldlm_svc_debugfs_dir);
 	if (IS_ERR(ldlm_state->ldlm_cancel_service)) {
@@ -3403,7 +3406,7 @@ static int ldlm_setup(void)
 		blp->blp_min_threads = LDLM_NTHRS_INIT;
 		blp->blp_max_threads = LDLM_NTHRS_MAX;
 	} else {
-		blp->blp_min_threads = blp->blp_max_threads = \
+		blp->blp_min_threads = blp->blp_max_threads =
 			min_t(int, LDLM_NTHRS_MAX, max_t(int, LDLM_NTHRS_INIT,
 							 ldlm_num_threads));
 	}
@@ -3574,7 +3577,7 @@ out_resource:
 void ldlm_exit(void)
 {
 	if (ldlm_refcount)
-		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
+		CERROR("ldlm_refcount is %d in %s\n", ldlm_refcount, __func__);
 	synchronize_rcu();
 	kmem_cache_destroy(ldlm_resource_slab);
 	/*

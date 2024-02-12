@@ -139,8 +139,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 {
 	ENTRY;
 
-	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: %#llx)",
-		   mode, flags);
+	LDLM_DEBUG(lock, "%s(mode: %d, flags: %#llx)", __func__, mode, flags);
 
 	/* Safe to not lock here, since it should be empty anyway */
 	LASSERT(hlist_unhashed(&lock->l_exp_flock_hash));
@@ -171,7 +170,6 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
  * one client holds a lock on something and want a lock on something
  * else and at the same time another client has the opposite situation).
  */
-
 struct ldlm_flock_lookup_cb_data {
 	__u64 *bl_owner;
 	struct ldlm_lock *lock;
@@ -372,9 +370,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 #endif
 
 	ENTRY;
-	CDEBUG(D_DLMTRACE, "flags %#llx owner %llu pid %u mode %u start "
-	       "%llu end %llu\n", *flags,
-	       new->l_policy_data.l_flock.owner,
+	CDEBUG(D_DLMTRACE,
+	       "flags %#llx owner %llu pid %u mode %u start %llu end %llu\n",
+	       *flags, new->l_policy_data.l_flock.owner,
 	       new->l_policy_data.l_flock.pid, mode,
 	       req->l_policy_data.l_flock.start,
 	       req->l_policy_data.l_flock.end);
@@ -406,6 +404,7 @@ reprocess:
 #ifdef HAVE_SERVER_SUPPORT
 	else {
 		int reprocess_failed = 0;
+
 		lockmode_verify(mode);
 
 		/* This loop determines if there are existing locks
@@ -738,6 +737,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	struct obd_device *obd;
 	enum ldlm_error err;
 	int rc = 0;
+
 	ENTRY;
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT2, 4);
@@ -816,8 +816,7 @@ granted:
 		unlock_res_and_lock(lock);
 		LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
 
-		/* An error is still to be returned, to propagate it up to
-		 * ldlm_cli_enqueue_fini() caller. */
+		/* error is returned up to ldlm_cli_enqueue_fini() caller. */
 		RETURN(-EIO);
 	}
 
@@ -842,8 +841,8 @@ granted:
 			mode = lock->l_req_mode;
 
 		if (ldlm_is_flock_deadlock(lock)) {
-			LDLM_DEBUG(lock, "client-side enqueue deadlock "
-				   "received");
+			LDLM_DEBUG(lock,
+				   "client-side enqueue deadlock received");
 			rc = -EDEADLK;
 		}
 		ldlm_flock_destroy(lock, mode, LDLM_FL_WAIT_NOREPROC);
@@ -1004,7 +1003,7 @@ static struct cfs_hash_ops ldlm_export_flock_ops = {
 
 int ldlm_init_flock_export(struct obd_export *exp)
 {
-	if( strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDT_NAME) != 0)
+	if (strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDT_NAME) != 0)
 		RETURN(0);
 
 	exp->exp_flock_hash =

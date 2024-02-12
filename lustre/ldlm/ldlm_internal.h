@@ -86,9 +86,9 @@ static inline int ldlm_ns_empty(struct ldlm_namespace *ns)
 	return atomic_read(&ns->ns_bref) == 0;
 }
 
-void ldlm_namespace_move_to_active_locked(struct ldlm_namespace *,
+void ldlm_namespace_move_to_active_locked(struct ldlm_namespace *l,
 					  enum ldlm_side);
-void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *,
+void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *l,
 					    enum ldlm_side);
 struct ldlm_namespace *ldlm_namespace_first_locked(enum ldlm_side);
 
@@ -108,7 +108,7 @@ extern struct kmem_cache *ldlm_inodebits_slab;
 extern struct kmem_cache *ldlm_interval_tree_slab;
 
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
-                                     struct ldlm_lock *new);
+				     struct ldlm_lock *new);
 void ldlm_resource_insert_lock_before(struct ldlm_lock *original,
 				      struct ldlm_lock *new);
 
@@ -125,19 +125,21 @@ void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock);
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 		  enum req_location loc, void *data, int size);
-struct ldlm_lock *
-ldlm_lock_create(struct ldlm_namespace *ns, const struct ldlm_res_id *,
-		 enum ldlm_type type, enum ldlm_mode mode,
-		 const struct ldlm_callback_suite *cbs,
-		 void *data, __u32 lvb_len, enum lvb_type lvb_type);
+struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
+				   const struct ldlm_res_id *res,
+				   enum ldlm_type type, enum ldlm_mode mode,
+				   const struct ldlm_callback_suite *cbs,
+				   void *data, __u32 lvb_len,
+				   enum lvb_type lvb_type);
 enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
-				  struct ldlm_namespace *,
-				  struct ldlm_lock **,
+				  struct ldlm_namespace *l,
+				  struct ldlm_lock **lock,
 				  void *cookie, __u64 *flags);
-void ldlm_lock_addref_internal(struct ldlm_lock *, enum ldlm_mode mode);
-void ldlm_lock_addref_internal_nolock(struct ldlm_lock *, enum ldlm_mode mode);
-void ldlm_lock_decref_internal(struct ldlm_lock *, enum ldlm_mode mode);
-void ldlm_lock_decref_internal_nolock(struct ldlm_lock *, enum ldlm_mode mode);
+void ldlm_lock_addref_internal(struct ldlm_lock *l, enum ldlm_mode mode);
+void ldlm_lock_addref_internal_nolock(struct ldlm_lock *l, enum ldlm_mode mode);
+void ldlm_lock_decref_internal(struct ldlm_lock *l, enum ldlm_mode mode);
+void ldlm_lock_decref_internal_nolock(struct ldlm_lock *l,
+				      enum ldlm_mode mode);
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 			    struct list_head *work_list);
 #ifdef HAVE_SERVER_SUPPORT
@@ -167,7 +169,7 @@ void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
-                           struct ldlm_lock *lock);
+			   struct ldlm_lock *lock);
 int ldlm_bl_to_thread_list(struct ldlm_namespace *ns,
 			   struct ldlm_lock_desc *ld,
 			   struct list_head *cancels, int count,
@@ -176,7 +178,7 @@ int ldlm_bl_to_thread_ns(struct ldlm_namespace *ns);
 int ldlm_bl_thread_wakeup(void);
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
-                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
+			     struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -224,10 +226,10 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns);
 extern struct dentry *ldlm_svc_debugfs_dir;
 
 struct ldlm_state {
-        struct ptlrpc_service *ldlm_cb_service;
-        struct ptlrpc_service *ldlm_cancel_service;
-        struct ptlrpc_client *ldlm_client;
-        struct ldlm_bl_pool *ldlm_bl_pool;
+	struct ptlrpc_service *ldlm_cb_service;
+	struct ptlrpc_service *ldlm_cancel_service;
+	struct ptlrpc_client *ldlm_client;
+	struct ldlm_bl_pool *ldlm_bl_pool;
 };
 
 /* interval tree, for LDLM_EXTENT. */
@@ -239,21 +241,22 @@ extern void ldlm_interval_free(struct ldlm_interval *node);
 static inline struct ldlm_extent *
 ldlm_interval_extent(struct ldlm_interval *node)
 {
-        struct ldlm_lock *lock;
+	struct ldlm_lock *lock;
+
 	LASSERT(!list_empty(&node->li_group));
 
 	lock = list_first_entry(&node->li_group, struct ldlm_lock,
 				l_sl_policy);
-        return &lock->l_policy_data.l_extent;
+	return &lock->l_policy_data.l_extent;
 }
 
 int ldlm_init(void);
 void ldlm_exit(void);
 
 enum ldlm_policy_res {
-        LDLM_POLICY_CANCEL_LOCK,
-        LDLM_POLICY_KEEP_LOCK,
-        LDLM_POLICY_SKIP_LOCK
+	LDLM_POLICY_CANCEL_LOCK,
+	LDLM_POLICY_KEEP_LOCK,
+	LDLM_POLICY_SKIP_LOCK
 };
 
 #define LDLM_POOL_SYSFS_PRINT_int(v) sprintf(buf, "%d\n", v)
@@ -278,7 +281,7 @@ enum ldlm_policy_res {
 									   \
 		return LDLM_POOL_SYSFS_PRINT_##type(tmp);		   \
 	}								   \
-	struct __##var##__dummy_read {;} /* semicolon catcher */
+	struct __##var##__dummy_read { ; } /* semicolon catcher */
 
 #define LDLM_POOL_SYSFS_WRITER_STORE(var, type)				   \
 	static ssize_t var##_store(struct kobject *kobj,		   \
@@ -395,7 +398,7 @@ void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy);
 void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 				     union ldlm_wire_policy_data *wpolicy);
-void ldlm_extent_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
+void ldlm_extent_policy_wire_to_local(const union ldlm_wire_policy_data *wpol,
 				      union ldlm_policy_data *lpolicy);
 void ldlm_extent_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 				      union ldlm_wire_policy_data *wpolicy);

@@ -45,16 +45,16 @@ struct kmem_cache *ldlm_resource_slab, *ldlm_lock_slab;
 struct kmem_cache *ldlm_interval_tree_slab;
 struct kmem_cache *ldlm_inodebits_slab;
 
-int ldlm_srv_namespace_nr = 0;
-int ldlm_cli_namespace_nr = 0;
+int ldlm_srv_namespace_nr;
+int ldlm_cli_namespace_nr;
 
 DEFINE_MUTEX(ldlm_srv_namespace_lock);
 LIST_HEAD(ldlm_srv_namespace_list);
 
 DEFINE_MUTEX(ldlm_cli_namespace_lock);
-/* Client Namespaces that have active resources in them.
- * Once all resources go away, ldlm_poold moves such namespaces to the
- * inactive list */
+/* Client Namespaces that have active resources in them. Once all resources go
+ * away, ldlm_poold moves such namespaces to the inactive list
+ */
 LIST_HEAD(ldlm_cli_active_namespace_list);
 /* Client namespaces that don't have any locks in them */
 LIST_HEAD(ldlm_cli_inactive_namespace_list);
@@ -63,8 +63,7 @@ static struct dentry *ldlm_debugfs_dir;
 static struct dentry *ldlm_ns_debugfs_dir;
 struct dentry *ldlm_svc_debugfs_dir;
 
-/* during debug dump certain amount of granted locks for one resource to avoid
- * DDOS. */
+/* For debug dump, amount of granted locks for one resource to avoid DDOS. */
 static unsigned int ldlm_dump_granted_max = 256;
 
 static ssize_t ldebugfs_dump_ns_seq_write(struct file *file,
@@ -141,8 +140,7 @@ static ssize_t seq_watermark_write(struct file *file,
 
 	if (wm_low) {
 		if (ldlm_lock_limit_mb != 0 && watermark > ldlm_lock_limit_mb) {
-			CERROR("lock_reclaim_threshold_mb must be smaller than "
-			       "lock_limit_mb.\n");
+			CERROR("lock_reclaim_threshold_mb must be smaller than lock_limit_mb.\n");
 			return -EINVAL;
 		}
 
@@ -768,7 +766,7 @@ static int ldlm_namespace_debugfs_register(struct ldlm_namespace *ns)
 }
 #undef MAX_STRING_SIZE
 
-static unsigned ldlm_res_hop_hash(struct cfs_hash *hs,
+static unsigned int ldlm_res_hop_hash(struct cfs_hash *hs,
 				  const void *key, unsigned int mask)
 {
 	const struct ldlm_res_id *id = key;
@@ -780,7 +778,8 @@ static unsigned ldlm_res_hop_hash(struct cfs_hash *hs,
 	return val & mask;
 }
 
-static unsigned int ldlm_res_hop_fid_hash(const struct ldlm_res_id *id, unsigned int bits)
+static unsigned int ldlm_res_hop_fid_hash(const struct ldlm_res_id *id,
+					  unsigned int bits)
 {
 	struct lu_fid       fid;
 	__u32               hash;
@@ -792,11 +791,12 @@ static unsigned int ldlm_res_hop_fid_hash(const struct ldlm_res_id *id, unsigned
 
 	hash = fid_flatten32(&fid);
 	hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
-	if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0) {
+
+	if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0)
 		val = id->name[LUSTRE_RES_ID_HSH_OFF];
-	} else {
+	else
 		val = fid_oid(&fid);
-	}
+
 	hash += (val >> 5) + (val << 11);
 	return cfs_hash_32(hash, bits);
 }
@@ -852,9 +852,9 @@ static struct cfs_hash_ops ldlm_ns_hash_ops = {
 
 static struct {
 	/** hash bucket bits */
-	unsigned		nsd_bkt_bits;
+	unsigned int		nsd_bkt_bits;
 	/** hash bits */
-	unsigned		nsd_all_bits;
+	unsigned int		nsd_all_bits;
 } ldlm_ns_hash_defs[] = {
 	[LDLM_NS_TYPE_MDC] = {
 		.nsd_bkt_bits   = 11,
@@ -1010,7 +1010,7 @@ out_hash:
 	kfree(ns->ns_name);
 	cfs_hash_putref(ns->ns_rs_hash);
 out_ns:
-        OBD_FREE_PTR(ns);
+	OBD_FREE_PTR(ns);
 out_ref:
 	ldlm_put_ref();
 	RETURN(ERR_PTR(rc));
@@ -1034,8 +1034,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 	do {
 		struct ldlm_lock *lock = NULL, *tmp;
 
-		/* First, we look for non-cleaned-yet lock
-		 * all cleaned locks are marked by CLEANED flag. */
+		/* First, we look for non-cleaned-yet lock. all cleaned locks
+		 * are marked by CLEANED flag.
+		 */
 		lock_res(res);
 		list_for_each_entry(tmp, q, l_res_link) {
 			if (ldlm_is_cleaned(tmp))
@@ -1052,8 +1053,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 			break;
 		}
 
-		/* Set CBPENDING so nothing in the cancellation path
-		 * can match this lock. */
+		/* Set CBPENDING so nothing is in the cancellation path
+		 * can match this lock.
+		 */
 		ldlm_set_cbpending(lock);
 		ldlm_set_failed(lock);
 		ldlm_clear_converting(lock);
@@ -1166,6 +1168,7 @@ static int __ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 
 	if (atomic_read(&ns->ns_bref) > 0) {
 		int rc;
+
 		CDEBUG(D_DLMTRACE,
 		       "dlm namespace %s free waiting on refcount %d\n",
 		       ldlm_ns_name(ns), atomic_read(&ns->ns_bref));
@@ -1180,7 +1183,8 @@ force_wait:
 				ns->ns_waitq, atomic_read(&ns->ns_bref) == 0);
 
 		/* Forced cleanups should be able to reclaim all references,
-		 * so it's safe to wait forever... we can't leak locks... */
+		 * so it's safe to wait forever... we can't leak locks...
+		 */
 		if (force && rc == 0) {
 			rc = -ETIMEDOUT;
 			LCONSOLE_ERROR("Forced cleanup waiting for %s "
@@ -1214,8 +1218,7 @@ force_wait:
  * (1) Clear all locks in \a ns.
  */
 void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
-                               struct obd_import *imp,
-                               int force)
+			       struct obd_import *imp, int force)
 {
 	int rc;
 
@@ -1229,9 +1232,7 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
 	ns->ns_stopping = 1;
 	spin_unlock(&ns->ns_lock);
 
-	/*
-	 * Can fail with -EINTR when force == 0 in which case try harder.
-	 */
+	/* Can fail with -EINTR when force == 0 in which case try harder. */
 	rc = __ldlm_namespace_free(ns, force);
 	if (rc != ELDLM_OK) {
 		if (imp) {
@@ -1267,7 +1268,8 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 	ldlm_namespace_unregister(ns, ns->ns_client);
 	/* Fini pool _before_ parent proc dir is removed. This is important as
 	 * ldlm_pool_fini() removes own proc dir which is child to @dir.
-	 * Removing it after @dir may cause oops. */
+	 * Removing it after @dir may cause oops.
+	 */
 	ldlm_pool_fini(&ns->ns_pool);
 
 	ldlm_namespace_debugfs_unregister(ns);
@@ -1349,7 +1351,8 @@ void ldlm_namespace_unregister(struct ldlm_namespace *ns, enum ldlm_side client)
 	LASSERT(!list_empty(&ns->ns_list_chain));
 	/* Some asserts and possibly other parts of the code are still
 	 * using list_empty(&ns->ns_list_chain). This is why it is
-	 * important to use list_del_init() here. */
+	 * important to use list_del_init() here.
+	 */
 	list_del_init(&ns->ns_list_chain);
 	ldlm_namespace_nr_dec(client);
 	mutex_unlock(ldlm_namespace_lock(client));
@@ -1458,7 +1461,8 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	lu_ref_init(&res->lr_reference);
 
 	/* Since LVB init can be delayed now, there is no longer need to
-	 * immediatelly acquire mutex here. */
+	 * immediatelly acquire mutex here.
+	 */
 	mutex_init(&res->lr_lvb_mutex);
 	res->lr_lvb_initialized = false;
 
@@ -1558,7 +1562,8 @@ found:
 	/* Let's see if we happened to be the very first resource in this
 	 * namespace. If so, and this is a client namespace, we need to move
 	 * the namespace into the active namespaces list to be patrolled by
-	 * the ldlm_poold. */
+	 * the ldlm_poold.
+	 */
 	if (ns_is_client(ns) && ns_refcount == 1) {
 		mutex_lock(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
 		ldlm_namespace_move_to_active_locked(ns, LDLM_NAMESPACE_CLIENT);
@@ -1652,9 +1657,7 @@ static void __ldlm_resource_add_lock(struct ldlm_resource *res,
 	ldlm_resource_dump(D_INFO, res);
 }
 
-/**
- * Add a lock into a given resource into specified lock list.
- */
+/* Add a lock into a given resource into specified lock list. */
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 			    struct ldlm_lock *lock)
 {
@@ -1663,9 +1666,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 	__ldlm_resource_add_lock(res, head, lock, true);
 }
 
-/**
- * Insert a lock into resource after specified lock.
- */
+/* Insert a lock into resource after specified lock. */
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 				     struct ldlm_lock *new)
 {
@@ -1686,7 +1687,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
  * lock and insert after.
  */
 void ldlm_resource_insert_lock_before(struct ldlm_lock *original,
-                                      struct ldlm_lock *new)
+				      struct ldlm_lock *new)
 {
 	LASSERT(!list_empty(&original->l_res_link));
 
@@ -1724,10 +1725,7 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 	desc->lr_name = res->lr_name;
 }
 
-/**
- * Print information about all locks in all namespaces on this node to debug
- * log.
- */
+/* Print info about all locks in all namespaces on this node to debug log. */
 void ldlm_dump_all_namespaces(enum ldlm_side client, int level)
 {
 	struct ldlm_namespace *ns;
@@ -1756,10 +1754,7 @@ static int ldlm_res_hash_dump(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return 0;
 }
 
-/**
- * Print information about all locks in this namespace on this node to debug
- * log.
- */
+/* Print info about all locks in this namespace on this node to debug log. */
 void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 {
 	if (!((libcfs_debug | D_ERROR) & level))
@@ -1780,9 +1775,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 	spin_unlock(&ns->ns_lock);
 }
 
-/**
- * Print information about all locks in this resource to debug log.
- */
+/* Print information about all locks in this resource to debug log. */
 void ldlm_resource_dump(int level, struct ldlm_resource *res)
 {
 	struct ldlm_lock *lock;

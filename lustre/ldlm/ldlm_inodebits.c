@@ -210,7 +210,8 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 		/* We stop walking the queue if we hit ourselves so we don't
 		 * take conflicting locks enqueued after us into account,
-		 * or we'd wait forever. */
+		 * or we'd wait forever.
+		 */
 		if (req == lock)
 			RETURN(compat);
 
@@ -241,7 +242,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			}
 		} else if (ldlm_cos_same_client(req, lock) ||
 			   ldlm_txn_same_server(req, lock)) {
-			/* COS/TXN locks need to be checked one by one, 
+			/* COS/TXN locks need to be checked one by one,
 			 * because client cookie or initiator id may be
 			 * different for locks in mode/policy skiplist.
 			 */
@@ -249,8 +250,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 		}
 
 
-		/* GROUP locks are placed to a head of the waiting list, but
-		 * grouped by gid. */
+		/* GROUP(by gid) locks placed to a head of the waiting list */
 		if (unlikely(req_mode == LCK_GROUP && !ldlm_is_granted(lock))) {
 			compat = 0;
 			if (lock->l_req_mode != LCK_GROUP) {
@@ -259,7 +259,8 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				break;
 			}
 			/* Still GROUP but a different gid(the same gid would
-			 * be handled above). Keep searching for the same gid */
+			 * be handled above). Keep searching for the same gid
+			 */
 			LASSERT(req->l_policy_data.l_inodebits.li_gid !=
 				lock->l_policy_data.l_inodebits.li_gid);
 			continue;
@@ -318,7 +319,8 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					RETURN(0);
 
 				/* Add locks of the policy group to @work_list
-				 * as blocking locks for @req */
+				 * as blocking locks for @req
+				 */
 				if (lock->l_blocking_ast)
 					ldlm_add_ast_work_item(lock, req,
 							       work_list);
@@ -357,6 +359,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
 							NULL : work_list;
 	int rc, rc2 = 0;
+
 	ENTRY;
 
 	*err = ELDLM_LOCK_ABORTED;
@@ -431,7 +434,8 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 			/* There is no sense to set LDLM_FL_NO_TIMEOUT to
 			 * @ldlm_flags for DOM lock while they are enqueued
 			 * through intents, i.e. @lock here is local which does
-			 * not timeout. */
+			 * not timeout.
+			 */
 			*err = ELDLM_OK;
 		}
 	} else {
@@ -499,7 +503,8 @@ int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop)
 	}
 
 	/* remove lock from a skiplist and put in the new place
-	 * according with new inodebits */
+	 * according with new inodebits
+	 */
 	ldlm_resource_unlink_lock(lock);
 	lock->l_policy_data.l_inodebits.bits &= ~to_drop;
 	ldlm_grant_lock_with_skiplist(lock);
@@ -659,8 +664,7 @@ void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
 						    l_res_link);
 		LASSERT(orig->l_policy_data.l_inodebits.bits ==
 			lock->l_policy_data.l_inodebits.bits);
-		/* The is no a use case to insert before with exactly matched
-		 * set of bits */
+		/* should not insert before with exactly matched set of bits */
 		LASSERT(tail == false);
 
 		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {

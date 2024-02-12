@@ -846,7 +846,8 @@ static inline int target_check_recovery_timer(struct obd_device *target)
 
 	/* the recovery timer should expire, but it isn't triggered,
 	 * it's better to abort the recovery of this target to speed up
-	 * the recovery of the whole cluster. */
+	 * the recovery of the whole cluster.
+	 */
 	spin_lock(&target->obd_dev_lock);
 	if (target->obd_recovering) {
 		CERROR("%s: Aborting recovery\n", target->obd_name);
@@ -1797,9 +1798,9 @@ static void target_finish_recovery(struct lu_target *lut)
 		CERROR("%s: Recovery queues ( %s%s%s) are not empty\n",
 		       obd->obd_name,
 		       list_empty(&obd->obd_req_replay_queue) ? "" : "req ",
-		       list_empty(&obd->obd_lock_replay_queue) ? \
+		       list_empty(&obd->obd_lock_replay_queue) ?
 				  "" : "lock ",
-		       list_empty(&obd->obd_final_req_queue) ? \
+		       list_empty(&obd->obd_final_req_queue) ?
 				  "" : "final ");
 		spin_unlock(&obd->obd_recovery_task_lock);
 		LBUG();
