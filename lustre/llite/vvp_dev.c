@@ -64,19 +64,19 @@ static struct lu_kmem_descr vvp_caches[] = {
 		.ckd_name  = "vvp_object_kmem",
 		.ckd_size  = sizeof(struct vvp_object),
 	},
-        {
-                .ckd_cache = &vvp_session_kmem,
-                .ckd_name  = "vvp_session_kmem",
-                .ckd_size  = sizeof (struct vvp_session)
-        },
+	{
+		.ckd_cache = &vvp_session_kmem,
+		.ckd_name  = "vvp_session_kmem",
+		.ckd_size  = sizeof(struct vvp_session)
+	},
 	{
 		.ckd_cache = &vvp_thread_kmem,
 		.ckd_name  = "vvp_thread_kmem",
 		.ckd_size  = sizeof(struct vvp_thread_info),
 	},
-        {
-                .ckd_cache = NULL
-        }
+	{
+		.ckd_cache = NULL
+	}
 };
 
 static void *ll_thread_key_init(const struct lu_context *ctx,
@@ -117,16 +117,17 @@ static void *vvp_session_key_init(const struct lu_context *ctx,
 }
 
 static void vvp_session_key_fini(const struct lu_context *ctx,
-                                 struct lu_context_key *key, void *data)
+				 struct lu_context_key *key, void *data)
 {
-        struct vvp_session *session = data;
-        OBD_SLAB_FREE_PTR(session, vvp_session_kmem);
+	struct vvp_session *session = data;
+
+	OBD_SLAB_FREE_PTR(session, vvp_session_kmem);
 }
 
 struct lu_context_key vvp_session_key = {
-        .lct_tags = LCT_SESSION,
-        .lct_init = vvp_session_key_init,
-        .lct_fini = vvp_session_key_fini
+	.lct_tags = LCT_SESSION,
+	.lct_init = vvp_session_key_init,
+	.lct_fini = vvp_session_key_fini
 };
 
 static void *vvp_thread_key_init(const struct lu_context *ctx,
@@ -144,6 +145,7 @@ static void vvp_thread_key_fini(const struct lu_context *ctx,
 				struct lu_context_key *key, void *data)
 {
 	struct vvp_thread_info *vti = data;
+
 	OBD_SLAB_FREE_PTR(vti, vvp_thread_kmem);
 }
 
@@ -157,7 +159,7 @@ struct lu_context_key vvp_thread_key = {
 LU_TYPE_INIT_FINI(vvp, &ll_thread_key, &vvp_session_key, &vvp_thread_key);
 
 static const struct lu_device_operations vvp_lu_ops = {
-        .ldo_object_alloc      = vvp_object_alloc
+	.ldo_object_alloc = vvp_object_alloc
 };
 
 static struct lu_device *vvp_device_free(const struct lu_env *env,
@@ -185,6 +187,7 @@ static struct lu_device *vvp_device_alloc(const struct lu_env *env,
 	struct lu_device *lud;
 	struct cl_site *site;
 	int rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(vdv);
@@ -219,6 +222,7 @@ static int vvp_device_init(const struct lu_env *env, struct lu_device *d,
 {
 	struct vvp_device  *vdv;
 	int rc;
+
 	ENTRY;
 
 	vdv = lu2vvp_dev(d);
@@ -242,11 +246,11 @@ static struct lu_device *vvp_device_fini(const struct lu_env *env,
 }
 
 static const struct lu_device_type_operations vvp_device_type_ops = {
-        .ldto_init = vvp_type_init,
-        .ldto_fini = vvp_type_fini,
+	.ldto_init = vvp_type_init,
+	.ldto_fini = vvp_type_fini,
 
-        .ldto_start = vvp_type_start,
-        .ldto_stop  = vvp_type_stop,
+	.ldto_start = vvp_type_start,
+	.ldto_stop  = vvp_type_stop,
 
 	.ldto_device_alloc	= vvp_device_alloc,
 	.ldto_device_free	= vvp_device_free,
@@ -255,10 +259,10 @@ static const struct lu_device_type_operations vvp_device_type_ops = {
 };
 
 struct lu_device_type vvp_device_type = {
-        .ldt_tags     = LU_DEVICE_CL,
-        .ldt_name     = LUSTRE_VVP_NAME,
-        .ldt_ops      = &vvp_device_type_ops,
-        .ldt_ctx_tags = LCT_CL_THREAD
+	.ldt_tags     = LU_DEVICE_CL,
+	.ldt_name     = LUSTRE_VVP_NAME,
+	.ldt_ops      = &vvp_device_type_ops,
+	.ldt_ctx_tags = LCT_CL_THREAD
 };
 
 unsigned int (*vvp_account_page_dirtied)(struct page *page,
@@ -310,62 +314,57 @@ void vvp_global_fini(void)
 
 int cl_sb_init(struct super_block *sb)
 {
-        struct ll_sb_info *sbi;
-        struct cl_device  *cl;
-        struct lu_env     *env;
-        int rc = 0;
+	struct ll_sb_info *sbi;
+	struct cl_device  *cl;
+	struct lu_env     *env;
+	int rc = 0;
 	__u16 refcheck;
 
-        sbi  = ll_s2sbi(sb);
-        env = cl_env_get(&refcheck);
-        if (!IS_ERR(env)) {
-                cl = cl_type_setup(env, NULL, &vvp_device_type,
-                                   sbi->ll_dt_exp->exp_obd->obd_lu_dev);
-                if (!IS_ERR(cl)) {
-                        sbi->ll_cl = cl;
-                        sbi->ll_site = cl2lu_dev(cl)->ld_site;
-                }
-                cl_env_put(env, &refcheck);
-        } else
-                rc = PTR_ERR(env);
-        RETURN(rc);
+	sbi  = ll_s2sbi(sb);
+	env = cl_env_get(&refcheck);
+	if (!IS_ERR(env)) {
+		cl = cl_type_setup(env, NULL, &vvp_device_type,
+				   sbi->ll_dt_exp->exp_obd->obd_lu_dev);
+		if (!IS_ERR(cl)) {
+			sbi->ll_cl = cl;
+			sbi->ll_site = cl2lu_dev(cl)->ld_site;
+		}
+		cl_env_put(env, &refcheck);
+	} else
+		rc = PTR_ERR(env);
+	RETURN(rc);
 }
 
 int cl_sb_fini(struct super_block *sb)
 {
-        struct ll_sb_info *sbi;
-        struct lu_env     *env;
-        struct cl_device  *cld;
+	struct ll_sb_info *sbi;
+	struct lu_env     *env;
+	struct cl_device  *cld;
 	__u16              refcheck;
-        int                result;
+	int                result;
 
-        ENTRY;
-        sbi = ll_s2sbi(sb);
-        env = cl_env_get(&refcheck);
-        if (!IS_ERR(env)) {
-                cld = sbi->ll_cl;
+	ENTRY;
+	sbi = ll_s2sbi(sb);
+	env = cl_env_get(&refcheck);
+	if (!IS_ERR(env)) {
+		cld = sbi->ll_cl;
 
-                if (cld != NULL) {
-                        cl_stack_fini(env, cld);
-                        sbi->ll_cl = NULL;
-                        sbi->ll_site = NULL;
-                }
-                cl_env_put(env, &refcheck);
-                result = 0;
-        } else {
-                CERROR("Cannot cleanup cl-stack due to memory shortage.\n");
-                result = PTR_ERR(env);
-        }
+		if (cld != NULL) {
+			cl_stack_fini(env, cld);
+			sbi->ll_cl = NULL;
+			sbi->ll_site = NULL;
+		}
+		cl_env_put(env, &refcheck);
+		result = 0;
+	} else {
+		CERROR("Cannot cleanup cl-stack due to memory shortage.\n");
+		result = PTR_ERR(env);
+	}
 
 	RETURN(result);
 }
 
-/****************************************************************************
- *
- * debugfs/lustre/llite/$MNT/dump_page_cache
- *
- ****************************************************************************/
-
+/* debugfs/lustre/llite/$MNT/dump_page_cache */
 struct vvp_seq_private {
 	struct ll_sb_info	*vsp_sbi;
 	struct lu_env		*vsp_env;
@@ -450,11 +449,11 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 }
 
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
-	if (test_bit(PG_##flag, &(page)->flags)) {                  \
-                seq_printf(seq, "%s"#flag, has_flags ? "|" : "");       \
-                has_flags = 1;                                          \
-        }                                                               \
-} while(0)
+	if (test_bit(PG_##flag, &(page)->flags)) {                      \
+		seq_printf(seq, "%s"#flag, has_flags ? "|" : "");       \
+		has_flags = 1;                                          \
+	}                                                               \
+} while (0)
 
 static void vvp_pgcache_page_show(const struct lu_env *env,
 				  struct seq_file *seq, struct cl_page *page)
@@ -558,7 +557,7 @@ static void *vvp_pgcache_next(struct seq_file *f, void *v, loff_t *pos)
 
 static void vvp_pgcache_stop(struct seq_file *f, void *v)
 {
-        /* Nothing to do */
+	/* Nothing to do */
 }
 
 static const struct seq_operations vvp_pgcache_ops = {
