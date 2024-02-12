@@ -1247,14 +1247,13 @@ void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 	struct ll_file_data *fd = f->private_data;
 	struct ll_readahead_state *ras = &fd->fd_ras;
 	struct inode *inode = file_inode(f);
-	unsigned long index = pos >> PAGE_SHIFT;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
 	spin_lock(&ras->ras_lock);
 	ras->ras_requests++;
 	ras->ras_consecutive_requests++;
 	ras->ras_need_increase_window = false;
-	ras->ras_no_miss_check = false;
+	ras->ras_whole_file_read = false;
 	/*
 	 * On the second access to a file smaller than the tunable
 	 * ra_max_read_ahead_whole_pages trigger RA on all pages in the
@@ -1275,11 +1274,11 @@ void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 
 		if (kms_pages &&
 		    kms_pages <= ra->ra_max_read_ahead_whole_pages) {
+			ras->ras_whole_file_read = true;
 			ras->ras_window_start_idx = 0;
-			ras->ras_next_readahead_idx = index + 1;
+			ras->ras_next_readahead_idx = 0;
 			ras->ras_window_pages = min(ra->ra_max_pages_per_file,
 					    ra->ra_max_read_ahead_whole_pages);
-			ras->ras_no_miss_check = true;
 			GOTO(out_unlock, 0);
 		}
 	}
@@ -1339,7 +1338,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	 * Because we will read whole file to page cache even if
 	 * some pages missed.
 	 */
-	if (ras->ras_no_miss_check)
+	if (ras->ras_whole_file_read)
 		GOTO(out_unlock, 0);
 
 	if (io && io->ci_rand_read)
@@ -1890,10 +1889,14 @@ static bool ll_use_fast_io(struct file *file,
 		skip_pages = fast_read_pages;
 	}
 
-	if (ras->ras_window_start_idx + ras->ras_window_pages <
+	RAS_CDEBUG(ras);
+
+	if (ras->ras_whole_file_read ||
+	    ras->ras_window_start_idx + ras->ras_window_pages <
 	    ras->ras_next_readahead_idx + skip_pages ||
-	    kickoff_async_readahead(file, fast_read_pages) > 0)
+	    kickoff_async_readahead(file, fast_read_pages) > 0) {
 		return true;
+	}
 
 	return false;
 }
@@ -1970,6 +1973,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		page = cl_vmpage_page(vmpage, clob);
 		if (page == NULL) {
 			unlock_page(vmpage);
+			CDEBUG(D_READA, "fast read: failed to find page %ld\n",
+				vmpage->index);
 			ll_ra_stats_inc_sbi(sbi, RA_STAT_FAILED_FAST_READ);
 			RETURN(result);
 		}

@@ -23830,6 +23830,61 @@ test_248b() {
 }
 run_test 248b "test short_io read and write for both small and large sizes"
 
+test_248c() {
+	$LCTL set_param llite.*.read_ahead_stats=c
+	# This test compares whole file readahead to non-whole file readahead
+	# The performance should be consistently slightly faster for whole file,
+	# and the bug caused whole file readahead to be 80-100x slower, but to
+	# account for possible test system lag, we require whole file to be
+	# <= 1.5xnon-whole file, and require 3 failures in a row to fail the
+	# test
+	local time1
+	local time2
+	local whole_mb=$($LCTL get_param -n llite.*.max_read_ahead_whole_mb)
+	stack_trap "$LCTL set_param llite.*.max_read_ahead_whole_mb=$whole_mb" EXIT
+	counter=0
+
+	while [ $counter -lt 3 ]; do
+		# Increment the counter
+		((counter++))
+
+		$LCTL set_param llite.*.max_read_ahead_whole_mb=64
+		rm -f $DIR/$tfile
+		touch $DIR/$tfile || error "(0) failed to create file"
+		# 64 MiB
+		$TRUNCATE $DIR/$tfile 67108864 || error "(1) failed to truncate file"
+		time1=$(dd if=$DIR/$tfile bs=4K of=/dev/null 2>&1 | awk '/bytes/ {print $8}')
+		echo "whole file readahead of 64 MiB took $time1 seconds"
+		$LCTL get_param llite.*.read_ahead_stats
+
+		$LCTL set_param llite.*.read_ahead_stats=c
+		$LCTL set_param llite.*.max_read_ahead_whole_mb=8
+		rm -f $DIR/$tfile
+		touch $DIR/$tfile || error "(2) failed to create file"
+		# 64 MiB
+		$TRUNCATE $DIR/$tfile 67108864 || error "(3) failed to create file"
+		time2=$(dd if=$DIR/$tfile bs=4K of=/dev/null 2>&1 | awk '/bytes/ {print $8}')
+		echo "non-whole file readahead of 64 MiB took $time2 seconds"
+		$LCTL get_param llite.*.read_ahead_stats
+
+		# Check if time1 is not more than 1.5 times2
+		timecheck=$(echo "$time1 <= (1.5 * $time2)" | bc -l)
+
+		if [[ $timecheck -eq 1 ]]; then
+			echo "Test passed on attempt $counter"
+			# Exit the loop
+			counter=4
+		else
+			echo "Attempt $counter failed: whole file readahead took: $time1, greater than non: $time2"
+		fi
+	done
+	if [ $counter -eq 3 ]; then
+		error "whole file readahead check failed 3 times in a row, probably not just VM lag"
+	fi
+
+}
+run_test 248c "verify whole file read behavior"
+
 test_249() { # LU-7890
 	[ $MDS1_VERSION -lt $(version_code 2.8.53) ] &&
 		skip "Need at least version 2.8.54"

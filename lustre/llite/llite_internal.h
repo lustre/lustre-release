@@ -1086,8 +1086,8 @@ struct ll_readahead_state {
 	pgoff_t		ras_async_last_readpage_idx;
 	/* whether we should increase readahead window */
 	bool		ras_need_increase_window;
-	/* whether ra miss check should be skipped */
-	bool		ras_no_miss_check;
+	/* we're attempting to read the whole file */
+	bool		ras_whole_file_read;
 };
 
 struct ll_readahead_work {
