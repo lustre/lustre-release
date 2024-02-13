@@ -531,12 +531,6 @@ static inline int osp_fid_diff(const struct lu_fid *fid1,
 		       fid_idif_id(fid2->f_seq, fid2->f_oid, 0);
 	}
 
-	/* Changed to new seq before replay, we always start with oid 2 in
-	 * a new seq. In this case just return 1.
-	 */
-	if (fid_seq(fid1) != fid_seq(fid2) && fid_oid(fid1) == 2)
-		return 1;
-
 	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID", fid2:"DFID"\n",
 		 PFID(fid1), PFID(fid2));
 
@@ -552,10 +546,20 @@ static inline void osp_fid_to_obdid(struct lu_fid *last_fid, u64 *osi_id)
 		*osi_id = fid_oid(last_fid);
 }
 
-static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
+static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid,
+				       bool replay)
 {
-	int diff = osp_fid_diff(fid, &d->opd_last_used_fid);
 	struct lu_fid *gap_start = &d->opd_gap_start_fid;
+	int diff;
+
+	/*
+	 * replay could cross seq rollover, in this case we don't update
+	 * the last used fid
+	 */
+	if (replay && fid_seq(fid) != fid_seq(&d->opd_last_used_fid))
+		diff = 0;
+	else
+		diff = osp_fid_diff(fid, &d->opd_last_used_fid);
 
 	/*
 	 * we might have lost precreated objects due to VBR and precreate

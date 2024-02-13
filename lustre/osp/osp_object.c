@@ -1558,12 +1558,14 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 		      struct lu_attr *attr, struct dt_allocation_hint *hint,
 		      struct dt_object_format *dof, struct thandle *th)
 {
-	struct osp_thread_info	*osi = osp_env_info(env);
-	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
-	struct osp_object	*o = dt2osp_obj(dt);
-	int			rc = 0;
-	struct lu_fid		*fid = &osi->osi_fid;
-	struct thandle		*local_th;
+	struct osp_thread_info *osi = osp_env_info(env);
+	struct osp_device *d = lu2osp_dev(dt->do_lu.lo_dev);
+	struct osp_object *o = dt2osp_obj(dt);
+	struct lu_fid *fid = &osi->osi_fid;
+	struct thandle *local_th;
+	bool replay = false;
+	int rc = 0;
+
 	ENTRY;
 
 	if (is_only_remote_trans(th) &&
@@ -1581,6 +1583,8 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 	if (o->opo_reserved) {
 		/* regular case, fid is assigned holding transaction open */
 		 osp_object_assign_fid(env, d, o);
+	} else {
+		replay = true;
 	}
 
 	memcpy(fid, lu_object_fid(&dt->do_lu), sizeof(*fid));
@@ -1588,12 +1592,12 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERTF(fid_is_sane(fid), "fid for osp_object %px is insane"DFID"!\n",
 		 o, PFID(fid));
 
-	if (!o->opo_reserved) {
+	if (replay) {
 		/* special case, id was assigned outside of transaction
 		 * see comments in osp_declare_attr_set */
 		LASSERT(d->opd_pre != NULL);
 		spin_lock(&d->opd_pre_lock);
-		osp_update_last_fid(d, fid);
+		osp_update_last_fid(d, fid, true);
 		spin_unlock(&d->opd_pre_lock);
 	}
 

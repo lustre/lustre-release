@@ -40,8 +40,6 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
 
-force_new_seq mds1
-
 test_0a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 

@@ -482,11 +482,15 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
 		RETURN(rc);
 	}
 
+	if (fid_seq(fid) <= fid_seq(last_fid)) {
+		rc = -ESTALE;
+		CERROR("%s: not a new sequence: fid "DFID", last_used_fid "DFID": rc = %d\n",
+		       osp->opd_obd->obd_name, PFID(fid), PFID(last_fid), rc);
+		RETURN(rc);
+	}
+
 	fid->f_oid = 1;
 	fid->f_ver = 0;
-	LASSERTF(fid_seq(fid) != fid_seq(last_fid),
-		 "fid "DFID", last_fid "DFID"\n", PFID(fid),
-		 PFID(last_fid));
 
 	rc = osp_write_last_oid_seq_files(env, osp, fid, 1);
 	if (rc != 0) {
@@ -1640,7 +1644,7 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 	 * last_used_id must be changed along with getting new id otherwise
 	 * we might miscalculate gap causing object loss or leak
 	 */
-	osp_update_last_fid(d, fid);
+	osp_update_last_fid(d, fid, false);
 	spin_unlock(&d->opd_pre_lock);
 
 	/*

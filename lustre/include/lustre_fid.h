@@ -766,19 +766,6 @@ static inline __u32 fid_hash(const struct lu_fid *f, int bits)
 
 u32 lu_fid_hash(const void *data, u32 len, u32 seed);
 
-static inline int
-lu_fid_diff(const struct lu_fid *fid1, const struct lu_fid *fid2)
-{
-	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID", fid2:"DFID"\n",
-		 PFID(fid1), PFID(fid2));
-
-	if (fid_is_idif(fid1) && fid_is_idif(fid2))
-		return fid_idif_id(fid1->f_seq, fid1->f_oid, fid1->f_ver) -
-		       fid_idif_id(fid2->f_seq, fid2->f_oid, fid2->f_ver);
-
-	return fid_oid(fid1) - fid_oid(fid2);
-}
-
 static inline int fid_set_id(struct lu_fid *fid, u64 oid)
 {
 	if (unlikely(fid_seq_is_igif(fid->f_seq))) {

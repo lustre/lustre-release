@@ -28,8 +28,6 @@ check_and_setup_lustre
 assert_DIR
 rm -rf $DIR/d[0-9]* $DIR/f.${TESTSUITE}*
 
-force_new_seq mds1
-
 test_1() {
 	local f1="$DIR/$tfile"
 	local f2="$DIR/$tfile.2"
