@@ -748,7 +748,7 @@ retry_nego:
 		goto out;
 	}
 
-	rc = serialize_context_for_kernel(lnd.lnd_ctx, &lnd.lnd_ctx_token,
+	rc = serialize_context_for_kernel(&lnd.lnd_ctx, &lnd.lnd_ctx_token,
 					  lnd.lnd_mech);
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to export context\n", keyid);

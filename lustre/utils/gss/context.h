@@ -78,9 +78,9 @@ extern krb5_error_code krb5_derive_key(const void *enc,
 				       const krb5_data *in_constant);
 #endif
 
-int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
+int serialize_context_for_kernel(gss_ctx_id_t *ctx, gss_buffer_desc *buf,
 				 gss_OID mech);
-int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
-int serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
+int serialize_spkm3_ctx(gss_ctx_id_t *ctx, gss_buffer_desc *buf);
+int serialize_krb5_ctx(gss_ctx_id_t *ctx, gss_buffer_desc *buf);
 
 #endif /* _CONTEXT_H_ */

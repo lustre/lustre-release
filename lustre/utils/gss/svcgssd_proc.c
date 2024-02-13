@@ -868,15 +868,19 @@ static int handle_krb(struct svc_nego_data *snd)
 
 	/* kernel needs ctx to calculate verifier on null response, so
 	 * must give it context before doing null call: */
-	if (serialize_context_for_kernel(snd->ctx, &snd->ctx_token, mech)) {
+	if (serialize_context_for_kernel(&snd->ctx, &snd->ctx_token, mech)) {
 		printerr(LL_ERR,
 			 "ERROR: %s: serialize_context_for_kernel failed\n",
 			__func__);
 		snd->maj_stat = GSS_S_FAILURE;
 		goto out_err;
 	}
-	/* We no longer need the gss context */
-	gss_delete_sec_context(&ignore_min_stat, &snd->ctx, &ignore_out_tok);
+
+	/* heimdal/MIT implementations do not delete context at all */
+	if (snd->ctx != GSS_C_NO_CONTEXT)
+		gss_delete_sec_context(&ignore_min_stat, &snd->ctx,
+				       &ignore_out_tok);
+
 	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token);
 	/* We no longer need the context token */
 	if (snd->ctx_token.value) {

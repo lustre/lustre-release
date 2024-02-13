@@ -137,7 +137,7 @@ out_err:
  * and only export those fields to the kernel.
  */
 int
-serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
+serialize_spkm3_ctx(gss_ctx_id_t *ctx, gss_buffer_desc *buf)
 {
 	OM_uint32 vers, ret, maj_stat, min_stat;
 	void *ret_ctx = 0;
@@ -146,7 +146,7 @@ serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
 	printerr(1, "serialize_spkm3_ctx called\n");
 
 	printerr(2, "DEBUG: serialize_spkm3_ctx: lucid version!\n");
-	maj_stat = gss_export_lucid_sec_context(&min_stat, &ctx, 1, &ret_ctx);
+	maj_stat = gss_export_lucid_sec_context(&min_stat, ctx, 1, &ret_ctx);
 	if (maj_stat != GSS_S_COMPLETE)
 		goto out_err;
 
@@ -160,7 +160,7 @@ serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
 	}
 	ret = prepare_spkm3_ctx_buffer(lctx, buf);
 
-	maj_stat = gss_free_lucid_sec_context(&min_stat, ctx, ret_ctx);
+	maj_stat = gss_free_lucid_sec_context(&min_stat, *ctx, ret_ctx);
 
 	if (maj_stat != GSS_S_COMPLETE)
 		printerr(0, "WARN: failed to free lucid sec context\n");

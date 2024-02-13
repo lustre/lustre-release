@@ -275,9 +275,9 @@ typedef struct gss_union_ctx_id_t {
 } gss_union_ctx_id_desc, *gss_union_ctx_id_t;
 
 int
-serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
+serialize_krb5_ctx(gss_ctx_id_t *ctx, gss_buffer_desc *buf)
 {
-	krb5_gss_ctx_id_t kctx = ((gss_union_ctx_id_t)ctx)->internal_ctx_id;
+	krb5_gss_ctx_id_t kctx = ((gss_union_ctx_id_t)*ctx)->internal_ctx_id;
 	char *p, *end;
 	static int constant_zero = 0;
 	static int constant_one = 1;

@@ -203,7 +203,7 @@ int write_heimdal_seq_key(char **p, char *end, gss_ctx_id_t ctx)
  */
 
 int
-serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
+serialize_krb5_ctx(gss_ctx_id_t *ctx, gss_buffer_desc *buf)
 {
 
 	char *p, *end;
@@ -219,7 +219,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
 
 
 	/* initiate:  1 => initiating 0 => accepting */
-	if (ctx->more_flags & LOCAL) {
+	if ((*ctx)->more_flags & LOCAL) {
 		if (WRITE_BYTES(&p, end, constant_one)) goto out_err;
 	}
 	else {
@@ -242,19 +242,19 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
 	if (WRITE_BYTES(&p, end, algorithm)) goto out_err;
 
 	/* endtime */
-	if (WRITE_BYTES(&p, end, ctx->lifetime)) goto out_err;
+	if (WRITE_BYTES(&p, end, (*ctx)->lifetime)) goto out_err;
 
 	/* seq_send */
-	if (WRITE_BYTES(&p, end, ctx->auth_context->local_seqnumber))
+	if (WRITE_BYTES(&p, end, (*ctx)->auth_context->local_seqnumber))
 		goto out_err;
 	/* mech_used */
 	if (write_buffer(&p, end, (gss_buffer_desc*)&krb5oid)) goto out_err;
 
 	/* enc: derive the encryption key and copy it into buffer */
-	if (write_heimdal_enc_key(&p, end, ctx)) goto out_err;
+	if (write_heimdal_enc_key(&p, end, *ctx)) goto out_err;
 
 	/* seq: get the sequence number key and copy it into buffer */
-	if (write_heimdal_seq_key(&p, end, ctx)) goto out_err;
+	if (write_heimdal_seq_key(&p, end, *ctx)) goto out_err;
 
 	buf->length = p - (char *)buf->value;
 	printerr(2, "serialize_krb5_ctx: returning buffer "
