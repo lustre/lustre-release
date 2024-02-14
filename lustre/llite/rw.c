@@ -1182,6 +1182,7 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 	bool stride_detect = false;
 	pgoff_t index = pos >> PAGE_SHIFT;
 
+	RAS_CDEBUG(ras);
 	/*
 	 * Reset the read-ahead window in two cases. First when the app seeks
 	 * or reads to some other part of the file. Secondly if we get a
@@ -1235,6 +1236,7 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 	}
 
 	ras->ras_last_read_end_bytes = pos + bytes - 1;
+	RAS_CDEBUG(ras);
 }
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
@@ -1321,6 +1323,8 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 
 	ENTRY;
 	spin_lock(&ras->ras_lock);
+
+	RAS_CDEBUG(ras);
 
 	if (!hit)
 		CDEBUG(D_READA|D_IOTRACE, DFID " pages at %lu miss.\n",
@@ -1444,6 +1448,7 @@ skip_miss_checking:
 
 	EXIT;
 out_unlock:
+	RAS_CDEBUG(ras);
 	spin_unlock(&ras->ras_lock);
 }
 
