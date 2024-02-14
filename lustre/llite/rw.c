@@ -1345,7 +1345,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 			ras->ras_window_pages = sbi->ll_ra_info.ra_range_pages;
 			ll_ra_stats_inc_sbi(sbi, RA_STAT_MMAP_RANGE_READ);
 		}
-		goto skip;
+		goto skip_miss_checking;
 	}
 
 	if (flags & LL_RAS_MMAP) {
@@ -1374,7 +1374,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 			} else {
 				ras->ras_window_pages = 0;
 			}
-			goto skip;
+			goto skip_miss_checking;
 		}
 	}
 
@@ -1417,7 +1417,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 		}
 	}
 
-skip:
+skip_miss_checking:
 	ras->ras_window_start_idx = ras_align(ras, index);
 
 	if (stride_io_mode(ras)) {
