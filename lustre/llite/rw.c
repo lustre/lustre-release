@@ -928,18 +928,13 @@ static int ll_readpages(const struct lu_env *env, struct cl_io *io,
 	RETURN(count > 0 ? count : ret);
 }
 
-static void ras_set_start(struct ll_readahead_state *ras, pgoff_t index)
-{
-	ras->ras_window_start_idx = ras_align(ras, index);
-}
-
 /* called with the ras_lock held or from places where it doesn't matter */
 static void ras_reset(struct ll_readahead_state *ras, pgoff_t index)
 {
 	ras->ras_consecutive_requests = 0;
 	ras->ras_consecutive_bytes = 0;
 	ras->ras_window_pages = 0;
-	ras_set_start(ras, index);
+	ras->ras_window_start_idx = ras_align(ras, index);
 	ras->ras_next_readahead_idx = max(ras->ras_window_start_idx, index + 1);
 
 	RAS_CDEBUG(ras);
@@ -1423,7 +1418,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	}
 
 skip:
-	ras_set_start(ras, index);
+	ras->ras_window_start_idx = ras_align(ras, index);
 
 	if (stride_io_mode(ras)) {
 		/* Since stride readahead is sentivite to the offset
