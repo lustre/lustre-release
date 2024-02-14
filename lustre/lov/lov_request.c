@@ -197,7 +197,7 @@ lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 			/* assume all block sizes are always powers of 2 */
 			/* get the bits difference */
 			tmp = osfs->os_bsize | lov_sfs->os_bsize;
-			for (shift = 0; shift <= 64; ++shift) {
+			for (shift = 0; shift < 32; shift++) {
 				if (tmp & 1) {
 					if (quit)
 						break;
