@@ -1023,9 +1023,9 @@ load_modules_local() {
 		load_module mgs/mgs
 		load_module mdd/mdd
 		load_module mdt/mdt
-		load_module ost/ost
+		# don't fail if ost module doesn't exist
+		load_module ost/ost 2>/dev/null || true;
 		load_module lod/lod
-		load_module osp/osp
 		load_module ofd/ofd
 		load_module osp/osp
 	fi
