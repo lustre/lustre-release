@@ -307,10 +307,7 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
 		return ERR_PTR(-ENOMEM);
 	if (IS_ERR(top))
 		return top;
-	/*
-	 * This is the only place where object fid is assigned. It's constant
-	 * after this point.
-	 */
+	/* The only place where obj fid is assigned. It's constant after this */
 	top->lo_header->loh_fid = *f;
 
 	return top;
@@ -372,9 +369,7 @@ next:
 	return 0;
 }
 
-/**
- * Free an object.
- */
+/* Free an object. */
 static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 {
 	wait_queue_head_t *wq;
@@ -386,20 +381,18 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 	site = o->lo_dev->ld_site;
 	layers = &o->lo_header->loh_layers;
 	wq = lu_site_wq_from_fid(site, &o->lo_header->loh_fid);
-        /*
-         * First call ->loo_object_delete() method to release all resources.
-         */
+	/* First call ->loo_object_delete() method to release all resources. */
 	list_for_each_entry_reverse(scan, layers, lo_linkage) {
-                if (scan->lo_ops->loo_object_delete != NULL)
-                        scan->lo_ops->loo_object_delete(env, scan);
-        }
+		if (scan->lo_ops->loo_object_delete != NULL)
+			scan->lo_ops->loo_object_delete(env, scan);
+	}
 
-        /*
-         * Then, splice object layers into stand-alone list, and call
-         * ->loo_object_free() on all layers to free memory. Splice is
-         * necessary, because lu_object_header is freed together with the
-         * top-level slice.
-         */
+	/*
+	 * Then, splice object layers into stand-alone list, and call
+	 * ->loo_object_free() on all layers to free memory. Splice is
+	 * necessary, because lu_object_header is freed together with the
+	 * top-level slice.
+	 */
 	list_splice_init(layers, &splice);
 	while (!list_empty(&splice)) {
 		/*
@@ -528,19 +521,17 @@ EXPORT_SYMBOL(lu_site_purge_objects);
  */
 
 enum {
-        /**
-         * Maximal line size.
-         *
-         * XXX overflow is not handled correctly.
-         */
-        LU_CDEBUG_LINE = 512
+	/**
+	 * Maximal line size.
+	 *
+	 * XXX overflow is not handled correctly.
+	 */
+	LU_CDEBUG_LINE = 512
 };
 
 struct lu_cdebug_data {
-        /**
-         * Temporary buffer.
-         */
-        char lck_area[LU_CDEBUG_LINE];
+	/* Temporary buffer */
+	char lck_area[LU_CDEBUG_LINE];
 };
 
 /* context key constructor/destructor: lu_global_key_init, lu_global_key_fini */
@@ -557,46 +548,40 @@ static struct lu_context_key lu_global_key = {
 	.lct_fini = lu_global_key_fini
 };
 
-/**
- * Printer function emitting messages through libcfs_debug_msg().
- */
+/* Printer function emitting messages through libcfs_debug_msg(). */
 int lu_cdebug_printer(const struct lu_env *env,
-                      void *cookie, const char *format, ...)
+		      void *cookie, const char *format, ...)
 {
-        struct libcfs_debug_msg_data *msgdata = cookie;
-        struct lu_cdebug_data        *key;
-        int used;
-        int complete;
-        va_list args;
+	struct libcfs_debug_msg_data *msgdata = cookie;
+	struct lu_cdebug_data        *key;
+	int used;
+	int complete;
+	va_list args;
 
-        va_start(args, format);
+	va_start(args, format);
 
-        key = lu_context_key_get(&env->le_ctx, &lu_global_key);
-        LASSERT(key != NULL);
+	key = lu_context_key_get(&env->le_ctx, &lu_global_key);
+	LASSERT(key != NULL);
 
-        used = strlen(key->lck_area);
-        complete = format[strlen(format) - 1] == '\n';
-        /*
-         * Append new chunk to the buffer.
-         */
-        vsnprintf(key->lck_area + used,
-                  ARRAY_SIZE(key->lck_area) - used, format, args);
-        if (complete) {
+	used = strlen(key->lck_area);
+	complete = format[strlen(format) - 1] == '\n';
+	/* Append new chunk to the buffer. */
+	vsnprintf(key->lck_area + used,
+		  ARRAY_SIZE(key->lck_area) - used, format, args);
+	if (complete) {
 		if (cfs_cdebug_show(msgdata->msg_mask, msgdata->msg_subsys))
 			libcfs_debug_msg(msgdata, "%s", key->lck_area);
-                key->lck_area[0] = 0;
-        }
-        va_end(args);
-        return 0;
+		key->lck_area[0] = 0;
+	}
+	va_end(args);
+	return 0;
 }
 EXPORT_SYMBOL(lu_cdebug_printer);
 
-/**
- * Print object header.
- */
+/* Print object header. */
 void lu_object_header_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t printer,
-                            const struct lu_object_header *hdr)
+			    lu_printer_t printer,
+			    const struct lu_object_header *hdr)
 {
 	(*printer)(env, cookie, "header@%p[%#lx, %d, "DFID"%s%s%s]",
 		   hdr, hdr->loh_flags, atomic_read(&hdr->loh_ref),
@@ -608,9 +593,7 @@ void lu_object_header_print(const struct lu_env *env, void *cookie,
 }
 EXPORT_SYMBOL(lu_object_header_print);
 
-/**
- * Print human readable representation of the \a o to the \a printer.
- */
+/* Print human readable representation of the \a o to the \a printer. */
 void lu_object_print(const struct lu_env *env, void *cookie,
 		     lu_printer_t printer, const struct lu_object *o)
 {
@@ -623,9 +606,7 @@ void lu_object_print(const struct lu_env *env, void *cookie,
 	(*printer)(env, cookie, "{\n");
 
 	list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-		/*
-		 * print `.' \a depth times followed by type name and address
-		 */
+		/* print '.' \a depth times followed by type name and address */
 		(*printer)(env, cookie, "%*.*s%s@%p", depth, depth, ruler,
 			   o->lo_dev->ld_type->ldt_name, o);
 
@@ -639,20 +620,18 @@ void lu_object_print(const struct lu_env *env, void *cookie,
 }
 EXPORT_SYMBOL(lu_object_print);
 
-/**
- * Check object consistency.
- */
+/* Check object consistency. */
 int lu_object_invariant(const struct lu_object *o)
 {
-        struct lu_object_header *top;
+	struct lu_object_header *top;
 
-        top = o->lo_header;
+	top = o->lo_header;
 	list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-                if (o->lo_ops->loo_object_invariant != NULL &&
-                    !o->lo_ops->loo_object_invariant(o))
-                        return 0;
-        }
-        return 1;
+		if (o->lo_ops->loo_object_invariant != NULL &&
+		    !o->lo_ops->loo_object_invariant(o))
+			return 0;
+	}
+	return 1;
 }
 
 /*
@@ -755,17 +734,14 @@ try_again:
  * it. In any case, additional reference is acquired on the returned object.
  */
 struct lu_object *lu_object_find(const struct lu_env *env,
-                                 struct lu_device *dev, const struct lu_fid *f,
-                                 const struct lu_object_conf *conf)
+				 struct lu_device *dev, const struct lu_fid *f,
+				 const struct lu_object_conf *conf)
 {
-        return lu_object_find_at(env, dev->ld_site->ls_top_dev, f, conf);
+	return lu_object_find_at(env, dev->ld_site->ls_top_dev, f, conf);
 }
 EXPORT_SYMBOL(lu_object_find);
 
-/*
- * Get a 'first' reference to an object that was found while looking through the
- * hash table.
- */
+/* Get a 'first' ref to an obj that was found looking through the hash table */
 struct lu_object *lu_object_get_first(struct lu_object_header *h,
 				      struct lu_device *dev)
 {
@@ -937,13 +913,11 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_find_at);
 
-/**
- * Find object with given fid, and return its slice belonging to given device.
- */
+/* Find object with given fid, return its slice belonging to given device. */
 struct lu_object *lu_object_find_slice(const struct lu_env *env,
-                                       struct lu_device *dev,
-                                       const struct lu_fid *f,
-                                       const struct lu_object_conf *conf)
+				       struct lu_device *dev,
+				       const struct lu_fid *f,
+				       const struct lu_object_conf *conf)
 {
 	struct lu_object *top;
 	struct lu_object *obj;
@@ -981,21 +955,17 @@ void lu_device_type_fini(struct lu_device_type *ldt)
 }
 EXPORT_SYMBOL(lu_device_type_fini);
 
-/**
- * Global list of all sites on this node
- */
+/* Global list of all sites on this node */
 static LIST_HEAD(lu_sites);
 static DECLARE_RWSEM(lu_sites_guard);
 
-/**
- * Global environment used by site shrinker.
- */
+/* Global environment used by site shrinker. */
 static struct lu_env lu_shrink_env;
 
 struct lu_site_print_arg {
-        struct lu_env   *lsp_env;
-        void            *lsp_cookie;
-        lu_printer_t     lsp_printer;
+	struct lu_env   *lsp_env;
+	void            *lsp_cookie;
+	lu_printer_t     lsp_printer;
 };
 
 static void
@@ -1013,9 +983,7 @@ lu_site_obj_print(struct lu_object_header *h, struct lu_site_print_arg *arg)
 	}
 }
 
-/**
- * Print all objects in \a s.
- */
+/* Print all objects in \a s. */
 void lu_site_print(const struct lu_env *env, struct lu_site *s, atomic_t *ref,
 		   int msg_flag, lu_printer_t printer)
 {
@@ -1025,6 +993,7 @@ void lu_site_print(const struct lu_env *env, struct lu_site *s, atomic_t *ref,
 	};
 	struct rhashtable_iter iter;
 	struct lu_object_header *h;
+
 	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, msg_flag, NULL);
 
 	if (!s || !atomic_read(ref))
@@ -1044,9 +1013,7 @@ void lu_site_print(const struct lu_env *env, struct lu_site *s, atomic_t *ref,
 }
 EXPORT_SYMBOL(lu_site_print);
 
-/**
- * Return desired hash table order.
- */
+/* Return desired hash table order. */
 static void lu_htable_limits(struct lu_device *top)
 {
 	unsigned long cache_size;
@@ -1109,17 +1076,16 @@ void lu_dev_del_linkage(struct lu_site *s, struct lu_device *d)
 }
 EXPORT_SYMBOL(lu_dev_del_linkage);
 
-/**
-  * Initialize site \a s, with \a d as the top level device.
-  */
+/* Initialize site \a s, with \a d as the top level device.  */
 int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
 	struct lu_site_bkt_data *bkt;
 	unsigned int i;
 	int rc;
+
 	ENTRY;
 
-	memset(s, 0, sizeof *s);
+	memset(s, 0, sizeof(*s));
 	mutex_init(&s->ls_purge_mutex);
 	lu_htable_limits(top);
 
@@ -1184,9 +1150,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 }
 EXPORT_SYMBOL(lu_site_init);
 
-/**
- * Finalize \a s and release its resources.
- */
+/* Finalize \a s and release its resources. */
 void lu_site_fini(struct lu_site *s)
 {
 	down_write(&lu_sites_guard);
@@ -1213,9 +1177,7 @@ void lu_site_fini(struct lu_site *s)
 }
 EXPORT_SYMBOL(lu_site_fini);
 
-/**
- * Called when initialization of stack for this site is completed.
- */
+/* Called when initialization of stack for this site is completed. */
 int lu_site_init_finish(struct lu_site *s)
 {
 	int result;
@@ -1230,18 +1192,14 @@ int lu_site_init_finish(struct lu_site *s)
 }
 EXPORT_SYMBOL(lu_site_init_finish);
 
-/**
- * Acquire additional reference on device \a d
- */
+/* Acquire additional reference on device \a d */
 void lu_device_get(struct lu_device *d)
 {
 	atomic_inc(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_get);
 
-/**
- * Release reference on device \a d.
- */
+/* Release reference on device \a d. */
 void lu_device_put(struct lu_device *d)
 {
 	LASSERT(atomic_read(&d->ld_ref) > 0);
@@ -1255,9 +1213,7 @@ enum { /* Maximal number of tld slots. */
 static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 static DECLARE_RWSEM(lu_key_initing);
 
-/**
- * Initialize device \a d of type \a t.
- */
+/* Initialize device \a d of type \a t. */
 int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 {
 	if (atomic_add_unless(&t->ldt_device_nr, 1, 0) == 0) {
@@ -1269,7 +1225,7 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 		up_write(&lu_key_initing);
 	}
 
-	memset(d, 0, sizeof *d);
+	memset(d, 0, sizeof(*d));
 	d->ld_type = t;
 	lu_ref_init(&d->ld_reference);
 	INIT_LIST_HEAD(&d->ld_linkage);
@@ -1278,9 +1234,7 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 }
 EXPORT_SYMBOL(lu_device_init);
 
-/**
- * Finalize device \a d.
- */
+/* Finalize device \a d. */
 void lu_device_fini(struct lu_device *d)
 {
 	struct lu_device_type *t = d->ld_type;
@@ -1301,10 +1255,7 @@ void lu_device_fini(struct lu_device *d)
 }
 EXPORT_SYMBOL(lu_device_fini);
 
-/**
- * Initialize object \a o that is part of compound object \a h and was created
- * by device \a d.
- */
+/* Initialize obj o that is part of compound obj h and was created by dev d */
 int lu_object_init(struct lu_object *o, struct lu_object_header *h,
 		   struct lu_device *d)
 {
@@ -1319,9 +1270,7 @@ int lu_object_init(struct lu_object *o, struct lu_object_header *h,
 }
 EXPORT_SYMBOL(lu_object_init);
 
-/**
- * Finalize object and release its resources.
- */
+/* Finalize object and release its resources. */
 void lu_object_fini(struct lu_object *o)
 {
 	struct lu_device *dev = o->lo_dev;
@@ -1361,34 +1310,28 @@ void lu_object_add(struct lu_object *before, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_add);
 
-/**
- * Initialize compound object.
- */
+/* Initialize compound object. */
 int lu_object_header_init(struct lu_object_header *h)
 {
-        memset(h, 0, sizeof *h);
+	memset(h, 0, sizeof(*h));
 	atomic_set(&h->loh_ref, 1);
 	INIT_LIST_HEAD(&h->loh_lru);
 	INIT_LIST_HEAD(&h->loh_layers);
-        lu_ref_init(&h->loh_reference);
-        return 0;
+	lu_ref_init(&h->loh_reference);
+	return 0;
 }
 EXPORT_SYMBOL(lu_object_header_init);
 
-/**
- * Finalize compound object.
- */
+/* Finalize compound object. */
 void lu_object_header_fini(struct lu_object_header *h)
 {
 	LASSERT(list_empty(&h->loh_layers));
 	LASSERT(list_empty(&h->loh_lru));
-        lu_ref_fini(&h->loh_reference);
+	lu_ref_fini(&h->loh_reference);
 }
 EXPORT_SYMBOL(lu_object_header_fini);
 
-/**
- * Free lu_object_header with proper RCU handling
- */
+/* Free lu_object_header with proper RCU handling */
 void lu_object_header_free(struct lu_object_header *h)
 {
 	lu_object_header_fini(h);
@@ -1397,12 +1340,9 @@ void lu_object_header_free(struct lu_object_header *h)
 }
 EXPORT_SYMBOL(lu_object_header_free);
 
-/**
- * Given a compound object, find its slice, corresponding to the device type
- * \a dtype.
- */
+/* For compound obj, find its slice, corresponding to the device type dtype  */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
-                                   const struct lu_device_type *dtype)
+				   const struct lu_device_type *dtype)
 {
 	struct lu_object *o;
 
@@ -1423,25 +1363,25 @@ EXPORT_SYMBOL(lu_object_locate);
  */
 void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 {
-        struct lu_site   *site = top->ld_site;
-        struct lu_device *scan;
-        struct lu_device *next;
+	struct lu_site   *site = top->ld_site;
+	struct lu_device *scan;
+	struct lu_device *next;
 
-        lu_site_purge(env, site, ~0);
-        for (scan = top; scan != NULL; scan = next) {
-                next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
-                lu_ref_del(&scan->ld_reference, "lu-stack", &lu_site_init);
-                lu_device_put(scan);
-        }
+	lu_site_purge(env, site, ~0);
+	for (scan = top; scan != NULL; scan = next) {
+		next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
+		lu_ref_del(&scan->ld_reference, "lu-stack", &lu_site_init);
+		lu_device_put(scan);
+	}
 
-        /* purge again. */
-        lu_site_purge(env, site, ~0);
+	/* purge again. */
+	lu_site_purge(env, site, ~0);
 
-        for (scan = top; scan != NULL; scan = next) {
-                const struct lu_device_type *ldt = scan->ld_type;
+	for (scan = top; scan != NULL; scan = next) {
+		const struct lu_device_type *ldt = scan->ld_type;
 
-                next = ldt->ldt_ops->ldto_device_free(env, scan);
-        }
+		next = ldt->ldt_ops->ldto_device_free(env, scan);
+	}
 }
 
 /**
@@ -1452,23 +1392,21 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
  */
 static atomic_t key_set_version = ATOMIC_INIT(0);
 
-/**
- * Register new key.
- */
+/* Register new key. */
 int lu_context_key_register(struct lu_context_key *key)
 {
 	int result;
 	unsigned int i;
 
-        LASSERT(key->lct_init != NULL);
-        LASSERT(key->lct_fini != NULL);
-        LASSERT(key->lct_tags != 0);
-        LASSERT(key->lct_owner != NULL);
+	LASSERT(key->lct_init != NULL);
+	LASSERT(key->lct_fini != NULL);
+	LASSERT(key->lct_tags != 0);
+	LASSERT(key->lct_owner != NULL);
 
-        result = -ENFILE;
+	result = -ENFILE;
 	atomic_set(&key->lct_used, 1);
 	lu_ref_init(&key->lct_reference);
-        for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
 		if (lu_keys[i])
 			continue;
 		key->lct_index = i;
@@ -1482,7 +1420,7 @@ int lu_context_key_register(struct lu_context_key *key)
 		result = 0;
 		atomic_inc(&key_set_version);
 		break;
-        }
+	}
 	if (result) {
 		lu_ref_fini(&key->lct_reference);
 		atomic_set(&key->lct_used, 0);
@@ -1493,16 +1431,16 @@ EXPORT_SYMBOL(lu_context_key_register);
 
 static void key_fini(struct lu_context *ctx, int index)
 {
-        if (ctx->lc_value != NULL && ctx->lc_value[index] != NULL) {
-                struct lu_context_key *key;
+	if (ctx->lc_value != NULL && ctx->lc_value[index] != NULL) {
+		struct lu_context_key *key;
 
-                key = lu_keys[index];
-                LASSERT(key != NULL);
-                LASSERT(key->lct_fini != NULL);
+		key = lu_keys[index];
+		LASSERT(key != NULL);
+		LASSERT(key->lct_fini != NULL);
 		LASSERT(atomic_read(&key->lct_used) > 0);
 
-                key->lct_fini(ctx, key, ctx->lc_value[index]);
-                lu_ref_del(&key->lct_reference, "ctx", ctx);
+		key->lct_fini(ctx, key, ctx->lc_value[index]);
+		lu_ref_del(&key->lct_reference, "ctx", ctx);
 		if (atomic_dec_and_test(&key->lct_used))
 			wake_up_var(&key->lct_used);
 
@@ -1515,9 +1453,7 @@ static void key_fini(struct lu_context *ctx, int index)
 	}
 }
 
-/**
- * Deregister key.
- */
+/* Deregister key. */
 void lu_context_key_degister(struct lu_context_key *key)
 {
 	LASSERT(atomic_read(&key->lct_used) >= 1);
@@ -1537,7 +1473,7 @@ void lu_context_key_degister(struct lu_context_key *key)
 	if (!WARN_ON(lu_keys[key->lct_index] == NULL))
 		lu_ref_fini(&key->lct_reference);
 
-	smp_store_release(&lu_keys[key->lct_index], NULL);
+	smp_store_release(&lu_keys[key->lct_index], NULL); /* release key */
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
@@ -1547,29 +1483,29 @@ EXPORT_SYMBOL(lu_context_key_degister);
  */
 int lu_context_key_register_many(struct lu_context_key *k, ...)
 {
-        struct lu_context_key *key = k;
-        va_list args;
-        int result;
+	struct lu_context_key *key = k;
+	va_list args;
+	int result;
 
-        va_start(args, k);
-        do {
-                result = lu_context_key_register(key);
-                if (result)
-                        break;
-                key = va_arg(args, struct lu_context_key *);
-        } while (key != NULL);
-        va_end(args);
+	va_start(args, k);
+	do {
+		result = lu_context_key_register(key);
+		if (result)
+			break;
+		key = va_arg(args, struct lu_context_key *);
+	} while (key != NULL);
+	va_end(args);
 
-        if (result != 0) {
-                va_start(args, k);
-                while (k != key) {
-                        lu_context_key_degister(k);
-                        k = va_arg(args, struct lu_context_key *);
-                }
-                va_end(args);
-        }
+	if (result != 0) {
+		va_start(args, k);
+		while (k != key) {
+			lu_context_key_degister(k);
+			k = va_arg(args, struct lu_context_key *);
+		}
+		va_end(args);
+	}
 
-        return result;
+	return result;
 }
 EXPORT_SYMBOL(lu_context_key_register_many);
 
@@ -1579,36 +1515,32 @@ EXPORT_SYMBOL(lu_context_key_register_many);
  */
 void lu_context_key_degister_many(struct lu_context_key *k, ...)
 {
-        va_list args;
+	va_list args;
 
-        va_start(args, k);
-        do {
-                lu_context_key_degister(k);
-                k = va_arg(args, struct lu_context_key*);
-        } while (k != NULL);
-        va_end(args);
+	va_start(args, k);
+	do {
+		lu_context_key_degister(k);
+		k = va_arg(args, struct lu_context_key*);
+	} while (k != NULL);
+	va_end(args);
 }
 EXPORT_SYMBOL(lu_context_key_degister_many);
 
-/**
- * Revive a number of keys.
- */
+/* Revive a number of keys. */
 void lu_context_key_revive_many(struct lu_context_key *k, ...)
 {
-        va_list args;
+	va_list args;
 
-        va_start(args, k);
-        do {
-                lu_context_key_revive(k);
-                k = va_arg(args, struct lu_context_key*);
-        } while (k != NULL);
-        va_end(args);
+	va_start(args, k);
+	do {
+		lu_context_key_revive(k);
+		k = va_arg(args, struct lu_context_key*);
+	} while (k != NULL);
+	va_end(args);
 }
 EXPORT_SYMBOL(lu_context_key_revive_many);
 
-/**
- * Quiescent a number of keys.
- */
+/* Quiescent a number of keys. */
 void lu_context_key_quiesce_many(struct lu_device_type *t,
 				 struct lu_context_key *k, ...)
 {
@@ -1623,16 +1555,14 @@ void lu_context_key_quiesce_many(struct lu_device_type *t,
 }
 EXPORT_SYMBOL(lu_context_key_quiesce_many);
 
-/**
- * Return value associated with key \a key in context \a ctx.
- */
+/* Return value associated with key \a key in context \a ctx. */
 void *lu_context_key_get(const struct lu_context *ctx,
-                         const struct lu_context_key *key)
+			 const struct lu_context_key *key)
 {
-        LINVRNT(ctx->lc_state == LCS_ENTERED);
-        LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
-        LASSERT(lu_keys[key->lct_index] == key);
-        return ctx->lc_value[key->lct_index];
+	LINVRNT(ctx->lc_state == LCS_ENTERED);
+	LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+	LASSERT(lu_keys[key->lct_index] == key);
+	return ctx->lc_value[key->lct_index];
 }
 EXPORT_SYMBOL(lu_context_key_get);
 
@@ -1667,7 +1597,8 @@ void lu_context_key_quiesce(struct lu_device_type *t,
 
 		spin_lock(&lu_context_remembered_guard);
 		list_for_each_entry(ctx, &lu_context_remembered, lc_remember) {
-			spin_until_cond(READ_ONCE(ctx->lc_state) != LCS_LEAVING);
+			spin_until_cond(READ_ONCE(ctx->lc_state) !=
+					LCS_LEAVING);
 			key_fini(ctx, key->lct_index);
 		}
 		spin_unlock(&lu_context_remembered_guard);
@@ -1768,14 +1699,12 @@ static int keys_init(struct lu_context *ctx)
 	return -ENOMEM;
 }
 
-/**
- * Initialize context data-structure. Create values for all keys.
- */
+/* Initialize context data-structure. Create values for all keys. */
 int lu_context_init(struct lu_context *ctx, __u32 tags)
 {
 	int	rc;
 
-	memset(ctx, 0, sizeof *ctx);
+	memset(ctx, 0, sizeof(*ctx));
 	ctx->lc_state = LCS_INITIALIZED;
 	ctx->lc_tags = tags;
 	if (tags & LCT_REMEMBER) {
@@ -1794,9 +1723,7 @@ int lu_context_init(struct lu_context *ctx, __u32 tags)
 }
 EXPORT_SYMBOL(lu_context_init);
 
-/**
- * Finalize context data-structure. Destroy key values.
- */
+/* Finalize context data-structure. Destroy key values. */
 void lu_context_fini(struct lu_context *ctx)
 {
 	LINVRNT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
@@ -1814,19 +1741,15 @@ void lu_context_fini(struct lu_context *ctx)
 }
 EXPORT_SYMBOL(lu_context_fini);
 
-/**
- * Called before entering context.
- */
+/* Called before entering context. */
 void lu_context_enter(struct lu_context *ctx)
 {
-        LINVRNT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
-        ctx->lc_state = LCS_ENTERED;
+	LINVRNT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
+	ctx->lc_state = LCS_ENTERED;
 }
 EXPORT_SYMBOL(lu_context_enter);
 
-/**
- * Called after exiting from \a ctx
- */
+/* Called after exiting from \a ctx */
 void lu_context_exit(struct lu_context *ctx)
 {
 	unsigned int i;
@@ -1847,7 +1770,7 @@ void lu_context_exit(struct lu_context *ctx)
 	 */
 	smp_store_mb(ctx->lc_state, LCS_LEAVING);
 	if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value) {
-                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+		for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
 			struct lu_context_key *key;
 
 			key = lu_keys[i];
@@ -1856,9 +1779,9 @@ void lu_context_exit(struct lu_context *ctx)
 			    key->lct_exit)
 				key->lct_exit(ctx, key, ctx->lc_value[i]);
 		}
-        }
+	}
 
-	smp_store_release(&ctx->lc_state, LCS_LEFT);
+	smp_store_release(&ctx->lc_state, LCS_LEFT); /* release ownership  */
 	preempt_enable();
 }
 EXPORT_SYMBOL(lu_context_exit);
@@ -1924,32 +1847,32 @@ EXPORT_SYMBOL(lu_session_tags_clear);
 
 int lu_env_init(struct lu_env *env, __u32 tags)
 {
-        int result;
+	int result;
 
-        env->le_ses = NULL;
-        result = lu_context_init(&env->le_ctx, tags);
-        if (likely(result == 0))
-                lu_context_enter(&env->le_ctx);
-        return result;
+	env->le_ses = NULL;
+	result = lu_context_init(&env->le_ctx, tags);
+	if (likely(result == 0))
+		lu_context_enter(&env->le_ctx);
+	return result;
 }
 EXPORT_SYMBOL(lu_env_init);
 
 void lu_env_fini(struct lu_env *env)
 {
-        lu_context_exit(&env->le_ctx);
-        lu_context_fini(&env->le_ctx);
-        env->le_ses = NULL;
+	lu_context_exit(&env->le_ctx);
+	lu_context_fini(&env->le_ctx);
+	env->le_ses = NULL;
 }
 EXPORT_SYMBOL(lu_env_fini);
 
 int lu_env_refill(struct lu_env *env)
 {
-        int result;
+	int result;
 
-        result = lu_context_refill(&env->le_ctx);
-        if (result == 0 && env->le_ses != NULL)
-                result = lu_context_refill(env->le_ses);
-        return result;
+	result = lu_context_refill(&env->le_ctx);
+	if (result == 0 && env->le_ses != NULL)
+		result = lu_context_refill(env->le_ses);
+	return result;
 }
 EXPORT_SYMBOL(lu_env_refill);
 
@@ -1961,23 +1884,23 @@ EXPORT_SYMBOL(lu_env_refill);
  * when normal client and echo client co-exist in the same client.
  */
 int lu_env_refill_by_tags(struct lu_env *env, __u32 ctags,
-                          __u32 stags)
+			  __u32 stags)
 {
-        int    result;
+	int    result;
 
-        if ((env->le_ctx.lc_tags & ctags) != ctags) {
-                env->le_ctx.lc_version = 0;
-                env->le_ctx.lc_tags |= ctags;
-        }
+	if ((env->le_ctx.lc_tags & ctags) != ctags) {
+		env->le_ctx.lc_version = 0;
+		env->le_ctx.lc_tags |= ctags;
+	}
 
-        if (env->le_ses && (env->le_ses->lc_tags & stags) != stags) {
-                env->le_ses->lc_version = 0;
-                env->le_ses->lc_tags |= stags;
-        }
+	if (env->le_ses && (env->le_ses->lc_tags & stags) != stags) {
+		env->le_ses->lc_version = 0;
+		env->le_ses->lc_tags |= stags;
+	}
 
-        result = lu_env_refill(env);
+	result = lu_env_refill(env);
 
-        return result;
+	return result;
 }
 EXPORT_SYMBOL(lu_env_refill_by_tags);
 
@@ -1993,7 +1916,7 @@ static const struct rhashtable_params lu_env_rhash_params = {
 	.key_len     = sizeof(struct task_struct *),
 	.key_offset  = offsetof(struct lu_env_item, lei_task),
 	.head_offset = offsetof(struct lu_env_item, lei_linkage),
-    };
+};
 
 struct rhashtable lu_env_rhash;
 
@@ -2094,11 +2017,11 @@ struct lu_env *lu_env_find(void)
 }
 EXPORT_SYMBOL(lu_env_find);
 
-typedef struct lu_site_stats{
-        unsigned        lss_populated;
-        unsigned        lss_max_search;
-        unsigned        lss_total;
-        unsigned        lss_busy;
+typedef struct lu_site_stats {
+	unsigned int lss_populated;
+	unsigned int lss_max_search;
+	unsigned int lss_total;
+	unsigned int lss_busy;
 } lu_site_stats_t;
 
 static void lu_site_stats_get(const struct lu_site *s,
@@ -2245,9 +2168,7 @@ static struct shrinker lu_site_shrinker = {
 
 #endif /* HAVE_SHRINKER_COUNT */
 
-/**
- * Initialization of global lu_* data.
- */
+/* Initialization of global lu_* data. */
 int lu_global_init(void)
 {
 	int result;
@@ -2305,9 +2226,7 @@ out_lu_ref:
 	return result;
 }
 
-/**
- * Dual to lu_global_init().
- */
+/* Dual to lu_global_init(). */
 void lu_global_fini(void)
 {
 	unregister_shrinker(&lu_site_shrinker);
@@ -2373,26 +2292,24 @@ int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m)
 }
 EXPORT_SYMBOL(lu_site_stats_seq_print);
 
-/**
- * Helper function to initialize a number of kmem slab caches at once.
- */
+/* Helper function to initialize a number of kmem slab caches at once. */
 int lu_kmem_init(struct lu_kmem_descr *caches)
 {
-        int result;
-        struct lu_kmem_descr *iter = caches;
+	int result;
+	struct lu_kmem_descr *iter = caches;
 
-        for (result = 0; iter->ckd_cache != NULL; ++iter) {
+	for (result = 0; iter->ckd_cache != NULL; ++iter) {
 		*iter->ckd_cache = kmem_cache_create(iter->ckd_name,
 						     iter->ckd_size,
 						     0, 0, NULL);
-                if (*iter->ckd_cache == NULL) {
-                        result = -ENOMEM;
-                        /* free all previously allocated caches */
-                        lu_kmem_fini(caches);
-                        break;
-                }
-        }
-        return result;
+		if (*iter->ckd_cache == NULL) {
+			result = -ENOMEM;
+			/* free all previously allocated caches */
+			lu_kmem_fini(caches);
+			break;
+		}
+	}
+	return result;
 }
 EXPORT_SYMBOL(lu_kmem_init);
 
@@ -2402,12 +2319,12 @@ EXPORT_SYMBOL(lu_kmem_init);
  */
 void lu_kmem_fini(struct lu_kmem_descr *caches)
 {
-        for (; caches->ckd_cache != NULL; ++caches) {
-                if (*caches->ckd_cache != NULL) {
+	for (; caches->ckd_cache != NULL; ++caches) {
+		if (*caches->ckd_cache != NULL) {
 			kmem_cache_destroy(*caches->ckd_cache);
-                        *caches->ckd_cache = NULL;
-                }
-        }
+			*caches->ckd_cache = NULL;
+		}
+	}
 }
 EXPORT_SYMBOL(lu_kmem_fini);
 
