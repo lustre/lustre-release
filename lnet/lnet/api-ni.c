@@ -2849,6 +2849,9 @@ static int lnet_genl_parse_list(struct sk_buff *msg,
 	for (count = 1; count <= list->lkl_maxattr; count++) {
 		struct nlattr *key = nla_nest_start(msg, count);
 
+		if (!key)
+			return -EMSGSIZE;
+
 		if (count == 1)
 			nla_put_u16(msg, LN_SCALAR_ATTR_LIST_SIZE,
 				    list->lkl_maxattr);
@@ -5383,6 +5386,7 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 	nlist->lngl_idx = 0;
 	cb->args[0] = (long)nlist;
 
+	cb->min_dump_alloc = U16_MAX;
 	if (!msg_len)
 		return 0;
 

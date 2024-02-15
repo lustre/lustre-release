@@ -578,6 +578,38 @@ static int yaml_parse_key_list(struct yaml_netlink_input *data,
 	return NL_OK;
 }
 
+/* We translate Netlink nested list into either a YAML mappping or sequence.
+ * This generates the start of such a YAML block.
+ */
+static int yaml_nested_header(struct yaml_netlink_input *data,
+			      int *size, unsigned int *indent,
+			      int mapping, struct ln_key_props *keys)
+{
+	int len = 0;
+
+	if (keys->lkp_key_format & LNKF_FLOW) {
+		char brace = '{';
+
+		if (keys->lkp_key_format & LNKF_SEQUENCE)
+			brace = '[';
+
+		len = snprintf(data->buffer, *size, "%*s%s: %c ", data->indent,
+			       "", keys->lkp_value, brace);
+	} else {
+		int count = mapping & LNKF_SEQUENCE ? 0 : data->indent;
+
+		if (keys->lkp_key_format & LNKF_MAPPING)
+			*indent += 2;
+		if (keys->lkp_key_format & LNKF_SEQUENCE)
+			*indent += 2;
+
+		len = snprintf(data->buffer, *size, "%*s%s:\n", count, "",
+			       keys->lkp_value);
+	}
+
+	return len;
+}
+
 static struct yaml_nl_node *get_next_child(struct yaml_nl_node *node,
 					   unsigned int idx)
 {
@@ -640,6 +672,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 	struct ln_key_props *keys = node->keys.lkl_list;
 	int mapping = parent->lkp_key_format;
 	int child_idx = 0, len = 0, i;
+	bool first = true;
 
 	for (i = 1; i < node->keys.lkl_maxattr; i++) {
 		struct nlattr *attr;
@@ -648,11 +681,56 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 		if (!attr && !keys[i].lkp_value)
 			continue;
 
-		if (keys[i].lkp_data_type != NLA_NUL_STRING &&
-		    keys[i].lkp_data_type != NLA_NESTED) {
+		/* This function is called for each Netlink nested list.
+		 * Each nested list is treated as a YAML block. It is here
+		 * we handle data for the YAML block. How that data is seen
+		 * for YAML is based on the parents mapping and the type of
+		 * data value sent.
+		 *
+		 * The cases are:
+		 *
+		 * the value type is NLA_NUL_STRING which is interepted as
+		 *      key:\n
+		 *
+		 * Also NLA_NUL_STRING is used to update a single key value.
+		 *
+		 * the key has no lkp_value and we do receive a 'value'
+		 * that is not a nested list in the Netlink packet. This is
+		 * treated as a plain scalar.
+		 *
+		 * we have a key lkp_value and the parent mapping is
+		 * LNKF_MAPPING then we have a key : value pair. During
+		 * our loop the key normally doesn't change.
+		 *
+		 * This data belongs to a YAML block which can be of
+		 * different kinds (FLOW, SEQUENCE, MAPPING). We determine
+		 * the type and adjust the first line of output for the
+		 * YAML results if needed. Most of the time the creation
+		 * of the nested header is done in the NLA_NESTED case
+		 * switch below which happens before this function is
+		 * called. Specific handling is done here.
+		 *
+		 * The common case handled here is for building of the
+		 * mapping key : value pair. Another case is that we
+		 * are at the start of a SEQUENCE block. If this is the
+		 * case we add '-' to the output and clear the flag
+		 * LNKF_SEQUENCE to prevent multiple instanstances of
+		 * '-'. Only one '-' per SEQUENCE block. We need to
+		 * manually add '-' also in the case of were our nested
+		 * block first PROCESSED attr instance is another nested
+		 * block. For example:
+		 *	local NI(s):
+		 *	-     interfaces:
+		 *		   0: ib0
+		 */
+		if ((first && (mapping & LNKF_SEQUENCE) &&
+		     keys[i].lkp_data_type == NLA_NESTED) ||
+		    (keys[i].lkp_data_type != NLA_NUL_STRING &&
+		     keys[i].lkp_data_type != NLA_NESTED)) {
 			if (!attr && keys[i].lkp_data_type != NLA_FLAG)
 				continue;
 
+			/* Mark this as the start of a SEQUENCE block */
 			if (!(mapping & LNKF_FLOW)) {
 				unsigned int indent = data->indent ?
 						      data->indent : 2;
@@ -660,14 +738,19 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 				memset(data->buffer, ' ', indent);
 				if (mapping & LNKF_SEQUENCE) {
 					((char *)data->buffer)[indent - 2] = '-';
-					if (mapping & LNKF_MAPPING)
+					if (keys[i].lkp_data_type != NLA_NESTED &&
+					    mapping & LNKF_MAPPING)
 						mapping &= ~LNKF_SEQUENCE;
 				}
 				data->buffer += indent;
 				*size -= indent;
 			}
 
-			if (mapping & LNKF_MAPPING) {
+			/* Start of the build of the key : value pair.
+			 * Very common case.
+			 */
+			if (keys[i].lkp_data_type != NLA_NESTED &&
+			    mapping & LNKF_MAPPING) {
 				len = snprintf(data->buffer, *size, "%s: ",
 					       keys[i].lkp_value);
 				if (len < 0)
@@ -685,7 +768,8 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 			struct nla_policy nest_policy[num];
 			struct yaml_nl_node *old;
 			struct nlattr *cnt_attr;
-			uint16_t indent = 0;
+			unsigned int indent = 0;
+			bool start = true;
 			int rem, j;
 
 			if (!attr || !next)
@@ -695,40 +779,19 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 			for (j = 1; j < num; j++)
 				nest_policy[j].type = next->keys.lkl_list[j].lkp_data_type;
 
-			if (keys[i].lkp_key_format & LNKF_FLOW) {
-				char brace = '{';
-
-				if (keys[i].lkp_key_format &
-				    LNKF_SEQUENCE)
-					brace = '[';
-				len = snprintf(data->buffer, *size,
-					       "%*s%s: %c ",
-					       data->indent, "",
-					       keys[i].lkp_value,
-					       brace);
-			} else {
-				if (keys[i].lkp_key_format &
-				    LNKF_MAPPING)
-					indent += 2;
-				if (keys[i].lkp_key_format &
-				    LNKF_SEQUENCE)
-					indent += 2;
-
-				if (keys[i].lkp_value) {
-					len = snprintf(data->buffer,
-						       *size,
-						       "%*s%s:\n",
-						       data->indent, "",
-						       keys[i].lkp_value);
-				} else {
-					len = 0;
-				}
+			/* We might have a empty list but by YAML standards
+			 * we still need to display the header.
+			 */
+			if (!nla_len(attr)) {
+				len = yaml_nested_header(data, size, &indent,
+							 first ? mapping : 0,
+							 &keys[i]);
+				if (len < 0)
+					goto unwind;
+				data->buffer += len;
+				*size -= len;
+				len = 0;
 			}
-			if (len < 0)
-				goto unwind;
-			data->buffer += len;
-			*size -= len;
-			len = 0;
 
 			old = data->cur;
 			data->cur = next;
@@ -739,12 +802,32 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 						     nest_policy))
 					break;
 
+				/* Create the nested header only once at start */
+				if (!start)
+					goto skip_nested_header;
+				start = false;
+
+				/* Update the header's first key */
+				if (next->keys.lkl_list[1].lkp_data_type == NLA_NUL_STRING &&
+				    !keys[i].lkp_value)
+					keys[i].lkp_value = nla_strdup(nest_info[1]);
+
+				len = yaml_nested_header(data, size, &indent,
+							 first ? mapping : 0,
+							 &keys[i]);
+				if (len < 0)
+					goto unwind;
+				data->buffer += len;
+				*size -= len;
+				len = 0;
+skip_nested_header:
 				data->indent += indent;
 				yaml_parse_value_list(data, size, nest_info,
 						      &keys[i]);
 				data->indent -= indent;
 			}
 
+			/* nested bookend header */
 			if (keys[i].lkp_key_format & LNKF_FLOW) {
 				char *tmp = (char *)data->buffer - 2;
 				char *brace = " }\n";
@@ -758,9 +841,21 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 				*size -= 1;
 			}
 			data->cur = old;
+
+			/* This is for the special case of the first attr of
+			 * a nested list is another nested list. We had to
+			 * insert a '-' but that is only done once so clear
+			 * the mapping of LNKF_SEQUENCE.
+			 */
+			if (first && attr) {
+				if (mapping & LNKF_MAPPING)
+					mapping &= ~LNKF_SEQUENCE;
+				first = false;
+			}
 			break;
 		}
 
+		/* Handle the key:\n YAML case or updating an individual key */
 		case NLA_NUL_STRING:
 			if (i == 1) {
 				if (data->cur != data->root)
@@ -794,6 +889,9 @@ not_first:
 			}
 			break;
 
+		/* The below is used for a plain scalar or to complete the
+		*  key : value pair.
+		*/
 		case NLA_STRING:
 			len = snprintf(data->buffer, *size, "%s",
 				       nla_get_string(attr));
@@ -1270,7 +1368,7 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 			sep = tmp;
 	}
 	if (sep)
-		*sep++ = '\0';
+		*sep = '\0';
 
 	if (strspn(line, "-0123456789") == strlen(line)) {
 		num = strtoll(line, NULL, 0);
@@ -1286,11 +1384,19 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 	}
 
 	if (fmt & LNKF_MAPPING && sep) {
+		char *end = strchr(sep, '\n');
+		int len;
+
+		/* restore ':' */
+		*sep = ':';
+		sep++;
 		while (isspace(*sep))
 			++sep;
 
-		if (!strlen(sep))
+		len = end ? end - sep : strlen(sep);
+		if (len <= 0)
 			goto nla_put_failure;
+		sep[len] = '\0';
 
 		if (strcasecmp(sep, "yes") == 0 ||
 		    strcasecmp(sep, "true") == 0 ||
@@ -1308,6 +1414,7 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 		} else {
 			NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE, sep);
 		}
+		sep[len] = '\n';
 	}
 nla_put_failure:
 	return rc;
