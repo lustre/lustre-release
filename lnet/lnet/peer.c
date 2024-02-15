@@ -2619,8 +2619,8 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		if (LNET_PING_BUFFER_SEQNO(pbuf) >
 			LNET_PING_BUFFER_SEQNO(lp->lp_data) &&
 		    infobytes <= lp->lp_data->pb_nbytes) {
-			memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
-			       infobytes);
+			unsafe_memcpy(&lp->lp_data->pb_info, &pbuf->pb_info,
+			       infobytes, FLEXIBLE_OBJECT);
 			CDEBUG(D_NET, "Ping/Push race from %s: %u vs %u\n",
 			      libcfs_nidstr(&lp->lp_primary_nid),
 			      LNET_PING_BUFFER_SEQNO(pbuf),
