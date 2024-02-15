@@ -765,7 +765,7 @@ retry_nego:
 	       keyid, kup->kup_uid);
 out:
 	if (lnd.lnd_ctx_token.length != 0)
-		gss_release_buffer(&min_stat, &lnd.lnd_ctx_token);
+		(void)gss_release_buffer(&min_stat, &lnd.lnd_ctx_token);
 
 	lgssc_fini_nego_data(&lnd);
 

@@ -31,8 +31,6 @@
 
 #include "config.h"
 
-#ifdef HAVE_LUCID_CONTEXT_SUPPORT
-
 /*
  * Newer versions of MIT and Heimdal have lucid context support.
  * We can use common code if it is supported.
@@ -637,7 +635,3 @@ out_err:
 	printerr(0, "ERROR: failed serializing krb5 context for kernel\n");
 	return -1;
 }
-
-
-
-#endif /* HAVE_LUCID_CONTEXT_SUPPORT */

@@ -491,11 +491,6 @@ out_free:
 	return res;
 }
 
-typedef struct gss_union_ctx_id_t {
-	gss_OID         mech_type;
-	gss_ctx_id_t    internal_ctx_id;
-} gss_union_ctx_id_desc, *gss_union_ctx_id_t;
-
 int handle_sk(struct svc_nego_data *snd)
 {
 #ifdef HAVE_OPENSSL_SSK
@@ -884,11 +879,8 @@ static int handle_krb(struct svc_nego_data *snd)
 
 	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token);
 	/* We no longer need the context token */
-	if (snd->ctx_token.value) {
-		free(snd->ctx_token.value);
-		snd->ctx_token.value = NULL;
-		snd->ctx_token.length = 0;
-	}
+	if (snd->ctx_token.length)
+		(void)gss_release_buffer(&ignore_min_stat, &snd->ctx_token);
 	return 0;
 
 out_err:

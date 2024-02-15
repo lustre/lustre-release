@@ -16,8 +16,6 @@ endif
 COMMON_SRCS = \
         context.c \
         context_lucid.c \
-        context_mit.c \
-        context_heimdal.c \
         context_spkm3.c \
         gss_util.c \
         gss_oids.c \
@@ -80,8 +78,6 @@ lgss_keyring_SOURCES = \
 	lgss_keyring.c \
 	context.c \
 	context_lucid.c \
-	context_mit.c \
-	context_heimdal.c \
 	lgss_krb5_utils.c \
 	lgss_null_utils.c \
 	lgss_utils.c \
