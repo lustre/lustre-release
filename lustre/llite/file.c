@@ -5287,6 +5287,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	__u64 data_version = 0;
 	size_t namelen = strlen(name);
 	int lumlen = lmv_user_md_size(lum->lum_stripe_count, lum->lum_magic);
+	bool locked = false;
 	int rc;
 	ENTRY;
 
@@ -5342,13 +5343,12 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	if (IS_ERR(op_data))
 		GOTO(out_iput, rc = PTR_ERR(op_data));
 
-	ll_inode_lock(child_inode);
 	op_data->op_fid3 = *ll_inode2fid(child_inode);
 	if (!fid_is_sane(&op_data->op_fid3)) {
 		CERROR("%s: migrate %s, but FID "DFID" is insane\n",
 		       ll_i2sbi(parent)->ll_fsname, name,
 		       PFID(&op_data->op_fid3));
-		GOTO(out_unlock, rc = -EINVAL);
+		GOTO(out_data, rc = -EINVAL);
 	}
 
 	op_data->op_cli_flags |= CLI_MIGRATE | CLI_SET_MEA;
@@ -5366,7 +5366,7 @@ again:
 		if (IS_ERR(och)) {
 			rc = PTR_ERR(och);
 			och = NULL;
-			GOTO(out_unlock, rc);
+			GOTO(out_data, rc);
 		}
 
 		rc = ll_data_version(child_inode, &data_version,
@@ -5383,6 +5383,9 @@ again:
 		och->och_mod->mod_open_req->rq_replay = 0;
 		spin_unlock(&och->och_mod->mod_open_req->rq_lock);
 	}
+	LASSERT(locked == false);
+	ll_inode_lock(child_inode);
+	locked = true;
 
 	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data,
 		       op_data->op_name, op_data->op_namelen,
@@ -5414,18 +5417,23 @@ again:
 	}
 
 	/* Try again if the lease has cancelled. */
-	if (rc == -EAGAIN && S_ISREG(child_inode->i_mode))
+	if (rc == -EAGAIN && S_ISREG(child_inode->i_mode)) {
+		LASSERT(locked == true);
+		ll_inode_unlock(child_inode);
+		locked = false;
 		goto again;
+	}
 
 out_close:
 	if (och)
 		ll_lease_close(och, child_inode, NULL);
 	if (!rc)
 		clear_nlink(child_inode);
-out_unlock:
-	ll_inode_unlock(child_inode);
+out_data:
 	ll_finish_md_op_data(op_data);
 out_iput:
+	if (locked)
+		ll_inode_unlock(child_inode);
 	iput(child_inode);
 	RETURN(rc);
 }
