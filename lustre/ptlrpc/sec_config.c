@@ -50,119 +50,109 @@
 
 const char *sptlrpc_part2name(enum lustre_sec_part part)
 {
-        switch (part) {
-        case LUSTRE_SP_CLI:
-                return "cli";
-        case LUSTRE_SP_MDT:
-                return "mdt";
-        case LUSTRE_SP_OST:
-                return "ost";
-        case LUSTRE_SP_MGC:
-                return "mgc";
-        case LUSTRE_SP_MGS:
-                return "mgs";
-        case LUSTRE_SP_ANY:
-                return "any";
-        default:
-                return "err";
-        }
+	switch (part) {
+	case LUSTRE_SP_CLI:
+		return "cli";
+	case LUSTRE_SP_MDT:
+		return "mdt";
+	case LUSTRE_SP_OST:
+		return "ost";
+	case LUSTRE_SP_MGC:
+		return "mgc";
+	case LUSTRE_SP_MGS:
+		return "mgs";
+	case LUSTRE_SP_ANY:
+		return "any";
+	default:
+		return "err";
+	}
 }
 EXPORT_SYMBOL(sptlrpc_part2name);
 
 enum lustre_sec_part sptlrpc_target_sec_part(struct obd_device *obd)
 {
-        const char *type = obd->obd_type->typ_name;
+	const char *type = obd->obd_type->typ_name;
 
-        if (!strcmp(type, LUSTRE_MDT_NAME))
-                return LUSTRE_SP_MDT;
-        if (!strcmp(type, LUSTRE_OST_NAME))
-                return LUSTRE_SP_OST;
-        if (!strcmp(type, LUSTRE_MGS_NAME))
-                return LUSTRE_SP_MGS;
+	if (!strcmp(type, LUSTRE_MDT_NAME))
+		return LUSTRE_SP_MDT;
+	if (!strcmp(type, LUSTRE_OST_NAME))
+		return LUSTRE_SP_OST;
+	if (!strcmp(type, LUSTRE_MGS_NAME))
+		return LUSTRE_SP_MGS;
 
-        CERROR("unknown target %p(%s)\n", obd, type);
-        return LUSTRE_SP_ANY;
+	CERROR("unknown target %p(%s)\n", obd, type);
+	return LUSTRE_SP_ANY;
 }
 
-/****************************************
- * user supplied flavor string parsing  *
- ****************************************/
+/* user supplied flavor string parsing */
 
-/*
- * format: <base_flavor>[-<bulk_type:alg_spec>]
- */
+/* format: <base_flavor>[-<bulk_type:alg_spec>] */
 int sptlrpc_parse_flavor(const char *str, struct sptlrpc_flavor *flvr)
 {
-        char            buf[32];
-        char           *bulk, *alg;
+	char            buf[32];
+	char           *bulk, *alg;
 
-        memset(flvr, 0, sizeof(*flvr));
+	memset(flvr, 0, sizeof(*flvr));
 
-        if (str == NULL || str[0] == '\0') {
-                flvr->sf_rpc = SPTLRPC_FLVR_INVALID;
-                return 0;
-        }
+	if (str == NULL || str[0] == '\0') {
+		flvr->sf_rpc = SPTLRPC_FLVR_INVALID;
+		return 0;
+	}
 
 	strlcpy(buf, str, sizeof(buf));
 
-        bulk = strchr(buf, '-');
-        if (bulk)
-                *bulk++ = '\0';
+	bulk = strchr(buf, '-');
+	if (bulk)
+		*bulk++ = '\0';
 
-        flvr->sf_rpc = sptlrpc_name2flavor_base(buf);
-        if (flvr->sf_rpc == SPTLRPC_FLVR_INVALID)
-                goto err_out;
+	flvr->sf_rpc = sptlrpc_name2flavor_base(buf);
+	if (flvr->sf_rpc == SPTLRPC_FLVR_INVALID)
+		goto err_out;
 
-        /*
-         * currently only base flavor "plain" can have bulk specification.
-         */
-        if (flvr->sf_rpc == SPTLRPC_FLVR_PLAIN) {
-                flvr->u_bulk.hash.hash_alg = BULK_HASH_ALG_ADLER32;
-                if (bulk) {
-                        /*
-                         * format: plain-hash:<hash_alg>
-                         */
-                        alg = strchr(bulk, ':');
-                        if (alg == NULL)
-                                goto err_out;
-                        *alg++ = '\0';
+	/* currently only base flavor "plain" can have bulk specification.  */
+	if (flvr->sf_rpc == SPTLRPC_FLVR_PLAIN) {
+		flvr->u_bulk.hash.hash_alg = BULK_HASH_ALG_ADLER32;
+		if (bulk) {
+			/* format: plain-hash:<hash_alg> */
+			alg = strchr(bulk, ':');
+			if (alg == NULL)
+				goto err_out;
+			*alg++ = '\0';
 
-                        if (strcmp(bulk, "hash"))
-                                goto err_out;
+			if (strcmp(bulk, "hash"))
+				goto err_out;
 
-                        flvr->u_bulk.hash.hash_alg = sptlrpc_get_hash_alg(alg);
-                        if (flvr->u_bulk.hash.hash_alg >= BULK_HASH_ALG_MAX)
-                                goto err_out;
-                }
+			flvr->u_bulk.hash.hash_alg = sptlrpc_get_hash_alg(alg);
+			if (flvr->u_bulk.hash.hash_alg >= BULK_HASH_ALG_MAX)
+				goto err_out;
+		}
 
-                if (flvr->u_bulk.hash.hash_alg == BULK_HASH_ALG_NULL)
-                        flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_NULL);
-                else
-                        flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_INTG);
-        } else {
-                if (bulk)
-                        goto err_out;
-        }
+		if (flvr->u_bulk.hash.hash_alg == BULK_HASH_ALG_NULL)
+			flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_NULL);
+		else
+			flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_INTG);
+	} else {
+		if (bulk)
+			goto err_out;
+	}
 
-        flvr->sf_flags = 0;
-        return 0;
+	flvr->sf_flags = 0;
+	return 0;
 
 err_out:
-        CERROR("invalid flavor string: %s\n", str);
-        return -EINVAL;
+	CERROR("invalid flavor string: %s\n", str);
+	return -EINVAL;
 }
 EXPORT_SYMBOL(sptlrpc_parse_flavor);
 
-/****************************************
- * configure rules                      *
- ****************************************/
+/* configure rules */
 
 static void get_default_flavor(struct sptlrpc_flavor *sf)
 {
-        memset(sf, 0, sizeof(*sf));
+	memset(sf, 0, sizeof(*sf));
 
-        sf->sf_rpc = SPTLRPC_FLVR_NULL;
-        sf->sf_flags = 0;
+	sf->sf_rpc = SPTLRPC_FLVR_NULL;
+	sf->sf_flags = 0;
 }
 
 static void sptlrpc_rule_init(struct sptlrpc_rule *rule)
@@ -175,9 +165,7 @@ static void sptlrpc_rule_init(struct sptlrpc_rule *rule)
 	get_default_flavor(&rule->sr_flvr);
 }
 
-/*
- * format: network[.direction]=flavor
- */
+/* format: network[.direction]=flavor */
 int sptlrpc_parse_rule(char *param, struct sptlrpc_rule *rule)
 {
 	char *flavor, *dir;
@@ -246,9 +234,7 @@ void sptlrpc_rule_set_free(struct sptlrpc_rule_set *rset)
 }
 EXPORT_SYMBOL(sptlrpc_rule_set_free);
 
-/*
- * return 0 if the rule set could accomodate one more rule.
- */
+/* return 0 if the rule set could accomodate one more rule.  */
 int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset)
 {
 	struct sptlrpc_rule *rules;
@@ -289,12 +275,12 @@ static inline int rule_spec_net(struct sptlrpc_rule *rule)
 	return (rule->sr_netid != LNET_NET_ANY);
 }
 static inline int rule_match_dir(struct sptlrpc_rule *r1,
-                                 struct sptlrpc_rule *r2)
+				 struct sptlrpc_rule *r2)
 {
 	return (r1->sr_from == r2->sr_from && r1->sr_to == r2->sr_to);
 }
 static inline int rule_match_net(struct sptlrpc_rule *r1,
-                                 struct sptlrpc_rule *r2)
+				 struct sptlrpc_rule *r2)
 {
 	return (r1->sr_netid == r2->sr_netid);
 }
@@ -303,8 +289,8 @@ static inline int rule_match_net(struct sptlrpc_rule *r1,
  * merge @rule into @rset.
  * the @rset slots might be expanded.
  */
-int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset, 
-                           struct sptlrpc_rule *rule)
+int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset,
+			   struct sptlrpc_rule *rule)
 {
 	struct sptlrpc_rule      *p = rset->srs_rules;
 	int                       spec_dir, spec_net;
@@ -315,78 +301,78 @@ int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset,
 	spec_net = rule_spec_net(rule);
 	spec_dir = rule_spec_dir(rule);
 
-        for (n = 0; n < rset->srs_nrule; n++) {
-                p = &rset->srs_rules[n]; 
+	for (n = 0; n < rset->srs_nrule; n++) {
+		p = &rset->srs_rules[n];
 
-                /* test network match, if failed:
-                 * - spec rule: skip rules which is also spec rule match, until
-                 *   we hit a wild rule, which means no more chance
-                 * - wild rule: skip until reach the one which is also wild
-                 *   and matches
-                 */
-                if (!rule_match_net(p, rule)) {
-                        if (spec_net) {
-                                if (rule_spec_net(p))
-                                        continue;
-                                else
-                                        break;
-                        } else {
-                                continue;
-                        }
-                }
+		/* test network match, if failed:
+		 * - spec rule: skip rules which is also spec rule match, until
+		 *   we hit a wild rule, which means no more chance
+		 * - wild rule: skip until reach the one which is also wild
+		 *   and matches
+		 */
+		if (!rule_match_net(p, rule)) {
+			if (spec_net) {
+				if (rule_spec_net(p))
+					continue;
+				else
+					break;
+			} else {
+				continue;
+			}
+		}
 
-                /* test dir match, same logic as net matching */
-                if (!rule_match_dir(p, rule)) {
-                        if (spec_dir) {
-                                if (rule_spec_dir(p))
-                                        continue;
-                                else
-                                        break;
-                        } else {
-                                continue;
-                        }
-                }
+		/* test dir match, same logic as net matching */
+		if (!rule_match_dir(p, rule)) {
+			if (spec_dir) {
+				if (rule_spec_dir(p))
+					continue;
+				else
+					break;
+			} else {
+				continue;
+			}
+		}
 
-                /* find a match */
-                match = 1;
-                break;
-        }
+		/* find a match */
+		match = 1;
+		break;
+	}
 
-        if (match) {
-                LASSERT(n >= 0 && n < rset->srs_nrule);
+	if (match) {
+		LASSERT(n >= 0 && n < rset->srs_nrule);
 
-                if (rule->sr_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
-                        /* remove this rule */
-                        if (n < rset->srs_nrule - 1)
-                                memmove(&rset->srs_rules[n],
-                                        &rset->srs_rules[n + 1],
-                                        (rset->srs_nrule - n - 1) *
-                                        sizeof(*rule));
-                        rset->srs_nrule--;
-                } else {
-                        /* override the rule */
-                        memcpy(&rset->srs_rules[n], rule, sizeof(*rule));
-                }
-        } else {
-                LASSERT(n >= 0 && n <= rset->srs_nrule);
+		if (rule->sr_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
+			/* remove this rule */
+			if (n < rset->srs_nrule - 1)
+				memmove(&rset->srs_rules[n],
+					&rset->srs_rules[n + 1],
+					(rset->srs_nrule - n - 1) *
+					sizeof(*rule));
+			rset->srs_nrule--;
+		} else {
+			/* override the rule */
+			memcpy(&rset->srs_rules[n], rule, sizeof(*rule));
+		}
+	} else {
+		LASSERT(n >= 0 && n <= rset->srs_nrule);
 
-                if (rule->sr_flvr.sf_rpc != SPTLRPC_FLVR_INVALID) {
-                        rc = sptlrpc_rule_set_expand(rset);
-                        if (rc)
-                                return rc;
+		if (rule->sr_flvr.sf_rpc != SPTLRPC_FLVR_INVALID) {
+			rc = sptlrpc_rule_set_expand(rset);
+			if (rc)
+				return rc;
 
-                        if (n < rset->srs_nrule)
-                                memmove(&rset->srs_rules[n + 1],
-                                        &rset->srs_rules[n],
-                                        (rset->srs_nrule - n) * sizeof(*rule));
-                        memcpy(&rset->srs_rules[n], rule, sizeof(*rule));
-                        rset->srs_nrule++;
-                } else {
-                        CDEBUG(D_CONFIG, "ignore the unmatched deletion\n");
-                }
-        }
+			if (n < rset->srs_nrule)
+				memmove(&rset->srs_rules[n + 1],
+					&rset->srs_rules[n],
+					(rset->srs_nrule - n) * sizeof(*rule));
+			memcpy(&rset->srs_rules[n], rule, sizeof(*rule));
+			rset->srs_nrule++;
+		} else {
+			CDEBUG(D_CONFIG, "ignore the unmatched deletion\n");
+		}
+	}
 
-        return 0;
+	return 0;
 }
 EXPORT_SYMBOL(sptlrpc_rule_set_merge);
 
@@ -432,21 +418,21 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
 {
-        struct sptlrpc_rule *r;
-        int     n;
+	struct sptlrpc_rule *r;
+	int     n;
 
-        for (n = 0; n < rset->srs_nrule; n++) {
-                r = &rset->srs_rules[n];
-                CDEBUG(D_SEC, "<%02d> from %x to %x, net %x, rpc %x\n", n,
-                       r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
-        }
+	for (n = 0; n < rset->srs_nrule; n++) {
+		r = &rset->srs_rules[n];
+		CDEBUG(D_SEC, "<%02d> from %x to %x, net %x, rpc %x\n", n,
+		       r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
+	}
 }
 
 static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
-                                    struct sptlrpc_rule_set *tgt,
-                                    enum lustre_sec_part from,
-                                    enum lustre_sec_part to,
-                                    struct sptlrpc_rule_set *rset)
+				    struct sptlrpc_rule_set *tgt,
+				    enum lustre_sec_part from,
+				    enum lustre_sec_part to,
+				    struct sptlrpc_rule_set *rset)
 {
 	struct sptlrpc_rule_set *src[2] = { gen, tgt };
 	struct sptlrpc_rule     *rule;
@@ -459,37 +445,35 @@ static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
 		if (src[i] == NULL)
 			continue;
 
-                for (n = 0; n < src[i]->srs_nrule; n++) {
-                        rule = &src[i]->srs_rules[n];
+		for (n = 0; n < src[i]->srs_nrule; n++) {
+			rule = &src[i]->srs_rules[n];
 
-                        if (from != LUSTRE_SP_ANY &&
-                            rule->sr_from != LUSTRE_SP_ANY &&
-                            rule->sr_from != from)
-                                continue;
-                        if (to != LUSTRE_SP_ANY &&
-                            rule->sr_to != LUSTRE_SP_ANY &&
-                            rule->sr_to != to)
-                                continue;
+			if (from != LUSTRE_SP_ANY &&
+			    rule->sr_from != LUSTRE_SP_ANY &&
+			    rule->sr_from != from)
+				continue;
+			if (to != LUSTRE_SP_ANY &&
+			    rule->sr_to != LUSTRE_SP_ANY &&
+			    rule->sr_to != to)
+				continue;
 
-                        rc = sptlrpc_rule_set_merge(rset, rule);
-                        if (rc) {
-                                CERROR("can't merge: %d\n", rc);
-                                return rc;
-                        }
-                }
-        }
+			rc = sptlrpc_rule_set_merge(rset, rule);
+			if (rc) {
+				CERROR("can't merge: %d\n", rc);
+				return rc;
+			}
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
-/**********************************
- * sptlrpc configuration support  *
- **********************************/
+/* sptlrpc configuration support  */
 
 struct sptlrpc_conf_tgt {
 	struct list_head              sct_list;
-        char                    sct_name[MAX_OBD_NAME];
-        struct sptlrpc_rule_set sct_rset;
+	char                    sct_name[MAX_OBD_NAME];
+	struct sptlrpc_rule_set sct_rset;
 };
 
 struct sptlrpc_conf {
@@ -534,84 +518,82 @@ static void sptlrpc_conf_free(struct sptlrpc_conf *conf)
 
 static
 struct sptlrpc_conf_tgt *sptlrpc_conf_get_tgt(struct sptlrpc_conf *conf,
-                                              const char *name,
-                                              int create)
+					      const char *name,
+					      int create)
 {
-        struct sptlrpc_conf_tgt *conf_tgt;
+	struct sptlrpc_conf_tgt *conf_tgt;
 
 	list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
-                if (strcmp(conf_tgt->sct_name, name) == 0)
-                        return conf_tgt;
-        }
+		if (strcmp(conf_tgt->sct_name, name) == 0)
+			return conf_tgt;
+	}
 
-        if (!create)
-                return NULL;
+	if (!create)
+		return NULL;
 
-        OBD_ALLOC_PTR(conf_tgt);
-        if (conf_tgt) {
+	OBD_ALLOC_PTR(conf_tgt);
+	if (conf_tgt) {
 		strlcpy(conf_tgt->sct_name, name, sizeof(conf_tgt->sct_name));
-                sptlrpc_rule_set_init(&conf_tgt->sct_rset);
+		sptlrpc_rule_set_init(&conf_tgt->sct_rset);
 		list_add(&conf_tgt->sct_list, &conf->sc_tgts);
-        }
+	}
 
-        return conf_tgt;
+	return conf_tgt;
 }
 
 static
 struct sptlrpc_conf *sptlrpc_conf_get(const char *fsname,
-                                      int create)
+				      int create)
 {
-        struct sptlrpc_conf *conf;
+	struct sptlrpc_conf *conf;
 
 	list_for_each_entry(conf, &sptlrpc_confs, sc_list) {
-                if (strcmp(conf->sc_fsname, fsname) == 0)
-                        return conf;
-        }
+		if (strcmp(conf->sc_fsname, fsname) == 0)
+			return conf;
+	}
 
-        if (!create)
-                return NULL;
+	if (!create)
+		return NULL;
 
-        OBD_ALLOC_PTR(conf);
-        if (conf == NULL)
-                return NULL;
+	OBD_ALLOC_PTR(conf);
+	if (conf == NULL)
+		return NULL;
 
 	if (strlcpy(conf->sc_fsname, fsname, sizeof(conf->sc_fsname)) >=
 	    sizeof(conf->sc_fsname)) {
 		OBD_FREE_PTR(conf);
 		return NULL;
 	}
-        sptlrpc_rule_set_init(&conf->sc_rset);
+	sptlrpc_rule_set_init(&conf->sc_rset);
 	INIT_LIST_HEAD(&conf->sc_tgts);
 	list_add(&conf->sc_list, &sptlrpc_confs);
 
-        CDEBUG(D_SEC, "create sptlrpc conf %s\n", conf->sc_fsname);
-        return conf;
+	CDEBUG(D_SEC, "create sptlrpc conf %s\n", conf->sc_fsname);
+	return conf;
 }
 
-/**
- * caller must hold conf_lock already.
- */
+/* caller must hold conf_lock already. */
 static int sptlrpc_conf_merge_rule(struct sptlrpc_conf *conf,
-                                   const char *target,
-                                   struct sptlrpc_rule *rule)
+				   const char *target,
+				   struct sptlrpc_rule *rule)
 {
-        struct sptlrpc_conf_tgt  *conf_tgt;
-        struct sptlrpc_rule_set  *rule_set;
+	struct sptlrpc_conf_tgt  *conf_tgt;
+	struct sptlrpc_rule_set  *rule_set;
 
-        /* fsname == target means general rules for the whole fs */
-        if (strcmp(conf->sc_fsname, target) == 0) {
-                rule_set = &conf->sc_rset;
-        } else {
-                conf_tgt = sptlrpc_conf_get_tgt(conf, target, 1);
-                if (conf_tgt) {
-                        rule_set = &conf_tgt->sct_rset;
-                } else {
-                        CERROR("out of memory, can't merge rule!\n");
-                        return -ENOMEM;
-                }
-        }
+	/* fsname == target means general rules for the whole fs */
+	if (strcmp(conf->sc_fsname, target) == 0) {
+		rule_set = &conf->sc_rset;
+	} else {
+		conf_tgt = sptlrpc_conf_get_tgt(conf, target, 1);
+		if (conf_tgt) {
+			rule_set = &conf_tgt->sct_rset;
+		} else {
+			CERROR("out of memory, can't merge rule!\n");
+			return -ENOMEM;
+		}
+	}
 
-        return sptlrpc_rule_set_merge(rule_set, rule);
+	return sptlrpc_rule_set_merge(rule_set, rule);
 }
 
 /**
@@ -704,33 +686,33 @@ EXPORT_SYMBOL(sptlrpc_process_config);
 
 static int logname2fsname(const char *logname, char *buf, int buflen)
 {
-        char   *ptr;
-        int     len;
+	char   *ptr;
+	int     len;
 
-        ptr = strrchr(logname, '-');
-        if (ptr == NULL || strcmp(ptr, "-sptlrpc")) {
-                CERROR("%s is not a sptlrpc config log\n", logname);
-                return -EINVAL;
-        }
+	ptr = strrchr(logname, '-');
+	if (ptr == NULL || strcmp(ptr, "-sptlrpc")) {
+		CERROR("%s is not a sptlrpc config log\n", logname);
+		return -EINVAL;
+	}
 
-        len = min((int) (ptr - logname), buflen - 1);
+	len = min((int) (ptr - logname), buflen - 1);
 
-        memcpy(buf, logname, len);
-        buf[len] = '\0';
-        return 0;
+	memcpy(buf, logname, len);
+	buf[len] = '\0';
+	return 0;
 }
 
 void sptlrpc_conf_log_update_begin(const char *logname)
 {
-        struct sptlrpc_conf *conf;
-        char                 fsname[16];
+	struct sptlrpc_conf *conf;
+	char                 fsname[16];
 
-        if (logname2fsname(logname, fsname, sizeof(fsname)))
-                return;
+	if (logname2fsname(logname, fsname, sizeof(fsname)))
+		return;
 
 	mutex_lock(&sptlrpc_conf_lock);
 
-        conf = sptlrpc_conf_get(fsname, 0);
+	conf = sptlrpc_conf_get(fsname, 0);
 	if (conf) {
 		if (conf->sc_local) {
 			LASSERT(conf->sc_updated == 0);
@@ -743,30 +725,27 @@ void sptlrpc_conf_log_update_begin(const char *logname)
 }
 EXPORT_SYMBOL(sptlrpc_conf_log_update_begin);
 
-/**
- * mark a config log has been updated
- */
+/* mark a config log has been updated */
 void sptlrpc_conf_log_update_end(const char *logname)
 {
-        struct sptlrpc_conf *conf;
-        char                 fsname[16];
+	struct sptlrpc_conf *conf;
+	char                 fsname[16];
 
-        if (logname2fsname(logname, fsname, sizeof(fsname)))
-                return;
+	if (logname2fsname(logname, fsname, sizeof(fsname)))
+		return;
 
 	mutex_lock(&sptlrpc_conf_lock);
 
-        conf = sptlrpc_conf_get(fsname, 0);
-        if (conf) {
-                /*
-                 * if original state is not updated, make sure the
-                 * modified counter > 0 to enforce updating local copy.
-                 */
-                if (conf->sc_updated == 0)
-                        conf->sc_modified++;
+	conf = sptlrpc_conf_get(fsname, 0);
+	if (conf) {
+		/* if original state is not updated, make sure the
+		 * modified counter > 0 to enforce updating local copy.
+		 */
+		if (conf->sc_updated == 0)
+			conf->sc_modified++;
 
-                conf->sc_updated = 1;
-        }
+		conf->sc_updated = 1;
+	}
 
 	mutex_unlock(&sptlrpc_conf_lock);
 }
@@ -774,56 +753,55 @@ EXPORT_SYMBOL(sptlrpc_conf_log_update_end);
 
 void sptlrpc_conf_log_start(const char *logname)
 {
-        char                 fsname[16];
+	char                 fsname[16];
 
-        if (logname2fsname(logname, fsname, sizeof(fsname)))
-                return;
+	if (logname2fsname(logname, fsname, sizeof(fsname)))
+		return;
 
 	mutex_lock(&sptlrpc_conf_lock);
-        sptlrpc_conf_get(fsname, 1);
+	sptlrpc_conf_get(fsname, 1);
 	mutex_unlock(&sptlrpc_conf_lock);
 }
 EXPORT_SYMBOL(sptlrpc_conf_log_start);
 
 void sptlrpc_conf_log_stop(const char *logname)
 {
-        struct sptlrpc_conf *conf;
-        char                 fsname[16];
+	struct sptlrpc_conf *conf;
+	char                 fsname[16];
 
-        if (logname2fsname(logname, fsname, sizeof(fsname)))
-                return;
+	if (logname2fsname(logname, fsname, sizeof(fsname)))
+		return;
 
 	mutex_lock(&sptlrpc_conf_lock);
-        conf = sptlrpc_conf_get(fsname, 0);
-        if (conf)
-                sptlrpc_conf_free(conf);
+	conf = sptlrpc_conf_get(fsname, 0);
+	if (conf)
+		sptlrpc_conf_free(conf);
 	mutex_unlock(&sptlrpc_conf_lock);
 }
 EXPORT_SYMBOL(sptlrpc_conf_log_stop);
 
-static void inline flavor_set_flags(struct sptlrpc_flavor *sf,
-                                    enum lustre_sec_part from,
-                                    enum lustre_sec_part to,
-                                    unsigned int fl_udesc)
+static inline void flavor_set_flags(struct sptlrpc_flavor *sf,
+				    enum lustre_sec_part from,
+				    enum lustre_sec_part to,
+				    unsigned int fl_udesc)
 {
-        /*
-         * null flavor doesn't need to set any flavor, and in fact
-         * we'd better not do that because everybody share a single sec.
-         */
-        if (sf->sf_rpc == SPTLRPC_FLVR_NULL)
-                return;
+	/* null flavor doesn't need to set any flavor, and in fact
+	 * we'd better not do that because everybody share a single sec.
+	 */
+	if (sf->sf_rpc == SPTLRPC_FLVR_NULL)
+		return;
 
-        if (from == LUSTRE_SP_MDT) {
-                /* MDT->MDT; MDT->OST */
-                sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY;
-        } else if (from == LUSTRE_SP_CLI && to == LUSTRE_SP_OST) {
-                /* CLI->OST */
-                sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY | PTLRPC_SEC_FL_BULK;
-        } else if (from == LUSTRE_SP_CLI && to == LUSTRE_SP_MDT) {
-                /* CLI->MDT */
-                if (fl_udesc && sf->sf_rpc != SPTLRPC_FLVR_NULL)
-                        sf->sf_flags |= PTLRPC_SEC_FL_UDESC;
-        }
+	if (from == LUSTRE_SP_MDT) {
+		/* MDT->MDT; MDT->OST */
+		sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY;
+	} else if (from == LUSTRE_SP_CLI && to == LUSTRE_SP_OST) {
+		/* CLI->OST */
+		sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY | PTLRPC_SEC_FL_BULK;
+	} else if (from == LUSTRE_SP_CLI && to == LUSTRE_SP_MDT) {
+		/* CLI->MDT */
+		if (fl_udesc && sf->sf_rpc != SPTLRPC_FLVR_NULL)
+			sf->sf_flags |= PTLRPC_SEC_FL_UDESC;
+	}
 
 	/* Some flavors use a single uid (0) context */
 	if (flvr_is_rootonly(sf->sf_rpc))
@@ -901,6 +879,7 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd)
 {
 	struct obd_import  *imp;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
@@ -934,6 +913,7 @@ int sptlrpc_conf_target_get_rules(struct obd_device *obd,
 	enum lustre_sec_part sp_dst;
 	char fsname[MTI_NAME_MAXLEN];
 	int rc = 0;
+
 	ENTRY;
 
 	if (strcmp(obd->obd_type->typ_name, LUSTRE_MDT_NAME) == 0) {
