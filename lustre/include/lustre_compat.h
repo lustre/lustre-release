@@ -559,7 +559,7 @@ static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 				  const void *value, size_t size, int flags)
 {
 #if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
-	return vfs_setxattr(&nop_mnt_idmap, dentry, name,
+	return __vfs_setxattr(&nop_mnt_idmap, dentry, inode, name,
 			    VFS_SETXATTR_VALUE(value), size, flags);
 #elif defined(HAVE_VFS_SETXATTR)
 	return __vfs_setxattr(dentry, inode, name, value, size, flags);
@@ -575,7 +575,7 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 				     const char *name)
 {
 #if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
-	return vfs_removexattr(&nop_mnt_idmap, dentry, name);
+	return __vfs_removexattr(&nop_mnt_idmap, dentry, name);
 #elif defined(HAVE_VFS_SETXATTR)
 	return __vfs_removexattr(dentry, name);
 #else
