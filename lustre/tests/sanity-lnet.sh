@@ -3449,6 +3449,42 @@ test_231() {
 }
 run_test 231 "Check DLC handling of peer_timeout parameter"
 
+test_232() {
+	[[ ${NETTYPE} =~ ^(tcp|o2ib) ]] ||
+		skip "Need tcp or o2ib NETTYPE"
+
+	local i
+	local modparam=-1
+	local net=${NETTYPE}232
+
+	reinit_dlc || return $?
+	if [[ ${NETTYPE} == tcp* ]];then
+		modparam=$(cat "/sys/module/ksocklnd/parameters/tos")
+	elif [[ ${NETTYPE} == o2ib* ]]; then
+		modparam=$(cat "/sys/module/ko2iblnd/parameters/tos")
+	fi
+
+	do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
+		error "Failed to add net (no ToS)"
+	do_lnetctl net show --net $net -v 1 | grep -q "tos: $modparam" ||
+		error "Failed ToS value should inherit from module parameter $modparam"
+	do_lnetctl net del --net $net --if ${INTERFACES[0]} ||
+		error "Failed to delete net $net"
+
+	for i in -1 104 106; do
+		do_lnetctl net add --net $net --if ${INTERFACES[0]} --tos $i ||
+			error "Failed to add net (ToS: $i)"
+		do_lnetctl net show --net $net -v 1 | grep -q "tos: $i" ||
+			error "Failed to set ToS value to 104"
+		do_lnetctl net del --net $net --if ${INTERFACES[0]} ||
+			error "Failed to delete net $net"
+	done
+
+	! do_lnetctl net add --net $net --if ${INTERFACES[0]} --tos 300 ||
+		error "lnetctl should reject invalid ToS value (>255)"
+}
+run_test 232 "Test setting ToS value"
+
 ### Test that linux route is added for each ni
 test_250() {
 	local skip_param

@@ -155,7 +155,8 @@ command_t net_cmds[] = {
 	 "\t--conns-per-peer: number of connections per peer\n"
 	 "\t--skip-mr-route-setup: do not add linux route for the ni\n"
 	 "\t--auth-key: Network authorization key (kfilnd only)\n"
-	 "\t--traffic-class: Traffic class (kfilnd only)\n"},
+	 "\t--traffic-class: Traffic class (kfilnd only)\n"
+	 "\t--tos: IP's Type of Service\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--nid: shutdown NI based on the address of the specified LNet NID\n"
@@ -1817,11 +1818,13 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 
 skip_general_settings:
 	if (tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer > 0 ||
+	    tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_tos >= 0 ||
 #ifdef HAVE_KFILND
 	    tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key > 0 ||
 	    tunables->lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0] ||
 #endif
-	    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer > 0) {
+	    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer > 0 ||
+	    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos >= 0) {
 		yaml_scalar_event_initialize(&event, NULL,
 					     (yaml_char_t *)YAML_STR_TAG,
 					     (yaml_char_t *)"lnd tunables",
@@ -1904,6 +1907,35 @@ skip_general_settings:
 			else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND)
 				cpp = tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer;
 			snprintf(num, sizeof(num), "%u", cpp);
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)num,
+						     strlen(num), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+		}
+
+		if (tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_tos >= 0 ||
+		    tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos >= 0) {
+			int tos = 0;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"tos",
+						     strlen("tos"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(output, &event);
+			if (rc == 0)
+				goto error;
+
+			if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND)
+				tos = tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_tos;
+			else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND)
+				tos = tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos;
+			snprintf(num, sizeof(num), "%u", tos);
 
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_INT_TAG,
@@ -2314,6 +2346,7 @@ static int jt_add_ni(int argc, char **argv)
 	char *ip2net = NULL;
 	long int pto = -1, pc = -1, pbc = -1, cre = -1, cpp = -1, auth_key = -1;
 	char *traffic_class = NULL;
+	long int tos = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt, cpt_rc = -1;
 	struct lnet_dlc_network_descr nw_descr;
@@ -2339,6 +2372,7 @@ static int jt_add_ni(int argc, char **argv)
 	{ .name = "cpt",	  .has_arg = required_argument, .val = 's' },
 	{ .name = "peer-timeout", .has_arg = required_argument, .val = 't' },
 	{ .name = "traffic-class", .has_arg = required_argument, .val = 'T' },
+	{ .name = "tos", .has_arg = required_argument, .val = 'S' },
 	{ .name = NULL } };
 	bool nid_request = false;
 	char *net_id = NULL;
@@ -2447,6 +2481,16 @@ static int jt_add_ni(int argc, char **argv)
 				goto failed;
 			}
 			break;
+		case 'S':
+			rc = parse_long(optarg, &tos);
+			if (rc || tos < -1 || tos > 0xff) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						  "Invalid ToS argument",
+						  &err_rc);
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				goto failed;
+			}
+			break;
 		case '?':
 			print_help(net_cmds, "net", "add");
 		default:
@@ -2474,6 +2518,14 @@ static int jt_add_ni(int argc, char **argv)
 		found = true;
 	}
 #endif
+
+	if (LNET_NETTYP(nw_descr.nw_id) == SOCKLND) {
+		tunables.lt_tun.lnd_tun_u.lnd_sock.lnd_tos = tos;
+		found = true;
+	} else if (LNET_NETTYP(nw_descr.nw_id) == O2IBLND) {
+		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos = tos;
+		found = true;
+	}
 
 	if (LNET_NETTYP(nw_descr.nw_id) == SOCKLND && (cpp > -1)) {
 		tunables.lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;

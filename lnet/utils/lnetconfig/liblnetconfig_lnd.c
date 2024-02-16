@@ -60,6 +60,10 @@ lustre_o2iblnd_show_tun(struct cYAML *lndparams,
 				lnd_cfg->lnd_timeout) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
+	if (cYAML_create_number(lndparams, "tos",
+				lnd_cfg->lnd_tos) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
@@ -74,6 +78,10 @@ lustre_socklnd_show_tun(struct cYAML *lndparams,
 
 	if (cYAML_create_number(lndparams, "timeout",
 				lnd_cfg->lnd_timeout) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (cYAML_create_number(lndparams, "tos",
+				lnd_cfg->lnd_tos) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	return LUSTRE_CFG_RC_NO_ERR;
@@ -186,6 +194,7 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 	struct cYAML *fmr_pool_size = NULL, *fmr_cache = NULL;
 	struct cYAML *fmr_flush_trigger = NULL, *lndparams = NULL;
 	struct cYAML *conns_per_peer = NULL, *ntx = NULL;
+	struct cYAML *tos = NULL;
 
 	lndparams = cYAML_get_object_item(tree, "lnd tunables");
 	if (!lndparams)
@@ -219,6 +228,9 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 	lnd_cfg->lnd_conns_per_peer =
 		(conns_per_peer) ? conns_per_peer->cy_valueint : 1;
 
+	tos = cYAML_get_object_item(lndparams, "tos");
+	lnd_cfg->lnd_tos =
+		(tos) ? tos->cy_valueint : -1;
 }
 
 #ifdef HAVE_KFILND
@@ -262,7 +274,9 @@ static void
 yaml_extract_sock_tun(struct cYAML *tree,
 			 struct lnet_ioctl_config_socklnd_tunables *lnd_cfg)
 {
-	struct cYAML *conns_per_peer = NULL, *lndparams = NULL;
+	struct cYAML *conns_per_peer = NULL;
+	struct cYAML *tos = NULL;
+	struct cYAML *lndparams = NULL;
 
 	lndparams = cYAML_get_object_item(tree, "lnd tunables");
 	if (!lndparams)
@@ -271,6 +285,10 @@ yaml_extract_sock_tun(struct cYAML *tree,
 	conns_per_peer = cYAML_get_object_item(lndparams, "conns_per_peer");
 	lnd_cfg->lnd_conns_per_peer =
 		(conns_per_peer) ? conns_per_peer->cy_valueint : 1;
+
+	tos = cYAML_get_object_item(lndparams, "tos");
+	lnd_cfg->lnd_tos =
+		(tos) ? tos->cy_valueint : -1;
 }
 
 void
