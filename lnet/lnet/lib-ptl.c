@@ -156,61 +156,47 @@ lnet_try_match_md(struct lnet_libmd *md,
 	if (((me->me_match_bits ^ info->mi_mbits) & ~me->me_ignore_bits) != 0)
 		return LNET_MATCHMD_NONE;
 
-	/* mismatched ME nid/pid? */
-	if (me->me_match_bits & ~me->me_ignore_bits) {
-		/* try to accept match based on bits only */
-		if ((!LNET_NID_IS_ANY(&me->me_match_id.nid) &&
-		     !nid_same(&me->me_match_id.nid, &info->mi_id.nid)) ||
-		    CFS_FAIL_CHECK(CFS_FAIL_MATCH_MD_NID)) {
-			struct lnet_peer *lp_me, *lp_peer;
+	/* mismatched PID? */
+	if (me->me_match_id.pid != LNET_PID_ANY &&
+	    me->me_match_id.pid != info->mi_id.pid)
+		return LNET_MATCHMD_NONE;
 
-			/* check if ME NID matches another NID of same peer */
-			lp_me = lnet_find_peer(&me->me_match_id.nid);
-			lp_peer = lnet_find_peer(&info->mi_id.nid);
+	/* try to accept match based on bits only */
+	if ((!LNET_NID_IS_ANY(&me->me_match_id.nid) &&
+	     !nid_same(&me->me_match_id.nid, &info->mi_id.nid)) ||
+	    (!LNET_NID_IS_ANY(&me->me_match_id.nid) &&
+	     CFS_FAIL_CHECK(CFS_FAIL_MATCH_MD_NID))) {
+		struct lnet_peer *lp_me, *lp_peer;
 
-			if (lp_me && lp_peer && (lp_me == lp_peer)) {
-				/* Shouldn't happen, but better than dropping
-				 * message entirely. Print warning so we know
-				 * it happens, and something needs to be fixed.
-				 */
-				CWARN("message from %s matched %llu with NID mismatch %s accepted (same peer %pK)\n",
-				      libcfs_idstr(&info->mi_id),
-				      info->mi_mbits,
-				      libcfs_nidstr(&me->me_match_id.nid),
-				      lp_me);
+		/* check if ME NID matches another NID of same peer */
+		lp_me = lnet_find_peer(&me->me_match_id.nid);
+		lp_peer = lnet_find_peer(&info->mi_id.nid);
+
+		if (lp_me && lp_peer && (lp_me == lp_peer)) {
+			/* Shouldn't happen, but better than dropping
+			 * message entirely. Print warning so we know
+			 * it happens, and something needs to be fixed.
+			 */
+			CWARN("message from %s matched %llu with NID mismatch %s accepted (same peer %pK)\n",
+			      libcfs_idstr(&info->mi_id),
+			      info->mi_mbits,
+			      libcfs_nidstr(&me->me_match_id.nid),
+			      lp_me);
+			lnet_peer_decref_locked(lp_me);
+			lnet_peer_decref_locked(lp_peer);
+		} else {
+			CWARN("message from %s matched %llu with NID mismatch %s rejected (different peer %pK != %pK)\n",
+				libcfs_idstr(&info->mi_id),
+				info->mi_mbits,
+				libcfs_nidstr(&me->me_match_id.nid),
+				lp_me, lp_peer);
+			if (lp_me)
 				lnet_peer_decref_locked(lp_me);
+			if (lp_peer)
 				lnet_peer_decref_locked(lp_peer);
-			} else {
-				CNETERR("message from %s matched %llu with NID mismatch %s rejected (different peer %pK != %pK)\n",
-					libcfs_idstr(&info->mi_id),
-					info->mi_mbits,
-					libcfs_nidstr(&me->me_match_id.nid),
-					lp_me, lp_peer);
-				if (lp_me)
-					lnet_peer_decref_locked(lp_me);
-				if (lp_peer)
-					lnet_peer_decref_locked(lp_peer);
 
-				return LNET_MATCHMD_NONE;
-			}
-		}
-
-		if (me->me_match_id.pid != LNET_PID_ANY &&
-		    me->me_match_id.pid != info->mi_id.pid) {
-			CNETERR("message from %s matched %llu with PID mismatch %s rejected\n",
-				libcfs_idstr(&info->mi_id), info->mi_mbits,
-				libcfs_idstr(&me->me_match_id));
 			return LNET_MATCHMD_NONE;
 		}
-	} else {
-		/* there were no bits to match, reject on nid/pid mismatch */
-		if (!LNET_NID_IS_ANY(&me->me_match_id.nid) &&
-		    !nid_same(&me->me_match_id.nid, &info->mi_id.nid))
-			return LNET_MATCHMD_NONE;
-
-		if (me->me_match_id.pid != LNET_PID_ANY &&
-		    me->me_match_id.pid != info->mi_id.pid)
-			return LNET_MATCHMD_NONE;
 	}
 
 	/* Hurrah! This _is_ a match; check it out... */
