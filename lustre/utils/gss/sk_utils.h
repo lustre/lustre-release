@@ -380,7 +380,7 @@ uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
 			       const uint32_t flags);
 #ifndef HAVE_OPENSSL_EVP_PKEY
-int sk_speedtest_dh_valid(unsigned int usec_check_max);
+int sk_speedtest_dh_valid(unsigned int usec_check_max, pid_t *child);
 #endif
 uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds);
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,

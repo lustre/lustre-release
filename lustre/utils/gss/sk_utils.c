@@ -44,6 +44,7 @@
 #include <sys/stat.h>
 #include <libcfs/util/string.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #include "sk_utils.h"
 #include "write_bytes.h"
@@ -838,11 +839,38 @@ static unsigned char test_prime[VALUE_LENGTH] =
  * \retval	max number of rounds to keep prime testing under usec_check_max
  *		return 0 if we should use the default DH_check rounds
  */
-int sk_speedtest_dh_valid(unsigned int usec_check_max)
+int sk_speedtest_dh_valid(unsigned int usec_check_max, pid_t *child)
 {
 	DH *dh;
 	BIGNUM *p, *g;
+	struct sigaction sa;
 	int num_rounds, prev_rounds = 0;
+
+	/* Set SIGCHLD disposition so that child that terminates
+	 * does not become a zombie.
+	 */
+	sa.sa_handler = NULL;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_NOCLDWAIT;
+	if (sigaction(SIGCHLD, &sa, NULL) == -1)
+		printerr(2, "SIGCHLD sigaction failed\n");
+
+	*child = fork();
+	if (*child == -1) {
+		printerr(0, "cannot fork child for speedtest: %s\n",
+			 strerror(errno));
+		/* in this case the speedtest cannot be run, so return 0
+		 * to use default num rounds for prime testing
+		 */
+		return 0;
+	} else if (*child != 0) {
+		/* parent returns immediately,
+		 * 0 means num rounds is not determined yet
+		 */
+		return 0;
+	}
+
+	/* now in forked child process, start speed test */
 
 	dh = DH_new();
 	if (!dh)

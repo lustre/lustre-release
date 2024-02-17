@@ -1194,7 +1194,10 @@ check_gss_daemon_nodes() {
 	local ret
 
 	dname=$(basename "$dname" | awk '{print $1}')
-	do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
+	do_nodesv $list "num=0;
+for proc in \\\$(pgrep $dname); do
+[ \\\$(ps -o ppid= -p \\\$proc) -ne 1 ] || ((num++))
+done;
 if [ \\\"\\\$num\\\" -ne 1 ]; then
     echo \\\$num instance of $dname;
     exit 1;

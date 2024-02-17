@@ -601,7 +601,7 @@ static int handle_sk(struct svc_nego_data *snd)
 	}
 
 redo:
-	rc = sk_gen_params(skc, sk_dh_checks);
+	rc = sk_gen_params(skc, *sk_dh_checks);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(LL_ERR,
 			 "Failed to generate DH params for responder\n");

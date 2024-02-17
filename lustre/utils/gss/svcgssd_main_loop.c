@@ -45,6 +45,7 @@
 #include <unistd.h>
 /* For nanosleep() */
 #include <time.h>
+#include <sys/mman.h>
 
 #include "cacheio.h"
 #include "svcgssd.h"
@@ -54,25 +55,48 @@
 
 /* max allowed time for prime testing: 400 ms */
 #define MAX_ALLOWED_TIME_FOR_PRIME 400000
-int sk_dh_checks;
+int *sk_dh_checks;
 
 void svcgssd_run(void)
 {
-	int local_socket, remote_socket;
+	int local_socket = -1, remote_socket;
 	struct sockaddr_un addr;
 	bool retried = false;
-	int ret = 0;
+#if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x1010103fL
+	pid_t child = 1;
+#endif
+	int ret = EXIT_SUCCESS;
 
 	if (sk_enabled) {
+		sk_dh_checks = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
+				    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (sk_dh_checks == MAP_FAILED) {
+			printerr(LL_ERR,
+			       "cannot mmap memory for sk_dh_checks: %s\n",
+			       strerror(errno));
+			ret = EXIT_FAILURE;
+			goto out_close;
+		}
+
 #if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x1010103fL
-		sk_dh_checks =
-			sk_speedtest_dh_valid(MAX_ALLOWED_TIME_FOR_PRIME);
-		if (sk_dh_checks)
+		/* child will run asynchronously, parent will not wait for it */
+		*sk_dh_checks =
+			sk_speedtest_dh_valid(MAX_ALLOWED_TIME_FOR_PRIME,
+					      &child);
+		if (*sk_dh_checks)
 			printerr(LL_WARN,
 				 "will use %d rounds for prime testing\n",
-				 sk_dh_checks);
+				 *sk_dh_checks);
+		else
+			printerr(LL_WARN,
+				 "will use default number of rounds for prime testing\n");
+		if (child == 0)
+			/* job done for child */
+			exit(EXIT_SUCCESS);
 #else
-		sk_dh_checks = 0;
+		*sk_dh_checks = 0;
+		printerr(LL_WARN,
+			 "will use default number of rounds for prime testing\n");
 #endif
 	} else {
 		/* For krb, preload mapping table if any */
@@ -83,7 +107,7 @@ again:
 	local_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (local_socket == -1) {
 		printerr(LL_ERR, "unable to create socket: %d\n", -errno);
-		ret = 1;
+		ret = EXIT_FAILURE;
 		goto out_close;
 	}
 
@@ -99,13 +123,13 @@ again:
 			goto again;
 		}
 		printerr(LL_ERR, "unable to bind socket: %d\n", -errno);
-		ret = 1;
+		ret = EXIT_FAILURE;
 		goto out_close;
 	}
 
 	if (listen(local_socket, 10) == -1) {
 		printerr(LL_ERR, "unable to listen on socket: %d\n", -errno);
-		ret = 1;
+		ret = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -126,5 +150,10 @@ out:
 out_close:
 	if (local_socket >= 0)
 		close(local_socket);
+	if (munmap(sk_dh_checks, sizeof(int)) == -1) {
+		printerr(LL_ERR, "cannot munmap memory for sk_dh_checks: %s\n",
+			 strerror(errno));
+		ret = EXIT_FAILURE;
+	}
 	exit(ret);
 }
