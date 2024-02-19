@@ -233,7 +233,7 @@
     <glossentry xml:id="import">
       <glossterm>Import</glossterm>
       <glossdef>
-        <para>The state held held by the client for each target that it is
+        <para>The state held by the client for each target that it is
         connected to. It holds server NIDs, connection state, and uncommitted
         RPCs needed to fully recover a transaction sequence after a server
         failure and restart.</para>
