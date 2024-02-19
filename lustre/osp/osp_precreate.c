@@ -317,7 +317,7 @@ void osp_statfs_need_now(struct osp_device *d)
  */
 static inline int osp_precreate_is_low_nolock(struct osp_device *d)
 {
-	int available = osp_objs_precreated(d) - d->opd_pre_reserved;
+	int available = osp_objs_precreated_nolock(d) - d->opd_pre_reserved;
 	int precreate_needed = d->opd_pre_create_count > 1024 ?
 		d->opd_pre_create_count / 4 : d->opd_pre_create_count / 2;
 
@@ -681,16 +681,18 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	ostid_to_fid(fid, &body->oa.o_oi, d->opd_index);
 
 ready:
+	spin_lock(&d->opd_pre_lock);
+
 	if (osp_fid_diff(fid, &d->opd_pre_used_fid) <= 0) {
 		CERROR("%s: precreate fid "DFID" <= local used fid "DFID
 		       ": rc = %d\n", d->opd_obd->obd_name,
 		       PFID(fid), PFID(&d->opd_pre_used_fid), -ESTALE);
+		spin_unlock(&d->opd_pre_lock);
 		GOTO(out_req, rc = -ESTALE);
 	}
 
 	diff = osp_fid_diff(fid, &d->opd_pre_last_created_fid);
 
-	spin_lock(&d->opd_pre_lock);
 	if (diff < grow) {
 		/* the OST has not managed to create all the
 		 * objects we asked for */
@@ -1477,21 +1479,18 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 	while ((rc = d->opd_pre_status) == 0 || rc == -ENOSPC ||
 		rc == -ENODEV || rc == -EAGAIN || rc == -ENOTCONN) {
 
+		spin_lock(&d->opd_pre_lock);
+		precreated = osp_objs_precreated_nolock(d);
 		/*
 		 * increase number of precreations
 		 */
-		precreated = osp_objs_precreated(d);
 		if (d->opd_pre_create_count < d->opd_pre_max_create_count &&
 		    d->opd_pre_create_slow == 0 &&
 		    precreated <= (d->opd_pre_create_count / 4 + 1)) {
-			spin_lock(&d->opd_pre_lock);
 			d->opd_pre_create_slow = 1;
 			d->opd_pre_create_count *= 2;
-			spin_unlock(&d->opd_pre_lock);
 		}
 
-		spin_lock(&d->opd_pre_lock);
-		precreated = osp_objs_precreated(d);
 		if (!d->opd_pre_recovering && !d->opd_force_creation) {
 			if (precreated > d->opd_pre_reserved) {
 				d->opd_pre_reserved++;

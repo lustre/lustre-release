@@ -613,10 +613,20 @@ static inline bool osp_precreate_end_seq(struct osp_device *osp)
 	return rc;
 }
 
-static inline int osp_objs_precreated(struct osp_device *osp)
+static inline int osp_objs_precreated_nolock(struct osp_device *osp)
 {
 	return osp_fid_diff(&osp->opd_pre_last_created_fid,
 			    &osp->opd_pre_used_fid);
+}
+
+static inline int osp_objs_precreated(struct osp_device *osp)
+{
+	int diff;
+
+	spin_lock(&osp->opd_pre_lock);
+	diff = osp_objs_precreated_nolock(osp);
+	spin_unlock(&osp->opd_pre_lock);
+	return diff;
 }
 
 static inline int osp_is_fid_client(struct osp_device *osp)
