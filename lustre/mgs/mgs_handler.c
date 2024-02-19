@@ -151,7 +151,8 @@ static int mgs_completion_ast_generic(struct ldlm_lock *lock, __u64 flags,
 		struct fs_db *fsdb;
 
 		/* l_ast_data is used as a marker to avoid cancel ldlm lock
-		 * twice. See LU-2317. */
+		 * twice. See LU-2317.
+		 */
 		lock_res_and_lock(lock);
 		fsdb = (struct fs_db *)lock->l_ast_data;
 		lock->l_ast_data = NULL;
@@ -160,23 +161,23 @@ static int mgs_completion_ast_generic(struct ldlm_lock *lock, __u64 flags,
 		if (fsdb != NULL) {
 			struct lustre_handle lockh;
 
-			switch(type) {
-				case AST_CONFIG:
-					/* clear the bit before lock put */
-					clear_bit(FSDB_REVOKING_LOCK,
-						  &fsdb->fsdb_flags);
-					break;
-				case AST_PARAMS:
-					clear_bit(FSDB_REVOKING_PARAMS,
-						  &fsdb->fsdb_flags);
-					break;
-				case AST_IR:
-					mgs_ir_notify_complete(fsdb);
-					break;
-				case AST_BARRIER:
-					break;
-				default:
-					LBUG();
+			switch (type) {
+			case AST_CONFIG:
+				/* clear the bit before lock put */
+				clear_bit(FSDB_REVOKING_LOCK,
+					  &fsdb->fsdb_flags);
+				break;
+			case AST_PARAMS:
+				clear_bit(FSDB_REVOKING_PARAMS,
+					  &fsdb->fsdb_flags);
+				break;
+			case AST_IR:
+				mgs_ir_notify_complete(fsdb);
+				break;
+			case AST_BARRIER:
+				break;
+			default:
+				LBUG();
 			}
 
 			ldlm_lock2handle(lock, &lockh);
@@ -221,6 +222,7 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb,
 	struct ldlm_res_id       res_id;
 	__u64 flags = LDLM_FL_ATOMIC_CB;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(fsdb->fsdb_name[0] != '\0');
@@ -275,34 +277,36 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb,
 	RETURN_EXIT;
 }
 
-/* rc=0 means ok
-      1 means update
-     <0 means error */
+/* Returns: 0 on Success
+ * Returns: 1 means update
+ * Returns: <0 means error
+ */
 static int mgs_check_target(const struct lu_env *env,
 			    struct mgs_device *mgs,
 			    struct mgs_target_info *mti)
 {
-        int rc;
-        ENTRY;
+	int rc;
+
+	ENTRY;
 
 	rc = mgs_check_index(env, mgs, mti);
-        if (rc == 0) {
-                LCONSOLE_ERROR_MSG(0x13b, "%s claims to have registered, but "
-                                   "this MGS does not know about it, preventing "
-                                   "registration.\n", mti->mti_svname);
-                rc = -ENOENT;
-        } else if (rc == -1) {
-                LCONSOLE_ERROR_MSG(0x13c, "Client log %s-client has "
-                                   "disappeared! Regenerating all logs.\n",
-                                   mti->mti_fsname);
-                mti->mti_flags |= LDD_F_WRITECONF;
-                rc = 1;
-        } else {
-                /* Index is correctly marked as used */
+	if (rc == 0) {
+		LCONSOLE_ERROR_MSG(0x13b,
+				   "%s claims to have registered, but this MGS does not know about it, preventing registration.\n",
+				   mti->mti_svname);
+		rc = -ENOENT;
+	} else if (rc == -1) {
+		LCONSOLE_ERROR_MSG(0x13c,
+				   "Client log %s-client has disappeared! Regenerating all logs.\n",
+				   mti->mti_fsname);
+		mti->mti_flags |= LDD_F_WRITECONF;
+		rc = 1;
+	} else {
+		/* Index is correctly marked as used */
 		rc = 0;
-        }
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* Ensure this is not a failover node that is connecting first*/
@@ -320,14 +324,16 @@ static int mgs_check_failover_reg(struct mgs_target_info *mti)
 				int rc;
 
 				if (target_supports_large_nid(mti)) {
-					rc = libcfs_strnid(&nid2, mti->mti_nidlist[i]);
+					rc = libcfs_strnid(&nid2,
+							   mti->mti_nidlist[i]);
 					if (rc < 0) {
 						LCONSOLE_WARN("NID %s is unsupported type or improper format\n",
 							      libcfs_nidstr(&nid));
 						return rc;
 					}
 				} else {
-					lnet_nid4_to_nid(mti->mti_nids[i], &nid2);
+					lnet_nid4_to_nid(mti->mti_nids[i],
+							 &nid2);
 				}
 
 				if (nid_same(&nid, &nid2)) {
@@ -409,8 +415,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 		if (b_fsdb->fsdb_barrier_status == BS_FREEZING_P1 ||
 		    b_fsdb->fsdb_barrier_status == BS_FREEZING_P2 ||
 		    b_fsdb->fsdb_barrier_status == BS_FROZEN) {
-			LCONSOLE_WARN("%s: the system is in barrier, refuse "
-				      "the connection from MDT %s temporary\n",
+			LCONSOLE_WARN("%s: the system is in barrier, refuse the connection from MDT %s temporary\n",
 				      obd->obd_name, mti->mti_svname);
 
 			GOTO(out_norevoke, rc = -EBUSY);
@@ -418,9 +423,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 
 		if (!(exp_connect_flags(tsi->tsi_exp) & OBD_CONNECT_BARRIER) &&
 		    !b_fsdb->fsdb_barrier_disabled) {
-			LCONSOLE_WARN("%s: the MDT %s does not support write "
-				      "barrier, so disable barrier on the "
-				      "whole system.\n",
+			LCONSOLE_WARN("%s: the MDT %s does not support write barrier, so disable barrier on the whole system.\n",
 				      obd->obd_name, mti->mti_svname);
 
 			b_fsdb->fsdb_barrier_disabled = 1;
@@ -454,10 +457,8 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 			b_fsdb = NULL;
 			rc = mgs_erase_logs(tsi->tsi_env, mgs,
 					    mti->mti_fsname);
-			LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
-				      "request.  All servers must be restarted "
-				      "in order to regenerate the logs: rc = %d"
-				      "\n", obd->obd_name, mti->mti_fsname, rc);
+			LCONSOLE_WARN("%s: Logs for fs %s were removed by user request.  All servers must be restarted in order to regenerate the logs: rc = %d\n",
+				      obd->obd_name, mti->mti_fsname, rc);
 			if (rc && rc != -ENOENT)
 				GOTO(out_norevoke, rc);
 
@@ -472,9 +473,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 
 			if (!(exp_connect_flags(tsi->tsi_exp) &
 			      OBD_CONNECT_BARRIER)) {
-				LCONSOLE_WARN("%s: the MDT %s does not support "
-					      "write barrier, disable barrier "
-					      "on the whole system.\n",
+				LCONSOLE_WARN("%s: the MDT %s does not support write barrier, disable barrier on the whole system.\n",
 					      obd->obd_name, mti->mti_svname);
 
 				b_fsdb->fsdb_barrier_disabled = 1;
@@ -482,8 +481,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 		} else if (mti->mti_flags &
 			   (LDD_F_SV_TYPE_OST | LDD_F_SV_TYPE_MDT)) {
 			rc = mgs_erase_log(tsi->tsi_env, mgs, mti->mti_svname);
-			LCONSOLE_WARN("%s: Regenerating %s log by user "
-				      "request: rc = %d\n",
+			LCONSOLE_WARN("%s: Regenerating %s log by user request: rc = %d\n",
 				      obd->obd_name, mti->mti_svname, rc);
 			if (rc)
 				GOTO(out_norevoke, rc);
@@ -506,23 +504,22 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 	 * updating the logs - if we revoke at the end they will just update
 	 * from where they left off.
 	 */
-        if (mti->mti_flags & LDD_F_UPDATE) {
-                CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname,
-                       mti->mti_stripe_index);
+	if (mti->mti_flags & LDD_F_UPDATE) {
+		CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname,
+		       mti->mti_stripe_index);
 
-                /* create or update the target log
-                   and update the client/mdt logs */
+		/* create/update target log and update the client/mdt logs */
 		rc = mgs_write_log_target(tsi->tsi_env, mgs, mti, c_fsdb);
-                if (rc) {
-                        CERROR("Failed to write %s log (%d)\n",
-                               mti->mti_svname, rc);
-                        GOTO(out, rc);
-                }
+		if (rc) {
+			CERROR("Failed to write %s log (%d)\n",
+			       mti->mti_svname, rc);
+			GOTO(out, rc);
+		}
 
 		mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE |
 				    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
 		mti->mti_flags |= LDD_F_REWRITE_LDD;
-        }
+	}
 
 out:
 	mgs_revoke_lock(mgs, c_fsdb, MGS_CFG_T_CONFIG);
@@ -661,8 +658,7 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 
 		if (ptr == NULL || len >= sizeof(mgi->mgi_fsname)) {
 			if (strcmp(logname, PARAMS_FILENAME) != 0)
-				LCONSOLE_WARN("%s: non-config logname "
-					      "received: %s\n",
+				LCONSOLE_WARN("%s: non-config logname received: %s\n",
 					      tgt_name(tsi->tsi_tgt),
 					      logname);
 			/* not error, this can be llog test name */
@@ -673,8 +669,7 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 			rc = mgs_fsc_attach(tsi->tsi_env, tsi->tsi_exp,
 					    mgi->mgi_fsname);
 			if (rc && rc != -EEXIST) {
-				LCONSOLE_WARN("%s: Unable to add client %s "
-					      "to file system %s: %d\n",
+				LCONSOLE_WARN("%s: Unable to add client %s to file system %s: %d\n",
 					      tgt_name(tsi->tsi_tgt),
 					      libcfs_nidstr(&req->rq_peer.nid),
 					      mgi->mgi_fsname, rc);
@@ -701,27 +696,27 @@ static inline int mgs_init_export(struct obd_export *exp)
 	exp->exp_connecting = 1;
 	spin_unlock(&exp->exp_lock);
 
-        /* self-export doesn't need client data and ldlm initialization */
-        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
-                                     &exp->exp_client_uuid)))
-                return 0;
-        return ldlm_init_export(exp);
+	/* self-export doesn't need client data and ldlm initialization */
+	if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+				     &exp->exp_client_uuid)))
+		return 0;
+	return ldlm_init_export(exp);
 }
 
 static inline int mgs_destroy_export(struct obd_export *exp)
 {
-        ENTRY;
+	ENTRY;
 
-        target_destroy_export(exp);
-        mgs_client_free(exp);
+	target_destroy_export(exp);
+	mgs_client_free(exp);
 
-        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
-                                     &exp->exp_client_uuid)))
-                RETURN(0);
+	if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+				     &exp->exp_client_uuid)))
+		RETURN(0);
 
-        ldlm_destroy_export(exp);
+	ldlm_destroy_export(exp);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
@@ -736,9 +731,7 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 			return -EINVAL;
 	}
 
-	/* Test for fsname.poolname format.
-	 * strlen() test if poolname is empty
-	 */
+	/* Test for fsname.poolname format. strlen test if poolname is empty */
 	ptr = strchr(arg, '.');
 	if (!ptr || !strlen(ptr))
 		return -EINVAL;
@@ -812,9 +805,9 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 			GOTO(out_lcfg, rc = -EINVAL);
 		param = lustre_cfg_string(lcfg, 1);
 		if (strcmp(param, "1") == 0)
-				nodemap_activate(1);
+			nodemap_activate(1);
 		else
-				nodemap_activate(0);
+			nodemap_activate(0);
 		break;
 	case LCFG_NODEMAP_ADD:
 	case LCFG_NODEMAP_DEL:
@@ -937,15 +930,16 @@ out:
 
 static int mgs_iocontrol_pool(const struct lu_env *env,
 			      struct mgs_device *mgs,
-                              struct obd_ioctl_data *data)
+			      struct obd_ioctl_data *data)
 {
 	struct mgs_thread_info *mgi = mgs_env_info(env);
-        int rc;
-        struct lustre_cfg *lcfg = NULL;
-        char *poolname = NULL;
-        ENTRY;
+	int rc;
+	struct lustre_cfg *lcfg = NULL;
+	char *poolname = NULL;
 
-        OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
+	ENTRY;
+
+	OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
 	if (poolname == NULL)
 		RETURN(-ENOMEM);
 
@@ -953,14 +947,14 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 		CERROR("%s: unknown cfg record type: %d\n",
 		       mgs->mgs_obd->obd_name, data->ioc_type);
 		GOTO(out_pool, rc = -EINVAL);
-        }
+	}
 
 	if (data->ioc_plen1 > PAGE_SIZE)
 		GOTO(out_pool, rc = -E2BIG);
 
-        OBD_ALLOC(lcfg, data->ioc_plen1);
-        if (lcfg == NULL)
-                GOTO(out_pool, rc = -ENOMEM);
+	OBD_ALLOC(lcfg, data->ioc_plen1);
+	if (lcfg == NULL)
+		GOTO(out_pool, rc = -ENOMEM);
 
 	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 		GOTO(out_lcfg, rc = -EFAULT);
@@ -968,52 +962,52 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 	if (lcfg->lcfg_bufcount < 2)
 		GOTO(out_lcfg, rc = -EFAULT);
 
-        /* first arg is always <fsname>.<poolname> */
+	/* first arg is always <fsname>.<poolname> */
 	rc = mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), mgi->mgi_fsname,
 				 poolname);
 	if (rc)
 		GOTO(out_lcfg, rc);
 
-        switch (lcfg->lcfg_command) {
+	switch (lcfg->lcfg_command) {
 	case LCFG_POOL_NEW:
-                if (lcfg->lcfg_bufcount != 2)
+		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_NEW, mgi->mgi_fsname,
-                                  poolname, NULL);
-                break;
+				  poolname, NULL);
+		break;
 	case LCFG_POOL_ADD:
-                if (lcfg->lcfg_bufcount != 3)
+		if (lcfg->lcfg_bufcount != 3)
 			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_ADD, mgi->mgi_fsname,
 				  poolname, lustre_cfg_string(lcfg, 2));
-                break;
+		break;
 	case LCFG_POOL_REM:
-                if (lcfg->lcfg_bufcount != 3)
+		if (lcfg->lcfg_bufcount != 3)
 			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_REM, mgi->mgi_fsname,
 				  poolname, lustre_cfg_string(lcfg, 2));
-                break;
+		break;
 	case LCFG_POOL_DEL:
-                if (lcfg->lcfg_bufcount != 2)
+		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_DEL, mgi->mgi_fsname,
-                                  poolname, NULL);
-                break;
+				  poolname, NULL);
+		break;
 	default:
-                 rc = -EINVAL;
-        }
+		 rc = -EINVAL;
+	}
 
-        if (rc) {
-                CERROR("OBD_IOC_POOL err %d, cmd %X for pool %s.%s\n",
+	if (rc) {
+		CERROR("OBD_IOC_POOL err %d, cmd %X for pool %s.%s\n",
 		       rc, lcfg->lcfg_command, mgi->mgi_fsname, poolname);
 		GOTO(out_lcfg, rc);
-        }
+	}
 
 out_lcfg:
 	OBD_FREE(lcfg, data->ioc_plen1);
 out_pool:
 	OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* from mdt_iocontrol */
@@ -1180,6 +1174,7 @@ static int mgs_connect_to_osd(struct mgs_device *m, const char *nextdev)
 	struct obd_connect_data *data = NULL;
 	struct obd_device       *obd;
 	int                      rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(data);
@@ -1233,10 +1228,11 @@ static struct tgt_handler mgs_dlm_handlers[] = {
 [LDLM_ENQUEUE - LDLM_FIRST_OPC] = {
 	.th_name = "LDLM_ENQUEUE",
 	/* don't use th_fail_id for MGS to don't interfere with MDS tests.
-	 * * There are no tests for MGS with OBD_FAIL_LDLM_ENQUEUE_NET so it
-	 * * is safe. If such tests will be needed we have to distinguish
-	 * * MDS and MGS fail ids, e.g use OBD_FAIL_MGS_ENQUEUE_NET for MGS
-	 * * instead of common OBD_FAIL_LDLM_ENQUEUE_NET */
+	 * There are no tests for MGS with OBD_FAIL_LDLM_ENQUEUE_NET so it
+	 * is safe. If such tests will be needed we have to distinguish
+	 * MDS and MGS fail ids, e.g use OBD_FAIL_MGS_ENQUEUE_NET for MGS
+	 * instead of common OBD_FAIL_LDLM_ENQUEUE_NET
+	 */
 	.th_fail_id = 0,
 	.th_opc = LDLM_ENQUEUE,
 	.th_flags = HAS_KEY,
@@ -1247,10 +1243,10 @@ static struct tgt_handler mgs_dlm_handlers[] = {
 };
 
 static struct tgt_handler mgs_llog_handlers[] = {
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	mgs_llog_open),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_CREATE,	mgs_llog_open),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
 };
 
 static struct tgt_opc_slice mgs_common_slice[] = {
@@ -1313,7 +1309,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	obd_obt_init(obd);
 
 	/* namespace for mgs llog */
-	obd->obd_namespace = ldlm_namespace_new(obd ,"MGS",
+	obd->obd_namespace = ldlm_namespace_new(obd, "MGS",
 						LDLM_NAMESPACE_SERVER,
 						LDLM_NAMESPACE_MODEST,
 						LDLM_NS_TYPE_MGT);
@@ -1347,7 +1343,8 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		GOTO(err_fs, rc);
 
 	/* XXX: we need this trick till N:1 stack is supported
-	 * set "current" directory for named llogs */
+	 * set "current" directory for named llogs
+	 */
 	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
 	LASSERT(ctxt);
 	ctxt->loc_dir = mgs->mgs_configs_dir;
@@ -1373,7 +1370,8 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	}
 
 	/* Setup params fsdb and log, so that other servers can make a local
-	 * copy successfully when they are mounted. See LU-4783 */
+	 * copy successfully when they are mounted. See LU-4783
+	 */
 	rc = mgs_params_fsdb_setup(env, mgs);
 	if (rc)
 		/* params fsdb and log can be setup later */
@@ -1459,6 +1457,7 @@ static struct lu_device *mgs_device_free(const struct lu_env *env,
 					 struct lu_device *lu)
 {
 	struct mgs_device *mgs = lu2mgs_dev(lu);
+
 	ENTRY;
 
 	dt_device_fini(&mgs->mgs_dt_dev);
@@ -1481,10 +1480,10 @@ static int mgs_object_init(const struct lu_env *env, struct lu_object *o,
 	struct lu_device  *under;
 	struct lu_object  *below;
 	int                rc = 0;
+
 	ENTRY;
 
 	/* do no set .do_ops as mgs calls to bottom osd directly */
-
 	CDEBUG(D_INFO, "object init, fid = "DFID"\n",
 			PFID(lu_object_fid(o)));
 
