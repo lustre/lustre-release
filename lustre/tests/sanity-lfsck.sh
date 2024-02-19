@@ -4870,6 +4870,42 @@ test_29c()
 }
 run_test 29c "verify linkEA size limitation"
 
+test_29d() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5517"
+	[[ $mds1_FSTYPE == ldiskfs ]] || skip "ldiskfs only problem"
+
+	echo "#####"
+	echo "The object's nlink attribute is smaller than the object's known"
+	echo "name entries count. The LFSCK will repair the object's nlink"
+	echo "attribute to match the known name entries count"
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	touch $DIR/$tdir/d0/foo || error "(2) Fail to create foo"
+
+	echo "Inject failure stub on MDT0 to simulate the case that foo's"
+	echo "nlink attribute is smaller than its name entries count."
+
+	#define OBD_FAIL_LFSCK_LESS_NLINK	0x1626
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1626
+	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/h1 ||
+		error "(3) Fail to hard link to $DIR/$tdir/d0/foo"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	rm $DIR/$tdir/d0/h1 || error "can't remove link"
+
+	cancel_lru_locks mdc
+	# try to access non-existing inode
+	stat $DIR/$tdir/d0/foo
+	touch $DIR/$tdir/d0/foo0 || error "can't create new file"
+	echo "rm_entry"
+	$LFS rm_entry $DIR/$tdir/d0/foo
+	ls -l $DIR/$tdir/d0
+}
+run_test 29d "accessing non-existing inode shouldn't turn fs read-only (ldiskfs)"
+
 test_30() {
 	[[ $mds1_FSTYPE == ldiskfs ]] || skip "only ldiskfs has lost+found"
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"

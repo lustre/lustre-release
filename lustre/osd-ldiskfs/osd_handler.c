@@ -505,10 +505,10 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
  **/
 static struct inode *osd_iget2(struct osd_thread_info *info,
 			       struct osd_device *dev, struct osd_inode_id *id,
-			       int *err)
+			       bool special, int *err)
 {
-	int rc = 0;
 	struct inode *inode = NULL;
+	int rc = 0;
 
 	/*
 	 * if we look for an inode withing a running
@@ -517,7 +517,7 @@ static struct inode *osd_iget2(struct osd_thread_info *info,
 	 */
 	 /* LASSERT(current->journal_info == NULL); */
 
-	inode = osd_ldiskfs_iget(osd_sb(dev), id->oii_ino);
+	inode = osd_ldiskfs_iget_special(osd_sb(dev), id->oii_ino, special);
 	if (IS_ERR(inode)) {
 		CDEBUG(D_INODE, "no inode: ino = %u, rc = %ld\n",
 		       id->oii_ino, PTR_ERR(inode));
@@ -574,7 +574,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 	struct inode *inode;
 	int rc = 0;
 
-	inode = osd_iget2(info, dev, id, &rc);
+	inode = osd_iget2(info, dev, id, 0, &rc);
 
 	if (rc) {
 		iput(inode);
@@ -664,6 +664,7 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 				    bool trusted)
 {
 	struct inode *inode;
+	bool special = false;
 	int rc = 0;
 
 	ENTRY;
@@ -674,8 +675,10 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 	 * directly without further OI checking.
 	 */
 
+	if (unlikely(fid_is_acct(fid)))
+		special = true;
 again:
-	inode = osd_iget2(info, dev, id, &rc);
+	inode = osd_iget2(info, dev, id, special, &rc);
 	if (rc) {
 		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
 			goto check_oi;
