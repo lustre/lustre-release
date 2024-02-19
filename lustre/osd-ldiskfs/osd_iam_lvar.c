@@ -333,18 +333,6 @@ static int n_invariant(const struct iam_leaf *leaf)
 			BREAKPOINT();
 			return 0;
 		}
-		if (0 && nexthash < starthash) {
-			/*
-			 * Unfortunately this useful invariant cannot be
-			 * reliably checked as parent node is not necessarily
-			 * locked.
-			 */
-			n_print(leaf);
-			CERROR("invalid hash value less than start hash: %#x < %#x\n",
-				nexthash, starthash);
-			dump_stack();
-			return 0;
-		}
 		if (nexthash < hash) {
 			BREAKPOINT();
 			return 0;

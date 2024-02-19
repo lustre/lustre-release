@@ -112,13 +112,8 @@ static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
 		inode_set_mtime(inode, attr->cat_mtime, 0);
 	if (valid & CAT_CTIME)
 		inode_set_ctime(inode, attr->cat_ctime, 0);
-	if (0 && valid & CAT_SIZE)
-		i_size_write(inode, attr->cat_size);
 	if (valid & CAT_PROJID)
 		ll_i2info(inode)->lli_projid = attr->cat_projid;
-	/* not currently necessary */
-	if (0 && valid & (CAT_UID|CAT_GID|CAT_SIZE|CAT_PROJID))
-		mark_inode_dirty(inode);
 	return 0;
 }
 
