@@ -633,6 +633,19 @@ fi
 # mpi
 %endif
 
+# kfabric can be either cray-kfabric or kfabric
+WITH_KFI=""
+%if %{with kfi}
+	for kfabric in cray-kfabric kfabric
+	do
+		path=/usr/src/${kfabric}/default/Module.symvers
+		if [ -f $path ]; then
+			WITH_KFI="--with-kfi=$(dirname $path)"
+			break;
+		fi
+	done
+%endif
+
 WITH_O2IB=""
 %if %{with mofed}
 	o2ib_path=$(find -H %{mofed_default_path} -type d -name ofed_scripts | xargs dirname)
@@ -667,7 +680,7 @@ WITH_O2IB=""
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
 	%{?with_multiple_lnds:--enable-multiple-lnds} \
-	%{?with_kfi:--with-kfi=/usr/src/cray-kfabric/default} \
+	${WITH_KFI} \
 	%{?with_gni:--enable-gni} \
 	${WITH_O2IB} \
 	%{!?with_l_getsepol:--disable-l_getsepol} \
