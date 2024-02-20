@@ -227,7 +227,7 @@ static int iam_format_guess(struct iam_container *c)
 int iam_container_init(struct iam_container *c,
 		       struct iam_descr *descr, struct inode *inode)
 {
-	memset(c, 0, sizeof *c);
+	memset(c, 0, sizeof(*c));
 	c->ic_descr = descr;
 	c->ic_object = inode;
 	dynlock_init(&c->ic_tree_lock);
@@ -255,9 +255,9 @@ void iam_container_fini(struct iam_container *c)
 }
 
 void iam_path_init(struct iam_path *path, struct iam_container *c,
-                   struct iam_path_descr *pd)
+		   struct iam_path_descr *pd)
 {
-	memset(path, 0, sizeof *path);
+	memset(path, 0, sizeof(*path));
 	path->ip_container = c;
 	path->ip_frame = path->ip_frames;
 	path->ip_data = pd;
@@ -324,7 +324,7 @@ void iam_ipd_free(struct iam_path_descr *ipd)
 }
 
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
-                  handle_t *h, struct buffer_head **bh)
+		  handle_t *h, struct buffer_head **bh)
 {
 	/*
 	 * NB: it can be called by iam_lfix_guess() which is still at
@@ -376,19 +376,19 @@ static int iam_leaf_key_size(const struct iam_leaf *leaf)
 }
 
 static struct iam_ikey *iam_leaf_ikey(const struct iam_leaf *leaf,
-                                      struct iam_ikey *key)
+				      struct iam_ikey *key)
 {
 	return iam_leaf_ops(leaf)->ikey(leaf, key);
 }
 
 static int iam_leaf_keycmp(const struct iam_leaf *leaf,
-                           const struct iam_key *key)
+			   const struct iam_key *key)
 {
 	return iam_leaf_ops(leaf)->key_cmp(leaf, key);
 }
 
 static int iam_leaf_keyeq(const struct iam_leaf *leaf,
-                          const struct iam_key *key)
+			  const struct iam_key *key)
 {
 	return iam_leaf_ops(leaf)->key_eq(leaf, key);
 }
@@ -435,8 +435,8 @@ static int iam_leaf_load(struct iam_path *path)
 	block = path->ip_frame->leaf;
 	if (block == 0) {
 		/* XXX bug 11027 */
-		printk(KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
-		       (long unsigned)path->ip_frame->leaf,
+		pr_err("wrong leaf: %lu %d [%p %p %p]\n",
+		       (unsigned long)path->ip_frame->leaf,
 		       dx_get_count(dx_node_get_entries(path, path->ip_frame)),
 		       path->ip_frames[0].bh, path->ip_frames[1].bh,
 		       path->ip_frames[2].bh);
@@ -492,7 +492,7 @@ void iam_leaf_next(struct iam_leaf *folio)
 }
 
 static void iam_leaf_rec_add(struct iam_leaf *leaf, const struct iam_key *key,
-                             const struct iam_rec *rec)
+			     const struct iam_rec *rec)
 {
 	iam_leaf_ops(leaf)->rec_add(leaf, key, rec);
 }
@@ -519,13 +519,13 @@ static inline int iam_leaf_empty(struct iam_leaf *l)
 }
 
 int iam_leaf_can_add(const struct iam_leaf *l,
-                     const struct iam_key *k, const struct iam_rec *r)
+		     const struct iam_key *k, const struct iam_rec *r)
 {
 	return iam_leaf_ops(l)->can_add(l, k, r);
 }
 
 static int iam_txn_dirty(handle_t *handle,
-                         struct iam_path *path, struct buffer_head *bh)
+			 struct iam_path *path, struct buffer_head *bh)
 {
 	int result;
 
@@ -536,7 +536,7 @@ static int iam_txn_dirty(handle_t *handle,
 }
 
 static int iam_txn_add(handle_t *handle,
-                       struct iam_path *path, struct buffer_head *bh)
+		       struct iam_path *path, struct buffer_head *bh)
 {
 	int result;
 	struct super_block *sb = iam_path_obj(path)->i_sb;
@@ -548,10 +548,7 @@ static int iam_txn_add(handle_t *handle,
 	return result;
 }
 
-/***********************************************************************/
-/* iterator interface                                                  */
-/***********************************************************************/
-
+/* iterator interface */
 static enum iam_it_state it_state(const struct iam_iterator *it)
 {
 	return it->ii_state;
@@ -566,13 +563,13 @@ static struct iam_container *iam_it_container(const struct iam_iterator *it)
 }
 
 static inline int it_keycmp(const struct iam_iterator *it,
-                            const struct iam_key *k)
+			    const struct iam_key *k)
 {
 	return iam_leaf_keycmp(&it->ii_path.ip_leaf, k);
 }
 
 static inline int it_keyeq(const struct iam_iterator *it,
-                           const struct iam_key *k)
+			   const struct iam_key *k)
 {
 	return iam_leaf_keyeq(&it->ii_path.ip_leaf, k);
 }
@@ -623,9 +620,9 @@ static int iam_it_get_exact(struct iam_iterator *it, const struct iam_key *k)
  * postcondition: it_state(it) == IAM_IT_DETACHED
  */
 int  iam_it_init(struct iam_iterator *it, struct iam_container *c, __u32 flags,
-                 struct iam_path_descr *pd)
+		 struct iam_path_descr *pd)
 {
-	memset(it, 0, sizeof *it);
+	memset(it, 0, sizeof(*it));
 	it->ii_flags  = flags;
 	it->ii_state  = IAM_IT_DETACHED;
 	iam_path_init(&it->ii_path, c, pd);
@@ -746,7 +743,7 @@ static iam_ptr_t iam_find_ptr(struct iam_path *path, struct iam_frame *frame)
 }
 
 void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
-                    const struct iam_ikey *key, iam_ptr_t ptr)
+		    const struct iam_ikey *key, iam_ptr_t ptr)
 {
 	struct iam_entry *entries = frame->entries;
 	struct iam_entry *new = iam_entry_shift(path, frame->at, +1);
@@ -776,7 +773,7 @@ void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
 }
 
 void iam_insert_key_lock(struct iam_path *path, struct iam_frame *frame,
-                         const struct iam_ikey *key, iam_ptr_t ptr)
+			 const struct iam_ikey *key, iam_ptr_t ptr)
 {
 	iam_lock_bh(frame->bh);
 	iam_insert_key(path, frame, key, ptr);
@@ -868,7 +865,7 @@ static int __iam_path_lookup(struct iam_path *path)
 	int err;
 	int i;
 
-	for (i = 0; i < DX_MAX_TREE_HEIGHT; ++ i)
+	for (i = 0; i < DX_MAX_TREE_HEIGHT; ++i)
 		assert(path->ip_frames[i].bh == NULL);
 
 	do {
@@ -898,14 +895,10 @@ static int iam_check_full_path(struct iam_path *path, int search)
 		; /* find last filled in frame */
 	}
 
-	/*
-	 * Lock frames, bottom to top.
-	 */
+	/* Lock frames, bottom to top.  */
 	for (scan = bottom - 1; scan >= path->ip_frames; --scan)
 		iam_lock_bh(scan->bh);
-	/*
-	 * Check them top to bottom.
-	 */
+	/* Check them top to bottom.  */
 	result = 0;
 	for (scan = path->ip_frames; scan < bottom; ++scan) {
 		struct iam_entry *pos;
@@ -931,11 +924,9 @@ static int iam_check_full_path(struct iam_path *path, int search)
 		}
 	}
 
-	/*
-	 * Unlock top to bottom.
-	 */
+	/* Unlock top to bottom.  */
 	for (scan = path->ip_frames; scan < bottom; ++scan)
-                iam_unlock_bh(scan->bh);
+		iam_unlock_bh(scan->bh);
 	DX_DEVAL(iam_lock_stats.dls_bh_full_again += !!result);
 	do_corr(schedule());
 
@@ -1021,7 +1012,7 @@ static int __iam_it_get(struct iam_iterator *it, int index)
 		collision = result & IAM_LOOKUP_LAST;
 		switch (result & ~IAM_LOOKUP_LAST) {
 		case IAM_LOOKUP_EXACT:
-			result = +1;
+			result = 1;
 			it->ii_state = IAM_IT_ATTACHED;
 			break;
 		case IAM_LOOKUP_OK:
@@ -1038,9 +1029,7 @@ static int __iam_it_get(struct iam_iterator *it, int index)
 		}
 		result |= collision;
 	}
-	/*
-	 * See iam_it_get_exact() for explanation.
-	 */
+	/* See iam_it_get_exact() for explanation.  */
 	assert_corr(result != -ENOENT);
 	return result;
 }
@@ -1095,7 +1084,7 @@ int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
 			iam_it_fini(it);
 			result = __iam_it_get(it, 0);
 		} else
-			result = +1;
+			result = 1;
 	}
 	if (result > 0)
 		result &= ~IAM_LOOKUP_LAST;
@@ -1185,7 +1174,7 @@ void iam_it_put(struct iam_iterator *it)
 }
 
 static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
-                                        struct iam_ikey *ikey);
+					struct iam_ikey *ikey);
 
 
 /*
@@ -1206,8 +1195,8 @@ static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
  * hash of the next page.
  */
 static int iam_htree_advance(struct inode *dir, __u32 hash,
-                              struct iam_path *path, __u32 *start_hash,
-                              int compat)
+			      struct iam_path *path, __u32 *start_hash,
+			      int compat)
 {
 	struct iam_frame *p;
 	struct buffer_head *bh;
@@ -1243,9 +1232,7 @@ static int iam_htree_advance(struct inode *dir, __u32 hash,
 	}
 
 	if (compat) {
-		/*
-		 * Htree hash magic.
-		 */
+		/* Htree hash magic.  */
 
 		/*
 		 * If the hash is 1, then continue only if the next page has a
@@ -1321,9 +1308,7 @@ int iam_index_next(struct iam_container *c, struct iam_path *path)
 	struct dynlock_handle *lh[DX_MAX_TREE_HEIGHT] = { NULL, };
 	int result;
 
-	/*
-	 * Locking for iam_index_next()... is to be described.
-	 */
+	/* Locking for iam_index_next()... is to be described.  */
 
 	cursor = path->ip_frame->leaf;
 
@@ -1423,9 +1408,7 @@ int iam_it_next(struct iam_iterator *it)
 		if (!iam_leaf_at_end(leaf))
 			/* advance within leaf node */
 			iam_leaf_next(leaf);
-		/*
-		 * multiple iterations may be necessary due to empty leaves.
-		 */
+		/* multiple iterations may be necessary due to empty leaves. */
 		while (result == 0 && iam_leaf_at_end(leaf)) {
 			do_corr(schedule());
 			/* advance index portion of the path */
@@ -1433,6 +1416,7 @@ int iam_it_next(struct iam_iterator *it)
 			assert_corr(iam_leaf_is_locked(leaf));
 			if (result == 1) {
 				struct dynlock_handle *lh;
+
 				lh = iam_lock_htree(iam_it_container(it),
 						    path->ip_frame->leaf,
 						    DLT_WRITE);
@@ -1446,7 +1430,7 @@ int iam_it_next(struct iam_iterator *it)
 					result = -ENOMEM;
 			} else if (result == 0)
 				/* end of container reached */
-				result = +1;
+				result = 1;
 			if (result != 0)
 				iam_it_put(it);
 		}
@@ -1490,7 +1474,7 @@ static void iam_it_reccpy(struct iam_iterator *it, const struct iam_rec *r)
  *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
  */
 int iam_it_rec_set(handle_t *h,
-                   struct iam_iterator *it, const struct iam_rec *r)
+		   struct iam_iterator *it, const struct iam_rec *r)
 {
 	int result;
 	struct iam_path *path;
@@ -1517,7 +1501,7 @@ int iam_it_rec_set(handle_t *h,
  *                it_state(it) == IAM_IT_SKEWED
  */
 static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
-                                        struct iam_ikey *ikey)
+					struct iam_ikey *ikey)
 {
 	assert_corr(it_state(it) == IAM_IT_ATTACHED ||
 		    it_state(it) == IAM_IT_SKEWED);
@@ -1601,7 +1585,8 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	}
 
 	/* The block itself which contains the iam_idle_head is
-	 * also an idle block, and can be used as the new node. */
+	 * also an idle block, and can be used as the new node.
+	 */
 	idle_blocks = (__u32 *)(c->ic_root_bh->b_data +
 				c->ic_descr->id_root_gap +
 				sizeof(struct dx_countlimit));
@@ -1718,9 +1703,7 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
 			old_leaf = leaf->il_bh;
 			iam_leaf_split(leaf, &new_leaf, blknr);
 			if (old_leaf != leaf->il_bh) {
-				/*
-				 * Switched to the new leaf.
-				 */
+				/* Switched to the new leaf.  */
 				iam_leaf_unlock(leaf);
 				leaf->il_lock = lh;
 				path->ip_frame->leaf = blknr;
@@ -1739,18 +1722,18 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
 	return err;
 }
 
-static inline void dx_set_limit(struct iam_entry *entries, unsigned value)
+static inline void dx_set_limit(struct iam_entry *entries, unsigned int value)
 {
 	((struct dx_countlimit *) entries)->limit = cpu_to_le16(value);
 }
 
 static int iam_shift_entries(struct iam_path *path,
-                         struct iam_frame *frame, unsigned count,
-                         struct iam_entry *entries, struct iam_entry *entries2,
-                         u32 newblock)
+			 struct iam_frame *frame, unsigned int count,
+			 struct iam_entry *entries, struct iam_entry *entries2,
+			 u32 newblock)
 {
-	unsigned count1;
-	unsigned count2;
+	unsigned int count1;
+	unsigned int count2;
 	int delta;
 
 	struct iam_frame *parent = frame - 1;
@@ -1762,7 +1745,7 @@ static int iam_shift_entries(struct iam_path *path,
 	count2 = count - count1;
 	dx_get_ikey(path, iam_entry_shift(path, entries, count1), pivot);
 
-	dxtrace(printk("Split index %d/%d\n", count1, count2));
+	dxtrace(pr_info("Split index %d/%d\n", count1, count2));
 
 	memcpy((char *) iam_entry_shift(path, entries2, delta),
 	       (char *) iam_entry_shift(path, entries, count1),
@@ -1799,7 +1782,7 @@ static int iam_shift_entries(struct iam_path *path,
 
 
 int split_index_node(handle_t *handle, struct iam_path *path,
-                     struct dynlock_handle **lh)
+		     struct dynlock_handle **lh)
 {
 	struct iam_entry *entries;   /* old block contents */
 	struct iam_entry *entries2;  /* new block contents */
@@ -1858,9 +1841,7 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 
 	safe = frame;
 
-	/*
-	 * Lock all nodes, bottom to top.
-	 */
+	/* Lock all nodes, bottom to top.  */
 	for (frame = path->ip_frame, i = nr_splet; i >= 0; --i, --frame) {
 		do_corr(schedule());
 		lock[i] = iam_lock_htree(path->ip_container, frame->curidx,
@@ -1877,9 +1858,7 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 	err = iam_check_full_path(path, 1);
 	if (err)
 		goto cleanup;
-	/*
-	 * And check that the same number of nodes is to be split.
-	 */
+	/* And check that the same number of nodes is to be split.  */
 	for (i = 0, frame = path->ip_frame; frame >= path->ip_frames &&
 	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
 	     --frame, ++i) {
@@ -1890,10 +1869,7 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 		goto cleanup;
 	}
 
-	/*
-	 * Go back down, allocating blocks, locking them, and adding into
-	 * transaction...
-	 */
+	/* Go back down, allocate blocks, lock them, and add to transaction */
 	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
 		bh_new[i] = iam_new_node(handle, path->ip_container,
 					 &newblock[i], &err);
@@ -1931,7 +1907,7 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 
 	/* Go through nodes once more, inserting pointers */
 	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
-		unsigned count;
+		unsigned int count;
 		int idx;
 		struct buffer_head *bh2;
 		struct buffer_head *bh;
@@ -1977,14 +1953,15 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 			do_corr(schedule());
 			/* Shift frames in the path */
 			memmove(frames + 2, frames + 1,
-			       (sizeof path->ip_frames) - 2 * sizeof frames[0]);
+				(sizeof(path->ip_frames)) -
+				 2 * sizeof(frames[0]));
 			/* Add new access path frame */
 			frames[1].at = iam_entry_shift(path, entries2, idx);
 			frames[1].entries = entries = entries2;
 			frames[1].bh = bh2;
 			assert_inv(dx_node_check(path, frame));
-			++ path->ip_frame;
-			++ frame;
+			++path->ip_frame;
+			++frame;
 			assert_inv(dx_node_check(path, frame));
 			bh_new[0] = NULL; /* buffer head is "consumed" */
 			err = ldiskfs_handle_dirty_metadata(handle, NULL, bh2);
@@ -2043,9 +2020,7 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 	*lh = lock[nr_splet];
 	lock[nr_splet] = NULL;
 	if (nr_splet > 0) {
-		/*
-		 * Log ->i_size modification.
-		 */
+		/* Log ->i_size modification. */
 		err = ldiskfs_mark_inode_dirty(handle, dir);
 		if (err)
 			goto journal_error;
@@ -2069,8 +2044,8 @@ cleanup:
 }
 
 static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
-                       struct iam_path *path,
-                       const struct iam_key *k, const struct iam_rec *r)
+		       struct iam_path *path,
+		       const struct iam_key *k, const struct iam_rec *r)
 {
 	int err;
 	struct iam_leaf *leaf;
@@ -2096,7 +2071,7 @@ static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
 					do_corr(schedule());
 					err = iam_it_get_exact(it, k);
 					if (err == -ENOENT)
-						err = +1; /* repeat split */
+						err = 1; /* repeat split */
 					else if (err == 0)
 						err = -EEXIST;
 				}
@@ -2138,7 +2113,7 @@ static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
  *                     !memcmp(iam_it_rec_get(it), r, ...))
  */
 int iam_it_rec_insert(handle_t *h, struct iam_iterator *it,
-                      const struct iam_key *k, const struct iam_rec *r)
+		      const struct iam_key *k, const struct iam_rec *r)
 {
 	int result;
 	struct iam_path *path;
@@ -2367,9 +2342,7 @@ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
 	assert_inv(iam_path_check(path));
 
 	result = iam_txn_add(h, path, leaf->il_bh);
-	/*
-	 * no compaction for now.
-	 */
+	/* no compaction for now. */
 	if (result == 0) {
 		iam_rec_del(leaf, it->ii_flags&IAM_IT_MOVE);
 		result = iam_txn_dirty(h, path, leaf->il_bh);
@@ -2410,7 +2383,7 @@ iam_pos_t iam_it_store(const struct iam_iterator *it)
 	assert_corr(it_state(it) == IAM_IT_ATTACHED);
 	assert_corr(it_at_rec(it));
 	assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <=
-		    sizeof result);
+		    sizeof(result));
 
 	result = 0;
 	return *(iam_pos_t *)iam_it_ikey_get(it, (void *)&result);
@@ -2428,14 +2401,14 @@ int iam_it_load(struct iam_iterator *it, iam_pos_t pos)
 {
 	assert_corr(it_state(it) == IAM_IT_DETACHED &&
 		it->ii_flags&IAM_IT_MOVE);
-	assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <= sizeof pos);
+	assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <=
+		    sizeof(pos));
 	return iam_it_iget(it, (struct iam_ikey *)&pos);
 }
 
 /***********************************************************************/
 /* invariants                                                          */
 /***********************************************************************/
-
 static inline int ptr_inside(void *base, size_t size, void *ptr)
 {
 	return (base <= ptr) && (ptr < base + size);
@@ -2499,7 +2472,7 @@ int iam_it_invariant(struct iam_iterator *it)
  * Return values: 0: found, -ENOENT: not-found, -ve: error
  */
 int iam_lookup(struct iam_container *c, const struct iam_key *k,
-               struct iam_rec *r, struct iam_path_descr *pd)
+	       struct iam_rec *r, struct iam_path_descr *pd)
 {
 	struct iam_iterator it;
 	int result;
@@ -2508,9 +2481,7 @@ int iam_lookup(struct iam_container *c, const struct iam_key *k,
 
 	result = iam_it_get_exact(&it, k);
 	if (result == 0)
-		/*
-		 * record with required key found, copy it into user buffer
-		 */
+		/* record with required key found, copy it into user buffer */
 		iam_reccpy(&it.ii_path.ip_leaf, r);
 	iam_it_put(&it);
 	iam_it_fini(&it);
@@ -2528,7 +2499,7 @@ int iam_lookup(struct iam_container *c, const struct iam_key *k,
  *                                  iam_lookup(c, k, r2) > 0;
  */
 int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
-               const struct iam_rec *r, struct iam_path_descr *pd)
+	       const struct iam_rec *r, struct iam_path_descr *pd)
 {
 	struct iam_iterator it;
 	int result;
@@ -2553,7 +2524,7 @@ int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
  * -ve: error, including -ENOENT if no record with the given key found.
  */
 int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
-               const struct iam_rec *r, struct iam_path_descr *pd)
+	       const struct iam_rec *r, struct iam_path_descr *pd)
 {
 	struct iam_iterator it;
 	struct iam_leaf *folio;
@@ -2584,7 +2555,7 @@ int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
  *                                 !iam_lookup(c, k, *));
  */
 int iam_delete(handle_t *h, struct iam_container *c, const struct iam_key *k,
-               struct iam_path_descr *pd)
+	       struct iam_path_descr *pd)
 {
 	struct iam_iterator it;
 	int result;
