@@ -67,8 +67,8 @@ if (( $LINUX_VERSION_CODE < $(version_code 4.18.0) )); then
 	always_except LU-13063 411b
 fi
 
-#                                  5              12     8   12  15   (min)"
-[[ "$SLOW" = "no" ]] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o"
+# minutes runtime:                   5              12     8   12   15   10
+[[ "$SLOW" = "no" ]] && EXCEPT_SLOW="27m 60i 64b 68 71 135 136 230d 300o 842"
 
 if [[ "$mds1_FSTYPE" == "zfs" ]]; then
 	#                                               13    (min)"
@@ -32007,6 +32007,21 @@ test_833() {
 }
 run_test 833 "Mixed buffered/direct read and write should not return -EIO"
 
+test_842() {
+	local oss1=$(facet_host ost1)
+
+	# Try to insert the module.  This will leave results in dmesg
+	now=$(date +%s)
+	log "STAMP $now" > /dev/kmsg
+	do_rpc_nodes $oss1 load_module kunit/ldlm_extent ||
+		error "$oss1 load_module ldlm_extent failed"
+
+	do_node $oss1 dmesg | sed -n -e "1,/STAMP $now/d" -e '/ldlm_extent:/p'
+	do_node $oss1 rmmod -v ldlm_extent ||
+		error "rmmod failed (may trigger a failure in a later test)"
+}
+run_test 842 "Measure ldlm_extent performance"
+
 test_850() {
 	local dir=$DIR/$tdir
 	local file=$dir/$tfile
@@ -32295,7 +32310,6 @@ test_907() {
 	rm $DIR/$tfile || error "rm failed"
 }
 run_test 907 "write rpc error during unlink"
-
 
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true

@@ -9,7 +9,8 @@
 #
 
 MODULES := llog_test obd_test kinode
+@SERVER_TRUE@MODULES += ldlm_extent
 
-EXTRA_DIST = llog_test.c obd_test.c kinode.c
+EXTRA_DIST = llog_test.c obd_test.c kinode.c ldlm_extent.c
 
 @INCLUDE_RULES@

@@ -745,6 +745,7 @@ mkdir -p $basemodpath-tests/fs
 mv $basemodpath/fs/llog_test.ko $basemodpath-tests/fs/llog_test.ko
 mv $basemodpath/fs/obd_test.ko $basemodpath-tests/fs/obd_test.ko
 mv $basemodpath/fs/kinode.ko $basemodpath-tests/fs/kinode.ko
+[ -f $basemodpath/fs/ldlm_extent.ko ] && mv $basemodpath/fs/ldlm_extent.ko $basemodpath-tests/fs/ldlm_extent.ko
 %endif
 %endif
 

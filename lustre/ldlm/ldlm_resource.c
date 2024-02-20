@@ -1609,10 +1609,13 @@ static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
 /* Returns 1 if the resource was freed, 0 if it remains. */
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
-	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
+	struct ldlm_namespace *ns;
 	struct cfs_hash_bd bd;
 	int refcount;
 
+	if (refcount_dec_not_one(&res->lr_refcount))
+		return 0;
+	ns = ldlm_res_to_ns(res);
 	refcount = refcount_read(&res->lr_refcount);
 	LASSERT(refcount < LI_POISON);
 

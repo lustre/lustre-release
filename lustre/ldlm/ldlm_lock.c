@@ -241,7 +241,11 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 		ldlm_resource_putref(res);
 		lock->l_resource = NULL;
 		lu_ref_fini(&lock->l_reference);
-		call_rcu(&lock->l_handle.h_rcu, lock_handle_free);
+		if (lock->l_flags & BIT(63))
+			/* Performance testing - bypassing RCU removes overhead */
+			lock_handle_free(&lock->l_handle.h_rcu);
+		else
+			call_rcu(&lock->l_handle.h_rcu, lock_handle_free);
 	}
 
 	EXIT;
@@ -496,6 +500,33 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 
 	RETURN(lock);
 }
+
+struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource)
+{
+	struct ldlm_lock *lock = ldlm_lock_new(resource);
+	int rc;
+
+	if (!lock)
+		return NULL;
+	lock->l_flags |= BIT(63);
+	switch (resource->lr_type) {
+	case LDLM_EXTENT:
+		rc = ldlm_extent_alloc_lock(lock);
+		break;
+	case LDLM_IBITS:
+		rc = ldlm_inodebits_alloc_lock(lock);
+		break;
+	default:
+		rc = 0;
+	}
+
+	if (!rc)
+		return lock;
+	ldlm_lock_destroy(lock);
+	LDLM_LOCK_RELEASE(lock);
+	return NULL;
+}
+EXPORT_SYMBOL(ldlm_lock_new_testing);
 
 /**
  * Moves LDLM lock \a lock to another resource.

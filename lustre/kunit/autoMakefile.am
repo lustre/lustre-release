@@ -12,6 +12,9 @@ if MODULES
 modulefs_DATA = llog_test$(KMODEXT)
 modulefs_DATA += obd_test$(KMODEXT)
 modulefs_DATA += kinode$(KMODEXT)
+if SERVER
+modulefs_DATA += ldlm_extent$(KMODEXT)
+endif # SERVER
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
