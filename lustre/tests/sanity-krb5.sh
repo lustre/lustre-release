@@ -304,9 +304,19 @@ test_5() {
 
 	# flush context, and touch
 	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-	$RUNAS touch $file2 && error 'should fail without lsvcgssd'
+	$RUNAS touch $file2
+	if [ $? -eq 0 ]; then
+		# with newer servers, daemon is restarted automatically
+		if (( CLIENT_VERSION == MDS1_VERSION )); then
+			error '$RUNAS touch $file2 should fail without lsvcgssd'
+		else
+			echo "$RUNAS touch $file2 succeeded"
+		fi
+	else
+		echo "$RUNAS touch $file2 failed as expected"
+	fi
 
-	# restart lsvcgssd, expect touch suceed
+	# restart lsvcgssd, expect touch succeed
 	echo "restart lsvcgssd and recovering"
 	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -v"
 	sleep 5
