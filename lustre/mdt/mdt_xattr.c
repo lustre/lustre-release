@@ -544,10 +544,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
 		RETURN(err_serious(-ENOMEM));
 
-	rc = mdt_init_ucred_reint(info);
-	if (rc != 0)
-		RETURN(rc);
-
 	if (strncmp(xattr_name, XATTR_USER_PREFIX,
 		    sizeof(XATTR_USER_PREFIX) - 1) == 0) {
 		if (!(exp_connect_flags(req->rq_export) & OBD_CONNECT_XATTR))

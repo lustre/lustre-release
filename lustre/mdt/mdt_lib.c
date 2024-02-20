@@ -628,8 +628,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	RETURN(rc);
 }
 
-static inline int __mdt_init_ucred(struct mdt_thread_info *info,
-				   struct mdt_body *body)
+int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 {
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	struct lu_ucred		*uc  = mdt_ucred(info);
@@ -644,11 +643,6 @@ static inline int __mdt_init_ucred(struct mdt_thread_info *info,
 		return old_init_ucred(info, body);
 	else
 		return new_init_ucred(info, BODY_INIT, body);
-}
-
-int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
-{
-	return __mdt_init_ucred(info, body);
 }
 
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
