@@ -131,7 +131,7 @@ static int mmap_initialize(char *myself)
 	return rc;
 }
 
-static void mmap_finalize()
+static void mmap_finalize(void)
 {
 	unlink(mmap_sanity);
 }

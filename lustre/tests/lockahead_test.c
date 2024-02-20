@@ -115,7 +115,7 @@ static int test10(void)
 	int rc;
 	char buf[write_size];
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -155,7 +155,7 @@ static int test11(void)
 	int i;
 	int enqueue_requests = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -225,7 +225,7 @@ static int test12(void)
 	int i;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -246,7 +246,8 @@ static int test12(void)
 			i, advice[i].lla_lockahead_result);
 	}
 	/* Since all the requests are for the same extent, we should only have
-	 * one lock at the end. */
+	 * one lock at the end.
+	 */
 	expected_lock_count = 1;
 
 	/* Ask again until we get the locks. */
@@ -288,7 +289,7 @@ static int test13(void)
 	int i;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -355,7 +356,7 @@ static int test14(void)
 	const int num_blocks = 100;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -423,7 +424,7 @@ static int test15(void)
 	int i;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -431,7 +432,8 @@ static int test15(void)
 
 	for (i = 0; i < 100; i++) {
 		/* The 'UL' designators are required to avoid undefined
-		 * behavior which GCC turns in to an infinite loop */
+		 * behavior which GCC turns in to an infinite loop
+		 */
 		__u64 start = i * 1024UL * 1024UL * 10UL;
 		__u64 end = start + 1;
 
@@ -471,14 +473,14 @@ static int test15(void)
 	ASSERTF(rc == sizeof(buf), "write failed for '%s': %s",
 		mainpath, strerror(errno));
 	/* The write should cancel the first lock (which was too small)
-	 * and create one of its own, so the net effect on lock count is 0. */
+	 * and create one of its own, so the net effect on lock count is 0.
+	 */
 
 	free(advice);
 
 	close(fd);
 
-	/* We have to map our expected return in to the range of valid return
-	 * codes, 0-255. */
+	/* have to map expected return to range of valid values, 0-255 */
 	expected_lock_count = expected_lock_count/100;
 
 	return expected_lock_count;
@@ -498,7 +500,7 @@ static int test16(void)
 	char buf[write_size];
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -590,7 +592,8 @@ static int test16(void)
 }
 
 /* Use lockahead to verify behavior of ladvise locknoexpand, with O_NONBLOCK.
- * There should be no change in behavior. */
+ * There should be no change in behavior.
+ */
 static int test17(void)
 {
 	struct llapi_lu_ladvise *advice;
@@ -604,8 +607,7 @@ static int test17(void)
 	char buf[write_size];
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC | O_NONBLOCK,
-		  S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC | O_NONBLOCK, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -706,7 +708,7 @@ static int test18(void)
 	int i;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -769,14 +771,15 @@ static int test19(void)
 	int i;
 	int expected_lock_count = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
 	advice = malloc(sizeof(struct llapi_lu_ladvise)*count);
 
 	/* This should create a lock on the whole file, which will block lock
-	 * ahead requests. */
+	 * ahead requests.
+	 */
 	memset(buf, 0xaa, write_size);
 	rc = write(fd, buf, write_size);
 	ASSERTF(rc == sizeof(buf), "write failed for '%s': %s",
@@ -822,7 +825,7 @@ static int test20(void)
 	int i;
 	int expected_lock_count = 1;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -857,7 +860,8 @@ static int test20(void)
 		advice.lla_lockahead_result);
 
 	/* Convert to a sync request on smaller range, should match and not
-	 * cancel */
+	 * cancel
+	 */
 	setup_ladvise_lockahead(&advice, MODE_WRITE_USER, 0, 0,
 				write_size - 1 - write_size/2, false);
 
@@ -904,7 +908,7 @@ static int test21(void)
 	int i;
 	int expected_lock_count = 1;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -939,7 +943,8 @@ static int test21(void)
 		advice.lla_lockahead_result);
 
 	/* Convert to a sync request on larger range, should cancel existing
-	 * lock */
+	 * lock
+	 */
 	setup_ladvise_lockahead(&advice, MODE_WRITE_USER, 0, 0,
 				write_size*2 - 1, false);
 
@@ -984,7 +989,7 @@ static int test22(void)
 	size_t start = 0;
 	size_t end = 0;
 
-	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR | O_TRUNC, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -1101,12 +1106,12 @@ static int test23(void)
 	int rc;
 	int i;
 
-	fd = open(mainpath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	fd = open(mainpath, O_CREAT | O_RDWR, 0600);
 	ASSERTF(fd >= 0, "open failed for '%s': %s",
 		mainpath, strerror(errno));
 
 	/* mainpath2 is a different Lustre mount */
-	fd2 = open(mainpath2, O_RDWR, S_IRUSR | S_IWUSR);
+	fd2 = open(mainpath2, O_RDWR, 0600);
 	ASSERTF(fd2 >= 0, "open failed for '%s': %s",
 		mainpath2, strerror(errno));
 
@@ -1258,7 +1263,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	/* Create a test filename and reuse it. Remove possibly old files. */
@@ -1296,7 +1302,8 @@ int main(int argc, char *argv[])
 		/* When running all the test cases, we can't use the return
 		 * from the last test case, as it might be non-zero to return
 		 * info, rather than for an error.  Test cases assert and exit
-		 * if an error occurs. */
+		 * if an error occurs.
+		 */
 		rc = 0;
 		break;
 	case 10:

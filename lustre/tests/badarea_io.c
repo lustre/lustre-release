@@ -36,8 +36,8 @@ int main(int argc, char **argv)
 {
 	ssize_t rc;
 	int fd;
-	void *volatile buf = (void *)0x4096000;
 	void *volatile fd_ptr;
+	void *volatile buf = (void *)0x4096000;
 
 	fd = open(argv[1], O_WRONLY);
 	if (fd == -1) {
@@ -46,7 +46,8 @@ int main(int argc, char **argv)
 	}
 
 	/* We need rc because Sles11 compiler warns against unchecked
-	 * return value of read and write */
+	 * return value of read and write
+	 */
 	rc = write(fd, buf, 5);
 	if (rc != 5)
 		perror("write badarea (Should have failed)");

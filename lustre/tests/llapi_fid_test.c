@@ -100,7 +100,8 @@ static void cleanup(void)
 }
 
 /* Helper - call path2fid, fd2fid and fid2path against an existing
- * file/directory */
+ * file/directory
+ */
 static void helper_fid2path(const char *filename, int fd)
 {
 	struct lu_fid fid;
@@ -138,8 +139,7 @@ static void helper_fid2path(const char *filename, int fd)
 	ASSERTF(rc == 0, "llapi_fid2path failed for fid %s: %s",
 		fidstr, strerror(-rc));
 
-	/* Make sure both calls to llapi_fid2path returned the same
-	 * data. */
+	/* Make sure both calls to llapi_fid2path returned the same data. */
 	ASSERTF(strcmp(path1, path2) == 0, "paths are different: '%s' / '%s'",
 		path1, path2);
 	ASSERTF(recno1 == recno2, "recnos are different: %lld / %lld",
@@ -155,8 +155,7 @@ static void helper_fid2path(const char *filename, int fd)
 	ASSERTF(rc == 0, "llapi_fid2path failed for fid %s: %s",
 		fidstr, strerror(-rc));
 
-	/* Make sure both calls to llapi_fid2path returned the same
-	 * data. */
+	/* Make sure both calls to llapi_fid2path returned the same data. */
 	ASSERTF(strcmp(path1, path2) == 0, "paths are different: '%s' / '%s'",
 		path1, path2);
 	ASSERTF(recno1 == recno2, "recnos are different: %lld / %lld",
@@ -174,8 +173,7 @@ static void helper_fid2path(const char *filename, int fd)
 			"fids are different");
 	}
 
-	/* Pass the result back to fid2path and ensure the fid stays
-	 * the same. */
+	/* Pass result back to fid2path and ensure the fid stays the same. */
 	rc = snprintf(path3, sizeof(path3), "%s/%s", mnt_dir, path1);
 	ASSERTF((rc > 0 && rc < sizeof(path3)), "invalid name");
 	rc = llapi_path2fid(path3, &fid2);
@@ -223,7 +221,8 @@ static void test10(void)
 		mainpath, strerror(errno));
 
 	/* Against a char device. Use same as /dev/null in case things
-	 * go wrong. */
+	 * go wrong.
+	 */
 	rc = stat("/dev/null", &statbuf);
 	ASSERTF(rc == 0, "stat failed for /dev/null: %s", strerror(errno));
 	rc = mknod(mainpath, S_IFCHR, statbuf.st_rdev);
@@ -315,8 +314,7 @@ static void test12(void)
 
 	close(fd);
 
-	/* Check the file can still be opened, since fd2 is not
-	 * closed. */
+	/* Check the file can still be opened, since fd2 is not closed. */
 	fd3 = llapi_open_by_fid(mainpath, &fid, O_RDONLY);
 	ASSERTF(fd3 >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
 		PFID(&fid), strerror(errno));
@@ -342,20 +340,21 @@ static void test20(void)
 	ASSERTF((rc > 0 && rc < sizeof(testpath)),
 		"invalid name for testpath '%s'", mainpath);
 
-	rc = mkdir(testpath, S_IRWXU);
+	rc = mkdir(testpath, 0700);
 	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 		testpath, strerror(errno));
 
 	len = strlen(testpath);
 
 	/* Create subdirectories as long as we can. Each new subdir is
-	 * "/x", so we need at least 3 characters left in testpath. */
+	 * "/x", so we need at least 3 characters left in testpath.
+	 */
 	while (len <= sizeof(testpath) - 3) {
 		strncat(testpath, "/x", sizeof(testpath) - 1);
 
 		len += 2;
 
-		rc = mkdir(testpath, S_IRWXU);
+		rc = mkdir(testpath, 0700);
 		ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 			testpath, strerror(errno));
 
@@ -368,8 +367,8 @@ static void test20(void)
 	helper_fid2path(testpath, -1);
 
 	/* Make sure we have created enough directories. Even with a
-	 * reasonably long mountpath, we should have created at least
-	 * 2000. */
+	 * reasonably long mountpath, we should have created at least 2000.
+	 */
 	ASSERTF(dir_created >= 2000, "dir_created=%d -- '%s'",
 		dir_created, testpath);
 }
@@ -377,10 +376,10 @@ static void test20(void)
 /* Test linkno from fid2path */
 static void test30(void)
 {
-	/* Note that since the links are stored in the extended
-	 * attributes, only a few of these will fit (about 150 in this
-	 * test). Still, create more than that to ensure the system
-	 * doesn't break. See LU-5746. */
+	/* Note that since the links are stored in the extended attributes,
+	 * only a few of these will fit (about 150 in this test). Still, create
+	 * more than that to ensure the system doesn't break. See LU-5746.
+	 */
 	const int num_links = 1000;
 	struct {
 		char filename[PATH_MAX];
@@ -462,26 +461,26 @@ static void test30(void)
 			ASSERTF(found == true, "link '%s' not found", buf2);
 
 			if (linkno == i) {
-				/* The linkno hasn't changed. This
-				 * means it is the last entry
-				 * stored. */
+				/* The linkno hasn't changed. This means it is
+				 * the last entry stored.
+				 */
 				past_link_limit = true;
 
 				fprintf(stderr,
 					"Was able to store %d links in the EA\n",
 					i);
 
-				/* Also assume that some links were
-				 * returned. It's hard to compute the
-				 * exact value. */
+				/* Also assume that some links were returned.
+				 * It's hard to compute the exact value.
+				 */
 				ASSERTF(i > 50,
 					"not enough links were returned: %d",
 					i);
 			}
 		} else {
-			/* Past the number of links stored in the EA,
-			 * Lustre will simply return the original
-			 * file. */
+			/* Past the number of links stored in the EA, Lustre
+			 * will simply return the original file.
+			 */
 			ASSERTF(strcmp(buf2, links[0].filename) == 0,
 				       "unexpected link for record %d: '%s' / '%s'",
 				       i, buf2, links[0].filename);
@@ -509,7 +508,8 @@ static void test31(void)
 }
 
 /* Test llapi_fd2parent/llapi_path2parent on mainpath (whatever its
- * type). mainpath must exist. */
+ * type). mainpath must exist.
+ */
 static void help_test40(void)
 {
 	struct lu_fid parent_fid;
@@ -527,7 +527,8 @@ static void help_test40(void)
 
 	/* By construction, mainpath is just under lustre_dir, so we
 	 * can check that the parent fid of mainpath is indeed the one
-	 * of lustre_dir. */
+	 * of lustre_dir.
+	 */
 	rc = llapi_path2fid(lustre_dir, &fid2);
 	ASSERTF(rc == 0, "llapi_path2fid failed for '%s': %s",
 		lustre_dir, strerror(-rc));
@@ -603,7 +604,8 @@ static void test41(void)
 }
 
 /* Test with linkno. Create sub directories, and put a link to the
- * original file in them. */
+ * original file in them.
+ */
 static void test42(void)
 {
 
@@ -644,7 +646,7 @@ static void test42(void)
 
 	/* Create the subdirectories. */
 	for (i = 0; i < num_links; i++) {
-		rc = mkdir(links[i].subdir, S_IRWXU);
+		rc = mkdir(links[i].subdir, 0700);
 		ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 			links[i].subdir, strerror(errno));
 
@@ -675,7 +677,8 @@ static void test42(void)
 	}
 
 	/* Query the links, making sure we got all of them. Do it in
-	 * reverse order, just because! */
+	 * reverse order, just because!
+	 */
 	for (linkno = num_links-1; linkno >= 0; linkno--) {
 		bool found;
 
@@ -749,10 +752,12 @@ int main(int argc, char *argv[])
 	}
 
 	mnt_fd = open(mnt_dir, O_RDONLY|O_DIRECTORY);
-	ASSERTF(!(mnt_fd < 0), "cannot open '%s': %s\n", mnt_dir, strerror(errno));
+	ASSERTF(!(mnt_fd < 0), "cannot open '%s': %s\n", mnt_dir,
+		strerror(errno));
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	/* Create a test filename and reuse it. Remove possibly old files. */

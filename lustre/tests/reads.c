@@ -120,7 +120,7 @@ int main(int argc, char **argv)
 			usage();
 			return RR_PARSE;
 		case 'v':
-			verbosity ++;
+			verbosity++;
 			break;
 		case 'f':
 			fname = strdup(optarg);
@@ -128,7 +128,8 @@ int main(int argc, char **argv)
 		case 's':
 			size = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse size %s\n", optarg);
+				fprintf(stderr, "Can't parse size %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -136,7 +137,8 @@ int main(int argc, char **argv)
 		case 'b':
 			bsize = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse bsize %s\n", optarg);
+				fprintf(stderr, "Can't parse bsize %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -144,7 +146,8 @@ int main(int argc, char **argv)
 		case 'a':
 			ad = (int)strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse ad %s\n", optarg);
+				fprintf(stderr, "Can't parse ad %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -155,7 +158,8 @@ int main(int argc, char **argv)
 		case 'S':
 			seed = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -163,7 +167,8 @@ int main(int argc, char **argv)
 		case 'n':
 			iterations = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -173,23 +178,26 @@ int main(int argc, char **argv)
 		case 't':
 			timelimit = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
 			break;
-                case 'l':
-                        stride_length = strtol(optarg, &term, 0);
+		case 'l':
+			stride_length = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
-	       		break;
+			break;
 		case 'o':
 			stride_offset = strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -197,7 +205,8 @@ int main(int argc, char **argv)
 		case 'w':
 			width = (int)strtol(optarg, &term, 0);
 			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
+				fprintf(stderr, "Can't parse seed %s\n",
+					optarg);
 				usage();
 				return RR_SET;
 			}
@@ -246,12 +255,12 @@ int main(int argc, char **argv)
 		srand(seed);
 	gettimeofday(&start, NULL);
 	timelimit += start.tv_sec;
-	for (i = 0; !iterations || i < iterations; i ++) {
+	for (i = 0; !iterations || i < iterations; i++) {
 		unsigned long block_nr;
 		int j;
 
-		if (stride_length) 
-			block_nr = (unsigned long)(i*stride_length + 
+		if (stride_length)
+			block_nr = (unsigned long)(i*stride_length +
 						   stride_offset) % nblocks;
 		else
 			block_nr = (unsigned long)((double)nblocks*rand()/

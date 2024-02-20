@@ -48,7 +48,8 @@
 static void usage(const char *prog)
 {
 	printf("usage: %s {-o [-k]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] "
-	       "[-i mdt_index] [-t seconds] filenamefmt [[start] count]\n", prog);
+	       "[-i mdt_index] [-t seconds] filenamefmt [[start] count]\n",
+	       prog);
 	printf("\t-i\tMDT to create the directories on\n"
 	       "\t-l\tlink files to existing <tgt> file\n"
 	       "\t-m\tmknod regular files (don't create OST objects)\n"
@@ -78,11 +79,12 @@ static char *get_file_name(const char *fmt, long n, int has_fmt_spec)
 static double now(void)
 {
 	struct timeval tv;
+
 	gettimeofday(&tv, NULL);
 	return (double)tv.tv_sec + (double)tv.tv_usec / 1000000;
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
 	bool do_open = false, do_keep = false, do_link = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
@@ -102,8 +104,8 @@ int main(int argc, char ** argv)
 	/* Handle the deprecated positional last argument "-seconds" */
 	if (argc > 1 && argv[argc - 1][0] == '-' &&
 	    (end = strtol(argv[argc - 1] + 1, &endp, 0)) && *endp == '\0') {
-		fprintf(stderr, "warning: '-runtime' deprecated, "
-			"use '-t runtime' instead\n");
+		fprintf(stderr,
+			"warning: '-runtime' deprecated, use '-t runtime' instead\n");
 		argv[--argc] = NULL;
 	} else {
 		/* Not '-number', let regular argument parsing handle it. */
@@ -192,7 +194,9 @@ int main(int argc, char ** argv)
 
 		filename = get_file_name(fmt, begin, has_fmt_spec);
 		if (do_open) {
-			int fd = open(filename, O_CREAT|O_RDWR, 0644);
+			int fd;
+
+			fd = open(filename, O_CREAT|O_RDWR, 0644);
 			if (fd < 0) {
 				printf("open(%s) error: %s\n", filename,
 				       strerror(errno));
@@ -214,8 +218,10 @@ int main(int argc, char ** argv)
 		} else if (do_mkdir) {
 			if (stripe_offset != -1) {
 				rc = llapi_dir_create_pool(filename, 0755,
-							   stripe_offset, stripe_count,
-							   stripe_pattern, NULL);
+							   stripe_offset,
+							   stripe_count,
+							   stripe_pattern,
+							   NULL);
 				if (rc) {
 					printf("llapi_dir_create_pool(%s) error: %s\n",
 					       filename, strerror(-rc));
@@ -262,8 +268,7 @@ int main(int argc, char ** argv)
 		tmp = now();
 		if (tmp - last_t >= 10.0 ||
 		    (tmp - last_t > 2.0 && (i % 10000) == 0)) {
-			printf(" - %s%s %ld (time %.2f total %.2f last %.2f)"
-			       "\n",
+			printf(" - %s%s %ld (time %.2f total %.2f last %.2f)\n",
 			       do_open ? do_keep ? "open/keep" : "open/close" :
 					do_mkdir ? "mkdir" : do_link ? "link" :
 					do_mknod ? "create" : "",
@@ -295,8 +300,8 @@ int main(int argc, char ** argv)
 		if ((i != 0 && (i % 10000) == 0) || now() - last_t >= 10.0) {
 			double tmp = now();
 
-			printf(" - closed %ld (time %.2f total %.2f last %.2f)"
-			       "\n", i, tmp, tmp - start,
+			printf(" - closed %ld (time %.2f total %.2f last %.2f)\n",
+			       i, tmp, tmp - start,
 			       (i - last_i) / (tmp - last_t));
 			last_t = tmp;
 			last_i = i;

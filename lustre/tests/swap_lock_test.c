@@ -95,8 +95,7 @@ static void cleanup(void)
 		"rm command returned %d", WEXITSTATUS(rc));
 }
 
-/* Create a filename inside the test directory. Will assert on
- * error. */
+/* Create a filename inside the test directory. Will assert on error. */
 static char *create_file_name(const char *name)
 {
 	char *filename;
@@ -109,7 +108,8 @@ static char *create_file_name(const char *name)
 }
 
 /* Create a file of a given size in the test directory, filed with
- * c. Will assert on error. */
+ * character 'c'. Will assert on error.
+ */
 static int create_file(const char *name, size_t size, unsigned char c)
 {
 	int fd;
@@ -201,8 +201,7 @@ static void test11(void)
 	close(fd1);
 }
 
-/* Test self swap, on different handles. It's a no-op and will always
- * succeed. */
+/* Test self swap, on different handles. Is a no-op and will always succeed. */
 static void test12(void)
 {
 	int rc;
@@ -247,7 +246,8 @@ static void test13(void)
 	 * operations. In the first swap, fd1 is on Lustre, so the
 	 * ioctl will succeed, but its processing will eventually fail
 	 * because fd2 is not on Lustre. In the second swap, the ioctl
-	 * request is unknown, so ioctl() will directly fail. */
+	 * request is unknown, so ioctl() will directly fail.
+	 */
 	rc = llapi_fswap_layouts(fd1, fd2, 0, 0, 0);
 	ASSERTF(rc == -EINVAL, "llapi_fswap_layouts failed: %s",
 		strerror(-rc));
@@ -269,9 +269,9 @@ static void test14(void)
 	ASSERTF(rc == -EBADF, "llapi_fswap_layouts failed: %s",
 		strerror(-rc));
 
-	/* When run under a shell, rc is -EINVAL. When run under
-	 * Lustre test suite, stdin is redirected, and rc is
-	 * -ENOTTY. Catch both cases. */
+	/* When run under a shell, rc is -EINVAL. When run under Lustre test
+	 * suite, stdin is redirected, and rc is -ENOTTY. Catch both cases.
+	 */
 	rc = llapi_fswap_layouts(0, 0, 0, 0, 0);
 	ASSERTF(rc == -EINVAL || rc == -ENOTTY,
 		"llapi_fswap_layouts failed: %s",
@@ -641,8 +641,7 @@ static void test20(void)
 	ASSERTF(rc == 0, "llapi_fswap_layouts failed: %s",
 		strerror(-rc));
 
-	/* Read from fd1. Its file pointer is now positioned inside
-	 * the new data. */
+	/* Read from fd1. file pointer is now positioned inside the new data. */
 	rc = read(fd1, buf, 1);
 	ASSERTF(rc == 1, "read 1 byte on foo1 failed: %s", strerror(errno));
 	ASSERTF(buf[0] == 'y', "invalid data found on foo2: %x", buf[0]);
@@ -653,8 +652,7 @@ static void test20(void)
 		"invalid size found: %llu instead of %zu",
 		(unsigned long long)stbuf.st_size, foo1_size);
 
-	/* Read from fd2. After the swap, the file pointer is past the
-	 * data. */
+	/* Read from fd2. After the swap, the file pointer is past the data. */
 	rc = read(fd2, buf, 1);
 	ASSERTF(rc == 0, "unexpected read returned rc=%d (errno %s)",
 		rc, strerror(errno));
@@ -731,7 +729,8 @@ static void test31(void)
 	fd3 = create_file("foo3", foo3_size, 'z');
 
 	/* Note: swapping 3 fd this way will be back to original
-	 * layouts every 2 loops. */
+	 * layouts every 2 loops.
+	 */
 	for (i = 0; i < 999; i++) {
 		rc = llapi_fswap_layouts(fd1, fd2, 0, 0, 0);
 		ASSERTF(rc == 0, "llapi_fswap_layouts failed: %s",
@@ -862,9 +861,9 @@ static void test42(void)
 	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 		mainpath, strerror(errno));
 
-	/* Get dataversion for two files.
-	 * Make sure values are different so that the following checks make
-	 * sense. */
+	/* Get dataversion for two files. Make sure values are different so that
+	 * the following checks make sense.
+	 */
 	fd1 = create_file("foo1", foo1_size, 'x');
 
 	rc = llapi_get_data_version(fd1, &dv1, LL_DV_RD_FLUSH);
@@ -1141,7 +1140,8 @@ static void test54(void)
 }
 
 /* Swap group lock, lock a descriptor, and try to swap with it, on
- * second descriptor. */
+ * second descriptor.
+ */
 static void test55(void)
 {
 	int rc;
@@ -1172,8 +1172,7 @@ static void test55(void)
 	close(fd2);
 }
 
-/* Swap group lock, lock a descriptor, and try to swap with another
- * one. */
+/* Swap group lock, lock a descriptor, and try to swap with another one. */
 static void test56(void)
 {
 	int rc;
@@ -1211,8 +1210,7 @@ static void test56(void)
 	close(fd2);
 }
 
-/* Swap group lock, lock both descriptor, and try to swap with another
- * one. */
+/* Swap group lock, lock both descriptor, and try to swap with another one. */
 static void test57(void)
 {
 	int rc;
@@ -1251,7 +1249,8 @@ static void test57(void)
 }
 
 /* Swap group lock, lock both descriptor with same gid, and try to
- * swap with it. */
+ * swap with it.
+ */
 static void test58(void)
 {
 	int rc;
@@ -1288,8 +1287,7 @@ static void test58(void)
 	close(fd2);
 }
 
-/* Swap group lock, lock both descriptor with same gid, and swap with
- * none. */
+/* Swap group lock, lock both descriptor with same gid, and swap with none. */
 static void test59(void)
 {
 	int rc;
@@ -1367,7 +1365,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	/* Create a test filename and reuse it. Remove possibly old files. */

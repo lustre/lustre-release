@@ -1443,8 +1443,7 @@ do_mirror_ops(int op)
 		rc = WEXITSTATUS(rc);
 		if (rc > 0) {
 			prt("%s: %d\n", cmd, rc);
-			/**
-			 * mirror split won't delete the last non-stale mirror,
+			/* mirror split won't delete the last non-stale mirror,
 			 * and returns EUCLEAN
 			 */
 			if (rc != EUCLEAN)

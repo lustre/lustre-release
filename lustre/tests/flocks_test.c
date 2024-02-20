@@ -53,9 +53,7 @@ static double now(void)
 	return (double)tv.tv_sec + (double)tv.tv_usec / 1000000;
 }
 
-/**
- * helper functions
- */
+/* helper functions */
 static int t_fcntl(int fd, int cmd, ...)
 {
 	va_list ap;
@@ -129,9 +127,8 @@ static int t_unlink(const char *path)
 	return rc;
 }
 
-/** =================================================================
+/*
  * test number 1
- *
  * normal flock test
  */
 static void t1_usage(void)
@@ -198,9 +195,8 @@ out:
 	return rc;
 }
 
-/** ===============================================================
+/*
  * test number 2
- *
  * 2 threads flock ops interweave
  */
 struct thread_info {
@@ -306,7 +302,7 @@ out:
 	return rc;
 }
 
-/** =================================================================
+/*
  * test number 3
  *
  * Bug 24040: Two conflicting flocks from same process different fds should fail
@@ -692,15 +688,13 @@ static int t6(int argc, char *argv[])
 	return rc;
 }
 
-/** ==============================================================
- * program entry
- */
 static void usage(void)
 {
 	fprintf(stderr,
 		"usage: flocks_test test# [corresponding arguments]\n");
 }
 
+/* program entry */
 int main(int argc, char *argv[])
 {
 	int rc = EXIT_SUCCESS;

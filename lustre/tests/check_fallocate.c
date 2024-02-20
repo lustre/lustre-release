@@ -95,9 +95,10 @@ static int __do_fallocate(int fd, int mode, loff_t offset, loff_t len)
 
 	rc = fallocate(fd, mode, offset, len);
 	if (rc != 0) {
-		fprintf(stderr, "fallocate failed, error %s, mode %d, "
-			"offset %llu, len %llu\n", strerror(errno), mode,
-			(unsigned long long)offset, (unsigned long long)len);
+		fprintf(stderr,
+			"fallocate failed, error %s, mode %d, offset %llu, len %llu\n",
+			strerror(errno), mode, (unsigned long long)offset,
+			(unsigned long long)len);
 		rc = errno;
 	}
 
@@ -116,12 +117,12 @@ static int post_fallocate_checks(int fd, int mode, loff_t offset, loff_t len,
 		goto out;
 
 	if (st.st_size != expected_new_size) {
-		fprintf(stderr, "fallocate succeeded but size reported "
-			"is wrong\n");
-		fprintf(stderr, "mode %d, offset %llu, len %llu, "
-			"new_size %llu, expected_new_size %llu\n", mode,
-			(unsigned long long)offset, (unsigned long long)len,
-			(unsigned long long)st.st_size,
+		fprintf(stderr,
+			"fallocate succeeded but size reported is wrong\n");
+		fprintf(stderr,
+			"mode %d, offset %llu, len %llu, new_size %llu, expected_new_size %llu\n",
+			mode, (unsigned long long)offset,
+			(unsigned long long)len, (unsigned long long)st.st_size,
 			(unsigned long long)expected_new_size);
 		rc = -1;
 	}

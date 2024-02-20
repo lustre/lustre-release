@@ -47,7 +47,7 @@
  * Return:   0 success
  *           1 failure
  */
-int main(int argc, char**argv)
+int main(int argc, char **argv)
 {
 	int p_size;
 	unsigned int offset;

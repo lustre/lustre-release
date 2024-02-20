@@ -38,7 +38,8 @@
 
 #define GOTO(label, rc)   do { rc; goto label; } while (0)
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv)
+{
 	int fd, i, rc = 0;
 	unsigned long bytes, lbytes;
 	struct stat st;
@@ -76,7 +77,7 @@ int main (int argc, char **argv) {
 		GOTO(out_str2, rc = 6);
 	}
 
-	for(i=0; i < bytes; i++)
+	for (i = 0; i < bytes; i++)
 		str[i] = 'a' + (i % 26);
 	str[i] = '\0';
 
@@ -104,7 +105,7 @@ int main (int argc, char **argv) {
 	if (rc < 0 || st.st_size != bytes) {
 		printf("bad file %lu size first write %lu != %lu: rc %d\n",
 		       (unsigned long)st.st_ino, (unsigned long)st.st_size,
-                       bytes, rc);
+		       bytes, rc);
 		GOTO(out_fd, rc = 9);
 	}
 
@@ -124,7 +125,7 @@ int main (int argc, char **argv) {
 	if (rc < 0 || st.st_size != bytes + bytes / 2) {
 		printf("bad file %lu size second write %lu != %lu: rc %d\n",
 		       (unsigned long)st.st_ino, (unsigned long)st.st_size,
-                       bytes, rc);
+		       bytes, rc);
 		GOTO(out_fd, rc = 12);
 	}
 
@@ -145,7 +146,7 @@ int main (int argc, char **argv) {
 		if (rc < 0 || st.st_size != bytes + bytes / 2) {
 			printf("bad file size after read %lu != %lu: rc %d\n",
 			       (unsigned long)st.st_size, bytes + bytes / 2,
-                               rc);
+			       rc);
 			GOTO(out_fd, rc = 14);
 		}
 
@@ -164,11 +165,11 @@ int main (int argc, char **argv) {
 out_fd:
 	close(fd);
 out_readbuf:
-        free(readbuf);
+	free(readbuf);
 out_str2:
-        free(str2);
+	free(str2);
 out_str:
-        free(str);
+	free(str);
 out:
-        return rc;
+	return rc;
 }

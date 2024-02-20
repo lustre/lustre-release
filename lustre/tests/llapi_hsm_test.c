@@ -33,8 +33,8 @@
  */
 
 /* All tests return 0 on success and non zero on error. The program will
- * exit as soon a non zero error is returned. */
-
+ * exit as soon a non zero error is returned.
+ */
 #include <stdlib.h>
 #include <errno.h>
 #include <getopt.h>
@@ -77,7 +77,8 @@ static bool is_bitmap;
 	} while (0)
 
 /* Register and unregister 2000 times. Ensures there is no fd leak
- * since there is usually 1024 fd per process. */
+ * since there is usually 1024 fd per process.
+ */
 static int test1(void)
 {
 	int i;
@@ -288,8 +289,7 @@ static int test7(void)
 	return 0;
 }
 
-/* Create the testfile of a given length. It returns a valid file
- * descriptor. */
+/* Create the testfile of a given length. It returns a valid file descriptor. */
 static char testfile[PATH_MAX];
 static int create_testfile(size_t length)
 {
@@ -304,8 +304,9 @@ static int create_testfile(size_t length)
 	unlink(testfile);
 
 	/* Use truncate so we can create a file (almost) as big as we
-	 * want, while taking 0 bytes of data. */
-	fd = creat(testfile, S_IRWXU);
+	 * want, while taking 0 bytes of data.
+	 */
+	fd = creat(testfile, 0700);
 	ASSERTF(fd >= 0, "create failed for '%s': %s",
 		testfile, strerror(errno));
 
@@ -508,8 +509,7 @@ static void test52(void)
 		strerror(-rc));
 }
 
-/* Helper to simulate archiving a file. No actual data movement
- * happens. */
+/* Helper to simulate archiving a file. No actual data movement happens. */
 static void helper_archiving(void (*progress)
 		      (struct hsm_copyaction_private *hcp, size_t length),
 		      const size_t length)
@@ -756,8 +756,7 @@ static void test105_progress(struct hsm_copyaction_private *hcp, size_t length)
 	ASSERTF(hca.hca_action == HUA_ARCHIVE,
 		"hca_state=%u", hca.hca_action);
 
-	/* BUG - offset should be 2*length, or length should
-	 * be 8*length */
+	/* BUG - offset should be 2*length, or length should be 8*length */
 	ASSERTF(hca.hca_location.length == 10*length,
 		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
@@ -966,8 +965,7 @@ static void test111(void)
 	helper_archiving(test111_progress, length);
 }
 
-/* Archive, with 10 reports, and duplicating them, checking
- * progress. */
+/* Archive, with 10 reports, and duplicating them, checking progress. */
 static void test112_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -1100,7 +1098,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	PERFORM(test1);

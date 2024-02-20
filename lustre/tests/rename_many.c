@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
 	int i, c;
 
 	while ((c = getopt(argc, argv, "cf:n:rs:vx")) != EOF) {
-		switch(c) {
+		switch (c) {
 		case 'c':
 			++opt_create_only;
 			break;
@@ -115,7 +115,8 @@ int main(int argc, char *argv[])
 			if (i && end != NULL && *end == '\0') {
 				file_count = i;
 			} else {
-				fprintf(stderr, "bad file count '%s'\n",optarg);
+				fprintf(stderr, "bad file count '%s'\n",
+					optarg);
 				usage(argv[0]);
 				return 1;
 			}
@@ -125,7 +126,8 @@ int main(int argc, char *argv[])
 			if (i && end != NULL && *end == '\0') {
 				loop_count = i;
 			} else {
-				fprintf(stderr, "bad loop count '%s'\n",optarg);
+				fprintf(stderr, "bad loop count '%s'\n",
+					optarg);
 				usage(argv[0]);
 				return 1;
 			}
@@ -157,7 +159,7 @@ int main(int argc, char *argv[])
 	names = malloc(sizeof(struct names) * file_count);
 	if (names == NULL) {
 		perror("calloc");
-		return(1);
+		return 1;
 	}
 
 	h2 = sprintf(msg, "%x", file_count); /* just to figure length */
@@ -189,16 +191,16 @@ int main(int argc, char *argv[])
 	}
 
 	while (!stop && loop_count != 0 && loops < loop_count) {
-		int j,k,l,m;
+		int j, k, l, m;
 
 		srand(seed + loops);
-		if (mkdir("tmp", S_IRWXU) == -1) {
+		if (mkdir("tmp", 0700) == -1) {
 			perror("mkdir tmp");
-			return(1);
+			return 1;
 		}
 		if (chdir("tmp") == -1) {
 			perror("chdir tmp");
-			return(1);
+			return 1;
 		}
 
 		for (i = 0; i < file_count ; i++) {
@@ -214,7 +216,7 @@ int main(int argc, char *argv[])
 		}
 
 		for (i = 0; i < file_count; i++) {
-			if (mknod(names[i].from, S_IFREG | S_IRWXU, 0) == -1) {
+			if (mknod(names[i].from, S_IFREG | 0700, 0) == -1) {
 				sprintf(msg, "loop %d.%d: creat %s",
 					loops, i, names[i].from);
 				perror(msg);
@@ -254,18 +256,18 @@ int main(int argc, char *argv[])
 
 		if (chdir("..") == -1) {
 			perror("chdir ..");
-			return(1);
+			return 1;
 		}
 
 		if (rmdir("tmp") == -1) {
 			if (chdir("tmp") == -1) {
 				perror("chdir tmp 2");
-				return(1);
+				return 1;
 			}
 			for (i = 0; i < file_count; i++) {
 				if (unlink(names[i].from) != -1) {
-					fprintf(stderr, "loop %d.%d: "
-						"unexpected file %s\n",
+					fprintf(stderr,
+						"loop %d.%d: unexpected file %s\n",
 						loops, i, names[i].to);
 					unlink_errors++;
 					if (!opt_exit_on_err)
@@ -274,11 +276,11 @@ int main(int argc, char *argv[])
 			}
 			if (chdir("..") == -1) {
 				perror("chdir .. 2");
-				return(1);
+				return 1;
 			}
 			if (rmdir("tmp") == -1) {
 				perror("rmdir tmp");
-				return(1);
+				return 1;
 			}
 		}
 
@@ -289,5 +291,5 @@ int main(int argc, char *argv[])
 
 	if (!opt_verbose)
 		handler(0);
-	return(0);
+	return 0;
 }

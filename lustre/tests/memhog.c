@@ -49,9 +49,10 @@ int main(int argc, char *argv[])
 
 	if (argc == 2) {
 		char *end = NULL;
+
 		kbtotal = strtoull(argv[1], &end, 0);
 
-		switch(*end) {
+		switch (*end) {
 		case 'g':
 		case 'G':
 			kbtotal *= 1024;
@@ -85,7 +86,8 @@ int main(int argc, char *argv[])
 	alloc = CHUNK;
 	printf("[%d] allocating %lld kbytes in %u kbyte chunks\n",
 	       getpid(), kbtotal, alloc);
-	for (i = kballoc = 0; i < numchunk && alloc > 0; i++, kballoc += alloc){
+	for (i = kballoc = 0; i < numchunk && alloc > 0; i++,
+	     kballoc += alloc) {
 		if (kbtotal - kballoc < alloc)
 			alloc = kbtotal - kballoc;
 

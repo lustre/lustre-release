@@ -49,7 +49,8 @@
 
 #define ONEMB 1048576
 
-static inline void print_extent_flags(unsigned int flags) {
+static inline void print_extent_flags(unsigned int flags)
+{
 	if (!flags)
 		return;
 
@@ -84,7 +85,8 @@ static inline void print_extent_flags(unsigned int flags) {
 
 /* This test executes fiemap ioctl and check
  * a) there are no file ranges marked with FIEMAP_EXTENT_UNWRITTEN
- * b) data ranges sizes sum is equal to given in second param */
+ * b) data ranges sizes sum is equal to given in second param
+ */
 static int check_fiemap(int fd, long long expected_sum,
 			unsigned int *mapped_extents)
 {
@@ -119,9 +121,8 @@ static int check_fiemap(int fd, long long expected_sum,
 		if (fm_extents[i].fe_flags & FIEMAP_EXTENT_UNWRITTEN) {
 			fprintf(stderr, "Unwritten extent\n");
 			return -2;
-		} else {
-			ext_len_sum += fm_extents[i].fe_length;
 		}
+		ext_len_sum += fm_extents[i].fe_length;
 	}
 
 	printf("No unwritten extents, extents number %u, sum of lengths %lli, expected sum %lli\n",
@@ -129,11 +130,11 @@ static int check_fiemap(int fd, long long expected_sum,
 		ext_len_sum, expected_sum);
 
 	*mapped_extents = fiemap->fm_mapped_extents;
-	return ext_len_sum != expected_sum || (expected_sum && !*mapped_extents);
+	return ext_len_sum != expected_sum ||
+		(expected_sum && !*mapped_extents);
 }
 
-/**
- * LU-17110
+/* LU-17110
  * When userspace uses fiemap with fm_extent_count=0, it means that kernelspace
  * should return only the number of extents. So we should always check
  * fm_extent_count before accessing to fm_extents array. Otherwise this could
@@ -162,7 +163,8 @@ static void *corruption_th(void *args)
 			return (void *) (long long) -errno;
 		}
 		if (ta->expected_mapped != fiemap.fm_mapped_extents) {
-			fprintf(stderr, "mapped extents mismatch: expected=%d, returned=%d\n",
+			fprintf(stderr,
+				"mapped extents mismatch: expected=%d, returned=%d\n",
 				ta->expected_mapped, fiemap.fm_mapped_extents);
 			return (void *) -EINVAL;
 		}

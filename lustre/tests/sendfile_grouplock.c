@@ -116,8 +116,8 @@ static int crc_table_computed;
 static void make_crc_table(void)
 {
 	unsigned long c;
-
 	int n, k;
+
 	for (n = 0; n < 256; n++) {
 		c = (unsigned long) n;
 		for (k = 0; k < 8; k++) {
@@ -205,7 +205,8 @@ static unsigned long compute_crc(const char *fname)
 }
 
 /* Helper. Copy a file with sendfile. The destination will be
- * created. If a group lock is 0, it means do not take one. */
+ * created. If a group lock is 0, it means do not take one.
+ */
 static int sendfile_copy(const char *source, int source_gid,
 			 const char *dest, int dest_gid)
 {
@@ -253,8 +254,8 @@ static int sendfile_copy(const char *source, int source_gid,
 		/* Although senfile can return less than requested,
 		 * that should not happen under present conditions. At
 		 * the very least, make sure that a decent size was
-		 * copied. See LU-6371. */
-
+		 * copied. See LU-6371.
+		 */
 		ASSERTF(sret != 0, "sendfile read 0 bytes");
 		ASSERTF(sret > 0, "sendfile failed: %s", strerror(rc));
 		ASSERTF(sret > 100*1024,
@@ -384,7 +385,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	cleanup();

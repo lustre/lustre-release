@@ -20,11 +20,11 @@
  * information or have any questions.
  *
  * GPL HEADER END
-*/
+ */
 
 /*
  * Copyright 2012 Xyratex Technology Limited
-*/
+ */
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -85,21 +85,21 @@ enum {
 	FLOCK_PUT       = 1,
 };
 
-#define flock_call(fd, num, get, label)						\
-	flocks[num].l_type = get == FLOCK_GET ? F_WRLCK : F_UNLCK;		\
-	printf("%d: %s lock%d [%llu, %llu]\n", pid,				\
-		get == FLOCK_GET ? "taking" : "putting",			\
-		num, (unsigned long long)flocks[num].l_start,			\
-		(unsigned long long)flocks[num].l_start + flocks[num].l_len);	\
-	rc = fcntl(fd, F_SETLKW, &flocks[num]);                         	\
-	if (rc < 0) {                                                   	\
-		rc = errno;                                             	\
-		fprintf(stderr, "%d: failed to %s lock%d, %s\n",        	\
-			pid, get == FLOCK_GET ? "take" : "put",         	\
-			num, strerror(errno));                          	\
-		goto label;                                             	\
-	} else {                                                        	\
-		printf("%d: done\n", pid);                              	\
+#define flock_call(fd, num, get, label)					      \
+	flocks[num].l_type = get == FLOCK_GET ? F_WRLCK : F_UNLCK;	      \
+	printf("%d: %s lock%d [%llu, %llu]\n", pid,			      \
+		get == FLOCK_GET ? "taking" : "putting",		      \
+		num, (unsigned long long)flocks[num].l_start,		      \
+		(unsigned long long)flocks[num].l_start + flocks[num].l_len); \
+	rc = fcntl(fd, F_SETLKW, &flocks[num]);				      \
+	if (rc < 0) {							      \
+		rc = errno;						      \
+		fprintf(stderr, "%d: failed to %s lock%d, %s\n",	      \
+			pid, get == FLOCK_GET ? "take" : "put",		      \
+			num, strerror(errno));				      \
+		goto label;						      \
+	} else {							      \
+		printf("%d: done\n", pid);				      \
 	}
 
 static void catch_alarm(int i)
@@ -108,7 +108,7 @@ static void catch_alarm(int i)
 	exit(124);
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	struct sigaction act;
 	int status;
@@ -142,7 +142,8 @@ int main(int argc, char* argv[])
 
 			/* First of all, it should get blocked on flocks[1]
 			 * 2nd child. Later, should deadlock with flocks[2]
-			 * parent, after cancelling flocks[1] 2nd child. */
+			 * parent, after cancelling flocks[1] 2nd child.
+			 */
 			printf("%d: taking lock3 [%llu, %llu]\n", pid,
 				(unsigned long long)flocks[3].l_start,
 				(unsigned long long)flocks[3].l_start +
@@ -152,16 +153,18 @@ int main(int argc, char* argv[])
 			sigemptyset(&act.sa_mask);
 			sigaddset(&act.sa_mask, SIGALRM);
 			if (sigaction(SIGALRM, &act, NULL) < 0) {
-				fprintf(stderr, "SIGALRM signal setup failed"
-						", errno: %d", errno);
+				fprintf(stderr,
+					"SIGALRM signal setup failed, errno: %d",
+					errno);
 				rc = 3;
 				goto err_lock1;
 			}
 			alarm(5);
 			rc = fcntl(fd, F_SETLKW, &flocks[3]);
 			if (rc >= 0) {
-				fprintf(stderr, "%d: should not succeed to "
-						"take lock3\n", pid);
+				fprintf(stderr,
+					"%d: should not succeed to take lock3\n",
+					pid);
 
 				flock_call(fd, 3, FLOCK_PUT, err_lock1);
 				rc = EINVAL;
@@ -169,8 +172,9 @@ int main(int argc, char* argv[])
 			}
 			if (errno != EDEADLK) {
 				rc = errno;
-				fprintf(stderr, "%d: failed to take lock3: "
-						"%s\n", pid, strerror(errno));
+				fprintf(stderr,
+					"%d: failed to take lock3: %s\n", pid,
+					strerror(errno));
 				goto err_lock1;
 			}
 
@@ -184,7 +188,8 @@ int main(int argc, char* argv[])
 			flock_call(fd, 1, FLOCK_GET, err_lock0);
 
 			/* Let flocks[2] 2nd child get granted and
-			 * flocks[3] 1st child, flocks[0] parent get blocked.*/
+			 * flocks[3] 1st child, flocks[0] parent get blocked.
+			 */
 			printf("%d sleeping 2\n", pid);
 			sleep(2);
 
@@ -200,8 +205,9 @@ int main(int argc, char* argv[])
 
 			flock_call(fd, num, FLOCK_GET, err_lock0);
 
-			/* Should get blocked on flocks[0], 1st shild
-			 * and succeed later. */
+			/* Should get blocked on flocks[0], 1st child
+			 * and succeed later.
+			 */
 			flock_call(fd, 0, FLOCK_GET, err_lock1);
 
 			flock_call(fd, 0, FLOCK_PUT, err_lock1);

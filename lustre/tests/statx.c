@@ -171,11 +171,9 @@ static char const printf_flags[] = "'-+ #0I";
 
 /* Formats for the --terse option. */
 static char const fmt_terse_fs[] = "%n %i %l %t %s %S %b %f %a %c %d\n";
-static char const fmt_terse_regular[] = "%n %s %b %f %u %g %D %i %h %t %T"
-					" %X %Y %Z %W %o\n";
+static char const fmt_terse_regular[] = "%n %s %b %f %u %g %D %i %h %t %T %X %Y %Z %W %o\n";
 #ifdef HAVE_SELINUX
-static char const fmt_terse_selinux[] = "%n %s %b %f %u %g %D %i %h %t %T"
-					" %X %Y %Z %W %o %C\n";
+static char const fmt_terse_selinux[] = "%n %s %b %f %u %g %D %i %h %t %T %X %Y %Z %W %o %C\n";
 #endif
 static char *format;
 
@@ -315,21 +313,21 @@ static char ftypelet(mode_t bits)
 static void strmode(mode_t mode, char *str)
 {
 	str[0] = ftypelet(mode);
-	str[1] = mode & S_IRUSR ? 'r' : '-';
-	str[2] = mode & S_IWUSR ? 'w' : '-';
+	str[1] = mode & 0400 ? 'r' : '-';
+	str[2] = mode & 0200 ? 'w' : '-';
 	str[3] = (mode & S_ISUID
-			? (mode & S_IXUSR ? 's' : 'S')
-			: (mode & S_IXUSR ? 'x' : '-'));
-	str[4] = mode & S_IRGRP ? 'r' : '-';
-	str[5] = mode & S_IWGRP ? 'w' : '-';
+			? (mode & 0100 ? 's' : 'S')
+			: (mode & 0100 ? 'x' : '-'));
+	str[4] = mode & 0040 ? 'r' : '-';
+	str[5] = mode & 0020 ? 'w' : '-';
 	str[6] = (mode & S_ISGID
-			? (mode & S_IXGRP ? 's' : 'S')
-			: (mode & S_IXGRP ? 'x' : '-'));
-	str[7] = mode & S_IROTH ? 'r' : '-';
-	str[8] = mode & S_IWOTH ? 'w' : '-';
+			? (mode & 0010 ? 's' : 'S')
+			: (mode & 0010 ? 'x' : '-'));
+	str[7] = mode & 0004 ? 'r' : '-';
+	str[8] = mode & 0002 ? 'w' : '-';
 	str[9] = (mode & S_ISVTX
-			? (mode & S_IXOTH ? 't' : 'T')
-			: (mode & S_IXOTH ? 'x' : '-'));
+			? (mode & 0001 ? 't' : 'T')
+			: (mode & 0001 ? 'x' : '-'));
 	str[10] = ' ';
 	str[11] = '\0';
 }
@@ -382,19 +380,6 @@ static void strmode(mode_t mode, char *str)
 static void filemodestring(struct statx const *stxp, char *str)
 {
 	strmode(stxp->stx_mode, str);
-
-/*
-	if (S_TYPEISSEM(statp))
-		str[0] = 'F';
-	else if (IS_MIGRATED_FILE (statp))
-		str[0] = 'M';
-	else if (S_TYPEISMQ (statp))
-		str[0] = 'Q';
-	else if (S_TYPEISSHM (statp))
-		str[0] = 'S';
-	else if (S_TYPEISTMO (statp))
-		str[0] = 'T';
- */
 }
 
 /* gnulib/lib/file-type.c */
@@ -862,6 +847,7 @@ static void out_epoch_sec(char *pformat, size_t prefix_len,
 					if (w > 1) {
 						char *dst = pformat;
 						char const *src = dst;
+
 						for (; src < p; src++) {
 							if (*src == '-')
 								frac_left_adjust = true;
@@ -950,18 +936,17 @@ static int out_file_context(char *pformat, size_t prefix_len,
 /* Map a TS with negative TS.tv_nsec to {0,0}.  */
 static inline struct timespec neg_to_zero(struct timespec ts)
 {
-	if (ts.tv_nsec >= 0) {
+	if (ts.tv_nsec >= 0)
 		return ts;
-	} else {
-		struct timespec z = {0, 0};
 
-		return z;
-	}
+	struct timespec z = {0, 0};
+
+	return z;
 }
 
 /* All the mode bits that can be affected by chmod.  */
 #define CHMOD_MODE_BITS \
-	(S_ISUID | S_ISGID | S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO)
+	(S_ISUID | S_ISGID | S_ISVTX | 0700 | 0070 | 0007)
 
 /* Print statx info.  Return zero upon success, nonzero upon failure.  */
 static int print_statx(char *pformat, size_t prefix_len, unsigned int m,

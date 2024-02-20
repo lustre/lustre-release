@@ -174,6 +174,7 @@ static void test1(void)
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T0FILE);
 	struct llapi_layout *layout = llapi_layout_get_by_path(path, 0);
+
 	ASSERTF(layout != NULL, "errno = %d", errno);
 	__test1_helper(layout);
 	llapi_layout_free(layout);
@@ -192,6 +193,7 @@ static void test2(void)
 	ASSERTF(fd >= 0, "open(%s): errno = %d", path, errno);
 
 	struct llapi_layout *layout = llapi_layout_get_by_fd(fd, 0);
+
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
 	rc = close(fd);
@@ -256,6 +258,7 @@ static void test4(void)
 
 	errno = 0;
 	struct llapi_layout *layout = llapi_layout_get_by_path(path, 0);
+
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
 	rc = llapi_layout_stripe_count_get(layout, &count);
@@ -303,6 +306,7 @@ static void test6(void)
 {
 	errno = 0;
 	struct llapi_layout *layout = llapi_layout_get_by_fd(9999, 0);
+
 	ASSERTF(layout == NULL && errno == EBADF, "errno = %d", errno);
 }
 
@@ -343,13 +347,15 @@ static void test7(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 	errno = 0;
 	struct llapi_layout *layout = llapi_layout_get_by_path(path, 0);
+
 	ASSERTF(layout == NULL && errno == EACCES, "errno = %d", errno);
 	rc = seteuid(myuid);
 	ASSERTF(rc == 0, "errno = %d", errno);
 }
 
 /* llapi_layout_get_by_path() returns default layout for file with no
- * striping attributes. */
+ * striping attributes.
+ */
 #define T8FILE		"t8"
 #define T8_DESC		"llapi_layout_get_by_path ENODATA handling"
 static void test8(void)
@@ -954,7 +960,7 @@ static void test22(void)
 	rc = unlink(path);
 	ASSERTF(rc == 0 || errno == ENOENT, "errno = %d", errno);
 
-	umask_orig = umask(S_IWGRP | S_IWOTH);
+	umask_orig = umask(0022);
 
 	fd = llapi_layout_file_create(path, 0, mode_in, NULL);
 	ASSERTF(fd >= 0, "errno = %d", errno);
@@ -994,7 +1000,8 @@ static void test23(void)
 }
 
 /* llapi_layout_get_by_path(path, LAYOUT_GET_EXPECTED) returns expected layout
- * for file with unspecified layout. */
+ * for file with unspecified layout.
+ */
 #define T24FILE		"t24"
 #define T24_DESC	"LAYOUT_GET_EXPECTED works with existing file"
 static void test24(void)
@@ -1035,7 +1042,8 @@ static void test24(void)
 }
 
 /* llapi_layout_get_by_path(path, LAYOUT_GET_EXPECTED) returns expected layout
- * for directory with unspecified layout. */
+ * for directory with unspecified layout.
+ */
 #define T25DIR		"d25"
 #define T25_DESC	"LAYOUT_GET_EXPECTED works with directory"
 static void test25(void)
@@ -1073,7 +1081,8 @@ static void test25(void)
 }
 
 /* llapi_layout_get_by_path(path, LAYOUT_GET_EXPECTED) correctly combines
- * specified attributes of parent directory with attributes filesystem root. */
+ * specified attributes of parent directory with attributes filesystem root.
+ */
 #define T26DIR		"d26"
 #define T26_DESC	"LAYOUT_GET_EXPECTED partially specified parent"
 #define T26_STRIPE_SIZE	(1048576 * 4)
@@ -1121,7 +1130,8 @@ static void test26(void)
 }
 
 /* llapi_layout_get_by_path(path, LAYOUT_GET_EXPECTED) work with
- * non existing file. */
+ * non existing file.
+ */
 #define T27DIR		"d27"
 #define T27_DESC	"LAYOUT_GET_EXPECTED with non existing file"
 #define T27_STRIPE_SIZE	(1048576 * 3)
@@ -1172,7 +1182,8 @@ static void test27(void)
 }
 
 /* llapi_layout_stripe_count_get returns LLAPI_LAYOUT_WIDE for a directory
- * with a stripe_count of -1. */
+ * with a stripe_count of -1.
+ */
 #define T28DIR		"d28"
 #define T28_DESC	"LLAPI_LAYOUT_WIDE returned as expected"
 static void test28(void)
@@ -1353,7 +1364,8 @@ static void test30(void)
 	ASSERTF(rc == 0, "errno %d", errno);
 
 	/* add component without adjusting previous component's extent
-	 * end will fail. */
+	 * end will fail.
+	 */
 	rc = llapi_layout_comp_add(layout);
 	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
 
@@ -1695,8 +1707,8 @@ static void test34(void)
 	ASSERTF(rc == 0, "errno %d", errno);
 
 	/* Set extension space flag on adjacent components:
-	 * This is invalid, but can't be checked until we try to create the
-	 * file. */
+	 * This is invalid, but can't be checked until we create the file.
+	 */
 	rc = llapi_layout_comp_flags_set(layout, LCME_FL_EXTENSION);
 	ASSERTF(rc == 0, "errno %d", errno);
 
@@ -1710,8 +1722,7 @@ static void test34(void)
 	rc = llapi_layout_comp_add(layout);
 	ASSERTF(rc == 0, "errno %d", errno);
 
-	/* Convert this comp to zero-length so it can be followed by extension
-	 * space */
+	/* Convert this comp to 0-len that can be followed by extension space */
 	rc = llapi_layout_comp_extent_set(layout, start[2], start[2]);
 	ASSERTF(rc == 0, "errno %d", errno);
 
@@ -1797,7 +1808,8 @@ static void print_test_desc(int test_num, const char *test_desc,
 }
 
 /* This function runs a single test by forking the process.  This way,
- * if there is a segfault during a test, the test program won't crash. */
+ * if there is a segfault during a test, the test program won't crash.
+ */
 static int test(void (*test_fn)(), const char *test_desc, bool test_skip,
 		int test_num)
 {
@@ -1834,7 +1846,8 @@ static int test(void (*test_fn)(), const char *test_desc, bool test_skip,
 		print_test_desc(test_num, test_desc, status_buf);
 	} else if (pid == 0) {
 		/* Run the test in the child process.  Exit with 0 for success,
-		 * non-zero for failure */
+		 * non-zero for failure
+		 */
 		test_fn();
 		exit(0);
 	}
@@ -1947,11 +1960,13 @@ int main(int argc, char *argv[])
 	}
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly. */
+	 * stream under I/O redirection may appear incorrectly.
+	 */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	for (i = 0; i < NUM_TESTS; i++) {
 		struct test_tbl_entry *tst = &test_tbl[i];
+
 		if (test(tst->tte_fn, tst->tte_desc, tst->tte_skip, i) != 0)
 			rc++;
 	}

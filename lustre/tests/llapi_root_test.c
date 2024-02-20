@@ -204,7 +204,8 @@ int main(int argc, char *argv[])
 
 	if (strcmp(basename(mainpath), basename(mainpath2)) != 0 ||
 		   strcmp(mainpath, mainpath2) == 0) {
-		fprintf(stderr, "%s and %s should be the same file on 2 distinct mountpoints\n",
+		fprintf(stderr,
+			"%s and %s should be the same file on 2 distinct mountpoints\n",
 			mainpath, mainpath2);
 		return EXIT_FAILURE;
 	}
@@ -224,16 +225,19 @@ int main(int argc, char *argv[])
 	}
 
 	if (strcmp(fsname, fsname2) != 0) {
-		fprintf(stderr, "%s and %s are not on the same filesystem (%s, %s)\n",
+		fprintf(stderr,
+			"%s and %s are not on the same filesystem (%s, %s)\n",
 			mnt_dir, mnt_dir2, fsname, fsname2);
 		return EXIT_FAILURE;
 	}
 
 	mnt_fd = open(mnt_dir, O_RDONLY|O_DIRECTORY);
-	ASSERTF(mnt_fd >= 0, "cannot open '%s': %s\n", mnt_dir, strerror(errno));
+	ASSERTF(mnt_fd >= 0, "cannot open '%s': %s\n", mnt_dir,
+		strerror(errno));
 
 	mnt_fd2 = open(mnt_dir2, O_RDONLY|O_DIRECTORY);
-	ASSERTF(mnt_fd2 >= 0, "cannot open '%s': %s\n", mnt_dir2, strerror(errno));
+	ASSERTF(mnt_fd2 >= 0, "cannot open '%s': %s\n", mnt_dir2,
+		strerror(errno));
 
 	fprintf(stderr, "Starting: %s %s %s\n\n",
 		basename(argv[0]), mainpath, mainpath2);
