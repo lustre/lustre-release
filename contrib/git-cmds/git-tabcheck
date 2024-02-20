@@ -1,0 +1,37 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# contrib/git-cmds/git-tabcheck
+#
+# Check the progress of space -> tab conversion in the
+# Lustre tree.
+#
+# Author: Andreas Dilger <adilger@whamcloud.com>
+#
+
+DIRS="$*"
+[ -z "$DIRS" ] && DIRS="ls -d */"
+
+for D in $DIRS; do
+	[ ! -d "$D" ] && continue
+	FILES=$(find "$D" -name "*.[ch]" -o -name "*.sh")
+
+	[ -z "$FILES" ] && continue
+	TOT="$(echo "$FILES" | xargs cat | wc -l)"
+
+	[ -z "$TOT" ] && continue
+	TAB="$(echo "$FILES" | xargs grep "\t" | wc -l)"
+	SPC="$(echo "$FILES" | xargs grep "^    " | wc -l)"
+
+	PCB=$(((TAB * 1000 + 5) / TOT / 10))
+	PCS=$(((SPC * 1000 + 5) / TOT / 10))
+	PCT=$(((TAB * 1000 + 5) / (TAB + SPC) / 10))
+
+	D=$(basename "$D")
+
+	printf "%-16s %-10s %-11s %6s %-11s %6s %-10s\n" \
+	       "$D:" "loc=$TOT" "tabs=$TAB" "($PCB%)" "space=$SPC" "($PCS%)" "$PCT%"
+done

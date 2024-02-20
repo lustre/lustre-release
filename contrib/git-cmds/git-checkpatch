@@ -1,0 +1,35 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# contrib/git-cmds/git-checkpatch
+#
+# Check the progress of checkpatch.pl fixes in the
+# Lustre tree. Modified from git-tabcheck.
+#
+# Author: Andreas Dilger <adilger@whamcloud.com>
+# Modified by: Timothy Day <timday@amazon.com>
+#
+
+export CHECKPATCH=${CHECKPATCH:-"./contrib/scripts/checkpatch.pl"}
+
+DIRS="$*"
+[ -z "$DIRS" ] && DIRS="ls -d */"
+
+for D in $DIRS; do
+	[ ! -d "$D" ] && continue
+	FILES=$(find "$D" -name "*.[ch]")
+
+	[ -z "$FILES" ] && continue
+	TOT="$(echo "$FILES" | xargs cat | wc -l)"
+
+	[ -z "$TOT" ] && continue
+	CNT="$(echo "$FILES" | xargs -I{} bash -c '$CHECKPATCH --terse -f $1' _ {} | grep -v "total:" | wc -l)"
+
+	D=$(basename "$D")
+
+	printf "%-16s %-10s %-11s \n" \
+	       "$D:" "loc=$TOT" "errors/warnings=$CNT"
+done
