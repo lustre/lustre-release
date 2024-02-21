@@ -45,7 +45,7 @@
 #include <cl_object.h>
 #include "lov_internal.h"
 
-/** \defgroup lov lov
+/* \defgroup lov lov
  * Logical object volume layer. This layer implements data striping (raid0).
  *
  * At the lov layer top-entity (object, lock, io) is connected to one or
@@ -91,15 +91,15 @@ struct lovdom_device {
 };
 
 struct lov_device {
-        /*
-         * XXX Locking of lov-private data is missing.
-         */
-        struct cl_device          ld_cl;
-        struct lov_obd           *ld_lov;
-        /** size of lov_device::ld_target[] array */
-        __u32                     ld_target_nr;
-        struct lovsub_device    **ld_target;
-        __u32                     ld_flags;
+	/*
+	 * XXX Locking of lov-private data is missing.
+	 */
+	struct cl_device          ld_cl;
+	struct lov_obd           *ld_lov;
+	/* size of lov_device::ld_target[] array */
+	__u32                     ld_target_nr;
+	struct lovsub_device    **ld_target;
+	__u32                     ld_flags;
 
 	/* Data-on-MDT devices */
 	__u32			  ld_md_tgts_nr;
@@ -109,14 +109,14 @@ struct lov_device {
 	struct lu_site		  ld_site;
 };
 
-/**
+/*
  * Layout type.
  */
 enum lov_layout_type {
-	LLT_EMPTY,	/** empty file without body (mknod + truncate) */
-	LLT_RELEASED,	/** file with no objects (data in HSM) */
-	LLT_COMP,	/** support composite layout */
-	LLT_FOREIGN,	/** foreign layout */
+	LLT_EMPTY,	/* empty file without body (mknod + truncate) */
+	LLT_RELEASED,	/* file with no objects (data in HSM) */
+	LLT_COMP,	/* support composite layout */
+	LLT_FOREIGN,	/* foreign layout */
 	LLT_NR
 };
 
@@ -138,7 +138,7 @@ static inline char *llt2str(enum lov_layout_type llt)
 	return "";
 }
 
-/**
+/*
  * Return lov_layout_entry_type associated with a given composite layout
  * entry.
  */
@@ -169,15 +169,15 @@ struct lov_comp_layout_entry_ops {
 };
 
 struct lov_layout_raid0 {
-	unsigned               lo_nr;
-	/**
+	unsigned int lo_nr;
+	/*
 	 * When this is true, lov_object::lo_attr contains
 	 * valid up to date attributes for a top-level
 	 * object. This field is reset to 0 when attributes of
 	 * any sub-object change.
 	 */
 	bool		       lo_attr_valid;
-	/**
+	/*
 	 * Array of sub-objects. Allocated when top-object is
 	 * created (lov_init_raid0()).
 	 *
@@ -193,11 +193,11 @@ struct lov_layout_raid0 {
 	 * until the latter is finally destroyed.
 	 */
 	struct lovsub_object **lo_sub;
-	/**
+	/*
 	 * protect lo_sub
 	 */
 	spinlock_t		lo_sub_lock;
-	/**
+	/*
 	 * Cached object attribute, built from sub-object
 	 * attributes.
 	 */
@@ -229,13 +229,12 @@ struct lov_layout_entry {
 struct lov_mirror_entry {
 	unsigned short	lre_mirror_id;
 	unsigned short	lre_stale:1,	/* set if any components is stale */
-			lre_valid:1,	/* set if at least one of components
-					 * in this mirror is valid */
+			/* set if one of components in this mirror is valid */
+			lre_valid:1,
 			lre_foreign:1;	/* set if it is a foreign component */
 	int		lre_preference;	/* overall preference of this mirror */
 
-	unsigned short	lre_start;	/* index to lo_entries, start index of
-					 * this mirror */
+	unsigned short	lre_start;	/* idx(lo_entries) start idx (mirror) */
 	unsigned short	lre_end;	/* end index of this mirror */
 };
 
@@ -245,7 +244,7 @@ enum lov_object_flags {
 	LO_NEED_INODE_LOCK	= 0x2,
 };
 
-/**
+/*
  * lov-specific file state.
  *
  * lov object has particular layout type, determining how top-object is built
@@ -261,7 +260,7 @@ enum lov_object_flags {
  */
 struct lov_object {
 	struct cl_object	lo_cl;
-	/**
+	/*
 	 * Serializes object operations with transitions between layout types.
 	 *
 	 * This semaphore is taken in shared mode by all object methods, and
@@ -270,24 +269,24 @@ struct lov_object {
 	 * \see lov_object::lo_type
 	 */
 	struct rw_semaphore	lo_type_guard;
-	/**
+	/*
 	 * Type of an object. Protected by lov_object::lo_type_guard.
 	 */
 	enum lov_layout_type	lo_type;
-	/**
+	/*
 	 * Object flags.
 	 */
 	unsigned long		lo_obj_flags;
-	/**
+	/*
 	 * How many IOs are on going on this object. Layout can be changed
 	 * only if there is no active IO.
 	 */
 	atomic_t	       lo_active_ios;
-	/**
+	/*
 	 * Waitq - wait for no one else is using lo_lsm
 	 */
 	wait_queue_head_t	lo_waitq;
-	/**
+	/*
 	 * Layout metadata. NULL if empty layout.
 	 */
 	struct lov_stripe_md  *lo_lsm;
@@ -298,35 +297,27 @@ struct lov_object {
 		struct lov_layout_state_released {
 		} released;
 		struct lov_layout_composite {
-			/**
-			 * flags of lov_comp_md_v1::lcm_flags. Mainly used
+			/* flags of lov_comp_md_v1::lcm_flags. Mainly used
 			 * by FLR.
 			 */
 			uint32_t        lo_flags;
-			/**
-			 * For FLR: index of preferred mirror to read.
+			/* For FLR: index of preferred mirror to read.
 			 * Preferred mirror is initialized by the preferred
 			 * bit of lsme. It can be changed when the preferred
 			 * is inaccessible.
 			 */
 			int             lo_preferred_mirror;
-			/**
-			 * For FLR: Number of (valid) mirrors.
-			 */
-			unsigned        lo_mirror_count;
+			/* For FLR: Number of (valid) mirrors. */
+			unsigned int lo_mirror_count;
 			struct lov_mirror_entry *lo_mirrors;
-			/**
-			 * Current entry count of lo_entries, include
+			/* Current entry count of lo_entries, include
 			 * invalid entries.
 			 */
 			unsigned int    lo_entry_count;
 			struct lov_layout_entry *lo_entries;
 		} composite;
 	} u;
-	/**
-	 * Thread that acquired lov_object::lo_type_guard in an exclusive
-	 * mode.
-	 */
+	/* Thread that acquired lov_object::lo_type_guard in exclusive mode. */
 	struct task_struct            *lo_owner;
 };
 
@@ -343,7 +334,7 @@ static inline struct lov_stripe_md_entry *lov_lse(struct lov_object *lov, int i)
 	return lov->lo_lsm->lsm_entries[i];
 }
 
-static inline unsigned lov_flr_state(const struct lov_object *lov)
+static inline unsigned int lov_flr_state(const struct lov_object *lov)
 {
 	if (lov->lo_type != LLT_COMP)
 		return LCM_FL_NONE;
@@ -406,7 +397,7 @@ static inline unsigned
 lov_layout_entry_index(struct lov_object *lov, struct lov_layout_entry *entry)
 {
 	struct lov_layout_entry *first = &lov->u.composite.lo_entries[0];
-	unsigned index = (unsigned)(entry - first);
+	unsigned int index = (unsigned int)(entry - first);
 
 	LASSERT(entry >= first);
 	LASSERT(index < lov->u.composite.lo_entry_count);
@@ -414,52 +405,44 @@ lov_layout_entry_index(struct lov_object *lov, struct lov_layout_entry *entry)
 	return index;
 }
 
-/**
- * State lov_lock keeps for each sub-lock.
- */
+/* State lov_lock keeps for each sub-lock. */
 struct lov_lock_sub {
-	/** sub-lock itself */
+	/* sub-lock itself */
 	struct cl_lock		sub_lock;
-	/** Set if the sublock has ever been enqueued, meaning it may
-	 * hold resources of underlying layers */
+	/* Set if the sublock has ever been enqueued, meaning it may
+	 * hold resources of underlying layers
+	 */
 	unsigned int		sub_is_enqueued:1,
 				sub_initialized:1;
 	int			sub_index;
 };
 
-/**
- * lov-specific lock state.
- */
+/* lov-specific lock state. */
 struct lov_lock {
 	struct cl_lock_slice	lls_cl;
-	/** Number of sub-locks in this lock */
+	/* Number of sub-locks in this lock */
 	int			lls_nr;
-	/** sublock array */
+	/* sublock array */
 	struct lov_lock_sub	lls_sub[0];
 };
 
-/*
- * Bottom half.
- */
-
+/* Bottom half. */
 struct lovsub_device {
-        struct cl_device   acid_cl;
-        struct cl_device  *acid_next;
+	struct cl_device   acid_cl;
+	struct cl_device  *acid_next;
 };
 
 struct lovsub_object {
-        struct cl_object_header lso_header;
-        struct cl_object        lso_cl;
-        struct lov_object      *lso_super;
-        int                     lso_index;
+	struct cl_object_header lso_header;
+	struct cl_object        lso_cl;
+	struct lov_object      *lso_super;
+	int                     lso_index;
 };
 
-/**
- * Describe the environment settings for sublocks.
- */
+/* Describe the environment settings for sublocks. */
 struct lov_sublock_env {
-        const struct lu_env *lse_env;
-        struct cl_io        *lse_io;
+	const struct lu_env *lse_env;
+	struct cl_io        *lse_io;
 };
 
 struct lov_thread_info {
@@ -470,113 +453,84 @@ struct lov_thread_info {
 	struct cl_page_list     lti_plist;
 };
 
-/**
- * State that lov_io maintains for every sub-io.
- */
+/* State that lov_io maintains for every sub-io. */
 struct lov_io_sub {
-	/**
-	 * Linkage into a list (hanging off lov_io::lis_subios)
-	 */
+	/* Linkage into a list (hanging off lov_io::lis_subios) */
 	struct list_head	sub_list;
-	/**
-	 * Linkage into a list (hanging off lov_io::lis_active) of all
+	/* Linkage into a list (hanging off lov_io::lis_active) of all
 	 * sub-io's active for the current IO iteration.
 	 */
 	struct list_head	sub_linkage;
 	unsigned int		sub_subio_index;
-	/**
-	 * sub-io for a stripe. Ideally sub-io's can be stopped and resumed
+	/* sub-io for a stripe. Ideally sub-io's can be stopped and resumed
 	 * independently, with lov acting as a scheduler to maximize overall
 	 * throughput.
 	 */
 	struct cl_io		sub_io;
-	/**
-	 * environment, in which sub-io executes.
-	 */
+	/* environment, in which sub-io executes. */
 	struct lu_env		*sub_env;
-	/**
-	 * environment's refcheck.
-	 *
-	 * \see cl_env_get()
-	 */
+	/* environment's refcheck. (cl_env_get()) */
 	__u16			sub_refcheck;
 };
 
-/**
- * IO state private for LOV.
- */
+/* IO state private for LOV. */
 #define LIS_CACHE_ENTRY_NONE	-ENOENT
 struct lov_io {
-        /** super-class */
-        struct cl_io_slice lis_cl;
+	/* super-class */
+	struct cl_io_slice lis_cl;
 
-	/**
-	 * FLR: index to lo_mirrors. Valid only if lov_is_flr() returns true.
+	/* FLR: index to lo_mirrors. Valid only if lov_is_flr() returns true.
 	 *
 	 * The mirror index of this io. Preserved over cl_io_init()
 	 * if io->ci_ndelay_tried is greater than zero.
 	 */
 	int			lis_mirror_index;
-	/**
-	 * FLR: the layout gen when lis_mirror_index was cached. The
+	/* FLR: the layout gen when lis_mirror_index was cached. The
 	 * mirror index makes sense only when the layout gen doesn't
 	 * change.
 	 */
 	int			lis_mirror_layout_gen;
 
-	/**
-	 * fields below this will be initialized in lov_io_init().
+	/* fields below this will be initialized in lov_io_init(). */
+	unsigned int lis_preserved;
+
+	/* Pointer to obj slice. Duplicate of lov_io::lis_cl::cis_object. */
+	struct lov_object *lis_object;
+	/*
+	 * Original end-of-io position for this IO, set by the upper layer as
+	 * cl_io::u::ci_rw::pos + cl_io::u::ci_rw::count. lov remembers this,
+	 * changes pos and count to fit IO into a single stripe and uses saved
+	 * value to determine when IO iterations have to stop.
+	 *
+	 * This is used only for CIT_READ and CIT_WRITE io's.
 	 */
-	unsigned		lis_preserved;
+	loff_t             lis_io_endpos;
 
-        /**
-         * Pointer to the object slice. This is a duplicate of
-         * lov_io::lis_cl::cis_object.
-         */
-        struct lov_object *lis_object;
-        /**
-         * Original end-of-io position for this IO, set by the upper layer as
-         * cl_io::u::ci_rw::pos + cl_io::u::ci_rw::count. lov remembers this,
-         * changes pos and count to fit IO into a single stripe and uses saved
-         * value to determine when IO iterations have to stop.
-         *
-         * This is used only for CIT_READ and CIT_WRITE io's.
-         */
-        loff_t             lis_io_endpos;
-
-	/**
-	 * Record the stripe index before the truncate size, used for setting OST
-	 * object size for truncate. LU-14128. lis_trunc_stripe_index[i] refers to
+	/* Record stripe index before the truncate size, used for setting OST
+	 * obj size for truncate. LU-14128. lis_trunc_stripe_index[i] refers to
 	 * lov_object.u.composite.lo_entries[i].
 	 */
 	int *lis_trunc_stripe_index;
 
-        /**
-         * starting position within a file, for the current io loop iteration
-         * (stripe), used by ci_io_loop().
-         */
+	/* starting position within a file, for the current io loop iteration
+	 * (stripe), used by ci_io_loop().
+	 */
 	loff_t			lis_pos;
-	/**
-	 * end position with in a file, for the current stripe io. This is
+	/* end position with in a file, for the current stripe io. This is
 	 * exclusive (i.e., next offset after last byte affected by io).
 	 */
 	loff_t			lis_endpos;
 	int			lis_nr_subios;
 
-	/**
-	 * the index of ls_single_subio in ls_subios array
-	 */
+	/* the index of ls_single_subio in ls_subios array */
 	int			lis_single_subio_index;
 	struct lov_io_sub	lis_single_subio;
 
-	/**
-	 * List of active sub-io's. Active sub-io's are under the range
+	/* List of active sub-io's. Active sub-io's are under the range
 	 * of [lis_pos, lis_endpos).
 	 */
 	struct list_head	lis_active;
-	/**
-	 * All sub-io's created in this lov_io.
-	 */
+	/* All sub-io's created in this lov_io. */
 	struct list_head	lis_subios;
 	/* Cached results from stripe & offset calculations for page init */
 	int			lis_cached_entry;
@@ -587,8 +541,8 @@ struct lov_io {
 };
 
 struct lov_session {
-        struct lov_io          ls_io;
-        struct lov_sublock_env ls_subenv;
+	struct lov_io          ls_io;
+	struct lov_sublock_env ls_subenv;
 };
 
 extern struct lu_device_type lov_device_type;
@@ -605,18 +559,18 @@ extern struct kmem_cache *lov_session_kmem;
 extern struct kmem_cache *lovsub_object_kmem;
 
 int   lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
-                           struct cl_lock *lock, const struct cl_io *io);
-int   lov_lock_init_empty (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_lock *lock, const struct cl_io *io);
+			   struct cl_lock *lock, const struct cl_io *io);
+int   lov_lock_init_empty(const struct lu_env *env, struct cl_object *obj,
+			   struct cl_lock *lock, const struct cl_io *io);
 int   lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
-                           struct cl_io *io);
-int   lov_io_init_empty   (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_io *io);
+			   struct cl_io *io);
+int   lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
+			   struct cl_io *io);
 int   lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
-                           struct cl_io *io);
+			   struct cl_io *io);
 
 struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
-                               int stripe);
+			       int stripe);
 
 enum {
 	CP_LOV_INDEX_EMPTY = -1U,
@@ -627,74 +581,69 @@ static inline bool lov_page_is_empty(const struct cl_page *cp)
 	return cp->cp_lov_index == CP_LOV_INDEX_EMPTY;
 }
 
-int   lov_page_init_empty (const struct lu_env *env, struct cl_object *obj,
+int   lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_foreign(const struct lu_env *env, struct cl_object *obj,
 			     struct cl_page *page, pgoff_t index);
-struct lu_object *lov_object_alloc   (const struct lu_env *env,
-                                      const struct lu_object_header *hdr,
-                                      struct lu_device *dev);
+struct lu_object *lov_object_alloc(const struct lu_env *env,
+				      const struct lu_object_header *hdr,
+				      struct lu_device *dev);
 
 struct lu_object *lovsub_object_alloc(const struct lu_env *env,
-                                      const struct lu_object_header *hdr,
-                                      struct lu_device *dev);
+				      const struct lu_object_header *hdr,
+				      struct lu_device *dev);
 
 int lov_io_layout_at(struct lov_io *lio, __u64 offset);
 
 #define lov_foreach_target(lov, var)                    \
-        for (var = 0; var < lov_targets_nr(lov); ++var)
+	for (var = 0; var < lov_targets_nr(lov); ++var)
 
 static inline struct lu_extent *lov_io_extent(struct lov_io *io, int i)
 {
 	return &lov_lse(io->lis_object, i)->lsme_extent;
 }
 
-/**
- * For layout entries within @ext.
- */
+/* For layout entries within @ext. */
 #define lov_foreach_io_layout(ind, lio, ext)				\
 	for (ind = lov_io_layout_at(lio, (ext)->e_start);		\
 	     ind >= 0 &&						\
 	     lu_extent_is_overlapped(lov_io_extent(lio, ind), ext);	\
 	     ind = lov_io_layout_at(lio, lov_io_extent(lio, ind)->e_end))
 
-/*****************************************************************************
- *
+/*
  * Type conversions.
  *
  * Accessors.
- *
  */
-
 static inline struct lov_session *lov_env_session(const struct lu_env *env)
 {
-        struct lov_session *ses;
+	struct lov_session *ses;
 
-        ses = lu_context_key_get(env->le_ses, &lov_session_key);
-        LASSERT(ses != NULL);
-        return ses;
+	ses = lu_context_key_get(env->le_ses, &lov_session_key);
+	LASSERT(ses != NULL);
+	return ses;
 }
 
 static inline struct lov_io *lov_env_io(const struct lu_env *env)
 {
-        return &lov_env_session(env)->ls_io;
+	return &lov_env_session(env)->ls_io;
 }
 
 static inline int lov_is_object(const struct lu_object *obj)
 {
-        return obj->lo_dev->ld_type == &lov_device_type;
+	return obj->lo_dev->ld_type == &lov_device_type;
 }
 
 static inline int lovsub_is_object(const struct lu_object *obj)
 {
-        return obj->lo_dev->ld_type == &lovsub_device_type;
+	return obj->lo_dev->ld_type == &lovsub_device_type;
 }
 
 static inline struct lu_device *lov2lu_dev(struct lov_device *lov)
 {
-        return &lov->ld_cl.cd_lu_dev;
+	return &lov->ld_cl.cd_lu_dev;
 }
 
 static inline struct lov_device *lu2lov_dev(const struct lu_device *d)
@@ -705,12 +654,12 @@ static inline struct lov_device *lu2lov_dev(const struct lu_device *d)
 
 static inline struct cl_device *lovsub2cl_dev(struct lovsub_device *lovsub)
 {
-        return &lovsub->acid_cl;
+	return &lovsub->acid_cl;
 }
 
 static inline struct lu_device *lovsub2lu_dev(struct lovsub_device *lovsub)
 {
-        return &lovsub2cl_dev(lovsub)->cd_lu_dev;
+	return &lovsub2cl_dev(lovsub)->cd_lu_dev;
 }
 
 static inline struct lovsub_device *lu2lovsub_dev(const struct lu_device *d)
@@ -727,12 +676,12 @@ static inline struct lovsub_device *cl2lovsub_dev(const struct cl_device *d)
 
 static inline struct lu_object *lov2lu(struct lov_object *lov)
 {
-        return &lov->lo_cl.co_lu;
+	return &lov->lo_cl.co_lu;
 }
 
 static inline struct cl_object *lov2cl(struct lov_object *lov)
 {
-        return &lov->lo_cl;
+	return &lov->lo_cl;
 }
 
 static inline struct lov_object *lu2lov(const struct lu_object *obj)
@@ -776,34 +725,32 @@ static inline struct lov_lock *cl2lov_lock(const struct cl_lock_slice *slice)
 }
 
 static inline struct lov_io *cl2lov_io(const struct lu_env *env,
-                                const struct cl_io_slice *ios)
+				const struct cl_io_slice *ios)
 {
-        struct lov_io *lio;
+	struct lov_io *lio;
 
-        lio = container_of(ios, struct lov_io, lis_cl);
-        LASSERT(lio == lov_env_io(env));
-        return lio;
+	lio = container_of(ios, struct lov_io, lis_cl);
+	LASSERT(lio == lov_env_io(env));
+	return lio;
 }
 
 static inline int lov_targets_nr(const struct lov_device *lov)
 {
-        return lov->ld_lov->desc.ld_tgt_count;
+	return lov->ld_lov->desc.ld_tgt_count;
 }
 
 static inline struct lov_thread_info *lov_env_info(const struct lu_env *env)
 {
-        struct lov_thread_info *info;
+	struct lov_thread_info *info;
 
-        info = lu_context_key_get(&env->le_ctx, &lov_key);
-        LASSERT(info != NULL);
-        return info;
+	info = lu_context_key_get(&env->le_ctx, &lov_key);
+	LASSERT(info != NULL);
+	return info;
 }
 
 /* lov_pack.c */
 int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 		  struct lov_stripe_md *lsm, struct lov_user_md __user *lump,
 		  size_t size);
-
-/** @} lov */
 
 #endif
