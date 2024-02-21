@@ -589,23 +589,64 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
+static const char *mdt_cap2str(int cap)
+{
+	/* We don't allow using all capabilities, but the fields must exist.
+	 * The supported capabilities are CAP_FS_SET and CAP_NFSD_SET, plus
+	 * CAP_SYS_ADMIN for a bunch of HSM operations (that should be fixed).
+	 */
+	static const char *const capability_names[] = {
+		"cap_chown",			/*  0 */
+		"cap_dac_override",		/*  1 */
+		"cap_dac_read_search",		/*  2 */
+		"cap_fowner",			/*  3 */
+		"cap_fsetid",			/*  4 */
+		NULL,				/*  5 */
+		NULL,				/*  6 */
+		NULL,				/*  7 */
+		NULL,				/*  8 */
+		"cap_linux_immutable",		/*  9 */
+		NULL,				/* 10 */
+		NULL,				/* 11 */
+		NULL,				/* 12 */
+		NULL,				/* 13 */
+		NULL,				/* 14 */
+		NULL,				/* 15 */
+		NULL,				/* 16 */
+		NULL,				/* 17 */
+		NULL,				/* 18 */
+		NULL,				/* 19 */
+		NULL,				/* 20 */
+		/* we should use more precise capabilities than this */
+		"cap_sys_admin",		/* 21 */
+		NULL,				/* 22 */
+		NULL,				/* 23 */
+		"cap_sys_resource",		/* 24 */
+		NULL,				/* 25 */
+		NULL,				/* 26 */
+		"cap_mknod",			/* 27 */
+		NULL,				/* 28 */
+		NULL,				/* 29 */
+		NULL,				/* 30 */
+		NULL,				/* 31 */
+		"cap_mac_override",		/* 32 */
+	};
+
+	if (cap >= ARRAY_SIZE(capability_names))
+		return NULL;
+
+	return capability_names[cap];
+}
+
 static ssize_t enable_cap_mask_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	u64 cap;
+	u64 mask = mdt_cap2num(mdt->mdt_enable_cap_mask);
 
-	BUILD_BUG_ON(_KERNEL_CAP_T_SIZE != sizeof(u64));
-
-#ifdef CAP_FOR_EACH_U32 /* kernels before v6.2-13111-gf122a08b197d */
-	cap = ((u64)mdt->mdt_enable_cap_mask.cap[1] << 32) |
-	       mdt->mdt_enable_cap_mask.cap[0];
-#else
-	cap = mdt->mdt_enable_cap_mask.val;
-#endif
-	return scnprintf(buf, PAGE_SIZE, "%#0llx\n", cap);
+	return cfs_mask2str(buf, PAGE_SIZE, mask, mdt_cap2str, ',');
 }
 
 static ssize_t enable_cap_mask_store(struct kobject *kobj,
@@ -615,24 +656,28 @@ static ssize_t enable_cap_mask_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	static kernel_cap_t allowed_cap = CAP_EMPTY_SET;
 	unsigned long long val;
 	int rc;
 
 	rc = kstrtoull(buffer, 0, &val);
+	if (rc == -EINVAL) {
+		u64 cap = mdt_cap2num(mdt->mdt_enable_cap_mask);
+
+		/* the "allmask" is filtered by allowed_mask below */
+		rc = cfs_str2mask(buffer, mdt_cap2str, &cap, 0, ~0ULL, 0);
+		val = cap;
+	}
 	if (rc)
-		/* should also accept symbolic names via cfs_str2mask() */
 		return rc;
 
-#ifdef CAP_FOR_EACH_U32
-	mdt->mdt_enable_cap_mask.cap[0] = val &
-		(CAP_FS_MASK_B0 | CAP_TO_MASK(CAP_SYS_RESOURCE) |
-		 CAP_TO_MASK(CAP_LINUX_IMMUTABLE));
-	mdt->mdt_enable_cap_mask.cap[1] = (val >> 32) & CAP_FS_MASK_B1;
-#else
-	mdt->mdt_enable_cap_mask.val = val &
-		(CAP_FS_MASK | BIT_ULL(CAP_SYS_RESOURCE) |
-		 BIT_ULL(CAP_LINUX_IMMUTABLE));
-#endif
+	/* All of the capabilities that we currently allow/check */
+	if (unlikely(cap_isclear(allowed_cap))) {
+		allowed_cap = CAP_FS_SET;
+		cap_raise(allowed_cap, CAP_SYS_RESOURCE);
+	}
+
+	mdt->mdt_enable_cap_mask = cap_intersect(mdt_num2cap(val), allowed_cap);
 
 	return count;
 }

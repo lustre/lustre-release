@@ -121,7 +121,7 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	char *kernbuf;
 	int rc;
 	int oldmask = mdd->mdd_cl.mc_proc_mask;
-	int newmask = oldmask;
+	u64 newmask = oldmask;
 
 	ENTRY;
 

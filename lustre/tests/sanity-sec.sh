@@ -4391,7 +4391,10 @@ test_51() {
 
 	old_cap=($(do_nodes $mdts $LCTL get_param -n $cap_param 2>/dev/null))
 	if [[ -n "$old_cap" ]]; then
-		do_nodes $mdts $LCTL set_param $cap_param=0xf
+		local new_cap="+cap_chown+cap_fowner+cap_dac_override+cap_dac_read_search"
+		(( $MDS1_VERSION > $(version_code 2.14.0.135) )) || new_cap=0xf
+		echo "old_cap: $old_cap new_cap: $new_cap"
+		do_nodes $mdts $LCTL set_param $cap_param=$new_cap
 		stack_trap "do_nodes $mdts $LCTL set_param $cap_param=$old_cap"
 	fi
 

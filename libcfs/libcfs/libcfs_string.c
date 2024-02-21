@@ -39,13 +39,61 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_string.h>
 
+
+/* convert a binary mask to a string of bit names */
+int cfs_mask2str(char *str, int size, u64 mask, const char *(*bit2str)(int bit),
+		 char sep)
+{
+	int len = 0;
+	const char *token;
+	int i;
+
+	if (mask == 0) {			/* "0" */
+		if (size > 0)
+			str[0] = '0';
+		len = 1;
+	} else {				/* space-separated tokens */
+		for (i = 0; i < 64; i++) {
+			if ((mask & BIT(i)) == 0)
+				continue;
+
+			token = bit2str(i);
+			if (!token)		/* unused bit */
+				continue;
+
+			if (len > 0) {		/* separator? */
+				if (len < size)
+					str[len] = sep;
+				len++;
+			}
+
+			while (*token != 0) {
+				if (len < size)
+					str[len] = *token;
+				token++;
+				len++;
+			}
+		}
+	}
+
+	/* terminate 'str' */
+	if (len < size)
+		str[len++] = '\n';
+	if (len < size)
+		str[len] = '\0';
+	else
+		str[size - 1] = '\0';
+
+	return len;
+}
+EXPORT_SYMBOL(cfs_mask2str);
+
 /* Convert a text string to a bitmask */
 int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
-		 int *oldmask, int minmask, int allmask, int defmask)
+		 u64 *oldmask, u64 minmask, u64 allmask, u64 defmask)
 {
 	const char *debugstr;
-	char op = 0;
-	int newmask = minmask, i, len, found = 0;
+	u64 newmask = minmask, found = 0;
 
 	ENTRY;
 	/* <str> must be a list of tokens separated by whitespace or comma,
@@ -55,6 +103,9 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 	 * applies to all following tokens up to the next operator.
 	 */
 	while (*str != 0) {
+		int i, len;
+		char op = 0;
+
 		while (isspace(*str) || *str == ',')
 			str++;
 		if (*str == 0)

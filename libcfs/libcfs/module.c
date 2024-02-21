@@ -124,7 +124,7 @@ static int proc_dobitmasks(struct ctl_table *table, int write,
 			rc = 0;
 		} else {
 			rc = cfs_trace_copyout_string(buffer, nob,
-						      tmpstr + pos, "\n");
+						      tmpstr + pos, NULL);
 		}
 	} else {
 		tmpstr = memdup_user_nul(buffer, nob);

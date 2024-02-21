@@ -283,78 +283,44 @@ static const char *libcfs_debug_dbg2str(int debug)
 	return libcfs_debug_masks[debug];
 }
 
-int
-libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
+int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
 {
-	const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
-						 libcfs_debug_dbg2str;
-	int len = 0;
-	const char *token;
-	int i;
+	const char *(*bit2str)(int bit) = is_subsys ? libcfs_debug_subsys2str :
+						      libcfs_debug_dbg2str;
 
-	if (mask == 0) {			/* "0" */
-		if (size > 0)
-			str[0] = '0';
-		len = 1;
-	} else {				/* space-separated tokens */
-		for (i = 0; i < 32; i++) {
-			if ((mask & BIT(i)) == 0)
-				continue;
-
-			token = fn(i);
-			if (!token)	/* unused bit */
-				continue;
-
-			if (len > 0) {		/* separator? */
-				if (len < size)
-					str[len] = ' ';
-				len++;
-			}
-
-			while (*token != 0) {
-				if (len < size)
-					str[len] = *token;
-				token++;
-				len++;
-			}
-		}
-	}
-
-	/* terminate 'str' */
-	if (len < size)
-		str[len] = 0;
-	else
-		str[size - 1] = 0;
-
-	return len;
+	return cfs_mask2str(str, size, mask, bit2str, ' ');
 }
 
-int
-libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
+int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 {
-	const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
-						 libcfs_debug_dbg2str;
+	const char *(*bit2str)(int bit) = is_subsys ? libcfs_debug_subsys2str :
+						      libcfs_debug_dbg2str;
+	u64 newmask = *mask;
 	int m = 0;
 	int matched;
-	int n;
-	int t;
+	int n, t;
+	int rc;
 
 	/* Allow a number for backwards compatibility */
 	for (n = strlen(str); n > 0; n--)
-		if (!isspace(str[n-1]))
+		if (!isspace(str[n - 1]))
 			break;
 	matched = n;
 	t = sscanf(str, "%i%n", &m, &matched);
 	if (t >= 1 && matched == n) {
 		/* don't print warning for lctl set_param debug=0 or -1 */
 		if (m != 0 && m != -1)
-			CWARN("You are trying to use a numerical value for the mask - this will be deprecated in a future release.\n");
+			CWARN("using a numerical debug mask is deprecated\n");
 		*mask = m;
 		return 0;
 	}
 
-	return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK, ~0,
-			    is_subsys ? LIBCFS_S_DEFAULT : LIBCFS_D_DEFAULT);
+	rc = cfs_str2mask(str, bit2str, &newmask, is_subsys ? 0 : D_CANTMASK,
+			  ~0, is_subsys ? LIBCFS_S_DEFAULT : LIBCFS_D_DEFAULT);
+
+	*mask = newmask;
+
+	return rc;
 }
 
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";

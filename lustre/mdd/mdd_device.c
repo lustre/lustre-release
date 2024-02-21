@@ -1798,13 +1798,15 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	if (mask) {
+		u64 newmask = CHANGELOG_DEFMASK;
+
 		/* if user will use relative mask apply it on default one */
-		rec->cur_mask = CHANGELOG_DEFMASK;
-		rc = cfs_str2mask(mask, changelog_type2str, &rec->cur_mask,
+		rc = cfs_str2mask(mask, changelog_type2str, &newmask,
 				  CHANGELOG_MINMASK, CHANGELOG_ALLMASK,
 				  CHANGELOG_DEFMASK);
 		if (rc)
 			GOTO(out_users, rc);
+		rec->cur_mask = newmask;
 	} else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK) {
 		/* a maskless users means default mask but only if server has
 		 * no specific mask set

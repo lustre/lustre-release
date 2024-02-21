@@ -1479,6 +1479,37 @@ static inline bool mdt_changelog_allow(struct mdt_thread_info *info)
 	return is_admin;
 }
 
+/* convert a capability into an integer to print or manage more easily */
+static inline u64 mdt_cap2num(kernel_cap_t cap)
+{
+#ifdef CAP_FOR_EACH_U32
+	/* kernels before v6.2-13111-gf122a08b197d had a more complex
+	 * kernel_cap_t structure with an array of __u32 values, but this
+	 * was then fixed to have a single __u64 value.  There are accessor
+	 * functions for the old kernel_cap_t but since that is now dead code
+	 * it isn't worthwhile to jump through hoops for compatibility for it.
+	 */
+	return ((u64)cap.cap[1] << 32) | cap.cap[0];
+#else
+	return cap.val;
+#endif
+}
+
+/* convert an integer into a capabilityt */
+static inline kernel_cap_t mdt_num2cap(u64 num)
+{
+	kernel_cap_t cap;
+
+#ifdef CAP_FOR_EACH_U32
+	cap.cap[0] = num;
+	cap.cap[1] = (num >> 32);
+#else
+	cap.val = num;
+#endif
+
+	return cap;
+}
+
 /* We forbid operations from encryption-unaware clients if they try to
  * manipulate encrypted files/directories.
  */
