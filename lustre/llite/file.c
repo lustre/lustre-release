@@ -1677,7 +1677,6 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	if (iot == CIT_WRITE) {
 		io->u.ci_wr.wr_append = iocb_ki_flags_check(flags, APPEND);
 		io->u.ci_wr.wr_sync   = !!(iocb_ki_flags_check(flags, SYNC) ||
-					   iocb_ki_flags_check(flags, APPEND) ||
 					   iocb_ki_flags_check(flags, DSYNC) ||
 					   IS_SYNC(inode));
 	}
