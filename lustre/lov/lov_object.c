@@ -164,7 +164,6 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 	} else {
 		struct lu_object  *old_obj;
 		struct lov_object *old_lov;
-		unsigned int mask = D_INODE;
 
 		spin_unlock(&subhdr->coh_attr_guard);
 		old_obj = lu_object_locate(&parent->coh_lu, &lov_device_type);
@@ -176,14 +175,13 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 			lu_object_unhash(env, &subobj->co_lu);
 			result = -EAGAIN;
 		} else {
-			mask = D_ERROR;
 			result = -EIO;
 		}
 
-		LU_OBJECT_DEBUG(mask, env, &subobj->co_lu,
+		LU_OBJECT_DEBUG(D_INODE, env, &subobj->co_lu,
 				"stripe %d is already owned.", idx);
-		LU_OBJECT_DEBUG(mask, env, old_obj, "owned.");
-		LU_OBJECT_HEADER(mask, env, lov2lu(lov), "try to own.\n");
+		LU_OBJECT_DEBUG(D_INODE, env, old_obj, "owned.");
+		LU_OBJECT_HEADER(D_INODE, env, lov2lu(lov), "try to own.\n");
 		cl_object_put(env, subobj);
 	}
 	return result;
