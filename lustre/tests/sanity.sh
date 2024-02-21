@@ -11097,6 +11097,11 @@ test_77l() {
 	set_checksums 1
 	stack_trap "set_checksums $ORIG_CSUM" EXIT
 	stack_trap "set_checksum_type $ORIG_CSUM_TYPE" EXIT
+	local old
+
+	old=$($LCTL get_param -n osc.*.idle_timeout | head -n 1)
+	$LCTL set_param osc.*.idle_timeout=10
+	stack_trap "$LCTL set_param osc.*.idle_timeout=$old" EXIT
 
 	set_checksum_type invalid && error "unexpected success of invalid checksum type"
 
@@ -31456,6 +31461,11 @@ run_test 810 "partial page writes on ZFS (LU-11663)"
 test_812a() {
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
+	local old
+
+	old=$($LCTL get_param -n osc.*.idle_timeout | head -n 1)
+	$LCTL set_param osc.*.idle_timeout=10
+	stack_trap "$LCTL set_param osc.*.idle_timeout=$old" EXIT
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
@@ -31477,6 +31487,11 @@ run_test 812a "do not drop reqs generated when imp is going to idle (LU-11951)"
 test_812b() { # LU-12378
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
+	local old
+
+	old=$($LCTL get_param -n osc.*.idle_timeout | head -n 1)
+	$LCTL set_param osc.*.idle_timeout=10
+	stack_trap "$LCTL set_param osc.*.idle_timeout=$old" EXIT
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "setstripe failed"
 	# ensure ost1 is connected
@@ -31709,6 +31724,11 @@ test_816() {
 	local ost1_imp=$(get_osc_import_name client ost1)
 	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
 			 cut -d'.' -f2)
+	local old
+
+	old=$($LCTL get_param -n osc.*.idle_timeout | head -n 1)
+	$LCTL set_param osc.*.idle_timeout=10
+	stack_trap "$LCTL set_param osc.*.idle_timeout=$old" EXIT
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
