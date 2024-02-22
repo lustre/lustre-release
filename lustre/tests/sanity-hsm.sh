@@ -1706,7 +1706,7 @@ test_21() {
 	local orig_size=$(stat -c "%s" $f)
 	local orig_blocks=$(stat -c "%b" $f)
 
-	start_full_debug_logging
+#	start_full_debug_logging
 
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -1746,7 +1746,7 @@ test_21() {
 	$LFS hsm_release $f || fail "second release should succeed"
 	check_hsm_flags $f "0x0000000d"
 
-	stop_full_debug_logging
+#	stop_full_debug_logging
 }
 run_test 21 "Simple release tests"
 
