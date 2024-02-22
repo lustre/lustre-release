@@ -56,8 +56,7 @@ static struct vvp_io *cl2vvp_io(const struct lu_env *env,
 	return vio;
 }
 
-/**
- * For swapping layout. The file's layout may have changed.
+/* For swapping layout. The file's layout may have changed.
  * To avoid populating pages to a wrong stripe, we have to verify the
  * correctness of layout. It works because swapping layout processes
  * have to acquire group lock.
@@ -73,7 +72,8 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 	case CIT_READ:
 	case CIT_WRITE:
 		/* don't need lock here to check lli_layout_gen as we have held
-		 * extent lock and GROUP lock has to hold to swap layout */
+		 * extent lock and GROUP lock has to hold to swap layout
+		 */
 		if (ll_layout_version_get(lli) != vio->vui_layout_gen ||
 		    CFS_FAIL_CHECK_RESET(OBD_FAIL_LLITE_LOST_LAYOUT, 0)) {
 			io->ci_need_restart = 1;
@@ -106,7 +106,7 @@ static void vvp_object_size_unlock(struct cl_object *obj)
 	ll_inode_size_unlock(inode);
 }
 
-/**
+/*
  * Helper function that if necessary adjusts file size (inode->i_size), when
  * position at the offset \a pos is accessed. File size can be arbitrary stale
  * on a Lustre client, but client at least knows KMS. If accessed area is
@@ -162,8 +162,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 				/* If objective page index exceed end-of-file
 				 * page index, return directly. Do not expect
 				 * kernel will check such case correctly.
-				 * linux-2.6.18-128.1.1 miss to do that.
-				 * --bug 17336 */
+				 */
 				loff_t size = i_size_read(inode);
 				unsigned long cur_index = start >>
 					PAGE_SHIFT;
@@ -175,24 +174,23 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 			}
 
 			return result;
-		} else {
-			/*
-			 * region is within kms and, hence, within real file
-			 * size (A). We need to increase i_size to cover the
-			 * read region so that generic_file_read() will do its
-			 * job, but that doesn't mean the kms size is
-			 * _correct_, it is only the _minimum_ size. If
-			 * someone does a stat they will get the correct size
-			 * which will always be >= the kms value here.
-			 * b=11081
-			 */
-			if (i_size_read(inode) < kms) {
-				i_size_write(inode, kms);
-				CDEBUG(D_VFSTRACE,
-				       DFID" updating i_size %llu\n",
-				       PFID(lu_object_fid(&obj->co_lu)),
-				       (__u64)i_size_read(inode));
-			}
+		}
+		/*
+		 * region is within kms and, hence, within real file
+		 * size (A). We need to increase i_size to cover the
+		 * read region so that generic_file_read() will do its
+		 * job, but that doesn't mean the kms size is
+		 * _correct_, it is only the _minimum_ size. If
+		 * someone does a stat they will get the correct size
+		 * which will always be >= the kms value here.
+		 * b=11081
+		 */
+		if (i_size_read(inode) < kms) {
+			i_size_write(inode, kms);
+			CDEBUG(D_VFSTRACE,
+			       DFID" updating i_size %llu\n",
+			       PFID(lu_object_fid(&obj->co_lu)),
+			       (__u64)i_size_read(inode));
 		}
 	}
 
@@ -201,12 +199,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 	return result;
 }
 
-/*****************************************************************************
- *
- * io operations.
- *
- */
-
+/* io operations. */
 static int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 				 __u32 enqflags, enum cl_lock_mode mode,
 				 pgoff_t start, pgoff_t end)
@@ -220,7 +213,7 @@ static int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 
 	CDEBUG(D_VFSTRACE, "lock: %d [%lu, %lu]\n", mode, start, end);
 
-	memset(&vio->vui_link, 0, sizeof vio->vui_link);
+	memset(&vio->vui_link, 0, sizeof(vio->vui_link));
 
 	if (vio->vui_fd && (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 		descr->cld_mode = CLM_GROUP;
@@ -280,7 +273,7 @@ static void vvp_io_write_iter_fini(const struct lu_env *env,
 }
 
 static int vvp_io_fault_iter_init(const struct lu_env *env,
-                                  const struct cl_io_slice *ios)
+				  const struct cl_io_slice *ios)
 {
 	struct vvp_io *vio   = cl2vvp_io(env, ios);
 	struct inode  *inode = vvp_object_inode(ios->cis_obj);
@@ -298,12 +291,12 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct inode     *inode = vvp_object_inode(obj);
 	__u32		  gen = 0;
 	int rc;
+
 	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
-	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-	       "need write layout %d, restore needed %d, invalidate_lock %d\n",
+	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d need write layout %d, restore needed %d, invalidate_lock %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
 	       vio->vui_layout_gen, io->ci_need_write_intent,
@@ -322,8 +315,9 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		 */
 		rc = ll_layout_restore(inode, 0, OBD_OBJECT_EOF);
 		/* if restore registration failed, no restart,
-		 * we will return -ENODATA */
-		/* The layout will change after restore, so we need to
+		 * we will return -ENODATA
+		 *
+		 * The layout will change after restore, so we need to
 		 * block on layout lock held by the MDT
 		 * as MDT will not send new layout in lvb (see LU-3124)
 		 * we have to explicitly fetch it, all this will be done
@@ -354,8 +348,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			       DFID" layout changed from %d to %d.\n",
 			       PFID(lu_object_fid(&obj->co_lu)),
 			       vio->vui_layout_gen, gen);
-			/* today successful restore is the only possible
-			 * case */
+			/* today successful restore is the only possible case */
 			/* restore was done, clear restoring state */
 			clear_bit(LLIF_FILE_RESTORING,
 				  &ll_i2info(vvp_object_inode(obj))->lli_flags);
@@ -363,10 +356,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		GOTO(out, 0);
 	}
 
-	/**
-	 * dynamic layout change needed, send layout intent
-	 * RPC.
-	 */
+	/* dynamic layout change needed, send layout intent RPC. */
 	if (io->ci_need_write_intent) {
 		enum layout_intent_opc opc = LAYOUT_INTENT_WRITE;
 
@@ -407,31 +397,30 @@ out:
 }
 
 static void vvp_io_fault_fini(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+			      const struct cl_io_slice *ios)
 {
-        struct cl_io   *io   = ios->cis_io;
-        struct cl_page *page = io->u.ci_fault.ft_page;
+	struct cl_io   *io   = ios->cis_io;
+	struct cl_page *page = io->u.ci_fault.ft_page;
 
 	CLOBINVRNT(env, io->ci_obj, vvp_object_invariant(io->ci_obj));
 
-        if (page != NULL) {
-                lu_ref_del(&page->cp_reference, "fault", io);
-                cl_page_put(env, page);
-                io->u.ci_fault.ft_page = NULL;
-        }
-        vvp_io_fini(env, ios);
+	if (page != NULL) {
+		lu_ref_del(&page->cp_reference, "fault", io);
+		cl_page_put(env, page);
+		io->u.ci_fault.ft_page = NULL;
+	}
+	vvp_io_fini(env, ios);
 }
 
 static enum cl_lock_mode vvp_mode_from_vma(struct vm_area_struct *vma)
 {
-        /*
-         * we only want to hold PW locks if the mmap() can generate
-         * writes back to the file and that only happens in shared
-         * writable vmas
-         */
-        if ((vma->vm_flags & VM_SHARED) && (vma->vm_flags & VM_WRITE))
-                return CLM_WRITE;
-        return CLM_READ;
+	/* we only want to hold PW locks if the mmap() can generate
+	 * writes back to the file and that only happens in shared
+	 * writable vmas
+	 */
+	if ((vma->vm_flags & VM_SHARED) && (vma->vm_flags & VM_WRITE))
+		return CLM_WRITE;
+	return CLM_READ;
 }
 
 static int vvp_mmap_locks(const struct lu_env *env,
@@ -447,6 +436,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 	unsigned long addr;
 	ssize_t bytes;
 	int result = 0;
+
 	ENTRY;
 
 	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
@@ -482,9 +472,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			int flags = CEF_MUST;
 
 			if (ll_file_nolock(vma->vm_file)) {
-				/*
-				 * For no lock case is not allowed for mmap
-				 */
+				/* For no lock case is not allowed for mmap */
 				result = -EINVAL;
 				break;
 			}
@@ -553,7 +541,7 @@ static void vvp_io_update_iov(const struct lu_env *env,
 }
 
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
-                          enum cl_lock_mode mode, loff_t start, loff_t end)
+			  enum cl_lock_mode mode, loff_t start, loff_t end)
 {
 	struct vvp_io *vio = vvp_env_io(env);
 	int result;
@@ -591,7 +579,7 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 }
 
 static int vvp_io_read_lock(const struct lu_env *env,
-                            const struct cl_io_slice *ios)
+			    const struct cl_io_slice *ios)
 {
 	struct cl_io *io = ios->cis_io;
 	struct cl_io_rw_common *rd = &io->u.ci_rd.rd;
@@ -604,13 +592,11 @@ static int vvp_io_read_lock(const struct lu_env *env,
 }
 
 static int vvp_io_fault_lock(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+			     const struct cl_io_slice *ios)
 {
-        struct cl_io *io   = ios->cis_io;
-        struct vvp_io *vio = cl2vvp_io(env, ios);
-        /*
-         * XXX LDLM_FL_CBPENDING
-         */
+	struct cl_io *io   = ios->cis_io;
+	struct vvp_io *vio = cl2vvp_io(env, ios);
+	/* XXX LDLM_FL_CBPENDING */
 	return vvp_io_one_lock_index(env,
 				     io, 0,
 				     vvp_mode_from_vma(vio->u.fault.ft_vma),
@@ -643,13 +629,13 @@ static int vvp_io_setattr_iter_init(const struct lu_env *env,
 	return 0;
 }
 
-/**
+/*
  * Implementation of cl_io_operations::cio_lock() method for CIT_SETATTR io.
  *
  * Handles "lockless io" mode when extent locking is done by server.
  */
 static int vvp_io_setattr_lock(const struct lu_env *env,
-                               const struct cl_io_slice *ios)
+			       const struct cl_io_slice *ios)
 {
 	struct cl_io  *io  = ios->cis_io;
 	__u64 lock_start = 0;
@@ -690,11 +676,9 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 
 static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 {
-	int     result;
+	int result;
 
-	/*
-	 * Only ll_inode_size_lock is taken at this level.
-	 */
+	/* Only ll_inode_size_lock is taken at this level.  */
 	ll_inode_size_lock(inode);
 	result = inode_newsize_ok(inode, size);
 	if (result < 0) {
@@ -709,13 +693,13 @@ static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 }
 
 static int vvp_io_setattr_time(const struct lu_env *env,
-                               const struct cl_io_slice *ios)
+			       const struct cl_io_slice *ios)
 {
-        struct cl_io       *io    = ios->cis_io;
-        struct cl_object   *obj   = io->ci_obj;
-	struct cl_attr     *attr  = vvp_env_thread_attr(env);
-        int result;
-        unsigned valid = CAT_CTIME;
+	struct cl_io *io    = ios->cis_io;
+	struct cl_object *obj   = io->ci_obj;
+	struct cl_attr *attr  = vvp_env_thread_attr(env);
+	int result;
+	unsigned int valid = CAT_CTIME;
 
 	cl_object_attr_lock(obj);
 	attr->cat_ctime = io->u.ci_setattr.sa_attr.lvb_ctime;
@@ -771,7 +755,7 @@ static int vvp_io_setattr_start(const struct lu_env *env,
 }
 
 static void vvp_io_setattr_end(const struct lu_env *env,
-                               const struct cl_io_slice *ios)
+			       const struct cl_io_slice *ios)
 {
 	struct cl_io *io = ios->cis_io;
 	struct inode *inode = vvp_object_inode(io->ci_obj);
@@ -780,7 +764,8 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 
 	if (cl_io_is_trunc(io)) {
 		/* Truncate in memory pages - they must be clean pages
-		 * because osc has already notified to destroy osc_extents. */
+		 * because osc has already notified to destroy osc_extents.
+		 */
 		vvp_do_vmtruncate(inode, size);
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
@@ -866,7 +851,8 @@ static int vvp_io_read_start(const struct lu_env *env,
 	}
 
 	/* Unless this is reading a sparse file, otherwise the lock has already
-	 * been acquired so vvp_prep_size() is an empty op. */
+	 * been acquired so vvp_prep_size() is an empty op.
+	 */
 	result = vvp_prep_size(env, obj, io, pos, crw_bytes, &exceed);
 	if (result != 0)
 		RETURN(result);
@@ -908,8 +894,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	/* this seqlock lets us notice if a page has been deleted on this inode
 	 * during the fault process, allowing us to catch an erroneous short
-	 * read or EIO
-	 * See LU-16160
+	 * read or EIO. See LU-16160
 	 */
 	do {
 		seq = read_seqbegin(&ll_i2info(inode)->lli_page_inv_lock);
@@ -918,9 +903,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 			io->ci_bytes += result;
 			total_bytes_read += result;
 		}
-	/* if we got a short read or -EIO and we raced with page invalidation,
-	 * retry
-	 */
+	/* got a short read or -EIO and we raced with page invalidation retry */
 	} while (read_seqretry(&ll_i2info(inode)->lli_page_inv_lock, seq) &&
 		 ((result >= 0 && iov_iter_count(&iter) > 0)
 		  || result == -EIO));
@@ -945,6 +928,7 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 	struct cl_page *page;
 	unsigned int bytes = 0;
 	int rc = 0;
+
 	ENTRY;
 
 	if (plist->pl_nr == 0)
@@ -1140,6 +1124,7 @@ static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
 
 	for (i = 0; i < count; i++) {
 		struct page *vmpage = pvec->pages[i];
+
 		SetPageUptodate(vmpage);
 	}
 
@@ -1148,6 +1133,7 @@ static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
 	for (i = 0; i < count; i++) {
 		struct page *vmpage = pvec->pages[i];
 		struct cl_page *page = (struct cl_page *) vmpage->private;
+
 		cl_page_disown(env, io, page);
 		lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
 		cl_page_put(env, page);
@@ -1189,6 +1175,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	int rc = 0;
 	int bytes = 0;
 	unsigned int npages = vio->u.readwrite.vui_queue.pl_nr;
+
 	ENTRY;
 
 	if (npages == 0)
@@ -1246,7 +1233,8 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	ll_merge_attr(env, inode);
 
 	/* Now the pages in queue were failed to commit, discard them
-	 * unless they were dirtied before. */
+	 * unless they were dirtied before.
+	 */
 	while (queue->pl_nr > 0) {
 		page = cl_page_list_first(queue);
 		cl_page_list_del(env, queue, page, true);
@@ -1310,7 +1298,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 
 	/* The maximum Lustre file size is variable, based on the OST maximum
 	 * object size and number of stripes.  This needs another check in
-	 * addition to the VFS checks earlier. */
+	 * addition to the VFS checks earlier.
+	 */
 	if (pos + crw_bytes > ll_file_maxbytes(inode)) {
 		CDEBUG(D_INODE,
 		       "%s: file %s ("DFID") offset %llu > maxbytes %llu\n",
@@ -1489,26 +1478,27 @@ static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
 }
 
 static int vvp_io_fault_start(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+			      const struct cl_io_slice *ios)
 {
-	struct vvp_io		*vio   = cl2vvp_io(env, ios);
-	struct cl_io		*io    = ios->cis_io;
-	struct cl_object	*obj   = io->ci_obj;
-	struct inode		*inode = vvp_object_inode(obj);
-	struct ll_inode_info	*lli   = ll_i2info(inode);
-	struct cl_fault_io	*fio   = &io->u.ci_fault;
-	struct vvp_fault_io	*cfio  = &vio->u.fault;
-	loff_t			 offset;
-	int			 result = 0;
-	struct page		*vmpage = NULL;
-	struct cl_page		*page;
-	loff_t			 size;
-	pgoff_t			 last_index;
+	struct vvp_io *vio = cl2vvp_io(env, ios);
+	struct cl_io *io = ios->cis_io;
+	struct cl_object *obj = io->ci_obj;
+	struct inode *inode = vvp_object_inode(obj);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_fault_io *fio = &io->u.ci_fault;
+	struct vvp_fault_io *cfio = &vio->u.fault;
+	loff_t offset;
+	int result = 0;
+	struct page *vmpage = NULL;
+	struct cl_page *page;
+	loff_t size;
+	pgoff_t last_index;
+
 	ENTRY;
 
 	trunc_sem_down_read_nowait(&lli->lli_trunc_sem);
 
-        /* offset of the last byte on the page */
+	/* offset of the last byte on the page */
 	offset = ((fio->ft_index + 1) << PAGE_SHIFT) - 1;
 	LASSERT((offset >> PAGE_SHIFT) == fio->ft_index);
 	result = vvp_prep_size(env, obj, io, 0, offset + 1, NULL);
@@ -1542,20 +1532,22 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		generic_error_remove_page(vmpage->mapping, vmpage);
 
 	size = i_size_read(inode);
-        /* Though we have already held a cl_lock upon this page, but
-         * it still can be truncated locally. */
+	/* Though we have already held a cl_lock upon this page, but
+	 * it still can be truncated locally.
+	 */
 	if (unlikely((vmpage->mapping != inode->i_mapping) ||
 		     (page_offset(vmpage) > size))) {
-                CDEBUG(D_PAGE, "llite: fault and truncate race happened!\n");
+		CDEBUG(D_PAGE, "llite: fault and truncate race happened!\n");
 
-                /* return +1 to stop cl_io_loop() and ll_fault() will catch
-                 * and retry. */
-                GOTO(out, result = +1);
-        }
+		/* return +1 to stop cl_io_loop() and ll_fault() will catch
+		 * and retry.
+		 */
+		GOTO(out, result = + 1);
+	}
 
 	last_index = (size - 1) >> PAGE_SHIFT;
 
-	if (fio->ft_mkwrite ) {
+	if (fio->ft_mkwrite) {
 		/*
 		 * Capture the size while holding the lli_trunc_sem from above
 		 * we want to make sure that we complete the mkwrite action
@@ -1564,9 +1556,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		 */
 		if (last_index < fio->ft_index) {
 			CDEBUG(D_PAGE,
-				"llite: mkwrite and truncate race happened: "
-				"%p: 0x%lx 0x%lx\n",
-				vmpage->mapping,fio->ft_index,last_index);
+				"llite: mkwrite and truncate race happened: %p: 0x%lx 0x%lx\n",
+				vmpage->mapping, fio->ft_index, last_index);
 			/*
 			 * We need to return if we are
 			 * passed the end of the file. This will propagate
@@ -1586,8 +1577,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	if (IS_ERR(page))
 		GOTO(out, result = PTR_ERR(page));
 
-	/* if page is going to be written, we should add this page into cache
-	 * earlier. */
+	/* if page will be written, then add this page into cache earlier. */
 	if (fio->ft_mkwrite) {
 		wait_on_page_writeback(vmpage);
 		if (!PageDirty(vmpage)) {
@@ -1606,11 +1596,13 @@ static int vvp_io_fault_start(const struct lu_env *env,
 
 			/* Do not set Dirty bit here so that in case IO is
 			 * started before the page is really made dirty, we
-			 * still have chance to detect it. */
+			 * still have chance to detect it.
+			 */
 			result = cl_io_commit_async(env, io, plist, 0, to,
 						    mkwrite_commit_callback);
 			/* Have overquota flag, trying sync write to check
-			 * whether indeed out of quota */
+			 * whether indeed out of quota
+			 */
 			if (result == -EDQUOT) {
 				cl_page_get(page);
 				result = vvp_io_commit_sync(env, io,
@@ -1657,9 +1649,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	 */
 	LASSERT(!fio->ft_mkwrite || fio->ft_index <= last_index);
 	if (fio->ft_index == last_index)
-		/*
-		 * Last page is mapped partially.
-		 */
+		/* Last page is mapped partially. */
 		fio->ft_bytes = size - (fio->ft_index << PAGE_SHIFT);
 	else
 		fio->ft_bytes = PAGE_SIZE;
@@ -1692,9 +1682,9 @@ static void vvp_io_fault_end(const struct lu_env *env,
 static int vvp_io_fsync_start(const struct lu_env *env,
 			      const struct cl_io_slice *ios)
 {
-	/* we should mark TOWRITE bit to each dirty page in radix tree to
-	 * verify pages have been written, but this is difficult because of
-	 * race. */
+	/* mark TOWRITE bit to each dirty page in radix tree to verify pages
+	 * have been written, but this is difficult because of race.
+	 */
 	return 0;
 }
 
@@ -1714,6 +1704,7 @@ static int vvp_io_read_ahead(const struct lu_env *env,
 			     pgoff_t start, struct cl_read_ahead *ra)
 {
 	int result = 0;
+
 	ENTRY;
 
 	if (ios->cis_io->ci_type == CIT_READ ||
@@ -1722,7 +1713,7 @@ static int vvp_io_read_ahead(const struct lu_env *env,
 
 		if (unlikely(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 			ra->cra_end_idx = CL_PAGE_EOF;
-			result = +1; /* no need to call down */
+			result = 1; /* no need to call down */
 		}
 	}
 
@@ -1784,7 +1775,7 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_end	= vvp_io_rw_end,
 			.cio_advance	= vvp_io_advance,
 		},
-                [CIT_WRITE] = {
+		[CIT_WRITE] = {
 			.cio_fini      = vvp_io_fini,
 			.cio_iter_init = vvp_io_write_iter_init,
 			.cio_iter_fini = vvp_io_write_iter_fini,
@@ -1792,21 +1783,21 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_start     = vvp_io_write_start,
 			.cio_end       = vvp_io_write_end,
 			.cio_advance   = vvp_io_advance,
-                },
-                [CIT_SETATTR] = {
-                        .cio_fini       = vvp_io_setattr_fini,
-                        .cio_iter_init  = vvp_io_setattr_iter_init,
-                        .cio_lock       = vvp_io_setattr_lock,
-                        .cio_start      = vvp_io_setattr_start,
-                        .cio_end        = vvp_io_setattr_end
-                },
-                [CIT_FAULT] = {
-                        .cio_fini      = vvp_io_fault_fini,
-                        .cio_iter_init = vvp_io_fault_iter_init,
-                        .cio_lock      = vvp_io_fault_lock,
-                        .cio_start     = vvp_io_fault_start,
+		},
+		[CIT_SETATTR] = {
+			.cio_fini       = vvp_io_setattr_fini,
+			.cio_iter_init  = vvp_io_setattr_iter_init,
+			.cio_lock       = vvp_io_setattr_lock,
+			.cio_start      = vvp_io_setattr_start,
+			.cio_end        = vvp_io_setattr_end
+		},
+		[CIT_FAULT] = {
+			.cio_fini      = vvp_io_fault_fini,
+			.cio_iter_init = vvp_io_fault_iter_init,
+			.cio_lock      = vvp_io_fault_lock,
+			.cio_start     = vvp_io_fault_start,
 			.cio_end       = vvp_io_fault_end,
-                },
+		},
 		[CIT_FSYNC] = {
 			.cio_start	= vvp_io_fsync_start,
 			.cio_fini	= vvp_io_fini,
@@ -1832,7 +1823,7 @@ static const struct cl_io_operations vvp_io_ops = {
 };
 
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
-                struct cl_io *io)
+		struct cl_io *io)
 {
 	struct vvp_io      *vio   = vvp_env_io(env);
 	struct inode       *inode = vvp_object_inode(obj);
@@ -1841,8 +1832,7 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-	       "restore needed %d\n",
+	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d restore needed %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
 	       vio->vui_layout_gen, io->ci_restore_needed);
@@ -1857,7 +1847,8 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 
 		bytes = io->u.ci_rw.crw_bytes;
 		/* "If nbyte is 0, read() will return 0 and have no other
-		 *  results."  -- Single Unix Spec */
+		 *  results."  -- Single Unix Spec
+		 */
 		if (bytes == 0)
 			result = 1;
 		else
@@ -1879,14 +1870,16 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 
 	/* Enqueue layout lock and get layout version. We need to do this
 	 * even for operations requiring to open file, such as read and write,
-	 * because it might not grant layout lock in IT_OPEN. */
+	 * because it might not grant layout lock in IT_OPEN.
+	 */
 	if (result == 0 && !io->ci_ignore_layout) {
 		result = ll_layout_refresh(inode, &vio->vui_layout_gen);
 		if (result == -ENOENT)
 			/* If the inode on MDS has been removed, but the objects
 			 * on OSTs haven't been destroyed (async unlink), layout
 			 * fetch will return -ENOENT, we'd ingore this error
-			 * and continue with dirty flush. LU-3230. */
+			 * and continue with dirty flush. LU-3230.
+			 */
 			result = 0;
 		if (result < 0)
 			CERROR("%s: refresh file layout " DFID " error %d.\n",
