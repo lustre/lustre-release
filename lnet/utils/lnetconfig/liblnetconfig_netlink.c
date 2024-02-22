@@ -425,7 +425,10 @@ struct yaml_nl_node {
 
 struct yaml_netlink_input {
 	yaml_parser_t		*parser;
+	void			*start;
+	void			*read;
 	void			*buffer;
+	void			*end;
 	const char		*errmsg;
 	int			error;
 	struct nl_sock		*nl;
@@ -1043,8 +1046,21 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 		if (lnet_genlmsg_parse(nlh, 0, attrs, maxtype, policy))
 			return NL_SKIP;
 
-		size = data->parser->raw_buffer.end -
-		       (unsigned char *)data->buffer;
+		size = data->end - data->buffer;
+		if (size < 1024) {
+			size_t len = (data->end - data->start) * 2;
+			size_t off = data->buffer - data->start;
+
+			data->start = realloc(data->start, len);
+			if (!data->start)
+				return NL_STOP;
+			data->end = data->start + len;
+
+			data->buffer = data->start + off;
+			data->read = data->start;
+
+			size = data->end - data->buffer;
+		}
 		yaml_parse_value_list(data, &size, attrs,
 				      &data->cur->keys.lkl_list[1]);
 	}
@@ -1143,34 +1159,36 @@ static int yaml_netlink_read_handler(void *arg, unsigned char *buffer,
 				     size_t size, size_t *size_read)
 {
 	struct yaml_netlink_input *data = arg;
-	struct nl_sock *nl = data->nl;
-	struct nl_cb *cb;
 	int rc = 0;
 
-	if (data->complete) {
-		*size_read = 0;
-		return 1;
+	/* First collect the Netlink data and then transfer it
+	 * into the internal libyaml buffers.
+	 */
+	if (!data->complete) {
+		struct nl_cb *cb = nl_socket_get_cb(data->nl);
+
+		rc = nl_recvmsgs_report(data->nl, cb);
+		if (rc == -NLE_INTR) {
+			*size_read = 0;
+			return 1;
+		} else if (!data->errmsg && rc < 0) {
+			data->errmsg = nl_geterror(rc);
+			return 0;
+		} else if (data->parser->error) {
+			/* data->errmsg is set in NL_CB_FINISH */
+			return 0;
+		}
 	}
-
-	data->buffer = buffer;
-
-	cb = nl_socket_get_cb(nl);
-	rc = nl_recvmsgs_report(nl, cb);
-	if (rc == -NLE_INTR) {
-		*size_read = 0;
-		return 1;
-	} else if (!data->errmsg && rc < 0) {
-		data->errmsg = nl_geterror(rc);
-		return 0;
-	} else if (data->parser->error) {
-		/* data->errmsg is set in NL_CB_FINISH */
-		return 0;
-	}
-
-	rc = (unsigned char *)data->buffer - buffer;
+	rc = data->buffer - data->read;
 	if ((int)size > rc)
 		size = rc;
 
+	if (size) {
+		memcpy(buffer, data->read, size);
+		data->read += size;
+	} else if (data->complete) {
+		free(data->start);
+	}
 	*size_read = size;
 	return 1;
 }
@@ -1229,6 +1247,10 @@ yaml_parser_set_input_netlink(yaml_parser_t *reply, struct nl_sock *nl,
 		goto failed;
 	}
 
+	buf->start = malloc(65536);
+	buf->end = buf->start + 65536;
+	buf->buffer = buf->start;
+	buf->read = buf->start;
 	buf->nl = nl;
 	buf->async = stream;
 	buf->parser = reply;
