@@ -60,7 +60,7 @@
 
 static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which);
 
-/**
+/*
  * Get readahead pages from the filesystem readahead pool of the client for a
  * thread.
  *
@@ -77,7 +77,8 @@ static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which);
  * to get an ra budget that is larger than the remaining readahead pages
  * and reach here at exactly the same time. They will compute /a ret to
  * consume the remaining pages, but will fail at atomic_add_return() and
- * get a zero ra window, although there is still ra space remaining. - Jay */
+ * get a zero ra window, although there is still ra space remaining. - Jay
+ */
 
 static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
 				     struct ra_io_arg *ria,
@@ -87,15 +88,15 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	long ret;
 
-        ENTRY;
+	ENTRY;
 
 	WARN_ON_ONCE(pages_min > pages);
-	/**
+	/*
 	 * Don't try readahead aggresively if we are limited
 	 * LRU pages, otherwise, it could cause deadlock.
 	 */
 	pages = min(sbi->ll_cache->ccc_lru_max >> 2, pages);
-	/**
+	/*
 	 * if this happen, we reserve more pages than needed,
 	 * this will make us leak @ra_cur_pages, because
 	 * ll_ra_count_put() acutally freed @pages.
@@ -130,6 +131,7 @@ out:
 void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long pages)
 {
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
+
 	atomic_sub(pages, &ra->ra_cur_pages);
 }
 
@@ -191,7 +193,7 @@ enum ll_ra_page_hint {
 	WILLNEED /* this page is gurateed to be needed */
 };
 
-/**
+/*
  * Initiates read-ahead of a page with given index.
  *
  * \retval +ve: page was already uptodate so it will be skipped
@@ -270,7 +272,8 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 		/* skip completed pages */
 		cl_page_unassume(env, io, cp);
 		/* This page is already uptodate, returning a positive number
-		 * to tell the callers about this */
+		 * to tell the callers about this
+		 */
 		rc = 1;
 	}
 
@@ -299,7 +302,7 @@ out:
 
 static inline int stride_io_mode(struct ll_readahead_state *ras)
 {
-        return ras->ras_consecutive_stride_requests > 1;
+	return ras->ras_consecutive_stride_requests > 1;
 }
 
 /* The function calculates how many bytes will be read in
@@ -384,7 +387,7 @@ static unsigned long ria_page_count(struct ra_io_arg *ria)
 
 static pgoff_t ras_align(struct ll_readahead_state *ras, pgoff_t index)
 {
-	unsigned opt_size = min(ras->ras_window_pages, ras->ras_rpc_pages);
+	unsigned int opt_size = min(ras->ras_window_pages, ras->ras_rpc_pages);
 
 	if (opt_size == 0)
 		opt_size = 1;
@@ -397,8 +400,8 @@ static bool ras_inside_ra_window(pgoff_t idx, struct ra_io_arg *ria)
 	loff_t pos = (loff_t)idx << PAGE_SHIFT;
 
 	/* If ria_length == ria_bytes, it means non-stride I/O mode,
-         * idx should always inside read-ahead window in this case
-         * For stride I/O mode, just check whether the idx is inside
+	 * idx should always inside read-ahead window in this case
+	 * For stride I/O mode, just check whether the idx is inside
 	 * the ria_bytes.
 	 */
 	if (ria->ria_length == 0 || ria->ria_length == ria->ria_bytes)
@@ -476,13 +479,15 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 					 "object: %px, indcies %lu / %lu\n",
 					 io->ci_obj, ra.cra_end_idx, page_idx);
 				/* update read ahead RPC size.
-				 * NB: it's racy but doesn't matter */
+				 * NB: it's racy but doesn't matter
+				 */
 				if (ras->ras_rpc_pages != ra.cra_rpc_pages &&
 				    ra.cra_rpc_pages > 0)
 					ras->ras_rpc_pages = ra.cra_rpc_pages;
 				if (!skip_index) {
-					/* trim it to align with optimal RPC size */
-					end_idx = ras_align(ras, ria->ria_end_idx + 1);
+					/* trim (align with optimal RPC size) */
+					end_idx = ras_align(ras,
+							ria->ria_end_idx + 1);
 					if (end_idx > 0 && !ria->ria_eof)
 						ria->ria_end_idx = end_idx - 1;
 				}
@@ -505,14 +510,16 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				 * last pages of each region can be read by
 				 * another reader on the same node, and so
 				 * may be busy. So only stop for > 2 busy
-				 * pages. */
+				 * pages.
+				 */
 				if (busy_page_count > 2)
 					break;
 			}
 
 			*ra_end = page_idx;
 			/* Only subtract from reserve & count the page if we
-			 * really did readahead on that page. */
+			 * really did readahead on that page.
+			 */
 			if (rc == 0) {
 				ria->ria_reserved--;
 				count++;
@@ -740,14 +747,14 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	struct ll_sb_info *sbi;
 	struct ll_ra_info *ra;
 
-        ENTRY;
+	ENTRY;
 
 	clob = io->ci_obj;
 	inode = vvp_object_inode(clob);
 	sbi = ll_i2sbi(inode);
 	ra = &sbi->ll_ra_info;
 
-	/**
+	/*
 	 * In case we have a limited max_cached_mb, readahead
 	 * should be stopped if it have run out of all LRU slots.
 	 */
@@ -768,7 +775,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 
 	spin_lock(&ras->ras_lock);
 
-	/**
+	/*
 	 * Note: other thread might rollback the ras_next_readahead_idx,
 	 * if it can not get the full size of prepared pages, see the
 	 * end of this function. For stride read ahead, it needs to
@@ -839,7 +846,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			vio->vui_ra_start_idx + vio->vui_ra_pages - 1;
 		pages_min = vio->vui_ra_start_idx + vio->vui_ra_pages -
 				ria->ria_start_idx;
-		 /**
+		 /*
 		  * For performance reason, exceeding @ra_max_pages
 		  * are allowed, but this should be limited with RPC
 		  * size in case a large block size read issued. Trim
@@ -880,7 +887,8 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 		ll_ra_stats_inc(inode, RA_STAT_FAILED_REACH_END);
 	if (ra_end_idx > 0) {
 		/* update the ras so that the next read-ahead tries from
-		 * where we left off. */
+		 * where we left off.
+		 */
 		spin_lock(&ras->ras_lock);
 		ras->ras_next_readahead_idx = ra_end_idx + 1;
 		spin_unlock(&ras->ras_lock);
@@ -917,7 +925,7 @@ static int ll_readpages(const struct lu_env *env, struct cl_io *io,
 	}
 
 	for (page_idx = start; page_idx <= end; page_idx++) {
-		ret= ll_read_ahead_page(env, io, queue, page_idx,
+		ret = ll_read_ahead_page(env, io, queue, page_idx,
 					WILLNEED);
 		if (ret < 0)
 			break;
@@ -943,10 +951,10 @@ static void ras_reset(struct ll_readahead_state *ras, pgoff_t index)
 /* called with the ras_lock held or from places where it doesn't matter */
 static void ras_stride_reset(struct ll_readahead_state *ras)
 {
-        ras->ras_consecutive_stride_requests = 0;
-        ras->ras_stride_length = 0;
+	ras->ras_consecutive_stride_requests = 0;
+	ras->ras_stride_length = 0;
 	ras->ras_stride_bytes = 0;
-        RAS_CDEBUG(ras);
+	RAS_CDEBUG(ras);
 }
 
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
@@ -1021,7 +1029,8 @@ stride_page_count(struct ll_readahead_state *ras, loff_t len)
 }
 
 /* Stride Read-ahead window will be increased inc_len according to
- * stride I/O pattern */
+ * stride I/O pattern
+ */
 static void ras_stride_increase_window(struct ll_readahead_state *ras,
 				       struct ll_ra_info *ra, loff_t inc_bytes)
 {
@@ -1099,7 +1108,7 @@ static void ras_increase_window(struct inode *inode,
 	}
 }
 
-/**
+/*
  * Seek within 8 pages are considered as sequential read for now.
  */
 static inline bool is_loose_seq_read(struct ll_readahead_state *ras, loff_t pos)
@@ -1119,7 +1128,7 @@ static inline bool is_loose_mmap_read(struct ll_sb_info *sbi,
 			     range_pages << PAGE_SHIFT);
 }
 
-/**
+/*
  * We have observed slow mmap read performances for some
  * applications. The problem is if access pattern is neither
  * sequential nor stride, but could be still adjacent in a
@@ -1456,18 +1465,19 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 {
 	struct inode	       *inode = vmpage->mapping->host;
 	struct ll_inode_info   *lli   = ll_i2info(inode);
-        struct lu_env          *env;
-        struct cl_io           *io;
-        struct cl_page         *page;
-        struct cl_object       *clob;
+	struct lu_env          *env;
+	struct cl_io           *io;
+	struct cl_page         *page;
+	struct cl_object       *clob;
 	bool redirtied = false;
 	bool unlocked = false;
-        int result;
+	int result;
 	__u16 refcheck;
-        ENTRY;
 
-        LASSERT(PageLocked(vmpage));
-        LASSERT(!PageWriteback(vmpage));
+	ENTRY;
+
+	LASSERT(PageLocked(vmpage));
+	LASSERT(!PageWriteback(vmpage));
 
 	LASSERT(ll_i2dtexp(inode) != NULL);
 
@@ -1475,16 +1485,16 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 	if (IS_ERR(env))
 		GOTO(out, result = PTR_ERR(env));
 
-        clob  = ll_i2info(inode)->lli_clob;
-        LASSERT(clob != NULL);
+	clob  = ll_i2info(inode)->lli_clob;
+	LASSERT(clob != NULL);
 
 	io = vvp_env_thread_io(env);
-        io->ci_obj = clob;
+	io->ci_obj = clob;
 	io->ci_ignore_layout = 1;
-        result = cl_io_init(env, io, CIT_MISC, clob);
-        if (result == 0) {
-                page = cl_page_find(env, clob, vmpage->index,
-                                    vmpage, CPT_CACHEABLE);
+	result = cl_io_init(env, io, CIT_MISC, clob);
+	if (result == 0) {
+		page = cl_page_find(env, clob, vmpage->index,
+				    vmpage, CPT_CACHEABLE);
 		if (!IS_ERR(page)) {
 			lu_ref_add(&page->cp_reference, "writepage",
 				   current);
@@ -1510,8 +1520,8 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		} else {
 			result = PTR_ERR(page);
 		}
-        }
-        cl_io_fini(env, io);
+	}
+	cl_io_fini(env, io);
 
 	if (redirtied && wbc->sync_mode == WB_SYNC_ALL) {
 		loff_t offset = vmpage->index << PAGE_SHIFT;
@@ -1519,14 +1529,15 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		/* Flush page failed because the extent is being written out.
 		 * Wait for the write of extent to be finished to avoid
 		 * breaking kernel which assumes ->writepage should mark
-		 * PageWriteback or clean the page. */
+		 * PageWriteback or clean the page.
+		 */
 		result = cl_sync_file_range(inode, offset,
 					    offset + PAGE_SIZE - 1,
 					    CL_FSYNC_LOCAL, 1);
 		if (result > 0) {
-			/* actually we may have written more than one page.
-			 * decreasing this page because the caller will count
-			 * it. */
+			/* May have written more than one page. decreasing this
+			 * page because the caller will count it.
+			 */
 			wbc->nr_to_write -= result - 1;
 			result = 0;
 		}
@@ -1609,12 +1620,13 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 
 	/* for directio, it would call writepages() to evict cached pages
 	 * inside the IO context of write, which will cause deadlock at
-	 * layout_conf since it waits for active IOs to complete. */
+	 * layout_conf since it waits for active IOs to complete.
+	 */
 	result = cl_sync_file_range(inode, start, end, mode, 1);
 	if (result > 0) {
 		wbc->nr_to_write -= result;
 		result = 0;
-	 }
+	}
 
 	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0)) {
 		if (end == OBD_OBJECT_EOF)
@@ -1688,6 +1700,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	pgoff_t io_start_index;
 	pgoff_t io_end_index;
 	bool unlockpage = true;
+
 	ENTRY;
 
 	if (file) {
@@ -1744,9 +1757,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file, skip_index,
 				   &ra_start_index);
-		/* to keep iotrace clean, we only print here if we actually
-		 * read pages
-		 */
+		/* Keep iotrace clean. Print only on actual page read */
 		CDEBUG(D_READA | (rc2 ? D_IOTRACE : 0),
 		       DFID " %d pages read ahead at %lu, triggered by user read at %lu, stride offset %lld, stride length %lld, stride bytes %lld\n",
 		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
@@ -1763,6 +1774,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 
 	if (queue->c2_qin.pl_nr > 0) {
 		int count = queue->c2_qin.pl_nr;
+
 		rc = cl_io_submit_rw(env, io, CRT_READ, queue);
 		if (rc == 0)
 			task_io_account_read(PAGE_SIZE * count);
@@ -1780,7 +1792,8 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			 * new page can be created with new mirror.
 			 *
 			 * TODO: this is not needed after page reinit
-			 * route is implemented */
+			 * route is implemented
+			 */
 			cl_page_discard(env, io, page);
 		}
 		if (unlockpage)
@@ -1817,7 +1830,7 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 	pgoff_t start_idx = ras_align(ras, ras->ras_next_readahead_idx);
 	pgoff_t end_idx = start_idx + pages - 1;
 
-	/**
+	/*
 	 * In case we have a limited max_cached_mb, readahead
 	 * should be stopped if it have run out of all LRU slots.
 	 */
@@ -1969,7 +1982,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		result = -ENODATA;
 
 		/* TODO: need to verify the layout version to make sure
-		 * the page is not invalid due to layout change. */
+		 * the page is not invalid due to layout change.
+		 */
 		page = cl_vmpage_page(vmpage, clob);
 		if (page == NULL) {
 			unlock_page(vmpage);
@@ -1987,7 +2001,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 			/* For fast read, it updates read ahead state only
 			 * if the page is hit in cache because non cache page
-			 * case will be handled by slow read later. */
+			 * case will be handled by slow read later.
+			 */
 			ras_update(sbi, inode, ras, cl_page_index(page), flags, io);
 			/* avoid duplicate ras_update() call */
 			page->cp_ra_updated = 1;
@@ -2011,7 +2026,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 		/* release page refcount before unlocking the page to ensure
 		 * the object won't be destroyed in the calling path of
-		 * cl_page_put(). Please see comment in ll_releasepage(). */
+		 * cl_page_put(). Please see comment in ll_releasepage().
+		 */
 		cl_page_put(env, page);
 		unlock_page(vmpage);
 		if (local_env)
@@ -2060,7 +2076,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	}
 
 	vio = vvp_env_io(env);
-	/**
+	/*
 	 * Direct read can fall back to buffered read, but DIO is done
 	 * with lockless i/o, and buffered requires LDLM locking, so in
 	 * this case we must restart without lockless.
