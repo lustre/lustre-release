@@ -166,7 +166,8 @@ void ll_release_page(struct inode *inode, struct page *page,
 	kunmap(page);
 
 	/* Always remove the page for striped dir, because the page is
-	 * built from temporarily in LMV layer */
+	 * built from temporarily in LMV layer
+	 */
 	if (inode && ll_dir_striped(inode)) {
 		__free_page(page);
 		return;
@@ -198,6 +199,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 	bool done = false;
 	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
 	int rc = 0;
+
 	ENTRY;
 
 	if (IS_ENCRYPTED(inode)) {
@@ -246,7 +248,8 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			type = S_DT(lu_dirent_type_get(ent));
 			/* For ll_nfs_get_name_filldir(), it will try to access
 			 * 'ent' through 'lde_name', so the parameter 'name'
-			 * for 'filldir()' must be part of the 'ent'. */
+			 * for 'filldir()' must be part of the 'ent'.
+			 */
 #ifdef HAVE_DIR_CONTEXT
 			ctx->pos = lhash;
 			if (!IS_ENCRYPTED(inode)) {
@@ -363,8 +366,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		}
 		dput(parent);
 
-		/* If it can not find in cache, do lookup .. on the master
-		 * object */
+		/* If it can not find in cache, do lookup on the master obj */
 		if (fid_is_zero(&pfid)) {
 			rc = ll_dir_get_parent_fid(inode, &pfid);
 			if (rc != 0)
@@ -421,7 +423,7 @@ out:
 	RETURN(rc);
 }
 
-/**
+/*
  * Create striped directory with specified stripe(@lump)
  *
  * \param[in] dparent	the parent of the directory.
@@ -530,7 +532,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		/* selinux_dentry_init_security() uses dentry->d_parent and name
 		 * to determine the security context for the file. So our fake
-		 * dentry should be real enough for this purpose. */
+		 * dentry should be real enough for this purpose.
+		 */
 		err = ll_dentry_init_security(&dentry, mode, &dentry.d_name,
 					      &op_data->op_file_secctx_name,
 					      &op_data->op_file_secctx_name_size,
@@ -600,8 +603,8 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 	struct ptlrpc_request *req = NULL;
 	int rc = 0;
 	int lum_size;
-	ENTRY;
 
+	ENTRY;
 	if (lump != NULL) {
 		switch (lump->lmm_magic) {
 		case LOV_USER_MAGIC_V1:
@@ -832,7 +835,7 @@ out:
 	return rc;
 }
 
-/**
+/*
  * This function will be used to get default LOV/LMV/Default LMV
  * @valid will be used to indicate which stripe it will retrieve.
  * If the directory does not have its own default layout, then the
@@ -852,8 +855,8 @@ int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 	struct lov_mds_md *lmm = NULL;
 	int lmm_size = 0;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
 				       &req, valid, 0);
 	if (rc == -ENODATA && !fid_is_root(ll_inode2fid(inode)) &&
@@ -874,7 +877,7 @@ int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 	RETURN(rc);
 }
 
-/**
+/*
  * This function will be used to get default LOV/LMV/Default LMV
  * @valid will be used to indicate which stripe it will retrieve
  *	OBD_MD_MEA		LMV stripe EA
@@ -889,8 +892,8 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	struct lov_mds_md *lmm = NULL;
 	int lmm_size = 0;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
 				       &req, valid, 0);
 
@@ -903,11 +906,11 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid)
 {
-	struct md_op_data	*op_data;
-	int			rc;
-	int			mdt_index;
-	ENTRY;
+	struct md_op_data *op_data;
+	int rc;
+	int mdt_index;
 
+	ENTRY;
 	OBD_ALLOC_PTR(op_data);
 	if (op_data == NULL)
 		RETURN(-ENOMEM);
@@ -931,7 +934,7 @@ int ll_get_mdt_idx(struct inode *inode)
 	return ll_get_mdt_idx_by_fid(ll_i2sbi(inode), ll_inode2fid(inode));
 }
 
-/**
+/*
  * Generic handler to do any pre-copy work.
  *
  * It sends a first hsm_progress (with extent length == 0) to coordinator as a
@@ -944,12 +947,12 @@ int ll_get_mdt_idx(struct inode *inode)
  */
 static int ll_ioc_copy_start(struct super_block *sb, struct hsm_copy *copy)
 {
-	struct ll_sb_info		*sbi = ll_s2sbi(sb);
-	struct hsm_progress_kernel	 hpk;
-	int				 rc = 0;
-	int				 rc2;
-	ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct hsm_progress_kernel hpk;
+	int rc = 0;
+	int rc2;
 
+	ENTRY;
 	/* Forge a hsm_progress based on data from copy. */
 	hpk.hpk_fid = copy->hc_hai.hai_fid;
 	hpk.hpk_cookie = copy->hc_hai.hai_cookie;
@@ -990,7 +993,8 @@ static int ll_ioc_copy_start(struct super_block *sb, struct hsm_copy *copy)
 		}
 
 		/* Store in the hsm_copy for later copytool use.
-		 * Always modified even if no lsm. */
+		 * Always modified even if no lsm.
+		 */
 		copy->hc_data_version = data_version;
 	}
 
@@ -1006,7 +1010,7 @@ progress:
 	RETURN(rc != 0 ? rc : rc2);
 }
 
-/**
+/*
  * Generic handler to do any post-copy work.
  *
  * It will send the last hsm_progress update to coordinator to inform it
@@ -1023,12 +1027,12 @@ progress:
  */
 static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 {
-	struct ll_sb_info		*sbi = ll_s2sbi(sb);
-	struct hsm_progress_kernel	 hpk;
-	int				 rc = 0;
-	int				 rc2;
-	ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct hsm_progress_kernel hpk;
+	int rc = 0;
+	int rc2;
 
+	ENTRY;
 	/* If you modify the logic here, also check llapi_hsm_copy_end(). */
 	/* Take care: copy->hc_hai.hai_action, len, gid and data are not
 	 * initialized if copy_end was called with copy == NULL.
@@ -1073,11 +1077,13 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 		}
 
 		/* Store in the hsm_copy for later copytool use.
-		 * Always modified even if no lsm. */
+		 * Always modified even if no lsm.
+		 */
 		hpk.hpk_data_version = data_version;
 
 		/* File could have been stripped during archiving, so we need
-		 * to check anyway. */
+		 * to check anyway.
+		 */
 		if ((copy->hc_hai.hai_action == HSMA_ARCHIVE) &&
 		    (copy->hc_data_version != data_version)) {
 			CDEBUG(D_HSM, "File data version mismatched. "
@@ -1090,7 +1096,8 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 			 * the cdt will loop on retried archive requests.
 			 * The policy engine will ask for a new archive later
 			 * when the file will not be modified for some tunable
-			 * time */
+			 * time
+			 */
 			hpk.hpk_flags &= ~HP_FLAG_RETRY;
 			rc = -EBUSY;
 			/* hpk_errval must be >= 0 */
@@ -1798,8 +1805,8 @@ static int ll_rmfid(struct file *file, void __user *arg)
 	unsigned int nr;
 	bool lfa_flag = false; /* lfa already free'ed */
 	size_t size;
-	ENTRY;
 
+	ENTRY;
 	if (!capable(CAP_DAC_READ_SEARCH) &&
 	    !test_bit(LL_SBI_USER_FID2PATH, ll_i2sbi(inode)->ll_flags))
 		RETURN(-EPERM);
@@ -1918,9 +1925,9 @@ free_lfa:
 	RETURN(rc);
 }
 
-/* This function tries to get a single name component,
- * to send to the server. No actual path traversal involved,
- * so we limit to NAME_MAX */
+/* This function tries to get a single name component, to send to the server.
+ * No actual path traversal involved, so we limit to NAME_MAX
+ */
 static char *ll_getname(const char __user *filename)
 {
 	int ret = 0, len;
@@ -1956,8 +1963,8 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct obd_ioctl_data *data = NULL;
 	void __user *uarg = (void __user *)arg;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOCTL, "VFS Op:inode="DFID"(%pK) cmd=%x arg=%lx\n",
 	       PFID(ll_inode2fid(inode)), inode, cmd, arg);
 
@@ -2145,7 +2152,8 @@ out:
 		max_stripe_count = lum.lum_stripe_count;
 		/* lum_magic will indicate which stripe the ioctl will like
 		 * to get, LMV_MAGIC_V1 is for normal LMV stripe, LMV_USER_MAGIC
-		 * is for default LMV stripe */
+		 * is for default LMV stripe
+		 */
 		if (lum.lum_magic == LMV_MAGIC_V1)
 			valid |= OBD_MD_MEA;
 		else if (lum.lum_magic == LMV_USER_MAGIC)
@@ -2244,15 +2252,16 @@ finish_req:
 		return rc;
 	}
 	case LL_IOC_REMOVE_ENTRY: {
-		char		*filename = NULL;
-		int		 namelen = 0;
-		int		 rc;
+		char *filename = NULL;
+		int namelen = 0;
+		int rc;
 
 		/* Here is a little hack to avoid sending REINT_RMENTRY to
 		 * unsupported server, which might crash the server(LU-2730),
 		 * Because both LVB_TYPE and REINT_RMENTRY will be supported
 		 * on 2.4, we use OBD_CONNECT_LVB_TYPE to detect whether the
-		 * server will support REINT_RMENTRY XXX*/
+		 * server will support REINT_RMENTRY XXX
+		 */
 		if (!(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_LVB_TYPE))
 			RETURN(-EOPNOTSUPP);
 
@@ -2353,7 +2362,8 @@ out_rmdir:
 
 		if (lmmsize == 0) {
 			/* If the file has no striping then zero out *lump so
-			 * that the caller isn't confused by garbage. */
+			 * that the caller isn't confused by garbage.
+			 */
 			if (clear_user(lump, sizeof(*lump)))
 				GOTO(out_req, rc = -EFAULT);
 		} else if (copy_to_user(lump, lmm, lmmsize)) {
@@ -2427,7 +2437,8 @@ out_rmdir:
 				 * set, also set ext4 equivalent to please statx
 				 */
 				if (body->mbo_flags & LUSTRE_ENCRYPT_FL)
-				     stx.stx_attributes |= STATX_ATTR_ENCRYPTED;
+					stx.stx_attributes |=
+						STATX_ATTR_ENCRYPTED;
 			}
 
 			/* For a striped directory, the size and blocks returned
@@ -2614,7 +2625,8 @@ out_hur:
 		hpk.hpk_data_version = 0;
 
 		/* File may not exist in Lustre; all progress
-		 * reported to Lustre root */
+		 * reported to Lustre root
+		 */
 		rc = obd_iocontrol(cmd, sbi->ll_md_exp, sizeof(hpk), &hpk,
 				   NULL);
 		RETURN(rc);
@@ -2806,8 +2818,8 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int api32 = ll_need_32bit_api(sbi);
 	loff_t ret = -EINVAL;
-	ENTRY;
 
+	ENTRY;
 	ll_inode_lock(inode);
 	switch (origin) {
 	case SEEK_SET:

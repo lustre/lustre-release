@@ -52,12 +52,13 @@ static void free_dentry_data(struct rcu_head *head)
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static void ll_release(struct dentry *de)
 {
-        struct ll_dentry_data *lld;
-        ENTRY;
-        LASSERT(de != NULL);
-        lld = ll_d2d(de);
-        if (lld == NULL) /* NFS copies the de->d_op methods (bug 4655) */
-                RETURN_EXIT;
+	struct ll_dentry_data *lld;
+
+	ENTRY;
+	LASSERT(de != NULL);
+	lld = ll_d2d(de);
+	if (lld == NULL) /* NFS copies the de->d_op methods (bug 4655) */
+		RETURN_EXIT;
 
 	de->d_fsdata = NULL;
 	call_rcu(&lld->lld_rcu_head, free_dentry_data);
@@ -197,7 +198,8 @@ void ll_intent_drop_lock(struct lookup_intent *it)
 		ldlm_lock_decref(&handle, it->it_lock_mode);
 
 		/* bug 494: intent_release may be called multiple times, from
-		 * this thread and we don't want to double-decref this lock */
+		 * this thread and we don't want to double-decref this lock
+		 */
 		it->it_lock_mode = 0;
 		if (it->it_remote_lock_mode != 0) {
 			handle.cookie = it->it_remote_lock_handle;
@@ -214,12 +216,12 @@ void ll_intent_drop_lock(struct lookup_intent *it)
 
 void ll_intent_release(struct lookup_intent *it)
 {
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_INFO, "intent %p released\n", it);
-        ll_intent_drop_lock(it);
-        /* We are still holding extra reference on a request, need to free it */
-        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+	CDEBUG(D_INFO, "intent %p released\n", it);
+	ll_intent_drop_lock(it);
+	/* We are still holding extra reference on a request, need to free it */
+	if (it_disposition(it, DISP_ENQ_OPEN_REF))
 		ptlrpc_req_finished(it->it_request); /* ll_file_open */
 
 	if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
@@ -234,6 +236,7 @@ void ll_intent_release(struct lookup_intent *it)
 void ll_prune_aliases(struct inode *inode)
 {
 	struct dentry *dentry;
+
 	ENTRY;
 
 	LASSERT(inode != NULL);
@@ -248,7 +251,7 @@ void ll_prune_aliases(struct inode *inode)
 
 	d_prune_aliases(inode);
 
-        EXIT;
+	EXIT;
 }
 
 int ll_revalidate_it_finish(struct ptlrpc_request *request,
@@ -259,7 +262,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 	__u64 bits = 0;
 	int rc = 0;
 
-        ENTRY;
+	ENTRY;
 
 	if (!request)
 		RETURN(0);
@@ -321,9 +324,10 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	if (rc != 1)
 		return rc;
 
-	/* If this is intermediate component path lookup and we were able to get
-	 * to this dentry, then its lock has not been revoked and the
-	 * path component is valid. */
+	/* If this is intermediate component path lookup and were able to get to
+	 * this dentry, then its lock has not been revoked and the
+	 * path component is valid.
+	 */
 	if (lookup_flags & (LOOKUP_CONTINUE | LOOKUP_PARENT)) {
 		if (dentry->d_inode && S_ISDIR(dentry->d_inode->i_mode)) {
 			parent = dget_parent(dentry);

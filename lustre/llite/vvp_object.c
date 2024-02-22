@@ -157,7 +157,6 @@ static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 	int rc;
 
 	ENTRY;
-
 	rc = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, CL_FSYNC_LOCAL, 1);
 	if (rc < 0) {
 		CDEBUG(D_VFSTRACE, DFID ": writeback failed: %d\n",

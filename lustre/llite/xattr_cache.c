@@ -43,11 +43,11 @@
  * using a hash or a tree structure instead of list for faster lookups.
  */
 struct ll_xattr_entry {
-	struct list_head	xe_list;    /* protect by lli_xattrs_list_rwsem */
-	char			*xe_name;   /* xattr name, \0-terminated */
-	char			*xe_value;  /* xattr value */
-	unsigned int		xe_namelen; /* strlen(xe_name) + 1 */
-	unsigned int		xe_vallen;  /* xattr value length */
+	struct list_head xe_list; /* protected by lli_xattrs_list_rwsem */
+	char *xe_name;            /* xattr name, \0-terminated */
+	char *xe_value;           /* xattr value */
+	unsigned int xe_namelen;  /* strlen(xe_name) + 1 */
+	unsigned int xe_vallen;   /* xattr value length */
 };
 
 static struct kmem_cache *xattr_kmem;
@@ -72,7 +72,7 @@ void ll_xattr_fini(void)
 	lu_kmem_fini(xattr_caches);
 }
 
-/**
+/*
  * Initializes xattr cache for an inode.
  *
  * This initializes the xattr list and marks cache presence.
@@ -292,7 +292,7 @@ static int ll_xattr_cache_destroy_locked(struct ll_inode_info *lli)
 		RETURN(0);
 
 	while (ll_xattr_cache_del(&lli->lli_xattrs, NULL) == 0)
-		/* empty loop */;
+		; /* empty loop */
 
 	clear_bit(LLIF_XATTR_CACHE_FILLED, &lli->lli_flags);
 	clear_bit(LLIF_XATTR_CACHE, &lli->lli_flags);
@@ -314,7 +314,7 @@ int ll_xattr_cache_destroy(struct inode *inode)
 	RETURN(rc);
 }
 
-/**
+/*
  * ll_xattr_cache_empty - empty xattr cache for @ino
  *
  * Similar to ll_xattr_cache_destroy(), but preserves encryption context.

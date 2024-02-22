@@ -72,6 +72,7 @@ static void ll_inode_destroy_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
 	struct ll_inode_info *ptr = ll_i2info(inode);
+
 	llcrypt_free_inode(inode);
 	OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
 }
@@ -97,8 +98,7 @@ static int ll_drop_inode(struct inode *inode)
 }
 
 /* exported operations */
-const struct super_operations lustre_super_operations =
-{
+const struct super_operations lustre_super_operations = {
 	.alloc_inode   = ll_alloc_inode,
 	.destroy_inode = ll_destroy_inode,
 	.drop_inode    = ll_drop_inode,
@@ -237,7 +237,8 @@ static int __init lustre_init(void)
 
 	/* print an address of _any_ initialized kernel symbol from this
 	 * module, to allow debugging with gdb that doesn't support data
-	 * symbols from modules.*/
+	 * symbols from modules.
+	 */
 	CDEBUG(D_INFO, "Lustre client module (%p).\n",
 	       &lustre_super_operations);
 

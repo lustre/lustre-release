@@ -1246,7 +1246,8 @@ static int ll_statahead_by_list(struct dentry *parent)
 
 			while (({set_current_state(TASK_IDLE);
 				 /* matches smp_store_release() in
-				  * ll_deauthorize_statahead() */
+				  * ll_deauthorize_statahead()
+				  */
 				 smp_load_acquire(&sai->sai_task); })) {
 				long timeout;
 
@@ -2018,7 +2019,7 @@ sa_pattern_fname_detect(struct inode *dir, struct dentry *dchild)
 		int ret;
 
 		while (--i >= 0 && isdigit(name[i]))
-			/* do nothing */;
+			; /* do nothing */
 		i++;
 		ret = kstrtol(&name[i], 0, &num);
 		if (ret)
@@ -2133,7 +2134,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 
 		i = dname->len;
 		while (--i >= 0 && isdigit(name[i]))
-			/* do nothing */;
+			; /* do nothing */
 		i++;
 
 		memcpy(sai->sai_fname, dname->name, i);
