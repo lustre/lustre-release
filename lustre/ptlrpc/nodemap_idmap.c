@@ -280,20 +280,20 @@ void idmap_delete_tree(struct lu_nodemap *nodemap)
 	struct rb_root		root;
 
 	root = nodemap->nm_fs_to_client_uidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_fs_to_client) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_fs_to_client) {
 		idmap_destroy(idmap);
 	}
 
 	root = nodemap->nm_client_to_fs_gidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_client_to_fs) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
 		idmap_destroy(idmap);
 	}
 
 	root = nodemap->nm_client_to_fs_projidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_client_to_fs) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
 		idmap_destroy(idmap);
 	}
 }

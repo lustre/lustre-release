@@ -497,8 +497,8 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 		rc = rc2;
 
 	root = nodemap->nm_fs_to_client_uidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_fs_to_client) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_fs_to_client) {
 		nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_UID,
 				       idmap->id_client);
 		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
@@ -508,8 +508,8 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	}
 
 	root = nodemap->nm_client_to_fs_gidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_client_to_fs) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
 		nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_GID,
 				       idmap->id_client);
 		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
@@ -519,8 +519,8 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	}
 
 	root = nodemap->nm_client_to_fs_projidmap;
-	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
-						id_client_to_fs) {
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
 		nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_PROJID,
 				       idmap->id_client);
 		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
@@ -1222,8 +1222,8 @@ nodemap_save_config_cache(const struct lu_env *env,
 		 * lock prevents changes from happening to nodemaps
 		 */
 		root = nodemap->nm_client_to_fs_uidmap;
-		nm_rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
-							id_client_to_fs) {
+		rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
+						     id_client_to_fs) {
 			nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_UID,
 					       idmap->id_client);
 			nodemap_idmap_rec_init(&nr, idmap->id_fs);
@@ -1233,8 +1233,8 @@ nodemap_save_config_cache(const struct lu_env *env,
 		}
 
 		root = nodemap->nm_client_to_fs_gidmap;
-		nm_rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
-							id_client_to_fs) {
+		rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
+						     id_client_to_fs) {
 			nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_GID,
 					       idmap->id_client);
 			nodemap_idmap_rec_init(&nr, idmap->id_fs);
@@ -1244,8 +1244,8 @@ nodemap_save_config_cache(const struct lu_env *env,
 		}
 
 		root = nodemap->nm_client_to_fs_projidmap;
-		nm_rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
-							id_client_to_fs) {
+		rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
+						     id_client_to_fs) {
 			nodemap_idmap_key_init(&nk, nodemap->nm_id,
 					       NODEMAP_PROJID,
 					       idmap->id_client);

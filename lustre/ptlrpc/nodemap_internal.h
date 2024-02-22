@@ -145,27 +145,11 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 			     const struct lnet_nid nid[2],
 			     u8 netmask, unsigned int range_id);
 
-struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
-struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
 void nodemap_getref(struct lu_nodemap *nodemap);
 void nodemap_putref(struct lu_nodemap *nodemap);
 int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		    struct hlist_node *hnode,
 		    void *nodemap_list_head);
-
-#define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\
-						root, field)		\
-	for (pos = nm_rb_first_postorder(root) ?			\
-		rb_entry(nm_rb_first_postorder(root), typeof(*pos),	\
-		field) : NULL,						\
-		n = (pos && nm_rb_next_postorder(&pos->field)) ?	\
-		rb_entry(nm_rb_next_postorder(&pos->field),		\
-		typeof(*pos), field) : NULL;				\
-		pos != NULL;						\
-		pos = n,						\
-		n = (pos && nm_rb_next_postorder(&pos->field)) ?	\
-		rb_entry(nm_rb_next_postorder(&pos->field),		\
-		typeof(*pos), field) : NULL)
 
 int nodemap_idx_nodemap_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap);
