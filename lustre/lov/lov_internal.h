@@ -36,9 +36,11 @@
 #include <uapi/linux/lustre/lustre_user.h>
 
 /* If we are unable to get the maximum object size from the OST in
- * ocd_maxbytes using OBD_CONNECT_MAXBYTES, then we fall back to using
- * the old maximum object size from ext3. */
-#define LUSTRE_EXT3_STRIPE_MAXBYTES 0x1fffffff000ULL
+ * ocd_maxbytes using OBD_CONNECT_MAXBYTES or LSM component don't init,
+ * then we fall back to using the maximum object size from ldiskfs.
+ * Once indirect's blocks don't supported for ost now, ldiskfs
+ * extent limit used */
+#define LUSTRE_EXT4_STRIPE_MAXBYTES (((1ULL << 32) - 1) << 12)
 
 struct lov_stripe_md_entry {
 	struct lu_extent	lsme_extent;

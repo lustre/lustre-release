@@ -51,12 +51,12 @@ lu_extent_le_to_cpu(struct lu_extent *dst, const struct lu_extent *src)
 
 /*
  * Find minimum stripe maxbytes value.  For inactive or
- * reconnecting targets use LUSTRE_EXT3_STRIPE_MAXBYTES.
+ * reconnecting targets use LUSTRE_EXT4_STRIPE_MAXBYTES.
  */
 static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 {
 	struct obd_import *imp;
-	loff_t maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
+	loff_t maxbytes = LUSTRE_EXT4_STRIPE_MAXBYTES;
 
 	if (!tgt->ltd_active)
 		return maxbytes;
@@ -281,12 +281,14 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	if (maxbytes) {
 		if (min_stripe_maxbytes == 0)
-			min_stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
+			min_stripe_maxbytes = LUSTRE_EXT4_STRIPE_MAXBYTES;
 
 		if (stripe_count == 0)
-			stripe_count = lov->desc.ld_tgt_count;
+			stripe_count = lsme->lsme_stripe_count <= 0 ?
+					    lov->desc.ld_tgt_count :
+					    lsme->lsme_stripe_count;
 
-		if (min_stripe_maxbytes <= LLONG_MAX / stripe_count)
+		if (min_stripe_maxbytes <= (LLONG_MAX / stripe_count))
 			lov_bytes = min_stripe_maxbytes * stripe_count;
 		else
 			lov_bytes = MAX_LFS_FILESIZE;
