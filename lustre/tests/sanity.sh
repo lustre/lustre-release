@@ -28860,6 +28860,10 @@ test_qos_mkdir() {
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null"
 
+	# decrease statfs age, so that it can be updated in time
+	$LCTL set_param lmv.*.qos_maxage=1 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=1 > /dev/null
+
 	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
 
@@ -28959,9 +28963,6 @@ test_qos_mkdir() {
 	$LCTL set_param lmv.*.qos_prio_free=100 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=0 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_prio_free=100 > /dev/null
-	# decrease statfs age, so that it can be updated in time
-	$LCTL set_param lmv.*.qos_maxage=1 > /dev/null
-	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=1 > /dev/null
 
 	sleep 1
 
