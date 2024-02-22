@@ -104,6 +104,7 @@ ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
 	struct cl_io	       *io;
 	struct cl_fault_io     *fio;
 	int			rc;
+
 	ENTRY;
 
 	if (ll_file_nolock(file))
@@ -135,8 +136,7 @@ restart:
 
 		LASSERT(vio->vui_cl.cis_io == io);
 
-		/* mmap lock must be MANDATORY it has to cache
-		 * pages. */
+		/* mmap lock must be MANDATORY it has to cache pages. */
 		io->ci_lockreq = CILR_MANDATORY;
 		vio->vui_fd = fd;
 	} else {
@@ -152,7 +152,7 @@ restart:
 
 /* Sharing code of page_mkwrite method for rhel5 and rhel6 */
 static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
-                            bool *retry)
+			    bool *retry)
 {
 	struct lu_env           *env;
 	struct cl_io            *io;
@@ -162,6 +162,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	sigset_t old, new;
 	struct inode             *inode = NULL;
 	struct ll_inode_info     *lli;
+
 	ENTRY;
 
 	LASSERT(vmpage != NULL);
@@ -191,37 +192,37 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 
 	sigprocmask(SIG_SETMASK, &old, NULL);
 
-        if (result == 0) {
-                lock_page(vmpage);
-                if (vmpage->mapping == NULL) {
-                        unlock_page(vmpage);
+	if (result == 0) {
+		lock_page(vmpage);
+		if (vmpage->mapping == NULL) {
+			unlock_page(vmpage);
 
-                        /* page was truncated and lock was cancelled, return
-                         * ENODATA so that VM_FAULT_NOPAGE will be returned
-                         * to handle_mm_fault(). */
-                        if (result == 0)
-                                result = -ENODATA;
-                } else if (!PageDirty(vmpage)) {
-                        /* race, the page has been cleaned by ptlrpcd after
-                         * it was unlocked, it has to be added into dirty
-                         * cache again otherwise this soon-to-dirty page won't
-                         * consume any grants, even worse if this page is being
-                         * transferred because it will break RPC checksum.
-                         */
-                        unlock_page(vmpage);
+			/* page was truncated and lock was cancelled, return
+			 * ENODATA so that VM_FAULT_NOPAGE will be returned
+			 * to handle_mm_fault().
+			 */
+			if (result == 0)
+				result = -ENODATA;
+		} else if (!PageDirty(vmpage)) {
+			/* race, the page has been cleaned by ptlrpcd after
+			 * it was unlocked, it has to be added into dirty
+			 * cache again otherwise this soon-to-dirty page won't
+			 * consume any grants, even worse if this page is being
+			 * transferred because it will break RPC checksum.
+			 */
+			unlock_page(vmpage);
 
-                        CDEBUG(D_MMAP, "Race on page_mkwrite %p/%lu, page has "
-                               "been written out, retry.\n",
-                               vmpage, vmpage->index);
+			CDEBUG(D_MMAP, "Race on page_mkwrite %p/%lu, page has been written out, retry.\n",
+			       vmpage, vmpage->index);
 
-                        *retry = true;
-                        result = -EAGAIN;
-                }
+			*retry = true;
+			result = -EAGAIN;
+		}
 
 		if (result == 0)
 			set_bit(LLIF_DATA_MODIFIED, &lli->lli_flags);
-        }
-        EXIT;
+	}
+	EXIT;
 
 out_io:
 	cl_io_fini(env, io);
@@ -235,8 +236,8 @@ out:
 	 * entering live-lock situation with competitors
 	 */
 	if (result == -ENODATA && inode != NULL) {
-		CDEBUG(D_MMAP, "delaying new page-fault for inode %p to "
-			       "prevent live-lock\n", inode);
+		CDEBUG(D_MMAP, "delaying new page-fault for inode %p to prevent live-lock\n",
+			       inode);
 		msleep(10);
 	}
 
@@ -245,7 +246,7 @@ out:
 
 static inline int to_fault_error(int result)
 {
-	switch(result) {
+	switch (result) {
 	case 0:
 		result = VM_FAULT_LOCKED;
 		break;
@@ -299,6 +300,7 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 	int                      result = 0;
 	int                      fault_ret = 0;
 	__u16			 refcheck;
+
 	ENTRY;
 
 	env = cl_env_get(&refcheck);
@@ -329,7 +331,8 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 		 *   uptodate;
 		 * - If VM_FAULT_RETRY is set, the page existed but failed to
 		 *   lock. We will try slow path to avoid loops.
-		 * - Otherwise, it should try normal fault under DLM lock. */
+		 * - Otherwise, it should try normal fault under DLM lock.
+		 */
 		if (!(fault_ret & VM_FAULT_RETRY) &&
 		    !(fault_ret & VM_FAULT_ERROR))
 			GOTO(out, result = 0);
@@ -357,8 +360,7 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 		ll_cl_remove(inode, env);
 
-		/* ft_flags are only valid if we reached
-		 * the call to filemap_fault */
+		/* ft_flags are only valid if we reached ll_filemap_fault() */
 		if (vio->u.fault.ft_flags_valid)
 			fault_ret = vio->u.fault.ft_flags;
 
@@ -367,7 +369,7 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 			put_page(vmpage);
 			vmf->page = NULL;
 		}
-        }
+	}
 	cl_io_fini(env, io);
 
 out:
@@ -487,8 +489,8 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	CDEBUG(D_MMAP|D_IOTRACE,
 	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
 	       file_dentry(vma->vm_file)->d_name.name,
-	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
-	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->page->index);
+	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid), vma,
+	       vma->vm_start, vma->vm_end, vma->vm_flags, vmf->page->index);
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)
@@ -552,7 +554,7 @@ out:
  *  To avoid cancel the locks covering mmapped region for lock cache pressure,
  *  we track the mapped vma count in vvp_object::vob_mmap_cnt.
  */
-static void ll_vm_open(struct vm_area_struct * vma)
+static void ll_vm_open(struct vm_area_struct *vma)
 {
 	struct inode *inode    = file_inode(vma->vm_file);
 	struct vvp_object *vob = cl_inode2vvp(inode);
@@ -586,7 +588,7 @@ static const struct vm_operations_struct ll_file_vm_ops = {
 	.close			= ll_vm_close,
 };
 
-int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
+int ll_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct inode *inode = file_inode(file);
 	ktime_t kstart = ktime_get();
