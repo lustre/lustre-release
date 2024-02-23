@@ -174,7 +174,6 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
-		LASSERT(osc == oap->oap_obj);
 
 		if (!list_empty(&oap->oap_pending_item) ||
 		    !list_empty(&oap->oap_rpc_item)) {
@@ -336,9 +335,6 @@ int osc_io_commit_async(const struct lu_env *env,
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
 
-		LASSERTF(osc == oap->oap_obj,
-			 "obj mismatch: %px / %px\n", osc, oap->oap_obj);
-
 		if (!list_empty(&oap->oap_rpc_item)) {
 			CDEBUG(D_CACHE, "Busy oap %p page %p for submit.\n",
 			       oap, opg);
@@ -348,7 +344,7 @@ int osc_io_commit_async(const struct lu_env *env,
 
 		/* The page may be already in dirty cache. */
 		if (list_empty(&oap->oap_pending_item)) {
-			result = osc_page_cache_add(env, opg, io, cb);
+			result = osc_page_cache_add(env, osc, opg, io, cb);
 			if (result != 0)
 				break;
 		}

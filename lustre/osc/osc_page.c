@@ -86,14 +86,15 @@ static void osc_page_transfer_add(const struct lu_env *env,
 	osc_lru_use(osc_cli(obj), opg);
 }
 
-int osc_page_cache_add(const struct lu_env *env, struct osc_page *opg,
-		       struct cl_io *io, cl_commit_cbt cb)
+int osc_page_cache_add(const struct lu_env *env, struct osc_object *osc,
+		       struct osc_page *opg, struct cl_io *io,
+		       cl_commit_cbt cb)
 {
 	int result;
 	ENTRY;
 
 	osc_page_transfer_get(opg, "transfer\0cache");
-	result = osc_queue_async_io(env, io, opg, cb);
+	result = osc_queue_async_io(env, io, osc, opg, cb);
 	if (result != 0)
 		osc_page_transfer_put(env, opg);
 	else

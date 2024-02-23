@@ -47,10 +47,11 @@ static void osc_update_pending(struct osc_object *obj, int cmd, int delta);
 static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 			   enum osc_extent_state state);
 static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
+			      struct osc_object *osc,
 			      struct osc_async_page *oap, int sent, int rc);
 static int osc_make_ready(const struct lu_env *env, struct osc_async_page *oap,
 			  int cmd);
-static int osc_refresh_count(const struct lu_env *env,
+static int osc_refresh_count(const struct lu_env *env, struct osc_object *osc,
 			     struct osc_async_page *oap, int cmd);
 static int osc_io_unplug_async(const struct lu_env *env,
 			       struct client_obd *cli, struct osc_object *osc);
@@ -831,6 +832,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		      int sent, int rc)
 {
 	struct client_obd *cli = osc_cli(ext->oe_obj);
+	struct osc_object *osc = ext->oe_obj;
 	struct osc_async_page *oap;
 	struct osc_async_page *tmp;
 	int nr_pages = ext->oe_nr_pages;
@@ -859,7 +861,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		}
 
 		--ext->oe_nr_pages;
-		osc_ap_completion(env, cli, oap, sent, rc);
+		osc_ap_completion(env, cli, osc, oap, sent, rc);
 	}
 	EASSERT(ext->oe_nr_pages == 0, ext);
 
@@ -1113,7 +1115,8 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	/* the last page is the only one we need to refresh its count by
 	 * the size of file. */
 	if (!(last->oap_async_flags & ASYNC_COUNT_STABLE)) {
-		int last_oap_count = osc_refresh_count(env, last, OBD_BRW_WRITE);
+		int last_oap_count = osc_refresh_count(env, obj, last,
+						       OBD_BRW_WRITE);
 		LASSERTF(last_oap_count > 0,
 			 "last_oap_count %d\n", last_oap_count);
 		LASSERT(last->oap_page_off + last_oap_count <= PAGE_SIZE);
@@ -1262,12 +1265,12 @@ static int osc_make_ready(const struct lu_env *env, struct osc_async_page *oap,
 	RETURN(result);
 }
 
-static int osc_refresh_count(const struct lu_env *env,
+static int osc_refresh_count(const struct lu_env *env, struct osc_object *osc,
 			     struct osc_async_page *oap, int cmd)
 {
 	struct osc_page  *opg = oap2osc_page(oap);
 	pgoff_t index = osc_index(oap2osc(oap));
-	struct cl_object *obj = osc2cl(osc_page_object(opg));
+	struct cl_object *obj = osc2cl(osc);
 	struct cl_attr   *attr = &osc_env_info(env)->oti_attr;
 	int result;
 	loff_t kms;
@@ -1292,8 +1295,8 @@ static int osc_refresh_count(const struct lu_env *env,
 		return PAGE_SIZE;
 }
 
-static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
-			  int cmd, int rc)
+static int osc_completion(const struct lu_env *env, struct osc_object *osc,
+			  struct osc_async_page *oap, int cmd, int rc)
 {
 	struct osc_page   *opg  = oap2osc_page(oap);
 	struct cl_page    *page = oap2cl_page(oap);
@@ -1317,7 +1320,7 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 
 	/* statistic */
 	if (rc == 0 && srvlock) {
-		struct lu_device *ld = osc_page_object(opg)->oo_cl.co_lu.lo_dev;
+		struct lu_device *ld = osc->oo_cl.co_lu.lo_dev;
 		struct osc_stats *stats = &lu2osc_dev(ld)->osc_stats;
 		size_t bytes = oap->oap_count;
 
@@ -1550,9 +1553,9 @@ static inline void cli_lock_after_unplug(struct client_obd *cli)
  * The process will be put into sleep if it's already run out of grant.
  */
 static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
-			   struct osc_async_page *oap, int bytes)
+			   struct osc_object *osc, struct osc_async_page *oap,
+			   int bytes)
 {
-	struct osc_object *osc = oap->oap_obj;
 	struct lov_oinfo *loi = osc->oo_oinfo;
 	int rc = -EDQUOT;
 	int remain;
@@ -1759,16 +1762,15 @@ static int osc_list_maint(struct client_obd *cli, struct osc_object *osc)
  * async_flag maintenance
  */
 static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
+			      struct osc_object *osc,
 			      struct osc_async_page *oap, int sent, int rc)
 {
-	struct osc_object *osc = oap->oap_obj;
-
 	ENTRY;
 
 	/* As the transfer for this page is being done, clear the flags */
 	oap->oap_async_flags = 0;
 
-	rc = osc_completion(env, oap, oap->oap_cmd, rc);
+	rc = osc_completion(env, osc, oap, oap->oap_cmd, rc);
 	if (rc)
 		CERROR("completion on oap %p obj %p returns %d.\n",
 		       oap, osc, rc);
@@ -2233,12 +2235,12 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 EXPORT_SYMBOL(osc_prep_async_page);
 
 int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
-		       struct osc_page *ops, cl_commit_cbt cb)
+		       struct osc_object *osc, struct osc_page *ops,
+		       cl_commit_cbt cb)
 {
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_extent     *ext = NULL;
 	struct osc_async_page *oap = &ops->ops_oap;
-	struct osc_object     *osc = oap->oap_obj;
 	struct client_obd     *cli = osc_cli(osc);
 	struct pagevec        *pvec = &osc_env_info(env)->oti_pagevec;
 	pgoff_t index;
@@ -2375,7 +2377,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		}
 
 		if (grants == 0) {
-			rc = osc_enter_cache(env, cli, oap, tmp);
+			rc = osc_enter_cache(env, cli, osc, oap, tmp);
 			if (rc == 0)
 				grants = tmp;
 		}
@@ -2569,7 +2571,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 
 		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
 			list_del_init(&oap->oap_pending_item);
-			osc_ap_completion(env, cli, oap, 0, -ENOMEM);
+			osc_ap_completion(env, cli, obj, oap, 0, -ENOMEM);
 		}
 		RETURN(-ENOMEM);
 	}

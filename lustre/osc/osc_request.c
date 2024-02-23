@@ -2538,6 +2538,8 @@ static int brw_interpret(const struct lu_env *env,
 
 	ENTRY;
 
+	ext = list_first_entry(&aa->aa_exts, struct osc_extent, oe_link);
+
 	rc = osc_brw_fini_request(req, rc);
 	CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
 
@@ -2572,7 +2574,7 @@ static int brw_interpret(const struct lu_env *env,
 	}
 
 	last = brw_page2oap(aa->aa_ppga[aa->aa_page_count - 1]);
-	obj = osc2cl(last->oap_obj);
+	obj = osc2cl(ext->oe_obj);
 	loi = cl2osc(obj)->oo_oinfo;
 
 	if (rc == 0) {
