@@ -169,17 +169,18 @@ static void osc_page_delete(const struct lu_env *env,
 	ENTRY;
 	CDEBUG(D_TRACE, "%p\n", opg);
 	osc_page_transfer_put(env, opg);
-	rc = osc_teardown_async_page(env, obj, opg);
-	if (rc) {
-		CL_PAGE_DEBUG(D_ERROR, env, slice->cpl_page,
-			      "Trying to teardown failed: %d\n", rc);
-		LASSERT(0);
-	}
-
-	osc_lru_del(osc_cli(obj), opg);
 
 	if (slice->cpl_page->cp_type == CPT_CACHEABLE) {
 		void *value = NULL;
+
+		rc = osc_teardown_async_page(env, obj, opg);
+		if (rc) {
+			CL_PAGE_DEBUG(D_ERROR, env, slice->cpl_page,
+				      "Trying to teardown failed: %d\n", rc);
+			LASSERT(0);
+		}
+
+		osc_lru_del(osc_cli(obj), opg);
 
 		spin_lock(&obj->oo_tree_lock);
 		if (opg->ops_intree) {
