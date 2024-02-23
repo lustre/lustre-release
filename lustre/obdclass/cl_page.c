@@ -940,21 +940,21 @@ void cl_page_completion(const struct lu_env *env,
 	int i;
 
 	ENTRY;
-	PASSERT(env, cl_page, crt < CRT_NR);
-	if (cl_page->cp_type != CPT_TRANSIENT)
-		PASSERT(env, cl_page,
-			cl_page->cp_state == cl_req_type_state(crt));
 
 	CL_PAGE_HEADER(D_TRACE, env, cl_page, "%d %d\n", crt, ioret);
-	if (cl_page->cp_type != CPT_TRANSIENT)
-		cl_page_state_set(env, cl_page, CPS_CACHED);
-	if (crt >= CRT_NR)
-		return;
+	PASSERT(env, cl_page, crt < CRT_NR);
 
-	cl_page_slice_for_each_reverse(cl_page, slice, i) {
-		if (slice->cpl_ops->io[crt].cpo_completion != NULL)
-			(*slice->cpl_ops->io[crt].cpo_completion)(env, slice,
-								  ioret);
+	if (cl_page->cp_type != CPT_TRANSIENT) {
+		PASSERT(env, cl_page,
+			cl_page->cp_state == cl_req_type_state(crt));
+		cl_page_state_set(env, cl_page, CPS_CACHED);
+
+		cl_page_slice_for_each_reverse(cl_page, slice, i) {
+			if (slice->cpl_ops->io[crt].cpo_completion != NULL)
+				(*slice->cpl_ops->io[crt].cpo_completion)(env,
+									  slice,
+									 ioret);
+		}
 	}
 
 	if (anchor != NULL) {
