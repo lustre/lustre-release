@@ -2517,7 +2517,12 @@ struct ll_dio_pages {
 	/** # of pages in the array. */
 	size_t			ldp_count;
 	/* the file offset of the first page. */
-	loff_t			ldp_file_offset;
+	loff_t                  ldp_file_offset;
+	/* the first and last page can be incomplete, this records the
+	 * offsets
+	 */
+	int			ldp_from;
+	int			ldp_to;
 };
 
 /* Top level struct used for AIO and DIO */

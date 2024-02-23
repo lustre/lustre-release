@@ -386,6 +386,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 
 	ENTRY;
 
+	pv->ldp_from = offset & ~PAGE_MASK;
+	pv->ldp_to = (offset + size) & ~PAGE_MASK;
+
 	cl_2queue_init(queue);
 	while (size > 0) {
 		size_t from = offset & ~PAGE_MASK;
