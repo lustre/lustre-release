@@ -71,19 +71,6 @@ static void osc_page_transfer_put(const struct lu_env *env,
 	}
 }
 
-/**
- * This is called once for every page when it is submitted for a transfer
- * either opportunistic (osc_page_cache_add()), or immediate
- * (osc_page_submit()).
- */
-static void osc_page_transfer_add(const struct lu_env *env,
-                                  struct osc_page *opg, enum cl_req_type crt)
-{
-	struct osc_object *obj = osc_page_object(opg);
-
-	osc_lru_use(osc_cli(obj), opg);
-}
-
 int osc_page_cache_add(const struct lu_env *env, struct osc_object *osc,
 		       struct osc_page *opg, struct cl_io *io,
 		       cl_commit_cbt cb)
@@ -96,7 +83,7 @@ int osc_page_cache_add(const struct lu_env *env, struct osc_object *osc,
 	if (result != 0)
 		osc_page_transfer_put(env, opg);
 	else
-		osc_page_transfer_add(env, opg, CRT_WRITE);
+		osc_lru_use(osc_cli(osc), opg);
 
 	RETURN(result);
 }
@@ -297,9 +284,10 @@ EXPORT_SYMBOL(osc_page_init);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags)
 {
-	struct osc_io *oio = osc_env_io(env);
-	struct osc_async_page *oap = &opg->ops_oap;
+	struct osc_object *obj = osc_page_object(opg);
 	struct cl_page *page = opg->ops_cl.cpl_page;
+	struct osc_async_page *oap = &opg->ops_oap;
+	struct osc_io *oio = osc_env_io(env);
 
 	LASSERT(oap->oap_async_flags & ASYNC_READY);
 	LASSERT(oap->oap_async_flags & ASYNC_COUNT_STABLE);
@@ -314,7 +302,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 
 	if (page->cp_type != CPT_TRANSIENT)
 		osc_page_transfer_get(opg, "transfer\0imm");
-	osc_page_transfer_add(env, opg, crt);
+	osc_lru_use(osc_cli(obj), opg);
 }
 
 /* --------------- LRU page management ------------------ */
