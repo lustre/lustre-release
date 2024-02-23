@@ -104,6 +104,7 @@ struct obd_type *class_get_type(const char *name)
 {
 	struct obd_type *type;
 
+	rcu_read_lock();
 	type = class_search_type(name);
 #ifdef HAVE_MODULE_LOADING_SUPPORT
 	if (!type) {
@@ -120,17 +121,27 @@ struct obd_type *class_get_type(const char *name)
 			modname = LUSTRE_MDT_NAME;
 #endif /* HAVE_SERVER_SUPPORT */
 
+		rcu_read_unlock();
 		if (!request_module("%s", modname)) {
 			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
-			type = class_search_type(name);
 		} else {
 			LCONSOLE_ERROR_MSG(0x158, "Can't load module '%s'\n",
 					   modname);
 		}
+		rcu_read_lock();
+		type = class_search_type(name);
 	}
 #endif
 	if (type) {
-		if (try_module_get(type->typ_dt_ops->o_owner)) {
+		/*
+		 * Holding rcu_read_lock() matches the synchronize_rcu() call
+		 * in free_module() and ensures that if type->typ_dt_ops is
+		 * not yet NULL, then the module won't be freed until after
+		 * we rcu_read_unlock().
+		 */
+		const struct obd_ops *dt_ops = READ_ONCE(type->typ_dt_ops);
+
+		if (dt_ops && try_module_get(dt_ops->o_owner)) {
 			atomic_inc(&type->typ_refcnt);
 			/* class_search_type() returned a counted ref, this
 			 * count not needed as we could get it via typ_refcnt
@@ -141,6 +152,7 @@ struct obd_type *class_get_type(const char *name)
 			type = NULL;
 		}
 	}
+	rcu_read_unlock();
 	return type;
 }
 EXPORT_SYMBOL(class_get_type);
@@ -306,18 +318,24 @@ int class_unregister_type(const char *name)
 	int rc = 0;
 
 	ENTRY;
-
 	if (!type) {
 		CERROR("unknown obd type\n");
 		RETURN(-EINVAL);
 	}
+
+	/*
+	 * Ensure that class_get_type doesn't try to get the module
+	 * as it could be freed before the obd_type is released.
+	 * synchronize_rcu() will be called before the module
+	 * is freed.
+	 */
+	type->typ_dt_ops = NULL;
 
 	if (atomic_read(&type->typ_refcnt)) {
 		CERROR("type %s has refcount (%d)\n", name,
 		       atomic_read(&type->typ_refcnt));
 		/* This is a bad situation, let's make the best of it */
 		/* Remove ops, but leave the name for debugging */
-		type->typ_dt_ops = NULL;
 		type->typ_md_ops = NULL;
 		GOTO(out_put, rc = -EBUSY);
 	}
