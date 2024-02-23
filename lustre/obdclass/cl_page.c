@@ -541,6 +541,8 @@ void __cl_page_disown(const struct lu_env *env, struct cl_page *cp)
 
 	ENTRY;
 
+	LASSERT(cp->cp_type != CPT_TRANSIENT);
+
 	cl_page_owner_clear(cp);
 	state = cp->cp_state;
 	PINVRNT(env, cp, state == CPS_OWNED || state == CPS_FREEING);
@@ -562,10 +564,8 @@ int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io)
 
 	LINVRNT(cl_object_same(pg->cp_obj, top->ci_obj));
 	ENTRY;
-	if (pg->cp_type != CPT_TRANSIENT)
-		RETURN(pg->cp_state == CPS_OWNED && pg->cp_owner == top);
-	else
-		RETURN(pg->cp_owner == top);
+	LASSERT(pg->cp_type != CPT_TRANSIENT);
+	RETURN(pg->cp_state == CPS_OWNED && pg->cp_owner == top);
 }
 EXPORT_SYMBOL(cl_page_is_owned);
 
@@ -734,8 +734,6 @@ EXPORT_SYMBOL(cl_page_unassume);
 void cl_page_disown(const struct lu_env *env,
 		    struct cl_io *io, struct cl_page *pg)
 {
-	LASSERT(pg->cp_type != CPT_TRANSIENT);
-
 	PINVRNT(env, pg, cl_page_is_owned(pg, cl_io_top(io)) ||
 		pg->cp_state == CPS_FREEING);
 

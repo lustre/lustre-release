@@ -2230,8 +2230,6 @@ void cl_page_completion(const struct lu_env *env, struct cl_page *pg,
 			 enum cl_req_type crt, int ioret);
 int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
 		       enum cl_req_type crt);
-int cl_page_cache_add(const struct lu_env *env, struct cl_io *io,
-		      struct cl_page *pg, enum cl_req_type crt);
 void cl_page_clip(const struct lu_env *env, struct cl_page *pg,
 		  int from, int to);
 int cl_page_flush(const struct lu_env *env, struct cl_io *io,
