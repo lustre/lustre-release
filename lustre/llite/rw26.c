@@ -451,6 +451,10 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	}
 
 out:
+	/* if pages were not submitted successfully above, this takes care of
+	 * taking them off the list and removing the single reference they have
+	 * from when they were created
+	 */
 	cl_2queue_fini(env, queue);
 	RETURN(rc);
 }
