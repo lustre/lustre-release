@@ -67,8 +67,8 @@ static int lfsck_bookmark_load(const struct lu_env *env,
 			       struct lfsck_instance *lfsck)
 {
 	loff_t pos = 0;
-	int    len = sizeof(struct lfsck_bookmark);
-	int    rc;
+	int len = sizeof(struct lfsck_bookmark);
+	int rc;
 
 	rc = dt_record_read(env, lfsck->li_bookmark_obj,
 			    lfsck_buf_get(env, &lfsck->li_bookmark_disk, len),
@@ -78,9 +78,10 @@ static int lfsck_bookmark_load(const struct lu_env *env,
 
 		lfsck_bookmark_le_to_cpu(bm, &lfsck->li_bookmark_disk);
 		if (bm->lb_magic != LFSCK_BOOKMARK_MAGIC) {
-			CDEBUG(D_LFSCK, "%s: invalid lfsck_bookmark magic "
-			      "%#x != %#x\n", lfsck_lfsck2name(lfsck),
-			      bm->lb_magic, LFSCK_BOOKMARK_MAGIC);
+			CDEBUG(D_LFSCK,
+			       "%s: invalid lfsck_bookmark magic %#x != %#x\n",
+			       lfsck_lfsck2name(lfsck), bm->lb_magic,
+			       LFSCK_BOOKMARK_MAGIC);
 			/* Process it as new lfsck_bookmark. */
 			rc = -ENODATA;
 		}
@@ -89,8 +90,8 @@ static int lfsck_bookmark_load(const struct lu_env *env,
 			/* return -ENODATA for empty lfsck_bookmark. */
 			rc = -ENODATA;
 		else
-			CDEBUG(D_LFSCK, "%s: fail to load lfsck_bookmark, "
-			       "expected = %d: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to load lfsck_bookmark, expected = %d: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), len, rc);
 	}
 	return rc;
@@ -98,12 +99,13 @@ static int lfsck_bookmark_load(const struct lu_env *env,
 
 int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 {
-	struct thandle    *handle;
-	struct dt_object  *obj    = lfsck->li_bookmark_obj;
-	struct dt_device  *dev    = lfsck_obj2dev(obj);
-	loff_t		   pos    = 0;
-	int		   len    = sizeof(struct lfsck_bookmark);
-	int		   rc;
+	struct thandle *handle;
+	struct dt_object *obj = lfsck->li_bookmark_obj;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	loff_t pos = 0;
+	int len = sizeof(struct lfsck_bookmark);
+	int rc;
+
 	ENTRY;
 
 	lfsck_bookmark_cpu_to_le(&lfsck->li_bookmark_disk,
@@ -160,9 +162,9 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 {
 	struct dt_object *root;
 	struct dt_object *obj;
-	int		  rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
 	if (IS_ERR(root))
 		RETURN(PTR_ERR(root));
@@ -186,7 +188,8 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 		struct lfsck_bookmark *mb = &lfsck->li_bookmark_ram;
 
 		/* It is upgraded from old release, set it as
-		 * LFSCK_ASYNC_WIN_DEFAULT to avoid memory pressure. */
+		 * LFSCK_ASYNC_WIN_DEFAULT to avoid memory pressure.
+		 */
 		if (unlikely(mb->lb_async_windows == 0)) {
 			mb->lb_async_windows = LFSCK_ASYNC_WIN_DEFAULT;
 			mutex_lock(&lfsck->li_mutex);
@@ -203,9 +206,9 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lfsck_start *start, bool reset)
 {
-	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
-	int			 rc	= 0;
-	bool			 dirty	= false;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	int rc = 0;
+	bool dirty = false;
 
 	if (start == NULL) {
 		LASSERT(reset);

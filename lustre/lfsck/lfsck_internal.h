@@ -56,8 +56,7 @@ enum lfsck_flags {
 	/* The device is upgraded from 1.8 format. */
 	LF_UPGRADE		= 0x00000004ULL,
 
-	/* The server ever restarted during the LFSCK, and may miss to process
-	 * some objects check/repair. */
+	/* Server restarted during LFSCK may miss to process obj check/repair */
 	LF_INCOMPLETE		= 0x00000008ULL,
 
 	/* The LAST_ID (file) crashed. */
@@ -209,8 +208,7 @@ struct lfsck_namespace {
 	/* How many dangling name entries have been found/repaired. */
 	__u64	ln_dangling_repaired;
 
-	/* How many multiple referenced name entries have been
-	 * found/repaired. */
+	/* How many multiple referenced name entries have been found/repaired */
 	__u64	ln_mul_ref_repaired;
 
 	/* How many name entries with bad file type have been repaired. */
@@ -222,8 +220,7 @@ struct lfsck_namespace {
 	/* How many objects under /lost+found have been scanned. */
 	__u64	ln_local_lpf_scanned;
 
-	/* How many objects under /lost+found have been moved to
-	 * namespace visible directory. */
+	/* How many obj under lost+found moved to namespace visible directory */
 	__u64	ln_local_lpf_moved;
 
 	/* How many objects under /lost+found have been skipped. */
@@ -245,7 +242,8 @@ struct lfsck_namespace {
 	__u64	ln_striped_dirs_disabled;
 
 	/* How many striped directory's (master) have been skipped
-	 * (for shards verification) because of lost master LMV EA. */
+	 * (for shards verification) because of lost master LMV EA.
+	 */
 	__u64	ln_striped_dirs_skipped;
 
 	/* How many striped directory's shards (slave) have been scanned. */
@@ -259,15 +257,18 @@ struct lfsck_namespace {
 
 	/* How many striped directory's shards (slave) have been skipped
 	 * (for name hash verification) because do not know whether the slave
-	 * LMV EA is valid or not. */
+	 * LMV EA is valid or not.
+	 */
 	__u64	ln_striped_shards_skipped;
 
 	/* How many name entries under striped directory with bad name
-	 * hash have been repaired. */
+	 * hash have been repaired.
+	 */
 	__u64	ln_name_hash_repaired;
 
 	/* The size of MDT targets bitmap with nbits. Such bitmap records
-	 * the MDTs that contain non-verified MDT-objects. */
+	 * the MDTs that contain non-verified MDT-objects.
+	 */
 	__u32	ln_bitmap_size;
 
 	/* For further using. 256-bytes aligned now. */
@@ -292,7 +293,7 @@ enum lfsck_layout_inconsistency_type {
 	LLIT_UNMATCHED_PAIR		= 2,
 	LLIT_MULTIPLE_REFERENCED	= 3,
 	LLIT_ORPHAN			= 4,
-	LLIT_INCONSISTENT_OWNER 	= 5,
+	LLIT_INCONSISTENT_OWNER		= 5,
 	LLIT_OTHERS			= 6,
 	LLIT_MAX			= LLIT_OTHERS
 };
@@ -331,8 +332,7 @@ struct lfsck_layout {
 	/* Position for the last LFSCK checkpoint. */
 	__u64	ll_pos_last_checkpoint;
 
-	/* Position for the first object to be fixed or
-	 * failed to be checked in the phase1. */
+	/* Position for first obj to be fixed/failed to be checked in phase1. */
 	__u64	ll_pos_first_inconsistent;
 
 	/* How many objects have been checked. */
@@ -348,11 +348,13 @@ struct lfsck_layout {
 	__u64	ll_objs_failed_phase2;
 
 	/* kinds of inconsistency have been or to be repaired.
-	 * ll_objs_repaired[type - 1] is the count for the given @type. */
+	 * ll_objs_repaired[type - 1] is the count for the given @type.
+	 */
 	__u64	ll_objs_repaired[LLIT_MAX];
 
 	/* How many objects have been skipped because of related
-	 * MDT(s)/OST(s) do not participate in the LFSCK */
+	 * MDT(s)/OST(s) do not participate in the LFSCK
+	 */
 	__u64	ll_objs_skipped;
 
 	/* The size of ll_ost_bitmap with nbits. */
@@ -367,8 +369,7 @@ struct lfsck_layout {
 	/* For further using */
 	u64	ll_reserved_2[7];
 
-	/* The OST targets bitmap to record the OSTs that contain
-	 * non-verified OST-objects. */
+	/* OST target bitmap to record OSTs that contain non-verified OST-obj */
 	__u8	ll_ost_bitmap[0];
 };
 
@@ -580,7 +581,8 @@ struct lfsck_component {
 #define LFSCK_LMV_DEF_STRIPES	4
 
 /* Warning: NOT change the lfsck_slave_lmv_flags members order,
- *	    otherwise the lfsck_record_lmv() may be wrong. */
+ *          otherwise the lfsck_record_lmv() may be wrong.
+ */
 enum lfsck_slave_lmv_flags {
 	LSLF_NONE	= 0,
 	LSLF_BAD_INDEX2	= 1,
@@ -595,7 +597,8 @@ enum lfsck_slave_lmv_flags {
  * will take one lfsck_slave_lmv_rec slot. After the 1st cycle scanning
  * the striped directory, the LFSCK will get all the information about
  * whether there are some inconsistency, and then it can repair them in
- * the 2nd cycle scanning. */
+ * the 2nd cycle scanning.
+ */
 struct lfsck_slave_lmv_rec {
 	struct lu_fid	lslr_fid;
 	__u32		lslr_stripe_count;
@@ -630,7 +633,8 @@ struct lfsck_lmv {
  * master MDT-object resides to rescan the striped directory. To do that,
  * the notify handler will insert a "lfsck_lmv_unit" structure into the
  * lfsck::li_list_lmv. The LFSCK instance will scan such list from time
- * to time to check whether needs to rescan some stirped directories. */
+ * to time to check whether needs to rescan some stirped directories.
+ */
 struct lfsck_lmv_unit {
 	struct list_head	 llu_link;
 	struct lfsck_lmv	 llu_lmv;
@@ -658,7 +662,8 @@ struct lfsck_instance {
 
 	/* For the components in scanning via directory traversal. Because
 	 * directory traversal cannot guarantee all the object be scanned,
-	 * so the component in the li_list_dir must be in li_list_scan. */
+	 * so the component in the li_list_dir must be in li_list_scan.
+	 */
 	struct list_head	  li_list_dir;
 
 	/* For the components in double scanning. */
@@ -1218,7 +1223,7 @@ static inline int lfsck_pos_is_eq(const struct lfsck_position *pos1,
 	return 0;
 }
 
-static void inline lfsck_position_le_to_cpu(struct lfsck_position *des,
+static inline void lfsck_position_le_to_cpu(struct lfsck_position *des,
 					    struct lfsck_position *src)
 {
 	des->lp_oit_cookie = le64_to_cpu(src->lp_oit_cookie);
@@ -1226,7 +1231,7 @@ static void inline lfsck_position_le_to_cpu(struct lfsck_position *des,
 	des->lp_dir_cookie = le64_to_cpu(src->lp_dir_cookie);
 }
 
-static void inline lfsck_position_cpu_to_le(struct lfsck_position *des,
+static inline void lfsck_position_cpu_to_le(struct lfsck_position *des,
 					    struct lfsck_position *src)
 {
 	des->lp_oit_cookie = cpu_to_le64(src->lp_oit_cookie);
@@ -1343,18 +1348,17 @@ lfsck_object_find_bottom_new(const struct lu_env *env,
 static inline struct dt_object *
 lfsck_object_locate(struct dt_device *dev, struct dt_object *obj)
 {
-	if (lfsck_obj2dev(obj) == dev) {
+	struct lu_object *lo;
+
+	if (lfsck_obj2dev(obj) == dev)
 		return obj;
-	} else {
-		struct lu_object *lo;
 
-		lo = lu_object_locate(obj->do_lu.lo_header,
-				      dev->dd_lu_dev.ld_type);
-		if (unlikely(lo == NULL))
-			return ERR_PTR(-ENOENT);
+	lo = lu_object_locate(obj->do_lu.lo_header,
+			      dev->dd_lu_dev.ld_type);
+	if (unlikely(lo == NULL))
+		return ERR_PTR(-ENOENT);
 
-		return lu2dt(lo);
-	}
+	return lu2dt(lo);
 }
 
 static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
@@ -1470,7 +1474,8 @@ static inline int lfsck_links_read(const struct lu_env *env,
 }
 
 /* Read linkEA for the given object, the linkEA should contain
- * at least one entry, otherwise, -ENODATA will be returned. */
+ * at least one entry, otherwise, -ENODATA will be returned.
+ */
 static inline int lfsck_links_read_with_rec(const struct lu_env *env,
 					    struct dt_object *obj,
 					    struct linkea_data *ldata)
