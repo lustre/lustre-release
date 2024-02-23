@@ -140,6 +140,7 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 	unsigned int ppc_bits; /* pages per chunk bits */
 	unsigned int ppc;
 	bool sync_queue = false;
+	bool dio = false;
 
 	LASSERT(qin->pl_nr > 0);
 
@@ -157,8 +158,10 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 		brw_flags |= OBD_BRW_NDELAY;
 
 	page = cl_page_list_first(qin);
-	if (page->cp_type == CPT_TRANSIENT)
+	if (page->cp_type == CPT_TRANSIENT) {
 		brw_flags |= OBD_BRW_NOCACHE;
+		dio = true;
+	}
 	if (lnet_is_rdma_only_page(page->cp_vmpage))
 		brw_flags |= OBD_BRW_RDMA_ONLY;
 
@@ -182,23 +185,24 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
                         break;
                 }
 
-		result = cl_page_prep(env, top_io, page, crt);
-		if (result != 0) {
-                        LASSERT(result < 0);
-                        if (result != -EALREADY)
-                                break;
-                        /*
-                         * Handle -EALREADY error: for read case, the page is
-                         * already in UPTODATE state; for write, the page
-                         * is not dirty.
-                         */
-                        result = 0;
-			continue;
-                }
-
-		if (page->cp_type != CPT_TRANSIENT) {
-			oap->oap_async_flags = ASYNC_URGENT|ASYNC_READY|ASYNC_COUNT_STABLE;
+		if (!dio) {
+			result = cl_page_prep(env, top_io, page, crt);
+			if (result != 0) {
+				LASSERT(result < 0);
+				if (result != -EALREADY)
+					break;
+				/*
+				 * Handle -EALREADY error: for read case, the
+				 * page is already in UPTODATE state; for
+				 * write, the page is not dirty.
+				 */
+				result = 0;
+				continue;
+			}
 		}
+
+		if (!dio)
+			oap->oap_async_flags = ASYNC_URGENT|ASYNC_READY|ASYNC_COUNT_STABLE;
 
 		osc_page_submit(env, opg, crt, brw_flags);
 		list_add_tail(&oap->oap_pending_item, &list);

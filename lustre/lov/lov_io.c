@@ -1381,7 +1381,7 @@ static int lov_io_submit(const struct lu_env *env,
 			 * the pages will be transient. We don't care about
 			 * the return code of cl_page_prep() at all.
 			 */
-			(void) cl_page_prep(env, ios->cis_io, page, crt);
+			LASSERT(page->cp_type == CPT_TRANSIENT);
 			cl_page_completion(env, page, crt, 0);
 			continue;
 		}
