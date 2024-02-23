@@ -3191,9 +3191,11 @@ int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
 
 static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni)
 {
-	if (lpni->lpni_ns_status == LNET_NI_STATUS_DOWN)
+	if (lpni->lpni_ns_status == LNET_NI_STATUS_DOWN) {
+		lnet_net_lock(0);
 		lnet_handle_remote_failure_locked(lpni);
-	else if (lpni->lpni_ns_status == LNET_NI_STATUS_UP &&
+		lnet_net_unlock(0);
+	} else if (lpni->lpni_ns_status == LNET_NI_STATUS_UP &&
 		 !lpni->lpni_last_alive)
 		atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
 }
