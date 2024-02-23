@@ -121,7 +121,7 @@ static int osc_page_print(const struct lu_env *env,
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
 			  "1< %d %c %c > "
-			  "2< %lld %u %u %#x %#x | %p %p %p > "
+			  "2< %lld %u %u %#x %#x | %p %p > "
 			  "3< %d %d > "
 			  "4< %d %d %d %lu %c | %c %c %c %c > "
 			  "5< %c %c %c %c | %d %c | %d %c %c>\n",
@@ -133,7 +133,7 @@ static int osc_page_print(const struct lu_env *env,
 			  /* 2 */
 			  oap->oap_obj_off, oap->oap_page_off, oap->oap_count,
 			  oap->oap_async_flags, oap->oap_brw_flags,
-			  oap->oap_request, cli, obj,
+			  cli, obj,
 			  /* 3 */
 			  opg->ops_transfer_pinned,
 			  opg->ops_srvlock,

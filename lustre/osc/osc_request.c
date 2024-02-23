@@ -2407,7 +2407,6 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 {
 	struct ptlrpc_request *new_req;
 	struct osc_brw_async_args *new_aa;
-	struct osc_async_page *oap;
 	ENTRY;
 
 	/* The below message is checked in replay-ost-single.sh test_8ae*/
@@ -2421,13 +2420,10 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
         if (rc)
                 RETURN(rc);
 
-	list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
-		if (oap->oap_request != NULL) {
-			LASSERTF(request == oap->oap_request,
-				 "request %px != oap_request %px\n",
-				 request, oap->oap_request);
-		}
-	}
+
+	LASSERTF(request == aa->aa_request,
+		 "request %p != aa_request %p\n",
+		 request, aa->aa_request);
 	/*
 	 * New request takes over pga and oaps from old request.
 	 * Note that copying a list_head doesn't work, need to move it...
@@ -2453,12 +2449,10 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 	list_splice_init(&aa->aa_exts, &new_aa->aa_exts);
 	new_aa->aa_resends = aa->aa_resends;
 
-	list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
-                if (oap->oap_request) {
-                        ptlrpc_req_finished(oap->oap_request);
-                        oap->oap_request = ptlrpc_request_addref(new_req);
-                }
-        }
+	if (aa->aa_request) {
+		ptlrpc_req_finished(aa->aa_request);
+		new_aa->aa_request = ptlrpc_request_addref(new_req);
+	}
 
 	/* XXX: This code will run into problem if we're going to support
 	 * to add a series of BRW RPCs into a self-defined ptlrpc_request_set
@@ -2507,15 +2501,40 @@ static void osc_release_ppga(struct brw_page **ppga, size_t count)
 	OBD_FREE_PTR_ARRAY_LARGE(ppga, count);
 }
 
+/* this is trying to propogate async writeback errors back up to the
+ * application.  As an async write fails we record the error code for later if
+ * the app does an fsync.  As long as errors persist we force future rpcs to be
+ * sync so that the app can get a sync error and break the cycle of queueing
+ * pages for which writeback will fail.
+ */
+static void osc_process_ar(struct osc_async_rc *ar, __u64 xid,
+			   int rc)
+{
+	if (rc) {
+		if (!ar->ar_rc)
+			ar->ar_rc = rc;
+
+		ar->ar_force_sync = 1;
+		ar->ar_min_xid = ptlrpc_sample_next_xid();
+		return;
+
+	}
+
+	if (ar->ar_force_sync && (xid >= ar->ar_min_xid))
+		ar->ar_force_sync = 0;
+}
+
 static int brw_interpret(const struct lu_env *env,
 			 struct ptlrpc_request *req, void *args, int rc)
 {
 	struct osc_brw_async_args *aa = args;
-	struct osc_extent *ext;
-	struct osc_extent *tmp;
 	struct client_obd *cli = aa->aa_cli;
 	unsigned long transferred = 0;
 	struct cl_object *obj = NULL;
+	struct osc_async_page *last;
+	struct osc_extent *ext;
+	struct osc_extent *tmp;
+	struct lov_oinfo *loi;
 
 	ENTRY;
 
@@ -2552,14 +2571,14 @@ static int brw_interpret(const struct lu_env *env,
 			rc = -EIO;
 	}
 
+	last = brw_page2oap(aa->aa_ppga[aa->aa_page_count - 1]);
+	obj = osc2cl(last->oap_obj);
+	loi = cl2osc(obj)->oo_oinfo;
+
 	if (rc == 0) {
 		struct obdo *oa = aa->aa_oa;
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 		unsigned long valid = 0;
-		struct osc_async_page *last;
-
-		last = brw_page2oap(aa->aa_ppga[aa->aa_page_count - 1]);
-		obj = osc2cl(last->oap_obj);
 
 		cl_object_attr_lock(obj);
 		if (oa->o_valid & OBD_MD_FLBLOCKS) {
@@ -2580,7 +2599,6 @@ static int brw_interpret(const struct lu_env *env,
 		}
 
 		if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE) {
-			struct lov_oinfo *loi = cl2osc(obj)->oo_oinfo;
 			loff_t last_off = last->oap_count + last->oap_obj_off +
 				last->oap_page_off;
 
@@ -2616,6 +2634,17 @@ static int brw_interpret(const struct lu_env *env,
 			cl_object_dirty_for_sync(env, cl_object_top(obj));
 	}
 
+	if (aa->aa_request) {
+		__u64 xid = ptlrpc_req_xid(req);
+
+		ptlrpc_req_finished(req);
+		if (xid && lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE) {
+			spin_lock(&cli->cl_loi_list_lock);
+			osc_process_ar(&cli->cl_ar, xid, rc);
+			osc_process_ar(&loi->loi_ar, xid, rc);
+			spin_unlock(&cli->cl_loi_list_lock);
+		}
+	}
 	list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
 		list_del_init(&ext->oe_link);
 		osc_extent_finish(env, ext, 1,
@@ -2784,7 +2813,6 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	req->rq_commit_cb = brw_commit;
 	req->rq_interpret_reply = brw_interpret;
 	req->rq_memalloc = mem_tight != 0;
-	oap->oap_request = ptlrpc_request_addref(req);
 	if (ndelay) {
 		req->rq_no_resend = req->rq_no_delay = 1;
 		/* probably set a shorter timeout value.
@@ -2810,6 +2838,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	list_splice_init(&rpc_list, &aa->aa_oaps);
 	INIT_LIST_HEAD(&aa->aa_exts);
 	list_splice_init(ext_list, &aa->aa_exts);
+	aa->aa_request = ptlrpc_request_addref(req);
 
 	spin_lock(&cli->cl_loi_list_lock);
 	starting_offset >>= PAGE_SHIFT;

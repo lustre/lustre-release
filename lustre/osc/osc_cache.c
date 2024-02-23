@@ -1755,53 +1755,18 @@ static int osc_list_maint(struct client_obd *cli, struct osc_object *osc)
 	return is_ready;
 }
 
-/* this is trying to propogate async writeback errors back up to the
- * application.  As an async write fails we record the error code for later if
- * the app does an fsync.  As long as errors persist we force future rpcs to be
- * sync so that the app can get a sync error and break the cycle of queueing
- * pages for which writeback will fail. */
-static void osc_process_ar(struct osc_async_rc *ar, __u64 xid,
-			   int rc)
-{
-	if (rc) {
-		if (!ar->ar_rc)
-			ar->ar_rc = rc;
-
-		ar->ar_force_sync = 1;
-		ar->ar_min_xid = ptlrpc_sample_next_xid();
-		return;
-
-	}
-
-	if (ar->ar_force_sync && (xid >= ar->ar_min_xid))
-		ar->ar_force_sync = 0;
-}
-
 /* this must be called holding the loi list lock to give coverage to exit_cache,
- * async_flag maintenance, and oap_request */
+ * async_flag maintenance
+ */
 static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
 			      struct osc_async_page *oap, int sent, int rc)
 {
 	struct osc_object *osc = oap->oap_obj;
-	struct lov_oinfo  *loi = osc->oo_oinfo;
-	__u64 xid = 0;
 
 	ENTRY;
-	if (oap->oap_request != NULL) {
-		xid = ptlrpc_req_xid(oap->oap_request);
-		ptlrpc_req_finished(oap->oap_request);
-		oap->oap_request = NULL;
-	}
 
 	/* As the transfer for this page is being done, clear the flags */
 	oap->oap_async_flags = 0;
-
-	if (oap->oap_cmd & OBD_BRW_WRITE && xid > 0) {
-		spin_lock(&cli->cl_loi_list_lock);
-		osc_process_ar(&cli->cl_ar, xid, rc);
-		osc_process_ar(&loi->loi_ar, xid, rc);
-		spin_unlock(&cli->cl_loi_list_lock);
-	}
 
 	rc = osc_completion(env, oap, oap->oap_cmd, rc);
 	if (rc)
