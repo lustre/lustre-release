@@ -164,37 +164,35 @@ static void osc_page_delete(const struct lu_env *env,
 {
 	struct osc_page   *opg = cl2osc_page(slice);
 	struct osc_object *obj = osc_page_object(opg);
+	void *value = NULL;
 	int rc;
 
 	ENTRY;
 	CDEBUG(D_TRACE, "%p\n", opg);
+
 	osc_page_transfer_put(env, opg);
 
-	if (slice->cpl_page->cp_type == CPT_CACHEABLE) {
-		void *value = NULL;
-
-		rc = osc_teardown_async_page(env, obj, opg);
-		if (rc) {
-			CL_PAGE_DEBUG(D_ERROR, env, slice->cpl_page,
-				      "Trying to teardown failed: %d\n", rc);
-			LASSERT(0);
-		}
-
-		osc_lru_del(osc_cli(obj), opg);
-
-		spin_lock(&obj->oo_tree_lock);
-		if (opg->ops_intree) {
-			value = radix_tree_delete(&obj->oo_tree,
-						  osc_index(opg));
-			if (value != NULL) {
-				--obj->oo_npages;
-				opg->ops_intree = 0;
-			}
-		}
-		spin_unlock(&obj->oo_tree_lock);
-
-		LASSERT(ergo(value != NULL, value == opg));
+	rc = osc_teardown_async_page(env, obj, opg);
+	if (rc) {
+		CL_PAGE_DEBUG(D_ERROR, env, slice->cpl_page,
+			      "Trying to teardown failed: %d\n", rc);
+		LASSERT(0);
 	}
+
+	osc_lru_del(osc_cli(obj), opg);
+
+	spin_lock(&obj->oo_tree_lock);
+	if (opg->ops_intree) {
+		value = radix_tree_delete(&obj->oo_tree,
+					  osc_index(opg));
+		if (value != NULL) {
+			--obj->oo_npages;
+			opg->ops_intree = 0;
+		}
+	}
+	spin_unlock(&obj->oo_tree_lock);
+
+	LASSERT(ergo(value != NULL, value == opg));
 
 	EXIT;
 }
@@ -236,7 +234,6 @@ static void osc_page_touch(const struct lu_env *env,
 
 static const struct cl_page_operations osc_transient_page_ops = {
 	.cpo_print         = osc_page_print,
-	.cpo_delete        = osc_page_delete,
 	.cpo_clip           = osc_page_clip,
 };
 
@@ -304,6 +301,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 {
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_async_page *oap = &opg->ops_oap;
+	struct cl_page *page = opg->ops_cl.cpl_page;
 
 	LASSERT(oap->oap_async_flags & ASYNC_READY);
 	LASSERT(oap->oap_async_flags & ASYNC_COUNT_STABLE);
@@ -316,7 +314,8 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	if (oio->oi_cap_sys_resource)
 		oap->oap_brw_flags |= OBD_BRW_SYS_RESOURCE;
 
-	osc_page_transfer_get(opg, "transfer\0imm");
+	if (page->cp_type != CPT_TRANSIENT)
+		osc_page_transfer_get(opg, "transfer\0imm");
 	osc_page_transfer_add(env, opg, crt);
 }
 

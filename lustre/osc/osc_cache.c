@@ -1302,11 +1302,12 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	struct cl_page    *page = oap2cl_page(oap);
 	enum cl_req_type   crt;
 	int srvlock;
+	int cptype = page->cp_type;
 
 	ENTRY;
 
 	cmd &= ~OBD_BRW_NOQUOTA;
-	if (page->cp_type != CPT_TRANSIENT) {
+	if (cptype != CPT_TRANSIENT) {
 		LASSERTF(equi(page->cp_state == CPS_PAGEIN,  cmd == OBD_BRW_READ),
 			 "cp_state:%u, cmd:%d\n", page->cp_state, cmd);
 		LASSERTF(equi(page->cp_state == CPS_PAGEOUT, cmd == OBD_BRW_WRITE),
@@ -1339,8 +1340,12 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	 */
 	lu_ref_del(&page->cp_reference, "transfer", page);
 
+	/* for transient pages, the last reference is destroyed by the
+	 * cl_page_completion process, so do not referencce the page after this
+	 */
 	cl_page_completion(env, page, crt, rc);
-	cl_page_put(env, page);
+	if (cptype != CPT_TRANSIENT)
+		cl_page_put(env, page);
 
 	RETURN(0);
 }
