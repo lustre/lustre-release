@@ -215,7 +215,8 @@ static bool mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 				cl_page_discard(env, io, page);
 				cl_page_disown(env, io, page);
 			} else {
-				LASSERT(page->cp_state == CPS_FREEING);
+				if (page->cp_type != CPT_TRANSIENT)
+					LASSERT(page->cp_state == CPS_FREEING);
 			}
 		}
 

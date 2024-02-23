@@ -1306,11 +1306,13 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	ENTRY;
 
 	cmd &= ~OBD_BRW_NOQUOTA;
-	LASSERTF(equi(page->cp_state == CPS_PAGEIN,  cmd == OBD_BRW_READ),
-		 "cp_state:%u, cmd:%d\n", page->cp_state, cmd);
-	LASSERTF(equi(page->cp_state == CPS_PAGEOUT, cmd == OBD_BRW_WRITE),
-		"cp_state:%u, cmd:%d\n", page->cp_state, cmd);
-	LASSERT(opg->ops_transfer_pinned);
+	if (page->cp_type != CPT_TRANSIENT) {
+		LASSERTF(equi(page->cp_state == CPS_PAGEIN,  cmd == OBD_BRW_READ),
+			 "cp_state:%u, cmd:%d\n", page->cp_state, cmd);
+		LASSERTF(equi(page->cp_state == CPS_PAGEOUT, cmd == OBD_BRW_WRITE),
+			"cp_state:%u, cmd:%d\n", page->cp_state, cmd);
+		LASSERT(opg->ops_transfer_pinned);
+	}
 
 	crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
 	/* Clear opg->ops_transfer_pinned before VM lock is released. */
