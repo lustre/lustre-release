@@ -233,6 +233,12 @@ static void osc_page_touch(const struct lu_env *env,
 	osc_page_touch_at(env, obj, osc_index(opg), to);
 }
 
+static const struct cl_page_operations osc_transient_page_ops = {
+	.cpo_print         = osc_page_print,
+	.cpo_delete        = osc_page_delete,
+	.cpo_clip           = osc_page_clip,
+};
+
 static const struct cl_page_operations osc_page_ops = {
 	.cpo_print         = osc_page_print,
 	.cpo_delete        = osc_page_delete,
@@ -259,10 +265,13 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		return result;
 
 	opg->ops_srvlock = osc_io_srvlock(oio);
-	cl_page_slice_add(cl_page, &opg->ops_cl, obj, &osc_page_ops);
 
-	/* reserve an LRU space for this page */
-	if (cl_page->cp_type == CPT_CACHEABLE) {
+	if (cl_page->cp_type == CPT_TRANSIENT) {
+		cl_page_slice_add(cl_page, &opg->ops_cl, obj,
+				  &osc_transient_page_ops);
+	} else if (cl_page->cp_type == CPT_CACHEABLE) {
+		cl_page_slice_add(cl_page, &opg->ops_cl, obj, &osc_page_ops);
+		/* reserve an LRU space for this page */
 		result = osc_lru_alloc(env, osc_cli(osc), opg);
 		if (result == 0) {
 			result = radix_tree_preload(GFP_NOFS);
