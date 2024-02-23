@@ -364,11 +364,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	struct cl_dio_pages *cdp = &sdio->csd_dio_pages;
 	struct cl_sync_io *anchor = &sdio->csd_sync;
 	struct cl_object *obj = io->ci_obj;
-	struct cl_2queue *queue = NULL;
 	struct cl_page *page;
 	int iot = rw == READ ? CRT_READ : CRT_WRITE;
 	loff_t offset = cdp->cdp_file_offset;
-	int io_pages = 0;
 	ssize_t rc = 0;
 	int i = 0;
 
@@ -416,7 +414,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		 */
 		if (from != 0 || to != PAGE_SIZE)
 			cl_page_clip(env, page, from, to);
-		++io_pages;
 		i++;
 
 		offset += to - from;
@@ -428,37 +425,20 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	LASSERT(i == cdp->cdp_count);
 	LASSERT(size == 0);
 
-	cl_dio_pages_2queue(cdp);
-	queue = &cdp->cdp_queue;
-	atomic_add(io_pages, &anchor->csi_sync_nr);
+	atomic_add(cdp->cdp_count, &anchor->csi_sync_nr);
 	/*
 	 * Avoid out-of-order execution of adding inflight
 	 * modifications count and io submit.
 	 */
 	smp_mb();
-	rc = cl_io_submit_rw(env, io, iot, queue);
-	/* pages must be off the queue when they're freed */
-	if (rc == 0) {
-		while (queue->c2_qout.pl_nr > 0) {
-			page = cl_page_list_first(&queue->c2_qout);
-			cl_page_list_del(env, &queue->c2_qout, page,
-						 false);
-		}
-	} else {
-		atomic_add(-queue->c2_qin.pl_nr,
+	rc = cl_dio_submit_rw(env, io, iot, cdp);
+	if (rc != 0) {
+		atomic_add(-cdp->cdp_count,
 			   &anchor->csi_sync_nr);
 		for (i = 0; i < cdp->cdp_count; i++) {
 			page = cdp->cdp_cl_pages[i];
 			page->cp_sync_io = NULL;
 		}
-	}
-	/* handle partially submitted reqs */
-	if (queue->c2_qin.pl_nr > 0) {
-		CERROR(DFID " failed to submit %d dio pages: %zd\n",
-		       PFID(lu_object_fid(&obj->co_lu)),
-		       queue->c2_qin.pl_nr, rc);
-		if (rc == 0)
-			rc = -EIO;
 	}
 
 out:

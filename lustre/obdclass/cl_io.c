@@ -669,6 +669,39 @@ void cl_io_extent_release(const struct lu_env *env, struct cl_io *io)
 }
 EXPORT_SYMBOL(cl_io_extent_release);
 
+int cl_dio_submit_rw(const struct lu_env *env, struct cl_io *io,
+		     enum cl_req_type crt, struct cl_dio_pages *cdp)
+{
+	const struct cl_io_slice *scan;
+	struct cl_2queue *queue;
+	int result = 0;
+
+	ENTRY;
+
+	cl_dio_pages_2queue(cdp);
+	queue = &cdp->cdp_queue;
+
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->cio_submit == NULL)
+			continue;
+		result = scan->cis_iop->cio_submit(env, io, scan, crt, queue);
+		if (result != 0)
+			break;
+	}
+	/*
+	 * If ->cio_submit() failed, no pages were sent.
+	 */
+	LASSERT(ergo(result != 0, list_empty(&queue->c2_qout.pl_pages)));
+	while (queue->c2_qout.pl_nr > 0) {
+		struct cl_page *page;
+
+		page = cl_page_list_first(&queue->c2_qout);
+		cl_page_list_del(env, &queue->c2_qout, page, false);
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_dio_submit_rw);
+
 /**
  * cl_io_submit_rw() - Submits a list of pages for immediate IO.
  * @env: execution environment

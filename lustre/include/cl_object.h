@@ -2324,6 +2324,8 @@ int cl_lock_enqueue(const struct lu_env *env, struct cl_io *io,
 		    struct cl_lock *lock, struct cl_sync_io *anchor);
 void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock);
 
+struct cl_dio_pages;
+
 /* cl_io */
 int   cl_io_init(const struct lu_env *env, struct cl_io *io,
 		 enum cl_io_type iot, struct cl_object *obj);
@@ -2344,6 +2346,8 @@ int   cl_io_lock_add(const struct lu_env *env, struct cl_io *io,
 		     struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
 			   struct cl_lock_descr *descr);
+int   cl_dio_submit_rw    (const struct lu_env *env, struct cl_io *io,
+			   enum cl_req_type iot, struct cl_dio_pages *cdp);
 int   cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
 		      enum cl_req_type iot, struct cl_2queue *queue);
 int   cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
@@ -2462,7 +2466,6 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 struct cl_sync_io;
 struct cl_dio_aio;
 struct cl_sub_dio;
-struct cl_dio_pages;
 
 typedef void (cl_sync_io_end_t)(const struct lu_env *, struct cl_sync_io *);
 
