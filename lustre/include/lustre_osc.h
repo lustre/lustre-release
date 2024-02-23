@@ -675,8 +675,9 @@ void osc_update_next_shrink(struct client_obd *cli);
 void osc_schedule_grant_work(void);
 
 /* osc_io.c */
-int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
-		  enum cl_req_type crt, struct cl_2queue *queue);
+int osc_io_submit(const struct lu_env *env, struct cl_io *io,
+		  const struct cl_io_slice *ios, enum cl_req_type crt,
+		  struct cl_2queue *queue);
 int osc_io_commit_async(const struct lu_env *env,
 			const struct cl_io_slice *ios,
 			struct cl_page_list *qin, int from, int to,

@@ -1350,6 +1350,7 @@ static int lov_io_lru_reserve(const struct lu_env *env,
  * lov_device::ld_mutex mutex.
  */
 static int lov_io_submit(const struct lu_env *env,
+			 struct cl_io *io,
 			 const struct cl_io_slice *ios,
 			 enum cl_req_type crt, struct cl_2queue *queue)
 {
@@ -1804,6 +1805,7 @@ static void lov_empty_io_fini(const struct lu_env *env,
 }
 
 static int lov_empty_io_submit(const struct lu_env *env,
+			       struct cl_io *io,
 			       const struct cl_io_slice *ios,
 			       enum cl_req_type crt, struct cl_2queue *queue)
 {

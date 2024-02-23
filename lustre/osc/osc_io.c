@@ -119,15 +119,16 @@ static int osc_io_read_ahead(const struct lu_env *env,
  * or, if page is already submitted, changes osc flags through
  * osc_set_async_flags().
  */
-int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
-		  enum cl_req_type crt, struct cl_2queue *queue)
+int osc_io_submit(const struct lu_env *env, struct cl_io *io,
+		  const struct cl_io_slice *ios, enum cl_req_type crt,
+		  struct cl_2queue *queue)
 {
 	struct cl_page	  *page;
 	struct cl_page	  *tmp;
+	struct cl_io	  *top_io = cl_io_top(io);
 	struct client_obd *cli  = NULL;
 	struct osc_object *osc  = NULL;	/* to keep gcc happy */
 	struct osc_page	  *opg;
-	struct cl_io	  *io;
 	LIST_HEAD(list);
 
 	struct cl_page_list *qin      = &queue->c2_qin;
@@ -168,9 +169,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
         cl_page_list_for_each_safe(page, tmp, qin) {
                 struct osc_async_page *oap;
 
-                /* Top level IO. */
-                io = page->cp_owner;
-                LASSERT(io != NULL);
+		LASSERT(top_io != NULL);
 
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
@@ -183,7 +182,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
                         break;
                 }
 
-                result = cl_page_prep(env, io, page, crt);
+		result = cl_page_prep(env, top_io, page, crt);
 		if (result != 0) {
                         LASSERT(result < 0);
                         if (result != -EALREADY)
@@ -227,7 +226,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 		}
 
 		if (sync_queue) {
-			result = osc_queue_sync_pages(env, io, osc, &list,
+			result = osc_queue_sync_pages(env, top_io, osc, &list,
 						      brw_flags);
 			if (result < 0)
 				break;
@@ -237,7 +236,8 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	}
 
 	if (queued > 0)
-		result = osc_queue_sync_pages(env, io, osc, &list, brw_flags);
+		result = osc_queue_sync_pages(env, top_io, osc, &list,
+					      brw_flags);
 
 	/* Update c/mtime for sync write. LU-7310 */
 	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {

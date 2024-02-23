@@ -655,7 +655,7 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->cio_submit == NULL)
 			continue;
-		result = scan->cis_iop->cio_submit(env, scan, crt, queue);
+		result = scan->cis_iop->cio_submit(env, io, scan, crt, queue);
 		if (result != 0)
 			break;
 	}
