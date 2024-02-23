@@ -1411,6 +1411,8 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 }
 
 
+struct cl_dio_pages;
+
 /**
  * Per-layer io operations.
  * \see vvp_io_ops, lov_io_ops, lovsub_io_ops, osc_io_ops
@@ -1507,6 +1509,14 @@ struct cl_io_operations {
 			   struct cl_io *io,
 			   const struct cl_io_slice *slice,
 			   enum cl_req_type crt, struct cl_2queue *queue);
+	/* the dio version of cio_submit, this either submits all pages
+	 * successfully or fails.  Uses an array, rather than a queue.
+	 */
+	int  (*cio_dio_submit)(const struct lu_env *env,
+			       struct cl_io *io,
+			       const struct cl_io_slice *slice,
+			       enum cl_req_type crt,
+			       struct cl_dio_pages *cdp);
 	/**
 	 * Queue async page for write.
 	 * The difference between cio_submit and cio_queue is that
