@@ -300,9 +300,10 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	if (oio->oi_cap_sys_resource)
 		oap->oap_brw_flags |= OBD_BRW_SYS_RESOURCE;
 
-	if (page->cp_type != CPT_TRANSIENT)
+	if (page->cp_type != CPT_TRANSIENT) {
 		osc_page_transfer_get(opg, "transfer\0imm");
-	osc_lru_use(osc_cli(obj), opg);
+		osc_lru_use(osc_cli(obj), opg);
+	}
 }
 
 /* --------------- LRU page management ------------------ */
