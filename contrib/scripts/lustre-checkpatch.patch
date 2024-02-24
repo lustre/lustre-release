@@ -1,0 +1,207 @@
+From 13ff4734408a93e43f67afa54d7694a8312e82ca Mon Sep 17 00:00:00 2001
+From: Timothy Day <timday@amazon.com>
+Date: Sat, 24 Feb 2024 02:09:42 +0000
+Subject: [PATCH] LU-6142 contrib: Lustre checkpatch.pl
+
+v4.12-11743-g96d0d83
+
+Signed-off-by: Timothy Day <timday@amazon.com>
+---
+ contrib/scripts/checkpatch.pl | 78 ++++++++++++++++++++++++++++-------
+ 1 file changed, 64 insertions(+), 14 deletions(-)
+
+diff --git a/contrib/scripts/checkpatch.pl b/contrib/scripts/checkpatch.pl
+index 2287a0bca8..5f09cd1532 100755
+--- a/contrib/scripts/checkpatch.pl
++++ b/contrib/scripts/checkpatch.pl
+@@ -5,6 +5,9 @@
+ # (c) 2008-2010 Andy Whitcroft <apw@canonical.com>
+ # Licensed under the terms of the GNU GPL License version 2
+ 
++# Based on linux/scripts/checkpatch.pl v4.12-11743-g96d0d83 with
++# some additional Lustre-specific checks.
++
+ use strict;
+ use warnings;
+ use POSIX;
+@@ -20,8 +23,8 @@ my $V = '0.32';
+ use Getopt::Long qw(:config no_auto_abbrev);
+ 
+ my $quiet = 0;
+-my $tree = 1;
+-my $chk_signoff = 1;
++my $tree = 0;
++my $chk_signoff = 0;
+ my $chk_patch = 1;
+ my $tst_only;
+ my $emacs = 0;
+@@ -454,9 +457,11 @@ our $logFunctions = qr{(?x:
+ 	printk(?:_ratelimited|_once|_deferred_once|_deferred|)|
+ 	(?:[a-z0-9]+_){1,2}(?:printk|emerg|alert|crit|err|warning|warn|notice|info|debug|dbg|vdbg|devel|cont|WARN)(?:_ratelimited|_once|)|
+ 	WARN(?:_RATELIMIT|_ONCE|)|
++	CDEBUG|CERROR|CNETERR|CEMERG|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
+ 	panic|
+ 	MODULE_[A-Z_]+|
+-	seq_vprintf|seq_printf|seq_puts
++	seq_vprintf|seq_printf|seq_puts|
++	printf|fprintf
+ )};
+ 
+ our $signature_tags = qr{(?xi:
+@@ -1566,6 +1570,7 @@ sub ctx_locate_comment {
+ 	for (my $linenr = $first_line; $linenr < $end_line; $linenr++) {
+ 		my $line = $rawlines[$linenr - 1];
+ 		#warn "           $line\n";
++		next if ($line =~ /^-/); # ignore lines removed by patch
+ 		if ($linenr == $first_line and $line =~ m@^.\s*\*@) {
+ 			$in_comment = 1;
+ 		}
+@@ -2710,11 +2715,9 @@ sub process {
+ # Check for various typo / spelling mistakes
+ 		if (defined($misspellings) &&
+ 		    ($in_commit_log || $line =~ /^(?:\+|Subject:)/i)) {
+-			while ($rawline =~ /(?:^|[^a-z@])($misspellings)(?:\b|$|[^a-z@])/gi) {
++			while ($rawline =~ /(?:^|[^a-z@])($misspellings)(?:\b|$|[^a-z@])/g) {
+ 				my $typo = $1;
+-				my $typo_fix = $spelling_fix{lc($typo)};
+-				$typo_fix = ucfirst($typo_fix) if ($typo =~ /^[A-Z]/);
+-				$typo_fix = uc($typo_fix) if ($typo =~ /^[A-Z]+$/);
++				my $typo_fix = $spelling_fix{$typo};
+ 				my $msg_type = \&WARN;
+ 				$msg_type = \&CHK if ($file);
+ 				if (&{$msg_type}("TYPO_SPELLING",
+@@ -2892,6 +2895,10 @@ sub process {
+ 			if ($line =~ /^\+\s*$logFunctions\s*\(\s*(?:(?:KERN_\S+\s*|[^"]*))?($String\s*(?:|,|\)\s*;)\s*)$/ &&
+ 			    length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
+ 				$msg_type = "";
++			# a Lustre message that contains embedded formatting
++			} elsif ($line =~ /^\+\s*(?:$logFunctions\s*\()?($String(?:DFID|DOSTID)$String\s*(?:|,|\)\s*;)?\s*)$/ &&
++				 length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
++				$msg_type = ""
+ 
+ 			# lines with only strings (w/ possible termination)
+ 			# #defines with only strings
+@@ -2944,7 +2951,7 @@ sub process {
+ 		}
+ 
+ # check we are in a valid source file C or perl if not then ignore this hunk
+-		next if ($realfile !~ /\.(h|c|pl|dtsi|dts)$/);
++		next if ($realfile !~ /\.(h|c|pl|dtsi|dts|sh)$/);
+ 
+ # at the beginning of a line any tabs must come first and anything
+ # more than 8 must use tabs.
+@@ -3040,7 +3047,7 @@ sub process {
+ 
+ # Block comment styles
+ # Networking with an initial /*
+-		if ($realfile =~ m@^(drivers/net/|net/)@ &&
++		if ($realfile =~ m@^(drivers/net/|net/|lnet)@ &&
+ 		    $prevrawline =~ /^\+[ \t]*\/\*[ \t]*$/ &&
+ 		    $rawline =~ /^\+[ \t]*\*/ &&
+ 		    $realline > 2) {
+@@ -4554,6 +4561,8 @@ sub process {
+ #	avoid cases like "foo + BAR < baz"
+ #	only fix matches surrounded by parentheses to avoid incorrect
+ #	conversions like "FOO < baz() + 5" being "misfixed" to "baz() > FOO + 5"
++# Exceptions:
++# 01.	LUSTRE_VERSION_CODE upper-case constant on left side.
+ 		if ($^V && $^V ge 5.10.0 &&
+ 		    $line =~ /^\+(.*)\b($Constant|[A-Z_][A-Z0-9_]*)\s*($Compare)\s*($LvalOrFunc)/) {
+ 			my $lead = $1;
+@@ -4563,6 +4572,7 @@ sub process {
+ 			my $newcomp = $comp;
+ 			if ($lead !~ /(?:$Operators|\.)\s*$/ &&
+ 			    $to !~ /^(?:Constant|[A-Z_][A-Z0-9_]*)$/ &&
++			    $const !~ /LUSTRE_VERSION_CODE/ &&
+ 			    WARN("CONSTANT_COMPARISON",
+ 				 "Comparisons should place the constant on the right side of the test\n" . $herecurr) &&
+ 			    $fix) {
+@@ -5163,6 +5173,46 @@ sub process {
+ 			}
+ 		}
+ 
++# Lustre try to replace assertions with error handling
++		if ($line =~ /\bLASSERTF?\s*\(/) {
++		    WARN("LASSERT",
++			 "Try to replace assertions with error handling\n" .
++			 $herecurr);
++		}
++
++# Lustre minimize new CERROR messages
++		if ($line =~ /\b(CEMERG|CERROR|CNETERR|CWARN|LCONSOLE)\s*\(/) {
++			if ($rawline !~ /\(\"\%s: /) {
++				WARN("CERROR_DEV",
++				     "Console messages should start with '%s:' to print device name\n" . $herecurr)
++			}
++
++			# Check for "rc = %d" or "rc = %ld" or "rc = %zd"
++			# at the end of errors
++			if ($line !~ /LCONSOLE/ &&
++			    $rawline !~ /: rc = \%l|z?d\\n\",/) {
++				WARN("CERROR_RET",
++				     "Console messages should end with ': rc = %[lz]d'\n" . $herecurr);
++			}
++
++			# This is fine as we are only matching the first part.
++			if ($line =~ /(CEMERG|CERROR|CNETERR)/) {
++				WARN("CERROR",
++				     "Errors should be useful to fix failure conditions, not status/debug\n" . $herecurr);
++			}
++		}
++# Lustre avoid unlimited message printing to the console
++		if ($line =~ /CDEBUG\((D_ERROR|D_WARNING|D_CONSOLE|[a-z])/) {
++			WARN("CDEBUG_LIMIT",
++			     "CDEBUG does not rate-limit console messages, use CDEBUG_LIMIT\n". $herecurr);
++		}
++
++# Lustre don't allow GPLv3 license files
++		if ($rawline =~ /version 3/) {
++			WARN("GPLV3",
++			     "Using GPLv3 is usually wrong\n" . $herecurr);
++		}
++
+ # check for single line unbalanced braces
+ 		if ($sline =~ /^.\s*\}\s*else\s*$/ ||
+ 		    $sline =~ /^.\s*else\s*\{\s*$/) {
+@@ -5609,16 +5659,16 @@ sub process {
+ 			}
+ 		}
+ 
+-# Check for __attribute__ packed, prefer __packed
++# Check for __packed, prefer __attribute__ packed
+ 		if ($realfile !~ m@\binclude/uapi/@ &&
+-		    $line =~ /\b__attribute__\s*\(\s*\(.*\bpacked\b/) {
++		    $line =~ /\b__packed\b/) {
+ 			WARN("PREFER_PACKED",
+ 			     "__packed is preferred over __attribute__((packed))\n" . $herecurr);
+ 		}
+ 
+-# Check for __attribute__ aligned, prefer __aligned
++# Check for __aligned, prefer __attribute__ aligned
+ 		if ($realfile !~ m@\binclude/uapi/@ &&
+-		    $line =~ /\b__attribute__\s*\(\s*\(.*aligned/) {
++		    $line =~ /\b__aligned\b/) {
+ 			WARN("PREFER_ALIGNED",
+ 			     "__aligned(size) is preferred over __attribute__((aligned(size)))\n" . $herecurr);
+ 		}
+@@ -5737,7 +5787,7 @@ sub process {
+ 		        for (my $count = $linenr; $count <= $lc; $count++) {
+ 				my $fmt = get_quoted_string($lines[$count - 1], raw_line($count, 0));
+ 				$fmt =~ s/%%//g;
+-				if ($fmt =~ /(\%[\*\d\.]*p(?![\WFfSsBKRraEhMmIiUDdgVCbGNO]).)/) {
++				if ($fmt =~ /(\%[\*\d\.]*p(?![\WFfSsBKRraEhMmIiUDdgVCbGNOx]).)/) {
+ 					$bad_extension = $1;
+ 					last;
+ 				}
+@@ -6084,7 +6134,7 @@ sub process {
+ 				next if ($fline =~ /^.[\s$;]*$/);
+ 				$has_statement = 1;
+ 				$count++;
+-				$has_break = 1 if ($fline =~ /\bswitch\b|\b(?:break\s*;[\s$;]*$|return\b|goto\b|continue\b)/);
++				$has_break = 1 if ($fline =~ /\bswitch\b|\b(?:break\s*;[\s$;]*$|return\b|goto\b|continue\b)/i);
+ 			}
+ 			if (!$has_break && $has_statement) {
+ 				WARN("MISSING_BREAK",
+-- 
+2.27.0
+
