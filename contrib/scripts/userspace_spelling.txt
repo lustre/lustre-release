@@ -1,0 +1,9 @@
+# The format of each line is:
+# mistake||correction
+#
+ALWAYS_EXCEPT||always_except
+alloca||malloc
+sprintf||snprintf
+strcat||strncat
+strcpy||strncpy
+version_code.*2.1[7-9]||version 2.16.x should be used
