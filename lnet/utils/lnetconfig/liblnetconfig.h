@@ -94,7 +94,7 @@ struct lnet_dlc_network_descr {
 
 struct lnet_dlc_intf_descr {
 	struct list_head intf_on_network;
-	char intf_name[IFNAMSIZ];
+	char intf_name[LNET_MAX_STR_LEN];
 	struct cfs_expr_list *cpt_expr;
 };
 

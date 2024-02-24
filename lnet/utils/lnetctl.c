@@ -1671,7 +1671,7 @@ static int yaml_add_ni_tunables(yaml_emitter_t *output,
 {
 	char num[INT_STRING_LEN];
 	yaml_event_t event;
-	int rc;
+	int rc = 0;
 
 	if (tunables->lt_cmn.lct_peer_timeout < 0 &&
 	    tunables->lt_cmn.lct_peer_tx_credits <= 0 &&
@@ -1870,7 +1870,9 @@ skip_general_settings:
 			if (rc == 0)
 				goto error;
 
-			if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND)
+			if (nw_descr->nw_id == LNET_NET_ANY)
+				cpp = tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer;
+			else if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND)
 				cpp = tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer;
 			else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND)
 				cpp = tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer;
@@ -1896,7 +1898,7 @@ error:
 static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			       struct lnet_dlc_network_descr *nw_descr,
 			       struct lnet_ioctl_config_lnd_tunables *tunables,
-			       struct cfs_expr_list *global_cpts,
+			       int healthv, struct cfs_expr_list *global_cpts,
 			       int version, int flags)
 {
 	struct lnet_dlc_intf_descr *intf;
@@ -1908,14 +1910,19 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 	int rc;
 
 	if (!(flags & NLM_F_DUMP) && !ip2net && (!nw_descr || nw_descr->nw_id == 0)) {
-		fprintf(stdout, "missing mandatory parameters in NI config: '%s'",
+		fprintf(stdout, "missing mandatory parameters in NI config: '%s'\n",
 			(!nw_descr) ? "network , interface" :
 			(nw_descr->nw_id == 0) ? "network" : "interface");
 		return -EINVAL;
 	}
 
 	if ((flags == NLM_F_CREATE) && !ip2net && list_empty(&nw_descr->nw_intflist)) {
-		fprintf(stdout, "creating a local NI needs at least one interface");
+		fprintf(stdout, "creating a local NI needs at least one interface\n");
+		return -EINVAL;
+	}
+
+	if ((flags == NLM_F_REPLACE) && list_empty(&nw_descr->nw_intflist)) {
+		fprintf(stdout, "updating a local NI needs at least one address\n");
 		return -EINVAL;
 	}
 
@@ -2047,47 +2054,115 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 		if (rc == 0)
 			goto emitter_error;
 
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_STR_TAG,
-					     (yaml_char_t *)"interfaces",
-					     strlen("interfaces"), 1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(&output, &event);
-		if (rc == 0)
-			goto emitter_error;
+		/* Use NI addresses instead of interface */
+		if ((strchr(intf->intf_name, '@') ||
+		     strcmp(intf->intf_name, "<?>") == 0) &&
+		    flags == NLM_F_REPLACE) {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"nid",
+						     strlen("nid"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
 
-		yaml_mapping_start_event_initialize(&event, NULL,
-						    (yaml_char_t *)YAML_MAP_TAG,
-						    1, YAML_ANY_MAPPING_STYLE);
-		rc = yaml_emitter_emit(&output, &event);
-		if (rc == 0)
-			goto emitter_error;
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)intf->intf_name,
+						     strlen(intf->intf_name), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		} else {
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"interfaces",
+						     strlen("interfaces"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
 
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_STR_TAG,
-					     (yaml_char_t *)"0",
-					     strlen("0"), 1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(&output, &event);
-		if (rc == 0)
-			goto emitter_error;
+			yaml_mapping_start_event_initialize(&event, NULL,
+							    (yaml_char_t *)YAML_MAP_TAG,
+							    1, YAML_ANY_MAPPING_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
 
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_STR_TAG,
-					     (yaml_char_t *)intf->intf_name,
-					     strlen(intf->intf_name), 1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(&output, &event);
-		if (rc == 0)
-			goto emitter_error;
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"0",
+						     strlen("0"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
 
-		yaml_mapping_end_event_initialize(&event);
-		rc = yaml_emitter_emit(&output, &event);
-		if (rc == 0)
-			goto emitter_error;
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)intf->intf_name,
+						     strlen(intf->intf_name), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_mapping_end_event_initialize(&event);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+		}
 
 		if (tunables) {
 			rc = yaml_add_ni_tunables(&output, tunables, nw_descr);
+			if (rc == 0)
+				goto emitter_error;
+		}
+
+		if (flags == NLM_F_REPLACE && healthv > -1) {
+			char health[INT_STRING_LEN];
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"health stats",
+						     strlen("health stats"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			/* Setup all mappings for data related to the 'health stats' */
+			yaml_mapping_start_event_initialize(&event, NULL,
+							    (yaml_char_t *)YAML_MAP_TAG,
+							    1, YAML_BLOCK_MAPPING_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_STR_TAG,
+						     (yaml_char_t *)"health value",
+						     strlen("health value"), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			snprintf(health, sizeof(health), "%d", healthv);
+			yaml_scalar_event_initialize(&event, NULL,
+						     (yaml_char_t *)YAML_INT_TAG,
+						     (yaml_char_t *)health,
+						     strlen(health), 1, 0,
+						     YAML_PLAIN_SCALAR_STYLE);
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				goto emitter_error;
+
+			yaml_mapping_end_event_initialize(&event);
+			rc = yaml_emitter_emit(&output, &event);
 			if (rc == 0)
 				goto emitter_error;
 		}
@@ -2373,7 +2448,7 @@ static int jt_add_ni(int argc, char **argv)
 		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_map_on_demand = UINT_MAX;
 
 	rc = yaml_lnet_config_ni(net_id, ip2net, &nw_descr,
-				 found ? &tunables : NULL,
+				 found ? &tunables : NULL, -1,
 				 (cpt_rc == 0) ? global_cpts : NULL,
 				 LNET_GENL_VERSION, NLM_F_CREATE);
 	if (rc <= 0) {
@@ -2504,7 +2579,7 @@ static int jt_del_ni(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, NULL,
+	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, -1, NULL,
 				 LNET_GENL_VERSION, 0);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
@@ -2600,19 +2675,21 @@ old_api:
 	return rc;
 }
 
-static int set_value_helper(int argc, char **argv,
+static int set_value_helper(int argc, char **argv, int cmd,
 			    int (*cb)(int, bool, char*, int, int, struct cYAML**))
 {
-	char *nid = NULL;
+	char *nidstr = NULL;
 	long int healthv = -1;
 	bool all = false;
 	long int state = -1;
+	long int cpp = -1;
 	int rc, opt;
 	struct cYAML *err_rc = NULL;
-	const char *const short_options = "t:n:s:a";
+	const char *const short_options = "t:n:m:s:a";
 	static const struct option long_options[] = {
 		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
 		{ .name = "health", .has_arg = required_argument, .val = 't' },
+		{ .name = "conns-per-peer", .has_arg = required_argument, .val = 'm' },
 		{ .name = "state", .has_arg = required_argument, .val = 's' },
 		{ .name = "all", .has_arg = no_argument, .val = 'a' },
 		{ .name = NULL }
@@ -2622,16 +2699,23 @@ static int set_value_helper(int argc, char **argv,
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
-			nid = optarg;
+			nidstr = optarg;
 			break;
 		case 't':
 			if (parse_long(optarg, &healthv) != 0)
 				healthv = -1;
 			break;
 		case 's':
-			if (parse_long(optarg, &state) != 0)
+			if (cmd != LNET_CMD_PEERS ||
+			    parse_long(optarg, &state) != 0)
 				state = -1;
 			break;
+		case 'm':
+			if (cmd != LNET_CMD_NETS ||
+			    parse_long(optarg, &cpp) != 0)
+				cpp = -1;
+			break;
+
 		case 'a':
 			all = true;
 			break;
@@ -2640,7 +2724,8 @@ static int set_value_helper(int argc, char **argv,
 		}
 	}
 
-	rc = cb(healthv, all, nid, state, -1, &err_rc);
+	rc = cb(healthv, all, nidstr, cmd == LNET_CMD_PEERS ? state : cpp, -1,
+		&err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -2649,68 +2734,71 @@ static int set_value_helper(int argc, char **argv,
 	return rc;
 }
 
-static int jt_set_ni_value(int argc, char **argv)
+int yaml_lnet_config_ni_healthv(int healthv, bool all, char *nidstr, int cpp,
+				int seq_no, struct cYAML **err_rc)
 {
-	char *nid = NULL;
-	long int healthv = -1, cpp = -1;
-	bool all = false;
-	int rc, opt;
-	struct cYAML *err_rc = NULL;
+	struct lnet_ioctl_config_lnd_tunables tunables;
+	struct lnet_dlc_network_descr nw_descr;
+	char *net_id = "<255:65535>"; /* LNET_NET_ANY */
+	int rc = 0;
 
-	const char *const short_options = "a:m:n:t:";
-	static const struct option long_options[] = {
-	{ .name = "all",	    .has_arg = no_argument,	  .val = 'a' },
-	{ .name = "conns-per-peer", .has_arg = required_argument, .val = 'm' },
-	{ .name = "nid",	    .has_arg = required_argument, .val = 'n' },
-	{ .name = "health",	    .has_arg = required_argument, .val = 't' },
-	{ .name = NULL } };
+	/* For NI you can't have both setting all NIDs and a requested NID */
+	if (!all && !nidstr)
+		return -EINVAL;
 
-	rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
-	if (rc)
-		return rc;
+	if (cpp == -1 && healthv == -1)
+		return 0;
 
-	while ((opt = getopt_long(argc, argv, short_options,
-				   long_options, NULL)) != -1) {
-		switch (opt) {
-		case 'a':
-			all = true;
-			break;
-		case 'm':
-			rc = parse_long(optarg, &cpp);
-			if (rc != 0) {
-				/* ignore option */
-				cpp = -1;
-				continue;
-			}
-			break;
-		case 'n':
-			nid = optarg;
-			break;
-		case 't':
-			if (parse_long(optarg, &healthv) != 0) {
-				/* ignore option */
-				healthv = -1;
-				continue;
-			}
-			break;
-		default:
-			return 0;
-		}
+	if (nidstr) {
+		net_id = strchr(nidstr, '@');
+		if (!net_id)
+			return -EINVAL;
+		net_id++;
 	}
 
-	if (cpp > -1)
-		rc = lustre_lnet_config_ni_conns_per_peer(cpp, all, nid,
-							  -1, &err_rc);
-	if (healthv > -1)
-		rc = lustre_lnet_config_ni_healthv(healthv, all, nid,
-						   -1, &err_rc);
+	lustre_lnet_init_nw_descr(&nw_descr);
+	nw_descr.nw_id = libcfs_str2net(net_id);
 
+	rc = lustre_lnet_parse_interfaces(nidstr ? nidstr : "<?>", &nw_descr);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		cYAML_print_tree2file(stderr, err_rc);
+		return -EINVAL;
 
-	cYAML_free_tree(err_rc);
+	memset(&tunables, 0, sizeof(tunables));
+	tunables.lt_cmn.lct_peer_timeout = -1;
+	if (nw_descr.nw_id == LNET_NET_ANY && cpp > -1)
+		tunables.lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;
+	else if (LNET_NETTYP(nw_descr.nw_id) == SOCKLND && (cpp > -1))
+		tunables.lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;
+	else if (LNET_NETTYP(nw_descr.nw_id) == O2IBLND && (cpp > -1))
+		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = cpp;
 
+	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr,
+				 cpp != -1 ? &tunables : NULL, healthv, NULL,
+				 LNET_GENL_VERSION, NLM_F_REPLACE);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
+	if (cpp > -1)
+		rc = lustre_lnet_config_ni_conns_per_peer(cpp, all, nidstr,
+							  -1, err_rc);
+	if (healthv > -1)
+		rc = lustre_lnet_config_ni_healthv(healthv, all, nidstr,
+						   -1, err_rc);
 	return rc;
+}
+
+static int jt_set_ni_value(int argc, char **argv)
+{
+	int rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
+
+	if (rc < 0)
+		return rc;
+
+	return set_value_helper(argc, argv, LNET_CMD_NETS,
+				yaml_lnet_config_ni_healthv);
 }
 
 static int yaml_lnet_peer_display(yaml_parser_t *reply, bool list_only)
@@ -3227,10 +3315,6 @@ old_api:
 							seq_no, err_rc);
 	else
 		rc = lustre_lnet_set_peer_state(state, lpni_nid, -1, err_rc);
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		cYAML_print_tree2file(stderr, *err_rc);
-
-	cYAML_free_tree(*err_rc);
 
 	return rc;
 }
@@ -3242,7 +3326,8 @@ static int jt_set_peer_ni_value(int argc, char **argv)
 	if (rc < 0)
 		return rc;
 
-	return set_value_helper(argc, argv, yaml_lnet_config_peer_ni_healthv);
+	return set_value_helper(argc, argv, LNET_CMD_PEERS,
+				yaml_lnet_config_peer_ni_healthv);
 }
 
 static int jt_show_recovery(int argc, char **argv)
@@ -3358,7 +3443,7 @@ static int jt_show_net(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_config_ni(network, NULL, NULL, NULL, NULL,
+	rc = yaml_lnet_config_ni(network, NULL, NULL, NULL, -1, NULL,
 				 detail, NLM_F_DUMP);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)

@@ -3987,29 +3987,30 @@ __u32 lnet_get_dlc_seq_locked(void)
 }
 
 static void
-lnet_ni_set_healthv(lnet_nid_t nid, int value, bool all)
+lnet_ni_set_healthv(struct lnet_nid *nid, int value)
 {
+	bool all = nid_same(nid, &LNET_ANY_NID);
 	struct lnet_net *net;
 	struct lnet_ni *ni;
 
 	lnet_net_lock(LNET_LOCK_EX);
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			if (all || (nid_is_nid4(&ni->ni_nid) &&
-				    lnet_nid_to_nid4(&ni->ni_nid) == nid)) {
-				atomic_set(&ni->ni_healthv, value);
-				if (list_empty(&ni->ni_recovery) &&
-				    value < LNET_MAX_HEALTH_VALUE) {
-					CERROR("manually adding local NI %s to recovery\n",
-					       libcfs_nidstr(&ni->ni_nid));
-					list_add_tail(&ni->ni_recovery,
-						      &the_lnet.ln_mt_localNIRecovq);
-					lnet_ni_addref_locked(ni, 0);
-				}
-				if (!all) {
-					lnet_net_unlock(LNET_LOCK_EX);
-					return;
-				}
+			if (!all && !nid_same(&ni->ni_nid, nid))
+				continue;
+
+			atomic_set(&ni->ni_healthv, value);
+			if (list_empty(&ni->ni_recovery) &&
+			    value < LNET_MAX_HEALTH_VALUE) {
+				CERROR("manually adding local NI %s to recovery\n",
+				       libcfs_nidstr(&ni->ni_nid));
+				list_add_tail(&ni->ni_recovery,
+					      &the_lnet.ln_mt_localNIRecovq);
+				lnet_ni_addref_locked(ni, 0);
+			}
+			if (!all) {
+				lnet_net_unlock(LNET_LOCK_EX);
+				return;
 			}
 		}
 	}
@@ -4467,11 +4468,13 @@ LNetCtl(unsigned int cmd, void *arg)
 		       "local" : "peer", libcfs_nid2str(cfg->rh_nid), cfg->rh_all);
 		lnet_nid4_to_nid(cfg->rh_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
-		if (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI)
-			lnet_ni_set_healthv(cfg->rh_nid, value,
-					     cfg->rh_all);
-		else
+		if (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI) {
+			if (cfg->rh_all)
+				nid = LNET_ANY_NID;
+			lnet_ni_set_healthv(&nid, value);
+		} else {
 			lnet_peer_ni_set_healthv(&nid, value, cfg->rh_all);
+		}
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}
@@ -5888,9 +5891,10 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			 int net_id, struct lnet_ioctl_config_ni *conf,
 			 bool *ni_list)
 {
-	bool create = info->nlhdr->nlmsg_flags & NLM_F_CREATE;
 	struct lnet_ioctl_config_lnd_tunables *tun;
+	struct lnet_nid nid = LNET_ANY_NID;
 	struct nlattr *settings;
+	int healthv = -1;
 	int rem3, rc = 0;
 
 	LIBCFS_ALLOC(tun, sizeof(struct lnet_ioctl_config_lnd_tunables));
@@ -5940,6 +5944,61 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				}
 			}
 			*ni_list = true;
+		} else if (nla_strcmp(settings, "nid") == 0 &&
+			   net_id != LNET_NET_ANY &&
+			   info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
+			char nidstr[LNET_NIDSTR_SIZE];
+
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) != LN_SCALAR_ATTR_VALUE) {
+				GENL_SET_ERR_MSG(info, "cannot parse NID");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			rc = nla_strscpy(nidstr, settings, sizeof(nidstr));
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "failed to parse NID");
+				GOTO(out, rc);
+			}
+
+			CDEBUG(D_NET, "Requested NID %s\n", nidstr);
+			rc = libcfs_strnid(&nid, strim(nidstr));
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info, "unsupported NID");
+				GOTO(out, rc);
+			}
+		} else if (nla_strcmp(settings, "health stats") == 0 &&
+			   info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
+			struct nlattr *health;
+			int rem4;
+
+			settings = nla_next(settings, &rem3);
+			if (nla_type(settings) != LN_SCALAR_ATTR_LIST) {
+				GENL_SET_ERR_MSG(info,
+						 "cannot parse health stats");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			nla_for_each_nested(health, settings, rem4) {
+				if (nla_type(health) != LN_SCALAR_ATTR_VALUE ||
+				    nla_strcmp(health, "health value") != 0) {
+					GENL_SET_ERR_MSG(info,
+							 "wrong health config format");
+					GOTO(out, rc = -EINVAL);
+				}
+
+				health = nla_next(health, &rem4);
+				if (nla_type(health) !=
+				    LN_SCALAR_ATTR_INT_VALUE) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid health config format");
+					GOTO(out, rc = -EINVAL);
+				}
+
+				healthv = nla_get_s64(health);
+				clamp_t(s64, healthv, 0, LNET_MAX_HEALTH_VALUE);
+			}
 		} else if (nla_strcmp(settings, "tunables") == 0) {
 			settings = nla_next(settings, &rem3);
 			if (nla_type(settings) !=
@@ -5958,13 +6017,6 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		} else if ((nla_strcmp(settings, "lnd tunables") == 0)) {
 			const struct lnet_lnd *lnd;
 
-			lnd = lnet_load_lnd(LNET_NETTYP(net_id));
-			if (IS_ERR(lnd)) {
-				GENL_SET_ERR_MSG(info,
-						 "LND type not supported");
-				GOTO(out, rc = PTR_ERR(lnd));
-			}
-
 			settings = nla_next(settings, &rem3);
 			if (nla_type(settings) !=
 			    LN_SCALAR_ATTR_LIST) {
@@ -5973,12 +6025,49 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				GOTO(out, rc = -EINVAL);
 			}
 
-			rc = lnet_genl_parse_lnd_tunables(settings,
-							  &tun->lt_tun, lnd);
-			if (rc < 0) {
-				GENL_SET_ERR_MSG(info,
-						 "failed to parse lnd tunables");
-				GOTO(out, rc);
+			if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE &&
+			    net_id == LNET_NET_ANY) {
+				struct lnet_net *net;
+
+				lnet_net_lock(LNET_LOCK_EX);
+				list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+					struct lnet_ni *ni;
+
+					if (!net->net_lnd)
+						continue;
+
+					list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+						if (!nid_same(&nid, &LNET_ANY_NID) &&
+						    !nid_same(&nid, &ni->ni_nid))
+							continue;
+
+						rc = lnet_genl_parse_lnd_tunables(settings,
+										  &ni->ni_lnd_tunables,
+										  net->net_lnd);
+						if (rc < 0) {
+							GENL_SET_ERR_MSG(info,
+									 "failed to parse lnd tunables");
+							lnet_net_unlock(LNET_LOCK_EX);
+							GOTO(out, rc);
+						}
+					}
+				}
+				lnet_net_unlock(LNET_LOCK_EX);
+			} else {
+				lnd = lnet_load_lnd(LNET_NETTYP(net_id));
+				if (IS_ERR(lnd)) {
+					GENL_SET_ERR_MSG(info,
+							 "LND type not supported");
+					GOTO(out, rc = PTR_ERR(lnd));
+				}
+
+				rc = lnet_genl_parse_lnd_tunables(settings,
+								  &tun->lt_tun, lnd);
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "failed to parse lnd tunables");
+					GOTO(out, rc);
+				}
 			}
 		} else if (nla_strcmp(settings, "CPT") == 0) {
 			struct nlattr *cpt;
@@ -6014,10 +6103,36 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		}
 	}
 
-	if (!create) {
+	if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+		if (!strlen(conf->lic_ni_intf)) {
+			GENL_SET_ERR_MSG(info,
+					 "interface is missing");
+			GOTO(out, rc);
+		}
+
+		rc = lnet_dyn_add_ni(conf, net_id, tun);
+		switch (rc) {
+		case -ENOENT:
+			GENL_SET_ERR_MSG(info,
+					 "cannot parse net");
+			break;
+		case -ERANGE:
+			GENL_SET_ERR_MSG(info,
+					 "invalid CPT set");
+			break;
+		default:
+			GENL_SET_ERR_MSG(info,
+					 "cannot add LNet NI");
+		case 0:
+			break;
+		}
+	} else if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && healthv != -1) {
+		lnet_ni_set_healthv(&nid, healthv);
+	} else if (!(info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_REPLACE))) {
 		struct lnet_net *net;
 		struct lnet_ni *ni;
 
+		/* delete case */
 		rc = -ENODEV;
 		if (!strlen(conf->lic_ni_intf)) {
 			GENL_SET_ERR_MSG(info,
@@ -6055,29 +6170,6 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			GENL_SET_ERR_MSG(info,
 					 "interface invalid for deleting LNet NI");
 			lnet_net_unlock(LNET_LOCK_EX);
-		}
-	} else {
-		if (!strlen(conf->lic_ni_intf)) {
-			GENL_SET_ERR_MSG(info,
-					 "interface is missing");
-			GOTO(out, rc);
-		}
-
-		rc = lnet_dyn_add_ni(conf, net_id, tun);
-		switch (rc) {
-		case -ENOENT:
-			GENL_SET_ERR_MSG(info,
-					 "cannot parse net");
-			break;
-		case -ERANGE:
-			GENL_SET_ERR_MSG(info,
-					 "invalid CPT set");
-			break;
-		default:
-			GENL_SET_ERR_MSG(info,
-					 "cannot add LNet NI");
-		case 0:
-			break;
 		}
 	}
 out:
@@ -6203,7 +6295,8 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 		}
 
 		/* Handle case of just sent NET with no list of NIDs */
-		if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE) && !ni_list) {
+		if (!(info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_REPLACE)) &&
+		    !ni_list) {
 			rc = lnet_dyn_del_net(net_id);
 			if (rc < 0) {
 				GENL_SET_ERR_MSG(info,

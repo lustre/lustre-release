@@ -1298,6 +1298,7 @@ static int
 kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
 	struct lnet_lnd_tunables *tunables = data;
+	int rc = 0;
 	s64 num;
 
 	if (cmd != LNET_CMD_NETS)
@@ -1333,14 +1334,16 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 		break;
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER:
 		num = nla_get_s64(attr);
-		clamp_t(s64, num, 1, 127);
-		tunables->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = num;
+		if (num > -1 || num < 128)
+			tunables->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = num;
+		else
+			rc = -ERANGE;
 		fallthrough;
 	default:
 		break;
 	}
 
-	return 0;
+	return rc;
 }
 
 static void

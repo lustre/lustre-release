@@ -1918,7 +1918,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
 	char buf[LNET_MAX_STR_LEN];
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+	char err_str[LNET_MAX_STR_LEN * 2] = "\"success\"";
 	lnet_nid_t *nids = NULL;
 	__u32 nnids = 0;
 	size_t len;
@@ -2063,7 +2063,7 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 {
 	struct lnet_ioctl_config_ni data;
 	int rc = LUSTRE_CFG_RC_NO_ERR, i;
-	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+	char err_str[LNET_MAX_STR_LEN * 2] = "\"success\"";
 	lnet_nid_t *nids = NULL;
 	__u32 nnids = 0;
 	struct lnet_dlc_intf_descr *intf_descr, *tmp;

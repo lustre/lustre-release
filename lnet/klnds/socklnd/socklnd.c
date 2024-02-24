@@ -841,6 +841,7 @@ static int
 ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
 	struct lnet_lnd_tunables *tunables = data;
+	int rc = 0;
 	s64 num;
 
 	if (cmd != LNET_CMD_NETS)
@@ -853,8 +854,10 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	case LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER:
 		/* value values are 1 to 127. Zero mean calculate the value */
 		num = nla_get_s64(attr);
-		clamp_t(s64, num, 0, 127);
-		tunables->lnd_tun_u.lnd_sock.lnd_conns_per_peer = num;
+		if (num > -1 && num < 128)
+			tunables->lnd_tun_u.lnd_sock.lnd_conns_per_peer = num;
+		else
+			rc = -ERANGE;
 		break;
 	case LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT:
 		num = nla_get_s64(attr);
@@ -864,7 +867,7 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 		break;
 	}
 
-	return 0;
+	return rc;
 }
 
 static int
