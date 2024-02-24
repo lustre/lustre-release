@@ -2362,8 +2362,6 @@ void lustre_msg_set_versions(struct lustre_msg *msg, __u64 *versions);
 void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno);
 void lustre_msg_set_status(struct lustre_msg *msg, __u32 status);
 void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
-void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count,
-			    __u32 *sizes);
 void ptlrpc_request_set_replen(struct ptlrpc_request *req);
 void lustre_msg_set_timeout(struct lustre_msg *msg, timeout_t timeout);
 void lustre_msg_set_service_timeout(struct lustre_msg *msg,
@@ -2542,18 +2540,6 @@ static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
 static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
 {
 	return lustre_msg_get_magic(req->rq_reqmsg);
-}
-
-static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
-{
-	switch (req->rq_reqmsg->lm_magic) {
-	case LUSTRE_MSG_MAGIC_V2:
-		return req->rq_reqmsg->lm_repsize;
-	default:
-		LASSERTF(0, "incorrect message magic: %08x\n",
-			 req->rq_reqmsg->lm_magic);
-		return -EFAULT;
-	}
 }
 
 static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)

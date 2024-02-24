@@ -1707,13 +1707,6 @@ void ptlrpc_request_set_replen(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ptlrpc_request_set_replen);
 
-void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *lens)
-{
-	req->rq_replen = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
-	if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
-		req->rq_reqmsg->lm_repsize = req->rq_replen;
-}
-
 /**
  * Send a remote set_info_async.
  *
