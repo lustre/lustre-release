@@ -1299,16 +1299,18 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 
 	cmd &= ~OBD_BRW_NOQUOTA;
 	if (cptype != CPT_TRANSIENT) {
-		LASSERTF(equi(page->cp_state == CPS_PAGEIN,  cmd == OBD_BRW_READ),
+		LASSERTF(equi(page->cp_state == CPS_PAGEIN,
+			      cmd == OBD_BRW_READ),
 			 "cp_state:%u, cmd:%d\n", page->cp_state, cmd);
-		LASSERTF(equi(page->cp_state == CPS_PAGEOUT, cmd == OBD_BRW_WRITE),
+		LASSERTF(equi(page->cp_state == CPS_PAGEOUT,
+			      cmd == OBD_BRW_WRITE),
 			"cp_state:%u, cmd:%d\n", page->cp_state, cmd);
 		LASSERT(opg->ops_transfer_pinned);
+		/* Clear opg->ops_transfer_pinned before VM lock is released.*/
+		opg->ops_transfer_pinned = 0;
 	}
 
 	crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
-	/* Clear opg->ops_transfer_pinned before VM lock is released. */
-	opg->ops_transfer_pinned = 0;
 
 	srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
 
