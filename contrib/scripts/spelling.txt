@@ -81,6 +81,7 @@ lnet_magicversion_t||struct lnet_magicversion
 lnet_ni_status_t||struct lnet_ni_status
 lnet_ping_info_t||struct lnet_ping_info
 lnet_process_id_packed_t||struct lnet_process_id_packed
+LOOKUP_CONTINUE||LOOKUP_PARENT
 HZ||cfs_time_seconds
 LPD64||%lld
 LPLD||%ld

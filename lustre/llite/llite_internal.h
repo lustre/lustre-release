@@ -60,13 +60,6 @@
 #define VM_FAULT_RETRY 0
 #endif
 
-/* Kernel 3.1 kills LOOKUP_CONTINUE, LOOKUP_PARENT is equivalent to it.
- * seem kernel commit 49084c3bb2055c401f3493c13edae14d49128ca0
- */
-#ifndef LOOKUP_CONTINUE
-#define LOOKUP_CONTINUE LOOKUP_PARENT
-#endif
-
 #ifdef HAVE_DENTRY_D_U_D_ALIAS
 #define d_alias			d_u.d_alias
 #endif

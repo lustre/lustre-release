@@ -325,7 +325,7 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	 * this dentry, then its lock has not been revoked and the
 	 * path component is valid.
 	 */
-	if (lookup_flags & (LOOKUP_CONTINUE | LOOKUP_PARENT)) {
+	if (lookup_flags & LOOKUP_PARENT) {
 		if (dentry->d_inode && S_ISDIR(dentry->d_inode->i_mode)) {
 			parent = dget_parent(dentry);
 			ll_update_dir_depth_dmv(d_inode(parent), dentry);
