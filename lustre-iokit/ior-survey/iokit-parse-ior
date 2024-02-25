@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
+# SPDX-License-Identifier: GPL-2.0
 
-# arg 0 is filename
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 
 sub usages_msg(){
 	print "Usage: $0 <results_filename>\n"

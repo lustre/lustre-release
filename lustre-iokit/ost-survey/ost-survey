@@ -1,4 +1,9 @@
 #!/usr/bin/perl
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 # This script is to be run on a client machine and will test all the
 # OSTs to determine which is the fastest and slowest
 # The current test method is as follows:
@@ -9,6 +14,7 @@
 #   -Compute the average, and Standard deviation 
 #   -Find the slowest OST for read and write
 #   -Find the Fastest OST for read and write
+#
 
 # GLOBALS
 $pname = $0;			 # to hold program name

@@ -1,4 +1,9 @@
 #!/usr/bin/perl -w
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 # Report generation for iokit-plot-sgpdd
 # ======================================
 # The iokit-plot-sgpdd script is used to generate csv file and
@@ -14,6 +19,7 @@
 # [Note: 1. This script may need modifications whenever there will be
 #           modifications in output format of sgpdd-survey script.
 #        2. Gnuplot version 4.0 or above is required.]
+#
 
 sub usage()
 {

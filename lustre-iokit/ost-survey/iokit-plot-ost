@@ -1,4 +1,9 @@
 #!/usr/bin/perl -w
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 # Report generation for ost-survey.pl
 # ===================================
 # The iokit-plot-ost script is used to generate csv file and
@@ -13,8 +18,8 @@
 # Note:  1. This script may need modifications whenever there will be
 #	    modifications in output format of ost-survey.pl script.
 #	 2. Gnuplot version 4.0 or above is required.
+#
 
-# arg 0 is filename
 sub usages_msg(){
 	print "Usage: $0 <log_filename> \n";
 	print "       $0 produces graphs from the output of ost-survey.pl\n";

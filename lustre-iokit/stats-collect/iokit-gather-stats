@@ -1,13 +1,19 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
 
-# iokit-gather-stats:
-# script on a selection of nodes and collect all the results into a single
-# tar ball
 #
 # Copyright 2008 Sun Microsystems, Inc. All rights reserved
 # Use is subject to license terms.
 #
 # Copyright (c) 2014, Intel Corporation.
+#
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# iokit-gather-stats:
+# script on a selection of nodes and collect all the results into a single
+# tar ball
 #
 
 error() {
