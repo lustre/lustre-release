@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := lnet_selftest
 
 lnet_selftest-objs := console.o conrpc.o conctl.o framework.o timer.o rpc.o \
