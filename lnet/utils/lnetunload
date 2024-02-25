@@ -4,8 +4,6 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# lnet/utils/lnetunload
-#
 # Unload lnet related kernel modules
 #
 

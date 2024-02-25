@@ -4,8 +4,6 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# lnet/utils/lbstats
-#
 # Cleanly print out info about lnet router buffers,
 # network interfaces, and peers
 #
