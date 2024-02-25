@@ -2568,6 +2568,128 @@ out:
 	return rc;
 }
 
+int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
+			struct osc_object *obj, struct list_head *list,
+			int brw_flags)
+{
+	struct client_obd *cli = osc_cli(obj);
+	struct osc_io *oio = osc_env_io(env);
+	struct osc_async_page *oap;
+	struct osc_extent *ext;
+	struct osc_lock *oscl;
+	int mppr = cli->cl_max_pages_per_rpc;
+	pgoff_t start = CL_PAGE_EOF;
+	bool can_merge = true;
+	int page_count = 0;
+	pgoff_t end = 0;
+
+	ENTRY;
+
+	list_for_each_entry(oap, list, oap_pending_item) {
+		struct osc_page *opg = oap2osc_page(oap);
+		pgoff_t index = osc_index(opg);
+
+		if (index > end)
+			end = index;
+		if (index < start)
+			start = index;
+		++page_count;
+		mppr <<= (page_count > mppr);
+
+		if (unlikely(oap->oap_count < PAGE_SIZE))
+			can_merge = false;
+	}
+
+	ext = osc_extent_alloc(obj);
+	if (ext == NULL) {
+		struct osc_async_page *tmp;
+
+		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
+			list_del_init(&oap->oap_pending_item);
+			osc_ap_completion(env, cli, obj, oap, 0, -ENOMEM);
+		}
+		RETURN(-ENOMEM);
+	}
+
+	ext->oe_rw = !!(brw_flags & OBD_BRW_READ);
+	ext->oe_sync = 1;
+	ext->oe_no_merge = !can_merge;
+	ext->oe_urgent = 1;
+	ext->oe_start = start;
+	ext->oe_end = ext->oe_max_end = end;
+	ext->oe_obj = obj;
+	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
+	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
+	ext->oe_dio = true;
+	if (ext->oe_dio) {
+		struct cl_sync_io *anchor;
+		struct cl_page *clpage;
+
+		oap = list_first_entry(list, struct osc_async_page,
+				       oap_pending_item);
+		clpage = oap2cl_page(oap);
+		LASSERT(clpage->cp_type == CPT_TRANSIENT);
+		anchor = clpage->cp_sync_io;
+		ext->oe_csd = anchor->csi_dio_aio;
+	}
+	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;
+	if (oscl && oscl->ols_dlmlock != NULL)
+		ext->oe_dlmlock = ldlm_lock_get(oscl->ols_dlmlock);
+	if (!ext->oe_rw) { /* direct io write */
+		int grants;
+		int ppc;
+
+		ppc = 1 << (cli->cl_chunkbits - PAGE_SHIFT);
+		grants = cli->cl_grant_extent_tax;
+		grants += (1 << cli->cl_chunkbits) *
+			((page_count + ppc - 1) / ppc);
+
+		CDEBUG(D_CACHE, "requesting %d bytes grant\n", grants);
+		spin_lock(&cli->cl_loi_list_lock);
+		if (osc_reserve_grant(cli, grants) == 0) {
+			list_for_each_entry(oap, list, oap_pending_item) {
+				osc_consume_write_grant(cli,
+							&oap->oap_brw_page);
+			}
+			atomic_long_add(page_count, &obd_dirty_pages);
+			osc_unreserve_grant_nolock(cli, grants, 0);
+			ext->oe_grants = grants;
+		} else {
+			/* We cannot report ENOSPC correctly if we do parallel
+			 * DIO (async RPC submission), so turn off parallel dio
+			 * if there is not sufficient grant available.  This
+			 * makes individual RPCs synchronous.
+			 */
+			io->ci_parallel_dio = false;
+			CDEBUG(D_CACHE,
+			"not enough grant available, switching to sync for this i/o\n");
+		}
+		spin_unlock(&cli->cl_loi_list_lock);
+		osc_update_next_shrink(cli);
+	}
+
+	ext->oe_is_rdma_only = !!(brw_flags & OBD_BRW_RDMA_ONLY);
+	ext->oe_nr_pages = page_count;
+	ext->oe_mppr = mppr;
+	list_splice_init(list, &ext->oe_pages);
+	ext->oe_layout_version = io->ci_layout_version;
+
+	osc_object_lock(obj);
+	/* Reuse the initial refcount for RPC, don't drop it */
+	osc_extent_state_set(ext, OES_LOCK_DONE);
+	if (!ext->oe_rw) { /* write */
+		list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
+		osc_update_pending(obj, OBD_BRW_WRITE, page_count);
+	} else {
+		list_add_tail(&ext->oe_link, &obj->oo_reading_exts);
+		osc_update_pending(obj, OBD_BRW_READ, page_count);
+	}
+	osc_object_unlock(obj);
+
+	osc_io_unplug_async(env, cli, obj);
+	RETURN(0);
+}
+
 int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 			 struct osc_object *obj, struct list_head *list,
 			 int brw_flags)

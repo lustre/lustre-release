@@ -314,8 +314,8 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 		}
 
 		if (sync_queue) {
-			result = osc_queue_sync_pages(env, top_io, osc, &list,
-						      brw_flags);
+			result = osc_queue_dio_pages(env, top_io, osc, &list,
+						     brw_flags);
 			if (result < 0)
 				break;
 			queued = 0;
@@ -324,8 +324,8 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	}
 
 	if (queued > 0)
-		result = osc_queue_sync_pages(env, top_io, osc, &list,
-					      brw_flags);
+		result = osc_queue_dio_pages(env, top_io, osc, &list,
+					     brw_flags);
 
 	/* Update c/mtime for sync write. LU-7310 */
 	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {
