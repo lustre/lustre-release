@@ -740,7 +740,7 @@ struct obd_device {
 	__u64				obd_pool_slv;
 	int				obd_pool_limit;
 
-	int				obd_conn_inprogress;
+	atomic_t			obd_conn_inprogress;
 
 	/**
 	 * List of outstanding class_incref()'s fo this OBD. For debugging. */

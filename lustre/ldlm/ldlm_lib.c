@@ -1121,13 +1121,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 		GOTO(out, rc = -ENODEV);
 	}
 
-	spin_lock(&target->obd_dev_lock);
-
-	target->obd_conn_inprogress++;
+	atomic_inc(&target->obd_conn_inprogress);
 
 	if (target->obd_stopping || !target->obd_set_up) {
-		spin_unlock(&target->obd_dev_lock);
-
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_INFO("%.*s: Not available for connect from %s (%s)\n",
 			      target_len, target_start,
@@ -1138,15 +1134,11 @@ int target_handle_connect(struct ptlrpc_request *req)
 	}
 
 	if (target->obd_no_conn) {
-		spin_unlock(&target->obd_dev_lock);
-
 		CDEBUG(D_INFO,
 		       "%s: Temporarily refusing client connection from %s\n",
 		       target->obd_name, libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -EAGAIN);
 	}
-
-	spin_unlock(&target->obd_dev_lock);
 
 	str = req_capsule_client_get(&req->rq_pill, &RMF_CLUUID);
 	if (str == NULL) {
@@ -1624,10 +1616,9 @@ out:
 
 		class_export_put(export);
 	}
-	if (target != NULL) {
-		spin_lock(&target->obd_dev_lock);
-		target->obd_conn_inprogress--;
-		spin_unlock(&target->obd_dev_lock);
+	if (target) {
+		if (atomic_dec_and_test(&target->obd_conn_inprogress))
+			wake_up_var(&target->obd_conn_inprogress);
 		class_decref(target, "find", current);
 	}
 	if (pcon)

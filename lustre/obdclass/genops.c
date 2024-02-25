@@ -410,7 +410,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	lu_ref_init(&newdev->obd_reference);
 	lu_ref_add(&newdev->obd_reference, "newdev", newdev);
 
-	newdev->obd_conn_inprogress = 0;
+	atomic_set(&newdev->obd_conn_inprogress, 0);
 
 	strncpy(newdev->obd_uuid.uuid, uuid, UUID_MAX);
 

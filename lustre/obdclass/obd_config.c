@@ -846,8 +846,8 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* wait for already-arrived-connections to finish. */
-	while (obd->obd_conn_inprogress > 0)
-		yield();
+	wait_var_event(&obd->obd_conn_inprogress,
+		       atomic_read(&obd->obd_conn_inprogress) == 0);
 	smp_rmb();
 
 	if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
