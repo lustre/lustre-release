@@ -643,6 +643,9 @@ void osc_schedule_grant_work(void);
 int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 		  const struct cl_io_slice *ios, enum cl_req_type crt,
 		  struct cl_2queue *queue);
+int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
+		  const struct cl_io_slice *ios, enum cl_req_type crt,
+		  struct cl_dio_pages *cdp);
 int osc_io_commit_async(const struct lu_env *env,
 			const struct cl_io_slice *ios,
 			struct cl_page_list *qin, int from, int to,

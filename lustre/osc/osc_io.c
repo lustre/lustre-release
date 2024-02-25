@@ -242,6 +242,31 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_io_submit);
 
+int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
+		  const struct cl_io_slice *ios, enum cl_req_type crt,
+		  struct cl_dio_pages *cdp)
+{
+	struct cl_2queue *queue;
+	int rc = 0;
+
+	cl_dio_pages_2queue(cdp);
+	queue = &cdp->cdp_queue;
+
+	rc = osc_io_submit(env, io, ios, crt, queue);
+
+	/* if submit failed, no pages were sent */
+	LASSERT(ergo(rc != 0, list_empty(&queue->c2_qout.pl_pages)));
+	while (queue->c2_qout.pl_nr > 0) {
+		struct cl_page *page;
+
+		page = cl_page_list_first(&queue->c2_qout);
+		cl_page_list_del(env, &queue->c2_qout, page, false);
+	}
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(osc_dio_submit);
+
 /**
  * This is called to update the attributes when modifying a specific page,
  * both when making new pages and when doing updates to existing cached pages.
@@ -1332,6 +1357,7 @@ static const struct cl_io_operations osc_io_ops = {
 	.cio_read_ahead		    = osc_io_read_ahead,
 	.cio_lru_reserve	    = osc_io_lru_reserve,
 	.cio_submit                 = osc_io_submit,
+	.cio_dio_submit		    = osc_dio_submit,
 	.cio_commit_async           = osc_io_commit_async,
 	.cio_extent_release         = osc_io_extent_release
 };

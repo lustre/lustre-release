@@ -1327,73 +1327,25 @@ static int lov_dio_submit(const struct lu_env *env,
 			  const struct cl_io_slice *ios,
 			  enum cl_req_type crt, struct cl_dio_pages *cdp)
 {
-	struct cl_page_list	*plist = &lov_env_info(env)->lti_plist;
-	struct lov_io		*lio = cl2lov_io(env, ios);
-	struct cl_2queue	*queue;
-	struct cl_page		*page;
-	struct cl_page_list	*qin;
-	struct lov_io_sub	*sub;
-	int index;
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct lov_io_sub *sub;
 	int rc = 0;
+	int index;
 	ENTRY;
 
-	cl_dio_pages_2queue(cdp);
-	queue = &cdp->cdp_queue;
-
-	qin = &queue->c2_qin;
-	page = cl_page_list_first(qin);
-
-	cl_page_list_init(plist);
-	while (qin->pl_nr > 0) {
-		struct cl_2queue  *cl2q = &lov_env_info(env)->lti_cl2q;
-
-		page = cl_page_list_first(qin);
-		if (lov_pages_is_empty(cdp)) {
-			cl_page_list_move(&queue->c2_qout, qin, page);
-
-			/*
-			 * it could only be mirror read to get here therefore
-			 * the pages will be transient. We don't care about
-			 * the return code of cl_page_prep() at all.
-			 */
-			LASSERT(page->cp_type == CPT_TRANSIENT);
-			cl_page_complete(env, page, crt, 0);
-			continue;
-		}
-
-		cl_2queue_init(cl2q);
-		cl_page_list_move(&cl2q->c2_qin, qin, page);
-
-		index = page->cp_lov_index;
-		/* DIO is already split by stripe */
-		cl_page_list_splice(qin, &cl2q->c2_qin);
-
-		sub = lov_sub_get(env, lio, index);
-		if (!IS_ERR(sub)) {
-			rc = cl_io_submit_rw(sub->sub_env, &sub->sub_io,
-					     crt, cl2q);
-		} else {
-			rc = PTR_ERR(sub);
-		}
-
-		cl_page_list_splice(&cl2q->c2_qin, plist);
-		cl_page_list_splice(&cl2q->c2_qout, &queue->c2_qout);
-		cl_2queue_fini(env, cl2q);
-
-		if (rc != 0)
-			break;
+	if (lov_pages_is_empty(cdp)) {
+		cl_dio_pages_complete(env, cdp, cdp->cdp_page_count, 0);
+		RETURN(0);
 	}
 
-	cl_page_list_splice(plist, qin);
-	cl_page_list_fini(env, plist);
+	index = cdp->cdp_lov_index;
 
-	/* if submit failed, no pages were sent */
-	LASSERT(ergo(rc != 0, list_empty(&queue->c2_qout.pl_pages)));
-	while (queue->c2_qout.pl_nr > 0) {
-		struct cl_page *page;
-
-		page = cl_page_list_first(&queue->c2_qout);
-		cl_page_list_del(env, &queue->c2_qout, page, false);
+	sub = lov_sub_get(env, lio, index);
+	if (!IS_ERR(sub)) {
+		rc = cl_dio_submit_rw(sub->sub_env, &sub->sub_io,
+				      crt, cdp);
+	} else {
+		rc = PTR_ERR(sub);
 	}
 
 	RETURN(rc);

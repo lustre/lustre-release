@@ -1381,6 +1381,7 @@ static const struct cl_io_operations mdc_io_ops = {
 	.cio_read_ahead   = mdc_io_read_ahead,
 	.cio_lru_reserve  = osc_io_lru_reserve,
 	.cio_submit	  = osc_io_submit,
+	.cio_dio_submit	  = osc_dio_submit,
 	.cio_commit_async = osc_io_commit_async,
 	.cio_extent_release = osc_io_extent_release,
 };
