@@ -124,6 +124,10 @@ static int mdt_root_squash(struct mdt_thread_info *info,
 	ucred->uc_cap = CAP_EMPTY_SET;
 	ucred->uc_suppgids[0] = -1;
 	ucred->uc_suppgids[1] = -1;
+	if (ucred->uc_ginfo) {
+		put_group_info(ucred->uc_ginfo);
+		ucred->uc_ginfo = NULL;
+	}
 
 	RETURN(0);
 }
@@ -200,7 +204,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
-	bool is_nm_gid_squashed = false;
 	int rc = 0;
 
 	ENTRY;
@@ -230,22 +233,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_o_fsuid = pud->pud_fsuid;
 	ucred->uc_o_fsgid = pud->pud_fsgid;
 
-	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid) {
-		/* deny access before we get identity ref */
-		if (nodemap->nmf_deny_unknown) {
-			nodemap_putref(nodemap);
-			RETURN(-EACCES);
-		}
-
-		ucred->uc_suppgids[0] = -1;
-		ucred->uc_suppgids[1] = -1;
-	}
-
-	if (nodemap && ucred->uc_o_gid == nodemap->nm_squash_gid)
-		is_nm_gid_squashed = true;
-
-	nodemap_putref(nodemap);
-
 	if (type == BODY_INIT) {
 		struct mdt_body *body = (struct mdt_body *)buf;
 
@@ -260,8 +247,13 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		       libcfs_nidstr(&peernid), req->rq_auth_uid,
 		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid);
-		RETURN(-EACCES);
+		GOTO(out_nodemap, rc = -EACCES);
 	}
+
+	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid &&
+	    nodemap->nmf_deny_unknown)
+		/* deny access before we get identity ref */
+		GOTO(out, rc = -EACCES);
 
 	if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		ucred->uc_identity = NULL;
@@ -280,7 +272,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 				CDEBUG(D_SEC,
 				       "Deny access without identity: uid %u\n",
 				       pud->pud_uid);
-				RETURN(-EACCES);
+				GOTO(out_nodemap, rc = -EACCES);
 			}
 		} else {
 			ucred->uc_identity = identity;
@@ -311,42 +303,45 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		GOTO(out, rc = -EACCES);
 	}
 
-	if (perm & CFS_SETGRP_PERM) {
-		/* only set groups if GID is not squashed */
-		if (pud->pud_ngroups && !is_nm_gid_squashed) {
-			/* setgroups for local client */
-			ucred->uc_ginfo = groups_alloc(pud->pud_ngroups);
-			if (!ucred->uc_ginfo) {
-				CERROR("failed to alloc %d groups\n",
-				       pud->pud_ngroups);
-				GOTO(out, rc = -ENOMEM);
-			}
-
-			lustre_groups_from_list(ucred->uc_ginfo,
-						pud->pud_groups);
-			lustre_groups_sort(ucred->uc_ginfo);
-		} else {
-			ucred->uc_suppgids[0] = -1;
-			ucred->uc_suppgids[1] = -1;
-			ucred->uc_ginfo = NULL;
+	if (perm & CFS_SETGRP_PERM && pud->pud_ngroups) {
+		/* setgroups for local client */
+		ucred->uc_ginfo = groups_alloc(pud->pud_ngroups);
+		if (!ucred->uc_ginfo) {
+			CERROR("failed to alloc %d groups\n",
+			       pud->pud_ngroups);
+			GOTO(out, rc = -ENOMEM);
 		}
+
+		lustre_groups_from_list(ucred->uc_ginfo, pud->pud_groups);
+		lustre_groups_sort(ucred->uc_ginfo);
 	} else {
 		ucred->uc_suppgids[0] = -1;
 		ucred->uc_suppgids[1] = -1;
 		ucred->uc_ginfo = NULL;
 	}
 
+	ll_set_capability_u32(&ucred->uc_cap, pud->pud_cap);
+
 	ucred->uc_uid = pud->pud_uid;
 	ucred->uc_gid = pud->pud_gid;
-
-	ucred->uc_cap = CAP_EMPTY_SET;
-	if (!nodemap || ucred->uc_o_uid != nodemap->nm_squash_uid)
-		ll_set_capability_u32(&ucred->uc_cap, pud->pud_cap);
 
 	ucred->uc_fsuid = pud->pud_fsuid;
 	ucred->uc_fsgid = pud->pud_fsgid;
 
-	/* process root_squash here. */
+	/* clear suppgids if uid or gid was squashed. */
+	if (nodemap &&
+	    (ucred->uc_o_uid == nodemap->nm_squash_uid ||
+	     ucred->uc_o_gid == nodemap->nm_squash_gid)) {
+
+		ucred->uc_cap = CAP_EMPTY_SET;
+		ucred->uc_suppgids[0] = -1;
+		ucred->uc_suppgids[1] = -1;
+		if (ucred->uc_ginfo) {
+			put_group_info(ucred->uc_ginfo);
+			ucred->uc_ginfo = NULL;
+		}
+	}
+
 	mdt_root_squash(info, &peernid);
 
 	if (ucred->uc_fsuid) {
@@ -385,6 +380,8 @@ out:
 		}
 	}
 
+out_nodemap:
+	nodemap_putref(nodemap);
 	return rc;
 }
 
@@ -506,15 +503,10 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct md_identity	*identity = NULL;
 
-	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid) {
+	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid
+	    && nodemap->nmf_deny_unknown)
 		/* deny access before we get identity ref */
-		if (nodemap->nmf_deny_unknown)
-			RETURN(-EACCES);
-
-		uc->uc_cap = CAP_EMPTY_SET;
-		uc->uc_suppgids[0] = -1;
-		uc->uc_suppgids[1] = -1;
-	}
+		RETURN(-EACCES);
 
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
@@ -532,6 +524,15 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		}
 	}
 	uc->uc_identity = identity;
+
+	if (nodemap &&
+	    (uc->uc_o_uid == nodemap->nm_squash_uid ||
+	     uc->uc_o_gid == nodemap->nm_squash_gid)) {
+
+		uc->uc_cap = CAP_EMPTY_SET;
+		uc->uc_suppgids[0] = -1;
+		uc->uc_suppgids[1] = -1;
+	}
 
 	/* process root_squash here. */
 	mdt_root_squash(info,
