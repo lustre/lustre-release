@@ -283,7 +283,7 @@ int seq_server_check_and_alloc_super(const struct lu_env *env,
 		}
 	}
 
-	if (lu_seq_range_is_zero(&seq->lss_lowater_set))
+	if (lu_seq_range_is_zero(&seq->lss_lowater_set) && seq->lss_set_width)
 		__seq_set_init(env, seq);
 
 	RETURN(rc);
@@ -316,7 +316,13 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 		RETURN(rc);
 	}
 
-	rc = range_alloc_set(env, out, seq);
+	if (seq->lss_set_width) {
+		rc = range_alloc_set(env, out, seq);
+	} else {
+		range_alloc(out, space, seq->lss_width);
+		rc = seq_store_update(env, seq, NULL, 1);
+	}
+
 	if (rc != 0) {
 		CERROR("%s: Allocated meta-sequence failed: rc = %d\n",
 		       seq->lss_name, rc);
@@ -458,12 +464,10 @@ static void seq_server_debugfs_init(struct lu_server_seq *seq)
 				    seq, &seq_fld_debugfs_seq_fops);
 }
 
-int seq_server_init(const struct lu_env *env,
-		    struct lu_server_seq *seq,
-		    struct dt_device *dev,
-		    const char *prefix,
-		    enum lu_mgr_type type,
-		    struct seq_server_site *ss)
+int seq_server_init(const struct lu_env *env, struct lu_server_seq *seq,
+		    struct dt_device *dev, const char *prefix,
+		    enum lu_mgr_type type, struct seq_server_site *ss,
+		    bool set_batch_width)
 {
 	int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
 	ENTRY;
@@ -491,7 +495,7 @@ int seq_server_init(const struct lu_env *env,
 
 	lu_seq_range_init(&seq->lss_lowater_set);
 	lu_seq_range_init(&seq->lss_hiwater_set);
-	seq->lss_set_width = LUSTRE_SEQ_BATCH_WIDTH;
+	seq->lss_set_width = set_batch_width ? LUSTRE_SEQ_BATCH_WIDTH : 0;
 
 	mutex_init(&seq->lss_mutex);
 

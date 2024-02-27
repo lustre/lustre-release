@@ -779,7 +779,7 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 		GOTO(out_name, rc = -ENOMEM);
 
 	rc = seq_server_init(env, ss->ss_server_seq, ofd->ofd_osd, obd_name,
-			     LUSTRE_SEQ_SERVER, ss);
+			     LUSTRE_SEQ_SERVER, ss, false);
 	if (rc) {
 		CERROR("%s: seq server init error: rc = %d\n", obd_name, rc);
 		GOTO(out_server, rc);

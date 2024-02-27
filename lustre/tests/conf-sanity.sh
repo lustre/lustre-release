@@ -11958,6 +11958,34 @@ test_154() {
 }
 run_test 154 "expand .. on rename after MDT backup restore"
 
+test_155() {
+	(( OST1_VERSION >= $(version_code 2.16.50.134) )) ||
+		skip "Need OST version at least 2.16.50.134"
+
+	reformat_and_config
+	setupall
+
+	rm -rf $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	force_new_seq mds1
+	touch $DIR/$tdir/$tfile
+	local seq1=$($LFS getstripe --yaml $DIR/$tdir/$tfile |
+		     awk -F ':' '/l_fid:/ {print $2}' | tr -d [:blank:])
+
+	stopall
+	setupall
+
+	force_new_seq mds1
+	touch $DIR/$tdir/${tfile}2
+	local seq2=$($LFS getstripe --yaml $DIR/$tdir/${tfile}2 |
+		     awk -F ':' '/l_fid:/ {print $2}' | tr -d [:blank:])
+
+	(( seq2 == seq1 + 1 )) || error "gap in seq: old $seq1 new $seq2"
+}
+run_test 155 "gap in seq allocation from ofd after restarting"
+
 cleanup_200() {
 	local modopts=$1
 	stopall

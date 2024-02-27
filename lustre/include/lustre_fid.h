@@ -484,12 +484,10 @@ struct seq_server_site {
 
 /* Server methods */
 
-int seq_server_init(const struct lu_env *env,
-		    struct lu_server_seq *seq,
-		    struct dt_device *dev,
-		    const char *prefix,
-		    enum lu_mgr_type type,
-		    struct seq_server_site *ss);
+int seq_server_init(const struct lu_env *env, struct lu_server_seq *seq,
+		    struct dt_device *dev, const char *prefix,
+		    enum lu_mgr_type type, struct seq_server_site *ss,
+		    bool set_batch_width);
 
 void seq_server_fini(struct lu_server_seq *seq,
 		     const struct lu_env *env);

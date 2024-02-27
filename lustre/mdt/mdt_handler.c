@@ -5595,7 +5595,7 @@ static int mdt_seq_init(const struct lu_env *env, struct mdt_device *mdt)
 
 		rc = seq_server_init(env, ss->ss_control_seq, mdt->mdt_bottom,
 				     mdt_obd_name(mdt), LUSTRE_SEQ_CONTROLLER,
-				     ss);
+				     ss, true);
 		if (rc)
 			GOTO(out_seq_fini, rc);
 	}
@@ -5606,7 +5606,7 @@ static int mdt_seq_init(const struct lu_env *env, struct mdt_device *mdt)
 		GOTO(out_seq_fini, rc = -ENOMEM);
 
 	rc = seq_server_init(env, ss->ss_server_seq, mdt->mdt_bottom,
-			     mdt_obd_name(mdt), LUSTRE_SEQ_SERVER, ss);
+			     mdt_obd_name(mdt), LUSTRE_SEQ_SERVER, ss, true);
 	if (rc)
 		GOTO(out_seq_fini, rc);
 
