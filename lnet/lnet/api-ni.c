@@ -5437,6 +5437,26 @@ report_err:
 	return rc;
 }
 
+static const struct ln_key_list net_update_props_list = {
+	.lkl_maxattr			= LNET_NET_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_NET_ATTR_HDR]		= {
+			.lkp_value		= "",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_NET_ATTR_TYPE]		= {
+			.lkp_value		= "net type",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_NET_ATTR_LOCAL]           = {
+			.lkp_value		= "local NI(s)",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED
+		},
+	},
+};
+
 static int lnet_net_show_dump(struct sk_buff *msg,
 			      struct netlink_callback *cb)
 {
@@ -5446,7 +5466,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 #endif
 	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 	int portid = NETLINK_CB(cb->skb).portid;
-	bool found = false, started = true;
+	bool found = false, started = false;
 	const struct lnet_lnd *lnd = NULL;
 	int idx = nlist->lngl_idx, rc = 0;
 	int seq = cb->nlh->nlmsg_seq;
@@ -5465,6 +5485,10 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 
 		if (nlist->lngl_net_id != LNET_NET_ANY &&
 		    nlist->lngl_net_id != net->net_id)
+			continue;
+
+		if (cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED &&
+		    LNET_NETTYP(net->net_id) == LOLND)
 			continue;
 
 		if (gnlh->version && LNET_NETTYP(net->net_id) != LOLND) {
@@ -5502,9 +5526,10 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 
 			if (lnd) {
 				all[ARRAY_SIZE(all) - 2] = lnd->lnd_keys;
-				if (idx)
+				if (idx) {
+					all[0] = &net_update_props_list;
 					flags |= NLM_F_REPLACE;
-				started = true;
+				}
 			}
 
 			rc = lnet_genl_send_scalar_list(msg, portid, seq,
@@ -5514,6 +5539,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 				NL_SET_ERR_MSG(extack, "failed to send key table");
 				GOTO(net_unlock, rc);
 			}
+			started = true;
 		}
 
 		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
@@ -5541,13 +5567,15 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 			ni_attr = nla_nest_start(msg, dev++);
 			found = true;
 			lnet_ni_lock(ni);
-			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
-				       libcfs_nidstr(&ni->ni_nid));
-			if (!nid_is_lo0(&ni->ni_nid) &&
-			    lnet_ni_get_status_locked(ni) != LNET_NI_STATUS_UP)
-				status = "down";
-			nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS,
-				       status);
+			if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
+				nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
+					       libcfs_nidstr(&ni->ni_nid));
+				if (!nid_is_lo0(&ni->ni_nid) &&
+				    lnet_ni_get_status_locked(ni) != LNET_NI_STATUS_UP)
+					status = "down";
+				nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_STATUS,
+					       status);
+			}
 
 			if (!nid_is_lo0(&ni->ni_nid) && ni->ni_interface) {
 				struct nlattr *intf_nest, *intf_attr;
@@ -5574,6 +5602,11 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 				struct nlattr *stats_attr, *ni_stats;
 				struct nlattr *tun_attr, *ni_tun;
 				int j;
+
+				if (cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED) {
+					lnet_ni_unlock(ni);
+					goto skip_msg_stats;
+				}
 
 				stats.iel_send_count = lnet_sum_stats(&ni->ni_stats,
 								      LNET_STATS_TYPE_SEND);
@@ -5727,7 +5760,9 @@ skip_msg_stats:
 					nla_nest_end(msg, lnd_tun_attr);
 				}
 
-				nla_put_s32(msg, LNET_NET_LOCAL_NI_DEV_CPT, ni->ni_dev_cpt);
+				if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED))
+					nla_put_s32(msg, LNET_NET_LOCAL_NI_DEV_CPT,
+						    ni->ni_dev_cpt);
 
 				/* Report cpts. We could send this as a nested list
 				 * of integers but older versions of the tools
@@ -6959,12 +6994,14 @@ static int lnet_route_show_dump(struct sk_buff *msg,
 			nla_put_u32(msg, LNET_ROUTE_ATTR_HEALTH_SENSITIVITY,
 				    prop->lrp_sensitivity);
 
-			nla_put_string(msg, LNET_ROUTE_ATTR_STATE,
-				       prop->lrp_flags & LNET_RT_ALIVE ?
-				       "up" : "down");
-			nla_put_string(msg, LNET_ROUTE_ATTR_TYPE,
-				       prop->lrp_flags & LNET_RT_MULTI_HOP ?
-				       "multi-hop" : "single-hop");
+			if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
+				nla_put_string(msg, LNET_ROUTE_ATTR_STATE,
+					       prop->lrp_flags & LNET_RT_ALIVE ?
+					       "up" : "down");
+				nla_put_string(msg, LNET_ROUTE_ATTR_TYPE,
+					       prop->lrp_flags & LNET_RT_MULTI_HOP ?
+					       "multi-hop" : "single-hop");
+			}
 		}
 		genlmsg_end(msg, hdr);
 	}
@@ -7419,6 +7456,9 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 				}
 			}
 
+			if (cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED)
+				goto skip_state;
+
 			if (lnet_isrouter(lpni) ||
 			    lnet_peer_aliveness_enabled(lpni)) {
 				nla_put_string(msg, LNET_PEER_NI_LIST_ATTR_STATE,
@@ -7428,7 +7468,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 				nla_put_string(msg, LNET_PEER_NI_LIST_ATTR_STATE,
 					       "NA");
 			}
-
+skip_state:
 			if (gnlh->version) {
 				struct lnet_ioctl_element_msg_stats lpni_msg_stats;
 				struct nlattr *send_stats_list, *send_stats;

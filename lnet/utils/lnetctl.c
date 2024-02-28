@@ -24,6 +24,10 @@
 #define LNET_CONFIGURE		true
 #define LNET_UNCONFIGURE	false
 
+#ifndef NLM_F_DUMP_FILTERED
+#define NLM_F_DUMP_FILTERED    0x20
+#endif
+
 static int jt_config_lnet(int argc, char **argv);
 static int jt_unconfig_lnet(int argc, char **argv);
 static int jt_add_route(int argc, char **argv);
@@ -3909,22 +3913,24 @@ static int jt_export(int argc, char **argv)
 {
 	struct cYAML *show_rc = NULL;
 	struct cYAML *err_rc = NULL;
+	int flags = NLM_F_DUMP;
 	int rc;
 	FILE *f = NULL;
 	int opt;
 	bool backup = false;
 	char *file = NULL;
-
 	const char *const short_options = "bh";
 	static const struct option long_options[] = {
 		{ .name = "backup", .has_arg = no_argument, .val = 'b' },
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'b':
+			flags |= NLM_F_DUMP_FILTERED;
 			backup = true;
 			break;
 		case 'h':
@@ -3949,6 +3955,36 @@ static int jt_export(int argc, char **argv)
 			return -1;
 	}
 
+	rc = yaml_lnet_config_ni(NULL, NULL, NULL, NULL, -1, NULL,
+				 flags & NLM_F_DUMP_FILTERED ? 1 : 2,
+				 flags);
+	if (rc < 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+	}
+
+	rc = yaml_lnet_route(NULL, NULL, -1, -1, -1, LNET_GENL_VERSION, flags);
+	if (rc < 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+	}
+
+	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc, backup);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = yaml_lnet_peer(NULL, NULL, false, -1, false, false,
+			    flags & NLM_F_DUMP_FILTERED ? 0 : 3, flags);
+	if (rc < 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+	}
+	goto show_others;
+
+old_api:
 	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
@@ -3977,7 +4013,7 @@ static int jt_export(int argc, char **argv)
 		cYAML_free_tree(err_rc);
 		err_rc = NULL;
 	}
-
+show_others:
 	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);

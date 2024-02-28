@@ -38,6 +38,10 @@
 } while (0)
 #endif
 
+#ifndef NLM_F_DUMP_FILTERED
+#define NLM_F_DUMP_FILTERED   0x20    /* Dump was filtered as requested */
+#endif
+
 #ifndef HAVE_NLA_STRDUP
 char *nla_strdup(const struct nlattr *nla, gfp_t flags);
 #endif /* !HAVE_NLA_STRDUP */

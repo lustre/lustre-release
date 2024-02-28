@@ -192,8 +192,8 @@ validate_peer_nids() {
 	# The primary nid also shows up in the list of secondary nids
 	local expect_s="$(($num_peers + $(($nids_per_peer*$num_peers))))"
 
-	local actual_p=$(grep -c -- '- primary nid:' $TMP/sanity-lnet-$testnum-actual.yaml)
-	local actual_s=$(grep -c -- '- nid:' $TMP/sanity-lnet-$testnum-actual.yaml)
+	local actual_p=$(awk '/-\s+primary nid:/{print $NF}' $TMP/sanity-lnet-$testnum-actual.yaml | wc -l)
+	local actual_s=$(awk '/-\s+nid:/{print $NF}' $TMP/sanity-lnet-$testnum-actual.yaml | wc -l)
 	if [[ $expect_p -ne $actual_p ]]; then
 		compare_yaml_files
 		error "Expected $expect_p but found $actual_p primary nids"
