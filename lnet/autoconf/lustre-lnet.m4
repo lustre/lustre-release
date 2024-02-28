@@ -310,29 +310,15 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 		fi
 	fi
 
-	# we suspect that the found in-kernel OFED source+headers are good
-	# the above compile test *could* be repeated with in-kernel paths ... 
+	# we expect that the found in-kernel OFED source+headers are good
 	INT_O2IB_SYMBOLS=""
 	CHECK_SYMBOLS=""
-	if test -f $INT_O2IBPATH/Module.symvers; then
-		CHECK_SYMBOLS=$INT_O2IBPATH/Module.symvers
-	elif test "x$SUSE_KERNEL" = "xyes"; then
-		CHECK_SYMBOLS=$(find ${INT_O2IBPATH}* -name Module.symvers -printf "%p ")
-		# Select only the current 'flavor' if there is more than 1
-		NUM_AVAIL=$(find ${INT_O2IBPATH}* -name Module.symvers | wc -l)
-		if test ${NUM_AVAIL} -gt 1; then
-			PREFER=$(basename ${LINUX_OBJ})
-			for F in $(find ${O2IBPATH}-obj -name Module.symvers)
-			do
-				maybe=$(echo $F | grep "/${PREFER}")
-				if test "x$maybe" != "x"; then
-					CHECK_SYMBOLS=$F
-				fi
-			done
-		fi
-	elif test -f $LINUX_OBJ/Module.symvers; then
+	if test -f $LINUX_OBJ/Module.symvers; then
 		# Debian symvers is in the arch tree
+		# SUSE symvers is in the OBJ tree [KVER-obj/<arch>/<flavor>/]
 		CHECK_SYMBOLS=$LINUX_OBJ/Module.symvers
+	elif test -f $INT_O2IBPATH/Module.symvers; then
+		CHECK_SYMBOLS=$INT_O2IBPATH/Module.symvers
 	fi
 
 	if test -n "$CHECK_SYMBOLS"; then
