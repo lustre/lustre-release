@@ -464,9 +464,10 @@ out:
 		ll_stats_ops_tally(sbi, LPROC_LL_RELEASE,
 				   ktime_us_delta(ktime_get(), kstart));
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p), flags %o\n",
+	       "COMPLETED file %s:"DFID"(%p), flags %o, rc = %d\n",
 	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags,
+	       rc);
 
 	RETURN(rc);
 }
@@ -1090,9 +1091,10 @@ out_nofiledata:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p), flags %o\n",
+	       "COMPLETED file %s:"DFID"(%p), flags %o, rc = %d\n",
 	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
+	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags,
+	       rc);
 
 	return rc;
 }
@@ -2269,10 +2271,10 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu\n",
+	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu, rc = %zu\n",
 	       file_dentry(file)->d_name.name,
 	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(to));
+	       iov_iter_count(to), result);
 
 	RETURN(result);
 }
@@ -2433,10 +2435,10 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu\n",
+	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu, rc = %zu\n",
 	       file_dentry(file)->d_name.name,
 	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(from));
+	       iov_iter_count(from), rc_normal);
 
 	RETURN(rc_normal);
 }
@@ -4918,7 +4920,7 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK,
 				   ktime_us_delta(ktime_get(), kstart));
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "COMPLETED file %s:"DFID", offset: %lld, type: %s, result: %lld\n",
+	       "COMPLETED file %s:"DFID", offset: %lld, type: %s, rc = %lld\n",
 	       file_dentry(file)->d_name.name,
 	       PFID(ll_inode2fid(file_inode(file))), offset,
 	       ll_seek_names[origin], retval);

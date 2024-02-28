@@ -460,9 +460,10 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu, rc %d\n",
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
-	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff);
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff,
+	       result);
 
 	return result;
 }
@@ -540,10 +541,10 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu, rc %d\n",
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
 	       vma, vma->vm_start, vma->vm_end, vma->vm_flags,
-	       vmf->page->index);
+	       vmf->page->index, result);
 	return result;
 }
 

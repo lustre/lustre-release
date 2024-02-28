@@ -2522,13 +2522,13 @@ out:
 				   ktime_us_delta(ktime_get(), kstart));
 clear:
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
+	       "COMPLETED file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld, rc %d\n",
 	       dentry->d_name.name, PFID(ll_inode2fid(inode)), inode,
 	       i_size_read(inode), attr->ia_valid, attr->ia_mode,
 	       attr->ia_uid.val, attr->ia_gid.val, attr->ia_size,
 	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,
 	       (long long) attr->ia_mtime.tv_sec, attr->ia_mtime.tv_nsec,
-	       (long long) attr->ia_ctime.tv_sec, attr->ia_ctime.tv_nsec);
+	       (long long) attr->ia_ctime.tv_sec, attr->ia_ctime.tv_nsec, rc);
 
 	ll_clear_inode_lock_owner(inode);
 
