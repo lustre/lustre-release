@@ -527,6 +527,17 @@ test_quota_performance() {
 	rm -f $TESTFILE
 }
 
+set_max_dirty_mb() {
+	local mdmb=$1 # MB
+	local mdmb_param="osc.*.max_dirty_mb"
+	local old_mdmb=($($LCTL get_param -n $mdmb_param))
+
+	echo "old_mdmb $old_mdmb mdmb $mdmb"
+	stack_trap "$LCTL set_param $mdmb_param=$old_mdmb" EXIT
+	$LCTL set_param $mdmb_param=$mdmb ||
+		error "set max_dirty_mb to $mdmb failed"
+}
+
 # test basic quota performance b=21696
 test_0() {
 	local MB=100 # MB
@@ -1050,13 +1061,10 @@ test_1g() {
 	local global_limit=40 # MB
 	local testfile="$DIR/$tdir/$tfile-0"
 	local qpool="qpool1"
-	local mdmb_param="osc.*.max_dirty_mb"
-	local max_dirty_mb=$($LCTL get_param -n $mdmb_param | head -1)
 
 	mds_supports_qp
 	setup_quota_test || error "setup quota failed with $?"
-	$LCTL set_param $mdmb_param=1
-	stack_trap "$LCTL set_param $mdmb_param=$max_dirty_mb" EXIT
+	set_max_dirty_mb 1
 
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -1092,7 +1100,7 @@ test_1g() {
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 	sleep 5
-	$RUNAS $DD of=$testfile count=$((OSTCOUNT*3)) seek=$limit &&
+	$RUNAS $DD of=$testfile count=$OSTCOUNT seek=$limit oflag=sync &&
 		quota_error u $TSTUSR \
 			"user write success, but expect EDQUOT"
 
@@ -1526,6 +1534,7 @@ test_3a() {
 		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit) / 1024 ))
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	set_max_dirty_mb 1
 
 	echo "User quota (soft limit:$limit MB  grace:$grace seconds)"
 	# make sure the system is clean
@@ -1599,6 +1608,7 @@ test_3b() {
 	echo "grace $grace glbl_grace $glbl_grace"
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	set_max_dirty_mb 1
 
 	echo "User quota in $qpool(soft limit:$limit MB  grace:$grace seconds)"
 	# make sure the system is clean
@@ -1702,6 +1712,7 @@ test_3c() {
 	echo "grace1 $grace1 grace2 $grace2 glbl_grace $glbl_grace"
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	set_max_dirty_mb 1
 
 	echo "User quota in qpool2(soft:$limit2 MB grace:$grace2 seconds)"
 	# make sure the system is clean
