@@ -48,7 +48,8 @@
  * as the trace file magic. When downgrade to such old release, the old LFSCK
  * will not recognize the new LFSCK_NAMESPACE_MAGIC_V2 in the new trace file,
  * then it will reset the whole LFSCK, and will not cause start failure. The
- * similar case will happen when upgrade from such old release. */
+ * similar case will happen when upgrade from such old release.
+ */
 #define LFSCK_NAMESPACE_MAGIC		LFSCK_NAMESPACE_MAGIC_V3
 
 enum lfsck_nameentry_check {
@@ -63,7 +64,7 @@ lfsck_namespace_assistant_req_init(struct lfsck_instance *lfsck,
 				   struct lu_dirent *ent, __u16 type)
 {
 	struct lfsck_namespace_req *lnr;
-	int			    size;
+	int size;
 
 	size = sizeof(*lnr) + (ent->lde_namelen & ~3) + 4;
 	OBD_ALLOC(lnr, size);
@@ -257,8 +258,8 @@ static void lfsck_namespace_record_failure(const struct lu_env *env,
 	    lfsck_pos_is_eq(&pos, &ns->ln_pos_first_inconsistent) < 0) {
 		ns->ln_pos_first_inconsistent = pos;
 
-		CDEBUG(D_LFSCK, "%s: namespace LFSCK hit first non-repaired "
-		       "inconsistency at the pos [%llu, "DFID", %#llx]\n",
+		CDEBUG(D_LFSCK,
+		       "%s: namespace LFSCK hit first non-repaired inconsistency at the pos [%llu, "DFID", %#llx]\n",
 		       lfsck_lfsck2name(lfsck),
 		       ns->ln_pos_first_inconsistent.lp_oit_cookie,
 		       PFID(&ns->ln_pos_first_inconsistent.lp_dir_parent),
@@ -282,7 +283,7 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 	struct lfsck_assistant_data *lad = com->lc_data;
 	struct lfsck_namespace *ns = com->lc_file_ram;
 	unsigned long *bitmap = lad->lad_bitmap;
-	ssize_t	size;
+	ssize_t size;
 	__u32 nbits;
 	int rc;
 
@@ -358,16 +359,17 @@ static int lfsck_namespace_load(const struct lu_env *env,
 		lfsck_namespace_le_to_cpu(ns,
 				(struct lfsck_namespace *)com->lc_file_disk);
 		if (ns->ln_magic != LFSCK_NAMESPACE_MAGIC) {
-			CDEBUG(D_LFSCK, "%s: invalid lfsck_namespace magic "
-			       "%#x != %#x\n", lfsck_lfsck2name(com->lc_lfsck),
-			       ns->ln_magic, LFSCK_NAMESPACE_MAGIC);
+			CDEBUG(D_LFSCK,
+			       "%s: invalid lfsck_namespace magic %#x != %#x\n",
+			       lfsck_lfsck2name(com->lc_lfsck), ns->ln_magic,
+			       LFSCK_NAMESPACE_MAGIC);
 			rc = -ESTALE;
 		} else {
 			rc = 0;
 		}
 	} else if (rc != -ENODATA) {
-		CDEBUG(D_LFSCK, "%s: fail to load lfsck_namespace, "
-		       "expected = %d: rc = %d\n",
+		CDEBUG(D_LFSCK,
+		       "%s: fail to load lfsck_namespace, expected = %d: rc = %d\n",
 		       lfsck_lfsck2name(com->lc_lfsck), len, rc);
 		if (rc >= 0)
 			rc = -ESTALE;
@@ -481,17 +483,17 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 				 const struct lu_fid *fid,
 				 const __u8 flags, bool add)
 {
-	struct lfsck_instance	*lfsck  = com->lc_lfsck;
-	struct dt_object	*obj;
-	struct lu_fid		*key    = &lfsck_env_info(env)->lti_fid3;
-	struct dt_device	*dev;
-	struct thandle		*th	= NULL;
-	int			 idx;
-	int			 rc	= 0;
-	__u8			 old	= 0;
-	__u8			 new	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_object *obj;
+	struct lu_fid *key = &lfsck_env_info(env)->lti_fid3;
+	struct dt_device *dev;
+	struct thandle *th = NULL;
+	int idx;
+	int rc = 0;
+	__u8 old = 0;
+	__u8 new = 0;
 
+	ENTRY;
 	LASSERT(flags != 0);
 
 	if (unlikely(!fid_is_sane(fid)))
@@ -578,8 +580,7 @@ log:
 		dt_trans_stop(env, dev, th);
 
 	CDEBUG(rc ? D_LFSCK : D_INFO,
-	       "%s: namespace LFSCK %s flags for "DFID" in the "
-	       "trace file, flags %x, old %x, new %x: rc = %d\n",
+	       "%s: namespace LFSCK %s flags for "DFID" in the trace file, flags %x, old %x, new %x: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), add ? "add" : "del", PFID(fid),
 	       (__u32)flags, (__u32)old, (__u32)new, rc);
 
@@ -594,10 +595,10 @@ int lfsck_namespace_check_exist(const struct lu_env *env,
 				struct dt_object *dir,
 				struct dt_object *obj, const char *name)
 {
-	struct lu_fid	 *fid = &lfsck_env_info(env)->lti_fid;
-	int		  rc;
-	ENTRY;
+	struct lu_fid *fid = &lfsck_env_info(env)->lti_fid;
+	int rc;
 
+	ENTRY;
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		RETURN(LFSCK_NAMEENTRY_DEAD);
 
@@ -621,7 +622,8 @@ static int lfsck_declare_namespace_exec_dir(const struct lu_env *env,
 	int rc;
 
 	/* For remote updating LINKEA, there may be further LFSCK action
-	 * on remote MDT after the updating, so update the LINKEA ASAP. */
+	 * on remote MDT after the updating, so update the LINKEA ASAP.
+	 */
 	if (dt_object_remote(obj))
 		handle->th_sync = 1;
 
@@ -692,12 +694,12 @@ static int lfsck_namespace_links_remove(const struct lu_env *env,
 					struct lfsck_component *com,
 					struct dt_object *obj)
 {
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	struct thandle			*th	= NULL;
-	int				 rc	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	struct thandle *th = NULL;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(dt_object_remote(obj) == 0);
 
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
@@ -730,8 +732,8 @@ stop:
 	dt_trans_stop(env, dev, th);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK remove invalid linkEA "
-	       "for the object "DFID": rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK remove invalid linkEA for the object "DFID": rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(obj)), rc);
 
 	if (rc == 0) {
@@ -814,8 +816,7 @@ static void lfsck_linkea_del_buf(struct linkea_data *ldata,
 {
 	LASSERT(ldata->ld_leh != NULL && ldata->ld_lee != NULL);
 
-	/* If current record is corrupted, all the subsequent
-	 * records will be dropped. */
+	/* Current record corrupted?, all subsequent records will be dropped. */
 	if (unlikely(!linkea_reclen_is_valid(ldata))) {
 		void *ptr = ldata->ld_lee;
 
@@ -844,9 +845,9 @@ static int lfsck_namespace_filter_linkea_entry(struct linkea_data *ldata,
 					       struct lu_fid *pfid,
 					       bool remove)
 {
-	struct link_ea_entry	*oldlee;
-	int			 oldlen;
-	int			 repeated = 0;
+	struct link_ea_entry *oldlee;
+	int oldlen;
+	int repeated = 0;
 
 	oldlee = ldata->ld_lee;
 	oldlen = ldata->ld_reclen;
@@ -918,27 +919,27 @@ static int lfsck_namespace_insert_orphan(const struct lu_env *env,
 					 const char *infix, const char *type,
 					 int *count)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_name			*cname	= &info->lti_name;
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	struct lu_attr			*la	= &info->lti_la2;
-	const struct lu_fid		*cfid	= lfsck_dto2fid(orphan);
-	const struct lu_fid		*pfid;
-	struct lu_fid			 tfid;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dev(orphan);
-	struct dt_object		*parent;
-	struct thandle			*th	= NULL;
-	struct lfsck_lock_handle	*pllh	= &info->lti_llh;
-	struct lustre_handle		 clh	= { 0 };
-	struct linkea_data		 ldata2	= { NULL };
-	struct lu_buf			 linkea_buf;
-	int				 namelen;
-	int				 idx	= 0;
-	int				 rc	= 0;
-	bool				 exist	= false;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_name *cname = &info->lti_name;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lu_attr *la = &info->lti_la2;
+	const struct lu_fid *cfid = lfsck_dto2fid(orphan);
+	const struct lu_fid *pfid;
+	struct lu_fid tfid;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck_obj2dev(orphan);
+	struct dt_object *parent;
+	struct thandle *th = NULL;
+	struct lfsck_lock_handle *pllh = &info->lti_llh;
+	struct lustre_handle clh = { 0 };
+	struct linkea_data ldata2 = { NULL };
+	struct lu_buf linkea_buf;
+	int namelen;
+	int idx = 0;
+	int rc = 0;
+	bool exist = false;
 
+	ENTRY;
 	cname->ln_name = NULL;
 	if (unlikely(lfsck->li_lpf_obj == NULL))
 		GOTO(log, rc = -ENXIO);
@@ -963,8 +964,7 @@ again:
 	if (rc != 0)
 		GOTO(log, rc);
 
-	/* Re-check whether the name conflict with othrs after taken
-	 * the ldlm lock. */
+	/* Re-check whether name conflict with othrs after taken ldlm lock. */
 	rc = dt_lookup_dir(env, parent, info->lti_key, &tfid);
 	if (rc == 0) {
 		if (!lu_fid_eq(cfid, &tfid)) {
@@ -1104,8 +1104,8 @@ stop:
 log:
 	lfsck_ibits_unlock(&clh, LCK_EX);
 	lfsck_unlock(pllh);
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK insert orphan for the "
-	       "object "DFID", name = %s: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK insert orphan for the object "DFID", name = %s: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid),
 	       cname->ln_name != NULL ? cname->ln_name : "<NULL>", rc);
 
@@ -1264,7 +1264,8 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	ENTRY;
 
 	/* @parent/@child may be based on lfsck->li_bottom,
-	 * but here we need the object based on the lfsck->li_next. */
+	 * but here we need the object based on the lfsck->li_next.
+	 */
 
 	parent = lfsck_object_locate(dev, parent);
 	if (IS_ERR(parent))
@@ -1290,8 +1291,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (rc == 1) {
 		rc = lfsck_read_stripe_lmv(env, lfsck, parent, lmv);
 		if (!rc) {
-			/*
-			 * To add a shard, we need to convert parent to a
+			/* To add a shard, we need to convert parent to a
 			 * plain directory by deleting its LMV, and after
 			 * insertion set it back.
 			 */
@@ -1403,8 +1403,8 @@ unlock:
 	lfsck_unlock(llh);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK insert object "DFID" with "
-	       "the name %s and type %o to the parent "DFID": rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK insert object "DFID" with the name %s and type %o to the parent "DFID": rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid), lname->ln_name,
 	       lfsck_object_type(child) & S_IFMT, PFID(pfid), rc);
 
@@ -1440,31 +1440,31 @@ static int lfsck_namespace_create_orphan_dir(const struct lu_env *env,
 					     struct dt_object *orphan,
 					     struct lmv_mds_md_v1 *lmv)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_attr			*la	= &info->lti_la;
-	struct dt_allocation_hint	*hint	= &info->lti_hint;
-	struct dt_object_format		*dof	= &info->lti_dof;
-	struct lu_name			*cname	= &info->lti_name2;
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
-	const struct lu_fid		*cfid	= lfsck_dto2fid(orphan);
-	struct lu_fid			 tfid;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct dt_device		*dev	= lfsck_obj2dev(orphan);
-	struct dt_object		*parent	= NULL;
-	struct thandle			*th	= NULL;
-	struct lfsck_lock_handle	*llh    = &info->lti_llh;
-	struct linkea_data		 ldata	= { NULL };
-	struct lu_buf			 linkea_buf;
-	struct lu_buf			 lmv_buf;
-	char				 name[32];
-	int				 namelen;
-	int				 idx	= 0;
-	int				 rc	= 0;
-	int				 rc1	= 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *la = &info->lti_la;
+	struct dt_allocation_hint *hint = &info->lti_hint;
+	struct dt_object_format *dof = &info->lti_dof;
+	struct lu_name *cname = &info->lti_name2;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lmv_mds_md_v1 *lmv2 = &info->lti_lmv2;
+	const struct lu_fid *cfid = lfsck_dto2fid(orphan);
+	struct lu_fid tfid;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct dt_device *dev = lfsck_obj2dev(orphan);
+	struct dt_object *parent = NULL;
+	struct thandle *th = NULL;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	struct lu_buf lmv_buf;
+	char name[32];
+	int namelen;
+	int idx = 0;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	LASSERT(!dt_object_exists(orphan));
 
 	cname->ln_name = NULL;
@@ -1517,8 +1517,9 @@ again:
 	if (rc != 0)
 		GOTO(log, rc);
 
-	/* Re-check whether the name conflict with othrs after taken
-	 * the ldlm lock. */
+	/* Re-check whether the name conflict with others after taken
+	 * the ldlm lock.
+	 */
 	rc = dt_lookup_dir(env, parent, name, &tfid);
 	if (unlikely(rc == 0)) {
 		lfsck_unlock(llh);
@@ -1552,7 +1553,8 @@ again:
 		GOTO(unlock1, rc = PTR_ERR(th));
 
 	/* Sync the remote transaction to guarantee that the subsequent
-	 * lock against the @orphan can find the @orphan in time. */
+	 * lock against the @orphan can find the @orphan in time.
+	 */
 	if (dt_object_remote(orphan))
 		th->th_sync = 1;
 
@@ -1667,8 +1669,8 @@ unlock1:
 	lfsck_unlock(llh);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK create orphan dir for "
-	       "the object "DFID", name = %s: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK create orphan dir for the object "DFID", name = %s: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid),
 	       cname->ln_name != NULL ? cname->ln_name : "<NULL>", rc);
 
@@ -1709,17 +1711,17 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 					 struct lu_fid *pfid,
 					 bool next)
 {
-	struct lfsck_instance		*lfsck	   = com->lc_lfsck;
-	struct dt_device		*dev	   = lfsck_obj2dev(obj);
-	struct lfsck_bookmark		*bk	   = &lfsck->li_bookmark_ram;
-	struct thandle			*th	   = NULL;
-	struct lustre_handle		 lh	   = { 0 };
-	struct linkea_data		 ldata_new = { NULL };
-	struct lu_buf			 linkea_buf;
-	int				 buflen    = 0;
-	int				 rc	   = 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct thandle *th = NULL;
+	struct lustre_handle lh = { 0 };
+	struct linkea_data ldata_new = { NULL };
+	struct lu_buf linkea_buf;
+	int buflen = 0;
+	int rc = 0;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(log, rc = 0);
 
@@ -1812,8 +1814,8 @@ unlock1:
 	lfsck_ibits_unlock(&lh, LCK_EX);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK remove %s linkEA entry "
-	       "for the object: "DFID", parent "DFID", name %.*s\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK remove %s linkEA entry for the object: "DFID", parent "DFID", name %.*s\n",
 	       lfsck_lfsck2name(lfsck), next ? "invalid" : "redundant",
 	       PFID(lfsck_dto2fid(obj)), PFID(pfid), cname->ln_namelen,
 	       cname->ln_name);
@@ -1854,12 +1856,12 @@ static int lfsck_namespace_shrink_linkea_cond(const struct lu_env *env,
 					      struct lu_name *cname,
 					      struct lu_fid *pfid)
 {
-	struct lfsck_thread_info *info	= lfsck_env_info(env);
-	struct lu_fid		 *cfid	= &info->lti_fid3;
-	struct lfsck_lock_handle *llh	= &info->lti_llh;
-	int			  rc;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_fid *cfid = &info->lti_fid3;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	int rc;
 
+	ENTRY;
 	rc = lfsck_lock(env, com->lc_lfsck, parent, cname->ln_name, llh,
 			MDS_INODELOCK_UPDATE, LCK_PR);
 	if (rc != 0)
@@ -1885,7 +1887,8 @@ static int lfsck_namespace_shrink_linkea_cond(const struct lu_env *env,
 	 * may add new linkEA entry after the ldlm lock released. If other
 	 * has removed the specified linkEA entry by race, then it is OK,
 	 * because the subsequent lfsck_namespace_shrink_linkea() can handle
-	 * such case. */
+	 * such case.
+	 */
 	lfsck_unlock(llh);
 	if (rc == -ENOENT) {
 		rc = lfsck_namespace_shrink_linkea(env, com, child, ldata,
@@ -1898,7 +1901,8 @@ static int lfsck_namespace_shrink_linkea_cond(const struct lu_env *env,
 		RETURN(rc);
 
 	/* The LFSCK just found some internal status of cross-MDTs
-	 * create operation. That is normal. */
+	 * create operation. That is normal.
+	 */
 	if (lu_fid_eq(cfid, lfsck_dto2fid(child))) {
 		linkea_next_entry(ldata);
 
@@ -1940,26 +1944,27 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 					const struct lu_fid *cfid,
 					const struct lu_name *cname)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_attr			*la	= &info->lti_la;
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	struct lu_fid			 tfid;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *la = &info->lti_la;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lu_fid tfid;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
 	/* The child and its name may be on different MDTs. */
-	struct dt_device		*dev	= lfsck->li_next;
-	const char			*name	= cname->ln_name;
-	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
-	struct dt_object		*cobj	= NULL;
-	struct lfsck_lock_handle	*pllh	= &info->lti_llh;
-	struct lustre_handle		 clh	= { 0 };
-	struct linkea_data		 ldata	= { NULL };
-	struct thandle			*th	= NULL;
-	bool				 exist	= true;
-	int				 rc	= 0;
-	ENTRY;
+	struct dt_device *dev = lfsck->li_next;
+	const char *name = cname->ln_name;
+	const struct lu_fid *pfid = lfsck_dto2fid(parent);
+	struct dt_object *cobj = NULL;
+	struct lfsck_lock_handle *pllh = &info->lti_llh;
+	struct lustre_handle clh = { 0 };
+	struct linkea_data ldata = { NULL };
+	struct thandle *th = NULL;
+	bool exist = true;
+	int rc = 0;
 
+	ENTRY;
 	/* @parent/@child may be based on lfsck->li_bottom,
-	 * but here we need the object based on the lfsck->li_next. */
+	 * but here we need the object based on the lfsck->li_next.
+	 */
 
 	parent = lfsck_object_locate(dev, parent);
 	if (IS_ERR(parent))
@@ -2025,14 +2030,14 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 		GOTO(log, rc);
 
 	/* The object has been modified by other(s), or it is not created by
-	 * LFSCK, the two cases are indistinguishable. So cannot replace it. */
+	 * LFSCK, the two cases are indistinguishable. So cannot replace it.
+	 */
 	if (la->la_ctime != 0)
 		GOTO(log, rc);
 
 	if (S_ISREG(la->la_mode)) {
 		rc = dt_xattr_get(env, cobj, &LU_BUF_NULL, XATTR_NAME_LOV);
-		/* If someone has created related OST-object(s),
-		 * then keep it. */
+		/* Someone has created related OST-object(s), then keep it. */
 		if ((rc > 0) || (rc < 0 && rc != -ENODATA))
 			GOTO(log, rc = (rc > 0 ? 0 : rc));
 	}
@@ -2108,9 +2113,8 @@ log:
 	if (cobj != NULL && !IS_ERR(cobj))
 		lfsck_object_put(env, cobj);
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK conditionally destroy the "
-	       "object "DFID" because of conflict with the object "DFID
-	       " under the parent "DFID" with name %s: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK conditionally destroy the object "DFID" because of conflict with the object "DFID" under the parent "DFID" with name %s: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid),
 	       PFID(lfsck_dto2fid(child)), PFID(pfid), name, rc);
 
@@ -2136,13 +2140,13 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 				   struct dt_object *obj,
 				   struct linkea_data *ldata)
 {
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	struct thandle			*th	= NULL;
-	struct lu_buf			 linkea_buf;
-	int				 rc	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	struct thandle *th = NULL;
+	struct lu_buf linkea_buf;
+	int rc = 0;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(log, rc = 1);
 
@@ -2177,8 +2181,8 @@ stop:
 	dt_trans_stop(env, dev, th);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK rebuild linkEA for the "
-	       "object "DFID": rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK rebuild linkEA for the object "DFID": rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(obj)), rc);
 
 	if (rc != 0) {
@@ -2218,19 +2222,19 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 				  const char *name, const char *name2,
 				  __u16 type, bool update, bool dec)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
-	struct lu_fid			cfid	= {0};
-	struct lu_fid			 tfid;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck->li_next;
-	struct thandle			*th	= NULL;
-	struct lfsck_lock_handle        *llh    = &info->lti_llh;
-	struct lustre_handle		 lh	= { 0 };
-	int				 rc	= 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	const struct lu_fid *pfid = lfsck_dto2fid(parent);
+	struct lu_fid cfid = {0};
+	struct lu_fid tfid;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck->li_next;
+	struct thandle *th = NULL;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	struct lustre_handle lh = { 0 };
+	int rc = 0;
 
+	ENTRY;
 	if (child)
 		cfid = *lfsck_dto2fid(child);
 	parent = lfsck_object_locate(dev, parent);
@@ -2292,7 +2296,8 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 		GOTO(unlock2, rc);
 
 	/* Someone has removed the bad name entry and reused it for other
-	 * object by race. */
+	 * object by race.
+	 */
 	if (!lu_fid_eq(&tfid, &cfid))
 		GOTO(unlock2, rc = 0);
 
@@ -2324,7 +2329,8 @@ stop:
 
 	/* We are not sure whether the child will become orphan or not.
 	 * Record it in the LFSCK trace file for further checking in
-	 * the second-stage scanning. */
+	 * the second-stage scanning.
+	 */
 	if (!update && !dec && child && rc == 0)
 		lfsck_namespace_trace_update(env, com, &cfid,
 					     LNTF_CHECK_LINKEA, true);
@@ -2335,10 +2341,8 @@ unlock1:
 	lfsck_unlock(llh);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant found bad name "
-	       "entry for: parent "DFID", child "DFID", name %s, type "
-	       "in name entry %o, type claimed by child %o. repair it "
-	       "by %s with new name2 %s: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK assistant found bad name entry for: parent "DFID", child "DFID", name %s, type in name entry %o, type claimed by child %o. repair it by %s with new name2 %s: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(pfid), PFID(&cfid),
 	       name, type, update ? lfsck_object_type(child) : 0,
 	       update ? "updating" : "removing", name2, rc);
@@ -2376,16 +2380,16 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 						  const struct lu_fid *pfid,
 						  struct lu_name *cname)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	struct thandle			*th	= NULL;
-	struct linkea_data		 ldata	= { NULL };
-	struct lu_buf			 linkea_buf;
-	int				 rc	= 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	struct thandle *th = NULL;
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(!dt_object_remote(obj));
 	LASSERT(S_ISDIR(lfsck_object_type(obj)));
 
@@ -2446,8 +2450,8 @@ stop:
 	dt_trans_stop(env, dev, th);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK rebuild dotdot name entry for "
-	       "the object "DFID", new parent "DFID": rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK rebuild dotdot name entry for the object "DFID", new parent "DFID": rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(obj)),
 	       PFID(pfid), rc);
 
@@ -2489,10 +2493,10 @@ lfsck_namespace_dsd_orphan(const struct lu_env *env,
 			   enum lfsck_namespace_inconsistency_type *type)
 {
 	struct lfsck_thread_info *info = lfsck_env_info(env);
-	struct lfsck_namespace	 *ns   = com->lc_file_ram;
-	int			  rc;
-	ENTRY;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	int rc;
 
+	ENTRY;
 	/* Remove the unrecognized linkEA. */
 	rc = lfsck_namespace_links_remove(env, com, obj);
 	lfsck_ibits_unlock(lh, LCK_EX);
@@ -2507,13 +2511,15 @@ lfsck_namespace_dsd_orphan(const struct lu_env *env,
 	 * may be some remote name entry on other MDT that references this
 	 * object with another name, so we cannot know whether this linkEA
 	 * is valid or not. So keep it there and maybe resolved when next
-	 * LFSCK run. */
+	 * LFSCK run.
+	 */
 	if (ns->ln_flags & LF_INCOMPLETE)
 		RETURN(0);
 
 	/* The unique linkEA is invalid, even if the ".." name entry may be
 	 * valid, we still cannot know via which name entry this directory
-	 * will be referenced. Then handle it as pure orphan. */
+	 * will be referenced. Then handle it as pure orphan.
+	 */
 	snprintf(info->lti_tmpbuf, sizeof(info->lti_tmpbuf),
 		 "-"DFID, PFID(pfid));
 	rc = lfsck_namespace_insert_orphan(env, com, obj,
@@ -2556,17 +2562,17 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 			   enum lfsck_namespace_inconsistency_type *type,
 			   bool *retry, bool *unknown)
 {
-	struct lfsck_thread_info *info		= lfsck_env_info(env);
-	struct lu_name		 *cname		= &info->lti_name;
-	const struct lu_fid	 *cfid		= lfsck_dto2fid(child);
-	struct lu_fid		  tfid;
-	struct lfsck_namespace	 *ns		= com->lc_file_ram;
-	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
-	struct dt_object	 *parent	= NULL;
-	struct lmv_mds_md_v1	 *lmv;
-	int			  rc		= 0;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_name *cname = &info->lti_name;
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct lu_fid tfid;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_object *parent = NULL;
+	struct lmv_mds_md_v1 *lmv;
+	int rc = 0;
 
+	ENTRY;
 	rc = lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid,
 						 info->lti_key,
 						 sizeof(info->lti_key));
@@ -2589,7 +2595,8 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 	 * ".." name entry or not. Because even if the linkEA entry is wrong
 	 * and the ".." name entry is right, we still cannot know via which
 	 * name entry the child will be referenced, since all known entries
-	 * have been verified during the first-stage scanning. */
+	 * have been verified during the first-stage scanning.
+	 */
 	if (!dt_object_exists(parent)) {
 		/* If the LFSCK is marked as LF_INCOMPLETE, then means some MDT
 		 * has ever tried to verify some remote MDT-object that resides
@@ -2597,7 +2604,8 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 		 * means there may be some remote name entry on other MDT that
 		 * references this object with another name, so we cannot know
 		 * whether this linkEA is valid or not. So keep it there and
-		 * maybe resolved when next LFSCK run. */
+		 * maybe resolved when next LFSCK run.
+		 */
 		if (ns->ln_flags & LF_INCOMPLETE)
 			GOTO(out, rc = 0);
 
@@ -2620,8 +2628,7 @@ lost_parent:
 		} else if (lfsck_shard_name_to_index(env,
 					cname->ln_name, cname->ln_namelen,
 					S_IFDIR, cfid) < 0) {
-			/* It is an invalid name entry, we
-			 * cannot trust the parent also. */
+			/* An invalid name entry?, cannot trust parent also */
 			rc = lfsck_namespace_shrink_linkea(env, com, child,
 						ldata, cname, &tfid, true);
 			if (rc < 0)
@@ -2649,7 +2656,8 @@ lost_parent:
 				 * LFSCK cannot recover the system
 				 * totally back to its original status,
 				 * but it is necessary to make the
-				 * current system to be consistent. */
+				 * current system to be consistent.
+				 */
 				rc = lfsck_namespace_shrink_linkea(env,
 						com, child, ldata,
 						cname, &tfid, true);
@@ -2686,7 +2694,8 @@ lost_parent:
 		 * means there may be some remote name entry on other MDT that
 		 * references this object with another name, so we cannot know
 		 * whether this linkEA is valid or not. So keep it there and
-		 * maybe resolved when next LFSCK run. */
+		 * maybe resolved when next LFSCK run.
+		 */
 		if (ns->ln_flags & LF_INCOMPLETE)
 			GOTO(out, rc = 0);
 
@@ -2725,7 +2734,8 @@ lost_parent:
 						   cname);
 		if (unlikely(rc == -ESTALE))
 			/* It may happen when the remote object has been
-			 * removed, but the local MDT is not aware of that. */
+			 * removed, but the local MDT is not aware of that.
+			 */
 			goto lost_parent;
 
 		if (unlikely(rc == -EEXIST)) {
@@ -2738,7 +2748,8 @@ lost_parent:
 			 *
 			 * It also may be because of the LFSCK found some
 			 * internal status of create operation. Under such
-			 * case, nothing to be done. */
+			 * case, nothing to be done.
+			 */
 			rc = lfsck_namespace_shrink_linkea_cond(env, com,
 					parent, child, ldata, cname, &tfid);
 			if (rc >= 0) {
@@ -2766,7 +2777,8 @@ lost_parent:
 		lfsck_ibits_unlock(lh, LCK_EX);
 		/* The name entry references another MDT-object that
 		 * may be created by the LFSCK for repairing dangling
-		 * name entry. Try to replace it. */
+		 * name entry. Try to replace it.
+		 */
 		rc = lfsck_namespace_replace_cond(env, com, parent, child,
 						  &tfid, cname);
 		if (rc == 0)
@@ -2781,7 +2793,8 @@ lost_parent:
 	 * how to repair the inconsistency, but the namespace LFSCK on the MDT
 	 * where its name entry resides may has more information (name, FID) to
 	 * repair such inconsistency. So here, keep the inconsistency to avoid
-	 * some imporper repairing. */
+	 * some imporper repairing.
+	 */
 	if (fid_is_zero(pfid)) {
 		if (unknown)
 			*unknown = true;
@@ -2845,21 +2858,21 @@ lfsck_namespace_dsd_multiple(const struct lu_env *env,
 			     enum lfsck_namespace_inconsistency_type *type,
 			     bool lpf, bool *unknown)
 {
-	struct lfsck_thread_info *info		= lfsck_env_info(env);
-	struct lu_name		 *cname		= &info->lti_name;
-	const struct lu_fid	 *cfid		= lfsck_dto2fid(child);
-	struct lu_fid		 *pfid2		= &info->lti_fid3;
-	struct lu_fid		  tfid;
-	struct lfsck_namespace	 *ns		= com->lc_file_ram;
-	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
-	struct lfsck_bookmark	 *bk		= &lfsck->li_bookmark_ram;
-	struct dt_object	 *parent	= NULL;
-	struct linkea_data	  ldata_new	= { NULL };
-	int			  dirent_count	= 0;
-	int			  rc		= 0;
-	bool			  once		= true;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_name *cname = &info->lti_name;
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct lu_fid *pfid2 = &info->lti_fid3;
+	struct lu_fid tfid;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct dt_object *parent = NULL;
+	struct linkea_data ldata_new = { NULL };
+	int dirent_count = 0;
+	int rc = 0;
+	bool once = true;
 
+	ENTRY;
 again:
 	while (ldata->ld_lee != NULL) {
 		rc = lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid,
@@ -2886,7 +2899,8 @@ again:
 		 *
 		 * When the LFSCK runs again, if the dangling name is still
 		 * there, the LFSCK should move the orphan directory object
-		 * back to the normal namespace. */
+		 * back to the normal namespace.
+		 */
 		if (!lpf && !fid_is_zero(pfid) &&
 		    !lu_fid_eq(pfid, &tfid) && once) {
 			linkea_next_entry(ldata);
@@ -2915,7 +2929,8 @@ again:
 				/* If it is NOT the last linkEA entry, then
 				 * there is still other chance to make the
 				 * child to be visible via other parent, then
-				 * remove this linkEA entry. */
+				 * remove this linkEA entry.
+				 */
 				lfsck_linkea_del_buf(ldata, cname);
 				continue;
 			}
@@ -2949,7 +2964,8 @@ again:
 			/* If the parent (that is declared via linkEA entry)
 			 * directory contains the specified child, but such
 			 * parent does not match the dotdot name entry, then
-			 * trust the linkEA. */
+			 * trust the linkEA.
+			 */
 			if (!fid_is_zero(pfid) && !lu_fid_eq(pfid, pfid2)) {
 				*type = LNIT_UNMATCHED_PAIRS;
 				rc = lfsck_namespace_repair_unmatched_pairs(env,
@@ -2961,7 +2977,8 @@ again:
 rebuild:
 			/* It is the most common case that we find the
 			 * name entry corresponding to the linkEA entry
-			 * that matches the ".." name entry. */
+			 * that matches the ".." name entry.
+			 */
 			rc = linkea_links_new(&ldata_new, &info->lti_big_buf,
 					      cname, pfid2);
 			if (rc != 0)
@@ -2975,7 +2992,8 @@ rebuild:
 			lfsck_linkea_del_buf(ldata, cname);
 			linkea_first_entry(ldata);
 			/* There may be some invalid dangling name entries under
-			 * other parent directories, remove all of them. */
+			 * other parent directories, remove all of them.
+			 */
 			while (ldata->ld_lee != NULL) {
 				rc = lfsck_namespace_unpack_linkea_entry(ldata,
 						cname, &tfid, info->lti_key,
@@ -3024,7 +3042,8 @@ next:
 		lfsck_ibits_unlock(lh, LCK_EX);
 		/* The name entry references another MDT-object that may be
 		 * created by the LFSCK for repairing dangling name entry.
-		 * Try to replace it. */
+		 * Try to replace it.
+		 */
 		rc = lfsck_namespace_replace_cond(env, com, parent, child,
 						  &tfid, cname);
 		lfsck_object_put(env, parent);
@@ -3050,7 +3069,8 @@ next:
 	}
 
 	/* All linkEA entries are invalid and removed, then handle the @child
-	 * as an orphan.*/
+	 * as an orphan.
+	 */
 	if (ldata->ld_leh->leh_reccount == 0) {
 		rc = lfsck_namespace_dsd_orphan(env, com, child, pfid, lh,
 						type);
@@ -3060,7 +3080,8 @@ next:
 
 	/* If the dangling name entry for the orphan directory object has
 	 * been remvoed, then just check whether the directory object is
-	 * still under the .lustre/lost+found/MDTxxxx/ or not. */
+	 * still under the .lustre/lost+found/MDTxxxx/ or not.
+	 */
 	if (lpf) {
 		lpf = false;
 		goto again;
@@ -3068,7 +3089,8 @@ next:
 
 	/* There is no linkEA entry that matches the ".." name entry. Find
 	 * the first linkEA entry that both parent and name entry exist to
-	 * rebuild a new ".." name entry. */
+	 * rebuild a new ".." name entry.
+	 */
 	if (once) {
 		once = false;
 		goto again;
@@ -3101,17 +3123,17 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 					struct dt_object *obj,
 					struct lu_attr *la)
 {
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
+	struct lfsck_namespace *ns	= com->lc_file_ram;
+	struct lfsck_instance *lfsck	= com->lc_lfsck;
+	struct dt_device *dev	= lfsck_obj2dev(obj);
 	const struct lu_fid		*cfid	= lfsck_dto2fid(obj);
-	struct thandle			*th	= NULL;
-	struct linkea_data		 ldata	= { NULL };
-	struct lustre_handle		 lh	= { 0 };
-	__u32				 old	= la->la_nlink;
-	int				 rc	= 0;
-	ENTRY;
+	struct thandle *th	= NULL;
+	struct linkea_data ldata	= { NULL };
+	struct lustre_handle lh	= { 0 };
+	__u32 old = la->la_nlink;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(!dt_object_remote(obj));
 
 	if (ns->ln_flags & LF_INCOMPLETE)
@@ -3145,7 +3167,8 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	 * may be some remote name entry on other MDT that references this
 	 * object with another name, so we cannot know whether this linkEA
 	 * is valid or not. So keep it there and maybe resolved when next
-	 * LFSCK run. */
+	 * LFSCK run.
+	 */
 	rc = dt_attr_get(env, obj, la);
 	if (rc != 0)
 		GOTO(unlock, rc = (rc == -ENOENT ? 0 : rc));
@@ -3156,7 +3179,8 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 
 	/* XXX: Currently, we only update the nlink attribute if the known
 	 *	linkEA entries is larger than the nlink attribute. That is
-	 *	safe action. */
+	 *	safe action.
+	 */
 	if (la->la_nlink >= ldata.ld_leh->leh_reccount ||
 	    unlikely(la->la_nlink == 0 ||
 		     ldata.ld_leh->leh_overflow_time))
@@ -3176,8 +3200,8 @@ stop:
 
 log:
 	lfsck_ibits_unlock(&lh, LCK_PW);
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK repaired the object "DFID"'s "
-	       "nlink count from %u to %u: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK repaired the object "DFID"'s nlink count from %u to %u: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid), old, la->la_nlink, rc);
 
 	if (rc != 0)
@@ -3227,20 +3251,20 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 					   struct lfsck_component *com,
 					   struct dt_object *child, __u8 flags)
 {
-	struct lfsck_thread_info *info		= lfsck_env_info(env);
-	const struct lu_fid	 *cfid		= lfsck_dto2fid(child);
-	struct lu_fid		 *pfid		= &info->lti_fid2;
-	struct lfsck_namespace	 *ns		= com->lc_file_ram;
-	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
-	struct lustre_handle	  lh		= { 0 };
-	struct linkea_data	  ldata		= { NULL };
-	bool			  unknown	= false;
-	bool			  lpf		= false;
-	bool			  retry		= false;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct lu_fid *pfid = &info->lti_fid2;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lustre_handle lh = { 0 };
+	struct linkea_data ldata = { NULL };
+	bool unknown = false;
+	bool lpf = false;
+	bool retry = false;
 	enum lfsck_namespace_inconsistency_type type = LNIT_BAD_LINKEA;
-	int			  rc		= 0;
-	ENTRY;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(!dt_object_remote(child));
 
 	if (flags & LNTF_UNCERTAIN_LMV) {
@@ -3272,7 +3296,8 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 		GOTO(out, rc = -ENOTDIR);
 
 	/* We only take ldlm lock on the @child when required. When the
-	 * logic comes here for the first time, it is always false. */
+	 * logic comes here for the first time, it is always false.
+	 */
 	if (0) {
 
 lock:
@@ -3332,7 +3357,8 @@ lock:
 				 * some parent that references this object,
 				 * then the LFSCK can rebuild the linkEA;
 				 * otherwise, this object will be handled
-				 * as orphan as above. */
+				 * as orphan as above.
+				 */
 				unknown = true;
 		} else {
 			/* 1. If we have neither ".." nor linkEA,
@@ -3340,7 +3366,8 @@ lock:
 			 *
 			 * 2. If we only have the ".." name entry,
 			 *    but no parent references this child
-			 *    directory, then handle it as orphan. */
+			 *    directory, then handle it as orphan.
+			 */
 			lfsck_ibits_unlock(&lh, LCK_EX);
 			type = LNIT_MUL_REF;
 
@@ -3353,7 +3380,8 @@ lock:
 			 * references this object with another name,
 			 * so we cannot know whether this linkEA is
 			 * valid or not. So keep it there and maybe
-			 * resolved when next LFSCK run. */
+			 * resolved when next LFSCK run.
+			 */
 			if (ns->ln_flags & LF_INCOMPLETE)
 				GOTO(out, rc = 0);
 
@@ -3400,7 +3428,8 @@ lock:
 	 * 2) The directory object has a right linkEA entry. During the
 	 *    first-stage scanning, the LFSCK finds some bad name entry,
 	 *    but the LFSCK cannot aware that at that time, then it adds
-	 *    the bad linkEA entry for further processing. */
+	 *    the bad linkEA entry for further processing.
+	 */
 	rc = lfsck_namespace_dsd_multiple(env, com, child, pfid, &ldata,
 					  &lh, &type, lpf, &unknown);
 
@@ -3434,9 +3463,9 @@ static inline bool
 lfsck_namespace_linkea_stale_overflow(struct linkea_data *ldata,
 				      struct lfsck_namespace *ns)
 {
-	/* Both the leh_overflow_time and ln_time_latest_reset are
-	 * local time based, so need NOT to care about clock drift
-	 * among the servers. */
+	/* Both the leh_overflow_time and ln_time_latest_reset are local time
+	 * based, so need NOT to care about clock drift among the servers.
+	 */
 	return ldata->ld_leh->leh_overflow_time &&
 	       ldata->ld_leh->leh_overflow_time < ns->ln_time_latest_reset;
 }
@@ -3471,8 +3500,8 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 	struct lustre_handle lh = { 0 };
 	struct lu_buf linkea_buf;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(!dt_object_remote(obj));
 
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
@@ -3562,8 +3591,8 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 	__u32 idx = lfsck_dev_idx(lfsck);
 	int rc;
 	bool remote = false;
-	ENTRY;
 
+	ENTRY;
 	if (!(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT))
 		RETURN(0);
 
@@ -3575,7 +3604,8 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 		GOTO(out, rc);
 
 	/* We check the agent entry again after verifying the linkEA
-	 * successfully. So invalid linkEA should be dryrun mode. */
+	 * successfully. So invalid linkEA should be dryrun mode.
+	 */
 	if (rc == -EINVAL || unlikely(!ldata.ld_leh->leh_reccount))
 		RETURN(0);
 
@@ -3639,7 +3669,8 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 		}
 
 		/* If someone changed linkEA by race, then the agent
-		 * entry will be updated by lower layer automatically. */
+		 * entry will be updated by lower layer automatically.
+		 */
 		if (ldata.ld_leh->leh_len != ldata2.ld_leh->leh_len ||
 		    memcmp(ldata.ld_buf->lb_buf, ldata2.ld_buf->lb_buf,
 			   ldata.ld_leh->leh_len) != 0)
@@ -3694,20 +3725,20 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 					   struct lfsck_component *com,
 					   struct dt_object *child, __u8 flags)
 {
-	struct lfsck_thread_info *info	   = lfsck_env_info(env);
-	struct lu_attr		 *la	   = &info->lti_la;
-	struct lu_name		 *cname	   = &info->lti_name;
-	struct lu_fid		 *pfid	   = &info->lti_fid;
-	struct lu_fid		 *cfid	   = &info->lti_fid2;
-	struct lfsck_instance	 *lfsck	   = com->lc_lfsck;
-	struct lfsck_namespace	 *ns	   = com->lc_file_ram;
-	struct dt_object	 *parent   = NULL;
-	struct linkea_data	  ldata	   = { NULL };
-	bool			  repaired = false;
-	int			  count	   = 0;
-	int			  rc;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *la = &info->lti_la;
+	struct lu_name *cname = &info->lti_name;
+	struct lu_fid *pfid = &info->lti_fid;
+	struct lu_fid *cfid = &info->lti_fid2;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct dt_object *parent = NULL;
+	struct linkea_data ldata = { NULL };
+	bool repaired = false;
+	int count = 0;
+	int rc;
 
+	ENTRY;
 	dt_read_lock(env, child, 0);
 	if (unlikely(lfsck_is_dead_obj(child))) {
 		dt_read_unlock(env, child);
@@ -3811,7 +3842,8 @@ lost_parent:
 				/* If it is NOT the last linkEA entry, then
 				 * there is still other chance to make the
 				 * child to be visible via other parent, then
-				 * remove this linkEA entry. */
+				 * remove this linkEA entry.
+				 */
 				rc = lfsck_namespace_shrink_linkea(env, com,
 					child, &ldata, cname, pfid, true);
 			} else {
@@ -3824,7 +3856,8 @@ lost_parent:
 				 * references this object with another name,
 				 * so we cannot know whether this linkEA is
 				 * valid or not. So keep it there and maybe
-				 * resolved when next LFSCK run. */
+				 * resolved when next LFSCK run.
+				 */
 				if (ns->ln_flags & LF_INCOMPLETE) {
 					lfsck_object_put(env, parent);
 
@@ -3854,7 +3887,8 @@ lost_parent:
 					 * the LFSCK cannot recover the system
 					 * totally back to its original status,
 					 * but it is necessary to make the
-					 * current system to be consistent. */
+					 * current system to be consistent.
+					 */
 					rc = lfsck_namespace_shrink_linkea(env,
 							com, child, &ldata,
 							cname, pfid, true);
@@ -3897,14 +3931,15 @@ lost_parent:
 			if (lu_fid_eq(cfid, lfsck_dto2fid(child))) {
 				/* It is the most common case that we
 				 * find the name entry corresponding
-				 * to the linkEA entry. */
+				 * to the linkEA entry.
+				 */
 				lfsck_object_put(env, parent);
 				linkea_next_entry(&ldata);
 			} else {
-				/* The name entry references another
-				 * MDT-object that may be created by
-				 * the LFSCK for repairing dangling
-				 * name entry. Try to replace it. */
+				/* Name entry references another MDT-object that
+				 * may be created by the LFSCK for repairing
+				 * dangling name entry. Try to replace it.
+				 */
 				rc = lfsck_namespace_replace_cond(env, com,
 						parent, child, cfid, cname);
 				lfsck_object_put(env, parent);
@@ -3937,7 +3972,8 @@ lost_parent:
 
 		/* If there is no name entry in the parent dir and the object
 		 * link count is fewer than the linkea entries count, then the
-		 * linkea entry should be removed. */
+		 * linkea entry should be removed.
+		 */
 		if (ldata.ld_leh->leh_reccount > la->la_nlink) {
 			rc = lfsck_namespace_shrink_linkea_cond(env, com,
 					parent, child, &ldata, cname, pfid);
@@ -3957,7 +3993,8 @@ lost_parent:
 		 * request. So means there may be some remote name entry on
 		 * other MDT that references this object with another name,
 		 * so we cannot know whether this linkEA is valid or not.
-		 * So keep it there and maybe resolved when next LFSCK run. */
+		 * So keep it there and maybe resolved when next LFSCK run.
+		 */
 		if (ns->ln_flags & LF_INCOMPLETE) {
 			lfsck_object_put(env, parent);
 
@@ -3994,7 +4031,8 @@ lost_parent:
 						   cname);
 		if (unlikely(rc == -ESTALE))
 			/* It may happen when the remote object has been
-			 * removed, but the local MDT is not aware of that. */
+			 * removed, but the local MDT is not aware of that.
+			 */
 			goto lost_parent;
 
 		if (unlikely(rc == -EEXIST))
@@ -4007,7 +4045,8 @@ lost_parent:
 			 *
 			 * It also may be because of the LFSCK found some
 			 * internal status of create operation. Under such
-			 * case, nothing to be done. */
+			 * case, nothing to be done.
+			 */
 			rc = lfsck_namespace_shrink_linkea_cond(env, com,
 					parent, child, &ldata, cname, pfid);
 		else
@@ -4037,12 +4076,14 @@ out:
 		 * request. So means there may be some remote name entry on
 		 * other MDT that references this object with another name,
 		 * so we cannot know whether this linkEA is valid or not.
-		 * So keep it there and maybe resolved when next LFSCK run. */
+		 * So keep it there and maybe resolved when next LFSCK run.
+		 */
 		if (!(ns->ln_flags & LF_INCOMPLETE) &&
 		    (ldata.ld_leh == NULL ||
 		     !ldata.ld_leh->leh_overflow_time)) {
 			/* If the child becomes orphan, then insert it into
-			 * the global .lustre/lost+found/MDTxxxx directory. */
+			 * the global .lustre/lost+found/MDTxxxx directory.
+			 */
 			rc = lfsck_namespace_insert_orphan(env, com, child,
 							   "", "O", &count);
 			if (rc < 0)
@@ -4061,10 +4102,8 @@ out:
 		if (la->la_nlink != 0 && la->la_nlink != count) {
 			if (unlikely(!S_ISREG(lfsck_object_type(child)) &&
 				     !S_ISLNK(lfsck_object_type(child)))) {
-				CDEBUG(D_LFSCK, "%s: namespace LFSCK finds "
-				       "the object "DFID"'s nlink count %d "
-				       "does not match linkEA count %d, "
-				       "type %o, skip it.\n",
+				CDEBUG(D_LFSCK,
+				       "%s: namespace LFSCK finds the object "DFID"'s nlink count %d does not match linkEA count %d, type %o, skip it.\n",
 				       lfsck_lfsck2name(lfsck),
 				       PFID(lfsck_dto2fid(child)),
 				       la->la_nlink, count,
@@ -4186,8 +4225,8 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 static void lfsck_namespace_release_lmv(const struct lu_env *env,
 					struct lfsck_component *com)
 {
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
 
 	while (!list_empty(&lfsck->li_list_lmv)) {
 		struct lfsck_lmv_unit	*llu;
@@ -4211,7 +4250,7 @@ static int lfsck_namespace_check_for_double_scan(const struct lu_env *env,
 						 struct dt_object *obj)
 {
 	struct lu_attr *la = &lfsck_env_info(env)->lti_la;
-	int		rc;
+	int rc;
 
 	rc = dt_attr_get(env, obj, la);
 	if (rc != 0)
@@ -4219,11 +4258,13 @@ static int lfsck_namespace_check_for_double_scan(const struct lu_env *env,
 
 	/* zero-linkEA object may be orphan, but it also maybe because
 	 * of upgrading. Currently, we cannot record it for double scan.
-	 * Because it may cause the LFSCK trace file to be too large. */
+	 * Because it may cause the LFSCK trace file to be too large.
+	 */
 
 	/* "la_ctime" == 1 means that it has ever been removed from
 	 * backend /lost+found directory but not been added back to
-	 * the normal namespace yet. */
+	 * the normal namespace yet.
+	 */
 
 	if ((S_ISREG(lfsck_object_type(obj)) && la->la_nlink > 1) ||
 	    unlikely(la->la_ctime == 1))
@@ -4238,13 +4279,13 @@ static int lfsck_namespace_check_for_double_scan(const struct lu_env *env,
 static int lfsck_namespace_reset(const struct lu_env *env,
 				 struct lfsck_component *com, bool init)
 {
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct dt_object		*root;
-	int				 rc;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct dt_object *root;
+	int rc;
 
+	ENTRY;
 	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
 	if (IS_ERR(root))
 		GOTO(log, rc = PTR_ERR(root));
@@ -4312,18 +4353,18 @@ lfsck_namespace_fail(const struct lu_env *env, struct lfsck_component *com,
 static void lfsck_namespace_close_dir(const struct lu_env *env,
 				      struct lfsck_component *com)
 {
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_assistant_object	*lso	= NULL;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_lmv		*llmv	= lfsck->li_lmv;
-	struct lfsck_namespace_req	*lnr;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_assistant_object *lso = NULL;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_lmv *llmv = lfsck->li_lmv;
+	struct lfsck_namespace_req *lnr;
 	struct lu_attr *la = &lfsck_env_info(env)->lti_la2;
 	__u32 size = sizeof(*lnr) + LFSCK_TMPBUF_LEN;
 	int rc;
 	bool wakeup = false;
-	ENTRY;
 
+	ENTRY;
 	if (llmv == NULL)
 		RETURN_EXIT;
 
@@ -4348,7 +4389,8 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	}
 
 	/* Generate a dummy request to indicate that all shards' name entry
-	 * in this striped directory has been scanned for the first time. */
+	 * in this striped directory has been scanned for the first time.
+	 */
 	INIT_LIST_HEAD(&lnr->lnr_lar.lar_list);
 	lnr->lnr_lar.lar_parent = lso;
 	lnr->lnr_lmv = lfsck_lmv_get(llmv);
@@ -4383,12 +4425,12 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 static int lfsck_namespace_open_dir(const struct lu_env *env,
 				    struct lfsck_component *com)
 {
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace	*ns	= com->lc_file_ram;
-	struct lfsck_lmv	*llmv	= lfsck->li_lmv;
-	int			 rc	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_lmv *llmv = lfsck->li_lmv;
+	int rc = 0;
 
+	ENTRY;
 	if (llmv == NULL)
 		RETURN(0);
 
@@ -4412,9 +4454,9 @@ static int lfsck_namespace_open_dir(const struct lu_env *env,
 static int lfsck_namespace_checkpoint(const struct lu_env *env,
 				      struct lfsck_component *com, bool init)
 {
-	struct lfsck_instance	*lfsck = com->lc_lfsck;
-	struct lfsck_namespace	*ns    = com->lc_file_ram;
-	int			 rc;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	int rc;
 
 	if (!init) {
 		rc = lfsck_checkpoint_generic(env, com);
@@ -4438,8 +4480,8 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK checkpoint at the pos [%llu"
-	       ", "DFID", %#llx], status = %d: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK checkpoint at the pos [%llu, "DFID", %#llx], status = %d: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), lfsck->li_pos_current.lp_oit_cookie,
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
 	       lfsck->li_pos_current.lp_dir_cookie, ns->ln_status, rc);
@@ -4451,10 +4493,10 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 				struct lfsck_component *com,
 				struct lfsck_start_param *lsp)
 {
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace	*ns	= com->lc_file_ram;
-	struct lfsck_position	*pos	= &com->lc_pos_start;
-	int			 rc;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_position *pos = &com->lc_pos_start;
+	int rc;
 
 	rc = lfsck_namespace_load_bitmap(env, com);
 	if (rc != 0 || ns->ln_status == LS_COMPLETED) {
@@ -4463,8 +4505,9 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 			rc = lfsck_set_param(env, lfsck, lsp->lsp_start, true);
 
 		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: namespace LFSCK prep failed: "
-			       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);
+			CDEBUG(D_LFSCK,
+			       "%s: namespace LFSCK prep failed: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), rc);
 
 			return rc;
 		}
@@ -4540,8 +4583,8 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 
 	rc = lfsck_start_assistant(env, com, lsp);
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK prep done, start pos [%llu, "
-	       DFID", %#llx]: rc = %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK prep done, start pos [%llu, "DFID", %#llx]: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), pos->lp_oit_cookie,
 	       PFID(&pos->lp_dir_parent), pos->lp_dir_cookie, rc);
 
@@ -4565,8 +4608,8 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 	struct lu_attr la = { .la_valid = 0 };
 	bool remote = false;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = dt_attr_get(env, obj, &la);
 	if (unlikely(rc || (la.la_valid & LA_FLAGS &&
 			    la.la_flags & LUSTRE_ORPHAN_FL))) {
@@ -4676,13 +4719,13 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 				    struct lfsck_assistant_object *lso,
 				    struct lu_dirent *ent, __u16 type)
 {
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct lfsck_instance		*lfsck	 = com->lc_lfsck;
-	struct lfsck_namespace_req	*lnr;
-	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	bool				 wakeup	 = false;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace_req *lnr;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct ptlrpc_thread *mthread = &lfsck->li_thread;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
+	bool wakeup = false;
 
 	wait_event_idle(mthread->t_ctl_waitq,
 			lad->lad_prefetched < bk->lb_async_windows ||
@@ -4733,11 +4776,11 @@ static int lfsck_namespace_post(const struct lu_env *env,
 				struct lfsck_component *com,
 				int result, bool init)
 {
-	struct lfsck_instance	*lfsck = com->lc_lfsck;
-	struct lfsck_namespace	*ns    = com->lc_file_ram;
-	int			 rc;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	int rc;
 
+	ENTRY;
 	lfsck_post_generic(env, com, &result);
 
 	down_write(&com->lc_sem);
@@ -4789,9 +4832,9 @@ static void
 lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		     struct seq_file *m)
 {
-	struct lfsck_instance	*lfsck = com->lc_lfsck;
-	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
-	struct lfsck_namespace	*ns    = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct lfsck_namespace *ns = com->lc_file_ram;
 
 	down_read(&com->lc_sem);
 	seq_printf(m, "name: lfsck_namespace\n"
@@ -4853,7 +4896,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 			/* The low layer otable-based iteration position may NOT
 			 * exactly match the namespace-based directory traversal
 			 * cookie. Generally, it is not a serious issue. But the
-			 * caller should NOT make assumption on that. */
+			 * caller should NOT make assumption on that.
+			 */
 			pos.lp_oit_cookie = iops->store(env, lfsck->li_di_oit);
 			if (!lfsck->li_current_oit_processed)
 				pos.lp_oit_cookie--;
@@ -4962,12 +5006,12 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 static int lfsck_namespace_double_scan(const struct lu_env *env,
 				       struct lfsck_component *com)
 {
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_tgt_descs		*ltds	= &com->lc_lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		*ltd;
-	struct lfsck_tgt_desc		*next;
-	int				 rc;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_tgt_descs *ltds = &com->lc_lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
+	int rc;
 
 	rc = lfsck_double_scan_generic(env, com, ns->ln_status);
 	if (thread_is_stopped(&lad->lad_thread)) {
@@ -4988,10 +5032,10 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 static void lfsck_namespace_data_release(const struct lu_env *env,
 					 struct lfsck_component *com)
 {
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_tgt_descs		*ltds	= &com->lc_lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		*ltd;
-	struct lfsck_tgt_desc		*next;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_tgt_descs *ltds = &com->lc_lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
 
 	LASSERT(lad != NULL);
 	LASSERT(thread_is_init(&lad->lad_thread) ||
@@ -5025,10 +5069,10 @@ static void lfsck_namespace_data_release(const struct lu_env *env,
 static void lfsck_namespace_quit(const struct lu_env *env,
 				 struct lfsck_component *com)
 {
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct lfsck_tgt_descs		*ltds	= &com->lc_lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		*ltd;
-	struct lfsck_tgt_desc		*next;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_tgt_descs *ltds = &com->lc_lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
 
 	LASSERT(lad != NULL);
 
@@ -5063,8 +5107,8 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 	struct lfsck_tgt_desc *ltd;
 	int rc = 0;
 	bool fail = false;
-	ENTRY;
 
+	ENTRY;
 	switch (lr->lr_event) {
 	case LE_SET_LMV_MASTER: {
 		struct dt_object	*obj;
@@ -5098,9 +5142,10 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK handles notify %u from MDT %x, "
-	       "status %d, flags %x\n", lfsck_lfsck2name(lfsck), lr->lr_event,
-	       lr->lr_index, lr->lr_status, lr->lr_flags2);
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK handles notify %u from MDT %x, status %d, flags %x\n",
+	       lfsck_lfsck2name(lfsck), lr->lr_event, lr->lr_index,
+	       lr->lr_status, lr->lr_flags2);
 
 	spin_lock(&ltds->ltd_lock);
 	ltd = lfsck_ltd2tgt(ltds, lr->lr_index);
@@ -5116,8 +5161,8 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 		if (lr->lr_status <= 0) {
 			ltd->ltd_namespace_done = 1;
 			list_del_init(&ltd->ltd_namespace_list);
-			CDEBUG(D_LFSCK, "%s: MDT %x failed/stopped at "
-			       "phase1 for namespace LFSCK: rc = %d.\n",
+			CDEBUG(D_LFSCK,
+			       "%s: MDT %x failed/stopped at phase1 for namespace LFSCK: rc = %d.\n",
 			       lfsck_lfsck2name(lfsck),
 			       ltd->ltd_index, lr->lr_status);
 			ns->ln_flags |= LF_INCOMPLETE;
@@ -5195,8 +5240,8 @@ static int lfsck_namespace_query_all(const struct lu_env *env,
 	struct lfsck_tgt_desc *ltd;
 	int idx;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = lfsck_query_all(env, com);
 	if (rc != 0)
 		RETURN(rc);
@@ -5317,8 +5362,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	int rc = 0;
 	__u16 type = lnr->lnr_type;
 	bool create;
-	ENTRY;
 
+	ENTRY;
 	cname = lfsck_name_get_const(env, lnr->lnr_name, lnr->lnr_namelen);
 	if (bk->lb_param & LPF_CREATE_MDTOBJ)
 		create = true;
@@ -5329,7 +5374,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		GOTO(log, rc = 0);
 
 	/* We may need to create the sub-objects of the @child via LOD,
-	 * so make the modification based on lfsck->li_next. */
+	 * so make the modification based on lfsck->li_next.
+	 */
 
 	parent = lfsck_object_locate(dev, parent);
 	if (IS_ERR(parent))
@@ -5372,7 +5418,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	/* Set the ctime as zero, then others can know it is created for
 	 * repairing dangling name entry by LFSCK. And if the LFSCK made
 	 * wrong decision and the real MDT-object has been found later,
-	 * then the LFSCK has chance to fix the incosistency properly. */
+	 * then the LFSCK has chance to fix the incosistency properly.
+	 */
 	memset(la, 0, sizeof(*la));
 	if (S_ISDIR(type))
 		la->la_mode = (type & S_IFMT) | 0700;
@@ -5380,8 +5427,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		la->la_mode = (type & S_IFMT) | 0600;
 	la->la_valid = LA_TYPE | LA_MODE | LA_CTIME;
 
-	/*
-	 * if it's directory, skip do_ah_init() to create a plain directory
+	/* if it's directory, skip do_ah_init() to create a plain directory
 	 * because it may have shards already, which will be inserted back
 	 * later, besides, it may be remote, and creating stripe directory
 	 * remotely is not supported.
@@ -5395,7 +5441,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	dof->dof_type = dt_mode_to_dft(type);
 	/* If the target is a regular file, then the LFSCK will only create
 	 * the MDT-object without stripes (dof->dof_reg.striped = 0). related
-	 * OST-objects will be created when write open. */
+	 * OST-objects will be created when write open.
+	 */
 
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
@@ -5556,10 +5603,10 @@ unlock_remote_lookup:
 		lfsck_ibits_unlock(&rlh, LCK_EX);
 log:
 	lfsck_unlock(llh);
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant found dangling "
-	       "reference for: parent "DFID", child "DFID", type %u, "
-	       "name %s. %s: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       PFID(pfid), PFID(cfid), type, cname->ln_name,
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK assistant found dangling reference for: parent "DFID", child "DFID", type %u, name %s. %s: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), PFID(pfid), PFID(cfid), type,
+	       cname->ln_name,
 	       create ? "Create the lost MDT-object as required" :
 			"Keep the MDT-object there by default", rc);
 
@@ -5576,36 +5623,36 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 						struct lfsck_component *com,
 						struct lfsck_assistant_req *lar)
 {
-	struct lfsck_thread_info   *info     = lfsck_env_info(env);
-	struct lu_attr		   *la	     = &info->lti_la;
-	struct lfsck_instance	   *lfsck    = com->lc_lfsck;
-	struct lfsck_bookmark	   *bk	     = &lfsck->li_bookmark_ram;
-	struct lfsck_namespace	   *ns	     = com->lc_file_ram;
-	struct lfsck_assistant_data *lad     = com->lc_data;
-	struct linkea_data	    ldata    = { NULL };
-	const struct lu_name	   *cname;
-	struct thandle		   *handle   = NULL;
-	struct lfsck_namespace_req *lnr      =
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *la = &info->lti_la;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct linkea_data ldata = { NULL };
+	const struct lu_name *cname;
+	struct thandle *handle = NULL;
+	struct lfsck_namespace_req *lnr =
 		container_of(lar, struct lfsck_namespace_req, lnr_lar);
-	struct dt_object	   *dir      = NULL;
-	struct dt_object	   *obj      = NULL;
-	struct lfsck_assistant_object *lso   = lar->lar_parent;
-	const struct lu_fid	   *pfid     = &lso->lso_fid;
-	struct dt_device	   *dev      = NULL;
-	struct lustre_handle	    lh       = { 0 };
-	bool			    repaired = false;
-	bool			    dtlocked = false;
-	bool			    remove = false;
-	bool			    newdata = false;
-	bool			    log      = false;
-	bool			    bad_hash = false;
-	bool			    bad_linkea = false;
-	int			    idx      = 0;
-	int			    count    = 0;
-	int			    rc	     = 0;
+	struct dt_object *dir = NULL;
+	struct dt_object *obj = NULL;
+	struct lfsck_assistant_object *lso = lar->lar_parent;
+	const struct lu_fid *pfid = &lso->lso_fid;
+	struct dt_device *dev = NULL;
+	struct lustre_handle lh       = { 0 };
+	bool repaired = false;
+	bool dtlocked = false;
+	bool remove = false;
+	bool newdata = false;
+	bool log = false;
+	bool bad_hash = false;
+	bool bad_linkea = false;
+	int idx = 0;
+	int count = 0;
+	int rc = 0;
 	enum lfsck_namespace_inconsistency_type type = LNIT_NONE;
-	ENTRY;
 
+	ENTRY;
 	if (lso->lso_dead)
 		RETURN(0);
 
@@ -5629,8 +5676,8 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	}
 
 	if (unlikely(!fid_is_sane(&lnr->lnr_fid))) {
-		CDEBUG(D_LFSCK, "%s: dir scan find invalid FID "DFID
-		       " for the name entry %.*s under "DFID"\n",
+		CDEBUG(D_LFSCK,
+		       "%s: dir scan find invalid FID "DFID" for the name entry %.*s under "DFID"\n",
 		       lfsck_lfsck2name(lfsck), PFID(&lnr->lnr_fid),
 		       lnr->lnr_namelen, lnr->lnr_name, PFID(pfid));
 
@@ -5639,7 +5686,8 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 			type = LNIT_BAD_DIRENT;
 		else
 			/* If the parent FID is invalid, we cannot remove
-			 * the ".." entry directly. */
+			 * the ".." entry directly.
+			 */
 			rc = lfsck_namespace_trace_update(env, com, pfid,
 						LNTF_CHECK_PARENT, true);
 
@@ -5675,7 +5723,8 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 
 		/* Usually, some local filesystem consistency verification
 		 * tools can guarantee the local namespace tree consistenct.
-		 * So the LFSCK will only verify the remote directory. */
+		 * So the LFSCK will only verify the remote directory.
+		 */
 		if (unlikely(strcmp(lnr->lnr_name, dotdot) == 0)) {
 			rc = lfsck_namespace_trace_update(env, com, pfid,
 						LNTF_CHECK_PARENT, true);
@@ -5685,8 +5734,8 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 
 		ltd = lfsck_ltd2tgt(&lfsck->li_mdt_descs, idx);
 		if (unlikely(ltd == NULL)) {
-			CDEBUG(D_LFSCK, "%s: cannot talk with MDT %x which "
-			       "did not join the namespace LFSCK\n",
+			CDEBUG(D_LFSCK,
+			       "%s: cannot talk with MDT %x which did not join the namespace LFSCK\n",
 			       lfsck_lfsck2name(lfsck), idx);
 			lfsck_lad_set_bitmap(env, com, idx);
 
@@ -5770,7 +5819,8 @@ again:
 		}
 
 		/* It may happen when the remote object has been removed,
-		 * but the local MDT is not aware of that. */
+		 * but the local MDT is not aware of that.
+		 */
 		goto dangling;
 	} else if (rc == 0) {
 		count = ldata.ld_leh->leh_reccount;
@@ -5788,7 +5838,8 @@ again:
 
 		/* If the name entry hash does not match the slave striped
 		 * directory, and the name entry does not match also, then
-		 * it is quite possible that name entry is corrupted. */
+		 * it is quite possible that name entry is corrupted.
+		 */
 		if (!lfsck_is_valid_slave_name_entry(env, lnr->lnr_lmv,
 					lnr->lnr_name, lnr->lnr_namelen)) {
 			ns->ln_flags |= LF_INCONSISTENT;
@@ -5800,7 +5851,8 @@ again:
 		/* If the file type stored in the name entry does not match
 		 * the file type claimed by the object, and the object does
 		 * not recognize the name entry, then it is quite possible
-		 * that the name entry is corrupted. */
+		 * that the name entry is corrupted.
+		 */
 		if ((lfsck_object_type(obj) & S_IFMT) != lnr->lnr_type) {
 			ns->ln_flags |= LF_INCONSISTENT;
 			type = LNIT_BAD_DIRENT;
@@ -5816,7 +5868,8 @@ again:
 		 * So under such case, we should replace the linkEA according
 		 * to current name entry. But this needs to be done during the
 		 * LFSCK second-stage scanning. The LFSCK will record the name
-		 * entry for further possible using. */
+		 * entry for further possible using.
+		 */
 		remove = false;
 		newdata = false;
 		goto nodata;
@@ -5826,7 +5879,8 @@ again:
 
 		count = 1;
 		/* The magic crashed, we are not sure whether there are more
-		 * corrupt data in the linkea, so remove all linkea entries. */
+		 * corrupt data in the linkea, so remove all linkea entries.
+		 */
 		remove = true;
 		newdata = true;
 		goto nodata;
@@ -5978,7 +6032,8 @@ out:
 			/* XXX: This is a bad dirent, we do not know whether
 			 *	the original name entry reference a regular
 			 *	file or a directory, then keep the parent's
-			 *	nlink count unchanged here. */
+			 *	nlink count unchanged here.
+			 */
 			rc = lfsck_namespace_repair_dirent(env, com, dir,
 					obj, lnr->lnr_name, lnr->lnr_name,
 					lnr->lnr_type, false, false);
@@ -6008,8 +6063,8 @@ out:
 trace:
 	down_write(&com->lc_sem);
 	if (rc < 0) {
-		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail to handle "
-		       "the entry: "DFID", parent "DFID", name %.*s: rc = %d\n",
+		CDEBUG(D_LFSCK,
+		       "%s: namespace LFSCK assistant fail to handle the entry: "DFID", parent "DFID", name %.*s: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), PFID(&lnr->lnr_fid), PFID(pfid),
 		       lnr->lnr_namelen, lnr->lnr_name, rc);
 
@@ -6026,9 +6081,8 @@ trace:
 		if (repaired) {
 			ns->ln_items_repaired++;
 			if (log)
-				CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant "
-				       "repaired the entry: "DFID", parent "DFID
-				       ", name %.*s, type %d\n",
+				CDEBUG(D_LFSCK,
+				       "%s: namespace LFSCK assistant repaired the entry: "DFID", parent "DFID", name %.*s, type %d\n",
 				       lfsck_lfsck2name(lfsck),
 				       PFID(&lnr->lnr_fid), PFID(pfid),
 				       lnr->lnr_namelen, lnr->lnr_name, type);
@@ -6061,10 +6115,8 @@ trace:
 			if (!repaired) {
 				ns->ln_items_repaired++;
 				if (log)
-					CDEBUG(D_LFSCK, "%s: namespace LFSCK "
-					       "assistant repaired the entry: "
-					       DFID", parent "DFID
-					       ", name %.*s\n",
+					CDEBUG(D_LFSCK,
+					       "%s: namespace LFSCK assistant repaired the entry: "DFID", parent "DFID", name %.*s\n",
 					       lfsck_lfsck2name(lfsck),
 					       PFID(&lnr->lnr_fid), PFID(pfid),
 					       lnr->lnr_namelen, lnr->lnr_name);
@@ -6128,18 +6180,18 @@ static int lfsck_namespace_scan_local_lpf_one(const struct lu_env *env,
 					      struct dt_object *parent,
 					      struct lu_dirent *ent)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_fid			*key	= &info->lti_fid;
-	struct lu_attr			*la	= &info->lti_la;
-	struct lfsck_instance		*lfsck  = com->lc_lfsck;
-	struct dt_object		*obj;
-	struct dt_device		*dev	= lfsck->li_bottom;
-	struct dt_object		*child	= NULL;
-	struct thandle			*th	= NULL;
-	int				 idx;
-	int				 rc	= 0;
-	__u8				 flags	= 0;
-	bool				 exist	= false;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_fid *key = &info->lti_fid;
+	struct lu_attr *la = &info->lti_la;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_object *obj;
+	struct dt_device *dev = lfsck->li_bottom;
+	struct dt_object *child = NULL;
+	struct thandle *th = NULL;
+	int idx;
+	int rc = 0;
+	__u8 flags = 0;
+	bool exist = false;
 
 	ENTRY;
 
@@ -6274,24 +6326,23 @@ out:
 static void lfsck_namespace_scan_local_lpf(const struct lu_env *env,
 					   struct lfsck_component *com)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_dirent		*ent	=
-					(struct lu_dirent *)info->lti_key;
-	struct lu_seq_range		*range	= &info->lti_range;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct ptlrpc_thread		*thread = &lfsck->li_thread;
-	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
-	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	struct dt_object		*parent;
-	const struct dt_it_ops		*iops;
-	struct dt_it			*di;
-	struct seq_server_site		*ss	= lfsck_dev_site(lfsck);
-	__u64				 cookie;
-	__u32				 idx	= lfsck_dev_idx(lfsck);
-	int				 rc	= 0;
-	__u16				 type;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_dirent *ent = (struct lu_dirent *)info->lti_key;
+	struct lu_seq_range *range = &info->lti_range;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct ptlrpc_thread *thread = &lfsck->li_thread;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct dt_object *parent;
+	const struct dt_it_ops *iops;
+	struct dt_it *di;
+	struct seq_server_site *ss = lfsck_dev_site(lfsck);
+	__u64 cookie;
+	__u32 idx = lfsck_dev_idx(lfsck);
+	int rc = 0;
+	__u16 type;
 
+	ENTRY;
 	parent = lfsck_object_find_by_dev(env, lfsck->li_bottom,
 					  &LU_BACKEND_LPF_FID);
 	if (IS_ERR(parent)) {
@@ -6333,8 +6384,8 @@ static void lfsck_namespace_scan_local_lpf(const struct lu_env *env,
 			rc = lfsck_unpack_ent(ent, &cookie, &type);
 
 		if (unlikely(rc != 0)) {
-			CDEBUG(D_LFSCK, "%s: fail to iterate backend "
-			       "/lost+found: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to iterate backend /lost+found: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), rc);
 
 			goto skip;
@@ -6373,10 +6424,10 @@ static void lfsck_namespace_scan_local_lpf(const struct lu_env *env,
 			 * furtherly.
 			 *
 			 * For MDT0, it is more possible the case 1). The LFSCK
-			 * will handle the orphan as an upgraded object. */
-			CDEBUG(D_LFSCK, "%s: the orphan %.*s with IGIF "DFID
-			       "in the backend /lost+found on the MDT %04x, "
-			       "to be safe, skip it.\n",
+			 * will handle the orphan as an upgraded object.
+			 */
+			CDEBUG(D_LFSCK,
+			       "%s: the orphan %.*s with IGIF "DFID"in the backend /lost+found on the MDT %04x, to be safe, skip it.\n",
 			       lfsck_lfsck2name(lfsck), ent->lde_namelen,
 			       ent->lde_name, PFID(&ent->lde_fid), idx);
 			goto skip;
@@ -6445,23 +6496,22 @@ static int lfsck_namespace_rescan_striped_dir(const struct lu_env *env,
 					      struct lfsck_component *com,
 					      struct lfsck_lmv_unit *llu)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct lfsck_assistant_data	*lad	= com->lc_data;
-	struct dt_object		*dir;
-	const struct dt_it_ops		*iops;
-	struct dt_it			*di;
-	struct lu_dirent		*ent	=
-			(struct lu_dirent *)info->lti_key;
-	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
-	struct ptlrpc_thread		*thread = &lfsck->li_thread;
-	struct lfsck_assistant_object	*lso	= NULL;
-	struct lfsck_namespace_req	*lnr;
-	struct lfsck_assistant_req	*lar;
-	int				 rc;
-	__u16				 type;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct dt_object *dir;
+	const struct dt_it_ops *iops;
+	struct dt_it *di;
+	struct lu_dirent *ent = (struct lu_dirent *)info->lti_key;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct ptlrpc_thread *thread = &lfsck->li_thread;
+	struct lfsck_assistant_object *lso = NULL;
+	struct lfsck_namespace_req *lnr;
+	struct lfsck_assistant_req *lar;
+	int rc;
+	__u16 type;
 
+	ENTRY;
 	LASSERT(list_empty(&lad->lad_req_list));
 
 	lfsck->li_lmv = &llu->llu_lmv;
@@ -6553,19 +6603,19 @@ lfsck_namespace_double_scan_one_trace_file(const struct lu_env *env,
 					   struct lfsck_component *com,
 					   struct dt_object *obj, bool first)
 {
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct ptlrpc_thread	*thread = &lfsck->li_thread;
-	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
-	struct lfsck_namespace	*ns	= com->lc_file_ram;
-	const struct dt_it_ops	*iops	= &obj->do_index_ops->dio_it;
-	struct dt_object	*target;
-	struct dt_it		*di;
-	struct dt_key		*key;
-	struct lu_fid		 fid;
-	int			 rc;
-	__u8			 flags	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct ptlrpc_thread *thread = &lfsck->li_thread;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	const struct dt_it_ops *iops = &obj->do_index_ops->dio_it;
+	struct dt_object *target;
+	struct dt_it *di;
+	struct dt_key *key;
+	struct lu_fid fid;
+	int rc;
+	__u8 flags = 0;
 
+	ENTRY;
 	di = iops->init(env, obj, 0);
 	if (IS_ERR(di))
 		RETURN(PTR_ERR(di));
@@ -6580,7 +6630,8 @@ lfsck_namespace_double_scan_one_trace_file(const struct lu_env *env,
 
 	if (first) {
 		/* The start one either has been processed or does not exist,
-		 * skip it. */
+		 * skip it.
+		 */
 		rc = iops->next(env, di);
 		if (rc != 0)
 			GOTO(put, rc);
@@ -6679,12 +6730,12 @@ fini:
 static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 						struct lfsck_component *com)
 {
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace	*ns	= com->lc_file_ram;
-	int			 rc;
-	int			 i;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	int rc;
+	int i;
 
+	ENTRY;
 	while (!list_empty(&lfsck->li_list_lmv)) {
 		struct lfsck_lmv_unit *llu;
 
@@ -6717,8 +6768,9 @@ static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 		rc = lfsck_namespace_double_scan_one_trace_file(env, com,
 				com->lc_sub_trace_objs[i].lsto_obj, false);
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK phase2 scan stop at the No. %d "
-	       "trace file: rc = %d\n", lfsck_lfsck2name(lfsck), i, rc);
+	CDEBUG(D_LFSCK,
+	       "%s: namespace LFSCK phase2 scan stop at the No. %d trace file: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), i, rc);
 
 	RETURN(rc);
 }
@@ -6727,8 +6779,8 @@ static void lfsck_namespace_assistant_fill_pos(const struct lu_env *env,
 					       struct lfsck_component *com,
 					       struct lfsck_position *pos)
 {
-	struct lfsck_assistant_data	*lad = com->lc_data;
-	struct lfsck_namespace_req	*lnr;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_namespace_req *lnr;
 
 	if (((struct lfsck_namespace *)(com->lc_file_ram))->ln_status !=
 	    LS_SCANNING_PHASE1)
@@ -6749,8 +6801,8 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 					      struct lfsck_component *com,
 					      int rc)
 {
-	struct lfsck_instance	*lfsck	= com->lc_lfsck;
-	struct lfsck_namespace	*ns	= com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
 
 	down_write(&com->lc_sem);
 	ns->ln_run_time_phase2 += ktime_get_seconds() -
@@ -6791,7 +6843,7 @@ lfsck_namespace_assistant_sync_failures_interpret(const struct lu_env *env,
 {
 	if (rc == 0) {
 		struct lfsck_async_interpret_args *laia = args;
-		struct lfsck_tgt_desc		  *ltd	= laia->laia_ltd;
+		struct lfsck_tgt_desc *ltd = laia->laia_ltd;
 
 		ltd->ltd_synced_failures = 1;
 	}
@@ -6858,8 +6910,8 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 			lfsck_namespace_assistant_sync_failures_interpret,
 			laia, LFSCK_NOTIFY);
 		if (rc != 0)
-			CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail "
-			       "to sync failure with MDT %x: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: namespace LFSCK assistant fail to sync failure with MDT %x: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), ltd->ltd_index, rc);
 	}
 	up_read(&ltds->ltd_rw_sem);
@@ -6871,9 +6923,8 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 
 out:
 	if (rc != 0)
-		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail "
-		       "to sync failure with MDTs, and related MDTs "
-		       "may handle orphan improperly: rc = %d\n",
+		CDEBUG(D_LFSCK,
+		       "%s: namespace LFSCK assistant fail to sync failure with MDTs, and related MDTs may handle orphan improperly: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), rc);
 
 	EXIT;
@@ -6905,13 +6956,13 @@ int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid)
 {
-	struct dt_device	*dev	= lfsck_obj2dev(obj);
-	struct linkea_data	 ldata	= { NULL };
-	struct lu_buf		 linkea_buf;
-	struct thandle		*th;
-	int			 rc;
-	int			 fl	= LU_XATTR_CREATE;
-	bool			 dirty	= false;
+	struct dt_device *dev = lfsck_obj2dev(obj);
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	struct thandle *th;
+	int rc;
+	int fl = LU_XATTR_CREATE;
+	bool dirty = false;
 
 	ENTRY;
 
@@ -6989,9 +7040,9 @@ stop:
 int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 			  char *name, struct lu_fid *pfid)
 {
-	struct lu_name		 *cname = &lfsck_env_info(env)->lti_name;
-	struct linkea_data	  ldata = { NULL };
-	int			  rc;
+	struct lu_name *cname = &lfsck_env_info(env)->lti_name;
+	struct linkea_data ldata = { NULL };
+	int rc;
 
 	rc = lfsck_links_read_with_rec(env, obj, &ldata);
 	if (rc)
@@ -7028,15 +7079,15 @@ int lfsck_update_name_entry(const struct lu_env *env,
 			    struct dt_object *dir, const char *name,
 			    const struct lu_fid *fid, __u32 type)
 {
-	struct lfsck_thread_info *info	 = lfsck_env_info(env);
-	struct dt_insert_rec	 *rec	 = &info->lti_dt_rec;
-	struct lfsck_lock_handle *llh	 = &info->lti_llh;
-	struct dt_device	 *dev	 = lfsck_obj2dev(dir);
-	struct thandle		 *th;
-	int			  rc;
-	bool			  exists = true;
-	ENTRY;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	struct dt_device *dev = lfsck_obj2dev(dir);
+	struct thandle *th;
+	int rc;
+	bool exists = true;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
@@ -7092,9 +7143,10 @@ stop:
 
 unlock:
 	lfsck_unlock(llh);
-	CDEBUG(D_LFSCK, "%s: update name entry "DFID"/%s with the FID "DFID
-	       " and the type %o: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       PFID(lfsck_dto2fid(dir)), name, PFID(fid), type, rc);
+	CDEBUG(D_LFSCK,
+	       "%s: update name entry "DFID"/%s with the FID "DFID" and the type %o: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(dir)), name,
+	       PFID(fid), type, rc);
 
 	return rc;
 }
@@ -7102,14 +7154,14 @@ unlock:
 int lfsck_namespace_setup(const struct lu_env *env,
 			  struct lfsck_instance *lfsck)
 {
-	struct lfsck_component	*com;
-	struct lfsck_namespace	*ns;
-	struct dt_object	*root = NULL;
-	struct dt_object	*obj;
-	int			 i;
-	int			 rc;
-	ENTRY;
+	struct lfsck_component *com;
+	struct lfsck_namespace *ns;
+	struct dt_object *root = NULL;
+	struct dt_object *obj;
+	int i;
+	int rc;
 
+	ENTRY;
 	LASSERT(lfsck->li_master);
 
 	OBD_ALLOC_PTR(com);
@@ -7188,7 +7240,8 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	case LS_SCANNING_PHASE2:
 		/* No need to store the status to disk right now.
 		 * If the system crashed before the status stored,
-		 * it will be loaded back when next time. */
+		 * it will be loaded back when next time.
+		 */
 		ns->ln_status = LS_CRASHED;
 		fallthrough;
 	case LS_PAUSED:
