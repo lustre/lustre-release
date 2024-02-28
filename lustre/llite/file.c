@@ -4868,6 +4868,15 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	RETURN(retval);
 }
 
+#define LU_SEEK_NAMES {					\
+	[SEEK_SET]	= "SEEK_SET",			\
+	[SEEK_CUR]	= "SEEK_CUR",			\
+	[SEEK_DATA]	= "SEEK_DATA",			\
+	[SEEK_HOLE]	= "SEEK_HOLE",			\
+}
+
+static const char *const ll_seek_names[] = LU_SEEK_NAMES;
+
 static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file_inode(file);
@@ -4876,9 +4885,11 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), to=%llu=%#llx(%d)\n",
-	       PFID(ll_inode2fid(inode)), inode, retval, retval,
-	       origin);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file %s:"DFID", offset: %lld, type: %s\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), offset,
+	       ll_seek_names[origin]);
 
 	if (origin == SEEK_END) {
 		retval = ll_glimpse_size(inode);
@@ -4906,6 +4917,12 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 	if (retval >= 0)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK,
 				   ktime_us_delta(ktime_get(), kstart));
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "COMPLETED file %s:"DFID", offset: %lld, type: %s, result: %lld\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), offset,
+	       ll_seek_names[origin], retval);
+
 	RETURN(retval);
 }
 
