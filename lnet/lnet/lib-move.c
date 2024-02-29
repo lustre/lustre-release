@@ -2186,14 +2186,19 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	if (!LNET_NID_IS_ANY(&sd->sd_rtr_nid)) {
 		gwni = lnet_peer_ni_find_locked(&sd->sd_rtr_nid);
 		if (gwni) {
-			gwni_decref = true;
 			gw = gwni->lpni_peer_net->lpn_peer;
-			if (gw->lp_rtr_refcount)
+			if (gw->lp_rtr_refcount) {
+				gwni_decref = true;
 				route_found = true;
-		} else {
+			} else {
+				lnet_peer_ni_decref_locked(gwni);
+				gwni = NULL;
+				gw = NULL;
+			}
+		}
+		if (!gwni)
 			CWARN("No peer NI for gateway %s. Attempting to find an alternative route.\n",
 			      libcfs_nidstr(&sd->sd_rtr_nid));
-		}
 	}
 
 	if (!route_found) {
