@@ -1969,7 +1969,7 @@ static int server_getattr(struct vfsmount *mnt, struct dentry *de,
 	CDEBUG(D_SUPER, "%s: root_inode from %s ino=%lu, dev=%x\n",
 	       lsi->lsi_svname, root_inode == inode ? "lsi" : "vfsmnt",
 	       root_inode->i_ino, root_inode->i_rdev);
-	generic_fillattr(IDMAP_ARG root_inode, stat);
+	generic_fillattr(IDMAP_ARG RQMASK_ARG root_inode, stat);
 	iput(root_inode);
 
 	return 0;

@@ -111,9 +111,9 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 			   0, 0, LUSTRE_OPC_ANY, NULL);
 
 	op_data->op_attr.ia_mode = inode->i_mode;
-	op_data->op_attr.ia_atime = inode->i_atime;
-	op_data->op_attr.ia_mtime = inode->i_mtime;
-	op_data->op_attr.ia_ctime = inode->i_ctime;
+	op_data->op_attr.ia_atime = inode_get_atime(inode);
+	op_data->op_attr.ia_mtime = inode_get_mtime(inode);
+	op_data->op_attr.ia_ctime = inode_get_ctime(inode);
 	/* In case of encrypted file without the key, visible size was rounded
 	 * up to next LUSTRE_ENCRYPTION_UNIT_SIZE, and clear text size was
 	 * stored into lli_lazysize in ll_merge_attr(), so set proper file size
@@ -1495,15 +1495,15 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	 * read, this will hurt performance.
 	 */
 	if (test_and_clear_bit(LLIF_UPDATE_ATIME, &lli->lli_flags) ||
-	    inode->i_atime.tv_sec < lli->lli_atime)
-		inode->i_atime.tv_sec = lli->lli_atime;
+	    inode_get_atime_sec(inode) < lli->lli_atime)
+		inode_set_atime(inode, lli->lli_atime, 0);
 
-	inode->i_mtime.tv_sec = lli->lli_mtime;
-	inode->i_ctime.tv_sec = lli->lli_ctime;
+	inode_set_mtime(inode, lli->lli_mtime, 0);
+	inode_set_ctime(inode, lli->lli_ctime, 0);
 
-	mtime = inode->i_mtime.tv_sec;
-	atime = inode->i_atime.tv_sec;
-	ctime = inode->i_ctime.tv_sec;
+	mtime = inode_get_mtime_sec(inode);
+	atime = inode_get_atime_sec(inode);
+	ctime = inode_get_ctime_sec(inode);
 
 	cl_object_attr_lock(obj);
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDC_MERGE))
@@ -1540,9 +1540,9 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	i_size_write(inode, attr->cat_size);
 	inode->i_blocks = attr->cat_blocks;
 
-	inode->i_mtime.tv_sec = mtime;
-	inode->i_atime.tv_sec = atime;
-	inode->i_ctime.tv_sec = ctime;
+	inode_set_mtime(inode, mtime, 0);
+	inode_set_atime(inode, atime, 0);
+	inode_set_ctime(inode, ctime, 0);
 
 	EXIT;
 out:
@@ -1605,25 +1605,30 @@ void ll_io_set_mirror(struct cl_io *io, const struct file *file)
 static int relatime_need_update(struct vfsmount *mnt, struct inode *inode,
 				struct timespec64 now)
 {
+	struct timespec64 ts;
+	struct timespec64 atime;
 
 	if (!(mnt->mnt_flags & MNT_RELATIME))
 		return 1;
 	/*
 	 * Is mtime younger than atime? If yes, update atime:
 	 */
-	if (timespec64_compare(&inode->i_mtime, &inode->i_atime) >= 0)
+	atime = inode_get_atime(inode);
+	ts = inode_get_mtime(inode);
+	if (timespec64_compare(&ts, &atime) >= 0)
 		return 1;
 	/*
 	 * Is ctime younger than atime? If yes, update atime:
 	 */
-	if (timespec64_compare(&inode->i_ctime, &inode->i_atime) >= 0)
+	ts = inode_get_ctime(inode);
+	if (timespec64_compare(&ts, &atime) >= 0)
 		return 1;
 
 	/*
 	 * Is the previous atime value older than a day? If yes,
 	 * update atime:
 	 */
-	if ((long)(now.tv_sec - inode->i_atime.tv_sec) >= 24*60*60)
+	if ((long)(now.tv_sec - atime.tv_sec) >= 24*60*60)
 		return 1;
 	/*
 	 * Good, we can skip the atime update:
@@ -5710,11 +5715,11 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		if (lli->lli_attr_valid & OBD_MD_FLSIZE &&
 		    lli->lli_attr_valid & OBD_MD_FLBLOCKS &&
 		    lli->lli_attr_valid & OBD_MD_FLMTIME) {
-			inode->i_mtime.tv_sec = lli->lli_mtime;
+			inode_set_mtime(inode, lli->lli_mtime, 0);
 			if (lli->lli_attr_valid & OBD_MD_FLATIME)
-				inode->i_atime.tv_sec = lli->lli_atime;
+				inode_set_atime(inode, lli->lli_atime, 0);
 			if (lli->lli_attr_valid & OBD_MD_FLCTIME)
-				inode->i_ctime.tv_sec = lli->lli_ctime;
+				inode_set_ctime(inode, lli->lli_ctime, 0);
 			GOTO(fill_attr, rc);
 		}
 
@@ -5740,11 +5745,11 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		}
 
 		if (lli->lli_attr_valid & OBD_MD_FLATIME)
-			inode->i_atime.tv_sec = lli->lli_atime;
+			inode_set_atime(inode, lli->lli_atime, 0);
 		if (lli->lli_attr_valid & OBD_MD_FLMTIME)
-			inode->i_mtime.tv_sec = lli->lli_mtime;
+			inode_set_mtime(inode, lli->lli_mtime, 0);
 		if (lli->lli_attr_valid & OBD_MD_FLCTIME)
-			inode->i_ctime.tv_sec = lli->lli_ctime;
+			inode_set_ctime(inode, lli->lli_ctime, 0);
 	}
 
 fill_attr:
@@ -5768,9 +5773,9 @@ fill_attr:
 
 	stat->uid = inode->i_uid;
 	stat->gid = inode->i_gid;
-	stat->atime = inode->i_atime;
-	stat->mtime = inode->i_mtime;
-	stat->ctime = inode->i_ctime;
+	stat->atime = inode_get_atime(inode);
+	stat->mtime = inode_get_mtime(inode);
+	stat->ctime = inode_get_ctime(inode);
 	/* stat->blksize is used to tell about preferred IO size */
 	if (sbi->ll_stat_blksize)
 		stat->blksize = sbi->ll_stat_blksize;

@@ -2259,12 +2259,13 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		map.m_lblk += rc;
 		map.m_len = blen = blen - rc;
 		epos = (loff_t)map.m_lblk << inode->i_blkbits;
-		inode->i_ctime = current_time(inode);
+		inode_set_ctime_current(inode);
 		if (new_size) {
 			if (epos > end)
 				epos = end;
 			if (ldiskfs_update_inode_size(inode, epos) & 0x1)
-				inode->i_mtime = inode->i_ctime;
+				inode_set_mtime_to_ts(inode,
+						      inode_get_ctime(inode));
 #ifdef LDISKFS_EOFBLOCKS_FL
 		} else {
 			if (epos > inode->i_size)

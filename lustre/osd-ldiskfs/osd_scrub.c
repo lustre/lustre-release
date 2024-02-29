@@ -415,8 +415,8 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		fid2 = &info->oti_ost_attrs.loa_lma.lma_self_fid;
 		if ((rc == 0 && lu_fid_eq(fid, fid2)) &&
 		    ((inode->i_size == 0 && inode2->i_size > 0 &&
-		      inode->i_mtime.tv_sec == inode2->i_mtime.tv_sec) ||
-		     inode->i_mtime.tv_sec < inode2->i_mtime.tv_sec)) {
+		      inode_get_mtime_sec(inode) == inode_get_mtime_sec(inode2)) ||
+		     inode_get_mtime_sec(inode) < inode_get_mtime_sec(inode2))) {
 			iput(inode2);
 			GOTO(skip, rc);
 		}

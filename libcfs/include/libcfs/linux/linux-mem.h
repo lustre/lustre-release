@@ -128,6 +128,14 @@ static inline void mmap_read_unlock(struct mm_struct *mm)
 {
 	up_read(&mm->mmap_sem);
 }
+#else
+ #ifndef HAVE_MMAP_WRITE_TRYLOCK
+/* Replacement for mmap_write_trylock() */
+static inline bool mmap_write_trylock(struct mm_struct *mm)
+{
+	return down_write_trylock(&mm->mmap_lock) != 0;
+}
+ #endif /* HAVE_MMAP_WRITE_TRYLOCK */
 #endif
 
 #ifdef HAVE_VMALLOC_2ARGS

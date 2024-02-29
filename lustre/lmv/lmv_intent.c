@@ -255,9 +255,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			spin_lock(&inode->i_lock);
 			set_nlink(inode, body->mbo_nlink);
 			spin_unlock(&inode->i_lock);
-			inode->i_atime.tv_sec = body->mbo_atime;
-			inode->i_ctime.tv_sec = body->mbo_ctime;
-			inode->i_mtime.tv_sec = body->mbo_mtime;
+			inode_set_atime(inode, body->mbo_atime, 0);
+			inode_set_ctime(inode, body->mbo_ctime, 0);
+			inode_set_mtime(inode, body->mbo_mtime, 0);
 		}
 
 		md_set_lock_data(tgt->ltd_exp, lockh, inode, NULL);

@@ -231,7 +231,7 @@ int __init cfs_arch_init(void)
 void __exit cfs_arch_exit(void)
 {
 	/* exit_libcfs_vfree_atomic */
-	flush_scheduled_work();
+	__flush_workqueue(system_wq);
 
 	llcrypt_exit();
 }

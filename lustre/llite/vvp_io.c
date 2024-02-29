@@ -788,7 +788,7 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 			i_size_write(inode, size);
 			ll_inode_size_unlock(inode);
 		}
-		inode->i_ctime = current_time(inode);
+		inode_set_ctime_current(inode);
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else {

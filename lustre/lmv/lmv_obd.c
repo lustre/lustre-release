@@ -4184,8 +4184,9 @@ static int lmv_merge_attr(struct obd_export *exp,
 		       "" DFID " size %llu, blocks %llu nlink %u, atime %lld ctime %lld, mtime %lld.\n",
 		       PFID(&lsm->lsm_md_oinfo[i].lmo_fid),
 		       i_size_read(inode), (unsigned long long)inode->i_blocks,
-		       inode->i_nlink, (s64)inode->i_atime.tv_sec,
-		       (s64)inode->i_ctime.tv_sec, (s64)inode->i_mtime.tv_sec);
+		       inode->i_nlink, (s64)inode_get_atime_sec(inode),
+		       (s64)inode_get_ctime_sec(inode),
+		       (s64)inode_get_mtime_sec(inode));
 
 		/* for slave stripe, it needs to subtract nlink for . and .. */
 		if (i != 0)
@@ -4196,14 +4197,14 @@ static int lmv_merge_attr(struct obd_export *exp,
 		attr->cat_size += i_size_read(inode);
 		attr->cat_blocks += inode->i_blocks;
 
-		if (attr->cat_atime < inode->i_atime.tv_sec)
-			attr->cat_atime = inode->i_atime.tv_sec;
+		if (attr->cat_atime < inode_get_atime_sec(inode))
+			attr->cat_atime = inode_get_atime_sec(inode);
 
-		if (attr->cat_ctime < inode->i_ctime.tv_sec)
-			attr->cat_ctime = inode->i_ctime.tv_sec;
+		if (attr->cat_ctime < inode_get_ctime_sec(inode))
+			attr->cat_ctime = inode_get_ctime_sec(inode);
 
-		if (attr->cat_mtime < inode->i_mtime.tv_sec)
-			attr->cat_mtime = inode->i_mtime.tv_sec;
+		if (attr->cat_mtime < inode_get_mtime_sec(inode))
+			attr->cat_mtime = inode_get_mtime_sec(inode);
 	}
 	return 0;
 }

@@ -173,6 +173,7 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LIBCFS_SRC_LOCKDEP_IS_HELD
 			LIBCFS_SRC_HAVE_WAIT_BIT_HEADER
 			LIBCFS_SRC_LINUX_BLK_INTEGRITY_HEADER
+			LIBCFS_SRC_HAVE_MMAP_LOCK
 
 			LB2_LINUX_TEST_COMPILE_ALL([early],
 				[for available lustre kapi interfaces])
@@ -180,6 +181,7 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LIBCFS_LOCKDEP_IS_HELD
 			LIBCFS_HAVE_WAIT_BIT_HEADER
 			LIBCFS_LINUX_BLK_INTEGRITY_HEADER
+			LIBCFS_HAVE_MMAP_LOCK
 
 			# Run any parallel compile tests
 			LB_PROG_LINUX_SRC

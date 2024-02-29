@@ -2882,9 +2882,9 @@ static void osd_inode_getattr(const struct lu_env *env,
 			   LA_PROJID | LA_FLAGS | LA_NLINK | LA_RDEV |
 			   LA_BLKSIZE | LA_TYPE | LA_BTIME;
 
-	attr->la_atime = inode->i_atime.tv_sec;
-	attr->la_mtime = inode->i_mtime.tv_sec;
-	attr->la_ctime = inode->i_ctime.tv_sec;
+	attr->la_atime = inode_get_atime_sec(inode);
+	attr->la_mtime = inode_get_mtime_sec(inode);
+	attr->la_ctime = inode_get_ctime_sec(inode);
 	attr->la_btime = LDISKFS_I(inode)->i_crtime.tv_sec;
 	attr->la_mode	 = inode->i_mode;
 	attr->la_size	 = i_size_read(inode);
@@ -3167,11 +3167,14 @@ static int osd_inode_setattr(const struct lu_env *env,
 		return 0;
 
 	if (bits & LA_ATIME)
-		inode->i_atime = osd_inode_time(inode, attr->la_atime);
+		inode_set_atime_to_ts(inode,
+				      osd_inode_time(inode, attr->la_atime));
 	if (bits & LA_CTIME)
-		inode->i_ctime = osd_inode_time(inode, attr->la_ctime);
+		inode_set_ctime_to_ts(inode,
+				      osd_inode_time(inode, attr->la_ctime));
 	if (bits & LA_MTIME)
-		inode->i_mtime = osd_inode_time(inode, attr->la_mtime);
+		inode_set_mtime_to_ts(inode,
+				      osd_inode_time(inode, attr->la_mtime));
 	if (bits & LA_SIZE) {
 		spin_lock(&inode->i_lock);
 		LDISKFS_I(inode)->i_disksize = attr->la_size;
@@ -3729,11 +3732,14 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
 
 	if (dof->dof_type != DFT_NODE)
 		attr->la_valid &= ~LA_RDEV;
-	if ((valid & LA_ATIME) && (attr->la_atime == inode->i_atime.tv_sec))
+	if ((valid & LA_ATIME) &&
+	    (attr->la_atime == inode_get_atime_sec(inode)))
 		attr->la_valid &= ~LA_ATIME;
-	if ((valid & LA_CTIME) && (attr->la_ctime == inode->i_ctime.tv_sec))
+	if ((valid & LA_CTIME) &&
+	    (attr->la_ctime == inode_get_ctime_sec(inode)))
 		attr->la_valid &= ~LA_CTIME;
-	if ((valid & LA_MTIME) && (attr->la_mtime == inode->i_mtime.tv_sec))
+	if ((valid & LA_MTIME) &&
+	    (attr->la_mtime == inode_get_mtime_sec(inode)))
 		attr->la_valid &= ~LA_MTIME;
 
 	result = osd_quota_transfer(inode, attr, handle);

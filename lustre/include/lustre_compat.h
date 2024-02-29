@@ -45,6 +45,7 @@
 #include <linux/slab.h>
 #include <linux/security.h>
 #include <linux/pagevec.h>
+#include <linux/workqueue.h>
 #include <libcfs/linux/linux-fs.h>
 #ifdef HAVE_XARRAY_SUPPORT
 #include <linux/xarray.h>
@@ -781,5 +782,60 @@ static inline void folio_batch_reinit(struct folio_batch *fbatch)
 # define fbatch_at_npgs(pvec, n)	1
 # define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
 #endif /* HAVE_FOLIO_BATCH */
+
+#ifndef HAVE_FLUSH___WORKQUEUE
+#define __flush_workqueue(wq)	flush_scheduled_work()
+#endif
+
+#ifdef HAVE_NSPROXY_COUNT_AS_REFCOUNT
+#define nsproxy_dec(ns)		refcount_dec(&(ns)->count)
+#else
+#define nsproxy_dec(ns)		atomic_dec(&(ns)->count)
+#endif
+
+#ifndef HAVE_INODE_GET_CTIME
+#define inode_get_ctime(i)		((i)->i_ctime)
+#define inode_set_ctime_to_ts(i, ts)	((i)->i_ctime = ts)
+#define inode_set_ctime_current(i) \
+	inode_set_ctime_to_ts((i), current_time((i)))
+
+static inline struct timespec64 inode_set_ctime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+
+	return inode_set_ctime_to_ts(inode, ts);
+}
+#endif /* !HAVE_INODE_GET_CTIME */
+
+#ifndef HAVE_INODE_GET_MTIME_SEC
+
+#define inode_get_ctime_sec(i)		(inode_get_ctime((i)).tv_sec)
+
+#define inode_get_atime(i)		((i)->i_atime)
+#define inode_get_atime_sec(i)		((i)->i_atime.tv_sec)
+#define inode_set_atime_to_ts(i, ts)	((i)->i_atime = ts)
+
+static inline struct timespec64 inode_set_atime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+	return inode_set_atime_to_ts(inode, ts);
+}
+
+#define inode_get_mtime(i)		((i)->i_mtime)
+#define inode_get_mtime_sec(i)		((i)->i_mtime.tv_sec)
+#define inode_set_mtime_to_ts(i, ts)	((i)->i_mtime = ts)
+
+static inline struct timespec64 inode_set_mtime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+	return inode_set_mtime_to_ts(inode, ts);
+}
+#endif  /* !HAVE_INODE_GET_MTIME_SEC */
 
 #endif /* _LUSTRE_COMPAT_H */

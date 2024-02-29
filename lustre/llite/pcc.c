@@ -1853,15 +1853,15 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 
 	ll_inode_size_lock(inode);
 	if (test_and_clear_bit(LLIF_UPDATE_ATIME, &lli->lli_flags) ||
-	    inode->i_atime.tv_sec < lli->lli_atime)
-		inode->i_atime.tv_sec = lli->lli_atime;
+	    inode_get_atime_sec(inode) < lli->lli_atime)
+		inode_set_atime(inode, lli->lli_atime, 0);
 
-	inode->i_mtime.tv_sec = lli->lli_mtime;
-	inode->i_ctime.tv_sec = lli->lli_ctime;
+	inode_set_mtime(inode, lli->lli_mtime, 0);
+	inode_set_ctime(inode, lli->lli_ctime, 0);
 
-	atime = inode->i_atime.tv_sec;
-	mtime = inode->i_mtime.tv_sec;
-	ctime = inode->i_ctime.tv_sec;
+	atime = inode_get_atime_sec(inode);
+	mtime = inode_get_mtime_sec(inode);
+	ctime = inode_get_ctime_sec(inode);
 
 	if (atime < stat.atime.tv_sec)
 		atime = stat.atime.tv_sec;
@@ -1875,9 +1875,9 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 	i_size_write(inode, stat.size);
 	inode->i_blocks = stat.blocks;
 
-	inode->i_atime.tv_sec = atime;
-	inode->i_mtime.tv_sec = mtime;
-	inode->i_ctime.tv_sec = ctime;
+	inode_set_atime(inode, atime, 0);
+	inode_set_mtime(inode, mtime, 0);
+	inode_set_ctime(inode, ctime, 0);
 
 	ll_inode_size_unlock(inode);
 out:
