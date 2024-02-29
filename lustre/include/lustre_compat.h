@@ -644,11 +644,84 @@ static inline bool is_root_inode(struct inode *inode)
 #define migrate_folio	migratepage
 #endif
 
-#ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
-#define register_shrinker(_s) register_shrinker((_s), "%ps", (_s))
-#elif !defined(HAVE_REGISTER_SHRINKER_RET)
-#define register_shrinker(_s) (register_shrinker(_s), 0)
+struct ll_shrinker_ops {
+#ifdef HAVE_SHRINKER_COUNT
+	unsigned long (*count_objects)(struct shrinker *,
+				       struct shrink_control *sc);
+	unsigned long (*scan_objects)(struct shrinker *,
+				      struct shrink_control *sc);
+#else
+	int (*shrink)(struct shrinker *, struct shrink_control *sc);
 #endif
+	int seeks;	/* seeks to recreate an obj */
+};
+
+#ifndef HAVE_SHRINKER_ALLOC
+static inline void shrinker_free(struct shrinker *shrinker)
+{
+	unregister_shrinker(shrinker);
+	OBD_FREE_PTR(shrinker);
+}
+#endif
+
+/* allocate and register a shrinker, return should be checked with IS_ERR() */
+static inline struct shrinker *
+ll_shrinker_create(struct ll_shrinker_ops *ops, unsigned int flags,
+		   const char *fmt, ...)
+{
+	struct shrinker *shrinker;
+	int rc = 0;
+
+#if defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED) || defined(HAVE_SHRINKER_ALLOC)
+	struct va_format vaf;
+	va_list args;
+#endif
+
+#ifdef HAVE_SHRINKER_ALLOC
+	va_start(args, fmt);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	shrinker = shrinker_alloc(flags, "%pV", &vaf);
+	va_end(args);
+#else
+	OBD_ALLOC_PTR(shrinker);
+#endif
+	if (!shrinker)
+		return ERR_PTR(-ENOMEM);
+
+#ifdef HAVE_SHRINKER_COUNT
+	shrinker->count_objects = ops->count_objects;
+	shrinker->scan_objects = ops->scan_objects;
+#else
+	shrinker->shrink = ops->shrink;
+#endif
+	shrinker->seeks = ops->seeks;
+
+#ifdef HAVE_SHRINKER_ALLOC
+	shrinker_register(shrinker);
+#else
+ #ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
+	va_start(args, fmt);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	rc = register_shrinker(shrinker, "%pV", &vaf);
+	va_end(args);
+ #elif defined(HAVE_REGISTER_SHRINKER_RET)
+	rc = register_shrinker(shrinker);
+ #else
+	register_shrinker(shrinker);
+ #endif
+#endif
+	if (rc) {
+#ifdef HAVE_SHRINKER_ALLOC
+		shrinker_free(shrinker);
+#else
+		OBD_FREE_PTR(shrinker);
+#endif
+		shrinker = ERR_PTR(rc);
+	}
+	return shrinker;
+}
 
 #ifndef fallthrough
 # if defined(__GNUC__) && __GNUC__ >= 7

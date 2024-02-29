@@ -2123,7 +2123,7 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
 }
 
 #ifdef HAVE_SHRINKER_COUNT
-static struct shrinker lu_site_shrinker = {
+static struct ll_shrinker_ops lu_site_sh_ops = {
 	.count_objects	= lu_cache_shrink_count,
 	.scan_objects	= lu_cache_shrink_scan,
 	.seeks		= DEFAULT_SEEKS,
@@ -2162,12 +2162,14 @@ static int lu_cache_shrink(struct shrinker *shrinker,
 	return cached;
 }
 
-static struct shrinker lu_site_shrinker = {
+static struct ll_shrinker_ops lu_site_sh_ops = {
 	.shrink  = lu_cache_shrink,
 	.seeks   = DEFAULT_SEEKS,
 };
 
 #endif /* HAVE_SHRINKER_COUNT */
+
+static struct shrinker *lu_site_shrinker;
 
 /* Initialization of global lu_* data. */
 int lu_global_init(void)
@@ -2203,9 +2205,11 @@ int lu_global_init(void)
 	 * inode, one for ea. Unfortunately setting this high value results in
 	 * lu_object/inode cache consuming all the memory.
 	 */
-	result = register_shrinker(&lu_site_shrinker);
-	if (result)
+	lu_site_shrinker = ll_shrinker_create(&lu_site_sh_ops, 0, "lu_site");
+	if (IS_ERR(lu_site_shrinker)) {
+		result = PTR_ERR(lu_site_shrinker);
 		goto out_env;
+	}
 
 	result = rhashtable_init(&lu_env_rhash, &lu_env_rhash_params);
 
@@ -2215,7 +2219,7 @@ int lu_global_init(void)
 	return result;
 
 out_shrinker:
-	unregister_shrinker(&lu_site_shrinker);
+	shrinker_free(lu_site_shrinker);
 out_env:
 	/* ordering here is explained in lu_global_fini() */
 	lu_context_key_degister(&lu_global_key);
@@ -2230,7 +2234,7 @@ out_lu_ref:
 /* Dual to lu_global_init(). */
 void lu_global_fini(void)
 {
-	unregister_shrinker(&lu_site_shrinker);
+	shrinker_free(lu_site_shrinker);
 
 	lu_context_key_degister(&lu_global_key);
 

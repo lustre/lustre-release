@@ -151,10 +151,9 @@ int lustre_in_group_p(struct lu_ucred *mu, gid_t grp)
 		if (!group_info)
 			return 0;
 
-		atomic_inc(&group_info->usage);
+		get_group_info(group_info);
 		rc = lustre_groups_search(group_info, grp);
-		if (atomic_dec_and_test(&group_info->usage))
-			groups_free(group_info);
+		put_group_info(group_info);
 	}
 	return rc;
 }

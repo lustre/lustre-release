@@ -120,7 +120,8 @@ static struct ptlrpc_enc_page_pool {
 	/*
 	 * memory shrinker
 	 */
-	struct shrinker pool_shrinker;
+	struct ll_shrinker_ops epp_shops;
+	struct shrinker *pool_shrinker;
 	struct mutex add_pages_mutex;
 } **page_pools;
 
@@ -1014,16 +1015,17 @@ int sptlrpc_enc_pool_init(void)
 			GOTO(fail, rc = -ENOMEM);
 		/* Pass pool number as part of pools_shrinker_seeks value */
 #ifdef HAVE_SHRINKER_COUNT
-		pool->pool_shrinker.count_objects = enc_pools_shrink_count;
-		pool->pool_shrinker.scan_objects = enc_pools_shrink_scan;
+		pool->epp_shops.count_objects = enc_pools_shrink_count;
+		pool->epp_shops.scan_objects = enc_pools_shrink_scan;
 #else
-		pool->pool_shrinker.shrink = enc_pools_shrink;
+		pool->epp_shops.shrink = enc_pools_shrink;
 #endif
-		pool->pool_shrinker.seeks = INDEX_TO_SEEKS(pool_index);
+		pool->epp_shops.seeks = INDEX_TO_SEEKS(pool_index);
 
-		rc = register_shrinker(&pool->pool_shrinker);
-		if (rc)
-			GOTO(fail, rc);
+		pool->pool_shrinker = ll_shrinker_create(&pool->epp_shops, 0,
+							 "sptlrpc_enc_pool");
+		if (IS_ERR(pool->pool_shrinker))
+			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
 
 		mutex_init(&pool->add_pages_mutex);
 	}
@@ -1034,7 +1036,7 @@ fail:
 	for (pool_index = 0; pool_index <= to_revert; pool_index++) {
 		pool = page_pools[pool_index];
 		if (pool) {
-			if (pool->epp_pools) 
+			if (pool->epp_pools)
 				enc_pools_free(pool_index);
 			OBD_FREE(pool, sizeof(**page_pools));
 		}
@@ -1052,7 +1054,7 @@ void sptlrpc_enc_pool_fini(void)
 
 	for (pool_index = 0; pool_index < POOLS_COUNT; pool_index++) {
 		pool = page_pools[pool_index];
-		unregister_shrinker(&pool->pool_shrinker);
+		shrinker_free(pool->pool_shrinker);
 		LASSERT(pool->epp_pools);
 		LASSERT(pool->epp_total_pages == pool->epp_free_pages);
 
