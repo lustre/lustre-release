@@ -39,6 +39,7 @@
 #include <linux/types.h>
 
 #include <libcfs/libcfs.h>
+#include <lnet/lib-cpt.h>
 #include <lprocfs_status.h>
 #include <lustre_handles.h>
 

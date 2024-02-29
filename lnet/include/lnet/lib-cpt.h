@@ -15,15 +15,11 @@
  *
  * GPL HEADER END
  */
-/*
- * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  *
  * Copyright (c) 2012, 2017, Intel Corporation.
  */
-/*
- * This file is part of Lustre, http://www.lustre.org/
- *
- * libcfs/include/libcfs/libcfs_cpu.h
+/* This file is part of Lustre, http://www.lustre.org/
  *
  * CPU partition
  *   . CPU partition is virtual processing unit
@@ -296,6 +292,10 @@ static inline void cfs_cpu_fini(void)
 
 #endif /* CONFIG_SMP */
 
+/* Module parameters */
+extern int cpu_npartitions;
+extern char *cpu_pattern;
+
 static inline
 struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 						struct cfs_cpt_table *tbl,
@@ -320,16 +320,13 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 	return wq;
 }
 
-/*
- * allocate per-cpu-partition data, returned value is an array of pointers,
+/* allocate per-cpu-partition data, returned value is an array of pointers,
  * variable can be indexed by CPU ID.
  *	cptab != NULL: size of array is number of CPU partitions
  *	cptab == NULL: size of array is number of HW cores
  */
 void *cfs_percpt_alloc(struct cfs_cpt_table *cptab, unsigned int size);
-/*
- * destroy per-cpu-partition variable
- */
+/* destroy per-cpu-partition variable */
 void cfs_percpt_free(void *vars);
 int cfs_percpt_number(void *vars);
 
