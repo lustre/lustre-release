@@ -177,10 +177,10 @@ static int __lfsck_add_target(const struct lu_env *env,
 			      bool for_ost, bool locked)
 {
 	struct lfsck_tgt_descs *ltds;
-	__u32			index = ltd->ltd_index;
-	int			rc    = 0;
-	ENTRY;
+	__u32 index = ltd->ltd_index;
+	int rc = 0;
 
+	ENTRY;
 	if (for_ost)
 		ltds = &lfsck->li_ost_descs;
 	else
@@ -242,12 +242,12 @@ unlock:
 static int lfsck_add_target_from_orphan(const struct lu_env *env,
 					struct lfsck_instance *lfsck)
 {
-	struct lfsck_tgt_descs	*ltds    = &lfsck->li_ost_descs;
-	struct lfsck_tgt_desc	*ltd;
-	struct lfsck_tgt_desc	*next;
-	struct list_head	*head    = &lfsck_ost_orphan_list;
-	int			 rc;
-	bool			 for_ost = true;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_ost_descs;
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
+	struct list_head *head = &lfsck_ost_orphan_list;
+	int rc;
+	bool for_ost = true;
 
 again:
 	spin_lock(&lfsck_instance_lock);
@@ -337,8 +337,8 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 {
 	struct lfsck_bookmark	*bk = &lfsck->li_bookmark_ram;
 	int			 rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (!locked)
 		mutex_lock(&lfsck->li_mutex);
 
@@ -348,7 +348,8 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 		/* We do not care about whether the subsequent sub-operations
 		 * failed or not. The worst case is that one FID is lost that
 		 * is not a big issue for the LFSCK since it is relative rare
-		 * for LFSCK create. */
+		 * for LFSCK create.
+		 */
 		rc = lfsck_bookmark_store(env, lfsck);
 	}
 
@@ -364,10 +365,10 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 			      struct lustre_handle *lh, __u64 bits,
 			      enum ldlm_mode mode)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	union ldlm_policy_data		*policy = &info->lti_policy;
-	__u64				 flags	= LDLM_FL_ATOMIC_CB;
-	int				 rc;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	union ldlm_policy_data *policy = &info->lti_policy;
+	__u64 flags = LDLM_FL_ATOMIC_CB;
+	int rc;
 
 	LASSERT(lfsck->li_namespace != NULL);
 
@@ -389,7 +390,8 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 		/* for regular checks LFSCK doesn't use LDLM locking,
 		 * so the state isn't coherent. here we just took LDLM
 		 * lock for coherency and it's time to invalidate
-		 * previous state */
+		 * previous state
+		 */
 		if (rc == ELDLM_OK)
 			dt_invalidate(env, obj);
 	} else {
@@ -514,7 +516,7 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       struct lfsck_lock_handle *llh, __u64 bits, enum ldlm_mode mode)
 {
 	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
-	int		    rc;
+	int rc;
 
 	LASSERT(S_ISDIR(lfsck_object_type(obj)));
 	LASSERT(name != NULL);
@@ -572,9 +574,9 @@ int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,
 			      const struct lu_fid *fid)
 {
-	struct seq_server_site	*ss	= lfsck_dev_site(lfsck);
-	struct lu_seq_range	*range	= &lfsck_env_info(env)->lti_range;
-	int			 rc;
+	struct seq_server_site *ss = lfsck_dev_site(lfsck);
+	struct lu_seq_range *range = &lfsck_env_info(env)->lti_range;
+	int rc;
 
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* "ROOT" is always on the MDT0. */
@@ -615,13 +617,13 @@ static int lfsck_lpf_remove_name_entry(const struct lu_env *env,
 				       struct lfsck_instance *lfsck,
 				       const char *name)
 {
-	struct dt_object	*parent = lfsck->li_lpf_root_obj;
-	struct dt_device	*dev	= lfsck_obj2dev(parent);
-	struct thandle		*th;
-	struct lfsck_lock_handle *llh	= &lfsck_env_info(env)->lti_llh;
-	int			 rc;
-	ENTRY;
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct dt_device *dev = lfsck_obj2dev(parent);
+	struct thandle *th;
+	struct lfsck_lock_handle *llh = &lfsck_env_info(env)->lti_llh;
+	int rc;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
@@ -675,21 +677,21 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 				  struct dt_object_format *dof,
 				  const char *name)
 {
-	struct dt_insert_rec	*rec	= &lfsck_env_info(env)->lti_dt_rec;
-	struct dt_object	*parent	= lfsck->li_lpf_root_obj;
-	struct dt_device	*dev	= lfsck_obj2dev(child);
-	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
-	struct dt_object	*bk_obj = lfsck->li_bookmark_obj;
-	const struct lu_fid	*cfid	= lfsck_dto2fid(child);
-	struct thandle		*th	= NULL;
-	struct linkea_data	 ldata	= { NULL };
-	struct lu_buf		 linkea_buf;
-	const struct lu_name	*cname;
-	loff_t			 pos	= 0;
-	int			 len	= sizeof(struct lfsck_bookmark);
-	int			 rc;
-	ENTRY;
+	struct dt_insert_rec *rec = &lfsck_env_info(env)->lti_dt_rec;
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct dt_device *dev = lfsck_obj2dev(child);
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct dt_object *bk_obj = lfsck->li_bookmark_obj;
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct thandle *th = NULL;
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	const struct lu_name *cname;
+	loff_t pos = 0;
+	int len = sizeof(struct lfsck_bookmark);
+	int rc;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
@@ -833,21 +835,21 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 				   struct dt_object_format *dof,
 				   const char *name)
 {
-	struct dt_insert_rec	*rec	= &lfsck_env_info(env)->lti_dt_rec;
-	struct dt_object	*parent	= lfsck->li_lpf_root_obj;
-	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
-	struct dt_object	*bk_obj = lfsck->li_bookmark_obj;
-	const struct lu_fid	*cfid	= lfsck_dto2fid(child);
-	struct thandle		*th	= NULL;
-	struct linkea_data	 ldata	= { NULL };
-	struct lu_buf		 linkea_buf;
-	const struct lu_name	*cname;
-	struct dt_device	*dev;
-	loff_t			 pos	= 0;
-	int			 len	= sizeof(struct lfsck_bookmark);
-	int			 rc;
-	ENTRY;
+	struct dt_insert_rec *rec = &lfsck_env_info(env)->lti_dt_rec;
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct dt_object *bk_obj = lfsck->li_bookmark_obj;
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct thandle *th = NULL;
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	const struct lu_name *cname;
+	struct dt_device *dev;
+	loff_t pos = 0;
+	int len = sizeof(struct lfsck_bookmark);
+	int rc;
 
+	ENTRY;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
@@ -875,7 +877,8 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	 *	   remotely.
 	 *
 	 *	If 1) done, but 2) failed, then go ahead, the LFSCK will try to
-	 *	repair such inconsistency when LFSCK run next time. */
+	 *	repair such inconsistency when LFSCK run next time.
+	 */
 
 	/* Transaction I: locally */
 
@@ -1017,10 +1020,8 @@ stop:
 	dt_trans_stop(env, dev, th);
 
 	if (rc != 0 && dev == lfsck_obj2dev(parent))
-		CDEBUG(D_LFSCK, "%s: partially created the object "DFID
-		       "for orphans, but failed to insert the name %s "
-		       "to the .lustre/lost+found/. Such inconsistency "
-		       "will be repaired when LFSCK run next time: rc = %d\n",
+		CDEBUG(D_LFSCK,
+		       "%s: partially created the object "DFID"for orphans, but failed to insert the name %s to the .lustre/lost+found/. Such inconsistency will be repaired when LFSCK run next time: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), PFID(cfid), name, rc);
 
 	return rc;
@@ -1043,19 +1044,19 @@ stop:
 static int lfsck_create_lpf(const struct lu_env *env,
 			    struct lfsck_instance *lfsck)
 {
-	struct lfsck_bookmark	 *bk	= &lfsck->li_bookmark_ram;
-	struct lfsck_thread_info *info	= lfsck_env_info(env);
-	struct lu_fid		 *cfid	= &info->lti_fid2;
-	struct lu_attr		 *la	= &info->lti_la;
-	struct dt_object_format  *dof	= &info->lti_dof;
-	struct dt_object	 *parent = lfsck->li_lpf_root_obj;
-	struct dt_object	 *child	= NULL;
-	struct lfsck_lock_handle *llh	= &info->lti_llh;
-	char			  name[8];
-	int			  node	= lfsck_dev_idx(lfsck);
-	int			  rc	= 0;
-	ENTRY;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_fid *cfid = &info->lti_fid2;
+	struct lu_attr *la = &info->lti_la;
+	struct dt_object_format *dof = &info->lti_dof;
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct dt_object *child = NULL;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	char name[8];
+	int node = lfsck_dev_idx(lfsck);
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(lfsck->li_master);
 	LASSERT(parent != NULL);
 	LASSERT(lfsck->li_lpf_obj == NULL);
@@ -1070,7 +1071,8 @@ static int lfsck_create_lpf(const struct lu_env *env,
 		/* There is corner case that: in former LFSCK scanning we have
 		 * created the .lustre/lost+found/MDTxxxx but failed to update
 		 * the lfsck_bookmark::lb_lpf_fid successfully. So need lookup
-		 * it from MDT0 firstly. */
+		 * it from MDT0 firstly.
+		 */
 		rc = dt_lookup_dir(env, parent, name, cfid);
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(unlock, rc);
@@ -1141,14 +1143,14 @@ unlock:
 static int lfsck_scan_lpf_bad_entries(const struct lu_env *env,
 				      struct lfsck_instance *lfsck)
 {
-	struct dt_object	*parent = lfsck->li_lpf_root_obj;
-	struct lu_dirent	*ent	=
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct lu_dirent *ent =
 			(struct lu_dirent *)lfsck_env_info(env)->lti_key;
-	const struct dt_it_ops	*iops	= &parent->do_index_ops->dio_it;
-	struct dt_it		*it;
-	int			 rc;
-	ENTRY;
+	const struct dt_it_ops *iops = &parent->do_index_ops->dio_it;
+	struct dt_it *it;
+	int rc;
 
+	ENTRY;
 	it = iops->init(env, parent, LUDA_64BITHASH);
 	if (IS_ERR(it))
 		RETURN(PTR_ERR(it));
@@ -1269,15 +1271,15 @@ static int lfsck_verify_lpf_pairs(const struct lu_env *env,
 				  struct lu_fid *fid,
 				  enum lfsck_verify_lpf_types type)
 {
-	struct dt_object	 *parent  = lfsck->li_lpf_root_obj;
-	struct lfsck_thread_info *info    = lfsck_env_info(env);
-	char			 *name2   = info->lti_key;
-	struct lu_fid		 *fid2    = &info->lti_fid3;
-	struct dt_object	 *parent2 = NULL;
-	struct lustre_handle	  lh      = { 0 };
-	int			  rc;
-	ENTRY;
+	struct dt_object *parent = lfsck->li_lpf_root_obj;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	char *name2 = info->lti_key;
+	struct lu_fid *fid2 = &info->lti_fid3;
+	struct dt_object *parent2 = NULL;
+	struct lustre_handle lh = { 0 };
+	int rc;
 
+	ENTRY;
 	fid_zero(fid);
 	rc = dt_lookup_dir(env, child, dotdot, fid);
 	if (rc != 0)
@@ -1330,7 +1332,8 @@ linkea:
 	}
 
 	/* It is almost impossible that the bookmark file (or the name entry)
-	 * and the linkEA hit the same data corruption. Trust the linkEA. */
+	 * and the linkEA hit the same data corruption. Trust the linkEA.
+	 */
 	if (lu_fid_eq(fid2, &LU_LPF_FID) && strcmp(name, name2) == 0) {
 		dt_read_unlock(env, child);
 		lfsck_ibits_unlock(&lh, LCK_PR);
@@ -1415,21 +1418,21 @@ out_done:
  */
 int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 {
-	struct lfsck_thread_info *info	 = lfsck_env_info(env);
-	struct lu_fid		 *pfid	 = &info->lti_fid;
-	struct lu_fid		 *cfid	 = &info->lti_fid2;
-	struct lfsck_bookmark	 *bk	 = &lfsck->li_bookmark_ram;
-	struct dt_object	 *parent;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_fid *pfid = &info->lti_fid;
+	struct lu_fid *cfid = &info->lti_fid2;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct dt_object *parent;
 	/* child1's FID is in the bookmark file. */
-	struct dt_object	 *child1 = NULL;
+	struct dt_object *child1 = NULL;
 	/* child2's FID is in the name entry MDTxxxx. */
-	struct dt_object	 *child2 = NULL;
-	const struct lu_name	 *cname;
-	char			  name[8];
-	int			  node   = lfsck_dev_idx(lfsck);
-	int			  rc	 = 0;
-	ENTRY;
+	struct dt_object *child2 = NULL;
+	const struct lu_name *cname;
+	char name[8];
+	int node = lfsck_dev_idx(lfsck);
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(lfsck->li_master);
 
 	if (lfsck_is_dryrun(lfsck))
@@ -1468,8 +1471,8 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 	if (node == 0) {
 		rc = lfsck_scan_lpf_bad_entries(env, lfsck);
 		if (rc != 0)
-			CDEBUG(D_LFSCK, "%s: scan .lustre/lost+found/ "
-			       "for bad sub-directories: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: scan .lustre/lost+found/ for bad sub-directories: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), rc);
 	}
 
@@ -1610,12 +1613,12 @@ put:
 
 static int lfsck_fid_init(struct lfsck_instance *lfsck)
 {
-	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
-	struct seq_server_site	*ss	= lfsck_dev_site(lfsck);
-	char			*prefix;
-	int			 rc	= 0;
-	ENTRY;
+	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
+	struct seq_server_site *ss = lfsck_dev_site(lfsck);
+	char *prefix;
+	int rc = 0;
 
+	ENTRY;
 	if (unlikely(ss == NULL))
 		RETURN(-ENXIO);
 
@@ -1656,14 +1659,14 @@ static void lfsck_fid_fini(struct lfsck_instance *lfsck)
 void lfsck_instance_cleanup(const struct lu_env *env,
 			    struct lfsck_instance *lfsck)
 {
-	struct ptlrpc_thread	*thread = &lfsck->li_thread;
-	struct lfsck_component	*com;
-	struct lfsck_component	*next;
-	struct lfsck_lmv_unit	*llu;
-	struct lfsck_lmv_unit	*llu_next;
-	struct lfsck_lmv	*llmv;
-	ENTRY;
+	struct ptlrpc_thread *thread = &lfsck->li_thread;
+	struct lfsck_component *com;
+	struct lfsck_component *next;
+	struct lfsck_lmv_unit *llu;
+	struct lfsck_lmv_unit *llu_next;
+	struct lfsck_lmv *llmv;
 
+	ENTRY;
 	LASSERT(list_empty(&lfsck->li_link));
 	LASSERT(thread_is_init(thread) || thread_is_stopped(thread));
 
@@ -1928,7 +1931,7 @@ lfsck_thread_args_init(struct lfsck_instance *lfsck,
 		       struct lfsck_start_param *lsp)
 {
 	struct lfsck_thread_args *lta;
-	int			  rc;
+	int rc;
 
 	OBD_ALLOC_PTR(lta);
 	if (lta == NULL)
@@ -1994,7 +1997,7 @@ lfsck_assistant_object_init(const struct lu_env *env, const struct lu_fid *fid,
 			    const struct lu_attr *attr, __u64 cookie,
 			    bool is_dir)
 {
-	struct lfsck_assistant_object	*lso;
+	struct lfsck_assistant_object *lso;
 
 	OBD_ALLOC_PTR(lso);
 	if (lso == NULL)
@@ -2057,11 +2060,11 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 				 void *args, int rc)
 {
 	struct lfsck_async_interpret_args *laia = args;
-	struct lfsck_component		  *com  = laia->laia_com;
-	struct lfsck_assistant_data	  *lad  = com->lc_data;
-	struct lfsck_tgt_descs		  *ltds = laia->laia_ltds;
-	struct lfsck_tgt_desc		  *ltd  = laia->laia_ltd;
-	struct lfsck_request		  *lr   = laia->laia_lr;
+	struct lfsck_component *com = laia->laia_com;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_tgt_descs *ltds = laia->laia_ltds;
+	struct lfsck_tgt_desc *ltd = laia->laia_ltd;
+	struct lfsck_request *lr = laia->laia_lr;
 
 	LASSERT(com->lc_lfsck->li_master);
 
@@ -2073,8 +2076,8 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 		}
 
 		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for %s "
-			       "start: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to notify %s %x for %s start: rc = %d\n",
 			       lfsck_lfsck2name(com->lc_lfsck),
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
@@ -2097,7 +2100,8 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 				 * not. So the namespace LFSCK on this MDT
 				 * cannot handle orphan MDT-objects properly.
 				 * So we mark the LFSCK as LF_INCOMPLETE and
-				 * skip orphan MDT-objects handling. */
+				 * skip orphan MDT-objects handling.
+				 */
 				ns->ln_flags |= LF_INCOMPLETE;
 			}
 			break;
@@ -2151,8 +2155,8 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 	case LE_PHASE2_DONE:
 	case LE_PEER_EXIT:
 		if (rc != 0 && rc != -EALREADY)
-			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for %s: "
-			      "event = %d, rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to notify %s %x for %s: event = %d, rc = %d\n",
 			      lfsck_lfsck2name(com->lc_lfsck),
 			      (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			      ltd->ltd_index, lad->lad_name, lr->lr_event, rc);
@@ -2187,8 +2191,9 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 					       &RMF_LFSCK_REPLY);
 		if (reply == NULL) {
 			rc = -EPROTO;
-			CDEBUG(D_LFSCK, "%s: invalid query reply for %s: "
-			       "rc = %d\n", lfsck_lfsck2name(com->lc_lfsck),
+			CDEBUG(D_LFSCK,
+			       "%s: invalid query reply for %s: rc = %d\n",
+			       lfsck_lfsck2name(com->lc_lfsck),
 			       lad->lad_name, rc);
 
 			if (lr->lr_flags & LEF_QUERY_ALL) {
@@ -2277,7 +2282,7 @@ static void lfsck_interpret(const struct lu_env *env,
 			    struct ptlrpc_request *req, void *args, int result)
 {
 	struct lfsck_async_interpret_args *laia = args;
-	struct lfsck_component		  *com;
+	struct lfsck_component *com;
 
 	LASSERT(laia->laia_com == NULL);
 	LASSERT(laia->laia_shared);
@@ -2301,9 +2306,9 @@ static int lfsck_stop_notify(const struct lu_env *env,
 			     struct lfsck_tgt_desc *ltd, __u16 type)
 {
 	struct lfsck_component *com;
-	int			rc = 0;
-	ENTRY;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(lfsck->li_master);
 
 	spin_lock(&lfsck->li_lock);
@@ -2371,8 +2376,8 @@ static int lfsck_stop_notify(const struct lu_env *env,
 					 lfsck_async_interpret_common,
 					 laia, LFSCK_NOTIFY);
 		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for "
-			       "co-stop for %s: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to notify %s %x for co-stop for %s: rc = %d\n",
 			       lfsck_lfsck2name(lfsck),
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
@@ -2393,7 +2398,7 @@ static int lfsck_async_interpret(const struct lu_env *env,
 				 void *args, int rc)
 {
 	struct lfsck_async_interpret_args *laia = args;
-	struct lfsck_instance		  *lfsck;
+	struct lfsck_instance *lfsck;
 
 	lfsck = container_of(laia->laia_ltds, struct lfsck_instance,
 			     li_mdt_descs);
@@ -2412,10 +2417,10 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 			void *args, int request)
 {
 	struct lfsck_async_interpret_args *laia;
-	struct ptlrpc_request		  *req;
-	struct lfsck_request		  *tmp;
-	struct req_format		  *format;
-	int				   rc;
+	struct ptlrpc_request *req;
+	struct lfsck_request *tmp;
+	struct req_format *format;
+	int rc;
 
 	switch (request) {
 	case LFSCK_NOTIFY:
@@ -2498,8 +2503,9 @@ again:
 		if (rc != 0) {
 			struct lfsck_assistant_data *lad = com->lc_data;
 
-			CDEBUG(D_LFSCK, "%s: Fail to query %s %x for stat %s: "
-			       "rc = %d\n", lfsck_lfsck2name(lfsck),
+			CDEBUG(D_LFSCK,
+			       "%s: Fail to query %s %x for stat %s: rc = %d\n",
+			       lfsck_lfsck2name(lfsck),
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
 			lfsck_reset_ltd_status(ltd, com->lc_type);
@@ -2524,15 +2530,15 @@ again:
 int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 			  struct lfsck_start_param *lsp)
 {
-	struct lfsck_instance		*lfsck   = com->lc_lfsck;
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct lfsck_thread_args	*lta;
-	struct task_struct		*task;
-	int				 rc;
-	ENTRY;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct ptlrpc_thread *mthread = &lfsck->li_thread;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
+	struct lfsck_thread_args *lta;
+	struct task_struct *task;
+	int rc;
 
+	ENTRY;
 	lad->lad_assistant_status = 0;
 	lad->lad_post_result = 0;
 	lad->lad_flags = 0;
@@ -2546,8 +2552,8 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 	task = kthread_run(lfsck_assistant_engine, lta, "%s", lad->lad_name);
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
-		CERROR("%s: cannot start LFSCK assistant thread for %s: "
-		       "rc = %d\n", lfsck_lfsck2name(lfsck), lad->lad_name, rc);
+		CERROR("%s: cannot start LFSCK assistant thread for %s: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), lad->lad_name, rc);
 		lfsck_thread_args_fini(lta);
 	} else {
 		wait_event_idle(mthread->t_ctl_waitq,
@@ -2569,9 +2575,9 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 int lfsck_checkpoint_generic(const struct lu_env *env,
 			     struct lfsck_component *com)
 {
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct ptlrpc_thread *mthread = &com->lc_lfsck->li_thread;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
 
 	wait_event_idle(mthread->t_ctl_waitq,
 			list_empty(&lad->lad_req_list) ||
@@ -2587,9 +2593,9 @@ int lfsck_checkpoint_generic(const struct lu_env *env,
 void lfsck_post_generic(const struct lu_env *env,
 			struct lfsck_component *com, int *result)
 {
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
+	struct ptlrpc_thread *mthread = &com->lc_lfsck->li_thread;
 
 	lad->lad_post_result = *result;
 	if (*result <= 0)
@@ -2614,17 +2620,17 @@ void lfsck_post_generic(const struct lu_env *env,
 int lfsck_double_scan_generic(const struct lu_env *env,
 			      struct lfsck_component *com, int status)
 {
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct ptlrpc_thread *mthread = &com->lc_lfsck->li_thread;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
 
 	if (status != LS_SCANNING_PHASE2)
 		set_bit(LAD_EXIT, &lad->lad_flags);
 	else
 		set_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags);
 
-	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s double_scan, "
-	       "status %d\n",
+	CDEBUG(D_LFSCK,
+	       "%s: waiting for assistant to do %s double_scan, status %d\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, status);
 
 	wake_up(&athread->t_ctl_waitq);
@@ -2632,8 +2638,9 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 			test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) ||
 			thread_is_stopped(athread));
 
-	CDEBUG(D_LFSCK, "%s: the assistant has done %s double_scan, "
-	       "status %d\n", lfsck_lfsck2name(com->lc_lfsck), lad->lad_name,
+	CDEBUG(D_LFSCK,
+	       "%s: the assistant has done %s double_scan, status %d\n",
+	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name,
 	       lad->lad_assistant_status);
 
 	if (lad->lad_assistant_status < 0)
@@ -2645,9 +2652,9 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 void lfsck_quit_generic(const struct lu_env *env,
 			struct lfsck_component *com)
 {
-	struct lfsck_assistant_data	*lad	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &lad->lad_thread;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct ptlrpc_thread *mthread = &com->lc_lfsck->li_thread;
+	struct ptlrpc_thread *athread = &lad->lad_thread;
 
 	set_bit(LAD_EXIT, &lad->lad_flags);
 	wake_up(&athread->t_ctl_waitq);
@@ -2666,8 +2673,8 @@ int lfsck_load_one_trace_file(const struct lu_env *env,
 	struct lfsck_instance *lfsck = com->lc_lfsck;
 	struct dt_object *obj;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (*child != NULL) {
 		struct dt_it *it;
 		const struct dt_it_ops *iops;
@@ -2724,8 +2731,8 @@ unlink:
 	rc = obj->do_ops->do_index_try(env, obj, ft);
 	if (rc) {
 		lfsck_object_put(env, obj);
-		CDEBUG(D_LFSCK, "%s: LFSCK fail to load "
-		       "sub trace file %s: rc = %d\n",
+		CDEBUG(D_LFSCK,
+		       "%s: LFSCK fail to load sub trace file %s: rc = %d\n",
 		       lfsck_lfsck2name(com->lc_lfsck), name, rc);
 	} else {
 		*child = obj;
@@ -2758,11 +2765,11 @@ int lfsck_load_sub_trace_files(const struct lu_env *env,
 /* external interfaces */
 int lfsck_get_speed(char *buf, struct dt_device *key)
 {
-	struct lu_env		env;
-	struct lfsck_instance  *lfsck;
-	int			rc;
-	ENTRY;
+	struct lu_env env;
+	struct lfsck_instance *lfsck;
+	int rc;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0)
 		RETURN(rc);
@@ -2784,11 +2791,11 @@ EXPORT_SYMBOL(lfsck_get_speed);
 
 int lfsck_set_speed(struct dt_device *key, __u32 val)
 {
-	struct lu_env		env;
-	struct lfsck_instance  *lfsck;
-	int			rc;
-	ENTRY;
+	struct lu_env env;
+	struct lfsck_instance *lfsck;
+	int rc;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0)
 		RETURN(rc);
@@ -2812,11 +2819,11 @@ EXPORT_SYMBOL(lfsck_set_speed);
 
 int lfsck_get_windows(char *buf, struct dt_device *key)
 {
-	struct lu_env		env;
-	struct lfsck_instance  *lfsck;
-	int			rc;
-	ENTRY;
+	struct lu_env env;
+	struct lfsck_instance *lfsck;
+	int rc;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0)
 		RETURN(rc);
@@ -2838,11 +2845,11 @@ EXPORT_SYMBOL(lfsck_get_windows);
 
 int lfsck_set_windows(struct dt_device *key, unsigned int val)
 {
-	struct lu_env		env;
-	struct lfsck_instance  *lfsck;
-	int			rc;
-	ENTRY;
+	struct lu_env env;
+	struct lfsck_instance *lfsck;
+	int rc;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0)
 		RETURN(rc);
@@ -2850,9 +2857,7 @@ int lfsck_set_windows(struct dt_device *key, unsigned int val)
 	lfsck = lfsck_instance_find(key, true, false);
 	if (likely(lfsck != NULL)) {
 		if (val < 1 || val > LFSCK_ASYNC_WIN_MAX) {
-			CWARN("%s: invalid async windows size that may "
-			      "cause memory issues. The valid range is "
-			      "[1 - %u].\n",
+			CWARN("%s: invalid async windows size that may cause memory issues. The valid range is [1 - %u].\n",
 			      lfsck_lfsck2name(lfsck), LFSCK_ASYNC_WIN_MAX);
 			rc = -EINVAL;
 		} else if (lfsck->li_bookmark_ram.lb_async_windows != val) {
@@ -2874,12 +2879,12 @@ EXPORT_SYMBOL(lfsck_set_windows);
 
 int lfsck_dump(struct seq_file *m, struct dt_device *key, enum lfsck_type type)
 {
-	struct lu_env		env;
-	struct lfsck_instance  *lfsck;
+	struct lu_env env;
+	struct lfsck_instance *lfsck;
 	struct lfsck_component *com;
-	int			rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0)
 		RETURN(rc);
@@ -2952,8 +2957,8 @@ static int lfsck_stop_all(const struct lu_env *env,
 		if (rc != 0) {
 			lfsck_interpret(env, lfsck, NULL, laia, rc);
 			lfsck_tgt_put(ltd);
-			CERROR("%s: cannot notify MDT %x for LFSCK stop: "
-			       "rc = %d\n", lfsck_lfsck2name(lfsck), idx, rc);
+			CERROR("%s: cannot notify MDT %x for LFSCK stop: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), idx, rc);
 			rc1 = rc;
 		}
 	}
@@ -2989,8 +2994,8 @@ static int lfsck_start_all(const struct lu_env *env,
 	int idx;
 	int rc = 0;
 	bool retry = false;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(start->ls_flags & LPF_BROADCAST);
 
 	memset(lr, 0, sizeof(*lr));
@@ -3036,8 +3041,7 @@ again:
 		if (rc != 0) {
 			lfsck_interpret(env, lfsck, NULL, laia, rc);
 			lfsck_tgt_put(ltd);
-			CERROR("%s: cannot notify MDT %x for LFSCK "
-			       "start, failout: rc = %d\n",
+			CERROR("%s: cannot notify MDT %x for LFSCK start, failout: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), idx, rc);
 			break;
 		}
@@ -3070,8 +3074,7 @@ again:
 	if (rc != 0) {
 		struct lfsck_stop *stop = &info->lti_stop;
 
-		CERROR("%s: cannot start LFSCK on some MDTs, "
-		       "stop all: rc = %d\n",
+		CERROR("%s: cannot start LFSCK on some MDTs, stop all: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), rc);
 		if (rc != -EALREADY) {
 			stop->ls_status = LS_FAILED;
@@ -3163,7 +3166,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 			}
 
 			if (com->lc_ops->lfsck_join != NULL) {
-				rc = com->lc_ops->lfsck_join( env, com, lsp);
+				rc = com->lc_ops->lfsck_join(env, com, lsp);
 				if (rc != 0 && rc != -EALREADY)
 					break;
 			}
@@ -3213,9 +3216,10 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 				com = __lfsck_component_find(lfsck, type,
 							&lfsck->li_list_idle);
 				if (com != NULL)
-					/* The component status will be updated
-					 * when its prep() is called later by
-					 * the LFSCK main engine. */
+					/* Component status will be updated when
+					 * its prep() is called later by LFSCK
+					 * main engine.
+					 */
 					list_move_tail(&com->lc_link,
 						       &lfsck->li_list_scan);
 				start->ls_active &= ~type;
@@ -3226,7 +3230,8 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 
 	if (list_empty(&lfsck->li_list_scan)) {
 		/* The speed limit will be used to control both the LFSCK and
-		 * low layer scrub (if applied), need to be handled firstly. */
+		 * low layer scrub (if applied), need to be handled firstly.
+		 */
 		if (start->ls_valid & LSV_SPEED_LIMIT) {
 			if (__lfsck_set_speed(lfsck, start->ls_speed_limit)) {
 				rc = lfsck_bookmark_store(env, lfsck);
@@ -3373,12 +3378,12 @@ EXPORT_SYMBOL(lfsck_start);
 int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	       struct lfsck_stop *stop)
 {
-	struct lfsck_instance	*lfsck;
-	struct ptlrpc_thread	*thread;
-	int			 rc	= 0;
-	int			 rc1	= 0;
-	ENTRY;
+	struct lfsck_instance *lfsck;
+	struct ptlrpc_thread *thread;
+	int rc = 0;
+	int rc1 = 0;
 
+	ENTRY;
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENXIO);
@@ -3443,7 +3448,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		rc1 = lfsck_stop_all(env, lfsck, stop);
 
 	/* It was me set the status as 'stopping' just now, if it is not
-	 * 'stopping' now, then either stopped, or re-started by race. */
+	 * 'stopping' now, then either stopped, or re-started by race.
+	 */
 	wait_event_idle(thread->t_ctl_waitq,
 			!thread_is_stopping(thread));
 
@@ -3464,8 +3470,8 @@ int lfsck_in_notify_local(const struct lu_env *env, struct dt_device *key,
 	struct lfsck_instance *lfsck;
 	struct lfsck_component *com;
 	int rc = -EOPNOTSUPP;
-	ENTRY;
 
+	ENTRY;
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(!lfsck))
 		RETURN(-ENXIO);
@@ -3486,8 +3492,8 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 		    struct lfsck_request *lr)
 {
 	int rc = -EOPNOTSUPP;
-	ENTRY;
 
+	ENTRY;
 	switch (lr->lr_event) {
 	case LE_START: {
 		struct lfsck_start	 *start = &lfsck_env_info(env)->lti_start;
@@ -3551,13 +3557,13 @@ int lfsck_query(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_request *req, struct lfsck_reply *rep,
 		struct lfsck_query *que)
 {
-	struct lfsck_instance  *lfsck;
+	struct lfsck_instance *lfsck;
 	struct lfsck_component *com;
-	int			i;
-	int			rc = 0;
-	__u16			type;
-	ENTRY;
+	int i;
+	int rc = 0;
+	__u16 type;
 
+	ENTRY;
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENXIO);
@@ -3642,8 +3648,8 @@ EXPORT_SYMBOL(lfsck_query);
 int lfsck_register_namespace(const struct lu_env *env, struct dt_device *key,
 			     struct ldlm_namespace *ns)
 {
-	struct lfsck_instance  *lfsck;
-	int			rc	= -ENXIO;
+	struct lfsck_instance *lfsck;
+	int rc = -ENXIO;
 
 	lfsck = lfsck_instance_find(key, true, false);
 	if (likely(lfsck != NULL)) {
@@ -3660,13 +3666,13 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 		   struct dt_device *next, struct obd_device *obd,
 		   lfsck_out_notify notify, void *notify_data, bool master)
 {
-	struct lfsck_instance	*lfsck;
-	struct dt_object	*root  = NULL;
-	struct dt_object	*obj   = NULL;
-	struct lu_fid		*fid   = &lfsck_env_info(env)->lti_fid;
-	int			 rc;
-	ENTRY;
+	struct lfsck_instance *lfsck;
+	struct dt_object *root  = NULL;
+	struct dt_object *obj   = NULL;
+	struct lu_fid *fid   = &lfsck_env_info(env)->lti_fid;
+	int rc;
 
+	ENTRY;
 	lfsck = lfsck_instance_find(key, false, false);
 	if (unlikely(lfsck != NULL))
 		RETURN(-EEXIST);
@@ -3835,11 +3841,11 @@ int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
 		     struct dt_device *tgt, struct obd_export *exp,
 		     __u32 index, bool for_ost)
 {
-	struct lfsck_instance	*lfsck;
-	struct lfsck_tgt_desc	*ltd;
-	int			 rc;
-	ENTRY;
+	struct lfsck_instance *lfsck;
+	struct lfsck_tgt_desc *ltd;
+	int rc;
 
+	ENTRY;
 	OBD_ALLOC_PTR(ltd);
 	if (ltd == NULL)
 		RETURN(-ENOMEM);
@@ -3883,10 +3889,10 @@ EXPORT_SYMBOL(lfsck_add_target);
 void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		      struct dt_device *tgt, __u32 index, bool for_ost)
 {
-	struct lfsck_instance	*lfsck;
-	struct lfsck_tgt_descs	*ltds;
-	struct lfsck_tgt_desc	*ltd;
-	struct list_head	*head;
+	struct lfsck_instance *lfsck;
+	struct lfsck_tgt_descs *ltds;
+	struct lfsck_tgt_desc *ltd;
+	struct list_head *head;
 
 	if (for_ost)
 		head = &lfsck_ost_orphan_list;
