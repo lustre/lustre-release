@@ -61,7 +61,8 @@
 
 /* We don't actually have direct access to the zap_hashbits() function
  * so just pretend like we do for now.  If this ever breaks we can look at
- * it at that time. */
+ * it at that time.
+ */
 #define zap_hashbits(zc) 48
 /*
  * ZFS hash format:
@@ -117,6 +118,7 @@ static inline void osd_obj_cursor_init_serialized(zap_cursor_t *zc,
 						 uint64_t dirhash)
 {
 	struct osd_device *d = osd_obj2dev(o);
+
 	osd_zap_cursor_init_serialized(zc, d->od_os,
 				       o->oo_dn->dn_object, dirhash);
 }
@@ -125,6 +127,7 @@ static inline int osd_obj_cursor_init(zap_cursor_t **zc, struct osd_object *o,
 			uint64_t dirhash)
 {
 	struct osd_device *d = osd_obj2dev(o);
+
 	return osd_zap_cursor_init(zc, d->od_os, o->oo_dn->dn_object, dirhash);
 }
 
@@ -137,8 +140,8 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 	struct osd_object       *obj = osd_dt_obj(dt);
 	struct lu_object        *lo  = &dt->do_lu;
 	int			 rc;
-	ENTRY;
 
+	ENTRY;
 	if (obj->oo_destroyed)
 		RETURN(ERR_PTR(-ENOENT));
 
@@ -167,8 +170,8 @@ static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_zap_it	*it	= (struct osd_zap_it *)di;
 	struct osd_object	*obj;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(it);
 	LASSERT(it->ozi_obj);
 
@@ -185,13 +188,14 @@ static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 static void osd_index_it_put(const struct lu_env *env, struct dt_it *di)
 {
 	/* PBS: do nothing : ref are incremented at retrive and decreamented
-	 *      next/finish. */
+	 *      next/finish.
+	 */
 }
 
 static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
 				       int len, __u16 type)
 {
-	const unsigned    align = sizeof(struct luda_type) - 1;
+	const unsigned int align = sizeof(struct luda_type) - 1;
 	struct luda_type *lt;
 
 	/* check if file type is required */
@@ -255,8 +259,8 @@ int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
 	uint64_t		 xattr	  = ZFS_NO_OBJECT;
 	int			 size	  = 0;
 	int			 rc;
-	ENTRY;
 
+	ENTRY;
 	rc = __osd_xattr_load_by_oid(osd, oid, &sa_xattr);
 	if (rc == -ENOENT)
 		goto regular;
@@ -303,10 +307,11 @@ found:
 	lustre_lma_swab(lma);
 	if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 		     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
-		CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-		      "oid = %#llx\n", osd->od_svname,
-		      lma->lma_incompat & ~LMA_INCOMPAT_SUPP, oid);
-		GOTO(out, rc = -EOPNOTSUPP);
+		rc = -EOPNOTSUPP;
+		CWARN("%s: unsupported incompat LMA feature(s) %#x for oid = %#llx: rc = %d\n",
+		      osd->od_svname, lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
+		      oid, rc);
+		GOTO(out, rc);
 	} else {
 		*fid = lma->lma_self_fid;
 		GOTO(out, rc = 0);
@@ -331,8 +336,8 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 	struct osd_device	*osd = osd_obj2dev(obj);
 	uint64_t		 dnode = ZFS_NO_OBJECT;
 	int			 rc;
-	ENTRY;
 
+	ENTRY;
 	/* first of all, get parent dnode from own attributes */
 	rc = osd_sa_handle_get(obj);
 	if (rc != 0)
@@ -354,8 +359,8 @@ static int osd_find_parent_fid(const struct lu_env *env, struct dt_object *o,
 	struct link_ea_entry   *lee;
 	struct lu_buf		buf;
 	int			rc;
-	ENTRY;
 
+	ENTRY;
 	buf.lb_buf = osd_oti_get(env)->oti_buf;
 	buf.lb_len = sizeof(osd_oti_get(env)->oti_buf);
 
@@ -397,10 +402,13 @@ out:
 
 #if 0
 	/* this block can be enabled for additional verification
-	 * it's trying to match FID from LinkEA vs. FID from LMA */
+	 * it's trying to match FID from LinkEA vs. FID from LMA
+	 */
 	if (rc == 0) {
 		struct lu_fid fid2;
+
 		int rc2;
+
 		rc2 = osd_find_parent_by_dnode(env, o, &fid2, oid);
 		if (rc2 == 0)
 			if (lu_fid_eq(fid, &fid2) == 0)
@@ -464,8 +472,8 @@ static int osd_check_lmv(const struct lu_env *env, struct osd_device *osd,
 	struct lmv_mds_md_v1 *lmv = NULL;
 	int size;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = __osd_xattr_load_by_oid(osd, oid, &nvbuf);
 	if (rc == -ENOENT || rc == -EEXIST || rc == -ENODATA)
 		RETURN(0);
@@ -500,8 +508,7 @@ static int osd_check_lmv(const struct lu_env *env, struct osd_device *osd,
 			GOTO(out_zc, rc = 0);
 
 		if (rc) {
-			CERROR("%s: fail to locate next for check LMV "
-			       DFID"(%llu): rc = %d\n",
+			CERROR("%s: fail to locate next for check LMV "DFID"(%llu): rc = %d\n",
 			       osd_name(osd), PFID(fid), oid, rc);
 			GOTO(out_zc, rc);
 		}
@@ -514,8 +521,7 @@ static int osd_check_lmv(const struct lu_env *env, struct osd_device *osd,
 					sizeof(*zde) / za->za_integer_length,
 					(void *)zde);
 			if (rc) {
-				CERROR("%s: fail to lookup for check LMV "
-				       DFID"(%llu): rc = %d\n",
+				CERROR("%s: fail to lookup for check LMV "DFID"(%llu): rc = %d\n",
 				       osd_name(osd), PFID(fid), oid, rc);
 				GOTO(out_zc, rc);
 			}
@@ -594,7 +600,8 @@ trigger:
 		/* There is race condition between osd_oi_lookup and OI scrub.
 		 * The OI scrub finished just after osd_oi_lookup() failure.
 		 * Under such case, it is unnecessary to trigger OI scrub again,
-		 * but try to call osd_oi_lookup() again. */
+		 * but try to call osd_oi_lookup() again.
+		 */
 		if (unlikely(rc == -EAGAIN))
 			goto again;
 
@@ -633,11 +640,12 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	char *name = (char *)key;
 	uint64_t oid = ZFS_NO_OBJECT;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (name[0] == '.') {
 		if (name[1] == 0) {
 			const struct lu_fid *f = lu_object_fid(&dt->do_lu);
+
 			memcpy(rec, f, sizeof(*f));
 			RETURN(1);
 		} else if (name[1] == '.' && name[2] == 0) {
@@ -709,8 +717,8 @@ static int osd_create_agent_object(const struct lu_env *env,
 	dnode_t *dn = NULL;
 	sa_handle_t *hdl;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTOBJ))
 		RETURN(0);
 
@@ -726,8 +734,7 @@ static int osd_create_agent_object(const struct lu_env *env,
 		GOTO(out, rc);
 
 	la->la_valid = LA_TYPE | LA_MODE;
-	la->la_mode = (DTTOIF(zde->lzd_reg.zde_type) & S_IFMT) |
-			S_IRUGO | S_IWUSR | S_IXUGO;
+	la->la_mode = (DTTOIF(zde->lzd_reg.zde_type) & S_IFMT) | 0755;
 
 	if (S_ISDIR(la->la_mode))
 		rc = __osd_zap_create(env, osd, &dn, tx, la,
@@ -778,15 +785,14 @@ int osd_add_to_remote_parent(const struct lu_env *env,
 	};
 	int size = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
 		RETURN(0);
 
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
 	if (rc) {
-		CWARN("%s: fail to load LMA for adding "
-		      DFID" to remote parent: rc = %d\n",
+		CWARN("%s: fail to load LMA for adding "DFID" to remote parent: rc = %d\n",
 		      osd_name(osd), PFID(fid), rc);
 		RETURN(rc);
 	}
@@ -798,8 +804,7 @@ int osd_add_to_remote_parent(const struct lu_env *env,
 	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
 				    LU_XATTR_REPLACE, oh);
 	if (rc) {
-		CWARN("%s: fail to update LMA for adding "
-		      DFID" to remote parent: rc = %d\n",
+		CWARN("%s: fail to update LMA for adding "DFID" to remote parent: rc = %d\n",
 		      osd_name(osd), PFID(fid), rc);
 		RETURN(rc);
 	}
@@ -838,16 +843,15 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	};
 	int size = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	osd_fid2str(name, fid, sizeof(info->oti_str));
 	rc = osd_zap_remove(osd, osd->od_remote_parent_dir, NULL,
 			    name, oh->ot_tx);
 	if (unlikely(rc == -ENOENT))
 		rc = 0;
 	if (rc)
-		CERROR("%s: fail to remove entry under remote "
-		       "parent for "DFID": rc = %d\n",
+		CERROR("%s: fail to remove entry under remote parent for "DFID": rc = %d\n",
 		       osd_name(osd), PFID(fid), rc);
 
 	if (destroy || rc)
@@ -855,8 +859,7 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
 	if (rc) {
-		CERROR("%s: fail to load LMA for removing "
-		       DFID" from remote parent: rc = %d\n",
+		CERROR("%s: fail to load LMA for removing "DFID" from remote parent: rc = %d\n",
 		       osd_name(osd), PFID(fid), rc);
 		RETURN(rc);
 	}
@@ -868,8 +871,7 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
 				    LU_XATTR_REPLACE, oh);
 	if (rc)
-		CERROR("%s: fail to update LMA for removing "
-		       DFID" from remote parent: rc = %d\n",
+		CERROR("%s: fail to update LMA for removing "DFID" from remote parent: rc = %d\n",
 		       osd_name(osd), PFID(fid), rc);
 	else
 		lu_object_clear_agent_entry(&obj->oo_dt.do_lu);
@@ -890,8 +892,8 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	struct osd_thandle	*oh;
 	uint64_t		 object;
 	struct osd_idmap_cache *idc;
-	ENTRY;
 
+	ENTRY;
 	rec1 = (struct dt_insert_rec *)rec;
 	fid = rec1->rec_fid;
 	LASSERT(fid != NULL);
@@ -910,7 +912,8 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 		if (name[0] != '.' || name[1] != '.' || name[2] != 0) {
 			/* Prepare agent object for remote entry that will
 			 * be used for operations via ZPL, such as MDT side
-			 * file-level backup and restore. */
+			 * file-level backup and restore.
+			 */
 			dmu_tx_hold_sa_create(oh->ot_tx,
 				osd_find_dnsize(osd, OSD_BASE_EA_IN_BONUS));
 			if (S_ISDIR(rec1->rec_type))
@@ -927,7 +930,8 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
-	 * before insertion */
+	 * before insertion
+	 */
 	osd_tx_hold_zap(oh->ot_tx, object, obj->oo_dn, TRUE, NULL);
 
 	RETURN(0);
@@ -939,16 +943,16 @@ static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
 	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(ss != NULL);
 	LASSERT(ss->ss_server_fld != NULL);
 
 	rc = osd_fld_lookup(env, osd, seq, range);
 	if (rc != 0) {
 		if (rc != -ENOENT)
-			CERROR("%s: Can not lookup fld for %#llx\n",
-			       osd_name(osd), seq);
+			CERROR("%s: Can not lookup fld for %#llx: rc = %d\n",
+			       osd_name(osd), seq, rc);
 		RETURN(0);
 	}
 
@@ -959,15 +963,16 @@ int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 		   const struct lu_fid *fid)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
-	ENTRY;
 
+	ENTRY;
 	/* FID seqs not in FLDB, must be local seq */
 	if (unlikely(!fid_seq_in_fldb(fid_seq(fid))))
 		RETURN(0);
 
 	/* If FLD is not being initialized yet, it only happens during the
 	 * initialization, likely during mgs initialization, and we assume
-	 * this is local FID. */
+	 * this is local FID.
+	 */
 	if (ss == NULL || ss->ss_server_fld == NULL)
 		RETURN(0);
 
@@ -1004,8 +1009,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	struct luz_direntry *zde = &oti->oti_zde;
 	int num = sizeof(*zde) / 8;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(parent->oo_dn);
 
 	LASSERT(dt_object_exists(dt));
@@ -1020,7 +1025,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		 * FID is missing in OI cache. we better do not
 		 * lookup FID in FLDB/OI and don't risk to deadlock,
 		 * but in some special cases (lfsck testing, etc)
-		 * it's much simpler than fixing a caller */
+		 * it's much simpler than fixing a caller
+		 */
 		idc = osd_idc_find_or_init(env, osd, fid);
 		if (IS_ERR(idc)) {
 			CERROR("%s: "DFID" wasn't declared for insert\n",
@@ -1039,16 +1045,17 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	if (idc->oic_remote) {
 		if (name[0] != '.' || name[1] != '.' || name[2] != 0) {
 			/* Create agent inode for remote object that will
-			 * be used for MDT file-level backup and restore. */
+			 * be used for MDT file-level backup and restore.
+			 */
 			rc = osd_create_agent_object(env, osd, zde,
 					parent->oo_dn->dn_object, oh->ot_tx);
 			if (rc) {
-				CWARN("%s: Fail to create agent object for "
-				      DFID": rc = %d\n",
+				CWARN("%s: Fail to create agent object for "DFID": rc = %d\n",
 				      osd_name(osd), PFID(fid), rc);
 				/* Ignore the failure since the system can go
 				 * ahead if we do not care about the MDT side
-				 * file-level backup and restore. */
+				 * file-level backup and restore.
+				 */
 				rc = 0;
 			}
 		}
@@ -1062,15 +1069,18 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		if (name[0] == '.') {
 			if (name[1] == 0) {
 				/* do not store ".", instead generate it
-				 * during iteration */
+				 * during iteration
+				 */
 				GOTO(out, rc = 0);
 			} else if (name[1] == '.' && name[2] == 0) {
 				uint64_t dnode = idc->oic_dnode;
+
 				if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT))
 					dnode--;
 
 				/* update parent dnode in the child.
-				 * later it will be used to generate ".." */
+				 * later it will be used to generate ".."
+				 */
 				rc = osd_object_sa_update(parent,
 						 SA_ZPL_PARENT(osd),
 						 &dnode, 8, oh);
@@ -1085,7 +1095,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		zde->lzd_fid.f_ver = ~0;
 
 	/* The logic is not related with IGIF, just re-use the fail_loc value
-	 * to be consistent with ldiskfs case, then share the same test logic */
+	 * to be consistent with ldiskfs case, then share the same test logic
+	 */
 	if (CFS_FAIL_CHECK(OBD_FAIL_FID_IGIF))
 		num = 1;
 
@@ -1112,8 +1123,8 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	dnode_t *zap_dn = obj->oo_dn;
 	struct osd_thandle *oh;
 	const char *name = (const char *)key;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(zap_dn != NULL);
@@ -1134,7 +1145,8 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
-	 * before deletion */
+	 * before deletion
+	 */
 	osd_tx_hold_zap(oh->ot_tx, zap_dn->dn_object, zap_dn, FALSE, NULL);
 
 	/* For destroying agent object if have. */
@@ -1153,8 +1165,8 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	dnode_t *zap_dn = obj->oo_dn;
 	char	  *name = (char *)key;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(zap_dn);
 
 	LASSERT(th != NULL);
@@ -1165,11 +1177,10 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	 * request as now). we preserve them for backward compatibility
 	 */
 	if (name[0] == '.') {
-		if (name[1] == 0) {
+		if (name[1] == 0)
 			RETURN(0);
-		} else if (name[1] == '.' && name[2] == 0) {
+		else if (name[1] == '.' && name[2] == 0)
 			RETURN(0);
-		}
 	}
 
 	/* XXX: We have to say that lookup during delete_declare will affect
@@ -1182,7 +1193,8 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	 *	   the lookup conditionally.
 	 *	2) Enhance the ZFS logic to recognize the OSD lookup result
 	 *	   and delete the given entry directly without lookup again
-	 *	   internally. LU-10190 */
+	 *	   internally. LU-10190
+	 */
 	memset(&zde->lzd_fid, 0, sizeof(zde->lzd_fid));
 	rc = osd_zap_lookup(osd, zap_dn->dn_object, zap_dn, name, 8, 3, zde);
 	if (unlikely(rc)) {
@@ -1196,9 +1208,9 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 		rc = -dmu_object_free(osd->od_os, zde->lzd_reg.zde_dnode,
 				      oh->ot_tx);
 		if (rc)
-			CERROR("%s: failed to destroy agent object (%llu) "
-			       "for the entry %s: rc = %d\n", osd->od_svname,
-			       (__u64)zde->lzd_reg.zde_dnode, name, rc);
+			CERROR("%s: failed to destroy agent object (%llu) for the entry %s: rc = %d\n",
+			       osd->od_svname, (__u64)zde->lzd_reg.zde_dnode,
+			       name, rc);
 	}
 
 	/* Remove key from the ZAP */
@@ -1241,8 +1253,8 @@ static int osd_dir_it_get(const struct lu_env *env,
 	struct osd_object *obj = it->ozi_obj;
 	char		  *name = (char *)key;
 	int		   rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(it);
 	LASSERT(it->ozi_zc);
 
@@ -1270,7 +1282,7 @@ static int osd_dir_it_get(const struct lu_env *env,
 
 	/* neither . nor .. - some real record */
 	it->ozi_pos = OZI_POS_REAL;
-	rc = +1;
+	rc = 1;
 
 out:
 	RETURN(rc);
@@ -1279,7 +1291,8 @@ out:
 static void osd_dir_it_put(const struct lu_env *env, struct dt_it *di)
 {
 	/* PBS: do nothing : ref are incremented at retrive and decreamented
-	 *      next/finish. */
+	 *      next/finish.
+	 */
 }
 
 /*
@@ -1327,8 +1340,8 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
 
-	ENTRY;
 
+	ENTRY;
 	/* temp. storage should be enough for any key supported by ZFS */
 	BUILD_BUG_ON(sizeof(za->za_name) > sizeof(it->ozi_name));
 
@@ -1341,7 +1354,6 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 		it->ozi_pos++;
 		if (it->ozi_pos <= OZI_POS_DOTDOT)
 			RETURN(0);
-
 	} else {
 		zap_cursor_advance(it->ozi_zc);
 	}
@@ -1366,8 +1378,8 @@ static struct dt_key *osd_dir_it_key(const struct lu_env *env,
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
 	int		   rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (it->ozi_pos <= OZI_POS_DOT) {
 		it->ozi_pos = OZI_POS_DOT;
 		RETURN((struct dt_key *)".");
@@ -1375,7 +1387,8 @@ static struct dt_key *osd_dir_it_key(const struct lu_env *env,
 		RETURN((struct dt_key *)"..");
 	}
 
-	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)))
+	rc = -zap_cursor_retrieve(it->ozi_zc, za);
+	if (rc)
 		RETURN(ERR_PTR(rc));
 
 	strcpy(it->ozi_name, za->za_name);
@@ -1388,8 +1401,8 @@ static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
-	ENTRY;
 
+	ENTRY;
 	if (it->ozi_pos <= OZI_POS_DOT) {
 		it->ozi_pos = OZI_POS_DOT;
 		RETURN(2);
@@ -1397,7 +1410,8 @@ static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
 		RETURN(3);
 	}
 
-	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)) == 0)
+	rc = -zap_cursor_retrieve(it->ozi_zc, za);
+	if (rc == 0)
 		rc = strlen(za->za_name);
 
 	RETURN(rc);
@@ -1409,8 +1423,8 @@ osd_dirent_update(const struct lu_env *env, struct osd_device *dev,
 {
 	dmu_tx_t *tx;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	tx = dmu_tx_create(dev->od_os);
 	if (!tx)
 		RETURN(-ENOMEM);
@@ -1435,8 +1449,8 @@ static int osd_update_entry_for_agent(const struct lu_env *env,
 {
 	dmu_tx_t *tx = NULL;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (attr & LUDA_VERIFY_DRYRUN)
 		GOTO(out, rc = 0);
 
@@ -1478,14 +1492,15 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 	struct lu_fid *fid = &info->oti_fid;
 	struct osd_device *osd = osd_obj2dev(it->ozi_obj);
 	int rc, namelen;
-	ENTRY;
 
+	ENTRY;
 	lde->lde_attrs = 0;
 	if (it->ozi_pos <= OZI_POS_DOT) {
 		/* notice hash=0 here, this is needed to avoid
 		 * case when some real entry (after ./..) may
 		 * have hash=0. in this case the client would
-		 * be confused having records out of hash order. */
+		 * be confused having records out of hash order.
+		 */
 		lde->lde_hash = cpu_to_le64(0);
 		strcpy(lde->lde_name, ".");
 		lde->lde_namelen = cpu_to_le16(1);
@@ -1549,7 +1564,8 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 			     osd_remote_fid(env, osd, &zde->lzd_fid) > 0 &&
 			     attr & LUDA_VERIFY)) {
 			/* It is mainly used for handling the MDT
-			 * upgraded from old ZFS based backend. */
+			 * upgraded from old ZFS based backend.
+			 */
 			rc = osd_update_entry_for_agent(env, osd,
 					it->ozi_obj->oo_dn->dn_object,
 					za->za_name, zde, attr);
@@ -1615,8 +1631,8 @@ static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
 	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
 	size_t		     namelen = 0;
 	int		     rc;
-	ENTRY;
 
+	ENTRY;
 	if (it->ozi_pos <= OZI_POS_DOT)
 		namelen = 1;
 	else if (it->ozi_pos == OZI_POS_DOTDOT)
@@ -1651,8 +1667,8 @@ static __u64 osd_dir_it_store(const struct lu_env *env, const struct dt_it *di)
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	__u64		   pos;
-	ENTRY;
 
+	ENTRY;
 	if (it->ozi_pos <= OZI_POS_DOTDOT)
 		pos = 0;
 	else
@@ -1674,21 +1690,21 @@ static int osd_dir_it_load(const struct lu_env *env,
 	struct osd_object *obj = it->ozi_obj;
 	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
-	ENTRY;
 
+	ENTRY;
 	/* reset the cursor */
 	zap_cursor_fini(it->ozi_zc);
 	osd_obj_cursor_init_serialized(it->ozi_zc, obj, hash);
 
 	if (hash == 0) {
 		it->ozi_pos = OZI_POS_INIT;
-		rc = +1; /* there will be ./.. at least */
+		rc = 1; /* there will be ./.. at least */
 	} else {
 		it->ozi_pos = OZI_POS_REAL;
 		/* to return whether the end has been reached */
 		rc = osd_index_retrieve_skip_dots(it, za);
 		if (rc == 0)
-			rc = +1;
+			rc = 1;
 		else if (rc == -ENOENT)
 			rc = 0;
 	}
@@ -1750,8 +1766,8 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device *osd = osd_obj2dev(obj);
 	__u64		  *k = osd_oti_get(env)->oti_key64;
 	int                rc;
-	ENTRY;
 
+	ENTRY;
 	rc = osd_prepare_key_uint64(obj, k, key);
 
 	rc = -zap_lookup_uint64(osd->od_os, obj->oo_dn->dn_object,
@@ -1768,8 +1784,8 @@ static int osd_declare_index_insert(const struct lu_env *env,
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(th != NULL);
 	oh = container_of(th, struct osd_thandle, ot_super);
 
@@ -1777,7 +1793,8 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
-	 * before insertion */
+	 * before insertion
+	 */
 	osd_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, obj->oo_dn,
 			TRUE, NULL);
 
@@ -1793,8 +1810,8 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle *oh;
 	__u64		   *k = osd_oti_get(env)->oti_key64;
 	int                 rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(obj->oo_dn);
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
@@ -1818,8 +1835,8 @@ static int osd_declare_index_delete(const struct lu_env *env,
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(th != NULL);
@@ -1829,7 +1846,8 @@ static int osd_declare_index_delete(const struct lu_env *env,
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
-	 * before deletion */
+	 * before deletion
+	 */
 	osd_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, obj->oo_dn,
 			FALSE, NULL);
 
@@ -1844,8 +1862,8 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle *oh;
 	__u64		   *k = osd_oti_get(env)->oti_key64;
 	int                 rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(obj->oo_dn);
 	LASSERT(th != NULL);
 	oh = container_of(th, struct osd_thandle, ot_super);
@@ -1864,17 +1882,16 @@ static int osd_index_it_get(const struct lu_env *env, struct dt_it *di,
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	struct osd_object *obj = it->ozi_obj;
 	struct osd_device *osd = osd_obj2dev(obj);
-	ENTRY;
 
+	ENTRY;
 	LASSERT(it);
 	LASSERT(it->ozi_zc);
 
-	/*
-	 * XXX: we need a binary version of zap_cursor_move_to_key()
-	 *	to implement this API */
+	/* XXX: we need a binary version of zap_cursor_move_to_key()
+	 *	to implement this API
+	 */
 	if (*((const __u64 *)key) != 0)
-		CERROR("NOT IMPLEMETED YET (move to %#llx)\n",
-		       *((__u64 *)key));
+		CERROR("NOT IMPLEMETED YET (move to %#llx)\n", *((__u64 *)key));
 
 	zap_cursor_fini(it->ozi_zc);
 	zap_cursor_init(it->ozi_zc, osd->od_os, obj->oo_dn->dn_object);
@@ -1888,8 +1905,8 @@ static int osd_index_it_next(const struct lu_env *env, struct dt_it *di)
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
 	int                rc;
-	ENTRY;
 
+	ENTRY;
 	if (it->ozi_reset == 0)
 		zap_cursor_advance(it->ozi_zc);
 	it->ozi_reset = 0;
@@ -1914,8 +1931,8 @@ static struct dt_key *osd_index_it_key(const struct lu_env *env,
 	struct osd_object *obj = it->ozi_obj;
 	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
 	int                rc = 0;
-	ENTRY;
 
+	ENTRY;
 	it->ozi_reset = 0;
 	rc = -zap_cursor_retrieve(it->ozi_zc, za);
 	if (rc)
@@ -1932,6 +1949,7 @@ static int osd_index_it_key_size(const struct lu_env *env,
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	struct osd_object *obj = it->ozi_obj;
+
 	RETURN(obj->oo_keysize);
 }
 
@@ -1944,8 +1962,8 @@ static int osd_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 	struct osd_device *osd = osd_obj2dev(obj);
 	__u64		  *k = osd_oti_get(env)->oti_key64;
 	int                rc;
-	ENTRY;
 
+	ENTRY;
 	it->ozi_reset = 0;
 	rc = -zap_cursor_retrieve(it->ozi_zc, za);
 	if (rc)
@@ -1976,8 +1994,8 @@ static int osd_index_it_load(const struct lu_env *env, const struct dt_it *di,
 	struct osd_device *osd = osd_obj2dev(obj);
 	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
 	int                rc;
-	ENTRY;
 
+	ENTRY;
 	/* reset the cursor */
 	zap_cursor_fini(it->ozi_zc);
 	zap_cursor_init_serialized(it->ozi_zc, osd->od_os,
@@ -2020,8 +2038,8 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device *osd = osd_obj2dev(obj);
 	const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	down_read(&obj->oo_guard);
 
 	/*
@@ -2047,7 +2065,8 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		dt->do_index_ops = &osd_acct_index_ops;
 	} else if (dt->do_index_ops == NULL) {
 		/* For index file, we don't support variable key & record sizes
-		 * and the key has to be unique */
+		 * and the key has to be unique
+		 */
 		if ((feat->dif_flags & ~DT_IND_UPDATE) != 0)
 			GOTO(out, rc = -EINVAL);
 
