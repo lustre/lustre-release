@@ -161,8 +161,8 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 	struct dt_object *next = mdd_object_child(obj);
 	struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(mdd_write_locked(env, obj) != 0);
 	LASSERT(!(obj->mod_flags & ORPHAN_OBJ));
 
@@ -216,19 +216,19 @@ int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
 	if (!mdd_object_exists(obj))
 		return -ENOENT;
 
-        rc = mdo_declare_ref_del(env, obj, th);
-        if (rc)
-                return rc;
+	rc = mdo_declare_ref_del(env, obj, th);
+	if (rc)
+		return rc;
 
-        if (S_ISDIR(mdd_object_type(obj))) {
-                rc = mdo_declare_ref_del(env, obj, th);
-                if (rc)
-                        return rc;
+	if (S_ISDIR(mdd_object_type(obj))) {
+		rc = mdo_declare_ref_del(env, obj, th);
+		if (rc)
+			return rc;
 
-                rc = dt_declare_ref_del(env, mdd->mdd_orphans, th);
-        }
+		rc = dt_declare_ref_del(env, mdd->mdd_orphans, th);
+	}
 
-        return rc;
+	return rc;
 }
 
 /**
@@ -250,11 +250,9 @@ int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 	int rc = 0;
 
 	ENTRY;
-
 	LASSERT(mdd_write_locked(env, obj) != 0);
 	LASSERT(obj->mod_flags & ORPHAN_OBJ);
 	LASSERT(obj->mod_count == 0);
-
 	LASSERT(dor);
 
 	key = mdd_orphan_key_fill(env, mdd_object_fid(obj));
@@ -294,8 +292,8 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 	struct thandle *th = NULL;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
 	int rc = 0, rc1 = 0;
-	ENTRY;
 
+	ENTRY;
 	th = mdd_trans_create(env, mdd);
 	if (IS_ERR(th)) {
 		rc = PTR_ERR(th);
@@ -371,18 +369,18 @@ static int mdd_orphan_key_test_and_delete(const struct lu_env *env,
 		if (rc) /* below message checked in replay-single.sh test_37 */
 			CERROR("%s: error unlinking orphan "DFID": rc = %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(lf), rc);
-        } else {
+	} else {
 		mdd_write_lock(env, mdo, DT_TGT_CHILD);
-                if (likely(mdo->mod_count > 0)) {
-                        CDEBUG(D_HA, "Found orphan "DFID" count %d, skip it\n",
-                               PFID(lf), mdo->mod_count);
-                        mdo->mod_flags |= ORPHAN_OBJ;
-                }
-                mdd_write_unlock(env, mdo);
-        }
+		if (likely(mdo->mod_count > 0)) {
+			CDEBUG(D_HA, "Found orphan "DFID" count %d, skip it\n",
+			       PFID(lf), mdo->mod_count);
+			mdo->mod_flags |= ORPHAN_OBJ;
+		}
+		mdd_write_unlock(env, mdo);
+	}
 
-        mdd_object_put(env, mdo);
-        return rc;
+	mdd_object_put(env, mdo);
+	return rc;
 }
 
 /**
@@ -408,8 +406,8 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 	struct lu_fid fid;
 	int key_sz = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	iops = &dor->do_index_ops->dio_it;
 	it = iops->init(env, dor, LUDA_64BITHASH);
 	if (IS_ERR(it)) {
@@ -423,10 +421,11 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_put, rc);
 	if (rc == 0) {
-		CERROR("%s: error loading iterator to clean '%s'\n",
-		       mdd2obd_dev(mdd)->obd_name, mdd_orphan_index_name);
+		rc = -EIO;
+		CERROR("%s: error loading iterator to clean '%s': rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, mdd_orphan_index_name, rc);
 		/* Index contains no zero key? */
-		GOTO(out_put, rc = -EIO);
+		GOTO(out_put, rc);
 	}
 
 	mdd_env_info(env)->mdi_flags |= MDI_KEEP_KEY;
@@ -497,12 +496,10 @@ int mdd_orphan_index_init(const struct lu_env *env, struct mdd_device *mdd)
 	int rc = 0;
 
 	ENTRY;
-
 	/* create PENDING dir */
 	fid_zero(&fid);
 	rc = mdd_local_file_create(env, mdd, &mdd->mdd_local_root_fid,
-				   mdd_orphan_index_name, S_IFDIR | S_IRUGO |
-				   S_IWUSR | S_IXUGO, &fid);
+				   mdd_orphan_index_name, S_IFDIR | 0755, &fid);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -535,8 +532,8 @@ static int mdd_orphan_cleanup_thread(void *args)
 	struct mdd_generic_thread *thread = (struct mdd_generic_thread *)args;
 	struct lu_env *env = NULL;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	complete(&thread->mgt_started);
 
 	OBD_ALLOC_PTR(env);
