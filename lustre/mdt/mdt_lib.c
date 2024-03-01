@@ -51,9 +51,9 @@
 #include <lustre_nodemap.h>
 
 typedef enum ucred_init_type {
-        NONE_INIT       = 0,
-        BODY_INIT       = 1,
-        REC_INIT        = 2
+	NONE_INIT	= 0,
+	BODY_INIT	= 1,
+	REC_INIT	= 2
 } ucred_init_type_t;
 
 static __u64 get_mrc_cr_flags(struct mdt_rec_create *mrc)
@@ -87,6 +87,7 @@ static int match_nosquash_list(struct spinlock *rsi_lock,
 			       struct lnet_nid *peernid)
 {
 	int rc;
+
 	ENTRY;
 	spin_lock(rsi_lock);
 	rc = cfs_match_nid(peernid, nidlist);
@@ -100,8 +101,8 @@ static int mdt_root_squash(struct mdt_thread_info *info,
 {
 	struct lu_ucred *ucred = mdt_ucred(info);
 	struct root_squash_info *squash = &info->mti_mdt->mdt_squash;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(ucred != NULL);
 	if (!squash->rsi_uid || ucred->uc_fsuid)
 		RETURN(0);
@@ -208,7 +209,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	int rc = 0;
 
 	ENTRY;
-
 	LASSERT(req->rq_auth_gss);
 	LASSERT(!req->rq_auth_usr_mdt);
 	LASSERT(req->rq_user_desc);
@@ -254,8 +254,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 	if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
 	    req->rq_auth_uid != pud->pud_uid) {
-		CDEBUG(D_SEC, "local client %s: auth uid %u "
-		       "while client claims %u:%u/%u:%u\n",
+		CDEBUG(D_SEC, "local client %s: auth uid %u while client claims %u:%u/%u:%u\n",
 		       libcfs_nidstr(&peernid), req->rq_auth_uid,
 		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid);
@@ -426,13 +425,13 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 {
 	__u32 perm;
 
-	/* 1. If identity_upcall is disabled,
-	 *    permit local client to do anything. */
+	/* 1. identity_upcall disabled? permit local client to do anything. */
 	if (is_identity_get_disabled(info->mti_mdt->mdt_identity_cache))
 		return true;
 
 	/* 2. If fail to get related identities, then forbid any client to
-	 *    set supplementary group IDs. */
+	 *    set supplementary group IDs.
+	 */
 	if (uc->uc_identity == NULL)
 		return false;
 
@@ -448,19 +447,18 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 
 int mdt_check_ucred(struct mdt_thread_info *info)
 {
-	struct ptlrpc_request	*req = mdt_info_req(info);
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct ptlrpc_user_desc	*pud = req->rq_user_desc;
-	struct lu_ucred		*ucred = mdt_ucred(info);
-	struct md_identity	*identity = NULL;
-	struct lnet_nid		 peernid = req->rq_peer.nid;
-	__u32			 perm = 0;
-	int			 setuid;
-	int			 setgid;
-	int			 rc = 0;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_device *mdt = info->mti_mdt;
+	struct ptlrpc_user_desc *pud = req->rq_user_desc;
+	struct lu_ucred *ucred = mdt_ucred(info);
+	struct md_identity *identity = NULL;
+	struct lnet_nid peernid = req->rq_peer.nid;
+	__u32 perm = 0;
+	int setuid;
+	int setgid;
+	int rc = 0;
 
 	ENTRY;
-
 	LASSERT(ucred != NULL);
 	if ((ucred->uc_valid == UCRED_OLD) || (ucred->uc_valid == UCRED_NEW))
 		RETURN(0);
@@ -469,11 +467,11 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 		RETURN(0);
 
 	/* sanity check: if we use strong authentication, we expect the
-	 * uid which client claimed is true */
+	 * uid which client claimed is true
+	 */
 	if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
 	    req->rq_auth_uid != pud->pud_uid) {
-		CDEBUG(D_SEC, "local client %s: auth uid %u "
-		       "while client claims %u:%u/%u:%u\n",
+		CDEBUG(D_SEC, "local client %s: auth uid %u while client claims %u:%u/%u:%u\n",
 		       libcfs_nidstr(&peernid), req->rq_auth_uid,
 		       pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid);
@@ -546,8 +544,8 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 						CAP_DAC_READ_SEARCH))) {
 				identity = NULL;
 			} else {
-				CDEBUG(D_SEC, "Deny access without identity: "
-				       "uid %u\n", uc->uc_fsuid);
+				CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
+				       uc->uc_fsuid);
 				RETURN(-EACCES);
 			}
 		}
@@ -577,7 +575,8 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 			       uc->uc_cap.val,
 #endif
 			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
-		uc->uc_cap = cap_intersect(uc->uc_cap,mdt->mdt_enable_cap_mask);
+		uc->uc_cap = cap_intersect(uc->uc_cap,
+					   mdt->mdt_enable_cap_mask);
 	}
 
 	/* Thanks to Kerberos, Lustre does not have to trust clients anymore,
@@ -617,8 +616,8 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
@@ -655,8 +654,8 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
@@ -681,8 +680,8 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 {
-	struct ptlrpc_request	*req = mdt_info_req(info);
-	struct lu_ucred		*uc  = mdt_ucred(info);
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct lu_ucred *uc = mdt_ucred(info);
 
 	LASSERT(uc != NULL);
 	if ((uc->uc_valid == UCRED_OLD) || (uc->uc_valid == UCRED_NEW))
@@ -699,8 +698,8 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
-	struct lu_ucred       *uc  = mdt_ucred(info);
-	struct md_attr        *ma  = &info->mti_attr;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct md_attr *ma = &info->mti_attr;
 
 	LASSERT(uc != NULL);
 	if ((uc->uc_valid == UCRED_OLD) || (uc->uc_valid == UCRED_NEW))
@@ -746,7 +745,8 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 		     count > LOV_MAX_STRIPE_COUNT ? "bad " : "", count);
 
 	/* If it's a directory or a released file, then there are
-	 * no actual objects to print, so bail out. */
+	 * no actual objects to print, so bail out.
+	 */
 	if (valid & OBD_MD_FLDIREA ||
 	    le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_RELEASED)
 		return;
@@ -767,7 +767,7 @@ void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
 {
 	const struct lmv_mds_md_v1 *lmm1;
 	const struct lmv_foreign_md *lfm;
-	int			   i;
+	int i;
 
 	if (likely(!cfs_cdebug_show(level, DEBUG_SUBSYSTEM)))
 		return;
@@ -810,15 +810,15 @@ void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
 /* Shrink and/or grow reply buffers */
 int mdt_fix_reply(struct mdt_thread_info *info)
 {
-        struct req_capsule *pill = info->mti_pill;
-        struct mdt_body    *body;
-        int                md_size, md_packed = 0;
-        int                acl_size;
-        int                rc = 0;
-        ENTRY;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_body *body;
+	int md_size, md_packed = 0;
+	int acl_size;
+	int rc = 0;
 
-        body = req_capsule_server_get(pill, &RMF_MDT_BODY);
-        LASSERT(body != NULL);
+	ENTRY;
+	body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+	LASSERT(body != NULL);
 
 	if (body->mbo_valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE |
 			       OBD_MD_LINKNAME))
@@ -845,12 +845,13 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 (optional)  something else
 */
 
-        /* MDT_MD buffer may be bigger than packed value, let's shrink all
-         * buffers before growing it */
+	/* MDT_MD buffer may be bigger than packed value, let's shrink all
+	 * buffers before growing it
+	 */
 	if (info->mti_big_lov_used || info->mti_big_lmv_used) {
-
 		/* big_lmm buffer may be used even without packing the result
-		 * into reply, just for internal server needs */
+		 * into reply, just for internal server needs
+		 */
 		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
 			md_packed = req_capsule_get_size(pill, &RMF_MDT_MD,
 							 RCL_SERVER);
@@ -968,12 +969,13 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 
 /* if object is dying, pack the lov/llog data,
  * parameter info->mti_attr should be valid at this point!
- * Also implements RAoLU policy */
+ * Also implements RAoLU policy
+ */
 int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 			   struct md_attr *ma)
 {
 	struct mdt_body *repbody = NULL;
-        const struct lu_attr *la = &ma->ma_attr;
+	const struct lu_attr *la = &ma->ma_attr;
 	struct coordinator *cdt = &info->mti_mdt->mdt_coordinator;
 	int rc;
 	__u64 need = 0;
@@ -986,8 +988,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	};
 	int archive_id;
 
-        ENTRY;
-
+	ENTRY;
 	if (mdt_info_req(info) != NULL) {
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
@@ -996,7 +997,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	}
 
 	if ((ma->ma_valid & MA_INODE) && repbody != NULL)
-                mdt_pack_attr2body(info, repbody, la, mdt_object_fid(mo));
+		mdt_pack_attr2body(info, repbody, la, mdt_object_fid(mo));
 
 	if (ma->ma_valid & MA_LOV) {
 		CERROR("No need in LOV EA upon unlink\n");
@@ -1020,12 +1021,13 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	need |= (MA_INODE | MA_HSM) & ~ma->ma_valid;
 	if (need != 0) {
 		/* ma->ma_valid is missing either MA_INODE, MA_HSM, or both,
-		 * try setting them */
+		 * try setting them
+		 */
 		ma->ma_need |= need;
 		rc = mdt_attr_get_complex(info, mo, ma);
 		if (rc) {
-			CERROR("%s: unable to fetch missing attributes of"
-			       DFID": rc=%d\n", mdt_obd_name(info->mti_mdt),
+			CERROR("%s: unable to fetch missing attributes of "DFID": rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(mo)), rc);
 			RETURN(0);
 		}
@@ -1052,7 +1054,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	/* RAoLU policy is active, last close on file has occured,
 	 * file is unlinked, file is archived, so create remove request
 	 * for copytool!
-	 * If CDT is not running, requests will be logged for later. */
+	 * If CDT is not running, requests will be logged for later.
+	 */
 	if (ma->ma_hsm.mh_arch_id != 0)
 		archive_id = ma->ma_hsm.mh_arch_id;
 	else
@@ -1063,16 +1066,16 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt, archive_id, 0,
 				  &hai);
 	if (rc)
-		CERROR("%s: unable to add HSM remove request for "DFID
-		       ": rc=%d\n", mdt_obd_name(info->mti_mdt),
-		       PFID(mdt_object_fid(mo)), rc);
+		CERROR("%s: unable to add HSM remove request for "DFID": rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(mo)),
+		       rc);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static __u64 mdt_attr_valid_xlate(enum mds_attr_flags in,
 				  struct mdt_reint_record *rr,
-                                  struct md_attr *ma)
+				  struct md_attr *ma)
 {
 	__u64 out;
 
@@ -1127,7 +1130,6 @@ static __u64 mdt_attr_valid_xlate(enum mds_attr_flags in,
 }
 
 /* unpacking */
-
 int mdt_name_unpack(struct req_capsule *pill,
 		    const struct req_msg_field *field,
 		    struct lu_name *ln,
@@ -1147,7 +1149,8 @@ int mdt_name_unpack(struct req_capsule *pill,
 	    ln->ln_namelen == 1 && ln->ln_name[0] == '/') {
 		/* Newer (3.x) kernels use a name of "/" for the
 		 * "anonymous" disconnected dentries from NFS
-		 * filehandle conversion. See d_obtain_alias(). */
+		 * filehandle conversion. See d_obtain_alias().
+		 */
 		ln->ln_name = NULL;
 		ln->ln_namelen = 0;
 	}
@@ -1226,7 +1229,6 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	struct lu_nodemap *nodemap;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1274,8 +1276,8 @@ static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 {
 	struct req_capsule *pill = info->mti_pill;
 	struct mdt_ioepoch *ioepoch;
-	ENTRY;
 
+	ENTRY;
 	if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
 		ioepoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
 	else
@@ -1290,7 +1292,7 @@ static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 }
 
 static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
-	struct req_capsule      *pill = info->mti_pill;
+	struct req_capsule *pill = info->mti_pill;
 
 	if (!info->mti_intent_lock &&
 	    req_capsule_get_size(pill, &RMF_DLM_REQ, RCL_CLIENT)) {
@@ -1304,27 +1306,28 @@ static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
 
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct md_attr          *ma = &info->mti_attr;
-        struct req_capsule      *pill = info->mti_pill;
-        int rc;
-        ENTRY;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct md_attr *ma = &info->mti_attr;
+	struct req_capsule *pill = info->mti_pill;
+	int rc;
 
-        rc = mdt_setattr_unpack_rec(info);
-        if (rc)
-                RETURN(rc);
+	ENTRY;
+	rc = mdt_setattr_unpack_rec(info);
+	if (rc)
+		RETURN(rc);
 
-        if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-                rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
-                                                        RCL_CLIENT);
+	if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
+		rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
+		rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+							RCL_CLIENT);
 
 		if (rr->rr_eadatalen > 0) {
 			const struct lmv_user_md	*lum;
 
 			lum = rr->rr_eadata;
 			/* Sigh ma_valid(from req) does not indicate whether
-			 * it will set LOV/LMV EA, so we have to check magic */
+			 * it will set LOV/LMV EA, so we have to check magic
+			 */
 			if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC) {
 				ma->ma_valid |= MA_LMV;
 				ma->ma_lmv = (void *)rr->rr_eadata;
@@ -1343,10 +1346,10 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 
 static int mdt_close_intent_unpack(struct mdt_thread_info *info)
 {
-	struct md_attr          *ma = &info->mti_attr;
-	struct req_capsule	*pill = info->mti_pill;
-	ENTRY;
+	struct md_attr *ma = &info->mti_attr;
+	struct req_capsule *pill = info->mti_pill;
 
+	ENTRY;
 	if (!(ma->ma_attr_flags & MDS_CLOSE_INTENT))
 		RETURN(0);
 
@@ -1362,11 +1365,11 @@ static int mdt_close_intent_unpack(struct mdt_thread_info *info)
 int mdt_close_unpack(struct mdt_thread_info *info)
 {
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = mdt_close_handle_unpack(info);
-        if (rc)
-                RETURN(rc);
+	if (rc)
+		RETURN(rc);
 
 	rc = mdt_setattr_unpack_rec(info);
 	if (rc)
@@ -1381,16 +1384,15 @@ int mdt_close_unpack(struct mdt_thread_info *info)
 
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred *uc  = mdt_ucred(info);
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct mdt_rec_create *rec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct req_capsule      *pill = info->mti_pill;
-	struct md_op_spec       *sp = &info->mti_spec;
+	struct req_capsule *pill = info->mti_pill;
+	struct md_op_spec *sp = &info->mti_spec;
 	int rc;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1496,7 +1498,6 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	int rc;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1533,15 +1534,14 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred *uc  = mdt_ucred(info);
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct mdt_rec_unlink *rec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct req_capsule      *pill = info->mti_pill;
+	struct req_capsule *pill = info->mti_pill;
 	int rc;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1599,7 +1599,6 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	int rc;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1653,7 +1652,6 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	int rc;
 
 	ENTRY;
-
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1730,7 +1728,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
  */
 void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata)
 {
-	struct lov_user_md_v1   *v1 = eadata;
+	struct lov_user_md_v1 *v1 = eadata;
 
 	LASSERT(v1);
 
@@ -1753,8 +1751,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct md_op_spec *sp = &info->mti_spec;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	BUILD_BUG_ON(sizeof(struct mdt_rec_create) !=
 		     sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
@@ -1782,37 +1780,37 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	attr->la_atime = rec->cr_time;
 	attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
 			 LA_CTIME | LA_MTIME | LA_ATIME;
-        memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
-        info->mti_spec.sp_cr_flags = get_mrc_cr_flags(rec);
-        /* Do not trigger ASSERTION if client miss to set such flags. */
-        if (unlikely(info->mti_spec.sp_cr_flags == 0))
-                RETURN(-EPROTO);
+	memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
+	info->mti_spec.sp_cr_flags = get_mrc_cr_flags(rec);
+	/* Do not trigger ASSERTION if client miss to set such flags. */
+	if (unlikely(info->mti_spec.sp_cr_flags == 0))
+		RETURN(-EPROTO);
 
-        info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
+	info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 
 	mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, MNF_FIX_ANON);
 
-        if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-                rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
-                                                        RCL_CLIENT);
+	if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
+		rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+							RCL_CLIENT);
 
-                if (rr->rr_eadatalen > 0) {
-                        rr->rr_eadata = req_capsule_client_get(pill,
-                                                               &RMF_EADATA);
-                        sp->u.sp_ea.eadatalen = rr->rr_eadatalen;
-                        sp->u.sp_ea.eadata = rr->rr_eadata;
+		if (rr->rr_eadatalen > 0) {
+			rr->rr_eadata = req_capsule_client_get(pill,
+							       &RMF_EADATA);
+			sp->u.sp_ea.eadatalen = rr->rr_eadatalen;
+			sp->u.sp_ea.eadata = rr->rr_eadata;
 			sp->sp_archive_id = rec->cr_archive_id;
-                        sp->no_create = !!req_is_replay(req);
+			sp->no_create = !!req_is_replay(req);
 			mdt_fix_lov_magic(info, rr->rr_eadata);
-                }
+		}
 
-                /*
-                 * Client default md_size may be 0 right after client start,
-                 * until all osc are connected, set here just some reasonable
-                 * value to prevent misbehavior.
-                 */
-                if (rr->rr_eadatalen == 0 &&
-                    !(info->mti_spec.sp_cr_flags & MDS_OPEN_DELAY_CREATE))
+		/*
+		 * Client default md_size may be 0 right after client start,
+		 * until all osc are connected, set here just some reasonable
+		 * value to prevent misbehavior.
+		 */
+		if (rr->rr_eadatalen == 0 &&
+		    !(info->mti_spec.sp_cr_flags & MDS_OPEN_DELAY_CREATE))
 			rr->rr_eadatalen = MIN_MD_SIZE;
 	}
 
@@ -1842,9 +1840,8 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	struct req_capsule *pill = info->mti_pill;
 	struct mdt_rec_setxattr *rec;
 	int rc;
+
 	ENTRY;
-
-
 	BUILD_BUG_ON(sizeof(struct mdt_rec_setxattr) !=
 		     sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
@@ -1902,12 +1899,12 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 
 static int mdt_resync_unpack(struct mdt_thread_info *info)
 {
-	struct req_capsule      *pill = info->mti_pill;
-	struct mdt_reint_record *rr   = &info->mti_rr;
-	struct lu_ucred		*uc	= mdt_ucred(info);
-	struct mdt_rec_resync	*rec;
-	ENTRY;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_rec_resync *rec;
 
+	ENTRY;
 	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
@@ -1924,7 +1921,8 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 
 	/* cookie doesn't need to be swapped but it has been swapped
 	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs
-	 * restoring. */
+	 * restoring.
+	 */
 	if (req_capsule_req_need_swab(pill))
 		__swab64s(&rec->rs_lease_handle.cookie);
 	rr->rr_lease_handle = &rec->rs_lease_handle;
@@ -1949,18 +1947,19 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        memset(&info->mti_rr, 0, sizeof(info->mti_rr));
-        if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
-                info->mti_rr.rr_opcode = op;
-                rc = mdt_reint_unpackers[op](info);
-        } else {
-                CERROR("Unexpected opcode %d\n", op);
-                rc = -EFAULT;
-        }
-        RETURN(rc);
+	ENTRY;
+	memset(&info->mti_rr, 0, sizeof(info->mti_rr));
+	if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
+		info->mti_rr.rr_opcode = op;
+		rc = mdt_reint_unpackers[op](info);
+	} else {
+		rc = -EFAULT;
+		CERROR("%s: Unexpected opcode %d: rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), op, rc);
+	}
+	RETURN(rc);
 }
 
 int mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
@@ -2078,7 +2077,6 @@ int mdt_is_remote_object(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	if (fid_is_root(mdt_object_fid(child)))
 		RETURN(0);
 
