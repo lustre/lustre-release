@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 # LN_CONFIG_BACKOFF
 #
 # check if tunable tcp backoff is available/wanted

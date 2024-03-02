@@ -1,22 +1,8 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
 
-/* percpu partition lock
+/* This file is part of Lustre, http://www.lustre.org/
+ *
+ * percpu partition lock
  *
  * There are some use-cases like this in Lustre:
  * . each CPU partition has it's own private data which is frequently changed,
@@ -31,6 +17,7 @@
  * . change on shared data needs to take _all_ private locks,
  *   which is slow and should be really rare.
  */
+
 enum {
 	CFS_PERCPT_LOCK_EX	= -1,	/* negative */
 };

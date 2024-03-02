@@ -3,10 +3,6 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# lnet/doc/Makefile.am
-#
-# Automake file for lnet man pages
-#
 
 MANFILES =					\
 	lnetctl.8				\

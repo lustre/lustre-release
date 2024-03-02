@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/* This file is part of Lustre, http://www.lustre.org/ */
+
 #ifndef LUSTRE_NVFS_H
 #define LUSTRE_NVFS_H
 
