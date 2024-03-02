@@ -1,26 +1,13 @@
-/*
- * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0
+
+/* Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  *
  * Copyright (c) 2011, 2017, Intel Corporation.
  *
  * Copyright (c) 2018-2020 Data Direct Networks.
- *
- *   This file is part of Lustre, https://wiki.whamcloud.com/
- *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Portals is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   version 2 along with this program; If not, see
- *   http://www.gnu.org/licenses/gpl-2.0.html
- *
- *   lnet/lnet/udsp.c
+ */
+
+/*   This file is part of Lustre, http://www.lustre.org/
  *
  *   User Defined Selection Policies (UDSP) are introduced to add
  *   ability of fine traffic control. The policies are instantiated
