@@ -123,8 +123,8 @@ static int
 osd_oi_lookup(const struct lu_env *env, struct osd_device *o,
 	      uint64_t parent, const char *name, struct osd_oi *oi)
 {
-	struct zpl_direntry	*zde = &osd_oti_get(env)->oti_zde.lzd_reg;
-	int			 rc;
+	struct zpl_direntry *zde = &osd_oti_get(env)->oti_zde.lzd_reg;
+	int rc;
 
 	rc = -zap_lookup(o->od_os, parent, name, 8, 1, (void *)zde);
 	if (rc)
@@ -153,8 +153,8 @@ static int osd_obj_create(const struct lu_env *env, struct osd_device *o,
 	uint64_t oid;
 	__u32 compat = LMAC_NOT_IN_OI;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (o->od_dt_dev.dd_rdonly)
 		RETURN(-EROFS);
 
@@ -237,7 +237,6 @@ static int osd_oi_destroy(const struct lu_env *env, struct osd_device *o,
 	int rc;
 
 	ENTRY;
-
 	if (o->od_dt_dev.dd_rdonly)
 		RETURN(-EROFS);
 
@@ -290,8 +289,8 @@ static int
 osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
 		      uint64_t parent, const char *name, uint64_t *child)
 {
-	struct osd_oi	oi;
-	int		rc;
+	struct osd_oi oi;
+	int rc;
 
 	rc = osd_oi_lookup(env, o, parent, name, &oi);
 	if (rc == 0)
@@ -325,7 +324,7 @@ int osd_obj_find_or_create(const struct lu_env *env, struct osd_device *o,
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   u64 seq, struct lu_seq_range *range)
 {
-	struct seq_server_site	*ss = osd_seq_site(osd);
+	struct seq_server_site *ss = osd_seq_site(osd);
 
 	if (fid_seq_is_idif(seq)) {
 		fld_range_set_ost(range);
@@ -337,7 +336,8 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		fld_range_set_mdt(range);
 		if (ss != NULL)
 			/* FIXME: If ss is NULL, it suppose not get lsr_index
-			 * at all */
+			 * at all
+			 */
 			range->lsr_index = ss->ss_node_id;
 		return 0;
 	}
@@ -355,10 +355,10 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 		  const struct lu_fid *fid)
 {
-	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
-	int			rc;
-	ENTRY;
+	struct lu_seq_range *range = &osd_oti_get(env)->oti_seq_range;
+	int rc;
 
+	ENTRY;
 	if (fid_is_idif(fid))
 		RETURN(1);
 
@@ -373,7 +373,8 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 		 * OST FLDB is not created until 2.6, so if some DNE
 		 * filesystem upgrade from 2.5 to 2.7/2.8, they will
 		 * not be able to find the sequence from local FLDB
-		 * cache see fld_index_init(). */
+		 * cache see fld_index_init().
+		 */
 		if (rc == -ENOENT && osd->od_is_ost)
 			RETURN(1);
 
@@ -415,23 +416,22 @@ static struct osd_seq *osd_seq_find(struct osd_seq_list *seq_list, u64 seq)
 static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 					   struct osd_device *osd, u64 seq)
 {
-	struct osd_seq_list	*seq_list = &osd->od_seq_list;
-	struct osd_seq		*osd_seq;
-	char			*key = osd_oti_get(env)->oti_buf;
-	char			*seq_name = osd_oti_get(env)->oti_str;
-	struct osd_oi		oi;
-	uint64_t		sdb, odb;
-	int			i;
-	int			rc = 0;
-	ENTRY;
+	struct osd_seq_list *seq_list = &osd->od_seq_list;
+	struct osd_seq *osd_seq;
+	char *key = osd_oti_get(env)->oti_buf;
+	char *seq_name = osd_oti_get(env)->oti_str;
+	struct osd_oi oi;
+	uint64_t sdb, odb;
+	int i;
+	int rc = 0;
 
+	ENTRY;
 	osd_seq = osd_seq_find(seq_list, seq);
 	if (osd_seq != NULL)
 		RETURN(osd_seq);
 
 	down(&seq_list->osl_seq_init_sem);
-	/* Check again, in case some one else already add it
-	 * to the list */
+	/* Check again, in case some one else already add it to the list */
 	osd_seq = osd_seq_find(seq_list, seq);
 	if (osd_seq != NULL)
 		GOTO(out, rc = 0);
@@ -443,8 +443,9 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 	INIT_LIST_HEAD(&osd_seq->os_seq_list);
 	osd_seq->os_seq = seq;
 
-	/* Init subdir count to be 32, but each seq can have
-	 * different subdir count */
+	/* Init subdir count to be 32, but each seq can have different subdir
+	 * count
+	 */
 	osd_seq->os_subdir_count = OSD_OST_MAP_SIZE;
 	OBD_ALLOC_PTR_ARRAY(osd_seq->os_compat_dirs, osd_seq->os_subdir_count);
 	if (osd_seq->os_compat_dirs == NULL)
@@ -491,10 +492,10 @@ static uint64_t
 osd_get_idx_for_ost_obj_compat(const struct lu_env *env, struct osd_device *osd,
 			       const struct lu_fid *fid, char *buf, int bufsize)
 {
-	struct osd_seq	*osd_seq;
-	unsigned long	b;
-	u64		id;
-	int		rc;
+	struct osd_seq *osd_seq;
+	unsigned long b;
+	u64 id;
+	int rc;
 
 	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));
 	if (IS_ERR(osd_seq)) {
@@ -529,10 +530,10 @@ static uint64_t
 osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 			const struct lu_fid *fid, char *buf, int bufsize)
 {
-	struct osd_seq	*osd_seq;
-	unsigned long	b;
-	u64		id;
-	int		rc;
+	struct osd_seq *osd_seq;
+	unsigned long b;
+	u64 id;
+	int rc;
 
 	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));
 	if (IS_ERR(osd_seq)) {
@@ -661,13 +662,13 @@ static inline int fid_is_fs_root(const struct lu_fid *fid)
 int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t *oid)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	char			*buf = info->oti_buf;
+	struct osd_thread_info *info = osd_oti_get(env);
+	char *buf = info->oti_buf;
 	dnode_t *zdn;
 	uint64_t zapid;
-	int			rc = 0;
-	ENTRY;
+	int rc = 0;
 
+	ENTRY;
 	if (CFS_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
 		RETURN(-ENOENT);
 
@@ -774,8 +775,8 @@ osd_oi_open_table(const struct lu_env *env, struct osd_device *o, int count)
 {
 	char name[16];
 	int  i, rc = 0;
-	ENTRY;
 
+	ENTRY;
 	for (i = 0; i < count; i++) {
 		sprintf(name, "%s.%d", DMU_OSD_OI_NAME_BASE, i);
 		rc = osd_oi_add_table(env, o, name, i);
@@ -800,8 +801,8 @@ static int osd_oi_probe(const struct lu_env *env, struct osd_device *o)
 	int max = sf->sf_oi_count > 0 ? sf->sf_oi_count : OSD_OI_FID_NR_MAX;
 	int count;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/*
 	 * Check for multiple OIs and determine the count.  There is no
 	 * gap handling, if an OI is missing the wrong size can be returned.
@@ -832,8 +833,8 @@ static int osd_oi_probe(const struct lu_env *env, struct osd_device *o)
 
 static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
 {
-	struct osd_seq_list	*osl = &osd->od_seq_list;
-	struct osd_seq		*osd_seq, *tmp;
+	struct osd_seq_list *osl = &osd->od_seq_list;
+	struct osd_seq *osd_seq, *tmp;
 
 	write_lock(&osl->osl_seq_list_lock);
 	list_for_each_entry_safe(osd_seq, tmp, &osl->osl_seq_list,
@@ -854,8 +855,8 @@ osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 {
 	uint64_t sdb;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = osd_oi_find_or_create(env, o, o->od_root, "O", &sdb);
 	if (!rc)
 		o->od_O_id = sdb;
@@ -868,8 +869,8 @@ osd_oi_init_index_backup(const struct lu_env *env, struct osd_device *o)
 {
 	struct lu_fid *fid = &osd_oti_get(env)->oti_fid;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
 	rc = osd_obj_find_or_create(env, o, o->od_root, INDEX_BACKUP_DIR,
 				    &o->od_index_backup_id, fid, true);
@@ -882,14 +883,14 @@ osd_oi_init_remote_parent(const struct lu_env *env, struct osd_device *o)
 {
 	uint64_t sdb;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (o->od_is_ost) {
 		o->od_remote_parent_dir = ZFS_NO_OBJECT;
 	} else {
-		/* Remote parent only used for cross-MDT objects,
-		 * it is usless for single MDT case or under read
-		 * only mode. So ignore the failure. */
+		/* Remote parent only used for cross-MDT objects, it is usless
+		 * for single MDT case or under read only mode. Ignore failure.
+		 */
 		rc = osd_oi_find_or_create(env, o, o->od_root,
 					   REMOTE_PARENT_DIR, &sdb);
 		if (!rc)
@@ -909,8 +910,8 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o, bool reset)
 	char *key = osd_oti_get(env)->oti_buf;
 	uint64_t sdb;
 	int i, rc, count;
-	ENTRY;
 
+	ENTRY;
 	LASSERTF((sf->sf_oi_count & (sf->sf_oi_count - 1)) == 0,
 		 "Invalid OI count in scrub file %d\n", sf->sf_oi_count);
 
@@ -942,8 +943,7 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o, bool reset)
 				goto open;
 			}
 
-			LCONSOLE_ERROR("%s: invalid oi count %d. You can "
-				       "remove all OIs, then remount it\n",
+			LCONSOLE_ERROR("%s: invalid oi count %d. You can remove all OIs, then remount it\n",
 				       osd_name(o), count);
 			GOTO(out, rc = -EDOM);
 		}
