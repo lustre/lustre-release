@@ -66,8 +66,8 @@
 
 int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa)
 {
-	char	    *buf;
-	int	     rc, size;
+	char *buf;
+	int rc, size;
 
 	rc = -sa_size(hdl, SA_ZPL_DXATTR(osd), &size);
 	if (rc) {
@@ -104,7 +104,7 @@ __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
 		   const struct lu_buf *buf, const char *name, int *sizep)
 {
 	uchar_t *nv_value;
-	int      rc = 0;
+	int rc = 0;
 
 	rc = __osd_xattr_cache(obj);
 	if (rc)
@@ -132,10 +132,10 @@ int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep)
 {
-	dnode_t		*xa_data_dn;
+	dnode_t *xa_data_dn;
 	sa_handle_t *sa_hdl = NULL;
-	uint64_t	 xa_data_obj, size;
-	int		 rc;
+	uint64_t xa_data_obj, size;
+	int rc;
 
 	/* are there any extended attributes? */
 	if (xattr == ZFS_NO_OBJECT)
@@ -277,8 +277,8 @@ static int osd_get_pfid_from_lma(const struct lu_env *env,
 		.lb_len = sizeof(info->oti_buf),
 	};
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*loa));
 	rc = osd_xattr_get_internal(env, obj, &tbuf,
 				    XATTR_NAME_LMA, sizep);
@@ -318,10 +318,10 @@ static int osd_get_pfid_from_lma(const struct lu_env *env,
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name)
 {
-	struct osd_object  *obj  = osd_dt_obj(dt);
-	int                 rc, size = 0;
-	ENTRY;
+	struct osd_object *obj = osd_dt_obj(dt);
+	int rc, size = 0;
 
+	ENTRY;
 	if (!osd_obj2dev(obj)->od_posix_acl &&
 	    (strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS) == 0 ||
 	     strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT) == 0))
@@ -333,7 +333,8 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn != NULL);
 
 	/* For the OST migrated from ldiskfs, the PFID EA may
-	 * be stored in LMA because of ldiskfs inode size. */
+	 * be stored in LMA because of ldiskfs inode size.
+	 */
 	if (strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma)
 		rc = osd_get_pfid_from_lma(env, obj, buf, &size);
 	else
@@ -408,7 +409,8 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		 * remote entry will be removed, then related agent entry may
 		 * need to be removed from the remote parent. So there may be
 		 * kinds of cases, let's declare enough credits. The credits
-		 * for create agent entry is enough for remove case. */
+		 * for create agent entry is enough for remove case.
+		 */
 		osd_tx_hold_zap(tx, osd->od_remote_parent_dir,
 				NULL, TRUE, NULL);
 	}
@@ -421,9 +423,9 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 	/* declare EA in SA */
 	if (dt_object_exists(&obj->oo_dt)) {
 		LASSERT(obj->oo_sa_hdl);
-		/* XXX: it should be possible to skip spill
-		 * declaration if specific EA is part of
-		 * bonus and doesn't grow */
+		/* XXX: it should be possible to skip spill declaration if
+		 * specific EA is part of bonus and doesn't grow
+		 */
 		dmu_tx_hold_spill(tx, obj->oo_dn->dn_object);
 		return;
 	}
@@ -431,7 +433,8 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 	bonuslen = osd_obj_bonuslen(obj);
 
 	/* the object doesn't exist, but we've declared bonus
-	 * in osd_declare_object_create() yet */
+	 * in osd_declare_object_create() yet
+	 */
 	if (obj->oo_ea_in_bonus > bonuslen) {
 		/* spill has been declared already */
 	} else if (obj->oo_ea_in_bonus + vallen > bonuslen) {
@@ -445,10 +448,10 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			  const struct lu_buf *buf, const char *name,
 			  int fl, struct thandle *handle)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(handle != NULL);
 	oh = container_of(handle, struct osd_thandle, ot_super);
 
@@ -530,9 +533,10 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 
 	lu_buf_check_and_alloc(lb, size);
 	if (lb->lb_buf == NULL) {
-		CERROR("%s: can't allocate buffer for xattr update\n",
-				osd->od_svname);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		CERROR("%s: can't allocate buffer for xattr update: rc = %d\n",
+		       osd->od_svname, rc);
+		return rc;
 	}
 
 	rc = -nvlist_pack(obj->oo_sa_xattr, (char **)&lb->lb_buf, &size,
@@ -550,11 +554,11 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 			   struct osd_thandle *oh)
 {
-	struct lu_buf	  *lb = &osd_oti_get(env)->oti_xattr_lbuf;
+	struct lu_buf *lb = &osd_oti_get(env)->oti_xattr_lbuf;
 	struct osd_device *osd = osd_obj2dev(obj);
-	char              *dxattr;
-	size_t             size;
-	int                rc;
+	char *dxattr;
+	size_t size;
+	int rc;
 
 	obj->oo_late_xattr = 0;
 
@@ -565,9 +569,10 @@ int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 
 	lu_buf_check_and_alloc(lb, size);
 	if (lb->lb_buf == NULL) {
-		CERROR("%s: can't allocate buffer for xattr update\n",
-				osd->od_svname);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		CERROR("%s: can't allocate buffer for xattr update: rc = %d\n",
+		       osd->od_svname, rc);
+		return rc;
 	}
 
 	dxattr = lb->lb_buf;
@@ -611,10 +616,10 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		       struct osd_thandle *oh)
 {
 	uchar_t *nv_value;
-	size_t  size;
-	int	nv_size;
-	int	rc;
-	int	too_big = 0;
+	size_t size;
+	int nv_size;
+	int rc;
+	int too_big = 0;
 
 	rc = __osd_xattr_cache(obj);
 	if (rc)
@@ -624,8 +629,7 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	if (buf->lb_len > OBD_MAX_EA_SIZE) {
 		too_big = 1;
 	} else {
-		/* Prevent the DXATTR SA from consuming the entire SA
-		 * region */
+		/* Prevent the DXATTR SA from consuming the entire SA region */
 		rc = -nvlist_size(obj->oo_sa_xattr, &size, NV_ENCODE_XDR);
 		if (rc)
 			return rc;
@@ -635,7 +639,8 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	/* even in case of -EFBIG we must lookup xattr and check can we
-	 * rewrite it then delete from SA */
+	 * rewrite it then delete from SA
+	 */
 	rc = -nvlist_lookup_byte_array(obj->oo_sa_xattr, name, &nv_value,
 					&nv_size);
 	if (rc == 0) {
@@ -662,6 +667,7 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	if (obj->oo_xattr != ZFS_NO_OBJECT) {
 		struct osd_device *osd = osd_obj2dev(obj);
 		uint64_t           objid;
+
 		rc = -zap_lookup(osd->od_os, obj->oo_xattr,
 				 name, 8, 1, &objid);
 		if (rc == 0) {
@@ -678,7 +684,8 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		return rc;
 
 	/* batch updates only for just created dnodes where we
-	 * used to set number of EAs in a single transaction */
+	 * used to set number of EAs in a single transaction
+	 */
 	if (obj->oo_dn->dn_allocated_txg == oh->ot_tx->tx_txg)
 		rc = __osd_sa_xattr_schedule_update(env, obj, oh);
 	else
@@ -695,11 +702,11 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *xa_zap_dn = NULL;
 	dnode_t *xa_data_dn = NULL;
-	uint64_t           xa_data_obj;
-	sa_handle_t       *sa_hdl = NULL;
-	dmu_tx_t          *tx = oh->ot_tx;
-	uint64_t           size;
-	int                rc;
+	uint64_t xa_data_obj;
+	sa_handle_t *sa_hdl = NULL;
+	dmu_tx_t *tx = oh->ot_tx;
+	uint64_t size;
+	int rc;
 
 	LASSERT(obj->oo_sa_hdl);
 
@@ -707,7 +714,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		struct lu_attr *la = &osd_oti_get(env)->oti_la;
 
 		la->la_valid = LA_MODE;
-		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
+		la->la_mode = S_IFDIR | 0755;
 		rc = __osd_zap_create(env, osd, &xa_zap_dn, tx, la, 0, 0);
 		if (rc)
 			return rc;
@@ -726,10 +733,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 			rc = -EEXIST;
 			goto out;
 		}
-		/*
-		 * Entry already exists.
-		 * We'll truncate the existing object.
-		 */
+		/* Entry already exists. We'll truncate the existing object. */
 		rc = __osd_obj2dnode(osd->od_os, xa_data_obj, &xa_data_dn);
 		if (rc)
 			goto out;
@@ -755,13 +759,14 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		 */
 		if (fl & LU_XATTR_REPLACE) {
 			/* should be ENOATTR according to the
-			 * man, but that is undefined here */
+			 * man, but that is undefined here
+			 */
 			rc = -ENODATA;
 			goto out;
 		}
 
 		la->la_valid = LA_MODE;
-		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		la->la_mode = S_IFREG | 0644;
 		rc = __osd_object_create(env, osd, obj,
 					 lu_object_fid(&obj->oo_dt.do_lu),
 					 &xa_data_dn, tx, la);
@@ -813,8 +818,8 @@ static int osd_xattr_split_pfid(const struct lu_env *env,
 	};
 	int size;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*loa));
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
 	if (rc)
@@ -862,8 +867,8 @@ static int osd_xattr_handle_linkea(const struct lu_env *env,
 	struct lu_name tmpname;
 	int rc;
 	bool remote = false;
-	ENTRY;
 
+	ENTRY;
 	rc = linkea_init_with_rec(&ldata);
 	if (!rc) {
 		linkea_first_entry(&ldata);
@@ -884,13 +889,13 @@ static int osd_xattr_handle_linkea(const struct lu_env *env,
 	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu) && !remote) {
 		rc = osd_delete_from_remote_parent(env, osd, obj, oh, false);
 		if (rc)
-			CERROR("%s: failed to remove agent entry for "DFID
-			       ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+			CERROR("%s: failed to remove agent entry for "DFID": rc = %d\n",
+			       osd_name(osd), PFID(fid), rc);
 	} else if (!lu_object_has_agent_entry(&obj->oo_dt.do_lu) && remote) {
 		rc = osd_add_to_remote_parent(env, osd, obj, oh);
 		if (rc)
-			CWARN("%s: failed to create agent entry for "DFID
-			      ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+			CWARN("%s: failed to create agent entry for "DFID": rc = %d\n",
+			      osd_name(osd), PFID(fid), rc);
 	}
 
 	RETURN(rc);
@@ -904,8 +909,8 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
 
@@ -920,7 +925,8 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	CDEBUG(D_INODE, "Setting xattr %s with size %d\n",
 		name, (int)buf->lb_len);
 	/* For the OST migrated from ldiskfs, the PFID EA may
-	 * be stored in LMA because of ldiskfs inode size. */
+	 * be stored in LMA because of ldiskfs inode size.
+	 */
 	if (unlikely(strcmp(name, XATTR_NAME_FID) == 0 &&
 		     obj->oo_pfid_in_lma)) {
 		rc = osd_xattr_split_pfid(env, obj, oh);
@@ -943,9 +949,9 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 			const char *name, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	dmu_tx_t          *tx = oh->ot_tx;
-	uint64_t           xa_data_obj;
-	int                rc;
+	dmu_tx_t *tx = oh->ot_tx;
+	uint64_t xa_data_obj;
+	int rc;
 
 	/* update SA_ZPL_DXATTR if xattr was in SA */
 	dmu_tx_hold_sa(tx, obj->oo_sa_hdl, 0);
@@ -955,10 +961,7 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 
 	rc = -zap_lookup(osd->od_os, obj->oo_xattr, name, 8, 1, &xa_data_obj);
 	if (rc == 0) {
-		/*
-		 * Entry exists.
-		 * We'll delete the existing object and ZAP entry.
-		 */
+		/* Entry exists. Will delete the existing obj and ZAP entry */
 		dmu_tx_hold_bonus(tx, xa_data_obj);
 		dmu_tx_hold_free(tx, xa_data_obj, 0, DMU_OBJECT_END);
 		dmu_tx_hold_zap(tx, obj->oo_xattr, FALSE, (char *) name);
@@ -977,10 +980,10 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			  const char *name, struct thandle *handle)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
 
@@ -1026,8 +1029,8 @@ static int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
 			   const char *name, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	uint64_t           xa_data_obj;
-	int                rc;
+	uint64_t xa_data_obj;
+	int rc;
 
 	if (unlikely(!dt_object_exists(&obj->oo_dt) || obj->oo_destroyed))
 		return -ENOENT;
@@ -1045,10 +1048,7 @@ static int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
 	if (rc == -ENOENT) {
 		rc = 0;
 	} else if (rc == 0) {
-		/*
-		 * Entry exists.
-		 * We'll delete the existing object and ZAP entry.
-		 */
+		/* Entry exists. We'll delete the existing obj and ZAP entry */
 		rc = -dmu_object_free(osd->od_os, xa_data_obj, oh->ot_tx);
 		if (rc)
 			return rc;
@@ -1064,9 +1064,9 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
-	int                 rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	LASSERT(handle != NULL);
 	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
@@ -1081,7 +1081,8 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc = -ENOENT);
 	LASSERT(obj->oo_dn != NULL);
 	/* For the OST migrated from ldiskfs, the PFID EA may
-	 * be stored in LMA because of ldiskfs inode size. */
+	 * be stored in LMA because of ldiskfs inode size.
+	 */
 	if (unlikely(strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma))
 		rc = osd_xattr_split_pfid(env, obj, oh);
 	else
@@ -1096,11 +1097,11 @@ void osd_declare_xattrs_destroy(const struct lu_env *env,
 				struct osd_object *obj, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
-	uint64_t	   oid = obj->oo_xattr, xid;
-	dmu_tx_t	  *tx = oh->ot_tx;
-	zap_cursor_t	  *zc;
-	int		   rc;
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	uint64_t oid = obj->oo_xattr, xid;
+	dmu_tx_t *tx = oh->ot_tx;
+	zap_cursor_t *zc;
+	int rc;
 
 	if (oid == ZFS_NO_OBJECT)
 		return; /* Nothing to do for SA xattrs */
@@ -1138,11 +1139,11 @@ int osd_xattrs_destroy(const struct lu_env *env,
 		       struct osd_object *obj, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	dmu_tx_t	  *tx = oh->ot_tx;
-	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
-	zap_cursor_t	  *zc;
-	uint64_t	   xid;
-	int		   rc;
+	dmu_tx_t *tx = oh->ot_tx;
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	zap_cursor_t *zc;
+	uint64_t xid;
+	int rc;
 
 	/* The transaction must have been assigned to a transaction group. */
 	LASSERT(tx->tx_txg != 0);
@@ -1187,8 +1188,8 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 		  const struct lu_buf *lb)
 {
 	nvpair_t *nvp = NULL;
-	int       len, counted = 0;
-	int       rc = 0;
+	int len, counted = 0;
+	int rc = 0;
 
 	rc = __osd_xattr_cache(obj);
 	if (rc)
@@ -1217,13 +1218,13 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 		   const struct lu_buf *lb)
 {
-	struct osd_object      *obj = osd_dt_obj(dt);
-	struct osd_device      *osd = osd_obj2dev(obj);
-	zap_attribute_t	       *za = &osd_oti_get(env)->oti_za;
-	zap_cursor_t           *zc;
-	int                    rc, counted;
-	ENTRY;
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	zap_cursor_t *zc;
+	int rc, counted;
 
+	ENTRY;
 	down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
 		GOTO(out, rc = -ENOENT);
