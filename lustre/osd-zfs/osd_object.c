@@ -193,8 +193,8 @@ static int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	struct lu_buf buf;
 	int cnt = 0;
 	int		 rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(obj->oo_dn != NULL);
 
 	la->la_valid |= LA_ATIME | LA_MTIME | LA_CTIME | LA_BTIME | LA_MODE |
@@ -353,8 +353,8 @@ static void osd_obj_set_blksize(const struct lu_env *env,
 	dnode_t *dn = obj->oo_dn;
 	uint32_t blksz;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(!osd_oti_get(env)->oti_in_trans);
 
 	tx = dmu_tx_create(osd->od_os);
@@ -368,8 +368,8 @@ static void osd_obj_set_blksize(const struct lu_env *env,
 	rc = -dmu_tx_assign(tx, TXG_WAIT);
 	if (rc) {
 		dmu_tx_abort(tx);
-		CERROR("%s: fail to assign tx to set blksize for "DFID
-		       ": rc = %d\n", osd->od_svname, PFID(fid), rc);
+		CERROR("%s: fail to assign tx to set blksize for "DFID": rc = %d\n",
+		       osd->od_svname, PFID(fid), rc);
 		RETURN_EXIT;
 	}
 
@@ -413,8 +413,8 @@ static int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 	struct osd_device	*osd = osd_obj2dev(obj);
 	const struct lu_fid	*fid = lu_object_fid(&obj->oo_dt.do_lu);
 	int			 rc = 0;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(obj->oo_dn);
 
 	rc = osd_object_sa_init(obj, osd);
@@ -457,8 +457,8 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	int			rc;
 	struct lustre_mdt_attrs	*lma;
 	const struct lu_fid *rfid = lu_object_fid(&obj->oo_dt.do_lu);
-	ENTRY;
 
+	ENTRY;
 	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*lma));
 	lma = (struct lustre_mdt_attrs *)info->oti_buf;
 	buf.lb_buf = lma;
@@ -470,17 +470,16 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 		lustre_lma_swab(lma);
 		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
-			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-			      "fid = "DFID"\n", osd_obj2dev(obj)->od_svname,
-			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(rfid));
 			rc = -EOPNOTSUPP;
-		} else if (unlikely(!lu_fid_eq(rfid, &lma->lma_self_fid))) {
-			CERROR("%s: FID-in-LMA "DFID" does not match the "
-			      "object self-fid "DFID"\n",
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for fid = "DFID": rc = %d\n",
 			      osd_obj2dev(obj)->od_svname,
-			      PFID(&lma->lma_self_fid), PFID(rfid));
+			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
+			      PFID(rfid), rc);
+		} else if (unlikely(!lu_fid_eq(rfid, &lma->lma_self_fid))) {
 			rc = -EREMCHG;
+			CERROR("%s: FID-in-LMA "DFID" does not match the object self-fid "DFID": rc = %d\n",
+			      osd_obj2dev(obj)->od_svname,
+			      PFID(&lma->lma_self_fid), PFID(rfid), rc);
 		} else {
 			struct osd_device *osd = osd_obj2dev(obj);
 
@@ -547,8 +546,8 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	int rc = 0;
 	int rc1;
 	bool remote = false;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(osd_invariant(obj));
 
 	if (fid_is_otable_it(&l->lo_header->loh_fid)) {
@@ -633,7 +632,8 @@ trigger:
 	 *
 	 * During the OI scrub, if we cannot find the OI mapping, we may still
 	 * have change to map the FID to local OID via lookup the dir
-	 * /REMOTE_PARENT_DIR. */
+	 * /REMOTE_PARENT_DIR.
+	 */
 	if (!remote && !fid_is_on_ost(env, osd, fid)) {
 		osd_fid2str(name, fid, sizeof(info->oti_str));
 		rc = osd_zap_lookup(osd, osd->od_remote_parent_dir,
@@ -717,7 +717,8 @@ osd_object_unlinked_add(struct osd_object *obj, struct osd_thandle *oh)
 
 	/* the object is supposed to be exclusively locked by
 	 * the caller (osd_destroy()), while the transaction
-	 * (oh) is per-thread and not shared */
+	 * (oh) is per-thread and not shared
+	 */
 	if (likely(list_empty(&obj->oo_unlinked_linkage))) {
 		list_add(&obj->oo_unlinked_linkage, &oh->ot_unlinked_list);
 		rc = 0;
@@ -759,8 +760,8 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	dnode_t *dn;
 	int			 rc;
 	uint64_t		 zapid;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(th != NULL);
 	if (unlikely(obj->oo_dn == NULL))
 		RETURN(-ENOENT);
@@ -803,8 +804,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 		osd_tx_hold_zap(oh->ot_tx, osd->od_remote_parent_dir,
 				NULL, FALSE, NULL);
 
-	/* will help to find FID->ino when this object is being
-	 * added to PENDING/ */
+	/* will help to find FID->ino when this obj is being added to PENDING */
 	osd_idc_find_and_init(env, osd, obj);
 
 	RETURN(0);
@@ -822,8 +822,8 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	int			 rc;
 	uint64_t		 oid, zapid;
 	dnode_t *zdn;
-	ENTRY;
 
+	ENTRY;
 	down_write(&obj->oo_guard);
 
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
@@ -856,7 +856,8 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		/* this may happen if the destroy wasn't declared
 		 * e.g. when the object is created and then destroyed
 		 * in the same transaction - we don't need additional
-		 * space for destroy specifically */
+		 * space for destroy specifically
+		 */
 		LASSERT(obj->oo_attr.la_size <= osd_sync_destroy_max_size);
 		rc = -dmu_object_free(osd->od_os, oid, oh->ot_tx);
 		if (rc)
@@ -883,7 +884,8 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	/* Remove the OI mapping after the destroy to handle the race with
-	 * OI scrub that may insert missed OI mapping during the interval. */
+	 * OI scrub that may insert missed OI mapping during the interval.
+	 */
 	rc = osd_zap_remove(osd, zapid, zdn, buf, oh->ot_tx);
 	if (unlikely(rc == -ENOENT))
 		rc = 0;
@@ -899,7 +901,7 @@ out:
 	if (rc == 0)
 		obj->oo_destroyed = 1;
 	up_write(&obj->oo_guard);
-	RETURN (0);
+	RETURN(0);
 }
 
 static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
@@ -948,7 +950,7 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 }
 
 static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
-			  unsigned role)
+			  unsigned int role)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
@@ -958,7 +960,7 @@ static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
 }
 
 static void osd_write_lock(const struct lu_env *env, struct dt_object *dt,
-			   unsigned role)
+			   unsigned int role)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
@@ -1036,10 +1038,12 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 
 	/* with ZFS_DEBUG zrl_add_debug() called by DB_DNODE_ENTER()
 	 * from within sa_object_size() can block on a mutex, so
-	 * we can't call sa_object_size() holding rwlock */
+	 * we can't call sa_object_size() holding rwlock
+	 */
 	sa_object_size(obj->oo_sa_hdl, &blksize, &blocks);
 	/* we do not control size of indices, so always calculate
-	 * it from number of blocks reported by DMU */
+	 * it from number of blocks reported by DMU
+	 */
 	if (S_ISDIR(attr->la_mode)) {
 		attr->la_size = 512 * blocks;
 		rc = -zap_count(osd->od_os, obj->oo_dn->dn_object,
@@ -1161,9 +1165,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	uint32_t		 blksize;
 	int			 rc = 0;
 	bool			 found;
+
 	ENTRY;
-
-
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
 
@@ -1177,7 +1180,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	LASSERT(oh->ot_tx != NULL);
 	/* regular attributes are part of the bonus buffer */
 	/* let's check whether this object is already part of
-	 * transaction.. */
+	 * transaction..
+	 */
 	found = false;
 	for (txh = list_head(&oh->ot_tx->tx_holds); txh;
 	     txh = list_next(&oh->ot_tx->tx_holds, txh)) {
@@ -1186,7 +1190,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		if (txh->txh_dnode->dn_object != obj->oo_dn->dn_object)
 			continue;
 		/* this object is part of the transaction already
-		 * we don't need to declare bonus again */
+		 * we don't need to declare bonus again
+		 */
 		found = true;
 		break;
 	}
@@ -1283,7 +1288,6 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	int			 rc = 0;
 
 	ENTRY;
-
 	down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
 		GOTO(out, rc = -ENOENT);
@@ -1293,8 +1297,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_sa_hdl);
 
 	oh = container_of(handle, struct osd_thandle, ot_super);
-	/* Assert that the transaction has been assigned to a
-	   transaction group. */
+	/* Assert that the transaction has been assigned to a transaction grp */
 	LASSERT(oh->ot_tx->tx_txg != 0);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) && !osd->od_is_ost) {
@@ -1346,7 +1349,8 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 			buf.lb_len = sizeof(info->oti_buf);
 
 			/* Please do NOT call osd_xattr_get() directly, that
-			 * will cause recursive down_read() on oo_guard. */
+			 * will cause recursive down_read() on oo_guard.
+			 */
 			rc = osd_xattr_get_internal(env, obj, &buf,
 						    XATTR_NAME_LMA, &size);
 			if (!rc && unlikely(size < sizeof(*lma))) {
@@ -1453,8 +1457,7 @@ lock:
 	}
 	if (valid & LA_FLAGS) {
 		osa->flags = attrs_fs2zfs(la->la_flags);
-		/* many flags are not supported by zfs, so ensure a good cached
-		 * copy */
+		/* many flags not supported by zfs, ensure good cached copy */
 		obj->oo_attr.la_flags = attrs_zfs2fs(osa->flags);
 #ifdef ZFS_PROJINHERIT
 		if (obj->oo_with_projid && osd->od_projectused_dn)
@@ -1489,7 +1492,6 @@ out:
  *
  * XXX temporary solution.
  */
-
 static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 			struct dt_object *parent, struct dt_object *child,
 			umode_t child_mode)
@@ -1519,19 +1521,19 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	uint64_t		 zapid;
 	dnode_t			*dn;
 	int			 rc, dnode_size;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(dof);
 
 	switch (dof->dof_type) {
-		case DFT_REGULAR:
-		case DFT_SYM:
-		case DFT_NODE:
-			if (obj->oo_dt.do_body_ops == NULL)
-				obj->oo_dt.do_body_ops = &osd_body_ops;
-			break;
-		default:
-			break;
+	case DFT_REGULAR:
+	case DFT_SYM:
+	case DFT_NODE:
+		if (obj->oo_dt.do_body_ops == NULL)
+			obj->oo_dt.do_body_ops = &osd_body_ops;
+		break;
+	default:
+		break;
 	}
 
 	LASSERT(handle != NULL);
@@ -1544,24 +1546,24 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	dnode_size = size_roundup_power2(obj->oo_ea_in_bonus + 32);
 
 	switch (dof->dof_type) {
-		case DFT_DIR:
-			dt->do_index_ops = &osd_dir_ops;
-			fallthrough;
-		case DFT_INDEX:
-			/* for zap create */
-			dmu_tx_hold_zap(oh->ot_tx, DMU_NEW_OBJECT, FALSE, NULL);
-			dmu_tx_hold_sa_create(oh->ot_tx, dnode_size);
-			break;
-		case DFT_REGULAR:
-		case DFT_SYM:
-		case DFT_NODE:
-			/* first, we'll create new object */
-			dmu_tx_hold_sa_create(oh->ot_tx, dnode_size);
-			break;
+	case DFT_DIR:
+		dt->do_index_ops = &osd_dir_ops;
+		fallthrough;
+	case DFT_INDEX:
+		/* for zap create */
+		dmu_tx_hold_zap(oh->ot_tx, DMU_NEW_OBJECT, FALSE, NULL);
+		dmu_tx_hold_sa_create(oh->ot_tx, dnode_size);
+		break;
+	case DFT_REGULAR:
+	case DFT_SYM:
+	case DFT_NODE:
+		/* first, we'll create new object */
+		dmu_tx_hold_sa_create(oh->ot_tx, dnode_size);
+		break;
 
-		default:
-			LBUG();
-			break;
+	default:
+		LBUG();
+		break;
 	}
 
 	/* and we'll add it to some mapping */
@@ -1764,7 +1766,8 @@ int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
 	int size;
 
 	/* Use DMU_OTN_UINT8_METADATA for local objects so their data blocks
-	 * would get an additional ditto copy */
+	 * would get an additional ditto copy
+	 */
 	if (unlikely(S_ISREG(la->la_mode) &&
 		     fid_seq_is_local_file(fid_seq(fid))))
 		type = DMU_OTN_UINT8_METADATA;
@@ -1793,15 +1796,15 @@ int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
  * This is fine for directories today, because storing the FID in the dirent
  * will also require a FAT ZAP.  If there is a new type of micro ZAP created
  * then we might need to re-evaluate the use of this flag and instead do
- * a conversion from the different internal ZAP hash formats being used. */
+ * a conversion from the different internal ZAP hash formats being used.
+ */
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la,
-		     unsigned dnsize, zap_flags_t flags)
+		     unsigned int dnsize, zap_flags_t flags)
 {
 	uint64_t oid;
 
-	/* Assert that the transaction has been assigned to a
-	   transaction group. */
+	/* Assert that the transaction has been assigned to a transaction grp */
 	LASSERT(tx->tx_txg != 0);
 	*dnp = NULL;
 
@@ -1827,7 +1830,8 @@ static dnode_t *osd_mkidx(const struct lu_env *env, struct osd_object *obj,
 	/* Index file should be created as regular file in order not to confuse
 	 * ZPL which could interpret them as directory.
 	 * We set ZAP_FLAG_UINT64_KEY to let ZFS know than we are going to use
-	 * binary keys */
+	 * binary keys
+	 */
 	LASSERT(S_ISREG(la->la_mode));
 	rc = __osd_zap_create(env, osd, &dn, oh->ot_tx, la,
 		osd_find_dnsize(osd, obj->oo_ea_in_bonus), ZAP_FLAG_UINT64_KEY);
@@ -1868,7 +1872,8 @@ static dnode_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 		/* The minimum block size must be at least page size otherwise
 		 * it will break the assumption in tgt_thread_big_cache where
 		 * the array size is PTLRPC_MAX_BRW_PAGES. It will also affect
-		 * RDMA due to subpage transfer size */
+		 * RDMA due to subpage transfer size
+		 */
 		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
 					       PAGE_SIZE, 0, oh->ot_tx);
 		if (unlikely(rc)) {
@@ -1878,7 +1883,8 @@ static dnode_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 		}
 	} else if ((fid_is_llog(fid))) {
 		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
-					       LLOG_MIN_CHUNK_SIZE, 0, oh->ot_tx);
+					       LLOG_MIN_CHUNK_SIZE, 0,
+					       oh->ot_tx);
 		if (unlikely(rc)) {
 			CERROR("%s: can't change blocksize: %d\n",
 			       osd->od_svname, rc);
@@ -1974,12 +1980,12 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	__u32 compat = 0;
 
 	ENTRY;
-
 	LASSERT(!fid_is_acct(fid));
 
 	/* concurrent create declarations should not see
 	 * the object inconsistent (db, attr, etc).
-	 * in regular cases acquisition should be cheap */
+	 * in regular cases acquisition should be cheap
+	 */
 	down_write(&obj->oo_guard);
 
 	if (unlikely(dt_object_exists(dt)))
@@ -1993,8 +1999,9 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_dn == NULL);
 
-	/* to follow ZFS on-disk format we need
-	 * to initialize parent dnode properly */
+	/* to follow ZFS on-disk format we need to initialize parent dnode
+	 * properly
+	 */
 	if (hint != NULL && hint->dah_parent != NULL &&
 	    !dt_object_remote(hint->dah_parent))
 		parent = osd_dt_obj(hint->dah_parent)->oo_dn->dn_object;
@@ -2107,7 +2114,6 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 	int rc;
 
 	ENTRY;
-
 	down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
 		GOTO(out, rc = -ENOENT);
@@ -2148,7 +2154,6 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	int			 rc;
 
 	ENTRY;
-
 	down_read(&obj->oo_guard);
 
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
@@ -2176,8 +2181,8 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	uint64_t txg = 0;
-	ENTRY;
 
+	ENTRY;
 	if (osd->od_dt_dev.dd_rdonly)
 		RETURN(0);
 
