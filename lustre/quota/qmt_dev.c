@@ -77,11 +77,6 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "%s: initiating QMT shutdown\n", qmt->qmt_svname);
 	qmt->qmt_stopping = true;
 
-	if (qmt->qmt_lvbo_free_wq) {
-		destroy_workqueue(qmt->qmt_lvbo_free_wq);
-		qmt->qmt_lvbo_free_wq = NULL;
-	}
-
 	/* kill pool instances, if any */
 	qmt_pool_fini(env, qmt);
 
@@ -110,6 +105,11 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	/* clear references to MDT namespace */
 	ld->ld_obd->obd_namespace = NULL;
 	qmt->qmt_ns = NULL;
+
+	if (qmt->qmt_lvbo_free_wq) {
+		destroy_workqueue(qmt->qmt_lvbo_free_wq);
+		qmt->qmt_lvbo_free_wq = NULL;
+	}
 
 	RETURN(NULL);
 }
