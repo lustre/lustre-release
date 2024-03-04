@@ -65,6 +65,7 @@ char osd_0copy_tag[] = "zerocopy";
 static void dbuf_set_pending_evict(dmu_buf_t *db)
 {
 	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *)db;
+
 	dbi->db_pending_evict = TRUE;
 }
 
@@ -168,19 +169,20 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 				const struct lu_buf *buf, loff_t pos,
 				struct thandle *th)
 {
-	struct osd_object  *obj  = osd_dt_obj(dt);
-	struct osd_device  *osd = osd_obj2dev(obj);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	loff_t _pos = pos, max = 0;
 	struct osd_thandle *oh;
-	uint64_t            oid;
-	ENTRY;
+	uint64_t oid;
 
+	ENTRY;
 	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/* in some cases declare can race with creation (e.g. llog)
 	 * and we need to wait till object is initialized. notice
 	 * LOHA_EXISTs is supposed to be the last step in the
-	 * initialization */
+	 * initialization
+	 */
 
 	/* size change (in dnode) will be declared by dmu_tx_hold_write() */
 	if (dt_object_exists(dt))
@@ -190,7 +192,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 	/* XXX: we still miss for append declaration support in ZFS
 	 *	-1 means append which is used by llog mostly, llog
-	 *	can grow upto LLOG_MIN_CHUNK_SIZE*8 records */
+	 *	can grow upto LLOG_MIN_CHUNK_SIZE*8 records
+	 */
 	max = max_t(loff_t, 256 * 8 * LLOG_MIN_CHUNK_SIZE,
 		    obj->oo_attr.la_size + (2 << 20));
 	if (pos == -1)
@@ -233,7 +236,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those
-	 * objects, so always set the lqi_space as 0. */
+	 * objects, so always set the lqi_space as 0.
+	 */
 	RETURN(osd_declare_quota(env, osd, obj->oo_attr.la_uid,
 				 obj->oo_attr.la_gid, obj->oo_attr.la_projid,
 				 0, oh, NULL, OSD_QID_BLK));
@@ -248,6 +252,7 @@ static dmu_buf_t *osd_get_dbuf(struct osd_object *obj, uint64_t offset)
 	blkid = dbuf_whichblock(obj->oo_dn, 0, offset);
 	for (i = 0; i < OSD_MAX_DBUFS; i++) {
 		dmu_buf_impl_t *dbi = (void *)dbs[i];
+
 		if (!dbs[i])
 			continue;
 		if (dbi->db_blkid == blkid)
@@ -320,14 +325,13 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 			const struct lu_buf *buf, loff_t *pos,
 			struct thandle *th)
 {
-	struct osd_object  *obj  = osd_dt_obj(dt);
-	struct osd_device  *osd = osd_obj2dev(obj);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	uint64_t            offset = *pos;
-	int                 rc;
+	uint64_t offset = *pos;
+	int rc;
 
 	ENTRY;
-
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
 
@@ -350,7 +354,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 		write_unlock(&obj->oo_attr_lock);
 		/* osd_object_sa_update() will be copying directly from oo_attr
 		 * into dbuf.  any update within a single txg will copy the
-		 * most actual */
+		 * most actual
+		 */
 		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
 					&obj->oo_attr.la_size, 8, oh);
 		if (unlikely(rc))
@@ -382,8 +387,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	struct osd_device *osd = osd_obj2dev(obj);
-	unsigned long      ptr;
-	int                i;
+	unsigned long ptr;
+	int i;
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
@@ -405,10 +410,12 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 				atomic_dec(&osd->od_zerocopy_pin);
 			} else if (lnb[i].lnb_data != NULL) {
 				int j, apages, abufsz;
+
 				abufsz = arc_buf_size(lnb[i].lnb_data);
 				apages = abufsz >> PAGE_SHIFT;
 				/* these references to pages must be invalidated
-				 * to prevent access in osd_bufs_put() */
+				 * to prevent access in osd_bufs_put()
+				 */
 				for (j = 0; j < apages; j++)
 					lnb[i + j].lnb_page = NULL;
 				dmu_return_arcbuf(lnb[i].lnb_data);
@@ -520,7 +527,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 				lnb->lnb_page = kmem_to_page(dbp[i]->db_data +
 							     bufoff);
 				/* mark just a single slot: we need this
-				 * reference to dbuf to be released once */
+				 * reference to dbuf to be released once
+				 */
 				lnb->lnb_data = dbf;
 				dbf = NULL;
 
@@ -536,8 +544,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			if (drop_cache)
 				dbuf_set_pending_evict(dbp[i]);
 
-			/* steal dbuf so dmu_buf_rele_array() can't release
-			 * it */
+			/* steal dbuf so dmu_buf_rele_array() can't free it */
 			dbp[i] = NULL;
 		}
 
@@ -586,13 +593,13 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			      int maxlnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	int                poff, plen, off_in_block, sz_in_block;
-	int                rc, i = 0, npages = 0;
+	int poff, plen, off_in_block, sz_in_block;
+	int rc, i = 0, npages = 0;
 	dnode_t *dn = obj->oo_dn;
 	arc_buf_t *abuf;
 	uint32_t bs = dn->dn_datablksz;
-	ENTRY;
 
+	ENTRY;
 	/*
 	 * currently only full blocks are subject to zerocopy approach:
 	 * so that we're sure nobody is trying to update the same block
@@ -616,7 +623,8 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			atomic_inc(&osd->od_zerocopy_loan);
 
 			/* go over pages arcbuf contains, put them as
-			 * local niobufs for ptlrpc's bulks */
+			 * local niobufs for ptlrpc's bulks
+			 */
 			while (sz_in_block > 0) {
 				plen = min_t(int, sz_in_block, PAGE_SIZE);
 
@@ -703,7 +711,7 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			int maxlnb, enum dt_bufs_type rw)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
-	int                rc;
+	int rc;
 
 	down_read(&obj->oo_guard);
 
@@ -750,21 +758,21 @@ static int osd_declare_write_commit(const struct lu_env *env,
 				    struct niobuf_local *lnb, int npages,
 				    struct thandle *th)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
-	struct osd_device  *osd = osd_obj2dev(obj);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	uint64_t            offset = 0;
-	uint32_t            size = 0;
+	uint64_t offset = 0;
+	uint32_t size = 0;
 	uint32_t blksz = obj->oo_dn->dn_datablksz;
-	int		    i, rc;
+	int i, rc;
 	bool synced = false;
-	long long	    space = 0;
-	struct page	   *last_page = NULL;
-	unsigned long	    discont_pages = 0;
+	long long space = 0;
+	struct page *last_page = NULL;
+	unsigned long discont_pages = 0;
 	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
 
@@ -781,13 +789,15 @@ static int osd_declare_write_commit(const struct lu_env *env,
 			/* ENOSPC, network RPC error, etc.
 			 * We don't want to book space for pages which will be
 			 * skipped in osd_write_commit(). Hence we skip pages
-			 * with lnb_rc != 0 here too */
+			 * with lnb_rc != 0 here too
+			 */
 			continue;
 		/* ignore quota for the whole request if any page is from
 		 * client cache or written by root.
 		 *
 		 * XXX we could handle this on per-lnb basis as done by
-		 * grant. */
+		 * grant.
+		 */
 		if ((lnb[i].lnb_flags & OBD_BRW_NOQUOTA) ||
 		    (lnb[i].lnb_flags & OBD_BRW_SYS_RESOURCE) ||
 		    !(lnb[i].lnb_flags & OBD_BRW_SYNC))
@@ -812,7 +822,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		 * indirect blocks and just use as a rough estimate the worse
 		 * case where the old space is being held by a snapshot. Quota
 		 * overrun will be adjusted once the operation is committed, if
-		 * required. */
+		 * required.
+		 */
 		space += osd_roundup2blocksz(size, offset, blksz);
 
 		offset = lnb[i].lnb_file_offset;
@@ -825,8 +836,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		space += osd_roundup2blocksz(size, offset, blksz);
 	}
 
-	/* backend zfs filesystem might be configured to store multiple data
-	 * copies */
+	/* backend zfs FS might be configured to store multiple data copies */
 	space  *= osd->od_os->os_copies;
 	space   = toqb(space);
 	CDEBUG(D_QUOTA, "writing %d pages, reserving %lldK of quota space\n",
@@ -850,7 +860,8 @@ retry:
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
-	 * revised. */
+	 * revised.
+	 */
 	if (local_flags & QUOTA_FL_OVER_USRQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
 	if (local_flags & QUOTA_FL_OVER_GRPQUOTA)
@@ -874,13 +885,12 @@ retry:
 static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh,
 			      uint64_t start, uint64_t end)
 {
-	struct osd_device	*osd = osd_obj2dev(obj);
+	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *dn = obj->oo_dn;
-	uint32_t		 blksz;
-	int			 rc = 0;
+	uint32_t blksz;
+	int rc = 0;
 
 	ENTRY;
-
 	if (dn->dn_maxblkid > 0) /* can't change block size */
 		GOTO(out, rc);
 
@@ -894,7 +904,8 @@ static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh,
 		GOTO(out_unlock, rc);
 
 	/* now ZFS can support up to 16MB block size, and if the write
-	 * is sequential, it just increases the block size gradually */
+	 * is sequential, it just increases the block size gradually
+	 */
 	if (start <= blksz) { /* sequential */
 		blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, end);
 	} else { /* sparse, pick a block size by write region */
@@ -910,8 +921,8 @@ static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh,
 					       blksz, 0, oh->ot_tx);
 		LASSERT(ergo(rc == 0, dn->dn_datablksz >= blksz));
 		if (rc < 0)
-			CDEBUG(D_INODE, "object "DFID": change block size"
-			       "%u -> %u error rc = %d\n",
+			CDEBUG(D_INODE,
+			       "object "DFID": change block size %u -> %u error: rc = %d\n",
 			       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
 			       dn->dn_datablksz, blksz, rc);
 	}
@@ -943,14 +954,14 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages,
 			struct thandle *th, __u64 user_size)
 {
-	struct osd_object  *obj  = osd_dt_obj(dt);
-	struct osd_device  *osd = osd_obj2dev(obj);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	uint64_t            new_size = 0;
-	int                 i, abufsz, rc = 0, drop_cache = 0;
-	unsigned long	   iosize = 0;
-	ENTRY;
+	uint64_t new_size = 0;
+	int i, abufsz, rc = 0, drop_cache = 0;
+	unsigned long iosize = 0;
 
+	ENTRY;
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
 
@@ -1008,13 +1019,14 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	for (i = 0; i < npages; i++) {
 		CDEBUG(D_INODE, "write %u bytes at %u\n",
-			(unsigned) lnb[i].lnb_len,
-			(unsigned) lnb[i].lnb_file_offset);
+			(unsigned int) lnb[i].lnb_len,
+			(unsigned int) lnb[i].lnb_file_offset);
 
 		if (lnb[i].lnb_rc) {
 			/* ENOSPC, network RPC error, etc.
 			 * Unlike ldiskfs, zfs allocates new blocks on rewrite,
-			 * so we skip this page if lnb_rc is set to -ENOSPC */
+			 * so we skip this page if lnb_rc is set to -ENOSPC
+			 */
 			CDEBUG(D_INODE, "obj "DFID": skipping lnb[%u]: rc=%d\n",
 				PFID(lu_object_fid(&dt->do_lu)), i,
 				lnb[i].lnb_rc);
@@ -1035,30 +1047,35 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			abufsz = lnb[i].lnb_len; /* to drop cache below */
 		} else if (lnb[i].lnb_data) {
 			int j, apages;
+
 			LASSERT(((unsigned long)lnb[i].lnb_data & 1) == 0);
 			/* buffer loaned for zerocopy, try to use it.
 			 * notice that dmu_assign_arcbuf() is smart
 			 * enough to recognize changed blocksize
-			 * in this case it fallbacks to dmu_write() */
+			 * in this case it fallbacks to dmu_write()
+			 */
 			abufsz = arc_buf_size(lnb[i].lnb_data);
 			LASSERT(abufsz & PAGE_MASK);
 			apages = abufsz >> PAGE_SHIFT;
 			LASSERT(i + apages <= npages);
 			/* these references to pages must be invalidated
-			 * to prevent access in osd_bufs_put() */
+			 * to prevent access in osd_bufs_put()
+			 */
 			for (j = 0; j < apages; j++)
 				lnb[i + j].lnb_page = NULL;
 			dmu_assign_arcbuf(&obj->oo_dn->dn_bonus->db,
 					  lnb[i].lnb_file_offset,
 					  lnb[i].lnb_data, oh->ot_tx);
 			/* drop the reference, otherwise osd_put_bufs()
-			 * will be releasing it - bad! */
+			 * will be releasing it - bad!
+			 */
 			lnb[i].lnb_data = NULL;
 			atomic_dec(&osd->od_zerocopy_loan);
 			iosize += abufsz;
 		} else {
 			/* we don't want to deal with cache if nothing
-			 * has been send to ZFS at this step */
+			 * has been send to ZFS at this step
+			 */
 			continue;
 		}
 
@@ -1067,7 +1084,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		/* we have to mark dbufs for eviction here because
 		 * dmu_assign_arcbuf() may create a new dbuf for
-		 * loaned abuf */
+		 * loaned abuf
+		 */
 		osd_evict_dbufs_after_write(obj, lnb[i].lnb_file_offset,
 					    abufsz);
 	}
@@ -1076,7 +1094,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		/* no pages to write, no transno is needed */
 		th->th_local = 1;
 		/* it is important to return 0 even when all lnb_rc == -ENOSPC
-		 * since ofd_commitrw_write() retries several times on ENOSPC */
+		 * since ofd_commitrw_write() retries several times on ENOSPC
+		 */
 		up_read(&obj->oo_guard);
 		record_end_io(osd, WRITE, 0, 0, 0);
 		RETURN(0);
@@ -1091,7 +1110,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		write_unlock(&obj->oo_attr_lock);
 		/* osd_object_sa_update() will be copying directly from
 		 * oo_attr into dbuf. any update within a single txg will copy
-		 * the most actual */
+		 * the most actual
+		 */
 		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
 					  &obj->oo_attr.la_size, 8, oh);
 	} else {
@@ -1109,8 +1129,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
-	int                i;
-	loff_t		   eof;
+	int i;
+	loff_t eof;
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
@@ -1161,12 +1181,9 @@ static int __osd_object_punch(struct osd_object *obj, objset_t *os,
 	uint64_t size = obj->oo_attr.la_size;
 	int rc = 0;
 
-	/* Assert that the transaction has been assigned to a
-	   transaction group. */
+	/* Confirm if transaction has been assigned to a transaction group */
 	LASSERT(tx->tx_txg != 0);
-	/*
-	 * Nothing to do if file already at desired length.
-	 */
+	/* Nothing to do if file already at desired length. */
 	if (len == DMU_OBJECT_END && size == off)
 		return 0;
 
@@ -1193,13 +1210,13 @@ static int __osd_object_punch(struct osd_object *obj, objset_t *os,
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 			__u64 start, __u64 end, struct thandle *th)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
-	struct osd_device  *osd = osd_obj2dev(obj);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	__u64               len;
-	int                 rc = 0;
-	ENTRY;
+	__u64 len;
+	int rc = 0;
 
+	ENTRY;
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 
@@ -1239,9 +1256,9 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	__u64		    len;
-	ENTRY;
+	__u64 len;
 
+	ENTRY;
 	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	read_lock(&obj->oo_attr_lock);
@@ -1275,9 +1292,9 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
 		       __u64 start, __u64 end, enum lu_ladvise_type advice)
 {
-	int	rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	switch (advice) {
 	default:
 		rc = -ENOTSUPP;
@@ -1291,8 +1308,8 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 			 __u64 start, __u64 end, int mode, struct thandle *th)
 {
 	int rc = -EOPNOTSUPP;
-	ENTRY;
 
+	ENTRY;
 	 /*
 	  * space preallocation is not supported for ZFS
 	  * Returns -EOPNOTSUPP for now
@@ -1305,8 +1322,8 @@ static int osd_declare_fallocate(const struct lu_env *env,
 				 int mode, struct thandle *th)
 {
 	int rc = -EOPNOTSUPP;
-	ENTRY;
 
+	ENTRY;
 	 /*
 	  * space preallocation is not supported for ZFS
 	  * Returns -EOPNOTSUPP for now
@@ -1325,7 +1342,6 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	boolean_t hole = whence == SEEK_HOLE;
 
 	ENTRY;
-
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(offset >= 0);
