@@ -96,8 +96,8 @@ static void arc_prune_func(int64_t bytes, void *private)
 #endif
 {
 	struct osd_device *od = private;
-	struct lu_site    *site = &od->od_site;
-	struct lu_env      env;
+	struct lu_site *site = &od->od_site;
+	struct lu_env env;
 	int rc;
 
 	rc = lu_env_init(&env, LCT_SHRINKER);
@@ -131,14 +131,13 @@ static int osd_root_get(const struct lu_env *env,
  */
 static void osd_trans_commit_cb(void *cb_data, int error)
 {
-	struct osd_thandle	*oh = cb_data;
-	struct thandle		*th = &oh->ot_super;
-	struct osd_device	*osd = osd_dt_dev(th->th_dev);
-	struct lu_device	*lud = &th->th_dev->dd_lu_dev;
-	struct dt_txn_commit_cb	*dcb, *tmp;
+	struct osd_thandle *oh = cb_data;
+	struct thandle *th = &oh->ot_super;
+	struct osd_device *osd = osd_dt_dev(th->th_dev);
+	struct lu_device *lud = &th->th_dev->dd_lu_dev;
+	struct dt_txn_commit_cb *dcb, *tmp;
 
 	ENTRY;
-
 	if (error) {
 		if (error == ECANCELED)
 			CWARN("%s: transaction @0x%p was aborted\n",
@@ -162,7 +161,8 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	 * component that reserved quota space is now accounted in usage and
 	 * should be released. Quota space won't be adjusted at this point since
 	 * we can't provide a suitable environment. It will be performed
-	 * asynchronously by a lquota thread. */
+	 * asynchronously by a lquota thread.
+	 */
 	qsd_op_end(NULL, osd->od_quota_slave_dt, &oh->ot_quota_trans);
 	if (osd->od_quota_slave_md != NULL)
 		qsd_op_end(NULL, osd->od_quota_slave_md, &oh->ot_quota_trans);
@@ -214,15 +214,16 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
 		/* Unlike ldiskfs, ZFS checks for available space and returns
-		 * -ENOSPC when assigning txg */
+		 * -ENOSPC when assigning txg
+		 */
 		RETURN(-EIO);
 
 	rc = -dmu_tx_assign(oh->ot_tx, TXG_WAIT);
 	if (unlikely(rc != 0)) {
 		/* dmu will call commit callback with error code during abort */
 		if (!lu_device_is_md(&d->dd_lu_dev) && rc == -ENOSPC)
-			CERROR("%s: failed to start transaction due to ENOSPC"
-			       "\n", osd->od_svname);
+			CERROR("%s: failed to start transaction due to ENOSPC: rc = %d\n",
+			       osd->od_svname, rc);
 		else
 			CERROR("%s: can't assign tx: rc = %d\n",
 			       osd->od_svname, rc);
@@ -242,7 +243,7 @@ static void osd_unlinked_list_emptify(const struct lu_env *env,
 				      struct list_head *list, bool free)
 {
 	struct osd_object *obj;
-	uint64_t	   oid;
+	uint64_t oid;
 
 	while (!list_empty(list)) {
 		obj = list_first_entry(list,
@@ -258,8 +259,8 @@ static void osd_unlinked_list_emptify(const struct lu_env *env,
 
 static void osd_trans_stop_cb(struct osd_thandle *oth, int result)
 {
-	struct dt_txn_commit_cb	*dcb;
-	struct dt_txn_commit_cb	*tmp;
+	struct dt_txn_commit_cb *dcb;
+	struct dt_txn_commit_cb *tmp;
 
 	/* call per-transaction stop callbacks if any */
 	list_for_each_entry_safe(dcb, tmp, &oth->ot_stop_dcb_list,
@@ -278,14 +279,14 @@ static void osd_trans_stop_cb(struct osd_thandle *oth, int result)
 static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	struct osd_device	*osd = osd_dt_dev(th->th_dev);
-	bool			 sync = (th->th_sync != 0);
-	struct osd_thandle	*oh;
+	struct osd_device *osd = osd_dt_dev(th->th_dev);
+	bool sync = (th->th_sync != 0);
+	struct osd_thandle *oh;
 	LIST_HEAD(unlinked);
-	uint64_t		 txg;
-	int			 rc;
-	ENTRY;
+	uint64_t txg;
+	int rc;
 
+	ENTRY;
 	oh = container_of(th, struct osd_thandle, ot_super);
 	list_splice_init(&oh->ot_unlinked_list, &unlinked);
 
@@ -302,7 +303,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		osd_object_sa_dirty_rele(env, oh);
 		osd_unlinked_list_emptify(env, osd, &unlinked, false);
 		/* there won't be any commit, release reserved quota space now,
-		 * if any */
+		 * if any
+		 */
 		qsd_op_end(env, osd->od_quota_slave_dt, &oh->ot_quota_trans);
 		if (osd->od_quota_slave_md != NULL)
 			qsd_op_end(env, osd->od_quota_slave_md,
@@ -323,7 +325,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	osd_object_sa_dirty_rele(env, oh);
 	/* XXX: Once dmu_tx_commit() called, oh/th could have been freed
-	 * by osd_trans_commit_cb already. */
+	 * by osd_trans_commit_cb already.
+	 */
 	dmu_tx_commit(oh->ot_tx);
 	osd_oti_get(env)->oti_in_trans = 0;
 
@@ -342,29 +345,37 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 static struct thandle *osd_trans_create(const struct lu_env *env,
 					struct dt_device *dt)
 {
-	struct osd_device	*osd = osd_dt_dev(dt);
-	struct osd_thandle	*oh;
-	struct thandle		*th;
-	dmu_tx_t		*tx;
-	ENTRY;
+	struct osd_device *osd = osd_dt_dev(dt);
+	struct osd_thandle *oh;
+	struct thandle *th;
+	dmu_tx_t *tx;
+	int rc;
 
+	ENTRY;
 	if (dt->dd_rdonly) {
-		CERROR("%s: someone try to start transaction under "
-		       "readonly mode, should be disabled.\n",
-		       osd_name(osd_dt_dev(dt)));
+		rc = -EROFS;
+		CERROR("%s: someone try to start transaction under readonly mode, should be disabled: rc = %d\n",
+		       osd_name(osd_dt_dev(dt)), rc);
 		dump_stack();
-		RETURN(ERR_PTR(-EROFS));
+		RETURN(ERR_PTR(rc));
 	}
 
 	tx = dmu_tx_create(osd->od_os);
-	if (tx == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
+	if (tx == NULL) {
+		rc = -ENOMEM;
+		CDEBUG(D_OTHER, "%s: dmu_tx_create Failed: rc = %d\n",
+		       osd_name(osd_dt_dev(dt)), rc);
+		RETURN(ERR_PTR(rc));
+	}
 
 	/* alloc callback data */
 	OBD_ALLOC_PTR(oh);
 	if (oh == NULL) {
+		rc = -ENOMEM;
 		dmu_tx_abort(tx);
-		RETURN(ERR_PTR(-ENOMEM));
+		CDEBUG(D_OTHER, "%s: Allocate memory failed for osd_handle: rc = %d\n",
+		       osd_name(osd_dt_dev(dt)), rc);
+		RETURN(ERR_PTR(rc));
 	}
 
 	oh->ot_tx = tx;
@@ -463,7 +474,8 @@ uint64_t osd_objs_count_estimate(uint64_t usedbytes, uint64_t usedobjs,
 		 * so we can safely use 7 bits to compute a fixed-point
 		 * fraction and est_totobjs can still fit in 64 bits.
 		 */
-		unsigned dn_per_block = (est_usedobjs << 7) / est_usedblocks;
+		unsigned int dn_per_block = (est_usedobjs << 7) /
+					     est_usedblocks;
 
 		est_totobjs = (nrblocks * dn_per_block) >> 7;
 	}
@@ -536,7 +548,8 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	osfs->os_files = osfs->os_ffree + usedobjs;
 
 	/* ZFS XXX: fill in backing dataset FSID/UUID
-	   memcpy(osfs->os_fsid, .... );*/
+	 * memcpy(osfs->os_fsid, .... );
+	 */
 
 	osfs->os_namelen = MAXNAMELEN;
 	osfs->os_maxbytes = OBD_OBJECT_EOF;
@@ -555,9 +568,9 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	       struct obd_statfs *osfs, struct obd_statfs_info *info)
 {
 	struct osd_device *osd = osd_dt_dev(d);
-	int		  rc;
-	ENTRY;
+	int rc;
 
+	ENTRY;
 	rc = osd_objset_statfs(osd, osfs);
 	if (unlikely(rc != 0))
 		RETURN(rc);
@@ -579,19 +592,22 @@ static int osd_blk_insert_cost(struct osd_device *osd)
 	int max_blockshift, nr_blkptrshift, bshift;
 
 	/* max_blockshift is the log2 of the number of blocks needed to reach
-	 * the maximum filesize (that's to say 2^64) */
+	 * the maximum filesize (that's to say 2^64)
+	 */
 	bshift = fls64(spa_maxblocksize(dmu_objset_spa(osd->od_os)) - 1);
 	max_blockshift = DN_MAX_OFFSET_SHIFT - bshift;
 
 	/* nr_blkptrshift is the log2 of the number of block pointers that can
-	 * be stored in an indirect block */
+	 * be stored in an indirect block
+	 */
 	BUILD_BUG_ON(DN_MAX_INDBLKSHIFT <= SPA_BLKPTRSHIFT);
 	nr_blkptrshift = DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT;
 
 	/* max_blockshift / nr_blkptrshift is thus the maximum depth of the
 	 * tree. We add +1 for rounding purpose.
 	 * The tree depth times the indirect block size gives us the maximum
-	 * cost of inserting a block in the tree */
+	 * cost of inserting a block in the tree
+	 */
 	return (max_blockshift / nr_blkptrshift + 1) * (1<<DN_MAX_INDBLKSHIFT);
 }
 
@@ -624,7 +640,8 @@ static void osd_conf_get(const struct lu_env *env,
 	/* inodes are dynamically allocated, so we report the per-inode space
 	 * consumption to upper layers. This static value is not really accurate
 	 * and we should use the same logic as in udmu_objset_statfs() to
-	 * estimate the real size consumed by an object */
+	 * estimate the real size consumed by an object
+	 */
 	param->ddp_inodespace = OSD_DNODE_EST_COUNT;
 	/* Although ZFS isn't an extent-based filesystem, the metadata overhead
 	 * (i.e. 7 levels of indirect blocks, see osd_blk_insert_cost()) should
@@ -633,14 +650,16 @@ static void osd_conf_get(const struct lu_env *env,
 	 * can fit into a single contiguous indirect block. There would be some
 	 * cases where this crosses indirect blocks, but it also won't have 7
 	 * new levels of indirect blocks in that case either, so it will still
-	 * have enough reserved space for the extra indirect block */
+	 * have enough reserved space for the extra indirect block
+	 */
 	param->ddp_max_extent_blks =
 		(1 << (DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT));
 	param->ddp_extent_tax = osd_blk_insert_cost(osd);
 
 	/* Preferred RPC size for efficient disk IO.  1MB shows good
 	 * all-around performance for ZFS, but use blocksize (recordsize)
-	 * by default if larger to avoid read-modify-write. */
+	 * by default if larger to avoid read-modify-write.
+	 */
 	if (osd->od_max_blksz > ONE_MB_BRW_SIZE)
 		param->ddp_brw_size = osd->od_max_blksz;
 	else
@@ -672,8 +691,8 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 static int osd_commit_async(const struct lu_env *env, struct dt_device *dev)
 {
 	struct osd_device *osd = osd_dt_dev(dev);
-	tx_state_t	  *tx = &dmu_objset_pool(osd->od_os)->dp_tx;
-	uint64_t	   txg;
+	tx_state_t *tx = &dmu_objset_pool(osd->od_os)->dp_tx;
+	uint64_t txg;
 
 	mutex_enter(&tx->tx_sync_lock);
 	txg = tx->tx_open_txg + 1;
@@ -691,9 +710,9 @@ static int osd_commit_async(const struct lu_env *env, struct dt_device *dev)
  */
 static int osd_ro(const struct lu_env *env, struct dt_device *d)
 {
-	struct osd_device  *osd = osd_dt_dev(d);
-	ENTRY;
+	struct osd_device *osd = osd_dt_dev(d);
 
+	ENTRY;
 	CERROR("%s: *** setting device %s read-only ***\n",
 	       osd->od_svname, LUSTRE_OSD_ZFS_NAME);
 	osd->od_dev_set_rdonly = 1;
@@ -707,12 +726,12 @@ static int osd_reserve_or_free_quota(const struct lu_env *env,
 				     struct dt_device *dev,
 				     struct lquota_id_info *qi)
 {
-	struct osd_device       *osd = osd_dt_dev(dev);
-	struct qsd_instance     *qsd = NULL;
+	struct osd_device *osd = osd_dt_dev(dev);
+	struct qsd_instance *qsd = NULL;
 	int rc;
 
-	ENTRY;
 
+	ENTRY;
 	if (qi->lqi_is_blk)
 		qsd = osd->od_quota_slave_dt;
 	else
@@ -865,7 +884,7 @@ static void osd_dnodesize_changed_cb(void *arg, uint64_t newval)
  */
 static void osd_objset_unregister_callbacks(struct osd_device *o)
 {
-	struct dsl_dataset	*ds = dmu_objset_ds(o->od_os);
+	struct dsl_dataset *ds = dmu_objset_ds(o->od_os);
 
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_XATTR),
 				   osd_xattr_changed_cb, o);
@@ -888,9 +907,9 @@ static void osd_objset_unregister_callbacks(struct osd_device *o)
  */
 static int osd_objset_register_callbacks(struct osd_device *o)
 {
-	struct dsl_dataset	*ds = dmu_objset_ds(o->od_os);
-	dsl_pool_t		*dp = dmu_objset_pool(o->od_os);
-	int			rc;
+	struct dsl_dataset *ds = dmu_objset_ds(o->od_os);
+	dsl_pool_t *dp = dmu_objset_pool(o->od_os);
+	int rc;
 
 	LASSERT(ds);
 	LASSERT(dp);
@@ -927,17 +946,18 @@ err:
 
 static int osd_objset_open(struct osd_device *o)
 {
-	uint64_t	version = ZPL_VERSION;
-	uint64_t	sa_obj, unlink_obj;
-	int		rc;
-	ENTRY;
+	uint64_t version = ZPL_VERSION;
+	uint64_t sa_obj, unlink_obj;
+	int rc;
 
+	ENTRY;
 	rc = -osd_dmu_objset_own(o->od_mntdev, DMU_OST_ZFS,
 			     o->od_dt_dev.dd_rdonly ? B_TRUE : B_FALSE,
 			     B_TRUE, o, &o->od_os);
 
 	if (rc) {
-		CERROR("%s: can't open %s\n", o->od_svname, o->od_mntdev);
+		CERROR("%s: can't open %s: rc = %d\n", o->od_svname,
+		       o->od_mntdev, rc);
 		o->od_os = NULL;
 
 		GOTO(out, rc);
@@ -947,12 +967,14 @@ static int osd_objset_open(struct osd_device *o)
 	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ,
 			 ZPL_VERSION_STR, 8, 1, &version);
 	if (rc) {
-		CERROR("%s: Error looking up ZPL VERSION\n", o->od_mntdev);
+		rc = -EIO;
+		CERROR("%s: Error looking up ZPL VERSION: rc = %d\n",
+		       o->od_mntdev, rc);
 		/*
 		 * We can't return ENOENT because that would mean the objset
 		 * didn't exist.
 		 */
-		GOTO(out, rc = -EIO);
+		GOTO(out, rc);
 	}
 
 	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ,
@@ -985,9 +1007,10 @@ static int osd_objset_open(struct osd_device *o)
 	if (!dmu_objset_userused_enabled(o->od_os) ||
 	    DMU_USERUSED_DNODE(o->od_os)->dn_type != DMU_OT_USERGROUP_USED ||
 	    DMU_GROUPUSED_DNODE(o->od_os)->dn_type != DMU_OT_USERGROUP_USED) {
-		CERROR("%s: Space accounting not supported by this target, "
-			"aborting\n", o->od_svname);
-		GOTO(out, rc = -ENOTSUPP);
+		rc = -ENOTSUPP;
+		CERROR("%s: Space accounting not supported by this target, aborting: rc = %d\n",
+		       o->od_svname, rc);
+		GOTO(out, rc);
 	}
 
 	rc = __osd_obj2dnode(o->od_os, unlink_obj, &o->od_unlinked);
@@ -1010,15 +1033,15 @@ int osd_unlinked_object_free(const struct lu_env *env, struct osd_device *osd,
 			 uint64_t oid)
 {
 	char *key = osd_oti_get(env)->oti_str;
-	int	  rc;
+	int rc;
 	dmu_tx_t *tx;
 
 	if (osd->od_dt_dev.dd_rdonly) {
-		CERROR("%s: someone try to free objects under "
-		       "readonly mode, should be disabled.\n", osd_name(osd));
+		rc = -EROFS;
+		CERROR("%s: someone try to free objects under readonly mode, should be disabled: rc = %d\n",
+		       osd_name(osd), rc);
 		dump_stack();
-
-		return -EROFS;
+		return rc;
 	}
 
 	rc = -dmu_free_long_range(osd->od_os, oid, 0, DMU_OBJECT_END);
@@ -1069,15 +1092,16 @@ failed:
 static void
 osd_unlinked_drain(const struct lu_env *env, struct osd_device *osd)
 {
-	zap_cursor_t	 zc;
-	zap_attribute_t	*za = &osd_oti_get(env)->oti_za;
+	zap_cursor_t zc;
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
 
 	zap_cursor_init(&zc, osd->od_os, osd->od_unlinked->dn_object);
 
 	while (zap_cursor_retrieve(&zc, za) == 0) {
 		/* If cannot free the object, leave it in the unlinked set,
 		 * until the OSD is mounted again when obd_unlinked_drain()
-		 * will be called. */
+		 * will be called.
+		 */
 		if (osd_unlinked_object_free(env, osd, za->za_first_integer))
 			break;
 		zap_cursor_advance(&zc);
@@ -1099,7 +1123,6 @@ static int osd_mount(const struct lu_env *env,
 	int rc;
 
 	ENTRY;
-
 	if (o->od_os != NULL)
 		RETURN(0);
 
@@ -1230,8 +1253,7 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (!osd_dmu_userobj_accounting_available(o))
-		CWARN("%s: dnode accounting not enabled: "
-		      "enable feature@userobj_accounting in pool\n",
+		CWARN("%s: dnode accounting not enabled: enable feature@userobj_accounting in pool\n",
 		      o->od_mntdev);
 
 	/* parse mount option "noacl", and enable ACL by default */
@@ -1297,8 +1319,8 @@ static int osd_device_init0(const struct lu_env *env,
 			    struct osd_device *o,
 			    struct lustre_cfg *cfg)
 {
-	struct lu_device	*l = osd2lu_dev(o);
-	int			 rc;
+	struct lu_device *l = osd2lu_dev(o);
+	int rc;
 
 	/* if the module was re-loaded, env can loose its keys */
 	rc = lu_env_refill((struct lu_env *) env);
@@ -1324,7 +1346,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct osd_device *o = osd_dev(d);
-	int		   rc;
+	int rc;
 
 	ENTRY;
 	osd_index_backup(env, o, false);
@@ -1379,9 +1401,9 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *type,
 					  struct lustre_cfg *cfg)
 {
-	struct osd_device	*dev;
-	struct osd_seq_list	*osl;
-	int			rc;
+	struct osd_device *dev;
+	struct osd_seq_list *osl;
+	int rc;
 
 	OBD_ALLOC_PTR(dev);
 	if (dev == NULL)
@@ -1418,7 +1440,7 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 }
 
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,
-                           const char *name, struct lu_device *next)
+			   const char *name, struct lu_device *next)
 {
 	return 0;
 }
@@ -1435,13 +1457,14 @@ static int osd_process_config(const struct lu_env *env,
 	int rc;
 
 	ENTRY;
-	switch(cfg->lcfg_command) {
+	switch (cfg->lcfg_command) {
 	case LCFG_SETUP:
 		rc = osd_mount(env, o, cfg);
 		break;
 	case LCFG_CLEANUP:
 		/* For the case LCFG_PRE_CLEANUP is not called in advance,
-		 * that may happend if hit failure during mount process. */
+		 * that may happend if hit failure during mount process.
+		 */
 		osd_index_backup(env, o, false);
 		rc = osd_shutdown(env, o);
 		break;
@@ -1470,15 +1493,16 @@ static int osd_process_config(const struct lu_env *env,
 
 static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)
 {
-	struct osd_device	*osd = osd_dev(d);
-	int			 rc = 0;
-	ENTRY;
+	struct osd_device *osd = osd_dev(d);
+	int rc = 0;
 
+	ENTRY;
 	if (osd->od_quota_slave_md == NULL && osd->od_quota_slave_dt == NULL)
 		RETURN(0);
 
 	/* start qsd instance on recovery completion, this notifies the quota
-	 * slave code that we are about to process new requests now */
+	 * slave code that we are about to process new requests now
+	 */
 	rc = qsd_start(env, osd->od_quota_slave_dt);
 	if (rc == 0 && osd->od_quota_slave_md != NULL)
 		rc = qsd_start(env, osd->od_quota_slave_md);
@@ -1492,11 +1516,11 @@ static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
 {
-	struct osd_device    *osd = osd_dev(obd->obd_lu_dev);
-	struct lustre_handle  conn;
-	int                   rc;
-	ENTRY;
+	struct osd_device *osd = osd_dev(obd->obd_lu_dev);
+	struct lustre_handle conn;
+	int rc;
 
+	ENTRY;
 	CDEBUG(D_CONFIG, "connect #%d\n", atomic_read(&osd->od_connects));
 
 	rc = class_connect(&conn, obd, cluuid);
@@ -1519,8 +1543,8 @@ static int osd_obd_disconnect(struct obd_export *exp)
 	struct obd_device *obd = exp->exp_obd;
 	struct osd_device *osd = osd_dev(obd->obd_lu_dev);
 	int                rc, release = 0;
-	ENTRY;
 
+	ENTRY;
 	/* Only disconnect the underlying layers on the final disconnect. */
 	release = atomic_dec_and_test(&osd->od_connects);
 
@@ -1535,8 +1559,8 @@ static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
 {
 	struct seq_server_site *ss = osd_seq_site(osd);
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (osd->od_is_ost || osd->od_cl_seq != NULL)
 		RETURN(0);
 
@@ -1566,10 +1590,10 @@ static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *dev)
 {
-	struct osd_device	*osd = osd_dev(dev);
-	int			 rc = 0;
-	ENTRY;
+	struct osd_device *osd = osd_dev(dev);
+	int rc = 0;
 
+	ENTRY;
 	if (osd->od_quota_slave_md != NULL) {
 		/* set up quota slave objects */
 		rc = qsd_prepare(env, osd->od_quota_slave_md);
