@@ -3532,7 +3532,8 @@ fixup_tpobj:
 					mdo_ref_add(env, mdd_tobj, handle);
 			}
 
-			rc2 = __mdd_index_insert(env, mdd_tpobj, tpobj_fid,
+			rc2 = __mdd_index_insert(env, mdd_tpobj,
+						 mdd_object_fid(mdd_tobj),
 						 mdd_object_type(mdd_tobj),
 						 tname, handle);
 			if (rc2)
