@@ -204,7 +204,8 @@ struct osd_idmap_cache {
 
 struct osd_inconsistent_item {
 	/* link into lustre_scrub::os_inconsistent_items,
-	 * protected by lustr_scrub::os_lock. */
+	 * protected by lustr_scrub::os_lock.
+	 */
 	struct list_head       oii_list;
 
 	/* The right FID <=> oid mapping. */
@@ -222,13 +223,11 @@ struct osd_otable_it {
 
 	/* The following bits can be updated/checked w/o lock protection.
 	 * If more bits will be introduced in the future and need lock to
-	 * protect, please add comment. */
-	unsigned int		 ooi_used_outside:1, /* Some user out of OSD
-						      * uses the iteration. */
-				 ooi_all_cached:1, /* No more entries can be
-						    * filled into cache. */
-				 ooi_user_ready:1, /* The user out of OSD is
-						    * ready to iterate. */
+	 * protect, please add comment.
+	 */
+	unsigned int		 ooi_used_outside:1, /* Some user out of OSD  uses the iteration. */
+				 ooi_all_cached:1, /* No more entries can be filled into cache. */
+				 ooi_user_ready:1, /* The user out of OSD is ready to iterate. */
 				 ooi_waiting:1; /* it::next is waiting. */
 };
 
@@ -334,8 +333,7 @@ struct osd_device {
 	struct objset		*od_os;
 	uint64_t		 od_rootid;  /* id of root znode */
 	dnode_t *od_unlinked; /* dnode of unlinked zapobj */
-	/* SA attr mapping->id,
-	 * name is the same as in ZFS to use defines SA_ZPL_...*/
+	/* SA attr mapping->id, name is same as in ZFS (use defines SA_ZPL_) */
 	sa_attr_type_t		 *z_attr_table;
 
 	struct proc_dir_entry	*od_proc_entry;
@@ -351,7 +349,7 @@ struct osd_device {
 	struct osd_seq_list	od_seq_list;
 
 	unsigned int		 od_dev_set_rdonly:1, /**< osd_ro() called */
-				 od_prop_rdonly:1,  /**< ZFS property readonly */
+				 od_prop_rdonly:1, /**< ZFS property readonly */
 				 od_xattr_in_sa:1,
 				 od_is_ost:1,
 				 od_in_init:1,
@@ -388,7 +386,8 @@ struct osd_device {
 
 	/* used to debug zerocopy logic: the fields track all
 	 * allocated, loaned and referenced buffers in use.
-	 * to be removed once the change is tested well. */
+	 * to be removed once the change is tested well.
+	 */
 	atomic_t		 od_zerocopy_alloc;
 	atomic_t		 od_zerocopy_loan;
 	atomic_t		 od_zerocopy_pin;
@@ -442,7 +441,8 @@ struct osd_object {
 	struct rw_semaphore	 oo_sem;
 
 	/* to serialize some updates: destroy vs. others,
-	 * xattr_set, object block size change etc */
+	 * xattr_set, object block size change etc
+	 */
 	struct rw_semaphore	 oo_guard;
 
 	/* protected by oo_guard */
@@ -480,8 +480,8 @@ struct osd_object {
 	dmu_buf_t *oo_dbs[OSD_MAX_DBUFS];
 };
 
-int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *,
-	       struct obd_statfs_info *);
+int osd_statfs(const struct lu_env *env, struct dt_device *dt,
+	       struct obd_statfs *obd_statfs, struct obd_statfs_info *osi);
 extern const struct dt_index_operations osd_acct_index_ops;
 extern const struct lu_device_operations  osd_lu_ops;
 extern const struct dt_index_operations osd_dir_ops;
@@ -536,7 +536,7 @@ static inline struct lu_device *osd2lu_dev(struct osd_device *osd)
 	return &osd->od_dt_dev.dd_lu_dev;
 }
 
-static inline struct objset * osd_dtobj2objset(struct dt_object *o)
+static inline struct objset *osd_dtobj2objset(struct dt_object *o)
 {
 	return osd_dev(o->do_lu.lo_dev)->od_os;
 }
@@ -634,13 +634,13 @@ int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dnode_t **zap_dnp, dmu_tx_t *tx, struct lu_attr *la,
-		     unsigned dnsize, zap_flags_t flags);
+		     unsigned int dnsize, zap_flags_t flags);
 int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
 			struct osd_object *obj, const struct lu_fid *fid,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    struct osd_object *obj, sa_handle_t *sa_hdl, dmu_tx_t *tx,
-		    struct lu_attr *la, uint64_t parent, nvlist_t *);
+		    struct lu_attr *la, uint64_t parent, nvlist_t *list);
 int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 		       uint64_t oid, dnode_t **dnp);
 
@@ -648,7 +648,8 @@ int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 int osd_oi_init(const struct lu_env *env, struct osd_device *o, bool reset);
 void osd_oi_fini(const struct lu_env *env, struct osd_device *o);
 int osd_fid_lookup(const struct lu_env *env,
-		   struct osd_device *, const struct lu_fid *, uint64_t *);
+		   struct osd_device *osd, const struct lu_fid *lufid,
+		   uint64_t *oid);
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			    const struct lu_fid *fid, char *buf, int bufsize,
 			    dnode_t **zdn);
@@ -770,7 +771,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 			int vallen, const char *name, struct osd_thandle *oh);
 int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		       const struct lu_buf *buf, const char *name, int fl,
-		       struct osd_thandle *oh);;
+		       struct osd_thandle *oh);
 int __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		    const struct lu_buf *buf, const char *name, int fl,
 		    struct osd_thandle *oh);
@@ -908,6 +909,7 @@ static inline int osd_sa_handle_get(struct osd_object *obj)
 static inline void osd_dnode_rele(dnode_t *dn)
 {
 	dmu_buf_impl_t *db;
+
 	LASSERT(dn);
 	LASSERT(dn->dn_bonus);
 	db = dn->dn_bonus;
