@@ -283,6 +283,7 @@ find_with_lock:
 				       entry->ue_key, rc);
 				goto find_again;
 			}
+			wake_up_all(&entry->ue_waitq);
 			CERROR("%s: acquire for key %lld after %llu: rc = %d\n",
 			       cache->uc_name, entry->ue_key,
 			       cache->uc_acquire_expire, rc);
