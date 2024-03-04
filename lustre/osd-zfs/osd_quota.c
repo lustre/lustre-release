@@ -88,8 +88,8 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	dnode_t *dn = obj->oo_dn;
 	size_t buflen = sizeof(info->oti_buf);
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rec->bspace = rec->ispace = 0;
 
 	/* convert the 64-bit uid/gid/projid into a string */
@@ -103,7 +103,8 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 
 	/* disk usage (in bytes) is maintained by DMU.
 	 * DMU_USERUSED_OBJECT/DMU_GROUPUSED_OBJECT are special objects which
-	 * not associated with any dmu_but_t (see dnode_special_open()). */
+	 * not associated with any dmu_but_t (see dnode_special_open()).
+	 */
 	rc = osd_zap_lookup(osd, dn->dn_object, dn, buf, sizeof(uint64_t), 1,
 			    &rec->bspace);
 	if (rc == -ENOENT) {
@@ -156,8 +157,8 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *dn = obj->oo_dn;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (unlikely(!dn)) {
 		CDEBUG(D_QUOTA, "%s: Not found in DMU accounting ZAP\n",
 		       osd->od_svname);
@@ -197,9 +198,9 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
  */
 static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_it_quota	*it	= (struct osd_it_quota *)di;
-	ENTRY;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
 
+	ENTRY;
 	osd_zap_cursor_fini(it->oiq_zc);
 	osd_object_put(env, it->oiq_obj);
 	OBD_FREE_PTR(it);
@@ -213,8 +214,8 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 static int osd_zap_locate(struct osd_it_quota *it, zap_attribute_t *za)
 {
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	while (1) {
 		rc = -zap_cursor_retrieve(it->oiq_zc, za);
 		if (rc)
@@ -241,11 +242,11 @@ static int osd_zap_locate(struct osd_it_quota *it, zap_attribute_t *za)
  */
 static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	zap_attribute_t		*za = &osd_oti_get(env)->oti_za;
-	int			 rc;
-	ENTRY;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	int rc;
 
+	ENTRY;
 	if (it->oiq_reset == 0)
 		zap_cursor_advance(it->oiq_zc);
 	it->oiq_reset = 0;
@@ -262,11 +263,11 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 static struct dt_key *osd_it_acct_key(const struct lu_env *env,
 				      const struct dt_it *di)
 {
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	zap_attribute_t		*za = &osd_oti_get(env)->oti_za;
-	int			 rc;
-	ENTRY;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	int rc;
 
+	ENTRY;
 	it->oiq_reset = 0;
 	rc = osd_zap_locate(it, za);
 	if (rc)
@@ -274,7 +275,7 @@ static struct dt_key *osd_it_acct_key(const struct lu_env *env,
 
 	rc = kstrtoull(za->za_name, 16, &it->oiq_id);
 	if (rc)
-		CERROR("couldn't parse name %s\n", za->za_name);
+		CERROR("couldn't parse name %s: rc = %d\n", za->za_name, rc);
 
 	RETURN((struct dt_key *) &it->oiq_id);
 }
@@ -342,16 +343,16 @@ static int osd_it_acct_rec(const struct lu_env *env,
 			   const struct dt_it *di,
 			   struct dt_rec *dtrec, __u32 attr)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	zap_attribute_t		*za = &info->oti_za;
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	struct lquota_acct_rec	*rec  = (struct lquota_acct_rec *)dtrec;
-	struct osd_object	*obj = it->oiq_obj;
-	struct osd_device	*osd = osd_obj2dev(obj);
-	int			 bytes_read;
-	int			 rc;
-	ENTRY;
+	struct osd_thread_info *info = osd_oti_get(env);
+	zap_attribute_t *za = &info->oti_za;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	struct lquota_acct_rec *rec = (struct lquota_acct_rec *)dtrec;
+	struct osd_object *obj = it->oiq_obj;
+	struct osd_device *osd = osd_obj2dev(obj);
+	int bytes_read;
+	int rc;
 
+	ENTRY;
 	it->oiq_reset = 0;
 	rec->ispace = rec->bspace = 0;
 
@@ -400,6 +401,7 @@ static __u64 osd_it_acct_store(const struct lu_env *env,
 			       const struct dt_it *di)
 {
 	struct osd_it_quota *it = (struct osd_it_quota *)di;
+
 	ENTRY;
 	it->oiq_reset = 0;
 	RETURN(osd_zap_cursor_serialize(it->oiq_zc));
@@ -419,13 +421,13 @@ static __u64 osd_it_acct_store(const struct lu_env *env,
 static int osd_it_acct_load(const struct lu_env *env,
 			    const struct dt_it *di, __u64 hash)
 {
-	struct osd_it_quota	*it  = (struct osd_it_quota *)di;
-	struct osd_device	*osd = osd_obj2dev(it->oiq_obj);
-	zap_attribute_t		*za = &osd_oti_get(env)->oti_za;
-	zap_cursor_t		*zc;
-	int			 rc;
-	ENTRY;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	struct osd_device *osd = osd_obj2dev(it->oiq_obj);
+	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
+	zap_cursor_t *zc;
+	int rc;
 
+	ENTRY;
 	/* create new cursor pointing to the new hash */
 	rc = osd_zap_cursor_init(&zc, osd->od_os, it->oiq_oid, hash);
 	if (rc)
@@ -527,8 +529,8 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	struct thandle *th = &oh->ot_super;
 	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
 			th->th_ignore_quota;
-	ENTRY;
 
+	ENTRY;
 	/* very fast path for special files like llog */
 	if (uid == 0 && gid == 0 && projid == 0)
 		return 0;
@@ -557,7 +559,8 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	/* For non-fatal error, we want to continue to get the noquota flags
 	 * for group id. This is only for commit write, which has @flags passed
 	 * in. See osd_declare_write_commit().
-	 * When force is set to true, we also want to proceed with the gid */
+	 * When force is set to true, we also want to proceed with the gid
+	 */
 	if (rcu && (rcu != -EDQUOT || local_flags == NULL))
 		RETURN(rcu);
 
