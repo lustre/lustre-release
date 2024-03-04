@@ -80,8 +80,8 @@ int osd_scrub_refresh_mapping(const struct lu_env *env,
 	dnode_t *dn = NULL;
 	uint64_t zapid;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN && !force)
 		GOTO(log, rc = 0);
 
@@ -124,7 +124,8 @@ int osd_scrub_refresh_mapping(const struct lu_env *env,
 		rc = osd_zap_remove(dev, zapid, dn, buf, tx);
 		if (rc == -ENOENT) {
 			/* It is normal that the unlink thread has removed the
-			 * OI mapping already. */
+			 * OI mapping already.
+			 */
 			rc = 1;
 		}
 		break;
@@ -157,8 +158,8 @@ osd_scrub_check_update(const struct lu_env *env, struct osd_device *dev,
 	uint64_t oid2;
 	int ops = DTO_INDEX_UPDATE;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	down_write(&scrub->os_rwsem);
 	scrub->os_new_checked++;
 	if (val < 0)
@@ -218,11 +219,12 @@ zget:
 
 		lustre_lma_swab(lma);
 		if (unlikely(lu_fid_eq(&lma->lma_self_fid, fid))) {
-			CDEBUG(D_LFSCK, "%s: the FID "DFID" is used by "
-			       "two objects: %llu and %llu (in OI)\n",
-			       osd_name(dev), PFID(fid), oid, oid2);
+			rc = -EEXIST;
+			CDEBUG(D_LFSCK,
+			       "%s: the FID "DFID" is used by two objects: %llu and %llu (in OI): rc = %d\n",
+			       osd_name(dev), PFID(fid), oid, oid2, rc);
 
-			GOTO(out, rc = -EEXIST);
+			GOTO(out, rc);
 		}
 
 update:
@@ -279,7 +281,8 @@ cleanup:
 	}
 
 	/* There may be conflict unlink during the OI scrub,
-	 * if happend, then remove the new added OI mapping. */
+	 * if happend, then remove the new added OI mapping.
+	 */
 	if (ops == DTO_INDEX_INSERT && dn && dn->dn_free_txg)
 		osd_scrub_refresh_mapping(env, dev, fid, oid,
 					  DTO_INDEX_DELETE, false, NULL);
@@ -325,8 +328,8 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 	nvlist_t *nvbuf = NULL;
 	int size = 0;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0) {
 		wait_var_event_timeout(
 			scrub,
@@ -451,8 +454,8 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 
 	rc = scrub_checkpoint(env, scrub);
 	if (rc) {
-		CDEBUG(D_LFSCK, "%s: fail to checkpoint, pos = %llu: "
-		       "rc = %d\n", scrub->os_name, scrub->os_pos_current, rc);
+		CDEBUG(D_LFSCK, "%s: fail to checkpoint, pos = %llu: rc = %d\n",
+		       scrub->os_name, scrub->os_pos_current, rc);
 		/* Continue, as long as the scrub itself can go ahead. */
 	}
 
@@ -470,8 +473,8 @@ static int osd_scrub_main(void *args)
 	struct lu_fid *fid;
 	uint64_t oid;
 	int rc = 0, ret;
-	ENTRY;
 
+	ENTRY;
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_DT_THREAD);
 	if (rc) {
 		CDEBUG(D_LFSCK, "%s: OI scrub fail to init env: rc = %d\n",
@@ -686,7 +689,8 @@ static const struct osd_lf_map osd_lf_maps[] = {
 
 	/* OSP update logs update_log{_dir} use f_seq = FID_SEQ_UPDATE_LOG{_DIR}
 	 * and f_oid = index for their log files.  See lu_update_log{_dir}_fid()
-	 * for more details. */
+	 * for more details.
+	 */
 
 	/* update_log */
 	{
@@ -773,12 +777,14 @@ static int osd_ios_new_item(struct osd_device *dev, uint64_t parent,
 			    handle_dirent_t handle_dirent)
 {
 	struct osd_ios_item *item;
+	int rc = 0;
 
 	OBD_ALLOC_PTR(item);
 	if (!item) {
-		CWARN("%s: initial OI scrub failed to add item for %llu\n",
-		      osd_name(dev), parent);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		CWARN("%s: initial OI scrub failed to add item for %llu: rc = %d\n",
+		      osd_name(dev), parent, rc);
+		return rc;
 	}
 
 	INIT_LIST_HEAD(&item->oii_list);
@@ -788,7 +794,7 @@ static int osd_ios_new_item(struct osd_device *dev, uint64_t parent,
 	item->oii_handle_dirent = handle_dirent;
 	list_add_tail(&item->oii_list, &dev->od_ios_list);
 
-	return 0;
+	return rc;
 }
 
 static bool osd_index_need_recreate(const struct lu_env *env,
@@ -798,8 +804,8 @@ static bool osd_index_need_recreate(const struct lu_env *env,
 	zap_attribute_t *za = &info->oti_za2;
 	zap_cursor_t *zc = &info->oti_zc2;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	zap_cursor_init_serialized(zc, dev->od_os, oid, 0);
 	rc = -zap_cursor_retrieve(zc, za);
 	zap_cursor_fini(zc);
@@ -823,8 +829,8 @@ static void osd_ios_index_register(const struct lu_env *env,
 	__u32 keysize = 0;
 	__u32 recsize = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = __osd_obj2dnode(osd->od_os, oid, &dn);
 	if (rc == -EEXIST || rc == -ENOENT)
 		RETURN_EXIT;
@@ -887,8 +893,8 @@ static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
 	struct lu_fid *tgt_fid = &liru->liru_cfid;
 	struct lu_fid bak_fid;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	lustre_fid2lbx(buf, tgt_fid, bufsize);
 	rc = -zap_lookup(dev->od_os, dev->od_index_backup_id, buf, 8,
 			 sizeof(*zde) / 8, (void *)zde);
@@ -900,7 +906,8 @@ static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
 		GOTO(log, rc);
 
 	/* The OI mapping for index may be invalid, since it will be
-	 * re-created, not update the OI mapping, just cache it in RAM. */
+	 * re-created, not update the OI mapping, just cache it in RAM.
+	 */
 	rc = osd_idc_find_and_init_with_oid(env, dev, tgt_fid,
 					    liru->liru_clid);
 	if (!rc)
@@ -927,7 +934,7 @@ static int osd_ios_scan_one(const struct lu_env *env, struct osd_device *dev,
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct scrub_file *sf = &scrub->os_file;
-	struct lustre_mdt_attrs	*lma = NULL;
+	struct lustre_mdt_attrs *lma = NULL;
 	nvlist_t *nvbuf = NULL;
 	struct lu_fid tfid;
 	uint64_t oid2 = 0;
@@ -935,15 +942,15 @@ static int osd_ios_scan_one(const struct lu_env *env, struct osd_device *dev,
 	int size = 0;
 	int op = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = __osd_xattr_load_by_oid(dev, oid, &nvbuf);
 	if (unlikely(rc == -ENOENT || rc == -EEXIST))
 		RETURN(0);
 
 	if (rc && rc != -ENODATA) {
-		CWARN("%s: initial OI scrub failed to get lma for %llu: "
-		      "rc = %d\n", osd_name(dev), oid, rc);
+		CWARN("%s: initial OI scrub failed to get lma for %llu: rc = %d\n",
+		      osd_name(dev), oid, rc);
 
 		RETURN(rc);
 	}
@@ -1014,10 +1021,8 @@ static int osd_ios_scan_one(const struct lu_env *env, struct osd_device *dev,
 	rc = osd_fid_lookup(env, dev, &tfid, &oid2);
 	if (rc) {
 		if (rc != -ENOENT) {
-			CWARN("%s: initial OI scrub failed to lookup fid for "
-			      DFID"=>%llu: rc = %d\n",
+			CWARN("%s: initial OI scrub failed to lookup fid for "DFID"=>%llu: rc = %d\n",
 			      osd_name(dev), PFID(&tfid), oid, rc);
-
 			RETURN(rc);
 		}
 
@@ -1048,8 +1053,8 @@ static int osd_ios_varfid_hd(const struct lu_env *env, struct osd_device *dev,
 			     enum osd_lf_flags flags, bool is_dir)
 {
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = osd_ios_scan_one(env, dev, NULL, parent, oid, name, 0);
 	if (!rc && is_dir)
 		rc = osd_ios_new_item(dev, oid, flags, osd_ios_general_sd,
@@ -1064,8 +1069,8 @@ static int osd_ios_uld_hd(const struct lu_env *env, struct osd_device *dev,
 {
 	struct lu_fid tfid;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* skip any non-DFID format name */
 	if (name[0] != '[')
 		RETURN(0);
@@ -1094,8 +1099,8 @@ static int osd_ios_general_sd(const struct lu_env *env, struct osd_device *dev,
 	zap_attribute_t *za = &info->oti_za;
 	zap_cursor_t *zc = &info->oti_zc;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	zap_cursor_init_serialized(zc, dev->od_os, parent, 0);
 	rc = -zap_cursor_retrieve(zc, za);
 	if (rc == -ENOENT)
@@ -1115,8 +1120,7 @@ static int osd_ios_general_sd(const struct lu_env *env, struct osd_device *dev,
 					sizeof(*zde) / za->za_integer_length,
 					(void *)zde);
 			if (rc) {
-				CWARN("%s: initial OI scrub failed to lookup "
-				      "%s under %llu: rc = %d\n",
+				CWARN("%s: initial OI scrub failed to lookup %s under %llu: rc = %d\n",
 				      osd_name(dev), za->za_name, parent, rc);
 				continue;
 			}
@@ -1125,8 +1129,8 @@ static int osd_ios_general_sd(const struct lu_env *env, struct osd_device *dev,
 					zde->lzd_reg.zde_dnode, flags,
 					S_ISDIR(DTTOIF(zde->lzd_reg.zde_type)) ?
 					true : false);
-			CDEBUG(D_LFSCK, "%s: initial OI scrub handled %s under "
-			       "%llu: rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: initial OI scrub handled %s under %llu: rc = %d\n",
 			       osd_name(dev), za->za_name, parent, rc);
 		}
 
@@ -1135,8 +1139,8 @@ static int osd_ios_general_sd(const struct lu_env *env, struct osd_device *dev,
 
 log:
 	if (rc)
-		CWARN("%s: initial OI scrub failed to scan the directory %llu: "
-		      "rc = %d\n", osd_name(dev), parent, rc);
+		CWARN("%s: initial OI scrub failed to scan the directory %llu: rc = %d\n",
+		      osd_name(dev), parent, rc);
 	zap_cursor_fini(zc);
 
 	return rc;
@@ -1156,19 +1160,20 @@ static int osd_ios_ROOT_sd(const struct lu_env *env, struct osd_device *dev,
 	uint64_t oid;
 	int rc;
 	int rc1 = 0;
-	ENTRY;
 
+	ENTRY;
 	rc = osd_zap_lookup(dev, parent, NULL, dot_lustre_name, 8,
 			    sizeof(*zde) / 8, (void *)zde);
 	if (rc == -ENOENT) {
 		/* The .lustre directory is lost. That is not fatal. It can
-		 * be re-created in the subsequent MDT start processing. */
+		 * be re-created in the subsequent MDT start processing.
+		 */
 		RETURN(0);
 	}
 
 	if (rc) {
-		CWARN("%s: initial OI scrub failed to find .lustre: "
-		      "rc = %d\n", osd_name(dev), rc);
+		CWARN("%s: initial OI scrub failed to find .lustre: rc = %d\n",
+		      osd_name(dev), rc);
 
 		RETURN(rc);
 	}
@@ -1211,15 +1216,14 @@ static void osd_initial_OI_scrub(const struct lu_env *env,
 	struct luz_direntry *zde = &osd_oti_get(env)->oti_zde;
 	const struct osd_lf_map *map;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	for (map = osd_lf_maps; map->olm_name; map++) {
 		rc = osd_zap_lookup(dev, dev->od_root, NULL, map->olm_name, 8,
 				    sizeof(*zde) / 8, (void *)zde);
 		if (rc) {
 			if (rc != -ENOENT)
-				CWARN("%s: initial OI scrub failed "
-				      "to find the entry %s: rc = %d\n",
+				CWARN("%s: initial OI scrub failed to find the entry %s: rc = %d\n",
 				      osd_name(dev), map->olm_name, rc);
 			else if (!fid_is_zero(&map->olm_fid))
 				/* Try to remove the stale OI mapping. */
@@ -1255,8 +1259,8 @@ static void osd_initial_OI_scrub(const struct lu_env *env,
 
 		OBD_ALLOC_LARGE(buf, INDEX_BACKUP_BUFSIZE);
 		if (!buf)
-			CERROR("%s: not enough RAM for rebuild index\n",
-			       osd_name(dev));
+			CERROR("%s: not enough RAM for rebuild index: rc = %d\n",
+			       osd_name(dev), -ENOMEM);
 
 		while (!list_empty(&dev->od_index_restore_list)) {
 			struct lustre_index_restore_unit *liru;
@@ -1284,8 +1288,8 @@ int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 		    __u32 flags)
 {
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (dev->od_dt_dev.dd_rdonly)
 		RETURN(-EROFS);
 
@@ -1300,8 +1304,8 @@ int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 void osd_scrub_stop(struct osd_device *dev)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	ENTRY;
 
+	ENTRY;
 	/* od_otable_sem: prevent concurrent start/stop */
 	down(&dev->od_otable_sem);
 	spin_lock(&scrub->os_lock);
@@ -1328,8 +1332,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	uint64_t oid;
 	int rc = 0;
 	bool dirty = false;
-	ENTRY;
 
+	ENTRY;
 	memcpy(dev->od_uuid.b,
 	       &dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid,
 	       sizeof(dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid));
@@ -1341,7 +1345,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	scrub->os_auto_scrub_interval = interval;
 
 	/* 'What the @fid is' is not imporatant, because the object
-	 * has no OI mapping, and only is visible inside the OSD.*/
+	 * has no OI mapping, and only is visible inside the OSD.
+	 */
 	fid->f_seq = FID_SEQ_IGIF_MAX;
 	if (dev->od_is_ost)
 		fid->f_oid = ((1 << 31) | dev->od_index) + 1;
@@ -1463,8 +1468,8 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 	struct osd_otable_it *it;
 	__u32 start = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (dev->od_dt_dev.dd_rdonly)
 		RETURN(ERR_PTR(-EROFS));
 
@@ -1499,7 +1504,8 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 
 	/* XXX: dmu_object_next() does NOT find dnodes allocated
 	 *	in the current non-committed txg, so we force txg
-	 *	commit to find all existing dnodes ... */
+	 *	commit to find all existing dnodes ...
+	 */
 	txg_wait_synced(dmu_objset_pool(dev->od_os), 0ULL);
 
 	dev->od_otable_it = it;
@@ -1554,7 +1560,8 @@ static void osd_otable_it_preload(const struct lu_env *env,
 	int rc;
 
 	/* can go negative on the very first access to the iterator
-	 * or if some non-Lustre objects were found */
+	 * or if some non-Lustre objects were found
+	 */
 	if (unlikely(it->ooi_prefetched < 0))
 		it->ooi_prefetched = 0;
 
@@ -1599,8 +1606,8 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	nvlist_t *nvbuf = NULL;
 	int rc, size = 0;
 	bool locked;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(it->ooi_user_ready);
 	fid_zero(&it->ooi_fid);
 
@@ -1660,7 +1667,8 @@ again:
 				       (uchar_t **)&lma, &size);
 	if (rc || size == 0)
 		/* It is either non-Lustre object or OSD internal object,
-		 * ignore it, go ahead */
+		 * ignore it, go ahead
+		 */
 		goto again;
 
 	LASSERTF(lma != NULL, "corrupted LMA, size %d\n", size);
@@ -1723,8 +1731,8 @@ static int osd_otable_it_load(const struct lu_env *env,
 	struct osd_device *dev = it->ooi_dev;
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* Forbid to set iteration position after iteration started. */
 	if (it->ooi_user_ready)
 		RETURN(-EPERM);
@@ -1732,8 +1740,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 	if (hash > OSD_OTABLE_MAX_HASH)
 		hash = OSD_OTABLE_MAX_HASH;
 
-	/* The hash is the last checkpoint position,
-	 * we will start from the next one. */
+	/* The hash is the last checkpoint position, start from the next one. */
 	it->ooi_pos = hash + 1;
 	it->ooi_prefetched = 0;
 	it->ooi_prefetched_dnode = 0;
@@ -1777,8 +1784,8 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct osd_inconsistent_item *oii;
 	bool wakeup = false;
-	ENTRY;
 
+	ENTRY;
 	osd_idc_find_and_init_with_oid(env, dev, fid, oid);
 	OBD_ALLOC_PTR(oii);
 	if (unlikely(!oii))
@@ -1814,8 +1821,8 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct osd_inconsistent_item *oii;
 	int ret = -ENOENT;
-	ENTRY;
 
+	ENTRY;
 	spin_lock(&scrub->os_lock);
 	list_for_each_entry(oii, &scrub->os_inconsistent_items, oii_list) {
 		if (lu_fid_eq(fid, &oii->oii_cache.oic_fid)) {
@@ -1922,17 +1929,19 @@ static int osd_remove_ml_file(const struct lu_env *env, struct osd_device *dev,
 		GOTO(out, rc);
 
 	if (nlink <= 1) {
-		CERROR("%s: multi-link file O/%s/%s/%s has nlink %llu\n",
+		rc = 0;
+		CERROR("%s: multi-link file O/%s/%s/%s has nlink %llu: rc = %d\n",
 		       osd_name(dev), info->oti_seq_name, info->oti_dir_name,
-		       name, nlink);
-		GOTO(out, rc = 0);
+		       name, nlink, rc);
+		GOTO(out, rc);
 	}
 
 	tx = dmu_tx_create(dev->od_os);
 	if (!tx) {
-		CERROR("%s: fail to create tx to remove multi-link file!\n",
-		       osd_name(dev));
-		GOTO(out, rc = -ENOMEM);
+		rc = -ENOMEM;
+		CERROR("%s: fail to create tx to remove multi-link file!: rc = %d\n",
+		       osd_name(dev), rc);
+		GOTO(out, rc);
 	}
 
 	dmu_tx_hold_zap(tx, dir, FALSE, NULL);
