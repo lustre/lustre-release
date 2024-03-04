@@ -2307,8 +2307,11 @@ test_28() {
 	if [ ! -f $DIR/$tdir/$tdir.out ]; then
 		error "read before rotation failed"
 	fi
+	# check srpc_contexts is valid YAML
+	$LCTL get_param -n *.*.srpc_contexts 2>/dev/null | verify_yaml ||
+		error "srpc_contexts is not valid YAML"
 	# store top key identity to ensure rotation has occurred
-	SK_IDENTITY_OLD=$($LCTL get_param -n *.*.*srpc_contexts 2>/dev/null |
+	SK_IDENTITY_OLD=$($LCTL get_param -n *.*.srpc_contexts 2>/dev/null |
 		       head -n 1 | awk 'BEGIN{RS=", "} $1=="expire:"{print $2}')
 	do_facet $SINGLEMDS lfs flushctx ||
 		 error "could not run flushctx on $SINGLEMDS"
@@ -2316,7 +2319,7 @@ test_28() {
 	lfs flushctx || error "could not run flushctx on client"
 	sleep 5
 	# verify new key is in place
-	SK_IDENTITY_NEW=$($LCTL get_param -n *.*.*srpc_contexts 2>/dev/null |
+	SK_IDENTITY_NEW=$($LCTL get_param -n *.*.srpc_contexts 2>/dev/null |
 		       head -n 1 | awk 'BEGIN{RS=", "} $1=="expire:"{print $2}')
 	if [ $SK_IDENTITY_OLD == $SK_IDENTITY_NEW ]; then
 		error "key did not rotate correctly"

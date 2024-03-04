@@ -1229,8 +1229,8 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 		mech[sizeof(mech) - 1] = '\0';
 
 		seq_printf(seq,
-			   "- %p: { %s%s%suid: %u, ctxref: %d, expire: %lld, delta: %lld, flags: [%s], seq: %d, win: %u, key: %08x, keyref: %d, hdl: \"%#llx:%#llx\", mech: \"%s\" }\n",
-			   ctx, conn ? "peer_nid: " : "",
+			   "- { %s%s%suid: %u, ctxref: %d, expire: %lld, delta: %lld, flags: [%s], seq: %d, win: %u, key: %08x, keyref: %d, hdl: \"%#llx:%#llx\", mech: \"%s\" }\n",
+			   conn ? "peer_nid: " : "",
 			   conn ? libcfs_nidstr(&conn->c_peer.nid) : "",
 			   conn ? ", " : "",
 			   ctx->cc_vcred.vc_uid, atomic_read(&ctx->cc_refcount),
