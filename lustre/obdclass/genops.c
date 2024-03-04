@@ -2264,15 +2264,16 @@ static int claim_mod_rpc_function(wait_queue_entry_t *wq_entry,
 		(close_req && cli->cl_close_rpcs_in_flight == 0);
 	if (avail) {
 		cli->cl_mod_rpcs_in_flight++;
-		if (w->close_req)
+		if (close_req)
 			cli->cl_close_rpcs_in_flight++;
 		ret = woken_wake_function(wq_entry, mode, flags, key);
 	} else if (cli->cl_close_rpcs_in_flight)
 		/* No other waiter could be woken */
 		ret = -1;
-	else if (key == NULL)
-		/* This was not a wakeup from a close completion, so there is no
-		 * point seeing if there are close waiters to be woken
+	else if (!key)
+		/* This was not a wakeup from a close completion or a new close
+		 * being queued, so there is no point seeing if there are close
+		 * waiters to be woken.
 		 */
 		ret = -1;
 	else
@@ -2305,8 +2306,12 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 	/* This wakeup will only succeed if the maximums haven't
 	 * been reached.  If that happens, WQ_FLAG_WOKEN will be cleared
 	 * and there will be no need to wait.
+	 * If a close_req was enqueue, ensure we search all the way to the
+	 * end of the waitqueue for a close request.
 	 */
-	wake_up_locked(&cli->cl_mod_rpcs_waitq);
+	__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
+			     (void*)wait.close_req);
+
 	if (!(wait.wqe.flags & WQ_FLAG_WOKEN)) {
 		spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
 		wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
