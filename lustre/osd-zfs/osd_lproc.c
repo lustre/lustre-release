@@ -70,7 +70,8 @@ static void osd_symlink_brw_stats(struct osd_device *osd)
 	strscpy(path, root, len_root);
 	if (p > path + len_root) {
 		s = path + len_root;
-		while ((*s++ = *p++) != '\0');
+		while ((*s++ = *p++) != '\0')
+			;
 	}
 
 	*(path + len_root + len_path) = '\0';
@@ -436,7 +437,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 					      NULL, &osd->od_dt_dev);
 	if (IS_ERR(osd->od_proc_entry)) {
 		rc = PTR_ERR(osd->od_proc_entry);
-		CERROR("Error %d setting up lprocfs for %s\n", rc, name);
+		CERROR("%s: error setting up lprocfs: rc = %d\n", name, rc);
 		osd->od_proc_entry = NULL;
 		GOTO(out, rc);
 	}
