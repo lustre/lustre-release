@@ -40,7 +40,8 @@
 #define D_MOUNT (D_SUPER|D_CONFIG/*|D_WARNING */)
 #define PRINT_CMD CDEBUG
 
-#include <linux/inet.h>
+#include <linux/types.h>
+#include <linux/parser.h>
 #include <linux/random.h>
 #include <linux/uuid.h>
 #include <linux/version.h>
@@ -1108,19 +1109,12 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, const char *ptr)
 
 static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
 {
-	char *tail;
-	int length;
+	int length = strlen(ptr);
 
 	if (lmd->lmd_mgssec != NULL) {
 		OBD_FREE(lmd->lmd_mgssec, strlen(lmd->lmd_mgssec) + 1);
 		lmd->lmd_mgssec = NULL;
 	}
-
-	tail = strchr(ptr, ',');
-	if (tail == NULL)
-		length = strlen(ptr);
-	else
-		length = tail - ptr;
 
 	OBD_ALLOC(lmd->lmd_mgssec, length + 1);
 	if (lmd->lmd_mgssec == NULL)
@@ -1133,19 +1127,12 @@ static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
 
 static int lmd_parse_network(struct lustre_mount_data *lmd, char *ptr)
 {
-	char *tail;
-	int length;
+	int length = strlen(ptr);
 
 	if (lmd->lmd_nidnet != NULL) {
 		OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
 		lmd->lmd_nidnet = NULL;
 	}
-
-	tail = strchr(ptr, ',');
-	if (tail == NULL)
-		length = strlen(ptr);
-	else
-		length = tail - ptr;
 
 	OBD_ALLOC(lmd->lmd_nidnet, length + 1);
 	if (lmd->lmd_nidnet == NULL)
@@ -1158,49 +1145,38 @@ static int lmd_parse_network(struct lustre_mount_data *lmd, char *ptr)
 
 static int lmd_parse_string(char **handle, char *ptr)
 {
-	char *tail;
-	int length;
-
-	if ((handle == NULL) || (ptr == NULL))
+	if (!handle || !ptr)
 		return -EINVAL;
 
-	if (*handle != NULL) {
-		OBD_FREE(*handle, strlen(*handle) + 1);
-		*handle = NULL;
-	}
+	OBD_FREE(*handle, strlen(*handle) + 1);
+	*handle = NULL;
 
-	tail = strchr(ptr, ',');
-	if (tail == NULL)
-		length = strlen(ptr);
-	else
-		length = tail - ptr;
-
-	OBD_ALLOC(*handle, length + 1);
-	if (*handle == NULL)
+	*handle = kstrdup(ptr, GFP_NOFS);
+	if (!*handle)
 		return -ENOMEM;
 
-	memcpy(*handle, ptr, length);
-	(*handle)[length] = '\0';
+	OBD_ALLOC_POST(*handle, strlen(ptr) + 1, "kmalloced");
 
 	return 0;
 }
 
 /* Collect multiple values for mgsnid specifiers */
-static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
+static int lmd_parse_mgs(struct lustre_mount_data *lmd, char *ptr, char **tail)
 {
+	int length = strlen(ptr);
 	struct lnet_nid nid;
-	char *tail = *ptr;
+	char *next = *tail;
 	char *mgsnid;
-	int length;
 	int oldlen = 0;
 
 	/* Find end of NID-list */
-	while (class_parse_nid_quiet(tail, &nid, &tail) == 0)
+	while (class_parse_nid_quiet(*tail, &nid, tail) == 0)
 		; /* do nothing */
 
-	length = tail - *ptr;
+	if (next && next != *tail)
+		length += *tail - next + 1;
 	if (length == 0) {
-		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", *ptr);
+		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", ptr);
 		return -EINVAL;
 	}
 
@@ -1217,204 +1193,222 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
 		mgsnid[oldlen - 1] = ':';
 		OBD_FREE(lmd->lmd_mgs, oldlen);
 	}
-	memcpy(mgsnid + oldlen, *ptr, length);
-	mgsnid[oldlen + length] = '\0';
+
+	if (next && next != *tail)
+		snprintf(mgsnid + oldlen, length + 1, "%s,%.*s", ptr,
+			 (int)(*tail - next + 1), next);
+	else
+		snprintf(mgsnid + oldlen, length + 1, "%s", ptr);
 	lmd->lmd_mgs = mgsnid;
-	*ptr = tail;
 
 	return 0;
 }
 
+enum lmd_mnt_flags {
+	LMD_OPT_RECOVERY_TIME_SOFT	= LMD_FLG_NUM_FLAGS + 1,
+	LMD_OPT_RECOVERY_TIME_HARD,
+	LMD_OPT_MGSNODE,
+	LMD_OPT_MGSSEC,
+	LMD_OPT_EXCLUDE,
+	LMD_OPT_SVNAME,
+	LMD_OPT_PARAM,
+	LMD_OPT_OSD,
+	LMD_OPT_NETWORK,
+	LMD_OPT_DEVICE,
+	LMD_NUM_MOUNT_OPT
+};
+
+static const match_table_t lmd_flags_table = {
+	{LMD_FLG_SKIP_LFSCK,		"skip_lfsck"},
+	{LMD_FLG_ABORT_RECOV,		"abort_recov"},
+	{LMD_FLG_ABORT_RECOV,		"abort_recovery"},
+	{LMD_FLG_NOSVC,			"nosvc"},
+	{LMD_FLG_MGS,			"mgs"},
+	{LMD_FLG_NOMGS,			"nomgs"},
+	{LMD_FLG_WRITECONF,		"writeconf"},
+	{LMD_FLG_NOIR,			"noir"},
+	{LMD_FLG_NOSCRUB,		"noscrub"},
+	{LMD_FLG_NO_PRIMNODE,		"noprimnode"},
+	{LMD_FLG_VIRGIN,		"virgin"},
+	{LMD_FLG_UPDATE,		"update"},
+	{LMD_FLG_DEV_RDONLY,		"rdonly_dev"},
+	{LMD_FLG_NO_CREATE,		"no_create"},
+	{LMD_FLG_NO_CREATE,		"no_precreate"},
+	{LMD_FLG_LOCAL_RECOV,		"localrecov"},
+	{LMD_FLG_ABORT_RECOV_MDT,	"abort_recov_mdt"},
+	{LMD_FLG_ABORT_RECOV_MDT,	"abort_recovery_mdt"},
+	{LMD_FLG_NO_LOCAL_LOGS,		"nolocallogs"},
+
+	{LMD_OPT_RECOVERY_TIME_SOFT,	"recovery_time_soft=%u"},
+	{LMD_OPT_RECOVERY_TIME_HARD,	"recovery_time_hard=%u"},
+	{LMD_OPT_MGSNODE,		"mgsnode=%s"},
+	{LMD_OPT_MGSSEC,		"mgssec=%s"},
+	{LMD_OPT_EXCLUDE,		"exclude=%s"},
+	{LMD_OPT_SVNAME,		"svname=%s"},
+	{LMD_OPT_PARAM,			"param=%s"},
+	{LMD_OPT_OSD,			"osd=%s"},
+	{LMD_OPT_NETWORK,		"network=%s"},
+	{LMD_OPT_DEVICE,		"device=%s"}, /* should be last */
+	{LMD_NUM_MOUNT_OPT,		NULL}
+};
+
 /**
- * Find the first delimiter (comma or colon) from the specified \a buf and
- * make \a *endh point to the string starting with the delimiter. The commas and
- * colons in expression list [...] will be skipped. Colons that are part of a
- * NID address are not considered delimiters.
+ * Find the first delimiter; comma; from the specified \a buf and
+ * make \a *endh point to the string starting with the delimiter.
+ * The character ':' is also a delimiter for Lustre but not match_table
+ * so the string is not split on it. Making it safe to ignore.
  *
  * @buf		a delimiter-separated string
  * @endh	a pointer to a pointer that will point to the string
  *		starting with the delimiter
  *
- * RETURNS	true if delimiter is found, false if delimiter is not found
+ * Returns:	true if delimiter is found, false if delimiter is not found
  */
 static bool lmd_find_delimiter(char *buf, char **endh)
 {
-	char *c;
-	char *at = NULL;
-	char *colon = NULL;
-	char *delim = NULL;
-	int brackets = 0;
-	int ncolons = 0;
+	substring_t args[LMD_NUM_MOUNT_OPT];
+	char *end, *tmp;
+	size_t len;
+	int token;
 
-	if (!buf || *buf == '\0')
+	if (!buf)
 		return false;
 
-	c = buf;
-	do {
-		if (*c == '[') {
-			brackets++;
-			continue;
-		}
+	/* No more options so we are done */
+	end = strchr(buf, ',');
+	if (!end)
+		return false;
 
-		if (*c == ']') {
-			brackets--;
-			if (brackets < 0) {
-				CWARN("imbalanced brackets detected in \"%s\"",
-				      buf);
-				return false;
-			}
-			continue;
-		}
+	len = end - buf;
+	tmp = kstrndup(buf, len, GFP_KERNEL);
+	if (!tmp)
+		return false;
 
-		/* Ignore all characters inside brackets */
-		if (brackets > 0)
-			continue;
+	args[0].to = NULL;
+	args[0].from = NULL;
+	token = match_token(tmp, lmd_flags_table, args);
+	kfree(tmp);
+	if (token != LMD_NUM_MOUNT_OPT)
+		return false;
 
-		if (*c == ':') {
-			if (at) {
-				/* We previously saw an '@', so this ':' is a
-				 * delimiter separating NIDs
-				 */
-				delim = c;
-				break;
-			}
+	if (endh)
+		*endh = end;
 
-			/* Record the first ':' that we find, as this may be a
-			 * delimiter
-			 */
-			if (!colon)
-				colon = c;
+	return true;
+}
 
-			ncolons++;
-			if (ncolons > 2) {
-				/* Something like :::<foo>. The first ':' is a
-				 * delimiter
-				 */
-				delim = colon;
-				break;
-			}
-			continue;
-		}
+/**
+ * Make sure the string in \a buf is of a valid formt.
+ *
+ * @buf		a delimiter-separated string
+ *
+ * Returns:	true if string valid, false if string contains errors
+ */
+static bool lmd_validate_param(char *buf)
+{
+	char *c = buf;
+	size_t pos;
 
-		ncolons = 0;
-		if (*c == '@') {
-			at = c;
-		} else if (*c == ',') {
-			/* When we find a ',', we can determine whether a ':'
-			 * seen earlier was a delimiter or part of a NID
-			 */
-			if (colon && !at) {
-				/* We previously saw a ':', but never
-				 * encountered an '@'. Thus, the ':' was a
-				 * delimiter
-				 */
-				delim = colon;
-			} else {
-				/* We either never saw a ':', or we saw both a
-				 * ':' and an '@' (so the ':' was part of a
-				 * NID). In both cases this ',' is our delimiter
-				 */
-				delim = c;
-			}
-			break;
-		}
-	} while (c++ && *c != '\0');
+	if (!buf)
+		return false;
+try_again:
+	pos = strcspn(c, "[]");
+	if (!pos)
+		return true;
 
-
-	if (brackets != 0) {
-		CWARN("imbalanced brackets detected in \"%s\"", buf);
+	c += pos;
+	/* Not a valid mount string */
+	if (*c == ']') {
+		CWARN("invalid mount string format\n");
 		return false;
 	}
 
-	if (!delim && colon && !at)
-		/* We saw a ':' but reached end of string without finding an '@'
-		 * or ','. Thus, the ':' is considered a delimiter
+	if (*c == '[') {
+		char *right = strchr(c, ']'), *tmp;
+
+		/* invalid mount string */
+		if (!right) {
+			CWARN("invalid mount string format\n");
+			return false;
+		}
+		c++;
+
+		/* Test for [ .. [ .. ] */
+		tmp = strchr(c, '[');
+		if (tmp && tmp < right) {
+			CWARN("invalid mount string format\n");
+			return false;
+		}
+
+		/* Test for [ .. @ .. ] which means brackets
+		 * span more than one NID string.
 		 */
-		delim = colon;
+		tmp = strchr(c, '@');
+		if (tmp && tmp < right) {
+			CWARN("invalid mount string format\n");
+			return false;
+		}
 
-	if (delim && endh)
-		*endh = delim;
+		c = right++;
+		goto try_again;
+	}
 
-	return delim != NULL;
+	return true;
 }
 
 /**
  * Find the first valid string delimited by comma or colon from the specified
- * \a buf and parse it to see whether it's a valid NID list. If yes, \a *endh
+ * @buf and parse it to see whether it's a valid nid list. If yes, @*endh
  * will point to the next string starting with the delimiter.
  *
- * \param[in] buf	a delimiter-separated string
- * \param[in] endh	a pointer to a pointer that will point to the string
- *			starting with the delimiter
+ * @buf:	a delimiter-separated string
  *
- * \retval 0		if the string is a valid NID list
- * \retval 1		if the string is not a valid NID list
+ * Returns:	false	if the string is a valid nid list
+ *              true	if the string is not a valid nid list
  */
-static int lmd_parse_nidlist(char *buf, char **endh)
+static bool lmd_parse_nidlist(char *buf)
 {
 	LIST_HEAD(nidlist);
-	char *endp = buf;
-	char tmp;
-	int rc = 0;
-	int ncolons = 0;
+	bool invalid;
+	char *end;
 
 	if (!buf)
-		return 1;
+		return true;
 
-	while (*buf == ',' || *buf == ':') {
-		if (*buf == ':')
-			ncolons++;
-		else
-			ncolons = 0;
-		buf++;
-	}
+	end = strchr(buf, '=');
+	if (end)
+		buf = end + 1;
 
-	/* IPv6 addresses can start with '::' */
-	if (ncolons >= 2)
-		buf = buf - 2;
+	while ((end = strchr(buf, '@')) != NULL) {
+		size_t pos = strcspn(end, ":,");
+		char c;
 
-	if (*buf == ' ' || *buf == '/' || *buf == '\0')
-		return 1;
+		end += pos;
+		c = end[0];
+		end[0] = '\0';
+		/* FIXME !!! Add IPv6 support to cfs_parse_nidlist */
+		if (strchr(buf, ':')) {
+			struct lnet_nid nid;
 
-	if (!lmd_find_delimiter(buf, &endp))
-		endp = buf + strlen(buf);
-
-	tmp = *endp;
-	*endp = '\0';
-
-	/* FIXME: cfs_parse_nidlist does not support IPv6 addresses, so if
-	 * buf contains a ':' and an '@' then we assume this is supposed to be
-	 * an IPv6 address.
-	 */
-	if (strchr(buf, ':')) {
-		struct in6_addr addr;
-		char *at;
-
-		rc = 1;
-		at = strchr(buf, '@');
-		if (at) {
-			*at = '\0';
-			rc = in6_pton(buf, -1, (u8 *)&addr.s6_addr, -1, NULL);
-			if (rc == 1)
-				rc = 0;
-			*at = '@';
+			if (libcfs_strnid(&nid, buf) < 0) {
+				invalid = true;
+				goto failed;
+			}
+		} else {
+			if (cfs_parse_nidlist(buf, &nidlist) < 0) {
+				invalid = true;
+				goto failed;
+			} else {
+				cfs_free_nidlist(&nidlist);
+			}
 		}
-	} else if (cfs_parse_nidlist(buf, &nidlist) < 0) {
-		rc = 1;
+		end[0] = c;
+		end++;
+		buf = end;
 	}
-
-	cfs_free_nidlist(&nidlist);
-
-	/* Restore the delimiter */
-	*endp = tmp;
-
-	if (rc)
-		return rc;
-
-	if (endh)
-		*endh = endp;
-
-	return 0;
+	invalid = false;
+failed:
+	return invalid;
 }
 
 /**
@@ -1424,12 +1418,11 @@ static int lmd_parse_nidlist(char *buf, char **endh)
  */
 int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
-	char *s1, *s2, *devname = NULL;
+	char *s1, *s2, *opts, *devname = NULL;
 	struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
 	int rc = 0;
 
 	ENTRY;
-
 	LASSERT(lmd);
 	if (!options) {
 		LCONSOLE_ERROR_MSG(0x162,
@@ -1446,23 +1439,56 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 	}
 	lmd->lmd_magic = LMD_MAGIC;
 
-	OBD_ALLOC(lmd->lmd_params, LMD_PARAMS_MAXLEN);
-	if (lmd->lmd_params == NULL)
+	/* Don't stomp on lmd_opts */
+	opts = kstrdup(options, GFP_KERNEL);
+	if (!opts)
 		RETURN(-ENOMEM);
+	s1 = opts;
+
+	OBD_ALLOC(lmd->lmd_params, LMD_PARAMS_MAXLEN);
+	if (!lmd->lmd_params)
+		GOTO(invalid, rc = -ENOMEM);
 	lmd->lmd_params[0] = '\0';
 
 	/* Set default flags here */
+	while ((s1 = strsep(&opts, ",")) != NULL) {
+		int time_min = OBD_RECOVERY_TIME_MIN, tmp;
+		substring_t args[LMD_NUM_MOUNT_OPT];
+		int token;
 
-	s1 = options;
-	while (*s1) {
-		int clear = 0;
-		int time_min = OBD_RECOVERY_TIME_MIN;
-		char *s3;
+		if (!*s1)
+			continue;
+		/*
+		 * Initialize args struct so we know whether arg was
+		 * found; some options take optional arguments.
+		 */
+		args[0].to = NULL;
+		args[0].from = NULL;
+		token = match_token(s1, lmd_flags_table, args);
+		if (token == LMD_NUM_MOUNT_OPT) {
+			if (match_wildcard("iam", s1) ||
+			    match_wildcard("hsm", s1))
+				continue;
 
-		/* Skip whitespace and extra commas */
-		while (*s1 == ' ' || *s1 == ',')
-			s1++;
-		s3 = s1;
+			/* Normally we would error but client and
+			 * server mounting is intertwine. So pass
+			 * off unknown args to ll_options instead.
+			 */
+			continue;
+		} else {
+			/* We found a known server option. Filter out
+			 * the result out of the options string. The
+			 * reset will be stored in lmd_opts.
+			 */
+			char *tmp = strstr(options, s1);
+
+			if (strcmp(tmp, s1) != 0) {
+				s2 = tmp + strlen(s1) + 1;
+				memmove(tmp, s2, strlen(s2) + 1);
+			} else {
+				*tmp = 0;
+			}
+		}
 
 		/*
 		 * Client options are parsed in ll_options: eg. flock,
@@ -1473,173 +1499,193 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		 * Parse non-ldiskfs options here. Rather than modifying
 		 * ldiskfs, we just zero these out here
 		 */
-		if (!strncmp(s1, "abort_recov_mdt", 15) ||
-		    !strncmp(s1, "abort_recovery_mdt", 18)) {
-			set_bit(LMD_FLG_ABORT_RECOV_MDT, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "abort_recov", 11) == 0) {
-			set_bit(LMD_FLG_ABORT_RECOV, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "recovery_time_soft=", 19) == 0) {
-			lmd->lmd_recovery_time_soft =
-				max_t(int, simple_strtoul(s1 + 19, NULL, 10),
-				      time_min);
-			clear++;
-		} else if (strncmp(s1, "recovery_time_hard=", 19) == 0) {
-			lmd->lmd_recovery_time_hard =
-				max_t(int, simple_strtoul(s1 + 19, NULL, 10),
-				      time_min);
-			clear++;
-		} else if (strncmp(s1, "no_create", 9) == 0 ||
-			   /* no_precreate kept for 2.16 compatibility */
-			   strncmp(s1, "no_precreate", 12) == 0) {
-			set_bit(LMD_FLG_NO_CREATE, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "noir", 4) == 0) { /* test case only */
-			set_bit(LMD_FLG_NOIR, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "nosvc", 5) == 0) {
-			set_bit(LMD_FLG_NOSVC, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "nomgs", 5) == 0) {
-			set_bit(LMD_FLG_NOMGS, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "noscrub", 7) == 0) {
-			set_bit(LMD_FLG_NOSCRUB, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "skip_lfsck", 10) == 0) {
-			set_bit(LMD_FLG_SKIP_LFSCK, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "rdonly_dev", 10) == 0) {
-			set_bit(LMD_FLG_DEV_RDONLY, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, PARAM_MGSNODE,
-				   sizeof(PARAM_MGSNODE) - 1) == 0) {
-			s2 = s1 + sizeof(PARAM_MGSNODE) - 1;
-			/*
-			 * Assume the next mount opt is the first
+		switch (token) {
+		case LMD_FLG_ABORT_RECOV_MDT:
+		case LMD_FLG_ABORT_RECOV:
+		case LMD_FLG_NO_CREATE:
+		case LMD_FLG_NOIR: /* test purpose only. */
+		case LMD_FLG_NOSVC:
+		case LMD_FLG_NOMGS:
+		case LMD_FLG_NOSCRUB:
+		case LMD_FLG_SKIP_LFSCK:
+		case LMD_FLG_DEV_RDONLY:
+		case LMD_FLG_WRITECONF:
+		case LMD_FLG_NO_LOCAL_LOGS:
+		case LMD_FLG_UPDATE:
+		case LMD_FLG_VIRGIN:
+		case LMD_FLG_NO_PRIMNODE:
+		case LMD_FLG_MGS: /* We are an MGS */
+		case LMD_FLG_LOCAL_RECOV:
+			set_bit(token, lmd->lmd_flags);
+			break;
+		case LMD_OPT_RECOVERY_TIME_SOFT:
+			rc = match_int(args, &tmp);
+			if (rc == 0)
+				lmd->lmd_recovery_time_soft = max_t(int, tmp,
+								    time_min);
+			break;
+		case LMD_OPT_RECOVERY_TIME_HARD:
+			rc = match_int(args, &tmp);
+			if (rc == 0)
+				lmd->lmd_recovery_time_hard = max_t(int, tmp,
+								    time_min);
+			break;
+		case LMD_OPT_MGSNODE:
+			/* Assume the next mount opt is the first
 			 * invalid NID we get to.
 			 */
-			rc = lmd_parse_mgs(lmd, &s2);
-			if (rc)
-				goto invalid;
-			s3 = s2;
-			clear++;
-		} else if (strncmp(s1, "writeconf", 9) == 0) {
-			set_bit(LMD_FLG_WRITECONF, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "nolocallogs", 11) == 0) {
-			set_bit(LMD_FLG_NO_LOCAL_LOGS, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "update", 6) == 0) {
-			set_bit(LMD_FLG_UPDATE, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "virgin", 6) == 0) {
-			set_bit(LMD_FLG_VIRGIN, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "noprimnode", 10) == 0) {
-			set_bit(LMD_FLG_NO_PRIMNODE, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "mgssec=", 7) == 0) {
-			rc = lmd_parse_mgssec(lmd, s1 + 7);
-			if (rc)
-				goto invalid;
-			clear++;
-			/* ost exclusion list */
-		} else if (strncmp(s1, "exclude=", 8) == 0) {
-			rc = lmd_make_exclusion(lmd, s1 + 7);
-			if (rc)
-				goto invalid;
-			clear++;
-		} else if (strncmp(s1, "mgs", 3) == 0) {
-			/* We are an MGS */
-			set_bit(LMD_FLG_MGS, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "svname=", 7) == 0) {
-			rc = lmd_parse_string(&lmd->lmd_profile, s1 + 7);
-			if (rc)
-				goto invalid;
-			clear++;
-		} else if (strncmp(s1, "param=", 6) == 0) {
-			size_t length, params_length;
-			char  *tail = s1;
+			rc = lmd_parse_mgs(lmd, args->from, &opts);
+			if (rc < 0)
+				GOTO(invalid, rc);
 
-			if (lmd_find_delimiter(s1 + 6, &tail)) {
-				char *param_str = tail + 1;
-				int   supplementary = 1;
-
-				while (lmd_parse_nidlist(param_str,
-							 &param_str) == 0) {
-					supplementary = 0;
-				}
-				length = param_str - s1 - supplementary;
-			} else {
-				length = strlen(s1);
+			if (strcmp(options, opts) != 0) {
+				s2 = strstr(options, opts);
+				if (s2)
+					options = s2;
 			}
-			length -= 6;
-			params_length = strlen(lmd->lmd_params);
-			if (params_length + length + 1 >= LMD_PARAMS_MAXLEN)
-				RETURN(-E2BIG);
-			strncat(lmd->lmd_params, s1 + 6, length);
-			lmd->lmd_params[params_length + length] = '\0';
-			strlcat(lmd->lmd_params, " ", LMD_PARAMS_MAXLEN);
-			s3 = s1 + 6 + length;
-			clear++;
-		} else if (strncmp(s1, "localrecov", 10) == 0) {
-			set_bit(LMD_FLG_LOCAL_RECOV, lmd->lmd_flags);
-			clear++;
-		} else if (strncmp(s1, "osd=", 4) == 0) {
-			rc = lmd_parse_string(&lmd->lmd_osd_type, s1 + 4);
-			if (rc)
-				goto invalid;
-			clear++;
-		}
-		/*
-		 * Linux 2.4 doesn't pass the device, so we stuck it at
-		 * the end of the options.
-		 */
-		else if (strncmp(s1, "device=", 7) == 0) {
-			devname = s1 + 7;
-			/*
-			 * terminate options right before device.  device
-			 * must be the last one.
-			 */
-			*s1 = '\0';
 			break;
-		} else if (strncmp(s1, "network=", 8) == 0) {
-			rc = lmd_parse_network(lmd, s1 + 8);
-			if (rc)
-				goto invalid;
+		case LMD_OPT_MGSSEC:
+			rc = lmd_parse_mgssec(lmd, args->from);
+			break;
+		case LMD_OPT_EXCLUDE:
+			/* ost exclusion list */
+			rc = lmd_make_exclusion(lmd, args->from);
+			break;
+		case LMD_OPT_SVNAME:
+			rc = lmd_parse_string(&lmd->lmd_profile, args->from);
+			break;
+		case LMD_OPT_PARAM: {
+			size_t length = strlen(args->from), params_length;
+			char *tail = NULL, *entry;
 
+			params_length = strlen(lmd->lmd_params);
+			if (params_length + length + 1 >= LMD_PARAMS_MAXLEN) {
+				rc = -E2BIG;
+				goto bad_string;
+			}
+			entry = lmd->lmd_params + params_length;
+			strncat(lmd->lmd_params, args->from, length);
+
+			/* Find end of param string */
+			while (lmd_find_delimiter(opts, &tail)) {
+				params_length = strlen(lmd->lmd_params);
+				/* match_table splits by ',' so fill it in */
+				lmd->lmd_params[params_length++] = ',';
+
+				length = tail - opts + 1;
+				if (!length)
+					break;
+				if (params_length + length + 1 >=
+				    LMD_PARAMS_MAXLEN) {
+					rc = -E2BIG;
+					goto bad_string;
+				}
+
+				strscpy(lmd->lmd_params + params_length,
+					opts, length);
+				opts = tail + 1;
+			}
+
+			lmd->lmd_params[params_length + length] = '\0';
+
+			if (!lmd_validate_param(entry)) {
+				rc = -EINVAL;
+				goto bad_string;
+			}
+
+			/* param contains NIDs */
+			if (strchr(entry, '@') && lmd_parse_nidlist(entry)) {
+				rc = -EINVAL;
+				goto bad_string;
+			}
+
+			/* remove params from opts string from options string */
+			if (strlen(args->from) != strlen(entry)) {
+				char *tmp = entry + strlen(args->from) + 1;
+
+				s2 = strstr(options, tmp);
+				if (s2) {
+					size_t len = strlen(s2) - strlen(tmp);
+
+					memmove(s2, s2 + strlen(tmp) + 1, len);
+				}
+			}
+
+			strlcat(lmd->lmd_params, " ", LMD_PARAMS_MAXLEN);
+			if (tail)
+				opts = tail + 1;
+bad_string:
+			break;
+		}
+		case LMD_OPT_OSD:
+			rc = lmd_parse_string(&lmd->lmd_osd_type, args->from);
+			break;
+		case LMD_OPT_DEVICE: {
+			size_t len = 0;
+
+			/* match_table splits strings at ',' so we need to
+			 * piece things back together.
+			 */
+			if (opts) {
+				len = strlen(opts) + 1;
+
+				/* Move to last part of device string */
+				s2 = strchr(opts, '/');
+				if (!s2)
+					GOTO(invalid, rc = -EINVAL);
+
+				/* See if more options exist */
+				s2 = strchr(s2, ',');
+				if (s2)
+					len = s2 - opts;
+			}
+			len += strlen(args->from) + 1;
+
+			/* Freed in lustre_free_lsi */
+			OBD_ALLOC(lmd->lmd_dev, len);
+			if (!lmd->lmd_dev)
+				GOTO(invalid, rc = -ENOMEM);
+
+			if (opts)
+				snprintf(lmd->lmd_dev, len, "%s,%s",
+					 args->from, opts);
+			else
+				strscpy(lmd->lmd_dev, args->from, len);
+
+			devname = lmd->lmd_dev;
+
+			/* remove the split string 'opts' from options */
+			if (opts) {
+				s1 = strstr(options, opts);
+				if (s1) {
+					/* opts start after args->from so
+					 * reduce len.
+					 */
+					len -= strlen(args->from) + 2;
+					s2 = s1 + len;
+					memmove(options, s2, strlen(s2) + 1);
+					opts += len;
+				}
+			}
+			break;
+		}
+		case LMD_OPT_NETWORK:
+			rc = lmd_parse_network(lmd, args->from);
 			/* check if LNet dynamic peer discovery is activated */
 			if (LNetGetPeerDiscoveryStatus()) {
-				CERROR("LNet Dynamic Peer Discovery is enabled "
-				       "on this node. 'network' mount option "
-				       "cannot be taken into account.\n");
-				goto invalid;
+				CERROR("LNet Dynamic Peer Discovery is enabled on this node. 'network' mount option cannot be taken into account.\n");
+				rc = -EINVAL;
 			}
-
-			clear++;
-		}
-
-		/* Find next opt */
-		s2 = strchr(s3, ',');
-		if (s2 == NULL) {
-			if (clear)
-				*s1 = '\0';
 			break;
 		}
-		s2++;
-		if (clear)
-			memmove(s1, s2, strlen(s2) + 1);
-		else
-			s1 = s2;
 	}
+	if (rc < 0)
+		GOTO(invalid, rc);
 
 	if (!devname) {
 		LCONSOLE_ERROR_MSG(0x164,
 				   "Can't find device name (need mount option 'device=...')\n");
-		goto invalid;
+		GOTO(invalid, rc = -ENODEV);
 	}
 
 	s1 = strstr(devname, ":/");
@@ -1655,7 +1701,7 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		/* Freed in lustre_free_lsi */
 		OBD_ALLOC(lmd->lmd_profile, s2 - s1 + 8);
 		if (!lmd->lmd_profile)
-			RETURN(-ENOMEM);
+			GOTO(invalid, rc = -ENOMEM);
 
 		strncat(lmd->lmd_profile, s1, s2 - s1);
 		strncat(lmd->lmd_profile, "-client", 7);
@@ -1667,11 +1713,8 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			s2--;
 		if (s2 > s1) {
 			OBD_ALLOC(lmd->lmd_fileset, s2 - s1 + 2);
-			if (lmd->lmd_fileset == NULL) {
-				OBD_FREE(lmd->lmd_profile,
-					 strlen(lmd->lmd_profile) + 1);
-				RETURN(-ENOMEM);
-			}
+			if (!lmd->lmd_fileset)
+				GOTO(invalid, rc = -ENOMEM);
 			strncat(lmd->lmd_fileset, s1, s2 - s1 + 1);
 		}
 	} else {
@@ -1681,18 +1724,11 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
 			lmd->lmd_nidnet = NULL;
 			rc = -EINVAL;
-			CERROR(
-			       "%s: option 'network=' not allowed for Lustre servers: rc = %d\n",
+			CERROR("%s: option 'network=' not allowed for Lustre servers: rc = %d\n",
 			       devname, rc);
-			RETURN(rc);
+			GOTO(invalid, rc);
 		}
 	}
-
-	/* Freed in lustre_free_lsi */
-	OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
-	if (!lmd->lmd_dev)
-		RETURN(-ENOMEM);
-	strncpy(lmd->lmd_dev, devname, strlen(devname)+1);
 
 	/* Save mount options */
 	s1 = options + strlen(options) - 1;
@@ -1704,16 +1740,16 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		/* Freed in lustre_free_lsi */
 		OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
 		if (!lmd->lmd_opts)
-			RETURN(-ENOMEM);
-		strncpy(lmd->lmd_opts, options, strlen(options)+1);
+			GOTO(invalid, rc = -ENOMEM);
+		strncpy(lmd->lmd_opts, options, strlen(options));
 	}
 
 	lmd_print(lmd);
+invalid:
+	if (rc < 0)
+		CERROR("Bad mount options %s\n", options);
+	kfree(opts);
 
 	RETURN(rc);
-
-invalid:
-	CERROR("Bad mount options %s\n", options);
-	RETURN(-EINVAL);
 }
 EXPORT_SYMBOL(lmd_parse);
