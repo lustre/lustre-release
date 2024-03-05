@@ -38,3 +38,6 @@ rhel8.7/ext4-filename-encode.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
 rhel8.4/ext4-optimize-find_delayed_extent.patch
 rhel8/ext4-encdata.patch
+rhel8/ext4-race-in-ext4-destroy-inode.patch
+rhel8/ext4-mballoc-dense.patch
+rhel8/ext4-limit-per-inode-preallocation-list.patch
