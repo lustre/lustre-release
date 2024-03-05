@@ -159,7 +159,7 @@ static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
 }
 
 static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
-			 struct pagevec *pvec)
+			 struct folio_batch *fbatch)
 {
 	struct cl_object *obj  = cp->cp_obj;
 	unsigned short bufsize = cl_object_header(obj)->coh_page_bufsize;
@@ -178,9 +178,9 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
 		LASSERT(vmpage != NULL);
 		LASSERT((struct cl_page *)vmpage->private != cp);
 
-		if (pvec != NULL) {
-			if (!pagevec_add(pvec, vmpage))
-				pagevec_release(pvec);
+		if (fbatch != NULL) {
+			if (!folio_batch_add_page(fbatch, vmpage))
+				folio_batch_release(fbatch);
 		} else {
 			put_page(vmpage);
 		}
@@ -452,13 +452,13 @@ void cl_page_get(struct cl_page *page)
 EXPORT_SYMBOL(cl_page_get);
 
 /**
- * Releases a reference to a page, use the pagevec to release the pages
+ * Releases a reference to a page, use the folio_batch to release the pages
  * in batch if provided.
  *
- * Users need to do a final pagevec_release() to release any trailing pages.
+ * Users need to do a final folio_batch_release() to release any trailing pages.
  */
-void cl_pagevec_put(const struct lu_env *env, struct cl_page *page,
-		    struct pagevec *pvec)
+void cl_batch_put(const struct lu_env *env, struct cl_page *page,
+		  struct folio_batch *fbatch)
 {
 	ENTRY;
 	CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
@@ -471,15 +471,15 @@ void cl_pagevec_put(const struct lu_env *env, struct cl_page *page,
 		PASSERT(env, page, page->cp_owner == NULL);
 		PASSERT(env, page, list_empty(&page->cp_batch));
 		/* Page is no longer reachable by other threads. Tear it down */
-		cl_page_free(env, page, pvec);
+		cl_page_free(env, page, fbatch);
 	}
 
 	EXIT;
 }
-EXPORT_SYMBOL(cl_pagevec_put);
+EXPORT_SYMBOL(cl_batch_put);
 
 /**
- * Releases a reference to a page, wrapper to cl_pagevec_put
+ * Releases a reference to a page, wrapper to cl_batch_put
  *
  * When last reference is released, page is returned to the cache, unless it
  * is in cl_page_state::CPS_FREEING state, in which case it is immediately
@@ -489,7 +489,7 @@ EXPORT_SYMBOL(cl_pagevec_put);
  */
 void cl_page_put(const struct lu_env *env, struct cl_page *page)
 {
-	cl_pagevec_put(env, page, NULL);
+	cl_batch_put(env, page, NULL);
 }
 EXPORT_SYMBOL(cl_page_put);
 

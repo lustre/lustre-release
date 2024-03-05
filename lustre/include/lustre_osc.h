@@ -164,7 +164,7 @@ struct osc_thread_info {
 	union ldlm_policy_data	oti_policy;
 	struct cl_attr		oti_attr;
 	struct cl_io		oti_io;
-	struct pagevec		oti_pagevec;
+	struct folio_batch	oti_fbatch;
 	void			*oti_pvec[OTI_PVEC_SIZE];
 	/**
 	 * Fields used by cl_lock_discard_pages().

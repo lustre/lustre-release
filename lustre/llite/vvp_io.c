@@ -43,6 +43,7 @@
 
 #include "llite_internal.h"
 #include "vvp_internal.h"
+#include <lustre_compat.h>
 #include <libcfs/linux/linux-misc.h>
 
 static struct vvp_io *cl2vvp_io(const struct lu_env *env,
@@ -1029,15 +1030,19 @@ static inline void ll_account_page_dirtied(struct page *page,
  * Backwards compat for 3.x, 5.x kernels relating to memcg handling
  * & rename of radix tree to xarray.
  */
-static void vvp_set_pagevec_dirty(struct pagevec *pvec)
+static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 {
-	struct page *page = pvec->pages[0];
-	int count = pagevec_count(pvec);
+	struct page *page = fbatch_at_pg(fbatch, 0, 0);
+	int count = folio_batch_count(fbatch);
 	int i;
+#if !defined(HAVE_FOLIO_BATCH) || defined(HAVE_KALLSYMS_LOOKUP_NAME)
+	int pg, npgs;
+#endif
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
 	struct address_space *mapping = page->mapping;
 	unsigned long flags;
 	unsigned long skip_pages = 0;
+	int pgno;
 	int dirtied = 0;
 #endif
 
@@ -1056,25 +1061,41 @@ static void vvp_set_pagevec_dirty(struct pagevec *pvec)
 	 */
 #ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
 	if (!vvp_account_page_dirtied) {
-		for (i = 0; i < count; i++)
-			__set_page_dirty_nobuffers(pvec->pages[i]);
+		for (i = 0; i < count; i++) {
+#ifdef HAVE_FOLIO_BATCH
+			filemap_dirty_folio(page->mapping, fbatch->folios[i]);
+#else
+			npgs = fbatch_at_npgs(fbatch, i);
+			for (pg = 0; pg < npgs; pg++) {
+				page = fbatch_at_pg(fbatch, i, pg);
+				__set_page_dirty_nobuffers(page);
+			}
+#endif
+		}
 		EXIT;
 	}
 #endif
 
+	/* account_page_dirtied is available directly or via kallsyms */
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
-	for (i = 0; i < count; i++) {
-		page = pvec->pages[i];
+	for (pgno = i = 0; i < count; i++) {
+		npgs = fbatch_at_npgs(fbatch, i);
+		for (pg = 0; pg < npgs; pg++) {
+			page = fbatch_at_pg(fbatch, i, pg);
 
-		ClearPageReclaim(page);
+			ClearPageReclaim(page);
 
-		vvp_lock_page_memcg(page);
-		if (TestSetPageDirty(page)) {
-			/* page is already dirty .. no extra work needed
-			 * set a flag for the i'th page to be skipped
-			 */
-			vvp_unlock_page_memcg(page);
-			skip_pages |= (1 << i);
+			vvp_lock_page_memcg(page);
+			if (TestSetPageDirty(page)) {
+				/* page is already dirty .. no extra work needed
+				 * set a flag for the i'th page to be skipped
+				 */
+				vvp_unlock_page_memcg(page);
+				skip_pages |= (1ul << pgno++);
+				LASSERTF(pgno <= BITS_PER_LONG,
+					 "Limit exceeded pgno: %d/%d\n", pgno,
+					 BITS_PER_LONG);
+			}
 		}
 	}
 
@@ -1089,19 +1110,22 @@ static void vvp_set_pagevec_dirty(struct pagevec *pvec)
 	 * dirty_nobuffers should be impossible because we hold the page lock.)
 	 * 4. All mappings are the same because i/o is only to one file.
 	 */
-	for (i = 0; i < count; i++) {
-		page = pvec->pages[i];
-		/* if the i'th page was unlocked above, skip it here */
-		if ((skip_pages >> i) & 1)
-			continue;
+	for (pgno = i = 0; i < count; i++) {
+		npgs = fbatch_at_npgs(fbatch, f);
+		for (pg = 0; pg < npgs; pg++) {
+			page = fbatch_at_pg(fbatch, i, pg);
+			/* if the i'th page was unlocked above, skip it here */
+			if ((skip_pages >> pgno++) & 1)
+				continue;
 
-		LASSERTF(page->mapping == mapping,
-			 "all pages must have the same mapping.  page %px, mapping %px, first mapping %px\n",
-			 page, page->mapping, mapping);
-		WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
-		ll_account_page_dirtied(page, mapping);
-		dirtied++;
-		vvp_unlock_page_memcg(page);
+			LASSERTF(page->mapping == mapping,
+				 "all pages must have the same mapping.  page %px, mapping %px, first mapping %px\n",
+				 page, page->mapping, mapping);
+			WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
+			ll_account_page_dirtied(page, mapping);
+			dirtied++;
+			vvp_unlock_page_memcg(page);
+		}
 	}
 	ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 
@@ -1117,31 +1141,36 @@ static void vvp_set_pagevec_dirty(struct pagevec *pvec)
 }
 
 static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
-				  struct pagevec *pvec)
+				  struct folio_batch *fbatch)
 {
+	struct page *vmpage;
+	struct cl_page *page;
+	int pg, npgs;
 	int count = 0;
 	int i = 0;
 
 	ENTRY;
 
-	count = pagevec_count(pvec);
+	count = folio_batch_count(fbatch);
 	LASSERT(count > 0);
 
 	for (i = 0; i < count; i++) {
-		struct page *vmpage = pvec->pages[i];
-
-		SetPageUptodate(vmpage);
+		npgs = fbatch_at_npgs(fbatch, i);
+		for (pg = 0; pg < npgs; pg++)
+			SetPageUptodate(fbatch_at_pg(fbatch, i, pg));
 	}
 
-	vvp_set_pagevec_dirty(pvec);
+	vvp_set_batch_dirty(fbatch);
 
 	for (i = 0; i < count; i++) {
-		struct page *vmpage = pvec->pages[i];
-		struct cl_page *page = (struct cl_page *) vmpage->private;
-
-		cl_page_disown(env, io, page);
-		lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
-		cl_page_put(env, page);
+		npgs = fbatch_at_npgs(fbatch, i);
+		for (pg = 0; pg < npgs; pg++) {
+			vmpage = fbatch_at_pg(fbatch, i, pg);
+			page = (struct cl_page *) vmpage->private;
+			cl_page_disown(env, io, page);
+			lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
+			cl_page_put(env, page);
+		}
 	}
 
 	EXIT;
@@ -1477,9 +1506,9 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 }
 
 static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
-				    struct pagevec *pvec)
+				    struct folio_batch *fbatch)
 {
-	vvp_set_pagevec_dirty(pvec);
+	vvp_set_batch_dirty(fbatch);
 }
 
 static int vvp_io_fault_start(const struct lu_env *env,

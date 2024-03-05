@@ -3990,6 +3990,29 @@ AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
 ]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 
 #
+# LC_HAVE_FOLIO_BATCH_REINIT
+#
+# linux kernel v6.2-rc4-254-g811561288397
+#   mm: pagevec: add folio_batch_reinit()
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH_REINIT], [
+	LB2_LINUX_TEST_SRC([folio_batch_reinit_exists], [
+		#include <linux/pagevec.h>
+	],[
+		struct folio_batch fbatch __attribute__ ((unused));
+
+		folio_batch_reinit(&fbatch);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FOLIO_BATCH_REINIT], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'folio_batch_reinit' is available],
+	[folio_batch_reinit_exists], [
+		AC_DEFINE(HAVE_FOLIO_BATCH_REINIT, 1,
+			['folio_batch_reinit' is available])
+	])
+]) # LC_HAVE_FOLIO_BATCH_REINIT
+
+#
 # LC_HAVE_IOV_ITER_IOVEC
 #
 # linux kernel v6.3-rc4-32-g6eb203e1a868
@@ -4147,6 +4170,51 @@ AC_DEFUN([LC_HAVE_GET_USER_PAGES_WITHOUT_VMA], [
 			[get_user_pages removed 'vma' parameter])
 	])
 ]) # LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
+
+#
+# LC_HAVE_FOLIO_BATCH
+#
+# linux kernel v5.16-rc4-36-g10331795fb79
+#   pagevec: Add folio_batch
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH], [
+	LB2_LINUX_TEST_SRC([struct_folio_batch_exists], [
+		#include <linux/pagevec.h>
+	],[
+		struct folio_batch fbatch __attribute__ ((unused));
+
+		folio_batch_init(&fbatch);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FOLIO_BATCH], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct folio_batch' is available],
+	[struct_folio_batch_exists], [
+		AC_DEFINE(HAVE_FOLIO_BATCH, 1,
+			['struct folio_batch' is available])
+	])
+]) # LC_HAVE_FOLIO_BATCH
+
+#
+# LC_HAVE_STRUCT_PAGEVEC
+#
+# linux kernel v6.4-rc4-438-g1e0877d58b1e
+#   mm: remove struct pagevec
+#
+AC_DEFUN([LC_SRC_HAVE_STRUCT_PAGEVEC], [
+	LB2_LINUX_TEST_SRC([struct_pagevec_exists], [
+		#include <linux/pagevec.h>
+	],[
+		struct pagevec *pvec = NULL;
+		(void)pvec;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_STRUCT_PAGEVEC], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct pagevec' is available],
+	[struct_pagevec_exists], [
+		AC_DEFINE(HAVE_PAGEVEC, 1,
+			['struct pagevec' is available])
+	])
+]) # LC_HAVE_STRUCT_PAGEVEC
 
 #
 # LC_PROG_LINUX
@@ -4407,6 +4475,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_MNT_IDMAP_ARG
 	LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_SRC_HAVE_U64_CAPABILITY
+	LC_SRC_HAVE_FOLIO_BATCH_REINIT
 
 	# 6.4
 	LC_SRC_HAVE_IOV_ITER_IOVEC
@@ -4417,6 +4486,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_FILEMAP_SPLICE_READ
 	LC_SRC_HAVE_ENUM_ITER_PIPE
 	LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA
+	LC_SRC_HAVE_FOLIO_BATCH
+	LC_SRC_HAVE_STRUCT_PAGEVEC
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4697,6 +4768,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_MNT_IDMAP_ARG
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_HAVE_U64_CAPABILITY
+	LC_HAVE_FOLIO_BATCH_REINIT
 
 	# 6.4
 	LC_HAVE_IOV_ITER_IOVEC
@@ -4707,6 +4779,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_FILEMAP_SPLICE_READ
 	LC_HAVE_ENUM_ITER_PIPE
 	LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
+	LC_HAVE_FOLIO_BATCH
+	LC_HAVE_STRUCT_PAGEVEC
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
