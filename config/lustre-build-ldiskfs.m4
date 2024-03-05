@@ -218,27 +218,6 @@ AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
 ]) # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 
 #
-# LB_EXT4_JOURNAL_START_3ARGS
-#
-# 3.9 added a type argument to ext4_journal_start and friends
-#
-AC_DEFUN([LB_SRC_EXT4_JOURNAL_START_3ARGS], [
-	LB2_LINUX_TEST_SRC([ext4_journal_start], [
-		#include <linux/fs.h>
-		#include "$EXT4_SRC_DIR/ext4_jbd2.h"
-	],[
-		ext4_journal_start(NULL, 0, 0);
-	],[],[],[__ext4_journal_start_sb])
-])
-AC_DEFUN([LB_EXT4_JOURNAL_START_3ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if ext4_journal_start takes 3 arguments],
-	[ext4_journal_start], [
-		AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1,
-			[ext4_journal_start takes 3 arguments])
-	])
-]) # LB_EXT4_JOURNAL_START_3ARGS
-
-#
 # LB_EXT4_BREAD_4ARGS
 #
 # 3.18 ext4_bread has 4 arguments
@@ -675,7 +654,6 @@ AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 AS_IF([test x$enable_ldiskfs != xno],[
 	AC_DEFUN([LB_EXT4_SRC_DIR_SRC],[
 		LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
-		LB_SRC_EXT4_JOURNAL_START_3ARGS
 		LB_SRC_EXT4_BREAD_4ARGS
 		LB_SRC_EXT4_HAVE_INFO_DQUOT
 		LB_SRC_EXT4_HAVE_I_CRYPT_INFO
@@ -689,7 +667,6 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	])
 	AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [
 		LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
-		LB_EXT4_JOURNAL_START_3ARGS
 		LB_EXT4_BREAD_4ARGS
 		LB_EXT4_HAVE_INFO_DQUOT
 		LB_EXT4_HAVE_I_CRYPT_INFO

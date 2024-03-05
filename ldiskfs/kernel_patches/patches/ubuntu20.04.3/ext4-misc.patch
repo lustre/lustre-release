@@ -1,15 +1,6 @@
 diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 --- a/fs/ext4/ext4.h	2022-03-24 16:23:11.725060881 -0600
 +++ b/fs/ext4/ext4.h	2022-03-24 16:24:35.400642866 -0600
-@@ -1882,6 +1882,8 @@
- 
- #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
- 
-+#define JOURNAL_START_HAS_3ARGS	1
-+
- /*
-  * Codes for operating systems
-  */
 @@ -2121,7 +2123,21 @@
  
  EXTN_FEATURE_FUNCS(2)

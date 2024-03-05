@@ -2,15 +2,6 @@ Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/ext4.h
 +++ linux-4.18.0-80.1.2.el8_0/fs/ext4/ext4.h
-@@ -1591,6 +1591,8 @@ static inline void ext4_clear_state_flag
-  */
- #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
- 
-+#define JOURNAL_START_HAS_3ARGS	1
-+
- /*
-  * Codes for operating systems
-  */
 @@ -1805,7 +1807,21 @@ static inline bool ext4_has_unknown_ext#
  
  EXTN_FEATURE_FUNCS(2)

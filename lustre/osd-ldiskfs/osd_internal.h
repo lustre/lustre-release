@@ -990,7 +990,6 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 	(jrnl->j_max_transaction_buffers)
 #endif
 
-#ifdef LDISKFS_HT_MISC
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, type, nblock)
 #ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
@@ -1027,39 +1026,6 @@ static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 		ldiskfs_journal_start(inode, type, nblocks)
 # define osd_transaction_size(dev) \
 		(jbd2_journal_get_max_txn_bufs(osd_journal(dev)) / 2)
-#else /* ! defined LDISKFS_HT_MISC */
-# define LDISKFS_HT_MISC	0
-# define osd_journal_start_sb(sb, type, nblock) \
-		ldiskfs_journal_start_sb(sb, nblock)
-
-static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
-						     struct inode *inode,
-						     ldiskfs_lblk_t *nblock)
-{
-	struct buffer_head *bh;
-	int err = 0;
-
-	bh = ldiskfs_append(handle, inode, nblock, &err);
-	if (bh == NULL)
-		bh = ERR_PTR(err);
-
-	return bh;
-}
-
-# ifdef HAVE___LDISKFS_FIND_ENTRY
-#  define osd_ldiskfs_find_entry(dir, name, de, inlined, lock) \
-		(__ldiskfs_find_entry(dir, name, de, lock) ?: \
-		 ERR_PTR(-ENOENT))
-# else
-#  define osd_ldiskfs_find_entry(dir, name, de, inlined, lock) \
-		(ldiskfs_find_entry_locked(dir, name, de, lock) ?: \
-		 ERR_PTR(-ENOENT))
-# endif
-# define osd_journal_start(inode, type, nblocks) \
-		ldiskfs_journal_start(inode, nblocks)
-# define osd_transaction_size(dev) \
-		jbd2_journal_get_max_txn_bufs(osd_journal(dev))
-#endif /* LDISKFS_HT_MISC */
 
 #ifndef HAVE___LDISKFS_FIND_ENTRY
 # define __ldiskfs_add_entry(handle, child, inode, hlock) \

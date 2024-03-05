@@ -2,15 +2,6 @@ diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index 57169367362a..f3e369fc4dae 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1870,6 +1870,8 @@ static inline bool ext4_verity_in_progress(struct inode *inode)
- 
- #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
- 
-+#define JOURNAL_START_HAS_3ARGS	1
-+
- /*
-  * Codes for operating systems
-  */
 @@ -2110,7 +2112,21 @@ static inline bool ext4_has_unknown_ext##ver##_incompat_features(struct super_bl
  
  EXTN_FEATURE_FUNCS(2)
