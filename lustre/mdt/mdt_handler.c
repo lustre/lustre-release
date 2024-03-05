@@ -2852,6 +2852,22 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 
 	/* Swab any part of val you need to here */
 	if (KEY_IS(KEY_READ_ONLY)) {
+		/* If client wants rw, make sure nodemap does not enforce ro. */
+		if (!*(__u32 *)val) {
+			struct lu_nodemap *nm = NULL;
+			bool readonly = false;
+
+			if (req->rq_export)
+				nm = nodemap_get_from_exp(req->rq_export);
+
+			if (!IS_ERR_OR_NULL(nm)) {
+				readonly = nm->nmf_readonly_mount;
+				nodemap_putref(nm);
+			}
+
+			if (unlikely(readonly))
+				RETURN(-EROFS);
+		}
 		spin_lock(&req->rq_export->exp_lock);
 		if (*(__u32 *)val)
 			*exp_connect_flags_ptr(req->rq_export) |=
