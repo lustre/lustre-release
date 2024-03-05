@@ -450,11 +450,17 @@ int sptlrpc_req_get_ctx(struct ptlrpc_request *req)
 	sptlrpc_sec_put(sec);
 
 	if (!req->rq_cli_ctx) {
-		CERROR("req %p: fail to get context\n", req);
-		RETURN(-ECONNREFUSED);
+		rc = -ECONNREFUSED;
+	} else if (IS_ERR(req->rq_cli_ctx)) {
+		rc = PTR_ERR(req->rq_cli_ctx);
+		req->rq_cli_ctx = NULL;
 	}
 
-	RETURN(0);
+	if (rc)
+		CERROR("%s: fail to get context for req %p: rc = %d\n",
+		       imp->imp_obd->obd_name, req, rc);
+
+	RETURN(rc);
 }
 
 /**
@@ -844,6 +850,8 @@ int sptlrpc_export_update_ctx(struct obd_export *exp)
 		sec = sptlrpc_import_sec_ref(imp);
 	if (sec) {
 		ctx = get_my_ctx(sec);
+		if (IS_ERR(ctx))
+			ctx = NULL;
 		sptlrpc_sec_put(sec);
 	}
 
@@ -960,7 +968,9 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	ctx = get_my_ctx(sec);
 	sptlrpc_sec_put(sec);
 
-	if (!ctx)
+	if (IS_ERR(ctx))
+		RETURN(PTR_ERR(ctx));
+	else if (!ctx)
 		RETURN(-ENOMEM);
 
 	if (cli_ctx_is_eternal(ctx) ||

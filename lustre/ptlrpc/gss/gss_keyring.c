@@ -806,6 +806,10 @@ do_unlink:
 	}
 }
 
+/**
+ * \retval a valid context on success
+ * \retval -ev error number or NULL on error
+ */
 static
 struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                                               struct vfs_cred *vcred,
@@ -962,7 +966,10 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	OBD_FREE(coinfo, coinfo_size);
 
 	if (IS_ERR(key)) {
-		CERROR("failed request key: %ld\n", PTR_ERR(key));
+		CERROR("%s: request key failed for uid %d: rc = %ld\n",
+		       imp->imp_obd->obd_name, vcred->vc_uid,
+		       PTR_ERR(key));
+		ctx = ERR_CAST(key);
 		goto out;
 	}
 	CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
