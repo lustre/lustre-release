@@ -534,8 +534,8 @@ int seq_server_init(const struct lu_env *env,
 			LUSTRE_SEQ_SPACE_RANGE;
 
 		seq->lss_space.lsr_index = ss->ss_node_id;
-		LCONSOLE_INFO("%s: No data found on store. Initialize space: rc = %d\n",
-			      seq->lss_name, rc);
+		LCONSOLE_INFO("%s: No data found on store. Initialize space.\n",
+			      seq->lss_name);
 
 		rc = seq_store_update(env, seq, NULL, 0);
 		if (rc) {

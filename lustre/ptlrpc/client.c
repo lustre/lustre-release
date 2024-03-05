@@ -1336,8 +1336,10 @@ static bool ptlrpc_console_allow(struct ptlrpc_request *req, __u32 opc, int err)
 	LASSERT(req->rq_reqmsg != NULL);
 
 	/* Suppress particular reconnect errors which are to be expected. */
-	if (opc == OST_CONNECT || opc == MDS_CONNECT || opc == MGS_CONNECT) {
-		/* Suppress timed out reconnect requests */
+	if (opc == OST_CONNECT || opc == OST_DISCONNECT ||
+	    opc == MDS_CONNECT || opc == MDS_DISCONNECT ||
+	    opc == MGS_CONNECT || opc == MGS_DISCONNECT) {
+		/* Suppress timed out reconnect/disconnect requests */
 		if (lustre_handle_is_used(&req->rq_import->imp_remote_handle) ||
 		    req->rq_timedout)
 			return false;
