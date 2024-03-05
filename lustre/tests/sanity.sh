@@ -14523,6 +14523,9 @@ test_123ad() {
 	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
 		skip "Need server version at least 2.15.53"
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
 	local max
 	local batch_max
 
@@ -14610,6 +14613,9 @@ test_123e() {
 	local batch_max
 	local dir=$DIR/$tdir
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -C 32 $dir || error "setstripe $dir failed"
 	stack_trap "rm -rf $dir"
@@ -14635,6 +14641,9 @@ test_123f() {
 	local batch_max
 	local dir=$DIR/$tdir
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -C 1000 $dir || error "setstripe $dir failed"
 	stack_trap "rm -rf $dir"
@@ -14659,6 +14668,9 @@ run_test 123f "Retry mechanism with large wide striping files"
 test_123g() {
 	local dir=$DIR/$tdir
 	local num=1000
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
 
 	mkdir $dir || error "failed to mkdir $dir"
 	createmany -o $dir/$tfile $num || error "failed creatmany files"
@@ -14724,6 +14736,9 @@ test_123h() {
 	local batch_max
 	local enabled
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+
 	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
 	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
 	enabled=$($LCTL get_param -n llite.*.enable_statahead_fname | head -n 1)
@@ -14788,6 +14803,9 @@ test_123i() {
 	local batch_max
 	local enabled
 	local min
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
 
 	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
 	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
