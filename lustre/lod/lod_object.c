@@ -1193,7 +1193,7 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 		/* has stripe but not inited yet, this component has been
 		 * declared to be created, but hasn't created yet.
 		 */
-		if (!lod_comp_inited(lod_comp))
+		if (!lod_comp_inited(lod_comp) && !data->locd_declare)
 			continue;
 
 		if (data->locd_comp_skip_cb &&
