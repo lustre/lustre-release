@@ -201,6 +201,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	struct lu_ucred *ucred = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
 	struct lnet_nid peernid = req->rq_peer.nid;
+	struct md_identity *identity = NULL;
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
@@ -233,12 +234,23 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_o_fsuid = pud->pud_fsuid;
 	ucred->uc_o_fsgid = pud->pud_fsgid;
 
+	ucred->uc_uid = pud->pud_uid;
+	ucred->uc_gid = pud->pud_gid;
+
+	ucred->uc_fsuid = pud->pud_fsuid;
+	ucred->uc_fsgid = pud->pud_fsgid;
+
+	ucred->uc_cap = CAP_EMPTY_SET;
+	ll_set_capability_u32(&ucred->uc_cap, pud->pud_cap);
+
 	if (type == BODY_INIT) {
 		struct mdt_body *body = (struct mdt_body *)buf;
 
 		ucred->uc_suppgids[0] = body->mbo_suppgid;
 		ucred->uc_suppgids[1] = -1;
 	}
+
+	/* Perm checks before fetching external identity */
 
 	if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
 	    req->rq_auth_uid != pud->pud_uid) {
@@ -255,31 +267,32 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		/* deny access before we get identity ref */
 		GOTO(out, rc = -EACCES);
 
-	if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-		ucred->uc_identity = NULL;
-		perm = CFS_SETUID_PERM | CFS_SETGID_PERM | CFS_SETGRP_PERM;
-	} else {
-		struct md_identity *identity;
+	/* Fetch external identity info, if enabled */
 
+	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    pud->pud_uid);
 		if (IS_ERR(identity)) {
-			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
-				ucred->uc_identity = NULL;
-				perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
-				       CFS_SETGRP_PERM;
+			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
+				     cap_raised(ucred->uc_cap,
+						CAP_DAC_READ_SEARCH))) {
+				identity = NULL;
 			} else {
 				CDEBUG(D_SEC,
 				       "Deny access without identity: uid %u\n",
 				       pud->pud_uid);
 				GOTO(out_nodemap, rc = -EACCES);
 			}
-		} else {
-			ucred->uc_identity = identity;
-			perm = mdt_identity_get_perm(ucred->uc_identity,
-						     &peernid);
 		}
 	}
+	ucred->uc_identity = identity;
+
+	/* Perm checks that needs external identity */
+
+	if (ucred->uc_identity)
+		perm = mdt_identity_get_perm(ucred->uc_identity, &peernid);
+	else
+		perm = CFS_SETUID_PERM | CFS_SETGID_PERM | CFS_SETGRP_PERM;
 
 	/* find out the setuid/setgid attempt */
 	setuid = (pud->pud_uid != pud->pud_fsuid);
@@ -321,14 +334,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_suppgids[1] = -1;
 		ucred->uc_ginfo = NULL;
 	}
-
-	ll_set_capability_u32(&ucred->uc_cap, pud->pud_cap);
-
-	ucred->uc_uid = pud->pud_uid;
-	ucred->uc_gid = pud->pud_gid;
-
-	ucred->uc_fsuid = pud->pud_fsuid;
-	ucred->uc_fsgid = pud->pud_fsgid;
 
 	/* clear suppgids if uid or gid was squashed. */
 	if (nodemap &&
@@ -381,11 +386,12 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		}
 	}
 
-	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
 	ucred_set_audit_enabled(info, ucred);
 	ucred_set_rbac_roles(info, ucred);
+
+	ucred->uc_valid = UCRED_NEW;
 
 	EXIT;
 
@@ -594,11 +600,12 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		uc->uc_suppgids[1] = -1;
 	}
 
-	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
 	ucred_set_audit_enabled(info, uc);
 	ucred_set_rbac_roles(info, uc);
+
+	uc->uc_valid = UCRED_OLD;
 
 	EXIT;
 	return 0;
