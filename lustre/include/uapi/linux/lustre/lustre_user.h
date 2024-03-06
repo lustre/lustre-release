@@ -2877,6 +2877,12 @@ struct sk_hmac_type {
 	int		sht_type;
 };
 
+struct sk_prime_type {
+	const char     *spt_name;
+	int		spt_type;
+	int		spt_primebits;
+};
+
 enum lock_mode_user {
 	MODE_READ_USER = 1,
 	MODE_WRITE_USER,

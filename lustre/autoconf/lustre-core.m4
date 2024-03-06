@@ -405,6 +405,36 @@ AC_MSG_RESULT([$has_hmac_functions])
 CFLAGS="$saved_flags"
 ]) # LC_OPENSSL_HMAC
 
+# LC_OPENSSL_FIPS
+#
+# OpenSSL 1.0+ can be built with or without FIPS support
+AC_DEFUN([LC_OPENSSL_FIPS], [
+has_fips_support="no"
+saved_flags="$CFLAGS"
+CFLAGS="-Werror"
+AC_MSG_CHECKING([whether OpenSSL has FIPS_mode])
+AS_IF([test "x$enable_ssk" != xno], [
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <openssl/dh.h>
+	#include <openssl/dsa.h>
+	#include <openssl/evp.h>
+	#include <openssl/hmac.h>
+	#include <openssl/fips.h>
+
+	int main(void) {
+		int rc;
+		rc = FIPS_mode();
+		return rc;
+	}
+])],[
+	AC_DEFINE(HAVE_OPENSSL_FIPS, 1, [OpenSSL FIPS_mode])
+	has_fips_support="yes"
+])
+])
+AC_MSG_RESULT([$has_fips_support])
+CFLAGS="$saved_flags"
+]) # LC_OPENSSL_FIPS
+
 # LC_OPENSSL_EVP_PKEY
 #
 # OpenSSL 3.0 introduces EVP_PKEY_get_params
@@ -440,6 +470,7 @@ AC_MSG_RESULT([$has_evp_pkey])
 AC_DEFUN([LC_OPENSSL_SSK], [
 AS_IF([test "x$enable_ssk" != xno], [
 	LC_OPENSSL_HMAC
+	LC_OPENSSL_FIPS
 	LC_OPENSSL_EVP_PKEY
 ])
 AS_IF([test "x$has_hmac_functions" = xyes -o "x$has_evp_pkey" = xyes], [

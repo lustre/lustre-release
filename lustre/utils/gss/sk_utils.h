@@ -36,8 +36,12 @@
 #include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_disk.h>
 #include <openssl/dh.h>
+#include <openssl/dsa.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#ifdef HAVE_OPENSSL_FIPS
+#include <openssl/fips.h>
+#endif
 #ifdef HAVE_OPENSSL_EVP_PKEY
 #include <openssl/core_names.h>
 #endif
@@ -131,6 +135,10 @@ static inline const BIGNUM *DH_get0_p(const DH *dh)
 {
 	return dh->p;
 }
+#endif
+
+#ifndef HAVE_OPENSSL_FIPS
+#define FIPS_mode()	0
 #endif
 
 /* Some limits and defaults */
@@ -364,6 +372,71 @@ static inline const char *sk_hmac2name(enum sk_hmac_alg type)
 	for (i = 0; i < ARRAY_SIZE(sk_hmac_algs); i++) {
 		if (type == sk_hmac_algs[i].sht_type)
 			return sk_hmac_algs[i].sht_name;
+	}
+
+	return NULL;
+}
+
+#ifndef NID_ffdhe2048
+#define NID_ffdhe2048		1126
+#define NID_ffdhe3072		1127
+#define NID_ffdhe4096		1128
+#define NID_ffdhe6144		1129
+#define NID_ffdhe8192		1130
+#endif
+
+static const struct sk_prime_type sk_prime_nids[] = {
+	{
+		.spt_name = "null",
+		.spt_type = 0,
+		.spt_primebits = 0
+	},
+	{
+		.spt_name = "ffdhe2048",
+		.spt_type = NID_ffdhe2048,
+		.spt_primebits = 2048
+	},
+	{
+		.spt_name = "ffdhe3072",
+		.spt_type = NID_ffdhe3072,
+		.spt_primebits = 3072
+	},
+	{
+		.spt_name = "ffdhe4096",
+		.spt_type = NID_ffdhe4096,
+		.spt_primebits = 4096
+	},
+	{
+		.spt_name = "ffdhe6144",
+		.spt_type = NID_ffdhe6144,
+		.spt_primebits = 6144
+	},
+	{
+		.spt_name = "ffdhe8192",
+		.spt_type = NID_ffdhe8192,
+		.spt_primebits = 8192
+	},
+};
+
+static inline int sk_primebits2primenid(int primebits)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_prime_nids); i++) {
+		if (primebits == sk_prime_nids[i].spt_primebits)
+			return sk_prime_nids[i].spt_type;
+	}
+
+	return -1;
+}
+
+static inline const char *sk_primebits2name(int primebits)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_prime_nids); i++) {
+		if (primebits == sk_prime_nids[i].spt_primebits)
+			return sk_prime_nids[i].spt_name;
 	}
 
 	return NULL;

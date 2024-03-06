@@ -51,9 +51,13 @@
 
 /* One week default expiration */
 #define SK_DEFAULT_EXPIRE 604800
+/* But only one day in FIPS mode */
+#define SK_DEFAULT_EXPIRE_FIPS 86400
 #define SK_DEFAULT_SK_KEYLEN 256
 #define SK_DEFAULT_PRIME_BITS 2048
 #define SK_DEFAULT_NODEMAP "default"
+
+static int fips_mode;
 
 static void usage(FILE *fp, char *program)
 {
@@ -275,12 +279,75 @@ static int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 	return rc;
 }
 
+#if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x10100000L
+static inline int __fetch_ssk_prime(struct sk_keyfile_config *config)
+{
+	const BIGNUM *p;
+	DH *dh = NULL;
+	int primenid;
+	int rc = -1;
+
+	primenid = sk_primebits2primenid(config->skc_prime_bits);
+	dh = DH_new_by_nid(primenid);
+	if (!dh) {
+		fprintf(stderr, "error: dh cannot be init\n");
+		goto prime_end;
+	}
+
+	p = DH_get0_p(dh);
+	if (!p) {
+		fprintf(stderr, "error: cannot get p from dh\n");
+		goto prime_end;
+	}
+
+	if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
+		fprintf(stderr,
+			"error: requested length %d exceeds maximum %d\n",
+			BN_num_bytes(p), SK_MAX_P_BYTES * 8);
+		goto prime_end;
+	}
+
+	if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
+		fprintf(stderr, "error: convert BIGNUM p to binary failed\n");
+		goto prime_end;
+	}
+
+	rc = 0;
+
+prime_end:
+	if (rc)
+		fprintf(stderr,
+			"error: fetching SSK prime failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+	DH_free(dh);
+	return rc;
+}
+#endif
+
 static inline int __gen_ssk_prime(struct sk_keyfile_config *config)
 {
 	int rc = -1;
+	const char *primename;
 	EVP_PKEY_CTX *ctx = NULL;
 	EVP_PKEY *dh = NULL;
 	BIGNUM *p;
+
+	if (fips_mode) {
+		primename = sk_primebits2name(config->skc_prime_bits);
+		if (!primename) {
+			fprintf(stderr,
+				"error: prime len %d not supported in FIPS mode\n",
+				config->skc_prime_bits);
+			return rc;
+		}
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		fprintf(stdout,
+			"FIPS mode, using well-known prime %s\n", primename);
+#ifndef HAVE_OPENSSL_EVP_PKEY
+		return __fetch_ssk_prime(config);
+#endif
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10100000L */
+	}
 
 	ctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
 	if (!ctx || EVP_PKEY_paramgen_init(ctx) != 1) {
@@ -320,6 +387,10 @@ static inline int __gen_ssk_prime(struct sk_keyfile_config *config)
 	rc = 0;
 
 prime_end:
+	if (rc)
+		fprintf(stderr,
+			"error: generating SSK prime failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
 	EVP_PKEY_free(dh);
 	EVP_PKEY_CTX_free(ctx);
 	return rc;
@@ -489,6 +560,8 @@ int main(int argc, char **argv)
 	/* init gss logger for foreground (no syslog) which prints to stderr */
 	initerr(NULL, verbose, 1);
 
+	fips_mode = FIPS_mode();
+
 	if (input)
 		return print_config(input);
 
@@ -548,7 +621,8 @@ int main(int argc, char **argv)
 
 		/* Set the defaults for new key */
 		config->skc_version = SK_CONF_VERSION;
-		config->skc_expire = SK_DEFAULT_EXPIRE;
+		config->skc_expire = fips_mode ?
+			SK_DEFAULT_EXPIRE_FIPS : SK_DEFAULT_EXPIRE;
 		config->skc_shared_keylen = SK_DEFAULT_SK_KEYLEN;
 		config->skc_prime_bits = SK_DEFAULT_PRIME_BITS;
 		config->skc_crypt_alg = SK_CRYPT_AES256_CTR;
@@ -576,6 +650,10 @@ int main(int argc, char **argv)
 		config->skc_hmac_alg = hmac;
 	if (expire != -1)
 		config->skc_expire = expire;
+	if (fips_mode && config->skc_expire > SK_DEFAULT_EXPIRE_FIPS)
+		fprintf(stderr,
+			"warning: using a %us key expiration greater than %us is not recommended in FIPS mode\n",
+			config->skc_expire, SK_DEFAULT_EXPIRE_FIPS);
 	if (shared_keylen != -1)
 		config->skc_shared_keylen = shared_keylen;
 	if (prime_bits != -1) {
