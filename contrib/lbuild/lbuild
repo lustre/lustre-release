@@ -403,7 +403,8 @@ EOF
 compare_version () {
     [[ $1 == $2 ]] && return 1
     local IFS=.
-    local i val1=($1) val2=($2)
+    # remove all minor sub version
+    local i val1=(${1//-*}) val2=(${2//-*})
 
     # padding zero to val1 if it needs
     for ((i=${#val1[@]}; i<${#val2[@]}; i++)); do
@@ -412,9 +413,9 @@ compare_version () {
     for ((i=0; i<${#val1[@]}; i++)); do
         [[ -z ${val2[i]} ]] && return 1
 
-        if [[ ${val1[i]} < ${val2[i]} ]]; then
+        if (( ${val1[i]} < ${val2[i]} )); then
             return 0
-        elif [[ ${val1[i]} > ${val2[i]} ]]; then
+        elif (( ${val1[i]} > ${val2[i]} )); then
             return 1
         fi
     done
@@ -833,7 +834,7 @@ unpack_ofed() {
 			if ! untar "$src"; then
 				return 1
 			fi
-			[ -d OFED ] || ln -sf MLNX_OFED_SRC-[0-9].[0-9]* OFED
+			[ -d OFED ] || ln -sf MLNX_OFED_SRC-[0-9]*.[0-9]* OFED
 			if compare_version $ofed_version 4.7 ||
 			   compare_version 5.1 $ofed_version; then
 				[ -d OFED_RPMS ] || ln -sf ${file}/RPMS OFED_RPMS
