@@ -325,11 +325,12 @@ static void cfs_set_ptldebug_header(struct ptldebug_header *header,
 	header->ph_extern_pid = 0;
 }
 
-static void cfs_vprint_to_console(struct ptldebug_header *hdr, int mask,
+static void cfs_vprint_to_console(struct ptldebug_header *hdr,
 				  struct va_format *vaf, const char *file,
 				  const char *fn)
 {
 	char *prefix = "Lustre";
+	int mask = hdr->ph_mask;
 
 	if (hdr->ph_subsys == S_LND || hdr->ph_subsys == S_LNET)
 		prefix = "LNet";
@@ -361,9 +362,8 @@ static void cfs_vprint_to_console(struct ptldebug_header *hdr, int mask,
 	}
 }
 
-static void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
-				 const char *file, const char *fn,
-				 const char *fmt, ...)
+static void cfs_print_to_console(struct ptldebug_header *hdr, const char *file,
+				 const char *fn, const char *fmt, ...)
 {
 	struct va_format vaf;
 	va_list args;
@@ -371,7 +371,7 @@ static void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
-	cfs_vprint_to_console(hdr, mask, &vaf, file, fn);
+	cfs_vprint_to_console(hdr, &vaf, file, fn);
 }
 
 #define DEBUG_FORMAT_BUFFER_SIZE	(256 - sizeof(unsigned long))
@@ -565,8 +565,8 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	int max_nob;
 	va_list ap;
 	int retry;
-	int mask = msgdata->msg_mask;
-	char *file = (char *)msgdata->msg_file;
+	const char *file = msgdata->msg_file;
+	const char *fn = msgdata->msg_fn;
 	struct cfs_debug_limit_state *cdls = msgdata->msg_cdls;
 	struct debug_format_buffer *dfb = NULL;
 
@@ -596,8 +596,8 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	}
 
 	known_size = strlen(file) + 1;
-	if (msgdata->msg_fn)
-		known_size += strlen(msgdata->msg_fn) + 1;
+	if (fn)
+		known_size += strlen(fn) + 1;
 
 	if (libcfs_debug_binary)
 		known_size += sizeof(header);
@@ -614,7 +614,7 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 		tage = cfs_trace_get_tage(tcd, needed + known_size + 1);
 		if (!tage) {
 			if (needed + known_size > PAGE_SIZE)
-				mask |= D_ERROR;
+				header.ph_mask |= D_ERROR;
 
 			cfs_trace_put_tcd(tcd);
 			tcd = NULL;
@@ -628,7 +628,7 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 		if (max_nob <= 0) {
 			pr_emerg("LustreError: negative max_nob: %d\n",
 				 max_nob);
-			mask |= D_ERROR;
+			header.ph_mask |= D_ERROR;
 			cfs_trace_put_tcd(tcd);
 			tcd = NULL;
 			goto console;
@@ -646,9 +646,9 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	}
 
 	/* `needed` is actual bytes written to string_buf */
-	if (*(string_buf + needed - 1) != '\n') {
+	if (unlikely(*(string_buf + needed - 1) != '\n')) {
 		pr_info("Lustre: format at %s:%d:%s doesn't end in newline\n",
-			file, msgdata->msg_line, msgdata->msg_fn);
+			file, header.ph_line_num, fn);
 	}
 
 	header.ph_len = known_size + needed;
@@ -664,10 +664,10 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	tage->used += strlen(file) + 1;
 	debug_buf += strlen(file) + 1;
 
-	if (msgdata->msg_fn) {
-		strlcpy(debug_buf, msgdata->msg_fn, PAGE_SIZE - tage->used);
-		tage->used += strlen(msgdata->msg_fn) + 1;
-		debug_buf += strlen(msgdata->msg_fn) + 1;
+	if (fn) {
+		strlcpy(debug_buf, fn, PAGE_SIZE - tage->used);
+		tage->used += strlen(fn) + 1;
+		debug_buf += strlen(fn) + 1;
 	}
 
 	__LASSERT(debug_buf == string_buf);
@@ -676,7 +676,7 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	__LASSERT(tage->used <= PAGE_SIZE);
 
 console:
-	if ((mask & libcfs_printk) == 0) {
+	if ((header.ph_mask & libcfs_printk) == 0) {
 		/* no console output requested */
 		if (tcd != NULL)
 			cfs_trace_put_tcd(tcd);
@@ -713,8 +713,7 @@ console:
 	}
 
 	if (tcd) {
-		cfs_print_to_console(&header, mask, file, msgdata->msg_fn,
-				     "%s", string_buf);
+		cfs_print_to_console(&header, file, fn, "%s", string_buf);
 		cfs_trace_put_tcd(tcd);
 	} else {
 		struct va_format vaf;
@@ -722,14 +721,12 @@ console:
 		va_start(ap, format);
 		vaf.fmt = format;
 		vaf.va = &ap;
-		cfs_vprint_to_console(&header, mask,
-				      &vaf, file, msgdata->msg_fn);
+		cfs_vprint_to_console(&header, &vaf, file, fn);
 		va_end(ap);
 	}
 
 	if (cdls != NULL && cdls->cdls_count != 0) {
-		cfs_print_to_console(&header, mask, file,
-				     msgdata->msg_fn,
+		cfs_print_to_console(&header, file, fn,
 				     "Skipped %d previous similar message%s\n",
 				     cdls->cdls_count,
 				     (cdls->cdls_count > 1) ? "s" : "");
@@ -752,8 +749,9 @@ cfs_trace_assertion_failed(const char *str,
 	smp_mb();
 
 	cfs_set_ptldebug_header(&hdr, msgdata);
+	hdr.ph_mask = D_EMERG;
 
-	cfs_print_to_console(&hdr, D_EMERG, msgdata->msg_file, msgdata->msg_fn,
+	cfs_print_to_console(&hdr, msgdata->msg_file, msgdata->msg_fn,
 			     "%s", str);
 
 	panic("Lustre debug assertion failure\n");
@@ -854,6 +852,7 @@ void cfs_trace_debug_print(void)
 		while (p < ((char *)page_address(page) + tage->used)) {
 			struct ptldebug_header *hdr;
 			int len;
+
 			hdr = (void *)p;
 			p += sizeof(*hdr);
 			file = p;
