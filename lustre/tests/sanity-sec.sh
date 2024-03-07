@@ -125,6 +125,18 @@ sec_login() {
 
 declare -a identity_old
 
+wait_ssk() {
+	# wait for SSK flavor to be applied if necessary
+	if $GSS_SK; then
+		if $SK_S2S; then
+			wait_flavor all2all $SK_FLAVOR
+		else
+			wait_flavor cli2mdt $SK_FLAVOR
+			wait_flavor cli2ost $SK_FLAVOR
+		fi
+	fi
+}
+
 sec_setup() {
 	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		switch_identity $num true || identity_old[$num]=$?
@@ -137,6 +149,7 @@ sec_setup() {
 	if ! $RUNAS_CMD -u $ID1 ls $DIR > /dev/null 2>&1; then
 		sec_login $USER1 $USER1
 	fi
+	wait_ssk
 }
 sec_setup
 
@@ -3019,18 +3032,6 @@ remove_enc_key() {
 	if [ -n "$dummy_key" ]; then
 		keyctl revoke $dummy_key
 		keyctl reap
-	fi
-}
-
-wait_ssk() {
-	# wait for SSK flavor to be applied if necessary
-	if $GSS_SK; then
-		if $SK_S2S; then
-			wait_flavor all2all $SK_FLAVOR
-		else
-			wait_flavor cli2mdt $SK_FLAVOR
-			wait_flavor cli2ost $SK_FLAVOR
-		fi
 	fi
 }
 
