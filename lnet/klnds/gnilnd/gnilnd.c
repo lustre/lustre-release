@@ -48,6 +48,9 @@ kgnilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
+	if (!attr)
+		return 0;
+
 	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
 		return -EINVAL;
 

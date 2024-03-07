@@ -140,6 +140,7 @@ struct kib_tunables {
 };
 
 extern struct kib_tunables  kiblnd_tunables;
+extern struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
 
 #define IBLND_MSG_QUEUE_SIZE_V1      8          /* V1 only : # messages/RDMAs in-flight */
 #define IBLND_CREDIT_HIGHWATER_V1    7          /* V1 only : when eagerly to return credits */

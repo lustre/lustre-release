@@ -837,6 +837,27 @@ ksocknal_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	return 0;
 }
 
+static inline void
+ksocknal_nl_set_default(int cmd, int type, void *data)
+{
+	struct lnet_lnd_tunables *tunables = data;
+	struct lnet_ioctl_config_socklnd_tunables *lt;
+	struct lnet_ioctl_config_socklnd_tunables *df;
+
+	lt = &tunables->lnd_tun_u.lnd_sock;
+	df = &ksock_default_tunables;
+	switch (type) {
+	case LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER:
+		lt->lnd_conns_per_peer = df->lnd_conns_per_peer;
+		break;
+	case LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT:
+		lt->lnd_timeout = df->lnd_timeout;
+		fallthrough;
+	default:
+		break;
+	}
+}
+
 static int
 ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
@@ -846,6 +867,11 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
+
+	if (!attr) {
+		ksocknal_nl_set_default(cmd, type, data);
+		return 0;
+	}
 
 	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
 		return -EINVAL;

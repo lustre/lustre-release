@@ -185,7 +185,7 @@ static inline bool is_native_host(void)
 }
 
 struct ksock_tunables ksocknal_tunables;
-static struct lnet_ioctl_config_socklnd_tunables default_tunables;
+struct lnet_ioctl_config_socklnd_tunables ksock_default_tunables;
 
 #ifdef HAVE_ETHTOOL_LINK_SETTINGS
 static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
@@ -270,8 +270,8 @@ static int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni)
 
 int ksocknal_tunables_init(void)
 {
-	default_tunables.lnd_version = CURRENT_LND_VERSION;
-	default_tunables.lnd_conns_per_peer = conns_per_peer;
+	ksock_default_tunables.lnd_version = CURRENT_LND_VERSION;
+	ksock_default_tunables.lnd_conns_per_peer = conns_per_peer;
 
 	/* initialize ksocknal_tunables structure */
 	ksocknal_tunables.ksnd_timeout            = &sock_timeout;
@@ -344,7 +344,7 @@ void ksocknal_tunables_setup(struct lnet_ni *ni)
 	/* If no tunables specified, setup default tunables */
 	if (!ni->ni_lnd_tunables_set)
 		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_sock,
-		       &default_tunables, sizeof(*tunables));
+		       &ksock_default_tunables, sizeof(*tunables));
 
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_sock;
 

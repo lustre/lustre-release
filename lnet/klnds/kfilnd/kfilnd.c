@@ -400,6 +400,9 @@ kfilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
+	if (!attr)
+		return 0;
+
 	lnd_kfi = &tunables->lnd_tun_u.lnd_kfi;
 
 	switch (type) {

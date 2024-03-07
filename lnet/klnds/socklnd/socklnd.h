@@ -436,6 +436,7 @@ struct ksock_connreq {
 
 extern struct ksock_nal_data ksocknal_data;
 extern struct ksock_tunables ksocknal_tunables;
+extern struct lnet_ioctl_config_socklnd_tunables ksock_default_tunables;
 
 #define SOCKNAL_MATCH_NO        0        /* TX can't match type of connection */
 #define SOCKNAL_MATCH_YES       1        /* TX matches type of connection */

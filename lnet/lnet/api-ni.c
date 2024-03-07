@@ -5921,6 +5921,26 @@ static int lnet_genl_parse_lnd_tunables(struct nlattr *settings,
 	return rc;
 }
 
+static inline void
+lnet_genl_init_tunables(const struct lnet_lnd *lnd,
+			struct lnet_ioctl_config_lnd_tunables *tun)
+{
+	const struct ln_key_list *list = lnd ? lnd->lnd_keys : NULL;
+	int i;
+
+	tun->lt_cmn.lct_peer_timeout = -1;
+	tun->lt_cmn.lct_peer_tx_credits = -1;
+	tun->lt_cmn.lct_peer_rtr_credits = -1;
+	tun->lt_cmn.lct_max_tx_credits = -1;
+
+	if (!list || !lnd->lnd_nl_set || !list->lkl_maxattr)
+		return;
+
+	/* init lnd tunables with default values */
+	for (i = 1; i <= list->lkl_maxattr; i++)
+		lnd->lnd_nl_set(LNET_CMD_NETS, NULL, i, &tun->lt_tun);
+}
+
 static int
 lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			 int net_id, struct lnet_ioctl_config_ni *conf,
@@ -5928,9 +5948,18 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 {
 	struct lnet_ioctl_config_lnd_tunables *tun;
 	struct lnet_nid nid = LNET_ANY_NID;
+	const struct lnet_lnd *lnd = NULL;
 	struct nlattr *settings;
 	int healthv = -1;
 	int rem3, rc = 0;
+
+	if (net_id != LNET_NET_ANY) {
+		lnd = lnet_load_lnd(LNET_NETTYP(net_id));
+		if (IS_ERR(lnd)) {
+			GENL_SET_ERR_MSG(info, "LND type not supported");
+			RETURN(PTR_ERR(lnd));
+		}
+	}
 
 	LIBCFS_ALLOC(tun, sizeof(struct lnet_ioctl_config_lnd_tunables));
 	if (!tun) {
@@ -5939,10 +5968,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 	}
 
 	/* Use LND defaults */
-	tun->lt_cmn.lct_peer_timeout = -1;
-	tun->lt_cmn.lct_peer_tx_credits = -1;
-	tun->lt_cmn.lct_peer_rtr_credits = -1;
-	tun->lt_cmn.lct_max_tx_credits = -1;
+	lnet_genl_init_tunables(lnd, tun);
 	conf->lic_ncpts = 0;
 
 	nla_for_each_nested(settings, entry, rem3) {
@@ -6050,8 +6076,6 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				GOTO(out, rc);
 			}
 		} else if ((nla_strcmp(settings, "lnd tunables") == 0)) {
-			const struct lnet_lnd *lnd;
-
 			settings = nla_next(settings, &rem3);
 			if (nla_type(settings) !=
 			    LN_SCALAR_ATTR_LIST) {

@@ -201,7 +201,7 @@ struct kib_tunables kiblnd_tunables = {
 	.kib_use_fastreg_gaps       = &use_fastreg_gaps,
 };
 
-static struct lnet_ioctl_config_o2iblnd_tunables default_tunables;
+struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
 
 /* # messages/RDMAs in-flight */
 int
@@ -227,7 +227,7 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	 */
 	if (!ni->ni_lnd_tunables_set)
 		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib,
-		       &default_tunables, sizeof(*tunables));
+		       &kib_default_tunables, sizeof(*tunables));
 
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
@@ -325,14 +325,14 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 int
 kiblnd_tunables_init(void)
 {
-	default_tunables.lnd_version = CURRENT_LND_VERSION;
-	default_tunables.lnd_peercredits_hiw = peer_credits_hiw;
-	default_tunables.lnd_map_on_demand = map_on_demand;
-	default_tunables.lnd_concurrent_sends = concurrent_sends;
-	default_tunables.lnd_fmr_pool_size = fmr_pool_size;
-	default_tunables.lnd_fmr_flush_trigger = fmr_flush_trigger;
-	default_tunables.lnd_fmr_cache = fmr_cache;
-	default_tunables.lnd_ntx = ntx;
-	default_tunables.lnd_conns_per_peer = conns_per_peer;
+	kib_default_tunables.lnd_version = CURRENT_LND_VERSION;
+	kib_default_tunables.lnd_peercredits_hiw = peer_credits_hiw;
+	kib_default_tunables.lnd_map_on_demand = map_on_demand;
+	kib_default_tunables.lnd_concurrent_sends = concurrent_sends;
+	kib_default_tunables.lnd_fmr_pool_size = fmr_pool_size;
+	kib_default_tunables.lnd_fmr_flush_trigger = fmr_flush_trigger;
+	kib_default_tunables.lnd_fmr_cache = fmr_cache;
+	kib_default_tunables.lnd_ntx = ntx;
+	kib_default_tunables.lnd_conns_per_peer = conns_per_peer;
 	return 0;
 }
