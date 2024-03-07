@@ -610,7 +610,7 @@ static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 	int seqwin = 0;
 	char *p, *end;
 	char buf[32];
-	int rc;
+	int rc, rc2;
 
 	logmsg(LL_TRACE, "revoking kernel key %08x\n", keyid);
 
@@ -633,15 +633,17 @@ static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 	WRITE_BYTES(&p, end, gss_error);
 
 	rc = do_keyctl_update("revok", keyid, buf, p - buf);
-	if (rc)
-		goto out;
-	rc = keyctl_unlink(keyid, inst_keyring);
-	if (rc)
+	/* no matter if revoking key was successful or not, always try unlink */
+	rc2 = keyctl_unlink(keyid, inst_keyring);
+	if (rc2) {
 		logmsg(LL_ERR, "unlink key %08x from %d: %s\n",
 		       keyid, inst_keyring, strerror(errno));
-	else
+		if (!rc)
+			rc = rc2;
+	} else {
 		logmsg(LL_INFO, "key %08x: unlinked from %d\n",
 		       keyid, inst_keyring);
+	}
 
 out:
 	if (child == 0)
