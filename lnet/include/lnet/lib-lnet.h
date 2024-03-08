@@ -513,8 +513,8 @@ struct lnet_ni *
 lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el,
 	      char *iface);
 struct lnet_ni *
-lnet_ni_alloc_w_cpt_array(struct lnet_net *net, __u32 *cpts, __u32 ncpts,
-			  char *iface);
+lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
+			  u32 *cpts, u32 ncpts, char *iface);
 int lnet_ni_add_interface(struct lnet_ni *ni, char *iface);
 
 static inline int
@@ -685,6 +685,7 @@ struct lnet_remotenet *lnet_find_rnet_locked(__u32 net);
 int lnet_dyn_add_net(struct lnet_ioctl_config_data *conf);
 int lnet_dyn_del_net(__u32 net);
 int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net,
+		    struct lnet_nid *nid,
 		    struct lnet_ioctl_config_lnd_tunables *tun);
 int lnet_dyn_del_ni(struct lnet_nid *nid);
 int lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason);

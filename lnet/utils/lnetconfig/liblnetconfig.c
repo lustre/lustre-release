@@ -320,6 +320,8 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 		return LUSTRE_CFG_RC_BAD_PARAM;
 
 	while (cur < end) {
+		char *net;
+
 		open_square = strchr(cur, '[');
 		if (open_square != NULL) {
 			close_square = strchr(cur, ']');
@@ -347,6 +349,10 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 			}
 		}
 
+		/* Extract net id if its a NID string */
+		net = strchr(cur, '@');
+		if (net)
+			nw_descr->nw_id = libcfs_str2net(net + 1);
 		rc = lustre_lnet_add_intf_descr(&nw_descr->nw_intflist, cur, len);
 		if (rc != LUSTRE_CFG_RC_NO_ERR)
 			goto failed;

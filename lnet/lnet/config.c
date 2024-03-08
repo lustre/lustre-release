@@ -414,7 +414,7 @@ int lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
 EXPORT_SYMBOL(lnet_ni_add_interface);
 
 static struct lnet_ni *
-lnet_ni_alloc_common(struct lnet_net *net, char *iface)
+lnet_ni_alloc_common(struct lnet_net *net, struct lnet_nid *nid, char *iface)
 {
 	struct lnet_tx_queue	*tq;
 	struct lnet_ni		*ni;
@@ -452,9 +452,13 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 		INIT_LIST_HEAD(&tq->tq_delayed);
 
 	ni->ni_net = net;
-	/* LND will fill in the address part of the NID */
-	ni->ni_nid.nid_type = LNET_NETTYP(net->net_id);
-	ni->ni_nid.nid_num = cpu_to_be16(LNET_NETNUM(net->net_id));
+	if (nid_same(nid, &LNET_ANY_NID)) {
+		/* LND will fill in the address part of the NID */
+		ni->ni_nid.nid_type = LNET_NETTYP(net->net_id);
+		ni->ni_nid.nid_num = cpu_to_be16(LNET_NETNUM(net->net_id));
+	} else {
+		ni->ni_nid = *nid;
+	}
 
 	/* Store net namespace in which current ni is being created */
 	if (current->nsproxy && current->nsproxy->net_ns)
@@ -487,7 +491,7 @@ lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
 	struct lnet_ni		*ni;
 	int			rc;
 
-	ni = lnet_ni_alloc_common(net, iface);
+	ni = lnet_ni_alloc_common(net, &LNET_ANY_NID, iface);
 	if (!ni)
 		return NULL;
 
@@ -523,13 +527,13 @@ failed:
 }
 
 struct lnet_ni *
-lnet_ni_alloc_w_cpt_array(struct lnet_net *net, __u32 *cpts, __u32 ncpts,
-			  char *iface)
+lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
+			  u32 *cpts, u32 ncpts, char *iface)
 {
 	struct lnet_ni		*ni;
 	int			rc;
 
-	ni = lnet_ni_alloc_common(net, iface);
+	ni = lnet_ni_alloc_common(net, nid, iface);
 	if (!ni)
 		return NULL;
 
@@ -1669,7 +1673,7 @@ int lnet_inet_select(struct lnet_ni *ni,
 		return 0;
 
 	for (if_idx = 0; if_idx < num_ifaces; if_idx++) {
-		if (ni->ni_interface &&
+		if (ni->ni_interface && strlen(ni->ni_interface) &&
 			strcmp(ni->ni_interface, ifaces[if_idx].li_name) != 0)
 			/* not the specified interface */
 			continue;
@@ -1693,15 +1697,15 @@ int lnet_inet_select(struct lnet_ni *ni,
 	if (if_idx < num_ifaces)
 		return if_idx;
 
-	if (ni->ni_interface)
+	if (addr_set)
+		CERROR("%s: failed to find IP address %s\n",
+		       libcfs_lnd2modname(ni->ni_nid.nid_type),
+		       libcfs_nidstr(&ni->ni_nid));
+	else if (ni->ni_interface)
 		CERROR("%s: failed to find interface %s%s%s\n",
 		       libcfs_lnd2modname(ni->ni_nid.nid_type),
 		       ni->ni_interface, addr_set ? "@" : "",
 		       addr_set ? libcfs_nidstr(&ni->ni_nid) : "");
-	else
-		CERROR("%s: failed to find IP address %s\n",
-		       libcfs_lnd2modname(ni->ni_nid.nid_type),
-		       libcfs_nidstr(&ni->ni_nid));
 
 	return -EINVAL;
 }

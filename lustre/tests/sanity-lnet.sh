@@ -1486,6 +1486,33 @@ test_109() {
 }
 run_test 109 "Add NI using a network interface alias (LU-16859)"
 
+test_110() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	configure_dlc || error "Failed to configure DLC rc = $?"
+
+	LOCAL_ADDR_LIST=$(local_addr_list)
+	set -- $LOCAL_ADDR_LIST
+	do_lnetctl net add --nid $2@tcp ||
+		error "Failed to add net tcp for IP $2@tcp"
+
+	$LNETCTL net show --net tcp | grep -q "nid: $2@tcp" ||
+		error "Failed to configure $2@tcp"
+
+	do_lnetctl net del --nid $2@tcp ||
+		error "Failed to del net tcp for IP $2@tcp"
+
+	$LNETCTL net show | grep -q "nid: $2@tcp"&&
+		error "$2@tcp should have been deleted"
+
+	cleanup_lnet
+	setup_netns
+}
+run_test 110 "Add NI using a specific TCP / IP address"
+
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"

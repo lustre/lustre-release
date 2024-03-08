@@ -3666,6 +3666,7 @@ out:
 }
 
 int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
+		    struct lnet_nid *nid,
 		    struct lnet_ioctl_config_lnd_tunables *tun)
 {
 	struct lnet_net *net;
@@ -3696,8 +3697,8 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
 		}
 	}
 
-	ni = lnet_ni_alloc_w_cpt_array(net, conf->lic_cpts, conf->lic_ncpts,
-				       conf->lic_ni_intf);
+	ni = lnet_ni_alloc_w_cpt_array(net, nid, conf->lic_cpts,
+				       conf->lic_ncpts, conf->lic_ni_intf);
 	if (!ni) {
 		lnet_net_free(net);
 		return -ENOMEM;
@@ -6038,8 +6039,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			}
 			*ni_list = true;
 		} else if (nla_strcmp(settings, "nid") == 0 &&
-			   net_id != LNET_NET_ANY &&
-			   info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
+			   net_id != LNET_NET_ANY) {
 			char nidstr[LNET_NIDSTR_SIZE];
 
 			settings = nla_next(settings, &rem3);
@@ -6061,6 +6061,13 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				GENL_SET_ERR_MSG(info, "unsupported NID");
 				GOTO(out, rc);
 			}
+
+			if (!(info->nlhdr->nlmsg_flags & NLM_F_REPLACE) &&
+			     nid_same(&nid, &LNET_ANY_NID)) {
+				GENL_SET_ERR_MSG(info, "any NID not supported");
+				GOTO(out, rc = -EINVAL);
+			}
+			*ni_list = true;
 		} else if (nla_strcmp(settings, "health stats") == 0 &&
 			   info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
 			struct nlattr *health;
@@ -6195,13 +6202,14 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 	}
 
 	if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
-		if (!strlen(conf->lic_ni_intf)) {
+		if (nid_same(&nid, &LNET_ANY_NID) &&
+		    !strlen(conf->lic_ni_intf)) {
 			GENL_SET_ERR_MSG(info,
-					 "interface is missing");
+					 "interface / NID is missing");
 			GOTO(out, rc);
 		}
 
-		rc = lnet_dyn_add_ni(conf, net_id, tun);
+		rc = lnet_dyn_add_ni(conf, net_id, &nid, tun);
 		switch (rc) {
 		case -ENOENT:
 			GENL_SET_ERR_MSG(info,
@@ -6220,47 +6228,56 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 	} else if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && healthv != -1) {
 		lnet_ni_set_healthv(&nid, healthv);
 	} else if (!(info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_REPLACE))) {
-		struct lnet_net *net;
 		struct lnet_ni *ni;
 
 		/* delete case */
 		rc = -ENODEV;
-		if (!strlen(conf->lic_ni_intf)) {
+		if (!strlen(conf->lic_ni_intf) &&
+		    nid_same(&nid, &LNET_ANY_NID)) {
 			GENL_SET_ERR_MSG(info,
-					 "interface is missing");
+					 "interface / NID is missing");
 			GOTO(out, rc);
 		}
 
-		lnet_net_lock(LNET_LOCK_EX);
-		net = lnet_get_net_locked(net_id);
-		if (!net) {
-			GENL_SET_ERR_MSG(info,
-					 "LNet net doesn't exist");
-			lnet_net_unlock(LNET_LOCK_EX);
-			GOTO(out, rc);
-		}
+		if (nid_same(&nid, &LNET_ANY_NID)) {
+			struct lnet_net *net;
+			bool found = false;
 
-		list_for_each_entry(ni, &net->net_ni_list,
-				    ni_netlist) {
-			if (!ni->ni_interface ||
-			    strcmp(ni->ni_interface,
-				  conf->lic_ni_intf) != 0)
-				continue;
-
-			lnet_net_unlock(LNET_LOCK_EX);
-			rc = lnet_dyn_del_ni(&ni->ni_nid);
-			if (rc < 0) {
+			lnet_net_lock(LNET_LOCK_EX);
+			net = lnet_get_net_locked(net_id);
+			if (!net) {
 				GENL_SET_ERR_MSG(info,
-						 "cannot del LNet NI");
+						 "LNet net doesn't exist");
+				lnet_net_unlock(LNET_LOCK_EX);
 				GOTO(out, rc);
 			}
-			break;
+
+			list_for_each_entry(ni, &net->net_ni_list,
+					    ni_netlist) {
+				if (!ni->ni_interface ||
+				    strcmp(ni->ni_interface,
+					  conf->lic_ni_intf) != 0)
+					continue;
+
+				found = true;
+				lnet_net_unlock(LNET_LOCK_EX);
+				rc = lnet_dyn_del_ni(&ni->ni_nid);
+				break;
+			}
+
+			if (rc < 0 && !found) { /* will be -ENODEV */
+				GENL_SET_ERR_MSG(info,
+						 "interface invalid for deleting LNet NI");
+				lnet_net_unlock(LNET_LOCK_EX);
+			}
+		} else {
+			rc = lnet_dyn_del_ni(&nid);
 		}
 
-		if (rc < 0) { /* will be -ENODEV */
+		if (rc < 0) {
 			GENL_SET_ERR_MSG(info,
-					 "interface invalid for deleting LNet NI");
-			lnet_net_unlock(LNET_LOCK_EX);
+					 "cannot del LNet NI");
+			GOTO(out, rc);
 		}
 	}
 out:

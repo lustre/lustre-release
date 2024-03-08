@@ -152,7 +152,7 @@ lnet_dyn_configure_ni(struct libcfs_ioctl_hdr *hdr)
 
 		lnet_nid4_to_nid(conf->lic_nid, &nid);
 		net_id = LNET_NID_NET(&nid);
-		rc = lnet_dyn_add_ni(conf, net_id, tun);
+		rc = lnet_dyn_add_ni(conf, net_id, &LNET_ANY_NID, tun);
 	}
 	mutex_unlock(&lnet_config_mutex);
 

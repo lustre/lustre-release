@@ -145,6 +145,7 @@ command_t net_cmds[] = {
 	{"add", jt_add_ni, 0, "add a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"
+	 "\t--nid: bring up NI based on the address of the specified LNet NID\n"
 	 "\t--ip2net: specify networks based on IP address patterns\n"
 	 "\t--peer-timeout: time to wait before declaring a peer dead\n"
 	 "\t--peer-credits: define the max number of inflight messages\n"
@@ -157,6 +158,7 @@ command_t net_cmds[] = {
 	 "\t--traffic-class: Traffic class (kfilnd only)\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
+	 "\t--nid: shutdown NI based on the address of the specified LNet NID\n"
 	 "\t--if: physical interface (e.g. eth0)\n"},
 	{"show", jt_show_net, 0, "show networks\n"
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
@@ -2081,9 +2083,9 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			goto emitter_error;
 
 		/* Use NI addresses instead of interface */
-		if ((strchr(intf->intf_name, '@') ||
-		     strcmp(intf->intf_name, "<?>") == 0) &&
-		    flags == NLM_F_REPLACE) {
+		if (strchr(intf->intf_name, '@') ||
+		    (strcmp(intf->intf_name, "<?>") == 0 &&
+-                    flags == NLM_F_REPLACE)) {
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_STR_TAG,
 						     (yaml_char_t *)"nid",
@@ -2332,12 +2334,14 @@ static int jt_add_ni(int argc, char **argv)
 	{ .name = "conns-per-peer",
 				  .has_arg = required_argument, .val = 'm' },
 	{ .name = "net",	  .has_arg = required_argument, .val = 'n' },
+	{ .name = "nid",	  .has_arg = required_argument, .val = 'N' },
 	{ .name = "ip2net",	  .has_arg = required_argument, .val = 'p' },
 	{ .name = "credits",	  .has_arg = required_argument, .val = 'r' },
 	{ .name = "cpt",	  .has_arg = required_argument, .val = 's' },
 	{ .name = "peer-timeout", .has_arg = required_argument, .val = 't' },
 	{ .name = "traffic-class", .has_arg = required_argument, .val = 'T' },
 	{ .name = NULL } };
+	bool nid_request = false;
 	char *net_id = NULL;
 
 	memset(&tunables, 0, sizeof(tunables));
@@ -2399,6 +2403,16 @@ static int jt_add_ni(int argc, char **argv)
 			nw_descr.nw_id = libcfs_str2net(optarg);
 			net_id = optarg;
 			break;
+		case 'N':
+			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						"bad NID list",
+						&err_rc);
+				goto failed;
+			}
+			nid_request = true;
+			break;
 		case 'p':
 			ip2net = optarg;
 			break;
@@ -2439,6 +2453,14 @@ static int jt_add_ni(int argc, char **argv)
 		default:
 			return 0;
 		}
+	}
+
+	if (nid_request) {
+		if (net_id) {
+			fprintf(stdout, "--net is invalid with --nid option\n");
+			return -EINVAL;
+		}
+		net_id = libcfs_net2str(nw_descr.nw_id);
 	}
 #ifdef HAVE_KFILND
 	if (auth_key > 0 && LNET_NETTYP(nw_descr.nw_id) == KFILND) {
@@ -2573,7 +2595,9 @@ static int jt_del_ni(int argc, char **argv)
 	static const struct option long_options[] = {
 	{ .name = "net",	.has_arg = required_argument,	.val = 'n' },
 	{ .name = "if",		.has_arg = required_argument,	.val = 'i' },
+	{ .name = "nid",	.has_arg = required_argument,	.val = 'N' },
 	{ .name = NULL } };
+	bool nid_request = false;
 	char *net_id = NULL;
 
 	rc = check_cmd(net_cmds, "net", "del", 0, argc, argv);
@@ -2589,6 +2613,16 @@ static int jt_del_ni(int argc, char **argv)
 			nw_descr.nw_id = libcfs_str2net(optarg);
 			net_id = optarg;
 			break;
+		case 'N':
+			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "ni", "del",
+						  "bad NID list",
+						  &err_rc);
+				goto out;
+			}
+			nid_request = true;
+			break;
 		case 'i':
 			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
 			if (rc != 0) {
@@ -2603,6 +2637,14 @@ static int jt_del_ni(int argc, char **argv)
 		default:
 			return 0;
 		}
+	}
+
+	if (nid_request) {
+		if (net_id) {
+			fprintf(stdout, "--net is invalid with --nid option\n");
+			return -EINVAL;
+		}
+		net_id = libcfs_net2str(nw_descr.nw_id);
 	}
 
 	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, -1, NULL,
