@@ -38,9 +38,6 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	81)     LDISKFS_SERIES="4.18-rhel8.1.series"    ;;
 	80)     LDISKFS_SERIES="4.18-rhel8.series"      ;;
 	79)	LDISKFS_SERIES="3.10-rhel7.9.series"	;;
-	78)	LDISKFS_SERIES="3.10-rhel7.8.series"	;;
-	77)	LDISKFS_SERIES="3.10-rhel7.7.series"	;;
-	76)	LDISKFS_SERIES="3.10-rhel7.6.series"	;;
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.3.18],[
@@ -194,28 +191,6 @@ AS_IF([test -z "$LDISKFS_SERIES"],
 	[AC_MSG_RESULT([$LDISKFS_SERIES for $LINUXRELEASE])])
 AC_SUBST(LDISKFS_SERIES)
 ]) # LDISKFS_LINUX_SERIES
-
-#
-# LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
-#
-# 2.6.32-rc7 ext4_free_blocks requires struct buffer_head
-# Note that RHEL6 is pre 2.6.32-rc7 so this check is still needed.
-#
-AC_DEFUN([LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
-	LB2_LINUX_TEST_SRC([ext4_free_blocks_with_buffer_head], [
-		#include <linux/fs.h>
-		#include "$EXT4_SRC_DIR/ext4.h"
-	],[
-		ext4_free_blocks(NULL, NULL, NULL, 0, 0, 0);
-	],[],[],[ext4_free_blocks])
-])
-AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'ext4_free_blocks' needs 'struct buffer_head'],
-	[ext4_free_blocks_with_buffer_head], [
-	AC_DEFINE(HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD, 1,
-		[ext4_free_blocks do not require struct buffer_head])
-	])
-]) # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 
 #
 # LB_EXT4_BREAD_4ARGS
@@ -653,7 +628,6 @@ AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 
 AS_IF([test x$enable_ldiskfs != xno],[
 	AC_DEFUN([LB_EXT4_SRC_DIR_SRC],[
-		LB_SRC_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 		LB_SRC_EXT4_BREAD_4ARGS
 		LB_SRC_EXT4_HAVE_INFO_DQUOT
 		LB_SRC_EXT4_HAVE_I_CRYPT_INFO
@@ -666,7 +640,6 @@ AS_IF([test x$enable_ldiskfs != xno],[
 		LB2_SRC_CHECK_CONFIG_IM([FS_ENCRYPTION])
 	])
 	AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [
-		LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 		LB_EXT4_BREAD_4ARGS
 		LB_EXT4_HAVE_INFO_DQUOT
 		LB_EXT4_HAVE_I_CRYPT_INFO
