@@ -14,10 +14,6 @@ Clients since 2.6.18 DO NOT need any patches.
 
 PATCH SERIES FOR SERVER KERNELS:
 3.10-rhel7.9.series     3.10.0-1160.88.1.el7 (RHEL 7.9)
-4.18-rhel8.series       4.18.0-80.11.2.el8   (RHEL 8.0)
-4.18-rhel8.1.series     4.18.0-147.8.1.el8   (RHEL 8.1)
-4.18-rhel8.2.series     4.18.0-193.28.1.el8  (RHEL 8.2)
-4.18-rhel8.3.series     4.18.0-240.22.1.el8  (RHEL 8.3)
 4.18-rhel8.4.series     4.18.0-305.25.1.el8  (RHEL 8.4)
 4.18-rhel8.5.series     4.18.0-348.23.1.el8  (RHEL 8.5)
 4.18-rhel8.6.series     4.18.0-372.32.1.el8  (RHEL 8.6)
