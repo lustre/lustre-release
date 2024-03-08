@@ -1,9 +1,51 @@
-From 3950e714298eca5bfd4955202c70b390f6f6c679 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <shaun.tancheff@hpe.com>
-Date: Wed, 2 Dec 2020 13:23:45 -0600
-Subject: [PATCH] ext4 ialloc uid gid and pass owner down
+commit 5bb641fa61175fd0fe63e830219d88304b5162c3
+Author:     Shaun Tancheff <shaun.tancheff@hpe.com>
+AuthorDate: Thu Dec 10 10:31:51 2020 -0600
+LU-13239 ldiskfs: pass inode timestamps at initial creation
 
-pass inode timestamps at initial creation
+A previous patch https://github.com/Cray/lustre/commit/6d4fb6694
+"LUS-4880 osd-ldiskfs: pass uid/gid/xtime directly to ldiskfs"
+was intended to be ported to upstream lustre but was lost.
+
+The patch https://review.whamcloud.com/34685/
+"LU-12151 osd-ldiskfs: pass owner down rather than transfer it"
+passed the inode UID and GID down to ldiskfs at inode allocation
+time to avoid the overhead of transferring quota from the inode
+(initially created as root) over to the actual user of the file.
+
+The two patches differed slightly in that the LUS-4880 included
+passing the a/m/ctimes from osd-ldiskfs to ldiskfs at inode
+creation time avoids overhead of setting the timestamps afterward.
+
+Benchmarks using MDTEST:
+  mdtest -f 32 -l 32 -n 16384 -i 5 -p 120 -t -u -v -d mdtest
+
+                            master                 patched
+   Operation                  Mean    Std Dev         Mean   Std Dev
+   ---------                  ----    -------         ----   -------
+   Directory creation:   17008.593     72.700    17099.863   155.461
+   Directory stat    :  170513.269   1456.002   170105.207  2349.934
+   Directory removal :   80796.147   2633.832    84480.222   892.536
+   File creation     :   39227.419   7014.539    40429.900  6643.868
+   File stat         :  101761.395   2979.802   103818.800  1146.689
+   File read         :   86583.370    871.982    85725.254   965.862
+   File removal      :   74923.504    761.048    75075.180   723.966
+   Tree creation     :     588.570    244.534      608.332   123.939
+   Tree removal      :      39.874      1.873       44.357     2.350
+
+This patch also reorganizes the ldiskfs patch series in
+order to accommodate struct iattr being added to
+ldiskfs_create_inode.
+All supported server platforms RHEL 7.5+, SUSE 12+ and
+ubuntu 18+ are affected.
+
+HPE-bug-id: LUS-7378, LUS-4880, LUS-8042, LUS-9157, LUS-8772, LUS-8769
+Signed-off-by: Shaun Tancheff <shaun.tancheff@hpe.com>
+Change-Id: I87e9c792b5240820bfd3a7268e477970ebac8465
+Reviewed-on: https://review.whamcloud.com/37556
+Reviewed-by: Petros Koutoupis <petros.koutoupis@hpe.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Reviewed-by: Wang Shilong <wshilong@whamcloud.com>
 ---
  fs/ext4/ext4.h   |  9 +++++----
  fs/ext4/ialloc.c | 12 +++++++++++-

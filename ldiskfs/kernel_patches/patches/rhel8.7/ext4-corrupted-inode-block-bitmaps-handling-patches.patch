@@ -1,6 +1,31 @@
-Since we could skip corrupt block groups, this patch
-use ext4_warning() intead of ext4_error() to make FS not
-emount RO in default
+commit 2963f3d09eb3a0817f87386c0bd7be7ce086809d
+Author:     Wang Shilong <wshilong@whamcloud.com>
+AuthorDate: Tue Sep 8 21:54:29 2015 +0800
+LU-7114 ldiskfs: corrupted bitmaps handling patches
+
+This patch backported following patches from upstream:
+
+163a203ddb36c36d4a1c942aececda0cc8d06aa7
+ext4: mark block group as corrupt on block bitmap error
+
+87a39389be3e3b007d341be510a7e4a0542bdf05
+ext4: mark block group as corrupt on inode bitmap error
+
+bdfb6ff4a255dcebeb09a901250e13a97eff75af
+ext4: mark group corrupt on group descriptor checksum
+
+Also use ext4_warning() instead of ext4_error() so that
+filesystem don't become RO in default, and together
+with these patches,FS wil still be usable even such
+bad things happen.
+
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+Change-Id: Ib4075aba7df6f7f59e89a90475405080acd43dd0
+Reviewed-on: http://review.whamcloud.com/16312
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Yang Sheng <yang.sheng@intel.com>
+
+NOTE: Ported to rhel8.7 keeps the ext4_warning() updates.
 
 Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/balloc.c
 ===================================================================

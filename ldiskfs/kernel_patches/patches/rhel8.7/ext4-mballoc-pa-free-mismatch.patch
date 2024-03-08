@@ -1,3 +1,13 @@
+commit 2d3aaef4122c11dcb6d892da89522ffa37036136
+Author:     Fan Yong <yong.fan@whamcloud.com>
+AuthorDate: Thu Feb 25 00:32:12 2010 -0800
+Subject: ext4: diagnostic patch to verify lustre read-only device mechanism
+
+Diagnostic patch to check whether lustre read-only device mechanism works well or not.
+Signed-off-by: Fan Yong <yong.fan@whamcloud.com>
+Reviewed-by: Alex Zhuravlev <alex.zhuravlev@sun.com>
+Reviewed-by: Rahul Deshmukh <rahul.deshmukh@sun.com>
+
 Index: kernel-4.18.0-423.el8/fs/ext4/mballoc.c
 ===================================================================
 --- kernel-4.18.0-423.el8.orig/fs/ext4/mballoc.c

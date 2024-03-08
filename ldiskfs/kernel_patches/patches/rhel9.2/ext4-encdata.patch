@@ -1,3 +1,47 @@
+commit d0a722cb8fb886380e24e8261e8efca09a3262d6
+Author:     Sebastien Buisson <sbuisson@ddn.com>
+AuthorDate: Tue Dec 20 15:40:52 2022 +0100
+Commit:     Oleg Drokin <green@whamcloud.com>
+CommitDate: Thu Aug 31 06:28:45 2023 +0000
+LU-16374 ldiskfs: implement security.encdata xattr
+
+security.encdata is a virtual xattr containing information related
+to encrypted files. It is expressed as ASCII text with a "key: value"
+format, and space as field separator. For instance:
+
+   { encoding: base64url, size: 3012, enc_ctx: YWJjZGVmZ2hpamtsbW
+   5vcHFyc3R1dnd4eXphYmNkZWZnaGlqa2xtbg, enc_name: ZmlsZXdpdGh2ZX
+   J5bG9uZ25hbWVmaWxld2l0aHZlcnlsb25nbmFtZWZpbGV3aXRodmVyeWxvbmdu
+   YW1lZmlsZXdpdGg }
+
+'encoding' is the encoding method used for binary data, assume name
+can be up to 255 chars.
+'size' is the clear text file data length in bytes.
+'enc_ctx' is encoded encryption context, 40 bytes for v2.
+'enc_name' is encoded encrypted name, 256 bytes max.
+So on overall, this xattr is at most 727 chars plus terminating '0'.
+
+On get, the value of the security.encdata xattr is computed from
+encrypted file's information.
+On set, encrypted file's information is restored from xattr value.
+The encrypted name is stored temporarily in a dedicated xattr
+LDISKFS_XATTR_NAME_RAWENCNAME, that will be used to set correct name
+at linkat.
+
+Signed-off-by: Sebastien Buisson <sbuisson@ddn.com>
+Change-Id: Ia318c39d403b1c448e71bcd5b29862d022d05d0a
+Reviewed-on: https://review.whamcloud.com/49456
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+---
+ fs/ext4/encdata.h        | 128 ++++++++++++++++++++++++
+ fs/ext4/inode.c          |   6 ++
+ fs/ext4/super.c          |   8 ++
+ fs/ext4/xattr.h          |   2 +
+ fs/ext4/xattr_security.c | 209 ++++++++++++++++++++++++++++++++++++++-
+ 5 files changed, 352 insertions(+), 1 deletion(-)
+ create mode 100644 fs/ext4/encdata.h
+
 diff --git a/fs/ext4/encdata.h b/fs/ext4/encdata.h
 new file mode 100644
 index 00000000..aa83832f

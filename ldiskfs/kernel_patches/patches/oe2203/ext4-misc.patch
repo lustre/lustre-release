@@ -1,3 +1,12 @@
+commit b175e2441b0cd9fae60341ba92b0f7f192e71446
+Author: girish <girish>
+
+b=16893
+i=adilger
+i=johann
+
+ext4 ldiskfs patches for rhel5
+
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index 57169367362a..f3e369fc4dae 100644
 --- a/fs/ext4/ext4.h

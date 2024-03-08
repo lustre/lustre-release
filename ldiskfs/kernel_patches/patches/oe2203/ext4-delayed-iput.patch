@@ -1,7 +1,7 @@
-From 5230b17f70f7d30161db506d4f631131befb319d Mon Sep 17 00:00:00 2001
-From: Xinliang Liu <xinliang.liu@linaro.org>
-Date: Wed, 10 May 2023 09:46:14 +0000
-Subject: [PATCH] ext4 delayed iput
+commit e239a14001b62d96c186ae2c9f58402f73e63dcc
+Author:     Andrew Perepechko <andrew.perepechko@hpe.com>
+AuthorDate: Mon Jan 31 19:55:31 2022 +0300
+LU-15404 ldiskfs: truncate during setxattr leads to kernel panic
 
 When changing a large xattr value to a different large xattr value,
 the old xattr inode is freed. Truncate during the final iput causes
@@ -15,6 +15,7 @@ Since the setxattr code adds xattr inodes with nlink=0 into the
 orphan list, old xattr inodes will be properly cleaned up in
 any case.
 
+Change-Id: Idd70befa6a83818ece06daccf9bb6256812674b9
 Signed-off-by: Andrew Perepechko <andrew.perepechko@hpe.com>
 HPE-bug-id: LUS-10534
 
@@ -22,7 +23,9 @@ Changes since v1:
 - fixed a bug added during the porting
 - fixed a workqueue related deadlock reported by Tetsuo Handa
 
-Signed-off-by: Xinliang Liu <xinliang.liu@linaro.org>
+Reviewed-on: https://review.whamcloud.com/46358
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alexander Zarochentsev <alexander.zarochentsev@hpe.com>
 ---
  fs/ext4/ext4.h    |  7 +++++--
  fs/ext4/page-io.c |  2 +-

@@ -1,3 +1,5 @@
+LU-50 ldiskfs: pdirops patch for ldiskfs
+
 Single directory performance is a critical for HPC workloads. In a
 typical use case an application creates a separate output file for
 each node and task in a job. As nodes and tasks increase, hundreds
@@ -11,8 +13,14 @@ ldiskfs directories. This work will enable multiple application
 threads to simultaneously lookup, create and unlink in parallel.
 
 This patch contains:
- - pdirops support for ldiskfs
- - integrate with osd-ldiskfs
+  - pdirops support for ldiskfs
+  - N-level htree directory
+  - integrate with osd-ldiskfs
+
+Signed-off-by: Liang Zhen <liang@whamcloud.com>
+Change-Id: I269c0e3112e68f3acd79e860dab052a68c7d7aaa
+Reviewed-on: http://review.whamcloud.com/375
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 
 Index: linux-4.18.0-423.el8/fs/ext4/Makefile
 ===================================================================

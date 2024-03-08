@@ -1,6 +1,22 @@
-We won't change i_xtime in ldiskfs code path. But also
-need keep normal function out of Lustre. So we using
-S_NOCMTIME to indicate invoked from Lustre.
+commit d2c828a32a3b019194051ee24607eafee517cc43
+Author:     Niu Yawei <yawei.niu@intel.com>
+AuthorDate: Mon Feb 9 22:21:00 2015 -0500
+LU-6137 ldiskfs: simplify nocmtime patch
+
+Simplify the nocmtime patch by patching only ext4_current_time(),
+this fixed the defect that original patch doesn't handle setacl
+code path, it can also avoid the risk of future changes adding
+new places that needs to be fixed.
+
+Remove the obsolete xattr-no-update-ctime patch.
+
+Signed-off-by: Niu Yawei <yawei.niu@intel.com>
+Change-Id: I02928c4f867e9476f0bc1815dd3256e3d79dadf7
+Reviewed-on: http://review.whamcloud.com/13705
+Reviewed-by: Bobi Jam <bobijam@hotmail.com>
+Reviewed-by: Bob Glossman <bob.glossman@intel.com>
+Reviewed-by: Fan Yong <fan.yong@intel.com>
+Signed-off-by: Andreas Dilger <andreas.dilger@intel.com>
 
 Index: linux-4.15.0/fs/ext4/ext4.h
 ===================================================================

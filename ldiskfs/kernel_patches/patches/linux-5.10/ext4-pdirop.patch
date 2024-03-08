@@ -1,22 +1,26 @@
-From 1a0f7f0b9c13ef0aa86e125f350b6733bff8db3c Mon Sep 17 00:00:00 2001
-From: Liang Zhen <liang@whamcloud.com>
-Date: Fri Jul 8 13:43:08 2011 -0400
-Subject: [PATCH] LU-50 ldiskfs: pdirops patch for ldiskfs
+LU-50 ldiskfs: pdirops patch for ldiskfs
 
- Single directory performance is a critical for HPC workloads.
- In a typical use case an application creates a separate output file for each
- node and task in a job. As nodes and tasks increase, hundreds of thousands of
- files may be created in a single directory within a short window of time.
- Today, both filename lookup and file system modifying operations (such as
- create and unlink) are protected with a single lock for an entire ldiskfs
- directory. PDO project will remove this bottleneck by introducing a parallel
- locking mechanism for entire ldiskfs directories. This work will enable
- multiple application threads to simultaneously lookup, create and unlink in
- parallel.
+Single directory performance is a critical for HPC workloads. In a
+typical use case an application creates a separate output file for
+each node and task in a job. As nodes and tasks increase, hundreds
+of thousands of files may be created in a single directory within
+a short window of time.
+Today, both filename lookup and file system modifying operations
+(such as create and unlink) are protected with a single lock for
+an entire ldiskfs directory. PDO project will remove this
+bottleneck by introducing a parallel locking mechanism for entire
+ldiskfs directories. This work will enable multiple application
+threads to simultaneously lookup, create and unlink in parallel.
 
 This patch contains:
- - pdirops support for ldiskfs
- - integrate with osd-ldiskfs
+  - pdirops support for ldiskfs
+  - N-level htree directory
+  - integrate with osd-ldiskfs
+
+Signed-off-by: Liang Zhen <liang@whamcloud.com>
+Change-Id: I269c0e3112e68f3acd79e860dab052a68c7d7aaa
+Reviewed-on: http://review.whamcloud.com/375
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 ---
  fs/ext4/Makefile |    1 
  fs/ext4/ext4.h   |   78 +++++++++

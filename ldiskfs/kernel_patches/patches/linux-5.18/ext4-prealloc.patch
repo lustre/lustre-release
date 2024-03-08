@@ -1,8 +1,15 @@
-From bdb2b47482f4e525ae0a7bc1334cbeca9115beac Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <shaun.tancheff@hpe.com>
-Date: Mon, 14 Nov 2022 01:18:58 -0600
-Subject: [PATCH] linux-5.18/ext4-prealloc.patch
+commit d8d8fd9192a54c7b8caef8cca9b7a1eb5e5e3298
+Author: Alex Zhuravlev <alex.zhuravlev@sun.com>
+AuthorDate: Thu Oct 23 10:02:19 2008 +0000
 
+Subject: ext4: support for tunable preallocation window
+Add support for tunable preallocation window and new tunables
+for large/small requests.
+
+Bugzilla-ID: b=12800
+Signed-off-by: Alex Zhuravlev <alex.zhuravlev@sun.com>
+Reviewed-by: Kalpak Shah <kalpak@clusterfs.com>
+Reviewed-by: Andreas Dilger <andreas.dilger@sun.com>
 ---
  fs/ext4/ext4.h    |   7 +-
  fs/ext4/inode.c   |   3 +

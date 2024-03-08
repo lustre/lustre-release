@@ -1,3 +1,16 @@
+commit f2f28f1d09c0a00b3fc569422f881931d857fac9
+Author:     Alex Zhuravlev <alex.zhuravlev@sun.com>
+AuthorDate: Tue Oct 28 17:59:09 2008 +0000
+Subject: ext4: detect on-disk corruption of block bitmap
+
+Detect on-disk corruption of block bitmap and better checking of
+preallocated blocks.
+
+Bugzilla-ID: b=16680
+Signed-off-by: Alex Zhuravlev <alex.zhuravlev@sun.com>
+Reviewed-by: Kalpak Shah <kalpak.shah@sun.com>
+Signed-off-by: Andreas Dilger <andreas.dilger@sun.com>
+
 Index: linux-4.15.0/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.15.0.orig/fs/ext4/ext4.h

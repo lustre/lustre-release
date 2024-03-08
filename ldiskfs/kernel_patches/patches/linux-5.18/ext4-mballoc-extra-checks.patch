@@ -1,8 +1,15 @@
-From 26c43c25b39cab8071fa45c595844320979efd16 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <shaun.tancheff@hpe.com>
-Date: Sun, 13 Nov 2022 04:31:54 -0600
-Subject: [PATCH] P: linux-5.14/ext4-mballoc-extra-checks.patch
+commit f2f28f1d09c0a00b3fc569422f881931d857fac9
+Author:     Alex Zhuravlev <alex.zhuravlev@sun.com>
+AuthorDate: Tue Oct 28 17:59:09 2008 +0000
+Subject: ext4: detect on-disk corruption of block bitmap
 
+Detect on-disk corruption of block bitmap and better checking of
+preallocated blocks.
+
+Bugzilla-ID: b=16680
+Signed-off-by: Alex Zhuravlev <alex.zhuravlev@sun.com>
+Reviewed-by: Kalpak Shah <kalpak.shah@sun.com>
+Signed-off-by: Andreas Dilger <andreas.dilger@sun.com>
 ---
  fs/ext4/ext4.h    |   1 +
  fs/ext4/mballoc.c | 103 ++++++++++++++++++++++++++++++++++++++++------

@@ -1,9 +1,24 @@
-Subject: [PATCH] ext4-fiemap-kernel-data
+Subject: [PATCH] fiemap on kernel allocated buffers
 
-Pull in enough upstream fiemap handling to conditionally use
-memcpy instead of copy_to_user in fiemap_fill_next_extent.
-Common kernel functions prefixed with ext4_ or _ext4_
+With KERNEL_DS gone lustre needs an alternative for fiemap to
+copy extents to kernel space memory.
 
+Direct in-kernel calls to inode->f_ops->fiemap() can utilize
+an otherwise unused flag on fiemap_extent_info fi_flags
+to indicate the fiemap extent buffer is allocated in kernel space.
+
+Introduce EXT4_FIEMAP_FLAG_MEMCPY and use it.
+
+The patch pulls some common code into ext4:
+   ext4_fiemap_fill_next_extent <--- fiemap_fill_next_extent
+   ext4_iomap_to_fiemap <----------- iomap_to_fiemap
+   ext4_iomap_fiemap_actor <-------- iomap_fiemap_actor
+   ext4_iomap_apply <--------------- iomap_apply
+   _ext4_iomap_fiemap <------------- iomap_fiemap
+and changes ext4_fiemap_fill_next_extent to conditionally
+use memcpy instead of copy_to_user.
+
+Signed-off-by: Shaun Tancheff <shaun.tancheff@hpe.com>
 ---
  fs/ext4/ext4.h    |   3 +
  fs/ext4/extents.c | 265 +++++++++++++++++++++++++++++++++++++++++++++-

@@ -1,18 +1,26 @@
-From ef3b0235735794064352d9b053802b368ecdfcc9 Mon Sep 17 00:00:00 2001
-From: Xinliang Liu <xinliang.liu@linaro.org>
-Date: Thu, 11 May 2023 09:57:05 +0000
-Subject: [PATCH] ext4 data in dirent
+commit 2db3b2b33ee796f4ea61316773452d936303ad27
+Author:     Pravin Shelar <Pravin.Shelar@sun.com>
+AuthorDate: Sun Oct 4 18:13:14 2009 +0000
+Subject: ext4: add ext4-data-in-dirent patch
 
-this patch implements feature which allows ext4 fs users (e.g. Lustre)
-to store data in ext4 dirent.
-data is stored in ext4 dirent after file-name, this space is accounted
-in de->rec_len. flag EXT4_DIRENT_LUFID added to d_type if extra data
-is present.
+Allows ext4 to store extra data records inside the ext4_dirent
+along with the regular directory entry (type, length, filename).
+Data is stored in ext4 dirent after filename, with a bit flag in
+de->file_type to indicate if any record after de->name is used.
+Each in-use record is variable length and must store a 1-byte
+length (including the length byte itself) at the start so that it
+can be skipped if the record type is unknown/uneeded.  The record
+starts after a NUL byte terminator for the filename.  This extra
+space is accounted in de->rec_len but not de->name_len.
 
-make use of dentry->d_fsdata to pass fid to ext4. so no
-changes in ext4_add_entry() interface required.
+Flag EXT4_DIRENT_LUFID is used for a 128-bit file identifier.
+Make use of dentry->d_fsdata to pass LUFID to ext4, so no changes
+in ext4_add_entry() interface are required.
 
-Signed-off-by: Xinliang Liu <xinliang.liu@linaro.org>
+Bugzilla-ID: b=17670
+Signed-off-by: Pravin Shelar <Pravin.Shelar@sun.com>
+Reviewed-by: Huang Hua <h.huang@sun.com>
+Signed-off-by: Andreas Dilger <andreas.dilger@sun.com>
 ---
  fs/ext4/dir.c         |  13 ++-
  fs/ext4/ext4.h        | 100 +++++++++++++++++++--

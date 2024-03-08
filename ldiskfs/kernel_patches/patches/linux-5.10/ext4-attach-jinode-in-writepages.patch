@@ -1,8 +1,17 @@
-From 01da8ce642e08594db95d940b3352ad7ee153b09 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <stancheff@cray.com>
-Date: Tue, 6 Aug 2019 17:11:57 -0500
-Subject: [PATCH] + linux-5.3/ext4-attach-jinode-in-writepages
+commit 66153d87190a3547099446d222f36114d3eeffad
+Author:     Yang Sheng <ys@whamcloud.com>
+AuthorDate: Tue Jan 24 03:31:27 2017 +0800
+Subject: LU-9031 osd: handle jinode change for ldiskfs
 
+We need to take care of jinode for ldiskfs. Since we
+did not get the inode from syscall like sys_open(). So
+we have to initialize it in OSD by ourselves.
+
+Signed-off-by: Yang Sheng <yang.sheng@intel.com>
+Change-Id: Iec6db290c3779a8f7c98e5d1356b71fd928d7c88
+Reviewed-on: https://review.whamcloud.com/24941
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Bob Glossman <bob.glossman@intel.com>
 ---
  fs/ext4/ext4.h  |    1 +
  fs/ext4/inode.c |    8 ++++++++

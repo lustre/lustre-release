@@ -1,9 +1,21 @@
+commit a70b020e5b2f1bbe3b759232852beaac4f0852b5
+Author:     Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+AuthorDate: Fri Nov 25 16:17:09 2016 +0530
+LU-8364 ext4: fixes for failover mode.
+
+When ext4 runs in failover mode with read-only disk,
+it may loose part of allocation updates and fail while
+mounting fs due to group descriptor checks before journal
+replay not being valid after journal replay is complete.
+Don't produce panics with on disk checks in read-only mode.
+
+Seagate-bug-id: MRP-797
+Change-Id: I54bee3a0aeb9a15f5ee2a79f7a2a2a905f19af1a
+Signed-off-by: Alexey Lyashkov <alexey_lyashkov@xyratex.com>
+Signed-off-by: Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+Reviewed-on: https://review.whamcloud.com/21141
+
 Index: linux-stage/fs/ext4/super.c
-When ldiskfs run in failover mode whith read-only disk.
-Part of allocation updates are lost and ldiskfs may fail
-while mounting this is due to inconsistent state of
-group-descriptor. Group-descriptor check is added after
-journal replay.
 ===================================================================
 --- linux-stage/fs/ext4/super.c	2016-11-06 15:15:30.892386878 +0530
 +++ linux-stage.orig.1/fs/ext4/super.c	2016-11-08 10:56:45.579892189 +0530
