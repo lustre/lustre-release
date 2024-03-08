@@ -1382,7 +1382,7 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 		break;
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER:
 		num = nla_get_s64(attr);
-		if (num > -1 || num < 128)
+		if (num >= 0 && num < 128)
 			tunables->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = num;
 		else
 			rc = -ERANGE;
