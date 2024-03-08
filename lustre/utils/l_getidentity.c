@@ -763,6 +763,7 @@ static void do_warn_interval(struct timeval *now)
 			write_warning = true;
 	} else {
 		show_warning = (now->tv_sec - sbuf.st_mtim.tv_sec) > ONE_DAY;
+		write_warning = sbuf.st_size == 0; /* file still empty? */
 	}
 
 	if (write_warning || show_warning) {
@@ -782,13 +783,17 @@ static void do_warn_interval(struct timeval *now)
 
 			/* unlikely, but rate-limiting may be broken */
 			if (written <= 0)
-				return;
+				goto out_close;
 		}
 		errlog("WARNING: %s", msg);
 
 		/* rate limiting is working */
 		if (show_warning)
-			futimens(fd, times);
+			if (futimens(fd, times) < 0)
+				errlog("Change Timestamp failed: %s\n",
+				       strerror(errno));
+out_close:
+		close(fd);
 	}
 }
 
