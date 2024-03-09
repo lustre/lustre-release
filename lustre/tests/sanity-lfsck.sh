@@ -2713,6 +2713,8 @@ test_18e() {
 	echo "setupall"
 	setupall > /dev/null
 
+	wait_osts_up
+
 	#define OBD_FAIL_LFSCK_DELAY3		0x1602
 	do_facet $SINGLEMDS $LCTL set_param fail_val=10 fail_loc=0x1602
 
