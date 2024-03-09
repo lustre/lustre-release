@@ -118,10 +118,11 @@ static inline bool nid_is_nid4(const struct lnet_nid *nid)
 /* check for address set */
 static inline bool nid_addr_is_set(const struct lnet_nid *nid)
 {
+	__u8 *addr = (__u8 *)(&nid->nid_addr[0]);
 	int i;
 
 	for (i = 0; i < NID_ADDR_BYTES(nid); i++)
-		if (nid->nid_addr[i])
+		if (addr[i])
 			return true;
 
 	return false;
