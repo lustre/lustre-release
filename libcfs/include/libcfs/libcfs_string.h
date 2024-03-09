@@ -43,14 +43,6 @@
 int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 		 int *oldmask, int minmask, int allmask, int defmask);
 
-/**
- * Structure to represent NULL-less strings.
- */
-struct cfs_lstr {
-	char		*ls_str;
-	int		ls_len;
-};
-
 /*
  * Structure to represent \<range_expr\> token of the syntax.
  */
@@ -59,9 +51,9 @@ struct cfs_range_expr {
 	 * Link to cfs_expr_list::el_exprs.
 	 */
 	struct list_head	re_link;
-	__u32			re_lo;
-	__u32			re_hi;
-	__u32			re_stride;
+	u32			re_lo;
+	u32			re_hi;
+	u32			re_stride;
 };
 
 struct cfs_expr_list {
@@ -69,13 +61,13 @@ struct cfs_expr_list {
 	struct list_head	el_exprs;
 };
 
-int cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list);
+int cfs_expr_list_match(u32 value, struct cfs_expr_list *expr_list);
 int cfs_expr_list_values(struct cfs_expr_list *expr_list,
-			 int max, __u32 **values);
-void cfs_expr_list_values_free(__u32 *values, int num);
+			 int max, u32 **values);
 void cfs_expr_list_free(struct cfs_expr_list *expr_list);
-int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
+int cfs_expr_list_parse(char *str, int len, unsigned int min, unsigned int max,
 			struct cfs_expr_list **elpp);
 void cfs_expr_list_free_list(struct list_head *list);
+#define cfs_expr_list_values_free(values, num)	CFS_FREE_PTR_ARRAY(values, num)
 
 #endif

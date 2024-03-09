@@ -126,6 +126,267 @@ struct addrrange {
 };
 
 /**
+ * Parses \<range_expr\> token of the syntax. If \a bracketed is false,
+ * \a src should only have a single token which can be \<number\> or  \*
+ *
+ * \retval pointer to allocated range_expr and initialized
+ * range_expr::re_lo, range_expr::re_hi and range_expr:re_stride if \a
+ `* src parses to
+ * \<number\> |
+ * \<number\> '-' \<number\> |
+ * \<number\> '-' \<number\> '/' \<number\>
+ * \retval 0 will be returned if it can be parsed, otherwise -EINVAL or
+ * -ENOMEM will be returned.
+ */
+static int
+cfs_range_expr_parse(char *src, unsigned int min, unsigned int max,
+		     int bracketed, struct cfs_range_expr **expr)
+{
+	struct cfs_range_expr *re;
+	char *tok;
+	unsigned int num;
+
+	LIBCFS_ALLOC(re, sizeof(*re));
+	if (!re)
+		return -ENOMEM;
+
+	src = strim(src);
+	if (strcmp(src, "*") == 0) {
+		re->re_lo = min;
+		re->re_hi = max;
+		re->re_stride = 1;
+		goto out;
+	}
+
+	if (kstrtouint(src, 0, &num) == 0) {
+		if (num < min || num > max)
+			goto failed;
+		/* <number> is parsed */
+		re->re_lo = num;
+		re->re_hi = re->re_lo;
+		re->re_stride = 1;
+		goto out;
+	}
+
+	if (!bracketed)
+		goto failed;
+	tok = strim(strsep(&src, "-"));
+	if (!src)
+		goto failed;
+	if (kstrtouint(tok, 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_lo = num;
+
+	/* <number> - */
+	if (kstrtouint(strim(src), 0, &num) == 0) {
+		if (num < min || num > max)
+			goto failed;
+		re->re_hi = num;
+		/* <number> - <number> is parsed */
+		re->re_stride = 1;
+		goto out;
+	}
+
+	/* go to check <number> '-' <number> '/' <number> */
+	tok = strim(strsep(&src, "/"));
+	if (!src)
+		goto failed;
+	if (kstrtouint(tok, 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_hi = num;
+	if (kstrtouint(strim(src), 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_stride = num;
+
+out:
+	*expr = re;
+	return 0;
+
+failed:
+	LIBCFS_FREE(re, sizeof(*re));
+	return -EINVAL;
+}
+
+/**
+ * Matches value (\a value) against ranges expression list \a expr_list.
+ *
+ * \retval 1 if \a value matches
+ * \retval 0 otherwise
+ */
+int
+cfs_expr_list_match(u32 value, struct cfs_expr_list *expr_list)
+{
+	struct cfs_range_expr *expr;
+
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		if (value >= expr->re_lo && value <= expr->re_hi &&
+		    ((value - expr->re_lo) % expr->re_stride) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
+/**
+ * Convert express list (\a expr_list) to an array of all matched values
+ *
+ * \retval N N is total number of all matched values
+ * \retval 0 if expression list is empty
+ * \retval < 0 for failure
+ */
+int
+cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, u32 **valpp)
+{
+	struct cfs_range_expr *expr;
+	int count = 0;
+	u32 *val;
+	int i;
+
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		for (i = expr->re_lo; i <= expr->re_hi; i++) {
+			if (((i - expr->re_lo) % expr->re_stride) == 0)
+				count++;
+		}
+	}
+
+	if (count == 0) /* empty expression list */
+		return 0;
+
+	if (count > max) {
+		CERROR("Number of values %d exceeds max allowed %d\n",
+		       max, count);
+		return -EINVAL;
+	}
+
+	CFS_ALLOC_PTR_ARRAY(val, count);
+	if (!val)
+		return -ENOMEM;
+
+	count = 0;
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		for (i = expr->re_lo; i <= expr->re_hi; i++) {
+			if (((i - expr->re_lo) % expr->re_stride) == 0)
+				val[count++] = i;
+		}
+	}
+
+	*valpp = val;
+	return count;
+}
+EXPORT_SYMBOL(cfs_expr_list_values);
+
+/**
+ * Frees cfs_range_expr structures of \a expr_list.
+ *
+ * \retval none
+ */
+void
+cfs_expr_list_free(struct cfs_expr_list *expr_list)
+{
+	while (!list_empty(&expr_list->el_exprs)) {
+		struct cfs_range_expr *expr;
+
+		expr = list_entry(expr_list->el_exprs.next,
+				      struct cfs_range_expr, re_link);
+		list_del(&expr->re_link);
+		LIBCFS_FREE(expr, sizeof(*expr));
+	}
+
+	LIBCFS_FREE(expr_list, sizeof(*expr_list));
+}
+EXPORT_SYMBOL(cfs_expr_list_free);
+
+/**
+ * Parses \<cfs_expr_list\> token of the syntax.
+ *
+ * \retval 0 if \a str parses to \<number\> | \<expr_list\>
+ * \retval -errno otherwise
+ */
+int
+cfs_expr_list_parse(char *str, int len, unsigned int min, unsigned int max,
+		    struct cfs_expr_list **elpp)
+{
+	struct cfs_expr_list *expr_list;
+	struct cfs_range_expr *expr;
+	char *src;
+	int rc;
+
+	CFS_ALLOC_PTR(expr_list);
+	if (!expr_list)
+		return -ENOMEM;
+
+	str = kstrndup(str, len, GFP_KERNEL);
+	if (!str) {
+		CFS_FREE_PTR(expr_list);
+		return -ENOMEM;
+	}
+
+	src = str;
+
+	INIT_LIST_HEAD(&expr_list->el_exprs);
+
+	if (src[0] == '[' &&
+	    src[strlen(src) - 1] == ']') {
+		src++;
+		src[strlen(src)-1] = '\0';
+
+		rc = -EINVAL;
+		while (src) {
+			char *tok = strsep(&src, ",");
+
+			if (!*tok) {
+				rc = -EINVAL;
+				break;
+			}
+			tok = strim(tok);
+
+			rc = cfs_range_expr_parse(tok, min, max, 1, &expr);
+			if (rc != 0)
+				break;
+
+			list_add_tail(&expr->re_link, &expr_list->el_exprs);
+		}
+	} else {
+		rc = cfs_range_expr_parse(src, min, max, 0, &expr);
+		if (rc == 0)
+			list_add_tail(&expr->re_link, &expr_list->el_exprs);
+	}
+	kfree(str);
+
+	if (rc != 0)
+		cfs_expr_list_free(expr_list);
+	else
+		*elpp = expr_list;
+
+	return rc;
+}
+EXPORT_SYMBOL(cfs_expr_list_parse);
+
+/**
+ * Frees cfs_expr_list structures of \a list.
+ *
+ * For each struct cfs_expr_list structure found on \a list it frees
+ * range_expr list attached to it and frees the cfs_expr_list itself.
+ *
+ * \retval none
+ */
+void
+cfs_expr_list_free_list(struct list_head *list)
+{
+	struct cfs_expr_list *el;
+
+	while (!list_empty(list)) {
+		el = list_first_entry(list,
+				      struct cfs_expr_list, el_link);
+		list_del(&el->el_link);
+		cfs_expr_list_free(el);
+	}
+}
+
+/**
  * Parses \<addrrange\> token on the syntax.
  *
  * Allocates struct addrrange and links to \a nidrange via
