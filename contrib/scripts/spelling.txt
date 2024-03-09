@@ -127,6 +127,7 @@ OS_STATE_ENOINO||OS_STATFS_ENOINO
 OS_STATE_SUM||OS_STATFS_SUM
 OS_STATE_NONROT||OS_STATFS_NONROT
 OS_STATFS_NOPRECREATE||OS_STATFS_NOCREATE
+comma_list.*osts_nodes||osts_nodes
 page_cache_get||get_page
 PAGE_CACHE_MASK||PAGE_MASK
 page_cache_release||put_page

@@ -17002,7 +17002,7 @@ check_stats() {
 				do_nodes $(comma_list $(mdts_nodes)) \
 					$LCTL get_param mdt.*.md_stats
 			else
-				do_nodes $(comma_list $(osts-nodes)) \
+				do_nodes $(osts_nodes) \
 					$LCTL get_param obdfilter.*.stats
 			fi
 			error "The $op counter on $facet is $count, not $want"

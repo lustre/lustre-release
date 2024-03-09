@@ -2592,6 +2592,7 @@ test_31() {
 	local addr1=${mdsnid%@*}
 	local nid2=${addr}@$net2
 	local addr2 failover_mds1
+	local all=$(comma_list $(all_nodes))
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
@@ -2615,7 +2616,7 @@ test_31() {
 	fi
 
 	# build list of interface on nodes
-	for node in $(all_nodes); do
+	for node in ${all//,/ }; do
 		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
 		itf=$(do_node $node $LNETCTL net show --net $net |
 		      awk 'BEGIN{inf=0} \
@@ -2627,6 +2628,7 @@ test_31() {
 	local mgsnid_orig=$MGSNID
 	# compute new MGSNID
 	local mgsnid_new=${MGSNID%@*}@$net2
+	local tgts=$(tgts_nodes)
 
 	# save mds failover nids for restore at cleanup
 	failover_mds1=$(do_facet mds1 $TUNEFS --dryrun $(mdsdevname 1))
@@ -2647,24 +2649,22 @@ test_31() {
 	fi
 
 	do_facet mgs "$LCTL set_param mgs.MGS.exports.clear=clear"
-	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
-		"$LCTL set_param *.${FSNAME}*.exports.clear=clear"
+	do_nodes $tgts "$LCTL set_param *.${FSNAME}*.exports.clear=clear"
 
 	# check exports on servers are empty for client
 	wait_update_facet_cond mgs \
 		"$LCTL get_param -N mgs.MGS.exports.* | grep $nid |
 		cut -d'.' -f4-" '!=' $nid
-	for node in $(mdts_nodes) $(osts_nodes); do
+	for node in ${tgts//,/ }; do
 		wait_update_cond $node \
 			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid |
 			cut -d'.' -f4-" '!=' $nid
 	done
-	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
-	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
+	do_facet mgs "$LCTL get_param *.MGS*.exports.*.export"
+	do_facet mgs "$LCTL get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null|
 		      grep -q -" && error "export on MGS should be empty"
-	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
-		 "lctl get_param -n *.${FSNAME}*.exports.'$nid'.uuid \
-		  2>/dev/null | grep -q -" &&
+	do_nodes $tgts "$LCTL get_param -n *.${FSNAME}*.exports.'$nid'.uuid \
+			 2>/dev/null | grep -q -" &&
 		error "export on servers should be empty"
 
 	KZPOOL=$KEEP_ZPOOL
@@ -2674,9 +2674,8 @@ test_31() {
 		error "Failed to unload modules"
 
 	# add network $net2 on all nodes
-	do_rpc_nodes $(comma_list $(all_nodes)) load_modules ||
-		error "unable to load modules on $(all_nodes)"
-	for node in $(all_nodes); do
+	do_rpc_nodes $all load_modules || error "unable to load modules on $all"
+	for node in ${all//,/ }; do
 		do_node $node "$LNETCTL lnet configure" ||
 			error "unable to configure lnet on node $node"
 		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
@@ -2717,34 +2716,29 @@ test_31() {
 		error "unable to remount client"
 
 	# check export on MGS
-	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
-	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
-		      grep -"
-	[ $? -ne 0 ] ||	error "export for $nid on MGS should not exist"
+	do_facet mgs "$LCTL get_param *.MGS*.exports.*.export"
+	do_facet mgs "$LCTL get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null|
+		      grep -" &&
+		error "export for $nid on MGS should not exist"
 
-	do_facet mgs \
-		"lctl get_param -n *.MGS*.exports.'$nid2'.uuid \
-		 2>/dev/null | grep -"
-	[ $? -eq 0 ] ||
+	do_facet mgs "$LCTL get_param -n *.MGS*.exports.'$nid2'.uuid"|grep - ||
 		error "export for $nid2 on MGS should exist"
 
 	# check {mdc,osc} imports
-	lctl get_param mdc.${FSNAME}-*.import | grep current_connection |
-	    grep $net2
-	[ $? -eq 0 ] ||
+	$LCTL get_param mdc.${FSNAME}-*.import | grep current_connection |
+		grep $net2 ||
 		error "import for mdc should use ${addr1}@$net2"
-	lctl get_param osc.${FSNAME}-*.import | grep current_connection |
-	    grep $net2
-	[ $? -eq 0 ] ||
+	$LCTL get_param osc.${FSNAME}-*.import | grep current_connection |
+		grep $net2 ||
 		error "import for osc should use ${addr1}@$net2"
 
 	# no NIDs on other networks should be listed
-	lctl get_param mdc.${FSNAME}-*.import | grep failover_nids |
+	$LCTL get_param mdc.${FSNAME}-*.import | grep failover_nids |
 	    grep -w ".*@$net" &&
 		error "MDC import shouldn't have failnids at @$net"
 
 	# failover NIDs on net999 should be listed
-	lctl get_param mdc.${FSNAME}-*.import | grep failover_nids |
+	$LCTL get_param mdc.${FSNAME}-*.import | grep failover_nids |
 	    grep ${addr2}@$net2 ||
 		error "MDC import should have failnid ${addr2}@$net2"
 
@@ -2752,24 +2746,22 @@ test_31() {
 	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
 
 	do_facet mgs "$LCTL set_param mgs.MGS.exports.clear=clear"
-	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
-		"$LCTL set_param *.${FSNAME}*.exports.clear=clear"
+	do_nodes $tgts "$LCTL set_param *.${FSNAME}*.exports.clear=clear"
 
 	wait_update_facet_cond mgs \
 		"$LCTL get_param -N mgs.MGS.exports.* | grep $nid2 |
 		cut -d'.' -f4-" '!=' $nid2
-	for node in $(mdts_nodes) $(osts_nodes); do
+	for node in ${tgts//,/ }; do
 		wait_update_cond $node \
 			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid2 |
 			cut -d'.' -f4-" '!=' $nid2
 	done
-	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
+	do_facet mgs "$LCTL get_param *.MGS*.exports.*.export"
 
 	# on client, configure LNet and turn LNet Dynamic Discovery on (default)
 	$LUSTRE_RMMOD || error "$LUSTRE_RMMOD failed (2)"
 	load_modules || error "Failed to load modules"
-	$LNETCTL lnet configure ||
-		error "unable to configure lnet on client"
+	$LNETCTL lnet configure || error "unable to configure lnet on client"
 	infname=inf_$(echo $(hostname -s) | sed s+-+_+g)
 	$LNETCTL net add --if ${!infname} --net $net2 ||
 		error "unable to configure NID on $net2 on client (2)"
@@ -2779,7 +2771,7 @@ test_31() {
 	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 &&
 		error "client mount with '-o network' option should be refused"
 
-	echo
+	return 0
 }
 run_test 31 "client mount option '-o network'"
 

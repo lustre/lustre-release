@@ -8027,9 +8027,14 @@ mdts_nodes () {
 	echo -n $(facets_nodes $(get_facets MDS))
 }
 
-# Get all of the active OSS nodes.
-osts_nodes () {
-	echo -n $(facets_nodes $(get_facets OST))
+# Get all of the active OSS nodes in a comma-separated list.
+osts_nodes() {
+	comma_list $(facets_nodes $(get_facets OST))
+}
+
+# Get all of the active server nodes in a comma-separated list.
+tgts_nodes() {
+	comma_list $(facets_nodes $(get_facets MDS OST))
 }
 
 # Get all of the client nodes and active server nodes.
@@ -8074,22 +8079,19 @@ all_mdts_nodes () {
 }
 
 # Get all of the OSS nodes, including active and passive nodes.
-all_osts_nodes () {
+all_osts_nodes() {
 	local host
 	local failover_host
-	local nodes=
-	local nodes_sort
+	local nodes=""
 	local i
 
-	for i in $(seq $OSTCOUNT); do
+	for ((i = 1; i <= $OSTCOUNT; i++)); do
 		host=ost${i}_HOST
 		failover_host=ost${i}failover_HOST
 		nodes="$nodes ${!host} ${!failover_host}"
 	done
 
-	[ -n "$nodes" ] || nodes="${ost_HOST} ${ostfailover_HOST}"
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
 # Get all of the server nodes, including active and passive nodes.
