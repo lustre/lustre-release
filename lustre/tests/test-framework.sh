@@ -1375,7 +1375,7 @@ start_gss_daemons() {
 		do_nodes $nodes "$LSVCGSSD -vvv $options" || return 1
 	fi
 
-	nodes=$(comma_list $(osts_nodes))
+	nodes=$(osts_nodes)
 	echo "Starting gss daemon on ost: $nodes"
 	if $GSS_SK; then
 		# Start all versions, in case of switching
@@ -1391,8 +1391,7 @@ start_gss_daemons() {
 	#
 	# check daemons are running
 	#
-	nodes=$(comma_list $(mdts_nodes) $(osts_nodes))
-	check_gss_daemon_nodes $nodes "$LSVCGSSD" || return 5
+	check_gss_daemon_nodes $(tgts_nodes) "$LSVCGSSD" || return 5
 }
 
 stop_gss_daemons() {
@@ -1400,7 +1399,7 @@ stop_gss_daemons() {
 
 	send_sigint $nodes lsvcgssd lgssd
 
-	nodes=$(comma_list $(osts_nodes))
+	nodes=$(osts_nodes)
 	send_sigint $nodes lsvcgssd
 
 	nodes=${CLIENTS:-$HOSTNAME}
@@ -1562,12 +1561,7 @@ init_gss() {
 		fi
 		# This is required for servers as well, if S2S in use
 		if $SK_S2S; then
-			do_nodes $(comma_list $(mdts_nodes)) \
-				"cp $SK_PATH/$FSNAME-s2s-server.key \
-				$SK_PATH/$FSNAME-s2s-client.key; $LGSS_SK \
-				-t client -m $SK_PATH/$FSNAME-s2s-client.key \
-				>/dev/null 2>&1"
-			do_nodes $(comma_list $(osts_nodes)) \
+			do_nodes $(tgts_nodes) \
 				"cp $SK_PATH/$FSNAME-s2s-server.key \
 				$SK_PATH/$FSNAME-s2s-client.key; $LGSS_SK \
 				-t client -m $SK_PATH/$FSNAME-s2s-client.key \
@@ -2070,7 +2064,7 @@ set_params_mdts() {
 }
 
 set_params_osts() {
-	local osts=${1:-$(comma_list $(osts_nodes))}
+	local osts=${1:-$(osts_nodes)}
 	shift || true
 	local params="${@:-$OSS_LCTL_SETPARAM_PARAM}"
 
@@ -3599,6 +3593,7 @@ sync_all_data_osts() {
 	    "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
 		grep -v 'Found no match'
 }
+
 sync_all_data() {
 	sync_all_data_mdts
 	sync_all_data_osts
@@ -3887,7 +3882,7 @@ wait_mds_ost_sync () {
 	then
 		# old way, use mds_sync
 		new_wait=false
-		list=$(comma_list $(osts_nodes))
+		list=$(osts_nodes)
 		cmd="$LCTL get_param -n obdfilter.*.mds_sync"
 	fi
 
@@ -6527,8 +6522,7 @@ check_shared_dir() {
 }
 
 run_lfsck() {
-	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
-		$LCTL set_param printk=+lfsck
+	do_nodes $(tgts_nodes) $LCTL set_param printk=+lfsck
 	do_facet $SINGLEMDS "$LCTL lfsck_start -M $FSNAME-MDT0000 -r -A -t all"
 
 	for k in $(seq $MDSCOUNT); do
@@ -6545,7 +6539,7 @@ run_lfsck() {
 	local rep_mdt=$(do_nodes $(comma_list $(mdts_nodes)) \
 			$LCTL get_param -n mdd.$FSNAME-*.lfsck_* |
 			awk '/repaired/ { print $2 }' | calc_sum)
-	local rep_ost=$(do_nodes $(comma_list $(osts_nodes)) \
+	local rep_ost=$(do_nodes $(osts_nodes) \
 			$LCTL get_param -n obdfilter.$FSNAME-*.lfsck_* |
 			awk '/repaired/ { print $2 }' | calc_sum)
 	local repaired=$((rep_mdt + rep_ost))
@@ -6907,40 +6901,44 @@ drop_reint_reply() {
 }
 
 drop_update_reply() {
-# OBD_FAIL_OUT_UPDATE_NET_REP
 	local index=$1
 	shift 1
-	RC=0
-	do_facet mds${index} lctl set_param fail_loc=0x1701
-	do_facet client "$@" || RC=$?
-	do_facet mds${index} lctl set_param fail_loc=0
-	return $RC
+	local rc=0
+
+	# OBD_FAIL_OUT_UPDATE_NET_REP			0x1701
+	do_facet mds${index} $LCTL set_param fail_loc=0x1701
+	do_facet client "$@" || rc=$?
+	do_facet mds${index} $LCTL set_param fail_loc=0
+
+	return $rc
 }
 
 pause_bulk() {
-#define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
-	RC=0
-
+	local cmd=${1:-0}
 	local timeout=${2:-0}
+	local rc=0
+
 	# default is (obd_timeout / 4) if unspecified
-	echo "timeout is $timeout/$2"
-	do_facet ost1 lctl set_param fail_val=$timeout fail_loc=0x80000214
-	do_facet client "$1" || RC=$?
+	echo "timeout is $timeout"
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK		0x214
+	do_facet ost1 $LCTL set_param fail_val=$timeout fail_loc=0x80000214
+	do_facet client "$cmd" || rc=$?
 	do_facet client "sync"
-	do_facet ost1 lctl set_param fail_loc=0
-	return $RC
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	return $rc
 }
 
 drop_ldlm_cancel() {
-#define OBD_FAIL_LDLM_CANCEL_NET			0x304
-	local RC=0
-	local list=$(comma_list $(mdts_nodes) $(osts_nodes))
-	do_nodes $list lctl set_param fail_loc=0x304
+	local tgts=$(tgts_nodes)
+	local rc=0
 
-	do_facet client "$@" || RC=$?
+	#define OBD_FAIL_LDLM_CANCEL_NET		0x304
+	do_nodes $tgts $LCTL set_param fail_loc=0x304
+	do_facet client "$@" || rc=$?
+	do_nodes $tgts $LCTL set_param fail_loc=0
 
-	do_nodes $list lctl set_param fail_loc=0
-	return $RC
+	return $rc
 }
 
 drop_bl_callback_once() {
@@ -7769,7 +7767,7 @@ check_grant() {
 
 	echo -n "checking grant......"
 
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 	local clients=$CLIENTS
 	[ -z "$clients" ] && clients=$(hostname)
 
@@ -7793,8 +7791,7 @@ check_grant() {
 		srv_grant=$(grant_from_servers $osts)
 	done
 	if [[ $cli_grant -ne $srv_grant ]]; then
-		do_nodes $(comma_list $(osts_nodes)) \
-			"$LCTL get_param obdfilter.${FSNAME}-OST*.tot*" \
+		do_nodes $osts "$LCTL get_param obdfilter.${FSNAME}-OST*.tot*" \
 			"obdfilter.${FSNAME}-OST*.grant_*"
 		do_nodes $clients "$LCTL get_param osc.${FSNAME}-*.cur_*_bytes"
 		error "failed grant check: client:$cli_grant server:$srv_grant"
@@ -9049,30 +9046,31 @@ wait_osp_active() {
 }
 
 oos_full() {
-	local -a AVAILA
-	local -a GRANTA
-	local -a TOTALA
-	local OSCFULL=1
-	AVAILA=($(do_nodes $(comma_list $(osts_nodes)) \
-	          $LCTL get_param obdfilter.*.kbytesavail))
-	GRANTA=($(do_nodes $(comma_list $(osts_nodes)) \
-	          $LCTL get_param -n obdfilter.*.tot_granted))
-	TOTALA=($(do_nodes $(comma_list $(osts_nodes)) \
-	          $LCTL get_param -n obdfilter.*.kbytestotal))
-	for ((i=0; i<${#AVAILA[@]}; i++)); do
-		local -a AVAIL1=(${AVAILA[$i]//=/ })
-		local -a TOTAL=(${TOTALA[$i]//=/ })
-		GRANT=$((${GRANTA[$i]}/1024))
+	local -a availa
+	local -a granta
+	local -a totala
+	local oscfull=1
+	local osts=$(osts_nodes)
+
+	availa=($(do_nodes $osts "$LCTL get_param obdfilter.*.kbytesavail"))
+	granta=($(do_nodes $osts "$LCTL get_param -n obdfilter.*.tot_granted"))
+	totala=($(do_nodes $osts "$LCTL get_param -n obdfilter.*.kbytestotal"))
+	for ((i=0; i<${#availa[@]}; i++)); do
+		local -a avail1=(${availa[$i]//=/ })
+		local -a total=(${totala[$i]//=/ })
+		local grant=$((${granta[$i]}/1024))
 		# allow 1% of total space in bavail because of delayed
 		# allocation with ZFS which might release some free space after
 		# txg commit.  For small devices, we set a mininum of 8MB
-		local LIMIT=$((${TOTAL} / 100 + 8000))
-		echo -n $(echo ${AVAIL1[0]} | cut -d"." -f2) avl=${AVAIL1[1]} \
-			grnt=$GRANT diff=$((AVAIL1[1] - GRANT)) limit=${LIMIT}
-		[ $((AVAIL1[1] - GRANT)) -lt $LIMIT ] && OSCFULL=0 && \
+		local limit=$((total / 100 + 8000))
+
+		echo -n $(echo ${avail1[0]} | cut -d"." -f2) avl=${avail1[1]} \
+			  grnt=$grant diff=$((avail1[1] - grant)) limit=${limit}
+		[ $((avail1[1] - grant)) -lt $limit ] && oscfull=0 &&
 			echo " FULL" || echo
 	done
-	return $OSCFULL
+
+	return $oscfull
 }
 
 list_pool() {
@@ -10935,7 +10933,7 @@ lfsck_verify_pfid()
 	cancel_lru_locks osc
 
 	# make sure PFID is set correctly for files
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $(osts_nodes) \
 	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=1"
 
 	for f in "$@"; do
@@ -10943,7 +10941,7 @@ lfsck_verify_pfid()
 			{ rc=$?; echo "verify $f failed"; break; }
 	done
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $(osts_nodes) \
 	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=0"
 	return $rc
 }
@@ -12207,7 +12205,7 @@ function check_set_fallocate()
 		{ echo "keep default fallocate mode: $old_mode"; return 0; }
 	[[ "$new_mode" && "$old_mode" == "$new_mode" ]] &&
 		{ echo "keep current fallocate mode: $old_mode"; return 0; }
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	stack_trap "do_nodes $osts $LCTL set_param $fa_mode=$old_mode"
 	do_nodes $osts $LCTL set_param $fa_mode=${new_mode:-0} ||
@@ -12447,7 +12445,7 @@ force_new_seq_all() {
 }
 
 ost_set_temp_seq_width_all() {
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 	local width=$(do_facet ost1 $LCTL get_param -n seq.*OST0000-super.width)
 
 	(( $width != $1 )) || return 0
