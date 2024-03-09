@@ -4107,7 +4107,7 @@ test_41b() {
 run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 
 test_41c() {
-	local oss_list=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	(( "$MDS1_VERSION" >= $(version_code 2.15.62.4) )) ||
 		skip "Need MDS >= 2.15.62.4 for parallel device locking"
@@ -4170,7 +4170,7 @@ test_41c() {
 
 	# OST concurrent start
 
-	do_rpc_nodes $oss_list "lsmod | grep -q libcfs" ||
+	do_rpc_nodes $osts "lsmod | grep -q libcfs" ||
 		error "OST concurrent start: libcfs module not loaded"
 
 	local ost1dev=$(ostdevname 1)
@@ -6204,8 +6204,8 @@ test_69() {
 
 	setup
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
-		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
+	do_nodes $(osts_nodes) \
+		$LCTL set_param seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 
 	# use OST0000 since it probably has the most creations
 	local OSTNAME=$(ostname_from_index 0)
@@ -8780,8 +8780,8 @@ test_101a() {
 	setup
 
 	mkdir_on_mdt0 $DIR1/$tdir
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
-		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
+	do_nodes $(osts_nodes) \
+		$LCTL set_param seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 	createmany -o $DIR1/$tdir/$tfile-%d 50000 &
 	createmany_pid=$!
 	# MDT->OST reconnection causes MDT<->OST last_id synchornisation
@@ -9112,8 +9112,8 @@ test_106() {
 	setup_noconfig
 	lfs df -i
 	mkdir -p $DIR/$tdir || error "create $tdir failed"
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
-		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
+	do_nodes $(osts_nodes) \
+		$LCTL set_param seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 	lfs setstripe -c 1 -i 0 $DIR/$tdir
 #define OBD_FAIL_CAT_RECORDS                        0x1312
 	do_facet mds1 $LCTL set_param fail_loc=0x1312 fail_val=$repeat
@@ -9898,13 +9898,12 @@ cleanup_113() {
 
 # Error out with mount info
 error_113() {
-	local server_nodes=$(comma_list $(mdts_nodes) $(osts_nodes))
 	local err=$1
 
 	echo "--Client Mount Info--"
 	mount | grep -i lustre
 	echo "--Server Mount Info--"
-	do_nodes $server_nodes mount | grep -i lustre
+	do_nodes $(tgts_nodes) mount | grep -i lustre
 
 	error $err
 }

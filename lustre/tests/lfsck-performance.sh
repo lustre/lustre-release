@@ -482,7 +482,7 @@ run_test 4a "Single MDS lfsck layout performance (routine case) without load"
 test_4b() {
 	echo "Inject failure stub to simulate dangling reference"
 	#define OBD_FAIL_LFSCK_DANGLING 0x1610
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1610
+	do_nodes $(osts_nodes) "$LCTL set_param fail_loc=0x1610"
 
 	t4_test
 }
@@ -559,7 +559,7 @@ run_test 5a "lfsck layout performance (routine case) without load for DNE"
 test_5b() {
 	echo "Inject failure stub to simulate dangling reference"
 	#define OBD_FAIL_LFSCK_DANGLING 0x1610
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1610
+	do_nodes $(osts_nodes) "$LCTL set_param fail_loc=0x1610"
 
 	t5_test
 }
