@@ -374,7 +374,7 @@ run_compbench() {
 dp_test_run() {
 	local test=$1
 	local facets=$(get_facets MDS)
-	local nodes=$(comma_list $(mdts_nodes))
+	local nodes=$(mdts_nodes)
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
 	save_lustre_params $facets "mdt.*.dom_lock" >> $p

@@ -5636,8 +5636,7 @@ test_56b() {
 	start_ost || error "Unable to start first ost"
 	start_ost2 || error "Unable to start second ost"
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param mdt.*.enable_remote_dir=1 \
+	do_nodes $(mdts_nodes) "$LCTL set_param mdt.*.enable_remote_dir=1 \
 		mdt.*.enable_remote_dir_gid=-1"
 
 	mount_client $MOUNT || error "Unable to mount client"
@@ -7484,8 +7483,7 @@ test_82a() { # LU-4665
 	done
 
 	# Collect debug information - start of test
-	do_nodes $(comma_list $(mdts_nodes)) \
-		   $LCTL get_param osp.*.prealloc_*_id
+	do_nodes $(mdts_nodes) "$LCTL get_param osp.*.prealloc_*_id"
 
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 	wait_osts_up
@@ -7494,8 +7492,7 @@ test_82a() { # LU-4665
 	check_lfs_df_ret_val $? || error "$LFS df $MOUNT failed"
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
-		   $LCTL get_param osp.*.prealloc_*_id || true" EXIT
+	stack_trap "do_nodes $(mdts_nodes) $LCTL get_param osp.*.prealloc_*_id"
 
 	# 1. If the file does not exist, new file will be created
 	#    with specified OSTs.

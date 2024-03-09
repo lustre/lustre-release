@@ -857,6 +857,7 @@ namespace_gen_set() {
 t7_test() {
 	local local_loc=$1
 	local saved_mdscount=$MDSCOUNT
+	local mdts=$(mdts_nodes)
 
 	[ $MDSCOUNT -le 8 ] ||
 		error "Too much MDT, test data set on each MDT may be unbalance"
@@ -871,8 +872,7 @@ t7_test() {
 		echo "+++++ Start cycle mdscount=$MDSCOUNT at: $(date) +++++"
 		echo
 
-		for ((j = $MINSUBDIR; j <= $MAXSUBDIR;
-		      j = $((j + MINSUBDIR)))); do
+		for ((j = $MINSUBDIR; j <= $MAXSUBDIR; j += MINSUBDIR)); do
 			echo "formatall"
 			formatall > /dev/null ||
 				error "(2) Fail to formatall, subdirs=${j}"
@@ -887,8 +887,7 @@ t7_test() {
 			$LFS setstripe -c 1 -i -1 $LFSCKDIR ||
 				error "(5) Fail to setstripe on $LFSCKDIR"
 
-			do_nodes $(comma_list $(mdts_nodes)) \
-				$LCTL set_param fail_loc=$local_loc
+			do_nodes $mdts $LCTL set_param fail_loc=$local_loc
 
 			local RC=0
 			namespace_gen_set ${j} || RC=$?
@@ -900,8 +899,7 @@ t7_test() {
 			[ $RC -eq 0 ] ||
 				error "(7) LFSCK failed with $RC, subdirs=${j}"
 
-			do_nodes $(comma_list $(mdts_nodes)) \
-				$LCTL set_param fail_loc=0
+			do_nodes $mdts $LCTL set_param fail_loc=0
 		done
 
 		echo "stopall"
