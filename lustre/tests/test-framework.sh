@@ -3589,8 +3589,7 @@ sync_all_data_mdts() {
 }
 
 sync_all_data_osts() {
-	do_nodes $(comma_list $(osts_nodes)) \
-	    "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
+	do_nodes $(osts_nodes) "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
 		grep -v 'Found no match'
 }
 

@@ -667,8 +667,8 @@ test_18c() {
 run_test 18c "Dropped connect reply after eviction handing (14755)"
 
 test_19a() {
-	local BEFORE=`date +%s`
-	local EVICT
+	local before=$(date +%s)
+	local evict
 
 	mount_client $DIR2 || error "failed to mount $DIR2"
 
@@ -684,19 +684,19 @@ test_19a() {
 
 	# let the client reconnect
 	client_reconnect
-	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
 		awk -F"[ [,]" '/EVICTED ]$/ \
 			{ if (mx<$5) {mx=$5;} } END { print mx }')
 
-	[ ! -z "$EVICT" ] && [[ $EVICT -gt $BEFORE ]] ||
+	[[ -n "$evict" ]] && (( $evict >= $before )) ||
 		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
-		    error "no eviction: $EVICT before:$BEFORE")
+		    error "no eviction: $evict < before: $before")
 }
 run_test 19a "test expired_lock_main on mds (2867)"
 
 test_19b() {
-	local BEFORE=`date +%s`
-	local EVICT
+	local before=$(date +%s)
+	local evict
 
 	mount_client $DIR2 || error "failed to mount $DIR2: $?"
 
@@ -714,13 +714,13 @@ test_19b() {
 
 	# let the client reconnect
 	client_reconnect
-	EVICT=$(do_facet client $LCTL get_param osc.$FSNAME-OST*.state |
+	evict=$(do_facet client $LCTL get_param osc.$FSNAME-OST*.state |
 		awk -F"[ [,]" '/EVICTED ]$/ \
 			{ if (mx < $5) {mx = $5;} } END { print mx }')
 
-	[ ! -z "$EVICT" ] && [[ $EVICT -gt $BEFORE ]] ||
+	[[ -n "$evict" ]] && (( $evict >= $before )) ||
 		(do_facet client $LCTL get_param osc.$FSNAME-OST*.state;
-		    error "no eviction: $EVICT before:$BEFORE")
+		    error "no eviction: $evict < before: $before")
 }
 run_test 19b "test expired_lock_main on ost (2867)"
 
@@ -1598,7 +1598,7 @@ test_66()
 	[[ "$MDS1_VERSION" -ge $(version_code 2.7.51) ]] ||
 		skip "Need MDS version at least 2.7.51"
 
-	local list=$(comma_list $(osts_nodes))
+	local list=$(osts_nodes)
 
 	# modify dir so that next revalidate would not obtain UPDATE lock
 	touch $DIR

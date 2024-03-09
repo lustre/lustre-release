@@ -1172,14 +1172,11 @@ test_9a() {
 		error "(6) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
-	do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
+	do_nodes $(tgts_nodes) $LCTL set_param -n *.*.lfsck_speed_limit=0
 
 	wait_update_facet $SINGLEMDS \
-		"$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 30 ||
+			  "$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout |
+			  awk '/^status/ { print \\\$2 }'" "completed" ||
 		error "(7) Failed to get expected 'completed'"
 }
 run_test 9a "LFSCK speed control (1)"
@@ -1270,13 +1267,10 @@ test_9b() {
 		error "(10) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
-	do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
+	do_nodes $(tgts_nodes) "$LCTL set_param -n *.*.lfsck_speed_limit=0"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+			  mdd.${MDT_DEV}.lfsck_namespace |
+			  awk '/^status/ { print \\\$2 }'" "completed" || {
 		$SHOW_NAMESPACE
 		error "(11) unexpected status"
 	}
@@ -1344,13 +1338,10 @@ test_10()
 	[ "$STATUS" == "scanning-phase1" ] ||
 		error "(15) Expect 'scanning-phase1', but got '$STATUS'"
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
-	do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+	do_nodes $(tgts_nodes) "$LCTL set_param -n *.*.lfsck_speed_limit=0"
+	wait_update_facet $SINGLEMDS \
+			  "$LCTL get_param -n mdd.${MDT_DEV}.lfsck_namespace |
+			  awk '/^status/ { print \\\$2 }'" "completed" || {
 		$SHOW_NAMESPACE
 		error "(16) unexpected status"
 	}
@@ -1808,6 +1799,7 @@ run_test 14b "LFSCK can repair MDT-object with dangling LOV EA reference (2)"
 test_15a() {
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-3591"
+	local osts=$(osts_nodes)
 
 	echo "#####"
 	echo "If the OST-object referenced by the MDT-object back points"
@@ -1822,7 +1814,7 @@ test_15a() {
 	echo "non-exist MDT-object."
 	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
 
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1611
+	do_nodes $osts "$LCTL set_param fail_loc=0x1611"
 	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1
 	$LFS setstripe -E 1M -S 256K -c 1 -E -1 -S 512K -c $OSTCOUNT \
 		$DIR/$tdir/f1 ||
@@ -1833,14 +1825,14 @@ test_15a() {
 	# its layout information will be set also.
 	dd if=/dev/zero of=$DIR/$tdir/f1 bs=4K count=257
 	cancel_lru_locks osc
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $osts "$LCTL set_param fail_loc=0"
 
 	echo "Trigger layout LFSCK to find out unmatched pairs and fix them"
 	$START_LAYOUT -r || error "(1) Fail to start LFSCK for layout!"
 
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+	wait_update_facet $SINGLEMDS \
+			  "$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout |
+			  awk '/^status/ { print \\\$2 }'" "completed" || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -1874,23 +1866,24 @@ test_15b() {
 
 	local stripes=1
 	[ $OSTCOUNT -ge 2 ] && stripes=2
+	local osts=$(osts_nodes)
 
 	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR2	0x1612
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1612
+	do_nodes $osts "$LCTL set_param fail_loc=0x1612"
 	dd if=/dev/zero of=$DIR/$tdir/0/f0 bs=1M count=1
 	$LFS setstripe -E 1M -S 256K -c $stripes -E 2M -S 512K -c 1 \
 		$DIR/$tdir/f1 ||
 		error "(0) Fail to create PFL $DIR/$tdir/f1"
 	dd if=/dev/zero of=$DIR/$tdir/f1 bs=1M count=2
 	cancel_lru_locks osc
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $osts "$LCTL set_param fail_loc=0"
 
 	echo "Trigger layout LFSCK to find out unmatched pairs and fix them"
 	$START_LAYOUT -r || error "(1) Fail to start LFSCK for layout!"
 
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+	wait_update_facet $SINGLEMDS \
+			  "$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout |
+			  awk '/^status/ { print \\\$2 }'" "completed" || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -2439,10 +2432,11 @@ test_18c() {
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
+	local osts=$(osts_nodes)
 
 	echo "Inject failure, to simulate the case of missing parent FID"
 	#define OBD_FAIL_LFSCK_NOPFID		0x1617
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1617
+	do_nodes $osts "$LCTL set_param fail_loc=0x1617"
 
 	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
 	$LFS getstripe $DIR/$tdir/a1/f1
@@ -2461,7 +2455,7 @@ test_18c() {
 	$LFS getstripe $DIR/$tdir/f3
 
 	cancel_lru_locks osc
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $osts "$LCTL set_param fail_loc=0"
 
 	echo "Inject failure, to simulate the case of missing the MDT-object"
 	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
@@ -3097,9 +3091,10 @@ test_19a() {
 
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
-		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
+	do_nodes $osts $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=0
 
 	echo "foo1" > $DIR/$tdir/a0
 	$LFS setstripe -E 512K -S 512K -o 0 -E -1 -S 1M $DIR/$tdir/a1 ||
@@ -3109,8 +3104,8 @@ test_19a() {
 	cancel_lru_locks osc
 
 	echo "Inject failure, then client will offer wrong parent FID when read"
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
-		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
+	do_nodes $osts $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=1
 
 	#define OBD_FAIL_LFSCK_INVALID_PFID	0x1619
 	$LCTL set_param fail_loc=0x1619
@@ -3131,21 +3126,22 @@ test_19b() {
 
 	echo "Inject failure stub to make the OST-object to back point to"
 	echo "non-exist MDT-object"
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
-		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
+	do_nodes $osts $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=0
 
 	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1611
+	do_nodes $osts "$LCTL set_param fail_loc=0x1611"
 	echo "foo1" > $DIR/$tdir/f0
 	$LFS setstripe -E 1M -S 1M -o 0 -E 4M -S 256K $DIR/$tdir/f1 ||
 		error "(0) Fail to create PFL $DIR/$tdir/f1"
 	echo "foo2" > $DIR/$tdir/f1
 	cancel_lru_locks osc
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $osts "$LCTL set_param fail_loc=0"
 
 	do_facet ost1 $LCTL set_param -n \
-		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=0
 	echo "Nothing should be fixed since self detect and repair is disabled"
 	local repaired=$(do_facet ost1 $LCTL get_param -n \
 			obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
@@ -3156,8 +3152,8 @@ test_19b() {
 	echo "Read RPC with right parent FID should be accepted,"
 	echo "and cause parent FID on OST to be fixed"
 
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
-		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
+	do_nodes $osts $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=1
 
 	cat $DIR/$tdir/f0 || error "(2.1) Read f0 should not be denied!"
 	cat $DIR/$tdir/f1 || error "(2.2) Read f1 should not be denied!"
@@ -3165,7 +3161,7 @@ test_19b() {
 	repaired=$(do_facet ost1 $LCTL get_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
 		awk '/^repaired/ { print $2 }')
-	[ $repaired -eq 2 ] ||
+	(( $repaired == 2 )) ||
 		error "(3) Expected 1 repaired, but got $repaired"
 }
 run_test 19b "OST-object inconsistency self repair"

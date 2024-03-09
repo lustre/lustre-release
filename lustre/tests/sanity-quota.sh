@@ -82,15 +82,15 @@ lustre_fail() {
 	local fail_node=$1
 	local fail_loc=$2
 	local fail_val=${3:-0}
-	local NODES=
+	local nodes=
 
 	case $fail_node in
-	mds_ost|mdt_ost) NODES="$(comma_list $(mdts_nodes) $(osts_nodes))";;
-	mds|mdt) NODES="$(comma_list $(mdts_nodes))";;
-	ost) NODES="$(comma_list $(osts_nodes))";;
+	mds_ost|mdt_ost|mds_oss) nodes="$(tgts_nodes)";;
+	mds|mdt) nodes="$(comma_list $(mdts_nodes))";;
+	ost) nodes="$(osts_nodes)";;
 	esac
 
-	do_nodes $NODES "lctl set_param fail_val=$fail_val fail_loc=$fail_loc"
+	do_nodes $nodes "lctl set_param fail_val=$fail_val fail_loc=$fail_loc"
 }
 
 RUNAS="runas -u $TSTID -g $TSTID"

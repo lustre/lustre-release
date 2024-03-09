@@ -1073,8 +1073,7 @@ test_21() {
 
 	# for zfs - sync OST dataset so that du below will return
 	# accurate results
-	[ "$FSTYPE" = "zfs" ] &&
-		do_nodes $(comma_list $(osts_nodes)) "$ZPOOL sync"
+	[[ "$FSTYPE" != "zfs" ]] || do_nodes $(osts_nodes) "$ZPOOL sync"
 
 	local blocks=$(du -kc $tf $tf2 | awk '/total/{print $1}')
 
@@ -1742,8 +1741,7 @@ test_37()
 	# verify mirror copy, write to this mirrored file will invalidate
 	# the other two mirrors
 	echo "Verifying mirror copy .."
-
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	$LFS mirror copy -i ${mirror_array[0]} -o-1 $tf ||
 		error "mirror copy error"
@@ -4343,7 +4341,7 @@ function check_ost_used() {
 
 test_208a() {
 	local tf=$DIR/$tfile
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
@@ -4386,7 +4384,7 @@ run_test 208a "mirror selection to prefer non-rotational devices for reads"
 
 test_208b() {
 	local tf=$DIR/$tfile
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
@@ -4433,7 +4431,7 @@ test_209a() {
 	local tf=$DIR/$tfile
 	local tmpfile="$TMP/$TESTSUITE-$TESTNAME-multiop.output"
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	stack_trap "rm -f $tmpfile"
 

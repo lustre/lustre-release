@@ -1640,6 +1640,7 @@ run_test 60 "test llog post recovery init vs llog unlink"
 #test race  llog recovery thread vs llog cleanup
 test_61a() {	# was test_61
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	local osts=$(osts_nodes)
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	createmany -o $DIR/$tdir/$tfile-%d 800 ||
@@ -1647,12 +1648,12 @@ test_61a() {	# was test_61
 	replay_barrier ost1
 	unlinkmany $DIR/$tdir/$tfile-%d 800
 	#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
-	set_nodes_failloc "$(osts_nodes)" 0x80000221
+	set_nodes_failloc $osts 0x80000221
 	facet_failover ost1
 	sleep 10
 	fail ost1
 	sleep 30
-	set_nodes_failloc "$(osts_nodes)" 0x0
+	set_nodes_failloc $osts 0x0
 
 	$CHECKSTAT -t file $DIR/$tdir/$tfile-* &&
 		error "$CHECKSTAT $DIR/$tdir/$tfile attribute check should fail"
@@ -1675,14 +1676,15 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	local osts=$(osts_nodes)
 
 	#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
-	set_nodes_failloc "$(osts_nodes)" 0x80000222
+	set_nodes_failloc $osts 0x80000222
 	rm $DIR/$tfile
 	sleep 10
 	fail ost1
-	set_nodes_failloc "$(osts_nodes)" 0x0
+	set_nodes_failloc $osts 0x0
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
