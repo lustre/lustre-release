@@ -655,15 +655,16 @@ run_test 4c "Auto trigger OI scrub if bad OI mapping was found (3)"
 
 test_4d() {
 	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip "ldiskfs only test"
+	local osts=$(osts_nodes)
 
 	check_mount_and_prep
 
 	#define OBD_FAIL_OSD_DUPLICATE_MAP	0x19b
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x19b
+	do_nodes $osts $LCTL set_param fail_loc=0x19b
 	for i in {1..100}; do
 		echo $i > $DIR/$tdir/f_$i || error "write f_$i failed"
 	done
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $osts $LCTL set_param fail_loc=0
 
 	for i in {101..200}; do
 		echo $i > $DIR/$tdir/f_$i || error "write f_$i failed"

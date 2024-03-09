@@ -81,8 +81,7 @@ test_fail_client_mds() {
 	stack_trap summary_and_cleanup EXIT INT
 
 	# start vmstat on OSS nodes
-	[ "$VMSTAT" ] &&
-		start_vmstat $(comma_list $(osts_nodes)) $VMSTAT_PID_FILE
+	[[ -z "$VMSTAT" ]] || start_vmstat $(osts_nodes) $VMSTAT_PID_FILE
 
 	# start client loads
 	rm -f $END_RUN_FILE

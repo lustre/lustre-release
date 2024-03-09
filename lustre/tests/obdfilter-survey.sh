@@ -69,7 +69,7 @@ obdflter_survey_targets () {
 
 	case $case in
 		disk)    targets=$(get_targets $case);;
-		network) targets=$(host_nids_address $(comma_list $(osts_nodes)) $NETTYPE);;
+		network) targets=$(host_nids_address $(osts_nodes) $NETTYPE);;
 		*) error "unknown obdflter-survey case!" ;;
 	esac
 	echo $targets
