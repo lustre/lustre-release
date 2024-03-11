@@ -3355,13 +3355,15 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	case RDMA_CM_EVENT_CONNECT_ERROR:
 		conn = cmid->context;
-                LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
-                        conn->ibc_state == IBLND_CONN_PASSIVE_WAIT);
-		CNETERR("%s: CONNECT ERROR %d cm_id %p conn %p\n",
-			libcfs_nid2str(conn->ibc_peer->ibp_nid), event->status, cmid, conn);
-                kiblnd_connreq_done(conn, -ENOTCONN);
-                kiblnd_conn_decref(conn);
-                return 0;
+		CNETERR("%s: CONNECT ERROR %d cm_id %p conn %p state: %d\n",
+			libcfs_nid2str(conn->ibc_peer->ibp_nid),
+			event->status, cmid, conn, conn->ibc_state);
+		if (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
+		    conn->ibc_state == IBLND_CONN_PASSIVE_WAIT) {
+			kiblnd_connreq_done(conn, -ENOTCONN);
+			kiblnd_conn_decref(conn);
+		}
+		return 0;
 
 	case RDMA_CM_EVENT_REJECTED:
 		conn = cmid->context;
