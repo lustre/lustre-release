@@ -424,14 +424,16 @@ static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 			goto out;
 		}
 
-		/* Make sure the pool exists */
-		rc = llapi_search_ost(fsname, *pool_name, NULL);
-		if (rc < 0) {
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "pool '%s fsname %s' does not exist",
-					  *pool_name, fsname);
-			rc = -EINVAL;
-			goto out;
+		if (!lov_pool_is_ignored((const char *) *pool_name)) {
+			/* Make sure the pool exists */
+			rc = llapi_search_ost(fsname, *pool_name, NULL);
+			if (rc < 0) {
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "pool '%s fsname %s' does not exist",
+					    *pool_name, fsname);
+				rc = -EINVAL;
+				goto out;
+			}
 		}
 	}
 
@@ -561,14 +563,16 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 	struct lov_user_md *lum = NULL;
 	const char *pool_name = param->lsp_pool;
 	size_t lum_size;
-	int fd, rc;
+	int fd, rc = 0;
 
 	/* Make sure we are on a Lustre file system */
-	rc = llapi_search_fsname(name, fsname);
-	if (rc) {
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "'%s' is not on a Lustre filesystem", name);
-		return rc;
+	if (pool_name && !lov_pool_is_ignored(pool_name)) {
+		rc = llapi_search_fsname(name, fsname);
+		if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "'%s' is not on a Lustre filesystem", name);
+			return rc;
+		}
 	}
 
 	/* Check if the stripe pattern is sane. */

@@ -1775,6 +1775,9 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 	struct lov_user_md *lum;
 	size_t lum_size;
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
 
 	if (path == NULL ||
 	    (layout != NULL && layout->llot_magic != LLAPI_LAYOUT_MAGIC)) {
@@ -1784,10 +1787,13 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 
 	if (layout) {
 		/* Make sure we are on a Lustre file system */
-		rc = llapi_search_fsname(path, fsname);
-		if (rc) {
-			errno = ENOTTY;
-			return -1;
+		if (comp->llc_pool_name[0] != '\0' &&
+		    !lov_pool_is_ignored(comp->llc_pool_name)) {
+			rc = llapi_search_fsname(path, fsname);
+			if (rc) {
+				errno = ENOTTY;
+				return -1;
+			}
 		}
 		rc = llapi_layout_v2_sanity((struct llapi_layout *)layout,
 					    false,
@@ -2405,6 +2411,7 @@ int llapi_layout_file_comp_add(const char *path,
 	struct llapi_layout *existing_layout = NULL;
 	struct lov_user_md *lum = NULL;
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
+	struct llapi_layout_comp *comp;
 
 	if (path == NULL || layout == NULL ||
 	    layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
@@ -2433,11 +2440,16 @@ int llapi_layout_file_comp_add(const char *path,
 		goto out;
 	}
 
-	rc = llapi_search_fsname(path, fsname);
-	if (rc) {
-		tmp_errno = -rc;
-		rc = -1;
-		goto out;
+	comp = __llapi_layout_cur_comp(layout);
+
+	if (comp->llc_pool_name[0] != '\0' &&
+	    !lov_pool_is_ignored(comp->llc_pool_name)) {
+		rc = llapi_search_fsname(path, fsname);
+		if (rc) {
+			tmp_errno = -rc;
+			rc = -1;
+			goto out;
+		}
 	}
 
 	rc = llapi_layout_v2_sanity(existing_layout, false, false, fsname);
@@ -2736,11 +2748,16 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 		goto out;
 	}
 
-	rc = llapi_search_fsname(path, fsname);
-	if (rc) {
-		tmp_errno = -rc;
-		rc = -1;
-		goto out;
+	comp = __llapi_layout_cur_comp(layout);
+
+	if (comp && comp->llc_pool_name[0] != '\0' &&
+	    !lov_pool_is_ignored(comp->llc_pool_name)) {
+		rc = llapi_search_fsname(path, fsname);
+		if (rc) {
+			tmp_errno = -rc;
+			rc = -1;
+			goto out;
+		}
 	}
 
 	rc = llapi_layout_v2_sanity(existing_layout, false, false, fsname);
@@ -3596,7 +3613,8 @@ static inline int verify_pool_name(char *fsname, struct llapi_layout *layout)
 	comp = __llapi_layout_cur_comp(layout);
 	if (!comp)
 		return 0;
-	if (comp->llc_pool_name[0] == '\0')
+	if (comp->llc_pool_name[0] == '\0' ||
+	    lov_pool_is_ignored(comp->llc_pool_name))
 		return 0;
 	/* check if the pool name exist */
 	if (llapi_search_ost(fsname, comp->llc_pool_name, NULL) < 0)
