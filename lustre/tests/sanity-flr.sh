@@ -3403,7 +3403,7 @@ resync_file_200() {
 		echo -n "resync file $tf with '$cmd' .."
 
 		if [[ $lock_taken = "true" ]]; then
-			flock -x 200
+			flock -x 200 &&
 			$cmd $tf &> /dev/null && echo "done" || echo "failed"
 			flock -u 200
 		else
