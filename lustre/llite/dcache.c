@@ -273,16 +273,12 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 
 	ll_set_lock_data(ll_i2sbi(inode)->ll_md_exp, inode, it,
 			 &bits);
-	if (bits & MDS_INODELOCK_LOOKUP) {
-		if (!ll_d_setup(de, true))
-			RETURN(-ENOMEM);
-		d_lustre_revalidate(de);
-		if (S_ISDIR(inode->i_mode)) {
-			struct dentry *parent = dget_parent(de);
+	if ((bits & MDS_INODELOCK_LOOKUP) &&
+	    !d_lustre_invalid(de) && S_ISDIR(inode->i_mode)) {
+		struct dentry *parent = dget_parent(de);
 
-			ll_update_dir_depth_dmv(d_inode(parent), de);
-			dput(parent);
-		}
+		ll_update_dir_depth_dmv(d_inode(parent), de);
+		dput(parent);
 	}
 
 	RETURN(rc);

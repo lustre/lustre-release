@@ -1208,6 +1208,50 @@ test_31r() {
 }
 run_test 31r "open-rename(replace) race"
 
+test_31s() {
+	local pid ls_str
+
+	mkdir_on_mdt0 $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error "touch $tdir/$tfile failed"
+	( cd $DIR/$tdir; tail -f $tfile || $MULTIOP . Dc) & pid=$!
+
+	stack_trap "pkill -P $pid 2> /dev/null" ERR
+
+	mv $DIR2/$tdir $DIR2/$tdir.old || error "mv $tdir $tdir.old failed"
+	mkdir_on_mdt0 $DIR2/$tdir || error "mkdir $DIR2/$tdir failed"
+	mv $DIR2/$tdir.old $DIR2/$tdir/ || error "mv $tdir.old $tdir/ failed"
+
+	pkill -P $pid || error "fail to stop $pid"
+	wait $pid
+
+	ls_str="$(ls  $DIR/$tdir)" || error "ls $DIR/$tdir failed"
+	[[ "$ls_str" == "$tdir.old" ]] ||
+		error "invalid dentry $DIR/$tdir: $ls_str != $tdir.old"
+}
+run_test 31s "open should not revalidate invalid dentry"
+
+test_31t() {
+	local pid i i_new
+
+	touch $DIR/$tfile || error "touch $tfile failed"
+
+	$MULTIOP $DIR/$tfile o_Sc & pid=$!
+	stack_trap "kill $pid 2> /dev/null" ERR
+	sleep 1
+
+	mv $DIR2/$tfile $DIR2/$tfile.old || error "mv $tfile $tfile.old failed"
+	touch $DIR2/$tfile || error "touch $tfile failed"
+	i_new=$(stat -c "%i" $DIR2/$tfile) || error "stat $tfile failed"
+
+	kill -SIGUSR1 $pid || error "fail to stop $pid"
+	wait $pid
+
+	i=$(stat -c "%i" $DIR/$tfile) || error "stat $tfile failed"
+	(( i == i_new )) ||
+		error "invalid dentry $DIR/$tfile, not updated (inode: $i != $i_new)"
+}
+run_test 31t "getattr should not revalidate invalid dentry"
+
 test_32b() { # bug 11270
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
