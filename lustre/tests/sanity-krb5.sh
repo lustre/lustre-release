@@ -124,24 +124,6 @@ error_dbench()
 	error $err_str
 }
 
-# obtain and cache Kerberos ticket-granting ticket
-refresh_krb5_tgt() {
-	local myRUNAS_UID=$1
-	local myRUNAS_GID=$2
-	shift 2
-	local myRUNAS=$@
-	if [ -z "$myRUNAS" ]; then
-		error_exit "myRUNAS command must be specified for refresh_krb5_tgt"
-	fi
-
-	CLIENTS=${CLIENTS:-$HOSTNAME}
-	do_nodes $CLIENTS "set -x
-if ! $myRUNAS krb5_login.sh; then
-    echo "Failed to refresh Krb5 TGT for UID/GID $myRUNAS_UID/$myRUNAS_GID."
-    exit 1
-fi"
-}
-
 restore_krb5_cred() {
 	local keys=$(keyctl show | awk '$6 ~ "^lgssc:" {print $1}')
 
