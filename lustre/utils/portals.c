@@ -304,6 +304,7 @@ int jt_ptl_network(int argc, char **argv)
 {
 	struct libcfs_ioctl_data data;
 	__u32 net = LNET_NET_ANY;
+	const char *msg = NULL;
 	int rc;
 
 	if (argc != 2) {
@@ -312,9 +313,26 @@ int jt_ptl_network(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "unconfigure") || !strcmp(argv[1], "down")) {
+		rc = yaml_lnet_configure(0, &msg);
+		if (rc != -EOPNOTSUPP) {
+			switch (rc) {
+			case 0:
+				printf("LNET ready to unload\n");
+				break;
+			case -ENODEV:
+			case -EBUSY:
+				printf("%s\n", msg);
+				break;
+			default:
+				printf("LNET unconfigure error %u: %s\n",
+				       -rc, msg);
+				break;
+			}
+			return rc;
+		}
+
 		LIBCFS_IOC_INIT(data);
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_UNCONFIGURE, &data);
-
 		if (rc == 0) {
 			printf("LNET ready to unload\n");
 			return 0;
@@ -332,6 +350,20 @@ int jt_ptl_network(int argc, char **argv)
 				errno, strerror(errno));
 		return -1;
 	} else if (!strcmp(argv[1], "configure") || !strcmp(argv[1], "up")) {
+		rc = yaml_lnet_configure(NLM_F_CREATE, &msg);
+		if (rc != -EOPNOTSUPP) {
+			switch (rc) {
+			case 0:
+				printf("LNET configured\n");
+				break;
+			default:
+				fprintf(stderr, "LNET configure error %u: %s\n",
+					-rc, msg);
+				break;
+			}
+			return rc;
+		}
+
 		LIBCFS_IOC_INIT(data);
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CONFIGURE, &data);
 

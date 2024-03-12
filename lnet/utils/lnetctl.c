@@ -899,6 +899,11 @@ static void yaml_lnet_print_error(int op, char *cmd, const char *errstr)
 	if (rc == 0)
 		goto emitter_error;
 
+	if (strcmp(cmd, "lnet") == 0) {
+		flag = "configure";
+		goto skip_op;
+	}
+
 	switch (op) {
 	case NLM_F_CREATE:
 		flag = "add";
@@ -917,7 +922,7 @@ static void yaml_lnet_print_error(int op, char *cmd, const char *errstr)
 		flag = "show";
 		break;
 	}
-
+skip_op:
 	yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
 				     (yaml_char_t *)flag,
@@ -1221,6 +1226,8 @@ static int jt_config_lnet(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
 	bool load_mod_params = false;
+	int flags = NLM_F_CREATE;
+	const char *msg = NULL;
 	int rc, opt;
 
 	const char *const short_options = "a";
@@ -1244,6 +1251,21 @@ static int jt_config_lnet(int argc, char **argv)
 		}
 	}
 
+	if (!load_mod_params)
+		flags |= NLM_F_EXCL;
+
+	rc = yaml_lnet_configure(flags, &msg);
+	if (rc != -EOPNOTSUPP) {
+		if (rc < 0) {
+			char errstr[256];
+
+			snprintf(errstr, sizeof(errstr),
+				 "LNet configure error: %s", msg);
+			yaml_lnet_print_error(flags, "lnet", errstr);
+		}
+		return rc;
+	}
+
 	rc = lustre_lnet_config_ni_system(LNET_CONFIGURE, load_mod_params,
 					  -1, &err_rc);
 
@@ -1258,11 +1280,24 @@ static int jt_config_lnet(int argc, char **argv)
 static int jt_unconfig_lnet(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
+	const char *msg = NULL;
 	int rc;
 
 	rc = check_cmd(lnet_cmds, "lnet", "unconfigure", 0, argc, argv);
 	if (rc)
 		return rc;
+
+	rc = yaml_lnet_configure(0, &msg);
+	if (rc != -EOPNOTSUPP) {
+		if (rc < 0) {
+			char errstr[256];
+
+			snprintf(errstr, sizeof(errstr),
+				 "LNet configure error: %s", msg);
+			yaml_lnet_print_error(0, "lnet", errstr);
+		}
+		return rc;
+	}
 
 	rc = lustre_lnet_config_ni_system(LNET_UNCONFIGURE, 0, -1, &err_rc);
 

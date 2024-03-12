@@ -793,6 +793,20 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 void lustre_lnet_free_list(struct nid_node *head);
 
 /**
+ * yaml_lnet_configure
+ *
+ *   Shared code for LNet setup and teardown.
+ *
+ *   flags	- Netlink flags that control setup behavior
+ *		  NLM_F_CREATE  - initializes LNet stack
+ *		  NLM_F_EXCL	- ignore module params
+ *		  0		- tears down LNet stack
+ *
+ *   msg	  error msg string returned.
+ */
+int yaml_lnet_configure(int flags, const char **msg);
+
+/**
  * yaml_emitter_set_output_netlink
  *
  *   Special handling to integrate LNet handling into libyaml.

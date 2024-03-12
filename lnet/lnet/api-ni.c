@@ -4791,6 +4791,38 @@ report_discover_err:
 }
 EXPORT_SYMBOL(LNetCtl);
 
+static int lnet_net_conf_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	int rc = 0;
+
+	if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+		/* NLM_F_EXCL means ignore module parameters */
+		if (info->nlhdr->nlmsg_flags & NLM_F_EXCL)
+			the_lnet.ln_nis_from_mod_params = true;
+
+		rc = lnet_configure(NULL);
+		switch (rc) {
+		case -ENETDOWN:
+			GENL_SET_ERR_MSG(info,
+					 "Network is down");
+			break;
+		case -ENODEV:
+			GENL_SET_ERR_MSG(info,
+					 "LNET is currently not loaded");
+			break;
+		case -EBUSY:
+			GENL_SET_ERR_MSG(info, "LNET busy");
+			break;
+		default:
+			break;
+		}
+	} else {
+		rc = lnet_unconfigure();
+	}
+
+	return rc;
+};
+
 struct lnet_nid_cpt {
 	struct lnet_nid lnc_nid;
 	unsigned int lnc_cpt;
@@ -8824,6 +8856,11 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
+	{
+		.cmd		= LNET_CMD_CONFIGURE,
+		.flags		= GENL_ADMIN_PERM,
+		.doit		= lnet_net_conf_cmd,
+	},
 	{
 		.cmd		= LNET_CMD_NETS,
 		.flags		= GENL_ADMIN_PERM,

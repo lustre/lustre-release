@@ -500,6 +500,9 @@ lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
 	lnet_net_unlock(cpt);
 }
 
+int lnet_configure(void *arg);
+int lnet_unconfigure(void);
+
 void lnet_ni_free(struct lnet_ni *ni);
 void lnet_net_free(struct lnet_net *net);
 

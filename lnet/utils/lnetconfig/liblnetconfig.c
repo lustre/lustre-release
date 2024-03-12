@@ -407,6 +407,81 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
 	return rc;
 }
 
+int yaml_lnet_configure(int flags, const char **msg)
+{
+	char *err = "lnet configure: ";
+	yaml_parser_t setup, reply;
+	char *config = "net:\n";
+	yaml_document_t results;
+	yaml_emitter_t request;
+	struct nl_sock *sk;
+	int rc;
+
+	/* Initialize configuration parser */
+	rc = yaml_parser_initialize(&setup);
+	if (rc == 0) {
+		yaml_parser_log_error(&setup, stderr, err);
+		yaml_parser_delete(&setup);
+		return -EOPNOTSUPP;
+	}
+
+	yaml_parser_set_input_string(&setup, (unsigned char *)config,
+				     strlen(config));
+	rc = yaml_parser_load(&setup, &results);
+	if (rc == 0) {
+		yaml_parser_log_error(&setup, stderr, err);
+		yaml_parser_delete(&setup);
+		return -EOPNOTSUPP;
+	}
+	yaml_parser_delete(&setup);
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk) {
+		yaml_document_delete(&results);
+		return -EOPNOTSUPP;
+	}
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		yaml_document_delete(&results);
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto free_reply;
+
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk, LNET_GENL_NAME,
+					     LNET_GENL_VERSION,
+					     LNET_CMD_CONFIGURE, flags);
+	if (rc == 1) /* 1 is success */
+		rc = yaml_emitter_dump(&request, &results);
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		rc = -EINVAL;
+	} else {
+		yaml_document_t errmsg;
+
+		rc = yaml_parser_load(&reply, &errmsg);
+	}
+	yaml_emitter_delete(&request);
+free_reply:
+	if (rc == 0) {
+		*msg = yaml_parser_get_reader_error(&reply);
+		rc = errno;
+	}
+
+	yaml_parser_delete(&reply);
+	yaml_document_delete(&results);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
 static int dispatch_peer_ni_cmd(__u32 cmd, struct lnet_ioctl_peer_cfg *data,
 				char *err_str, char *cmd_str)
 {

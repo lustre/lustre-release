@@ -56,6 +56,7 @@
  *
  * @LNET_CMD_UNSPEC:		unspecified command to catch errors
  *
+ * @LNET_CMD_CONFIGURE:		command to setup LNet stack
  * @LNET_CMD_NETS:		command to manage the LNet networks
  * @LNET_CMD_ROUTES:		command to manage LNet routes
  * @LNET_CMD_PING:		command to send pings to LNet connections
