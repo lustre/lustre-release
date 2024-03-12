@@ -510,6 +510,20 @@ t5_test() {
 			setupall > /dev/null ||
 				error "(3) Fail to setupall, subdirs=${j}"
 
+			# minimal number of free inodes among all OSTs
+			local avail=$($LFS df -i | grep "\[OST:.*\]" | sort -nk 4 |
+					   head -1 | awk '{print $4}')
+			local need=$((j * UNIT * i))
+			# add 10% to take unevenness of precreates among OSPs
+			((need += need / 10))
+
+			if ((avail < need))
+			then
+				echo "$avail, need $need at least"
+				i=$saved_mdscount
+				break;
+			fi
+
 			mkdir $LFSCKDIR ||
 				error "(4) mkdir $LFSCKDIR, subdirs=${j}"
 
