@@ -41,6 +41,8 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #define MAX_PATH_LENGTH 4096
 
@@ -87,6 +89,8 @@ static int t_fcntl(int fd, int cmd, ...)
 	case F_GETLK:
 	case F_SETLK:
 	case F_SETLKW:
+	case F_OFD_GETLK:
+	case F_OFD_SETLKW:
 		lock = va_arg(ap, struct flock *);
 		va_end(ap);
 		rc = fcntl(fd, cmd, lock);
@@ -594,6 +598,90 @@ static int t5(int argc, char *argv[])
 
 }
 
+#define	_OPS_FDS	-1
+
+int _op_fds(int num, void *ptr)
+{
+	static int *fds;
+	static int fdn;
+	static int cfd;
+	static char *name;
+	struct rlimit rlb;
+	int i;
+
+	if (num == _OPS_FDS)
+		return cfd;
+
+	if (ptr) {
+		name = ptr;
+		cfd = open(name, O_RDWR);
+		if (cfd < 0) {
+			fprintf(stderr, "Couldn't open file: %s\n", name);
+			return -1;
+		}
+		return 0;
+	}
+
+	if (num == 0 && ptr == NULL) {
+		for (i = 0; i < fdn; i++)
+			if (fds[i])
+				close(i);
+		free(fds);
+		fdn = 0;
+		return 0;
+	}
+	if (num <= 0) /* Invlid value, ignore */
+		return 0;
+
+	if (getrlimit(RLIMIT_NOFILE, &rlb)) {
+		fprintf(stderr, "Getlimit error: %s|n", strerror(errno));
+		return -1;
+	}
+	if (fdn < rlb.rlim_cur) {
+		int count = rlb.rlim_cur;
+
+		fds = realloc(fds, sizeof(int) * count);
+		if (fds == NULL) {
+			printf("error\n");
+			return -1;
+		}
+		for (i = fdn; i < count; i++)
+			fds[i] = 0;
+		fdn = count;
+	}
+	for (i = 0; i < fdn; i++) {
+		if (fds[i] == num) {
+			cfd = i; /* Already open */
+			return 0;
+		}
+	}
+	cfd = open(name, O_RDWR);
+	if (cfd < 0) {
+		fprintf(stderr, "Couldn't open file: %s(%s)\n",
+			name, strerror(errno));
+		return -1;
+	}
+	if (cfd >= fdn) {
+		fprintf(stderr, "Open too many files(cur:%d, lmt:%d)\n",
+			cfd, fdn);
+		return -1;
+	}
+	fds[cfd] = num;
+
+	return 0;
+}
+
+int set_cfd(int fno)
+{
+	if (fno >= 0)
+		return _op_fds(fno + 1, NULL);
+	return -1;
+}
+
+#define	new_fds(name)	_op_fds(0, name)
+#define	get_cfd()	_op_fds(_OPS_FDS, NULL)
+#define	put_fds()	_op_fds(0, NULL)
+
 #define	T6BUF_SIZE	200
 
 int set_lock(struct flock *lock, char *buf)
@@ -606,6 +694,10 @@ int set_lock(struct flock *lock, char *buf)
 		{ 'W', F_WRLCK },
 		{ 'R', F_RDLCK },
 		{ 'U', F_UNLCK },
+		{ 'S', 0 },	// setrlimit
+		{ 'F', 0 },	// file select
+		{ 'T', 0 },     // test lock
+		{ 'P', 0 },     // pause
 		{ 0, 0 }
 	};
 
@@ -623,6 +715,30 @@ int set_lock(struct flock *lock, char *buf)
 			lock->l_start = atol(head);
 			if (lock->l_start < 0)
 				break;
+			/* for special tag */
+			if (tags[v].tag == 'S') {
+				struct rlimit rlb;
+
+				rlb.rlim_cur = lock->l_start;
+				rlb.rlim_max = lock->l_start + 1;
+				if (setrlimit(RLIMIT_NOFILE, &rlb)) {
+					fprintf(stderr, "Setlimit error: %s\n",
+						strerror(errno));
+					return -1;
+				}
+				return 0;
+			}
+			if (tags[v].tag == 'F')
+				return set_cfd(lock->l_start);
+
+			if (tags[v].tag == 'T')
+				return 2;
+
+			if (tags[v].tag == 'P') {
+				sleep(lock->l_start);
+				return 0;
+			}
+
 			for (; !isdigit(buf[i]); i++)
 				if (i >= T6BUF_SIZE)
 					break;
@@ -637,6 +753,16 @@ int set_lock(struct flock *lock, char *buf)
 	return 0;
 }
 
+const char * fmode2str(int mode)
+{
+	static char buf[10];
+
+	if (mode == F_WRLCK) return "W";
+	if (mode == F_RDLCK) return "R";
+	sprintf(buf, "%d", mode);
+	return buf;
+}
+
 /*
  *	Read command from stdin then enqueue a lock
  *
@@ -646,8 +772,10 @@ int set_lock(struct flock *lock, char *buf)
  *	lll: length of range
  *
  *	for example:
+ *		F1		# open/select a fd as current one
  *		W1,100		# add a write lock from 1 to 100
  *		R100,100	# add a read lock from 100 to 199
+ *		Gn		# dump lock info(output count n, 0 is all)
  */
 static int t6(int argc, char *argv[])
 {
@@ -655,7 +783,7 @@ static int t6(int argc, char *argv[])
 		.l_whence = SEEK_SET,
 	};
 
-	int fd, rc = 0;
+	int rc = 0;
 	char buf[T6BUF_SIZE+1];
 	double stime;
 
@@ -664,26 +792,63 @@ static int t6(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	fd = open(argv[2], O_RDWR);
-	if (fd < 0) {
-		fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
+	new_fds(argv[2]);
+	if (get_cfd() < 0)
 		return EXIT_FAILURE;
-	}
 
 	memset(buf, '\0', T6BUF_SIZE + 1);
 	stime = now();
 	while (fgets(buf, T6BUF_SIZE, stdin)) {
-		if (set_lock(&lock, buf)) {
-			rc = t_fcntl(fd, F_SETLKW, &lock);
-			if (rc != 0) {
-				fprintf(stderr, "%d: cannot set lock: %s\n",
-					getpid(), strerror(errno));
+		lock.l_whence = SEEK_SET,
+		rc = set_lock(&lock, buf);
+		if (rc == 0)
+			continue;
+		if (rc == -1)
+			break;
+		if (rc == 2) {
+			int fd, i, cnt;
+
+			fd = open(argv[2], O_RDWR);
+			if (fd < 0) {
+				fprintf(stderr, "Couldn't open file: %s\n",
+					argv[2]);
 				rc = EXIT_FAILURE;
 				break;
 			}
+			cnt = lock.l_start;
+			lock.l_start = 0;
+			for (i = 0; cnt == 0 || i < cnt; i++) {
+				lock.l_type = F_WRLCK;
+				lock.l_len = 0;
+				lock.l_pid = 0;
+				rc = t_fcntl(fd, F_OFD_GETLK, &lock);
+				if (rc != 0) {
+					fprintf(stderr, "%d: get lock: %s\n",
+						getpid(), strerror(errno));
+					rc = EXIT_FAILURE;
+					break;
+				}
+				if (lock.l_type == F_UNLCK)
+					break;
+				printf("FLOCK %d: RWS:%s POS:%ld LEN:%ld PID:%d\n",
+				       i, fmode2str(lock.l_type), lock.l_start,
+				       lock.l_len, lock.l_pid);
+				lock.l_start += lock.l_len;
+			}
+			close(fd);
+			if (rc == EXIT_FAILURE)
+				break;
+			continue;
+		}
+		rc = t_fcntl(get_cfd(), F_OFD_SETLKW, &lock);
+		if (rc != 0) {
+			fprintf(stderr, "%d: cannot set lock: %s\n",
+				getpid(), strerror(errno));
+			rc = EXIT_FAILURE;
+			break;
 		}
 	}
-	close(fd);
+	put_fds();
 	printf("Time for processing %.03lfs\n", now() - stime);
 	return rc;
 }

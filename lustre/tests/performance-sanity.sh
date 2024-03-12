@@ -60,34 +60,55 @@ test_4() {
 }
 run_test 4 "lookup rate 200k files in 100 directories"
 
-test_5() {
+test_5a() {
 	touch $DIR/$tfile
-	for((i=0; i < 20000; i++)) {
+	for((i=0; i < 20001; i++)) {
 		echo "W$((i * 10)), 5"
+		[ $i -eq 20000 ] && echo "T5" && continue
 	} | flocks_test 6 $DIR/$tfile
 	rm -r $DIR/$tfile
 }
-run_test 5 "enqueue 20k no overlap flocks on same file"
+run_test 5a "enqueue 20k no overlap flocks on same file"
 
-test_6() {
+test_5b() {
 	touch $DIR/$tfile
-	for((i=0; i < 20000; i++)) {
+	for((i=0; i < 20001; i++)) {
 		[ $i -eq 0 ] && echo "W0,99999999" && continue
 		echo "R$((i * 10)), 5"
+		[ $i -eq 20000 ] && echo "T5" && continue
 	} | flocks_test 6 $DIR/$tfile
 	rm -r $DIR/$tfile
 }
-run_test 6 "split a flock 20k times"
+run_test 5b "split a flock 20k times"
 
-test_7() {
+test_5c() {
 	touch $DIR/$tfile
 	for((i=0; i < 20001; i++)) {
 		echo "R$((i * 10)), 5"
-		[ $i -eq 20000 ] && echo "W0,99999999" && continue
+		[ $i -eq 20000 ] && echo "W0,99999999" && echo "T0" && continue
 	} | flocks_test 6 $DIR/$tfile
 	rm -r $DIR/$tfile
 }
-run_test 7 "merge 20k flocks"
+run_test 5c "merge 20k flocks"
+
+test_5d() {
+	local v=0
+
+	touch $DIR/$tfile
+	for((i=0; i < 20001; i++)) {
+		echo "F$i"
+		echo "R400, $((100 + v))"
+		[ $i -eq 0 -a $v -eq 0 ] && echo "S20100"
+		[ $i -eq 20000 ] && {
+			echo "T5"
+			[ $v -eq 1 ] && break
+			v=$((v + 1))
+			i=0
+		}
+	} | flocks_test 6 $DIR/$tfile
+	rm -r $DIR/$tfile
+}
+run_test 5d "Enqueue 20k same range flocks, then expand them"
 
 complete_test $SECONDS
 check_and_cleanup_lustre
