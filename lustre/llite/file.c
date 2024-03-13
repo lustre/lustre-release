@@ -1759,6 +1759,8 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 #ifdef IOCB_DIRECT
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	int op = LPROC_LL_HYBRID_NOSWITCH;
+	int dio_switch = false;
 
 	ENTRY;
 
@@ -1776,15 +1778,28 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 	if (!test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags))
 		RETURN(false);
 
+	/* we only log hybrid IO stats if we hit the actual switching logic -
+	 * not if hybrid IO is disabled or the IO was never a candidate to
+	 * switch
+	 */
 	if (iot == CIT_WRITE &&
-	    count >= sbi->ll_hybrid_io_write_threshold_bytes)
-		RETURN(true);
+	    count >= sbi->ll_hybrid_io_write_threshold_bytes) {
+		op = LPROC_LL_HYBRID_WRITESIZE_SWITCH;
+		GOTO(out, dio_switch = true);
+	}
 
 	if (iot == CIT_READ &&
-	    count >= sbi->ll_hybrid_io_read_threshold_bytes)
-		RETURN(true);
-#endif
+	    count >= sbi->ll_hybrid_io_read_threshold_bytes) {
+		op = LPROC_LL_HYBRID_READSIZE_SWITCH;
+		GOTO(out, dio_switch = true);
+	}
+
+out:
+	ll_stats_ops_tally(sbi, op, 1);
+	RETURN(dio_switch);
+#else
 	RETURN(false);
+#endif
 }
 
 static ssize_t

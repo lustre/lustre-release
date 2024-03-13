@@ -2278,6 +2278,12 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_LISTXATTR,	LPROCFS_TYPE_LATENCY,	"listxattr" },
 	{ LPROC_LL_REMOVEXATTR,	LPROCFS_TYPE_LATENCY,	"removexattr" },
 	{ LPROC_LL_INODE_PERM,	LPROCFS_TYPE_LATENCY,	"inode_permission" },
+	/* hybrid IO switch from buffered I/O (BIO) to direct I/O (DIO) */
+	{ LPROC_LL_HYBRID_NOSWITCH, LPROCFS_TYPE_REQS, "hybrid_noswitch" },
+	{ LPROC_LL_HYBRID_WRITESIZE_SWITCH, LPROCFS_TYPE_REQS,
+		"hybrid_writesize_switch" },
+	{ LPROC_LL_HYBRID_READSIZE_SWITCH, LPROCFS_TYPE_REQS,
+		"hybrid_readsize_switch" },
 };
 
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, long count)
