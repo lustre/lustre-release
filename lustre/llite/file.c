@@ -6579,8 +6579,10 @@ int ll_layout_write_intent(struct inode *inode, enum layout_intent_opc opc,
  */
 int ll_layout_restore(struct inode *inode, loff_t offset, __u64 length)
 {
-	struct hsm_user_request	*hur;
-	int			 len, rc;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct hsm_user_request *hur;
+	int len, rc;
+
 	ENTRY;
 
 	len = sizeof(struct hsm_user_request) +
@@ -6597,8 +6599,13 @@ int ll_layout_restore(struct inode *inode, loff_t offset, __u64 length)
 	hur->hur_user_item[0].hui_extent.offset = offset;
 	hur->hur_user_item[0].hui_extent.length = length;
 	hur->hur_request.hr_itemcount = 1;
+	rc = mutex_lock_interruptible(&lli->lli_layout_mutex);
+	if (rc)
+		GOTO(out_free, rc);
 	rc = obd_iocontrol(LL_IOC_HSM_REQUEST, ll_i2sbi(inode)->ll_md_exp,
 			   len, hur, NULL);
+	mutex_unlock(&lli->lli_layout_mutex);
+out_free:
 	OBD_FREE(hur, len);
 	RETURN(rc);
 }

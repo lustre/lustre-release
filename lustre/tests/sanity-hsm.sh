@@ -1448,6 +1448,78 @@ test_12s() {
 }
 run_test 12s "race between restore requests"
 
+test_12t() {
+	copytool setup
+
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local file=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $file)
+	local n=32
+
+	$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to HSM archive $file"
+	wait_request_state $fid ARCHIVE SUCCEED
+	rm -f $file || error "failed to rm $file"
+
+	copytool import $fid $file
+	check_hsm_flags $file "0x0000000d"
+
+	local -a pids
+
+	for ((i=0; i < $n; i++)); do
+		cat $file > /dev/null &
+		pids[$i]=$!
+	done
+
+	for ((i=0; i < $n; i++));do
+		wait ${pids[$i]} || error "$?: failed to read pid=${pids[$i]}"
+	done
+}
+run_test 12t "Multiple parallel reads for a HSM imported file"
+
+test_12u() {
+	local dir=$DIR/$tdir
+	local n=10
+	local t=32
+
+	copytool setup
+	mkdir_on_mdt0 $dir || error "failed to mkdir $dir"
+
+	local -a pids
+	local -a fids
+
+	for ((i=0; i<$n; i++)); do
+		fids[$i]=$(copy_file /etc/hosts $dir/$tfile.$i)
+		$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $dir/$tfile.$i ||
+			error "failed to HSM archive $dir/$tfile.$i"
+	done
+
+	for ((i=0; i<$n; i++)); do
+		wait_request_state ${fids[$i]} ARCHIVE SUCCEED
+		rm $dir/$tfile.$i || error "failed to rm $dir/$tfile.$i"
+	done
+
+	for ((i=0; i<$n; i++)); do
+		copytool import ${fids[$i]} $dir/$tfile.$i
+		check_hsm_flags $dir/$tfile.$i "0x0000000d"
+	done
+
+	for ((i=0; i<$n; i++)); do
+		for ((j=0; j<$t; j++)); do
+			cat $dir/$tfile.$i > /dev/null &
+			pids[$((i * t + j))]=$!
+		done
+	done
+
+	local pid
+
+	for pid in "${pids[@]}"; do
+		wait $pid || error "$pid: failed to cat file: $?"
+	done
+}
+run_test 12u "Multiple reads on multiple HSM imported files in parallel"
+
 test_13() {
 	local -i i j k=0
 	for i in {1..10}; do
