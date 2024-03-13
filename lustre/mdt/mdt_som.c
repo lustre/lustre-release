@@ -199,6 +199,10 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	ma = &info->mti_attr;
 	la = &ma->ma_attr;
 
+	CDEBUG(D_INODE,
+	       "valid %llx, lsom init %d lsom size %llu size %llu lsom blocks %llu blocks %llu truncate %d\n",
+	       la->la_valid, o->mot_lsom_inited, o->mot_lsom_size, la->la_size,
+	       o->mot_lsom_blocks, la->la_blocks, truncate);
 	if (!(la->la_valid & (LA_SIZE | LA_LSIZE) &&
 	      o->mot_lsom_size < la->la_size) &&
 	    !(la->la_valid & (LA_BLOCKS | LA_LBLOCKS) &&

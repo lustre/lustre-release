@@ -1962,6 +1962,10 @@ out:
 		goto restart;
 	}
 
+	/* update inode size */
+	if (io->ci_type == CIT_WRITE)
+		ll_merge_attr(env, inode);
+
 	if (io->ci_dio_aio) {
 		/* set the number of bytes successfully moved in the aio */
 		if (result > 0)

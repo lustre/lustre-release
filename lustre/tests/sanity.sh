@@ -31253,25 +31253,27 @@ check_lsom_data()
 {
 	local file=$1
 	local expect=$(stat -c %s $file)
+	local msg=$2
 
-	check_lsom_size $1 $expect
+	check_lsom_size $1 $expect $msg
 
 	local blocks=$($LFS getsom -b $file)
 	expect=$(stat -c %b $file)
 	[[ $blocks == $expect ]] ||
-		error "$file expected blocks: $expect, got: $blocks"
+		error "$msg $file expected blocks: $expect, got: $blocks"
 }
 
 check_lsom_size()
 {
 	local size
 	local expect=$2
+	local msg=$3
 
 	cancel_lru_locks mdc
 
 	size=$($LFS getsom -s $1)
 	[[ $size == $expect ]] ||
-		error "$file expected size: $expect, got: $size"
+		error "$msg $file expected size: $expect, got: $size"
 }
 
 test_806() {
@@ -31289,7 +31291,11 @@ test_806() {
 	echo "Test SOM for single-threaded write"
 	dd if=/dev/zero of=$DIR/$tfile bs=$bs count=1 ||
 		error "write $tfile failed"
-	check_lsom_size $DIR/$tfile $bs
+	check_lsom_size $DIR/$tfile $bs "(0)"
+	# Test SOM with DIO write (dd truncates to 0)
+	dd if=/dev/zero of=$DIR/$tfile bs=$bs count=1 oflag=direct ||
+		error "write $tfile failed"
+	check_lsom_size $DIR/$tfile $bs "(1)"
 
 	local num=32
 	local size=$(($num * $bs))
@@ -31306,7 +31312,7 @@ test_806() {
 	for (( i=0; i < $num; i++ )); do
 		wait ${pids[$i]}
 	done
-	check_lsom_size $DIR/$tfile $size
+	check_lsom_size $DIR/$tfile $size "(2)"
 
 	$TRUNCATE $DIR/$tfile 0
 	for ((i = 0; i < $num; i++)); do
@@ -31317,7 +31323,7 @@ test_806() {
 	for (( i=0; i < $num; i++ )); do
 		wait ${pids[$i]}
 	done
-	check_lsom_size $DIR/$tfile $size
+	check_lsom_size $DIR/$tfile $size "(3)"
 
 	# multi-client writes
 	num=$(get_node_count ${CLIENTS//,/ })
@@ -31336,7 +31342,7 @@ test_806() {
 	for (( i=0; i < $num; i++ )); do
 		wait ${pids[$i]}
 	done
-	check_lsom_size $DIR/$tfile $offset
+	check_lsom_size $DIR/$tfile $offset "(4)"
 
 	i=0
 	$TRUNCATE $DIR/$tfile 0
@@ -31349,37 +31355,37 @@ test_806() {
 	for (( i=0; i < $num; i++ )); do
 		wait ${pids[$i]}
 	done
-	check_lsom_size $DIR/$tfile $size
+	check_lsom_size $DIR/$tfile $size "(5)"
 
 	# verify SOM blocks count
 	echo "Verify SOM block count"
 	$TRUNCATE $DIR/$tfile 0
 	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w$((bs))YSc ||
 		error "failed to write file $tfile with fdatasync and fstat"
-	check_lsom_data $DIR/$tfile
+	check_lsom_data $DIR/$tfile "(6)"
 
 	$TRUNCATE $DIR/$tfile 0
 	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w$((bs * 2))Yc ||
 		error "failed to write file $tfile with fdatasync"
-	check_lsom_data $DIR/$tfile
+	check_lsom_data $DIR/$tfile "(7)"
 
 	$TRUNCATE $DIR/$tfile 0
 	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:O_SYNC:w$((bs * 3))c ||
 		error "failed to write file $tfile with sync IO"
-	check_lsom_data $DIR/$tfile
+	check_lsom_data $DIR/$tfile "(8)"
 
 	# verify truncate
 	echo "Test SOM for truncate"
 	# use ftruncate to sync blocks on close request
 	$MULTIOP $DIR/$tfile oO_WRONLY:T16384c
-	check_lsom_size $DIR/$tfile 16384
-	check_lsom_data $DIR/$tfile
+	check_lsom_size $DIR/$tfile 16384 "(9)"
+	check_lsom_data $DIR/$tfile "(10)"
 
 	$TRUNCATE $DIR/$tfile 1234
-	check_lsom_size $DIR/$tfile 1234
+	check_lsom_size $DIR/$tfile 1234 "(11)"
 	# sync blocks on the MDT
 	$MULTIOP $DIR/$tfile oc
-	check_lsom_data $DIR/$tfile
+	check_lsom_data $DIR/$tfile "(12)"
 }
 run_test 806 "Verify Lazy Size on MDS"
 
@@ -31428,9 +31434,9 @@ test_807() {
 	do_rpc_nodes "$CLIENTS" cancel_lru_locks osc
 	do_nodes "$CLIENTS" "sync ; sleep 5 ; sync"
 	$LSOM_SYNC -u $cl_user -m $FSNAME-MDT0000 $MOUNT
-	check_lsom_data $DIR/$tdir/trunc
-	check_lsom_data $DIR/$tdir/single_dd
-	check_lsom_data $DIR/$tfile
+	check_lsom_data $DIR/$tdir/trunc "(0)"
+	check_lsom_data $DIR/$tdir/single_dd "(1)"
+	check_lsom_data $DIR/$tfile "(2)"
 
 	rm -rf $DIR/$tdir
 	# Deregistration step
