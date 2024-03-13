@@ -2127,8 +2127,11 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 				rc = ptl_send_rpc(req, 0);
 				if (rc == -ENOMEM) {
 					spin_lock(&imp->imp_lock);
-					if (!list_empty(&req->rq_list))
+					if (!list_empty(&req->rq_list)) {
 						list_del_init(&req->rq_list);
+						if (atomic_dec_and_test(&imp->imp_inflight))
+							wake_up(&imp->imp_recovery_waitq);
+					}
 					spin_unlock(&imp->imp_lock);
 					ptlrpc_rqphase_move(req, RQ_PHASE_NEW);
 					continue;

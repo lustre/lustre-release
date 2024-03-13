@@ -29609,6 +29609,11 @@ test_414() {
 	$LCTL set_param fail_loc=0x80000521
 	dd if=/dev/zero of=$DIR/$tfile bs=2M count=1 oflag=sync
 	rm -f $DIR/$tfile
+	# This error path has sometimes left inflight requests dangling, so
+	# test for this by remounting the client (umount will hang if there's
+	# a dangling request)
+	umount_client $MOUNT
+	mount_client $MOUNT
 }
 run_test 414 "simulate ENOMEM in ptlrpc_register_bulk()"
 
