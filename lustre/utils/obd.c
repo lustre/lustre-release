@@ -157,14 +157,14 @@ static int get_mgs_device(void)
 			fprintf(stderr,
 				"This command must be run on the MGS.\n");
 			errno = ENODEV;
-			return -1;
+			return -errno;
 		}
 		mgs_device = cur_device;
 	}
 	return mgs_device;
 }
 
-/* Returns -1 on error with errno set */
+/* Returns 0 on success, -errno on failure */
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
 	struct obd_ioctl_data data;
@@ -2295,7 +2295,10 @@ int jt_replace_nids(int argc, char **argv)
 	struct obd_ioctl_data data;
 
 	memset(&data, 0, sizeof(data));
-	data.ioc_dev = get_mgs_device();
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
 	if (argc != 3)
 		return CMD_HELP;
 
@@ -2444,7 +2447,10 @@ int jt_lcfg_clear(int argc, char **argv)
 	struct obd_ioctl_data data;
 
 	memset(&data, 0, sizeof(data));
-	data.ioc_dev = get_mgs_device();
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
 	if (argc != 2)
 		return CMD_HELP;
 
@@ -2478,7 +2484,10 @@ int jt_lcfg_fork(int argc, char **argv)
 		return CMD_HELP;
 
 	memset(&data, 0, sizeof(data));
-	data.ioc_dev = get_mgs_device();
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
 	data.ioc_inllen1 = strlen(argv[1]) + 1;
 	data.ioc_inlbuf1 = argv[1];
 	data.ioc_inllen2 = strlen(argv[2]) + 1;
@@ -2515,7 +2524,10 @@ int jt_lcfg_erase(int argc, char **argv)
 	}
 
 	memset(&data, 0, sizeof(data));
-	data.ioc_dev = get_mgs_device();
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
 	data.ioc_inllen1 = strlen(argv[1]) + 1;
 	data.ioc_inlbuf1 = argv[1];
 
@@ -3861,7 +3873,7 @@ out:
  *				ioctl buffer
  * \param	argv[]		variable number of string arguments
  *
- * \retval			0 on success
+ * \retval			0 on success, -errno on failure
  */
 static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 		       void *ret_data, unsigned int ret_size, ...)
@@ -3888,8 +3900,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 	va_end(ap);
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (!lcfg)
-		return -ENOMEM;
+	if (!lcfg) {
+		errno = ENOMEM;
+		return -errno;
+	}
 	lustre_cfg_init(lcfg, cmd, &bufs);
 
 	memset(&data, 0, sizeof(data));
@@ -3916,9 +3930,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
+		errno = -rc;
 		fprintf(stderr,
 			"error: invalid ioctl request: %08x errno: %d: %s\n",
-			cmd, errno, strerror(-rc));
+			cmd, errno, strerror(errno));
 		goto out;
 	}
 
@@ -3932,8 +3947,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 
 	if (ret_data) {
 		rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-		if (rc)
+		if (rc) {
+			errno = -rc;
 			goto out;
+		}
 
 		if (ret_size > data.ioc_plen1)
 			ret_size = data.ioc_plen1;
@@ -3963,10 +3980,8 @@ int jt_nodemap_activate(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, false, NULL, 0,
 			 argv[0], argv[1], NULL);
 
-	if (rc != 0) {
-		errno = -rc;
+	if (rc != 0)
 		perror(argv[0]);
-	}
 
 	return rc;
 }
@@ -3994,10 +4009,8 @@ int jt_nodemap_add(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_ADD, false, NULL, 0, argv[0],
 			 argv[1], NULL);
 
-	if (rc != 0) {
-		errno = -rc;
+	if (rc != 0)
 		perror(argv[0]);
-	}
 
 	return rc;
 }
@@ -4025,10 +4038,8 @@ int jt_nodemap_del(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_DEL, false, NULL, 0, argv[0],
 			 argv[1], NULL);
 
-	if (rc != 0) {
-		errno = -rc;
+	if (rc != 0)
 		perror(argv[0]);
-	}
 
 	return rc;
 }
@@ -4227,7 +4238,7 @@ int jt_nodemap_add_range(int argc, char **argv)
 		fprintf(stderr,
 			"error: %s: cannot add range '%s' to nodemap '%s': %s\n",
 			jt_cmdname(argv[0]), nodemap_range, nodemap_name,
-			strerror(-rc));
+			strerror(errno));
 	}
 
 	return rc;
@@ -4283,10 +4294,10 @@ int jt_nodemap_del_range(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_DEL_RANGE, false, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"error: %s: cannot delete range '%s' to nodemap '%s': rc = %d\n",
-			jt_cmdname(argv[0]), nodemap_range, nodemap_name, rc);
+			"error: %s: cannot delete range '%s' to nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), nodemap_range, nodemap_name,
+			strerror(errno));
 	}
 
 	return rc;
@@ -4336,10 +4347,10 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, false, NULL, 0, argv[0],
 			 nodemap_name, fileset_name, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"error: %s: cannot set fileset '%s' on nodemap '%s': rc = %d\n",
-			jt_cmdname(argv[0]), fileset_name, nodemap_name, rc);
+			"error: %s: cannot set fileset '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), fileset_name, nodemap_name,
+			strerror(errno));
 	}
 
 	return rc;
@@ -4400,10 +4411,10 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 	rc = nodemap_cmd(LCFG_NODEMAP_SET_SEPOL, false, NULL, 0, argv[0],
 			 nodemap_name, sepol, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"error: %s: cannot set sepol '%s' on nodemap '%s': rc = %d\n",
-			jt_cmdname(argv[0]), sepol, nodemap_name, rc);
+			"error: %s: cannot set sepol '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), sepol, nodemap_name,
+			strerror(errno));
 	}
 
 	return rc;
@@ -4492,10 +4503,10 @@ int jt_nodemap_modify(int argc, char **argv)
 	rc = nodemap_cmd(cmd, false, NULL, 0, argv[0], nodemap_name, param,
 			 value, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"error: %s: cannot modify nodemap '%s' to param '%s': value '%s': rc = %d\n",
-			jt_cmdname(argv[0]), nodemap_name, param, value, rc);
+			"error: %s: cannot modify nodemap '%s' to param '%s': value '%s': %s\n",
+			jt_cmdname(argv[0]), nodemap_name, param, value,
+			strerror(errno));
 	}
 
 	return rc;
@@ -4554,10 +4565,9 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 	rc = nodemap_cmd(cmd, false, NULL, 0,
 			 argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"cannot add %smap '%s' to nodemap '%s': rc = %d\n",
-			idtype, idmap, nodemap_name, rc);
+			"cannot add %smap '%s' to nodemap '%s': %s\n",
+			idtype, idmap, nodemap_name, strerror(errno));
 	}
 
 	return rc;
@@ -4616,10 +4626,9 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 	rc = nodemap_cmd(cmd, false, NULL, 0,
 			 argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {
-		errno = -rc;
 		fprintf(stderr,
-			"cannot delete %smap '%s' from nodemap '%s': rc = %d\n",
-			idtype, idmap, nodemap_name, rc);
+			"cannot delete %smap '%s' from nodemap '%s': %s\n",
+			idtype, idmap, nodemap_name, strerror(errno));
 	}
 
 	return rc;
