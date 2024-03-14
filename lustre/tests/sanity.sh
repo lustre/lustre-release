@@ -33307,6 +33307,11 @@ test_818() {
 	# restore osp-syn threads
 	stack_trap "fail $SINGLEMDS"
 
+	# disable console ratelimit
+	local rl=$(do_facet mds1 $LCTL get_param -n console_ratelimit)
+	do_facet mds1 $LCTL set_param console_ratelimit=0
+	stack_trap "do_facet mds1 $LCTL set_param console_ratelimit=$rl"
+
 	#define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80002105
 	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
