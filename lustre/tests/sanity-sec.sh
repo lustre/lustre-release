@@ -6293,6 +6293,67 @@ test_69() {
 }
 run_test 69 "check upcall incorrect values"
 
+test_70() {
+	local param_mgs=$(mktemp $TMP/$tfile-mgs.XXXXXX)
+	local param_copy=$(mktemp $TMP/$tfile-copy.XXXXXX)
+
+	stack_trap "rm -f $param_mgs $param_copy" EXIT
+
+	(( $MDS1_VERSION > $(version_code 2.15.61) )) ||
+		skip "Need MDS version at least 2.15.61"
+
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test"
+	fi
+
+	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip "ldiskfs only test (using debugfs)"
+
+	# unmount then remount the Lustre filesystem, to make sure llogs
+	# are copied locally
+	export SK_NO_KEY=false
+	stopall || error "stopall failed"
+	init_gss
+	mountmgs || error "mountmgs failed"
+	mountmds || error "mountmds failed"
+	mountoss || error "mountoss failed"
+	mountcli || error "mountcli failed"
+	lfs df -h
+	unset SK_NO_KEY
+
+	do_facet mgs "sync ; sync"
+	do_facet mgs "$DEBUGFS -c -R 'ls CONFIGS/' $(mgsdevname)"
+	do_facet mgs "$DEBUGFS -c -R 'dump CONFIGS/$FSNAME-sptlrpc $param_mgs' \
+		$(mgsdevname)"
+	do_facet mgs "llog_reader $param_mgs" | grep -vE "SKIP|marker" |
+		grep "^#" > $param_mgs
+	cat $param_mgs
+
+	if ! combined_mgs_mds; then
+		do_facet mds1 "sync ; sync"
+		do_facet mds1 "$DEBUGFS -c -R 'ls CONFIGS/' $(mdsdevname 1)"
+		do_facet mds1 "$DEBUGFS -c -R 'dump CONFIGS/$FSNAME-sptlrpc \
+			$param_copy' $(mdsdevname 1)"
+		do_facet mds1 "llog_reader $param_copy" |
+			grep -vE "SKIP|marker" | grep "^#" > $param_copy
+		cat $param_copy
+		cmp -bl $param_mgs $param_copy ||
+			error "sptlrpc llog differ in mds"
+		rm -f $param_copy
+	fi
+
+	do_facet ost1 "sync ; sync"
+	do_facet ost1 "$DEBUGFS -c -R 'ls CONFIGS/' $(ostdevname 1)"
+	do_facet ost1 "$DEBUGFS -c -R 'dump CONFIGS/$FSNAME-sptlrpc \
+		$param_copy' $(ostdevname 1)"
+	do_facet ost1 "llog_reader $param_copy" | grep -vE "SKIP|marker" |
+		grep "^#" > $param_copy
+	cat $param_copy
+	cmp -bl $param_mgs $param_copy ||
+		error "sptlrpc llog differ in oss"
+}
+run_test 70 "targets have local copy of sptlrpc llog"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

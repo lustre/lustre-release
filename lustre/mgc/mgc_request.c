@@ -297,7 +297,13 @@ config_log_find_or_add(struct obd_device *obd, char *logname,
 	struct config_llog_data *cld;
 
 	/* Note class_config_llog_handler() depends on getting "obd" back */
-	lcfg.cfg_instance = sb ? ll_get_cfg_instance(sb) : (unsigned long)obd;
+	/* for sptlrpc, sb is only provided to be able to make a local copy,
+	 * not for the instance
+	 */
+	if (sb && type != MGS_CFG_T_SPTLRPC)
+		lcfg.cfg_instance = ll_get_cfg_instance(sb);
+	else
+		lcfg.cfg_instance = (unsigned long)obd;
 
 	cld = config_log_find(logname, &lcfg);
 	if (unlikely(cld != NULL))
@@ -347,7 +353,7 @@ config_log_add(struct obd_device *obd, char *logname,
 	strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
 	if (cfg->cfg_sub_clds & CONFIG_SUB_SPTLRPC) {
-		sptlrpc_cld = config_log_find_or_add(obd, seclogname, NULL,
+		sptlrpc_cld = config_log_find_or_add(obd, seclogname, sb,
 						     MGS_CFG_T_SPTLRPC, cfg);
 		if (IS_ERR(sptlrpc_cld)) {
 			rc = PTR_ERR(sptlrpc_cld);
@@ -1636,6 +1642,12 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
 	if (cld->cld_cfg.cfg_sb)
 		lsi = s2lsi(cld->cld_cfg.cfg_sb);
+
+	/* sptlrpc llog must not keep ref to sb,
+	 * it was just needed to get lsi
+	 */
+	if (cld_is_sptlrpc(cld))
+		cld->cld_cfg.cfg_sb = NULL;
 
 	OBD_ALLOC_PTR(env);
 	if (!env)
