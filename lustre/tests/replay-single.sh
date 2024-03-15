@@ -31,8 +31,6 @@ mkdir -p $DIR
 assert_DIR
 rm -rf $DIR/[df][0-9]* $DIR/f.$TESTSUITE.*
 
-force_new_seq_all
-
 test_0a() {	# was test_0
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS

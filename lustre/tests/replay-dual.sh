@@ -47,8 +47,6 @@ CLIENT1=${CLIENT1:-$HOSTNAME}
 # Exception is the test which need two separate nodes
 CLIENT2=${CLIENT2:-$CLIENT1}
 
-force_new_seq_all
-
 LU482_FAILED=$(mktemp -u $TMP/$TESTSUITE.lu482.XXXXXX)
 test_0a() {
 	echo "Check file is LU482_FAILED=$LU482_FAILED"
