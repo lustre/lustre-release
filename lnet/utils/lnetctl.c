@@ -3955,36 +3955,6 @@ static int jt_export(int argc, char **argv)
 			return -1;
 	}
 
-	rc = yaml_lnet_config_ni(NULL, NULL, NULL, NULL, -1, NULL,
-				 flags & NLM_F_DUMP_FILTERED ? 1 : 2,
-				 flags);
-	if (rc < 0) {
-		if (rc == -EOPNOTSUPP)
-			goto old_api;
-	}
-
-	rc = yaml_lnet_route(NULL, NULL, -1, -1, -1, LNET_GENL_VERSION, flags);
-	if (rc < 0) {
-		if (rc == -EOPNOTSUPP)
-			goto old_api;
-	}
-
-	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc, backup);
-	if (rc != LUSTRE_CFG_RC_NO_ERR) {
-		cYAML_print_tree2file(stderr, err_rc);
-		cYAML_free_tree(err_rc);
-		err_rc = NULL;
-	}
-
-	rc = yaml_lnet_peer(NULL, NULL, false, -1, false, false,
-			    flags & NLM_F_DUMP_FILTERED ? 0 : 3, flags);
-	if (rc < 0) {
-		if (rc == -EOPNOTSUPP)
-			goto old_api;
-	}
-	goto show_others;
-
-old_api:
 	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
@@ -4013,7 +3983,7 @@ old_api:
 		cYAML_free_tree(err_rc);
 		err_rc = NULL;
 	}
-show_others:
+
 	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
