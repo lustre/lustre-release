@@ -377,6 +377,8 @@ void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
 			CDEBUG(D_NET, "Peer %s(%p):0x%llx new -> wait response\n",
 			       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
 	} else if (msg->type == KFILND_MSG_HELLO_RSP) {
+		struct lnet_nid nid;
+
 		kp->kp_version = msg->proto.hello.version;
 		atomic_set(&kp->kp_state, KP_STATE_UPTODATE);
 		CDEBUG(D_NET,
@@ -384,5 +386,9 @@ void kfilnd_peer_process_hello(struct kfilnd_peer *kp, struct kfilnd_msg *msg)
 		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr,
 		       msg->proto.hello.version);
 		kfilnd_peer_clear_hello_state(kp);
+
+		lnet_nid4_to_nid(kp->kp_nid, &nid);
+		lnet_notify(kp->kp_dev->kfd_ni, &nid, true, false,
+			    kp->kp_last_alive);
 	}
 }

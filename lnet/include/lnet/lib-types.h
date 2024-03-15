@@ -1395,6 +1395,14 @@ struct lnet_peer_ni {
 	__u32			lpni_sel_priority;
 	/* number of preferred NIDs in lnpi_pref_nids */
 	__u32			lpni_pref_nnids;
+	/* Whether some thread is processing an lnet_notify() event for this
+	 * peer NI
+	 */
+	bool			lpni_notifying;
+	/* Timestamp of the last lnet_notify() event for this peer NI */
+	time64_t		lpni_timestamp;
+	/* Whether we've received an lnet_notify() event for this peer NI */
+	bool			lpni_notified;
 };
 
 /* Preferred path added due to traffic on non-MR peer_ni */

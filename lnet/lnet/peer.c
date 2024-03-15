@@ -160,6 +160,7 @@ lnet_peer_ni_alloc(struct lnet_nid *nid)
 	lpni->lpni_nid = *nid;
 	lpni->lpni_cpt = cpt;
 	atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
+	lpni->lpni_notified = false;
 
 	net = lnet_get_net_locked(LNET_NID_NET(nid));
 	lpni->lpni_net = net;
@@ -3189,15 +3190,25 @@ int ping_info_count_entries(struct lnet_ping_buffer *pbuf)
 	return nnis;
 }
 
-static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni)
+static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni,
+					   __u32 new_status)
 {
-	if (lpni->lpni_ns_status == LNET_NI_STATUS_DOWN) {
+	__u32 old_status;
+
+	spin_lock(&lpni->lpni_lock);
+	old_status = lpni->lpni_ns_status;
+	lpni->lpni_ns_status = new_status;
+	spin_unlock(&lpni->lpni_lock);
+
+	/* Decrement health when transitioning from UP to DOWN */
+	if (old_status != new_status && new_status == LNET_NI_STATUS_DOWN) {
 		lnet_net_lock(0);
 		lnet_handle_remote_failure_locked(lpni);
 		lnet_net_unlock(0);
-	} else if (lpni->lpni_ns_status == LNET_NI_STATUS_UP &&
-		 !lpni->lpni_last_alive)
+	} else if (new_status == LNET_NI_STATUS_UP && !lpni->lpni_last_alive) {
+		/* Set health to max if the initial status is UP */
 		atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
+	}
 }
 
 /*
@@ -3239,7 +3250,6 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	int i;
 	int j;
 	int rc;
-	__u32 old_st;
 
 	flags = LNET_PEER_DISCOVERED;
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL)
@@ -3318,10 +3328,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 				 */
 				lpni = lnet_peer_ni_find_locked(&curnis[i]);
 				if (lpni) {
-					old_st = lpni->lpni_ns_status;
-					lpni->lpni_ns_status = *stp;
-					if (old_st != lpni->lpni_ns_status)
-						handle_disc_lpni_health(lpni);
+					handle_disc_lpni_health(lpni, *stp);
 					lnet_peer_ni_decref_locked(lpni);
 				}
 				break;
@@ -3351,8 +3358,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		}
 		lpni = lnet_peer_ni_find_locked(&addnis[i].ns_nid);
 		if (lpni) {
-			lpni->lpni_ns_status = addnis[i].ns_status;
-			handle_disc_lpni_health(lpni);
+			handle_disc_lpni_health(lpni, addnis[i].ns_status);
 			lnet_peer_ni_decref_locked(lpni);
 		}
 	}

@@ -3403,6 +3403,41 @@ test_226() {
 }
 run_test 226 "test missing route for 1 of 2 routers"
 
+test_227() {
+	local opts="lnet_peer_discovery_disabled=1 lnet_health_sensitivity=0"
+	opts+=" lnet_transaction_timeout=10"
+
+	[[ $NETTYPE != kfi* ]] || skip "kfi doesn't support drop rules"
+
+	setup_router_test -p 2 $opts || return $?
+
+	do_basic_rtr_test || return $?
+
+	do_node ${RPEERS[0]} $LNETCTL lnet unconfigure ||
+		error "Failed to unconfigure lnet on ${RPEERS[0]}"
+
+	local rpeer_nids=( ${RPEER_NIDS[${RPEERS[0]}]} )
+
+	do_lnetctl ping ${rpeer_nids[0]} &&
+		error "Expected ping to fail"
+
+	do_lnetctl ping ${rpeer_nids[0]} &&
+		error "Expected ping to fail"
+
+	local dropped=$(do_node ${ROUTERS[0]} \
+			$LNETCTL peer show -v 2 --nid ${rpeer_nids[0]} |
+			grep -A 2 dropped_stats |
+			awk '/get:/{print $2}' |
+			xargs echo |
+			sed 's/ /\+/g' | bc)
+
+	((dropped > 0)) ||
+		error "Expected dropped > 0 found $dropped"
+
+	cleanup_router_test
+}
+run_test 227 "Check router peer health w/DD disabled"
+
 test_230() {
 	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
 

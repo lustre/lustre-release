@@ -1644,13 +1644,6 @@ lnet_rtrpools_disable(void)
 	lnet_rtrpools_free(1);
 }
 
-static inline void
-lnet_notify_peer_down(struct lnet_ni *ni, struct lnet_nid *nid)
-{
-	if (ni->ni_net->net_lnd->lnd_notify_peer_down != NULL)
-		(ni->ni_net->net_lnd->lnd_notify_peer_down)(nid);
-}
-
 /*
  * ni: local NI used to communicate with the peer
  * nid: peer NID
@@ -1666,7 +1659,9 @@ lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 	struct lnet_route *route;
 	struct lnet_peer *lp;
 	time64_t now = ktime_get_seconds();
-	int cpt;
+	int cpt = lnet_nid2cpt(nid, ni);
+	unsigned int ns_status = alive ? LNET_NI_STATUS_UP :
+					 LNET_NI_STATUS_DOWN;
 
 	LASSERT(!in_interrupt());
 
@@ -1690,45 +1685,49 @@ lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 		return -EINVAL;
 	}
 
-	if (ni != NULL && !alive &&		/* LND telling me she's down */
-	    !auto_down) {			/* auto-down disabled */
+	if (ni && !alive &&		/* LND telling me she's down */
+	    !auto_down) {		/* auto-down disabled */
 		CDEBUG(D_NET, "Auto-down disabled\n");
 		return 0;
 	}
 
-	/* must lock 0 since this is used for synchronization */
-	lnet_net_lock(0);
+	lnet_net_lock(cpt);
 
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		lnet_net_unlock(0);
+		lnet_net_unlock(cpt);
 		return -ESHUTDOWN;
 	}
 
 	lpni = lnet_peer_ni_find_locked(nid);
-	if (lpni == NULL) {
+	if (!lpni) {
 		/* nid not found */
-		lnet_net_unlock(0);
+		lnet_net_unlock(cpt);
 		CDEBUG(D_NET, "%s not found\n", libcfs_nidstr(nid));
 		return 0;
 	}
 
-	if (alive) {
-		if (reset) {
-			lpni->lpni_ns_status = LNET_NI_STATUS_UP;
-			lnet_set_lpni_healthv_locked(lpni,
-						     LNET_MAX_HEALTH_VALUE);
-		} else {
-			lnet_inc_lpni_healthv_locked(lpni);
-		}
-	} else if (reset) {
-		lpni->lpni_ns_status = LNET_NI_STATUS_DOWN;
+	if (lpni->lpni_cpt != cpt) {
+		lnet_net_unlock(cpt);
+		cpt = lpni->lpni_cpt;
+		lnet_net_lock(cpt);
 	}
 
-	/* recalculate aliveness */
-	alive = lnet_is_peer_ni_alive(lpni);
+	if (ni && !alive && when < lpni->lpni_last_alive)
+		when = lpni->lpni_last_alive;
+
+	if (lpni->lpni_timestamp > when) {
+		CDEBUG(D_NET, "Out of date\n");
+		goto out_lpni_decref;
+	}
+
+	lpni->lpni_timestamp = when;
 
 	lp = lpni->lpni_peer_net->lpn_peer;
-	/* If this is an LNet router then update route aliveness */
+	/* If this peer NI belongs to an LNet router then update the associated
+	 * route aliveness. We update before taking lpni_lock below to avoid
+	 * holding both lpni_lock and lp_lock which is taken in
+	 * lnet_is_discovery_disabled().
+	 */
 	if (lp->lp_rtr_refcount) {
 		if (reset)
 			/* reset flag indicates gateway peer went up or down */
@@ -1736,12 +1735,6 @@ lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 
 		/* If discovery is disabled, locally or on the gateway, then
 		 * any routes using lpni as next-hop need to be updated
-		 *
-		 * NB: We can get many notifications while a route is down, so
-		 * we try and avoid the expensive net_lock/EX here for the
-		 * common case of receiving duplicate lnet_notify() calls (i.e.
-		 * only grab EX lock when we actually need to update the route
-		 * aliveness).
 		 */
 		if (lnet_is_discovery_disabled(lp)) {
 			list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
@@ -1751,13 +1744,51 @@ lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 		}
 	}
 
-	lnet_net_unlock(0);
+	spin_lock(&lpni->lpni_lock);
 
-	if (ni != NULL && !alive)
-		lnet_notify_peer_down(ni, &lpni->lpni_nid);
+	/* Depending on lnet_peers_start_down()/check_routers_before_use the
+	 * lpni_ns_status may initialize to either UP or DOWN. Thus, the
+	 * first notification that we receive may match the existing status.
+	 * We do not want to ignore this notification.
+	 */
+	if (lpni->lpni_notified && lpni->lpni_ns_status == ns_status) {
+		CDEBUG(D_NET, "Old news\n");
+		goto out_lpni_unlock;
+	}
 
-	cpt = lpni->lpni_cpt;
-	lnet_net_lock(cpt);
+	lpni->lpni_notified = true;
+	lpni->lpni_ns_status = ns_status;
+
+	while (lpni->lpni_notifying) {
+		/* Previous event is being processed */
+		spin_unlock(&lpni->lpni_lock);
+		lnet_net_unlock(cpt);
+		schedule();
+		lnet_net_lock(cpt);
+		spin_lock(&lpni->lpni_lock);
+	};
+
+	lpni->lpni_notifying = true;
+
+	if (alive && reset)
+		lnet_set_lpni_healthv_locked(lpni, LNET_MAX_HEALTH_VALUE);
+
+	if (lpni->lpni_ns_status == LNET_NI_STATUS_DOWN &&
+	    ni && ni->ni_net->net_lnd->lnd_notify_peer_down) {
+		spin_unlock(&lpni->lpni_lock);
+		lnet_net_unlock(cpt);
+
+		(ni->ni_net->net_lnd->lnd_notify_peer_down)(&lpni->lpni_nid);
+
+		lnet_net_lock(cpt);
+		spin_lock(&lpni->lpni_lock);
+	}
+
+	lpni->lpni_notifying = false;
+
+out_lpni_unlock:
+	spin_unlock(&lpni->lpni_lock);
+out_lpni_decref:
 	lnet_peer_ni_decref_locked(lpni);
 	lnet_net_unlock(cpt);
 

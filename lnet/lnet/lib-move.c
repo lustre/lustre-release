@@ -768,36 +768,14 @@ lnet_check_message_drop(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 	if (!lnet_peer_aliveness_enabled(lpni))
 		return 0;
 
-	/* If we're resending a message, let's attempt to send it even if
-	 * the peer is down to fulfill our resend quota on the message
-	 */
-	if (msg->msg_retry_count > 0)
-		return 0;
-
-	/* try and send recovery messages regardless */
-	if (msg->msg_recovery)
-		return 0;
-
-	/* always send any responses */
-	if (lnet_msg_is_response(msg))
-		return 0;
-
 	/* always send non-routed messages */
 	if (!msg->msg_routing)
 		return 0;
 
-	/* assume peer_ni is alive as long as we're within the configured
-	 * peer timeout
-	 */
-	if (ktime_get_seconds() <
-	    (lpni->lpni_last_alive +
-	     lpni->lpni_net->net_tunables.lct_peer_timeout))
+	if (lnet_is_peer_ni_alive(lpni))
 		return 0;
 
-	if (!lnet_is_peer_ni_alive(lpni))
-		return -EHOSTUNREACH;
-
-	return 0;
+	return -EHOSTUNREACH;
 }
 
 /**
@@ -4996,7 +4974,11 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 	 * from it. The ping response reports back the ns_status which is
 	 * marked on the remote as up or down and we cache it here.
 	 */
-	msg->msg_rxpeer->lpni_ns_status = LNET_NI_STATUS_UP;
+	if (unlikely(msg->msg_rxpeer->lpni_ns_status != LNET_NI_STATUS_UP)) {
+		spin_lock(&msg->msg_rxpeer->lpni_lock);
+		msg->msg_rxpeer->lpni_ns_status = LNET_NI_STATUS_UP;
+		spin_unlock(&msg->msg_rxpeer->lpni_lock);
+	}
 
 	lnet_msg_commit(msg, cpt);
 
