@@ -1061,6 +1061,9 @@ int tgt_connect(struct tgt_session_info *tsi)
 		   LUSTRE_MDT_NAME) == 0) {
 		struct lu_nodemap *nm = NULL;
 
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_ACCESS))
+			GOTO(out, rc = -EACCES);
+
 		rc = req_check_sepol(tsi->tsi_pill);
 		if (rc)
 			GOTO(out, rc);

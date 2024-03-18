@@ -1350,13 +1350,29 @@ out:
 		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
 		if (rc == -EACCES || rc == -EROFS) {
 			/*
-			 * Give up trying to reconnect
-			 * EACCES means client has no permission for connection
-			 * EROFS means client must mount read-only
+			 * -EACCES means client has no permission for connection
+			 * -EROFS means client must mount read-only
+			 *  Client deactivates import, it can be activated back
+			 *  manually when issue is resolved
+			 *  Server keeps trying forever until reconfigured or
+			 *  unmounted
 			 */
-			imp->imp_obd->obd_no_recov = 1;
-			ptlrpc_deactivate_import_nolock(imp);
-			inact = true;
+			LCONSOLE_WARN("%s: connection denied by %s: rc = %d\n",
+				      imp->imp_obd->obd_name,
+				      obd2cli_tgt(imp->imp_obd), rc);
+			if (imp->imp_connect_flags_orig &
+			    (OBD_CONNECT_LIGHTWEIGHT |
+			     OBD_CONNECT_MDS_MDS | OBD_CONNECT_MDS)) {
+				/* consider LWP, MDT-MDT and MDT-OST access
+				 * errors as temporary
+				 */
+				rc = -EAGAIN;
+				imp->imp_force_reconnect = 1;
+			} else {
+				imp->imp_deactive = 1;
+				ptlrpc_deactivate_import_nolock(imp);
+				inact = true;
+			}
 		} else if (rc == -EPROTO) {
 			struct obd_connect_data *ocd;
 
@@ -1383,6 +1399,7 @@ out:
 						   OBD_OCD_VERSION_PATCH(ocd->ocd_version),
 						   OBD_OCD_VERSION_FIX(ocd->ocd_version),
 						   LUSTRE_VERSION_STRING);
+				imp->imp_deactive = 1;
 				ptlrpc_deactivate_import_nolock(imp);
 				import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
 				inact = true;
@@ -1411,8 +1428,18 @@ out:
 			       (request->rq_deadline - request->rq_sent);
 		spin_unlock(&imp->imp_lock);
 
-		if (inact)
+		if (inact) {
+			/* imp_deactive event */
+			obd_import_event(imp->imp_obd, imp,
+					 IMP_EVENT_DEACTIVATE);
+			/* imp_invalid event */
 			obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
+			/* evict and invalidate if reconnect */
+			if (!aa->pcaa_initial_connect) {
+				import_set_state(imp, LUSTRE_IMP_EVICTED);
+				ptlrpc_import_recovery_state_machine(imp);
+			}
+		}
 
 		if (rc == -EPROTO)
 			RETURN(rc);
