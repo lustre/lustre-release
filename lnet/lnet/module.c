@@ -13,6 +13,7 @@
 #include <linux/miscdevice.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 
 static int config_on_load = 0;
 module_param(config_on_load, int, 0444);
@@ -375,8 +376,10 @@ lnet_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	CDEBUG(D_IOCTL, "lnet ioctl cmd %u\n", cmd);
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
 	err = libcfs_ioctl(cmd, data);
 	if (err == -EINVAL)
+#endif
 		err = lnet_ioctl(cmd, hdr);
 	if (err == -EINVAL) {
 		err = blocking_notifier_call_chain(&lnet_ioctl_list,

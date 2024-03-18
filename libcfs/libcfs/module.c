@@ -72,6 +72,12 @@ struct lnet_debugfs_symlink_def {
 
 static struct dentry *lnet_debugfs_root;
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+/* remove deprecated libcfs ioctl handling, since /dev/lnet has
+ * moved to lnet and there is no way to call these ioctls until
+ * after the lnet module is loaded.  They are replaced by writing
+ * to "debug_marker", handled by libcfs_debug_marker() below.
+ */
 int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 {
 	switch (cmd) {
@@ -93,6 +99,7 @@ int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 	return 0;
 }
 EXPORT_SYMBOL(libcfs_ioctl);
+#endif
 
 static int proc_dobitmasks(struct ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
@@ -212,6 +219,36 @@ static int proc_fail_loc(struct ctl_table *table, int write,
 		wake_up(&cfs_race_waitq);
 	}
 	return rc;
+}
+
+static int libcfs_debug_marker(struct ctl_table *table, int write,
+			       void __user *buffer,
+			       size_t *lenp, loff_t *ppos)
+{
+	size_t len = min(*lenp, 4000UL);
+	char *kbuf;
+
+	if (!*lenp || *ppos) {
+		*lenp = 0;
+		return 0;
+	}
+
+	if (!write)
+		return 0;
+
+	kbuf = strndup_user(buffer, len);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
+
+	if (strcmp(kbuf, "clear") == 0)
+		libcfs_debug_clear_buffer();
+	else
+		libcfs_debug_mark_buffer(kbuf);
+
+	kfree(kbuf);
+	*ppos += len;
+
+	return *lenp > 4000 ? -EOVERFLOW : 0;
 }
 
 int debugfs_doint(struct ctl_table *table, int write,
@@ -390,6 +427,11 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &debugfs_doint,
 		.extra1		= &min_watchdog_ratelimit,
 		.extra2		= &max_watchdog_ratelimit,
+	},
+	{
+		.procname	= "debug_marker",
+		.mode		= 0200,
+		.proc_handler	= &libcfs_debug_marker
 	},
 	{
 		.procname	= "force_lbug",

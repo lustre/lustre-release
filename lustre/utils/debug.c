@@ -732,14 +732,30 @@ out:
 
 int jt_dbg_clear_debug_buf(int argc, char **argv)
 {
-	int			 rc;
 	struct libcfs_ioctl_data data;
+	glob_t path;
+	int fd, rc;
 
 	if (argc != 1) {
 		fprintf(stderr, "usage: %s\n", argv[0]);
 		return 0;
 	}
 
+	if (cfs_get_param_paths(&path, "debug_marker") != 0)
+		goto use_ioctl;
+
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd < 0) {
+		cfs_free_param_data(&path);
+		goto use_ioctl;
+	}
+
+	rc = write(fd, "clear", strlen("clear") + 1);
+	cfs_free_param_data(&path);
+	close(fd);
+	return rc > 0 ? 0 : rc;
+
+use_ioctl:
 	memset(&data, 0, sizeof(data));
 	if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
 		fprintf(stderr, "libcfs_ioctl_pack failed.\n");
@@ -757,12 +773,11 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
-	static char		 scratch[MAX_MARK_SIZE] = "";
+	static char scratch[MAX_MARK_SIZE] = "";
 	struct libcfs_ioctl_data data;
-	char			*text;
-	int			 rc;
-
-	memset(&data, 0, sizeof(data));
+	glob_t path;
+	char *text;
+	int fd, rc;
 
 	if (argc > 1) {
 		int count, max_size = sizeof(scratch) - 1;
@@ -782,6 +797,22 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 		text = ctime(&now);
 	}
 
+	if (cfs_get_param_paths(&path, "debug_marker") != 0)
+		goto use_ioctl;
+
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd < 0) {
+		cfs_free_param_data(&path);
+		goto use_ioctl;
+	}
+
+	rc = write(fd, text, strlen(text) + 1);
+	cfs_free_param_data(&path);
+	close(fd);
+	return rc > 0 ? 0 : rc;
+
+use_ioctl:
+	memset(&data, 0, sizeof(data));
 	data.ioc_inllen1 = strlen(text) + 1;
 	data.ioc_inlbuf1 = text;
 
