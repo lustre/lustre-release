@@ -5045,13 +5045,15 @@ format_done:
  *
  * @param[out]	buffer	Location where file attributes are written
  * @param[in]	size	Size of the available buffer.
- * @pararm[in]	stx	struct statx containing attributes to print
+ * @pararm[in]	lstx	Void pointer holding address of struct statx. Which is
+ *                      containing attributes to be printed
  * @return		Number of bytes written to output buffer
  */
 static int printf_format_file_attributes(char *buffer, size_t size,
-					 lstatx_t stx, bool longopt)
+					 void *lstx, bool longopt)
 {
-	uint64_t attrs = stx.stx_attributes_mask & stx.stx_attributes;
+	lstatx_t *stx = (lstatx_t *)lstx;
+	uint64_t attrs = stx->stx_attributes_mask & stx->stx_attributes;
 	int bytes = 0, wrote = 0, first = 1;
 	uint64_t known_attrs = 0;
 	struct attrs_name *ap;
@@ -5125,6 +5127,7 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 	int err, bytes, i;
 	bool longopt = true;
 	int rc = 2;	/* all current valid sequences are 2 chars */
+	void *lstx;
 	*wrote = 0;
 
 	/* Sanity check.  Formats always look like %L{X} */
@@ -5157,8 +5160,9 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 		longopt = false;
 		fallthrough;
 	case 'A':
-		*wrote = printf_format_file_attributes(buffer, size,
-						       param->fp_lmd->lmd_stx,
+		lstx = &param->fp_lmd->lmd_stx;
+
+		*wrote = printf_format_file_attributes(buffer, size, lstx,
 						       longopt);
 		goto format_done;
 	}
