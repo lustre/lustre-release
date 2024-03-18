@@ -185,6 +185,7 @@ struct mdd_object {
 	u32			mod_count;
 	u32			mod_valid;
 	ktime_t			mod_cltime;
+	s64			mod_atime_set;
 	unsigned long		mod_flags;
 	struct list_head	mod_users;  /**< unique user opens */
 };

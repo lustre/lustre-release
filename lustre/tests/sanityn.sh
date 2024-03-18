@@ -1086,6 +1086,31 @@ test_26b() {
 }
 run_test 26b "sync mtime between ost and mds"
 
+test_26c() {
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need MDS version at least 2.15.61"
+
+	multiop_bg_pause $DIR1/$tfile O_c || error "multiop failed"
+	MULTIPID=$!
+	touch -am -d @978261179 $DIR2/$tfile
+	kill -USR1 $MULTIPID
+	wait $MULTIPID || error "wait for PID $MULTIPID failed"
+	sleep 1
+
+	echo
+	stat $DIR/$tfile
+	local times="$(stat -c"%X %Y" $DIR/$tfile)"
+	[[ "$times" == "978261179 978261179" ]] ||
+		error "[am]times are not set in past on $DIR: $times"
+	echo
+	stat $DIR2/$tfile
+	local times="$(stat -c"%X %Y" $DIR2/$tfile)"
+	[[ "$times" == "978261179 978261179" ]] ||
+		error "[am]times are not set in past on $DIR2: $times"
+	echo
+}
+run_test 26c "set-in-past on open file is not lost on close"
+
 test_27() {
 	cancel_lru_locks $OSC
 	lctl clear
