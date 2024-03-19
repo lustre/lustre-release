@@ -763,21 +763,8 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct obd_ioctl_data *data)
 {
-	struct lustre_cfg	*lcfg = NULL;
-	struct fs_db		*fsdb;
-	struct lnet_nid	nid;
-	const char		*nodemap_name = NULL;
-	const char		*nidstr = NULL;
-	const char		*client_idstr = NULL;
-	const char		*idtype_str = NULL;
-	char			*param = NULL;
-	char			fs_idstr[16];
-	char			name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
-	int			rc = 0;
-	unsigned long		client_id;
-	__u32			fs_id;
-	__u32			cmd;
-	int			idtype;
+	struct fs_db *fsdb;
+	int rc;
 
 	ENTRY;
 
@@ -787,130 +774,9 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	if (data->ioc_plen1 > PAGE_SIZE)
-		GOTO(out, rc = -E2BIG);
-
-	OBD_ALLOC(lcfg, data->ioc_plen1);
-	if (lcfg == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
-		GOTO(out_lcfg, rc = -EFAULT);
-
-	cmd = lcfg->lcfg_command;
-
-	switch (cmd) {
-	case LCFG_NODEMAP_ACTIVATE:
-		if (lcfg->lcfg_bufcount != 2)
-			GOTO(out_lcfg, rc = -EINVAL);
-		param = lustre_cfg_string(lcfg, 1);
-		if (strcmp(param, "1") == 0)
-			nodemap_activate(1);
-		else
-			nodemap_activate(0);
-		break;
-	case LCFG_NODEMAP_ADD:
-	case LCFG_NODEMAP_DEL:
-		if (lcfg->lcfg_bufcount != 2)
-			GOTO(out_lcfg, rc = -EINVAL);
-		nodemap_name = lustre_cfg_string(lcfg, 1);
-		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
-		break;
-	case LCFG_NODEMAP_TEST_NID:
-		if (lcfg->lcfg_bufcount != 2)
-			GOTO(out_lcfg, rc = -EINVAL);
-		nidstr = lustre_cfg_string(lcfg, 1);
-		rc = libcfs_strnid(&nid, nidstr);
-		if (rc < 0)
-			GOTO(out_lcfg, rc);
-
-		nodemap_test_nid(&nid, name_buf, sizeof(name_buf));
-		rc = copy_to_user(data->ioc_pbuf1, name_buf,
-				  min_t(size_t, data->ioc_plen1,
-					sizeof(name_buf)));
-		if (rc != 0)
-			GOTO(out_lcfg, rc = -EFAULT);
-		break;
-	case LCFG_NODEMAP_TEST_ID:
-		if (lcfg->lcfg_bufcount != 4)
-			GOTO(out_lcfg, rc = -EINVAL);
-		nidstr = lustre_cfg_string(lcfg, 1);
-		idtype_str = lustre_cfg_string(lcfg, 2);
-		client_idstr = lustre_cfg_string(lcfg, 3);
-
-		rc = libcfs_strnid(&nid, nidstr);
-		if (rc < 0)
-			GOTO(out_lcfg, rc);
-
-		if (strcmp(idtype_str, "uid") == 0)
-			idtype = NODEMAP_UID;
-		else if (strcmp(idtype_str, "gid") == 0)
-			idtype = NODEMAP_GID;
-		else if (strcmp(idtype_str, "projid") == 0)
-			idtype = NODEMAP_PROJID;
-		else
-			GOTO(out_lcfg, rc = -EINVAL);
-
-		rc = kstrtoul(client_idstr, 10, &client_id);
-		if (rc != 0)
-			GOTO(out_lcfg, rc = -EINVAL);
-
-		rc = nodemap_test_id(&nid, idtype, client_id, &fs_id);
-		if (rc < 0)
-			GOTO(out_lcfg, rc = -EINVAL);
-
-		if (data->ioc_plen1 < sizeof(fs_idstr))
-			GOTO(out_lcfg, rc = -EINVAL);
-
-		snprintf(fs_idstr, sizeof(fs_idstr), "%u", fs_id);
-		if (copy_to_user(data->ioc_pbuf1, fs_idstr,
-				 sizeof(fs_idstr)) != 0)
-			GOTO(out_lcfg, rc = -EINVAL);
-		break;
-	case LCFG_NODEMAP_ADD_RANGE:
-	case LCFG_NODEMAP_DEL_RANGE:
-	case LCFG_NODEMAP_ADD_UIDMAP:
-	case LCFG_NODEMAP_DEL_UIDMAP:
-	case LCFG_NODEMAP_ADD_GIDMAP:
-	case LCFG_NODEMAP_DEL_GIDMAP:
-	case LCFG_NODEMAP_ADD_PROJIDMAP:
-	case LCFG_NODEMAP_DEL_PROJIDMAP:
-	case LCFG_NODEMAP_SET_FILESET:
-	case LCFG_NODEMAP_SET_SEPOL:
-		if (lcfg->lcfg_bufcount != 3)
-			GOTO(out_lcfg, rc = -EINVAL);
-		nodemap_name = lustre_cfg_string(lcfg, 1);
-		param = lustre_cfg_string(lcfg, 2);
-		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
-		break;
-	case LCFG_NODEMAP_ADMIN:
-	case LCFG_NODEMAP_TRUSTED:
-	case LCFG_NODEMAP_DENY_UNKNOWN:
-	case LCFG_NODEMAP_SQUASH_UID:
-	case LCFG_NODEMAP_SQUASH_GID:
-	case LCFG_NODEMAP_SQUASH_PROJID:
-	case LCFG_NODEMAP_MAP_MODE:
-	case LCFG_NODEMAP_AUDIT_MODE:
-	case LCFG_NODEMAP_FORBID_ENCRYPT:
-	case LCFG_NODEMAP_READONLY_MOUNT:
-	case LCFG_NODEMAP_RBAC:
-		if (lcfg->lcfg_bufcount != 4)
-			GOTO(out_lcfg, rc = -EINVAL);
-		nodemap_name = lustre_cfg_string(lcfg, 1);
-		param = lustre_cfg_string(lcfg, 3);
-		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
-		break;
-	default:
-		rc = -ENOTTY;
-	}
-
-	if (rc) {
-		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
-			     "%s: OBD_IOC_NODEMAP command %X for %s: rc = %d\n",
-			     mgs->mgs_obd->obd_name, lcfg->lcfg_command,
-			     nodemap_name, rc);
-		GOTO(out_lcfg, rc);
-	}
+	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, false);
+	if (rc)
+		GOTO(out, rc);
 
 	/* revoke nodemap lock */
 	rc = mgs_find_or_make_fsdb(env, mgs, LUSTRE_NODEMAP_NAME, &fsdb);
@@ -922,8 +788,6 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		mgs_put_fsdb(mgs, fsdb);
 	}
 
-out_lcfg:
-	OBD_FREE(lcfg, data->ioc_plen1);
 out:
 	RETURN(rc);
 }

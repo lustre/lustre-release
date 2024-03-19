@@ -31,6 +31,7 @@
 #define _LUSTRE_NODEMAP_H
 
 #include <uapi/linux/lustre/lustre_disk.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 
@@ -169,6 +170,10 @@ void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #endif
 int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 		    u32 client_id, u32 *fs_id);
+
+int server_iocontrol_nodemap(struct obd_device *obd,
+			     struct obd_ioctl_data *data, bool dynamic);
+
 
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,
