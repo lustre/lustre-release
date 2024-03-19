@@ -768,6 +768,7 @@ struct osd_thread_info {
 
 	struct osd_it_ea_dirent *oti_seq_dirent;
 	struct osd_it_ea_dirent *oti_dir_dirent;
+	struct inode		*oti_lastid_inode;
 
 	struct osd_lookup_cache_object oti_cobj; /* cache object id */
 	struct osd_lookup_cache	*oti_lookup_cache;
@@ -1223,6 +1224,9 @@ int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
 			   const int blocks);
 
 int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
+int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
+		      int bufsize, int write_NUL, loff_t *offs,
+		      handle_t *handle);
 
 static inline
 struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,

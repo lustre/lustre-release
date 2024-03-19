@@ -363,6 +363,17 @@ static inline bool fid_is_sane(const struct lu_fid *fid)
 			fid_seq_is_rsvd(fid_seq(fid)));
 }
 
+static inline bool fid_seq_is_local_storage(__u64 seq)
+{
+	return seq == FID_SEQ_LLOG || seq == FID_SEQ_LLOG_NAME ||
+	       seq == FID_SEQ_LOCAL_NAME || seq == FID_SEQ_QUOTA;
+}
+
+static inline bool fid_is_local_storage(const struct lu_fid *fid)
+{
+	return fid_seq_is_local_storage(fid->f_seq);
+}
+
 static inline bool lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	return !memcmp(f0, f1, sizeof(*f0));

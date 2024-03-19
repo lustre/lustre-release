@@ -157,6 +157,7 @@ osd_scrub_check_update(const struct lu_env *env, struct osd_device *dev,
 	dnode_t *dn = NULL;
 	uint64_t oid2;
 	int ops = DTO_INDEX_UPDATE;
+	int index;
 	int rc;
 
 	ENTRY;
@@ -265,6 +266,17 @@ out:
 			scrub->os_has_ml_file = 1;
 
 		sa_handle_destroy(hdl);
+	}
+
+	if (!rc && scrub->os_ls_count > 0 && fid_is_local_storage(fid)) {
+		index = 0;
+		for (index = 0; index < scrub->os_ls_count; index++)
+			if (scrub->os_ls_fids[index].f_seq == fid->f_seq)
+				break;
+
+		if (index < scrub->os_ls_count &&
+		    scrub->os_ls_fids[index].f_oid < fid->f_oid)
+			scrub->os_ls_fids[index].f_oid = fid->f_oid;
 	}
 
 cleanup:
@@ -464,6 +476,9 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 
 static int osd_scan_ml_file_main(const struct lu_env *env,
 				 struct osd_device *dev);
+static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev);
+static int osd_scan_lastid_main(const struct lu_env *env,
+				struct osd_device *dev);
 
 static int osd_scrub_main(void *args)
 {
@@ -506,6 +521,16 @@ static int osd_scrub_main(void *args)
 	       scrub->os_name, scrub->os_start_flags,
 	       scrub->os_pos_current);
 
+	scrub->os_ls_count = 0;
+	scrub->os_ls_size = 4;
+	OBD_ALLOC(scrub->os_ls_fids, scrub->os_ls_size * sizeof(struct lu_fid));
+	if (scrub->os_ls_fids == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = osd_scan_O_main(&env, dev);
+	if (rc)
+		GOTO(out, rc);
+
 	fid = &osd_oti_get(&env)->oti_fid;
 	while (!rc && !kthread_should_stop()) {
 		rc = osd_scrub_next(&env, dev, fid, &oid);
@@ -535,11 +560,24 @@ post:
 			rc = ret;
 	}
 
+	ret = osd_scan_lastid_main(&env, dev);
+	if (ret != 0)
+		rc = ret;
+
 	rc = scrub_thread_post(&env, &dev->od_scrub, rc);
 	CDEBUG(D_LFSCK, "%s: OI scrub: stop, pos = %llu: rc = %d\n",
 	       scrub->os_name, scrub->os_pos_current, rc);
 
 out:
+	if (scrub->os_ls_fids) {
+		OBD_FREE(scrub->os_ls_fids,
+			 scrub->os_ls_size * sizeof(struct lu_fid));
+
+		scrub->os_ls_size = 0;
+		scrub->os_ls_count = 0;
+		scrub->os_ls_fids = NULL;
+	}
+
 	while (!list_empty(&scrub->os_inconsistent_items)) {
 		struct osd_inconsistent_item *oii;
 
@@ -2044,4 +2082,360 @@ static int osd_scan_ml_file_main(const struct lu_env *env,
 				 struct osd_device *dev)
 {
 	return osd_scan_dir(env, dev, dev->od_O_id, osd_scan_ml_file_seq);
+}
+
+#define LASTID	"LAST_ID"
+
+static int osd_create_lastid(const struct lu_env *env, struct osd_device *dev,
+			     struct osd_zap_it *ozi, __u64 lastid_known)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+	struct lu_attr *la = &info->oti_la;
+	struct luz_direntry *zde = &info->oti_zde;
+	uint64_t dir = ozi->ozi_zde.lzd_reg.zde_dnode;
+	dmu_tx_t *tx = NULL;
+	nvlist_t *nvbuf = NULL;
+	dnode_t *dn = NULL;
+	sa_handle_t *hdl;
+	__u64 lastid;
+	int num = sizeof(*zde) / 8;
+	int rc = 0;
+
+	ENTRY;
+
+	tx = dmu_tx_create(dev->od_os);
+	if (!tx)
+		GOTO(out, rc = -ENOMEM);
+
+	dmu_tx_hold_sa_create(tx, osd_find_dnsize(dev, OSD_BASE_EA_IN_BONUS));
+	dmu_tx_hold_zap(tx, dir, FALSE, NULL);
+
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (rc)
+		GOTO(abort, rc);
+
+	memset(&zde->lzd_reg, 0, sizeof(zde->lzd_reg));
+	zde->lzd_reg.zde_type = IFTODT(S_IFREG);
+	zde->lzd_fid = lma->lma_self_fid;
+
+	rc = -nvlist_alloc(&nvbuf, NV_UNIQUE_NAME, KM_SLEEP);
+	if (rc)
+		GOTO(abort, rc);
+
+	lustre_lma_init(lma, &zde->lzd_fid, 0, 0);
+	lustre_lma_swab(lma);
+	rc = -nvlist_add_byte_array(nvbuf, XATTR_NAME_LMA, (uchar_t *)lma,
+				    sizeof(*lma));
+	if (rc)
+		GOTO(abort, rc);
+
+	la->la_valid = LA_TYPE | LA_MODE;
+	la->la_mode = (DTTOIF(zde->lzd_reg.zde_type) & S_IFMT) | 0644;
+
+	rc = __osd_object_create(env, dev, NULL, &zde->lzd_fid, &dn, tx, la);
+	if (rc)
+		GOTO(abort, rc);
+
+	zde->lzd_reg.zde_dnode = dn->dn_object;
+	rc = -sa_handle_get(dev->od_os, dn->dn_object, NULL,
+			    SA_HDL_PRIVATE, &hdl);
+	if (rc)
+		GOTO(abort, rc);
+
+	rc = __osd_attr_init(env, dev, NULL, hdl, tx, la, dir, nvbuf);
+	if (rc)
+		GOTO(abort, rc);
+
+	sa_handle_destroy(hdl);
+	hdl = NULL;
+
+	dmu_tx_hold_write_by_dnode(tx, dn, 0, sizeof(lastid_known));
+
+	lastid = cpu_to_le64(lastid_known);
+	dmu_write_by_dnode(dn, 0, sizeof(lastid), &lastid, tx);
+
+	rc = osd_zap_add(dev, dir, NULL, LASTID, strlen(LASTID), num,
+			 (void *)zde, tx);
+	if (rc)
+		GOTO(abort, tx);
+
+	dmu_tx_commit(tx);
+	GOTO(out, rc);
+
+abort:
+	if (dn)
+		dmu_object_free(dev->od_os, dn->dn_object, tx);
+
+	dmu_tx_abort(tx);
+
+out:
+	if (hdl)
+		sa_handle_destroy(hdl);
+	if (dn)
+		osd_dnode_rele(dn);
+	if (nvbuf)
+		nvlist_free(nvbuf);
+
+	return rc;
+}
+
+static int osd_scan_lastid_dir(const struct lu_env *env,
+			       struct osd_device *dev, uint64_t dir_oid,
+			       struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	ENTRY;
+
+	if (!S_ISREG(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		RETURN(0);
+
+	if (strcmp(ozi->ozi_name, LASTID) != 0) {
+		CDEBUG(D_LFSCK, "%s: the file O/%s/%s is unexpected\n",
+		       osd_name(dev), info->oti_seq_name, ozi->ozi_name);
+		RETURN(0);
+	}
+
+	info->oti_lastid_oid = ozi->ozi_zde.lzd_reg.zde_dnode;
+	RETURN(0);
+}
+
+static int osd_scan_lastid_seq(const struct lu_env *env,
+			       struct osd_device *dev, uint64_t dir_oid,
+			       struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+	struct lu_buf *lb = &info->oti_xattr_lbuf;
+	struct lustre_scrub *scrub = &dev->od_scrub;
+	dnode_t *dn = NULL;
+	dmu_tx_t *tx = NULL;
+	nvlist_t *nvbuf = NULL;
+	sa_handle_t *hdl = NULL;
+	uint64_t blocks;
+	uint32_t blksize;
+	uint32_t sz_lma;
+	size_t size = 0;
+	__u64 seq;
+	__u64 lastid;
+	__u64 lastid_known;
+	bool need_update = false;
+	int index;
+	int rc;
+
+	ENTRY;
+
+	if (!S_ISDIR(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		RETURN(0);
+
+	rc = kstrtoull(ozi->ozi_name, 16, &seq);
+	if (rc)
+		RETURN(rc);
+
+	if (seq < 0x1F) {
+		rc = kstrtoull(ozi->ozi_name, 10, &seq);
+		if (rc)
+			RETURN(rc);
+	}
+
+	if (!fid_seq_is_local_storage(seq))
+		GOTO(out, rc = 0);
+
+	info->oti_lastid_oid = 0;
+	info->oti_seq_name = ozi->ozi_name;
+	rc = osd_scan_dir(env, dev, ozi->ozi_zde.lzd_reg.zde_dnode,
+			  osd_scan_lastid_dir);
+	if (rc)
+		GOTO(out, rc);
+
+	for (index = 0; index < scrub->os_ls_count; index++)
+		if (scrub->os_ls_fids[index].f_seq == seq)
+			break;
+
+	if (unlikely(index >= scrub->os_ls_count)) {
+		CDEBUG(D_LFSCK,
+		       "%s: can't find seq %llu, it's modified during scrub?\n",
+		       osd_name(dev), seq);
+		GOTO(out, rc = -ERANGE);
+	}
+
+	lastid_known = scrub->os_ls_fids[index].f_oid;
+
+	if (info->oti_lastid_oid == 0) {
+		lma->lma_self_fid.f_seq = seq;
+		lma->lma_self_fid.f_oid = 0;
+		lma->lma_self_fid.f_ver = 0;
+
+		rc = osd_create_lastid(env, dev, ozi, lastid_known);
+		GOTO(out, rc);
+	}
+
+	rc = __osd_obj2dnode(dev->od_os, info->oti_lastid_oid, &dn);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = -sa_handle_get(dev->od_os, dn->dn_object, NULL,
+			    SA_HDL_PRIVATE, &hdl);
+	if (rc)
+		GOTO(out, rc);
+
+	lastid = 0;
+	sa_object_size(hdl, &blksize, &blocks);
+	if (blocks > 0) {
+		rc = osd_dmu_read(dev, dn, 0, sizeof(lastid), (char *) &lastid,
+				  0);
+		if (rc)
+			GOTO(out, rc);
+
+		lastid = le64_to_cpu(lastid);
+		if (lastid <= lastid_known)
+			need_update = true;
+	} else {
+		need_update = true;
+	}
+
+	rc = __osd_xattr_load(dev, hdl, &nvbuf);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = -nvlist_lookup_byte_array(nvbuf, XATTR_NAME_LMA, (uchar_t **) &lma,
+				       &sz_lma);
+	if (rc != 0 && rc != -ENOENT)
+		GOTO(out, rc);
+
+	if (rc == -ENOENT || lma->lma_self_fid.f_seq != seq ||
+	    lma->lma_self_fid.f_oid != 0 || lma->lma_self_fid.f_ver != 0) {
+		if (!rc) {
+			rc = -nvlist_remove(nvbuf, XATTR_NAME_LMA,
+					    DATA_TYPE_BYTE_ARRAY);
+			if (rc)
+				GOTO(out, rc);
+		}
+
+		need_update = true;
+		lma->lma_self_fid.f_seq = seq;
+		lma->lma_self_fid.f_oid = 0;
+		lma->lma_self_fid.f_ver = 0;
+
+		rc = -nvlist_add_byte_array(nvbuf, XATTR_NAME_LMA,
+					    (uchar_t *) &lma, sizeof(lma));
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	if (!need_update)
+		GOTO(out, rc);
+
+	if (scrub->os_file.sf_param & SP_DRYRUN)
+		GOTO(out, rc = 0);
+
+	tx = dmu_tx_create(dev->od_os);
+	if (!tx)
+		GOTO(out, rc = -ENOMEM);
+
+	dmu_tx_hold_zap_by_dnode(tx, dn, TRUE, NULL);
+	if (lastid < lastid_known)
+		dmu_tx_hold_write_by_dnode(tx, dn, 0, sizeof(lastid));
+
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (rc)
+		GOTO(abort, rc);
+
+	rc = -nvlist_size(nvbuf, &size, NV_ENCODE_XDR);
+	if (rc)
+		GOTO(abort, rc);
+
+	lu_buf_check_and_alloc(lb, size);
+	if (lb->lb_buf == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = -nvlist_pack(nvbuf, (char **)&lb->lb_buf, &size, NV_ENCODE_XDR,
+			  KM_SLEEP);
+	if (rc)
+		GOTO(abort, rc);
+
+	rc = -sa_update(hdl, SA_ZPL_SIZE(dev), lb->lb_buf, size, tx);
+	if (rc)
+		GOTO(abort, rc);
+
+	if (lastid < lastid_known) {
+		lastid = cpu_to_le64(lastid_known);
+		dmu_write_by_dnode(dn, 0, sizeof(lastid),
+				   (const char *) &lastid, tx);
+	}
+
+	dmu_tx_commit(tx);
+	GOTO(out, rc);
+
+abort:
+	dmu_tx_abort(tx);
+
+out:
+	if (hdl)
+		sa_handle_destroy(hdl);
+
+	if (dn)
+		osd_dnode_rele(dn);
+
+	RETURN(rc);
+}
+
+static int osd_scan_lastid_main(const struct lu_env *env,
+				struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_O_id, osd_scan_lastid_seq);
+}
+
+static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
+			  uint64_t dir_oid, struct osd_zap_it *ozi)
+{
+	struct lustre_scrub *scrub = &dev->od_scrub;
+	struct lu_fid *fids;
+	__u64 seq;
+	int rc;
+
+	ENTRY;
+
+	if (!S_ISDIR(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		RETURN(0);
+
+	rc = kstrtoull(ozi->ozi_name, 16, &seq);
+	if (rc)
+		RETURN(rc);
+
+	if (seq < 0x1F) {
+		rc = kstrtoull(ozi->ozi_name, 10, &seq);
+		if (rc)
+			RETURN(rc);
+	}
+
+	if (!fid_seq_is_local_storage(seq))
+		GOTO(out, rc = 0);
+
+	scrub->os_ls_count++;
+	if (unlikely(scrub->os_ls_count > scrub->os_ls_size)) {
+		OBD_ALLOC(fids,
+			  sizeof(struct lu_fid) * (scrub->os_ls_size + 4));
+		if (fids == NULL)
+			GOTO(out, -ENOMEM);
+
+		memcpy(fids, scrub->os_ls_fids,
+		       sizeof(struct lu_fid) * scrub->os_ls_size);
+		OBD_FREE(scrub->os_ls_fids,
+			 sizeof(struct lu_fid) * scrub->os_ls_size);
+
+		scrub->os_ls_size += 4;
+		scrub->os_ls_fids = fids;
+	}
+
+	scrub->os_ls_fids[scrub->os_ls_count - 1].f_seq = seq;
+
+out:
+	RETURN(rc);
+}
+
+static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_O_id, osd_scan_O_seq);
 }

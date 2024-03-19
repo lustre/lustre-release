@@ -648,10 +648,13 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 
 static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 			struct lu_fid *fid, struct osd_inode_id *lid, __u32 pos,
-			struct super_block *sb, bool scrub)
+			struct super_block *sb, bool is_scrub)
 {
+	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct inode *inode;
+	int	      index;
 	int	      rc;
+
 	ENTRY;
 
 	/* Not handle the backend root object and agent parent object.
@@ -690,15 +693,24 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 	if (dev->od_is_ost && S_ISREG(inode->i_mode) && inode->i_nlink > 1)
 		dev->od_scrub.os_scrub.os_has_ml_file = 1;
 
-	if (scrub &&
+	if (is_scrub &&
 	    ldiskfs_test_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB)) {
 		/* Only skip it for the first OI scrub accessing. */
 		ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB);
 		GOTO(put, rc = SCRUB_NEXT_NOSCRUB);
 	}
 
-	rc = osd_scrub_get_fid(info, dev, inode, fid, scrub);
+	rc = osd_scrub_get_fid(info, dev, inode, fid, is_scrub);
+	if (rc >= 0 && scrub->os_ls_count > 0 && fid_is_local_storage(fid)) {
+		index = 0;
+		for (index = 0; index < scrub->os_ls_count; index++)
+			if (scrub->os_ls_fids[index].f_seq == fid->f_seq)
+				break;
 
+		if (index < scrub->os_ls_count &&
+		    scrub->os_ls_fids[index].f_oid < fid->f_oid)
+			scrub->os_ls_fids[index].f_oid = fid->f_oid;
+	}
 	GOTO(put, rc);
 
 put:
@@ -1200,6 +1212,11 @@ static int osd_otable_it_preload(const struct lu_env *env,
 static int osd_scan_ml_file_main(const struct lu_env *env,
 				 struct osd_device *dev);
 
+static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev);
+
+static int osd_scan_last_id_main(const struct lu_env *env,
+				 struct osd_device *dev);
+
 static int osd_scrub_main(void *args)
 {
 	struct lu_env env;
@@ -1240,6 +1257,16 @@ static int osd_scrub_main(void *args)
 	       scrub->os_pos_current,
 	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
 
+	scrub->os_ls_count = 0;
+	scrub->os_ls_size = 4;
+	OBD_ALLOC(scrub->os_ls_fids, scrub->os_ls_size * sizeof(struct lu_fid));
+	if (scrub->os_ls_fids == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = osd_scan_O_main(&env, dev);
+	if (rc)
+		GOTO(out, rc);
+
 	rc = osd_inode_iteration(osd_oti_get(&env), dev, ~0U, false);
 	if (unlikely(rc == SCRUB_IT_CRASH)) {
 		spin_lock(&scrub->os_lock);
@@ -1251,8 +1278,12 @@ static int osd_scrub_main(void *args)
 	if (scrub->os_has_ml_file) {
 		ret = osd_scan_ml_file_main(&env, dev);
 		if (ret != 0)
-			rc = ret;
+			GOTO(out, rc = ret);
 	}
+
+	ret = osd_scan_last_id_main(&env, dev);
+	if (ret != 0)
+		rc = ret;
 
 	GOTO(post, rc);
 
@@ -1268,6 +1299,15 @@ post:
 
 
 out:
+	if (scrub->os_ls_fids) {
+		OBD_FREE(scrub->os_ls_fids,
+			 scrub->os_ls_size * sizeof(struct lu_fid));
+
+		scrub->os_ls_size = 0;
+		scrub->os_ls_count = 0;
+		scrub->os_ls_fids = NULL;
+	}
+
 	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);
 	lu_env_fini(&env);
 
@@ -3195,4 +3235,309 @@ static int osd_scan_ml_file_main(const struct lu_env *env,
 {
 	return osd_scan_dir(env, dev, dev->od_ost_map->om_root->d_inode,
 			    osd_scan_ml_file_seq);
+}
+
+#define LASTID	"LAST_ID"
+
+static int osd_update_lastid(struct osd_device *dev, struct inode *inode,
+			     __u64 lastid_known)
+{
+	handle_t *th;
+	loff_t offset = 0;
+	__u64 lastid;
+	int rc;
+
+	ENTRY;
+
+	th = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC,
+				  osd_dto_credits_noquota[DTO_WRITE_BLOCK]);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	lastid = cpu_to_le64(lastid_known);
+	rc = osd_ldiskfs_write(dev, inode, &lastid, sizeof(lastid), 0, &offset,
+			       th);
+	mark_inode_dirty(inode);
+	ldiskfs_journal_stop(th);
+	RETURN(rc);
+}
+
+static int osd_create_lastid(const struct lu_env *env, struct osd_device *dev,
+			     struct inode *dir, __u64 lastid_known)
+{
+	handle_t *th;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *d_lastid;
+	struct inode *i_lastid;
+	loff_t offset = 0;
+	int credits = LDISKFS_DATA_TRANS_BLOCKS(dir->i_sb) +
+			LDISKFS_INDEX_EXTRA_TRANS_BLOCKS + 3 +
+			osd_dto_credits_noquota[DTO_WRITE_BLOCK];
+	int rc;
+
+	ENTRY;
+
+	sb_start_write(dir->i_sb);
+	th = osd_journal_start_sb(dir->i_sb, LDISKFS_HT_MISC, credits);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	i_lastid = ldiskfs_create_inode(th, dir, (S_IFREG | 0644), NULL);
+	if (IS_ERR(i_lastid))
+		GOTO(out_stop, rc = PTR_ERR(i_lastid));
+
+	unlock_new_inode(i_lastid);
+
+	d_lastid = osd_child_dentry_by_inode(env, dir, LASTID, strlen(LASTID));
+	rc = osd_ldiskfs_add_entry(info, dev, th, d_lastid, i_lastid, NULL);
+	if (rc)
+		GOTO(out_stop, rc);
+
+	rc = osd_ldiskfs_write(dev, i_lastid, &lastid_known,
+			       sizeof(lastid_known), 0, &offset, th);
+	if (rc)
+		GOTO(out_stop, rc);
+	mark_inode_dirty(i_lastid);
+
+	ldiskfs_journal_stop(th);
+	th = NULL;
+	sb_end_write(dir->i_sb);
+	GOTO(out, rc = 0);
+
+out_stop:
+	if (!IS_ERR_OR_NULL(th))
+		ldiskfs_journal_stop(th);
+	sb_end_write(dir->i_sb);
+
+out:
+	if (!IS_ERR_OR_NULL(i_lastid))
+		iput(i_lastid);
+	RETURN(rc);
+}
+
+static int osd_scan_lastid_dir(const struct lu_env *env, struct osd_device *dev,
+			       struct inode *dir, struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct inode *inode;
+	struct osd_inode_id id;
+	int rc = 0;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, dev, &id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (S_ISDIR(inode->i_mode))
+		GOTO(out, rc = 0);
+
+	if (strlen(LASTID) != oie->oie_dirent->oied_namelen ||
+	    strncmp(oie->oie_dirent->oied_name, LASTID,
+		    oie->oie_dirent->oied_namelen) != 0) {
+		CDEBUG(D_LFSCK, "%s: the file O/%s/%s is unexpected\n",
+		       osd_name(dev), info->oti_seq_dirent->oied_name,
+		       oie->oie_dirent->oied_name);
+		GOTO(out, rc = 0);
+	}
+
+	info->oti_lastid_inode = inode;
+	RETURN(0);
+
+out:
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
+			       struct inode *dir, struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_ost_attrs *lma = &info->oti_ost_attrs;
+	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
+	struct inode *inode;
+	struct osd_inode_id id;
+	__u64 seq;
+	__u64 lastid;
+	__u64 lastid_known;
+	loff_t offset = 0;
+	int index;
+	int rc;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, dev, &id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, rc = 0);
+
+	rc = kstrtoull(oie->oie_dirent->oied_name, 16, &seq);
+	if (rc)
+		GOTO(out, rc);
+
+	if (seq < 0x1F) {
+		rc = kstrtoull(oie->oie_dirent->oied_name, 10, &seq);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	if (!fid_seq_is_local_storage(seq))
+		GOTO(out, rc = 0);
+
+	info->oti_lastid_inode = NULL;
+	info->oti_seq_dirent = oie->oie_dirent;
+	rc = osd_scan_dir(env, dev, inode, osd_scan_lastid_dir);
+	info->oti_seq_dirent = NULL;
+
+	if (rc)
+		GOTO(out, rc);
+
+	if (scrub->os_file.sf_param & SP_DRYRUN)
+		GOTO(out, rc = 0);
+
+	for (index = 0; index < scrub->os_ls_count; index++)
+		if (scrub->os_ls_fids[index].f_seq == seq)
+			break;
+
+	if (unlikely(index >= scrub->os_ls_count)) {
+		CDEBUG(D_LFSCK,
+		       "%s: can't find seq %llu, it's modified during scrub?\n",
+		       osd_name(dev), seq);
+		GOTO(out, rc);
+	}
+
+	lastid_known = scrub->os_ls_fids[index].f_oid;
+	if (!info->oti_lastid_inode) {
+		rc = osd_create_lastid(env, dev, dir, lastid_known);
+		GOTO(out, rc);
+	}
+
+	rc = osd_get_lma(info, info->oti_lastid_inode, &info->oti_obj_dentry,
+			 lma);
+	if (rc && rc != -ENODATA) {
+		CDEBUG(D_LFSCK, "%s: failed to get the xattr %s for O/%s/%s\n",
+		       osd_name(dev), XATTR_NAME_LMA,
+		       oie->oie_dirent->oied_name, LASTID);
+		GOTO(out, rc);
+	}
+
+	if (rc != 0 || lma->loa_lma.lma_self_fid.f_seq != seq ||
+	    lma->loa_lma.lma_self_fid.f_oid != 0 ||
+	    lma->loa_lma.lma_self_fid.f_ver != 0) {
+		lma->loa_lma.lma_self_fid.f_seq = seq;
+		lma->loa_lma.lma_self_fid.f_oid = 0;
+		lma->loa_lma.lma_self_fid.f_ver = 0;
+
+		rc = __osd_xattr_set(info, info->oti_lastid_inode,
+				     XATTR_NAME_LMA, lma, sizeof(*lma),
+				     rc == -ENODATA ?
+						XATTR_CREATE : XATTR_REPLACE);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	spin_lock(&info->oti_lastid_inode->i_lock);
+	if (i_size_read(info->oti_lastid_inode) < sizeof(lastid)) {
+		spin_unlock(&info->oti_lastid_inode->i_lock);
+		lastid = 0;
+	} else {
+		spin_unlock(&info->oti_lastid_inode->i_lock);
+
+		rc = osd_ldiskfs_read(info->oti_lastid_inode, &lastid,
+				      sizeof(lastid), &offset);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		if (rc < sizeof(lastid))
+			lastid = 0;
+		else
+			lastid = le64_to_cpu(lastid);
+	}
+
+	if (lastid < lastid_known)
+		rc = osd_update_lastid(dev, info->oti_lastid_inode,
+				       lastid_known);
+
+out:
+	if (info->oti_lastid_inode) {
+		iput(info->oti_lastid_inode);
+		info->oti_lastid_inode = NULL;
+	}
+
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_last_id_main(const struct lu_env *env,
+				 struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_ost_map->om_root->d_inode,
+			    osd_scan_lastid_seq);
+}
+
+static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
+			  struct inode *dir, struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
+	struct inode *inode;
+	struct osd_inode_id id;
+	struct lu_fid *fids;
+	__u64 seq;
+	int rc;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, dev, &id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, rc = 0);
+
+	rc = kstrtoull(oie->oie_dirent->oied_name, 16, &seq);
+	if (rc)
+		GOTO(out, rc);
+
+	if (seq < 0x1F) {
+		rc = kstrtoull(oie->oie_dirent->oied_name, 10, &seq);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	if (!fid_seq_is_local_storage(seq))
+		GOTO(out, rc = 0);
+
+	scrub->os_ls_count++;
+	if (unlikely(scrub->os_ls_count > scrub->os_ls_size)) {
+		OBD_ALLOC(fids,
+			  sizeof(struct lu_fid) * (scrub->os_ls_size + 4));
+		if (fids == NULL)
+			GOTO(out, -ENOMEM);
+
+		memcpy(fids, scrub->os_ls_fids,
+		       sizeof(struct lu_fid) * scrub->os_ls_size);
+		OBD_FREE(scrub->os_ls_fids,
+			 sizeof(struct lu_fid) * scrub->os_ls_size);
+
+		scrub->os_ls_size += 4;
+		scrub->os_ls_fids = fids;
+	}
+
+	scrub->os_ls_fids[scrub->os_ls_count - 1].f_seq = seq;
+
+out:
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_ost_map->om_root->d_inode,
+			    osd_scan_O_seq);
 }

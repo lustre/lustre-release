@@ -52,6 +52,7 @@
 #include <linux/types.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <dt_object.h>
 #include <lu_object.h>
@@ -245,12 +246,26 @@ again:
 		}
 	}
 
+retry:
 	nm_obj = local_index_find_or_create(env, los, root_obj,
 						LUSTRE_NODEMAP_NAME,
 						S_IFREG | S_IRUGO | S_IWUSR,
 						&dt_nodemap_features);
-	if (IS_ERR(nm_obj))
+	if (IS_ERR(nm_obj)) {
+		if (PTR_ERR(nm_obj) == -EEXIST && rc != -ENOENT &&
+		    los->los_last_oid < (tfid.f_oid - 1)) {
+			if (dt2lu_dev(dev)->ld_obd)
+				dt2lu_dev(dev)->ld_obd->obd_need_scrub = 1;
+
+			mutex_lock(&los->los_id_lock);
+			los->los_last_oid = tfid.f_oid - 1;
+			mutex_unlock(&los->los_id_lock);
+
+			goto retry;
+		}
+
 		GOTO(out_root, nm_obj);
+	}
 
 	if (nm_obj->do_index_ops == NULL) {
 		rc = nm_obj->do_ops->do_index_try(env, nm_obj,

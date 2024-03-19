@@ -7951,9 +7951,21 @@ static int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 
 	if (!mdt->mdt_skip_lfsck && !mdt->mdt_bottom->dd_rdonly) {
 		struct lfsck_start_param lsp;
+		struct lfsck_start start;
 
 		lsp.lsp_start = NULL;
 		lsp.lsp_index_valid = 0;
+
+		if (dt2lu_dev(mdt->mdt_bottom)->ld_obd &&
+		    dt2lu_dev(mdt->mdt_bottom)->ld_obd->obd_need_scrub) {
+			memset(&start, 0, sizeof(start));
+			start.ls_version = LFSCK_VERSION_V1;
+			start.ls_active = LFSCK_TYPE_SCRUB;
+			start.ls_flags = LPF_RESET;
+
+			lsp.lsp_start = &start;
+		}
+
 		rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
 							   OBD_IOC_START_LFSCK,
 							   0, &lsp);

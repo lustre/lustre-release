@@ -1904,11 +1904,10 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
 	return 0;
 }
 
-static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
-				    int bufsize, int write_NUL, loff_t *offs,
-				    handle_t *handle)
+int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
+		      int bufsize, int write_NUL, loff_t *offs,
+		      handle_t *handle)
 {
-	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	struct buffer_head *bh        = NULL;
 	loff_t              offset    = *offs;
 	loff_t              new_size  = i_size_read(inode);
@@ -1964,7 +1963,6 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 			      offset, block, bufsize, *offs);
 
 		if (IS_ERR_OR_NULL(bh)) {
-			struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 			int flags = LDISKFS_GET_BLOCKS_CREATE;
 
 			/* while the file system is being mounted, avoid
@@ -2053,6 +2051,17 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 	if (err == 0)
 		*offs = offset;
 	return err;
+}
+
+static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
+				    int bufsize, int write_NUL, loff_t *offs,
+				    handle_t *handle)
+{
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+	return osd_ldiskfs_write(osd, inode, buf, bufsize, write_NUL, offs,
+				 handle);
 }
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,

@@ -93,9 +93,10 @@ int main(int argc, char *argv[])
 				struct lustre_ost_attrs *loa = (void *)buf;
 				int rc1;
 
+				memset(loa, 0, sizeof(*loa));
 				rc1 = getxattr(argv[i], "trusted.lma", loa,
 					       sizeof(*loa));
-				if (rc1 < sizeof(*loa)) {
+				if (rc1 < sizeof(struct lustre_mdt_attrs)) {
 					fprintf(stderr,
 						"%s: error reading fid: %s\n",
 						argv[i], strerror(ENODATA));
@@ -105,7 +106,8 @@ int main(int argc, char *argv[])
 				}
 
 				lustre_loa_swab(loa);
-				if (!(loa->loa_lma.lma_compat &
+				if (rc1 > sizeof(struct lustre_mdt_attrs) &&
+				    !(loa->loa_lma.lma_compat &
 				      LMAC_STRIPE_INFO)) {
 					fprintf(stderr,
 						"%s: not stripe info: %s\n",
@@ -115,9 +117,10 @@ int main(int argc, char *argv[])
 					continue;
 				}
 
-				printf("%s: parent="DFID" stripe=%u "
+				printf("%s: fid="DFID" parent="DFID" stripe=%u "
 				       "stripe_size=%u stripe_count=%u",
 				       argv[i],
+				       PFID(&loa->loa_lma.lma_self_fid),
 				       (unsigned long long)loa->loa_parent_fid.f_seq,
 				       loa->loa_parent_fid.f_oid, 0, /* ver */
 				       loa->loa_parent_fid.f_stripe_idx &

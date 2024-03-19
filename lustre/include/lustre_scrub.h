@@ -171,6 +171,12 @@ struct lustre_scrub {
 	__u64			os_new_checked;
 	__u64			os_pos_current;
 	__u32			os_start_flags;
+
+	/* FIDs with maxmimum OID in local storage */
+	__u32			os_ls_size;
+	__u32			os_ls_count;
+	struct lu_fid		*os_ls_fids;
+
 	/* Some of these bits can be set by different threads so
 	 * all updates must be protected by ->os_lock to avoid
 	 * racing read-modify-write cycles causing corruption.

@@ -1483,6 +1483,71 @@ test_21() {
 }
 run_test 21 "don't hang MDS recovery when failed to get update log"
 
+test_22() {
+	#FID_SEQ_LLOG = 1
+	#FID_SEQ_LLOG_NAME = 10
+	#FID_SEQ_LOCAL_NAME = 0x200000003,
+	local s_llog="1"
+	local s_llog_name="10"
+	local s_local="200000003"
+	local lma
+	local fid
+
+	stopall
+
+	# remove the LASTID
+	mount_fstype mds1 || error "(1) Fail to mount mds1"
+	mntpt=$(facet_mntpt mds1)
+
+	do_facet mds1 rm -f "$mntpt/O/$s_llog/LAST_ID"
+	do_facet mds1 rm -f "$mntpt/O/$s_llog_name/LAST_ID"
+	do_facet mds1 rm -f "$mntpt/O/$s_local_name/LAST_ID"
+
+	unmount_fstype mds1 || error "(2) Fail to umount mds1"
+
+	$LCTL set_param debug=-1
+	$LCTL dk > /dev/null
+	start mds1 $(mdsdevname 1) > /dev/null || {
+		$LCTL dk > /tmp/log
+		error "(3) Fail to start mds1"
+	}
+	$START_SCRUB -r || error "(4) Fail to start OI scrub on MDT!"
+
+	wait_update_facet mds1 "$LCTL get_param -n \
+		osd-*.$(facet_svc mds1).oi_scrub |
+		awk '/^status/ { print \\\$2 }'" "completed" 6 ||
+		error "(5) Expected '$expected' on mds1"
+
+	stop mds1
+
+	mount_fstype mds1 || error "(6) Fail to mount mds1 again"
+	do_facet mds1 stat "$mntpt/O/$s_llog/LAST_ID" ||
+		error "(7) LAST_ID is not recreated for LLOG"
+	lma=$(do_facet mds1 $LL_DECODE_FILTER_FID $mntpt/O/$s_llog/LAST_ID)
+	fid=$(sed -e 's/.*fid=//' -e 's/ .*//' <<< $lma)
+	[ "$fid" == "[0x1:0x0:0x0]" ] ||
+		error "(8) the LMA of the LAST_ID is incorrect"
+
+	do_facet mds1 stat "$mntpt/O/$s_llog_name/LAST_ID" ||
+		error "(8) LAST_ID is not recreated for LLOG_NAME"
+	lma=$(do_facet mds1 $LL_DECODE_FILTER_FID $mntpt/O/$s_llog_name/LAST_ID)
+	fid=$(sed -e 's/.*fid=//' -e 's/ .*//' <<< $lma)
+	[ "$fid" == "[0xa:0x0:0x0]" ] ||
+		error "(8) the LMA of the LAST_ID is incorrect"
+
+	do_facet mds1 stat "$mntpt/O/$s_local/LAST_ID" ||
+		error "(9) LAST_ID is not recreated for LOCAL_NAME"
+	lma=$(do_facet mds1 $LL_DECODE_FILTER_FID $mntpt/O/$s_local/LAST_ID)
+	fid=$(sed -e 's/.*fid=//' -e 's/ .*//' <<< $lma)
+	[ "$fid" == "[0x200000003:0x0:0x0]" ] ||
+		error "(8) the LMA of the LAST_ID is incorrect"
+
+	unmount_fstype mds1 || error "(10) Fail to umount mds1 again"
+
+	start mds1 $(mdsdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(11) Fail to start mds1"
+}
+run_test 22 "LFSCK can recreate or fix the LASTID on MDT/OST"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
