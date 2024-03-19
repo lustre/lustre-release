@@ -989,7 +989,8 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
  */
 static int check_gssd_socket(void)
 {
-	struct sockaddr_un *sun;
+	struct sockaddr_storage sstorage = {0};
+	struct sockaddr_un *sun = (struct sockaddr_un *)&sstorage;
 	struct socket *sock;
 	int tries = 0;
 	int err;
@@ -1005,19 +1006,13 @@ static int check_gssd_socket(void)
 		return err;
 	}
 
-	OBD_ALLOC(sun, sizeof(*sun));
-	if (!sun) {
-		sock_release(sock);
-		return -ENOMEM;
-	}
-	memset(sun, 0, sizeof(*sun));
 	sun->sun_family = AF_UNIX;
 	strncpy(sun->sun_path, GSS_SOCKET_PATH, sizeof(sun->sun_path));
 
 	/* Try to connect to the socket */
 	while (tries++ < 6) {
-		err = kernel_connect(sock, (struct sockaddr *)sun,
-				     sizeof(*sun), 0);
+		err = kernel_connect(sock, (struct sockaddr *)&sstorage,
+				     sizeof(sstorage), 0);
 		if (!err)
 			break;
 		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 4);
@@ -1028,7 +1023,6 @@ static int check_gssd_socket(void)
 		kernel_sock_shutdown(sock, SHUT_RDWR);
 
 	sock_release(sock);
-	OBD_FREE(sun, sizeof(*sun));
 	return err;
 }
 
