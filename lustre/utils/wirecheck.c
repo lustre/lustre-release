@@ -2550,6 +2550,31 @@ static void check_layout_intent(void)
 	CHECK_VALUE(LAIF_INCOMPRESSIBLE);
 }
 
+static void check_swap_layout(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lustre_swap_layouts);
+	CHECK_MEMBER(lustre_swap_layouts, sl_flags);
+	CHECK_MEMBER(lustre_swap_layouts, sl_fd);
+	CHECK_MEMBER(lustre_swap_layouts, sl_gid);
+	CHECK_MEMBER(lustre_swap_layouts, sl_dv1);
+	CHECK_MEMBER(lustre_swap_layouts, sl_dv2);
+
+	BLANK_LINE();
+	CHECK_STRUCT(mdc_swap_layouts);
+	CHECK_MEMBER(mdc_swap_layouts, msl_flags);
+
+	BLANK_LINE();
+	COMMENT("Checks for mdc_swap_layouts::msl_flags");
+	CHECK_VALUE(SWAP_LAYOUTS_CHECK_DV1);
+	CHECK_VALUE(SWAP_LAYOUTS_CHECK_DV2);
+	CHECK_VALUE(SWAP_LAYOUTS_KEEP_MTIME);
+	CHECK_VALUE(SWAP_LAYOUTS_KEEP_ATIME);
+	CHECK_VALUE(SWAP_LAYOUTS_CLOSE);
+	CHECK_VALUE(SWAP_LAYOUTS_MDS_RELEASE);
+
+}
+
 static void check_hsm_state_set(void)
 {
 	BLANK_LINE();
@@ -3737,6 +3762,7 @@ main(int argc, char **argv)
 	check_hsm_progress_kernel();
 	check_hsm_user_item();
 	check_hsm_user_state();
+	check_swap_layout();
 	check_hsm_state_set();
 	check_hsm_current_action();
 	check_hsm_request();
