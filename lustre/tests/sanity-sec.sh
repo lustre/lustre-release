@@ -6792,6 +6792,8 @@ test_72() {
 	local nids=1.1.1.[1-100]@tcp
 	local startnid=1.1.1.1@tcp
 	local endnid=1.1.1.100@tcp
+	local clid=500
+	local fsid=1000
 	local val
 
 	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
@@ -6833,6 +6835,29 @@ test_72() {
 		error "dynamic nodemap wrong end nid range $val"
 	fi
 
+	do_facet ost1 $LCTL nodemap_add_idmap --name $nm --idtype uid \
+		--idmap $clid:$fsid ||
+			error "dynamic add_idmap on server failed"
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
+		awk 'BEGIN{RS=", "} $1=="client_id:"{print $2 ; exit}')
+	if [[ "x$val" != "x$clid" ]]; then
+		error "dynamic nodemap wrong client id $val"
+	fi
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
+		awk 'BEGIN{RS=", "} $1=="fs_id:"{print $2 ; exit}')
+	if [[ "x$val" != "x$fsid" ]]; then
+		error "dynamic nodemap wrong fs id $val"
+	fi
+
+	do_facet ost1 $LCTL nodemap_del_idmap --name $nm --idtype uid \
+		--idmap $clid:$fsid ||
+			error "dynamic del_idmap on server failed"
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
+		awk 'BEGIN{RS=", "} $1=="client_id:"{print $2 ; exit}')
+	if [[ "x$val" != "x" ]]; then
+		error "idmap should be empty, got $val"
+	fi
+
 	do_facet ost1 $LCTL nodemap_del_range --name $nm --range $nids ||
 		error "dynamic del_range on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
@@ -6852,6 +6877,12 @@ test_72() {
 			error "add_range $mgsnm on server should fail"
 	do_facet ost1 $LCTL nodemap_del_range --name $mgsnm --range $mgsnids &&
 		error "del_range $mgsnm on server should fail"
+	do_facet ost1 $LCTL nodemap_add_idmap --name $mgsnm --idtype gid \
+		--idmap $mgsclid:$mgsfsid &&
+			error "add_idmap $mgsnm on server should fail"
+	do_facet ost1 $LCTL nodemap_del_idmap --name $mgsnm --idtype uid \
+		--idmap $mgsclid:$mgsfsid &&
+			error "del_idmap $mgsnm on server should fail"
 	do_facet ost1 $LCTL nodemap_del $mgsnm &&
 		error "nodemap del $mgsnm on server should fail"
 	do_facet ost1 $LCTL get_param -R 'nodemap.*'

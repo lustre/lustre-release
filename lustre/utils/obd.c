@@ -4731,39 +4731,52 @@ int jt_nodemap_del_offset(int argc, char **argv)
 
 int jt_nodemap_add_idmap(int argc, char **argv)
 {
-	int			c;
-	enum			lcfg_command_type cmd = 0;
-	char			*nodemap_name = NULL;
-	char			*idmap = NULL;
-	char			*idtype = NULL;
-	int			rc = 0;
+	enum lcfg_command_type cmd = 0;
+	char *nodemap_name = NULL;
+	char *idtype = NULL;
+	char *idmap = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "idtype",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "idmap",	.has_arg = required_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:m:i:",
+	while ((c = getopt_long(argc, argv, "hi:m:n:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'n':
-			nodemap_name = optarg;
+		case 'i':
+			idtype = optarg;
 			break;
 		case 'm':
 			idmap = optarg;
 			break;
-		case 'i':
-			idtype = optarg;
+		case 'n':
+			nodemap_name = optarg;
 			break;
+		case 'h':
+		default:
+			goto add_idmap_usage;
 		}
 	}
 
-	if (!nodemap_name || !idmap || !idtype) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_add_idmap: missing nodemap name\n");
+add_idmap_usage:
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
+			"usage: %s --name NODEMAP_NAME --idtype ID_TYPE --idmap CLIENTID:FSID\n",
 			argv[0]);
-		return -1;
+		return -EINVAL;
+	}
+	if (!idtype) {
+		fprintf(stderr, "nodemap_add_idmap: missing ID type\n");
+		goto add_idmap_usage;
+	}
+	if (!idmap) {
+		fprintf(stderr, "nodemap_add_idmap: missing ID map\n");
+		goto add_idmap_usage;
 	}
 
 	if (strcmp("uid", idtype) == 0) {
@@ -4774,9 +4787,8 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 		cmd = LCFG_NODEMAP_ADD_PROJIDMAP;
 	} else {
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
-			argv[0]);
-		return -1;
+			"nodemap_add_idmap: incorrect ID type, must be one of uid, gid, projid.\n");
+		goto add_idmap_usage;
 	}
 
 	rc = nodemap_cmd(cmd, false, NULL, 0,
@@ -4792,39 +4804,52 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 
 int jt_nodemap_del_idmap(int argc, char **argv)
 {
-	int			c;
-	enum			lcfg_command_type cmd = 0;
-	char			*nodemap_name = NULL;
-	char			*idmap = NULL;
-	char			*idtype = NULL;
-	int			rc = 0;
+	enum lcfg_command_type cmd = 0;
+	char *nodemap_name = NULL;
+	char *idtype = NULL;
+	char *idmap = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "idtype",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "idmap",	.has_arg = required_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:m:i:",
+	while ((c = getopt_long(argc, argv, "hi:m:n:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'n':
-			nodemap_name = optarg;
+		case 'i':
+			idtype = optarg;
 			break;
 		case 'm':
 			idmap = optarg;
 			break;
-		case 'i':
-			idtype = optarg;
+		case 'n':
+			nodemap_name = optarg;
 			break;
+		case 'h':
+		default:
+			goto del_idmap_usage;
 		}
 	}
 
-	if (!nodemap_name || !idmap || !idtype) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_del_idmap: missing nodemap name\n");
+del_idmap_usage:
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
+			"usage: %s --name NODEMAP_NAME --idtype ID_TYPE --idmap CLIENTID:FSID\n",
 			argv[0]);
-		return -1;
+		return -EINVAL;
+	}
+	if (!idtype) {
+		fprintf(stderr, "nodemap_del_idmap: missing ID type\n");
+		goto del_idmap_usage;
+	}
+	if (!idmap) {
+		fprintf(stderr, "nodemap_del_idmap: missing ID map\n");
+		goto del_idmap_usage;
 	}
 
 	if (strcmp("uid", idtype) == 0) {
@@ -4835,9 +4860,8 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 		cmd = LCFG_NODEMAP_DEL_PROJIDMAP;
 	} else {
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
-			argv[0]);
-		return -1;
+			"nodemap_del_idmap: incorrect ID type, must be one of uid, gid, projid.\n");
+		goto del_idmap_usage;
 	}
 
 	rc = nodemap_cmd(cmd, false, NULL, 0,

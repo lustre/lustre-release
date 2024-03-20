@@ -550,7 +550,8 @@ int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 
 		del_map[0] = temp->id_client;
 		idmap_delete(id_type, temp, nodemap);
-		rc = nodemap_idx_idmap_del(nodemap, id_type, del_map);
+		if (!nodemap->nm_dyn)
+			rc = nodemap_idx_idmap_del(nodemap, id_type, del_map);
 		/* In case there is any corrupted idmap */
 		if (!rc || unlikely(rc == -ENOENT)) {
 			temp = idmap_insert(id_type, idmap, nodemap);
@@ -609,7 +610,7 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		GOTO(out_unlock, rc = -EPERM);
 
 	rc = nodemap_add_idmap_helper(nodemap, id_type, map);
-	if (!rc)
+	if (!rc && !nodemap->nm_dyn)
 		rc = nodemap_idx_idmap_add(nodemap, id_type, map);
 
 out_unlock:
@@ -660,7 +661,8 @@ int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		rc = -EINVAL;
 	} else {
 		idmap_delete(id_type, idmap, nodemap);
-		rc = nodemap_idx_idmap_del(nodemap, id_type, map);
+		if (!nodemap->nm_dyn)
+			rc = nodemap_idx_idmap_del(nodemap, id_type, map);
 	}
 	up_write(&nodemap->nm_idmap_lock);
 

@@ -726,7 +726,7 @@ int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 	ENTRY;
 
 	if (!nodemap_mgs()) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		CERROR("cannot add idmap to non-existing MGS.\n");
 		return -EINVAL;
 	}
 
@@ -753,7 +753,7 @@ int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 	ENTRY;
 
 	if (!nodemap_mgs()) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		CERROR("cannot del idmap from non-existing MGS.\n");
 		return -EINVAL;
 	}
 
