@@ -98,6 +98,8 @@ struct lu_nodemap {
 
 	/* used when loading/unloading nodemaps */
 	struct list_head	 nm_list;
+	/* is a dynamic nodemap */
+	bool			 nm_dyn;
 };
 
 /* Store handles to local MGC storage to save config locally. In future
@@ -111,7 +113,7 @@ struct nm_config_file {
 };
 
 void nodemap_activate(const bool value);
-int nodemap_add(const char *nodemap_name);
+int nodemap_add(const char *nodemap_name, bool dynamic);
 int nodemap_del(const char *nodemap_name);
 int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
@@ -140,9 +142,9 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
-int nodemap_set_fileset(const char *name, const char *fileset);
+int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm);
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
-int nodemap_set_sepol(const char *name, const char *sepol);
+int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,

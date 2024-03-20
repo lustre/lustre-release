@@ -462,10 +462,8 @@ static int nodemap_idx_cluster_add_update(const struct lu_nodemap *nodemap,
 	ENTRY;
 
 	if (idx == NULL) {
-		if (!nodemap_mgs()) {
-			CERROR("cannot add nodemap config to non-existing MGS.\n");
-			return -EINVAL;
-		}
+		if (nodemap->nm_dyn)
+			return 0;
 		idx = nodemap_mgs_ncf->ncf_obj;
 	}
 
@@ -521,8 +519,9 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	int			 rc2 = 0;
 
 	ENTRY;
+
 	if (!nodemap_mgs()) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		CERROR("cannot del nodemap config from non-existing MGS.\n");
 		return -EINVAL;
 	}
 

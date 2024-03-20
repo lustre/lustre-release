@@ -6538,6 +6538,53 @@ test_71() {
 }
 run_test 71 "encryption does not remove project flag"
 
+test_72() {
+	local mgsnm=mgsnm
+	local mgsnids=1.1.0.[1-100]@tcp
+	local mgsclid=600
+	local mgsfsid=2000
+	local nm=nm_test71
+	local val
+
+	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
+		skip "Need MDS >= 2.15.64 dynamic nodemaps"
+
+	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
+		skip "Need servers on different hosts"
+
+	do_facet mgs $LCTL nodemap_add $mgsnm ||
+		error "adding $mgsnm on MGS failed"
+	stack_trap "do_facet mgs $LCTL nodemap_del $mgsnm" EXIT
+	do_facet mgs $LCTL nodemap_add_range --name $mgsnm --range $mgsnids ||
+		error "add_range for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_add_idmap --name $mgsnm --idtype uid \
+		--idmap $mgsclid:$mgsfsid ||
+		error "add_idmap for $mgsnm on MGS failed"
+	wait_nm_sync $mgsnm idmap '' inactive
+
+	stack_trap "do_facet ost1 $LCTL nodemap_del $nm || true" EXIT
+	do_facet ost1 $LCTL nodemap_add $nm &&
+		error "static nodemap on server should fail"
+	do_facet ost1 $LCTL nodemap_add -d $nm ||
+		error "dynamic nodemap on server failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ "x$val" == "x" ]] || [[ "x$val" == "x0" ]]; then
+		error "dynamic nodemap wrong id $val"
+	fi
+
+	do_facet ost1 $LCTL nodemap_del $nm ||
+		error "dynamic nodemap del on server failed"
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.id)
+	if [[ "x$val" != "x" ]]; then
+		error "nodemap should be gone, got $val"
+	fi
+
+	do_facet ost1 $LCTL nodemap_del $mgsnm &&
+		error "nodemap del $mgsnm on server should fail"
+	do_facet ost1 $LCTL get_param -R 'nodemap.*'
+}
+run_test 72 "dynamic nodemap properties"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

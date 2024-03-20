@@ -2,9 +2,8 @@
 .SH NAME
 lctl-nodemap_add \- create a new nodemap to define client behavior
 .SH SYNOPSIS
-.SY "lctl nodemap_add"
-.I NODEMAP_NAME
-.YS
+.BR "lctl nodemap_add" " [ " -d "|" --dynamic " ] " \fINODEMAP_NAME
+.br
 .SH DESCRIPTION
 .B nodemap_add
 creates and names a new nodemap to which NID ranges, process identities,
@@ -12,8 +11,13 @@ and properties can be added to limit or otherwise manage capabilities
 and filesystem access permission of those NID(s).
 .SH OPTIONS
 .TP
+.BR -d ", " --dynamic
+Adds a temporary in-memory nodemap on the local node instead of a persistent
+one.
+.TP
 .I NODEMAP_NAME
-The name to give the new nodemap. It can be any string except
+The name to give the new nodemap. It can be any alphanumeric string of
+maximum length 16, except
 .RB \(dq default \(dq.
 .SH EXAMPLES
 .EX
