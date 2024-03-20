@@ -494,6 +494,14 @@ reset_quota_settings() {
 	[[ $(id -g $TSTUSR2) == $TSTID2 ]] || resetquota_one -g $TSTID2
 	is_project_quota_supported && resetquota_one -p $TSTPRJID
 
+	$LFS setquota -U -b 0 -B 0 -i 0 -I 0 $MOUNT ||
+		error "failed to reset default user quota"
+	$LFS setquota -G -b 0 -B 0 -i 0 -I 0 $MOUNT ||
+		error "failed to reset default group quota"
+	is_project_quota_supported &&
+		$LFS setquota -P -b 0 -B 0 -i 0 -I 0 $MOUNT ||
+			error "failed to reset default project quota"
+
 	sleep 1
 }
 
@@ -3957,6 +3965,56 @@ test_41() {
 		error "failed to get correct statfs when statfs_project=0"
 }
 run_test 41 "df should return projid-specific values"
+
+test_lfs_quota()
+{
+	local qdtype=$1
+	local qtype=$2
+	local bsl
+	local bhl
+	local isl
+	local ihl
+
+	eval $($LFS quota $qtype 2147483647 $MOUNT |
+	    awk 'NR = 2 {printf("bsl=%d;bhl=%d;isl=%d;ihl=%d;", \
+				$3, $4, $7, $8)}')
+
+	(( $bsl != 0 || $bhl != 0 || $isl != 0 || $ihl != 0 )) &&
+		skip "qid 2147483647 is already used"
+
+	$LFS setquota $qdtype -b 100M -B 200M $MOUNT ||
+		error "fail to set default quota"
+
+	eval $($LFS quota $qtype 2147483647 $MOUNT |
+	    awk 'NR = 2 {printf("bsl=%d;bhl=%d;isl=%d;ihl=%d;", \
+				$3, $4, $7, $8)}')
+
+	[ $bsl -ne 102400 -o $bhl -ne 204800 ] &&
+		error "fail to include default block quota"
+
+	$LFS setquota $qdtype -i 10K -I 20K $MOUNT ||
+		error "fail to set default quota"
+
+	eval $($LFS quota $qtype 2147483647 $MOUNT |
+	    awk 'NR = 2 {printf("bsl=%d;bhl=%d;isl=%d;ihl=%d;", \
+				$3, $4, $7, $8)}')
+
+	[ $isl -ne 10240 -o $ihl -ne 20480 ] &&
+		error "fail to include default file quota"
+}
+
+test_42()
+{
+	setup_quota_test || error "setup quota failed with $?"
+	quota_init
+
+	test_lfs_quota "-U" "-u"
+	test_lfs_quota "-G" "-g"
+	is_project_quota_supported && test_lfs_quota "-P" "-p"
+
+	cleanup_quota_test
+}
+run_test 42 "lfs quota should include default quota info"
 
 test_delete_qid()
 {

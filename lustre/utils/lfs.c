@@ -9117,8 +9117,6 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 	char *obd_type = (char *)qctl->obd_type;
 	char *obd_uuid = (char *)qctl->obd_uuid.uuid;
 	__u64 total_ialloc = 0, total_balloc = 0;
-	bool use_default_for_blk = false;
-	bool use_default_for_file = false;
 	int inacc;
 
 	if (!show_default && qctl->qc_id == 0) {
@@ -9132,16 +9130,12 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 	}
 
 	if (qctl->qc_dqblk.dqb_valid & QIF_BTIME &&
-	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_btime) & LQUOTA_FLAG_DEFAULT) {
-		use_default_for_blk = true;
+	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_btime) & LQUOTA_FLAG_DEFAULT)
 		qctl->qc_dqblk.dqb_btime &= LQUOTA_GRACE_MASK;
-	}
 
 	if (qctl->qc_dqblk.dqb_valid & QIF_ITIME &&
-	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_itime) & LQUOTA_FLAG_DEFAULT) {
-		use_default_for_file = true;
+	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_itime) & LQUOTA_FLAG_DEFAULT)
 		qctl->qc_dqblk.dqb_itime &= LQUOTA_GRACE_MASK;
-	}
 
 	if (!show_qid && (qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
 	     qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ||
@@ -9177,14 +9171,6 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		printf("Total allocated inode limit: %ju, total allocated block limit: %s\n",
 		       (uintmax_t)total_ialloc, strbuf);
 	}
-
-	if (use_default_for_blk)
-		printf("%cid %u is using default block quota setting\n",
-		       *qtype_name(qctl->qc_type), qctl->qc_id);
-
-	if (use_default_for_file)
-		printf("%cid %u is using default file quota setting\n",
-		       *qtype_name(qctl->qc_type), qctl->qc_id);
 
 	if (!show_qid && (rc || rc1 || rc2 || inacc))
 		printf("%d Some errors happened when getting quota info. Some devices may be not working or deactivated. The data in \"[]\" is inaccurate.\n", inacc);
