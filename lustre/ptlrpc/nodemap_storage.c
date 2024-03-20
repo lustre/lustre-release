@@ -68,6 +68,11 @@ static DEFINE_MUTEX(ncf_list_lock);
 /* MGS index is different than others, others are listeners to MGS idx */
 static struct nm_config_file *nodemap_mgs_ncf;
 
+bool nodemap_mgs(void)
+{
+	return (nodemap_mgs_ncf != NULL);
+}
+
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id,
 				     enum nodemap_cluster_rec_subid subid)
 {
@@ -423,7 +428,7 @@ static int nodemap_idx_cluster_add_update(const struct lu_nodemap *nodemap,
 	ENTRY;
 
 	if (idx == NULL) {
-		if (nodemap_mgs_ncf == NULL) {
+		if (!nodemap_mgs()) {
 			CERROR("cannot add nodemap config to non-existing MGS.\n");
 			return -EINVAL;
 		}
@@ -482,7 +487,7 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 	int			 rc2 = 0;
 
 	ENTRY;
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -572,7 +577,7 @@ int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap)
 
 	ENTRY;
 
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -596,7 +601,7 @@ int nodemap_idx_range_add(const struct lu_nid_range *range)
 	int rc = 0;
 
 	ENTRY;
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -626,8 +631,8 @@ int nodemap_idx_range_del(const struct lu_nid_range *range)
 	int			 rc = 0;
 	ENTRY;
 
-	if (nodemap_mgs_ncf == NULL) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
+	if (!nodemap_mgs()) {
+		CERROR("cannot del nodemap config from non-existing MGS.\n");
 		return -EINVAL;
 	}
 
@@ -654,7 +659,7 @@ int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 	int			 rc = 0;
 	ENTRY;
 
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -681,7 +686,7 @@ int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 	int			 rc = 0;
 	ENTRY;
 
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -706,7 +711,7 @@ static int nodemap_idx_global_add_update(bool value, enum nm_add_update update)
 	int			 rc = 0;
 	ENTRY;
 
-	if (nodemap_mgs_ncf == NULL) {
+	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
 	}
@@ -1348,7 +1353,7 @@ struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	if (nodemap_mgs_ncf != NULL)
+	if (nodemap_mgs())
 		GOTO(out, ncf = ERR_PTR(-EEXIST));
 
 	OBD_ALLOC_PTR(ncf);

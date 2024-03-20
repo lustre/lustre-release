@@ -151,6 +151,7 @@ int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		    struct hlist_node *hnode,
 		    void *nodemap_list_head);
 
+bool nodemap_mgs(void);
 int nodemap_idx_nodemap_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap);
