@@ -844,6 +844,43 @@ static int nodemap_deny_mount_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+/**
+ * Reads and prints the name of the parent nodemap for the given nodemap.
+ *
+ * \param	seq		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
+{
+	struct lu_nodemap *nodemap;
+	char *pname;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(seq->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)seq->private, rc);
+		return rc;
+	}
+
+	if (nodemap->nm_dyn) {
+		if (nodemap->nm_parent_nm)
+			pname = nodemap->nm_parent_nm->nm_name;
+		else
+			pname = DEFAULT_NODEMAP;
+	} else {
+		pname = "";
+	}
+
+	seq_printf(seq, "%s\n", pname);
+	nodemap_putref(nodemap);
+	return 0;
+}
+
 static struct ldebugfs_vars lprocfs_nm_module_vars[] = {
 	{
 		.name		= "active",
@@ -868,6 +905,7 @@ LDEBUGFS_SEQ_FOPS_RO(nodemap_audit_mode);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_forbid_encryption);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_readonly_mount);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_mount);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_parent);
 
 static const struct file_operations nodemap_ranges_fops = {
 	.open		= nodemap_ranges_open,
@@ -931,6 +969,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "map_mode",
 		.fops		= &nodemap_map_mode_fops,
+	},
+	{
+		.name		= "parent",
+		.fops		= &nodemap_parent_fops,
 	},
 	{
 		.name		= "ranges",

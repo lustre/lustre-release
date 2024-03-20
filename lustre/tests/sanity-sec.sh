@@ -7109,6 +7109,12 @@ test_72() {
 	local nids=1.1.1.[1-100]@tcp
 	local startnid=1.1.1.1@tcp
 	local endnid=1.1.1.100@tcp
+	local subnids1=1.1.1.[2-50]@tcp
+	local subnids2=1.1.1.[51-100]@tcp
+	local subnids3=1.1.1.[2-25]@tcp
+	local subnids4=1.1.1.[51-52]@tcp
+	local subnids5=1.1.1.[26-60]@tcp
+	local subnids6=1.1.1.[1-60]@tcp
 	local clid=500
 	local fsid=1000
 	local properties="audit_mode deny_unknown forbid_encryption \
@@ -7130,6 +7136,9 @@ test_72() {
 		stack_trap cleanup_active EXIT
 	fi
 
+	do_facet mgs $LCTL nodemap_set_fileset --name default \
+		--fileset "/deffset" ||
+			error "setting fileset on default failed"
 	do_facet mgs $LCTL nodemap_add $mgsnm ||
 		error "adding $mgsnm on MGS failed"
 	stack_trap "do_facet mgs $LCTL nodemap_del $mgsnm" EXIT
@@ -7145,10 +7154,12 @@ test_72() {
 	stack_trap "do_facet ost1 $LCTL nodemap_del $nm || true" EXIT
 	do_facet ost1 $LCTL nodemap_add $nm &&
 		error "static nodemap on server should fail"
-	do_facet ost1 $LCTL nodemap_add -d $nm ||
+	do_facet ost1 $LCTL nodemap_add -d $nm &&
+		error "dynamic nodemap without parent should fail"
+	do_facet ost1 $LCTL nodemap_add -d -p default $nm ||
 		error "dynamic nodemap on server failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.id)
-	if [[ "x$val" == "x" ]] || [[ "x$val" == "x0" ]]; then
+	if [[ -z "$val" || "$val" == "0" ]]; then
 		error "dynamic nodemap wrong id $val"
 	fi
 
@@ -7156,148 +7167,174 @@ test_72() {
 		error "dynamic add_range on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
 		awk 'BEGIN{RS=", "} $1=="start_nid:"{print $2 ; exit}')
-	if [[ "x$val" != "x$startnid" ]]; then
+	[[ "$val" == "$startnid" ]] ||
 		error "dynamic nodemap wrong start nid range $val"
-	fi
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
 		awk 'BEGIN{RS=", "} $1=="end_nid:"{print $2 ; exit}')
-	if [[ "x$val" != "x$endnid" ]]; then
+	[[ "$val" == "$endnid" ]] ||
 		error "dynamic nodemap wrong end nid range $val"
-	fi
 
 	do_facet ost1 $LCTL nodemap_add_idmap --name $nm --idtype uid \
 		--idmap $clid:$fsid ||
 			error "dynamic add_idmap on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
 		awk 'BEGIN{RS=", "} $1=="client_id:"{print $2 ; exit}')
-	if [[ "x$val" != "x$clid" ]]; then
-		error "dynamic nodemap wrong client id $val"
-	fi
+	(( val == clid )) || error "dynamic nodemap wrong client id $val"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
 		awk 'BEGIN{RS=", "} $1=="fs_id:"{print $2 ; exit}')
-	if [[ "x$val" != "x$fsid" ]]; then
-		error "dynamic nodemap wrong fs id $val"
-	fi
+	(( val == fsid )) || error "dynamic nodemap wrong fs id $val"
 
 	for prop in $properties; do
 		do_facet ost1 $LCTL nodemap_modify --name $nm \
 			--property $prop --value 1 ||
 				error "dynamic modify of $prop failed"
 		val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-		[[ "x$val" == "x1" ]] || error "incorrect $prop $val"
+		(( val == 1 )) || error "incorrect $prop $val"
 	done
 	prop=admin
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 1 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.admin_nodemap)
-	[[ "x$val" == "x1" ]] || error "incorrect $prop $val"
+	(( val == 1 )) || error "incorrect $prop $val"
 	prop=trusted
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 0 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.trusted_nodemap)
-	[[ "x$val" == "x0" ]] || error "incorrect $prop $val"
+	(( val == 0 )) || error "incorrect $prop $val"
 	prop=map_mode
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value uid ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "xuid" ]] || error "incorrect $prop $val"
+	[[ "$val" == "uid" ]] || error "incorrect $prop $val"
 	prop=rbac
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value file_perms ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "xfile_perms" ]] || error "incorrect $prop $val"
+	[[ "$val" == "file_perms" ]] || error "incorrect $prop $val"
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value all ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x$rbac_val" ]] || error "incorrect $prop $val"
+	[[ "$val" == "$rbac_val" ]] || error "incorrect $prop $val"
 	prop=squash_uid
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 77 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	(( val == 77 )) || error "incorrect $prop $val"
 	prop=squash_gid
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 77 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	(( val == 77 )) || error "incorrect $prop $val"
 	prop=squash_projid
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 77 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	(( val == 77 )) || error "incorrect $prop $val"
 	prop=fileset
 	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
-		--fileset "/tmp" ||
-			error "dynamic modify of $prop failed"
+		--fileset "/tmp" &&
+			error "dynamic modify of $prop should fail"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x/tmp" ]] || error "incorrect $prop $val"
+	[[ "$val" == "/deffset" ]] || error "incorrect $prop $val"
 	prop=sepol
 	do_facet ost1 $LCTL nodemap_set_sepol --name $nm \
 		--sepol $sepol ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "x$val" == "x$sepol" ]] || error "incorrect $prop $val"
+	[[ "$val" == "$sepol" ]] || error "incorrect $prop $val"
+
 	prop=offset
 	do_facet ost1 $LCTL nodemap_add_offset --name $nm \
 		--offset 100000 --limit 200000 ||
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
 		awk '$1 == "start_uid:" {print $2}' | sed s+,++)
-	[[ "x$val" == "x100000" ]] || error "incorrect $prop start_uid $val"
+	(( val == 100000 )) || error "incorrect $prop start_uid $val"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
 		awk '$1 == "limit_uid:" {print $2}' | sed s+,++)
-	[[ "x$val" == "x200000" ]] || error "incorrect $prop limit_uid $val"
+	(( val == 200000 )) || error "incorrect $prop limit_uid $val"
 	do_facet ost1 $LCTL nodemap_del_offset --name $nm ||
 			error "dynamic del of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
 		awk '$1 == "start_uid:" {print $2}' | sed s+,++)
-	[[ "x$val" == "x0" ]] || error "incorrect $prop start_uid $val"
+	(( val == 0 )) || error "incorrect $prop start_uid $val"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
 		awk '$1 == "limit_uid:" {print $2}' | sed s+,++)
-	[[ "x$val" == "x0" ]] || error "incorrect $prop limit_uid $val"
+	(( val == 0 )) || error "incorrect $prop limit_uid $val"
 
 	val=$(do_facet ost1 $LCTL nodemap_test_id --nid $startnid \
 		--idtype uid --id $clid)
-	if [[ "x$val" != "x$fsid" ]]; then
-		error "dynamic test_id on server failed"
-	fi
+	(( val == fsid )) || error "dynamic test_id on server failed"
 
 	do_facet ost1 $LCTL nodemap_del_idmap --name $nm --idtype uid \
 		--idmap $clid:$fsid ||
 			error "dynamic del_idmap on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.idmap |
 		awk 'BEGIN{RS=", "} $1=="client_id:"{print $2 ; exit}')
-	if [[ "x$val" != "x" ]]; then
-		error "idmap should be empty, got $val"
-	fi
+	[[ -z "$val" ]] || error "idmap should be empty, got $val"
 
 	val=$(do_facet ost1 $LCTL nodemap_test_nid $startnid)
-	if [[ "x$val" != "x$nm" ]]; then
-		error "dynamic test_nid on server failed"
-	fi
+	[[ "$val" == "$nm" ]] || error "dynamic test_nid on server failed"
+
+	do_facet ost1 $LCTL nodemap_add -d -p $nm ${nm}_1 ||
+		error "nodemap add ${nm}_1 on server failed"
+	stack_trap "do_facet ost1 $LCTL nodemap_del ${nm}_1 || true" EXIT
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_1 \
+		--range $subnids1 ||
+			error "add_range for ${nm}_1 failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.${nm}_1.parent)
+	[[ "$val" == "$nm" ]] ||
+		error "parent of ${nm}_1 should be $nm, got $val"
+
+	do_facet ost1 $LCTL nodemap_add -d -p $nm ${nm}_2 ||
+		error "nodemap add ${nm}_2 on server failed"
+	stack_trap "do_facet ost1 $LCTL nodemap_del ${nm}_2 || true" EXIT
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_2 \
+		--range $subnids2 ||
+			error "add_range for ${nm}_2 failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.${nm}_2.parent)
+	[[ "$val" == "$nm" ]] ||
+		error "parent of ${nm}_2 should be $nm, got $val"
+
+	do_facet ost1 $LCTL nodemap_add -d -p ${nm}_1 ${nm}_3 ||
+		error "nodemap add ${nm}_3 on server failed"
+	stack_trap "do_facet ost1 $LCTL nodemap_del ${nm}_3 || true" EXIT
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_3 \
+		--range $subnids4 &&
+		       error "nodemap ${nm}_3 should not accept range $subnids4"
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_3 \
+		--range $subnids5 &&
+		       error "nodemap ${nm}_3 should not accept range $subnids5"
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_3 \
+		--range $subnids6 &&
+		       error "nodemap ${nm}_3 should not accept range $subnids6"
+	do_facet ost1 $LCTL nodemap_add_range --name ${nm}_3 \
+		--range $subnids3 ||
+			error "add_range $subnids3 for ${nm}_3 failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.${nm}_3.parent)
+	[[ "$val" == "${nm}_1" ]] ||
+		error "parent of ${nm}_3 should be ${nm}_1, got $val"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.${nm}_3.squash_projid)
+	(( val == 77 )) || error "squash_projid should be inherited, got $val"
 
 	do_facet ost1 $LCTL nodemap_del_range --name $nm --range $nids ||
 		error "dynamic del_range on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
 		awk 'BEGIN{RS=", "} $1=="start_nid:"{print $2 ; exit}')
-	if [[ "x$val" != "x" ]]; then
-		error "nid range should be empty, got $val"
-	fi
+	[[ -z "$val" ]] || error "nid range should be empty, got $val"
 
 	do_facet ost1 $LCTL nodemap_del $nm ||
 		error "dynamic nodemap del on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.id)
-	if [[ "x$val" != "x" ]]; then
-		error "nodemap should be gone, got $val"
-	fi
+	[[ -z "$val" ]] || error "nodemap should be gone, got $val"
 
 	do_facet ost1 $LCTL nodemap_add_range --name $mgsnm --range $mgsnids2 &&
 			error "add_range $mgsnm on server should fail"

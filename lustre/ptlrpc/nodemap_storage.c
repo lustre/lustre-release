@@ -966,10 +966,10 @@ int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
 
 	ENTRY;
 
-	if (!nodemap_mgs()) {
-		if (nodemap->nm_dyn)
-			return 0;
+	if (nodemap->nm_dyn)
+		return 0;
 
+	if (!nodemap_mgs()) {
 		rc = -EINVAL;
 		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
 		       nodemap->nm_name, rc);
@@ -1038,10 +1038,10 @@ int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 
 	ENTRY;
 
-	if (!nodemap_mgs()) {
-		if (nodemap->nm_dyn)
-			return 0;
+	if (nodemap->nm_dyn)
+		return 0;
 
+	if (!nodemap_mgs()) {
 		rc = -EINVAL;
 		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
 		       nodemap->nm_name, rc);
@@ -1089,10 +1089,10 @@ int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 
 	ENTRY;
 
-	if (!nodemap_mgs()) {
-		if (nodemap->nm_dyn)
-			return 0;
+	if (nodemap->nm_dyn)
+		return 0;
 
+	if (!nodemap_mgs()) {
 		rc = -EINVAL;
 		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
 		       nodemap->nm_name, rc);
@@ -1154,10 +1154,10 @@ int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
 
 	ENTRY;
 
-	if (!nodemap_mgs()) {
-		if (nodemap->nm_dyn)
-			return 0;
+	if (nodemap->nm_dyn)
+		return 0;
 
+	if (!nodemap_mgs()) {
 		rc = -EINVAL;
 		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
 		       nodemap->nm_name, rc);
@@ -1370,9 +1370,11 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	nodemap = cfs_hash_lookup(config->nmc_nodemap_hash, rec->ncr.ncr_name);
 	if (nodemap == NULL) {
 		if (nodemap_id == LUSTRE_NODEMAP_DEFAULT_ID)
-			nodemap = nodemap_create(rec->ncr.ncr_name, config, 1);
+			nodemap = nodemap_create(rec->ncr.ncr_name, config, 1,
+						 false);
 		else
-			nodemap = nodemap_create(rec->ncr.ncr_name, config, 0);
+			nodemap = nodemap_create(rec->ncr.ncr_name, config, 0,
+						 false);
 		if (IS_ERR(nodemap))
 			return PTR_ERR(nodemap);
 
@@ -1831,7 +1833,7 @@ out:
 	if (new_config->nmc_default_nodemap == NULL) {
 		/* new MGS won't have a default nm on disk, so create it here */
 		struct lu_nodemap *nodemap =
-			nodemap_create(DEFAULT_NODEMAP, new_config, 1);
+			nodemap_create(DEFAULT_NODEMAP, new_config, 1, false);
 		if (IS_ERR(nodemap)) {
 			rc = PTR_ERR(nodemap);
 		} else {

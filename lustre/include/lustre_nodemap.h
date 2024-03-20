@@ -123,6 +123,12 @@ struct lu_nodemap {
 	unsigned int		 nm_offset_start_projid;
 	/* number of values allocated to PROJID offset */
 	unsigned int		 nm_offset_limit_projid;
+	/* list of sub-nodemaps */
+	struct list_head	 nm_subnodemaps;
+	/* list entry for parent nodemap */
+	struct list_head	 nm_parent_entry;
+	/* link to parent nodemap */
+	struct lu_nodemap	*nm_parent_nm;
 };
 
 /* Store handles to local MGC storage to save config locally. In future

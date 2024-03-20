@@ -28,6 +28,19 @@
 INTERVAL_TREE_DEFINE(struct lu_nid_range, rn_rb, lnet_nid_t, rn_subtree_last,
 		     START, LAST, static, nm_range)
 
+static int __range_is_included(lnet_nid_t needle_start, lnet_nid_t needle_end,
+			       struct lu_nid_range *haystack)
+{
+	return LNET_NIDADDR(START(haystack)) <= LNET_NIDADDR(needle_start) &&
+	       LNET_NIDADDR(LAST(haystack)) >= LNET_NIDADDR(needle_end);
+}
+
+static int range_is_included(struct lu_nid_range *needle,
+			     struct lu_nid_range *haystack)
+{
+	return __range_is_included(START(needle), LAST(needle), haystack);
+}
+
 /*
  * range constructor
  *
@@ -145,6 +158,7 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 	INIT_LIST_HEAD(&range->rn_nidlist);
 	if (!list_empty(&tmp_nidlist))
 		list_splice(&tmp_nidlist, &range->rn_nidlist);
+	range->rn_subtree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
 
 	return range;
 }
@@ -172,10 +186,15 @@ struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
 
 	range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
 				    nid4[0], nid4[1]);
-	while (range &&
-	       (!nid_same(&range->rn_start, start_nid) ||
-		!nid_same(&range->rn_end, end_nid)))
+	while (range) {
+		if (nid_same(&range->rn_start, start_nid) &&
+		    nid_same(&range->rn_end, end_nid))
+			break;
+		if (__range_is_included(nid4[0], nid4[1], range))
+			return __range_find(&range->rn_subtree,
+					    start_nid, end_nid);
 		range = nm_range_iter_next(range, nid4[0], nid4[1]);
+	}
 
 	return range;
 }
@@ -233,24 +252,44 @@ void range_destroy(struct lu_nid_range *range)
  * to exactly one range
  */
 static int __range_insert(struct nodemap_range_tree *nm_range_tree,
-			  struct lu_nid_range *range)
+			  struct lu_nid_range *range,
+			  struct lu_nid_range **parent_range, bool dynamic)
 {
-	if (nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-				lnet_nid_to_nid4(&range->rn_start),
-				lnet_nid_to_nid4(&range->rn_end)))
-		return -EEXIST;
+	struct lu_nid_range *found = NULL;
+	int rc = 0;
+
+	found = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				    lnet_nid_to_nid4(&range->rn_start),
+				    lnet_nid_to_nid4(&range->rn_end));
+	if (found) {
+		if (dynamic && range_is_included(range, found)) {
+			rc = __range_insert(&found->rn_subtree,
+					    range, parent_range, dynamic);
+			if (!rc) {
+				if (parent_range && !*parent_range)
+					*parent_range = found;
+			}
+		} else {
+			rc = -EEXIST;
+		}
+		GOTO(out_insert, rc);
+	}
 
 	nm_range_insert(range,
 			&nm_range_tree->nmrt_range_interval_root);
-	return 0;
+
+out_insert:
+	return rc;
 }
 
-int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
+int range_insert(struct nodemap_config *config, struct lu_nid_range *range,
+		 struct lu_nid_range **parent_range, bool dynamic)
 {
 	int rc = 0;
 
 	if (!range->rn_netmask) {
-		rc = __range_insert(&config->nmc_range_tree, range);
+		rc = __range_insert(&config->nmc_range_tree,
+				    range, parent_range, dynamic);
 	} else {
 		if (range_find(config, &range->rn_start, &range->rn_end,
 			       range->rn_netmask))
@@ -271,8 +310,28 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
 static void __range_delete(struct nodemap_range_tree *nm_range_tree,
 			   struct lu_nid_range *range)
 {
-	nm_range_remove(range,
-			&nm_range_tree->nmrt_range_interval_root);
+	struct lu_nid_range *found;
+	lnet_nid_t nid4[2];
+
+	nid4[0] = lnet_nid_to_nid4(&range->rn_start);
+	nid4[1] = lnet_nid_to_nid4(&range->rn_end);
+
+	found = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				    nid4[0], nid4[1]);
+	while (found) {
+		if (nid_same(&found->rn_start, &range->rn_start) &&
+		    nid_same(&found->rn_end, &range->rn_end))
+			break;
+		if (__range_is_included(nid4[0], nid4[1], found)) {
+			__range_delete(&found->rn_subtree, range);
+			return;
+		}
+		found = nm_range_iter_next(found, nid4[0], nid4[1]);
+	}
+
+	if (found)
+		nm_range_remove(found,
+				&nm_range_tree->nmrt_range_interval_root);
 }
 
 void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
@@ -296,9 +355,18 @@ static
 struct lu_nid_range *__range_search(struct nodemap_range_tree *nm_range_tree,
 				    struct lnet_nid *nid)
 {
-	return nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-				   lnet_nid_to_nid4(nid),
-				   lnet_nid_to_nid4(nid));
+	struct lu_nid_range *range, *subrange;
+
+	range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				    lnet_nid_to_nid4(nid),
+				    lnet_nid_to_nid4(nid));
+	if (range) {
+		subrange = __range_search(&range->rn_subtree, nid);
+		if (subrange)
+			range = subrange;
+	}
+
+	return range;
 }
 
 struct lu_nid_range *range_search(struct nodemap_config *config,

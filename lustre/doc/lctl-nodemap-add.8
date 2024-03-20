@@ -6,6 +6,9 @@ lctl-nodemap_add \- create a new nodemap to define client behavior
 or
 .SY "lctl nodemap add"
 .RB [ -d | --dynamic ]
+.RB [ -p |
+.BI --parent " PARENT_NAME"
+]
 .BI --name " NODEMAP_NAME"
 .YS
 .SH DESCRIPTION
@@ -18,6 +21,10 @@ and filesystem access permission of those NID(s).
 .BR -d ", " --dynamic
 Adds a temporary in-memory nodemap on the local node instead of a persistent
 one.
+.TP
+.BI -p ", " --parent " PARENT_NAME"
+Mandatory for dynamic nodemap. Specifies the parent nodemap to inherit
+properties from. This can be "default".
 .TP
 .BI --name " NODEMAP_NAME"
 The name to give the new nodemap. It can be any alphanumeric string of maximum

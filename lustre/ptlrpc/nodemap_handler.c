@@ -35,6 +35,8 @@ bool nodemap_active;
 DEFINE_MUTEX(active_config_lock);
 struct nodemap_config *active_config;
 
+static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src);
+
 /**
  * Nodemap destructor
  *
@@ -60,8 +62,16 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 
 	mutex_unlock(&active_config_lock);
 
+	if (nodemap->nm_parent_nm) {
+		list_del(&nodemap->nm_parent_entry);
+		nodemap_putref(nodemap->nm_parent_nm);
+	}
+
 	if (!list_empty(&nodemap->nm_member_list))
 		CWARN("nodemap_destroy failed to reclassify all members\n");
+
+	if (!list_empty(&nodemap->nm_subnodemaps))
+		CWARN("nodemap_destroy failed to reclassify all subnodemaps\n");
 
 	nm_member_delete_list(nodemap);
 
@@ -950,10 +960,11 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 }
 EXPORT_SYMBOL(nodemap_map_acl);
 
-static void nodemap_inherit_properties(struct lu_nodemap *dst,
-				       struct lu_nodemap *src,
-				       bool is_new)
+static int nodemap_inherit_properties(struct lu_nodemap *dst,
+				      struct lu_nodemap *src)
 {
+	int rc = 0;
+
 	if (!src) {
 		dst->nmf_trust_client_ids = 0;
 		dst->nmf_allow_root_access = 0;
@@ -993,19 +1004,36 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
-		if (is_new) {
-			dst->nm_sepol[0] = '\0';
-		}
 		dst->nm_offset_start_uid = src->nm_offset_start_uid;
 		dst->nm_offset_limit_uid = src->nm_offset_limit_uid;
 		dst->nm_offset_start_gid = src->nm_offset_start_gid;
 		dst->nm_offset_limit_gid = src->nm_offset_limit_gid;
 		dst->nm_offset_start_projid = src->nm_offset_start_projid;
 		dst->nm_offset_limit_projid = src->nm_offset_limit_projid;
-		/* filesets cannot yet be inherited */
-		dst->nm_prim_fileset = NULL;
-		dst->nm_prim_fileset_size = 0;
+		if (src->nm_id == LUSTRE_NODEMAP_DEFAULT_ID) {
+			dst->nm_sepol[0] = '\0';
+		} else {
+			/* because we are copying from an existing nodemap,
+			 * we already know this string is well formatted
+			 */
+			strcpy(dst->nm_sepol, src->nm_sepol);
+			rc = idmap_copy_tree(dst, src);
+			if (rc)
+				goto out;
+		}
+		/* only dynamic nodemap inherits fileset from parent */
+		if (dst->nm_dyn) {
+			rc = nodemap_copy_fileset(dst, src);
+			if (rc)
+				goto out;
+		} else {
+			dst->nm_prim_fileset = NULL;
+			dst->nm_prim_fileset_size = 0;
+		}
 	}
+
+out:
+	return rc;
 }
 
 /*
@@ -1024,6 +1052,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 			     const struct lnet_nid nid[2],
 			     u8 netmask, unsigned int range_id)
 {
+	struct lu_nid_range *prange = NULL;
 	struct lu_nid_range *range;
 	int rc;
 
@@ -1035,7 +1064,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 		GOTO(out, rc = -ENOMEM);
 	}
 
-	rc = range_insert(config, range);
+	rc = range_insert(config, range, &prange, nodemap->nm_dyn);
 	if (rc) {
 		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
 			     "cannot insert nodemap range into '%s': rc = %d\n",
@@ -1046,6 +1075,32 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 		GOTO(out, rc);
 	}
 
+	if (nodemap->nm_dyn) {
+		/* Verify that the parent already associated with the nodemap
+		 * is the one the prange belongs to.
+		 */
+		struct lu_nodemap *parent;
+
+		if (!nodemap->nm_parent_nm ||
+		    list_empty(&nodemap->nm_parent_entry)) {
+			CDEBUG(D_INFO, "dynamic nodemap %s has no parent\n",
+			       nodemap->nm_name);
+			GOTO(err_parent, rc = -EINVAL);
+		}
+		parent = prange ?
+			prange->rn_nodemap : config->nmc_default_nodemap;
+		if (nodemap->nm_parent_nm != parent) {
+			CDEBUG(D_INFO,
+			       "%s: range [%s-%s] is not included in range of parent nodemap %s\n",
+			       nodemap->nm_name,
+			       libcfs_nidstr(&nid[0]), libcfs_nidstr(&nid[1]),
+			       nodemap->nm_parent_nm->nm_name);
+err_parent:
+			range_delete(config, range);
+			up_write(&config->nmc_range_tree_lock);
+			GOTO(out, rc = -EINVAL);
+		}
+	}
 	list_add(&range->rn_list, &nodemap->nm_ranges);
 
 	/* nodemaps have no members if they aren't on the active config */
@@ -1281,6 +1336,34 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 }
 
 /**
+ * Copy a fileset from a source to a destination nodemap. This is a local,
+ * non-persistent operation made for dynamic nodemaps.
+ * *
+ * \param	dst		the nodemap to set fileset on
+ * \param	src		the nodemap to fetch fileset from
+ * \retval	0 on success
+ * \retval	< 0 on error
+ */
+static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
+{
+	char *fileset;
+	int rc = 0;
+
+	fileset = nodemap_get_fileset(src);
+	if (!fileset) {
+		dst->nm_prim_fileset = NULL;
+		dst->nm_prim_fileset_size = 0;
+	} else {
+		/* nodemap_set_fileset_iam() knows how to
+		 * handle a dynamic nodemap
+		 */
+		rc = nodemap_set_fileset_iam(dst, fileset);
+	}
+
+	return rc;
+}
+
+/**
  * Set fileset on a named nodemap
  *
  * \param	name		name of the nodemap to set fileset on
@@ -1311,6 +1394,12 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 		mutex_unlock(&active_config_lock);
 		RETURN(PTR_ERR(nodemap));
 	}
+
+	/* FIXME: for now the fileset on a dynamic nodemap can just be
+	 * inherited from the parent, not set explicitly
+	 */
+	if (nodemap->nm_dyn)
+		GOTO(out_unlock, rc = -EPERM);
 
 	if (checkperm && !allow_op_on_nm(nodemap))
 		GOTO(out_unlock, rc = -EPERM);
@@ -1483,18 +1572,51 @@ EXPORT_SYMBOL(nodemap_get_sepol);
  */
 struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
-				  bool is_default)
+				  bool is_default, bool dynamic)
 {
 	struct lu_nodemap *nodemap = NULL;
 	struct lu_nodemap *default_nodemap;
-	struct lu_nodemap *parent_nodemap;
+	struct lu_nodemap *parent_nodemap = NULL;
 	struct cfs_hash *hash = config->nmc_nodemap_hash;
+	char newname[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	int rc = 0;
 	ENTRY;
 
 	default_nodemap = config->nmc_default_nodemap;
 
-	if (!nodemap_name_is_valid(name))
+	if (dynamic) {
+		char pname[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+		char format[32];
+
+		/* for a dynamic nodemap, nodemap_name is in the form:
+		 * parent_name/new_name
+		 */
+		if (!strchr(name, '/'))
+			GOTO(out, rc = -EINVAL);
+		rc = snprintf(format, sizeof(format), "%%%zu[^/]/%%%zus",
+			      sizeof(pname) - 1, sizeof(newname) - 1);
+		if (rc >= sizeof(format))
+			GOTO(out, rc = -ENAMETOOLONG);
+		rc = sscanf(name, format, pname, newname);
+		if (rc != 2)
+			GOTO(out, rc = -EINVAL);
+
+		if (!nodemap_name_is_valid(pname))
+			GOTO(out, rc = -EINVAL);
+
+		/* the call to nodemap_create for a dynamic nodemap comes from
+		 * nodemap_add, which holds the active_config_lock
+		 */
+		parent_nodemap = nodemap_lookup(pname);
+		if (IS_ERR(parent_nodemap))
+			GOTO(out, rc = PTR_ERR(parent_nodemap));
+	} else {
+		rc = snprintf(newname, sizeof(newname), "%s", name);
+		if (rc >= sizeof(newname))
+			GOTO(out, rc = -ENAMETOOLONG);
+	}
+
+	if (!nodemap_name_is_valid(newname))
 		GOTO(out, rc = -EINVAL);
 
 	if (hash == NULL) {
@@ -1503,7 +1625,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	}
 
 	OBD_ALLOC_PTR(nodemap);
-	if (nodemap == NULL) {
+	if (!nodemap) {
 		CERROR("cannot allocate memory (%zu bytes) for nodemap '%s'\n",
 		       sizeof(*nodemap), name);
 		GOTO(out, rc = -ENOMEM);
@@ -1514,25 +1636,40 @@ struct lu_nodemap *nodemap_create(const char *name,
 	 * while it's being created.
 	 */
 	refcount_set(&nodemap->nm_refcount, 2);
-	snprintf(nodemap->nm_name, sizeof(nodemap->nm_name), "%s", name);
-	rc = cfs_hash_add_unique(hash, name, &nodemap->nm_hash);
-	if (rc != 0) {
-		OBD_FREE_PTR(nodemap);
-		GOTO(out, rc = -EEXIST);
-	}
+	snprintf(nodemap->nm_name, sizeof(nodemap->nm_name), "%s", newname);
 
-	INIT_LIST_HEAD(&nodemap->nm_ranges);
-	INIT_LIST_HEAD(&nodemap->nm_list);
-	INIT_LIST_HEAD(&nodemap->nm_member_list);
-
-	mutex_init(&nodemap->nm_member_list_lock);
-	init_rwsem(&nodemap->nm_idmap_lock);
 	nodemap->nm_fs_to_client_uidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_uidmap = RB_ROOT;
 	nodemap->nm_fs_to_client_gidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_gidmap = RB_ROOT;
 	nodemap->nm_fs_to_client_projidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_projidmap = RB_ROOT;
+
+	nodemap->nm_dyn = dynamic;
+	if (!parent_nodemap)
+		rc = nodemap_inherit_properties(nodemap,
+					   is_default ? NULL : default_nodemap);
+	else
+		rc = nodemap_inherit_properties(nodemap, parent_nodemap);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = cfs_hash_add_unique(hash, newname, &nodemap->nm_hash);
+	if (rc)
+		GOTO(out, rc = -EEXIST);
+
+	INIT_LIST_HEAD(&nodemap->nm_ranges);
+	INIT_LIST_HEAD(&nodemap->nm_list);
+	INIT_LIST_HEAD(&nodemap->nm_member_list);
+	INIT_LIST_HEAD(&nodemap->nm_subnodemaps);
+	INIT_LIST_HEAD(&nodemap->nm_parent_entry);
+	nodemap->nm_parent_nm = parent_nodemap;
+	if (parent_nodemap)
+		list_add(&nodemap->nm_parent_entry,
+			 &parent_nodemap->nm_subnodemaps);
+
+	mutex_init(&nodemap->nm_member_list_lock);
+	init_rwsem(&nodemap->nm_idmap_lock);
 
 	if (is_default) {
 		nodemap->nm_id = LUSTRE_NODEMAP_DEFAULT_ID;
@@ -1546,12 +1683,12 @@ struct lu_nodemap *nodemap_create(const char *name,
 		CWARN("adding nodemap '%s' to config without default nodemap\n",
 		      nodemap->nm_name);
 
-	parent_nodemap = is_default ? NULL : default_nodemap;
-	nodemap_inherit_properties(nodemap, parent_nodemap, true);
-
 	RETURN(nodemap);
 
 out:
+	OBD_FREE_PTR(nodemap);
+	if (!IS_ERR_OR_NULL(parent_nodemap))
+		nodemap_putref(parent_nodemap);
 	CERROR("cannot add nodemap: '%s': rc = %d\n", name, rc);
 	RETURN(ERR_PTR(rc));
 }
@@ -2006,12 +2143,11 @@ int nodemap_add(const char *nodemap_name, bool dynamic)
 	int rc;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_create(nodemap_name, active_config, 0);
+	nodemap = nodemap_create(nodemap_name, active_config, 0, dynamic);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		return PTR_ERR(nodemap);
 	}
-	nodemap->nm_dyn = dynamic;
 
 	rc = nodemap_idx_nodemap_add(nodemap);
 	if (rc == 0)
@@ -2051,6 +2187,22 @@ int nodemap_del(const char *nodemap_name)
 	if (!allow_op_on_nm(nodemap)) {
 		nodemap_putref(nodemap);
 		GOTO(out, rc = -EPERM);
+	}
+
+	/* delete sub-nodemaps first */
+	if (!list_empty(&nodemap->nm_subnodemaps)) {
+		struct lu_nodemap *nm, *nm_temp;
+
+		list_for_each_entry_safe(nm, nm_temp, &nodemap->nm_subnodemaps,
+					 nm_parent_entry) {
+			/* do our best and report any error on sub-nodemaps
+			 * but do not forward rc
+			 */
+			rc2 = nodemap_del(nm->nm_name);
+			CDEBUG_LIMIT(D_INFO,
+				     "cannot del sub-nodemap %s: rc = %d\n",
+				     nm->nm_name, rc2);
+		}
 	}
 	nodemap_putref(nodemap);
 
@@ -2094,13 +2246,18 @@ int nodemap_del(const char *nodemap_name)
 	lprocfs_nodemap_remove(nodemap->nm_pde_data);
 	nodemap->nm_pde_data = NULL;
 
+	if (!list_empty(&nodemap->nm_subnodemaps))
+		CWARN("%s: nodemap_del failed to remove all subnodemaps\n",
+		      nodemap_name);
+
 	/* reclassify all member exports from nodemap, so they put their refs */
 	down_read(&active_config->nmc_range_tree_lock);
 	nm_member_reclassify_nodemap(nodemap);
 	up_read(&active_config->nmc_range_tree_lock);
 
 	if (!list_empty(&nodemap->nm_member_list))
-		CWARN("nodemap_del failed to reclassify all members\n");
+		CWARN("%s: nodemap_del failed to reclassify all members\n",
+		      nodemap_name);
 
 	mutex_unlock(&active_config_lock);
 	nodemap_putref(nodemap);
@@ -2524,7 +2681,7 @@ int nodemap_mod_init(void)
 		GOTO(out, rc = PTR_ERR(new_config));
 	}
 
-	nodemap = nodemap_create(DEFAULT_NODEMAP, new_config, 1);
+	nodemap = nodemap_create(DEFAULT_NODEMAP, new_config, 1, false);
 	if (IS_ERR(nodemap)) {
 		nodemap_config_dealloc(new_config);
 		nodemap_procfs_exit();

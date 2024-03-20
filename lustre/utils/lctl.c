@@ -166,7 +166,7 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap activate {0|1}"},
 	{.pc_name = "add", .pc_func = jt_nodemap_add,
 	 .pc_help = "add a new nodemap\n"
-	 "usage: nodemap add [-d|--dynamic] --name NODEMAP_NAME"},
+	 "usage: nodemap add [-d|--dynamic] [-p|--parent PARENT_NAME] --name NODEMAP_NAME"},
 	{.pc_name = "del", .pc_func = jt_nodemap_del,
 	 .pc_help = "remove a nodemap\n"
 	 "usage: nodemap del --name NODEMAP_NAME"},
@@ -591,7 +591,7 @@ command_t cmdlist[] = {
 	 "usage: nodemap_activate {0|1}"},
 	{"nodemap_add", jt_nodemap_add, 0,
 	 "add a new nodemap\n"
-	 "usage: nodemap_add [-d|--dynamic] --name NODEMAP_NAME"},
+	 "usage: nodemap_add [-d|--dynamic] [-p|--parent PARENT_NAME] --name NODEMAP_NAME"},
 	{"nodemap_del", jt_nodemap_del, 0,
 	 "remove a nodemap\n"
 	 "usage: nodemap_del --name NODEMAP_NAME"},

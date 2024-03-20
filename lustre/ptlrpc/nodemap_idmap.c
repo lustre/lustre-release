@@ -49,7 +49,7 @@ static void idmap_destroy(struct lu_idmap *idmap)
 /**
  * Insert idmap into the proper trees
  *
- * \param	id_type		NODEMAP_UID or NODEMAP_GID
+ * \param	id_type		NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
  * \param	idmap		lu_idmap structure to insert
  * \param	nodemap		nodemap to associate with the map
  *
@@ -277,4 +277,77 @@ void idmap_delete_tree(struct lu_nodemap *nodemap)
 					     id_client_to_fs) {
 		idmap_destroy(idmap);
 	}
+}
+
+/*
+ * copy all idmap trees from a source nodemap to a dest nodemap
+ *
+ * \param	dst		nodemap to copy trees to
+ * \param	src		nodemap to copy trees from
+ *
+ * \retval	0 on success, error code otherwise
+ *
+ * This uses the postorder safe traversal code that is committed
+ * in a later kernel. Each lu_idmap structure is copied.
+ * No need for this function to hold nm_idmap_lock, as it is called
+ * only when a sub-nodemap is first attached to a parent.
+ */
+int idmap_copy_tree(struct lu_nodemap *dst, struct lu_nodemap *src)
+{
+	struct lu_idmap *idmap, *temp, *idmap_new, *err;
+	struct rb_root root;
+	int rc = 0;
+
+	root = src->nm_fs_to_client_uidmap;
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_fs_to_client) {
+		idmap_new = idmap_create(idmap->id_client, idmap->id_fs);
+		if (!idmap_new)
+			GOTO(out_copy_tree, rc = -ENOMEM);
+
+		err = idmap_insert(NODEMAP_UID, idmap_new, dst);
+		if (err) {
+			OBD_FREE_PTR(idmap);
+			GOTO(out_copy_tree,
+			     rc = IS_ERR(err) ? PTR_ERR(err) : -EEXIST);
+		}
+	}
+
+	root = src->nm_client_to_fs_gidmap;
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
+		idmap_new = idmap_create(idmap->id_client, idmap->id_fs);
+		if (!idmap_new)
+			GOTO(out_copy_tree, rc = -ENOMEM);
+
+		err = idmap_insert(NODEMAP_GID, idmap_new, dst);
+		if (err) {
+			OBD_FREE_PTR(idmap);
+			GOTO(out_copy_tree,
+			     rc = IS_ERR(err) ? PTR_ERR(err) : -EEXIST);
+		}
+	}
+
+	root = src->nm_client_to_fs_projidmap;
+	rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+					     id_client_to_fs) {
+		idmap_new = idmap_create(idmap->id_client, idmap->id_fs);
+		if (!idmap_new)
+			GOTO(out_copy_tree, rc = -ENOMEM);
+
+		err = idmap_insert(NODEMAP_PROJID, idmap_new, dst);
+		if (err) {
+			OBD_FREE_PTR(idmap);
+			GOTO(out_copy_tree,
+			     rc = IS_ERR(err) ? PTR_ERR(err) : -EEXIST);
+		}
+	}
+
+out_copy_tree:
+	if (rc)
+		CDEBUG(D_INFO,
+		       "Copying idmap %d:%d from %s to %s failed: rc=%d\n",
+		       idmap->id_client, idmap->id_fs,
+		       src->nm_name, dst->nm_name, rc);
+	return rc;
 }

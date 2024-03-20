@@ -53,6 +53,8 @@ struct lu_nid_range {
 	 */
 	struct list_head	 rn_nidlist;
 	struct rb_node		 rn_rb;
+	/* sub ranges included in this NID range */
+	struct nodemap_range_tree rn_subtree;
 };
 
 struct lu_idmap {
@@ -101,7 +103,7 @@ static inline __u32 nm_idx_set_type(unsigned int id, enum nodemap_idx_type t)
 void nodemap_config_set_active(struct nodemap_config *config);
 struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
-				  bool is_default);
+				  bool is_default, bool dynamic);
 void nodemap_putref(struct lu_nodemap *nodemap);
 struct lu_nodemap *nodemap_lookup(const char *name);
 
@@ -116,7 +118,8 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 				  u8 netmask, struct lu_nodemap *nodemap,
 				  unsigned int range_id);
 void range_destroy(struct lu_nid_range *range);
-int range_insert(struct nodemap_config *config, struct lu_nid_range *data);
+int range_insert(struct nodemap_config *config, struct lu_nid_range *range,
+		 struct lu_nid_range **parent_range, bool dynamic);
 void range_delete(struct nodemap_config *config, struct lu_nid_range *data);
 struct lu_nid_range *range_search(struct nodemap_config *config,
 				  struct lnet_nid *nid);
@@ -132,6 +135,7 @@ struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
 void idmap_delete(enum nodemap_id_type id_type,  struct lu_idmap *idmap,
 		  struct lu_nodemap *nodemap);
 void idmap_delete_tree(struct lu_nodemap *nodemap);
+int idmap_copy_tree(struct lu_nodemap *dst, struct lu_nodemap *src);
 struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_tree_type,
 			      enum nodemap_id_type id_type,

@@ -78,6 +78,7 @@
 #include <linux/lustre/lustre_ver.h>
 
 #include <lustre/lustreapi.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
 #define MAX_STRING_SIZE 128
 
@@ -4023,7 +4024,8 @@ int jt_nodemap_activate(int argc, char **argv)
  */
 int jt_nodemap_add(int argc, char **argv)
 {
-	char *nodemap_name = NULL;
+	char nm_to_send[LUSTRE_NODEMAP_NAME_LENGTH*2 + 2];
+	char *nodemap_name = NULL, *parent_nm = NULL;
 	bool dynamic = false;
 	int c, rc = EXIT_SUCCESS;
 
@@ -4031,9 +4033,10 @@ int jt_nodemap_add(int argc, char **argv)
 		{ .val = 'd', .name = "dynamic", .has_arg = no_argument },
 		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
 		{ .val = 'n', .name = "name",	 .has_arg = required_argument },
+		{ .val = 'p', .name = "parent",	 .has_arg = required_argument },
 		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "dhn:",
+	while ((c = getopt_long(argc, argv, "dhn:p:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'd':
@@ -4041,6 +4044,9 @@ int jt_nodemap_add(int argc, char **argv)
 			break;
 		case 'n':
 			nodemap_name = optarg;
+			break;
+		case 'p':
+			parent_nm = optarg;
 			break;
 		case 'h':
 		default:
@@ -4056,21 +4062,54 @@ int jt_nodemap_add(int argc, char **argv)
 		nodemap_name = argv[optind];
 	}
 
-	if (!dynamic && !is_mgs()) {
+	if (dynamic && !parent_nm) {
 		fprintf(stderr,
-			"nodemap_add: non-dynamic nodemap only allowed on MGS node\n");
+			"nodemap_add: missing parent for dynamic nodemap\n");
 		return CMD_HELP;
 	}
 
-	if (llapi_nodemap_exists(nodemap_name) == 0) {
+	if (!dynamic) {
+		if (!is_mgs()) {
+			fprintf(stderr,
+				"nodemap_add: non-dynamic nodemap only allowed on MGS node\n");
+			return CMD_HELP;
+		}
+		if (parent_nm) {
+			fprintf(stderr,
+				"nodemap_add: invalid parent for non-dynamic nodemap\n");
+			return CMD_HELP;
+		}
+	}
+
+	if (!llapi_nodemap_exists(nodemap_name)) {
 		fprintf(stderr, "error: nodemap '%s' already exists\n",
 			nodemap_name);
 		errno = EINVAL;
 		goto out;
 	}
 
+	if (parent_nm) {
+		if (llapi_nodemap_exists(parent_nm)) {
+			fprintf(stderr, "error: parent '%s' does not exist\n",
+				parent_nm);
+			errno = EINVAL;
+			goto out;
+		}
+	}
+
+	if (snprintf(nm_to_send, sizeof(nm_to_send), "%s%s%s",
+		     parent_nm ? parent_nm : "",
+		     parent_nm ? "/" : "", nodemap_name) >=
+	    sizeof(nm_to_send)) {
+		fprintf(stderr, "error: nodemap names %s%s%s too long\n",
+			parent_nm ? parent_nm : "", parent_nm ? "/" : "",
+			nodemap_name);
+		errno = EINVAL;
+		goto out;
+	}
+
 	errno = -nodemap_cmd(LCFG_NODEMAP_ADD, dynamic, NULL, 0, argv[0],
-			     nodemap_name, NULL);
+			     nm_to_send, NULL);
 
 out:
 	if (errno) {
