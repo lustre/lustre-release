@@ -796,6 +796,62 @@ int jt_opt_net(int argc, char **argv)
 #define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
 #endif
 
+static bool is_mds(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "mdt/*-MDT0000");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
+static bool is_oss(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "obdfilter/*-OST0000");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
+static int get_mds_device(void)
+{
+	char mds[] = "$MDS";
+	int rc;
+
+	do_disconnect(NULL, 1);
+	rc = do_device("mdsioc", mds);
+	if (rc) {
+		errno = ENODEV;
+		return -errno;
+	}
+	return cur_device;
+}
+
+static int get_oss_device(void)
+{
+	char oss[] = "$OSS";
+	int rc;
+
+	do_disconnect(NULL, 1);
+	rc = do_device("ossioc", oss);
+	if (rc) {
+		errno = ENODEV;
+		return -errno;
+	}
+	return cur_device;
+}
+
 int jt_obd_no_transno(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
@@ -3807,8 +3863,8 @@ out:
  *
  * \retval			0 on success
  */
-static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
-		       unsigned int ret_size, ...)
+static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
+		       void *ret_data, unsigned int ret_size, ...)
 {
 	va_list			ap;
 	char			*arg;
@@ -3837,7 +3893,18 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 	lustre_cfg_init(lcfg, cmd, &bufs);
 
 	memset(&data, 0, sizeof(data));
-	rc = data.ioc_dev = get_mgs_device();
+	if (dynamic) {
+		if (is_mds()) {
+			rc = data.ioc_dev = get_mds_device();
+		} else if (is_oss()) {
+			rc = data.ioc_dev = get_oss_device();
+		} else {
+			errno = EINVAL;
+			rc = -errno;
+		}
+	} else {
+		rc = data.ioc_dev = get_mgs_device();
+	}
 	if (rc < 0)
 		goto out;
 
@@ -3893,8 +3960,8 @@ int jt_nodemap_activate(int argc, char **argv)
 {
 	int rc;
 
-	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, NULL, 0, argv[0], argv[1],
-			 NULL);
+	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, false, NULL, 0,
+			 argv[0], argv[1], NULL);
 
 	if (rc != 0) {
 		errno = -rc;
@@ -3924,7 +3991,8 @@ int jt_nodemap_add(int argc, char **argv)
 		return 1;
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_ADD, NULL, 0, argv[0], argv[1], NULL);
+	rc = nodemap_cmd(LCFG_NODEMAP_ADD, false, NULL, 0, argv[0],
+			 argv[1], NULL);
 
 	if (rc != 0) {
 		errno = -rc;
@@ -3954,7 +4022,8 @@ int jt_nodemap_del(int argc, char **argv)
 			argv[1]);
 		return rc;
 	}
-	rc = nodemap_cmd(LCFG_NODEMAP_DEL, NULL, 0, argv[0], argv[1], NULL);
+	rc = nodemap_cmd(LCFG_NODEMAP_DEL, false, NULL, 0, argv[0],
+			 argv[1], NULL);
 
 	if (rc != 0) {
 		errno = -rc;
@@ -3979,7 +4048,7 @@ int jt_nodemap_test_nid(int argc, char **argv)
 	char	rawbuf[MAX_IOC_BUFLEN];
 	int	rc;
 
-	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, &rawbuf, sizeof(rawbuf),
+	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, false, &rawbuf, sizeof(rawbuf),
 			 argv[0], argv[1], NULL);
 	if (rc == 0)
 		printf("%s\n", (char *)rawbuf);
@@ -4036,7 +4105,7 @@ int jt_nodemap_test_id(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, &rawbuf, sizeof(rawbuf),
+	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, false, &rawbuf, sizeof(rawbuf),
 			 argv[0], nidstr, typestr, idstr, NULL);
 	if (rc == 0)
 		printf("%s\n", (char *)rawbuf);
@@ -4152,7 +4221,7 @@ int jt_nodemap_add_range(int argc, char **argv)
 	if (rc) {
 		return rc;
 	}
-	rc = nodemap_cmd(LCFG_NODEMAP_ADD_RANGE, NULL, 0, argv[0],
+	rc = nodemap_cmd(LCFG_NODEMAP_ADD_RANGE, false, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
 	if (rc) {
 		fprintf(stderr,
@@ -4211,7 +4280,7 @@ int jt_nodemap_del_range(int argc, char **argv)
 		errno = -rc;
 		return rc;
 	}
-	rc = nodemap_cmd(LCFG_NODEMAP_DEL_RANGE, NULL, 0, argv[0],
+	rc = nodemap_cmd(LCFG_NODEMAP_DEL_RANGE, false, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
 	if (rc != 0) {
 		errno = -rc;
@@ -4264,7 +4333,7 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, NULL, 0, argv[0],
+	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, false, NULL, 0, argv[0],
 			 nodemap_name, fileset_name, NULL);
 	if (rc != 0) {
 		errno = -rc;
@@ -4328,7 +4397,7 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_SET_SEPOL, NULL, 0, argv[0],
+	rc = nodemap_cmd(LCFG_NODEMAP_SET_SEPOL, false, NULL, 0, argv[0],
 			 nodemap_name, sepol, NULL);
 	if (rc != 0) {
 		errno = -rc;
@@ -4420,7 +4489,7 @@ int jt_nodemap_modify(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, param,
+	rc = nodemap_cmd(cmd, false, NULL, 0, argv[0], nodemap_name, param,
 			 value, NULL);
 	if (rc != 0) {
 		errno = -rc;
@@ -4482,7 +4551,8 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
+	rc = nodemap_cmd(cmd, false, NULL, 0,
+			 argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {
 		errno = -rc;
 		fprintf(stderr,
@@ -4543,7 +4613,8 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 		return -1;
 	}
 
-	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
+	rc = nodemap_cmd(cmd, false, NULL, 0,
+			 argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {
 		errno = -rc;
 		fprintf(stderr,
