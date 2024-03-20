@@ -710,6 +710,8 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t oid, bool insert);
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   uint64_t *oid);
+int osd_last_seq_get(const struct lu_env *env, struct dt_device *dt,
+		     __u64 *seq);
 
 /**
  * Basic transaction credit op

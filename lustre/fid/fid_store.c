@@ -205,6 +205,7 @@ int seq_store_init(struct lu_server_seq *seq,
 	dt_obj = dt_find_or_create(env, dt, &fid, &dof, &attr);
 	if (!IS_ERR(dt_obj)) {
 		seq->lss_obj = dt_obj;
+		seq->lss_dev = dt;
 		rc = 0;
 	} else {
 		CERROR("%s: Can't find \"%s\" obj %d\n",

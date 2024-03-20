@@ -310,6 +310,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
 	LASSERT(lu_seq_range_is_sane(space));
 
+restart:
 	rc = seq_server_check_and_alloc_super(env, seq);
 	if (rc < 0) {
 		if (rc == -EINPROGRESS) {
@@ -328,6 +329,26 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 	if (seq->lss_set_width) {
 		rc = range_alloc_set(env, out, seq);
 	} else {
+		__u64 last_seq;
+
+		rc = dt_last_seq_get(env, seq->lss_dev, &last_seq);
+		if (!rc) {
+			if (last_seq + 1 >= space->lsr_end) {
+				LCONSOLE_INFO("%s: On disk last known sequence %#llx beyond super-sequence "
+					      DRANGE", getting new super-sequence\n",
+					      seq->lss_name, last_seq,
+					      PRANGE(space));
+				space->lsr_start = space->lsr_end;
+				GOTO(restart, rc);
+			}
+			if (last_seq >= space->lsr_start) {
+				LCONSOLE_INFO("%s: On disk last known sequence %#llx within super-sequence "
+					      DRANGE", updating super-sequence\n",
+					      seq->lss_name, last_seq,
+					      PRANGE(space));
+				space->lsr_start = last_seq + 1;
+			}
+		}
 		range_alloc(out, space, seq->lss_width);
 		rc = seq_store_update(env, seq, NULL, 1);
 	}

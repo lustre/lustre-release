@@ -304,6 +304,20 @@ struct dt_device_operations {
 	int   (*dt_reserve_or_free_quota)(const struct lu_env *env,
 					  struct dt_device *dev,
 					  struct lquota_id_info *qi);
+
+	/**
+	 * Return last known sequence number from disk.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[out] seq	last known sequence on disk
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dt_last_seq_get)(const struct lu_env *env,
+				 struct dt_device *dev,
+				 __u64 *seq);
 };
 
 struct dt_index_features {
@@ -3024,6 +3038,16 @@ static inline int dt_reserve_or_free_quota(const struct lu_env *env,
 	LASSERT(dev->dd_ops);
 	LASSERT(dev->dd_ops->dt_reserve_or_free_quota);
 	return dev->dd_ops->dt_reserve_or_free_quota(env, dev, qi);
+}
+
+static inline int dt_last_seq_get(const struct lu_env *env,
+				  struct dt_device *dev,
+				  __u64 *seq)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_last_seq_get);
+	return dev->dd_ops->dt_last_seq_get(env, dev, seq);
 }
 
 static inline int dt_lookup(const struct lu_env *env,

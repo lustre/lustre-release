@@ -3527,3 +3527,64 @@ static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev)
 	return osd_scan_dir(env, dev, dev->od_ost_map->om_root->d_inode,
 			    osd_scan_O_seq);
 }
+
+static int osd_seq_dir_helper(const struct lu_env *env,
+			       struct osd_device *osd, struct inode *dir,
+			       struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *fid = &info->oti_fid;
+	struct inode *inode;
+	struct osd_inode_id id;
+	char *name = NULL;
+	__u64 seq;
+	int rc = 0;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, osd, &id, 0);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, rc);
+
+	OBD_ALLOC(name, oie->oie_dirent->oied_namelen + 1);
+	if (name == NULL)
+		GOTO(out, rc = -ENOMEM);
+	memcpy(name, oie->oie_dirent->oied_name,
+	       oie->oie_dirent->oied_namelen);
+	name[oie->oie_dirent->oied_namelen] = '\0';
+
+	rc = kstrtoull(name, 16, &seq);
+	if (!rc && seq >= FID_SEQ_NORMAL && seq > fid_seq(fid))
+		fid->f_seq = seq;
+
+	OBD_FREE(name, oie->oie_dirent->oied_namelen + 1);
+out:
+	iput(inode);
+	RETURN(rc);
+}
+
+int osd_last_seq_get(const struct lu_env *env, struct dt_device *dt,
+		     __u64 *seq)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_device *osd = osd_dt_dev(dt);
+	struct lu_fid *fid = &info->oti_fid;
+	int rc;
+
+	ENTRY;
+
+	if (!osd->od_is_ost)
+		RETURN(-EINVAL);
+
+	fid_zero(fid);
+	rc = osd_scan_dir(env, osd, osd->od_ost_map->om_root->d_inode,
+			  osd_seq_dir_helper);
+	if (!rc)
+		*seq = fid_seq(fid);
+
+	RETURN(rc);
+}

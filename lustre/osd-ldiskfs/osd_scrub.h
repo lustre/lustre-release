@@ -53,4 +53,6 @@ struct osd_scrub {
 	time64_t		os_bad_oimap_time;
 };
 
+int osd_last_seq_get(const struct lu_env *env, struct dt_device *dt,
+		     __u64 *seq);
 #endif /* _OSD_SCRUB_H */

@@ -2426,3 +2426,43 @@ static int osd_scan_O_main(const struct lu_env *env, struct osd_device *dev)
 {
 	return osd_scan_dir(env, dev, dev->od_O_id, osd_scan_O_seq);
 }
+
+static int osd_seq_dir_helper(const struct lu_env *env,
+			      struct osd_device *osd, uint64_t dir_oid,
+			      struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *fid = &info->oti_fid;
+	__u64 seq;
+	int rc;
+
+	if (!S_ISDIR(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		return 0;
+
+	rc = kstrtoull(ozi->ozi_name, 16, &seq);
+	if (!rc && seq >= FID_SEQ_NORMAL && seq > fid_seq(fid))
+		fid->f_seq = seq;
+
+	return 0;
+}
+
+int osd_last_seq_get(const struct lu_env *env, struct dt_device *dt,
+		     __u64 *seq)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_device *osd = osd_dt_dev(dt);
+	struct lu_fid *fid = &info->oti_fid;
+	int rc;
+
+	ENTRY;
+
+	if (!osd->od_is_ost)
+		RETURN(-EINVAL);
+
+	fid_zero(fid);
+	rc = osd_scan_dir(env, osd, osd->od_O_id, osd_seq_dir_helper);
+	if (!rc)
+		*seq = fid_seq(fid);
+
+	RETURN(rc);
+}

@@ -734,6 +734,7 @@ static const struct dt_device_operations osd_dt_ops = {
 	.dt_commit_async	  = osd_commit_async,
 	.dt_ro			  = osd_ro,
 	.dt_reserve_or_free_quota = osd_reserve_or_free_quota,
+	.dt_last_seq_get	  = osd_last_seq_get,
 };
 
 static void *osd_key_init(const struct lu_context *ctx,
