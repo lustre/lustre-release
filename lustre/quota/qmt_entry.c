@@ -561,8 +561,17 @@ bool qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 				RETURN(false);
 
 			/* least qunit value not sent to all slaves yet */
-			if (lqe->lqe_revoke_time == 0)
+			if (lqe->lqe_revoke_time == 0 &&
+			    !lqe->lqe_gl && list_empty(&lqe->lqe_link)) {
+				/* LU-16736: the revoke_time should be set when
+				 * the qunit reachs the least qunit, the quota
+				 * LDLM lock could encounter some issue, setting
+				 * it to avoid endless wait in QSD. */
+				LQUOTA_ERROR(lqe, "set revoke_time explicitly");
+
+				lqe->lqe_revoke_time = ktime_get_seconds();
 				RETURN(false);
+			}
 
 			/* Let's give more time to slave to release space */
 			lapse = ktime_get_seconds() - QMT_REBA_TIMEOUT;
