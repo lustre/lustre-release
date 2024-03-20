@@ -373,10 +373,10 @@ command_t cmdlist[] = {
 	 "usage: nodemap_del NODEMAP_NAME"},
 	{"nodemap_add_range", jt_nodemap_add_range, 0,
 	 "add a range to a nodemap\n"
-	 "usage: nodemap_add_range <nid_range>"},
+	 "usage: nodemap_add_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_del_range", jt_nodemap_del_range, 0,
-	 "add a range to a nodemap\n"
-	 "usage: nodemap_del_range <nid_range>"},
+	 "delete a range from a nodemap\n"
+	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap parameters\n"
 	 "usage: nodemap_modify nodemap_name param value"},

@@ -4281,18 +4281,18 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
  */
 int jt_nodemap_add_range(int argc, char **argv)
 {
-	char			*nodemap_name = NULL;
-	char			*nodemap_range = NULL;
-	char			nid_range[2 * LNET_NIDSTR_SIZE + 2];
-	int			rc = 0;
-	int			c;
+	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
+	char *nodemap_range = NULL;
+	char *nodemap_name = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 	{ .val = 'r',	.name = "range",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:r:",
+	while ((c = getopt_long(argc, argv, "hn:r:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
@@ -4301,13 +4301,22 @@ int jt_nodemap_add_range(int argc, char **argv)
 		case 'r':
 			nodemap_range = optarg;
 			break;
+		case 'h':
+		default:
+			goto add_range_usage;
 		}
 	}
 
-	if (!nodemap_name || !nodemap_range) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_add_range: missing nodemap name\n");
+add_range_usage:
 		fprintf(stderr,
-			"usage: nodemap_add_range --name <name> --range <range>\n");
+			"usage: nodemap_add_range --name NODEMAP_NAME --range NID_RANGE\n");
 		return -EINVAL;
+	}
+	if (!nodemap_range) {
+		fprintf(stderr, "nodemap_add_range: missing NID range\n");
+		goto add_range_usage;
 	}
 
 	rc = parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
@@ -4339,18 +4348,18 @@ int jt_nodemap_add_range(int argc, char **argv)
  */
 int jt_nodemap_del_range(int argc, char **argv)
 {
-	char			*nodemap_name = NULL;
-	char			*nodemap_range = NULL;
-	char			nid_range[2 * LNET_NIDSTR_SIZE + 2];
-	int			rc = 0;
-	int			c;
+	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
+	char *nodemap_range = NULL;
+	char *nodemap_name = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
-	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
-	{ .val = 'r',	.name = "range",	.has_arg = required_argument },
-	{ .name = NULL } };
+		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .val = 'n', .name = "name",    .has_arg = required_argument },
+		{ .val = 'r', .name = "range",   .has_arg = required_argument },
+		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:r:",
+	while ((c = getopt_long(argc, argv, "hn:r:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
@@ -4359,13 +4368,22 @@ int jt_nodemap_del_range(int argc, char **argv)
 		case 'r':
 			nodemap_range = optarg;
 			break;
+		case 'h':
+		default:
+			goto del_range_usage;
 		}
 	}
 
-	if (!nodemap_name || !nodemap_range) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_del_range: missing nodemap name\n");
+del_range_usage:
 		fprintf(stderr,
-			"usage: nodemap_del_range --name <name> --range <range>\n");
-		return -1;
+			"usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE\n");
+		return -EINVAL;
+	}
+	if (!nodemap_range) {
+		fprintf(stderr, "nodemap_del_range: missing NID range\n");
+		goto del_range_usage;
 	}
 
 	rc = parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));

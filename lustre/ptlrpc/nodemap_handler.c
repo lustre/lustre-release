@@ -951,7 +951,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 	up_write(&config->nmc_range_tree_lock);
 
 	/* if range_id is non-zero, we are loading from disk */
-	if (range_id == 0)
+	if (range_id == 0 && !nodemap->nm_dyn)
 		rc = nodemap_idx_range_add(range);
 
 	if (config == active_config) {
@@ -1032,7 +1032,8 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);
 	}
-	rc = nodemap_idx_range_del(range);
+	if (!nodemap->nm_dyn)
+		rc = nodemap_idx_range_del(range);
 	range_delete(active_config, range);
 	nm_member_reclassify_nodemap(nodemap);
 	up_write(&active_config->nmc_range_tree_lock);
@@ -1832,7 +1833,8 @@ int nodemap_del(const char *nodemap_name)
 	down_write(&active_config->nmc_range_tree_lock);
 	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 				 rn_list) {
-		rc2 = nodemap_idx_range_del(range);
+		if (!nodemap->nm_dyn)
+			rc2 = nodemap_idx_range_del(range);
 		if (rc2 < 0)
 			rc = rc2;
 

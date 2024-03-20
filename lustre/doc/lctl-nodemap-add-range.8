@@ -7,8 +7,10 @@ lctl-nodemap_add_range \- define a range of NIDs for a nodemap
 .BI --range " NID_RANGE"
 .YS
 .SH DESCRIPTION
-.B nodemap_add_range adds a range of NIDs to an existing nodemap.
-The NID range cannot overlap with an existing NID range.
+.B nodemap_add_range
+adds a range of NIDs to an existing nodemap.
+The NID range cannot overlap with an existing NID range except with a dynamic
+overlay range.
 Clients with NIDs that fall into the new range
 will be moved into the given nodemap and any future RPCs will be subject
 to the properties configured for that nodemap.

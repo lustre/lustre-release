@@ -6541,9 +6541,13 @@ run_test 71 "encryption does not remove project flag"
 test_72() {
 	local mgsnm=mgsnm
 	local mgsnids=1.1.0.[1-100]@tcp
+	local mgsnids2=1.0.0.[1-100]@tcp
 	local mgsclid=600
 	local mgsfsid=2000
 	local nm=nm_test71
+	local nids=1.1.1.[1-100]@tcp
+	local startnid=1.1.1.1@tcp
+	local endnid=1.1.1.100@tcp
 	local val
 
 	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
@@ -6572,6 +6576,27 @@ test_72() {
 		error "dynamic nodemap wrong id $val"
 	fi
 
+	do_facet ost1 $LCTL nodemap_add_range --name $nm --range $nids ||
+		error "dynamic add_range on server failed"
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
+		awk 'BEGIN{RS=", "} $1=="start_nid:"{print $2 ; exit}')
+	if [[ "x$val" != "x$startnid" ]]; then
+		error "dynamic nodemap wrong start nid range $val"
+	fi
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
+		awk 'BEGIN{RS=", "} $1=="end_nid:"{print $2 ; exit}')
+	if [[ "x$val" != "x$endnid" ]]; then
+		error "dynamic nodemap wrong end nid range $val"
+	fi
+
+	do_facet ost1 $LCTL nodemap_del_range --name $nm --range $nids ||
+		error "dynamic del_range on server failed"
+	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.ranges |
+		awk 'BEGIN{RS=", "} $1=="start_nid:"{print $2 ; exit}')
+	if [[ "x$val" != "x" ]]; then
+		error "nid range should be empty, got $val"
+	fi
+
 	do_facet ost1 $LCTL nodemap_del $nm ||
 		error "dynamic nodemap del on server failed"
 	val=$(do_facet ost1 $LCTL get_param nodemap.$nm.id)
@@ -6579,6 +6604,10 @@ test_72() {
 		error "nodemap should be gone, got $val"
 	fi
 
+	do_facet ost1 $LCTL nodemap_add_range --name $mgsnm --range $mgsnids2 &&
+			error "add_range $mgsnm on server should fail"
+	do_facet ost1 $LCTL nodemap_del_range --name $mgsnm --range $mgsnids &&
+		error "del_range $mgsnm on server should fail"
 	do_facet ost1 $LCTL nodemap_del $mgsnm &&
 		error "nodemap del $mgsnm on server should fail"
 	do_facet ost1 $LCTL get_param -R 'nodemap.*'
