@@ -39,6 +39,7 @@
 #include <linux/module.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <lustre_nodemap.h>
 #include <obd_class.h>
 #include "ost_internal.h"
 
@@ -411,12 +412,38 @@ static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 	return rc != 0 ? 1 : 0;
 }
 
+/* ioctls on obd dev */
+static int oss_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+			 void *karg, void __user *uarg)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct obd_ioctl_data *data;
+	int rc = 0;
+
+	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
+
+	data = karg;
+	/* we only support nodemap ioctls, for now */
+	if (cmd != OBD_IOC_NODEMAP)
+		GOTO(out, rc = -EINVAL);
+
+	rc = server_iocontrol_nodemap(obd, data, true);
+	if (rc)
+		GOTO(out, rc);
+
+out:
+	RETURN(rc);
+}
+
 /* use obd ops to offer management infrastructure */
 static const struct obd_ops ost_obd_ops = {
 	.o_owner        = THIS_MODULE,
 	.o_setup        = ost_setup,
 	.o_cleanup      = ost_cleanup,
 	.o_health_check = ost_health_check,
+	.o_iocontrol    = oss_iocontrol,
 };
 
 static int __init ost_init(void)
