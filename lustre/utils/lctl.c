@@ -515,8 +515,8 @@ command_t cmdlist[] = {
 	 "delete a range from a nodemap\n"
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
-	 "modify a nodemap parameters\n"
-	 "usage: nodemap_modify nodemap_name param value"},
+	 "modify a nodemap parameter\n"
+	 "usage: nodemap_modify --name NODEMAP_NAME --property PROPERTY_NAME --value VALUE"},
 	{"nodemap_add_offset", jt_nodemap_add_offset, 0,
 	 "add an offset for UID/GID/PROJID mappings\n"
 	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET --limit LIMIT\n"},
@@ -531,14 +531,14 @@ command_t cmdlist[] = {
 	 "usage: nodemap_del_idmap --name NODEMAP_NAME --idtype ID_TYPE --idmap CLIENTID:FSID"},
 	{"nodemap_set_fileset", jt_nodemap_set_fileset, 0,
 	 "set a fileset on a nodemap\n"
-	 "usage: nodemap_set_fileset <fileset>"},
+	 "usage: nodemap_set_fileset --name NODEMAP_NAME --fileset FILESET"},
 	{"nodemap_set_sepol", jt_nodemap_set_sepol, 0,
 	 "set SELinux policy info on a nodemap\n"
-	 "usage: nodemap_set_sepol <SELinux policy info>"},
+	 "usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
-	 "usage: nodemap_test_nid <nid>"},
+	 "usage: nodemap_test_nid NID"},
 	{"nodemap_test_id", jt_nodemap_test_id, 0,
-	 "Usage: nodemap_test_id --nid <nid> --idtype [uid|gid] --id <id>"},
+	 "Usage: nodemap_test_id --nid NID --idtype ID_TYPE --id ID"},
 	{"nodemap_info", jt_nodemap_info, 0,
 	 "Usage: nodemap_info [list|nodemap_name|all]"},
 

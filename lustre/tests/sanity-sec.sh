@@ -6794,6 +6794,9 @@ test_72() {
 	local endnid=1.1.1.100@tcp
 	local clid=500
 	local fsid=1000
+	local properties="audit_mode deny_unknown forbid_encryption \
+			  readonly_mount"
+	local sepol="1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f"
 	local val
 
 	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
@@ -6801,6 +6804,13 @@ test_72() {
 
 	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
 		skip "Need servers on different hosts"
+
+	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	if [[ "$activedefault" != "1" ]]; then
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active
+		stack_trap cleanup_active EXIT
+	fi
 
 	do_facet mgs $LCTL nodemap_add $mgsnm ||
 		error "adding $mgsnm on MGS failed"
@@ -6810,7 +6820,7 @@ test_72() {
 	do_facet mgs $LCTL nodemap_add_idmap --name $mgsnm --idtype uid \
 		--idmap $mgsclid:$mgsfsid ||
 		error "add_idmap for $mgsnm on MGS failed"
-	wait_nm_sync $mgsnm idmap '' inactive
+	wait_nm_sync $mgsnm idmap
 
 	stack_trap "do_facet ost1 $LCTL nodemap_del $nm || true" EXIT
 	do_facet ost1 $LCTL nodemap_add $nm &&
@@ -6849,6 +6859,74 @@ test_72() {
 		error "dynamic nodemap wrong fs id $val"
 	fi
 
+	for prop in $properties; do
+		do_facet ost1 $LCTL nodemap_modify --name $nm \
+			--property $prop --value 1 ||
+				error "dynamic modify of $prop failed"
+		val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+		[[ "x$val" == "x1" ]] || error "incorrect $prop $val"
+	done
+	prop=admin
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value 1 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.admin_nodemap)
+	[[ "x$val" == "x1" ]] || error "incorrect $prop $val"
+	prop=trusted
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value 0 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.trusted_nodemap)
+	[[ "x$val" == "x0" ]] || error "incorrect $prop $val"
+	prop=map_mode
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value uid ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "xuid" ]] || error "incorrect $prop $val"
+	prop=rbac
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value file_perms ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "xfile_perms" ]] || error "incorrect $prop $val"
+	prop=squash_uid
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value 77 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	prop=squash_gid
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value 77 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	prop=squash_projid
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value 77 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x77" ]] || error "incorrect $prop $val"
+	prop=fileset
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset "/tmp" ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x/tmp" ]] || error "incorrect $prop $val"
+	prop=sepol
+	do_facet ost1 $LCTL nodemap_set_sepol --name $nm \
+		--sepol $sepol ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x$sepol" ]] || error "incorrect $prop $val"
+
+	val=$(do_facet ost1 $LCTL nodemap_test_id --nid $startnid \
+		--idtype uid --id $clid)
+	if [[ "x$val" != "x$fsid" ]]; then
+		error "dynamic test_id on server failed"
+	fi
+
 	do_facet ost1 $LCTL nodemap_del_idmap --name $nm --idtype uid \
 		--idmap $clid:$fsid ||
 			error "dynamic del_idmap on server failed"
@@ -6856,6 +6934,11 @@ test_72() {
 		awk 'BEGIN{RS=", "} $1=="client_id:"{print $2 ; exit}')
 	if [[ "x$val" != "x" ]]; then
 		error "idmap should be empty, got $val"
+	fi
+
+	val=$(do_facet ost1 $LCTL nodemap_test_nid $startnid)
+	if [[ "x$val" != "x$nm" ]]; then
+		error "dynamic test_nid on server failed"
 	fi
 
 	do_facet ost1 $LCTL nodemap_del_range --name $nm --range $nids ||
@@ -6883,6 +6966,9 @@ test_72() {
 	do_facet ost1 $LCTL nodemap_del_idmap --name $mgsnm --idtype uid \
 		--idmap $mgsclid:$mgsfsid &&
 			error "del_idmap $mgsnm on server should fail"
+	do_facet ost1 $LCTL nodemap_modify --name $mgsnm \
+		--property squash_projid --value 77 &&
+			error "modify $mgsnm on server should fail"
 	do_facet ost1 $LCTL nodemap_del $mgsnm &&
 		error "nodemap del $mgsnm on server should fail"
 	do_facet ost1 $LCTL get_param -R 'nodemap.*'

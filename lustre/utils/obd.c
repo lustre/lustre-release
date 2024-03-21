@@ -4138,11 +4138,36 @@ del_usage:
  */
 int jt_nodemap_test_nid(int argc, char **argv)
 {
-	char	rawbuf[MAX_IOC_BUFLEN];
-	int	rc;
+	char rawbuf[MAX_IOC_BUFLEN];
+	char *nid = NULL;
+	int c, rc;
 
-	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, false, &rawbuf, sizeof(rawbuf),
-			 argv[0], argv[1], NULL);
+	static struct option long_opts[] = {
+		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "dh",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'h':
+		default:
+			goto test_nid_usage;
+		}
+	}
+
+	if (optind < argc)
+		nid = argv[optind];
+
+	if (!nid) {
+		fprintf(stderr, "nodemap_test_nid: missing NID\n");
+test_nid_usage:
+		fprintf(stderr,
+			"usage: nodemap_test_nid NID\n");
+		return -EINVAL;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, false, &rawbuf,
+			 sizeof(rawbuf), argv[0], nid, NULL);
 	if (rc == 0)
 		printf("%s\n", (char *)rawbuf);
 
@@ -4163,39 +4188,53 @@ int jt_nodemap_test_nid(int argc, char **argv)
  */
 int jt_nodemap_test_id(int argc, char **argv)
 {
-	char	rawbuf[MAX_IOC_BUFLEN];
-	char	*nidstr = NULL;
-	char	*idstr = NULL;
-	char	*typestr = NULL;
-	int	rc = 0;
-	int	c;
+	char rawbuf[MAX_IOC_BUFLEN];
+	char *nidstr = NULL;
+	char *idstr = NULL;
+	char *typestr = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
+		{ .val = 'h',	.name = "help", .has_arg = no_argument },
 		{ .val = 'i',	.name = "id",	.has_arg = required_argument },
 		{ .val = 'n',	.name = "nid",	.has_arg = required_argument },
 		{ .val = 't',	.name = "idtype",
 						.has_arg = required_argument },
 		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:t:i:",
+	while ((c = getopt_long(argc, argv, "hi:n:t:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
+		case 'i':
+			idstr = optarg;
+			break;
 		case 'n':
 			nidstr = optarg;
 			break;
 		case 't':
 			typestr = optarg;
 			break;
-		case 'i':
-			idstr = optarg;
-			break;
+		case 'h':
+		default:
+			goto test_id_usage;
 		}
 	}
 
-	if (!nidstr || !typestr || !idstr) {
+	if (!nidstr) {
+		fprintf(stderr, "nodemap_test_id: missing NID\n");
+test_id_usage:
 		fprintf(stderr,
-			"usage: nodemap_test_id --nid <nid> --idtype [uid|gid] --id <id>\n");
-		return -1;
+			"usage: nodemap_test_id --nid NID --idtype IDTYPE --id ID\n");
+		return -EINVAL;
+	}
+	if (!typestr) {
+		fprintf(stderr,
+			"nodemap_test_id: missing idtype, must be one of uid, gid, projid\n");
+		goto test_id_usage;
+	}
+	if (!idstr) {
+		fprintf(stderr, "nodemap_test_id: missing id\n");
+		goto test_id_usage;
 	}
 
 	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, false, &rawbuf, sizeof(rawbuf),
@@ -4404,30 +4443,39 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 {
 	char *nodemap_name = NULL;
 	char *fileset_name = NULL;
-	int   rc = 0;
-	int   c;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
 	{ .val = 'f',	.name = "fileset",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:f:",
+	while ((c = getopt_long(argc, argv, "f:hn:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'n':
-			nodemap_name = optarg;
-			break;
 		case 'f':
 			fileset_name = optarg;
 			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'h':
+		default:
+			goto set_fileset_usage;
 		}
 	}
 
-	if (!nodemap_name || !fileset_name) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_set_fileset: missing nodemap name\n");
+set_fileset_usage:
 		fprintf(stderr,
-			"usage: nodemap_set_fileset --name <name> --fileset <fileset>\n");
-		return -1;
+			"usage: nodemap_set_fileset --name NODEMAP_NAME --fileset FILESET\n");
+		return -EINVAL;
+	}
+	if (!fileset_name) {
+		fprintf(stderr, "nodemap_set_fileset: missing NID range\n");
+		goto set_fileset_usage;
 	}
 
 	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, false, NULL, 0, argv[0],
@@ -4457,10 +4505,14 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 {
 	char *nodemap_name = NULL;
 	char *sepol = NULL;
-	int   rc = 0;
-	int   c;
+	int c, rc = 0;
 
 	static struct option long_options[] = {
+		{
+			.name		= "help",
+			.has_arg	= no_argument,
+			.val		= 'h',
+		},
 		{
 			.name		= "name",
 			.has_arg	= required_argument,
@@ -4476,7 +4528,7 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 		}
 	};
 
-	while ((c = getopt_long(argc, argv, "n:s:",
+	while ((c = getopt_long(argc, argv, "hn:s:",
 				long_options, NULL)) != -1) {
 		switch (c) {
 		case 'n':
@@ -4485,13 +4537,22 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 		case 's':
 			sepol = optarg;
 			break;
+		case 'h':
+		default:
+			goto set_sepol_usage;
 		}
 	}
 
-	if (!nodemap_name || !sepol) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_set_sepol: missing nodemap name\n");
+set_sepol_usage:
 		fprintf(stderr,
-			"usage: nodemap_set_sepol --name <name> --sepol <sepol>\n");
-		return -1;
+			"usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL\n");
+		return -EINVAL;
+	}
+	if (!sepol) {
+		fprintf(stderr, "nodemap_set_sepol: missing sepol\n");
+		goto set_sepol_usage;
 	}
 
 	rc = nodemap_cmd(LCFG_NODEMAP_SET_SEPOL, false, NULL, 0, argv[0],
@@ -4521,20 +4582,20 @@ int jt_nodemap_set_sepol(int argc, char **argv)
  */
 int jt_nodemap_modify(int argc, char **argv)
 {
-	int			c;
-	int			rc = 0;
 	enum lcfg_command_type	cmd = 0;
-	char			*nodemap_name = NULL;
-	char			*param = NULL;
-	char			*value = NULL;
+	char *nodemap_name = NULL;
+	char *param = NULL;
+	char *value = NULL;
+	int c, rc = 0;
 
 	static struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 	{ .val = 'p',	.name = "property",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "value",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "n:p:v:",
+	while ((c = getopt_long(argc, argv, "hn:p:v:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
@@ -4546,15 +4607,29 @@ int jt_nodemap_modify(int argc, char **argv)
 		case 'v':
 			value = optarg;
 			break;
+		case 'h':
+		default:
+			goto modify_usage;
 		}
 	}
 
-	if (!nodemap_name || !param || !value) {
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_modify: missing nodemap name\n");
+modify_usage:
 		fprintf(stderr,
-			"usage: nodemap_modify --name <nodemap_name> --property <property_name> --value <value>\n");
+			"usage: %s --name NODEMAP_NAME --property PROPERTY_NAME --value VALUE\n",
+			argv[0]);
 		fprintf(stderr,
 			"valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption readonly_mount rbac\n");
-		return -1;
+		return -EINVAL;
+	}
+	if (!param) {
+		fprintf(stderr, "nodemap_modify: missing property name\n");
+		goto modify_usage;
+	}
+	if (!value) {
+		fprintf(stderr, "nodemap_modify: missing value for property\n");
+		goto modify_usage;
 	}
 
 	if (strcmp("admin", param) == 0) {
@@ -4581,9 +4656,9 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_RBAC;
 	} else {
 		fprintf(stderr,
-			"error: %s: nodemap_modify invalid subcommand: %s\n",
+			"error: %s: nodemap_modify invalid property: %s\n",
 			jt_cmdname(argv[0]), param);
-		return -1;
+		goto modify_usage;
 	}
 
 	rc = nodemap_cmd(cmd, false, NULL, 0, argv[0], nodemap_name, param,
