@@ -114,9 +114,9 @@ opcodes = {
 def translate_opcodes(opc_list):
     for opc in opc_list:
         try:
-            print "o%d \t= %s" % (opc, opcodes[opc])
+            print("o%d \t= %s" % (opc, opcodes[opc]))
         except:
-            print "o%d \t= unknown" % opc
+            print("o%d \t= unknown" % opc)
 
 
 if __name__ == "__main__":

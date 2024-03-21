@@ -72,13 +72,13 @@ def printRes(sort, printpid, printptr):
     """
     for stack_trace, ptask_list in sort:
         if printpid and not printptr:
-            print "PID: %s" % (', '.join(p[0] for p in ptask_list))
+            print("PID: %s" % (', '.join(p[0] for p in ptask_list)))
         elif printpid and printptr:
-            print "PID, TSK: %s" % (', '.join(p[0] + ': ' + p[1] for p in ptask_list))
+            print("PID, TSK: %s" % (', '.join(p[0] + ': ' + p[1] for p in ptask_list)))
         elif not printpid and printptr:
-            print "TSK: %s" % (', '.join(p[1] for p in ptask_list))
-        print "TASKS: %d" %(len(ptask_list))
-        print "\t%s" %(stack_trace)
+            print("TSK: %s" % (', '.join(p[1] for p in ptask_list)))
+        print("TASKS: %d" %(len(ptask_list)))
+        print("\t%s" %(stack_trace))
 
 
 def main():

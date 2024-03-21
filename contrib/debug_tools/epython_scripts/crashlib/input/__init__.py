@@ -68,7 +68,7 @@ def toint(string, base=default_bases, suffixes=binary_suffixes):
         # a suffix happens to contain valid numeric characters, we'll
         # try the numeric interpretation before we try their multiplier
         # meaning, e.g. 'g' is a valid numeric value in base 17).
-        for i in xrange(2):
+        for i in range(2):
             for b in bases:
                 try:
                     return int(string, b) * multiplier
@@ -104,7 +104,7 @@ def hex2int(string):
     return toint(string, base=[16, 0])
 
 
-def to_rangelist(args, default=xrange(0), base=[0,16],
+def to_rangelist(args, default=range(0), base=[0,16],
                   suffixes=binary_suffixes):
     """Convert a bunch of range list strings into a list of ranges
 
@@ -133,16 +133,16 @@ def to_rangelist(args, default=xrange(0), base=[0,16],
                 fields = range_str.split('-', 1)
                 start = toint(fields[0], base, suffixes=suffixes)
                 end = toint(fields[1], base, suffixes=suffixes) + 1
-                ranges.append(xrange(start, end))
+                ranges.append(range(start, end))
             elif "#" in range_str:
                 fields = range_str.split('#', 1)
                 start = toint(fields[0], base, suffixes=suffixes)
                 end = start + toint(fields[1], base, suffixes=suffixes)
-                ranges.append(xrange(start, end))
+                ranges.append(range(start, end))
             else:
                 start = toint(range_str, base, suffixes=suffixes)
                 end = start + 1
-                ranges.append(xrange(start, end))
+                ranges.append(range(start, end))
 
     return ranges
 
@@ -213,9 +213,9 @@ if __name__ == '__main__':
         """Test both iter_rangelist and the underlying to_rangelist."""
         def test_good_single_ranges(self):
             self.assertEqual(list(iter_rangestr([])), [])
-            self.assertEqual(list(iter_rangestr(['1-2'])), list(xrange(1,3)))
-            self.assertEqual(list(iter_rangestr(['1#2'])), list(xrange(1,3)))
-            self.assertEqual(list(iter_rangestr(['1'])), list(xrange(1,2)))
+            self.assertEqual(list(iter_rangestr(['1-2'])), list(range(1,3)))
+            self.assertEqual(list(iter_rangestr(['1#2'])), list(range(1,3)))
+            self.assertEqual(list(iter_rangestr(['1'])), list(range(1,2)))
 
         def test_good_multiple_ranges(self):
             test_rangestrs = [
