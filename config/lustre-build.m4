@@ -225,11 +225,15 @@ AC_ARG_ENABLE([tests],
 # Check to see if we can build the lutf
 #
 AX_PYTHON_DEVEL()
-AS_IF([test "x$PYTHON_VERSION_CHECK" = xno], [
-	enable_lutf="no"
+AS_IF([test "x$enable_dist" != xno], [
+	enable_lutf="yes"
 ], [
+  AS_IF([test "x$PYTHON_VERSION_CHECK" = xno], [
+	enable_lutf="no"
+  ], [
 	AX_PKG_SWIG(2.0, [ enable_lutf="yes" ],
 			 [ enable_lutf="no" ])
+  ])
 ])
 
 AC_MSG_RESULT([$enable_tests])
