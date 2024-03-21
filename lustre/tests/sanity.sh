@@ -15843,10 +15843,12 @@ test_133a() {
 	touch ${testdir}/${tfile} || error "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
-	# open should match close
-	ls -lR ${testdir}
-	check_stats $SINGLEMDS "open" 2
-	check_stats $SINGLEMDS "close" 2
+	(( $MDS1_VERSION >= $(version_code 2.15.62) )) && {
+		# open should match close
+		ls -lR ${testdir}
+		check_stats $SINGLEMDS "open" 2
+		check_stats $SINGLEMDS "close" 2
+	}
 	[ $MDS1_VERSION -ge $(version_code 2.8.54) ] && {
 		mknod ${testdir}/${tfile}-pipe p || error "mknod failed"
 		check_stats $SINGLEMDS "mknod" 2
