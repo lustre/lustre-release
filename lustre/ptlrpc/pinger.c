@@ -221,7 +221,7 @@ EXPORT_SYMBOL(ptlrpc_pinger_ir_down);
 static void ptlrpc_pinger_process_import(struct obd_import *imp,
 					 time64_t this_ping)
 {
-	int level;
+	enum lustre_imp_state level;
 	int force;
 	int force_next;
 	int suppress;
@@ -245,7 +245,8 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 	imp->imp_force_next_verify = 0;
 
-	CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+	CDEBUG((level == LUSTRE_IMP_FULL || level == LUSTRE_IMP_IDLE) ?
+		D_INFO : D_HA,
 	       "%s->%s: level %s/%u force %u force_next %u deactive %u pingable %u suppress %u\n",
 	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 	       ptlrpc_import_state_name(level), level, force, force_next,
@@ -264,7 +265,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 		}
 	} else if (level != LUSTRE_IMP_FULL || imp->imp_obd->obd_no_recov ||
 		   imp_is_deactive(imp)) {
-		CDEBUG(D_HA,
+		CDEBUG(level == LUSTRE_IMP_IDLE ? D_INFO : D_HA,
 		       "%s->%s: not pinging (in recovery or recovery disabled: %s)\n",
 		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 		       ptlrpc_import_state_name(level));
