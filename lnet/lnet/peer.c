@@ -1501,14 +1501,14 @@ again:
 
 	/* DD disabled, nothing to do */
 	if (lnet_peer_discovery_disabled) {
-		nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+		primary_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 		spin_unlock(&lp->lp_lock);
 		goto out_decref;
 	}
 
 	/* Peer already up to date, nothing to do */
 	if (lnet_peer_is_uptodate_locked(lp)) {
-		nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+		primary_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 		spin_unlock(&lp->lp_lock);
 		goto out_decref;
 	}
@@ -1541,7 +1541,7 @@ again:
 
 	if (!lock_prim_nid && !lnet_is_discovery_disabled(lp))
 		goto again;
-	nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+	primary_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 out_decref:
 	lnet_peer_ni_decref_locked(lpni);
 out_unlock:
