@@ -2594,6 +2594,8 @@ test_31() {
 	do_rpc_nodes $(comma_list $(all_nodes)) load_modules ||
 		error "unable to load modules on $(all_nodes)"
 	for node in $(all_nodes); do
+		do_node $node "$LNETCTL lnet configure" ||
+			error "unable to configure lnet on node $node"
 		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
 		do_node $node "$LNETCTL net add --if ${!infname} --net $net2" ||
 			error "unable to configure NID on $net2 for node $node"
