@@ -1420,11 +1420,6 @@ void LNetPrimaryNID(struct lnet_nid *nid)
 	 */
 again:
 	spin_lock(&lp->lp_lock);
-	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY) && lock_prim_nid) {
-		lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
-		lp->lp_prim_lock_ts = ktime_get_ns();
-	}
-
 	/* DD disabled, nothing to do */
 	if (lnet_peer_discovery_disabled) {
 		*nid = lp->lp_primary_nid;
@@ -1446,7 +1441,7 @@ again:
 	 * Messages to the peer will not go through until the discovery is
 	 * complete.
 	 */
-	if (lock_prim_nid)
+	if (lock_prim_nid && lp->lp_state & LNET_PEER_LOCK_PRIMARY)
 		rc = lnet_discover_peer_locked(lpni, cpt, false);
 	else
 		rc = lnet_discover_peer_locked(lpni, cpt, true);
