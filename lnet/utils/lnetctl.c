@@ -3829,6 +3829,127 @@ static int jt_udsp(int argc, char **argv)
 	return cfs_parser(argc, argv, udsp_cmds);
 }
 
+static int yaml_import_global_settings(char *key, unsigned long value,
+				       char cmd, struct cYAML *show_rc,
+				       struct cYAML *err_rc)
+{
+	int rc;
+
+	if (strcmp("numa_range", key) == 0) {
+		if (cmd == 'a' || cmd == 'd') {
+			if (cmd == 'd')
+				value = 0;
+			rc = lustre_lnet_config_numa_range(value, -1,
+							   &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_numa_range(-1, &show_rc,
+							 &err_rc);
+		}
+	} else if (strcmp("max_interfaces", key) == 0 ||
+		   strcmp("max_intf", key) == 0) {
+		if (cmd == 'a' || cmd == 'd') {
+			if (cmd == 'd')
+				value = LNET_INTERFACES_MAX_DEFAULT;
+			rc = lustre_lnet_config_max_intf(value, -1,
+							 &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_max_intf(-1, &show_rc,
+						       &err_rc);
+		}
+	} else if (strcmp("discovery", key) == 0) {
+		if (cmd == 'a' || cmd == 'd') {
+			if (cmd == 'd')
+				value = 1;
+			rc = lustre_lnet_config_discovery(value, -1,
+							  &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_discovery(-1, &show_rc,
+							&err_rc);
+		}
+	} else if (strcmp("drop_asym_route", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_drop_asym_route(value,
+								-1,
+								&err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_drop_asym_route(-1, &show_rc,
+							      &err_rc);
+		}
+	} else if (strcmp("retry_count", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_retry_count(value, -1,
+							    &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_retry_count(-1, &show_rc,
+							  &err_rc);
+		}
+	} else if (strcmp("transaction_timeout", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_transaction_to(value, -1,
+							       &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_transaction_to(-1, &show_rc,
+							     &err_rc);
+		}
+	} else if (strcmp("health_sensitivity", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_hsensitivity(value, -1,
+							     &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_hsensitivity(-1, &show_rc,
+							   &err_rc);
+		}
+	} else if (strcmp("recovery_interval", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_recov_intrv(value, -1,
+							    &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_recov_intrv(-1, &show_rc,
+							  &err_rc);
+		}
+	} else if (strcmp("router_sensitivity", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_rtr_sensitivity(value, -1,
+								&err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_rtr_sensitivity(-1, &show_rc,
+							      &err_rc);
+		}
+	} else if (strcmp("lnd_timeout", key) == 0) {
+		if (cmd == 'a') {
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_lnd_timeout(-1, &show_rc,
+							  &err_rc);
+		}
+	} else if (strcmp("response_tracking", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_response_tracking(value, -1,
+								  &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_response_tracking(-1, &show_rc,
+								&err_rc);
+		}
+	} else if (strcmp("recovery_limit", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_recovery_limit(value, -1,
+							       &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_recovery_limit(-1, &show_rc,
+							     &err_rc);
+		}
+	} else if (strcmp("max_recovery_ping_interval", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_max_recovery_ping_interval(value, -1,
+									   &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_max_recovery_ping_interval(-1, &show_rc,
+									 &err_rc);
+		}
+	}
+
+	return rc;
+}
+
 static int jt_import(int argc, char **argv)
 {
 	char *file = NULL;
@@ -3836,6 +3957,7 @@ static int jt_import(int argc, char **argv)
 	struct cYAML *show_rc = NULL;
 	int rc = 0, return_rc = 0, opt, opt_found = 0;
 	char *yaml_blk = NULL, *buf, cmd = 'a';
+	int flags = NLM_F_CREATE;
 	bool release = true;
 	char err_str[256];
 	struct stat st;
@@ -3850,19 +3972,32 @@ static int jt_import(int argc, char **argv)
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL }
 	};
+	bool done = false, unspec = true;
+	yaml_parser_t setup, reply;
+	struct nl_sock *sk = NULL;
+	int op = LNET_CMD_UNSPEC;
+	const char *msg = NULL;
+	yaml_emitter_t output;
+	yaml_event_t event;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
 		opt_found = 1;
 		switch (opt) {
 		case 'a':
+			/* default is NLM_F_CREATE */
 			cmd = opt;
 			break;
 		case 'd':
+			flags = 0; /* Netlink delete cmd */
+			cmd = opt;
+			break;
 		case 's':
+			flags = NLM_F_DUMP;
 			cmd = opt;
 			break;
 		case 'e':
+			/* use NLM_F_CREATE for discover */
 			cmd = opt;
 			break;
 		case 'h':
@@ -3905,6 +4040,193 @@ static int jt_import(int argc, char **argv)
 		input = stdin;
 	}
 
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		goto old_api;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		goto old_api;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		msg = yaml_parser_get_reader_error(&reply);
+		goto free_reply;
+	}
+
+	/* Initialize configuration parser */
+	rc = yaml_parser_initialize(&setup);
+	if (rc == 0) {
+		yaml_parser_log_error(&setup, stderr, "import: ");
+		yaml_parser_delete(&setup);
+		return -EINVAL;
+	}
+
+	yaml_parser_set_input_file(&setup, input);
+
+	while (!done) {
+		if (!yaml_parser_parse(&setup, &event)) {
+			yaml_parser_log_error(&setup, stderr, "import: ");
+			break;
+		}
+
+		if (event.type != YAML_SCALAR_EVENT)
+			goto skip_test;
+
+		if (!strcmp((char *)event.data.scalar.value, "net") &&
+		    op != LNET_CMD_ROUTES && cmd != 'e') {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_NETS;
+
+			rc = yaml_netlink_setup_emitter(&output, sk,
+							LNET_GENL_NAME,
+							LNET_GENL_VERSION,
+							flags, op, true);
+			if (rc == 0)
+				goto emitter_error;
+
+			unspec = false;
+		} else if (!strcmp((char *)event.data.scalar.value, "peer") &&
+			   cmd != 'e') {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_PEERS;
+
+			rc = yaml_netlink_setup_emitter(&output, sk,
+							LNET_GENL_NAME,
+							LNET_GENL_VERSION,
+							flags, op, true);
+			if (rc == 0)
+				goto emitter_error;
+
+			unspec = false;
+		} else if (!strcmp((char *)event.data.scalar.value, "route") &&
+			   cmd != 'e') {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_ROUTES;
+
+			rc = yaml_netlink_setup_emitter(&output, sk,
+							LNET_GENL_NAME,
+							LNET_GENL_VERSION,
+							flags, op, true);
+			if (rc == 0)
+				goto emitter_error;
+
+			unspec = false;
+		} else if ((!strcmp((char *)event.data.scalar.value, "discover") ||
+			    !strcmp((char *)event.data.scalar.value, "ping")) &&
+			   cmd == 'e') {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_PING;
+
+			if (!strcmp((char *)event.data.scalar.value, "ping"))
+				flags = NLM_F_DUMP;
+
+			rc = yaml_netlink_setup_emitter(&output, sk,
+							LNET_GENL_NAME,
+							LNET_GENL_VERSION,
+							flags, op, true);
+			if (rc == 0)
+				goto emitter_error;
+
+			unspec = false;
+		} else if (!strcmp((char *)event.data.scalar.value, "global")) {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_UNSPEC;
+		} else if (op == LNET_CMD_UNSPEC) {
+			struct cYAML *err_rc = NULL;
+			long int value;
+			char *key;
+
+			key = strdup((char *)event.data.scalar.value);
+			rc = yaml_parser_parse(&setup, &event);
+			if (rc == 0)
+				goto free_reply;
+
+			rc = parse_long((char *)event.data.scalar.value,
+					&value);
+			if (rc != 0)
+				goto free_reply;
+
+			rc = yaml_import_global_settings(key, value, cmd,
+							 show_rc, err_rc);
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
+				cYAML_print_tree2file(stderr, err_rc);
+			else
+				rc = 1;
+		}
+skip_test:
+		if (op != LNET_CMD_UNSPEC) {
+			rc = yaml_emitter_emit(&output, &event);
+			if (rc == 0)
+				break;
+		}
+
+		done = (event.type == YAML_STREAM_END_EVENT);
+	}
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		yaml_emitter_delete(&output);
+		rc = -EINVAL;
+	} else if (!unspec) {
+		yaml_document_t errmsg;
+
+		rc = yaml_parser_load(&reply, &errmsg);
+		if (rc == 1 && (flags & NLM_F_DUMP)) {
+			yaml_emitter_t debug;
+
+			rc = yaml_emitter_initialize(&debug);
+			if (rc == 1) {
+				yaml_emitter_set_indent(&debug,
+							LNET_DEFAULT_INDENT);
+				yaml_emitter_set_output_file(&debug,
+							     stdout);
+				rc = yaml_emitter_dump(&debug, &errmsg);
+			}
+			yaml_emitter_delete(&debug);
+		} else {
+			msg = yaml_parser_get_reader_error(&reply);
+		}
+		yaml_emitter_delete(&output);
+		yaml_document_delete(&errmsg);
+	}
+free_reply:
+	if (rc == 0) {
+		yaml_lnet_print_error(flags, "import", msg);
+		rc = -EINVAL;
+	}
+	yaml_parser_delete(&reply);
+	yaml_parser_delete(&setup);
+	nl_socket_free(sk);
+	if (input)
+		fclose(input);
+
+	return rc == 1 ? 0 : rc;
+old_api:
 	/* assume that we're getting our input from stdin */
 	rc = fstat(fileno(input), &st);
 	if (rc < 0) {

@@ -809,6 +809,15 @@ int yaml_lnet_configure(int flags, const char **msg);
 int yaml_emitter_set_output_netlink(yaml_emitter_t *emitter, struct nl_sock *nl,
 				    char *family, int version, int cmd,
 				    int flags);
+/**
+ * yaml_emitter_set_streaming_output_netlink
+ *
+ * Special handling to handle the fact RHEL7 is super old.
+ */
+int yaml_emitter_set_streaming_output_netlink(yaml_emitter_t *sender,
+					      struct nl_sock *nl, char *family,
+					      int version, int cmd, int flags,
+					      bool stream);
 
 /**
  * yaml_parser_set_input_netlink
@@ -868,6 +877,33 @@ void yaml_parser_log_error(yaml_parser_t *parser, FILE *log,
  */
 void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log);
 
+/**
+ * yaml_netlink_setup_emitter
+ *
+ *   Helper function to setup emitter with Netlink. Needed for
+ *   cases where we reuse the @sk.
+ *
+ *   emitter	- YAML emitter to setup.
+ *   sk		- Netlink socket.
+ *   family	- Netlink family
+ *   version	- Netlink API version
+ *   flags	- Netlink flags (NLM_F_*)
+ *   op		- Netlink command (*_CMD_*)
+ *   stream	- Is the netlink socket reusable
+ */
+int yaml_netlink_setup_emitter(yaml_emitter_t *output, struct nl_sock *sk,
+			       char *family, int version, int flags, int op,
+			       bool stream);
+
+/**
+ * yaml_netlink_complete_emitter
+ *
+ *   Helper function to cleanup emitter when done. The netlink socket
+ *   is not altered in anyway.
+ *
+ *   emitter	- YAML emitter to cleanup.
+ */
+int yaml_netlink_complete_emitter(yaml_emitter_t *output);
 
 /*
  * lustre_lnet_init_nw_descr

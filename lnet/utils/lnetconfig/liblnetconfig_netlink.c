@@ -284,30 +284,6 @@ static int lustre_netlink_register(struct nl_sock *sk, bool async_events)
 	return rc;
 }
 
-/**
- * Filter Netlink socket by groups
- *
- * @nl		Netlink socket
- * @family	The family name of the Netlink socket.
- * @group	Netlink messages will only been sent if they belong to this
- *		group
- *
- * Return	0 on success or a negative error code.
- */
-static int lustre_netlink_add_group(struct nl_sock *nl, const char *family,
-				    const char *group)
-{
-	int group_id;
-
-	/* Get group ID */
-	group_id = genl_ctrl_resolve_grp(nl, family, group);
-	if (group_id < 0)
-		return group_id;
-
-	/* subscribe to generic netlink multicast group */
-	return nl_socket_add_membership(nl, group_id);
-}
-
 /* A YAML file is used to describe data. In a YAML document the content is
  * all about a collection of scalars used to create new data types such as
  * key-value pairs. This allows complex documents to represent anything from
@@ -1282,6 +1258,7 @@ failed:
 struct yaml_netlink_output {
 	yaml_emitter_t		*emitter;
 	struct nl_sock		*nl;
+	struct nl_sock		*ctrl;
 	char			*family;
 	int			family_id;
 	int			version;
@@ -1664,6 +1641,30 @@ static void yaml_quotation_handling(char *buf)
 	}
 }
 
+/**
+ * Filter Netlink socket by groups
+ *
+ * @out		Data structure for YAML write handler.
+ * @family	The family name of the Netlink socket.
+ * @group	Netlink messages will only been sent if they belong to this
+ *		group
+ *
+ * Return	0 on success or a negative error code.
+ */
+static int lustre_netlink_add_group(struct yaml_netlink_output *out,
+				    const char *group)
+{
+	int group_id;
+
+	/* Get group ID */
+	group_id = genl_ctrl_resolve_grp(out->ctrl, out->family, group);
+	if (group_id < 0)
+		return group_id;
+
+	/* subscribe to generic netlink multicast group */
+	return nl_socket_add_membership(out->nl, group_id);
+}
+
 /* libyaml takes the YAML documents and places the data into an
  * internal buffer to the library. We take each line and turn it
  * into a Netlink message using the same format as the key table.
@@ -1703,8 +1704,7 @@ already_have_line:
 				continue;
 			*tmp = '\0';
 
-			rc = lustre_netlink_add_group(out->nl, out->family,
-						      line);
+			rc = lustre_netlink_add_group(out, line);
 			if (rc < 0) {
 				yaml_emitter_set_writer_error(out->emitter,
 							      "Netlink group does not exist");
@@ -1791,6 +1791,8 @@ already_have_line:
 		yaml_emitter_set_writer_error(out->emitter,
 					      nl_geterror(rc));
 nla_put_failure:
+	if (out->ctrl != out->nl)
+		nl_socket_free(out->ctrl);
 	free(buf);
 	return out->emitter->error == YAML_NO_ERROR ? 1 : 0;
 }
@@ -1801,8 +1803,10 @@ nla_put_failure:
  * which is used to write out a YAML document to a file.
  */
 YAML_DECLARE(int)
-yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
-				char *family, int version, int cmd, int flags)
+yaml_emitter_set_streaming_output_netlink(yaml_emitter_t *sender,
+					  struct nl_sock *nl, char *family,
+					  int version, int cmd, int flags,
+					  bool stream)
 {
 	struct yaml_netlink_output *out;
 
@@ -1812,11 +1816,36 @@ yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 		return false;
 	}
 
+	/* All because RHEL7 is really too old. Once we drop RHEL7
+	 * this hack can go away.
+	 */
+	if (stream) {
+		out->ctrl = nl_socket_alloc();
+		if (!out->ctrl) {
+			sender->problem = "socket allocation failed";
+			sender->error = YAML_MEMORY_ERROR;
+			free(out);
+			return false;
+		}
+
+		if (genl_connect(out->ctrl) < 0) {
+			yaml_emitter_set_writer_error(sender,
+						      "socket failed to connect");
+			nl_socket_free(out->ctrl);
+			free(out);
+			return false;
+		}
+	} else {
+		out->ctrl = nl;
+	}
+
 	/* Get family ID */
-	out->family_id = genl_ctrl_resolve(nl, family);
+	out->family_id = genl_ctrl_resolve(out->ctrl, family);
 	if (out->family_id < 0) {
 		yaml_emitter_set_writer_error(sender,
 					      "failed to resolve Netlink family id");
+		if (stream)
+			nl_socket_free(out->ctrl);
 		free(out);
 		return false;
 	}
@@ -1830,6 +1859,15 @@ yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 	out->pid = nl_socket_get_local_port(nl);
 	yaml_emitter_set_output(sender, yaml_netlink_write_handler, out);
 	return true;
+}
+
+YAML_DECLARE(int)
+yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
+				char *family, int version, int cmd, int flags)
+{
+	return yaml_emitter_set_streaming_output_netlink(sender, nl, family,
+							 version, cmd, flags,
+							 false);
 }
 
 /* Error handling helpers */

@@ -3524,6 +3524,11 @@ EOF
 		error "export failed $?"
 
 	validate_gateway_nids
+
+	# Since we have an complex YAML config file we can test import
+	do_lnetctl lnet unconfigure ||
+		error "Failed to stop LNet rc=$?"
+	do_lnetctl import <  ${GLOBAL_YAML_FILE} || error "Import failed $?"
 }
 run_test 255 "Use lnet routes param with pdsh syntax"
 

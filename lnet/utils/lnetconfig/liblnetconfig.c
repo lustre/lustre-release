@@ -357,6 +357,62 @@ failed:
 	return rc;
 }
 
+int yaml_netlink_setup_emitter(yaml_emitter_t *output, struct nl_sock *sk,
+			       char *family, int version, int flags, int op,
+			       bool stream)
+{
+	yaml_event_t hdr;
+	int rc;
+
+	rc = yaml_emitter_initialize(output);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_set_streaming_output_netlink(output, sk, family,
+						       version, op, flags,
+						       stream);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_open(output);
+	yaml_emitter_set_indent(output, 6);
+	yaml_document_start_event_initialize(&hdr, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(output, &hdr);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&hdr, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_BLOCK_MAPPING_STYLE);
+	rc = yaml_emitter_emit(output, &hdr);
+emitter_error:
+	return rc;
+}
+
+int yaml_netlink_complete_emitter(yaml_emitter_t *output)
+{
+	yaml_event_t hdr;
+	int rc;
+
+	yaml_mapping_end_event_initialize(&hdr);
+	rc = yaml_emitter_emit(output, &hdr);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_document_end_event_initialize(&hdr, 0);
+	rc = yaml_emitter_emit(output, &hdr);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_emitter_close(output);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_emitter_delete(output);
+emitter_error:
+	return rc;
+}
+
 int lustre_lnet_config_lib_init(void)
 {
 	return register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
