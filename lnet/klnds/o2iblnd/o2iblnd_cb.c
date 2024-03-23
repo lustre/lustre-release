@@ -3254,6 +3254,20 @@ kiblnd_active_connect(struct rdma_cm_id *cmid)
         return 0;
 }
 
+/* set the IP ToS ("Type of Service") used by the RoCE QoS */
+static void
+kiblnd_set_tos(struct rdma_cm_id *cmid)
+{
+	struct kib_peer_ni *peer_ni = cmid->context;
+	struct lnet_ioctl_config_o2iblnd_tunables *t;
+
+	t = &peer_ni->ibp_ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	if (t->lnd_tos < 0)
+		return;
+
+	rdma_set_service_type(cmid, t->lnd_tos);
+}
+
 int
 kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 {
@@ -3295,6 +3309,7 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 				event->status, cmid);
                         rc = event->status;
 		} else {
+			kiblnd_set_tos(cmid);
 			rc = rdma_resolve_route(
 				cmid, kiblnd_timeout() * 1000);
 			if (rc == 0) {

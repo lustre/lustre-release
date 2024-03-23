@@ -1255,6 +1255,10 @@ static const struct ln_key_list kiblnd_tunables_keys = {
 			.lkp_value	= "timeout",
 			.lkp_data_type	= NLA_U32,
 		},
+		[LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TOS] = {
+			.lkp_value	= "tos",
+			.lkp_data_type	= NLA_S16,
+		},
 	},
 };
 
@@ -1290,6 +1294,8 @@ kiblnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 		    tuns->lnd_conns_per_peer);
 	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TIMEOUT,
 		    kiblnd_timeout());
+	nla_put_s16(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TOS,
+		    tuns->lnd_tos);
 
 	return 0;
 }
@@ -1386,6 +1392,10 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 			tunables->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = num;
 		else
 			rc = -ERANGE;
+		break;
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TOS:
+		num = nla_get_s64(attr);
+		tunables->lnd_tun_u.lnd_o2ib.lnd_tos = num;
 		fallthrough;
 	default:
 		break;

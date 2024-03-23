@@ -184,6 +184,22 @@ static unsigned int wrq_sge = 2;
 module_param(wrq_sge, uint, 0444);
 MODULE_PARM_DESC(wrq_sge, "# scatter/gather element per work request");
 
+static int tos = -1;
+static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
+static const struct kernel_param_ops param_ops_tos = {
+	.set = param_set_tos,
+	.get = param_get_int,
+};
+
+#define param_check_tos(name, p) \
+	__param_check(name, p, int)
+module_param(tos, tos, 0444);
+#else
+module_param_call(tos, param_set_tos, param_get_int, &tos, 0444);
+#endif
+MODULE_PARM_DESC(tos, "Set the type of service (=-1 to disable)");
+
 struct kib_tunables kiblnd_tunables = {
         .kib_dev_failover           = &dev_failover,
         .kib_service                = &service,
@@ -202,6 +218,25 @@ struct kib_tunables kiblnd_tunables = {
 };
 
 struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
+
+static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp)
+{
+	int rc, t;
+
+	if (!val)
+		return -EINVAL;
+
+	rc = kstrtoint(val, 0, &t);
+	if (rc)
+		return rc;
+
+	if (t < -1 || t > 0xff)
+		return -ERANGE;
+
+	*((int *)kp->arg) = t;
+
+	return 0;
+}
 
 /* # messages/RDMAs in-flight */
 int
@@ -312,10 +347,11 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		tunables->lnd_fmr_cache = fmr_cache;
 	if (!tunables->lnd_ntx)
 		tunables->lnd_ntx = ntx;
-	if (!tunables->lnd_conns_per_peer) {
+	if (!tunables->lnd_conns_per_peer)
 		tunables->lnd_conns_per_peer = (conns_per_peer) ?
 			conns_per_peer : 1;
-	}
+	if (tunables->lnd_tos < 0)
+		tunables->lnd_tos = tos;
 
 	tunables->lnd_timeout = kiblnd_timeout();
 
@@ -334,5 +370,6 @@ kiblnd_tunables_init(void)
 	kib_default_tunables.lnd_fmr_cache = fmr_cache;
 	kib_default_tunables.lnd_ntx = ntx;
 	kib_default_tunables.lnd_conns_per_peer = conns_per_peer;
+	kib_default_tunables.lnd_tos = tos;
 	return 0;
 }
