@@ -276,7 +276,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 			continue;
 
 retry_new_ost:
-		if (unlikely(loi->loi_ost_idx >= lov->desc.ld_tgt_count ||
+		if (unlikely((u32)loi->loi_ost_idx >= lov->desc.ld_tgt_count ||
 			     !(ltd = lov->lov_tgts[loi->loi_ost_idx]))) {
 			time64_t now = ktime_get_seconds();
 
@@ -292,11 +292,15 @@ retry_new_ost:
 
 			/* log debug every loop, just to see it is trying */
 			CDEBUG_LIMIT(level,
-				loi->loi_ost_idx < lov->desc.ld_tgt_count ?
+				(u32)loi->loi_ost_idx < lov->desc.ld_tgt_count ?
 				"%s: FID "DOSTID" OST index %d/%u missing\n" :
 				"%s: FID "DOSTID" OST index %d more than OST count %u\n",
 				lov->desc.ld_uuid.uuid, POSTID(&loi->loi_oi),
 				loi->loi_ost_idx, lov->desc.ld_tgt_count);
+
+			if ((u32)loi->loi_ost_idx >= LOV_V1_INSANE_STRIPE_COUNT)
+				GOTO(out_lsme, rc = -EINVAL);
+
 			if (now > next_print) {
 				LCONSOLE_INFO("%s: wait %ds while client connects to new OST\n",
 					      lov->desc.ld_uuid.uuid,

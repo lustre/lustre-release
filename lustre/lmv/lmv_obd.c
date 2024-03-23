@@ -159,6 +159,10 @@ retry:
 		     "%s: MDT index %u/%u not configured\n" :
 		     "%s: MDT index %u more than MDT count %u\n",
 		     obd->obd_name, index, lmv->lmv_mdt_count);
+
+	if (index >= LOV_V1_INSANE_STRIPE_COUNT)
+		return NULL;
+
 	if (now > next_print) {
 		LCONSOLE_INFO("%s: wait %ds while client connects to new MDT\n",
 			      obd->obd_name, (int)(retry_limit - now));
