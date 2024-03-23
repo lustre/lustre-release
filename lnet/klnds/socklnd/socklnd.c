@@ -813,6 +813,10 @@ static const struct ln_key_list ksocknal_tunables_keys = {
 			.lkp_value	= "timeout",
 			.lkp_data_type	= NLA_U32
 		},
+		[LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TOS] = {
+			.lkp_value	= "tos",
+			.lkp_data_type	= NLA_S16,
+		},
 	},
 };
 
@@ -833,6 +837,8 @@ ksocknal_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 		    tun->lnd_tun_u.lnd_sock.lnd_conns_per_peer);
 	nla_put_u32(msg, LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT,
 		    ksocknal_timeout());
+	nla_put_s16(msg, LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TOS,
+		    tun->lnd_tun_u.lnd_sock.lnd_tos);
 
 	return 0;
 }
@@ -888,6 +894,11 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	case LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT:
 		num = nla_get_s64(attr);
 		tunables->lnd_tun_u.lnd_sock.lnd_timeout = num;
+		break;
+	case LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TOS:
+		num = nla_get_s64(attr);
+		clamp_t(s64, num, -1, 0xff);
+		tunables->lnd_tun_u.lnd_sock.lnd_tos = num;
 		fallthrough;
 	default:
 		break;
@@ -1244,7 +1255,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	 * response has been sent.
 	 */
 	if (rc == 0)
-		rc = ksocknal_lib_setup_sock(sock);
+		rc = ksocknal_lib_setup_sock(sock, ni);
 
 	write_lock_bh(global_lock);
 

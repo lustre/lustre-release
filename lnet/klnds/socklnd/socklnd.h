@@ -88,6 +88,7 @@ enum ksocklnd_ni_lnd_tunables_attr {
 
 	LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER,
 	LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT,
+	LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TOS,
 	__LNET_NET_SOCKLND_TUNABLES_ATTR_MAX_PLUS_ONE,
 };
 
@@ -673,7 +674,7 @@ extern void ksocknal_lib_reset_callback(struct socket *sock,
 					struct ksock_conn *conn);
 extern void ksocknal_lib_push_conn(struct ksock_conn *conn);
 extern int ksocknal_lib_get_conn_addrs(struct ksock_conn *conn);
-extern int ksocknal_lib_setup_sock(struct socket *so);
+extern int ksocknal_lib_setup_sock(struct socket *sock, struct lnet_ni *ni);
 extern int ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
 				 struct kvec *scratch_iov);
 extern int ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,

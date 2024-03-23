@@ -173,6 +173,22 @@ module_param(protocol, int, 0644);
 MODULE_PARM_DESC(protocol, "protocol version");
 #endif
 
+static int tos = -1;
+static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
+static const struct kernel_param_ops param_ops_tos = {
+	.set = param_set_tos,
+	.get = param_get_int,
+};
+
+#define param_check_tos(name, p) \
+	__param_check(name, p, int)
+module_param(tos, tos, 0444);
+#else
+module_param_call(tos, param_set_tos, param_get_int, &tos, 0444);
+#endif
+MODULE_PARM_DESC(tos, "Set the type of service (=-1 to disable)");
+
 static inline bool is_native_host(void)
 {
 #ifdef HAVE_HYPERVISOR_IS_TYPE
@@ -186,6 +202,25 @@ static inline bool is_native_host(void)
 
 struct ksock_tunables ksocknal_tunables;
 struct lnet_ioctl_config_socklnd_tunables ksock_default_tunables;
+
+static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp)
+{
+	int rc, t;
+
+	if (!val)
+		return -EINVAL;
+
+	rc = kstrtoint(val, 0, &t);
+	if (rc)
+		return rc;
+
+	if (t < -1 || t > 0xff)
+		return -ERANGE;
+
+	*((int *)kp->arg) = t;
+
+	return 0;
+}
 
 #ifdef HAVE_ETHTOOL_LINK_SETTINGS
 static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
@@ -272,6 +307,7 @@ int ksocknal_tunables_init(void)
 {
 	ksock_default_tunables.lnd_version = CURRENT_LND_VERSION;
 	ksock_default_tunables.lnd_conns_per_peer = conns_per_peer;
+	ksock_default_tunables.lnd_tos = tos;
 
 	/* initialize ksocknal_tunables structure */
 	ksocknal_tunables.ksnd_timeout            = &sock_timeout;
@@ -377,6 +413,9 @@ void ksocknal_tunables_setup(struct lnet_ni *ni)
 	if (!tunables->lnd_conns_per_peer)
 		tunables->lnd_conns_per_peer =
 			ksocklnd_lookup_conns_per_peer(ni);
+
+	if (tunables->lnd_tos < 0)
+		tunables->lnd_tos = tos;
 
 	tunables->lnd_timeout = ksocknal_timeout();
 }

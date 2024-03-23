@@ -440,7 +440,7 @@ ksocknal_lib_get_conn_tunables(struct ksock_conn *conn, int *txmem, int *rxmem, 
 }
 
 int
-ksocknal_lib_setup_sock (struct socket *sock)
+ksocknal_lib_setup_sock(struct socket *sock, struct lnet_ni *ni)
 {
 	int rc;
 	int keep_idle;
@@ -448,6 +448,7 @@ ksocknal_lib_setup_sock (struct socket *sock)
 	int keep_count;
 	int do_keepalive;
 	struct tcp_sock *tp = tcp_sk(sock->sk);
+	struct lnet_ioctl_config_socklnd_tunables *lndtun;
 
 	sock->sk->sk_allocation = GFP_NOFS;
 
@@ -542,6 +543,10 @@ ksocknal_lib_setup_sock (struct socket *sock)
 		CERROR("Can't set TCP_KEEPCNT: %d\n", rc);
 		return rc;
 	}
+
+	lndtun = &ni->ni_lnd_tunables.lnd_tun_u.lnd_sock;
+	if (lndtun->lnd_tos >= 0)
+		ip_sock_set_tos(sock->sk, lndtun->lnd_tos);
 
 	return (0);
 }

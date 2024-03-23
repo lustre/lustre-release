@@ -126,6 +126,7 @@ struct lnet_ioctl_config_socklnd_tunables {
 	__u16 lnd_conns_per_peer;
 	__u16 lnd_pad;
 	__u32 lnd_timeout;
+	__s16 lnd_tos;
 };
 
 struct lnet_ioctl_config_gnilnd_tunables {

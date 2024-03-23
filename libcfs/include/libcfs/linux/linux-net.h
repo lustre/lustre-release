@@ -182,6 +182,14 @@ static inline void ip6_sock_set_addr_preferences(struct sock *sk,
 			  (char *)&pref, sizeof(pref));
 }
 #endif /* HAVE_IP6_SET_PREF */
+
+#if !defined(HAVE_IP_SET_TOS)
+static inline void ip_sock_set_tos(struct sock *sk, int val)
+{
+	kernel_setsockopt(sk->sk_socket, IPPROTO_IP, IP_TOS,
+			  (char *)&val, sizeof(val));
+}
+#endif /* HAVE_IP_SET_TOS */
 #endif /* HAVE_KERNEL_SETSOCKOPT */
 
 #endif /* __LIBCFS_LINUX_NET_H__ */
