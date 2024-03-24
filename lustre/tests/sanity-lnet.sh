@@ -1164,8 +1164,14 @@ append_net_tunables() {
 		awk '/^\s+tunables:$/,/^\s+CPT:/' >> $TMP/sanity-lnet-$testnum-expected.yaml
 }
 
-IF0_IP=$(ip -o -4 a s ${INTERFACES[0]} |
-	 awk '{print $4}' | sed 's/\/.*//')
+ARR_IF0_IP=($(ip -o -4 a s ${INTERFACES[0]} |
+	    awk '{print $4}' | sed 's/\/.*//'))
+echo "Total IP for ${INTERFACES[0]} found [${#ARR_IF0_IP[@]}]"
+echo "Interface:IP are"
+for i in ${ARR_IF0_IP[@]}; do
+	echo "${INTERFACES[0]}:$i"
+done
+IF0_IP=${ARR_IF0_IP[0]}
 IF0_NET=$(awk -F. '{print $1"."$2"."$3}'<<<"${IF0_IP}")
 IF0_HOSTNUM=$(awk -F. '{print $4}'<<<"${IF0_IP}")
 if (((IF0_HOSTNUM + 5) > 254)); then
@@ -1174,6 +1180,8 @@ else
 	GW_HOSTNUM=$((IF0_HOSTNUM + 1))
 fi
 GW_NID="${IF0_NET}.${GW_HOSTNUM}@${NETTYPE}"
+echo "Using GW_NID:$GW_NID"
+
 test_100() {
 	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
 
