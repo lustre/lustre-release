@@ -1253,7 +1253,7 @@ void cfs_cpu_fini(void)
 #ifdef HAVE_HOTPLUG_STATE_MACHINE
 	if (lustre_cpu_online > 0)
 		cpuhp_remove_state_nocalls(lustre_cpu_online);
-	cpuhp_remove_state_nocalls(CPUHP_LUSTRE_CFS_DEAD);
+	cpuhp_remove_state_nocalls(CPUHP_BP_PREPARE_DYN);
 #else
 	unregister_hotcpu_notifier(&cfs_cpu_notifier);
 #endif /* !HAVE_HOTPLUG_STATE_MACHINE */
@@ -1268,7 +1268,7 @@ int cfs_cpu_init(void)
 
 #ifdef CONFIG_HOTPLUG_CPU
 #ifdef HAVE_HOTPLUG_STATE_MACHINE
-	ret = cpuhp_setup_state_nocalls(CPUHP_LUSTRE_CFS_DEAD,
+	ret = cpuhp_setup_state_nocalls(CPUHP_BP_PREPARE_DYN,
 					"fs/lustre/cfe:dead", NULL,
 					cfs_cpu_dead);
 	if (ret < 0)
@@ -1323,7 +1323,7 @@ failed_alloc_table:
 	if (lustre_cpu_online > 0)
 		cpuhp_remove_state_nocalls(lustre_cpu_online);
 failed_cpu_online:
-	cpuhp_remove_state_nocalls(CPUHP_LUSTRE_CFS_DEAD);
+	cpuhp_remove_state_nocalls(CPUHP_AP_ONLINE_DYN);
 failed_cpu_dead:
 #else
 	unregister_hotcpu_notifier(&cfs_cpu_notifier);

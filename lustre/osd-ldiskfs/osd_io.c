@@ -1476,8 +1476,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			CDEBUG(D_INODE, "Skipping [%d] == %d\n", i,
 			       lnb[i].lnb_rc);
 			LASSERT(lnb[i].lnb_page);
-			generic_error_remove_page(inode->i_mapping,
-						  lnb[i].lnb_page);
+			generic_error_remove_folio(inode->i_mapping,
+						   page_folio(lnb[i].lnb_page));
 			continue;
 		}
 
@@ -1528,8 +1528,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 				continue;
 			if (!PagePrivate2(lnb[i].lnb_page)) {
 				LASSERT(PageLocked(lnb[i].lnb_page));
-				generic_error_remove_page(inode->i_mapping,
-							  lnb[i].lnb_page);
+				generic_error_remove_folio(inode->i_mapping,
+						page_folio(lnb[i].lnb_page));
 			}
 		}
 	}

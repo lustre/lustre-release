@@ -178,7 +178,7 @@ restart:
 	spin_lock(&dir->i_lock);
 	hlist_for_each_entry(dentry, &dir->i_dentry, d_alias) {
 		spin_lock(&dentry->d_lock);
-		list_for_each_entry(child, &dentry->d_subdirs, d_child) {
+		d_for_each_child(child, dentry) {
 			if (child->d_inode)
 				continue;
 

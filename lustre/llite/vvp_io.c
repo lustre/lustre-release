@@ -1565,7 +1565,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	LASSERT(PageLocked(vmpage));
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
-		generic_error_remove_page(vmpage->mapping, vmpage);
+		generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
 
 	size = i_size_read(inode);
 	/* Though we have already held a cl_lock upon this page, but

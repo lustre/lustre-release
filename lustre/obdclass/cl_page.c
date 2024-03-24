@@ -784,7 +784,7 @@ void cl_page_discard(const struct lu_env *env,
 		vmpage = cp->cp_vmpage;
 		LASSERT(vmpage != NULL);
 		LASSERT(PageLocked(vmpage));
-		generic_error_remove_page(vmpage->mapping, vmpage);
+		generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
 	} else {
 		cl_page_delete(env, cp);
 	}

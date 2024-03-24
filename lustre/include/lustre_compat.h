@@ -124,6 +124,16 @@ static inline int d_in_lookup(struct dentry *dentry)
 }
 #endif
 
+#ifdef HAVE_DENTRY_D_CHILDREN
+#define d_no_children(dentry)	(hlist_empty(&(dentry)->d_children))
+#define d_for_each_child(child, dentry) \
+	hlist_for_each_entry((child), &(dentry)->d_children, d_sib)
+#else
+#define d_no_children(dentry)	(list_empty(&(dentry)->d_subdirs))
+#define d_for_each_child(child, dentry) \
+	list_for_each_entry((child), &(dentry)->d_subdirs, d_child)
+#endif
+
 #ifndef HAVE_VM_FAULT_T
 #define vm_fault_t int
 #endif
@@ -777,6 +787,30 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
 
+#ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
+#ifdef HAVE_FOLIO_BATCH
+#define generic_folio			folio
+#else
+#define generic_folio			page
+#define folio_page(page, n)		(page)
+#define folio_nr_pages(page)		(1)
+#define page_folio(page)		(page)
+#endif
+static inline int generic_error_remove_folio(struct address_space *mapping,
+					     struct generic_folio *folio)
+{
+	int pg, npgs = folio_nr_pages(folio);
+	int err = 0;
+
+	for (pg = 0; pg < npgs; pg++) {
+		err = generic_error_remove_page(mapping, folio_page(folio, pg));
+		if (err)
+			break;
+	}
+	return err;
+}
+#endif
+
 /**
  * delete_from_page_cache is not exported anymore
  */
@@ -792,7 +826,7 @@ static inline void cfs_delete_from_page_cache(struct page *page)
 	unlock_page(page);
 	/* on entry page is locked */
 	if (S_ISREG(page->mapping->host->i_mode)) {
-		generic_error_remove_page(page->mapping, page);
+		generic_error_remove_folio(page->mapping, page_folio(page));
 	} else {
 		loff_t lstart = page->index << PAGE_SHIFT;
 		loff_t lend = lstart + PAGE_SIZE - 1;

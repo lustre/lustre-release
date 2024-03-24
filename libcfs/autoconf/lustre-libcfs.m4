@@ -1009,14 +1009,27 @@ AC_DEFUN([LIBCFS_GET_USER_PAGES_GUP_FLAGS], [
 ]) # LIBCFS_GET_USER_PAGES_GUP_FLAGS
 
 #
-# Kernel version 4.10 commit 7b737965b33188bd3dbb44e938535c4006d97fbb
-# libcfs: Convert to hotplug state machine
+# LIBCFS_HOTPLUG_STATE_MACHINE
+#
+# Linux commit v4.9-12227-g7b737965b331 introduced
+#   staging/lustre/libcfs: Convert to hotplug state machine
+#   Which introduced: CPUHP_LUSTRE_CFS_DEAD
+#
+# Linux commit v4.10-rc1-5-g4205e4786d0b
+#   cpu/hotplug: Provide dynamic range for prepare stage
+#   Which introduced: CPUHP_BP_PREPARE_DYN
+#
+# Linux commit v6.7-rc2-1-g15bece7bec0d
+#   cpu/hotplug: Remove unused CPU hotplug states
+#   Which removed: CPUHP_LUSTRE_CFS_DEAD
+#
+# With no distro kernels between 4.10 and 4.11 switch to CPUHP_BP_PREPARE_DYN
 #
 AC_DEFUN([LIBCFS_SRC_HOTPLUG_STATE_MACHINE], [
 	LB2_LINUX_TEST_SRC([cpu_hotplug_state_machine], [
 		#include <linux/cpuhotplug.h>
 	],[
-		cpuhp_remove_state(CPUHP_LUSTRE_CFS_DEAD);
+		cpuhp_remove_state(CPUHP_BP_PREPARE_DYN);
 	])
 ])
 AC_DEFUN([LIBCFS_HOTPLUG_STATE_MACHINE], [

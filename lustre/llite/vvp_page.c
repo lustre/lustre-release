@@ -159,7 +159,8 @@ static void vvp_page_completion_read(const struct lu_env *env,
 			 * because subpage would be from wrong osc when trying
 			 * to read from a new mirror
 			 */
-			generic_error_remove_page(vmpage->mapping, vmpage);
+			generic_error_remove_folio(vmpage->mapping,
+						   page_folio(vmpage));
 		}
 	}
 
