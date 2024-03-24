@@ -328,7 +328,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 	}
 
 	if (arg)
-		strlcpy(policy->pol_arg, arg, sizeof(policy->pol_arg));
+		strscpy(policy->pol_arg, arg, sizeof(policy->pol_arg));
 
 	/* take the started reference */
 	refcount_set(&policy->pol_start_ref, 1);
@@ -1253,7 +1253,7 @@ static int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 	if (desc == NULL)
 		GOTO(fail, rc = -ENOMEM);
 
-	if (strlcpy(desc->pd_name, conf->nc_name, sizeof(desc->pd_name)) >=
+	if (strscpy(desc->pd_name, conf->nc_name, sizeof(desc->pd_name)) >=
 	    sizeof(desc->pd_name)) {
 		OBD_FREE_PTR(desc);
 		GOTO(fail, rc = -E2BIG);

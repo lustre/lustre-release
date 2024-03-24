@@ -204,7 +204,12 @@ static inline void *cfs_kallsyms_lookup_name(const char *name)
 #endif
 
 #ifndef HAVE_STRSCPY
-#define strscpy(s1, s2, sz)    strlcpy((s1), (s2), (sz))
+static inline ssize_t strscpy(char *s1, const char *s2, size_t sz)
+{
+	ssize_t len = strlcpy(s1, s2, sz);
+
+	return (len >= sz) ? -E2BIG : len;
+}
 #endif
 
 #ifndef HAVE_BITMAP_TO_ARR32

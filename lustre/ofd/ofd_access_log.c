@@ -468,7 +468,7 @@ struct ofd_access_log *ofd_access_log_create(const char *ofd_name, size_t size)
 	if (!oal)
 		return ERR_PTR(-ENOMEM);
 
-	strlcpy(oal->oal_name, ofd_name, sizeof(oal->oal_name));
+	strscpy(oal->oal_name, ofd_name, sizeof(oal->oal_name));
 	oal->oal_log_size = size;
 	oal->oal_entry_size = entry_size;
 	INIT_LIST_HEAD(&oal->oal_circ_buf_list);

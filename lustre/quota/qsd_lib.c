@@ -713,9 +713,9 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	qsd->qsd_exclusive = excl;
 
 	/* copy service name */
-	if (strlcpy(qsd->qsd_svname, svname, sizeof(qsd->qsd_svname))
-	    >= sizeof(qsd->qsd_svname))
-		GOTO(out, rc = -E2BIG);
+	rc = strscpy(qsd->qsd_svname, svname, sizeof(qsd->qsd_svname));
+	if (rc < 0)
+		GOTO(out, rc);
 
 	/* grab reference on osd device */
 	lu_device_get(&dev->dd_lu_dev);

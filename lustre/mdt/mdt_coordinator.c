@@ -256,7 +256,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 			RETURN(-ENOMEM);
 
 		hal->hal_version = HAL_VERSION;
-		strlcpy(hal->hal_fsname, hsd->hsd_fsname, MTI_NAME_MAXLEN + 1);
+		strscpy(hal->hal_fsname, hsd->hsd_fsname, MTI_NAME_MAXLEN + 1);
 		hal->hal_archive_id = larr->arr_archive_id;
 		hal->hal_flags = larr->arr_flags;
 		hal->hal_count = 0;

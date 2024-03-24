@@ -1045,7 +1045,7 @@ static void mdd_changelog_rec_ext_rename(struct changelog_rec *rec,
 	rnm->cr_spfid = *spfid;
 
 	changelog_rec_name(rec)[rec->cr_namelen] = '\0';
-	strlcpy(changelog_rec_sname(rec), sname->ln_name, extsize);
+	strscpy(changelog_rec_sname(rec), sname->ln_name, extsize);
 	rec->cr_namelen += extsize;
 }
 
@@ -1056,7 +1056,7 @@ void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid)
 	if (jobid == NULL || jobid[0] == '\0')
 		return;
 
-	strlcpy(jid->cr_jobid, jobid, sizeof(jid->cr_jobid));
+	strscpy(jid->cr_jobid, jobid, sizeof(jid->cr_jobid));
 }
 
 void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags)
@@ -1095,7 +1095,7 @@ void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 {
 	struct changelog_ext_xattr *xattr = changelog_rec_xattr(rec);
 
-	strlcpy(xattr->cr_xattr, xattr_name, sizeof(xattr->cr_xattr));
+	strscpy(xattr->cr_xattr, xattr_name, sizeof(xattr->cr_xattr));
 }
 
 /**

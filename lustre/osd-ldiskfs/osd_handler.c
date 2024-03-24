@@ -8209,10 +8209,10 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 			   const char *name, struct lu_device *next)
 {
 	struct osd_device *osd = osd_dev(d);
+	int cplen = strscpy(osd->od_svname, name, sizeof(osd->od_svname));
 
-	if (strlcpy(osd->od_svname, name, sizeof(osd->od_svname)) >=
-	    sizeof(osd->od_svname))
-		return -E2BIG;
+	if (cplen < 0)
+		return cplen;
 	return osd_procfs_init(osd, name);
 }
 
@@ -8591,12 +8591,10 @@ static int osd_device_init0(const struct lu_env *env,
 	/* default fallocate to unwritten extents: LU-14326/LU-14333 */
 	o->od_fallocate_zero_blocks = 0;
 
-	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
+	cplen = strscpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname));
-	if (cplen >= sizeof(o->od_svname)) {
-		rc = -E2BIG;
-		GOTO(out, rc);
-	}
+	if (cplen < 0)
+		GOTO(out, rc = cplen);
 
 	o->od_index_backup_stop = 0;
 	o->od_index = -1; /* -1 means index is invalid */

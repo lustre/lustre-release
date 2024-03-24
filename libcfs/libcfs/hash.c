@@ -1068,7 +1068,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         if (hs == NULL)
                 RETURN(NULL);
 
-	strlcpy(hs->hs_name, name, len);
+	strscpy(hs->hs_name, name, len);
 	hs->hs_flags = flags;
 
 	kref_init(&hs->hs_refcount);

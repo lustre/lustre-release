@@ -139,7 +139,7 @@ static void ucred_set_jobid(struct mdt_thread_info *info, struct lu_ucred *uc)
 
 	/* set jobid if specified. */
 	if (jobid)
-		strlcpy(uc->uc_jobid, jobid, sizeof(uc->uc_jobid));
+		strscpy(uc->uc_jobid, jobid, sizeof(uc->uc_jobid));
 	else
 		uc->uc_jobid[0] = '\0';
 }

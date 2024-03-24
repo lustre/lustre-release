@@ -104,7 +104,7 @@ l_wait_condition||wait_event_idle
 \bMIN\(||min_t
 mdo2fid||mdd_object_fid
 mktemp||mkstemp
-nla_strlcpy|nla_strscpy
+nla_strlcpy||nla_strscpy
 OBD_FAILED||CFS_FAILED
 OBD_FAIL_CHECK||CFS_FAIL_CHECK
 OBD_FAIL_CHECK_ORSET||CFS_FAIL_CHECK_ORSET
@@ -139,6 +139,7 @@ setup_timer||cfs_timer_setup
 sprintf||snprintf
 strcat||strncat
 strcpy||strncpy
+strlcpy||strscpy
 struct timeval||struct timespec64
 tempnam||mkstemp
 time_t||timeout_t

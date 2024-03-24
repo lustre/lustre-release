@@ -571,27 +571,27 @@ lstcon_sesrpc_prep(struct lstcon_node *nd, int transop,
 	struct srpc_rmsn_reqst *rsrq;
 	int rc;
 
-        switch (transop) {
-        case LST_TRANS_SESNEW:
+	switch (transop) {
+	case LST_TRANS_SESNEW:
 		rc = lstcon_rpc_prep(nd, SRPC_SERVICE_MAKE_SESSION,
 				     feats, 0, 0, crpc);
-                if (rc != 0)
-                        return rc;
+		if (rc != 0)
+			return rc;
 
-                msrq = &(*crpc)->crp_rpc->crpc_reqstmsg.msg_body.mksn_reqst;
+		msrq = &(*crpc)->crp_rpc->crpc_reqstmsg.msg_body.mksn_reqst;
 		msrq->mksn_sid.ses_stamp = console_session.ses_id.ses_stamp;
 		msrq->mksn_sid.ses_nid =
 			lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
 		msrq->mksn_force = console_session.ses_force;
-		strlcpy(msrq->mksn_name, console_session.ses_name,
+		strscpy(msrq->mksn_name, console_session.ses_name,
 			sizeof(msrq->mksn_name));
-                break;
+		break;
 
-        case LST_TRANS_SESEND:
+	case LST_TRANS_SESEND:
 		rc = lstcon_rpc_prep(nd, SRPC_SERVICE_REMOVE_SESSION,
 				     feats, 0, 0, crpc);
-                if (rc != 0)
-                        return rc;
+		if (rc != 0)
+			return rc;
 
 		rsrq = &(*crpc)->crp_rpc->crpc_reqstmsg.msg_body.rmsn_reqst;
 		rsrq->rmsn_sid.ses_stamp = console_session.ses_id.ses_stamp;
@@ -599,11 +599,11 @@ lstcon_sesrpc_prep(struct lstcon_node *nd, int transop,
 			lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
 		break;
 
-        default:
-                LBUG();
-        }
+	default:
+		LBUG();
+	}
 
-        return 0;
+	return 0;
 }
 
 int

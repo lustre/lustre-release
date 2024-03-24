@@ -2633,7 +2633,7 @@ ksocknal_startup(struct lnet_ni *ni)
 		ni->ni_nid.nid_size = 0;
 		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
 	}
-	strlcpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
+	strscpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
 
 	/* call it before add it to ksocknal_data.ksnd_nets */
 	rc = ksocknal_net_start_threads(net, ni->ni_cpts, ni->ni_ncpts);

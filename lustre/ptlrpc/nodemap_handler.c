@@ -972,9 +972,8 @@ static int nodemap_set_fileset_helper(struct nodemap_config *config,
 		nodemap->nm_fileset[0] = '\0';
 	else if (fileset[0] != '/')
 		rc = -EINVAL;
-	else if (strlcpy(nodemap->nm_fileset, fileset,
-			 sizeof(nodemap->nm_fileset)) >=
-		 sizeof(nodemap->nm_fileset))
+	else if (strscpy(nodemap->nm_fileset, fileset,
+			 sizeof(nodemap->nm_fileset)) < 0)
 		rc = -ENAMETOOLONG;
 
 	return rc;
@@ -1096,7 +1095,7 @@ int nodemap_set_sepol(const char *name, const char *sepol)
 	/* truncation cannot happen, as string length was checked in
 	 * nodemap_validate_sepol()
 	 */
-	strlcpy(nodemap->nm_sepol, sepol, sizeof(nodemap->nm_sepol));
+	strscpy(nodemap->nm_sepol, sepol, sizeof(nodemap->nm_sepol));
 
 out_putref:
 	mutex_unlock(&active_config_lock);

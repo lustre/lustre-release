@@ -67,7 +67,7 @@ static void osd_symlink_brw_stats(struct osd_device *osd)
 	if (len_root > (p - path) || len_root + len_path + 16 > PATH_MAX)
 		goto out;
 
-	strlcpy(path, root, len_root);
+	strscpy(path, root, len_root);
 	if (p > path + len_root) {
 		s = path + len_root;
 		while ((*s++ = *p++) != '\0');

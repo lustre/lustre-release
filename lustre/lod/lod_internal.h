@@ -365,7 +365,7 @@ static inline int lod_set_pool(char **pool, const char *new_pool)
 		OBD_ALLOC(*pool, len);
 		if (*pool == NULL)
 			return -ENOMEM;
-		strlcpy(*pool, new_pool, len);
+		strscpy(*pool, new_pool, len);
 	}
 	return 0;
 }
@@ -639,7 +639,7 @@ static inline void lod_layout_get_pool(struct lod_layout_component *entries,
 		if (entries[i].llc_magic == LOV_MAGIC_FOREIGN)
 			continue;
 		if (entries[i].llc_pool != NULL) {
-			strlcpy(pool, entries[i].llc_pool, len);
+			strscpy(pool, entries[i].llc_pool, len);
 			break;
 		}
 	}

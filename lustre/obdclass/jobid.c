@@ -523,7 +523,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 		rcu_read_lock();
 		jid = jobid_current();
 		if (jid) {
-			strlcpy(jobid, jid, joblen);
+			strscpy(jobid, jid, joblen);
 			joblen = strlen(jobid);
 		} else {
 			rc = -ENOENT;
@@ -602,7 +602,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 		spin_lock(&pidmap->jp_lock);
 		if (!rc) {
 			pidmap->jp_joblen = env_len;
-			strlcpy(pidmap->jp_jobid, env_jobid,
+			strscpy(pidmap->jp_jobid, env_jobid,
 				sizeof(pidmap->jp_jobid));
 			rc = 0;
 		} else if (rc == -ENOENT) {
@@ -619,7 +619,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 	 * If a cached missing entry was found, return -ENOENT.
 	 */
 	if (pidmap->jp_joblen) {
-		strlcpy(jobid, pidmap->jp_jobid, joblen);
+		strscpy(jobid, pidmap->jp_jobid, joblen);
 		joblen = pidmap->jp_joblen;
 		rc = 0;
 	} else if (!rc) {
@@ -959,7 +959,7 @@ void lustre_jobid_clear(const char *find_jobid)
 	if (jobid_hash == NULL)
 		return;
 
-	strlcpy(jobid, find_jobid, sizeof(jobid));
+	strscpy(jobid, find_jobid, sizeof(jobid));
 	/* trim \n off the end of the incoming jobid */
 	end = strchr(jobid, '\n');
 	if (end && *end == '\n')

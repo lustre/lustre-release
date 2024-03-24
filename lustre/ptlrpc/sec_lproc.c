@@ -178,7 +178,7 @@ static int sptlrpc_sepol_update(struct obd_import *imp,
 	kref_init(&new->ssp_ref);
 	new->ssp_sepol_size = pol_len + 1;
 	new->ssp_mtime = mtime;
-	strlcpy(new->ssp_sepol, pol, new->ssp_sepol_size);
+	strscpy(new->ssp_sepol, pol, new->ssp_sepol_size);
 
 	spin_lock(&imp_sec->ps_lock);
 	old = rcu_dereference_protected(imp_sec->ps_sepol, 1);

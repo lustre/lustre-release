@@ -3616,11 +3616,11 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 	lsm->lsm_md_layout_version = le32_to_cpu(lmm1->lmv_layout_version);
 	lsm->lsm_md_migrate_offset = le32_to_cpu(lmm1->lmv_migrate_offset);
 	lsm->lsm_md_migrate_hash = le32_to_cpu(lmm1->lmv_migrate_hash);
-	cplen = strlcpy(lsm->lsm_md_pool_name, lmm1->lmv_pool_name,
+	cplen = strscpy(lsm->lsm_md_pool_name, lmm1->lmv_pool_name,
 			sizeof(lsm->lsm_md_pool_name));
 
-	if (cplen >= sizeof(lsm->lsm_md_pool_name))
-		RETURN(-E2BIG);
+	if (cplen < 0)
+		RETURN(cplen);
 
 	CDEBUG(D_INFO, "unpack lsm count %d/%d, master %d hash_type %#x/%#x layout_version %d\n",
 	       lsm->lsm_md_stripe_count,

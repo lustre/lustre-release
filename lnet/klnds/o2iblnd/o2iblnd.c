@@ -2276,15 +2276,15 @@ kiblnd_init_poolset(struct kib_poolset *ps, int cpt,
 	memset(ps, 0, sizeof(struct kib_poolset));
 
 	ps->ps_cpt	    = cpt;
-        ps->ps_net          = net;
-        ps->ps_pool_create  = po_create;
-        ps->ps_pool_destroy = po_destroy;
-        ps->ps_node_init    = nd_init;
-        ps->ps_node_fini    = nd_fini;
-        ps->ps_pool_size    = size;
-	if (strlcpy(ps->ps_name, name, sizeof(ps->ps_name))
-	    >= sizeof(ps->ps_name))
-		return -E2BIG;
+	ps->ps_net          = net;
+	ps->ps_pool_create  = po_create;
+	ps->ps_pool_destroy = po_destroy;
+	ps->ps_node_init    = nd_init;
+	ps->ps_node_fini    = nd_fini;
+	ps->ps_pool_size    = size;
+	rc = strscpy(ps->ps_name, name, sizeof(ps->ps_name));
+	if (rc < 0)
+		return rc;
 	spin_lock_init(&ps->ps_lock);
 	INIT_LIST_HEAD(&ps->ps_pool_list);
 	INIT_LIST_HEAD(&ps->ps_failed_pool_list);
@@ -3736,7 +3736,7 @@ kiblnd_startup(struct lnet_ni *ni)
 		}
 
 		ibdev->ibd_ifip = ntohl(ifaces[i].li_ipaddr);
-		strlcpy(ibdev->ibd_ifname, ifaces[i].li_name,
+		strscpy(ibdev->ibd_ifname, ifaces[i].li_name,
 			sizeof(ibdev->ibd_ifname));
 		ibdev->ibd_can_failover = ifaces[i].li_iff_master;
 

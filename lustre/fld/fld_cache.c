@@ -68,7 +68,7 @@ struct fld_cache *fld_cache_init(const char *name, int cache_size,
 	cache->fci_cache_count = 0;
 	rwlock_init(&cache->fci_lock);
 
-	strlcpy(cache->fci_name, name, sizeof(cache->fci_name));
+	strscpy(cache->fci_name, name, sizeof(cache->fci_name));
 
 	cache->fci_cache_size = cache_size;
 	cache->fci_threshold = cache_threshold;

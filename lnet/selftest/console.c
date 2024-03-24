@@ -1708,22 +1708,22 @@ lstcon_session_new(char *name, int key, unsigned feats,
 
 	if (strlen(name) > sizeof(console_session.ses_name)-1)
 		return -E2BIG;
-	strlcpy(console_session.ses_name, name,
+	strscpy(console_session.ses_name, name,
 		sizeof(console_session.ses_name));
 
-        rc = lstcon_batch_add(LST_DEFAULT_BATCH);
-        if (rc != 0)
-                return rc;
+	rc = lstcon_batch_add(LST_DEFAULT_BATCH);
+	if (rc != 0)
+		return rc;
 
-        rc = lstcon_rpc_pinger_start();
-        if (rc != 0) {
+	rc = lstcon_rpc_pinger_start();
+	if (rc != 0) {
 		struct lstcon_batch *bat = NULL;
 
-                lstcon_batch_find(LST_DEFAULT_BATCH, &bat);
-                lstcon_batch_destroy(bat);
+		lstcon_batch_find(LST_DEFAULT_BATCH, &bat);
+		lstcon_batch_destroy(bat);
 
-                return rc;
-        }
+		return rc;
+	}
 
 	console_session.ses_state = LST_SESSION_ACTIVE;
 
@@ -1834,7 +1834,7 @@ lstcon_acceptor_handle(struct srpc_server_rpc *rpc)
 	struct lstcon_ndlink *ndl;
 	int rc = 0;
 
-        sfw_unpack_message(req);
+	sfw_unpack_message(req);
 
 	mutex_lock(&console_session.ses_mutex);
 
@@ -1842,70 +1842,70 @@ lstcon_acceptor_handle(struct srpc_server_rpc *rpc)
 	jrep->join_sid.ses_nid = lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
 
 	if (LNET_NID_IS_ANY(&console_session.ses_id.ses_nid)) {
-                jrep->join_status = ESRCH;
-                goto out;
-        }
+		jrep->join_status = ESRCH;
+		goto out;
+	}
 
 	if (lstcon_session_feats_check(req->msg_ses_feats) != 0) {
 		jrep->join_status = EPROTO;
 		goto out;
 	}
 
-        if (jreq->join_sid.ses_nid != LNET_NID_ANY &&
-             !lstcon_session_match(jreq->join_sid)) {
-                jrep->join_status = EBUSY;
-                goto out;
-        }
+	if (jreq->join_sid.ses_nid != LNET_NID_ANY &&
+	    !lstcon_session_match(jreq->join_sid)) {
+		jrep->join_status = EBUSY;
+		goto out;
+	}
 
-        if (lstcon_group_find(jreq->join_group, &grp) != 0) {
-                rc = lstcon_group_alloc(jreq->join_group, &grp);
-                if (rc != 0) {
-                        CERROR("Out of memory\n");
-                        goto out;
-                }
+	if (lstcon_group_find(jreq->join_group, &grp) != 0) {
+		rc = lstcon_group_alloc(jreq->join_group, &grp);
+		if (rc != 0) {
+			CERROR("Out of memory\n");
+			goto out;
+		}
 
 		list_add_tail(&grp->grp_link,
 			      &console_session.ses_grp_list);
 		lstcon_group_addref(grp);
 	}
 
-        if (grp->grp_ref > 2) {
-                /* Group in using */
-                jrep->join_status = EBUSY;
-                goto out;
-        }
+	if (grp->grp_ref > 2) {
+		/* Group in using */
+		jrep->join_status = EBUSY;
+		goto out;
+	}
 
-        rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 0);
-        if (rc == 0) {
-                jrep->join_status = EEXIST;
-                goto out;
-        }
+	rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 0);
+	if (rc == 0) {
+		jrep->join_status = EEXIST;
+		goto out;
+	}
 
-        rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 1);
-        if (rc != 0) {
-                CERROR("Out of memory\n");
-                goto out;
-        }
+	rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 1);
+	if (rc != 0) {
+		CERROR("Out of memory\n");
+		goto out;
+	}
 
-        ndl->ndl_node->nd_state   = LST_NODE_ACTIVE;
-        ndl->ndl_node->nd_timeout = console_session.ses_timeout;
+	ndl->ndl_node->nd_state   = LST_NODE_ACTIVE;
+	ndl->ndl_node->nd_timeout = console_session.ses_timeout;
 
-        if (grp->grp_userland == 0)
-                grp->grp_userland = 1;
+	if (grp->grp_userland == 0)
+		grp->grp_userland = 1;
 
-	strlcpy(jrep->join_session, console_session.ses_name,
+	strscpy(jrep->join_session, console_session.ses_name,
 		sizeof(jrep->join_session));
-        jrep->join_timeout = console_session.ses_timeout;
-        jrep->join_status  = 0;
+	jrep->join_timeout = console_session.ses_timeout;
+	jrep->join_status  = 0;
 
 out:
 	rep->msg_ses_feats = console_session.ses_features;
-        if (grp != NULL)
+	if (grp != NULL)
 		lstcon_group_decref(grp);
 
 	mutex_unlock(&console_session.ses_mutex);
 
-        return rc;
+	return rc;
 }
 
 static struct srpc_service lstcon_acceptor_service;

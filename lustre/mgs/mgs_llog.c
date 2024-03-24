@@ -995,14 +995,14 @@ static int mgs_modify(const struct lu_env *env, struct mgs_device *mgs,
 	OBD_ALLOC_PTR(mml);
 	if (!mml)
 		GOTO(out_close, rc = -ENOMEM);
-	if (strlcpy(mml->mml_marker.cm_comment, comment,
-		    sizeof(mml->mml_marker.cm_comment)) >=
-	    sizeof(mml->mml_marker.cm_comment))
-		GOTO(out_free, rc = -E2BIG);
-	if (strlcpy(mml->mml_marker.cm_tgtname, devname,
-		    sizeof(mml->mml_marker.cm_tgtname)) >=
-	    sizeof(mml->mml_marker.cm_tgtname))
-		GOTO(out_free, rc = -E2BIG);
+	rc = strscpy(mml->mml_marker.cm_comment, comment,
+		     sizeof(mml->mml_marker.cm_comment));
+	if (rc < 0)
+		GOTO(out_free, rc);
+	rc = strscpy(mml->mml_marker.cm_tgtname, devname,
+		     sizeof(mml->mml_marker.cm_tgtname));
+	if (rc < 0)
+		GOTO(out_free, rc);
 	/* Modify mostly means cancel */
 	mml->mml_marker.cm_flags = flags;
 	mml->mml_marker.cm_canceltime = flags ? ktime_get_real_seconds() : 0;
@@ -1479,11 +1479,11 @@ static int mgs_replace_log(const struct lu_env *env,
 		GOTO(out_close, rc = -ENOMEM);
 	/* devname is only needed information to replace UUID records */
 	if (devname)
-		strlcpy(mrd->target.mti_svname, devname,
+		strscpy(mrd->target.mti_svname, devname,
 			sizeof(mrd->target.mti_svname));
 	/* data is parsed in llog callback */
 	if (data)
-		strlcpy(mrd->target.mti_params, data,
+		strscpy(mrd->target.mti_params, data,
 			sizeof(mrd->target.mti_params));
 	/* Copy records to this temporary llog */
 	mrd->temp_llh = orig_llh;
@@ -1971,14 +1971,14 @@ static int record_marker(const struct lu_env *env,
 	mgi->mgi_marker.cm_step = fsdb->fsdb_gen;
 	mgi->mgi_marker.cm_flags = flags;
 	mgi->mgi_marker.cm_vers = LUSTRE_VERSION_CODE;
-	cplen = strlcpy(mgi->mgi_marker.cm_tgtname, tgtname,
+	cplen = strscpy(mgi->mgi_marker.cm_tgtname, tgtname,
 			sizeof(mgi->mgi_marker.cm_tgtname));
-	if (cplen >= sizeof(mgi->mgi_marker.cm_tgtname))
-		return -E2BIG;
-	cplen = strlcpy(mgi->mgi_marker.cm_comment, comment,
+	if (cplen < 0)
+		return cplen;
+	cplen = strscpy(mgi->mgi_marker.cm_comment, comment,
 			sizeof(mgi->mgi_marker.cm_comment));
-	if (cplen >= sizeof(mgi->mgi_marker.cm_comment))
-		return -E2BIG;
+	if (cplen < 0)
+		return cplen;
 	mgi->mgi_marker.cm_createtime = ktime_get_real_seconds();
 	mgi->mgi_marker.cm_canceltime = 0;
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
@@ -2211,10 +2211,10 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 		    (marker->cm_flags & CM_START) &&
 		    !(marker->cm_flags & CM_SKIP)) {
 			got_an_osc_or_mdc = 1;
-			cplen = strlcpy(tmti->mti_svname, marker->cm_tgtname,
+			cplen = strscpy(tmti->mti_svname, marker->cm_tgtname,
 					sizeof(tmti->mti_svname));
-			if (cplen >= sizeof(tmti->mti_svname))
-				RETURN(-E2BIG);
+			if (cplen < 0)
+				RETURN(cplen);
 			rc = record_start_log(env, mgs, &mdt_llh,
 					      mti->mti_svname);
 			if (rc)
@@ -3499,7 +3499,7 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	int rc, del;
 
 	/* Erase any old settings of this same parameter */
-	strlcpy(comment, ptr, sizeof(comment));
+	strscpy(comment, ptr, sizeof(comment));
 	/* But don't try to match the value. */
 	tmp = strchr(comment, '=');
 	if (tmp != NULL)
@@ -4080,11 +4080,9 @@ static int mgs_write_log_param2(const struct lu_env *env,
 		}
 
 		param = strstr(ptr, PARAM_FAILNODE);
-		if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
-		    sizeof(mti->mti_params)) {
-			rc = -E2BIG;
+		rc = strscpy(mti->mti_params, param, sizeof(mti->mti_params));
+		if (rc < 0)
 			goto end;
-		}
 
 		CDEBUG(D_MGS, "Adding failnode with param %s\n",
 		       mti->mti_params);
@@ -5403,9 +5401,9 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 			 "%.*s", (int)len, param);
 		param += len + 1;
 	} else {
-		if (strlcpy(mti->mti_svname, devname, sizeof(mti->mti_svname)) >=
-		    sizeof(mti->mti_svname))
-			RETURN(-E2BIG);
+		rc = strscpy(mti->mti_svname, devname, sizeof(mti->mti_svname));
+		if (rc < 0)
+			RETURN(rc);
 	}
 
 	if (!strlen(mti->mti_svname)) {
@@ -5419,7 +5417,7 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 	/* For this case we have an invalid obd device name */
 	case -ENXIO:
 		CDEBUG(D_MGS, "%s don't contain an index\n", mti->mti_svname);
-		strlcpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
+		strscpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
 		dev_type = 0;
 		break;
 	/* Not an obd device, assume devname is the fsname.
@@ -5427,7 +5425,7 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 	 */
 	case -EINVAL:
 		CDEBUG(D_MGS, "%s is seen as a file system name\n", mti->mti_svname);
-		strlcpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
+		strscpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
 		dev_type = 0;
 		break;
 	default:
@@ -5452,10 +5450,9 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 		}
 		break;
 	}
-
-	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
-	    sizeof(mti->mti_params))
-		GOTO(out, rc = -E2BIG);
+	rc = strscpy(mti->mti_params, param, sizeof(mti->mti_params));
+	if (rc < 0)
+		GOTO(out, rc);
 
 	CDEBUG(D_MGS, "set_conf_param fs='%s' device='%s' param='%s'\n",
 	       mti->mti_fsname, mti->mti_svname, mti->mti_params);
@@ -5499,9 +5496,9 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	size_t len;
 	int rc;
 
-	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
-	    sizeof(mti->mti_params))
-		GOTO(out, rc = -E2BIG);
+	rc = strscpy(mti->mti_params, param, sizeof(mti->mti_params));
+	if (rc < 0)
+		GOTO(out, rc);
 
 	len = strcspn(param, ".=");
 	if (len && param[len] != '=') {

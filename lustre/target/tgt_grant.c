@@ -1563,7 +1563,7 @@ int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 	dcb = &tgc->tgc_cb;
 	dcb->dcb_func = tgt_grant_commit_cb;
 	INIT_LIST_HEAD(&dcb->dcb_linkage);
-	strlcpy(dcb->dcb_name, "tgt_grant_commit_cb", sizeof(dcb->dcb_name));
+	strscpy(dcb->dcb_name, "tgt_grant_commit_cb", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);
 	if (rc) {

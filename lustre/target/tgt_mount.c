@@ -1280,9 +1280,9 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 	if (!mti)
 		GOTO(free_list, mti = ERR_PTR(-ENOMEM));
 
-	if (strlcpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname))
-	    >= sizeof(mti->mti_svname))
-		GOTO(free_mti, rc = -E2BIG);
+	rc = strscpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname));
+	if (rc < 0)
+		GOTO(free_mti, rc);
 
 	mti->mti_nid_count = nid_count;
 	for (i = 0; i < mti->mti_nid_count; i++) {
@@ -1314,7 +1314,7 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 	/* use NID strings instead */
 	if (large_nid)
 		mti->mti_flags |= LDD_F_LARGE_NID;
-	cplen = strlcpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
+	cplen = strscpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
 			sizeof(mti->mti_params));
 	if (cplen >= sizeof(mti->mti_params))
 		rc = -E2BIG;
@@ -1635,13 +1635,13 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	    strlen(fstype) >= sizeof(lsi->lsi_fstype))
 		RETURN(-ENAMETOOLONG);
 
-	strlcpy(lsi->lsi_svname, lsi->lsi_lmd->lmd_profile,
+	strscpy(lsi->lsi_svname, lsi->lsi_lmd->lmd_profile,
 		sizeof(lsi->lsi_svname));
-	strlcpy(lsi->lsi_osd_type, osd_type, sizeof(lsi->lsi_osd_type));
+	strscpy(lsi->lsi_osd_type, osd_type, sizeof(lsi->lsi_osd_type));
 	/* XXX: a temp. solution for components using ldiskfs
 	 *      to be removed in one of the subsequent patches
 	 */
-	strlcpy(lsi->lsi_fstype, fstype, sizeof(lsi->lsi_fstype));
+	strscpy(lsi->lsi_fstype, fstype, sizeof(lsi->lsi_fstype));
 
 	/* Determine server type */
 	rc = server_name2index(lsi->lsi_svname, &index, NULL);

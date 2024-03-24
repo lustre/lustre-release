@@ -562,9 +562,9 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 		RETURN(ERR_PTR(-ENOMEM));
 	for (i = 0; i < cache->uc_hashsize; i++)
 		INIT_LIST_HEAD(&cache->uc_hashtable[i]);
-	strlcpy(cache->uc_name, name, sizeof(cache->uc_name));
+	strscpy(cache->uc_name, name, sizeof(cache->uc_name));
 	/* upcall pathname proc tunable */
-	strlcpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall));
+	strscpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall));
 	cache->uc_entry_expire = entry_expire;
 	cache->uc_acquire_expire = acquire_expire;
 	cache->uc_acquire_replay = replayable;

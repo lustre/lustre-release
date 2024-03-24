@@ -1816,7 +1816,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 		rc = mdd_changelog_name_check(env, ctxt, mdd, name);
 		if (rc)
 			GOTO(out_users, rc);
-		strlcpy(rec->cur_name, name, sizeof(rec->cur_name));
+		strscpy(rec->cur_name, name, sizeof(rec->cur_name));
 	}
 	mdd_chlg_username(rec, user_name, sizeof(user_name));
 

@@ -130,9 +130,9 @@ osd_oi_lookup(const struct lu_env *env, struct osd_device *o,
 	if (rc)
 		return rc;
 
-	rc = strlcpy(oi->oi_name, name, sizeof(oi->oi_name));
-	if (rc >= sizeof(oi->oi_name))
-		return -E2BIG;
+	rc = strscpy(oi->oi_name, name, sizeof(oi->oi_name));
+	if (rc < 0)
+		return rc;
 
 	oi->oi_zapid = zde->zde_dnode;
 

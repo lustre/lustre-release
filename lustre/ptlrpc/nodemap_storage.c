@@ -805,7 +805,7 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	mutex_lock(&active_config_lock);
 	old_nm = nodemap_lookup(rec->ncr.ncr_name);
 	if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
-		strlcpy(nodemap->nm_fileset, old_nm->nm_fileset,
+		strscpy(nodemap->nm_fileset, old_nm->nm_fileset,
 			sizeof(nodemap->nm_fileset));
 	mutex_unlock(&active_config_lock);
 	if (!IS_ERR(old_nm))

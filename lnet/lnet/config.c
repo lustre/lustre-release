@@ -1573,7 +1573,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 			ifaces[nip].li_index = dev->ifindex;
 			ifaces[nip].li_ipaddr = ifa->ifa_local;
 			ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
-			strlcpy(ifaces[nip].li_name, ifa->ifa_label,
+			strscpy(ifaces[nip].li_name, ifa->ifa_label,
 				sizeof(ifaces[nip].li_name));
 			nip++;
 		}
@@ -1615,7 +1615,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns, bool v6)
 			ifaces[nip].li_index = dev->ifindex;
 			memcpy(ifaces[nip].li_ipv6addr,
 			       &ifa6->addr, sizeof(struct in6_addr));
-			strlcpy(ifaces[nip].li_name, dev->name,
+			strscpy(ifaces[nip].li_name, dev->name,
 				sizeof(ifaces[nip].li_name));
 			nip++;
 			/* As different IPv6 addresses don't have unique

@@ -297,7 +297,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	if (rule == NULL)
 		return -ENOMEM;
 
-	strlcpy(rule->tr_name, start->tc_name, sizeof(rule->tr_name));
+	strscpy(rule->tr_name, start->tc_name, sizeof(rule->tr_name));
 	rule->tr_rpc_rate = start->u.tc_start.ts_rpc_rate;
 	rule->tr_flags = start->u.tc_start.ts_rule_flags;
 	rule->tr_nsecs_per_rpc = NSEC_PER_SEC / rule->tr_rpc_rate;
@@ -1647,8 +1647,8 @@ static inline void nrs_tbf_cli_gen_key(struct nrs_tbf_client *cli,
 
 	if (cli) {
 		INIT_LIST_HEAD(&cli->tc_lru);
-		strlcpy(cli->tc_key, keystr, sizeof(cli->tc_key));
-		strlcpy(cli->tc_jobid, jobid, sizeof(cli->tc_jobid));
+		strscpy(cli->tc_key, keystr, sizeof(cli->tc_key));
+		strscpy(cli->tc_jobid, jobid, sizeof(cli->tc_jobid));
 		cli->tc_nid = req->rq_peer.nid;
 		cli->tc_opcode = opc;
 		cli->tc_id = id;
@@ -2621,7 +2621,7 @@ nrs_tbf_id_rule_init(struct ptlrpc_nrs_policy *policy,
 	if (rule->tr_ids_str == NULL)
 		return -ENOMEM;
 
-	strlcpy(rule->tr_ids_str, start->u.tc_start.ts_ids_str,
+	strscpy(rule->tr_ids_str, start->u.tc_start.ts_ids_str,
 		ids_len);
 
 	if (!list_empty(&start->u.tc_start.ts_ids)) {

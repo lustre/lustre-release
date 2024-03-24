@@ -754,7 +754,7 @@ static ssize_t append_pool_store(struct kobject *kobj, struct attribute *attr,
 	if (!count || count > LOV_MAXPOOLNAME + 1 || buffer[0]  == '\n')
 		return -EINVAL;
 
-	strlcpy(mdd->mdd_append_pool, buffer, LOV_MAXPOOLNAME + 1);
+	strscpy(mdd->mdd_append_pool, buffer, LOV_MAXPOOLNAME + 1);
 	if (mdd->mdd_append_pool[count - 1] == '\n')
 		mdd->mdd_append_pool[count - 1] = '\0';
 

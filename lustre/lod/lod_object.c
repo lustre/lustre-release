@@ -4106,7 +4106,7 @@ static void embed_pool_to_comp_v1(const struct lov_comp_md_v1 *src,
 		} else {
 			lum3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
 			entry->lcme_size = cpu_to_le32(sizeof(*lum3));
-			strlcpy(lum3->lmm_pool_name, pool,
+			strscpy(lum3->lmm_pool_name, pool,
 				sizeof(lum3->lmm_pool_name));
 			shift += sizeof(*lum3) - sizeof(*lum);
 		}
@@ -4176,7 +4176,7 @@ static int lod_xattr_set_default_lov_on_dir(const struct lu_env *env,
 		v3->lmm_stripe_offset =	cpu_to_le32(v1->lmm_stripe_offset);
 		v3->lmm_stripe_size = cpu_to_le32(v1->lmm_stripe_size);
 
-		strlcpy(v3->lmm_pool_name, pool, sizeof(v3->lmm_pool_name));
+		strscpy(v3->lmm_pool_name, pool, sizeof(v3->lmm_pool_name));
 
 		info->lti_buf.lb_buf = v3;
 		info->lti_buf.lb_len = sizeof(*v3);

@@ -778,11 +778,11 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		objs = &lmm->lmm_objects[0];
 	} else {
 		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
-		size_t cplen = strlcpy(v3->lmm_pool_name,
+		size_t cplen = strscpy(v3->lmm_pool_name,
 				       lod_comp->llc_pool,
 				       sizeof(v3->lmm_pool_name));
-		if (cplen >= sizeof(v3->lmm_pool_name))
-			RETURN(-E2BIG);
+		if (cplen < 0)
+			RETURN(cplen);
 		objs = &v3->lmm_objects[0];
 	}
 	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);

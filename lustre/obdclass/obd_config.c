@@ -1257,7 +1257,7 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 	if (!new_param)
 		GOTO(out_nocfg, new_cfg = ERR_PTR(-ENOMEM));
 
-	strlcpy(new_param, new_name, new_len);
+	strscpy(new_param, new_name, new_len);
 	if (value)
 		strcat(new_param, value);
 

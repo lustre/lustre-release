@@ -113,7 +113,7 @@ static void mdc_pack_name(struct req_capsule *pill,
 		buf[name_len] = '\0';
 		return;
 	}
-	cpy_len = strlcpy(buf, name, buf_size);
+	cpy_len = strscpy(buf, name, buf_size);
 
 	LASSERT(lu_name_is_valid_2(buf, cpy_len));
 	if (cpy_len != name_len)
@@ -175,7 +175,7 @@ void mdc_file_sepol_pack(struct req_capsule *pill, struct sptlrpc_sepol *p)
 					RCL_CLIENT);
 
 	LASSERT(buf_size == p->ssp_sepol_size);
-	strlcpy(buf, p->ssp_sepol, p->ssp_sepol_size);
+	strscpy(buf, p->ssp_sepol, p->ssp_sepol_size);
 }
 
 void mdc_readdir_pack(struct req_capsule *pill, __u64 pgoff, size_t size,

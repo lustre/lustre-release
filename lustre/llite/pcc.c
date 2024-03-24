@@ -3020,7 +3020,7 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	if (IS_ERR(path))
 		GOTO(out_unlock, rc = PTR_ERR(path));
 
-	if (strlcpy(state->pccs_path, path, buf_len) >= buf_len)
+	if (strscpy(state->pccs_path, path, buf_len) < 0)
 		GOTO(out_unlock, rc = -ENAMETOOLONG);
 
 out_unlock:

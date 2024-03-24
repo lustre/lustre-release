@@ -221,9 +221,9 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 		RETURN(-EINVAL);
 
 	/* record who i am, it might be useful ... */
-	rc = strlcpy(qmt->qmt_svname, svname, sizeof(qmt->qmt_svname));
-	if (rc >= sizeof(qmt->qmt_svname))
-		RETURN(-E2BIG);
+	rc = strscpy(qmt->qmt_svname, svname, sizeof(qmt->qmt_svname));
+	if (rc < 0)
+		RETURN(rc);
 
 	/* look-up the obd_device associated with the qmt */
 	obd = class_name2obd(qmt->qmt_svname);

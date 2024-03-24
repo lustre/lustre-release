@@ -342,7 +342,7 @@ dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
 	dfh->dfh_dt = dt;
 	dfh->dfh_fid = fid;
 
-	strlcpy(info->dti_buf, path, sizeof(info->dti_buf));
+	strscpy(info->dti_buf, path, sizeof(info->dti_buf));
 
 	result = dt->dd_ops->dt_root_get(env, dt, fid);
 	if (result == 0) {

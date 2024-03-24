@@ -241,10 +241,10 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	if (pool_name) {
 		size_t pool_name_len;
 
-		pool_name_len = strlcpy(lsme->lsme_pool_name, pool_name,
+		pool_name_len = strscpy(lsme->lsme_pool_name, pool_name,
 					sizeof(lsme->lsme_pool_name));
-		if (pool_name_len >= sizeof(lsme->lsme_pool_name))
-			GOTO(out_lsme, rc = -E2BIG);
+		if (pool_name_len < 0)
+			GOTO(out_lsme, rc = pool_name_len);
 	}
 
 	/* with Data-on-MDT set maxbytes to stripe size */

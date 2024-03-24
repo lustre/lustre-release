@@ -625,7 +625,9 @@ AC_DEFUN([LIBCFS_SRC_STRSCPY_EXISTS], [
 	LB2_LINUX_TEST_SRC([strscpy_exists], [
 		#include <linux/string.h>
 	],[
-		strscpy((char *)NULL, (const char *)NULL, 0);
+		char buf[129];
+
+		strscpy(buf, "something", sizeof(buf));
 	],[-Werror])
 ])
 AC_DEFUN([LIBCFS_STRSCPY_EXISTS], [

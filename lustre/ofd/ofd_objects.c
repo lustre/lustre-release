@@ -206,7 +206,7 @@ static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
 	dcb = &opc->opc_cb;
 	dcb->dcb_func = ofd_cb_precreate;
 	INIT_LIST_HEAD(&dcb->dcb_linkage);
-	strlcpy(dcb->dcb_name, "ofd_cb_precreate", sizeof(dcb->dcb_name));
+	strscpy(dcb->dcb_name, "ofd_cb_precreate", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);
 	if (rc) {

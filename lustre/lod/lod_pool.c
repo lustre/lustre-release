@@ -466,7 +466,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	if (new_pool == NULL)
 		RETURN(-ENOMEM);
 
-	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
+	strscpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
 	new_pool->pool_spill_target[0] = '\0';
 	atomic_set(&new_pool->pool_spill_hit, 0);
 	new_pool->pool_lobd = obd;

@@ -848,8 +848,9 @@ int server_name2svname(const char *label, char *svname, const char **endptr,
 	if (endptr != NULL)
 		*endptr = dash;
 
-	if (strlcpy(svname, dash + 1, svsize) >= svsize)
-		return -E2BIG;
+	rc = strscpy(svname, dash + 1, svsize);
+	if (rc < 0)
+		return rc;
 
 	return 0;
 }

@@ -1106,13 +1106,13 @@ static int osd_mount(const struct lu_env *env,
 	if (mntdev == NULL || svname == NULL)
 		RETURN(-EINVAL);
 
-	rc = strlcpy(o->od_mntdev, mntdev, sizeof(o->od_mntdev));
-	if (rc >= sizeof(o->od_mntdev))
-		RETURN(-E2BIG);
+	rc = strscpy(o->od_mntdev, mntdev, sizeof(o->od_mntdev));
+	if (rc < 0)
+		RETURN(rc);
 
-	rc = strlcpy(o->od_svname, svname, sizeof(o->od_svname));
-	if (rc >= sizeof(o->od_svname))
-		RETURN(-E2BIG);
+	rc = strscpy(o->od_svname, svname, sizeof(o->od_svname));
+	if (rc < 0)
+		RETURN(rc);
 
 	opts = lustre_cfg_string(cfg, 3);
 
