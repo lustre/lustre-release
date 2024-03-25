@@ -1071,7 +1071,7 @@ int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 static int ll_options(char *options, struct super_block *sb)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	char *s2, *s1, *opts;
+	char *s2, *s1, *opts, *orig_opts;
 	int err = 0;
 
 	ENTRY;
@@ -1079,7 +1079,7 @@ static int ll_options(char *options, struct super_block *sb)
 		RETURN(0);
 
 	/* Don't stomp on lmd_opts */
-	opts = kstrdup(options, GFP_KERNEL);
+	orig_opts = opts = kstrdup(options, GFP_KERNEL);
 	if (!opts)
 		RETURN(-ENOMEM);
 	s1 = opts;
@@ -1244,7 +1244,7 @@ static int ll_options(char *options, struct super_block *sb)
 			break;
 		}
         }
-	kfree(opts);
+	kfree(orig_opts);
 	RETURN(err);
 }
 
