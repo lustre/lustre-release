@@ -83,6 +83,7 @@ static void test_one(struct ldlm_resource *res,
 enum tests {
 	TEST_NO_OVERLAP,
 	TEST_WHOLE_FILE,
+	TEST_SAME_RANGE,
 
 	NUM_TESTS,
 };
@@ -123,12 +124,12 @@ static int ldlm_extent_init(void)
 	pr_info("ldlm_extent: sizeof(struct ldlm_lock)=%lu\n",
 	       sizeof(struct ldlm_lock));
 	for (tnum = 0; tnum < NUM_TESTS; tnum++) {
-		long sum = 0, sumsq = 0, ns;
-		int min_iters = 10;
+		long sum = 0, sumsq = 0, nsec;
+		int min_iters = 10, lk_num, it_num;
 		int loops;
 
 		pr_info("ldlm_extent: start test %d\n", tnum);
-		for (loops = 0; loops < 30 ; loops++) {
+		for (loops = 0; loops < 10 ; loops++) {
 			struct ldlm_lock *lock;
 			ktime_t start, now;
 			LIST_HEAD(list);
@@ -157,6 +158,17 @@ static int ldlm_extent_init(void)
 						 prandom_u32_state(&rstate), 1,
 						 LCK_PR, &cnt, max, &list);
 					break;
+				case TEST_SAME_RANGE:
+					max = min(1000000, min_iters);
+					if (i < max * 16 / 15)
+						max = i * 15 / 16;
+					test_one(res, 400, 300, LCK_PR,
+						 &cnt, max, &list);
+					lock = list_first_entry_or_null(&list,
+						struct ldlm_lock, l_lru);
+					if (lock)
+						ldlm_extent_shift_kms(lock, 1000);
+					break;
 				case NUM_TESTS:
 					break;
 				}
@@ -170,19 +182,33 @@ static int ldlm_extent_init(void)
 				min_iters = i;
 			else if (i > min_iters * 3)
 				min_iters *= 10;
-			ns = ktime_to_ns(ktime_sub(now, start)) / i;
-			sum += ns;
-			sumsq += ns * ns;
-			pr_info("ldlm_extent: test %d loop=%d min_iters=%d iters=%d ns/iter=%lu\n",
-				tnum, loops, min_iters, i, ns);
+			nsec = ktime_to_ns(ktime_sub(now, start)) / i;
+			sum += nsec;
+			sumsq += nsec * nsec;
 
+			lk_num = it_num = 0;
 			while ((lock = list_first_entry_or_null(&list,
 						struct ldlm_lock, l_lru))
 			       != NULL) {
+#ifdef to_ldlm_interval
+				struct ldlm_interval *n = lock->l_tree_node;
+
+				if (n && interval_is_intree(&n->li_node) &&
+				    lock->l_sl_policy.next == &n->li_group &&
+				    lock->l_sl_policy.prev == &n->li_group)
+					it_num++;
+#else
+				if (!RB_EMPTY_NODE(&lock->l_rb) &&
+				    list_empty(&lock->l_same_extent))
+					it_num++;
+#endif
 				list_del_init(&lock->l_lru);
 				ldlm_lock_cancel(lock);
 				ldlm_lock_put(lock);
+				lk_num++;
 			}
+			pr_info("ldlm_extent: test %d loop=%d min_iters=%d iters=%d ns/iter=%lu (%d/%d)\n",
+				tnum, loops, min_iters, i, nsec, lk_num, it_num);
 		}
 
 		pr_info("ldlm_extent: test %d ended - loops=%d min_iters=%d mean=%ld stddev=%ld\n",
