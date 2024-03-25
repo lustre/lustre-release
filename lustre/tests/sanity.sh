@@ -18724,7 +18724,6 @@ test_160n() {
 		skip "Need MDS version at least 2.14.51"
 	local cl_users
 	local cl_user1
-	local cl_user2
 	local pid1
 	local first_rec
 	local last_rec=0
@@ -18763,9 +18762,9 @@ test_160n() {
 	pid1=$!
 	sleep 2
 	__changelog_clear mds1 $cl_user1 0 ||
-		error "fail to cancel record for $cl_user1"
+		error "fail to cancel record for $cl_user1 (forground)"
 	wait $pid1
-	[[ $? -eq 0 ]] || error "fail to cancel record for $cl_user2"
+	[[ $? -eq 0 ]] || error "fail to cancel record for $cl_user1 (background)"
 }
 run_test 160n "Changelog destroy race"
 
