@@ -227,6 +227,14 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  	}
  
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
+@@ -2800,6 +2840,7 @@ int ext4_mb_release(struct super_block *sb)
+ 		kvfree(group_info);
+ 		rcu_read_unlock();
+ 	}
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
+ 	iput(sbi->s_buddy_cache);
 @@ -2963,9 +3107,9 @@ ext4_mb_normalize_request(struct ext4_al
  				struct ext4_allocation_request *ar)
  {

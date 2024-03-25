@@ -231,6 +231,14 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	if (sbi->s_group_info) {
  		for (i = 0; i < ngroups; i++) {
+@@ -2700,6 +2740,7 @@ int ext4_mb_release(struct super_block *sb)
+ 		kvfree(group_info);
+ 		rcu_read_unlock();
+ 	}
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
+ 	iput(sbi->s_buddy_cache);
 @@ -2877,7 +2999,6 @@ ext4_mb_mark_diskspace_used(struct ext4_
  	int err, len;
  

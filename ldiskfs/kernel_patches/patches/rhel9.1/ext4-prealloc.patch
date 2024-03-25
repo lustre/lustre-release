@@ -18,19 +18,19 @@ Reviewed-by: Andreas Dilger <andreas.dilger@sun.com>
  4 files changed, 182 insertions(+), 55 deletions(-)
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index 2f1249b..4aa8ae4 100644
+index b03dbd7..78d3176 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1294,6 +1294,8 @@ extern void ext4_set_bits(void *bm, int cur, int len);
- /* Metadata checksum algorithm codes */
- #define EXT4_CRC32C_CHKSUM		1
+@@ -1291,6 +1291,8 @@ extern void mb_set_bits(void *bm, int cur, int len);
+ #define EXT4_DFL_MAX_MNT_COUNT		20	/* Allow 20 mounts */
+ #define EXT4_DFL_CHECKINTERVAL		0	/* Don't use interval check */
  
 +#define EXT4_MAX_PREALLOC_TABLE	64
 +
  /*
-  * Structure of the super block
+  * Behaviour when detecting errors
   */
-@@ -1557,11 +1559,13 @@ struct ext4_sb_info {
+@@ -1597,11 +1599,13 @@ struct ext4_sb_info {
  	/* tunables */
  	unsigned long s_stripe;
  	unsigned int s_mb_max_linear_groups;
@@ -45,8 +45,8 @@ index 2f1249b..4aa8ae4 100644
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_mb_max_inode_prealloc;
  	unsigned int s_max_dir_size_kb;
-@@ -2888,6 +2892,7 @@ int ext4_fc_commit(journal_t *journal, tid_t commit_tid);
- int __init ext4_fc_init_dentry_cache(void);
+@@ -2940,6 +2944,7 @@ int ext4_fc_record_regions(struct super_block *sb, int ino,
+ 			   int len, int replay);
  
  /* mballoc.c */
 +extern const struct proc_ops ext4_seq_prealloc_table_fops;
@@ -54,10 +54,10 @@ index 2f1249b..4aa8ae4 100644
  extern const struct seq_operations ext4_mb_seq_structs_summary_ops;
  extern long ext4_mb_stats;
 diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index bf6a22c..bffdf63 100644
+index 6723622..2ed00ae 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -2730,6 +2730,9 @@ static int ext4_writepages(struct address_space *mapping,
+@@ -2720,6 +2720,9 @@ static int ext4_writepages(struct address_space *mapping,
  						PAGE_SIZE >> inode->i_blkbits);
  	}
  
@@ -68,10 +68,10 @@ index bf6a22c..bffdf63 100644
  		range_whole = 1;
  
 diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
-index 349fabe..06c583d 100644
+index 8164480..94a299b 100644
 --- a/fs/ext4/mballoc.c
 +++ b/fs/ext4/mballoc.c
-@@ -3050,6 +3050,99 @@ const struct seq_operations ext4_mb_seq_structs_summary_ops = {
+@@ -3070,6 +3070,99 @@ const struct seq_operations ext4_mb_seq_structs_summary_ops = {
  	.show   = ext4_mb_seq_structs_summary_show,
  };
  
@@ -125,7 +125,7 @@ index 349fabe..06c583d 100644
 +					     const char __user *buf,
 +					     size_t cnt, loff_t *pos)
 +{
-+	struct ext4_sb_info *sbi = EXT4_SB(PDE_DATA(file_inode(file)));
++	struct ext4_sb_info *sbi = EXT4_SB(pde_data(file_inode(file)));
 +	char str[128];
 +	int rc;
 +
@@ -157,7 +157,7 @@ index 349fabe..06c583d 100644
 +
 +static int mb_prealloc_table_seq_open(struct inode *inode, struct file *file)
 +{
-+	return single_open(file, mb_prealloc_table_seq_show, PDE_DATA(inode));
++	return single_open(file, mb_prealloc_table_seq_show, pde_data(inode));
 +}
 +
 +const struct proc_ops ext4_seq_prealloc_table_fops = {
@@ -171,7 +171,7 @@ index 349fabe..06c583d 100644
  static struct kmem_cache *get_groupinfo_cache(int blocksize_bits)
  {
  	int cache_index = blocksize_bits - EXT4_MIN_BLOCK_LOG_SIZE;
-@@ -3311,7 +3404,7 @@ static int ext4_groupinfo_create_slab(size_t size)
+@@ -3382,7 +3475,7 @@ static void ext4_discard_work(struct work_struct *work)
  int ext4_mb_init(struct super_block *sb)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
@@ -180,7 +180,7 @@ index 349fabe..06c583d 100644
  	unsigned offset, offset_incr;
  	unsigned max;
  	int ret;
-@@ -3380,7 +3473,6 @@ int ext4_mb_init(struct super_block *sb)
+@@ -3454,7 +3547,6 @@ int ext4_mb_init(struct super_block *sb)
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
@@ -188,7 +188,7 @@ index 349fabe..06c583d 100644
  	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
  	sbi->s_mb_max_inode_prealloc = MB_DEFAULT_MAX_INODE_PREALLOC;
  	/*
-@@ -3405,9 +3497,29 @@ int ext4_mb_init(struct super_block *sb)
+@@ -3479,9 +3571,29 @@ int ext4_mb_init(struct super_block *sb)
  	 * RAID stripe size so that preallocations don't fragment
  	 * the stripes.
  	 */
@@ -221,23 +221,15 @@ index 349fabe..06c583d 100644
  	}
  
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
-@@ -3441,6 +3553,7 @@ out_free_locality_groups:
+@@ -3515,6 +3627,7 @@ out_free_locality_groups:
  out:
  	kfree(sbi->s_mb_largest_free_orders);
  	kfree(sbi->s_mb_largest_free_orders_locks);
 +	kfree(sbi->s_mb_prealloc_table);
  	kfree(sbi->s_mb_offsets);
- 	sbi->s_mb_offsets = NULL;
- 	kfree(sbi->s_mb_maxs);
-@@ -3600,6 +3640,7 @@ int ext4_mb_release(struct super_block *sb)
- 		kvfree(group_info);
- 		rcu_read_unlock();
- 	}
-+	kfree(sbi->s_mb_prealloc_table);
- 	kfree(sbi->s_mb_offsets);
  	kfree(sbi->s_mb_maxs);
  	iput(sbi->s_buddy_cache);
-@@ -3713,7 +3826,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
+@@ -3783,7 +3896,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
  	int err, len;
  
  	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
@@ -245,7 +237,7 @@ index 349fabe..06c583d 100644
  
  	sb = ac->ac_sb;
  	sbi = EXT4_SB(sb);
-@@ -3922,13 +4034,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4026,13 +4138,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
@@ -262,7 +254,7 @@ index 349fabe..06c583d 100644
  
  	/* do normalize only data requests, metadata requests
  	   do not need preallocation */
-@@ -3957,51 +4070,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4061,51 +4174,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  	size = size << bsbits;
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
@@ -349,9 +341,9 @@ index 349fabe..06c583d 100644
 +
 +	orig_size = size;
  
- 	/* don't cover already allocated blocks in selected range */
- 	if (ar->pleft && start <= ar->lleft) {
-@@ -4083,7 +4191,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+ 	/*
+ 	 * For tiny groups (smaller than 8MB) the chosen allocation
+@@ -4196,7 +4304,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  			 (unsigned long) ac->ac_o_ex.fe_logical);
  		BUG();
  	}
@@ -359,7 +351,7 @@ index 349fabe..06c583d 100644
  
  	/* now prepare goal request */
  
-@@ -5101,11 +5208,19 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
+@@ -5199,11 +5306,19 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
  
  	/* don't use group allocation for large files */
  	size = max(size, isize);
@@ -381,7 +373,7 @@ index 349fabe..06c583d 100644
  	/*
  	 * locality group prealloc space are per cpu. The reason for having
 diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
-index 2314f74..5fc52fc 100644
+index d233c24..9d2254f 100644
 --- a/fs/ext4/sysfs.c
 +++ b/fs/ext4/sysfs.c
 @@ -212,7 +212,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
@@ -394,7 +386,7 @@ index 2314f74..5fc52fc 100644
  EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
  EXT4_RW_ATTR_SBI_UI(mb_max_inode_prealloc, s_mb_max_inode_prealloc);
  EXT4_RW_ATTR_SBI_UI(mb_max_linear_groups, s_mb_max_linear_groups);
-@@ -261,7 +262,8 @@ static struct attribute *ext4_attrs[] = {
+@@ -262,7 +263,8 @@ static struct attribute *ext4_attrs[] = {
  	ATTR_LIST(mb_max_to_scan),
  	ATTR_LIST(mb_min_to_scan),
  	ATTR_LIST(mb_order2_req),
@@ -404,7 +396,7 @@ index 2314f74..5fc52fc 100644
  	ATTR_LIST(mb_group_prealloc),
  	ATTR_LIST(mb_max_inode_prealloc),
  	ATTR_LIST(mb_max_linear_groups),
-@@ -541,6 +543,8 @@ int ext4_register_sysfs(struct super_block *sb)
+@@ -543,6 +545,8 @@ int ext4_register_sysfs(struct super_block *sb)
  					ext4_fc_info_show, sb);
  		proc_create_seq_data("mb_groups", S_IRUGO, sbi->s_proc,
  				&ext4_mb_seq_groups_ops, sb);
@@ -414,5 +406,5 @@ index 2314f74..5fc52fc 100644
  				ext4_seq_mb_stats_show, sb);
  		proc_create_seq_data("mb_structs_summary", 0444, sbi->s_proc,
 -- 
-2.31.1
+2.34.1
 
