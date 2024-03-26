@@ -1340,9 +1340,9 @@ AC_DEFUN([LC_SRC_IOV_ITER_RW], [
 	])
 ])
 AC_DEFUN([LC_IOV_ITER_RW], [
-	LB2_MSG_LINUX_TEST_RESULT([if iov_iter_rw exist],
+	LB2_MSG_LINUX_TEST_RESULT([if iov_iter_rw exists],
 	[iov_iter_rw], [
-		AC_DEFINE(HAVE_IOV_ITER_RW, 1, [iov_iter_rw exist])
+		AC_DEFINE(HAVE_IOV_ITER_RW, 1, [iov_iter_rw exists])
 	])
 ]) # LC_IOV_ITER_RW
 
@@ -1398,7 +1398,8 @@ AC_DEFUN([LC_SRC_SYMLINK_OPS_USE_NAMEIDATA], [
 	])
 ])
 AC_DEFUN([LC_SYMLINK_OPS_USE_NAMEIDATA], [
-	LB2_MSG_LINUX_TEST_RESULT([if symlink inode operations have struct nameidata argument],
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if symlink inode operations have struct nameidata argument],
 	[symlink_use_nameidata], [
 		AC_DEFINE(HAVE_SYMLINK_OPS_USE_NAMEIDATA, 1,
 			[symlink inode operations need struct nameidata argument])
@@ -1525,7 +1526,8 @@ AC_DEFUN([LC_SRC_HAVE_XATTR_HANDLER_SIMPLIFIED], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_XATTR_HANDLER_SIMPLIFIED], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct xattr_handler' functions pass in handler pointer],
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if 'struct xattr_handler' functions pass in handler pointer],
 	[xattr_handler_simplified], [
 		AC_DEFINE(HAVE_XATTR_HANDLER_SIMPLIFIED, 1,
 			[handler pointer is parameter])
@@ -2459,7 +2461,7 @@ AC_DEFUN([LC_SRC_BI_STATUS], [
 	])
 ])
 AC_DEFUN([LC_BI_STATUS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'bi_status' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'bi_status' exists],
 	[bi_status], [
 		AC_DEFINE(HAVE_BI_STATUS, 1, ['bi_status' is available])
 	])
@@ -2498,7 +2500,7 @@ AC_DEFUN([LC_SRC_BI_BDEV], [
 	])
 ])
 AC_DEFUN([LC_BI_BDEV], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'bi_bdev' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'bi_bdev' exists],
 	[bi_bdev], [
 		AC_DEFINE(HAVE_BI_BDEV, 1, ['bi_bdev' is available])
 	])
@@ -2787,10 +2789,11 @@ AC_DEFUN([LC_SRC_HAVE_BVEC_ITER_ALL], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_BVEC_ITER_ALL], [
-	LB2_MSG_LINUX_TEST_RESULT([if bvec_iter_all exists for multi-page bvec iternation],
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if bvec_iter_all exists for multi-page bvec iteration],
 	[struct_bvec_iter_all], [
 		AC_DEFINE(HAVE_BVEC_ITER_ALL, 1,
-			[if bvec_iter_all exists for multi-page bvec iternation])
+			[if bvec_iter_all exists for multi-page bvec iteration])
 	])
 ]) # LC_HAVE_BVEC_ITER_ALL
 
@@ -3233,7 +3236,8 @@ AC_DEFUN([LC_SRC_HAVE_USER_NAMESPACE_ARG], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_USER_NAMESPACE_ARG], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'inode_operations' members have user namespace argument],
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if 'inode_operations' members have user namespace argument],
 	[inode_ops_has_user_namespace_argument], [
 		AC_DEFINE(HAVE_USER_NAMESPACE_ARG, 1,
 			['inode_operations' members have user namespace argument])

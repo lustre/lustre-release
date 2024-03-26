@@ -78,7 +78,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_GET_TS64], [
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_GET_TS64], [
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_ts64' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_ts64' exist],
 	[ktime_get_ts64], [
 		AC_DEFINE(HAVE_KTIME_GET_TS64, 1,
 			['ktime_get_ts64' is available])
@@ -96,7 +96,7 @@ AC_DEFUN([LIBCFS_SRC_PREPARE_TO_WAIT_EVENT],[
 	])
 ])
 AC_DEFUN([LIBCFS_PREPARE_TO_WAIT_EVENT],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'prepare_to_wait_event' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'prepare_to_wait_event' exist],
 	[prepare_to_wait_event], [
 		AC_DEFINE(HAVE_PREPARE_TO_WAIT_EVENT, 1,
 			['prepare_to_wait_event' is available])
@@ -118,7 +118,7 @@ AC_DEFUN([LIBCFS_SRC_KERNEL_PARAM_OPS],[
 	])
 ])
 AC_DEFUN([LIBCFS_KERNEL_PARAM_OPS],[
-	LB2_MSG_LINUX_TEST_RESULT([does 'struct kernel_param_ops' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct kernel_param_ops' exist],
 	[kernel_param_ops], [
 		AC_DEFINE(HAVE_KERNEL_PARAM_OPS, 1,
 			['struct kernel_param_ops' is available])
@@ -141,7 +141,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_ADD],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_ADD],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_add' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_add' exist],
 	[ktime_add], [
 		AC_DEFINE(HAVE_KTIME_ADD, 1, [ktime_add is available])
 	])
@@ -162,7 +162,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_AFTER],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_AFTER],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_after' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_after' exist],
 	[ktime_after], [
 		AC_DEFINE(HAVE_KTIME_AFTER, 1, [ktime_after is available])
 	])
@@ -184,7 +184,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_BEFORE],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_BEFORE],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_before' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_before' exist],
 	[ktime_before], [
 		AC_DEFINE(HAVE_KTIME_BEFORE, 1, [ktime_before is available])
 	])
@@ -205,7 +205,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_COMPARE],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_COMPARE],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_compare' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_compare' exist],
 	[ktime_compare], [
 		AC_DEFINE(HAVE_KTIME_COMPARE, 1,
 			[ktime_compare is available])
@@ -226,7 +226,7 @@ AC_DEFUN([LIBCFS_SRC_SHRINKER_COUNT],[
 	])
 ])
 AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
-	LB2_MSG_LINUX_TEST_RESULT([shrinker has 'count_objects'],
+	LB2_MSG_LINUX_TEST_RESULT([if shrinker has 'count_objects'],
 	[shrinker_count_objects], [
 		AC_DEFINE(HAVE_SHRINKER_COUNT, 1,
 			[shrinker has count_objects member])
@@ -247,7 +247,7 @@ AC_DEFUN([LIBCFS_SRC_MATCH_WILDCARD],[
 	])
 ])
 AC_DEFUN([LIBCFS_MATCH_WILDCARD],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'match_wildcard' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'match_wildcard' exist],
 	[match_wildcard], [
 		AC_DEFINE(HAVE_MATCH_WILDCARD, 1,
 			[match_wildcard() is available])
@@ -316,7 +316,7 @@ AC_DEFUN([LIBCFS_SRC_HAVE_NS_TO_TIMESPEC64],[
 	])
 ])
 AC_DEFUN([LIBCFS_HAVE_NS_TO_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([does 'ns_to_timespec64()' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'ns_to_timespec64()' exist],
 	[kernel_old_timeval], [
 		AC_DEFINE(HAVE_NS_TO_TIMESPEC64, 1,
 			[ns_to_timespec64() is available])
@@ -337,7 +337,7 @@ AC_DEFUN([LIBCFS_SRC_HAVE_GLOB],[
 	],[-Werror])
 ])
 AC_DEFUN([LIBCFS_HAVE_GLOB],[
-	LB2_MSG_LINUX_TEST_RESULT([does 'glob_match()' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'glob_match()' exist],
 	[glob_match], [
 		AC_DEFINE(HAVE_GLOB, 1,
 			[glob_match() is available])
@@ -356,7 +356,7 @@ AC_DEFUN([LIBCFS_SRC_HLIST_ADD_AFTER],[
 	])
 ])
 AC_DEFUN([LIBCFS_HLIST_ADD_AFTER],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'hlist_add_after' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'hlist_add_after' exist],
 	[hlist_add_after], [
 		AC_DEFINE(HAVE_HLIST_ADD_AFTER, 1,
 			[hlist_add_after is available])
@@ -377,7 +377,7 @@ AC_DEFUN([LIBCFS_SRC_TIMESPEC64],[
 	])
 ])
 AC_DEFUN([LIBCFS_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([does 'struct timespec64' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct timespec64' exist],
 	[timespec64], [
 		AC_DEFINE(HAVE_TIMESPEC64, 1,
 			['struct timespec64' is available])
@@ -397,7 +397,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_TS64],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_TS64],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_real_ts64' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ts64' exist],
 	[ktime_get_real_ts64], [
 		AC_DEFINE(HAVE_KTIME_GET_REAL_TS64, 1,
 			['ktime_get_real_ts64' is available])
@@ -418,7 +418,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_SECONDS],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_SECONDS],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_real_ts64' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ts64' exist],
 	[ktime_get_real_seconds], [
 		AC_DEFINE(HAVE_KTIME_GET_REAL_SECONDS, 1,
 			['ktime_get_real_seconds' is available])
@@ -460,7 +460,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_NS],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_NS],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_real_ns' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ns' exist],
 	[ktime_get_real_ns], [],[
 		AC_DEFINE(NEED_KTIME_GET_REAL_NS, 1,
 			['ktime_get_real_ns' is not available])
@@ -482,7 +482,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_TO_TIMESPEC64],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_TO_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_to_timespec64' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_to_timespec64' exist],
 	[ktime_to_timespec64], [
 		AC_DEFINE(HAVE_KTIME_TO_TIMESPEC64, 1,
 			['ktime_to_timespec64' is available])
@@ -502,7 +502,7 @@ AC_DEFUN([LIBCFS_SRC_TIMESPEC64_SUB],[
 	])
 ])
 AC_DEFUN([LIBCFS_TIMESPEC64_SUB],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'timespec64_sub' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'timespec64_sub' exist],
 	[timespec64_sub], [
 		AC_DEFINE(HAVE_TIMESPEC64_SUB, 1,
 			['timespec64_sub' is available])
@@ -523,7 +523,7 @@ AC_DEFUN([LIBCFS_SRC_TIMESPEC64_TO_KTIME],[
 	])
 ])
 AC_DEFUN([LIBCFS_TIMESPEC64_TO_KTIME],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'timespec64_to_ktime' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'timespec64_to_ktime' exist],
 	[timespec64_to_ktime], [
 		AC_DEFINE(HAVE_TIMESPEC64_TO_KTIME, 1,
 			['timespec64_to_ktime' is available])
@@ -543,7 +543,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_GET_SECONDS],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_GET_SECONDS],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_seconds' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_seconds' exist],
 	[ktime_get_seconds], [
 		AC_DEFINE(HAVE_KTIME_GET_SECONDS, 1,
 			['ktime_get_seconds' is available])
@@ -562,7 +562,7 @@ AC_DEFUN([LIBCFS_SRC_WAIT_WOKEN],[
 	])
 ])
 AC_DEFUN([LIBCFS_WAIT_WOKEN],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'wait_woken' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'wait_woken' exist],
 	[wait_woken], [
 		AC_DEFINE(HAVE_WAIT_WOKEN, 1,
 			['wait_woken, is available'])
@@ -584,7 +584,7 @@ AC_DEFUN([LIBCFS_SRC_KTIME_MS_DELTA],[
 	])
 ])
 AC_DEFUN([LIBCFS_KTIME_MS_DELTA],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_ms_delta' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_ms_delta' exist],
 	[ktime_ms_delta], [
 		AC_DEFINE(HAVE_KTIME_MS_DELTA, 1,
 			['ktime_ms_delta' is available])
@@ -606,7 +606,7 @@ AC_DEFUN([LIBCFS_SRC_KERNEL_PARAM_LOCK],[
 	])
 ])
 AC_DEFUN([LIBCFS_KERNEL_PARAM_LOCK],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'kernel_param_[un]lock' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'kernel_param_[un]lock' exist],
 	[kernel_param_lock], [
 		AC_DEFINE(HAVE_KERNEL_PARAM_LOCK, 1,
 			['kernel_param_[un]lock' is available])
@@ -652,7 +652,7 @@ AC_DEFUN([LIBCFS_SRC_HAVE_TOPOLOGY_SIBLING_CPUMASK],[
 	])
 ])
 AC_DEFUN([LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'topology_sibling_cpumask' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'topology_sibling_cpumask' exist],
 	[topology_sibling_cpumask], [
 		AC_DEFINE(HAVE_TOPOLOGY_SIBLING_CPUMASK, 1,
 			[topology_sibling_cpumask is available])
@@ -715,7 +715,7 @@ AC_DEFUN([LIBCFS_SRC_CRYPTO_HASH_HELPERS], [
 	])
 ])
 AC_DEFUN([LIBCFS_CRYPTO_HASH_HELPERS], [
-	LB2_MSG_LINUX_TEST_RESULT([does crypto hash helper functions exist],
+	LB2_MSG_LINUX_TEST_RESULT([if crypto hash helper functions exist],
 	[crypto_hash_helpers], [
 		AC_DEFINE(HAVE_CRYPTO_HASH_HELPERS, 1,
 			[crypto hash helper functions are available])
@@ -766,7 +766,7 @@ AC_DEFUN([LIBCFS_SRC_BROKEN_HASH_64], [
 	])
 ])
 AC_DEFUN([LIBCFS_BROKEN_HASH_64], [
-	LB2_MSG_LINUX_TEST_RESULT([kernel has fixed hash_64()],
+	LB2_MSG_LINUX_TEST_RESULT([if kernel has fixed hash_64()],
 	[broken_hash_64], [
 		AC_DEFINE(HAVE_BROKEN_HASH_64, 1, [kernel hash_64() is broken])
 	])
@@ -872,7 +872,7 @@ AC_DEFUN([LIBCFS_SRC_HAVE_NR_ZONE_WRITE_PENDING], [
 	],[-Werror])
 ])
 AC_DEFUN([LIBCFS_HAVE_NR_ZONE_WRITE_PENDING], [
-	LB2_MSG_LINUX_TEST_RESULT([if NR_ZONE_WRITE_PENDING is available],
+	LB2_MSG_LINUX_TEST_RESULT([if NR_ZONE_WRITE_PENDING enum is available],
 	[nr_zone_write_pending_exists], [
 		AC_DEFINE(HAVE_NR_ZONE_WRITE_PENDING, 1,
 			[NR_ZONE_WRITE_PENDING is still in use.])
@@ -937,7 +937,7 @@ AC_DEFUN([LIBCFS_SRC_RHLTABLE], [
 	])
 ])
 AC_DEFUN([LIBCFS_RHLTABLE], [
-	LB2_MSG_LINUX_TEST_RESULT([does 'struct rhltable' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct rhltable' exist],
 	[rhtable], [
 		AC_DEFINE(HAVE_RHLTABLE, 1, [struct rhltable exist])
 	])
@@ -1808,7 +1808,7 @@ AC_DEFUN([LIBCFS_SRC_KOBJ_TYPE_DEFAULT_GROUPS],[
 	])
 ])
 AC_DEFUN([LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS],[
-	LB2_MSG_LINUX_TEST_RESULT([does struct kobj_type have 'default_groups' member],
+	LB2_MSG_LINUX_TEST_RESULT([if struct kobj_type have 'default_groups' member],
 	[kobj_type_default_groups], [
 		AC_DEFINE(HAVE_KOBJ_TYPE_DEFAULT_GROUPS, 1,
 			[struct kobj_type has 'default_groups' member])
@@ -2197,7 +2197,7 @@ AC_DEFUN([LIBCFS_SRC_LINUX_FORTIFY_STRING_HEADER],[
 	],[])
 ])
 AC_DEFUN([LIBCFS_LINUX_FORTIFY_STRING_HEADER],[
-	LB2_MSG_LINUX_TEST_RESULT([Is linux/fortify-string.h header available],
+	LB2_MSG_LINUX_TEST_RESULT([if linux/fortify-string.h header available],
 	[linux_fortify_string_header], [
 		AC_DEFINE(HAVE_LINUX_FORTIFY_STRING_HEADER, 1,
 			[linux/fortify-string.h header available])
@@ -2288,7 +2288,7 @@ AC_DEFUN([LIBCFS_SRC_PARAM_SET_UINT_MINMAX],[
 	], [])
 ])
 AC_DEFUN([LIBCFS_PARAM_SET_UINT_MINMAX],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'param_set_uint_minmax' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'param_set_uint_minmax' exist],
 	[param_set_uint_minmax], [
 		AC_DEFINE(HAVE_PARAM_SET_UINT_MINMAX, 1,
 			['param_set_uint_minmax' is available])
@@ -2329,7 +2329,7 @@ AC_DEFUN([LIBCFS_SRC_PDE_DATA_EXISTS],[
 	],[])
 ])
 AC_DEFUN([LIBCFS_PDE_DATA_EXISTS],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'pde_data' exist],
+	LB2_MSG_LINUX_TEST_RESULT([if function 'pde_data' exist],
 	[pde_data], [
 		AC_DEFINE(HAVE_pde_data, 1, [function pde_data() available])
 	],[
@@ -2356,7 +2356,7 @@ AC_DEFUN([LIBCFS_SRC_BIO_ALLOC_WITH_BDEV],[
 	],[])
 ])
 AC_DEFUN([LIBCFS_BIO_ALLOC_WITH_BDEV],[
-	LB2_MSG_LINUX_TEST_RESULT([does bio_alloc() takes a struct block_device],
+	LB2_MSG_LINUX_TEST_RESULT([if bio_alloc() takes a struct block_device],
 	[bio_alloc_with_bdev], [
 		AC_DEFINE(HAVE_BIO_ALLOC_WITH_BDEV, 1,
 			[bio_alloc() takes a struct block_device])
@@ -2380,7 +2380,7 @@ AC_DEFUN([LIBCFS_SRC_TIMER_DELETE_SYNC],[
 	],[])
 ])
 AC_DEFUN([LIBCFS_TIMER_DELETE_SYNC],[
-	LB2_MSG_LINUX_TEST_RESULT([is timer_delete_sync() available],
+	LB2_MSG_LINUX_TEST_RESULT([if timer_delete_sync() is available],
 	[timer_delete_sync], [
 		AC_DEFINE(HAVE_TIMER_DELETE_SYNC, 1,
 			[timer_delete_sync() is available])
@@ -2405,7 +2405,7 @@ AC_DEFUN([LIBCFS_SRC_TIMER_DELETE],[
 	],[])
 ])
 AC_DEFUN([LIBCFS_TIMER_DELETE],[
-	LB2_MSG_LINUX_TEST_RESULT([is timer_delete() available],
+	LB2_MSG_LINUX_TEST_RESULT([if timer_delete() is available],
 	[timer_delete], [
 		AC_DEFINE(HAVE_TIMER_DELETE, 1,
 			[timer_delete() is available])
