@@ -13300,6 +13300,25 @@ test_105f() {
 }
 run_test 105f "Enqueue same range flocks"
 
+test_105g() {
+
+	(( $CLIENT_VERSION >= $(version_code 2.15.63.127) )) ||
+		skip "Need Client >= 2.15.63.127 for ldlm dump stack"
+
+	flock_is_enabled || skip_env "mount w/o flock enabled"
+	mkdir $DIR/$tdir
+	#define OBD_FAIL_LDLM_LOCK_STACK  0x32f
+	do_facet client $LCTL set_param -n \
+		ldlm.namespaces.*.dump_stack_on_error=1
+	stack_trap "do_facet client $LCTL set_param -n \
+		ldlm.namespaces.*.dump_stack_on_error=0"
+	$LCTL set_param fail_loc=0x8000032f
+	flocks_test 2 $DIR/$tdir
+	dmesg | tac | sed "/$(echo $TESTNAME | tr '_' ' ')/,$ d" |
+		grep -q "dump_stack" || error "didn't find dump_stack"
+}
+run_test 105g "ldlm_lock_debug stack test"
+
 test_106() { #bug 10921
 	test_mkdir $DIR/$tdir
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"

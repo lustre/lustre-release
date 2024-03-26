@@ -571,6 +571,12 @@ struct ldlm_namespace {
 	 */
 	unsigned int		ns_stopping:1,
 
+
+	/**
+	 * This namespace will control the stack trace log in ldlm_lock_debug
+	 */
+				ns_dump_stack_on_error:1,
+
 	/**
 	 * Flag to indicate the LRU recalc on RPC reply is in progress.
 	 * Used to limit the process by 1 thread only.
@@ -1317,10 +1323,14 @@ extern const char *ldlm_it2str(enum ldlm_intent_flags it);
  */
 #ifdef LIBCFS_DEBUG
 #define ldlm_lock_debug(msgdata, mask, cdls, lock, fmt, a...) do {      \
-	if (((mask) & D_CANTMASK) != 0 ||                               \
+	if (((mask) & D_CANTMASK) != 0 ||                \
 	    ((libcfs_debug & (mask)) != 0 &&                            \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
+	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {        \
 		_ldlm_lock_debug(lock, msgdata, fmt, ##a);              \
+		if (ldlm_lock_to_ns(lock)->ns_dump_stack_on_error &&    \
+					(mask) & D_ERROR)             \
+			dump_stack();				        \
+	}								\
 } while (0)
 
 __printf(3, 4) /* function attribute */

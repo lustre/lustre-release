@@ -532,6 +532,38 @@ static ssize_t dirty_age_limit_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(dirty_age_limit);
 
+static ssize_t dump_stack_on_error_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return snprintf(buf, sizeof(buf) - 1, "%u\n",
+				ns->ns_dump_stack_on_error);
+}
+
+static ssize_t dump_stack_on_error_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	bool tmp;
+	int err;
+
+	err = kstrtobool(buffer, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	if (tmp != 0)
+		ns->ns_dump_stack_on_error = 1;
+	else
+		ns->ns_dump_stack_on_error = 0;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dump_stack_on_error);
+
 #ifdef HAVE_SERVER_SUPPORT
 static ssize_t ctime_age_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -692,6 +724,7 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_lru_max_age.attr,
 	&lustre_attr_early_lock_cancel.attr,
 	&lustre_attr_dirty_age_limit.attr,
+	&lustre_attr_dump_stack_on_error.attr,
 #ifdef HAVE_SERVER_SUPPORT
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
@@ -970,25 +1003,26 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	atomic_set(&ns->ns_bref, 0);
 	init_waitqueue_head(&ns->ns_waitq);
 
-	ns->ns_max_nolock_size    = NS_DEFAULT_MAX_NOLOCK_BYTES;
-	ns->ns_contention_time    = NS_DEFAULT_CONTENTION_SECONDS;
-	ns->ns_contended_locks    = NS_DEFAULT_CONTENDED_LOCKS;
+	ns->ns_max_nolock_size		= NS_DEFAULT_MAX_NOLOCK_BYTES;
+	ns->ns_contention_time		= NS_DEFAULT_CONTENTION_SECONDS;
+	ns->ns_contended_locks		= NS_DEFAULT_CONTENDED_LOCKS;
 
-	ns->ns_max_parallel_ast   = LDLM_DEFAULT_PARALLEL_AST_LIMIT;
-	ns->ns_nr_unused          = 0;
-	ns->ns_max_unused         = LDLM_DEFAULT_LRU_SIZE;
-	ns->ns_cancel_batch       = LDLM_DEFAULT_LRU_SHRINK_BATCH;
-	ns->ns_recalc_pct         = LDLM_DEFAULT_SLV_RECALC_PCT;
-	ns->ns_max_age            = ktime_set(LDLM_DEFAULT_MAX_ALIVE, 0);
-	ns->ns_ctime_age_limit    = LDLM_CTIME_AGE_LIMIT;
-	ns->ns_dirty_age_limit    = ktime_set(LDLM_DIRTY_AGE_LIMIT, 0);
-	ns->ns_timeouts           = 0;
-	ns->ns_orig_connect_flags = 0;
-	ns->ns_connect_flags      = 0;
-	ns->ns_stopping           = 0;
-	ns->ns_reclaim_start	  = 0;
-	ns->ns_last_pos		  = &ns->ns_unused_list;
-	ns->ns_flags		  = 0;
+	ns->ns_max_parallel_ast		= LDLM_DEFAULT_PARALLEL_AST_LIMIT;
+	ns->ns_nr_unused		= 0;
+	ns->ns_max_unused		= LDLM_DEFAULT_LRU_SIZE;
+	ns->ns_cancel_batch		= LDLM_DEFAULT_LRU_SHRINK_BATCH;
+	ns->ns_recalc_pct		= LDLM_DEFAULT_SLV_RECALC_PCT;
+	ns->ns_max_age			= ktime_set(LDLM_DEFAULT_MAX_ALIVE, 0);
+	ns->ns_ctime_age_limit		= LDLM_CTIME_AGE_LIMIT;
+	ns->ns_dirty_age_limit		= ktime_set(LDLM_DIRTY_AGE_LIMIT, 0);
+	ns->ns_timeouts			= 0;
+	ns->ns_orig_connect_flags	= 0;
+	ns->ns_connect_flags		= 0;
+	ns->ns_stopping			= 0;
+	ns->ns_dump_stack_on_error	= 0;
+	ns->ns_reclaim_start		= 0;
+	ns->ns_last_pos			= &ns->ns_unused_list;
+	ns->ns_flags			= 0;
 
 	rc = ldlm_namespace_sysfs_register(ns);
 	if (rc) {

@@ -414,6 +414,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE 0x32c
 #define OBD_FAIL_LDLM_LOCK_REPLAY	 0x32d
 #define OBD_FAIL_LDLM_REPLAY_PAUSE	 0x32e
+#define OBD_FAIL_LDLM_LOCK_STACK         0x32f
 
 /* LOCKLESS IO */
 #define OBD_FAIL_LDLM_SET_CONTENTION     0x385

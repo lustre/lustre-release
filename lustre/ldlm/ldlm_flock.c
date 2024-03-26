@@ -671,6 +671,8 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	ENTRY;
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_LOCK_STACK))
+		LDLM_ERROR(lock, "Test ldlm error stack");
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT2, 4);
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT3)) {
 		lock_res_and_lock(lock);
