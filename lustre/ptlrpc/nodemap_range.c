@@ -156,6 +156,30 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
  * \param	end_nid			ending nid
  * \retval	matching range or NULL
  */
+static
+struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
+				  const struct lnet_nid *start_nid,
+				  const struct lnet_nid *end_nid)
+{
+	struct lu_nid_range *range;
+	lnet_nid_t nid4[2];
+
+	if (!nid_is_nid4(start_nid) || !nid_is_nid4(end_nid))
+		return NULL;
+
+	nid4[0] = lnet_nid_to_nid4(start_nid);
+	nid4[1] = lnet_nid_to_nid4(end_nid);
+
+	range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				    nid4[0], nid4[1]);
+	while (range &&
+	       (!nid_same(&range->rn_start, start_nid) ||
+		!nid_same(&range->rn_end, end_nid)))
+		range = nm_range_iter_next(range, nid4[0], nid4[1]);
+
+	return range;
+}
+
 struct lu_nid_range *range_find(struct nodemap_config *config,
 				const struct lnet_nid *start_nid,
 				const struct lnet_nid *end_nid,
@@ -164,23 +188,8 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 	struct lu_nid_range *range = NULL;
 
 	if (!netmask) {
-		struct nodemap_range_tree *nm_range_tree;
-		lnet_nid_t nid4[2];
-
-		if (!nid_is_nid4(start_nid) || !nid_is_nid4(end_nid))
-			return NULL;
-
-		nid4[0] = lnet_nid_to_nid4(start_nid);
-		nid4[1] = lnet_nid_to_nid4(end_nid);
-		nm_range_tree = &config->nmc_range_tree;
-		range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-					    nid4[0], nid4[1]);
-		while (range &&
-		       (!nid_same(&range->rn_start, start_nid) ||
-			!nid_same(&range->rn_end, end_nid)))
-			range = nm_range_iter_next(range, nid4[0], nid4[1]);
-
-		return range;
+		return __range_find(&config->nmc_range_tree,
+				    start_nid, end_nid);
 	}
 
 	if (!list_empty(&config->nmc_netmask_setup)) {
@@ -214,7 +223,7 @@ void range_destroy(struct lu_nid_range *range)
 }
 
 /*
- * insert an nid range into the interval tree
+ * insert a nid range into the interval tree
  *
  * \param	range		range to insert
  * \retval	0 on success
@@ -223,19 +232,25 @@ void range_destroy(struct lu_nid_range *range)
  * does not overlap so that each nid can belong
  * to exactly one range
  */
+static int __range_insert(struct nodemap_range_tree *nm_range_tree,
+			  struct lu_nid_range *range)
+{
+	if (nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				lnet_nid_to_nid4(&range->rn_start),
+				lnet_nid_to_nid4(&range->rn_end)))
+		return -EEXIST;
+
+	nm_range_insert(range,
+			&nm_range_tree->nmrt_range_interval_root);
+	return 0;
+}
+
 int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
 {
+	int rc = 0;
+
 	if (!range->rn_netmask) {
-		struct nodemap_range_tree *nm_range_tree;
-
-		nm_range_tree = &config->nmc_range_tree;
-		if (nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-					lnet_nid_to_nid4(&range->rn_start),
-					lnet_nid_to_nid4(&range->rn_end)))
-			return -EEXIST;
-
-		nm_range_insert(range,
-				&nm_range_tree->nmrt_range_interval_root);
+		rc = __range_insert(&config->nmc_range_tree, range);
 	} else {
 		if (range_find(config, &range->rn_start, &range->rn_end,
 			       range->rn_netmask))
@@ -243,7 +258,8 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
 
 		list_add(&range->rn_collect, &config->nmc_netmask_setup);
 	}
-	return 0;
+
+	return rc;
 }
 
 /*
@@ -252,18 +268,22 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
  *
  * \param	range		range to remove
  */
+void __range_delete(struct nodemap_range_tree *nm_range_tree,
+		    struct lu_nid_range *range)
+{
+	nm_range_remove(range,
+			&nm_range_tree->nmrt_range_interval_root);
+}
+
 void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
 {
 	list_del(&range->rn_list);
-	if (!range->rn_netmask) {
-		struct nodemap_range_tree *nm_range_tree;
 
-		nm_range_tree = &config->nmc_range_tree;
-		nm_range_remove(range,
-				&nm_range_tree->nmrt_range_interval_root);
-	} else {
+	if (!range->rn_netmask)
+		__range_delete(&config->nmc_range_tree, range);
+	else
 		list_del(&range->rn_collect);
-	}
+
 	range_destroy(range);
 }
 
@@ -272,16 +292,20 @@ void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
  *
  * \param	nid		nid to search for
  */
+static
+struct lu_nid_range *__range_search(struct nodemap_range_tree *nm_range_tree,
+				    struct lnet_nid *nid)
+{
+	return nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+				   lnet_nid_to_nid4(nid),
+				   lnet_nid_to_nid4(nid));
+}
+
 struct lu_nid_range *range_search(struct nodemap_config *config,
 				  struct lnet_nid *nid)
 {
 	if (nid_is_nid4(nid)) {
-		struct nodemap_range_tree *nm_range_tree;
-
-		nm_range_tree = &config->nmc_range_tree;
-		return nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-					   lnet_nid_to_nid4(nid),
-					   lnet_nid_to_nid4(nid));
+		return __range_search(&config->nmc_range_tree, nid);
 	}
 
 	if (!list_empty(&config->nmc_netmask_setup)) {
