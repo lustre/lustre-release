@@ -4757,7 +4757,7 @@ out_ladvise:
 		if (!S_ISREG(inode->i_mode))
 			RETURN(-EINVAL);
 
-		if (!inode_owner_or_capable(&init_user_ns, inode))
+		if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
 			RETURN(-EPERM);
 
 		OBD_ALLOC_PTR(attach);
