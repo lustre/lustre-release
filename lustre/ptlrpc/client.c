@@ -291,7 +291,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 	LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
 	LASSERT(desc->bd_frag_ops != NULL);
 
-	sptlrpc_enc_pool_put_pages(desc);
+	sptlrpc_pool_put_desc_pages(desc);
 
 	if (desc->bd_export)
 		class_export_put(desc->bd_export);
@@ -1673,7 +1673,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 	/* do not try to go further if there is not enough memory in enc_pool */
 	if (req->rq_sent && req->rq_bulk)
 		if (req->rq_bulk->bd_iov_count >
-		    sptlrpc_enc_pool_get_free_pages(PAGES_POOL) &&
+		    sptlrpc_pool_get_free_pages(PAGES_POOL) &&
 		    pool_is_at_full_capacity())
 			RETURN(-ENOMEM);
 

@@ -3387,7 +3387,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		rc = llcrypt_ioctl_add_key(file, uarg);
 #ifdef CONFIG_LL_ENCRYPTION
 		if (!rc && S_ISDIR(inode->i_mode))
-			sptlrpc_enc_pool_add_user();
+			sptlrpc_pool_add_user();
 #endif
 		RETURN(rc);
 	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:

@@ -136,7 +136,7 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
 			if (desc->bd_iov_count == 0)
 				RETURN(0);
 
-			rc = sptlrpc_enc_pool_get_pages(desc);
+			rc = sptlrpc_pool_get_desc_pages(desc);
 			if (rc) {
 				CERROR("bulk write: failed to allocate "
 				       "encryption pages: %d\n", rc);
@@ -302,7 +302,7 @@ static int gss_prep_bulk(struct ptlrpc_bulk_desc *desc,
         if (desc->bd_iov_count == 0)
                 return 0;
 
-        rc = sptlrpc_enc_pool_get_pages(desc);
+        rc = sptlrpc_pool_get_desc_pages(desc);
         if (rc)
                 return rc;
 
@@ -491,7 +491,7 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
                         break;
                 }
 
-                rc = sptlrpc_enc_pool_get_pages(desc);
+                rc = sptlrpc_pool_get_desc_pages(desc);
                 if (rc) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("bulk read: failed to allocate encryption "
