@@ -146,6 +146,12 @@ __u16 obd_get_max_mod_rpcs_in_flight(struct client_obd *cli);
 int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max);
 int obd_mod_rpc_stats_seq_show(struct client_obd *cli, struct seq_file *seq);
 
+/* page_pools.c */
+int  sptlrpc_pool_init(void);
+void sptlrpc_pool_fini(void);
+int encrypt_page_pools_seq_show(struct seq_file *m, void *v);
+int page_pools_seq_show(struct seq_file *m, void *v);
+
 __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc);
 void obd_put_mod_rpc_slot(struct client_obd *cli, __u32 opc, __u16 tag);
 

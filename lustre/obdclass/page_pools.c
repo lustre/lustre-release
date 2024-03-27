@@ -28,7 +28,7 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/ptlrpc/sec_bulk.c
+ * lustre/obdclass/page_pools.c
  *
  * Author: Eric Mei <ericm@clusterfs.com>
  */
@@ -38,15 +38,12 @@
 #include <libcfs/linux/linux-mem.h>
 
 #include <obd.h>
-#include <obd_cksum.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_dlm.h>
 #include <lustre_sec.h>
-
-#include "ptlrpc_internal.h"
 
 /* we have a pool for every power of 2 number of pages <= MAX_BRW_BITS.
  * most pools will be unused, but that's OK - unused pools are very cheap
@@ -189,6 +186,7 @@ int encrypt_page_pools_seq_show(struct seq_file *m, void *v)
 
 	return 0;
 }
+EXPORT_SYMBOL(encrypt_page_pools_seq_show);
 
 /*
  * /sys/kernel/debug/lustre/sptlrpc/page_pools
@@ -249,6 +247,7 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(page_pools_seq_show);
 
 static void pool_release_free_pages(long npages, struct ptlrpc_page_pool *pool)
 {
@@ -896,6 +895,7 @@ void sptlrpc_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
 		       desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
 	desc->bd_enc_vec = NULL;
 }
+EXPORT_SYMBOL(sptlrpc_pool_put_desc_pages);
 
 void sptlrpc_pool_put_pages_array(struct page **pa, unsigned int count)
 {
@@ -1076,6 +1076,7 @@ fail:
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(sptlrpc_pool_init);
 
 void sptlrpc_pool_fini(void)
 {
@@ -1114,110 +1115,4 @@ void sptlrpc_pool_fini(void)
 
 	OBD_FREE(page_pools, POOLS_COUNT * sizeof(*page_pools));
 }
-
-static int cfs_hash_alg_id[] = {
-	[BULK_HASH_ALG_NULL]	= CFS_HASH_ALG_NULL,
-	[BULK_HASH_ALG_ADLER32]	= CFS_HASH_ALG_ADLER32,
-	[BULK_HASH_ALG_CRC32]	= CFS_HASH_ALG_CRC32,
-	[BULK_HASH_ALG_MD5]	= CFS_HASH_ALG_MD5,
-	[BULK_HASH_ALG_SHA1]	= CFS_HASH_ALG_SHA1,
-	[BULK_HASH_ALG_SHA256]	= CFS_HASH_ALG_SHA256,
-	[BULK_HASH_ALG_SHA384]	= CFS_HASH_ALG_SHA384,
-	[BULK_HASH_ALG_SHA512]	= CFS_HASH_ALG_SHA512,
-};
-const char *sptlrpc_get_hash_name(__u8 hash_alg)
-{
-	return cfs_crypto_hash_name(cfs_hash_alg_id[hash_alg]);
-}
-
-__u8 sptlrpc_get_hash_alg(const char *algname)
-{
-	return cfs_crypto_hash_alg(algname);
-}
-
-int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed)
-{
-	struct ptlrpc_bulk_sec_desc *bsd;
-	int size = msg->lm_buflens[offset];
-
-	bsd = lustre_msg_buf(msg, offset, sizeof(*bsd));
-	if (bsd == NULL) {
-		CERROR("Invalid bulk sec desc: size %d\n", size);
-		return -EINVAL;
-	}
-
-	if (swabbed)
-		__swab32s(&bsd->bsd_nob);
-
-	if (unlikely(bsd->bsd_version != 0)) {
-		CERROR("Unexpected version %u\n", bsd->bsd_version);
-		return -EPROTO;
-	}
-
-	if (unlikely(bsd->bsd_type >= SPTLRPC_BULK_MAX)) {
-		CERROR("Invalid type %u\n", bsd->bsd_type);
-		return -EPROTO;
-	}
-
-	/* FIXME more sanity check here */
-
-	if (unlikely(bsd->bsd_svc != SPTLRPC_BULK_SVC_NULL &&
-		     bsd->bsd_svc != SPTLRPC_BULK_SVC_INTG &&
-		     bsd->bsd_svc != SPTLRPC_BULK_SVC_PRIV)) {
-		CERROR("Invalid svc %u\n", bsd->bsd_svc);
-		return -EPROTO;
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(bulk_sec_desc_unpack);
-
-/*
- * Compute the checksum of an RPC buffer payload.  If the return \a buflen
- * is not large enough, truncate the result to fit so that it is possible
- * to use a hash function with a large hash space, but only use a part of
- * the resulting hash.
- */
-int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
-			      void *buf, int buflen)
-{
-	struct ahash_request *req;
-	int hashsize;
-	unsigned int bufsize;
-	int i, err;
-
-	LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
-	LASSERT(buflen >= 4);
-
-	req = cfs_crypto_hash_init(cfs_hash_alg_id[alg], NULL, 0);
-	if (IS_ERR(req)) {
-		CERROR("Unable to initialize checksum hash %s\n",
-		       cfs_crypto_hash_name(cfs_hash_alg_id[alg]));
-		return PTR_ERR(req);
-	}
-
-	hashsize = cfs_crypto_hash_digestsize(cfs_hash_alg_id[alg]);
-
-	for (i = 0; i < desc->bd_iov_count; i++) {
-		cfs_crypto_hash_update_page(req,
-				  desc->bd_vec[i].bv_page,
-				  desc->bd_vec[i].bv_offset &
-					      ~PAGE_MASK,
-				  desc->bd_vec[i].bv_len);
-	}
-
-	if (hashsize > buflen) {
-		unsigned char hashbuf[CFS_CRYPTO_HASH_DIGESTSIZE_MAX];
-
-		bufsize = sizeof(hashbuf);
-		LASSERTF(bufsize >= hashsize, "bufsize = %u < hashsize %u\n",
-			 bufsize, hashsize);
-		err = cfs_crypto_hash_final(req, hashbuf, &bufsize);
-		memcpy(buf, hashbuf, buflen);
-	} else {
-		bufsize = buflen;
-		err = cfs_crypto_hash_final(req, buf, &bufsize);
-	}
-
-	return err;
-}
+EXPORT_SYMBOL(sptlrpc_pool_fini);
