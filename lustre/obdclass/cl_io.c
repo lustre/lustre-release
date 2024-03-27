@@ -1372,10 +1372,8 @@ EXPORT_SYMBOL(cl_sub_dio_free);
  */
 int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size)
 {
-	struct page *new_page;
 	size_t pg_offset;
 	int result = 0;
-	ssize_t i;
 
 	ENTRY;
 
@@ -1399,18 +1397,11 @@ int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size)
 	OBD_ALLOC_PTR_ARRAY_LARGE(pvec->ldp_pages, pvec->ldp_count);
 #endif
 	if (pvec->ldp_pages == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out, result = -ENOMEM);
 
-	for (i = 0; i < pvec->ldp_count; i++) {
-		new_page = alloc_page(GFP_NOFS);
-		if (!new_page) {
-			result = -ENOMEM;
-			pvec->ldp_count = i;
-			goto out;
-		}
-		pvec->ldp_pages[i] = new_page;
-	}
-	WARN_ON(i != pvec->ldp_count);
+	result = obd_pool_get_pages_array(pvec->ldp_pages, pvec->ldp_count);
+	if (result)
+		GOTO(out, result);
 
 out:
 	if (result) {
@@ -1427,13 +1418,10 @@ EXPORT_SYMBOL(ll_allocate_dio_buffer);
 
 void ll_free_dio_buffer(struct ll_dio_pages *pvec)
 {
-	int i;
-
-	for (i = 0; i < pvec->ldp_count; i++)
-		__free_page(pvec->ldp_pages[i]);
+	obd_pool_put_pages_array(pvec->ldp_pages, pvec->ldp_count);
 
 #ifdef HAVE_DIO_ITER
-	kfree(pvec->ldp_pages);
+	kvfree(pvec->ldp_pages);
 #else
 	OBD_FREE_PTR_ARRAY_LARGE(pvec->ldp_pages, pvec->ldp_count);
 #endif
