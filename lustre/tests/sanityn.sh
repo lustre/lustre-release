@@ -4803,7 +4803,7 @@ test_77k() {
 	tbf_verify 20 10 "runas -u $RUNAS_ID"
 	cleanup_77k "ext_a ext_b" "fifo"
 }
-run_test 77k "check TBF policy with NID/JobID/OPCode expression"
+run_test 77k "check TBF policy with UID/GID/JobID/OPCode expression"
 
 test_77l() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.10.56) ]] ||

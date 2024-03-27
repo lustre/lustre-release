@@ -80,6 +80,7 @@ struct nrs_tbf_client {
 	/** Resource object for policy instance. */
 	struct ptlrpc_nrs_resource	 tc_res;
 	/** Node in the hash table. */
+	struct rhash_head		 tc_rhash;
 	struct hlist_node		 tc_hnode;
 	/** NID of the client. */
 	struct lnet_nid			 tc_nid;
@@ -131,6 +132,10 @@ struct nrs_tbf_client {
 	 * nrs_tbf_head::th_cli_hash.
 	 */
 	struct list_head		 tc_lru;
+	/**
+	 * RCU head for rhashtable handling
+	 */
+	struct rcu_head			 tc_rcu_head;
 };
 
 #define MAX_TBF_NAME (16)
@@ -236,6 +241,10 @@ struct nrs_tbf_head {
 	 */
 	struct ptlrpc_nrs_resource	 th_res;
 	/**
+	 * Hash of clients.
+	 */
+	struct rhashtable		 th_cli_rhash ____cacheline_aligned_in_smp;
+	/**
 	 * List of rules.
 	 */
 	struct list_head		 th_list;
@@ -266,7 +275,7 @@ struct nrs_tbf_head {
 	/**
 	 * Heap of queues.
 	 */
-	struct binheap		*th_binheap;
+	struct binheap			*th_binheap;
 	/**
 	 * Hash of clients.
 	 */
