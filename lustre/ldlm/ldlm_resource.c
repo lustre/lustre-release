@@ -767,7 +767,7 @@ static int ldlm_namespace_debugfs_register(struct ldlm_namespace *ns)
 #undef MAX_STRING_SIZE
 
 static unsigned int ldlm_res_hop_hash(struct cfs_hash *hs,
-				  const void *key, unsigned int mask)
+				      const void *key, const unsigned int bits)
 {
 	const struct ldlm_res_id *id = key;
 	unsigned int val = 0;
@@ -775,11 +775,12 @@ static unsigned int ldlm_res_hop_hash(struct cfs_hash *hs,
 
 	for (i = 0; i < RES_NAME_SIZE; i++)
 		val += id->name[i];
-	return val & mask;
+
+	return val & ((1UL << bits) - 1);
 }
 
 static unsigned int ldlm_res_hop_fid_hash(const struct ldlm_res_id *id,
-					  unsigned int bits)
+					  const unsigned int bits)
 {
 	struct lu_fid       fid;
 	__u32               hash;
