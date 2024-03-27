@@ -72,18 +72,18 @@ MODULE_PARM_DESC(pool_max_memory_mb,
 
 #define CACHE_QUIESCENT_PERIOD  (20)
 
-static struct ptlrpc_page_pool {
-	unsigned long ppp_max_pages;   /* maximum pages can hold, const */
-	unsigned int ppp_max_ptr_pages;   /* number of ptr_pages, const */
+static struct obd_page_pool {
+	unsigned long opp_max_pages;   /* maximum pages can hold, const */
+	unsigned int opp_max_ptr_pages;   /* number of ptr_pages, const */
 
 	/*
 	 * wait queue in case of not enough free pages.
 	 */
-	wait_queue_head_t ppp_waitq;   /* waiting threads */
-	unsigned int ppp_waitqlen;    /* wait queue length */
-	unsigned long ppp_pages_short; /* # of pages wanted of in-q users */
-	unsigned int ppp_growing:1;   /* during adding pages */
-	unsigned int ppp_order;       /* page pool order and index in pools
+	wait_queue_head_t opp_waitq;   /* waiting threads */
+	unsigned int opp_waitqlen;    /* wait queue length */
+	unsigned long opp_pages_short; /* # of pages wanted of in-q users */
+	unsigned int opp_growing:1;   /* during adding pages */
+	unsigned int opp_order;       /* page pool order and index in pools
 				       * array (element size is 2^order pages),
 				       */
 
@@ -94,43 +94,43 @@ static struct ptlrpc_page_pool {
 	 * is idled for a while but the idle_idx might still be low if no
 	 * activities happened in the pool.
 	 */
-	unsigned long ppp_idle_idx;
+	unsigned long opp_idle_idx;
 
 	/* last shrink time due to mem tight */
-	time64_t ppp_last_shrink;
-	time64_t ppp_last_access;
+	time64_t opp_last_shrink;
+	time64_t opp_last_access;
 
 	/* in-pool pages bookkeeping */
-	spinlock_t ppp_lock; /* protect following fields */
-	unsigned long ppp_total_pages; /* total pages in pool */
-	unsigned long ppp_free_pages;  /* current pages available */
+	spinlock_t opp_lock; /* protect following fields */
+	unsigned long opp_total_pages; /* total pages in pool */
+	unsigned long opp_free_pages;  /* current pages available */
 
 	/* statistics */
-	unsigned long ppp_st_max_pages;      /* # of pages ever reached */
-	unsigned int ppp_st_grows;          /* # of grows */
-	unsigned int ppp_st_grow_fails;     /* # of add pages failures */
-	unsigned int ppp_st_shrinks;        /* # of shrinks */
-	unsigned long ppp_st_access;         /* # of access */
-	unsigned long ppp_st_missings;       /* # of cache missing */
-	unsigned long ppp_st_lowfree;        /* lowest free pages reached */
-	unsigned int ppp_st_max_wqlen;      /* highest waitqueue length */
-	ktime_t ppp_st_max_wait; /* in nanoseconds */
-	unsigned long ppp_st_outofmem; /* # of out of mem requests */
+	unsigned long opp_st_max_pages;      /* # of pages ever reached */
+	unsigned int opp_st_grows;          /* # of grows */
+	unsigned int opp_st_grow_fails;     /* # of add pages failures */
+	unsigned int opp_st_shrinks;        /* # of shrinks */
+	unsigned long opp_st_access;         /* # of access */
+	unsigned long opp_st_missings;       /* # of cache missing */
+	unsigned long opp_st_lowfree;        /* lowest free pages reached */
+	unsigned int opp_st_max_wqlen;      /* highest waitqueue length */
+	ktime_t opp_st_max_wait; /* in nanoseconds */
+	unsigned long opp_st_outofmem; /* # of out of mem requests */
 	/*
 	 * pointers to ptr_pages, may be vmalloc'd
 	 */
-	void ***ppp_ptr_pages;
+	void ***opp_ptr_pages;
 	/*
 	 * memory shrinker
 	 */
-	struct ll_shrinker_ops ppp_shops;
+	struct ll_shrinker_ops opp_shops;
 	struct shrinker *pool_shrinker;
 	struct mutex add_pages_mutex;
 } **page_pools;
 
-static int element_size(struct ptlrpc_page_pool *pool)
+static int element_size(struct obd_page_pool *pool)
 {
-	return 1 << pool->ppp_order;
+	return 1 << pool->opp_order;
 }
 
 /*
@@ -141,9 +141,9 @@ static int element_size(struct ptlrpc_page_pool *pool)
  */
 int encrypt_page_pools_seq_show(struct seq_file *m, void *v)
 {
-	struct ptlrpc_page_pool *pool = page_pools[0];
+	struct obd_page_pool *pool = page_pools[0];
 
-	spin_lock(&pool->ppp_lock);
+	spin_lock(&pool->opp_lock);
 	seq_printf(m,
 		"physical pages:          %lu\n"
 		"pages per pool:          %lu\n"
@@ -165,24 +165,24 @@ int encrypt_page_pools_seq_show(struct seq_file *m, void *v)
 		"max wait time ms:        %lld\n"
 		"out of mem:              %lu\n",
 		cfs_totalram_pages(), PTRS_PER_PAGE,
-		pool->ppp_max_pages,
-		pool->ppp_max_ptr_pages,
-		pool->ppp_total_pages,
-		pool->ppp_free_pages,
-		pool->ppp_idle_idx,
-		ktime_get_seconds() - pool->ppp_last_shrink,
-		ktime_get_seconds() - pool->ppp_last_access,
-		pool->ppp_st_max_pages,
-		pool->ppp_st_grows,
-		pool->ppp_st_grow_fails,
-		pool->ppp_st_shrinks,
-		pool->ppp_st_access,
-		pool->ppp_st_missings,
-		pool->ppp_st_lowfree,
-		pool->ppp_st_max_wqlen,
-		ktime_to_ms(pool->ppp_st_max_wait),
-		pool->ppp_st_outofmem);
-	spin_unlock(&pool->ppp_lock);
+		pool->opp_max_pages,
+		pool->opp_max_ptr_pages,
+		pool->opp_total_pages,
+		pool->opp_free_pages,
+		pool->opp_idle_idx,
+		ktime_get_seconds() - pool->opp_last_shrink,
+		ktime_get_seconds() - pool->opp_last_access,
+		pool->opp_st_max_pages,
+		pool->opp_st_grows,
+		pool->opp_st_grow_fails,
+		pool->opp_st_shrinks,
+		pool->opp_st_access,
+		pool->opp_st_missings,
+		pool->opp_st_lowfree,
+		pool->opp_st_max_wqlen,
+		ktime_to_ms(pool->opp_st_max_wait),
+		pool->opp_st_outofmem);
+	spin_unlock(&pool->opp_lock);
 
 	return 0;
 }
@@ -194,7 +194,7 @@ EXPORT_SYMBOL(encrypt_page_pools_seq_show);
 int page_pools_seq_show(struct seq_file *m, void *v)
 {
 	int pool_order;
-	struct ptlrpc_page_pool *pool;
+	struct obd_page_pool *pool;
 
 	seq_printf(m, "physical_pages: %lu\n"
 		      "pools:\n",
@@ -202,9 +202,9 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 
 	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
 		pool = page_pools[pool_order];
-		if (!pool->ppp_st_access)
+		if (!pool->opp_st_access)
 			continue;
-		spin_lock(&pool->ppp_lock);
+		spin_lock(&pool->opp_lock);
 		seq_printf(m, "  pool_%dk:\n"
 			   "    max_pages: %lu\n"
 			   "    max_items: %lu\n"
@@ -225,63 +225,63 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 			   "    out_of_mem: %lu\n",
 			   /* convert from bytes to KiB */
 			   element_size(pool) >> 10,
-			   pool->ppp_max_pages,
-			   pool->ppp_max_ptr_pages * PTRS_PER_PAGE,
-			   pool->ppp_total_pages,
-			   pool->ppp_free_pages,
-			   pool->ppp_idle_idx,
-			   ktime_get_seconds() - pool->ppp_last_shrink,
-			   ktime_get_seconds() - pool->ppp_last_access,
-			   pool->ppp_st_max_pages,
-			   pool->ppp_st_grows,
-			   pool->ppp_st_grow_fails,
-			   pool->ppp_st_shrinks,
-			   pool->ppp_st_access,
-			   pool->ppp_st_missings,
-			   pool->ppp_st_lowfree,
-			   pool->ppp_st_max_wqlen,
-			   ktime_to_ms(pool->ppp_st_max_wait),
-			   pool->ppp_st_outofmem);
+			   pool->opp_max_pages,
+			   pool->opp_max_ptr_pages * PTRS_PER_PAGE,
+			   pool->opp_total_pages,
+			   pool->opp_free_pages,
+			   pool->opp_idle_idx,
+			   ktime_get_seconds() - pool->opp_last_shrink,
+			   ktime_get_seconds() - pool->opp_last_access,
+			   pool->opp_st_max_pages,
+			   pool->opp_st_grows,
+			   pool->opp_st_grow_fails,
+			   pool->opp_st_shrinks,
+			   pool->opp_st_access,
+			   pool->opp_st_missings,
+			   pool->opp_st_lowfree,
+			   pool->opp_st_max_wqlen,
+			   ktime_to_ms(pool->opp_st_max_wait),
+			   pool->opp_st_outofmem);
 
-		spin_unlock(&pool->ppp_lock);
+		spin_unlock(&pool->opp_lock);
 	}
 	return 0;
 }
 EXPORT_SYMBOL(page_pools_seq_show);
 
-static void pool_release_free_pages(long npages, struct ptlrpc_page_pool *pool)
+static void pool_release_free_pages(long npages, struct obd_page_pool *pool)
 {
 	int p_idx, g_idx;
 	int p_idx_max1, p_idx_max2;
 
 	LASSERT(npages > 0);
-	LASSERT(npages <= pool->ppp_free_pages);
-	LASSERT(pool->ppp_free_pages <= pool->ppp_total_pages);
+	LASSERT(npages <= pool->opp_free_pages);
+	LASSERT(pool->opp_free_pages <= pool->opp_total_pages);
 
 	/* max pool index before the release */
-	p_idx_max2 = (pool->ppp_total_pages - 1) / PTRS_PER_PAGE;
+	p_idx_max2 = (pool->opp_total_pages - 1) / PTRS_PER_PAGE;
 
-	pool->ppp_free_pages -= npages;
-	pool->ppp_total_pages -= npages;
+	pool->opp_free_pages -= npages;
+	pool->opp_total_pages -= npages;
 
 	/* max pool index after the release */
-	p_idx_max1 = pool->ppp_total_pages == 0 ? -1 :
-		((pool->ppp_total_pages - 1) / PTRS_PER_PAGE);
+	p_idx_max1 = pool->opp_total_pages == 0 ? -1 :
+		((pool->opp_total_pages - 1) / PTRS_PER_PAGE);
 
-	p_idx = pool->ppp_free_pages / PTRS_PER_PAGE;
-	g_idx = pool->ppp_free_pages % PTRS_PER_PAGE;
-	LASSERT(pool->ppp_ptr_pages[p_idx]);
+	p_idx = pool->opp_free_pages / PTRS_PER_PAGE;
+	g_idx = pool->opp_free_pages % PTRS_PER_PAGE;
+	LASSERT(pool->opp_ptr_pages[p_idx]);
 
 	while (npages--) {
-		LASSERT(pool->ppp_ptr_pages[p_idx]);
-		LASSERT(pool->ppp_ptr_pages[p_idx][g_idx] != NULL);
+		LASSERT(pool->opp_ptr_pages[p_idx]);
+		LASSERT(pool->opp_ptr_pages[p_idx][g_idx] != NULL);
 
-		if (pool->ppp_order == 0)
-			__free_page(pool->ppp_ptr_pages[p_idx][g_idx]);
+		if (pool->opp_order == 0)
+			__free_page(pool->opp_ptr_pages[p_idx][g_idx]);
 		else
-			OBD_FREE_LARGE(pool->ppp_ptr_pages[p_idx][g_idx],
+			OBD_FREE_LARGE(pool->opp_ptr_pages[p_idx][g_idx],
 				       element_size(pool));
-		pool->ppp_ptr_pages[p_idx][g_idx] = NULL;
+		pool->opp_ptr_pages[p_idx][g_idx] = NULL;
 
 		if (++g_idx == PTRS_PER_PAGE) {
 			p_idx++;
@@ -291,9 +291,9 @@ static void pool_release_free_pages(long npages, struct ptlrpc_page_pool *pool)
 
 	/* free unused ptr_pages */
 	while (p_idx_max1 < p_idx_max2) {
-		LASSERT(pool->ppp_ptr_pages[p_idx_max2]);
-		OBD_FREE(pool->ppp_ptr_pages[p_idx_max2], PAGE_SIZE);
-		pool->ppp_ptr_pages[p_idx_max2] = NULL;
+		LASSERT(pool->opp_ptr_pages[p_idx_max2]);
+		OBD_FREE(pool->opp_ptr_pages[p_idx_max2], PAGE_SIZE);
+		pool->opp_ptr_pages[p_idx_max2] = NULL;
 		p_idx_max2--;
 	}
 }
@@ -307,23 +307,23 @@ static unsigned long pool_shrink_count(struct shrinker *s,
 				       struct shrink_control *sc)
 {
 	unsigned int pool_order = SEEKS_TO_ORDER(s);
-	struct ptlrpc_page_pool *pool = page_pools[pool_order];
+	struct obd_page_pool *pool = page_pools[pool_order];
 	/*
 	 * if no pool access for a long time, we consider it's fully
 	 * idle. A little race here is fine.
 	 */
-	if (unlikely(ktime_get_seconds() - pool->ppp_last_access >
+	if (unlikely(ktime_get_seconds() - pool->opp_last_access >
 		     CACHE_QUIESCENT_PERIOD)) {
-		spin_lock(&pool->ppp_lock);
-		pool->ppp_idle_idx = IDLE_IDX_MAX;
-		spin_unlock(&pool->ppp_lock);
+		spin_lock(&pool->opp_lock);
+		pool->opp_idle_idx = IDLE_IDX_MAX;
+		spin_unlock(&pool->opp_lock);
 	}
 
-	LASSERT(pool->ppp_idle_idx <= IDLE_IDX_MAX);
+	LASSERT(pool->opp_idle_idx <= IDLE_IDX_MAX);
 
-	return (pool->ppp_free_pages <= PTLRPC_MAX_BRW_PAGES) ? 0 :
-		(pool->ppp_free_pages - PTLRPC_MAX_BRW_PAGES) *
-		(IDLE_IDX_MAX - pool->ppp_idle_idx) / IDLE_IDX_MAX;
+	return (pool->opp_free_pages <= PTLRPC_MAX_BRW_PAGES) ? 0 :
+		(pool->opp_free_pages - PTLRPC_MAX_BRW_PAGES) *
+		(IDLE_IDX_MAX - pool->opp_idle_idx) / IDLE_IDX_MAX;
 }
 
 /*
@@ -334,36 +334,36 @@ static unsigned long pool_shrink_scan(struct shrinker *s,
 {
 	/* Get pool number passed as part of pool_shrinker_seeks value */
 	unsigned int pool_order = SEEKS_TO_ORDER(s);
-	struct ptlrpc_page_pool *pool = page_pools[pool_order];
+	struct obd_page_pool *pool = page_pools[pool_order];
 
-	spin_lock(&pool->ppp_lock);
-	if (pool->ppp_free_pages <= PTLRPC_MAX_BRW_PAGES)
+	spin_lock(&pool->opp_lock);
+	if (pool->opp_free_pages <= PTLRPC_MAX_BRW_PAGES)
 		sc->nr_to_scan = 0;
 	else
 		sc->nr_to_scan = min_t(unsigned long, sc->nr_to_scan,
-			      pool->ppp_free_pages - PTLRPC_MAX_BRW_PAGES);
+			      pool->opp_free_pages - PTLRPC_MAX_BRW_PAGES);
 	if (sc->nr_to_scan > 0) {
 		pool_release_free_pages(sc->nr_to_scan, pool);
 		CDEBUG(D_SEC, "released %ld pages, %ld left\n",
-		       (long)sc->nr_to_scan, pool->ppp_free_pages);
+		       (long)sc->nr_to_scan, pool->opp_free_pages);
 
-		pool->ppp_st_shrinks++;
-		pool->ppp_last_shrink = ktime_get_seconds();
+		pool->opp_st_shrinks++;
+		pool->opp_last_shrink = ktime_get_seconds();
 	}
-	spin_unlock(&pool->ppp_lock);
+	spin_unlock(&pool->opp_lock);
 
 	/*
 	 * if no pool access for a long time, we consider it's fully idle.
 	 * a little race here is fine.
 	 */
-	if (unlikely(ktime_get_seconds() - pool->ppp_last_access >
+	if (unlikely(ktime_get_seconds() - pool->opp_last_access >
 		     CACHE_QUIESCENT_PERIOD)) {
-		spin_lock(&pool->ppp_lock);
-		pool->ppp_idle_idx = IDLE_IDX_MAX;
-		spin_unlock(&pool->ppp_lock);
+		spin_lock(&pool->opp_lock);
+		pool->opp_idle_idx = IDLE_IDX_MAX;
+		spin_unlock(&pool->opp_lock);
 	}
 
-	LASSERT(pool->ppp_idle_idx <= IDLE_IDX_MAX);
+	LASSERT(pool->opp_idle_idx <= IDLE_IDX_MAX);
 
 	return sc->nr_to_scan;
 }
@@ -391,7 +391,7 @@ int npages_to_nptr_pages(unsigned long npages)
  * return how many pages cleaned up.
  */
 static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
-				  struct ptlrpc_page_pool *pool)
+				  struct obd_page_pool *pool)
 {
 	unsigned long cleaned = 0;
 	int i, j;
@@ -400,7 +400,7 @@ static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
 		if (ptr_pages[i]) {
 			for (j = 0; j < PTRS_PER_PAGE; j++) {
 				if (ptr_pages[i][j]) {
-					if (pool->ppp_order == 0) {
+					if (pool->opp_order == 0) {
 						__free_page(ptr_pages[i][j]);
 					} else {
 						OBD_FREE_LARGE(ptr_pages[i][j],
@@ -425,18 +425,18 @@ static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
  * the simplest way to avoid complexity. It's not frequently called.
  */
 static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
-			     struct ptlrpc_page_pool *page_pool)
+			     struct obd_page_pool *page_pool)
 {
 	int freeslot;
 	int op_idx, np_idx, og_idx, ng_idx;
 	int cur_nptr_page, end_nptr_page;
 
 	LASSERT(npages > 0);
-	LASSERT(page_pool->ppp_total_pages+npages <= page_pool->ppp_max_pages);
+	LASSERT(page_pool->opp_total_pages+npages <= page_pool->opp_max_pages);
 	LASSERT(npages_to_nptr_pages(npages) == nptr_pages);
-	LASSERT(page_pool->ppp_growing);
+	LASSERT(page_pool->opp_growing);
 
-	spin_lock(&page_pool->ppp_lock);
+	spin_lock(&page_pool->opp_lock);
 
 	/*
 	 * (1) fill all the free slots in current pool ptr_pages
@@ -445,21 +445,21 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 	 * free slots are those left by rent pages, and the extra ones with
 	 * index >= total_pages, locate at the tail of last pool.
 	 */
-	freeslot = page_pool->ppp_total_pages % PTRS_PER_PAGE;
+	freeslot = page_pool->opp_total_pages % PTRS_PER_PAGE;
 	if (freeslot != 0)
 		freeslot = PTRS_PER_PAGE - freeslot;
-	freeslot += page_pool->ppp_total_pages - page_pool->ppp_free_pages;
+	freeslot += page_pool->opp_total_pages - page_pool->opp_free_pages;
 
-	op_idx = page_pool->ppp_free_pages / PTRS_PER_PAGE;
-	og_idx = page_pool->ppp_free_pages % PTRS_PER_PAGE;
+	op_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
+	og_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
 	np_idx = nptr_pages - 1;
 	ng_idx = (npages - 1) % PTRS_PER_PAGE;
 
 	while (freeslot) {
-		LASSERT(page_pool->ppp_ptr_pages[op_idx][og_idx] == NULL);
+		LASSERT(page_pool->opp_ptr_pages[op_idx][og_idx] == NULL);
 		LASSERT(ptr_pages[np_idx][ng_idx] != NULL);
 
-		page_pool->ppp_ptr_pages[op_idx][og_idx] =
+		page_pool->opp_ptr_pages[op_idx][og_idx] =
 			ptr_pages[np_idx][ng_idx];
 		ptr_pages[np_idx][ng_idx] = NULL;
 
@@ -480,19 +480,19 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 	/*
 	 * (2) add ptr pages if needed.
 	 */
-	cur_nptr_page = (page_pool->ppp_total_pages + PTRS_PER_PAGE - 1) /
+	cur_nptr_page = (page_pool->opp_total_pages + PTRS_PER_PAGE - 1) /
 		      PTRS_PER_PAGE;
-	end_nptr_page = (page_pool->ppp_total_pages + npages +
+	end_nptr_page = (page_pool->opp_total_pages + npages +
 		      PTRS_PER_PAGE - 1) / PTRS_PER_PAGE;
-	LASSERT(end_nptr_page <= page_pool->ppp_max_ptr_pages);
+	LASSERT(end_nptr_page <= page_pool->opp_max_ptr_pages);
 
 	np_idx = 0;
 	while (cur_nptr_page < end_nptr_page) {
-		LASSERT(page_pool->ppp_ptr_pages[cur_nptr_page] == NULL);
+		LASSERT(page_pool->opp_ptr_pages[cur_nptr_page] == NULL);
 		LASSERT(np_idx < nptr_pages);
 		LASSERT(ptr_pages[np_idx] != NULL);
 
-		page_pool->ppp_ptr_pages[cur_nptr_page++] = ptr_pages[np_idx];
+		page_pool->opp_ptr_pages[cur_nptr_page++] = ptr_pages[np_idx];
 		ptr_pages[np_idx++] = NULL;
 	}
 
@@ -507,37 +507,37 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 		ptr_pages[np_idx++] = NULL;
 	}
 
-	page_pool->ppp_total_pages += npages;
-	page_pool->ppp_free_pages += npages;
-	page_pool->ppp_st_lowfree = page_pool->ppp_free_pages;
+	page_pool->opp_total_pages += npages;
+	page_pool->opp_free_pages += npages;
+	page_pool->opp_st_lowfree = page_pool->opp_free_pages;
 
-	if (page_pool->ppp_total_pages > page_pool->ppp_st_max_pages)
-		page_pool->ppp_st_max_pages = page_pool->ppp_total_pages;
+	if (page_pool->opp_total_pages > page_pool->opp_st_max_pages)
+		page_pool->opp_st_max_pages = page_pool->opp_total_pages;
 
 	CDEBUG(D_SEC, "add %d pages to total %lu\n", npages,
-	       page_pool->ppp_total_pages);
+	       page_pool->opp_total_pages);
 
-	spin_unlock(&page_pool->ppp_lock);
+	spin_unlock(&page_pool->opp_lock);
 }
 
 #define POOL_INIT_SIZE (PTLRPC_MAX_BRW_SIZE / 4)
-static int pool_add_pages(int npages, struct ptlrpc_page_pool *page_pool)
+static int pool_add_pages(int npages, struct obd_page_pool *page_pool)
 {
 	void ***ptr_pages;
 	int nptr_pages, alloced = 0;
 	int i, j, rc = -ENOMEM;
-	unsigned int pool_order = page_pool->ppp_order;
+	unsigned int pool_order = page_pool->opp_order;
 
 	if (npages < POOL_INIT_SIZE / element_size(page_pool))
 		npages = POOL_INIT_SIZE / element_size(page_pool);
 
 	mutex_lock(&page_pool->add_pages_mutex);
 
-	if (npages + page_pool->ppp_total_pages > page_pool->ppp_max_pages)
-		npages = page_pool->ppp_max_pages - page_pool->ppp_total_pages;
+	if (npages + page_pool->opp_total_pages > page_pool->opp_max_pages)
+		npages = page_pool->opp_max_pages - page_pool->opp_total_pages;
 	LASSERT(npages > 0);
 
-	page_pool->ppp_st_grows++;
+	page_pool->opp_st_grows++;
 
 	nptr_pages = npages_to_nptr_pages(npages);
 	OBD_ALLOC_PTR_ARRAY(ptr_pages, nptr_pages);
@@ -576,7 +576,7 @@ out_ptr_pages:
 	}
 out:
 	if (rc) {
-		page_pool->ppp_st_grow_fails++;
+		page_pool->opp_st_grow_fails++;
 		CERROR("Failed to allocate %d pages\n", npages);
 	}
 
@@ -584,26 +584,26 @@ out:
 	return rc;
 }
 
-static inline void pool_wakeup(struct ptlrpc_page_pool *pool)
+static inline void pool_wakeup(struct obd_page_pool *pool)
 {
-	assert_spin_locked(&pool->ppp_lock);
+	assert_spin_locked(&pool->opp_lock);
 
 	/* waitqueue_active */
-	if (unlikely(waitqueue_active(&pool->ppp_waitq)))
-		wake_up_all(&pool->ppp_waitq);
+	if (unlikely(waitqueue_active(&pool->opp_waitq)))
+		wake_up_all(&pool->opp_waitq);
 }
 
-static int pool_should_grow(int needed, struct ptlrpc_page_pool *pool)
+static int pool_should_grow(int needed, struct obd_page_pool *pool)
 {
 	/*
 	 * don't grow if someone else is growing the pool right now,
 	 * or the pool has reached its full capacity
 	 */
-	if (pool->ppp_growing || pool->ppp_total_pages == pool->ppp_max_pages)
+	if (pool->opp_growing || pool->opp_total_pages == pool->opp_max_pages)
 		return 0;
 
 	/* if total pages is not enough, we need to grow */
-	if (pool->ppp_total_pages < needed)
+	if (pool->opp_total_pages < needed)
 		return 1;
 	/*
 	 * we wanted to return 0 here if there was a shrink just
@@ -625,7 +625,7 @@ static int pool_should_grow(int needed, struct ptlrpc_page_pool *pool)
  */
 int sptlrpc_pool_get_free_pages(unsigned int order)
 {
-	return page_pools[order]->ppp_free_pages;
+	return page_pools[order]->opp_free_pages;
 }
 EXPORT_SYMBOL(sptlrpc_pool_get_free_pages);
 
@@ -634,8 +634,8 @@ EXPORT_SYMBOL(sptlrpc_pool_get_free_pages);
  */
 int pool_is_at_full_capacity(int order)
 {
-	return (page_pools[order]->ppp_total_pages ==
-		page_pools[order]->ppp_max_pages);
+	return (page_pools[order]->opp_total_pages ==
+		page_pools[order]->opp_max_pages);
 }
 EXPORT_SYMBOL(pool_is_at_full_capacity);
 
@@ -658,7 +658,7 @@ static inline void **page_from_bufarray(void *array, int index)
 	return (void **)array;
 }
 
-static bool __grow_pool_try(int needed, struct ptlrpc_page_pool *pool);
+static bool __grow_pool_try(int needed, struct obd_page_pool *pool);
 
 /*
  * we allocate the requested pages atomically.
@@ -667,26 +667,26 @@ static inline int __sptlrpc_pool_get_pages(void *array, unsigned int count,
 					   unsigned int order,
 					   void **(*page_from)(void *, int))
 {
-	struct ptlrpc_page_pool *page_pool = page_pools[order];
+	struct obd_page_pool *page_pool = page_pools[order];
 	wait_queue_entry_t waitlink;
 	unsigned long this_idle = -1;
 	u64 tick_ns = 0;
 	int p_idx, g_idx;
 	int i, rc = 0;
 
-	if (!array || count <= 0 || count > page_pool->ppp_max_pages)
+	if (!array || count <= 0 || count > page_pool->opp_max_pages)
 		return -EINVAL;
 
-	spin_lock(&page_pool->ppp_lock);
+	spin_lock(&page_pool->opp_lock);
 
-	page_pool->ppp_st_access++;
+	page_pool->opp_st_access++;
 again:
-	if (unlikely(page_pool->ppp_free_pages < count)) {
+	if (unlikely(page_pool->opp_free_pages < count)) {
 		if (tick_ns == 0)
 			tick_ns = ktime_get_ns();
 
-		page_pool->ppp_st_missings++;
-		page_pool->ppp_pages_short += count;
+		page_pool->opp_st_missings++;
+		page_pool->opp_pages_short += count;
 
 		/* if we aren't able to add pages, check if someone else is
 		 * growing the pool and sleep if so, otherwise we return
@@ -699,23 +699,23 @@ again:
 		 * if ENOMEM is returned here, the RPC will go back in the queue
 		 */
 		if (!__grow_pool_try(count, page_pool)) {
-			if (page_pool->ppp_growing) {
-				if (++page_pool->ppp_waitqlen >
-				    page_pool->ppp_st_max_wqlen)
-					page_pool->ppp_st_max_wqlen =
-						page_pool->ppp_waitqlen;
+			if (page_pool->opp_growing) {
+				if (++page_pool->opp_waitqlen >
+				    page_pool->opp_st_max_wqlen)
+					page_pool->opp_st_max_wqlen =
+						page_pool->opp_waitqlen;
 
 				set_current_state(TASK_UNINTERRUPTIBLE);
 				init_wait(&waitlink);
-				add_wait_queue(&page_pool->ppp_waitq,
+				add_wait_queue(&page_pool->opp_waitq,
 					       &waitlink);
 
-				spin_unlock(&page_pool->ppp_lock);
+				spin_unlock(&page_pool->opp_lock);
 				schedule();
-				remove_wait_queue(&page_pool->ppp_waitq,
+				remove_wait_queue(&page_pool->opp_waitq,
 						  &waitlink);
-				spin_lock(&page_pool->ppp_lock);
-				page_pool->ppp_waitqlen--;
+				spin_lock(&page_pool->opp_lock);
+				page_pool->opp_waitqlen--;
 			} else {
 				/*
 				 * ptlrpcd thread should not sleep in that
@@ -723,14 +723,14 @@ again:
 				 * Instead, return -ENOMEM so that upper layers
 				 * will put request back in queue.
 				 */
-				page_pool->ppp_st_outofmem++;
+				page_pool->opp_st_outofmem++;
 				GOTO(out_unlock, rc = -ENOMEM);
 			}
 		}
 
-		if (page_pool->ppp_pages_short < count)
+		if (page_pool->opp_pages_short < count)
 			GOTO(out_unlock, rc = -EPROTO);
-		page_pool->ppp_pages_short -= count;
+		page_pool->opp_pages_short -= count;
 
 		this_idle = 0;
 		goto again;
@@ -740,23 +740,23 @@ again:
 	if (unlikely(tick_ns)) {
 		ktime_t tick = ktime_sub_ns(ktime_get(), tick_ns);
 
-		if (ktime_after(tick, page_pool->ppp_st_max_wait))
-			page_pool->ppp_st_max_wait = tick;
+		if (ktime_after(tick, page_pool->opp_st_max_wait))
+			page_pool->opp_st_max_wait = tick;
 	}
 
 	/* proceed with rest of allocation */
-	page_pool->ppp_free_pages -= count;
+	page_pool->opp_free_pages -= count;
 
-	p_idx = page_pool->ppp_free_pages / PTRS_PER_PAGE;
-	g_idx = page_pool->ppp_free_pages % PTRS_PER_PAGE;
+	p_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
+	g_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
 
 	for (i = 0; i < count; i++) {
 		void **pagep = page_from(array, i);
 
-		if (page_pool->ppp_ptr_pages[p_idx][g_idx] == NULL)
+		if (page_pool->opp_ptr_pages[p_idx][g_idx] == NULL)
 			GOTO(out_unlock, rc = -EPROTO);
-		*pagep = page_pool->ppp_ptr_pages[p_idx][g_idx];
-		page_pool->ppp_ptr_pages[p_idx][g_idx] = NULL;
+		*pagep = page_pool->opp_ptr_pages[p_idx][g_idx];
+		page_pool->opp_ptr_pages[p_idx][g_idx] = NULL;
 
 		if (++g_idx == PTRS_PER_PAGE) {
 			p_idx++;
@@ -764,25 +764,25 @@ again:
 		}
 	}
 
-	if (page_pool->ppp_free_pages < page_pool->ppp_st_lowfree)
-		page_pool->ppp_st_lowfree =
-			page_pool->ppp_free_pages;
+	if (page_pool->opp_free_pages < page_pool->opp_st_lowfree)
+		page_pool->opp_st_lowfree =
+			page_pool->opp_free_pages;
 
 	/*
 	 * new idle index = (old * weight + new) / (weight + 1)
 	 */
 	if (this_idle == -1) {
-		this_idle = page_pool->ppp_free_pages * IDLE_IDX_MAX /
-			page_pool->ppp_total_pages;
+		this_idle = page_pool->opp_free_pages * IDLE_IDX_MAX /
+			page_pool->opp_total_pages;
 	}
-	page_pool->ppp_idle_idx = (page_pool->ppp_idle_idx *
+	page_pool->opp_idle_idx = (page_pool->opp_idle_idx *
 			IDLE_IDX_WEIGHT + this_idle) /
 			(IDLE_IDX_WEIGHT + 1);
 
-	page_pool->ppp_last_access = ktime_get_seconds();
+	page_pool->opp_last_access = ktime_get_seconds();
 
 out_unlock:
-	spin_unlock(&page_pool->ppp_lock);
+	spin_unlock(&page_pool->opp_lock);
 	return rc;
 }
 
@@ -791,7 +791,7 @@ int sptlrpc_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 	int rc;
 
 	LASSERT(desc->bd_iov_count > 0);
-	LASSERT(desc->bd_iov_count <= page_pools[0]->ppp_max_pages);
+	LASSERT(desc->bd_iov_count <= page_pools[0]->opp_max_pages);
 
 	/* resent bulk, enc iov might have been allocated previously */
 	if (desc->bd_enc_vec != NULL)
@@ -832,7 +832,7 @@ static int __sptlrpc_pool_put_pages(void *array, unsigned int count,
 				    unsigned int order,
 				    void **(*page_from)(void *, int))
 {
-	struct ptlrpc_page_pool *page_pool;
+	struct obd_page_pool *page_pool;
 	int p_idx, g_idx;
 	int i, rc = 0;
 
@@ -847,35 +847,35 @@ static int __sptlrpc_pool_put_pages(void *array, unsigned int count,
 	page_pool = page_pools[order];
 	LASSERTF(page_pool != NULL, "count %u, pool %u\n", count, order);
 
-	spin_lock(&page_pool->ppp_lock);
+	spin_lock(&page_pool->opp_lock);
 
-	p_idx = page_pool->ppp_free_pages / PTRS_PER_PAGE;
-	g_idx = page_pool->ppp_free_pages % PTRS_PER_PAGE;
+	p_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
+	g_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
 
-	if (page_pool->ppp_free_pages + count > page_pool->ppp_total_pages)
+	if (page_pool->opp_free_pages + count > page_pool->opp_total_pages)
 		GOTO(out_unlock, rc = -EPROTO);
-	if (!page_pool->ppp_ptr_pages[p_idx])
+	if (!page_pool->opp_ptr_pages[p_idx])
 		GOTO(out_unlock, rc = -EPROTO);
 
 	for (i = 0; i < count; i++) {
 		void **pagep = page_from(array, i);
 
 		if (!*pagep ||
-		    page_pool->ppp_ptr_pages[p_idx][g_idx] != NULL)
+		    page_pool->opp_ptr_pages[p_idx][g_idx] != NULL)
 			GOTO(out_unlock, rc = -EPROTO);
 
-		page_pool->ppp_ptr_pages[p_idx][g_idx] = *pagep;
+		page_pool->opp_ptr_pages[p_idx][g_idx] = *pagep;
 		if (++g_idx == PTRS_PER_PAGE) {
 			p_idx++;
 			g_idx = 0;
 		}
 	}
 
-	page_pool->ppp_free_pages += count;
+	page_pool->opp_free_pages += count;
 	pool_wakeup(page_pool);
 
 out_unlock:
-	spin_unlock(&page_pool->ppp_lock);
+	spin_unlock(&page_pool->opp_lock);
 	return rc;
 }
 
@@ -919,52 +919,52 @@ void sptlrpc_pool_put_pages(void *buf, unsigned int order)
 }
 EXPORT_SYMBOL(sptlrpc_pool_put_pages);
 
-/* called with pool->ppp_lock held */
-static bool __grow_pool_try(int needed, struct ptlrpc_page_pool *pool)
+/* called with pool->opp_lock held */
+static bool __grow_pool_try(int needed, struct obd_page_pool *pool)
 {
 	bool pool_grown = false;
 
-	assert_spin_locked(&pool->ppp_lock);
+	assert_spin_locked(&pool->opp_lock);
 
 	if (pool_should_grow(needed, pool)) {
 		unsigned int to_add;
 		int rc;
 
-		pool->ppp_growing = 1;
+		pool->opp_growing = 1;
 		/* the pool of single pages is grown a large amount on
 		 * first use
 		 */
-		if (pool->ppp_order == 0 &&
-		    pool->ppp_total_pages == 0)
+		if (pool->opp_order == 0 &&
+		    pool->opp_total_pages == 0)
 			to_add = PTLRPC_MAX_BRW_PAGES * 2;
 		else /* otherwise, we add requested or at least 8 items */
 			to_add = max(needed, 8);
-		spin_unlock(&pool->ppp_lock);
+		spin_unlock(&pool->opp_lock);
 
 		CDEBUG(D_SEC,
 		       "pool %d is %lu elements (size %d bytes), growing by %d items\n",
-			pool->ppp_order, pool->ppp_pages_short,
+			pool->opp_order, pool->opp_pages_short,
 			element_size(pool), to_add);
 		/* we can't hold a spinlock over page allocation */
 		rc = pool_add_pages(to_add, pool);
 		if (rc == 0)
 			pool_grown = true;
 
-		spin_lock(&pool->ppp_lock);
-		pool->ppp_growing = 0;
+		spin_lock(&pool->opp_lock);
+		pool->opp_growing = 0;
 		pool_wakeup(pool);
 	}
 
 	return pool_grown;
 }
 
-static bool grow_pool_try(int needed, struct ptlrpc_page_pool *pool)
+static bool grow_pool_try(int needed, struct obd_page_pool *pool)
 {
 	bool rc;
 
-	spin_lock(&pool->ppp_lock);
+	spin_lock(&pool->opp_lock);
 	rc = __grow_pool_try(needed, pool);
-	spin_unlock(&pool->ppp_lock);
+	spin_unlock(&pool->opp_lock);
 
 	return rc;
 }
@@ -976,7 +976,7 @@ static bool grow_pool_try(int needed, struct ptlrpc_page_pool *pool)
  */
 void sptlrpc_pool_add_user(void)
 {
-	struct ptlrpc_page_pool *pool = page_pools[0];
+	struct obd_page_pool *pool = page_pools[0];
 
 	/* since this is startup, no one is waiting for these pages, so we
 	 * don't worry about sucess or failure here
@@ -985,26 +985,26 @@ void sptlrpc_pool_add_user(void)
 }
 EXPORT_SYMBOL(sptlrpc_pool_add_user);
 
-static inline void pool_ptrs_alloc(struct ptlrpc_page_pool *pool)
+static inline void pool_ptrs_alloc(struct obd_page_pool *pool)
 {
-	LASSERT(pool->ppp_max_ptr_pages);
-	OBD_ALLOC_LARGE(pool->ppp_ptr_pages,
-			pool->ppp_max_ptr_pages *
-			sizeof(*pool->ppp_ptr_pages));
+	LASSERT(pool->opp_max_ptr_pages);
+	OBD_ALLOC_LARGE(pool->opp_ptr_pages,
+			pool->opp_max_ptr_pages *
+			sizeof(*pool->opp_ptr_pages));
 }
 
-static inline void pool_ptrs_free(struct ptlrpc_page_pool *pool)
+static inline void pool_ptrs_free(struct obd_page_pool *pool)
 {
-	LASSERT(pool->ppp_max_ptr_pages);
-	LASSERT(pool->ppp_ptr_pages);
+	LASSERT(pool->opp_max_ptr_pages);
+	LASSERT(pool->opp_ptr_pages);
 
-	OBD_FREE_LARGE(pool->ppp_ptr_pages,
-		       pool->ppp_max_ptr_pages * sizeof(*pool->ppp_ptr_pages));
+	OBD_FREE_LARGE(pool->opp_ptr_pages,
+		       pool->opp_max_ptr_pages * sizeof(*pool->opp_ptr_pages));
 }
 
 int sptlrpc_pool_init(void)
 {
-	struct ptlrpc_page_pool *pool;
+	struct obd_page_pool *pool;
 	int pool_max_pages = cfs_totalram_pages() / POOLS_COUNT;
 	int pool_order = 0;
 	int to_revert;
@@ -1027,33 +1027,33 @@ int sptlrpc_pool_init(void)
 			GOTO(fail, rc = -ENOMEM);
 
 		pool = page_pools[pool_order];
-		pool->ppp_max_pages = pool_max_pages;
+		pool->opp_max_pages = pool_max_pages;
 
-		pool->ppp_max_ptr_pages =
-			npages_to_nptr_pages(pool->ppp_max_pages);
+		pool->opp_max_ptr_pages =
+			npages_to_nptr_pages(pool->opp_max_pages);
 
-		init_waitqueue_head(&pool->ppp_waitq);
-		pool->ppp_last_shrink = ktime_get_seconds();
-		pool->ppp_last_access = ktime_get_seconds();
+		init_waitqueue_head(&pool->opp_waitq);
+		pool->opp_last_shrink = ktime_get_seconds();
+		pool->opp_last_access = ktime_get_seconds();
 
-		spin_lock_init(&pool->ppp_lock);
-		pool->ppp_st_max_wait = ktime_set(0, 0);
+		spin_lock_init(&pool->opp_lock);
+		pool->opp_st_max_wait = ktime_set(0, 0);
 
 		pool_ptrs_alloc(pool);
-		pool->ppp_order = pool_order;
+		pool->opp_order = pool_order;
 		CDEBUG(D_SEC, "Allocated pool %i\n", pool_order);
-		if (pool->ppp_ptr_pages == NULL)
+		if (pool->opp_ptr_pages == NULL)
 			GOTO(fail, rc = -ENOMEM);
 		/* Pass pool number as part of pool_shrinker_seeks value */
 #ifdef HAVE_SHRINKER_COUNT
-		pool->ppp_shops.count_objects = pool_shrink_count;
-		pool->ppp_shops.scan_objects = pool_shrink_scan;
+		pool->opp_shops.count_objects = pool_shrink_count;
+		pool->opp_shops.scan_objects = pool_shrink_scan;
 #else
-		pool->ppp_shops.shrink = pool_shrink;
+		pool->opp_shops.shrink = pool_shrink;
 #endif
-		pool->ppp_shops.seeks = ORDER_TO_SEEKS(pool_order);
+		pool->opp_shops.seeks = ORDER_TO_SEEKS(pool_order);
 
-		pool->pool_shrinker = ll_shrinker_create(&pool->ppp_shops, 0,
+		pool->pool_shrinker = ll_shrinker_create(&pool->opp_shops, 0,
 							 "sptlrpc_pool");
 		if (IS_ERR(pool->pool_shrinker))
 			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
@@ -1067,7 +1067,7 @@ fail:
 	for (pool_order = 0; pool_order <= to_revert; pool_order++) {
 		pool = page_pools[pool_order];
 		if (pool) {
-			if (pool->ppp_ptr_pages)
+			if (pool->opp_ptr_pages)
 				pool_ptrs_free(pool);
 			OBD_FREE(pool, sizeof(**page_pools));
 		}
@@ -1082,32 +1082,32 @@ void sptlrpc_pool_fini(void)
 {
 	unsigned long cleaned, nptr_pages;
 	int pool_order;
-	struct ptlrpc_page_pool *pool;
+	struct obd_page_pool *pool;
 
 	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
 		pool = page_pools[pool_order];
 		shrinker_free(pool->pool_shrinker);
-		LASSERT(pool->ppp_ptr_pages);
-		LASSERT(pool->ppp_total_pages == pool->ppp_free_pages);
+		LASSERT(pool->opp_ptr_pages);
+		LASSERT(pool->opp_total_pages == pool->opp_free_pages);
 
-		nptr_pages = npages_to_nptr_pages(pool->ppp_total_pages);
-		cleaned = pool_cleanup(pool->ppp_ptr_pages, nptr_pages, pool);
-		LASSERT(cleaned == pool->ppp_total_pages);
+		nptr_pages = npages_to_nptr_pages(pool->opp_total_pages);
+		cleaned = pool_cleanup(pool->opp_ptr_pages, nptr_pages, pool);
+		LASSERT(cleaned == pool->opp_total_pages);
 
 		pool_ptrs_free(pool);
 
-		if (pool->ppp_st_access > 0) {
+		if (pool->opp_st_access > 0) {
 			CDEBUG(D_SEC,
 			       "max pages %lu, grows %u, grow fails %u, shrinks %u, access %lu, missing %lu, max qlen %u, max wait ms %lld, out of mem %lu\n",
-			       pool->ppp_st_max_pages,
-			       pool->ppp_st_grows,
-			       pool->ppp_st_grow_fails,
-			       pool->ppp_st_shrinks,
-			       pool->ppp_st_access,
-			       pool->ppp_st_missings,
-			       pool->ppp_st_max_wqlen,
-			       ktime_to_ms(pool->ppp_st_max_wait),
-			       pool->ppp_st_outofmem);
+			       pool->opp_st_max_pages,
+			       pool->opp_st_grows,
+			       pool->opp_st_grow_fails,
+			       pool->opp_st_shrinks,
+			       pool->opp_st_access,
+			       pool->opp_st_missings,
+			       pool->opp_st_max_wqlen,
+			       ktime_to_ms(pool->opp_st_max_wait),
+			       pool->opp_st_outofmem);
 		}
 
 		OBD_FREE(pool, sizeof(**page_pools));
