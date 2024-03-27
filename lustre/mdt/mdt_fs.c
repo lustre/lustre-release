@@ -44,7 +44,7 @@ static const struct proc_ops mdt_open_files_seq_fops = {
 	.proc_open		= lprocfs_mdt_open_files_seq_open,
 	.proc_read		= seq_read,
 	.proc_lseek		= seq_lseek,
-	.proc_release		= seq_release,
+	.proc_release		= single_release,
 };
 
 /**
