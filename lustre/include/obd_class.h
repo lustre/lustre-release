@@ -147,8 +147,18 @@ int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max);
 int obd_mod_rpc_stats_seq_show(struct client_obd *cli, struct seq_file *seq);
 
 /* page_pools.c */
-int  sptlrpc_pool_init(void);
-void sptlrpc_pool_fini(void);
+int  obd_pool_init(void);
+void obd_pool_fini(void);
+void obd_pool_add_user(void);
+int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc);
+int obd_pool_get_pages_array(struct page **pa, unsigned int count);
+int obd_pool_get_pages(void **buf, unsigned int order);
+void obd_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc);
+void obd_pool_put_pages_array(struct page **pa, unsigned int count);
+void obd_pool_put_pages(void *buf, unsigned int order);
+int obd_pool_get_free_pages(unsigned int order);
+int pool_is_at_full_capacity(int order);
+
 int encrypt_page_pools_seq_show(struct seq_file *m, void *v);
 int page_pools_seq_show(struct seq_file *m, void *v);
 

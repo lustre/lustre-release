@@ -1495,7 +1495,7 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 	}
 
 	if (pa) {
-		sptlrpc_pool_put_pages_array(pa, j);
+		obd_pool_put_pages_array(pa, j);
 		OBD_FREE_PTR_ARRAY_LARGE(pa, page_count);
 	}
 #endif
@@ -1558,7 +1558,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			RETURN(-ENOMEM);
 		}
 
-		rc = sptlrpc_pool_get_pages_array(pa, page_count);
+		rc = obd_pool_get_pages_array(pa, page_count);
 		if (rc) {
 			CDEBUG(D_SEC, "failed to allocate from enc pool: %d\n",
 			       rc);
@@ -1615,8 +1615,8 @@ retry_encrypt:
 					goto retry_encrypt;
 				}
 				if (pa) {
-					sptlrpc_pool_put_pages_array(pa + i,
-								page_count - i);
+					obd_pool_put_pages_array(pa + i,
+								 page_count - i);
 					OBD_FREE_PTR_ARRAY_LARGE(pa,
 								 page_count);
 				}

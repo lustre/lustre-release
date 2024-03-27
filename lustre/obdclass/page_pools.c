@@ -623,11 +623,11 @@ static int pool_should_grow(int needed, struct obd_page_pool *pool)
 /*
  * Export the number of free pages in the pool of 'order'
  */
-int sptlrpc_pool_get_free_pages(unsigned int order)
+int obd_pool_get_free_pages(unsigned int order)
 {
 	return page_pools[order]->opp_free_pages;
 }
-EXPORT_SYMBOL(sptlrpc_pool_get_free_pages);
+EXPORT_SYMBOL(obd_pool_get_free_pages);
 
 /*
  * Let outside world know if pool full capacity is reached
@@ -663,9 +663,9 @@ static bool __grow_pool_try(int needed, struct obd_page_pool *pool);
 /*
  * we allocate the requested pages atomically.
  */
-static inline int __sptlrpc_pool_get_pages(void *array, unsigned int count,
-					   unsigned int order,
-					   void **(*page_from)(void *, int))
+static inline int __obd_pool_get_pages(void *array, unsigned int count,
+				       unsigned int order,
+				       void **(*page_from)(void *, int))
 {
 	struct obd_page_pool *page_pool = page_pools[order];
 	wait_queue_entry_t waitlink;
@@ -786,7 +786,7 @@ out_unlock:
 	return rc;
 }
 
-int sptlrpc_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
+int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 {
 	int rc;
 
@@ -802,7 +802,7 @@ int sptlrpc_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 	if (desc->bd_enc_vec == NULL)
 		return -ENOMEM;
 
-	rc = __sptlrpc_pool_get_pages((void *)desc, desc->bd_iov_count, 0,
+	rc = __obd_pool_get_pages((void *)desc, desc->bd_iov_count, 0,
 				      page_from_bulkdesc);
 	if (rc) {
 		OBD_FREE_LARGE(desc->bd_enc_vec,
@@ -812,23 +812,23 @@ int sptlrpc_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 	}
 	return rc;
 }
-EXPORT_SYMBOL(sptlrpc_pool_get_desc_pages);
+EXPORT_SYMBOL(obd_pool_get_desc_pages);
 
-int sptlrpc_pool_get_pages_array(struct page **pa, unsigned int count)
+int obd_pool_get_pages_array(struct page **pa, unsigned int count)
 {
-	return __sptlrpc_pool_get_pages((void *)pa, count, 0,
+	return __obd_pool_get_pages((void *)pa, count, 0,
 					page_from_pagearray);
 }
-EXPORT_SYMBOL(sptlrpc_pool_get_pages_array);
+EXPORT_SYMBOL(obd_pool_get_pages_array);
 
-int sptlrpc_pool_get_pages(void **pages, unsigned int order)
+int obd_pool_get_pages(void **pages, unsigned int order)
 {
-	return __sptlrpc_pool_get_pages((void *)pages, 1, order,
+	return __obd_pool_get_pages((void *)pages, 1, order,
 					page_from_bufarray);
 }
-EXPORT_SYMBOL(sptlrpc_pool_get_pages);
+EXPORT_SYMBOL(obd_pool_get_pages);
 
-static int __sptlrpc_pool_put_pages(void *array, unsigned int count,
+static int __obd_pool_put_pages(void *array, unsigned int count,
 				    unsigned int order,
 				    void **(*page_from)(void *, int))
 {
@@ -879,14 +879,14 @@ out_unlock:
 	return rc;
 }
 
-void sptlrpc_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
+void obd_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
 {
 	int rc;
 
 	if (desc->bd_enc_vec == NULL)
 		return;
 
-	rc = __sptlrpc_pool_put_pages((void *)desc, desc->bd_iov_count, 0,
+	rc = __obd_pool_put_pages((void *)desc, desc->bd_iov_count, 0,
 				      page_from_bulkdesc);
 	if (rc)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
@@ -895,29 +895,28 @@ void sptlrpc_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
 		       desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
 	desc->bd_enc_vec = NULL;
 }
-EXPORT_SYMBOL(sptlrpc_pool_put_desc_pages);
+EXPORT_SYMBOL(obd_pool_put_desc_pages);
 
-void sptlrpc_pool_put_pages_array(struct page **pa, unsigned int count)
+void obd_pool_put_pages_array(struct page **pa, unsigned int count)
 {
 	int rc;
 
-	rc = __sptlrpc_pool_put_pages((void *)pa, count, 0,
-				      page_from_pagearray);
+	rc = __obd_pool_put_pages((void *)pa, count, 0, page_from_pagearray);
 
 	if (rc)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
 }
-EXPORT_SYMBOL(sptlrpc_pool_put_pages_array);
+EXPORT_SYMBOL(obd_pool_put_pages_array);
 
-void sptlrpc_pool_put_pages(void *buf, unsigned int order)
+void obd_pool_put_pages(void *buf, unsigned int order)
 {
 	int rc;
 
-	rc = __sptlrpc_pool_put_pages(buf, 1, order, page_from_bufarray);
+	rc = __obd_pool_put_pages(buf, 1, order, page_from_bufarray);
 	if (rc)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
 }
-EXPORT_SYMBOL(sptlrpc_pool_put_pages);
+EXPORT_SYMBOL(obd_pool_put_pages);
 
 /* called with pool->opp_lock held */
 static bool __grow_pool_try(int needed, struct obd_page_pool *pool)
@@ -974,7 +973,7 @@ static bool grow_pool_try(int needed, struct obd_page_pool *pool)
  * initial pages in add_user() if current pool is empty, rest would be
  * handled by the pool self-adaption.
  */
-void sptlrpc_pool_add_user(void)
+void obd_pool_add_user(void)
 {
 	struct obd_page_pool *pool = page_pools[0];
 
@@ -983,7 +982,7 @@ void sptlrpc_pool_add_user(void)
 	 */
 	grow_pool_try(1, pool);
 }
-EXPORT_SYMBOL(sptlrpc_pool_add_user);
+EXPORT_SYMBOL(obd_pool_add_user);
 
 static inline void pool_ptrs_alloc(struct obd_page_pool *pool)
 {
@@ -1002,7 +1001,7 @@ static inline void pool_ptrs_free(struct obd_page_pool *pool)
 		       pool->opp_max_ptr_pages * sizeof(*pool->opp_ptr_pages));
 }
 
-int sptlrpc_pool_init(void)
+int obd_pool_init(void)
 {
 	struct obd_page_pool *pool;
 	int pool_max_pages = cfs_totalram_pages() / POOLS_COUNT;
@@ -1054,7 +1053,7 @@ int sptlrpc_pool_init(void)
 		pool->opp_shops.seeks = ORDER_TO_SEEKS(pool_order);
 
 		pool->pool_shrinker = ll_shrinker_create(&pool->opp_shops, 0,
-							 "sptlrpc_pool");
+							 "obd_pool");
 		if (IS_ERR(pool->pool_shrinker))
 			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
 
@@ -1076,9 +1075,9 @@ fail:
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(sptlrpc_pool_init);
+EXPORT_SYMBOL(obd_pool_init);
 
-void sptlrpc_pool_fini(void)
+void obd_pool_fini(void)
 {
 	unsigned long cleaned, nptr_pages;
 	int pool_order;
@@ -1115,4 +1114,4 @@ void sptlrpc_pool_fini(void)
 
 	OBD_FREE(page_pools, POOLS_COUNT * sizeof(*page_pools));
 }
-EXPORT_SYMBOL(sptlrpc_pool_fini);
+EXPORT_SYMBOL(obd_pool_fini);

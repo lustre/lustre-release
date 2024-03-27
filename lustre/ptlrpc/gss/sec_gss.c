@@ -1104,7 +1104,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
 	}
 
 	if (SPTLRPC_FLVR_BULK_SVC(sec->ps_flvr.sf_rpc) == SPTLRPC_BULK_SVC_PRIV)
-		sptlrpc_pool_add_user();
+		obd_pool_add_user();
 
 	CDEBUG(D_SEC, "create %s%s@%p\n", (svcctx ? "reverse " : ""),
 	       policy->sp_name, gsec);
