@@ -3794,6 +3794,7 @@ kiblnd_startup(struct lnet_ni *ni)
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	net->ibn_init = IBLND_INIT_ALL;
+	kfree(ifaces);
 
 	return 0;
 

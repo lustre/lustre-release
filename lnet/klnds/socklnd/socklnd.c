@@ -2649,6 +2649,7 @@ ksocknal_startup(struct lnet_ni *ni)
 	list_add(&net->ksnn_list, &ksocknal_data.ksnd_nets);
 	net->ksnn_ni = ni;
 	ksocknal_data.ksnd_nnets++;
+	kfree(ifaces);
 
 	return 0;
 
@@ -2657,6 +2658,7 @@ out_net:
 out_base:
 	if (ksocknal_data.ksnd_nnets == 0)
 		ksocknal_base_shutdown();
+	kfree(ifaces);
 
 	return -ENETDOWN;
 }
