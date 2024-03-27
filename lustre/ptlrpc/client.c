@@ -1670,11 +1670,11 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 	ENTRY;
 	LASSERT(req->rq_phase == RQ_PHASE_NEW);
 
-	/* do not try to go further if there is not enough memory in enc_pool */
+	/* do not try to go further if there is not enough memory in pool */
 	if (req->rq_sent && req->rq_bulk)
 		if (req->rq_bulk->bd_iov_count >
-		    sptlrpc_pool_get_free_pages(PAGES_POOL) &&
-		    pool_is_at_full_capacity())
+		    sptlrpc_pool_get_free_pages(0) &&
+		    pool_is_at_full_capacity(0))
 			RETURN(-ENOMEM);
 
 	if (req->rq_sent && (req->rq_sent > ktime_get_real_seconds()) &&
