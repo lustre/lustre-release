@@ -1442,6 +1442,7 @@ static inline void osc_finalize_bounce_page(struct page **pagep)
 {
 	struct page *page = *pagep;
 
+	ClearPageChecked(page);
 	/* PagePrivate2 was set in osc_encrypt_pagecache_blocks
 	 * to indicate the cipher page was allocated by ourselves.
 	 * So we must not free it via llcrypt.
