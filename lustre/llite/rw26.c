@@ -389,11 +389,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			GOTO(out, rc = PTR_ERR(page));
 
 		LASSERT(page->cp_type == CPT_TRANSIENT);
-		rc = cl_page_own(env, io, page);
-		if (rc) {
-			cl_page_put(env, page);
-			break;
-		}
 
 		page->cp_sync_io = anchor;
 		if (inode && IS_ENCRYPTED(inode)) {

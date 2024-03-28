@@ -498,6 +498,7 @@ static void discard_cl_pages(const struct lu_env *env, struct cl_io *io,
 	for (i = 0; i < max_index; i++) {
 		struct cl_page *page = pvec[i];
 
+		LASSERT(page->cp_type != CPT_TRANSIENT);
 		LASSERT(cl_page_is_owned(page, io));
 		cl_page_discard(env, io, page);
 		cl_page_disown(env, io, page);

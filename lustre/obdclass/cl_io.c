@@ -846,7 +846,8 @@ void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page,
 	ENTRY;
 	/* it would be better to check that page is owned by "current" io, but
 	 * it is not passed here. */
-	LASSERT(page->cp_owner != NULL);
+	if (page->cp_type != CPT_TRANSIENT)
+		LASSERT(page->cp_owner != NULL);
 
 	LASSERT(list_empty(&page->cp_batch));
 	list_add_tail(&page->cp_batch, &plist->pl_pages);
@@ -959,7 +960,8 @@ void cl_page_list_disown(const struct lu_env *env, struct cl_page_list *plist)
 		/*
 		 * XXX __cl_page_disown() will fail if page is not locked.
 		 */
-		__cl_page_disown(env, page);
+		if (page->cp_type == CPT_CACHEABLE)
+			__cl_page_disown(env, page);
 		lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue",
 			      plist);
 		cl_page_put(env, page);
