@@ -8197,7 +8197,7 @@ test_56xe() {
 
 	local dir=$DIR/$tdir
 	local f_comp=$dir/$tfile
-	local layout="-E 1M -S 512K -c 1 -E -1 -S 1M -c 2 -i 0"
+	local layout="-E 1M -S 512K -E 2M -c 2 -E 3M -c 2 -E eof -c $OSTCOUNT"
 	local layout_before=""
 	local layout_after=""
 
@@ -8211,14 +8211,23 @@ test_56xe() {
 	# 1. migrate a comp layout file by lfs_migrate
 	$LFS_MIGRATE -y $f_comp || error "cannot migrate $f_comp by lfs_migrate"
 	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
+	idx_before=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
+		     tr '\n' ' ')
 	[ "$layout_before" == "$layout_after" ] ||
 		error "lfs_migrate: $layout_before != $layout_after"
 
 	# 2. migrate a comp layout file by lfs migrate
 	$LFS migrate $f_comp || error "cannot migrate $f_comp by lfs migrate"
 	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
+	idx_after=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
+		     tr '\n' ' ')
 	[ "$layout_before" == "$layout_after" ] ||
 		error "lfs migrate: $layout_before != $layout_after"
+
+	# this may not fail every time with a broken lfs migrate, but will fail
+	# often enough to notice, and will not have false positives very often
+	[ "$idx_before" != "$idx_after" ] ||
+		error "lfs migrate: $idx_before == $idx_after"
 }
 run_test 56xe "migrate a composite layout file"
 

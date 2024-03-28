@@ -1603,6 +1603,42 @@ int llapi_layout_ost_index_set(struct llapi_layout *layout, int stripe_number,
 	return 0;
 }
 
+static int reset_index_cb(struct llapi_layout *layout, void *cbdata)
+{
+	int *save_errno = (int *)cbdata;
+	int rc;
+
+	rc = llapi_layout_ost_index_set(layout, 0, LLAPI_LAYOUT_DEFAULT);
+
+	/* save the first error returned, but try to reset all components */
+	if (rc && !*save_errno)
+		*save_errno = errno;
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+/**
+ * Reset the OST index on all components in \a layout to LLAPI_LAYOUT_DEFAULT.
+ *
+ * This is useful when reusing a file layout that was copied from an existing
+ * file and to be used for a new file (e.g. when mirroring or migrating or
+ * copying a file), so the objects are allocated on different OSTs.
+ *
+ * \retval  0 Success.
+ * \retval -ve errno Error with errno set to non-zero value.
+ */
+int llapi_layout_ost_index_reset(struct llapi_layout *layout)
+{
+	int save_errno = 0;
+	int rc;
+
+	rc = llapi_layout_comp_iterate(layout, reset_index_cb, &save_errno);
+
+	if (save_errno)
+		errno = save_errno;
+	return save_errno ? -save_errno : (rc < 0 ? -errno : 0);
+}
+
 /**
  * Get the OST index associated with stripe \a stripe_number.
  *
@@ -2791,8 +2827,8 @@ bool llapi_layout_is_composite(struct llapi_layout *layout)
  * Iterate every components in the @layout and call callback function @cb.
  *
  * \param[in] layout	component layout list.
- * \param[in] cb	callback for each component
- * \param[in] cbdata	callback data
+ * \param[in] cb	callback function called for each component
+ * \param[in] cbdata	callback data passed to the callback function
  *
  * \retval < 0				error happens during the iteration
  * \retval LLAPI_LAYOUT_ITER_CONT	finished the iteration w/o error

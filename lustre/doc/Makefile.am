@@ -170,6 +170,7 @@ LIBMAN = 					\
 	llapi_layout_get_by_xattr.3		\
 	llapi_layout_ost_index_get.3		\
 	llapi_layout_ost_index_set.3		\
+	llapi_layout_ost_index_reset.3		\
 	llapi_layout_pattern_get.3		\
 	llapi_layout_pattern_set.3		\
 	llapi_layout_pool_name_get.3		\

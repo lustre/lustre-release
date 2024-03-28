@@ -4521,8 +4521,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				 * Strip the source layout of specific
 				 * OST object/index values.
 				 */
-				result = llapi_layout_ost_index_set(layout, 0,
-						LLAPI_LAYOUT_DEFAULT);
+				result = llapi_layout_ost_index_reset(layout);
 				if (result) {
 					fprintf(stderr,
 						"%s: set default ost index failed: %s\n",

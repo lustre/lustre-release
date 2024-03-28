@@ -44,6 +44,7 @@ help:
 	@echo  'Generic targets:'
 	@echo  '  all               - Build all modules and utilities enabled by'
 	@echo  '                      autotools'
+	@echo  '  utils             - Build only userspace utilities'
 	@echo  '  checkpatch        - Run checkpatch.pl on latest commit'
 	@echo  '  checkstack        - Run checkstack.pl'
 	@echo  '  checkstack-update - Update checkstack.pl'
@@ -59,6 +60,11 @@ help:
 
 checkpatch:
 	@git diff HEAD~1 | ./contrib/scripts/checkpatch.pl
+
+utils:
+	$(MAKE) -C libcfs/libcfs/util
+	$(MAKE) -C lnet/utils
+	$(MAKE) -C lustre/utils
 
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules

@@ -22,6 +22,7 @@ obtain the layout of a Lustre file
 .fi
 .SH DESCRIPTION
 .PP
+The functions
 .BR llapi_layout_get_by_xattr() ,
 .BR llapi_layout_get_by_fd() ,
 .BR llapi_layout_get_by_fid() ,
@@ -34,8 +35,8 @@ containing the layout information for the file referenced by
 .IR fd ,
 .IR fid ,
 or
-.IR path .
-The
+.IR path ,
+respectively.  The
 .B struct llapi_layout
 is an opaque entity containing the layout information for a file in a
 Lustre filesystem.  Its internal structure should not be directly
@@ -52,7 +53,7 @@ is a Lustre layout extended attribute (LOV EA) from a file or directory in
 a Lustre filesystem. The
 .I lov_xattr
 should be the raw xattr without being byte-swapped, since this function will
-swap it properly.
+swap it to the local machine endianness properly.
 .PP
 For
 .BR llapi_layout_get_by_fd() ,
@@ -62,12 +63,10 @@ filesystem.
 .PP
 For
 .BR llapi_layout_get_by_fid() ,
-the
 .I lustre_path
-argument serves to identify the Lustre filesystem containing the file
-represented by
+identifies the Lustre filesystem containing the file represented by
 .IR fid .
-It is typically the filesystem root, but may also be any path beneath
+It is typically the filesystem root directory, but may also be any path beneath
 the root.  Use the function
 .BR llapi_path2fid (3)
 to obtain a
@@ -82,17 +81,15 @@ argument that names a file or directory in a Lustre filesystem.
 .PP
 Zero or more flags may be bitwise-or'd together in
 .I flags
-or
-.I xattr_flags
 to control how a layout is retrieved.  Currently
-.B llapi_layout_get_by_path()
-accepts only one flag, while
 .B llapi_layout_get_by_fd()
 and
 .B llapi_layout_get_by_fid()
-do not use any flags. The list of flags that can be used in
-.I flags
-is as follows:
+do not accept any values for
+.IR flags ,
+while
+.B llapi_layout_get_by_path()
+accepts only one flag as follows:
 .TP 5
 .SM LLAPI_LAYOUT_GET_EXPECTED
 Unspecified attribute values are replaced by the literal default values
@@ -128,10 +125,11 @@ since stripe size is unspecified, while
 reports the literal value 1048576.  Both forms report a stripe count
 of 2, since that attribute is specified.
 .PP
-The values that can be used by
-.B llapi_layout_get_by_xattr()
+Valid arguments for
 .I flags
-argument is as follows:
+with
+.B llapi_layout_get_by_xattr()
+are:
 .TP 5
 .SM LLAPI_LAYOUT_GET_CHECK
 If the
@@ -150,13 +148,16 @@ when necessary, leaving
 unmodified. Otherwise, the byte swapping will be done to the fields of the
 .I lov_xattr
 buffer directly.
+.SH NOTE
+When using these functions to copy an existing file's layout to create a
+new file with
+.B llapi_layout_file_open (3)
+for mirroring, migration, or as the template for a new file,
+.BR llapi_layout_ost_index_reset (3)
+should be called to reset the OST index values for each component, so that
+the file copy is not created on exactly the same OSTs as the original file.
 .SH RETURN VALUES
-.LP
-.BR llapi_layout_get_by_fd() ,
-.BR llapi_layout_get_by_fid() ,
-and
-.B llapi_layout_get_by_path()
-return a valid pointer on success or
+These functions return a valid pointer on success or
 .B NULL
 on failure with
 .B errno
@@ -180,6 +181,7 @@ An invalid argument was specified.
 The kernel returned less than the expected amount of data.
 .SH "SEE ALSO"
 .BR llapi_layout_file_open (3),
+.BR llapi_layout_ost_index_reset (3),
 .BR llapi_path2fid (3),
 .BR llapi_layout (7),
 .BR lustreapi (7)

@@ -1002,6 +1002,18 @@ int llapi_layout_ost_index_get(const struct llapi_layout *layout,
 int llapi_layout_ost_index_set(struct llapi_layout *layout, int stripe_number,
 			       uint64_t index);
 
+/**
+ * Reset the OST index on all components in \a layout to LLAPI_LAYOUT_DEFAULT.
+ *
+ * This is useful when reusing a file layout that was copied from an existing
+ * file and to be used for a new file (e.g. when mirroring or migrating or
+ * copying a file), so the objects are allocated on different OSTs.
+ *
+ * \retval  0 Success.
+ * \retval -1 Error with errno set to non-zero value.
+ */
+int llapi_layout_ost_index_reset(struct llapi_layout *layout);
+
 /******************** Pool Name ********************/
 
 /**
@@ -1285,7 +1297,15 @@ enum {
 typedef int (*llapi_layout_iter_cb)(struct llapi_layout *layout, void *cbdata);
 
 /**
- * Iterate all components in the corresponding layout
+ * Iterate every components in the @layout and call callback function @cb.
+ *
+ * \param[in] layout	component layout list.
+ * \param[in] cb	callback function called for each component
+ * \param[in] cbdata	callback data passed to the callback function
+ *
+ * \retval < 0				error happens during the iteration
+ * \retval LLAPI_LAYOUT_ITER_CONT	finished the iteration w/o error
+ * \retval LLAPI_LAYOUT_ITER_STOP	got something, stop the iteration
  */
 int llapi_layout_comp_iterate(struct llapi_layout *layout,
 			      llapi_layout_iter_cb cb, void *cbdata);

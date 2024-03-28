@@ -1,0 +1,52 @@
+.TH llapi_layout_ost_index_reset 3 "2024 Mar 27" "Lustre User API"
+.SH NAME
+llapi_layout_ost_index_reset \- reset OST index of all Lustre file components
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_ost_index_reset(struct llapi_layout *" layout );
+.fi
+.SH DESCRIPTION
+.PP
+.B llapi_layout_ost_index_reset()
+resets the starting ost_index number of all components in the specified file
+.I layout 
+to
+.BR LLAPI_LAYOUT_DEFAULT .
+This allows the MDS to automatically allocate the objects for each file
+component to the best OSTs available at that time.
+.PP
+This should be called when copying an existing file
+.I layout
+retrieved using one of
+.BR llapi_layout_get_by_fid (3),
+.BR llapi_layout_get_by_fd (3),
+.BR llapi_layout_get_by_path (3),
+or
+.BR llapi_layout_get_by_xattr (3),
+so that the OST selection is not copied exactly from the source layout if
+it is used with
+.BR llapi_layout_file_open (3)
+to create a new file for migration, mirroring, or other replication task.
+.SH RETURN VALUES
+.LP
+.B llapi_layout_ost_index_reset()
+returns 0 on success, or a negative error if an error occurred (in which case,
+errno is set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.TP 15
+.SM ENOENT
+The layout does not have any valid components.
+.TP 15
+.SM ENOMEM
+The layout does not have any valid components.
+.SH "SEE ALSO"
+.BR llapi_layout (7),
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout_ost_index_set (3),
+.BR lustreapi (7)
