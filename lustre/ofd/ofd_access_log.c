@@ -578,6 +578,7 @@ void ofd_access_log_delete(struct ofd_access_log *oal)
 		wake_up(&ocb->ocb_read_wait_queue);
 	up_read(&oal->oal_buf_list_sem);
 	cdev_device_del(&oal->oal_cdev, &oal->oal_device);
+	put_device(&oal->oal_device);
 }
 
 /* private_data for control device file. */
