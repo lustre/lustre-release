@@ -705,7 +705,7 @@ static int qmt_lgd_extend_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 {
 	struct lqe_glbl_entry *lqeg_arr, *old_lqeg_arr;
 	struct lquota_entry *lqe;
-	int old_num, rc;
+	int old_num = 0, rc;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
