@@ -28,6 +28,14 @@ if [[ "$ost1_FSTYPE" == "zfs" ]]; then
 	ALWAYS_EXCEPT+=" 49a "
 fi
 
+if [ -r /etc/redhat-release ]; then
+	rhel_version=$(cat /etc/redhat-release |
+		sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
+	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
+		always_except LU-17675 61a
+	fi
+fi
+
 build_test_filter
 
 [[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
