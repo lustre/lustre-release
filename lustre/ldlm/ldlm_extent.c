@@ -59,7 +59,105 @@
 #define START(node) ((node)->l_policy_data.l_extent.start)
 #define LAST(node) ((node)->l_policy_data.l_extent.end)
 INTERVAL_TREE_DEFINE(struct ldlm_lock, l_rb, u64, l_subtree_last,
-		     START, LAST, static, extent);
+		     START, LAST, static inline, extent);
+
+static inline struct ldlm_lock *extent_next_lock(struct ldlm_lock *lock)
+{
+	lock = list_next_entry(lock, l_same_extent);
+	if (RB_EMPTY_NODE(&lock->l_rb))
+		return lock;
+	return extent_next(lock);
+}
+
+static inline struct ldlm_lock *extent_prev_lock(struct ldlm_lock *lock)
+{
+	lock = list_prev_entry(lock, l_same_extent);
+	if (RB_EMPTY_NODE(&lock->l_rb))
+		return lock;
+	return extent_prev(lock);
+}
+
+static inline struct ldlm_lock *extent_insert_unique(
+	struct ldlm_lock *node, struct interval_tree_root *root)
+{
+	struct rb_node **link, *rb_parent = NULL;
+	u64 start = START(node), last = LAST(node);
+	struct ldlm_lock *parent;
+	bool leftmost = true;
+
+#ifdef HAVE_INTERVAL_TREE_CACHED
+	link = &root->rb_root.rb_node;
+#else
+	link = &root->rb_node;
+#endif
+	while (*link) {
+		rb_parent = *link;
+		parent = rb_entry(rb_parent, struct ldlm_lock, l_rb);
+		if (parent->l_subtree_last < last)
+			parent->l_subtree_last = last;
+		if (start == START(parent)) {
+			if (last == LAST(parent))
+				return parent;
+			if (last < LAST(parent)) {
+				link = &parent->l_rb.rb_left;
+			} else {
+				link = &parent->l_rb.rb_right;
+				leftmost = false;
+			}
+		} else if (start < START(parent))
+			link = &parent->l_rb.rb_left;
+		else {
+			link = &parent->l_rb.rb_right;
+			leftmost = false;
+		}
+	}
+
+	node->l_subtree_last = last;
+	rb_link_node(&node->l_rb, rb_parent, link);
+#ifdef HAVE_INTERVAL_TREE_CACHED
+	rb_insert_augmented_cached(&node->l_rb, root,
+				   leftmost, &extent_augment);
+#else
+	rb_insert_augmented(&node->l_rb, root,
+			    &extent_augment);
+#endif
+	return NULL;
+}
+
+static inline void extent_replace(struct ldlm_lock *in_tree,
+				  struct ldlm_lock *new,
+				  struct interval_tree_root *tree)
+{
+	struct rb_node *p = rb_parent(&in_tree->l_rb);
+
+	/* place 'new' in the rbtree replacing in_tree */
+	new->l_rb.rb_left = in_tree->l_rb.rb_left;
+	new->l_rb.rb_right = in_tree->l_rb.rb_right;
+
+	if (new->l_rb.rb_left)
+		rb_set_parent_color(new->l_rb.rb_left, &new->l_rb,
+				    rb_color(new->l_rb.rb_left));
+	if (new->l_rb.rb_right)
+		rb_set_parent_color(new->l_rb.rb_right, &new->l_rb,
+				    rb_color(new->l_rb.rb_right));
+	rb_set_parent_color(&new->l_rb, p, rb_color(&in_tree->l_rb));
+
+	if (!p) {
+#ifdef HAVE_INTERVAL_TREE_CACHED
+		tree->rb_root.rb_node = &new->l_rb;
+#else
+		tree->rb_node = &new->l_rb;
+#endif
+	} else if (p->rb_left == &in_tree->l_rb) {
+		p->rb_left = &new->l_rb;
+	} else {
+		p->rb_right = &new->l_rb;
+	}
+#ifdef HAVE_INTERVAL_TREE_CACHED
+	if (tree->rb_leftmost == &in_tree->l_rb)
+		tree->rb_leftmost = &new->l_rb;
+#endif
+}
 
 #ifdef HAVE_SERVER_SUPPORT
 # define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
@@ -454,7 +552,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				compat = 0;
 				for (lock = extent_first(tree);
 				     lock;
-				     lock = extent_next(lock))
+				     lock = extent_next_lock(lock))
 					ldlm_extent_compat_cb(lock, &data);
 				continue;
 			}
@@ -875,8 +973,18 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
 		for (lck = extent_last(tree);
 		     lck;
 		     lck = extent_prev(lck)) {
-			if (ldlm_is_kms_ignore(lck))
-				continue;
+			if (ldlm_is_kms_ignore(lck)) {
+				struct ldlm_lock *lk;
+
+				list_for_each_entry(lk, &lck->l_same_extent,
+						    l_same_extent)
+					if (!ldlm_is_kms_ignore(lk)) {
+						lk = NULL;
+						break;
+					}
+				if (lk)
+					continue;
+			}
 
 			/* If this lock has a greater or equal kms, we are not
 			 * the highest lock (or we share that distinction
@@ -933,18 +1041,22 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 			  struct ldlm_lock *lock)
 {
 	struct ldlm_interval_tree *tree;
+	struct ldlm_lock *orig;
 	int idx;
 
 	LASSERT(ldlm_is_granted(lock));
 
 	LASSERT(RB_EMPTY_NODE(&lock->l_rb));
+	LASSERT(list_empty(&lock->l_same_extent));
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
 	LASSERT(lock->l_granted_mode == BIT(idx));
 	LASSERT(lock->l_granted_mode == res->lr_itree[idx].lit_mode);
 
 	tree = &res->lr_itree[idx];
-	extent_insert(lock, &tree->lit_root);
+	orig = extent_insert_unique(lock, &tree->lit_root);
+	if (orig)
+		list_add(&lock->l_same_extent, &orig->l_same_extent);
 	tree->lit_size++;
 
 	/* even though we use interval tree to manage the extent lock, we also
@@ -955,8 +1067,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_GRANT_CHECK)) {
 		struct ldlm_lock *lck;
 
-		list_for_each_entry_reverse(lck, &res->lr_granted,
-					l_res_link) {
+		list_for_each_entry_reverse(lck, &res->lr_granted, l_res_link) {
 			if (lck == lock)
 				continue;
 			if (lockmode_compat(lck->l_granted_mode,
@@ -981,7 +1092,8 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 	struct ldlm_interval_tree *tree;
 	int idx;
 
-	if (RB_EMPTY_NODE(&lock->l_rb)) /* duplicate unlink */
+	if (RB_EMPTY_NODE(&lock->l_rb) &&
+	    list_empty(&lock->l_same_extent)) /* duplicate unlink */
 		return;
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
@@ -991,8 +1103,19 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 	LASSERT(!INTERVAL_TREE_EMPTY(&tree->lit_root));
 
 	tree->lit_size--;
-	extent_remove(lock, &tree->lit_root);
-	RB_CLEAR_NODE(&lock->l_rb);
+
+	if (RB_EMPTY_NODE(&lock->l_rb)) {
+		list_del_init(&lock->l_same_extent);
+	} else if (list_empty(&lock->l_same_extent)) {
+		extent_remove(lock, &tree->lit_root);
+		RB_CLEAR_NODE(&lock->l_rb);
+	} else {
+		struct ldlm_lock *next = list_next_entry(lock, l_same_extent);
+		list_del_init(&lock->l_same_extent);
+		extent_remove(lock, &tree->lit_root);
+		RB_CLEAR_NODE(&lock->l_rb);
+		extent_insert(next, &tree->lit_root);
+	}
 }
 
 void ldlm_extent_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
@@ -1016,11 +1139,15 @@ void ldlm_extent_search(struct interval_tree_root *root,
 			bool (*matches)(struct ldlm_lock *lock, void *data),
 			void *data)
 {
-	struct ldlm_lock *lock;
+	struct ldlm_lock *lock, *lock2;
 
 	for (lock = extent_iter_first(root, start, end);
 	     lock;
-	     lock = extent_iter_next(lock, start, end))
+	     lock = extent_iter_next(lock, start, end)) {
 		if (matches(lock, data))
-			break;
+			return;
+		list_for_each_entry(lock2, &lock->l_same_extent, l_same_extent)
+			if (matches(lock2, data))
+				return;
+	}
 }

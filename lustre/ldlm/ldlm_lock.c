@@ -484,6 +484,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 		break;
 	case LDLM_EXTENT:
 		RB_CLEAR_NODE(&lock->l_rb);
+		INIT_LIST_HEAD(&lock->l_same_extent);
 		break;
 	case LDLM_MAX_TYPE:
 		break;

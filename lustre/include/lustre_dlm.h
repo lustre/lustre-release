@@ -819,6 +819,7 @@ struct ldlm_lock {
 			struct ldlm_extent	l_req_extent;
 			struct rb_node		l_rb;
 			u64			l_subtree_last;
+			struct list_head	l_same_extent;
 		};
 		/* LDLM_PLAIN and LDLM_IBITS locks */
 		struct {
