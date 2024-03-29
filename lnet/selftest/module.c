@@ -67,12 +67,31 @@ lnet_selftest_exit(void)
 	}
 }
 
+void
+lnet_selftest_structure_assertion(void)
+{
+	BUILD_BUG_ON(sizeof(struct srpc_msg) != 160);
+	BUILD_BUG_ON(sizeof(struct srpc_test_reqst) != 70);
+	BUILD_BUG_ON(offsetof(struct srpc_msg, msg_body.tes_reqst.tsr_concur) !=
+		     72);
+	BUILD_BUG_ON(offsetof(struct srpc_msg, msg_body.tes_reqst.tsr_ndest) !=
+			      78);
+	BUILD_BUG_ON(sizeof(struct srpc_stat_reply) != 136);
+	BUILD_BUG_ON(sizeof(struct srpc_stat_reqst) != 28);
+}
+
 static int __init
 lnet_selftest_init(void)
 {
 	int nscheds;
 	int rc = -ENOMEM;
 	int i;
+
+	/* This assertion checks that struct sizes do not drift
+	 * inadvertently and induce crashes when different nodes
+	 * running LNet Selftest have mismatched structures.
+	 */
+	lnet_selftest_structure_assertion();
 
 	rc = libcfs_setup();
 	if (rc)
