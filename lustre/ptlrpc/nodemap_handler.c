@@ -932,6 +932,57 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 }
 EXPORT_SYMBOL(nodemap_map_acl);
 
+static void nodemap_inherit_properties(struct lu_nodemap *dst,
+				       struct lu_nodemap *src,
+				       bool is_new)
+{
+	if (!src) {
+		dst->nmf_trust_client_ids = 0;
+		dst->nmf_allow_root_access = 0;
+		dst->nmf_deny_unknown = 0;
+		dst->nmf_map_mode = NODEMAP_MAP_ALL;
+		dst->nmf_enable_audit = 1;
+		dst->nmf_forbid_encryption = 0;
+		dst->nmf_readonly_mount = 0;
+		dst->nmf_rbac = NODEMAP_RBAC_ALL;
+
+		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
+		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
+		dst->nm_squash_projid = NODEMAP_NOBODY_PROJID;
+		dst->nm_fileset[0] = '\0';
+		dst->nm_sepol[0] = '\0';
+		dst->nm_offset_start_uid = 0;
+		dst->nm_offset_limit_uid = 0;
+		dst->nm_offset_start_gid = 0;
+		dst->nm_offset_limit_gid = 0;
+		dst->nm_offset_start_projid = 0;
+		dst->nm_offset_limit_projid = 0;
+	} else {
+		dst->nmf_trust_client_ids = src->nmf_trust_client_ids;
+		dst->nmf_allow_root_access = src->nmf_allow_root_access;
+		dst->nmf_deny_unknown = src->nmf_deny_unknown;
+		dst->nmf_map_mode = src->nmf_map_mode;
+		dst->nmf_enable_audit = src->nmf_enable_audit;
+		dst->nmf_forbid_encryption = src->nmf_forbid_encryption;
+		dst->nmf_readonly_mount = src->nmf_readonly_mount;
+		dst->nmf_rbac = src->nmf_rbac;
+		dst->nm_squash_uid = src->nm_squash_uid;
+		dst->nm_squash_gid = src->nm_squash_gid;
+		dst->nm_squash_projid = src->nm_squash_projid;
+		if (is_new) {
+			dst->nm_fileset[0] = '\0';
+			dst->nm_sepol[0] = '\0';
+		}
+		dst->nm_offset_start_uid = src->nm_offset_start_uid;
+		dst->nm_offset_limit_uid = src->nm_offset_limit_uid;
+		dst->nm_offset_start_gid = src->nm_offset_start_gid;
+		dst->nm_offset_limit_gid = src->nm_offset_limit_gid;
+		dst->nm_offset_start_projid = src->nm_offset_start_projid;
+		dst->nm_offset_limit_projid = src->nm_offset_limit_projid;
+
+	}
+}
+
 /*
  * Add nid range to given nodemap
  *
@@ -1283,10 +1334,11 @@ struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
 				  bool is_default)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	struct lu_nodemap	*default_nodemap;
-	struct cfs_hash		*hash = config->nmc_nodemap_hash;
-	int			 rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	struct lu_nodemap *default_nodemap;
+	struct lu_nodemap *parent_nodemap;
+	struct cfs_hash *hash = config->nmc_nodemap_hash;
+	int rc = 0;
 	ENTRY;
 
 	default_nodemap = config->nmc_default_nodemap;
@@ -1339,56 +1391,12 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nm_id = config->nmc_nodemap_highest_id;
 	}
 
-	if (is_default || default_nodemap == NULL) {
-		nodemap->nmf_trust_client_ids = 0;
-		nodemap->nmf_allow_root_access = 0;
-		nodemap->nmf_deny_unknown = 0;
-		nodemap->nmf_map_mode = NODEMAP_MAP_ALL;
-		nodemap->nmf_enable_audit = 1;
-		nodemap->nmf_forbid_encryption = 0;
-		nodemap->nmf_readonly_mount = 0;
-		nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
+	if (!is_default && !default_nodemap)
+		CWARN("adding nodemap '%s' to config without default nodemap\n",
+		      nodemap->nm_name);
 
-		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
-		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
-		nodemap->nm_squash_projid = NODEMAP_NOBODY_PROJID;
-		nodemap->nm_fileset[0] = '\0';
-		nodemap->nm_sepol[0] = '\0';
-		nodemap->nm_offset_start_uid = 0;
-		nodemap->nm_offset_limit_uid = 0;
-		nodemap->nm_offset_start_gid = 0;
-		nodemap->nm_offset_limit_gid = 0;
-		nodemap->nm_offset_start_projid = 0;
-		nodemap->nm_offset_limit_projid = 0;
-		if (!is_default)
-			CWARN("adding nodemap '%s' to config without"
-			      " default nodemap\n", nodemap->nm_name);
-	} else {
-		nodemap->nmf_trust_client_ids =
-				default_nodemap->nmf_trust_client_ids;
-		nodemap->nmf_allow_root_access =
-				default_nodemap->nmf_allow_root_access;
-		nodemap->nmf_deny_unknown = default_nodemap->nmf_deny_unknown;
-		nodemap->nmf_map_mode = default_nodemap->nmf_map_mode;
-		nodemap->nmf_enable_audit = default_nodemap->nmf_enable_audit;
-		nodemap->nmf_forbid_encryption =
-			default_nodemap->nmf_forbid_encryption;
-		nodemap->nmf_readonly_mount =
-			default_nodemap->nmf_readonly_mount;
-		nodemap->nmf_rbac = default_nodemap->nmf_rbac;
-
-		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
-		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
-		nodemap->nm_squash_projid = default_nodemap->nm_squash_projid;
-		nodemap->nm_fileset[0] = '\0';
-		nodemap->nm_sepol[0] = '\0';
-		nodemap->nm_offset_start_uid = 0;
-		nodemap->nm_offset_limit_uid = 0;
-		nodemap->nm_offset_start_gid = 0;
-		nodemap->nm_offset_limit_gid = 0;
-		nodemap->nm_offset_start_projid = 0;
-		nodemap->nm_offset_limit_projid = 0;
-	}
+	parent_nodemap = is_default ? NULL : default_nodemap;
+	nodemap_inherit_properties(nodemap, parent_nodemap, true);
 
 	RETURN(nodemap);
 
