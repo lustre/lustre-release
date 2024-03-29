@@ -548,7 +548,7 @@ test_0d() {
 
 	$mirror_cmd -N $tf-3 &> /dev/null
 	rc=$?
-	[[ $rc == 34 ]] ||
+	(( $rc == 34 || $MDS1_VERSION < $(version_code v2_14_57-72-gf468093cb6) )) ||
 		error "exceeded maximum mirror count returns $rc not ERANGE(34)"
 }
 run_test 0d "lfs mirror extend with -N option"
