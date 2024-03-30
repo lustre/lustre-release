@@ -1367,6 +1367,8 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	u64			 oid;
 	int			 skip_orphan;
 	int			 rc	= 0;
+	char *target_start;
+	int target_len;
 
 	ENTRY;
 
@@ -1387,8 +1389,10 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	if (CFS_FAIL_CHECK(OBD_FAIL_OST_NODESTROY))
 		goto done;
 
-	LCONSOLE(D_INFO, "%s: deleting orphan objects from "DOSTID
-		 " to "DOSTID"\n", ofd_name(ofd), seq, end_id + 1, seq, last);
+	deuuidify(exp->exp_client_uuid.uuid, NULL, &target_start, &target_len);
+	LCONSOLE(D_INFO, "%s: new connection from %.*s (cleaning up unused objects from "DOSTID" to "DOSTID")\n",
+		 ofd_name(ofd), target_len, target_start, seq, end_id + 1, seq,
+		 last);
 
 	while (oid > end_id) {
 		rc = fid_set_id(fid, oid);
