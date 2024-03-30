@@ -3642,7 +3642,8 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 				args->lsa_rc = LSE_FLAGS;
 		} else {
 			if (comp->llc_flags &
-			    ~(LCME_FL_EXTENSION | LCME_FL_PREF_RW))
+			    ~(LCME_FL_EXTENSION | LCME_FL_PREF_RW |
+			      LCME_FL_NOCOMPR))
 				args->lsa_rc = LSE_FLAGS;
 		}
 	}

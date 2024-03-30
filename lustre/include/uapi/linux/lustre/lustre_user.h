@@ -937,7 +937,7 @@ enum lov_comp_md_entry_flags {
 				 LCME_FL_EXTENSION)
 
 /* The mirror flags can be set by users at creation time. */
-#define LCME_USER_MIRROR_FLAGS	(LCME_FL_PREF_RW)
+#define LCME_USER_MIRROR_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOCOMPR)
 
 /* The allowed flags obtained from the client at component creation time. */
 #define LCME_CL_COMP_FLAGS	(LCME_USER_MIRROR_FLAGS | LCME_FL_EXTENSION)

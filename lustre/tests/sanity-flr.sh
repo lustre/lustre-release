@@ -4132,12 +4132,26 @@ function test_205() {
 
 	$LFS mirror extend -N --flags=prefer $tf
 	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
-	(( $mirrors == 3 )) || error "no new mirror was created?"
+	(( $mirrors == 3 )) || error "no new mirror with prefer flag was created?"
 
 	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q prefer) ||
 		error "prefer flag was not set on the new mirror"
+
+	$LFS mirror extend -N --flags=nocompr $tf
+	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
+	(( $mirrors == 4 )) || error "no new mirror with nocompr flag was created?"
+
+	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q nocompr) ||
+		error "nocompr flag was not set on the new mirror"
+
+	$LFS mirror extend -N --flags=prefer,nocompr $tf
+	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
+	(( $mirrors == 5 )) || error "no new mirror with prefer,nocompr flags was created?"
+
+	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q "prefer,nocompr") ||
+		error "prefer,nocompr flags were not set on the new mirror"
 }
-run_test 205 "lfs mirror extend to set prefer flag"
+run_test 205 "lfs mirror extend to set prefer and nocompr flags"
 
 function test_206() {
 	# create a new OST pool
