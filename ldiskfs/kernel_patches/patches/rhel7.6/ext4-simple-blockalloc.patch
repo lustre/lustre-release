@@ -64,7 +64,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	}
  
  	if (ac->ac_b_ex.fe_len > 0 && ac->ac_status != AC_STATUS_FOUND &&
-@@ -2316,6 +2350,93 @@ static const struct seq_operations ext4_
+@@ -2316,6 +2350,96 @@ static const struct seq_operations ext4_
  	.show   = ext4_mb_seq_groups_show,
  };
  
@@ -85,12 +85,14 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
 +	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
 +
-+	seq_printf(seq, "\tuseless_c1_loops: %lu\n",
++	seq_printf(seq, "\tuseless_c0_loops: %lu\n",
 +		   atomic64_read(&sbi->s_bal_cX_failed[0]));
-+	seq_printf(seq, "\tuseless_c2_loops: %lu\n",
++	seq_printf(seq, "\tuseless_c1_loops: %lu\n",
 +		   atomic64_read(&sbi->s_bal_cX_failed[1]));
-+	seq_printf(seq, "\tuseless_c3_loops: %lu\n",
++	seq_printf(seq, "\tuseless_c2_loops: %lu\n",
 +		   atomic64_read(&sbi->s_bal_cX_failed[2]));
++	seq_printf(seq, "\tuseless_c3_loops: %lu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[3]));
 +	seq_printf(seq, "\tskipped_c1_loops: %lu\n",
 +		   atomic64_read(&sbi->s_bal_cX_skipped[0]));
 +	seq_printf(seq, "\tskipped_c2_loops: %lu\n",
@@ -126,6 +128,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	atomic64_set(&sbi->s_bal_cX_failed[0], 0),
 +	atomic64_set(&sbi->s_bal_cX_failed[1], 0),
 +	atomic64_set(&sbi->s_bal_cX_failed[2], 0);
++	atomic64_set(&sbi->s_bal_cX_failed[3], 0);
 +
 +	atomic64_set(&sbi->s_bal_cX_skipped[0], 0),
 +	atomic64_set(&sbi->s_bal_cX_skipped[1], 0),
@@ -200,14 +203,15 @@ Index: linux-stage/fs/ext4/mballoc.c
  	}
  
  	if (sbi->s_group_info) {
-@@ -2936,6 +3064,16 @@ int ext4_mb_release(struct super_block *
+@@ -2936,6 +3064,17 @@ int ext4_mb_release(struct super_block *
  				atomic_read(&sbi->s_bal_reqs),
  				atomic_read(&sbi->s_bal_success));
  		ext4_msg(sb, KERN_INFO,
-+			"mballoc: (%lu, %lu, %lu) useless c(0,1,2) loops",
++			"mballoc: (%lu, %lu, %lu, %lu) useless c(0,1,2,3) loops",
 +				atomic64_read(&sbi->s_bal_cX_failed[0]),
 +				atomic64_read(&sbi->s_bal_cX_failed[1]),
-+				atomic64_read(&sbi->s_bal_cX_failed[2]));
++				atomic64_read(&sbi->s_bal_cX_failed[2]),
++				atomic64_read(&sbi->s_bal_cX_failed[3]));
 +		ext4_msg(sb, KERN_INFO,
 +			"mballoc: (%lu, %lu, %lu) skipped c(0,1,2) loops",
 +				atomic64_read(&sbi->s_bal_cX_skipped[0]),
@@ -236,7 +240,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	atomic_t s_bal_breaks;	/* too long searches */
  	atomic_t s_bal_2orders;	/* 2^order hits */
 +	/* cX loop didn't find blocks */
-+	atomic64_t s_bal_cX_failed[3];
++	atomic64_t s_bal_cX_failed[4];
 +	atomic64_t s_bal_cX_skipped[3];
  	spinlock_t s_bal_lock;
  	unsigned long s_mb_buddies_generated;

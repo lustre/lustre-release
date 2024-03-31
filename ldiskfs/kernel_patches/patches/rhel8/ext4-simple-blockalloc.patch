@@ -17,7 +17,7 @@ index 3b9ec24..64dc5fd 100644
  	atomic_t s_bal_breaks;	/* too long searches */
  	atomic_t s_bal_2orders;	/* 2^order hits */
 +	/* cX loop didn't find blocks */
-+	atomic64_t s_bal_cX_failed[3];
++	atomic64_t s_bal_cX_failed[4];
 +	atomic64_t s_bal_cX_skipped[3];
  	spinlock_t s_bal_lock;
  	unsigned long s_mb_buddies_generated;
@@ -97,7 +97,7 @@ index 15c962f..7870406 100644
  	}
  
  	if (ac->ac_b_ex.fe_len > 0 && ac->ac_status != AC_STATUS_FOUND &&
-@@ -2510,6 +2543,93 @@ const struct file_operations ext4_seq_mb_last_group_fops = {
+@@ -2510,6 +2543,96 @@ const struct file_operations ext4_seq_mb_last_group_fops = {
  	.write         = ext4_mb_last_group_write,
  };
  
@@ -118,17 +118,19 @@ index 15c962f..7870406 100644
 +	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
 +	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
 +
-+	seq_printf(seq, "\tuseless_c1_loops: %llu\n",
++	seq_printf(seq, "\tuseless_c0_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]));
-+	seq_printf(seq, "\tuseless_c2_loops: %llu\n",
++	seq_printf(seq, "\tuseless_c1_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]));
-+	seq_printf(seq, "\tuseless_c3_loops: %llu\n",
++	seq_printf(seq, "\tuseless_c2_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]));
-+	seq_printf(seq, "\tskipped_c1_loops: %llu\n",
++	seq_printf(seq, "\tuseless_c3_loops: %llu\n",
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[3]));
++	seq_printf(seq, "\tskipped_c0_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[0]));
-+	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
++	seq_printf(seq, "\tskipped_c1_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]));
-+	seq_printf(seq, "\tskipped_c3_loops: %llu\n",
++	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
 +		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
 +	seq_printf(seq, "\tbuddies_generated: %lu\n",
 +		   sbi->s_mb_buddies_generated);
@@ -159,6 +161,7 @@ index 15c962f..7870406 100644
 +	atomic64_set(&sbi->s_bal_cX_failed[0], 0),
 +	atomic64_set(&sbi->s_bal_cX_failed[1], 0),
 +	atomic64_set(&sbi->s_bal_cX_failed[2], 0);
++	atomic64_set(&sbi->s_bal_cX_failed[3], 0);
 +
 +	atomic64_set(&sbi->s_bal_cX_skipped[0], 0),
 +	atomic64_set(&sbi->s_bal_cX_skipped[1], 0),
@@ -216,15 +219,16 @@ index 15c962f..7870406 100644
  	/*
  	 * The default group preallocation is 512, which for 4k block
  	 * sizes translates to 2 megabytes.  However for bigalloc file
-@@ -2922,6 +3046,16 @@ int ext4_mb_release(struct super_block *sb)
+@@ -2922,6 +3046,17 @@ int ext4_mb_release(struct super_block *sb)
  				atomic_read(&sbi->s_bal_allocated),
  				atomic_read(&sbi->s_bal_reqs),
  				atomic_read(&sbi->s_bal_success));
 +		ext4_msg(sb, KERN_INFO,
-+			"mballoc: (%llu, %llu, %llu) useless c(0,1,2) loops",
++			"mballoc: (%llu, %llu, %llu, %llu) useless c(0,1,2,3) loops",
 +				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]),
 +				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]),
-+				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]));
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]),
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[3]));
 +		ext4_msg(sb, KERN_INFO,
 +			"mballoc: (%llu, %llu, %llu) skipped c(0,1,2) loops",
 +				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[0]),
