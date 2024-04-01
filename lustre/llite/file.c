@@ -4457,13 +4457,14 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct inode *inode = file_inode(file);
 	struct ll_file_data *fd = file->private_data;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	void __user *uarg = (void __user *)arg;
 	int flags, rc;
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOCTL, "VFS Op:inode="DFID"(%pK) cmd=%x arg=%lx\n",
 	       PFID(ll_inode2fid(inode)), inode, cmd, arg);
-	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
+	ll_stats_ops_tally(sbi, LPROC_LL_IOCTL, 1);
 
 	/* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
 	if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
@@ -4506,6 +4507,24 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		RETURN(0);
 	case LL_IOC_LOV_SETSTRIPE:
 	case LL_IOC_LOV_SETSTRIPE_NEW:
+		if (sbi->ll_enable_setstripe_gid != -1 &&
+		    !capable(CAP_SYS_RESOURCE) &&
+		    /* in_group_p always returns true for gid == 0, so we check
+		     * for this case directly
+		     */
+		    (sbi->ll_enable_setstripe_gid == 0 ||
+		     !in_group_p(KGIDT_INIT(sbi->ll_enable_setstripe_gid)))) {
+			/* for lfs we return EACCES, so we can print an error
+			 * from the tool
+			 */
+			if (!strcmp(current->comm, "lfs"))
+				RETURN(-EACCES);
+			/* otherwise, setstripe is refused silently so
+			 * applications do not fail
+			 */
+			RETURN(0);
+		}
+
 		RETURN(ll_lov_setstripe(inode, file, uarg));
 	case LL_IOC_LOV_SETEA:
 		RETURN(ll_lov_setea(inode, file, uarg));

@@ -230,6 +230,9 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	sbi->ll_hybrid_io_read_threshold_bytes =
 		SBI_DEFAULT_HYBRID_IO_READ_THRESHOLD;
 
+	/* setstripe is allowed for all groups by default */
+	sbi->ll_enable_setstripe_gid = -1;
+
 	INIT_LIST_HEAD(&sbi->ll_all_quota_list);
 	RETURN(sbi);
 out_destroy_ra:

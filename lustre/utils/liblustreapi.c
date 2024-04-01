@@ -562,6 +562,7 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct lov_user_md *lum = NULL;
 	const char *pool_name = param->lsp_pool;
+	bool use_default_striping = false;
 	size_t lum_size;
 	int fd, rc = 0;
 
@@ -593,7 +594,10 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 		return -ENOMEM;
 
 retry_open:
-	fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
+	if (!use_default_striping)
+		fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
+	else
+		fd = open(name, flags, mode);
 	if (fd < 0) {
 		if (errno == EISDIR && !(flags & O_DIRECTORY)) {
 			flags = O_DIRECTORY | O_RDONLY;
@@ -640,24 +644,45 @@ retry_open:
 			lumv3->lmm_objects[i].l_ost_idx = param->lsp_osts[i];
 	}
 
-	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) != 0) {
-		char errmsg[512] = "stripe already set";
+	if (!use_default_striping && ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) != 0) {
+		char errbuf[512] = "stripe already set";
+		char *errmsg = errbuf;
 
 		rc = -errno;
-		if (errno != EEXIST && errno != EALREADY)
-			strncpy(errmsg, strerror(errno), sizeof(errmsg) - 1);
+		if (rc != -EEXIST && rc != -EALREADY)
+			strncpy(errbuf, strerror(errno), sizeof(errbuf) - 1);
 		if (rc == -EREMOTEIO)
-			snprintf(errmsg, sizeof(errmsg),
+			snprintf(errbuf, sizeof(errbuf),
 				 "inactive OST among your specified %d OST(s)",
 				 param->lsp_stripe_count);
-
-		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "setstripe error for '%s': %s", name, errmsg);
-
 		close(fd);
+		/* the only reason we get EACESS on the ioctl is if setstripe
+		 * has been explicitly restricted, normal permission errors
+		 * happen earlier on open() and we never call ioctl()
+		 */
+		if (rc == -EACCES) {
+			errmsg = "Setstripe is restricted by your administrator, default striping applied";
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+					  "setstripe warning for '%s': %s",
+					  name, errmsg);
+			rc = remove(name);
+			if (rc) {
+				llapi_err_noerrno(LLAPI_MSG_ERROR,
+						  "setstripe error for '%s': %s",
+						  name, strerror(errno));
+				goto out;
+			}
+			use_default_striping = true;
+			goto retry_open;
+		} else {
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+					  "setstripe error for '%s': %s", name,
+					  errmsg);
+		}
 		fd = rc;
 	}
 
+out:
 	free(lum);
 
 	return fd;
@@ -703,6 +728,7 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 {
 	size_t len;
 	struct lov_foreign_md *lfm;
+	bool use_default_striping = false;
 	int fd, rc;
 
 	if (foreign_lov == NULL) {
@@ -731,7 +757,11 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 		goto out_err;
 	}
 
-	fd = open(name, O_WRONLY|O_CREAT|O_LOV_DELAY_CREATE, mode);
+retry_open:
+	if (!use_default_striping)
+		fd = open(name, O_WRONLY|O_CREAT|O_LOV_DELAY_CREATE, mode);
+	else
+		fd = open(name, O_WRONLY|O_CREAT, mode);
 	if (fd == -1) {
 		fd = -errno;
 		llapi_error(LLAPI_MSG_ERROR, fd, "open '%s' failed", name);
@@ -744,21 +774,43 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 	lfm->lfm_flags = flags;
 	memcpy(lfm->lfm_value, foreign_lov, len);
 
-	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lfm) != 0) {
-		char *errmsg = "stripe already set";
+	if (!use_default_striping && ioctl(fd, LL_IOC_LOV_SETSTRIPE, lfm) != 0) {
+		char *errmsg;
 
 		rc = -errno;
 		if (errno == ENOTTY)
 			errmsg = "not on a Lustre filesystem";
 		else if (errno == EEXIST || errno == EALREADY)
 			errmsg = "stripe already set";
+		else if (errno == EACCES)
+			errmsg = "Setstripe is restricted by your administrator, default striping applied";
 		else
 			errmsg = strerror(errno);
 
-		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "setstripe error for '%s': %s", name, errmsg);
-
 		close(fd);
+		/* the only reason we get ENOPERM on the ioctl is if setstripe
+		 * has been explicitly restricted, normal permission errors
+		 * happen earlier on open() and we never call ioctl()
+		 */
+		if (rc == -EACCES) {
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+					  "setstripe warning for '%s': %s",
+					  name, errmsg);
+			rc = remove(name);
+			if (rc) {
+				llapi_err_noerrno(LLAPI_MSG_ERROR,
+						  "setstripe error for '%s': %s",
+						  name, strerror(errno));
+				goto out_free;
+			}
+			use_default_striping = true;
+			goto retry_open;
+		} else {
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+					  "setstripe error for '%s': %s", name,
+					  errmsg);
+		}
+
 		fd = rc;
 	}
 

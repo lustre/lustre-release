@@ -899,6 +899,7 @@ struct ll_sb_info {
 	struct mnt_namespace	*ll_mnt_ns;
 
 	DECLARE_BITMAP(ll_flags, LL_SBI_NUM_FLAGS); /* enum ll_sbi_flags */
+	gid_t			 ll_enable_setstripe_gid; /*  */
 	unsigned int		 ll_xattr_cache_enabled:1,
 				 ll_xattr_cache_set:1, /* already set to 0/1 */
 				 ll_client_common_fill_super_succeeded:1,

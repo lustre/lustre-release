@@ -1468,6 +1468,34 @@ static ssize_t hybrid_io_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(hybrid_io);
 
+static ssize_t enable_setstripe_gid_show(struct kobject *kobj,
+					 struct attribute *attr, char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", sbi->ll_enable_setstripe_gid);
+}
+
+static ssize_t enable_setstripe_gid_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtoint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_enable_setstripe_gid = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_setstripe_gid);
+
 static ssize_t max_read_ahead_async_active_show(struct kobject *kobj,
 					       struct attribute *attr,
 					       char *buf)
@@ -2261,6 +2289,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_parallel_dio.attr,
 	&lustre_attr_unaligned_dio.attr,
 	&lustre_attr_hybrid_io.attr,
+	&lustre_attr_enable_setstripe_gid.attr,
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,

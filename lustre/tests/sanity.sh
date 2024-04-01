@@ -3634,6 +3634,54 @@ test_27V() {
 }
 run_test 27V "creating widely striped file races with deactivating OST"
 
+test_27W() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	local stripe_count
+	local defcount=4
+
+	# Set back to unrestricted
+	stack_trap "$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=-1"
+
+	mkdir $DIR/$tdir
+	# Set a default layout
+	$LFS setstripe -C $defcount $DIR/$tdir || error "(0) root failed to set default layout"
+
+	chmod a+rw $DIR
+	chmod a+rw $DIR/$tdir
+	# Verify this works normally
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile || error "(1) failed to setstripe"
+	rm -f $DIR/$tdir/$tfile
+
+	# Limit to CAP_SYS_RESOURCE
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=0
+	# Prints a messsage, but will use the default layout for the directory
+	# This is so scripts which use setstripe and don't check error will not fail
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile || error "(2) setstripe failed"
+	# Verify default layout was used on file:
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	((stripe_count == defcount)) ||
+		error "(3) got stripe_count '$stripe_count', expected $defcount"
+	rm -f $DIR/$tdir/$tfile
+
+	# Allow for RUNAS group
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=$RUNAS_GID
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile || error "(4) failed to setstripe"
+	# Confirm we did not use the default layout
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	((stripe_count == 1)) || error "(5) got stripe_count '$stripe_count', expected 1"
+	rm -f $DIR/$tdir/$tfile
+
+	# Set to some other GID
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=1
+	# Should give warning and succeed
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile || error "(6) setstripe failed"
+	# Confirm we used default layout
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	((stripe_count == defcount)) ||
+		error "(7) got stripe_count '$stripe_count', expected $defcount"
+}
+run_test 27W "test enable_setstripe_gid"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

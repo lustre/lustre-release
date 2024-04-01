@@ -50,6 +50,17 @@ copy the default layout at creation time, but will implicitly inherit the
 default layout at runtime. The default layout set on a non-root directory
 will be copied to any new subdirectories created within that directory
 at the time they are created.
+Setstripe can be restricted to privileged users
+.RB (with CAP_SYS_RESOURCE ,
+see
+.BR setcap (8))
+by setting the parameter
+.BR llite.*.enable_setstripe_gid=0 ,
+to an administrator group (e.g.
+.BR wheel )
+by using its numeric group ID, or
+.B -1
+to permit all users this functionality (the default).
 .TP
 .B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR ...] \fIDIRECTORY\fR|\fIFILENAME\fR
 Create a new
@@ -566,3 +577,4 @@ layout/LOV EA and flags
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-split (1),
 .BR lustre (7)
+.BR setcap (8)
