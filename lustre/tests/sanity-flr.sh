@@ -28,14 +28,6 @@ if [[ "$ost1_FSTYPE" == "zfs" ]]; then
 	ALWAYS_EXCEPT+=" 49a "
 fi
 
-if [ -r /etc/redhat-release ]; then
-	rhel_version=$(cat /etc/redhat-release |
-		sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
-	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
-		always_except LU-17675 61a
-	fi
-fi
-
 build_test_filter
 
 [[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
@@ -3156,8 +3148,13 @@ check_times_61() {
 
 test_61a() { # LU-14508
 	local file=$DIR/$tdir/$tfile
+	local old_diff=($(do_facet mds1 "$LCTL get_param -n mdd.*.atime_diff"))
+	local mdts=$(comma_list $(mdts_nodes))
 	local -a tim
 	local nap=5
+
+	do_nodes $mdts "$LCTL set_param mdd.*.atime_diff=1"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.atime_diff=$old_diff"
 
 	mkdir -p $DIR/$tdir
 	echo "create $file"
