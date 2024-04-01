@@ -3559,6 +3559,9 @@ run_test 155 "failover after client remount"
 
 test_156()
 {
+	(( OST1_VERSION >= $(version_code v2_15_60-90-g9df01eee75) )) ||
+		skip "Need OST >= 2.15.60.90 for tot_granted miscount fix"
+
 	# on failover recovery time hard will be 9 * 5
 	local saved_timeout=$(do_facet ost1 $LCTL get_param -n timeout)
 
