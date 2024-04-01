@@ -6529,7 +6529,7 @@ test_56a() {
 
 	#test lfs getstripe with -v prints lmm_fid
 	filenum=$($LFS getstripe -v $dir | grep -c lmm_fid)
-	local countfids=$((numdirs + numfiles * numcomp))
+	local countfids=$(((numdirs + numfiles) * numcomp))
 	[[ $filenum -eq $countfids ]] ||
 		error "$LFS getstripe -v $dir: "\
 		      "got $filenum want $countfids lmm_fid"
@@ -10032,6 +10032,10 @@ run_test 64i "shrink on reconnect"
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	# LU-16904 check if the root is set as PFL layout
+	local numcomp=$($LFS getstripe --component-count $MOUNT)
+	[ $numcomp -eq 0 ] || skip "Skip test_65a for PFL layout"
 
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/f1
