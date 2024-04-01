@@ -636,6 +636,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_LOV_COMP_MAGIC			    0x1426
 #define OBD_FAIL_LOV_COMP_PATTERN		    0x1427
 #define OBD_FAIL_LOV_INVALID_OSTIDX		    0x1428
+#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO		    0x1429
 #define OBD_FAIL_LLITE_DELAY_TRUNCATE		    0x1430
 #define OBD_FAIL_LLITE_READ_PAUSE		    0x1431
 #define OBD_FAIL_LLITE_FAULT_PAUSE		    0x1432

@@ -14071,6 +14071,56 @@ test_119i()
 }
 run_test 119i "test unaligned aio at varying sizes"
 
+test_119j()
+{
+	(( $LINUX_VERSION_CODE > $(version_code 4.5.0) )) ||
+		skip "needs kernel > 4.5.0 for ki_flags support"
+
+	local rpcs
+	dd if=/dev/urandom of=$DIR/$tfile bs=8 count=1 || error "(0) dd failed"
+	sync
+	$LCTL set_param -n osc.*.rpc_stats=0
+	# Read from page cache, does not generate an rpc
+	dd if=$DIR/$tfile of=/dev/null bs=8 count=1 || error "(1) dd failed"
+	$LCTL get_param osc.*.rpc_stats
+	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
+		sed -n '/pages per rpc/,/^$/p' |
+		awk '/'$pages':/ { reads += $2; writes += $6 }; \
+		END { print reads,writes }'))
+	[[ ${rpcs[0]} == 0 ]] ||
+		error "(3) ${rpcs[0]} != 0 read RPCs"
+
+	# Test hybrid IO read
+	# Force next BIO as DIO
+	# This forces an RPC to the server
+	#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO	0x1429
+	$LCTL set_param fail_loc=0x1429
+	dd if=$DIR/$tfile of=/dev/null bs=8 count=1 || error "(4) dd failed"
+	$LCTL get_param osc.*.rpc_stats
+	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
+		sed -n '/pages per rpc/,/^$/p' |
+		awk '/'$pages':/ { reads += $2; writes += $6 }; \
+		END { print reads,writes }'))
+	[[ ${rpcs[0]} == 1 ]] ||
+		error "(5) ${rpcs[0]} != 1 read RPCs"
+
+	# Test hybrid IO write
+	#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO	0x1429
+	$LCTL set_param fail_loc=0x1429
+	#NB: We do not check for 0 write RPCs in the BIO case because that
+	# would make the test racey vs cache flushing
+	# but the DIO case is guaranteed to generate 1 write RPC
+	dd if=/dev/zero of=$DIR/$tfile bs=8 count=1 || error "(6) dd failed"
+	$LCTL get_param osc.*.rpc_stats
+	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
+		sed -n '/pages per rpc/,/^$/p' |
+		awk '/'$pages':/ { reads += $2; writes += $6 }; \
+		END { print reads,writes }'))
+	[[ ${rpcs[1]} == 1 ]] ||
+		error "(7) ${rpcs[0]} != 1 read RPCs"
+}
+run_test 119j "basic tests of hybrid IO switching"
+
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

@@ -2235,7 +2235,8 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	args->u.normal.via_iocb = iocb;
 
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_READ,
-					   iov_iter_count(to))) {
+					   iov_iter_count(to)) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
 #ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
@@ -2384,7 +2385,8 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		GOTO(out, rc_normal = result);
 
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_WRITE,
-					   iov_iter_count(from))) {
+					   iov_iter_count(from)) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
 #ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
