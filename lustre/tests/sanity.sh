@@ -3510,6 +3510,12 @@ test_27T() {
 #define OBD_FAIL_OST_ENOSPC              0x215
 	do_facet ost1 "$LCTL set_param fail_loc=0x80000215"
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
+	# DIO does not support partial writes to a single stripe - a write to
+	# each stripe will fail or succeed entirely.  So we disable hybrid IO
+	# so we can see the partial write behavior of buffered IO
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 	$MULTIOP $DIR/$tfile oO_WRONLY:P$((4 * 1024 * 1024 + 10 * 4096))c ||
 		error "multiop failed"
 }
@@ -9887,6 +9893,11 @@ test_64f() {
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
 
+	# Hybrid means this won't really be buffered IO, so we disable it for
+	# this part of the test
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 	# Testing that buffered IO consumes grant on the client
 
 	# Delay the RPC on the server so it's guaranteed to not complete even
@@ -11838,6 +11849,9 @@ run_test 101g "Big bulk(4/16 MiB) readahead"
 
 test_101h() {
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=70 ||
 		error "dd 70M file failed"
@@ -11886,6 +11900,9 @@ test_101j() {
 	local file_size=$((1048576 * 16))
 	local old_ra=$($LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1)
 	stack_trap "$LCTL set_param -n llite.*.max_read_ahead_mb $old_ra" EXIT
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 
 	echo Disable read-ahead
 	$LCTL set_param -n llite.*.max_read_ahead_mb=0
@@ -24443,6 +24460,12 @@ ladvise_willread_performance()
 	local average_cache=0
 	local average_ladvise=0
 
+	# Hybrid IO switches to DIO, which invalidates much of the caching
+	# So disable it for this test
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
+
 	for ((i = 1; i <= $repeat; i++)); do
 		echo "Iter $i/$repeat: reading without willread hint"
 		cancel_lru_locks osc
@@ -25434,6 +25457,11 @@ test_271ba() {
 
 	lctl set_param -n mdc.*.stats=clear
 	lctl set_param -n osc.*.stats=clear
+	# Hybrid switches to DIO, so does not hold the required lock to skip
+	# the glimpse, so we disable it here...
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 	dd if=/dev/zero of=$dom bs=2048K count=1 || return 1
 	cancel_lru_locks mdc
 	$CHECKSTAT -t file -s 2097152 $dom || error "stat"

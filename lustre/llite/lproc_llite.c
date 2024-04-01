@@ -1806,6 +1806,76 @@ static ssize_t inode_cache_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(inode_cache);
 
+/* an arbitrary but very large maximum value for sanity */
+#define HYBRID_IO_THRESHOLD_BYTES_MAX (2 * 1024 * 1024 * 1024UL) /* 2 GiB */
+static ssize_t hybrid_io_write_threshold_bytes_show(struct kobject *kobj,
+						    struct attribute *attr,
+						    char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			sbi->ll_hybrid_io_write_threshold_bytes);
+}
+
+static ssize_t hybrid_io_write_threshold_bytes_store(struct kobject *kobj,
+						     struct attribute *attr,
+						     const char *buffer,
+						     size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "B");
+	if (rc)
+		return rc;
+
+	if (val > HYBRID_IO_THRESHOLD_BYTES_MAX)
+		return -ERANGE;
+
+	sbi->ll_hybrid_io_write_threshold_bytes = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(hybrid_io_write_threshold_bytes);
+
+static ssize_t hybrid_io_read_threshold_bytes_show(struct kobject *kobj,
+						   struct attribute *attr,
+						   char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			sbi->ll_hybrid_io_read_threshold_bytes);
+}
+
+static ssize_t hybrid_io_read_threshold_bytes_store(struct kobject *kobj,
+						    struct attribute *attr,
+						    const char *buffer,
+						    size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "B");
+	if (rc)
+		return rc;
+
+	if (val > HYBRID_IO_THRESHOLD_BYTES_MAX)
+		return -ERANGE;
+
+	sbi->ll_hybrid_io_read_threshold_bytes = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(hybrid_io_read_threshold_bytes);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -2137,6 +2207,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_opencache_threshold_ms.attr,
 	&lustre_attr_opencache_max_ms.attr,
 	&lustre_attr_inode_cache.attr,
+	&lustre_attr_hybrid_io_write_threshold_bytes.attr,
+	&lustre_attr_hybrid_io_read_threshold_bytes.attr,
 #ifdef CONFIG_LL_ENCRYPTION
 	&lustre_attr_enable_filename_encryption.attr,
 #endif

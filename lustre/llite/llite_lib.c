@@ -210,7 +210,6 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	set_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags);
 	ll_sbi_set_encrypt(sbi, true);
 	ll_sbi_set_name_encrypt(sbi, true);
-	set_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
 
 	/* root squash */
 	sbi->ll_squash.rsi_uid = 0;
@@ -226,6 +225,10 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	sbi->ll_oc_thrsh_count = SBI_DEFAULT_OPENCACHE_THRESHOLD_COUNT;
 	sbi->ll_oc_max_ms = SBI_DEFAULT_OPENCACHE_THRESHOLD_MAX_MS;
 	sbi->ll_oc_thrsh_ms = SBI_DEFAULT_OPENCACHE_THRESHOLD_MS;
+	sbi->ll_hybrid_io_write_threshold_bytes =
+		SBI_DEFAULT_HYBRID_IO_WRITE_THRESHOLD;
+	sbi->ll_hybrid_io_read_threshold_bytes =
+		SBI_DEFAULT_HYBRID_IO_READ_THRESHOLD;
 
 	INIT_LIST_HEAD(&sbi->ll_all_quota_list);
 	RETURN(sbi);

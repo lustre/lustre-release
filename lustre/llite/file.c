@@ -1775,6 +1775,14 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 
 	if (!test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags))
 		RETURN(false);
+
+	if (iot == CIT_WRITE &&
+	    count >= sbi->ll_hybrid_io_write_threshold_bytes)
+		RETURN(true);
+
+	if (iot == CIT_READ &&
+	    count >= sbi->ll_hybrid_io_read_threshold_bytes)
+		RETURN(true);
 #endif
 	RETURN(false);
 }
