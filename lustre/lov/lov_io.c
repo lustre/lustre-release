@@ -1999,6 +1999,19 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	RETURN(result);
 }
 
+/* confirm this offset is in the given layout entry */
+bool lov_io_layout_at_confirm(struct lov_io *lio, int entry, __u64 offset)
+{
+	struct lov_object *lov = lio->lis_object;
+	struct lov_layout_entry *lle = lov_entry(lov, entry);
+
+	if ((offset >= lle->lle_extent->e_start &&
+	     offset < lle->lle_extent->e_end) ||
+	    (offset == OBD_OBJECT_EOF &&
+	     lle->lle_extent->e_end == OBD_OBJECT_EOF))
+		return true;
+	return false;
+}
 /**
  * Return the index in composite:lo_entries by the file offset
  */

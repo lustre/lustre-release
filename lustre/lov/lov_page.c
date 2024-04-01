@@ -77,13 +77,19 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 
 	if (stripe_cached) {
 		entry = lio->lis_cached_entry;
+		/* if there's no layout at this offset, we'll end up here with
+		 * a cached layout entry, so we must verify the layout includes
+		 * this offset
+		 */
+		if (!lov_io_layout_at_confirm(lio, entry, offset))
+			return -ENODATA;
 		stripe = lio->lis_cached_stripe;
 		/* Offset can never go backwards in an i/o, so this is valid */
 		suboff = lio->lis_cached_suboff + offset - lio->lis_cached_off;
 	} else {
 		entry = lov_io_layout_at(lio, offset);
 		if (entry < 0)
-			return(-ENODATA);
+			return -ENODATA;
 
 		stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
 		rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe,

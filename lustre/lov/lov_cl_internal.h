@@ -596,6 +596,7 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
 				      struct lu_device *dev);
 
 int lov_io_layout_at(struct lov_io *lio, __u64 offset);
+bool lov_io_layout_at_confirm(struct lov_io *lio, int entry, __u64 offset);
 
 #define lov_foreach_target(lov, var)                    \
 	for (var = 0; var < lov_targets_nr(lov); ++var)
