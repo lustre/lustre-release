@@ -155,7 +155,8 @@ static inline int have_expired_locks(void)
 static int expired_lock_main(void *arg)
 {
 	struct list_head *expired = &expired_lock_list;
-	int do_dump;
+	struct lu_env env;
+	int rc, do_dump;
 
 	ENTRY;
 
@@ -167,7 +168,17 @@ static int expired_lock_main(void *arg)
 				have_expired_locks() ||
 				expired_lock_thread_state == ELT_TERMINATE);
 
+		rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
+		if (rc) {
+			CERROR("can't init env: rc=%d\n", rc);
+			schedule_timeout(HZ * 3);
+			continue;
+		}
+		rc = lu_env_add(&env);
+		LASSERT(rc == 0);
+
 		spin_lock_bh(&waiting_locks_spinlock);
+
 		if (expired_lock_dump) {
 			spin_unlock_bh(&waiting_locks_spinlock);
 
@@ -254,6 +265,9 @@ static int expired_lock_main(void *arg)
 			spin_lock_bh(&waiting_locks_spinlock);
 		}
 		spin_unlock_bh(&waiting_locks_spinlock);
+
+		lu_env_remove(&env);
+		lu_env_fini(&env);
 
 		if (do_dump) {
 			CERROR("dump the log upon eviction\n");

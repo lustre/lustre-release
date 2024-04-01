@@ -471,6 +471,8 @@ static int ping_evictor_main(void *arg)
 	struct obd_device *obd;
 	struct obd_export *exp;
 	time64_t expire_time;
+	struct lu_env env;
+	int rc;
 
 	ENTRY;
 	unshare_fs_struct();
@@ -484,6 +486,15 @@ static int ping_evictor_main(void *arg)
 		/* loop until all obd's will be removed */
 		if ((pet_state == PET_TERMINATE) && list_empty(&pet_list))
 			break;
+
+		rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
+		if (rc) {
+			CERROR("can't init env: rc=%d\n", rc);
+			schedule_timeout(HZ * 3);
+			continue;
+		}
+		rc = lu_env_add(&env);
+		LASSERT(rc == 0);
 
 		/*
 		 * we only get here if pet_exp != NULL, and the end of this
@@ -537,6 +548,9 @@ static int ping_evictor_main(void *arg)
 			}
 		}
 		spin_unlock(&obd->obd_dev_lock);
+
+		lu_env_remove(&env);
+		lu_env_fini(&env);
 
 		spin_lock(&pet_lock);
 		list_del_init(&obd->obd_evict_list);

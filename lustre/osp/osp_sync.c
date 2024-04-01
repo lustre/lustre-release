@@ -1303,7 +1303,6 @@ static int osp_sync_process_queues(const struct lu_env *env,
 
 struct osp_sync_args {
 	struct osp_device	*osa_dev;
-	struct lu_env		 osa_env;
 	struct completion	*osa_started;
 };
 
@@ -1334,14 +1333,24 @@ static int osp_sync_thread(void *_args)
 	struct llog_ctxt *ctxt;
 	struct obd_device *obd = d->opd_obd;
 	struct llog_handle *llh;
-	struct lu_env *env = &args->osa_env;
 	struct osp_job_args *ja, *tmp;
+	struct lu_env env;
 	int rc, count;
 	bool wrapped;
 
 	ENTRY;
 
 	complete(args->osa_started);
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc) {
+		CERROR("%s: can't initialize env: rc = %d\n",
+		       d->opd_obd->obd_name, rc);
+		RETURN(rc);
+	}
+	rc = lu_env_add(&env);
+	LASSERT(rc == 0);
+
 again:
 	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
 	if (ctxt == NULL) {
@@ -1371,7 +1380,7 @@ again:
 			rc = -EINPROGRESS;
 			goto next;
 		}
-		rc = llog_cat_process(env, llh, osp_sync_process_queues, d,
+		rc = llog_cat_process(&env, llh, osp_sync_process_queues, d,
 				      d->opd_sync_last_catalog_idx, 0);
 
 next:
@@ -1394,8 +1403,8 @@ next:
 		if (rc == -EINPROGRESS) {
 			/* can't access the llog now - OI scrub is trying to fix
 			 * underlying issue. let's wait and try again */
-			llog_cat_close(env, llh);
-			rc = llog_cleanup(env, ctxt);
+			llog_cat_close(&env, llh);
+			rc = llog_cleanup(&env, ctxt);
 			if (rc)
 				GOTO(out, rc);
 			schedule_timeout_interruptible(cfs_time_seconds(5));
@@ -1423,7 +1432,7 @@ wait:
 	/* wait till all the requests are completed */
 	count = 0;
 	while (atomic_read(&d->opd_sync_rpcs_in_progress) > 0) {
-		osp_sync_process_committed(env, d);
+		osp_sync_process_committed(&env, d);
 
 		rc = wait_event_idle_timeout(
 			d->opd_sync_waitq,
@@ -1439,8 +1448,8 @@ wait:
 
 	}
 
-	llog_cat_close(env, llh);
-	rc = llog_cleanup(env, ctxt);
+	llog_cat_close(&env, llh);
+	rc = llog_cleanup(&env, ctxt);
 	if (rc)
 		CERROR("can't cleanup llog: %d\n", rc);
 	list_for_each_entry_safe(ja, tmp, &d->opd_sync_error_list,
@@ -1457,7 +1466,8 @@ out:
 		 atomic_read(&d->opd_sync_rpcs_in_flight),
 		 list_empty(&d->opd_sync_committed_there) ? "" : "!");
 
-	lu_env_fini(env);
+	lu_env_remove(&env);
+	lu_env_fini(&env);
 
 	if (xchg(&d->opd_sync_task, NULL) == NULL)
 		/* already being waited for */
@@ -1673,13 +1683,6 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 		GOTO(err_id, rc);
 	}
 
-	rc = lu_env_init(&args->osa_env, LCT_LOCAL);
-	if (rc) {
-		CERROR("%s: can't initialize env: rc = %d\n",
-		       d->opd_obd->obd_name, rc);
-		GOTO(err_llog, rc);
-	}
-
 	/*
 	 * Start synchronization thread
 	 */
@@ -1689,7 +1692,6 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start sync thread: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
-		lu_env_fini(&args->osa_env);
 		GOTO(err_llog, rc);
 	}
 	d->opd_sync_task = task;

@@ -1541,8 +1541,8 @@ static int mgs_replace_log(const struct lu_env *env,
 	/* Copy records to this temporary llog */
 	mrd->temp_llh = orig_llh;
 
-	rc = llog_process(env, backup_llh, replace_handler,
-			  (void *)mrd, NULL);
+	rc = llog_process_or_fork(env, backup_llh, replace_handler,
+			  (void *)mrd, NULL, false);
 	OBD_FREE_PTR(mrd);
 out_close:
 	rc2 = llog_close(NULL, backup_llh);

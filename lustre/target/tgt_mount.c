@@ -1652,6 +1652,8 @@ static void server_put_super(struct super_block *sb)
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_device *obd;
 	char *tmpname, *extraname = NULL;
+	struct lu_env env;
+	int rc;
 	int tmpname_sz;
 	int lsiflags = lsi->lsi_flags;
 	bool stop_servers = lsi->lsi_server_started;
@@ -1676,6 +1678,14 @@ static void server_put_super(struct super_block *sb)
 			CWARN("%s: failed to disconnect lwp: rc= %d\n",
 			      tmpname, rc);
 	}
+
+	rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
+	if (rc) {
+		CERROR("can't init env: rc=%d\n", rc);
+		GOTO(out, rc);
+	}
+	rc = lu_env_add(&env);
+	LASSERT(rc == 0);
 
 	/* Stop the target */
 	if (!test_bit(LMD_FLG_NOSVC, lsi->lsi_lmd->lmd_flags) &&
@@ -1765,6 +1775,10 @@ static void server_put_super(struct super_block *sb)
 		OBD_FREE(extraname, strlen(extraname) + 1);
 	}
 
+	lu_env_remove(&env);
+	lu_env_fini(&env);
+
+out:
 	LCONSOLE(D_WARNING, "server umount %s complete\n", tmpname);
 	OBD_FREE(tmpname, tmpname_sz);
 	EXIT;

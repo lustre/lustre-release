@@ -391,8 +391,7 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 
 	larr->arr_status = ARS_CANCELED;
 	larr->arr_req_change = now;
-	rc = llog_write(hsd->hsd_mti->mti_env, llh, &larr->arr_hdr,
-			larr->arr_hdr.lrh_index);
+	rc = llog_write(env, llh, &larr->arr_hdr, larr->arr_hdr.lrh_index);
 	if (rc < 0) {
 		CERROR("%s: cannot update agent log: rc = %d\n",
 		       mdt_obd_name(mdt), rc);
