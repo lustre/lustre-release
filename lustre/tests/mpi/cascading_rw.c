@@ -221,6 +221,8 @@ void rw_file(char *name, long stride, unsigned int seed)
 			errno = 0;
 			FAILF("Error: diff data read from %s", filename);
 		}
+		if (close(fd) == -1)
+			FAILF("close of file %s", filename);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
