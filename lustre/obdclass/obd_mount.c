@@ -1418,7 +1418,7 @@ failed:
  */
 int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
-	char *s1, *s2, *opts, *devname = NULL;
+	char *s1, *s2, *opts, *orig_opts, *devname = NULL;
 	struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
 	int rc = 0;
 
@@ -1443,6 +1443,7 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 	opts = kstrdup(options, GFP_KERNEL);
 	if (!opts)
 		RETURN(-ENOMEM);
+	orig_opts = opts;
 	s1 = opts;
 
 	OBD_ALLOC(lmd->lmd_params, LMD_PARAMS_MAXLEN);
@@ -1748,7 +1749,7 @@ bad_string:
 invalid:
 	if (rc < 0)
 		CERROR("Bad mount options %s\n", options);
-	kfree(opts);
+	kfree(orig_opts);
 
 	RETURN(rc);
 }
