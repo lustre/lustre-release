@@ -7524,14 +7524,14 @@ test_56rd() {
 
 	mkfifo $dir/fifo || error "failed to create fifo file"
 	$LFS find $dir -t p --printf "%p %y %LP\n" ||
-		error "should not fail even cannot get projid from pipe file"
+		error "should not fail when getting projid from pipe file"
 	found=$($LFS find $dir -t p --printf "%y")
 	[[ "p" == $found ]] || error "found $found, expect p"
 
 	mknod $dir/chardev c 1 5 ||
 		error "failed to create character device file"
 	$LFS find $dir -t c --printf "%p %y %LP\n" ||
-		error "should not fail even cannot get projid from chardev file"
+		error "should not fail when getting projid from chardev file"
 	found=$($LFS find $dir -t c --printf "%y")
 	[[ "c" == $found ]] || error "found $found, expect c"
 
@@ -9517,6 +9517,38 @@ test_56eh() {
 	done
 }
 run_test 56eh "check lfs find --skip"
+
+test_56ei() {
+	local path=$DIR/$tdir
+	local projid=1234
+	local expected_count=3
+
+	# Create test dir containing:
+	# - regular file, with default projid
+	# - regular file, with unique projid
+	# - symbolic link, with unique projid
+	# - special char dev file, with unique projid
+	test_mkdir $path || error "mkdir $path failed"
+	touch $path/file0 $path/file$projid || error "touch failed"
+	ln -s $path/file$projid $path/link$projid
+	mknod $path/char$projid c 1 3
+	$LFS project -p $projid -s $path/file$projid
+	$LFS project -p $projid -s $path/link$projid
+	$LFS project -p $projid -s $path/char$projid
+	stack_trap "rm -rf $path" EXIT
+
+	$LFS project -r $path/
+	echo -e "Actual output:\n$($LFS find $path --printf '%LP %p\n')"
+
+	# Find all files and print their projids along with their path; count
+	found_count=$($LFS find $path --printf "%LP %p\n" |
+		grep -E "$projid $path/(link|char|file)$projid" | wc -l)
+	echo -e "found_count: $found_count"
+	[[ $found_count == $expected_count ]] ||
+		error "Did not find any entries with expected projid $projid"
+
+}
+run_test 56ei "test lfs find --printf prints correct projid for special files"
 
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

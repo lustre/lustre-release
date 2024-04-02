@@ -85,8 +85,8 @@
 
 #define FORMATTED_BUF_LEN	1024
 
-#ifndef INVALID_PROJID
-#define INVALID_PROJID	-1
+#ifndef DEFAULT_PROJID
+#define DEFAULT_PROJID	0
 #endif
 
 static int llapi_msg_level = LLAPI_MSG_MAX;
@@ -5246,10 +5246,7 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 		*wrote = snprintf(buffer, size, DFID_NOBRACE, PFID(&fid));
 		goto format_done;
 	case 'P':
-		if (projid == INVALID_PROJID)
-			*wrote = snprintf(buffer, size, "-1");
-		else
-			*wrote = snprintf(buffer, size, "%u", projid);
+		*wrote = snprintf(buffer, size, "%u", projid);
 		goto format_done;
 	case 'a': /* file attributes */
 		longopt = false;
@@ -5562,22 +5559,81 @@ static void printf_format_string(struct find_param *param, char *path,
 }
 
 /*
- * Get file/directory project id.
- * by the open fd resides on.
- * Return 0 and project id on success, or -ve errno.
+ * Gets the project id of a file, directory, or special file,
+ * and stores it at the projid memory address passed in.
+ * Returns 0 on success, or -errno for failure.
+ *
+ * @param[in]	path	The full path of the file or directory we're trying
+ *			to retrieve the project id for.
+ * @param[in]	fd	A reference to the file descriptor of either the file
+ *			or directory we're inspecting. The file/dir may or may
+ *			not have been already opened, but if not, we'll open
+ *			it here (for regular files/directories).
+ * @param[in]	mode	The mode type of the file. This will tell us if the file
+ *			is a regular file/dir or if it's a special file type.
+ * @param[out]	projid	A reference to where to store the projid of the file/dir
  */
-static int fget_projid(int fd, __u32 *projid)
+static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 {
-	struct fsxattr fsx;
-	int rc;
+	struct fsxattr fsx = { 0 };
+	struct lu_project lu_project = { 0 };
+	int ret = 0;
 
-	rc = ioctl(fd, FS_IOC_FSGETXATTR, &fsx);
-	if (rc) {
-		*projid = INVALID_PROJID;
-		return -errno;
+	/* Check the mode of the file */
+	if (S_ISREG(mode) || S_ISDIR(mode)) {
+		/* This is a regular file type or directory */
+		if (*fd < 0) {
+			/* If we haven't yet opened the file,
+			 * open it in read-only mode
+			 */
+			*fd = open(path, O_RDONLY | O_NOCTTY | O_NDELAY);
+			if (*fd <= 0) {
+				llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+					    "warning: %s: unable to open file \"%s\"to get project id",
+					    __func__, path);
+				return -ENOENT;
+			}
+		}
+		ret = ioctl(*fd, FS_IOC_FSGETXATTR, &fsx);
+		if (ret)
+			return -errno;
+
+		*projid = fsx.fsx_projid;
+	} else {
+		/* This is a special file type, like a symbolic link, block or
+		 * character device file. We'll have to open its parent
+		 * directory and get metadata about the file through that.
+		 */
+		char dir_path[PATH_MAX + 1] = { 0 };
+		char base_path[PATH_MAX + 1] = { 0 };
+
+		strncpy(dir_path, path, PATH_MAX);
+		strncpy(base_path, path, PATH_MAX);
+		char *dir_name = dirname(dir_path);
+		char *base_name = basename(base_path);
+		int dir_fd = open(dir_name, O_RDONLY | O_NOCTTY | O_NDELAY);
+
+		if (dir_fd < 0) {
+			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+				    "warning: %s: unable to open dir \"%s\"to get project id",
+				    __func__, path);
+			return -errno;
+		}
+		lu_project.project_type = LU_PROJECT_GET;
+		if (base_name)
+			strncpy(lu_project.project_name, base_name, NAME_MAX);
+
+		ret = ioctl(dir_fd, LL_IOC_PROJECT, &lu_project);
+		if (ret) {
+			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+				    "warning: %s: failed to get xattr for '%s': %s",
+				    __func__, path, strerror(errno));
+			return -errno;
+		}
+		*projid = lu_project.project_id;
+		close(dir_fd);
 	}
 
-	*projid = fsx.fsx_projid;
 	return 0;
 }
 
@@ -5623,7 +5679,7 @@ static int cb_find_init(char *path, int p, int *dp,
 	__u32 stripe_count = 0;
 	__u64 flags;
 	int fd = -2;
-	__u32 projid = INVALID_PROJID;
+	__u32 projid = DEFAULT_PROJID;
 	bool gather_all = false;
 
 	if (p == -1 && d == -1)
@@ -5962,24 +6018,26 @@ obd_matches:
 		}
 	}
 
+	/* Retrieve project id from file/dir */
 	if (param->fp_check_projid || gather_all) {
-		if (fd == -2)
-			fd = open(path, O_RDONLY | O_NONBLOCK);
-
-		if (fd > 0)
-			ret = fget_projid(fd, &projid);
-		else
-			ret = -errno;
+		ret = get_projid(path, &fd, lmd->lmd_stx.stx_mode, &projid);
+		if (ret) {
+			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+				    "warning: %s: failed to get project id from file \"%s\"",
+				    __func__, path);
+			goto out;
+		}
 		if (param->fp_check_projid) {
-			if (ret)
-				goto out;
-			if (projid == param->fp_projid) {
-				if (param->fp_exclude_projid)
-					goto decided;
-			} else {
-				if (!param->fp_exclude_projid)
-					goto decided;
-			}
+			/* Conditionally filter this result based on --projid
+			 * param, and whether or not we're including or
+			 * excluding matching results.
+			 * fp_exclude_projid = 0 means only include exact match.
+			 * fp_exclude_projid = 1 means exclude exact match.
+			 */
+			bool matches = projid == param->fp_projid;
+
+			if (matches == param->fp_exclude_projid)
+				goto decided;
 		}
 	}
 
