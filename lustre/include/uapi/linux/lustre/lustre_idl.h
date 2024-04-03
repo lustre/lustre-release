@@ -1287,11 +1287,11 @@ static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 	if (stripes == LOV_ALL_STRIPES)
 		stripes = 0;
 
-	if (lmm_magic == LOV_MAGIC_V3)
-		return sizeof(struct lov_mds_md_v3) +
-				stripes * sizeof(struct lov_ost_data_v1);
-	else
+	if (lmm_magic == LOV_MAGIC_V1)
 		return sizeof(struct lov_mds_md_v1) +
+				stripes * sizeof(struct lov_ost_data_v1);
+	else /* LOV_MAGIC_V3 and LOV_MAGIC_SPECIFIC */
+		return sizeof(struct lov_mds_md_v3) +
 				stripes * sizeof(struct lov_ost_data_v1);
 }
 

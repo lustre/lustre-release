@@ -2812,6 +2812,40 @@ test_27I() {
 }
 run_test 27I "check that root dir striping does not break parent dir one"
 
+test_27Ia() {
+	(( $MDS1_VERSION >= $(version_code 2.15.61.225) )) ||
+                skip "need MDS >= 2.15.61.255 for pool inheritance fix"
+
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	save_layout_restore_at_exit $MOUNT
+	pool_add $TESTNAME || error "pool_add failed"
+	pool_add_targets $TESTNAME 1 || error "pool_add_targets failed"
+
+	$LFS setstripe -p $TESTNAME $MOUNT
+
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -i0 $DIR/$tdir
+	$MULTIOP $DIR/$tdir/$tfile.1 Oc || error_noexit "multiop failed"
+	$LFS getstripe $DIR/$tdir/$tfile.1
+
+	$LFS setstripe -d $DIR/$tdir
+	$LFS setstripe -o 0,1 $DIR/$tdir
+	$MULTIOP $DIR/$tdir/$tfile.2 Oc || error_noexit "multiop failed"
+	$LFS getstripe $DIR/$tdir/$tfile.2
+
+	test_mkdir $DIR/$tdir/d1
+	$MULTIOP $DIR/$tdir/d1/$tfile.3 Oc || error_noexit "multiop failed"
+	$LFS getstripe $DIR/$tdir/d1/$tfile.3
+
+	$LFS setstripe -d $DIR/$tdir
+	$LFS setstripe -E 128G -o 0,1 -E-1 $DIR/$tdir
+	test_mkdir $DIR/$tdir/d2
+	$MULTIOP $DIR/$tdir/d2/$tfile.4 Oc || error_noexit "multiop failed"
+	$LFS getstripe $DIR/$tdir/d2/$tfile.4
+}
+run_test 27Ia "check that root dir pool is dropped with conflict parent dir settings"
+
 test_27J() {
 	(( $MDS1_VERSION > $(version_code 2.12.51) )) ||
 		skip "Need MDS version newer than 2.12.51"

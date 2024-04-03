@@ -761,7 +761,7 @@ int lod_fill_mirrors(struct lod_object *lo);
 int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm);
 
 /* lod_pool.c */
-struct lod_pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
+struct lod_pool_desc *lod_find_pool(struct lod_device *lod, const char *poolname);
 void lod_pool_putref(struct lod_pool_desc *pool);
 int lod_pool_del(struct obd_device *obd, char *poolname);
 int lod_check_index_in_pool(__u32 idx, struct lod_pool_desc *pool);
@@ -807,6 +807,7 @@ int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf);
+void lod_qos_set_pool(struct lod_object *lo, int pos, const char *pool_name);
 int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, struct thandle *th,
 			int comp_idx, __u64 reserve);
@@ -915,7 +916,7 @@ void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 			      char **poolname);
 void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
 			      struct lod_pool_desc *pool);
-struct lod_pool_desc *lod_pool_find(struct lod_device *lod, char *poolname);
+struct lod_pool_desc *lod_pool_find(struct lod_device *lod, const char *poolname);
 int lod_tgt_weights_seq_show(struct seq_file *m, struct lod_device *lod,
 			     struct lu_tgt_pool *tgts, bool mdt);
 int lod_tgt_weights_seq_write(struct seq_file *m, const char __user *buf,
