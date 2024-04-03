@@ -37,6 +37,7 @@
 #include <linux/highmem.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/percpu_counter.h>
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-cpt.h>
@@ -44,11 +45,7 @@
 #include <lustre_handles.h>
 
 /* global variables */
-extern struct lprocfs_stats *obd_memory;
-enum {
-	OBD_MEMORY_STAT = 0,
-	OBD_STATS_NUM,
-};
+extern struct percpu_counter obd_memory;
 
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
@@ -784,41 +781,36 @@ extern bool obd_enable_health_write;
 
 extern atomic64_t libcfs_kmem;
 
-#ifdef CONFIG_PROC_FS
-#define obd_memory_add(size)                                                  \
-        lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
-#define obd_memory_sub(size)                                                  \
-        lprocfs_counter_sub(obd_memory, OBD_MEMORY_STAT, (long)(size))
-#define obd_memory_sum()                                                      \
-        lprocfs_stats_collector(obd_memory, OBD_MEMORY_STAT,                  \
-                                LPROCFS_FIELDS_FLAGS_SUM)
+/* OBD_MEMORY_BATCH is the maximum error allowed per CPU core.  Since
+ * obd_memory_sum() is calling percpu_counter_sum_positive(), it adds
+ * up the per-core local delta anyway, so the per-core batch size is
+ * can be large.  This could be percpu_counter_add_local(), but that
+ * only exists in kernel 6.0 and later, and just uses a larger batch.
+ */
+#define OBD_MEMORY_BATCH (16 * 1024 * 1024)
+
+#ifndef HAVE_PERCPU_COUNTER_ADD_BATCH
+#define percpu_counter_add_batch(fbc, amount, batch) \
+	__percpu_counter_add(fbc, amount, batch)
+#endif
+
+static inline void obd_memory_add(size_t size)
+{
+	percpu_counter_add_batch(&obd_memory, size, OBD_MEMORY_BATCH);
+}
+
+static inline void obd_memory_sub(size_t size)
+{
+	percpu_counter_add_batch(&obd_memory, -size, OBD_MEMORY_BATCH);
+}
+
+static inline s64 obd_memory_sum(void)
+{
+	return percpu_counter_sum_positive(&obd_memory);
+}
 
 extern void obd_update_maxusage(void);
 extern __u64 obd_memory_max(void);
-
-#else /* CONFIG_PROC_FS */
-
-extern __u64 obd_alloc;
-
-extern __u64 obd_max_alloc;
-
-static inline void obd_memory_add(long size)
-{
-	obd_alloc += size;
-	if (obd_alloc > obd_max_alloc)
-		obd_max_alloc = obd_alloc;
-}
-
-static inline void obd_memory_sub(long size)
-{
-	obd_alloc -= size;
-}
-
-#define obd_memory_sum() (obd_alloc)
-
-#define obd_memory_max() (obd_max_alloc)
-
-#endif /* !CONFIG_PROC_FS */
 
 #define OBD_DEBUG_MEMUSAGE (1)
 

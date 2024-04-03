@@ -444,10 +444,7 @@ int lprocfs_stats_lock(struct lprocfs_stats *stats,
 		       unsigned long *flags)
 {
 	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-			spin_lock_irqsave(&stats->ls_lock, *flags);
-		else
-			spin_lock(&stats->ls_lock);
+		spin_lock(&stats->ls_lock);
 		return opc == LPROCFS_GET_NUM_CPU ? 1 : 0;
 	}
 
@@ -490,10 +487,7 @@ void lprocfs_stats_unlock(struct lprocfs_stats *stats,
 			  unsigned long *flags)
 {
 	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-			spin_unlock_irqrestore(&stats->ls_lock, *flags);
-		else
-			spin_unlock(&stats->ls_lock);
+		spin_unlock(&stats->ls_lock);
 	} else if (opc == LPROCFS_GET_SMP_ID) {
 		put_cpu();
 	}
@@ -1200,7 +1194,6 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
 	struct lprocfs_counter *cntr;
 	unsigned int percpusize;
 	int rc = -ENOMEM;
-	unsigned long flags = 0;
 	int i;
 
 	LASSERT(stats->ls_percpu[cpuid] == NULL);
@@ -1211,17 +1204,10 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
 	if (stats->ls_percpu[cpuid]) {
 		rc = 0;
 		if (unlikely(stats->ls_biggest_alloc_num <= cpuid)) {
-			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-				spin_lock_irqsave(&stats->ls_lock, flags);
-			else
-				spin_lock(&stats->ls_lock);
+			spin_lock(&stats->ls_lock);
 			if (stats->ls_biggest_alloc_num <= cpuid)
 				stats->ls_biggest_alloc_num = cpuid + 1;
-			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
-				spin_unlock_irqrestore(&stats->ls_lock, flags);
-			} else {
-				spin_unlock(&stats->ls_lock);
-			}
+			spin_unlock(&stats->ls_lock);
 		}
 		/* initialize the ls_percpu[cpuid] non-zero counter */
 		for (i = 0; i < stats->ls_num; ++i) {
@@ -1238,7 +1224,6 @@ struct lprocfs_stats *lprocfs_stats_alloc(unsigned int num,
 	struct lprocfs_stats *stats;
 	unsigned int num_entry;
 	unsigned int percpusize = 0;
-	int i;
 
 	if (num == 0)
 		return NULL;
@@ -1273,11 +1258,6 @@ struct lprocfs_stats *lprocfs_stats_alloc(unsigned int num,
 		if (!stats->ls_percpu[0])
 			goto fail;
 		stats->ls_biggest_alloc_num = 1;
-	} else if ((flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0) {
-		/* alloc all percpu data, currently only obd_memory use this */
-		for (i = 0; i < num_entry; ++i)
-			if (lprocfs_stats_alloc_one(stats, i) < 0)
-				goto fail;
 	}
 
 	return stats;
@@ -1373,8 +1353,6 @@ void lprocfs_stats_clear(struct lprocfs_stats *stats)
 			percpu_cntr->lc_max		= 0;
 			percpu_cntr->lc_sumsquare	= 0;
 			percpu_cntr->lc_sum		= 0;
-			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-				percpu_cntr->lc_sum_irq	= 0;
 		}
 	}
 	stats->ls_init = ktime_get_real();
@@ -1601,8 +1579,6 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 		percpu_cntr->lc_max		= 0;
 		percpu_cntr->lc_sumsquare	= 0;
 		percpu_cntr->lc_sum		= 0;
-		if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-			percpu_cntr->lc_sum_irq	= 0;
 	}
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
@@ -1724,8 +1700,6 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 			break;
 		case LPROCFS_FIELDS_FLAGS_SUM:
 			ret = lc->lc_sum;
-			if ((flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-				ret += lc->lc_sum_irq;
 			break;
 		case LPROCFS_FIELDS_FLAGS_MIN:
 			ret = lc->lc_min;
@@ -1734,9 +1708,7 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 			ret = lc->lc_max;
 			break;
 		case LPROCFS_FIELDS_FLAGS_AVG:
-			ret = div64_u64((flags & LPROCFS_STATS_FLAG_IRQ_SAFE ?
-					 lc->lc_sum_irq : 0) + lc->lc_sum,
-					lc->lc_count);
+			ret = div64_u64(lc->lc_sum, lc->lc_count);
 			break;
 		case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
 			ret = lc->lc_sumsquare;

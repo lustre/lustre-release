@@ -52,11 +52,7 @@
 #include "llog_internal.h"
 #include <lustre_ioctl_old.h>
 
-#ifdef CONFIG_PROC_FS
 static __u64 obd_max_alloc;
-#else
-__u64 obd_max_alloc;
-#endif
 
 static DEFINE_SPINLOCK(obd_updatemax_lock);
 
@@ -102,19 +98,15 @@ EXPORT_SYMBOL(at_early_margin);
 int at_extra = 30;
 EXPORT_SYMBOL(at_extra);
 
-#ifdef CONFIG_PROC_FS
-struct lprocfs_stats *obd_memory = NULL;
+struct percpu_counter obd_memory;
 EXPORT_SYMBOL(obd_memory);
-#endif
 
 static int obdclass_oom_handler(struct notifier_block *self,
 				unsigned long notused, void *nfreed)
 {
-#ifdef CONFIG_PROC_FS
 	/* in bytes */
 	pr_info("obd_memory max: %llu, obd_memory current: %llu\n",
 		obd_memory_max(), obd_memory_sum());
-#endif /* CONFIG_PROC_FS */
 
 	return NOTIFY_OK;
 }
@@ -715,19 +707,13 @@ static int __init obdclass_init(void)
 	if (err)
 		return err;
 
-#ifdef CONFIG_PROC_FS
-	obd_memory = lprocfs_stats_alloc(OBD_STATS_NUM,
-					 LPROCFS_STATS_FLAG_NONE |
-					 LPROCFS_STATS_FLAG_IRQ_SAFE);
-	if (obd_memory == NULL) {
-		CERROR("kmalloc of 'obd_memory' failed\n");
-		return -ENOMEM;
+	err = percpu_counter_init(&obd_memory, 0, GFP_KERNEL);
+	if (err < 0) {
+		CERROR("obdclass: initializing 'obd_memory' failed: rc = %d\n",
+		       err);
+		return err;
 	}
 
-	lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
-			     "memused");
-#endif
 	err = libcfs_kkuc_init();
 	if (err)
 		goto cleanup_obd_memory;
@@ -742,7 +728,7 @@ static int __init obdclass_init(void)
 
 	err = misc_register(&obd_psdev);
 	if (err) {
-		CERROR("cannot register OBD miscdevice: err = %d\n", err);
+		CERROR("cannot register OBD miscdevice: rc = %d\n", err);
 		goto cleanup_class_handle;
 	}
 
@@ -830,9 +816,7 @@ cleanup_kkuc:
 	libcfs_kkuc_fini();
 
 cleanup_obd_memory:
-#ifdef CONFIG_PROC_FS
-	lprocfs_stats_free(&obd_memory);
-#endif
+	percpu_counter_destroy(&obd_memory);
 
 	unregister_oom_notifier(&obdclass_oom);
 	return err;
@@ -851,7 +835,6 @@ void obd_update_maxusage(void)
 }
 EXPORT_SYMBOL(obd_update_maxusage);
 
-#ifdef CONFIG_PROC_FS
 __u64 obd_memory_max(void)
 {
 	__u64 ret;
@@ -863,14 +846,12 @@ __u64 obd_memory_max(void)
 
 	return ret;
 }
-#endif /* CONFIG_PROC_FS */
+EXPORT_SYMBOL(obd_memory_max);
 
 static void __exit obdclass_exit(void)
 {
-#ifdef CONFIG_PROC_FS
 	__u64 memory_leaked;
 	__u64 memory_max;
-#endif /* CONFIG_PROC_FS */
 	ENTRY;
 
 	misc_deregister(&obd_psdev);
@@ -891,16 +872,14 @@ static void __exit obdclass_exit(void)
 	obd_zombie_impexp_stop();
 	libcfs_kkuc_fini();
 
-#ifdef CONFIG_PROC_FS
 	memory_leaked = obd_memory_sum();
 	memory_max = obd_memory_max();
 
-	lprocfs_stats_free(&obd_memory);
+	percpu_counter_destroy(&obd_memory);
 	/* the below message is checked in test-framework.sh check_mem_leak() */
 	CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
 	       "obd_memory max: %llu, leaked: %llu\n",
 	       memory_max, memory_leaked);
-#endif /* CONFIG_PROC_FS */
 
 	unregister_oom_notifier(&obdclass_oom);
 
