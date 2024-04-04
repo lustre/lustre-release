@@ -19,24 +19,38 @@
  */
 enum {
 	/* Only add to these values (i.e. don't ever change or redefine them):
-	 * network addresses depend on them... */
-	/*QSWLND	= 1, removed v2_7_50                 */
-	SOCKLND		= 2,
-	/*GMLND		= 3, removed v2_0_0-rc1a-16-gc660aac */
-	/*PTLLND	= 4, removed v2_7_50                 */
-	O2IBLND		= 5,
-	/*CIBLND	= 6, removed v2_0_0-rc1a-175-gd2b8a0e */
-	/*OPENIBLND	= 7, removed v2_0_0-rc1a-175-gd2b8a0e */
-	/*IIBLND	= 8, removed v2_0_0-rc1a-175-gd2b8a0e */
-	LOLND		= 9,
-	/*RALND		= 10, removed v2_7_50_0-34-g8be9e41    */
-	/*VIBLND	= 11, removed v2_0_0-rc1a-175-gd2b8a0e */
-	/*MXLND		= 12, removed v2_7_50_0-34-g8be9e41    */
-	GNILND		= 13,
-	GNIIPLND	= 14,
-	PTL4LND		= 15,
-	KFILND		= 16,
-
+	 * network addresses depend on them...
+	 *
+	 * It is important to keep these definitions and the nidstring handlers
+	 * in libcfs_netstrfns[] around for several releases after the actual
+	 * LND support has been removed, so that it is still possible to use
+	 * LNet routers between peers that may still be using the old LND type.
+	 *
+	 * The "removed" version is when the LND code was deleted.
+	 * The nidstring handling was removed several releases later.
+	 */
+	/* QSWLND	= 1,  removed v2_7_50_0-34-g8be9e41369        */
+	SOCKLND		= 2,  /* TCP Sockets                          */
+	/* GMLND	= 3,  removed v2_0_0-rc1a-16-gc660aac3        */
+	/* PTLLND	= 4,  removed v2_7_50_0-34-g8be9e41369        */
+	O2IBLND		= 5,  /* OpenFabrics Alliance OFED v2         */
+	/* CIBLND	= 6,  removed v2_0_0-rc1a-175-gd2b8a0e        */
+	/* OPENIBLND	= 7,  removed v2_0_0-rc1a-175-gd2b8a0e        */
+	/* IIBLND	= 8,  removed v2_0_0-rc1a-175-gd2b8a0e        */
+	LOLND		= 9,  /* LNet internal loopback/memcpy        */
+	/* RALND	= 10, removed v2_7_50_0-34-g8be9e41369        */
+	/* VIBLND	= 11, removed v2_0_0-rc1a-175-gd2b8a0e        */
+	/* MXLND	= 12, removed v2_7_50_0-34-g8be9e41369        */
+	GNILND		= 13, /* Cray/HPE Gemini Network Interface    */
+	GNIIPLND	= 14, /* Cray/HPE Gemini IP Network Interface */
+	PTL4LND		= 15, /* ATOS/Bull Portals 4 for BXI          */
+	KFILND		= 16, /* HPE Kernel Fabric Interface          */
+	TOFULND		= 17, /* Fujitsu Torus Fusion                 */
+	EFALND		= 18, /* Amazon Elastic Fabric Adapter        */
+	/* Please email adilger@whamcloud.com and lustre-devel@lists.lustre.org
+	 * to reserve new LND numbers before they are used anywhere.  This only
+	 * takes a few minutes, and will save everyone a lot of grief later.
+	 */
 	NUM_LNDS
 };
 
