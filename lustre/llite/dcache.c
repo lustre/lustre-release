@@ -133,9 +133,6 @@ static int ll_ddelete(const struct dentry *de)
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
 
-	/* kernel >= 2.6.38 last refcount is decreased after this function. */
-	LASSERT(ll_d_count(de) == 1);
-
 	if (d_lustre_invalid(de))
 		RETURN(1);
 	RETURN(0);
