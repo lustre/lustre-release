@@ -2882,17 +2882,12 @@ test_32d() {
 
 	t32_check
 	for tarball in $tarballs; do
-		banner "testing $tarball upgrade with ff and project upgrade"
-		project_upgrade="no"
-		[[ "$MDS1_VERSION" -ge $(version_code 2.13.54) ]] &&
-			[[ "$tarball" =~ "disk2_4-ldiskfs" ]] &&
-				project_upgrade="yes"
-		project_upgrade=$project_upgrade ff_convert=yes t32_test \
-			$tarball || rc=$?
+		banner "testing $tarball with filter_fid upgrade"
+		ff_convert=yes t32_test $tarball || rc=$?
 	done
 	return $rc
 }
-run_test 32d "convert ff and project quota upgrade test"
+run_test 32d "convert filter_fid upgrade test"
 
 test_32e() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
