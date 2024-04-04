@@ -5,7 +5,7 @@ AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 DIST_SUBDIRS = mpi
 DIST_SUBDIRS += lutf iabf
 
-noinst_DATA = disk2_4-ldiskfs.tar.bz2 disk2_4-zfs.tar.bz2
+noinst_DATA =
 noinst_DATA += disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
 noinst_DATA += disk2_9-zfs.tar.bz2 disk2_9-ldiskfs.tar.bz2
 noinst_DATA += disk2_10-ldiskfs.tar.bz2 disk2_12-ldiskfs.tar.bz2
