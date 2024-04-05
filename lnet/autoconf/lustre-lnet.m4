@@ -317,7 +317,7 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 	if test -f $INT_O2IBPATH/Module.symvers; then
 		CHECK_SYMBOLS=$INT_O2IBPATH/Module.symvers
 	elif test "x$SUSE_KERNEL" = "xyes"; then
-		CHECK_SYMBOLS=$(find ${INT_O2IBPATH}* -name Module.symvers)
+		CHECK_SYMBOLS=$(find ${INT_O2IBPATH}* -name Module.symvers -printf "%p ")
 		# Select only the current 'flavor' if there is more than 1
 		NUM_AVAIL=$(find ${INT_O2IBPATH}* -name Module.symvers | wc -l)
 		if test ${NUM_AVAIL} -gt 1; then
