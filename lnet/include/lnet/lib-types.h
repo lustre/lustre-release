@@ -1225,6 +1225,10 @@ lnet_ping_sts_size(const struct lnet_nid *nid)
 {
 	int size;
 
+	/* for deciding the size of the ping buffer */
+	if (unlikely(LNET_NID_IS_ANY(nid)))
+		return sizeof(struct lnet_ni_large_status);
+
 	if (nid_is_nid4(nid))
 		return sizeof(struct lnet_ni_status);
 

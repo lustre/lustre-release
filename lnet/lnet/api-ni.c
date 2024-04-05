@@ -9054,6 +9054,9 @@ lnet_ping_event_handler(struct lnet_event *event)
 		complete(&pd->completion);
 }
 
+/* Max buffer we allow to be sent. Larger values will cause IB failures */
+#define LNET_PING_BUFFER_MAX	3960
+
 static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_genl_ping_list *plist,
 		     int n_ids)
@@ -9085,7 +9088,11 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	if (id->pid == LNET_PID_ANY)
 		id->pid = LNET_PID_LUSTRE;
 
-	id_bytes += n_ids * sizeof(struct lnet_nid);
+	/* Allocate maximum possible NID size */
+	id_bytes += lnet_ping_sts_size(&LNET_ANY_NID) * n_ids;
+	if (id_bytes > LNET_PING_BUFFER_MAX)
+		id_bytes = LNET_PING_BUFFER_MAX;
+
 	pbuf = lnet_ping_buffer_alloc(id_bytes, GFP_NOFS);
 	if (!pbuf)
 		return -ENOMEM;
