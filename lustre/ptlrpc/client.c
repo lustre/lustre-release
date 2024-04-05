@@ -2805,7 +2805,7 @@ EXPORT_SYMBOL(ptlrpc_req_xid);
  */
 static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 {
-	bool discard;
+	bool discard = false;
 	/*
 	 * Might sleep.
 	 */
@@ -2820,14 +2820,10 @@ static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 	/*
 	 * Nothing left to do.
 	 */
-	if (!ptlrpc_cli_wait_unlink(request))
+	if (!__ptlrpc_cli_wait_unlink(request, &discard))
 		RETURN(1);
 
 	LNetMDUnlink(request->rq_reply_md_h);
-
-	spin_lock(&request->rq_lock);
-	discard = request->rq_reply_unlinked && !request->rq_req_unlinked;
-	spin_unlock(&request->rq_lock);
 
 	if (discard) /* Discard the request-out callback */
 		__LNetMDUnlink(request->rq_req_md_h, discard);
