@@ -672,7 +672,7 @@ static ssize_t idle_timeout_store(struct kobject *kobj, struct attribute *attr,
 				req = ptlrpc_request_alloc(imp,
 							   &RQF_OST_STATFS);
 				if (req != NULL)
-					ptlrpc_req_finished(req);
+					ptlrpc_req_put(req);
 			}
 			imp->imp_idle_timeout = val;
 		}
@@ -695,7 +695,7 @@ static ssize_t idle_connect_store(struct kobject *kobj, struct attribute *attr,
 		/* to initiate the connection if it's in IDLE state */
 		req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
 		if (req)
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 		ptlrpc_pinger_force(imp);
 	}
 

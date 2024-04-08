@@ -328,7 +328,7 @@ skip_locking:
 
 	memcpy(fiemap, reply, *buflen);
 fini_req:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 drop_lock:
 	if (mode)
 		ldlm_lock_decref(&lockh, LCK_PR);

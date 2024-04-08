@@ -134,7 +134,7 @@ static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	return rc;
 }
@@ -175,7 +175,7 @@ static int osc_setattr(const struct lu_env *env, struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -374,7 +374,7 @@ static int osc_create(const struct lu_env *env, struct obd_export *exp,
 	CDEBUG(D_HA, "transno: %lld\n",
 	       lustre_msg_get_transno(req->rq_repmsg));
 out_req:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 out:
 	RETURN(rc);
 }
@@ -676,7 +676,7 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
 			cli->cl_destroy_waitq,
 			osc_can_send_destroy(cli));
 		if (rc) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			RETURN(-EINTR);
 		}
 	}
@@ -2504,7 +2504,7 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 	new_aa->aa_resends = aa->aa_resends;
 
 	if (aa->aa_request) {
-		ptlrpc_req_finished(aa->aa_request);
+		ptlrpc_req_put(aa->aa_request);
 		new_aa->aa_request = ptlrpc_request_addref(new_req);
 	}
 
@@ -2694,7 +2694,7 @@ static int brw_interpret(const struct lu_env *env,
 	if (aa->aa_request) {
 		__u64 xid = ptlrpc_req_xid(req);
 
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		if (xid && lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE) {
 			spin_lock(&cli->cl_loi_list_lock);
 			osc_process_ar(&cli->cl_ar, xid, rc);
@@ -3465,7 +3465,7 @@ static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -3635,7 +3635,7 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		aa = ptlrpc_req_async_args(aa, req);
 		OBD_SLAB_ALLOC_PTR_GFP(oa, osc_obdo_kmem, GFP_NOFS);
 		if (!oa) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			RETURN(-ENOMEM);
 		}
 		*oa = ((struct ost_body *)val)->oa;

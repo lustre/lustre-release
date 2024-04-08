@@ -281,7 +281,7 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 	}
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
