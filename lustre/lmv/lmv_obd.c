@@ -1984,7 +1984,7 @@ lmv_locate_tgt2(struct lmv_obd *lmv, struct md_op_data *op_data)
 		op_data->op_fid1 = fid1;
 		op_data->op_lso1 = lso1;
 		if (!rc) {
-			ptlrpc_req_finished(request);
+			ptlrpc_req_put(request);
 			RETURN(ERR_PTR(-EEXIST));
 		}
 
@@ -2013,7 +2013,7 @@ int lmv_old_layout_lookup(struct lmv_obd *lmv, struct md_op_data *op_data)
 
 	rc = md_getattr_name(tgt->ltd_exp, op_data, &request);
 	if (!rc) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		return -EEXIST;
 	}
 
@@ -2285,7 +2285,7 @@ retry:
 		RETURN(rc);
 
 	op_data->op_fid2 = repbody->mbo_fid1;
-	ptlrpc_req_finished(*request);
+	ptlrpc_req_put(*request);
 	*request = NULL;
 
 	tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
@@ -2350,7 +2350,7 @@ retry:
 
 	rc = md_getattr_name(tgt->ltd_exp, op_data, preq);
 	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
-		ptlrpc_req_finished(*preq);
+		ptlrpc_req_put(*preq);
 		*preq = NULL;
 		goto retry;
 	}
@@ -2367,7 +2367,7 @@ retry:
 		op_data->op_namelen = 0;
 		op_data->op_name = NULL;
 
-		ptlrpc_req_finished(*preq);
+		ptlrpc_req_put(*preq);
 		*preq = NULL;
 
 		goto retry;
@@ -2815,7 +2815,7 @@ rename:
 	rc = md_rename(tgt->ltd_exp, op_data, old, oldlen, new, newlen,
 			request);
 	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
-		ptlrpc_req_finished(*request);
+		ptlrpc_req_put(*request);
 		*request = NULL;
 		goto retry;
 	}
@@ -2833,7 +2833,7 @@ rename:
 
 	op_data->op_fid4 = body->mbo_fid1;
 
-	ptlrpc_req_finished(*request);
+	ptlrpc_req_put(*request);
 	*request = NULL;
 
 	tgt = lmv_fid2tgt(lmv, &op_data->op_fid4);
@@ -3365,7 +3365,7 @@ retry:
 
 	rc = md_unlink(tgt->ltd_exp, op_data, request);
 	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
-		ptlrpc_req_finished(*request);
+		ptlrpc_req_put(*request);
 		*request = NULL;
 		goto retry;
 	}
@@ -3383,7 +3383,7 @@ retry:
 
 	/* This is a remote object, try remote MDT. */
 	op_data->op_fid2 = body->mbo_fid1;
-	ptlrpc_req_finished(*request);
+	ptlrpc_req_put(*request);
 	*request = NULL;
 
 	tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);

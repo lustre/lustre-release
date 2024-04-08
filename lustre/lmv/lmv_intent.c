@@ -146,7 +146,7 @@ out:
 	if (rc && pmode)
 		ldlm_lock_decref(&plock, pmode);
 
-	ptlrpc_req_finished(*reqp);
+	ptlrpc_req_put(*reqp);
 	*reqp = req;
 	return rc;
 }
@@ -216,7 +216,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		       PFID(&fid), tgt->ltd_index);
 
 		if (req != NULL) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			req = NULL;
 		}
 
@@ -271,7 +271,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 
 cleanup:
 	if (req != NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	/* if all stripes are invalid, return -ENOENT to notify user */
 	if (!rc && !valid_stripe_count)
@@ -387,7 +387,7 @@ retry:
 	    !(it->it_disposition & DISP_OPEN_OPEN)) {
 		if (!(it->it_flags & MDS_OPEN_BY_FID) &&
 		    lmv_dir_retry_check_update(op_data)) {
-			ptlrpc_req_finished(*reqp);
+			ptlrpc_req_put(*reqp);
 			it->it_request = NULL;
 			it->it_disposition = 0;
 			*reqp = NULL;
@@ -510,7 +510,7 @@ retry:
 		RETURN(rc);
 	} else if (it_disposition(it, DISP_LOOKUP_NEG) &&
 		   lmv_dir_retry_check_update(op_data)) {
-		ptlrpc_req_finished(*reqp);
+		ptlrpc_req_put(*reqp);
 		it->it_request = NULL;
 		it->it_disposition = 0;
 		*reqp = NULL;
