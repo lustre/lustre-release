@@ -827,6 +827,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx *ctx = NULL;
 	unsigned int is_root = 0, create_new = 0;
+	const struct cred *old_cred = NULL;
+	struct cred *new_cred = NULL;
 	struct key *key;
 	char desc[24];
 	char *coinfo;
@@ -968,9 +970,30 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
 	CDEBUG(D_SEC, "requesting key for %s\n", desc);
 
+	if (vcred->vc_uid) {
+		/* If the session keyring is revoked, it must not be used by
+		 * request_key(), otherwise we would get -EKEYREVOKED and
+		 * the user keyring would not even be searched.
+		 * So prepare new creds with no session keyring.
+		 */
+		if (current_cred()->session_keyring &&
+		    test_bit(KEY_FLAG_REVOKED,
+			     &current_cred()->session_keyring->flags)) {
+			new_cred = prepare_creds();
+			if (new_cred) {
+				new_cred->session_keyring = NULL;
+				old_cred = override_creds(new_cred);
+			}
+		}
+	}
+
 	keyring_upcall_lock(gsec_kr);
 	key = request_key(&gss_key_type, desc, coinfo);
 	keyring_upcall_unlock(gsec_kr);
+	if (old_cred) {
+		revert_creds(old_cred);
+		put_cred(new_cred);
+	}
 
 	OBD_FREE(coinfo, coinfo_size);
 
