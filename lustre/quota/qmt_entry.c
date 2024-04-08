@@ -1056,7 +1056,7 @@ void qti_lqes_write_unlock(const struct lu_env *env)
 		lqe_write_unlock(qti_lqes(env)[i]);
 }
 
-#define QMT_INIT_SLV_CNT	64
+#define QMT_INIT_SLV_CNT	2048
 struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *pool, int qtype)
 {
 	struct lqe_glbl_data	*lgd;
@@ -1070,7 +1070,7 @@ struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *pool, int qtype)
 	slv_cnt = qpi_slv_nr_by_rtype(pool, qtype);
 
 	glbe_num = slv_cnt < QMT_INIT_SLV_CNT ? QMT_INIT_SLV_CNT : slv_cnt;
-	OBD_ALLOC(lqeg_arr, sizeof(struct lqe_glbl_entry) * glbe_num);
+	OBD_ALLOC_LARGE(lqeg_arr, sizeof(struct lqe_glbl_entry) * glbe_num);
 	if (!lqeg_arr) {
 		OBD_FREE(lgd, sizeof(struct lqe_glbl_data));
 		RETURN(NULL);
@@ -1090,7 +1090,7 @@ void qmt_free_lqe_gd(struct lqe_glbl_data *lgd)
 	if (unlikely(!lgd))
 		return;
 
-	OBD_FREE(lgd->lqeg_arr,
+	OBD_FREE_LARGE(lgd->lqeg_arr,
 		 sizeof(struct lqe_glbl_entry) * lgd->lqeg_num_alloc);
 	OBD_FREE(lgd, sizeof(struct lqe_glbl_data));
 }
@@ -1121,7 +1121,7 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 	if (qunit)
 		qmt_lqes_sort(env);
 
-	for (i = 0; i < lgd->lqeg_num_used; i++) {
+	for (i = 0; i < lgd->lqeg_num_alloc; i++) {
 		lgd->lqeg_arr[i].lge_qunit_set = 0;
 		lgd->lqeg_arr[i].lge_qunit_nu = 0;
 		lgd->lqeg_arr[i].lge_edquot_nu = 0;
@@ -1134,8 +1134,7 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 		CDEBUG(D_QUOTA, "lqes_cnt %d, i %d\n", qti_lqes_cnt(env), i);
 		qpi = lqe2qpi(lqe);
 		if (qmt_pool_global(qpi)) {
-			slaves_cnt = qpi_slv_nr_by_rtype(lqe2qpi(lqe),
-							 lqe_qtype(lqe));
+			slaves_cnt = lgd->lqeg_num_alloc;
 		} else {
 			sem = qmt_sarr_rwsem(qpi);
 			down_read(sem);
