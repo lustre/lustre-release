@@ -9035,6 +9035,9 @@ test_64g() {
 run_test 64g "grant shrink on MDT"
 
 test_64h() {
+	(( $OST1_VERSION >= $(version_code 2.14.0.38) )) ||
+		skip "Need OSS >= 2.14.0.38 for grant shrink"
+
 	local instance=$($LFS getname -i $DIR)
 	local osc_tgt="$FSNAME-OST0000-osc-$instance"
 	local num_exps=$(do_facet ost1 \
