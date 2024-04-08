@@ -670,6 +670,11 @@ static inline struct key *get_user_keyring(const struct cred *cred)
 {
 	return _user_key(KEY_SPEC_USER_KEYRING);
 }
+
+static inline struct key *get_session_keyring(const struct cred *cred)
+{
+	return _user_key(KEY_SPEC_SESSION_KEYRING);
+}
 #else
 static inline struct key *get_user_session_keyring(const struct cred *cred)
 {
@@ -680,6 +685,11 @@ static inline struct key *get_user_keyring(const struct cred *cred)
 {
 	return key_get(cred->user->uid_keyring);
 }
+
+static inline struct key *get_session_keyring(const struct cred *cred)
+{
+	return key_get(cred->session_keyring);
+}
 #endif
 
 /*
@@ -689,22 +699,26 @@ static inline struct key *get_user_keyring(const struct cred *cred)
 static void request_key_unlink(struct key *key)
 {
 	struct cred *cred = (struct cred *)current_cred(), *new_cred = NULL;
+	kuid_t kuid_orig = current_cred()->user->uid;
 #ifdef HAVE_USER_UID_KEYRING
 	struct key *root_uid_keyring = NULL;
 #endif
 	const struct cred *old_cred = NULL;
-	kuid_t uid = current_uid();
 	struct key *ring = NULL;
+	uid_t uid, key_uid;
 	int res;
 
+	uid = from_kuid(current_user_ns(), kuid_orig);
+	key_uid = from_kuid(&init_user_ns, key->uid);
 	/* unlink key with user's creds if it's a user key */
-	if (!uid_eq(key->uid, current_uid())) {
+	if (key_uid != uid) {
 		new_cred = prepare_creds();
 		if (new_cred == NULL)
 			goto search;
 
 		new_cred->uid = key->uid;
 		new_cred->user->uid = key->uid;
+		new_cred->user_ns = &init_user_ns;
 #ifdef HAVE_USER_UID_KEYRING
 		root_uid_keyring = current_cred()->user->uid_keyring;
 		new_cred->user->uid_keyring = NULL;
@@ -714,7 +728,7 @@ static void request_key_unlink(struct key *key)
 	}
 
 	/* User keys are linked to the user keyring. So get it now. */
-	if (from_kuid(&init_user_ns, key->uid)) {
+	if (key_uid) {
 		/* Getting a key(ring) normally increases its refcount by 1.
 		 * But if we overrode creds above, calling get_user_keyring()
 		 * will add one more ref, because of the user switch.
@@ -778,12 +792,6 @@ do_unlink:
 		       key->serial, key, ring->serial, res);
 		/* matches key_get()/get_user_keyring() above */
 		key_put(ring);
-		/* If this is a user key, it added an extra ref on the user
-		 * keyring at link/instantiate stage. This ref needs to be
-		 * removed now that the key has been unlinked.
-		 */
-		if (from_kuid(&init_user_ns, key->uid))
-			key_put(ring);
 	} else {
 		CDEBUG(D_SEC,
 		       "Missing keyring, key %08x (%p) could not be unlinked, ignored\n",
@@ -793,7 +801,7 @@ do_unlink:
 	if (old_cred) {
 		revert_creds(old_cred);
 		put_cred(new_cred);
-		current_cred()->user->uid = uid;
+		current_cred()->user->uid = kuid_orig;
 #ifdef HAVE_USER_UID_KEYRING
 		/* We are switching creds back, so need to drop ref on keyring
 		 * for kernel implementation based on user keyring pinned from
@@ -1485,7 +1493,7 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 	 */
 	uid = from_kuid(&init_user_ns, current_uid());
 	if (uid == 0)
-		keyring = current_cred()->session_keyring;
+		keyring = get_session_keyring(current_cred());
 	else
 		keyring = get_user_keyring(current_cred());
 
@@ -1495,13 +1503,15 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 	if (unlikely(rc)) {
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
 		       key->serial, keyring->serial, rc);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	CDEBUG(D_SEC,
 	      "key %08x (%p) linked to keyring %08x and instantiated, ctx %p\n",
 	       key->serial, key, keyring->serial, key_get_payload(key, 0));
-	RETURN(0);
+out:
+	key_put(keyring);
+	RETURN(rc);
 }
 
 /*
@@ -1682,6 +1692,17 @@ void gss_kt_describe(const struct key *key, struct seq_file *s)
                 seq_puts(s, key->description);
 }
 
+static void gss_kt_revoke(struct key *key)
+{
+	CDEBUG(D_SEC, "revoking key %08x (%p) ref %d\n",
+	       key->serial, key, ll_read_key_usage(key));
+	kill_key_locked(key);
+	key_revoke_locked(key);
+	key_put(key);
+	CDEBUG(D_SEC, "key %08x (%p) revoked ref %d\n",
+	       key->serial, key, ll_read_key_usage(key));
+}
+
 static struct key_type gss_key_type =
 {
 	.name		= "lgssc",
@@ -1695,6 +1716,7 @@ static struct key_type gss_key_type =
 #endif
 	.destroy	= gss_kt_destroy,
 	.describe	= gss_kt_describe,
+	.revoke		= gss_kt_revoke,
 };
 
 /****************************************
