@@ -849,7 +849,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 			RETURN(dentry == save ? NULL : dentry);
 	}
 
-	if (it->it_op & IT_OPEN && it->it_flags & FMODE_WRITE &&
+	if (it->it_op & IT_OPEN && it->it_open_flags & FMODE_WRITE &&
 	    dentry->d_sb->s_flags & SB_RDONLY)
 		RETURN(ERR_PTR(-EROFS));
 
@@ -872,7 +872,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		op_data->op_fid2 = fid;
 		op_data->op_bias = MDS_FID_OP;
 		if (it->it_op & IT_OPEN)
-			it->it_flags |= MDS_OPEN_BY_FID;
+			it->it_open_flags |= MDS_OPEN_BY_FID;
 	}
 
 	/* enforce umask if acl disabled or MDS doesn't support umask */
@@ -1002,7 +1002,7 @@ inherit:
 		op_data->op_data = lum;
 		op_data->op_data_size = sizeof(*lum);
 		op_data->op_archive_id = pca->pca_dataset->pccd_rwid;
-		it->it_flags |= MDS_OPEN_PCC;
+		it->it_open_flags |= MDS_OPEN_PCC;
 	}
 
 	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
@@ -1229,8 +1229,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		}
 	}
 	it->it_create_mode = (mode & S_IALLUGO) | S_IFREG;
-	it->it_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
-	it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
+	it->it_open_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
+	it->it_open_flags &= ~MDS_OPEN_FL_INTERNAL;
 
 	if (ll_sbi_has_encrypt(ll_i2sbi(dir)) && IS_ENCRYPTED(dir)) {
 		/* in case of create, this is going to be a regular file because
@@ -1267,7 +1267,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (open_threshold == 1 &&
 	    exp_connect_flags2(ll_i2mdexp(dir)) &
 	    OBD_CONNECT2_ATOMIC_OPEN_LOCK)
-		it->it_flags |= MDS_OPEN_LOCK;
+		it->it_open_flags |= MDS_OPEN_LOCK;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
 	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &secctxslot,

@@ -1399,10 +1399,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
 	ldlm_rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
 
-	if (unlikely(open_flags & MDS_OPEN_JOIN_FILE)) {
-		CERROR("file join is not supported anymore.\n");
-		GOTO(out, result = err_serious(-EOPNOTSUPP));
-	}
 	msg_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
 	if ((open_flags & (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS)) &&

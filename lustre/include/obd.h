@@ -867,7 +867,7 @@ static inline int it_to_lock_mode(struct lookup_intent *it)
 	else if (it->it_op & (IT_GETATTR | IT_OPEN | IT_LOOKUP))
 		return LCK_CR;
 	else if (it->it_op & IT_LAYOUT)
-		return (it->it_flags & FMODE_WRITE) ? LCK_EX : LCK_CR;
+		return (it->it_open_flags & FMODE_WRITE) ? LCK_EX : LCK_CR;
 	else if (it->it_op &  IT_READDIR)
 		return LCK_PR;
 	else if (it->it_op &  IT_GETXATTR)

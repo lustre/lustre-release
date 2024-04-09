@@ -270,16 +270,17 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	/* XXX: openlock is not cancelled for cross-refs. */
 	/* If inode is known, cancel conflicting OPEN locks. */
 	if (fid_is_sane(&op_data->op_fid2)) {
-		if (it->it_flags & MDS_OPEN_LEASE) { /* try to get lease */
-			if (it->it_flags & MDS_FMODE_WRITE)
+		if (it->it_open_flags & MDS_OPEN_LEASE) { /* try to get lease */
+			if (it->it_open_flags & MDS_FMODE_WRITE)
 				mode = LCK_EX;
 			else
 				mode = LCK_PR;
 		} else {
-			if (it->it_flags & (MDS_FMODE_WRITE | MDS_OPEN_TRUNC))
+			if (it->it_open_flags & (MDS_FMODE_WRITE |
+						 MDS_OPEN_TRUNC))
 				mode = LCK_CW;
 #ifdef FMODE_EXEC
-			else if (it->it_flags & FMODE_EXEC)
+			else if (it->it_open_flags & FMODE_EXEC)
 				mode = LCK_PR;
 #endif
 			else
@@ -308,7 +309,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
 			     op_data->op_namelen + 1);
-	if (cl_is_lov_delay_create(it->it_flags)) {
+	if (cl_is_lov_delay_create(it->it_open_flags)) {
 		/* open(O_LOV_DELAY_CREATE) won't pack lmm */
 		LASSERT(lmmsize == 0);
 		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);
@@ -349,7 +350,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	/* pack the intended request */
 	mdc_open_pack(&req->rq_pill, op_data, it->it_create_mode, 0,
-		      it->it_flags, lmm, lmmsize, sepol);
+		      it->it_open_flags, lmm, lmmsize, sepol);
 
 	sptlrpc_sepol_put(sepol);
 
@@ -660,7 +661,8 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		easize = obd->u.cli.cl_max_mds_easize;
 
 	/* pack the intended request */
-	mdc_getattr_pack(&req->rq_pill, valid, it->it_flags, op_data, easize);
+	mdc_getattr_pack(&req->rq_pill, valid, it->it_open_flags, op_data,
+			 easize);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, easize);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
@@ -715,7 +717,7 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	if (fid_is_sane(&op_data->op_fid2) && (it->it_op & IT_LAYOUT) &&
-	    (it->it_flags & FMODE_WRITE)) {
+	    (it->it_open_flags & FMODE_WRITE)) {
 		count = mdc_resource_get_unused(exp, &op_data->op_fid2,
 						&cancels, LCK_EX,
 						MDS_INODELOCK_LAYOUT);
@@ -989,7 +991,8 @@ static inline bool mdc_skip_mod_rpc_slot(const struct lookup_intent *it)
 	if (it != NULL &&
 	    (it->it_op == IT_GETATTR || it->it_op == IT_LOOKUP ||
 	     it->it_op == IT_READDIR || it->it_op == IT_GETXATTR ||
-	     (it->it_op == IT_LAYOUT && !(it->it_flags & MDS_FMODE_WRITE))))
+	     (it->it_op == IT_LAYOUT && !(it->it_open_flags &
+					  MDS_FMODE_WRITE))))
 		return true;
 	return false;
 }
@@ -1420,10 +1423,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 	LASSERT(it);
 	CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
-		", intent: %s flags %#llo\n", (int)op_data->op_namelen,
+		", intent: %s flags %#lo\n", (int)op_data->op_namelen,
 		op_data->op_name, PFID(&op_data->op_fid2),
 		PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
-		it->it_flags);
+		it->it_open_flags);
 
 	lockh.cookie = 0;
 	/* MDS_FID_OP is not a revalidate case */
@@ -1525,9 +1528,10 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 
 	ENTRY;
 	CDEBUG(D_DLMTRACE,
-	       "name: %.*s in inode "DFID", intent: %s flags %#llo\n",
+	       "name: %.*s in inode "DFID", intent: %s flags %#lo\n",
 	       (int)op_data->op_namelen, op_data->op_name,
-	       PFID(&op_data->op_fid1), ldlm_it2str(it->it_op), it->it_flags);
+	       PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
+	       it->it_open_flags);
 
 	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 	/* If the MDT return -ERANGE because of large ACL, then the sponsor

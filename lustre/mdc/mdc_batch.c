@@ -126,7 +126,7 @@ static int mdc_batch_getattr_pack(struct batch_update_head *head,
 	easize = MAX_MD_SIZE_OLD; /* obd->u.cli.cl_default_mds_easize; */
 
 	/* pack the intended request */
-	mdc_getattr_pack(&pill, valid, it->it_flags, op_data, easize);
+	mdc_getattr_pack(&pill, valid, it->it_open_flags, op_data, easize);
 
 	item->mop_lock_flags |= LDLM_FL_HAS_INTENT;
 	rc = mdc_ldlm_lock_pack(head->buh_exp, &pill, &policy,

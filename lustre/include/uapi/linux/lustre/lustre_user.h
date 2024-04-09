@@ -1652,67 +1652,51 @@ enum la_valid {
 	LA_REMOTE_ATTR_SET = (LA_UID | LA_GID | LA_PROJID | LA_LAYOUT_VERSION)
 };
 
-#define MDS_FMODE_READ           00000001
-#define MDS_FMODE_WRITE          00000002
-
-#define MDS_FMODE_CLOSED         00000000
-#define MDS_FMODE_EXEC           00000004
-/*	MDS_FMODE_EPOCH          01000000 obsolete since 2.8.0 */
-/*	MDS_FMODE_TRUNC          02000000 obsolete since 2.8.0 */
-/*	MDS_FMODE_SOM            04000000 obsolete since 2.8.0 */
-
-#define MDS_OPEN_CREATED         00000010
-/*	MDS_OPEN_CROSS           00000020 obsolete in 2.12, internal use only */
-
-#define MDS_OPEN_CREAT           00000100
-#define MDS_OPEN_EXCL            00000200
-#define MDS_OPEN_TRUNC           00001000
-#define MDS_OPEN_APPEND          00002000
-#define MDS_OPEN_SYNC            00010000
-#define MDS_OPEN_DIRECTORY       00200000
-
-#define MDS_OPEN_BY_FID		040000000 /* open_by_fid for known object */
-#define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
-#define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
-#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file.
-					   * We do not support JOIN FILE
-					   * anymore, reserve this flags
-					   * just for preventing such bit
-					   * to be reused.
-					   */
-
-#define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
-#define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
-#define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
-#define MDS_OPEN_NORESTORE  0100000000000ULL /* Do not restore file at open */
-#define MDS_OPEN_NEWSTRIPE  0200000000000ULL /* New stripe needed (restripe or
-					      * hsm restore)
-					      */
-#define MDS_OPEN_VOLATILE   0400000000000ULL /* File is volatile = created
-					      * linked
-					      */
-#define MDS_OPEN_LEASE	   01000000000000ULL /* Open the file and grant lease
-					      * delegation, succeed if it's not
-					      * being opened with conflict mode.
-					      */
-#define MDS_OPEN_RELEASE   02000000000000ULL /* Open the file for HSM release */
-
-#define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
-#define MDS_OPEN_PCC      010000000000000ULL /* PCC: auto RW-PCC cache attach
-					      * for newly created file
-					      */
-#define MDS_OP_WITH_FID   020000000000000ULL /* operation carried out by FID */
-#define MDS_OPEN_DEFAULT_LMV  040000000000000ULL /* open fetches default LMV,
-						  * or mkdir with default LMV
-						  */
-
-/* lustre internal open flags, which should not be set from user space */
-#define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
-			      MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |	\
-			      MDS_OPEN_BY_FID | MDS_OPEN_LEASE |	\
-			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC |	\
-			      MDS_OPEN_PCC | MDS_OP_WITH_FID |		\
-			      MDS_OPEN_DEFAULT_LMV)
+enum mds_open_flags {
+	MDS_FMODE_CLOSED	=	          00000000,
+	MDS_FMODE_READ		=	          00000001,
+	MDS_FMODE_WRITE		=	          00000002,
+	MDS_FMODE_EXEC		=	          00000004,
+	MDS_OPEN_CREATED	=	          00000010,
+/*	MDS_OPEN_CROSS		=	          00000020, obsolete in 2.12, internal use only */
+	MDS_OPEN_CREAT		=	          00000100,
+	MDS_OPEN_EXCL		=	          00000200,
+	MDS_OPEN_TRUNC		=	          00001000,
+	MDS_OPEN_APPEND		=	          00002000,
+	MDS_OPEN_SYNC		=	          00010000,
+	MDS_OPEN_DIRECTORY	=	          00200000,
+/*	MDS_FMODE_EPOCH		=	          01000000, obsolete in 2.8.0 */
+/*	MDS_FMODE_TRUNC		=	          02000000, obsolete in 2.8.0 */
+/*	MDS_FMODE_SOM		=	          04000000, obsolete in 2.8.0 */
+	MDS_OPEN_BY_FID		=	         040000000, /* open_by_fid for known object */
+	MDS_OPEN_DELAY_CREATE	=	        0100000000, /* delay initial object create */
+	MDS_OPEN_OWNEROVERRIDE	=	        0200000000, /* NFSD rw-reopen ro file for owner */
+/*	MDS_OPEN_JOIN_FILE	=	        0400000000, obsolete in 1.4 */
+/*	FMODE_NONOTIFY		=	        0400000000, from OPEN_FMODE() */
+	MDS_OPEN_LOCK		=	       04000000000, /* This requires open lock */
+	MDS_OPEN_HAS_EA		=	      010000000000, /* specify obj create pattern */
+	MDS_OPEN_HAS_OBJS	=	      020000000000, /* Just set EA, the obj exist */
+	MDS_OPEN_NORESTORE	=	  0100000000000ULL, /* Dont restore file at open */
+	/* New stripe needed (restripe or hsm restore) */
+	MDS_OPEN_NEWSTRIPE	=	  0200000000000ULL,
+	MDS_OPEN_VOLATILE	=	  0400000000000ULL, /* File is volatile = created linked */
+	/* Open file and grant lease delegaion, success if not being opened with conflict mode */
+	MDS_OPEN_LEASE		=	 01000000000000ULL,
+	MDS_OPEN_RELEASE	=	 02000000000000ULL, /* Open file for HSM release */
+	MDS_OPEN_RESYNC		=	 04000000000000ULL, /* FLR: file resync */
+	/* PCC: auto RW-PCC cache attach for newly created file */
+	MDS_OPEN_PCC		=	010000000000000ULL,
+	MDS_OP_WITH_FID		=	020000000000000ULL, /* operation carried out by FID */
+	/* open fetches default LMV, or mkdir with default LMV */
+	MDS_OPEN_DEFAULT_LMV	=	040000000000000ULL,
+	/* lustre internal open flags, should not be set from user space */
+	MDS_OPEN_FL_INTERNAL	=	(MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |
+					 MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_PCC |
+					 MDS_OPEN_BY_FID | MDS_OPEN_LEASE |
+					 MDS_OPEN_RELEASE | MDS_OPEN_RESYNC |
+					 MDS_OPEN_LOCK | MDS_OP_WITH_FID |
+					 MDS_OPEN_DEFAULT_LMV),
+};
 
 /* mkdir fetches LMV, reuse bit of MDS_OPEN_RESYNC */
 #define MDS_MKDIR_LMV	MDS_OPEN_RESYNC

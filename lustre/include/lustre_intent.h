@@ -37,7 +37,7 @@
 struct lookup_intent {
 	int			 it_op;
 	int			 it_create_mode;
-	__u64			 it_flags;
+	enum mds_open_flags	 it_open_flags;
 	int			 it_disposition;
 	int			 it_status;
 	__u64			 it_lock_handle;

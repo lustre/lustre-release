@@ -663,7 +663,7 @@ static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
 	ENTRY;
 
 	LASSERT(parent != NULL);
-	LASSERT(itp->it_flags & MDS_OPEN_BY_FID);
+	LASSERT(itp->it_open_flags & MDS_OPEN_BY_FID);
 
 	/* if server supports open-by-fid, or file name is invalid, don't pack
 	 * name in open request */
@@ -787,7 +787,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct lookup_intent *it,
 	och->och_fid = body->mbo_fid1;
 	och->och_lease_handle.cookie = it->it_lock_handle;
 	och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
-	och->och_flags = it->it_flags;
+	och->och_flags = it->it_open_flags;
 
 	return md_set_open_replay_data(md_exp, och, it);
 }
@@ -812,7 +812,8 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 
 	file->private_data = fd;
 	ll_readahead_init(inode, &fd->fd_ras);
-	fd->fd_omode = it->it_flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
+	fd->fd_omode = it->it_open_flags & (FMODE_READ | FMODE_WRITE |
+					    FMODE_EXEC);
 
 	RETURN(0);
 }
@@ -857,7 +858,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lookup_intent *it, oit = { .it_op = IT_OPEN,
-					  .it_flags = file->f_flags };
+					  .it_open_flags = file->f_flags };
 	struct obd_client_handle **och_p = NULL;
 	__u64 *och_usecount = NULL;
 	struct ll_file_data *fd;
@@ -900,27 +901,27 @@ int ll_file_open(struct inode *inode, struct file *file)
 		/* Convert f_flags into access mode. We cannot use file->f_mode,
 		 * because everything but O_ACCMODE mask was stripped from
 		 * there */
-		if ((oit.it_flags + 1) & O_ACCMODE)
-			oit.it_flags++;
+		if ((oit.it_open_flags + 1) & O_ACCMODE)
+			oit.it_open_flags++;
 		if (file->f_flags & O_TRUNC)
-			oit.it_flags |= FMODE_WRITE;
+			oit.it_open_flags |= FMODE_WRITE;
 
 		/* kernel only call f_op->open in dentry_open.  filp_open calls
 		 * dentry_open after call to open_namei that checks permissions.
 		 * Only nfsd_open call dentry_open directly without checking
 		 * permissions and because of that this code below is safe.
 		 */
-		if (oit.it_flags & (FMODE_WRITE | FMODE_READ))
-			oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
+		if (oit.it_open_flags & (FMODE_WRITE | FMODE_READ))
+			oit.it_open_flags |= MDS_OPEN_OWNEROVERRIDE;
 
 		/* We do not want O_EXCL here, presumably we opened the file
 		 * already? XXX - NFS implications? */
-		oit.it_flags &= ~O_EXCL;
+		oit.it_open_flags &= ~O_EXCL;
 
-		/* bug20584, if "it_flags" contains O_CREAT, the file will be
+		/* bug20584, if "it_open_flags" contains O_CREAT, file will be
 		 * created if necessary, then "IT_CREAT" should be set to keep
 		 * consistent with it */
-		if (oit.it_flags & O_CREAT)
+		if (oit.it_open_flags & O_CREAT)
 			oit.it_op |= IT_CREAT;
 
 		it = &oit;
@@ -928,10 +929,10 @@ int ll_file_open(struct inode *inode, struct file *file)
 
 restart:
 	/* Let's see if we have file open on MDS already. */
-	if (it->it_flags & FMODE_WRITE) {
+	if (it->it_open_flags & FMODE_WRITE) {
 		och_p = &lli->lli_mds_write_och;
 		och_usecount = &lli->lli_open_fd_write_count;
-	} else if (it->it_flags & FMODE_EXEC) {
+	} else if (it->it_open_flags & FMODE_EXEC) {
 		och_p = &lli->lli_mds_exec_och;
 		och_usecount = &lli->lli_open_fd_exec_count;
 	} else {
@@ -1004,20 +1005,20 @@ restart:
 			} else if (open_threshold > 0) {
 				/* Take MDS_OPEN_LOCK with many opens */
 				if (lli->lli_open_fd_count >= open_threshold)
-					it->it_flags |= MDS_OPEN_LOCK;
+					it->it_open_flags |= MDS_OPEN_LOCK;
 
 				/* If this is open after we just closed */
 				else if (ktime_before(ktime_get(),
 					    ktime_add_ms(lli->lli_close_fd_time,
 							 sbi->ll_oc_thrsh_ms)))
-					it->it_flags |= MDS_OPEN_LOCK;
+					it->it_open_flags |= MDS_OPEN_LOCK;
 			}
 
 			/*
 			 * Always specify MDS_OPEN_BY_FID because we don't want
 			 * to get file with different fid.
 			 */
-			it->it_flags |= MDS_OPEN_BY_FID;
+			it->it_open_flags |= MDS_OPEN_BY_FID;
 			rc = ll_intent_file_open(dentry, NULL, 0, it);
 			if (rc)
 				GOTO(out_openerr, rc);
@@ -1252,8 +1253,8 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	/* To tell the MDT this openhandle is from the same owner */
 	op_data->op_open_handle = old_open_handle;
 
-	it.it_flags = fmode | open_flags;
-	it.it_flags |= MDS_OPEN_LOCK | MDS_OPEN_BY_FID | MDS_OPEN_LEASE;
+	it.it_open_flags = fmode | open_flags;
+	it.it_open_flags |= MDS_OPEN_LOCK | MDS_OPEN_BY_FID | MDS_OPEN_LEASE;
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
 			    &ll_md_blocking_lease_ast,
 	/* LDLM_FL_NO_LRU: To not put the lease lock into LRU list, otherwise
@@ -2686,7 +2687,7 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 {
 	struct lookup_intent oit = {
 		.it_op = IT_OPEN,
-		.it_flags = flags | MDS_OPEN_BY_FID,
+		.it_open_flags = flags | MDS_OPEN_BY_FID,
 	};
 	int rc;
 	ENTRY;
@@ -6571,7 +6572,7 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 	it.it_op = IT_LAYOUT;
 	if (intent->lai_opc == LAYOUT_INTENT_WRITE ||
 	    intent->lai_opc == LAYOUT_INTENT_TRUNC)
-		it.it_flags = FMODE_WRITE;
+		it.it_open_flags = FMODE_WRITE;
 
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",
 			  sbi->ll_fsname, PFID(&lli->lli_fid), inode);

@@ -38,8 +38,8 @@
 #include <linux/math64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
-#include <lustre_intent.h>
 
+#include <uapi/linux/lustre/lustre_user.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -295,7 +295,7 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *tgt;
 	struct mdt_body *body;
-	__u64 flags = it->it_flags;
+	__u64 flags = it->it_open_flags;
 	int rc;
 
 	ENTRY;
@@ -328,13 +328,13 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 				 * layout first, to avoid creating new file
 				 * under old layout, clear O_CREAT.
 				 */
-				it->it_flags &= ~O_CREAT;
+				it->it_open_flags &= ~O_CREAT;
 			}
 		}
 	}
 
 retry:
-	if (it->it_flags & MDS_OPEN_BY_FID) {
+	if (it->it_open_flags & MDS_OPEN_BY_FID) {
 		LASSERT(fid_is_sane(&op_data->op_fid2));
 
 		/* for striped directory, we can't know parent stripe fid
@@ -360,7 +360,7 @@ retry:
 
 	/* If it is ready to open the file by FID, do not need
 	 * allocate FID at all, otherwise it will confuse MDT */
-	if ((it->it_op & IT_CREAT) && !(it->it_flags & MDS_OPEN_BY_FID)) {
+	if ((it->it_op & IT_CREAT) && !(it->it_open_flags & MDS_OPEN_BY_FID)) {
 		/*
 		 * For lookup(IT_CREATE) cases allocate new fid and setup FLD
 		 * for it.
@@ -385,14 +385,14 @@ retry:
 	if ((it->it_disposition & DISP_LOOKUP_NEG) &&
 	    !(it->it_disposition & DISP_OPEN_CREATE) &&
 	    !(it->it_disposition & DISP_OPEN_OPEN)) {
-		if (!(it->it_flags & MDS_OPEN_BY_FID) &&
+		if (!(it->it_open_flags & MDS_OPEN_BY_FID) &&
 		    lmv_dir_retry_check_update(op_data)) {
 			ptlrpc_req_put(*reqp);
 			it->it_request = NULL;
 			it->it_disposition = 0;
 			*reqp = NULL;
 
-			it->it_flags = flags;
+			it->it_open_flags = flags;
 			fid_zero(&op_data->op_fid2);
 			goto retry;
 		}
