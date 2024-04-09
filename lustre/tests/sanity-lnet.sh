@@ -3515,6 +3515,10 @@ test_251() {
 run_test 251 "Define multiple kfi networks on single interface"
 
 test_252() {
+
+	(( $MDS1_VERSION >= $(version_code v2_14_55-10-gc807e3f33b) )) ||
+		skip "need MDS >= 2.14.55.10 for memory leak fix"
+
 	setup_health_test false || return $?
 
 	local rc=0
