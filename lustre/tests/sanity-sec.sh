@@ -6272,29 +6272,29 @@ test_69() {
 	orig="$(do_facet mds1 "$LCTL get_param -n $param")"
 	stack_trap "do_facet mds1 $LCTL set_param $param=$orig" EXIT
 
-	# identity_upcall accepts a path to an executable,
+	# identity_upcall accepts an absolute path to an executable,
 	# or NONE (case insensitive)
 	do_facet mds1 $LCTL set_param $param=/path/to/prog ||
-		error "set_param $param=/path/to/prog failed"
+		error "set_param $param=/path/to/prog failed (1)"
 	do_facet mds1 $LCTL set_param $param=prog &&
-		error "set_param $param=prog should failed"
+		error "set_param $param=prog should fail (1)"
 	do_facet mds1 $LCTL set_param $param=NONE ||
-		error "set_param $param=NONE failed"
+		error "set_param $param=NONE failed (1)"
 	do_facet mds1 $LCTL set_param $param=none ||
-		error "set_param $param=none failed"
+		error "set_param $param=none failed (1)"
 
 	if $GSS; then
 		param="sptlrpc.gss.rsi_upcall"
 		orig="$(do_facet mds1 "$LCTL get_param -n $param")"
 		stack_trap "do_facet mds1 $LCTL set_param $param=$orig" EXIT
 
-		# rsi_upcall only accepts a path to an executable
+		# rsi_upcall only accepts an absolute path to an executable
 		do_facet mds1 $LCTL set_param $param=prog &&
-			error "set_param $param=prog should failed"
+			error "set_param $param=prog should fail (2)"
 		do_facet mds1 $LCTL set_param $param=NONE &&
-			error "set_param $param=NONE should fail"
+			error "set_param $param=NONE should fail (2)"
 		do_facet mds1 $LCTL set_param $param=/path/to/prog ||
-			error "set_param $param=/path/to/prog failed"
+			error "set_param $param=/path/to/prog failed (2)"
 	fi
 }
 run_test 69 "check upcall incorrect values"

@@ -155,6 +155,7 @@ int upcall_cache_set_upcall(struct upcall_cache *cache, const char *buffer,
 			    size_t count, bool path_only)
 {
 	char *upcall;
+	int rc = 0;
 
 	if (count >= UC_CACHE_UPCALL_MAXPATH)
 		return -E2BIG;
@@ -165,30 +166,26 @@ int upcall_cache_set_upcall(struct upcall_cache *cache, const char *buffer,
 
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
 	if (sscanf(buffer, "%s", upcall) != 1)
-		goto invalid;
+		GOTO(out, rc = -EINVAL);
 
-	if (upcall[0] == '/')
-		goto valid;
-
-	if (path_only)
-		goto invalid;
-
-	if (strcasecmp(upcall, "NONE") == 0) {
-		snprintf(upcall, count + 1, "NONE");
-		goto valid;
+	/* Accepted values are:
+	 * - an absolute path to an executable
+	 * - if path_only is false: "none", case insensitive
+	 */
+	if (upcall[0] != '/') {
+		if (!path_only && strcasecmp(upcall, "NONE") == 0)
+			snprintf(upcall, count + 1, "NONE");
+		else
+			GOTO(out, rc = -EINVAL);
 	}
 
-invalid:
-	OBD_FREE(upcall, count + 1);
-	return -EINVAL;
-
-valid:
 	down_write(&cache->uc_upcall_rwsem);
-	strcpy(cache->uc_upcall, upcall);
+	strncpy(cache->uc_upcall, upcall, count + 1);
 	up_write(&cache->uc_upcall_rwsem);
 
+out:
 	OBD_FREE(upcall, count + 1);
-	return 0;
+	return rc;
 }
 EXPORT_SYMBOL(upcall_cache_set_upcall);
 
