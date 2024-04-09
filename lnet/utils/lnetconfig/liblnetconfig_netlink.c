@@ -955,7 +955,8 @@ static bool cleanup_children(struct yaml_nl_node *parent)
  */
 static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 {
-	struct yaml_netlink_input *data = arg;
+	yaml_parser_t *parser = arg;
+	struct yaml_netlink_input *data = parser->read_handler_data;
 	struct nlmsghdr *nlh = nlmsg_hdr(msg);
 
 	if (nlh->nlmsg_flags & NLM_F_CREATE) {
@@ -1036,11 +1037,10 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 /* This is the libnl callback for when an error has happened
  * kernel side. An error message is sent back to the user.
  */
-static int yaml_netlink_msg_error(struct sockaddr_nl *who,
-				  struct nlmsgerr *errmsg, void *arg)
+static int yaml_netlink_parse_msg_error(struct nlmsgerr *errmsg,
+					yaml_parser_t *parser)
 {
 	struct nlmsghdr *nlh = (void *)errmsg - NLMSG_HDRLEN;
-	struct yaml_netlink_input *data = arg;
 
 	if ((nlh->nlmsg_type == NLMSG_ERROR ||
 	     nlh->nlmsg_flags & NLM_F_ACK_TLVS) && errmsg->error) {
@@ -1048,6 +1048,7 @@ static int yaml_netlink_msg_error(struct sockaddr_nl *who,
 		 * cache the source of the error.
 		 */
 		const char *errstr = nl_geterror(nl_syserr2nlerr(errmsg->error));
+		struct yaml_netlink_input *data = parser->read_handler_data;
 
 #ifdef HAVE_USRSPC_NLMSGERR
 		/* Newer kernels support NLM_F_ACK_TLVS in nlmsg_flags
@@ -1065,11 +1066,24 @@ static int yaml_netlink_msg_error(struct sockaddr_nl *who,
 			}
 		}
 #endif /* HAVE_USRSPC_NLMSGERR */
+		parser->error = YAML_READER_ERROR;
+		data = parser->read_handler_data;
 		data->errmsg = errstr;
 		data->error = errmsg->error;
-		data->parser->error = YAML_READER_ERROR;
 		data->complete = true;
 	}
+
+	return parser->error;
+}
+
+/* This is the libnl callback for when an error has happened
+ * kernel side. An error message is sent back to the user.
+ */
+static int yaml_netlink_msg_error(struct sockaddr_nl *who,
+				  struct nlmsgerr *errmsg, void *arg)
+{
+	yaml_netlink_parse_msg_error(errmsg, (yaml_parser_t *)arg);
+
 	return NL_STOP;
 }
 
@@ -1079,18 +1093,20 @@ static int yaml_netlink_msg_error(struct sockaddr_nl *who,
  */
 static int yaml_netlink_msg_complete(struct nl_msg *msg, void *arg)
 {
-	struct yaml_netlink_input *data = arg;
 	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct yaml_netlink_input *data;
+	yaml_parser_t *parser = arg;
 
 	/* For the case of NLM_F_DUMP the kernel will send error msgs
 	 * yet not be labled NLMSG_ERROR which results in this code
 	 * path being executed.
 	 */
-	yaml_netlink_msg_error(NULL, nlmsg_data(nlh), arg);
-	if (data->parser->error == YAML_READER_ERROR)
+	if (yaml_netlink_parse_msg_error(nlmsg_data(nlh), parser) ==
+	    YAML_READER_ERROR)
 		return NL_STOP;
 
 	/* Free internal data. */
+	data = parser->read_handler_data;
 	if (data->root) {
 		cleanup_children(data->root);
 		free(data->root);
@@ -1218,10 +1234,10 @@ yaml_parser_set_input_netlink(yaml_parser_t *reply, struct nl_sock *nl,
 	buf->nl = nl;
 	buf->async = stream;
 	buf->parser = reply;
-	yaml_parser_set_input(buf->parser, yaml_netlink_read_handler, buf);
+	yaml_parser_set_input(reply, yaml_netlink_read_handler, buf);
 
 	rc = nl_socket_modify_cb(buf->nl, NL_CB_VALID, NL_CB_CUSTOM,
-				 yaml_netlink_msg_parse, buf);
+				 yaml_netlink_msg_parse, reply);
 	if (rc < 0) {
 		yaml_parser_set_reader_error(reply,
 					     "netlink msg recv setup failed",
@@ -1230,7 +1246,7 @@ yaml_parser_set_input_netlink(yaml_parser_t *reply, struct nl_sock *nl,
 	}
 
 	rc = nl_socket_modify_cb(buf->nl, NL_CB_FINISH, NL_CB_CUSTOM,
-				 yaml_netlink_msg_complete, buf);
+				 yaml_netlink_msg_complete, reply);
 	if (rc < 0) {
 		yaml_parser_set_reader_error(reply,
 					     "netlink msg cleanup setup failed",
@@ -1238,8 +1254,8 @@ yaml_parser_set_input_netlink(yaml_parser_t *reply, struct nl_sock *nl,
 		goto failed;
 	}
 
-	rc = nl_socket_modify_err_cb(nl, NL_CB_CUSTOM, yaml_netlink_msg_error,
-				     buf);
+	rc = nl_socket_modify_err_cb(buf->nl, NL_CB_CUSTOM, yaml_netlink_msg_error,
+				     reply);
 	if (rc < 0) {
 		yaml_parser_set_reader_error(reply,
 					     "failed to register error handling",
