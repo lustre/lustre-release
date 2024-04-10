@@ -3084,6 +3084,12 @@ test_27M() {
 	[[ "$pool" == "" ]] || error "expected append_pool == '', got '$pool'"
 	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool=none"
 
+	# Validate append_pool name length
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) &&
+		do_nodes $mdts $LCTL \
+			set_param mdd.*.append_pool="LOV_MAXPOOLNAME*" &&
+			error "Wrong pool name length should report error"
+
 	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
 	((orig_count == 1)) || error "expected append_stripe_count == 1, got $orig_count"
 	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1"
