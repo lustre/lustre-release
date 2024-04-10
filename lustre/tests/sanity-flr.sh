@@ -4478,37 +4478,39 @@ run_test 210a "handle broken mirrored lovea"
 
 test_210b() {
 	local tf=$DIR/$tfile
-	local after
-	local mirrorred
-	local before
 
 	[ "$FSTYPE" != "zfs" ] || skip "ZFS file number is not accurate"
 
-	stack_trap "rm -f $tf"
-
-	# XXX: how to avoid precreate
-	wait_delete_completed
-	$LFS df -i | grep OST
-	before=$($LFS df -i|grep OST|awk '{sum=sum+$3}END{print sum}')
-	echo "before file creation: $before"
-	$LFS setstripe -c 2 $tf || error "can't create file"
+	$LFS setstripe -i0 -c1 $tf || error "can't create file"
 	dd if=/dev/zero of=$tf bs=1M count=1 || error "can't dd"
+
+	local ostdev=$(ostdevname 1)
+	local fid=($($LFS getstripe $DIR/$tfile | grep 0x))
+	local seq=${fid[3]#0x}
+	local oid=${fid[1]}
+	local oid_hex
+	if [ $seq == 0 ]; then
+		oid_hex=${fid[1]}
+	else
+		oid_hex=${fid[2]#0x}
+	fi
+	local objpath="O/$seq/d$(($oid % 32))/$oid_hex"
+	local cmd="$DEBUGFS -c -R \\\"stat $objpath\\\" $ostdev"
+
+	local ino=$(do_facet ost1 $cmd | grep Inode:)
+	[[ -n $ino ]] || error "can't access obj object: $objpath"
 
 #define OBD_FAIL_LOV_INVALID_OSTIDX		    0x1428
 	do_facet mds1 "$LCTL set_param fail_loc=0x1428"
 	$LFS mirror extend -N $tf || error "can't mirror"
-	$LFS df -i | grep OST
-	mirrored=$($LFS df -i|grep OST|awk '{sum=sum+$3}END{print sum}')
-	echo "after mirror: $mirrored"
 
+	# now remove the file with bogus ostidx in the striping info
 	rm $tf || error "can't remove"
 	[[ -f $tf ]] && error "rm failed"
 	wait_delete_completed
 
-	$LFS df -i | grep OST
-	after=$($LFS df -i|grep OST|awk '{sum=sum+$3}END{print sum}')
-	echo "after rm: $after"
-	(( after < before )) || error "something went wrong with unlink"
+	local ino=$(do_facet ost1 $cmd | grep Inode:)
+	[[ -z $ino ]] || error "still CAN access obj object: $objpath"
 }
 run_test 210b "handle broken mirrored lovea (unlink)"
 
