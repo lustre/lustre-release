@@ -3293,6 +3293,8 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 							&mirror_end);
 				if (rc < 0) {
 					free(buf);
+					llapi_error(LLAPI_MSG_ERROR, rc,
+						    "cannot find source mirror");
 					return rc;
 				}
 				src = rc;
@@ -3387,6 +3389,9 @@ do_read:
 		}
 		if (bytes_read < 0) {
 			rc = bytes_read;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error reading bytes %ld-%ld of mirror %u",
+				    pos, to_read, src);
 			break;
 		}
 		total_bytes_read += bytes_read;

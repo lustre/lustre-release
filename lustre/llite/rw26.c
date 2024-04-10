@@ -494,7 +494,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	if (file_offset & ~PAGE_MASK)
 		unaligned = true;
 
-	if (count & ~PAGE_MASK)
+	if ((file_offset + count < i_size_read(inode)) && (count & ~PAGE_MASK))
 		unaligned = true;
 
 	/* Check that all user buffers are aligned as well */
@@ -512,7 +512,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	LASSERT(io != NULL);
 
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%llx, pages %zd (max %lu)%s%s%s%s\n",
+	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%#llx, pages %zd (max %lu)%s%s%s%s\n",
 	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
 	       file_offset, file_offset,
 	       (count >> PAGE_SHIFT) + !!(count & ~PAGE_MASK),

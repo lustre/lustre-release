@@ -843,6 +843,8 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 		rc = ftruncate(fd_dst, pos);
 		if (rc < 0) {
 			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "fail to ftruncate dst file to %ld", pos);
 			free(buf);
 			return rc;
 		}
@@ -868,8 +870,12 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			/* hole at the end of file, truncate up to it */
 			if (!data_size) {
 				rc = ftruncate(fd_dst, data_off);
-				if (rc < 0)
+				if (rc < 0) {
+					llapi_error(LLAPI_MSG_ERROR, rc,
+						    "fail to ftruncate dst file to %ld",
+						    data_off);
 					goto out;
+				}
 			}
 			pos = data_off & ~(page_size - 1);
 			data_end = data_off + data_size;
@@ -881,14 +887,20 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 		if (check_file) {
 			rc = check_file(fd_src);
-			if (rc < 0)
+			if (rc < 0) {
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error checking src file");
 				goto out;
+			}
 		}
 
 		rsize = pread(fd_src, buf, to_read, pos);
 		read_bytes += rsize;
 		if (rsize < 0) {
 			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error reading src bytes %ld-%ld",
+				    pos, to_read);
 			goto out;
 		}
 		/* EOF */
@@ -904,6 +916,9 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			written = pwrite(fd_dst, buf, to_write, pos);
 			if (written < 0) {
 				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error writing dst bytes %ld-%ld",
+					    pos, to_write);
 				goto out;
 			}
 			pos += written;
@@ -939,10 +954,8 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 				if (rc < 0) {
 					if (stats_interval_sec)
-						fprintf(stderr,
-							"error %s: delay for bandwidth control failed: %s\n",
-							progname,
-							strerror(-rc));
+						llapi_error(LLAPI_MSG_WARN, rc,
+							    "delay for bandwidth control failed");
 					rc = 0;
 				}
 			}
@@ -970,8 +983,11 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	}
 
 	rc = fsync(fd_dst);
-	if (rc < 0)
+	if (rc < 0) {
 		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "failed to fsync dst file");
+	}
 out:
 	/* Try to avoid page cache pollution after migration. */
 	(void)posix_fadvise(fd_src, 0, 0, POSIX_FADV_DONTNEED);
@@ -11925,8 +11941,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 					     start, end, stats_interval_sec,
 					     bandwidth_bytes_sec);
 	if (rc < 0)
-		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %s.\n",
-			progname, fname, strerror(-rc));
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "fail to mirror resync '%s'\n", fname);
 
 	rc2 = migrate_set_timestamps(fd, &stbuf);
 	if (rc2 < 0) {
@@ -12478,8 +12494,12 @@ static inline int lfs_mirror_write(int argc, char **argv)
 
 	if (pos & (page_size - 1)) {
 		rc = llapi_mirror_truncate(fd, mirror_id, pos);
-		if (rc < 0)
+		if (rc < 0) {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "fail to trucate mirror %u of file '%s' to %ld",
+				    mirror_id, fname, pos);
 			goto free_buf;
+		}
 	}
 
 	ioc.lil_mode = LL_LEASE_UNLCK;
