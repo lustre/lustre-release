@@ -3924,9 +3924,24 @@ wait_destroy_complete () {
 	return 1
 }
 
+fstrim_inram_devs() {
+	local i
+
+	[[ "$(facet_fstype ost1)" = "ldiskfs" ]] || return 0
+	[[ $OSTDEVBASE == */tmp/* ]] || return 0
+
+	for (( i=1; i <= $OSTCOUNT; i++)); do
+		do_facet ost$i "fstrim -v $(facet_mntpt ost$i)" &
+	done
+	wait
+
+	return 0
+}
+
 wait_delete_completed() {
 	wait_delete_completed_mds $1 || return $?
 	wait_destroy_complete || return $?
+	fstrim_inram_devs
 }
 
 wait_exit_ST () {
