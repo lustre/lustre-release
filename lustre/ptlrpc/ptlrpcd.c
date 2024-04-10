@@ -266,10 +266,8 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
 	struct ptlrpcd_ctl *pc;
 
-	if (req->rq_reqmsg) {
-		lustre_msg_set_jobid(req->rq_reqmsg, NULL);
-		lustre_msg_set_uid_gid(req->rq_reqmsg, NULL, NULL);
-	}
+	if (req->rq_reqmsg)
+		lustre_msg_set_jobinfo(req->rq_reqmsg, NULL);
 
 	spin_lock(&req->rq_lock);
 	if (req->rq_invalid_rqset) {

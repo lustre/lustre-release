@@ -1607,7 +1607,7 @@ void lustre_msg_set_service_timeout(struct lustre_msg *msg,
 	}
 }
 
-void lustre_msg_set_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid)
+void lustre_msg_set_jobinfo(struct lustre_msg *msg, const struct job_info *ji)
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2: {
@@ -1623,52 +1623,31 @@ void lustre_msg_set_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid)
 				       sizeof(struct ptlrpc_body));
 		LASSERTF(pb, "invalid msg %px: no ptlrpc body!\n", msg);
 
-		if (uid && gid) {
-			pb->pb_uid = *uid;
-			pb->pb_gid = *gid;
+		if (ji) {
 			pb->pb_flags |= MSG_PACK_UID_GID;
-		} else if (!(pb->pb_flags & MSG_PACK_UID_GID)) {
-			pb->pb_uid = from_kuid(&init_user_ns, current_uid());
-			pb->pb_gid = from_kgid(&init_user_ns, current_gid());
-			pb->pb_flags |= MSG_PACK_UID_GID;
+			pb->pb_uid = ji->ji_uid;
+			pb->pb_gid = ji->ji_gid;
+			memcpy(pb->pb_jobid, ji->ji_jobid,
+			       sizeof(pb->pb_jobid));
+			return;
 		}
 
-		return;
-	}
-	default:
-		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-	}
-}
-EXPORT_SYMBOL(lustre_msg_set_uid_gid);
+		if (!(pb->pb_flags & MSG_PACK_UID_GID)) {
+			pb->pb_flags |= MSG_PACK_UID_GID;
+			pb->pb_uid = from_kuid(&init_user_ns, current_uid());
+			pb->pb_gid = from_kgid(&init_user_ns, current_gid());
+		}
 
-void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid)
-{
-	switch (msg->lm_magic) {
-	case LUSTRE_MSG_MAGIC_V2: {
-		__u32 opc = lustre_msg_get_opc(msg);
-		struct ptlrpc_body *pb;
-
-		/* Don't set jobid for ldlm ast RPCs, they've been shrinked.
-		 * See the comment in ptlrpc_request_pack(). */
-		if (!opc || opc == LDLM_BL_CALLBACK ||
-		    opc == LDLM_CP_CALLBACK || opc == LDLM_GL_CALLBACK)
-			return;
-
-		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
-				       sizeof(struct ptlrpc_body));
-		LASSERTF(pb, "invalid msg %px: no ptlrpc body!\n", msg);
-
-		if (jobid != NULL)
-			memcpy(pb->pb_jobid, jobid, sizeof(pb->pb_jobid));
-		else if (pb->pb_jobid[0] == '\0')
+		if (pb->pb_jobid[0] == '\0')
 			lustre_get_jobid(pb->pb_jobid, sizeof(pb->pb_jobid));
+
 		return;
 	}
 	default:
 		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
 	}
 }
-EXPORT_SYMBOL(lustre_msg_set_jobid);
+EXPORT_SYMBOL(lustre_msg_set_jobinfo);
 
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
 {

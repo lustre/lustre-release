@@ -223,10 +223,7 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
 
-	attr->cra_uid = lli->lli_uid;
-	attr->cra_gid = lli->lli_gid;
-
-	memcpy(attr->cra_jobid, &lli->lli_jobid, sizeof(attr->cra_jobid));
+	lli_jobinfo_cpy(lli, &attr->cra_jobinfo);
 }
 
 static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,

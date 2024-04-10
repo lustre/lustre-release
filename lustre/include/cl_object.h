@@ -1987,11 +1987,8 @@ struct cl_req_attr {
 	struct cl_page  *cra_page;
 	/** Generic attributes for the server consumption. */
 	struct obdo	*cra_oa;
-	/** Jobid */
-	char		 cra_jobid[LUSTRE_JOBID_SIZE];
-	/** uid/gid of the process doing an io */
-	u32 cra_uid;
-	u32 cra_gid;
+	/** process jobid/uid/gid performing the io */
+	struct job_info cra_jobinfo;
 };
 
 enum cache_stats_item {

@@ -611,6 +611,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	int rc;
 	pgoff_t eof_index;
 	struct ll_sb_info *sbi;
+	struct ll_inode_info *lli;
 
 	work = container_of(wq, struct ll_readahead_work,
 			    lrw_readahead_work);
@@ -619,6 +620,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	file = work->lrw_file;
 	inode = file_inode(file);
 	sbi = ll_i2sbi(inode);
+	lli = ll_i2info(inode);
 
 	CDEBUG(D_READA|D_IOTRACE,
 	       "%s:"DFID": async ra from %lu to %lu triggered by user pid %d\n",
@@ -678,10 +680,9 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 		GOTO(out_put_env, rc);
 
 	/* overwrite jobid inited in vvp_io_init() */
-	if (strncmp(ll_i2info(inode)->lli_jobid, work->lrw_jobid,
-		    sizeof(work->lrw_jobid)))
-		memcpy(ll_i2info(inode)->lli_jobid, work->lrw_jobid,
-		       sizeof(work->lrw_jobid));
+	write_seqlock(&lli->lli_jobinfo_seqlock);
+	memcpy(&lli->lli_jobinfo, &work->lrw_jobinfo, sizeof(lli->lli_jobinfo));
+	write_sequnlock(&lli->lli_jobinfo_seqlock);
 
 	vvp_env_io(env)->vui_fd = fd;
 	io->ci_state = CIS_LOCKED;
@@ -1869,8 +1870,8 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 		ras->ras_next_readahead_idx = end_idx + 1;
 		ras->ras_async_last_readpage_idx = start_idx;
 		spin_unlock(&ras->ras_lock);
-		memcpy(lrw->lrw_jobid, ll_i2info(inode)->lli_jobid,
-		       sizeof(lrw->lrw_jobid));
+		lli_jobinfo_cpy(ll_i2info(inode), &lrw->lrw_jobinfo);
+
 		ll_readahead_work_add(inode, lrw);
 	} else {
 		return -ENOMEM;

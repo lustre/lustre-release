@@ -274,9 +274,8 @@ struct ll_inode_info {
 			 * uid or gid will not be accurate if the file is shared
 			 * by different jobs.
 			 */
-			char                    lli_jobid[LUSTRE_JOBID_SIZE];
-			__u32			lli_uid;
-			__u32			lli_gid;
+			seqlock_t		lli_jobinfo_seqlock;
+			struct job_info		lli_jobinfo;
 
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
@@ -336,6 +335,17 @@ struct ll_inode_info {
 
 	struct task_struct		*lli_inode_lock_owner;
 };
+
+static inline void lli_jobinfo_cpy(const struct ll_inode_info *lli,
+				   struct job_info *out)
+{
+	unsigned int seq;
+
+	do {
+		seq = read_seqbegin(&lli->lli_jobinfo_seqlock);
+		memcpy(out, &lli->lli_jobinfo, sizeof(*out));
+	} while (read_seqretry(&lli->lli_jobinfo_seqlock, seq));
+}
 
 #ifndef HAVE_USER_NAMESPACE_ARG
 #define inode_permission(ns, inode, mask)	inode_permission(inode, mask)
@@ -1102,7 +1112,7 @@ struct ll_readahead_work {
 
 	/* async worker to handler read */
 	struct work_struct		 lrw_readahead_work;
-	char				 lrw_jobid[LUSTRE_JOBID_SIZE];
+	struct job_info			 lrw_jobinfo;
 };
 
 extern struct kmem_cache *ll_file_data_slab;

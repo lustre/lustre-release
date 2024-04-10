@@ -2352,8 +2352,15 @@ void ptlrpc_request_set_replen(struct ptlrpc_request *req);
 void lustre_msg_set_timeout(struct lustre_msg *msg, timeout_t timeout);
 void lustre_msg_set_service_timeout(struct lustre_msg *msg,
 				    timeout_t service_timeout);
-void lustre_msg_set_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid);
-void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid);
+
+/* jobid/uid/gid process information to pack */
+struct job_info {
+	char ji_jobid[LUSTRE_JOBID_SIZE];
+	__u32 ji_uid;
+	__u32 ji_gid;
+};
+
+void lustre_msg_set_jobinfo(struct lustre_msg *msg, const struct job_info *ji);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
 void lustre_msg_set_mbits(struct lustre_msg *msg, __u64 mbits);
 

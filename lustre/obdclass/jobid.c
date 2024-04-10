@@ -922,7 +922,6 @@ static struct cfs_hash_ops jobid_hash_ops = {
  */
 int lustre_get_jobid(char *jobid, size_t joblen)
 {
-	char id[LUSTRE_JOBID_SIZE] = "";
 	int len = min_t(int, joblen, LUSTRE_JOBID_SIZE);
 	int rc = 0;
 	ENTRY;
@@ -941,9 +940,9 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 
 	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0) {
 		/* Whole node dedicated to single job */
-		rc = jobid_interpret_string(obd_jobid_name, id, len);
+		rc = jobid_interpret_string(obd_jobid_name, jobid, len);
 	} else if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
-		rc = jobid_interpret_string("%e.%u", id, len);
+		rc = jobid_interpret_string("%e.%u", jobid, len);
 	} else if (strcmp(obd_jobid_var, JOBSTATS_SESSION) == 0 ||
 		   jobid_name_is_valid(current->comm)) {
 		/*
@@ -954,18 +953,17 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 		 */
 		rc = -EAGAIN;
 		if (!strnstr(obd_jobid_name, "%j", joblen))
-			rc = jobid_get_from_cache(id, len);
+			rc = jobid_get_from_cache(jobid, len);
 
 		/* fall back to jobid_name if jobid_var not available */
 		if (rc < 0) {
 			int rc2 = jobid_interpret_string(obd_jobid_name,
-							 id, len);
+							 jobid, len);
 			if (!rc2)
 				rc = 0;
 		}
 	}
 
-	memcpy(jobid, id, len);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_get_jobid);

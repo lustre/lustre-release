@@ -1877,6 +1877,7 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
 		size_t bytes;
 		struct ll_inode_info *lli = ll_i2info(inode);
+		struct job_info ji;
 
 		bytes = io->u.ci_rw.crw_bytes;
 		/* "If nbyte is 0, read() will return 0 and have no other
@@ -1887,15 +1888,20 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 		else
 			vio->vui_tot_bytes = bytes;
 
+		/* this might sleep */
+		lustre_get_jobid(ji.ji_jobid, sizeof(ji.ji_jobid));
+		ji.ji_uid = from_kuid(&init_user_ns, current_uid());
+		ji.ji_gid = from_kgid(&init_user_ns, current_gid());
+
 		/* for read/write, we store the process jobid/gid/uid in the
 		 * inode, and it'll be fetched by osc when building RPC.
 		 *
 		 * it's not accurate if the file is shared by different
 		 * jobs/user/group.
 		 */
-		lustre_get_jobid(lli->lli_jobid, sizeof(lli->lli_jobid));
-		lli->lli_uid = from_kuid(&init_user_ns, current_uid());
-		lli->lli_gid = from_kgid(&init_user_ns, current_gid());
+		write_seqlock(&lli->lli_jobinfo_seqlock);
+		memcpy(&lli->lli_jobinfo, &ji, sizeof(ji));
+		write_sequnlock(&lli->lli_jobinfo_seqlock);
 	} else if (io->ci_type == CIT_SETATTR) {
 		if (!cl_io_is_trunc(io))
 			io->ci_lockreq = CILR_MANDATORY;

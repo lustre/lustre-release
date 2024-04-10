@@ -2832,9 +2832,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	crattr->cra_oa = &body->oa;
 	crattr->cra_flags = OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME;
 	cl_req_attr_set(env, osc2cl(obj), crattr);
-	lustre_msg_set_uid_gid(req->rq_reqmsg, &crattr->cra_uid,
-			       &crattr->cra_gid);
-	lustre_msg_set_jobid(req->rq_reqmsg, crattr->cra_jobid);
+	lustre_msg_set_jobinfo(req->rq_reqmsg, &crattr->cra_jobinfo);
 
 	aa = ptlrpc_req_async_args(aa, req);
 	INIT_LIST_HEAD(&aa->aa_oaps);

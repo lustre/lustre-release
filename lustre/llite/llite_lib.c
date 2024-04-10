@@ -1284,6 +1284,8 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_sa_enabled = 0;
 		init_rwsem(&lli->lli_lsm_sem);
 	} else {
+		struct job_info *ji = &lli->lli_jobinfo;
+
 		mutex_init(&lli->lli_size_mutex);
 		mutex_init(&lli->lli_setattr_mutex);
 		lli->lli_symlink_name = NULL;
@@ -1305,9 +1307,10 @@ void ll_lli_init(struct ll_inode_info *lli)
 		mutex_init(&lli->lli_group_mutex);
 		lli->lli_group_users = 0;
 		lli->lli_group_gid = 0;
-		memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
-		lli->lli_uid = (__u32) -1;
-		lli->lli_gid = (__u32) -1;
+		seqlock_init(&lli->lli_jobinfo_seqlock);
+		memset(ji->ji_jobid, 0, sizeof(ji->ji_jobid));
+		ji->ji_uid = (__u32) -1;
+		ji->ji_gid = (__u32) -1;
 	}
 	mutex_init(&lli->lli_layout_mutex);
 	lli->lli_layout_lock_owner = NULL;
