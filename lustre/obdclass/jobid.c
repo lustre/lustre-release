@@ -207,11 +207,10 @@ static void jobid_prune(struct work_struct *work)
 
 static void jobid_prune_expedite(void)
 {
-	if (!jobid_prune_expedited) {
-		jobid_prune_expedited = 1;
+	/* submit the work only once */
+	if (!cmpxchg(&jobid_prune_expedited, 0, 1))
 		mod_delayed_work(system_wq, &jobid_prune_work,
 				 cfs_time_seconds(JOBID_EXPEDITED_CLEAN));
-	}
 }
 
 static int cfs_access_process_vm(struct task_struct *tsk,
@@ -468,6 +467,43 @@ static int jobid_should_free_item(void *obj, void *data)
 	return rc;
 }
 
+static void jobid_pidmap_gc(struct work_struct *work);
+static DECLARE_DELAYED_WORK(jobid_pidmap_gc_work, jobid_pidmap_gc);
+static int jobid_pidmap_gc_started;
+
+static void jobid_pidmap_gc(struct work_struct *work)
+{
+	struct cfs_hash *hash;
+
+	hash = cfs_hash_getref(jobid_hash);
+	if (!hash)
+		return;
+
+	CDEBUG(D_INFO, "jobid: running the PID map GC (count: %d)\n",
+	       atomic_read(&jobid_hash->hs_count));
+
+	cfs_hash_cond_del(jobid_hash, jobid_should_free_item,
+			  "intentionally_bad_jobid");
+
+	if (atomic_read(&jobid_hash->hs_count) == 0)
+		jobid_pidmap_gc_started = 0;
+	else
+		schedule_delayed_work(&jobid_pidmap_gc_work,
+				      cfs_time_seconds(DELETE_INTERVAL));
+
+	cfs_hash_putref(hash);
+}
+
+/* scan hash periodically to remove old PID entries from cache */
+static inline void jobid_pidmap_gc_start(void)
+{
+	/* submit the work only once */
+	if (!cmpxchg(&jobid_pidmap_gc_started, 0, 1))
+		schedule_delayed_work(&jobid_pidmap_gc_work,
+				      cfs_time_seconds(DELETE_INTERVAL));
+}
+
+
 /*
  * jobid_name_is_valid
  *
@@ -509,8 +545,6 @@ static bool jobid_name_is_valid(char *jobid)
  */
 static int jobid_get_from_cache(char *jobid, size_t joblen)
 {
-	static time64_t last_expire;
-	bool expire_cache = false;
 	pid_t pid = current->pid;
 	struct jobid_pid_map *pidmap = NULL;
 	time64_t now = ktime_get_real_seconds();
@@ -533,18 +567,6 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 	}
 
 	LASSERT(jobid_hash != NULL);
-
-	/* scan hash periodically to remove old PID entries from cache */
-	spin_lock(&jobid_hash_lock);
-	if (unlikely(last_expire + DELETE_INTERVAL <= now)) {
-		expire_cache = true;
-		last_expire = now;
-	}
-	spin_unlock(&jobid_hash_lock);
-
-	if (expire_cache)
-		cfs_hash_cond_del(jobid_hash, jobid_should_free_item,
-				  "intentionally_bad_jobid");
 
 	/* first try to find PID in the hash and use that value */
 	pidmap = cfs_hash_lookup(jobid_hash, &pid);
@@ -579,6 +601,8 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 			       pid);
 			OBD_FREE_PTR(pidmap);
 			pidmap = pidmap2;
+		} else {
+			jobid_pidmap_gc_start();
 		}
 	}
 
@@ -795,6 +819,7 @@ void jobid_cache_fini(void)
 	spin_unlock(&jobid_hash_lock);
 
 	cancel_delayed_work_sync(&jobid_prune_work);
+	cancel_delayed_work_sync(&jobid_pidmap_gc_work);
 
 	if (tmp_hash != NULL) {
 		cfs_hash_cond_del(tmp_hash, jobid_should_free_item, NULL);
