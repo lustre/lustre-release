@@ -57,7 +57,9 @@ u64 lu_prandom_u64_max(u64 ep_ro)
 	u64 rand = 0;
 
 	if (ep_ro) {
-#if BITS_PER_LONG == 32
+#ifdef HAVE_GET_RANDOM_U32_AND_U64
+		rand = get_random_u64() % ep_ro;
+#elif BITS_PER_LONG == 32
 		/*
 		 * If ep_ro > 32-bit, first generate the high
 		 * 32 bits of the random number, then add in the low
@@ -69,9 +71,9 @@ u64 lu_prandom_u64_max(u64 ep_ro)
 		if (rand == (ep_ro & 0xffffffff00000000ULL))
 			rand |= prandom_u32_max((u32)ep_ro);
 		else
-			rand |= prandom_u32();
+			rand |= get_random_u32();
 #else
-		rand = ((u64)prandom_u32() << 32 | prandom_u32()) % ep_ro;
+		rand = ((u64)get_random_u32() << 32 | get_random_u32()) % ep_ro;
 #endif
 	}
 

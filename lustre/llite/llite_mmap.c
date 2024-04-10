@@ -51,18 +51,32 @@ void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
 			       ~PAGE_MASK;
 }
 
+/*
+ * Linux commit v6.0-rc3-225-gf39af05949a4
+ * mm: add VMA iterator
+ */
+#ifndef VMA_ITERATOR
+#define vma_iterator vm_area_struct *
+#define vma_iter_init(vmip, mm, addr) *(vmip) = find_vma(mm, addr)
+#define for_each_vma(vmi, vma) \
+	for (vma = vmi; vma != NULL; vma = vma->vm_next)
+#endif
+
 struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
-                               size_t count)
+			       size_t count)
 {
 	struct vm_area_struct *vma, *ret = NULL;
+	struct vma_iterator vmi;
+
 	ENTRY;
 
 	/* mmap_lock must have been held by caller. */
 	LASSERT(!mmap_write_trylock(mm));
 
-	for (vma = find_vma(mm, addr);
-	     vma != NULL && vma->vm_start < (addr + count);
-	     vma = vma->vm_next) {
+	vma_iter_init(&vmi, mm, addr);
+	for_each_vma(vmi, vma) {
+		if (vma->vm_start < (addr + count))
+			break;
 		if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
 		    vma->vm_flags & VM_SHARED) {
 			ret = vma;

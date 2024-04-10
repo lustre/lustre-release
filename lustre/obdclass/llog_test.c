@@ -2249,7 +2249,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	ctxt->loc_dir = o;
 	llog_ctxt_put(ctxt);
 
-	llog_test_rand = prandom_u32();
+	llog_test_rand = get_random_u32();
 
 	rc = llog_run_tests(&env, tgt);
 	if (rc)

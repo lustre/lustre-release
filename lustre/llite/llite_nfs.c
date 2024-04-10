@@ -198,19 +198,10 @@ static int ll_encode_fh(struct inode *inode, u32 *fh, int *plen,
 	RETURN(FILEID_LUSTRE);
 }
 
-static int
-#ifndef HAVE_FILLDIR_USE_CTX
-ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,
-			loff_t hash, u64 ino, unsigned type)
+static inline int
+do_nfs_get_name_filldir(struct ll_getname_data *lgd, const char *name,
+			int namelen, loff_t hash, u64 ino, unsigned int type)
 {
-	struct ll_getname_data *lgd = cookie;
-#else
-ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
-			loff_t hash, u64 ino, unsigned type)
-{
-	struct ll_getname_data *lgd =
-		container_of(ctx, struct ll_getname_data, ctx);
-#endif /* HAVE_FILLDIR_USE_CTX */
 	/*
 	 * It is hack to access lde_fid for comparison with lgd_fid.
 	 * So the input 'name' must be part of the 'lu_dirent', and
@@ -232,11 +223,41 @@ ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
 		lgd->lgd_name[namelen] = 0;
 		lgd->lgd_found = 1;
 	}
-        return lgd->lgd_found;
+	return lgd->lgd_found;
 }
 
-static int ll_get_name(struct dentry *dentry, char *name,
-                       struct dentry *child)
+#ifdef HAVE_FILLDIR_USE_CTX_RETURN_BOOL
+static bool
+ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
+			loff_t hash, u64 ino, unsigned int type)
+{
+	struct ll_getname_data *lgd =
+		container_of(ctx, struct ll_getname_data, ctx);
+	int err = do_nfs_get_name_filldir(lgd, name, namelen, hash, ino, type);
+
+	return err == 0;
+}
+#elif defined(HAVE_FILLDIR_USE_CTX)
+static int
+ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
+			loff_t hash, u64 ino, unsigned int type)
+{
+	struct ll_getname_data *lgd =
+		container_of(ctx, struct ll_getname_data, ctx);
+
+	return do_nfs_get_name_filldir(lgd, name, namelen, hash, ino, type);
+}
+#else
+static int ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,
+				   loff_t hash, u64 ino, unsigned int type)
+{
+	struct ll_getname_data *lgd = cookie;
+
+	return do_nfs_get_name_filldir(lgd, name, namelen, hash, ino, type);
+}
+#endif /* HAVE_FILLDIR_USE_CTX */
+
+static int ll_get_name(struct dentry *dentry, char *name, struct dentry *child)
 {
 	struct inode *dir = dentry->d_inode;
 	struct ll_getname_data lgd = {

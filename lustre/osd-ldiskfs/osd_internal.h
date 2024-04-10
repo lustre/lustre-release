@@ -1701,6 +1701,24 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 #define INTEGRITY_FLAG_WRITE BLK_INTEGRITY_GENERATE
 #endif
 
+#ifdef HAVE_FILLDIR_USE_CTX_RETURN_BOOL
+#define WRAP_FILLDIR_FN(prefix, fill_fn) \
+static bool fill_fn(struct dir_context *buf, const char *name, int namelen, \
+		    loff_t offset, __u64 ino, unsigned int d_type)	    \
+{									    \
+	return !prefix##fill_fn(buf, name, namelen, offset, ino, d_type);   \
+}
+#elif defined(HAVE_FILLDIR_USE_CTX)
+#define WRAP_FILLDIR_FN(prefix, fill_fn) \
+static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
+		   loff_t offset, __u64 ino, unsigned int d_type)	    \
+{									    \
+	return prefix##fill_fn(buf, name, namelen, offset, ino, d_type);    \
+}
+#else
+#define WRAP_FILLDIR_FN(prefix, fill_fn)
+#endif
+
 static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 {
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)

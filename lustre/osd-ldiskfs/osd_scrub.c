@@ -1234,27 +1234,30 @@ typedef int (*scandir_t)(struct osd_thread_info *, struct osd_device *,
 			 struct dentry *, filldir_t filldir);
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_varfid_fill(struct dir_context *buf, const char *name,
-			       int namelen, loff_t offset, __u64 ino,
-			       unsigned d_type);
-static int osd_ios_lf_fill(struct dir_context *buf, const char *name,
-			   int namelen, loff_t offset, __u64 ino,
-			   unsigned d_type);
-static int osd_ios_dl_fill(struct dir_context *buf, const char *name,
-			   int namelen, loff_t offset, __u64 ino,
-			   unsigned d_type);
-static int osd_ios_uld_fill(struct dir_context *buf, const char *name,
-			    int namelen, loff_t offset, __u64 ino,
-			    unsigned d_type);
+static FILLDIR_TYPE
+osd_ios_varfid_fill(struct dir_context *buf, const char *name, int namelen,
+		    loff_t offset, __u64 ino, unsigned int d_type);
+
+static FILLDIR_TYPE
+osd_ios_lf_fill(struct dir_context *buf, const char *name, int namelen,
+		loff_t offset, __u64 ino, unsigned int d_type);
+
+static FILLDIR_TYPE
+osd_ios_dl_fill(struct dir_context *buf, const char *name, int namelen,
+		loff_t offset, __u64 ino, unsigned int d_type);
+
+static FILLDIR_TYPE
+osd_ios_uld_fill(struct dir_context *buf, const char *name, int namelen,
+		 loff_t offset, __u64 ino, unsigned int d_type);
 #else
 static int osd_ios_varfid_fill(void *buf, const char *name, int namelen,
-			       loff_t offset, __u64 ino, unsigned d_type);
+			       loff_t offset, __u64 ino, unsigned int d_type);
 static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
-			   loff_t offset, __u64 ino, unsigned d_type);
+			   loff_t offset, __u64 ino, unsigned int d_type);
 static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
-			   loff_t offset, __u64 ino, unsigned d_type);
+			   loff_t offset, __u64 ino, unsigned int d_type);
 static int osd_ios_uld_fill(void *buf, const char *name, int namelen,
-			    loff_t offset, __u64 ino, unsigned d_type);
+			    loff_t offset, __u64 ino, unsigned int d_type);
 #endif
 
 static int
@@ -1883,12 +1886,12 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
  * or filter_fid_18_23), move them back to its proper /O/<seq>/d<x>.
  */
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_lf_fill(struct dir_context *buf,
+static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 #else
 static int osd_ios_lf_fill(void *buf,
 #endif
 			   const char *name, int namelen,
-			   loff_t offset, __u64 ino, unsigned d_type)
+			   loff_t offset, __u64 ino, unsigned int d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
@@ -1963,14 +1966,15 @@ put:
 	/* skip the failure to make the scanning to continue. */
 	return 0;
 }
+WRAP_FILLDIR_FN(do_, osd_ios_lf_fill)
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_varfid_fill(struct dir_context *buf,
+static FILLDIR_TYPE do_osd_ios_varfid_fill(struct dir_context *buf,
 #else
 static int osd_ios_varfid_fill(void *buf,
 #endif
 			       const char *name, int namelen,
-			       loff_t offset, __u64 ino, unsigned d_type)
+			       loff_t offset, __u64 ino, unsigned int d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
@@ -1999,14 +2003,15 @@ static int osd_ios_varfid_fill(void *buf,
 
 	RETURN(rc);
 }
+WRAP_FILLDIR_FN(do_, osd_ios_varfid_fill)
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_dl_fill(struct dir_context *buf,
+static FILLDIR_TYPE do_osd_ios_dl_fill(struct dir_context *buf,
 #else
 static int osd_ios_dl_fill(void *buf,
 #endif
 			   const char *name, int namelen,
-			   loff_t offset, __u64 ino, unsigned d_type)
+			   loff_t offset, __u64 ino, unsigned int d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
@@ -2044,14 +2049,15 @@ static int osd_ios_dl_fill(void *buf,
 
 	RETURN(rc);
 }
+WRAP_FILLDIR_FN(do_, osd_ios_dl_fill)
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_uld_fill(struct dir_context *buf,
+static FILLDIR_TYPE do_osd_ios_uld_fill(struct dir_context *buf,
 #else
 static int osd_ios_uld_fill(void *buf,
 #endif
 			    const char *name, int namelen,
-			    loff_t offset, __u64 ino, unsigned d_type)
+			    loff_t offset, __u64 ino, unsigned int d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
@@ -2083,14 +2089,15 @@ static int osd_ios_uld_fill(void *buf,
 
 	RETURN(rc);
 }
+WRAP_FILLDIR_FN(do_, osd_ios_uld_fill)
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_root_fill(struct dir_context *buf,
+static FILLDIR_TYPE do_osd_ios_root_fill(struct dir_context *buf,
 #else
 static int osd_ios_root_fill(void *buf,
 #endif
 			     const char *name, int namelen,
-			     loff_t offset, __u64 ino, unsigned d_type)
+			     loff_t offset, __u64 ino, unsigned int d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
@@ -2135,6 +2142,8 @@ out_put:
 
 	RETURN(rc);
 }
+
+WRAP_FILLDIR_FN(do_, osd_ios_root_fill)
 
 static int
 osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,

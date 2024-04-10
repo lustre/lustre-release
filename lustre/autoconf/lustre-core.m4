@@ -3455,6 +3455,97 @@ AC_DEFUN([LC_HAVE_GET_EXPIRY_TIME64_T], [
 ]) # LC_HAVE_GET_EXPIRY_TIME64_T
 
 #
+# LC_HAVE_GET_RANDOM_U32_AND_U64
+#
+# Linux commit v4.10-rc3-6-gc440408cf690
+#   random: convert get_random_int/long into get_random_u32/u64
+# Linux commit v6.0-11338-gde492c83cae0
+#   prandom: remove unused functions
+#
+AC_DEFUN([LC_SRC_HAVE_GET_RANDOM_U32_AND_U64], [
+	LB2_LINUX_TEST_SRC([get_random_u32_and_u64], [
+		#include <linux/random.h>
+	],[
+		u32 rand32 = get_random_u32();
+		u64 rand64 = get_random_u64();
+		(void)rand32;
+		(void)rand64;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GET_RANDOM_U32_AND_U64], [
+	AC_MSG_CHECKING([if get_random_u32() and get_random_u64() are available])
+	LB2_LINUX_TEST_RESULT([get_random_u32_and_u64], [
+		AC_DEFINE(HAVE_GET_RANDOM_U32_AND_U64, 1,
+			[get_random_[u32|u64] are available])
+	],[
+		AC_DEFINE([get_random_u32()], [prandom_u32()],
+			[get_random_u32() is not available, use prandom_u32])
+	])
+]) # LC_HAVE_GET_RANDOM_U32_AND_U64
+
+#
+# LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
+#
+# Linux commit v6.0-rc1-2-g25885a35a720
+#  Change calling conventions for filldir_t
+#
+AC_DEFUN([LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL], [
+	LB2_LINUX_TEST_SRC([filldir_ctx_return_bool], [
+		#include <linux/fs.h>
+	],[
+		bool filldir(struct dir_context *ctx, const char* name,
+			     int i, loff_t off, u64 tmp, unsigned temp)
+		{
+			return 0;
+		}
+
+		struct dir_context ctx = {
+			.actor = filldir,
+		};
+
+		ctx.actor(NULL, "test", 0, (loff_t) 0, 0, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL], [
+	AC_MSG_CHECKING([if filldir_t uses struct dir_context and returns bool])
+	LB2_LINUX_TEST_RESULT([filldir_ctx_return_bool], [
+		AC_DEFINE(HAVE_FILLDIR_USE_CTX_RETURN_BOOL, 1,
+			[filldir_t needs struct dir_context and returns bool])
+		AC_DEFINE(HAVE_FILLDIR_USE_CTX, 1,
+			[filldir_t needs struct dir_context as argument])
+		AC_DEFINE(FILLDIR_TYPE, bool,
+			[filldir_t return type is bool or int])
+	],[
+		AC_DEFINE(FILLDIR_TYPE, int,
+			[filldir_t return type is bool or int])
+	])
+]) # LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
+
+#
+# LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+#
+# Linux commit v6.0-rc3-94-g35b471467f88
+#   filemap: add filemap_get_folios_contig()
+#
+AC_DEFUN([LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
+	LB2_LINUX_TEST_SRC([filemap_get_folios_contig], [
+		#include <linux/pagemap.h>
+	],[
+		struct address_space *m = NULL;
+		pgoff_t start = 0;
+		struct folio_batch *fbatch = NULL;
+		(void)filemap_get_folios_contig(m, &start, ULONG_MAX, fbatch);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
+	AC_MSG_CHECKING([if filemap_get_folios_contig() is available])
+	LB2_LINUX_TEST_RESULT([filemap_get_folios_contig], [
+		AC_DEFINE(HAVE_FILEMAP_GET_FOLIOS_CONTIG, 1,
+			[filemap_get_folios_contig() is available])
+	])
+]) # LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3680,6 +3771,11 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG
 	LC_SRC_HAVE_GET_EXPIRY_TIME64_T
+
+	# 6.1
+	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
+	LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
+	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -3919,6 +4015,11 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_IOVEC_WITH_IOV_MEMBER
 	LC_HAVE_CLASS_CREATE_MODULE_ARG
 	LC_HAVE_GET_EXPIRY_TIME64_T
+
+	# 6.1
+	LC_HAVE_GET_RANDOM_U32_AND_U64
+	LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
+	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
