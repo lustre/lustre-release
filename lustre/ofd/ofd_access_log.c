@@ -433,7 +433,9 @@ static const struct file_operations oal_fops = {
 	.read = &oal_file_read,
 	.write = &oal_file_write,
 	.poll = &oal_file_poll,
+#ifdef HAVE_NO_LLSEEK
 	.llseek = &no_llseek,
+#endif
 };
 
 static void oal_device_release(struct device *dev)

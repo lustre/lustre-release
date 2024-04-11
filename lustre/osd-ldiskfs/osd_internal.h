@@ -1749,4 +1749,10 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	return false;
 }
 
+#ifdef HAVE_DQUOT_TRANSFER_WITH_USER_NS
+#define osd_dquot_transfer(ns, i, a)	dquot_transfer((ns), (i), (a))
+#else
+#define osd_dquot_transfer(ns, i, a)	dquot_transfer((i), (a))
+#endif
+
 #endif /* _OSD_INTERNAL_H */

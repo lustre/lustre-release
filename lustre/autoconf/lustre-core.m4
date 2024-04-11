@@ -3239,6 +3239,55 @@ AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO], [
 ]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 #
+# LC_HAVE_NO_LLSEEK
+#
+# Linux commit v5.19-rc2-6-g868941b14441
+#   fs: remove no_llseek
+#
+AC_DEFUN([LC_SRC_HAVE_NO_LLSEEK], [
+	LB2_LINUX_TEST_SRC([no_llseek], [
+		#include <linux/fs.h>
+	],[
+		static const struct file_operations fops = {
+			.llseek = &no_llseek,
+		};
+		(void)fops;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_NO_LLSEEK], [
+	AC_MSG_CHECKING([if no_llseek() is available])
+	LB2_LINUX_TEST_RESULT([no_llseek], [
+		AC_DEFINE(HAVE_NO_LLSEEK, 1, [no_llseek() is available])
+	])
+]) # LC_HAVE_NO_LLSEEK
+
+#
+# LC_DQUOT_TRANSFER_WITH_USER_NS
+#
+# Linux commit v5.19-rc3-6-g71e7b535b890
+#  quota: port quota helpers mount ids
+#
+AC_DEFUN([LC_SRC_DQUOT_TRANSFER_WITH_USER_NS], [
+	LB2_LINUX_TEST_SRC([dquot_transfer], [
+		#include <linux/quotaops.h>
+	],[
+		struct user_namespace *userns = NULL;
+		struct inode *inode = NULL;
+		struct iattr *iattr = NULL;
+		int err __attribute__ ((unused));
+
+		err = dquot_transfer(userns, inode, iattr);
+	],[-Werror])
+])
+AC_DEFUN([LC_DQUOT_TRANSFER_WITH_USER_NS], [
+	AC_MSG_CHECKING([if dquot_transfer() has user_ns argument])
+	LB2_LINUX_TEST_RESULT([dquot_transfer], [
+		AC_DEFINE(HAVE_DQUOT_TRANSFER_WITH_USER_NS, 1,
+			[dquot_transfer() has user_ns argument])
+	])
+]) # LC_DQUOT_TRANSFER_WITH_USER_NS
+
+#
 # LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
 #
 # Linux commit v5.19-rc3-392-g5490da4f06d1
@@ -3761,6 +3810,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 	# 6.0
+	LC_SRC_HAVE_NO_LLSEEK
+	LC_SRC_DQUOT_TRANSFER_WITH_USER_NS
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
 	LC_SRC_REGISTER_SHRINKER_FORMAT_NAMED
 	LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
@@ -4005,6 +4056,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 
 	# 6.0
+	LC_HAVE_NO_LLSEEK
+	LC_DQUOT_TRANSFER_WITH_USER_NS
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
 	LC_REGISTER_SHRINKER_FORMAT_NAMED
 	LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
