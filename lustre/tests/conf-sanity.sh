@@ -14,20 +14,17 @@ init_logging
 #                                  tool to create lustre filesystem images
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
 
-# bug number for skipped test: LU-11915
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+always_except LU-11915 110
+always_except LU-17269 41c
 
 if $SHARED_KEY; then
-	# bug number for skipped tests: LU-9795	(all below)
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT   84      86      103"
+	always_except LU-9795 84 86 103
 fi
 
 if ! combined_mgs_mds; then
-	# bug number for skipped test: LU-11991
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e"
-	# bug number for skipped test: LU-9897	LU-12032
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  84	123F"
+	always_except LU-11991 32a 32b 32c 32d 32e
+	always_except LU-9897 84
+	always_except LU-12032 123F
 fi
 
 #                                     8  22  40 165  (min)
