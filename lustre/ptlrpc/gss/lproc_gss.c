@@ -209,8 +209,8 @@ static ssize_t rsi_upcall_seq_write(struct file *file,
 
 	rc = upcall_cache_set_upcall(rsicache, kbuf, count, true);
 	if (rc) {
-		CERROR("%s: incorrect rsi upcall %.*s. Valid value for sptlrpc.gss.rsi_upcall is an executable pathname: rc = %d\n",
-		       rsicache->uc_name, (int)count, buffer, rc);
+		CERROR("%s: incorrect rsi upcall %s. Valid value for sptlrpc.gss.rsi_upcall is an executable pathname: rc = %d\n",
+		       rsicache->uc_name, kbuf, rc);
 		GOTO(out, rc);
 	}
 
