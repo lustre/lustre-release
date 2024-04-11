@@ -2079,6 +2079,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	struct cl_2queue *queue = NULL;
 	struct cl_sync_io *anchor = NULL;
 	bool holdinglock = false;
+	bool page_locked = false;
 	int rc;
 
 	ENTRY;
@@ -2120,6 +2121,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	if (vmpage == NULL)
 		GOTO(rellock, rc = -EOPNOTSUPP);
 
+	page_locked = true;
 	if (!PageDirty(vmpage)) {
 		/* associate cl_page */
 		clpage = cl_page_find(env, clob, vmpage->index,
@@ -2181,13 +2183,17 @@ queuefini2:
 queuefini1:
 		cl_2queue_disown(env, queue);
 		cl_2queue_fini(env, queue);
+		/* The page was unlocked by queue disown. */
+		page_locked = false;
 	}
 
 clpfini:
 	if (clpage)
 		cl_page_put(env, clpage);
 pagefini:
-	unlock_page(vmpage);
+	if (page_locked)
+		unlock_page(vmpage);
+	page_locked = false;
 	put_page(vmpage);
 rellock:
 	if (holdinglock)
