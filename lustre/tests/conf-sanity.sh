@@ -15,7 +15,6 @@ init_logging
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
 
 always_except LU-11915 110
-always_except LU-17269 41c
 
 if $SHARED_KEY; then
 	always_except LU-9795 84 86 103
@@ -3645,12 +3644,8 @@ run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 test_41c() {
 	local oss_list=$(comma_list $(osts_nodes))
 
-	[[ "$MDS1_VERSION" -ge $(version_code 2.6.52) ]] ||
-	[[ "$MDS1_VERSION" -ge $(version_code 2.5.26) &&
-	   "$MDS1_VERSION" -lt $(version_code 2.5.50) ]] ||
-	[[ "$MDS1_VERSION" -ge $(version_code 2.5.4) &&
-	   "$MDS1_VERSION" -lt $(version_code 2.5.11) ]] ||
-		skip "Need MDS version 2.5.4+ or 2.5.26+ or 2.6.52+"
+	(( "$MDS1_VERSION" >= $(version_code 2.15.62.4) )) ||
+		skip "Need MDS >= 2.15.62.4 for parallel device locking"
 
 	# ensure mds1 ost1 have been created even if running sub-test standalone
 	cleanup
@@ -3671,7 +3666,7 @@ test_41c() {
 	local mds1mnt=$(facet_mntpt mds1)
 	local mds1opts=$MDS_MOUNT_OPTS
 
-	if [ "$mds1_FSTYPE" == ldiskfs ] &&
+	if [[ "$mds1_FSTYPE" == ldiskfs ]] &&
 	   ! do_facet mds1 test -b $mds1dev; then
 		mds1opts=$(csa_add "$mds1opts" -o loop)
 	fi

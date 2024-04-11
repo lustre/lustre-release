@@ -480,6 +480,45 @@ void class_free_dev(struct obd_device *obd)
 	class_put_type(obd_type);
 }
 
+static int class_name2dev_nolock(const char *name)
+{
+	struct obd_device *obd = NULL;
+	unsigned long dev_no = 0;
+	int ret;
+
+	if (!name)
+		return -1;
+
+	obd_device_for_each(dev_no, obd) {
+		if (strcmp(name, obd->obd_name) == 0) {
+			/*
+			 * Make sure we finished attaching before we give
+			 * out any references
+			 */
+			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+			if (obd->obd_attached) {
+				ret = obd->obd_minor;
+				return ret;
+			}
+			break;
+		}
+	}
+
+	return -1;
+}
+
+int class_name2dev(const char *name)
+{
+	int ret;
+
+	obd_device_lock();
+	ret = class_name2dev_nolock(name);
+	obd_device_unlock();
+
+	return ret;
+}
+EXPORT_SYMBOL(class_name2dev);
+
 /**
  * Unregister obd device.
  *
@@ -491,12 +530,14 @@ void class_free_dev(struct obd_device *obd)
  */
 void class_unregister_device(struct obd_device *obd)
 {
+	obd_device_lock();
 	if (obd->obd_minor >= 0) {
-		xa_erase(&obd_devs, obd->obd_minor);
+		__xa_erase(&obd_devs, obd->obd_minor);
 		class_decref(obd, "obd_device_list", obd);
 		obd->obd_minor = -1;
 		atomic_dec(&obd_devs_count);
 	}
+	obd_device_unlock();
 }
 
 /**
@@ -523,10 +564,11 @@ int class_register_device(struct obd_device *new_obd)
 	if (class_name2dev(new_obd->obd_name) != -1)
 		obd_zombie_barrier();
 
-	if (class_name2dev(new_obd->obd_name) == -1) {
+	obd_device_lock();
+	if (class_name2dev_nolock(new_obd->obd_name) == -1) {
 		class_incref(new_obd, "obd_device_list", new_obd);
-		rc = xa_alloc(&obd_devs, &dev_no, new_obd,
-			      xa_limit_31b, GFP_ATOMIC);
+		rc = __xa_alloc(&obd_devs, &dev_no, new_obd,
+				xa_limit_31b, GFP_ATOMIC);
 
 		if (rc != 0)
 			goto out;
@@ -538,39 +580,9 @@ int class_register_device(struct obd_device *new_obd)
 	}
 
 out:
+	obd_device_unlock();
 	RETURN(rc);
 }
-
-int class_name2dev(const char *name)
-{
-	struct obd_device *obd = NULL;
-	unsigned long dev_no = 0;
-	int ret;
-
-	if (!name)
-		return -1;
-
-	obd_device_lock();
-	obd_device_for_each(dev_no, obd) {
-		if (strcmp(name, obd->obd_name) == 0) {
-			/*
-			 * Make sure we finished attaching before we give
-			 * out any references
-			 */
-			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (obd->obd_attached) {
-				ret = obd->obd_minor;
-				obd_device_unlock();
-				return ret;
-			}
-			break;
-		}
-	}
-	obd_device_unlock();
-
-	return -1;
-}
-EXPORT_SYMBOL(class_name2dev);
 
 struct obd_device *class_name2obd(const char *name)
 {
