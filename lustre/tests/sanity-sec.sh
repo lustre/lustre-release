@@ -15,12 +15,12 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
-if [[ "$MDS1_OS_ID" == "rhel" || "$MDS1_OS_ID_LIKE" =~ "rhel" ]] &&
+if [[ "$MDS1_OS_ID_LIKE" =~ "rhel" ]] &&
    (( $MDS1_OS_VERSION_CODE == $(version_code 9.3) )); then
 	always_except LU-16915 51
 fi
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="26"
+[[ "$SLOW" == "no" ]] && EXCEPT_SLOW="26"
 
 NODEMAP_TESTS=$(seq 7 26)
 

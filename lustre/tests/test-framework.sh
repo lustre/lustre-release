@@ -389,10 +389,10 @@ get_lustre_env() {
 		# MDS1_OS_VERSION_ID, MDS1_OS_ID, MDS1_OS_ID_LIKE,
 		# OST1_OS_VERSION_ID, OST1_OS_ID, OST1_OS_ID_LIKE,
 		# CLIENT_OS_VERSION_ID, CLIENT_OS_ID, CLIENT_OS_ID_LIKE
-		lustre_os_release "eval export" mgs
-		lustre_os_release "eval export" mds1
-		lustre_os_release "eval export" ost1
-		lustre_os_release "eval export" client
+		lustre_os_release mgs
+		lustre_os_release mds1
+		lustre_os_release ost1
+		lustre_os_release client
 	fi
 
 	# Prefer using "mds1" directly instead of SINGLEMDS.
@@ -773,24 +773,30 @@ lustre_version_code() {
 # generates $facet_OS_ID, $facet_OS_ID_LIKE, $facet_VERSION_ID
 # and also $facet_OS_VERSION_CODE=$(version_code $facet_VERSION_ID)
 lustre_os_release() {
-	local action=${1:-echo}
-	local facet=$2
-	local FACET_OS=$(tr "[:lower:]" "[:upper:]" <<<$facet)_OS_
+	local facet=$1
+	local facet_os=$(tr "[:lower:]" "[:upper:]" <<<$facet)_OS_
+	local facet_version=${facet_os}VERSION_
+	local line
 
-	[[ "$action" == "echo" ]] &&
-		echo "$facet: $(do_facet $facet "cat /etc/system-release")"
-	do_facet $facet "[[ -r /etc/os-release ]] || ls -s /etc/*release" 1>&2
+	echo "$facet: $(do_facet $facet "cat /etc/system-release")"
+	do_facet $facet "test -r /etc/os-release" || {
+		echo "$facet: has no /etc/os-release"
+		do_facet $facet "uname -a; ls -s /etc/*release"
+		return 0
+	}
 
-	while read LINE; do
-	case $LINE in
-	VERSION_ID=*|ID=*|ID_LIKE=*) $action ${FACET_OS}$LINE ;;
-	esac
+	while read line; do
+		# more variables in os-release could be exported, but these
+		# are the ones that looked enough for our needs here
+		case $line in
+		VERSION_ID=*|ID=*|ID_LIKE=*) eval export ${facet_os}$line ;;
+		esac
 	done < <(do_facet $facet "cat /etc/os-release")
 
-	[[ "$action" == "echo" ]] && return 0
-
-	local facet_version=${FACET_OS}VERSION
-	$action ${facet_version}_CODE=\$\(version_code \$${facet_version}_ID\)
+	eval export ${facet_version}CODE=\$\(version_code \$${facet_version}ID\)
+	# add in the "self" ID to ID_LIKE so only one needs to be checked
+	eval export ${facet_os}ID_LIKE+=\" \$${facet_os}ID\"
+	env | grep "${facet_os}"
 }
 
 module_loaded () {
@@ -9593,11 +9599,8 @@ init_logging() {
 
 	# log actual client and server versions if needed for debugging
 	log "Client: $(lustre_build_version client)"
-	lustre_os_release echo client
 	log "MDS: $(lustre_build_version mds1)"
-	lustre_os_release echo mds1
 	log "OSS: $(lustre_build_version ost1)"
-	lustre_os_release echo ost1
 }
 
 log_test() {

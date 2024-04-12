@@ -80,12 +80,9 @@ if [[ "$ost1_FSTYPE" = "zfs" ]]; then
 	always_except LU-9054 312
 fi
 
-proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
-
-if [ -r /etc/redhat-release ]; then
-	rhel_version=$(cat /etc/redhat-release |
-		sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
-	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
+# Check if running on specific distros to skip certain subtests
+if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
+	if (( $CLIENT_OS_VERSION_CODE == $(version_code 9.3.0) )); then
 		# disable test_906 temporarily until rhel9.3 solves the
 		# failure on fio io_uring I/O engine.
 		always_except LU-17289 906
@@ -94,6 +91,8 @@ fi
 
 build_test_filter
 FAIL_ON_ERROR=false
+
+proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
 cleanup() {
 	echo -n "cln.."
