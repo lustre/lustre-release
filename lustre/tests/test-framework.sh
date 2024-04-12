@@ -382,6 +382,17 @@ get_lustre_env() {
 		export MDS1_VERSION=$(lustre_version_code mds1)
 		export OST1_VERSION=$(lustre_version_code ost1)
 		export CLIENT_VERSION=$(lustre_version_code client)
+
+		# import server-side version information into local variables
+		# so they can be used in tests instead of checked separately
+		# MGS_OS_VERSION_ID, MGS_OS_ID, MGS_OS_ID_LIKE,
+		# MDS1_OS_VERSION_ID, MDS1_OS_ID, MDS1_OS_ID_LIKE,
+		# OST1_OS_VERSION_ID, OST1_OS_ID, OST1_OS_ID_LIKE,
+		# CLIENT_OS_VERSION_ID, CLIENT_OS_ID, CLIENT_OS_ID_LIKE
+		lustre_os_release "eval export" mgs
+		lustre_os_release "eval export" mds1
+		lustre_os_release "eval export" ost1
+		lustre_os_release "eval export" client
 	fi
 
 	# Prefer using "mds1" directly instead of SINGLEMDS.
@@ -755,6 +766,31 @@ lustre_build_version() {
 # Report the Lustre numeric build version code for the supplied facet.
 lustre_version_code() {
 	version_code $(lustre_build_version $1)
+}
+
+# Extract the server-side /etc/os-release information into local variables
+# usage: lustre_os_release <facet>
+# generates $facet_OS_ID, $facet_OS_ID_LIKE, $facet_VERSION_ID
+# and also $facet_OS_VERSION_CODE=$(version_code $facet_VERSION_ID)
+lustre_os_release() {
+	local action=${1:-echo}
+	local facet=$2
+	local FACET_OS=$(tr "[:lower:]" "[:upper:]" <<<$facet)_OS_
+
+	[[ "$action" == "echo" ]] &&
+		echo "$facet: $(do_facet $facet "cat /etc/system-release")"
+	do_facet $facet "[[ -r /etc/os-release ]] || ls -s /etc/*release" 1>&2
+
+	while read LINE; do
+	case $LINE in
+	VERSION_ID=*|ID=*|ID_LIKE=*) $action ${FACET_OS}$LINE ;;
+	esac
+	done < <(do_facet $facet "cat /etc/os-release")
+
+	[[ "$action" == "echo" ]] && return 0
+
+	local facet_version=${FACET_OS}VERSION
+	$action ${facet_version}_CODE=\$\(version_code \$${facet_version}_ID\)
 }
 
 module_loaded () {
@@ -9555,8 +9591,11 @@ init_logging() {
 
 	# log actual client and server versions if needed for debugging
 	log "Client: $(lustre_build_version client)"
+	lustre_os_release echo client
 	log "MDS: $(lustre_build_version mds1)"
+	lustre_os_release echo mds1
 	log "OSS: $(lustre_build_version ost1)"
+	lustre_os_release echo ost1
 }
 
 log_test() {

@@ -15,9 +15,10 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
-# bug number for skipped test:
-ALWAYS_EXCEPT+=" "
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+if [[ "$MDS1_OS_ID" == "rhel" || "$MDS1_OS_ID_LIKE" =~ "rhel" ]] &&
+   (( $MDS1_OS_VERSION_CODE == $(version_code 9.3) )); then
+	always_except LU-16915 51
+fi
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="26"
 
@@ -4381,8 +4382,8 @@ test_50() {
 run_test 50 "DoM encrypted file"
 
 test_51() {
-	[ "$MDS1_VERSION" -gt $(version_code 2.13.53) ] ||
-		skip "Need MDS version at least 2.13.53"
+	(( "$MDS1_VERSION" >= $(version_code v2_13_55-38-gf05edf8e2b) )) ||
+		skip "Need MDS version at least 2.13.55.38"
 
 	mkdir $DIR/$tdir || error "mkdir $tdir"
 	local mdts=$(comma_list $(mdts_nodes))
