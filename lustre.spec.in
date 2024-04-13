@@ -439,7 +439,7 @@ applications against the Lustre / LNet utilities libraries.
 Summary: Lustre testing framework
 Provides: %{name}-tests = %{version}
 %if %{with lustre_iokit}
-Requires: %{name} = %{version}, lustre-iokit
+Requires: %{name} = %{version}, %{lustre_name}-iokit
 %else
 Requires: %{name} = %{version}
 %endif
@@ -516,14 +516,14 @@ echo $TMPFILE
 %endif
 
 %if %{with lustre_iokit}
-%package -n lustre-iokit
+%package -n %{lustre_name}-iokit
 Summary: Collection of benchmark tools for a cluster with the Lustre file system
 Requires: sg3_utils
 %if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
 Recommends: perl
 %endif
 
-%description -n lustre-iokit
+%description -n %{lustre_name}-iokit
 This package includes five tools:
 sgpdd-survey:
 A test of the 'bare metal' performance, bypassing as much of the kernel as we can. Uses the sgp_dd utility.
@@ -974,7 +974,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 
 %if %{with lustre_iokit}
-%files -n lustre-iokit
+%files -n %{lustre_name}-iokit
 %defattr(-, root, root)
 %{_bindir}/iokit-config
 %{_bindir}/iokit-gather-stats
