@@ -173,7 +173,9 @@ verify_comp_attr() {
 		return
 	}
 
-	[[ $value = $expected ]] || {
+	[[ $value = $expected ]] ||
+	# file sometimes one stripe short if MDS-OST didn't precreate, LU-16623
+	[[ $attr == "stripe-count" && $value == $((OSTCOUNT - 1)) ]] || {
 		$getstripe_cmd $tf
 		error "verify $attr failed on $tf: $value != $expected"
 	}
@@ -221,7 +223,9 @@ verify_comp_attr_with_parent() {
 	value=$($tf_cmd $opt $tf)
 	[[ $value = -1 ]] && value=$OSTCOUNT
 
-	[[ $value = $expected ]] || {
+	[[ $value = $expected ]] ||
+	# file sometimes one stripe short if MDS-OST didn't precreate, LU-16623
+	[[ $attr == "stripe-count" && $value == $((OSTCOUNT - 1)) ]] || {
 		$td_cmd -d $td
 		$tf_cmd -v $tf
 		error "verify $attr failed with parent on $tf:" \
@@ -260,7 +264,9 @@ verify_comp_attr_with_default() {
 	value=$($tf_cmd $opt $tf)
 	[[ $value = -1 ]] && value=$OSTCOUNT
 
-	[[ $value = $expected ]] || {
+	[[ $value = $expected ]] ||
+	# file sometimes one stripe short if MDS-OST didn't precreate, LU-16623
+	[[ $attr == "stripe-count" && $value == $((OSTCOUNT - 1)) ]] || {
 		$tf_cmd -v $tf
 		error "verify $attr failed with default value on $tf:" \
 		      "$value != $expected"
@@ -3720,11 +3726,11 @@ function test_206() {
 run_test 206 "lfs setstripe -pool .. --comp-flags=.. "
 
 test_207() {
-       local file=$DIR/$tfile
-       local tmpfile=$DIR/$tfile-tt
+	local file=$DIR/$tfile
+	local tmpfile=$DIR/$tfile-tt
 
-	[ $MDS1_VERSION -lt $(version_code 2.14.50) ] &&
-		skip "Need MDS version at least 2.14.50"
+	(( $MDS1_VERSION >= $(version_code v2_14_50-161-g571f3cf111) )) ||
+		skip "Need MDS >= 2.14.50.161 for stale components fix"
 
 	stack_trap "rm -f $tmpfile $file"
 
