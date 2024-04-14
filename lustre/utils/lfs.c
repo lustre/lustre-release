@@ -9502,6 +9502,13 @@ static int lfs_quota(int argc, char **argv)
 			qctl->qc_cmd = LUSTRE_Q_ITERQUOTA;
 			break;
 		case 'e':
+			if (optarg == NULL || *optarg == '\0') {
+				fprintf(stderr,
+					"%s quota: invalid start quota ID\n",
+				progname);
+				rc = CMD_HELP;
+				goto out;
+			}
 			end_qid = strtoul(optarg, NULL, 0);
 			break;
 		case 'G':
@@ -9592,6 +9599,13 @@ static int lfs_quota(int argc, char **argv)
 			quiet = 1;
 			break;
 		case 's':
+			if (optarg == NULL || *optarg == '\0') {
+				fprintf(stderr,
+					"%s quota: invalid start quota ID\n",
+				progname);
+				rc = CMD_HELP;
+				goto out;
+			}
 			start_qid = strtoul(optarg, NULL, 0);
 			break;
 		case 't':
