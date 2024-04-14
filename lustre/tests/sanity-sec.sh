@@ -6262,6 +6262,9 @@ test_69() {
 	local param
 	local orig
 
+	(( MDS1_VERSION >= $(version_code v2_15_61-210-g2153e86541) )) ||
+		skip "need MDS >= 2.15.61.210 for upcall sanity checking"
+
 	param="mdt.$mdt.identity_upcall"
 	orig="$(do_facet mds1 "$LCTL get_param -n $param")"
 	stack_trap "do_facet mds1 $LCTL set_param $param=$orig" EXIT
