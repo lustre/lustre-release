@@ -82,29 +82,7 @@ fi
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
-# Get the SLES distro version
-#
-# Returns a version string that should only be used in comparing
-# strings returned by version_code()
-sles_version_code()
-{
-	local version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
-
-	# All SuSE Linux versions have one decimal. version_code expects two
-	local sles_version=$version.0
-	version_code $sles_version
-}
-
-# Check if we are running on Ubuntu or SLES so we can make decisions on
-# what tests to run
-if [ -r /etc/SuSE-release ] || [ -r /etc/SUSE-brand ]; then
-	sles_version=$(sles_version_code)
-	(( $sles_version >= $(version_code 11.4.0) )) ||
-		always_except LU-4341 170
-
-	(( $sles_version >= $(version_code 12.0.0) )) ||
-		always_except LU-3703 234
-elif [ -r /etc/redhat-release ]; then
+if [ -r /etc/redhat-release ]; then
 	rhel_version=$(cat /etc/redhat-release |
 		sed -e 's/^[^0-9.]*//g' | sed -e 's/[ ].*//')
 	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
