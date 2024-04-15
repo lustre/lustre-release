@@ -882,6 +882,7 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 			} else if (idx >= 0) {
 				int lge_idx = qmt_map_lge_idx(lgd, idx);
 
+				LASSERT(lge_idx >= 0);
 				/* If there are no locks yet when
 				 * lge_qunit/edquot_nu is set, slaves
 				 * are still not notified with new
@@ -1149,6 +1150,8 @@ int qmt_map_lge_idx(struct lqe_glbl_data *lgd, int ostidx)
 {
 	int k;
 
+	CDEBUG(D_QUOTA, "mapping ostidx %d num_used %d\n", ostidx,
+	       lgd->lqeg_num_used);
 	/* check common case of sequential OST numbers first */
 	if (ostidx < lgd->lqeg_num_used &&
 	    lgd->lqeg_arr[ostidx].lge_idx == ostidx)
@@ -1158,8 +1161,12 @@ int qmt_map_lge_idx(struct lqe_glbl_data *lgd, int ostidx)
 		if (lgd->lqeg_arr[k].lge_idx == ostidx)
 			break;
 
-	LASSERTF(k < lgd->lqeg_num_used, "Cannot map ostidx %d for %p\n",
-		 ostidx, lgd);
+	if (k >= lgd->lqeg_num_used) {
+		CERROR("qmt: cannot map ostidx %d, num_used %d: rc = %d\n",
+		       ostidx, lgd->lqeg_num_used, -EINVAL);
+		return -EINVAL;
+	}
+
 	return k;
 }
 
@@ -1211,6 +1218,17 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 			tgt_idx = qmt_sarr_get_idx(qpi, j);
 			LASSERT(tgt_idx >= 0);
 			idx = qmt_map_lge_idx(lgd, tgt_idx);
+			/* ENOENT is fine here - it is possible when
+			 * quota_master/dt-0x0 hasn't got indexes
+			 * files for all OSTs yet. At the same time
+			 * Quota Pool may include all OSTs just from
+			 * configuration despite they haven't connected
+			 * yet.
+			 */
+			if (idx < 0 && !lqe->lqe_is_global)
+				continue;
+			LASSERTF(idx >= 0, "idx %d lqe_is_global %d lqe %px\n",
+				 idx, lqe->lqe_is_global, lqe);
 
 			if (edquot) {
 				int lge_edquot, new_edquot, edquot_nu;

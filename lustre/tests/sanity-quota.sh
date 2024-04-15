@@ -6476,6 +6476,67 @@ test_90b()
 }
 run_test 90b "lfs quota should work with multiple mount points"
 
+test_91()
+{
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	local mds_dev=$(mdsdevname 1)
+	local ost1_dev=$(ostdevname 1)
+	local ost2_dev=$(ostdevname 2)
+	local ost0_idx="quota_master/dt-0x0/0x20000-OST0000_UUID"
+	local ost1_idx="quota_master/dt-0x0/0x20000-OST0001_UUID"
+	local tstid=$(id -u $TSTUSR)
+
+	formatall
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	start mds1 $mds_dev $MDS_MOUNT_OPTS || error "Cannot start mds1"
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds1 FULL
+
+	echo "start ost1 service on `facet_active_host ost1`"
+	start ost1 $ost1_dev $OST_MOUNT_OPTS || error "Cannot start ost1"
+	wait_clients_import_ready ${CLIENTS:-$HOSTNAME} ost1
+	echo "start ost2 service on `facet_active_host ost2`"
+	start ost2 $ost2_dev $OST_MOUNT_OPTS || error "Cannot start ost2"
+	wait_clients_import_ready ${CLIENTS:-$HOSTNAME} ost2
+	echo "start client"
+	zconf_mount $HOSTNAME $MOUNT || error "mount client failed"
+
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			set_param -P osd-*.*.quota_slave.enabled=u
+	else
+		do_facet mgs $PERM_CMD $FSNAME.quota.ost=u ||
+			error "set ost quota type failed"
+	fi
+
+	pool_add qpool1 1
+	pool_add_targets qpool1 0 1 1 1
+	$LFS setquota -u $TSTUSR -B50M $DIR || error "can't set quota"
+	wait_quota_synced ost1 OST0000 usr $tstid hardlimit $((50*1024))
+	wait_quota_synced ost2 OST0001 usr $tstid hardlimit $((50*1024))
+	echo "stop mds1"
+	stop mds1 -f || error "Can't stop mds1"
+
+	do_facet mds1 "$DEBUGFS -w -R 'rm $ost0_idx' $mds_dev" ||
+		error "removing $ost0_idx error"
+	do_facet mds1 "$DEBUGFS -w -R 'rm $ost1_idx' $mds_dev" ||
+		error "removing $ost1_idx error"
+	do_facet mds1 "$DEBUGFS -c -R 'ls -l quota_master/dt-0x0/' $mds_dev"
+
+	echo "start mds1"
+	start mds1 $mds_dev $MDS_MOUNT_OPTS || error "Cannot start mds1"
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds1 FULL
+
+	mkdir $DIR/$tdir || error "mkdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod error"
+	$RUNAS $DD of=$DIR/$tdir/f1 bs=1M count=50
+
+	stopall
+	formatall
+	setupall
+}
+run_test 91 "new quota index files in quota_master"
 
 quota_fini()
 {

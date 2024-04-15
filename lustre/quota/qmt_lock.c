@@ -270,6 +270,8 @@ static bool qmt_clear_lgeg_arr_nu(struct lquota_entry *lqe, int stype, int idx)
 		if (lgd) {
 			int lge_idx = qmt_map_lge_idx(lgd, idx);
 
+			if (lge_idx < 0)
+				return false;
 			lgd->lqeg_arr[lge_idx].lge_qunit_nu = 0;
 			lgd->lqeg_arr[lge_idx].lge_edquot_nu = 0;
 			/* We shouldn't call revoke for DOM case, it will be
@@ -299,6 +301,7 @@ static bool qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe_gl,
 		int lge_idx;
 
 		lge_idx = qmt_map_lge_idx(lgd, idx);
+		LASSERT(lge_idx >= 0);
 		if (lgd->lqeg_arr[lge_idx].lge_qunit == least_qunit) {
 			struct lquota_entry *lqe;
 			int i;
@@ -667,6 +670,7 @@ static void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
 		lgd = lqe->lqe_glbl_data;
 		if (lgd) {
 			lge_idx = qmt_map_lge_idx(lgd, idx);
+			LASSERT(lge_idx >= 0);
 			edquot = lgd->lqeg_arr[lge_idx].lge_edquot;
 			qunit = lgd->lqeg_arr[lge_idx].lge_qunit;
 		} else {
@@ -886,6 +890,7 @@ static int qmt_id_lock_cb(struct ldlm_lock *lock, struct lquota_entry *lqe)
 	if (lgd) {
 		int lge_idx = qmt_map_lge_idx(lgd, idx);
 
+		LASSERT(lge_idx >= 0);
 		CDEBUG(D_QUOTA,
 		       "tgt idx:%d lge_idx:%d edquot_nu:%d qunit_nu:%d\n",
 		       idx, lge_idx, lgd->lqeg_arr[lge_idx].lge_edquot_nu,
