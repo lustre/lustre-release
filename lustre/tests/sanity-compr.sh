@@ -29,23 +29,21 @@ fi
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 save_layout_restore_at_exit $MOUNT
-# allow COMPR_EXTRA_LAYOUT for backward compatibility
-compr_STRIPEPARAMS=${compr_STRIPEPARAMS:-$COMPR_EXTRA_LAYOUT}
 compr_STRIPEPARAMS=${compr_STRIPEPARAMS:-${fs_STRIPEPARAMS:-"-E 1M -c1 -E eof"}}
+sanity_compr_STRIPEPARAMS=${sanity_compr_STRIPEPARAMS:-$compr_STRIPEPARAMS}
 # Set file system with different layout
 setstripe_getstripe $MOUNT $compr_STRIPEPARAMS
 
 test_sanity()
 {
-	always_except LU-16928 56wb
-
-	SANITY_EXCEPT=$ALWAYS_EXCEPT bash sanity.sh
-	return 0
+	export sanity_STRIPEPARAMS="$sanity_compr_STRIPEPARAMS"
+	bash sanity.sh
 }
 run_test sanity "Run sanity with PFL layout"
 
 test_sanityn()
 {
+	export sanityn_STRIPEPARAMS="$sanity_compr_STRIPEPARAMS"
 	bash sanityn.sh
 	return 0
 }

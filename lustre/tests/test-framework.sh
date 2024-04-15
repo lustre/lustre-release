@@ -47,6 +47,8 @@ export LSNAPSHOT_LOG="/var/log/lsnapshot.log"
 
 export DATA_SEQ_MAX_WIDTH=0x1ffffff
 
+export fs_STRIPEPARAMS=${fs_STRIPEPARAMS:-""}
+
 # sles12 umount has a issue with -d option
 [ -e /etc/SuSE-release ] && grep -w VERSION /etc/SuSE-release | grep -wq 12 && {
 	export UMOUNT="umount"
@@ -6664,7 +6666,11 @@ do_check_and_setup_lustre() {
 		fi
 	fi
 
-	if [ -n "$fs_STRIPEPARAMS" ]; then
+	local suite_stripeparams=${TESTSUITE//-/_}_STRIPEPARAMS
+	if [[ -n "${!suite_stripeparams}" ]]; then
+		save_layout_restore_at_exit $MOUNT
+		setstripe_getstripe $MOUNT ${!suite_stripeparams}
+	elif [[ -n "$fs_STRIPEPARAMS" ]]; then
 		setstripe_getstripe $MOUNT $fs_STRIPEPARAMS
 	fi
 

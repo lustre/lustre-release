@@ -82,6 +82,20 @@ if [[ "$ost1_FSTYPE" == "zfs" ]]; then
 	always_except LU-1941 130b 130c 130d 130e 130f 130g
 fi
 
+# LU-16904 skip tests for PFL layout until fixed
+if [[ "${sanity_STRIPEPARAMS:-$fs_STRIPEPARAMS}" =~ "-E" ]]; then
+	SKIP27D+=" -s 16 -s 20" # LU-20622
+	always_except LU-18713 27M
+	always_except LU-17748 34h
+	always_except LU-20617 44f
+	always_except LU-16928 56wb
+	always_except LU-20618 56wc 56xb 56xd 56xe 56xf 56Ec 65r 270h
+	always_except LU-17694 184d
+	always_except LU-17655 204a 204e
+	always_except LU-20341 600a
+	always_except LU-20638 853
+fi
+
 # Check if running on specific distros to skip certain subtests
 if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
 	if (( $CLIENT_OS_VERSION_CODE >= $(version_code 9.3.0) )); then
@@ -13457,11 +13471,14 @@ test_101h() {
 run_test 101h "Readahead should cover current read window"
 
 test_101i() {
+	# LU-16904 Create plain layout file
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+	stack_trap "rm -f $DIR/$tfile"
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 ||
-		error "dd 10M file failed"
+		error "dd 10M $DIR/$tfile failed"
 
 	local max_per_file_mb=$($LCTL get_param -n \
-		llite.*.max_read_ahead_per_file_mb 2>/dev/null)
+				llite.*.max_read_ahead_per_file_mb 2>/dev/null)
 	cancel_lru_locks osc
 	stack_trap "$LCTL set_param llite.*.max_read_ahead_per_file_mb=$max_per_file_mb"
 	$LCTL set_param llite.*.max_read_ahead_per_file_mb=1 ||
@@ -13475,8 +13492,7 @@ test_101i() {
 	$LCTL get_param llite.*.read_ahead_stats
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
 		     awk '/misses/ { print $2 }')
-	[ $miss -eq 5 ] || error "expected misses 5 but got $miss"
-	rm -f $DIR/$tfile
+	(( $miss == 5 )) || error "expected misses 5 but got $miss"
 }
 run_test 101i "allow current readahead to exceed reservation"
 
