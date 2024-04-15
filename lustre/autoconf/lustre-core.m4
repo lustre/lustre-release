@@ -2517,10 +2517,15 @@ AC_DEFUN([LC_SRC_INTERVAL_TREE_CACHED], [
 		#define START(n) ((n)->a)
 		#define LAST(n) ((n)->b)
 		struct rb_root_cached tree;
+		/* forward declare functions created by INTERVAL_TREE_DEFINE */
+		void ftree_insert(struct foo *, struct rb_root_cached *);
+		void ftree_remove(struct foo *, struct rb_root_cached *);
+		struct foo *ftree_iter_first(struct rb_root_cached *, int, int);
+		struct foo *ftree_iter_next(struct foo *, int, int);
 		INTERVAL_TREE_DEFINE(struct foo, rb, int, last,
-			START, LAST, , foo);
+			START, LAST, , ftree);
 	],[
-		foo_insert(NULL, &tree);
+		ftree_insert(NULL, &tree);
 	],[-Werror])
 ])
 AC_DEFUN([LC_INTERVAL_TREE_CACHED], [

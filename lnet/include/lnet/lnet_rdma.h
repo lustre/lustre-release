@@ -5,6 +5,17 @@
 #ifndef LNET_RDMA_H
 #define LNET_RDMA_H
 
+#define REGSTR2(x) x##_register_nvfs_dma_ops
+#define REGSTR(x)  REGSTR2(x)
+
+#define UNREGSTR2(x) x##_unregister_nvfs_dma_ops
+#define UNREGSTR(x)  UNREGSTR2(x)
+
+#define MODULE_PREFIX lustre_v1
+
+#define REGISTER_FUNC REGSTR(MODULE_PREFIX)
+#define UNREGISTER_FUNC UNREGSTR(MODULE_PREFIX)
+
 struct device;
 struct page;
 enum dma_data_direction;
@@ -12,9 +23,8 @@ struct scatterlist;
 
 struct nvfs_dma_rw_ops;
 
-int REGISTER_FUNC (struct nvfs_dma_rw_ops *ops);
-
-void UNREGISTER_FUNC (void);
+int REGISTER_FUNC(struct nvfs_dma_rw_ops *ops);
+void UNREGISTER_FUNC(void);
 
 unsigned int lnet_get_dev_prio(struct device *dev,
 			       unsigned int dev_idx);

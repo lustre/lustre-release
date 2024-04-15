@@ -279,7 +279,7 @@ void mdt_cdt_get_request(struct cdt_agent_req *car)
 	kref_get(&car->car_refcount);
 }
 
-void mdt_cdt_put_request_free(struct kref *kref)
+static void mdt_cdt_put_request_free(struct kref *kref)
 {
 	struct cdt_agent_req *car;
 

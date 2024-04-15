@@ -919,10 +919,6 @@ void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,
                              struct mdt_lock_handle *lhc);
 
-extern void target_recovery_fini(struct obd_device *obd);
-extern void target_recovery_init(struct lu_target *lut,
-                                 svc_handler_t handler);
-
 int mdt_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
                           void *client_nid);

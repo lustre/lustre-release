@@ -46,7 +46,7 @@
 
 #include "ptlrpc_internal.h"
 
-struct obd_import *llog_client_entry(struct llog_ctxt *ctxt)
+static struct obd_import *llog_client_entry(struct llog_ctxt *ctxt)
 {
 	struct obd_import *imp = ERR_PTR(-EINVAL);
 
@@ -62,7 +62,7 @@ struct obd_import *llog_client_entry(struct llog_ctxt *ctxt)
 	return imp;
 }
 
-void llog_client_exit(struct llog_ctxt *ctxt, struct obd_import *imp)
+static void llog_client_exit(struct llog_ctxt *ctxt, struct obd_import *imp)
 {
 	mutex_lock(&ctxt->loc_mutex);
 	if (ctxt->loc_imp != imp)

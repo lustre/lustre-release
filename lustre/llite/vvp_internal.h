@@ -263,8 +263,6 @@ struct vvp_object *cl_inode2vvp(struct inode *inode);
 	((void)sizeof(env), (void)sizeof(clob), (void)sizeof !!(expr))
 #endif /* CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK */
 
-int lov_read_and_clear_async_rc(struct cl_object *clob);
-
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 		struct cl_io *io);
 int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);

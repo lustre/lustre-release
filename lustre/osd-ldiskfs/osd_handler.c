@@ -1848,7 +1848,7 @@ bool osd_tx_was_declared(const struct lu_env *env, struct osd_thandle *oth,
 	return false;
 }
 
-void osd_tx_declaration_free(struct osd_thandle *oth)
+static void osd_tx_declaration_free(struct osd_thandle *oth)
 {
 	struct osd_obj_declare *old, *tmp;
 
@@ -2007,17 +2007,17 @@ void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th)
 }
 
 #ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
-void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
-				    struct osd_thandle *oh,
-				    int *credits, int *revoke)
+static void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
+					   struct osd_thandle *oh,
+					   int *credits, int *revoke)
 {
 	int blocks = LDISKFS_MAX_EXTENT_DEPTH * oh->oh_declared_ext;
 	*revoke += ldiskfs_trans_default_revoke_credits(osd_sb(osd)) + blocks;
 }
 #else
-void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
-				    struct osd_thandle *oh,
-				    int *credits, int *revoke)
+static void osd_ldiskfs_credits_for_revoke(struct osd_device *osd,
+					   struct osd_thandle *oh,
+					   int *credits, int *revoke)
 {
 	struct journal_s *journal = LDISKFS_SB(osd_sb(osd))->s_journal;
 	int blocks, jbsize, records_per_block;
@@ -2320,8 +2320,8 @@ static void osd_delayed_iput_fn(struct work_struct *work)
 	OBD_FREE_PTR(diwork);
 }
 
-noinline void osd_delayed_iput(struct inode *inode,
-			       struct osd_delayed_iput_work *diwork)
+noinline static void osd_delayed_iput(struct inode *inode,
+				      struct osd_delayed_iput_work *diwork)
 {
 	if (!diwork) {
 		iput(inode);
@@ -7948,7 +7948,7 @@ static int osd_it_ea_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
-int osd_olc_lookup(const struct lu_env *env, struct osd_object *obj,
+static int osd_olc_lookup(const struct lu_env *env, struct osd_object *obj,
 			  u64 iversion, struct dt_rec *rec,
 			  const struct lu_name *ln, int *result)
 {
@@ -7996,9 +7996,9 @@ int osd_olc_lookup(const struct lu_env *env, struct osd_object *obj,
 	return 0;
 }
 
-void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
-			  struct dt_rec *rec, const struct lu_name *ln,
-			  const int result, u64 iversion)
+static void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
+			 struct dt_rec *rec, const struct lu_name *ln,
+			 const int result, u64 iversion)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_lookup_cache_entry *entry;

@@ -2414,57 +2414,6 @@ static inline int ptr_inside(void *base, size_t size, void *ptr)
 	return (base <= ptr) && (ptr < base + size);
 }
 
-static int iam_frame_invariant(struct iam_frame *f)
-{
-	return
-		(f->bh != NULL &&
-		f->bh->b_data != NULL &&
-		ptr_inside(f->bh->b_data, f->bh->b_size, f->entries) &&
-		ptr_inside(f->bh->b_data, f->bh->b_size, f->at) &&
-		f->entries <= f->at);
-}
-
-static int iam_leaf_invariant(struct iam_leaf *l)
-{
-	return
-		l->il_bh != NULL &&
-		l->il_bh->b_data != NULL &&
-		ptr_inside(l->il_bh->b_data, l->il_bh->b_size, l->il_entries) &&
-		ptr_inside(l->il_bh->b_data, l->il_bh->b_size, l->il_at) &&
-		l->il_entries <= l->il_at;
-}
-
-static int iam_path_invariant(struct iam_path *p)
-{
-	int i;
-
-	if (p->ip_container == NULL ||
-	    p->ip_indirect < 0 || p->ip_indirect > DX_MAX_TREE_HEIGHT - 1 ||
-	    p->ip_frame != p->ip_frames + p->ip_indirect ||
-	    !iam_leaf_invariant(&p->ip_leaf))
-		return 0;
-	for (i = 0; i < ARRAY_SIZE(p->ip_frames); ++i) {
-		if (i <= p->ip_indirect) {
-			if (!iam_frame_invariant(&p->ip_frames[i]))
-				return 0;
-		}
-	}
-	return 1;
-}
-
-int iam_it_invariant(struct iam_iterator *it)
-{
-	return
-		(it->ii_state == IAM_IT_DETACHED ||
-		it->ii_state == IAM_IT_ATTACHED ||
-		it->ii_state == IAM_IT_SKEWED) &&
-		!(it->ii_flags & ~(IAM_IT_MOVE | IAM_IT_WRITE)) &&
-		ergo(it->ii_state == IAM_IT_ATTACHED ||
-		it->ii_state == IAM_IT_SKEWED,
-		iam_path_invariant(&it->ii_path) &&
-		equi(it_at_rec(it), it->ii_state == IAM_IT_SKEWED));
-}
-
 /*
  * Search container @c for record with key @k. If record is found, its data
  * are moved into @r.

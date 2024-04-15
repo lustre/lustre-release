@@ -37,10 +37,17 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
-
 #include <lustre_log.h>
 #include <lustre_update.h>
 #include <llog_swab.h>
+
+#ifdef HAVE_SERVER_SUPPORT
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)	EXPORT_SYMBOL(symbol)
+#define SERVER_ONLY
+#else
+#define SERVER_ONLY static
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)
+#endif
 
 static void print_llogd_body(struct llogd_body *d)
 {
@@ -124,7 +131,8 @@ void lustre_swab_lu_seq_range(struct lu_seq_range *range)
 }
 EXPORT_SYMBOL(lustre_swab_lu_seq_range);
 
-void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count)
+SERVER_ONLY void lustre_swab_update_ops(struct update_ops *uops,
+					unsigned int op_count)
 {
 	unsigned int i;
 	unsigned int j;
@@ -137,7 +145,7 @@ void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count)
 			__swab16s(&uops->uops_op[i].uop_params_off[j]);
 	}
 }
-EXPORT_SYMBOL(lustre_swab_update_ops);
+SERVER_ONLY_EXPORT_SYMBOL(lustre_swab_update_ops);
 
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 {

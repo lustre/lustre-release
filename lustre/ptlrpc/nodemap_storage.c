@@ -1620,10 +1620,8 @@ out:
 	return rc;
 }
 
-int nodemap_index_read(struct lu_env *env,
-		       struct nm_config_file *ncf,
-		       struct idx_info *ii,
-		       const struct lu_rdpg *rdpg)
+int nodemap_index_read(struct lu_env *env, struct nm_config_file *ncf,
+		       struct idx_info *ii, const struct lu_rdpg *rdpg)
 {
 	struct dt_object	*nodemap_idx = ncf->ncf_obj;
 	__u64			 version;

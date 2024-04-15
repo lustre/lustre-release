@@ -148,12 +148,6 @@ static inline lvar_hash_t e_hash(const struct lvar_leaf_entry *ent)
 	return le32_to_cpu(ent->vle_hash);
 }
 
-static void e_print(const struct lvar_leaf_entry *ent)
-{
-	CERROR("        %p %8.8x \"%*.*s\"\n", ent, e_hash(ent),
-			e_keysize(ent), e_keysize(ent), e_char(ent));
-}
-
 static inline struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
 					     const struct lvar_leaf_entry *ent)
 {
@@ -285,15 +279,6 @@ static struct lvar_leaf_entry *n_end(const struct iam_leaf *l)
 static struct lvar_leaf_entry *n_cur(const struct iam_leaf *l)
 {
 	return lentry_lvar(l->il_at);
-}
-
-void n_print(const struct iam_leaf *l)
-{
-	struct lvar_leaf_entry *scan;
-
-	CERROR("used: %d\n", h_used(n_head(l)));
-	for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
-		e_print(scan);
 }
 
 #if LDISKFS_CORRECTNESS_ON

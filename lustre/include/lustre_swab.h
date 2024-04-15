@@ -84,6 +84,8 @@ void lustre_swab_mdt_rec_setattr(struct mdt_rec_setattr *sa);
 void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
 void lustre_swab_lmv_desc(struct lmv_desc *ld);
 void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm);
+void lustre_swab_lmv_user_md_objects(struct lmv_user_mds_data *lmd,
+				     int stripe_count);
 void lustre_swab_lov_desc(struct lov_desc *ld);
 void lustre_swab_ldlm_res_id(struct ldlm_res_id *id);
 void lustre_swab_ldlm_policy_data(union ldlm_wire_policy_data *d);

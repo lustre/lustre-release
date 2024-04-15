@@ -331,41 +331,6 @@ const static struct proc_ops pool_proc_operations = {
 	.proc_release	= seq_release,
 };
 
-/**
- * Dump the pool target list into the Lustre debug log.
- *
- * This is a debugging function to allow dumping the list of targets
- * in \a pool to the Lustre kernel debug log at the given \a level.
- *
- * This is not currently called by any existing code, but can be called
- * from within gdb/crash to display the contents of the pool, or from
- * code under development.
- *
- * \param[in] level	Lustre debug level (D_INFO, D_WARN, D_ERROR, etc)
- * \param[in] pool	pool descriptor to be dumped
- */
-void lod_dump_pool(int level, struct lod_pool_desc *pool)
-{
-	unsigned int i;
-
-	pool_getref(pool);
-
-	CDEBUG(level, "pool "LOV_POOLNAMEF" has %d members\n",
-	       pool->pool_name, pool->pool_obds.op_count);
-	down_read(&pool_tgt_rw_sem(pool));
-
-	for (i = 0; i < pool_tgt_count(pool) ; i++) {
-		if (!pool_tgt(pool, i) || !(pool_tgt(pool, i))->ltd_exp)
-			continue;
-		CDEBUG(level, "pool "LOV_POOLNAMEF"[%d] = %s\n",
-		       pool->pool_name, i,
-		       obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
-	}
-
-	up_read(&pool_tgt_rw_sem(pool));
-	lod_pool_putref(pool);
-}
-
 static void pools_hash_exit(void *vpool, void *data)
 {
 	struct lod_pool_desc *pool = vpool;

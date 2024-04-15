@@ -2616,4 +2616,6 @@ struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,
 int cl_global_init(void);
 void cl_global_fini(void);
 
+int lov_read_and_clear_async_rc(struct cl_object *clob);
+
 #endif /* _LINUX_CL_OBJECT_H */

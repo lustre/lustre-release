@@ -3921,7 +3921,7 @@ void lnet_mark_ping_buffer_for_update(void)
 }
 EXPORT_SYMBOL(lnet_mark_ping_buffer_for_update);
 
-void lnet_update_ping_buffer(struct work_struct *work)
+static void lnet_update_ping_buffer(struct work_struct *work)
 {
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_handle_md ping_mdh;
@@ -3937,10 +3937,8 @@ void lnet_update_ping_buffer(struct work_struct *work)
 				    false))
 		lnet_ping_target_update(pbuf, ping_mdh);
 
-
 	mutex_unlock(&the_lnet.ln_api_mutex);
 }
-
 
 void lnet_queue_ping_buffer_update(void)
 {

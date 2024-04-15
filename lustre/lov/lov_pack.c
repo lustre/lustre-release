@@ -182,7 +182,8 @@ static ssize_t lov_lsm_pack_foreign(const struct lov_stripe_md *lsm, void *buf,
 	RETURN(lfm_size);
 }
 
-unsigned int lov_lsme_pack_foreign(struct lov_stripe_md_entry *lsme, void *lmm)
+static unsigned int lov_lsme_pack_foreign(struct lov_stripe_md_entry *lsme,
+					  void *lmm)
 {
 	struct lov_foreign_md *lfm = (struct lov_foreign_md *)lmm;
 
@@ -198,8 +199,8 @@ unsigned int lov_lsme_pack_foreign(struct lov_stripe_md_entry *lsme, void *lmm)
 	return lov_foreign_md_size(lsme->lsme_length);
 }
 
-unsigned int lov_lsme_pack_v1v3(struct lov_stripe_md_entry *lsme,
-				struct lov_mds_md *lmm)
+static unsigned int lov_lsme_pack_v1v3(struct lov_stripe_md_entry *lsme,
+				       struct lov_mds_md *lmm)
 {
 	struct lov_ost_data_v1 *lmm_objects;
 	__u16 stripe_count;

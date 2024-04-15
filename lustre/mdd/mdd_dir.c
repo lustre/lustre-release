@@ -1112,9 +1112,11 @@ void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
  * \retval 0 success
  * \retval -errno failure
  */
-int mdd_changelog_ns_pfid_set(const struct lu_env *env, struct mdd_device *mdd,
-			      struct mdd_object *parent,
-			      const struct lu_attr *pattr, struct lu_fid *pfid)
+static int mdd_changelog_ns_pfid_set(const struct lu_env *env,
+				     struct mdd_device *mdd,
+				     struct mdd_object *parent,
+				     const struct lu_attr *pattr,
+				     struct lu_fid *pfid)
 {
 	int rc = 0;
 

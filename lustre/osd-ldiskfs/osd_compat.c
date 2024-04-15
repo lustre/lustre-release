@@ -69,10 +69,10 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	push_ctxt(save, newctxt);
 }
 
-struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
-					 const char *name,
-					 struct dentry *base, int len,
-					 enum oi_check_flags flags)
+static struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
+						const char *name,
+						struct dentry *base, int len,
+						enum oi_check_flags flags)
 {
 	struct dentry *dchild;
 

@@ -14,17 +14,6 @@
 /* MAX / MIN conflict */
 #include <lnet/lib-lnet.h>
 
-#define REGSTR2(x) x##_register_nvfs_dma_ops
-#define REGSTR(x)  REGSTR2(x)
-
-#define UNREGSTR2(x) x##_unregister_nvfs_dma_ops
-#define UNREGSTR(x)  UNREGSTR2(x)
-
-#define MODULE_PREFIX lustre_v1
-
-#define REGISTER_FUNC REGSTR(MODULE_PREFIX)
-#define UNREGISTER_FUNC UNREGSTR(MODULE_PREFIX)
-
 #define NVFS_IO_ERR			-1
 #define NVFS_CPU_REQ			-2
 

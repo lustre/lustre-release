@@ -1186,7 +1186,8 @@ static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
-ssize_t job_xattr_show(struct kobject *kobj, struct attribute *attr, char *buf)
+static ssize_t job_xattr_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -1208,8 +1209,8 @@ ssize_t job_xattr_show(struct kobject *kobj, struct attribute *attr, char *buf)
  *
  * @return -EINVAL if the name is invalid, else count
  */
-ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
-			const char *buffer, size_t count)
+static ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);

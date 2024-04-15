@@ -944,8 +944,6 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 }
 EXPORT_SYMBOL(qsd_start);
 
-void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg));
-
 /*
  * Global initialization performed at module load time
  */

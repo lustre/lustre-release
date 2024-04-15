@@ -33,6 +33,14 @@
 #include <dt_object.h>
 #endif
 
+#ifdef HAVE_SERVER_SUPPORT
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)	EXPORT_SYMBOL(symbol)
+#define SERVER_ONLY
+#else
+#define SERVER_ONLY static
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)
+#endif
+
 #define OBD_STATFS_NODELAY	0x0001	/* requests should be send without delay
 					 * and resends for avoid deadlocks */
 #define OBD_STATFS_FROM_CACHE	0x0002	/* the statfs callback should not update
@@ -180,6 +188,10 @@ struct cfg_interop_param {
 	char *old_param;
 	char *new_param;
 };
+
+#ifdef HAVE_SERVER_SUPPORT
+void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg));
+#endif
 
 char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index);
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
@@ -2140,5 +2152,10 @@ int obd_ioctl_msg(const char *file, const char *func, int line, int level,
 	obd_ioctl_msg(__FILE__, __func__, __LINE__, level, dev, cmd, msg, rc)
 #define OBD_IOC_ERROR(dev, cmd, msg, rc)	\
 	obd_ioctl_msg(__FILE__, __func__, __LINE__, D_ERROR, dev, cmd, msg, rc)
+
+/* ldlm/ldlm_lib.c */
+void target_recovery_fini(struct obd_device *obd);
+void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
+
 
 #endif /* __LINUX_OBD_CLASS_H */
