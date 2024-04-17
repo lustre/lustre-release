@@ -11187,6 +11187,111 @@ test_153a() {
 }
 run_test 153a "bypass invalid NIDs quickly"
 
+test_154() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
+	(( $MDS1_VERSION >= $(version_code 2.15.63.1) )) ||
+		skip "Need MDS version at least 2.15.63.1"
+	local mdt1=$(mdsdevname 1)
+	local cmd
+	local parentfid
+	local dotdotfid
+	local ino
+
+	reformat
+	setupall
+
+	# create rename test dir on MDT0000 to simplify later debugfs checks
+	test_mkdir -c 1 -i 0 $DIR/$tdir || error "mkdir $tdir failed"
+	test_mkdir -c 1 -i 0 $DIR/$tdir.tgt || error "mkdir $tdir.tgt failed"
+
+	for name in dx_dir dirent empty; do
+		test_mkdir -c 1 -i 0 $DIR/$tdir.$name ||
+			error "mkdir $tdir.$name failed"
+	done
+
+	# make this directory large enough to htree split
+	createmany -o $DIR/$tdir.dx_dir/$tfile.longfilename 128
+	# put 2 entries after dotdot in this directory
+	createmany -o $DIR/$tdir.dirent/$tfile.longfilename 2
+
+	for name in dx_dir dirent empty; do
+		mv $DIR/$tdir.$name $DIR/$tdir || error "mv $tdir.$name failed"
+	done
+
+	parentfid="fid:$($LFS path2fid $DIR/$tdir)"
+	echo "==target parent FID: $parentfid=="
+
+	stopall
+
+	# check that ".." FID is updated during normal operation
+	echo "==debugfs before backup=="
+	for name in dx_dir dirent empty; do
+		cmd="debugfs -c -R 'stat ROOT/$tdir/$tdir.$name' $mdt1"
+		do_facet mds1 "$cmd" ||
+			error "debugfs stat before backup failed"
+		cmd="debugfs -c -R 'ls -lD ROOT/$tdir/$tdir.$name' $mdt1"
+		do_facet mds1 "$cmd" ||
+			error "debugfs before backup $name failed"
+		dotdotfid=$(do_facet mds1 "$cmd" |& awk '/fid:.+\.\./ { print $9 }')
+		[[ "$dotdotfid" == "$parentfid" ]] ||
+			error "parent '$parentfid' != dotdot '$dotdotfid' on $name"
+	done
+
+	for ((i = 1; i <= $MDSCOUNT; i++ )); do
+		mds_backup_restore mds$i ||
+			error "Backup/restore on mds$i failed"
+	done
+
+	setupall
+
+	# verify that rename of the restored directory updates the
+	# ".." entry in the directory with the parent FID
+	echo "==pre-rename parent/.. inodes=="
+	for name in dx_dir dirent empty; do
+		ls -dial $DIR/$tdir $DIR/$tdir/$tdir.$name/.. ||
+			error "ls on original dirs failed"
+		ino=($(stat -c "%i" $DIR/$tdir $DIR/$tdir/$tdir.$name/..))
+		(( ${ino[0]} == ${ino[1]} )) ||
+			error "ino $DIR/$tdir ${ino[0]} != $tdir.$name/.. ${ino[1]}"
+	done
+
+	for name in dx_dir dirent empty; do
+		mv $DIR/$tdir/$tdir.$name $DIR/$tdir.tgt ||
+			error "mv $tdir.$name failed"
+	done
+
+	echo "==post-rename parent/.. inodes=="
+	for name in dx_dir dirent empty; do
+		ls -dial $DIR/$tdir.tgt $DIR/$tdir.tgt/$tdir.$name/.. ||
+			error "ls on renamed dirs failed"
+		ino=($(stat -c "%i" $DIR/$tdir.tgt $DIR/$tdir.tgt/$tdir.$name/..))
+		(( ${ino[0]} == ${ino[1]} )) ||
+			error "ino $DIR/$tdir.tgt ${ino[0]} != $tdir.$name/.. ${ino[1]}"
+	done
+
+	parentfid="fid:$($LFS path2fid $DIR/$tdir.tgt)"
+	echo "==target parent FID: $parentfid=="
+
+	stopall
+
+	for name in dx_dir dirent empty; do
+		echo "==post-rename .$name should have '$parentfid ..'=="
+		cmd="debugfs -c -R 'stat ROOT/$tdir.tgt/$tdir.$name' $mdt1"
+		do_facet mds1 "$cmd" ||
+			error "debugfs stat after rename failed"
+		cmd="debugfs -c -R 'ls -lD ROOT/$tdir.tgt/$tdir.$name' $mdt1"
+		do_facet mds1 "$cmd" ||
+			error "debugfs ls .$name after rename failed"
+		dotdotfid=$(do_facet mds1 "$cmd" |& awk '/fid:.+\.\./ { print $9 }')
+		[[ "$dotdotfid" == "$parentfid" ]] ||
+			error "parent '$parentfid' != dotdot '$dotdotfid' on $name"
+	done
+
+	FSCK_MAX_ERR=0 run_e2fsck $(facet_active_host mds1) $mdt1 -n ||
+		error "e2fsck returned $?"
+}
+run_test 154 "expand .. on rename after MDT backup restore"
+
 #
 # (This was sanity/802a)
 #

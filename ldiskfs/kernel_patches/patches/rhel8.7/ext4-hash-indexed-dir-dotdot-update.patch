@@ -1,17 +1,8 @@
-From eb2cc3a5d4cfb8feee399507a8f2e2fe17f96cf4 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <stancheff@cray.com>
-Date: Tue, 6 Aug 2019 18:12:53 -0500
-Subject: [PATCH] + linux-5.3/ext4-hash-indexed-dir-dotdot-update.patch
-
----
- fs/ext4/namei.c | 71 +++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 71 insertions(+)
-
-diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index f54e868..14ff68e 100644
---- a/fs/ext4/namei.c
-+++ b/fs/ext4/namei.c
-@@ -2174,6 +2174,67 @@ out_frames:
+Index: linux-4.15.0/fs/ext4/namei.c
+===================================================================
+--- linux-4.15.0.orig/fs/ext4/namei.c
++++ linux-4.15.0/fs/ext4/namei.c
+@@ -2043,6 +2043,67 @@ out_frames:
  	return retval;
  }
  
@@ -68,7 +59,7 @@ index f54e868..14ff68e 100644
 +	if (is_dx(dir)) {
 +		retval = ext4_handle_dirty_dx_node(handle, dir, bh);
 +	} else {
-+		retval = ext4_handle_dirty_dirblock(handle, dir, bh);
++		retval = ext4_handle_dirty_dirent_node(handle, dir, bh);
 +	}
 +
 +out:
@@ -79,7 +70,7 @@ index f54e868..14ff68e 100644
  /*
   *	ext4_add_entry()
   *
-@@ -2228,6 +2296,10 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+@@ -2090,6 +2158,10 @@ static int ext4_add_entry(handle_t *hand
  		}
  	}
  
@@ -90,6 +81,3 @@ index f54e868..14ff68e 100644
  	if (is_dx(dir)) {
  		retval = ext4_dx_add_entry(handle, &fname, dir, inode);
  		if (!retval || (retval != ERR_BAD_DX_DIR))
--- 
-2.20.1
-

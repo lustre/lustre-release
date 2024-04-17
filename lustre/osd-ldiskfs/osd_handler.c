@@ -5806,9 +5806,10 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		 * the entry after the agent had been removed, or leave a
 		 * dangling entry pointing at a random inode.
 		 */
-		if (strcmp((char *)key, dotdot) != 0)
+		if (strcmp((char *)key, dotdot) != 0) {
 			osd_take_care_of_agent(env, osd, oh, de);
-		rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
+			rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
+		}
 		brelse(bh);
 	} else {
 		rc = PTR_ERR(bh);

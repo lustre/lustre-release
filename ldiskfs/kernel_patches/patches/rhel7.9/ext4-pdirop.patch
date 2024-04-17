@@ -757,9 +757,9 @@ Index: linux-3.10.0-1160.2.1.el7.x86_64/fs/ext4/namei.c
  	struct inode *dir = dentry->d_parent->d_inode;
  	struct buffer_head *bh = NULL;
 @@ -2108,9 +2446,10 @@ static int ext4_add_entry(handle_t *hand
- 		if (dentry->d_name.len == 2 &&
- 		    memcmp(dentry->d_name.name, "..", 2) == 0)
- 			return ext4_update_dotdot(handle, dentry, inode);
+ 		return ext4_update_dotdot(handle, dentry, inode);
+ 
+ 	if (is_dx(dir)) {
 -		retval = ext4_dx_add_entry(handle, dentry, inode);
 +		retval = ext4_dx_add_entry(handle, dentry, inode, lck);
  		if (!retval || (retval != ERR_BAD_DX_DIR))

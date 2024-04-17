@@ -8,7 +8,7 @@ linux-5.18/ext4-mballoc-extra-checks.patch
 sles15sp4/ext4-hash-indexed-dir-dotdot-update.patch
 linux-5.14/ext4-kill-dx-root.patch
 linux-5.18/ext4-mballoc-pa-free-mismatch.patch
-linux-5.18/ext4-data-in-dirent.patch
+rhel9.1/ext4-data-in-dirent.patch
 rhel8/ext4-nocmtime.patch
 base/ext4-htree-lock.patch
 rhel9.1/ext4-pdirop.patch
