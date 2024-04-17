@@ -33,6 +33,9 @@ export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 export MOUNT_CMD=${MOUNT_CMD:-"mount -t lustre"}
 export UMOUNT=${UMOUNT:-"umount -d"}
 
+# A switch to enable kptr less restrictively
+export KPTR_ON_MOUNT=${KPTR_ON_MOUNT:-true}
+
 export LSNAPSHOT_CONF="/etc/ldev.conf"
 export LSNAPSHOT_LOG="/var/log/lsnapshot.log"
 
@@ -5123,12 +5126,41 @@ cleanup_echo_devs () {
 	done
 }
 
+# Allow %pK to print raw pointers and save the initial value
+kptr_enable_and_save() {
+	# do not overwrite whatever was initially saved:
+	[[ -f $TMP/kptr-$PPID-env ]] && return
+
+	declare -A kptr
+	for node in $(all_nodes); do
+		kptr[$node]=$(do_node $node "sysctl --values kernel/kptr_restrict")
+		do_node $node "sysctl -wq kernel/kptr_restrict=1"
+	done
+	declare -p kptr > $TMP/kptr-$PPID-env
+}
+
+# Restore the initial %pK settings
+kptr_restore() {
+	[[ ! -f $TMP/kptr-$PPID-env ]] && return
+
+	source $TMP/kptr-$PPID-env
+
+	local param
+	for node in $(all_nodes); do
+		[[ -z ${kptr[$node]} ]] && continue
+		param="kernel/kptr_restrict=${kptr[$node]}"
+		do_node $node "sysctl -wq ${param} || true"
+	done
+}
+
 cleanupall() {
 	nfs_client_mode && return
 	cifs_client_mode && return
 
 	cleanup_echo_devs
 	CLEANUP_DM_DEV=true stopall $*
+
+	[[ $KPTR_ON_MOUNT ]] && kptr_restore
 
 	unload_modules
 	cleanup_sk
@@ -5488,6 +5520,7 @@ writeconf_all () {
 mountmgs() {
 	if ! combined_mgs_mds ; then
 		start mgs $(mgsdevname) $MGS_MOUNT_OPTS
+		do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
 	fi
 }
 
@@ -5513,6 +5546,9 @@ mountmds() {
 			switch_identity $num $IDENTITY_UPCALL
 		fi
 	done
+	if combined_mgs_mds ; then
+		do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
+	fi
 }
 
 unmountoss() {
@@ -5635,6 +5671,8 @@ setupall() {
 
 	mountcli
 	init_param_vars
+
+	[[ $KPTR_ON_MOUNT ]] && kptr_enable_and_save
 
 	# by remounting mdt before ost, initial connect from mdt to ost might
 	# timeout because ost is not ready yet. wait some time to its fully
@@ -7404,17 +7442,9 @@ run_one_logged() {
 	local SAVE_UMASK=$(umask)
 	local rc=0
 	local node
-	declare -A kptr_restrict
-	declare -A debug_raw
 	umask 0022
 
-	for node in $(all_nodes); do
-		kptr_restrict[$node]=$(do_node $node "sysctl --values kernel/kptr_restrict")
-		do_node $node "sysctl -wq kernel/kptr_restrict=1"
-		# Enable %p to be unhashed (if supported)
-		debug_raw[$node]=$(do_node $node "$LCTL get_param -n debug_raw_pointers" || echo 0)
-		do_node $node "$LCTL set_param debug_raw_pointers=Y || true"
-	done
+	[[ $KPTR_ON_MOUNT ]] || kptr_enable_and_save
 
 	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
 	echo
@@ -7487,14 +7517,7 @@ run_one_logged() {
 		((testiter++))
 	done
 
-	local param
-	for node in $(all_nodes); do
-		param="kernel/kptr_restrict=${kptr_restrict[$node]}"
-		do_node $node "sysctl -wq ${param} || true"
-		# Restore %p to initial state
-		param="debug_raw_pointers=${debug_raw[$node]}"
-		do_node $node "$LCTL set_param ${param} || true"
-	done
+	[[ $KPTR_ON_MOUNT ]] || kptr_restore
 
 	if [[ "$TEST_STATUS" != "SKIP" && -f $TF_SKIP ]]; then
 		rm -f $TF_SKIP
