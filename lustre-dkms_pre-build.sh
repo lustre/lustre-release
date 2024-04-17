@@ -10,7 +10,7 @@
 case $1 in
     lustre-client)
 	SERVER="--disable-server"
-	KERNEL_STUFF=""
+	KERNEL_STUFF="--with-linux=$4 --with-linux-obj=$4"
 	;;
 
     lustre-zfs|lustre-all)

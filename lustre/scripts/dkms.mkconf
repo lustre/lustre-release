@@ -38,6 +38,7 @@ fi
 cat >>${filename} <<EOF
 AUTOINSTALL="yes"
 REMAKE_INITRD="no"
+NO_WEAK_MODULES="yes"
 MAKE[0]="make"
 # just have to set STRIP[0], it will become the new default.
 STRIP[0]="\$(
