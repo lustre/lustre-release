@@ -2,7 +2,7 @@
 
 me="${0##*/}"
 
-# convert number of mask bits to x.x.x.x mask format
+# convert number of mask bits to x.x.x.x or x:x:x:x:x:x:x:x mask format
 cidr2mask() {
 	local i mask=""
 	local full_octets=$(($1/8))
@@ -18,7 +18,31 @@ cidr2mask() {
 		fi
 		test $i -lt 3 && mask+=.
 	done
+	echo $mask
+}
 
+cidr2maskipv6() {
+	local mask=""
+	local num_bits=$1
+
+	if [ $num_bits -le 128 ]; then
+		local full_blocks=$((num_bits / 16))
+		local remaining_bits=$((16 - (num_bits % 16)))
+
+		for ((i = 0; i < 8; i++)); do
+			if [ $i -lt $full_blocks ]; then
+				mask+="ffff"
+			elif [ $i -eq $full_blocks ]; then
+				mask+="$(printf "%x" $((0xFFFF >> $remaining_bits)))"
+			else
+				mask+="0"
+			fi
+			[ $i -lt 7 ] && mask+=":"
+		done
+	else
+		echo "Invalid prefix length for IPv6"
+		return 1
+	fi
 	echo $mask
 }
 
@@ -39,6 +63,85 @@ netcalc() {
 	echo "$nta.$ntb.$ntc.$ntd"
 }
 
+# expand IPv6 address to full length
+expand_ipv6() {
+	local ip=$1
+	local expanded_ip=""
+
+	# Split the IP address into segments
+	IFS=':' read -r -a segments <<< "$ip"
+
+	# Count the number of segments
+	local num_segments=${#segments[@]}
+
+	# Check if "::" is present in the IP address
+	local double_colon_index=$(echo "$ip" | grep -o "::" | wc -l)
+	local double_colon_present=false
+
+	# If "::" is present, count the number of segments before and after it
+	if [[ "$double_colon_index" -gt 0 ]]; then
+		double_colon_present=true
+		local before_double_colon=${segments[0]}
+		local after_double_colon=${segments[-1]}
+
+		# Count the number of segments before "::"
+		local num_before_double_colon=$(echo "$before_double_colon" | grep -o ":" | wc -l)
+		[[ -z "$before_double_colon" ]] && num_before_double_colon=0
+
+		# Count the number of segments after "::"
+		local num_after_double_colon=$(echo "$after_double_colon" | grep -o ":" | wc -l)
+		[[ -z "$after_double_colon" ]] && num_after_double_colon=0
+	fi
+
+	# Iterate over each segment
+	for segment in "${segments[@]}"; do
+		# If "::" is present, handle segments before and after it
+		if [[ "$double_colon_present" = true ]]; then
+			if [[ "$segment" = "" ]]; then
+				# Fill in the missing segments with "0000"
+				local missing_segments=$((8 - num_segments + 1))
+				for ((i=1; i<=$missing_segments; i++)); do
+					expanded_ip+="0000:"
+				done
+			else
+				# Expand the segment to 4 characters and append it to the expanded IP
+				expanded_ip+=$(printf "%04s" "$segment" | tr ' ' '0')
+				expanded_ip+=":"
+			fi
+		else
+			# Expand the segment to 4 characters and append it to the expanded IP
+			expanded_ip+=$(printf "%04s" "$segment" | tr ' ' '0')
+			expanded_ip+=":"
+		fi
+	done
+
+	# Remove the trailing colon
+	expanded_ip="${expanded_ip%:}"
+
+	echo "$expanded_ip"
+}
+
+netcalcipv6() {
+	local ip=$1
+	local mask=$2
+
+	# Expand IP address and subnet mask to full length
+	ip=$(expand_ipv6 $ip)
+
+	local ip_blocks=(${ip//:/ })
+	local mask_blocks=(${mask//:/ })
+	local result=""
+
+	for ((i = 0; i < 8; i++)); do
+		local dec_ip_block=$((16#${ip_blocks[i]}))
+		local dec_mask_block=$((16#${mask_blocks[i]}))
+		local network_block=$((dec_ip_block & dec_mask_block))
+		result+=$(printf "%04x" $network_block)
+		[ $i -lt 7 ] && result+=":"
+	done
+	echo $result
+}
+
 # Check if the user wants to skip setting the routes
 checkskipcmd=$(cat /sys/module/ksocklnd/parameters/skip_mr_route_setup 2>&-)
 if [ "$checkskipcmd" == "1" ]; then
@@ -51,22 +154,38 @@ declare -a interfaces
 for i in $(echo $1 | sed "s/,/ /g")
 do
 	# verify that the interface exists
-	#echo "$i"
-	addr=$(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1)
-	linelen=$(echo -n $addr | wc -m)
-	if [[ $linelen -eq 0 ]]; then
-		# there's a problem with this interface, skip it
-		#echo 'bad!'
-		continue
-	fi
-	# check if route is already set up for this interface
-	intfroute=$(/sbin/ip route show table $i 2>&-)
-	if [[ ! -z $intfroute ]]; then
-		# route exists so skip this interface
-		logcmd=(logger "${me}: skip setting up route for ${i}: don\'t overwrite existing route")
+	ipv4_addr=$(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1)
+	ipv6_addr=$(/sbin/ip -o -6 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1)
+
+	if [ -z "$ipv4_addr" ] && [ -z "$ipv6_addr" ]; then
+		# No IPv4 or IPv6 address configured on this interface, skip it
+		logcmd=(logger "${me}: skip setting up route for ${i}: IP address not found")
 		eval "${logcmd[@]}"
 		continue
 	fi
+
+	# Check if route is already set up for this interface (IPv4 or IPv6)
+	if [ ! -z "$ipv4_addr" ]; then
+		intfroute_ipv4=$(/sbin/ip -o -4 route show table $i 2>&-)
+		if [ ! -z "$intfroute_ipv4" ]; then
+			echo $intfroute_ipv4
+			# IPv4 route exists, skip this interface
+			logcmd=(logger "${me}: skip setting up route for ${i}: IPv4 route exists")
+			eval "${logcmd[@]}"
+			continue
+		fi
+	fi
+
+	if [ ! -z "$ipv6_addr" ]; then
+		intfroute_ipv6=$(/sbin/ip -o -6 route show table $i 2>&-)
+		if [ ! -z "$intfroute_ipv6" ]; then
+			# IPv6 route exists, skip this interface
+			logcmd=(logger "${me}: skip setting up route for ${i}: IPv6 route exists")
+			eval "${logcmd[@]}"
+			continue
+		fi
+	fi
+
 	interfaces[$j]=$i
 	j=$((j+1))
 done
@@ -104,7 +223,7 @@ while read line; do
 		continue
 	fi
 	# split using space as separator
-        splitline=( $line )
+	splitline=( $line )
 	# check the table number and update the max
 	if [ $max_table_num -lt ${splitline[0]} ]; then
 		max_table_num=${splitline[0]}
@@ -118,7 +237,6 @@ while read line; do
 			fi
 		fi
 	done
-	#echo "Line No. $n : $line: $max_table_num"
 	n=$((n+1))
 done < $filename
 
@@ -135,46 +253,129 @@ done
 gwsline=$(/sbin/ip route | awk '/default/ { print $3 }')
 gateways=($gwsline)
 
-# select a gateway on the same subnet
+gwsline_ipv6=$(/sbin/ip -6 route | awk '/default/ { print $3 }')
+gateways_ipv6=($gwsline_ipv6)
+
+# Select a gateway on the same subnet for both IPv4 and IPv6
 selectgw() {
-	for gw in "${gateways[@]}"; do
-		if [[ "$(netcalc "${1}" "${2}")" == "$(netcalc "${gw}" "${2}")" ]]; then
-			echo $gw
-			return
-		fi
-	done
+	local ip=$1
+	local mask=$2
+
+	# Check if the IP address is IPv4 or IPv6
+	if [[ $ip =~ .*:.* ]]; then
+		# IPv6
+		ip=$(expand_ipv6 $ip)
+		mask=$(expand_ipv6 $mask)
+		local ip_blocks=(${ip//:/ })
+		local mask_blocks=(${mask//:/ })
+		local result=""
+
+		for ((i = 0; i < 8; i++)); do
+			local dec_ip_block=$((16#${ip_blocks[i]}))
+			local dec_mask_block=$((16#${mask_blocks[i]}))
+			local network_block=$((dec_ip_block & dec_mask_block))
+			result+=$(printf "%04x" $network_block)
+			[ $i -lt 7 ] && result+=":"
+		done
+
+		local network_ipv6=$result
+		for gw in "${gateways_ipv6[@]}"; do
+			gw_network=$(netcalcipv6 "$gw" "$mask")
+			if [[ "$network_ipv6" == "$gw_network" ]]; then
+				echo $gw
+				return
+			fi
+		done
+	else
+		# IPv4
+		local ip_parts=(${ip//./ })
+		local mask_parts=(${mask//./ })
+		local network_ipv4=""
+
+		for ((i = 0; i < 4; i++)); do
+			local network_part=$((ip_parts[i] & mask_parts[i]))
+			network_ipv4+="$network_part"
+			[ $i -lt 3 ] && network_ipv4+="."
+		done
+
+		for gw in "${gateways[@]}"; do
+			gw_network=$(netcalc "$gw" "$mask")
+			if [[ "$network_ipv4" == "$gw_network" ]]; then
+				echo $gw
+				return
+			fi
+		done
+	fi
 	echo "0.0.0.0"
 }
 
-# add the routing entries and rules
+# Add the routing entries and rules for IPv4 and/or IPv6
 for i in "${interfaces[@]}"
 do
-	# extract ipv4 address and netmask in cidr format
-	addr=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
-	cidrmask=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
-	# convert cidr mask to mask in dot format
-	dotmask=$(cidr2mask ${cidrmask[0]})
-	# find a gateway on the same subnet
-	gw=$(selectgw ${addr[0]} $dotmask)
-	# build and execute route commands
-	if [[ $gw == "0.0.0.0" ]]; then
-		# gateway not found, assume local destinations
-		net=$(netcalc ${addr[0]} $dotmask)
-		routecmd=(/sbin/ip route add ${net}/${cidrmask[0]} dev ${i} proto kernel scope link src ${addr[0]} table ${i})
-	else
-		routecmd=(/sbin/ip route add default via ${gw} dev ${i} table ${i})
+	# Extract IPv4 and IPv6 addresses and netmasks in CIDR format
+	addr_ipv4=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
+	cidrmask_ipv4=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
+	addr_ipv6=($(/sbin/ip -o -6 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
+	cidrmask_ipv6=($(/sbin/ip -o -6 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
+	# Configure routing and rules for IPv4 (if IPv4 address is configured)
+	if [ ! -z "${addr_ipv4}" ]; then
+		# Convert CIDR mask to mask in dot format for IPv4
+		dotmask_ipv4=$(cidr2mask ${cidrmask_ipv4[0]})
+		# Find a gateway on the same subnet for IPv4
+		gw_ipv4=$(selectgw "${addr_ipv4[0]}" "$dotmask_ipv4")
+		# Build and execute route commands for IPv4
+		if [[ $gw_ipv4 == "0.0.0.0" ]]; then
+			# Gateway not found, assume local destinations for IPv4
+			net_ipv4=$(netcalc "${addr_ipv4[0]}" "$dotmask_ipv4")
+			routecmd_ipv4=(/sbin/ip route add ${net_ipv4}/${cidrmask_ipv4[0]} dev ${i} proto kernel scope link src ${addr_ipv4[0]} table ${i})
+		else
+			routecmd_ipv4=(/sbin/ip route add default via ${gw_ipv4} dev ${i} table ${i})
+		fi
+		ruledelcmd_ipv4=(/sbin/ip rule del from ${addr_ipv4[0]} table ${i} '&>/dev/null')
+		ruleaddcmd_ipv4=(/sbin/ip rule add from ${addr_ipv4[0]} table ${i})
+
+		routeerr_ipv4=$(eval "${routecmd_ipv4[@]}" 2>&1 >/dev/null)
+		ruledelerr_ipv4=$(eval "${ruledelcmd_ipv4[@]}" 2>&1 >/dev/null)
+		ruleadderr_ipv4=$(eval "${ruleaddcmd_ipv4[@]}" 2>&1 >/dev/null)
+
+		logcmd1_ipv4=(logger "${me}: ${routecmd_ipv4[@]} ${routeerr_ipv4}")
+		logcmd2_ipv4=(logger "${me}: ${ruledelcmd_ipv4[@]} ${ruledelerr_ipv4}")
+		logcmd3_ipv4=(logger "${me}: ${ruleaddcmd_ipv4[@]} ${ruleadderr_ipv4}")
+
+		eval "${logcmd1_ipv4[@]}"
+		eval "${logcmd2_ipv4[@]}"
+		eval "${logcmd3_ipv4[@]}"
 	fi
-	ruledelcmd=(/sbin/ip rule del from ${addr[0]} table ${i} '&>/dev/null')
-	ruleaddcmd=(/sbin/ip rule add from ${addr[0]} table ${i})
-	routeerr=$(eval ${routecmd[@]} 2>&1 >/dev/null)
-	ruledelerr=$(eval ${ruledelcmd[@]} 2>&1 >/dev/null)
-	ruleaddcmd=$(eval ${ruleaddcmd[@]} 2>&1 >/dev/null)
-	logcmd1=(logger "${me}: ${routecmd[@]} ${routeerr}")
-	logcmd2=(logger "${me}: ${ruledelcmd[@]} ${ruledelerr}")
-	logcmd3=(logger "${me}: ${ruleaddcmd[@]} ${ruleaddcmd}")
-	eval "${logcmd1[@]}"
-	eval "${logcmd2[@]}"
-	eval "${logcmd3[@]}"
+
+	# Configure routing and rules for IPv6 (if IPv6 address is configured)
+	if [ ! -z "${addr_ipv6}" ]; then
+		# Convert CIDR mask to mask in dot format for IPv6
+		dotmask_ipv6=$(cidr2maskipv6 ${cidrmask_ipv6[0]})
+		# Find a gateway on the same subnet for IPv6
+		gw_ipv6=$(selectgw "${addr_ipv6[0]}" "$dotmask_ipv6")
+		# Build and execute route commands for IPv6
+		if [[ $gw_ipv6 == "0.0.0.0" ]]; then
+			# Gateway not found, assume local destinations for IPv6
+			net_ipv6=$(netcalcipv6 "${addr_ipv6[0]}" "$dotmask_ipv6")
+			routecmd_ipv6=(/sbin/ip -6 route add ${addr_ipv6[0]}/${cidrmask_ipv6[0]} dev ${i} proto kernel scope link src ${addr_ipv6[0]} table ${i})
+		else
+			routecmd_ipv6=(/sbin/ip -6 route add default via ${gw_ipv6} dev ${i} table ${i})
+		fi
+		ruledelcmd_ipv6=(/sbin/ip -6 rule del from ${addr_ipv6[0]} table ${i} '&>/dev/null')
+		ruleaddcmd_ipv6=(/sbin/ip -6 rule add from ${addr_ipv6[0]} table ${i})
+
+		routeerr_ipv6=$(eval "${routecmd_ipv6[@]}" 2>&1 >/dev/null)
+		ruledelerr_ipv6=$(eval "${ruledelcmd_ipv6[@]}" 2>&1 >/dev/null)
+		ruleadderr_ipv6=$(eval "${ruleaddcmd_ipv6[@]}" 2>&1 >/dev/null)
+
+		logcmd1_ipv6=(logger -- "${me}: ${routecmd_ipv6[@]} ${routeerr_ipv6}")
+		logcmd2_ipv6=(logger -- "${me}: ${ruledelcmd_ipv6[@]} ${ruledelerr_ipv6}")
+		logcmd3_ipv6=(logger -- "${me}: ${ruleaddcmd_ipv6[@]} ${ruleadderr_ipv6}")
+
+		eval "${logcmd1_ipv6[@]}"
+		eval "${logcmd2_ipv6[@]}"
+		eval "${logcmd3_ipv6[@]}"
+	fi
 done
 
 # flush arp tables

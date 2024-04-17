@@ -303,7 +303,6 @@ if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 		always_except LU-14288 101
 		always_except LU-14288 103
 		always_except LU-17458 220
-		always_except LU-17455 250
 		always_except LU-17457 208
 		always_except LU-17457 255
 		always_except LU-17460 214
