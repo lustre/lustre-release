@@ -2436,10 +2436,10 @@ out:
 	spin_unlock(&lli->lli_sa_lock);
 
 	if (sai)
-		ll_sai_free(sai);
+		ll_sai_put(sai);
 
 	if (ctx)
-		ll_sax_free(ctx);
+		ll_sax_put(dir, ctx);
 
 	if (rc)
 		atomic_dec(&sbi->ll_sa_running);
@@ -2659,10 +2659,10 @@ out:
 	}
 
 	if (sai)
-		ll_sai_free(sai);
+		ll_sai_put(sai);
 
 	if (ctx)
-		ll_sax_free(ctx);
+		ll_sax_put(dir, ctx);
 
 	atomic_dec(&sbi->ll_sa_running);
 	RETURN(rc);
