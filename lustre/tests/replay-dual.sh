@@ -47,6 +47,11 @@ CLIENT1=${CLIENT1:-$HOSTNAME}
 # Exception is the test which need two separate nodes
 CLIENT2=${CLIENT2:-$CLIENT1}
 
+# new sequence needed for MDS < v2_15_61-226-gf00d2467fc
+if (( $MDS1_VERSION < $(version_code 2.15.61.226) )); then
+	force_new_seq_all
+fi
+
 LU482_FAILED=$(mktemp -u $TMP/$TESTSUITE.lu482.XXXXXX)
 test_0a() {
 	echo "Check file is LU482_FAILED=$LU482_FAILED"

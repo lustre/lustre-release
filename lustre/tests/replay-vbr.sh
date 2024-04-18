@@ -71,6 +71,11 @@ chk_get_version() {
 cos_param_file=$TMP/rvbr-cos-params
 save_lustre_params $(get_facets MDS) "mdt.*.commit_on_sharing" > $cos_param_file
 
+# new sequence needed for MDS < v2_15_61-226-gf00d2467fc
+if (( $MDS1_VERSION < $(version_code 2.15.61.226) )); then
+	force_new_seq_all
+fi
+
 test_0a() {
 	local ver=$(get_version $CLIENT1 $DIR/$tdir/1a)
 

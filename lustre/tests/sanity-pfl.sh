@@ -40,6 +40,11 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
 
+# new sequence needed for MDS < v2_15_61-226-gf00d2467fc
+if (( $MDS1_VERSION < $(version_code 2.15.61.226) )); then
+	force_new_seq_all
+fi
+
 test_0a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
