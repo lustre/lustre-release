@@ -1515,16 +1515,12 @@ out_free_cfg:
 
 static void ll_bdi_device_unregister(struct backing_dev_info *bdi)
 {
+#if !defined(HAVE_BDI_DEBUG_STATS) && defined(SB_I_CGROUPWB) && \
+    !defined(SB_I_PERSB_BDI)
 	if (bdi->dev == NULL)
 		return;
 
-#if defined(SB_I_CGROUPWB) && !defined(SB_I_PERSB_BDI)
-#ifdef HAVE_BDI_DEBUG_STATS
-	debugfs_remove(bdi->debug_stats);
-	debugfs_remove(bdi->debug_dir);
-#else
 	debugfs_remove_recursive(bdi->debug_dir);
-#endif
 	device_unregister(bdi->dev);
 	bdi->dev = NULL;
 #endif
