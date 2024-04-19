@@ -326,6 +326,7 @@ if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 	if $FORCE_LARGE_NID; then
 		always_except LU-14288 101
 		always_except LU-14288 103
+		always_except LU-17457 199
 		always_except LU-17457 208
 		always_except LU-9680 213
 		always_except LU-17458 220
@@ -1823,6 +1824,27 @@ test_111() {
 	cleanup_router_test
 }
 run_test 111 "Test many routes"
+
+test_199() {
+	[[ ${NETTYPE} == tcp* || ${NETTYPE} == o2ib* ]] ||
+		skip "Need tcp or o2ib NETTYPE"
+
+	reinit_dlc || return $?
+
+	echo "Add interface ${INTERFACES[0]}"
+	do_lnetctl net add --net ${NETTYPE} --if ${INTERFACES[0]} ||
+		error "Failed to add net ${NETTYPE} with ${INTERFACES[0]}"
+
+	local ipaddress=$(ip --oneline addr show dev ${INTERFACES[0]} |
+			  awk '/inet /{print $4}' |
+			  sed 's:/.*::')
+
+	echo "Add IP address ${ipaddress} for interface ${INTERFACES[0]}"
+	do_lnetctl net add --ip2net "${NETTYPE} ${ipaddress}" || return 0
+
+	error "Failed to add net ${NETTYPE} with ${INTERFACES[0]}"
+}
+run_test 199 "load lnet w/o module option, configure interface twice"
 
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||

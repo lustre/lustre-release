@@ -2537,6 +2537,14 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 		goto failed0;
 	}
 
+	lnet_net_lock(0);
+	if (lnet_nid_to_ni_locked(&ni->ni_nid, 0)) {
+		lnet_ni_addref_locked(ni, 0);
+		lnet_net_unlock(0);
+		return -EEXIST;
+	}
+	lnet_net_unlock(0);
+
 	/* We keep a reference on the loopback net through the loopback NI */
 	if (net->net_lnd->lnd_type == LOLND) {
 		lnet_ni_addref(ni);
@@ -2687,7 +2695,9 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 
 		/* make sure that the the NI we're about to start
 		 * up is actually unique. if it's not fail. */
-		if (!lnet_ni_unique_net(&net_l->net_ni_list,
+
+		if (ni->ni_interface &&
+		    !lnet_ni_unique_net(&net_l->net_ni_list,
 					ni->ni_interface)) {
 			rc = -EEXIST;
 			goto failed1;
@@ -2698,6 +2708,9 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		ni->ni_net = net_l;
 
 		rc = lnet_startup_lndni(ni, tun);
+
+		if (rc == -EEXIST)
+			list_add_tail(&ni->ni_netlist, &local_ni_list);
 
 		if (rc != 0)
 			goto failed1;
