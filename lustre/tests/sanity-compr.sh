@@ -36,21 +36,16 @@ $LFS setstripe $COMPR_EXTRA_LAYOUT $MOUNT
 test_sanity()
 {
 	always_except LU-16928 56wb
-	local rc=0
 
 	SANITY_EXCEPT=$ALWAYS_EXCEPT bash sanity.sh
-	rc=$?
-	return $rc
+	return 0
 }
 run_test sanity "Run sanity with PFL layout"
 
 test_sanityn()
 {
-	local rc=0
-
 	bash sanityn.sh
-	rc=$?
-	return $rc
+	return 0
 }
 run_test sanityn "Run sanityn with PFL layout"
 
