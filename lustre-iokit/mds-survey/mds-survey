@@ -119,6 +119,9 @@ get_stats () {
 		n = -1;							\
 		exit;							\
 	}								\
+	/PID [0-9]+ had rc=0/ {						\
+		next;							\
+	}								\
 	/^Total: total [0-9]+ threads [0-9]+ sec [0-9\.]+ [0-9]+\.[0-9]+\/second$/ { \
 		ave = strtonum($8);					\
 		n++;							\
