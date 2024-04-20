@@ -2251,6 +2251,8 @@ void ptlrpc_watchdog_delete(struct delayed_work *work);
 int ptlrpc_connect_import(struct obd_import *imp);
 int ptlrpc_connect_import_locked(struct obd_import *imp);
 int ptlrpc_init_import(struct obd_import *imp);
+int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
+				   struct completion *a, int *r);
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose);
 int ptlrpc_disconnect_and_idle_import(struct obd_import *imp);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);

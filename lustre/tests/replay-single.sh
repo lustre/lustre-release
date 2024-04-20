@@ -5309,6 +5309,35 @@ test_200() {
 }
 run_test 200 "Dropping one OBD_PING should not cause disconnect"
 
+test_201() {
+	(( MDS1_VERSION >= $(version_code 2.15.63) )) ||
+		skip "MDS < 2.15.63 doesn't support parallel disconnect"
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	# delay DISCONNECT for 8 seconds, on all OSTs and MDTs
+#define OBD_FAIL_OST_DISCONNECT_DELAY	 0x245
+	do_nodes $(comma_list $(mdts_nodes)) "$LCTL set_param \
+					      fail_loc=0x245 fail_val=8"
+	do_nodes $(comma_list $(osts_nodes)) "$LCTL set_param \
+					      fail_loc=0x245 fail_val=8"
+
+	local start_time=$SECONDS
+
+	stop mds2
+
+	local duration=$((SECONDS - start_time))
+
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS ||
+			error "mount mds2 failed"
+	echo "Umount took $duration seconds"
+
+	#Valid timeout is 8 for MDTs + 8 for OSTs + 4 some for other umount
+	(( duration < 20 )) || error "Cascading timeouts on disconnect"
+}
+run_test 201 "MDT umount cascading disconnects timeouts"
+
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

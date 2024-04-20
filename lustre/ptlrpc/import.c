@@ -1737,21 +1737,145 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 	RETURN(req);
 }
 
-int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
+struct disconnect_async_arg {
+	struct completion	*daa_completion;
+	int			*daa_result;
+	int			daa_noclose;
+};
+
+/*
+ * Unlock import.
+ */
+static void ptlrpc_disconnect_import_end(struct obd_import *imp, int noclose)
+{
+	assert_spin_locked(&imp->imp_lock);
+
+	if (noclose)
+		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
+	else
+		import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
+	memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
+	spin_unlock(&imp->imp_lock);
+
+	obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
+	if (!noclose)
+		obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
+}
+
+static int ptlrpc_disconnect_interpet(const struct lu_env *env,
+				      struct ptlrpc_request *req, void *args,
+				      int rc)
+{
+	struct obd_import *imp = req->rq_import;
+	struct disconnect_async_arg *daa = args;
+
+	spin_lock(&imp->imp_lock);
+	ptlrpc_disconnect_import_end(imp, daa->daa_noclose);
+
+	if (rc == -ETIMEDOUT || rc == -ENOTCONN || rc == -ESHUTDOWN)
+		rc = 0;
+
+	if (daa->daa_result)
+		*daa->daa_result = rc;
+
+	complete(daa->daa_completion);
+
+	return 0;
+}
+
+/**
+ * Sends disconnect request and set import state DISCONNECT/CLOSED.
+ * Produces events IMP_EVENT_DISCON[IMP_EVENT_INACTIVE].
+ * Signals when it is complete.
+ *
+ * \param[in] imp		import
+ * \param[in] noclose		final close import
+ * \param[in] completion	completion to signal disconnect is finished
+ * \param[out] out_res		result of disconnection
+ *
+ * \retval 0			on seccess
+ * \retval negative		negated errno on error
+ **/
+int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
+				   struct completion *cmpl, int *out_res)
 {
 	struct ptlrpc_request *req;
 	int rc = 0;
-
+	struct disconnect_async_arg *daa;
 	ENTRY;
 
-	if (imp->imp_obd->obd_force)
-		GOTO(set_state, rc);
+	spin_lock(&imp->imp_lock);
+	/* probably the import has been disconnected already being idle */
+	if (imp->imp_state != LUSTRE_IMP_FULL || imp->imp_obd->obd_force) {
+
+		ptlrpc_disconnect_import_end(imp, noclose);
+
+		if (out_res)
+			*out_res = 0;
+		complete(cmpl);
+
+		RETURN(0);
+	}
+	spin_unlock(&imp->imp_lock);
+
+	req = ptlrpc_disconnect_prep_req(imp);
+
+	spin_lock(&imp->imp_lock);
+
+	if (IS_ERR(req) || imp->imp_state != LUSTRE_IMP_FULL ||
+	    imp->imp_obd->obd_force) {
+
+		if (!IS_ERR(req))
+			ptlrpc_req_put_with_imp_lock(req);
+
+		ptlrpc_disconnect_import_end(imp, noclose);
+		rc = IS_ERR(req) ? PTR_ERR(req) : 0;
+
+		if (out_res)
+			*out_res = rc;
+		complete(cmpl);
+
+		RETURN(rc);
+	}
+	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
+	spin_unlock(&imp->imp_lock);
+
+	req->rq_interpret_reply = ptlrpc_disconnect_interpet;
+	daa = ptlrpc_req_async_args(daa, req);
+	daa->daa_completion = cmpl;
+	daa->daa_result = out_res;
+	daa->daa_noclose = noclose;
+
+	ptlrpcd_add_req(req);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(ptlrpc_disconnect_import_async);
+
+/**
+ * Sends disconnect request and set import state DISCONNECT/CLOSED.
+ * Produces events IMP_EVENT_DISCON[IMP_EVENT_INACTIVE].
+ *
+ * \param[in] imp		import
+ * \param[in] noclose		final close import
+ *
+ * \retval 0			on seccess
+ * \retval negative		negated errno on error
+ **/
+int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
+{
+	DECLARE_COMPLETION_ONSTACK(cmpl);
+	int rc;
+	ENTRY;
 
 	/* probably the import has been disconnected already being idle */
 	spin_lock(&imp->imp_lock);
-	if (imp->imp_state == LUSTRE_IMP_IDLE)
-		GOTO(out, rc);
+	if (imp->imp_state == LUSTRE_IMP_IDLE || imp->imp_obd->obd_force) {
+		ptlrpc_disconnect_import_end(imp, noclose);
+		RETURN(0);
+	}
 	spin_unlock(&imp->imp_lock);
+
 
 	if (ptlrpc_import_in_recovery(imp)) {
 		long timeout_jiffies;
@@ -1781,37 +1905,10 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 			rc = -EINTR;
 	}
 
-	req = ptlrpc_disconnect_prep_req(imp);
-	if (IS_ERR(req))
-		GOTO(set_state, rc = PTR_ERR(req));
+	rc = ptlrpc_disconnect_import_async(imp, noclose, &cmpl, &rc);
 
-	spin_lock(&imp->imp_lock);
-	if (imp->imp_state != LUSTRE_IMP_FULL) {
-		ptlrpc_req_put_with_imp_lock(req);
-		GOTO(out, rc);
-	}
-	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
-	spin_unlock(&imp->imp_lock);
+	wait_for_completion(&cmpl);
 
-	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_put(req);
-
-set_state:
-	spin_lock(&imp->imp_lock);
-out:
-	if (noclose)
-		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
-	else
-		import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
-	memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
-	spin_unlock(&imp->imp_lock);
-
-	obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
-	if (!noclose)
-		obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
-
-	if (rc == -ETIMEDOUT || rc == -ENOTCONN || rc == -ESHUTDOWN)
-		rc = 0;
 	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_disconnect_import);

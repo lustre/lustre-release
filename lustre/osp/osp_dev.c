@@ -467,13 +467,17 @@ static int osp_disconnect(struct osp_device *d)
 	struct obd_device *obd = d->opd_obd;
 	struct obd_import *imp;
 	int rc = 0;
+	ENTRY;
 
 	imp = obd->u.cli.cl_import;
 
+	CDEBUG(D_INFO, "%s: disconnecting import %px\n", obd->obd_name,
+	       imp);
 	/* Mark import deactivated now, so we don't try to reconnect if any
 	 * of the cleanup RPCs fails (e.g. ldlm cancel, etc).  We don't
 	 * fully deactivate the import, or that would drop all requests. */
 	LASSERT(imp != NULL);
+
 	spin_lock(&imp->imp_lock);
 	imp->imp_deactive = 1;
 	spin_unlock(&imp->imp_lock);
@@ -487,15 +491,13 @@ static int osp_disconnect(struct osp_device *d)
 
 	/* Send disconnect on healthy import, do force disconnect otherwise */
 	spin_lock(&imp->imp_lock);
-	imp->imp_obd->obd_force = imp->imp_state != LUSTRE_IMP_FULL;
+	imp->imp_obd->obd_force |= imp->imp_state != LUSTRE_IMP_FULL;
 	spin_unlock(&imp->imp_lock);
 
-	rc = ptlrpc_disconnect_import(imp, 0);
-	if (rc != 0)
-		CERROR("%s: can't disconnect: rc = %d\n", obd->obd_name, rc);
-
-	ptlrpc_invalidate_import(imp);
-
+	init_completion(&d->opd_disconnect_cmplt);
+	d->opd_disconnecting = 1;
+	rc = ptlrpc_disconnect_import_async(imp, 0, &d->opd_disconnect_cmplt,
+					    &d->opd_disconnect_res);
 	RETURN(rc);
 }
 
@@ -615,13 +617,26 @@ static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
  */
 static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 {
-	int			 rc = 0;
+	struct obd_device *obd = d->opd_obd;
+	struct obd_import *imp = obd->u.cli.cl_import;
+	int  rc = 0;
 	ENTRY;
 
 	LASSERT(env);
 
-	rc = osp_disconnect(d);
+	/* Shutdown could be called during fail initialization, LCFG_CLEANUP
+	 * without LCFG_PRE_CLEANUP phase, like
+	 * lod_add_device()->obd_connect() failure.
+	 */
+	if (d->opd_disconnecting) {
+		wait_for_completion(&d->opd_disconnect_cmplt);
+		rc = d->opd_disconnect_res;
 
+		if (rc != 0)
+			CERROR("%s: can't disconnect: rc = %d\n",
+			       obd->obd_name, rc);
+	}
+	ptlrpc_invalidate_import(imp);
 	osp_statfs_fini(d);
 
 	if (!d->opd_connect_mdt) {
