@@ -423,3 +423,180 @@ lnet_sock_connect(int interface, int local_port,
 	sock_release(sock);
 	return ERR_PTR(rc);
 }
+
+static int lnet_inet4_enumerate(struct net_device *dev, int flags,
+				int *nalloc, int nip, int cpt,
+				struct lnet_inetdev **dev_list)
+{
+	struct lnet_inetdev *ifaces = *dev_list;
+	struct in_device *in_dev;
+	DECLARE_CONST_IN_IFADDR(ifa);
+
+	in_dev = __in_dev_get_rtnl(dev);
+	if (!in_dev) {
+		CWARN("lnet: Interface %s has no IPv4 status.\n",
+		      dev->name);
+		return nip;
+	}
+
+	in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+		if (nip >= *nalloc) {
+			struct lnet_inetdev *tmp;
+
+			*nalloc += LNET_INTERFACES_NUM;
+			tmp = krealloc(ifaces, *nalloc * sizeof(*tmp),
+				       GFP_KERNEL);
+			if (!tmp) {
+				kfree(ifaces);
+				ifaces = NULL;
+				return -ENOMEM;
+			}
+			ifaces = tmp;
+		}
+
+		ifaces[nip].li_cpt = cpt;
+		ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
+		ifaces[nip].li_size = sizeof(ifa->ifa_local);
+		ifaces[nip].li_index = dev->ifindex;
+		ifaces[nip].li_ipaddr = ifa->ifa_local;
+		ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
+		strscpy(ifaces[nip].li_name, ifa->ifa_label,
+		       sizeof(ifaces[nip].li_name));
+		nip++;
+	}
+	endfor_ifa(in_dev);
+
+	*dev_list = ifaces;
+
+	return nip;
+}
+
+static int lnet_inet6_enumerate(struct net_device *dev, int flags,
+				int *nalloc, int nip, int cpt,
+				struct lnet_inetdev **dev_list)
+{
+#if IS_ENABLED(CONFIG_IPV6)
+	struct lnet_inetdev *ifaces = *dev_list;
+	const struct inet6_ifaddr *ifa6;
+	struct inet6_dev *in6_dev;
+
+	in6_dev = __in6_dev_get(dev);
+	if (!in6_dev) {
+		CWARN("lnet: Interface %s has no IPv6 status.\n",
+		      dev->name);
+		return nip;
+	}
+
+	list_for_each_entry_rcu(ifa6, &in6_dev->addr_list, if_list) {
+		if (ifa6->flags & IFA_F_TEMPORARY)
+			continue;
+
+		if (ipv6_addr_type(&ifa6->addr) & IPV6_ADDR_LINKLOCAL)
+			continue;
+
+		if (nip >= *nalloc) {
+			struct lnet_inetdev *tmp;
+
+			*nalloc += LNET_INTERFACES_NUM;
+			tmp = krealloc(ifaces, *nalloc * sizeof(*tmp),
+				       GFP_KERNEL);
+			if (!tmp) {
+				kfree(ifaces);
+				ifaces = NULL;
+				return -ENOMEM;
+			}
+			ifaces = tmp;
+		}
+
+		ifaces[nip].li_cpt = cpt;
+		ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
+		ifaces[nip].li_size = sizeof(struct in6_addr);
+		ifaces[nip].li_index = dev->ifindex;
+		memcpy(ifaces[nip].li_ipv6addr,
+		       &ifa6->addr, sizeof(struct in6_addr));
+		strscpy(ifaces[nip].li_name, dev->name,
+			sizeof(ifaces[nip].li_name));
+		nip++;
+		/* As different IPv6 addresses don't have unique
+		 * labels, it is safest just to use the first
+		 * and ignore the rest.
+		 */
+		break;
+	}
+
+	*dev_list = ifaces;
+#endif /* IS_ENABLED(CONFIG_IPV6) */
+	return nip;
+}
+
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
+			bool v6_first)
+{
+	struct lnet_inetdev *ifaces = NULL;
+	struct net_device *dev;
+	int nalloc = 0;
+	int nip = 0;
+
+	rtnl_lock();
+	for_each_netdev(ns, dev) {
+		int flags = dev_get_flags(dev);
+		int node_id, cpt;
+		int count;
+
+		if (flags & IFF_LOOPBACK) /* skip the loopback IF */
+			continue;
+
+		if (!(flags & IFF_UP)) {
+			CWARN("lnet: Ignoring interface %s: it's down\n",
+			      dev->name);
+			continue;
+		}
+
+		node_id = dev_to_node(&dev->dev);
+		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+
+		if (v6_first) {
+			count = lnet_inet6_enumerate(dev, flags, &nalloc, nip,
+						     cpt, &ifaces);
+			if (count < 0)
+				CWARN("lnet: No IPv6 addresses for interface %s.\n",
+				      dev->name);
+			else
+				nip = count;
+
+			count = lnet_inet4_enumerate(dev, flags, &nalloc, nip,
+						     cpt, &ifaces);
+			if (count < 0)
+				CWARN("lnet: No IPv4 addresses for interface %s.\n",
+				      dev->name);
+			else
+				nip = count;
+		} else {
+			count = lnet_inet4_enumerate(dev, flags, &nalloc, nip,
+						     cpt, &ifaces);
+			if (count < 0)
+				CWARN("lnet: No IPv4 addresses for interface %s.\n",
+				      dev->name);
+			else
+				nip = count;
+
+			count = lnet_inet6_enumerate(dev, flags, &nalloc, nip,
+						     cpt, &ifaces);
+			if (count < 0)
+				CWARN("lnet: No IPv6 addresses for interface %s.\n",
+				      dev->name);
+			else
+				nip = count;
+		}
+	}
+	rtnl_unlock();
+
+	if (nip == 0) {
+		CERROR("lnet: Can't find any usable interfaces, rc = -ENOENT\n");
+		nip = -ENOENT;
+	}
+
+	*dev_list = ifaces;
+	return nip;
+}
+EXPORT_SYMBOL(lnet_inet_enumerate);

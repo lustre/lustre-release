@@ -87,7 +87,7 @@ static int jt_calc_cpt_of_nid(int argc, char **argv);
 static int jt_show_peer_debug_info(int argc, char **argv);
 
 command_t cmd_list[] = {
-	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
+	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all|--large]"},
 	{"route", jt_route, 0, "route {add | del | show | help}"},
 	{"net", jt_net, 0, "net {add | del | show | set | help}"},
 	{"routing", jt_routing, 0, "routing {show | help}"},
@@ -117,7 +117,8 @@ command_t cmd_list[] = {
 
 command_t lnet_cmds[] = {
 	{"configure", jt_config_lnet, 0, "configure lnet\n"
-	 "\t--all: load NI configuration from module parameters\n"},
+	 "\t--all: load NI configuration from module parameters\n"
+	 "\t--large: start LNet with large NIDs\n"},
 	{"unconfigure", jt_unconfig_lnet, 0, "unconfigure lnet\n"},
 	{ 0, 0, 0, NULL }
 };
@@ -1232,10 +1233,10 @@ static int jt_config_lnet(int argc, char **argv)
 	int flags = NLM_F_CREATE;
 	const char *msg = NULL;
 	int rc, opt;
-
-	const char *const short_options = "a";
+	const char *const short_options = "al";
 	static const struct option long_options[] = {
-		{ .name = "all",  .has_arg = no_argument, .val = 'a' },
+		{ .name = "all",	.has_arg = no_argument, .val = 'a' },
+		{ .name = "large",	.has_arg = no_argument, .val = 'l' },
 		{ .name = NULL }
 	};
 
@@ -1248,6 +1249,9 @@ static int jt_config_lnet(int argc, char **argv)
 		switch (opt) {
 		case 'a':
 			load_mod_params = true;
+			break;
+		case 'l':
+			flags |= NLM_F_REPLACE;
 			break;
 		default:
 			return 0;

@@ -307,8 +307,8 @@ int jt_ptl_network(int argc, char **argv)
 	const char *msg = NULL;
 	int rc;
 
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s <net>|up|down\n", argv[0]);
+	if (argc > 3) {
+		fprintf(stderr, "usage: %s <net>|up|down [-l]\n", argv[0]);
 		return -1;
 	}
 
@@ -325,7 +325,7 @@ int jt_ptl_network(int argc, char **argv)
 				break;
 			default:
 				printf("LNET unconfigure error %u: %s\n",
-				       -rc, msg);
+				       -rc, msg ? msg : strerror(-rc));
 				break;
 			}
 			return rc;
@@ -350,7 +350,12 @@ int jt_ptl_network(int argc, char **argv)
 				errno, strerror(errno));
 		return -1;
 	} else if (!strcmp(argv[1], "configure") || !strcmp(argv[1], "up")) {
-		rc = yaml_lnet_configure(NLM_F_CREATE, &msg);
+		int flags = NLM_F_CREATE;
+
+		if (argc == 3 && argv[2] && !strcmp(argv[2], "-l"))
+			flags |= NLM_F_REPLACE;
+
+		rc = yaml_lnet_configure(flags, &msg);
 		if (rc != -EOPNOTSUPP) {
 			switch (rc) {
 			case 0:

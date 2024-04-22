@@ -4780,6 +4780,9 @@ static int lnet_net_conf_cmd(struct sk_buff *skb, struct genl_info *info)
 		if (info->nlhdr->nlmsg_flags & NLM_F_EXCL)
 			the_lnet.ln_nis_from_mod_params = true;
 
+		if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE)
+			the_lnet.ln_nis_use_large_nids = true;
+
 		rc = lnet_configure(NULL);
 		switch (rc) {
 		case -ENETDOWN:

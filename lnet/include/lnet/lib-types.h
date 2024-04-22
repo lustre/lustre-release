@@ -1929,6 +1929,9 @@ struct lnet {
 	 */
 	bool				ln_nis_from_mod_params;
 
+	/* Switch to test large NIDs */
+	bool				ln_nis_use_large_nids;
+
 	/*
 	 * completion for the monitor thread. The monitor thread takes care of
 	 * checking routes, timedout messages and resending messages.
