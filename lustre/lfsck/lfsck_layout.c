@@ -2789,7 +2789,7 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 
 	rc = lfsck_layout_master_conditional_destroy(env, com, cfid2, ost_idx2);
 
-	/* If the conflict OST-obejct is not created for fixing dangling
+	/* If the conflict OST-object is not created for fixing dangling
 	 * referenced MDT-object in former LFSCK check/repair, or it has
 	 * been modified by others, then we cannot destroy it. Re-create
 	 * a new MDT-object for the orphan OST-object.

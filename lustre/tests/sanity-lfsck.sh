@@ -2580,12 +2580,12 @@ test_18d() {
 	cancel_lru_locks osc
 
 	echo "Inject failure to make $DIR/$tdir/a1/f1 and $DIR/$tdir/a1/f2"
-	echo "to reference the same OST-object (which is f1's OST-obejct)."
+	echo "to reference the same OST-object (which is f1's OST-object)."
 	echo "Then drop $DIR/$tdir/a1/f1 and its OST-object, so f2 becomes"
 	echo "dangling reference case, but f2's old OST-object is there."
 
 	echo "The failure also makes $DIR/$tdir/a1/f3 and $DIR/$tdir/a1/f4"
-	echo "to reference the same OST-object (which is f3's OST-obejct)."
+	echo "to reference the same OST-object (which is f3's OST-object)."
 	echo "Then drop $DIR/$tdir/a1/f3 and its OST-object, so f4 becomes"
 	echo "dangling reference case, but f4's old OST-object is there."
 	echo
@@ -2695,12 +2695,12 @@ test_18e() {
 	cancel_lru_locks osc
 
 	echo "Inject failure to make $DIR/$tdir/a1/f1 and $DIR/$tdir/a1/f2"
-	echo "to reference the same OST-object (which is f1's OST-obejct)."
+	echo "to reference the same OST-object (which is f1's OST-object)."
 	echo "Then drop $DIR/$tdir/a1/f1 and its OST-object, so f2 becomes"
 	echo "dangling reference case, but f2's old OST-object is there."
 
 	echo "Also the failure makes $DIR/$tdir/a1/f3 and $DIR/$tdir/a1/f4"
-	echo "to reference the same OST-object (which is f3's OST-obejct)."
+	echo "to reference the same OST-object (which is f3's OST-object)."
 	echo "Then drop $DIR/$tdir/a1/f3 and its OST-object, so f4 becomes"
 	echo "dangling reference case, but f4's old OST-object is there."
 	echo

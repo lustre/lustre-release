@@ -1097,7 +1097,7 @@ repeat_find:
  * Allocate a specific striping layout on a user defined set of OSTs.
  *
  * Allocates new striping using the OST index range provided by the data from
- * the lmm_obejcts contained in the lov_user_md passed to this method. Full
+ * the lmm_objects contained in the lov_user_md passed to this method. Full
  * OSTs are not considered. The exact order of OSTs requested by the user
  * is respected as much as possible depending on OST status. The number of
  * stripes needed and stripe offset are taken from the object. If that number
@@ -2754,7 +2754,7 @@ static void lod_collect_avoidance(struct lod_object *lo,
 }
 
 /**
- * Create a striping for an obejct.
+ * Create a striping for an object.
  *
  * The function creates a new striping for the object. The function tries QoS
  * algorithm first unless free space is distributed evenly among OSTs, but

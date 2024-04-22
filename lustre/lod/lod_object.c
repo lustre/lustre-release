@@ -1955,7 +1955,7 @@ out:
  * Allocate a striping on a predefined set of MDTs.
  *
  * Allocates new striping using the MDT index range provided by the data from
- * the lum_obejcts contained in the lmv_user_md passed to this method if
+ * the lum_objects contained in the lmv_user_md passed to this method if
  * \a is_specific is true; or allocates new layout starting from MDT index in
  * lo->ldo_dir_stripe_offset. The exact order of MDTs is not important and
  * varies depending on MDT status. The number of stripes needed and stripe
