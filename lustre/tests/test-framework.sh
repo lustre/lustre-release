@@ -7418,10 +7418,20 @@ run_one_logged() {
 
 	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
 	echo
-	# if $ONLY is set, repeat subtest $ONLY_REPEAT times, otherwise once
-	local repeat=${ONLY:+$ONLY_REPEAT}
 
-	for ((testiter=0; testiter < ${repeat:-1}; testiter++)); do
+	# process ONLY options:
+	# - $ONLY_REPEAT will run the subtest $ONLY_REPEAT times
+	# - $ONLY_MINUTES will run the subtest for $ONLY_MINUTES
+	# - $ONLY_REPEAT and $ONLY_MINUTES can be set to run the subtest for
+	#   $ONLY_REPEAT times but not to exceed $ONLY_MINUTES
+	# - if $ONLY_REPEAT and ONLY_MINUTES are unset, subtest will run once
+	local repeat=${ONLY:+$ONLY_REPEAT}
+	if [[ -n "$ONLY" && "$ONLY_MINUTES" ]]; then
+		local repeat_end_sec=$((SECONDS + ONLY_MINUTES * 60))
+	fi
+
+	local testiter=1
+	while true; do
 		local before_sub=$SECONDS
 
 		log_sub_test_begin $TESTNAME
@@ -7429,7 +7439,8 @@ run_one_logged() {
 		if [[ -n "$append" ]]; then
 			[[ -n "$tdir" ]] && rm -rvf $DIR/$tdir*
 			[[ -n "$tfile" ]] && rm -vf $DIR/$tfile*
-			echo "subtest iteration $testiter/$repeat"
+			echo "subtest iteration $testiter/$repeat " \
+				"($(((SECONDS-before)/60))/$ONLY_MINUTES min)"
 		fi
 		# loop around subshell so stack_trap EXIT triggers each time
 		(run_one $testnum "$testmsg") 2>&1 | tee -i $append $test_log
@@ -7466,6 +7477,14 @@ run_one_logged() {
 			exit $STOP_NOW_RC
 
 		[[ $rc != 0 || "$TEST_STATUS" != "PASS" ]] && break
+
+		# no repeat options were set, break after the first iteration
+		[[ -z "$repeat" && -z "$repeat_end_sec" ]] && break
+		# break if any repeat options were set and have been met
+		[[ -n "$repeat" ]] && (( $testiter >= $repeat )) && break
+		[[ -n "$repeat_end_sec" ]] &&
+			(( $SECONDS >= $repeat_end_sec )) && break
+		((testiter++))
 	done
 
 	local param
