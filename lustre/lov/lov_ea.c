@@ -239,7 +239,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	lsme->lsme_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 
 	if (pool_name) {
-		size_t pool_name_len;
+		ssize_t pool_name_len;
 
 		pool_name_len = strscpy(lsme->lsme_pool_name, pool_name,
 					sizeof(lsme->lsme_pool_name));

@@ -754,7 +754,7 @@ static int llog_cancel_rec_cb(const struct lu_env *env,
 static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 {
 	struct llog_handle *llh = NULL;
-	char name[10];
+	char name[10] = "";
 	int rc, rc2;
 	struct llog_mini_rec lmr;
 	struct llog_ctxt *ctxt;

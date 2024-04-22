@@ -781,9 +781,10 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		objs = &lmm->lmm_objects[0];
 	} else {
 		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
-		size_t cplen = strscpy(v3->lmm_pool_name,
+		ssize_t cplen = strscpy(v3->lmm_pool_name,
 				       lod_comp->llc_pool ? : "\0",
 				       sizeof(v3->lmm_pool_name));
+
 		if (cplen < 0)
 			RETURN(cplen);
 		objs = &v3->lmm_objects[0];
