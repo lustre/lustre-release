@@ -1123,6 +1123,27 @@ AC_DEFUN([LN_HAVE_ORACLE_OFED_EXTENSIONS], [
 ]) # LN_HAVE_ORACLE_OFED_EXTENSIONS
 
 #
+# LN_SRC_HAVE_NETDEV_CMD_TO_NAME
+#
+# 4.16-rc6 commit ede2762d93ff16e0974f7446516b46b1022db213
+# created netdev_cmd_to_name() to map NETDEV events to char names
+#
+AC_DEFUN([LN_SRC_HAVE_NETDEV_CMD_TO_NAME], [
+	LB2_LINUX_TEST_SRC([netdev_cmd_to_name], [
+		#include <linux/netdevice.h>
+	],[
+		netdev_cmd_to_name(NETDEV_UP);
+	],[-Werror])
+])
+AC_DEFUN([LN_HAVE_NETDEV_CMD_TO_NAME], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'netdev_cmd_to_name' exist],
+	[netdev_cmd_to_name], [
+		AC_DEFINE(HAVE_NETDEV_CMD_TO_NAME, 1,
+			['netdev_cmd_to_name' is present])
+	])
+]) # LN_SRC_HAVE_NETDEV_CMD_TO_NAME
+
+#
 # LN_CONFIG_SOCK_GETNAME
 #
 # 4.17 commit 9b2c45d479d0fb8647c9e83359df69162b5fbe5f getname()
@@ -1200,6 +1221,8 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	# 4.14
 	LN_SRC_HAVE_HYPERVISOR_IS_TYPE
 	LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS
+	# 4.16
+	LN_SRC_HAVE_NETDEV_CMD_TO_NAME
 	# 4.17
 	LN_SRC_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8
@@ -1217,6 +1240,8 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	# 4.14
 	LN_HAVE_HYPERVISOR_IS_TYPE
 	LN_HAVE_ORACLE_OFED_EXTENSIONS
+	# 4.16
+	LN_HAVE_NETDEV_CMD_TO_NAME
 	# 4.17
 	LN_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8

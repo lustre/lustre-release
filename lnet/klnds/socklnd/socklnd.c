@@ -1980,14 +1980,12 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 	struct ksock_net *cnxt;
 	int ifindex;
 	unsigned char link_down;
-	struct in_device *in_dev;
 	bool found_ip = false;
 	struct ksock_interface *ksi = NULL;
-	struct sockaddr_in *sa;
-	__u32 ni_state_before;
+	struct sockaddr *sa = NULL;
+	u32 ni_state_before;
 	bool update_ping_buf = false;
 	int state;
-	DECLARE_CONST_IN_IFADDR(ifa);
 
 	link_down = !((operstate == IF_OPER_UP) || (operstate == IF_OPER_UNKNOWN));
 	ifindex = dev->ifindex;
@@ -1997,9 +1995,7 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 
 	list_for_each_entry_safe(net, cnxt, &ksocknal_data.ksnd_nets,
 				 ksnn_list) {
-
 		ksi = &net->ksnn_interface;
-		sa = (void *)&ksi->ksni_addr;
 		found_ip = false;
 
 		if (strcmp(ksi->ksni_name, dev->name))
@@ -2026,22 +2022,65 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 
 		ni = net->ksnn_ni;
 
-		in_dev = __in_dev_get_rtnl(dev);
-		if (!in_dev) {
-			CDEBUG(D_NET, "Interface %s has no IPv4 status.\n",
-			       dev->name);
-			ni_state_before = lnet_set_link_fatal_state(ni, 1);
-			goto ni_done;
-		}
-		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
-			if (sa->sin_addr.s_addr == ifa->ifa_local)
-				found_ip = true;
-		}
-		endfor_ifa(in_dev);
+		sa = (void *)&ksi->ksni_addr;
+		switch (sa->sa_family) {
+		case AF_INET: {
+			struct in_device *in_dev = __in_dev_get_rtnl(dev);
+			DECLARE_CONST_IN_IFADDR(ifa);
 
-		if (!found_ip) {
-			CDEBUG(D_NET, "Interface %s has no matching ip\n",
-			       dev->name);
+			if (in_dev) {
+				struct sockaddr_in *sa4;
+
+				sa4 = (struct sockaddr_in *)sa;
+				in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+					if (sa4->sin_addr.s_addr ==
+					    ifa->ifa_local)
+						found_ip = true;
+				}
+				endfor_ifa(in_dev);
+			} else {
+				sa = NULL;
+			}
+			break;
+		}
+#if IS_ENABLED(CONFIG_IPV6)
+		case AF_INET6:{
+			struct inet6_dev *in6_dev = __in6_dev_get(dev);
+
+			if (in6_dev) {
+				const struct inet6_ifaddr *ifa6;
+				struct sockaddr_in6 *sa6;
+
+				sa6 = (struct sockaddr_in6 *)sa;
+				list_for_each_entry_rcu(ifa6,
+							&in6_dev->addr_list,
+							if_list) {
+					if (!ipv6_addr_cmp(&ifa6->addr,
+							   &sa6->sin6_addr)) {
+						found_ip = true;
+					}
+				}
+			} else {
+				sa = NULL;
+			}
+			break;
+		}
+#endif
+		default:
+			sa = NULL;
+			break;
+		}
+
+		if (!sa || !found_ip) {
+			if (!sa) {
+				CDEBUG(D_NET,
+				       "Interface %s has no IP status.\n",
+				       dev->name);
+			} else {
+				CDEBUG(D_NET,
+				       "Interface %s has no matching IP\n",
+				       dev->name);
+			}
 			ni_state_before = lnet_set_link_fatal_state(ni, 1);
 			goto ni_done;
 		}
@@ -2068,16 +2107,15 @@ out:
 
 
 static int
-ksocknal_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
+ksocknal_handle_inetaddr_change(struct net_device *event_netdev, unsigned long event)
 {
 	struct lnet_ni *ni = NULL;
 	struct ksock_net *net;
 	struct ksock_net *cnxt;
-	struct net_device *event_netdev = ifa->ifa_dev->dev;
 	int ifindex;
 	struct ksock_interface *ksi = NULL;
-	struct sockaddr_in *sa;
-	__u32 ni_state_before;
+	struct sockaddr *sa;
+	u32 ni_state_before;
 	bool update_ping_buf = false;
 	bool link_down;
 
@@ -2088,7 +2126,6 @@ ksocknal_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 
 	list_for_each_entry_safe(net, cnxt, &ksocknal_data.ksnd_nets,
 				 ksnn_list) {
-
 		ksi = &net->ksnn_interface;
 		sa = (void *)&ksi->ksni_addr;
 
@@ -2096,17 +2133,18 @@ ksocknal_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 		    strcmp(ksi->ksni_name, event_netdev->name))
 			continue;
 
-		if (sa->sin_addr.s_addr == ifa->ifa_local) {
-			ni = net->ksnn_ni;
-			link_down = (event == NETDEV_DOWN);
-			ni_state_before = lnet_set_link_fatal_state(ni,
-								    link_down);
+		ni = net->ksnn_ni;
+		if (nid_is_nid4(&ni->ni_nid) ^ (sa->sa_family == AF_INET))
+			continue;
 
-			if (!update_ping_buf &&
-			    (ni->ni_state == LNET_NI_STATE_ACTIVE) &&
-			    ((event == NETDEV_DOWN) != ni_state_before))
-				update_ping_buf = true;
-		}
+		link_down = (event == NETDEV_DOWN);
+		ni_state_before = lnet_set_link_fatal_state(ni,
+							    link_down);
+
+		if (!update_ping_buf &&
+		    (ni->ni_state == LNET_NI_STATE_ACTIVE) &&
+		    ((event == NETDEV_DOWN) != ni_state_before))
+			update_ping_buf = true;
 	}
 
 	if (update_ping_buf)
@@ -2126,8 +2164,8 @@ static int ksocknal_device_event(struct notifier_block *unused,
 
 	operstate = dev->operstate;
 
-	CDEBUG(D_NET, "devevent: status=%ld, iface=%s ifindex %d state %u\n",
-	       event, dev->name, dev->ifindex, operstate);
+	CDEBUG(D_NET, "devevent: status=%s, iface=%s ifindex %d state %u\n",
+	       netdev_cmd_to_name(event), dev->name, dev->ifindex, operstate);
 
 	switch (event) {
 	case NETDEV_UP:
@@ -2150,14 +2188,15 @@ static int ksocknal_inetaddr_event(struct notifier_block *unused,
 {
 	struct in_ifaddr *ifa = ptr;
 
-	CDEBUG(D_NET, "addrevent: status %ld ip addr %pI4, netmask %pI4.\n",
-	       event, &ifa->ifa_address, &ifa->ifa_mask);
+	CDEBUG(D_NET, "addrevent: status %s device %s, ip addr %pI4, netmask %pI4.\n",
+		netdev_cmd_to_name(event), ifa->ifa_dev->dev->name,
+		&ifa->ifa_address, &ifa->ifa_mask);
 
 	switch (event) {
 	case NETDEV_UP:
 	case NETDEV_DOWN:
 	case NETDEV_CHANGE:
-		ksocknal_handle_inetaddr_change(ifa, event);
+		ksocknal_handle_inetaddr_change(ifa->ifa_dev->dev, event);
 		break;
 
 	}
@@ -2171,6 +2210,31 @@ static struct notifier_block ksocknal_dev_notifier_block = {
 static struct notifier_block ksocknal_inetaddr_notifier_block = {
 	.notifier_call = ksocknal_inetaddr_event,
 };
+
+#if IS_ENABLED(CONFIG_IPV6)
+static int ksocknal_inet6addr_event(struct notifier_block *this,
+				    unsigned long event, void *ptr)
+{
+	struct inet6_ifaddr *ifa6 = ptr;
+
+	CDEBUG(D_NET, "addr6event: status %s, device %s, ip addr %pISc\n",
+		netdev_cmd_to_name(event), ifa6->idev->dev->name, &ifa6->addr);
+
+	switch (event) {
+	case NETDEV_UP:
+	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
+		ksocknal_handle_inetaddr_change(ifa6->idev->dev, event);
+		break;
+
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block ksocknal_inet6addr_notifier_block = {
+	.notifier_call = ksocknal_inet6addr_event,
+};
+#endif
 
 static void
 ksocknal_base_shutdown(void)
@@ -2186,6 +2250,9 @@ ksocknal_base_shutdown(void)
 	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_ALL) {
 		unregister_netdevice_notifier(&ksocknal_dev_notifier_block);
 		unregister_inetaddr_notifier(&ksocknal_inetaddr_notifier_block);
+#if IS_ENABLED(CONFIG_IPV6)
+		unregister_inet6addr_notifier(&ksocknal_inet6addr_notifier_block);
+#endif
 	}
 
 	switch (ksocknal_data.ksnd_init) {
@@ -2354,7 +2421,9 @@ ksocknal_base_startup(void)
 
 	register_netdevice_notifier(&ksocknal_dev_notifier_block);
 	register_inetaddr_notifier(&ksocknal_inetaddr_notifier_block);
-
+#if IS_ENABLED(CONFIG_IPV6)
+	register_inet6addr_notifier(&ksocknal_inet6addr_notifier_block);
+#endif
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 

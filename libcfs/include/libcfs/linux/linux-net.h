@@ -23,8 +23,29 @@
 #ifndef __LIBCFS_LINUX_NET_H__
 #define __LIBCFS_LINUX_NET_H__
 
+#include <linux/netdevice.h>
 #include <net/netlink.h>
 #include <net/genetlink.h>
+
+#ifndef HAVE_NETDEV_CMD_TO_NAME
+static inline const char *netdev_cmd_to_name(unsigned long cmd)
+{
+#define N(val)                                                 \
+	case NETDEV_##val:                              \
+		return "NETDEV_" __stringify(val);
+	switch (cmd) {
+	N(UP) N(DOWN) N(REBOOT) N(CHANGE) N(REGISTER) N(UNREGISTER)
+	N(CHANGEMTU) N(CHANGEADDR) N(GOING_DOWN) N(CHANGENAME) N(FEAT_CHANGE)
+	N(BONDING_FAILOVER) N(PRE_UP) N(PRE_TYPE_CHANGE) N(POST_TYPE_CHANGE)
+	N(POST_INIT) N(RELEASE) N(NOTIFY_PEERS) N(JOIN) N(CHANGEUPPER)
+	N(RESEND_IGMP) N(PRECHANGEMTU) N(CHANGEINFODATA) N(BONDING_INFO)
+	N(PRECHANGEUPPER) N(CHANGELOWERSTATE) N(UDP_TUNNEL_PUSH_INFO)
+	N(UDP_TUNNEL_DROP_INFO) N(CHANGE_TX_QUEUE_LEN)
+	};
+#undef N
+	return "UNKNOWN_NETDEV_EVENT";
+}
+#endif
 
 /* NL_SET_ERR_MSG macros is already defined in kernels
  * 3.10.0-1160 and above. For older kernels (3.10.0-957)

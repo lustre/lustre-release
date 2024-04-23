@@ -10,10 +10,13 @@
  *
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
-
-#include <asm/page.h>
 #include <linux/ethtool.h>
 #include <linux/inetdevice.h>
+#include <linux/kernel.h>
+#include <linux/sunrpc/addr.h>
+#include <net/addrconf.h>
+
+#include <libcfs/linux/linux-net.h>
 
 #include "o2iblnd.h"
 
@@ -3215,15 +3218,12 @@ kiblnd_handle_link_state_change(struct net_device *dev,
 	struct kib_net *net;
 	struct kib_net *cnxt;
 	bool link_down = !(operstate == IF_OPER_UP);
-	struct in_device *in_dev;
 	bool found_ip = false;
-	__u32 ni_state_before;
+	u32 ni_state_before;
 	bool update_ping_buf = false;
 	int state;
-	DECLARE_CONST_IN_IFADDR(ifa);
 
 	event_kibdev = kiblnd_dev_search(dev->name);
-
 	if (!event_kibdev)
 		goto out;
 
@@ -3231,18 +3231,44 @@ kiblnd_handle_link_state_change(struct net_device *dev,
 		found_ip = false;
 		ni = net->ibn_ni;
 
-		in_dev = __in_dev_get_rtnl(dev);
-		if (!in_dev) {
-			CDEBUG(D_NET, "Interface %s has no IPv4 status.\n",
-			       dev->name);
-			ni_state_before = lnet_set_link_fatal_state(ni, 1);
-			goto ni_done;
+		if (nid_is_nid4(&ni->ni_nid)) {
+			struct in_device *in_dev = __in_dev_get_rtnl(dev);
+			DECLARE_CONST_IN_IFADDR(ifa);
+
+			if (!in_dev) {
+				CDEBUG(D_NET, "Interface %s has no IPv4 status.\n",
+				       dev->name);
+				ni_state_before = lnet_set_link_fatal_state(ni, 1);
+				goto ni_done;
+			}
+			in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+				if (ifa->ifa_local == ni->ni_nid.nid_addr[0])
+					found_ip = true;
+			}
+			endfor_ifa(in_dev);
+#if IS_ENABLED(CONFIG_IPV6)
+		} else {
+			struct inet6_dev *in6_dev = __in6_dev_get(dev);
+			const struct inet6_ifaddr *ifa6;
+			struct in6_addr sin6_addr;
+
+			if (!in6_dev) {
+				CDEBUG(D_NET, "Interface %s has no IPv6 status.\n",
+				       dev->name);
+				ni_state_before = lnet_set_link_fatal_state(ni, 1);
+				goto ni_done;
+			}
+
+			memcpy(&sin6_addr, &ni->ni_nid.nid_addr, sizeof(sin6_addr));
+			rcu_read_lock();
+			list_for_each_entry_rcu(ifa6, &in6_dev->addr_list,
+						if_list) {
+				if (!ipv6_addr_cmp(&ifa6->addr, &sin6_addr))
+					found_ip = true;
+			}
+			rcu_read_unlock();
+#endif
 		}
-		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
-			if (ifa->ifa_local == ni->ni_nid.nid_addr[0])
-				found_ip = true;
-		}
-		endfor_ifa(in_dev);
 
 		if (!found_ip) {
 			CDEBUG(D_NET, "Interface %s has no matching ip\n",
@@ -3273,18 +3299,17 @@ out:
 }
 
 static int
-kiblnd_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
+kiblnd_handle_inetaddr_change(struct net_device *dev, unsigned long event, int family)
 {
 	struct kib_dev *event_kibdev;
 	struct kib_net *net;
 	struct kib_net *cnxt;
-	struct net_device *event_netdev = ifa->ifa_dev->dev;
-	__u32 ni_state_before;
+	u32 ni_state_before;
 	bool update_ping_buf = false;
 	struct lnet_ni *ni = NULL;
 	bool link_down;
 
-	event_kibdev = kiblnd_dev_search(event_netdev->name);
+	event_kibdev = kiblnd_dev_search(dev->name);
 	if (!event_kibdev)
 		goto out;
 
@@ -3292,7 +3317,7 @@ kiblnd_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 				 ibn_list) {
 		ni = net->ibn_ni;
 
-		if (!(nid_is_nid4(&ni->ni_nid)))
+		if (nid_is_nid4(&ni->ni_nid) ^ (family == AF_INET))
 			continue;
 
 		link_down = (event == NETDEV_DOWN);
@@ -3322,8 +3347,8 @@ static int kiblnd_device_event(struct notifier_block *unused,
 
 	operstate = dev->operstate;
 
-	CDEBUG(D_NET, "devevent: status=%ld, iface=%s ifindex %d state %u\n",
-	       event, dev->name, dev->ifindex, operstate);
+	CDEBUG(D_NET, "devevent: status=%s, iface=%s ifindex %d state %u\n",
+	       netdev_cmd_to_name(event), dev->name, dev->ifindex, operstate);
 
 	switch (event) {
 	case NETDEV_UP:
@@ -3344,14 +3369,15 @@ static int kiblnd_inetaddr_event(struct notifier_block *unused,
 {
 	struct in_ifaddr *ifa = ptr;
 
-	CDEBUG(D_NET, "addrevent: status %ld ip addr %pI4, netmask %pI4.\n",
-	       event, &ifa->ifa_address, &ifa->ifa_mask);
+	CDEBUG(D_NET, "addrevent: status %s ip addr %pI4, netmask %pI4.\n",
+	       netdev_cmd_to_name(event), &ifa->ifa_address, &ifa->ifa_mask);
 
 	switch (event) {
 	case NETDEV_UP:
 	case NETDEV_DOWN:
 	case NETDEV_CHANGE:
-		kiblnd_handle_inetaddr_change(ifa, event);
+		kiblnd_handle_inetaddr_change(ifa->ifa_dev->dev, event,
+					      AF_INET);
 		break;
 
 	}
@@ -3365,6 +3391,32 @@ static struct notifier_block kiblnd_dev_notifier_block = {
 static struct notifier_block kiblnd_inetaddr_notifier_block = {
 	.notifier_call = kiblnd_inetaddr_event,
 };
+
+#if IS_ENABLED(CONFIG_IPV6)
+static int kiblnd_inet6addr_event(struct notifier_block *this,
+				  unsigned long event, void *ptr)
+{
+	struct inet6_ifaddr *ifa6 = ptr;
+
+	CDEBUG(D_NET, "addrevent: status %s ip addr %pISc\n",
+	       netdev_cmd_to_name(event), &ifa6->addr);
+
+	switch (event) {
+	case NETDEV_UP:
+	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
+		kiblnd_handle_inetaddr_change(ifa6->idev->dev, event,
+					      AF_INET6);
+		break;
+
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block kiblnd_inet6addr_notifier_block = {
+	.notifier_call = kiblnd_inet6addr_event,
+};
+#endif
 
 static void
 kiblnd_base_shutdown(void)
@@ -3381,6 +3433,9 @@ kiblnd_base_shutdown(void)
 	if (kiblnd_data.kib_init == IBLND_INIT_ALL) {
 		unregister_netdevice_notifier(&kiblnd_dev_notifier_block);
 		unregister_inetaddr_notifier(&kiblnd_inetaddr_notifier_block);
+#if IS_ENABLED(CONFIG_IPV6)
+		unregister_inet6addr_notifier(&kiblnd_inet6addr_notifier_block);
+#endif
 	}
 
 	switch (kiblnd_data.kib_init) {
@@ -3581,7 +3636,9 @@ kiblnd_base_startup(struct net *ns)
 
 	register_netdevice_notifier(&kiblnd_dev_notifier_block);
 	register_inetaddr_notifier(&kiblnd_inetaddr_notifier_block);
-
+#if IS_ENABLED(CONFIG_IPV6)
+	register_inet6addr_notifier(&kiblnd_inet6addr_notifier_block);
+#endif
 	/* flag everything initialised */
 	kiblnd_data.kib_init = IBLND_INIT_ALL;
 	/*****************************************************/

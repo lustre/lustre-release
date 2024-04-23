@@ -19,6 +19,7 @@
 #ifdef HAVE_ETHTOOL_LINK_SETTINGS
 #include <linux/inetdevice.h>
 #include <linux/ethtool.h>
+#include <net/addrconf.h>
 #endif
 
 #define CURRENT_LND_VERSION 1
@@ -238,14 +239,43 @@ static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
 			continue;
 
 		in_dev = __in_dev_get_rtnl(dev);
-		if (!in_dev)
-			continue;
+		if (in_dev) {
+			in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+				if (strcmp(ifa->ifa_label, ni->ni_interface) == 0)
+					intf_idx = dev->ifindex;
+			}
+			endfor_ifa(in_dev);
+		} else {
+#if IS_ENABLED(CONFIG_IPV6)
+			struct inet6_dev *in6_dev = __in6_dev_get(dev);
 
-		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
-			if (strcmp(ifa->ifa_label, ni->ni_interface) == 0)
-				intf_idx = dev->ifindex;
+			if (in6_dev) {
+				const struct inet6_ifaddr *ifa6;
+
+				list_for_each_entry_rcu(ifa6,
+							&in6_dev->addr_list,
+							if_list) {
+					if (ifa6->flags & IFA_F_TEMPORARY)
+						continue;
+
+					/* As different IPv6 addresses don't
+					 * have unique labels, it is safest
+					 * just to use the first and ignore
+					 * the rest.
+					 */
+					if (strcmp(dev->name,
+						   ni->ni_interface) == 0) {
+						intf_idx = dev->ifindex;
+						break;
+					}
+				}
+			} else {
+#endif
+				continue;
+#if IS_ENABLED(CONFIG_IPV6)
+			}
+#endif
 		}
-		endfor_ifa(in_dev);
 
 		if (intf_idx >= 0)
 			break;
