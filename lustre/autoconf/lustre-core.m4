@@ -3675,6 +3675,28 @@ AC_DEFUN([LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
 ]) # LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
 
 #
+# LC_LSMCONTEXT_HAS_ID
+#
+# repo: git://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble
+# commit dad7cffb719e45fd43121ade4ada90ff376c9cad
+# LSM stacking v39: LSM: Ensure the correct LSM context releaser
+#
+AC_DEFUN([LC_SRC_LSMCONTEXT_HAS_ID], [
+	LB2_LINUX_TEST_SRC([lsmcontext_has_id], [
+		#include <linux/security.h>
+	],[
+		((struct lsmcontext *)1)->id = 0;
+	],[-Werror])
+])
+AC_DEFUN([LC_LSMCONTEXT_HAS_ID], [
+	LB2_MSG_LINUX_TEST_RESULT([if lsmcontext has id],
+	[lsmcontext_has_id], [
+		AC_DEFINE(HAVE_LSMCONTEXT_HAS_ID, 1,
+			[lsmcontext has id])
+	])
+]) # LC_LSMCONTEXT_HAS_ID
+
+#
 # LC_HAVE_NO_LLSEEK
 #
 # Linux commit v5.19-rc2-6-g868941b14441
@@ -4803,6 +4825,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.8
 	LC_SRC_HAVE_DENTRY_D_CHILDREN
 	LC_SRC_HAVE_GENERIC_ERROR_REMOVE_FOLIO
+	LC_SRC_LSMCONTEXT_HAS_ID
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -5113,6 +5136,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 6.8
 	LC_HAVE_DENTRY_D_CHILDREN
 	LC_HAVE_GENERIC_ERROR_REMOVE_FOLIO
+	LC_LSMCONTEXT_HAS_ID
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

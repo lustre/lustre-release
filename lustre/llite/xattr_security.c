@@ -102,8 +102,12 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 #ifdef HAVE_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
 	*secctx = ctx.context;
 	*secctx_size = ctx.len;
+#ifdef HAVE_LSMCONTEXT_HAS_ID
+	*secctx_slot = ctx.id;
+#else
 	*secctx_slot = ctx.slot;
-#endif
+#endif /* HAVE_LSMCONTEXT_HAS_ID */
+#endif /* HAVE_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX */
 
 #ifdef HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	if (strncmp(*secctx_name, secctx_name_lsm, *secctx_name_size) != 0) {
