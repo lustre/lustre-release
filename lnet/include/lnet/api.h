@@ -107,7 +107,7 @@ int LNetMDBind(const struct lnet_md *md_in,
 int __LNetMDUnlink(struct lnet_handle_md md_in, bool discard);
 #define LNetMDUnlink(handle) __LNetMDUnlink(handle, false)
 
-bool lnet_assert_handler_unused(lnet_handler_t handler, bool assert);
+void lnet_assert_handler_unused(lnet_handler_t handler);
 /** @} lnet_md */
 
 /** \defgroup lnet_data Data movement operations

@@ -244,29 +244,22 @@ lnet_md_link(struct lnet_libmd *md, lnet_handler_t handler, int cpt)
 	list_add(&md->md_list, &container->rec_active);
 }
 
-bool lnet_assert_handler_unused(lnet_handler_t handler, bool assert)
+void lnet_assert_handler_unused(lnet_handler_t handler)
 {
 	struct lnet_res_container *container;
 	int cpt;
-	bool handler_in_use = false;
 
 	if (!handler)
-		return handler_in_use;
+		return;
 	cfs_percpt_for_each(container, cpt, the_lnet.ln_md_containers) {
 		struct lnet_libmd *md;
 
 		lnet_res_lock(cpt);
 		list_for_each_entry(md, &container->rec_active, md_list) {
-			if (assert) {
-				LASSERT(md->md_handler != handler);
-			} else if (md->md_handler == handler) {
-				handler_in_use = true;
-				break;
-			}
+			LASSERT(md->md_handler != handler);
 		}
 		lnet_res_unlock(cpt);
 	}
-	return handler_in_use;
 }
 EXPORT_SYMBOL(lnet_assert_handler_unused);
 
