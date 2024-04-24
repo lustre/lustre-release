@@ -2178,10 +2178,88 @@ fini_io:
 	RETURN(rc);
 }
 
+#ifdef HAVE_IOV_ITER_INIT_DIRECTION
+# define ll_iov_iter_init(i, d, v, n, l) \
+	 iov_iter_init((i), (d), (v), (n), (l))
+# else
+# define ll_iov_iter_init(i, d, v, n, l) \
+	 iov_iter_init((i), (v), (n), (l), 0)
+# endif
+
+typedef ssize_t (*iter_fn_t)(struct kiocb *, struct iov_iter *);
+
+static ssize_t do_loop_readv_writev(struct kiocb *iocb, const struct iovec *iov,
+				    int rw, unsigned long nr_segs, iter_fn_t fn)
+{
+	const struct iovec *vector = iov;
+	ssize_t ret = 0;
+
+	while (nr_segs > 0) {
+		struct iov_iter	i;
+		ssize_t nr;
+		size_t len = vector->iov_len;
+
+		ll_iov_iter_init(&i, rw, vector, 1, len);
+		nr = fn(iocb, &i);
+		if (nr < 0) {
+			if (!ret)
+				ret = nr;
+			break;
+		}
+		ret += nr;
+		if (nr != len)
+			break;
+		vector++;
+		nr_segs--;
+	}
+
+	return ret;
+}
+
+/*
+ * Check if we need loop over the iovec and submit each segment in a loop.
+ * This is needed when:
+ *   - Prior to the introduction of HAVE_DIO_ITER
+ *   - unaligned direct i/o
+ * Returns true for the above cases and false otherwise.
+ *
+ * Note that looping is always safe although it is preferable to pass the
+ * iovec down unmodified when the appropriate support is available.
+ */
+static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
+				 enum cl_io_type io_type)
+{
+#ifdef HAVE_DIO_ITER
+	struct file *file = iocb->ki_filp;
+	int iocb_flags = iocb_ki_flags_get(file, iocb);
+	bool direct_io = iocb_ki_flags_check(iocb_flags, DIRECT);
+	bool unaligned = false;
+
+/* This I/O could be switched to direct i/o if the kernel is new enough */
+#ifdef IOCB_DIRECT
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, io_type,
+					   iov_iter_count(iter)))
+		direct_io = true;
+#endif
+
+	if (direct_io) {
+		if (iocb->ki_pos & ~PAGE_MASK)
+			unaligned = true;
+		else if (iov_iter_count(iter) & ~PAGE_MASK)
+			unaligned = true;
+		else if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
+			unaligned = true;
+	}
+	return unaligned;
+#else
+	return true;
+#endif /* HAVE_DIO_ITER */
+}
+
 /*
  * Read from a file (through the page cache).
  */
-static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
+static ssize_t do_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
 	struct lu_env *env;
 	struct vvp_io_args *args;
@@ -2289,6 +2367,14 @@ out:
 	RETURN(result);
 }
 
+static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	if (iter->nr_segs > 1 && is_unaligned_directio(iocb, iter, CIT_READ))
+		return do_loop_readv_writev(iocb, iter->__iov, READ,
+					    iter->nr_segs, do_file_read_iter);
+	return do_file_read_iter(iocb, iter);
+}
+
 /**
  * Similar trick to ll_do_fast_read, this improves write speed for tiny writes.
  * If a page is already in the page cache and dirty (and some other things -
@@ -2349,7 +2435,7 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 /*
  * Write to a file (through the page cache).
  */
-static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
+static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
 	struct vvp_io_args *args;
@@ -2454,6 +2540,14 @@ out:
 	RETURN(rc_normal);
 }
 
+static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	if (iter->nr_segs > 1 && is_unaligned_directio(iocb, iter, CIT_WRITE))
+		return do_loop_readv_writev(iocb, iter->__iov, WRITE,
+					    iter->nr_segs, do_file_write_iter);
+	return do_file_write_iter(iocb, iter);
+}
+
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 /*
  * XXX: exact copy from kernel code (__generic_file_aio_write_nolock)
@@ -2493,6 +2587,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	struct iov_iter	to;
 	size_t iov_count;
 	ssize_t result;
+
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_READ);
@@ -2502,15 +2597,9 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	if (!iov_count)
 		RETURN(0);
 
-# ifdef HAVE_IOV_ITER_INIT_DIRECTION
-	iov_iter_init(&to, READ, iov, nr_segs, iov_count);
-# else /* !HAVE_IOV_ITER_INIT_DIRECTION */
-	iov_iter_init(&to, iov, nr_segs, iov_count, 0);
-# endif /* HAVE_IOV_ITER_INIT_DIRECTION */
+	ll_iov_iter_init(&to, READ, iov, nr_segs, iov_count);
 
-	result = ll_file_read_iter(iocb, &to);
-
-	RETURN(result);
+	RETURN(ll_file_read_iter(iocb, &to));
 }
 
 static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
@@ -2549,6 +2638,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct iov_iter from;
 	size_t iov_count;
 	ssize_t result;
+
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_WRITE);
@@ -2558,15 +2648,9 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	if (!iov_count)
 		RETURN(0);
 
-# ifdef HAVE_IOV_ITER_INIT_DIRECTION
-	iov_iter_init(&from, WRITE, iov, nr_segs, iov_count);
-# else /* !HAVE_IOV_ITER_INIT_DIRECTION */
-	iov_iter_init(&from, iov, nr_segs, iov_count, 0);
-# endif /* HAVE_IOV_ITER_INIT_DIRECTION */
+	ll_iov_iter_init(&from, WRITE, iov, nr_segs, iov_count);
 
-	result = ll_file_write_iter(iocb, &from);
-
-	RETURN(result);
+	RETURN(ll_file_write_iter(iocb, &from));
 }
 
 static ssize_t ll_file_write(struct file *file, const char __user *buf,

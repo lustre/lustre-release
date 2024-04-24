@@ -252,9 +252,11 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 
 	result = iov_iter_get_pages_alloc2(iter, &pvec->ldp_pages, maxsize,
 					  &start);
-	if (result > 0)
+	if (result > 0) {
 		pvec->ldp_count = DIV_ROUND_UP(result + start, PAGE_SIZE);
-
+		if (user_backed_iter(iter))
+			iov_iter_revert(iter, result);
+	}
 	return result;
 #else
 	unsigned long addr;
@@ -336,7 +338,7 @@ static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
  * Lustre could relax a bit for alignment, io count is not
  * necessary page alignment.
  */
-static unsigned long ll_iov_iter_alignment(struct iov_iter *i)
+unsigned long ll_iov_iter_alignment(struct iov_iter *i)
 {
 	size_t orig_size = i->count;
 	size_t count = orig_size & ~PAGE_MASK;

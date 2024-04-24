@@ -77,6 +77,11 @@
 #endif
 #endif /* HAVE_IOV_ITER_TYPE */
 
+#ifndef HAVE_USER_BACKED_ITER
+#define iter_is_ubuf(iter)		0
+#define user_backed_iter(iter)		iter_is_iovec(iter)
+#endif
+
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 		     loff_t *pos);
 ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count,

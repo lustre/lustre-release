@@ -3830,6 +3830,30 @@ AC_DEFUN([LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2], [
 ]) # LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 
 #
+# LC_HAVE_USER_BACKED_ITER
+#
+# Linux commit v5.19-10287-gfcb14cb1bdac
+#   new iov_iter flavour - ITER_UBUF
+#
+AC_DEFUN([LC_SRC_HAVE_USER_BACKED_ITER], [
+	LB2_LINUX_TEST_SRC([user_backed_iter], [
+		#include <linux/uio.h>
+	],[
+		struct iov_iter *iter = NULL;
+		bool result __attribute__ ((unused));
+
+		result = user_backed_iter(iter);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_USER_BACKED_ITER], [
+	LB2_MSG_LINUX_TEST_RESULT([if user_backed_iter() is available],
+	[user_backed_iter], [
+		AC_DEFINE(HAVE_USER_BACKED_ITER, 1,
+			[user_backed_iter() is available])
+	])
+]) # LC_HAVE_USER_BACKED_ITER
+
+#
 # LC_HAVE_GET_RANDOM_U32_AND_U64
 #
 # Linux commit v4.10-rc3-6-gc440408cf690
@@ -4736,6 +4760,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_REGISTER_SHRINKER_FORMAT_NAMED
 	LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
 	LC_SRC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
+	LC_SRC_HAVE_USER_BACKED_ITER
 
 	# 6.1
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
@@ -5045,6 +5070,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_REGISTER_SHRINKER_FORMAT_NAMED
 	LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
 	LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
+	LC_HAVE_USER_BACKED_ITER
 
 	# 6.1
 	LC_HAVE_GET_RANDOM_U32_AND_U64

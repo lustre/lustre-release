@@ -59,6 +59,7 @@ static void usage(void)
 	printf("-a  append IO (O_APPEND)\n");
 	printf("-r  file read (O_RDONLY)\n");
 	printf("-w  file write (O_WRONLY)\n");
+	printf("-D  open file with (O_DIRECT)\n");
 	printf("-s  set the start pos of the read/write test\n");
 	printf("-z  test for read hitting hole\n");
 	printf("-d  create flags (O_LOV_DELAY_CREATE)\n");
@@ -100,7 +101,7 @@ int main(int argc, char **argv)
 	struct iovec *iov;
 	off64_t offset = 0;
 
-	while ((c = getopt(argc, argv, "f:n:s:rwahvdzo::")) != -1) {
+	while ((c = getopt(argc, argv, "f:n:s:rwahvdDzo::")) != -1) {
 		switch (c) {
 		case 'f':
 			fname = optarg;
@@ -137,6 +138,9 @@ int main(int argc, char **argv)
 			break;
 		case 'd':
 			flags |= O_LOV_DELAY_CREATE;
+			break;
+		case 'D':
+			flags |= O_DIRECT;
 			break;
 		case 'z':
 			pad = 0;

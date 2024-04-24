@@ -13737,6 +13737,18 @@ test_118n()
 }
 run_test 118n "statfs() sends OST_STATFS requests in parallel"
 
+dio_readv_writev_support()
+{
+	# Kernels after 3.16 work:
+	(( $(version_code $(uname -r)) >= $(version_code 3.16) ))
+		return 0
+	# Lustre with LU-17524 works:
+	(( $OST1_VERSION > $(version_code 2.15.61.141) ))
+		return 0
+
+	skip "need readv/writev with O_DIRECT support"
+}
+
 test_119a() # bug 11737
 {
         BSIZE=$((512 * 1024))
@@ -14137,6 +14149,17 @@ test_119j()
 		error "(7) ${rpcs[0]} != 1 read RPCs"
 }
 run_test 119j "basic tests of hybrid IO switching"
+
+test_119m() {
+	dio_readv_writev_support
+
+	timeout 90s rwv -f $DIR/$tfile -Dw -n 3 0x80000 0x100000 0x180000 ||
+		error "DIO aligned writev test failed"
+	timeout 90s rwv -f $DIR/$tfile -Dr -v -n 2 0x180000 0x100000 ||
+		error "DIO aligned readv failed"
+	rm -f $DIR/$tfile
+}
+run_test 119m "Test DIO readv/writev: exercise iter duplication"
 
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

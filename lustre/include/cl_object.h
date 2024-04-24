@@ -2553,10 +2553,6 @@ struct cl_sub_dio {
 				csd_write:1,
 				csd_unaligned:1;
 };
-#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
-	defined(HAVE_DIRECTIO_2ARGS)
-#define HAVE_DIO_ITER 1
-#endif
 
 void ll_release_user_pages(struct page **pages, int npages);
 int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size);
