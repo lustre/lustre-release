@@ -2552,9 +2552,11 @@ struct cl_sub_dio {
 	struct ll_dio_pages	csd_dio_pages;
 	struct iov_iter		csd_iter;
 	struct cl_iter_dup	csd_dup;
+	spinlock_t		csd_lock;
 	unsigned		csd_creator_free:1,
 				csd_write:1,
-				csd_unaligned:1;
+				csd_unaligned:1,
+				csd_write_copied:1;
 };
 
 static inline u64 cl_io_nob_aligned(u64 off, u32 nob, u32 pgsz)

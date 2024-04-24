@@ -639,18 +639,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			GOTO(out, result);
 		}
 
-		if (unaligned && rw == WRITE) {
-			result = ll_dio_user_copy(sdio);
-			if (unlikely(result <= 0)) {
-				cl_sync_io_note(env, &sdio->csd_sync, result);
-				if (sync_submit) {
-					LASSERT(sdio->csd_creator_free);
-					cl_sub_dio_free(sdio);
-				}
-				GOTO(out, result);
-			}
-		}
-
 		result = ll_direct_rw_pages(env, io, count, rw, inode, sdio);
 		/* if the i/o was unsuccessful, we zero the number of bytes to
 		 * copy back.  Note that partial I/O completion isn't possible

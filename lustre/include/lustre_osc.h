@@ -287,6 +287,7 @@ struct osc_object {
 	struct list_head	oo_hp_exts;	/* list of hp extents */
 	struct list_head	oo_urgent_exts;	/* list of writeback extents */
 	struct list_head	oo_full_exts;
+	struct list_head	oo_dio_exts;
 
 	struct list_head	oo_reading_exts;
 
@@ -963,6 +964,7 @@ struct osc_extent {
 	unsigned int		oe_nr_pages;
 	/** list of pending oap pages. Pages in this list are NOT sorted. */
 	struct list_head	oe_pages;
+	struct cl_sub_dio	*oe_csd;
 	/** start and end index of this extent, include start and end
 	 * themselves. Page offset here is the page index of osc_pages.
 	 * oe_start is used as keyword for red-black tree.

@@ -2585,6 +2585,17 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_dio = !!(brw_flags & OBD_BRW_NOCACHE);
+	if (ext->oe_dio) {
+		struct cl_sync_io *anchor;
+		struct cl_page *clpage;
+
+		oap = list_first_entry(list, struct osc_async_page,
+				       oap_pending_item);
+		clpage = oap2cl_page(oap);
+		LASSERT(clpage->cp_type == CPT_TRANSIENT);
+		anchor = clpage->cp_sync_io;
+		ext->oe_csd = anchor->csi_dio_aio;
+	}
 	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;
 	if (oscl && oscl->ols_dlmlock != NULL) {
 		ext->oe_dlmlock = LDLM_LOCK_GET(oscl->ols_dlmlock);

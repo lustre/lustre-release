@@ -2762,6 +2762,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 	/* add pages into rpc_list to build BRW rpc */
 	list_for_each_entry(ext, ext_list, oe_link) {
+		struct cl_sub_dio *sdio = ext->oe_csd;
+
 		LASSERT(ext->oe_state == OES_RPC);
 		mem_tight |= ext->oe_memalloc;
 		grant += ext->oe_grants;
@@ -2769,6 +2771,26 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		layout_version = max(layout_version, ext->oe_layout_version);
 		if (obj == NULL)
 			obj = ext->oe_obj;
+
+		/* for unaligned writes, we do the data copying here */
+		if (sdio && sdio->csd_unaligned && sdio->csd_write &&
+		    !sdio->csd_write_copied) {
+			/* note a single sdio can correspond to multiple RPCs,
+			 * so we use this lock to ensure the data copy is only
+			 * done once (an sdio can also correspond to multiple
+			 * extents, which is also handled by this)
+			 */
+			spin_lock(&sdio->csd_lock);
+			if (!sdio->csd_write_copied) {
+				rc = ll_dio_user_copy(sdio);
+				if (rc <= 0) {
+					spin_unlock(&sdio->csd_lock);
+					GOTO(out, rc);
+				}
+				sdio->csd_write_copied = true;
+			}
+			spin_unlock(&sdio->csd_lock);
+		}
 	}
 
 	soft_sync = osc_over_unstable_soft_limit(cli);

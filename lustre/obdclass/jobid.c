@@ -517,7 +517,7 @@ static bool jobid_name_is_valid(char *jobid)
 	const char *const lustre_reserved[] = { "ll_ping", "ptlrpc",
 						"ldlm", "ll_sa", "kworker",
 						"kswapd", "writeback", "irq",
-						"ksoftirq", NULL };
+						"ksoftirq", "ll_ucp", NULL };
 	int i;
 
 	if (jobid[0] == '\0')
@@ -669,7 +669,7 @@ out:
 static int jobid_print_current_comm(char *jobid, ssize_t joblen)
 {
 	const char *const names[] = {"kworker", "kswapd", "ll_sa", "ll_agl",
-				     "ldlm_bl", NULL};
+				     "ldlm_bl", "ll_ucp", NULL};
 	int i;
 
 	if (current->flags & PF_KTHREAD) {

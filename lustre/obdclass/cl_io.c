@@ -1291,6 +1291,7 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 		sdio->csd_creator_free = sync;
 		sdio->csd_write = write;
 		sdio->csd_unaligned = unaligned;
+		spin_lock_init(&sdio->csd_lock);
 
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 
@@ -1464,7 +1465,7 @@ EXPORT_SYMBOL(ll_release_user_pages);
 #endif
 
 /* copy IO data to/from internal buffer and userspace iovec */
-ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio)
+ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 {
 	struct iov_iter *iter = &sdio->csd_iter;
 	struct ll_dio_pages *pvec = &sdio->csd_dio_pages;
@@ -1493,8 +1494,13 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio)
 	 * Also, if mm == current->mm, that means this is being handled in the
 	 * thread which created it, and not in a separate kthread - so it is
 	 * unnecessary (and incorrect) to do a use_mm here
+	 *
+	 * assert that if we have an mm and it's not ours, we're doing this
+	 * copying from a kernel thread - otherwise kthread_use_mm will happily
+	 * trash memory and crash later
 	 */
 	if (mm && mm != current->mm) {
+		LASSERT(current->flags & PF_KTHREAD);
 		kthread_use_mm(mm);
 		mm_used = true;
 	}
@@ -1601,6 +1607,56 @@ out:
 
 	/* the total bytes copied, or status */
 	RETURN(original_count - count ? original_count - count : status);
+}
+
+struct dio_user_copy_data {
+	struct cl_sub_dio *ducd_sdio;
+	struct completion ducd_completion;
+	ssize_t ducd_result;
+};
+
+int ll_dio_user_copy_helper(void *data)
+{
+	struct dio_user_copy_data *ducd = data;
+	struct cl_sub_dio *sdio = ducd->ducd_sdio;
+
+	ducd->ducd_result = __ll_dio_user_copy(sdio);
+	complete(&ducd->ducd_completion);
+
+	return 0;
+}
+
+ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio)
+{
+	struct dio_user_copy_data ducd;
+	struct task_struct *kthread;
+
+	/* normal case - copy is being done by ptlrpcd */
+	if (current->flags & PF_KTHREAD ||
+	/* for non-parallel DIO, the submitting thread does the copy */
+	    sdio->csd_ll_aio->cda_mm == current->mm)
+		return __ll_dio_user_copy(sdio);
+
+	/* this is a slightly unfortunate workaround; when doing an fsync, a
+	 * user thread may pick up a DIO extent which is about to be written
+	 * out.  we can't just ignore these, but we also can't handle them from
+	 * the user thread, since user threads can't do data copying from
+	 * another thread's memory.
+	 *
+	 * so we spawn a kthread to handle this case.
+	 * this will be rare and is not a 'hot path', so the performance
+	 * cost doesn't matter
+	 */
+	init_completion(&ducd.ducd_completion);
+	ducd.ducd_sdio = sdio;
+
+	kthread = kthread_run(ll_dio_user_copy_helper, &ducd,
+			      "ll_ucp_%u", current->pid);
+	if (IS_ERR_OR_NULL(kthread))
+		return PTR_ERR(kthread);
+	wait_for_completion(&ducd.ducd_completion);
+
+	return ducd.ducd_result;
 }
 EXPORT_SYMBOL(ll_dio_user_copy);
 
