@@ -24170,48 +24170,48 @@ test_248c() {
 	# test
 	local time1
 	local time2
+	local counter
 	local whole_mb=$($LCTL get_param -n llite.*.max_read_ahead_whole_mb)
-	stack_trap "$LCTL set_param llite.*.max_read_ahead_whole_mb=$whole_mb" EXIT
-	counter=0
+	stack_trap "$LCTL set_param llite.*.max_read_ahead_whole_mb=$whole_mb"
 
-	while [ $counter -lt 3 ]; do
-		# Increment the counter
-		((counter++))
+	# LU-16904 Use stripe counct 1 for root before the readahead issue
+	# described in LU-17755 and LU-15155 get fixed
+	test_mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -c 1 $DIR/$tdir || error "setstripe $tdir failed"
 
+	for (( counter = 0; counter < 3; counter++ )); do
 		$LCTL set_param llite.*.max_read_ahead_whole_mb=64
-		rm -f $DIR/$tfile
-		touch $DIR/$tfile || error "(0) failed to create file"
+		rm -f $DIR/$tdir/$tfile
+		touch $DIR/$tdir/$tfile || error "(0) failed to create file"
 		# 64 MiB
-		$TRUNCATE $DIR/$tfile 67108864 || error "(1) failed to truncate file"
-		time1=$(dd if=$DIR/$tfile bs=4K of=/dev/null 2>&1 | awk '/bytes/ {print $8}')
+		$TRUNCATE $DIR/$tdir/$tfile 67108864 || error "(1) trunc failed"
+		time1=$(dd if=$DIR/$tdir/$tfile bs=4K of=/dev/null 2>&1 |
+			awk '/bytes/ { print $8 }')
 		echo "whole file readahead of 64 MiB took $time1 seconds"
 		$LCTL get_param llite.*.read_ahead_stats
 
-		$LCTL set_param llite.*.read_ahead_stats=c
+		$LCTL set_param llite.*.read_ahead_stats=clear
 		$LCTL set_param llite.*.max_read_ahead_whole_mb=8
-		rm -f $DIR/$tfile
-		touch $DIR/$tfile || error "(2) failed to create file"
+		rm -f $DIR/$tdir/$tfile
+		touch $DIR/$tdir/$tfile || error "(2) failed to create file"
 		# 64 MiB
-		$TRUNCATE $DIR/$tfile 67108864 || error "(3) failed to create file"
-		time2=$(dd if=$DIR/$tfile bs=4K of=/dev/null 2>&1 | awk '/bytes/ {print $8}')
+		$TRUNCATE $DIR/$tdir/$tfile 67108864 || error "(3) trunc failed"
+		time2=$(dd if=$DIR/$tdir/$tfile bs=4K of=/dev/null 2>&1 |
+			awk '/bytes/ { print $8 }')
 		echo "non-whole file readahead of 64 MiB took $time2 seconds"
 		$LCTL get_param llite.*.read_ahead_stats
 
 		# Check if time1 is not more than 1.5 times2
 		timecheck=$(echo "$time1 <= (1.5 * $time2)" | bc -l)
 
-		if [[ $timecheck -eq 1 ]]; then
+		if (( $timecheck == 1 )); then
 			echo "Test passed on attempt $counter"
-			# Exit the loop
-			counter=4
-		else
-			echo "Attempt $counter failed: whole file readahead took: $time1, greater than non: $time2"
+			break
 		fi
+		echo "Try $counter failed: whole file readahead took: $time1, greater than non: $time2"
 	done
-	if [ $counter -eq 3 ]; then
-		error "whole file readahead check failed 3 times in a row, probably not just VM lag"
-	fi
-
+	(( $counter < 3 )) ||
+		error "whole file readahead failed 3x, probably not just VM lag"
 }
 run_test 248c "verify whole file read behavior"
 
@@ -27756,6 +27756,11 @@ test_360() {
 	stack_trap "do_facet ost1 $LCTL set_param $param=${old[0]}"
 
 	mkdir $DIR/$tdir/
+	# LU-16904 Use stripe count 1 for test dir to make sure the files
+	# created under it have object greater than 1M on single OST
+	# to test delayed iput
+	$LFS setstripe -c 1 $DIR/$tdir/
+
 	do_facet ost1 $LCTL set_param debug=+inode
 	do_facet ost1 $LCTL clear
 	local files=100
