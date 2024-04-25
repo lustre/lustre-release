@@ -161,24 +161,38 @@ validate_nid() {
 	local net="${nid//*@/}"
 	local addr="${nid//@*/}"
 
+	local rc=1
+
 	local num_re='[0-9]+'
-	local ip_re="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
 
 	if [[ $net =~ (gni|kfi)[0-9]* ]]; then
-		[[ $addr =~ ${num_re} ]] && return 0
+		[[ $addr =~ ${num_re} ]] && rc=0
+	elif [[ $net =~ tcp[0-9]* ]]; then
+		if ip_is_v4 "$addr" || ip_is_v6 "$addr"; then
+			rc=0
+		fi
+	elif [[ $net =~ o2ib[0-9]* ]]; then
+		ip_is_v4 "$addr" && rc=0
 	else
-		[[ $addr =~ ${ip_re} ]] && return 0
+		echo "Unrecognized net: \"$net\""
 	fi
+
+	if ((rc != 0)); then
+		echo "Invalid nid: \"$nid\""
+	fi
+
+	return $rc
 }
 
 validate_nids() {
 	local yfile=$TMP/sanity-lnet-$testnum-actual.yaml
-	local primary_nids=$(awk '/- primary nid:/{print $NF}' $yfile | xargs echo)
-	local secondary_nids=$(awk '/- nid:/{print $NF}' $yfile | xargs echo)
+	local primary_nids=$(awk '/-\s+primary nid:/{print $NF}' $yfile |
+			     xargs echo)
+	local secondary_nids=$(awk '/-\s+nid:/{print $NF}' $yfile | xargs echo)
 	local gateway_nids=$(awk '/gateway:/{print $NF}' $yfile | xargs echo)
 
 	local nid
-	for nid in $primary_nids $secondary_nids; do
+	for nid in $primary_nids $secondary_nids $gateway_nids; do
 		validate_nid "$nid" || error "Bad NID \"${nid}\""
 	done
 	return 0
@@ -207,6 +221,8 @@ validate_peer_nids() {
 validate_gateway_nids() {
 	local expect_gw=$(grep -c -- 'gateway:' $TMP/sanity-lnet-$testnum-expected.yaml)
 	local actual_gw=$(grep -c -- 'gateway:' $TMP/sanity-lnet-$testnum-actual.yaml)
+
+	echo "expect_gw: $expect_gw actual_gw: $actual_gw"
 	if [[ $expect_gw -ne $actual_gw ]]; then
 		compare_yaml_files
 		error "Expected $expect_gw gateways but found $actual_gw gateways"
@@ -215,8 +231,11 @@ validate_gateway_nids() {
 	local expect_gwnids=$(awk '/gateway:/{print $NF}' $TMP/sanity-lnet-$testnum-expected.yaml |
 			      xargs echo)
 	local nid
+
+	echo "expect_gwnids: $expect_gwnids"
 	for nid in ${expect_gwnids}; do
 		if ! grep -q "gateway: ${nid}" $TMP/sanity-lnet-$testnum-actual.yaml; then
+			compare_yaml_files
 			error "${nid} not configured as gateway"
 		fi
 	done
@@ -283,10 +302,6 @@ if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 		always_except LU-9680 500
 		always_except LU-14288 101
 		always_except LU-14288 103
-		always_except LU-16822 100
-		always_except LU-16822 102
-		always_except LU-16822 105
-		always_except LU-16822 106
 		always_except LU-17458 220
 		always_except LU-17455 250
 		always_except LU-17457 208
@@ -1151,8 +1166,12 @@ compare_route_add() {
 
 	do_lnetctl route add --net ${rnet} --gateway ${gw} ||
 		error "route add failed $?"
+
+	echo "$LNETCTL export --backup > $actual"
+
 	$LNETCTL export --backup > $actual ||
 		error "export failed $?"
+
 	validate_gateway_nids
 	return $?
 }
@@ -1163,6 +1182,213 @@ append_net_tunables() {
 	$LNETCTL net show -v --net ${net} | grep -v 'dev cpt' |
 		awk '/^\s+tunables:$/,/^\s+CPT:/' >> $TMP/sanity-lnet-$testnum-expected.yaml
 }
+
+ROUTERS_REQUIRED=1
+ROUTERS=()
+declare -A ROUTER_INTERFACES
+RPEERS_REQUIRED=1
+RPEERS=()
+declare -A RPEER_INTERFACES
+init_router_test_vars() {
+	local rnodes_required
+	((rnodes_required=ROUTERS_REQUIRED+RPEERS_REQUIRED))
+	# all remote nodes, including some that may not be used
+	local rnodes_all=( $(remote_nodes_list) )
+	[[ -z $rnodes_all || "${#rnodes_all[@]}" -lt $rnodes_required ]] &&
+		skip "Need at least $rnodes_required remote nodes" \
+			"found \"${rnodes_all[@]}\""
+
+	ROUTERS=( "${rnodes_all[@]:0:${ROUTERS_REQUIRED}}" )
+	RPEERS=( "${rnodes_all[@]:${ROUTERS_REQUIRED}:${RPEERS_REQUIRED}}" )
+
+	local rnodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]})
+	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
+
+	do_nodes $rnodes $LUSTRE_RMMOD ||
+		error "failed to unload modules"
+
+	do_rpc_nodes $rnodes "load_lnet config_on_load=1" ||
+		error "Failed to load and configure LNet"
+
+	for router in ${ROUTERS[@]}; do
+		ROUTER_INTERFACES[$router]=$(do_rpc_nodes --quiet \
+						$router lnet_if_list)
+	done
+
+	for rpeer in ${RPEERS[@]}; do
+		RPEER_INTERFACES[$rpeer]=$(do_rpc_nodes --quiet \
+						$rpeer lnet_if_list)
+	done
+
+	do_nodes $all_nodes $LUSTRE_RMMOD ||
+		error "Failed to unload modules"
+
+	[[ ${#INTERFACES[@]} -eq 0 ]] &&
+		error "No interfaces configured for local host $HOSTNAME"
+	for router in ${!ROUTER_INTERFACES[@]}; do
+		[[ -z "${ROUTER_INTERFACES[$router]}" ]] &&
+			error "No interfaces configured for router $router"
+	done
+	for rpeer in ${!RPEER_INTERFACES[@]}; do
+		[[ -z "${RPEER_INTERFACES[$rpeer]}" ]] &&
+			error "No interfaces configured for remote peer $rpeer"
+	done
+
+	return 0
+}
+
+do_net_add() {
+	local node=$1
+	local net=$2
+	local if=$3
+
+	do_rpc_nodes $node "$LNETCTL net add --net $net --if $if" ||
+		error "add $net on interface $if on node $node failed rc=$?"
+}
+
+do_route_add() {
+	local node=$1
+	local net=$2
+	local gw=$3
+
+	do_node $node "$LNETCTL route add --net $net --gateway $gw" ||
+		error "route add to $net via $gw failed rc=$?"
+}
+
+declare -A ROUTER_NIDS
+declare -A RPEER_NIDS
+LNIDS=()
+LOCAL_NET=${NETTYPE}
+REMOTE_NET=${NETTYPE}1
+setup_router_test() {
+	local mod_opts="$@"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
+		skip "need at least 2.15.0 for load_lnet"
+
+	if [[ ${#RPEER_INTERFACES[@]} -eq 0 ]]; then
+		init_router_test_vars ||
+			return $?
+	fi
+
+	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
+
+	do_nodes $all_nodes $LUSTRE_RMMOD ||
+		error "failed to unload modules"
+
+	mod_opts+=" alive_router_check_interval=5"
+	mod_opts+=" router_ping_timeout=5"
+	mod_opts+=" large_router_buffers=4"
+	mod_opts+=" small_router_buffers=8"
+	mod_opts+=" tiny_router_buffers=16"
+	do_rpc_nodes $all_nodes load_lnet "${mod_opts}" ||
+		error "Failed to load lnet"
+
+	do_nodes $all_nodes "$LNETCTL lnet configure" ||
+		error "Failed to initialize DLC"
+
+	for router in ${!ROUTER_INTERFACES[@]}; do
+		local router_interfaces=( ${ROUTER_INTERFACES[$router]} )
+
+		do_net_add $router $LOCAL_NET ${router_interfaces[0]} ||
+			return $?
+		do_net_add $router $REMOTE_NET ${router_interfaces[0]} ||
+			return $?
+	done
+
+	for rpeer in ${!RPEER_INTERFACES[@]}; do
+		local rpeer_interfaces=( ${RPEER_INTERFACES[$rpeer]} )
+
+		do_net_add $rpeer $REMOTE_NET ${rpeer_interfaces[0]} ||
+			return $?
+	done
+
+	add_net $LOCAL_NET ${INTERFACES[0]} ||
+		return $?
+
+	for router in ${!ROUTER_INTERFACES[@]}; do
+		ROUTER_NIDS[$router]=$(do_node $router $LCTL list_nids
+					2>/dev/null | xargs echo)
+	done
+
+	for rpeer in ${!RPEER_INTERFACES[@]}; do
+		RPEER_NIDS[$rpeer]=$(do_node $rpeer $LCTL list_nids
+					2>/dev/null | xargs echo)
+	done
+
+	LNIDS=( $($LCTL list_nids 2>/dev/null | xargs echo) )
+}
+
+do_route_del() {
+	local node=$1
+	local net=$2
+	local gw=$3
+
+	do_nodesv $node \
+	'output="$($LNETCTL route show --net $net --gateway $gw 2>/dev/null)"; \
+		if [[ "x${lnetctl_text}x" != "xx" ]]; then		       \
+				$LNETCTL route del --net $net --gateway $gw;   \
+			else						       \
+				exit 0;					       \
+			fi'
+}
+
+cleanup_router_test() {
+	local all_nodes=$(comma_list $HOSTNAME ${ROUTERS[@]} ${RPEERS[@]})
+
+	for router in ${!ROUTER_NIDS[@]}; do
+		local router_nids=( ${ROUTER_NIDS[$router]} )
+
+		do_route_del $HOSTNAME $REMOTE_NET ${router_nids[0]} ||
+			error "Failed to delete $HOSTNAME -> "\
+				"$REMOTE_NET via ${router_nids[0]} route"
+	done
+
+	for router in ${!ROUTER_INTERFACES[@]}; do
+		local router_nids=( ${ROUTER_NIDS[$router]} )
+
+		do_route_del $rpeer $LOCAL_NET ${router_nids[1]} ||
+			error "Failed to delete $rpeer -> "\
+				"$LOCAL_NET via ${router_nids[1]} route"
+	done
+
+	do_nodes $all_nodes $LUSTRE_RMMOD ||
+		error "failed to unload modules"
+
+	return 0
+}
+
+test_100() {
+	define_global_yaml
+	setup_router_test || return $?
+	local router_nids=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: $LOCAL_NET
+      local NI(s):
+        - interfaces:
+              0: ${INTERFACES[0]}
+EOF
+	append_net_tunables $LOCAL_NET
+	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: $REMOTE_NET
+      gateway: ${router_nids[0]}
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+peer:
+    - primary nid: ${router_nids[0]}
+      Multi-Rail: False
+      peer ni:
+        - nid: ${router_nids[0]}
+EOF
+	append_global_yaml
+	compare_route_add "$REMOTE_NET" "${router_nids[0]}"
+	cleanup_router_test
+}
+run_test 100 "Add route with single gw"
 
 ARR_IF0_IP=($(ip -o -4 a s ${INTERFACES[0]} |
 	    awk '{print $4}' | sed 's/\/.*//'))
@@ -1182,42 +1408,13 @@ fi
 GW_NID="${IF0_NET}.${GW_HOSTNUM}@${NETTYPE}"
 echo "Using GW_NID:$GW_NID"
 
-test_100() {
-	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
-
-	reinit_dlc || return $?
-	add_net "${NETTYPE}" "${INTERFACES[0]}"
-	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
-net:
-    - net type: ${NETTYPE}
-      local NI(s):
-        - interfaces:
-              0: ${INTERFACES[0]}
-EOF
-	append_net_tunables tcp
-	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-route:
-    - net: tcp7
-      gateway: ${GW_NID}
-      hop: -1
-      priority: 0
-      health_sensitivity: 1
-peer:
-    - primary nid: ${GW_NID}
-      Multi-Rail: False
-      peer ni:
-        - nid: ${GW_NID}
-EOF
-	append_global_yaml
-	compare_route_add "tcp7" "${GW_NID}"
-}
-run_test 100 "Add route with single gw (tcp)"
-
 test_101() {
-	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+	[[ -n $ARR_IF0_IP ]] || skip "Need IPv4 NIDs"
 
 	reinit_dlc || return $?
+
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
+
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
     - net type: ${NETTYPE}
@@ -1225,13 +1422,13 @@ net:
         - interfaces:
               0: ${INTERFACES[0]}
 EOF
-	append_net_tunables tcp
+	append_net_tunables ${NETTYPE}
 
 	echo "route:" >> $TMP/sanity-lnet-$testnum-expected.yaml
 	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
 		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-    - net: tcp8
-      gateway: ${IF0_NET}.${i}@tcp
+    - net: ${REMOTE_NET}
+      gateway: ${IF0_NET}.${i}@${NETTYPE}
       hop: -1
       priority: 0
       health_sensitivity: 1
@@ -1241,19 +1438,19 @@ EOF
 	echo "peer:" >> $TMP/sanity-lnet-$testnum-expected.yaml
 	for i in $(seq $GW_HOSTNUM $((GW_HOSTNUM + 4))); do
 		cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-    - primary nid: ${IF0_NET}.${i}@tcp
+    - primary nid: ${IF0_NET}.${i}@${NETTYPE}
       Multi-Rail: False
       peer ni:
-        - nid: ${IF0_NET}.${i}@tcp
+        - nid: ${IF0_NET}.${i}@${NETTYPE}
 EOF
 	done
 	append_global_yaml
 
-	local gw="${IF0_NET}.[$GW_HOSTNUM-$((GW_HOSTNUM + 4))]@tcp"
+	local gw="${IF0_NET}.[$GW_HOSTNUM-$((GW_HOSTNUM + 4))]@${NETTYPE}"
 
-	compare_route_add "tcp8" "${gw}"
+	compare_route_add "${REMOTE_NET}" "${gw}"
 }
-run_test 101 "Add route with multiple gw (tcp)"
+run_test 101 "Add route with multiple gw"
 
 compare_route_del() {
 	local rnet="$1"
@@ -1268,32 +1465,25 @@ compare_route_del() {
 	validate_gateway_nids
 }
 
-generate_gw_nid() {
-	local net=${1}
-
-	if [[ ${net} =~ (tcp|o2ib)[0-9]* ]]; then
-		echo "${GW_NID}"
-	else
-		echo "$((${testnum} % 255))@${net}"
-	fi
-}
-
 test_102() {
-	reinit_dlc || return $?
-	add_net "${NETTYPE}" "${INTERFACES[0]}"
+	define_global_yaml
+	setup_router_test || return $?
+	local router_nids=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
+
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 
-	local gwnid=$(generate_gw_nid ${NETTYPE})
-
-	do_lnetctl route add --net ${NETTYPE}2 --gateway ${gwnid} ||
+	do_lnetctl route add --net $REMOTE_NET --gateway ${router_nids[0]} ||
 		error "route add failed $?"
-	compare_route_del "${NETTYPE}2" "${gwnid}"
+
+	compare_route_del "$REMOTE_NET" "${router_nids[0]}"
+	# Routes already deleted so don't call cleanup_router_test
 }
 run_test 102 "Delete route with single gw"
 
-IP_NID_EXPR='103.103.103.[103-120/4]'
 NUM_NID_EXPR='[103-120/4]'
 test_103() {
+	[[ -n $ARR_IF0_IP ]] || skip "Need IPv4 NIDs"
+
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
@@ -1371,32 +1561,30 @@ EOF
 run_test 104 "Set/check response_tracking param"
 
 test_105() {
-	reinit_dlc || return $?
-	add_net "${NETTYPE}" "${INTERFACES[0]}"
+	define_global_yaml
+	setup_router_test || return $?
+	local router_nids=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
 
-	local gwnid=$(generate_gw_nid ${NETTYPE})
-
-	do_lnetctl route add --net ${NETTYPE}105 --gateway ${gwnid} ||
+	do_lnetctl route add --net $REMOTE_NET --gateway ${router_nids[0]} ||
 		error "route add failed $?"
-	do_lnetctl peer add --prim ${gwnid} &&
+	do_lnetctl peer add --prim ${router_nids[0]} &&
 		error "peer add should fail"
 
-	return 0
+	cleanup_router_test
 }
 run_test 105 "Adding duplicate GW peer should fail"
 
 test_106() {
-	reinit_dlc || return $?
-	add_net "${NETTYPE}" "${INTERFACES[0]}"
+	define_global_yaml
+	setup_router_test || return $?
+	local router_nids=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
 
-	local gwnid=$(generate_gw_nid ${NETTYPE})
-
-	do_lnetctl route add --net ${NETTYPE}106 --gateway ${gwnid} ||
+	do_lnetctl route add --net $REMOTE_NET --gateway ${router_nids[0]} ||
 		error "route add failed $?"
-	do_lnetctl peer del --prim ${gwnid} &&
+	do_lnetctl peer del --prim ${router_nids[0]} &&
 		error "peer del should fail"
 
-	return 0
+	cleanup_router_test
 }
 run_test 106 "Deleting GW peer should fail"
 
@@ -2787,181 +2975,6 @@ test_219() {
 }
 run_test 219 "Consolidate peer entries"
 
-do_net_add() {
-	local node=$1
-	local net=$2
-	local if=$3
-
-	do_rpc_nodes $node "$LNETCTL net add --net $net --if $if" ||
-		error "add $net on interface $if on node $node failed rc=$?"
-}
-
-do_route_add() {
-	local node=$1
-	local net=$2
-	local gw=$3
-
-	do_node $node "$LNETCTL route add --net $net --gateway $gw" ||
-		error "route add to $net via $gw failed rc=$?"
-}
-
-ROUTERS_REQUIRED=
-ROUTERS=()
-declare -A ROUTER_INTERFACES
-RPEERS_REQUIRED=
-RPEERS=()
-declare -A RPEER_INTERFACES
-init_router_test_vars() {
-	local rnodes_required
-	((rnodes_required=ROUTERS_REQUIRED+RPEERS_REQUIRED))
-	# all remote nodes, including some that may not be used
-	local rnodes_all=( $(remote_nodes_list) )
-	[[ -z $rnodes_all || "${#rnodes_all[@]}" -lt $rnodes_required ]] &&
-		skip "Need at least $rnodes_required remote nodes" \
-			"found \"${rnodes_all[@]}\""
-
-	ROUTERS=( "${rnodes_all[@]:0:${ROUTERS_REQUIRED}}" )
-	RPEERS=( "${rnodes_all[@]:${ROUTERS_REQUIRED}:${RPEERS_REQUIRED}}" )
-
-	local rnodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]})
-	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
-
-	do_nodes $rnodes $LUSTRE_RMMOD ||
-		error "failed to unload modules"
-
-	do_rpc_nodes $rnodes "load_lnet config_on_load=1" ||
-		error "Failed to load and configure LNet"
-
-	for router in ${ROUTERS[@]}; do
-		ROUTER_INTERFACES[$router]=$(do_rpc_nodes --quiet \
-						$router lnet_if_list)
-	done
-
-	for rpeer in ${RPEERS[@]}; do
-		RPEER_INTERFACES[$rpeer]=$(do_rpc_nodes --quiet \
-						$rpeer lnet_if_list)
-	done
-
-	do_nodes $all_nodes $LUSTRE_RMMOD ||
-		error "Failed to unload modules"
-
-	[[ ${#INTERFACES[@]} -eq 0 ]] &&
-		error "No interfaces configured for local host $HOSTNAME"
-	for router in ${!ROUTER_INTERFACES[@]}; do
-		[[ -z "${ROUTER_INTERFACES[$router]}" ]] &&
-			error "No interfaces configured for router $router"
-	done
-	for rpeer in ${!RPEER_INTERFACES[@]}; do
-		[[ -z "${RPEER_INTERFACES[$rpeer]}" ]] &&
-			error "No interfaces configured for remote peer $rpeer"
-	done
-
-	return 0
-}
-
-declare -A ROUTER_NIDS
-declare -A RPEER_NIDS
-LNIDS=()
-LOCAL_NET=${NETTYPE}1
-REMOTE_NET=${NETTYPE}2
-setup_router_test() {
-	local mod_opts="$@"
-
-	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
-		skip "need at least 2.15.0 for load_lnet"
-
-	if [[ ${#RPEER_INTERFACES[@]} -eq 0 ]]; then
-		init_router_test_vars ||
-			return $?
-	fi
-
-	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
-
-	do_nodes $all_nodes $LUSTRE_RMMOD ||
-		error "failed to unload modules"
-
-	mod_opts+=" alive_router_check_interval=5"
-	mod_opts+=" router_ping_timeout=5"
-	mod_opts+=" large_router_buffers=4"
-	mod_opts+=" small_router_buffers=8"
-	mod_opts+=" tiny_router_buffers=16"
-	do_rpc_nodes $all_nodes load_lnet "${mod_opts}" ||
-		error "Failed to load lnet"
-
-	do_nodes $all_nodes "$LNETCTL lnet configure" ||
-		error "Failed to initialize DLC"
-
-	for router in ${!ROUTER_INTERFACES[@]}; do
-		local router_interfaces=( ${ROUTER_INTERFACES[$router]} )
-
-		do_net_add $router $LOCAL_NET ${router_interfaces[0]} ||
-			return $?
-		do_net_add $router $REMOTE_NET ${router_interfaces[0]} ||
-			return $?
-	done
-
-	for rpeer in ${!RPEER_INTERFACES[@]}; do
-		local rpeer_interfaces=( ${RPEER_INTERFACES[$rpeer]} )
-
-		do_net_add $rpeer $REMOTE_NET ${rpeer_interfaces[0]} ||
-			return $?
-	done
-
-	add_net $LOCAL_NET ${INTERFACES[0]} ||
-		return $?
-
-	for router in ${!ROUTER_INTERFACES[@]}; do
-		ROUTER_NIDS[$router]=$(do_node $router $LCTL list_nids
-					2>/dev/null | xargs echo)
-	done
-
-	for rpeer in ${!RPEER_INTERFACES[@]}; do
-		RPEER_NIDS[$rpeer]=$(do_node $rpeer $LCTL list_nids
-					2>/dev/null | xargs echo)
-	done
-
-	LNIDS=( $($LCTL list_nids 2>/dev/null | xargs echo) )
-}
-
-do_route_del() {
-	local node=$1
-	local net=$2
-	local gw=$3
-
-	do_nodesv $node \
-	'output="$($LNETCTL route show --net $net --gateway $gw 2>/dev/null)"; \
-		if [[ "x${lnetctl_text}x" != "xx" ]]; then		       \
-				$LNETCTL route del --net $net --gateway $gw;   \
-			else						       \
-				exit 0;					       \
-			fi'
-}
-
-cleanup_router_test() {
-	local all_nodes=$(comma_list $HOSTNAME ${ROUTERS[@]} ${RPEERS[@]})
-
-	for router in ${!ROUTER_NIDS[@]}; do
-		local router_nids=( ${ROUTER_NIDS[$router]} )
-
-		do_route_del $HOSTNAME $REMOTE_NET ${router_nids[0]} ||
-			error "Failed to delete $HOSTNAME -> "\
-				"$REMOTE_NET via ${router_nids[0]} route"
-	done
-
-	for router in ${!ROUTER_INTERFACES[@]}; do
-		local router_nids=( ${ROUTER_NIDS[$router]} )
-
-		do_route_del $rpeer $LOCAL_NET ${router_nids[1]} ||
-			error "Failed to delete $rpeer -> "\
-				"$LOCAL_NET via ${router_nids[1]} route"
-	done
-
-	do_nodes $all_nodes $LUSTRE_RMMOD ||
-		error "failed to unload modules"
-
-	return 0
-}
-
 # check that all routes are up
 check_route_aliveness() {
 	local node="$1"
@@ -3097,9 +3110,6 @@ do_basic_rtr_test() {
 }
 
 test_220() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	setup_router_test || return $?
 
 	do_basic_rtr_test || return $?
@@ -3119,9 +3129,6 @@ test_220() {
 run_test 220 "Add routes w/default options - check aliveness"
 
 test_221() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	setup_router_test lnet_peer_discovery_disabled=1 || return $?
 
 	do_basic_rtr_test || return $?
@@ -3206,9 +3213,6 @@ do_aarf_enabled_test() {
 }
 
 test_222() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	setup_router_test avoid_asym_router_failure=1 || return $?
 
 	do_aarf_enabled_test || return $?
@@ -3218,9 +3222,6 @@ test_222() {
 run_test 222 "Check avoid_asym_router_failure=1"
 
 test_223() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	local opts="avoid_asym_router_failure=1 lnet_peer_discovery_disabled=1"
 
 	setup_router_test $opts || return $?
@@ -3284,9 +3285,6 @@ do_aarf_disabled_test() {
 }
 
 test_224() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	setup_router_test avoid_asym_router_failure=0 ||
 		return $?
 
@@ -3299,9 +3297,6 @@ test_224() {
 run_test 224 "Check avoid_asym_router_failure=0"
 
 test_225() {
-	ROUTERS_REQUIRED=1
-	RPEERS_REQUIRED=1
-
 	local opts="avoid_asym_router_failure=0 lnet_peer_discovery_disabled=1"
 
 	setup_router_test $opts || return $?
