@@ -2185,17 +2185,25 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
 
 	stripe_count = lo->ldo_dir_stripe_count;
-	if (!(lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
-	    stripe_count > mdt_count)
+	/* silently clear OVERSTRIPED flag on single MDT system */
+	if (mdt_count == 1)
+		lo->ldo_dir_hash_type &= ~LMV_HASH_FLAG_OVERSTRIPED;
+	if (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) {
+		/* silently clamp stripe count if MDTs are not specific */
+		if (stripe_count > mdt_count * lod->lod_max_stripes_per_mdt) {
+			if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC)
+				stripe_count = mdt_count *
+					       lod->lod_max_stripes_per_mdt;
+			else
+				RETURN(-E2BIG);
+		}
+		/* clear OVERSTRIPED if not overstriped */
+		if (stripe_count <= mdt_count &&
+		    le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC)
+			lo->ldo_dir_hash_type &= ~LMV_HASH_FLAG_OVERSTRIPED;
+	} else if (stripe_count > mdt_count) {
 		RETURN(-E2BIG);
-
-	if ((lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
-	    (stripe_count > mdt_count * LMV_MAX_STRIPES_PER_MDT ||
-	/* a single MDT doesn't initialize the infrastructure for striped
-	 * directories, so we just don't support overstriping in that case
-	 */
-		   mdt_count == 1))
-		RETURN(-E2BIG);
+	}
 
 	OBD_ALLOC_PTR_ARRAY(stripes, stripe_count);
 	if (!stripes)
@@ -2228,6 +2236,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) {
 			int stripes_per_mdt;
 			int mdt;
+			bool overstriped = false;
 
 			is_specific = true;
 
@@ -2235,13 +2244,24 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			for (mdt = 0; mdt < mdt_count + 1; mdt++) {
 				stripes_per_mdt = 0;
 				for (i = 0; i < stripe_count; i++) {
-					if (mdt == le32_to_cpu(
-					    lum->lum_objects[i].lum_mds))
+					if (mdt ==
+					    le32_to_cpu(lum->lum_objects[i].lum_mds))
 						stripes_per_mdt++;
 				}
-				if (stripes_per_mdt > LMV_MAX_STRIPES_PER_MDT)
+				if (stripes_per_mdt >
+				    lod->lod_max_stripes_per_mdt)
 					GOTO(out_free, rc = -EINVAL);
+				if (stripes_per_mdt > 1)
+					overstriped = true;
 			}
+			if (!overstriped &&
+			    (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED))
+				lo->ldo_dir_hash_type &=
+					~LMV_HASH_FLAG_OVERSTRIPED;
+			else if (overstriped &&
+				 !(lo->ldo_dir_hash_type &
+				   LMV_HASH_FLAG_OVERSTRIPED))
+				GOTO(out_free, rc = -EINVAL);
 
 			for (i = 0; i < stripe_count; i++)
 				idx_array[i] =
@@ -5939,8 +5959,7 @@ static void lod_ah_init(const struct lu_env *env,
 
 		max_stripe_count = d->lod_remote_mdt_count + 1;
 		if (lc->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED)
-			max_stripe_count =
-				max_stripe_count * LMV_MAX_STRIPES_PER_MDT;
+			max_stripe_count *= d->lod_max_stripes_per_mdt;
 
 		/* shrink the stripe_count to max stripe count */
 		if (lc->ldo_dir_stripe_count > max_stripe_count &&
@@ -9031,8 +9050,6 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 
 	saved_count = lo->ldo_dir_stripes_allocated;
 	stripe_count = le32_to_cpu(lum->lum_stripe_count);
-	if (stripe_count <= saved_count)
-		RETURN(-EINVAL);
 
 	/* if the split target is overstriped, we need to put that flag in the
 	 * current layout so it can allocate the larger number of stripes
@@ -9042,20 +9059,18 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	 * rather than after when we finalize directory setup (at the end of
 	 * this function).
 	 */
-	if (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_FLAG_OVERSTRIPED)
-		lo->ldo_dir_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
-
-	if (!(lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
-	    stripe_count > mdt_count) {
-		RETURN(-E2BIG);
-	} else if ((lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) &&
-		   (stripe_count > mdt_count * LMV_MAX_STRIPES_PER_MDT ||
-	/* a single MDT doesn't initialize the infrastructure for striped
-	 * directories, so we just don't support overstriping in that case
-	 */
-		   mdt_count == 1)) {
+	if (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_FLAG_OVERSTRIPED) {
+		/* silently clamp stripe count if it exceeds limit */
+		if (stripe_count > mdt_count * lod->lod_max_stripes_per_mdt)
+			stripe_count = mdt_count * lod->lod_max_stripes_per_mdt;
+		if (stripe_count > mdt_count)
+			lo->ldo_dir_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
+	} else if (stripe_count > mdt_count) {
 		RETURN(-E2BIG);
 	}
+
+	if (stripe_count <= saved_count)
+		RETURN(-EINVAL);
 
 	dof->dof_type = DFT_DIR;
 

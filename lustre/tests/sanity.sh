@@ -26923,7 +26923,12 @@ test_300t() {
 }
 run_test 300t "test max_mdt_stripecount"
 
-MDT_OVSTRP_VER="2.15.60"
+mdts=$(comma_list $(mdts_nodes))
+max_stripes_per_mdt=$(do_facet mds1 $LCTL get_param -n \
+		      lod.$FSNAME-MDT0000-mdtlov.max_stripes_per_mdt || echo 0)
+((max_stripes_per_mdt == 0)) ||
+	do_nodes $mdts $LCTL set_param -n \
+	lod.$FSNAME-MDT*.max_stripes_per_mdt=$LMV_MAX_STRIPES_PER_MDT
 # 300u family tests MDT overstriping
 test_300ua() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
@@ -26939,7 +26944,7 @@ test_300ua() {
 
 	# This does a basic interop test - if the MDS does not support mdt
 	# overstriping, we should get stripes == number of MDTs
-	if (( $MDS1_VERSION < $(version_code $MDT_OVSTRP_VER) )); then
+	if (( max_stripes_per_mdt == 0 )); then
 		expected_count=$MDSCOUNT
 	else
 		expected_count=$setcount
@@ -26951,8 +26956,7 @@ test_300ua() {
 		error "(2) unable to rm overstriped dir"
 
 	# Tests after this require overstriping support
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		{ echo "skipped for MDS < $MDT_OVSTRP_VER"; return 0; }
+	(( max_stripes_per_mdt > 0 )) || return 0
 
 	test_striped_dir 0 $setcount true ||
 		error "(3)failed on overstriped dir"
@@ -26967,8 +26971,8 @@ test_300ua() {
 run_test 300ua "basic overstriped dir sanity test"
 
 test_300ub() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	mkdir $DIR/$tdir
@@ -27036,8 +27040,8 @@ test_300ub() {
 run_test 300ub "test MDT overstriping interface & limits"
 
 test_300uc() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	mkdir $DIR/$tdir
@@ -27064,8 +27068,8 @@ test_300uc() {
 run_test 300uc "test MDT overstriping as default & inheritance"
 
 test_300ud() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	local mdts=$(comma_list $(mdts_nodes))
@@ -27113,8 +27117,8 @@ test_300ud() {
 run_test 300ud "dir split"
 
 test_300ue() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	local mdts=$(comma_list $(mdts_nodes))
@@ -27161,8 +27165,8 @@ test_300ue() {
 run_test 300ue "dir merge"
 
 test_300uf() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	# maximum amount of local locks:
@@ -27207,8 +27211,8 @@ test_300uf() {
 run_test 300uf "migrate with too many local locks"
 
 test_300ug() {
-	(( MDS1_VERSION >= $(version_code $MDT_OVSTRP_VER) )) ||
-		skip "skipped for MDS < $MDT_OVSTRP_VER"
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 
 	mkdir -p $DIR/$tdir
@@ -27238,6 +27242,55 @@ test_300ug() {
 	rm -rf $migrate_dir || error "(6) unable to rm overstriped dir"
 }
 run_test 300ug "migrate overstriped dirs"
+
+test_300uh() {
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local val=$(do_facet mds1 $LCTL get_param -n \
+		    lod.$FSNAME-MDT0000-mdtlov.max_stripes_per_mdt)
+
+	stack_trap "do_nodes $mdts $LCTL set_param -n \
+		    lod.$FSNAME-MDT*.max_stripes_per_mdt=$val"
+
+	# create 5 stripes will be silently clamped down
+	do_nodes $mdts $LCTL set_param -n \
+		lod.$FSNAME-MDT*.max_stripes_per_mdt=2
+	$LFS setdirstripe -C $((MDSCOUNT * 5)) $DIR/$tdir ||
+		error "mkdir $tdir failed"
+	$LFS getdirstripe -H $DIR/$tdir | grep overstriped ||
+		error "overstriped flag not found"
+
+	local count=$($LFS getdirstripe -c $DIR/$tdir)
+
+	((count == 2 * MDSCOUNT)) || error "count $count != $((2 * MDSCOUNT))"
+
+	# create 3 stripes on MDT0 should fail
+	$LFS setdirstripe -i 0,0,0 $DIR/$tdir/sub && error "mkdir sub succeeded"
+
+	# OVERSTRIPED flag will be cleared if not really overstriped
+	$LFS setdirstripe -C $MDSCOUNT $DIR/$tdir/sub ||
+		error "mkdir sub failed"
+	$LFS getdirstripe -H $DIR/$tdir/sub | grep -v overstriped ||
+		error "overstriped flag found"
+}
+run_test 300uh "overstripe tunable max_stripes_per_mdt"
+
+test_300ui() {
+	(( max_stripes_per_mdt > 0 )) ||
+		skip "skipped for MDS that doesn't support metadata overstripe"
+	(( MDSCOUNT == 1 )) || skip "1 MDT only"
+
+	$LFS setdirstripe -C 2 $DIR/$tdir && error "mkdir $tdir succeeded" ||
+		true
+}
+run_test 300ui "overstripe is not supported on one MDT system"
+
+(( max_stripes_per_mdt == 0 )) ||
+	do_nodes $mdts $LCTL set_param -n \
+		lod.$FSNAME-MDT*.max_stripes_per_mdt=$max_stripes_per_mdt
 
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||

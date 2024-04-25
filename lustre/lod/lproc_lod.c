@@ -345,6 +345,38 @@ static ssize_t max_mdt_stripecount_store(struct kobject *kobj,
 
 LUSTRE_RW_ATTR(max_mdt_stripecount);
 
+static ssize_t max_stripes_per_mdt_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", lod->lod_max_stripes_per_mdt);
+}
+
+static ssize_t max_stripes_per_mdt_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	long val;
+	int rc;
+
+	rc = kstrtol(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1 || val > LMV_MAX_STRIPES_PER_MDT) /* any limitation? */
+		return -ERANGE;
+
+	lod->lod_max_stripes_per_mdt = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(max_stripes_per_mdt);
+
 
 /**
  * Show default striping pattern (LOV_PATTERN_*).
@@ -1386,6 +1418,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_stripecount.attr,
 	&lustre_attr_max_stripecount.attr,
 	&lustre_attr_max_mdt_stripecount.attr,
+	&lustre_attr_max_stripes_per_mdt.attr,
 	&lustre_attr_stripetype.attr,
 	&lustre_attr_activeobd.attr,
 	&lustre_attr_desc_uuid.attr,
