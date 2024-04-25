@@ -216,7 +216,7 @@ enum kib_dev_caps {
 struct kib_dev {
 	struct list_head	ibd_list;	/* chain on kib_devs */
 	struct list_head	ibd_fail_list;	/* chain on kib_failed_devs */
-	__u32			ibd_ifip;	/* IPoIB interface IP */
+	struct sockaddr_storage	ibd_addr;	/* Interface network address */
 	/** IPoIB interface name */
 	char			ibd_ifname[KIB_IFNAME_SIZE];
 	int			ibd_nnets;	/* # nets extant */
@@ -670,7 +670,7 @@ struct kib_peer_ni {
 	/* on peer_ni hash chain */
 	struct hlist_node	ibp_list;
 	/* who's on the other end(s) */
-	lnet_nid_t		ibp_nid;
+	struct lnet_nid		ibp_nid;
 	/* LNet interface */
 	struct lnet_ni		*ibp_ni;
 	/* all active connections */
@@ -815,7 +815,7 @@ void kiblnd_destroy_peer(struct kref *kref);
 static inline void kiblnd_peer_addref(struct kib_peer_ni *peer_ni)
 {
 	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)++\n",
-	       peer_ni, libcfs_nid2str(peer_ni->ibp_nid),
+	       peer_ni, libcfs_nidstr(&peer_ni->ibp_nid),
 	       kref_read(&peer_ni->ibp_kref));
 	kref_get(&(peer_ni)->ibp_kref);
 }
@@ -823,7 +823,7 @@ static inline void kiblnd_peer_addref(struct kib_peer_ni *peer_ni)
 static inline void kiblnd_peer_decref(struct kib_peer_ni *peer_ni)
 {
 	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)--\n",
-	       peer_ni, libcfs_nid2str(peer_ni->ibp_nid),
+	       peer_ni, libcfs_nidstr(&peer_ni->ibp_nid),
 	       kref_read(&peer_ni->ibp_kref));
 	kref_put(&peer_ni->ibp_kref, kiblnd_destroy_peer);
 }
@@ -1174,11 +1174,12 @@ int  kiblnd_translate_mtu(int value);
 
 int  kiblnd_dev_failover(struct kib_dev *dev, struct net *ns);
 int kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
-		       lnet_nid_t nid);
+		       struct lnet_nid *nid);
 bool kiblnd_reconnect_peer(struct kib_peer_ni *peer);
 void kiblnd_destroy_dev(struct kib_dev *dev);
 void kiblnd_unlink_peer_locked(struct kib_peer_ni *peer_ni);
-struct kib_peer_ni *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
+struct kib_peer_ni *kiblnd_find_peer_locked(struct lnet_ni *ni,
+					    struct lnet_nid *nid);
 int  kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
 				     int version, u64 incarnation);
 int  kiblnd_close_peer_conns_locked(struct kib_peer_ni *peer_ni, int why);
@@ -1190,7 +1191,8 @@ void kiblnd_destroy_conn(struct kib_conn *conn);
 void kiblnd_close_conn(struct kib_conn *conn, int error);
 void kiblnd_close_conn_locked(struct kib_conn *conn, int error);
 
-void kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx, lnet_nid_t nid);
+void kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx,
+		      struct lnet_nid *nid);
 void kiblnd_txlist_done(struct list_head *txlist, int status,
 			enum lnet_msg_hstatus hstatus);
 
@@ -1199,7 +1201,7 @@ void kiblnd_cq_event(struct ib_event *event, void *arg);
 void kiblnd_cq_completion(struct ib_cq *cq, void *arg);
 
 void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
-		     int credits, lnet_nid_t dstnid, __u64 dststamp);
+		     int credits, struct lnet_nid *dstnid, u64 dststamp);
 int kiblnd_unpack_msg(struct kib_msg *msg, int nob);
 int kiblnd_post_rx(struct kib_rx *rx, int credit);
 

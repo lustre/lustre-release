@@ -177,7 +177,7 @@ static int kiblnd_unpack_rd(struct kib_msg *msg, bool flip)
 }
 
 void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
-		     int credits, lnet_nid_t dstnid, __u64 dststamp)
+		     int credits, struct lnet_nid *dstnid, u64 dststamp)
 {
 	struct kib_net *net = ni->ni_data;
 
@@ -192,7 +192,7 @@ void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
 	msg->ibm_cksum    = 0;
 	msg->ibm_srcnid   = lnet_nid_to_nid4(&ni->ni_nid);
 	msg->ibm_srcstamp = net->ibn_incarnation;
-	msg->ibm_dstnid   = dstnid;
+	msg->ibm_dstnid   = lnet_nid_to_nid4(dstnid);
 	msg->ibm_dststamp = dststamp;
 
 	if (*kiblnd_tunables.kib_cksum) {
@@ -315,15 +315,15 @@ int kiblnd_unpack_msg(struct kib_msg *msg, int nob)
 
 int
 kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
-		   lnet_nid_t nid)
+		   struct lnet_nid *nid)
 {
 	struct kib_peer_ni *peer_ni;
 	struct kib_net *net = ni->ni_data;
-	int cpt = lnet_cpt_of_nid(nid, ni);
+	int cpt = lnet_nid2cpt(nid, ni);
 	unsigned long flags;
 
-	LASSERT(net != NULL);
-	LASSERT(nid != LNET_NID_ANY);
+	LASSERT(net);
+	LASSERT(!LNET_NID_IS_ANY(nid));
 
 	LIBCFS_CPT_ALLOC(peer_ni, lnet_cpt_table(), cpt, sizeof(*peer_ni));
 	if (!peer_ni) {
@@ -332,7 +332,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	}
 
 	peer_ni->ibp_ni = ni;
-	peer_ni->ibp_nid = nid;
+	peer_ni->ibp_nid = *nid;
 	peer_ni->ibp_error = 0;
 	peer_ni->ibp_last_alive = 0;
 	peer_ni->ibp_max_frags = IBLND_MAX_RDMA_FRAGS;
@@ -383,15 +383,16 @@ kiblnd_destroy_peer(struct kref *kref)
 }
 
 struct kib_peer_ni *
-kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid)
+kiblnd_find_peer_locked(struct lnet_ni *ni, struct lnet_nid *nid)
 {
 	/* the caller is responsible for accounting the additional reference
 	 * that this creates
 	 */
+	unsigned long hash = nidhash(nid);
 	struct kib_peer_ni *peer_ni;
 
 	hash_for_each_possible(kiblnd_data.kib_peers, peer_ni,
-			       ibp_list, nid) {
+			       ibp_list, hash) {
 		LASSERT(!kiblnd_peer_idle(peer_ni));
 
 		/*
@@ -400,12 +401,12 @@ kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid)
 		 * the peer, which will result in a new lnd peer being
 		 * created.
 		 */
-		if (peer_ni->ibp_nid != nid ||
+		if (!nid_same(&peer_ni->ibp_nid, nid) ||
 		    !nid_same(&peer_ni->ibp_ni->ni_nid, &ni->ni_nid))
 			continue;
 
 		CDEBUG(D_NET, "got peer_ni [%p] -> %s (%d) version: %x\n",
-		       peer_ni, libcfs_nid2str(nid),
+		       peer_ni, libcfs_nidstr(nid),
 		       kref_read(&peer_ni->ibp_kref),
 		       peer_ni->ibp_version);
 		return peer_ni;
@@ -455,7 +456,7 @@ kiblnd_debug_conn(struct kib_conn *conn)
 
 	CDEBUG(D_CONSOLE, "conn[%d] %p [version %x] -> %s:\n",
 	       atomic_read(&conn->ibc_refcount), conn,
-	       conn->ibc_version, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+	       conn->ibc_version, libcfs_nidstr(&conn->ibc_peer->ibp_nid));
 	CDEBUG(D_CONSOLE, "   state %d nposted %d/%d cred %d o_cred %d "
 	       " r_cred %d\n", conn->ibc_state, conn->ibc_noops_posted,
 	       conn->ibc_nsends_posted, conn->ibc_credits,
@@ -515,12 +516,12 @@ kiblnd_dump_peer_debug_info(struct kib_peer_ni *peer_ni)
 
 
 static int
-kiblnd_get_peer_info(struct lnet_ni *ni, lnet_nid_t nid, int index,
-		     lnet_nid_t *nidp, int *count)
+kiblnd_get_peer_info(struct lnet_ni *ni, struct lnet_nid *nid, int index,
+		     struct lnet_nid *nidp, int *count)
 {
-	struct kib_peer_ni		*peer_ni;
-	int			 i;
-	unsigned long		 flags;
+	struct kib_peer_ni *peer_ni;
+	int i;
+	unsigned long flags;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
@@ -530,7 +531,7 @@ kiblnd_get_peer_info(struct lnet_ni *ni, lnet_nid_t nid, int index,
 		if (peer_ni->ibp_ni != ni)
 			continue;
 
-		if (peer_ni->ibp_nid == nid)
+		if (nid_same(&peer_ni->ibp_nid, nid))
 			kiblnd_dump_peer_debug_info(peer_ni);
 
 		if (index-- > 0)
@@ -566,7 +567,7 @@ kiblnd_del_peer_locked(struct kib_peer_ni *peer_ni)
 }
 
 static int
-kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
+kiblnd_del_peer(struct lnet_ni *ni, struct lnet_nid *nid)
 {
 	LIST_HEAD(zombies);
 	struct hlist_node *pnxt;
@@ -579,8 +580,9 @@ kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	if (nid != LNET_NID_ANY) {
-		lo = hash_min(nid, HASH_BITS(kiblnd_data.kib_peers));
+	if (!LNET_NID_IS_ANY(nid)) {
+		lo = hash_min(nidhash(nid),
+			      HASH_BITS(kiblnd_data.kib_peers));
 		hi = lo;
 	} else {
 		lo = 0;
@@ -595,7 +597,8 @@ kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 			if (peer_ni->ibp_ni != ni)
 				continue;
 
-			if (!(nid == LNET_NID_ANY || peer_ni->ibp_nid == nid))
+			if (!(LNET_NID_IS_ANY(nid) ||
+			      nid_same(&peer_ni->ibp_nid, nid)))
 				continue;
 
 			if (!list_empty(&peer_ni->ibp_tx_queue)) {
@@ -664,11 +667,11 @@ kiblnd_setup_mtu_locked(struct rdma_cm_id *cmid)
 static int
 kiblnd_get_completion_vector(struct kib_conn *conn, int cpt)
 {
-	cpumask_var_t	*mask;
-	int		vectors;
-	int		off;
-	int		i;
-	lnet_nid_t	ibp_nid;
+	unsigned long hash = nidhash(&conn->ibc_peer->ibp_nid);
+	cpumask_var_t *mask;
+	int vectors;
+	int off;
+	int i;
 
 	vectors = conn->ibc_cmid->device->num_comp_vectors;
 	if (vectors <= 1)
@@ -680,9 +683,8 @@ kiblnd_get_completion_vector(struct kib_conn *conn, int cpt)
 	 * with multiple QPs, to engage more cores in CQ processing to a single
 	 * peer, use ibp_nconns to salt the value the comp_vector value
 	 */
-	ibp_nid = conn->ibc_peer->ibp_nid +
-		atomic_read(&conn->ibc_peer->ibp_nconns);
-	off = do_div(ibp_nid, cpumask_weight(*mask));
+	hash += atomic_read(&conn->ibc_peer->ibp_nconns);
+	off = do_div(hash, cpumask_weight(*mask));
 	for_each_cpu(i, *mask) {
 		if (off-- == 0)
 			return i % vectors;
@@ -782,10 +784,9 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 
 	dev = net->ibn_dev;
 
-	cpt = lnet_cpt_of_nid(peer_ni->ibp_nid, peer_ni->ibp_ni);
+	cpt = lnet_nid2cpt(&peer_ni->ibp_nid, peer_ni->ibp_ni);
 	sched = kiblnd_get_scheduler(cpt);
-
-	if (sched == NULL) {
+	if (!sched) {
 		CERROR("no schedulers available. node is unhealthy\n");
 		goto failed_0;
 	}
@@ -799,7 +800,7 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	LIBCFS_CPT_ALLOC(conn, lnet_cpt_table(), cpt, sizeof(*conn));
 	if (conn == NULL) {
 		CERROR("Can't allocate connection for %s\n",
-		       libcfs_nid2str(peer_ni->ibp_nid));
+		       libcfs_nidstr(&peer_ni->ibp_nid));
 		goto failed_0;
 	}
 
@@ -935,7 +936,7 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	    conn->ibc_queue_depth != peer_ni->ibp_queue_depth) {
 		CWARN("peer %s - queue depth reduced from %u to %u"
 		      "  to allow for qp creation\n",
-		      libcfs_nid2str(peer_ni->ibp_nid),
+		      libcfs_nidstr(&peer_ni->ibp_nid),
 		      peer_ni->ibp_queue_depth,
 		      conn->ibc_queue_depth);
 		peer_ni->ibp_queue_depth_mod = conn->ibc_queue_depth;
@@ -1080,7 +1081,7 @@ kiblnd_close_peer_conns_locked(struct kib_peer_ni *peer_ni, int why)
 				 ibc_list) {
 		CDEBUG(D_NET, "Closing conn -> %s, "
 			      "version: %x, reason: %d\n",
-		       libcfs_nid2str(peer_ni->ibp_nid),
+		       libcfs_nidstr(&peer_ni->ibp_nid),
 		       conn->ibc_version, why);
 
 		kiblnd_close_conn_locked(conn, why);
@@ -1106,7 +1107,7 @@ kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
 
 		CDEBUG(D_NET, "Closing stale conn -> %s version: %x, "
 			      "incarnation:%#llx(%x, %#llx)\n",
-		       libcfs_nid2str(peer_ni->ibp_nid),
+		       libcfs_nidstr(&peer_ni->ibp_nid),
 		       conn->ibc_version, conn->ibc_incarnation,
 		       version, incarnation);
 
@@ -1118,7 +1119,7 @@ kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
 }
 
 static int
-kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
+kiblnd_close_matching_conns(struct lnet_ni *ni, struct lnet_nid *nid)
 {
 	struct kib_peer_ni *peer_ni;
 	struct hlist_node *pnxt;
@@ -1130,8 +1131,9 @@ kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	if (nid != LNET_NID_ANY) {
-		lo = hash_min(nid, HASH_BITS(kiblnd_data.kib_peers));
+	if (LNET_NID_IS_ANY(nid)) {
+		lo = hash_min(nidhash(nid),
+			      HASH_BITS(kiblnd_data.kib_peers));
 		hi = lo;
 	} else {
 		lo = 0;
@@ -1146,7 +1148,8 @@ kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
 			if (peer_ni->ibp_ni != ni)
 				continue;
 
-			if (!(nid == LNET_NID_ANY || nid == peer_ni->ibp_nid))
+			if (!(LNET_NID_IS_ANY(nid) ||
+			      nid_same(nid, &peer_ni->ibp_nid)))
 				continue;
 
 			count += kiblnd_close_peer_conns_locked(peer_ni, 0);
@@ -1156,7 +1159,7 @@ kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	/* wildcards always succeed */
-	if (nid == LNET_NID_ANY)
+	if (LNET_NID_IS_ANY(nid))
 		return 0;
 
 	return (count == 0) ? -ENOENT : 0;
@@ -1165,25 +1168,28 @@ kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
 static int
 kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 {
-        struct libcfs_ioctl_data *data = arg;
-        int                       rc = -EINVAL;
+	struct libcfs_ioctl_data *data = arg;
+	struct lnet_nid nid;
+	int rc = -EINVAL;
 
         switch(cmd) {
         case IOC_LIBCFS_GET_PEER: {
-                lnet_nid_t   nid = 0;
-                int          count = 0;
+		struct lnet_nid user_nid;
+		int count = 0;
 
-		rc = kiblnd_get_peer_info(ni, data->ioc_nid, data->ioc_count,
+		lnet_nid4_to_nid(data->ioc_nid, &user_nid);
+		rc = kiblnd_get_peer_info(ni, &user_nid, data->ioc_count,
                                           &nid, &count);
-                data->ioc_nid    = nid;
-                data->ioc_count  = count;
-                break;
+		data->ioc_nid = lnet_nid_to_nid4(&nid);
+		data->ioc_count = count;
+		break;
         }
 
-        case IOC_LIBCFS_DEL_PEER: {
-                rc = kiblnd_del_peer(ni, data->ioc_nid);
-                break;
-        }
+	case IOC_LIBCFS_DEL_PEER:
+		lnet_nid4_to_nid(data->ioc_nid, &nid);
+		rc = kiblnd_del_peer(ni, &nid);
+		break;
+
         case IOC_LIBCFS_GET_CONN: {
 		struct kib_conn *conn;
 
@@ -1194,8 +1200,11 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
                         break;
                 }
 
-		LASSERT(conn->ibc_cmid != NULL);
-		data->ioc_nid = conn->ibc_peer->ibp_nid;
+		LASSERT(conn->ibc_cmid);
+		if (!nid_is_nid4(&conn->ibc_peer->ibp_nid))
+			return -EINVAL;
+
+		data->ioc_nid = lnet_nid_to_nid4(&conn->ibc_peer->ibp_nid);
 		if (conn->ibc_cmid->route.path_rec == NULL)
 			data->ioc_u32[0] = 0; /* iWarp has no path MTU */
 		else
@@ -1204,10 +1213,10 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 		kiblnd_conn_decref(conn);
 		break;
         }
-        case IOC_LIBCFS_CLOSE_CONNECTION: {
-                rc = kiblnd_close_matching_conns(ni, data->ioc_nid);
-                break;
-        }
+	case IOC_LIBCFS_CLOSE_CONNECTION:
+		lnet_nid4_to_nid(data->ioc_nid, &nid);
+		rc = kiblnd_close_matching_conns(ni, &nid);
+		break;
 
         default:
                 break;
@@ -2943,10 +2952,10 @@ kiblnd_dummy_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 static int
 kiblnd_dev_need_failover(struct kib_dev *dev, struct net *ns)
 {
-        struct rdma_cm_id  *cmid;
-        struct sockaddr_in  srcaddr;
-        struct sockaddr_in  dstaddr;
-        int                 rc;
+	struct rdma_cm_id *cmid;
+	struct sockaddr_storage srcaddr;
+	struct sockaddr dstaddr;
+	int rc;
 
         if (dev->ibd_hdev == NULL || /* initializing */
             dev->ibd_hdev->ibh_cmid == NULL || /* listener is dead */
@@ -2971,17 +2980,13 @@ kiblnd_dev_need_failover(struct kib_dev *dev, struct net *ns)
                 return rc;
         }
 
-        memset(&srcaddr, 0, sizeof(srcaddr));
-        srcaddr.sin_family      = AF_INET;
-        srcaddr.sin_addr.s_addr = (__force u32)htonl(dev->ibd_ifip);
-
-        memset(&dstaddr, 0, sizeof(dstaddr));
-        dstaddr.sin_family = AF_INET;
-        rc = rdma_resolve_addr(cmid, (struct sockaddr *)&srcaddr,
-                               (struct sockaddr *)&dstaddr, 1);
+	memcpy(&srcaddr, &dev->ibd_addr, sizeof(struct sockaddr_storage));
+	memset(&dstaddr, 0, sizeof(dstaddr));
+	dstaddr.sa_family = dev->ibd_addr.ss_family;
+	rc = rdma_resolve_addr(cmid, (struct sockaddr *)&srcaddr, &dstaddr, 1);
 	if (rc != 0 || cmid->device == NULL) {
-		CERROR("Failed to bind %s:%pI4h to device(%p): %d\n",
-		       dev->ibd_ifname, &dev->ibd_ifip,
+		CERROR("Failed to bind %s:%pISc to device(%p): %d\n",
+		       dev->ibd_ifname, &dev->ibd_addr,
 		       cmid->device, rc);
                 rdma_destroy_id(cmid);
                 return rc;
@@ -3001,14 +3006,14 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	struct rdma_cm_id  *cmid  = NULL;
 	struct kib_hca_dev *hdev  = NULL;
 	struct kib_hca_dev *old;
-	struct ib_pd       *pd;
+	struct ib_pd *pd;
 	struct kib_net *net;
-	struct sockaddr_in  addr;
+	struct sockaddr_storage addr;
 	struct net_device *netdev;
-	unsigned long       flags;
-	int                 rc = 0;
-	int		    i;
-	bool		    set_fatal = true;
+	unsigned long flags;
+	int rc = 0;
+	int i;
+	bool set_fatal = true;
 
 	LASSERT(*kiblnd_tunables.kib_dev_failover > 1 ||
 		dev->ibd_can_failover ||
@@ -3044,15 +3049,34 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	}
 
 	memset(&addr, 0, sizeof(addr));
-	addr.sin_family      = AF_INET;
-	addr.sin_addr.s_addr = (__force u32)htonl(dev->ibd_ifip);
-	addr.sin_port        = htons(*kiblnd_tunables.kib_service);
+	switch (dev->ibd_addr.ss_family) {
+	case AF_INET6: {
+		struct sockaddr_in6 *sa = (void *)&addr;
+
+		memcpy(&addr, &dev->ibd_addr, sizeof(struct sockaddr_storage));
+		sa->sin6_port = htons(*kiblnd_tunables.kib_service);
+		break;
+	}
+	case AF_INET: {
+		struct sockaddr_in *sa = (void *)&addr;
+
+		memcpy(&addr, &dev->ibd_addr, sizeof(struct sockaddr_storage));
+		sa->sin_port = htons(*kiblnd_tunables.kib_service);
+		break;
+	}
+	default:
+		CERROR("Unsupported family for failover\n");
+		rc = -EOPNOTSUPP;
+		break;
+	}
+	if (rc < 0)
+		return rc;
 
 	/* Bind to failover device or port */
 	rc = rdma_bind_addr(cmid, (struct sockaddr *)&addr);
 	if (rc != 0 || cmid->device == NULL) {
-		CERROR("Failed to bind %s:%pI4h to device(%p): %d\n",
-		       dev->ibd_ifname, &dev->ibd_ifip,
+		CERROR("Failed to bind %s:%pISc to device(%p): %d\n",
+		       dev->ibd_ifname, &dev->ibd_addr,
 		       cmid->device, rc);
 		if (!rc && !cmid->device)
 			set_fatal = false;
@@ -3237,7 +3261,7 @@ kiblnd_handle_link_state_change(struct net_device *dev,
 			goto ni_done;
 		}
 		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
-			if (htonl(event_kibdev->ibd_ifip) == ifa->ifa_local)
+			if (ifa->ifa_local == ni->ni_nid.nid_addr[0])
 				found_ip = true;
 		}
 		endfor_ifa(in_dev);
@@ -3283,16 +3307,16 @@ kiblnd_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
 	bool link_down;
 
 	event_kibdev = kiblnd_dev_search(event_netdev->name);
-
 	if (!event_kibdev)
-		goto out;
-
-	if (htonl(event_kibdev->ibd_ifip) != ifa->ifa_local)
 		goto out;
 
 	list_for_each_entry_safe(net, cnxt, &event_kibdev->ibd_nets,
 				 ibn_list) {
 		ni = net->ibn_ni;
+
+		if (!(nid_is_nid4(&ni->ni_nid)))
+			continue;
+
 		link_down = (event == NETDEV_DOWN);
 		ni_state_before = lnet_set_link_fatal_state(ni, link_down);
 		if (!update_ping_buf &&
@@ -3452,7 +3476,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 
 	case IBLND_INIT_ALL:
 		/* nuke all existing peers within this net */
-		kiblnd_del_peer(ni, LNET_NID_ANY);
+		kiblnd_del_peer(ni, &LNET_ANY_NID);
 
 		/* Wait for all peer_ni state to clean up */
 		wait_var_event_warning(&net->ibn_npeers,
@@ -3662,6 +3686,7 @@ kiblnd_startup(struct lnet_ni *ni)
 {
 	char *ifname = NULL;
 	struct lnet_inetdev *ifaces = NULL;
+	struct sockaddr_storage addr;
 	struct kib_dev *ibdev = NULL;
 	struct kib_net *net = NULL;
 	unsigned long flags;
@@ -3725,6 +3750,27 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
+	memset(&addr, 0, sizeof(addr));
+	if (ifaces[i].li_size == sizeof(struct in6_addr)) {
+		struct sockaddr_in6 *sa = (void *)&addr;
+
+		sa->sin6_family = AF_INET6;
+		memcpy(&sa->sin6_addr, ifaces[i].li_ipv6addr,
+		       sizeof(struct in6_addr));
+
+		ni->ni_nid.nid_size = sizeof(struct in6_addr) - 4;
+		memcpy(&ni->ni_nid.nid_addr, ifaces[i].li_ipv6addr,
+		       sizeof(struct in6_addr));
+	} else {
+		struct sockaddr_in *sa = (void *)&addr;
+
+		sa->sin_family = AF_INET;
+		sa->sin_addr.s_addr = ifaces[i].li_ipaddr;
+
+		ni->ni_nid.nid_size = 0;
+		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
+	}
+
 	ibdev = kiblnd_dev_search(ifname);
 	newdev = ibdev == NULL;
 	/* hmm...create kib_dev even for alias */
@@ -3735,10 +3781,10 @@ kiblnd_startup(struct lnet_ni *ni)
 			goto failed;
 		}
 
-		ibdev->ibd_ifip = ntohl(ifaces[i].li_ipaddr);
 		strscpy(ibdev->ibd_ifname, ifaces[i].li_name,
 			sizeof(ibdev->ibd_ifname));
 		ibdev->ibd_can_failover = ifaces[i].li_iff_master;
+		memcpy(&ibdev->ibd_addr, &addr, sizeof(addr));
 
 		INIT_LIST_HEAD(&ibdev->ibd_nets);
 		INIT_LIST_HEAD(&ibdev->ibd_list); /* not yet in kib_devs */
@@ -3756,7 +3802,6 @@ kiblnd_startup(struct lnet_ni *ni)
 	}
 
 	net->ibn_dev = ibdev;
-	ni->ni_nid.nid_addr[0] = cpu_to_be32(ibdev->ibd_ifip);
 	if (!ni->ni_interface) {
 		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
 		if (rc < 0)
