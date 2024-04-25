@@ -1,8 +1,22 @@
+From e396a9a0d0c4ec3b84eeba4933c7624b14dee898 Mon Sep 17 00:00:00 2001
+From: Shaun Tancheff <shaun.tancheff@hpe.com>
+Date: Thu, 25 Apr 2024 22:34:59 +0700
+Subject: [PATCH] linux-5.16/ext4-misc.patch
+
+---
+ fs/ext4/ext4.h   | 23 ++++++++++++++++++++++-
+ fs/ext4/ialloc.c |  3 ++-
+ fs/ext4/inode.c  | 17 +++++++++++++++++
+ fs/ext4/namei.c  |  9 ++++++---
+ fs/ext4/super.c  | 10 ++--------
+ fs/ext4/xattr.c  |  2 ++
+ 6 files changed, 51 insertions(+), 13 deletions(-)
+
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index d7332df..d04d87c 100644
+index d200eb93..0b3522cf 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -2202,7 +2204,21 @@ static inline bool ext4_has_unknown_ext##ver##_incompat_features(struct super_bl
+@@ -2212,7 +2212,21 @@ static inline bool ext4_has_unknown_ext##ver##_incompat_features(struct super_bl
  
  EXTN_FEATURE_FUNCS(2)
  EXTN_FEATURE_FUNCS(3)
@@ -25,7 +39,7 @@ index d7332df..d04d87c 100644
  
  static inline bool ext4_has_compat_features(struct super_block *sb)
  {
-@@ -3724,6 +3740,13 @@ struct ext4_extent;
+@@ -3692,6 +3706,13 @@ struct ext4_extent;
  #define EXT_MAX_BLOCKS	0xffffffff
  
  extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
@@ -40,7 +54,7 @@ index d7332df..d04d87c 100644
  extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
  			       struct ext4_map_blocks *map, int flags);
 diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
-index 5d0a11d..4840190 100644
+index f75aa85b..a1ba2767 100644
 --- a/fs/ext4/ialloc.c
 +++ b/fs/ext4/ialloc.c
 @@ -120,7 +120,7 @@ verified:
@@ -61,10 +75,10 @@ index 5d0a11d..4840190 100644
  /*
   * NOTE! When we get the inode, we're the only people
 diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index f0206e2..88e82d6 100644
+index 98f0dc0e..a59c0c8a 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6145,3 +6145,20 @@ out_error:
+@@ -6313,3 +6313,20 @@ out_error:
  	ext4_journal_stop(handle);
  	goto out;
  }
@@ -86,7 +100,7 @@ index f0206e2..88e82d6 100644
 +EXPORT_SYMBOL(__ext4_journal_ensure_credits);
 +EXPORT_SYMBOL(ext4_chunk_trans_blocks);
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index 249836e..627b9eb 100644
+index 994851ed..3c6931e3 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -50,7 +50,7 @@
@@ -98,7 +112,7 @@ index 249836e..627b9eb 100644
  					struct inode *inode,
  					ext4_lblk_t *block)
  {
-@@ -182,6 +182,7 @@ static struct buffer_head *__ext4_read_dirblock(struct inode *inode,
+@@ -210,6 +210,7 @@ static struct buffer_head *__ext4_read_dirblock(struct inode *inode,
  	}
  	return bh;
  }
@@ -106,7 +120,7 @@ index 249836e..627b9eb 100644
  
  #ifdef DX_DEBUG
  #define dxtrace(command) command
-@@ -2703,23 +2704,25 @@ out:
+@@ -2786,23 +2787,25 @@ EXPORT_SYMBOL(ext4_delete_entry);
   * for checking S_ISDIR(inode) (since the INODE_INDEX feature will not be set
   * on regular files) and to avoid creating huge/slow non-HTREE directories.
   */
@@ -135,28 +149,28 @@ index 249836e..627b9eb 100644
  
  /*
 diff --git a/fs/ext4/super.c b/fs/ext4/super.c
-index 24a7ad8..b8a9fce 100644
+index 760249d9..55d614b8 100644
 --- a/fs/ext4/super.c
 +++ b/fs/ext4/super.c
-@@ -5429,7 +5429,7 @@ static void ext4_update_super(struct super_block *sb)
+@@ -6024,7 +6024,7 @@ static void ext4_update_super(struct super_block *sb)
  			__ext4_update_tstamp(&es->s_first_error_time,
  					     &es->s_first_error_time_hi,
  					     sbi->s_first_error_time);
 -			strncpy(es->s_first_error_func, sbi->s_first_error_func,
-+			strlcpy(es->s_first_error_func, sbi->s_first_error_func,
++			strscpy(es->s_first_error_func, sbi->s_first_error_func,
  				sizeof(es->s_first_error_func));
  			es->s_first_error_line =
  				cpu_to_le32(sbi->s_first_error_line);
-@@ -5443,7 +5443,7 @@ static void ext4_update_super(struct super_block *sb)
+@@ -6038,7 +6038,7 @@ static void ext4_update_super(struct super_block *sb)
  		__ext4_update_tstamp(&es->s_last_error_time,
  				     &es->s_last_error_time_hi,
  				     sbi->s_last_error_time);
 -		strncpy(es->s_last_error_func, sbi->s_last_error_func,
-+		strlcpy(es->s_last_error_func, sbi->s_last_error_func,
++		strscpy(es->s_last_error_func, sbi->s_last_error_func,
  			sizeof(es->s_last_error_func));
  		es->s_last_error_line = cpu_to_le32(sbi->s_last_error_line);
  		es->s_last_error_ino = cpu_to_le32(sbi->s_last_error_ino);
-@@ -6652,16 +6652,12 @@ static int __init ext4_init_fs(void)
+@@ -7279,16 +7279,12 @@ static int __init ext4_init_fs(void)
  	if (err)
  		goto out05;
  
@@ -173,7 +187,7 @@ index 24a7ad8..b8a9fce 100644
  	ext4_fc_destroy_dentry_cache();
  out05:
  	destroy_inodecache();
-@@ -6686,8 +6682,6 @@ out7:
+@@ -7313,8 +7309,6 @@ out7:
  static void __exit ext4_exit_fs(void)
  {
  	ext4_destroy_lazyinit_thread();
@@ -183,10 +197,10 @@ index 24a7ad8..b8a9fce 100644
  	ext4_fc_destroy_dentry_cache();
  	destroy_inodecache();
 diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
-index 1e0fc1e..379c59c 100644
+index 51d642a9..33657020 100644
 --- a/fs/ext4/xattr.c
 +++ b/fs/ext4/xattr.c
-@@ -656,6 +656,7 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
+@@ -666,6 +666,7 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
  	up_read(&EXT4_I(inode)->xattr_sem);
  	return error;
  }
@@ -194,7 +208,7 @@ index 1e0fc1e..379c59c 100644
  
  static int
  ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
-@@ -2416,6 +2417,7 @@ cleanup:
+@@ -2430,6 +2431,7 @@ cleanup:
  	ext4_write_unlock_xattr(inode, &no_expand);
  	return error;
  }
@@ -203,5 +217,5 @@ index 1e0fc1e..379c59c 100644
  int ext4_xattr_set_credits(struct inode *inode, size_t value_len,
  			   bool is_create, int *credits)
 -- 
-2.27.0
+2.34.1
 

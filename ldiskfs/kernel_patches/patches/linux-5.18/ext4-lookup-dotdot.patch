@@ -1,0 +1,61 @@
+commit 113303973ec9f8484eb2355a1a6ef3c4c7fd6a56
+Author:     Alex Zhuravlev <alex@clusterfs.com>
+AuthorDate: Sat Feb 10 06:33:41 2007 +0000
+Subject: ext4: htree fix for '..' lookup
+Avoid looping in directory lookup when ext3_dx_find_entry()
+can't find the '..' entry in a directory and then looks it
+up in the directory.  This results in the ".." (parent
+directory) entry being added as the child of a directory
+in the dcache.  The '..' lookup can happen knfsd is looking
+up the path of a disconnected dentry.
+Bugzilla-ID: b=10458
+Signed-off-by: Alex Zhuravlev <alex@clusterfs.com>
+Reviewed-by: Kalpak Shah <kalpak@clusterfs.com>
+Signed-off-by: Andreas Dilger <adilger@clusterfs.com>
+---
+ fs/ext4/namei.c | 28 +++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index 4f0420b..a519200 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -1822,8 +1822,34 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
+ 			return ERR_PTR(-EPERM);
+ 		}
+ 	}
++	/* ".." shouldn't go into dcache to preserve dcache hierarchy
++	 * otherwise we'll get parent being a child of actual child.
++	 * see bug 10458 for details -bzzz */
++	if (inode && (dentry->d_name.name[0] == '.' &&
++		      (dentry->d_name.len == 1 || (dentry->d_name.len == 2 &&
++					     dentry->d_name.name[1] == '.')))) {
++		struct dentry *goal = NULL;
++
++		/* first, look for an existing dentry - any one is good */
++		goal = d_find_any_alias(inode);
++		if (goal == NULL) {
++			spin_lock(&dentry->d_lock);
++			/* there is no alias, we need to make current dentry:
++			 *  a) inaccessible for __d_lookup()
++			 *  b) inaccessible for iopen */
++			J_ASSERT(hlist_unhashed(&dentry->d_u.d_alias));
++			dentry->d_flags |= DCACHE_NFSFS_RENAMED;
++			/* this is d_instantiate() ... */
++			hlist_add_head(&dentry->d_u.d_alias, &inode->i_dentry);
++			dentry->d_inode = inode;
++			spin_unlock(&dentry->d_lock);
++		}
++		if (goal)
++			iput(inode);
++		return goal;
++	}
+ 
+-#if IS_ENABLED(CONFIG_UNICODE)
++#ifdef CONFIG_UNICODE
+ 	if (!inode && IS_CASEFOLDED(dir)) {
+ 		/* Eventually we want to call d_add_ci(dentry, NULL)
+ 		 * for negative dentries in the encoding case as
+-- 
+2.34.1
+

@@ -161,26 +161,23 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 # Not RHEL/SLES/openEuler or Ubuntu .. probably mainline
 AS_IF([test -z "$LDISKFS_SERIES"],
 	[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[],
-	[LDISKFS_SERIES="5.4.0-ml.series"],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.21],
-	  [LDISKFS_SERIES="5.4.0-ml.series"],  # lt
-	  [LDISKFS_SERIES="5.4.21-ml.series"], # eq
-	  [AS_VERSION_COMPARE([$LINUXRELEASE],[5.8.0],
-	    [LDISKFS_SERIES="5.4.136-ml.series"], # lt
-	    [LDISKFS_SERIES="5.8.0-ml.series"],  # eq
-	    [AS_VERSION_COMPARE([$LINUXRELEASE],[5.9.0],
-	      [LDISKFS_SERIES="5.8.0-ml.series"],  # lt
-	      [LDISKFS_SERIES="5.9.0-ml.series"],  # eq
-	      [AS_VERSION_COMPARE([$LINUXRELEASE],[5.10.0],
-	        [LDISKFS_SERIES="5.9.0-ml.series"],  # lt
-	        [LDISKFS_SERIES="5.10.0-ml.series"],  # eq
-	        [LDISKFS_SERIES="5.10.0-ml.series"],  # gt
-	      )]
-	    )]
-	  )]
-		)])
-	],
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[
+		], [
+		LDISKFS_SERIES="5.4.0-ml.series"],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.21],[
+		LDISKFS_SERIES="5.4.0-ml.series"], [
+		LDISKFS_SERIES="5.4.21-ml.series"],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.10.0], [
+		LDISKFS_SERIES="5.4.136-ml.series"], [
+		LDISKFS_SERIES="5.10.0-ml.series"], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[6.1.0], [
+		LDISKFS_SERIES="5.10.0-ml.series"], [
+		LDISKFS_SERIES="6.1.38-ml.series"], [
+		LDISKFS_SERIES="6.1.38-ml.series"]
+	)] # 6.1 LTS
+	)] # 5.10 LTS
+	)] # 5.4 LTS
+	)],
 [])
 AS_IF([test -z "$LDISKFS_SERIES"],
 	[AC_MSG_RESULT([failed to identify series])],
