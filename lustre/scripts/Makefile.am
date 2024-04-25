@@ -60,7 +60,8 @@ bin_SCRIPTS   = lfs_migrate
 
 if SERVER
 sbin_SCRIPTS += $(genscripts) lc_mon lhbadm lc_servip
-bin_SCRIPTS  += lustre_req_history remove_changelog remove_updatelog
+bin_SCRIPTS  += lustre_req_history remove_changelog remove_updatelog \
+		lsvcgss_sysd
 
 hadir = $(sysconfdir)/ha.d/resource.d
 ha_SCRIPTS = Lustre.ha_v2
@@ -95,7 +96,7 @@ EXTRA_DIST = lustre_rmmod ldev lc_mon lhbadm \
 	     zfsobj2fid ko2iblnd-probe ksocklnd-config statechange-lustre.sh \
 	     vdev_attach-lustre.sh vdev_remove-lustre.sh vdev_clear-lustre.sh \
 	     bash-completion/lustre bash-completion/lctl bash-completion/lfs \
-	     remove_changelog remove_updatelog
+	     remove_changelog remove_updatelog lsvcgss_sysd
 
 CLEANFILES = $(genscripts)
 

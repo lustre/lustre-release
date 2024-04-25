@@ -1,0 +1,8 @@
+[Unit]
+Description=Lustre GSS daemon
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/lsvcgss_sysd
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/var/run/lsvcgss.pid

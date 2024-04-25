@@ -178,7 +178,10 @@ sig_die(int signal)
 	/* remove socket */
 	unlink(GSS_SOCKET_PATH);
 	printerr(LL_WARN, "exiting on signal %d\n", signal);
-	exit(1);
+	if (signal == SIGTERM)
+		exit(EXIT_SUCCESS);
+	else
+		exit(EXIT_FAILURE);
 }
 
 static void

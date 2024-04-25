@@ -3,9 +3,10 @@ genunitfiles = lnet.service
 
 if HAVE_SYSTEMD
 systemdsystemunit_DATA = lnet.service
+systemdsystemunit_SCRIPTS = lsvcgss.service
 endif
 
-EXTRA_DIST = $(addsuffix .in,$(genunitfiles))
+EXTRA_DIST = $(addsuffix .in,$(genunitfiles)) lsvcgss.service
 
 CLEANFILES = $(genunitfiles)
 
