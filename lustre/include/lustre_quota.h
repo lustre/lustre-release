@@ -78,7 +78,7 @@ struct lquota_iter {
 	struct list_head li_link;
 	__u32		 li_md_size;
 	__u32		 li_dt_size;
-	char		 li_buffer[0];
+	char		 li_buffer[];
 };
 
 struct if_quotactl_iter {

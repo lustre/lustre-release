@@ -2463,7 +2463,7 @@ check_hsm_action_list(void)
 	CHECK_MEMBER(hsm_action_list, hal_flags);
 	CHECK_MEMBER(hsm_action_list, hal_archive_id);
 	CHECK_MEMBER(hsm_action_list, padding1);
-	CHECK_MEMBER(hsm_action_list, hal_fsname);
+	CHECK_MEMBER_IS_FLEXIBLE(hsm_action_list, hal_fsname);
 }
 
 static void
@@ -2683,7 +2683,7 @@ static void check_object_update_param(void)
 	CHECK_MEMBER(object_update_param, oup_len);
 	CHECK_MEMBER(object_update_param, oup_padding);
 	CHECK_MEMBER(object_update_param, oup_padding2);
-	CHECK_MEMBER(object_update_param, oup_buf);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_param, oup_buf);
 }
 
 static void check_object_update(void)
@@ -2697,7 +2697,7 @@ static void check_object_update(void)
 	CHECK_MEMBER(object_update, ou_padding1);
 	CHECK_MEMBER(object_update, ou_batchid);
 	CHECK_MEMBER(object_update, ou_fid);
-	CHECK_MEMBER(object_update, ou_params);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update, ou_params);
 
 	CHECK_CVALUE_X(UPDATE_FL_OST);
 	CHECK_CVALUE_X(UPDATE_FL_SYNC);
@@ -2712,7 +2712,7 @@ static void check_object_update_request(void)
 	CHECK_MEMBER(object_update_request, ourq_magic);
 	CHECK_MEMBER(object_update_request, ourq_count);
 	CHECK_MEMBER(object_update_request, ourq_padding);
-	CHECK_MEMBER(object_update_request, ourq_updates);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_request, ourq_updates);
 
 	CHECK_CDEFINE(UPDATE_REQUEST_MAGIC);
 }
@@ -2724,7 +2724,7 @@ static void check_object_update_result(void)
 	CHECK_MEMBER(object_update_result, our_rc);
 	CHECK_MEMBER(object_update_result, our_datalen);
 	CHECK_MEMBER(object_update_result, our_padding);
-	CHECK_MEMBER(object_update_result, our_data);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_result, our_data);
 }
 
 static void check_object_update_reply(void)
@@ -2734,7 +2734,7 @@ static void check_object_update_reply(void)
 	CHECK_MEMBER(object_update_reply, ourp_magic);
 	CHECK_MEMBER(object_update_reply, ourp_count);
 	CHECK_MEMBER(object_update_reply, ourp_padding);
-	CHECK_MEMBER(object_update_reply, ourp_lens);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_reply, ourp_lens);
 
 	CHECK_CDEFINE(UPDATE_REPLY_MAGIC);
 }
@@ -2747,7 +2747,7 @@ static void check_out_update_header(void)
 	CHECK_MEMBER(out_update_header, ouh_count);
 	CHECK_MEMBER(out_update_header, ouh_inline_length);
 	CHECK_MEMBER(out_update_header, ouh_reply_size);
-	CHECK_MEMBER(out_update_header, ouh_inline_data);
+	CHECK_MEMBER_IS_FLEXIBLE(out_update_header, ouh_inline_data);
 
 	CHECK_CDEFINE(OUT_UPDATE_HEADER_MAGIC);
 	CHECK_CDEFINE(OUT_UPDATE_MAX_INLINE_SIZE);

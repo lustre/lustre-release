@@ -206,23 +206,25 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 {
 	struct config_llog_data *cld;
 	int rc;
+	int logname_size;
 
 	ENTRY;
 
 	CDEBUG(D_MGC, "do adding config log %s-%016lx\n", logname,
 	       cfg ? cfg->cfg_instance : 0);
 
-	OBD_ALLOC(cld, sizeof(*cld) + strlen(logname) + 1);
+	logname_size = strlen(logname) + 1;
+	OBD_ALLOC(cld, sizeof(*cld) + logname_size);
 	if (!cld)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	rc = mgc_logname2resid(logname, &cld->cld_resid, type);
 	if (rc) {
-		OBD_FREE(cld, sizeof(*cld) + strlen(cld->cld_logname) + 1);
+		OBD_FREE(cld, sizeof(*cld) + logname_size);
 		RETURN(ERR_PTR(rc));
 	}
 
-	strcpy(cld->cld_logname, logname);
+	strscpy(cld->cld_logname, logname, logname_size);
 	if (cfg)
 		cld->cld_cfg = *cfg;
 	else

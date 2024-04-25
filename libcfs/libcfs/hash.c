@@ -1064,7 +1064,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
 
         len = (flags & CFS_HASH_BIGNAME) == 0 ?
               CFS_HASH_NAME_LEN : CFS_HASH_BIGNAME_LEN;
-	LIBCFS_ALLOC(hs, offsetof(struct cfs_hash, hs_name[len]));
+	LIBCFS_ALLOC(hs, sizeof(struct cfs_hash) + len);
         if (hs == NULL)
                 RETURN(NULL);
 

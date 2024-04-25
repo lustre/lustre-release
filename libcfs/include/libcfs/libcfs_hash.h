@@ -251,8 +251,8 @@ struct cfs_hash {
         /** workitem to output max depth */
 	struct work_struct		hs_dep_work;
 #endif
-        /** name of htable */
-        char                        hs_name[0];
+	/** name of htable */
+	char                        hs_name[];
 };
 
 struct cfs_hash_lock_ops {

@@ -794,7 +794,7 @@ struct lfsck_namespace_req {
 	__u32				 lnr_size;
 	__u16				 lnr_type;
 	__u16				 lnr_namelen;
-	char				 lnr_name[0];
+	char				 lnr_name[];
 };
 
 struct lfsck_layout_req {

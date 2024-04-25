@@ -365,25 +365,27 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 	}
 
 #ifdef OBD_GET_VERSION
-	case_OBD_IOC_DEPRECATED(OBD_GET_VERSION, "obdclass", 2, 15)
+	case_OBD_IOC_DEPRECATED(OBD_GET_VERSION, "obdclass", 2, 15) {
+		size_t vstr_size = sizeof(LUSTRE_VERSION_STRING);
+
 		if (!data->ioc_inlbuf1) {
 			rc = OBD_IOC_ERROR("obdclass", cmd, "no buffer passed",
 					   -EINVAL);
 			GOTO(out, rc);
 		}
 
-		if (strlen(LUSTRE_VERSION_STRING) + 1 > data->ioc_inllen1) {
+		if (vstr_size > data->ioc_inllen1) {
 			rc = OBD_IOC_ERROR("obdclass", cmd, "buffer too small",
 					   -EINVAL);
 			GOTO(out, rc);
 		}
 
-		memcpy(data->ioc_bulk, LUSTRE_VERSION_STRING,
-		       strlen(LUSTRE_VERSION_STRING) + 1);
+		strscpy(data->ioc_bulk, LUSTRE_VERSION_STRING, vstr_size);
 
 		if (copy_to_user(uarg, data, len))
 			rc = -EFAULT;
 		GOTO(out, rc);
+	}
 #endif
 	case OBD_IOC_NAME2DEV: {
 		/* Resolve device name, does not change current selected dev */

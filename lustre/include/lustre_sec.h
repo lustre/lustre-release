@@ -835,7 +835,7 @@ struct sptlrpc_sepol {
 	 * <mode>:<policy name>:<policy version>:<policy hash>
 	 */
 	__u32		ssp_sepol_size;
-	char		ssp_sepol[0];
+	char		ssp_sepol[];
 };
 
 /**

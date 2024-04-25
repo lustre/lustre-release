@@ -1048,7 +1048,7 @@ struct lov_comp_md_v1 {
 	__u8	lcm_padding3[1];
 	__u16	lcm_padding1[2];
 	__u64	lcm_padding2;
-	struct lov_comp_md_entry_v1 lcm_entries[0];
+	struct lov_comp_md_entry_v1 lcm_entries[];
 } __attribute__((packed));
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
@@ -2662,7 +2662,7 @@ struct hsm_action_list {
 	__u64 hal_flags;
 	__u32 hal_archive_id; /* which archive backend */
 	__u32 padding1;
-	char  hal_fsname[0];   /* null-terminated */
+	char  hal_fsname[];   /* null-terminated */
 	/* struct hsm_action_item[hal_count] follows, aligned on 8-byte
 	 * boundaries. See i_zero
 	 */

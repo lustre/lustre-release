@@ -452,7 +452,7 @@ struct lu_dirent {
 	 *  their natural order. After the last attribute, padding bytes are
 	 *  added to make ->lde_reclen a multiple of 8.
 	 */
-	char          lde_name[0];
+	char          lde_name[];
 };
 
 /*
@@ -3363,7 +3363,7 @@ struct lu_idxpage {
 	 *
 	 * For the time being, we only support fixed-size key & record.
 	 */
-	char	lip_entries[0];
+	char	lip_entries[];
 };
 
 #define LIP_HDR_SIZE (offsetof(struct lu_idxpage, lip_entries))
@@ -3529,7 +3529,7 @@ struct object_update_param {
 	__u16	oup_len;	/* length of this parameter */
 	__u16	oup_padding;
 	__u32	oup_padding2;
-	char	oup_buf[0];
+	char	oup_buf[];
 } __attribute__((packed));
 
 /* object update */
@@ -3541,7 +3541,7 @@ struct object_update {
 	__u32		ou_padding1;		/* padding 1 */
 	__u64		ou_batchid;		/* op transno on master */
 	struct lu_fid	ou_fid;			/* object to be updated */
-	struct object_update_param ou_params[0]; /* update params */
+	struct object_update_param ou_params[]; /* update params */
 };
 
 #define	UPDATE_REQUEST_MAGIC_V1	0xBDDE0001
@@ -3552,7 +3552,7 @@ struct object_update_request {
 	__u32			ourq_magic;
 	__u16			ourq_count;	/* number of ourq_updates[] */
 	__u16			ourq_padding;
-	struct object_update	ourq_updates[0];
+	struct object_update	ourq_updates[];
 };
 
 #define OUT_UPDATE_HEADER_MAGIC		0xBDDF0001
@@ -3563,7 +3563,7 @@ struct out_update_header {
 	__u32		ouh_count;
 	__u32		ouh_inline_length;
 	__u32		ouh_reply_size;
-	__u32		ouh_inline_data[0];
+	__u32		ouh_inline_data[];
 };
 
 struct out_update_buffer {
@@ -3576,7 +3576,7 @@ struct object_update_result {
 	__u32   our_rc;
 	__u16   our_datalen;
 	__u16   our_padding;
-	__u32   our_data[0];
+	__u32   our_data[];
 };
 
 #define UPDATE_REPLY_MAGIC_V1	0x00BD0001
@@ -3587,7 +3587,7 @@ struct object_update_reply {
 	__u32	ourp_magic;
 	__u16	ourp_count;
 	__u16	ourp_padding;
-	__u16	ourp_lens[0];
+	__u16	ourp_lens[];
 };
 
 /* read update result */
@@ -3595,7 +3595,7 @@ struct out_read_reply {
 	__u32	orr_size;
 	__u32	orr_padding;
 	__u64	orr_offset;
-	char	orr_data[0];
+	char	orr_data[];
 };
 
 #define BUT_REQUEST_MAGIC	0xBADE0001

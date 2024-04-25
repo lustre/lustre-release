@@ -308,7 +308,7 @@ struct config_llog_data {
 						     * watching */
 				    cld_lostlock:1, /* lock not requeued */
 				    cld_processed:1;  /* successfully fetched */
-	char			    cld_logname[0];
+	char			    cld_logname[];
 };
 
 struct lustre_profile {
