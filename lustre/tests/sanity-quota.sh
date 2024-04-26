@@ -564,7 +564,7 @@ wait_quota_synced() {
 check_system_is_clean() {
 	local used
 
-	lfs quota -uv quota_usr /mnt/lustre
+	lfs quota -uv $TSTUSR /mnt/lustre
 	for cur in "curspace" "curinodes";
 	do
 		used=$(getquota -u $TSTUSR global $cur)
