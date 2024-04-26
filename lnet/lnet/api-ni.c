@@ -6789,6 +6789,21 @@ failed_alloc:
 	return rc;
 }
 
+/* Size of the message send by lnet_genl_send_scalar_list().
+ * Length is from genlmsg_len() on the msg created.
+ */
+#define ROUTER_MSG_MIN_SIZE		284
+/* For 'value' packet it contains
+ *	net		LNET_NIDSTR_SIZE
+ *	gateway		LNET_NIDSTR_SIZE
+ *	hop		u32
+ *	priority	u32
+ *	health sensit.. u32
+ *	state		"down" largest string (5)
+ *	type		"single-hop" largest string (10)
+ */
+#define ROUTER_MSG_VALUES_SIZE		(LNET_NIDSTR_SIZE * 2 + 27)
+
 /* LNet route ->start() handler for GET requests */
 static int lnet_route_show_start(struct netlink_callback *cb)
 {
@@ -6796,6 +6811,7 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK
 	struct netlink_ext_ack *extack = NULL;
 #endif
+	unsigned long len = ROUTER_MSG_MIN_SIZE;
 	struct lnet_genl_route_list *rlist;
 	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
@@ -6935,6 +6951,14 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 				GOTO(report_err, rc);
 			}
 		}
+	}
+
+	len += ROUTER_MSG_VALUES_SIZE * rlist->lgrl_count;
+	if (len > BIT(sizeof(cb->min_dump_alloc) << 3)) {
+		NL_SET_ERR_MSG(extack, "Netlink msg is too large");
+		rc = -EMSGSIZE;
+	} else {
+		cb->min_dump_alloc = len;
 	}
 report_err:
 	mutex_unlock(&the_lnet.ln_api_mutex);

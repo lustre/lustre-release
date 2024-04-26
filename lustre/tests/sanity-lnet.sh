@@ -1708,6 +1708,21 @@ test_110() {
 }
 run_test 110 "Add NI using a specific TCP / IP address"
 
+test_111() {
+	[[ $(uname -r | grep "3.10") ]] &&
+		skip "Unsupported on RHEL7"
+
+	reinit_dlc || return $?
+	add_net "${NETTYPE}" "${INTERFACES[0]}"
+
+	for index in {2..500}
+	do
+		do_lnetctl route add --net ${NETTYPE}${index} --gateway ${GW_NID}
+	done
+	do_lnetctl route show || return $?
+}
+run_test 111 "Test many routes"
+
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
