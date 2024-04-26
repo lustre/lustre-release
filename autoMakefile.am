@@ -371,6 +371,7 @@ debs: undef.h debs_common
 	fi; \
 	if test "x@systemdsystemunitdir@" != "x"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"; \
+		export SYSTEMD_OPTIONS="--with-systemdsystemunitdir=@systemdsystemunitdir@"; \
 	fi; \
 	if test "x@ENABLE_PINGER@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} pinger"; \
