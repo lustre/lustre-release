@@ -14,6 +14,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/pagemap.h>
+#include <linux/mm.h>
 
 #include <lnet/lib-lnet.h>
 #include <linux/nsproxy.h>
@@ -404,7 +405,11 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 		 * However in practice at least one of the kiovs will be mapped
 		 * kernel pages and the map/unmap will be NOOPs */
 
-		memcpy (daddr, saddr, this_nob);
+		if (this_nob == PAGE_SIZE && !diov->bv_offset && !doffset &&
+		    !siov->bv_offset && !soffset)
+			copy_page(daddr, saddr);
+		else
+			memcpy (daddr, saddr, this_nob);
 		nob -= this_nob;
 
 		if (diov->bv_len > doffset + this_nob) {
