@@ -141,14 +141,20 @@ do {								\
 	CHECK_VALUE((int)sizeof(((struct s *)0)->m));		\
 } while(0)
 
+#define CHECK_MEMBER_SIZEOF_ARRAY_ELEMENT(s, m)			\
+do {								\
+	CHECK_VALUE((int)sizeof(*((struct s *)0)->m));		\
+} while(0)
+
 #define CHECK_MEMBER_SIZEOF_TYPEDEF(s, m)			\
 do {								\
 	CHECK_VALUE((int)sizeof(((s *)0)->m));			\
 } while(0)
 
-#define CHECK_MEMBER_IS_FLEXIBLE(s, m)			\
+#define CHECK_MEMBER_IS_FLEXIBLE(s, m)					\
 do {									\
 	CHECK_MEMBER_OFFSET(s, m);					\
+	CHECK_MEMBER_SIZEOF_ARRAY_ELEMENT(s, m);			\
 	CHECK_BUILD_TEST(offsetof(struct s, m) != sizeof(struct s));	\
 } while (0)
 
@@ -960,7 +966,7 @@ check_lov_comp_md_v1(void)
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding3);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
-	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
+	CHECK_MEMBER_IS_FLEXIBLE(lov_comp_md_v1, lcm_entries);
 
 	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
 
