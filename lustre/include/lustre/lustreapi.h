@@ -1249,6 +1249,9 @@ enum llapi_layout_comp_use {
 	LLAPI_LAYOUT_COMP_USE_LAST = 2,
 	LLAPI_LAYOUT_COMP_USE_NEXT = 3,
 	LLAPI_LAYOUT_COMP_USE_PREV = 4,
+
+	/* ensure -fshort-enums keeps u32 size for interop */
+	_LLAPI_LAYOUT_COMP_TYPE_SIZE = (__u32)-1,
 };
 
 /**
@@ -1258,7 +1261,8 @@ int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t id);
 /**
  * Select the currently active component at the specified position.
  */
-int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos);
+int llapi_layout_comp_use(struct llapi_layout *layout,
+			  enum llapi_layout_comp_use pos);
 /**
  * Add layout components to an existing file.
  */

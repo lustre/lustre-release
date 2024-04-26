@@ -525,11 +525,18 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (!lov_supported_comp_magic(magic)) {
 		struct lov_stripe_md_entry *lsme;
+		size_t lsme_sz = offsetof(typeof(*lsme), lsme_oinfo[0]);
+		struct lov_stripe_md_entry lsme_init = {
+			.lsme_pattern = le32_to_cpu(lmm->lmm_pattern),
+			.lsme_magic = magic,
+		};
 
 		/* allocate a lsme holder for invalid magic lmm */
-		OBD_ALLOC_LARGE(lsme, offsetof(typeof(*lsme), lsme_oinfo[0]));
-		lsme->lsme_magic = magic;
-		lsme->lsme_pattern = le32_to_cpu(lmm->lmm_pattern);
+		OBD_ALLOC_LARGE(lsme, lsme_sz);
+		if (!lsme)
+			return ERR_PTR(-ENOMEM);
+
+		memcpy(lsme, &lsme_init, lsme_sz);
 
 		return lsme;
 	}
