@@ -1769,9 +1769,8 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 	ENTRY;
 
 	size = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT);
-	if (size <= offsetof(struct ldlm_request, lock_handle) ||
-	    (size - offsetof(struct ldlm_request, lock_handle)) /
-	     sizeof(struct lustre_handle) < dlm_req->lock_count)
+	if (size <= sizeof(*dlm_req) || dlm_req->lock_count >
+	    (size - sizeof(*dlm_req)) / sizeof(struct lustre_handle))
 		RETURN(0);
 
 	count = dlm_req->lock_count ? dlm_req->lock_count : 1;

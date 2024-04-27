@@ -2636,8 +2636,8 @@ struct ldlm_lock_desc {
 struct ldlm_request {
 	__u32			lock_flags; /* LDLM_FL_*,(lustre_dlm_flags.h) */
 	__u32			lock_count; /* Num of locks in lock_handle[] */
-	struct ldlm_lock_desc	lock_desc; /* lock descriptor */
-	struct lustre_handle	lock_handle[LDLM_LOCKREQ_HANDLES];
+	struct ldlm_lock_desc	lock_desc;  /* lock descriptor */
+	struct lustre_handle	lock_handle[]; /* was LDLM_LOCKREQ_HANDLES */
 };
 
 struct ldlm_reply {
