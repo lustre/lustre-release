@@ -2625,47 +2625,84 @@ ptlrpc_at_check(struct ptlrpc_service_part *svcpt)
  */
 static struct ratelimit_state watchdog_limit;
 
-static void ptlrpc_watchdog_fire(struct work_struct *w)
+static void ptlrpc_watchdog_fire(struct work_struct *work)
 {
-	struct ptlrpc_thread *thread = container_of(w, struct ptlrpc_thread,
+	struct ptlrpc_thread *thread = container_of(work, struct ptlrpc_thread,
 						    t_watchdog.work);
-	u64 ms_lapse = ktime_ms_delta(ktime_get(), thread->t_touched);
-	u32 ms_frac = do_div(ms_lapse, MSEC_PER_SEC);
+	u64 ms_elapsed = ktime_ms_delta(ktime_get(), thread->t_touched);
+	u32 ms_frac = do_div(ms_elapsed, MSEC_PER_SEC);
+
+	thread->t_flags |= SVC_WATCHDOG;
 
 	/* ___ratelimit() returns true if the action is NOT ratelimited */
 	if (__ratelimit(&watchdog_limit)) {
 		/* below message is checked in sanity-quota.sh test_6,18 */
+		/* below message is checked in recovery-small test 10a. */
 		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. The thread might be hung, or it might only be slow and will resume later. Dumping the stack trace for debugging purposes:\n",
 			      thread->t_task->comm, thread->t_task->pid,
-			      ms_lapse, ms_frac);
+			      ms_elapsed, ms_frac);
 
 		libcfs_debug_dumpstack(thread->t_task);
 	} else {
-		/* below message is checked in sanity-quota.sh test_6,18 */
 		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. Watchdog stack traces are limited to 3 per %u seconds, skipping this one.\n",
 			      thread->t_task->comm, thread->t_task->pid,
-			      ms_lapse, ms_frac, libcfs_watchdog_ratelimit);
+			      ms_elapsed, ms_frac, libcfs_watchdog_ratelimit);
 	}
 }
 
 void ptlrpc_watchdog_init(struct delayed_work *work, timeout_t timeout)
 {
+	struct ptlrpc_thread *thread = container_of(&work->work,
+						    struct ptlrpc_thread,
+						    t_watchdog.work);
+
+	thread->t_touched = ktime_get();
 	INIT_DELAYED_WORK(work, ptlrpc_watchdog_fire);
 	schedule_delayed_work(work, cfs_time_seconds(timeout));
 }
 
-void ptlrpc_watchdog_disable(struct delayed_work *work)
-{
-	cancel_delayed_work_sync(work);
-}
-
-void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout)
+static void ptlrpc_watchdog_update(struct delayed_work *work, const char *msg)
 {
 	struct ptlrpc_thread *thread = container_of(&work->work,
 						    struct ptlrpc_thread,
 						    t_watchdog.work);
-	thread->t_touched = ktime_get();
+	ktime_t now = ktime_get();
+
+	if (unlikely(thread->t_flags & SVC_WATCHDOG)) {
+		u64 ms_elapsed = ktime_ms_delta(now, thread->t_touched);
+		u32 ms_frac = do_div(ms_elapsed, MSEC_PER_SEC);
+
+		/* Don't ratelimit this message, since it is already limited
+		 * by the watchdog (obd_timeout) and it is important to know
+		 * if/when a service thread has revived after being hung.
+		 * below message is checked in recovery-small test 10a.
+		 */
+		LCONSOLE(D_WARNING,
+			 "%s: service thread pid %u %s after %llu.%03us. This likely indicates the system was overloaded (too many service threads, or not enough hardware resources).\n",
+			 thread->t_task->comm, thread->t_pid, msg,
+			 ms_elapsed, ms_frac);
+		thread->t_flags &= ~SVC_WATCHDOG;
+	}
+
+	thread->t_touched = now;
+}
+
+void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout)
+{
+	ptlrpc_watchdog_update(work, "resumed");
 	mod_delayed_work(system_wq, work, cfs_time_seconds(timeout));
+}
+
+void ptlrpc_watchdog_disable(struct delayed_work *work)
+{
+	ptlrpc_watchdog_update(work, "completed");
+	cancel_delayed_work_sync(work);
+}
+
+void ptlrpc_watchdog_delete(struct delayed_work *work)
+{
+	ptlrpc_watchdog_update(work, "stopped");
+	cancel_delayed_work_sync(work);
 }
 
 /**
@@ -2819,9 +2856,8 @@ static int ptlrpc_main(void *arg)
 	/* wake up our creator in case he's still waiting. */
 	wake_up(&thread->t_ctl_waitq);
 
-	thread->t_touched = ktime_get();
 	ptlrpc_watchdog_init(&thread->t_watchdog,
-			 ptlrpc_server_get_timeout(svcpt));
+			     ptlrpc_server_get_timeout(svcpt));
 
 	spin_lock(&svcpt->scp_rep_lock);
 	list_add(&rs->rs_list, &svcpt->scp_rep_idle);
@@ -2910,7 +2946,7 @@ static int ptlrpc_main(void *arg)
 			ptlrpc_thread_stop(thread);
 	}
 
-	ptlrpc_watchdog_disable(&thread->t_watchdog);
+	ptlrpc_watchdog_delete(&thread->t_watchdog);
 
 out_ctx_fini:
 	lu_context_fini(&env->le_ctx);
@@ -3267,10 +3303,7 @@ static int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 		spin_lock(&svcpt->scp_lock);
 		--svcpt->scp_nthrs_starting;
 		if (thread_is_stopping(thread)) {
-			/*
-			 * this ptlrpc_thread is being hanled
-			 * by ptlrpc_svcpt_stop_threads now
-			 */
+			/* thread now handled by ptlrpc_svcpt_stop_threads() */
 			thread_add_flags(thread, SVC_STOPPED);
 			wake_up(&thread->t_ctl_waitq);
 			spin_unlock(&svcpt->scp_lock);

@@ -150,6 +150,18 @@ test_10a() {
 
 	do_facet client checkstat -v -p 0777 $DIR ||
 		error "client checkstat failed: $?"
+
+	# check that the thread watchdog is working properly
+	do_facet mds1 dmesg | tac | sed "/${TESTNAME/_/ }/,$ d" |
+		grep "[Ss]ervice thread pid .* was inactive" ||
+		error "no service thread inactive message for ${TESTNAME/_/ }"
+
+	# can't check for "completed" message where it was removed
+	(( $MDS1_VERSION > $(version_code v2_12_50-83-gfc9de679a4) &&
+	   $MDS1_VERSION < $(version_code 2.15.62.59) )) ||
+		do_facet mds1 dmesg | tac | sed "/${TESTNAME/_/ }/,$ d" |
+			grep "[Ss]ervice thread pid .* completed after" ||
+		error "no service thread completed  message for ${TESTNAME/_/ }"
 }
 run_test 10a "finish request on server after client eviction (bug 1521)"
 

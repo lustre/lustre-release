@@ -1440,12 +1440,13 @@ struct ptlrpc_bulk_desc {
 	struct bio_vec *bd_vec;
 };
 
-enum {
+enum ptlrpc_thread_state {
 	SVC_INIT	= 0,
 	SVC_STOPPED	= BIT(0),
 	SVC_STOPPING	= BIT(1),
 	SVC_STARTING	= BIT(2),
 	SVC_RUNNING	= BIT(3),
+	SVC_WATCHDOG	= BIT(4),
 };
 
 #define PTLRPC_THR_NAME_LEN		32
@@ -1453,36 +1454,18 @@ enum {
  * Definition of server service thread structure
  */
 struct ptlrpc_thread {
-	/**
-	 * List of active threads in svcpt->scp_threads
-	 */
-	struct list_head t_link;
-	/**
-	 * thread-private data (preallocated vmalloc'd memory)
-	 */
-	void *t_data;
-	__u32 t_flags;
-	/**
-	 * service thread index, from ptlrpc_start_threads
-	 */
-	unsigned int t_id;
-	/**
-	 * service thread
-	 */
-	struct task_struct *t_task;
-	pid_t t_pid;
-	ktime_t t_touched;
-	/**
-	 * put watchdog in the structure per thread b=14840
-	 */
-	struct delayed_work t_watchdog;
-	/**
-	 * the svc this thread belonged to b=18582
-	 */
-	struct ptlrpc_service_part	*t_svcpt;
-	wait_queue_head_t		t_ctl_waitq;
-	struct lu_env			*t_env;
-	char				t_name[PTLRPC_THR_NAME_LEN];
+	struct list_head	 t_link; /* active threads svcpt->scp_threads */
+	void			*t_data; /* thread-private memory (vmalloc) */
+	enum ptlrpc_thread_state t_flags;
+	unsigned int		 t_id;   /* index, from ptlrpc_start_threads */
+	struct task_struct	*t_task; /* service thread */
+	pid_t			 t_pid;      /* kernel process ID */
+	ktime_t			 t_touched;  /* last active time */
+	struct delayed_work	 t_watchdog; /* inactivity watchdog timer */
+	struct ptlrpc_service_part *t_svcpt; /* service the thread belongs to */
+	wait_queue_head_t	 t_ctl_waitq;/* waiter for thread starter */
+	struct lu_env		*t_env;
+	char			 t_name[PTLRPC_THR_NAME_LEN];
 };
 
 static inline int thread_is_init(struct ptlrpc_thread *thread)
@@ -2256,6 +2239,7 @@ void ptlrpc_hr_fini(void);
 void ptlrpc_watchdog_init(struct delayed_work *work, timeout_t timeout);
 void ptlrpc_watchdog_disable(struct delayed_work *work);
 void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout);
+void ptlrpc_watchdog_delete(struct delayed_work *work);
 
 /** @} */
 
