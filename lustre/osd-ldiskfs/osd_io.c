@@ -2243,7 +2243,15 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		}
 
 		/* TODO: quota check */
-		rc = osd_extend_restart_trans(handle, credits, inode);
+		if (handle->h_transaction->t_state == T_RUNNING) {
+			rc = osd_extend_restart_trans(handle, credits, inode);
+		} else {
+			rc = ldiskfs_journal_restart(handle, credits
+#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
+				,ldiskfs_trans_default_revoke_credits(inode->i_sb)
+#endif
+				);
+		}
 		if (rc)
 			break;
 
