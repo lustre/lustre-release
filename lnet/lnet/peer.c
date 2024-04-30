@@ -1365,7 +1365,6 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 	mr = lnet_peer_discovery_disabled == 0;
 
 	rc = 0;
-	CDEBUG(D_NET, "num_nids %d\n", num_nids);
 
 	for (i = 0; i < num_nids; i++) {
 		if (nid_is_lo0(&nids[i]))
@@ -3649,8 +3648,8 @@ __must_hold(&lp->lp_lock)
 	 */
 	if (!LNET_NID_IS_ANY(&lp->lp_merge_primary_nid)) {
 
-		rc = lnet_peer_set_primary_nid(lp, &lp->lp_merge_primary_nid,
-					       flags);
+		lnet_peer_set_primary_nid(lp, &lp->lp_merge_primary_nid,
+					  flags);
 		lp->lp_merge_primary_nid = LNET_ANY_NID;
 	}
 
