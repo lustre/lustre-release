@@ -796,12 +796,26 @@ int jt_opt_net(int argc, char **argv)
 #define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
 #endif
 
+static bool is_mgs(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "mgs/MGS/exports");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
 static bool is_mds(void)
 {
 	glob_t path;
 	int rc;
 
-	rc = cfs_get_param_paths(&path, "mdt/*-MDT0000");
+	rc = cfs_get_param_paths(&path, "mdt/*-MDT*/exports");
 	if (!rc) {
 		cfs_free_param_data(&path);
 		return true;
@@ -815,7 +829,7 @@ static bool is_oss(void)
 	glob_t path;
 	int rc;
 
-	rc = cfs_get_param_paths(&path, "obdfilter/*-OST0000");
+	rc = cfs_get_param_paths(&path, "obdfilter/*-OST*/exports");
 	if (!rc) {
 		cfs_free_param_data(&path);
 		return true;
@@ -3907,6 +3921,7 @@ static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 	lustre_cfg_init(lcfg, cmd, &bufs);
 
 	memset(&data, 0, sizeof(data));
+getdev:
 	if (dynamic) {
 		if (is_mds()) {
 			rc = data.ioc_dev = get_mds_device();
@@ -3917,6 +3932,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 			rc = -errno;
 		}
 	} else {
+		if (!is_mgs()) {
+			dynamic = true;
+			goto getdev;
+		}
 		rc = data.ioc_dev = get_mgs_device();
 	}
 	if (rc < 0)
