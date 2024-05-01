@@ -447,8 +447,8 @@ static int lnet_inet4_enumerate(struct net_device *dev, int flags,
 			tmp = krealloc(ifaces, *nalloc * sizeof(*tmp),
 				       GFP_KERNEL);
 			if (!tmp) {
-				kfree(ifaces);
-				ifaces = NULL;
+				kfree(*dev_list);
+				*dev_list = NULL;
 				return -ENOMEM;
 			}
 			ifaces = tmp;
@@ -501,8 +501,8 @@ static int lnet_inet6_enumerate(struct net_device *dev, int flags,
 			tmp = krealloc(ifaces, *nalloc * sizeof(*tmp),
 				       GFP_KERNEL);
 			if (!tmp) {
-				kfree(ifaces);
-				ifaces = NULL;
+				kfree(*dev_list);
+				*dev_list = NULL;
 				return -ENOMEM;
 			}
 			ifaces = tmp;
