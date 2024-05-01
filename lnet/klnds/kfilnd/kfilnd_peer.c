@@ -56,20 +56,36 @@ static void kfilnd_peer_free(void *ptr, void *arg)
 }
 
 /**
- * kfilnd_peer_del() - Mark a peer for deletion
+ * kfilnd_peer_del() - Delete a peer from the peer cache. kp_remove_peer is used
+ * to prevent more than one thread from deleting the peer at once, and it
+ * informs threads on the allocation path that this peer is being deleted. When
+ * the peer is removed from the peer cache its allocation reference is returned
+ * and lnet is notified that this peer is down.
  * @kp: Peer to be deleted
  */
 static void kfilnd_peer_del(struct kfilnd_peer *kp)
 {
+
+	rcu_read_lock();
+
 	if (atomic_cmpxchg(&kp->kp_remove_peer, 0, 1) == 0) {
 		struct lnet_nid peer_nid;
 
+		rhashtable_remove_fast(&kp->kp_dev->peer_cache, &kp->kp_node,
+				       peer_cache_params);
+		/* Return allocation reference */
+		refcount_dec(&kp->kp_cnt);
+
+		rcu_read_unlock();
+
 		lnet_nid4_to_nid(kp->kp_nid, &peer_nid);
-		CDEBUG(D_NET, "%s(%p):0x%llx marked for removal from peer cache\n",
+		CDEBUG(D_NET, "%s(%p):0x%llx removed from peer cache\n",
 		       libcfs_nidstr(&peer_nid), kp, kp->kp_addr);
 
 		lnet_notify(kp->kp_dev->kfd_ni, &peer_nid, false, false,
 			    kp->kp_last_alive);
+	} else {
+		rcu_read_unlock();
 	}
 }
 
@@ -158,22 +174,8 @@ void kfilnd_peer_tn_failed(struct kfilnd_peer *kp, int error, bool delete)
  */
 void kfilnd_peer_put(struct kfilnd_peer *kp)
 {
-	rcu_read_lock();
-
-	/* Return allocation reference if the peer was marked for removal. */
-	if (atomic_cmpxchg(&kp->kp_remove_peer, 1, 2) == 1) {
-		rhashtable_remove_fast(&kp->kp_dev->peer_cache, &kp->kp_node,
-				       peer_cache_params);
-		refcount_dec(&kp->kp_cnt);
-
-		CDEBUG(D_NET, "%s(%p):0x%llx removed from peer cache\n",
-		       libcfs_nid2str(kp->kp_nid), kp, kp->kp_addr);
-	}
-
 	if (refcount_dec_and_test(&kp->kp_cnt))
 		kfilnd_peer_free(kp, NULL);
-
-	rcu_read_unlock();
 }
 
 u16 kfilnd_peer_target_rx_base(struct kfilnd_peer *kp)
@@ -210,8 +212,14 @@ again:
 		kp = NULL;
 	rcu_read_unlock();
 
-	if (kp)
+	if (kp) {
+		if (atomic_read(&kp->kp_remove_peer)) {
+			kfilnd_peer_put(kp);
+			goto again;
+		}
+
 		return kp;
+	}
 
 	/* Allocate a new peer for the cache. */
 	kp = kzalloc(sizeof(*kp), GFP_KERNEL);
