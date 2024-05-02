@@ -1309,7 +1309,7 @@ static int lfsck_namespace_notify_lmv_remote(const struct lu_env *env,
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	GOTO(out, rc = (rc == -ENOENT ? 1 : rc));
 

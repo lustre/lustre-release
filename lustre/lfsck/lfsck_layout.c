@@ -2625,7 +2625,7 @@ static int lfsck_layout_master_conditional_destroy(const struct lu_env *env,
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	GOTO(put, rc);
 
@@ -5273,7 +5273,7 @@ static int lfsck_layout_slave_check_pairs(const struct lu_env *env,
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	if (rc == -ENOENT || rc == -ENODATA)
 		rc = 1;
