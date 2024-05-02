@@ -1109,7 +1109,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 			failed_lock_cleanup(ns, lock, einfo->ei_mode);
 			LDLM_LOCK_RELEASE(lock);
 			if (!req_passed_in)
-				ptlrpc_req_finished(req);
+				ptlrpc_req_put(req);
 			GOTO(out, rc);
 		}
 	}
@@ -1138,7 +1138,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
 out:
 	if (!req_passed_in && req != NULL) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		if (reqp)
 			*reqp = NULL;
 	}
@@ -1461,7 +1461,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 
 		rc = _ldlm_cancel_pack(req, lock, head, count);
 		if (rc == 0) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			sent = count;
 			GOTO(out, rc);
 		}
@@ -1481,7 +1481,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 			rc = 0;
 		} else if (rc == -ETIMEDOUT && /* check there was no reconnect*/
 			   req->rq_import_generation == imp->imp_generation) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			continue;
 		} else if (rc != ELDLM_OK) {
 			/* -ESHUTDOWN is common on umount */
@@ -1494,7 +1494,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 		break;
 	}
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	EXIT;
 out:
 	return sent ? sent : rc;

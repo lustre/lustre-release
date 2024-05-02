@@ -885,7 +885,7 @@ static inline int ldlm_ast_fini(struct ptlrpc_request *req,
 
 	if (unlikely(instant_cancel)) {
 		rc = ptl_send_rpc(req, 1);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		if (rc == 0)
 			atomic_inc(&arg->restart);
 	} else {
@@ -985,7 +985,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	if (ldlm_is_destroyed(lock)) {
 		/* What's the point? */
 		unlock_res_and_lock(lock);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		RETURN(0);
 	}
 
@@ -998,7 +998,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 		ldlm_set_waited(lock);
 		unlock_res_and_lock(lock);
 
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");
 		RETURN(0);
 	}
