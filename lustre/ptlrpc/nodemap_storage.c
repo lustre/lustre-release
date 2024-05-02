@@ -1327,8 +1327,25 @@ static void nodemap_save_all_caches(void)
 }
 
 /* tracks if config still needs to be loaded, either from disk or network */
-static bool nodemap_config_loaded;
+/*  0: not loaded yet
+ *  1: successfully loaded
+ * -1: loading in progress
+ */
+static int nodemap_config_loaded;
 static DEFINE_MUTEX(nodemap_config_loaded_lock);
+
+bool nodemap_loading(void)
+{
+	return (nodemap_config_loaded == -1);
+}
+
+void nodemap_config_set_loading_mgc(bool loading)
+{
+	mutex_lock(&nodemap_config_loaded_lock);
+	nodemap_config_loaded = loading ? -1 : 0;
+	mutex_unlock(&nodemap_config_loaded_lock);
+}
+EXPORT_SYMBOL(nodemap_config_set_loading_mgc);
 
 /**
  * Ensures that configs loaded over the wire are prioritized over those loaded
@@ -1340,7 +1357,7 @@ void nodemap_config_set_active_mgc(struct nodemap_config *config)
 {
 	mutex_lock(&nodemap_config_loaded_lock);
 	nodemap_config_set_active(config);
-	nodemap_config_loaded = true;
+	nodemap_config_loaded = 1;
 	nodemap_save_all_caches();
 	mutex_unlock(&nodemap_config_loaded_lock);
 }
@@ -1379,9 +1396,9 @@ struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 	 * loading is done, so disk config is overwritten by MGS config.
 	 */
 	mutex_lock(&nodemap_config_loaded_lock);
+	nodemap_config_loaded = -1;
 	rc = nodemap_load_entries(env, obj);
-	if (!rc)
-		nodemap_config_loaded = true;
+	nodemap_config_loaded = !rc;
 	mutex_unlock(&nodemap_config_loaded_lock);
 
 	if (rc) {
@@ -1415,15 +1432,15 @@ struct nm_config_file *nm_config_file_register_tgt(const struct lu_env *env,
 
 	/* don't load from cache if config already loaded */
 	mutex_lock(&nodemap_config_loaded_lock);
-	if (!nodemap_config_loaded) {
+	if (nodemap_config_loaded < 1) {
 		config_obj = nodemap_cache_find_create(env, dev, los, 0);
-		if (IS_ERR(config_obj))
+		if (IS_ERR(config_obj)) {
 			rc = PTR_ERR(config_obj);
-		else
+		} else {
+			nodemap_config_loaded = -1;
 			rc = nodemap_load_entries(env, config_obj);
-
-		if (!rc)
-			nodemap_config_loaded = true;
+		}
+		nodemap_config_loaded = !rc;
 	}
 	mutex_unlock(&nodemap_config_loaded_lock);
 	if (rc)

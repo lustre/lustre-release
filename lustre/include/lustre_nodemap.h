@@ -224,6 +224,7 @@ struct nodemap_config {
 
 struct nodemap_config *nodemap_config_alloc(void);
 void nodemap_config_dealloc(struct nodemap_config *config);
+void nodemap_config_set_loading_mgc(bool loading);
 void nodemap_config_set_active_mgc(struct nodemap_config *config);
 
 int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,

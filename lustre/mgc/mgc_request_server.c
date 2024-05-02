@@ -404,6 +404,8 @@ again:
 	 * recent_nodemap should be set to NULL when the nodemap_config
 	 * is either destroyed or set active.
 	 */
+	if (new_config)
+		nodemap_config_set_loading_mgc(true);
 	for (i = 0; i < nrpages && ealen > 0; i++) {
 		union lu_page *ptr;
 		int rc2;
@@ -424,6 +426,9 @@ again:
 	}
 
 out:
+	if (new_config)
+		nodemap_config_set_loading_mgc(false);
+
 	if (req) {
 		ptlrpc_req_put(req);
 		req = NULL;
