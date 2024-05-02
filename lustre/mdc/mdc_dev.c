@@ -827,14 +827,14 @@ static int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 			req->rq_interpret_reply = mdc_enqueue_interpret;
 			ptlrpcd_add_req(req);
 		} else {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 		}
 		RETURN(rc);
 	}
 
 	rc = mdc_enqueue_fini(exp, req, upcall, cookie, &lockh, einfo->ei_mode,
 			      flags, rc);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 

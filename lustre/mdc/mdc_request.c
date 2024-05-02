@@ -147,7 +147,7 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 	       PFID(rootfid), lustre_msg_get_last_committed(req->rq_repmsg));
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	return rc;
 }
@@ -273,7 +273,7 @@ again:
 			goto again;
 		}
 
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	} else {
 		*request = req;
 	}
@@ -339,7 +339,7 @@ again:
 			goto again;
 		}
 
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	} else {
 		*request = req;
 	}
@@ -460,7 +460,7 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 		ptlrpc_put_mod_rpc_slot(req);
 
 	if (rc)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	else
 		*request = req;
 	RETURN(rc);
@@ -543,7 +543,7 @@ static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 	GOTO(out, rc = body->mbo_eadatasize);
 out:
 	if (rc < 0) {
-		ptlrpc_req_finished(*req);
+		ptlrpc_req_put(*req);
 		*req = NULL;
 	}
 
@@ -1055,7 +1055,7 @@ restart_bulk:
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
 	if (desc == NULL) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		RETURN(-ENOMEM);
 	}
 
@@ -1069,7 +1069,7 @@ restart_bulk:
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
 	if (rc) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		if (rc != -ETIMEDOUT)
 			RETURN(rc);
 
@@ -1092,7 +1092,7 @@ restart_bulk:
 	rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk,
 					  req->rq_bulk->bd_nob_transferred);
 	if (rc < 0) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		RETURN(rc);
 	}
 
@@ -1100,7 +1100,7 @@ restart_bulk:
 		CERROR("%s: unexpected bytes transferred: %d (%ld expected)\n",
 		       exp->exp_obd->obd_name, req->rq_bulk->bd_nob_transferred,
 		       PAGE_SIZE * npages);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		RETURN(-EPROTO);
 	}
 
@@ -1372,7 +1372,7 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	}
 	unlock_page(page0);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	CDEBUG(D_CACHE, "read %d/%d pages\n", rd_pgs, npages);
 	for (i = 1; i < npages; i++) {
 		unsigned long	offset;
@@ -1462,7 +1462,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	rc = mdc_intent_lock(exp, op_data, &it, &enq_req,
 			     mrinfo->mr_blocking_ast, 0);
 	if (enq_req != NULL)
-		ptlrpc_req_finished(enq_req);
+		ptlrpc_req_put(enq_req);
 
 	if (rc < 0) {
 		CERROR("%s: "DFID" lock enqueue fails: rc = %d\n",
@@ -1681,7 +1681,7 @@ static int mdc_statfs(const struct lu_env *env,
         *osfs = *msfs;
         EXIT;
 out:
-        ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 output:
         class_import_put(imp);
         return rc;
@@ -1766,7 +1766,7 @@ static int mdc_ioc_hsm_progress(struct obd_export *exp,
 
 	GOTO(out, rc);
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -1823,7 +1823,7 @@ static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archive_count,
 	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -1865,7 +1865,7 @@ static int mdc_ioc_hsm_current_action(struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -1888,7 +1888,7 @@ static int mdc_ioc_hsm_ct_unregister(struct obd_import *imp)
 	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -1929,7 +1929,7 @@ static int mdc_ioc_hsm_state_get(struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -1970,7 +1970,7 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 
 	GOTO(out, rc);
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -2062,7 +2062,7 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 	GOTO(out, rc);
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -2159,7 +2159,7 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 			exp->exp_obd->obd_name, rc);
 	}
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -2216,7 +2216,7 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 	EXIT;
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -2402,7 +2402,7 @@ static int mdc_get_info_rpc(struct obd_export *exp,
 				lustre_swab_fid2path(val);
 		}
 	}
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -2700,7 +2700,7 @@ static int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
-                ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
         else
                 *request = req;
         RETURN(rc);

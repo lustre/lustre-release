@@ -259,7 +259,7 @@ rebuild:
 	} else if (rc == -EINPROGRESS) {
 		/* Retry create infinitely until succeed or get other
 		 * error code or interrupted. */
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		if (generation == import->imp_generation) {
 			if (signal_pending(current))
 				RETURN(-EINTR);
@@ -601,6 +601,6 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 	if (rc == -ERESTARTSYS)
 		rc = 0;
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
