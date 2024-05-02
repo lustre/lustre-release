@@ -470,8 +470,8 @@ debs: undef.h debs_common
 		export IB_OPTIONS="--with-o2ib=no"; \
 	else \
 		if test "x@ENABLEO2IB@" != "xyes" && \
-		   test -n "@O2IBPATH@"; then \
-			export IB_OPTIONS="--with-o2ib=@O2IBPATH@"; \
+		   test -n "@EXT_O2IBPATH@"; then \
+			export IB_OPTIONS="--with-o2ib=@EXT_O2IBPATH@"; \
 		else \
 			export IB_OPTIONS="--with-o2ib=yes"; \
 		fi; \
