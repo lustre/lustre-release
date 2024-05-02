@@ -193,7 +193,7 @@ int fld_update_from_controller(const struct lu_env *env,
 	fld->lsf_new = 1;
 out:
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	RETURN(rc);
 }

@@ -408,7 +408,7 @@ again:
 			rc = -EAGAIN;
 		}
 		if (rc == -EAGAIN) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			if (msleep_interruptible(2 * MSEC_PER_SEC))
 				GOTO(out_req, rc = -EINTR);
 			rc = 0;
@@ -428,7 +428,7 @@ again:
 	EXIT;
 out_req:
 	if (rc != 0 || !reqp) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		req = NULL;
 	}
 
