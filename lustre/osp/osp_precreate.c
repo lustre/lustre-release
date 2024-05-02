@@ -726,7 +726,7 @@ out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	if (!rc)
 		osp_update_fldb_cache(env, d, fid);
@@ -828,7 +828,7 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 	       PFID(last_fid));
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
@@ -978,7 +978,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	       PFID(&d->opd_pre_last_created_fid), PFID(&d->opd_last_used_fid));
 out:
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 
 	/*
@@ -1756,7 +1756,7 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (oa)
 		OBD_FREE_PTR(oa);
 	RETURN(rc);

@@ -549,7 +549,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 out:
 	if (req != NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	osp_update_request_destroy(env, update);
 
@@ -916,7 +916,7 @@ static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
 
 out:
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	if (update && !IS_ERR(update))
 		osp_update_request_destroy(env, update);
@@ -988,7 +988,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      (const union ldlm_policy_data *)policy, &flags,
 			      NULL, 0, LVB_T_NONE, lh, 0);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc == ELDLM_OK ? 0 : -EIO);
 }
@@ -1378,7 +1378,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	rc = orr->orr_size;
 	*pos = orr->orr_offset;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 out_update:
 	osp_update_request_destroy(env, update);

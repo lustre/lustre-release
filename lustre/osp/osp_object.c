@@ -665,7 +665,7 @@ out:
 
 out_req:
 	if (req != NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	osp_update_request_destroy(env, update);
 
@@ -796,7 +796,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 			rc = osp_remote_sync(env, osp, update, &req);
 			if (req != NULL)
-				ptlrpc_req_finished(req);
+				ptlrpc_req_put(req);
 
 			osp_update_request_destroy(env, update);
 		} else {
@@ -1187,7 +1187,7 @@ out_req:
 	}
 
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	if (update && !IS_ERR(update))
 		osp_update_request_destroy(env, update);
@@ -1950,7 +1950,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	it->ooi_next = ii->ii_hash_end;
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	return rc;
 }

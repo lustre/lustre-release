@@ -680,7 +680,7 @@ static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, op);
 	if (rc) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		return ERR_PTR(rc);
 	}
 
@@ -1071,7 +1071,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 			DEBUG_REQ(D_OTHER, req, "imp_committed = %llu",
 				  imp->imp_peer_committed_transno);
 		}
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		done++;
 		if (arr &&
 		    ((i * sizeof(int)) == arr_size ||

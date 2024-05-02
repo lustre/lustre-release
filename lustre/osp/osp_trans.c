@@ -450,7 +450,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 
 out_req:
 	if (rc < 0)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -489,7 +489,7 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 	rc = ptlrpc_queue_wait(req);
 	our->our_rc = rc;
 	if (rc < 0 || reqp == NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	else
 		*reqp = req;
 
@@ -1220,7 +1220,7 @@ static int osp_send_update_req(const struct lu_env *env,
 	}
 out:
 	if (req != NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	RETURN(rc);
 }

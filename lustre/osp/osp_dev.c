@@ -1564,7 +1564,7 @@ static int osp_obd_statfs(const struct lu_env *env, struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
