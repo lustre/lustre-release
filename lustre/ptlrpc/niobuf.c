@@ -978,7 +978,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 skip_send:
 	request->rq_req_unlinked = 1;
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 	if (noreply)
 		GOTO(out, rc);
 

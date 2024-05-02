@@ -373,7 +373,7 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 
 		list_del_init(&req->rq_set_chain);
 		req->rq_set = NULL;
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	}
 
 	if (rc == 0) {

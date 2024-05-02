@@ -1767,7 +1767,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 	spin_unlock(&imp->imp_lock);
 
 	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 set_state:
 	spin_lock(&imp->imp_lock);

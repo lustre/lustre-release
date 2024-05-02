@@ -214,7 +214,7 @@ static int batch_prep_update_req(struct batch_update_head *head,
 
 out_req:
 	if (rc < 0)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -493,7 +493,7 @@ static int batch_send_update_req(const struct lu_env *env,
 	}
 
 	if (req != NULL)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 
 	lprocfs_oh_tally_log2(&obd->u.cli.cl_batch_rpc_hist,
 			      head->buh_update_count);

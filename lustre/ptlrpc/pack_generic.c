@@ -1755,7 +1755,7 @@ int do_set_info_async(struct obd_import *imp,
 		ptlrpc_check_set(NULL, set);
 	} else {
 		rc = ptlrpc_queue_wait(req);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	}
 
 	RETURN(rc);

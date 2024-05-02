@@ -1160,7 +1160,7 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
 		req->rq_invalid_rqset = 0;
 		spin_unlock(&req->rq_lock);
 
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	}
 
 	LASSERT(atomic_read(&set->set_remaining) == 0);
@@ -2296,7 +2296,7 @@ interpret:
 			/* record rq_status to compute the final status later */
 			if (req->rq_status != 0)
 				set->set_rc = req->rq_status;
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 		} else {
 			list_move_tail(&req->rq_set_chain, &comp_reqs);
 		}
@@ -3730,7 +3730,7 @@ void ptlrpcd_destroy_work(void *handler)
 	struct ptlrpc_request *req = handler;
 
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 }
 EXPORT_SYMBOL(ptlrpcd_destroy_work);
 

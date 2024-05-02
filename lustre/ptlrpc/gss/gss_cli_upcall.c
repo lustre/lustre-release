@@ -383,7 +383,7 @@ out_copy:
 		rc = 0;
 
 	class_import_put(imp);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
@@ -446,7 +446,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
                       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec), rc);
 
 out_ref:
-        ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 out:
         RETURN(rc);
 }

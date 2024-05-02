@@ -143,7 +143,7 @@ static int llog_client_open(const struct lu_env *env,
 	EXIT;
 out:
 	llog_client_exit(ctxt, imp);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -217,7 +217,7 @@ static int llog_client_next_block(const struct lu_env *env,
 	memcpy(buf, ptr, len);
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 err_exit:
 	llog_client_exit(loghandle->lgh_ctxt, imp);
 	return rc;
@@ -270,7 +270,7 @@ static int llog_client_prev_block(const struct lu_env *env,
 	memcpy(buf, ptr, len);
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 err_exit:
 	llog_client_exit(loghandle->lgh_ctxt, imp);
 	return rc;
@@ -338,7 +338,7 @@ static int llog_client_read_header(const struct lu_env *env,
 	}
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 err_exit:
 	llog_client_exit(handle->lgh_ctxt, imp);
 	return rc;

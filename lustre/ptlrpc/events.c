@@ -83,7 +83,7 @@ void request_out_callback(struct lnet_event *ev)
 
 	spin_unlock(&req->rq_lock);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	EXIT;
 }
 

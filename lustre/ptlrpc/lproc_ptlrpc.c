@@ -1350,7 +1350,7 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 	req->rq_send_state = LUSTRE_IMP_FULL;
 
 	rc = ptlrpc_queue_wait(req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
