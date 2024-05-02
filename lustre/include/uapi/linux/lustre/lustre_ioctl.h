@@ -220,7 +220,9 @@ enum obd_abort_recovery_flags {
 #define OBD_IOC_START_LFSCK	_IOWR('f', 230, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_STOP_LFSCK	_IOW('f', 231, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_QUERY_LFSCK	_IOR('f', 232, struct obd_ioctl_data)
-#define OBD_IOC_CHLG_POLL	_IOR('f', 233, long)
+#define OBD_IOC_CHLG_SET_FLAGS	_IOR('f', 233, long)
+/* for compatibility issues with old apps */
+#define OBD_IOC_CHLG_POLL OBD_IOC_CHLG_SET_FLAGS
 /*	lustre/lustre_user.h	240-249 */
 /* was	LIBCFS_IOC_DEBUG_MASK	_IOWR('f', 250, long) until 2.11 */
 
