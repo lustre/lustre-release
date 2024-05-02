@@ -1014,7 +1014,7 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	/* A failed enqueue should still call the mgc_blocking_ast,
 	 * where it will be requeued if needed ("grant failed").
 	 */
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
@@ -1611,7 +1611,7 @@ again:
 
 out:
 	if (req) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		req = NULL;
 	}
 

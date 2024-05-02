@@ -209,7 +209,7 @@ static int mgc_target_register(struct obd_export *exp,
 
 	req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
 	if (!req_mti) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		RETURN(-ENOMEM);
 	}
 
@@ -244,7 +244,7 @@ static int mgc_target_register(struct obd_export *exp,
 		       mti->mti_svname, mti->mti_stripe_index);
 		server_mti_print("mgc_target_register: rep", mti);
 	}
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	RETURN(rc);
 }
@@ -445,7 +445,7 @@ again:
 
 out:
 	if (req) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		req = NULL;
 	}
 
