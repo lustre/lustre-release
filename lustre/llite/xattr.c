@@ -212,7 +212,7 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	}
 	ll_i2info(inode)->lli_synced_to_mds = false;
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	ll_stats_ops_tally(ll_i2sbi(inode), valid == OBD_MD_FLXATTRRM ?
 				LPROC_LL_REMOVEXATTR : LPROC_LL_SETXATTR,
@@ -495,7 +495,7 @@ out_xattr:
 		clear_bit(LL_SBI_USER_XATTR, sbi->ll_flags);
 	}
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
@@ -644,9 +644,9 @@ out_env:
 		GOTO(out_req, rc = lmm_size);
 out_req:
 		if (req)
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 		if (root_req)
-			ptlrpc_req_finished(root_req);
+			ptlrpc_req_put(root_req);
 
 		RETURN(rc);
 	} else {

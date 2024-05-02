@@ -113,7 +113,7 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 			 ctx, len, XATTR_CREATE, ll_i2suppgid(inode), &req);
 	if (rc)
 		return rc;
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	return ll_set_encflags(inode, (void *)ctx, len, false);
 }

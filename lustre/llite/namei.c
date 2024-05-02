@@ -1026,7 +1026,7 @@ inherit:
 
 		fid_zero(&op_data->op_fid2);
 		op_data->op_suppgids[1] = body->mbo_gid;
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		req = NULL;
 		ll_intent_release(it);
 		rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
@@ -1089,7 +1089,7 @@ out:
 	if (lum != NULL)
 		OBD_FREE_PTR(lum);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return retval;
 }
 
@@ -1410,7 +1410,7 @@ static struct inode *ll_create_node(struct inode *dir, struct lookup_intent *it)
         ll_set_lock_data(sbi->ll_md_exp, inode, it, NULL);
         EXIT;
  out:
-        ptlrpc_req_finished(request);
+        ptlrpc_req_put(request);
         return inode;
 }
 
@@ -1803,7 +1803,7 @@ again:
 		int			lumsize;
 		int			err2;
 
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		request = NULL;
 		ll_finish_md_op_data(op_data);
 		op_data = NULL;
@@ -1853,7 +1853,7 @@ again:
 			GOTO(err_exit, err);
 		}
 
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		request = NULL;
 		goto again;
 	}
@@ -1870,7 +1870,7 @@ again:
 	EXIT;
 err_exit:
 	if (request != NULL)
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 	if (!IS_ERR_OR_NULL(op_data))
 		ll_finish_md_op_data(op_data);
 	if (lum)
@@ -2032,7 +2032,7 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 			   ktime_us_delta(ktime_get(), kstart));
 	EXIT;
 out:
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 clear:
 	ll_clear_inode_lock_owner(src);
 	ll_clear_inode_lock_owner(dir);
@@ -2108,7 +2108,7 @@ static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 out_fini:
 	ll_finish_md_op_data(op_data);
 	ll_intent_release(&mkdir_it);
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 	if (lum)
 		OBD_FREE_PTR(lum);
 
@@ -2178,7 +2178,7 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 		}
 	}
 
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 out:
 	ll_clear_inode_lock_owner(dir);
 	ll_clear_inode_lock_owner(dchild->d_inode);
@@ -2210,7 +2210,7 @@ int ll_rmdir_entry(struct inode *dir, char *name, int namelen)
 	if (!rc)
 		ll_update_times(request, dir);
 
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 	if (!rc)
 		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_RMDIR,
 				   ktime_us_delta(ktime_get(), kstart));
@@ -2278,7 +2278,7 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 	ll_update_times(request, dir);
 
 out:
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 	if (!rc)
 		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_UNLINK,
 				   ktime_us_delta(ktime_get(), kstart));
@@ -2383,7 +2383,7 @@ static int ll_rename(struct mnt_idmap *map,
 		ll_update_times(request, tgt);
 	}
 
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 
 	if (!err) {
 		d_move(src_dchild, tgt_dchild);

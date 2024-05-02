@@ -773,7 +773,7 @@ static void ll_statahead_interpret_fini(struct ll_inode_info *lli,
 	ll_intent_release(&item->mop_it);
 	sa_fini_data(item);
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	sa_make_ready(sai, entry, rc);
 
 	spin_lock(&lli->lli_sa_lock);

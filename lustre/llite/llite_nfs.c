@@ -106,7 +106,7 @@ struct inode *search_inode_for_lustre(struct super_block *sb,
 		RETURN(ERR_PTR(rc));
 	}
 	rc = ll_prep_inode(&inode, &req->rq_pill, sb, NULL);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (rc)
 		RETURN(ERR_PTR(rc));
 
@@ -458,7 +458,7 @@ int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid)
 		*parent_fid = body->mbo_fid1;
 	}
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(0);
 }
 

@@ -219,10 +219,10 @@ void ll_intent_release(struct lookup_intent *it)
 	ll_intent_drop_lock(it);
 	/* We are still holding extra reference on a request, need to free it */
 	if (it_disposition(it, DISP_ENQ_OPEN_REF))
-		ptlrpc_req_finished(it->it_request); /* ll_file_open */
+		ptlrpc_req_put(it->it_request); /* ll_file_open */
 
 	if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
-		ptlrpc_req_finished(it->it_request);
+		ptlrpc_req_put(it->it_request);
 
 	it->it_disposition = 0;
 	it->it_request = NULL;

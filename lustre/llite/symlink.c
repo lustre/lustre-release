@@ -158,7 +158,7 @@ static void ll_put_link(struct inode *unused, void *cookie)
 # endif
 #endif
 {
-	ptlrpc_req_finished(cookie);
+	ptlrpc_req_put(cookie);
 }
 
 #ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
@@ -187,7 +187,7 @@ static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 		ll_inode_size_unlock(inode);
 	}
 	if (rc) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		request = NULL;
 		symname = ERR_PTR(rc);
 	}
@@ -218,7 +218,7 @@ static const char *ll_get_link(struct dentry *dentry,
 	rc = ll_readlink_internal(inode, &request, &symname, done);
 	ll_inode_size_unlock(inode);
 	if (rc < 0) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		return ERR_PTR(rc);
 	}
 
@@ -244,7 +244,7 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 	rc = ll_readlink_internal(inode, &request, &symname);
 	ll_inode_size_unlock(inode);
 	if (rc < 0) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		return ERR_PTR(rc);
 	}
 

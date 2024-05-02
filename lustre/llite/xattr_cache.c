@@ -535,7 +535,7 @@ static int ll_xattr_cache_refill(struct inode *inode)
 	ll_set_lock_data(sbi->ll_md_exp, inode, &oit, NULL);
 	ll_intent_drop_lock(&oit);
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(0);
 
 err_cancel:
@@ -548,7 +548,7 @@ err_req:
 	if (rc == -ERANGE)
 		rc = -EAGAIN;
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 

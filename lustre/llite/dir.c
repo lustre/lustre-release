@@ -587,7 +587,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 out_inode:
 	iput(inode);
 out_request:
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 out_op_data:
 	ll_finish_md_op_data(op_data);
 
@@ -674,7 +674,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 	/* swabbing is done in lov_setstripe() on server side */
 	rc = md_setattr(sbi->ll_md_exp, op_data, lump, lum_size, &req);
 	ll_finish_md_op_data(op_data);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (rc)
 		RETURN(rc);
 
@@ -2247,7 +2247,7 @@ out:
 out_tmp:
 		OBD_FREE(tmp, lum_size);
 finish_req:
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		return rc;
 	}
 	case LL_IOC_REMOVE_ENTRY: {
@@ -2476,8 +2476,8 @@ out_rmdir:
 
 		EXIT;
 out_req:
-		ptlrpc_req_finished(request);
-		ptlrpc_req_finished(root_request);
+		ptlrpc_req_put(request);
+		ptlrpc_req_put(root_request);
 		if (filename)
 			ll_putname(filename);
 		return rc;

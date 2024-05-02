@@ -283,7 +283,7 @@ out:
 	och->och_open_handle.cookie = DEAD_HANDLE_MAGIC;
 	OBD_FREE_PTR(och);
 
-	ptlrpc_req_finished(req);	/* This is close request */
+	ptlrpc_req_put(req);	/* This is close request */
 	return rc;
 }
 
@@ -743,7 +743,7 @@ retry:
 		ll_update_dir_depth_dmv(parent->d_inode, de);
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	ll_intent_drop_lock(itp);
 
 	/* We did open by fid, but by the time we got to the server, the object
@@ -1085,7 +1085,7 @@ out_openerr:
 
 out_nofiledata:
 	if (it && it_disposition(it, DISP_ENQ_OPEN_REF)) {
-		ptlrpc_req_finished(it->it_request);
+		ptlrpc_req_put(it->it_request);
 		it_clear_disposition(it, DISP_ENQ_OPEN_REF);
 	}
 
@@ -1260,7 +1260,7 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	 */
 			    LDLM_FL_NO_LRU | LDLM_FL_EXCL);
 	ll_finish_md_op_data(op_data);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (rc < 0)
 		GOTO(out_release_it, rc);
 
@@ -3121,7 +3121,7 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
 out:
 	/* this one is in place of ll_file_open */
 	if (it_disposition(it, DISP_ENQ_OPEN_REF)) {
-		ptlrpc_req_finished(it->it_request);
+		ptlrpc_req_put(it->it_request);
 		it_clear_disposition(it, DISP_ENQ_OPEN_REF);
 	}
 	RETURN(rc);
@@ -4096,7 +4096,7 @@ int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 
 	op_data->op_xvalid |= OP_XVALID_PROJID | OP_XVALID_FLAGS;
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL, 0, &req);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (rc)
 		GOTO(out_fsxattr, rc);
 	ll_update_inode_flags(inode, op_data->op_attr_flags);
@@ -5158,7 +5158,7 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 			rc = err;
 		if (!err) {
 			lli->lli_synced_to_mds = true;
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 		}
 	}
 
@@ -5391,7 +5391,7 @@ int ll_get_fid_by_name(struct inode *parent, const char *name,
 	if (inode != NULL)
 		rc = ll_prep_inode(inode, &req->rq_pill, parent->i_sb, NULL);
 out_req:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
@@ -5536,7 +5536,7 @@ again:
 	}
 
 	if (request != NULL) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		request = NULL;
 	}
 
@@ -5741,7 +5741,7 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 
 	ll_lookup_finish_locks(&oit, dentry);
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	return rc;
 }
@@ -6451,7 +6451,7 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	EXIT;
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
@@ -6601,7 +6601,7 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
 			    &ll_md_blocking_ast, 0);
 	if (it.it_request != NULL)
-		ptlrpc_req_finished(it.it_request);
+		ptlrpc_req_put(it.it_request);
 	it.it_request = NULL;
 
 	ll_finish_md_op_data(op_data);

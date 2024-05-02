@@ -125,7 +125,7 @@ int ll_set_acl(struct mnt_idmap *map,
 	if (!rc)
 		ll_i2info(inode)->lli_synced_to_mds = false;
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 out_value:
 	kfree(value);
 out:

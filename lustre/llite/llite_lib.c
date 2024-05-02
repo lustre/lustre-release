@@ -752,7 +752,7 @@ retry_connect:
 			       sbi->ll_dt_exp, sbi->ll_md_exp, &lmd);
 	if (err) {
 		CERROR("failed to understand root inode md: rc = %d\n", err);
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		GOTO(out_lock_cn_cb, err);
 	}
 
@@ -767,7 +767,7 @@ retry_connect:
 		root = NULL;
 		CERROR("%s: bad ll_iget() for root: rc = %d\n",
 		       sbi->ll_fsname, err);
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		GOTO(out_root, err);
 	}
 
@@ -787,7 +787,7 @@ retry_connect:
 			      sbi->ll_fsname,
 			      PFID(&sbi->ll_root_fid), err);
 	}
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 
 	checksum = test_bit(LL_SBI_CHECKSUM, sbi->ll_flags);
 	if (sbi->ll_checksum_set) {
@@ -2005,7 +2005,7 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 
 	rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &request);
 	if (rc) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		if (rc == -ENOENT) {
 			clear_nlink(inode);
 			/* Unlinked special device node? Or just a race?
@@ -2028,7 +2028,7 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	rc = md_get_lustre_md(sbi->ll_md_exp, &request->rq_pill, sbi->ll_dt_exp,
 			      sbi->ll_md_exp, &md);
 	if (rc) {
-		ptlrpc_req_finished(request);
+		ptlrpc_req_put(request);
 		RETURN(rc);
 	}
 
@@ -2045,7 +2045,7 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	op_data->op_attr.ia_valid = ia_valid;
 
 	rc = ll_update_inode(inode, &md);
-	ptlrpc_req_finished(request);
+	ptlrpc_req_put(request);
 	md_put_lustre_md(sbi->ll_md_exp, &md);
 
 	RETURN(rc);
@@ -3282,7 +3282,7 @@ static int fileattr_get(struct inode *inode, int *flags,
 	if (*flags & LUSTRE_ENCRYPT_FL)
 		*flags |= STATX_ATTR_ENCRYPTED;
 
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 
 	*xflags = ll_inode_flags_to_xflags(inode->i_flags);
 	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags))
@@ -3321,7 +3321,7 @@ static int fileattr_set(struct inode *inode, int flags)
 	op_data->op_xvalid |= OP_XVALID_FLAGS;
 	rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &req);
 	ll_finish_md_op_data(op_data);
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	if (rc)
 		RETURN(rc);
 
@@ -3626,7 +3626,7 @@ void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
 	op_data->op_open_handle = body->mbo_open_handle;
 	op_data->op_mod_time = ktime_get_real_seconds();
 	md_close(exp, op_data, NULL, &close_req);
-	ptlrpc_req_finished(close_req);
+	ptlrpc_req_put(close_req);
 	ll_finish_md_op_data(op_data);
 
 	EXIT;
@@ -3664,7 +3664,7 @@ static int ll_fileset_default_lmv_fixup(struct inode *inode,
 	EXIT;
 out:
 	if (req)
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	return rc;
 }
 
