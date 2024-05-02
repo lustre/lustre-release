@@ -129,7 +129,7 @@ int qsd_send_dqacq(const struct lu_env *env, struct obd_export *exp,
 	if (sync) {
 		rc = ptlrpc_queue_wait(req);
 		rc = qsd_dqacq_interpret(env, req, aa, rc);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	} else {
 		req->rq_interpret_reply = qsd_dqacq_interpret;
 		ptlrpcd_add_req(req);
@@ -291,7 +291,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 			      &flags, (void *)lvb, sizeof(*lvb), LVB_T_LQUOTA,
 			      &qti->qti_lockh, 1);
 	if (rc < 0) {
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 		GOTO(out, rc);
 	}
 
@@ -305,7 +305,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 
 		lock = ldlm_handle2lock(&qti->qti_lockh);
 		if (lock == NULL) {
-			ptlrpc_req_finished(req);
+			ptlrpc_req_put(req);
 			GOTO(out, rc = -ENOLCK);
 		}
 		lu_ref_add(&qqi->qqi_reference, "glb_lock", lock);
@@ -337,7 +337,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		/* send lock enqueue request and wait for completion */
 		rc = ptlrpc_queue_wait(req);
 		rc = qsd_intent_interpret(env, req, aa, rc);
-		ptlrpc_req_finished(req);
+		ptlrpc_req_put(req);
 	} else {
 		/* queue lock request and return */
 		req->rq_interpret_reply = qsd_intent_interpret;
@@ -429,6 +429,6 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 
 	EXIT;
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
