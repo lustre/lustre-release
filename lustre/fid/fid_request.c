@@ -142,7 +142,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
 	EXIT;
 out_req:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	return rc;
 }
 
