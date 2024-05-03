@@ -1126,14 +1126,11 @@ static int osp_send_update_req(const struct lu_env *env,
 	LASSERT(osp->opd_obd);
 
 	if (ou && ou->ou_generation != our->our_generation) {
-		const struct lnet_processid *peer;
-
 		rc = -ESTALE;
 		osp_trans_callback(env, oth, rc);
-		peer = &osp->opd_obd->u.cli.cl_import->imp_connection->c_peer;
-		CDEBUG(D_HA, "%s: stale tx to %s: gen %llu != %llu: rc = %d\n",
-		       osp->opd_obd->obd_name, libcfs_nidstr(&peer->nid),
-		       osp->opd_update->ou_generation, our->our_generation, rc);
+		CDEBUG(D_HA, "%s: stale tx: gen %llu != %llu: rc = %d\n",
+		       osp->opd_obd->obd_name, ou->ou_generation,
+		       our->our_generation, rc);
 		RETURN(rc);
 	}
 
