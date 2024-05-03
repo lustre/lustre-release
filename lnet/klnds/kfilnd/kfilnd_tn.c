@@ -46,18 +46,21 @@ static __sum16 kfilnd_tn_cksum(void *ptr, int nob)
 	return NO_CHECKSUM;
 }
 
-static int kfilnd_tn_msgtype2size(enum kfilnd_msg_type type)
+static int kfilnd_tn_msgtype2size(struct kfilnd_msg *msg)
 {
 	const int hdr_size = offsetof(struct kfilnd_msg, proto);
 
-	switch (type) {
+	switch (msg->type) {
 	case KFILND_MSG_IMMEDIATE:
 		return offsetof(struct kfilnd_msg, proto.immed.payload[0]);
 
 	case KFILND_MSG_BULK_PUT_REQ:
 	case KFILND_MSG_BULK_GET_REQ:
-		return hdr_size + sizeof(struct kfilnd_bulk_req_msg);
-
+		if (msg->version == KFILND_MSG_VERSION_1)
+			return hdr_size + sizeof(struct kfilnd_bulk_req_msg);
+		else if (msg->version == KFILND_MSG_VERSION_2)
+			return hdr_size + sizeof(struct kfilnd_bulk_req_msg_v2);
+		fallthrough;
 	default:
 		return -1;
 	}
@@ -127,20 +130,35 @@ static void kfilnd_tn_pack_bulk_req(struct kfilnd_transaction *tn)
 {
 	struct kfilnd_msg *msg = tn->tn_tx_msg.msg;
 
-	/* Pack the protocol header and payload. */
-	lnet_hdr_to_nid4(&tn->tn_lntmsg->msg_hdr, &msg->proto.bulk_req.hdr);
-	msg->proto.bulk_req.key = tn->tn_mr_key;
-	msg->proto.bulk_req.response_rx = tn->tn_response_rx;
-
 	/* Pack the transport header. */
 	msg->magic = KFILND_MSG_MAGIC;
-	msg->version = KFILND_MSG_VERSION;
+	msg->version = tn->tn_kp->kp_version;
 	msg->type = tn->msg_type;
-	msg->nob = sizeof(struct kfilnd_bulk_req_msg) +
-		offsetof(struct kfilnd_msg, proto);
 	msg->cksum = NO_CHECKSUM;
 	msg->srcnid = lnet_nid_to_nid4(&tn->tn_ep->end_dev->kfd_ni->ni_nid);
 	msg->dstnid = tn->tn_kp->kp_nid;
+
+	if (msg->version == KFILND_MSG_VERSION_1) {
+		msg->nob = sizeof(struct kfilnd_bulk_req_msg) +
+			offsetof(struct kfilnd_msg, proto);
+
+		/* Pack the protocol header and payload. */
+		lnet_hdr_to_nid4(&tn->tn_lntmsg->msg_hdr,
+				 &msg->proto.bulk_req.hdr);
+		msg->proto.bulk_req.key = tn->tn_mr_key;
+		msg->proto.bulk_req.response_rx = tn->tn_response_rx;
+	} else {
+		msg->nob = sizeof(struct kfilnd_bulk_req_msg_v2) +
+			offsetof(struct kfilnd_msg, proto);
+
+		/* Pack the protocol header and payload. */
+		lnet_hdr_to_nid4(&tn->tn_lntmsg->msg_hdr,
+				 &msg->proto.bulk_req_v2.kbrm2_hdr);
+		msg->proto.bulk_req_v2.kbrm2_key = tn->tn_mr_key;
+		msg->proto.bulk_req_v2.kbrm2_response_rx = tn->tn_response_rx;
+		msg->proto.bulk_req_v2.kbrm2_session_key =
+						tn->tn_kp->kp_local_session_key;
+	}
 
 	/* Checksum entire message. */
 	msg->cksum = kfilnd_tn_cksum(msg, msg->nob);
@@ -164,7 +182,7 @@ static void kfilnd_tn_pack_immed_msg(struct kfilnd_transaction *tn)
 
 	/* Pack the transport header. */
 	msg->magic = KFILND_MSG_MAGIC;
-	msg->version = KFILND_MSG_VERSION;
+	msg->version = tn->tn_kp->kp_version;
 	msg->type = tn->msg_type;
 	msg->nob = offsetof(struct kfilnd_msg, proto.immed.payload[tn->tn_nob]);
 	msg->cksum = NO_CHECKSUM;
@@ -223,10 +241,10 @@ static int kfilnd_tn_unpack_msg(struct kfilnd_ep *ep, struct kfilnd_msg *msg,
 		return -EPROTO;
 	}
 
-	if (msg->nob < kfilnd_tn_msgtype2size(msg->type)) {
+	if (msg->nob < kfilnd_tn_msgtype2size(msg)) {
 		KFILND_EP_ERROR(ep, "Short %s: %d(%d)\n",
 				msg_type_to_str(msg->type),
-				msg->nob, kfilnd_tn_msgtype2size(msg->type));
+				msg->nob, kfilnd_tn_msgtype2size(msg));
 		return -EPROTO;
 	}
 
@@ -824,7 +842,10 @@ static int kfilnd_tn_state_idle(struct kfilnd_transaction *tn,
 			rc = lnet_parse(tn->tn_ep->end_dev->kfd_ni,
 					&hdr, &srcnid, tn, 0);
 		} else {
-			lnet_hdr_from_nid4(&hdr, &msg->proto.bulk_req.hdr);
+			if (msg->version == KFILND_MSG_VERSION_1)
+				lnet_hdr_from_nid4(&hdr, &msg->proto.bulk_req.hdr);
+			else
+				lnet_hdr_from_nid4(&hdr, &msg->proto.bulk_req_v2.kbrm2_hdr);
 			rc = lnet_parse(tn->tn_ep->end_dev->kfd_ni,
 					&hdr, &srcnid, tn, 1);
 		}

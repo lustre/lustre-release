@@ -199,8 +199,19 @@ int kfilnd_ep_gen_fake_err(struct kfilnd_ep *ep,
 
 static uint64_t gen_init_tag_bits(struct kfilnd_transaction *tn)
 {
-	return (tn->tn_kp->kp_remote_session_key << KFILND_EP_KEY_BITS) |
+	return (tn->tn_response_session_key << KFILND_EP_KEY_BITS) |
 		tn->tn_response_mr_key;
+}
+
+static bool tn_session_key_is_valid(struct kfilnd_transaction *tn)
+{
+	if (tn->tn_response_session_key == tn->tn_kp->kp_remote_session_key)
+		return true;
+
+	KFILND_TN_DEBUG(tn, "Detected session key mismatch %u != %u\n",
+			tn->tn_response_session_key,
+			tn->tn_kp->kp_remote_session_key);
+	return false;
 }
 
 /**
@@ -230,6 +241,9 @@ int kfilnd_ep_post_tagged_send(struct kfilnd_ep *ep,
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
 		return -EINVAL;
 
+	if (!tn_session_key_is_valid(tn))
+		return -EINVAL;
+
 	/* Progress transaction to failure if send should fail. */
 	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_TAGGED_SEND_EVENT)) {
 		rc = kfilnd_ep_gen_fake_err(ep, &fake_error);
@@ -240,6 +254,9 @@ int kfilnd_ep_post_tagged_send(struct kfilnd_ep *ep,
 	} else if (CFS_FAIL_CHECK(CFS_KFI_FAIL_TAGGED_SEND_EAGAIN)) {
 		return -EAGAIN;
 	}
+
+	KFILND_TN_DEBUG(tn, "tagged_data: %llu tn_status: %d\n",
+			tn->tagged_data, tn->tn_status);
 
 	rc = kfi_tsenddata(ep->end_tx, NULL, 0, NULL, tn->tagged_data,
 			   tn->tn_target_addr, gen_init_tag_bits(tn), tn);
@@ -471,6 +488,9 @@ int kfilnd_ep_post_write(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
 		return -EINVAL;
 
+	if (!tn_session_key_is_valid(tn))
+		return -EINVAL;
+
 	/* Progress transaction to failure if read should fail. */
 	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_WRITE_EVENT)) {
 		rc = kfilnd_ep_gen_fake_err(ep, &fake_error);
@@ -491,18 +511,19 @@ int kfilnd_ep_post_write(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"Transaction ID %p: %s write of %u bytes in %u frags with key 0x%x to peer 0x%llx: rc=%d",
+				"TN ID %p: %s write of %u bytes in %u frags kp %s(%p) rma_iov.key %llu: rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
 				tn->tn_nob, tn->tn_num_iovec,
-				tn->tn_response_mr_key, tn->tn_target_addr, rc);
+				libcfs_nid2str(tn->tn_kp->kp_nid), tn->tn_kp,
+				rma_iov.key, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"Transaction ID %p: Failed to post write of %u bytes in %u frags with key 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: Failed to post write of %u bytes in %u frags kp %s(%p) rma_iov.key %llu: rc=%d",
 				tn, tn->tn_nob, tn->tn_num_iovec,
-				tn->tn_response_mr_key, tn->tn_target_addr,
-				rc);
+				libcfs_nid2str(tn->tn_kp->kp_nid), tn->tn_kp,
+				rma_iov.key, rc);
 	}
 
 	return rc;
@@ -547,6 +568,9 @@ int kfilnd_ep_post_read(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
 		return -EINVAL;
 
+	if (!tn_session_key_is_valid(tn))
+		return -EINVAL;
+
 	/* Progress transaction to failure if read should fail. */
 	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_READ_EVENT)) {
 		rc = kfilnd_ep_gen_fake_err(ep, &fake_error);
@@ -567,17 +591,19 @@ int kfilnd_ep_post_read(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"Transaction ID %p: %s read of %u bytes in %u frags with key 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: %s read of %u bytes in %u frags kp %s(%p) rma_iov.key %llu: rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
 				tn->tn_nob, tn->tn_num_iovec,
-				tn->tn_response_mr_key, tn->tn_target_addr, rc);
+				libcfs_nid2str(tn->tn_kp->kp_nid), tn->tn_kp,
+				rma_iov.key, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"Transaction ID %p: Failed to post read of %u bytes in %u frags with key 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: Failed to post read of %u bytes in %u frags kp %s(%p) rma_iov.key %llu: rc=%d",
 				tn, tn->tn_nob, tn->tn_num_iovec,
-				tn->tn_response_mr_key, tn->tn_target_addr, rc);
+				libcfs_nid2str(tn->tn_kp->kp_nid), tn->tn_kp,
+				rma_iov.key, rc);
 	}
 
 	return rc;

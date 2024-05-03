@@ -328,8 +328,16 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	}
 
 	/* Store relevant fields to generate a bulk response. */
-	tn->tn_response_mr_key = rxmsg->proto.bulk_req.key;
-	tn->tn_response_rx = rxmsg->proto.bulk_req.response_rx;
+	if (rxmsg->version == KFILND_MSG_VERSION_1) {
+		tn->tn_response_mr_key = rxmsg->proto.bulk_req.key;
+		tn->tn_response_rx = rxmsg->proto.bulk_req.response_rx;
+		tn->tn_response_session_key = tn->tn_kp->kp_remote_session_key;
+	} else {
+		tn->tn_response_mr_key = rxmsg->proto.bulk_req_v2.kbrm2_key;
+		tn->tn_response_rx = rxmsg->proto.bulk_req_v2.kbrm2_response_rx;
+		tn->tn_response_session_key =
+				rxmsg->proto.bulk_req_v2.kbrm2_session_key;
+	}
 
 #if 0
 	tn->tn_tx_msg.length = kfilnd_init_proto(tn->tn_tx_msg.msg,

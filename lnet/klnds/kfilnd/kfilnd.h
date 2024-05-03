@@ -515,6 +515,24 @@ struct kfilnd_bulk_req_msg {
 	__u16 key;
 } __packed;
 
+struct kfilnd_bulk_req_msg_v2 {
+	/* Entire LNet header needed by the destination to match incoming
+	 * message.
+	 */
+	struct lnet_hdr_nid4 kbrm2_hdr;
+
+	/* Specific RX context the target must target to push/pull LNet
+	 * payload.
+	 */
+	__u32 kbrm2_response_rx;
+
+	/* Memory key needed by the target to push/pull LNet payload. */
+	__u16 kbrm2_key;
+
+	/* Session key used by peer. */
+	__u32 kbrm2_session_key;
+} __packed;
+
 /* Kfilnd message. Includes base transport header plus embedded protocol
  * message.
  */
@@ -548,13 +566,15 @@ struct kfilnd_msg {
 		struct kfilnd_immed_msg immed;
 		struct kfilnd_bulk_req_msg bulk_req;
 		struct kfilnd_hello_msg hello;
+		struct kfilnd_bulk_req_msg_v2 bulk_req_v2;
 	} __packed proto;
 } __packed;
 
 #define KFILND_MSG_MAGIC LNET_PROTO_KFI_MAGIC	/* unique magic */
 
 #define KFILND_MSG_VERSION_1	0x1
-#define KFILND_MSG_VERSION	KFILND_MSG_VERSION_1
+#define KFILND_MSG_VERSION_2	0x2
+#define KFILND_MSG_VERSION	KFILND_MSG_VERSION_2
 
 /* Get the KFI RX context from a KFI RX address. RX context information is
  * stored in the MSBs of the KFI address.
@@ -575,14 +595,22 @@ struct kfilnd_msg {
 	!IS_ERR_OR_NULL((tn)->tn_kp)
 
 #define KFILND_TN_DIR_DEBUG(tn, fmt, dir, ...) \
-	CDEBUG(D_NET, "%s Transaction ID %p: %s:%u %s %s(%p):0x%llx " fmt "\n", \
+	CDEBUG(D_NET, "%s TN %p: %s:%u %s %s(%p):0x%llx lsk %u rsk %u tsk %u trmk %u tmk %u trr %u tta 0x%llx " fmt "\n", \
 	       msg_type_to_str(tn->msg_type), \
 	       (tn), \
 	       libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
-	       (tn)->tn_ep->end_context_id, dir, \
-	       libcfs_nid2str((tn)->tn_kp->kp_nid), tn->tn_kp, \
-	       KFILND_TN_PEER_VALID(tn) ? \
-		KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr) : 0, \
+	       (tn)->tn_ep->end_context_id, \
+	       dir, \
+	       libcfs_nid2str((tn)->tn_kp->kp_nid), \
+	       (tn)->tn_kp, \
+	       KFILND_RX_CONTEXT((tn)->tn_kp->kp_addr), \
+	       (tn)->tn_kp->kp_local_session_key, \
+	       (tn)->tn_kp->kp_remote_session_key, \
+	       (tn)->tn_response_session_key, \
+	       (tn)->tn_response_mr_key, \
+	       (tn)->tn_mr_key, \
+	       (tn)->tn_response_rx, \
+	       (tn)->tn_target_addr, \
 	       ##__VA_ARGS__)
 
 #define KFILND_TN_DEBUG(tn, fmt, ...) \
@@ -711,6 +739,7 @@ static inline const char *tn_event_to_str(enum tn_events type)
 		[TN_EVENT_RX_FAIL] = "TN_EVENT_RX_FAIL",
 		[TN_EVENT_INIT_TAG_RMA] = "TN_EVENT_INIT_TAG_RMA",
 		[TN_EVENT_SKIP_TAG_RMA] = "TN_EVENT_SKIP_TAG_RMA",
+		[TN_EVENT_TAG_TX_OK] = "TN_EVENT_TAG_TX_OK",
 		[TN_EVENT_TAG_TX_FAIL] = "TN_EVENT_TAG_TX_FAIL",
 	};
 
@@ -765,6 +794,7 @@ struct kfilnd_transaction {
 	 */
 	u16			tn_response_mr_key;
 	u8			tn_response_rx;
+	u32			tn_response_session_key;
 
 	/* Immediate data used to convey transaction state from LNet target to
 	 * LNet intiator.
