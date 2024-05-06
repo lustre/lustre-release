@@ -525,6 +525,11 @@ static inline bool exp_connect_unaligned_dio(struct obd_export *exp)
 	return (exp_connect_flags2(exp) & OBD_CONNECT2_UNALIGNED_DIO);
 }
 
+static inline bool exp_connect_batch_rpc(struct obd_export *exp)
+{
+	return (exp_connect_flags2(exp) & OBD_CONNECT2_BATCH_RPC);
+}
+
 enum {
 	/* archive_ids in array format */
 	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,

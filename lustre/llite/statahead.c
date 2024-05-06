@@ -1533,7 +1533,11 @@ static int ll_statahead_thread(void *arg)
 	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %pd\n",
 	       sai, parent);
 
-	sai->sai_max_batch_count = sbi->ll_sa_batch_max;
+	if (exp_connect_batch_rpc(sbi->ll_md_exp))
+		sai->sai_max_batch_count = sbi->ll_sa_batch_max;
+	else
+		sai->sai_max_batch_count = 0;
+
 	if (sai->sai_max_batch_count) {
 		bh = md_batch_create(ll_i2mdexp(dir), BATCH_FL_RDONLY,
 				     sai->sai_max_batch_count);
