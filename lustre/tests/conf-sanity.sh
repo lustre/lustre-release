@@ -516,6 +516,9 @@ test_5g() {
 run_test 5g "handle missing debugfs"
 
 test_5h() {
+	(( $MDS1_VERSION >= $(version_code 2.12.54) )) ||
+		skip "Need MDS version at least 2.12.54"
+
 	setup
 
 	stop mds1
