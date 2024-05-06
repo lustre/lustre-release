@@ -893,9 +893,9 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 				(struct lov_user_md_v3 *)blob;
 
 			if (comp->llc_pool_name[0] != '\0') {
-				strncpy(lumv3->lmm_pool_name,
-					comp->llc_pool_name,
-					sizeof(lumv3->lmm_pool_name));
+				snprintf(lumv3->lmm_pool_name,
+					 sizeof(lumv3->lmm_pool_name), "%s",
+					 comp->llc_pool_name);
 			} else {
 				memset(lumv3->lmm_pool_name, 0,
 				       sizeof(lumv3->lmm_pool_name));
@@ -1723,7 +1723,7 @@ int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
 		return -1;
 	}
 
-	strncpy(dest, comp->llc_pool_name, n);
+	snprintf(dest, n, "%s", comp->llc_pool_name);
 
 	return 0;
 }
@@ -1756,7 +1756,8 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 		return -1;
 	}
 
-	strncpy(comp->llc_pool_name, pool_name, sizeof(comp->llc_pool_name));
+	snprintf(comp->llc_pool_name, sizeof(comp->llc_pool_name), "%s",
+		 pool_name);
 	return 0;
 }
 
@@ -1943,7 +1944,7 @@ __u16 llapi_layout_string_flags(char *string)
  */
 static bool llapi_layout_mirror_count_is_valid(uint16_t count)
 {
-	return count >= 0 && count <= LUSTRE_MIRROR_COUNT_MAX;
+	return count <= LUSTRE_MIRROR_COUNT_MAX;
 }
 
 /**
@@ -2222,7 +2223,7 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	 * component, the end of the previous component cannot be EOF.) */
 	if (llapi_layout_comp_extent_set(layout, last->llc_extent.e_end,
 					LUSTRE_EOF - 1)) {
-		llapi_layout_comp_del(layout);
+		(void)llapi_layout_comp_del(layout);
 		layout->llot_is_composite = composite;
 		return -1;
 	}
@@ -2933,8 +2934,8 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 		new->llc_stripe_offset = comp->llc_stripe_offset;
 
 		if (comp->llc_pool_name[0] != '\0')
-			strncpy(new->llc_pool_name, comp->llc_pool_name,
-				sizeof(new->llc_pool_name));
+			snprintf(new->llc_pool_name, sizeof(new->llc_pool_name),
+				 "%s", comp->llc_pool_name);
 
 		for (i = 0; i < comp->llc_objects_count; i++) {
 			if (__llapi_comp_objects_realloc(new,
@@ -2962,6 +2963,7 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 	return 0;
 error:
 	llapi_layout_free(new_layout);
+	*dst_layout = NULL;
 	return -1;
 }
 

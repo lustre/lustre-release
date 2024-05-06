@@ -618,7 +618,8 @@ retry_open:
 		struct lov_user_md_v3 *lumv3 = (void *)lum;
 
 		lumv3->lmm_magic = LOV_USER_MAGIC_V3;
-		strncpy(lumv3->lmm_pool_name, pool_name, LOV_MAXPOOLNAME);
+		snprintf(lumv3->lmm_pool_name, sizeof(lumv3->lmm_pool_name),
+			 "%s", pool_name);
 	}
 	if (param->lsp_is_specific) {
 		struct lov_user_md_v3 *lumv3 = (void *)lum;
@@ -631,7 +632,8 @@ retry_open:
 			 * OST list, therefore if pool is not specified we have
 			 * to pack a null pool name for placeholder.
 			 */
-			memset(lumv3->lmm_pool_name, 0, LOV_MAXPOOLNAME);
+			memset(lumv3->lmm_pool_name, 0,
+			       sizeof(lumv3->lmm_pool_name));
 		}
 
 		for (i = 0; i < param->lsp_stripe_count; i++)
@@ -902,14 +904,15 @@ static inline void param2lmu(struct lmv_user_md *lmu,
 	lmu->lum_hash_type = param->lsp_stripe_pattern;
 	lmu->lum_max_inherit = param->lsp_max_inherit;
 	lmu->lum_max_inherit_rr = param->lsp_max_inherit_rr;
-	if (param->lsp_pool != NULL)
-		strncpy(lmu->lum_pool_name, param->lsp_pool, LOV_MAXPOOLNAME);
 	if (param->lsp_is_specific) {
 		int i;
 
 		for (i = 0; i < param->lsp_stripe_count; i++)
 			lmu->lum_objects[i].lum_mds = param->lsp_tgts[i];
 	}
+	if (param->lsp_pool)
+		snprintf(lmu->lum_pool_name, sizeof(lmu->lum_pool_name), "%s",
+			 param->lsp_pool);
 }
 
 int llapi_dir_set_default_lmv(const char *name,

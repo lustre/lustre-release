@@ -1239,7 +1239,7 @@ struct lmv_user_md_v1 {
 	__u32	lum_padding2;
 	__u32	lum_padding3;
 	char	lum_pool_name[LOV_MAXPOOLNAME + 1];
-	struct	lmv_user_mds_data  lum_objects[0];
+	struct	lmv_user_mds_data  lum_objects[];
 } __attribute__((packed));
 
 static inline __u32 lmv_foreign_to_md_stripes(__u32 size)
