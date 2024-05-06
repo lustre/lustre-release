@@ -151,22 +151,36 @@ AC_ARG_ENABLE([modules],
 		LC_TARGET_SUPPORTED([enable_modules="yes"],
 				    [enable_modules="no"])
 	])
-AC_MSG_RESULT([$enable_modules ($target_os)])
+	AC_MSG_RESULT([$enable_modules ($target_os)])
+	AS_IF([test "x$enable_modules" = xyes], [
+		AS_IF([test "x$FLEX" = "x"], [AC_MSG_ERROR(
+			[flex package is required to build kernel modules])])
+		AS_IF([test "x$BISON" = "x"], [AC_MSG_ERROR(
+			[bison package is required to build kernel modules])])
+	AS_CASE([$target_os], [linux*], [
+			# Ensure SUBARCH is defined
+			SUBARCH=$(echo $target_cpu | sed -e 's/powerpc.*/powerpc/' -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64.*/arm64/' -e 's/armv7.*/arm/')
+			LB_PROG_LINUX
+			AS_IF([test "x$enable_server" != xno],
+				[LB_EXT4_SOURCE_PATH])
+		], [*], [
+			# This is strange - Lustre supports a target we don't
+			AC_MSG_ERROR([Modules are not supported on $target_os])
+	])
+])
 
-AS_IF([test "x$enable_modules" = xyes], [
-	AS_IF([test "x$FLEX" = "x"], [AC_MSG_ERROR([flex package is required to build kernel modules])])
-	AS_IF([test "x$BISON" = "x"], [AC_MSG_ERROR([bison package is required to build kernel modules])])
+AC_DEFUN([LB_KABI_CHECKS], [
 	AS_CASE([$target_os],
 		[linux*], [
 			# Ensure SUBARCH is defined
 			SUBARCH=$(echo $target_cpu | sed -e 's/powerpc.*/powerpc/' -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64.*/arm64/' -e 's/armv7.*/arm/')
 
 			# Run serial tests
-			LB_PROG_LINUX
 			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
-			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR])
 			LC_PROG_LINUX
+			AS_IF([test "x$enable_zfs" = xyes],
+				[LZ_ZFS_KABI_SERIAL])
 
 			# Run 'early' checks. The results of these are used in
 			# other configure tests:
@@ -187,8 +201,11 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LB_PROG_LINUX_SRC
 			LIBCFS_PROG_LINUX_SRC
 			LN_PROG_LINUX_SRC
-			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_SRC])
+			AS_IF([test "x$enable_server" != xno],
+				[LB_EXT4_LDISKFS_TESTS])
 			LC_PROG_LINUX_SRC
+			AS_IF([test "x$enable_zfs" = xyes],
+				[LZ_KABI_ZFS_TESTS])
 
 			LB2_LINUX_TEST_COMPILE_ALL([lustre],
 				[for available lustre kapi interfaces])
@@ -197,8 +214,11 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LB_PROG_LINUX_RESULTS
 			LIBCFS_PROG_LINUX_RESULTS
 			LN_PROG_LINUX_RESULTS
-			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_RESULTS])
+			AS_IF([test "x$enable_server" != xno],
+				[LB_EXT4_LDISKFS_CHECKS])
 			LC_PROG_LINUX_RESULTS
+			AS_IF([test "x$enable_zfs" = xyes],
+				[LZ_KABI_ZFS_CHECKS])
 
 		], [*], [
 			# This is strange - Lustre supports a target we don't
@@ -439,6 +459,11 @@ LB_CONFIG_MODULES
 AS_IF([test x$enable_modules = xno], [enable_server=no])
 LB_CONFIG_LDISKFS
 LB_CONFIG_ZFS
+AS_IF([test "x$enable_dist" = xno], [
+	LB_KABI_LDISKFS
+	LZ_KABI_ZFS
+	LB_KABI_CHECKS
+])
 
 # If no backends were configured, and the user did not explicitly
 # require servers to be enabled, we just disable servers.

@@ -622,8 +622,8 @@ AC_MSG_RESULT([$enable_ldiskfs])
 AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 ]) # LB_CONFIG_LDISKFS
 
-AS_IF([test x$enable_ldiskfs != xno],[
-	AC_DEFUN([LB_EXT4_SRC_DIR_SRC],[
+AC_DEFUN([LB_KABI_LDISKFS], [AS_IF([test x$enable_ldiskfs != xno],[
+	AC_DEFUN([LB_EXT4_LDISKFS_TESTS],[
 		LB_SRC_EXT4_BREAD_4ARGS
 		LB_SRC_EXT4_HAVE_INFO_DQUOT
 		LB_SRC_EXT4_HAVE_I_CRYPT_INFO
@@ -635,7 +635,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 		LB_SRC_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 		LB2_SRC_CHECK_CONFIG_IM([FS_ENCRYPTION])
 	])
-	AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [
+	AC_DEFUN([LB_EXT4_LDISKFS_CHECKS], [
 		LB_EXT4_BREAD_4ARGS
 		LB_EXT4_HAVE_INFO_DQUOT
 		LB_EXT4_HAVE_I_CRYPT_INFO
@@ -650,7 +650,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 			EXT4_CRYPTO='%/crypto.c'])
 	])
 	AC_SUBST(EXT4_CRYPTO)
-])
+])])
 
 #
 # LB_VALIDATE_EXT4_SRC_DIR
@@ -696,12 +696,12 @@ and kernel-debuginfo-common-<arch> packages are installed.
 ]) # LB_VALIDATE_EXT4_SRC_DIR
 
 #
-# LB_EXT4_SRC_DIR
+# LB_EXT4_SOURCE_PATH
 #
 # Determine the location of the ext4 source code.  It it required
 # for several configure tests and to build ldiskfs.
 #
-AC_DEFUN([LB_EXT4_SRC_DIR], [
+AC_DEFUN([LB_EXT4_SOURCE_PATH], [
 AC_MSG_CHECKING([ext4 source directory])
 # Kernel ext source located with devel headers
 linux_src=$LINUX
@@ -729,7 +729,7 @@ AC_MSG_RESULT([$EXT4_SRC_DIR])
 AC_SUBST(EXT4_SRC_DIR)
 
 LB_VALIDATE_EXT4_SRC_DIR
-]) # LB_EXT4_SRC_DIR
+]) # LB_EXT4_SOURCE_PATH
 
 #
 # LB_DEFINE_E2FSPROGS_NAMES
