@@ -1660,6 +1660,8 @@ static int ll_new_node_prepare(struct inode *dir, struct dentry *dchild,
 
 			if (!fakeinode)
 				GOTO(err_exit, err = -ENOMEM);
+			if (!disk_link)
+				GOTO(err_exit, err = -EINVAL);
 			fakeinode->i_sb = dchild->d_sb;
 			fakeinode->i_mode |= S_IFLNK;
 #ifdef IOP_XATTR
