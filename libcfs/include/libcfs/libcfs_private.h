@@ -128,12 +128,12 @@ extern atomic64_t libcfs_kmem;
 
 # define libcfs_kmem_inc(ptr, size)		\
 do {						\
-	atomic64_add(size, &libcfs_kmem);	\
+	atomic64_add((size), &libcfs_kmem);	\
 } while (0)
 
 # define libcfs_kmem_dec(ptr, size)		\
 do {						\
-	atomic64_sub(size, &libcfs_kmem);	\
+	atomic64_sub((size), &libcfs_kmem);	\
 } while (0)
 
 # define libcfs_kmem_read()			\
@@ -169,13 +169,13 @@ do {									      \
 		       libcfs_kmem_read());				      \
 	} else {							      \
 		libcfs_kmem_inc((ptr), (size));				      \
-		LIBCFS_MEM_MSG(ptr, size, name);			      \
+		LIBCFS_MEM_MSG(ptr, (size), name);			      \
 	}                                                                     \
 } while (0)
 
 #define LIBCFS_FREE_PRE(ptr, size, name)				\
 	libcfs_kmem_dec((ptr), (size));					\
-	LIBCFS_MEM_MSG(ptr, size, name)
+	LIBCFS_MEM_MSG(ptr, (size), name)
 
 /**
  * allocate memory with GFP flags @mask
@@ -193,13 +193,13 @@ do {									    \
  * default allocator
  */
 #define LIBCFS_ALLOC(ptr, size) \
-	LIBCFS_ALLOC_GFP(ptr, size, GFP_NOFS)
+	LIBCFS_ALLOC_GFP(ptr, (size), GFP_NOFS)
 
 /**
  * non-sleeping allocator
  */
 #define LIBCFS_ALLOC_ATOMIC(ptr, size) \
-	LIBCFS_ALLOC_GFP(ptr, size, GFP_ATOMIC)
+	LIBCFS_ALLOC_GFP(ptr, (size), GFP_ATOMIC)
 
 /**
  * allocate memory for specified CPU partition
@@ -218,7 +218,7 @@ do {									    \
 
 /** default numa allocator */
 #define LIBCFS_CPT_ALLOC(ptr, cptab, cpt, size)				    \
-	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, GFP_NOFS)
+	LIBCFS_CPT_ALLOC_GFP(ptr, (cptab), (cpt), (size), GFP_NOFS)
 
 #define LIBCFS_FREE(ptr, size)						\
 do {									\
@@ -228,7 +228,7 @@ do {									\
 		       "%s:%d\n", s, __FILE__, __LINE__);		\
 		break;							\
 	}								\
-	LIBCFS_FREE_PRE(ptr, size, "kfreed");				\
+	LIBCFS_FREE_PRE(ptr, (size), "kfreed");				\
 	if (unlikely(s > LIBCFS_VMALLOC_SIZE))				\
 		libcfs_vfree_atomic(ptr);				\
 	else								\

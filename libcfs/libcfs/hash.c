@@ -1096,7 +1096,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         if (hs->hs_buckets != NULL)
                 return hs;
 
-	LIBCFS_FREE(hs, offsetof(struct cfs_hash, hs_name[len]));
+	LIBCFS_FREE(hs, sizeof(struct cfs_hash) + len);
         RETURN(NULL);
 }
 EXPORT_SYMBOL(cfs_hash_create);
@@ -1162,7 +1162,7 @@ cfs_hash_destroy(struct kref *kref)
 			      0, CFS_HASH_NBKT(hs));
 	i = cfs_hash_with_bigname(hs) ?
 	    CFS_HASH_BIGNAME_LEN : CFS_HASH_NAME_LEN;
-	LIBCFS_FREE(hs, offsetof(struct cfs_hash, hs_name[i]));
+	LIBCFS_FREE(hs, sizeof(struct cfs_hash) + i);
 
 	EXIT;
 }
