@@ -1797,7 +1797,7 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 
 	if (layout) {
 		/* Make sure we are on a Lustre file system */
-		if (comp->llc_pool_name[0] != '\0' &&
+		if (comp != NULL && comp->llc_pool_name[0] != '\0' &&
 		    !lov_pool_is_ignored(comp->llc_pool_name)) {
 			rc = llapi_search_fsname(path, fsname);
 			if (rc) {
@@ -2452,7 +2452,7 @@ int llapi_layout_file_comp_add(const char *path,
 
 	comp = __llapi_layout_cur_comp(layout);
 
-	if (comp->llc_pool_name[0] != '\0' &&
+	if (comp != NULL && comp->llc_pool_name[0] != '\0' &&
 	    !lov_pool_is_ignored(comp->llc_pool_name)) {
 		rc = llapi_search_fsname(path, fsname);
 		if (rc) {
