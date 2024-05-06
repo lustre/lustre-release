@@ -93,7 +93,7 @@ union qmt_sarray {
 
 /* Since DOM support, data resources can exist
  * on both MDT and OST targets. */
-enum {
+enum qmt_stype {
 	QMT_STYPE_MDT,
 	QMT_STYPE_OST,
 	QMT_STYPE_CNT
@@ -532,7 +532,7 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 		     __u64 time, __u32 valid, bool is_default, bool is_updated);
 int qmt_dqacq0(const struct lu_env *, struct qmt_device *, struct obd_uuid *,
 	       __u32, __u64, __u64, struct quota_body *, int);
-int qmt_uuid2idx(struct obd_uuid *, int *);
+enum qmt_stype qmt_uuid2idx(struct obd_uuid *, int *);
 
 /* qmt_lock.c */
 int qmt_intent_policy(const struct lu_env *, struct lu_device *,

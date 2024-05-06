@@ -1182,7 +1182,7 @@ out:
  * \retval		slave type(QMT_STYPE_MDT or QMT_STYPE_OST)
  * \retval -EINVAL	wrong uuid
  */
-int qmt_uuid2idx(struct obd_uuid *uuid, int *idx)
+enum qmt_stype qmt_uuid2idx(struct obd_uuid *uuid, int *idx)
 {
 	char *uuid_str, *name, *dash;
 	int rc = -EINVAL;
@@ -1236,8 +1236,10 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	struct quota_body *qbody, *repbody;
 	struct obd_uuid	*uuid;
 	struct ldlm_lock *lock;
-	int rtype, qtype;
-	int rc, idx, stype;
+	enum lquota_res_type rtype;
+	enum lquota_type qtype;
+	enum qmt_stype stype;
+	int rc, idx;
 	struct obd_device *obd = NULL;
 
 	ENTRY;

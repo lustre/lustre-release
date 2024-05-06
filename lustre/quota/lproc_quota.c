@@ -212,7 +212,8 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 		if (fid_is_acct(fid)) {
 			seq_printf(p, "%s:\n", oid2name(fid_oid(fid)));
 		} else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB) {
-			int	rtype, qtype;
+			enum lquota_res_type rtype;
+			enum lquota_type qtype;
 
 			rc = lquota_extract_fid(fid, &rtype, &qtype);
 			if (rc)

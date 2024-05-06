@@ -404,7 +404,8 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 	qti->qti_fid.f_seq = FID_SEQ_QUOTA;
 	qti->qti_fid.f_ver = 0;
 	if (local) {
-		int pool_type, qtype;
+		enum lquota_res_type pool_type;
+		enum lquota_type qtype;
 
 		rc = lquota_extract_fid(glb_fid, &pool_type, &qtype);
 		if (rc)

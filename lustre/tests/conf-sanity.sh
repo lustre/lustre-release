@@ -3175,6 +3175,19 @@ test_33c() {
 }
 run_test 33c "Mount ost with a large index number"
 
+test_33d() {
+	setup
+	stack_trap cleanup
+
+	mkdir_on_mdt0 $DIR/$tdir || error "cannot create $DIR/$tdir"
+	touch $DIR/$tfile
+	$LFS setquota -p 1 -I1K $MOUNT
+
+	do_facet mgs $LCTL set_param osd*.*.quota_slave.enabled=p
+	$LFS project -p 1 $DIR/
+}
+run_test 33d "Don't panic when enable project quota"
+
 test_34a() {
 	setup
 	do_facet client "bash runmultiop_bg_pause $DIR/file O_c"

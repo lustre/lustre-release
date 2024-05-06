@@ -60,7 +60,7 @@ static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi);
 #define qmt_sarr_pool_add_locked(qpi, idx, stype) \
 		_qmt_sarr_pool_add(qpi, idx, stype, true)
 static inline int _qmt_sarr_pool_add(struct qmt_pool_info *qpi,
-				    int idx, int min, bool locked);
+				    int idx, enum qmt_stype min, bool locked);
 static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx);
 static inline void qmt_sarr_pool_free(struct qmt_pool_info *qpi);
 static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx);
@@ -519,8 +519,9 @@ static int qmt_slv_add(const struct lu_env *env, struct lu_fid *glb_fid,
 {
 	struct obd_uuid uuid;
 	struct qmt_pool_info *qpi = arg;
-	int stype, qtype, idx;
-	int rc;
+	enum lquota_type qtype;
+	enum qmt_stype stype;
+	int idx, rc;
 
 	rc = lquota_extract_fid(glb_fid, NULL, &qtype);
 	LASSERT(!rc);
@@ -786,11 +787,13 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 		      struct lu_fid *glb_fid, struct lu_fid *slv_fid,
 		      __u64 *slv_ver, struct obd_uuid *uuid)
 {
-	struct qmt_pool_info	*pool;
-	struct dt_object	*slv_obj;
-	int			 pool_type, qtype, stype;
-	bool			 created = false;
-	int			 idx, i, rc = 0;
+	struct qmt_pool_info *pool;
+	struct dt_object *slv_obj;
+	enum lquota_res_type pool_type;
+	enum lquota_type qtype;
+	enum qmt_stype stype;
+	bool created = false;
+	int idx, i, rc = 0;
 
 	stype = qmt_uuid2idx(uuid, &idx);
 	if (stype < 0)
@@ -833,7 +836,7 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 		CDEBUG(D_QUOTA, "add tgt idx:%d pool_type:%d qtype:%d stype:%d\n",
 		       idx, pool_type, qtype, stype);
 
-		if (!qmt_dom(qtype, stype)) {
+		if (!qmt_dom(pool_type, stype)) {
 			qmt_sarr_write_down(pool);
 			rc = qmt_sarr_pool_add_locked(pool, idx, stype);
 			if (!rc) {
@@ -1636,7 +1639,8 @@ static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi)
 }
 
 static inline int
-_qmt_sarr_pool_add(struct qmt_pool_info *qpi, int idx, int stype, bool locked)
+_qmt_sarr_pool_add(struct qmt_pool_info *qpi, int idx, enum qmt_stype stype,
+		   bool locked)
 {
 	/* We don't have an array for DOM */
 	if (qmt_dom(qpi->qpi_rtype, stype))

@@ -491,8 +491,9 @@ void lquota_generate_fid(struct lu_fid *fid, int pool_type, int quota_type)
  * Helper routine used to extract pool type and quota type from a
  * given FID.
  */
-int lquota_extract_fid(const struct lu_fid *fid, int *pool_type,
-		       int *quota_type)
+int lquota_extract_fid(const struct lu_fid *fid,
+		       enum lquota_res_type *pool_type,
+		       enum lquota_type *quota_type)
 {
 	unsigned int lqtype;
 	ENTRY;

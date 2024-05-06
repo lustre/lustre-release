@@ -1626,7 +1626,7 @@ struct quota_body {
 #define QUOTA_DQACQ_FL_REPORT	0x8  /* report usage */
 
 /* Quota types currently supported */
-enum {
+enum lquota_type {
 	LQUOTA_TYPE_USR	= 0x00, /* maps to USRQUOTA */
 	LQUOTA_TYPE_GRP	= 0x01, /* maps to GRPQUOTA */
 	LQUOTA_TYPE_PRJ	= 0x02, /* maps to PRJQUOTA */
@@ -1637,7 +1637,7 @@ enum {
  * - inodes on the MDTs
  * - blocks on the OSTs
  */
-enum {
+enum lquota_res_type {
 	LQUOTA_RES_MD		= 0x01, /* skip 0 to avoid null oid in FID */
 	LQUOTA_RES_DT		= 0x02,
 	LQUOTA_LAST_RES,

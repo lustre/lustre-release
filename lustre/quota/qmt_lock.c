@@ -90,9 +90,10 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	switch (it->opc) {
 
 	case IT_QUOTA_DQACQ: {
-		struct lquota_entry	*lqe;
-		struct ldlm_lock	*lock;
-		int idx, stype;
+		struct lquota_entry *lqe;
+		struct ldlm_lock *lock;
+		enum qmt_stype stype;
+		int idx;
 
 		if (res->lr_name.name[LUSTRE_RES_ID_QUOTA_SEQ_OFF] == 0)
 			/* acquire on global lock? something is wrong ... */
@@ -178,11 +179,12 @@ out:
  */
 int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 {
-	struct lu_env		*env;
-	struct qmt_thread_info	*qti;
-	struct qmt_device	*qmt = lu2qmt_dev(ld);
-	int			 pool_type, qtype;
-	int			 rc;
+	struct lu_env *env;
+	struct qmt_thread_info *qti;
+	struct qmt_device *qmt = lu2qmt_dev(ld);
+	enum lquota_res_type pool_type;
+	enum lquota_type qtype;
+	int rc;
 	ENTRY;
 
 	LASSERT(res != NULL);
@@ -350,15 +352,16 @@ static bool qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe_gl,
 int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 		    struct ptlrpc_request *req, int increase_only)
 {
-	struct lu_env		*env;
-	struct qmt_thread_info	*qti;
-	struct qmt_device	*qmt = lu2qmt_dev(ld);
-	struct lquota_entry	*lqe;
-	struct lquota_lvb	*lvb;
-	struct ldlm_lock	*lock;
-	struct obd_export	*exp;
-	bool			 need_revoke;
-	int			 rc = 0, idx, stype;
+	struct lu_env *env;
+	struct qmt_thread_info *qti;
+	struct qmt_device *qmt = lu2qmt_dev(ld);
+	struct lquota_entry *lqe;
+	struct lquota_lvb *lvb;
+	struct ldlm_lock *lock;
+	struct obd_export *exp;
+	bool need_revoke;
+	enum qmt_stype stype;
+	int rc = 0, idx;
 	ENTRY;
 
 	LASSERT(res != NULL);
@@ -505,16 +508,17 @@ int qmt_lvbo_fill(struct lu_device *ld, struct ldlm_lock *lock, void *lvb,
 		struct lquota_entry *lqe = res->lr_lvb_data;
 		struct qmt_device *qmt;
 		struct obd_uuid *uuid;
+		enum qmt_stype stype;
 		int idx;
 
 		uuid = &(lock)->l_export->exp_client_uuid;
-		rc = qmt_uuid2idx(uuid, &idx);
-		if (rc < 0)
-			RETURN(rc);
+		stype = qmt_uuid2idx(uuid, &idx);
+		if (stype < 0)
+			RETURN(stype);
 		qmt = lu2qmt_dev(ld);
 		/* return current qunit value & edquot flags in lvb */
 		lqe_getref(lqe);
-		rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), rc,
+		rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), stype,
 					  lqe_qtype(lqe), &lqe->lqe_id,
 					  NULL, idx);
 		if (!rc) {
@@ -661,7 +665,8 @@ static void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
 			      struct lquota_entry *lqe)
 {
 	struct obd_uuid *uuid = &(lock)->l_export->exp_client_uuid;
-	int idx, stype;
+	enum qmt_stype stype;
+	int idx;
 	__u64 qunit;
 	bool edquot;
 
@@ -884,9 +889,10 @@ static int qmt_id_lock_cb(struct ldlm_lock *lock, struct lquota_entry *lqe)
 {
 	struct obd_uuid *uuid = &(lock)->l_export->exp_client_uuid;
 	struct lqe_glbl_data *lgd = lqe->lqe_glbl_data;
+	enum qmt_stype stype;
 	int idx;
-	int stype = qmt_uuid2idx(uuid, &idx);
 
+	stype = qmt_uuid2idx(uuid, &idx);
 	LASSERT(stype == QMT_STYPE_OST || stype == QMT_STYPE_MDT);
 
 	CDEBUG(D_QUOTA, "stype %d rtype %d idx %d uuid %s\n",
