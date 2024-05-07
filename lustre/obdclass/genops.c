@@ -860,11 +860,16 @@ EXPORT_SYMBOL(class_exp2obd);
 
 struct obd_import *class_exp2cliimp(struct obd_export *exp)
 {
-	struct obd_device *obd = exp->exp_obd;
+	struct obd_device *obd;
 
-	if (obd == NULL)
-		return NULL;
+	if (!exp || !exp->exp_obd)
+		goto out;
+
+	obd = exp->exp_obd;
+
 	return obd->u.cli.cl_import;
+out:
+	return NULL;
 }
 EXPORT_SYMBOL(class_exp2cliimp);
 
