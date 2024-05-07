@@ -1873,6 +1873,58 @@ static ssize_t mirror_file_compare(int fd_src, int fd_dst)
 	return bytes_done;
 }
 
+static int
+open_by_fid_str(const char *fid_str, const char *path, int *fdp, int flags)
+{
+	char mntdir[PATH_MAX] = {'\0'};
+	struct lu_fid fid;
+	int fd;
+	int rc;
+
+	rc = llapi_fid_parse(fid_str, &fid, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = llapi_search_mounts(path, 0, mntdir, NULL);
+	if (rc < 0 || mntdir[0] == '\0') {
+		fprintf(stderr, "Cannot find mounted Lustre filesystem: %s\n",
+			(rc < 0) ? strerror(-rc) : strerror(ENODEV));
+		return rc != 0 ? rc : -ENODEV;
+	}
+
+	fd = llapi_open_by_fid(mntdir, &fid, flags);
+	if (fd < 0)
+		return fd;
+
+	*fdp = fd;
+	return rc;
+}
+
+static struct llapi_layout*
+layout_get_by_name_or_fid(const char *name_or_fid, const char *path,
+			  enum llapi_layout_get_flags layout_flags, int flags)
+{
+	int rc;
+
+	/* Check if name or fid */
+	if (isdigit(*name_or_fid) || *name_or_fid == '[') {
+		int fd;
+
+		rc = open_by_fid_str(name_or_fid, path, &fd, flags);
+		if (rc == 0) {
+			struct llapi_layout *layout;
+
+			layout = llapi_layout_get_by_fd(fd, layout_flags);
+			close(fd);
+			if (layout != NULL)
+				return layout;
+		}
+	}
+
+	/* Then try getting by name */
+	return llapi_layout_get_by_path(name_or_fid, layout_flags);
+}
+
 static int mirror_extend_file(const char *fname, const char *victim_file,
 			      enum mirror_flags mirror_flags)
 {
@@ -4560,7 +4612,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	for (fname = argv[optind]; (optind < argc) && (fname != NULL);
 	     fname = argv[++optind]) {
 		if (from_copy) {
-			layout = llapi_layout_get_by_path(template ?: fname, 0);
+			layout = layout_get_by_name_or_fid(template ?: fname,
+							   fname, 0, O_RDONLY);
 			if (!layout) {
 				fprintf(stderr,
 					"%s: can't create composite layout from file %s: %s\n",

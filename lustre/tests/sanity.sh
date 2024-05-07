@@ -26130,7 +26130,9 @@ test_270h() {
 
 	# DOM component in the middle and has other enries in the same mirror,
 	# should succeed but lost DoM component
-	$LFS setstripe --copy=${dom}_1 $dom ||
+	local fid1=$($LFS path2fid ${dom}_1)
+
+	$LFS setstripe --copy=$fid1 $dom ||
 		error "Can't create file from OST|DOM mirror layout"
 	# check new file has no DoM layout after all
 	[[ $($LFS getstripe -L $dom) != "mdt" ]] ||
