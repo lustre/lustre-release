@@ -468,7 +468,6 @@ void cl_batch_put(const struct lu_env *env, struct cl_page *page,
 			PASSERT(env, page, page->cp_owner == NULL);
 		}
 
-		LASSERT(refcount_read(&page->cp_ref) == 0);
 		PASSERT(env, page, list_empty(&page->cp_batch));
 		/* Page is no longer reachable by other threads. Tear it down */
 		cl_page_free(env, page, fbatch);
