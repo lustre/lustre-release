@@ -575,7 +575,10 @@ struct ldlm_namespace {
 	 * Flag to indicate the LRU recalc on RPC reply is in progress.
 	 * Used to limit the process by 1 thread only.
 	 */
-				ns_rpc_recalc:1;
+				ns_rpc_recalc:1,
+
+	 /* lru_size is set even before connection */
+				ns_lru_size_set_before_connection:1;
 
 	/**
 	 * Which bucket should we start with the lock reclaim.

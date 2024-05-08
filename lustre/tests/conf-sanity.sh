@@ -4107,7 +4107,7 @@ test_46a() {
 }
 run_test 46a "handle ost additional - wide striped file"
 
-test_47() { #17674
+test_47a() { #17674
 	reformat
 	setup_noconfig
 	check_mount || error "check_mount failed"
@@ -4140,10 +4140,39 @@ test_47() { #17674
 		fi
 		let count=count+1
 	done
-
 	cleanup || error "cleanup failed with $?"
 }
-run_test 47 "server restart does not make client loss lru_resize settings"
+run_test 47a "server restart does not lose lru_resize"
+
+test_47b() { #17833
+	local create_simple_link=false
+
+	reformat
+	setup_noconfig
+	check_mount || error "check_mount failed"
+
+	[[ -e /usr/sbin/lctl ]] || {
+		# Unfortunately set_param -P rely on the hardcoded path
+		# /usr/sbin/lctl
+		ln -s /usr/sbin/lctl $LCTL ||
+			skip_env "Can not create symlink /usr/sbin/lctl"
+		stack_trap "rm -f /usr/sbin/lctl"
+	}
+
+	do_facet mgs $LCTL \
+		set_param -P ldlm.namespaces.$FSNAME-*-mdc-*.lru_size=200
+	wait_update $HOSTNAME \
+	  "$LCTL get_param -n ldlm.namespaces.$FSNAME-MDT0000-mdc-*.lru_size" \
+	  "200"
+	umount $MOUNT || error "Unable to umount client"
+	mount_client $MOUNT || error "mount failed"
+	for ns in $($LCTL get_param ldlm.namespaces.$FSNAME*mdc*.lru_size); do
+		(( ${ns/*=/} == 200)) ||
+			error "${ns/=*/} is ${ns/*=/}, expect 200"
+	done
+	cleanup || error "cleanup failed with $?"
+}
+run_test 47b "client restart does not lose lru_resize"
 
 cleanup_48() {
 	trap 0

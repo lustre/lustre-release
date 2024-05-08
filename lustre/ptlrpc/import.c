@@ -938,9 +938,25 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		CDEBUG(D_HA, "%s: Resetting ns_connect_flags to server flags: %#llx\n",
 			     imp->imp_obd->obd_name,
 			     ocd->ocd_connect_flags);
+
+		spin_lock(&ns->ns_lock);
 		ns->ns_connect_flags = (ns->ns_connect_flags & changed_flags) |
 				      (ocd->ocd_connect_flags & ~changed_flags);
 		ns->ns_orig_connect_flags = ocd->ocd_connect_flags;
+		/* If lru_size has been set by param set configuration,
+		 * then it should honor param set.
+		 * if ns_max_unused is 0, then it means the param set actually
+		 * set lru_size to 0, i.e. LRU_SIZE should be enabled or set by
+		 * connection result; otherwise it should disable lru_resize.
+		 * see lru_size_store().
+		 */
+		if (ns_connect_lru_resize(ns) &&
+		    ns->ns_lru_size_set_before_connection &&
+		    ns->ns_max_unused != 0)
+			ns->ns_connect_flags &= ~OBD_CONNECT_LRU_RESIZE;
+
+		ns->ns_lru_size_set_before_connection = 0;
+		spin_unlock(&ns->ns_lock);
 	}
 
 	if (ocd->ocd_connect_flags & OBD_CONNECT_AT)

@@ -352,6 +352,16 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
 		       ldlm_ns_name(ns), ns->ns_max_unused,
 		       (unsigned int)tmp);
 
+		/* This might be done even before connection from param setting
+		 * config log, so it needs to be remembered to make sure
+		 * LRU_SIZE is being set correctly in connection callback.
+		 * See ptlrpc_connect_set_flags().
+		 */
+		spin_lock(&ns->ns_lock);
+		if (ns->ns_connect_flags == 0)
+			ns->ns_lru_size_set_before_connection = 1;
+		spin_unlock(&ns->ns_lock);
+
 		/* Make sure that LRU resize was originally supported before
 		 * turning it on here.
 		 */
