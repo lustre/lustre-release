@@ -72,7 +72,6 @@ static void vvp_page_delete(const struct lu_env *env,
 		struct page *vmpage = cp->cp_vmpage;
 		struct inode *inode = vmpage->mapping->host;
 
-		LASSERT(PageLocked(vmpage));
 		LASSERT((struct cl_page *)vmpage->private == cp);
 
 		CDEBUG(D_CACHE, "delete page %pK index %ld\n",
