@@ -749,8 +749,6 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 			if (rc <= 0) {
 				CERROR("%s: failed to parse CPT array %s: %d\n",
 				       conf->psc_name, cconf->cc_pattern, rc);
-				if (cpts != NULL)
-					OBD_FREE_PTR_ARRAY(cpts, ncpts);
 				RETURN(ERR_PTR(rc < 0 ? rc : -EINVAL));
 			}
 			ncpts = rc;
@@ -760,7 +758,7 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	OBD_ALLOC(service, offsetof(struct ptlrpc_service, srv_parts[ncpts]));
 	if (service == NULL) {
 		if (cpts != NULL)
-			OBD_FREE_PTR_ARRAY(cpts, ncpts);
+			cfs_expr_list_values_free(cpts, ncpts);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
