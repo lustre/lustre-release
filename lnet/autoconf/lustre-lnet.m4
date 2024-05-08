@@ -911,7 +911,8 @@ AC_ARG_ENABLE([gni],
 AC_MSG_RESULT([$enable_gni])
 
 AS_IF([test "x$enable_gni" = xyes], [
-	# GNICPPFLAGS was set in spec file
+	# GNICPPFLAGS and KBUILD_EXTRA_SYMBOLS were set in spec file
+	# to include the additional module dependancies of gni kernel driver
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $GNICPPFLAGS"
 	LB_CHECK_COMPILE([if GNI kernel headers are present],

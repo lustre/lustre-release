@@ -141,7 +141,7 @@ all-am: modules
 
 modules: undef.h ldiskfs-sources
 	$(MAKE) DEQUOTE_CC_VERSION_TEXT=$(DEQUOTE) \
-	KBUILD_EXTRA_SYMBOLS="@INT_O2IB_SYMBOLS@ @EXTRA_SYMBOLS@" \
+	KBUILD_EXTRA_SYMBOLS="@INT_O2IB_SYMBOLS@ @EXTRA_SYMBOLS@ $(KBUILD_EXTRA_SYMBOLS)" \
 	LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
