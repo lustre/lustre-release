@@ -1467,7 +1467,12 @@ retry:
 			CDEBUG(D_HA, "skip old for "DFID": %d < %d\n",
 			       PFID(lu_object_fid(lov2lu(lov))),
 			       (int)newgen, (int)oldgen);
-			GOTO(out, result = 0);
+			if (conf->coc_try) {
+				set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
+				GOTO(out, result = -ERESTARTSYS);
+			} else {
+				GOTO(out, result = 0);
+			}
 		}
 	}
 

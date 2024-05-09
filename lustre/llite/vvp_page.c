@@ -115,9 +115,12 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 		obj->vob_discard_page_warned = 0;
 	} else {
 		SetPageError(vmpage);
-		if (ioret != -ENOSPC &&
-		    CFS_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
-			LBUG();
+		if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
+			LASSERTF(ioret == -ENOSPC,
+				 "%s:"DFID" got a stale page %p: rc = %d.\n",
+				 obj->vob_cl.co_lu.lo_dev->ld_obd->obd_name,
+				 PFID(lu_object_fid(&obj->vob_cl.co_lu)),
+				 vmpage, ioret);
 
 		mapping_set_error(inode->i_mapping, ioret);
 
