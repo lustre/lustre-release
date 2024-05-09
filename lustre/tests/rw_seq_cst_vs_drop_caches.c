@@ -8,7 +8,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
+#endif
 
 /*
  * Usage: rw_seq_cst_vs_drop_caches [-m] /mnt/lustre/file0 /mnt/lustre2/file0
@@ -36,8 +38,10 @@ static int fd[2] = { -1, -1 };
  * contending with constant reads
  */
 static uint64_t u, u_max = UINT64_MAX / 2;
-static uint64_t v[2];
 char *ptr;
+
+#ifdef HAVE_LIBPTHREAD
+static uint64_t v[2];
 
 static void *access_thread_start(void *unused)
 {
@@ -72,13 +76,14 @@ static void *access_thread_start(void *unused)
 		munmap(ptr2, sizeof(v[i]));
 	abort();
 }
+#endif
 
 static char stderr_buf[4096];
 
 int main(int argc, char *argv[])
 {
 	int drop_caches_fd = -1;
-	pthread_t access_thread;
+	pthread_t access_thread __attribute__ ((unused));
 	struct stat st[2];
 	ssize_t rc;
 	int i, ch;
@@ -140,9 +145,11 @@ int main(int argc, char *argv[])
 			handle_error("pwrite");
 	}
 
+#ifdef HAVE_LIBPTHREAD
 	rc = pthread_create(&access_thread, NULL, &access_thread_start, NULL);
 	if (rc != 0)
 		handle_error("pthread_create");
+#endif
 
 	for (u = 1; u <= u_max; u++) {
 		if (mmap_mode) {
@@ -158,6 +165,7 @@ int main(int argc, char *argv[])
 			handle_error("drop caches");
 	}
 
+#ifdef HAVE_LIBPTHREAD
 	rc = pthread_cancel(access_thread);
 	if (rc != 0)
 		handle_error("pthread_cancel");
@@ -165,6 +173,7 @@ int main(int argc, char *argv[])
 	rc = pthread_join(access_thread, NULL);
 	if (rc != 0)
 		handle_error("pthread_join");
+#endif
 
 	if (mmap_mode)
 		munmap(ptr, sizeof(u));

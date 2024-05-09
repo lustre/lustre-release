@@ -49,9 +49,10 @@ struct param_opts {
 	unsigned int po_header:1;
 	unsigned int po_parallel_threads;
 };
-#define popt_is_parallel(popt) ((popt).po_parallel_threads > 0)
 
 #ifdef HAVE_LIBPTHREAD
+#define popt_is_parallel(popt) ((popt).po_parallel_threads > 0)
+
 int write_param(const char *path, const char *param_name,
 		struct param_opts *popt, const char *value);
 
@@ -96,4 +97,21 @@ int spwq_expand(struct sp_workq *wq, size_t num_items);
 int spwq_add_item(struct sp_workq *wq, char *path, char *param_name,
 		  char *value);
 int sp_run_threads(struct sp_workq *wq);
+#else
+#define popt_is_parallel(popt) 0
+
+struct sp_workq { int unused; };
+
+static inline int spwq_init(struct sp_workq *wq, struct param_opts *popt)
+{ return 0; }
+static inline int spwq_destroy(struct sp_workq *wq)
+{ return 0; }
+static inline int spwq_expand(struct sp_workq *wq, size_t num_items)
+{ return 0; }
+static inline int spwq_add_item(struct sp_workq *wq, char *path,
+				char *param_name, char *value)
+{ return 0; }
+static inline int sp_run_threads(struct sp_workq *wq)
+{ return 0; }
+
 #endif

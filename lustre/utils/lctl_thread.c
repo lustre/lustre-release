@@ -26,13 +26,15 @@
  *
  * Author: Rajeev Mishra <rajeevm@hpe.com>
  */
- #include <errno.h>
- #include <stdio.h>
- #include <stdarg.h>
- #include <ctype.h>
- #include "lctl_thread.h"
- #include <stdlib.h>
- #include <libcfs/util/string.h>
+
+#include <errno.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <ctype.h>
+#include "lctl_thread.h"
+#include <stdlib.h>
+#include <libcfs/util/string.h>
+
 #if HAVE_LIBPTHREAD
 /**
  * Initialize the given set_param work queue.
@@ -298,12 +300,5 @@ out_free:
 	free(sp_threads);
 	return rc;
 }
-#else
-#define popt_is_parallel(popt) 0
-#define spwq_init(wq, popt) 0
-#define spwq_expand(wq, num_items) 0
-#define spwq_add_item(wq, path, param_name, value) 0
-#define sp_run_threads(wq) 0
-#define spwq_destroy(wq) 0
-struct sp_workq { int unused; }
+
 #endif /* HAVE_LIBPTHREAD */

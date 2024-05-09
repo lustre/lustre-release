@@ -2004,16 +2004,18 @@ int jt_obd_test_brw(int argc, char **argv)
 	struct obd_ioctl_data data;
 	struct timeval start, next_time;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	__u64 count, next_count, len, stride, thr_offset = 0, objid = 3;
+	__u64 count, next_count, len, thr_offset = 0, objid = 3;
 	int write = 0, verbose = 1, cmd, i, rc = 0, pages = 1;
 	int offset_pages = 0;
 	long n;
 	int repeat_offset = 0;
 	unsigned long long ull;
-	int  nthr_per_obj = 0;
 	int  verify = 1;
-	int  obj_idx = 0;
 	char *end;
+	__u64 stride __attribute__ ((unused));
+	int  nthr_per_obj __attribute__ ((unused)) = 0;
+	int  obj_idx __attribute__ ((unused)) = 0;
+
 
 	if (argc < 2 || argc > 7) {
 		fprintf(stderr, "error: %s: bad number of arguments: %d\n",
