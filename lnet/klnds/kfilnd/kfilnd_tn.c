@@ -354,23 +354,26 @@ void kfilnd_tn_process_rx_event(struct kfilnd_immediate_buffer *bufdesc,
 				struct kfilnd_msg *rx_msg, int msg_size)
 {
 	struct kfilnd_transaction *tn;
+	struct kfilnd_ep *ep = bufdesc->immed_end;
 	bool alloc_msg = true;
 	int rc;
 	enum tn_events event = TN_EVENT_RX_HELLO;
+	enum kfilnd_msg_type msg_type;
 
 	/* Increment buf ref count for this work */
 	atomic_inc(&bufdesc->immed_ref);
 
 	/* Unpack the message */
-	rc = kfilnd_tn_unpack_msg(bufdesc->immed_end, rx_msg, msg_size);
+	rc = kfilnd_tn_unpack_msg(ep, rx_msg, msg_size);
 	if (rc || CFS_FAIL_CHECK(CFS_KFI_FAIL_MSG_UNPACK)) {
 		kfilnd_ep_imm_buffer_put(bufdesc);
-		KFILND_EP_ERROR(bufdesc->immed_end,
-				"Failed to unpack message %d", rc);
+		KFILND_EP_ERROR(ep, "Failed to unpack message %d", rc);
 		return;
 	}
 
-	switch ((enum kfilnd_msg_type)rx_msg->type) {
+	msg_type = (enum kfilnd_msg_type)rx_msg->type;
+
+	switch (msg_type) {
 	case KFILND_MSG_IMMEDIATE:
 	case KFILND_MSG_BULK_PUT_REQ:
 	case KFILND_MSG_BULK_GET_REQ:
@@ -384,14 +387,13 @@ void kfilnd_tn_process_rx_event(struct kfilnd_immediate_buffer *bufdesc,
 		 * Allocate a Tn structure, set its values, then launch the
 		 * receive.
 		 */
-		tn = kfilnd_tn_alloc(bufdesc->immed_end->end_dev,
-				     bufdesc->immed_end->end_cpt,
+		tn = kfilnd_tn_alloc(ep->end_dev, ep->end_cpt,
 				     rx_msg->srcnid, alloc_msg, false,
 				     false);
 		if (IS_ERR(tn)) {
 			kfilnd_ep_imm_buffer_put(bufdesc);
-			KFILND_EP_ERROR(bufdesc->immed_end,
-					"Failed to allocate transaction struct: rc=%ld",
+			KFILND_EP_ERROR(ep,
+				"Failed to allocate transaction struct: rc=%ld",
 					PTR_ERR(tn));
 			return;
 		}
@@ -399,16 +401,16 @@ void kfilnd_tn_process_rx_event(struct kfilnd_immediate_buffer *bufdesc,
 		tn->tn_rx_msg.msg = rx_msg;
 		tn->tn_rx_msg.length = msg_size;
 		tn->tn_posted_buf = bufdesc;
+		tn->msg_type = msg_type;
 
-		KFILND_EP_DEBUG(bufdesc->immed_end, "%s transaction ID %u",
-				msg_type_to_str((enum kfilnd_msg_type)rx_msg->type),
+		KFILND_EP_DEBUG(ep, "%s TN %p tmk %u",
+				msg_type_to_str(tn->msg_type), tn,
 				tn->tn_mr_key);
 		break;
 
 	default:
-		KFILND_EP_ERROR(bufdesc->immed_end,
-				"Unhandled kfilnd message type: %d",
-				(enum kfilnd_msg_type)rx_msg->type);
+		KFILND_EP_ERROR(ep, "Unhandled kfilnd message type: %d",
+				msg_type);
 		LBUG();
 	};
 
@@ -1621,7 +1623,7 @@ static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
 	tn->tn_alloc_ts = tn_alloc_ts;
 	tn->tn_state_ts = ktime_get();
 
-	KFILND_EP_DEBUG(ep, "Transaction ID %u allocated", tn->tn_mr_key);
+	KFILND_EP_DEBUG(ep, "TN %p allocated with tmk %u", tn, tn->tn_mr_key);
 
 	return tn;
 

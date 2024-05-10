@@ -622,7 +622,7 @@ struct kfilnd_msg {
 	} while (0)
 
 #define KFILND_TN_DIR_ERROR(tn, fmt, dir, ...) \
-	CNETERR("Transaction ID %p: %s:%u %s %s(%p):0x%llx " fmt "\n", \
+	CNETERR("TN %p: %s:%u %s %s(%p):0x%llx " fmt "\n", \
 		(tn), \
 		libcfs_nidstr(&(tn)->tn_ep->end_dev->kfd_ni->ni_nid), \
 		(tn)->tn_ep->end_context_id, dir, \

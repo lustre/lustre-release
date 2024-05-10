@@ -264,14 +264,14 @@ int kfilnd_ep_post_tagged_send(struct kfilnd_ep *ep,
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"Transaction ID %p: %s tagged send of with tag 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: %s tagged send of with tag 0x%x to peer 0x%llx: rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
 				tn->tn_response_mr_key, tn->tn_target_addr, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"Transaction ID %p: Failed to post tagged send with tag 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: Failed to post tagged send with tag 0x%x to peer 0x%llx: rc=%d",
 				tn, tn->tn_response_mr_key,
 				tn->tn_target_addr, rc);
 	}
@@ -369,14 +369,14 @@ int kfilnd_ep_post_tagged_recv(struct kfilnd_ep *ep,
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"Transaction ID %p: %s tagged recv of %u bytes (%u frags) with tag 0x%llx: rc=%d",
+				"TN %p: %s tagged recv of %u bytes (%u frags) with tag 0x%llx: rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
 				tn->tn_nob, tn->tn_num_iovec, msg.tag, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"Transaction ID %p: Failed to post tagged recv of %u bytes (%u frags) with tag 0x%llx: rc=%d",
+				"TN %p: Failed to post tagged recv of %u bytes (%u frags) with tag 0x%llx: rc=%d",
 				tn, tn->tn_nob, tn->tn_num_iovec, msg.tag, rc);
 	}
 
@@ -434,14 +434,14 @@ int kfilnd_ep_post_send(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"Transaction ID %p: %s send of %lu bytes to peer 0x%llx: rc=%d",
+				"TN %p: %s send of %lu bytes to peer 0x%llx: rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
 				len, tn->tn_target_addr, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"Transaction ID %p: Failed to post send of %lu bytes to peer 0x%llx: rc=%d",
+				"TN %p: Failed to post send of %lu bytes to peer 0x%llx: rc=%d",
 				tn, len, tn->tn_target_addr, rc);
 	}
 
