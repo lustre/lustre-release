@@ -2171,7 +2171,6 @@ void pcc_layout_invalidate(struct inode *inode)
 	struct pcc_inode *pcci;
 
 	ENTRY;
-
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 	if (pcci && pcc_inode_has_layout(pcci)) {
@@ -2455,7 +2454,6 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 	ssize_t result;
 
 	ENTRY;
-
 	file->f_ra.ra_pages = 0;
 	if (pccf->pccf_file == NULL) {
 		*cached = false;
@@ -2526,7 +2524,6 @@ ssize_t pcc_file_write_iter(struct kiocb *iocb,
 	ssize_t result;
 
 	ENTRY;
-
 	if (pccf->pccf_file == NULL) {
 		*cached = false;
 		RETURN(0);
@@ -2666,7 +2663,6 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 	ssize_t result;
 
 	ENTRY;
-
 	in_file->f_ra.ra_pages = 0;
 	if (!pcc_file)
 		RETURN(default_file_splice_read(in_file, ppos, pipe,
@@ -2693,7 +2689,6 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	int rc;
 
 	ENTRY;
-
 	if (!pcc_file) {
 		*cached = false;
 		RETURN(0);
@@ -2826,7 +2821,7 @@ static int pcc_mmap_pages_convert(struct inode *inode,
 #ifdef HAVE_ADD_TO_PAGE_CACHE_LOCKED
 	struct folio_batch fbatch;
 	pgoff_t index = 0;
-	unsigned nr;
+	unsigned int nr;
 	int rc = 0;
 
 	ll_folio_batch_init(&fbatch, 0);
@@ -2944,7 +2939,6 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 	int rc = 0;
 
 	ENTRY;
-
 	/* With PCC, the files are cached in an unusual way, then we do some
 	 * special magic with mmap to allow Lustre and PCC to share the page
 	 * mapping, and the @ra_pages may set with the backing device of PCC
@@ -3034,7 +3028,6 @@ void pcc_vm_open(struct vm_area_struct *vma)
 	struct inode *inode;
 
 	ENTRY;
-
 	if (!pccv)
 		RETURN_EXIT;
 
@@ -3061,7 +3054,6 @@ void pcc_vm_close(struct vm_area_struct *vma)
 	struct inode *inode;
 
 	ENTRY;
-
 	if (!pccv)
 		RETURN_EXIT;
 
@@ -3098,7 +3090,6 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 	int rc;
 
 	ENTRY;
-
 	if (!pccv || !pccv->pccv_vm_ops) {
 		*cached = false;
 		RETURN(0);
@@ -3187,7 +3178,6 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	int rc;
 
 	ENTRY;
-
 	if (!pccv) {
 		*cached = false;
 		RETURN(0);
@@ -4163,7 +4153,6 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	struct pcc_inode *pcci;
 
 	ENTRY;
-
 	if (buf_len <= 0)
 		RETURN(-EINVAL);
 

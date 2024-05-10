@@ -598,7 +598,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	__u16 refcheck;
 	struct ra_io_arg *ria;
 	struct inode *inode;
-	struct ll_file_data *fd;
+	struct ll_file_data *lfd;
 	struct ll_readahead_state *ras;
 	struct cl_io *io;
 	struct cl_2queue *queue;
@@ -613,8 +613,8 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 
 	work = container_of(wq, struct ll_readahead_work,
 			    lrw_readahead_work);
-	fd = work->lrw_file->private_data;
-	ras = &fd->fd_ras;
+	lfd = work->lrw_file->private_data;
+	ras = &lfd->fd_ras;
 	file = work->lrw_file;
 	inode = file_inode(file);
 	sbi = ll_i2sbi(inode);
@@ -682,7 +682,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	memcpy(&lli->lli_jobinfo, &work->lrw_jobinfo, sizeof(lli->lli_jobinfo));
 	write_sequnlock(&lli->lli_jobinfo_seqlock);
 
-	vvp_env_io(env)->vui_fd = fd;
+	vvp_env_io(env)->vui_fd = lfd;
 	io->ci_state = CIS_LOCKED;
 	io->ci_async_readahead = true;
 	rc = cl_io_start(env, io);
@@ -1249,8 +1249,8 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 {
-	struct ll_file_data *fd = f->private_data;
-	struct ll_readahead_state *ras = &fd->fd_ras;
+	struct ll_file_data *lfd = f->private_data;
+	struct ll_readahead_state *ras = &lfd->fd_ras;
 	struct inode *inode = file_inode(f);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
@@ -1683,7 +1683,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 {
 	struct inode              *inode  = vvp_object_inode(page->cp_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
-	struct ll_file_data       *fd     = NULL;
+	struct ll_file_data       *lfd    = NULL;
 	struct ll_readahead_state *ras    = NULL;
 	struct cl_2queue          *queue  = &io->ci_queue;
 	struct cl_sync_io	  *anchor = NULL;
@@ -1699,8 +1699,8 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	ENTRY;
 
 	if (file) {
-		fd = file->private_data;
-		ras = &fd->fd_ras;
+		lfd = file->private_data;
+		ras = &lfd->fd_ras;
 	}
 
 	/* PagePrivate2 is set in ll_io_zero_page() to tell us the vmpage
@@ -1818,8 +1818,8 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 	struct ll_readahead_work *lrw;
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct ll_file_data *fd = file->private_data;
-	struct ll_readahead_state *ras = &fd->fd_ras;
+	struct ll_file_data *lfd = file->private_data;
+	struct ll_readahead_state *ras = &lfd->fd_ras;
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	unsigned long throttle;
 	pgoff_t start_idx = ras_align(ras, ras->ras_next_readahead_idx);
@@ -1984,8 +1984,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 	if (io == NULL) { /* fast read */
 		struct inode *inode = file_inode(file);
-		struct ll_file_data *fd = file->private_data;
-		struct ll_readahead_state *ras = &fd->fd_ras;
+		struct ll_file_data *lfd = file->private_data;
+		struct ll_readahead_state *ras = &lfd->fd_ras;
 		struct lu_env  *local_env = NULL;
 
 		CDEBUG(D_VFSTRACE, "fast read pgno: %ld\n", vmpage->index);

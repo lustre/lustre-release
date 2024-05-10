@@ -2928,7 +2928,7 @@ static ssize_t ll_rw_extents_stats_seq_write(struct file *file,
 LDEBUGFS_SEQ_FOPS(ll_rw_extents_stats);
 
 void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
-		       struct ll_file_data *file, loff_t pos,
+		       struct ll_file_data *lfd, loff_t pos,
 		       size_t count, int rw)
 {
 	int i, cur = -1;
@@ -2987,13 +2987,13 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 	/* Offset statistics */
 	for (i = 0; i < LL_PROCESS_HIST_MAX; i++) {
 		if (process[i].rw_pid == pid) {
-			if (process[i].rw_last_file != file) {
+			if (process[i].rw_last_file != lfd) {
 				process[i].rw_range_start = pos;
 				process[i].rw_last_file_pos = pos + count;
 				process[i].rw_smallest_extent = count;
 				process[i].rw_largest_extent = count;
 				process[i].rw_offset = 0;
-				process[i].rw_last_file = file;
+				process[i].rw_last_file = lfd;
 				goto out_unlock;
 			}
 			if (process[i].rw_last_file_pos != pos) {
@@ -3034,7 +3034,7 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 	process[*process_count].rw_smallest_extent = count;
 	process[*process_count].rw_largest_extent = count;
 	process[*process_count].rw_offset = 0;
-	process[*process_count].rw_last_file = file;
+	process[*process_count].rw_last_file = lfd;
 
 out_unlock:
 	spin_unlock(&sbi->ll_process_lock);

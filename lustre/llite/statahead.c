@@ -1660,8 +1660,8 @@ void ll_authorize_statahead(struct inode *dir, void *key)
 static void ll_deauthorize_statahead_advise(struct inode *dir, void *key)
 {
 	struct ll_inode_info *lli = ll_i2info(dir);
-	struct ll_file_data *fd = (struct ll_file_data *)key;
-	struct ll_statahead_info *sai = fd->fd_sai;
+	struct ll_file_data *lfd = (struct ll_file_data *)key;
+	struct ll_statahead_info *sai = lfd->fd_sai;
 
 	if (sai == NULL)
 		return;
@@ -1674,7 +1674,7 @@ static void ll_deauthorize_statahead_advise(struct inode *dir, void *key)
 		smp_store_release(&sai->sai_task, NULL);
 		wake_up_process(task);
 	}
-	fd->fd_sai = NULL;
+	lfd->fd_sai = NULL;
 	spin_unlock(&lli->lli_sa_lock);
 	ll_sai_put(sai);
 	LASSERT(lli->lli_sax != NULL);
@@ -2543,7 +2543,7 @@ int ll_revalidate_statahead(struct inode *dir, struct dentry **dentryp,
 int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 {
 	int node = cfs_cpt_spread_node(cfs_cpt_tab, CFS_CPT_ANY);
-	struct ll_file_data *fd = file->private_data;
+	struct ll_file_data *lfd = file->private_data;
 	struct dentry *dentry = file_dentry(file);
 	struct inode *dir = dentry->d_inode;
 	struct ll_inode_info *lli = ll_i2info(dir);
@@ -2562,7 +2562,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 	if (!S_ISDIR(dir->i_mode))
 		RETURN(-EINVAL);
 
-	if (fd->fd_sai) {
+	if (lfd->fd_sai) {
 		rc = -EALREADY;
 		CWARN("%s: already set statahead hint for dir %pd: rc = %d\n",
 		      sbi->ll_fsname, dentry, rc);
@@ -2602,7 +2602,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 				lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 				ctx = lli->lli_sax;
 				__ll_sax_get(ctx);
-				fd->fd_sai = __ll_sai_get(sai);
+				lfd->fd_sai = __ll_sai_get(sai);
 				rc = 0;
 			} else {
 				rc = -EINVAL;
@@ -2617,7 +2617,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 		} else {
 			lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 			lli->lli_sax = ctx;
-			fd->fd_sai = __ll_sai_get(sai);
+			lfd->fd_sai = __ll_sai_get(sai);
 			spin_unlock(&lli->lli_sa_lock);
 		}
 	} else {
@@ -2629,7 +2629,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 		}
 
 		lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
-		fd->fd_sai = __ll_sai_get(sai);
+		lfd->fd_sai = __ll_sai_get(sai);
 		spin_unlock(&lli->lli_sa_lock);
 	}
 
@@ -2656,10 +2656,10 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 
 	RETURN(0);
 out:
-	if (fd->fd_sai) {
+	if (lfd->fd_sai) {
 		ll_sai_put(sai);
 		ll_sax_put(dir, ctx);
-		fd->fd_sai = NULL;
+		lfd->fd_sai = NULL;
 	}
 
 	if (sai)

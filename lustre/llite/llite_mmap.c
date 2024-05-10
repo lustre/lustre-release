@@ -132,13 +132,13 @@ restart:
 	rc = cl_io_init(env, io, CIT_FAULT, io->ci_obj);
 	if (rc == 0) {
 		struct vvp_io *vio = vvp_env_io(env);
-		struct ll_file_data *fd = file->private_data;
+		struct ll_file_data *lfd = file->private_data;
 
 		LASSERT(vio->vui_cl.cis_io == io);
 
 		/* mmap lock must be MANDATORY it has to cache pages. */
 		io->ci_lockreq = CILR_MANDATORY;
-		vio->vui_fd = fd;
+		vio->vui_fd = lfd;
 	} else {
 		cl_io_fini(env, io);
 		if (io->ci_need_restart)

@@ -2893,7 +2893,7 @@ out_detach:
 static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file->f_mapping->host;
-	struct ll_file_data *fd = file->private_data;
+	struct ll_file_data *lfd = file->private_data;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int api32 = ll_need_32bit_api(sbi);
 	loff_t ret = -EINVAL;
@@ -2927,11 +2927,11 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 			hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 			if ((api32 && offset == LL_DIR_END_OFF_32BIT) ||
 			    (!api32 && offset == LL_DIR_END_OFF))
-				fd->lfd_pos = MDS_DIR_END_OFF;
+				lfd->lfd_pos = MDS_DIR_END_OFF;
 			else if (api32 && hash64)
-				fd->lfd_pos = offset << 32;
+				lfd->lfd_pos = offset << 32;
 			else
-				fd->lfd_pos = offset;
+				lfd->lfd_pos = offset;
 			file->f_pos = offset;
 			file->f_version = 0;
 		}
