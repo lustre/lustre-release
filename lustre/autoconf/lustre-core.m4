@@ -4498,6 +4498,7 @@ lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
 lustre/include/uapi/linux/lustre/Makefile
+lustre/kernel_patches/targets/5.14-rhel9.4.target
 lustre/kernel_patches/targets/5.14-rhel9.3.target
 lustre/kernel_patches/targets/5.14-rhel9.2.target
 lustre/kernel_patches/targets/5.14-rhel9.1.target
