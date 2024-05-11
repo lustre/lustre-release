@@ -9942,7 +9942,7 @@ test_mkdir() {
 	local overstripe_count
 	local stripe_command="-c"
 
-	(( $MDS1_VERSION > $(version_code 2.15.0) )) &&
+	(( $MDS1_VERSION > $(version_code v2_15_50-185-g1ac4b9598a) )) &&
 		hash_name+=("crush2")
 
 	while getopts "c:C:H:i:p" opt; do

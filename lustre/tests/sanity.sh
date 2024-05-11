@@ -6955,6 +6955,8 @@ test_newerXY_base() {
 	local ref
 	local negref
 
+	stack_trap "rm -rf $DIR/$tdir $DIR/$tfile*" RETURN EXIT
+
 	if [ $y == "t" ]; then
 		if [ $x == "b" ]; then
 			ref=\"$(do_facet mds1 date +"%Y-%m-%d\ %H:%M:%S")\"
@@ -6998,8 +7000,6 @@ test_newerXY_base() {
 	nums=$(eval $cmd | wc -l)
 	[ $nums -eq $expected ] || { ls -lauR --full-time $dir ;
 		error "'$cmd' wrong: found $nums between, expected $expected"; }
-
-	rm -rf $DIR/*
 }
 
 test_56oc() {
@@ -23237,8 +23237,8 @@ run_test 230w "non-recursive mode dir migration"
 
 test_230x() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
-	(( MDS1_VERSION >= $(version_code 2.15.0) )) ||
-		skip "Need MDS version at least 2.15.0"
+	(( MDS1_VERSION >= $(version_code v2_15_52-83-g6aee406c84) )) ||
+		skip "Need MDS >= 2.15.53 for migrate space check"
 
 	mkdir -p $DIR/$tdir || error "mkdir failed"
 	createmany -d $DIR/$tdir/sub 100 || error "createmany failed"
@@ -26462,7 +26462,7 @@ test_300i() {
 	local dircnt=$($LFS find -H fnv_1a_64,crush $DIR/$tdir/hashdir | wc -l)
 	(( $dircnt == 2 )) || error "lfs find striped dir got $dircnt != 2"
 
-	if (( $MDS1_VERSION > $(version_code 2.15.0) )); then
+	if (( $MDS1_VERSION > $(version_code v2_15_50-185-g1ac4b9598a) )); then
 		$LFS mkdir -i0 -c$MDSCOUNT -H crush2 $DIR/$tdir/hashdir/d3 ||
 			error "create crush2 dir $tdir/hashdir/d3 failed"
 		$LFS find -H crush2 $DIR/$tdir/hashdir
