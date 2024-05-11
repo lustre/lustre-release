@@ -58,16 +58,28 @@ static inline const char *lease_mode2str(enum ll_lease_mode mode)
  * \retval >= 0 on success.
  * \retval -errno on error.
  */
+#define FMT_STR_LEASE_SET "cannot get %s lease, ext %x"
 int llapi_lease_set(int fd, const struct ll_ioc_lease *data)
 {
 	int rc;
 
 	rc = ioctl(fd, LL_IOC_SET_LEASE, data);
 	if (rc < 0) {
-		rc = -errno;
+		struct lu_fid fid;
+		int rc2;
 
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get %s lease, ext %x",
-			    lease_mode2str(data->lil_mode), data->lil_flags);
+		rc = -errno;
+		rc2 = llapi_fd2fid(fd, &fid);
+		if (rc2 == 0)
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    FMT_STR_LEASE_SET" for "DFID,
+				    lease_mode2str(data->lil_mode),
+				    data->lil_flags, PFID(&fid));
+		else
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    FMT_STR_LEASE_SET,
+				    lease_mode2str(data->lil_mode),
+				    data->lil_flags);
 	}
 	return rc;
 }
@@ -151,8 +163,16 @@ int llapi_lease_check(int fd)
 
 	rc = ioctl(fd, LL_IOC_GET_LEASE);
 	if (rc < 0) {
+		int rc2;
+		struct lu_fid fid;
+
 		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot check lease");
+		rc2 = llapi_fd2fid(fd, &fid);
+		if (rc2 == 0)
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "cannot check lease for "DFID, PFID(&fid));
+		else
+			llapi_error(LLAPI_MSG_ERROR, rc, "cannot check lease");
 	}
 	return rc;
 }
