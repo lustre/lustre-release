@@ -1896,11 +1896,10 @@ out_fatal:
 
 	if (peerid->pid != recv_id.pid ||
 	    !nid_same(&peerid->nid,  &recv_id.nid)) {
-		LCONSOLE_ERROR_MSG(0x130,
-				   "Connected successfully to %s on host %pISc, but they claimed they were %s; please check your Lustre configuration.\n",
-				   libcfs_idstr(peerid),
-				   &conn->ksnc_peeraddr,
-				   libcfs_idstr(&recv_id));
+		LCONSOLE_ERROR("Connected successfully to %s on host %pISc, but they claimed they were %s; please check your Lustre configuration.\n",
+			       libcfs_idstr(peerid),
+			       &conn->ksnc_peeraddr,
+			       libcfs_idstr(&recv_id));
 		return -EPROTO;
 	}
 

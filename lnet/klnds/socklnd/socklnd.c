@@ -761,9 +761,8 @@ ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 
 	LIBCFS_ALLOC(cr, sizeof(*cr));
 	if (cr == NULL) {
-		LCONSOLE_ERROR_MSG(0x12f,
-				   "Dropping connection request from %pISc: memory exhausted\n",
-				   &peer);
+		LCONSOLE_ERROR("Dropping connection request from %pISc: memory exhausted\n",
+			       &peer);
 		return -ENOMEM;
 	}
 
