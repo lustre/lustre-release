@@ -3888,7 +3888,7 @@ static int yaml_import_global_settings(char *key, unsigned long value,
 				       char cmd, struct cYAML *show_rc,
 				       struct cYAML *err_rc)
 {
-	int rc;
+	int rc = 0;
 
 	if (strcmp("numa_range", key) == 0) {
 		if (cmd == 'a' || cmd == 'd') {

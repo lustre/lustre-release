@@ -273,7 +273,6 @@ brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
 
 	} else {
 		struct test_bulk_req_v1 *breq = &tsi->tsi_u.bulk_v1;
-		int off;
 
 		/* I should never get this step if it's unknown feature
 		 * because make_session will reject unknown feature */
