@@ -5556,6 +5556,23 @@ test_39s() {
 }
 run_test 39s "relatime is supported"
 
+test_39u() {
+	touch $DIR/$tfile
+	sleep 2
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=notrunc ||
+		error "dd failed"
+
+	#define OBD_FAIL_LLITE_STAT_RACE1			0x1434
+	$LCTL set_param fail_loc=0x80001434
+
+	local mtimes=($(stat -c "%Y" $DIR/$tfile &
+			sleep 1; stat -c "%Y" $DIR/$tfile; wait))
+
+	(( ${mtimes[0]} == ${mtimes[1]} )) ||
+		error "mtime mismatch ${mtimes[0]} != ${mtimes[1]}"
+}
+run_test 39u "stat race"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/$tfile &&

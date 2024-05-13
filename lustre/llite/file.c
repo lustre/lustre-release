@@ -1511,6 +1511,13 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	if (rc != 0)
 		GOTO(out, rc = (rc == -ENODATA ? 0 : rc));
 
+	CFS_RACE(OBD_FAIL_LLITE_STAT_RACE2);
+	/*
+	 * let a awaken stat thread a chance to get intermediate
+	 * attributes from inode
+	 */
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_STAT_RACE2, 1);
+
 	if (atime < attr->cat_atime)
 		atime = attr->cat_atime;
 
@@ -5930,11 +5937,24 @@ fill_attr:
 	else
 		stat->mode = (inode->i_mode & ~S_IFMT) | S_IFLNK;
 
+	CFS_FAIL_CHECK_RESET(OBD_FAIL_LLITE_STAT_RACE1,
+			     OBD_FAIL_LLITE_STAT_RACE2);
+	/* pause to let other stat to do intermediate changes to inode */
+	CFS_RACE(OBD_FAIL_LLITE_STAT_RACE2);
+
+	/*
+	 * ll_merge_attr() (in case of regular files) does not update
+	 * inode's timestamps atomically. Protect against intermediate
+	 * values
+	 */
+	if (!S_ISDIR(inode->i_mode))
+		ll_inode_size_lock(inode);
 	stat->uid = inode->i_uid;
 	stat->gid = inode->i_gid;
 	stat->atime = inode_get_atime(inode);
 	stat->mtime = inode_get_mtime(inode);
 	stat->ctime = inode_get_ctime(inode);
+
 	/* stat->blksize is used to tell about preferred IO size */
 	if (sbi->ll_stat_blksize)
 		stat->blksize = sbi->ll_stat_blksize;
@@ -5950,6 +5970,9 @@ fill_attr:
 	stat->nlink = inode->i_nlink;
 	stat->size = i_size_read(inode);
 	stat->blocks = inode->i_blocks;
+
+	if (!S_ISDIR(inode->i_mode))
+		ll_inode_size_unlock(inode);
 
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 	if (flags & AT_STATX_DONT_SYNC) {

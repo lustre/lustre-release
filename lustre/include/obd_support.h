@@ -646,6 +646,8 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_LLITE_READ_PAUSE		    0x1431
 #define OBD_FAIL_LLITE_FAULT_PAUSE		    0x1432
 #define OBD_FAIL_LLITE_STATAHEAD_PAUSE		    0x1433
+#define OBD_FAIL_LLITE_STAT_RACE1		    0x1434
+#define OBD_FAIL_LLITE_STAT_RACE2		    0x1435
 
 #define OBD_FAIL_FID_INDIR	0x1501
 #define OBD_FAIL_FID_INLMA	0x1502
