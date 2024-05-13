@@ -519,6 +519,7 @@ static inline int rsc_do_upcall(struct upcall_cache *cache,
 	upcall_cache_update_entry(cache, entry,
 				  ktime_get_seconds() + cache->uc_entry_expire,
 				  0);
+	wake_up(&entry->ue_waitq);
 	return 0;
 }
 
