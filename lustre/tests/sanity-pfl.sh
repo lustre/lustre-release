@@ -119,8 +119,10 @@ test_0c() {
 
 	test_mkdir $DIR/$tdir
 
-	$LFS setstripe -E -1 -C $LOV_MAX_STRIPE_COUNT -z 128M $comp_file ||
-		error "Create $comp_file failed"
+	# extension size aligned to 64M and limit to 1G
+	$LFS setstripe -E-1 -S64K -C $LOV_MAX_STRIPE_COUNT \
+		-z $((64*1024*((LOV_MAX_STRIPE_COUNT+1023)>>10<<10))) \
+		$comp_file || error "Create $comp_file failed"
 
 	local count=$($LFS getstripe -I1 -c $comp_file)
 	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
@@ -186,6 +188,66 @@ test_0d() {
 }
 run_test 0d "Verify comp end and stripe size"
 
+test_0e() {
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	(( MDS1_VERSION >= $(version_code 2.15.4.1) )) ||
+		skip "need MDS >= 2.15.4.1 for stripe limits by size"
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+
+	test_mkdir $td
+
+	# component size 1M can only utilize 1 stripe
+	$LFS setstripe -E1M -S1M -c2 -Eeof -S1M -c2 $tf ||
+		error "failed to setstripe $tf"
+
+	local sc=$($LFS getstripe -I1 -c $tf)
+	(( sc == 1 )) || {
+		$LFS getstripe $tf
+		error "expect 1 stripe count instread of $sc"
+	}
+	sc=$($LFS getstripe -I2 -c $tf)
+	(( sc == 2 )) || {
+		$LFS getstripe $tf
+		error "expect 2 stripe count instread of $sc"
+	}
+
+	(( OSTCOUNT >= 3 )) || skip "needs >= 3 OSTs"
+
+	rm -f $tf
+	# component size 2M can only utilize 2 stripes
+	$LFS setstripe -E2M -S1M -c3 -Eeof -S1M -c3 $tf ||
+		error "failed to setstripe $tf"
+	sc=$($LFS getstripe -I1 -c $tf)
+	(( sc == 2 )) || {
+		$LFS getstripe $tf
+		error "expect 2 stripe count instread of $sc"
+	}
+	sc=$($LFS getstripe -I2 -c $tf)
+	(( sc == 3 )) || {
+		$LFS getstripe $tf
+		error "expect 3 stripe count instread of $sc"
+	}
+
+	rm -f $tf
+	# 2nd component size 11M and stripe_size 4M should cross 3 stripes
+	$LFS setstripe -E1M -S1M -c3 -E12M -S4M -c3 $tf ||
+		error "failed to setstripe $tf"
+	sc=$($LFS getstripe -I1 -c $tf)
+	(( sc == 1 )) || {
+		$LFS getstripe $tf
+		error "expect 1 stripe count instread of $sc"
+	}
+	sc=$($LFS getstripe -I2 -c $tf)
+	(( sc == 3 )) || {
+		$LFS getstripe $tf
+		error "expect 3 stripe count instread of $sc"
+	}
+}
+run_test 0e "lfs setstripe should limite stripe count for component size"
+
 test_1a() {
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
@@ -222,7 +284,7 @@ test_1b() {
 
 	test_mkdir $DIR/$tdir
 
-	$LFS setstripe -E 1m -S 1m -o 0,0 -E -1 -o 1,1,0,0 $comp_file ||
+	$LFS setstripe -E 2m -S 1m -o 0,0 -E -1 -o 1,1,0,0 $comp_file ||
 		error "Create $comp_file failed"
 
 	#instantiate all components, so that objs are allocted
@@ -258,7 +320,7 @@ test_1c() {
 
 	test_mkdir $DIR/$tdir
 
-	$LFS setstripe -E 1m -C 10 -E 10M -C 100 -E -1 \
+	$LFS setstripe -E 10m -C 10 -E 110M -C 100 -E -1 \
 	    -C $LOV_MAX_STRIPE_COUNT $comp_file ||
 		error "Create $comp_file failed"
 
@@ -711,8 +773,8 @@ test_12() {
 	rm -f $file
 
 	# specify ost list for component
-	$LFS setstripe -E 1M -S 1M -c 2 -o 0,1 -E 2M -c 2 -o 1,2 \
-		-E 3M -c 2 -o 2,1 -E 4M -c 1 -i 2 -E -1 $file ||
+	$LFS setstripe -E 2M -S 1M -c 2 -o 0,1 -E 4M -c 2 -o 1,2 \
+		-E 6M -c 2 -o 2,1 -E 8M -c 1 -i 2 -E -1 $file ||
 		error "Create $file failed"
 
 	# clear lod component cache
@@ -721,7 +783,7 @@ test_12() {
 	start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS || error "start MDS"
 
 	# instantiate all components
-	$TRUNCATE $file $((1024*1024*4+1))
+	$TRUNCATE $file $((1024*1024*8+1))
 
 	#verify object alloc order
 	local o1=$($LFS getstripe -I1 $file |
@@ -1057,7 +1119,7 @@ test_17() {
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
 
-	$LFS setstripe -E 1M -S 1M -E 2M -c 2 -E -1 -c -1 $file ||
+	$LFS setstripe -E 1M -S 1M -E 3M -c 2 -E -1 -c -1 $file ||
 		error "Create $file failed"
 
 	local s1=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')
@@ -1075,7 +1137,7 @@ test_17() {
 	[ $s2 -lt $s2n ] || error "2nd comp size $s2 should < $s2n"
 
 	# init 3rd component
-	$TRUNCATE $file $((1024*1024*2+1))
+	$TRUNCATE $file $((1024*1024*3+1))
 	s1n=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')
 	s2n=$($LFS getstripe -I2 -v $file | awk '/lcme_size:/{print $2}')
 	local s3n=$($LFS getstripe -I3 -v $file | awk '/lcme_size:/{print $2}')
