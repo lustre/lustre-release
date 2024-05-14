@@ -67,7 +67,7 @@
 
 %{!?version: %global version @VERSION@}
 # if you want a custom kernel version set it variable with $ver.$arch
-%{!?kver:    %global kver    %(uname -r)}
+%{!?kver:    %global kver    @LINUXRELEASE@}
 # cut epoch for kmodtool
 %define _kver %(echo %{kver} | sed -e 's/^[0-9]*://')
 # trust version from kdir - but it can lost 'epoch'
