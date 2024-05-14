@@ -2533,6 +2533,8 @@ void lustre_assert_wire_constants(void)
 		OBD_BRW_SYS_RESOURCE);
 	LASSERTF(OBD_BRW_COMPRESSED == 0x80000, "found 0x%.8x\n",
 		OBD_BRW_COMPRESSED);
+	LASSERTF(OBD_BRW_SPECULATIVE_COMPR == 0x100000, "found 0x%.8x\n",
+		OBD_BRW_SPECULATIVE_COMPR);
 
 	/* Checks for struct ost_body */
 	LASSERTF((int)sizeof(struct ost_body) == 208, "found %lld\n",

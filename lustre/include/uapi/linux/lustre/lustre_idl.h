@@ -1450,6 +1450,8 @@ struct hsm_state_set {
 #define OBD_BRW_RDMA_ONLY    0x20000 /* RPC contains RDMA-only pages*/
 #define OBD_BRW_SYS_RESOURCE 0x40000 /* page has CAP_SYS_RESOURCE */
 #define OBD_BRW_COMPRESSED   0x80000 /* data compressed on client */
+/* client compressed data optimistically but server must check file size */
+#define OBD_BRW_SPECULATIVE_COMPR  0x100000
 
 #define OBD_BRW_OVER_ALLQUOTA (OBD_BRW_OVER_USRQUOTA | \
 			       OBD_BRW_OVER_GRPQUOTA | \
