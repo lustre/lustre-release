@@ -609,8 +609,7 @@ lnet_get_networks(void)
 	int rc;
 
 	if (*networks != 0 && *ip2nets != 0) {
-		LCONSOLE_ERROR_MSG(0x101, "Please specify EITHER 'networks' or "
-				   "'ip2nets' but not both at once\n");
+		LCONSOLE_ERROR("Please specify EITHER 'networks' or 'ip2nets' but not both at once\n");
 		return NULL;
 	}
 
@@ -2533,8 +2532,8 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 	mutex_unlock(&the_lnet.ln_lnd_mutex);
 
 	if (rc != 0) {
-		LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s\n",
-				   rc, libcfs_lnd2str(net->net_lnd->lnd_type));
+		LCONSOLE_ERROR("Error %d starting up LNI %s\n",
+			       rc, libcfs_lnd2str(net->net_lnd->lnd_type));
 		goto failed0;
 	}
 
@@ -2552,10 +2551,10 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 
 	if (ni->ni_net->net_tunables.lct_peer_tx_credits == 0 ||
 	    ni->ni_net->net_tunables.lct_max_tx_credits == 0) {
-		LCONSOLE_ERROR_MSG(0x107, "LNI %s has no %scredits\n",
-				   libcfs_lnd2str(net->net_lnd->lnd_type),
-				   ni->ni_net->net_tunables.lct_peer_tx_credits == 0 ?
-					"" : "per-peer ");
+		LCONSOLE_ERROR("LNI %s has no %scredits\n",
+			       libcfs_lnd2str(net->net_lnd->lnd_type),
+			       ni->ni_net->net_tunables.lct_peer_tx_credits == 0 ?
+			       "" : "per-peer ");
 		/* shutdown the NI since if we get here then it must've already
 		 * been started
 		 */
@@ -2610,8 +2609,7 @@ static const struct lnet_lnd *lnet_load_lnd(u32 lnd_type)
 			libcfs_lnd2str(lnd_type),
 			libcfs_lnd2modname(lnd_type), rc);
 #ifndef HAVE_MODULE_LOADING_SUPPORT
-			LCONSOLE_ERROR_MSG(0x104,
-					   "Your kernel must be compiled with kernel module loading support.");
+			LCONSOLE_ERROR("Your kernel must be compiled with kernel module loading support.");
 #endif
 			return ERR_PTR(-EINVAL);
 		}
