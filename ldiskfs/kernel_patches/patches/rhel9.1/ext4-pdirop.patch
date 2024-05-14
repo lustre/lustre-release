@@ -216,7 +216,7 @@ index 2760dc6..2d14bd2 100644
 -				 struct dx_frame *frame);
 +				 struct dx_frame *frame,
 +				 struct htree_lock *lck);
- static void dx_release(struct dx_frame *frames, struct inode *dir);
+ static void dx_release(struct dx_frame *frames);
  static int dx_make_map(struct inode *dir, struct buffer_head *bh,
  		       struct dx_hash_info *hinfo,
 @@ -307,12 +319,13 @@ static void dx_insert_block(struct dx_frame *frame,
@@ -580,7 +580,7 @@ index 2760dc6..2d14bd2 100644
  		blocks[level] = block;
  		frame++;
  		frame->bh = ext4_read_dirblock(dir, block, INDEX);
-@@ -1004,7 +1314,7 @@ static void dx_release(struct dx_frame *frames, struct inode *dir)
+@@ -1004,7 +1314,7 @@ static void dx_release(struct dx_frame *frames)
  static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  				 struct dx_frame *frame,
  				 struct dx_frame *frames,
@@ -917,7 +917,7 @@ index 2760dc6..2d14bd2 100644
 +	ext4_htree_dx_unlock(lck);
 +	ext4_htree_de_unlock(lck);
  	brelse(bh);
- 	dx_release(frames, dir);
+ 	dx_release(frames);
  	/* @restart is true means htree-path has been changed, we need to
 diff --git a/fs/ext4/super.c b/fs/ext4/super.c
 index b271e1f..cda88f8 100644

@@ -301,7 +301,7 @@ diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
 index 25e84f0e..5c068e3a 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
-@@ -290,13 +290,14 @@ static unsigned dx_get_count(struct dx_entry *entries);
+@@ -290,7 +290,8 @@ static unsigned dx_get_count(struct dx_entry *entries);
  static unsigned dx_get_limit(struct dx_entry *entries);
  static void dx_set_count(struct dx_entry *entries, unsigned value);
  static void dx_set_limit(struct dx_entry *entries, unsigned value);
@@ -311,13 +311,6 @@ index 25e84f0e..5c068e3a 100644
  static unsigned dx_node_limit(struct inode *dir);
  static struct dx_frame *dx_probe(struct ext4_filename *fname,
  				 struct inode *dir,
- 				 struct dx_hash_info *hinfo,
- 				 struct dx_frame *frame);
--static void dx_release(struct dx_frame *frames);
-+static void dx_release(struct dx_frame *frames, struct inode *dir);
- static int dx_make_map(struct inode *dir, struct buffer_head *bh,
- 		       struct dx_hash_info *hinfo,
- 		       struct dx_map_entry *map_tail);
 @@ -436,22 +437,23 @@ static struct dx_countlimit *get_dx_countlimit(struct inode *inode,
  {
  	struct ext4_dir_entry *dp;
@@ -350,21 +343,18 @@ index 25e84f0e..5c068e3a 100644
  
  	if (offset)
  		*offset = count_offset;
-@@ -554,13 +556,14 @@ ext4_next_entry(struct ext4_dir_entry_2 *p, unsigned long blocksize)
-  * Future: use high four bits of block for coalesce-on-delete flags
-  * Mask them off for now.
+@@ -556,11 +558,12 @@ ext4_next_entry(struct ext4_dir_entry_2 *p, unsigned long blocksize)
   */
--struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
-+struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de, struct inode *i_dir)
+ struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
  {
 +	BUG_ON(de->name_len != 1);
  	/* get dotdot first */
 -	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
-+	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_ENTRY_LEN(de, i_dir));
++	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_ENTRY_LEN(de, NULL));
  
  	/* dx root info is after dotdot entry */
 -	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
-+	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_ENTRY_LEN(de, i_dir));
++	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_ENTRY_LEN(de, NULL));
  
  	return (struct dx_root_info *)de;
  }
@@ -398,15 +388,6 @@ index 25e84f0e..5c068e3a 100644
  			names++;
  		}
  		de = ext4_next_entry(de, size);
-@@ -823,7 +831,7 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
- 	if (IS_ERR(frame->bh))
- 		return (struct dx_frame *) frame->bh;
- 
--	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frame->bh->b_data);
-+	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frame->bh->b_data, dir);
- 	if (info->hash_version != DX_HASH_TEA &&
- 	    info->hash_version != DX_HASH_HALF_MD4 &&
- 	    info->hash_version != DX_HASH_LEGACY &&
 @@ -885,11 +893,14 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
  
  	entries = (struct dx_entry *)(((char *)info) + info->info_length);
@@ -424,48 +405,6 @@ index 25e84f0e..5c068e3a 100644
 +					  info->info_length));
  		goto fail;
  	}
- 
-@@ -966,7 +977,7 @@ fail:
- 	return ret_err;
- }
- 
--static void dx_release(struct dx_frame *frames)
-+static void dx_release(struct dx_frame *frames, struct inode *dir)
- {
- 	struct dx_root_info *info;
- 	int i;
-@@ -975,7 +986,7 @@ static void dx_release(struct dx_frame *frames)
- 	if (frames[0].bh == NULL)
- 		return;
- 
--	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frames[0].bh->b_data);
-+	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frames[0].bh->b_data, dir);
- 	/* save local copy, "info" may be freed after brelse() */
- 	indirect_levels = info->indirect_levels;
- 	for (i = 0; i <= indirect_levels; i++) {
-@@ -1281,12 +1292,12 @@ int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
- 		    (count && ((hashval & 1) == 0)))
- 			break;
- 	}
--	dx_release(frames);
-+	dx_release(frames, dir);
- 	dxtrace(printk(KERN_DEBUG "Fill tree: returned %d entries, "
- 		       "next hash: %x\n", count, *next_hash));
- 	return count;
- errout:
--	dx_release(frames);
-+	dx_release(frames, dir);
- 	return (err);
- }
- 
-@@ -1821,7 +1832,7 @@ static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
- errout:
- 	dxtrace(printk(KERN_DEBUG "%s not found\n", fname->usr_fname->name));
- success:
--	dx_release(frames);
-+	dx_release(frames, dir);
- 	return bh;
- }
  
 @@ -1945,7 +1956,7 @@ dx_move_dirents(struct inode *dir, char *from, char *to,
  	while (count--) {
@@ -568,15 +507,6 @@ index 25e84f0e..5c068e3a 100644
  
  	/*
  	 * XXX shouldn't update any times until successful
-@@ -2324,7 +2378,7 @@ static int make_indexed_dir(handle_t *handle, struct ext4_filename *fname,
- 				     blocksize);
- 
- 	/* initialize hashing info */
--	dx_info = dx_get_dx_info(dot_de);
-+	dx_info = dx_get_dx_info(dot_de, dir);
- 	memset(dx_info, 0, sizeof(*dx_info));
- 	dx_info->info_length = sizeof(*dx_info);
- 	if (ext4_hash_in_dirent(dir))
 @@ -2335,7 +2389,8 @@ static int make_indexed_dir(handle_t *handle, struct ext4_filename *fname,
  	entries = (void *)dx_info + sizeof(*dx_info);
  	dx_set_block(entries, 1);
@@ -587,13 +517,7 @@ index 25e84f0e..5c068e3a 100644
  
  	/* Initialize as for dx_probe */
  	fname->hinfo.hash_version = dx_info->hash_version;
-@@ -2381,12 +2406,111 @@ out_frames:
- 	 */
- 	if (retval)
- 		ext4_mark_inode_dirty(handle, dir);
--	dx_release(frames);
-+	dx_release(frames, dir);
- 	brelse(bh2);
+@@ -2386,7 +2411,106 @@ out_frames:
  	return retval;
  }
  
@@ -619,7 +543,7 @@ index 25e84f0e..5c068e3a 100644
 +		len = EXT4_DIR_REC_LEN(2 + dlen, NULL) -
 +			EXT4_DIR_ENTRY_LEN(dotdot_de, NULL);
 +
-+		dx_info = dx_get_dx_info(dot_de, NULL);
++		dx_info = dx_get_dx_info(dot_de);
 +		entries = (struct dx_entry *)((char *)dx_info +
 +							sizeof(*dx_info));
 +		count = dx_get_count(entries);
@@ -749,24 +673,6 @@ index 25e84f0e..5c068e3a 100644
  	if (ext4_has_metadata_csum(inode->i_sb))
  		csum_size = sizeof(struct ext4_dir_entry_tail);
  
-@@ -2720,7 +2788,7 @@ again:
- 			dx_set_count(entries, 1);
- 			dx_set_block(entries + 0, newblock);
- 			info = dx_get_dx_info((struct ext4_dir_entry_2 *)
--					      frames[0].bh->b_data);
-+					      frames[0].bh->b_data, dir);
- 			info->indirect_levels = 1;
- 			dxtrace(printk(KERN_DEBUG
- 				       "Creating %d level index...\n",
-@@ -2746,7 +2814,7 @@ journal_error:
- 	ext4_std_error(dir->i_sb, err); /* this is a no-op if err == 0 */
- cleanup:
- 	brelse(bh);
--	dx_release(frames);
-+	dx_release(frames, dir);
- 	/* @restart is true means htree-path has been changed, we need to
- 	 * repeat dx_probe() to find out valid htree-path
- 	 */
 @@ -3049,38 +3117,73 @@ err_unlock_inode:
  	return err;
  }
