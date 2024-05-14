@@ -790,8 +790,6 @@ int osp_it_get(const struct lu_env *env, struct dt_it *di,
 	       const struct dt_key *key);
 void osp_it_put(const struct lu_env *env, struct dt_it *di);
 __u64 osp_it_store(const struct lu_env *env, const struct dt_it *di);
-int osp_it_key_rec(const struct lu_env *env, const struct dt_it *di,
-		   void *key_rec);
 int osp_it_next_page(const struct lu_env *env, struct dt_it *di);
 /* osp_md_object.c */
 int osp_md_declare_create(const struct lu_env *env, struct dt_object *dt,

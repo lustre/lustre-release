@@ -2213,12 +2213,6 @@ static int osp_orphan_it_load(const struct lu_env *env, const struct dt_it *di,
 	return rc;
 }
 
-int osp_it_key_rec(const struct lu_env *env, const struct dt_it *di,
-		   void *key_rec)
-{
-	return 0;
-}
-
 static const struct dt_index_operations osp_orphan_index_ops = {
 	.dio_lookup		= osp_orphan_index_lookup,
 	.dio_declare_insert	= osp_orphan_index_declare_insert,
@@ -2236,7 +2230,6 @@ static const struct dt_index_operations osp_orphan_index_ops = {
 		.rec		= osp_orphan_it_rec,
 		.store		= osp_it_store,
 		.load		= osp_orphan_it_load,
-		.key_rec	= osp_it_key_rec,
 	}
 };
 

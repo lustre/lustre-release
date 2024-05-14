@@ -327,23 +327,6 @@ static int lod_it_load(const struct lu_env *env, const struct dt_it *di,
 	return it->lit_obj->do_index_ops->dio_it.load(env, it->lit_it, hash);
 }
 
-/**
- * Implementation of dt_it_ops::key_rec.
- *
- * Used with regular (non-striped) objects.
- *
- * \see dt_it_ops::rec() in the API description for details.
- */
-static int lod_it_key_rec(const struct lu_env *env, const struct dt_it *di,
-			  void *key_rec)
-{
-	const struct lod_it *it = (const struct lod_it *)di;
-
-	LOD_CHECK_IT(env, it);
-	return it->lit_obj->do_index_ops->dio_it.key_rec(env, it->lit_it,
-							 key_rec);
-}
-
 static const struct dt_index_operations lod_index_ops = {
 	.dio_lookup		= lod_lookup,
 	.dio_declare_insert	= lod_declare_insert,
@@ -362,7 +345,6 @@ static const struct dt_index_operations lod_index_ops = {
 		.rec_size	= lod_it_rec_size,
 		.store		= lod_it_store,
 		.load		= lod_it_load,
-		.key_rec	= lod_it_key_rec,
 	}
 };
 

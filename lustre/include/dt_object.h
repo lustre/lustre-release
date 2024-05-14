@@ -1842,13 +1842,6 @@ struct dt_index_operations {
 		int           (*load)(const struct lu_env *env,
 				      const struct dt_it *di,
 				      __u64 hash);
-
-		/**
-		 * Not used
-		 */
-		int        (*key_rec)(const struct lu_env *env,
-				      const struct dt_it *di,
-				      void *key_rec);
 	} dio_it;
 };
 

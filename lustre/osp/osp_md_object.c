@@ -831,7 +831,6 @@ const struct dt_index_operations osp_md_index_ops = {
 		.rec      = osp_md_index_it_rec,
 		.store    = osp_it_store,
 		.load     = osp_it_load,
-		.key_rec  = osp_it_key_rec,
 	}
 };
 

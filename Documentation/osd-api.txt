@@ -929,7 +929,6 @@ int   (*rec)(const struct lu_env *, const struct dt_it *, struct dt_rec *,
 	     __u32);
 __u64 (*store)(const struct lu_env *, const struct dt_it *);
 int   (*load)(const struct lu_env *, const struct dt_it *, __u64);
-int   (*key_rec)(const struct lu_env *, const struct dt_it *, void *);
 
 init
 	is called to allocate and initialize an instance of "iterator" which
@@ -970,8 +969,6 @@ load
 	cookie ->store() method returns. these two methods allow to implement
 	functionality like POSIX readdir where current position is stored as an
 	integer.
-key_rec
-	is not used currently
 
 3. Transactions
 ===============

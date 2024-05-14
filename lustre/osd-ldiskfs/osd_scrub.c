@@ -2962,12 +2962,6 @@ static int osd_otable_it_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int osd_otable_it_key_rec(const struct lu_env *env,
-				 const struct dt_it *di, void *key_rec)
-{
-	return 0;
-}
-
 const struct dt_index_operations osd_otable_ops = {
 	.dio_it = {
 		.init     = osd_otable_it_init,
@@ -2980,7 +2974,6 @@ const struct dt_index_operations osd_otable_ops = {
 		.rec      = osd_otable_it_rec,
 		.store    = osd_otable_it_store,
 		.load     = osd_otable_it_load,
-		.key_rec  = osd_otable_it_key_rec,
 	}
 };
 
