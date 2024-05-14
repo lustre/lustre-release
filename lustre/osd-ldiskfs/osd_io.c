@@ -1973,7 +1973,7 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 			 * XXX: this is a workaround until we have a proper
 			 *	fix in mballoc
 			 * XXX: works with extent-based files only */
-			if (!osd->od_cl_seq)
+			if (!osd->od_dt_dev.dd_cl_seq)
 				flags |= LDISKFS_GET_BLOCKS_NO_NORMALIZE;
 			bh = __ldiskfs_bread(handle, inode, block, flags);
 			create = true;

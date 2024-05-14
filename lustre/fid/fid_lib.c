@@ -40,7 +40,12 @@
 
 #include <libcfs/libcfs.h>
 #include <linux/module.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include <lustre_fid.h>
+
+#include "fid_internal.h"
 
 /**
  * A cluster-wide range from which fid-sequences are granted to servers and
@@ -84,3 +89,59 @@ const struct lu_fid LU_BACKEND_LPF_FID = { .f_seq = FID_SEQ_LOCAL_FILE,
 					   .f_oid = OSD_LPF_OID,
 					   .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_BACKEND_LPF_FID);
+
+int fid_alloc_generic(const struct lu_env *env, struct lu_device *lu,
+		      struct lu_fid *fid, struct lu_object *parent,
+		      const struct lu_name *name)
+{
+	struct dt_device *dt = container_of(lu, struct dt_device,
+					    dd_lu_dev);
+
+	return seq_client_alloc_fid(env, dt->dd_cl_seq, fid);
+}
+EXPORT_SYMBOL(fid_alloc_generic);
+
+int seq_target_init(const struct lu_env *env,
+		    struct dt_device *dt, char *svname,
+		    bool is_ost)
+{
+	struct seq_server_site *ss = dt->dd_lu_dev.ld_site->ld_seq_site;
+	int rc = 0;
+
+	if (is_ost || dt->dd_cl_seq != NULL)
+		return 0;
+
+	if (unlikely(!ss))
+		return -ENODEV;
+
+	OBD_ALLOC_PTR(dt->dd_cl_seq);
+	if (!dt->dd_cl_seq)
+		return -ENOMEM;
+
+	seq_client_init(dt->dd_cl_seq, NULL, LUSTRE_SEQ_METADATA,
+			svname, ss->ss_server_seq);
+
+	/*
+	 * If the OSD on the sequence controller(MDT0), then allocate
+	 * sequence here, otherwise allocate sequence after connected
+	 * to MDT0 (see mdt_register_lwp_callback()).
+	 */
+	if (!ss->ss_node_id)
+		rc = seq_server_alloc_meta(dt->dd_cl_seq->lcs_srv,
+				   &dt->dd_cl_seq->lcs_space, env);
+
+	return rc;
+}
+EXPORT_SYMBOL(seq_target_init);
+
+void seq_target_fini(const struct lu_env *env,
+		     struct dt_device *dt)
+{
+	if (!dt->dd_cl_seq)
+		return;
+
+	seq_client_fini(dt->dd_cl_seq);
+	OBD_FREE_PTR(dt->dd_cl_seq);
+	dt->dd_cl_seq = NULL;
+}
+EXPORT_SYMBOL(seq_target_fini);

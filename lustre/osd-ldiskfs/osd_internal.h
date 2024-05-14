@@ -338,8 +338,6 @@ struct osd_device {
 	/* quota slave instance for block */
 	struct qsd_instance	*od_quota_slave_dt;
 
-	/* osd seq instance */
-	struct lu_client_seq	*od_cl_seq;
 	/* If the ratio of "the total OI mappings count" vs
 	 * "the bad OI mappings count" is lower than the
 	 * osd_device::od_full_scrub_ratio, then trigger

@@ -1879,6 +1879,7 @@ enum dt_otable_it_flags {
 struct dt_device {
 	struct lu_device                   dd_lu_dev;
 	const struct dt_device_operations *dd_ops;
+	struct lu_client_seq		  *dd_cl_seq;
 
 	/**
 	 * List of dt_txn_callback (see below). This is not protected in any

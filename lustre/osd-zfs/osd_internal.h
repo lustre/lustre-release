@@ -394,9 +394,6 @@ struct osd_device {
 
 	arc_prune_t		*arc_prune_cb;
 
-	/* osd seq instance */
-	struct lu_client_seq	*od_cl_seq;
-
 	struct semaphore	 od_otable_sem;
 	struct osd_otable_it	*od_otable_it;
 	struct lustre_scrub	 od_scrub;

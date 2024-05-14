@@ -148,6 +148,7 @@
  */
 
 #include <libcfs/libcfs.h>
+#include <lu_object.h>
 #include <uapi/linux/lustre/lustre_fid.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <uapi/linux/lustre/lustre_ostid.h>
@@ -526,6 +527,18 @@ int seq_server_set_cli(const struct lu_env *env,
 
 int seq_server_check_and_alloc_super(const struct lu_env *env,
 				     struct lu_server_seq *seq);
+
+int fid_alloc_generic(const struct lu_env *env, struct lu_device *lu,
+		      struct lu_fid *fid, struct lu_object *parent,
+		      const struct lu_name *name);
+
+int seq_target_init(const struct lu_env *env,
+		    struct dt_device *dt, char *svname,
+		    bool is_ost);
+
+void seq_target_fini(const struct lu_env *env,
+		     struct dt_device *dt);
+
 /* Client methods */
 void seq_client_init(struct lu_client_seq *seq,
 		     struct obd_export *exp,
