@@ -88,25 +88,21 @@ lnet_connect_console_error(int rc, struct lnet_nid *peer_nid,
 			libcfs_nidstr(peer_nid), sa);
 		break;
 	case -ECONNRESET:
-		LCONSOLE_ERROR_MSG(0x11b,
-				   "Connection to %s at host %pIScp was reset: is it running a compatible version of Lustre and is %s one of its NIDs?\n",
-				   libcfs_nidstr(peer_nid), sa,
-				   libcfs_nidstr(peer_nid));
+		LCONSOLE_ERROR("Connection to %s at host %pIScp was reset: is it running a compatible version of Lustre and is %s one of its NIDs?\n",
+			       libcfs_nidstr(peer_nid), sa,
+			       libcfs_nidstr(peer_nid));
 		break;
 	case -EPROTO:
-		LCONSOLE_ERROR_MSG(0x11c,
-				   "Protocol error connecting to %s at host %pIScp: is it running a compatible version of Lustre?\n",
-				   libcfs_nidstr(peer_nid), sa);
+		LCONSOLE_ERROR("Protocol error connecting to %s at host %pIScp: is it running a compatible version of Lustre?\n",
+			       libcfs_nidstr(peer_nid), sa);
 		break;
 	case -EADDRINUSE:
-		LCONSOLE_ERROR_MSG(0x11d,
-				   "No privileged ports available to connect to %s at host %pIScp\n",
-				   libcfs_nidstr(peer_nid), sa);
+		LCONSOLE_ERROR("No privileged ports available to connect to %s at host %pIScp\n",
+			       libcfs_nidstr(peer_nid), sa);
 		break;
 	default:
-		LCONSOLE_ERROR_MSG(0x11e,
-				   "Unexpected error %d connecting to %s at host %pIScp\n",
-				   rc, libcfs_nidstr(peer_nid), sa);
+		LCONSOLE_ERROR("Unexpected error %d connecting to %s at host %pIScp\n",
+			       rc, libcfs_nidstr(peer_nid), sa);
 		break;
 	}
 }
@@ -233,9 +229,8 @@ lnet_accept(struct socket *sock, __u32 magic)
 		else
 			str = "unrecognised";
 
-		LCONSOLE_ERROR_MSG(0x11f, "Refusing connection from %pISc"
-				   " magic %08x: %s acceptor protocol\n",
-				   &peer, magic, str);
+		LCONSOLE_ERROR("Refusing connection from %pISc magic %08x: %s acceptor protocol\n",
+			       &peer, magic, str);
 		return -EPROTO;
 	}
 
@@ -311,18 +306,16 @@ lnet_accept(struct socket *sock, __u32 magic)
 		/* right NET, wrong NID! */
 		if (ni != NULL)
 			lnet_ni_decref(ni);
-		LCONSOLE_ERROR_MSG(0x120,
-				   "Refusing connection from %pISc for %s: No matching NI\n",
-				   &peer, libcfs_nidstr(&nid));
+		LCONSOLE_ERROR("Refusing connection from %pISc for %s: No matching NI\n",
+			       &peer, libcfs_nidstr(&nid));
 		return -EPERM;
 	}
 
 	if (ni->ni_net->net_lnd->lnd_accept == NULL) {
 		/* This catches a request for the loopback LND */
 		lnet_ni_decref(ni);
-		LCONSOLE_ERROR_MSG(0x121,
-				   "Refusing connection from %pISc for %s: NI doesn not accept IP connections\n",
-				  &peer, libcfs_nidstr(&nid));
+		LCONSOLE_ERROR("Refusing connection from %pISc for %s: NI doesn not accept IP connections\n",
+			       &peer, libcfs_nidstr(&nid));
 		return -EPERM;
 	}
 
@@ -369,13 +362,11 @@ lnet_acceptor(void *arg)
 	if (IS_ERR(lnet_acceptor_state.pta_sock)) {
 		rc = PTR_ERR(lnet_acceptor_state.pta_sock);
 		if (rc == -EADDRINUSE)
-			LCONSOLE_ERROR_MSG(0x122, "Can't start acceptor on port"
-					   " %d: port already in use\n",
-					   accept_port);
+			LCONSOLE_ERROR("Can't start acceptor on port %d: port already in use\n",
+				       accept_port);
 		else
-			LCONSOLE_ERROR_MSG(0x123, "Can't start acceptor on port "
-					   "%d: unexpected error %d\n",
-					   accept_port, rc);
+			LCONSOLE_ERROR("Can't start acceptor on port %d: unexpected error %d\n",
+				       accept_port, rc);
 
 		lnet_acceptor_state.pta_sock = NULL;
 	} else {
@@ -478,8 +469,7 @@ accept2secure(const char *acc, long *sec)
 	} else if (!strcmp(acc, "none")) {
 		return 0;
 	} else {
-		LCONSOLE_ERROR_MSG(0x124, "Can't parse 'accept=\"%s\"'\n",
-				   acc);
+		LCONSOLE_ERROR("Can't parse 'accept=\"%s\"'\n", acc);
 		return -EINVAL;
 	}
 }

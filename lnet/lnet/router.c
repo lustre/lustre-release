@@ -1394,9 +1394,8 @@ lnet_nrb_tiny_calculate(void)
 	int nrbs = LNET_NRB_TINY;
 
 	if (tiny_router_buffers < 0) {
-		LCONSOLE_ERROR_MSG(0x10c,
-				   "tiny_router_buffers=%d invalid when "
-				   "routing enabled\n", tiny_router_buffers);
+		LCONSOLE_ERROR("tiny_router_buffers=%d invalid when routing enabled\n",
+			       tiny_router_buffers);
 		return -EINVAL;
 	}
 
@@ -1417,9 +1416,8 @@ lnet_nrb_small_calculate(void)
 	int nrbs = LNET_NRB_SMALL;
 
 	if (small_router_buffers < 0) {
-		LCONSOLE_ERROR_MSG(0x10c,
-				   "small_router_buffers=%d invalid when "
-				   "routing enabled\n", small_router_buffers);
+		LCONSOLE_ERROR("small_router_buffers=%d invalid when routing enabled\n",
+			       small_router_buffers);
 		return -EINVAL;
 	}
 
@@ -1440,9 +1438,8 @@ lnet_nrb_large_calculate(void)
 	int nrbs = LNET_NRB_LARGE;
 
 	if (large_router_buffers < 0) {
-		LCONSOLE_ERROR_MSG(0x10c,
-				   "large_router_buffers=%d invalid when "
-				   "routing enabled\n", large_router_buffers);
+		LCONSOLE_ERROR("large_router_buffers=%d invalid when routing enabled\n",
+			       large_router_buffers);
 		return -EINVAL;
 	}
 
@@ -1478,9 +1475,8 @@ lnet_rtrpools_alloc(int im_a_router)
 		/* explicitly enabled */
 	} else {
 		rc = -EINVAL;
-		LCONSOLE_ERROR_MSG(0x10b,
-				   "lnet: forwarding='%s' not set to either 'enabled' or 'disabled': rc = %d\n",
-				   forwarding, rc);
+		LCONSOLE_ERROR("lnet: forwarding='%s' not set to either 'enabled' or 'disabled': rc = %d\n",
+			       forwarding, rc);
 		return rc;
 	}
 
@@ -1501,9 +1497,8 @@ lnet_rtrpools_alloc(int im_a_router)
 						sizeof(struct lnet_rtrbufpool));
 	if (the_lnet.ln_rtrpools == NULL) {
 		rc = -ENOMEM;
-		LCONSOLE_ERROR_MSG(0x10c,
-			"lnet: error allocating router buffer pool: rc = %d\n",
-			rc);
+		LCONSOLE_ERROR("lnet: error allocating router buffer pool: rc = %d\n",
+			       rc);
 		return rc;
 	}
 
