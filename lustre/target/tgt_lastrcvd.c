@@ -1904,21 +1904,17 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 				       tgt->lut_obd->obd_uuid.uuid,
 				       sizeof(lsd->lsd_uuid));
 			} else {
-				LCONSOLE_ERROR_MSG(0x157, "Trying to start "
-						   "OBD %s using the wrong "
-						   "disk %s. Were the /dev/ "
-						   "assignments rearranged?\n",
-						   tgt->lut_obd->obd_uuid.uuid,
-						   lsd->lsd_uuid);
+				LCONSOLE_ERROR("Trying to start OBD %s using the wrong disk %s. Were the /dev/ assignments rearranged?\n",
+					       tgt->lut_obd->obd_uuid.uuid,
+					       lsd->lsd_uuid);
 				RETURN(-EINVAL);
 			}
 		}
 
 		if (lsd->lsd_osd_index != index) {
-			LCONSOLE_ERROR_MSG(0x157,
-					   "%s: index %d in last rcvd is different with the index %d in config log, It might be disk corruption!\n",
-					   tgt_name(tgt),
-					   lsd->lsd_osd_index, index);
+			LCONSOLE_ERROR("%s: index %d in last rcvd is different with the index %d in config log, It might be disk corruption!\n",
+				       tgt_name(tgt), lsd->lsd_osd_index,
+				       index);
 			RETURN(-EINVAL);
 		}
 	}

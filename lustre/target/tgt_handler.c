@@ -2016,8 +2016,7 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 					   oa->o_flags : 0);
 
 	if (cksum_type != server_cksum_type)
-		msg = "the server may have not used the checksum type specified"
-		      " in the original request - likely a protocol problem";
+		msg = "the server may have not used the checksum type specified in the original request - likely a protocol problem";
 	else
 		msg = "should have changed on the client or in transit";
 
@@ -2025,17 +2024,15 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 	end = local_nb[npages-1].lnb_file_offset +
 					local_nb[npages-1].lnb_len - 1;
 
-	LCONSOLE_ERROR_MSG(0x132, "%s: BAD READ CHECKSUM: %s: from %s inode "
-		DFID " object "DOSTID" extent [%llu-%llu], client returned csum"
-		" %x (type %x), server csum %x (type %x)\n",
-		exp->exp_obd->obd_name,
-		msg, libcfs_nidstr(&peer->nid),
-		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : 0ULL,
-		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
-		oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
-		POSTID(&oa->o_oi),
-		start, end, client_cksum, cksum_type, server_cksum,
-		server_cksum_type);
+	LCONSOLE_ERROR("%s: BAD READ CHECKSUM: %s: from %s inode " DFID " object "DOSTID" extent [%llu-%llu], client returned csum %x (type %x), server csum %x (type %x)\n",
+		       exp->exp_obd->obd_name,
+		       msg, libcfs_nidstr(&peer->nid),
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : 0ULL,
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
+		       POSTID(&oa->o_oi),
+		       start, end, client_cksum, cksum_type, server_cksum,
+		       server_cksum_type);
 
 	return 1;
 }
@@ -2631,22 +2628,20 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 		return;
 	}
 
-	LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: from %s%s%s inode "
-			   DFID" object "DOSTID" extent [%llu-%llu"
-			   "]: client csum %x, server csum %x\n",
-			   exp->exp_obd->obd_name, libcfs_idstr(&req->rq_peer),
-			   via, router,
-			   body->oa.o_valid & OBD_MD_FLFID ?
-			   body->oa.o_parent_seq : (__u64)0,
-			   body->oa.o_valid & OBD_MD_FLFID ?
-			   body->oa.o_parent_oid : 0,
-			   body->oa.o_valid & OBD_MD_FLFID ?
-			   body->oa.o_parent_ver : 0,
-			   POSTID(&body->oa.o_oi),
-			   local_nb[0].lnb_file_offset,
-			   local_nb[npages-1].lnb_file_offset +
-			   local_nb[npages - 1].lnb_len - 1,
-			   client_cksum, server_cksum);
+	LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: from %s%s%s inode " DFID " object " DOSTID " extent [%llu-%llu]: client csum %x, server csum %x\n",
+		       exp->exp_obd->obd_name, libcfs_idstr(&req->rq_peer),
+		       via, router,
+		       body->oa.o_valid & OBD_MD_FLFID ?
+		       body->oa.o_parent_seq : (__u64)0,
+		       body->oa.o_valid & OBD_MD_FLFID ?
+		       body->oa.o_parent_oid : 0,
+		       body->oa.o_valid & OBD_MD_FLFID ?
+		       body->oa.o_parent_ver : 0,
+		       POSTID(&body->oa.o_oi),
+		       local_nb[0].lnb_file_offset,
+		       local_nb[npages-1].lnb_file_offset +
+		       local_nb[npages - 1].lnb_len - 1,
+		       client_cksum, server_cksum);
 }
 
 int tgt_brw_write(struct tgt_session_info *tsi)

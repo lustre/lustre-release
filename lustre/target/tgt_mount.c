@@ -231,8 +231,7 @@ static int server_start_mgs(struct super_block *sb)
 	lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
 	if (lmi) {
 		lsi = s2lsi(lmi->lmi_sb);
-		LCONSOLE_ERROR_MSG(0x15d,
-				   "The MGS service was already started from server\n");
+		LCONSOLE_ERROR("The MGS service was already started from server\n");
 		RETURN(-EALREADY);
 	}
 
@@ -254,9 +253,8 @@ static int server_start_mgs(struct super_block *sb)
 	if (rc < 0) {
 		server_deregister_mount(LUSTRE_MGS_OBDNAME);
 report_err:
-		LCONSOLE_ERROR_MSG(0x15e,
-				   "Failed to start MGS '%s' (%d). Is the 'mgs' module loaded?\n",
-				   LUSTRE_MGS_OBDNAME, rc);
+		LCONSOLE_ERROR("Failed to start MGS '%s' (%d). Is the 'mgs' module loaded?\n",
+			       LUSTRE_MGS_OBDNAME, rc);
 	}
 	RETURN(rc);
 }
@@ -1368,9 +1366,8 @@ again:
 				mti_len, mti, NULL);
 	if (rc < 0) {
 		if (mti->mti_flags & LDD_F_ERROR) {
-			LCONSOLE_ERROR_MSG(0x160,
-					   "%s: the MGS refuses to allow this server to start: rc = %d. Please see messages on the MGS.\n",
-					   lsi->lsi_svname, rc);
+			LCONSOLE_ERROR("%s: the MGS refuses to allow this server to start: rc = %d. Please see messages on the MGS.\n",
+				       lsi->lsi_svname, rc);
 		} else if (must_succeed) {
 			if ((rc == -ESHUTDOWN || rc == -EIO) && ++tried < 5) {
 				/* The connection with MGS is not established.
@@ -1381,9 +1378,8 @@ again:
 					goto again;
 			}
 
-			LCONSOLE_ERROR_MSG(0x15f,
-					   "%s: cannot register this server with the MGS: rc = %d. Is the MGS running?\n",
-					   lsi->lsi_svname, rc);
+			LCONSOLE_ERROR("%s: cannot register this server with the MGS: rc = %d. Is the MGS running?\n",
+				       lsi->lsi_svname, rc);
 		} else {
 			CDEBUG(D_HA,
 			       "%s: error registering with the MGS: rc = %d (not fatal)\n",
@@ -2196,9 +2192,8 @@ int server_fill_super(struct super_block *sb)
 	       lsi->lsi_svname, lsi->lsi_lmd->lmd_dev);
 
 	if (class_name2obd(lsi->lsi_svname)) {
-		LCONSOLE_ERROR_MSG(0x161,
-				   "The target named %s is already running. Double-mount may have compromised the disk journal.\n",
-				   lsi->lsi_svname);
+		LCONSOLE_ERROR("The target named %s is already running. Double-mount may have compromised the disk journal.\n",
+			       lsi->lsi_svname);
 		lustre_put_lsi(sb);
 		RETURN(-EALREADY);
 	}
