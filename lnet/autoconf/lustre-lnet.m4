@@ -88,8 +88,10 @@ case $with_o2ib in
 				       egrep "${O2IBDIR}$" | head -n1)
 
 			if test -n "$O2IBDIR_PATH"; then
+				if test -d $O2IBDIR_PATH/${LINUXRELEASE}; then
+					O2IBDIR_PATH=$O2IBDIR_PATH/${LINUXRELEASE}
+				fi
 				O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
-					egrep "`uname -r`|default" |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
 			fi
 
