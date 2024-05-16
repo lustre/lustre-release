@@ -486,7 +486,11 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
 
 	ctx = gsec_kr->gsk_root_ctx;
 
-	if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
+	/* Need to find valid rev ctx if we do not have one yet,
+	 * or if it is expired.
+	 */
+	if (unlikely(sec_is_reverse(sec)) &&
+	    (ctx == NULL || ctx->cc_expire < now)) {
 		struct ptlrpc_cli_ctx	*tmp;
 
 		/* For reverse context, browse list and pick the one with
@@ -527,6 +531,7 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
 {
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx *ctx;
+	struct hlist_node *next;
 	time64_t now;
 
 	ENTRY;
@@ -536,22 +541,31 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
 
 	now = ktime_get_real_seconds();
 
-        /* set all existing ctxs short expiry */
-	hlist_for_each_entry(ctx, &gsec_kr->gsk_clist, cc_cache) {
-                if (ctx->cc_expire > now + RVS_CTX_EXPIRE_NICE) {
-                        ctx->cc_early_expire = 1;
-                        ctx->cc_expire = now + RVS_CTX_EXPIRE_NICE;
-                }
-        }
+	/* set all existing ctxs short expiry */
+	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist, cc_cache) {
+		if (ctx->cc_expire > now + RVS_CTX_EXPIRE_NICE) {
+			ctx->cc_early_expire = 1;
+			ctx->cc_expire = now + RVS_CTX_EXPIRE_NICE;
+		} else if (ctx != gsec_kr->gsk_root_ctx &&
+			   ctx->cc_expire < now) {
+			/* unlist expired context to remove it from gsk_clist */
+			if (ctx_unlist_kr(ctx, 1)) {
+				/* release unlisted ctx to destroy it */
+				set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
+				ctx_release_kr(ctx, 1);
+			}
+		}
+	}
 
-        /* if there's root_ctx there, instead obsolete the current
-         * immediately, we leave it continue operating for a little while.
-         * hopefully when the first backward rpc with newest ctx send out,
-         * the client side already have the peer ctx well established. */
-        ctx_enlist_kr(new_ctx, gsec_kr->gsk_root_ctx ? 0 : 1, 1);
+	/* If there's root_ctx there, instead obsolete the current
+	 * immediately, we leave it continue operating for a little while.
+	 * hopefully when the first backward rpc with newest ctx send out,
+	 * the client side already have the peer ctx well established.
+	 */
+	ctx_enlist_kr(new_ctx, gsec_kr->gsk_root_ctx ? 0 : 1, 1);
 
-        if (key)
-                bind_key_ctx(key, new_ctx);
+	if (key)
+		bind_key_ctx(key, new_ctx);
 
 	spin_unlock(&sec->ps_lock);
 }
@@ -1202,10 +1216,11 @@ int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
 static
 void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
-	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_head	freelist = HLIST_HEAD_INIT;
+	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
+	struct hlist_head freelist = HLIST_HEAD_INIT;
+	struct ptlrpc_cli_ctx *ctx;
+	struct gss_cli_ctx *gctx;
 	struct hlist_node *next;
-	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
 
 	CDEBUG(D_SEC, "running gc\n");
@@ -1218,8 +1233,13 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 		atomic_inc(&ctx->cc_refcount);
 
 		if (cli_ctx_check_death(ctx) && ctx_unlist_kr(ctx, 1)) {
+			gctx = ctx2gctx(ctx);
+
 			hlist_add_head(&ctx->cc_cache, &freelist);
-			CWARN("unhashed ctx %p\n", ctx);
+			CWARN("%s: cleaning gss ctx hdl %#llx:%#llx\n",
+			      ctx->cc_sec->ps_import->imp_obd->obd_name,
+			      gss_handle_to_u64(&gctx->gc_handle),
+			      gss_handle_to_u64(&gctx->gc_svc_handle));
 		} else {
 			LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
 			atomic_dec(&ctx->cc_refcount);

@@ -661,13 +661,15 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 				  struct gss_header *ghdr)
 {
 	struct gss_err_header *errhdr;
+	struct gss_cli_ctx *gctx;
 	int rc;
 
 	LASSERT(ghdr->gh_proc == PTLRPC_GSS_PROC_ERR);
 
 	errhdr = (struct gss_err_header *) ghdr;
 
-	CWARN("%s: req x%llu/t%llu, ctx %p idx %#llx(%u->%s): %sserver respond (%08x/%08x)\n",
+	CDEBUG(D_SEC,
+	       "%s: req x%llu/t%llu, ctx %p idx %#llx(%u->%s): %sserver respond (%08x/%08x)\n",
 	      ctx->cc_sec->ps_import->imp_obd->obd_name,
 	      req->rq_xid, req->rq_transno, ctx,
 	      gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
@@ -708,10 +710,16 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 	 * if we add new mechanism, make sure the correct error are
 	 * returned in this case.
 	 */
-	CWARN("%s: %s might have lost the context (%s), retrying\n",
+	gctx = ctx2gctx(ctx);
+	CWARN("%s: %s context (hdl %#llx:%#llx) from %s %s (uid %u), retrying\n",
 	      ctx->cc_sec->ps_import->imp_obd->obd_name,
+	      errhdr->gh_major == GSS_S_NO_CONTEXT ?
+		"unknown" : "wrong signature for",
+	      gss_handle_to_u64(&gctx->gc_handle),
+	      gss_handle_to_u64(&gctx->gc_svc_handle),
 	      sec_is_reverse(ctx->cc_sec) ? "client" : "server",
-	      errhdr->gh_major == GSS_S_NO_CONTEXT ?  "NO_CONTEXT" : "BAD_SIG");
+	      req->rq_import ? obd_import_nid2str(req->rq_import) : "0@<0:0>",
+	      ctx->cc_vcred.vc_uid);
 
 	sptlrpc_cli_ctx_expire(ctx);
 

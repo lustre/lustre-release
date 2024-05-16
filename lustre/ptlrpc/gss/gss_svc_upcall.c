@@ -961,7 +961,7 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 
 	rscp = gss_svc_searchbyctx(&gw->gw_handle);
 	if (IS_ERR_OR_NULL(rscp)) {
-		CWARN("Invalid gss ctx idx %#llx from %s\n",
+		CWARN("Invalid gss ctx hdl %#llx from %s\n",
 		      gss_handle_to_u64(&gw->gw_handle),
 		      libcfs_nidstr(&req->rq_peer.nid));
 		return NULL;

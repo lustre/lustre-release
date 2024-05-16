@@ -869,6 +869,54 @@ test_151() {
 }
 run_test 151 "secure mgs connection: server flavor control"
 
+test_200() {
+	local nid=$(lctl list_nids | grep ${NETTYPE} | head -n1)
+	local nidstr="peer_nid: ${nid},"
+	local count
+
+	lfs df -h
+	do_facet $SINGLEMDS $LCTL get_param -n \
+		mdt.*-MDT0000.gss.srpc_serverctx | grep "$nidstr"
+	count=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		mdt.*-MDT0000.gss.srpc_serverctx | grep "$nidstr" |
+		grep -c 'delta: -')
+	echo "found $count expired reverse contexts (1)"
+	# We can have up to 3 expired contexts in the normal case:
+	# - the newest one, that is just about to be renewed
+	# - the previous one that had expired
+	# - the one currently referenced in the sec, not updated in the absence
+	#   of client activity.
+	(( count < 4 )) || error "expired reverse contexts should be <= 3 (1)"
+
+	# unmount to get rid of old context
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	kdestroy
+	stack_trap "mount_client $MOUNT ${MOUNT_OPTS} || true" EXIT
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+		stack_trap "mount_client $MOUNT2 ${MOUNT_OPTS}" EXIT
+	fi
+
+	# update ticket lifetime to be 45s
+	stack_trap "/usr/bin/cp -f /etc/krb5.conf.bkp /etc/krb5.conf" EXIT
+	sed -i.bkp s+[^#]ticket_lifetime.*+ticket_lifetime\ =\ 45s+ \
+		/etc/krb5.conf
+	# establish new context, and wait 3x lifetime
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed"
+	lfs df -h
+	sleep 135
+	# re-activate connections, and look for reverse contexts on server side
+	lfs df -h
+	do_facet $SINGLEMDS $LCTL get_param -n \
+		mdt.*-MDT0000.gss.srpc_serverctx | grep "$nidstr"
+	count=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		mdt.*-MDT0000.gss.srpc_serverctx | grep "$nidstr" |
+		grep -c 'delta: -')
+	echo "found $count expired reverse contexts (2)"
+	(( count < 4 )) || error "expired reverse contexts should be <= 3 (2)"
+}
+run_test 200 "check expired reverse gss contexts"
+
 complete_test $SECONDS
 set_flavor_all null
 cleanup_gss
