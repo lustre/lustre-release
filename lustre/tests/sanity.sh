@@ -27863,19 +27863,18 @@ test_398b() { # LU-4198
 run_test 398b "DIO and buffer IO race"
 
 test_398c() { # LU-4198
-	local ost1_imp=$(get_osc_import_name client ost1)
-	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
-			 cut -d'.' -f2)
+	local ost1_imp="osc.$(get_osc_import_name client ost1)"
+	local imp_name=($($LCTL list_param $ost1_imp | cut -d'.' -f2))
 
 	which fio || skip_env "no fio installed"
 
 	saved_debug=$($LCTL get_param -n debug)
 	$LCTL set_param debug=0
 
-	local size=$(lctl get_param -n osc.$FSNAME-OST0000*.kbytesavail | head -1)
-	((size /= 1024)) # by megabytes
-	((size /= 2)) # write half of the OST at most
-	[ $size -gt 40 ] && size=40 #reduce test time anyway
+	local size=($($LCTL get_param -n $ost1_imp.kbytesavail))
+	(( size /= 1024 )) # by megabytes
+	(( size /= 2 )) # write half of the OST at most
+	(( size <= 40 )) || size=40 #reduce test time anyway
 
 	$LFS setstripe -c 1 $DIR/$tfile
 
@@ -27885,7 +27884,7 @@ test_398c() { # LU-4198
 	cancel_lru_locks osc
 
 	# clear and verify rpc_stats later
-	$LCTL set_param osc.${FSNAME}-OST0000-osc-ffff*.rpc_stats=clear
+	$LCTL set_param $ost1_imp.rpc_stats=clear
 
 	local njobs=4
 	echo "writing ${size}M to OST0 by fio with $njobs jobs..."
@@ -27895,7 +27894,7 @@ test_398c() { # LU-4198
 		--filename=$DIR/$tfile
 	[ $? -eq 0 ] || error "fio write error"
 
-	[ $($LCTL get_param -n ldlm.namespaces.$imp_name.lock_count) -eq 0 ] ||
+	(( $($LCTL get_param -n ldlm.namespaces.$imp_name.lock_count) == 0 )) ||
 		error "Locks were requested while doing AIO"
 
 	# get the percentage of 1-page I/O
