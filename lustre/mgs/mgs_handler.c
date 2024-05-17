@@ -271,14 +271,12 @@ static int mgs_check_target(const struct lu_env *env,
 
 	rc = mgs_check_index(env, mgs, mti);
 	if (rc == 0) {
-		LCONSOLE_ERROR_MSG(0x13b,
-				   "%s claims to have registered, but this MGS does not know about it, preventing registration.\n",
-				   mti->mti_svname);
+		LCONSOLE_ERROR("%s claims to have registered, but this MGS does not know about it, preventing registration.\n",
+			       mti->mti_svname);
 		rc = -ENOENT;
 	} else if (rc == -1) {
-		LCONSOLE_ERROR_MSG(0x13c,
-				   "Client log %s-client has disappeared! Regenerating all logs.\n",
-				   mti->mti_fsname);
+		LCONSOLE_ERROR("Client log %s-client has disappeared! Regenerating all logs.\n",
+			       mti->mti_fsname);
 		mti->mti_flags |= LDD_F_WRITECONF;
 		rc = 1;
 	} else {

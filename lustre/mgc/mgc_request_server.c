@@ -585,9 +585,8 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 
 			if (strcmp(cld->cld_logname, PARAMS_FILENAME) != 0 &&
 			    llog_is_empty(env, lctxt, cld->cld_logname)) {
-				LCONSOLE_ERROR_MSG(0x13a,
-						   "Failed to get MGS log %s and no local copy.\n",
-						   cld->cld_logname);
+				LCONSOLE_ERROR("Failed to get MGS log %s and no local copy.\n",
+					       cld->cld_logname);
 				GOTO(out_pop, rc = -ENOENT);
 			}
 			CDEBUG(D_MGC,

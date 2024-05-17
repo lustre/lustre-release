@@ -712,21 +712,18 @@ static int mgs_set_index(const struct lu_env *env,
 
 	/* the last index(0xffff) is reserved for default value. */
 	if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8 - 1) {
-		LCONSOLE_ERROR_MSG(0x13f, "Server %s requested index %u, "
-				   "but index must be less than %u.\n",
-				   mti->mti_svname, mti->mti_stripe_index,
-				   INDEX_MAP_SIZE * 8 - 1);
+		LCONSOLE_ERROR("Server %s requested index %u, but index must be less than %u.\n",
+			       mti->mti_svname, mti->mti_stripe_index,
+			       INDEX_MAP_SIZE * 8 - 1);
 		GOTO(out_up, rc = -ERANGE);
 	}
 
 	if (test_bit(mti->mti_stripe_index, imap)) {
 		if ((mti->mti_flags & LDD_F_VIRGIN) &&
 		    !(mti->mti_flags & LDD_F_WRITECONF)) {
-			LCONSOLE_ERROR_MSG(
-				0x140,
-				"Server %s requested index %d, but that index is already in use. Use --writeconf to force\n",
-				mti->mti_svname,
-				mti->mti_stripe_index);
+			LCONSOLE_ERROR("Server %s requested index %d, but that index is already in use. Use --writeconf to force\n",
+				       mti->mti_svname,
+				       mti->mti_stripe_index);
 			GOTO(out_up, rc = -EADDRINUSE);
 		} else {
 			CDEBUG(D_MGS, "Server %s updating index %d\n",
@@ -3450,9 +3447,8 @@ static int mgs_write_log_ost(const struct lu_env *env,
 	 * the ost and it called target_add again.
 	 */
 	if (!mgs_log_is_empty(env, mgs, mti->mti_svname)) {
-		LCONSOLE_ERROR_MSG(0x141,
-				   "The config log for %s already exists, yet the server claims it never registered. It may have been reformatted, or the index changed. writeconf the MDT to regenerate all logs.\n",
-				   mti->mti_svname);
+		LCONSOLE_ERROR("The config log for %s already exists, yet the server claims it never registered. It may have been reformatted, or the index changed. writeconf the MDT to regenerate all logs.\n",
+			       mti->mti_svname);
 		RETURN(-EALREADY);
 	}
 
@@ -3621,9 +3617,8 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
 
 	/* Verify that we know about this target */
 	if (mgs_log_is_empty(env, mgs, mti->mti_svname)) {
-		LCONSOLE_ERROR_MSG(0x142,
-				   "The target %s has not registered yet. It must be started before failnids can be added.\n",
-				   mti->mti_svname);
+		LCONSOLE_ERROR("The target %s has not registered yet. It must be started before failnids can be added.\n",
+			       mti->mti_svname);
 		RETURN(-ENOENT);
 	}
 
@@ -4246,9 +4241,8 @@ static int mgs_write_log_param2(const struct lu_env *env,
 	 * be changed by lctl set_param -P.
 	 */
 	if (!class_match_param(ptr, PARAM_FAILMODE, NULL)) {
-		LCONSOLE_ERROR_MSG(0x169,
-				   "%s can only be changed with tunefs.lustre and --writeconf\n",
-				   ptr);
+		LCONSOLE_ERROR("%s can only be changed with tunefs.lustre and --writeconf\n",
+			       ptr);
 		rc = -EPERM;
 		goto end;
 	}
@@ -4343,9 +4337,8 @@ static int mgs_write_log_param(const struct lu_env *env,
 	/* Processed in mgs_write_log_ost */
 	if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
 		if (mti->mti_flags & LDD_F_PARAM) {
-			LCONSOLE_ERROR_MSG(0x169,
-					   "%s can only be changed with tunefs.lustre and --writeconf\n",
-					   ptr);
+			LCONSOLE_ERROR("%s can only be changed with tunefs.lustre and --writeconf\n",
+				       ptr);
 			rc = -EPERM;
 		}
 		GOTO(end, rc);
@@ -4395,9 +4388,8 @@ static int mgs_write_log_param(const struct lu_env *env,
 				GOTO(end, rc);
 
 			if (index == 0) {
-				LCONSOLE_ERROR_MSG(0x144, "%s: MDC0 can not be"
-						   " (de)activated.\n",
-						   mti->mti_svname);
+				LCONSOLE_ERROR("%s: MDC0 can not be (de)activated.\n",
+					       mti->mti_svname);
 				GOTO(end, rc = -EPERM);
 			}
 		}
@@ -4433,12 +4425,10 @@ static int mgs_write_log_param(const struct lu_env *env,
 		}
 active_err:
 		if (rc < 0) {
-			LCONSOLE_ERROR_MSG(0x145,
-					   "Couldn't find %s in log (%d). No permanent changes were made to the config log.\n",
-					   mti->mti_svname, rc);
+			LCONSOLE_ERROR("Couldn't find %s in log (%d). No permanent changes were made to the config log.\n",
+				       mti->mti_svname, rc);
 			if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags))
-				LCONSOLE_ERROR_MSG(0x146,
-						   "This may be because the log is in the old 1.4 style. Consider --writeconf to update the logs.\n");
+				LCONSOLE_ERROR("This may be because the log is in the old 1.4 style. Consider --writeconf to update the logs.\n");
 			GOTO(end, rc);
 		}
 		/* Fall through to osc/mdc proc for deactivating live
@@ -4453,9 +4443,8 @@ active_err:
 
 		CDEBUG(D_MGS, "lov param %s\n", ptr);
 		if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
-			LCONSOLE_ERROR_MSG(0x147,
-					   "LOV params must be set on the MDT, not %s. Ignoring.\n",
-					   mti->mti_svname);
+			LCONSOLE_ERROR("LOV params must be set on the MDT, not %s. Ignoring.\n",
+				       mti->mti_svname);
 			GOTO(end, rc = 0);
 		}
 
@@ -4491,11 +4480,8 @@ active_err:
 		char *cname;
 
 		if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
-			LCONSOLE_ERROR_MSG(0x148, "Upgraded client logs for %s"
-					   " cannot be modified. Consider"
-					   " updating the configuration with"
-					   " --writeconf\n",
-					   mti->mti_svname);
+			LCONSOLE_ERROR("Upgraded client logs for %s cannot be modified. Consider updating the configuration with --writeconf\n",
+				       mti->mti_svname);
 			GOTO(end, rc = -EINVAL);
 		}
 		if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
@@ -5604,7 +5590,7 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 	}
 
 	if (!strlen(mti->mti_svname)) {
-		LCONSOLE_ERROR_MSG(0x14d, "No target specified: %s\n", param);
+		LCONSOLE_ERROR("No target specified: %s\n", param);
 		RETURN(-ENOSYS);
 	}
 
