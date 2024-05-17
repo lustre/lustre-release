@@ -125,8 +125,7 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 		if (!request_module("%s", modname)) {
 			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
 		} else {
-			LCONSOLE_ERROR_MSG(0x158, "Can't load module '%s'\n",
-					   modname);
+			LCONSOLE_ERROR("Can't load module '%s'\n", modname);
 		}
 		rcu_read_lock();
 		type = class_search_type(name);

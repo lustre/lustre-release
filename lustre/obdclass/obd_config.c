@@ -415,7 +415,7 @@ static int parse_nid(char *buf, void *value, int quiet)
 		return 0;
 
 	if (!quiet)
-		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
+		LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
 	return -EINVAL;
 }
 
@@ -1484,7 +1484,7 @@ int class_process_config(struct lustre_cfg *lcfg)
 		GOTO(out, err = 0);
 	}
 	case LCFG_SET_UPCALL: {
-		LCONSOLE_ERROR_MSG(0x15a, "recovery upcall is deprecated\n");
+		LCONSOLE_ERROR("recovery upcall is deprecated\n");
 		/* COMPAT_146 Don't fail on old configs */
 		GOTO(out, err = 0);
 	}

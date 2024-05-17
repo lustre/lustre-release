@@ -103,13 +103,11 @@ out:
 	OBD_FREE_PTR(bufs);
 
 	if (rc == -EINVAL)
-		LCONSOLE_ERROR_MSG(0x15b,
-				   "%s: Configuration from log %s failed from MGS %d. Check client and MGS are on compatible version.\n",
-				   mgc->obd_name, logname, rc);
+		LCONSOLE_ERROR("%s: Configuration from log %s failed from MGS %d. Check client and MGS are on compatible version.\n",
+			       mgc->obd_name, logname, rc);
 	else if (rc != 0)
-		LCONSOLE_ERROR_MSG(0x15c,
-				   "%s: Confguration from log %s failed from MGS %d. Communication error between node & MGS, a bad configuration, or other errors. See syslog for more info\n",
-				   mgc->obd_name, logname, rc);
+		LCONSOLE_ERROR("%s: Confguration from log %s failed from MGS %d. Communication error between node & MGS, a bad configuration, or other errors. See syslog for more info\n",
+			       mgc->obd_name, logname, rc);
 
 	RETURN(rc);
 }
@@ -1180,7 +1178,7 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char *ptr, char **tail)
 	if (next && next != *tail)
 		length += *tail - next + 1;
 	if (length == 0) {
-		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", ptr);
+		LCONSOLE_ERROR("Can't parse NID '%s'\n", ptr);
 		return -EINVAL;
 	}
 
@@ -1429,16 +1427,14 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 	ENTRY;
 	LASSERT(lmd);
 	if (!options) {
-		LCONSOLE_ERROR_MSG(0x162,
-				   "Missing mount data: check /sbin/mount.lustre_tgt is installed.\n");
+		LCONSOLE_ERROR("Missing mount data: check /sbin/mount.lustre_tgt is installed.\n");
 		RETURN(-EINVAL);
 	}
 
 	/* Options should be a string - try to detect old lmd data */
 	if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) {
-		LCONSOLE_ERROR_MSG(0x163,
-				   "Using an old version of /sbin/mount.lustre. Please install version %s\n",
-				   LUSTRE_VERSION_STRING);
+		LCONSOLE_ERROR("Using an old version of /sbin/mount.lustre. Please install version %s\n",
+			       LUSTRE_VERSION_STRING);
 		RETURN(-EINVAL);
 	}
 	lmd->lmd_magic = LMD_MAGIC;
@@ -1688,8 +1684,7 @@ bad_string:
 		GOTO(invalid, rc);
 
 	if (!devname) {
-		LCONSOLE_ERROR_MSG(0x164,
-				   "Can't find device name (need mount option 'device=...')\n");
+		LCONSOLE_ERROR("Can't find device name (need mount option 'device=...')\n");
 		GOTO(invalid, rc = -ENODEV);
 	}
 
