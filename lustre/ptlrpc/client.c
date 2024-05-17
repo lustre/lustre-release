@@ -1380,11 +1380,10 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 		__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
 		if (ptlrpc_console_allow(req, opc, rc))
-			LCONSOLE_ERROR_MSG(0x11,
-					   "%s: operation %s to node %s failed: rc = %d\n",
-					   imp->imp_obd->obd_name,
-					   ll_opcode2str(opc),
-					   libcfs_nidstr(nid), rc);
+			LCONSOLE_ERROR("%s: operation %s to node %s failed: rc = %d\n",
+				       imp->imp_obd->obd_name,
+				       ll_opcode2str(opc),
+				       libcfs_nidstr(nid), rc);
 		RETURN(rc < 0 ? rc : -EINVAL);
 	}
 

@@ -199,7 +199,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp,
 			       imp->imp_obd->obd_name, target_len, target_start,
 			       obd_import_nid2str(imp));
 		} else {
-			LCONSOLE_ERROR_MSG(0x166, "%s: Connection to %.*s (at %s) was lost; in progress operations using this service will fail\n",
+			LCONSOLE_ERROR("%s: Connection to %.*s (at %s) was lost; in progress operations using this service will fail\n",
 			       imp->imp_obd->obd_name, target_len, target_start,
 			       obd_import_nid2str(imp));
 			if (invalid) {
@@ -1392,13 +1392,13 @@ out:
 			if (ocd &&
 			    (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
 			    (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
-				LCONSOLE_ERROR_MSG(0x16a, "Server %s version (%d.%d.%d.%d) refused connection from this client with an incompatible version (%s). Client must be recompiled\n",
-						   obd2cli_tgt(imp->imp_obd),
-						   OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
-						   OBD_OCD_VERSION_MINOR(ocd->ocd_version),
-						   OBD_OCD_VERSION_PATCH(ocd->ocd_version),
-						   OBD_OCD_VERSION_FIX(ocd->ocd_version),
-						   LUSTRE_VERSION_STRING);
+				LCONSOLE_ERROR("Server %s version (%d.%d.%d.%d) refused connection from this client with an incompatible version (%s). Client must be recompiled\n",
+					       obd2cli_tgt(imp->imp_obd),
+					       OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+					       OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+					       OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+					       OBD_OCD_VERSION_FIX(ocd->ocd_version),
+					       LUSTRE_VERSION_STRING);
 				imp->imp_deactive = 1;
 				ptlrpc_deactivate_import_nolock(imp);
 				import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
@@ -1599,9 +1599,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		if (strcmp(imp->imp_obd->obd_type->typ_name,
 			   LUSTRE_MGC_NAME) != 0 &&
 		    (connect_flags & OBD_CONNECT_LIGHTWEIGHT) == 0) {
-			LCONSOLE_ERROR_MSG(0x167, "%s: This client was evicted by %.*s; in progress operations using this service will fail.\n",
-					   imp->imp_obd->obd_name, target_len,
-					   target_start);
+			LCONSOLE_ERROR("%s: This client was evicted by %.*s; in progress operations using this service will fail.\n",
+				       imp->imp_obd->obd_name, target_len,
+				       target_start);
 			LASSERTF(!obd_lbug_on_eviction, "LBUG upon eviction\n");
 		}
 		CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
