@@ -1465,7 +1465,8 @@ static int lfsck_namespace_create_orphan_dir(const struct lu_env *env,
 	int rc1 = 0;
 
 	ENTRY;
-	LASSERT(!dt_object_exists(orphan));
+	if (dt_object_exists(orphan))
+		RETURN(0);
 
 	cname->ln_name = NULL;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
