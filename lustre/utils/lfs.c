@@ -420,7 +420,8 @@ command_t cmdlist[] = {
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
 	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
-	 "          [--pool|-p <fsname>[.<pool>]] [path]"},
+	 "[--mdt|-m] [--ost|-o]\n"
+	 "[--pool|-p <fsname>[.<pool>]] [path]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
@@ -7791,7 +7792,7 @@ static int lfs_df(int argc, char **argv)
 {
 	char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
 	enum mntdf_flags flags = MNTDF_SHOW;
-	int ops = LL_STATFS_LMV | LL_STATFS_LOV;
+	int ops = 0;
 	int c, rc = 0, rc1 = 0, index = 0, arg_idx = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	struct option long_opts[] = {
@@ -7801,9 +7802,12 @@ static int lfs_df(int argc, char **argv)
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt",		.has_arg = no_argument },
+	{ .val = 'o',	.name = "ost",		.has_arg = no_argument },
 	{ .name = NULL} };
 
-	while ((c = getopt_long(argc, argv, "hHilp:v", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hHilmop:v",
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'h':
 			flags = (flags & ~MNTDF_DECIMAL) | MNTDF_COOKED;
@@ -7817,6 +7821,12 @@ static int lfs_df(int argc, char **argv)
 		case 'l':
 			flags |= MNTDF_LAZY;
 			break;
+		case 'm':
+			ops |= LL_STATFS_LMV;
+			break;
+		case 'o':
+			ops |= LL_STATFS_LOV;
+			break;
 		case 'p':
 			pool_name = optarg;
 			break;
@@ -7829,6 +7839,10 @@ static int lfs_df(int argc, char **argv)
 			return CMD_HELP;
 		}
 	}
+
+	/* Handle case where neither MDT nor OST flag is specified */
+	if (!ops)
+		ops |= LL_STATFS_LMV | LL_STATFS_LOV;
 
 	/* Handle case where path is not specified */
 	if (optind == argc) {

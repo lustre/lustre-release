@@ -8941,6 +8941,32 @@ test_56da() { # LU-14179
 }
 run_test 56da "test lfs find with long paths"
 
+test_56db() {
+	local mdts=$($LFS df -m | grep -c MDT)
+	local osts=$($LFS df -m | grep -c OST)
+
+	$LFS df
+
+	(( mdts == MDSCOUNT )) ||
+		error "lfs df -m showed $mdts MDTs, not $MDSCOUNT"
+	(( osts == 0 )) ||
+		error "lfs df -m showed $osts OSTs, not 0"
+}
+run_test 56db "test 'lfs df -m' only shows MDT devices"
+
+test_56dc() {
+	local mdts=$($LFS df -o | grep -c MDT)
+	local osts=$($LFS df -o | grep -c OST)
+
+	$LFS df
+
+	(( osts == OSTCOUNT )) ||
+		error "lfs df -o showed $osts OSTs, not $OSTCOUNT"
+	(( mdts == 0 )) ||
+		error "lfs df -o showed $mdts MDTs, not 0"
+}
+run_test 56dc "test 'lfs df -o' only shows OST devices"
+
 test_56ea() { #LU-10378
 	local path=$DIR/$tdir
 	local pool=$TESTNAME

@@ -6,6 +6,8 @@ lfs-df \- report Lustre filesystem disk usage
 .RB [ --lazy | -l ]
 .RB [ --pool | -p
 .IR <fsname> [. <pool> ]]
+.RB [ --mdt | -m ]
+.RB [ --ost | -o ]
 .RB [ --verbose | -v ]
 .RI [ path ]
 .SH DESCRIPTION
@@ -133,6 +135,20 @@ the client.  This avoids blocking the
 .B lfs df
 output if a target is offline or unreachable, and only returns the
 space on OSTs that can currently be accessed.
+.TP
+.BR -m ", " --mdt
+Filter output to show information on
+.B MDT
+devices. Can be used with
+.BR -o
+to show both types of devices, which is equivalent to having neither option.
+.TP
+.BR -o ", " --ost
+Filter output to show information on
+.B OST
+devices. Can be used with
+.BR -m
+to show both types of devices, which is equivalent to having neither option.
 .TP
 .BR -p ", " --pool= [ \fIfsname\fR .] \fIpool\fR
 Limit the usage to report only MDTs and OSTs that are in the specified
