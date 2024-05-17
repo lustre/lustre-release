@@ -2039,8 +2039,9 @@ set_default_debug_facet () {
 }
 
 set_params_nodes() {
+	(( $# >= 2 )) || return 0
 	local nodes=$1
-	shift
+	shift || true
 	local params="$@"
 
 	[[ -n "$params" ]] || return 0
@@ -2049,27 +2050,24 @@ set_params_nodes() {
 }
 
 set_params_clients() {
-	(( $# >= 2 )) || return 0
 	local clients=${1:-$CLIENTS}
-	shift
+	shift || true
 	local params="${@:-$CLIENT_LCTL_SETPARAM_PARAM}"
 
 	set_params_nodes $clients $params
 }
 
 set_params_mdts() {
-	(( $# >= 2 )) || return 0
 	local mdts=${1:-$(comma_list $(mdts_nodes))}
-	shift
+	shift || true
 	local params="${@:-$MDS_LCTL_SETPARAM_PARAM}"
 
 	set_params_nodes $mdts $params
 }
 
 set_params_osts() {
-	(( $# >= 2 )) || return 0
 	local osts=${1:-$(comma_list $(osts_nodes))}
-	shift
+	shift || true
 	local params="${@:-$OSS_LCTL_SETPARAM_PARAM}"
 
 	set_params_nodes $osts $params
