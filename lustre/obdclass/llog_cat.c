@@ -725,17 +725,16 @@ int llog_cat_cancel_arr_rec(const struct lu_env *env,
 		cat_index = loghandle->u.phd.phd_cookie.lgc_index;
 		rc = llog_cat_cleanup(env, cathandle, loghandle, cat_index);
 		if (rc)
-			CERROR("%s: fail to cancel catalog record: rc = %d\n",
+			CDEBUG(D_HA,
+			       "%s: fail to cancel catalog record: rc = %d\n",
 			       loghandle2name(cathandle), rc);
 		rc = 0;
 
 	}
 	llog_handle_put(env, loghandle);
-
-	if (rc)
-		CERROR("%s: fail to cancel %d llog-records: rc = %d\n",
-		       loghandle2name(cathandle), count, rc);
-
+	if (rc != -ENOENT && rc != -ESTALE && rc != -EIO)
+		CWARN("%s: fail to cancel %d records in "DFID": rc = %d\n",
+		      loghandle2name(cathandle), count, PLOGID(lgl), rc);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_cancel_arr_rec);
@@ -753,7 +752,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 			    struct llog_handle *cathandle, int count,
 			    struct llog_cookie *cookies)
 {
-	int i, rc = 0, failed = 0;
+	int i, rc = 0;
 
 	ENTRY;
 
@@ -761,16 +760,11 @@ int llog_cat_cancel_records(const struct lu_env *env,
 		int lrc;
 
 		lrc = llog_cat_cancel_arr_rec(env, cathandle, &cookies->lgc_lgl,
-					     1, &cookies->lgc_index);
-		if (lrc) {
-			failed++;
-			if (!rc)
-				rc = lrc;
-		}
+					      1, &cookies->lgc_index);
+		if (lrc && !rc)
+			rc = lrc;
 	}
-	if (failed)
-		CERROR("%s: fail to cancel %d of %d llog-records: rc = %d\n",
-		       loghandle2name(cathandle), failed, count, rc);
+
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_cancel_records);

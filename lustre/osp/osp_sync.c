@@ -1077,13 +1077,9 @@ static void osp_sync_process_committed(const struct lu_env *env,
 		    ((i * sizeof(int)) == arr_size ||
 		     (list_empty(&list) && i > 0))) {
 			rc = llog_cat_cancel_arr_rec(env, llh, &lgid, i, arr);
-
-			if (rc)
-				CERROR("%s: can't cancel %d records: rc = %d\n",
-				       obd->obd_name, i, rc);
-			else
-				CDEBUG(D_OTHER, "%s: massive records cancel id "DFID" num %d\n",
-				       obd->obd_name, PLOGID(&lgid), i);
+			CDEBUG(D_OTHER,
+			       "%s: cancel %d records in "DFID": rc = %d\n",
+			       obd->obd_name, i, PLOGID(&lgid), rc);
 			i = 0;
 		}
 
