@@ -229,17 +229,17 @@ static inline struct ofd_device *ofd_obj2dev(const struct ofd_object *fo)
 static inline void ofd_read_lock(const struct lu_env *env,
 				 struct ofd_object *fo)
 {
-	struct dt_object  *next = ofd_object_child(fo);
+	struct dt_object *next = ofd_object_child(fo);
 
-	next->do_ops->do_read_lock(env, next, 0);
+	dt_read_lock(env, next, 0);
 }
 
 static inline void ofd_read_unlock(const struct lu_env *env,
 				   struct ofd_object *fo)
 {
-	struct dt_object  *next = ofd_object_child(fo);
+	struct dt_object *next = ofd_object_child(fo);
 
-	next->do_ops->do_read_unlock(env, next);
+	dt_read_unlock(env, next);
 }
 
 static inline void ofd_write_lock(const struct lu_env *env,
@@ -247,15 +247,15 @@ static inline void ofd_write_lock(const struct lu_env *env,
 {
 	struct dt_object *next = ofd_object_child(fo);
 
-	next->do_ops->do_write_lock(env, next, 0);
+	dt_write_lock(env, next, 0);
 }
 
 static inline void ofd_write_unlock(const struct lu_env *env,
 				    struct ofd_object *fo)
 {
-	struct dt_object  *next = ofd_object_child(fo);
+	struct dt_object *next = ofd_object_child(fo);
 
-	next->do_ops->do_write_unlock(env, next);
+	dt_write_unlock(env, next);
 }
 
 /*

@@ -154,16 +154,6 @@ static int osd_object_invariant(const struct lu_object *l)
 }
 
 /*
- * Concurrency: doesn't matter
- */
-static int osd_is_write_locked(const struct lu_env *env, struct osd_object *o)
-{
-	struct osd_thread_info *oti = osd_oti_get(env);
-
-	return oti->oti_w_locks > 0 && o->oo_owner == env;
-}
-
-/*
  * Concurrency: doesn't access mutable data
  */
 static int osd_root_get(const struct lu_env *env,
@@ -447,7 +437,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 
 		mo->oo_dt.do_ops = &osd_obj_ops;
 		l->lo_ops = &osd_lu_obj_ops;
-		init_rwsem(&mo->oo_sem);
+		init_rwsem(&mo->oo_dt.dd_sem);
 		init_rwsem(&mo->oo_ext_idx_sem);
 		spin_lock_init(&mo->oo_guard);
 		INIT_LIST_HEAD(&mo->oo_xattr_list);
@@ -2034,12 +2024,10 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	LASSERT(current->journal_info == NULL);
 
 	oh = container_of(th, struct osd_thandle, ot_super);
-	LASSERT(oh != NULL);
-	LASSERT(oh->ot_handle == NULL);
-	if (unlikely(ldiskfs_track_declares_assert != 0)) {
-		LASSERT(oti->oti_r_locks == 0);
-		LASSERT(oti->oti_w_locks == 0);
-	}
+	LASSERT(oh);
+	LASSERT(!oh->ot_handle);
+	if (unlikely(ldiskfs_track_declares_assert))
+		LASSERT(dt_thread_no_locks(env));
 
 	rc = dt_txn_hook_start(env, d, th);
 	if (rc != 0)
@@ -2794,72 +2782,6 @@ static const struct dt_device_operations osd_dt_ops = {
 	.dt_commit_async	  = osd_commit_async,
 	.dt_reserve_or_free_quota = osd_reserve_or_free_quota,
 };
-
-static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
-			  unsigned int role)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_thread_info *oti = osd_oti_get(env);
-
-	LINVRNT(osd_invariant(obj));
-
-	LASSERT(obj->oo_owner != env);
-	down_read_nested(&obj->oo_sem, role);
-
-	LASSERT(obj->oo_owner == NULL);
-	oti->oti_r_locks++;
-}
-
-static void osd_write_lock(const struct lu_env *env, struct dt_object *dt,
-			   unsigned int role)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_thread_info *oti = osd_oti_get(env);
-
-	LINVRNT(osd_invariant(obj));
-
-	LASSERT(obj->oo_owner != env);
-	down_write_nested(&obj->oo_sem, role);
-
-	LASSERT(obj->oo_owner == NULL);
-	obj->oo_owner = env;
-	oti->oti_w_locks++;
-}
-
-static void osd_read_unlock(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_thread_info *oti = osd_oti_get(env);
-
-	LINVRNT(osd_invariant(obj));
-
-	LASSERT(oti->oti_r_locks > 0);
-	oti->oti_r_locks--;
-	up_read(&obj->oo_sem);
-}
-
-static void osd_write_unlock(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_thread_info *oti = osd_oti_get(env);
-
-	LINVRNT(osd_invariant(obj));
-
-	LASSERT(obj->oo_owner == env);
-	LASSERT(oti->oti_w_locks > 0);
-	oti->oti_w_locks--;
-	obj->oo_owner = NULL;
-	up_write(&obj->oo_sem);
-}
-
-static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-
-	LINVRNT(osd_invariant(obj));
-
-	return obj->oo_owner == env;
-}
 
 static void osd_inode_getattr(const struct lu_env *env,
 			      struct inode *inode, struct lu_attr *attr)
@@ -4432,8 +4354,8 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(!dt_object_remote(dt));
-	LASSERT(osd_is_write_locked(env, obj));
-	LASSERT(th != NULL);
+	LASSERT(dt_write_locked(env, dt));
+	LASSERT(th);
 
 	if (unlikely(fid_is_acct(fid)))
 		/*
@@ -4540,8 +4462,8 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(!dt_object_remote(dt));
-	LASSERT(osd_is_write_locked(env, obj));
-	LASSERT(th != NULL);
+	LASSERT(dt_write_locked(env, dt));
+	LASSERT(th);
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
@@ -4616,8 +4538,8 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(!dt_object_remote(dt));
-	LASSERT(osd_is_write_locked(env, obj));
-	LASSERT(th != NULL);
+	LASSERT(dt_write_locked(env, dt));
+	LASSERT(th);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_REF_DEL))
 		return -EIO;
@@ -5474,11 +5396,6 @@ static int osd_otable_it_attr_get(const struct lu_env *env,
 }
 
 static const struct dt_object_operations osd_obj_ops = {
-	.do_read_lock		= osd_read_lock,
-	.do_write_lock		= osd_write_lock,
-	.do_read_unlock		= osd_read_unlock,
-	.do_write_unlock	= osd_write_unlock,
-	.do_write_locked	= osd_write_locked,
 	.do_attr_get		= osd_attr_get,
 	.do_declare_attr_set	= osd_declare_attr_set,
 	.do_attr_set		= osd_attr_set,
@@ -8194,8 +8111,6 @@ static void osd_key_exit(const struct lu_context *ctx,
 
 	if (olc)
 		memset(olc, 0, sizeof(*olc));
-	LASSERT(info->oti_r_locks == 0);
-	LASSERT(info->oti_w_locks == 0);
 	LASSERT(info->oti_txns    == 0);
 	LASSERTF(info->oti_dio_pages_used == 0, "%d\n",
 		 info->oti_dio_pages_used);

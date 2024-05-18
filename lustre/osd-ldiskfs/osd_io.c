@@ -1470,7 +1470,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(!PageWriteback(lnb[i].lnb_page));
 
 		/*
-		 * Since write and truncate are serialized by oo_sem, even
+		 * Since write and truncate are serialized by dd_sem, even
 		 * partial-page truncate should not leave dirty pages in the
 		 * page cache.
 		 */

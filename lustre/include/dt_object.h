@@ -1839,6 +1839,8 @@ enum dt_otable_it_flags {
 struct dt_device {
 	struct lu_device                   dd_lu_dev;
 	const struct dt_device_operations *dd_ops;
+
+	/* OSD specific fields */
 	struct lu_client_seq		  *dd_cl_seq;
 
 	/*
@@ -1878,6 +1880,10 @@ struct dt_object {
 	const struct dt_object_operations *do_ops;
 	const struct dt_body_operations   *do_body_ops;
 	const struct dt_index_operations  *do_index_ops;
+
+	/* OSD specific fields */
+	struct rw_semaphore		   dd_sem;
+	struct lu_env			  *dd_owner;
 };
 
 /*
@@ -1934,6 +1940,54 @@ static inline struct dt_object *dt_object_child(struct dt_object *o)
 {
 	return container_of(lu_object_next(&(o)->do_lu),
 			    struct dt_object, do_lu);
+}
+
+#define DT_MAX_PATH 1024
+
+struct dt_find_hint {
+	struct lu_fid        *dfh_fid;
+	struct dt_device     *dfh_dt;
+	struct dt_object     *dfh_o;
+};
+
+struct dt_insert_rec {
+	union {
+		const struct lu_fid	*rec_fid;
+		void			*rec_data;
+	};
+	union {
+		struct {
+			__u32		 rec_type;
+			__u32		 rec_padding;
+		};
+		__u64			 rec_misc;
+	};
+};
+
+struct dt_thread_info {
+	char                     dti_buf[DT_MAX_PATH];
+	struct dt_find_hint      dti_dfh;
+	struct lu_attr           dti_attr;
+	struct lu_fid            dti_fid;
+	struct dt_object_format  dti_dof;
+	struct lustre_mdt_attrs  dti_lma;
+	struct lu_buf            dti_lb;
+	struct lu_object_conf	 dti_conf;
+	loff_t                   dti_off;
+	struct dt_insert_rec	 dti_dt_rec;
+	int                      dti_r_locks;
+	int                      dti_w_locks;
+};
+
+extern struct lu_context_key dt_key;
+
+static inline struct dt_thread_info *dt_info(const struct lu_env *env)
+{
+	struct dt_thread_info *dti;
+
+	dti = lu_context_key_get(&env->le_ctx, &dt_key);
+	LASSERT(dti);
+	return dti;
 }
 
 /*
@@ -2020,8 +2074,6 @@ int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check);
 typedef int (*dt_entry_func_t)(const struct lu_env *env,
 			    const char *name,
 			    void *pvt);
-
-#define DT_MAX_PATH 1024
 
 int dt_path_parser(const struct lu_env *env,
 		   char *local, dt_entry_func_t entry_func,
@@ -2335,47 +2387,96 @@ static inline void dt_read_lock(const struct lu_env *env,
 				struct dt_object *dt,
 				unsigned int role)
 {
+	struct dt_thread_info *info = dt_info(env);
+
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_read_lock);
-	dt->do_ops->do_read_lock(env, dt, role);
+	LASSERT(dt->dd_owner != env);
+
+	if (dt->do_ops->do_read_lock)
+		dt->do_ops->do_read_lock(env, dt, role);
+	else
+		down_read_nested(&dt->dd_sem, role);
+
+	LASSERT(dt->dd_owner == NULL);
+	info->dti_r_locks++;
 }
 
 static inline void dt_write_lock(const struct lu_env *env,
-				struct dt_object *dt,
-				unsigned int role)
+				 struct dt_object *dt,
+				 unsigned int role)
 {
+	struct dt_thread_info *info = dt_info(env);
+
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_write_lock);
-	dt->do_ops->do_write_lock(env, dt, role);
+	LASSERT(dt->dd_owner != env);
+
+	if (dt->do_ops->do_write_lock)
+		dt->do_ops->do_write_lock(env, dt, role);
+	else
+		down_write_nested(&dt->dd_sem, role);
+
+	LASSERT(dt->dd_owner == NULL);
+	info->dti_w_locks++;
+
+	/* TODO: Cleanup usage of const */
+	dt->dd_owner = (struct lu_env *)env;
 }
 
 static inline void dt_read_unlock(const struct lu_env *env,
-				struct dt_object *dt)
+				  struct dt_object *dt)
 {
+	struct dt_thread_info *info = dt_info(env);
+
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_read_unlock);
-	dt->do_ops->do_read_unlock(env, dt);
+	LASSERT(info->dti_r_locks > 0);
+
+	info->dti_r_locks--;
+
+	if (dt->do_ops->do_read_unlock)
+		dt->do_ops->do_read_unlock(env, dt);
+	else
+		up_read(&dt->dd_sem);
 }
 
 static inline void dt_write_unlock(const struct lu_env *env,
-				struct dt_object *dt)
+				   struct dt_object *dt)
 {
+	struct dt_thread_info *info = dt_info(env);
+
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_write_unlock);
-	dt->do_ops->do_write_unlock(env, dt);
+	LASSERT(dt->dd_owner == env);
+	LASSERT(info->dti_w_locks > 0);
+
+	info->dti_w_locks--;
+	dt->dd_owner = NULL;
+
+	if (dt->do_ops->do_write_unlock)
+		dt->do_ops->do_write_unlock(env, dt);
+	else
+		up_write(&dt->dd_sem);
 }
 
-static inline int dt_write_locked(const struct lu_env *env,
-				  struct dt_object *dt)
+static inline bool dt_write_locked(const struct lu_env *env,
+				   struct dt_object *dt)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_write_locked);
-	return dt->do_ops->do_write_locked(env, dt);
+
+	if (dt->do_ops->do_write_locked)
+		return dt->do_ops->do_write_locked(env, dt);
+
+	return dt->dd_owner == env;
+}
+
+static inline bool dt_thread_no_locks(const struct lu_env *env)
+{
+	struct dt_thread_info *info = dt_info(env);
+
+	return !info->dti_r_locks && !info->dti_w_locks;
 }
 
 static inline bool dt_object_stale(struct dt_object *dt)
@@ -2998,50 +3099,6 @@ static inline int dt_layout_pccro_check(const struct lu_env *env,
 	LASSERT(o->do_ops);
 	LASSERT(o->do_ops->do_layout_pccro_check);
 	return o->do_ops->do_layout_pccro_check(env, o, mlc);
-}
-
-struct dt_find_hint {
-	struct lu_fid        *dfh_fid;
-	struct dt_device     *dfh_dt;
-	struct dt_object     *dfh_o;
-};
-
-struct dt_insert_rec {
-	union {
-		const struct lu_fid	*rec_fid;
-		void			*rec_data;
-	};
-	union {
-		struct {
-			__u32		 rec_type;
-			__u32		 rec_padding;
-		};
-		__u64			 rec_misc;
-	};
-};
-
-struct dt_thread_info {
-	char                     dti_buf[DT_MAX_PATH];
-	struct dt_find_hint      dti_dfh;
-	struct lu_attr           dti_attr;
-	struct lu_fid            dti_fid;
-	struct dt_object_format  dti_dof;
-	struct lustre_mdt_attrs  dti_lma;
-	struct lu_buf            dti_lb;
-	struct lu_object_conf	 dti_conf;
-	loff_t                   dti_off;
-	struct dt_insert_rec	 dti_dt_rec;
-};
-
-extern struct lu_context_key dt_key;
-
-static inline struct dt_thread_info *dt_info(const struct lu_env *env)
-{
-	struct dt_thread_info *dti;
-
-	dti = lu_context_key_get(&env->le_ctx, &dt_key);
-	LASSERT(dti);
-	return dti;
 }
 
 int dt_global_init(void);

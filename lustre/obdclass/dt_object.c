@@ -37,6 +37,7 @@ struct lu_context_key dt_key = {
 	.lct_init = dt_global_key_init,
 	.lct_fini = dt_global_key_fini
 };
+EXPORT_SYMBOL(dt_key);
 
 /*
  * no lock is necessary to protect the list, because call-backs

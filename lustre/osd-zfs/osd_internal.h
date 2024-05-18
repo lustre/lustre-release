@@ -428,9 +428,6 @@ struct osd_object {
 	nvlist_t		*oo_sa_xattr;
 	struct list_head	 oo_sa_linkage;
 
-	/* used to implement osd_object_*_{lock|unlock} */
-	struct rw_semaphore	 oo_sem;
-
 	/* to serialize some updates: destroy vs. others,
 	 * xattr_set, object block size change etc
 	 */

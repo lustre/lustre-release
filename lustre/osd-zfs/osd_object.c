@@ -313,7 +313,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 		l->lo_ops = &osd_lu_obj_ops;
 		INIT_LIST_HEAD(&mo->oo_sa_linkage);
 		INIT_LIST_HEAD(&mo->oo_unlinked_linkage);
-		init_rwsem(&mo->oo_sem);
+		init_rwsem(&mo->oo_dt.dd_sem);
 		init_rwsem(&mo->oo_guard);
 		rwlock_init(&mo->oo_attr_lock);
 		mo->oo_destroy = OSD_DESTROY_NONE;
@@ -927,56 +927,6 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 	struct osd_object *o = osd_obj(l);
 
 	return (*p)(env, cookie, LUSTRE_OSD_ZFS_NAME"-object@%p", o);
-}
-
-static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
-			  unsigned int role)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-
-	LASSERT(osd_invariant(obj));
-
-	down_read_nested(&obj->oo_sem, role);
-}
-
-static void osd_write_lock(const struct lu_env *env, struct dt_object *dt,
-			   unsigned int role)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-
-	LASSERT(osd_invariant(obj));
-
-	down_write_nested(&obj->oo_sem, role);
-}
-
-static void osd_read_unlock(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-
-	LASSERT(osd_invariant(obj));
-	up_read(&obj->oo_sem);
-}
-
-static void osd_write_unlock(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-
-	LASSERT(osd_invariant(obj));
-	up_write(&obj->oo_sem);
-}
-
-static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_object *obj = osd_dt_obj(dt);
-	int rc = 1;
-
-	LASSERT(osd_invariant(obj));
-
-	if (down_write_trylock(&obj->oo_sem)) {
-		rc = 0;
-		up_write(&obj->oo_sem);
-	}
-	return rc;
 }
 
 static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
@@ -2179,11 +2129,6 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 }
 
 static const struct dt_object_operations osd_obj_ops = {
-	.do_read_lock		= osd_read_lock,
-	.do_write_lock		= osd_write_lock,
-	.do_read_unlock		= osd_read_unlock,
-	.do_write_unlock	= osd_write_unlock,
-	.do_write_locked	= osd_write_locked,
 	.do_attr_get		= osd_attr_get,
 	.do_declare_attr_set	= osd_declare_attr_set,
 	.do_attr_set		= osd_attr_set,

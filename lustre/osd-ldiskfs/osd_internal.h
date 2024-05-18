@@ -119,7 +119,6 @@ struct osd_object {
 	 */
 	struct htree_lock_head *oo_hl_head;
 	struct rw_semaphore	oo_ext_idx_sem;
-	struct rw_semaphore	oo_sem;
 	struct osd_directory	*oo_dir;
 	/** protects inode attributes. */
 	spinlock_t		oo_guard;
@@ -137,8 +136,6 @@ struct osd_object {
 	/* the i_flags in LMA */
 	__u32                   oo_lma_flags;
 	atomic_t		oo_dirent_count;
-
-        const struct lu_env    *oo_owner;
 
 	struct list_head	oo_xattr_list;
 	struct lu_object_header *oo_header;
@@ -714,8 +711,6 @@ struct osd_thread_info {
 	/* inc by osd_trans_create and dec by osd_trans_stop */
 	int				oti_ins_cache_depth;
 
-	int				oti_r_locks;
-	int				oti_w_locks;
 	int				oti_txns;
 	/** used in osd_fid_set() to put xattr */
 	struct lu_buf			oti_buf;
