@@ -15987,6 +15987,29 @@ test_130g() {
 }
 run_test 130g "FIEMAP (overstripe file)"
 
+test_130h() {
+	(( OSTCOUNT < 2 )) && skip_env "need 2 OSTs"
+
+	$LFS setstripe -o 0,1 -S 1M $DIR/$tfile
+	$LFS getstripe $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=2
+	$LCTL set_param ldlm.namespaces.*-OST0000-osc-*.lru_size=clear
+	sleep 1
+	local before=$(date +%s)
+	##define OBD_FAIL_OSC_FIEMAP              0x418
+	$LCTL set_param fail_loc=0x80000418 fail_val=5
+	checkfiemap $DIR/$tfile $((2 * 1024 * 1024)) &
+	sleep 1
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=3
+	wait
+	$LCTL set_param fail_loc=0 fail_val=0
+	# check for client eviction
+	local evict=$($LCTL get_param osc.$FSNAME-OST0001-osc-f*.state |
+          awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+	[ -z "$evict" ] || [[ $evict -le $before ]] || error "eviction happened"
+}
+run_test 130h "FIEMAP deadlock"
+
 # Test for writev/readv
 test_131a() {
 	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 ||

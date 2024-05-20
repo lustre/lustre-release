@@ -441,6 +441,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_OSC_NO_SIZE_DATA        0x415
 #define OBD_FAIL_OSC_DELAY_CANCEL        0x416
 #define OBD_FAIL_OSC_SLOW_PAGE_EVICT	 0x417
+#define OBD_FAIL_OSC_FIEMAP		 0x418
 #define OBD_FAIL_OSC_MARK_COMPRESSED	 0x419
 
 #define OBD_FAIL_PTLRPC                  0x500
