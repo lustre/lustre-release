@@ -167,9 +167,9 @@ struct lr_info {
 
 	/* Variables for querying the xattributes */
 	char *xlist;
-	size_t xsize;
+	ssize_t xsize;
 	char *xvalue;
-	size_t xvsize;
+	ssize_t xvsize;
 };
 
 struct lr_parent_child_list {
@@ -452,17 +452,17 @@ int lr_copy_attr(const char *src, const char *dest)
 /* Copy all xattrs from file info->src to info->dest */
 int lr_copy_xattr(struct lr_info *info)
 {
-	size_t size = info->xsize;
+	ssize_t size = info->xsize;
+	ssize_t rc;
 	int start;
 	int len;
-	int rc;
 
 	if (noxattr)
 		return 0;
 
 	errno = 0;
 	rc = llistxattr(info->src, info->xlist, size);
-	lr_debug(DTRACE, "llistxattr(%s,%p) returned %d, errno=%d\n",
+	lr_debug(DTRACE, "llistxattr(%s,%p) returned %zd, errno=%d\n",
 		 info->src, info->xlist, rc, errno);
 	if ((rc > 0 && info->xlist == NULL) || errno == ERANGE) {
 		size = rc > PATH_MAX ? rc : PATH_MAX;
@@ -471,7 +471,7 @@ int lr_copy_xattr(struct lr_info *info)
 			return -ENOMEM;
 		info->xsize = size;
 		rc = llistxattr(info->src, info->xlist, size);
-		lr_debug(DTRACE, "llistxattr %s returned %d, errno=%d\n",
+		lr_debug(DTRACE, "llistxattr %s returned %zd, errno=%d\n",
 			 info->src, rc, errno);
 	}
 	if (rc < 0)
@@ -484,7 +484,7 @@ int lr_copy_xattr(struct lr_info *info)
 		rc = lgetxattr(info->src, info->xlist + start,
 			       NULL, 0);
 		if (rc < 0) {
-			lr_debug(DTRACE, "\t(%s,0) rc=%d, errno=%d\n",
+			lr_debug(DTRACE, "\t(%s,0) rc=%zd, errno=%d\n",
 				 info->xlist + start, rc, errno);
 			start += strlen(info->xlist + start) + 1;
 			continue;
@@ -503,13 +503,13 @@ int lr_copy_xattr(struct lr_info *info)
 
 		rc = lgetxattr(info->src, info->xlist + start,
 			       info->xvalue, size);
-		lr_debug(DTRACE, "\t(%s,%d) rc=%p\n", info->xlist + start,
+		lr_debug(DTRACE, "\t(%s,%s) rc=%zd\n", info->xlist + start,
 			 info->xvalue, rc);
 		if (rc > 0) {
 			size = rc;
 			rc = lsetxattr(info->dest, info->xlist + start,
 				       info->xvalue, size, 0);
-			lr_debug(DTRACE, "\tlsetxattr(), rc=%d, errno=%d\n",
+			lr_debug(DTRACE, "\tlsetxattr(), rc=%zd, errno=%d\n",
 				 rc, errno);
 			if (rc == -1) {
 				if (errno != ENOTSUP) {
@@ -1549,8 +1549,8 @@ int lr_replicate(void)
 	struct lr_info *ext = NULL;
 	time_t start;
 	int xattr_not_supp;
-	int i;
-	int rc;
+	int i, rc;
+	ssize_t rc1;
 
 	start = time(NULL);
 
@@ -1592,8 +1592,8 @@ int lr_replicate(void)
 			rc = -errno;
 			goto out;
 		}
-		rc = llistxattr(info->src, info->xlist, info->xsize);
-		if (rc == -1 && errno == ENOTSUP) {
+		rc1 = llistxattr(info->src, info->xlist, info->xsize);
+		if (rc1 == -1 && errno == ENOTSUP) {
 			fprintf(stderr, "xattrs not supported on %s\n",
 				status->ls_targets[i]);
 			xattr_not_supp++;
