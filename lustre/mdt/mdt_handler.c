@@ -3612,6 +3612,12 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
 	struct mdt_object *m;
 
 	ENTRY;
+	/* mdt_orphan_open() gets local ROOT */
+	if (!fid_is_namespace_visible(f) && !fid_is_local_file(f)) {
+		CERROR("%s: MDT object FID "DFID" is corrupt: rc = %d\n",
+		       mdt_obd_name(d), PFID(f), -EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
+	}
 
 	CDEBUG(D_INFO, "Find object for "DFID"\n", PFID(f));
 	o = lu_object_find(env, &d->mdt_lu_dev, f, NULL);

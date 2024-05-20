@@ -104,7 +104,13 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 	struct lu_object  *o;
 
 	ENTRY;
-
+	if (!(fid_is_mdt0(fid) || fid_is_norm(fid) || fid_is_idif(fid) ||
+	      fid_is_echo(fid)) ||
+	    fid_oid(fid) == 0) {
+		CERROR("%s: OST object FID "DFID" is corrupt, rc = %d\n",
+		       ofd_name(ofd), PFID(fid), -EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
+	}
 	o = lu_object_find(env, &ofd->ofd_dt_dev.dd_lu_dev, fid, NULL);
 	if (likely(!IS_ERR(o)))
 		fo = ofd_obj(o);
