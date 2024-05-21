@@ -5088,8 +5088,8 @@ check_striped_create_137() {
 
 test_137a() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
-		skip "Need MDS >= 2.15.61 for intent mkdir"
+	(( $MDS1_VERSION >= $(version_code v2_15_62-70-g668dfb53de) )) ||
+		skip "Need MDS >= 2.15.62.70 for intent mkdir"
 
 	[[ $FAILURE_MODE != "HARD" ]] ||
 		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
@@ -5115,8 +5115,8 @@ run_test 137a "DNE: create under striped dir, fail MDT1"
 
 test_137b() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
-		skip "Need MDS version at least 2.15.61 for intent mkdir"
+	(( $MDS1_VERSION >= $(version_code v2_15_62-70-g668dfb53de) )) ||
+		skip "Need MDS version at least 2.15.62.70 for intent mkdir"
 
 	[[ $FAILURE_MODE != "HARD" ]] ||
 		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
@@ -5144,8 +5144,8 @@ run_test 137b "DNE: create under striped dir, fail MDT2"
 
 test_137c() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
-		skip "Need MDS version at least 2.15.61 for intent mkdir"
+	(( $MDS1_VERSION >= $(version_code v2_15_62-70-g668dfb53de) )) ||
+		skip "Need MDS version at least 2.15.62.70 for intent mkdir"
 
 	[[ $FAILURE_MODE != "HARD" ]] ||
 		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||

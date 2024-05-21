@@ -32879,8 +32879,8 @@ run_test 851 "fanotify can monitor open/read/write/close events for lustre fs"
 
 test_852() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
-		skip "Need MDS version at least 2.15.61 for intent mkdir"
+	(( $MDS1_VERSION >= $(version_code v2_15_62-70-g668dfb53de) )) ||
+		skip "Need MDS version at least 2.15.62.70 for intent mkdir"
 
 	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
