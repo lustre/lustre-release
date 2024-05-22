@@ -3856,7 +3856,6 @@ void llapi_layout_sanity_perror(int error)
  * components"?
  *
  * \param[in] layout            component layout list.
- * \param[in] fname		file the layout to be checked for
  * \param[in] incomplete        if layout is complete or not - some checks can
  *                              only be done on complete layouts.
  * \param[in] flr		set when this is called from FLR mirror create
@@ -3877,7 +3876,6 @@ int llapi_layout_sanity(struct llapi_layout *layout,
  * of the sanity function is passing NULL for the filename
  * Input arguments ---
  * \param[in] layout            component layout list.
- * \param[in] fname		file the layout to be checked for
  * \param[in] incomplete        if layout is complete or not - some checks can
  *                              only be done on complete layouts.
  * \param[in] flr		set when this is called from FLR mirror create
@@ -3885,6 +3883,7 @@ int llapi_layout_sanity(struct llapi_layout *layout,
  *				NULL no pool name check is performed
  *
  * \retval                      0, success, positive: various errors, see
+ *                              llapi_layout_sanity_perror, -1, failure
  */
 
 int llapi_layout_v2_sanity(struct llapi_layout *layout,
