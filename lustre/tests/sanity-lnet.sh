@@ -1185,23 +1185,25 @@ append_net_tunables() {
 		awk '/^\s+tunables:$/,/^\s+CPT:/' >> $TMP/sanity-lnet-$testnum-expected.yaml
 }
 
-ROUTERS_REQUIRED=1
 ROUTERS=()
 declare -A ROUTER_INTERFACES
-RPEERS_REQUIRED=1
 RPEERS=()
 declare -A RPEER_INTERFACES
+NTRB=16
 init_router_test_vars() {
+	local routers_required="$1"
+	local rpeers_required="$2"
+
 	local rnodes_required
-	((rnodes_required=ROUTERS_REQUIRED+RPEERS_REQUIRED))
+	((rnodes_required=routers_required+rpeers_required))
 	# all remote nodes, including some that may not be used
 	local rnodes_all=( $(remote_nodes_list) )
 	[[ -z $rnodes_all || "${#rnodes_all[@]}" -lt $rnodes_required ]] &&
 		skip "Need at least $rnodes_required remote nodes" \
 			"found \"${rnodes_all[@]}\""
 
-	ROUTERS=( "${rnodes_all[@]:0:${ROUTERS_REQUIRED}}" )
-	RPEERS=( "${rnodes_all[@]:${ROUTERS_REQUIRED}:${RPEERS_REQUIRED}}" )
+	ROUTERS=( "${rnodes_all[@]:0:${routers_required}}" )
+	RPEERS=( "${rnodes_all[@]:${routers_required}:${rpeers_required}}" )
 
 	local rnodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]})
 	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
@@ -1221,6 +1223,15 @@ init_router_test_vars() {
 		RPEER_INTERFACES[$rpeer]=$(do_rpc_nodes --quiet \
 						$rpeer lnet_if_list)
 	done
+
+	# test_256 needs tiny_router_buffers > (# CPTs * peer credits)
+	local rtr_list=$(comma_list ${ROUTERS[@]})
+	local max_ncpt=$(do_nodes $rtr_list "$LCTL get_param -n cpu_partition_table | wc -l" |
+			 sort -ug | tail -n 1)
+	local max_pcs=$(do_nodes $rtr_list "$LNETCTL net show -v" |
+			awk '/peer_credits:/{print $NF}' |
+			sort -ug | tail -n 1)
+	((NTRB=max_ncpt*(max_pcs+1)))
 
 	do_nodes $all_nodes $LUSTRE_RMMOD ||
 		error "Failed to unload modules"
@@ -1263,13 +1274,26 @@ LNIDS=()
 LOCAL_NET=${NETTYPE}
 REMOTE_NET=${NETTYPE}1
 setup_router_test() {
-	local mod_opts="$@"
-
 	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
 		skip "need at least 2.15.0 for load_lnet"
 
+	local routers_required=1
+	local rpeers_required=1
+	local flag
+
+	while getopts "r:p:" flag; do
+		case $flag in
+			r) routers_required="$OPTARG";;
+			p) rpeers_required="$OPTARG";;
+			*) ;;
+		esac
+	done
+	shift $((OPTIND - 1))
+
+	local mod_opts="$@"
+
 	if [[ ${#RPEER_INTERFACES[@]} -eq 0 ]]; then
-		init_router_test_vars ||
+		init_router_test_vars $routers_required $rpeers_required ||
 			return $?
 	fi
 
@@ -1282,7 +1306,7 @@ setup_router_test() {
 	mod_opts+=" router_ping_timeout=5"
 	mod_opts+=" large_router_buffers=4"
 	mod_opts+=" small_router_buffers=8"
-	mod_opts+=" tiny_router_buffers=16"
+	mod_opts+=" tiny_router_buffers=$NTRB"
 	do_rpc_nodes $all_nodes load_lnet "${mod_opts}" ||
 		error "Failed to load lnet"
 
@@ -1309,16 +1333,19 @@ setup_router_test() {
 		return $?
 
 	for router in ${!ROUTER_INTERFACES[@]}; do
-		ROUTER_NIDS[$router]=$(do_node $router $LCTL list_nids
-					2>/dev/null | xargs echo)
+		ROUTER_NIDS[$router]=$(do_node $router $LCTL list_nids \
+				       2>/dev/null | xargs echo)
+		echo "router: $router nids: ${ROUTER_NIDS[$router]}"
 	done
 
 	for rpeer in ${!RPEER_INTERFACES[@]}; do
-		RPEER_NIDS[$rpeer]=$(do_node $rpeer $LCTL list_nids
-					2>/dev/null | xargs echo)
+		RPEER_NIDS[$rpeer]=$(do_node $rpeer $LCTL list_nids \
+				     2>/dev/null | xargs echo)
+		echo "rpeer: $rpeer nids: ${RPEER_NIDS[$rpeer]}"
 	done
 
 	LNIDS=( $($LCTL list_nids 2>/dev/null | xargs echo) )
+	echo "local: $HOSTNAME nids: ${LNIDS[@]}"
 }
 
 do_route_del() {
@@ -1328,7 +1355,7 @@ do_route_del() {
 
 	do_nodesv $node \
 	'output="$($LNETCTL route show --net $net --gateway $gw 2>/dev/null)"; \
-		if [[ "x${lnetctl_text}x" != "xx" ]]; then		       \
+		if [[ "x${output}x" != "xx" ]]; then			       \
 				$LNETCTL route del --net $net --gateway $gw;   \
 			else						       \
 				exit 0;					       \
@@ -1478,7 +1505,7 @@ test_102() {
 		error "route add failed $?"
 
 	compare_route_del "$REMOTE_NET" "${router_nids[0]}"
-	# Routes already deleted so don't call cleanup_router_test
+	cleanup_router_test
 }
 run_test 102 "Delete route with single gw"
 
@@ -3326,10 +3353,7 @@ test_225() {
 run_test 225 "Check avoid_asym_router_failure=0 w/DD disabled"
 
 test_226() {
-	ROUTERS_REQUIRED=2
-	RPEERS_REQUIRED=1
-
-	setup_router_test || return $?
+	setup_router_test -r 2 || return $?
 
 	do_basic_rtr_test || return $?
 
@@ -3723,6 +3747,114 @@ EOF
 	do_lnetctl import <  ${GLOBAL_YAML_FILE} || error "Import failed $?"
 }
 run_test 255 "Use lnet routes param with pdsh syntax"
+
+test_256() {
+	[[ $NETTYPE != kfi* ]] || skip "kfi doesn't support delay rules"
+
+	setup_router_test peer_buffer_credits=1024 || return $?
+
+	do_basic_rtr_test || return $?
+
+	local rpeer=${RPEERS[0]}
+	local rpeer_nids=( ${RPEER_NIDS[$rpeer]} )
+	local rpnid=${rpeer_nids[0]}
+	local router=${ROUTERS[0]}
+	local router_nids=( ${ROUTER_NIDS[$router]} )
+	local rtrpnid=${router_nids[0]}
+
+	local rtr_pc=$(do_node $router $LNETCTL peer show -v --nid $rpnid |
+		       awk '/max_ni_tx_credits:/{print $NF}' |
+		       xargs echo | sed 's/ /\+/g' | bc)
+
+	((rtr_pc > 0)) ||
+		error "$router couldn't determine peer credits for $rpnid"
+
+	local my_pc=$($LNETCTL peer show -v --nid $rtrpnid |
+		      awk '/max_ni_tx_credits:/{print $NF}' |
+		      xargs echo | sed 's/ /\+/g' | bc)
+
+	((my_pc > 0)) || error "couldn't determine peer credits for $rtrpnid"
+
+	if ((my_pc < rtr_pc )); then
+		cleanup_router_test || return $?
+		skip "Need local peer credits >= router's peer credits"
+	fi
+
+	local old_tto=$(do_node $router $LNETCTL global show |
+			awk '/transaction_timeout:/{print $NF}')
+
+	[[ -n $old_tto ]] ||
+		error "Cannot determine LNet transaction timeout"
+
+	local tto=10
+
+	do_node $router $LNETCTL set transaction_timeout $tto ||
+		error "Failed to set transaction_timeout"
+
+	local old_retry=$(do_node $router $LNETCTL global show |
+			  awk '/retry_count:/{print $NF}')
+
+	[[ -n $old_retry ]] ||
+		error "Cannot determine LNet retry count"
+
+	do_node $router $LNETCTL set retry_count 0 ||
+		error "Failed to set transaction_timeout"
+
+#define CFS_FAIL_DELAY_MSG_FORWARD      0xe002
+	do_node $router $LCTL set_param fail_loc=0xe002
+
+	# We want to consume all peer credits for at least transaction_timeout
+	# seconds
+	local delay=$((tto + 1))
+
+	local rnid lnid cmd
+	local args="-l $delay -r 1 -m GET"
+
+	for lnid in ${LNIDS[@]}; do
+		for rnid in ${rpeer_nids[@]}; do
+			cmd="$LCTL net_delay_add -s ${lnid} -d ${rnid} $args"
+			echo "$router $cmd"
+			do_node $router $cmd || error "Failed to add delay rule"
+		done
+	done
+
+	local i
+
+	for i in $(seq 1 ${rtr_pc}); do
+		$LNETCTL ping --timeout $((delay+2)) $rpnid 1>/dev/null &
+	done
+
+	echo "Issued ${rtr_pc} pings to $rpnid"
+
+	local pid
+
+	# This ping should be queued on the router's peer NI tx credit queue
+	$LNETCTL ping --timeout $((delay+2)) $rpnid &
+
+	echo "Issued last ping - sleep $delay"
+	sleep ${delay}
+
+	do_node $router $LCTL net_delay_del -a
+
+	wait
+
+	do_node $router $LNETCTL set transaction_timeout ${old_tto}
+	do_node $router $LNETCTL set retry_count ${old_retry}
+
+	# Router should not drop any of the messages that have exceeded their
+	# deadline
+	local dropped=$(do_node $router $LNETCTL peer show -v 2 --nid $rpnid |
+			grep -A 2 dropped_stats |
+			awk '/get:/{print $2}' |
+			xargs echo |
+			sed 's/ /\+/g' | bc)
+
+	((dropped == 0)) ||
+		error "Expect 0 dropped GET but found $dropped"
+
+	cleanup_router_test
+}
+run_test 256 "Router should not drop messages that are past the deadline"
 
 test_300() {
 	# LU-13274

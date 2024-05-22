@@ -754,8 +754,12 @@ static int
 lnet_check_message_drop(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 			struct lnet_msg *msg)
 {
-	/* Drop message if we've exceeded the message deadline */
-	if (ktime_after(ktime_get(), msg->msg_deadline))
+	/* Drop message if we've exceeded the message deadline. Routers always
+	 * attempt delivery because they're ignorant of upper layer timeouts
+	 * (e.g. Lustre/DVS RPC) that may be large enough to account for extra
+	 * time on router.
+	 */
+	if (!msg->msg_routing && ktime_after(ktime_get(), msg->msg_deadline))
 		return -ETIMEDOUT;
 
 	if (msg->msg_target.pid & LNET_PID_USERFLAG)
@@ -4998,6 +5002,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 
 	/* message delay simulation */
 	if (unlikely(!list_empty(&the_lnet.ln_delay_rules) &&
+		     !CFS_FAIL_CHECK(CFS_FAIL_DELAY_MSG_FORWARD) &&
 		     lnet_delay_rule_match_locked(hdr, msg))) {
 		lnet_net_unlock(cpt);
 		return 0;
