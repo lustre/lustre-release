@@ -1455,8 +1455,8 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
 {
         struct rdma_cm_id *cmid;
 	struct kib_net *net = peer_ni->ibp_ni->ni_data;
-	struct sockaddr srcaddr;
-	struct sockaddr dstaddr;
+	struct sockaddr_storage srcaddr;
+	struct sockaddr_storage dstaddr;
 	int rc;
 
         LASSERT (net != NULL);
@@ -1506,10 +1506,12 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
         kiblnd_peer_addref(peer_ni);               /* cmid's ref */
 
 	if (*kiblnd_tunables.kib_use_priv_port) {
-		rc = kiblnd_resolve_addr(cmid, &srcaddr, &dstaddr,
+		rc = kiblnd_resolve_addr(cmid, (struct sockaddr *)&srcaddr,
+					 (struct sockaddr *)&dstaddr,
 					 kiblnd_timeout() * 1000);
 	} else {
-		rc = rdma_resolve_addr(cmid, &srcaddr, &dstaddr,
+		rc = rdma_resolve_addr(cmid, (struct sockaddr *)&srcaddr,
+				       (struct sockaddr *)&dstaddr,
 				       kiblnd_timeout() * 1000);
 	}
 	if (rc != 0) {
