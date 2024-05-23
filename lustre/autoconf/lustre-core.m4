@@ -5481,20 +5481,6 @@ AS_IF([test "x$enable_invariants" = xyes], [
 	AC_SUBST(ENABLE_INVARIANTS, no)
 ])
 
-AC_MSG_CHECKING([whether to track references with lu_ref])
-AC_ARG_ENABLE([lu_ref],
-	AS_HELP_STRING([--enable-lu_ref],
-		[enable lu_ref reference tracking code]),
-	[], [enable_lu_ref="no"])
-AC_MSG_RESULT([$enable_lu_ref])
-AS_IF([test "x$enable_lu_ref" = xyes], [
-	AC_DEFINE([CONFIG_LUSTRE_DEBUG_LU_REF], 1,
-		  [enable lu_ref reference tracking code])
-	AC_SUBST(ENABLE_LU_REF, yes)
-], [
-	AC_SUBST(ENABLE_LU_REF, no)
-])
-
 AC_MSG_CHECKING([whether to enable page state tracking])
 AC_ARG_ENABLE([pgstate-track],
 	AS_HELP_STRING([--enable-pgstate-track],

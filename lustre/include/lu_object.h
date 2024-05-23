@@ -39,7 +39,6 @@
 #endif
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
-#include <lu_ref.h>
 #include <linux/percpu_counter.h>
 #include <linux/rhashtable.h>
 #include <linux/ctype.h>
@@ -306,10 +305,7 @@ struct lu_device {
 
 	/** \todo XXX: temporary back pointer into obd. */
 	struct obd_device                 *ld_obd;
-	/**
-	 * A list of references to this object, for debugging.
-	 */
-	struct lu_ref                      ld_reference;
+
 	/**
 	 * Link the device to the site.
 	 **/
@@ -480,10 +476,6 @@ struct lu_object {
 	 * Linkage into list of all layers.
 	 */
 	struct list_head		   lo_linkage;
-	/**
-	 * Link to the device, for debugging.
-	 */
-	struct lu_ref_link                 lo_dev_ref;
 };
 
 enum lu_object_header_flags {
@@ -561,10 +553,6 @@ struct lu_object_header {
 	 * during object destruction). No locking is necessary.
 	 */
 	struct list_head	loh_layers;
-	/**
-	 * A list of references to this object, for debugging.
-	 */
-	struct lu_ref		loh_reference;
 	/*
 	 * Handle used for kfree_rcu() or similar.
 	 */
@@ -890,42 +878,7 @@ static inline __u32 lu_object_attr(const struct lu_object *o)
 	return o->lo_header->loh_attr & S_IFMT;
 }
 
-static inline void lu_object_ref_add_atomic(struct lu_object *o,
-					    const char *scope,
-					    const void *source)
-{
-	lu_ref_add_atomic(&o->lo_header->loh_reference, scope, source);
-}
-
-static inline void lu_object_ref_add(struct lu_object *o,
-				     const char *scope,
-				     const void *source)
-{
-	lu_ref_add(&o->lo_header->loh_reference, scope, source);
-}
-
-static inline void lu_object_ref_add_at(struct lu_object *o,
-					struct lu_ref_link *link,
-					const char *scope,
-					const void *source)
-{
-	lu_ref_add_at(&o->lo_header->loh_reference, link, scope, source);
-}
-
-static inline void lu_object_ref_del(struct lu_object *o,
-				     const char *scope, const void *source)
-{
-	lu_ref_del(&o->lo_header->loh_reference, scope, source);
-}
-
-static inline void lu_object_ref_del_at(struct lu_object *o,
-					struct lu_ref_link *link,
-					const char *scope, const void *source)
-{
-	lu_ref_del_at(&o->lo_header->loh_reference, link, scope, source);
-}
-
-/** input params, should be filled out by mdt */
+/* input params, should be filled out by mdt */
 struct lu_rdpg {
 	/** hash */
 	__u64                   rp_hash;
@@ -1159,10 +1112,6 @@ struct lu_context_key {
 	 * Internal implementation detail: module for this key.
 	 */
 	struct module	*lct_owner;
-	/**
-	 * References to this key. For debugging.
-	 */
-	struct lu_ref	lct_reference;
 };
 
 #define LU_KEY_INIT(mod, type)                                    \

@@ -430,8 +430,6 @@ struct osd_thandle {
         struct ldiskfs_journal_cb_entry ot_jcb;
 	struct list_head       ot_commit_dcb_list;
 	struct list_head       ot_stop_dcb_list;
-	/* Link to the device, for debugging. */
-	struct lu_ref_link      ot_dev_link;
 	unsigned int		ot_credits;
 	unsigned int		oh_declared_ext;
 

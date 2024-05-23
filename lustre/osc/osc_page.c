@@ -57,7 +57,6 @@ static void osc_page_transfer_get(struct osc_page *opg, const char *label)
 
 	LASSERT(!opg->ops_transfer_pinned);
 	cl_page_get(page);
-	lu_ref_add_atomic(&page->cp_reference, label, page);
 	opg->ops_transfer_pinned = 1;
 }
 
@@ -68,7 +67,6 @@ static void osc_page_transfer_put(const struct lu_env *env,
 
 	if (opg->ops_transfer_pinned) {
 		opg->ops_transfer_pinned = 0;
-		lu_ref_del(&page->cp_reference, "transfer", page);
 		cl_page_put(env, page);
 	}
 }

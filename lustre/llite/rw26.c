@@ -897,7 +897,6 @@ again:
 		GOTO(out, result = PTR_ERR(page));
 
 	lcc->lcc_page = page;
-	lu_ref_add(&page->cp_reference, "cl_io", io);
 
 	cl_page_assume(env, io, page);
 	if (!PageUptodate(vmpage)) {
@@ -933,7 +932,6 @@ out:
 		}
 		/* On tiny_write failure, page and io are always null. */
 		if (!IS_ERR_OR_NULL(page)) {
-			lu_ref_del(&page->cp_reference, "cl_io", io);
 			cl_page_put(env, page);
 		}
 		if (io)
@@ -1045,7 +1043,6 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		cl_page_disown(env, io, page);
 
 		lcc->lcc_page = NULL;
-		lu_ref_del(&page->cp_reference, "cl_io", io);
 		cl_page_put(env, page);
 
 		/* page list is not contiguous now, commit it now */

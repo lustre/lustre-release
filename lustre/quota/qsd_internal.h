@@ -177,9 +177,6 @@ struct qsd_qtype_info {
 				qqi_reint:1,    /* in reintegration or not */
 				qqi_acct_failed:1; /* failed to setup acct */
 
-	/* A list of references to this instance, for debugging */
-	struct lu_ref		qqi_reference;
-
 	/* default quota setting*/
 	__u64			qqi_default_hardlimit;
 	__u64			qqi_default_softlimit;

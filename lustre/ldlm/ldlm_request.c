@@ -1999,7 +1999,6 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 
 		LDLM_LOCK_GET(lock);
 		spin_unlock(&ns->ns_lock);
-		lu_ref_add(&lock->l_reference, __FUNCTION__, current);
 
 		/*
 		 * Pass the lock through the policy filter and see if it
@@ -2018,13 +2017,11 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		 */
 		result = pf(ns, lock, added, min);
 		if (result == LDLM_POLICY_KEEP_LOCK) {
-			lu_ref_del(&lock->l_reference, __func__, current);
 			LDLM_LOCK_RELEASE(lock);
 			break;
 		}
 
 		if (result == LDLM_POLICY_SKIP_LOCK) {
-			lu_ref_del(&lock->l_reference, __func__, current);
 			if (no_wait) {
 				spin_lock(&ns->ns_lock);
 				if (!list_empty(&lock->l_lru) &&
@@ -2050,7 +2047,6 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			 * pages could be put under it.
 			 */
 			unlock_res_and_lock(lock);
-			lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 			LDLM_LOCK_RELEASE(lock);
 			continue;
 		}
@@ -2091,7 +2087,6 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		LASSERT(list_empty(&lock->l_bl_ast));
 		list_add(&lock->l_bl_ast, cancels);
 		unlock_res_and_lock(lock);
-		lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 		added++;
 		/* Once a lock added, batch the requested amount */
 		if (min == 0)
@@ -2304,7 +2299,6 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 		RETURN(0);
 	}
 
-	LDLM_RESOURCE_ADDREF(res);
 	count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
 					   0, flags | LCF_BL_AST, opaque);
 	rc = ldlm_cli_cancel_list(&cancels, count, NULL, flags);
@@ -2312,7 +2306,6 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 		CERROR("canceling unused lock "DLDLMRES": rc = %d\n",
 		       PLDLMRES(res), rc);
 
-	LDLM_RESOURCE_DELREF(res);
 	ldlm_resource_putref(res);
 	RETURN(0);
 }
@@ -2451,9 +2444,7 @@ int ldlm_resource_iterate(struct ldlm_namespace *ns,
 	if (IS_ERR(res))
 		RETURN(0);
 
-	LDLM_RESOURCE_ADDREF(res);
 	rc = ldlm_resource_foreach(res, iter, data);
-	LDLM_RESOURCE_DELREF(res);
 	ldlm_resource_putref(res);
 	RETURN(rc);
 }

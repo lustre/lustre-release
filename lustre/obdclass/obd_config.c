@@ -936,7 +936,6 @@ struct obd_device *class_incref(struct obd_device *obd,
 				const char *scope,
 				const void *source)
 {
-	lu_ref_add_atomic(&obd->obd_reference, scope, source);
 	kref_get(&obd->obd_refcount);
 	CDEBUG(D_INFO, "incref %s (%p) now %d - %s\n", obd->obd_name, obd,
 	       kref_read(&obd->obd_refcount), scope);
@@ -970,7 +969,6 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
 	       kref_read(&obd->obd_refcount), scope);
 	LASSERT(obd->obd_num_exports >= 0);
 	kref_put(&obd->obd_refcount, class_decref_free);
-	lu_ref_del(&obd->obd_reference, scope, source);
 }
 EXPORT_SYMBOL(class_decref);
 

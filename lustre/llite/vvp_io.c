@@ -411,7 +411,6 @@ static void vvp_io_fault_fini(const struct lu_env *env,
 	CLOBINVRNT(env, io->ci_obj, vvp_object_invariant(io->ci_obj));
 
 	if (page != NULL) {
-		lu_ref_del(&page->cp_reference, "fault", io);
 		cl_page_put(env, page);
 		io->u.ci_fault.ft_page = NULL;
 	}
@@ -978,7 +977,6 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 			cl_page_disown(env, io, page);
 
 			/* held in ll_cl_init() */
-			lu_ref_del(&page->cp_reference, "cl_io", io);
 			cl_page_put(env, page);
 		}
 	}
@@ -1168,7 +1166,6 @@ static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
 			vmpage = fbatch_at_pg(fbatch, i, pg);
 			page = (struct cl_page *) vmpage->private;
 			cl_page_disown(env, io, page);
-			lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
 			cl_page_put(env, page);
 		}
 	}
@@ -1276,7 +1273,6 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 		cl_page_disown(env, io, page);
 
 		/* held in ll_cl_init() */
-		lu_ref_del(&page->cp_reference, "cl_io", io);
 		cl_page_put(env, page);
 	}
 	cl_page_list_fini(env, queue);
@@ -1644,8 +1640,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 					io->ci_noquota = 1;
 					cl_page_own(env, io, page);
 					cl_page_list_add(plist, page, true);
-					lu_ref_add(&page->cp_reference,
-						   "cl_io", io);
 					result = cl_io_commit_async(env, io,
 						plist, 0, to,
 						mkwrite_commit_callback);
@@ -1687,7 +1681,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	else
 		fio->ft_bytes = PAGE_SIZE;
 
-	lu_ref_add(&page->cp_reference, "fault", io);
 	fio->ft_page = page;
 	EXIT;
 

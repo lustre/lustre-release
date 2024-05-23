@@ -852,7 +852,6 @@ void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page,
 	LASSERT(list_empty(&page->cp_batch));
 	list_add_tail(&page->cp_batch, &plist->pl_pages);
 	++plist->pl_nr;
-	lu_ref_add_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
 	if (getref)
 		cl_page_get(page);
 	EXIT;
@@ -871,7 +870,6 @@ void cl_page_list_del(const struct lu_env *env,
 	ENTRY;
 	list_del_init(&page->cp_batch);
 	--plist->pl_nr;
-	lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
 	if (putref)
 		cl_page_put(env, page);
 	EXIT;
@@ -890,8 +888,6 @@ void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
 	list_move_tail(&page->cp_batch, &dst->pl_pages);
 	--src->pl_nr;
 	++dst->pl_nr;
-	lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref, "queue",
-		      src, dst);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_move);
@@ -908,8 +904,6 @@ void cl_page_list_move_head(struct cl_page_list *dst, struct cl_page_list *src,
 	list_move(&page->cp_batch, &dst->pl_pages);
 	--src->pl_nr;
 	++dst->pl_nr;
-	lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref, "queue",
-			src, dst);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_move_head);
@@ -919,17 +913,7 @@ EXPORT_SYMBOL(cl_page_list_move_head);
  */
 void cl_page_list_splice(struct cl_page_list *src, struct cl_page_list *dst)
 {
-#ifdef CONFIG_LUSTRE_DEBUG_LU_REF
-	struct cl_page *page;
-	struct cl_page *tmp;
-
 	ENTRY;
-	cl_page_list_for_each_safe(page, tmp, src)
-		lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref,
-			      "queue", src, dst);
-#else
-	ENTRY;
-#endif
 	dst->pl_nr += src->pl_nr;
 	src->pl_nr = 0;
 	list_splice_tail_init(&src->pl_pages, &dst->pl_pages);
@@ -962,8 +946,6 @@ void cl_page_list_disown(const struct lu_env *env, struct cl_page_list *plist)
 		 */
 		if (page->cp_type == CPT_CACHEABLE)
 			__cl_page_disown(env, page);
-		lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue",
-			      plist);
 		cl_page_put(env, page);
 	}
 	EXIT;

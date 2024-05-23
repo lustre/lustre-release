@@ -234,7 +234,6 @@ static int vvp_device_init(const struct lu_env *env, struct lu_device *d,
 		env, next, next->ld_type->ldt_name, NULL);
 	if (rc == 0) {
 		lu_device_get(next);
-		lu_ref_add(&next->ld_reference, "lu-stack", &lu_site_init);
 	}
 	RETURN(rc);
 }
@@ -427,7 +426,6 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 				continue;
 
 			priv->vsp_clob = lu2cl(lu_obj);
-			lu_object_ref_add_atomic(lu_obj, "dump", current);
 			priv->vsp_page_index = 0;
 		}
 
@@ -439,7 +437,6 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 			priv->vsp_page_index = vmpage->index;
 			break;
 		}
-		lu_object_ref_del(&priv->vsp_clob->co_lu, "dump", current);
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
 		priv->vsp_clob = NULL;
 		priv->vsp_page_index = 0;
@@ -514,8 +511,6 @@ static void vvp_pgcache_rewind(struct vvp_seq_private *priv)
 		rhashtable_walk_enter(&s->ls_obj_hash, &priv->vsp_iter);
 		priv->vvp_prev_pos = 0;
 		if (priv->vsp_clob) {
-			lu_object_ref_del(&priv->vsp_clob->co_lu, "dump",
-					  current);
 			cl_object_put(priv->vsp_env, priv->vsp_clob);
 		}
 		priv->vsp_clob = NULL;
@@ -598,7 +593,6 @@ static int vvp_dump_pgcache_seq_release(struct inode *inode, struct file *file)
 	struct vvp_seq_private *priv = seq->private;
 
 	if (priv->vsp_clob) {
-		lu_object_ref_del(&priv->vsp_clob->co_lu, "dump", current);
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
 	}
 	cl_env_put(priv->vsp_env, &priv->vsp_refcheck);

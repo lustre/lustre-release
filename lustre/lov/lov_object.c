@@ -157,7 +157,6 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 		subhdr->coh_parent = hdr;
 		spin_unlock(&subhdr->coh_attr_guard);
 		subhdr->coh_nesting = hdr->coh_nesting + 1;
-		lu_object_ref_add(&subobj->co_lu, "lov-parent", lov);
 		lso->lso_super = lov;
 		lso->lso_index = idx;
 		result = 0;
@@ -291,7 +290,6 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 
 	cl_object_kill(env, sub);
 	/* release a reference to the sub-object and ... */
-	lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
 	cl_object_put(env, sub);
 
 	/* ... wait until it is actually destroyed---sub-object clears its

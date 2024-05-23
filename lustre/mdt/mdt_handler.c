@@ -4667,13 +4667,9 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 	 * possible blocking AST.
 	 */
 	while (new_lock->l_readers > 0) {
-		lu_ref_del(&new_lock->l_reference, "reader", new_lock);
-		lu_ref_del(&new_lock->l_reference, "user", new_lock);
 		new_lock->l_readers--;
 	}
 	while (new_lock->l_writers > 0) {
-		lu_ref_del(&new_lock->l_reference, "writer", new_lock);
-		lu_ref_del(&new_lock->l_reference, "user", new_lock);
 		new_lock->l_writers--;
 	}
 

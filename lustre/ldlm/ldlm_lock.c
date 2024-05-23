@@ -222,7 +222,6 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
 		lprocfs_counter_decr(ldlm_res_to_ns(res)->ns_stats,
 				     LDLM_NSS_LOCKS);
-		lu_ref_del(&res->lr_reference, "lock", lock);
 		if (lock->l_export) {
 			class_export_lock_put(lock->l_export, lock);
 			lock->l_export = NULL;
@@ -237,7 +236,6 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 		}
 		ldlm_resource_putref(res);
 		lock->l_resource = NULL;
-		lu_ref_fini(&lock->l_reference);
 		if (lock->l_flags & BIT(63))
 			/* Performance testing - bypassing RCU removes overhead */
 			lock_handle_free(&lock->l_handle.h_rcu);
@@ -417,7 +415,6 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
 	/* drop reference from hashtable only for first destroy */
 	if (first) {
-		lu_ref_del(&lock->l_reference, "hash", lock);
 		LDLM_LOCK_RELEASE(lock);
 	}
 	EXIT;
@@ -432,7 +429,6 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock)
 	first = ldlm_lock_destroy_internal(lock);
 	/* drop reference from hashtable only for first destroy */
 	if (first) {
-		lu_ref_del(&lock->l_reference, "hash", lock);
 		LDLM_LOCK_RELEASE(lock);
 	}
 	EXIT;
@@ -462,7 +458,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 		RETURN(NULL);
 
 	RCU_INIT_POINTER(lock->l_resource, resource);
-	lu_ref_add(&resource->lr_reference, "lock", lock);
 
 	refcount_set(&lock->l_handle.h_ref, 2);
 	INIT_LIST_HEAD(&lock->l_res_link);
@@ -497,8 +492,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 	INIT_HLIST_NODE(&lock->l_handle.h_link);
 	class_handle_hash(&lock->l_handle, lock_handle_owner);
 
-	lu_ref_init(&lock->l_reference);
-	lu_ref_add(&lock->l_reference, "hash", lock);
 	lock->l_callback_timestamp = 0;
 	lock->l_activity = 0;
 
@@ -572,7 +565,6 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 	if (IS_ERR(newres))
 		RETURN(PTR_ERR(newres));
 
-	lu_ref_add(&newres->lr_reference, "lock", lock);
 	/*
 	 * To flip the lock from the old to the new resource, oldres
 	 * and newres have to be locked. Resource spin-locks are taken
@@ -596,7 +588,6 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 	unlock_res(newres);
 
 	/* ...and the flowers are still standing! */
-	lu_ref_del(&oldres->lr_reference, "lock", lock);
 	ldlm_resource_putref(oldres);
 
 	RETURN(0);
@@ -650,7 +641,6 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 	 * destroyed after we did handle2object on it
 	 */
 	if ((flags == 0) && !ldlm_is_destroyed(lock)) {
-		lu_ref_add_atomic(&lock->l_reference, "handle", lock);
 		RETURN(lock);
 	}
 
@@ -658,7 +648,6 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 
 	LASSERT(lock->l_resource != NULL);
 
-	lu_ref_add_atomic(&lock->l_reference, "handle", lock);
 	if (unlikely(ldlm_is_destroyed(lock))) {
 		unlock_res_and_lock(lock);
 		CDEBUG(D_INFO, "lock already destroyed: lock %p\n", lock);
@@ -788,14 +777,11 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock,
 	ldlm_lock_remove_from_lru(lock);
 	if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
 		lock->l_readers++;
-		lu_ref_add_atomic(&lock->l_reference, "reader", lock);
 	}
 	if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS | LCK_TXN)) {
 		lock->l_writers++;
-		lu_ref_add_atomic(&lock->l_reference, "writer", lock);
 	}
 	LDLM_LOCK_GET(lock);
-	lu_ref_add_atomic(&lock->l_reference, "user", lock);
 	LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
@@ -853,16 +839,13 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock,
 	LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
 	if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
 		LASSERT(lock->l_readers > 0);
-		lu_ref_del(&lock->l_reference, "reader", lock);
 		lock->l_readers--;
 	}
 	if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS | LCK_TXN)) {
 		LASSERT(lock->l_writers > 0);
-		lu_ref_del(&lock->l_reference, "writer", lock);
 		lock->l_writers--;
 	}
 
-	lu_ref_del(&lock->l_reference, "user", lock);
 	LDLM_LOCK_RELEASE(lock);    /* matches the LDLM_LOCK_GET() in addref */
 }
 
@@ -1477,7 +1460,6 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 
 repeat:
 	group_lock = NULL;
-	LDLM_RESOURCE_ADDREF(res);
 	lock_res(res);
 	if (res->lr_type == LDLM_EXTENT)
 		lock = search_itree(res, &data);
@@ -1491,7 +1473,6 @@ repeat:
 	    (data.lmd_match & LDLM_MATCH_GROUP))
 		group_lock = lock;
 	unlock_res(res);
-	LDLM_RESOURCE_DELREF(res);
 
 	if (group_lock) {
 		l_wait_event_abortable(group_lock->l_waitq,

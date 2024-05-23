@@ -414,7 +414,6 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 
 	/* by now, all qqi users should have gone away */
 	LASSERT(atomic_read(&qqi->qqi_ref) == 1);
-	lu_ref_fini(&qqi->qqi_reference);
 
 	/* release accounting object */
 	if (qqi->qqi_acct_obj != NULL && !IS_ERR(qqi->qqi_acct_obj)) {
@@ -508,7 +507,6 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	/* set backpointer and other parameters */
 	qqi->qqi_qsd   = qsd;
 	qqi->qqi_qtype = qtype;
-	lu_ref_init(&qqi->qqi_reference);
 	qqi->qqi_glb_uptodate = false;
 	qqi->qqi_slv_uptodate = false;
 	qqi->qqi_reint        = false;
@@ -656,7 +654,6 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* release reference on dt_device */
 	if (qsd->qsd_dev != NULL) {
-		lu_ref_del(&qsd->qsd_dev->dd_lu_dev.ld_reference, "qsd", qsd);
 		lu_device_put(&qsd->qsd_dev->dd_lu_dev);
 		qsd->qsd_dev = NULL;
 	}
@@ -719,7 +716,6 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 
 	/* grab reference on osd device */
 	lu_device_get(&dev->dd_lu_dev);
-	lu_ref_add(&dev->dd_lu_dev.ld_reference, "qsd", qsd);
 	qsd->qsd_dev = dev;
 
 	/* get fsname from svname */

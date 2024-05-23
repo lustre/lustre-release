@@ -42,7 +42,6 @@ EXTRA_DIST = \
 	llog_swab.h \
 	lprocfs_status.h \
 	lu_object.h \
-	lu_ref.h \
 	lustre_acl.h \
 	lustre_barrier.h \
 	lustre_compat.h \

@@ -48,7 +48,6 @@
 #include <lustre_import.h>
 #include <lustre_handles.h>
 #include <linux/interval_tree_generic.h>
-#include <lu_ref.h>
 
 #include "lustre_dlm_flags.h"
 
@@ -1009,8 +1008,6 @@ struct ldlm_lock {
 	 */
 	struct ldlm_lock	*l_blocking_lock;
 
-	/** Reference tracking structure to debug leaked locks. */
-	struct lu_ref		l_reference;
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 	/* Debugging stuff for bug 20498, for tracking export references. */
 	/** number of export references taken */
@@ -1159,9 +1156,6 @@ struct ldlm_resource {
 	void			*lr_lvb_data;
 	/** is lvb initialized ? */
 	bool			lr_lvb_initialized;
-
-	/** List of references to this resource. For debugging. */
-	struct lu_ref		lr_reference;
 };
 
 static inline int ldlm_is_granted(struct ldlm_lock *lock)
@@ -1522,17 +1516,12 @@ static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
 	return __ldlm_handle2lock(h, 0);
 }
 
-#define LDLM_LOCK_REF_DEL(lock) \
-	lu_ref_del(&lock->l_reference, "handle", lock)
-
 static inline struct ldlm_lock *
 ldlm_handle2lock_long(const struct lustre_handle *h, __u64 flags)
 {
 	struct ldlm_lock *lock;
 
 	lock = __ldlm_handle2lock(h, flags);
-	if (lock != NULL)
-		LDLM_LOCK_REF_DEL(lock);
 	return lock;
 }
 
@@ -1579,8 +1568,6 @@ void ldlm_dump_export_locks(struct obd_export *exp);
 /* Release temporary lock got by ldlm_handle2lock() or __ldlm_handle2lock() */
 #define LDLM_LOCK_PUT(lock)                     \
 do {                                            \
-	LDLM_LOCK_REF_DEL(lock);                \
-	/*LDLM_DEBUG((lock), "put");*/          \
 	ldlm_lock_put(lock);                    \
 } while (0)
 
@@ -1721,12 +1708,6 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ln);
 void ldlm_resource_dump(int level, struct ldlm_resource *lr);
 int ldlm_lock_change_resource(struct ldlm_namespace *ln, struct ldlm_lock *ll,
 			      const struct ldlm_res_id *lri);
-
-#define LDLM_RESOURCE_ADDREF(res) \
-	lu_ref_add_atomic(&(res)->lr_reference, __FUNCTION__, current)
-
-#define LDLM_RESOURCE_DELREF(res) \
-	lu_ref_del(&(res)->lr_reference, __FUNCTION__, current)
 
 /* ldlm_request.c */
 /** \defgroup ldlm_local_ast Default AST handlers for local locks

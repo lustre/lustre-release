@@ -792,12 +792,6 @@ struct cl_page {
 	 * by sub-io. Protected by a VM lock.
 	 */
 	struct cl_io            *cp_owner;
-	/** List of references to this page, for debugging. */
-	struct lu_ref		cp_reference;
-	/** Link to an object, for debugging. */
-	struct lu_ref_link	cp_obj_ref;
-	/** Link to a queue, for debugging. */
-	struct lu_ref_link	cp_queue_ref;
 	/** Assigned if doing a sync_io */
 	struct cl_sync_io	*cp_sync_io;
 };

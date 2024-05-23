@@ -62,7 +62,6 @@ static int lovsub_device_init(const struct lu_env *env, struct lu_device *d,
 	}
 
 	lu_device_get(next);
-	lu_ref_add(&next->ld_reference, "lu-stack", &lu_site_init);
 	lsd->acid_next = lu2cl_dev(next);
 	RETURN(rc);
 }

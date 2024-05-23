@@ -352,8 +352,6 @@ static void osc_extent_free(struct kref *kref)
 	LASSERT(RB_EMPTY_NODE(&ext->oe_node));
 
 	if (ext->oe_dlmlock) {
-		lu_ref_del(&ext->oe_dlmlock->l_reference,
-			   "osc_extent", ext);
 		LDLM_LOCK_RELEASE(ext->oe_dlmlock);
 		ext->oe_dlmlock = NULL;
 	}
@@ -703,7 +701,6 @@ static struct osc_extent *osc_extent_find(const struct lu_env *env,
 	if (olck->ols_dlmlock != NULL) {
 		LASSERT(olck->ols_hold);
 		cur->oe_dlmlock = LDLM_LOCK_GET(olck->ols_dlmlock);
-		lu_ref_add(&olck->ols_dlmlock->l_reference, "osc_extent", cur);
 	}
 
 	/* grants has been allocated by caller */
@@ -1004,7 +1001,6 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 		list_del_init(&oap->oap_pending_item);
 
 		cl_page_get(page);
-		lu_ref_add(&page->cp_reference, "truncate", current);
 
 		if (cl_page_own(env, io, page) == 0) {
 			cl_page_discard(env, io, page);
@@ -1014,7 +1010,6 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 			LASSERT(0);
 		}
 
-		lu_ref_del(&page->cp_reference, "truncate", current);
 		cl_batch_put(env, page, fbatch);
 
 		--ext->oe_nr_pages;
@@ -1338,7 +1333,6 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	 * released in cl_page_completion() and nothing except for the
 	 * reference counter protects page from concurrent reclaim.
 	 */
-	lu_ref_del(&page->cp_reference, "transfer", page);
 
 	/* for transient pages, the last reference is destroyed by the
 	 * cl_page_completion process, so do not referencce the page after this
@@ -2124,7 +2118,6 @@ __must_hold(&cli->cl_loi_list_lock)
 
 	while ((osc = osc_next_obj(cli)) != NULL) {
 		struct cl_object *obj = osc2cl(osc);
-		struct lu_ref_link link;
 
 		OSC_IO_DEBUG(osc, "%lu in flight\n", rpcs_in_flight(cli));
 
@@ -2140,7 +2133,6 @@ __must_hold(&cli->cl_loi_list_lock)
 
 		cl_object_get(obj);
 		spin_unlock(&cli->cl_loi_list_lock);
-		lu_object_ref_add_at(&obj->co_lu, &link, "check", current);
 
 		/* attempt some read/write balancing by alternating between
 		 * reads and writes in an object.  The makes_rpc checks here
@@ -2181,7 +2173,6 @@ __must_hold(&cli->cl_loi_list_lock)
 		osc_object_unlock(osc);
 
 		osc_list_maint(cli, osc);
-		lu_object_ref_del_at(&obj->co_lu, &link, "check", current);
 		cl_object_put(env, obj);
 
 		spin_lock(&cli->cl_loi_list_lock);
@@ -2597,7 +2588,6 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;
 	if (oscl && oscl->ols_dlmlock != NULL) {
 		ext->oe_dlmlock = LDLM_LOCK_GET(oscl->ols_dlmlock);
-		lu_ref_add(&ext->oe_dlmlock->l_reference, "osc_extent", ext);
 	}
 	if (ext->oe_dio && !ext->oe_rw) { /* direct io write */
 		int grants;
@@ -3065,8 +3055,6 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 				continue;
 
 			cl_page_get(page);
-			lu_ref_add_atomic(&page->cp_reference,
-					  "gang_lookup", current);
 			pvec[j++] = ops;
 		}
 		++idx;
@@ -3087,7 +3075,6 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		for (i = 0; i < j; ++i) {
 			ops = pvec[i];
 			page = ops->ops_cl.cpl_page;
-			lu_ref_del(&page->cp_reference, "gang_lookup", current);
 			cl_batch_put(env, page, fbatch);
 		}
 		folio_batch_release(fbatch);

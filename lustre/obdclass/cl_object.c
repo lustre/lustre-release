@@ -1029,8 +1029,6 @@ struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,
                 rc = ldt->ldt_ops->ldto_device_init(env, d, typename, next);
                 if (rc == 0) {
                         lu_device_get(d);
-                        lu_ref_add(&d->ld_reference,
-                                   "lu-stack", &lu_site_init);
                 } else {
                         ldt->ldt_ops->ldto_device_free(env, d);
                         CERROR("can't init device '%s', %d\n", typename, rc);

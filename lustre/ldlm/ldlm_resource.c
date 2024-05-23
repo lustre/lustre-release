@@ -1459,7 +1459,6 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 
 	refcount_set(&res->lr_refcount, 1);
 	spin_lock_init(&res->lr_lock);
-	lu_ref_init(&res->lr_reference);
 
 	/* Since LVB init can be delayed now, there is no longer need to
 	 * immediatelly acquire mutex here.
@@ -1544,8 +1543,6 @@ ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
 	if (hnode != NULL) {
 		/* Someone won the race and already added the resource. */
 		cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
-		/* Clean lu_ref for failed resource. */
-		lu_ref_fini(&res->lr_reference);
 		ldlm_resource_free(res);
 found:
 		res = hlist_entry(hnode, struct ldlm_resource, lr_hash);
@@ -1602,7 +1599,6 @@ static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
 
 	cfs_hash_bd_del_locked(nsb->nsb_namespace->ns_rs_hash,
 			       bd, &res->lr_hash);
-	lu_ref_fini(&res->lr_reference);
 	if (atomic_dec_and_test(&nsb->nsb_count))
 		ldlm_namespace_put(nsb->nsb_namespace);
 }

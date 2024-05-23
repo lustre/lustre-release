@@ -41,7 +41,6 @@
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
-#include <lu_ref.h>
 #include <lustre_export.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
@@ -751,10 +750,6 @@ struct obd_device {
 	int				obd_pool_limit;
 
 	atomic_t			obd_conn_inprogress;
-
-	/**
-	 * List of outstanding class_incref()'s fo this OBD. For debugging. */
-	struct lu_ref			obd_reference;
 
 	struct kset		        obd_kset; /* sysfs object collection */
 	struct kobj_type		obd_ktype;

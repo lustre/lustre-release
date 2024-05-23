@@ -84,7 +84,6 @@ static void obd_device_free(struct obd_device *obd)
 		       obd, obd->obd_namespace, obd->obd_force);
 		LBUG();
 	}
-	lu_ref_fini(&obd->obd_reference);
 	OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
 
@@ -424,8 +423,6 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	llog_group_init(&newdev->obd_olg);
 	/* Detach drops this */
 	kref_init(&newdev->obd_refcount);
-	lu_ref_init(&newdev->obd_reference);
-	lu_ref_add(&newdev->obd_reference, "newdev", newdev);
 
 	atomic_set(&newdev->obd_conn_inprogress, 0);
 

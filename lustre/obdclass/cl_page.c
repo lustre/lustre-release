@@ -190,10 +190,8 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
 	cs_page_dec(obj, CS_total);
 	if (cp->cp_type != CPT_TRANSIENT)
 		cs_pagestate_dec(obj, cp->cp_state);
-	lu_object_ref_del_at(&obj->co_lu, &cp->cp_obj_ref, "cl_page", cp);
 	if (cp->cp_type != CPT_TRANSIENT)
 		cl_object_put(env, obj);
-	lu_ref_fini(&cp->cp_reference);
 	__cl_page_free(cp, bufsize);
 	EXIT;
 }
@@ -274,8 +272,6 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		cl_page->cp_obj = o;
 		if (type != CPT_TRANSIENT)
 			cl_object_get(o);
-		lu_object_ref_add_at(&o->co_lu, &cl_page->cp_obj_ref,
-				     "cl_page", cl_page);
 		cl_page->cp_vmpage = vmpage;
 		if (cl_page->cp_type != CPT_TRANSIENT)
 			cl_page->cp_state = CPS_CACHED;
@@ -286,7 +282,6 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		else
 			cl_page->cp_inode = page2inode(vmpage);
 		INIT_LIST_HEAD(&cl_page->cp_batch);
-		lu_ref_init(&cl_page->cp_reference);
 		head = o;
 		cl_page->cp_page_index = ind;
 		cl_object_for_each(o, head) {

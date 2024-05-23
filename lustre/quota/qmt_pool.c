@@ -202,7 +202,6 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 
 	/* grab reference on master target that this pool belongs to */
 	lu_device_get(qmt2lu_dev(qmt));
-	lu_ref_add(&qmt2lu_dev(qmt)->ld_reference, "pool", pool);
 	pool->qpi_qmt = qmt;
 
 	/* create pool proc directory */
@@ -289,7 +288,6 @@ void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 	if (pool->qpi_qmt != NULL) {
 		struct lu_device *ld = qmt2lu_dev(pool->qpi_qmt);
 
-		lu_ref_del(&ld->ld_reference, "pool", pool);
 		lu_device_put(ld);
 		pool->qpi_qmt = NULL;
 	}

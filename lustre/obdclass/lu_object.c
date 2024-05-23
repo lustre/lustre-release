@@ -53,7 +53,6 @@
 #include <lustre_disk.h>
 #include <lustre_fid.h>
 #include <lu_object.h>
-#include <lu_ref.h>
 
 struct lu_site_bkt_data {
 	/**
@@ -1140,7 +1139,6 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 	s->ls_top_dev = top;
 	top->ld_site = s;
 	lu_device_get(top);
-	lu_ref_add(&top->ld_reference, "site-top", s);
 
 	INIT_LIST_HEAD(&s->ls_ld_linkage);
 	spin_lock_init(&s->ls_ld_lock);
@@ -1168,7 +1166,6 @@ void lu_site_fini(struct lu_site *s)
 
 	if (s->ls_top_dev != NULL) {
 		s->ls_top_dev->ld_site = NULL;
-		lu_ref_del(&s->ls_top_dev->ld_reference, "site-top", s);
 		lu_device_put(s->ls_top_dev);
 		s->ls_top_dev = NULL;
 	}
@@ -1228,7 +1225,6 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 
 	memset(d, 0, sizeof(*d));
 	d->ld_type = t;
-	lu_ref_init(&d->ld_reference);
 	INIT_LIST_HEAD(&d->ld_linkage);
 
 	return 0;
@@ -1245,7 +1241,6 @@ void lu_device_fini(struct lu_device *d)
 		d->ld_obd = NULL;
 	}
 
-	lu_ref_fini(&d->ld_reference);
 	LASSERTF(atomic_read(&d->ld_ref) == 0,
 		 "Refcount is %u\n", atomic_read(&d->ld_ref));
 	LASSERT(atomic_read(&t->ldt_device_nr) > 0);
@@ -1264,7 +1259,6 @@ int lu_object_init(struct lu_object *o, struct lu_object_header *h,
 	o->lo_header = h;
 	o->lo_dev = d;
 	lu_device_get(d);
-	lu_ref_add_at(&d->ld_reference, &o->lo_dev_ref, "lu_object", o);
 	INIT_LIST_HEAD(&o->lo_linkage);
 
 	return 0;
@@ -1279,8 +1273,6 @@ void lu_object_fini(struct lu_object *o)
 	LASSERT(list_empty(&o->lo_linkage));
 
 	if (dev != NULL) {
-		lu_ref_del_at(&dev->ld_reference, &o->lo_dev_ref,
-			      "lu_object", o);
 		lu_device_put(dev);
 		o->lo_dev = NULL;
 	}
@@ -1318,7 +1310,6 @@ int lu_object_header_init(struct lu_object_header *h)
 	atomic_set(&h->loh_ref, 1);
 	INIT_LIST_HEAD(&h->loh_lru);
 	INIT_LIST_HEAD(&h->loh_layers);
-	lu_ref_init(&h->loh_reference);
 	return 0;
 }
 EXPORT_SYMBOL(lu_object_header_init);
@@ -1328,7 +1319,6 @@ void lu_object_header_fini(struct lu_object_header *h)
 {
 	LASSERT(list_empty(&h->loh_layers));
 	LASSERT(list_empty(&h->loh_lru));
-	lu_ref_fini(&h->loh_reference);
 }
 EXPORT_SYMBOL(lu_object_header_fini);
 
@@ -1371,7 +1361,6 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 	lu_site_purge(env, site, ~0);
 	for (scan = top; scan != NULL; scan = next) {
 		next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
-		lu_ref_del(&scan->ld_reference, "lu-stack", &lu_site_init);
 		lu_device_put(scan);
 	}
 
@@ -1406,7 +1395,6 @@ int lu_context_key_register(struct lu_context_key *key)
 
 	result = -ENFILE;
 	atomic_set(&key->lct_used, 1);
-	lu_ref_init(&key->lct_reference);
 	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
 		if (lu_keys[i])
 			continue;
@@ -1423,7 +1411,6 @@ int lu_context_key_register(struct lu_context_key *key)
 		break;
 	}
 	if (result) {
-		lu_ref_fini(&key->lct_reference);
 		atomic_set(&key->lct_used, 0);
 	}
 	return result;
@@ -1441,7 +1428,6 @@ static void key_fini(struct lu_context *ctx, int index)
 		LASSERT(atomic_read(&key->lct_used) > 0);
 
 		key->lct_fini(ctx, key, ctx->lc_value[index]);
-		lu_ref_del(&key->lct_reference, "ctx", ctx);
 		if (atomic_dec_and_test(&key->lct_used))
 			wake_up_var(&key->lct_used);
 
@@ -1470,9 +1456,6 @@ void lu_context_key_degister(struct lu_context_key *key)
 	 */
 	atomic_dec(&key->lct_used);
 	wait_var_event(&key->lct_used, atomic_read(&key->lct_used) == 0);
-
-	if (!WARN_ON(lu_keys[key->lct_index] == NULL))
-		lu_ref_fini(&key->lct_reference);
 
 	smp_store_release(&lu_keys[key->lct_index], NULL); /* release key */
 }
@@ -1674,7 +1657,6 @@ static int keys_fill(struct lu_context *ctx)
 				break;
 			}
 
-			lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
 			atomic_inc(&key->lct_used);
 			/*
 			 * This is the only place in the code, where an
@@ -2172,14 +2154,10 @@ int lu_global_init(void)
 
 	CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
 
-	result = lu_ref_global_init();
-	if (result != 0)
-		return result;
-
 	LU_CONTEXT_KEY_INIT(&lu_global_key);
 	result = lu_context_key_register(&lu_global_key);
 	if (result)
-		goto out_lu_ref;
+		goto out;
 
 	/*
 	 * At this level, we don't know what tags are needed, so allocate them
@@ -2191,7 +2169,7 @@ int lu_global_init(void)
 	up_write(&lu_sites_guard);
 	if (result) {
 		lu_context_key_degister(&lu_global_key);
-		goto out_lu_ref;
+		goto out;
 	}
 
 	/*
@@ -2220,8 +2198,7 @@ out_env:
 	down_write(&lu_sites_guard);
 	lu_env_fini(&lu_shrink_env);
 	up_write(&lu_sites_guard);
-out_lu_ref:
-	lu_ref_global_fini();
+out:
 	return result;
 }
 
@@ -2241,8 +2218,6 @@ void lu_global_fini(void)
 	up_write(&lu_sites_guard);
 
 	rhashtable_destroy(&lu_env_rhash);
-
-	lu_ref_global_fini();
 }
 
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)

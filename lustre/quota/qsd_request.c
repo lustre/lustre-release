@@ -299,19 +299,6 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	switch(it_op) {
 	case IT_QUOTA_CONN:
 		/* grab reference on qqi for new lock */
-#ifdef CONFIG_LUSTRE_DEBUG_LU_REF
-	{
-		struct ldlm_lock	*lock;
-
-		lock = ldlm_handle2lock(&qti->qti_lockh);
-		if (lock == NULL) {
-			ptlrpc_req_put(req);
-			GOTO(out, rc = -ENOLCK);
-		}
-		lu_ref_add(&qqi->qqi_reference, "glb_lock", lock);
-		LDLM_LOCK_PUT(lock);
-	}
-#endif
 		qqi_getref(qqi);
 		break;
 	case IT_QUOTA_DQACQ:

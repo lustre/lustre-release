@@ -1896,7 +1896,6 @@ static void osd_trans_commit_cb(struct super_block *sb,
 		dcb->dcb_func(NULL, th, dcb, error);
 	}
 
-	lu_ref_del_at(&lud->ld_reference, &oh->ot_dev_link, "osd-tx", th);
 	if (atomic_dec_and_test(&osd->od_commit_cb_in_flight))
 		wake_up(&osd->od_commit_cb_done);
 	th->th_dev = NULL;
@@ -2124,8 +2123,6 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		LASSERT(oti->oti_txns == 0);
 
 		atomic_inc(&dev->od_commit_cb_in_flight);
-		lu_ref_add_at(&d->dd_lu_dev.ld_reference, &oh->ot_dev_link,
-			      "osd-tx", th);
 		oti->oti_txns++;
 		rc = 0;
 	} else {

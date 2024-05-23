@@ -82,13 +82,7 @@ static struct qsd_qtype_info *qsd_glb_ast_data_get(struct ldlm_lock *lock,
 	}
 	unlock_res_and_lock(lock);
 
-	if (qqi)
-		/* it is not safe to call lu_ref_add() under spinlock */
-		lu_ref_add(&qqi->qqi_reference, "ast_data_get", lock);
-
 	if (reset && qqi) {
-		/* release qqi reference hold for the lock */
-		lu_ref_del(&qqi->qqi_reference, "glb_lock", lock);
 		qqi_putref(qqi);
 	}
 	RETURN(qqi);
@@ -230,7 +224,6 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 		if (!ldlm_is_local_only(lock))
 			qsd_start_reint_thread(qqi);
 
-		lu_ref_del(&qqi->qqi_reference, "ast_data_get", lock);
 		qqi_putref(qqi);
 		break;
 	}
@@ -340,7 +333,6 @@ static int qsd_glb_glimpse_ast(struct ldlm_lock *lock, void *data)
 			 desc->gl_ver, true);
 	EXIT;
 out_qqi:
-	lu_ref_del(&qqi->qqi_reference, "ast_data_get", lock);
 	qqi_putref(qqi);
 out:
 	req->rq_status = rc;

@@ -179,7 +179,6 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 			 * locked by I_NEW bit.
 			 */
 			lli->lli_clob = clob;
-			lu_object_ref_add(&clob->co_lu, "inode", inode);
 		} else {
 			result = PTR_ERR(clob);
 		}
@@ -254,7 +253,6 @@ void cl_inode_fini(struct inode *inode)
 		 * when its master is evicted.
 		 */
 		cl_object_kill(env, clob);
-		lu_object_ref_del(&clob->co_lu, "inode", inode);
 		cl_object_put_last(env, clob);
 		lli->lli_clob = NULL;
 		if (emergency)

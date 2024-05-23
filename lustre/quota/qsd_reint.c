@@ -436,7 +436,6 @@ static int qsd_reint_main(void *_args)
 	       qsd->qsd_svname, PFID(&qqi->qqi_fid));
 
 	qqi_getref(qqi);
-	lu_ref_add(&qqi->qqi_reference, "reint_thread", current);
 	qti = qsd_info(env);
 
 	complete(args->qra_started);
@@ -544,7 +543,6 @@ out_env_init:
 	if (xchg(&qqi->qqi_reint_task, NULL) == NULL)
 		wait_var_event(qqi, kthread_should_stop());
 
-	lu_ref_del(&qqi->qqi_reference, "reint_thread", current);
 	qqi_putref(qqi);
 
 	return rc;

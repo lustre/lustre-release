@@ -1810,12 +1810,10 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		if (res != pres) {
 			if (pres != NULL) {
 				ldlm_reprocess_all(pres, 0);
-				LDLM_RESOURCE_DELREF(pres);
 				ldlm_resource_putref(pres);
 			}
 			if (res != NULL) {
 				ldlm_resource_getref(res);
-				LDLM_RESOURCE_ADDREF(res);
 
 				if (!ldlm_is_discard_data(lock))
 					ldlm_lvbo_update(res, lock,
@@ -1843,7 +1841,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 	}
 	if (pres != NULL) {
 		ldlm_reprocess_all(pres, 0);
-		LDLM_RESOURCE_DELREF(pres);
 		ldlm_resource_putref(pres);
 	}
 	LDLM_DEBUG_NOLOCK("server-side cancel handler END");

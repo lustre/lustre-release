@@ -258,7 +258,6 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 		GOTO(out, rc = PTR_ERR(cp));
 	}
 
-	lu_ref_add(&cp->cp_reference, "ra", current);
 	cl_page_assume(env, io, cp);
 
 	if (!cp->cp_defer_uptodate && !PageUptodate(vmpage)) {
@@ -277,7 +276,6 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 		rc = 1;
 	}
 
-	lu_ref_del(&cp->cp_reference, "ra", current);
 	cl_page_put(env, cp);
 
 out:
@@ -1497,8 +1495,6 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		page = cl_page_find(env, clob, vmpage->index,
 				    vmpage, CPT_CACHEABLE);
 		if (!IS_ERR(page)) {
-			lu_ref_add(&page->cp_reference, "writepage",
-				   current);
 			cl_page_assume(env, io, page);
 			result = cl_page_flush(env, io, page);
 			if (result != 0) {
@@ -1515,8 +1511,6 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 			}
 			cl_page_disown(env, io, page);
 			unlocked = true;
-			lu_ref_del(&page->cp_reference,
-				   "writepage", current);
 			cl_page_put(env, page);
 		} else {
 			result = PTR_ERR(page);
