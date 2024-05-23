@@ -36,9 +36,13 @@
  *
  * @LNET_CMD_CONFIGURE:		command to setup LNet stack
  * @LNET_CMD_NETS:		command to manage the LNet networks
+ * @LNET_CMD_PEERS:		command to manage LNet peers
  * @LNET_CMD_ROUTES:		command to manage LNet routes
  * @LNET_CMD_PING:		command to send pings to LNet connections
  * @LNET_CMD_CPT_OF_NID:	command to calculate the CPT of specified NIDs
+ * @LNET_CMD_PEER_DIST:		command to find distance between LNet peers
+ * @LNET_CMD_UDSP:		command to manage LNet UDSP rules
+ * @LNET_CMD_PEER_FAIL:		command to fail LNet peers
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,
@@ -51,6 +55,8 @@ enum lnet_commands {
 	LNET_CMD_PING		= 6,
 	LNET_CMD_CPT_OF_NID     = 7,
 	LNET_CMD_PEER_DIST	= 8,
+	LNET_CMD_UDSP		= 9,
+	LNET_CMD_PEER_FAIL	= 10,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };

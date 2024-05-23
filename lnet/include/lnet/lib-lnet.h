@@ -788,7 +788,7 @@ int lnet_msg_containers_create(void);
 
 char *lnet_health_error2str(enum lnet_msg_hstatus hstatus);
 char *lnet_msgtyp2str(int type);
-int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
+int lnet_fail_nid(struct lnet_nid *nid, unsigned int threshold);
 
 /** \addtogroup lnet_fault_simulation @{ */
 

@@ -1423,9 +1423,9 @@ lnet_unprepare(void)
 	/* NB no LNET_LOCK since this is the last reference.  All LND instances
 	 * have shut down already, so it is safe to unlink and free all
 	 * descriptors, even those that appear committed to a network op (eg MD
-	 * with non-zero pending count) */
-
-	lnet_fail_nid(LNET_NID_ANY, 0);
+	 * with non-zero pending count)
+	 */
+	lnet_fail_nid(&LNET_ANY_NID, 0);
 
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(list_empty(&the_lnet.ln_test_peers));
@@ -2884,6 +2884,47 @@ canceled:
 }
 EXPORT_SYMBOL(lnet_genl_send_scalar_list);
 
+int
+nla_extract_val(struct nlattr **attr, int *rem,
+		enum lnet_nl_scalar_attrs attr_type,
+		void *ret, int ret_size,
+		struct netlink_ext_ack *extack)
+{
+	int rc = -EINVAL;
+
+	ENTRY;
+	*attr = nla_next(*attr, rem);
+	if (nla_type(*attr) != attr_type) {
+		CDEBUG(D_NET, "nla_type %d expect %d\n", nla_type(*attr),
+		       attr_type);
+		NL_SET_ERR_MSG(extack, "Invalid type for attribute");
+		RETURN(rc);
+	}
+
+	switch (attr_type) {
+	case LN_SCALAR_ATTR_VALUE:
+		rc = nla_strscpy(ret, *attr, ret_size);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack,
+				       "Failed to extract value from string attribute");
+		} else {
+			rc = 0;
+		}
+		break;
+	case LN_SCALAR_ATTR_INT_VALUE:
+		if (ret_size == sizeof(u64)) {
+			*(u64 *)ret = nla_get_s64(*attr);
+			rc = 0;
+		}
+		break;
+	default:
+		NL_SET_ERR_MSG(extack, "Unrecognized attribute type");
+		ret = NULL;
+		break;
+	}
+	RETURN(rc);
+}
+
 static struct genl_family lnet_family;
 
 /**
@@ -4116,7 +4157,8 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 	}
 	case IOC_LIBCFS_FAIL_NID:
-		return lnet_fail_nid(data->ioc_nid, data->ioc_count);
+		lnet_nid4_to_nid(data->ioc_nid, &nid);
+		return lnet_fail_nid(&nid, data->ioc_count);
 
 	case IOC_LIBCFS_ADD_ROUTE: {
 		/* default router sensitivity to 1 */
@@ -8866,6 +8908,86 @@ static int lnet_old_peer_dist_show_dump(struct sk_buff *msg,
 }
 #endif
 
+static int lnet_peer_fail_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	struct netlink_ext_ack *extack = NULL;
+	int msg_len, rem, rc = 0;
+	struct nlattr *attr;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = info->extack;
+#endif
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		return -ENOMSG;
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		return -EINVAL;
+	}
+
+	nla_for_each_nested(attr, params, rem) {
+		s64 threshold = LNET_MD_THRESH_INF;
+		struct lnet_nid pnid = {};
+		struct nlattr *peer;
+		int rem2;
+
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(peer, attr, rem2) {
+			if (nla_type(peer) != LN_SCALAR_ATTR_VALUE)
+				continue;
+
+			if (nla_strcmp(peer, "nid") == 0) {
+				char nidstr[LNET_NIDSTR_SIZE];
+
+				rc = nla_extract_val(&peer, &rem2,
+						     LN_SCALAR_ATTR_VALUE,
+						     nidstr, sizeof(nidstr),
+						     extack);
+				if (rc < 0)
+					GOTO(report_err, rc);
+
+				rc = libcfs_strnid(&pnid, strim(nidstr));
+				if (rc < 0) {
+					GENL_SET_ERR_MSG(info,
+							 "invalid peer NID");
+					GOTO(report_err, rc);
+				}
+				rc = 0;
+			} else if (nla_strcmp(peer, "threshold") == 0) {
+				rc = nla_extract_val(&peer, &rem2,
+						     LN_SCALAR_ATTR_INT_VALUE,
+						     &threshold, sizeof(threshold),
+						     extack);
+				if (rc < 0) {
+					GOTO(report_err, rc);
+				}
+			}
+		}
+
+		if (!nid_addr_is_set(&pnid)) {
+			GENL_SET_ERR_MSG(info, "peer NID missing");
+			GOTO(report_err, rc);
+		}
+
+		rc = lnet_fail_nid(&pnid, threshold);
+		if (rc < 0) {
+			GENL_SET_ERR_MSG(info,
+					 "could not set threshoold for peer NID");
+			GOTO(report_err, rc);
+		}
+	}
+report_err:
+	return rc;
+}
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -8949,6 +9071,11 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_peer_dist_show_dump,
 #endif
 		.done		= lnet_peer_dist_show_done,
+	},
+	{
+		.cmd		= LNET_CMD_PEER_FAIL,
+		.flags		= GENL_ADMIN_PERM,
+		.doit		= lnet_peer_fail_cmd,
 	},
 };
 
