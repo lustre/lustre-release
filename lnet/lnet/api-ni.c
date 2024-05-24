@@ -5527,6 +5527,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 	int seq = cb->nlh->nlmsg_seq;
 	struct lnet_net *net;
 	void *hdr = NULL;
+	bool export_backup = cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
 	extack = cb->extack;
@@ -5542,8 +5543,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 		    nlist->lngl_net_id != net->net_id)
 			continue;
 
-		if (cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED &&
-		    LNET_NETTYP(net->net_id) == LOLND)
+		if (export_backup && LNET_NETTYP(net->net_id) == LOLND)
 			continue;
 
 		if (gnlh->version && LNET_NETTYP(net->net_id) != LOLND) {
@@ -5622,7 +5622,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 			ni_attr = nla_nest_start(msg, dev++);
 			found = true;
 			lnet_ni_lock(ni);
-			if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
+			if (!export_backup) {
 				nla_put_string(msg, LNET_NET_LOCAL_NI_ATTR_NID,
 					       libcfs_nidstr(&ni->ni_nid));
 				if (!nid_is_lo0(&ni->ni_nid) &&
@@ -5658,7 +5658,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 				struct nlattr *tun_attr, *ni_tun;
 				int j;
 
-				if (cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED) {
+				if (export_backup) {
 					lnet_ni_unlock(ni);
 					goto skip_msg_stats;
 				}
@@ -5815,7 +5815,7 @@ skip_msg_stats:
 					nla_nest_end(msg, lnd_tun_attr);
 				}
 
-				if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED))
+				if (!export_backup)
 					nla_put_s32(msg, LNET_NET_LOCAL_NI_DEV_CPT,
 						    ni->ni_dev_cpt);
 
@@ -5858,7 +5858,7 @@ skip_msg_stats:
 		genlmsg_end(msg, hdr);
 	}
 
-	if (!found) {
+	if (!export_backup && !found) {
 		struct nlmsghdr *nlh = nlmsg_hdr(msg);
 
 		nlmsg_cancel(msg, nlh);

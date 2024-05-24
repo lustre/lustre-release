@@ -114,7 +114,7 @@ configure_dlc() {
 
 GLOBAL_YAML_FILE=$TMP/sanity-lnet-global.yaml
 define_global_yaml() {
-	$LNETCTL export --backup >${GLOBAL_YAML_FILE} ||
+	$LNETCTL export --backup &>${GLOBAL_YAML_FILE} ||
 		error "Failed to export global yaml $?"
 }
 
