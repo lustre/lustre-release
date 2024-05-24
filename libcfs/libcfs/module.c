@@ -50,7 +50,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
 #include <lustre_crypto.h>
 #include "tracefile.h"
@@ -629,7 +628,7 @@ int libcfs_setup(void)
 
 	mutex_lock(&libcfs_startup);
 	if (libcfs_active)
-		goto out;
+		goto cleanup_lock;
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
@@ -642,26 +641,12 @@ int libcfs_setup(void)
 		rc = -ENOMEM;
 		CERROR("libcfs: failed to start rehash workqueue: rc = %d\n",
 		       rc);
-		goto cleanup_debug;
-	}
-
-	rc = cfs_crypto_register();
-	if (rc) {
-		CERROR("cfs_crypto_register: error %d\n", rc);
-		goto cleanup_wq;
+		libcfs_debug_cleanup();
+		goto cleanup_lock;
 	}
 
 	CDEBUG(D_OTHER, "libcfs setup OK\n");
-out:
 	libcfs_active = 1;
-	mutex_unlock(&libcfs_startup);
-	return 0;
-
-cleanup_wq:
-	destroy_workqueue(cfs_rehash_wq);
-	cfs_rehash_wq = NULL;
-cleanup_debug:
-	libcfs_debug_cleanup();
 cleanup_lock:
 	mutex_unlock(&libcfs_startup);
 	return rc;
@@ -709,8 +694,6 @@ static void __exit libcfs_exit(void)
 
 	if (cfs_rehash_wq)
 		destroy_workqueue(cfs_rehash_wq);
-
-	cfs_crypto_unregister();
 
 	/* the below message is checked in test-framework.sh check_mem_leak() */
 	if (libcfs_kmem_read() != 0)

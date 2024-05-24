@@ -48,7 +48,7 @@
 #include <openssl/err.h>
 #include <sys/types.h>
 
-#include <libcfs/libcfs_crypto.h>
+#include <linux/lnet/lnet-crypto.h>
 #include "lsupport.h"
 
 #ifndef ARRAY_SIZE

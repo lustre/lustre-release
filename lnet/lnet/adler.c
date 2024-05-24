@@ -21,18 +21,15 @@
  * GPL HEADER END
  */
 
-/*
- * Copyright 2012 Xyratex Technology Limited
- */
-
-/*
+/* Copyright 2012 Xyratex Technology Limited
+ *
  * This is crypto api shash wrappers to zlib_adler32.
  */
 
 #include <linux/module.h>
 #include <linux/zutil.h>
 #include <crypto/internal/hash.h>
-#include "linux-crypto.h"
+#include "adler.h"
 
 #define CHKSUM_BLOCK_SIZE	1
 #define CHKSUM_DIGEST_SIZE	4

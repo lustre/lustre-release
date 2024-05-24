@@ -29,7 +29,6 @@
 #include "llite_internal.h"
 
 #ifdef HAVE_LUSTRE_CRYPTO
-#include <libcfs/libcfs_crypto.h>
 
 static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 {

@@ -21,27 +21,32 @@
  * GPL HEADER END
  */
 
-/*
- * Copyright 2012 Xyratex Technology Limited
+/* Copyright 2012 Xyratex Technology Limited
  *
  * Copyright (c) 2014, Intel Corporation.
  */
 
-#ifndef _LIBCFS_CRYPTO_H
-#define _LIBCFS_CRYPTO_H
+#ifndef _UAPI_LNET_CRYPTO_H
+#define _UAPI_LNET_CRYPTO_H
+
+#include <linux/types.h>
+#include <linux/string.h>
 
 struct cfs_crypto_hash_type {
-	char		*cht_name;      /**< hash algorithm name, equal to
-					 * format name for crypto api */
-	unsigned int    cht_key;	/**< init key by default (vaild for
-					 * 4 bytes context like crc32, adler */
-	unsigned int    cht_size;       /**< hash digest size */
+	char		*cht_name;      /* hash algorithm name, equal to
+					 * format name for crypto api
+					 */
+	unsigned int    cht_key;	/* init key by default (vaild for
+					 * 4 bytes context like crc32, adler
+					 */
+	unsigned int    cht_size;       /* hash digest size */
 };
 
 struct cfs_crypto_crypt_type {
-	char	       *cct_name;	  /**< crypto algorithm name, equal to
-					   * format name for crypto api */
-	unsigned int    cct_size;         /**< crypto key size */
+	char	       *cct_name;	  /* crypto algorithm name, equal to
+					   * format name for crypto api
+					   */
+	unsigned int    cct_size;         /* crypto key size */
 };
 
 enum cfs_crypto_hash_alg {
@@ -142,8 +147,8 @@ extern int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
  *
  * Hash information includes algorithm name, initial seed, hash size.
  *
- * \retval		cfs_crypto_hash_type for valid ID (CFS_HASH_ALG_*)
- * \retval		NULL for unknown algorithm identifier
+ * RETURN		cfs_crypto_hash_type for valid ID (CFS_HASH_ALG_*)
+ *			NULL for unknown algorithm identifier
  */
 static inline const struct
 cfs_crypto_hash_type *cfs_crypto_hash_type(enum cfs_crypto_hash_alg hash_alg)
@@ -152,7 +157,7 @@ cfs_crypto_hash_type *cfs_crypto_hash_type(enum cfs_crypto_hash_alg hash_alg)
 
 	if (hash_alg < CFS_HASH_ALG_MAX) {
 		ht = &hash_types[hash_alg];
-		if (ht->cht_name != NULL)
+		if (ht->cht_name)
 			return ht;
 	}
 	return NULL;
@@ -161,10 +166,10 @@ cfs_crypto_hash_type *cfs_crypto_hash_type(enum cfs_crypto_hash_alg hash_alg)
 /**
  * Return hash name for hash algorithm identifier
  *
- * \param[in] hash_alg	hash alrgorithm id (CFS_HASH_ALG_*)
+ * @hash_alg		hash alrgorithm id (CFS_HASH_ALG_*)
  *
- * \retval		string name of known hash algorithm
- * \retval		"unknown" if hash algorithm is unknown
+ * RETURN		string name of known hash algorithm
+ *			"unknown" if hash algorithm is unknown
  */
 static inline const
 char *cfs_crypto_hash_name(enum cfs_crypto_hash_alg hash_alg)
@@ -181,10 +186,10 @@ char *cfs_crypto_hash_name(enum cfs_crypto_hash_alg hash_alg)
 /**
  * Return digest size for hash algorithm type
  *
- * \param[in] hash_alg	hash alrgorithm id (CFS_HASH_ALG_*)
+ * @hash_alg		hash alrgorithm id (CFS_HASH_ALG_*)
  *
- * \retval		hash algorithm digest size in bytes
- * \retval		0 if hash algorithm type is unknown
+ * RETURN		hash algorithm digest size in bytes
+ *			0 if hash algorithm type is unknown
  */
 static inline
 unsigned int cfs_crypto_hash_digestsize(enum cfs_crypto_hash_alg hash_alg)
@@ -192,7 +197,7 @@ unsigned int cfs_crypto_hash_digestsize(enum cfs_crypto_hash_alg hash_alg)
 	const struct cfs_crypto_hash_type *ht;
 
 	ht = cfs_crypto_hash_type(hash_alg);
-	if (ht != NULL)
+	if (ht)
 		return ht->cht_size;
 
 	return 0;
@@ -201,8 +206,8 @@ unsigned int cfs_crypto_hash_digestsize(enum cfs_crypto_hash_alg hash_alg)
 /**
  * Find hash algorithm ID for the specified algorithm name
  *
- * \retval		hash algorithm ID for valid ID (CFS_HASH_ALG_*)
- * \retval		CFS_HASH_ALG_UNKNOWN for unknown algorithm name
+ * RETURN		hash algorithm ID for valid ID (CFS_HASH_ALG_*)
+ *			CFS_HASH_ALG_UNKNOWN for unknown algorithm name
  */
 static inline unsigned char cfs_crypto_hash_alg(const char *algname)
 {
@@ -220,8 +225,8 @@ static inline unsigned char cfs_crypto_hash_alg(const char *algname)
  *
  * Crypt information includes algorithm name, key size.
  *
- * \retval		cfs_crypto_crupt_type for valid ID (CFS_CRYPT_ALG_*)
- * \retval		NULL for unknown algorithm identifier
+ * RETURN		cfs_crypto_crupt_type for valid ID (CFS_CRYPT_ALG_*)
+ *			NULL for unknown algorithm identifier
  */
 static inline const struct
 cfs_crypto_crypt_type *cfs_crypto_crypt_type(
@@ -231,7 +236,7 @@ cfs_crypto_crypt_type *cfs_crypto_crypt_type(
 
 	if (crypt_alg < CFS_CRYPT_ALG_MAX) {
 		ct = &crypt_types[crypt_alg];
-		if (ct->cct_name != NULL)
+		if (ct->cct_name)
 			return ct;
 	}
 	return NULL;
@@ -240,10 +245,10 @@ cfs_crypto_crypt_type *cfs_crypto_crypt_type(
 /**
  * Return crypt name for crypt algorithm identifier
  *
- * \param[in] crypt_alg	crypt alrgorithm id (CFS_CRYPT_ALG_*)
+ * @crypt_alg		crypt alrgorithm id (CFS_CRYPT_ALG_*)
  *
- * \retval		string name of known crypt algorithm
- * \retval		"unknown" if hash algorithm is unknown
+ * RETURN		string name of known crypt algorithm
+ *			"unknown" if hash algorithm is unknown
  */
 static inline const
 char *cfs_crypto_crypt_name(enum cfs_crypto_crypt_alg crypt_alg)
@@ -261,10 +266,10 @@ char *cfs_crypto_crypt_name(enum cfs_crypto_crypt_alg crypt_alg)
 /**
  * Return key size for crypto algorithm type
  *
- * \param[in] crypt_alg	crypt alrgorithm id (CFS_CRYPT_ALG_*)
+ * @crypt_alg		crypt alrgorithm id (CFS_CRYPT_ALG_*)
  *
- * \retval		crypt algorithm key size in bytes
- * \retval		0 if crypt algorithm type is unknown
+ * RETURN		crypt algorithm key size in bytes
+ *			0 if crypt algorithm type is unknown
  */
 static inline
 unsigned int cfs_crypto_crypt_keysize(enum cfs_crypto_crypt_alg crypt_alg)
@@ -272,7 +277,7 @@ unsigned int cfs_crypto_crypt_keysize(enum cfs_crypto_crypt_alg crypt_alg)
 	const struct cfs_crypto_crypt_type *ct;
 
 	ct = cfs_crypto_crypt_type(crypt_alg);
-	if (ct != NULL)
+	if (ct)
 		return ct->cct_size;
 
 	return 0;
@@ -281,8 +286,8 @@ unsigned int cfs_crypto_crypt_keysize(enum cfs_crypto_crypt_alg crypt_alg)
 /**
  * Find crypto algorithm ID for the specified algorithm name
  *
- * \retval		crypto algorithm ID for valid ID (CFS_CRYPT_ALG_*)
- * \retval		CFS_CRYPT_ALG_UNKNOWN for unknown algorithm name
+ * RETURN		crypto algorithm ID for valid ID (CFS_CRYPT_ALG_*)
+ *			CFS_CRYPT_ALG_UNKNOWN for unknown algorithm name
  */
 static inline unsigned char cfs_crypto_crypt_alg(const char *algname)
 {
@@ -300,20 +305,4 @@ int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 			   unsigned char *key, unsigned int key_len,
 			   unsigned char *hash, unsigned int *hash_len);
 
-/* cfs crypto hash descriptor */
-struct page;
-
-struct ahash_request *
-	cfs_crypto_hash_init(enum cfs_crypto_hash_alg hash_alg,
-			     unsigned char *key, unsigned int key_len);
-int cfs_crypto_hash_update_page(struct ahash_request *req,
-				struct page *page, unsigned int offset,
-				unsigned int len);
-int cfs_crypto_hash_update(struct ahash_request *req, const void *buf,
-			   unsigned int buf_len);
-int cfs_crypto_hash_final(struct ahash_request *req,
-			  unsigned char *hash, unsigned int *hash_len);
-int cfs_crypto_register(void);
-void cfs_crypto_unregister(void);
-int cfs_crypto_hash_speed(enum cfs_crypto_hash_alg hash_alg);
-#endif
+#endif /* _UAPI_LNET_CRYPT_H_ */

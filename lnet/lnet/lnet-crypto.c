@@ -21,8 +21,7 @@
  * GPL HEADER END
  */
 
-/*
- * Copyright 2012 Xyratex Technology Limited
+/* Copyright 2012 Xyratex Technology Limited
  *
  * Copyright (c) 2012, 2014, Intel Corporation.
  */
@@ -31,8 +30,8 @@
 #include <linux/scatterlist.h>
 #include <linux/pagemap.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_crypto.h>
-#include "linux-crypto.h"
+#include <lnet/lnet_crypto.h>
+#include "adler.h"
 
 #ifndef HAVE_CRYPTO_HASH_HELPERS
 static inline const char *crypto_ahash_alg_name(struct crypto_ahash *tfm)

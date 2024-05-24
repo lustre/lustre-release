@@ -12,7 +12,7 @@
 #define __PTLRPC_GSS_GSS_INTERNAL_H_
 
 #include <crypto/hash.h>
-#include <libcfs/libcfs_crypto.h>
+#include <lnet/lnet_crypto.h>
 #include <lustre_sec.h>
 #include <upcall_cache.h>
 

@@ -7,7 +7,6 @@ libcfsdir = $(includedir)/libcfs
 
 EXTRA_DIST = \
 	libcfs.h \
-	libcfs_crypto.h \
 	libcfs_debug.h \
 	libcfs_fail.h \
 	libcfs_hash.h \

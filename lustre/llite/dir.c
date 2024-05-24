@@ -56,7 +56,6 @@
 #include <lustre_kernelcomm.h>
 #include <lustre_swab.h>
 #include <lustre_quota.h>
-#include <libcfs/libcfs_crypto.h>
 
 #include "llite_internal.h"
 

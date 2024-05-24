@@ -12,6 +12,7 @@
 
 #include <linux/miscdevice.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet_crypto.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lustre/lustre_ver.h>
 
@@ -423,9 +424,17 @@ static int __init lnet_init(void)
 		RETURN(rc);
 	}
 
+	rc = cfs_crypto_register();
+	if (rc) {
+		CERROR("cfs_crypto_register: rc = %d\n", rc);
+		cfs_cpu_fini();
+		RETURN(rc);
+	}
+
 	rc = lnet_lib_init();
 	if (rc != 0) {
 		CERROR("lnet_lib_init: rc = %d\n", rc);
+		cfs_crypto_unregister();
 		cfs_cpu_fini();
 		RETURN(rc);
 	}
@@ -433,6 +442,8 @@ static int __init lnet_init(void)
 	rc = misc_register(&lnet_dev);
 	if (rc) {
 		CERROR("misc_register: rc = %d\n", rc);
+		lnet_lib_exit();
+		cfs_crypto_unregister();
 		cfs_cpu_fini();
 		RETURN(rc);
 	}
@@ -456,6 +467,7 @@ static void __exit lnet_exit(void)
 
 	lnet_router_exit();
 	lnet_lib_exit();
+	cfs_crypto_unregister();
 	cfs_cpu_fini();
 }
 

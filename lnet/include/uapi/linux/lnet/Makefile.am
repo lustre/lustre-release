@@ -13,6 +13,7 @@ lnetinclude_HEADERS = \
 	libcfs_debug.h \
 	libcfs_ioctl.h \
 	lnetctl.h \
+	lnet-crypto.h \
 	lnet-dlc.h \
 	lnetst.h \
 	lnet-idl.h \
@@ -25,6 +26,7 @@ EXTRA_DIST = \
 	libcfs_debug.h \
 	libcfs_ioctl.h \
 	lnetctl.h \
+	lnet-crypto.h \
 	lnet-dlc.h \
 	lnetst.h \
 	lnet-idl.h \

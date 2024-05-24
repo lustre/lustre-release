@@ -41,6 +41,7 @@
 #include <linux/key.h>
 
 #include <libcfs/libcfs.h>
+#include <lnet/lnet_crypto.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -48,7 +49,6 @@
 #include <lustre_import.h>
 #include <lustre_dlm.h>
 #include <lustre_sec.h>
-#include <libcfs/libcfs_crypto.h>
 
 #include "ptlrpc_internal.h"
 

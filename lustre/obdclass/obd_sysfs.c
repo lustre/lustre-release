@@ -62,7 +62,7 @@
 #include <linux/kobject.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_crypto.h>
+#include <lnet/lnet_crypto.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
