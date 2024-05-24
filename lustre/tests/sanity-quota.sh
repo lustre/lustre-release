@@ -2663,25 +2663,26 @@ test_13(){
 
 	# clear the locks in cache first
 	do_facet ost1 $LCTL set_param -n $procf=clear
-	local nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq 0 ] || error "$nlock cached locks"
+	local init_nlock=$(do_facet ost1 $LCTL get_param -n $procf)
 
 	# write to acquire the per-ID lock
 	$RUNAS $DD of=$TESTFILE count=1 oflag=sync ||
 		quota_error a $TSTUSR "dd failed"
 
-	nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq 1 ] || error "lock count($nlock) isn't 1"
+	local nlock=$(do_facet ost1 $LCTL get_param -n $procf)
+	[ $nlock -eq $((init_nlock + 1)) ] ||
+		error "lock count($nlock) != $init_lock + 1"
 
 	# clear quota doesn't trigger per-ID lock cancellation
 	resetquota -u $TSTUSR
 	nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq 1 ] || error "per-ID lock is lost on quota clear"
+	[ $nlock -eq $((init_nlock + 1)) ] ||
+		error "per-ID lock is lost on quota clear"
 
 	# clear the per-ID lock
 	do_facet ost1 $LCTL set_param -n $procf=clear
 	nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq 0 ] || error "per-ID lock isn't cleared"
+	[ $nlock -eq $init_nlock ] || error "per-ID lock isn't cleared"
 
 	# spare quota should be released
 	local OSTUUID=$(ostuuid_from_index 0)
