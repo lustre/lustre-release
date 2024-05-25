@@ -35,6 +35,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [\fB--printf\fR \fIFORMAT\fR]
 [[\fB!\fR] \fB--projid\fR \fIPROJID\fR]
       [[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [\fB--skip\fR|\fB-k]\fR \fIPERCENT\fR]
 [[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--stripe-index|\fB-i\fR \fIn\fR,...]
 [[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
@@ -427,6 +428,13 @@ File size is \fIn\fR 512-byte blocks (if no unit is given), or
 \fIn\fR \fBc\fRhars (bytes), \fBK\fRibi-, \fBM\fRebi-,
 \fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if a
 suffix is given.
+.TP
+.BR --skip | -k
+Skip \fIPERCENT\fR of the total that match the other filters. This is
+useful together with
+.BR lfs-migrate (1)
+to allow processing only a fraction of the files to rebalance files when new
+OSTs are added to the filesystem.
 .TP
 .BR --stripe-count | -c
 File has \fIn\fR stripes allocated.  For composite files, this

@@ -4843,6 +4843,16 @@ matched:
 	return 1;
 }
 
+static bool find_skip_file(struct find_param *param)
+{
+	if (param->fp_skip_count * 100 <
+	    param->fp_skip_percent * param->fp_skip_total++) {
+		param->fp_skip_count++;
+		return true;
+	}
+	return false;
+}
+
 static bool find_check_lmm_info(struct find_param *param)
 {
 	return param->fp_check_pool || param->fp_check_stripe_count ||
@@ -6077,6 +6087,9 @@ obd_matches:
 	}
 
 print:
+	if (param->fp_skip_percent && find_skip_file(param))
+		goto decided;
+
 	if (param->fp_format_printf_str)
 		printf_format_string(param, path, projid, d);
 	else

@@ -400,7 +400,7 @@ command_t cmdlist[] = {
 	 "     [[!] --ost|-O <uuid|index,...>] [[!] --perm [/-]mode]\n"
 	 "     [[!] --pool <pool>] [--print|-P] [--print0|-0] [--printf <format>]\n"
 	 "     [[!] --projid <projid>] [[!] --size|-s [+-]N[bkMGTPE]]\n"
-	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
+	 "     [--skip|-k PERCENT] [[!] --stripe-count|-c [+-]<stripes>]\n"
 	 "     [[!] --stripe-index|-i <index,...>]\n"
 	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
@@ -5403,6 +5403,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument },
 /* getstripe { .val = 'I', .name = "comp-id",	.has_arg = required_argument }*/
+	{ .val = 'k',	.name = "skip",		.has_arg = required_argument },
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = LFS_LINKS_OPT,
@@ -5459,7 +5460,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-		"-0A:b:B:c:C:D:E:g:G:hH:i:lL:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
+		"-0A:b:B:c:C:D:E:g:G:hH:i:k:lL:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
 		long_opts, &optidx)) >= 0) {
 		xtime = NULL;
 		xsign = NULL;
@@ -5905,6 +5906,18 @@ static int lfs_find(int argc, char **argv)
 			if (param.fp_hash_inflags || param.fp_hash_exflags)
 				param.fp_check_hash_flag = 1;
 			param.fp_exclude_hash_type = !!neg_opt;
+			break;
+		case 'k':
+			param.fp_skip_percent = strtoul(optarg, &endptr, 10);
+			if (param.fp_skip_percent < 0 ||
+			    param.fp_skip_percent >= 100 ||
+			    (*endptr != '\0' && *endptr != '%')) {
+				ret = -1;
+				fprintf(stderr,
+					"error: invalid skip percentage '%s'\n",
+					optarg);
+				goto err;
+			}
 			break;
 		case 'l':
 			param.fp_lazy = 1;

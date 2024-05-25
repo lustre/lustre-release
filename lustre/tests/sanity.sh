@@ -9174,6 +9174,29 @@ test_56eg() {
 }
 run_test 56eg "lfs find -xattr"
 
+test_56eh() {
+	local dir=$DIR/d$(basetest $testnum)g.$TESTSUITE
+
+	setup_56_special $dir $NUMFILES $NUMDIRS
+
+	local cmd="$LFS find $dir"
+	local total=$($cmd | wc -l)
+	local n=1
+
+	local nums
+
+	echo "Running tests on $dir, with $total total results."
+
+	while (( $n < 100 )); do
+		nums=$($LFS find --skip=$((100 - $n)) $dir | wc -l)
+		(( $nums <= $(($total * ($n + 5) / 100)) &&
+		   $nums >= $(($total * ($n - 5) / 100)) )) ||
+			error "--skip=$((100 - $n)): expected $(($total * $n / 100)) results with 5% error margin, got $nums"
+		(( n++ ))
+	done
+}
+run_test 56eh "check lfs find --skip"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

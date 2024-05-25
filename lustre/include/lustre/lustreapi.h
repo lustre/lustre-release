@@ -444,6 +444,9 @@ struct find_param {
 	__u64			 fp_attrs;
 	__u64			 fp_neg_attrs;
 	struct xattr_match_info	*fp_xattr_match_info;
+	unsigned long int	 fp_skip_percent;
+	unsigned long long	 fp_skip_total;
+	unsigned long long	 fp_skip_count;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
