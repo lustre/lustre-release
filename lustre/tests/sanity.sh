@@ -28567,6 +28567,13 @@ test_401a() { #LU-7437
 }
 run_test 401a "Verify if 'lctl list_param -R' can list parameters recursively"
 
+test_401aa() {
+	$LCTL list_param -p osc.* | while read path; do
+		[[ -r $path ]] && echo "$path" || error "'$path' does not exist"
+	done
+}
+run_test 401aa "Verify that 'lctl list_param -p' lists the correct path names"
+
 test_401b() {
 	# jobid_var may not allow arbitrary values, so use jobid_name
 	# if available

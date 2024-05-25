@@ -772,22 +772,25 @@ clean_path(struct param_opts *popt, char *path)
 
 /**
  * The application lctl can perform three operations for lustre
- * tunables. This enum defines those three operations which are
+ * tunables. This enum defines those four operations which are
  *
  * 1) LIST_PARAM	- list available tunables
  * 2) GET_PARAM		- report the current setting of a tunable
  * 3) SET_PARAM		- set the tunable to a new value
+ * 4) LIST_PATHNAME	- list paths of available tunables
  */
 enum parameter_operation {
 	LIST_PARAM,
 	GET_PARAM,
 	SET_PARAM,
+	LIST_PATHNAME,
 };
 
 char *parameter_opname[] = {
 	[LIST_PARAM] = "list_param",
 	[GET_PARAM] = "get_param",
 	[SET_PARAM] = "set_param",
+	[LIST_PATHNAME] = "list_pathname",
 };
 
 /**
@@ -838,7 +841,7 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 
 		} while (buflen > 0);
 
-	} else if (popt->po_show_path) {
+	} else if (popt->po_show_name) {
 		bool multilines = memchr(buf, '\n', buflen - 1);
 
 		printf("%s=%s%s", param_name, multilines ? "\n" : "", buf);
@@ -893,7 +896,7 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 		fprintf(stderr,
 			"error: set_param: setting %s=%s: wrote only %zd\n",
 			path, value, count);
-	} else if (popt->po_show_path) {
+	} else if (popt->po_show_name) {
 		printf("%s=%s\n", param_name, value);
 	}
 	close(fd);
@@ -1231,8 +1234,22 @@ do_param_op(struct param_opts *popt, char *pattern, char *value,
 			}
 			dup_cache[dup_count++] = strdup(param_name);
 
-			if (popt->po_show_path)
+			if (popt->po_show_name)
 				printf("%s\n", param_name);
+			break;
+		case LIST_PATHNAME:
+			for (j = 0; j < dup_count; j++) {
+				if (!strcmp(dup_cache[j], param_name))
+					break;
+			}
+			if (j != dup_count) {
+				free(param_name);
+				param_name = NULL;
+				continue;
+			}
+			dup_cache[dup_count++] = strdup(param_name);
+			if (popt->po_show_name)
+				printf("%s\n", paths.gl_pathv[i]);
 			break;
 		}
 
@@ -1312,19 +1329,22 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	int ch;
 
-	popt->po_show_path = 1;
-	popt->po_only_path = 1;
+	popt->po_show_name = 1;
+	popt->po_only_name = 1;
 
-	while ((ch = getopt(argc, argv, "FRD")) != -1) {
+	while ((ch = getopt(argc, argv, "DFpR")) != -1) {
 		switch (ch) {
+		case 'D':
+			popt->po_only_dir = 1;
+			break;
 		case 'F':
 			popt->po_show_type = 1;
 			break;
+		case 'p':
+			popt->po_only_pathname = 1;
+			break;
 		case 'R':
 			popt->po_recursive = 1;
-			break;
-		case 'D':
-			popt->po_only_dir = 1;
 			break;
 		default:
 			return -1;
@@ -1359,7 +1379,8 @@ int jt_lcfg_listparam(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = do_param_op(&popt, path, NULL, LIST_PARAM, NULL);
+		rc2 = do_param_op(&popt, path, NULL, popt.po_only_pathname ?
+				  LIST_PATHNAME : LIST_PARAM, NULL);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
@@ -1383,7 +1404,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	int ch;
 
-	popt->po_show_path = 1;
+	popt->po_show_name = 1;
 
 	while ((ch = getopt(argc, argv, "FHnNRy")) != -1) {
 		switch (ch) {
@@ -1394,10 +1415,10 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			popt->po_header = 1;
 			break;
 		case 'n':
-			popt->po_show_path = 0;
+			popt->po_show_name = 0;
 			break;
 		case 'N':
-			popt->po_only_path = 1;
+			popt->po_only_name = 1;
 			break;
 		case 'R':
 			popt->po_recursive = 1;
@@ -1427,13 +1448,13 @@ int jt_lcfg_getparam(int argc, char **argv)
 	if (index < 0 || index >= argc)
 		return CMD_HELP;
 
-	mode = popt.po_only_path ? LIST_PARAM : GET_PARAM;
+	mode = popt.po_only_name ? LIST_PARAM : GET_PARAM;
 	if (mode == LIST_PARAM)
 		version = 0;
 
 	if (popt.po_yaml)
 		flags |= PARAM_FLAGS_YAML_FORMAT;
-	if (popt.po_show_path)
+	if (popt.po_show_name)
 		flags |= PARAM_FLAGS_SHOW_SOURCE;
 
 	for (i = index; i < argc; i++) {
@@ -1451,7 +1472,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 		}
 
 		rc2 = do_param_op(&popt, path, NULL,
-				  popt.po_only_path ? LIST_PARAM : GET_PARAM,
+				  popt.po_only_name ? LIST_PARAM : GET_PARAM,
 				  NULL);
 		if (rc2 < 0) {
 			if (rc == 0)
@@ -1621,7 +1642,7 @@ int jt_nodemap_info(int argc, char **argv)
 	int rc = 0;
 
 	memset(&popt, 0, sizeof(popt));
-	popt.po_show_path = 1;
+	popt.po_show_name = 1;
 
 	if (argc > 2) {
 		fprintf(stderr, usage_str);
@@ -1660,8 +1681,8 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	int ch;
 
-	popt->po_show_path = 1;
-	popt->po_only_path = 0;
+	popt->po_show_name = 1;
+	popt->po_only_name = 0;
 	popt->po_show_type = 0;
 	popt->po_recursive = 0;
 	popt->po_perm = 0;
@@ -1673,7 +1694,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	while ((ch = getopt(argc, argv, "dFnPt::")) != -1) {
 		switch (ch) {
 		case 'n':
-			popt->po_show_path = 0;
+			popt->po_show_name = 0;
 			break;
 		case 't':
 #if HAVE_LIBPTHREAD

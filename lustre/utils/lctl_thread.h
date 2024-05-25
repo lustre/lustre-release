@@ -36,8 +36,9 @@
 #endif
 
 struct param_opts {
-	unsigned int po_only_path:1;
-	unsigned int po_show_path:1;
+	unsigned int po_only_name:1;
+	unsigned int po_show_name:1;
+	unsigned int po_only_pathname:1;
 	unsigned int po_show_type:1;
 	unsigned int po_recursive:1;
 	unsigned int po_perm:1;

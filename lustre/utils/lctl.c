@@ -216,11 +216,11 @@ command_t cmdlist[] = {
 	 "usage: apply_yaml file\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
-	 "usage: list_param [-F|-R|-D] <param_path1 param_path2 ...>\n"
+	 "usage: list_param [-D|-F|-p|-R] <param_path1 param_path2 ...>\n"
 	 "List the name of Lustre or LNET parameter from the specified path.\n"
-	 "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files,\n"
-		"respectively.\n"
 	 "  -D  Only list directories.\n"
+	 "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files, respectively.\n"
+	 "  -p  Prints the pathname instead of the parameter name.\n"
 	 "  -R  Recursively list all parameters under the specified path.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
 	 "usage: del_ost [--dryrun] --target <$fsname-OSTxxxx>\n"

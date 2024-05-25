@@ -2,7 +2,7 @@
 .SH NAME
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
-.BR list_param " [" -F | -R ]
+.BR list_param " ["-D | -F | -p | -R ]
 .RI < param_search " ...>"
 .SH DESCRIPTION
 List the Lustre or LNet parameter name(s) matching
@@ -11,8 +11,14 @@ The parameter name(s) may contain wildcards using
 .BR glob (3)
 pathname patterns.
 .TP
+.B -D
+Only list directories.
+.TP
 .B -F
 Append '/', '@' or '=' for dirs, symlinks and writeable files, respectively.
+.TP
+.B -p
+Print the pathname instead of the parameter name.
 .TP
 .B -R
 Recursively list all parameters under the specified parameter search string. If
@@ -34,6 +40,13 @@ is unspecified, all the parameters will be shown.
   ost.num_refs
 .br
   debug=
+.br
+.B
+# lctl list_param -p ost.*
+.br
+  /sys/fs/lustre/ost/OSS
+.br
+  /sys/fs/lustre/ost/num_refs
 .br
 .B
 # lctl list_param -R mdt
