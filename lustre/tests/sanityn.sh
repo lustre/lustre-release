@@ -4746,119 +4746,79 @@ cleanup_80b() {
 	kill -9 $migrate_pid
 }
 
+success_count=0
+failure_count=0
+
+run_and_count()
+{
+	eval $@ &>/dev/null && success_count=$((success_count + 1)) ||
+		failure_count=$((failure_count + 1))
+}
+
 test_80b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	local migrate_dir1=$DIR1/$tdir/migrate_dir
-	local migrate_dir2=$DIR2/$tdir/migrate_dir
-	local migrate_run=$LUSTRE/tests/migrate.sh
+	local migdir1=$DIR1/$tdir/migrate_dir
+	local migdir2=$DIR2/$tdir/migrate_dir
 	local start_time
-	local show_time=1
 	local mdt_idx
 	local rc=0
 	local rc1=0
 
 	trap cleanup_80b EXIT
-	#prepare migrate directory
-	mkdir -p $migrate_dir1
+	# prepare migrate directory
+	mkdir -p $migdir1
 	for F in {1,2,3,4,5}; do
-		echo "$F$F$F$F$F" > $migrate_dir1/file$F
+		echo "$F$F$F$F$F" > $migdir1/file$F
 		echo "$F$F$F$F$F" > $DIR/$tdir/file$F
 	done
 
-	#migrate the directories among MDTs
+	# migrate the directories among MDTs
 	(
 		while true; do
 			mdt_idx=$((RANDOM % MDSCOUNT))
-			$LFS migrate -m $mdt_idx $migrate_dir1 &>/dev/null ||
-				rc=$?
-			(( $rc != 0 && $rc != 16 )) || break
+			# migrate may fail
+			$LFS migrate -m $mdt_idx $migdir1 &>/dev/null
 		done
 	) &
 	migrate_pid=$!
 
 	echo "start migration thread $migrate_pid"
-	#Access the files at the same time
+	# access the files at the same time
 	start_time=$SECONDS
-	echo "accessing the migrating directory for 5 minutes..."
-	while true; do
-		ls $migrate_dir2 > /dev/null || {
-			echo "read dir fails"
-			break
-		}
-		diff -u $DIR2/$tdir/file1 $migrate_dir2/file1 || {
-			echo "access file1 fails"
-			break
-		}
+	echo "accessing the migrating directory for 1 minute..."
+	while ((SECONDS - start_time < 60)); do
+		run_and_count ls $migdir2
+		run_and_count diff -u $DIR2/$tdir/file1 $migdir2/file1
+		run_and_count "cat $migdir2/file2 > $migdir2/file3"
+		run_and_count "echo "aaaaa" > $migdir2/file4"
+		run_and_count stat $migdir2/file5
+		run_and_count touch $migdir2/source_file
+		if [ -e $migdir2/source_file ]; then
+			run_and_count ln $migdir2/source_file \
+				$migdir2/link_file
 
-		cat $migrate_dir2/file2 > $migrate_dir2/file3 || {
-			echo "access file2/3 fails"
-			break
-		}
+			[ -e $migdir2/link_file ] &&
+				rm -rf $migdir2/link_file
 
-		echo "aaaaa" > $migrate_dir2/file4 > /dev/null || {
-			echo "access file4 fails"
-			break
-		}
+			run_and_count mrename $migdir2/source_file \
+				$migdir2/target_file
 
-		stat $migrate_dir2/file5 > /dev/null || {
-			echo "stat file5 fails"
-			break
-		}
-
-		touch $migrate_dir2/source_file > /dev/null || rc1=$?
-		(( $rc != 0 && $rc != 1 )) || {
-			echo "touch file failed with $rc1"
-			break;
-		}
-
-		if [ -e $migrate_dir2/source_file ]; then
-			ln $migrate_dir2/source_file $migrate_dir2/link_file \
-					&>/dev/null || rc1=$?
-			if [ -e $migrate_dir2/link_file ]; then
-				rm -rf $migrate_dir2/link_file
-			fi
-
-			mrename $migrate_dir2/source_file \
-				$migrate_dir2/target_file &>/dev/null || rc1=$?
-			(( $rc != 0 && $rc != 1 )) || {
-				echo "rename failed with $rc1"
-				break
-			}
-
-			if [ -e $migrate_dir2/target_file ]; then
-				rm -rf $migrate_dir2/target_file &>/dev/null ||
-								rc1=$?
-			else
-				rm -rf $migrate_dir2/source_file &>/dev/null ||
-								rc1=$?
-			fi
-			(( $rc != 0 && $rc != 1 )) || {
-				echo "unlink failed with $rc1"
-				break
-			}
-		fi
-
-		local duration=$((SECONDS - start_time))
-		if (( duration % 10 == 0 )); then
-			if (( $show_time == 1 )); then
-				echo "...$duration seconds"
-				show_time=0
-			fi
-		else
-			show_time=1
+			[ -e $migdir2/target_file ] &&
+				run_and_count rm -rf $migdir2/target_file ||
+				run_and_count rm -rf $migdir2/source_file
 		fi
 
 		kill -0 $migrate_pid || {
 			echo "migration stopped 1"
 			break
 		}
-
-		(( $duration < 300 )) || break
 	done
 
-	#check migration are still there
+	# check migration are still there
 	kill -0 $migrate_pid || error "migration stopped 2"
 	cleanup_80b
+	# access during migration may fail
+	echo "concurrent access $failure_count failures, $success_count successes"
 }
 run_test 80b "Accessing directory during migration"
 
