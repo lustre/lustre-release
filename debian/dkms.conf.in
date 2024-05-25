@@ -100,6 +100,14 @@ module lnet          lnet/lnet          net/lustre
 module lnet_selftest lnet/selftest      net/lustre
 module ksocklnd      lnet/klnds/socklnd net/lustre
 
+# LNet lnd modules
+lnds="socklnd"
+if [ -f /usr/src/kfabric/default/Module.symvers ] ; then
+    module kkfilnd   lnet/klnds/kfilnd  net/lustre
+fi
+if pkg-config --cflags cray-gni cray-gni-headers cray-krca lsb-cray-hss > /dev/null 2>&1 ; then
+    module kgnilnd   lnet/klnds/gnilnd  net/lustre
+fi
 # Determine which, if any, o2ib to install:
 can_o2ib_mofed=no
 can_o2ib_in_kernel=no

@@ -17,6 +17,7 @@
 # $5 : $arch
 # $6 : $source_tree
 # $7 : $dkms_tree
+# $8 : $kmoddir
 #
 # This script ensure that ALL Lustre kernel modules that have been built
 # during DKMS build step of lustre[-client]-dkms module will be moved in

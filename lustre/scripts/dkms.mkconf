@@ -25,10 +25,10 @@ PACKAGE_CONFIG="/etc/sysconfig/lustre"
 # re-evaluate/create dkms.conf on-target based on local build-time products/dependencies
 # (like krb5-devel presence) and also upon configure results/errors before dkms builds
 PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
-	 \$arch \$source_tree \$dkms_tree"
+	 \$arch \$source_tree \$dkms_tree \$kmoddir"
 # to ensure all just built Lustre kernel modules will be saved for further install
 POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
-	 \$arch \$source_tree \$dkms_tree"
+	 \$arch \$source_tree \$dkms_tree \$kmoddir"
 EOF
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
@@ -125,6 +125,15 @@ module() {
 module lnet_selftest lnet/selftest      lnet
 module lnet          lnet/lnet          lnet
 module ksocklnd      lnet/klnds/socklnd lnet
+flavor=\$(echo \$kernelver | tr '-' '\n' | tail -1)
+if [ -f /usr/src/kfabric/\${flavor}/Module.symvers -o -f /usr/src/kfabric/default/Module.symvers ] ; then
+    module kkfilnd   lnet/klnds/kfilnd  lnet
+fi
+# Guessing if gni packages are installed
+pkg-config --cflags cray-gni cray-gni-headers cray-krca lsb-cray-hss > /dev/null 2>&1
+if [ \$? -eq 0 ] ; then
+    module kgnilnd   lnet/klnds/gnilnd  lnet
+fi
 # in-kernel-o2ib or mofed
 if [ "x\${ext_mofed}" = "xyes" ] ; then
     module ko2iblnd lnet/klnds/o2iblnd lnet
