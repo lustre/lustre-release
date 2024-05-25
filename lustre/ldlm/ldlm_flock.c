@@ -818,7 +818,7 @@ granted:
 			LASSERT(ldlm_is_test_lock(lock));
 
 		if (ldlm_is_test_lock(lock) || ldlm_is_flock_deadlock(lock))
-			mode = getlk->fl_type;
+			mode = getlk->C_FLC_TYPE;
 		else
 			mode = lock->l_req_mode;
 
@@ -844,22 +844,22 @@ granted:
 	if (flags & LDLM_FL_TEST_LOCK) {
 		/*
 		 * fcntl(F_GETLK) request
-		 * The old mode was saved in getlk->fl_type so that if the mode
+		 * The old mode was saved in getlk->C_FLC_TYPE so that if the mode
 		 * in the lock changes we can decref the appropriate refcount.
 		 */
 		LASSERT(ldlm_is_test_lock(lock));
-		ldlm_flock_destroy(lock, getlk->fl_type, LDLM_FL_WAIT_NOREPROC);
+		ldlm_flock_destroy(lock, getlk->C_FLC_TYPE, LDLM_FL_WAIT_NOREPROC);
 		switch (lock->l_granted_mode) {
 		case LCK_PR:
-			getlk->fl_type = F_RDLCK;
+			getlk->C_FLC_TYPE = F_RDLCK;
 			break;
 		case LCK_PW:
-			getlk->fl_type = F_WRLCK;
+			getlk->C_FLC_TYPE = F_WRLCK;
 			break;
 		default:
-			getlk->fl_type = F_UNLCK;
+			getlk->C_FLC_TYPE = F_UNLCK;
 		}
-		getlk->fl_pid = (pid_t)lock->l_policy_data.l_flock.pid;
+		getlk->C_FLC_PID = (pid_t)lock->l_policy_data.l_flock.pid;
 		getlk->fl_start = (loff_t)lock->l_policy_data.l_flock.start;
 		getlk->fl_end = (loff_t)lock->l_policy_data.l_flock.end;
 	} else {

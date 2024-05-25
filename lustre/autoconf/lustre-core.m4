@@ -4541,6 +4541,29 @@ AC_DEFUN([LC_HAVE_GENERIC_ERROR_REMOVE_FOLIO], [
 ]) # LC_HAVE_GENERIC_ERROR_REMOVE_FOLIO
 
 #
+# LC_HAVE_STRUCT_FILE_LOCK_CORE
+#
+# Linux commit v6.7-rc4-79-gaf7628d6ec19
+#   fs: convert error_remove_page to error_remove_folio
+#
+AC_DEFUN([LC_SRC_HAVE_STRUCT_FILE_LOCK_CORE], [
+	LB2_LINUX_TEST_SRC([struct_file_lock_core], [
+		#include <linux/filelock.h>
+	],[
+		struct file_lock_core *flc = NULL;
+
+		flc->flc_flags = 0;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_STRUCT_FILE_LOCK_CORE], [
+	LB2_MSG_LINUX_TEST_RESULT([if struct file_lock_core exists],
+	[struct_file_lock_core], [
+		AC_DEFINE(HAVE_STRUCT_FILE_LOCK_CORE, 1,
+			[struct file_lock_core exists])
+	])
+]) # LC_HAVE_STRUCT_FILE_LOCK_CORE
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4830,6 +4853,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_DENTRY_D_CHILDREN
 	LC_SRC_HAVE_GENERIC_ERROR_REMOVE_FOLIO
 	LC_SRC_LSMCONTEXT_HAS_ID
+
+	# 6.9
+	LC_SRC_HAVE_STRUCT_FILE_LOCK_CORE
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -5141,6 +5167,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_DENTRY_D_CHILDREN
 	LC_HAVE_GENERIC_ERROR_REMOVE_FOLIO
 	LC_LSMCONTEXT_HAS_ID
+
+	# 6.9
+	LC_HAVE_STRUCT_FILE_LOCK_CORE
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
