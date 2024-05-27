@@ -3,14 +3,15 @@
 lctl-set_param \- Lustre filesystem set parameter utility
 .SH SYNOPSIS
 .B "\fBlctl set_param "
-.RB [ \-d ]
-.RB [ \-h ]
-.RB [ \-n ]
-.RB [ \-P ]
-.RB [ \-t [ \fITHREAD_COUNT ]]
-.RI < parameter \= value ...>
+.RB [ --delete | -d ]
+.RB [ --file | -F ]
+.RB [ --no-name | -n ]
+.RB [ --permanent | -P ]
+.RB [ --thread | -t [ \fITHREAD_COUNT ]]
+.IR PARAMETER \= VALUE " ..."
 .br
-.IR "\fBlctl set_param -F " < filename >
+.B lctl set_param -F
+.IR FILENAME
 .SH DESCRIPTION
 Set the value of the named Lustre or LNet
 .I parameter
@@ -34,26 +35,30 @@ is the name of a Lustre device, like
 but may be a specific component, or contain wildcards to match some or all
 devices on the node.  Parameters can only be modified by the root user for
 security reasons.
+.SH OPTIONS
+The various options supported by
+.B lctl list_param
+are listed and explained below:
 .TP
-.B -d
+.B -d ", " --delete
 Remove the permanent setting (only for parameters set with the
 .B -P
 option).
 .TP
-.B -F
+.B -F ", " --file
 Set parameters from
 .I filename
 instead of from the command-line.  The contents of
 .I filename
 is YAML format, created as an output from
-.BR  ' "lctl --device MGS llog_print " < \fIfsname\fR >- client '
+.RB ' "lctl --device MGS llog_print " \fIFSNAME\fB "-client" '
 or any other valid llog configuration log as listed by
 .RB ' "lctl --device MGS llog_catlist" '
 .TP
-.B -n
+.B -n ", " --no-name
 Disable printing of the parameter name after setting it.
 .TP
-.B -P
+.B -P ", " --permanent
 Set
 .I parameter
 permanently on
@@ -70,7 +75,7 @@ such as the filesystem and/or target name.  This option is only available
 in Lustre 2.5.0 and later clients, older clients cannot set persistent
 parameters, nor will they see them.
 .TP
-.B -t
+.B -t ", " --thread
 Spawn threads to set multiple parameters in parallel, optionally specifying
 the maximum number of threads to run (with no space between
 .B -t

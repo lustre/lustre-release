@@ -2,25 +2,41 @@
 .SH NAME
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
-.BR list_param " ["-D | -F | -p | -R ]
-.RI < param_search " ...>"
+.B "\fBlctl list_param "
+.RB [ --dir-only | -D ]
+.RB [ --classify | -F ]
+.RB [ --links | -l ]
+.RB [ --no-links | -L ]
+.RB [ --path | -p ]
+.RB [ --recursive | -R ]
+.IR PARAM_PATH1 " " PARAM_PATH2 " ..."
 .SH DESCRIPTION
 List the Lustre or LNet parameter name(s) matching
 .IR param_search .
 The parameter name(s) may contain wildcards using
 .BR glob (3)
 pathname patterns.
+.SH OPTIONS
+The various options supported by
+.B lctl list_param
+are listed and explained below:
 .TP
-.B -D
+.B -D ", " --dir-only
 Only list directories.
 .TP
-.B -F
+.B -F ", " --classify
 Append '/', '@' or '=' for dirs, symlinks and writeable files, respectively.
 .TP
-.B -p
-Print the pathname instead of the parameter name.
+.B -l ", " --links
+Follow symlinks while searching for parameters. (enabled by default)
 .TP
-.B -R
+.B -L ", " --no-links
+Do not follow symlinks while searching for parameters.
+.TP
+.b -p ", " --path
+Print the path name instead of the parameter name.
+.TP
+.B -R ", " --recursive
 Recursively list all parameters under the specified parameter search string. If
 .I param_search
 is unspecified, all the parameters will be shown.
@@ -66,6 +82,30 @@ is unspecified, all the parameters will be shown.
   mdt.lustre-MDT0000.commit_on_sharing
 .br
   mdt.lustre-MDT0000.evict_client
+.br
+  ...
+.br
+.B
+# lctl list_param -L -R mgs.MGS | grep -c .osd
+.br
+  0
+.br
+# mgs.MGS.osd is a \fIsymlink\fR -> ../../osd-ldiskfs/lustre-MDT0000
+.br
+Compare this to the same command with --links enabled
+.br
+.B
+# lctl list_param -l -R mgs.MGS | grep .osd
+.br
+  mgs.MGS.osd
+.br
+  mgs.MGS.osd.auto_scrub
+.br
+  mgs.MGS.osd.blocksize
+.br
+  mgs.MGS.osd.enable_projid.xattr
+.br
+  mgs.MGS.osd.extent_bytes_allocation
 .br
   ...
 .SH SEE ALSO

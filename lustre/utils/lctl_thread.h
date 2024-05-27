@@ -48,6 +48,7 @@ struct param_opts {
 	unsigned int po_yaml:1;
 	unsigned int po_detail:1;
 	unsigned int po_header:1;
+	unsigned int po_follow_symlinks:1;
 	unsigned int po_parallel_threads;
 };
 

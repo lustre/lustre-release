@@ -28645,7 +28645,7 @@ test_401a() { #LU-7437
 		sort -u | wc -l)
 
 	[ $params -eq $procs ] ||
-		error "found $params parameters vs. $procs proc files"
+		error "found $params parameters vs. $procs proc files '-D'"
 }
 run_test 401a "Verify if 'lctl list_param -R' can list parameters recursively"
 
@@ -28713,7 +28713,7 @@ test_401d() {
 	if $LCTL list_param jobid_name > /dev/null 2>&1; then
 		local testname=jobid_name new_value='foo=bar%p'
 	else
-		local testname=jobid_var new_valuie=foo=bar
+		local testname=jobid_var new_value=foo=bar
 	fi
 
 	local jobid_var_old=$($LCTL get_param -n $testname)
@@ -28754,6 +28754,14 @@ test_401e() { # LU-14779
 		error "lctl get_param lru_size failed"
 }
 run_test 401e "verify 'lctl get_param' works with NID in parameter"
+
+test_401f() {
+	$LCTL list_param -RpL "*" | while read path; do
+		[[ ! -L $path ]] ||
+			error "list_param -RpL returned the symlink: '$path'"
+	done
+}
+run_test 401f "check 'lctl list_param' doesn't follow symlinks with --no-links"
 
 test_402() {
 	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||

@@ -185,43 +185,30 @@ command_t cmdlist[] = {
 	{"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
 	 "usage: local_param <target.keyword=val>\n"},
 	{"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-	 "usage: get_param [-F|n|-N|-R] <param_path1 param_path2 ...>\n"
+	 "usage: get_param [--classify|-F] [--header|-H] [--links|-l]\n"
+	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
+	 "		   [--recursive|-R] [--yaml|-y]\n"
+	 "		   <param_path1 param_path2 ...>\n"
 	 "Get the value of Lustre or LNET parameter from the specified path.\n"
-	 "The path can contain shell-style filename patterns.\n"
-	 "  -F  When -N specified, add '/', '@' or '=' for directories,\n"
-	 "      symlinks and writeable files, respectively.\n"
-	 "  -H  Prefix each output line with the parameter name.\n"
-	 "  -n  Print only the value and not parameter name.\n"
-	 "  -N  Print only matched parameter names and not the values.\n"
-	 "      (Especially useful when using patterns.)\n"
-	 "  -R  Get parameters recursively from the specified entry.\n"},
+	 "The path can contain shell-style filename patterns.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [-n] [-P] [-d] [-F] "
+	 "usage: set_param [--delete|-d] [--file|-F] [--no-name|-n]\n"
+	 "		   [--permanent|-P]"
 #ifdef HAVE_LIBPTHREAD
-	 "[-t[THREAD_COUNT]] "
+	 " [--thread|-t [THREAD_COUNT]]"
 #endif
-	 "PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
-	 "Set the value of the Lustre or LNET parameter at the specified path.\n"
-	 "  -n  Disable printing of the key name when printing values.\n"
-	 "  -P  Set the parameter permanently, filesystem-wide.\n"
-	 "  -d  Remove the permanent setting (only with -P option).\n"
-	 "  -F  Read permanent configuration from a YAML file.\n"
-#ifdef HAVE_LIBPTHREAD
-	 "  -t  Set parameters in parallel, max THREAD_COUNT threads\n"
-	 "    (default " STRINGIFY(LCFG_THREADS_DEF) ").\n"
-#endif
-	},
+	 "\n"
+	 "		   PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
+	 "Set the value of the Lustre or LNET parameter at the specified path.\n"},
 	{"apply_yaml", jt_lcfg_applyyaml, 0, "set/config the Lustre or LNET "
 	 "parameters using configuration from a YAML file.\n"
 	 "usage: apply_yaml file\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
-	 "usage: list_param [-D|-F|-p|-R] <param_path1 param_path2 ...>\n"
-	 "List the name of Lustre or LNET parameter from the specified path.\n"
-	 "  -D  Only list directories.\n"
-	 "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files, respectively.\n"
-	 "  -p  Prints the pathname instead of the parameter name.\n"
-	 "  -R  Recursively list all parameters under the specified path.\n"},
+	 "usage: list_param [--dir-only|-D] [--classify|-F] [--links|-l]\n"
+	 "		    [--no-links|-L] [--path|-p] [--recursive|-R]\n"
+	 "		    <param_path1 param_path2 ...>\n"
+	 "List the name of Lustre or LNet parameter from the specified path.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
 	 "usage: del_ost [--dryrun] --target <$fsname-OSTxxxx>\n"
 	 "Cancel the config records for a specific OST to forget about it.\n"},

@@ -2,9 +2,16 @@
 .SH NAME
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
-.br
-.IR "\fBlctl get_param " [ -F "] [" -H "] [" -n | -N "] [" -R "] <" parameter ...>
-.br
+.B "\fBlctl get_param "
+.RB [ --classify | -F ]
+.RB [ --header | -H ]
+.RB [ --links | -l ]
+.RB [ --no-links | -L ]
+.RB [ --no-name | -n ]
+.RB [ --only-name | -N ]
+.RB [ --recursive | -R ]
+.RB [ --yaml | -y ]
+.IR PARAM_PATH1 " " PARAM_PATH2 " ..."
 .SH DESCRIPTION
 Get the value of the named Lustre or LNet
 .I parameter
@@ -29,31 +36,38 @@ some of them are accessible only by the root user for security or
 implementation reasons.
 .SH OPTIONS
 .TP
-.B -F
+.B -F ", " --classify
 Append a '/', '@', or '=' suffix for directories, symlinks, and writeable
 parameters, respectively.
 .B "lctl get_param -NF"
 is equivalent to
 .BR "lctl list_param -F" .
 .TP
-.B -H
+.B -H ", " --header
 Prefix each parameter value line with the parameter name, as a header. It
 also print a line for empty values. It could be useful when wildcards are
 used and filtering the output.
 .TP
-.B -n
+.B -l ", " --links
+Follow symlinks while searching for parameters. (enabled by default)
+.TP
+.B -L ", " --no-links
+Do not follow symlinks while searching for parameters.
+.TP
+.B -n ", " --no-name
 Print only the parameter value and not parameter name.  This may be confusing
 if multiple parameter names are specified, as the parameters are not
 identified, and may not be returned in the order that they are specified.
 .TP
-.B -N
+.B -N ", " --only-name
 Print only matched parameter names and not the values. This is especially
-useful when using patterns.
+useful when using patterns. This option is equivalent to
+.BR "lctl list_param".
 .TP
-.B -R
+.B -R ", " --recursive
 Recursively show all of the parameter names below the specified name.
 .TP
-.B -y
+.B -y ", " --yaml
 Some paramters can be presented in a YAML format but are not by default. This
 will format the parameter data in YAML. If the YAML provides a source: field
 it can be suppressed with the -n option.

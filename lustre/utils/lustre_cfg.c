@@ -1161,7 +1161,12 @@ do_param_op(struct param_opts *popt, char *pattern, char *value,
 		struct stat st;
 		int rc2, j;
 
-		if (stat(paths.gl_pathv[i], &st) == -1) {
+		if (!popt->po_follow_symlinks)
+			rc2 = lstat(paths.gl_pathv[i], &st);
+		else
+			rc2 = stat(paths.gl_pathv[i], &st);
+
+		if (rc2 == -1) {
 			fprintf(stderr, "error: %s: stat '%s': %s\n",
 				opname, paths.gl_pathv[i], strerror(errno));
 			if (!rc)
@@ -1169,6 +1174,8 @@ do_param_op(struct param_opts *popt, char *pattern, char *value,
 			continue;
 		}
 
+		if (S_ISLNK(st.st_mode) && !popt->po_follow_symlinks)
+			continue;
 		if (popt->po_only_dir && !S_ISDIR(st.st_mode))
 			continue;
 
@@ -1327,18 +1334,35 @@ out_param:
 
 static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
+	struct option long_opts[] = {
+	{ .val = 'D',	.name = "dir-only",	.has_arg = no_argument},
+	{ .val = 'D',	.name = "directory-only", .has_arg = no_argument},
+	{ .val = 'F',	.name = "classify",	.has_arg = no_argument},
+	{ .val = 'l',	.name = "links",	.has_arg = no_argument},
+	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
+	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	};
+
 	int ch;
 
 	popt->po_show_name = 1;
 	popt->po_only_name = 1;
+	popt->po_follow_symlinks = 1;
 
-	while ((ch = getopt(argc, argv, "DFpR")) != -1) {
+	while ((ch = getopt_long(argc, argv, "DFlLpR",
+				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'D':
 			popt->po_only_dir = 1;
 			break;
 		case 'F':
 			popt->po_show_type = 1;
+			break;
+		case 'l':
+			popt->po_follow_symlinks = 1;
+			break;
+		case 'L':
+			popt->po_follow_symlinks = 0;
 			break;
 		case 'p':
 			popt->po_only_pathname = 1;
@@ -1402,17 +1426,36 @@ int jt_lcfg_listparam(int argc, char **argv)
 
 static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
+	struct option long_opts[] = {
+	{ .val = 'F',	.name = "classify",	.has_arg = no_argument},
+	{ .val = 'H',	.name = "header",	.has_arg = no_argument},
+	{ .val = 'l',	.name = "links",	.has_arg = no_argument},
+	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
+	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
+	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
+	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
+	};
+
 	int ch;
 
 	popt->po_show_name = 1;
+	popt->po_follow_symlinks = 1;
 
-	while ((ch = getopt(argc, argv, "FHnNRy")) != -1) {
+	while ((ch = getopt_long(argc, argv, "FHlLnNRy",
+				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'F':
 			popt->po_show_type = 1;
 			break;
 		case 'H':
 			popt->po_header = 1;
+			break;
+		case 'l':
+			popt->po_follow_symlinks = 1;
+			break;
+		case 'L':
+			popt->po_follow_symlinks = 0;
 			break;
 		case 'n':
 			popt->po_show_name = 0;
@@ -1679,6 +1722,15 @@ int jt_nodemap_info(int argc, char **argv)
  */
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
+	struct option long_opts[] = {
+	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
+	{ .val = 'F',	.name = "file",		.has_arg = no_argument},
+	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
+	{ .val = 'P',	.name = "perm",		.has_arg = no_argument},
+	{ .val = 'P',	.name = "permanent",	.has_arg = no_argument},
+	{ .val = 't',	.name = "thread",	.has_arg = optional_argument},
+	};
+
 	int ch;
 
 	popt->po_show_name = 1;
@@ -1689,9 +1741,11 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_delete = 0;
 	popt->po_file = 0;
 	popt->po_parallel_threads = 0;
+	popt->po_follow_symlinks = 1;
 	opterr = 0;
 
-	while ((ch = getopt(argc, argv, "dFnPt::")) != -1) {
+	while ((ch = getopt_long(argc, argv, "dFnPt::",
+			    long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'n':
 			popt->po_show_name = 0;
