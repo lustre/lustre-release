@@ -95,7 +95,7 @@ int REGISTER_FUNC(struct nvfs_dma_rw_ops *ops)
 	CDEBUG(D_NET, "registering nvfs %p\n", ops);
 	return 0;
 }
-EXPORT_SYMBOL(REGISTER_FUNC);
+EXPORT_SYMBOL_GPL(REGISTER_FUNC);
 
 void UNREGISTER_FUNC(void)
 {
@@ -108,7 +108,7 @@ void UNREGISTER_FUNC(void)
 	nvfs_ops = NULL;
 	percpu_counter_destroy(&nvfs_n_ops);
 }
-EXPORT_SYMBOL(UNREGISTER_FUNC);
+EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);
 
 unsigned int
 lnet_get_dev_prio(struct device *dev, unsigned int dev_idx)
