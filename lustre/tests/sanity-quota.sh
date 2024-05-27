@@ -1799,6 +1799,7 @@ test_file_soft() {
 		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
 
 	setup_quota_test
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir || error "setstripe failed"
 	is_project_quota_supported && change_project -sp $TSTPRJID $DIR/$tdir
 
 	echo "Create files to exceed soft limit"
@@ -1806,17 +1807,20 @@ test_file_soft() {
 		quota_error a $TSTUSR "create failure, but expect success"
 	local trigger_time=$(date +%s)
 
-	sync_all_data || true
+	sync_all_data_mdts || true
+	do_facet ost1 "lctl set_param -n osd*.*OST0000.force_sync=1"
 
 	local cur_time=$(date +%s)
 	[ $(($cur_time - $trigger_time)) -ge $grace ] &&
 		error "Passed grace time $grace, $trigger_time, $cur_time"
+	echo "========= Passed grace time $grace, $trigger_time, $cur_time"
 
 	echo "Create file before timer goes off"
 	$RUNAS touch ${TESTFILE}_before ||
 		quota_error a $TSTUSR "failed create before timer expired," \
 			"but expect success. $trigger_time, $cur_time"
-	sync_all_data || true
+	sync_all_data_mdts || true
+	do_facet ost1 "lctl set_param -n osd*.*OST0000.force_sync=1"
 
 	wait_grace_time $qtype "file"
 
@@ -1832,7 +1836,8 @@ test_file_soft() {
 	$RUNAS createmany -m ${TESTFILE}_after_3 $((SOFT_LIMIT + 1)) &&
 		quota_error a $TSTUSR "create after timer expired," \
 			"but expect EDQUOT"
-	sync_all_data || true
+	sync_all_data_mdts || true
+	do_facet ost1 "lctl set_param -n osd*.*OST0000.force_sync=1"
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -1849,7 +1854,8 @@ test_file_soft() {
 	$RUNAS touch ${TESTFILE}_xxx ||
 		quota_error a $TSTUSR "touch after timer stop failure," \
 			"but expect success"
-	sync_all_data || true
+	sync_all_data_mdts || true
+	do_facet ost1 "lctl set_param -n osd*.*OST0000.force_sync=1"
 
 	# cleanup
 	cleanup_quota_test

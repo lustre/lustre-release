@@ -3536,12 +3536,19 @@ wait_update_facet() {
 	wait_update_cond $verbose $quiet $node "$check" "==" "$expect" $max_wait
 }
 
-sync_all_data() {
+sync_all_data_mdts() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 	    "lctl set_param -n os[cd]*.*MDT*.force_sync=1"
+}
+
+sync_all_data_osts() {
 	do_nodes $(comma_list $(osts_nodes)) \
 	    "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
 		grep -v 'Found no match'
+}
+sync_all_data() {
+	sync_all_data_mdts
+	sync_all_data_osts
 }
 
 wait_zfs_commit() {
