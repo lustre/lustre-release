@@ -37,24 +37,24 @@
 
 static inline int get_fe_device(struct fiemap_extent *fe)
 {
-	return fe->fe_device & 0xffff;
+	return fe->fe_device & 0x1ffff;
 }
 static inline void set_fe_device(struct fiemap_extent *fe, int devno)
 {
-	fe->fe_device = (fe->fe_device & 0xffff0000) | (devno & 0xffff);
+	fe->fe_device = (fe->fe_device & 0xfffe0000) | (devno & 0x1ffff);
 }
 static inline int get_fe_stripenr(struct fiemap_extent *fe)
 {
-	return fe->fe_device >> 16;
+	return fe->fe_device >> 17;
 }
 static inline void set_fe_stripenr(struct fiemap_extent *fe, int nr)
 {
-	fe->fe_device = (fe->fe_device & 0xffff) | (nr << 16);
+	fe->fe_device = (fe->fe_device & 0x1ffff) | (nr << 17);
 }
 static inline void set_fe_device_stripenr(struct fiemap_extent *fe, int devno,
 					  int nr)
 {
-	fe->fe_device = (nr << 16) | (devno & 0xffff);
+	fe->fe_device = (nr << 17) | (devno & 0x1ffff);
 }
 
 static inline __kernel_size_t fiemap_count_to_size(__kernel_size_t extent_count)

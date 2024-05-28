@@ -404,6 +404,11 @@ static const struct req_msg_field *ost_grant_shrink_client[] = {
 static const struct req_msg_field *mds_getinfo_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_GETINFO_KEY,
+};
+
+static const struct req_msg_field *mds_fid2path_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_GETINFO_KEY,
 	&RMF_GETINFO_VALLEN
 };
 
@@ -823,6 +828,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_CONNECT,
 	&RQF_MDS_DISCONNECT,
 	&RQF_MDS_GET_INFO,
+	&RQF_MDS_FID2PATH,
 	&RQF_MDS_GET_ROOT,
 	&RQF_MDS_STATFS,
 	&RQF_MDS_STATFS_NEW,
@@ -1587,6 +1593,11 @@ struct req_format RQF_MDS_GET_INFO =
 	DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
 			mds_getinfo_server);
 EXPORT_SYMBOL(RQF_MDS_GET_INFO);
+
+struct req_format RQF_MDS_FID2PATH =
+	DEFINE_REQ_FMT0("MDS_FID2PATH", mds_fid2path_client,
+			mds_getinfo_server);
+EXPORT_SYMBOL(RQF_MDS_FID2PATH);
 
 struct req_format RQF_MDS_BATCH =
 	DEFINE_REQ_FMT0("MDS_BATCH", mds_batch_client,

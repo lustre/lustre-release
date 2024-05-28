@@ -7798,49 +7798,55 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 
 int mdt_get_info(struct tgt_session_info *tsi)
 {
-	char	*key;
-	int	 keylen;
-	__u32	*vallen;
-	void	*valout;
-	int	 rc;
+	char *key;
+	int keylen;
+	int rc;
 
 	ENTRY;
 
 	key = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_KEY);
-	if (key == NULL) {
-		CDEBUG(D_IOCTL, "No GETINFO key\n");
-		RETURN(err_serious(-EFAULT));
+	if (!key) {
+		DEBUG_REQ(D_IOCTL, tgt_ses_req(tsi), "no GETINFO key");
+		RETURN(err_serious(-EPROTO));
 	}
 	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_GETINFO_KEY,
 				      RCL_CLIENT);
-
-	vallen = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_VALLEN);
-	if (vallen == NULL) {
-		CDEBUG(D_IOCTL, "%s: cannot get RMF_GETINFO_VALLEN buffer\n",
-				tgt_name(tsi->tsi_tgt));
-		RETURN(err_serious(-EFAULT));
-	}
-
-	req_capsule_set_size(tsi->tsi_pill, &RMF_GETINFO_VAL, RCL_SERVER,
-			     *vallen);
-	rc = req_capsule_server_pack(tsi->tsi_pill);
-	if (rc)
-		RETURN(err_serious(rc));
-
-	valout = req_capsule_server_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
-	if (valout == NULL) {
-		CDEBUG(D_IOCTL, "%s: cannot get get-info RPC out buffer\n",
-				tgt_name(tsi->tsi_tgt));
-		RETURN(err_serious(-EFAULT));
-	}
-
 	if (KEY_IS(KEY_FID2PATH)) {
-		struct mdt_thread_info	*info = tsi2mdt_info(tsi);
+		struct mdt_thread_info *info;
+		__u32 *vallen;
+		void *valout;
 
+		req_capsule_extend(tsi->tsi_pill, &RQF_MDS_FID2PATH);
+		vallen = req_capsule_client_get(tsi->tsi_pill,
+						&RMF_GETINFO_VALLEN);
+		if (!vallen) {
+			CDEBUG(D_IOCTL,
+			       "%s: cannot get RMF_GETINFO_VALLEN buffer\n",
+			       tgt_name(tsi->tsi_tgt));
+			RETURN(err_serious(-EPROTO));
+		}
+
+		req_capsule_set_size(tsi->tsi_pill, &RMF_GETINFO_VAL,
+				     RCL_SERVER, *vallen);
+		rc = req_capsule_server_pack(tsi->tsi_pill);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		valout = req_capsule_server_get(tsi->tsi_pill,
+						&RMF_GETINFO_VAL);
+		if (!valout) {
+			CDEBUG(D_IOCTL,
+			       "%s: cannot get get-info RPC out buffer\n",
+			       tgt_name(tsi->tsi_tgt));
+			RETURN(-ENOMEM);
+		}
+		info = tsi2mdt_info(tsi);
 		rc = mdt_rpc_fid2path(info, key, keylen, valout, *vallen);
 		mdt_thread_info_fini(info);
+	} else if (KEY_IS(KEY_FIEMAP)) {
+		rc = mdt_fiemap_get(tsi);
 	} else {
-		rc = -EINVAL;
+		rc = err_serious(-EOPNOTSUPP);
 	}
 	RETURN(rc);
 }

@@ -190,6 +190,7 @@ struct lov_layout_dom {
 	struct lov_layout_raid0 lo_dom_r0;
 	struct lovsub_object *lo_dom;
 	struct lov_oinfo *lo_loi;
+	unsigned short lo_mdt_idx;
 };
 
 struct lov_layout_entry {

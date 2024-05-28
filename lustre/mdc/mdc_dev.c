@@ -1392,7 +1392,7 @@ static int mdc_io_init(const struct lu_env *env, struct cl_object *obj,
 }
 
 static void mdc_build_res_name(struct osc_object *osc,
-				   struct ldlm_res_id *resname)
+			       struct ldlm_res_id *resname)
 {
 	fid_build_reg_res_name(lu_object_fid(osc2lu(osc)), resname);
 }
@@ -1506,6 +1506,89 @@ static int mdc_object_flush(const struct lu_env *env, struct cl_object *obj,
 	RETURN(mdc_dlm_canceling(env, lock));
 }
 
+static int mdc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
+			     struct ll_fiemap_info_key *fmkey,
+			     struct fiemap *fiemap, size_t *buflen)
+{
+	struct osc_thread_info *info = osc_env_info(env);
+	struct osc_object *osc = cl2osc(obj);
+	struct obd_export *exp = osc_export(osc);
+	struct lustre_handle lockh;
+	enum ldlm_mode mode = LCK_MINMODE;
+	struct ptlrpc_request *req;
+	struct fiemap *repbuf;
+	struct ll_fiemap_info_key *rq_fmkey;
+	char *fmbuf;
+	__u64 flags;
+	int rc;
+
+	ENTRY;
+
+	fmkey->lfik_oa.o_oi = osc->oo_oinfo->loi_oi;
+
+	if (fmkey->lfik_fiemap.fm_flags & FIEMAP_FLAG_SYNC) {
+		struct ldlm_res_id *resid = &osc_env_info(env)->oti_resname;
+		union ldlm_policy_data *policy = &info->oti_policy;
+
+		mdc_build_res_name(osc, resid);
+		mdc_lock_build_policy(env, NULL, policy);
+		flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY;
+		mode = mdc_dom_lock_match(env, exp, resid, LDLM_IBITS, policy,
+					  LCK_PR | LCK_PW | LCK_GROUP,
+					  &flags, osc, &lockh, 0);
+		fmkey->lfik_oa.o_valid |= OBD_MD_FLFLAGS;
+		if (mode) { /* lock is cached on client */
+			fmkey->lfik_oa.o_flags &= ~OBD_FL_SRVLOCK;
+			if (mode != LCK_PR) {
+				ldlm_lock_addref(&lockh, LCK_PR);
+				ldlm_lock_decref(&lockh, mode);
+			}
+		} else {
+			/* no cached lock, needs acquire lock on server side */
+			fmkey->lfik_oa.o_flags |= OBD_FL_SRVLOCK;
+		}
+	}
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_OST_GET_INFO_FIEMAP);
+	if (!req)
+		GOTO(drop_lock, rc = -ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_KEY, RCL_CLIENT,
+			     sizeof(*fmkey));
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_VAL, RCL_CLIENT,
+			     *buflen);
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_VAL, RCL_SERVER,
+			     *buflen);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+		GOTO(drop_lock, rc);
+	}
+	rq_fmkey = req_capsule_client_get(&req->rq_pill, &RMF_FIEMAP_KEY);
+	*rq_fmkey = *fmkey;
+	fmbuf = req_capsule_client_get(&req->rq_pill, &RMF_FIEMAP_VAL);
+	memcpy(fmbuf, fiemap, *buflen);
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		GOTO(fini_req, rc);
+
+	repbuf = req_capsule_server_get(&req->rq_pill, &RMF_FIEMAP_VAL);
+	if (!repbuf)
+		GOTO(fini_req, rc = -EPROTO);
+	memcpy(fiemap, repbuf, *buflen);
+
+fini_req:
+	ptlrpc_req_put(req);
+drop_lock:
+	if (mode)
+		ldlm_lock_decref(&lockh, LCK_PR);
+	RETURN(rc);
+}
+
 static const struct cl_object_operations mdc_ops = {
 	.coo_page_init = osc_page_init,
 	.coo_lock_init = mdc_lock_init,
@@ -1515,7 +1598,8 @@ static const struct cl_object_operations mdc_ops = {
 	.coo_glimpse = osc_object_glimpse,
 	.coo_req_attr_set = mdc_req_attr_set,
 	.coo_prune = mdc_object_prune,
-	.coo_object_flush = mdc_object_flush
+	.coo_object_flush = mdc_object_flush,
+	.coo_fiemap = mdc_object_fiemap,
 };
 
 static const struct osc_object_operations mdc_object_ops = {

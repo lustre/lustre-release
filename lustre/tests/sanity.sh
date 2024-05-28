@@ -16821,6 +16821,66 @@ test_130h() {
 }
 run_test 130h "FIEMAP deadlock"
 
+test_130i() {
+	(( $MDS1_VERSION >= $(version_code 2.15.63.195) )) ||
+		skip "Need MDS version at least 2.15.63.195 for DoM support"
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing Lustre support"
+	[[ "$ost1_FSTYPE" != "zfs" ]] ||
+		skip "LU-1941: FIEMAP unimplemented on ZFS"
+
+	local dom_file=$DIR/$tfile
+
+	stack_trap "rm -f $dom_file"
+
+	$LFS setstripe -E 1M -L mdt -E -1 -c2 -S 131072 -o1,0 $dom_file ||
+		error "setstripe on $dom_file"
+
+	local blks=$((128 * 3))
+	local expected=$(((blks / 3) * 4))
+
+	for ((i = 0; i < $blks; i++)); do
+		dd if=/dev/zero of=$dom_file count=1 bs=4k seek=$((2 * i)) \
+			conv=notrunc > /dev/null 2>&1 ||
+			error "dd failed to $dom_file"
+	done
+
+	filefrag -ves $dom_file | (head -7; echo ; tail -5)
+	(( ! ${PIPESTATUS[0]} )) || error "filefrag $dom_file failed"
+
+	filefrag_op=$(filefrag -ve -k $dom_file |
+		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
+
+	local last_lun=$(echo $filefrag_op | cut -d: -f5)
+	local lun_len=0
+	local num_luns=1
+
+	while IFS=$'\n' read line; do
+		local frag_lun=$(echo $line | cut -d: -f5)
+		local ext_len=$(echo $line | cut -d: -f4)
+
+		if (( $frag_lun != $last_lun )); then
+			if (( lun_len != expected )); then
+				error "dev #$last_lun: $lun_len != $expected"
+			else
+				(( num_luns += 1 ))
+				lun_len=0
+			fi
+		fi
+		(( lun_len += ext_len ))
+		last_lun=$frag_lun
+	done <<< "$filefrag_op"
+
+	if (( num_luns != 3 )); then
+		error "num devices: $num_luns, but 3 expected"
+	fi
+	if (( lun_len != expected )); then
+		error "dev #$last_lun: $lun_len != $expected"
+	fi
+	echo "FIEMAP on DoM file succeeded"
+}
+run_test 130i "FIEMAP (DoM file)"
+
 # Test for writev/readv
 test_131a() {
 	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 ||

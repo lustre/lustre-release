@@ -2380,35 +2380,36 @@ static int mdc_get_info_rpc(struct obd_export *exp,
 			    u32 keylen, void *key,
 			    u32 vallen, void *val)
 {
-        struct obd_import      *imp = class_exp2cliimp(exp);
-        struct ptlrpc_request  *req;
-        char                   *tmp;
-        int                     rc = -EINVAL;
-        ENTRY;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	struct ptlrpc_request *req;
+	char *tmp;
+	int rc = -EINVAL;
 
-        req = ptlrpc_request_alloc(imp, &RQF_MDS_GET_INFO);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
 
-        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY,
-                             RCL_CLIENT, keylen);
-        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
+	req = ptlrpc_request_alloc(imp, &RQF_MDS_FID2PATH);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY,
+			     RCL_CLIENT, keylen);
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
 			     RCL_CLIENT, sizeof(vallen));
 
-        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
-        memcpy(tmp, key, keylen);
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
+	memcpy(tmp, key, keylen);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
 	memcpy(tmp, &vallen, sizeof(vallen));
 
-        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
-                             RCL_SERVER, vallen);
-        ptlrpc_request_set_replen(req);
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
+			     RCL_SERVER, vallen);
+	ptlrpc_request_set_replen(req);
 
 	/* if server failed to resolve FID, and OI scrub not able to fix it, it
 	 * will return -EINPROGRESS, ptlrpc_queue_wait() will keep retrying,

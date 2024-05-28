@@ -1079,6 +1079,120 @@ out:
 	return rc;
 }
 
+/*
+ * Check if there is any sparse area in DoM segment.
+ */
+static int dom_has_zero_regions(struct fiemap *fiemap)
+{
+	struct fiemap_extent *fiemap_start = fiemap->fm_extents;
+	__u64 begin = fiemap->fm_start;
+	unsigned int i;
+
+	for (i = 0; i < fiemap->fm_mapped_extents; i++) {
+		if (fiemap_start[i].fe_logical > begin)
+			return true;
+		begin = fiemap_start[i].fe_logical + fiemap_start[i].fe_length;
+	}
+	return begin < (fiemap->fm_start + fiemap->fm_length);
+}
+
+int mdt_dom_fiemap(const struct lu_env *env, struct mdt_device *mdt,
+		   const struct lu_fid *fid, struct fiemap *fiemap)
+{
+	struct mdt_object *mo;
+	int rc;
+
+	ENTRY;
+
+	mo = mdt_object_find(env, mdt, fid);
+	if (IS_ERR(mo))
+		RETURN(PTR_ERR(mo));
+
+	mdt_dom_read_lock(mo);
+	if (!mdt_object_exists(mo))
+		GOTO(out, rc = -ENOENT);
+	if (mdt_object_remote(mo))
+		GOTO(out, rc = -EREMOTE);
+	if (!S_ISREG(lu_object_attr(&mo->mot_obj)))
+		GOTO(out, rc = -EBADF);
+
+	rc = dt_fiemap_get(env, mdt_obj2dt(mo), fiemap);
+out:
+	mdt_dom_read_unlock(mo);
+	lu_object_put(env, &mo->mot_obj);
+	RETURN(rc);
+}
+/**
+ * Get FIEMAP (FIle Extent MAPping) for object with the given FID.
+ *
+ * This function returns a list of extents which describes how a file's
+ * blocks are laid out on the disk.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if \a fiemap is filled with data successfully
+ * \retval		negative value on error
+ */
+int mdt_fiemap_get(struct tgt_session_info *tsi)
+{
+	struct ldlm_namespace *ns = tsi->tsi_tgt->lut_obd->obd_namespace;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
+	struct ll_fiemap_info_key *fm_key;
+	struct obdo *oa;
+	struct fiemap *fiemap;
+	const struct lu_fid *fid;
+	int rlen, rc;
+	bool srvlock;
+
+	req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_FIEMAP);
+
+	fm_key = req_capsule_client_get(tsi->tsi_pill, &RMF_FIEMAP_KEY);
+	if (!fm_key)
+		RETURN(err_serious(-EPROTO));
+
+	rlen = fiemap_count_to_size(fm_key->lfik_fiemap.fm_extent_count);
+	req_capsule_set_size(tsi->tsi_pill, &RMF_FIEMAP_VAL, RCL_SERVER, rlen);
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc)
+		RETURN(err_serious(rc));
+
+	fiemap = req_capsule_server_get(tsi->tsi_pill, &RMF_FIEMAP_VAL);
+	if (!fiemap)
+		RETURN(-ENOMEM);
+
+	oa = &fm_key->lfik_oa;
+	rc = tgt_validate_obdo(tsi, oa);
+	if (rc)
+		RETURN(rc);
+
+	fid = &oa->o_oi.oi_fid;
+	*fiemap = fm_key->lfik_fiemap;
+
+	CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
+	rc = mdt_dom_fiemap(tsi->tsi_env, mdt, fid, fiemap);
+	if (rc)
+		RETURN(rc);
+
+	srvlock = (exp_connect_flags(exp) & OBD_CONNECT_SRVLOCK) &&
+		  oa->o_valid & OBD_MD_FLFLAGS &&
+		  oa->o_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock && dom_has_zero_regions(fiemap)) {
+		__u64 flg = 0;
+		struct lustre_handle lh = { 0 };
+
+		CDEBUG(D_OTHER, "FIEMAP: lock "DFID" due to sparse areas\n",
+		       PFID(fid));
+		fid_build_reg_res_name(fid, &tsi->tsi_resid);
+		rc = tgt_mdt_data_lock(ns, &tsi->tsi_resid, &lh, LCK_PR, &flg);
+		if (!rc)
+			rc = mdt_dom_fiemap(tsi->tsi_env, mdt, fid, fiemap);
+	}
+
+	RETURN(rc);
+}
+
 static int mdt_object_punch(const struct lu_env *env, struct dt_device *dt,
 			    struct dt_object *dob, __u64 start, __u64 end,
 			    struct lu_attr *la)
@@ -2012,3 +2126,4 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 
 	RETURN_EXIT;
 }
+

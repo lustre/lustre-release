@@ -1420,6 +1420,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		     ktime_t kstart);
 int mdt_punch_hdl(struct tgt_session_info *tsi);
 int mdt_fallocate_hdl(struct tgt_session_info *tsi);
+int mdt_fiemap_get(struct tgt_session_info *tsi);
 int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 			struct ldlm_lock **lockp, __u64 flags);
 int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,

@@ -212,6 +212,7 @@ extern struct req_format RQF_MDS_CLOSE_INTENT;
 extern struct req_format RQF_MDS_CONNECT;
 extern struct req_format RQF_MDS_DISCONNECT;
 extern struct req_format RQF_MDS_GET_INFO;
+extern struct req_format RQF_MDS_FID2PATH;
 extern struct req_format RQF_MDS_READPAGE;
 extern struct req_format RQF_MDS_REINT;
 extern struct req_format RQF_MDS_REINT_CREATE;

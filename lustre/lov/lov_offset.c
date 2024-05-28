@@ -225,7 +225,7 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 	u64 loc_start, loc_end;
 
 	if (!lu_extent_is_overlapped(ext, &entry->lsme_extent))
-			return 0;
+		return 0;
 
 	if (!obd_start)
 		obd_start = &loc_start;

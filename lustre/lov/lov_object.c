@@ -538,6 +538,7 @@ again:
 	lle->lle_dom.lo_dom_r0.lo_nr = 1;
 	lle->lle_dom.lo_dom_r0.lo_sub = &lle->lle_dom.lo_dom;
 	lle->lle_dom.lo_loi = loi;
+	lle->lle_dom.lo_mdt_idx = idx;
 
 	rc = lov_page_slice_fixup(lov, clo);
 	RETURN(rc);
@@ -1619,7 +1620,7 @@ static int lov_lock_init(const struct lu_env *env, struct cl_object *obj,
 
 /**
  * We calculate on which OST the mapping will end. If the length of mapping
- * is greater than (stripe_size * stripe_count) then the last_stripe will
+ * is greater than (stripe_size * stripe_count) then the last_stripe
  * will be one just before start_stripe. Else we check if the mapping
  * intersects each OST and find last_stripe.
  * This function returns the last_stripe and also sets the stripe_count
@@ -1643,15 +1644,15 @@ static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, int index,
 	int last_stripe;
 	int i, j;
 
+	if (lsme_is_dom(lsme)) {
+		*stripe_count = 1;
+		return start_stripe;
+	}
+
 	init_stripe = lov_stripe_number(lsm, index, ext->e_start);
 
-	if (ext->e_end - ext->e_start >
-	    lsme->lsme_stripe_size * lsme->lsme_stripe_count) {
-		if (init_stripe == start_stripe) {
-			last_stripe = (start_stripe < 1) ?
-				lsme->lsme_stripe_count - 1 : start_stripe - 1;
-			*stripe_count = lsme->lsme_stripe_count;
-		} else if (init_stripe < start_stripe) {
+	if (ext->e_end - ext->e_start > stripe_width(lsm, index)) {
+		if (init_stripe <= start_stripe) {
 			last_stripe = (init_stripe < 1) ?
 				lsme->lsme_stripe_count - 1 : init_stripe - 1;
 			*stripe_count = lsme->lsme_stripe_count -
@@ -1663,7 +1664,7 @@ static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, int index,
 	} else {
 		for (j = 0, i = start_stripe; j < lsme->lsme_stripe_count;
 		     i = (i + 1) % lsme->lsme_stripe_count, j++) {
-			if (!lov_stripe_intersects(lsm, index,  i, ext, NULL,
+			if (!lov_stripe_intersects(lsm, index, i, ext, NULL,
 						   NULL))
 				break;
 			if ((start_stripe != init_stripe) && (i == init_stripe))
@@ -1751,10 +1752,12 @@ static u64 fiemap_calc_fm_end_offset(struct fiemap *fiemap,
 	    local_end < lun_end) {
 		fm_end_offset = local_end;
 	} else {
+		int stripes = lsme_is_dom(lsme) ? 1 : lsme->lsme_stripe_count;
+
 		/* This is a special value to indicate that caller should
 		 * calculate offset in next stripe. */
 		fm_end_offset = 0;
-		*start_stripe = (stripe_no + 1) % lsme->lsme_stripe_count;
+		*start_stripe = (stripe_no + 1) % stripes;
 	}
 
 	return fm_end_offset;
@@ -1774,73 +1777,45 @@ struct fiemap_state {
 	bool			fs_enough;	/* enough for this call */
 };
 
-static struct cl_object *lov_find_subobj(const struct lu_env *env,
-					 struct lov_object *lov,
-					 struct lov_stripe_md *lsm,
-					 int index)
+static int fiemap_unknown(struct fiemap_state *fs, u64 obd_start, u64 obd_end)
 {
-	struct lov_device	*dev = lu2lov_dev(lov2lu(lov)->lo_dev);
-	struct lov_thread_info  *lti = lov_env_info(env);
-	struct lu_fid		*ofid = &lti->lti_fid;
-	struct lov_oinfo	*oinfo;
-	struct cl_device	*subdev;
-	int			entry = lov_comp_entry(index);
-	int			stripe = lov_comp_stripe(index);
-	int			ost_idx;
-	int			rc;
-	struct cl_object	*result;
-
-	if (lov->lo_type != LLT_COMP)
-		GOTO(out, result = NULL);
-
-	if (entry >= lsm->lsm_entry_count ||
-	    stripe >= lsm->lsm_entries[entry]->lsme_stripe_count)
-		GOTO(out, result = NULL);
-
-	oinfo = lsm->lsm_entries[entry]->lsme_oinfo[stripe];
-	ost_idx = oinfo->loi_ost_idx;
-	rc = ostid_to_fid(ofid, &oinfo->loi_oi, ost_idx);
-	if (rc != 0)
-		GOTO(out, result = NULL);
-
-	subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
-	result = lov_sub_find(env, subdev, ofid, NULL);
-out:
-	if (result == NULL)
-		result = ERR_PTR(-EINVAL);
-	return result;
+	/* If OST is inactive or layout is not supported or available
+	 * then return extent with UNKNOWN flag.
+	 */
+	fs->fs_fm->fm_mapped_extents = 1;
+	if (fs->fs_fm->fm_extent_count) {
+		fs->fs_fm->fm_extents[0].fe_logical = obd_start;
+		fs->fs_fm->fm_extents[0].fe_length = obd_end - obd_start + 1;
+		fs->fs_fm->fm_extents[0].fe_flags |= FIEMAP_EXTENT_UNKNOWN;
+	}
+	fs->fs_device_done = true;
+	return 1;
 }
 
 static int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 			     struct lov_stripe_md *lsm, struct fiemap *fiemap,
 			     size_t *buflen, struct ll_fiemap_info_key *fmkey,
-			     int index, int stripe_last, int stripeno,
+			     int index, int stripe_last, const int stripeno,
 			     struct fiemap_state *fs)
 {
-	struct lov_stripe_md_entry *lsme = lsm->lsm_entries[index];
-	struct cl_object *subobj;
-	struct lov_obd *lov = lu2lov_dev(obj->co_lu.lo_dev)->ld_lov;
-	struct fiemap_extent *fm_ext = &fs->fs_fm->fm_extents[0];
+	struct lov_object *lo = cl2lov(obj);
+	struct lov_layout_entry *lle = lov_entry(lo, index);
+	struct lov_stripe_md_entry *lsme = lle->lle_lsme;
+	struct cl_object *subobj = NULL;
+	struct fiemap *fsm = fs->fs_fm;
+	struct fiemap_extent *fm_ext = &fsm->fm_extents[0];
 	u64 req_fm_len; /* max requested extent coverage */
 	u64 len_mapped_single_call;
 	u64 obd_start;
 	u64 obd_end;
 	unsigned int ext_count;
-	/* EOF for object */
-	bool ost_eof = false;
-	/* done with required mapping for this OST? */
-	bool ost_done = false;
-	int ost_index;
+	int devnr = 0;
 	int rc = 0;
 
-	fs->fs_device_done = false;
 	/* Find out range of mapping on this stripe */
 	if ((lov_stripe_intersects(lsm, index, stripeno, &fs->fs_ext,
 				   &obd_start, &obd_end)) == 0)
 		return 0;
-
-	if (lov_oinfo_is_dummy(lsme->lsme_oinfo[stripeno]))
-		return -EIO;
 
 	/* If this is a continuation FIEMAP call and we are on
 	 * starting stripe then obd_start needs to be set to
@@ -1852,18 +1827,59 @@ static int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 	    obd_start)
 		return 0;
 
+	fs->fs_device_done = false;
 	req_fm_len = obd_end - obd_start + 1;
-	fs->fs_fm->fm_length = 0;
+	fsm->fm_length = 0;
 	len_mapped_single_call = 0;
 
-	/* find lobsub object */
-	subobj = lov_find_subobj(env, cl2lov(obj), lsm,
-				 lov_comp_index(index, stripeno));
-	if (IS_ERR(subobj))
-		return PTR_ERR(subobj);
+	if (lo->lo_type != LLT_COMP || !lle->lle_valid) {
+		ext_count = fiemap_unknown(fs, obd_start, obd_end);
+		GOTO(out_unknown, rc = -EOPNOTSUPP);
+	}
+
+	switch (lle->lle_type) {
+	case LOV_PATTERN_RAID0:
+	{
+		struct lov_device *lov = lov_object_dev(lo);
+		const struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+		struct lov_oinfo *oinfo;
+
+		if (stripeno >= r0->lo_nr)
+			RETURN(-EINVAL);
+		subobj = lovsub2cl(r0->lo_sub[stripeno]);
+		oinfo = lsme->lsme_oinfo[stripeno];
+		if (lov_oinfo_is_dummy(oinfo))
+			RETURN(-EIO);
+		devnr = oinfo->loi_ost_idx;
+		if (devnr < 0 || devnr >= lov_targets_nr(lov))
+			RETURN(-EINVAL);
+		if (!lov->ld_lov->lov_tgts[devnr]->ltd_active) {
+			ext_count = fiemap_unknown(fs, obd_start, obd_end);
+			GOTO(out_unknown, rc = -ENODEV);
+		}
+		break;
+	}
+	case LOV_PATTERN_MDT:
+	{
+		const struct lov_layout_dom *dom = &lle->lle_dom;
+
+		subobj = lovsub2cl(dom->lo_dom);
+		if (lov_oinfo_is_dummy(dom->lo_loi))
+			RETURN(-EIO);
+		devnr = dom->lo_mdt_idx | 0x10000ULL;
+		break;
+	}
+	default:
+		ext_count = fiemap_unknown(fs, obd_start, obd_end);
+		GOTO(out_unknown, rc = -EOPNOTSUPP);
+	}
+
+	if (!subobj)
+		RETURN(-EINVAL);
+
 	/* If the output buffer is very large and the objects have many
 	 * extents we may need to loop on a single OST repeatedly */
-	do {
+	while (!fs->fs_device_done) {
 		if (fiemap->fm_extent_count > 0) {
 			/* Don't get too many extents. */
 			if (fs->fs_cur_extent + fs->fs_cnt_need >
@@ -1873,56 +1889,35 @@ static int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 		}
 
 		obd_start += len_mapped_single_call;
-		fs->fs_fm->fm_length = req_fm_len - len_mapped_single_call;
-		req_fm_len = fs->fs_fm->fm_length;
+		fsm->fm_length = req_fm_len - len_mapped_single_call;
+		req_fm_len = fsm->fm_length;
 		/**
 		 * If we've collected enough extent map, we'd request 1 more,
 		 * to see whether we coincidentally finished all available
 		 * extent map, so that FIEMAP_EXTENT_LAST would be set.
 		 */
-		fs->fs_fm->fm_extent_count = fs->fs_enough ?
-					     1 : fs->fs_cnt_need;
-		fs->fs_fm->fm_mapped_extents = 0;
-		fs->fs_fm->fm_flags = fiemap->fm_flags;
-
-		ost_index = lsme->lsme_oinfo[stripeno]->loi_ost_idx;
-
-		if (ost_index < 0 || ost_index >= lov->desc.ld_tgt_count)
-			GOTO(obj_put, rc = -EINVAL);
-		/* If OST is inactive, return extent with UNKNOWN flag. */
-		if (!lov->lov_tgts[ost_index]->ltd_active) {
-
-			fs->fs_fm->fm_mapped_extents = 1;
-			if (fs->fs_fm->fm_extent_count == 0)
-				goto inactive_tgt;
-
-			fm_ext[0].fe_logical = obd_start;
-			fm_ext[0].fe_length = obd_end - obd_start + 1;
-			fm_ext[0].fe_flags |=
-				FIEMAP_EXTENT_UNKNOWN | FIEMAP_EXTENT_LAST;
-
-			goto inactive_tgt;
+		fsm->fm_extent_count = fs->fs_enough ? 1 : fs->fs_cnt_need;
+		fsm->fm_mapped_extents = 0;
+		fsm->fm_flags = fiemap->fm_flags;
+		fsm->fm_start = obd_start;
+		fsm->fm_flags &= ~FIEMAP_FLAG_DEVICE_ORDER;
+		fmkey->lfik_fiemap = *fsm;
+		*buflen = fiemap_count_to_size(fsm->fm_extent_count);
+		rc = cl_object_fiemap(env, subobj, fmkey, fsm, buflen);
+		if (rc) {
+			/* Can we report as UNKNOWN all subdev error? */
+			ext_count = fiemap_unknown(fs, obd_start, obd_end);
+			GOTO(out_unknown, rc);
 		}
-
-		fs->fs_fm->fm_start = obd_start;
-		fs->fs_fm->fm_flags &= ~FIEMAP_FLAG_DEVICE_ORDER;
-		memcpy(&fmkey->lfik_fiemap, fs->fs_fm, sizeof(*fs->fs_fm));
-		*buflen = fiemap_count_to_size(fs->fs_fm->fm_extent_count);
-
-		rc = cl_object_fiemap(env, subobj, fmkey, fs->fs_fm, buflen);
-		if (rc != 0)
-			GOTO(obj_put, rc);
-inactive_tgt:
-		ext_count = fs->fs_fm->fm_mapped_extents;
+		ext_count = fsm->fm_mapped_extents;
 		if (ext_count == 0) {
-			ost_done = true;
 			fs->fs_device_done = true;
 			/* If last stripe has hold at the end,
 			 * we need to return */
 			if (stripeno == fs->fs_last_stripe) {
 				fiemap->fm_mapped_extents = 0;
 				fs->fs_finish_stripe = true;
-				GOTO(obj_put, rc);
+				RETURN(0);
 			}
 			break;
 		} else if (fs->fs_enough) {
@@ -1930,7 +1925,7 @@ inactive_tgt:
 			 * We've collected enough extents and there are
 			 * more extents after it.
 			 */
-			GOTO(obj_put, rc);
+			RETURN(0);
 		}
 
 		/* If we just need num of extents, got to next device */
@@ -1945,24 +1940,22 @@ inactive_tgt:
 					 obd_start;
 
 		/* Have we finished mapping on this device? */
-		if (req_fm_len <= len_mapped_single_call) {
-			ost_done = true;
+		if (req_fm_len <= len_mapped_single_call)
 			fs->fs_device_done = true;
-		}
 
 		/* Clear the EXTENT_LAST flag which can be present on
 		 * the last extent */
 		if (fm_ext[ext_count - 1].fe_flags & FIEMAP_EXTENT_LAST)
 			fm_ext[ext_count - 1].fe_flags &= ~FIEMAP_EXTENT_LAST;
+
 		if (lov_stripe_size(lsm, index,
 				    fm_ext[ext_count - 1].fe_logical +
 				    fm_ext[ext_count - 1].fe_length,
 				    stripeno) >= fmkey->lfik_oa.o_size) {
-			ost_eof = true;
 			fs->fs_device_done = true;
 		}
-
-		fiemap_prepare_and_copy_exts(fiemap, fm_ext, ost_index,
+out_unknown:
+		fiemap_prepare_and_copy_exts(fiemap, fm_ext, devnr,
 					     ext_count, fs->fs_cur_extent,
 					     stripe_last + stripeno);
 		fs->fs_cur_extent += ext_count;
@@ -1970,14 +1963,11 @@ inactive_tgt:
 		/* Ran out of available extents? */
 		if (fs->fs_cur_extent >= fiemap->fm_extent_count)
 			fs->fs_enough = true;
-	} while (!ost_done && !ost_eof);
+	}
 
 	if (stripeno == fs->fs_last_stripe)
 		fs->fs_finish_stripe = true;
-obj_put:
-	cl_object_put(env, subobj);
-
-	return rc;
+	return 0;
 }
 
 /**
@@ -2037,10 +2027,6 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			GOTO(out_lsm, rc = -EOPNOTSUPP);
 	}
 
-	/* No support for DOM layout yet. */
-	if (lsme_is_dom(lsm->lsm_entries[0]))
-		GOTO(out_lsm, rc = -EOPNOTSUPP);
-
 	if (lsm->lsm_is_released) {
 		if (fiemap->fm_start < fmkey->lfik_oa.o_size) {
 			/**
@@ -2091,8 +2077,8 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	if (whole_start > fmkey->lfik_oa.o_size)
 		GOTO(out_fm_local, rc = -EINVAL);
 	whole_end = (fiemap->fm_length == OBD_OBJECT_EOF) ?
-					fmkey->lfik_oa.o_size + 1 :
-					whole_start + fiemap->fm_length;
+		     fmkey->lfik_oa.o_size + 1 :
+		     whole_start + fiemap->fm_length;
 	/**
 	 * If fiemap->fm_length != OBD_OBJECT_EOF but whole_end exceeds file
 	 * size
@@ -2115,15 +2101,18 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	end_entry = lsm->lsm_entry_count - 1;
 	cur_stripe = 0;
 	for (entry = 0; entry <= end_entry; entry++) {
+		int stripes;
+
 		lsme = lsm->lsm_entries[entry];
-		if (cur_stripe + lsme->lsme_stripe_count >= stripe_last) {
+		stripes = lsme_is_dom(lsme) ? 1 : lsme->lsme_stripe_count;
+		if (cur_stripe + stripes > stripe_last) {
 			start_entry = entry;
 			start_stripe = stripe_last - cur_stripe;
 			break;
 		}
-
-		cur_stripe += lsme->lsme_stripe_count;
+		cur_stripe += stripes;
 	}
+
 	if (start_entry == -1) {
 		CERROR(DFID": FIEMAP does not init start entry, cur_stripe=%d, "
 		       "stripe_last=%d\n", PFID(lu_object_fid(&obj->co_lu)),
@@ -2140,18 +2129,21 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	range.e_end = whole_end;
 
 	for (entry = start_entry; entry <= end_entry; entry++) {
+		int stripes;
+
 		/* remeber to update stripe_last accordingly */
 		lsme = lsm->lsm_entries[entry];
+		stripes = lsme_is_dom(lsme) ? 1 : lsme->lsme_stripe_count;
 
 		/* FLR could contain component holes between entries */
 		if (!lsme_inited(lsme)) {
-			stripe_last += lsme->lsme_stripe_count;
+			stripe_last += stripes;
 			resume = false;
 			continue;
 		}
 
 		if (!lu_extent_is_overlapped(&range, &lsme->lsme_extent)) {
-			stripe_last += lsme->lsme_stripe_count;
+			stripe_last += stripes;
 			resume = false;
 			continue;
 		}
@@ -2196,8 +2188,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 
 		/* Check each stripe */
 		for (cur_stripe = fs.fs_start_stripe; stripe_count > 0;
-		     --stripe_count,
-		     cur_stripe = (cur_stripe + 1) % lsme->lsme_stripe_count) {
+		     --stripe_count, cur_stripe = (cur_stripe + 1) % stripes) {
 			/* reset fs_finish_stripe */
 			fs.fs_finish_stripe = false;
 			rc = fiemap_for_stripe(env, obj, lsm, fiemap, buflen,
@@ -2212,7 +2203,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			if (fs.fs_finish_stripe)
 				break;
 		} /* for each stripe */
-		stripe_last += lsme->lsme_stripe_count;
+		stripe_last += stripes;
 	} /* for covering layout component entry */
 
 finish:
@@ -2240,7 +2231,6 @@ skip_last_device_calc:
 	fiemap->fm_mapped_extents = fs.fs_cur_extent;
 out_fm_local:
 	OBD_FREE_LARGE(fm_local, buffer_size);
-
 out_lsm:
 	lov_lsm_put(lsm);
 	return rc;
