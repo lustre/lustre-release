@@ -29,7 +29,7 @@ TBD Whamcloud
          vanilla linux 5.4.136  (ZFS + ldiskfs)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
-         5.14.0-427.16.1.el9  (RHEL9.4)
+         5.14.0-427.18.1.el9  (RHEL9.4)
          5.14.0-362.24.1.el9  (RHEL9.3)
          4.18.0-513.24.1.el8  (RHEL8.9)
          4.18.0-477.27.1.el8  (RHEL8.8)
