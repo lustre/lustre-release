@@ -4503,6 +4503,7 @@ lustre/kernel_patches/targets/5.14-rhel9.3.target
 lustre/kernel_patches/targets/5.14-rhel9.2.target
 lustre/kernel_patches/targets/5.14-rhel9.1.target
 lustre/kernel_patches/targets/5.14-rhel9.0.target
+lustre/kernel_patches/targets/4.18-rhel8.10.target
 lustre/kernel_patches/targets/4.18-rhel8.9.target
 lustre/kernel_patches/targets/4.18-rhel8.8.target
 lustre/kernel_patches/targets/4.18-rhel8.7.target
