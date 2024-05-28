@@ -80,16 +80,18 @@
 %{!?kdir:    %global kdir    /lib/modules/%{_kver}/source}
 %{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{_kver}/source" ]; then echo "/lib/modules/%{_kver}/build"; else echo "%{kdir}"; fi)}
 
+%if %{defined _take_kver}
+# as an alternative to this implementation we could simply "make -C $kdir kernelversion"
+%global kver %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)
+%define _kver %kver
+%endif
+
+%if %{undefined _flavor}
 %if 0%{?suse_version} >= 1310 && %{defined _take_kobj}
 	%global _flavor %(echo %{_kver} | sed -e 's/^.*-//')
 %else
 	%global _flavor default
 %endif
-
-%if %{defined _take_kver}
-# as an alternative to this implementation we could simply "make -C $kdir kernelversion"
-%global kver %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)
-%define _kver %kver
 %endif
 
 # We set this because kernel_module_package has its own method of identifying
