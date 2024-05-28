@@ -268,6 +268,7 @@ struct xattr_match_info {
  */
 struct find_param {
 	unsigned int		 fp_max_depth;
+	unsigned int		 fp_min_depth;
 	dev_t			 fp_dev;
 	mode_t			 fp_type; /* S_IFIFO,... */
 	uid_t			 fp_uid;

@@ -18,7 +18,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
       [\fB--help\fR|\fB-h\fR]
 [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
 [\fB--lazy|-l\fR]
-      [[\fB!\fR] \fB--links\fR [\fB+-\fR]\fIn\fR] [\fB--maxdepth\fR|\fB-D\fI n\fR]
+      [[\fB!\fR] \fB--links\fR [\fB+-\fR]\fIn\fR] [\fB--maxdepth\fR|\fB-D\fI n\fR] [\fB--mindepth\fR|\fB-d\fI n\fR]
       [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR \fIUUID\fR|\fIINDEX\fR,...]
       [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
 [[\fB!\fR] \fB--mdt-hash\fR|\fB-H \fR<[^]\fIHASHFLAG\fR,[^]\fIHASHTYPE\fR,...>]
@@ -173,6 +173,9 @@ File has \fIn\fR links.
 .TP
 .BR --maxdepth
 Limits find to decend at most \fIn\fR levels of directory tree.
+.TP
+.BR --mindepth
+Starts find at \fIn\fR levels of directory tree.
 .TP
 .BR --mdt | --mdt-index | -m
 File or directory inode is located on the specified MDT(s).

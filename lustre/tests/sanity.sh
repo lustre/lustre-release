@@ -9040,6 +9040,26 @@ test_56dc() {
 }
 run_test 56dc "test 'lfs df -o' only shows OST devices"
 
+test_56dd() {
+	local dir=$DIR/d$(basetest $testnum)g.$TESTSUITE
+
+	setup_56 $dir $NUMFILES $NUMDIRS
+
+	local lfscount=($($LFS find $dir -mindepth 1 -maxdepth 2 | sort))
+	local findcount=($(find $dir -mindepth 1 -maxdepth 2 | sort))
+
+	if [[ ${#lfscount[@]} != ${#findcount[@]} ]]; then
+		error "lfs find returned ${#lfscount[@]} files, find returned ${#findcount[@]} files"
+	fi
+
+	for ((i = 0; i < ${#lfscount[@]}; i++)); do
+		[[ "${lfscount[$i]}" == "${findcount[$i]}" ]] &&
+			echo "${lfscount[$i]}" ||
+			error "${#lfscount[@]} != ${#findcount[@]}"
+	done
+}
+run_test 56dd "test lfs find with mindepth argument"
+
 test_56ea() { #LU-10378
 	local path=$DIR/$tdir
 	local pool=$TESTNAME

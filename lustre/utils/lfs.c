@@ -391,7 +391,8 @@ command_t cmdlist[] = {
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>] [--help|-h]\n"
 	 "     [[!] --layout|-L released,raid0,mdt] [--lazy|-l] [[!] --links [+-]n]\n"
-	 "     [--maxdepth|-D N] [[!] --mdt-count|-T [+-]<stripes>]\n"
+	 "     [--maxdepth|-D N] [--mindepth|-d N]\n"
+	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <[^][blm],[^]fnv_1a_64,all_char,crush,...>\n"
 	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --mirror-count|-N [+-]<n>]\n"
@@ -5321,6 +5322,7 @@ static int lfs_find(int argc, char **argv)
 	time_t t;
 	struct find_param param = {
 		.fp_max_depth = -1,
+		.fp_min_depth = 0,
 		.fp_quiet = 1,
 		.fp_time_margin = FP_DEFAULT_TIME_MARGIN,
 	};
@@ -5404,6 +5406,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
 /* getstripe { .val = 'd', .name = "directory",	.has_arg = no_argument }, */
+	{ .val = 'd',	.name = "mindepth",	.has_arg = required_argument },
 	{ .val = 'D',	.name = "maxdepth",	.has_arg = required_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument },
 	{ .val = 'E',	.name = "component-end",
@@ -5475,7 +5478,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-		"-0A:b:B:c:C:D:E:g:G:hH:i:k:lL:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
+		"-0A:b:B:c:C:d:D:E:g:G:hH:i:k:lL:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
 		long_opts, &optidx)) >= 0) {
 		xtime = NULL;
 		xsign = NULL;
@@ -5675,6 +5678,17 @@ static int lfs_find(int argc, char **argv)
 			}
 			param.fp_check_stripe_count = 1;
 			param.fp_exclude_stripe_count = !!neg_opt;
+			break;
+		case 'd':
+			errno = 0;
+			param.fp_min_depth = strtoul(optarg, 0, 0);
+			if (errno != 0 || param.fp_min_depth > PATH_MAX / 2) {
+				fprintf(stderr,
+					"error: bad mindepth '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
 			break;
 		case 'D':
 			errno = 0;
@@ -6279,6 +6293,13 @@ err_free:
 	} else if (pathend == -1) {
 		/* no options */
 		pathend = argc;
+	}
+
+	if (param.fp_min_depth > param.fp_max_depth) {
+		fprintf(stderr, "error: %s: mindepth %u > maxdepth %u\n",
+			argv[0], param.fp_min_depth, param.fp_max_depth);
+		ret = CMD_HELP;
+		goto err;
 	}
 
 	do {

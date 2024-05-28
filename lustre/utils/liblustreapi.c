@@ -2022,6 +2022,7 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 					  __func__, dent->d_name, dent->d_type);
 			break;
 		case DT_DIR:
+			/* recursion down into a new subdirectory here */
 			rc = llapi_semantic_traverse(path, size, d, sem_init,
 						     sem_fini, data, dent);
 			if (rc != 0 && ret == 0)
@@ -5575,6 +5576,9 @@ static int cb_find_init(char *path, int p, int *dp,
 
 	if (p == -1 && d == -1)
 		return -EINVAL;
+	/* if below minimum depth do not process further */
+	if (param->fp_depth < param->fp_min_depth)
+		goto decided;
 
 	/* Reset this value between invocations */
 	param->fp_get_lmv = 0;
@@ -6120,6 +6124,7 @@ print:
 	else
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%c", path,
 			     param->fp_zero_end ? '\0' : '\n');
+
 
 decided:
 	ret = 0;
