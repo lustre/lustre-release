@@ -170,7 +170,7 @@ static inline void name_destroy(char **name)
 static inline int name_create_osp(char **ospname, char **devtype, char *tgtname,
 				  int index)
 {
-	size_t size = strlen(tgtname) + sizeof("-osx-MDTXXXX");
+	size_t sz = strlen(tgtname) + sizeof("-osx-MDTXXXX");
 	char *out = NULL;
 	char *type = NULL;
 
@@ -181,12 +181,14 @@ static inline int name_create_osp(char **ospname, char **devtype, char *tgtname,
 	else
 		return -EINVAL;
 
-	OBD_ALLOC(out, size);
+	OBD_ALLOC(out, sz);
 	if (!out)
 		return -ENOMEM;
 
-	if (snprintf(out, size, "%s-%s-MDT%04x", tgtname, type, index) >= size)
+	if (snprintf(out, sz, "%s-%s-MDT%04x", tgtname, type, index) >= sz) {
+		OBD_FREE(out, sz);
 		return -EOVERFLOW;
+	}
 
 	*ospname = out;
 	if (devtype)
