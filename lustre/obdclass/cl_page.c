@@ -761,21 +761,19 @@ void cl_page_discard(const struct lu_env *env,
 	const struct cl_page_slice *slice;
 	int i;
 
+	LASSERT(cp->cp_type != CPT_TRANSIENT);
+
 	cl_page_slice_for_each(cp, slice, i) {
 		if (slice->cpl_ops->cpo_discard != NULL)
 			(*slice->cpl_ops->cpo_discard)(env, slice, io);
 	}
 
-	if (cp->cp_type == CPT_CACHEABLE) {
-		PINVRNT(env, cp, cl_page_is_owned(cp, io));
-		PINVRNT(env, cp, cl_page_invariant(cp));
-		vmpage = cp->cp_vmpage;
-		LASSERT(vmpage != NULL);
-		LASSERT(PageLocked(vmpage));
-		generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
-	} else {
-		cl_page_delete(env, cp);
-	}
+	PINVRNT(env, cp, cl_page_is_owned(cp, io));
+	PINVRNT(env, cp, cl_page_invariant(cp));
+	vmpage = cp->cp_vmpage;
+	LASSERT(vmpage != NULL);
+	LASSERT(PageLocked(vmpage));
+	generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
 }
 EXPORT_SYMBOL(cl_page_discard);
 
