@@ -1456,6 +1456,9 @@ int llog_copy_handler(const struct lu_env *env, struct llog_handle *llh,
 
 	ENTRY;
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLOG_BACKUP_ENOSPC))
+		RETURN(-ENOSPC);
+
 	/* Append all records */
 	rc = llog_write(env, copy_llh, rec, LLOG_NEXT_IDX);
 
@@ -1533,6 +1536,54 @@ out_close:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_backup);
+
+/* just count processed records */
+int llog_validate_record(const struct lu_env *env, struct llog_handle *llh,
+			 struct llog_rec_hdr *rec, void *data)
+{
+	int *recs = data;
+
+	(*recs)++;
+	return 0;
+}
+/* validate plain llog by reading all its records */
+int llog_validate(const struct lu_env *env, struct llog_ctxt *ctxt, char *name)
+{
+	struct llog_handle *llh;
+	struct llog_process_cat_data cd = { 0 };
+	unsigned int recs;
+	unsigned int processed = 1; /* one for header */
+	int rc;
+
+	ENTRY;
+
+	rc = llog_open(env, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
+	if (rc < 0)
+		RETURN(rc);
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
+	if (rc)
+		GOTO(out_close, rc);
+
+	recs = llog_get_size(llh);
+	if (recs <= 1)
+		GOTO(out_close, rc = -ENOENT);
+
+	rc = llog_process_or_fork(env, llh, llog_validate_record, &processed,
+				  &cd, false);
+	if (rc) {
+		CWARN("%s: can't validate log %s: rc = %d\n",
+		      ctxt->loc_obd->obd_name, name, rc);
+	} else if (recs != processed) {
+		rc = -EINVAL;
+		CWARN("%s: %s has %d recs but %d were processed: rc = %d\n",
+		      ctxt->loc_obd->obd_name, name, recs, processed, rc);
+	}
+out_close:
+	llog_close(env, llh);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_validate);
 
 /* Get size of llog */
 __u64 llog_size(const struct lu_env *env, struct llog_handle *llh)

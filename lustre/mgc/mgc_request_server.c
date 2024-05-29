@@ -504,20 +504,21 @@ int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 /* Copy a remote log locally */
 static int mgc_llog_local_copy(const struct lu_env *env,
-			       struct obd_device *obd,
 			       struct llog_ctxt *rctxt,
 			       struct llog_ctxt *lctxt, char *logname)
 {
+	struct obd_device *obd = lctxt->loc_obd;
 	char *temp_log;
 	int rc;
 
 	ENTRY;
 	/*
-	 * NB: mgc_process_server_cfg_log() always needs valid local copy
-	 * and works only on it, so that defines the process:
+	 * NB: mgc_get_server_cfg_log() prefers local copy first
+	 * and works on it if valid, so that defines the process:
 	 * - copy current local copy to temp_log using llog_backup()
 	 * - copy remote llog to logname using llog_backup()
 	 * - if failed then restore logname from backup
+	 * That guarantees valid local copy only after successful step #2
 	 */
 
 	OBD_ALLOC(temp_log, strlen(logname) + 2);
@@ -525,11 +526,25 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 		RETURN(-ENOMEM);
 	sprintf(temp_log, "%sT", logname);
 
-	/* copy current local llog to temp_log */
-	rc = llog_backup(env, obd, lctxt, lctxt, logname, temp_log);
-	if (rc < 0 && rc != -ENOENT)
-		CWARN("%s: failed to backup local config %s: rc = %d\n",
+	/* check current local llog is valid */
+	rc = llog_validate(env, lctxt, logname);
+	if (!rc) {
+		/* copy current local llog to temp_log */
+		rc = llog_backup(env, obd, lctxt, lctxt, logname, temp_log);
+		if (rc < 0)
+			CWARN("%s: can't backup local config %s: rc = %d\n",
+			      obd->obd_name, logname, rc);
+	} else if (rc < 0 && rc != -ENOENT) {
+		CWARN("%s: invalid local config log %s: rc = %d\n",
 		      obd->obd_name, logname, rc);
+		rc = llog_erase(env, lctxt, NULL, logname);
+	}
+
+	/* don't ignore errors like -EROFS and -ENOSPC, don't try to
+	 * refresh local config in that case but mount using remote one
+	 */
+	if (rc == -ENOSPC || rc == -EROFS)
+		GOTO(out_free, rc);
 
 	/* build new local llog */
 	rc = llog_backup(env, obd, rctxt, lctxt, logname, logname);
@@ -544,7 +559,7 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 		llog_backup(env, obd, lctxt, lctxt, temp_log, logname);
 	}
 	llog_erase(env, lctxt, NULL, temp_log);
-
+out_free:
 	OBD_FREE(temp_log, strlen(logname) + 2);
 	return rc;
 }
@@ -552,76 +567,65 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 			       struct lustre_sb_info *lsi,
 			       struct obd_device *mgc,
-			       struct config_llog_data *cld, int local_only)
+			       struct config_llog_data *cld, int mgslock)
 {
 	struct llog_ctxt *lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
 	struct client_obd *cli = &mgc->u.cli;
-	int rc = 0;
+	struct dt_object *configs_dir = cli->cl_mgc_configs_dir;
+	int rc = mgslock ? 0 : -EIO;
 
-	/* Copy the setup log locally if we can. Don't mess around if we're
-	 * running an MGS though (logs are already local).
-	 */
-	if (lctxt && lsi && IS_SERVER(lsi) && !IS_MGS(lsi) &&
-	    cli->cl_mgc_configs_dir &&
-	    lu2dt_dev(cli->cl_mgc_configs_dir->do_lu.lo_dev) ==
-	    lsi->lsi_dt_dev) {
-		if (!local_only && !lsi->lsi_dt_dev->dd_rdonly) {
-			/* Only try to copy log if we have the lock. */
-			CDEBUG(D_INFO, "%s: copy local log %s\n",
-			       mgc->obd_name, cld->cld_logname);
+	/* requeue might happen in nowhere state */
+	if (!lctxt)
+		RETURN(rc);
+	if (!configs_dir ||
+	    lu2dt_dev(configs_dir->do_lu.lo_dev) != lsi->lsi_dt_dev)
+		GOTO(out_pop, rc);
 
-			rc = mgc_llog_local_copy(env, mgc, *ctxt, lctxt,
-						 cld->cld_logname);
-			if (!rc)
-				lsi->lsi_flags &= ~LDD_F_NO_LOCAL_LOGS;
-		}
-		if (local_only || rc) {
-			if (unlikely(lsi->lsi_flags & LDD_F_NO_LOCAL_LOGS) ||
-			    rc) {
-				CWARN("%s: local log %s are not valid and/or remote logs are not accessbile rc = %d\n",
-				      mgc->obd_name, cld->cld_logname, rc);
-				GOTO(out_pop, rc = -EIO);
-			}
+	if (lsi->lsi_dt_dev->dd_rdonly) {
+		rc = -EROFS;
+	} else if (mgslock) {
+		/* Only try to copy log if we have the MGS lock. */
+		CDEBUG(D_INFO, "%s: copy local log %s\n", mgc->obd_name,
+		       cld->cld_logname);
 
-			if (strcmp(cld->cld_logname, PARAMS_FILENAME) != 0 &&
-			    llog_is_empty(env, lctxt, cld->cld_logname)) {
-				LCONSOLE_ERROR("Failed to get MGS log %s and no local copy.\n",
-					       cld->cld_logname);
-				GOTO(out_pop, rc = -ENOENT);
-			}
-			CDEBUG(D_MGC,
-			       "%s: Failed to get MGS log %s, using local copy for now, will try to update later.\n",
-			       mgc->obd_name, cld->cld_logname);
-			rc = 0;
-		}
-		/* Now, whether we copied or not, start using the local llog.
-		 * If we failed to copy, we'll start using whatever the old
-		 * log has.
-		 */
-		llog_ctxt_put(*ctxt);
-		*ctxt = lctxt;
-		lctxt = NULL;
-	} else if (local_only) { /* no local log at client side */
-		GOTO(out_pop, rc = -EIO);
+		rc = mgc_llog_local_copy(env, *ctxt, lctxt, cld->cld_logname);
+		if (!rc)
+			lsi->lsi_flags &= ~LDD_F_NO_LOCAL_LOGS;
 	}
 
-	rc = -EAGAIN;
-	if (lsi && IS_SERVER(lsi) && !IS_MGS(lsi) &&
-	    lsi->lsi_dt_dev->dd_rdonly) {
-		struct llog_ctxt *rctxt;
+	if (!mgslock) {
+		if (unlikely(lsi->lsi_flags & LDD_F_NO_LOCAL_LOGS)) {
+			rc = -EIO;
+			CWARN("%s: failed to get MGS log %s and no_local_log flag is set: rc = %d\n",
+			      mgc->obd_name, cld->cld_logname, rc);
+			GOTO(out_pop, rc);
+		}
 
-		/* Under readonly mode, we may have no local copy or local
-		 * copy is incomplete, so try to use remote llog firstly.
+		rc = llog_validate(env, lctxt, cld->cld_logname);
+		if (rc && strcmp(cld->cld_logname, PARAMS_FILENAME)) {
+			LCONSOLE_ERROR("Failed to get MGS log %s and no local copy.\n",
+				       cld->cld_logname);
+			GOTO(out_pop, rc);
+		}
+		CDEBUG(D_MGC,
+		       "%s: Failed to get MGS log %s, using local copy for now, will try to update later.\n",
+		       mgc->obd_name, cld->cld_logname);
+	} else if (rc) {
+		/* In case of error we may have empty or incomplete local
+		 * config. In both cases proceed with remote llog first
 		 */
-		rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
-		LASSERT(rctxt);
-
-		rc = class_config_parse_llog(env, rctxt, cld->cld_logname,
+		rc = class_config_parse_llog(env, *ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
-		llog_ctxt_put(rctxt);
+		if (!rc)
+			GOTO(out_pop, rc = EALREADY);
+		/* in case of an error while parsing remote MGS config
+		 * just try local copy whatever it is as last attempt
+		 */
 	}
+	llog_ctxt_put(*ctxt);
+	*ctxt = lctxt;
+	RETURN(0);
 out_pop:
-	if (lctxt)
-		__llog_ctxt_put(env, lctxt);
+	__llog_ctxt_put(env, lctxt);
 	return rc;
 }

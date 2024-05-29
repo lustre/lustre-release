@@ -1629,9 +1629,12 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	LASSERT(cld);
 	LASSERT(mutex_is_locked(&cld->cld_lock));
 
+#ifndef HAVE_SERVER_SUPPORT
+	if (local_only)
+		RETURN(-EIO);
+#endif
 	if (cld->cld_cfg.cfg_sb)
 		lsi = s2lsi(cld->cld_cfg.cfg_sb);
-
 	/* sptlrpc llog must not keep ref to sb,
 	 * it was just needed to get lsi
 	 */
@@ -1648,27 +1651,38 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
 	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
 	LASSERT(ctxt);
+
 #ifdef HAVE_SERVER_SUPPORT
-	rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc, cld,
-					local_only);
-	if (rc == -EIO && local_only)
-		GOTO(out_pop, rc);
-	if (rc && rc != -ENOENT)
-#else
-	if (local_only)
-		GOTO(out_pop, rc = -EIO);
+	/* IS_SERVER(lsi) doesn't work if MGC is shared between client/server
+	 * distinguish server mount by local storage set by server_mgc_set_fs()
+	 */
+	if (lsi && mgc->u.cli.cl_mgc_los) {
+		if (!IS_MGS(lsi))
+			rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc,
+							cld, !local_only);
+	} else if (local_only) {
+		rc = -EIO;
+	}
 #endif
+	/* When returned from mgc_process_server_cfg_log() the rc can be:
+	 *   0 - config llog context is returned for parsing below
+	 *   EALREADY - config was parsed already
+	 *   rc < 0 - fatal error, local and remote parsing are not available
+	 */
+	if (!rc)
 		rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
-
+	if (rc < 0)
+		GOTO(out_pop, rc);
 	/*
 	 * update settings on existing OBDs.
 	 * the logname must be <fsname>-sptlrpc
 	 */
-	if (rc == 0 && cld_is_sptlrpc(cld))
+	if (cld_is_sptlrpc(cld))
 		class_notify_sptlrpc_conf(cld->cld_logname,
 					  strlen(cld->cld_logname) -
 					  strlen("-sptlrpc"));
+	rc = 0;
 	EXIT;
 
 out_pop:

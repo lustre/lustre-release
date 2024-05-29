@@ -11106,7 +11106,7 @@ test_150() {
 }
 run_test 150 "test setting max_cached_mb to a %"
 
-test_151() {
+test_151a() {
 	(( MDS1_VERSION >= $(version_code 2.15.58) )) ||
 		skip "need MDS version at least 2.15.58"
 	[[ "$ost1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
@@ -11132,7 +11132,27 @@ test_151() {
 	start_ost || error "OST start failed"
 	reformat_and_config
 }
-run_test 151 "damaged local config doesn't prevent mounting"
+run_test 151a "damaged local config doesn't prevent mounting"
+
+test_151b() {
+	(( MDS1_VERSION >= $(version_code 2.15.63) )) ||
+		skip "need MDS version at least 2.15.63"
+	[[ "$ost1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	cleanup
+	if ! combined_mgs_mds ; then
+		stop mgs
+	fi
+
+	start_mgsmds || error "MDS start failed"
+
+	# start despite -ENOSPC errors
+#define OBD_FAIL_LLOG_BACKUP_ENOSPC 0x131e
+	do_facet ost1 $LCTL set_param fail_loc=0x131e
+	start_ost || error "OST start failed"
+	reformat_and_config
+}
+run_test 151b "-ENOSPC doesn't affect mount"
 
 test_152() {
 	(( MDS1_VERSION >= $(version_code 2.15.59.53) )) ||

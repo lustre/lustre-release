@@ -603,6 +603,7 @@ extern bool obd_enable_health_write;
 #define OBD_FAIL_CATLIST			    0x131b
 #define OBD_FAIL_LLOG_PAUSE_AFTER_PAD               0x131c
 #define OBD_FAIL_LLOG_ADD_GAP			    0x131d
+#define OBD_FAIL_LLOG_BACKUP_ENOSPC		    0x131e
 
 #define OBD_FAIL_LLITE                              0x1400
 #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE             0x1401

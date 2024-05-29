@@ -106,6 +106,7 @@ int llog_is_empty(const struct lu_env *env, struct llog_ctxt *ctxt,
 int llog_backup(const struct lu_env *env, struct obd_device *obd,
 		struct llog_ctxt *ctxt, struct llog_ctxt *bak_ctxt,
 		char *name, char *backup);
+int llog_validate(const struct lu_env *env, struct llog_ctxt *ctxt, char *name);
 int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		     const struct obd_uuid *uuid);
 __u64 llog_size(const struct lu_env *env, struct llog_handle *llh);
