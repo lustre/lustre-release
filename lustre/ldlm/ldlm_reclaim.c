@@ -328,20 +328,45 @@ bool ldlm_reclaim_full(void)
 {
 	__u64 high = ldlm_lock_limit;
 	__u64 low = ldlm_reclaim_threshold;
+	bool exact_sum = false;
+	s64 lock_count;
 
-	if (low != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW))
+	if (low != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW)) {
 		low = cfs_fail_val;
+		exact_sum = true;
+	}
 
-	if (low != 0 &&
-	    percpu_counter_sum_positive(&ldlm_granted_total) > low)
-		ldlm_reclaim_ns();
+	if (low != 0) {
+		/* this takes a spinlock to get precise accuracy, so we only
+		 * do it to get exact behavior for the sanity test
+		 */
+		if (exact_sum)
+			lock_count =
+			    percpu_counter_sum_positive(&ldlm_granted_total);
 
-	if (high != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_HIGH))
+		else
+			lock_count =
+			    percpu_counter_read_positive(&ldlm_granted_total);
+		if (lock_count > low)
+			ldlm_reclaim_ns();
+	}
+
+	if (high != 0 && CFS_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_HIGH)) {
 		high = cfs_fail_val;
+		exact_sum = true;
+	}
 
-	if (high != 0 &&
-	    percpu_counter_sum_positive(&ldlm_granted_total) > high)
-		return true;
+	if (high != 0) {
+		if (exact_sum)
+			lock_count =
+			    percpu_counter_sum_positive(&ldlm_granted_total);
+
+		else
+			lock_count =
+			    percpu_counter_read_positive(&ldlm_granted_total);
+		if (lock_count > high)
+			return true;
+	}
 
 	return false;
 }

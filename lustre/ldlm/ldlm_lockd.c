@@ -1368,7 +1368,7 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 		}
 	} else {
 		if (ldlm_reclaim_full()) {
-			DEBUG_REQ(D_DLMTRACE, req,
+			DEBUG_REQ(D_WARNING | D_RPCTRACE, req,
 				  "Too many granted locks, reject current enqueue request and let the client retry later");
 			GOTO(out, rc = -EINPROGRESS);
 		}
