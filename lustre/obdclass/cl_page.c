@@ -789,15 +789,16 @@ static void __cl_page_delete(const struct lu_env *env, struct cl_page *cp)
 
 	ENTRY;
 
+	if (cp->cp_type == CPT_TRANSIENT)
+		EXIT;
+
 	/*
 	 * Severe all ways to obtain new pointers to @pg.
 	 * Transient pages already can't be found because they're not in cache.
 	 */
-	if (cp->cp_type != CPT_TRANSIENT) {
-		PASSERT(env, cp, cp->cp_state != CPS_FREEING);
-		cl_page_owner_clear(cp);
-		__cl_page_state_set(env, cp, CPS_FREEING);
-	}
+	PASSERT(env, cp, cp->cp_state != CPS_FREEING);
+	cl_page_owner_clear(cp);
+	__cl_page_state_set(env, cp, CPS_FREEING);
 
 	cl_page_slice_for_each_reverse(cp, slice, i) {
 		if (slice->cpl_ops->cpo_delete != NULL)
