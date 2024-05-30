@@ -64,7 +64,13 @@ are specified, the margin of error is based on the smallest unit used, so
 .B -atime 3d
 has a margin of error of one day, while
 .B -atime 72h
-has a margin of error of one hour.
+has a margin of error of one hour.  If both
+.BI "-atime +" older
+and
+.BI "-atime -" newer
+are used, then files with atime within the range
+.IR older - newer
+are matched.
 .TP
 .BR --attrs
 File has ATTRS attribute flags. Supported attributes are (non exhaustive list):

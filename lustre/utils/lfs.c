@@ -4656,13 +4656,15 @@ static int lfs_poollist(int argc, char **argv)
 }
 
 #define FP_DEFAULT_TIME_MARGIN (24 * 60 * 60)
-static int set_time(struct find_param *param, time_t *time, time_t *set,
-		    char *str)
+static int set_time(struct find_param *param, time_t *time, time_t *set_t,
+		       int *sign_t, char *str)
 {
 	long long t = 0;
 	int sign = 0;
 	char *endptr = "AD";
 	char *timebuf;
+	time_t prev_set = 0;
+	int prev_sign = 0;
 
 	if (str[0] == '+')
 		sign = 1;
@@ -4671,6 +4673,11 @@ static int set_time(struct find_param *param, time_t *time, time_t *set,
 
 	if (sign)
 		str++;
+
+	if (*set_t) {
+		prev_set = *set_t;
+		prev_sign = *sign_t;
+	}
 
 	for (timebuf = str; *endptr && *(endptr + 1); timebuf = endptr + 1) {
 		long long val = strtoll(timebuf, &endptr, 0);
@@ -4721,7 +4728,17 @@ static int set_time(struct find_param *param, time_t *time, time_t *set,
 		return INT_MAX;
 	}
 
-	*set = *time - t;
+	*set_t = *time - t;
+	/* if user requested a time range via "-xtime +M -xtime -N" then
+	 * use the largest time and increase margin to cover the difference
+	 * This will occur as long as the signs differ.
+	 */
+	if (sign * prev_sign == -1) {
+		param->fp_time_margin = abs(*set_t - prev_set);
+		if (prev_set > *set_t)
+			*set_t = prev_set;
+		return 0;
+	}
 
 	return sign;
 }
@@ -5530,13 +5547,12 @@ static int lfs_find(int argc, char **argv)
 				xsign = &param.fp_msign;
 				param.fp_exclude_mtime = !!neg_opt;
 			}
-			rc = set_time(&param, &t, xtime, optarg);
+			rc = set_time(&param, &t, xtime, xsign, optarg);
 			if (rc == INT_MAX) {
 				ret = -1;
 				goto err;
 			}
-			if (rc)
-				*xsign = rc;
+			*xsign = rc;
 			break;
 		case LFS_ATTRS_OPT:
 			ret = name2attrs(optarg, &param.fp_attrs,

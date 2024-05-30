@@ -7133,6 +7133,51 @@ test_56od() {
 }
 run_test 56od "check lfs find -btime with units"
 
+test_56oe() {
+	local dir=$DIR/$tdir
+	local expected=5
+	local unit=hour
+
+	# just to make sure there is something that won't be found
+	test_mkdir $dir
+	touch $dir/$tfile.now
+
+	for ((val = 1; val <= 10; val++)); do
+		touch $dir/$tfile-a.$val $dir/$tfile-m.$val
+		touch $dir/$tfile-c.$val
+		touch --date="$val $unit ago" -a $dir/$tfile-a.$val
+		touch --date="$val $unit ago" -m $dir/$tfile-m.$val
+		(( val % 5 != 2 )) || sleep 10
+	done
+
+	cmd="$LFS find $dir -ctime -19s -ctime +9s"
+	nums=$($cmd | grep -c c.*)
+
+	(( nums == expected )) ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	local cmd="$LFS find $dir -atime +7h30m -atime -2h30m"
+	local nums=$($cmd | wc -l)
+
+	(( $($cmd | grep -c a.7) == 1 )) ||
+		error "'$cmd' didn't capture file accessed 7 hours ago"
+	(( $($cmd | grep -c a.3) == 1 )) ||
+		error "'$cmd' didn't capture file accessed 3 hours ago"
+	(( nums == expected )) ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	cmd="$LFS find $dir -mtime -7h30m -mtime +2h30m"
+	nums=$($cmd | wc -l)
+
+	(( $($cmd | grep -c m.7) == 1 )) ||
+		error "'$cmd' didn't capture file modified 7 hours ago"
+	(( $($cmd | grep -c m.3) == 1 )) ||
+		error "'$cmd' didn't capture file modified 3 hours ago"
+	(( nums == expected )) ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+}
+run_test 56oe "check lfs find with time range"
+
 test_56p() {
 	[ $RUNAS_ID -eq $UID ] &&
 		skip_env "RUNAS_ID = UID = $UID -- skipping"
