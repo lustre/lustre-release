@@ -705,11 +705,12 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 	struct lu_fid	    *oi_fid = &info->oti_fid2;
 	struct osd_inode_id *oi_id  = &info->oti_id2;
 	int		     rc     = 0;
+	bool		     locked = !!(flags & OI_LOCKED);
 
 	CDEBUG(D_INODE, "insert OI for "DFID"\n", PFID(fid));
 
 	if (unlikely(fid_is_last_id(fid)))
-		return osd_obj_spec_insert(info, osd, fid, id, th);
+		return osd_obj_spec_insert(info, osd, fid, id, th, locked);
 
 	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_insert(info, osd, fid, id, th);
@@ -774,7 +775,7 @@ update:
 	}
 
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
-		rc = osd_obj_spec_insert(info, osd, fid, id, th);
+		rc = osd_obj_spec_insert(info, osd, fid, id, th, locked);
 	return rc;
 }
 
@@ -834,11 +835,12 @@ int osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 	struct lu_fid	    *oi_fid = &info->oti_fid2;
 	struct osd_inode_id *oi_id  = &info->oti_id2;
 	int		     rc     = 0;
+	bool		     locked = !!(flags & OI_LOCKED);
 
 	CDEBUG(D_INODE, "update OI for "DFID"\n", PFID(fid));
 
 	if (unlikely(fid_is_last_id(fid)))
-		return osd_obj_spec_update(info, osd, fid, id, th);
+		return osd_obj_spec_update(info, osd, fid, id, th, locked);
 
 	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_update(info, osd, fid, id, th);
@@ -852,7 +854,7 @@ int osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 		return rc;
 
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
-		rc = osd_obj_spec_update(info, osd, fid, id, th);
+		rc = osd_obj_spec_update(info, osd, fid, id, th, locked);
 	return rc;
 }
 

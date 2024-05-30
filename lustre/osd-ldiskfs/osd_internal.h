@@ -870,10 +870,10 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			enum oi_check_flags flags);
 int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
-			handle_t *th);
+			handle_t *th, bool locked);
 int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
-			handle_t *th);
+			handle_t *th, bool locked);
 int osd_obj_del_entry(struct osd_thread_info *info, struct osd_device *osd,
 		      struct dentry *dird, char *name, int namelen,
 		      handle_t *th);
