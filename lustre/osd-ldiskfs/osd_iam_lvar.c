@@ -43,11 +43,9 @@
  */
 
 enum {
-	/* This is duplicated in lustre/utils/create_iam.c */
 	IAM_LVAR_LEAF_MAGIC = 0x1973
 };
 
-/* This is duplicated in lustre/utils/create_iam.c */
 struct lvar_leaf_header {
 	__le16 vlh_magic; /* magic number IAM_LVAR_LEAF_MAGIC */
 	__le16 vlh_used;  /* used bytes, including header */
@@ -63,10 +61,8 @@ struct lvar_leaf_header {
  * Entries are ordered in key order.
  */
 
-/* This is duplicated in lustre/utils/create_iam.c */
 typedef u32 lvar_hash_t;
 
-/* This is duplicated in lustre/utils/create_iam.c */
 struct lvar_leaf_entry {
 	__le32 vle_hash;
 	__le16 vle_keysize;
@@ -102,7 +98,6 @@ static inline int e_keysize(const struct lvar_leaf_entry *ent)
 	return le16_to_cpu(ent->vle_keysize);
 }
 
-/* This is duplicated in lustre/utils/create_iam.c */
 enum {
 	LVAR_PAD   = 4,
 	LVAR_ROUND = LVAR_PAD - 1
@@ -771,12 +766,10 @@ static const struct iam_leaf_operations lvar_leaf_ops = {
  */
 
 enum {
-	/* This is duplicated in lustre/utils/create_iam.c */
 	/* egrep -i '^o?x?[olabcdef]*$' /usr/share/dict/words */
 	IAM_LVAR_ROOT_MAGIC = 0xb01dface
 };
 
-/* This is duplicated in lustre/utils/create_iam.c */
 struct lvar_root {
 	__le32 vr_magic;
 	__le16 vr_recsize;

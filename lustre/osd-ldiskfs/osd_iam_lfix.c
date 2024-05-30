@@ -43,11 +43,9 @@
  */
 
 enum {
-	IAM_LEAF_HEADER_MAGIC = 0x1976 /* This is duplicated in
-                                        * lustre/utils/create_iam.c */
+	IAM_LEAF_HEADER_MAGIC = 0x1976
 };
 
-/* This is duplicated in lustre/utils/create_iam.c */
 struct iam_leaf_head {
 	__le16 ill_magic;
 	__le16 ill_count;
@@ -542,7 +540,6 @@ static const struct iam_leaf_operations iam_lfix_leaf_ops = {
  */
 
 enum {
-	/* This is duplicated in lustre/utils/create_iam.c */
 	/*
 	 * Then shalt thou see the dew-BEDABBLED wretch
 	 * Turn, and return, indenting with the way;
@@ -554,7 +551,6 @@ enum {
 	IAM_LFIX_ROOT_MAGIC = 0xbedabb1edULL /* d01efull */
 };
 
-/* This is duplicated in lustre/utils/create_iam.c */
 struct iam_lfix_root {
 	__le64  ilr_magic;
 	__le16  ilr_keysize;

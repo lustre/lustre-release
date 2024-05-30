@@ -5393,7 +5393,6 @@ LC_MDS_MAX_THREADS
 
 # lustre/utils/gss/gss_util.c
 # lustre/utils/llog_reader.c
-# lustre/utils/create_iam.c
 # lustre/utils/libiam.c
 AC_CHECK_HEADERS([netdb.h endian.h])
 
