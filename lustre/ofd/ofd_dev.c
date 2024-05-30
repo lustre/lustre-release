@@ -1588,15 +1588,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			if (sync_trans < 0)
 				GOTO(out, rc = sync_trans);
 
-			if (diff <= -OST_MAX_PRECREATE) {
-				/* LU-5648 */
-				CERROR("%s: invalid precreate request for "
-				       DOSTID", last_id %llu. "
-				       "Likely MDS last_id corruption\n",
-				       ofd_name(ofd), POSTID(&oa->o_oi),
-				       ofd_seq_last_oid(oseq));
-				GOTO(out, rc = -EINVAL);
-			} else if (diff < 0) {
+			if (diff < 0) {
 				LCONSOLE(D_INFO,
 					 "%s: MDS LAST_ID "DFID" (%llu) is %lld behind OST LAST_ID "DFID" (%llu), trust the OST\n",
 					 ofd_name(ofd), PFID(&oa->o_oi.oi_fid),
