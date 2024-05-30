@@ -2582,11 +2582,12 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 		default:
 			break;
 		}
-	}
-	if (port >= PROT_SOCK) {
-		CERROR("peer_ni's port (%pISc:%hu) is not privileged\n",
-		       &cmid->route.addr.dst_addr, port);
-		goto failed;
+
+		if (port >= PROT_SOCK) {
+			CERROR("peer_ni's port (%pISc:%hu) is not privileged\n",
+			       &cmid->route.addr.dst_addr, port);
+			goto failed;
+		}
 	}
 
 	if (priv_nob < offsetof(struct kib_msg, ibm_type)) {
