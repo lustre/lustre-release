@@ -1956,14 +1956,6 @@ int lu_env_add(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_add);
 
-static void lu_env_item_free(struct rcu_head *head)
-{
-	struct lu_env_item *lei;
-
-	lei = container_of(head, struct lu_env_item, lei_rcu_head);
-	OBD_FREE_PTR(lei);
-}
-
 void lu_env_remove(struct lu_env *env)
 {
 	struct lu_env_item *lei;
@@ -1986,8 +1978,10 @@ void lu_env_remove(struct lu_env *env)
 	lei = rhashtable_lookup_fast(&lu_env_rhash, &task,
 				     lu_env_rhash_params);
 	if (lei && rhashtable_remove_fast(&lu_env_rhash, &lei->lei_linkage,
-					  lu_env_rhash_params) == 0)
-		call_rcu(&lei->lei_rcu_head, lu_env_item_free);
+					  lu_env_rhash_params) == 0) {
+		OBD_FREE_PRE(lei, sizeof(*lei), "kfreed");
+		kfree_rcu(lei, lei_rcu_head);
+	}
 }
 EXPORT_SYMBOL(lu_env_remove);
 
