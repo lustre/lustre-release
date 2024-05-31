@@ -379,21 +379,33 @@ lfs_migrate() {
 			layout+="--copy $olddir"
 			OPT_COPY=true
 		elif ! $OPT_COMP; then
+			# this formatting is no longer consistent LU-15565
 			# avoid multiple getstripe calls
 			#   lcm_mirror_count:  1
 			#   lcm_entry_count:   0
 			#      lmm_stripe_count:  1
 			#      lmm_stripe_size:   1048576
 			#      lmm_pool:          pool_abc
-			local l_mirror_count=0
-			local l_comp_count=1
-			local l_stripe_count=2
-			local l_stripe_size=3
-			local l_stripe_pool=4
+			local l_mirror_count
+			local l_comp_count
+			local l_stripe_count
+			local l_stripe_size
+			local l_stripe_pool
 			local layout_info
 
 			layout_info=($($LFS getstripe $getstripe_opts $OLDNAME \
-				       2>/dev/null | awk '{ print $2 }'))
+				       2>/dev/null | awk '{ print }'))
+
+			for ((i = 0; i < ${#layout_info[*]}; i++)); do
+				case "${layout_info[$i]}" in
+				*mirror_count*) l_mirror_count=$((i + 1));;
+				*entry_count*) l_comp_count=$((i + 1));;
+				*stripe_count*) l_stripe_count=$((i + 1));;
+				*stripe_size*) l_stripe_size=$((i + 1));;
+				*stripe_pool*) l_stripe_pool=$((i + 1));;
+				esac
+			done
+
 			# If rsync copies Lustre xattrs properly in the future
 			# (i.e. before the file data, so that it preserves
 			# striping) then we don't need this getstripe stuff.

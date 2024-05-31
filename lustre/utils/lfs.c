@@ -3047,8 +3047,7 @@ static int build_component(struct llapi_layout **layout,
 
 static int build_prev_component(struct llapi_layout **layout,
 				struct lfs_setstripe_args *prev,
-				struct lfs_setstripe_args *lsa,
-				bool set_extent)
+				struct lfs_setstripe_args *lsa)
 {
 	int extension = lsa->lsa_comp_flags & LCME_FL_EXTENSION;
 	int rc;
@@ -3098,22 +3097,9 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 	while (node) {
 		string = node->cy_string;
 
-		if (node->cy_type == CYAML_TYPE_OBJECT) {
+		if (node->cy_type == CYAML_TYPE_OBJECT ||
+		    node->cy_type == CYAML_TYPE_ARRAY) {
 			/* go deep to sub blocks */
-			if (string && !strncmp(string, "component", 9) &&
-			    strncmp(string, "component0", 10) &&
-			    strncmp(string, "components", 10)) {
-				rc = build_prev_component(layout, prevp, lsa,
-							  true);
-				if (rc)
-					return rc;
-
-				/* initialize lsa. */
-				setstripe_args_init(lsa);
-				lsa->lsa_first_comp = false;
-				lsa->lsa_tgts = osts;
-			}
-
 			rc = build_layout_from_yaml_node(node->cy_child, layout,
 							 lsa, prevp);
 			if (rc)
@@ -3122,6 +3108,17 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 			if (!node->cy_string)
 				return -EINVAL;
 
+			if (strcmp(string, "lcme_id") == 0 &&
+			    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
+				rc = build_prev_component(layout, prevp, lsa);
+				if (rc)
+					return rc;
+
+				/* initialize lsa. */
+				setstripe_args_init(lsa);
+				lsa->lsa_first_comp = false;
+				lsa->lsa_tgts = osts;
+			}
 			/* skip leading lmm_ if present, to simplify parsing */
 			if (strncmp(string, "lmm_", 4) == 0)
 				string += 4;
@@ -3182,7 +3179,7 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 	}
 
 	if (prevp == &prev) {
-		rc = build_prev_component(layout, prevp, lsa, true);
+		rc = build_prev_component(layout, prevp, lsa);
 		if (rc)
 			return rc;
 

@@ -2964,7 +2964,8 @@ static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 			}
 		}
 	}
-	llapi_printf(LLAPI_MSG_NORMAL, "\n");
+	if (!yaml)
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 static void hsm_flags2str(__u32 hsm_flags)
@@ -3254,15 +3255,15 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 
 	if (verbose & VERBOSE_GENERATION) {
 		if (verbose & ~VERBOSE_GENERATION)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:    ",
-				     " ");
+			llapi_printf(LLAPI_MSG_NORMAL, "%slcm_layout_gen:    ",
+				     yaml ? "" : "  ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n", comp_v1->lcm_layout_gen);
 	}
 
 	if (verbose & VERBOSE_MIRROR_COUNT) {
 		if (verbose & ~VERBOSE_MIRROR_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_mirror_count:  ",
-				     " ");
+			llapi_printf(LLAPI_MSG_NORMAL, "%slcm_mirror_count:  ",
+				     yaml ? "" : "  ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
 			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
 			     comp_v1->lcm_mirror_count + 1 : 1);
@@ -3270,14 +3271,14 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 
 	if (verbose & VERBOSE_COMP_COUNT) {
 		if (verbose & ~VERBOSE_COMP_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count:   ",
-				     " ");
+			llapi_printf(LLAPI_MSG_NORMAL, "%slcm_entry_count:   ",
+				     yaml ? "" : "  ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
 			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
 			     comp_v1->lcm_entry_count : 0);
 	}
 
-	if (verbose & VERBOSE_DETAIL && !yaml)
+	if (verbose & VERBOSE_DETAIL || yaml)
 		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
 }
 
@@ -3320,11 +3321,8 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 
 	entry = &comp_v1->lcm_entries[index];
 
-	if (yaml)
-		llapi_printf(LLAPI_MSG_NORMAL, "%2scomponent%d:\n", " ", index);
-
-	if (verbose & VERBOSE_COMP_ID) {
-		if (verbose & VERBOSE_DETAIL && !yaml)
+	if (verbose & VERBOSE_COMP_ID || yaml) {
+		if (verbose & VERBOSE_DETAIL || yaml)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%slcme_id:             ", "  - ");
 		else if (verbose & ~VERBOSE_COMP_ID)
