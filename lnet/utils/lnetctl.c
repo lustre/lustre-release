@@ -1251,7 +1251,7 @@ static int jt_config_lnet(int argc, char **argv)
 			load_mod_params = true;
 			break;
 		case 'l':
-			flags |= NLM_F_REPLACE;
+			flags |= NLM_F_APPEND;
 			break;
 		default:
 			return 0;

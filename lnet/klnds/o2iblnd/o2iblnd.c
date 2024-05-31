@@ -3734,7 +3734,8 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
-	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns, false);
+	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns,
+				 the_lnet.ln_nis_use_large_nids);
 	if (rc < 0)
 		goto failed;
 

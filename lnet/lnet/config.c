@@ -683,9 +683,6 @@ lnet_parse_networks(struct list_head *netlist, const char *networks)
 		if (IS_ERR_OR_NULL(net))
 			goto failed;
 
-		if (the_lnet.ln_nis_use_large_nids)
-			net->net_tunables.lct_version = 1;
-
 		if (!nistr) {
 			/*
 			 * No interface list was specified, allocate a

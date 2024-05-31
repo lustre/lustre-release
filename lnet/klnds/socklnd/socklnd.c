@@ -2570,7 +2570,7 @@ ksocknal_startup(struct lnet_ni *ni)
 	ksocknal_tunables_setup(ni);
 
 	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns,
-				 ni->ni_net->net_tunables.lct_version);
+				 the_lnet.ln_nis_use_large_nids);
 	if (rc < 0)
 		goto out_net;
 
