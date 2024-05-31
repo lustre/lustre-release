@@ -1746,7 +1746,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
           non-modifying RPCs, that can be sent in parallel by a client to a MDT
           target. This includes every file system metadata operations, such as
           file or directory stat, creation, unlink. The default setting is 8,
-          minimum setting is 1 and maximum setting is 256.</para>
+          minimum setting is 2 and maximum setting is 512.</para>
         <para>To set the <literal>max_rpcs_in_flight</literal> parameter, run
           the following command on the Lustre client:</para>
         <screen>client$ lctl set_param mdc.*.max_rpcs_in_flight=16</screen>
@@ -1756,7 +1756,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
           client sends modify RPCs when it performs file or directory creation,
           unlink, access permission modification or ownership modification. The
           default setting is 7, minimum setting is 1 and maximum setting is
-          256.</para>
+          511.</para>
         <para>To set the <literal>max_mod_rpcs_in_flight</literal> parameter,
           run the following command on the Lustre client:</para>
         <screen>client$ lctl set_param mdc.*.max_mod_rpcs_in_flight=12</screen>
