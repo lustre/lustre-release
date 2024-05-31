@@ -1933,6 +1933,12 @@ struct cl_io {
 	 * to annotate that in the IO (since we learn if there is a problematic
 	 * OST/MDT target as we build the IO)
 	 */
+			     ci_target_is_zfs:1,
+	/**
+	 * there is an interop issue with unpatched clients/servers that
+	 * exceed 4k read/write offsets with I/O exceeding LNET_MTU.
+	 * This flag cleared if a target is not patched.
+	 */
 			     ci_allow_unaligned_dio:1,
 	/**
 	 * Bypass quota check
@@ -2544,6 +2550,11 @@ struct cl_sub_dio {
 				csd_write:1,
 				csd_unaligned:1;
 };
+
+static inline u64 cl_io_nob_aligned(u64 off, u32 nob, u32 pgsz)
+{
+	return (((nob / pgsz) - 1) * pgsz) + (pgsz - (off & (pgsz - 1)));
+}
 
 void ll_release_user_pages(struct page **pages, int npages);
 int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size);

@@ -2423,6 +2423,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
 			GOTO(out_commitrw, rc = -ENOMEM);
+		/* client may have MD handling requirements  */
+		desc->bd_md_offset = ioobj_page_interop_offset(ioo);
 	}
 
 	npages_read = npages;
@@ -2822,6 +2824,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
 			GOTO(skip_transfer, rc = -ENOMEM);
+		/* client may have MD handling requirements  */
+		desc->bd_md_offset = ioobj_page_interop_offset(ioo);
 
 		/* NB Having prepped, we must commit... */
 		for (i = 0; i < npages; i++)

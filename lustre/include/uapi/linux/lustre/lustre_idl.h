@@ -1476,12 +1476,15 @@ struct hsm_state_set {
 #define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {
-	struct ost_id	ioo_oid;	/* object ID, if multi-obj BRW */
-	__u32		ioo_max_brw;	/* low 16 bits were o_mode before 2.4,
-					 * now (PTLRPC_BULK_OPS_COUNT - 1) in
-					 * high 16 bits in 2.4 and later
-					 */
-	__u32		ioo_bufcnt;	/* number of niobufs for this object */
+	/* object ID, if multi-obj BRW */
+	struct ost_id	ioo_oid;
+	/* low 16 bits were o_mode before 2.4, now (PTLRPC_BULK_OPS_LIMIT - 1)
+	 * in high 16 bits in 2.4 and later.
+	 * With OBD_CONNECT2_UNALIGNED_DIO udio uses low 4 bits for offset
+	 */
+	__u32		ioo_max_brw;
+	/* number of niobufs for this object */
+	__u32		ioo_bufcnt;
 };
 
 /* NOTE: IOOBJ_MAX_BRW_BITS defines the _offset_ of the max_brw field in
@@ -1489,9 +1492,16 @@ struct obd_ioobj {
  * That said, ioo_max_brw is a 32-bit field so the limit is also 16 bits.
  */
 #define IOOBJ_MAX_BRW_BITS	16
+#define IOOBJ_OFFSET_BITS	4
+#define IOOBJ_OFFSET_MASK	((1u << IOOBJ_OFFSET_BITS) - 1)
+
+#define ioobj_page_interop_offset(ioo) ((ioo)->ioo_max_brw & IOOBJ_OFFSET_MASK)
 #define ioobj_max_brw_get(ioo)	(((ioo)->ioo_max_brw >> IOOBJ_MAX_BRW_BITS) + 1)
-#define ioobj_max_brw_set(ioo, num)					\
-do { (ioo)->ioo_max_brw = ((num) - 1) << IOOBJ_MAX_BRW_BITS; } while (0)
+#define ioobj_max_brw_set(ioo, num, offset)				\
+do {									\
+	(ioo)->ioo_max_brw = ((num) - 1) << IOOBJ_MAX_BRW_BITS;		\
+	(ioo)->ioo_max_brw |= (offset) & IOOBJ_OFFSET_MASK;		\
+} while (0)
 
 /* multiple of 8 bytes => can array */
 struct niobuf_remote {

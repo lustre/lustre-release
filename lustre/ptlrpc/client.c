@@ -190,15 +190,16 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned int nfrags,
 	desc->bd_portal = portal;
 	desc->bd_type = type;
 	desc->bd_md_count = 0;
-	desc->bd_nob_last = LNET_MTU;
+	desc->bd_iop_len = 0;
 	desc->bd_frag_ops = ops;
 	LASSERT(max_brw > 0);
 	desc->bd_md_max_brw = min(max_brw, PTLRPC_BULK_OPS_COUNT);
+	desc->bd_md_offset = 0;
 	/*
 	 * PTLRPC_BULK_OPS_COUNT is the compile-time transfer limit for this
 	 * node. Negotiated ocd_brw_size will always be <= this number.
 	 */
-	for (i = 0; i < PTLRPC_BULK_OPS_COUNT; i++)
+	for (i = 0; i < PTLRPC_BULK_OPS_LIMIT; i++)
 		LNetInvalidateMDHandle(&desc->bd_mds[i]);
 
 	return desc;
@@ -245,11 +246,16 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
 
+#define MD0_PAGE_SHIFT	(PAGE_SHIFT - MD_MIN_INTEROP_PAGE_SHIFT)
+
 void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 			     struct page *page, int pageoffset, int len,
 			     int pin)
 {
 	struct bio_vec *kiov;
+	int ilen = len;
+	int start = 0;
+	int nvecs = desc->bd_iov_count;
 
 	LASSERT(desc->bd_iov_count < desc->bd_max_iov);
 	LASSERT(page != NULL);
@@ -259,16 +265,27 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
 	kiov = &desc->bd_vec[desc->bd_iov_count];
 
-	if (((desc->bd_iov_count % LNET_MAX_IOV) == 0) ||
-	     ((desc->bd_nob_last + len) > LNET_MTU)) {
-		desc->bd_mds_off[desc->bd_md_count] = desc->bd_iov_count;
-		desc->bd_md_count++;
-		desc->bd_nob_last = 0;
-		LASSERT(desc->bd_md_count <= PTLRPC_BULK_OPS_COUNT);
-	}
+	/* unaligned i/o: accelerate MD0 consumption based offset 4k pages */
+	if (desc->bd_md_offset && desc->bd_md_count == 1)
+		nvecs += desc->bd_md_offset >> MD0_PAGE_SHIFT;
 
-	desc->bd_nob_last += len;
-	desc->bd_nob += len;
+	/* unaligned i/o: first vector may be less than LNET_MAX_IOV */
+	if (desc->bd_md_count > 0)
+		start = desc->bd_mds_off[desc->bd_md_count - 1];
+	nvecs -= start; /* kiov enties in this MD */
+	/* Initial page or adding this page will exceed iov or mtu limit */
+	if (desc->bd_iov_count == 0 || nvecs == LNET_MTU_IOV_LIMIT ||
+	    (desc->bd_iop_len + ilen) > LNET_MTU) {
+		desc->bd_mds_off[desc->bd_md_count++] = desc->bd_iov_count;
+		LASSERT(desc->bd_md_count <= PTLRPC_BULK_OPS_LIMIT);
+		desc->bd_iop_len = 0;
+		/* extend max_brw to the next power of 2 */
+		if (desc->bd_md_count > desc->bd_md_max_brw &&
+		    (desc->bd_md_max_brw << 1) <= PTLRPC_BULK_OPS_COUNT)
+			desc->bd_md_max_brw = (desc->bd_md_max_brw << 1);
+	}
+	desc->bd_iop_len += ilen; /* this vector, if 64k page aligned */
+	desc->bd_nob += len; /* total number of bytes for this bulk */
 
 	if (pin)
 		get_page(page);

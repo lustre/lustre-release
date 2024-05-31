@@ -1500,6 +1500,33 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 #endif
 }
 
+static inline bool is_interop_required(u64 foffset, u32 off0, u32 npgs,
+				       struct brw_page **pga)
+{
+	struct brw_page *pg0 = pga[0];
+	struct brw_page *pgN = pga[npgs - 1];
+	const u32 nob = ((npgs - 2) << PAGE_SHIFT) + pg0->bp_count +
+			pgN->bp_count;
+
+	return ((nob + off0) >= LNET_MTU &&
+	    cl_io_nob_aligned(foffset, nob, MD_MAX_INTEROP_PAGE_SIZE) !=
+	    cl_io_nob_aligned(foffset, nob, MD_MIN_INTEROP_PAGE_SIZE));
+}
+
+static inline u32 interop_pages(u64 foffset, u32 npgs, struct brw_page **pga)
+{
+	u32 off0;
+
+	if (foffset == 0 || npgs < 15)
+		return 0;
+
+	off0 = (foffset & (MD_MAX_INTEROP_PAGE_SIZE - 1));
+	if (is_interop_required(foffset, off0, npgs, pga))
+		return off0 >> MD_MIN_INTEROP_PAGE_SHIFT;
+
+	return 0;
+}
+
 static int
 osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 		     u32 page_count, struct brw_page **pga,
@@ -1521,13 +1548,20 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	bool gpu = 0;
 	bool enable_checksum = true;
 	struct cl_page *clpage;
+	u64 foffset = 0;
 
 	ENTRY;
 	if (pga[0]->bp_page) {
 		clpage = oap2cl_page(brw_page2oap(pga[0]));
 		inode = clpage->cp_inode;
-		if (clpage->cp_type == CPT_TRANSIENT)
+		if (clpage->cp_type == CPT_TRANSIENT) {
 			directio = true;
+			/* When page size interop logic is not supported by the
+			 * remote server use the old logic.
+			 */
+			if (imp_connect_unaligned_dio(cli->cl_import))
+				foffset = pga[0]->bp_off;
+		}
 	}
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
 		RETURN(-ENOMEM); /* Recoverable */
@@ -1758,15 +1792,18 @@ retry_encrypt:
 		OST_BULK_PORTAL,
 		&ptlrpc_bulk_kiov_pin_ops);
 
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
-        /* NB request now owns desc and will free it when it gets freed */
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
+	/* NB request now owns desc and will free it when it gets freed */
 	desc->bd_is_rdma = gpu;
+	if (directio && foffset)
+		desc->bd_md_offset = interop_pages(foffset, page_count, pga);
+
 no_bulk:
-        body = req_capsule_client_get(pill, &RMF_OST_BODY);
-        ioobj = req_capsule_client_get(pill, &RMF_OBD_IOOBJ);
-        niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
-        LASSERT(body != NULL && ioobj != NULL && niobuf != NULL);
+	body = req_capsule_client_get(pill, &RMF_OST_BODY);
+	ioobj = req_capsule_client_get(pill, &RMF_OBD_IOOBJ);
+	niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
+	LASSERT(body != NULL && ioobj != NULL && niobuf != NULL);
 
 	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
@@ -1778,18 +1815,6 @@ no_bulk:
 	 * other process logic */
 	body->oa.o_uid = oa->o_uid;
 	body->oa.o_gid = oa->o_gid;
-
-	obdo_to_ioobj(oa, ioobj);
-	ioobj->ioo_bufcnt = niocount;
-	/* The high bits of ioo_max_brw tells server _maximum_ number of bulks
-	 * that might be send for this request.  The actual number is decided
-	 * when the RPC is finally sent in ptlrpc_register_bulk(). It sends
-	 * "max - 1" for old client compatibility sending "0", and also so the
-	 * the actual maximum is a power-of-two number, not one less. LU-1431 */
-	if (desc != NULL)
-		ioobj_max_brw_set(ioobj, desc->bd_md_max_brw);
-	else /* short io */
-		ioobj_max_brw_set(ioobj, 0);
 
 	if (inode && IS_ENCRYPTED(inode) &&
 	    llcrypt_has_encryption_key(inode) &&
@@ -1866,6 +1891,24 @@ no_bulk:
 		if (CFS_FAIL_CHECK(OBD_FAIL_OSC_MARK_COMPRESSED))
 			niobuf->rnb_flags |= OBD_BRW_COMPRESSED;
 	}
+
+	obdo_to_ioobj(oa, ioobj);
+	ioobj->ioo_bufcnt = niocount;
+
+	/* The high bits of ioo_max_brw tells server _maximum_ number of bulks
+	 * that might be send for this request.  The actual number is decided
+	 * when the RPC is finally sent in ptlrpc_register_bulk(). It sends
+	 * "max - 1" for old client compatibility sending "0", and also so the
+	 * the actual maximum is a power-of-two number, not one less. LU-1431
+	 *
+	 * The low bits are reserved for md flags used for interopability, Ex:
+	 *  - OBD_IOOBJ_INTEROP_PAGE_ALIGNMENT
+	 */
+	if (desc)
+		ioobj_max_brw_set(ioobj, desc->bd_md_max_brw,
+				  desc->bd_md_offset);
+	else
+		ioobj_max_brw_set(ioobj, 0, 0); /* short io */
 
 	LASSERTF((void *)(niobuf - niocount) ==
 		 req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE),

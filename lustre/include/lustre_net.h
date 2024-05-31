@@ -81,7 +81,12 @@
 #if PTLRPC_BULK_OPS_BITS > 16
 #error "More than 65536 BRW RPCs not allowed by IOOBJ_MAX_BRW_BITS."
 #endif
-#define PTLRPC_BULK_OPS_COUNT	(1U << PTLRPC_BULK_OPS_BITS)
+/**
+ * PTLRPC_BULK_OPS_COUNT is a protocol maximum and must be a power of 2
+ * However PTLRPC_BULK_OPS_LIMIT (ops_count/2 +1) is enforced as the
+ * 64G with alignment interop limit.
+ */
+#define PTLRPC_BULK_OPS_COUNT	(1U << (PTLRPC_BULK_OPS_BITS + 1))
 /**
  * PTLRPC_BULK_OPS_MASK is for the convenience of the client only, and
  * should not be used on the server at all.  Otherwise, it imposes a
@@ -91,7 +96,14 @@
  * RPC count.
  */
 #define PTLRPC_BULK_OPS_MASK	(~((__u64)PTLRPC_BULK_OPS_COUNT - 1))
-
+/*
+ * Unaligned DIO adjust MD size for alignment to the interop page size
+ * Enable page alignmen interop range:
+ *  MD_MAX_INTEROP_PAGE_SIZE(64k) <-> MD_MIN_INTEROP_PAGE_SIZE(4k)
+ */
+#define MD_MIN_INTEROP_PAGE_SHIFT	12
+#define MD_MIN_INTEROP_PAGE_SIZE	(1u << MD_MIN_INTEROP_PAGE_SHIFT)
+#define MD_MAX_INTEROP_PAGE_SIZE	(1u << 16)
 /**
  * Define maxima for bulk I/O.
  *
@@ -110,6 +122,8 @@
 #define DT_DEF_BRW_SIZE		(4 * ONE_MB_BRW_SIZE)
 #define DT_MAX_BRW_PAGES	(DT_MAX_BRW_SIZE >> PAGE_SHIFT)
 #define OFD_MAX_BRW_SIZE	(1U << LNET_MTU_BITS)
+/* unaligned dio needs an extra md vector 65 instead of 64 */
+#define PTLRPC_BULK_OPS_LIMIT	((1U << PTLRPC_BULK_OPS_BITS) + 1)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
 #if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
@@ -123,6 +137,9 @@
 #endif
 #if (PTLRPC_MAX_BRW_PAGES > LNET_MAX_IOV * PTLRPC_BULK_OPS_COUNT)
 # error "PTLRPC_MAX_BRW_PAGES too big"
+#endif
+#if (PTLRPC_BULK_OPS_LIMIT > PTLRPC_BULK_OPS_COUNT)
+# error "PTLRPC_BULK_OPS_LIMIT too big"
 #endif
 
 #define PTLRPC_NTHRS_INIT	2
@@ -1400,9 +1417,10 @@ struct ptlrpc_bulk_desc {
 	/** completed with failure */
 	unsigned long bd_failure:1;
 	/** client side */
-	unsigned long bd_registered:1,
+	unsigned short bd_md_offset; /* offset in 4k pages ranged [0, 15] */
+	unsigned int bd_registered:1,
 	/* bulk request is RDMA transfer, use page->host as real address */
-			bd_is_rdma:1;
+		     bd_is_rdma:1;
 	/** For serialization with callback */
 	spinlock_t bd_lock;
 	/** {put,get}{source,sink}{kvec,kiov} */
@@ -1421,7 +1439,7 @@ struct ptlrpc_bulk_desc {
 	int			bd_max_iov;	/* allocated size of bd_iov */
 	int			bd_nob;		/* # bytes covered */
 	int			bd_nob_transferred; /* # bytes GOT/PUT */
-	unsigned int		bd_nob_last;	/* # bytes in last MD */
+	unsigned int		bd_iop_len;	/* md iop bytes */
 
 	__u64			bd_last_mbits;
 
@@ -1431,9 +1449,9 @@ struct ptlrpc_bulk_desc {
 	int			bd_md_max_brw;	/* max entries in bd_mds */
 
 	/** array of offsets for each MD */
-	unsigned int		bd_mds_off[PTLRPC_BULK_OPS_COUNT];
+	unsigned int		bd_mds_off[PTLRPC_BULK_OPS_LIMIT];
 	/** array of associated MDs */
-	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_COUNT];
+	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_LIMIT];
 
 	/* encrypted iov, size is either 0 or bd_iov_count. */
 	struct bio_vec *bd_enc_vec;

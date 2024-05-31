@@ -13879,13 +13879,38 @@ test_118n()
 }
 run_test 118n "statfs() sends OST_STATFS requests in parallel"
 
+# With unaligned_dio enabled there are no restrictions on dio.
+unaligned_dio() {
+	local udio=0
+
+	$LCTL get_param osc.*.import | grep connect_flags: |
+		grep -q "unaligned_dio" || udio=1
+
+	return $udio
+}
+
+# With unaligned_dio enabled there are no restrictions on dio.
+unaligned_dio_or_ldiskfs_with_same_page_size()
+{
+	if [[ "${ost1_FSTYPE}" == "zfs" ]]; then
+		$LCTL get_param osc.*.import | grep connect_flags: |
+			grep -q "unaligned_dio" ||
+		skip "Need ldiskfs server or 'unaligned_dio' support"
+	fi
+	if [[ $(get_page_size ost1) != $PAGE_SIZE ]]; then
+		$LCTL get_param osc.*.import | grep connect_flags: |
+			grep -q "unaligned_dio" ||
+		skip "Need page interop support"
+	fi
+}
+
 dio_readv_writev_support()
 {
 	# Kernels after 3.16 work:
 	(( $(version_code $(uname -r)) >= $(version_code 3.16) ))
 		return 0
 	# Lustre with LU-17524 works:
-	(( $OST1_VERSION > $(version_code 2.15.61.141) ))
+	(( $OST1_VERSION > $(version_code 2.15.61.196) ))
 		return 0
 
 	skip "need readv/writev with O_DIRECT support"
@@ -13934,8 +13959,7 @@ run_test 119c "Testing for direct read hitting hole"
 
 test_119e()
 {
-	(( $MDS1_VERSION >= $(version_code 2.15.58) )) ||
-		skip "Need server version at least 2.15.58"
+	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
@@ -13971,15 +13995,24 @@ test_119e()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
-			$((stripe_size + 1024))"
-	else
+		if unaligned_dio; then
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size + 1024))"
+		else
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size - 1))"
+		fi
+	elif unaligned_dio; then
 		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
 			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
 			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
 			$((stripe_size - 1)) $stripe_size \
 			$((stripe_size + 1)) $((stripe_size * 3/2)) \
 			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4))"
 	fi
 
 	for bs in $bsizes; do
@@ -14002,6 +14035,7 @@ run_test 119e "Basic tests of dio read and write at various sizes"
 
 test_119f()
 {
+	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
@@ -14020,15 +14054,24 @@ test_119f()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
-			$((stripe_size + 1024))"
-	else
+		if unaligned_dio; then
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size + 1024))"
+		else
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size - 1))"
+		fi
+	elif unaligned_dio; then
 		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
 			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
 			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
 			$((stripe_size - 1)) $stripe_size \
 			$((stripe_size + 1)) $((stripe_size * 3/2)) \
 			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4))"
 	fi
 
 	for bs in $bsizes; do
@@ -14067,6 +14110,7 @@ run_test 119f "dio vs dio race"
 
 test_119g()
 {
+	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
@@ -14085,15 +14129,24 @@ test_119g()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
-			$((stripe_size + 1024))"
-	else
+		if unaligned_dio; then
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size + 1024))"
+		else
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size - 1))"
+		fi
+	elif unaligned_dio; then
 		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
 			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
 			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
 			$((stripe_size - 1)) $stripe_size \
 			$((stripe_size + 1)) $((stripe_size * 3/2)) \
 			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4))"
 	fi
 
 	for bs in $bsizes; do
@@ -14127,6 +14180,7 @@ run_test 119g "dio vs buffered I/O race"
 
 test_119h()
 {
+	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
@@ -14140,15 +14194,24 @@ test_119h()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
-			$((stripe_size + 1024))"
-	else
+		if unaligned_dio; then
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size + 1024))"
+		else
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size - 1))"
+		fi
+	elif unaligned_dio; then
 		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
 			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
 			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
 			$((stripe_size - 1)) $stripe_size \
 			$((stripe_size + 1)) $((stripe_size * 3/2)) \
 			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4))"
 	fi
 
 	for bs in $bsizes; do
@@ -14191,6 +14254,7 @@ run_test 119h "basic tests of memory unaligned dio"
 # aiocp with the '-a' option makes testing memory unaligned aio trivial
 test_119i()
 {
+	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 	which aiocp || skip_env "no aiocp installed"
 
@@ -14210,15 +14274,24 @@ test_119i()
 		# DIO on ZFS can take up to 2 seconds per IO
 		# rotational is better, but still slow.
 		# Limit testing on those media to larger sizes
-		bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
-			$((stripe_size + 1024))"
-	else
+		if unaligned_dio; then
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size + 1024))"
+		else
+			bsizes="$((stripe_size - PAGE_SIZE)) $stripe_size \
+				$((stripe_size - 1))"
+		fi
+	elif unaligned_dio; then
 		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
 			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
 			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4)) \
 			$((stripe_size - 1)) $stripe_size \
 			$((stripe_size + 1)) $((stripe_size * 3/2)) \
 			$((stripe_size * 4)) $((stripe_size * 4 + 1))"
+	else
+		bsizes="$((PAGE_SIZE / 4)) $((PAGE_SIZE - 1024)) \
+			$((PAGE_SIZE - 1)) $PAGE_SIZE $((PAGE_SIZE + 1024)) \
+			$((PAGE_SIZE * 3/2)) $((PAGE_SIZE * 4))"
 	fi
 
 	# Do page aligned and NOT page aligned AIO
@@ -14302,6 +14375,124 @@ test_119m() {
 	rm -f $DIR/$tfile
 }
 run_test 119m "Test DIO readv/writev: exercise iter duplication"
+
+test_119n()
+{
+	# zfs server should fail without unaligned_dio connect flag
+	# and report EINVAL when attempting unaligned dio.
+	dio_readv_writev_support
+
+	[[ "${ost1_FSTYPE}" == "zfs" ]] ||
+		skip "need ZFS server without unaligned_dio support"
+	$LCTL get_param osc.*.import | grep connect_flags: |
+		grep -q "unaligned_dio" &&
+			skip "zfs server without 'unaligned_dio' support"
+
+	error_string=$(rwv -f $DIR/$tfile -Dw -n2 1024 4096 2>&1) &&
+		error "Allowed unaligned dio with ZFS with unpatched server"
+	grep -q "Invalid argument" <<< $error_string ||
+		error "Expected 'Invalid argument' failure: '$error_string'."
+
+	rwv -f $DIR/$tfile -Dw -n2 65536 4096 ||
+		error "DIO aligned writev test failed"
+
+	error_string=$(rwv -f $DIR/$tfile -Dr -v -n2 1024 4096 2>&1) &&
+		error "Allowed unaligned dio with ZFS with unpatched server"
+	grep -q "Invalid argument" <<< $error_string ||
+		error "Expected 'Invalid argument' failure: '$error_string'."
+
+	rm -f $DIR/$tfile
+}
+run_test 119n "Test Unaligned DIO readv() and writev() with unpatched ZFS"
+
+test_119o()
+{
+	dio_readv_writev_support
+
+	[[ "${ost1_FSTYPE}" == "zfs" ]] ||
+		skip "need ldiskfs without unaligned_dio support."
+	$LCTL get_param osc.*.import | grep connect_flags: |
+		grep -q "unaligned_dio" &&
+			skip "need ldiskfs without 'unaligned_dio' support"
+
+	error_string=$(timeout 200s \
+	rwv -f $DIR/$tfile -Dw -n 3 0x7ffff 0x100001 0x180000 2>&1) &&
+		error "Allowed 64k unaligned dio writev"
+	grep -q -E 'Invalid argument|Write error:' <<< $error_string ||
+		error "Expected 'Invalid argument' failure: '$error_string'."
+	rwv -f $DIR/$tfile -Dw -n 3 0x80000 0x100000 0x180000 ||
+		error "DIO aligned writev test failed"
+	error_string=$(timeout 200s \
+	rwv -f $DIR/$tfile -Dr -v -n 3 0x7ffff 0x100001 0x180000 2>&1) &&
+		error "Allowed 64k unaligned dio readv"
+	grep -q -E 'Invalid argument|Read error:' <<< $error_string ||
+		error "Expected 'Invalid argument' failure: '$error_string'."
+
+	rm -f $DIR/$tfile
+}
+run_test 119o "Test Unaligned DIO readv() and writev() with unpatched servers"
+
+test_119p()
+{
+	# Patched servers, unaligned dio that needs interop page alignment
+	dio_readv_writev_support
+
+	$LCTL get_param osc.*.import | grep connect_flags: |
+		grep -q "unaligned_dio" ||
+			skip "need unaligned_dio support."
+	rwv -f $DIR/$tfile -Dw -n 3 0x7ffff 0x100001 0x180000 ||
+		error "DIO unaligned writev test failed"
+	rwv -f $DIR/$tfile -Dr -v -n 3 0x7ffff 0x100001 0x180000 ||
+		error "DIO unaligned readv failed"
+	rm -f $DIR/$tfile
+}
+run_test 119p "Test Unaligned DIO readv() and writev() with patched servers"
+
+test_119q()
+{
+	dio_readv_writev_support
+	$LCTL get_param osc.*.import | grep connect_flags: |
+		grep -q "unaligned_dio" ||
+			skip "need unaligned_dio support."
+
+	local page_size
+	local off0
+	local off1
+	local off2
+
+	#  4k:   0x1000,  8k:   0x2000,  32k:   0x8000   64k:  0x10000
+	for page_size in 0x1000 0x2000 0x8000 0x10000; do
+		echo "RWV interop with 64k + $page_size +/- 1"
+		# short by 1 byte
+		off0=$((page_size + 0xffff))
+		echo "writev: $off0 0x100001 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dw -n 3 $off0 0x100001 0x100000 ||
+			error "DIO unaligned writev test failed: $off0"
+		echo "readv: 0x100001 $off0 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dr -v -n 3 0x100001 $off0 0x100000 ||
+			error "DIO unaligned readv failed: $off0"
+		rm -f $DIR/$tfile
+		# page offset exactly
+		off1=$((page_size + 0x10000))
+		echo "writev: $off1 0x100001 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dw -n 3 $off1 0x100001 0x100000 ||
+			error "DIO unaligned writev test failed: $off1"
+		echo "readv: 0x100001 $off1 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dr -v -n 3 0x100001 $off1 0x100000 ||
+			error "DIO unaligned readv failed: $off1"
+		rm -f $DIR/$tfile
+		# page offset over by 1 byte
+		off2=$((page_size + 0x10001))
+		echo "writev: $off2 0x100001 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dw -n 3 $off2 0x100001 0x100000 ||
+			error "DIO unaligned writev test failed: $off2"
+		echo "readv: 3 0x100001 $off2 0x100000"
+		timeout 90s rwv -f $DIR/$tfile -Dr -v -n 3 0x100001 $off2 0x100000 ||
+			error "DIO unaligned readv failed: $off2"
+		rm -f $DIR/$tfile
+	done
+}
+run_test 119q "Test patchded Unaligned DIO readv() and writev()"
 
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

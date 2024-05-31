@@ -670,14 +670,6 @@ int client_connect_import(const struct lu_env *env,
 		data->ocd_connect_flags = ocd->ocd_connect_flags;
 		data->ocd_connect_flags2 = ocd->ocd_connect_flags2;
 	}
-	/* ldiskfs servers do not actually need patching to support unaligned
-	 * DIO, so we always set the flag in that case
-	 */
-	if (data->ocd_connect_flags & OBD_CONNECT_MAXBYTES) {
-		/* > 2ULL << 59 implies ZFS, so this is ldiskfs */
-		if (data->ocd_maxbytes < (2ULL << 59))
-			data->ocd_connect_flags2 |= OBD_CONNECT2_UNALIGNED_DIO;
-	}
 
 	ptlrpc_pinger_add_import(imp);
 
