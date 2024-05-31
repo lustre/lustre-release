@@ -6,6 +6,8 @@ ONLY=${ONLY:-"$*"}
 
 SRCDIR=$(dirname $0)
 PTLDEBUG=${PTLDEBUG:--1}
+export FORCE_TEST_111=${FORCE_TEST_111:-false}
+
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env "$@"
@@ -13,8 +15,6 @@ init_logging
 
 #                                  tool to create lustre filesystem images
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
-
-always_except LU-11915 110
 
 if $SHARED_KEY; then
 	always_except LU-9795 84 86 103
@@ -9559,22 +9559,19 @@ run_test 109b "test lctl clear_conf one config"
 
 test_110()
 {
-	[[ "$mds1_FSTYPE" != ldiskfs ]] &&
+	[[ "$mds1_FSTYPE" == ldiskfs ]] ||
 		skip "Only applicable to ldiskfs-based MDTs"
-
-	do_facet $SINGLEMDS $DEBUGFS -w -R supported_features |grep large_dir ||
+	do_facet mds1 $DEBUGFS -w -R supported_features |grep large_dir ||
 		skip "large_dir option is not supported on MDS"
-	do_facet ost1 $DEBUGFS -w -R supported_features | grep large_dir ||
-		skip "large_dir option is not supported on OSS"
 
-	stopall # stop all targets before modifying the target counts
+	# stop all targets before modifying the target counts
 	local old_mdscount=$MDSCOUNT
 	local old_ostcount=$OSTCOUNT
-	local replace=""
-	stack_trap "MDSCOUNT=$old_mdscount OSTCOUNT=$old_ostcount; reformat"
+	stack_trap "MDSCOUNT=$old_mdscount OSTCOUNT=$old_ostcount \
+		reformat_and_config"
 	MDSCOUNT=1
 	OSTCOUNT=1
-
+	reformat
 	# ext4_dir_entry_2 struct size:264
 	# dx_root struct size:8
 	# dx_node struct size:8
@@ -9585,46 +9582,43 @@ test_110()
 	# Entries in leaf: 3
 	# For 2 levels limit: 48006
 	# For 3 levels limit : 6096762
-	# Create 80000 files to safely exceed 2-level htree limit.
-	CONF_SANITY_110_LINKS=${CONF_SANITY_110_LINKS:-80000}
+	# Create enough files to safely exceed 2-level htree limit.
+	CONF_SANITY_110_LINKS=${CONF_SANITY_110_LINKS:-60000}
 
 	# can fit at most 3 filenames per 1KB leaf block, but each
 	# leaf/index block will only be 3/4 full before split at each level
 	(( MDSSIZE < CONF_SANITY_110_LINKS / 3 * 4/3 * 4/3 )) &&
 		CONF_SANITY_110_LINKS=$((MDSSIZE * 3 * 3/4 * 3/4))
 
-	combined_mgs_mds || replace=" --replace "
-	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
-		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+	local dev=$(mdsdevname 1)
+	local opts="$(mkfs_opts mds1 $dev) --reformat $dev $(mdsvdevname 1)"
+
 	if [[ $opts != *large_dir* ]]; then
 		if [[ $opts != *mkfsoptions* ]]; then
-			opts+=" --mkfsoptions=\\\"-O large_dir -b 1024 -i 65536\\\""
+			opts+=" --mkfsoptions=\\\"-O large_dir\\\""
 		else
-			opts="${opts//--mkfsoptions=\\\"/ \
-				--mkfsoptions=\\\"-O large_dir -b 1024 -i 65536 }"
+			if [[ $opts != *-O* ]]; then
+				opts="${opts//--mkfsoptions=\\\"/ \
+					--mkfsoptions=\\\"-O large_dir }"
+			else
+				opts="${opts/-O /-O large_dir,}"
+			fi
 		fi
 	fi
+
+	if [[ $opts != *mkfsoptions* ]]; then
+		opts+=" --mkfsoptions=\\\"-b 1024 -i 65536\\\""
+	else
+		opts="${opts//--mkfsoptions=\\\"/ \
+			--mkfsoptions=\\\"-b 1024 -i 65536 }"
+	fi
+
 	echo "MDT params: $opts"
 	load_modules
 	combined_mgs_mds || start_mgs
 	add mds1 $opts || error "add mds1 failed with new params"
-	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
-
-	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
-		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
-
-	if [[ $opts != *large_dir* ]]; then
-		if [[ $opts != *mkfsoptions* ]]; then
-			opts+=" --mkfsoptions=\\\"-O large_dir\\\" "
-		else
-			opts="${opts//--mkfsoptions=\\\"/ \
-				--mkfsoptions=\\\"-O large_dir }"
-		fi
-	fi
-	echo "OST params: $opts"
-	add ost1 $opts || error "add ost1 failed with new params"
-	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
-
+	start mds1 $dev $MDS_MOUNT_OPTS || error "start mds1 failed"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
 	MOUNT_2=yes mountcli || error "mount clients failed"
 
 	mkdir -v $DIR/$tdir || error "cannot create $DIR/$tdir"
@@ -9650,77 +9644,63 @@ test_110()
 	echo "waiting for PIDs$pids to complete"
 	wait $pids || error "createmany failed after $group groups"
 
-	umount_client $MOUNT2 -f
-	cleanup
+	stopall
 
-	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
-	MDSCOUNT=$old_mdscount
-	OSTCOUNT=$old_ostcount
+	run_e2fsck $(facet_active_host mds1) $dev -n
 }
 run_test 110 "Adding large_dir with 3-level htree"
 
 test_111() {
-	[[ "$mds1_FSTYPE" != ldiskfs ]] &&
+	[[ "$mds1_FSTYPE" = ldiskfs ]] ||
 		skip "Only applicable to ldiskfs-based MDTs"
-
-	is_dm_flakey_dev $SINGLEMDS $(mdsdevname 1) &&
-		skip "This test can not be executed on flakey dev"
-
-	do_facet $SINGLEMDS $DEBUGFS -w -R supported_features |grep large_dir ||
+	do_facet mds1 $DEBUGFS -w -R supported_features |grep large_dir ||
 		skip "large_dir option is not supported on MDS"
 
-	do_facet ost1 $DEBUGFS -w -R supported_features | grep large_dir ||
-		skip "large_dir option is not supported on OSS"
-
 	# cleanup before changing target counts
-	cleanup
 	local old_mdscount=$MDSCOUNT
 	local old_ostcount=$OSTCOUNT
 	local old_mdssize=$MDSSIZE
-	local replace=""
 	stack_trap "MDSSIZE=$old_mdssize MDSCOUNT=$old_mdscount \
-		    OSTCOUNT=$old_ostcount; reformat"
+		    OSTCOUNT=$old_ostcount reformat_and_config"
 	MDSCOUNT=1
 	OSTCOUNT=1
-	(( MDSSIZE < 2400000 )) && MDSSIZE=2400000 # need at least 2.4GB
+	reformat
+	local min=5000000
+	# cannot enlarge a block device, so skip the test if size not enough
+	local dev=$(mdsdevname 1)
 
-	local mdsdev=$(mdsdevname 1)
-	combined_mgs_mds || replace=" --replace "
-	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
-		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+	if is_blkdev mds1 $dev; then
+		is_blkdev mds1 $dev $min ||
+			skip "$dev too small for ${min}kB MDS"
+	fi
+	(( MDSSIZE < min )) && MDSSIZE=$min # need at least 2.4GB
+	local opts="$(mkfs_opts mds1 $dev) --reformat $dev $(mdsvdevname 1)"
 	if [[ $opts != *large_dir* ]]; then
 		if [[ $opts != *mkfsoptions* ]]; then
-			opts+=" --mkfsoptions=\\\"-O large_dir -i 1048576 \\\" "
+			opts+=" --mkfsoptions=\\\"-O large_dir\\\""
 		else
-			opts="${opts//--mkfsoptions=\\\"/ \
-				--mkfsoptions=\\\"-O large_dir -i 1048576 }"
+			if [[ $opts != *-O* ]]; then
+				opts="${opts//--mkfsoptions=\\\"/ \
+					--mkfsoptions=\\\"-O large_dir }"
+			else
+				opts="${opts/-O /-O large_dir,}"
+			fi
 		fi
 	fi
+
 	echo "MDT params: $opts"
 	load_modules
 	combined_mgs_mds || start_mgs
-	__touch_device mds 1
 	add mds1 $opts || error "add mds1 failed with new params"
-	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
-
-	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
-		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
-	if [[ $opts != *large_dir* ]]; then
-		if [[ $opts != *mkfsoptions* ]]; then
-			opts+=" --mkfsoptions=\\\"-O large_dir \\\""
-		else
-			opts="${opts//--mkfsoptions=\\\"/ --mkfsoptions=\\\"-O large_dir }"
-		fi
-	fi
-	echo "OST params: $opts"
-	__touch_device ost 1
-	add ost1 $opts || error "add ost1 failed with new params"
-	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+	start mds1 $dev $MDS_MOUNT_OPTS ||
+		error "start mds1 failed"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "start ost1 failed"
 
 	MOUNT_2=yes mountcli
 	mkdir $DIR/$tdir || error "cannot create $DIR/$tdir"
-	lfs df $DIR/$tdir
-	lfs df -i $DIR/$tdir
+	$LFS df $DIR/$tdir
+	$LFS df -i $DIR/$tdir
 
 	local group=0
 
@@ -9760,12 +9740,19 @@ test_111() {
 		done
 		echo "waiting for PIDs$pids to complete"
 		wait $pids || error "createmany failed after $group groups"
+
 		dirsize=$(stat -c %s $DIR/$tdir)
 		taken=$((SECONDS - start))
 		rate=$((dirsize / taken))
 		left=$(((dirmax - dirsize) / rate))
 		num=$((group * 60000))
 		echo "estimate ${left}s left after $num files / ${taken}s"
+		echo "Reached $dirsize of $dirmax directory size"
+		echo "Free space:"
+		$LFS df $DIR/$tdir
+		$LFS df -i $DIR/$tdir
+
+		$FORCE_TEST_111 && continue
 		# if the estimated time remaining is too large (it may change
 		# over time as the create rate is not constant) then exit
 		# without declaring a failure.
@@ -9774,14 +9761,9 @@ test_111() {
 
 	umount_client $MOUNT2 -f
 	cleanup
-
-	! (( $needskip )) ||
-		echo "ETA ${left}s after $num files / ${taken}s is too long"
-
-	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
-	MDSCOUNT=$old_mdscount
-	OSTCOUNT=$old_ostcount
-	MDSSIZE=$old_mdssize
+	! (( needskip )) ||
+		skip "ETA ${left}s after $num files / ${taken}s is too long"
+	run_e2fsck $(facet_active_host mds1) $dev -n
 }
 run_test 111 "Adding large_dir with over 2GB directory"
 
