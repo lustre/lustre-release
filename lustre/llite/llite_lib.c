@@ -432,9 +432,8 @@ retry_connect:
 	err = obd_connect(NULL, &sbi->ll_md_exp, sbi->ll_md_obd,
 			  &sbi->ll_sb_uuid, data, sbi->ll_cache);
 	if (err == -EBUSY) {
-		LCONSOLE_ERROR_MSG(0x14f,
-				   "An MDT (md %s) is performing recovery, of which this client is not a part. Please wait for recovery to complete, abort, or time out.\n",
-				   md);
+		LCONSOLE_ERROR("An MDT (md %s) is performing recovery, of which this client is not a part. Please wait for recovery to complete, abort, or time out.\n",
+			       md);
 		GOTO(out, err);
 	} else if (err) {
 		CERROR("cannot connect to %s: rc = %d\n", md, err);
@@ -488,9 +487,8 @@ retry_connect:
 		OBD_ALLOC_WAIT(buf, PAGE_SIZE);
 		obd_connect_flags2str(buf, PAGE_SIZE,
 				      valid ^ CLIENT_CONNECT_MDT_REQD, 0, ",");
-		LCONSOLE_ERROR_MSG(0x170,
-				   "Server %s does not support feature(s) needed for correct operation of this client (%s). Please upgrade server or downgrade client.\n",
-				   sbi->ll_md_exp->exp_obd->obd_name, buf);
+		LCONSOLE_ERROR("Server %s does not support feature(s) needed for correct operation of this client (%s). Please upgrade server or downgrade client.\n",
+			       sbi->ll_md_exp->exp_obd->obd_name, buf);
 		OBD_FREE(buf, PAGE_SIZE);
 		GOTO(out_md_fid, err = -EPROTO);
 	}
@@ -644,9 +642,8 @@ retry_connect:
 	err = obd_connect(NULL, &sbi->ll_dt_exp, sbi->ll_dt_obd,
 			  &sbi->ll_sb_uuid, data, sbi->ll_cache);
 	if (err == -EBUSY) {
-		LCONSOLE_ERROR_MSG(0x150,
-				   "An OST (dt %s) is performing recovery, of which this client is not a part.  Please wait for recovery to complete, abort, or time out.\n",
-				   dt);
+		LCONSOLE_ERROR("An OST (dt %s) is performing recovery, of which this client is not a part.  Please wait for recovery to complete, abort, or time out.\n",
+			       dt);
 		GOTO(out_md, err);
 	} else if (err) {
 		CERROR("%s: Cannot connect to %s: rc = %d\n",
@@ -1120,9 +1117,8 @@ static int ll_options(char *options, struct super_block *sb)
 			    match_wildcard("rootcontext", s1))
 				continue;
 
-			LCONSOLE_ERROR_MSG(0x152,
-					   "Unknown option '%s', won't mount.\n",
-					   s1);
+			LCONSOLE_ERROR("Unknown option '%s', won't mount.\n",
+				       s1);
 			RETURN(-EINVAL);
 		}
 
@@ -1214,9 +1210,8 @@ static int ll_options(char *options, struct super_block *sb)
 
 				/* path must be absolute */
 				if (args->from[0] != '/') {
-					LCONSOLE_ERROR_MSG(0x152,
-							   "foreign prefix '%s' must be an absolute path\n",
-							   args->from);
+					LCONSOLE_ERROR("foreign prefix '%s' must be an absolute path\n",
+						       args->from);
 					RETURN(-EINVAL);
 				}
 
@@ -1242,8 +1237,7 @@ static int ll_options(char *options, struct super_block *sb)
 				/* enable foreign symlink support */
 				set_bit(token, sbi->ll_flags);
 			} else {
-				LCONSOLE_ERROR_MSG(0x152,
-						   "invalid %s option\n", s1);
+				LCONSOLE_ERROR("invalid %s option\n", s1);
 			}
 		fallthrough;
 		default:
@@ -1471,9 +1465,8 @@ int ll_fill_super(struct super_block *sb)
 	/* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
 	lprof = class_get_profile(profilenm);
 	if (lprof == NULL) {
-		LCONSOLE_ERROR_MSG(0x156,
-				   "The client profile '%s' could not be read from the MGS.  Does that filesystem exist?\n",
-				   profilenm);
+		LCONSOLE_ERROR("The client profile '%s' could not be read from the MGS.  Does that filesystem exist?\n",
+			       profilenm);
 		GOTO(out_debugfs, err = -EINVAL);
 	}
 	CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
