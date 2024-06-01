@@ -216,10 +216,9 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		int		       index = lsd->lsd_osd_index;
 
 		if (index != data->ocd_index) {
-			LCONSOLE_ERROR_MSG(0x136,
-					   "Connection from %s to index %u doesn't match actual OST index %u in last_rcvd file, bad configuration?\n",
-					   obd_export_nid2str(exp), index,
-					   data->ocd_index);
+			LCONSOLE_ERROR("Connection from %s to index %u doesn't match actual OST index %u in last_rcvd file, bad configuration?\n",
+				       obd_export_nid2str(exp), index,
+				       data->ocd_index);
 			RETURN(-EBADF);
 		}
 		if (!(lsd->lsd_feature_compat & OBD_COMPAT_OST)) {

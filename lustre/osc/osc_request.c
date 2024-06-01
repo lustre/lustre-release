@@ -2089,31 +2089,25 @@ check_write_checksum(struct obdo *oa, const struct lnet_processid *peer,
 	if (rc < 0)
 		msg = "failed to calculate the client write checksum";
 	else if (cksum_type != obd_cksum_type_unpack(aa->aa_oa->o_flags))
-                msg = "the server did not use the checksum type specified in "
-                      "the original request - likely a protocol problem";
-        else if (new_cksum == server_cksum)
-                msg = "changed on the client after we checksummed it - "
-                      "likely false positive due to mmap IO (bug 11742)";
-        else if (new_cksum == client_cksum)
-                msg = "changed in transit before arrival at OST";
-        else
-                msg = "changed in transit AND doesn't match the original - "
-                      "likely false positive due to mmap IO (bug 11742)";
+		msg = "the server did not use the checksum type specified in the original request - likely a protocol problem";
+	else if (new_cksum == server_cksum)
+		msg = "changed on the client after we checksummed it - likely false positive due to mmap IO (bug 11742)";
+	else if (new_cksum == client_cksum)
+		msg = "changed in transit before arrival at OST";
+	else
+		msg = "changed in transit AND doesn't match the original - likely false positive due to mmap IO (bug 11742)";
 
-	LCONSOLE_ERROR_MSG(0x132, "%s: BAD WRITE CHECKSUM: %s: from %s inode "
-			   DFID " object "DOSTID" extent [%llu-%llu], original "
-			   "client csum %x (type %x), server csum %x (type %x),"
-			   " client csum now %x\n",
-			   obd_name, msg, libcfs_nidstr(&peer->nid),
-			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
-			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
-			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
-			   POSTID(&oa->o_oi), aa->aa_ppga[0]->bp_off,
-			   aa->aa_ppga[aa->aa_page_count - 1]->bp_off +
-				aa->aa_ppga[aa->aa_page_count-1]->bp_count - 1,
-			   client_cksum,
-			   obd_cksum_type_unpack(aa->aa_oa->o_flags),
-			   server_cksum, cksum_type, new_cksum);
+	LCONSOLE_ERROR("%s: BAD WRITE CHECKSUM: %s: from %s inode " DFID " object " DOSTID " extent [%llu-%llu], original client csum %x (type %x), server csum %x (type %x), client csum now %x\n",
+		       obd_name, msg, libcfs_nidstr(&peer->nid),
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
+		       oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
+		       POSTID(&oa->o_oi), aa->aa_ppga[0]->bp_off,
+		       aa->aa_ppga[aa->aa_page_count - 1]->bp_off +
+		       aa->aa_ppga[aa->aa_page_count-1]->bp_count - 1,
+		       client_cksum,
+		       obd_cksum_type_unpack(aa->aa_oa->o_flags),
+		       server_cksum, cksum_type, new_cksum);
 	return 1;
 }
 
@@ -2284,25 +2278,21 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 						    aa->aa_ppga, server_cksum,
 						    client_cksum);
 
-			LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
-					   "%s%s%s inode "DFID" object "DOSTID
-					   " extent [%llu-%llu], client %x/%x, "
-					   "server %x, cksum_type %x\n",
-					   obd_name,
-					   libcfs_nidstr(&peer->nid),
-					   via, router,
-					   clbody->oa.o_valid & OBD_MD_FLFID ?
-						clbody->oa.o_parent_seq : 0ULL,
-					   clbody->oa.o_valid & OBD_MD_FLFID ?
-						clbody->oa.o_parent_oid : 0,
-					   clbody->oa.o_valid & OBD_MD_FLFID ?
-						clbody->oa.o_parent_ver : 0,
-					   POSTID(&body->oa.o_oi),
-					   aa->aa_ppga[0]->bp_off,
-					   aa->aa_ppga[page_count-1]->bp_off +
-					   aa->aa_ppga[page_count-1]->bp_count - 1,
-					   client_cksum, client_cksum2,
-					   server_cksum, cksum_type);
+			LCONSOLE_ERROR("%s: BAD READ CHECKSUM: from %s%s%s inode " DFID " object " DOSTID " extent [%llu-%llu], client %x/%x, server %x, cksum_type %x\n",
+				       obd_name, libcfs_nidstr(&peer->nid),
+				       via, router,
+				       clbody->oa.o_valid & OBD_MD_FLFID ?
+					clbody->oa.o_parent_seq : 0ULL,
+				       clbody->oa.o_valid & OBD_MD_FLFID ?
+					clbody->oa.o_parent_oid : 0,
+				       clbody->oa.o_valid & OBD_MD_FLFID ?
+					clbody->oa.o_parent_ver : 0,
+				       POSTID(&body->oa.o_oi),
+				       aa->aa_ppga[0]->bp_off,
+				       aa->aa_ppga[page_count-1]->bp_off +
+				       aa->aa_ppga[page_count-1]->bp_count - 1,
+				       client_cksum, client_cksum2,
+				       server_cksum, cksum_type);
 			cksum_counter = 0;
 			aa->aa_oa->o_cksum = client_cksum;
 			rc = -EAGAIN;
