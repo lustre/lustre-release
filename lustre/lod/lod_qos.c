@@ -302,9 +302,8 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 
 	if (placed != real_count) {
 		/* This should never happen */
-		LCONSOLE_ERROR_MSG(0x14e, "Failed to place all tgts in the "
-				   "round-robin list (%d of %d).\n",
-				   placed, real_count);
+		LCONSOLE_ERROR("Failed to place all tgts in the round-robin list (%d of %d).\n",
+			       placed, real_count);
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
 			LCONSOLE(D_WARNING, "rr #%d tgt idx=%d\n", i,
 				 lqr->lqr_pool.op_array[i]);

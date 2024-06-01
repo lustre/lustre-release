@@ -712,10 +712,9 @@ EXPORT_SYMBOL(ldlm_bl_timeout_by_rpc);
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 			    const char *ast_type)
 {
-	LCONSOLE_ERROR_MSG(0x138,
-			   "%s: A client on nid %s was evicted due to a lock %s callback time out: rc %d\n",
-			   lock->l_export->exp_obd->obd_name,
-			   obd_export_nid2str(lock->l_export), ast_type, rc);
+	LCONSOLE_ERROR("%s: A client on nid %s was evicted due to a lock %s callback time out: rc %d\n",
+		       lock->l_export->exp_obd->obd_name,
+		       obd_export_nid2str(lock->l_export), ast_type, rc);
 
 	if (obd_dump_on_timeout)
 		libcfs_debug_dumplog();

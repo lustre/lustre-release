@@ -184,12 +184,8 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #define LCONSOLE(mask, format, ...) CDEBUG(D_CONSOLE | (mask), format, ## __VA_ARGS__)
 #define LCONSOLE_INFO(format, ...)  CDEBUG_LIMIT(D_CONSOLE, format, ## __VA_ARGS__)
 #define LCONSOLE_WARN(format, ...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## __VA_ARGS__)
-#define LCONSOLE_ERROR_MSG(errnum, format, ...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
-                           "%x-%x: " format, errnum, LERRCHKSUM(errnum), ## __VA_ARGS__)
-#define LCONSOLE_ERROR(format, ...) LCONSOLE_ERROR_MSG(0x00, format, ## __VA_ARGS__)
-
-#define LCONSOLE_EMERG(format, ...) \
-	CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
+#define LCONSOLE_ERROR(format, ...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, format, ## __VA_ARGS__)
+#define LCONSOLE_EMERG(format, ...) CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
 void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 		      const char *format1, ...)
