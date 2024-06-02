@@ -593,14 +593,9 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	rc = mdo_lookup(info->mti_env, mdt_object_child(parent), &rr->rr_name,
 			&info->mti_tmp_fid1, &info->mti_spec);
 	if (rc == 0) {
-		/* mkdir may be partially executed: name entry was successfully
-		 * inserted into parent diretory on remote MDT, while target not
-		 * created on local MDT. This happens when update log recovery
-		 * is aborted, and mkdir is replayed by client request.
-		 */
-		if (unlikely(!(info->mti_spec.sp_replay &&
-			       mdt_object_remote(parent)) &&
-			     !restripe))
+		bool child_exists = false;
+
+		if (unlikely(!info->mti_spec.sp_replay && !restripe))
 			GOTO(put_parent, rc = -EEXIST);
 
 		child = mdt_object_find(info->mti_env, info->mti_mdt,
@@ -608,15 +603,34 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		if (unlikely(IS_ERR(child)))
 			GOTO(put_parent, rc = PTR_ERR(child));
 
-		if (mdt_object_exists(child)) {
-			mdt_object_put(info->mti_env, child);
-			rc = -EEXIST;
-			if (restripe)
+		child_exists = mdt_object_exists(child);
+		mdt_object_put(info->mti_env, child);
+		if (child_exists) {
+			if (restripe) {
 				rc = mdt_restripe(info, parent, &rr->rr_name,
 						  rr->rr_fid2, spec, ma);
+			} else {
+				LASSERT(info->mti_spec.sp_replay);
+				mdt_obj_version_get(info, child,
+						    &info->mti_ver[1]);
+				rc = mdt_version_check(mdt_info_req(info),
+						       info->mti_ver[1], 1);
+			}
 			GOTO(put_parent, rc);
+		} else if (restripe) {
+			/* restripe, dirent exists but inode not */
+			GOTO(put_parent, rc = -EINVAL);
+		} else if (!mdt_object_remote(parent)) {
+			/* create, parent is on local MDT and dirent exists */
+			LASSERT(info->mti_spec.sp_replay);
+			GOTO(put_parent, rc = -EEXIST);
 		}
-		mdt_object_put(info->mti_env, child);
+		/* mkdir may be partially executed: name entry was successfully
+		 * inserted into parent diretory on remote MDT, while target not
+		 * created on local MDT. This happens when update log recovery
+		 * is aborted, and mkdir is replayed by client request.
+		 */
+		LASSERT(info->mti_spec.sp_replay && !child_exists && !restripe);
 		recreate_obj = true;
 	} else if (rc != -ENOENT) {
 		GOTO(put_parent, rc);
