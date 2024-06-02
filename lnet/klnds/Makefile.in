@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 @BUILD_GNILND_TRUE@obj-m += gnilnd/
 @BUILT_IN_KO2IBLND_TRUE@obj-m += in-kernel-o2iblnd/
 ifneq ($(BUILD_EXT_O2IB),)
