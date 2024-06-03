@@ -90,7 +90,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	struct ahash_request *req;
 	obd_dif_csum_fn *fn = NULL;
-	unsigned int bufsize;
+	unsigned int bufsize = 0;
 	unsigned char *buffer;
 	struct page *__page;
 	__be16 *guard_start;
@@ -123,8 +123,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	for (i = 0; i < repeat_number; i++) {
-		/*
-		 * The left guard number should be able to hold checksums of a
+		/* The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
 		rc = obd_page_dif_generate_buffer(obd_name, data_page, 0,
