@@ -175,6 +175,11 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 	int rc;
 
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
+#ifdef AT_GETATTR_NOSEC /* added in v6.7-rc1-1-g8a924db2d7b5 */
+	if (flags & AT_GETATTR_NOSEC)
+		rc = vfs_getattr_nosec(path, st, request_mask, flags);
+	else
+#endif /* AT_GETATTR_NOSEC */
 	rc = vfs_getattr(path, st, request_mask, flags);
 #else
 	rc = vfs_getattr(path, st);
