@@ -867,7 +867,7 @@ int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr, int cmd,
 {
 	int num_nids, rc;
 	char err_str[LNET_MAX_STR_LEN] = "Error";
-	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
+	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER] = {0};
 	lnet_nid_t pnid = LNET_NID_ANY;
 
 	if (!prim_nid) {
@@ -887,10 +887,9 @@ int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr, int cmd,
 
 	num_nids = 0;
 	if (nids) {
-		/*
-		* if there is no primary nid we need to make the first nid in the
-		* nids list the primary nid
-		*/
+		/* if there is no primary nid we need to make the first nid in
+		 * the nids list the primary nid
+		 */
 		replace_sep(nids, ',', ' ');
 		rc = lustre_lnet_parse_nidstr(nids, lnet_nidlist,
 					LNET_MAX_NIDS_PER_PEER, err_str);
