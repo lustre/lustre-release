@@ -304,13 +304,14 @@ main(int argc, char *argv[])
 		if (gssd_check_mechs()) {
 			printerr(LL_ERR,
 				 "ERROR: problem with gssapi library\n");
-			exit(1);
+			ret = -1;
+			goto err_krb;
 		}
 		ret = gss_get_realm(realm);
 		if (ret) {
 			printerr(LL_ERR, "ERROR: no Kerberos realm: %s\n",
 				 error_message(ret));
-			exit(1);
+			goto err_krb;
 		}
 		printerr(LL_WARN, "Kerberos realm: %s\n", krb5_this_realm);
 		if (get_creds &&
@@ -320,7 +321,16 @@ main(int argc, char *argv[])
 				 "unable to obtain root (machine) credentials\n");
 			printerr(LL_ERR,
 				 "do you have a keytab entry for <lustre_xxs>/<your.host>@<YOUR.REALM> in /etc/krb5.keytab?\n");
-			exit(1);
+			ret = -1;
+			goto err_krb;
+		}
+
+err_krb:
+		if (ret) {
+			krb_enabled = 0;
+			printerr(LL_ERR, "ERROR: disabling Kerberos support\n");
+			if (!sk_enabled && !krb_enabled && !null_enabled)
+				exit(EXIT_FAILURE);
 		}
 	}
 

@@ -17,6 +17,6 @@ LSVCGSSDARGS="-k -s -z"
 
 /usr/sbin/lsvcgssd ${LSVCGSSDARGS}
 RETVAL=$?
-[ $RETVAL -eq 0 ] && echo $(pidof lsvcgssd) > $PIDFILE
+[ $RETVAL -eq 0 ] && echo $(pidof -s lsvcgssd) > $PIDFILE
 
 exit $RETVAL
