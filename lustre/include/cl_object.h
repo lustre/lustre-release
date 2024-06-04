@@ -2536,6 +2536,11 @@ struct cl_dio_aio {
 				cda_creator_free:1;
 };
 
+struct cl_iter_dup {
+	void		*id_vec;             /* dup'd vec (iov/bvec/kvec) */
+	size_t		id_vec_size;         /* bytes allocated for id_vec */
+};
+
 /* Sub-dio used for splitting DIO (and AIO, because AIO is DIO) according to
  * the layout/striping, so we can do parallel submit of DIO RPCs
  */
@@ -2546,6 +2551,7 @@ struct cl_sub_dio {
 	struct cl_dio_aio	*csd_ll_aio;
 	struct ll_dio_pages	csd_dio_pages;
 	struct iov_iter		csd_iter;
+	struct cl_iter_dup	csd_dup;
 	unsigned		csd_creator_free:1,
 				csd_write:1,
 				csd_unaligned:1;
@@ -2559,7 +2565,7 @@ static inline u64 cl_io_nob_aligned(u64 off, u32 nob, u32 pgsz)
 void ll_release_user_pages(struct page **pages, int npages);
 int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size);
 void ll_free_dio_buffer(struct ll_dio_pages *pvec);
-ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov);
+ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio);
 
 #ifndef HAVE_KTHREAD_USE_MM
 #define kthread_use_mm(mm) use_mm(mm)

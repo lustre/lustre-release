@@ -4162,7 +4162,7 @@ AC_DEFUN([LC_SRC_HAVE_IOVEC_WITH_IOV_MEMBER], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_IOVEC_WITH_IOV_MEMBER], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'iov_iter_iovec' is available],
+	LB2_MSG_LINUX_TEST_RESULT([if 'iov_iter()' is available],
 	[iov_iter_has___iov_member], [
 		AC_DEFINE(HAVE___IOV_MEMBER, __iov,
 			['struct iov_iter' has '__iov' member])

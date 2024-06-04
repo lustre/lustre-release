@@ -1189,6 +1189,14 @@ static void cl_dio_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	EXIT;
 }
 
+static inline void csd_dup_free(struct cl_iter_dup *dup)
+{
+	void *tmp = dup->id_vec;
+
+	dup->id_vec = NULL;
+	OBD_FREE(tmp, dup->id_vec_size);
+}
+
 static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 {
 	struct cl_sub_dio *sdio = container_of(anchor, typeof(*sdio), csd_sync);
@@ -1206,11 +1214,6 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	}
 
 	if (sdio->csd_unaligned) {
-		/* save the iovec pointer before it's modified by
-		 * ll_dio_user_copy
-		 */
-		struct iovec *tmp = (struct iovec *) sdio->csd_iter.__iov;
-
 		CDEBUG(D_VFSTRACE,
 		       "finishing unaligned dio %s aio->cda_bytes %ld\n",
 		       sdio->csd_write ? "write" : "read", sdio->csd_bytes);
@@ -1219,13 +1222,12 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		 * buffer from userspace at the start
 		 */
 		if (!sdio->csd_write && sdio->csd_bytes > 0)
-			ret = ll_dio_user_copy(sdio, NULL);
+			ret = ll_dio_user_copy(sdio);
 		ll_free_dio_buffer(&sdio->csd_dio_pages);
 		/* handle the freeing here rather than in cl_sub_dio_free
 		 * because we have the unmodified iovec pointer
 		 */
-		OBD_FREE_PTR(tmp);
-		sdio->csd_iter.__iov = NULL;
+		csd_dup_free(&sdio->csd_dup);
 	} else {
 		/* unaligned DIO does not get user pages, so it doesn't have to
 		 * release them, but aligned I/O must
@@ -1292,7 +1294,9 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 
-		if (unaligned) {
+		if (sdio->csd_unaligned) {
+			size_t v_sz = 0;
+
 			/* we need to make a copy of the user iovec at this
 			 * point in time, in order to:
 			 *
@@ -1303,15 +1307,25 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 			 * modifies the iovec, so to process each chunk from a
 			 * separate thread requires a local copy of the iovec
 			 */
-			memcpy(&sdio->csd_iter, iter, sizeof(struct iov_iter));
-			OBD_ALLOC_PTR(sdio->csd_iter.__iov);
-			if (sdio->csd_iter.__iov == NULL) {
+			sdio->csd_iter = *iter;
+			if (iov_iter_is_bvec(iter))
+				v_sz = iter->nr_segs * sizeof(struct bio_vec);
+			else if (iov_iter_is_kvec(iter) || iter_is_iovec(iter))
+				v_sz = iter->nr_segs * sizeof(struct iovec);
+
+			/* xarray and discard do not need vec to be dup'd */
+			if (!v_sz)
+				goto out;
+
+			OBD_ALLOC(sdio->csd_dup.id_vec, v_sz);
+			if (!sdio->csd_dup.id_vec) {
 				cl_sub_dio_free(sdio);
 				sdio = NULL;
 				goto out;
 			}
-			memcpy((void *) sdio->csd_iter.__iov, iter->__iov,
-			       sizeof(struct iovec));
+			memcpy(sdio->csd_dup.id_vec, iter->__iov, v_sz);
+			sdio->csd_dup.id_vec_size = v_sz;
+			sdio->csd_iter.__iov = sdio->csd_dup.id_vec;
 		}
 	}
 out:
@@ -1333,11 +1347,10 @@ EXPORT_SYMBOL(cl_dio_aio_free);
 void cl_sub_dio_free(struct cl_sub_dio *sdio)
 {
 	if (sdio) {
-		void *tmp = (void *)sdio->csd_iter.__iov;
-
-		if (tmp) {
+		if (sdio->csd_dup.id_vec) {
 			LASSERT(sdio->csd_unaligned);
-			OBD_FREE_PTR(tmp);
+			csd_dup_free(&sdio->csd_dup);
+			sdio->csd_iter.__iov = NULL;
 		}
 		OBD_SLAB_FREE_PTR(sdio, cl_sub_dio_kmem);
 	}
@@ -1451,9 +1464,9 @@ EXPORT_SYMBOL(ll_release_user_pages);
 #endif
 
 /* copy IO data to/from internal buffer and userspace iovec */
-ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov)
+ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio)
 {
-	struct iov_iter *iter = write_iov ? write_iov : &sdio->csd_iter;
+	struct iov_iter *iter = &sdio->csd_iter;
 	struct ll_dio_pages *pvec = &sdio->csd_dio_pages;
 	struct mm_struct *mm = sdio->csd_ll_aio->cda_mm;
 	loff_t pos = pvec->ldp_file_offset;
@@ -1508,8 +1521,7 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov)
 		LASSERT(i < pvec->ldp_count);
 
 		offset = pos & ~PAGE_MASK;
-		bytes = min_t(unsigned long, PAGE_SIZE - offset,
-			      count);
+		bytes = min_t(unsigned long, PAGE_SIZE - offset, count);
 
 		CDEBUG(D_VFSTRACE,
 		       "count %zd, offset %lu, pos %lld, ldp_count %lu\n",
@@ -1520,17 +1532,17 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov)
 			break;
 		}
 
+		/* like btrfs, we do not have a mapping since this isn't
+		 * a page cache page, so we must do this flush
+		 * unconditionally
+		 *
+		 * NB: This is a noop on x86 but active on other
+		 * architectures
+		 */
+		flush_dcache_page(page);
+
 		/* write requires a few extra steps */
 		if (rw == WRITE) {
-			/* like btrfs, we do not have a mapping since this isn't
-			 * a page cache page, so we must do this flush
-			 * unconditionally
-			 *
-			 * NB: This is a noop on x86 but active on other
-			 * architectures
-			 */
-			flush_dcache_page(page);
-
 #ifndef HAVE_COPY_PAGE_FROM_ITER_ATOMIC
 			copied = iov_iter_copy_from_user_atomic(page, iter,
 								offset, bytes);
@@ -1539,6 +1551,7 @@ ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio, struct iov_iter *write_iov)
 			copied = copy_page_from_iter_atomic(page, offset, bytes,
 							    iter);
 #endif
+			flush_dcache_page(page);
 
 		} else /* READ */ {
 			copied = copy_page_to_iter(page, offset, bytes, iter);
@@ -1582,14 +1595,6 @@ out:
 	LASSERTF(ergo(status == 0, i == pvec->ldp_count - 1),
 		 "status: %d, i: %d, pvec->ldp_count %zu, count %zu\n",
 		  status, i, pvec->ldp_count, count);
-
-	if (write_iov && status == 0) {
-		/* The copy function we use modifies the count in the iovec,
-		 * but that's actually the job of the caller, so we return the
-		 * iovec to the original count
-		 */
-		iov_iter_reexpand(iter, original_count);
-	}
 
 	if (mm_used)
 		kthread_unuse_mm(mm);
