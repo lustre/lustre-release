@@ -49,23 +49,21 @@
  	if (flags & EXT4_GET_BLOCKS_METADATA_NOFAIL)
 --- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/mballoc.c
 +++ linux-4.18.0-80.1.2.el8_0/fs/ext4/mballoc.c
-@@ -4267,6 +4291,25 @@ ext4_mb_use_inode_pa(struct ext4
+@@ -4267,6 +4291,23 @@ ext4_mb_use_inode_pa(struct ext4
  	ext4_fsblk_t end;
  	int len;
 
-+	if (ac->ac_flags & EXT4_MB_VERY_DENSE && !pa->pa_regular) {
++	if (!pa->pa_regular && (ac->ac_flags & EXT4_MB_VERY_DENSE ||
++	    pa->pa_free != pa->pa_len)) {
 +		unsigned int len = ac->ac_o_ex.fe_len;
 +		if (len > pa->pa_free)
 +			len = pa->pa_free;
 +		ext4_get_group_no_and_offset(ac->ac_sb,
-+					pa->pa_pstart,
++					pa->pa_pstart + (pa->pa_len - pa->pa_free),
 +					&ac->ac_b_ex.fe_group,
 +					&ac->ac_b_ex.fe_start);
 +		ac->ac_b_ex.fe_len = len;
-+		pa->pa_lstart += len;
-+		pa->pa_pstart += len;
 +		pa->pa_free -= len;
-+		pa->pa_len -= len;
 +		ac->ac_status = AC_STATUS_FOUND;
 +		ac->ac_pa = pa;
 +		return;
