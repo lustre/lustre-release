@@ -433,7 +433,7 @@ static struct ldebugfs_vars gss_debugfs_vars[] = {
 	  .fops	=	&gss_proc_oos_fops	},
 	{ .name	=	"init_channel",
 	  .fops	=	&gss_proc_secinit,
-	  .proc_mode =	0222			},
+	  .proc_mode =	0200			},
 	{ NULL }
 };
 
