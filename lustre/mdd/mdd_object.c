@@ -1816,14 +1816,16 @@ static int mdd_split_ea(struct lov_comp_md_v1 *comp_v1, __u16 mirror_id,
 	comp_rem->lcm_entry_count = cpu_to_le32(comp_cnt - count);
 	comp_rem->lcm_size = cpu_to_le32(lmm_size - lmm_size_vic);
 	if (!comp_rem->lcm_mirror_count)
-		comp_rem->lcm_flags = cpu_to_le16(LCM_FL_NONE);
+		comp_rem->lcm_flags = cpu_to_le16(comp_rem->lcm_flags &
+						  ~LCM_FL_FLR_MASK);
 
 	memset(comp_vic, 0, sizeof(*comp_v1));
 	comp_vic->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	comp_vic->lcm_mirror_count = 0;
 	comp_vic->lcm_entry_count = cpu_to_le32(count);
 	comp_vic->lcm_size = cpu_to_le32(lmm_size_vic + sizeof(*comp_vic));
-	comp_vic->lcm_flags = cpu_to_le16(LCM_FL_NONE);
+	comp_vic->lcm_flags = cpu_to_le16(comp_vic->lcm_flags &
+					  ~LCM_FL_FLR_MASK);
 	comp_vic->lcm_layout_gen = 0;
 
 	offset = sizeof(*comp_v1) + sizeof(*entry) * comp_cnt;

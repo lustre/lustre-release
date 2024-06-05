@@ -3508,7 +3508,9 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
 	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NONE)
-		lcm->lcm_flags = cpu_to_le32(LCM_FL_RDONLY);
+		lcm->lcm_flags = cpu_to_le16((le16_to_cpu(lcm->lcm_flags) &
+					      ~LCM_FL_FLR_MASK) |
+					     LCM_FL_RDONLY);
 
 	rc = lod_striping_reload(env, lo, buf, 0);
 	if (rc)

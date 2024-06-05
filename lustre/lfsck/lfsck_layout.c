@@ -1938,9 +1938,10 @@ static void lfsck_layout_update_lcm(struct lov_comp_md_v1 *lcm,
 	__u64 end = le64_to_cpu(lcme->lcme_extent.e_end);
 	__u32 gen = version + range;
 	__u32 tmp_gen;
-	int i;
 	__u16 count = le16_to_cpu(lcm->lcm_entry_count);
 	__u16 flags = le16_to_cpu(lcm->lcm_flags);
+	__u16 flr_state = flags & LCM_FL_FLR_MASK;
+	int i;
 
 	if (!gen)
 		gen = 1;
@@ -1949,9 +1950,12 @@ static void lfsck_layout_update_lcm(struct lov_comp_md_v1 *lcm,
 		lcm->lcm_layout_gen = cpu_to_le32(gen);
 
 	if (range)
-		lcm->lcm_flags = cpu_to_le16(LCM_FL_WRITE_PENDING);
-	else if (flags == LCM_FL_NONE && le16_to_cpu(lcm->lcm_mirror_count) > 0)
-		lcm->lcm_flags = cpu_to_le16(LCM_FL_RDONLY);
+		lcm->lcm_flags = cpu_to_le16((flags & ~LCM_FL_FLR_MASK) |
+					     LCM_FL_WRITE_PENDING);
+	else if (flr_state == LCM_FL_NONE &&
+		 le16_to_cpu(lcm->lcm_mirror_count) > 0)
+		lcm->lcm_flags = cpu_to_le16((flags & ~LCM_FL_FLR_MASK) |
+					     LCM_FL_RDONLY);
 
 	for (i = 0; i < count; i++) {
 		tmp = &lcm->lcm_entries[i];
