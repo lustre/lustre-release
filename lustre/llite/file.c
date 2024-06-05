@@ -129,9 +129,7 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 				      ATTR_CTIME);
 	op_data->op_xvalid |= OP_XVALID_CTIME_SET;
 	op_data->op_attr_blocks = inode->i_blocks;
-	op_data->op_attr_flags = ll_inode_to_ext_flags(inode->i_flags);
-	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags))
-		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
+	op_data->op_attr_flags = ll_inode2ext_flags(inode);
 	op_data->op_open_handle = och->och_open_handle;
 
 	if (och->och_flags & FMODE_WRITE &&
@@ -4099,7 +4097,6 @@ int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
 	struct cl_object *obj;
-	unsigned int inode_flags;
 	int rc = 0;
 
 	CDEBUG(D_QUOTA, DFID" xflags=%x projid=%u\n",
@@ -4113,10 +4110,7 @@ int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	inode_flags = ll_xflags_to_inode_flags(xflags);
-	op_data->op_attr_flags = ll_inode_to_ext_flags(inode_flags);
-	if (xflags & FS_XFLAG_PROJINHERIT)
-		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
+	op_data->op_attr_flags = ll_xflags_to_ext_flags(xflags);
 
 	/* pass projid to md_op_data */
 	op_data->op_projid = projid;

@@ -684,8 +684,13 @@ static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
 	     (rc = mdd_dir_is_empty(env, obj)) == 0)) {
 		struct lu_attr la = { 0 };
 
+		/* try to fetch existing attrs, to not lose them */
+		(void)dt_attr_get(env, next, &la);
+		if (la.la_valid & LA_FLAGS)
+			la.la_flags |= LUSTRE_ENCRYPT_FL;
+		else
+			la.la_flags = LUSTRE_ENCRYPT_FL;
 		la.la_valid = LA_FLAGS;
-		la.la_flags = LUSTRE_ENCRYPT_FL;
 		/* if this is an old client using the old enc xattr name,
 		 * switch to the new name for consistency
 		 */

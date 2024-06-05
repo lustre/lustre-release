@@ -518,6 +518,9 @@ enum ll_inode_flags {
 	/* Xattr cache is filled */
 	LLIF_XATTR_CACHE_FILLED	= 7,
 
+/* New flags added to this enum potentially need to be handled in
+ * ll_inode2ext_flags/ll_set_inode_flags
+ */
 };
 
 int ll_xattr_cache_destroy(struct inode *inode);
@@ -1476,6 +1479,8 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs);
 int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags);
 int ll_update_inode(struct inode *inode, struct lustre_md *md);
+u32 ll_inode2ext_flags(struct inode *inode);
+u32 ll_xflags_to_ext_flags(u32 xflags);
 void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags);
 void ll_update_dir_depth_dmv(struct inode *dir, struct dentry *de);
 int ll_read_inode2(struct inode *inode, void *opaque);

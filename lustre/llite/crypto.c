@@ -55,7 +55,7 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 	/* used as encryption unit size */
 	if (S_ISREG(inode->i_mode))
 		inode->i_blkbits = LUSTRE_ENCRYPTION_BLOCKBITS;
-	ext_flags = ll_inode_to_ext_flags(inode->i_flags) | LUSTRE_ENCRYPT_FL;
+	ext_flags = ll_inode2ext_flags(inode) | LUSTRE_ENCRYPT_FL;
 	ll_update_inode_flags(inode, ext_flags);
 
 	if (encctx && encctxlen)

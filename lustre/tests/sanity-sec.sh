@@ -6360,6 +6360,68 @@ test_70() {
 }
 run_test 70 "targets have local copy of sptlrpc llog"
 
+test_71() {
+	local vaultdir=$DIR/$tdir/vault
+	local projid=101
+	local res
+
+	(( $MDS1_VERSION >= $(version_code 2.15.63) )) ||
+		skip "Need MDS version at least 2.15.63"
+
+	[[ $($LCTL get_param mdc.*.import) =~ client_encryption ]] ||
+		skip "need encryption support"
+	which fscrypt || skip_env "Need fscrypt"
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	yes | fscrypt setup --force --verbose ||
+		echo "fscrypt global setup already done"
+	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+		/etc/fscrypt.conf
+	yes | fscrypt setup --verbose $MOUNT ||
+		echo "fscrypt setup $MOUNT already done"
+	stack_trap "rm -rf $MOUNT/.fscrypt"
+
+	mkdir -p $vaultdir
+	stack_trap "rm -rf $vaultdir"
+	$LFS project -p $projid -s $vaultdir
+	$LFS project -d $vaultdir
+	res=$($LFS project -d $vaultdir | awk '{print $1}')
+	[[ "$res" == "$projid" ]] ||
+		error "project id set to $res instead of $projid"
+	res=$($LFS project -d $vaultdir | awk '{print $2}')
+	[[ "$res" == "P" ]] ||
+		error "project id should have inherit flag (1)"
+
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+	     --source=custom_passphrase --name=protector_71 $vaultdir ||
+		error "fscrypt encrypt $vaultdir failed"
+
+	$LFS project -d $vaultdir
+	res=$($LFS project -d $vaultdir | awk '{print $1}')
+	[[ "$res" == "$projid" ]] ||
+		error "project id changed to $res after enc"
+	res=$($LFS project -d $vaultdir | awk '{print $2}')
+	[[ "$res" == "P" ]] ||
+		error "project id should have inherit flag (2)"
+
+	touch $vaultdir/fileA || error "touch $vaultdir/fileA failed"
+	$LFS project $vaultdir/fileA
+	res=$($LFS project $vaultdir/fileA | awk '{print $1}')
+	[[ "$res" == "$projid" ]] ||
+		error "project id on fileA is $res after enc"
+
+	mkdir $vaultdir/dirA || error "touch $vaultdir/dirA failed"
+	$LFS project -d $vaultdir/dirA
+	res=$($LFS project -d $vaultdir/dirA | awk '{print $1}')
+	[[ "$res" == "$projid" ]] ||
+		error "project id on dirA is $res after enc"
+	res=$($LFS project -d $vaultdir/dirA | awk '{print $2}')
+	[[ "$res" == "P" ]] ||
+		error "project id should have inherit flag (3)"
+}
+run_test 71 "encryption does not remove project flag"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

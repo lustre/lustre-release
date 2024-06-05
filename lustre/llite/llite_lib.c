@@ -2759,11 +2759,40 @@ int ll_inode_size_trylock(struct inode *inode)
 	return mutex_trylock(&lli->lli_size_mutex);
 }
 
+u32 ll_inode2ext_flags(struct inode *inode)
+{
+	u32 ext_flags;
+
+	ext_flags = ll_inode_to_ext_flags(inode->i_flags);
+
+	/* add here future new lli_flags */
+	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags))
+		ext_flags |= LUSTRE_PROJINHERIT_FL;
+
+	return ext_flags;
+}
+
+u32 ll_xflags_to_ext_flags(u32 xflags)
+{
+	u32 ext_flags;
+	u32 inode_flags;
+
+	inode_flags = ll_xflags_to_inode_flags(xflags);
+	ext_flags = ll_inode_to_ext_flags(inode_flags);
+	if (xflags & FS_XFLAG_PROJINHERIT)
+		ext_flags |= LUSTRE_PROJINHERIT_FL;
+
+	return ext_flags;
+}
+
 void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags)
 {
 	/* do not clear encryption flag */
 	ext_flags |= ll_inode_to_ext_flags(inode->i_flags) & LUSTRE_ENCRYPT_FL;
+
 	inode->i_flags = ll_ext_to_inode_flags(ext_flags);
+
+	/* add here future new lli_flags */
 	if (ext_flags & LUSTRE_PROJINHERIT_FL)
 		set_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags);
 	else
