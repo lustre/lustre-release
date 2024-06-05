@@ -1833,7 +1833,7 @@ jt_ptl_fail_nid(int argc, char **argv)
 
 static int ptl_yaml_route_display(yaml_parser_t *reply)
 {
-	char gw[LNET_MAX_STR_LEN], net[18];
+	char gw[LNET_MAX_STR_LEN] = "", net[18] = "";
 	bool done = false, alive = false;
 	int hops = -1, prio = -1;
 	yaml_event_t event;
