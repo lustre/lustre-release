@@ -43,6 +43,7 @@
  * @LNET_CMD_PEER_DIST:		command to find distance between LNet peers
  * @LNET_CMD_UDSP:		command to manage LNet UDSP rules
  * @LNET_CMD_PEER_FAIL:		command to fail LNet peers
+ * @LNET_CMD_DBG_RECOV:		command to debug peers
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,
@@ -57,6 +58,7 @@ enum lnet_commands {
 	LNET_CMD_PEER_DIST	= 8,
 	LNET_CMD_UDSP		= 9,
 	LNET_CMD_PEER_FAIL	= 10,
+	LNET_CMD_DBG_RECOV	= 11,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };

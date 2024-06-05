@@ -3453,6 +3453,113 @@ static int jt_set_peer_ni_value(int argc, char **argv)
 				yaml_lnet_config_peer_ni_healthv);
 }
 
+static int yaml_debug_recovery(enum lnet_health_type type)
+{
+	yaml_parser_t setup, reply;
+	yaml_document_t results;
+	yaml_emitter_t output;
+	const char *msg = NULL;
+	struct nl_sock *sk;
+	char *config;
+	int rc = 0;
+
+	switch (type) {
+	case LNET_HEALTH_TYPE_LOCAL_NI:
+		config = "dbg-recov:\n  queue_type: 0\n";
+		break;
+	case  LNET_HEALTH_TYPE_PEER_NI:
+		config = "dbg-recov:\n  queue_type: 1\n";
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+	if (rc < 0)
+		return rc;
+
+	/* Initialize configuration parser */
+	rc = yaml_parser_initialize(&setup);
+	if (rc == 0) {
+		yaml_parser_log_error(&setup, stderr, NULL);
+		yaml_parser_delete(&setup);
+		return -EOPNOTSUPP;
+	}
+
+	yaml_parser_set_input_string(&setup, (unsigned char *)config,
+				     strlen(config));
+	rc = yaml_parser_load(&setup, &results);
+	if (rc == 0) {
+		yaml_parser_log_error(&setup, stderr, NULL);
+		yaml_parser_delete(&setup);
+		return -EOPNOTSUPP;
+	}
+	yaml_parser_delete(&setup);
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk) {
+		yaml_document_delete(&results);
+		return -EOPNOTSUPP;
+	}
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		yaml_document_delete(&results);
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto free_reply;
+
+	yaml_emitter_initialize(&output);
+	rc = yaml_emitter_set_output_netlink(&output, sk, LNET_GENL_NAME,
+					     LNET_GENL_VERSION,
+					     LNET_CMD_DBG_RECOV, NLM_F_DUMP);
+	if (rc == 1) /* 1 is success */
+		rc = yaml_emitter_dump(&output, &results);
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	} else {
+		yaml_document_t errmsg;
+
+		rc = yaml_parser_load(&reply, &errmsg);
+		if (rc == 1) {
+			yaml_emitter_t debug;
+
+			rc = yaml_emitter_initialize(&debug);
+			if (rc == 1) {
+				yaml_emitter_set_indent(&debug,
+							LNET_DEFAULT_INDENT);
+				yaml_emitter_set_output_file(&debug,
+							     stdout);
+				rc = yaml_emitter_dump(&debug, &errmsg);
+			}
+			yaml_emitter_delete(&debug);
+		} else {
+			msg = yaml_parser_get_reader_error(&reply);
+			if (errno == -ENOENT)
+				rc = 1;
+		}
+		yaml_document_delete(&errmsg);
+	}
+	yaml_emitter_delete(&output);
+free_reply:
+	if (rc == 0) {
+		if (!msg)
+			msg = yaml_parser_get_reader_error(&reply);
+
+		fprintf(stdout, "Operation failed: %s\n", msg);
+	}
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
 static int jt_show_recovery(int argc, char **argv)
 {
 	int rc, opt;
@@ -3461,7 +3568,9 @@ static int jt_show_recovery(int argc, char **argv)
 	static const struct option long_options[] = {
 		{ .name = "local", .has_arg = no_argument, .val = 'l' },
 		{ .name = "peer", .has_arg = no_argument, .val = 'p' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
+	enum lnet_health_type type = -1;
 
 	rc = check_cmd(debug_cmds, "debug", "recovery", 0, argc, argv);
 	if (rc)
@@ -3471,14 +3580,33 @@ static int jt_show_recovery(int argc, char **argv)
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'l':
-			rc = lustre_lnet_show_local_ni_recovq(-1, &show_rc, &err_rc);
+			type = LNET_HEALTH_TYPE_LOCAL_NI;
 			break;
 		case 'p':
-			rc = lustre_lnet_show_peer_ni_recovq(-1, &show_rc, &err_rc);
+			type = LNET_HEALTH_TYPE_PEER_NI;
 			break;
 		default:
 			return 0;
 		}
+	}
+
+	rc = yaml_debug_recovery(type);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
+	switch (type) {
+	case LNET_HEALTH_TYPE_LOCAL_NI:
+		rc = lustre_lnet_show_local_ni_recovq(-1, &show_rc, &err_rc);
+		break;
+	case LNET_HEALTH_TYPE_PEER_NI:
+		rc = lustre_lnet_show_peer_ni_recovq(-1, &show_rc, &err_rc);
+		break;
+	default:
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		break;
 	}
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)

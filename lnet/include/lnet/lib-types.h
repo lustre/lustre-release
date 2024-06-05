@@ -1081,6 +1081,26 @@ enum lnet_peer_dist_attr {
 
 #define LNET_PEER_DIST_ATTR_MAX (__LNET_PEER_DIST_ATTR_MAX_PLUS_ONE - 1)
 
+/** enum lnet_debug_recovery_attr		Attributes to report contents of
+ *						the LNet health recovery queues
+ *
+ * @LNET_DBG_RECOV_ATTR_UNSPEC			Unspecified attribyute to catch
+ *						errors
+ * @LNET_DBG_RECOV_ATTR_HDR			Grouping for NI recovery queue
+ *						(NLA_NUL_STRING)
+ * @LNET_DBG_RECOV_ATTR_NID			A NID in one of the recovery
+ *						queues (NLA_STRING)
+ */
+enum lnet_debug_recovery_attr {
+	LNET_DBG_RECOV_ATTR_UNSPEC = 0,
+
+	LNET_DBG_RECOV_ATTR_HDR,
+	LNET_DBG_RECOV_ATTR_NID,
+	__LNET_DBG_RECOV_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_DBG_RECOV_ATTR_MAX (__LNET_DBG_RECOV_ATTR_MAX_PLUS_ONE - 1)
+
 struct lnet_ni {
 	/* chain on the lnet_net structure */
 	struct list_head	ni_netlist;

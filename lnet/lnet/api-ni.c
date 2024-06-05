@@ -8988,6 +8988,278 @@ report_err:
 	return rc;
 }
 
+struct lnet_genl_debug_recovery_list {
+	unsigned int			lgdrl_index;
+	unsigned int			lgdrl_count;
+	unsigned int			lgdrl_len;
+	struct ln_key_list		*lgdrl_keys;
+	enum lnet_health_type		lgdrl_type;
+	GENRADIX(struct lnet_nid)	lgdrl_nids;
+};
+
+static inline struct lnet_genl_debug_recovery_list *
+lnet_debug_recovery_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_debug_recovery_list *)cb->args[0];
+}
+
+static int lnet_debug_recovery_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_debug_recovery_list *drlist;
+
+	ENTRY;
+	drlist = lnet_debug_recovery_dump_ctx(cb);
+	if (drlist) {
+		if (drlist->lgdrl_keys) {
+			int i;
+
+			for (i = 1; i < drlist->lgdrl_count; i++) {
+				int idx = i + LNET_DBG_RECOV_ATTR_MAX;
+				struct ln_key_props *props;
+
+				props = &drlist->lgdrl_keys->lkl_list[idx];
+				kfree(props->lkp_value);
+			}
+			LIBCFS_FREE(drlist->lgdrl_keys,
+				    drlist->lgdrl_len);
+		}
+		genradix_free(&drlist->lgdrl_nids);
+		CFS_FREE_PTR(drlist);
+	}
+
+	cb->args[0] = 0;
+
+	RETURN(0);
+}
+
+static int lnet_debug_recovery_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+	struct netlink_ext_ack *extack = NULL;
+	struct nlattr *params;
+	struct nlattr *entry;
+	struct lnet_genl_debug_recovery_list *drlist;
+	enum lnet_health_type type = -1;
+	struct lnet_nid *nid;
+	int rem, rc = 0;
+	int msg_len;
+
+	ENTRY;
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		NL_SET_ERR_MSG(extack, "No configuration");
+		RETURN(-ENOMSG);
+	}
+
+	params = genlmsg_data(gnlh);
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		NL_SET_ERR_MSG(extack, "invalid configuration");
+		RETURN(-EINVAL);
+	}
+
+	nla_for_each_attr(entry, params, msg_len, rem) {
+		s64 tmp;
+
+		if (nla_type(entry) != LN_SCALAR_ATTR_VALUE ||
+		    nla_strcmp(entry, "queue_type") != 0)
+			continue;
+
+		rc = nla_extract_val(&entry, &rem, LN_SCALAR_ATTR_INT_VALUE,
+				     (void *)&tmp, sizeof(tmp),
+				     extack);
+		if (rc < 0)
+			GOTO(report_error, rc);
+		type = tmp;
+	}
+	CDEBUG(D_NET, "Got queue_type: %d\n", type);
+
+	CFS_ALLOC_PTR(drlist);
+	if (!drlist) {
+		NL_SET_ERR_MSG(extack, "No memory for recovery list");
+		RETURN(-ENOMEM);
+	}
+
+	genradix_init(&drlist->lgdrl_nids);
+	drlist->lgdrl_index = 0;
+	drlist->lgdrl_count = 0;
+	drlist->lgdrl_type = type;
+	cb->args[0] = (long)drlist;
+
+	rc = -ENOENT;
+	lnet_net_lock(LNET_LOCK_EX);
+	if (type == LNET_HEALTH_TYPE_LOCAL_NI) {
+		struct lnet_ni *ni;
+
+		list_for_each_entry(ni, &the_lnet.ln_mt_localNIRecovq,
+				    ni_recovery) {
+			CDEBUG(D_NET, "nid: %s\n", libcfs_nidstr(&ni->ni_nid));
+			nid = genradix_ptr_alloc(&drlist->lgdrl_nids,
+						 drlist->lgdrl_count++,
+						 GFP_ATOMIC);
+			if (!nid)
+				GOTO(report_error_unlock, rc = -ENOMEM);
+
+			*nid = ni->ni_nid;
+			rc = 0;
+		}
+	} else if (type == LNET_HEALTH_TYPE_PEER_NI) {
+		struct lnet_peer_ni *lpni;
+
+		list_for_each_entry(lpni, &the_lnet.ln_mt_peerNIRecovq,
+				    lpni_recovery) {
+			CDEBUG(D_NET, "nid: %s\n",
+			       libcfs_nidstr(&lpni->lpni_nid));
+			nid = genradix_ptr_alloc(&drlist->lgdrl_nids,
+						 drlist->lgdrl_count++,
+						 GFP_ATOMIC);
+			if (!nid)
+				GOTO(report_error_unlock, rc = -ENOMEM);
+
+			*nid = lpni->lpni_nid;
+			rc = 0;
+		}
+	}
+report_error_unlock:
+	lnet_net_unlock(LNET_LOCK_EX);
+report_error:
+	if (rc < 0)
+		lnet_debug_recovery_show_done(cb);
+
+	RETURN(rc);
+}
+
+static const struct ln_key_list debug_recovery_attr_list = {
+	.lkl_maxattr			= LNET_DBG_RECOV_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_DBG_RECOV_ATTR_HDR]	= {
+			.lkp_key_format		= LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_DBG_RECOV_ATTR_NID]	= {
+			.lkp_value		= "nid-0",
+			.lkp_data_type		= NLA_STRING,
+		},
+	},
+};
+
+static int lnet_debug_recovery_show_dump(struct sk_buff *msg,
+					 struct netlink_callback *cb)
+{
+	struct lnet_genl_debug_recovery_list *drlist;
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int rc = 0;
+	void *hdr;
+	int idx;
+
+	ENTRY;
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	drlist = lnet_debug_recovery_dump_ctx(cb);
+	if (!drlist->lgdrl_count) {
+		NL_SET_ERR_MSG(extack, "No NIDs in recovery");
+		GOTO(send_error, rc = -ENOENT);
+	}
+
+	idx = drlist->lgdrl_index;
+	if (!idx) {
+		unsigned int count = debug_recovery_attr_list.lkl_maxattr;
+		const struct ln_key_list *all[] = { NULL, NULL };
+		size_t len = sizeof(struct ln_key_list);
+		struct ln_key_list *keys;
+		int i;
+
+		count += drlist->lgdrl_count - 1;
+		len += sizeof(struct ln_key_props) * count;
+		LIBCFS_ALLOC(keys, len);
+		if (!keys) {
+			NL_SET_ERR_MSG(extack,
+				       "key list allocation failure");
+			GOTO(send_error, rc = -ENOMEM);
+		}
+		/* Set initial values */
+		*keys = debug_recovery_attr_list;
+		if (drlist->lgdrl_type == LNET_HEALTH_TYPE_LOCAL_NI) {
+			keys->lkl_list[LNET_DBG_RECOV_ATTR_HDR].lkp_value =
+				"Local NI recovery";
+		} else {
+			keys->lkl_list[LNET_DBG_RECOV_ATTR_HDR].lkp_value =
+				"Peer NI recovery";
+		}
+		keys->lkl_maxattr = count;
+
+		for (i = 1; i < drlist->lgdrl_count; i++) {
+			keys->lkl_list[LNET_DBG_RECOV_ATTR_MAX + i].lkp_data_type =
+				NLA_STRING;
+			keys->lkl_list[LNET_DBG_RECOV_ATTR_MAX + i].lkp_value =
+				kasprintf(GFP_ATOMIC, "nid-%u", i);
+		}
+		/* memory cleaned up is done in lnet_debug_recovery_show_done */
+		drlist->lgdrl_keys = keys;
+		drlist->lgdrl_len = len;
+
+		all[0] = keys;
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_DBG_RECOV, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+
+	hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+			  NLM_F_MULTI, LNET_CMD_DBG_RECOV);
+	if (!hdr) {
+		NL_SET_ERR_MSG(extack, "failed to send values");
+		genlmsg_cancel(msg, hdr);
+		GOTO(send_error, rc = -EMSGSIZE);
+	}
+
+	while (idx < drlist->lgdrl_count) {
+		struct lnet_nid *nid;
+
+		if (idx == 1)
+			nla_put_string(msg, LNET_DBG_RECOV_ATTR_HDR, "");
+
+		nid = genradix_ptr(&drlist->lgdrl_nids, idx++);
+		CDEBUG(D_NET, "nid: %s\n", libcfs_nidstr(nid));
+		nla_put_string(msg, LNET_DBG_RECOV_ATTR_NID + idx - 1,
+			       libcfs_nidstr(nid));
+	}
+	genlmsg_end(msg, hdr);
+
+	drlist->lgdrl_index = idx;
+send_error:
+	RETURN(lnet_nl_send_error(cb->skb, portid, seq, rc));
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+static int lnet_old_debug_recovery_show_dump(struct sk_buff *msg,
+					     struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_debug_recovery_show_start(cb);
+
+		if (rc < 0)
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
+	}
+
+	return lnet_debug_recovery_show_dump(msg, cb);
+}
+#endif
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -8996,6 +9268,7 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ping",		},
 	{ .name =	"discover",	},
 	{ .name =	"cpt-of-nid",	},
+	{ .name =	"dbg-recov",	},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -9076,6 +9349,17 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.cmd		= LNET_CMD_PEER_FAIL,
 		.flags		= GENL_ADMIN_PERM,
 		.doit		= lnet_peer_fail_cmd,
+	},
+	{
+		.cmd		= LNET_CMD_DBG_RECOV,
+		.flags		= GENL_ADMIN_PERM,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_debug_recovery_show_start,
+		.dumpit		= lnet_debug_recovery_show_dump,
+#else
+		.dumpit		= lnet_old_debug_recovery_show_dump,
+#endif
+		.done		= lnet_debug_recovery_show_done,
 	},
 };
 
