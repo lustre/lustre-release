@@ -1228,7 +1228,22 @@ test_31() {
 			((failed++))
 		fi
 	done
-	((failed == 0)) || error "$failed multiops failed"
+
+	$LFS df $MOUNT
+	$LFS df -i $MOUNT
+
+	if (( failed != 0 )); then
+		local bigly=($(du -sk $MOUNT/* | sort -nr | head -10))
+
+		for ((i = 0; i < ${#bigly[*]}; i += 2)); do
+			echo -e "${bigly[i]}\t${bigly[$((i+1))]}"
+		done
+
+		local biggest=${bigly[1]}
+
+		[[ -f $biggest ]] || du -sk $biggest/* | sort -nr | head -10
+		error "$failed multiops failed due to '$biggest'"
+	fi
 }
 run_test 31 "deadlock on file_remove_privs and occupied mod rpc slots"
 
