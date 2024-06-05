@@ -34,7 +34,6 @@
 #include <lustre_net.h>
 #include <lustre_export.h>
 #include <obd_class.h>
-#include <interval_tree.h>
 #include "nodemap_internal.h"
 
 static LIST_HEAD(nodemap_pde_list);

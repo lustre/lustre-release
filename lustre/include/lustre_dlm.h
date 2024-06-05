@@ -47,7 +47,6 @@
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_handles.h>
-#include <interval_tree.h> /* for interval_node{}, ldlm_extent */
 #include <linux/interval_tree_generic.h>
 #include <lu_ref.h>
 
@@ -696,7 +695,7 @@ struct ldlm_cb_async_args {
  * Interval tree for extent locks.
  * The interval tree must be accessed under the resource lock.
  * Interval trees are used for granted extent locks to speed up conflicts
- * lookup. See ldlm/interval_tree.c for more details.
+ * lookup.
  */
 struct ldlm_interval_tree {
 	/** Tree size. */
