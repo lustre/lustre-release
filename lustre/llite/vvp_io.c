@@ -1111,7 +1111,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 	 * 4. All mappings are the same because i/o is only to one file.
 	 */
 	for (pgno = i = 0; i < count; i++) {
-		npgs = fbatch_at_npgs(fbatch, f);
+		npgs = fbatch_at_npgs(fbatch, i);
 		for (pg = 0; pg < npgs; pg++) {
 			page = fbatch_at_pg(fbatch, i, pg);
 			/* if the i'th page was unlocked above, skip it here */
