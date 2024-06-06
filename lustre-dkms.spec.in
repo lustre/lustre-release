@@ -17,33 +17,37 @@
 %global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
 
 # Set the package name prefix
+%if %{undefined lustre_name}
+	%global lustre_name @PACKAGE@
+%endif
+
+# Set the package name prefix
 %if %{with servers}
     %if %{with zfs}
 	%if %{with ldiskfs}
-	    %define module @PACKAGE@-all
+	    %define module %{lustre_name}-all
 	%else
-	    %define module @PACKAGE@-zfs
+	    %define module %{lustre_name}-zfs
 	%endif
     %else
 	%if %{without ldiskfs}
-	    %define module @PACKAGE@-BADSTATE
+	    %define module %{lustre_name}-BADSTATE
 	%else
-	    %define module @PACKAGE@-ldiskfs
+	    %define module %{lustre_name}-ldiskfs
 	%endif
     %endif
-    %define lustre_name @PACKAGE@
-
+    %define lustre_kmp_name %{lustre_name}
 %else
-    %define module @PACKAGE@-client
-    %define lustre_name @PACKAGE@-client
+    %define module %{lustre_name}-client
+    %define lustre_kmp_name %{lustre_name}-client
 %endif
 
 %if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
-	%global kmod_name kmod-%{lustre_name}
+	%global kmod_name kmod-%{lustre_kmp_name}
 	%define mkconf_options %{nil}
 #for Suse / Ubuntu
 %else
-	%global kmod_name %{lustre_name}-kmp
+	%global kmod_name %{lustre_kmp_name}-kmp
 	%define mkconf_options -k updates
 %endif
 
@@ -80,26 +84,26 @@ Requires:	libnl3-devel
 # If client package is installed when installing server, remove it since
 # the server package also includes the client.  This can be removed if/when
 # the packages are split into independent client/server/common packages.
-Obsoletes:	@PACKAGE@-client < %{version}
+Obsoletes:	%{lustre_name}-client < %{version}
 %if %{with zfs}
 Requires:       zfs-dkms >= 0.6.5
-Conflicts:	@PACKAGE@-ldiskfs-dkms
-Conflicts:	@PACKAGE@-client-dkms
+Conflicts:	%{lustre_name}-ldiskfs-dkms
+Conflicts:	%{lustre_name}-client-dkms
 # lustre-zfs-dkms replicates the functionality old lustre-dkms package
-Provides:	@PACKAGE@-dkms
-Obsoletes:	@PACKAGE@-dkms
+Provides:	%{lustre_name}-dkms
+Obsoletes:	%{lustre_name}-dkms
 %endif
 %if %{with ldiskfs}
 Requires:	patch
 Requires:	%{ext4_source_rpm}
-Conflicts:	@PACKAGE@-zfs-dkms
-Conflicts:	@PACKAGE@-client-dkms
-%if "%{module}" != "@PACKAGE@-all"
-Conflicts:	@PACKAGE@-dkms
+Conflicts:	%{lustre_name}-zfs-dkms
+Conflicts:	%{lustre_name}-client-dkms
+%if "%{module}" != "%{lustre_name}-all"
+Conflicts:	%{lustre_name}-dkms
 %endif
 %endif
-%if "%{module}" != "@PACKAGE@-all"
-Conflicts:	@PACKAGE@-all-dkms
+%if "%{module}" != "%{lustre_name}-all"
+Conflicts:	%{lustre_name}-all-dkms
 %endif
 %endif
 Requires:	gcc, make
@@ -111,21 +115,21 @@ Suggests:	bash-completion
 Requires:	perl
 %endif
 Provides:	%{kmod_name} = %{version}
-Provides:	@PACKAGE@-modules = %{version}
+Provides:	%{lustre_name}-modules = %{version}
 %if %{with servers}
 %if %{with zfs}
-Provides:	@PACKAGE@-osd-zfs = %{version}
-Provides:	kmod-@PACKAGE@-osd-zfs = %{version}
-Provides:	@PACKAGE@-osd-zfs-mount = %{version}
+Provides:	%{lustre_name}-osd-zfs = %{version}
+Provides:	kmod-%{lustre_name}-osd-zfs = %{version}
+Provides:	%{lustre_name}-osd-zfs-mount = %{version}
 %endif
 %if %{with ldiskfs}
-Provides:	@PACKAGE@-osd-ldiskfs = %{version}
-Provides:	kmod-@PACKAGE@-osd-ldiskfs = %{version}
-Provides:	@PACKAGE@-osd-ldiskfs-mount = %{version}
+Provides:	%{lustre_name}-osd-ldiskfs = %{version}
+Provides:	kmod-%{lustre_name}-osd-ldiskfs = %{version}
+Provides:	%{lustre_name}-osd-ldiskfs-mount = %{version}
 %endif
-Provides:	@PACKAGE@-osd
+Provides:	%{lustre_name}-osd
 %else
-Provides:	@PACKAGE@-client
+Provides:	%{lustre_name}-client
 %endif
 
 %description
