@@ -9167,6 +9167,135 @@ test_56ec() {
 }
 run_test 56ec "check lfs getstripe,setstripe --hex --yaml"
 
+# LU-15565
+test_56ed() {
+	local new=$DIR/$tdir/$tfile-layout-new
+	local old=$DIR/$tdir/$tfile-layout-old
+
+	test_mkdir $DIR/$tdir
+
+	cat << PFL_LAYOUT_NEW > $new
+lcm_layout_gen:    3
+lcm_mirror_count:  1
+lcm_entry_count:   3
+components:
+  - lcme_id:             1
+    lcme_mirror_id:      0
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1073741824
+    sub_layout:
+      lmm_stripe_count:  1
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - l_ost_idx: 0
+        l_fid:     0x280000400:0x2:0x0
+  - lcme_id:             2
+    lcme_mirror_id:      0
+    lcme_flags:          0
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end:   4294967296
+    sub_layout:
+      lmm_stripe_count:  4
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+  - lcme_id:             3
+    lcme_mirror_id:      0
+    lcme_flags:          0
+    lcme_extent.e_start: 4294967296
+    lcme_extent.e_end:   EOF
+    sub_layout:
+      lmm_stripe_count:  4
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+PFL_LAYOUT_NEW
+
+# Layout changed in 2.16.0
+	cat << PFL_LAYOUT_OLD > $old
+  lcm_layout_gen:    3
+  lcm_mirror_count:  1
+  lcm_entry_count:   3
+  component0:
+    lcme_id:             1
+    lcme_mirror_id:      0
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1073741824
+    sub_layout:
+      lmm_stripe_count:  1
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - l_ost_idx: 0
+        l_fid:     0x280000400:0x2:0x0
+  component1:
+    lcme_id:             2
+    lcme_mirror_id:      0
+    lcme_flags:          0
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end:   4294967296
+    sub_layout:
+      lmm_stripe_count:  4
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+  component2:
+    lcme_id:             3
+    lcme_mirror_id:      0
+    lcme_flags:          0
+    lcme_extent.e_start: 4294967296
+    lcme_extent.e_end:   EOF
+    sub_layout:
+      lmm_stripe_count:  4
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+PFL_LAYOUT_OLD
+
+	local yaml_file=$DIR/$tdir/layout.yaml
+	local dir=$DIR/$tdir
+	local test=$dir/$tfile.test
+
+	$LFS setstripe -E 4M -c 2 -E EOF -c 4 $test ||
+		error "failed to setstripe"
+	$LFS getstripe --yaml $test > $yaml_file ||
+		error "failed to getstripe --yaml"
+
+	$LFS setstripe --yaml $old $dir/$tfile.new ||
+		error "failed to setstripe from new YAML format"
+	# test that the old format can still be used
+	$LFS setstripe --yaml $old $dir/$tfile.old ||
+		error "failed to setstripe from old YAML format"
+
+	local orig=$(get_layout_param $test)
+	local rest=$(cat $yaml_file | parse_layout_param)
+	[[ "$orig" == "$rest" ]] ||
+		error "failed to parse current YAML layout"
+
+	orig=$(get_layout_param $dir/$tfile.old)
+	rest=$(cat $old | parse_layout_param)
+	[[ "$orig" == "$rest" ]] ||
+		error "failed to parse old YAML layout"
+
+	orig=$(get_layout_param $dir/$tfile.new)
+	rest=$(cat $new | parse_layout_param)
+	[[ "$orig" == "$rest" ]] ||
+		error "failed to parse new YAML layout"
+
+}
+run_test 56ed "verify new YAML format is valid and back-compatible"
+
 test_56eda() {
 	local dir=$DIR/$tdir
 	local subdir=$dir/subdir
@@ -21588,134 +21717,36 @@ test_205i() {
 }
 run_test 205i "check job_xattr parameter accepts and rejects values correctly"
 
-# LU-15565
-test_205j() {
-	local new=$DIR/$tdir/$tfile-layout-new
-	local old=$DIR/$tdir/$tfile-layout-old
+	# LU-17512
+	# test '?' operator
+test_205k(){
+	# copied from test_205a
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$($LCTL get_param -n mdc.*.connect_flags)" =~ jobstats ]] ||
+		skip "Server doesn't support jobstats"
+	[[ "$JOBID_VAR" == "disable" ]] && skip_env "jobstats is disabled"
 
-	test_mkdir $DIR/$tdir
+	local jobid_save=$($LCTL get_param jobid_var jobid_name)
+	stack_trap "$LCTL set_param $jobid_save"
 
-	cat << PFL_LAYOUT_NEW > $new
-lcm_layout_gen:    3
-lcm_mirror_count:  1
-lcm_entry_count:   3
-components:
-  - lcme_id:             1
-    lcme_mirror_id:      0
-    lcme_flags:          init
-    lcme_extent.e_start: 0
-    lcme_extent.e_end:   1073741824
-    sub_layout:
-      lmm_stripe_count:  1
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: 0
-      lmm_objects:
-      - l_ost_idx: 0
-        l_fid:     0x280000400:0x2:0x0
-  - lcme_id:             2
-    lcme_mirror_id:      0
-    lcme_flags:          0
-    lcme_extent.e_start: 1073741824
-    lcme_extent.e_end:   4294967296
-    sub_layout:
-      lmm_stripe_count:  4
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: -1
-  - lcme_id:             3
-    lcme_mirror_id:      0
-    lcme_flags:          0
-    lcme_extent.e_start: 4294967296
-    lcme_extent.e_end:   EOF
-    sub_layout:
-      lmm_stripe_count:  4
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: -1
-PFL_LAYOUT_NEW
+	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+	$LCTL set_param jobid_var=FAKE jobid_name=%j?%H:%e:%u
+	cp -a /etc/hosts $DIR;
+	job_id_name=($(do_facet mds1 $LCTL get_param mdt.*.job_stats |
+		awk '/job_id:/ { print $3 }' | tr -d '"'))
+	[[ "$job_id_name" == "$(hostname -s):cp:0" ]] ||
+		error "expected $(hostname -s):cp:0, got $job_id_name instead"
 
-# Layout changed in 2.16.0
-	cat << PFL_LAYOUT_OLD > $old
-  lcm_layout_gen:    3
-  lcm_mirror_count:  1
-  lcm_entry_count:   3
-  component0:
-    lcme_id:             1
-    lcme_mirror_id:      0
-    lcme_flags:          init
-    lcme_extent.e_start: 0
-    lcme_extent.e_end:   1073741824
-    sub_layout:
-      lmm_stripe_count:  1
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: 0
-      lmm_objects:
-      - l_ost_idx: 0
-        l_fid:     0x280000400:0x2:0x0
-  component1:
-    lcme_id:             2
-    lcme_mirror_id:      0
-    lcme_flags:          0
-    lcme_extent.e_start: 1073741824
-    lcme_extent.e_end:   4294967296
-    sub_layout:
-      lmm_stripe_count:  4
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: -1
-  component2:
-    lcme_id:             3
-    lcme_mirror_id:      0
-    lcme_flags:          0
-    lcme_extent.e_start: 4294967296
-    lcme_extent.e_end:   EOF
-    sub_layout:
-      lmm_stripe_count:  4
-      lmm_stripe_size:   4194304
-      lmm_pattern:       raid0
-      lmm_layout_gen:    0
-      lmm_stripe_offset: -1
-PFL_LAYOUT_OLD
-
-	local yaml_file=$DIR/$tdir/layout.yaml
-	local dir=$DIR/$tdir
-	local test=$dir/$tfile.test
-
-	$LFS setstripe -E 4M -c 2 -E EOF -c 4 $test ||
-		error "failed to setstripe"
-	$LFS getstripe --yaml $test > $yaml_file ||
-		error "failed to getstripe --yaml"
-
-	$LFS setstripe --yaml $old $dir/$tfile.new ||
-		error "failed to setstripe from new YAML format"
-	# test that the old format can still be used
-	$LFS setstripe --yaml $old $dir/$tfile.old ||
-		error "failed to setstripe from old YAML format"
-
-	local orig=$(get_layout_param $test)
-	local rest=$(cat $yaml_file | parse_layout_param)
-	[[ "$orig" == "$rest" ]] ||
-		error "failed to parse current YAML layout"
-
-	orig=$(get_layout_param $dir/$tfile.old)
-	rest=$(cat $old | parse_layout_param)
-	[[ "$orig" == "$rest" ]] ||
-		error "failed to parse old YAML layout"
-
-	orig=$(get_layout_param $dir/$tfile.new)
-	rest=$(cat $new | parse_layout_param)
-	[[ "$orig" == "$rest" ]] ||
-		error "failed to parse new YAML layout"
-
+	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+	$LCTL set_param jobid_var=USER jobid_name=%j?%H:%e:%u
+	cp -a /etc/hosts $DIR;
+	job_id_name=($(do_facet mds1 $LCTL get_param mdt.*.job_stats |
+			awk '/job_id:/ { print $3 }' | tr -d '"'))
+	[[ "$job_id_name" == "$USER:cp:0" ]] ||
+		error "expected $USER:cp:0 but got $job_id_name instead"
 }
-run_test 205j "verify new YAML format is valid and back-compatible"
+run_test 205k "Verify '?' operator on job stats"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {

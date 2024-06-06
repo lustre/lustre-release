@@ -692,6 +692,7 @@ static int jobid_print_current_comm(char *jobid, ssize_t joblen)
  *   %h = hostname
  *   %H = short hostname
  *   %j = jobid from environment
+ *   ?  = for use between %j and %H. Uses jobid if set, otherwise use Hostname
  *   %p = pid
  *   %u = uid
  *
@@ -746,6 +747,12 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			l = jobid_get_from_cache(jobid, joblen);
 			if (l < 0)
 				l = 0;
+			if (*jobfmt == '?') {
+				if (l == 0)
+					jobfmt++;
+				else
+					jobfmt += 3;
+			}
 			break;
 		case 'p': /* process ID */
 			l = snprintf(jobid, joblen, "%u", current->pid);
