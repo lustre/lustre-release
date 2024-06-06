@@ -6249,6 +6249,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		}
 	} else if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && healthv != -1) {
 		lnet_ni_set_healthv(&nid, healthv);
+		rc = 0;
 	} else if (!(info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_REPLACE))) {
 		struct lnet_ni *ni;
 

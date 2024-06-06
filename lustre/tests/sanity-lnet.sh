@@ -1888,8 +1888,10 @@ function lnet_health_post() {
 
 	restore_lnet_params
 
-	do_lnetctl peer set --health 1000 --all
-	do_lnetctl net set --health 1000 --all
+	do_lnetctl peer set --health 1000 --all ||
+		error "Failed to set peer health rc $?"
+	do_lnetctl net set --health 1000 --all ||
+		error "Failed to set local NI health rc $?"
 
 	return 0
 }
@@ -2445,7 +2447,8 @@ test_210() {
 		error "Failed to add drop rule"
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
 		error "Failed to add drop rule"
-	do_lnetctl net set --health 0 --nid $prim_nid
+	do_lnetctl net set --health 0 --nid $prim_nid ||
+		error "Failed to set NI health to 0 rc $?"
 
 	check_ping_count "ni" "$prim_nid" "2" "10"
 	check_nid_in_recovq "-l" "$prim_nid" "1"
@@ -2483,7 +2486,8 @@ test_210() {
 		error "Failed to add drop rule"
 	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
 		error "Failed to add drop rule"
-	do_lnetctl net set --health 0 --nid $prim_nid
+	do_lnetctl net set --health 0 --nid $prim_nid ||
+		error "Failed to set NI health to 0 rc $?"
 
 	check_ping_count "ni" "$prim_nid" "2" "10"
 	check_nid_in_recovq "-l" "$prim_nid" "1"
