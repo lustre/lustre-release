@@ -1051,6 +1051,36 @@ test_26() {
 }
 run_test 26 "Delete peer with primary nid locked"
 
+test_27() {
+	reinit_dlc || return $?
+
+	local tmp=$(mktemp)
+
+	echo "foobar:" > $tmp
+	do_lnetctl import $tmp 2>&1 | grep -q "invalid key" ||
+		error "Expected import to detect invalid key"
+
+	cat ${GLOBAL_YAML_FILE} > $tmp
+
+	grep -q discovery $tmp ||
+		error "Expect discovery param in global params"
+
+	sed -i 's/discovery:.*/discovery:/' $tmp ||
+		error "Failed to edit $tmp rc $?"
+
+	do_lnetctl import $tmp 2>&1 | grep -q "no value" ||
+		error "Expected import to detect missing value"
+
+	sed -i 's/discovery:/discovery: foo/' $tmp ||
+		error "Failed to edit $tmp rc $?"
+
+	do_lnetctl import $tmp 2>&1 | grep -q "invalid value" ||
+		error "Expected import to detect invalid value"
+
+	rm -f $tmp
+}
+run_test 27 "Import bad config should fail gracefully"
+
 test_99a() {
 	reinit_dlc || return $?
 

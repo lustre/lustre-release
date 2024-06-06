@@ -4133,6 +4133,34 @@ static int yaml_import_global_settings(char *key, unsigned long value,
 	return rc;
 }
 
+static char *global_params[] = {
+	"numa_range",
+	"max_interfaces",
+	"max_intf",
+	"discovery",
+	"drop_asym_route",
+	"retry_count",
+	"transaction_timeout",
+	"health_sensitivity",
+	"recovery_interval",
+	"router_sensitivity",
+	"lnd_timeout",
+	"response_tracking",
+	"recovery_limit",
+	"max_recovery_ping_interval"
+};
+
+static bool key_is_global_param(const char *key)
+{
+	int i;
+
+	for (i = 0; i < sizeof(global_params)/sizeof(global_params[0]); i++) {
+		if (!strcmp(key, global_params[i]))
+			return true;
+	}
+	return false;
+}
+
 static int jt_import(int argc, char **argv)
 {
 	char *file = NULL;
@@ -4343,16 +4371,43 @@ static int jt_import(int argc, char **argv)
 			struct cYAML *err_rc = NULL;
 			long int value;
 			char *key;
+			char errmsg[LNET_MAX_STR_LEN];
 
 			key = strdup((char *)event.data.scalar.value);
-			rc = yaml_parser_parse(&setup, &event);
-			if (rc == 0)
+			if (!key_is_global_param(key)) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "invalid key '%s'", key);
+				errno = rc = -EINVAL;
+				yaml_lnet_print_error(flags, "import", errmsg);
 				goto free_reply;
+			}
+
+			rc = yaml_parser_parse(&setup, &event);
+			if (rc == 0) {
+				yaml_parser_log_error(&setup, stderr,
+						      "import: ");
+				goto emitter_error;
+			}
+
+			if (!strlen((char *)event.data.scalar.value)) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "no value specified for key '%s'",
+					 key);
+				errno = rc = -EINVAL;
+				yaml_lnet_print_error(flags, "import", errmsg);
+				goto free_reply;
+			}
 
 			rc = parse_long((char *)event.data.scalar.value,
 					&value);
-			if (rc != 0)
+			if (rc != 0) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "invalid value '%s' for key '%s'",
+					 (char *)event.data.scalar.value, key);
+				errno = rc = -EINVAL;
+				yaml_lnet_print_error(flags, "import", errmsg);
 				goto free_reply;
+			}
 
 			rc = yaml_import_global_settings(key, value, cmd,
 							 show_rc, err_rc);
