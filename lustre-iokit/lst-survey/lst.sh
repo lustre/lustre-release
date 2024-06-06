@@ -288,20 +288,20 @@ if ${HOST_MODE}; then
 	idx=0
 	opts=( -o NumberOfPasswordPrompts=0 -o ConnectTimeout=5 )
 	for host in ${SERVERS//,/ }; do
-		s_nids[idx]=$(ssh "${opts[@]}" "$host" '$LCTL list_nids | head -n 1')
+		s_nids[idx]=$(ssh "${opts[@]}" "$host" "$LCTL list_nids | head -n 1")
 		if [[ -z ${s_nids[idx]} ]]; then
 			echo "Failed to determine primary NID of $host"
-			exit
+			exit 1
 		fi
 		idx=$((idx + 1))
 	done
 
 	idx=0
 	for host in ${CLIENTS//,/ }; do
-		c_nids[idx]=$(ssh "${opts[@]}" "${host}" '$LCTL list_nids | head -n 1')
+		c_nids[idx]=$(ssh "${opts[@]}" "${host}" "$LCTL list_nids | head -n 1")
 		if [[ -z ${c_nids[idx]} ]]; then
 			echo "Failed to determine primary NID of $host"
-			exit
+			exit 1
 		fi
 		idx=$((idx + 1))
 	done
