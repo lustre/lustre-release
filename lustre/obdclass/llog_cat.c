@@ -732,7 +732,7 @@ int llog_cat_cancel_arr_rec(const struct lu_env *env,
 
 	}
 	llog_handle_put(env, loghandle);
-	if (rc != -ENOENT && rc != -ESTALE && rc != -EIO)
+	if (rc && rc != -ENOENT && rc != -ESTALE && rc != -EIO)
 		CWARN("%s: fail to cancel %d records in "DFID": rc = %d\n",
 		      loghandle2name(cathandle), count, PLOGID(lgl), rc);
 	RETURN(rc);
