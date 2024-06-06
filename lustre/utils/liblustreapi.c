@@ -3060,6 +3060,8 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	bool yaml = flags & LDF_YAML;
 	bool hex = flags & LDF_HEX_IDX;
 	bool obdstripe = false;
+	struct lu_fid dir_fid;
+	int rc;
 	int i;
 
 	if (obdindex != OBD_NOT_FOUND) {
@@ -3093,19 +3095,41 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			verbose = VERBOSE_OBJID;
 	}
 
-	if (depth && path && ((verbose != VERBOSE_OBJID)))
+	if (verbose & (VERBOSE_DETAIL | VERBOSE_DFID) ||
+	    (verbose & VERBOSE_OBJID && lum->lum_stripe_count >= 0)) {
+		rc = llapi_path2fid(path, &dir_fid);
+		if (rc)
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "Cannot determine directory FID: %s", path);
+	}
+
+	if (depth && path && (verbose != VERBOSE_OBJID))
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%s\n", prefix, path);
+
+	if (verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) {
+		if (verbose & ~VERBOSE_DFID)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "lmv_fid: %s", yaml ? "          " : "");
+		llapi_printf(LLAPI_MSG_NORMAL, DFID_NOBRACE, PFID(&dir_fid));
+
+		separator = yaml ? "\n" : " ";
+	}
+
+	if (verbose & VERBOSE_DETAIL) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		llapi_printf(LLAPI_MSG_NORMAL, "lmv_magic: %s%#x",
+			     yaml ? "        " : "", (int)lum->lum_magic);
+		separator = yaml ? "\n" : " ";
+	}
 
 	if (verbose & VERBOSE_STRIPE_COUNT) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_STRIPE_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
+			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: %s",
+				     yaml ? " " : "");
 		llapi_printf(LLAPI_MSG_NORMAL, "%d",
 			     (int)lum->lum_stripe_count);
-		if ((verbose & VERBOSE_STRIPE_OFFSET) && !yaml)
-			separator = " ";
-		else
-			separator = "\n";
+		separator = yaml ? "\n" : " ";
 	}
 
 	if (verbose & VERBOSE_STRIPE_OFFSET) {
@@ -3114,10 +3138,7 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_offset: ");
 		llapi_printf(LLAPI_MSG_NORMAL, hex ? "%#x" : "%d",
 			     (int)lum->lum_stripe_offset);
-		if (verbose & VERBOSE_HASH_TYPE && !yaml)
-			separator = " ";
-		else
-			separator = "\n";
+		separator = yaml ? "\n" : " ";
 	}
 
 	if (verbose & VERBOSE_HASH_TYPE) {
@@ -3126,7 +3147,8 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_HASH_TYPE)
-			llapi_printf(LLAPI_MSG_NORMAL, "lmv_hash_type: ");
+			llapi_printf(LLAPI_MSG_NORMAL, "lmv_hash_type: %s",
+				     yaml ? "    " : "");
 		if (type < LMV_HASH_TYPE_MAX)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s",
 				     mdt_hash_name[type]);
@@ -3146,17 +3168,14 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		if (flags & ~LMV_HASH_FLAG_KNOWN)
 			llapi_printf(LLAPI_MSG_NORMAL, ",unknown_%04x",
 				     flags & ~LMV_HASH_FLAG_KNOWN);
-
-		if (verbose & VERBOSE_HASH_TYPE && !yaml)
-			separator = " ";
-		else
-			separator = "\n";
+		separator = yaml ? "\n" : " ";
 	}
 
 	if ((verbose & VERBOSE_INHERIT) && lum->lum_magic == LMV_USER_MAGIC) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_INHERIT)
-			llapi_printf(LLAPI_MSG_NORMAL, "lmv_max_inherit: ");
+			llapi_printf(LLAPI_MSG_NORMAL, "lmv_max_inherit: %s",
+				     yaml ? "  " : "");
 		if (lum->lum_max_inherit == LMV_INHERIT_UNLIMITED)
 			llapi_printf(LLAPI_MSG_NORMAL, "-1");
 		else if (lum->lum_max_inherit == LMV_INHERIT_NONE)
@@ -3164,10 +3183,7 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%hhu",
 				     lum->lum_max_inherit);
-		if (verbose & VERBOSE_INHERIT && !yaml)
-			separator = " ";
-		else
-			separator = "\n";
+		separator = yaml ? "\n" : " ";
 	}
 
 	if ((verbose & VERBOSE_INHERIT_RR) &&
@@ -3182,42 +3198,53 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%hhu",
 				     lum->lum_max_inherit_rr);
-		if (verbose & VERBOSE_INHERIT_RR && !yaml)
-			separator = " ";
-		else
-			separator = "\n";
+		separator = yaml ? "\n" : " ";
+	}
+
+	if ((verbose & VERBOSE_POOL) && pool_name != NULL &&
+	    pool_name[0] != '\0') {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_POOL)
+			llapi_printf(LLAPI_MSG_NORMAL, "%slmv_pool: %s",
+				     prefix, yaml ? "          " : "");
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%c ", pool_name, ' ');
 	}
 
 	separator = "\n";
 
 	if ((verbose & VERBOSE_OBJID) && lum->lum_magic != LMV_USER_MAGIC) {
+		char fmt[64];
+
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (lum->lum_stripe_count > 0)
+		if (yaml)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "lmv_objects:\n");
+		else if (lum->lum_stripe_count >= 0)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "mdtidx\t\t FID[seq:oid:ver]\n");
 
-		char fmt[48] = { 0 };
-		sprintf(fmt, "%s%s", hex ? "%#6x" : "%6u",
-			"\t\t "DFID"\t\t%s\n");
+		if (yaml)
+			snprintf(fmt, sizeof(fmt),
+				 "      - l_mdt_idx: %s\n%s\n",
+				 hex ? "%#x" : "%d",
+				 "        l_fid:     "DFID_NOBRACE);
+		else
+			snprintf(fmt, sizeof(fmt), "%s%s", hex ? "%#6x" : "%6u",
+				"\t\t "DFID"\t\t%s\n");
+		if (lum->lum_stripe_count == 0 && yaml) {
+			llapi_printf(LLAPI_MSG_NORMAL, fmt,
+				     lum->lum_stripe_offset,
+				     PFID(&dir_fid), "");
+		}
 		for (i = 0; i < lum->lum_stripe_count; i++) {
 			int idx = objects[i].lum_mds;
 			struct lu_fid *fid = &objects[i].lum_fid;
 
 			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
-				llapi_printf(LLAPI_MSG_NORMAL, fmt,
-					    idx, PFID(fid),
-					    obdindex == idx ? " *" : "");
+				llapi_printf(LLAPI_MSG_NORMAL, fmt, idx,
+					     PFID(fid),
+					     obdindex == idx ? " *":"");
 		}
-	}
-
-	if ((verbose & VERBOSE_POOL) && pool_name != NULL &&
-	     pool_name[0] != '\0') {
-		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_POOL)
-			llapi_printf(LLAPI_MSG_NORMAL, "%slmv_pool:           ",
-				     prefix);
-		llapi_printf(LLAPI_MSG_NORMAL, "%s%c ", pool_name, ' ');
-		separator = "\n";
 	}
 
 	if (!(verbose & VERBOSE_OBJID) || lum->lum_magic == LMV_USER_MAGIC)

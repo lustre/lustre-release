@@ -6662,9 +6662,39 @@ test_56bb() {
 	$LFS getdirstripe -v -D -y $DIR 1> $output_file
 
 	cat $output_file
-	cat $output_file | verify_yaml || error "layout is not valid YAML"
+	verify_yaml <<<$output_file ||
+		error "default layout is not valid YAML"
+
+# check non-default 1 stripe case
+	test_mkdir -c 1 $DIR/$tdir
+	$LFS getdirstripe -v -y $DIR 1> $output_file
+	cat $output_file
+	verify_yaml <<<$output_file || error "dir layout not valid YAML"
 }
 run_test 56bb "check $LFS getdirstripe layout is YAML"
+
+test_56bc() {
+	(( $MDSCOUNT >= 2 )) || skip "need >= 2 MDTs"
+	verify_yaml_available || skip_env "YAML verification not installed"
+
+	local src_dir=$DIR/$tdir.src
+	local yaml_file=$DIR/$tfile.yaml
+
+	$LFS setdirstripe -c 4 $src_dir ||
+		error "failed to setstripe"
+	$LFS getdirstripe --yaml -v $src_dir > $yaml_file ||
+		error "failed to getdirstripe --yaml -v"
+
+	cat $yaml_file
+	verify_yaml <<<$yaml_file ||
+		error "striped dir layout is not valid YAML"
+
+	local orig=$(get_dir_layout_param $src_dir)
+	local rest=$(cat $yaml_file | parse_layout_param)
+	[[ "$orig" == "$rest" ]] ||
+		error "failed to parse YAML layout"
+}
+run_test 56bc "check '$LFS getdirstripe --yaml' params are valid"
 
 test_56c() {
 	remote_ost_nodsh && skip "remote OST with nodsh"

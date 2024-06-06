@@ -10584,6 +10584,22 @@ parse_plain_param()
 	fi
 }
 
+parse_dir_param()
+{
+	local line=$1
+	local val=$(awk '{print $2}' <<< $line)
+
+	if [[ $line =~ ^"lmv_stripe_count:" ]]; then
+		echo "-c $val"
+	elif [[ $line =~ ^"lmv_stripe_offset:" ]]; then
+		echo "-i $val"
+	elif [[ $line =~ ^"lmv_hash_type:" ]]; then
+		echo "-H $val"
+	elif [[ $line =~ ^"lmv_max_inherit:" ]]; then
+		echo "-X $val"
+	fi
+}
+
 parse_layout_param()
 {
 	local mode=""
@@ -10599,6 +10615,8 @@ parse_layout_param()
 					mode="plain_file"
 				elif [[ $line =~ ^"lcm_layout_gen:" ]]; then
 					mode="pfl"
+				elif [[ $line =~ ^"lmv_stripe_count" ]]; then
+					mode="dne"
 				fi
 			fi
 
@@ -10624,6 +10642,9 @@ parse_layout_param()
 					val=$(parse_plain_param "$line")
 					[[ ! -z $val ]] && param="$param $val"
 				fi
+			elif [[ $mode = "dne" ]]; then
+				val=$(parse_dir_param "$line")
+				[[ ! -z $val ]] && param="$param $val"
 			fi
 		fi
 	done
@@ -10632,7 +10653,13 @@ parse_layout_param()
 
 get_layout_param()
 {
-	local param=$($LFS getstripe -d $1 | parse_layout_param)
+	local param=$($LFS getstripe -dy $1 | parse_layout_param)
+	echo "$param"
+}
+
+get_dir_layout_param()
+{
+	local param=$($LFS getdirstripe -y $1 | parse_layout_param)
 	echo "$param"
 }
 

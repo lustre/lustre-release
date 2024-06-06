@@ -352,12 +352,12 @@ command_t cmdlist[] = {
 	{"getdirstripe", lfs_getdirstripe, 0,
 	 "To list the layout pattern info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
-	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
+	 "usage: getdirstripe [--mdt-count|-c] [--default|-D] [--fid|-F]\n"
 	 "		      [--help|-h] [--hex-idx] [--mdt-hash|-H]\n"
-	 "		      [--obd|-O UUID] [--recursive|-r] [--raw|-R]\n"
-	 "		      [--yaml|-y] [--verbose|-v] [--default|-D]\n"
-	 "		      [--max-inherit|-X]\n"
-	 "		      [--max-inherit-rr] <dir> ..."},
+	 "		      [--mdt-index|-m|-i] [--obd|-O UUID]\n"
+	 "		      [--recursive|-r] [--raw|-R]\n"
+	 "		      [--verbose|-v] [--max-inherit|-X]\n"
+	 "		      [--max-inherit-rr] [--yaml|-y] <dir> ...\n"},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "Create striped directory on specified MDT, same as setdirstripe.\n"
 	 "usage: mkdir [OPTION] <directory>\n"
@@ -6778,6 +6778,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "mdt-count",	 .has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	 .has_arg = no_argument },
+	{ .val = 'F',	.name = "fid",		 .has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	 .has_arg = no_argument },
 	{ .val = LFS_HEX_IDX_OPT,
@@ -6799,7 +6800,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDhHimO:rRtTvXy", long_opts, NULL)) != -1) {
+				"cDFhHimO:rRtTvXy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
@@ -6807,6 +6808,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 		case 'D':
 			param.fp_get_default_lmv = 1;
+			break;
+		case 'F':
+			param.fp_verbose |= VERBOSE_DFID;
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
@@ -6841,8 +6845,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 			param.fp_raw = 1;
 			break;
 		case 'v':
-			param.fp_verbose |= VERBOSE_DEFAULT;
-			param.fp_verbose |= VERBOSE_DETAIL;
+			param.fp_verbose |= VERBOSE_DEFAULT | VERBOSE_DETAIL;
 			break;
 		case 'X':
 			param.fp_verbose |= VERBOSE_INHERIT;
