@@ -3471,47 +3471,63 @@ test_231() {
 	reinit_dlc || return $?
 
 	local net=${NETTYPE}231
+	local opts="--net $net --if ${INTERFACES[0]}"
 
-	do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
-		error "Failed to add net"
+	do_lnetctl net add $opts || error "Failed to add net"
+
+	local lnd=$(basename $LNETLND)
+	local param_path="/sys/module/$lnd/parameters"
+
+	[[ -d $param_path ]] ||
+		error "Cannot find kernel params for $lnd at $param_path"
+
+	local lnd_pto=$(cat $param_path/peer_timeout)
+
+	# A value of -1 means we use the default peer timeout
+	#lnet/include/lnet/lib-lnet.h:#define DEFAULT_PEER_TIMEOUT    180
+	((lnd_pto != -1)) || lnd_pto=180
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
-	sed -i 's/peer_timeout: .*$/peer_timeout: 0/' \
-		$TMP/sanity-lnet-$testnum-expected.yaml
 
-	reinit_dlc || return $?
+	local pto=$(awk '/^\s+peer_timeout:/{print $NF}' \
+		    $TMP/sanity-lnet-$testnum-expected.yaml)
 
-	do_lnetctl import $TMP/sanity-lnet-$testnum-expected.yaml ||
-		error "Failed to import configuration"
-
-	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
-
-	compare_yaml_files || error "Wrong config after import"
-
-	do_lnetctl net del --net $net --if ${INTERFACES[0]} ||
-		error "Failed to delete net $net"
-
-	do_lnetctl net add --net $net --if ${INTERFACES[0]} --peer-timeout=0 ||
-		error "Failed to add net with peer-timeout=0"
+	((pto == lnd_pto)) ||
+		error "Expect peer_timeout $lnd_pto but found $pto"
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files ||
+		error "Unexpected config after net add without options"
 
-	compare_yaml_files || error "Wrong config after lnetctl net add"
+	for pto in -1 0 60 180; do
+		reinit_dlc || return $?
 
-	reinit_dlc || return $?
+		sed -i 's/peer_timeout: .*/peer_timeout: '$pto'/' \
+			$TMP/sanity-lnet-$testnum-expected.yaml
 
-	# lnet/include/lnet/lib-lnet.h defines DEFAULT_PEER_TIMEOUT 180
-	sed -i 's/peer_timeout: .*$/peer_timeout: 180/' \
-		$TMP/sanity-lnet-$testnum-expected.yaml
+		do_lnetctl import $TMP/sanity-lnet-$testnum-expected.yaml ||
+			error "Failed to import configuration"
 
-	sed -i '/^.*peer_timeout:.*$/d' $TMP/sanity-lnet-$testnum-actual.yaml
+		$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
 
-	do_lnetctl import $TMP/sanity-lnet-$testnum-actual.yaml ||
-		error "Failed to import config without peer_timeout"
+		# Swap lnd_to for -1 in the expected output
+		((pto != -1)) ||
+			sed -i 's/peer_timeout: '$pto'/peer_timeout: '$lnd_pto'/' \
+				$TMP/sanity-lnet-$testnum-expected.yaml
 
-	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+		compare_yaml_files || error "Wrong config after import"
 
-	compare_yaml_files
+		do_lnetctl net del $opts || error "Failed to delete net $net"
+
+		do_lnetctl net add $opts --peer-timeout=$pto ||
+			error "Failed to add net with peer-timeout=$pto"
+
+		$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+		compare_yaml_files || error "Wrong config after lnetctl net add"
+	done
+
+	return 0
 }
 run_test 231 "Check DLC handling of peer_timeout parameter"
 

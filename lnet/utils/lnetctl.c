@@ -2539,13 +2539,12 @@ static int jt_add_ni(int argc, char **argv)
 		found = true;
 	}
 
-	if (pto >= 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
-		tunables.lt_cmn.lct_peer_timeout = pto;
-		tunables.lt_cmn.lct_peer_tx_credits = pc;
-		tunables.lt_cmn.lct_peer_rtr_credits = pbc;
-		tunables.lt_cmn.lct_max_tx_credits = cre;
+	tunables.lt_cmn.lct_peer_timeout = pto;
+	tunables.lt_cmn.lct_peer_tx_credits = pc;
+	tunables.lt_cmn.lct_peer_rtr_credits = pbc;
+	tunables.lt_cmn.lct_max_tx_credits = cre;
+	if (pto >= 0 || pc > 0 || pbc > 0 || cre > 0)
 		found = true;
-	}
 
 	if (found && LNET_NETTYP(nw_descr.nw_id) == O2IBLND)
 		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_map_on_demand = UINT_MAX;
