@@ -1951,10 +1951,9 @@ static int lcfg_apply_param_yaml(char *func, char *filename)
 	 * when we have all 3, create param=val and call the
 	 * appropriate function for set/conf param
 	 */
-	while (token.type != YAML_STREAM_END_TOKEN) {
+	do {
 		int i;
 
-		yaml_token_delete(&token);
 		if (!yaml_parser_scan(&parser, &token)) {
 			rc = 1;
 			break;
@@ -2055,7 +2054,7 @@ static int lcfg_apply_param_yaml(char *func, char *filename)
 			device[0] = '\0';
 			free(buf);
 		}
-	}
+	} while (token.type != YAML_STREAM_END_TOKEN);
 
 	yaml_parser_delete(&parser);
 out_init:
