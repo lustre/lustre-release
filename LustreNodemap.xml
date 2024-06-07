@@ -15,6 +15,10 @@
     </listitem>
 
     <listitem>
+      <para><xref linkend="nodemapdel"/></para>
+    </listitem>
+
+    <listitem>
       <para><xref linkend="alteringproperties"/></para>
     </listitem>
 
@@ -38,8 +42,7 @@
   <section xml:id="settingamapping">
     <title>Setting a Mapping</title>
 
-    <para>The nodemap feature supported in Lustre 2.9 was first
-    introduced in Lustre 2.7 as a technology preview. It allows UIDs and GIDs
+    <para>The nodemap feature allows UIDs and GIDs
     from remote systems to be mapped to local sets of UIDs and GIDs while
     retaining POSIX ownership, permissions and quota information. As a result,
     multiple sites with conflicting user and group identifiers can operate on
@@ -136,14 +139,28 @@ mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --prop
 
       <para>Consider a deployment where researchers are working on data
       relating to birds. The researchers use a computing system which mounts
-      Lustre from a single IPv4 address, <literal>192.168.0.100</literal>.
-      Name this policy group <literal>BirdResearchSite</literal>. The IP
-      address forms the NID <literal>192.168.0.100@tcp</literal>. Create the
-      policy group and add the NID to that group on the MGS
-      using the <literal>lctl</literal> command:</para>
+      the filesystem from a single IPv4 address, <literal>192.168.0.100</literal>,
+      and sensors which mount the filesystem from an address range
+      <literal>192.168.0.[50-99]</literal>. Name this policy group
+      <literal>BirdResearchSite</literal>. Create the policy group and add the
+      NID ranges to that group on the MGS using the <literal>lctl</literal> command:</para>
 
-      <screen>mgs# lctl nodemap_add <replaceable>BirdResearchSite</replaceable>
-mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.100@tcp</screen>
+      <screen>
+        mgs# lctl nodemap_add <replaceable>BirdResearchSite</replaceable>
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.100@tcp
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[50-99]@tcp
+      </screen>
+
+      <para>
+        Later, additional sensors were added that use addresses in the range
+        <literal>192.168.10.[101-150]</literal> that increased the number of
+        nodes in the <literal>BirdResearchSite</literal> nodemap, but otherwise
+        are managed as part of the same nodemap.
+      </para>
+
+      <screen>
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[101-150]@tcp
+      </screen>
 
       <note>
         <para>A NID cannot be in more than one policy group. Assign a NID to
@@ -254,6 +271,31 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <literal>projid</literal> type:</para>
       <screen>mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype projid --idmap <replaceable>33:1</replaceable></screen>
     </section>
+  </section>
+
+  <section xml:id="nodemapdel">
+    <title>Removing Nodemaps</title>
+
+    <para>
+      It is possible to delete a NID range from a nodemap, any
+      clients in this NID range will be moved to the default nodemap.
+    </para>
+    <screen>mgs# lctl nodemap_del_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[101-150]@tcp</screen>
+    <para>
+      When deleting a range from a nodemap it must be the same range that was
+      declared when using nodemap_add_range. This means that it is not possible
+      to remove a range inside of the initial values or a (partially) overlapping
+      range. Also worth noting, if two different ranges are added that are adjacent,
+      they are still treated as two independent ranges and must be each individually
+      deleted.
+    </para>
+
+    <para>
+      When deleting a whole policy group all of the associated ID mappings,
+      NID ranges, and other parameters will be removed, and existing clients
+      will be moved to the default nodemap. The default nodemap cannot be deleted.
+      The syntax is:</para>
+    <screen>mgs# lctl nodemap_del <replaceable>BirdResearchSite</replaceable></screen>
   </section>
 
   <section xml:id="alteringproperties">
