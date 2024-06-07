@@ -28594,6 +28594,9 @@ run_test 398k "test enospc on first stripe"
 test_398l() { #  LU-13798
 	wait_delete_completed
 	wait_mds_ost_sync
+	# Clean up after the test
+	stack_trap wait_delete_completed
+	stack_trap wait_mds_ost_sync
 
 	# 4 stripe file; we will cause out of space on OST0
 	# Note the 1M stripe size and the > 1M i/o size mean this ENOSPC
