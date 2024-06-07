@@ -116,6 +116,29 @@ extern "C" {
 /* #define DVS_PORTAL			63 */
 /* reserved for Cray DVS - spitzcor@cray.com, roe@cray.com, n8851@cray.com */
 
+#ifndef DECLARE_FLEX_ARRAY
+#ifdef __cplusplus
+/* sizeof(struct{}) is 1 in C++, not 0, can't use C version of the macro. */
+#define DECLARE_FLEX_ARRAY(T, member) T member[0]
+#else
+/**
+ * DECLARE_FLEX_ARRAY() - Declare a flexible array usable in a union
+ *
+ * @TYPE: The type of each flexible array element
+ * @NAME: The name of the flexible array member
+ *
+ * In order to have a flexible array member in a union or alone in a
+ * struct, it needs to be wrapped in an anonymous struct with at least 1
+ * named member, but that member can be empty.
+ */
+#define DECLARE_FLEX_ARRAY(TYPE, NAME)	       \
+	struct {			       \
+		struct { } __empty_ ## NAME;   \
+		TYPE NAME[];		       \
+	}
+#endif
+#endif /* DECLARE_FLEX_ARRAY */
+
 /**
  * Describes a range of sequence, lsr_start is included but lsr_end is
  * not in the range.
@@ -3423,8 +3446,8 @@ struct getinfo_fid2path {
 	__u32		gf_linkno;
 	__u32		gf_pathlen;
 	union {
-		char		gf_path[0];
-		struct lu_fid	gf_root_fid[0];
+		DECLARE_FLEX_ARRAY(char, gf_path);
+		DECLARE_FLEX_ARRAY(struct lu_fid, gf_root_fid);
 	} gf_u;
 } __attribute__((packed));
 
