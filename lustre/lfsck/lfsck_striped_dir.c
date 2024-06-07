@@ -1957,16 +1957,31 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 		llmv->ll_lmv_updated = 1;
 	}
 
-	if (!lmv_is_known_hash_type(lmv->lmv_hash_type) &&
-	    !(lmv->lmv_hash_type & LMV_HASH_FLAG_BAD_TYPE) &&
+	hash_type = lmv->lmv_hash_type;
+	if (!lmv_is_known_hash_type(hash_type) &&
+	    !(hash_type & LMV_HASH_FLAG_BAD_TYPE) &&
 	    lmv_is_known_hash_type(llmv->ll_hash_type)) {
-		hash_type = llmv->ll_hash_type & LMV_HASH_TYPE_MASK;
-		lmv->lmv_hash_type = llmv->ll_hash_type;
+		hash_type = lmv->lmv_hash_type = llmv->ll_hash_type;
 		llmv->ll_lmv_updated = 1;
 	} else {
-		hash_type = lmv->lmv_hash_type & LMV_HASH_TYPE_MASK;
-		if (!lmv_is_known_hash_type(hash_type))
-			hash_type = LMV_HASH_TYPE_UNKNOWN;
+		if (!lmv_is_known_hash_type(hash_type)) {
+			/* Unknown hash type is not correct for a striped dir,
+			 * let's mark such dirs with BAD_TYPE flag unless a
+			 * hash type can be set for dirs with only one stripe
+			 * or for 2-striped dirs in a process of migration */
+			if (lmv->lmv_stripe_count == 1 ||
+			    (lmv->lmv_stripe_count == 2 &&
+			     (hash_type & LMV_HASH_FLAG_MIGRATION) &&
+			      lmv->lmv_migrate_offset == 1)) {
+				hash_type = LMV_HASH_TYPE_FNV_1A_64 |
+					    LMV_HASH_FLAG_MIGRATION;
+			} else {
+				hash_type = LMV_HASH_TYPE_UNKNOWN |
+					    LMV_HASH_FLAG_BAD_TYPE;
+			}
+			lmv->lmv_hash_type = hash_type;
+			llmv->ll_lmv_updated = 1;
+		}
 	}
 
 	if (llmv->ll_lmv_updated) {
@@ -2038,8 +2053,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 		case LSLF_NONE:
 			if (llmv->ll_inline ||
 			    lslr->lslr_stripe_count != stripe_count ||
-			    (lslr->lslr_hash_type & LMV_HASH_TYPE_MASK) !=
-			     hash_type)
+			    (lslr->lslr_hash_type != hash_type))
 				repair_lmvea = true;
 			break;
 		case LSLF_BAD_INDEX2:
@@ -2051,8 +2065,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				 DFID":%u", PFID(cfid), lslr->lslr_index);
 			if (llmv->ll_inline ||
 			    lslr->lslr_stripe_count != stripe_count ||
-			    (lslr->lslr_hash_type & LMV_HASH_TYPE_MASK) !=
-			     hash_type)
+			    (lslr->lslr_hash_type != hash_type))
 				repair_lmvea = true;
 			break;
 		case LSLF_BAD_INDEX1:
