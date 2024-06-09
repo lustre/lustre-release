@@ -1974,9 +1974,12 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	case IBLND_MSG_IMMEDIATE:
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[rlen]);
 		if (nob > rx->rx_nob) {
+			char *nid = "unknown";
+
+			if (lntmsg)
+				nid = libcfs_nidstr(&lntmsg->msg_hdr.src_nid);
 			CERROR("Immediate message from %s too big: %d(%d)\n",
-			       libcfs_nidstr(&lntmsg->msg_hdr.src_nid),
-			       nob, rx->rx_nob);
+			       nid, nob, rx->rx_nob);
 			rc = -EPROTO;
 			break;
 		}
@@ -1992,7 +1995,10 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	case IBLND_MSG_PUT_REQ: {
 		struct kib_msg	*txmsg;
 		struct kib_rdma_desc *rd;
-		struct lnet_libmd *msg_md = lntmsg->msg_md;
+		struct lnet_libmd *msg_md = NULL;
+
+		if (lntmsg)
+			msg_md = lntmsg->msg_md;
 
 		ibprm_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
 		if (mlen == 0) {
