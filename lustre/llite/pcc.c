@@ -381,14 +381,14 @@ static int pcc_expr_time_parse(char *str, struct pcc_expression *expr)
 	unsigned long mtime;
 	int len = strlen(str);
 	unsigned int mult = 1;
-	char buf[10];
+	char buf[11]; /* +1 for NUL */
 	int rc;
 
 	if (expr->pe_opc == PCC_FIELD_OP_EQ)
 		return -EOPNOTSUPP;
 
 	/* 1B seconds is enough, and avoids the need for overflow checking */
-	if (len > 10)
+	if (len >= sizeof(buf))
 		return -EOVERFLOW;
 
 	strncpy(buf, str, sizeof(buf));
