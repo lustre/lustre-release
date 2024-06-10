@@ -1,0 +1,44 @@
+commit d2c828a32a3b019194051ee24607eafee517cc43
+Author:     Niu Yawei <yawei.niu@intel.com>
+AuthorDate: Mon Feb 9 22:21:00 2015 -0500
+LU-6137 ldiskfs: simplify nocmtime patch
+
+Simplify the nocmtime patch by patching only ext4_current_time(),
+this fixed the defect that original patch doesn't handle setacl
+code path, it can also avoid the risk of future changes adding
+new places that needs to be fixed.
+
+Remove the obsolete xattr-no-update-ctime patch.
+
+Signed-off-by: Niu Yawei <yawei.niu@intel.com>
+Change-Id: I02928c4f867e9476f0bc1815dd3256e3d79dadf7
+Reviewed-on: http://review.whamcloud.com/13705
+Reviewed-by: Bobi Jam <bobijam@hotmail.com>
+Reviewed-by: Bob Glossman <bob.glossman@intel.com>
+Reviewed-by: Fan Yong <fan.yong@intel.com>
+Signed-off-by: Anreas Dilger <andreas.dilger@intel.com> 
+---
+ fs/ext4/ext4.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index adb577aa..218da6ec 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -985,6 +985,13 @@ enum {
+ 	I_DATA_SEM_EA
+ };
+ 
++static inline struct timespec64 ext4_current_time(struct inode *inode)
++{
++	if (IS_NOCMTIME(inode))
++		return inode_get_ctime(inode);
++	return current_time(inode);
++}
++#define current_time(a) ext4_current_time(a)
+ 
+ /*
+  * fourth extended file system inode data in memory
+-- 
+2.25.1
+

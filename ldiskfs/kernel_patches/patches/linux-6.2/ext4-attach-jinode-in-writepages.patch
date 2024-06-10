@@ -1,0 +1,68 @@
+commit 66153d87190a3547099446d222f36114d3eeffad
+Author:     Yang Sheng <ys@whamcloud.com>
+AuthorDate: Tue Jan 24 03:31:27 2017 +0800
+Subject: LU-9031 osd: handle jinode change for ldiskfs
+
+We need take care of jinode for ldiskfs. Since we
+didn't got inode from syscall like sys_open(). So
+have to initailize it in OSD by ourselves.
+
+Signed-off-by: Yang Sheng <yang.sheng@intel.com>
+Change-Id: Iec6db290c3779a8f7c98e5d1356b71fd928d7c88
+Reviewed-on: https://review.whamcloud.com/24941
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Bob Glossman <bob.glossman@intel.com>
+---
+ fs/ext4/ext4.h  | 1 +
+ fs/ext4/inode.c | 9 ++++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 4450196..8743d31 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -3120,6 +3120,7 @@ extern void ext4_mb_mark_bb(struct super_block *sb, ext4_fsblk_t block,
+ 		       int len, int state);
+ 
+ /* inode.c */
++#define HAVE_LDISKFS_INFO_JINODE
+ void ext4_inode_csum_set(struct inode *inode, struct ext4_inode *raw,
+ 			 struct ext4_inode_info *ei);
+ int ext4_inode_is_fast_symlink(struct inode *inode);
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 400a6c7..1cd709a 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -746,6 +746,10 @@ out_sem:
+ 				(loff_t)map->m_lblk << inode->i_blkbits;
+ 			loff_t length = (loff_t)map->m_len << inode->i_blkbits;
+ 
++			ret = ext4_inode_attach_jinode(inode);
++			if (ret)
++				return ret;
++
+ 			if (flags & EXT4_GET_BLOCKS_IO_SUBMIT)
+ 				ret = ext4_jbd2_inode_add_wait(handle, inode,
+ 						start_byte, length);
+@@ -2999,7 +3003,9 @@ static int ext4_do_writepages(struct mpage_da_data *mpd)
+ 		mpd->first_page = wbc->range_start >> PAGE_SHIFT;
+ 		mpd->last_page = wbc->range_end >> PAGE_SHIFT;
+ 	}
+-
++	ret = ext4_inode_attach_jinode(inode);
++	if (ret)
++		goto out_writepages;
+ 	ext4_io_submit_init(&mpd->io_submit, wbc);
+ retry:
+ 	if (wbc->sync_mode == WB_SYNC_ALL || wbc->tagged_writepages)
+@@ -4513,6 +4519,7 @@ int ext4_inode_attach_jinode(struct inode *inode)
+ 		jbd2_free_inode(jinode);
+ 	return 0;
+ }
++EXPORT_SYMBOL(ext4_inode_attach_jinode);
+ 
+ /*
+  * ext4_truncate()
+-- 
+2.34.1
+

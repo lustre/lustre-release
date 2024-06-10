@@ -7,6 +7,7 @@ backfs_extra := $(wildcard @LINUX@/fs/ext4/Makefile)
 
 backfs_headers := $(wildcard @EXT4_SRC_DIR@/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/ext4*.h)
+uapi_linux_headers := $(wildcard @LINUX@/include/uapi/linux/ext4*.h)
 linux_new_headers := htree_lock.h
 trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
 

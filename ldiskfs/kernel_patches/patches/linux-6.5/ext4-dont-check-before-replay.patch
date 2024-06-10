@@ -1,0 +1,40 @@
+commit a70b020e5b2f1bbe3b759232852beaac4f0852b5
+Author:     Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+AuthorDate: Fri Nov 25 16:17:09 2016 +0530
+LU-8364 ext4: fixes for failover mode.
+
+When ext4 runs in failover mode with read-only disk,
+it may loose part of allocation updates and fail while
+mounting fs due to group descriptor checks before journal
+replay not being valid after journal replay is complete.
+Don't produce panics with on disk checks in read-only mode.
+
+Seagate-bug-id: MRP-797
+Change-Id: I54bee3a0aeb9a15f5ee2a79f7a2a2a905f19af1a
+Signed-off-by: Alexey Lyashkov <alexey_lyashkov@xyratex.com>
+Signed-off-by: Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+Reviewed-on: https://review.whamcloud.com/21141
+---
+ fs/ext4/super.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 734c88b..7459777 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -5391,6 +5391,12 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 		needs_recovery = 0;
+ 	}
+ 
++	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		err = -EFSCORRUPTED;
++		goto failed_mount3a;
++	}
++
+ 	if (!test_opt(sb, NO_MBCACHE)) {
+ 		sbi->s_ea_block_cache = ext4_xattr_create_cache();
+ 		if (!sbi->s_ea_block_cache) {
+-- 
+2.34.1
+

@@ -10,9 +10,12 @@ ldiskfs$(KMODEXT): sources
 endif
 endif
 
-ldiskfs_linux_headers := $(addprefix linux/,$(subst ext4,ldiskfs,$(notdir $(linux_headers))))
+ldiskfs_linux_headers := \
+    $(addprefix linux/,$(subst ext4,ldiskfs,$(notdir $(linux_headers)))) \
+    $(addprefix uapi/linux/,$(subst ext4,ldiskfs,$(notdir $(uapi_linux_headers))))
 
-$(filter %.c,$(ldiskfs_patched_sources)): sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_patched_sources))
+$(filter %.c,$(ldiskfs_patched_sources)): \
+    sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_patched_sources))
 
 # Convert LDISKFS_SUPER_MAGIC back to EXT4_SUPER_MAGIC so that the ldiskfs
 # code can use the existing kernel headers instead of defining this itself.
@@ -29,18 +32,27 @@ ldiskfs_sed_flags = \
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
 linux/ldiskfs%.h: linux-stage/include/linux/ext4%.h
+	@echo sed $(strip $(ldiskfs_sed_flags)) $< '=>' $@
+	sed $(strip $(ldiskfs_sed_flags)) $< > $@
+
+uapi/linux/ldiskfs%.h: linux-stage/include/uapi/linux/ext4%.h
+	@echo sed $(strip $(ldiskfs_sed_flags)) $< '=>' $@
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
 series := @top_srcdir@/ldiskfs/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
 patches := @top_srcdir@/ldiskfs/kernel_patches/patches
 
-sources: $(backfs_sources) $(backfs_headers) $(linux_headers) $(series) $(trace_headers)
-	rm -rf linux-stage linux sources trace $(ldiskfs_SOURCES)
+sources: $(backfs_sources) $(backfs_headers) $(linux_headers) $(uapi_linux_headers) $(series) $(trace_headers)
+	rm -rf linux-stage uapi linux sources trace $(ldiskfs_SOURCES)
 	mkdir -p linux-stage/fs/ext4 linux-stage/include/linux \
+		 linux-stage/include/uapi/linux \
 		 linux-stage/include/trace/events
 	cp $(backfs_sources) $(backfs_headers) $(backfs_extra) linux-stage/fs/ext4
 	if test -n "$(linux_headers)" ; then \
 		cp $(linux_headers) linux-stage/include/linux; \
+	fi
+	if test -n "$(uapi_linux_headers)" ; then \
+		cp $(uapi_linux_headers) linux-stage/include/uapi/linux; \
 	fi
 	if test -n "$(trace_headers)" ; then \
 		cp $(trace_headers) linux-stage/include/trace/events; \
@@ -57,7 +69,7 @@ else
 	done
 	@echo
 endif
-	mkdir -p linux trace/events
+	mkdir -p uapi/linux linux trace/events
 	@echo -n "Replacing 'ext4' with 'ldiskfs':"
 	for i in $(notdir $(backfs_headers) $(backfs_sources)) $(new_sources) ; do \
 		[ -f linux-stage/fs/ext4/$$i ] || continue; \
@@ -70,6 +82,12 @@ endif
 			echo -n " ext4$$i" ; \
 			mv ext4$$i ldiskfs$$i ; \
 		fi ; \
+	done
+	for i in $(subst ext4,,$(notdir $(uapi_linux_headers))) ; do \
+		echo -n " ext4$$i" ; \
+		sed $(strip $(ldiskfs_sed_flags)) \
+			linux-stage/include/uapi/linux/ext4$$i \
+			> uapi/linux/ldiskfs$$i ; \
 	done
 	for i in $(subst ext4,,$(notdir $(linux_headers) $(new_headers))) ; do \
 		echo -n " ext4$$i" ; \
@@ -86,10 +104,9 @@ endif
 	for i in $(notdir $(linux_new_headers)) ; do \
 		echo -n " $$i"; \
 		sed $(strip $(ldiskfs_sed_flags)) \
-                linux-stage/include/linux/$$i \
-                > linux/$$i ; \
+			linux-stage/include/linux/$$i \
+		> linux/$$i ; \
 	done
-
 	@echo
 	touch sources
 
