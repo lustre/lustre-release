@@ -233,7 +233,7 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 			     unsigned int flag,
 			     uint64_t self_nid)
 {
-	const char     *princ_name;
+	unsigned int cred_type = 0;
 
 	logmsg(LL_DEBUG, "principal: realm %.*s, type %d, size %d, name %.*s\n",
 	       krb5_princ_realm(ctx, princ)->length,
@@ -259,23 +259,49 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 		return -1;
 	}
 
-	/* check principal name, give priority to MDT/OST cred over ROOT */
-	if (flag & LGSS_ROOT_CRED_MDT)
-		princ_name = LGSS_SVC_MDS_STR;
-	else if (flag & LGSS_ROOT_CRED_OST)
-		princ_name = LGSS_SVC_OSS_STR;
-	else if (flag & LGSS_ROOT_CRED_ROOT)
-		princ_name = LGSS_USR_ROOT_STR;
-	else
-		return -1;
+	/* check principal name against flag for cred type */
+	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+			     LGSS_SVC_HOST_STR) == 0 ||
+	    lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+			     LGSS_USR_ROOT_STR) == 0)
+		cred_type = LGSS_ROOT_CRED_ROOT;
+	else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+				  LGSS_SVC_MGS_STR) == 0)
+		cred_type = LGSS_ROOT_CRED_ROOT |
+			     LGSS_ROOT_CRED_MDT |
+			     LGSS_ROOT_CRED_OST;
+	else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+				  LGSS_SVC_MDS_STR) == 0)
+		cred_type = LGSS_ROOT_CRED_MDT;
+	else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+				  LGSS_SVC_OSS_STR) == 0)
+		cred_type = LGSS_ROOT_CRED_OST;
 
-	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name) &&
-	    (strcmp(princ_name, LGSS_USR_ROOT_STR) ||
-	    lgss_krb5_strcmp(krb5_princ_name(ctx, princ), LGSS_SVC_HOST_STR))) {
-		logmsg(LL_WARN, "%.*s: we expect %s instead\n",
+	if (!(flag & cred_type)) {
+		char wanted[50];
+		char *buf = wanted;
+
+		if (flag & LGSS_ROOT_CRED_MDT)
+			buf += snprintf(buf, sizeof(wanted) - (buf - wanted),
+					"%s", LGSS_SVC_MDS_STR);
+		if (flag & LGSS_ROOT_CRED_OST)
+			buf += snprintf(buf, sizeof(wanted) - (buf - wanted),
+					"%s%s",
+				       buf == wanted ? "" : ",",
+				       LGSS_SVC_OSS_STR);
+		if (flag & LGSS_ROOT_CRED_ROOT) {
+			buf += snprintf(buf, sizeof(wanted) - (buf - wanted),
+					"%s%s",
+					buf == wanted ? "" : ",",
+					LGSS_USR_ROOT_STR);
+			snprintf(buf, sizeof(wanted) - (buf - wanted), ",%s",
+				 LGSS_SVC_HOST_STR);
+		}
+		logmsg(LL_WARN,
+		       "Found in cc principal %.*s, but expecting one of %s instead\n",
 		       krb5_princ_name(ctx, princ)->length,
 		       krb5_princ_name(ctx, princ)->data,
-		       princ_name);
+		       wanted);
 		return -1;
 	}
 
