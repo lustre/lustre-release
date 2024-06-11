@@ -1373,12 +1373,13 @@ do_route_del() {
 	local gw=$3
 
 	do_nodesv $node \
-	'output="$($LNETCTL route show --net $net --gateway $gw 2>/dev/null)"; \
-		if [[ "x${output}x" != "xx" ]]; then			       \
-				$LNETCTL route del --net $net --gateway $gw;   \
-			else						       \
-				exit 0;					       \
-			fi'
+	"output=\\\"\\\$($LNETCTL route show --net $net --gateway $gw 2>/dev/null)\\\"; \
+		if [[ -n \\\"\\\${output}\\\" ]]; then			\
+			echo \\\"Delete route to $net via $gw\\\";	\
+			$LNETCTL route del --net $net --gateway $gw;	\
+		else							\
+			exit 0;						\
+		fi"
 }
 
 cleanup_router_test() {
@@ -3139,8 +3140,7 @@ do_basic_rtr_test() {
 		local router_nids=( ${ROUTER_NIDS[$router]} )
 
 		do_route_add $HOSTNAME $REMOTE_NET ${router_nids[0]} ||
-		error "Failed to add route $HOSTNAME -> "\
-			"$REMOTE_NET via ${router_nids[0]}"
+			return $?
 	done
 
 	for router in ${!ROUTER_INTERFACES[@]}; do
@@ -3148,8 +3148,7 @@ do_basic_rtr_test() {
 
 		for rpeer in ${!RPEER_INTERFACES[@]}; do
 			do_route_add $rpeer $LOCAL_NET ${router_nids[1]} ||
-				error "Failed to add route $rpeer -> "\
-					"$LOCAL_NET via ${router_nids[1]}"
+				return $?
 		done
 	done
 
@@ -3392,7 +3391,7 @@ test_226() {
 	# remove a route from the peer
 	local router_nids=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
 
-	do_route_del $rpeer $LOCAL_NET ${router_nids[0]}
+	do_route_del $rpeer $LOCAL_NET ${router_nids[1]}
 
 	# should attempt to use both routes due to round-robin
 	# failure case here is an LBUG on $rpeer
