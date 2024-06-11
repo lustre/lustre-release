@@ -67,7 +67,7 @@ struct lgssd_ioctl_param {
 	__u64 reply_buf_size;
 	char __user *reply_buf;
 	/* out */
-	__u64 status;
+	__s64 status;
 	__u64 reply_length;
 };
 

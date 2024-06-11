@@ -167,8 +167,8 @@ static int llog_client_next_block(const struct lu_env *env,
 	req = ptlrpc_request_alloc_pack(imp, &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
 					LUSTRE_LOG_VERSION,
 					LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
-	if (!req)
-		GOTO(err_exit, rc = -ENOMEM);
+	if (IS_ERR(req))
+		GOTO(err_exit, rc = PTR_ERR(req));
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
 	body->lgd_logid = loghandle->lgh_id;
@@ -242,8 +242,8 @@ static int llog_client_prev_block(const struct lu_env *env,
 	req = ptlrpc_request_alloc_pack(imp, &RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK,
 					LUSTRE_LOG_VERSION,
 					LLOG_ORIGIN_HANDLE_PREV_BLOCK);
-	if (!req)
-		GOTO(err_exit, rc = -ENOMEM);
+	if (IS_ERR(req))
+		GOTO(err_exit, rc = PTR_ERR(req));
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
 	body->lgd_logid = loghandle->lgh_id;
@@ -296,8 +296,8 @@ static int llog_client_read_header(const struct lu_env *env,
 					&RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
 					LUSTRE_LOG_VERSION,
 					LLOG_ORIGIN_HANDLE_READ_HEADER);
-	if (!req)
-		GOTO(err_exit, rc = -ENOMEM);
+	if (IS_ERR(req))
+		GOTO(err_exit, rc = PTR_ERR(req));
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
 	body->lgd_logid = handle->lgh_id;

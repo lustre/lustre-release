@@ -1515,9 +1515,9 @@ static int signal_completed_replay(struct obd_import *imp)
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
 					OBD_PING);
-	if (req == NULL) {
+	if (IS_ERR(req)) {
 		atomic_dec(&imp->imp_replay_inflight);
-		RETURN(-ENOMEM);
+		RETURN(PTR_ERR(req));
 	}
 
 	ptlrpc_request_set_replen(req);
@@ -1718,8 +1718,8 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_DISCONNECT,
 					LUSTRE_OBD_VERSION, rq_opc);
-	if (req == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
+	if (IS_ERR(req))
+		RETURN(ERR_CAST(req));
 
 	/* We are disconnecting, do not retry a failed DISCONNECT rpc if
 	 * it fails.  We can get through the above with a down server

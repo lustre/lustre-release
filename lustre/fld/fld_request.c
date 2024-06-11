@@ -340,8 +340,8 @@ again:
 	case FLD_QUERY:
 		req = ptlrpc_request_alloc_pack(imp, &RQF_FLD_QUERY,
 						LUSTRE_MDS_VERSION, FLD_QUERY);
-		if (!req)
-			RETURN(-ENOMEM);
+		if (IS_ERR(req))
+			RETURN(PTR_ERR(req));
 
 		/*
 		 * XXX: only needed when talking to old server(< 2.6), it should
@@ -364,8 +364,8 @@ again:
 	case FLD_READ:
 		req = ptlrpc_request_alloc_pack(imp, &RQF_FLD_READ,
 						LUSTRE_MDS_VERSION, FLD_READ);
-		if (!req)
-			RETURN(-ENOMEM);
+		if (IS_ERR(req))
+			RETURN(PTR_ERR(req));
 
 		req_capsule_set_size(&req->rq_pill, &RMF_GENERIC_DATA,
 				     RCL_SERVER, PAGE_SIZE);

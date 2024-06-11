@@ -63,10 +63,12 @@ ptlrpc_prep_ping(struct obd_import *imp)
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING,
 					LUSTRE_OBD_VERSION, OBD_PING);
-	if (req) {
-		ptlrpc_request_set_replen(req);
-		req->rq_no_resend = req->rq_no_delay = 1;
-	}
+	if (IS_ERR(req))
+		return ERR_CAST(req);
+
+	ptlrpc_request_set_replen(req);
+	req->rq_no_resend = req->rq_no_delay = 1;
+
 	return req;
 }
 
@@ -80,8 +82,8 @@ int ptlrpc_obd_ping(struct obd_device *obd)
 
 	with_imp_locked(obd, imp, rc) {
 		req = ptlrpc_prep_ping(imp);
-		if (!req) {
-			rc = -ENOMEM;
+		if (IS_ERR(req)) {
+			rc = PTR_ERR(req);
 			continue;
 		}
 		req->rq_send_state = LUSTRE_IMP_FULL;
@@ -141,11 +143,10 @@ static int ptlrpc_ping(struct obd_import *imp)
 			RETURN(0);
 
 	req = ptlrpc_prep_ping(imp);
-	if (!req) {
-		CERROR("OOM trying to ping %s->%s\n",
-		       imp->imp_obd->obd_uuid.uuid,
-		       obd2cli_tgt(imp->imp_obd));
-		RETURN(-ENOMEM);
+	if (IS_ERR(req)) {
+		CERROR("%s: ping failed: rc = %ld\n",
+		       imp->imp_obd->obd_name, PTR_ERR(req));
+		RETURN(PTR_ERR(req));
 	}
 
 	DEBUG_REQ(D_INFO, req, "pinging %s->%s",

@@ -1245,8 +1245,8 @@ int ldlm_cli_convert_req(struct ldlm_lock *lock, __u32 *flags, __u64 new_bits)
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
 					&RQF_LDLM_CONVERT, LUSTRE_DLM_VERSION,
 					LDLM_CONVERT);
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 	body->lock_handle[0] = lock->l_remote_handle;
@@ -2573,8 +2573,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_LDLM_ENQUEUE,
 					LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	/* We're part of recovery, so don't wait for it. */
 	req->rq_send_state = LUSTRE_IMP_REPLAY_LOCKS;

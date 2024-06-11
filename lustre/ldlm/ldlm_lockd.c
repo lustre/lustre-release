@@ -971,8 +971,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	req = ptlrpc_request_alloc_pack(lock->l_export->exp_imp_reverse,
 					&RQF_LDLM_BL_CALLBACK,
 					LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK);
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	ca = ptlrpc_req_async_args(ca, req);
 	ca->ca_set_arg = arg;
@@ -1215,8 +1215,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 					req_fmt, LUSTRE_DLM_VERSION,
 					LDLM_GL_CALLBACK);
 
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	if (arg->gl_desc != NULL) {
 		/* copy the GL descriptor */

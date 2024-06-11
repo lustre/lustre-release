@@ -1602,8 +1602,8 @@ static int mdc_statfs_async(struct obd_export *exp,
 
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_MDS_STATFS,
 					LUSTRE_MDS_VERSION, MDS_STATFS);
-	if (req == NULL)
-		return -ENOMEM;
+	if (IS_ERR(req))
+		return PTR_ERR(req);
 
 	ptlrpc_request_set_replen(req);
 	req->rq_interpret_reply = mdc_statfs_interpret;
@@ -1643,8 +1643,8 @@ static int mdc_statfs(const struct lu_env *env,
 		fmt = &RQF_MDS_STATFS_NEW;
 	req = ptlrpc_request_alloc_pack(imp, fmt, LUSTRE_MDS_VERSION,
 					MDS_STATFS);
-	if (req == NULL)
-		GOTO(output, rc = -ENOMEM);
+	if (IS_ERR(req))
+		GOTO(output, rc = PTR_ERR(req));
 	req->rq_allow_intr = 1;
 
 	if ((flags & OBD_STATFS_SUM) &&
@@ -1745,8 +1745,8 @@ static int mdc_ioc_hsm_progress(struct obd_export *exp,
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_PROGRESS,
 					LUSTRE_MDS_VERSION, MDS_HSM_PROGRESS);
-	if (req == NULL)
-		GOTO(out, rc = -ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
@@ -1878,18 +1878,18 @@ static int mdc_ioc_hsm_ct_unregister(struct obd_import *imp)
 	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_CT_UNREGISTER,
 					LUSTRE_MDS_VERSION,
 					MDS_HSM_CT_UNREGISTER);
-	if (req == NULL)
-		GOTO(out, rc = -ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	ptlrpc_request_set_replen(req);
 
 	rc = mdc_queue_wait(req);
-	GOTO(out, rc);
-out:
+
 	ptlrpc_req_put(req);
-	return rc;
+
+	RETURN(rc);
 }
 
 static int mdc_ioc_hsm_state_get(struct obd_export *exp,

@@ -1053,26 +1053,30 @@ void ptlrpc_request_free(struct ptlrpc_request *request)
 EXPORT_SYMBOL(ptlrpc_request_free);
 
 /**
- * Allocate new request for operatione \a opcode and immediatelly pack it for
+ * Allocate new request for operation \a opcode and immediatelly pack it for
  * network transfer.
  * Only used for simple requests like OBD_PING where the only important
  * part of the request is operation itself.
- * Returns allocated request or NULL on error.
+ *
+ * Returns allocated request on success, and -errno on failure.
  */
 struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
 						 const struct req_format *format,
 						 __u32 version, int opcode)
 {
-	struct ptlrpc_request *req = ptlrpc_request_alloc(imp, format);
+	struct ptlrpc_request *req;
 	int rc;
 
-	if (req) {
-		rc = ptlrpc_request_pack(req, version, opcode);
-		if (rc) {
-			ptlrpc_request_free(req);
-			req = NULL;
-		}
+	req = ptlrpc_request_alloc(imp, format);
+	if (!req)
+		return ERR_PTR(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, version, opcode);
+	if (rc) {
+		ptlrpc_request_free(req);
+		return ERR_PTR(rc);
 	}
+
 	return req;
 }
 EXPORT_SYMBOL(ptlrpc_request_alloc_pack);

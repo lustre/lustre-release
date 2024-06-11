@@ -1344,8 +1344,8 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 
 	if (rc)
 		RETURN(rc);
-	if (!req)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	req->rq_send_state = LUSTRE_IMP_FULL;
 

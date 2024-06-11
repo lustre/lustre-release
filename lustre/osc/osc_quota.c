@@ -215,8 +215,8 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
 					&RQF_OST_QUOTACTL, LUSTRE_OST_VERSION,
 					OST_QUOTACTL);
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
 		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTA_ITER,

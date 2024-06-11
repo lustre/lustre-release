@@ -316,7 +316,11 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
 					SEC_CTX_INIT);
-	if (!req || !req->rq_cli_ctx || !req->rq_cli_ctx->cc_sec) {
+	if (IS_ERR(req)) {
+		param.status = PTR_ERR(req);
+		req = NULL;
+		goto out_copy;
+	} else if (!req->rq_cli_ctx || !req->rq_cli_ctx->cc_sec) {
 		param.status = -ENOMEM;
 		goto out_copy;
 	}
@@ -358,7 +362,7 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 		if (rc != -EACCES)
 			param.status = -ETIMEDOUT;
 		CDEBUG(D_SEC,
-		       "%s: ctx init req got %d, returning to userspace status %llu\n",
+		       "%s: ctx init req got %d, returning to userspace status %lld\n",
 		       obd->obd_name, rc, param.status);
 		goto out_copy;
 	}

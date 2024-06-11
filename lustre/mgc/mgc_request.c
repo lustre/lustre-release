@@ -976,8 +976,8 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
 					&RQF_LDLM_ENQUEUE, LUSTRE_DLM_VERSION,
 					LDLM_ENQUEUE);
-	if (req == NULL)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, 0);
 	ptlrpc_request_set_replen(req);

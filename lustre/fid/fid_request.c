@@ -65,8 +65,8 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 	LASSERT(exp != NULL && !IS_ERR(exp));
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_SEQ_QUERY,
 					LUSTRE_MDS_VERSION, SEQ_QUERY);
-	if (!req)
-		RETURN(-ENOMEM);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
 	/* Init operation code */
 	op = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_OPC);
