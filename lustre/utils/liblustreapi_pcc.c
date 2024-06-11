@@ -544,7 +544,7 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 {
 	struct lu_pcc_detach_fid detach;
 	char fullname[PATH_MAX];
-	char fidstr[FID_LEN];
+	char fidstr[FID_LEN + 1];
 	const char *fidname;
 	bool lov_file;
 	int rc;
@@ -556,7 +556,7 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 		size_t len;
 
 		len = strlen(fname) - strlen(".lov");
-		if (len > sizeof(fidstr)) {
+		if (len >= sizeof(fidstr)) {
 			rc = -ENAMETOOLONG;
 			errno = ENAMETOOLONG;
 			llapi_error(LLAPI_MSG_ERROR, rc,
