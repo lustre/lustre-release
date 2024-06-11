@@ -3295,18 +3295,11 @@ test_37() {
 	do_facet ost1 "sync; sync"
 
 	# check that content on ost is encrypted
-	local fid=($($LFS getstripe $testfile | grep 0x))
-	local seq=${fid[3]#0x}
-	local oid=${fid[1]}
-	local oid_hex
+	local fids=($($LFS getstripe $testfile | grep 0x))
+	local fid="${fids[3]}:${fids[2]}:0"
+	local objpath=$(ost_fid2_objpath ost1 $fid)
 
-	if [ $seq == 0 ]; then
-		oid_hex=${fid[1]}
-	else
-		oid_hex=${fid[2]#0x}
-	fi
-	do_facet ost1 "$DEBUGFS -c -R 'cat O/$seq/d$(($oid % 32))/$oid_hex' \
-		 $(ostdevname 1)" > $objdump
+	do_facet ost1 "$DEBUGFS -c -R 'cat $objpath' $(ostdevname 1)" > $objdump
 	cmp -s $objdump $tmpfile &&
 		error "file $testfile is not encrypted on ost"
 

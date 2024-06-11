@@ -12482,3 +12482,122 @@ zfs_or_rotational() {
 		return 1
 	fi
 }
+
+ost_fid2_objpath() {
+	local facet=$1
+	local fid=$2
+
+	fid=$(echo $fid | tr -d '[]')
+
+	seq=$(echo $fid | awk -F ':' '{ print $1 }' | sed -e "s/^0x//g")
+	oidhex=$(echo $fid | awk -F ':' '{ print $2 }')
+
+	if [ $seq == 0 ] || [ $(facet_fstype $facet) == zfs ]; then
+		oid=$((16#${oidhex#0x}))
+	else
+		oid=${oidhex#0x}
+	fi
+
+	echo "O/$seq/d$((oidhex%32))/$oid"
+}
+
+check_seq_oid()
+{
+	log "check file $1"
+
+	lmm_count=$($LFS getstripe -c $1)
+	lmm_seq=$($LFS getstripe -v $1 | awk '/lmm_seq/ { print $2 }')
+	lmm_oid=$($LFS getstripe -v $1 | awk '/lmm_object_id/ { print $2 }')
+
+	local old_ifs="$IFS"
+	IFS=$'[:]'
+	fid=($($LFS path2fid $1))
+	IFS="$old_ifs"
+
+	log "FID seq ${fid[1]}, oid ${fid[2]} ver ${fid[3]}"
+	log "LOV seq $lmm_seq, oid $lmm_oid, count: $lmm_count"
+
+	# compare lmm_seq and lu_fid->f_seq
+	[ $lmm_seq = ${fid[1]} ] || error "SEQ mismatch"
+	# compare lmm_object_id and lu_fid->oid
+	[ $lmm_oid = ${fid[2]} ] || error "OID mismatch"
+
+	# check the trusted.fid attribute of the OST objects of the file
+	local have_obdidx=false
+	local stripe_nr=0
+	$LFS getstripe $1 | while read obdidx oid hex seq; do
+		# skip lines up to and including "obdidx"
+		[ -z "$obdidx" ] && break
+		[ "$obdidx" = "obdidx" ] && have_obdidx=true && continue
+		$have_obdidx || continue
+
+		local ost=$((obdidx + 1))
+		local dev=$(ostdevname $ost)
+
+		log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
+
+		local obj_file=$(ost_fid2_objpath ost$ost "$seq:$hex:0")
+
+		local ff=""
+		#
+		# Don't unmount/remount the OSTs if we don't need to do that.
+		# LU-2577 changes filter_fid to be smaller, so debugfs needs
+		# update too, until that use mount/ll_decode_filter_fid/mount.
+		# Re-enable when debugfs will understand new filter_fid.
+		#
+		if [ $(facet_fstype ost$ost) == ldiskfs ]; then
+			ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
+				$dev 2>/dev/null" | grep "parent=")
+		fi
+		if [ -z "$ff" ]; then
+			stop ost$ost
+			mount_fstype ost$ost
+			ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID \
+				$(facet_mntpt ost$ost)/$obj_file)
+			unmount_fstype ost$ost
+			start ost$ost $dev $OST_MOUNT_OPTS
+			clients_up
+		fi
+
+		[ -z "$ff" ] && error "$obj_file: no filter_fid info"
+
+		echo "$ff" | sed -e 's#.*objid=#got: objid=#'
+
+		# /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
+		# fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1
+		#
+		# fid: parent=[0x200000400:0x1e:0x0] stripe=1 stripe_count=2 \
+		#	stripe_size=1048576 component_id=1 component_start=0 \
+		#	component_end=33554432
+		local ff_parent=$(sed -e 's/.*parent=.//' <<<$ff)
+		local ff_pseq=$(cut -d: -f1 <<<$ff_parent)
+		local ff_poid=$(cut -d: -f2 <<<$ff_parent)
+		local ff_pstripe
+		if grep -q 'stripe=' <<<$ff; then
+			ff_pstripe=$(sed -e 's/.*stripe=//' -e 's/ .*//' <<<$ff)
+		else
+			# $LL_DECODE_FILTER_FID does not print "stripe="; look
+			# into f_ver in this case.  See comment on ff_parent.
+			ff_pstripe=$(cut -d: -f3 <<<$ff_parent | sed -e 's/]//')
+		fi
+
+		# compare lmm_seq and filter_fid->ff_parent.f_seq
+		[ $ff_pseq = $lmm_seq ] ||
+			error "FF parent SEQ $ff_pseq != $lmm_seq"
+		# compare lmm_object_id and filter_fid->ff_parent.f_oid
+		[ $ff_poid = $lmm_oid ] ||
+			error "FF parent OID $ff_poid != $lmm_oid"
+		(($ff_pstripe == $stripe_nr)) ||
+			error "FF stripe $ff_pstripe != $stripe_nr"
+
+		stripe_nr=$((stripe_nr + 1))
+		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
+			continue
+		if grep -q 'stripe_count=' <<<$ff; then
+			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
+					    -e 's/ .*//' <<<$ff)
+			[ $lmm_count = $ff_scnt ] ||
+				error "FF stripe count $lmm_count != $ff_scnt"
+		fi
+	done
+}

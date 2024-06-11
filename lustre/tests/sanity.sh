@@ -2243,114 +2243,6 @@ test_27y() {
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 
-check_seq_oid()
-{
-	log "check file $1"
-
-	lmm_count=$($LFS getstripe -c $1)
-	lmm_seq=$($LFS getstripe -v $1 | awk '/lmm_seq/ { print $2 }')
-	lmm_oid=$($LFS getstripe -v $1 | awk '/lmm_object_id/ { print $2 }')
-
-	local old_ifs="$IFS"
-	IFS=$'[:]'
-	fid=($($LFS path2fid $1))
-	IFS="$old_ifs"
-
-	log "FID seq ${fid[1]}, oid ${fid[2]} ver ${fid[3]}"
-	log "LOV seq $lmm_seq, oid $lmm_oid, count: $lmm_count"
-
-	# compare lmm_seq and lu_fid->f_seq
-	[ $lmm_seq = ${fid[1]} ] || { error "SEQ mismatch"; return 1; }
-	# compare lmm_object_id and lu_fid->oid
-	[ $lmm_oid = ${fid[2]} ] || { error "OID mismatch"; return 2; }
-
-	# check the trusted.fid attribute of the OST objects of the file
-	local have_obdidx=false
-	local stripe_nr=0
-	$LFS getstripe $1 | while read obdidx oid hex seq; do
-		# skip lines up to and including "obdidx"
-		[ -z "$obdidx" ] && break
-		[ "$obdidx" = "obdidx" ] && have_obdidx=true && continue
-		$have_obdidx || continue
-
-		local ost=$((obdidx + 1))
-		local dev=$(ostdevname $ost)
-		local oid_hex
-
-		log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
-
-		seq=$(echo $seq | sed -e "s/^0x//g")
-		if [ $seq == 0 ] || [ $(facet_fstype ost$ost) == zfs ]; then
-			oid_hex=$(echo $oid)
-		else
-			oid_hex=$(echo $hex | sed -e "s/^0x//g")
-		fi
-		local obj_file="O/$seq/d$((oid %32))/$oid_hex"
-
-		local ff=""
-		#
-		# Don't unmount/remount the OSTs if we don't need to do that.
-		# LU-2577 changes filter_fid to be smaller, so debugfs needs
-		# update too, until that use mount/ll_decode_filter_fid/mount.
-		# Re-enable when debugfs will understand new filter_fid.
-		#
-		if [ $(facet_fstype ost$ost) == ldiskfs ]; then
-			ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
-				$dev 2>/dev/null" | grep "parent=")
-		fi
-		if [ -z "$ff" ]; then
-			stop ost$ost
-			mount_fstype ost$ost
-			ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID \
-				$(facet_mntpt ost$ost)/$obj_file)
-			unmount_fstype ost$ost
-			start ost$ost $dev $OST_MOUNT_OPTS
-			clients_up
-		fi
-
-		[ -z "$ff" ] && error "$obj_file: no filter_fid info"
-
-		echo "$ff" | sed -e 's#.*objid=#got: objid=#'
-
-		# /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
-		# fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1
-		#
-		# fid: parent=[0x200000400:0x1e:0x0] stripe=1 stripe_count=2 \
-		#	stripe_size=1048576 component_id=1 component_start=0 \
-		#	component_end=33554432
-		local ff_parent=$(sed -e 's/.*parent=.//' <<<$ff)
-		local ff_pseq=$(cut -d: -f1 <<<$ff_parent)
-		local ff_poid=$(cut -d: -f2 <<<$ff_parent)
-		local ff_pstripe
-		if grep -q 'stripe=' <<<$ff; then
-			ff_pstripe=$(sed -e 's/.*stripe=//' -e 's/ .*//' <<<$ff)
-		else
-			# $LL_DECODE_FILTER_FID does not print "stripe="; look
-			# into f_ver in this case.  See comment on ff_parent.
-			ff_pstripe=$(cut -d: -f3 <<<$ff_parent | sed -e 's/]//')
-		fi
-
-		# compare lmm_seq and filter_fid->ff_parent.f_seq
-		[ $ff_pseq = $lmm_seq ] ||
-			error "FF parent SEQ $ff_pseq != $lmm_seq"
-		# compare lmm_object_id and filter_fid->ff_parent.f_oid
-		[ $ff_poid = $lmm_oid ] ||
-			error "FF parent OID $ff_poid != $lmm_oid"
-		(($ff_pstripe == $stripe_nr)) ||
-			error "FF stripe $ff_pstripe != $stripe_nr"
-
-		stripe_nr=$((stripe_nr + 1))
-		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
-			continue
-		if grep -q 'stripe_count=' <<<$ff; then
-			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
-					    -e 's/ .*//' <<<$ff)
-			[ $lmm_count = $ff_scnt ] ||
-				error "FF stripe count $lmm_count != $ff_scnt"
-		fi
-	done
-}
-
 test_27z() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
@@ -5469,17 +5361,9 @@ test_39r() {
 	echo "client atime: $atime_cli"
 
 	local ostdev=$(ostdevname 1)
-	local fid=($($LFS getstripe $DIR/$tfile | grep 0x))
-	local seq=${fid[3]#0x}
-	local oid=${fid[1]}
-	local oid_hex
-
-	if [ $seq == 0 ]; then
-		oid_hex=${fid[1]}
-	else
-		oid_hex=${fid[2]#0x}
-	fi
-	local objpath="O/$seq/d$(($oid % 32))/$oid_hex"
+	local fids=($($LFS getstripe $DIR/$tfile | grep 0x))
+	local fid="${fids[3]}:${fids[2]}:0"
+	local objpath=$(ost_fid2_objpath ost1 $fid)
 	local cmd="debugfs -c -R \\\"stat $objpath\\\" $ostdev"
 
 	# allow atime update to be written to device
@@ -9974,7 +9858,7 @@ test_60a() {
 
 		case $fstype in
 			ldiskfs )
-				obj_file=$mntpt/O/$seq/d$((oid%32))/$oid ;;
+				obj_file=$mntpt/$(ost_fid2_objpath mgs $fid) ;;
 			zfs )
 				obj_file=$mntpt/oi.$(($((16#$seq))&127))/$fid ;;
 		esac
