@@ -3460,8 +3460,8 @@ wait_update_cond() {
 	local verbose
 	local quiet
 
-	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
-	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift || true
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift || true
 
 	local node=$1
 	local check="$2"
@@ -3478,19 +3478,18 @@ wait_update_cond() {
 	while (( $waited <= $max_wait )); do
 		result=$(do_node $quiet $node "$check")
 
-		eval [[ "'$result'" $cond "'$expect'" ]]
-		if [[ $? == 0 ]]; then
-			[[ -n "$quiet" ]] && return 0
+		if eval [[ "'$result'" $cond "'$expect'" ]]; then
+			[[ -z "$quiet" ]] || return 0
 			[[ -z "$result" || $waited -le $sleep ]] ||
 				echo "Updated after ${waited}s: want '$expect' got '$result'"
 			return 0
 		fi
 		if [[ -n "$verbose" && "$result" != "$prev_result" ]]; then
-			[[ -z "$quiet" && -n "$prev_result" ]] &&
+			[[ -n "$quiet" || -z "$prev_result" ]] ||
 				echo "Changed after ${waited}s: from '$prev_result' to '$result'"
 			prev_result="$result"
 		fi
-		(( $waited % $print == 0 )) && {
+		(( $waited % $print != 0 )) || {
 			[[ -z "$quiet" ]] &&
 			echo "Waiting $((max_wait - waited))s for '$expect'"
 		}
@@ -3499,7 +3498,7 @@ wait_update_cond() {
 		waited=$((SECONDS - begin))
 	done
 
-	[[ -z "$quiet" ]] &&
+	[[ -n "$quiet" ]] ||
 	echo "Update not seen after ${max_wait}s: want '$expect' got '$result'"
 
 	return 3
@@ -3510,8 +3509,8 @@ wait_update() {
 	local verbose
 	local quiet
 
-	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
-	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift || true
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift || true
 
 	local node="$1"
 	local check="$2"

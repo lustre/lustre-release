@@ -1785,6 +1785,8 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		fprintf(stderr, "warning: ignoring -P option\n");
 		popt->po_perm = 0;
 	}
+	if (popt->po_delete && !popt->po_perm)
+		popt->po_perm = 1;
 	return optind;
 }
 
