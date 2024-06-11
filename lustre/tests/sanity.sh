@@ -83,7 +83,10 @@ fi
 
 # Check if running on specific distros to skip certain subtests
 if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
-	if (( $CLIENT_OS_VERSION_CODE == $(version_code 9.3.0) )); then
+	if (( $CLIENT_OS_VERSION_CODE >= $(version_code 9.4.0) )); then
+		always_except LU-17927 119e 119f 119g 119h
+	fi
+	if (( $CLIENT_OS_VERSION_CODE >= $(version_code 9.3.0) )); then
 		# disable test_906 temporarily until rhel9.3 solves the
 		# failure on fio io_uring I/O engine.
 		always_except LU-17289 906
