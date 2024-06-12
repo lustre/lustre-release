@@ -48,11 +48,6 @@ if $SHARED_KEY; then
 	always_except LU-17127 39o
 fi
 
-# skip the grant tests for ARM until they are fixed
-if [[ $(uname -m) = aarch64 ]]; then
-	always_except LU-11671 45
-fi
-
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
 	always_except LU-12661 817
