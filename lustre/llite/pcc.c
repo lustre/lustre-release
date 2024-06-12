@@ -1688,7 +1688,7 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 	item.pm_projid = ll_i2info(inode)->lli_projid;
 	item.pm_name = &dentry->d_name;
 	item.pm_size = ll_i2info(inode)->lli_lazysize;
-	item.pm_mtime = inode->i_mtime.tv_sec;
+	item.pm_mtime = inode_get_mtime_sec(inode);
 	dataset = pcc_dataset_match_get(&ll_i2sbi(inode)->ll_pcc_super,
 					LU_PCC_READONLY, &item);
 	if (dataset == NULL)
