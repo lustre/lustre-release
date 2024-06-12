@@ -2884,7 +2884,7 @@ canceled:
 }
 EXPORT_SYMBOL(lnet_genl_send_scalar_list);
 
-int
+static int
 nla_extract_val(struct nlattr **attr, int *rem,
 		enum lnet_nl_scalar_attrs attr_type,
 		void *ret, int ret_size,
