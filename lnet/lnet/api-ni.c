@@ -9261,6 +9261,300 @@ static int lnet_old_debug_recovery_show_dump(struct sk_buff *msg,
 }
 #endif
 
+static inline struct lnet_genl_fault_rule_list *
+lnet_fault_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lnet_genl_fault_rule_list *)cb->args[0];
+}
+
+int lnet_fault_show_done(struct netlink_callback *cb)
+{
+	struct lnet_genl_fault_rule_list *rlist = lnet_fault_dump_ctx(cb);
+
+	ENTRY;
+	if (rlist) {
+		genradix_free(&rlist->lgfrl_list);
+		CFS_FREE_PTR(rlist);
+	}
+	cb->args[0] = 0;
+
+	RETURN(0);
+}
+
+int lnet_fault_show_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+	struct netlink_ext_ack *extack = NULL;
+	struct nlattr *params = genlmsg_data(gnlh);
+	struct lnet_genl_fault_rule_list *rlist;
+	int msg_len, rem, rc = 0;
+	struct nlattr *entry;
+	s64 opc = 0;
+
+	ENTRY;
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		NL_SET_ERR_MSG(extack, "no configuration");
+		RETURN(-ENOMSG);
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		NL_SET_ERR_MSG(extack, "invalid configuration");
+		RETURN(-EINVAL);
+	}
+
+	nla_for_each_attr(entry, params, msg_len, rem) {
+		if (nla_type(entry) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(entry, "rule_type") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     (void *)&opc, sizeof(opc), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+		}
+	}
+
+	CDEBUG(D_NET, "Got opc %lld\n", opc);
+
+	if (opc != LNET_CTL_DROP_LIST && opc != LNET_CTL_DELAY_LIST) {
+		NL_SET_ERR_MSG(extack, "invalid operation");
+		GOTO(report_error, rc = -EINVAL);
+	}
+
+	CFS_ALLOC_PTR(rlist);
+	if (!rlist) {
+		NL_SET_ERR_MSG(extack, "No memory for rule list");
+		RETURN(-ENOMEM);
+	}
+
+	genradix_init(&rlist->lgfrl_list);
+	rlist->lgfrl_count = 0;
+	rlist->lgfrl_index = 0;
+	rlist->lgfrl_opc = opc;
+	cb->args[0] = (long)rlist;
+
+	rc = -ENOENT;
+	if (opc == LNET_CTL_DROP_LIST)
+		rc = lnet_drop_rule_collect(rlist);
+	else if (opc == LNET_CTL_DELAY_LIST)
+		rc = lnet_delay_rule_collect(rlist);
+report_error:
+	if (rc < 0)
+		lnet_fault_show_done(cb);
+
+	RETURN(rc);
+}
+
+static const struct ln_key_list fault_attr_list = {
+	.lkl_maxattr			= LNET_FAULT_ATTR_MAX,
+	.lkl_list			= {
+		[LNET_FAULT_ATTR_HDR]		= {
+			.lkp_value		= "fault",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LNET_FAULT_ATTR_FA_TYPE]	= {
+			.lkp_value		= "rule_type",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_FAULT_ATTR_FA_SRC]	= {
+			.lkp_value		= "fa_src",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_FAULT_ATTR_FA_DST]	= {
+			.lkp_value		= "fa_dst",
+			.lkp_data_type		= NLA_STRING
+		},
+		[LNET_FAULT_ATTR_FA_PTL_MASK]	= {
+			.lkp_value		= "fa_ptl_mask",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FA_MSG_MASK]	= {
+			.lkp_value		= "fa_msg_mask",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_DA_RATE]	= {
+			.lkp_value		= "da_rate",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_DA_INTERVAL]	= {
+			.lkp_value		= "da_interval",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_DS_DROPPED]	= {
+			.lkp_value		= "ds_dropped",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_LA_RATE]	= {
+			.lkp_value		= "la_rate",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_LA_INTERVAL]	= {
+			.lkp_value		= "la_interval",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_LA_LATENCY]	= {
+			.lkp_value		= "la_latency",
+			.lkp_data_type		= NLA_U32
+		},
+		[LNET_FAULT_ATTR_LS_DELAYED]	= {
+			.lkp_value		= "ls_delayed",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FS_COUNT]	= {
+			.lkp_value		= "fs_count",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FS_PUT]	= {
+			.lkp_value		= "fs_put",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FS_ACK]	= {
+			.lkp_value		= "fs_ack",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FS_GET]	= {
+			.lkp_value		= "fs_get",
+			.lkp_data_type		= NLA_U64
+		},
+		[LNET_FAULT_ATTR_FS_REPLY]	= {
+			.lkp_value		= "fs_reply",
+			.lkp_data_type		= NLA_U64
+		},
+	},
+};
+
+int lnet_fault_show_dump(struct sk_buff *msg, struct netlink_callback *cb)
+{
+	struct lnet_genl_fault_rule_list *rlist = lnet_fault_dump_ctx(cb);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx, rc = 0;
+	u32 opc;
+
+	ENTRY;
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	if (!rlist->lgfrl_count) {
+		NL_SET_ERR_MSG(extack, "No routes found");
+		GOTO(send_error, rc = -ENOENT);
+	}
+
+	idx = rlist->lgfrl_index;
+	if (!idx) {
+		const struct ln_key_list *all[] = {
+			&fault_attr_list, NULL
+		};
+
+		rc = lnet_genl_send_scalar_list(msg, portid, seq,
+						&lnet_family,
+						NLM_F_CREATE | NLM_F_MULTI,
+						LNET_CMD_FAULT, all);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "failed to send key table");
+			GOTO(send_error, rc);
+		}
+	}
+	opc = rlist->lgfrl_opc;
+
+	while (idx < rlist->lgfrl_count) {
+		struct lnet_rule_properties *prop;
+		void *hdr;
+
+		prop = genradix_ptr(&rlist->lgfrl_list, idx++);
+
+		hdr = genlmsg_put(msg, portid, seq, &lnet_family,
+				  NLM_F_MULTI, LNET_CMD_FAULT);
+		if (!hdr) {
+			NL_SET_ERR_MSG(extack, "failed to send values");
+			genlmsg_cancel(msg, hdr);
+			GOTO(send_error, rc = -EMSGSIZE);
+		}
+
+		if (idx == 1)
+			nla_put_string(msg, LNET_FAULT_ATTR_HDR, "");
+
+		nla_put_string(msg, LNET_FAULT_ATTR_FA_TYPE,
+			       opc == LNET_CTL_DROP_LIST ? "drop" : "delay");
+
+		nla_put_string(msg, LNET_FAULT_ATTR_FA_SRC,
+			       libcfs_nidstr(&prop->attr.fa_src));
+		nla_put_string(msg, LNET_FAULT_ATTR_FA_DST,
+			       libcfs_nidstr(&prop->attr.fa_dst));
+
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FA_PTL_MASK,
+				  prop->attr.fa_ptl_mask,
+				  LNET_FAULT_ATTR_PAD);
+		nla_put_u32(msg, LNET_FAULT_ATTR_FA_MSG_MASK,
+			    prop->attr.fa_msg_mask);
+
+		if (opc == LNET_CTL_DROP_LIST) {
+			nla_put_u32(msg, LNET_FAULT_ATTR_DA_RATE,
+				    prop->attr.u.drop.da_rate);
+			nla_put_u32(msg, LNET_FAULT_ATTR_DA_INTERVAL,
+				    prop->attr.u.drop.da_interval);
+			nla_put_u64_64bit(msg, LNET_FAULT_ATTR_DS_DROPPED,
+					  prop->stat.u.drop.ds_dropped,
+					  LNET_FAULT_ATTR_PAD);
+		} else if (opc == LNET_CTL_DELAY_LIST) {
+			nla_put_u32(msg, LNET_FAULT_ATTR_LA_RATE,
+				    prop->attr.u.delay.la_rate);
+			nla_put_u32(msg, LNET_FAULT_ATTR_LA_INTERVAL,
+				    prop->attr.u.delay.la_interval);
+			nla_put_u32(msg, LNET_FAULT_ATTR_LA_LATENCY,
+				    prop->attr.u.delay.la_latency);
+			nla_put_u64_64bit(msg, LNET_FAULT_ATTR_LS_DELAYED,
+					  prop->stat.u.delay.ls_delayed,
+					  LNET_FAULT_ATTR_PAD);
+		}
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FS_COUNT,
+				  prop->stat.fs_count,
+				  LNET_FAULT_ATTR_PAD);
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FS_PUT,
+				  prop->stat.fs_put,
+				  LNET_FAULT_ATTR_PAD);
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FS_ACK,
+				  prop->stat.fs_ack,
+				  LNET_FAULT_ATTR_PAD);
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FS_GET,
+				  prop->stat.fs_get,
+				  LNET_FAULT_ATTR_PAD);
+		nla_put_u64_64bit(msg, LNET_FAULT_ATTR_FS_REPLY,
+				  prop->stat.fs_reply,
+				  LNET_FAULT_ATTR_PAD);
+		genlmsg_end(msg, hdr);
+	}
+	rlist->lgfrl_index = idx;
+send_error:
+	return lnet_nl_send_error(cb->skb, portid, seq, rc);
+}
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+int lnet_old_fault_show_dump(struct sk_buff *msg, struct netlink_callback *cb)
+{
+	if (!cb->args[0]) {
+		int rc = lnet_fault_show_start(cb);
+
+		if (rc < 0)
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
+	}
+
+	return lnet_fault_show_dump(msg, cb);
+}
+#endif
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -9270,6 +9564,7 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name =	"discover",	},
 	{ .name =	"cpt-of-nid",	},
 	{ .name =	"dbg-recov",	},
+	{ .name =	"fault",	},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -9361,6 +9656,17 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_debug_recovery_show_dump,
 #endif
 		.done		= lnet_debug_recovery_show_done,
+	},
+	{
+		.cmd		= LNET_CMD_FAULT,
+		.flags		= GENL_ADMIN_PERM,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lnet_fault_show_start,
+		.dumpit		= lnet_fault_show_dump,
+#else
+		.dumpit		= lnet_old_fault_show_dump,
+#endif
+		.done		= lnet_fault_show_done,
 	},
 };
 

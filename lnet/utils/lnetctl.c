@@ -43,6 +43,7 @@ static int jt_show_peer(int argc, char **argv);
 static int jt_show_recovery(int argc, char **argv);
 static int jt_show_global(int argc, char **argv);
 static int jt_show_udsp(int argc, char **argv);
+static int jt_show_fault(int argc, char **argv);
 static int jt_set_tiny(int argc, char **argv);
 static int jt_set_small(int argc, char **argv);
 static int jt_set_large(int argc, char **argv);
@@ -62,7 +63,6 @@ static int jt_set_drop_asym_route(int argc, char **argv);
 static int jt_list_peer(int argc, char **argv);
 static int jt_add_udsp(int argc, char **argv);
 static int jt_del_udsp(int argc, char **argv);
-/*static int jt_show_peer(int argc, char **argv);*/
 static int jt_import(int argc, char **argv);
 static int jt_export(int argc, char **argv);
 static int jt_ping(int argc, char **argv);
@@ -82,6 +82,7 @@ static int jt_calc_service_id(int argc, char **argv);
 static int jt_set_response_tracking(int argc, char **argv);
 static int jt_set_recovery_limit(int argc, char **argv);
 static int jt_udsp(int argc, char **argv);
+static int jt_fault(int argc, char **argv);
 static int jt_setup_mrrouting(int argc, char **argv);
 static int jt_calc_cpt_of_nid(int argc, char **argv);
 static int jt_show_peer_debug_info(int argc, char **argv);
@@ -107,6 +108,7 @@ command_t cmd_list[] = {
 	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
 	{"service-id", jt_calc_service_id, 0, "Calculate IB Lustre service ID\n"},
 	{"udsp", jt_udsp, 0, "udsp {add | del | help}"},
+	{"fault", jt_fault, 0, "udsp {show | help}"},
 	{"setup-mrrouting", jt_setup_mrrouting, 0,
 	 "setup linux routing tables\n"},
 	{"cpt-of-nid", jt_calc_cpt_of_nid, 0,
@@ -293,6 +295,12 @@ command_t udsp_cmds[] = {
 	{"show", jt_show_udsp, 0, "show udsps\n"
 	 "\t--idx n: Show the rule at at index n.\n"
 	 "\t         By default, all rules are shown.\n"},
+	{ 0, 0, 0, NULL }
+};
+
+command_t fault_cmds[] = {
+	{"show", jt_show_fault, 0, "show fault rules\n"
+	 "\t--rule_type t: Show LNet fault rules of type t.\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -4011,6 +4019,17 @@ static int jt_udsp(int argc, char **argv)
 	return cfs_parser(argc, argv, udsp_cmds);
 }
 
+static int jt_fault(int argc, char **argv)
+{
+	int rc;
+
+	rc = check_cmd(fault_cmds, "fault", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
+
+	return cfs_parser(argc, argv, fault_cmds);
+}
+
 static int yaml_import_global_settings(char *key, unsigned long value,
 				       char cmd, struct cYAML *show_rc,
 				       struct cYAML *err_rc)
@@ -5473,6 +5492,57 @@ static int jt_del_udsp(int argc, char **argv)
 	cYAML_free_tree(err_rc);
 
 	return rc;
+}
+
+int jt_show_fault(int argc, char **argv)
+{
+	const char *const short_options = "t:";
+	static const struct option long_options[] = {
+		{ .name = "rule_type",	.has_arg = required_argument, .val = 't' },
+		{ .name = NULL }
+	};
+	yaml_document_t results;
+	yaml_emitter_t debug;
+	int opc = 0, opt, rc;
+
+	rc = check_cmd(fault_cmds, "fault", "show", 2, argc, argv);
+	if (rc < 0)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			if (strcmp(optarg, "delay") == 0)
+				opc = LNET_CTL_DELAY_LIST;
+			else if (strcmp(optarg, "drop") == 0)
+				opc = LNET_CTL_DROP_LIST;
+			else
+				return -EINVAL;
+			break;
+		default:
+			return 0;
+		}
+	}
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 0)
+		return -EINVAL;
+
+	yaml_emitter_set_indent(&debug, LNET_DEFAULT_INDENT);
+	yaml_emitter_set_output_file(&debug, stdout);
+	rc = yaml_emitter_dump(&debug, &results);
+
+	yaml_emitter_delete(&debug);
+	yaml_document_delete(&results);
+
+	return rc == 0 ? -EINVAL : 0;
 }
 
 int main(int argc, char **argv)

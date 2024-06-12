@@ -375,7 +375,6 @@ int yaml_netlink_setup_emitter(yaml_emitter_t *output, struct nl_sock *sk,
 		goto emitter_error;
 
 	yaml_emitter_open(output);
-	yaml_emitter_set_indent(output, 6);
 	yaml_document_start_event_initialize(&hdr, NULL, NULL, NULL, 0);
 	rc = yaml_emitter_emit(output, &hdr);
 	if (rc == 0)
@@ -524,6 +523,131 @@ free_reply:
 
 	yaml_parser_delete(&reply);
 	yaml_document_delete(&results);
+	nl_socket_free(sk);
+
+	return rc == 1 ? 0 : rc;
+}
+
+static char *
+fault_opc_to_str(__u32 opc)
+{
+	switch (opc) {
+	case LNET_CTL_DROP_LIST:
+		return "list drop rule";
+	case LNET_CTL_DELAY_LIST:
+		return "list delay rules";
+	default:
+		return "unrecognized command";
+	}
+}
+
+int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
+			 char *dst, char *local_nid,
+			 struct lnet_fault_attr *attr)
+{
+	struct nl_sock *sk = NULL;
+	char num[INT_STRING_LEN];
+	const char *msg = NULL;
+	int flags = NLM_F_DUMP;
+	yaml_emitter_t output;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	int rc;
+
+	/* Create Netlink emitter to send request to kernel */
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to receive Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		nl_socket_free(sk);
+		return -EOPNOTSUPP;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0)
+		goto free_reply;
+
+	rc = yaml_netlink_setup_emitter(&output, sk, LNET_GENL_NAME,
+					LNET_GENL_VERSION, flags,
+					LNET_CMD_FAULT, false);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"fault",
+				     strlen("fault"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"rule_type",
+				     strlen("rule_type"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	snprintf(num, sizeof(num), "%d", opc);
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_INT_TAG,
+				     (yaml_char_t *)num,
+				     strlen(num), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&output, &event);
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = yaml_netlink_complete_emitter(&output);
+emitter_error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&output, stderr);
+		rc = -EINVAL;
+	} else {
+		rc = yaml_parser_load(&reply, results);
+		if (rc == 0) {
+			msg = yaml_parser_get_reader_error(&reply);
+			/* dump routine returns ENOENT if the rule list is
+			 * empty. This is not an error condition.
+			 */
+			if (errno == -ENOENT && (flags & NLM_F_DUMP))
+				rc = 1;
+		}
+	}
+	yaml_emitter_delete(&output);
+free_reply:
+	if (rc == 0) {
+		if (!msg)
+			msg = yaml_parser_get_reader_error(&reply);
+
+		if (strcmp(msg, "Unspecific failure") != 0) {
+			fprintf(stdout, "failed to %s: %s\n",
+				fault_opc_to_str(opc), msg);
+		} else {
+			fprintf(stdout, "failed to %s: %s\n",
+				fault_opc_to_str(opc), strerror(errno));
+		}
+		rc = errno;
+	}
+	yaml_parser_delete(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;

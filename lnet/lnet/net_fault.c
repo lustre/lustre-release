@@ -288,6 +288,33 @@ lnet_drop_rule_list(int pos, struct lnet_fault_large_attr *attr,
 	RETURN(rc);
 }
 
+int lnet_drop_rule_collect(struct lnet_genl_fault_rule_list *rlist)
+{
+	struct lnet_drop_rule *rule;
+	int cpt, rc = 0;
+
+	ENTRY;
+	cpt = lnet_net_lock_current();
+	list_for_each_entry(rule, &the_lnet.ln_drop_rules, dr_link) {
+		struct lnet_rule_properties *prop;
+
+		prop = genradix_ptr_alloc(&rlist->lgfrl_list,
+					  rlist->lgfrl_count++,
+					  GFP_KERNEL);
+		if (!prop) {
+			rc = -ENOMEM;
+			break;
+		}
+		spin_lock(&rule->dr_lock);
+		prop->attr = rule->dr_attr;
+		prop->stat = rule->dr_stat;
+		spin_unlock(&rule->dr_lock);
+	}
+
+	lnet_net_unlock(cpt);
+	RETURN(rc);
+}
+
 /**
  * reset counters for all drop rules
  */
@@ -1007,6 +1034,33 @@ lnet_delay_rule_list(int pos, struct lnet_fault_large_attr *attr,
 		spin_unlock(&rule->dl_lock);
 		rc = 0;
 		break;
+	}
+
+	lnet_net_unlock(cpt);
+	RETURN(rc);
+}
+
+int lnet_delay_rule_collect(struct lnet_genl_fault_rule_list *rlist)
+{
+	struct lnet_delay_rule *rule;
+	int cpt, rc = 0;
+
+	ENTRY;
+	cpt = lnet_net_lock_current();
+	list_for_each_entry(rule, &the_lnet.ln_delay_rules, dl_link) {
+		struct lnet_rule_properties *prop;
+
+		prop = genradix_ptr_alloc(&rlist->lgfrl_list,
+					  rlist->lgfrl_count++,
+					  GFP_KERNEL);
+		if (!prop) {
+			rc = -ENOMEM;
+			break;
+		}
+		spin_lock(&rule->dl_lock);
+		prop->attr = rule->dl_attr;
+		prop->stat = rule->dl_stat;
+		spin_unlock(&rule->dl_lock);
 	}
 
 	lnet_net_unlock(cpt);

@@ -1084,7 +1084,7 @@ enum lnet_peer_dist_attr {
 /** enum lnet_debug_recovery_attr		Attributes to report contents of
  *						the LNet health recovery queues
  *
- * @LNET_DBG_RECOV_ATTR_UNSPEC			Unspecified attribyute to catch
+ * @LNET_DBG_RECOV_ATTR_UNSPEC			Unspecified attribute to catch
  *						errors
  * @LNET_DBG_RECOV_ATTR_HDR			Grouping for NI recovery queue
  *						(NLA_NUL_STRING)
@@ -1100,6 +1100,62 @@ enum lnet_debug_recovery_attr {
 };
 
 #define LNET_DBG_RECOV_ATTR_MAX (__LNET_DBG_RECOV_ATTR_MAX_PLUS_ONE - 1)
+
+
+/** enum lnet_fault_rule_attr		Attributes to report LNet fault
+ *					injection.
+ *
+ * @LNET_FAULT_ATTR_UNSPEC		Unspecified attribute to catch errors
+ * @LNET_FAULT_ATTR_PAD			Pad attribute for 64b alignment
+ *
+ * @LNET_FAULT_ATTR_HDR			Grouping for "fault"
+ * @LNET_FAULT_ATTR_FA_TYPE		The type of fault injection rule. i.e.
+ *					either a "drop" rule or a "delay" rule.
+ * @LNET_FAULT_ATTR_FA_SRC		For a description of this field, and
+ *					the ones below, refer to
+ *					struct lnet_fault_attr
+ * @LNET_FAULT_ATTR_FA_DST
+ * @LNET_FAULT_ATTR_FA_PTL_MASK
+ * @LNET_FAULT_ATTR_FA_MSG_MASK
+ * @LNET_FAULT_ATTR_DA_RATE
+ * @LNET_FAULT_ATTR_DA_INTERVAL
+ * @LNET_FAULT_ATTR_DS_DROPPED
+ * @LNET_FAULT_ATTR_LA_RATE
+ * @LNET_FAULT_ATTR_LA_INTERVAL
+ * @LNET_FAULT_ATTR_LA_LATENCY
+ * @LNET_FAULT_ATTR_LS_DELAYED
+ * @LNET_FAULT_ATTR_FS_COUNT
+ * @LNET_FAULT_ATTR_FS_PUT
+ * @LNET_FAULT_ATTR_FS_ACK
+ * @LNET_FAULT_ATTR_FS_GET
+ * @LNET_FAULT_ATTR_FS_REPLY
+ */
+enum lnet_fault_rule_attr {
+	LNET_FAULT_ATTR_UNSPEC = 0,
+	LNET_FAULT_ATTR_PAD = LNET_FAULT_ATTR_UNSPEC,
+
+	LNET_FAULT_ATTR_HDR,
+	LNET_FAULT_ATTR_FA_TYPE,
+	LNET_FAULT_ATTR_FA_SRC,
+	LNET_FAULT_ATTR_FA_DST,
+	LNET_FAULT_ATTR_FA_PTL_MASK,
+	LNET_FAULT_ATTR_FA_MSG_MASK,
+	LNET_FAULT_ATTR_DA_RATE,
+	LNET_FAULT_ATTR_DA_INTERVAL,
+	LNET_FAULT_ATTR_DS_DROPPED,
+	LNET_FAULT_ATTR_LA_RATE,
+	LNET_FAULT_ATTR_LA_INTERVAL,
+	LNET_FAULT_ATTR_LA_LATENCY,
+	LNET_FAULT_ATTR_LS_DELAYED,
+	LNET_FAULT_ATTR_FS_COUNT,
+	LNET_FAULT_ATTR_FS_PUT,
+	LNET_FAULT_ATTR_FS_ACK,
+	LNET_FAULT_ATTR_FS_GET,
+	LNET_FAULT_ATTR_FS_REPLY,
+	__LNET_FAULT_ATTR_MAX_PLUS_ONE,
+};
+
+#define LNET_FAULT_ATTR_MAX (__LNET_FAULT_ATTR_MAX_PLUS_ONE - 1)
 
 struct lnet_ni {
 	/* chain on the lnet_net structure */

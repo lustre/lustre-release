@@ -71,6 +71,11 @@ char *nla_strdup(const struct nlattr *nla, gfp_t flags);
 #define nla_strscpy	nla_strlcpy
 #endif /* HAVE_NLA_STRLCPY */
 
+#ifndef HAVE_NLA_PUT_U64_64BIT
+#define nla_put_u64_64bit(skb, type, value, padattr) \
+	nla_put_u64(skb, type, value)
+#endif
+
 #ifndef HAVE_NL_PARSE_WITH_EXT_ACK
 
 #define NL_SET_BAD_ATTR(extack, attr)

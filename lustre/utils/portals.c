@@ -2812,18 +2812,158 @@ jt_ptl_delay_reset(int argc, char **argv)
 				      argc, argv);
 }
 
+static void print_fault_rules(__u32 opc, struct lnet_nid *src,
+			      struct lnet_nid *dst,
+			      struct lnet_fault_attr *attr,
+			      struct lnet_fault_stat *stat)
+{
+	if (opc == LNET_CTL_DROP_LIST) {
+		printf("%s->%s (1/%d | %d) ptl %#jx, msg %x, %ju/%ju, PUT %ju, ACK %ju, GET %ju, REP %ju\n",
+		       libcfs_nidstr(src),
+		       libcfs_nidstr(dst),
+		       attr->u.drop.da_rate, attr->u.drop.da_interval,
+		       (uintmax_t)attr->fa_ptl_mask, attr->fa_msg_mask,
+		       (uintmax_t)stat->u.drop.ds_dropped,
+		       (uintmax_t)stat->fs_count,
+		       (uintmax_t)stat->fs_put,
+		       (uintmax_t)stat->fs_ack,
+		       (uintmax_t)stat->fs_get,
+		       (uintmax_t)stat->fs_reply);
+	} else if (opc == LNET_CTL_DELAY_LIST) {
+		printf("%s->%s (1/%d | %d, latency %d) ptl %#jx, msg %x, %ju/%ju, PUT %ju, ACK %ju, GET %ju, REP %ju\n",
+		       libcfs_nidstr(src),
+		       libcfs_nidstr(dst),
+		       attr->u.delay.la_rate, attr->u.delay.la_interval,
+		       attr->u.delay.la_latency,
+		       (uintmax_t)attr->fa_ptl_mask, attr->fa_msg_mask,
+		       (uintmax_t)stat->u.delay.ls_delayed,
+		       (uintmax_t)stat->fs_count,
+		       (uintmax_t)stat->fs_put,
+		       (uintmax_t)stat->fs_ack,
+		       (uintmax_t)stat->fs_get,
+		       (uintmax_t)stat->fs_reply);
+	}
+}
+
 static int
 fault_simul_rule_list(__u32 opc, char *name, int argc, char **argv)
 {
 	struct libcfs_ioctl_data data = { { 0 } };
-	struct lnet_fault_attr   attr;
-	struct lnet_fault_stat   stat;
-	int pos;
+	struct lnet_nid src = {}, dst = {};
+	struct lnet_fault_attr attr;
+	struct lnet_fault_stat stat;
+	yaml_document_t results;
+	yaml_node_t *node;
+	bool first = true;
+	int pos, rc;
+	int i = 2;
 
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc < 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+
+	memset(&attr, 0, sizeof(attr));
+	memset(&stat, 0, sizeof(stat));
+	pos = 0;
+
+	while ((node = yaml_document_get_node(&results, i++)) != NULL) {
+		yaml_node_t *next;
+		char *tmp;
+
+		if (node->type == YAML_MAPPING_NODE) {
+			if (first) {
+				fprintf(stderr, "LNet %s rules:\n",
+					opc == LNET_CTL_DELAY_LIST ?
+					"delay" : "drop");
+				first = false;
+			} else {
+				print_fault_rules(opc, &src, &dst,
+						  &attr, &stat);
+			}
+			pos++;
+		}
+
+		if (node->type != YAML_SCALAR_NODE)
+			continue;
+
+		tmp = (char *)node->data.scalar.value;
+		if (strcmp("fa_src", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			libcfs_strnid(&src, tmp);
+		} else if (strcmp("fa_dst", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			libcfs_strnid(&dst, tmp);
+		} else if (strcmp("fa_ptl_mask", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.fa_ptl_mask = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fa_msg_mask", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.fa_msg_mask = strtoul(tmp, NULL, 0);
+		} else if (strcmp("la_rate", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.u.delay.la_rate = strtoul(tmp, NULL, 0);
+		} else if (strcmp("la_interval", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.u.delay.la_interval = strtoul(tmp, NULL, 0);
+		} else if (strcmp("la_latency", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.u.delay.la_latency = strtoul(tmp, NULL, 0);
+		} else if (strcmp("da_rate", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.u.drop.da_rate = strtoul(tmp, NULL, 0);
+		} else if (strcmp("da_interval", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			attr.u.drop.da_interval = strtoul(tmp, NULL, 0);
+		} else if (strcmp("ds_dropped", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.u.drop.ds_dropped = strtoul(tmp, NULL, 0);
+		} else if (strcmp("ls_delayed", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.u.delay.ls_delayed = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fs_count", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.fs_count = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fs_put", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.fs_put = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fs_ack", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.fs_ack = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fs_get", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.fs_get = strtoul(tmp, NULL, 0);
+		} else if (strcmp("fs_reply", tmp) == 0) {
+			next = yaml_document_get_node(&results, i);
+			tmp = (char *)next->data.scalar.value;
+			stat.fs_reply = strtoul(tmp, NULL, 0);
+		}
+	}
+
+	print_fault_rules(opc, &src, &dst, &attr, &stat);
+	printf("found total %d\n", pos);
+	return rc == 0 ? -EINVAL : 0;
+old_api:
+	rc = 0;
 	printf("LNet %s rules:\n", name);
 	for (pos = 0;; pos++) {
-		int rc;
-
 		memset(&attr, 0, sizeof(attr));
 		memset(&stat, 0, sizeof(stat));
 
@@ -2844,37 +2984,14 @@ fault_simul_rule_list(__u32 opc, char *name, int argc, char **argv)
 
 		libcfs_ioctl_unpack(&data, ioc_buf);
 
-		if (opc == LNET_CTL_DROP_LIST) {
-			printf("%s->%s (1/%d | %d) ptl %#jx, msg %x, %ju/%ju, PUT %ju, ACK %ju, GET %ju, REP %ju\n",
-			       libcfs_nid2str(attr.fa_src),
-			       libcfs_nid2str(attr.fa_dst),
-			       attr.u.drop.da_rate, attr.u.drop.da_interval,
-			       (uintmax_t)attr.fa_ptl_mask, attr.fa_msg_mask,
-			       (uintmax_t)stat.u.drop.ds_dropped,
-			       (uintmax_t)stat.fs_count,
-			       (uintmax_t)stat.fs_put,
-			       (uintmax_t)stat.fs_ack,
-			       (uintmax_t)stat.fs_get,
-			       (uintmax_t)stat.fs_reply);
+		lnet_nid4_to_nid(attr.fa_src, &src);
+		lnet_nid4_to_nid(attr.fa_dst, &dst);
 
-		} else if (opc == LNET_CTL_DELAY_LIST) {
-			printf("%s->%s (1/%d | %d, latency %d) ptl %#jx, msg %x, %ju/%ju, PUT %ju, ACK %ju, GET %ju, REP %ju\n",
-			       libcfs_nid2str(attr.fa_src),
-			       libcfs_nid2str(attr.fa_dst),
-			       attr.u.delay.la_rate, attr.u.delay.la_interval,
-			       attr.u.delay.la_latency,
-			       (uintmax_t)attr.fa_ptl_mask, attr.fa_msg_mask,
-			       (uintmax_t)stat.u.delay.ls_delayed,
-			       (uintmax_t)stat.fs_count,
-			       (uintmax_t)stat.fs_put,
-			       (uintmax_t)stat.fs_ack,
-			       (uintmax_t)stat.fs_get,
-			       (uintmax_t)stat.fs_reply);
-		}
+		print_fault_rules(opc, &src, &dst, &attr, &stat);
 	}
 	printf("found total %d\n", pos);
 
-	return 0;
+	return rc;
 }
 
 int

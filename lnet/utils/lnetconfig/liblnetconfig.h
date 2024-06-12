@@ -25,6 +25,7 @@
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <linux/lnet/lnet-dlc.h>
+#include <linux/lnet/lnetctl.h>
 #include <linux/lnet/nidstr.h>
 
 #define LUSTRE_CFG_RC_NO_ERR			 0 /* success */
@@ -791,6 +792,10 @@ void lustre_lnet_free_list(struct nid_node *head);
  *   msg	  error msg string returned.
  */
 int yaml_lnet_configure(int flags, const char **msg);
+
+int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
+			 char *dst, char *local_nid,
+			 struct lnet_fault_attr *attr);
 
 /**
  * yaml_emitter_set_output_netlink

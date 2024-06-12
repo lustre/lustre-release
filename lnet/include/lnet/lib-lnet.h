@@ -19,6 +19,7 @@
 #define CFS_FAIL_MATCH_MD_NID		0xe001
 #define CFS_FAIL_DELAY_MSG_FORWARD	0xe002
 
+#include <linux/generic-radix-tree.h>
 #include <linux/netdevice.h>
 
 #include <libcfs/libcfs.h>
@@ -816,18 +817,31 @@ struct lnet_fault_large_attr {
 	} u;
 };
 
+struct lnet_rule_properties {
+	struct lnet_fault_large_attr attr;
+	struct lnet_fault_stat stat;
+};
+
+struct lnet_genl_fault_rule_list {
+	unsigned int				lgfrl_index;
+	unsigned int				lgfrl_count;
+	u32					lgfrl_opc;
+	GENRADIX(struct lnet_rule_properties)	lgfrl_list;
+};
+
 int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
 bool lnet_drop_rule_match(struct lnet_hdr *hdr, struct lnet_nid *local_nid,
 			  enum lnet_msg_hstatus *hstatus);
-
+int lnet_drop_rule_collect(struct lnet_genl_fault_rule_list *rlist);
 int lnet_delay_rule_add(struct lnet_fault_large_attr *attr);
 int lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst,
 			bool shutdown);
 int lnet_delay_rule_list(int pos, struct lnet_fault_large_attr *attr,
 			 struct lnet_fault_stat *stat);
+int lnet_delay_rule_collect(struct lnet_genl_fault_rule_list *rlist);
 void lnet_delay_rule_reset(void);
 void lnet_delay_rule_check(void);
 bool lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg);
