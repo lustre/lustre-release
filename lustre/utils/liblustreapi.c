@@ -41,16 +41,18 @@
 #endif
 
 #include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <grp.h>
 #include <mntent.h>
+#include <pwd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <dirent.h>
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -5401,6 +5403,62 @@ format_done:
 }
 
 /*
+ * Create a formated access mode string
+ *
+ * @param[in] param->fp_lmd->lmd_stx.stx_mode
+ *
+ */
+
+static int snprintf_access_mode(char *buffer, size_t size, __u16 mode)
+{
+	char access_string[16];
+	char *p = access_string;
+
+	switch (mode & S_IFMT) {
+	case S_IFREG:
+		*p++ = '-';
+		break;
+	case S_IFDIR:
+		*p++ = 'd';
+		break;
+	case S_IFLNK:
+		*p++ = 'l';
+		break;
+	case S_IFIFO:
+		*p++ = 'p';
+		break;
+	case S_IFSOCK:
+		*p++ = 's';
+		break;
+	case S_IFBLK:
+		*p++ = 'b';
+		break;
+	case S_IFCHR:
+		*p++ = 'c';
+		break;
+	default:
+		*p++ = '?';
+		break;
+	}
+
+	*p++ = (mode & S_IRUSR) ? 'r' : '-';
+	*p++ = (mode & S_IWUSR) ? 'w' : '-';
+	*p++ = (mode & S_IXUSR) ? ((mode & S_ISUID) ? 's' : 'x') :
+				  ((mode & S_ISUID) ? 'S' : '-');
+	*p++ = (mode & S_IRGRP) ? 'r' : '-';
+	*p++ = (mode & S_IWGRP) ? 'w' : '-';
+	*p++ = (mode & S_IXGRP) ? ((mode & S_ISGID) ? 's' : 'x') :
+				  ((mode & S_ISGID) ? 'S' : '-');
+	*p++ = (mode & S_IROTH) ? 'r' : '-';
+	*p++ = (mode & S_IWOTH) ? 'w' : '-';
+	*p++ = (mode & S_IXOTH) ? ((mode & S_ISVTX) ? 't' : 'x') :
+				  ((mode & S_ISVTX) ? 'T' : '-');
+	*p = '\0';
+
+	return snprintf(buffer, size, "%s", access_string);
+}
+
+/*
  * Interpret format specifiers beginning with '%'.
  *
  * @param[in]	seq	String being parsed for format specifier.  The leading
@@ -5436,9 +5494,33 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 	case 'b':	/* file size (in 512B blocks) */
 		*wrote = snprintf(buffer, size, "%"PRIu64, blocks);
 		break;
+	case 'g': { /* groupname of owner*/
+		static char save_gr_name[LOGIN_NAME_MAX + 1];
+		static gid_t save_gid = -1;
+
+		if (save_gid != param->fp_lmd->lmd_stx.stx_gid) {
+			struct group *gr;
+
+			gr = getgrgid(param->fp_lmd->lmd_stx.stx_gid);
+			if (gr) {
+				save_gid = param->fp_lmd->lmd_stx.stx_gid;
+				strncpy(save_gr_name, gr->gr_name,
+					sizeof(save_gr_name) - 1);
+			}
+		}
+		if (save_gr_name[0]) {
+			*wrote = snprintf(buffer, size, "%s", save_gr_name);
+			break;
+		}
+		fallthrough;
+	}
 	case 'G':	/* GID of owner */
 		*wrote = snprintf(buffer, size, "%u",
 				   param->fp_lmd->lmd_stx.stx_gid);
+		break;
+	case 'i':	/* inode number */
+		*wrote = snprintf(buffer, size, "%llu",
+				  param->fp_lmd->lmd_stx.stx_ino);
 		break;
 	case 'k':	/* file size (in 1K blocks) */
 		*wrote = snprintf(buffer, size, "%"PRIu64, (blocks + 1)/2);
@@ -5449,6 +5531,9 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		break;
 	case 'm':	/* file mode in octal */
 		*wrote = snprintf(buffer, size, "%#o", (mode & (~S_IFMT)));
+		break;
+	case 'M':	/* file access mode */
+		*wrote = snprintf_access_mode(buffer, size, mode);
 		break;
 	case 'n':	/* number of links */
 		*wrote = snprintf(buffer, size, "%u",
@@ -5461,6 +5546,26 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		*wrote = snprintf(buffer, size, "%"PRIu64,
 				   (uint64_t) param->fp_lmd->lmd_stx.stx_size);
 		break;
+	case 'u': {/* username of owner */
+		static char save_username[LOGIN_NAME_MAX + 1];
+		static uid_t save_uid = -1;
+
+		if (save_uid != param->fp_lmd->lmd_stx.stx_uid) {
+			struct passwd *pw;
+
+			pw = getpwuid(param->fp_lmd->lmd_stx.stx_uid);
+			if (pw) {
+				save_uid = param->fp_lmd->lmd_stx.stx_uid;
+				strncpy(save_username, pw->pw_name,
+					sizeof(save_username) - 1);
+			}
+		}
+		if (save_username[0]) {
+			*wrote = snprintf(buffer, size, "%s", save_username);
+			break;
+		}
+		fallthrough;
+	}
 	case 'U':	/* UID of owner */
 		*wrote = snprintf(buffer, size, "%u",
 				   param->fp_lmd->lmd_stx.stx_uid);
@@ -6460,7 +6565,7 @@ static int validate_printf_esc(char *c)
  */
 static int validate_printf_fmt(char *c)
 {
-	char *valid_fmt_single = "abcGkmnpstUwy%";
+	char *valid_fmt_single = "abcigGkmMnpstuUwy%";
 	char *valid_fmt_double = "ACTW";
 	char *valid_fmt_lustre = "aAcFhioPpS";
 	char curr = *c, next;

@@ -352,11 +352,20 @@ File\'s last status change time in the format returned by the C \`ctime\' functi
 .B %C@
 File\'s last status change time in seconds since Jan. 1, 1970, 00:00 GMT.
 .TP
+.B %g
+File\'s groupname.
+.TP
 .B %G
 File\'s numeric group ID.
 .TP
+.B %i
+Inode number.
+.TP
 .B %m
 File permission bits (in octal).
+.TP
+.B %M
+File permissions (rwx format)
 .TP
 .B %n
 Number of hard links to file.
@@ -372,6 +381,9 @@ File\'s last modification time in the format returned by the C \`ctime\' functio
 .TP
 .B %T@
 File\'s last modification time in seconds since Jan. 1, 1970, 00:00 GMT.
+.TP
+.B %u
+File's username.
 .TP
 .B %U
 File's numeric user ID.
@@ -512,6 +524,10 @@ the OST object attributes for that file.
 .B $ lfs find /mnt/lustre
 Efficiently lists all files in a given directory and its subdirectories,
 without fetching any file attributes.
+.TP
+.B $ lfs find /mnt/lustre -printf "%u %M %i \n"
+Prints a formatted find string, listing the username, access mode and inode
+number.
 .TP
 .B $ lfs find /mnt/lustre -mtime +30 -type f -print
 Recursively list all regular files in given directory more than 30 days old.

@@ -9173,6 +9173,22 @@ test_56ea() { #LU-10378
 }
 run_test 56ea "test lfs find -printf option"
 
+test_56eaa() {
+	local lfs_find=($($LFS find $DIR -printf "%i %u %g %M %p\n" | sort -n))
+	local normal_find=($(find $DIR -printf "%i %u %g %M %p\n" | sort -n))
+
+	echo "comparing ${#normal_find[@]} elements starting with:"
+	echo "lfs: ${lfs_find[0]} ${lfs_find[1]} ${lfs_find[2]} ${lfs_find[3]} ${lfs_find[4]}"
+	echo "find: ${normal_find[0]} ${normal_find[1]} ${normal_find[2]} ${normal_find[3]} ${normal_find[4]}"
+
+	for ((i = 0; i < ${#normal_find[@]}; i++)); do
+		if [[ "${lfs_find[i]}" != "${normal_find[i]}" ]]; then
+			error "expected '${normal_find[i]}' but got '${lfs_find[i]}' from file ${lfs_find[$((i - (i % 5) + 4))]}"
+		fi
+	done
+}
+run_test 56eaa "test lfs find -printf added functions"
+
 test_56eb() {
 	local dir=$DIR/$tdir
 	local subdir_1=$dir/subdir_1
