@@ -934,7 +934,7 @@ int main(int argc, char **argv)
 	struct identity_downcall_data *data = NULL;
 	glob_t path;
 	unsigned long uid;
-	struct timeval start, idgot, fini;
+	struct timeval start, idgot = {0}, fini;
 	int fd, rc = -EINVAL, size, maxgroups;
 	bool alreadyfailed = false;
 
