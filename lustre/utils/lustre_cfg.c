@@ -461,8 +461,7 @@ static int lcfg_setparam_perm(char *func, char *buf)
  * This should be loaded after the individual config logs.
  * Called from set param with -P option.
  */
-int jt_lcfg_setparam_perm(int argc, char **argv,
-				 struct param_opts *popt)
+int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 {
 	int rc;
 	int i;

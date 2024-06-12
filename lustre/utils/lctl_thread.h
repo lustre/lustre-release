@@ -50,8 +50,10 @@ struct param_opts {
 	unsigned int po_header:1;
 	unsigned int po_follow_symlinks:1;
 	unsigned int po_tunable:1;
+	unsigned int po_client:1;
 	unsigned int po_parallel_threads;
 	unsigned int po_permissions;
+	char *po_fsname;
 };
 
 #ifdef HAVE_LIBPTHREAD

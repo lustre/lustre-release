@@ -36,6 +36,8 @@
 #include <linux/lustre/lustre_barrier_user.h>
 #endif
 
+#define PATH_FORMAT "/etc/lustre/mount.%s.params"
+
 /* ptlctl.a */
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
@@ -139,9 +141,11 @@ char *jt_cmdname(char *func);
 
 /* lustre_param.c */
 struct param_opts;
+int jt_clean_path(struct param_opts *popt, char *path);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
+int jt_lcfg_setparam_client(int argc, char **argv, struct param_opts *popt);
 
 /* lustre_cfg.c */
 int lcfg_set_devname(char *name);

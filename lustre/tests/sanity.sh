@@ -29913,6 +29913,139 @@ test_401f() {
 }
 run_test 401f "check 'lctl list_param' doesn't follow symlinks with --no-links"
 
+test_401ga() {
+	local paramdir=/etc/lustre
+	local fsnamefile=$paramdir/mount.$FSNAME.params
+	local clientfile=$paramdir/mount.client.params
+
+	local param1="osc.$FSNAME-OST0000-*.max_dirty_mb"
+	local param2="at_max"
+
+	local value1_new value2_new
+	local value1_old=$($LCTL get_param -n $param1)
+	local value2_old=$($LCTL get_param -n $param2)
+
+	local value1_client=$(( value1_old - 1 ))
+	local value1_fsname=$(( value1_old - 3 ))
+	local value2_client=$(( value2_old - 10 ))
+	local value2_fsname=$(( value2_old - 13 ))
+
+	stack_trap "$LCTL set_param $param1=$value1_old"
+	stack_trap "$LCTL set_param $param2=$value2_old"
+
+	if [[ -e $fsnamefile ]]; then
+		mv $fsnamefile $fsnamefile.$TESTNAME
+		stack_trap "mv $fsnamefile.$TESTNAME $fsnamefile"
+	else
+		stack_trap "rm -f $fsnamefile"
+	fi
+
+	if [[ -e $clientfile ]]; then
+		mv $clientfile $clientfile.$TESTNAME
+		stack_trap "mv $clientfile.$TESTNAME $clientfile"
+	else
+		stack_trap "rm -f $clientfile"
+	fi
+
+	# do not allow bad params to be set
+	$LCTL set_param --client $TESTNAME=$TESTNAME &&
+		error "set $TESTNAME as param in $clientfile" || true
+
+	# set garbage val to be overwritten
+	$LCTL set_param --client $param1=$TESTNAME ||
+		error "failed to set $param1 in $clientfile"
+
+	$LCTL set_param --client $param1=$value1_client ||
+		error "failed to overwrite $param1 in $clientfile"
+
+	# nothing should be changed
+	$LCTL set_param --client $param1=$value1_client ||
+		error "error setting duplicate param $param1 in $clientfile"
+
+	$LCTL set_param --client=$FSNAME $param1=$value1_fsname ||
+		error "failed to set $param1 in $fsnamefile"
+
+	$LCTL set_param --client=$FSNAME $param2=$value2_fsname &&
+		error "set $param2 in $fsnamefile without containing $FSNAME" ||
+		true
+
+	$LCTL set_param --client $TESTNAME= $param2=$value2_client || true
+	grep -q "$param2=$value2_client" $clientfile ||
+		error "set_param -C did not continue after error"
+
+	remount_client $MOUNT
+
+	value1_new=$($LCTL get_param -n $param1)
+	value2_new=$($LCTL get_param -n $param2)
+
+	[[ "$value1_new" == "$value1_client" ]] &&
+		error "$param1 not $value1_fsname, got client param $value1_new"
+	[[ "$value1_new" == "$value1_fsname" ]] ||
+		error "$param1 not $FSNAME param $value1_fsname, got $value1_new"
+	[[ "$value2_new" == "$value2_client" ]] ||
+		error "$param2 not client param $value2_client, got $value2_new"
+}
+run_test 401ga "check 'set_param -C' sets params upon mount"
+
+test_401gb() {
+	local paramdir=/etc/lustre
+	local fsnamefile=$paramdir/mount.$FSNAME.params
+	local clientfile=$paramdir/mount.client.params
+
+	local param1="osc.$FSNAME-OST0000-*.max_dirty_mb"
+	local param2="at_max"
+
+	local value1_new value2_new
+	local value1_old=$($LCTL get_param -n $param1)
+	local value2_old=$($LCTL get_param -n $param2)
+
+	local value1_client=$(( value1_old - 1 ))
+	local value1_fsname=$(( value1_old - 3 ))
+	local value2_client=$(( value2_old - 10 ))
+
+	stack_trap "$LCTL set_param $param1=$value1_old"
+	stack_trap "$LCTL set_param $param2=$value2_old"
+
+	if [[ -e $fsnamefile ]]; then
+		mv $fsnamefile $fsnamefile.$TESTNAME
+		stack_trap "mv $fsnamefile.$TESTNAME $fsnamefile"
+	else
+		stack_trap "rm $fsnamefile"
+	fi
+
+	if [[ -e $clientfile ]]; then
+		mv $clientfile $clientfile.$TESTNAME
+		stack_trap "mv $clientfile.$TESTNAME $clientfile"
+	else
+		stack_trap "rm $clientfile"
+	fi
+
+	$LCTL set_param --client $param1=$value1_client $param2=$value2_client
+	$LCTL set_param --client=$FSNAME $param1=$value1_fsname
+
+	$LCTL set_param -d --client $TESTNAME=$TESTNAME ||
+		error "error deleting bad param $TESTNAME from $clientfile"
+
+	$LCTL set_param -d --client $param2 ||
+		error "error deleting $param2 from $clientfile"
+
+	$LCTL set_param -d --client=$FSNAME $param1 $param2 ||
+		error "error deleting $param1 and $param2 from $fsnamefile"
+
+	remount_client $MOUNT
+
+	value1_new=$($LCTL get_param -n $param1)
+	value2_new=$($LCTL get_param -n $param2)
+
+	[[ "$value1_new" == "$value1_fsname" ]] &&
+		error "$param1 not $value1_client, got $FSNAME param $value1_new"
+	[[ "$value1_new" == "$value1_client" ]] ||
+		error "$param1 not client param $value1_client, got $value1_new"
+	[[ "$value2_new" == "$value2_old" ]] ||
+		error "$param2 not $value2_old, got $value2_new"
+}
+run_test 401gb "check 'set_param -d -C' removes client params"
+
 test_402() {
 	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||
 	[[ $MDS1_VERSION -ge $(version_code 2.7.18.4) &&

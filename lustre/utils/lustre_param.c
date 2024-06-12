@@ -189,7 +189,7 @@ static char *display_name(const char *filename, struct stat *st,
  *
  * \retval -errno on error.
  */
-static int clean_path(struct param_opts *popt, char *path)
+int jt_clean_path(struct param_opts *popt, char *path)
 {
 	char *nidstart = NULL;
 	char *nidend = NULL;
@@ -579,7 +579,7 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 		}
 
 		/* Turn param_name into file path format */
-		rc2 = clean_path(popt, param_name);
+		rc2 = jt_clean_path(popt, param_name);
 		if (rc2 < 0) {
 			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
 				opname, param_name, strerror(-rc2));
@@ -716,7 +716,7 @@ int jt_lcfg_listparam(int argc, char **argv)
 
 		path = argv[i];
 
-		rc2 = clean_path(&popt, path);
+		rc2 = jt_clean_path(&popt, path);
 		if (rc2 < 0) {
 			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
 				jt_cmdname(argv[0]), path, strerror(-rc2));
@@ -842,7 +842,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 
 		path = argv[i];
 
-		rc2 = clean_path(&popt, path);
+		rc2 = jt_clean_path(&popt, path);
 		if (rc2 < 0) {
 			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
 				jt_cmdname(argv[0]), path, strerror(-rc2));
@@ -920,6 +920,7 @@ static void setparam_check_deprecated(const char *path)
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	struct option long_opts[] = {
+	{ .val = 'C',	.name = "client",	.has_arg = optional_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'F',	.name = "file",		.has_arg = no_argument},
 	{ .val = 'n',	.name = "noname",	.has_arg = no_argument},
@@ -939,15 +940,44 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_file = 0;
 	popt->po_parallel_threads = 0;
 	popt->po_follow_symlinks = 1;
+	popt->po_client = 0;
 	opterr = 0;
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "dFnPt::",
+	while ((ch = getopt_long(argc, argv, "C::dFnPt::",
 				 long_opts, NULL)) != -1) {
 		switch (ch) {
+		case 'C':
+			if (popt->po_perm) {
+				fprintf(stderr,
+					"error: %s: -C cannot be used with -P\n",
+					argv[0]);
+				return -1;
+			}
+			popt->po_client = 1;
+			if (optarg)
+				/* remove leading '=' from fsname if present */
+				popt->po_fsname = strdup(optarg +
+							 (optarg[0] == '='));
+			break;
+		case 'd':
+			popt->po_delete = 1;
+			break;
+		case 'F':
+			popt->po_file = 1;
+			break;
 		case 'n':
 			popt->po_show_name = 0;
+			break;
+		case 'P':
+			if (popt->po_client) {
+				fprintf(stderr,
+					"error: %s: -P cannot be used with -C\n",
+					argv[0]);
+				return -1;
+			}
+			popt->po_perm = 1;
 			break;
 		case 't':
 #if HAVE_LIBPTHREAD
@@ -959,24 +989,15 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 				return -EINVAL;
 #else
 			{
-			static bool printed;
+				static bool printed;
 
-			if (!printed) {
-				printed = true;
-				fprintf(stderr,
-					"warning: set_param: no pthread support, proceeding serially.\n");
-			}
+				if (!printed) {
+					printed = true;
+					fprintf(stderr,
+						"warning: set_param: no pthread support, proceeding serially.\n");
+				}
 			}
 #endif
-			break;
-		case 'P':
-			popt->po_perm = 1;
-			break;
-		case 'd':
-			popt->po_delete = 1;
-			break;
-		case 'F':
-			popt->po_file = 1;
 			break;
 		default:
 			return -1;
@@ -986,8 +1007,10 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		fprintf(stderr, "warning: ignoring -P option\n");
 		popt->po_perm = 0;
 	}
-	if (popt->po_delete && !popt->po_perm)
+	if (popt->po_delete && !popt->po_perm && !popt->po_client) {
+		fprintf(stderr, "warning: setting -P option\n");
 		popt->po_perm = 1;
+	}
 	return optind;
 }
 
@@ -1019,6 +1042,9 @@ int jt_lcfg_setparam(int argc, char **argv)
 		 * set with old conf_param interface
 		 */
 		return jt_lcfg_setparam_perm(argc, argv, &popt);
+
+	if (popt.po_client)
+		return jt_lcfg_setparam_client(argc, argv, &popt);
 
 	if (popt.po_file) {
 		fprintf(stderr,
@@ -1053,7 +1079,7 @@ int jt_lcfg_setparam(int argc, char **argv)
 		/* Increment index by the number of arguments consumed. */
 		index += rc;
 
-		rc = clean_path(&popt, path);
+		rc = jt_clean_path(&popt, path);
 		if (rc < 0)
 			break;
 
@@ -1098,5 +1124,247 @@ int jt_lcfg_setparam(int argc, char **argv)
 		}
 	}
 
+	return rc;
+}
+
+/*
+ * Param set to single client file, used by all mounts on a client or specific
+ * filesystem if FSNAME is specified.
+ * These params should be loaded directly after mounting.
+ * Called from set param with -C option.
+ */
+static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
+{
+	glob_t paths;
+	char path[NAME_MAX];
+	char *param_name, *param, *tmp;
+	char *dir_path = "/etc/lustre";
+	char *line = NULL;
+	bool found_param_name = false;
+	bool found_param_value = false;
+	size_t len = 0;
+	size_t buf_len;
+	FILE *file = NULL;
+	int fd = -1;
+	int rc, rc1;
+
+	buf_len = strlen(buf);
+	if (buf && buf[buf_len - 1] == '\n') {
+		param = buf;
+	} else {
+		param = malloc(++buf_len + 1);
+		snprintf(param, buf_len + 1, "%s\n", buf);
+	}
+
+	param_name = strdup(buf);
+	tmp = strchr(param_name, '=');
+	if (tmp) {
+		*tmp = '\0';
+	} else if (!popt->po_delete) {
+		rc = -EINVAL;
+		fprintf(stderr, "error: %s: client: argument '%s' does not contain '=': %s\n",
+			jt_cmdname(func), param, strerror(-rc));
+		goto out;
+	}
+
+	if (!popt->po_delete) {
+		if (popt->po_fsname && !strstr(buf, popt->po_fsname)) {
+			rc = -EINVAL;
+			fprintf(stderr,
+				"error: %s: client: argument '%s' must contain '%s' to be written to "PATH_FORMAT": %s\n",
+			jt_cmdname(func), buf, popt->po_fsname,
+			popt->po_fsname, strerror(-rc));
+			goto out;
+		}
+		char *tmp_path = strdup(param_name);
+
+		rc = jt_clean_path(popt, tmp_path);
+		if (rc < 0) {
+			fprintf(stderr,
+				"error: %s: client: cleaning '%s': %s\n",
+				jt_cmdname(func), param_name, strerror(-rc));
+			goto out;
+		}
+		rc = llapi_param_get_paths(tmp_path, &paths);
+		if (rc) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: param_paths '%s': %s\n",
+				jt_cmdname(func), param_name, strerror(errno));
+			goto out;
+		}
+		free(tmp_path);
+	}
+
+	snprintf(path, sizeof(path), PATH_FORMAT,
+		 popt->po_fsname ? popt->po_fsname : "client");
+
+	file = fopen(path, "r");
+
+	if (file) {
+		while (getline(&line, &len, file) != -1) {
+			if (strstr(line, param_name)) {
+				found_param_name = true;
+				if (!popt->po_delete && strstr(line, param))
+					found_param_value = true;
+				break;
+			}
+		}
+		if (found_param_value && !popt->po_delete)
+			goto out_file; /* nothing to change */
+	}
+
+	if (!found_param_name) {
+		if (popt->po_delete)
+			goto out_file; /* nothing to delete */
+		mkdir(dir_path, 0644);
+		fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+		if (fd < 0) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: failed open file %s: %s\n",
+				jt_cmdname(func), path, strerror(-rc));
+			goto out_fd;
+		}
+		rc1 = write(fd, param, strlen(param));
+		if (rc1 < strlen(param)) {
+			rc = -ENOMEM;
+			fprintf(stderr,
+				"error: %s: client: failed to write '%s': %s\n",
+				jt_cmdname(func), param, strerror(-rc));
+			goto out_fd;
+		}
+	} else {
+		struct stat st;
+		struct timeval now;
+		ssize_t line_len;
+		size_t tmp_len;
+		char *tmp_path;
+		char *bak_path;
+
+		line = NULL;
+		len = 0;
+
+		tmp_len = strlen(path) + 8;
+		tmp_path = malloc(tmp_len);
+		snprintf(tmp_path, tmp_len, "%s.XXXXXX", path);
+
+		rewind(file);
+
+		fd = mkstemp(tmp_path);
+		if (fd < 0) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: failed open file %s: %s\n",
+				jt_cmdname(func), tmp, strerror(-rc));
+			goto out_fd;
+		}
+
+		bak_path = malloc(strlen(path) + 5);
+		snprintf(bak_path, strlen(path) + 5, "%s.bak", path);
+		gettimeofday(&now, NULL);
+		if (stat(bak_path, &st) == -1 ||
+		    st.st_atim.tv_sec < now.tv_sec - 100) {
+			rc = rename(path, bak_path);
+			free(bak_path);
+		}
+		if (rc) {
+			fprintf(stderr,
+				"error: %s: client: failed to backup %s: %s\n",
+				jt_cmdname(func), path, strerror(-rc));
+			goto out_fd;
+		}
+
+		while ((line_len = getline(&line, &len, file)) != -1) {
+			if (strstr(line, param_name)) {
+				if (popt->po_delete)
+					continue; /* do not write param */
+				rc = write(fd, param, strlen(param));
+				if (rc < strlen(param)) {
+					fprintf(stderr,
+						"error: %s: client: failed to write '%s': %s\n",
+						jt_cmdname(func), param,
+						strerror(-rc));
+					goto out;
+				}
+			} else {
+				rc1 = write(fd, line, line_len);
+				if (rc1 < line_len) {
+					rc = -ENOMEM;
+					fprintf(stderr,
+						"error: %s: client: failed to write '%s': %s\n",
+						jt_cmdname(func), line,
+						strerror(-rc));
+					goto out;
+				}
+			}
+		}
+
+		rc = fsync(fd);
+		if (rc && errno != EEXIST && errno != ENOENT) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: failed to sync %s: %s\n",
+				jt_cmdname(func), tmp_path, strerror(-rc));
+			goto out_fd;
+		}
+
+		rc = rename(tmp_path, path);
+		if (rc) {
+			fprintf(stderr,
+				"error: %s: client: failed to rename %s: %s\n",
+				jt_cmdname(func), tmp_path, strerror(-rc));
+			goto out_fd;
+		}
+	}
+
+out_fd:
+	close(fd);
+out_file:
+	if (file)
+		fclose(file);
+	free(line);
+out:
+	if (param != buf)
+		free(param);
+	free(param_name);
+
+	return rc;
+}
+
+int jt_lcfg_setparam_client(int argc, char **argv, struct param_opts *popt)
+{
+	int rc, rc1;
+	int i;
+	int first_param;
+	char *buf = NULL;
+	char *tmp;
+
+	first_param = optind;
+	if (first_param < 0 || first_param >= argc)
+		return CMD_HELP;
+
+	if (popt->po_show_name)
+		printf("params %s /etc/lustre/mount.%s.params:\n",
+		       popt->po_delete ? "deleted from" : "written to",
+		       popt->po_fsname ? popt->po_fsname : "client");
+
+	for (i = first_param, rc = 0; i < argc; i++) {
+		buf = argv[i];
+
+		rc1 = lcfg_setparam_client(argv[0], buf, popt);
+		if (popt->po_show_name && !rc1) {
+			tmp = strchr(buf, '=');
+			if (popt->po_delete)
+				printf("%.*s=\n", tmp ? (int) (tmp - buf) :
+						  (int) strlen(buf), buf);
+			else
+				printf("%s\n", buf);
+		}
+		if (!rc && rc1)
+			rc = rc1;
+	}
+
+	free(popt->po_fsname);
 	return rc;
 }

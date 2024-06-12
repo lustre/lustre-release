@@ -3,6 +3,8 @@
 lctl-set_param \- Lustre filesystem set parameter utility
 .SH SYNOPSIS
 .SY "lctl set_param"
+.RB [ --client | -C\c
+.RI [ FSNAME ]]
 .RB [ --delete | -d ]
 .RB [ --file | -F ]
 .RB [ --no-name | -n ]
@@ -40,6 +42,18 @@ Parameters can only be modified by the root user for security reasons.
 The various options supported by
 .B lctl list_param
 are listed and explained below:
+.TP
+.BR -C ", " --client
+Write parameters to the local
+.B /etc/lustre/mount.client.params
+config file. Upon all future Lustre client mounts
+those parameters will be set on the local node. If
+.I FSNAME
+was specified, the parameters will be instead written to the mount-specific
+.BI /etc/lustre/mount. FSNAME .params
+config file. The filesystem specific params will be set only when that
+filesystem is mounted and will override the more generic client mount
+parameters.
 .TP
 .BR -d ", " --delete
 Remove the permanent setting (only for parameters set with the
@@ -108,6 +122,18 @@ osc.testfs-OST0001-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0003-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0004-osc-ffff8803c9c0f000.max_dirty_mb=512
+.PP
+Set
+.B osc.testfs-*.max_dirty_mb=2000
+when mounting 'testfs' and
+.B osc.testfs-*.max_dirty_mb=1024
+for other Lustre mountpoints on this client node
+.EX
+.RS
+.B # lctl set_param -C=test_fs osc.testfs-*.max_dirty_mb=2000
+.B # lctl set_param -C osc.testfs-*.max_dirty_mb=1024
+.RE
+.EE
 .SH AVAILABILITY
 .B lctl set_param
 is part of the

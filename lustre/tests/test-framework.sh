@@ -2534,7 +2534,7 @@ mount_facet() {
 
 	health=$(do_facet ${facet} "$LCTL get_param -n health_check")
 	if [[ "$health" != "healthy" ]]; then
-		error "$facet is in a unhealthy state"
+		error "$facet is in a unhealthy state, got: '$health'"
 	fi
 
 	set_default_debug_facet $facet

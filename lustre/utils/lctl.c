@@ -428,10 +428,10 @@ command_t cmdlist[] = {
 	 "Get the value of Lustre or LNET parameter from the specified path.\n"
 	 "The path can contain shell-style filename patterns.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [--delete|-d] [--file|-F] [--no-name|-n]\n"
-	 "		   [--permanent|-P]"
+	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d] [--file|-F]\n"
+	 "		   [--no-name|-n] [--permanent|-P]"
 #ifdef HAVE_LIBPTHREAD
-	 " [--thread|-t [THREAD_COUNT]]"
+	 " [--thread|-t[THREAD_COUNT]]"
 #endif
 	 "\n"
 	 "		   PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
