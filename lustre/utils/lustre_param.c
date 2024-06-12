@@ -72,6 +72,20 @@
 #include <stdio.h>
 #include <yaml.h>
 
+/**
+ * Parse the arguments to set_param and return the first parameter and value
+ * pair and the number of arguments consumed.
+ *
+ * \param[in] argc   number of arguments remaining in argv
+ * \param[in] argv   list of param-value arguments to set_param (this function
+ *                   will modify the strings by overwriting '=' with '\0')
+ * \param[out] param the parameter name
+ * \param[out] value the parameter value
+ *
+ * \retval the number of args consumed from argv (1 for "param=value" format, 2
+ *         for "param value" format)
+ * \retval -errno if unsuccessful
+ */
 static int sp_parse_param_value(int argc, char **argv, char **param,
 				char **value)
 {
@@ -626,6 +640,8 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_only_name = 1;
 	popt->po_follow_symlinks = 1;
 
+	/* reset optind for each getopt_long() in case of multiple calls */
+	optind = 0;
 	while ((ch = getopt_long(argc, argv, "DFlLpR",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
@@ -720,6 +736,8 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_show_name = 1;
 	popt->po_follow_symlinks = 1;
 
+	/* reset optind for each getopt_long() in case of multiple calls */
+	optind = 0;
 	while ((ch = getopt_long(argc, argv, "FHlLnNRy",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
@@ -860,13 +878,13 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 				return -EINVAL;
 #else
 			{
-				static bool printed;
+			static bool printed;
 
-				if (!printed) {
-					printed = true;
-					fprintf(stderr,
-						"warning: set_param: no pthread support, proceeding serially.\n");
-				}
+			if (!printed) {
+				printed = true;
+				fprintf(stderr,
+					"warning: set_param: no pthread support, proceeding serially.\n");
+			}
 			}
 #endif
 			break;

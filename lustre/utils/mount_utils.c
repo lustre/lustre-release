@@ -997,6 +997,39 @@ out_bad_mnt_str:
 	return NULL;
 }
 
+char *convert_fsname(char *devname)
+{
+	char *fsname, *start, *end;
+	int len = 0;
+
+	start = strstr(devname, ":/");
+	if (!start)
+		goto out_bad_name;
+	start += 2; /* skip ":/" */
+
+	end = strchr(start, '/');
+	if (!end)
+		end = start + strlen(start);
+
+	len = end - start + 1;
+
+	fsname = calloc(len, sizeof(char));
+	if (!fsname) {
+		fprintf(stderr, "%s: cannot allocate %u bytes for MOUNT: %s\n",
+			progname, len, strerror(ENOMEM));
+		return NULL;
+	}
+
+	memcpy(fsname, start, len);
+	fsname[len - 1] = '\0';
+	return fsname;
+
+out_bad_name:
+	fprintf(stderr, "%s: Can't parse filesystem name: %s\n",
+		progname, devname);
+	return NULL;
+}
+
 #ifdef HAVE_SERVER_SUPPORT
 struct lustre_cfg_entry {
 	struct list_head lce_list;

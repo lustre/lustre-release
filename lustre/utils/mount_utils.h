@@ -59,6 +59,7 @@
 #include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_disk.h>
 #endif
+#include <linux/lustre/lustre_user.h>
 
 extern char *progname;
 extern int verbose;
@@ -109,6 +110,7 @@ struct mount_opts {
 	char	*mo_orig_options;
 	char	*mo_usource;		/* user-specified mount device */
 	char	*mo_source;		/* our mount device name */
+	char	*mo_fsname;		/* file system name */
 	char	 mo_target[PATH_MAX];	/* mount directory */
 #ifdef HAVE_GSS
 	char	 mo_skpath[PATH_MAX];	/* shared key file/directory */
@@ -178,6 +180,9 @@ int update_utab_entry(struct mount_opts *mop);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
 char *convert_hostnames(char *buf, bool mount);
+char *convert_fsname(char *s1);
+int set_client_params(char *fs_name);
+int parse_param_file(char *path);
 #ifdef HAVE_SERVER_SUPPORT
 __u64 get_device_size(char* device);
 int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,

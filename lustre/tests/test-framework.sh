@@ -1155,6 +1155,9 @@ load_modules_local() {
 			fi
 			mount --bind $mount_lustre $sbin_mount ||
 				error "can't bind $mount_lustre to $sbin_mount"
+			# ignore errors to symlink .libs for read-only /sbin
+			[[ -e /sbin/.libs ]] ||
+				ln -sf $LUSTRE/utils/.libs /sbin/.libs || true
 		fi
 	fi
 }
@@ -1251,6 +1254,8 @@ unload_modules() {
 		[ -s $sbin_mount ] && ! grep -q "STUB MARK" $sbin_mount ||
 			rm -f $sbin_mount
 	fi
+
+	[ -L /sbin/.libs ] && rm /sbin/.libs
 
 	[[ $rc -eq 0 ]] && echo "modules unloaded."
 
@@ -2795,7 +2800,7 @@ zconf_mount() {
 	do_node $client mkdir -p $mnt
 	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ];then
 		do_node $client $MOUNT_CMD $flags $opts $MGSNID:/$FSNAME \
-			$mnt || return 1
+			$mnt || return $?
 		#disable FILESET if not supported
 		do_nodes $client lctl get_param -n \
 			mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
@@ -2813,10 +2818,10 @@ zconf_mount() {
 		local prunedopts=$(echo $opts |
 				sed -e "s#skpath=[^,^ ]*#skpath=$mountkey#g")
 		do_node $client $MOUNT_CMD $flags $prunedopts $device $mnt ||
-				return 1
+				return $?
 	else
 		do_node $client $MOUNT_CMD $flags $opts $device $mnt ||
-				return 1
+				return $?
 	fi
 
 	set_default_debug_nodes $client
@@ -2858,7 +2863,7 @@ mount_mds_client() {
 	local host=$(facet_active_host $SINGLEMDS)
 	echo $host
 	zconf_mount $host $MOUNT2 $MOUNT_OPTS ||
-		error "unable to mount $MOUNT2 on $host"
+		error "unable to mount $MOUNT2 on $host with ($?)"
 }
 
 # Unmount the file system on the MDS
@@ -5621,7 +5626,7 @@ switch_identity() {
 remount_client()
 {
 	zconf_umount $HOSTNAME $1 || error "umount failed"
-	zconf_mount $HOSTNAME $1 || error "mount failed"
+	zconf_mount $HOSTNAME $1 || error "mount failed with ($?)"
 }
 
 writeconf_facet() {

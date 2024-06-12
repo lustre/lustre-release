@@ -1,0 +1,13 @@
+# This is the per-client lustre configuration file.
+# The parameters declared in this file will be set after the system has mounted,
+# but only on this node.
+
+# if mount.$FS_NAME.params exists, the parameters declared in
+# that file will be loaded afterwards, meaning the filesystem
+# specific parameters will override the client specific ones.
+
+# Examples:
+# max_dirty_mb=7873
+# mdc.*.max_rpcs_in_flight=16
+# jobid_var=nodelocal
+# jobid_name=%H:%e:%u

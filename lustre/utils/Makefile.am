@@ -214,11 +214,13 @@ PLUGIN_LIB += libmount_utils_ldiskfs.a
 endif # PLUGINS
 endif # LDISKFS_ENABLED
 
-mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
+mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC) \
+			lustre_param.c
 mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
 mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
-mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB) \
-			 $(top_builddir)/libcfs/libcfs/libcfs.la $(MNTMODLIBS)
+mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB)
+mount_lustre_LDADD    += $(top_builddir)/libcfs/libcfs/libcfs.la $(MNTMODLIBS)
+mount_lustre_LDADD    += liblustreapi.la
 mount_lustre_tgt_SOURCES = ${mount_lustre_SOURCES}
 mount_lustre_tgt_CPPFLAGS = ${mount_lustre_CPPFLAGS}
 mount_lustre_tgt_LDFLAGS = ${mount_lustre_LDFLAGS}

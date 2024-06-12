@@ -36,12 +36,14 @@ DIST_SUBDIRS = resource
 
 EXTRA_DIST = lustre.xml 99-lustre.rules lustre ldev.conf ko2iblnd.conf \
              lsvcgss lnet_routes.conf lnet.conf lgssc.conf \
-             lnet-sysctl.conf 99-lustre-server.rules
+             lnet-sysctl.conf 99-lustre-server.rules mount.client.params
 
 sysconf_DATA = lnet.conf
 
 if UTILS
 sysconf_DATA += lnet_routes.conf
+lustredir = $(sysconfdir)/lustre
+lustre_DATA = mount.client.params
 endif
 
 firewallddir = ${prefix}/lib/firewalld/services

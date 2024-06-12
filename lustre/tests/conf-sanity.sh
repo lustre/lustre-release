@@ -1206,6 +1206,96 @@ test_28a() { # LU-4221
 }
 run_test 28a "set symlink parameters permanently with lctl"
 
+test_28b() {
+	setup_noconfig
+	stack_trap "cleanup"
+
+	# jobid_this_session is not available so use jobid_name when possible
+	if $LCTL list_param jobid_name &> /dev/null; then
+		local jobvarname=jobid_name test_val="$TESTNAME-$RANDOM%p"
+	else
+		local jobvarname=jobid_var test_val=$TESTNAME-$RANDOM
+	fi
+
+	local jobid_var_new
+	local jobid_var_old=$($LCTL get_param -n $jobvarname)
+	local paramdir=/etc/lustre
+	local paramfile=$paramdir/mount.client.params
+
+	[[ -d $paramdir ]] || mkdir $paramdir
+
+	stack_trap "$LCTL set_param $jobvarname=$jobid_var_old"
+
+	if [[ -e $paramfile ]]; then
+		mv $paramfile $paramfile.$TESTNAME
+		stack_trap "mv $paramfile.$TESTNAME $paramfile"
+	else
+		# leave no traces behind
+		stack_trap "rm $paramfile"
+	fi
+
+	# if the test param is set in the filesystem params file
+	# it will override the more general client params
+	if [[ -e $paramdir/mount.$FSNAME.params ]]; then
+		echo "disabling $FSNAME specific params file"
+		local clientfile=$paramdir/mount.$FSNAME.params
+
+		mv $clientfile $clientfile.disabled
+		stack_trap "mv $clientfile.disabled $clientfile"
+	fi
+	echo "$jobvarname=$test_val" > $paramfile
+
+	remount_client $MOUNT
+
+	jobid_var_new=$($LCTL get_param -n $jobvarname)
+
+	echo "before mount: $jobid_var_old"
+	echo "after mount:  $jobid_var_new"
+	[[ "$jobid_var_new" == "$test_val" ]] ||
+		error "$jobvarname was not $test_val: got $jobid_var_new"
+}
+run_test 28b "verify client-side parameters are set upon mount"
+
+test_28c() {
+	setup_noconfig
+	stack_trap "cleanup"
+
+	# jobid_this_session is not available so use jobid_name when possible
+	if $LCTL list_param jobid_name > /dev/null 2>&1; then
+		local jobvarname=jobid_name test_val="$TESTNAME-$RANDOM%p"
+	else
+		local jobvarname=jobid_var test_val=$TESTNAME-$RANDOM
+	fi
+
+	local jobid_var_new
+	local jobid_var_old=$($LCTL get_param -n $jobvarname)
+	local paramdir=/etc/lustre
+	local paramfile=$paramdir/mount.$FSNAME.params
+
+	[[ -d $paramdir ]] || mkdir $paramdir
+
+	stack_trap "$LCTL set_param $jobvarname=$jobid_var_old"
+
+	if [[ -e $paramfile ]]; then
+		mv $paramfile $paramfile.$testname
+		stack_trap "mv $paramfile.$testname $paramfile"
+	else
+		# leave no traces behind
+		stack_trap "rm $paramfile"
+	fi
+	echo "$jobvarname=$test_val" > $paramfile
+
+	remount_client $MOUNT
+
+	jobid_var_new=$($LCTL get_param -n $jobvarname)
+
+	echo "before mount: $jobid_var_old"
+	echo "after mount:  $jobid_var_new"
+	[[ "$jobid_var_new" == "$test_val" ]] ||
+		error "$jobvarname was not $test_val: got $jobid_var_new"
+}
+run_test 28c "verify filesystem parameters are set upon mount"
+
 test_29() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
 	setup_noconfig > /dev/null 2>&1

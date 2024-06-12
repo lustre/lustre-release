@@ -33,8 +33,16 @@ or
 .B lustre_tgt
 filesystem type is used. Lustre clients and targets are stopped by using the
 .BR umount (8)
-command.
-.PP
+command. When mounted, Lustre clients will have parameters set according to
+what is described in
+.BR /etc/lustre/mount.client.params ,
+and/or the
+.BI /etc/lustre/mount. FSNAME .params
+file, with lines of the same style as
+.BR lctl-set_param (8),
+with lines of the form
+.IR PARAM = VALUE .
+.P
 There are two forms for the device option passed to the
 .I mount
 command, depending on whether a client or a target service is started:

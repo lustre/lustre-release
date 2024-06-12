@@ -61,6 +61,7 @@
 #include "mount_utils.h"
 
 #define MAX_RETRIES 99
+#define PATH_FORMAT "/etc/lustre/mount.%s.params"
 
 int	verbose;
 int	version;
@@ -754,6 +755,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		mop->mo_source = convert_hostnames(mop->mo_usource, true);
 		if (!mop->mo_source)
 			usage(stderr);
+		mop->mo_fsname = convert_fsname(mop->mo_usource);
 	} else {
 		mop->mo_source = strdup(mop->mo_usource);
 	}
@@ -803,6 +805,84 @@ static void label_lustre(struct mount_opts *mop)
 	}
 }
 #endif /* HAVE_SERVER_SUPPORT */
+
+/* no-op version for mount, since it only needs temporary parameters */
+int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
+{
+	return 0;
+}
+
+char *jt_cmdname(char *func)
+{
+	return func;
+}
+struct sp_workq { int unused; };
+int spwq_init(struct sp_workq *wq, struct param_opts *popt)
+{ return 0; }
+int spwq_destroy(struct sp_workq *wq)
+{ return 0; }
+int spwq_expand(struct sp_workq *wq, size_t num_items)
+{ return 0; }
+int spwq_add_item(struct sp_workq *wq, char *path,
+				char *param_name, char *value)
+{ return 0; }
+int sp_run_threads(struct sp_workq *wq)
+{ return 0; }
+
+int parse_param_file(char *path)
+{
+	int rc = 0;
+
+	FILE *file = fopen(path, "r");
+
+	if (file) {
+		char *param = NULL;
+		size_t len = 0;
+
+		while (getline(&param, &len, file) != -1) {
+			char *tmp;
+
+			/* skip any comments on lines */
+			tmp = strchr(param, '#');
+			if (tmp) {
+				if (tmp == param)
+					continue;
+				*tmp = '\0';
+			}
+			/* remove trailing newline/whitespace. embedded OK */
+			tmp = strchr(param, '\n');
+			if (tmp)
+				*tmp = '\0';
+
+			if (!*param)
+				continue;
+
+			rc = jt_lcfg_setparam(2, (char*[3])
+					      { "mount.params", param, NULL });
+		}
+		free(param);
+	}
+
+	return rc;
+}
+
+int set_client_params(char *fsname)
+{
+	char path[PATH_MAX];
+	int rc, rc1;
+
+	snprintf(path, sizeof(path), PATH_FORMAT, "client");
+	rc = parse_param_file(path);
+
+	if (fsname) {
+		snprintf(path, sizeof(path), PATH_FORMAT, fsname);
+		rc1 = parse_param_file(path);
+		if (rc1 && !rc)
+			rc = rc1;
+	}
+
+	return 0;
+}
 
 int main(int argc, char *const argv[])
 {
@@ -1072,9 +1152,14 @@ int main(int argc, char *const argv[])
 		 * Deal with utab just for client. Note that we ignore
 		 * the return value here since it is not worth to fail
 		 * mount by prevent some rare cases
+		 * Client specific parameters are stored in either
+		 * '/etc/lustre/mount.params' or '/etc/lustre/FSNAME.params'
+		 * and are set here.
 		 */
-		if (strstr(mop.mo_usource, ":/") != NULL)
+		if (strstr(mop.mo_usource, ":/") != NULL) {
 			update_utab_entry(&mop);
+			rc = set_client_params(mop.mo_fsname);
+		}
 		if (!mop.mo_nomtab) {
 			rc = update_mtab_entry(mop.mo_usource, mop.mo_target,
 					       "lustre", mop.mo_orig_options,
@@ -1093,5 +1178,6 @@ out_options:
 out_mo_source:
 	/* mo_usource should be freed, but we can rely on the kernel */
 	free(mop.mo_source);
+	free(mop.mo_fsname);
 	return rc;
 }
