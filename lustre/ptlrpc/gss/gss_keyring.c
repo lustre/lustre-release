@@ -364,8 +364,13 @@ static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
  */
 static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
+	/* give up on revoked key, someone else already took care of it */
+	if (test_bit(KEY_FLAG_REVOKED, &key->flags)) {
+		CDEBUG(D_SEC, "key %08x already revoked\n", key->serial);
+		return;
+	}
+
 	LASSERT(key_get_payload(key, 0) == ctx);
-	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
 
 	/* must revoke the key, or others may treat it as newly created */
 	key_revoke_locked(key);
@@ -391,8 +396,6 @@ static void unbind_ctx_kr(struct ptlrpc_cli_ctx *ctx)
 	struct key      *key = ctx2gctx_keyring(ctx)->gck_key;
 
 	if (key) {
-		LASSERT(key_get_payload(key, 0) == ctx);
-
 		key_get(key);
 		down_write(&key->sem);
 		unbind_key_ctx(key, ctx);
@@ -1673,6 +1676,13 @@ out:
 	 * opinions here. */
 	if (rc == 0) {
 		gss_cli_ctx_uptodate(gctx);
+		/* The companion key for root ctx can now be unbound,
+		 * if it is still enlisted and up-to-date.
+		 */
+		if (ctx->cc_vcred.vc_uid == 0 &&
+		    test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) &&
+		    test_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags))
+			unbind_key_ctx(key, ctx);
 	} else {
 		/* this will also revoke the key. has to be done before
 		 * wakeup waiters otherwise they can find the stale key */
