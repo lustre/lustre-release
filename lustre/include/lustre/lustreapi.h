@@ -721,8 +721,9 @@ int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state);
 int llapi_pcc_state_get(const char *path, struct lu_pcc_state *state);
 int llapi_pccdev_set(const char *mntpath, const char *cmd);
 int llapi_pccdev_get(const char *mntpath);
-int llapi_pcc_del(const char *mntpath, const char *pccpath, __u32 flags);
-int llapi_pcc_clear(const char *mntpath, __u32 flags);
+int llapi_pcc_del(const char *mntpath, const char *pccpath,
+		  enum lu_pcc_cleanup_flags flags);
+int llapi_pcc_clear(const char *mntpath, enum lu_pcc_cleanup_flags flags);
 /** @} llapi */
 
 /* llapi_layout user interface */
