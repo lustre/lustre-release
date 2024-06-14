@@ -75,12 +75,6 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-#skip ACL tests on RHEL8 and SLES15 until tests changed to use other users
-if (( $(egrep -cw "^bin|^daemon" /etc/passwd) < 2 )); then
-	# bug number:   LU-15259 LU-15259
-	ALWAYS_EXCEPT+=" 103a  125   154a"
-fi
-
 #                                  5              12     8   12  15   (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
 
@@ -130,8 +124,8 @@ elif [ -r /etc/os-release ]; then
 
 		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
 			# bug number for skipped test:
-			#                LU-10334 LU-10366
-			ALWAYS_EXCEPT+=" 103a	  410"
+			#                LU-10366
+			ALWAYS_EXCEPT+=" 410"
 		fi
 	fi
 fi
@@ -11454,17 +11448,33 @@ run_test 102t "zero length xattr values handled correctly"
 
 run_acl_subtest()
 {
-    $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test
-    return $?
+	local test=$LUSTRE/tests/acl/$1.test
+	local tmp=$(mktemp -t $1-XXXXXX).test
+	local bin=$2
+	local dmn=$3
+	local grp=$4
+	local nbd=$5
+	export LANG=C
+
+
+	local sedusers="-e s/bin/$bin/g -e s/daemon/$dmn/g"
+	local sedgroups="-e s/:users/:$grp/g"
+	[[ -z "$nbd" ]] || sedusers+=" -e s/nobody/$nbd/g"
+
+	sed $sedusers $sedgroups < $test > $tmp
+	stack_trap "rm -f $tmp"
+	[[ -s $tmp ]] || error "sed failed to create test script"
+
+	echo "performing $1 with bin='$bin' daemon='$dmn' users='$grp'..."
+	$LUSTRE/tests/acl/run $tmp || error "run_acl_subtest '$1' failed"
 }
 
 test_103a() {
 	[ "$UID" != 0 ] && skip "must run as root"
 	$GSS && skip_env "could not run under gss"
-	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] &&
+	[[ "$(lctl get_param -n mdc.*-mdc-*.connect_flags)" =~ "acl" ]] ||
 		skip_env "must have acl enabled"
-	[ -z "$(which setfacl 2>/dev/null)" ] &&
-		skip_env "could not find setfacl"
+	which setfacl || skip_env "could not find setfacl"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local mdts=$(comma_list $(mdts_nodes))
@@ -11474,8 +11484,62 @@ test_103a() {
 	stack_trap "[[ -z \"$saved\" ]] || \
 		    do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$saved" EXIT
 
-	gpasswd -a daemon bin				# LU-5641
-	do_facet $SINGLEMDS gpasswd -a daemon bin	# LU-5641
+	ACLBIN=${ACLBIN:-"bin"}
+	ACLDMN=${ACLDMN:-"daemon"}
+	ACLGRP=${ACLGRP:-"users"}
+	ACLNBD=${ACLNBD:-"nobody"}
+
+	if ! id $ACLBIN ||
+	   [[ "$(id -u $ACLBIN)" != "$(do_facet mds1 id -u $ACLBIN)" ]]; then
+		echo "bad 'bin' user '$ACLBIN', using '$USER0'"
+		ACLBIN=$USER0
+		if ! id $ACLBIN ; then
+			cat /etc/passwd
+			skip_env "can't find suitable ACL 'bin' $ACLBIN"
+		fi
+	fi
+	if ! id $ACLDMN || (( $(id -u $ACLDMN) < $(id -u $ACLBIN) )) ||
+	   [[ "$(id -u $ACLDMN)" != "$(do_facet mds1 id -u $ACLDMN)" ]]; then
+		echo "bad 'daemon' user '$ACLDMN', using '$USER1'"
+		ACLDMN=$USER1
+		if ! id $ACLDMN ; then
+			cat /etc/passwd
+			skip_env "can't find suitable ACL 'daemon' $ACLDMN"
+		fi
+	fi
+	if ! getent group $ACLGRP; then
+		echo "missing 'users' group '$ACLGRP', using '$TSTUSR'"
+		ACLGRP="$TSTUSR"
+		if ! getent group $ACLGRP; then
+			echo "cannot find group '$ACLGRP', adding it"
+			cat /etc/group
+			add_group 60000 $ACLGRP
+		fi
+	fi
+
+	local bingid=$(getent group $ACLBIN | cut -d: -f 3)
+	local dmngid=$(getent group $ACLDMN | cut -d: -f 3)
+	local grpgid=$(getent group $ACLGRP | cut -d: -f 3)
+
+	if (( $bingid > $grpgid || $dmngid > $grpgid )); then
+		echo "group '$ACLGRP' has low gid=$grpgid, use '$TSTUSR'"
+		ACLGRP="$TSTUSR"
+		if ! getent group $ACLGRP; then
+			echo "cannot find group '$ACLGRP', adding it"
+			cat /etc/group
+			add_group 60000 $ACLGRP
+		fi
+		grpgid=$(getent group $ACLGRP | cut -d: -f 3)
+		if (( $bingid > $grpgid || $dmngid > $grpgid )); then
+			cat /etc/group
+			skip_env "$ACLGRP gid=$grpgid less than $bingid|$dmngid"
+		fi
+	fi
+
+	gpasswd -a $ACLDMN $ACLBIN ||
+		error "setting client group failed"		# LU-5641
+	do_facet mds1 gpasswd -a $ACLDMN $ACLBIN ||
+		error "setting MDS group failed"		# LU-5641
 
 	declare -a identity_old
 
@@ -11488,48 +11552,56 @@ test_103a() {
 	mkdir -p $DIR/$tdir
 	cd $DIR/$tdir
 
-	echo "performing cp ..."
-	run_acl_subtest cp || error "run_acl_subtest cp failed"
-	echo "performing getfacl-noacl..."
-	run_acl_subtest getfacl-noacl || error "getfacl-noacl test failed"
-	echo "performing misc..."
-	run_acl_subtest misc || error  "misc test failed"
-	echo "performing permissions..."
-	run_acl_subtest permissions || error "permissions failed"
+	run_acl_subtest cp $ACLBIN $ACLDMN $ACLGRP
+	run_acl_subtest getfacl-noacl $ACLBIN $ACLDMN $ACLGRP
+	run_acl_subtest misc $ACLBIN $ACLDMN $ACLGRP
+	run_acl_subtest permissions $ACLBIN $ACLDMN $ACLGRP
 	# LU-1482 mdd: Setting xattr are properly checked with and without ACLs
-	if [ $MDS1_VERSION -gt $(version_code 2.8.55) ] ||
-		{ [ $MDS1_VERSION -lt $(version_code 2.6) ] &&
-			[ $MDS1_VERSION -ge $(version_code 2.5.29) ]; }
-	then
-		echo "performing permissions xattr..."
-		run_acl_subtest permissions_xattr ||
-			error "permissions_xattr failed"
+	# CentOS7- uses nobody=99, while newer distros use nobody=65534
+	if ! id -u $ACLNBD ||
+	   (( $(id -u nobody) != $(do_facet mds1 id -u nobody) )); then
+		ACLNBD="nfsnobody"
+		if ! id -u $ACLNBD; then
+			ACLNBD=""
+		fi
 	fi
-	echo "performing setfacl..."
-	run_acl_subtest setfacl || error  "setfacl test failed"
+	if [[ -n "$ACLNBD" ]] && ! getent group $ACLNBD; then
+		add_group $(id -u $ACLNBD) $ACLNBD
+		if ! getent group $ACLNBD; then
+			ACLNBD=""
+		fi
+	fi
+	if (( $MDS1_VERSION > $(version_code 2.8.55) )) &&
+	   [[ -n "$ACLNBD" ]] && which setfattr; then
+		run_acl_subtest permissions_xattr \
+			$ACLBIN $ACLDMN $ACLGRP $ACLNBD
+	elif [[ -z "$ACLNBD" ]]; then
+		echo "skip 'permission_xattr' test - missing 'nobody' user/grp"
+	else
+		echo "skip 'permission_xattr' test - missing setfattr command"
+	fi
+	run_acl_subtest setfacl $ACLBIN $ACLDMN $ACLGRP
 
 	# inheritance test got from HP
-	echo "performing inheritance..."
 	cp $LUSTRE/tests/acl/make-tree . || error "cannot copy make-tree"
 	chmod +x make-tree || error "chmod +x failed"
-	run_acl_subtest inheritance || error "inheritance test failed"
+	run_acl_subtest inheritance $ACLBIN $ACLDMN $ACLGRP
 	rm -f make-tree
 
 	echo "LU-974 ignore umask when acl is enabled..."
-	run_acl_subtest 974 || error "LU-974 umask test failed"
+	run_acl_subtest 974 $ACLBIN $ACLDMN $ACLGRP
 	if [ $MDSCOUNT -ge 2 ]; then
-		run_acl_subtest 974_remote ||
-			error "LU-974 umask test failed under remote dir"
+		run_acl_subtest 974_remote $ACLBIN $ACLDMN $ACLGRP
 	fi
 
 	echo "LU-2561 newly created file is same size as directory..."
 	if [ "$mds1_FSTYPE" != "zfs" ]; then
-		run_acl_subtest 2561 || error "LU-2561 test failed"
+		run_acl_subtest 2561 $ACLBIN $ACLDMN $ACLGRP
 	else
-		run_acl_subtest 2561_zfs || error "LU-2561 zfs test failed"
+		run_acl_subtest 2561_zfs $ACLBIN $ACLDMN $ACLGRP
 	fi
 
-	run_acl_subtest 4924 || error "LU-4924 test failed"
+	run_acl_subtest 4924 $ACLBIN $ACLDMN $ACLGRP
 
 	cd $SAVE_PWD
 	umask $SAVE_UMASK
@@ -13398,7 +13470,8 @@ test_125() { # 13358
 
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -S 65536 -c -1 $DIR/$tdir || error "setstripe failed"
-	setfacl -R -m u:bin:rwx $DIR/$tdir || error "setfacl $DIR/$tdir failed"
+	setfacl -R -m u:$USER0:rwx $DIR/$tdir ||
+		error "setfacl $DIR/$tdir failed"
 	ls -ld $DIR/$tdir || error "cannot access $DIR/$tdir"
 }
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
@@ -15225,7 +15298,7 @@ dot_lustre_fid_permission_check() {
 	local test_dir=$2
 
 	echo "stat fid $fid"
-	stat $ffid > /dev/null || error "stat $ffid failed."
+	stat $ffid || error "stat $ffid failed."
 	echo "touch fid $fid"
 	touch $ffid || error "touch $ffid failed."
 	echo "write to fid $fid"
@@ -15247,9 +15320,10 @@ dot_lustre_fid_permission_check() {
 	ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
 	if [[ $($LCTL get_param -n mdc.*-mdc-*.connect_flags) =~ acl ]]; then
 		echo "setfacl fid $fid"
-		setfacl -R -m u:bin:rwx $ffid || error "setfacl $ffid failed."
+		setfacl -R -m u:$USER0:rwx $ffid ||
+			error "setfacl $ffid failed"
 		echo "getfacl fid $fid"
-		getfacl $ffid >/dev/null || error "getfacl $ffid failed."
+		getfacl $ffid || error "getfacl $ffid failed."
 	fi
 	echo "unlink fid $fid"
 	unlink $MOUNT/.lustre/fid/$fid && error "unlink $ffid should fail."
@@ -15276,7 +15350,7 @@ dot_lustre_fid_permission_check() {
 	ffid=$MOUNT/.lustre/fid/$fid
 
 	echo "ls $fid"
-	ls $ffid > /dev/null || error "ls $ffid failed."
+	ls $ffid || error "ls $ffid failed."
 	echo "touch $fid/$tfile.1"
 	touch $ffid/$tfile.1 || error "touch $ffid/$tfile.1 failed."
 
@@ -15396,7 +15470,7 @@ run_test 154B "verify the ll_decode_linkea tool"
 test_154a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
-	[[ $MDS1_VERSION -ge $(version_code 2.2.51) ]] ||
+	(( $MDS1_VERSION >= $(version_code 2.2.51) )) ||
 		skip "Need MDS version at least 2.2.51"
 	[ -z "$(which setfacl)" ] && skip_env "must have setfacl tool"
 

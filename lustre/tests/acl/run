@@ -250,8 +250,8 @@ sub exec_test($$) {
     while (<IN>) {
       #print "< $_";
       if ($needs_shell) {
-	s#^/bin/sh: line \d+: ##;
-	s#^/bin/sh: ##; # temporarily added by ericm
+	s#^/bin/bash: line \d+: ##;
+	s#^/bin/bash: ##; # temporarily added by ericm
       }
       push @$result, $_;
     }
@@ -272,7 +272,7 @@ sub exec_test($$) {
       or die "Can't join STDOUT and STDERR: $!";
 
     if ($needs_shell) {
-      exec ('/bin/sh', '-c', join(" ", @$prog));
+      exec ('/bin/bash', '-c', join(" ", @$prog));
     } else {
       exec @$prog;
     }

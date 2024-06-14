@@ -7291,6 +7291,9 @@ add_group() {
 			rc=1
 		}
 	else
+		echo "adding group $group_name:$group_id"
+		getent group $group_name || true
+		getent group $group_id || true
 		groupadd -g $group_id $group_name
 		rc=${PIPESTATUS[0]}
 	fi
