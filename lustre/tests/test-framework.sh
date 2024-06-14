@@ -10551,7 +10551,8 @@ parse_plain_dir_param()
 	local param=""
 
 	if [[ ${invalues[0]} =~ "stripe_count:" ]]; then
-		param="-c ${invalues[1]}"
+		(( ${invalues[1]} == $OSTCOUNT - 1 )) &&
+			param="-c $OSTCOUNT" || param="-c ${invalues[1]}"
 	fi
 	if [[ ${invalues[2]} =~ "stripe_size:" ]]; then
 		param="$param -S ${invalues[3]}"
@@ -10574,6 +10575,8 @@ parse_plain_param()
 	local val=$(awk '{print $2}' <<< $line)
 
 	if [[ $line =~ ^"lmm_stripe_count:" ]]; then
+		(( $val == $OSTCOUNT - 1 )) &&
+			param="-c $OSTCOUNT" || param="-c $val"
 		echo "-c $val"
 	elif [[ $line =~ ^"lmm_stripe_size:" ]]; then
 		echo "-S $val"
