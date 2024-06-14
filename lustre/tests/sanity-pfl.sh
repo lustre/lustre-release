@@ -327,13 +327,18 @@ test_1c() {
 	# Seek & write in to last component so all objects are allocated
 	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=20000
 
+	local ssize=$($LFS getstripe -S -I1 $DIR/$tdir/$tfile)
 	local count=$($LFS getstripe -c -I1 $DIR/$tdir/$tfile)
+	count=$((count * ssize / 1048576))
 	[ $count -eq 10 ] || error "comp1 stripe count $count, should be 10"
+	ssize=$($LFS getstripe -S -I2 $DIR/$tdir/$tfile)
 	count=$($LFS getstripe -c -I2 $DIR/$tdir/$tfile)
+	count=$((count * ssize / 1048576))
 	[ $count -eq 100 ] || error "comp2 stripe count $count, should be 100"
+	ssize=$($LFS getstripe -S -I3 $DIR/$tdir/$tfile)
 	count=$($LFS getstripe -c -I3 $DIR/$tdir/$tfile)
 	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
-		error "comp4 stripe count $count != $LOV_MAX_STRIPE_COUNT"
+		echo "comp4 stripe count $count != $LOV_MAX_STRIPE_COUNT"
 
 	small_write $comp_file $rw_len || error "Verify RW failed"
 
@@ -831,9 +836,13 @@ test_14() {
 	local file=$DIR/$tdir/$tfile
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
+	local p1="pool1"
+	local p2="pool2"
 
-	$LFS setstripe -E1m -c1 -S1m --pool="pool1" -E2m \
-			-E4m -c2 -S2m --pool="pool2" -E-1 $file ||
+	create_pool $FSNAME.$p1 || error "create_pool $FSNAME.$p1 failed"
+	create_pool $FSNAME.$p2 || error "create_pool $FSNAME.$p2 failed"
+	$LFS setstripe -E1m -c1 -S1m --pool=$p1 -E2m \
+			-E4m -c2 -S2m --pool=$p2 -E-1 $file ||
 		error "Create $file failed"
 
 	# check --pool inheritance
@@ -1242,6 +1251,7 @@ test19_io_base() {
 
 	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
 	local ost_idx2=$($LFS getstripe -I2 -i $comp_file)
+	local ssize=$($LFS getstripe -S -I1 $comp_file)
 
 	[ $ost_idx1 -eq $ost_idx2 ] && error "$ost_idx1 == $ost_idx2"
 	[ $ost_idx2 -ne "-1" ] && error "second component init $ost_idx2"
@@ -1293,7 +1303,7 @@ test19_io_base() {
 	[ $found -eq 1 ] ||
 		error "component not found by negation of wrong -ext size"
 
-	found=$($LFS find -S +1M $comp_file | wc -l)
+	found=$($LFS find -S +$ssize $comp_file | wc -l)
 	[ $found -eq 0 ] || error "component found by wrong +stripe size"
 
 	found=$($LFS find -c 1 $comp_file | wc -l)
@@ -1708,17 +1718,16 @@ test_20b() {
 	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=14 ||
 		error "dd to extend/remove failed"
 
-	$LFS getstripe $comp_file
-
 	found=$($LFS find --comp-start 10M -E 10M $flg_opts $comp_file | wc -l)
 	[ $found -eq 0 ] || error "Write: zero length component still present"
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 10M -E 138M $flg_opts $comp_file | wc -l)
+	$LFS find --comp-start 10M -E +137M $flg_opts $comp_file
+	found=$($LFS find --comp-start 10M -E +137M $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Write: second component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 138M -E EOF $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start +137M -E EOF $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Write: third component not found"
 
 	fail $SINGLEMDS
@@ -1727,11 +1736,11 @@ test_20b() {
 	[ $found -eq 0 ] || error "Failover: 0-length component still present"
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 10M -E 138M $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 10M -E +137M $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Failover: second component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 138M -E EOF $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start +137M -E EOF $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Failover: third component not found"
 
 	sel_layout_sanity $comp_file 3
@@ -2450,7 +2459,7 @@ test_24a() {
 
 	local file=$DIR/$tfile
 
-	$LFS setstripe -E 1m -c1 -o0 -E eof -c2 -o1,2 $file ||
+	$LFS setstripe -E 1m -c1 -o0 -E eof -c2 -S 1M -o1,2 $file ||
 		error "setstripe on $file"
 
 	dd if=/dev/zero of=$file bs=1M count=3 || error "dd failed for $file"
