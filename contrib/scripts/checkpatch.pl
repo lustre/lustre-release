@@ -601,6 +601,7 @@ our $logFunctions = qr{(?x:
 	TP_printk|
 	WARN(?:_RATELIMIT|_ONCE|)|
 	CDEBUG|CERROR|CNETERR|CEMERG|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
+	CERROR_SLOW|CWARN_SLOW|
 	panic|
 	MODULE_[A-Z_]+|
 	seq_vprintf|seq_printf|seq_puts|

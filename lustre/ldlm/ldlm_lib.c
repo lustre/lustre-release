@@ -1086,9 +1086,10 @@ int target_handle_connect(struct ptlrpc_request *req)
 	target = class_str2obd(str);
 	if (!target) {
 		deuuidify(str, NULL, &target_start, &target_len);
-		LCONSOLE_ERROR("%.*s: not available for connect from %s (no target). If you are running an HA pair check that the target is mounted on the other server.\n",
-			       target_len, target_start,
-			       libcfs_nidstr(&req->rq_peer.nid));
+		CERROR_SLOW(5,
+			    "%.*s: not available for connect from %s (no target). If you are running an HA pair check that the target is mounted on the other server.\n",
+			    target_len, target_start,
+			    libcfs_nidstr(&req->rq_peer.nid));
 		GOTO(out, rc = -ENODEV);
 	}
 

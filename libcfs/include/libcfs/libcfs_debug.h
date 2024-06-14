@@ -158,6 +158,16 @@ do {									\
 			  mask, &cdls, format, ## __VA_ARGS__);		\
 } while (0)
 
+#  define CDEBUG_SLOW(delay, mask, format, ...)				\
+do {									\
+	static struct cfs_debug_limit_state cdls = {			\
+	.cdls_count = -delay,						\
+	.cdls_delay = delay,						\
+	};								\
+									\
+	__CDEBUG_WITH_LOC(__FILE__, __func__, __LINE__,			\
+			  mask, &cdls, format, ## __VA_ARGS__);		\
+} while (0)
 # else /* !CDEBUG_ENABLED */
 static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
@@ -166,6 +176,7 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #  define CDEBUG(mask, format, ...) (void)(0)
 #  define CDEBUG_LIMIT(mask, format, ...) (void)(0)
 #  define CDEBUG_LIMIT_LOC(file, func, line, mask, format, ...) (void)(0)
+#  define CDEBUG_SLOW(delay, mask, format, ...) (void)(0)
 #  warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 # endif /* CDEBUG_ENABLED */
 
@@ -180,6 +191,11 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #define CERROR(format, ...)         CDEBUG_LIMIT(D_ERROR, format, ## __VA_ARGS__)
 #define CNETERR(format, a...)       CDEBUG_LIMIT(D_NETERROR, format, ## a)
 #define CEMERG(format, ...)         CDEBUG_LIMIT(D_EMERG, format, ## __VA_ARGS__)
+
+#define CWARN_SLOW(delay, format, ...)  CDEBUG_SLOW(delay, D_WARNING, format, \
+		   ## __VA_ARGS__)
+#define CERROR_SLOW(delay, format, ...) CDEBUG_SLOW(delay, D_ERROR, format, \
+		    ## __VA_ARGS__)
 
 #define LCONSOLE(mask, format, ...) CDEBUG(D_CONSOLE | (mask), format, ## __VA_ARGS__)
 #define LCONSOLE_INFO(format, ...)  CDEBUG_LIMIT(D_CONSOLE, format, ## __VA_ARGS__)

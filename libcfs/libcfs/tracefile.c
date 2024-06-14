@@ -684,6 +684,13 @@ console:
 	}
 
 	if (cdls != NULL) {
+		/* avoid unlikely case of many errors between printing */
+		if (unlikely(cdls->cdls_count < 0 &&
+			     cdls->cdls_count >= -600)) {
+			cdls->cdls_next = jiffies +
+				    cfs_time_seconds(-cdls->cdls_count);
+			cdls->cdls_count = 1;
+		}
 		if (libcfs_console_ratelimit &&
 		    cdls->cdls_next != 0 &&	/* not first time ever */
 		    time_before(jiffies, cdls->cdls_next)) {
@@ -729,8 +736,7 @@ console:
 		cfs_print_to_console(&header, file, fn,
 				     "Skipped %d previous similar message%s\n",
 				     cdls->cdls_count,
-				     (cdls->cdls_count > 1) ? "s" : "");
-
+				     cdls->cdls_count > 1 ? "s" : "");
 		cdls->cdls_count = 0;
 	}
 out:

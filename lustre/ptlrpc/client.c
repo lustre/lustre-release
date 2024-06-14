@@ -2354,6 +2354,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	if (ptlrpc_console_allow(req, opc,
 				 lustre_msg_get_status(req->rq_reqmsg)))
 		debug_mask = D_WARNING;
+	/* this message is used in replay-single test_200, DO NOT MODIFY */
 	DEBUG_REQ(debug_mask, req, "Request sent has %s: [sent %lld/real %lld]",
 		  req->rq_net_err ? "failed due to network error" :
 		     ((req->rq_real_sent == 0 ||
