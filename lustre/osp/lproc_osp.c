@@ -912,7 +912,6 @@ static ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
 
 	return count;
 }
-
 LUSTRE_ATTR(ost_conn_uuid, 0444, osp_conn_uuid_show, NULL);
 LUSTRE_ATTR(mdt_conn_uuid, 0444, osp_conn_uuid_show, NULL);
 
@@ -1143,6 +1142,31 @@ static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_WO_ATTR(force_sync);
 
+static int osp_sync_error_list_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device	*dev = m->private;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct osp_job_args	*ja;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	if (list_empty(&osp->opd_sync_error_list))
+		return 0;
+
+	spin_lock(&osp->opd_sync_lock);
+	list_for_each_entry(ja, &osp->opd_sync_error_list, ja_error_link) {
+		seq_printf(m, "%u ["DOSTID"] llog=["DOSTID"] idx %d\n",
+			   ja->ja_op, POSTID(&ja->ja_body.oa.o_oi),
+			   POSTID(&ja->ja_lcookie.lgc_lgl.lgl_oi),
+			   ja->ja_lcookie.lgc_index);
+	}
+	spin_unlock(&osp->opd_sync_lock);
+
+	return 0;
+}
+LDEBUGFS_SEQ_FOPS_RO(osp_sync_error_list);
+
 static struct ldebugfs_vars ldebugfs_osp_obd_vars[] = {
 	{ .name =	"connect_flags",
 	  .fops =	&osp_connect_flags_fops		},
@@ -1154,6 +1178,8 @@ static struct ldebugfs_vars ldebugfs_osp_obd_vars[] = {
 	  .fops =	&osp_import_fops		},
 	{ .name =	"state",
 	  .fops =	&osp_state_fops			},
+	{ .name =	"error_list",
+	  .fops =	&osp_sync_error_list_fops	},
 	{ NULL }
 };
 

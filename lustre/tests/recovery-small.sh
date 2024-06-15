@@ -3685,6 +3685,46 @@ test_158a() {
 }
 run_test 158a "connect without access right"
 
+test_160() {
+	(( $MDS1_VERSION >= $(version_code 2.15.62) )) ||
+		skip "Need MDS version at least 2.15.62 for group lock destroy fix"
+
+	local threads=10
+	local size=$((1024*100))
+	local timeout=10
+	local pids
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	for ((i = 1; i <= threads; i++)); do
+		local file=$DIR/$tdir/file_$i
+		#open/group lock/write/unlink/pause 20s/group unlock/close
+		$MULTIOP $file OG1234w10240u_20g1234c &
+		pids[$i]=$!
+	done
+	sleep 2
+
+	#evict client from MDS, MDS starts to unlink files/destroy objects
+	mds_evict_client
+	client_reconnect
+
+	local step=3
+	for ((i = 1; i <= $((timeout / step + 1)); i++)); do
+		do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight
+		sleep $step
+	done
+	local rc=$(do_facet mds1 $LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight)
+	do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.error_list
+	echo inflight $rc
+	for ((i = 1; i <= threads; i++)); do
+		wait ${pids[$i]}
+	done
+
+	(( $rc <= 2 )) || error "destroying OST objects are blocked $rc"
+}
+run_test 160 "MDT destroys are blocked by grouplocks"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

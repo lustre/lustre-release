@@ -221,6 +221,10 @@ struct osp_device {
 	struct list_head		 opd_sync_in_flight_list;
 	/* list of remotely committed rpc */
 	struct list_head		 opd_sync_committed_there;
+	/* list for failed rpcs */
+	struct list_head		 opd_sync_error_list;
+	atomic_t			 opd_sync_error_count;
+
 	/* number of RPCs in flight - flow control */
 	atomic_t			 opd_sync_rpcs_in_flight;
 	int				 opd_sync_max_rpcs_in_flight;
@@ -390,6 +394,14 @@ struct osp_thandle {
 	struct list_head	 ot_stop_dcb_list;
 	struct osp_update_request *ot_our;
 	atomic_t		 ot_refcount;
+};
+
+struct osp_job_args {
+	struct list_head		ja_error_link;
+	struct llog_cookie		ja_lcookie;
+	struct ost_body			ja_body;
+	enum ost_cmd			ja_op;
+	ktime_t				ja_time;
 };
 
 static inline struct osp_thandle *

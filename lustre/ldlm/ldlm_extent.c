@@ -755,9 +755,11 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	RETURN(compat);
 destroylock:
 	list_del_init(&req->l_res_link);
+	if (ldlm_is_local(req))
+		ldlm_lock_decref_internal_nolock(req, req_mode);
 	ldlm_lock_destroy_nolock(req);
 	RETURN(compat);
-	}
+}
 
 /**
  * This function refresh eviction timer for cancelled lock.

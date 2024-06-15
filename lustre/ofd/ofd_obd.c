@@ -919,7 +919,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 	struct lustre_handle lockh;
 	union ldlm_policy_data policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
 	struct ofd_object *fo;
-	__u64 flags = LDLM_FL_AST_DISCARD_DATA;
+	__u64 flags = LDLM_FL_AST_DISCARD_DATA | LDLM_FL_BLOCK_NOWAIT;
 	__u64 rc = 0;
 
 	ENTRY;
@@ -939,14 +939,18 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 				    NULL, NULL, 0, LVB_T_NONE, NULL, &lockh);
 
 	/* We only care about the side-effects, just drop the lock. */
-	if (rc == ELDLM_OK)
+	if (rc == ELDLM_OK) {
 		ldlm_lock_decref(&lockh, LCK_PW);
 
-	LASSERT(fo != NULL);
+		LASSERT(fo != NULL);
 
-	rc = ofd_destroy(env, fo, orphan);
-	EXIT;
-
+		rc = ofd_destroy(env, fo, orphan);
+		EXIT;
+	} else if (rc == -EAGAIN) {
+		CDEBUG(D_HA, "%s: Object "DFID" is locked, skiping destroy\n",
+		       ofd->ofd_osd_exp->exp_obd->obd_name, PFID(fid));
+		rc = -EIO;
+	}
 	ofd_object_put(env, fo);
 	RETURN(rc);
 }
