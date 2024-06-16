@@ -9189,6 +9189,19 @@ test_56eaa() {
 }
 run_test 56eaa "test lfs find -printf added functions"
 
+test_56eab() {
+	touch $DIR/$tfile
+	local lfs_ls=($($LFS find $DIR -name $tfile -ls))
+	local find_ls=($(find $DIR -name $tfile -ls))
+
+# "-1" is last field, since dates are not printed exactly the same.
+	for ((i = -1; i < 7; i++)); do
+		[[ "${lfs_ls[i]}" == "${find_ls[i]}" ]] ||
+			error "expected '${lfs_ls[i]}' but got '${find_ls[i]}'"
+	done
+}
+run_test 56eab "test lfs find -ls function"
+
 test_56eb() {
 	local dir=$DIR/$tdir
 	local subdir_1=$dir/subdir_1

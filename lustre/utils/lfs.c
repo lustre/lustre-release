@@ -3533,6 +3533,7 @@ enum {
 	LFS_INHERIT_RR_OPT,
 	LFS_FIND_PERM,
 	LFS_PRINTF_OPT,
+	LFS_PRINTF_LS,
 	LFS_NO_FOLLOW_OPT,
 	LFS_HEX_IDX_OPT,
 	LFS_STATS_OPT,
@@ -5449,6 +5450,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = LFS_LINKS_OPT,
 			.name = "links",	.has_arg = required_argument },
+	{ .val = LFS_PRINTF_LS,
+			.name = "ls",		.has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument },
@@ -6143,6 +6146,10 @@ err_free:
 			break;
 		case LFS_PRINTF_OPT:
 			param.fp_format_printf_str = strdup(optarg);
+			break;
+		case LFS_PRINTF_LS:
+			param.fp_format_printf_str =
+				strdup("%i\t%k\t%M\t%n\t%u\t%g\t%s\t%t\t%p\n");
 			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
